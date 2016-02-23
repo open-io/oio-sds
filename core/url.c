@@ -306,6 +306,8 @@ oio_url_set(struct oio_url_s *u, enum oio_url_field_e f, const char *v)
 	return NULL;
 }
 
+static int _is_set (const char *s) { return NULL!=s && 0!=*s; }
+
 int
 oio_url_has(const struct oio_url_s *u, enum oio_url_field_e f)
 {
@@ -314,18 +316,18 @@ oio_url_has(const struct oio_url_s *u, enum oio_url_field_e f)
 
 	switch (f) {
 		case OIOURL_NS:
-			return NULL != u->ns;
+			return _is_set(u->ns);
 		case OIOURL_ACCOUNT:
-			return NULL != u->account;
+			return _is_set(u->account);
 		case OIOURL_USER:
-			return NULL != u->user;
+			return _is_set(u->user);
 		case OIOURL_TYPE:
 			// the type has a default value
 			return TRUE;
 		case OIOURL_PATH:
-			return NULL != u->path;
+			return _is_set(u->path);
 		case OIOURL_VERSION:
-			return NULL != u->version;
+			return _is_set(u->version);
 		case OIOURL_WHOLE:
 			return TRUE;
 		case OIOURL_HEXID:

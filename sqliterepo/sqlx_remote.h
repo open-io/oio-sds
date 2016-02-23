@@ -20,7 +20,6 @@ License along with this library.
 #ifndef OIO_SDS__sqliterepo__sqlx_remote_h
 # define OIO_SDS__sqliterepo__sqlx_remote_h 1
 
-/** @param C */
 #define NAME_CHECK(C) do {\
 	EXTRA_ASSERT((C) != NULL);\
 	EXTRA_ASSERT((C)->base != NULL); \
@@ -29,15 +28,6 @@ License along with this library.
 } while (0)
 
 #define SQLXNAME_CHECK(p) do { EXTRA_ASSERT((p) != NULL); NAME_CHECK(p); } while (0)
-
-/**
- * @defgroup sqliterepo_remote RPC Codec
- * @ingroup sqliterepo
- * @brief
- * @details
- *
- * @{
- */
 
 # include <metautils/lib/metatypes.h>
 
@@ -57,18 +47,21 @@ struct sqlx_name_mutable_s
 
 struct sqlx_name_s
 {
-	const gchar *ns;
-	const gchar *base;
-	const gchar *type;
+	const char *ns;
+	const char *base;
+	const char *type;
 };
 
 void sqlx_name_clean (struct sqlx_name_mutable_s *n);
 void sqlx_name_free  (struct sqlx_name_mutable_s *n);
 
+void sqlx_name_dup   (struct sqlx_name_mutable_s *dst,
+		const struct sqlx_name_s *src);
+
 void sqlx_name_fill  (struct sqlx_name_mutable_s *n, struct oio_url_s *url,
 		const char *srvtype, gint64 seq);
 
-gboolean sqlx_name_extract (struct sqlx_name_s *n, struct oio_url_s *url,
+gboolean sqlx_name_extract (const struct sqlx_name_s *n, struct oio_url_s *url,
 		const char *srvtype, gint64 *pseq);
 
 static inline struct sqlx_name_s *
@@ -91,52 +84,52 @@ GError* sqlx_remote_execute_RELOAD (const char *to);
 
 // sqliterepo-related requests coders ------------------------------------------
 
-GByteArray* sqlx_pack_ENABLE (struct sqlx_name_s *name);
-GByteArray* sqlx_pack_FREEZE (struct sqlx_name_s *name);
-GByteArray* sqlx_pack_DISABLE (struct sqlx_name_s *name);
-GByteArray* sqlx_pack_DISABLE_DISABLED (struct sqlx_name_s *name);
+GByteArray* sqlx_pack_ENABLE (const struct sqlx_name_s *name);
+GByteArray* sqlx_pack_FREEZE (const struct sqlx_name_s *name);
+GByteArray* sqlx_pack_DISABLE (const struct sqlx_name_s *name);
+GByteArray* sqlx_pack_DISABLE_DISABLED (const struct sqlx_name_s *name);
 
-GByteArray* sqlx_pack_PROPGET (struct sqlx_name_s *name);
-GByteArray* sqlx_pack_PROPDEL (struct sqlx_name_s *name, const gchar * const *k);
+GByteArray* sqlx_pack_PROPGET (const struct sqlx_name_s *name);
+GByteArray* sqlx_pack_PROPDEL (const struct sqlx_name_s *name, const gchar * const *k);
 
 /* @param kv a NULL-terminated array of strings, containing N pairs
  * with for 0 <= i < N:
  *   kv[2i] is the key
  *   kv[2i+1] if the value.
  */
-GByteArray* sqlx_pack_PROPSET_tab (struct sqlx_name_s *name, gboolean flush, const gchar * const *kv);
+GByteArray* sqlx_pack_PROPSET_tab (const struct sqlx_name_s *name, gboolean flush, const gchar * const *kv);
 
 /* @param pairs GSList of <key_value_pair_s*> */
-GByteArray* sqlx_pack_PROPSET_pairs (struct sqlx_name_s *name, gboolean flush, GSList *pairs);
+GByteArray* sqlx_pack_PROPSET_pairs (const struct sqlx_name_s *name, gboolean flush, GSList *pairs);
 
-GByteArray* sqlx_pack_EXITELECTION(struct sqlx_name_s *name);
-GByteArray* sqlx_pack_USE(struct sqlx_name_s *name);
-GByteArray* sqlx_pack_DESCR(struct sqlx_name_s *name);
-GByteArray* sqlx_pack_STATUS(struct sqlx_name_s *name);
-GByteArray* sqlx_pack_GETVERS(struct sqlx_name_s *name);
-GByteArray* sqlx_pack_ISMASTER(struct sqlx_name_s *name);
+GByteArray* sqlx_pack_EXITELECTION(const struct sqlx_name_s *name);
+GByteArray* sqlx_pack_USE(const struct sqlx_name_s *name);
+GByteArray* sqlx_pack_DESCR(const struct sqlx_name_s *name);
+GByteArray* sqlx_pack_STATUS(const struct sqlx_name_s *name);
+GByteArray* sqlx_pack_GETVERS(const struct sqlx_name_s *name);
+GByteArray* sqlx_pack_ISMASTER(const struct sqlx_name_s *name);
 
-GByteArray* sqlx_pack_PIPEFROM(struct sqlx_name_s *name, const gchar *source);
-GByteArray* sqlx_pack_PIPETO(struct sqlx_name_s *name, const gchar *target);
-GByteArray* sqlx_pack_RESYNC(struct sqlx_name_s *name);
+GByteArray* sqlx_pack_PIPEFROM(const struct sqlx_name_s *name, const gchar *source);
+GByteArray* sqlx_pack_PIPETO(const struct sqlx_name_s *name, const gchar *target);
+GByteArray* sqlx_pack_RESYNC(const struct sqlx_name_s *name);
 
-GByteArray* sqlx_pack_DUMP(struct sqlx_name_s *name, gboolean chunked);
-GByteArray* sqlx_pack_RESTORE(struct sqlx_name_s *name, const guint8 *raw, gsize rawsize);
+GByteArray* sqlx_pack_DUMP(const struct sqlx_name_s *name, gboolean chunked);
+GByteArray* sqlx_pack_RESTORE(const struct sqlx_name_s *name, const guint8 *raw, gsize rawsize);
 
-GByteArray* sqlx_pack_REPLICATE(struct sqlx_name_s *name, struct TableSequence *tabseq);
+GByteArray* sqlx_pack_REPLICATE(const struct sqlx_name_s *name, struct TableSequence *tabseq);
 
 // service-wide requests
 GByteArray* sqlx_pack_LEANIFY(void);
 GByteArray* sqlx_pack_INFO(void);
 
 // sqlx requests
-GByteArray* sqlx_pack_QUERY(struct sqlx_name_s *name,
+GByteArray* sqlx_pack_QUERY(const struct sqlx_name_s *name,
 		const gchar *query, struct TableSequence *params, gboolean autocreate);
 
-GByteArray* sqlx_pack_QUERY_single(struct sqlx_name_s *name,
+GByteArray* sqlx_pack_QUERY_single(const struct sqlx_name_s *name,
 		const gchar *query, gboolean autocreate);
 
-GByteArray* sqlx_pack_DESTROY(struct sqlx_name_s *name, gboolean local);
+GByteArray* sqlx_pack_DESTROY(const struct sqlx_name_s *name, gboolean local);
 
 // sqlx-related elements coders ------------------------------------------------
 

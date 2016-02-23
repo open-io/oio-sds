@@ -36,6 +36,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqliterepo/election.h>
 #include <sqliterepo/synchro.h>
 #include <sqliterepo/replication_dispatcher.h>
+#include <sqliterepo/gridd_client_pool.h>
 #include <resolver/hc_resolver.h>
 
 #include <glib.h>
@@ -56,7 +57,7 @@ static void sqlx_service_specific_stop(void);
 static void _task_malloc_trim(gpointer p);
 static void _task_expire_bases(gpointer p);
 static void _task_expire_resolver(gpointer p);
-static void _task_retry_elections(gpointer p);
+static void _task_react_elections(gpointer p);
 static void _task_reload_nsinfo(gpointer p);
 static void _task_reload_workers(gpointer p);
 
@@ -135,7 +136,7 @@ _get_url(gpointer ctx)
 }
 
 static GError*
-_get_version(gpointer ctx, struct sqlx_name_s *n, GTree **result)
+_get_version(gpointer ctx, const struct sqlx_name_s *n, GTree **result)
 {
 	EXTRA_ASSERT(ctx != NULL);
 	return sqlx_repository_get_version2(PSRV(ctx)->repository, n, result);
@@ -245,6 +246,7 @@ _init_configless_structures(struct sqlx_service_s *ss)
 	if (!(ss->server = network_server_init())
 			|| !(ss->dispatcher = transport_gridd_build_empty_dispatcher())
 			|| !(ss->clients_pool = gridd_client_pool_create())
+			|| !(ss->clients_factory = gridd_client_factory_create())
 			|| !(ss->resolver = hc_resolver_create1(oio_ext_monotonic_time() / G_TIME_SPAN_SECOND))
 			|| !(ss->gtq_admin = grid_task_queue_create("admin"))
 			|| !(ss->gtq_reload = grid_task_queue_create("reload"))) {
@@ -252,6 +254,14 @@ _init_configless_structures(struct sqlx_service_s *ss)
 		return FALSE;
 	}
 
+	return TRUE;
+}
+
+static gboolean
+_configure_peering (struct sqlx_service_s *ss)
+{
+	ss->peering = sqlx_peering_factory__create_direct
+		(ss->clients_pool, ss->clients_factory);
 	return TRUE;
 }
 
@@ -294,8 +304,8 @@ _configure_replication(struct sqlx_service_s *ss)
 	replication_config.ctx = ss;
 	replication_config.get_local_url = _get_url;
 	replication_config.get_version = _get_version;
-	replication_config.get_peers = (GError* (*)(gpointer, struct sqlx_name_s*,
-				gboolean nocache, gchar ***)) ss->service_config->get_peers;
+	replication_config.get_peers = (GError* (*)(gpointer, const struct sqlx_name_s*,
+				gboolean, gchar ***)) ss->service_config->get_peers;
 
 	GError *err = election_manager_create(&replication_config,
 			&ss->election_manager);
@@ -357,7 +367,7 @@ _configure_tasks(struct sqlx_service_s *ss)
 
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_bases, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_resolver, NULL, ss);
-	grid_task_queue_register(ss->gtq_admin, 1, _task_retry_elections, NULL, ss);
+	grid_task_queue_register(ss->gtq_admin, 1, _task_react_elections, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 3600, _task_malloc_trim, NULL, ss);
 
 	return TRUE;
@@ -430,7 +440,7 @@ sqlx_service_action(void)
 	network_server_set_cnx_backlog(SRV.server, SRV.cnx_backlog);
 	sqlx_repository_configure_maxbases(SRV.repository, SRV.max_bases);
 
-	election_manager_set_clients(SRV.election_manager, SRV.clients_pool);
+	election_manager_set_peering(SRV.election_manager, SRV.peering);
 	if (SRV.sync)
 		election_manager_set_sync(SRV.election_manager, SRV.sync);
 	sqlx_repository_set_elections(SRV.repository, SRV.election_manager);
@@ -491,6 +501,7 @@ sqlx_service_configure(int argc, char **argv)
 	    && _init_configless_structures(&SRV)
 	    && _configure_with_arguments(&SRV, argc, argv)
 		&& _configure_synchronism(&SRV)
+	    && _configure_peering(&SRV)
 	    && _configure_replication(&SRV)
 	    && _configure_backend(&SRV)
 	    && _configure_tasks(&SRV)
@@ -555,6 +566,8 @@ sqlx_service_specific_fini(void)
 		election_manager_exit_all(SRV.election_manager, 0, TRUE);
 	if (SRV.sync)
 		sqlx_sync_close(SRV.sync);
+	if (SRV.peering)
+		sqlx_peering__destroy(SRV.peering);
 
 	// Cleanup
 	if (SRV.gtq_admin) {
@@ -739,17 +752,24 @@ _task_expire_resolver(gpointer p)
 }
 
 static void
-_task_retry_elections(gpointer p)
+_task_react_elections(gpointer p)
 {
 	if (!grid_main_is_running ())
 		return;
 	if (!PSRV(p)->flag_replicable)
 		return;
 
-	guint count = election_manager_retry_elections(PSRV(p)->election_manager,
-			100, 500 * G_TIME_SPAN_MILLISECOND);
+	guint count = 0;
+
+	const gint64 deadline = oio_ext_monotonic_time() +
+		500 * G_TIME_SPAN_MILLISECOND;
+	while (election_manager_play_timers (PSRV(p)->election_manager)) {
+		++ count;
+		if (oio_ext_monotonic_time () > deadline)
+			break;
+	}
 	if (count)
-		GRID_DEBUG("Retried %u elections", count);
+		GRID_DEBUG("Reacted %u elections", count);
 }
 
 static void

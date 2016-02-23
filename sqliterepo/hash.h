@@ -25,12 +25,6 @@ License along with this library.
 struct hashstr_s;
 struct sqlx_name_s;
 
-/**
- * @addtogroup sqliterepo_misc
- * @param n
- * @param t
- * @return
- */
-struct hashstr_s * sqliterepo_hash_name(struct sqlx_name_s *n);
+struct hashstr_s * sqliterepo_hash_name (const struct sqlx_name_s *n);
 
 #endif /*OIO_SDS__sqliterepo__hash_h*/

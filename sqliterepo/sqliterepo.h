@@ -48,7 +48,7 @@ typedef void (*sqlx_repo_change_hook)(struct sqlx_sqlite3_s *sq3,
 		gpointer cb_data);
 
 typedef void (*sqlx_file_locator_f) (gpointer locator_data,
-		struct sqlx_name_s *n, GString *file_name);
+		const struct sqlx_name_s *n, GString *file_name);
 
 enum sqlx_open_type_e
 {
@@ -211,7 +211,7 @@ void sqlx_repository_call_change_callback(struct sqlx_sqlite3_s *sq3);
 /* Bases operations -------------------------------------------------------- */
 
 GError* sqlx_repository_open_and_lock(sqlx_repository_t *repo,
-		struct sqlx_name_s *n, enum sqlx_open_type_e how,
+		const struct sqlx_name_s *n, enum sqlx_open_type_e how,
 		struct sqlx_sqlite3_s **sq3, gchar **lead);
 
 /** The complement of sqlx_repository_open_and_lock() */
@@ -235,31 +235,31 @@ GError * sqlx_repository_get_version(struct sqlx_sqlite3_s *sq3,
 /** Opens the base (locally) then calls sqlx_repository_get_version() before
  * closing it.  */
 GError * sqlx_repository_get_version2(sqlx_repository_t *repo,
-		struct sqlx_name_s *n, GTree **result);
+		const struct sqlx_name_s *n, GTree **result);
 
 GError* sqlx_repository_has_base2(sqlx_repository_t *repo,
-		 struct sqlx_name_s *n, gchar** bddname);
+		const struct sqlx_name_s *n, gchar** bddname);
 
 #define sqlx_repository_has_base(r,n) sqlx_repository_has_base2(r,n,NULL)
 
 /** Allocates the internal structure for an election, but does not
  * kick it off.  */
 GError* sqlx_repository_prepare_election(sqlx_repository_t *repo,
-		struct sqlx_name_s *n);
+		const struct sqlx_name_s *n);
 
 GError* sqlx_repository_exit_election(sqlx_repository_t *repo,
-		struct sqlx_name_s *n);
+		const struct sqlx_name_s *n);
 
 /** Triggers the global election mechanism on a base given its name */
 GError* sqlx_repository_use_base(sqlx_repository_t *repo,
-		struct sqlx_name_s *n);
+		const struct sqlx_name_s *n);
 
 /** Triggers the global election mechanism on a base given its name and
  * returns when a final status (or a timeout) has been reached.
  * @return NULL if master, an error with code CODE_REDIRECT if slave, an error with
  *         another code if the election failed. */
 GError* sqlx_repository_status_base(sqlx_repository_t *repo,
-		struct sqlx_name_s *n);
+		const struct sqlx_name_s *n);
 
 /** Collect into a buffer the binary dump of the base (i.e. the content
  *  of a valid sqlite3 file, with only the meaningful pages). */

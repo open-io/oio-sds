@@ -40,7 +40,7 @@ _dump_cid (const char *s)
 	const char *dst;
 	struct oio_url_s *url = oio_url_init (s);
 
-	if (url && NULL != oio_url_get_id(url)) {
+	if (url && oio_url_has_fq_container(url) && NULL != oio_url_get_id(url)) {
 		memset(str_id, 0, sizeof(str_id));
 		oio_str_bin2hex(oio_url_get_id(url), oio_url_get_id_size(url),
 				str_id, sizeof(str_id));

@@ -13,9 +13,7 @@ link_directories(
 		${SQLITE3_LIBRARY_DIRS})
 
 
-add_library(sqliteutils SHARED
-		rc.c
-		sqlite_utils.c)
+add_library(sqliteutils SHARED rc.c sqlite_utils.c)
 
 set_target_properties(sqliteutils PROPERTIES SOVERSION ${ABI_VERSION})
 target_link_libraries(sqliteutils metautils
@@ -31,6 +29,7 @@ target_link_libraries(sqlitereporemote metautils
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
 add_library(sqliterepo SHARED
+		gridd_client_pool.c
 		synchro.c
 		version.c
 		cache.c

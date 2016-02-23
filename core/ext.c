@@ -181,7 +181,7 @@ oio_ext_get_reqid (void)
 void
 oio_ext_set_reqid (const char *reqid)
 {
-	 g_private_replace (&th_local_key_reqid, g_strdup (reqid));
+	 g_private_replace (&th_local_key_reqid, reqid ? g_strdup (reqid) : NULL);
 }
 
 void
