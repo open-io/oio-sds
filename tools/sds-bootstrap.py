@@ -1003,8 +1003,16 @@ def generate(ns, ip, options={}):
         f.write(tpl.safe_substitute(env))
 
     # Test agent configuration
-    def only_services(t):
-        return [str(ip) + ':' + str(m[3]) for m in services if m[0] == t]
+    def only_services(type_):
+        for service in services:
+            if service[0] != type_:
+                continue
+            path = env['DATADIR'] + '/%s-%s-%d' % (ns, type_, service[2])
+            entry = {'num': service[2],
+                     'addr': "%s:%d" % (ip, service[3]),
+                     'path': path}
+            yield entry
+
     listing = {}
     listing["ns"] = ns
     listing["namespace"] = ns
