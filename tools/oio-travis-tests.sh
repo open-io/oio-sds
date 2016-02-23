@@ -15,6 +15,6 @@ func_tests () {
 echo -e "\n### UNIT tests\n"
 make -C tests/unit test
 
-func_tests -- -S "SINGLE" -E 3 -C 1000 -B 1 -D 1 -R 1 -X zookeeper
-func_tests -- -S "THREECOPIES" -E 5 -C 65536 -B 1 -D 1 -R 1 -X zookeeper
+func_tests -- -S "SINGLE" -M 1 -E 3 -C 1000 -B 1 -D 1 -R 1 -X zookeeper
+func_tests -- -S "THREECOPIES" -M 1 -E 5 -C 65536 -B 1 -D 1 -R 1 -X zookeeper
 
