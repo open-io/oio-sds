@@ -98,10 +98,8 @@ m2v2_remote_pack_DESTROY(struct oio_url_s *url, guint32 flags)
 		metautils_message_add_field_str(msg, NAME_MSGKEY_FORCE, "1");
 	if (flags & M2V2_DESTROY_FLUSH)
 		metautils_message_add_field_str(msg, NAME_MSGKEY_FLUSH, "1");
-	if (flags & M2V2_DESTROY_PURGE)
-		metautils_message_add_field_str(msg, NAME_MSGKEY_PURGE, "1");
-	if (flags & M2V2_DESTROY_LOCAL)
-		metautils_message_add_field_str(msg, NAME_MSGKEY_LOCAL, "1");
+	if (flags & M2V2_DESTROY_EVENT)
+		metautils_message_add_field_str(msg, NAME_MSGKEY_EVENT, "1");
 
 	return message_marshall_gba_and_clean(msg);
 }
@@ -356,6 +354,13 @@ m2v2_remote_pack_TOUCH_container(struct oio_url_s *url, guint32 flags)
 }
 
 static GByteArray*
+m2v2_remote_pack_ISEMPTY (struct oio_url_s *url)
+{
+	return message_marshall_gba_and_clean(_m2v2_build_request
+			(NAME_MSGNAME_M2V2_ISEMPTY, url, NULL));
+}
+
+static GByteArray*
 m2v2_remote_pack_LINK(struct oio_url_s *url)
 {
 	return message_marshall_gba_and_clean(_m2v2_build_request(NAME_MSGNAME_M2V2_LINK, url, NULL));
@@ -395,7 +400,7 @@ m2v2_remote_execute_DESTROY_many(gchar **targets, struct oio_url_s *url, guint32
 		return NEWERROR(CODE_INTERNAL_ERROR, "invalid target array (NULL)");
 
 	// TODO: factorize with sqlx_remote_execute_DESTROY_many
-	GByteArray *req = m2v2_remote_pack_DESTROY(url, flags | M2V2_DESTROY_LOCAL);
+	GByteArray *req = m2v2_remote_pack_DESTROY(url, flags);
 	struct gridd_client_s **clients = gridd_client_create_many(targets, req, NULL, NULL);
 	metautils_gba_unref(req);
 	req = NULL;
@@ -418,6 +423,12 @@ m2v2_remote_execute_DESTROY_many(gchar **targets, struct oio_url_s *url, guint32
 
 	gridd_clients_free(clients);
 	return err;
+}
+
+GError*
+m2v2_remote_execute_ISEMPTY(const char *target, struct oio_url_s *url)
+{
+	return _m2v2_request(target, m2v2_remote_pack_ISEMPTY(url), NULL);
 }
 
 GError*

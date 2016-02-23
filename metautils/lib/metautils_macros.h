@@ -79,6 +79,7 @@ License along with this library.
 #define NAME_MSGKEY_DISTANCE           "DIST"
 #define NAME_MSGKEY_DRYRUN             "DRYRUN"
 #define NAME_MSGKEY_DST                "DST"
+#define NAME_MSGKEY_EVENT              "E"
 #define NAME_MSGKEY_FLAGS              "FLAGS"
 #define NAME_MSGKEY_FLUSH              "FLUSH"
 #define NAME_MSGKEY_FORCE              "FORCE"

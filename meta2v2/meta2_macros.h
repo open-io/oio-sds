@@ -78,6 +78,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_M2V2_LHID            "M2_LHID"
 # define NAME_MSGNAME_M2V2_LHHASH          "M2_LHHASH"
 # define NAME_MSGNAME_M2V2_LINK            "M2_LINK"
+# define NAME_MSGNAME_M2V2_ISEMPTY         "M2_EMPTY"
 # define NAME_MSGNAME_M2V2_PROP_SET        "M2_PSET"
 # define NAME_MSGNAME_M2V2_PROP_GET        "M2_PGET"
 # define NAME_MSGNAME_M2V2_PROP_DEL        "M2_PDEL"

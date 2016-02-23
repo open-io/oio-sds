@@ -86,23 +86,15 @@ retry:
 }
 
 int
-meta2_filter_action_has_container(struct gridd_filter_ctx_s *ctx,
+meta2_filter_action_empty_container(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	(void) reply;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 
-	if (!url) {
-		GRID_WARN("BUG : Checking container's presence : URL not set");
-		meta2_filter_ctx_set_error (ctx, NEWERROR(CODE_BAD_REQUEST, "No URL"));
-		return FILTER_KO;
-	}
-
-	GError *e = meta2_backend_has_container(m2b, url);
+	GError *e = meta2_backend_container_isempty(m2b, url);
 	if (NULL != e) {
-		GRID_DEBUG("Container test error for [%s] : (%d) %s",
-					oio_url_get(url, OIOURL_WHOLE), e->code, e->message);
 		if (e->code == CODE_CONTAINER_NOTFOUND)
 			hc_decache_reference_service(m2b->resolver, url, NAME_SRVTYPE_META2);
 		meta2_filter_ctx_set_error(ctx, e);
@@ -113,16 +105,37 @@ meta2_filter_action_has_container(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_action_delete_container(struct gridd_filter_ctx_s *ctx,
+meta2_filter_action_has_container(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	(void) reply;
-	guint32 flags = 0;
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 
-	flags |= meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FORCE) ? M2V2_DESTROY_FORCE : 0;
-	flags |= meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FLUSH) ? M2V2_DESTROY_FLUSH : 0;
-	flags |= meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_PURGE) ? M2V2_DESTROY_PURGE : 0;
-	flags |= meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_LOCAL) ? M2V2_DESTROY_LOCAL : 0;
+	GError *e = meta2_backend_has_container(m2b, url);
+	if (NULL != e) {
+		if (e->code == CODE_CONTAINER_NOTFOUND)
+			hc_decache_reference_service(m2b->resolver, url, NAME_SRVTYPE_META2);
+		meta2_filter_ctx_set_error(ctx, e);
+		return FILTER_KO;
+	}
+
+	return FILTER_OK;
+}
+
+#define getflag(F,R,N) do { \
+	if (metautils_message_extract_flag (R, NAME_MSGKEY_##N, 0)) \
+		F |= M2V2_DESTROY_##N; \
+} while (0)
+
+int
+meta2_filter_action_delete_container(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	guint32 flags = 0;
+	getflag (flags,reply->request, FORCE);
+	getflag (flags,reply->request, FLUSH);
+	getflag (flags,reply->request, EVENT);
 
 	GError *err = meta2_backend_destroy_container(
 			meta2_filter_ctx_get_backend(ctx),

@@ -230,27 +230,6 @@ _extract_header_flag(const gchar *n, struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_extract_header_forceflag(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	return _extract_header_flag(NAME_MSGKEY_FORCE, ctx, reply);
-}
-
-int
-meta2_filter_extract_header_purgeflag(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	return _extract_header_flag(NAME_MSGKEY_PURGE, ctx, reply);
-}
-
-int
-meta2_filter_extract_header_flushflag(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	return _extract_header_flag(NAME_MSGKEY_FLUSH, ctx, reply);
-}
-
-int
 meta2_filter_extract_header_localflag(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
