@@ -819,7 +819,6 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 		GRID_TRACE("No status (%d) expected on [%s][%s] (peers found: %s)",
 				expected, args->name.base, args->name.type,
 				args->is_replicated ? "true" : "false");
-		status = ELECTION_LEADER;
 	} else {
 		gchar *url = NULL;
 

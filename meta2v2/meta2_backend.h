@@ -61,17 +61,17 @@ const gchar* meta2_backend_get_local_addr(struct meta2_backend_s *m2);
 
 /* -------------------------------------------------------------------------- */
 
-GError *meta2_backend_has_master_container(struct meta2_backend_s *m2,
-		struct oio_url_s *url);
-
-GError *meta2_backend_has_container(struct meta2_backend_s *m2,
-		struct oio_url_s *url);
-
 GError *meta2_backend_create_container(struct meta2_backend_s *m2,
 		struct oio_url_s *url, struct m2v2_create_params_s *params);
 
 GError* meta2_backend_destroy_container(struct meta2_backend_s *m2,
 		struct oio_url_s *url, guint32 flags);
+
+GError *meta2_backend_has_container(struct meta2_backend_s *m2,
+		struct oio_url_s *url);
+
+GError *meta2_backend_container_isempty (struct meta2_backend_s *m2,
+		struct oio_url_s *url);
 
 /* Destroy all contents of a container. */
 GError* meta2_backend_flush_container(struct meta2_backend_s *m2,

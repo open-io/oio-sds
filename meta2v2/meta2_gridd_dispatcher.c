@@ -99,10 +99,6 @@ static gridd_filter M2V2_CREATE_FILTERS[] =
 static gridd_filter M2V2_DESTROY_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
-	meta2_filter_extract_header_forceflag,
-	meta2_filter_extract_header_purgeflag,
-	meta2_filter_extract_header_flushflag,
-	meta2_filter_extract_header_localflag,
 	meta2_filter_fill_subject,
 	meta2_filter_check_url_cid,
 	meta2_filter_check_backend,
@@ -110,6 +106,19 @@ static gridd_filter M2V2_DESTROY_FILTERS[] =
 	meta2_filter_check_ns_is_master,
 	meta2_filter_check_ns_not_wormed,
 	meta2_filter_action_delete_container,
+	meta2_filter_reply_success,
+	NULL
+};
+
+static gridd_filter M2V2_EMPTY_FILTERS[] =
+{
+	meta2_filter_extract_header_url,
+	meta2_filter_extract_header_localflag,
+	meta2_filter_fill_subject,
+	meta2_filter_check_url_cid,
+	meta2_filter_check_backend,
+	meta2_filter_check_ns_name,
+	meta2_filter_action_empty_container,
 	meta2_filter_reply_success,
 	NULL
 };
@@ -122,7 +131,6 @@ static gridd_filter M2V2_HAS_FILTERS[] =
 	meta2_filter_check_url_cid,
 	meta2_filter_check_backend,
 	meta2_filter_check_ns_name,
-	meta2_filter_check_ns_is_master,
 	meta2_filter_action_has_container,
 	meta2_filter_reply_success,
 	NULL
@@ -437,6 +445,7 @@ meta2_gridd_get_v2_requests(void)
 		{NAME_MSGNAME_M2V2_CREATE,  (hook) meta2_dispatch_all, M2V2_CREATE_FILTERS},
 		{NAME_MSGNAME_M2V2_DESTROY, (hook) meta2_dispatch_all, M2V2_DESTROY_FILTERS},
 		{NAME_MSGNAME_M2V2_HAS,	    (hook) meta2_dispatch_all, M2V2_HAS_FILTERS},
+		{NAME_MSGNAME_M2V2_ISEMPTY, (hook) meta2_dispatch_all, M2V2_EMPTY_FILTERS},
 		{NAME_MSGNAME_M2V2_PURGE,   (hook) meta2_dispatch_all, M2V2_PURGE_FILTERS},
 		{NAME_MSGNAME_M2V2_DEDUP,   (hook) meta2_dispatch_all, M2V2_DEDUP_FILTERS},
 		{NAME_MSGNAME_M2V2_FLUSH,   (hook) meta2_dispatch_all, M2V2_FLUSH_FILTERS},

@@ -511,14 +511,14 @@ command=${EXE_PREFIX}-cluster-agent -s OIO,${NS},agent ${CFGDIR}/agent.conf
 template_gridinit_ns = """
 
 [service.${NS}-conscience]
-group=${NS},localhost,conscience
+group=${NS},localhost,conscience,${IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=true
 command=${EXE_PREFIX}-daemon -q -s OIO,${NS},conscience ${CFGDIR}/${NS}-conscience.conf
 
 [service.${NS}-event-agent]
-group=${NS},localhost,event,${IP}:${PORT}
+group=${NS},localhost,event
 on_die=respawn
 enabled=true
 start_at_boot=false
@@ -797,7 +797,7 @@ def generate(ns, ip, options={}):
                HTTPD_BINARY=HTTPD_BINARY)
 
     env['CHUNK_SIZE'] = getint(options.CHUNK_SIZE, 1024*1024)
-    env['MONITOR_PERIOD'] = getint(options.MONITOR_PERIOD, 1)
+    env['MONITOR_PERIOD'] = getint(options.MONITOR_PERIOD, 5)
     env['PORT_REDIS'] = 6379
 
     if options.NO_ZOOKEEPER is not None:
@@ -835,9 +835,11 @@ def generate(ns, ip, options={}):
         tpl = Template(template_gridinit_header)
         f.write(tpl.safe_substitute(env))
     with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
-        env['PORT'] = port_proxy
+        # Conscience, conscience-agent and event-agent
+        env['PORT'] = port_cs
         tpl = Template(template_gridinit_ns)
         f.write(tpl.safe_substitute(env))
+        # Other services, but not sqlx
         tpl = Template(template_gridinit_service)
         for t, e, n, p in ((t,e,n,p) for t,e,n,p in services if t != 'sqlx'):
             mkdir_noerror(DATADIR + '/' + ns + '-' + t + '-' + str(n))
@@ -849,9 +851,6 @@ def generate(ns, ip, options={}):
 
     # Now create the sqlx and pre-defined schemas
     with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
-        env['PORT'] = port_proxy
-        tpl = Template(template_gridinit_ns)
-        f.write(tpl.safe_substitute(env))
         tpl = Template(template_gridinit_sqlx)
         for t, e, n, p in ((t,e,n,p) for t,e,n,p in services if t == 'sqlx'):
             mkdir_noerror(DATADIR + '/' + ns + '-' + t + '-' + str(n))

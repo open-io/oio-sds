@@ -57,15 +57,16 @@ def release_lock(conn, lockname, identifier):
 
 
 class AccountBackend(object):
-    def __init__(self, conf):
+    def __init__(self, conf, connection=None):
         self.conf = conf
-        self._conn = None
+        self._conn = connection
         self._sentinel = None
         self._sentinel_hosts = conf.get('sentinel_hosts', None)
         self._sentinel_name = conf.get('sentinel_master_name', 'oio')
         self.autocreate = true_value(conf.get('autocreate', 'true'))
 
-        if self._sentinel_hosts:
+        # Do not use Sentinel if a connection object is provided
+        if self._sentinel_hosts and not self._conn:
             self._sentinel = redis.sentinel.Sentinel(
                     [(h, int(p)) for h, p, in (hp.split(':', 2)
                      for hp in self._sentinel_hosts.split(','))])

@@ -71,10 +71,10 @@ GError* m2v2_remote_execute_CREATE(const char *target, struct oio_url_s *url,
 		struct m2v2_create_params_s *pols);
 
 enum m2v2_destroy_flag_e {
-	M2V2_DESTROY_PURGE = 0x01,
+	/* send a destruction event */
+	M2V2_DESTROY_EVENT = 0x01,
 	M2V2_DESTROY_FLUSH = 0x02,
 	M2V2_DESTROY_FORCE = 0x04,
-	M2V2_DESTROY_LOCAL = 0x08,
 };
 
 GError* m2v2_remote_execute_DESTROY(const char *target, struct oio_url_s *url,
@@ -87,6 +87,9 @@ GError* m2v2_remote_execute_DESTROY_many(gchar **targets, struct oio_url_s *url,
 GError* m2v2_remote_execute_PURGE(const char *m2, struct oio_url_s *u, gdouble to);
 GError* m2v2_remote_execute_DEDUP(const char *m2, struct oio_url_s *u, gdouble to);
 GError* m2v2_remote_execute_FLUSH(const char *m2, struct oio_url_s *u, gdouble to);
+
+/* returns an error of not empty (or if an other error occured) */
+GError* m2v2_remote_execute_ISEMPTY(const char *m2, struct oio_url_s *u);
 
 GError* m2v2_remote_execute_HAS(const char *target, struct oio_url_s *url);
 
