@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # Copyright (C) 2015 OpenIO, original work as part of
 # OpenIO Software Defined Storage
 #
@@ -250,8 +251,8 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(c.chunks[2].raw(), chunks[1])
         self.assertEqual(c.chunks[3].raw(), chunks[0])
 
-    def _new_content(self, stgpol, data):
-        old_content = self.content_factory.new(self.container_id, "titi",
+    def _new_content(self, stgpol, data, path="titi"):
+        old_content = self.content_factory.new(self.container_id, path,
                                                len(data), stgpol)
         old_content.upload(StringIO.StringIO(data))
         return self.content_factory.get(self.container_id,
@@ -383,3 +384,23 @@ class TestContentFactory(BaseTestCase):
         content = self._new_content("TWOCOPIES", data)
         with ExpectedException(OrphanChunk):
             content.move_chunk("1234")
+
+    def test_strange_paths(self):
+        for cname in (
+                "Annual report.txt",
+                "foo+bar=foobar.txt",
+                "100%_bug_free.c",
+                "forward/slash/allowed",
+                "I\\put\\backslashes\\and$dollar$signs$in$file$names",
+                "Je suis tombé sur la tête, mais ça va bien.",
+                "%s%f%u%d%%",
+                "carriage\rreturn",
+                "line\nfeed",
+                "ta\tbu\tla\ttion",
+                "controlchars",
+                ):
+            content = self._new_content("SINGLE", "nobody cares", cname)
+            try:
+                self.assertEqual(cname, content.path)
+            finally:
+                pass  # TODO: delete the content

@@ -1,3 +1,4 @@
+from urllib import quote_plus
 from oio.common.http import requests
 from oio.common import exceptions as exc
 from oio.blob.utils import chunk_headers
@@ -24,7 +25,7 @@ def gen_put_headers(meta):
     if meta.get('content_chunksnb'):
         headers.update(
             {chunk_headers['content_chunksnb']: meta['content_chunksnb']})
-    return headers
+    return {k: quote_plus(str(v)) for (k, v) in headers.iteritems()}
 
 
 def extract_headers_meta(headers):

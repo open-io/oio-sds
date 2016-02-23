@@ -193,14 +193,14 @@ _reply_aliases (struct req_args_s *args, GError * err, GSList * beans,
 			}
 		}
 
+		g_string_append(gstr, "{\"name\":\"");
+		oio_str_gstring_append_json_string(gstr, ALIASES_get_alias(a)->str);
 		g_string_append_printf(gstr,
-				"{\"name\":\"%s\""
-				",\"ver\":%"G_GINT64_FORMAT
+				"\",\"ver\":%"G_GINT64_FORMAT
 				",\"ctime\":%"G_GINT64_FORMAT
 				",\"mtime\":%"G_GINT64_FORMAT
 				",\"deleted\":%s"
 				",\"content\":\"",
-				ALIASES_get_alias(a)->str,
 				ALIASES_get_version(a),
 				ALIASES_get_ctime(a),
 				ALIASES_get_mtime(a),

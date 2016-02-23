@@ -86,6 +86,12 @@ static gchar hexa[] =
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 };
 
+static const gchar json_basic_translations[] =
+{
+	  0,   0,   0,   0,   0,   0,   0,   0,
+	'b', 't', 'n',   0, 'f', 'r',   0,   0,
+};
+
 void
 oio_str_reuse(gchar **dst, gchar *src)
 {
@@ -332,9 +338,46 @@ void
 oio_str_gstring_append_json_string (GString *base, const char *s)
 {
 	while (*s) {
-		if (*s == '"')
-			g_string_append_c (base, '\\');
-		g_string_append_c (base, *(s++));
+		if (*s < 0) {  // (part of a) unicode character
+			gunichar c = g_utf8_get_char_validated(s, -1);
+			if (c == (gunichar)-1) {
+				// something wrong happened, let the client deal with it
+				g_string_append_c(base, *(s++));
+			} else if (c == (gunichar)-2) {
+				// middle of a unicode character
+				char *end = g_utf8_next_char(s);
+				while (s < end && *s)
+					g_string_append_c(base, *(s++));
+			} else {
+				g_string_append_unichar(base, c);
+				s = g_utf8_next_char(s);
+			}
+		} else if (*s < ' ') {  // control character
+			g_string_append_c(base, '\\');
+			switch (*s) {
+			case '\b':
+			case '\t':
+			case '\n':
+			case '\f':
+			case '\r':
+				g_string_append_c(base, json_basic_translations[(int)*(s++)]);
+				break;
+			default:
+				g_string_append_printf(base, "u%04x", *(s++));
+				break;
+			}
+		} else {  // printable ASCII character
+			switch (*s) {
+			case '"':
+			case '\\':
+			case '/':
+				g_string_append_c(base, '\\');
+				/* FALLTHROUGH */
+			default:
+				g_string_append_c(base, *(s++));
+				break;
+			}
+		}
 	}
 }
 

@@ -1,5 +1,6 @@
 from oio.common.client import Client
 from oio.common.utils import json
+from urllib import unquote_plus
 
 CONTENT_HEADER_PREFIX = 'x-oio-content-meta-'
 
@@ -9,7 +10,7 @@ def extract_content_headers_meta(headers):
     for key in headers:
         if key.lower().startswith(CONTENT_HEADER_PREFIX):
             short_key = key[len(CONTENT_HEADER_PREFIX):]
-            resp_headers[short_key] = headers[key]
+            resp_headers[short_key] = unquote_plus(headers[key])
     return resp_headers
 
 
