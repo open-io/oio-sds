@@ -41,3 +41,11 @@ python/.eggs/
 # IDE
 .idea
 tags
+
+# cmake
+install_manifest.txt
+CMakeFiles
+*.cmake
+CMakeCache.txt
+Makefile
+Temporary
