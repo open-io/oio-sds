@@ -1639,7 +1639,7 @@ defer_GETVERS(struct election_member_s *member)
 		return;
 	}
 
-	pending = g_strv_length(peers);
+	pending = peers ? g_strv_length(peers) : 0;
 
 	if (member->sent_GETVERS > 0)
 		member_debug(__FUNCTION__ , "GETVERS req lost", member);

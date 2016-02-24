@@ -20,6 +20,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__proxy__actions_h
 # define OIO_SDS__proxy__actions_h 1
 
+struct req_args_s;
+
 enum http_rc_e action_forward (struct req_args_s *args);
 
 enum http_rc_e action_cache_status (struct req_args_s *args);

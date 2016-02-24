@@ -267,7 +267,7 @@ _header_callback(char *b, size_t s, size_t n, void *u)
 	if (colon) {
 		*(colon++) = 0;
 
-		gsize l = g_strv_length (o->headers);
+		const gsize l = g_strv_length (o->headers);
 		o->headers = g_realloc (o->headers, (l+3) * sizeof(void*));
 		o->headers[l+0] = g_strdup (g_strstrip(tmp));
 		o->headers[l+1] = g_strdup (g_strstrip(colon));

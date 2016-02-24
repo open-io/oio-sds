@@ -112,6 +112,11 @@ metautils_encode_lines(gchar **strv)
 gchar **
 g_strdupv_inline(gchar **src)
 {
+	if (!src)
+		return NULL;
+	if (!*src)
+		return g_malloc0(sizeof(void*));
+
 	// get the tail size
 	gsize header = sizeof(void*) * (1+g_strv_length(src));
 	gsize tail = 0;

@@ -149,14 +149,18 @@ _dummy_stgpol(void)
 static void
 __fill_info(GHashTable *params, const char *info)
 {
-	gchar **tok = NULL;
-	tok = g_strsplit(info, "|", 0);
-	for (guint i = 0; i < g_strv_length(tok); i++) {
+	gchar **tok = g_strsplit(info, "|", 0);
+	if (!tok)
+		return;
+
+	const guint max = g_strv_length(tok);
+	for (guint i = 0; i < max; i++) {
 		gchar **kv = g_strsplit(tok[i], "=", 2);
-		if(g_strv_length(kv) == 2) {
-			g_hash_table_insert(params, g_strdup(kv[0]), g_strdup(kv[1]));
+		if (kv) {
+			if (kv[0] && kv[1])
+				g_hash_table_insert(params, g_strdup(kv[0]), g_strdup(kv[1]));
+			g_strfreev(kv);
 		}
-		g_strfreev(kv);
 	}
 
 	g_strfreev(tok);
@@ -166,8 +170,9 @@ static int
 _parse_data_treatments(struct data_treatments_s *dt, const char *config)
 {
 	gchar **tok = g_strsplit(config, ":", 2);
-
-	if (g_strv_length(tok) != 2) {
+	if (!tok)
+		return 0;
+	if (!tok[0] || !tok[1]) {
 		g_strfreev(tok);
 		return 0;
 	}
@@ -215,8 +220,9 @@ static int
 _parse_data_security(struct data_security_s *ds, const char *config)
 {
 	gchar **tok = g_strsplit(config, ":", 2);
-
-	if (g_strv_length(tok) != 2) {
+	if (!tok)
+		return 0;
+	if (!tok[0] || !tok[1]) {
 		g_strfreev(tok);
 		return 0;
 	}
@@ -267,6 +273,8 @@ _load_storage_policy(struct storage_policy_s *sp, GByteArray *gba, namespace_inf
 	gchar **tok = g_strsplit(str, ":", 3);
 	g_free(str);
 
+	if (!tok)
+		return 0;
 	int rc = (3 == g_strv_length(tok))
 		&& NULL != (sp->stgclass = storage_class_init(ni, tok[0]))
 		&& NULL != (sp->datasec = _load_data_security(ni, tok[1]))
