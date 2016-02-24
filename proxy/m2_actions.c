@@ -638,6 +638,8 @@ static enum http_rc_e
 _reply_properties (struct req_args_s *args, GError * err, GSList * beans)
 {
 	if (err) {
+		if (err->code == CODE_BAD_REQUEST)
+			return _reply_format_error (args, err);
 		if (CODE_IS_NOTFOUND(err->code))
 			return _reply_notfound_error (args, err);
 		return _reply_system_error (args, err);
