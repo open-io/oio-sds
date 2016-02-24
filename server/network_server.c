@@ -308,15 +308,23 @@ network_server_clean(struct network_server_s *srv)
 }
 
 static void
-_bind_host(struct network_server_s *srv, const gchar *url, gpointer u,
+_srv_append_endpoint (struct network_server_s *srv, struct endpoint_s *e)
+{
+	const gsize len = g_strv_length((gchar**) srv->endpointv);
+	srv->endpointv = g_realloc(srv->endpointv, sizeof(void*) * (len+2));
+	srv->endpointv[len] = e;
+	srv->endpointv[len+1] = NULL;
+}
+
+static void
+_srv_bind_host(struct network_server_s *srv, const gchar *url, gpointer u,
 		network_transport_factory factory, guint32 flags)
 {
 	EXTRA_ASSERT(srv != NULL);
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(factory != NULL);
 
-	/* endpoint creation */
-	gsize len = strlen(url);
+	const gsize len = strlen(url);
 	struct endpoint_s *e = g_malloc0(sizeof(*e) + 1 + len);
 	e->magic = MAGIC_ENDPOINT;
 	e->fd = -1;
@@ -337,32 +345,28 @@ _bind_host(struct network_server_s *srv, const gchar *url, gpointer u,
 		GRID_DEBUG("URL configured : INET port=%d endpoint=%s", e->port_cfg, e->url);
 	}
 
-	/* append the endpoint to the array in the server */
-	len = g_strv_length((gchar**) srv->endpointv);
-	srv->endpointv = g_realloc(srv->endpointv, sizeof(struct endpoint_s*) * (len+2));
-	srv->endpointv[len] = e;
-	srv->endpointv[len+1] = NULL;
+	_srv_append_endpoint (srv, e);
 }
 
 void
 network_server_bind_host(struct network_server_s *srv, const gchar *url, gpointer u,
 		network_transport_factory factory)
 {
-	_bind_host(srv, url, u, factory, 0);
+	_srv_bind_host(srv, url, u, factory, 0);
 }
 
 void
 network_server_bind_host_lowlatency(struct network_server_s *srv,
 		const gchar *url, gpointer u, network_transport_factory factory)
 {
-	_bind_host(srv, url, u, factory, NETSERVER_LATENCY);
+	_srv_bind_host(srv, url, u, factory, NETSERVER_LATENCY);
 }
 
 void
 network_server_bind_host_throughput(struct network_server_s *srv, const gchar *url, gpointer u,
 		network_transport_factory factory)
 {
-	_bind_host(srv, url, u, factory, NETSERVER_THROUGHPUT);
+	_srv_bind_host(srv, url, u, factory, NETSERVER_THROUGHPUT);
 }
 
 void
