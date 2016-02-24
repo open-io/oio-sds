@@ -14,6 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import sys
 import requests
 
 from oio.blob.client import BlobClient
@@ -102,13 +103,16 @@ class Content(object):
     def upload(self, stream):
         try:
             self._upload(stream)
-        except Exception as e:
+        except:
+            # Keep the stack trace
+            exc_info = sys.exc_info()
             for chunk in self.chunks:
                 try:
                     self.blob_client.chunk_delete(chunk.url)
                 except:
-                    pass
-            raise e
+                    self.logger.warn("Failed to delete %s", chunk.url)
+            # Raise with the original stack trace
+            raise exc_info[0], exc_info[1], exc_info[2]
 
     def _upload(self, stream):
         raise NotImplementedError()

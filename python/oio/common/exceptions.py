@@ -95,4 +95,4 @@ def from_response(resp, body=None):
             message = body
         return cls(http_status, status, message)
     else:
-        return cls(http_status)
+        return cls(http_status, resp.reason)
