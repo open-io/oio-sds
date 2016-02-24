@@ -123,6 +123,11 @@ cli_configure(int argc, char **argv)
 	}
 
 	query = g_strdupv_inline(argv+1);
+	if (!query) {
+		g_printerr("Missing query (as positional arguments)\n");
+		return FALSE;
+	}
+
 	GRID_DEBUG("Executing %u requests", g_strv_length(query));
 
 	dir = oio_directory__create_proxy (oio_url_get(url, OIOURL_NS));
