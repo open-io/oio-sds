@@ -14,10 +14,16 @@ target_link_libraries(oio-tool metautils ${GLIB2_LIBRARIES})
 
 set(OUTPUT      "${CMAKE_CURRENT_BINARY_DIR}/.timestamp")
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/sds-reset.sh
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/oio-unlock-all.sh
+		${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-unlock-all.sh
+		@ONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/oio-wait-scored.sh
+		${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-wait-scored.sh
+		@ONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/oio-reset.sh
 		${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-reset.sh
 		@ONLY)
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/sds-bootstrap.py
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/oio-bootstrap.py
 		${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-bootstrap.py
 		@ONLY)
 
@@ -44,6 +50,8 @@ install(TARGETS
 install(PROGRAMS
 			zk-bootstrap.py
 			zk-reset.py
+			${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-unlock-all.sh
+			${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-wait-scored.sh
 			${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-bootstrap.py
 			${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-reset.sh
 		DESTINATION bin)

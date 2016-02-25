@@ -20,17 +20,81 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "common.h"
 #include "actions.h"
 
+#include <cluster/module/module.h>
+
+GError *
+conscience_remote_get_namespace (const char *cs, namespace_info_t **out)
+{
+	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_CS_GET_NSINFO);
+	GByteArray *gba = NULL;
+	GError *err = gridd_client_exec_and_concat (cs, CS_CLIENT_TIMEOUT,
+			message_marshall_gba_and_clean(req), &gba);
+	if (err) {
+		g_assert (gba == NULL);
+		g_prefix_error(&err, "request: ");
+		return err;
+	}
+
+	*out = namespace_info_unmarshall(gba->data, gba->len, &err);
+	g_byte_array_unref (gba);
+	if (*out) return NULL;
+	GSETERROR(&err, "Decoding error");
+	return err;
+}
+
+GError *
+conscience_remote_get_services(const char *cs, const char *type, gboolean full,
+		GSList **out)
+{
+	EXTRA_ASSERT(type != NULL);
+	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_CS_GET_SRV);
+	metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, type);
+	if (full)
+		metautils_message_add_field_str(req, NAME_MSGKEY_FULL, "1");
+	return gridd_client_exec_and_decode (cs, CS_CLIENT_TIMEOUT,
+			message_marshall_gba_and_clean(req), out, service_info_unmarshall);
+}
+
+GError *
+conscience_remote_get_types(const char *cs, GSList **out)
+{
+	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_CS_GET_SRVNAMES);
+	return gridd_client_exec_and_decode (cs, CS_CLIENT_TIMEOUT,
+			message_marshall_gba_and_clean(req), out, strings_unmarshall);
+}
+
+GError *
+conscience_remote_push_services(const char *cs, GSList *ls)
+{
+	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_CS_PUSH_SRV);
+	metautils_message_add_body_unref (req, service_info_marshall_gba (ls, NULL));
+	return gridd_client_exec (cs, CS_CLIENT_TIMEOUT,
+			message_marshall_gba_and_clean(req));
+}
+
+GError*
+conscience_remote_remove_services(const char *cs, const char *type, GSList *ls)
+{
+	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_CS_RM_SRV);
+	if (ls)
+		metautils_message_add_body_unref (req, service_info_marshall_gba (ls, NULL));
+	if (type) metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, type);
+	return gridd_client_exec (cs, CS_CLIENT_TIMEOUT,
+			message_marshall_gba_and_clean(req));
+}
+
+/* -------------------------------------------------------------------------- */
+
 static GError *
 _cs_check_tokens (struct req_args_s *args)
 {
 	// XXX All the handler use the NS, this should have been checked earlier.
 	if (!validate_namespace(NS()))
-		return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Invalid NS");
+		return BADNS();
 
-	if (TYPE()) {
-		if (!validate_srvtype(TYPE()))
-			return NEWERROR(CODE_SRVTYPE_NOTMANAGED, "Invalid srvtype");
-	}
+	const char *type = TYPE();
+	if (type && !validate_srvtype(type))
+		return BADSRVTYPE();
 	return NULL;
 }
 
@@ -54,6 +118,20 @@ enum reg_op_e {
 	REGOP_UNLOCK,
 };
 
+#ifdef HAVE_EXTRA_DEBUG
+static const char*
+_regop_2str (const enum reg_op_e op)
+{
+	switch (op) {
+		ON_ENUM(REGOP_,PUSH);
+		ON_ENUM(REGOP_,LOCK);
+		ON_ENUM(REGOP_,UNLOCK);
+	}
+	g_assert_not_reached ();
+	return "?";
+}
+#endif
+
 static enum http_rc_e
 _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *jsrv)
 {
@@ -63,8 +141,7 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 		return _reply_common_error (args, BADREQ("Expected: json object"));
 
 	if (!push_queue)
-		return _reply_bad_gateway(args, NEWERROR(CODE_INTERNAL_ERROR,
-					"Service upstream disabled"));
+		return _reply_bad_gateway(args, SYSERR("Service upstream disabled"));
 
 	if (NULL != (err = _cs_check_tokens(args)))
 		return _reply_notfound_error (args, err);
@@ -73,6 +150,7 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 	err = service_info_load_json_object (jsrv, &si, TRUE);
 
 	if (err) {
+		g_prefix_error (&err, "JSON error: ");
 		if (err->code == CODE_BAD_REQUEST)
 			return _reply_format_error (args, err);
 		else
@@ -85,28 +163,44 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 	}
 
 	if (!si->ns_name[0]) {
+		GRID_TRACE2("%s NS forced to %s", __FUNCTION__, si->ns_name);
 		g_strlcpy (si->ns_name, nsname, sizeof(si->ns_name));
 	} else if (!validate_namespace (si->ns_name)) {
 		service_info_clean (si);
-		return _reply_format_error (args, NEWERROR (CODE_NAMESPACE_NOTMANAGED,
-					"Unexpected NS"));
+		return _reply_format_error (args, BADNS());
 	}
 
-	if (op == REGOP_PUSH)
-		si->score.value = SCORE_UNSET;
-	else if (op == REGOP_UNLOCK)
-		si->score.value = SCORE_UNLOCK;
-	else /* if (op == REGOP_LOCK) */
-		si->score.value = CLAMP(si->score.value, SCORE_DOWN, SCORE_MAX);
+	gchar *k = service_info_key (si);
+	STRING_STACKIFY(k);
+	GRID_TRACE2("%s op=%s score=%d key=[%s]", __FUNCTION__,
+			_regop_2str(op), si->score.value, k);
+
+	switch (op) {
+		case REGOP_PUSH:
+			si->score.value = SCORE_UNSET;
+			if (!service_is_known (k)) {
+				service_learn (k);
+				service_tag_set_value_boolean (service_info_ensure_tag (
+							si->tags, NAME_TAGNAME_RAWX_FIRST), TRUE);
+			}
+			break;
+		case REGOP_LOCK:
+			si->score.value = CLAMP(si->score.value, SCORE_DOWN, SCORE_MAX);
+			break;
+		case REGOP_UNLOCK:
+			si->score.value = SCORE_UNLOCK;
+			break;
+		default:
+			g_assert_not_reached();
+	}
 
 	if (cs_expire_local_services > 0) {
-		gchar *k = service_info_key (si);
 		struct service_info_s *v = service_info_dup (si);
 		v->score.timestamp = oio_ext_monotonic_seconds ();
 		PUSH_DO(
 			const struct service_info_s *si0 = lru_tree_get(srv_registered, k);
 			if (si0) v->score.value = si0->score.value;
-			lru_tree_insert (srv_registered, k, v);
+			lru_tree_insert (srv_registered, g_strdup(k), v);
 		);
 	}
 
@@ -133,7 +227,7 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 	}
 }
 
-//------------------------------------------------------------------------------
+/* -------------------------------------------------------------------------- */
 
 enum http_rc_e
 action_conscience_info (struct req_args_s *args)

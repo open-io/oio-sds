@@ -43,17 +43,17 @@ GError * oio_cs_client__lock_service (struct oio_cs_client_s *self,
 		const char *in_type, const struct oio_cs_registration_s *reg,
 		int score);
 
+GError * oio_cs_client__unlock_service (struct oio_cs_client_s *self,
+		const char *in_type, const struct oio_cs_registration_s *reg);
+
 GError * oio_cs_client__deregister_service (struct oio_cs_client_s *self,
-		const char *in_type, const char *id);
+		const char *in_type, const struct oio_cs_registration_s *reg);
 
 GError * oio_cs_client__flush_services (struct oio_cs_client_s *self,
 		const char *in_type);
 
-GError * oio_cs_client__unlock_service (struct oio_cs_client_s *self,
-		const char *in_type, const char *id);
-
 GError * oio_cs_client__list_services (struct oio_cs_client_s *self,
-		const char *in_type,
+		const char *in_type, gboolean full,
 		void (*on_reg) (const struct oio_cs_registration_s *reg, int score));
 
 GError * oio_cs_client__list_types (struct oio_cs_client_s *self,

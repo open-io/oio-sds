@@ -39,6 +39,16 @@ class BaseTestCase(testtools.TestCase):
 
     _last_cache_flush = 0
 
+    def get_service_url(self, srvtype, i=0):
+        allsrv = self.conf[srvtype]
+        srv = allsrv[i]
+        return srv['num'], srv['path'], srv['addr']
+
+    def get_service(self, srvtype, i=0):
+        num, path, addr = self.get_service_url(srvtype, i=i)
+        ip, port = addr.split(':')
+        return num, path, ip, port
+
     def _url(self, name):
         return '/'.join((self.uri, "v3.0", self.ns, name))
 
@@ -66,7 +76,7 @@ class BaseTestCase(testtools.TestCase):
     def setUp(self):
         super(BaseTestCase, self).setUp()
         self.conf = get_config()
-        self.uri = self.conf['proxyd_uri']
+        self.uri = 'http://' + self.conf['proxy'][0]['addr']
         self.ns = self.conf['namespace']
         if 'account' in self.conf:
             self.account = self.conf['account']

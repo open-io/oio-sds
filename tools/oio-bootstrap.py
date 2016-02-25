@@ -27,7 +27,7 @@ import re
 template_redis = """
 daemonize no
 pidfile ${RUNDIR}/redis.pid
-port ${PORT_REDIS}
+port ${PORT}
 tcp-backlog 128
 bind ${IP}
 timeout 0
@@ -79,31 +79,31 @@ aof-rewrite-incremental-fsync yes
 """
 
 template_redis_gridinit = """
-[service.${NS}-redis-${SRVNUM}]
-group=${NS},localhost,redis,${IP}:${PORT}
+[service.${NS}-${SRVTYPE}-${SRVNUM}]
+group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=redis-server ${CFGDIR}/${NS}-redis-${SRVNUM}.conf
+command=redis-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 """
 
 template_account_gridinit = """
-[service.${NS}-account]
-group=${NS},localhost,account,${IP}:${PORT}
+[service.${NS}-${SRVTYPE}-${SRVNUM}]
+group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-account-server ${CFGDIR}/${NS}-account.conf
+command=${EXE_PREFIX}-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
 template_rdir_gridinit = """
-[service.${NS}-rdir]
-group=${NS},localhost,rdir,${IP}:${PORT}
+[service.${NS}-${SRVTYPE}-${SRVNUM}]
+group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-rdir-server ${CFGDIR}/${NS}-rdir.conf
+command=${EXE_PREFIX}-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
@@ -133,7 +133,7 @@ LoadModule dav_rawx_module @APACHE2_MODULES_DIRS@/mod_dav_rawx.so
 </IfModule>
 
 Listen ${IP}:${PORT}
-PidFile ${RUNDIR}/${NS}-${SRVTYPE}-httpd-${SRVNUM}.pid
+PidFile ${RUNDIR}/${NS}-${SRVTYPE}-${SRVNUM}.pid
 ServerRoot ${TMPDIR}
 ServerName localhost
 ServerSignature Off
@@ -145,9 +145,9 @@ User  ${USER}
 Group ${GROUP}
 
 LogFormat "%h %l %t \\"%r\\" %>s %b %D" log/common
-ErrorLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-httpd-${SRVNUM}-errors.log
+ErrorLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-errors.log
 SetEnvIf Request_URI "/(stat|info)$" nolog
-CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-httpd-${SRVNUM}-access.log log/common env=!nolog
+CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-access.log log/common env=!nolog
 LogLevel info
 
 <IfModule mod_env.c>
@@ -209,7 +209,7 @@ LoadModule dav_rainx_module @APACHE2_MODULES_DIRS@/mod_dav_rainx.so
 </IfModule>
 
 Listen ${IP}:${PORT}
-PidFile ${RUNDIR}/${NS}-${SRVTYPE}-httpd-${SRVNUM}.pid
+PidFile ${RUNDIR}/${NS}-${SRVTYPE}-${SRVNUM}.pid
 ServerRoot ${TMPDIR}
 ServerName localhost
 ServerSignature Off
@@ -221,9 +221,9 @@ User  ${USER}
 Group ${GROUP}
 
 LogFormat "%h %l %t \\"%r\\" %>s %b %D" log/common
-ErrorLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-httpd-${SRVNUM}-errors.log
+ErrorLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-errors.log
 SetEnvIf Request_URI "/(stat|info)$" nolog
-CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-httpd-${SRVNUM}-access.log log/common env=!nolog
+CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-access.log log/common env=!nolog
 LogLevel info
 
 <IfModule mod_env.c>
@@ -272,7 +272,7 @@ checks:
     - {type: tcp}
 
 stats:
-    - {type: volume, path: ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}}
+    - {type: volume, path: ${VOLUME}}
     - {type: meta}
     - {type: system}
 """
@@ -310,7 +310,7 @@ checks:
     - {type: http, uri: /info}
 
 stats:
-    - {type: volume, path: ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}}
+    - {type: volume, path: ${VOLUME}}
     - {type: rawx, path: /stat}
     - {type: system}
 """
@@ -324,7 +324,7 @@ checks:
     - {type: tcp}
 
 stats:
-    - {type: volume, path: ${RDIR_DB_PATH}}
+    - {type: volume, path: ${VOLUME}}
     - {type: http, path: /status, parser: json}
     - {type: system}
 """
@@ -338,34 +338,11 @@ checks:
     - {type: tcp}
 
 stats:
-    - {type: volume, path: ${REDIS_DB_PATH}}
+    - {type: volume, path: ${VOLUME}}
     - {type: system}
 """
 
-template_agent = """
-[General]
-user=${UID}
-group=${GID}
-
-service_check_freq=1
-cluster_update_freq=1
-
-period_get_ns=1
-period_get_srv=1
-period_get_srvtype=1
-period_push_srv=1
-
-[server.inet]
-port=${PORT}
-
-[server.unix]
-mode=0666
-uid=${UID}
-gid=${GID}
-path=${RUNDIR}/agent.sock
-"""
-
-template_conscience = """
+template_conscience_service = """
 [General]
 to_op=1000
 to_cnx=1000
@@ -403,6 +380,9 @@ path=${LIBDIR}/grid/msg_conscience.so
 param_namespace=${NS}
 param_chunk_size=${CHUNK_SIZE}
 
+param_hub.me=tcp://${IP}:${PORT_HUB}
+param_hub.group=${CS_ALL_HUB}
+
 param_option.service_update_policy=meta2=KEEP|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|;rdir=KEEP|1|1|user_is_a_service=1
 param_option.meta2_max_versions=${VERSIONING}
 param_option.lb.rawx=WRR?shorten_ratio=1.0&standard_deviation=no
@@ -414,39 +394,39 @@ param_option.FLATNS_hash_size=0
 param_option.FLATNS_hash_bitlength=17
 
 param_option.storage_policy=${STGPOL}
-param_storage_conf=${CFGDIR}/${NS}-conscience-policies.conf
+param_storage_conf=${CFGDIR}/${NS}-policies.conf
 
 param_service.meta0.score_timeout=3600
 param_service.meta0.score_variation_bound=5
-param_service.meta0.score_expr=((num stat.io)>=5) * ((num stat.space)>=5) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+param_service.meta0.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
 
 param_service.meta1.score_timeout=120
 param_service.meta1.score_variation_bound=5
-param_service.meta1.score_expr=((num stat.io)>=5) * ((num stat.space)>=5) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+param_service.meta1.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
 
 param_service.meta2.score_timeout=120
 param_service.meta2.score_variation_bound=5
-param_service.meta2.score_expr=((num stat.io)>=5) * ((num stat.space)>=5) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+param_service.meta2.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
 
 param_service.rawx.score_timeout=120
 param_service.rawx.score_variation_bound=5
-param_service.rawx.score_expr=(num tag.up) * ((num stat.io)>=5) * ((num stat.space)>=5) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
-
-param_service.rainx.score_timeout=120
-param_service.rainx.score_variation_bound=5
-param_service.rainx.score_expr=(num tag.up) * (num stat.cpu)
+param_service.rawx.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
 
 param_service.sqlx.score_timeout=120
 param_service.sqlx.score_variation_bound=5
-param_service.sqlx.score_expr=((num stat.io)>=5) * ((num stat.space)>=5) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+param_service.sqlx.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
 
 param_service.rdir.score_timeout=120
 param_service.rdir.score_variation_bound=5
-param_service.rdir.score_expr=(num tag.up) * (num stat.cpu) * ((num stat.space)>=2)
+param_service.rdir.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+
+param_service.rainx.score_timeout=120
+param_service.rainx.score_variation_bound=5
+param_service.rainx.score_expr=(num stat.cpu)
 
 param_service.redis.score_timeout=120
 param_service.redis.score_variation_bound=5
-param_service.redis.score_expr=(num tag.up) * (num stat.cpu)
+param_service.redis.score_expr=(num stat.cpu)
 
 param_service.oiofs.score_timeout=120
 param_service.oiofs.score_variation_bound=5
@@ -454,7 +434,7 @@ param_service.oiofs.score_expr=(num stat.cpu)
 
 param_service.account.score_timeout=120
 param_service.account.score_variation_bound=5
-param_service.account.score_expr=(num tag.up) * (num stat.cpu)
+param_service.account.score_expr=(num stat.cpu)
 
 param_service.echo.score_timeout=120
 param_service.echo.score_variation_bound=5
@@ -501,23 +481,9 @@ env.LD_LIBRARY_PATH=${HOME}/.local/@LD_LIBDIR@:${LIBDIR}
 
 #include=${CFGDIR}/*-gridinit.conf
 
-[service.gridagent]
-group=common,localhost,agent
-on_die=respawn
-enabled=false
-start_at_boot=true
-command=${EXE_PREFIX}-cluster-agent -s OIO,${NS},agent ${CFGDIR}/agent.conf
-
 """
 
 template_gridinit_ns = """
-
-[service.${NS}-conscience]
-group=${NS},localhost,conscience,${IP}:${PORT}
-on_die=respawn
-enabled=true
-start_at_boot=true
-command=${EXE_PREFIX}-daemon -q -s OIO,${NS},conscience ${CFGDIR}/${NS}-conscience.conf
 
 [service.${NS}-event-agent]
 group=${NS},localhost,event
@@ -536,7 +502,16 @@ command=${EXE_PREFIX}-conscience-agent ${CFGDIR}/conscience-agent.yml
 env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
-template_gridinit_service = """
+template_conscience_gridinit = """
+[service.${NS}-conscience-${SRVNUM}]
+group=${NS},localhost,conscience,${IP}:${PORT}
+on_die=respawn
+enabled=true
+start_at_boot=true
+command=${EXE_PREFIX}-daemon -s OIO,${NS},cs,${SRVNUM} ${CFGDIR}/${NS}-conscience-${SRVNUM}.conf
+"""
+
+template_gridinit_meta = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 on_die=respawn
@@ -557,7 +532,7 @@ command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O DirectorySchemas=${CFGDIR}/s
 template_gridinit_rawx = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-command=${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-httpd-${SRVNUM}.conf
+command=${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 enabled=true
 start_at_boot=false
 on_die=respawn
@@ -566,7 +541,7 @@ on_die=respawn
 template_gridinit_rainx = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-command=${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-httpd-${SRVNUM}.conf
+command=${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 enabled=true
 start_at_boot=false
 on_die=respawn
@@ -574,16 +549,15 @@ on_die=respawn
 
 template_local_header = """
 [default]
-agent=${RUNDIR}/agent.sock
 """
 
 template_local_ns = """
 [${NS}]
 ${NOZK}zookeeper=${IP}:2181
-conscience=${IP}:${PORT_CS}
 #proxy-local=${RUNDIR}/${NS}-proxy.sock
 proxy=${IP}:${PORT_PROXYD}
 event-agent=ipc://${RUNDIR}/event-agent.sock
+conscience=${CS_ALL_PUB}
 """
 
 template_event_agent = """
@@ -591,7 +565,7 @@ template_event_agent = """
 namespace = ${NS}
 user = ${USER}
 bind_addr = ipc://${RUNDIR}/event-agent.sock
-queue_location = ${EVENT_DB_PATH}/queue.db
+queue_location = ${VOLUME}/queue.db
 retries_per_second = 30
 batch_size = 500
 workers = 5
@@ -607,7 +581,7 @@ user: ${USER}
 log_level: INFO
 log_facility: LOG_LOCAL0
 log_address: /dev/log
-syslog_prefix: OIO,${NS},conscience-agent,1
+syslog_prefix: OIO,${NS},${SRVTYPE},${SRVNUM}
 check_interval: ${MONITOR_PERIOD}
 rise: 1
 fall: 1
@@ -623,7 +597,7 @@ autocreate = true
 log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
-syslog_prefix = OIO,${NS},account,1
+syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 
 # Let this option empty to connect directly to redis_host
 #sentinel_hosts = 127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381
@@ -635,7 +609,7 @@ template_rdir = """
 bind_addr = ${IP}
 bind_port = ${PORT}
 namespace = ${NS}
-db_path= ${RDIR_DB_PATH}
+db_path= ${VOLUME}
 # Currently, only 1 worker is allowed to avoid concurrent access to leveldb
 workers = 1
 log_facility = LOG_LOCAL0
@@ -645,8 +619,8 @@ syslog_prefix = OIO,${NS},rdir,1
 """
 
 sqlx_schemas = (
-	("sqlx", ""),
-	("sqlx.mail", """
+    ("sqlx", ""),
+    ("sqlx.mail", """
 CREATE TABLE IF NOT EXISTS box (
 		name TEXT NOT NULL PRIMARY KEY,
 		ro INT NOT NULL DEFAULT 0,
@@ -657,25 +631,25 @@ CREATE TABLE IF NOT EXISTS box (
 		uidvalidity INT NOT NULL DEFAULT 0);
 
 CREATE TABLE IF NOT EXISTS boxattr (
-		box TEXT NOT NULL,
-		k TEXT NOT NULL,
-		v TEXT NOT NULL,
-		PRIMARY KEY (box,k));
+        box TEXT NOT NULL,
+        k TEXT NOT NULL,
+        v TEXT NOT NULL,
+        PRIMARY KEY (box,k));
 
 CREATE TABLE IF NOT EXISTS mail (
-		seq INTEGER PRIMARY KEY AUTOINCREMENT,
-		uid TEXT NOT NULL UNIQUE,
-		guid TEXT NOT NULL UNIQUE,
-		box TEXT NOT NULL,
-		oiourl TEXT NOT NULL,
-		len INTEGER NOT NULL,
-		hlen INTEGER NOT NULL);
+        seq INTEGER PRIMARY KEY AUTOINCREMENT,
+        uid TEXT NOT NULL UNIQUE,
+        guid TEXT NOT NULL UNIQUE,
+        box TEXT NOT NULL,
+        oiourl TEXT NOT NULL,
+        len INTEGER NOT NULL,
+        hlen INTEGER NOT NULL);
 
 CREATE TABLE IF NOT EXISTS mailattr (
-		guid TEXT NOT NULL,
-		k TEXT NOT NULL,
-		v TEXT NOT NULL,
-		PRIMARY KEY (guid,k));
+        guid TEXT NOT NULL,
+        k TEXT NOT NULL,
+        v TEXT NOT NULL,
+        PRIMARY KEY (guid,k));
 
 CREATE INDEX IF NOT EXISTS boxattr_index_by_box ON boxattr(box);
 CREATE INDEX IF NOT EXISTS mail_index_by_box ON mail(box);
@@ -700,6 +674,12 @@ LIBDIR = CODEDIR + '/@LD_LIBDIR@'
 PATH = HOME+"/.local/bin:@CMAKE_INSTALL_PREFIX@/bin:/usr/sbin"
 port = 6000
 
+defaults_small = {'NB_CS':1, 'NB_M0':1, 'NB_M1':1, 'NB_M2':1, 'NB_SQLX':1,
+            'NB_RAWX':2, 'NB_RAINX':1}
+
+defaults_multi = {'NB_CS':3, 'NB_M0':1, 'NB_M1':5, 'NB_M2':5, 'NB_SQLX':5,
+            'NB_RAWX':7, 'NB_RAINX':3}
+
 # XXX When /usr/sbin/httpd is present we suspect a Redhat/Centos/Fedora
 # environment. If not, we consider being in a Ubuntu/Debian environment.
 # Sorry for the others, we cannot manage everything in this helper script for
@@ -711,6 +691,21 @@ if not os.path.exists('/usr/sbin/httpd'):
     HTTPD_BINARY = '/usr/sbin/apache2'
     APACHE2_MODULES_SYSTEM_DIR = '/usr/lib/apache2/'
 
+
+def record(env):
+    out = {'addr':str(env['IP']) + ':' + str(env['PORT']), 'num':env['SRVNUM']}
+    if 'VOLUME' in env:
+        out['path'] = env['VOLUME']
+    return out
+
+def config(env):
+    return '{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.conf'.format(**env)
+
+def watch(env):
+    return '{WATCHDIR}/{NS}-{SRVTYPE}-{SRVNUM}.yml'.format(**env)
+
+def gridinit(env):
+    return '{CFGDIR}/gridinit.conf'.format(**env)
 
 def mkdir_noerror(d):
     try:
@@ -730,7 +725,7 @@ def next_port():
     return res
 
 
-def generate(ns, ip, options={}):
+def generate(ns, ip, options={}, defaults={}):
     def getint(v, default):
         if v is None:
             return int(default)
@@ -739,65 +734,39 @@ def generate(ns, ip, options={}):
     global port
     port = getint(options.PORT_START, 6000)
 
-    port_cs = next_port()
-    port_agent = next_port()
+    all_services = {}
+
     port_proxy = next_port()
-    port_account = next_port()
     port_event_agent = next_port()
     port_rdir = next_port()
-    rawx = []
-    rainx = []
-    services = []
 
     versioning = 1
     stgpol = "SINGLE"
 
-    meta2_replicas = getint(options.M2_REPLICAS, 3)
-    sqlx_replicas = getint(options.SQLX_REPLICAS, 1)
+    meta2_replicas = getint(options.M2_REPLICAS, defaults['NB_M2'])
+    sqlx_replicas = getint(options.SQLX_REPLICAS, defaults['NB_SQLX'])
 
     if options.M2_VERSIONS is not None:
         versioning = int(options.M2_VERSIONS)
     if options.M2_STGPOL is not None:
         stgpol = str(options.M2_STGPOL)
 
-    if options.NO_META0 is None:
-        for i in range(1, 1+getint(options.NB_META0, 1)):
-            srv = ('meta0', EXE_PREFIX + '-meta0-server', i, next_port())
-            services.append(srv)
-    if options.NO_META1 is None:
-        for i in range(1, 1+getint(options.NB_META1, 3)):
-            srv = ('meta1', EXE_PREFIX + '-meta1-server', i, next_port())
-            services.append(srv)
-    if options.NO_META2 is None:
-        for i in range(1, 1+getint(options.NB_META2, meta2_replicas)):
-            srv = ('meta2', EXE_PREFIX + '-meta2-server', i, next_port())
-            services.append(srv)
-    if options.NO_SQLX is None:
-        for i in range(1, 1+getint(options.NB_SQLX, sqlx_replicas)):
-            srv = ('sqlx',  EXE_PREFIX + '-sqlx-server', i, next_port())
-            services.append(srv)
-    if options.NO_RAWX is None:
-        for i in range(1, 1+getint(options.NB_RAWX, 3)):
-            rawx.append((i, next_port()))
-    if options.NO_RAINX is None:
-        for i in range(1, 1+getint(options.NB_RAINX, 1)):
-            rainx.append((i, next_port()))
-
-    print "Deploying", repr(services)
-
-    env = dict(IP=ip, NS=ns, HOME=HOME, EXE_PREFIX=EXE_PREFIX,
+    ENV = dict(IP=ip, NS=ns, HOME=HOME, EXE_PREFIX=EXE_PREFIX,
                PATH=PATH, LIBDIR=LIBDIR,
-               SDSDIR=SDSDIR, TMPDIR=TMPDIR,
-               DATADIR=DATADIR, CFGDIR=CFGDIR, RUNDIR=RUNDIR,
+               OIODIR=OIODIR, SDSDIR=SDSDIR, TMPDIR=TMPDIR,
+               DATADIR=DATADIR,
+               CFGDIR=CFGDIR,
+               RUNDIR=RUNDIR,
                SPOOLDIR=SPOOLDIR,
-               LOGDIR=LOGDIR, CODEDIR=CODEDIR,
+               LOGDIR=LOGDIR,
+               CODEDIR=CODEDIR,
+               WATCHDIR=WATCHDIR,
                UID=str(os.geteuid()),
                GID=str(os.getgid()),
                USER=str(pwd.getpwuid(os.getuid()).pw_name),
                GROUP=str(grp.getgrgid(os.getgid()).gr_name),
                VERSIONING=versioning,
                STGPOL=stgpol,
-               PORT_CS=port_cs,
                PORT_PROXYD=port_proxy,
                M2_REPLICAS=meta2_replicas,
                M2_DISTANCE=str(1),
@@ -806,14 +775,21 @@ def generate(ns, ip, options={}):
                APACHE2_MODULES_SYSTEM_DIR=APACHE2_MODULES_SYSTEM_DIR,
                HTTPD_BINARY=HTTPD_BINARY)
 
-    env['CHUNK_SIZE'] = getint(options.CHUNK_SIZE, 1024*1024)
-    env['MONITOR_PERIOD'] = getint(options.MONITOR_PERIOD, 5)
-    env['PORT_REDIS'] = 6379
+    def merge_env(add):
+        env = dict(ENV)
+        env.update(add)
+        return env
+    def subenv(add):
+        env = merge_env(add)
+        env['VOLUME'] = '{DATADIR}/{NS}-{SRVTYPE}-{SRVNUM}'.format(**env)
+        return env
 
+    ENV['CHUNK_SIZE'] = getint(options.CHUNK_SIZE, 1024*1024)
+    ENV['MONITOR_PERIOD'] = getint(options.MONITOR_PERIOD, 5)
     if options.NO_ZOOKEEPER is not None:
-        env['NOZK'] = '#'
+        ENV['NOZK'] = '#'
     else:
-        env['NOZK'] = ''
+        ENV['NOZK'] = ''
 
     mkdir_noerror(SDSDIR)
     mkdir_noerror(CODEDIR)
@@ -823,243 +799,211 @@ def generate(ns, ip, options={}):
     mkdir_noerror(RUNDIR)
     mkdir_noerror(LOGDIR)
 
-    # Global SDS configuration
-    with open(OIODIR + '/' + 'sds.conf', 'w+') as f:
-        tpl = Template(template_local_header)
-        f.write(tpl.safe_substitute(env))
-        tpl = Template(template_local_ns)
-        f.write(tpl.safe_substitute(env))
+    def add_service(env):
+        t = env['SRVTYPE']
+        if t not in all_services:
+            all_services[t] = []
+        all_services[t].append(record(env))
 
-    # Conscience configuration
-    with open(CFGDIR + '/' + ns + '-conscience.conf', 'w+') as f:
-        env['PORT'] = port_cs
-        tpl = Template(template_conscience)
-        f.write(tpl.safe_substitute(env))
-    with open(CFGDIR + '/' + ns + '-conscience-policies.conf', 'w+') as f:
-        tpl = Template(template_conscience_policies)
-        f.write(tpl.safe_substitute(env))
-
-    # Generate the "GRIDD-like" services, excepted the sqlx that require
-    # specific options
-    with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
+    # gridinit header
+    with open(gridinit(ENV), 'w+') as f:
         tpl = Template(template_gridinit_header)
-        f.write(tpl.safe_substitute(env))
-    with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
-        # Conscience, conscience-agent and event-agent
-        env['PORT'] = port_cs
-        tpl = Template(template_gridinit_ns)
-        f.write(tpl.safe_substitute(env))
-        # Other services, but not sqlx
-        tpl = Template(template_gridinit_service)
-        for t, e, n, p in ((t,e,n,p) for t,e,n,p in services if t != 'sqlx'):
-            mkdir_noerror(DATADIR + '/' + ns + '-' + t + '-' + str(n))
-            env['SRVTYPE'] = t
-            env['SRVNUM'] = n
-            env['PORT'] = p
-            env['EXE'] = e
+        f.write(tpl.safe_substitute(ENV))
+
+    # consciences
+    if options.NO_CS is None:
+        cs = list()
+        with open('{CFGDIR}/{NS}-policies.conf'.format(**ENV), 'w+') as f:
+            tpl = Template(template_conscience_policies)
+            f.write(tpl.safe_substitute(ENV))
+        # Prepare a list of consciences
+        for num in range(1, 1+getint(options.NB_CS, defaults['NB_CS'])):
+            cs.append((num, next_port(), next_port()))
+        ENV.update({
+                    'CS_ALL_PUB': ','.join([str(ip)+':'+str(pub) for _,pub,_ in cs]),
+                    'CS_ALL_HUB': ','.join(['tcp://'+str(ip)+':'+str(hub) for _,_,hub in cs]),
+        })
+        for num, pub, hub in cs:
+            env = subenv({'SRVTYPE':'conscience', 'SRVNUM':num, 'PORT':pub, 'PORT_HUB':hub})
+            add_service(env)
+            with open(gridinit(env), 'a+') as f:
+                tpl = Template(template_conscience_gridinit)
+                f.write(tpl.safe_substitute(env))
+            with open(config(env), 'w+') as f:
+                tpl = Template(template_conscience_service)
+                f.write(tpl.safe_substitute(env))
+
+    # meta* + sqlx
+    def generate_meta(t,n,tpl):
+        env = subenv({'SRVTYPE':t, 'SRVNUM':n, 'PORT':next_port(),
+                      'EXE':EXE_PREFIX + '-' + t + '-server'})
+        add_service(env)
+        # gridinit config
+        tpl = Template(tpl)
+        with open(gridinit(env), 'a+') as f:
+            f.write(tpl.safe_substitute(env))
+        # watcher
+        tpl = Template(template_meta_watch)
+        with open(watch(env), 'w+') as f:
             f.write(tpl.safe_substitute(env))
 
-    # Now create the sqlx and pre-defined schemas
-    with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
-        tpl = Template(template_gridinit_sqlx)
-        for t, e, n, p in ((t,e,n,p) for t,e,n,p in services if t == 'sqlx'):
-            mkdir_noerror(DATADIR + '/' + ns + '-' + t + '-' + str(n))
-            env['SRVTYPE'] = t
-            env['SRVNUM'] = n
-            env['PORT'] = p
-            env['EXE'] = e
-            f.write(tpl.safe_substitute(env))
-        mkdir_noerror(CFGDIR + "/sqlx/schemas")
-        for name, content in sqlx_schemas:
-            with open(CFGDIR + '/sqlx/schemas/' + name, 'w+') as f:
-                f.write(content)
+    if options.NO_META0 is None:
+        for i in range(1, 1+getint(options.NB_META0, defaults['NB_M0'])):
+            generate_meta('meta0', i, template_gridinit_meta)
+    if options.NO_META1 is None:
+        for i in range(1, 1+getint(options.NB_META1, defaults['NB_M1'])):
+            generate_meta('meta1', i, template_gridinit_meta)
+    if options.NO_META2 is None:
+        for i in range(1, 1+getint(options.NB_META2, meta2_replicas)):
+            generate_meta('meta2', i, template_gridinit_meta)
+    if options.NO_SQLX is None:
+        for i in range(1, 1+getint(options.NB_SQLX, sqlx_replicas)):
+            generate_meta('sqlx', i, template_gridinit_sqlx)
 
-    # All the GRIDD-based servers require a watcher
-    tpl = Template(template_meta_watch)
-    for t, e, n, p in ((t,e,n,p) for t,e,n,p in services if t in ['meta0','meta1','meta2','sqlx']):
-        path = WATCHDIR + '/' + ns + '-' + str(t) + '-' + str(n) + '.yml'
-        with open(path, 'w+') as f:
-            env['SRVTYPE'] = t
-            env['SRVNUM'] = n
-            env['PORT'] = p
-            env['EXE'] = e
-            f.write(tpl.safe_substitute(env))
+    # RAWX
+    if options.NO_RAWX is None:
+        for num in range(1, 1+getint(options.NB_RAWX, defaults['NB_RAWX'])):
+            env = subenv({'SRVTYPE':'rawx', 'SRVNUM':num, 'PORT':next_port()})
+            add_service(env)
+            # gridinit
+            tpl = Template(template_gridinit_rawx)
+            with open(gridinit(env), 'a+') as f:
+                f.write(tpl.safe_substitute(env))
+            # service
+            tpl = Template(template_rawx_service)
+            to_write = tpl.safe_substitute(env)
+            if options.OPENSUSE:
+                to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
+            with open(config(env), 'w+') as f:
+                f.write(to_write)
+            # watcher
+            tpl = Template(template_rawx_watch)
+            to_write = tpl.safe_substitute(env)
+            with open(watch(env), 'w+') as f:
+                f.write(to_write)
 
-    # Generate the RAWX services
-    tpl = Template(template_gridinit_rawx)
-    with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
-        for n, p in rawx:
-            mkdir_noerror(DATADIR + '/' + ns + '-rawx-' + str(n))
-            env['SRVTYPE'] = 'rawx'
-            env['SRVNUM'] = n
-            env['PORT'] = p
-            f.write(tpl.safe_substitute(env))
-    tpl = Template(template_rawx_service)
-    for n, p in rawx:
-        env['SRVTYPE'] = 'rawx'
-        env['SRVNUM'] = n
-        env['PORT'] = p
-        to_write = tpl.safe_substitute(env)
-        if options.OPENSUSE:
-            to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
-        path = CFGDIR + '/' + ns + '-rawx-httpd-' + str(n) + '.conf'
-        with open(path, 'w+') as f:
-            f.write(to_write)
-    tpl = Template(template_rawx_watch)
-    for n, p in rawx:
-        env['SRVTYPE'] = 'rawx'
-        env['SRVNUM'] = n
-        env['PORT'] = p
-        to_write = tpl.safe_substitute(env)
-        path = WATCHDIR + '/' + ns + '-rawx-' + str(n) + '.yml'
-        with open(path, 'w+') as f:
-            f.write(to_write)
-
-    # Generate the RAINX services
-    tpl = Template(template_gridinit_rainx)
-    with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
-        for n, p in rainx:
-            mkdir_noerror(DATADIR + '/' + ns + '-rainx-' + str(n))
-            env['SRVTYPE'] = 'rainx'
-            env['SRVNUM'] = n
-            env['PORT'] = p
-            f.write(tpl.safe_substitute(env))
-    tpl = Template(template_rainx_service)
-    for n, p in rainx:
-        env['SRVTYPE'] = 'rainx'
-        env['SRVNUM'] = n
-        env['PORT'] = p
-        to_write = tpl.safe_substitute(env)
-        if options.OPENSUSE:
-            to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
-        path = CFGDIR + '/' + ns + '-rainx-httpd-' + str(n) + '.conf'
-        with open(path, 'w+') as f:
-            f.write(to_write)
-    tpl = Template(template_rainx_watch)
-    for n, p in rainx:
-        env['SRVTYPE'] = 'rainx'
-        env['SRVNUM'] = n
-        env['PORT'] = p
-        to_write = tpl.safe_substitute(env)
-        path = WATCHDIR + '/' + ns + '-rainx-' + str(n) + '.yml'
-        with open(path, 'w+') as f:
-            f.write(to_write)
+    # rainx
+    if options.NO_RAINX is None:
+        for num in range(1, 1+getint(options.NB_RAINX, defaults['NB_RAINX'])):
+            env = subenv({'SRVTYPE':'rainx', 'SRVNUM':num, 'PORT':next_port()})
+            add_service(env)
+            # gridinit
+            tpl = Template(template_gridinit_rainx)
+            with open(gridinit(env), 'a+') as f:
+                f.write(tpl.safe_substitute(env))
+            # service
+            tpl = Template(template_rainx_service)
+            to_write = tpl.safe_substitute(env)
+            if options.OPENSUSE:
+                to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
+            with open(config(env), 'w+') as f:
+                f.write(to_write)
+            # watcher
+            tpl = Template(template_rainx_watch)
+            to_write = tpl.safe_substitute(env)
+            with open(watch(env), 'w+') as f:
+                f.write(to_write)
 
     # redis
     if options.ALLOW_REDIS is not None:
-        env['SRVNUM'] = 1
-        env['PORT'] = env['PORT_REDIS']
-        env['REDIS_DB_PATH'] = (DATADIR + '/' + str(env['NS']) + '-' +
-                                'redis' + '-' + str(env['SRVNUM']))
-        mkdir_noerror(env['REDIS_DB_PATH'])
-        path = CFGDIR + '/' + ns + '-redis-' + str(env['SRVNUM']) + '.conf'
-        with open(path, 'w+') as f:
-            tpl = Template(template_redis)
-            f.write(tpl.safe_substitute(env))
-        with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
+        env = subenv({'SRVTYPE':'redis', 'SRVNUM':1, 'PORT':6379})
+        add_service(env)
+        with open(gridinit(env), 'a+') as f:
             tpl = Template(template_redis_gridinit)
             f.write(tpl.safe_substitute(env))
-        with open(WATCHDIR + '/' + ns + '-redis-1.yml', 'w+') as f:
+        with open(config(env), 'w+') as f:
+            tpl = Template(template_redis)
+            f.write(tpl.safe_substitute(env))
+        with open(watch(env), 'w+') as f:
             tpl = Template(template_redis_watch)
             f.write(tpl.safe_substitute(env))
 
     # proxy
-    env['PORT'] = port_proxy
-    with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
+    env = subenv({'SRVTYPE':'proxy', 'SRVNUM': 1, 'PORT':port_proxy})
+    add_service(env)
+    with open(gridinit(env), 'a+') as f:
         tpl = Template(template_proxy_gridinit)
         f.write(tpl.safe_substitute(env))
 
     # account
-    env['PORT'] = port_account
-    with open(CFGDIR + '/' + ns + '-account.conf', 'w+') as f:
-        tpl = Template(template_account)
-        f.write(tpl.safe_substitute(env))
-    with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
+    env = subenv({'SRVTYPE':'account','SRVNUM':1, 'PORT':next_port()})
+    add_service(env)
+    with open(gridinit(env), 'a+') as f:
         tpl = Template(template_account_gridinit)
         f.write(tpl.safe_substitute(env))
-    with open(WATCHDIR + '/' + ns + '-account-1.yml', 'w+') as f:
+    with open(config(env), 'w+') as f:
+        tpl = Template(template_account)
+        f.write(tpl.safe_substitute(env))
+    with open(watch(env), 'w+') as f:
         tpl = Template(template_account_watch)
         f.write(tpl.safe_substitute(env))
 
     # rdir
-    env['PORT'] = port_rdir
-    env['RDIR_DB_PATH'] = DATADIR + '/' + ns + '-rdir-1'
-    mkdir_noerror(env['RDIR_DB_PATH'])
-    with open(CFGDIR + '/' + ns + '-rdir.conf', 'w+') as f:
-        tpl = Template(template_rdir)
-        f.write(tpl.safe_substitute(env))
-    with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
+    env = subenv({'SRVTYPE':'rdir', 'SRVNUM':1, 'PORT':next_port()})
+    add_service(env)
+    with open(gridinit(env), 'a+') as f:
         tpl = Template(template_rdir_gridinit)
         f.write(tpl.safe_substitute(env))
-    with open(WATCHDIR + '/' + ns + '-rdir-1.yml', 'w+') as f:
+    with open(config(env), 'w+') as f:
+        tpl = Template(template_rdir)
+        f.write(tpl.safe_substitute(env))
+    with open(watch(env), 'w+') as f:
         tpl = Template(template_rdir_watch)
         f.write(tpl.safe_substitute(env))
 
     # Event agent configuration
-    env['PORT'] = port_event_agent
-    env['EVENT_DB_PATH'] = (DATADIR + '/' + str(env['NS']) + '-event')
-    mkdir_noerror(env['EVENT_DB_PATH'])
+    env = subenv({'SRVTYPE':'event-agent', 'SRVNUM':1, 'PORT': port_event_agent})
+    add_service(env)
     with open(CFGDIR + '/' + 'event-agent.conf', 'w+') as f:
         tpl = Template(template_event_agent)
         f.write(tpl.safe_substitute(env))
 
     # Conscience agent configuration
+    env = subenv({'SRVTYPE':'conscience-agent', 'SRVNUM':1, 'PORT': port_event_agent})
     with open(CFGDIR + '/' + 'conscience-agent.yml', 'w+') as f:
         tpl = Template(template_conscience_agent)
         f.write(tpl.safe_substitute(env))
 
-    # Central agent configuration
-    env['PORT'] = port_agent
-    with open(CFGDIR + '/' + 'agent.conf', 'w+') as f:
-        tpl = Template(template_agent)
-        f.write(tpl.safe_substitute(env))
+    # sqlx schemas
+    base = '{CFGDIR}/sqlx/schemas'.format(**ENV)
+    mkdir_noerror(base)
+    for name, content in sqlx_schemas:
+        with open(base + '/' + name, 'w+') as f:
+            f.write(content)
 
-    # Test agent configuration
-    def only_services(type_):
-        for service in services:
-            if service[0] != type_:
-                continue
-            path = env['DATADIR'] + '/%s-%s-%d' % (ns, type_, service[2])
-            entry = {'num': service[2],
-                     'addr': "%s:%d" % (ip, service[3]),
-                     'path': path}
-            yield entry
+    # gridinit header
+    with open(gridinit(ENV), 'a+') as f:
+        tpl = Template(template_gridinit_ns)
+        f.write(tpl.safe_substitute(ENV))
+    # system config
+    with open('{OIODIR}/sds.conf'.format(**ENV), 'w+') as f:
+        tpl = Template(template_local_header)
+        f.write(tpl.safe_substitute(ENV))
+        tpl = Template(template_local_ns)
+        f.write(tpl.safe_substitute(ENV))
 
-    listing = {}
-    listing["ns"] = ns
-    listing["namespace"] = ns
-    listing["chunk_size"] = env['CHUNK_SIZE']
-    listing["stgpol"] = stgpol
-    listing["account"] = 'test_account'
-    listing["account_addr"] = [str(ip) + ":" + str(port_account)]
-    listing["proxyd_uri"] = "http://" + str(ip) + ":" + str(port_proxy)
-    listing["proxyd_url"] = listing["proxyd_uri"]
-    listing["meta0"] = list(only_services('meta0'))
-    listing["meta1"] = list(only_services('meta1'))
-    listing["meta2"] = list(only_services('meta2'))
-    listing["sqlx"] = list(only_services('sqlx'))
-    listing["rawx"] = list()
-    rawx_index = 0
-    for num, port in rawx:
-        i, rawx_index = rawx_index, rawx_index + 1
-        path = env['DATADIR'] + '/' + ns + '-rawx-' + str(num)
-        srv = {'num': num, 'addr': str(ip) + ':' + str(port), 'path': path}
-        listing["rawx"].append(srv)
-    listing["rainx"] = list()
-    for num, port in rainx:
-        srv = {'num': num, 'addr': str(ip) + ':' + str(port)}
-        listing["rainx"].append(srv)
-    listing["redis"] = str(ip) + ':' + str(env['PORT_REDIS'])
-    listing["sds_path"] = SDSDIR
-    listing["rdir"] = {"path": env['RDIR_DB_PATH'],
-                       "addr": str(ip) + ':' + str(port_rdir)}
-    with open(CFGDIR + '/' + 'test.conf', 'w+') as f:
-        f.write(json.dumps(listing, indent=2))
+    # ensure the services'es volumes
+    for srvtype in all_services:
+        for rec in all_services[srvtype]:
+            if 'path' in rec:
+                mkdir_noerror(rec['path'])
+
+    all_services["namespace"] = ns
+    all_services["chunk_size"] = ENV['CHUNK_SIZE']
+    all_services["stgpol"] = stgpol
+    all_services["account"] = 'test_account'
+    all_services["sds_path"] = SDSDIR
+    with open('{CFGDIR}/test.conf'.format(**ENV), 'w+') as f:
+        f.write(json.dumps(all_services, indent=2, sort_keys=True))
 
 
 def main():
     from optparse import OptionParser as OptionParser
     parser = OptionParser()
+
+    parser.add_option("-b", "--big",
+                      action="store_true", dest="BIG",
+                      help="By default, deploy manny services")
 
     parser.add_option("-B", "--bucket-replicas",
                       action="store", type="int", dest="M2_REPLICAS",
@@ -1088,6 +1032,8 @@ def main():
     parser.add_option("--monitor-period",
                       action="store", type="int", dest="MONITOR_PERIOD")
 
+    parser.add_option("--no-conscience",
+                      action="store_true", dest="NO_CS")
     parser.add_option("--no-meta0",
                       action="store_true", dest="NO_META0")
     parser.add_option("--no-meta1",
@@ -1101,6 +1047,8 @@ def main():
     parser.add_option("--no-rainx",
                       action="store_true", dest="NO_RAINX")
 
+    parser.add_option("--nb-conscience",
+                      action="store", type="int", dest="NB_CS")
     parser.add_option("--nb-meta0",
                       action="store", type="int", dest="NB_META0")
     parser.add_option("--nb-meta1",
@@ -1115,7 +1063,10 @@ def main():
                       action="store", type="int", dest="NB_RAINX")
 
     options, args = parser.parse_args()
-    generate(args[0], args[1], options)
+    if options.BIG is not None:
+        generate(args[0], args[1], options, defaults_multi)
+    else:
+        generate(args[0], args[1], options, defaults_small)
 
 
 if __name__ == '__main__':

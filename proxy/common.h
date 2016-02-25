@@ -81,7 +81,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 extern gchar *nsname;
 extern gboolean flag_cache_enabled;
-extern time_t nsinfo_refresh_delay;
 extern time_t nsinfo_refresh_m0;
 
 /* how long the proxy remembers the srv it registered ino the conscience */
@@ -91,11 +90,16 @@ extern time_t cs_expire_local_services;
 /* TODO(jfs): convert time_t seconds to gint64 monotonic microseconds. */
 extern time_t cs_down_services;
 
+/* how long the proxy remembers services from the conscience */
+/* TODO(jfs): convert time_t seconds to gint64 monotonic microseconds. */
+extern time_t cs_known_services;
+
 extern struct grid_lbpool_s *lbpool;
 extern struct hc_resolver_s *resolver;
 
 extern GMutex csurl_mutex;
-extern gchar *csurl;
+extern gchar **csurl;
+extern gsize csurl_count;
 
 extern GMutex push_mutex;
 /* staging area for services being sent up. <struct service_info_s*> */
@@ -110,6 +114,7 @@ extern struct namespace_info_s nsinfo;
 /* "IP:PORT" that had a problem */
 extern GMutex srv_mutex;
 extern struct lru_tree_s *srv_down;
+extern struct lru_tree_s *srv_known;
 
 enum
 {
@@ -129,7 +134,8 @@ struct req_args_s
 	guint32 flags;
 };
 
-struct sub_action_s {
+struct sub_action_s
+{
 	const char *verb;
 	enum http_rc_e (*handler) (struct req_args_s *, struct json_object *);
 };
@@ -144,6 +150,8 @@ gboolean validate_srvtype (const char * n);
 /* check in <srv_down> */
 gboolean service_is_ok (gconstpointer p);
 void service_invalidate (gconstpointer n);
+void service_learn (const char *key);
+gboolean service_is_known (const char *key);
 
 const char * _req_get_option (struct req_args_s *args, const char *name);
 const char * _req_get_token (struct req_args_s *args, const char *name);
@@ -171,6 +179,8 @@ enum http_rc_e _reply_json (struct req_args_s *args, int code, const char * msg,
 enum http_rc_e _reply_format_error (struct req_args_s *args, GError *err);
 enum http_rc_e _reply_system_error (struct req_args_s *args, GError *err);
 enum http_rc_e _reply_bad_gateway (struct req_args_s *args, GError *err);
+enum http_rc_e _reply_srv_unavailable (struct req_args_s *args, GError *err);
+enum http_rc_e _reply_gateway_timeout (struct req_args_s *args, GError * err);
 enum http_rc_e _reply_not_implemented (struct req_args_s *args);
 enum http_rc_e _reply_notfound_error (struct req_args_s *args, GError * err);
 enum http_rc_e _reply_forbidden_error (struct req_args_s *args, GError * err);
@@ -185,5 +195,13 @@ GString * _create_status (gint code, const char * msg);
 GString * _create_status_error (GError * e);
 
 enum http_rc_e _reply_common_error (struct req_args_s *args, GError *err);
+
+GError * conscience_remote_get_namespace (const char *cs, namespace_info_t **out);
+GError * conscience_remote_get_services(const char *cs, const char *type,
+		gboolean full, GSList **out);
+GError * conscience_remote_get_types(const char *cs, GSList **out);
+GError * conscience_remote_push_services(const char *cs, GSList *ls);
+GError* conscience_remote_remove_services(const char *cs, const char *type,
+		GSList *ls);
 
 #endif /*OIO_SDS__proxy__common_h*/

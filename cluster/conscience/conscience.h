@@ -32,12 +32,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
  * Provide this value OR'ed in the conscience_srvtype_run_all() flags to
- * run all the service, even those who have expired.
- */
-#define SRVTYPE_FLAG_INCLUDE_EXPIRED 0x00000001
-
-/**
- * Provide this value OR'ed in the conscience_srvtype_run_all() flags to
  * call the callback function with a NULL service when all the services
  * have been run.
  */

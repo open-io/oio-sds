@@ -13,6 +13,7 @@ include_directories(AFTER
 
 link_directories(
 		${ZK_LIBRARY_DIRS}
+		${ZMQ_LIBRARY_DIRS}
 		${SQLITE3_LIBRARY_DIRS})
 
 

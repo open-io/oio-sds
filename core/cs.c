@@ -46,6 +46,8 @@ oio_cs_client__register_service (struct oio_cs_client_s *self,
 {
 	if (!in_type || !*in_type)
 		return BADREQ("Missing srvtype");
+	if (!reg || !reg->id || !*(reg->id))
+		return BADREQ("Missing srvid");
 	CS_CALL(self,register_service)(self,in_type,reg);
 }
 
@@ -56,29 +58,31 @@ oio_cs_client__lock_service (struct oio_cs_client_s *self,
 {
 	if (!in_type || !*in_type)
 		return BADREQ("Missing srvtype");
+	if (!reg || !reg->id || !*(reg->id))
+		return BADREQ("Missing srvid");
 	CS_CALL(self,lock_service)(self,in_type,reg,score);
 }
 
 GError *
 oio_cs_client__deregister_service (struct oio_cs_client_s *self,
-		const char *in_type, const char *id)
+		const char *in_type, const struct oio_cs_registration_s *reg)
 {
 	if (!in_type || !*in_type)
 		return BADREQ("Missing srvtype");
-	if (!id || !*id)
+	if (!reg || !reg->id || !*(reg->id))
 		return BADREQ("Missing srvid");
-	CS_CALL(self,deregister_service)(self,in_type,id);
+	CS_CALL(self,deregister_service)(self,in_type,reg);
 }
 
 GError *
 oio_cs_client__unlock_service (struct oio_cs_client_s *self,
-		const char *in_type, const char *id)
+		const char *in_type, const struct oio_cs_registration_s *reg)
 {
 	if (!in_type || !*in_type)
 		return BADREQ("Missing srvtype");
-	if (!id || !*id)
+	if (!reg || !reg->id || !*(reg->id))
 		return BADREQ("Missing srvid");
-	CS_CALL(self,unlock_service)(self,in_type,id);
+	CS_CALL(self,unlock_service)(self,in_type,reg);
 }
 
 GError *
@@ -92,12 +96,12 @@ oio_cs_client__flush_services (struct oio_cs_client_s *self,
 
 GError *
 oio_cs_client__list_services (struct oio_cs_client_s *self,
-		const char *in_type,
+		const char *in_type, gboolean full,
 		void (*on_reg) (const struct oio_cs_registration_s *reg, int score))
 {
 	if (!in_type || !*in_type)
 		return BADREQ("Missing srvtype");
-	CS_CALL(self,list_services)(self,in_type,on_reg);
+	CS_CALL(self,list_services)(self,in_type,full,on_reg);
 }
 
 GError *
@@ -204,16 +208,16 @@ static GError * _cs_PROXY__lock_service (struct oio_cs_client_s *self,
 		int score);
 
 static GError * _cs_PROXY__deregister_service (struct oio_cs_client_s *self,
-		const char *in_type, const char *id);
+		const char *in_type, const struct oio_cs_registration_s *reg);
 
 static GError * _cs_PROXY__flush_services (struct oio_cs_client_s *self,
 		const char *in_type);
 
 static GError * _cs_PROXY__unlock_service (struct oio_cs_client_s *self,
-		const char *in_type, const char *id);
+		const char *in_type, const struct oio_cs_registration_s *reg);
 
 static GError * _cs_PROXY__list_services (struct oio_cs_client_s *self,
-		const char *in_type,
+		const char *in_type, gboolean full,
 		void (*on_reg) (const struct oio_cs_registration_s *reg, int score));
 
 static GError * _cs_PROXY__list_types (struct oio_cs_client_s *self,
@@ -284,7 +288,7 @@ _cs_PROXY__lock_service (struct oio_cs_client_s *self,
 			&score, reg->kv_tags);
 
 	CURL *h = _curl_get_handle_proxy ();
-	GError *err = oio_proxy_call_conscience_register (h, cs->ns, body);
+	GError *err = oio_proxy_call_conscience_lock (h, cs->ns, body);
 	curl_easy_cleanup (h);
 
 	g_string_free (body, TRUE);
@@ -293,7 +297,7 @@ _cs_PROXY__lock_service (struct oio_cs_client_s *self,
 
 GError *
 _cs_PROXY__deregister_service (struct oio_cs_client_s *self,
-		const char *in_type, const char *id)
+		const char *in_type, const struct oio_cs_registration_s *reg)
 {
 	g_assert (self != NULL);
 	struct oio_cs_client_PROXY_s *cs = (struct oio_cs_client_PROXY_s*) self;
@@ -301,11 +305,11 @@ _cs_PROXY__deregister_service (struct oio_cs_client_s *self,
 
 	if (!in_type || !*in_type)
 		return BADREQ("Missing srvtype");
-	if (!id || !*id)
+	if (!reg || !reg->id || !*(reg->id))
 		return BADREQ("Invalid service");
 
-	GString *body = _pack_registration (cs->ns, in_type, id,
-			NULL, NULL, NULL);
+	GString *body = _pack_registration (cs->ns, in_type, reg->id,
+			reg->url, NULL, NULL);
 
 	CURL *h = _curl_get_handle_proxy ();
 	GError *err = oio_proxy_call_conscience_deregister (h, cs->ns, body);
@@ -334,7 +338,7 @@ _cs_PROXY__flush_services (struct oio_cs_client_s *self, const char *in_type)
 
 GError *
 _cs_PROXY__unlock_service (struct oio_cs_client_s *self,
-		const char *in_type, const char *id)
+		const char *in_type, const struct oio_cs_registration_s *reg)
 {
 	g_assert (self != NULL);
 	struct oio_cs_client_PROXY_s *cs = (struct oio_cs_client_PROXY_s*) self;
@@ -342,11 +346,12 @@ _cs_PROXY__unlock_service (struct oio_cs_client_s *self,
 
 	if (!in_type || !*in_type)
 		return BADREQ("Missing srvtype");
-	if (!id || !*id)
+	if (!reg || !reg->id || !*(reg->id))
 		return BADREQ("Invalid service");
 
 	int score = SCORE_UNLOCK;
-	GString *body = _pack_registration (cs->ns, in_type, id, id, &score, NULL);
+	GString *body = _pack_registration (cs->ns, in_type, reg->id, reg->url,
+			&score, NULL);
 
 	CURL *h = _curl_get_handle_proxy ();
 	GError *err = oio_proxy_call_conscience_unlock (h, cs->ns, body);
@@ -358,7 +363,7 @@ _cs_PROXY__unlock_service (struct oio_cs_client_s *self,
 
 GError *
 _cs_PROXY__list_services (struct oio_cs_client_s *self,
-		const char *in_type,
+		const char *in_type, gboolean full,
 		void (*on_reg) (const struct oio_cs_registration_s *reg, int score))
 {
 	g_assert (self != NULL);
@@ -371,7 +376,7 @@ _cs_PROXY__list_services (struct oio_cs_client_s *self,
 	GString *body = g_string_new ("");
 
 	CURL *h = _curl_get_handle_proxy ();
-	GError *err = oio_proxy_call_conscience_list (h, cs->ns, in_type, body);
+	GError *err = oio_proxy_call_conscience_list (h, cs->ns, in_type, full, body);
 	curl_easy_cleanup (h);
 
 	if (!err && !body->len)

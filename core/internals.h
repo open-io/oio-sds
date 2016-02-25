@@ -57,6 +57,20 @@ extern "C" {
 	VTABLE_CHECK(self,T,F); \
 	return ((T)self)->vtable-> F
 
+#define ADAPTIVE_PERIOD_DECLARE() \
+	static volatile gboolean already_succeeded = FALSE; \
+	static volatile guint tick_reload = 0; \
+	static volatile guint period_reload = 1
+
+#define ADAPTIVE_PERIOD_SKIP() \
+	(already_succeeded && 0 != (tick_reload++ % period_reload))
+
+#define ADAPTIVE_PERIOD_ONSUCCESS(P) \
+	already_succeeded = TRUE; \
+	period_reload ++; \
+	period_reload = CLAMP(period_reload,2,(P)); \
+	tick_reload = 1
+
 enum {
 	ERRCODE_UNKNOWN_ERROR = 0,
 	ERRCODE_PARAM = 1,
@@ -158,6 +172,8 @@ enum {
 	HTTP_CODE_INTERNAL_ERROR     = 500,
 	HTTP_CODE_NOT_IMPLEMENTED    = 501,
 	HTTP_CODE_BAD_GATEWAY        = 502,
+	HTTP_CODE_SRV_UNAVAILABLE    = 503,
+	HTTP_CODE_GATEWAY_TIMEOUT    = 504,
 };
 
 typedef gint64 (*time_hook_f) (void);
@@ -189,7 +205,10 @@ GError * oio_error_debug (GQuark gq, int code, const char *fmt, ...);
 #  define NEWERROR(CODE, FMT,...) g_error_new(GQ(), (CODE), FMT, ##__VA_ARGS__)
 # endif
 
+#define NYI()           NEWERROR(CODE_NOT_IMPLEMENTED, "NYI")
 #define BADREQ(FMT,...) NEWERROR(CODE_BAD_REQUEST, FMT, ##__VA_ARGS__)
+#define BADNS()         NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Unexpected NS")
+#define BADSRVTYPE()    NEWERROR(CODE_SRVTYPE_NOTMANAGED, "Unexpected service type")
 #define SYSERR(FMT,...) NEWERROR(CODE_INTERNAL_ERROR, FMT, ##__VA_ARGS__)
 
 /* -------------------------------------------------------------------------- */

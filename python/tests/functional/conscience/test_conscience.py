@@ -130,6 +130,9 @@ class TestConscienceFunctional(BaseTestCase):
         srv = self._srv('echo')
         resp = self.session.post(self._url_cs("lock"), json.dumps(srv))
         self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertIsInstance(body, list)
+        self.assertIn(srv['addr'], [x['addr'] for x in body])
 
         resp = self.session.post(self._url_cs("unlock"), json.dumps(srv))
         self.assertEqual(resp.status_code, 200)
@@ -138,4 +141,4 @@ class TestConscienceFunctional(BaseTestCase):
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
         self.assertIsInstance(body, list)
-        self.assertIn(srv['addr'], [x['addr'] for x in body])
+        self.assertListEqual([], body)

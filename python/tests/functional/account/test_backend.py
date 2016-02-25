@@ -10,8 +10,7 @@ from tests.utils import BaseTestCase
 class TestAccountBackend(BaseTestCase):
     def setUp(self):
         super(TestAccountBackend, self).setUp()
-        h, p = self.conf['redis'].split(':', 2)
-        self.redis_host, self.redis_port = h, int(p)
+        _, _, self.redis_host, self.redis_port = self.get_service('redis')
         self.conn = redis.Redis(host=self.redis_host, port=self.redis_port,
                                 db=3)
         self.conn.flushdb()

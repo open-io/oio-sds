@@ -136,65 +136,6 @@ conscience_srvtype_remove_srv(struct conscience_srvtype_s *srvtype,
 	}
 }
 
-static GByteArray *
-conscience_srvtype_serialize_config(struct conscience_srvtype_s *srvtype,
-    GError ** err)
-{
-	GByteArray *v, *encoded_kv;
-	GSList *kv_list = NULL;
-	GHashTable *ht = NULL;
-	gchar wrkBuf[32];
-
-	v = encoded_kv = NULL;
-	ht = srvtype->config_ht;
-	g_hash_table_ref(ht);
-
-	/*Add the current timestamp */
-	g_snprintf(wrkBuf, sizeof(wrkBuf), "%"G_GINT64_FORMAT, oio_ext_real_time () / G_TIME_SPAN_SECOND);
-	v = g_byte_array_append(g_byte_array_new(),
-	    (guint8 *) wrkBuf, strlen(wrkBuf) + 1);
-	g_hash_table_insert(ht, "timestamp", v);
-
-	/*convert the GHashTable to a list of KV */
-	kv_list = key_value_pairs_convert_from_map(ht, FALSE, err);
-	if (!kv_list) {
-		GSETERROR(err, "Conversion HashTable->List failure");
-		g_hash_table_unref(ht);
-		return NULL;
-	}
-
-	/*encode the list */
-	encoded_kv = key_value_pairs_marshall_gba(kv_list, err);
-	if (!encoded_kv)
-		GSETERROR(err, "Conversion List->ASN.1 failure");
-	g_slist_foreach(kv_list, g_free1, NULL);
-	g_slist_free(kv_list);
-
-	g_hash_table_unref(ht);
-	return encoded_kv;
-}
-
-GByteArray *
-conscience_srvtype_get_config(struct conscience_srvtype_s * srvtype,
-    GError ** err)
-{
-	if (!srvtype) {
-		GSETERROR(err, "Invalid parameter");
-		return NULL;
-	}
-
-	if (!srvtype->config_serialized)
-		srvtype->config_serialized = conscience_srvtype_serialize_config(srvtype, err);
-
-	if (!srvtype->config_serialized) {
-		GSETERROR(err,"Serialization failure");
-		return NULL;
-	}
-
-	return g_byte_array_append(g_byte_array_new(), srvtype->config_serialized->data,
-		srvtype->config_serialized->len);
-}
-
 struct conscience_srv_s *
 conscience_srvtype_register_srv(struct conscience_srvtype_s *srvtype,
     GError ** err, const struct conscience_srvid_s *srvid)
@@ -211,7 +152,7 @@ conscience_srvtype_register_srv(struct conscience_srvtype_s *srvtype,
 	memcpy(&(service->id), srvid, sizeof(struct conscience_srvid_s));
 	service->tags = g_ptr_array_new();
 	service->locked = FALSE;
-	service->score.timestamp = oio_ext_real_time () / G_TIME_SPAN_SECOND;
+	service->score.timestamp = oio_ext_monotonic_seconds ();
 	service->score.value = -1;
 	service->srvtype = srvtype;
 
@@ -234,66 +175,50 @@ conscience_srvtype_register_srv(struct conscience_srvtype_s *srvtype,
 	return service;
 }
 
-gint
+guint
 conscience_srvtype_remove_expired(struct conscience_srvtype_s * srvtype,
-    GError ** err, service_callback_f * callback, gpointer u)
+    service_callback_f * callback, gpointer u)
 {
+	g_assert_nonnull (srvtype);
+
+	guint count = 0U;
+	time_t oldest = oio_ext_monotonic_seconds() - srvtype->score_expiration;
+
 	GHashTableIter iter;
 	gpointer key, value;
-	gint how_many;
-	time_t oldest;
-
-	if (!srvtype) {
-		GSETERROR(err, "Invalid parameter");
-		return -1;
-	}
-
-	how_many = 0U;
-	oldest = oio_ext_real_time () / G_TIME_SPAN_SECOND - srvtype->score_expiration;
-
 	g_hash_table_iter_init(&iter, srvtype->services_ht);
 	while (g_hash_table_iter_next(&iter, &key, &value)) {
-
 		struct conscience_srv_s *pService = value;
-
 		if (!pService->locked && pService->score.timestamp < oldest) {
 			if (callback)
 				callback(pService, u);
 			g_hash_table_iter_steal(&iter);
 			conscience_srv_destroy(pService);
-			how_many++;
+			count++;
 		}
 	}
 
-	return how_many;
+	return count;
 }
 
 gboolean
 conscience_srvtype_run_all(struct conscience_srvtype_s * srvtype,
     GError ** error, guint32 flags, service_callback_f * callback, gpointer udata)
 {
-	gboolean rc;
-	time_t oldest;
-	struct conscience_srv_s *beacon, *srv;
-
 	if (!srvtype || !callback) {
 		GSETERROR(error, "Invalid parameter");
 		return FALSE;
 	}
 
-	rc = TRUE;
-	if (flags & SRVTYPE_FLAG_INCLUDE_EXPIRED) {
-		beacon = &(srvtype->services_ring);
-		for (srv = beacon->next; rc && srv && srv != beacon; srv = srv->next)
+	gboolean rc = TRUE;
+	time_t oldest = oio_ext_monotonic_seconds () - srvtype->score_expiration;
+
+	const struct conscience_srv_s *beacon = &(srvtype->services_ring);
+	for (struct conscience_srv_s *srv = beacon->next;
+			rc && srv != NULL && srv != beacon;
+			srv = srv->next) {
+		if (srv->locked || srv->score.timestamp > oldest)
 			rc = callback(srv, udata);
-	}
-	else {
-		oldest = oio_ext_real_time () / G_TIME_SPAN_SECOND - srvtype->score_expiration;
-		beacon = &(srvtype->services_ring);
-		for (srv = beacon->next; rc && srv && srv != beacon; srv = srv->next) {
-			if (srv->locked || srv->score.timestamp > oldest)
-				rc = callback(srv, udata);
-		}
 	}
 
 	if (rc && (flags & SRVTYPE_FLAG_ADDITIONAL_CALL))
@@ -314,15 +239,12 @@ conscience_srvtype_count_srv(struct conscience_srvtype_s * srvtype,
 	if (include_expired)
 		return g_hash_table_size(srvtype->services_ht);
 	else {
+		time_t oldest = oio_ext_monotonic_seconds () - srvtype->score_expiration;
+		struct conscience_srv_s *beacon = &(srvtype->services_ring);
 
-		time_t oldest;
-		struct conscience_srv_s *beacon, *srv;
-
-		oldest = oio_ext_real_time () / G_TIME_SPAN_SECOND - srvtype->score_expiration;
-		beacon = &(srvtype->services_ring);
-
-		for (srv = beacon->next; srv && srv != beacon;
-		    srv = srv->next) {
+		for (struct conscience_srv_s *srv = beacon->next;
+				srv && srv != beacon;
+				srv = srv->next) {
 			if (srv->score.timestamp < oldest)
 				break;
 			count++;
@@ -397,63 +319,79 @@ conscience_srvtype_flush(struct conscience_srvtype_s *srvtype)
 	    srvtype->type_name, counter);
 }
 
-gboolean
-conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype,
-    GError ** error, struct service_info_s *si, gboolean overwrite_score)
+struct conscience_srv_s *
+conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_info_s *si)
 {
-	struct conscience_srvid_s srvid;
-	struct conscience_srv_s *p_srv;
-	struct service_tag_s *tag_first = NULL;
+	g_assert_nonnull (srvtype);
+	g_assert_nonnull (si);
 
-	if (!srvtype || !si) {
-		GSETERROR(error, "Invalid argument srvtype=%p srvinfo=%p",
-		    (void *) srvtype, (void *) si);
-		return FALSE;
-	}
+	struct conscience_srvid_s srvid;
 	memcpy(&(srvid.addr), &(si->addr), sizeof(addr_info_t));
 
-	/* Get first launching tag if any and lock score to 0 if true */
-	tag_first = service_info_get_tag(si->tags, NAME_TAGNAME_RAWX_FIRST);
+	struct service_tag_s *tag_first = service_info_get_tag(si->tags, NAME_TAGNAME_RAWX_FIRST);
+	gboolean first = tag_first && tag_first->type == STVT_BOOL && tag_first->value.b;
 
 	/*register the service if necessary */
-	p_srv = conscience_srvtype_get_srv(srvtype, &srvid);
+	struct conscience_srv_s *p_srv = conscience_srvtype_get_srv(srvtype, &srvid);
 	if (!p_srv) {
-		p_srv = conscience_srvtype_register_srv(srvtype, error, &srvid);
-		if (!p_srv) {
-			GSETERROR(error, "Service not found, registration impossible");
-			return FALSE;
-		}
-
-		if (tag_first != NULL && tag_first->type == STVT_BOOL && tag_first->value.b) {
-			DEBUG("Service [%s] lauched for the first time => locking score to 0", si->type);
-			p_srv->score.value = 0;
-			p_srv->locked = TRUE;
-		}
-		else
-			p_srv->score.value = -1;
+		p_srv = conscience_srvtype_register_srv(srvtype, NULL, &srvid);
+		g_assert_nonnull (p_srv);
+		p_srv->score.value = -1;
+		p_srv->score.timestamp = 0;
 	}
 
 	/* refresh the tags: create missing, replace existing
 	 * (but the tags are not flushed before) */
 	if (si->tags) {
-		int i, max;
-		struct service_tag_s *tag, *orig;
-
-		TRACE("Refreshing tags for srv [%.*s]", (int)(LIMIT_LENGTH_SRVDESCR), p_srv->description);
-		for (i = 0, max = si->tags->len; i < max; i++) {
-			tag = g_ptr_array_index(si->tags, i);
-			orig = conscience_srv_ensure_tag(p_srv, tag->name);
+		TRACE("Refreshing tags for srv [%.*s]",
+				(int)(LIMIT_LENGTH_SRVDESCR), p_srv->description);
+		const guint max = si->tags->len;
+		for (guint i = 0; i < max; i++) {
+			struct service_tag_s *tag = g_ptr_array_index(si->tags, i);
+			if (tag == tag_first) continue;
+			struct service_tag_s *orig = conscience_srv_ensure_tag(p_srv, tag->name);
 			service_tag_copy(orig, tag);
 		}
 	}
 
-	/*now compute the score with the new tags */
-	if (overwrite_score)
-		memcpy(&(p_srv->score), &(si->score), sizeof(score_t));
-	else if (!conscience_srv_compute_score(p_srv, error)) {
-		GSETERROR(error, "Service data refreshed, but score computation failed!");
-		return FALSE;
+	p_srv->score.timestamp = oio_ext_monotonic_seconds ();
+	if (si->score.value == SCORE_UNSET || si->score.value == SCORE_UNLOCK) {
+		if (first) {
+			GRID_TRACE2("SRV first [%s]", p_srv->description);
+			p_srv->score.value = 0;
+			p_srv->locked = TRUE;
+		} else {
+			if (si->score.value == SCORE_UNLOCK) {
+				if (p_srv->locked) {
+					GRID_TRACE2("SRV unlocked [%s]", p_srv->description);
+					p_srv->locked = FALSE;
+					p_srv->score.value = CLAMP (p_srv->score.value, SCORE_DOWN, SCORE_MAX);
+				} else {
+					GRID_TRACE2("SRV already unlocked [%s]", p_srv->description);
+				}
+			} else { /* UNSET, a.k.a. regular computation */
+				if (p_srv->locked) {
+					GRID_TRACE2("SRV untouched [%s]", p_srv->description);
+				} else {
+					GError *err = NULL;
+					if (!conscience_srv_compute_score(p_srv, &err)) {
+						GRID_TRACE2("SRV error [%s]: (%d) %s", p_srv->description, err->code, err->message);
+						g_clear_error (&err);
+					} else {
+						GRID_TRACE2("SRV refreshed [%s]", p_srv->description);
+					}
+				}
+			}
+		}
+	} else { /* LOCK */
+		p_srv->score.value = CLAMP(si->score.value, SCORE_DOWN, SCORE_MAX);
+		if (p_srv->locked) {
+			GRID_TRACE2("SRV already locked [%s]", p_srv->description);
+		} else {
+			p_srv->locked = TRUE;
+			GRID_TRACE2("SRV locked [%s]", p_srv->description);
+		}
 	}
 
-	return TRUE;
+	return p_srv;
 }

@@ -22,7 +22,10 @@ gchar *
 proxy_get_csurl (void)
 {
 	gchar *cs = NULL;
-	CSURL_DO(if (csurl) { cs = g_strdup(csurl); });
+	CSURL_DO(if (csurl && csurl_count) {
+		guint i = g_random_int_range(0, csurl_count);
+		cs = g_strdup(csurl[i]);
+	});
 	return cs;
 }
 
@@ -319,3 +322,18 @@ _request_has_flag (struct req_args_s *args, const char *header,
 	return rc;
 }
 
+void
+service_learn (const char *key)
+{
+	gulong now = oio_ext_monotonic_seconds ();
+	gchar *k = g_strdup(key);
+	SRV_DO(lru_tree_insert(srv_known, k, (void*)now));
+}
+
+gboolean
+service_is_known (const char *key)
+{
+	gboolean known = FALSE;
+	SRV_DO(known = (NULL != lru_tree_get (srv_known, key)));
+	return known;
+}
