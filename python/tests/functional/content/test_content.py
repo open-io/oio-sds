@@ -386,7 +386,7 @@ class TestContentFactory(BaseTestCase):
             content.move_chunk("1234")
 
     def test_strange_paths(self):
-        for cname in (
+        strange_paths = [
                 "Annual report.txt",
                 "foo+bar=foobar.txt",
                 "100%_bug_free.c",
@@ -398,9 +398,26 @@ class TestContentFactory(BaseTestCase):
                 "line\nfeed",
                 "ta\tbu\tla\ttion",
                 "controlchars",
-                ):
+                ]
+        answers = dict()
+        for cname in strange_paths:
             content = self._new_content("SINGLE", "nobody cares", cname)
-            try:
-                self.assertEqual(cname, content.path)
-            finally:
-                pass  # TODO: delete the content
+            answers[cname] = content
+        listing = self.container_client.container_list(self.account,
+                                                       self.container_name)
+        obj_set = {k["name"].encode("utf8", "ignore")
+                   for k in listing["objects"]}
+        try:
+            # Ensure the saved path is the one we gave the object
+            for cname in answers:
+                self.assertEqual(cname, answers[cname].path)
+            # Ensure all objects appear in listing
+            for cname in strange_paths:
+                self.assertIn(cname, obj_set)
+        finally:
+            # Cleanup
+            for cname in answers:
+                try:
+                    content.delete()
+                except:
+                    pass

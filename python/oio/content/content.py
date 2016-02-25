@@ -120,6 +120,10 @@ class Content(object):
     def download(self):
         raise NotImplementedError()
 
+    def delete(self):
+        self.container_client.content_delete(cid=self.container_id,
+                                             path=self.path)
+
     def move_chunk(self, chunk_id):
         current_chunk = self.chunks.filter(id=chunk_id).one()
         if current_chunk is None:
