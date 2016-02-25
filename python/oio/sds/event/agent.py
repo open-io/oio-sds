@@ -102,7 +102,7 @@ class EventWorker(object):
         except Exception as e:
             self.logger.warn('ERROR in worker "%s"', e)
             self.failed = True
-            raise e
+            raise
         finally:
             self.logger.info('worker "%s" stopped', self.name)
 

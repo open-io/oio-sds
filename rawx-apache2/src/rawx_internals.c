@@ -123,7 +123,14 @@ void send_chunk_event(const char *type, const dav_resource *resource) {
 			"\"container_id\":\"%s\","
 			"\"content_id\":\"%s\","
 			"\"content_version\":\"%s\","
-			"\"content_path\":\"%s\","
+			"\"content_path\":\"",
+			conf->rawx_id,
+			resource->info->content.container_id,
+			resource->info->content.content_id,
+			resource->info->content.version);
+	oio_str_gstring_append_json_string(json,
+			resource->info->content.path);
+	g_string_append_printf(json, "\","
 			"\"content_storage_policy\":\"%s\","
 			"\"content_mime_type\":\"%s\","
 			"\"content_chunk_method\":\"%s\","
@@ -131,11 +138,6 @@ void send_chunk_event(const char *type, const dav_resource *resource) {
 			"\"chunk_hash\":\"%s\","
 			"\"chunk_position\":\"%s\","
 			"\"chunk_size\":\"%s\"",
-			conf->rawx_id,
-			resource->info->content.container_id,
-			resource->info->content.content_id,
-			resource->info->content.version,
-			resource->info->content.path,
 			resource->info->content.storage_policy,
 			resource->info->content.mime_type,
 			resource->info->content.chunk_method,
