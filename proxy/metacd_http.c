@@ -35,6 +35,7 @@ time_t nsinfo_refresh_delay = PROXYD_PERIOD_RELOAD_NSINFO;
 time_t nsinfo_refresh_m0 = PROXYD_PERIOD_RELOAD_M0INFO;
 time_t cs_expire_local_services = PROXYD_TTL_DEAD_LOCAL_SERVICES;
 time_t cs_down_services = PROXYD_TTL_DOWN_SERVICES;
+time_t cs_known_services = PROXYD_TTL_KNOWN_SERVICES;
 
 // Configuration
 
@@ -65,6 +66,7 @@ gchar **srvtypes = NULL;
 
 GMutex srv_mutex = {0};
 struct lru_tree_s *srv_down = NULL;
+struct lru_tree_s *srv_known = NULL;
 
 // Misc. handlers --------------------------------------------------------------
 
@@ -101,10 +103,11 @@ action_status(struct req_args_s *args)
 	g_string_append_printf(gstr, "gauge cache.srv.ttl = %lu\n", s.services.ttl);
 	g_string_append_printf(gstr, "gauge cache.srv.clock = %lu\n", s.clock);
 
-	gint64 count_down = 0;
-	SRV_DO(count_down = lru_tree_count(srv_down));
-	g_string_append_printf(gstr, "gauge down.srv = %"G_GINT64_FORMAT"\n",
-			count_down);
+	gint64 count = 0;
+	SRV_DO(count = lru_tree_count(srv_down));
+	g_string_append_printf(gstr, "gauge down.srv = %"G_GINT64_FORMAT"\n", count);
+	SRV_DO(count = lru_tree_count(srv_known));
+	g_string_append_printf(gstr, "gauge known.srv = %"G_GINT64_FORMAT"\n", count);
 
 	args->rp->set_body_gstr(gstr);
 	args->rp->set_status(HTTP_CODE_OK, "OK");
@@ -265,27 +268,43 @@ _push_queue_create (void)
 
 // Administrative tasks --------------------------------------------------------
 
-static void
-_task_expire_services_down (gpointer p)
+static guint
+_expire_services (struct lru_tree_s *lru, gint64 delay)
 {
-	(void) p;
 	gchar *k = NULL;
 	gpointer v = NULL;
 	guint count = 0;
 
-	gulong oldest = oio_ext_monotonic_seconds() - cs_down_services;
+	gulong oldest = oio_ext_monotonic_seconds() - delay;
 
-	SRV_DO(while (lru_tree_get_last(srv_down, (void**)&k, &v)) {
+	SRV_DO(while (lru_tree_get_last(lru, (void**)&k, &v)) {
 		EXTRA_ASSERT(k != NULL);
 		EXTRA_ASSERT(v != NULL);
 		gulong when = (gulong)v;
 		if (when >= oldest)
 			break;
-		lru_tree_steal_last(srv_down, (void**)&k, &v);
+		lru_tree_steal_last(srv_known, (void**)&k, &v);
 		g_free(k);
 		++ count;
 	});
 
+	return count;
+}
+
+static void
+_task_expire_services_known (gpointer p)
+{
+	(void) p;
+	guint count = _expire_services (srv_known, cs_known_services);
+	if (count)
+		GRID_INFO("Forgot %u services", count);
+}
+
+static void
+_task_expire_services_down (gpointer p)
+{
+	(void) p;
+	guint count = _expire_services (srv_down, cs_down_services);
 	if (count)
 		GRID_INFO("re-enabled %u services", count);
 }
@@ -321,6 +340,14 @@ _reload_srvtype(const char *type)
 		GRID_TRACE ("SRV loaded %u [%s]", g_slist_length(list), type);
 	}
 
+	/* reloads the known services */
+	gulong now = oio_ext_monotonic_seconds ();
+	SRV_DO(for (GSList *l=list; l ;l=l->next) {
+		gchar *k = service_info_key (l->data);
+		lru_tree_insert (srv_known, k, (void*)now);
+	});
+
+	/* reloads the LB */
 	if (list) {
 		GSList *l = list;
 
@@ -613,6 +640,10 @@ grid_main_specific_fini (void)
 		lru_tree_destroy (srv_down);
 		srv_down = NULL;
 	}
+	if (srv_known) {
+		lru_tree_destroy (srv_known);
+		srv_known = NULL;
+	}
 	if (push_queue) {
 		lru_tree_destroy (push_queue);
 		push_queue = NULL;
@@ -764,8 +795,8 @@ grid_main_configure (int argc, char **argv)
 			gq_time_all, 0, gq_time_unexpected, 0);
 
 	lbpool = grid_lbpool_create (nsname);
-	srv_down = lru_tree_create((GCompareFunc)g_strcmp0, g_free,
-			NULL, LTO_NOATIME);
+	srv_down = lru_tree_create((GCompareFunc)g_strcmp0, g_free, NULL, LTO_NOATIME);
+	srv_known = lru_tree_create((GCompareFunc)g_strcmp0, g_free, NULL, LTO_NOATIME);
 
 	resolver = hc_resolver_create1 (oio_ext_monotonic_seconds());
 	enum hc_resolver_flags_e f = 0;
@@ -803,6 +834,9 @@ grid_main_configure (int argc, char **argv)
 	// Now prepare a queue for administrative tasks, such as cache expiration,
 	// configuration reloadings, etc.
 	admin_gtq = grid_task_queue_create ("admin");
+
+	grid_task_queue_register (admin_gtq, 1,
+		(GDestroyNotify) _task_expire_services_known, NULL, NULL);
 
 	grid_task_queue_register (admin_gtq, 1,
 		(GDestroyNotify) _task_expire_services_down, NULL, NULL);

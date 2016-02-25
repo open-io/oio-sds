@@ -124,7 +124,7 @@ _mark_service_state(const gchar *ns_name, const gchar *srv_key, gboolean is_up)
 
 		/*ensure the UP tag on TRUE*/
 		if (si) {
-			service_tag_set_value_boolean(service_info_ensure_tag(si->tags,"tag.up"), TRUE);
+			service_tag_set_value_boolean(service_info_ensure_tag(si->tags, NAME_TAGNAME_RAWX_UP), TRUE);
 			si->score.timestamp = oio_ext_real_time() / G_TIME_SPAN_SECOND;
 		}
 	}
@@ -147,7 +147,7 @@ _mark_service_state(const gchar *ns_name, const gchar *srv_key, gboolean is_up)
 
 		/*was it UP or not, we ensure it has ZERO stats and the right flags*/
 		if (si) {
-			service_tag_set_value_boolean(service_info_ensure_tag(si->tags,"tag.up"), FALSE);
+			service_tag_set_value_boolean(service_info_ensure_tag(si->tags, NAME_TAGNAME_RAWX_UP), FALSE);
 			zero_service_stats(si->tags);
 			invalidate_conscience_service(ns_data, si);
 			DEBUG("Service [%s/%s] zeroed, invalidated, marked down", ns_name, srv_key);
@@ -196,7 +196,7 @@ _detect_obsolete_services(struct namespace_data_s *ns_data)
 
 			invalidate_conscience_service(ns_data,si);
 			zero_service_stats(si->tags);
-			service_tag_set_value_boolean(service_info_ensure_tag(si->tags,"tag.up"), FALSE);
+			service_tag_set_value_boolean(service_info_ensure_tag(si->tags, NAME_TAGNAME_RAWX_UP), FALSE);
 
 			counter++;
 		}

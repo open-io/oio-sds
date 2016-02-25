@@ -82,7 +82,6 @@ static void _alert_service_with_zeroed_score(struct conscience_srv_s *srv);
 
 /* ------------------------------------------------------------------------- */
 
-static gboolean flag_serialize_srvinfo_cache = DEF_SERIALIZE_SRVINFO_CACHED;
 static gboolean flag_serialize_srvinfo_stats = DEF_SERIALIZE_SRVINFO_STATS;
 static gboolean flag_serialize_srvinfo_tags = DEF_SERIALIZE_SRVINFO_TAGS;
 
@@ -474,12 +473,7 @@ _conscience_srv_serialize_full(struct conscience_srv_s *srv)
 static void
 _conscience_srv_prepare_cache(struct conscience_srv_s *srv)
 {
-	GByteArray *gba;
-
-	if (!flag_serialize_srvinfo_cache)
-		return;
-
-	gba = _conscience_srv_serialize(srv);
+	GByteArray *gba = _conscience_srv_serialize(srv);
 	_conscience_srv_clean_udata(srv);
 	srv->app_data_type = SAD_PTR;
 	srv->app_data.pointer.value = gba;
@@ -499,8 +493,7 @@ _srvinfo_append(struct srvget_s *sg, struct conscience_srv_s *srv)
 			return TRUE;
 		}
 	}
-	else if (flag_serialize_srvinfo_cache
-		&& srv->app_data_type == SAD_PTR
+	else if (srv->app_data_type == SAD_PTR
 		&& NULL != (gba = srv->app_data.pointer.value))
 	{
 		if (gba->len > 0) {
@@ -695,21 +688,19 @@ push_service(struct conscience_s *cs, struct service_info_s *si)
 				srv->score.value = old_score;
 			} else if (si->score.value == SCORE_UNSET) { /* simple push */
 				gboolean bval = FALSE;
-				struct service_tag_s *tag = service_info_get_tag(si->tags, "tag.up");
+				struct service_tag_s *tag = service_info_get_tag(si->tags, NAME_TAGNAME_RAWX_UP);
 				if (tag && service_tag_get_value_boolean(tag, &bval, NULL) && !bval)
 					_alert_service_with_zeroed_score(srv);
 			} else { /* lock */
 				srv->locked = TRUE;
 			}
-			_conscience_srv_prepare_cache(srv);
-		}
-		else { /* first register */
+		} else { /* first register */
 			srv = conscience_srvtype_get_srv(srvtype, (struct conscience_srvid_s*)&(si->addr));
-			if (srv) {
+			if (srv)
 				srv->locked = (si->score.value >= 0);
-				_conscience_srv_prepare_cache(srv);
-			}
 		}
+		if (srv)
+			_conscience_srv_prepare_cache(srv);
 		conscience_release_locked_srvtype(srvtype);
 		/* XXX end of critical section */
 
@@ -1406,12 +1397,6 @@ plugin_init(GHashTable * params, GError ** err)
 	NOTICE("[NS=%s] Chunk size set to %"G_GINT64_FORMAT, conscience->ns_info.name, conscience->ns_info.chunk_size);
 
 	/* Serialization optimizations */
-	str = g_hash_table_lookup(params, KEY_SERIALIZE_SRVINFO_CACHED);
-	if (NULL != str)
-		flag_serialize_srvinfo_cache = metautils_cfg_get_bool(str, DEF_SERIALIZE_SRVINFO_CACHED);
-	NOTICE("[NS=%s] Cache for serialized service_info  [%s]", conscience->ns_info.name,
-			(flag_serialize_srvinfo_cache ? "ENABLED" : "DISABLED"));
-
 	str = g_hash_table_lookup(params, KEY_SERIALIZE_SRVINFO_TAGS);
 	if (NULL != str)
 		flag_serialize_srvinfo_tags = metautils_cfg_get_bool(str, DEF_SERIALIZE_SRVINFO_TAGS);

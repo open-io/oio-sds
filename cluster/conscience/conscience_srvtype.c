@@ -436,13 +436,15 @@ conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype,
 	/* refresh the tags: create missing, replace existing
 	 * (but the tags are not flushed before) */
 	if (si->tags) {
-		int i, max;
-		struct service_tag_s *tag, *orig;
 
-		TRACE("Refreshing tags for srv [%.*s]", (int)(LIMIT_LENGTH_SRVDESCR), p_srv->description);
-		for (i = 0, max = si->tags->len; i < max; i++) {
-			tag = g_ptr_array_index(si->tags, i);
-			orig = conscience_srv_ensure_tag(p_srv, tag->name);
+		TRACE("Refreshing tags for srv [%.*s]",
+				(int)(LIMIT_LENGTH_SRVDESCR), p_srv->description);
+		const guint max = si->tags->len;
+		for (guint i = 0; i < max; i++) {
+			struct service_tag_s *tag = g_ptr_array_index(si->tags, i);
+			if (!strcmp(tag->name, NAME_TAGNAME_RAWX_FIRST))
+				continue;
+			struct service_tag_s *orig = conscience_srv_ensure_tag(p_srv, tag->name);
 			service_tag_copy(orig, tag);
 		}
 	}

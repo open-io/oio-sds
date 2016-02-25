@@ -100,6 +100,18 @@ wait_for_srvtype () {
 	done
 }
 
+unlock_all_registered_services () {
+	oio-cluster -r "$NS" | while read S ; do
+		oio-cluster --unlock-score -S "$S"
+	done
+}
+
+reload_service_type () {
+	oio-cluster -r "$NS" | awk -F\| "/$1/{print \$3}" | while read IP ; do
+		curl -v -X POST "http://127.0.0.1:6002/v3.0/forward/reload?id=$IP"
+	done
+}
+
 #-------------------------------------------------------------------------------
 
 G_DEBUG_LEVEL=WARN
@@ -184,6 +196,8 @@ gridinit_cmd -S "$GRIDINIT_SOCK" start "@conscience" "@proxy" "@agent" "@meta0" 
 
 wait_for_srvtype "meta0" 1
 wait_for_srvtype "meta1" ${REPLICATION_DIRECTORY}
+unlock_all_registered_services
+reload_service_type "meta1"
 
 ${PREFIX}-cluster -r "$NS" | awk -F\| '/meta0/{print $3}' | while read URL ; do
 	${PREFIX}-meta0-init -O "NbReplicas=${REPLICATION_DIRECTORY}" -O IgnoreDistance=on "$URL"
@@ -194,7 +208,10 @@ gridinit_cmd -S "$GRIDINIT_SOCK" start "@${NS}"
 find $SDS -type d | xargs chmod a+rx
 
 wait_for_srvtype "meta2" ${REPLICATION_BUCKET}
-wait_for_srvtype "rawx" ${REPLICATION_BUCKET}
+wait_for_srvtype "rawx" ${NB_RAWX}
+unlock_all_registered_services
+reload_service_type "meta2"
+reload_service_type "sqlx"
 
 echo
 gridinit_cmd -S "$GRIDINIT_SOCK" status2
