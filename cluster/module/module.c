@@ -383,7 +383,6 @@ handler_get_ns_info(struct request_context_s *req_ctx)
 		return (0);
 	}
 
-	reply_context_log_access(&ctx, NULL);
 	reply_context_clear(&ctx, TRUE);
 	return (1);
 }
@@ -636,7 +635,8 @@ handler_get_service(struct request_context_s *req_ctx)
 	if (sg.gba_body)
 		g_byte_array_free(sg.gba_body, TRUE);
 	g_slist_free_full(sg.response_bodies, metautils_gba_unref);
-	reply_context_log_access(&reply_ctx, NULL);
+	if (reply_ctx.warning)
+		reply_context_log_access(&reply_ctx, NULL);
 	reply_context_clear(&(reply_ctx), TRUE);
 	return rc ? 1 : 0;
 }
@@ -776,7 +776,6 @@ handler_push_service(struct request_context_s *req_ctx)
 
 	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	reply_context_reply(&ctx, NULL);
-	reply_context_log_access(&ctx, NULL);
 	reply_context_clear(&ctx, TRUE);
 	return 1;
 errorLabel:
@@ -839,7 +838,6 @@ handler_get_services_types(struct request_context_s *req_ctx)
 	g_byte_array_free(gba_names, TRUE);
 	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	reply_context_reply(&ctx, NULL);
-	reply_context_log_access(&ctx, NULL);
 	reply_context_clear(&ctx, TRUE);
 	return 1;
 }
