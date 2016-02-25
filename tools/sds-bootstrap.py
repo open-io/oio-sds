@@ -120,6 +120,7 @@ command=${EXE_PREFIX}-proxy -O Cache=off -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
 template_rawx_service = """
 LoadModule mpm_worker_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mpm_worker.so
 LoadModule authz_core_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_authz_core.so
+LoadModule setenvif_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_setenvif.so
 LoadModule dav_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_dav.so
 LoadModule mime_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mime.so
 LoadModule dav_rawx_module @APACHE2_MODULES_DIRS@/mod_dav_rawx.so
@@ -145,7 +146,8 @@ Group ${GROUP}
 
 LogFormat "%h %l %t \\"%r\\" %>s %b %D" log/common
 ErrorLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-httpd-${SRVNUM}-errors.log
-CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-httpd-${SRVNUM}-access.log log/common
+SetEnvIf Request_URI "/(stat|info)$" nolog
+CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-httpd-${SRVNUM}-access.log log/common env=!nolog
 LogLevel info
 
 <IfModule mod_env.c>
@@ -194,6 +196,7 @@ Require all granted
 template_rainx_service = """
 LoadModule mpm_worker_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mpm_worker.so
 LoadModule authz_core_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_authz_core.so
+LoadModule setenvif_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_setenvif.so
 LoadModule dav_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_dav.so
 LoadModule mime_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mime.so
 LoadModule dav_rainx_module @APACHE2_MODULES_DIRS@/mod_dav_rainx.so
@@ -219,7 +222,8 @@ Group ${GROUP}
 
 LogFormat "%h %l %t \\"%r\\" %>s %b %D" log/common
 ErrorLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-httpd-${SRVNUM}-errors.log
-CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-httpd-${SRVNUM}-access.log log/common
+SetEnvIf Request_URI "/(stat|info)$" nolog
+CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-httpd-${SRVNUM}-access.log log/common env=!nolog
 LogLevel info
 
 <IfModule mod_env.c>
