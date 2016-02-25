@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 import xattr
 import mock
@@ -21,7 +22,7 @@ class TestIndexerCrawler(BaseTestCase):
     def tearDown(self):
         super(TestIndexerCrawler, self).tearDown()
 
-    def _create_chunk(self, rawx_path):
+    def _create_chunk(self, rawx_path, alias="toto"):
         container_id = generate_id(64)
         content_id = generate_id(64)
         chunk_id = generate_id(64)
@@ -41,7 +42,7 @@ class TestIndexerCrawler(BaseTestCase):
         xattr.setxattr(chunk_path, 'user.grid.content.container', container_id)
         xattr.setxattr(chunk_path, 'user.grid.content.id', content_id)
         xattr.setxattr(chunk_path, 'user.grid.content.nbchunk', '1')
-        xattr.setxattr(chunk_path, 'user.grid.content.path', 'toto')
+        xattr.setxattr(chunk_path, 'user.grid.content.path', alias)
         xattr.setxattr(chunk_path, 'user.grid.content.size', '4')
         xattr.setxattr(chunk_path, 'user.grid.content.mime_type',
                                    'application/octet-stream')
@@ -61,12 +62,12 @@ class TestIndexerCrawler(BaseTestCase):
                 return i_value
         return None
 
-    def test_index_chunk(self):
+    def _test_index_chunk(self, alias="toto"):
         rawx_conf = self.conf['rawx'][0]
 
         # create a fake chunk
         chunk_path, container_id, content_id, chunk_id = self._create_chunk(
-            rawx_conf['path'])
+            rawx_conf['path'], alias)
 
         # index the chunk
         indexer = BlobIndexerWorker(self.gridconf, None, rawx_conf['path'])
@@ -81,10 +82,11 @@ class TestIndexerCrawler(BaseTestCase):
 
         self.assertIsNotNone(check_value)
 
+        # _rdir_get returns unicode
         self.assertEqual(check_value['content_nbchunks'], 1)
         self.assertEqual(check_value['chunk_hash'], 32 * '0')
         self.assertEqual(check_value['content_size'], 4)
-        self.assertEqual(check_value['content_path'], 'toto')
+        self.assertEqual(check_value['content_path'], alias.decode("utf8"))
         self.assertEqual(check_value['chunk_position'], '0')
         self.assertEqual(check_value['chunk_size'], 4)
         self.assertEqual(check_value['mtime'], 1234)
@@ -102,6 +104,12 @@ class TestIndexerCrawler(BaseTestCase):
         self.assertIsNotNone(check_value)
 
         self.assertEqual(check_value['mtime'], 4567)
+
+    def test_index_chunk(self):
+        return self._test_index_chunk()
+
+    def test_index_unicode_chunk(self):
+        return self._test_index_chunk('a%%%s%d%xàç"\r\n{0}€ 1+1=2/\\$\t_')
 
     def test_index_chunk_missing_xattr(self):
         rawx_conf = self.conf['rawx'][0]
