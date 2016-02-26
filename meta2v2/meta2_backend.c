@@ -66,9 +66,9 @@ _append_url (GString *gs, struct oio_url_s *url)
 {
 	void _append (const char *n, const char *v) {
 		if (v)
-			g_string_append_printf (gs, "\"%s\":\"%s\"", n, v);
+			oio_str_gstring_append_json_pair(gs, n, v);
 		else
-			g_string_append_printf (gs, "\"%s\":null", n);
+			g_string_append_printf(gs, "\"%s\":null", n);
 	}
 	_append ("ns", oio_url_get(url, OIOURL_NS));
 	g_string_append_c (gs, ',');
