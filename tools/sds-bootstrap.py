@@ -589,6 +589,9 @@ template_event_agent = """
 namespace = ${NS}
 user = ${USER}
 bind_addr = ipc://${RUNDIR}/event-agent.sock
+queue_location = ${EVENT_DB_PATH}/queue.db
+retry_interval = 5
+batch_size = 500
 workers = 5
 log_facility = LOG_LOCAL0
 log_level = INFO
@@ -987,6 +990,8 @@ def generate(ns, ip, options={}):
 
     # Event agent configuration
     env['PORT'] = port_event_agent
+    env['EVENT_DB_PATH'] = (DATADIR + '/' + str(env['NS']) + '-event')
+    mkdir_noerror(env['EVENT_DB_PATH'])
     with open(CFGDIR + '/' + 'event-agent.conf', 'w+') as f:
         tpl = Template(template_event_agent)
         f.write(tpl.safe_substitute(env))

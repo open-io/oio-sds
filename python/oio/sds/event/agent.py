@@ -23,8 +23,6 @@ PARALLEL_CHUNKS_DELETE = 2
 CHUNK_TIMEOUT = 60
 ACCOUNT_SERVICE_TIMEOUT = 60
 
-EVENT_BATCH_SIZE = 500
-
 ACCOUNT_SERVICE = 'account'
 
 
@@ -95,14 +93,19 @@ class EventWorker(object):
             while self.running:
                 msg = self.socket.recv_multipart()
                 self.logger.debug("msg received: %s" % msg)
-                event = decode_msg(msg)
-                success = self.process_event(event)
+                event = None
+                try:
+                    event = decode_msg(msg)
+                except Exception as e:
+                    self.logger.warn('ERROR decoding msg "%s"', e)
+                success = False
+                if event:
+                    success = self.process_event(event)
                 f = "0" if success else ""
                 self.safe_ack([msg[0], f])
         except Exception as e:
             self.logger.warn('ERROR in worker "%s"', e)
             self.failed = True
-            raise e
         finally:
             self.logger.info('worker "%s" stopped', self.name)
 
@@ -242,7 +245,8 @@ class EventWorker(object):
                 with Timeout(CHUNK_TIMEOUT):
                     resp = self.session.delete(chunk['id'])
             except (Exception, Timeout) as e:
-                self.logger.exception(e)
+                self.logger.warn('error while deleting chunk %s "%s"',
+                                 chunk['id'], str(e.message))
             return resp
 
         for chunk in chunks:
@@ -329,7 +333,8 @@ class EventAgent(Daemon):
         self.conf = conf
         self.logger = get_logger(conf)
         self.running = False
-        self.retry_interval = int_value(conf.get('retry_interval'), 30)
+        self.retry_interval = int_value(conf.get('retry_interval'), 5)
+        self.batch_size = int_value(conf.get('batch_size'), 500)
         self.last_retry = 0
         self.init_zmq()
         self.init_queue()
@@ -429,7 +434,7 @@ class EventAgent(Daemon):
             worker.stop()
 
     def retry(self):
-        cursor = self.queue.load(EVENT_BATCH_SIZE)
+        cursor = self.queue.load(self.batch_size)
 
         for event in cursor:
             event_id, data = event
