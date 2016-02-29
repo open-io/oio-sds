@@ -23,8 +23,6 @@ PARALLEL_CHUNKS_DELETE = 2
 CHUNK_TIMEOUT = 60
 ACCOUNT_SERVICE_TIMEOUT = 60
 
-EVENT_BATCH_SIZE = 500
-
 ACCOUNT_SERVICE = 'account'
 
 
@@ -42,10 +40,6 @@ class EventType(object):
 
 def validate_msg(msg):
     return len(msg) == 4
-
-
-def decode_msg(msg):
-    return json.loads(msg[1])
 
 
 class EventWorker(object):
@@ -84,32 +78,40 @@ class EventWorker(object):
         socket.connect('inproc://event-front')
         self.socket = socket
 
+    def safe_decode_msg(self, msg):
+        try:
+            return json.loads(msg[1])
+        except Exception as e:
+            self.logger.warn('ERROR decoding msg "%s"', str(e.message))
+            return None
+
     def safe_ack(self, msg):
         try:
             self.socket.send_multipart(msg)
-        except Exception:
-            self.logger.warn('Unable to ack event')
+        except Exception as e:
+            self.logger.warn('ERROR unable to ack event "%s"', str(e.message))
 
     def run(self):
         try:
             while self.running:
                 msg = self.socket.recv_multipart()
                 self.logger.debug("msg received: %s" % msg)
-                event = decode_msg(msg)
-                success = self.process_event(event)
+                event = self.safe_decode_msg(msg)
+                success = False
+                if event:
+                    success = self.process_event(event)
                 f = "0" if success else ""
                 self.safe_ack([msg[0], f])
         except Exception as e:
             self.logger.warn('ERROR in worker "%s"', e)
             self.failed = True
-            raise
         finally:
             self.logger.info('worker "%s" stopped', self.name)
 
     def process_event(self, event):
         handler = self.get_handler(event)
         if not handler:
-            self.logger.warn("No handler found")
+            self.logger.warn("ERROR no handler found for event")
             # mark as success
             return True
         success = True
@@ -242,7 +244,8 @@ class EventWorker(object):
                 with Timeout(CHUNK_TIMEOUT):
                     resp = self.session.delete(chunk['id'])
             except (Exception, Timeout) as e:
-                self.logger.exception(e)
+                self.logger.warn('error while deleting chunk %s "%s"',
+                                 chunk['id'], str(e.message))
             return resp
 
         for chunk in chunks:
@@ -329,7 +332,8 @@ class EventAgent(Daemon):
         self.conf = conf
         self.logger = get_logger(conf)
         self.running = False
-        self.retry_interval = int_value(conf.get('retry_interval'), 30)
+        self.retry_interval = int_value(conf.get('retry_interval'), 5)
+        self.batch_size = int_value(conf.get('batch_size'), 500)
         self.last_retry = 0
         self.init_zmq()
         self.init_queue()
@@ -429,7 +433,7 @@ class EventAgent(Daemon):
             worker.stop()
 
     def retry(self):
-        cursor = self.queue.load(EVENT_BATCH_SIZE)
+        cursor = self.queue.load(self.batch_size)
 
         for event in cursor:
             event_id, data = event

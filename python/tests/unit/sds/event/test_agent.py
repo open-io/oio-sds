@@ -15,31 +15,38 @@ class TestEventWorker(unittest.TestCase):
         self.worker = EventWorker(conf, "test", context)
 
     def test_process_event(self):
-        self.worker.handle_container_destroy = Mock()
-        self.worker.handle_container_put = Mock()
-        self.worker.handle_container_update = Mock()
-        self.worker.handle_object_delete = Mock()
-        self.worker.handle_object_put = Mock()
+        w = self.worker
+        w.handle_container_destroy = Mock()
+        w.handle_container_put = Mock()
+        w.handle_container_update = Mock()
+        w.handle_object_delete = Mock()
+        w.handle_object_put = Mock()
+        w.handle_reference_update = Mock()
+        w.handle_chunk_put = Mock()
+        w.handle_chunk_delete = Mock()
+        w.handle_ping = Mock()
 
-        event = {"event": "meta2.container.destroy"}
-        self.worker.process_event(event)
-        self.worker.handle_container_destroy.assert_called_once_with(event)
+        event_types_handlers = [
+                ('meta2.container.destroy', w.handle_container_destroy),
+                ('meta2.container.create', w.handle_container_put),
+                ('meta2.container.state', w.handle_container_update),
+                ('meta2.content.new', w.handle_object_put),
+                ('meta2.content.deleted', w.handle_object_delete),
+                ('meta1.account.services', w.handle_reference_update),
+                ('rawx.chunk.new', w.handle_chunk_put),
+                ('rawx.chunk.delete', w.handle_chunk_delete),
+                ('ping', w.handle_ping)
+        ]
 
-        event = {"event": "meta2.container.create"}
-        self.worker.process_event(event)
-        self.worker.handle_container_put.assert_called_once_with(event)
+        for event_type, handler in event_types_handlers:
+            event = {'event': event_type}
+            self.assertEqual(w.process_event(event), True)
+            handler.assert_called_once_with(event)
 
-        event = {"event": "meta2.container.state"}
-        self.worker.process_event(event)
-        self.worker.handle_container_update.assert_called_once_with(event)
+        self.assertEqual(w.process_event({'event': 'foo'}), True)
 
-        event = {"event": "meta2.content.new"}
-        self.worker.process_event(event)
-        self.worker.handle_object_put.assert_called_once_with(event)
-
-        event = {"event": "meta2.content.deleted"}
-        self.worker.process_event(event)
-        self.worker.handle_object_delete.assert_called_once_with(event)
+        w.handle_ping = Mock(side_effect=Exception('bar'))
+        self.assertEqual(w.process_event({'event': 'ping'}), False)
 
     def test_object_delete_handler(self):
 
