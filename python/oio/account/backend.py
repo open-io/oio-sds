@@ -104,6 +104,33 @@ class AccountBackend(object):
         release_lock(conn, 'account:%s' % account_id, lock)
         return account_id
 
+    def delete_account(self, account_id):
+        conn = self.conn
+        if not account_id:
+            return None
+        account_id = conn.hget('account:%s' % account_id, 'id')
+
+        if not account_id:
+            return None
+
+        lock = acquire_lock_with_timeout(conn, 'account:%s' % account_id, 1)
+        if not lock:
+            return None
+
+        num_containers = conn.zcard('containers:%s' % account_id)
+
+        if int(num_containers) > 0:
+            return False
+
+        pipeline = conn.pipeline(True)
+        pipeline.delete('metadata:%s' % account_id)
+        pipeline.delete('containers:%s' % account_id)
+        pipeline.delete('account:%s' % account_id)
+        pipeline.hdel('accounts:', account_id)
+        pipeline.execute()
+        release_lock(conn, 'account:%s' % account_id, lock)
+        return True
+
     def get_account_metadata(self, account_id):
         conn = self.conn
         if not account_id:
