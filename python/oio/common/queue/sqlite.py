@@ -124,9 +124,10 @@ class SqliteQueue(BaseQueue):
         );
     """
     _remove = "DELETE FROM {0} WHERE id = ?"
-    _add = "INSERT INTO {0} (id, data, ts) VALUES (?, ?, DATETIME('now'))"
+    _add = "INSERT OR IGNORE INTO {0} (id, data, ts) \
+            VALUES (?, ?, DATETIME('now'))"
     _load = "SELECT id, data FROM {0} LIMIT ?"
-    _failed = "INSERT INTO {0}_failed (id, data, ts) \
+    _failed = "INSERT OR IGNORE INTO {0}_failed (id, data, ts) \
     SELECT id, data, DATETIME('now') FROM {0} WHERE id = ?"
 
     def __init__(self, name, location):

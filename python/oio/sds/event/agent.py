@@ -42,10 +42,6 @@ def validate_msg(msg):
     return len(msg) == 4
 
 
-def decode_msg(msg):
-    return json.loads(msg[1])
-
-
 class EventWorker(object):
     def __init__(self, conf, name, context, **kwargs):
         self.conf = conf
@@ -82,22 +78,25 @@ class EventWorker(object):
         socket.connect('inproc://event-front')
         self.socket = socket
 
+    def safe_decode_msg(self, msg):
+        try:
+            return json.loads(msg[1])
+        except Exception as e:
+            self.logger.warn('ERROR decoding msg "%s"', str(e.message))
+            return None
+
     def safe_ack(self, msg):
         try:
             self.socket.send_multipart(msg)
-        except Exception:
-            self.logger.warn('Unable to ack event')
+        except Exception as e:
+            self.logger.warn('ERROR unable to ack event "%s"', str(e.message))
 
     def run(self):
         try:
             while self.running:
                 msg = self.socket.recv_multipart()
                 self.logger.debug("msg received: %s" % msg)
-                event = None
-                try:
-                    event = decode_msg(msg)
-                except Exception as e:
-                    self.logger.warn('ERROR decoding msg "%s"', e)
+                event = self.safe_decode_msg(msg)
                 success = False
                 if event:
                     success = self.process_event(event)
@@ -112,7 +111,7 @@ class EventWorker(object):
     def process_event(self, event):
         handler = self.get_handler(event)
         if not handler:
-            self.logger.warn("No handler found")
+            self.logger.warn("ERROR no handler found for event")
             # mark as success
             return True
         success = True
