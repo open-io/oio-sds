@@ -28,7 +28,6 @@ add_library(mod_dav_rainx MODULE
 		rainx_config_utils.c
 		rainx_internals.c
 		rainx_internals.h
-		rainx_properties.c
 		rainx_repository.c
 		rainx_req_info.c
 		rainx_http_tools.c
