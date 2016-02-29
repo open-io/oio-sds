@@ -9,7 +9,7 @@ class BaseChecker(object):
         self.agent = agent
         self.checker_conf = checker_conf
         self.logger = logger
-        self.timeout = float_value(checker_conf.get('timeout'), 1.0)
+        self.timeout = float_value(checker_conf.get('timeout'), 5.0)
         self.rise = checker_conf['rise']
         self.fall = checker_conf['fall']
         self.results = RingBuffer(max([self.rise, self.fall]))
