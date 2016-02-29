@@ -81,6 +81,11 @@ class AccountBackend(object):
             self._conn = redis.StrictRedis(host=redis_host, port=redis_port)
         return self._conn
 
+    @staticmethod
+    def ckey(account, name):
+        """Build the key of a container description"""
+        return 'container:%s:%s' % (account, unicode(name))
+
     def create_account(self, account_id):
         conn = self.conn
         if not account_id:
@@ -199,12 +204,12 @@ class AccountBackend(object):
             else:
                 return None
 
-        lock = acquire_lock_with_timeout(conn, 'container:%s:%s' % (
-            account_id, name), 1)
+        lock = acquire_lock_with_timeout(
+                conn, AccountBackend.ckey(account_id, name), 1)
         if not lock:
             return None
 
-        data = conn.hgetall('container:%s:%s' % (account_id, name))
+        data = conn.hgetall(AccountBackend.ckey(account_id, name))
 
         record = {'name': name, 'mtime': mtime, 'dtime': dtime,
                   'objects': object_count, 'bytes': bytes_used}
@@ -243,13 +248,13 @@ class AccountBackend(object):
             if record[r] is None:
                 record[r] = 0
 
-        ct = {str(name): 0}
+        ct = {name: 0}
         pipeline = conn.pipeline(True)
         if deleted:
-            pipeline.delete('container:%s:%s' % (account_id, name))
-            pipeline.zrem('containers:%s' % account_id, str(name))
+            pipeline.delete(AccountBackend.ckey(account_id, name))
+            pipeline.zrem('containers:%s' % account_id, name)
         else:
-            pipeline.hmset('container:%s:%s' % (account_id, name), record)
+            pipeline.hmset(AccountBackend.ckey(account_id, name), record)
             pipeline.zadd('containers:%s' % account_id, **ct)
         if incr_object_count:
             pipeline.hincrby('account:%s' % account_id, 'objects',
@@ -258,7 +263,7 @@ class AccountBackend(object):
             pipeline.hincrby('account:%s' % account_id, 'bytes',
                              incr_bytes_used)
         pipeline.execute()
-        release_lock(conn, 'container:%s:%s' % (account_id, name), lock)
+        release_lock(conn, AccountBackend.ckey(account_id, name), lock)
         return name
 
     def _raw_listing(self, account_id, limit, marker, end_marker, delimiter,
@@ -283,6 +288,8 @@ class AccountBackend(object):
 
             container_ids = conn.zrangebylex('containers:%s' % account_id, min,
                                              max, offset, limit - len(results))
+            container_ids = [cid.decode('utf8', errors='ignore')
+                             for cid in container_ids]
 
             if prefix is None:
                 containers = [[c_id, 0, 0, 0] for c_id in container_ids]
@@ -322,7 +329,7 @@ class AccountBackend(object):
                                      delimiter=delimiter)
         pipeline = self.conn.pipeline(True)
         for container in raw_list:
-            pipeline.hmget('container:%s:%s' % (account_id, container[0]),
+            pipeline.hmget(AccountBackend.ckey(account_id, container[0]),
                            'objects', 'bytes')
         res = pipeline.execute()
 

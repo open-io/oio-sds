@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from time import sleep, time
 
 import redis
@@ -137,6 +138,39 @@ class TestAccountBackend(BaseTestCase):
                                                                name)))
 
         # same event
+        backend.update_container(account_id, name, 0, dtime, 0, 0)
+        res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
+        self.assertEqual(len(res), 0)
+        self.assertFalse(self.conn.exists('container:%s:%s' % (account_id,
+                                                               name)))
+
+    def test_utf8_container(self):
+        backend = AccountBackend({}, self.conn)
+        account_id = 'test'
+        self.assertEqual(backend.create_account(account_id), account_id)
+        name = u'La fête à la maison'
+        mtime = Timestamp(time()).normal
+
+        # create container
+        backend.update_container(account_id, name, mtime, 0, 0, 0)
+        res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
+        self.assertEqual(unicode(res[0], 'utf8'), name)
+
+        # ensure it appears in listing
+        listing = backend.list_containers(account_id, marker='',
+                                          delimiter='', limit=100)
+        self.assertIn(name, [entry[0] for entry in listing])
+
+        # delete container
+        sleep(.00001)
+        dtime = Timestamp(time()).normal
+        backend.update_container(account_id, name, 0, dtime, 0, 0)
+        res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
+        self.assertEqual(len(res), 0)
+        self.assertFalse(self.conn.exists('container:%s:%s' % (account_id,
+                                                               name)))
+
+        # ensure it ha been removed
         backend.update_container(account_id, name, 0, dtime, 0, 0)
         res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)

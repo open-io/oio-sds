@@ -177,7 +177,7 @@ class EventWorker(object):
         account = data.get('url').get('account')
 
         event = {'mtime': mtime, 'name': name}
-        self.session.post(uri, params={'id': account}, data=json.dumps(event))
+        self.session.post(uri, params={'id': account}, json=event)
 
     def handle_container_update(self, event):
         """
@@ -201,7 +201,7 @@ class EventWorker(object):
             'bytes': bytes_count,
             'objects': object_count
         }
-        self.session.post(uri, params={'id': account}, data=json.dumps(event))
+        self.session.post(uri, params={'id': account}, json=event)
 
     def handle_container_destroy(self, event):
         """

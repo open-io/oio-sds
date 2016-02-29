@@ -57,5 +57,5 @@ class ServiceLogger(Logger):
         self.access_log = get_logger(access_conf, 'account.access')
 
     def access(self, resp, req, environ, request_time):
-        if environ['PATH_INFO'] != '/status':
+        if environ.get('PATH_INFO', None) != '/status':
             super(ServiceLogger, self).access(resp, req, environ, request_time)
