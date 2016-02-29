@@ -46,7 +46,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define KEY_STG_CONF "storage_conf"
 # define KEY_SCORE_VARBOUND "score_variation_bound"
 
-# define KEY_SERIALIZE_SRVINFO_CACHED "serialize_srvinfo_cache"
 # define DEF_SERIALIZE_SRVINFO_CACHED FALSE
 
 # define KEY_SERIALIZE_SRVINFO_TAGS   "serialize_srvinfo_tags"

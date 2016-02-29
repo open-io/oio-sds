@@ -115,6 +115,11 @@ extern "C" {
 #  define PROXYD_TTL_DOWN_SERVICES 5
 # endif
 
+/* in seconds */
+# ifndef PROXYD_TTL_KNOWN_SERVICES
+#  define PROXYD_TTL_KNOWN_SERVICES 3600
+# endif
+
 # ifndef PROXYD_DEFAULT_PERIOD_DOWNSTREAM
 #  define PROXYD_DEFAULT_PERIOD_DOWNSTREAM 10 /*s*/
 # endif

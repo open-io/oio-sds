@@ -108,7 +108,7 @@ manage_service(struct service_info_s *si)
 			service_tag_set_value_boolean(service_info_ensure_tag(si->tags, NAME_TAGNAME_RAWX_FIRST), tag_first->value.b);
 	}
 
-	service_tag_set_value_boolean(service_info_ensure_tag(si->tags, "tag.up"), TRUE);
+	service_tag_set_value_boolean(service_info_ensure_tag(si->tags, NAME_TAGNAME_RAWX_UP), TRUE);
 	g_hash_table_insert(ns_data->local_services, g_strndup(key, key_size), si);
 
 	DEBUG("Service registration [ns=%s type=%s addr=%s]", ns_data->name, si->type, str_addr);

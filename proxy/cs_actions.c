@@ -92,18 +92,28 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 					"Unexpected NS"));
 	}
 
-	if (op == REGOP_PUSH)
-		si->score.value = SCORE_UNSET;
-	else if (op == REGOP_UNLOCK)
+	gchar *k = service_info_key (si);
+	STRING_STACKIFY(k);
+
+	if (op == REGOP_PUSH) {
+		if (service_is_known (k))
+			si->score.value = SCORE_UNSET;
+		else {
+			service_learn (k);
+			service_tag_set_value_boolean (service_info_ensure_tag (
+						si->tags, NAME_TAGNAME_RAWX_FIRST), TRUE);
+			si->score.value = 0;
+		}
+	} else if (op == REGOP_UNLOCK)
 		si->score.value = SCORE_UNLOCK;
-	else /* if (op == REGOP_LOCK) */
+	else { /* if (op == REGOP_LOCK) */
 		si->score.value = CLAMP(si->score.value, SCORE_DOWN, SCORE_MAX);
+	}
 
 	if (cs_expire_local_services > 0) {
-		gchar *k = service_info_key (si);
 		struct service_info_s *v = service_info_dup (si);
 		v->score.timestamp = oio_ext_monotonic_seconds ();
-		PUSH_DO(lru_tree_insert (srv_registered, k, v));
+		PUSH_DO(lru_tree_insert (srv_registered, g_strdup(k), v));
 	}
 
 	si->score.timestamp = oio_ext_real_seconds ();

@@ -82,7 +82,6 @@ static void _alert_service_with_zeroed_score(struct conscience_srv_s *srv);
 
 /* ------------------------------------------------------------------------- */
 
-static gboolean flag_serialize_srvinfo_cache = DEF_SERIALIZE_SRVINFO_CACHED;
 static gboolean flag_serialize_srvinfo_stats = DEF_SERIALIZE_SRVINFO_STATS;
 static gboolean flag_serialize_srvinfo_tags = DEF_SERIALIZE_SRVINFO_TAGS;
 
@@ -383,7 +382,6 @@ handler_get_ns_info(struct request_context_s *req_ctx)
 		return (0);
 	}
 
-	reply_context_log_access(&ctx, NULL);
 	reply_context_clear(&ctx, TRUE);
 	return (1);
 }
@@ -475,12 +473,7 @@ _conscience_srv_serialize_full(struct conscience_srv_s *srv)
 static void
 _conscience_srv_prepare_cache(struct conscience_srv_s *srv)
 {
-	GByteArray *gba;
-
-	if (!flag_serialize_srvinfo_cache)
-		return;
-
-	gba = _conscience_srv_serialize(srv);
+	GByteArray *gba = _conscience_srv_serialize(srv);
 	_conscience_srv_clean_udata(srv);
 	srv->app_data_type = SAD_PTR;
 	srv->app_data.pointer.value = gba;
@@ -500,8 +493,7 @@ _srvinfo_append(struct srvget_s *sg, struct conscience_srv_s *srv)
 			return TRUE;
 		}
 	}
-	else if (flag_serialize_srvinfo_cache
-		&& srv->app_data_type == SAD_PTR
+	else if (srv->app_data_type == SAD_PTR
 		&& NULL != (gba = srv->app_data.pointer.value))
 	{
 		if (gba->len > 0) {
@@ -636,7 +628,8 @@ handler_get_service(struct request_context_s *req_ctx)
 	if (sg.gba_body)
 		g_byte_array_free(sg.gba_body, TRUE);
 	g_slist_free_full(sg.response_bodies, metautils_gba_unref);
-	reply_context_log_access(&reply_ctx, NULL);
+	if (reply_ctx.warning)
+		reply_context_log_access(&reply_ctx, NULL);
 	reply_context_clear(&(reply_ctx), TRUE);
 	return rc ? 1 : 0;
 }
@@ -695,21 +688,19 @@ push_service(struct conscience_s *cs, struct service_info_s *si)
 				srv->score.value = old_score;
 			} else if (si->score.value == SCORE_UNSET) { /* simple push */
 				gboolean bval = FALSE;
-				struct service_tag_s *tag = service_info_get_tag(si->tags, "tag.up");
+				struct service_tag_s *tag = service_info_get_tag(si->tags, NAME_TAGNAME_RAWX_UP);
 				if (tag && service_tag_get_value_boolean(tag, &bval, NULL) && !bval)
 					_alert_service_with_zeroed_score(srv);
 			} else { /* lock */
 				srv->locked = TRUE;
 			}
-			_conscience_srv_prepare_cache(srv);
-		}
-		else { /* first register */
+		} else { /* first register */
 			srv = conscience_srvtype_get_srv(srvtype, (struct conscience_srvid_s*)&(si->addr));
-			if (srv) {
+			if (srv)
 				srv->locked = (si->score.value >= 0);
-				_conscience_srv_prepare_cache(srv);
-			}
 		}
+		if (srv)
+			_conscience_srv_prepare_cache(srv);
 		conscience_release_locked_srvtype(srvtype);
 		/* XXX end of critical section */
 
@@ -776,7 +767,6 @@ handler_push_service(struct request_context_s *req_ctx)
 
 	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	reply_context_reply(&ctx, NULL);
-	reply_context_log_access(&ctx, NULL);
 	reply_context_clear(&ctx, TRUE);
 	return 1;
 errorLabel:
@@ -839,7 +829,6 @@ handler_get_services_types(struct request_context_s *req_ctx)
 	g_byte_array_free(gba_names, TRUE);
 	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	reply_context_reply(&ctx, NULL);
-	reply_context_log_access(&ctx, NULL);
 	reply_context_clear(&ctx, TRUE);
 	return 1;
 }
@@ -1408,12 +1397,6 @@ plugin_init(GHashTable * params, GError ** err)
 	NOTICE("[NS=%s] Chunk size set to %"G_GINT64_FORMAT, conscience->ns_info.name, conscience->ns_info.chunk_size);
 
 	/* Serialization optimizations */
-	str = g_hash_table_lookup(params, KEY_SERIALIZE_SRVINFO_CACHED);
-	if (NULL != str)
-		flag_serialize_srvinfo_cache = metautils_cfg_get_bool(str, DEF_SERIALIZE_SRVINFO_CACHED);
-	NOTICE("[NS=%s] Cache for serialized service_info  [%s]", conscience->ns_info.name,
-			(flag_serialize_srvinfo_cache ? "ENABLED" : "DISABLED"));
-
 	str = g_hash_table_lookup(params, KEY_SERIALIZE_SRVINFO_TAGS);
 	if (NULL != str)
 		flag_serialize_srvinfo_tags = metautils_cfg_get_bool(str, DEF_SERIALIZE_SRVINFO_TAGS);

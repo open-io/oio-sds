@@ -91,6 +91,10 @@ extern time_t cs_expire_local_services;
 /* TODO(jfs): convert time_t seconds to gint64 monotonic microseconds. */
 extern time_t cs_down_services;
 
+/* how long the proxy remembers services from the conscience */
+/* TODO(jfs): convert time_t seconds to gint64 monotonic microseconds. */
+extern time_t cs_known_services;
+
 extern struct grid_lbpool_s *lbpool;
 extern struct hc_resolver_s *resolver;
 
@@ -109,6 +113,7 @@ extern struct namespace_info_s nsinfo;
 
 extern GMutex srv_mutex;
 extern struct lru_tree_s *srv_down;
+extern struct lru_tree_s *srv_known;
 
 enum
 {
@@ -128,7 +133,8 @@ struct req_args_s
 	guint32 flags;
 };
 
-struct sub_action_s {
+struct sub_action_s
+{
 	const char *verb;
 	enum http_rc_e (*handler) (struct req_args_s *, struct json_object *);
 };
@@ -142,6 +148,8 @@ gboolean validate_srvtype (const char * n);
 
 gboolean service_is_ok (gconstpointer p);
 void service_invalidate (gconstpointer n);
+void service_learn (const char *key);
+gboolean service_is_known (const char *key);
 
 const char * _req_get_option (struct req_args_s *args, const char *name);
 const char * _req_get_token (struct req_args_s *args, const char *name);

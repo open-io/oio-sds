@@ -519,7 +519,7 @@ group=${NS},localhost,conscience,${IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=true
-command=${EXE_PREFIX}-daemon -q -s OIO,${NS},conscience ${CFGDIR}/${NS}-conscience.conf
+command=${EXE_PREFIX}-daemon -s OIO,${NS},conscience ${CFGDIR}/${NS}-conscience.conf
 
 [service.${NS}-event-agent]
 group=${NS},localhost,event
