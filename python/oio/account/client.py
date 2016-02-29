@@ -47,6 +47,9 @@ class AccountClient(Client):
     def account_create(self, account):
         self._account_request(account, 'PUT', 'create')
 
+    def account_delete(self, account):
+        self._account_request(account, 'POST', 'delete')
+
     def containers_list(self, account, marker=None, limit=None):
         params = {}
         if marker is not None:

@@ -48,6 +48,20 @@ def account_create():
         return flask.Response('', 202)
 
 
+@account_api.route('/v1.0/account/delete', methods=['POST'])
+def account_delete():
+    account_id = request.args.get('id')
+    if not account_id:
+        return flask.Response('Missing Account ID', 400)
+    result = get_backend().delete_account(account_id)
+    if result is None:
+        return flask.Response('No such account', 404)
+    if result is False:
+        return flask.Response('Account not empty', 409)
+    else:
+        return flask.Response('', 204)
+
+
 @account_api.route('/v1.0/account/update', methods=['POST'])
 def account_update():
     account_id = request.args.get('id')
