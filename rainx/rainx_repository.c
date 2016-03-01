@@ -1951,12 +1951,12 @@ static const dav_hooks_repository dav_hooks_repository_rainx =
 static const dav_provider dav_rainx_provider =
 {
 	&dav_hooks_repository_rainx,
-	&dav_hooks_db_dbm,
-	NULL,               /* no lock management */
-	NULL,               /* vsn */
-	NULL,               /* binding */
-	NULL,               /* search */
-	NULL                /* ctx */
+	NULL,  /* Documentation says this should not be NULL, but it seems to work */
+	NULL,  /* no lock management */
+	NULL,  /* vsn */
+	NULL,  /* binding */
+	NULL,  /* search */
+	NULL   /* ctx */
 };
 
 void
