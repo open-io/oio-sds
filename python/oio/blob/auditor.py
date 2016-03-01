@@ -167,11 +167,11 @@ class BlobAuditorWorker(object):
                     cid=content_cid, path=content_path)
 
                 # Check chunk data
-                chunks_nb = 0
                 chunk_data = None
+                metachunks = set()
                 for c in data:
                     if c['url'].endswith(meta['chunk_id']):
-                        chunks_nb += 1  # FIXME: won't work with DUP
+                        metachunks.add(c['pos'].split('.', 2)[0])
                         chunk_data = c
                 if not chunk_data:
                     raise exc.OrphanChunk('Not found in content')
@@ -189,10 +189,9 @@ class BlobAuditorWorker(object):
                 if content_attr['length'] != meta['content_size']:
                     raise exc.FaultyChunk('Invalid content size found')
 
-                if chunks_nb != int(meta['content_chunksnb']):
+                if len(metachunks) != int(meta['content_chunksnb']):
                     self.logger.warn('Invalid number of chunks found')
-                    # TODO: really count chunks and enable the exception
-                    # raise exc.FaultyChunk('Invalid number of chunks found')
+                    raise exc.FaultyChunk('Invalid number of chunks found')
 
             except exc.NotFound:
                 raise exc.OrphanChunk('Chunk not found in container')
