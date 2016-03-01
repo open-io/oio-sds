@@ -340,9 +340,12 @@ action_sqlx_propget (struct req_args_s *args, struct json_object *jargs)
 			continue;
 		if (!kv->value)
 			g_string_append_printf (out, "\"%s\":null", kv->key);
-		else
-			g_string_append_printf (out, "\"%s\":\"%.*s\"",
-					kv->key, kv->value->len, (gchar*) kv->value->data);
+		else {
+			g_string_append_printf(out, "\"%s\":\"", kv->key);
+			oio_str_gstring_append_json_blob(out,
+					(const char*)kv->value->data, kv->value->len);
+			g_string_append_c(out, '"');
+		}
 	}
 	g_string_append_c (out, '}');
 

@@ -335,9 +335,9 @@ oio_str_lower(register gchar *s)
 }
 
 void
-oio_str_gstring_append_json_string (GString *base, const char *s)
+oio_str_gstring_append_json_blob(GString *base, const char *s, ssize_t len)
 {
-	while (*s) {
+	for (ssize_t i = 0; (len < 0 && *s) || i < len; i++) {
 		if (*s < 0) {  // (part of a) unicode character
 			gunichar c = g_utf8_get_char_validated(s, -1);
 			if (c == (gunichar)-1) {
@@ -379,6 +379,12 @@ oio_str_gstring_append_json_string (GString *base, const char *s)
 			}
 		}
 	}
+}
+
+void
+oio_str_gstring_append_json_string (GString *base, const char *s)
+{
+	return oio_str_gstring_append_json_blob(base, s, -1);
 }
 
 void
