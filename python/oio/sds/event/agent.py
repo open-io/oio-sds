@@ -396,7 +396,7 @@ class EventAgent(Daemon):
 
         except Exception as e:
             self.logger.error('ERROR in main loop %s', e)
-            raise e
+            raise
         finally:
             self.logger.warn('event agent: stopping')
             self.stop_workers()

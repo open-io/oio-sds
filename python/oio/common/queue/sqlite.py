@@ -118,7 +118,7 @@ class SqliteQueue(BaseQueue):
         );
         CREATE TABLE IF NOT EXISTS {0}_failed
         (
-            id TEST PRIMARY KEY,
+            id TEXT PRIMARY KEY,
             data BLOB,
             ts INTEGER
         );
