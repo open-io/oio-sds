@@ -1,5 +1,5 @@
-import sqlite3
 import time
+import binascii
 
 from eventlet import GreenPile
 from eventlet import GreenPool
@@ -56,10 +56,8 @@ class EventWorker(object):
         self.acct_refresh_interval = int_value(
             conf.get('acct_refresh_interval'), 60
         )
-        self.acct_update = true_value(
-            conf.get('acct_update', True))
-        self.rdir_update = true_value(
-            conf.get('rdir_update', True))
+        self.acct_update = true_value(conf.get('acct_update', True))
+        self.rdir_update = true_value(conf.get('rdir_update', True))
         self.session = requests.Session()
         self.failed = False
 
@@ -95,13 +93,16 @@ class EventWorker(object):
         try:
             while self.running:
                 msg = self.socket.recv_multipart()
-                self.logger.debug("msg received: %s" % msg)
+                self.logger.debug("worker %s msg received: %s", self.name, msg)
                 event = self.safe_decode_msg(msg)
                 success = False
                 if event:
                     success = self.process_event(event)
-                f = "0" if success else ""
-                self.safe_ack([msg[0], f])
+                result = "0" if success else ""
+                event_id = msg[0]
+                self.safe_ack([event_id, result])
+                self.logger.debug('worker %s ack event %s', self.name,
+                                  binascii.hexlify(event_id))
         except Exception as e:
             self.logger.warn('ERROR in worker "%s"', e)
             self.failed = True
@@ -353,7 +354,7 @@ class EventAgent(Daemon):
                     msg = server.recv_multipart()
                     if validate_msg(msg):
                         try:
-                            event_id = sqlite3.Binary(msg[2])
+                            event_id = msg[2]
                             data = msg[3]
                             self.queue.put(event_id, data)
                             event = ['', msg[2], msg[3]]
@@ -369,11 +370,14 @@ class EventAgent(Daemon):
                     msg = backend.recv_multipart()
                     event_id = msg[1]
                     success = msg[2]
-                    event_id = sqlite3.Binary(event_id)
                     if not success:
                         self.queue.failed(event_id)
+                        self.logger.warn('event %s moved to failed',
+                                         binascii.hexlify(event_id))
                     else:
                         self.queue.delete(event_id)
+                        self.logger.debug('event %s removed from queue',
+                                          binascii.hexlify(event_id))
 
             boss_pool = GreenPool(2)
             boss_pool.spawn_n(front, self.server, self.backend)
@@ -401,7 +405,6 @@ class EventAgent(Daemon):
             self.logger.warn('event agent: stopping')
             self.stop_workers()
 
-            self.logger.warn('ZMQ context being destroyed')
             self.context.destroy(linger=True)
             self.context = None
 
