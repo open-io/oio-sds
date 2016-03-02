@@ -1,4 +1,4 @@
-from eventlet import connect
+from eventlet.green import socket
 from oio.common import exceptions as exc
 from oio.conscience.checker.base import BaseChecker
 
@@ -13,9 +13,10 @@ class TcpChecker(BaseChecker):
 
     def check(self):
         result = False
-        s = None
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            s = connect(self.addr)
+            s.connect(self.addr)
             result = True
         finally:
             if s:
