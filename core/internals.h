@@ -29,6 +29,8 @@ extern "C" {
 #  define EXTRA_ASSERT(X)
 # endif
 
+#define ON_ENUM(P,E) case P##E: return #E
+
 #define CODE_IS_NETWORK_ERROR(C) ((C) < CODE_TEMPORARY)
 #define CODE_IS_OK(C)            (((C) >= CODE_FINAL_OK) && ((C) < CODE_BEACON_REDIRECT))
 #define CODE_IS_TEMP(C)          (((C) >= CODE_TEMPORARY) && ((C) < CODE_FINAL_OK))

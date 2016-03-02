@@ -39,7 +39,8 @@ extern "C" {
 # endif
 
 
-CURL * _curl_get_handle (void);
+CURL * _curl_get_handle_blob (void);
+CURL * _curl_get_handle_proxy (void);
 
 /* --------------------------------------------------------------------------
  * Headers helpers

@@ -55,18 +55,15 @@ struct oio_error_s;
 struct oio_url_s;
 
 static CURL *
-_curl_get_handle_proxy (struct oio_sds_s *sds)
+_get_proxy_handle (struct oio_sds_s *sds)
 {
-	CURL *h = _curl_get_handle ();
+	CURL *h = _curl_get_handle_proxy ();
 #if (LIBCURL_VERSION_MAJOR > 7) || ((LIBCURL_VERSION_MAJOR == 7) && (LIBCURL_VERSION_MINOR >= 40))
 	if (sds->proxy_local)
 		curl_easy_setopt (h, CURLOPT_UNIX_SOCKET_PATH, sds->proxy_local);
 #else
 	(void) sds;
 #endif
-	//curl_easy_setopt (h, CURLOPT_FORBID_REUSE, 0L);
-	//curl_easy_setopt (h, CURLOPT_FRESH_CONNECT, 0L);
-	curl_easy_setopt (h, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_0);
 	return h;
 }
 
@@ -392,7 +389,7 @@ oio_sds_init (struct oio_sds_s **out, const char *ns)
 	(*out)->proxy_local = oio_cfg_get_proxylocal (ns);
 	(*out)->proxy = oio_cfg_get_proxy_containers (ns);
 	(*out)->sync_after_download = TRUE;
-	(*out)->h = _curl_get_handle_proxy (*out);
+	(*out)->h = _get_proxy_handle (*out);
 	return NULL;
 }
 
@@ -530,7 +527,7 @@ _download_range_from_chunk (struct _download_ctx_s *dl,
 	GRID_DEBUG ("%s Range:%s/%"G_GSIZE_FORMAT" %s", __FUNCTION__,
 			str_range, c0->size, c0->url);
 
-	CURL *h = _curl_get_handle ();
+	CURL *h = _curl_get_handle_blob ();
 	struct oio_headers_s headers = {NULL,NULL};
 	oio_headers_common (&headers);
 	oio_headers_add (&headers, "Range", str_range);

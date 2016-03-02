@@ -258,7 +258,7 @@ _cs_PROXY__register_service (struct oio_cs_client_s *self,
 	GString *body = _pack_registration (cs->ns, in_type, reg->id, reg->url,
 			&score, reg->kv_tags);
 
-	CURL *h = _curl_get_handle ();
+	CURL *h = _curl_get_handle_proxy ();
 	GError *err = oio_proxy_call_conscience_register (h, cs->ns, body);
 	curl_easy_cleanup (h);
 
@@ -283,7 +283,7 @@ _cs_PROXY__lock_service (struct oio_cs_client_s *self,
 	GString *body = _pack_registration (cs->ns, in_type, reg->id, reg->url,
 			&score, reg->kv_tags);
 
-	CURL *h = _curl_get_handle ();
+	CURL *h = _curl_get_handle_proxy ();
 	GError *err = oio_proxy_call_conscience_register (h, cs->ns, body);
 	curl_easy_cleanup (h);
 
@@ -307,7 +307,7 @@ _cs_PROXY__deregister_service (struct oio_cs_client_s *self,
 	GString *body = _pack_registration (cs->ns, in_type, id,
 			NULL, NULL, NULL);
 
-	CURL *h = _curl_get_handle ();
+	CURL *h = _curl_get_handle_proxy ();
 	GError *err = oio_proxy_call_conscience_deregister (h, cs->ns, body);
 	curl_easy_cleanup (h);
 
@@ -325,7 +325,7 @@ _cs_PROXY__flush_services (struct oio_cs_client_s *self, const char *in_type)
 	if (!in_type || !*in_type)
 		return BADREQ("Missing srvtype");
 
-	CURL *h = _curl_get_handle ();
+	CURL *h = _curl_get_handle_proxy ();
 	GError *err = oio_proxy_call_conscience_flush (h, cs->ns, in_type);
 	curl_easy_cleanup (h);
 
@@ -348,7 +348,7 @@ _cs_PROXY__unlock_service (struct oio_cs_client_s *self,
 	int score = SCORE_UNLOCK;
 	GString *body = _pack_registration (cs->ns, in_type, id, id, &score, NULL);
 
-	CURL *h = _curl_get_handle ();
+	CURL *h = _curl_get_handle_proxy ();
 	GError *err = oio_proxy_call_conscience_unlock (h, cs->ns, body);
 	curl_easy_cleanup (h);
 
@@ -370,7 +370,7 @@ _cs_PROXY__list_services (struct oio_cs_client_s *self,
 
 	GString *body = g_string_new ("");
 
-	CURL *h = _curl_get_handle ();
+	CURL *h = _curl_get_handle_proxy ();
 	GError *err = oio_proxy_call_conscience_list (h, cs->ns, in_type, body);
 	curl_easy_cleanup (h);
 
@@ -415,7 +415,7 @@ _cs_PROXY__list_types (struct oio_cs_client_s *self,
 
 	GString *body = g_string_new ("");
 
-	CURL *h = _curl_get_handle ();
+	CURL *h = _curl_get_handle_proxy ();
 	GError *err = oio_proxy_call_conscience_list_types (h, cs->ns, body);
 	curl_easy_cleanup (h);
 

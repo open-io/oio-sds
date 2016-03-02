@@ -149,7 +149,7 @@ _dir_proxy_create (struct oio_directory_s *self, const struct oio_url_s *url)
 	g_assert (d->vtable == &vtable_PROXY);
 
 	struct oio_url_s *u = oio_url_dup (url);
-	CURL *h = _curl_get_handle ();
+	CURL *h = _curl_get_handle_proxy ();
 	GError *err = oio_proxy_call_reference_create (h, u);
 	curl_easy_cleanup (h);
 	oio_url_pclean (&u);
@@ -169,7 +169,7 @@ _dir_proxy_list (struct oio_directory_s *self,
 	GError *err = NULL;
 	GString *out = g_string_new ("");
 	struct oio_url_s *u = oio_url_dup (url);
-	CURL *h = _curl_get_handle ();
+	CURL *h = _curl_get_handle_proxy ();
 	err = oio_proxy_call_reference_show (h, u, srvtype, out);
 	curl_easy_cleanup (h);
 	oio_url_pclean (&u);
@@ -213,7 +213,7 @@ _dir_proxy_link (struct oio_directory_s *self,
 	GError *err = NULL;
 	GString *out = g_string_new ("");
 	struct oio_url_s *u = oio_url_dup (url);
-	CURL *h = _curl_get_handle ();
+	CURL *h = _curl_get_handle_proxy ();
 	err = oio_proxy_call_reference_link (h, u, srvtype, autocreate, out);
 	curl_easy_cleanup (h);
 	oio_url_pclean (&u);
