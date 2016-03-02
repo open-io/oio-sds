@@ -22,6 +22,12 @@ License along with this library.
 #include <errno.h>
 #include <poll.h>
 
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <netinet/tcp.h>
+
 #include <glib.h>
 #include <glib/gstdio.h>
 
@@ -110,13 +116,14 @@ static const char *
 _single_put_state_to_string (enum http_single_put_e s)
 {
 	switch (s) {
-		case HTTP_SINGLE_BEGIN: return "BEGIN";
-		case HTTP_SINGLE_REQUEST: return "REQUEST";
-		case HTTP_SINGLE_PAUSED: return "PAUSED";
-		case HTTP_SINGLE_REPLY: return "REPLY";
-		case HTTP_SINGLE_FINISHED: return "FINISHED";
-		default: g_assert_not_reached (); return "?";
+		ON_ENUM(HTTP_SINGLE_,BEGIN);
+		ON_ENUM(HTTP_SINGLE_,REQUEST);
+		ON_ENUM(HTTP_SINGLE_,PAUSED);
+		ON_ENUM(HTTP_SINGLE_,REPLY);
+		ON_ENUM(HTTP_SINGLE_,FINISHED);
 	}
+	g_assert_not_reached ();
+	return "?";
 }
 #endif
 
@@ -438,7 +445,7 @@ _start_upload(struct http_put_s *p)
 		g_assert (dest->bytes_sent == 0);
 		g_assert (dest->handle == NULL);
 
-		dest->handle = _curl_get_handle();
+		dest->handle = _curl_get_handle_blob();
 		g_assert(dest->handle != NULL);
 
 		curl_easy_setopt(dest->handle, CURLOPT_CONNECTTIMEOUT, p->timeout_cnx);
@@ -569,10 +576,11 @@ http_put_step (struct http_put_s *p)
 	 * and ensure the action with data ready are registered. */
 	for (GSList *l=p->dests; l ;l=l->next) {
 		struct http_put_dest_s *d = l->data;
+		GRID_TRACE("%s %d/%s buf=%p url=%s", __FUNCTION__,
+				d->state, _single_put_state_to_string(d->state),
+				d->buffer, d->url);
 		if (d->state == HTTP_SINGLE_FINISHED)
 			continue;
-		GRID_TRACE("%s %p %d/%s %s", __FUNCTION__, d->buffer,
-				d->state, _single_put_state_to_string(d->state), d->url);
 		if (d->buffer) {
 			if (d->state == HTTP_SINGLE_PAUSED) {
 				curl_easy_pause (d->handle, CURLPAUSE_CONT);
@@ -581,7 +589,7 @@ http_put_step (struct http_put_s *p)
 		}
 	}
 
-	count_up= _count_up_dests (p);
+	count_up = _count_up_dests (p);
 	p->state = count_up ? HTTP_WHOLE_READY : HTTP_WHOLE_PAUSED;
 
 	GRID_TRACE("%s Uploads: %u total, %u up (%u wanted to data)",
@@ -644,13 +652,70 @@ _trace(CURL *h, curl_infotype t, char *data, size_t size, void *u)
 	}
 }
 
+static int
+_curl_set_sockopt_common (void *u, curl_socket_t fd, curlsocktype event)
+{
+	g_assert_null (u);
+	if (event == CURLSOCKTYPE_IPCXN) {
+		int opt = 1;
+		setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (void*)&opt, sizeof(opt));
+#ifdef SO_REUSEPORT
+		opt = 1;
+		setsockopt (fd, SOL_SOCKET, SO_REUSEPORT, (void*)&opt, sizeof(opt));
+#endif
+	}
+	return CURL_SOCKOPT_OK;
+}
+
+static int
+_curl_set_sockopt_blob (void *u, curl_socket_t fd, curlsocktype event)
+{
+	_curl_set_sockopt_common (u, fd, event);
+	if (event == CURLSOCKTYPE_IPCXN) {
+		struct linger ls = {.l_onoff=1, .l_linger=1};
+		setsockopt (fd, SOL_SOCKET, SO_LINGER, (void*)&ls, sizeof(ls));
+	}
+	return CURL_SOCKOPT_OK;
+}
+
+/* Overrides the default setsockopt() for proxy connections.
+   SO_LINGER is now set. */
+static int
+_curl_set_sockopt_proxy (void *u, curl_socket_t fd, curlsocktype event)
+{
+	_curl_set_sockopt_common (u, fd, event);
+	if (event == CURLSOCKTYPE_IPCXN) {
+		int opt = 1;
+		setsockopt (fd, IPPROTO_TCP, TCP_NODELAY, (void*)&opt, sizeof(opt));
+		struct linger ls = {.l_onoff=1, .l_linger=0};
+		setsockopt (fd, SOL_SOCKET, SO_LINGER, (void*)&ls, sizeof(ls));
+	}
+	return CURL_SOCKOPT_OK;
+}
+
 CURL *
-_curl_get_handle (void)
+_curl_get_handle_blob (void)
 {
 	CURL *h = curl_easy_init ();
 	curl_easy_setopt (h, CURLOPT_USERAGENT, OIOSDS_http_agent);
 	curl_easy_setopt (h, CURLOPT_NOPROGRESS, 1L);
 	curl_easy_setopt (h, CURLOPT_PROXY, NULL);
+	curl_easy_setopt (h, CURLOPT_SOCKOPTDATA, NULL);
+	curl_easy_setopt (h, CURLOPT_SOCKOPTFUNCTION, _curl_set_sockopt_blob);
+	return h;
+}
+
+CURL *
+_curl_get_handle_proxy (void)
+{
+	CURL *h = curl_easy_init ();
+	curl_easy_setopt (h, CURLOPT_USERAGENT, OIOSDS_http_agent);
+	curl_easy_setopt (h, CURLOPT_NOPROGRESS, 1L);
+	curl_easy_setopt (h, CURLOPT_PROXY, NULL);
+	curl_easy_setopt (h, CURLOPT_FORBID_REUSE, 0L);
+	curl_easy_setopt (h, CURLOPT_FRESH_CONNECT, 0L);
+	curl_easy_setopt (h, CURLOPT_SOCKOPTDATA, NULL);
+	curl_easy_setopt (h, CURLOPT_SOCKOPTFUNCTION, _curl_set_sockopt_proxy);
 	if (GRID_TRACE_ENABLED()) {
 		curl_easy_setopt (h, CURLOPT_DEBUGFUNCTION, _trace);
 		curl_easy_setopt (h, CURLOPT_VERBOSE, 1L);
