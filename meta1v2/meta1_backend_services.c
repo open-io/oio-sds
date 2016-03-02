@@ -1190,8 +1190,9 @@ __notify_services(struct meta1_backend_s *m1, struct sqlx_sqlite3_s *sq3,
 		g_string_append (notif, "{\"event\":\""NAME_SRVTYPE_META1".account.services\"");
 		g_string_append_printf (notif, ",\"when\":%"G_GINT64_FORMAT, oio_ext_real_time());
 		g_string_append (notif, ",\"data\":{");
-		g_string_append_printf (notif, "\"url\":\"%s\"", oio_url_get(url, OIOURL_WHOLE));
-		g_string_append (notif, ",\"services\":[");
+		g_string_append(notif, "\"url\":\"");
+		oio_str_gstring_append_json_string(notif, oio_url_get(url, OIOURL_WHOLE));
+		g_string_append(notif, "\",\"services\":[");
 		if (services2) {
 			for (struct meta1_service_url_s **svc = services2; *svc ; svc++) {
 				if (svc != services2) // not at the beginning
