@@ -5,8 +5,8 @@ from oio.common.utils import get_logger
 
 
 class Application(BaseApplication):
-    access_log_fmt = '%(l)s %(h)s %(m)s %(s)s %(D)s %(B)s %(l)s ' + \
-                     '%({X-oio-req-id})s %(U)s?%(q)s'
+    access_log_fmt = '%(bind0)s %(h)s:%({remote}p)s %(m)s %(s)s %(D)s ' + \
+                     '%(B)s %(l)s %({X-oio-req-id}i)s %(U)s?%(q)s'
 
     def __init__(self, app, conf, logger_class=None):
         self.conf = conf
@@ -37,7 +37,7 @@ class Application(BaseApplication):
 
 class ServiceLogger(Logger):
     def __init__(self, cfg):
-        self.cfg = cfg
+        super(ServiceLogger, self).__init__(cfg)
         prefix = cfg.syslog_prefix if cfg.syslog_prefix else ''
         address = cfg.syslog_addr if cfg.syslog_addr else '/dev/log'
 
@@ -53,9 +53,21 @@ class ServiceLogger(Logger):
             'log_address': address
         }
 
-        self.error_log = get_logger(error_conf, 'account.error')
-        self.access_log = get_logger(access_conf, 'account.access')
+        self.error_log = get_logger(error_conf, 'log')
+        self.access_log = get_logger(access_conf, 'access')
+
+    def atoms(self, resp, req, environ, request_time):
+        atoms = super(ServiceLogger, self).atoms(resp, req, environ,
+                                                 request_time)
+        # We may bind on several addresses and ports but I don't
+        # know how to identify for which one we are logging
+        index = 0
+        for bind in self.cfg.bind:
+            atoms['bind%d' % index] = bind
+            index += 1
+        return atoms
 
     def access(self, resp, req, environ, request_time):
-        if environ.get('PATH_INFO', None) != '/status':
+        # do not log status requests
+        if environ.get('PATH_INFO', '/') != '/status':
             super(ServiceLogger, self).access(resp, req, environ, request_time)

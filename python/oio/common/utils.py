@@ -97,11 +97,15 @@ def redirect_stdio(logger):
     sys.stderr = StreamToLogger(logger, 'STDERR')
 
 
-def get_logger(conf, name=None, verbose=False, fmt="%(message)s"):
+def get_logger(
+        conf,
+        name=None,
+        verbose=False,
+        fmt="%(process)d %(thread)X %(name)s %(levelname)s %(message)s"):
     if not conf:
         conf = {}
     if name is None:
-        name = 'oio'
+        name = 'log'
     logger = logging.getLogger(name)
     logger.propagate = False
 
