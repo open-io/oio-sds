@@ -295,7 +295,6 @@ port: ${PORT}
 type: rainx
 checks:
     - {type: http, uri: /info}
-    - {type: tcp}
 
 stats:
     - {type: rawx, path: /stat}
@@ -309,7 +308,6 @@ type: rawx
 location: hem.oio.vol${SRVNUM}
 checks:
     - {type: http, uri: /info}
-    - {type: tcp}
 
 stats:
     - {type: volume, path: ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}}
