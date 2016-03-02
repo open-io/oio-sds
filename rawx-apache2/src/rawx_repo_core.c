@@ -379,6 +379,7 @@ request_load_chunk_info(request_rec *request, dav_resource *resource)
 	if (!resource->info->content.mime_type) return "mime-type";
 
 	if (!resource->info->content.path) return "content-path";
+	if (!resource->info->content.version) return "version";
 	if (!resource->info->chunk.position) return "chunk-pos";
 
 	_up (resource->info->content.container_id);

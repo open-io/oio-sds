@@ -394,9 +394,13 @@ oio_str_gstring_append_json_pair (GString *base, const char *k, const char *v)
 	g_string_append (base, k);
 	g_string_append_c (base, '"');
 	g_string_append_c (base, ':');
-	g_string_append_c (base, '"');
-	oio_str_gstring_append_json_string (base, v);
-	g_string_append_c (base, '"');
+	if (v == NULL) {
+		g_string_append(base, "null");
+	} else {
+		g_string_append_c(base, '"');
+		oio_str_gstring_append_json_string(base, v);
+		g_string_append_c(base, '"');
+	}
 }
 
 size_t
