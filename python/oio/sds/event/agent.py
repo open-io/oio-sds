@@ -436,9 +436,9 @@ class EventAgent(Daemon):
             worker.stop()
 
     def retry(self):
-        cursor = self.queue.load(self.batch_size)
+        results = self.queue.load(self.batch_size)
 
-        for event in cursor:
+        for event in results:
             event_id, data = event
             msg = ['', event_id, str(data)]
             self.backend.send_multipart(msg)
