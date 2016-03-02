@@ -208,7 +208,6 @@ class TestMeta2Containers(BaseTestCase):
         resp = self.session.post(self.url_container('get_properties'),
                                  params=params)
         self.assertEqual(resp.status_code, 200)
-        print resp.text
         body = resp.json()
         self.assertIsInstance(body, dict)
         self.assertGreater(len(body), 0)
@@ -236,7 +235,6 @@ class TestMeta2Containers(BaseTestCase):
         resp = self.session.post(self.url_container('get_properties'),
                                  params=params)
         self.assertEqual(resp.status_code, 200)
-        print resp.text
         self.check_prop_output(resp.json(), data)
 
         # check SET overriding works

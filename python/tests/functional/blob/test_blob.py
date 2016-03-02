@@ -26,6 +26,7 @@ class TestBlobFunctional(BaseTestCase):
     def _chunk_attr(self, name, data):
         return {
             'X-oio-chunk-meta-content-id': '0123456789ABCDEF',
+            'X-oio-chunk-meta-content-version': '1456938361143740',
             'X-oio-chunk-meta-content-path': 'test-plop',
             'X-oio-chunk-meta-content-mime-type': 'application/octet-stream',
             'X-oio-chunk-meta-content-chunk-method': 'bytes',
@@ -158,6 +159,8 @@ class TestBlobFunctional(BaseTestCase):
                         remove_headers=['X-oio-chunk-meta-chunk-id'])
         self._cycle_put(32, 400,
                         remove_headers=['X-oio-chunk-meta-content-id'])
+        self._cycle_put(32, 400,
+                        remove_headers=['X-oio-chunk-meta-content-version'])
         self._cycle_put(32, 201,
                         remove_headers=['X-oio-chunk-meta-content-chunksnb'])
         self._cycle_put(32, 201,
