@@ -14,11 +14,12 @@ from oio.common.utils import get_logger
 from oio.common.utils import int_value
 from oio.common.utils import json
 from oio.common.utils import true_value
+from oio.common.utils import ratelimit
 from oio.common.utils import validate_service_conf
 from oio.conscience.client import ConscienceClient
 from oio.rdir.client import RdirClient
 
-
+SLEEP_TIME = 1
 PARALLEL_CHUNKS_DELETE = 2
 CHUNK_TIMEOUT = 60
 ACCOUNT_SERVICE_TIMEOUT = 60
@@ -333,9 +334,10 @@ class EventAgent(Daemon):
         self.conf = conf
         self.logger = get_logger(conf)
         self.running = False
-        self.retry_interval = int_value(conf.get('retry_interval'), 5)
+        self.retries_run_time = 0
+        self.max_retries_per_second = int_value(
+            conf.get('retries_per_second'), 30)
         self.batch_size = int_value(conf.get('batch_size'), 500)
-        self.last_retry = 0
         self.init_zmq()
         self.init_queue()
         self.init_workers()
@@ -383,12 +385,15 @@ class EventAgent(Daemon):
             boss_pool.spawn_n(front, self.server, self.backend)
             boss_pool.spawn_n(back, self.backend)
             while True:
-                sleep(1)
 
-                now = time.time()
-                if now - self.last_retry > self.retry_interval:
-                    self.retry()
-                    self.last_retry = now
+                results = self.queue.load(self.batch_size)
+
+                for event in results:
+                    event_id, data = event
+                    msg = ['', event_id, str(data)]
+                    self.backend.send_multipart(msg)
+                    self.retries_run_time = ratelimit(
+                        self.retries_run_time, self.max_retries_per_second)
 
                 for w in self.workers:
                     if w.failed:
@@ -397,6 +402,8 @@ class EventAgent(Daemon):
                         new_w = EventWorker(self.conf, w.name, self.context)
                         self.workers.append(new_w)
                         pool.spawn(new_w.start)
+
+                sleep(SLEEP_TIME)
 
         except Exception as e:
             self.logger.error('ERROR in main loop %s', e)
@@ -434,11 +441,3 @@ class EventAgent(Daemon):
     def stop_workers(self):
         for worker in self.workers:
             worker.stop()
-
-    def retry(self):
-        cursor = self.queue.load(self.batch_size)
-
-        for event in cursor:
-            event_id, data = event
-            msg = ['', event_id, str(data)]
-            self.backend.send_multipart(msg)

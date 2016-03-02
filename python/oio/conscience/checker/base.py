@@ -28,7 +28,7 @@ class BaseChecker(object):
             with Timeout(self.timeout):
                 result = self.check()
         except (Exception, Timeout) as e:
-            self.logger.debug('check failed: %s', str(e.message))
+            self.logger.warn('check failed: %s', str(e.message))
 
         if self.last_result is None:
             self.last_result = result

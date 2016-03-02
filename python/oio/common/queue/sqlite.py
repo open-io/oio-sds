@@ -149,8 +149,8 @@ class SqliteQueue(BaseQueue):
 
     def load(self, count):
         with self.db.get() as conn:
-            c = conn.execute(self._load.format(self.name), (count,))
-            return c
+            res = conn.execute(self._load.format(self.name), (count,))
+            return res.fetchall()
 
     def failed(self, event_id):
         with self.db.get() as conn:
