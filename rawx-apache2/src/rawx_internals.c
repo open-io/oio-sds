@@ -116,35 +116,26 @@ void send_chunk_event(const char *type, const dav_resource *resource) {
 	int rc;
 	dav_rawx_server_conf *conf = resource_get_server_config(resource);
 
-	GString *json = g_string_sized_new(128);
-	g_string_append_printf(json,
-			"{"
-			"\"volume_id\":\"%s\","
-			"\"container_id\":\"%s\","
-			"\"content_id\":\"%s\","
-			"\"content_version\":\"%s\","
-			"\"content_path\":\"",
-			conf->rawx_id,
-			resource->info->content.container_id,
-			resource->info->content.content_id,
-			resource->info->content.version);
-	oio_str_gstring_append_json_string(json,
-			resource->info->content.path);
-	g_string_append_printf(json, "\","
-			"\"content_storage_policy\":\"%s\","
-			"\"content_mime_type\":\"%s\","
-			"\"content_chunk_method\":\"%s\","
-			"\"chunk_id\":\"%s\","
-			"\"chunk_hash\":\"%s\","
-			"\"chunk_position\":\"%s\","
-			"\"chunk_size\":\"%s\"",
-			resource->info->content.storage_policy,
-			resource->info->content.mime_type,
-			resource->info->content.chunk_method,
-			resource->info->chunk.id,
-			resource->info->chunk.hash,
-			resource->info->chunk.position,
-			resource->info->chunk.size);
+	GString *json = g_string_sized_new(256);
+
+#define _PAIR_AND_COMMA(KEY,VAL) \
+	oio_str_gstring_append_json_pair(json, KEY, VAL);\
+	g_string_append_c(json, ',')
+
+	g_string_append_c(json, '{');
+
+	_PAIR_AND_COMMA("volume_id", conf->rawx_id);
+	_PAIR_AND_COMMA("container_id", resource->info->content.container_id);
+	_PAIR_AND_COMMA("content_id", resource->info->content.content_id);
+	_PAIR_AND_COMMA("content_version", resource->info->content.version);
+	_PAIR_AND_COMMA("content_path", resource->info->content.path);
+	_PAIR_AND_COMMA("content_storage_policy", resource->info->content.storage_policy);
+	_PAIR_AND_COMMA("content_mime_type", resource->info->content.mime_type);
+	_PAIR_AND_COMMA("content_chunk_method", resource->info->content.chunk_method);
+	_PAIR_AND_COMMA("chunk_id", resource->info->chunk.id);
+	_PAIR_AND_COMMA("chunk_hash", resource->info->chunk.hash);
+	_PAIR_AND_COMMA("chunk_position", resource->info->chunk.position);
+	oio_str_gstring_append_json_pair(json, "chunk_size", resource->info->chunk.size);
 
 	if (resource->info->content.size)
 		g_string_append_printf(json,
@@ -157,6 +148,8 @@ void send_chunk_event(const char *type, const dav_resource *resource) {
 				resource->info->content.chunk_nb);
 
 	g_string_append_printf(json, "}");
+
+#undef _PAIR_AND_COMMA
 
 	rc = rawx_event_send(type, json);
 	DAV_DEBUG_REQ(resource->info->request, 0, "Event %s %s", type, rc ? "OK" : "KO");
