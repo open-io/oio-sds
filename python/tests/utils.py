@@ -5,6 +5,7 @@ import json
 import testtools
 import requests
 import random
+import time
 
 
 def trim_srv(srv):
@@ -35,6 +36,8 @@ def get_config(defaults=None):
 
 
 class BaseTestCase(testtools.TestCase):
+
+    _last_cache_flush = 0
 
     def _url(self, name):
         return '/'.join((self.uri, "v3.0", self.ns, name))
@@ -74,6 +77,15 @@ class BaseTestCase(testtools.TestCase):
         super(BaseTestCase, self).tearDown()
         self._flush_cs('echo')
 
+    @classmethod
+    def tearDownClass(cls):
+        now = time.time()
+        if (now - cls._last_cache_flush) < 10:
+            # Flushing the proxy's service cache may make further tests
+            # fail. By sleeping a bit, we allow the proxy to reload
+            # its service cache.
+            time.sleep(now - cls._last_cache_flush)
+
     def _flush_cs(self, srvtype):
         params = {'type': srvtype}
         resp = self.session.post(self._url_cs("deregister"), params=params)
@@ -105,6 +117,7 @@ class BaseTestCase(testtools.TestCase):
                 url = self.uri + '/v3.0/forward/reload'
                 resp = self.session.post(url, params={'id': t['addr']})
                 self.assertEqual(resp.status_code, 204)
+        BaseTestCase._last_cache_flush = time.time()
 
     def _addr(self):
         return '127.0.0.2:' + str(random.randint(7000, 65535))
