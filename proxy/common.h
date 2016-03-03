@@ -107,6 +107,7 @@ extern GMutex nsinfo_mutex;
 extern gchar **srvtypes;
 extern struct namespace_info_s nsinfo;
 
+/* "IP:PORT" that had a problem */
 extern GMutex srv_mutex;
 extern struct lru_tree_s *srv_down;
 
@@ -140,13 +141,15 @@ gchar * proxy_get_csurl (void);
 gboolean validate_namespace (const char * ns);
 gboolean validate_srvtype (const char * n);
 
+/* check in <srv_down> */
 gboolean service_is_ok (gconstpointer p);
 void service_invalidate (gconstpointer n);
 
 const char * _req_get_option (struct req_args_s *args, const char *name);
 const char * _req_get_token (struct req_args_s *args, const char *name);
 
-enum http_rc_e abstract_action (const char *tag, struct req_args_s*args, struct sub_action_s *sub);
+enum http_rc_e abstract_action (const char *tag, struct req_args_s *args,
+		struct sub_action_s *sub);
 
 enum http_rc_e rest_action (struct req_args_s *args,
         enum http_rc_e (*handler) (struct req_args_s *, json_object *));
@@ -156,11 +159,11 @@ GError * _resolve_service_and_do (const char *t, gint64 seq, struct oio_url_s *u
 
 GError * _m1_locate_and_action (struct oio_url_s *url, GError * (*hook) ());
 
-GError * _gba_request (struct meta1_service_url_s *m1u, GByteArray * (reqbuilder) (void),
-        GByteArray ** out);
+GError * _gba_request (struct meta1_service_url_s *m1u,
+		GByteArray * (reqbuilder) (void), GByteArray ** out);
 
-GError * _gbav_request (const char *t, gint64 seq, struct oio_url_s *u, GByteArray * builder (void),
-        gchar ***outurl, GByteArray ***out);
+GError * _gbav_request (const char *t, gint64 seq, struct oio_url_s *u,
+		GByteArray * builder (void), gchar ***outurl, GByteArray ***out);
 
 gboolean _request_has_flag (struct req_args_s *args, const char *header, const char *flag);
 
@@ -181,7 +184,6 @@ enum http_rc_e _reply_success_json (struct req_args_s *args, GString * gstr);
 GString * _create_status (gint code, const char * msg);
 GString * _create_status_error (GError * e);
 
-enum http_rc_e
-_reply_common_error (struct req_args_s *args, GError *err);
+enum http_rc_e _reply_common_error (struct req_args_s *args, GError *err);
 
 #endif /*OIO_SDS__proxy__common_h*/

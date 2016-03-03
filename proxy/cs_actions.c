@@ -103,7 +103,11 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 		gchar *k = service_info_key (si);
 		struct service_info_s *v = service_info_dup (si);
 		v->score.timestamp = oio_ext_monotonic_seconds ();
-		PUSH_DO(lru_tree_insert (srv_registered, k, v));
+		PUSH_DO(
+			const struct service_info_s *si0 = lru_tree_get(srv_registered, k);
+			if (si0) v->score.value = si0->score.value;
+			lru_tree_insert (srv_registered, k, v);
+		);
 	}
 
 	si->score.timestamp = oio_ext_real_seconds ();
