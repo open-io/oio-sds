@@ -649,7 +649,12 @@ sqlx_schemas = (
 	("sqlx.mail", """
 CREATE TABLE IF NOT EXISTS box (
 		name TEXT NOT NULL PRIMARY KEY,
-		ro INT NOT NULL DEFAULT 0);
+		ro INT NOT NULL DEFAULT 0,
+		messages INT NOT NULL DEFAULT 0,
+		recent INT NOT NULL DEFAULT 0,
+		unseen INT NOT NULL DEFAULT 0,
+		uidnext INT NOT NULL DEFAULT 0,
+		uidvalidity INT NOT NULL DEFAULT 0);
 
 CREATE TABLE IF NOT EXISTS boxattr (
 		box TEXT NOT NULL,
