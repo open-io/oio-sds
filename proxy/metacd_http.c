@@ -304,6 +304,17 @@ _task_expire_resolver (gpointer p)
 }
 
 static void
+_local_score_update (const struct service_info_s *si0)
+{
+	gchar *k = service_info_key (si0);
+	STRING_STACKIFY(k);
+	/* XXX(jfs): requires LTO_NOATIME to be set on <srv_registered> to avoid
+	   disturbing the sequence */
+	struct service_info_s *si = lru_tree_get (srv_registered, k);
+	if (si) si->score.value = si0->score.value;
+}
+
+static void
 _reload_srvtype(const char *type)
 {
 	CSURL(cs);
@@ -321,16 +332,24 @@ _reload_srvtype(const char *type)
 		GRID_TRACE ("SRV loaded %u [%s]", g_slist_length(list), type);
 	}
 
+	/* Update the score of the local services with the services received
+	   from the conscience. Though not mandatory, this is usefull for
+	   administrator that can watch the scores from the local services only. */
+	if (list) {
+		for (GSList *l=list; l ;l=l->next)
+			PUSH_DO(_local_score_update(l->data));
+
+	}
+
+	/* reload the LB */
 	if (list) {
 		GSList *l = list;
-
 		gboolean provide(struct service_info_s **p_si) {
-			if (!l)
-				return 0;
+			if (!l) return FALSE;
 			*p_si = l->data;
 			l->data = NULL;
 			l = l->next;
-			return 1;
+			return TRUE;
 		}
 		grid_lbpool_reload(lbpool, type, provide);
 		g_slist_free(list);
