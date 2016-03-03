@@ -191,7 +191,13 @@ _zmq2agent_send_event (struct _zmq2agent_ctx_s  *ctx, struct event_s *evt,
 {
 	int rc;
 
-	evt->last_sent = oio_ext_monotonic_seconds ();
+	const time_t now = oio_ext_monotonic_seconds ();
+	if (ctx->last_error == now) {
+		GRID_DEBUG("ZMQ2AGENT event delayed, stream paused");
+		return FALSE;
+	}
+
+	evt->last_sent = now;
 retry:
 	rc = zmq_send (ctx->zagent, "", 0, more|ZMQ_DONTWAIT);
 	if (rc == 0) {
@@ -204,7 +210,7 @@ retry:
 		if (EINTR == (rc = zmq_errno ()))
 			goto retry;
 		ctx->last_error = evt->last_sent;
-		GRID_WARN("EVT:ERR %s (%d) %s", dbg, rc, zmq_strerror(rc));
+		GRID_INFO("EVT:ERR %s (%d) %s", dbg, rc, zmq_strerror(rc));
 		return FALSE;
 	} else {
 		++ ctx->q->counter_sent;
@@ -349,7 +355,7 @@ _zmq2agent_worker (struct _zmq2agent_ctx_s *ctx)
 
 		/* Periodically write stats in the log */
 		gint64 now = oio_ext_monotonic_time ();
-		if ((now - last_debug) > G_TIME_SPAN_MINUTE) {
+		if ((now - last_debug) > 2 * G_TIME_SPAN_MINUTE) {
 			GRID_INFO("ZMQ2AGENT recv=%"G_GINT64_FORMAT" sent=%"G_GINT64_FORMAT
 					" ack=%"G_GINT64_FORMAT"+%"G_GINT64_FORMAT" queue=%u",
 					ctx->q->counter_received, ctx->q->counter_sent,
