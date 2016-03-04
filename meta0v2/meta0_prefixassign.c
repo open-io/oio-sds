@@ -248,114 +248,108 @@ _host(const char *s0)
 }
 
 static struct meta1_assignment_s*
-_select_dest_assign_m1(GList *lst, const struct meta1_assignment_s *s_aM1,
-		guint8 *prefixe, gboolean unref, gboolean force)
+_select_dest_assign_m1(GList *lst, const struct meta1_assignment_s *m1_old,
+		guint8 *prefix_in, gboolean unref, gboolean force)
 {
 	guint8 *prefix;
-	if (s_aM1)
-		prefix = (guint8 *)(s_aM1->prefixes)->data;
+	if (m1_old)
+		prefix = (guint8 *)(m1_old->prefixes)->data;
 	else {
-		if (prefixe)
-			prefix = prefixe;
+		if (prefix_in)
+			prefix = prefix_in;
 		else
 			return NULL;
 	}
 
+	/* Select the meta1 with the lowest score */
 	lst = g_list_last(lst);
-	struct meta1_assignment_s *d_aM1 = lst->data;
+	struct meta1_assignment_s *m1_new = lst->data;
 
 	gboolean loop = TRUE;
-	gchar *shost = NULL, *dhost = NULL, *host = NULL, *port = NULL;
-	guint i, len;
+	gchar *shost = NULL, *dhost = NULL, *host = NULL;
 
 	guint avgscore = context->avgscore;
+	gchar **urls = meta0_utils_array_get_urlv(
+			context->m1_by_prefix_array, prefix);
+	gsize urls_len = g_strv_length(urls);
 
-	if (s_aM1)
-		shost = _host (s_aM1->addr);
-	do {
-		if (d_aM1 == NULL || (d_aM1->score >= avgscore && !unref)) {
+	if (!urls) {
+		/* The current prefix is assigned to no meta1.
+		 * Assign it to m1_new (the lowest scored meta1). */
+		goto cleanup;
+	}
+
+	if (m1_old)
+		shost = _host(m1_old->addr);
+
+	for (; loop && lst; lst = g_list_previous(lst)) {
+		m1_new = lst->data;
+		if (m1_new == NULL || (m1_new->score >= avgscore && !unref)) {
+			/* We reached the end of the list or a score higher than the
+			 * average (which is a problem when rebalancing). */
 			loop = FALSE;
-			d_aM1 = NULL;
+			m1_new = NULL;
 		} else {
-			dhost = _host(d_aM1->addr);
-
-			gchar **urls = meta0_utils_array_get_urlv(
-					context->m1_by_prefix_array, prefix);
-			if (urls) {
-				len = g_strv_length(urls);
-				for (i = 0; i < len; i++) {
-					if (s_aM1 &&
-							!g_ascii_strncasecmp(urls[i], s_aM1->addr,
-								strlen(s_aM1->addr))) {
-						continue; //meta1 to replace
-					}
-					if (!g_ascii_strncasecmp(urls[i], d_aM1->addr, strlen(d_aM1->addr))) {
-						loop = TRUE;
-						break;  // meta1 manage this prefix, not OK
-					}
-					if (NULL != (host = _host(urls[i]))) {
-						if (g_ascii_strncasecmp(host,dhost,strlen(dhost)) == 0 &&
-								(shost == NULL ||
-								 g_ascii_strncasecmp(host, shost, strlen(shost)))) {
-							if (!force) {
-								//nouveau meta1 host identique a un host deja present
-								//meta1 remplace a un host different , on fait pire au niveau localisation
-								loop = TRUE;
-								break;
-							}
+			dhost = _host(m1_new->addr);
+			for (gsize i = 0; i < urls_len; i++) {
+				if (m1_old && !g_strcmp0(urls[i], m1_old->addr)) {
+					/* We found the old meta1 */
+					continue;
+				} else if (!g_strcmp0(urls[i], m1_new->addr)) {
+					/* The currently selected meta1 already manages
+					 * the prefix, we must find another one. */
+					loop = TRUE;
+					break;
+				} else if ((host = _host(urls[i])) != NULL) {
+					if (!g_strcmp0(host, dhost) &&
+							(shost == NULL || g_strcmp0(host, shost))) {
+						if (!force) {
+							/* The currently selected meta1 is on the same
+							 * host as another one managing the prefix.
+							 * Unless we don't care about the distance, we
+							 * must find another one. */
+							loop = TRUE;
+							oio_str_clean(&host);
+							break;
 						}
-						loop = FALSE;
-						oio_str_clean(&host);
-						oio_str_clean(&port);
 					}
-				}
-				g_strfreev(urls);
-			} else {
-				// New Init select this meta1
-				loop = FALSE;
-			}
-
-			if (loop == TRUE) {
-				lst = g_list_previous(lst);
-				if (lst != NULL) {
-					d_aM1 = lst->data;
-				} else {
-					d_aM1 = NULL;
+					loop = FALSE;
+					oio_str_clean(&host);
 				}
 			}
 		}
 		oio_str_clean(&dhost);
 		oio_str_clean(&host);
-		oio_str_clean(&port);
+	}
 
-	} while (loop);
-
+cleanup:
+	g_strfreev(urls);
 	oio_str_clean(&shost);
 
-	if (!d_aM1) {
+	if (!m1_new) {
 		GRID_TRACE("NO meta1 dest found");
 	}
-	return d_aM1;
+	return m1_new;
 }
 
 static void
-_remove_first_prefix_to_assign_meta1(struct meta1_assignment_s *aM1)
+_remove_first_prefix_to_assign_meta1(struct meta1_assignment_s *m1)
 {
 
-	GArray *prefixes = aM1->prefixes;
+	GArray *prefixes = m1->prefixes;
 	if (prefixes->len > 0)
 		prefixes = g_array_remove_index(prefixes, 0);
 
 	if (prefixes->len == 0) {
-		aM1->available = FALSE;
-		aM1->prefixes = NULL;
+		m1->available = FALSE;
+		m1->prefixes = NULL;
 	}
 }
 
 static guint8*
-_get_first_prefix_to_assign_meta1(struct meta1_assignment_s *aM1)
+_get_first_prefix_to_assign_meta1(struct meta1_assignment_s *m1)
 {
-	GArray *prefixes = aM1->prefixes;
+	GArray *prefixes = m1->prefixes;
 	if (prefixes) {
 		if (prefixes->len > 0)
 			return (guint8 *)&g_array_index(prefixes, guint8, 0);
@@ -378,15 +372,15 @@ _decrease_score(struct meta1_assignment_s *aM1)
 }
 
 static void
-_replace(struct meta1_assignment_s *s_aM1, struct meta1_assignment_s *d_aM1)
+_replace(struct meta1_assignment_s *m1_old, struct meta1_assignment_s *m1_new)
 {
-	guint8 *prefix = (guint8 *)(s_aM1->prefixes)->data;
+	guint8 *prefix = (guint8 *)(m1_old->prefixes)->data;
 	if (meta0_utils_array_replace(context->m1_by_prefix_array,
-			prefix, s_aM1->addr, d_aM1->addr)) {
+			prefix, m1_old->addr, m1_new->addr)) {
 		_treat_prefix(context->treat_prefixes, prefix);
-		_remove_first_prefix_to_assign_meta1(s_aM1);
-		_decrease_score(s_aM1);
-		_increase_score(d_aM1);
+		_remove_first_prefix_to_assign_meta1(m1_old);
+		_decrease_score(m1_old);
+		_increase_score(m1_new);
 	}
 }
 
@@ -397,61 +391,58 @@ _updated_meta1ref()
 }
 
 static GError*
-_assign(GList *working_m1list,GSList *unref_m1list)
+_assign(GList *working_m1list, GSList *unref_m1list)
 {
 	GError *error = NULL;
 	guint nb_treat_prefixes = 0;
-	struct meta1_assignment_s *s_aM1, *d_aM1;
+	struct meta1_assignment_s *m1_old, *m1_new;
 	//unref meta1
 	if (unref_m1list) {
 		for (; unref_m1list; unref_m1list = unref_m1list->next) {
-			s_aM1 = unref_m1list->data;
-			guint8 *prefix = _get_first_prefix_to_assign_meta1(s_aM1);
-			if (!s_aM1->prefixes)
-				continue;
-			do {
+			m1_old = unref_m1list->data;
+			guint8 *prefix = _get_first_prefix_to_assign_meta1(m1_old);
+			while (m1_old->prefixes) {
 				if (_is_treat_prefix(context->treat_prefixes, prefix)) {
 					GRID_ERROR("prefix [%02X%02X] already treat", prefix[0], prefix[1]);
 					error = NEWERROR(0, "Failed to remove Meta1 service");
 				}
-				d_aM1 = _select_dest_assign_m1(working_m1list, s_aM1, NULL, TRUE, FALSE);
-				if (!d_aM1) {
-					d_aM1 = _select_dest_assign_m1(working_m1list, s_aM1, NULL, TRUE, TRUE);
-					if (!d_aM1) {
+				m1_new = _select_dest_assign_m1(working_m1list, m1_old, NULL, TRUE, FALSE);
+				if (!m1_new) {
+					m1_new = _select_dest_assign_m1(working_m1list, m1_old, NULL, TRUE, TRUE);
+					if (!m1_new) {
 						error = NEWERROR(0,
 								"Failed to assign prefix from meta1 %s: "
 								"Not enough META1 to meet the requirements",
-								s_aM1->addr);
+								m1_old->addr);
 						return error;
 					}
 				}
-				_replace(s_aM1, d_aM1);
+				_replace(m1_old, m1_new);
 				nb_treat_prefixes++;
-
-			} while (s_aM1->prefixes);
+			}
 		}
 	}
 
 	gboolean loop = TRUE;
 
 	do {
-		s_aM1 = NULL;
-		d_aM1 = NULL;
+		m1_old = NULL;
+		m1_new = NULL;
 		// sort meta1 list
 		working_m1list = g_list_sort(working_m1list, meta0_assign_sort_by_score);
 
 		// election high meta1 and prefix
-		s_aM1 = _select_source_assign_m1(working_m1list,
+		m1_old = _select_source_assign_m1(working_m1list,
 				context->treat_prefixes, context->avgscore);
 
-		if (s_aM1) {
-			d_aM1 = _select_dest_assign_m1(working_m1list, s_aM1, NULL, FALSE, FALSE);
+		if (m1_old) {
+			m1_new = _select_dest_assign_m1(working_m1list, m1_old, NULL, FALSE, FALSE);
 
-			if (d_aM1) {
-				_replace(s_aM1, d_aM1);
+			if (m1_new) {
+				_replace(m1_old, m1_new);
 				nb_treat_prefixes++;
 			} else {
-				_remove_first_prefix_to_assign_meta1(s_aM1);
+				_remove_first_prefix_to_assign_meta1(m1_old);
 			}
 		} else {
 			loop = FALSE;
@@ -460,7 +451,7 @@ _assign(GList *working_m1list,GSList *unref_m1list)
 		if (nb_treat_prefixes == 65536)
 			loop = FALSE;
 
-	} while (loop == TRUE);
+	} while (loop);
 
 	GRID_TRACE("END %d prefix assigned", nb_treat_prefixes);
 	return NULL;
@@ -882,7 +873,7 @@ meta0_assign_prefix_to_meta1(struct meta0_backend_s *m0, gchar *ns_name, gboolea
 	}
 
 	new_meta1ref = _updated_meta1ref();
-	error = meta0_backend_assign(m0, context->m1_by_prefix_array, new_meta1ref,FALSE);
+	error = meta0_backend_assign(m0, context->m1_by_prefix_array, new_meta1ref, FALSE);
 	if ( error ) {
 		GRID_ERROR("Failed to update database: (%d) %s", error->code, error->message);
 		goto errorLabel;
@@ -908,7 +899,8 @@ errorLabel :
 }
 
 GError*
-meta0_assign_disable_meta1(struct meta0_backend_s *m0, gchar *ns_name, char **m1urls, gboolean nocheck)
+meta0_assign_disable_meta1(struct meta0_backend_s *m0, gchar *ns_name,
+		char **m1urls, gboolean nocheck)
 {
 	GList *working_m1list = NULL;
 	GSList *unref_m1list = NULL;
@@ -933,11 +925,11 @@ meta0_assign_disable_meta1(struct meta0_backend_s *m0, gchar *ns_name, char **m1
 	if (error)
 		goto errorLabel;
 
-	error = _init_assign(ns_name,&working_m1list,&unref_m1list);
+	error = _init_assign(ns_name, &working_m1list, &unref_m1list);
 	if (error)
 		goto errorLabel;
 
-	error = _assign(working_m1list,unref_m1list);
+	error = _assign(working_m1list, unref_m1list);
 	if (error)
 		goto errorLabel;
 

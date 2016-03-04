@@ -61,24 +61,25 @@ meta0_utils_array_to_tree(GPtrArray *byprefix)
 }
 
 gboolean
-meta0_utils_check_url_from_base(gchar **url) {
+meta0_utils_check_url_from_base(gchar **url)
+{
 	gchar *colon;
 
-	if ( ! url )
+	if (!url)
 		return FALSE;
 	gchar *end = *url + strlen(*url);
 
-	if (! g_ascii_isdigit(*end)) {
+	if (!g_ascii_isdigit(*end)) {
 		/* Find the ':' separator */
-        	for (colon=end; colon>=*url && *colon != ':';colon--);
-        	if (colon<=*url || colon>=(end-1) || *colon!=':') {
+		for (colon = end; colon >= *url && *colon != ':'; colon--);
+		if (colon <= *url || colon >= (end-1) || *colon != ':') {
 			return FALSE;
 		}
 
 		colon++;
-		for (;colon<=end;colon++) {
-			if (! g_ascii_isdigit(*colon)) {
-				*colon='\0';
+		for (; colon <= end; colon++) {
+			if (!g_ascii_isdigit(*colon)) {
+				*colon = '\0';
 				break;
 			}
 		}
@@ -115,7 +116,7 @@ meta0_utils_list_to_tree(GSList *list)
 
 		g_tree_replace(result, hashstr_create(url), pfx);
 	}
-	
+
 	return result;
 }
 
@@ -368,14 +369,14 @@ meta0_utils_pack_meta1ref(gchar *addr, gchar *ref, gchar *nb)
 gboolean
 meta0_utils_unpack_meta1ref(const gchar *s_m1ref, gchar **addr, gchar **ref, gchar **nb)
 {
-	(void)addr ;(void) ref; (void) nb;
-	gchar** split_result = g_strsplit(s_m1ref,"|",-1);
-	if ( g_strv_length(split_result) != 3 )
-        	return FALSE;
+	(void) addr; (void) ref; (void) nb;
+	gchar** split_result = g_strsplit(s_m1ref, "|", -1);
+	if (g_strv_length(split_result) != 3)
+		return FALSE;
 
-	*addr=strdup(split_result[0]);
-	*ref=strdup(split_result[1]);
-	*nb=strdup(split_result[2]);
+	*addr = strdup(split_result[0]);
+	*ref = strdup(split_result[1]);
+	*nb = strdup(split_result[2]);
 
 	g_strfreev(split_result);
 	return TRUE;
@@ -385,12 +386,12 @@ meta0_utils_unpack_meta1ref(const gchar *s_m1ref, gchar **addr, gchar **ref, gch
 /* ------------------------------------------------------------------------- */
 static gboolean
 _is_usable_meta0(addr_info_t *m0addr, GSList *exclude) {
-        GSList *l = NULL;
-        for (l = exclude; l && l->data; l=l->next) {
-                if(addr_info_equal(l->data, m0addr))
-                        return FALSE;
-        }
-        return TRUE;
+	GSList *l = NULL;
+	for (l = exclude; l && l->data; l = l->next) {
+		if (addr_info_equal(l->data, m0addr))
+			return FALSE;
+	}
+	return TRUE;
 }
 
 addr_info_t *
