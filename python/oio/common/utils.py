@@ -3,18 +3,17 @@ import errno
 import glob
 import grp
 import hashlib
-import logging
 import pwd
 import sys
 import time
 import xattr
+import fcntl
 
 try:
     import simplejson as json
 except ImportError:
     import json  # noqa
 
-from logging.handlers import SysLogHandler
 
 import eventlet
 import eventlet.semaphore
@@ -24,9 +23,17 @@ from optparse import OptionParser
 from ConfigParser import SafeConfigParser
 
 
+from logging.handlers import SysLogHandler
+import logging
 logging.thread = eventlet.green.thread
 logging.threading = threading
 logging._lock = logging.threading.RLock()
+
+try:
+    import multiprocessing
+    CPU_COUNT = multiprocessing.cpu_count() or 1
+except (ImportError, NotImplementedError):
+    CPU_COUNT = 1
 
 
 class NullLogger(object):
@@ -54,6 +61,17 @@ class StreamToLogger(object):
         pass
 
 
+def set_fd_non_blocking(fd):
+    flags = fcntl.fcntl(fd, fcntl.F_GETFL) | os.O_NONBLOCK
+    fcntl.fcntl(fd, fcntl.F_SETFL, flags)
+
+
+def set_fd_close_on_exec(fd):
+    flags = fcntl.fcntl(fd, fcntl.F_GETFD)
+    flags |= fcntl.FD_CLOEXEC
+    fcntl.fcntl(fd, fcntl.F_SETFL, flags)
+
+
 def drop_privileges(user):
     if os.geteuid() == 0:
         groups = [g.gr_gid for g in grp.getgrall() if user in g.gr_mem]
@@ -76,6 +94,8 @@ def redirect_stdio(logger):
 
     :param logger:
     """
+    sys.excepthook = lambda * exc_info: \
+        logger.critical('UNCAUGHT EXCEPTION', exc_info=exc_info)
     stdio_fd = [sys.stdin, sys.stdout, sys.stderr]
     console_fds = [h.stream.fileno() for _, h in getattr(
         get_logger, 'console_handler4logger', {}).items()]
