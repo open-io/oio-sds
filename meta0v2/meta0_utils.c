@@ -288,7 +288,7 @@ meta0_utils_array_dup(GPtrArray *in)
 	GPtrArray *result;
 
 	result = g_ptr_array_sized_new(in->len);
-	for (i=0,max=in->len; i<max ;i++) {
+	for (i = 0, max = in->len; i < max; i++) {
 		if (!(v = in->pdata[i])) {
 			g_ptr_array_add(result, NULL);
 		} else {
@@ -327,41 +327,41 @@ meta0_utils_tree_add_url(GTree *tree, const guint8 *b, const gchar *url)
 void
 meta0_utils_array_meta1ref_clean(GPtrArray *array)
 {
-        guint i;
+	guint i;
 
-        if (!array)
-                return;
+	if (!array)
+		return;
 
-        for (i=0; i<array->len ;i++) {
-                gpointer p = array->pdata[i];
-                if (p) {
-                        g_free((gchar*)p);
+	for (i = 0; i < array->len; i++) {
+		gpointer p = array->pdata[i];
+		if (p) {
+			g_free((gchar*)p);
 		}
-        }
-        g_ptr_array_free(array, TRUE);
+	}
+	g_ptr_array_free(array, TRUE);
 }
 
 GPtrArray*
 meta0_utils_array_meta1ref_dup(GPtrArray *in)
 {
-        register guint i, max;
-        gchar *v;
-        GPtrArray *result;
+	register guint i, max;
+	gchar *v;
+	GPtrArray *result;
 
-        result = g_ptr_array_sized_new(in->len);
-        for (i=0,max=in->len; i<max ;i++) {
-                if (!(v = in->pdata[i]))
-                        continue;
-                g_ptr_array_add(result, g_strdup(v));
-        }
-        return result;
+	result = g_ptr_array_sized_new(in->len);
+	for (i = 0, max = in->len; i < max; i++) {
+		if (!(v = in->pdata[i]))
+			continue;
+		g_ptr_array_add(result, g_strdup(v));
+	}
+	return result;
 }
 
 gchar *
 meta0_utils_pack_meta1ref(gchar *addr, gchar *ref, gchar *nb)
 {
-	gchar * result=NULL;
-        result = g_strjoin("|",addr,ref,nb,NULL);
+	gchar *result = NULL;
+	result = g_strjoin("|", addr, ref, nb, NULL);
 	return result;
 }
 
