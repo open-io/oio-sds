@@ -121,8 +121,12 @@ class TestDirectoryFunctional(BaseTestCase):
         self.assertIsInstance(body, dict)
         self.assertItemsEqual(body['srv'], [])
 
+        # XXX(jfs): now the servies are locked at first registration, it is
+        # easier to force their score than registering/unlocking/registering
+        # (to let the score be computed).
         srv0, srv1 = self._srv('echo'), self._srv('echo')
-        self._register_srv(srv0)
+        srv0['score'] = 1
+        self._lock_srv(srv0)
         self._reload()
 
         # Initial link
@@ -153,7 +157,7 @@ class TestDirectoryFunctional(BaseTestCase):
         srv0['score'] = 0
         srv1['score'] = 1
         self._lock_srv(srv0)
-        self._register_srv(srv1)
+        self._lock_srv(srv1)
         self._reload()
 
         resp = self.session.post(self._url_ref('link'), params=params)
