@@ -7,7 +7,8 @@ func_tests () {
 	echo -e "\n### FUNC tests : $@\n"
 	export OIO_NS="NS-${RANDOM}" OIO_ACCOUNT="ACCT-$RANDOM" OIO_USER=USER-$RANDOM OIO_PATH=PATH-$RANDOM
 	oio-reset.sh -v -v -N $OIO_NS $@
-	# if [ -d python ] ; then ( cd python && tox ) ; fi
+	echo -e "END OF RESET" | logger -t TEST
+	if [ -d python ] ; then ( cd python && tox ) ; fi
 	make -C tests/func test
 	./core/tool_roundtrip /etc/passwd
 }
