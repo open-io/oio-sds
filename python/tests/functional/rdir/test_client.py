@@ -1,13 +1,14 @@
-import unittest
 from mock import MagicMock as Mock
 
 from oio.rdir.client import RdirClient
+from tests.utils import BaseTestCase
 
 
-class TestRdirClient(unittest.TestCase):
+class TestRdirClient(BaseTestCase):
     def setUp(self):
         super(TestRdirClient, self).setUp()
-        self.rdir_client = RdirClient({'namespace': "NS"})
+        self.namespace = self.conf['namespace']
+        self.rdir_client = RdirClient({'namespace': self.namespace})
         self.rdir_client._get_rdir_addr = Mock(return_value="0.1.2.3:4567")
 
     def tearDown(self):
