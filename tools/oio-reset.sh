@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# @EXE_PREFIX@-reset, a script initating from scratch a local installation of OpenIO SDS.
+# @EXE_PREFIX@-reset.sh, a CLI tool of OpenIO
 # Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
 #
 # This program is free software: you can redistribute it and/or modify
@@ -35,11 +35,14 @@ REDIS=0
 PORT=
 verbose=0
 NB_RAWX=3
+BIG=0
+MONITOR_PERIOD=
 
 OPENSUSE=`grep -i opensuse /etc/*release || echo -n ''`
 
-while getopts ":B:C:D:E:I:M:N:P:R:S:V:X:Zv" opt; do
+while getopts "B:C:D:E:I:M:N:P:R:S:V:X:Zvb" opt; do
 	case $opt in
+		b) BIG=1 ;;
 		B) REPLICATION_BUCKET="${OPTARG}" ;;
 		C) CHUNKSIZE="${OPTARG}" ;;
 		D) REPLICATION_DIRECTORY="${OPTARG}" ;;
@@ -54,7 +57,7 @@ while getopts ":B:C:D:E:I:M:N:P:R:S:V:X:Zv" opt; do
 		X) AVOID="${AVOID} ${OPTARG}" ;;
 		Z) ZKSLOW=1 ;;
 		v) ((verbose=verbose+1)) ;;
-		\?) ;;
+		\?) exit 1 ;;
 	esac
 done
 
@@ -81,22 +84,37 @@ then
 	opts="${opts} --opensuse"
 fi
 
+if [ "$BIG" -gt 0 ] ; then opts="${opts} -b" ; fi
+
 timeout () {
-	local max="$1" ; shift
-	if [ $count -gt $max ] ; then
-		echo "TIMEOUT: $@"
+	num=$1 ; shift
+	if [ $count -gt "$num" ] ; then
+		echo "TIMEOUT! $@"
+		${PREFIX}-cluster -r "$NS"
+		( ps -o pid,ppid,cmd $(pgrep -u $UID -P "$pidof_gridinit" | sed 's/^/-p /') || exit 0 )
 		exit 1
 	fi
-	sleep 2
-	((count=count+2))
+	sleep 1
+	((count=count+1))
+}
+
+list_services () {
+	${PREFIX}-cluster -r "$NS" | awk -F\| "/$1/{print \$3}"
 }
 
 wait_for_srvtype () {
-	local srvtype=$1 ; shift
-	local expected=$1 ; shift
+	echo "Waiting for $2 $1 to appear"
 	count=0
-	while [ ${expected} -gt $(${PREFIX}-cluster -r "$NS" | grep -c "$srvtype") ] ; do
-		timeout 10 "$srvtype registration"
+	while [ $2 -gt $(${PREFIX}-cluster -r "$NS" | grep -c $1) ] ; do
+		timeout 15
+	done
+	echo "Waiting for the $1 to get a score"
+	$PREFIX-wait-scored.sh -u -n "$NS" -s "$1" -t 15
+}
+
+reload_service_type () {
+	list_services "$1" | while read IP ; do
+		curl -X POST "http://${PROXY}/v3.0/forward/reload?id=$IP"
 	done
 }
 
@@ -142,10 +160,9 @@ pgrep -u "$UID" --full gridinit | while read pidof_gridinit ; do
 		# Waiting for gridinit ...
 		if [ "$count" -gt 20 ] ; then
 			echo "Gridinit doesn't want to die gracefully. Go for euthanasy"
-			pkill -9 -u "$UID" oio-event-agent
+			( pkill -9 -u "$UID" ${PREFIX}-event-agent || exit 0 )
 		fi
-		ps -o pid,ppid,cmd $(pgrep -u $UID -P "$pidof_gridinit" | sed 's/^/-p /')
-		timeout 30 "(previous) gridinit exit"
+		timeout 30
 	done
 done
 
@@ -156,8 +173,10 @@ ${PREFIX}-bootstrap.py \
 		-V "$VERSIONING" \
 		-S "$STGPOL" \
 		${opts} "$NS" "$IP"
-nice gridinit -s OIO,gridinit -d ${SDS}/conf/gridinit.conf
 
+gridinit -s OIO,gridinit -d ${SDS}/conf/gridinit.conf
+
+PROXY=$(jq -r '.proxy[0].addr' ~/.oio/sds/conf/test.conf)
 
 # Initiate Zookeeper (if necessary)
 ZK=$(${PREFIX}-cluster --local-cfg | grep "$NS/zookeeper" ; exit 0)
@@ -173,29 +192,43 @@ fi
 # Wait for the gridinit's startup
 count=0
 while ! pkill -u "$UID" --full -0 gridinit ; do
-	timeout 5 "gridinit startup"
+	timeout 15 "gridinit startup"
 done
 while ! [ -e "$GRIDINIT_SOCK" ] ; do
-	timeout 15 "gridinit readyness"
+	timeout 30 "gridinit readyness"
 done
+pidof_gridinit=$(pgrep -u "$UID" --full gridinit)
 
-gridinit_cmd -S "$GRIDINIT_SOCK" reload
-gridinit_cmd -S "$GRIDINIT_SOCK" start "@conscience" "@proxy" "@agent" "@meta0" "@meta1"
+echo -e '\n\n\n'
+gridinit_cmd -S "$GRIDINIT_SOCK" reload >/dev/null
+gridinit_cmd -S "$GRIDINIT_SOCK" start "@conscience" "@proxy"
+gridinit_cmd -S "$GRIDINIT_SOCK" start "@rawx"
+wait_for_srvtype "rawx" ${NB_RAWX}
+gridinit_cmd -S "$GRIDINIT_SOCK" start "@${NS}"
+wait_for_srvtype "meta2" ${REPLICATION_BUCKET}
 
+echo -e '\n\n\n'
+gridinit_cmd -S "$GRIDINIT_SOCK" start "@meta0"
 wait_for_srvtype "meta0" 1
+gridinit_cmd -S "$GRIDINIT_SOCK" start "@meta1"
 wait_for_srvtype "meta1" ${REPLICATION_DIRECTORY}
 
-${PREFIX}-cluster -r "$NS" | awk -F\| '/meta0/{print $3}' | while read URL ; do
+echo -e '\n\n\n'
+list_services "meta0" | while read URL ; do
 	${PREFIX}-meta0-init -O "NbReplicas=${REPLICATION_DIRECTORY}" -O IgnoreDistance=on "$URL"
 	${PREFIX}-meta0-client "$URL" reload
 done
 
-gridinit_cmd -S "$GRIDINIT_SOCK" start "@${NS}"
+echo -e '\n\n\n'
+${PREFIX}-unlock-all.sh -n "$NS"
+${PREFIX}-wait-scored.sh -n "$NS" -t 60
+
+echo -e '\n\n\n'
+reload_service_type "meta1"
+reload_service_type "meta2"
+
+echo -e '\n\n\n'
 find $SDS -type d | xargs chmod a+rx
-
-wait_for_srvtype "meta2" ${REPLICATION_BUCKET}
-wait_for_srvtype "rawx" ${REPLICATION_BUCKET}
-
-echo
 gridinit_cmd -S "$GRIDINIT_SOCK" status2
+${PREFIX}-cluster -r "$NS"
 

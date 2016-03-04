@@ -779,7 +779,7 @@ namespace_info_ASN2API(const NamespaceInfo_t *asn, namespace_info_t *api)
 
 	memset(api, 0, sizeof(*api));
 	memcpy(api->name, asn->name.buf, MIN((int)sizeof(api->name), asn->name.size));
-	addr_info_ASN2API(&(asn->addr), &(api->addr));
+
 	asn_INTEGER_to_int64(&(asn->chunkSize), &(api->chunk_size));
 
 	api->options = list_conversion(&(asn->options));
@@ -834,8 +834,12 @@ namespace_info_API2ASN(const namespace_info_t * api, NamespaceInfo_t * asn)
 	EXTRA_ASSERT (asn != NULL);
 
 	OCTET_STRING_fromBuf(&(asn->name), api->name, strlen(api->name));
-	addr_info_API2ASN(&(api->addr), &(asn->addr));
 	asn_int64_to_INTEGER(&(asn->chunkSize), api->chunk_size);
+
+	/* TODO(jfs): remove this in the next release (kept for backward compliance) */
+	struct addr_info_s dummy;
+	grid_string_to_addrinfo ("0.0.0.0:0", &dummy);
+	addr_info_API2ASN(&dummy, &(asn->addr));
 
 	if (!hashtable_conversion(api->options, &(asn->options), key_value_pairs_convert_from_map))
 		return FALSE;

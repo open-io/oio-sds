@@ -565,10 +565,22 @@ oio_proxy_call_reference_link (CURL *h, struct oio_url_s *u,
 	return err;
 }
 
+/* -------------------------------------------------------------------------- */
+
 GError *
 oio_proxy_call_conscience_register (CURL *h, const char *ns, GString *in)
 {
 	GString *http_url = _curl_conscience_url (ns, "register");
+	struct http_ctx_s i = { .headers = NULL, .body = in };
+	GError *err = _proxy_call (h, "POST", http_url->str, &i, NULL);
+	g_string_free(http_url, TRUE);
+	return err;
+}
+
+GError *
+oio_proxy_call_conscience_lock (CURL *h, const char *ns, GString *in)
+{
+	GString *http_url = _curl_conscience_url (ns, "lock");
 	struct http_ctx_s i = { .headers = NULL, .body = in };
 	GError *err = _proxy_call (h, "POST", http_url->str, &i, NULL);
 	g_string_free(http_url, TRUE);
@@ -586,8 +598,7 @@ oio_proxy_call_conscience_deregister (CURL *h, const char *ns, GString *in)
 }
 
 GError *
-oio_proxy_call_conscience_flush (CURL *h, const char *ns,
-		const char *srvtype)
+oio_proxy_call_conscience_flush (CURL *h, const char *ns, const char *srvtype)
 {
 	GString *http_url = _curl_conscience_url (ns, "flush");
 	_append (http_url, '?', "type", srvtype);
@@ -608,12 +619,21 @@ oio_proxy_call_conscience_unlock (CURL *h, const char *ns, GString *in)
 
 GError *
 oio_proxy_call_conscience_list (CURL *h, const char *ns,
-		const char *srvtype, GString *out)
+		const char *srvtype, gboolean full, GString *out)
 {
 	GString *http_url = _curl_conscience_url (ns, "list");
 	_append (http_url, '?', "type", srvtype);
+	gchar *hdrin[] = {
+		g_strdup(PROXYD_HEADER_MODE),
+		g_strdup(full ? "full" : NULL),
+		NULL,
+	};
+
+	struct http_ctx_s i = { .headers = hdrin, .body = NULL };
 	struct http_ctx_s o = { .headers = NULL, .body = out };
-	GError *err = _proxy_call (h, "GET", http_url->str, NULL, &o);
+	GError *err = _proxy_call (h, "GET", http_url->str, &i, &o);
+
+	_ptrv_free_content (i.headers);
 	g_strfreev (o.headers);
 	g_string_free(http_url, TRUE);
 	return err;
@@ -625,6 +645,17 @@ oio_proxy_call_conscience_list_types (CURL *h, const char *ns,
 {
 	GString *http_url = _curl_conscience_url (ns, "info");
 	_append (http_url, '?', "what", "types");
+	struct http_ctx_s o = { .headers = NULL, .body = out };
+	GError *err = _proxy_call (h, "GET", http_url->str, NULL, &o);
+	g_strfreev (o.headers);
+	g_string_free(http_url, TRUE);
+	return err;
+}
+
+GError *
+oio_proxy_call_conscience_info (CURL *h, const char *ns, GString *out)
+{
+	GString *http_url = _curl_conscience_url (ns, "info");
 	struct http_ctx_s o = { .headers = NULL, .body = out };
 	GError *err = _proxy_call (h, "GET", http_url->str, NULL, &o);
 	g_strfreev (o.headers);

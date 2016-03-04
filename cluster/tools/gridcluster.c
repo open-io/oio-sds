@@ -37,7 +37,6 @@ usage(void)
 	g_printerr("  %-20s\t%s\n", "--local-cfg,              -A", "Prints to stdout the namespaces configuration values locally configured");
 	g_printerr("  %-20s\t%s\n", "--local-ns,               -L", "Prints to stdout the namespaces locally configured");
 	g_printerr("  %-20s\t%s\n", "--local-srv               -l", "List local services monitored on this server.");
-	g_printerr("  %-20s\t%s\n", "--local-tasks,            -t", "List internal tasks scheduled on this server.");
 	g_printerr("  %-20s\t%s\n", "--raw,                    -r", "Output in parsable mode.");
 	g_printerr("  %-20s\t%s\n", "--service <service desc>, -S", "Select service described by desc.");
 	g_printerr("  %-20s\t%s\n", "--set-score <[0..100]>      ", "Set and lock score for the service specified by -S.");
@@ -196,19 +195,6 @@ print_raw_services(const gchar * ns, const gchar * type, GSList * services)
 	}
 }
 
-static void
-raw_print_list_task(GSList * tasks)
-{
-	GSList *le = NULL;
-	struct task_s *task;
-
-	for (le = tasks; le && le->data; le = le->next) {
-		task = (struct task_s *) le->data;
-
-		g_print("%s|%"G_GINT64_FORMAT"|%s\n", task->id, task->period, task->busy ? "running" : "waiting");
-	}
-}
-
 static GError *
 set_service_score(const char *service_desc, int score)
 {
@@ -218,11 +204,6 @@ set_service_score(const char *service_desc, int score)
 	STRINGV_STACKIFY(tokens);
 	if (g_strv_length(tokens) < 3)
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid service description");
-
-	gchar *cs = gridcluster_get_conscience(tokens[0]);
-	STRING_STACKIFY (cs);
-	if (!cs)
-		return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Unknown namespace %s", tokens[0]);
 
 	struct service_info_s *si = g_malloc0(sizeof(struct service_info_s));
 	g_strlcpy(si->ns_name, tokens[0], sizeof(si->ns_name));
@@ -235,9 +216,7 @@ set_service_score(const char *service_desc, int score)
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid service address %s", tokens[2]);
 	}
 
-	GSList *list = g_slist_prepend(NULL, si);
-	GError *err = conscience_remote_push_services(cs, list);
-	g_slist_free(list);
+	GError *err = conscience_push_service (tokens[0], si);
 	if (err)
 		g_prefix_error(&err, "Registration failed: ");
 	service_info_clean (si);
@@ -263,11 +242,9 @@ main(int argc, char **argv)
 	gboolean has_nslist = FALSE;
 	gboolean has_raw = FALSE;
 	gboolean has_clear_services = FALSE;
-	gboolean has_list = FALSE;
 	gboolean has_set_score = FALSE;
 	gboolean has_unlock_score = FALSE;
 	gboolean has_service = FALSE;
-	gboolean has_list_task = FALSE;
 	gboolean has_flag_full = FALSE;
 	int c = 0;
 	int option_index = 0;
@@ -288,7 +265,6 @@ main(int argc, char **argv)
 		{"local-cfg",      0, 0, 'A'},
 		{"local-ns",       0, 0, 'L'},
 		{"local-srv",      0, 0, 'l'},
-		{"local-tasks",    0, 0, 't'},
 		{"show",           0, 0, 's'},
 		{"raw",            0, 0, 'r'},
 		{"help",           0, 0, 'h'},
@@ -302,7 +278,7 @@ main(int argc, char **argv)
 	memset(cid_str, 0x00, sizeof(cid_str));
 	enable_debug();
 
-	while ((c = getopt_long(argc, argv, "ALsvltrC:S:h", long_options, &option_index)) > -1) {
+	while ((c = getopt_long(argc, argv, "ALsvlrC:S:h", long_options, &option_index)) > -1) {
 
 		switch (c) {
 			case 'A':
@@ -337,12 +313,6 @@ main(int argc, char **argv)
 					abort();
 				}
 				g_strlcpy(service_desc, optarg, sizeof(service_desc));
-				break;
-			case 'l':
-				has_list = TRUE;
-				break;
-			case 't':
-				has_list_task = TRUE;
 				break;
 			case 'r':
 				has_raw = TRUE;
@@ -380,7 +350,7 @@ main(int argc, char **argv)
 		goto success_label;
 	}
 
-	if (!has_list && !has_set_score && !has_list_task) {
+	if (!has_set_score) {
 		namespace = argv[argc - 1];
 		if (argc < 2 || namespace == NULL) {
 			g_printerr("\nNo namespace specified in args, aborting.\n\n");
@@ -410,33 +380,6 @@ main(int argc, char **argv)
 		}
 
 	}
-	else if (has_list) {
-
-		GSList *services = list_local_services(&error);
-
-		if (services == NULL && error) {
-			g_printerr("Failed to get service list\n");
-			g_printerr("%s\n", error->message);
-			goto exit_label;
-		}
-
-		print_raw_services(NULL, NULL, services);
-		g_slist_free_full (services, (GDestroyNotify)service_info_clean);
-
-	}
-	else if (has_list_task) {
-
-		GSList *tasks = list_tasks(&error);
-
-		if (tasks == NULL && error) {
-			g_printerr("Failed to get task list \n");
-			g_printerr("%s\n", error->message);
-			goto exit_label;
-		}
-
-		raw_print_list_task(tasks);
-
-	}
 	else if (has_set_score) {
 
 		if (!has_service) {
@@ -464,12 +407,6 @@ main(int argc, char **argv)
 		if (!has_raw)
 			print_formated_namespace(ns);
 
-		gchar *csurl = gridcluster_get_conscience(namespace);
-		STRING_STACKIFY(csurl);
-		if (!csurl) {
-			g_printerr("No conscience address known for [%s]\n", namespace);
-			goto exit_label;
-		}
 		GSList *services_types = NULL;
 		error = conscience_get_types (namespace, &services_types);
 
@@ -484,11 +421,9 @@ main(int argc, char **argv)
 				gchar *str_type = st->data;
 
 				/* Generate the list */
-				if (!has_flag_full || !has_raw) {
-					error = conscience_get_services (namespace, str_type, &list_services);
-				} else {
-					error = conscience_remote_get_services(csurl, str_type, TRUE, &list_services);
-				}
+				gboolean full = has_flag_full && has_raw;
+				error = conscience_get_services (namespace, str_type, full,
+						&list_services);
 
 				/* Dump the list */
 				if (error && !list_services) {

@@ -37,16 +37,16 @@ struct oio_cs_client_vtable_s
 			int scor);
 
 	GError * (*deregister_service) (struct oio_cs_client_s *self,
-			const char *in_type, const char *id);
+			const char *in_type, const struct oio_cs_registration_s *reg);
 
 	GError * (*flush_services) (struct oio_cs_client_s *self,
 			const char *in_type);
 
 	GError * (*unlock_service) (struct oio_cs_client_s *self,
-			const char *in_type, const char *id);
+			const char *in_type, const struct oio_cs_registration_s *reg);
 
 	GError * (*list_services) (struct oio_cs_client_s *self,
-			const char *in_type,
+			const char *in_type, gboolean full,
 			void (*on_reg) (const struct oio_cs_registration_s *reg, int score));
 
 	GError * (*list_types) (struct oio_cs_client_s *self,
