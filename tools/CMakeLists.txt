@@ -26,6 +26,9 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/oio-reset.sh
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/oio-bootstrap.py
 		${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-bootstrap.py
 		@ONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/oio-test-config.py
+		${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-test-config.py
+		@ONLY)
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/oio-sds.pc.in
 		${CMAKE_CURRENT_BINARY_DIR}/oio-sds.pc
@@ -54,5 +57,6 @@ install(PROGRAMS
 			${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-wait-scored.sh
 			${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-bootstrap.py
 			${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-reset.sh
+			${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-test-config.py
 		DESTINATION bin)
 
