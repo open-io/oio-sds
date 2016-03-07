@@ -19,7 +19,7 @@ from flask import request
 from flask import current_app
 from werkzeug.exceptions import BadRequest
 
-from oio.rdir.server_db import RdirBackend
+from oio.rdir.server_db import RdirBackend, NoSuchDB
 from oio.common.utils import json
 
 rdir_api = flask.Blueprint('rdir_api', __name__)
@@ -70,8 +70,14 @@ def rdir_push(ns):
         if token in decoded:
             data[token] = decoded[token]
 
-    get_backend().chunk_push(volume, container_id, content_id, chunk_id,
-                             **data)
+    try:
+        get_backend().chunk_push(volume, container_id, content_id, chunk_id,
+                                 **data)
+    except NoSuchDB:
+        if request.args.get('create'):
+            get_backend().create(volume)
+        get_backend().chunk_push(volume, container_id, content_id, chunk_id,
+                                 **data)
     return flask.Response('', 204)
 
 
@@ -248,6 +254,12 @@ def create_app(conf, **kwargs):
     app.register_blueprint(rdir_api)
     app.backend = RdirBackend(conf)
     app.ns = conf['namespace']
+    # default to sync worker for rdir
+    if not conf.get('worker_class'):
+        conf['worker_class'] = 'sync'
+    # default to 1 worker (concurrency issue with leveldb)
+    if not conf.get('workers'):
+        conf['workers'] = 1
     # we want exceptions to be logged
     if conf.get('log_level') == 'DEBUG':
         app.config['PROPAGATE_EXCEPTIONS'] = True

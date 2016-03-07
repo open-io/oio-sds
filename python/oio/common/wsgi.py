@@ -20,7 +20,7 @@ class Application(BaseApplication):
         self.cfg.set('bind', bind)
         self.cfg.set('backlog', self.conf.get('backlog', 2048))
         self.cfg.set('workers', self.conf.get('workers', 2))
-        self.cfg.set('worker_class', 'eventlet')
+        self.cfg.set('worker_class', self.conf.get('worker_class', 'eventlet'))
         self.cfg.set('worker_connections', self.conf.get(
             'worker_connections', 1000))
         self.cfg.set('syslog_prefix', self.conf.get('syslog_prefix', ''))
