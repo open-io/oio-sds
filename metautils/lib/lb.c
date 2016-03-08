@@ -1213,6 +1213,7 @@ grid_lb_iterator_to_string (struct grid_lb_iterator_s *it)
 	g_string_append_printf (gs, "?shorten_ratio=%f", it->lb->shorten_ratio);
 	g_string_append_printf (gs, "&standard_deviation=%s",
 			it->lb->standard_deviation ? "yes" : "no");
+	g_string_append_printf (gs, "&reset_delay=%d", it->lb->reset_delay);
 	return gs;
 }
 

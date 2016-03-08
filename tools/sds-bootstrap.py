@@ -268,6 +268,7 @@ template_meta_watch = """
 host: ${IP}
 port: ${PORT}
 type: ${SRVTYPE}
+location: hem.oio.vol${SRVNUM}
 checks:
     - {type: tcp}
 
@@ -409,7 +410,7 @@ param_option.sqlx.events-max-pending=12
 param_option.meta1.events-max-pending=456
 
 param_option.service_update_policy=meta2=KEEP|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|;rdir=KEEP|1|1|user_is_a_service=1
-param_option.lb.rawx=WRR?shorten_ratio=1.0&standard_deviation=no
+param_option.lb.rawx=WRR?shorten_ratio=1.0&standard_deviation=no&reset_delay=60
 param_option.meta2_max_versions=${VERSIONING}
 param_option.meta2_keep_deleted_delay=86400
 param_option.compression=none
