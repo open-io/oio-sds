@@ -135,7 +135,7 @@ LoadModule dav_rawx_module @APACHE2_MODULES_DIRS@/mod_dav_rawx.so
 Listen ${IP}:${PORT}
 PidFile ${RUNDIR}/${NS}-${SRVTYPE}-httpd-${SRVNUM}.pid
 ServerRoot ${TMPDIR}
-ServerName localhost
+ServerName ${IP}
 ServerSignature Off
 ServerTokens Prod
 DocumentRoot ${RUNDIR}
@@ -149,12 +149,6 @@ ErrorLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-httpd-${SRVNUM}-errors.log
 SetEnvIf Request_URI "/(stat|info)$" nolog
 CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-httpd-${SRVNUM}-access.log log/common env=!nolog
 LogLevel info
-
-<IfModule mod_env.c>
-SetEnv nokeepalive 1
-SetEnv downgrade-1.0 1
-SetEnv force-response-1.0 1
-</IfModule>
 
 <IfModule prefork.c>
 MaxClients 10
@@ -174,13 +168,29 @@ MaxRequestsPerChild 0
 
 DavDepthInfinity Off
 
-grid_hash_width 2
-grid_hash_depth 1
-grid_docroot ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
-grid_namespace ${NS}
-grid_dir_run ${RUNDIR}
-#grid_upload_blocksize 65536
-#grid_upload_fileflags DIRECT|SYNC|NOATIME
+grid_docroot           ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
+grid_namespace         ${NS}
+grid_dir_run           ${RUNDIR}
+
+# How many hexdigits must be used to name the indirection directories
+grid_hash_width        3
+
+# How many levels of directories are used to store chunks.
+grid_hash_depth        1
+
+# At the end of an upload, perform a fsync() on the chunk file itself
+grid_fsync             disabled
+
+# At the end of an upload, perform a fsync() on the directory holding the chunk
+grid_fsync_dir         enabled
+
+# If set, gives the internal FILE a buffer of this size. If not set (default),
+# let the default buffer used by the glibc.
+#grid_upload_blocksize 131072
+
+# Triggers Access Control List (acl)
+# DO NOT USE, this is broken
+#grid_acl disabled
 
 <Directory />
 DAV rawx
@@ -198,6 +208,7 @@ LoadModule mpm_worker_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mpm_worker
 LoadModule authz_core_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_authz_core.so
 LoadModule setenvif_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_setenvif.so
 LoadModule dav_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_dav.so
+# Do not chang
 LoadModule mime_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mime.so
 LoadModule dav_rainx_module @APACHE2_MODULES_DIRS@/mod_dav_rainx.so
 
