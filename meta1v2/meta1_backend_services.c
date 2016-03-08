@@ -497,13 +497,11 @@ static GError*
 _get_iterator2(struct meta1_backend_s *m1, const char *srvtype,
 		struct grid_lb_iterator_s **result)
 {
-	struct compound_type_s ct;
-	GError *err;
+	struct compound_type_s ct = {0};
 
 	*result = NULL;
-	memset(&ct, 0, sizeof(ct));
 
-	err = compound_type_parse(&ct, srvtype);
+	GError *err = compound_type_parse(&ct, srvtype);
 	if (NULL != err) {
 		g_prefix_error(&err, "Type parsing error: ");
 		return err;
@@ -541,8 +539,7 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 	GRID_DEBUG("Polling %u [%s]", replicas, ct->fulltype);
 
 	if (!(*err = _get_iterator(m1, ct, &iter))) {
-		struct lb_next_opt_ext_s opt;
-		memset(&opt, 0, sizeof(opt));
+		struct lb_next_opt_ext_s opt = {0};
 		opt.req.distance = MACRO_COND(replicas>1,1,0);
 		opt.req.max = replicas;
 		opt.req.duplicates = FALSE;
@@ -837,8 +834,7 @@ __relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
 		struct service_update_policies_s *pol = meta1_backend_get_svcupdate(in->m1);
 		EXTRA_ASSERT (pol != NULL);
 
-		struct lb_next_opt_ext_s opt;
-		memset (&opt, 0, sizeof (opt));
+		struct lb_next_opt_ext_s opt = {0};
 		opt.req.max = service_howmany_replicas (pol, in->ct->baretype);
 		opt.req.distance = opt.req.max > 1 ? 1 : 0;
 		opt.req.duplicates = FALSE;
@@ -898,6 +894,9 @@ GError*
 meta1_backend_services_config(struct meta1_backend_s *m1,
 		struct oio_url_s *url, const char *packedurl)
 {
+	GError *err = __check_backend_events (m1);
+	if (err) return err;
+
 	struct meta1_service_url_s *m1url;
 	if (!(m1url = meta1_unpack_url(packedurl)))
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid URL");
@@ -906,7 +905,7 @@ meta1_backend_services_config(struct meta1_backend_s *m1,
 			m1url->srvtype, m1url->seq, m1url->host, m1url->args);
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
+	err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
 	if (err) { g_free(m1url); return err; }
 
 	struct sqlx_repctx_s *repctx = NULL;
@@ -927,12 +926,15 @@ meta1_backend_services_set(struct meta1_backend_s *m1,
 		struct oio_url_s *url, const char *packedurl,
 		gboolean autocreate, gboolean force)
 {
+	GError *err = __check_backend_events (m1);
+	if (err) return err;
+
 	struct meta1_service_url_s *m1url;
 	if (!(m1url = meta1_unpack_url(packedurl)))
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid URL");
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
+	err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
 	if (err) { g_free(m1url); return err; }
 
 	struct sqlx_repctx_s *repctx = NULL;
@@ -987,8 +989,11 @@ meta1_backend_services_link (struct meta1_backend_s *m1,
 		gboolean dryrun, gboolean autocreate,
 		gchar ***result)
 {
+	GError *err = __check_backend_events (m1);
+	if (err) return err;
+
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
+	err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
 	if (err) return err;
 
 	struct sqlx_repctx_s *repctx = NULL;
@@ -1016,12 +1021,15 @@ meta1_backend_services_poll(struct meta1_backend_s *m1,
 		gboolean dryrun, gboolean autocreate,
 		gchar ***result)
 {
+	GError *err = __check_backend_events (m1);
+	if (err) return err;
+
 	EXTRA_ASSERT(srvtype != NULL);
 	EXTRA_ASSERT(result != NULL);
 
 	gboolean renewed = FALSE;
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
+	err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
 	if (err) return err;
 
 	struct sqlx_repctx_s *repctx = NULL;
@@ -1076,9 +1084,12 @@ GError*
 meta1_backend_services_unlink(struct meta1_backend_s *m1,
 		struct oio_url_s *url, const char *srvtype, gchar **urlv)
 {
+	GError *err = __check_backend_events (m1);
+	if (err) return err;
+
 	EXTRA_ASSERT(srvtype != NULL);
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
+	err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
 	if (err) return err;
 
 	struct sqlx_repctx_s *repctx = NULL;
@@ -1101,13 +1112,14 @@ meta1_backend_services_relink(struct meta1_backend_s *m1,
 		struct oio_url_s *url, const char *kept, const char *replaced,
 		gboolean dryrun, gchar ***out)
 {
-	GError *err = NULL;
+	GError *err = __check_backend_events (m1);
+	if (err) return err;
+
 	struct meta1_service_url_s **ukept = NULL, **urepl = NULL;
 	/* fields to be prefetched */
 	struct grid_lb_iterator_s *iterator = NULL;
-	struct compound_type_s ct;
+	struct compound_type_s ct = {0};
 
-	memset (&ct, 0, sizeof(ct));
 	ukept = __parse_and_expand (kept);
 	urepl = __parse_and_expand (replaced);
 

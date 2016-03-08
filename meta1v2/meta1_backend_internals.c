@@ -74,6 +74,16 @@ m1_to_sqlx(enum m1v2_open_type_e t)
 	return SQLX_OPEN_LOCAL;
 }
 
+GError *
+__check_backend_events (struct meta1_backend_s *m1)
+{
+	if (!m1)
+		return SYSERR("backend not ready");
+	if (m1->notifier && oio_events_queue__is_stalled (m1->notifier))
+		return BUSY("Too many pending events");
+	return NULL;
+}
+
 GError*
 _open_and_lock(struct meta1_backend_s *m1, struct oio_url_s *url,
 		enum m1v2_open_type_e how, struct sqlx_sqlite3_s **handle)
