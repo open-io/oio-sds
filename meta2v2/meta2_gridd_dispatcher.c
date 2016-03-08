@@ -88,6 +88,7 @@ static gridd_filter M2V2_CREATE_FILTERS[] =
 	meta2_filter_check_backend,
 	meta2_filter_check_ns_name,
 	meta2_filter_check_ns_is_master,
+	meta2_filter_check_events_not_stalled,
 	meta2_filter_extract_header_storage_policy,
 	meta2_filter_extract_header_version_policy,
 	meta2_filter_extract_header_localflag,
@@ -105,6 +106,7 @@ static gridd_filter M2V2_DESTROY_FILTERS[] =
 	meta2_filter_check_ns_name,
 	meta2_filter_check_ns_is_master,
 	meta2_filter_check_ns_not_wormed,
+	meta2_filter_check_events_not_stalled,
 	meta2_filter_action_delete_container,
 	meta2_filter_reply_success,
 	NULL
@@ -267,6 +269,7 @@ static gridd_filter M2V2_PUT_FILTERS[] =
 	meta2_filter_check_backend,
 	meta2_filter_check_ns_name,
 	meta2_filter_check_ns_is_master,
+	meta2_filter_check_events_not_stalled,
 	meta2_filter_extract_body_beans,
 	meta2_filter_action_put_content,
 	NULL
@@ -311,6 +314,7 @@ static gridd_filter M2V2_DELETE_FILTERS[] =
 	meta2_filter_check_ns_name,
 	meta2_filter_check_ns_is_master,
 	meta2_filter_check_ns_not_wormed,
+	meta2_filter_check_events_not_stalled,
 	meta2_filter_action_delete_content,
 	NULL
 };
