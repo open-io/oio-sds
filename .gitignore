@@ -32,9 +32,9 @@
 *.pyc
 *.pyo
 dist
-build
 *.egg
 *.egg-info
+python/build/
 python/.tox/
 python/.eggs/
 
