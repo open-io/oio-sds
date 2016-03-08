@@ -15,11 +15,39 @@ class TestRdirServer(unittest.TestCase):
                      'namespace': 'NS'}
 
         self.app = create_app(self.conf).test_client()
+        self.app.get("/v1/NS/rdir/create", query_string={'vol': "xxx"})
 
     def tearDown(self):
         super(TestRdirServer, self).tearDown()
         del self.app
         shutil.rmtree(self.db_path)
+
+    def test_explicit_create(self):
+        data_put = {
+            'container_id': "mycontainer",
+            'content_id': "mycontent",
+            'chunk_id': "mychunk",
+            'content_version': "1",
+            'content_nbchunks': "3",
+            'content_path': "path",
+            'content_size': "1234",
+            'chunk_hash': "1234567890ABCDEF",
+            'chunk_position': "1",
+            'chunk_size': "123",
+            'mtime': 123456,
+            'rtime': 456
+        }
+        resp = self.app.post("/v1/NS/rdir/push",
+                             query_string={'vol': "unknown"},
+                             data=json.dumps(data_put),
+                             content_type="application/json")
+        self.assertEqual(resp.status_code, 500)
+        self.app.get("/v1/NS/rdir/create", query_string={'vol': "unknown"})
+        resp = self.app.post("/v1/NS/rdir/push",
+                             query_string={'vol': "unknown"},
+                             data=json.dumps(data_put),
+                             content_type="application/json")
+        self.assertEqual(resp.status_code, 204)
 
     def test_push_allowed_tokens(self):
         data_put = {
