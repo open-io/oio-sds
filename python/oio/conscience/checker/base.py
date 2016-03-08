@@ -14,6 +14,7 @@ class BaseChecker(object):
         self.fall = checker_conf['fall']
         self.results = RingBuffer(max([self.rise, self.fall]))
         self.name = checker_conf.get('name')
+        self.srv_type = agent.service['type']
         self.last_result = None
         self.configure()
 
@@ -27,7 +28,9 @@ class BaseChecker(object):
         try:
             with Timeout(self.timeout):
                 result = self.check()
-        except (Exception, Timeout) as e:
+        except Timeout as e:
+            self.logger.warn('check timed out')
+        except Exception as e:
             self.logger.warn('check failed: %s', str(e.message))
 
         if self.last_result is None:

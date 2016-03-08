@@ -1,4 +1,3 @@
-from oio.common.http import requests
 from oio.conscience.stats.base import BaseStat
 
 
@@ -9,8 +8,7 @@ class HttpStat(BaseStat):
         self.stat_conf['path'] = self.stat_conf.get('path', '').lstrip('/')
         self.parser = self.stat_conf.get('parser', 'lines')
         self.url = 'http://{host}:{port}/{path}'.format(**self.stat_conf)
-        self.session = requests.session()
-        self._fetch_func = self.session.get
+        self.session = self.agent.session
         if self.parser == 'json':
             # use json parser (account and rdir style)
             self._parse_func = self._parse_stats_json
@@ -49,7 +47,7 @@ class HttpStat(BaseStat):
 
     def get_stats(self):
         try:
-            resp = self._fetch_func(self.url)
+            resp = self.session.get(self.url)
             return self._parse_func(resp)
         except Exception as e:
             self.logger.debug("get_stats error: %s", e)
