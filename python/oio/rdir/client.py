@@ -13,27 +13,37 @@ class RdirClient(Client):
 
     def _lookup_rdir_host(self, resp):
         host = None
-        for srv in resp['srv']:
+        for srv in resp.get('srv', {}):
             if srv['type'] == 'rdir':
                 host = srv['host']
         if not host:
             raise ClientException("No rdir service found")
         return host
 
+    def _link_rdir(self, volume_id):
+        self.directory_client.link(acct=RDIR_ACCT, ref=volume_id,
+                                   srv_type='rdir', autocreate=True)
+        return self.directory_client.show(
+                acct=RDIR_ACCT, ref=volume_id, srv_type='rdir')
+
     # TODO keep rdir addr in local cache to avoid lookup requests
     def _get_rdir_addr(self, volume_id, create=False):
+        resp = {}
         try:
             resp = self.directory_client.show(acct=RDIR_ACCT, ref=volume_id,
                                               srv_type='rdir')
         except NotFound:
-            if create:
-                self.directory_client.link(acct=RDIR_ACCT, ref=volume_id,
-                                           srv_type='rdir', autocreate=True)
-                resp = self.directory_client.show(
-                        acct=RDIR_ACCT, ref=volume_id, srv_type='rdir')
-            else:
+            if not create:
                 raise
-        host = self._lookup_rdir_host(resp)
+
+        try:
+            host = self._lookup_rdir_host(resp)
+        except ClientException:
+            # Reference exists but no rdir linked
+            if not create:
+                raise
+            resp = self._link_rdir(volume_id)
+            host = self._lookup_rdir_host(resp)
         return host
 
     def _make_uri(self, action, volume_id, create=False):
