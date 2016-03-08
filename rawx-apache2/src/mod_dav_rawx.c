@@ -299,11 +299,10 @@ dav_rawx_cmd_gridconfig_upblock(cmd_parms *cmd, void *config, const char *arg1)
 	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
 
 	if (arg1 && *arg1) {
-		conf->FILE_buffer_size = atoi(arg1);
-		if (conf->FILE_buffer_size > 0 && conf->FILE_buffer_size < 8192)
-			conf->FILE_buffer_size = 8192;
-		else if (conf->FILE_buffer_size > 131072)
-			conf->FILE_buffer_size = 131072;
+		int s = atoi(arg1);
+		if (s > 0) {
+			conf->FILE_buffer_size = CLAMP(s, RAWX_BUF_MIN, RAWX_BUF_MAX);
+		}
 	}
 
 	return NULL;

@@ -708,11 +708,8 @@ rawx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 			MAP_IO2HTTP(rv), 0, "An error occurred while opening a resource.");
 	}
 	else if (conf->FILE_buffer_size > 0) {
-		int s = 131072;
-		char *buf;
-		if (conf->FILE_buffer_size < 131072 && conf->FILE_buffer_size > 8192)
-			s = conf->FILE_buffer_size;
-		buf = apr_pcalloc(p, s);
+		int s = CLAMP(conf->FILE_buffer_size, RAWX_BUF_MIN, RAWX_BUF_MAX);
+		char *buf = apr_pcalloc(p, s);
 		if (0 != setvbuf(ds->f, buf, _IOFBF, (ssize_t)s)) {
 			DAV_DEBUG_REQ(resource->info->request, 0,
 					"setvbuf failed : (errno=%d) %s",
