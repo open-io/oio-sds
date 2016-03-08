@@ -60,6 +60,7 @@ static void _task_expire_resolver(gpointer p);
 static void _task_react_elections(gpointer p);
 static void _task_reload_nsinfo(gpointer p);
 static void _task_reload_workers(gpointer p);
+static void _task_reconfigure_events(gpointer p);
 
 static gpointer _worker_queue (gpointer p);
 static gpointer _worker_clients (gpointer p);
@@ -364,6 +365,7 @@ _configure_tasks(struct sqlx_service_s *ss)
 {
 	grid_task_queue_register(ss->gtq_reload, 5, _task_reload_nsinfo, NULL, ss);
 	grid_task_queue_register(ss->gtq_reload, 5, _task_reload_workers, NULL, ss);
+	grid_task_queue_register(ss->gtq_reload, 5, _task_reconfigure_events, NULL, ss);
 
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_bases, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_resolver, NULL, ss);
@@ -805,6 +807,38 @@ _task_reload_workers(gpointer p)
 			NULL, PSRV(p)->service_config->srvtype, "max_workers",
 			SRV.cfg_max_workers);
 	network_server_set_max_workers(PSRV(p)->server, (guint) max_workers);
+}
+
+static void
+_task_reconfigure_events (gpointer p)
+{
+	if (!grid_main_is_running ())
+		return;
+	if (!p || !PSRV(p)->events_queue)
+		return;
+
+	struct namespace_info_s *ni = PSRV(p)->nsinfo;
+	if (!ni || !ni->options)
+		return;
+
+	gint64 i64 = OIO_EVTQ_MAXPENDING;
+	gchar *k;
+
+	/* without the prefix */
+	i64 = gridcluster_get_nsinfo_int64 (ni, OIO_CFG_EVTQ_MAXPENDING, i64);
+	GRID_TRACE("Looking for [%s]: %"G_GINT64_FORMAT, OIO_CFG_EVTQ_MAXPENDING, i64);
+
+	/* with the prefix */
+	k = g_strconcat (PSRV(p)->service_config->srvtype, ".",
+			OIO_CFG_EVTQ_MAXPENDING, NULL);
+	i64 = gridcluster_get_nsinfo_int64 (ni, k, i64);
+	GRID_TRACE("Looking for [%s]: %"G_GINT64_FORMAT, k, i64);
+	g_free(k);
+
+	if (i64 >= 0 && i64 < G_MAXUINT) {
+		guint u = (guint) i64;
+		oio_events_queue__set_max_pending (PSRV(p)->events_queue, u);
+	}
 }
 
 void
