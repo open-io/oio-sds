@@ -271,13 +271,13 @@ _select_dest_assign_m1(GList *lst, const struct meta1_assignment_s *m1_old,
 	guint avgscore = context->avgscore;
 	gchar **urls = meta0_utils_array_get_urlv(
 			context->m1_by_prefix_array, prefix);
-	gsize urls_len = g_strv_length(urls);
 
 	if (!urls) {
 		/* The current prefix is assigned to no meta1.
 		 * Assign it to m1_new (the lowest scored meta1). */
 		goto cleanup;
 	}
+	gsize urls_len = g_strv_length(urls);
 
 	if (m1_old)
 		shost = _host(m1_old->addr);
