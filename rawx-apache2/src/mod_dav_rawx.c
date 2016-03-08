@@ -80,8 +80,9 @@ dav_rawx_create_server_config(apr_pool_t *p, server_rec *s)
 	conf = apr_pcalloc(p, sizeof(dav_rawx_server_conf));
 	conf->pool = p;
 	conf->cleanup = NULL;
-	conf->hash_depth = conf->hash_width = 2;
-	conf->fsync_on_close = FSYNC_ON_CHUNK;
+	conf->hash_depth = 1;
+	conf->hash_width = 3;
+	conf->fsync_on_close = FSYNC_ON_CHUNK_DIR;
 	conf->FILE_buffer_size = 0;
 
 	return conf;
