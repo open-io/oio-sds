@@ -1,7 +1,6 @@
 /*
-OpenIO SDS sqlx
-Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+OpenIO SDS event queue
+Copyright (C) 2016 OpenIO, original work as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -29,8 +28,16 @@ gboolean oio_events_queue__is_stalled (struct oio_events_queue_s *self);
 
 /* Event-agent based implementation ----------------------------------------- */
 
+/* Creates an agent-based event queue, with a maximum number of events "not yet
+   acknowledged" events set to <max_pending>. When ZERO, there is no limit
+   with all the (possible) consequences of memory outage */
 struct oio_events_queue_s * oio_events_queue_factory__create_agent (
 		const char *zurl, guint max_pending);
+
+/* Changes the window's width of events in flight. <max_pending> has the same
+   meaning as in oio_events_queue_factory__create_agent() */
+void oio_events_queue__set_max_pending (struct oio_events_queue_s *self,
+		guint max_pending);
 
 /* <self> must have been created by oio_events_queue_factory__create_agent().
    It internally loops until <running> returns FALSE */

@@ -187,6 +187,10 @@ extern "C" {
 #  define OIO_EVTQ_MAXPENDING 1000
 # endif
 
+# ifndef  OIO_CFG_EVTQ_MAXPENDING
+#  define OIO_CFG_EVTQ_MAXPENDING "events-max-pending"
+# endif
+
 # define OIO_CFG_PROXY        "proxy"
 # define OIO_CFG_PROXYLOCAL   "proxy-local"
 # define OIO_CFG_PROXY_CONSCIENCE "proxy-conscience"

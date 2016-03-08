@@ -403,18 +403,23 @@ path=${LIBDIR}/grid/msg_conscience.so
 param_namespace=${NS}
 param_chunk_size=${CHUNK_SIZE}
 
+param_option.events-max-pending=1234
+param_option.meta2.events-max-pending=123
+param_option.sqlx.events-max-pending=12
+param_option.meta1.events-max-pending=456
+
 param_option.service_update_policy=meta2=KEEP|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|;rdir=KEEP|1|1|user_is_a_service=1
-param_option.meta2_max_versions=${VERSIONING}
 param_option.lb.rawx=WRR?shorten_ratio=1.0&standard_deviation=no
+param_option.meta2_max_versions=${VERSIONING}
 param_option.meta2_keep_deleted_delay=86400
 param_option.compression=none
 param_option.container_max_size=50000000
 param_option.FLATNS_hash_offset=0
 param_option.FLATNS_hash_size=0
 param_option.FLATNS_hash_bitlength=17
-
 param_option.storage_policy=${STGPOL}
-param_storage_conf=${CFGDIR}/${NS}-conscience-policies.conf
+
+param_storage_conf=${CFGDIR}/${NS}-policies.conf
 
 param_service.meta0.score_timeout=3600
 param_service.meta0.score_variation_bound=5
@@ -835,7 +840,7 @@ def generate(ns, ip, options={}):
         env['PORT'] = port_cs
         tpl = Template(template_conscience)
         f.write(tpl.safe_substitute(env))
-    with open(CFGDIR + '/' + ns + '-conscience-policies.conf', 'w+') as f:
+    with open(CFGDIR + '/' + ns + '-policies.conf', 'w+') as f:
         tpl = Template(template_conscience_policies)
         f.write(tpl.safe_substitute(env))
 
