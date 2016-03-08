@@ -13,7 +13,7 @@ class MetaStat(HttpStat):
 
     def get_stats(self):
         try:
-            resp = self.agent.client._request(
+            resp, body = self.agent.client._request(
                     'POST', self.uri, params=self.params)
             return self._parse_stats_lines(resp)
         except Exception as e:

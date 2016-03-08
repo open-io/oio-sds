@@ -5,8 +5,9 @@ import pkg_resources
 from eventlet import GreenPool, sleep
 
 from oio.common.daemon import Daemon
+from oio.common.http import requests
 from oio.common.utils import get_logger, float_value, validate_service_conf, \
-    int_value, parse_config
+    int_value, parse_config, true_value
 from oio.common.client import Client
 from oio.conscience.client import ConscienceClient
 
@@ -28,18 +29,22 @@ class ServiceWatcher(object):
             if k not in service:
                 raise Exception(
                     'Missing field "%s" in service configuration' % k)
-        self.name = '%s|%s' % \
-            (service['host'], service['port'])
+        self.name = '%s|%s|%s' % \
+            (service['type'], service['host'], service['port'])
 
-        self.check_interval = float_value(conf.get('check_interval'), 1)
         self.service = service
 
-        self.rise = int_value(conf.get('rise'), 1)
-        self.fall = int_value(conf.get('fall'), 1)
+        self.rise = int_value(self._load_item_config('rise'), 1)
+        self.fall = int_value(self._load_item_config('fall'), 1)
+        self.check_interval = float_value(
+                self._load_item_config('check_interval'), 1)
+        self.deregister_on_exit = true_value(
+                self._load_item_config('deregister_on_exit', False))
 
         self.logger = get_logger(self.conf)
-        self.cs = ConscienceClient(self.conf)
-        self.client = Client(self.conf)
+        self.session = requests.Session()
+        self.cs = ConscienceClient(self.conf, session=self.session)
+        self.client = Client(self.conf, session=self.session)
         self.last_status = False
         self.failed = False
         self.service_definition = {
@@ -56,6 +61,9 @@ class ServiceWatcher(object):
         self.init_checkers(service)
         self.init_stats(service)
 
+    def _load_item_config(self, item, default=None):
+        return self.service.get(item, self.conf.get(item)) or default
+
     def start(self):
         self.logger.info('watcher "%s" starting', self.name)
         self.running = True
@@ -63,6 +71,13 @@ class ServiceWatcher(object):
 
     def stop(self):
         self.logger.info('watcher "%s" stopping', self.name)
+        if self.deregister_on_exit:
+            self.logger.info('watcher "%s" deregister service', self.name)
+            try:
+                self.last_status = False
+                self.register()
+            except Exception as e:
+                self.logger.warn('Failed to register service: %s', e)
         self.running = False
 
     def check(self):
@@ -80,10 +95,10 @@ class ServiceWatcher(object):
 
     def get_stats(self):
         """Update service definition with all configured stats"""
+        if not self.last_status:
+            return
         for stat in self.service_stats:
             stats = stat.get_stats()
-            self.logger.debug("Stat fetcher '%s' returned %s",
-                              str(stat), str(stats))
             self.service_definition['tags'].update(stats)
 
     def register(self):
