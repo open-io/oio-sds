@@ -54,6 +54,7 @@ M2V2_DECLARE_FILTER(meta2_filter_check_optional_ns_name);
 M2V2_DECLARE_FILTER(meta2_filter_check_backend);
 M2V2_DECLARE_FILTER(meta2_filter_check_ns_is_master);
 M2V2_DECLARE_FILTER(meta2_filter_check_ns_not_wormed);
+M2V2_DECLARE_FILTER(meta2_filter_check_events_not_stalled);
 
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_url);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_copy);

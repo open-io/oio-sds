@@ -1,7 +1,6 @@
 /*
-OpenIO SDS sqlx
-Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+OpenIO SDS event queue
+Copyright (C) 2016 OpenIO, original work as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -119,6 +118,18 @@ oio_events_queue_factory__create_agent (const char *zurl, guint max_pending)
 	self->max_events_in_queue = max_pending;
 	self->procid = getpid();
 	return (struct oio_events_queue_s *) self;
+}
+
+void
+oio_events_queue__set_max_pending (struct oio_events_queue_s *self,
+		guint max_pending)
+{
+	struct _queue_AGENT_s *q = (struct _queue_AGENT_s *)self;
+	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_AGENT);
+	if (q->max_events_in_queue != max_pending) {
+		GRID_NOTICE("max events in queue set to [%u]", max_pending);
+		q->max_events_in_queue = max_pending;
+	}
 }
 
 static void
