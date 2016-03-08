@@ -28,6 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <server/transport_gridd.h>
 #include <server/gridd_dispatcher_filters.h>
+#include <sqlx/oio_events_queue.h>
 
 #include <meta2v2/meta2_macros.h>
 #include <meta2v2/meta2_filter_context.h>
@@ -49,8 +50,7 @@ _meta2_filter_check_ns_name(struct gridd_filter_ctx_s *ctx,
 
 	if (!backend || !backend->ns_name[0]) {
 		GRID_DEBUG("Missing information for namespace checking");
-		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_INTERNAL_ERROR,
-					"Missing backend information, cannot check namespace"));
+		meta2_filter_ctx_set_error(ctx, SYSERR("backend not ready"));
 		return FILTER_KO;
 	}
 
@@ -58,15 +58,12 @@ _meta2_filter_check_ns_name(struct gridd_filter_ctx_s *ctx,
 		if (optional)
 			return FILTER_OK;
 		GRID_DEBUG("Missing namespace name in request");
-		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_BAD_REQUEST,
-					"Bad Request: Missing namespace name information"));
+		meta2_filter_ctx_set_error(ctx, BADREQ("No namespace"));
 		return FILTER_KO;
 	}
 
 	if (0 != g_ascii_strcasecmp(backend->ns_name, req_ns)) {
-		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_BAD_REQUEST,
-					"Request namespace [%s] does not match server namespace [%s]",
-					req_ns, backend->ns_name));
+		meta2_filter_ctx_set_error(ctx, BADNS());
 		return FILTER_KO;
 	}
 
@@ -93,14 +90,12 @@ int
 meta2_filter_check_backend(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	struct meta2_backend_s *m2b;
-
 	(void) reply;
 	TRACE_FILTER();
-	m2b = meta2_filter_ctx_get_backend(ctx);
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	if (meta2_backend_initiated(m2b))
 		return FILTER_OK;
-	meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_INTERNAL_ERROR, "Backend not ready"));
+	meta2_filter_ctx_set_error(ctx, SYSERR("Backend not ready"));
 	return FILTER_KO;
 }
 
@@ -131,7 +126,25 @@ meta2_filter_check_url_cid (struct gridd_filter_ctx_s *ctx,
 	TRACE_FILTER();
 	if (url && oio_url_has(url, OIOURL_HEXID))
 		return FILTER_OK;
-	meta2_filter_ctx_set_error (ctx, NEWERROR(CODE_BAD_REQUEST, "No/partial URL"));
+	meta2_filter_ctx_set_error (ctx, BADREQ("Invalid URL"));
 	return FILTER_KO;
+}
+
+int
+meta2_filter_check_events_not_stalled (struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	(void) reply;
+	TRACE_FILTER ();
+
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	if (m2b->notifier && meta2_backend_initiated (m2b)) {
+		if (oio_events_queue__is_stalled (m2b->notifier)) {
+			meta2_filter_ctx_set_error(ctx, BUSY("Too many pending events"));
+			return FILTER_KO;
+		}
+	}
+
+	return FILTER_OK;
 }
 
