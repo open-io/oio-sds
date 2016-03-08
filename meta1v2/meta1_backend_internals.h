@@ -25,7 +25,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # include <sqlx/sqlx_service.h>
 # include <sqlx/oio_events_queue.h>
 
-#define M1_SQLITE_GERROR(db,RC) g_error_new(GQ(), (RC), "(%s) %s", \
+#define M1_SQLITE_GERROR(db,RC) NEWERROR((RC), "(%s) %s", \
 		sqlite_strerror(RC), (db)?sqlite3_errmsg(db):"unkown error")
 
 struct meta1_backend_s
@@ -44,6 +44,8 @@ struct meta1_backend_s
 void __exec_cid(sqlite3 *handle, const gchar *sql, const container_id_t cid);
 
 GError* __create_user(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url);
+
+GError * __check_backend_events (struct meta1_backend_s *m1);
 
 /*! check the container exists */
 GError * __info_user(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
