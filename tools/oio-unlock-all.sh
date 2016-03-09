@@ -24,7 +24,7 @@ SRVTYPE=
 
 list () {
 	if [ -n "$SRVTYPE" ] ; then
-		${PREFIX}-cluster -r "$NS" | grep -e "|${SRVTYPE}|"
+		${PREFIX}-cluster -r "$NS" | egrep -E -e "|${SRVTYPE}|"
 	else
 		${PREFIX}-cluster -r "$NS"
 	fi
@@ -40,10 +40,7 @@ while getopts "s:n:l" opt ; do
 done
 
 if [ -z "$NS" ] && [ -n "$LOCAL" ] ; then
-	test_conf="${HOME}/.oio/sds/conf/test.conf"
-	if [ -r "$test_conf" ] && which jq >/dev/null ; then
-		NS=$(jq -r .namespace "$test_conf")
-	fi
+	NS=$(${PREFIX}-test-config.py -n)
 fi
 
 if [ -z "$NS" ] ; then

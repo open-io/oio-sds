@@ -21,12 +21,13 @@ PREFIX="@EXE_PREFIX@"
 LOCAL=
 NS=
 SRVTYPE=
-MAX=0
+MAXWAIT=0
+MINSRV=1
 UNLOCK=
 
 list () {
 	if [ -n "$SRVTYPE" ] ; then
-		${PREFIX}-cluster -r "$NS" | grep -e "|${SRVTYPE}|"
+		${PREFIX}-cluster -r "$NS" | egrep -E -e "|${SRVTYPE}|"
 	else
 		${PREFIX}-cluster -r "$NS"
 	fi
@@ -40,22 +41,20 @@ maybe_unlock () {
 	fi
 }
 
-while getopts "s:t:n:lu" opt ; do
+while getopts "N:s:t:n:lu" opt ; do
 	case $opt in
-		t) MAX="${OPTARG}" ;;
+		t) MAXWAIT="${OPTARG}" ;;
 		s) SRVTYPE="${OPTARG}" ;;
 		n) NS="${OPTARG}" ;;
 		l) LOCAL=1 ;;
 		u) UNLOCK=1 ;;
+		N) MINSRV="${OPTARG}" ;;
 		\?) exit 1 ;;
 	esac
 done
 
 if [ -z "$NS" ] && [ -n "$LOCAL" ] ; then
-	test_conf="${HOME}/.oio/sds/conf/test.conf"
-	if [ -r "$test_conf" ] && which jq >/dev/null ; then
-		NS=$(jq -r .namespace "$test_conf")
-	fi
+	NS=$(${PREFIX}-test-config.py -n)
 fi
 
 if [ -z "$NS" ] ; then
@@ -65,11 +64,13 @@ fi
 
 count=0
 while true ; do
-	if [ 0 -eq $(list | grep -c 'score=0') ] ; then
+	count_scored=$(list | grep -c -v 'score=0' || exit 0)
+	count_down=$(list | grep -c 'score=0' || exit 0)
+	if [ "$count_scored" -ge "$MINSRV" ] && [ "$count_down" -eq 0 ] ; then
 		exit 0
 	else
-		if [ "$MAX" -gt 0 ] ; then
-			if [ $count -ge "$MAX" ] ; then
+		if [ "$MAXWAIT" -gt 0 ] ; then
+			if [ $count -ge "$MAXWAIT" ] ; then
 				echo "Timeout!"
 				exit 2
 			else

@@ -103,19 +103,19 @@ list_services () {
 }
 
 wait_for_srvtype () {
-	echo "Waiting for $2 $1 to appear"
-	count=0
-	while [ $2 -gt $(${PREFIX}-cluster -r "$NS" | grep -c $1) ] ; do
-		timeout 15
-	done
-	echo "Waiting for the $1 to get a score"
-	$PREFIX-wait-scored.sh -u -n "$NS" -s "$1" -t 15
+	echo "Waiting for the $2 $1 to get a score"
+	$PREFIX-wait-scored.sh -u -N "$2" -n "$NS" -s "$1" -t 15
 }
 
 reload_service_type () {
 	list_services "$1" | while read IP ; do
 		curl -X POST "http://${PROXY}/v3.0/forward/reload?id=$IP"
 	done
+}
+
+timestamp () {
+	echo
+	date '+%Y-%m-%d %H:%M:%S.%N'
 }
 
 #-------------------------------------------------------------------------------
@@ -176,7 +176,7 @@ ${PREFIX}-bootstrap.py \
 
 gridinit -s OIO,gridinit -d ${SDS}/conf/gridinit.conf
 
-PROXY=$(jq -r '.proxy[0].addr' ~/.oio/sds/conf/test.conf)
+PROXY=$(${PREFIX}-test-config.py -1 -t proxy)
 
 # Initiate Zookeeper (if necessary)
 ZK=$(${PREFIX}-cluster --local-cfg | grep "$NS/zookeeper" ; exit 0)
@@ -199,36 +199,31 @@ while ! [ -e "$GRIDINIT_SOCK" ] ; do
 done
 pidof_gridinit=$(pgrep -u "$UID" --full gridinit)
 
-echo -e '\n\n\n'
+timestamp
 gridinit_cmd -S "$GRIDINIT_SOCK" reload >/dev/null
-gridinit_cmd -S "$GRIDINIT_SOCK" start "@conscience" "@proxy"
-gridinit_cmd -S "$GRIDINIT_SOCK" start "@rawx"
-wait_for_srvtype "rawx" ${NB_RAWX}
 gridinit_cmd -S "$GRIDINIT_SOCK" start "@${NS}"
-wait_for_srvtype "meta2" ${REPLICATION_BUCKET}
+timestamp
+wait_for_srvtype "(sqlx|rawx|rainx|meta2)" $((2+NB_RAWX+REPLICATION_BUCKET))
+timestamp
+wait_for_srvtype "(meta0|meta1)" $((1+REPLICATION_DIRECTORY))
 
-echo -e '\n\n\n'
-gridinit_cmd -S "$GRIDINIT_SOCK" start "@meta0"
-wait_for_srvtype "meta0" 1
-gridinit_cmd -S "$GRIDINIT_SOCK" start "@meta1"
-wait_for_srvtype "meta1" ${REPLICATION_DIRECTORY}
-
-echo -e '\n\n\n'
+timestamp
 list_services "meta0" | while read URL ; do
 	${PREFIX}-meta0-init -O "NbReplicas=${REPLICATION_DIRECTORY}" -O IgnoreDistance=on "$URL"
 	${PREFIX}-meta0-client "$URL" reload
 done
 
-echo -e '\n\n\n'
+timestamp
 ${PREFIX}-unlock-all.sh -n "$NS"
 ${PREFIX}-wait-scored.sh -n "$NS" -t 60
 
-echo -e '\n\n\n'
+timestamp
 reload_service_type "meta1"
 reload_service_type "meta2"
 
-echo -e '\n\n\n'
+timestamp
 find $SDS -type d | xargs chmod a+rx
 gridinit_cmd -S "$GRIDINIT_SOCK" status2
 ${PREFIX}-cluster -r "$NS"
 
+timestamp

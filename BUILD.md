@@ -8,7 +8,7 @@ When building only the SDK, OpenIO only depends on:
 * cmake, make : involved in the build process.
 * bison, flex : generates expression parsers.
 * glib2, glib2-devel
-* curl, libcurl, libcurl-devel 
+* curl, libcurl, libcurl-devel
 * json-c, json-c-devel
 * [asn1c](https://github.com/open-io/asn1c) : our ASN.1 codec, forked from [Lev Walkin's excellent ASN.1 codec](https://github.com/vlm/asn1c). The purpose of our fork is simply to provide codec for explicitely sized integers (int{8,16,32,64} instead of long int).
 
@@ -26,6 +26,7 @@ Building the entire project will require the SDK dependencies, but also:
 * zookeeper-devel, libzookeeper\_mt.so : building with distribution's zookeeper client is OK, but the package ships with a lot of dependencies, including the openjdk. We recommand to use the official Oracle/Sun JDK, and to build your own zookeeper client from the source to avoid a huge waste of space and bandwith.
 * python-setuptools
 * python-pbr
+* beanstalkd: you need it to have the event-agent working
 
 In addition, a few python modules are required at runtime:
 * python-eventlet
