@@ -27,7 +27,7 @@ class TestIndexerCrawler(BaseTestCase):
         content_id = generate_id(64)
         chunk_id = generate_id(64)
 
-        chunk_dir = "%s/%s" % (rawx_path, chunk_id[0:2])
+        chunk_dir = "%s/%s" % (rawx_path, chunk_id[0:3])
         if not os.path.isdir(chunk_dir):
             os.makedirs(chunk_dir)
 
