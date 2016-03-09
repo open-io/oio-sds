@@ -6,7 +6,7 @@ from oio.common.utils import validate_service_conf
 
 
 class Client(object):
-    def __init__(self, conf, **kwargs):
+    def __init__(self, conf, session=None, **kwargs):
         super(Client, self).__init__()
         validate_service_conf(conf)
         self.ns = conf.get('namespace')
@@ -14,7 +14,7 @@ class Client(object):
         self.conf = conf
         self.ns_conf = ns_conf
         self.logger = get_logger(conf)
-        self.session = requests.Session()
+        self.session = session or requests.Session()
         self.endpoint = 'http://%s' % ns_conf.get('proxy')
 
     def _direct_request(self, method, full_url, **kwargs):

@@ -45,7 +45,7 @@ class TestBlobFunctional(BaseTestCase):
 
     def _chunk_path(self, chunkid):
         chunkid = chunkid.upper()
-        return self.rawx_path + '/' + chunkid[:2] + '/' + chunkid
+        return self.rawx_path + '/' + chunkid[:3] + '/' + chunkid
 
     def setUp(self):
         super(TestBlobFunctional, self).setUp()

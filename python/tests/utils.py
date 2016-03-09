@@ -90,11 +90,11 @@ class BaseTestCase(testtools.TestCase):
     @classmethod
     def tearDownClass(cls):
         now = time.time()
-        if (now - cls._last_cache_flush) < 10:
+        if (now - cls._last_cache_flush) < 12:
             # Flushing the proxy's service cache may make further tests
             # fail. By sleeping a bit, we allow the proxy to reload
             # its service cache.
-            time.sleep(now - cls._last_cache_flush)
+            time.sleep(12)
 
     def _flush_cs(self, srvtype):
         params = {'type': srvtype}

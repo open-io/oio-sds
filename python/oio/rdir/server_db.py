@@ -15,10 +15,27 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
+import plyvel
+from plyvel import DB
+from functools import wraps
 from oio.common.exceptions import ServerException
 from oio.common.utils import json
-from plyvel import DB
 
+
+class NoSuchDB(Exception):
+    pass
+
+
+def handle_db_not_found(fnc):
+    @wraps(fnc)
+    def _wrapped(self, volume_id, *args, **kwargs):
+        try:
+            return fnc(self, volume_id, *args, **kwargs)
+        except plyvel.Error as e:
+            if 'does not exist' in e.message:
+                msg = "Volume '%s' does not exist." % volume_id
+            raise NoSuchDB(msg)
+    return _wrapped
 
 # FIXME this class is not thread-safe (see _get_db, push, lock) but it
 # works fine with the default gunicorn sync worker and with only one worker.
@@ -26,20 +43,29 @@ from plyvel import DB
 # we need to close/open db each time.
 # In multithreaded environement, the push function needs transaction to update
 # an entry in a consistent manner.
-class RdirBackend(object):
 
+
+class RdirBackend(object):
     def __init__(self, conf):
         self.db_path = conf.get('db_path')
         self.dbs = {}
         if not os.path.exists(self.db_path):
             os.makedirs(self.db_path)
 
+    def _get_db_path(self, volume_id):
+        return "%s/%s" % (self.db_path, volume_id)
+
+    def create(self, volume_id):
+        db_path = self._get_db_path(volume_id)
+        DB(db_path, create_if_missing=True)
+
+    @handle_db_not_found
     def _get_db(self, volume_id):
         try:
             db = self.dbs[volume_id]
         except KeyError:
-            path = "%s/%s" % (self.db_path, volume_id)
-            self.dbs[volume_id] = DB(path, create_if_missing=True)
+            db_path = self._get_db_path(volume_id)
+            self.dbs[volume_id] = DB(db_path, create_if_missing=False)
             db = self.dbs[volume_id]
         return db
 

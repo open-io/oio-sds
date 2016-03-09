@@ -190,6 +190,14 @@ extern "C" {
 #  define CS_CLIENT_TIMEOUT 2.0
 # endif
 
+# ifndef RAWX_BUF_MIN
+#  define RAWX_BUF_MIN 8192
+# endif
+
+# ifndef RAWX_BUF_MAX
+#  define RAWX_BUF_MAX 1048576
+# endif
+
 # ifndef RAWX_LOSTFOUND_FOLDER
 #  define RAWX_LOSTFOUND_FOLDER "_lost+found"
 # endif

@@ -1,43 +1,62 @@
 from oio.common.client import Client
 from oio.common.exceptions import ClientException, NotFound
-from oio.common.utils import true_value
 from oio.directory.client import DirectoryClient
+
+
+RDIR_ACCT = '_RDIR'
 
 
 class RdirClient(Client):
     def __init__(self, conf, **kwargs):
         super(RdirClient, self).__init__(conf, **kwargs)
-        self.autocreate = true_value(conf.get('autocreate', True))
-        self.directory_client = DirectoryClient(conf)
+        self.directory_client = DirectoryClient(conf, **kwargs)
+
+    def _lookup_rdir_host(self, resp):
+        host = None
+        for srv in resp.get('srv', {}):
+            if srv['type'] == 'rdir':
+                host = srv['host']
+        if not host:
+            raise ClientException("No rdir service found")
+        return host
+
+    def _link_rdir(self, volume_id):
+        self.directory_client.link(acct=RDIR_ACCT, ref=volume_id,
+                                   srv_type='rdir', autocreate=True)
+        return self.directory_client.show(
+                acct=RDIR_ACCT, ref=volume_id, srv_type='rdir')
 
     # TODO keep rdir addr in local cache to avoid lookup requests
-    def _get_rdir_addr(self, volume_id):
+    def _get_rdir_addr(self, volume_id, create=False):
+        resp = {}
         try:
-            resp = self.directory_client.show(acct='_RDIR', ref=volume_id,
+            resp = self.directory_client.show(acct=RDIR_ACCT, ref=volume_id,
                                               srv_type='rdir')
-        except NotFound as e:
-            if self.autocreate:
-                self.directory_client.link('_RDIR', volume_id, 'rdir',
-                                           autocreate=True)
-                resp = self.directory_client.show(acct='_RDIR', ref=volume_id,
-                                                  srv_type='rdir')
-            else:
-                raise e
+        except NotFound:
+            if not create:
+                raise
 
-        for srv in resp['srv']:
-            if srv['type'] == 'rdir':
-                return srv['host']
-        raise ClientException("No rdir service found")
+        try:
+            host = self._lookup_rdir_host(resp)
+        except ClientException:
+            # Reference exists but no rdir linked
+            if not create:
+                raise
+            resp = self._link_rdir(volume_id)
+            host = self._lookup_rdir_host(resp)
+        return host
 
-    def _make_uri(self, action, volume_id):
-        rdir_host = self._get_rdir_addr(volume_id)
-        uri = 'http://%s/v1/%s/%s?vol=%s' % (
-            rdir_host, self.ns, action, volume_id)
+    def _make_uri(self, action, volume_id, create=False):
+        rdir_host = self._get_rdir_addr(volume_id, create=create)
+        uri = 'http://%s/v1/%s/%s' % (rdir_host, self.ns, action)
         return uri
 
-    def _rdir_request(self, volume, method, action, **kwargs):
-        uri = self._make_uri(action, volume)
-        resp, body = self._direct_request(method, uri, **kwargs)
+    def _rdir_request(self, volume, method, action, create=False, **kwargs):
+        uri = self._make_uri(action, volume, create=create)
+        params = {'vol': volume}
+        if create:
+            params['create'] = '1'
+        resp, body = self._direct_request(method, uri, params=params, **kwargs)
         return resp, body
 
     def chunk_push(self, volume_id, container_id, content_id, chunk_id,
@@ -51,7 +70,7 @@ class RdirClient(Client):
 
         headers = {}
 
-        self._rdir_request(volume_id, 'POST', 'rdir/push',
+        self._rdir_request(volume_id, 'POST', 'rdir/push', create=True,
                            json=body, headers=headers)
 
     def chunk_delete(self, volume_id, container_id, content_id, chunk_id):
@@ -96,4 +115,8 @@ class RdirClient(Client):
 
     def admin_show(self, volume):
         resp, resp_body = self._rdir_request(volume, 'GET', 'rdir/admin/show')
+        return resp_body
+
+    def status(self, volume):
+        resp, resp_body = self._rdir_request(volume, 'GET', 'rdir/status')
         return resp_body
