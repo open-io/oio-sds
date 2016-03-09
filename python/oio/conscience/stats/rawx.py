@@ -24,8 +24,6 @@ class RawxStat(HttpStat):
         delta_req = (self._cur_http_stats[hkey] -
                      self._prev_http_stats.get(hkey, 0))
         rate = delta_req / delta_t
-        self.logger.debug("%s: %d requests in %fs -> %frps",
-                          hkey, delta_req, delta_t, rate)
         return rate
 
     def _compute_avreqtime(self, stat_key, _delta_t):
@@ -38,8 +36,6 @@ class RawxStat(HttpStat):
         delta_t_req = (self._cur_http_stats[hkey] -
                        self._prev_http_stats.get(hkey, 0))
         avreqtime = delta_t_req / delta_req
-        self.logger.debug(u"%s: %d requests took %fµs -> %fµs/req",
-                          hkey, delta_req, delta_t_req, avreqtime)
         return avreqtime
 
     def get_stats(self):
