@@ -40,6 +40,16 @@ def server_status():
     return flask.Response(json.dumps(status), mimetype='application/json')
 
 
+@rdir_api.route('/v1/<ns>/rdir/create', methods=['GET'])
+def rdir_create(ns):
+    _check_ns(ns)
+    volume = request.args.get('vol')
+    if not volume:
+        return flask.Response('Missing volume id', 400)
+    get_backend().create(volume)
+    return flask.Response('', 201)
+
+
 @rdir_api.route('/v1/<ns>/rdir/push', methods=['POST'])
 def rdir_push(ns):
     _check_ns(ns)

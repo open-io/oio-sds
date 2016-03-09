@@ -17,6 +17,7 @@
 import time
 
 from oio.account.client import AccountClient
+from oio.common.exceptions import ClientException
 from oio.container.client import ContainerClient
 from tests.utils import BaseTestCase
 
@@ -29,7 +30,16 @@ class TestAccountClient(BaseTestCase):
         self.account_client = AccountClient(self.conf)
         self.container_client = ContainerClient(self.conf)
 
-        self.account_client.account_create(self.account_id)
+        retry = 3
+        for i in range(retry+1):
+            try:
+                self.account_client.account_create(self.account_id)
+                break
+            except ClientException:
+                if i < retry:
+                    time.sleep(2)
+                else:
+                    raise
         self.container_client.container_create(acct=self.account_id,
                                                ref="container1")
         self.container_client.container_create(acct=self.account_id,

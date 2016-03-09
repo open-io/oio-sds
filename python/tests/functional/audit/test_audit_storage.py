@@ -90,8 +90,8 @@ class TestBlobAuditorFunctional(BaseTestCase):
                       'chunk_pos': self.chunk.pos}
         self.blob_c.chunk_put(self.chunk_url, chunk_meta, self.data)
 
-        self.chunk_path = self.test_dir + '/data/NS-rawx-1/' +\
-            self.chunk.id_chunk[0:2] + "/" + self.chunk.id_chunk
+        self.chunk_path = self.test_dir + '/data/' + self.namespace + \
+            '-rawx-1/' + self.chunk.id_chunk[0:3] + "/" + self.chunk.id_chunk
         self.bad_container_id = '0'*64
 
     def tearDown(self):

@@ -3,7 +3,7 @@ import shutil
 import unittest
 
 from oio.common.exceptions import ServerException
-from oio.rdir.server_db import RdirBackend
+from oio.rdir.server_db import NoSuchDB, RdirBackend
 
 
 class TestRdirBackend(unittest.TestCase):
@@ -12,11 +12,22 @@ class TestRdirBackend(unittest.TestCase):
         self.db_path = tempfile.mkdtemp()
         self.conf = {'db_path': self.db_path}
         self.rdir = RdirBackend(self.conf)
+        self.rdir.create("myvolume")
 
     def tearDown(self):
         super(TestRdirBackend, self).tearDown()
         del self.rdir
         shutil.rmtree(self.db_path)
+
+    def test_explicit_create(self):
+        newvolume = "mynewvolume"
+        self.assertRaises(NoSuchDB,
+                          self.rdir.chunk_push,
+                          newvolume, "mycontainer", "mycontent",
+                          "mychunk", mtime=1234)
+        self.rdir.create(newvolume)
+        self.rdir.chunk_push(newvolume, "mycontainer", "mycontent",
+                             "mychunk", mtime=1234)
 
     def test_chunk_push_mtime(self):
         self.rdir.chunk_push("myvolume", "mycontainer", "mycontent", "mychunk",
@@ -258,6 +269,8 @@ class TestRdirBackend(unittest.TestCase):
         self.assertEqual(self.rdir.status(), {'opened_db_count': 1})
 
     def test_multi_volume(self):
+        self.rdir.create("myvolume1")
+        self.rdir.create("myvolume2")
         self.rdir.chunk_push("myvolume1", "mycontainer", "mycontent",
                              "mychunk",
                              mtime=1111)
