@@ -535,23 +535,23 @@ oio_sys_cpu_idle (void)
 			if (!g_str_has_prefix(line, "cpu "))
 				continue;
 			char *p = g_strstrip(line + 4);
-			long long unsigned int user = 0, nice = 0, sys = 0, idle = 0,
-				 wait = 0, irq = 0, soft = 0, steal = 0, guest = 0,
+			long long unsigned int user = 0, _nice = 0, sys = 0, _idle = 0,
+				 _wait = 0, irq = 0, soft = 0, steal = 0, guest = 0,
 				 guest_nice = 0;
 			/* TODO linux provides 10 fields since Linux 2.6.33,
 			 * and we should check the Linux verison to manage the
 			 * old style with 7 fields for earlier releases. */
 			int rc = sscanf(p, "%llu %llu %llu %llu %llu %llu %llu %llu"
-					" %llu %llu", &user, &nice, &sys, &idle, &wait, &irq,
+					" %llu %llu", &user, &_nice, &sys, &_idle, &_wait, &irq,
 					&soft, &steal, &guest, &guest_nice);
 			if (rc != 0) {
-				guint64 sum = user + nice + sys + idle + wait + irq + soft
+				guint64 sum = user + _nice + sys + _idle + _wait + irq + soft
 					+ steal + guest + guest_nice;
-				if (sum > last_sum && idle > last_idle)
-					ratio_idle = ((gdouble)(idle - last_idle)) /
+				if (sum > last_sum && _idle > last_idle)
+					ratio_idle = ((gdouble)(_idle - last_idle)) /
 						((gdouble)(sum - last_sum));
 				last_sum = sum;
-				last_idle = idle;
+				last_idle = _idle;
 				last_update = now;
 			}
 			break;
