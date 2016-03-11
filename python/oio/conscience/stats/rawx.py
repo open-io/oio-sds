@@ -7,7 +7,6 @@ class RawxStat(HttpStat):
     """Specialization of HttpStat for rawx services"""
 
     rawx_stat_keys = [
-            ("config", "volume", "tag.vol"),
             ("counter", "req.hits", "stat.total_reqpersec"),
             ("counter", "req.time", "stat.total_avreqtime"),
     ]
