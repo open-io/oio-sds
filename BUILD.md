@@ -79,7 +79,7 @@ make DESTDIR=${install_dir} install
 
 Install python module:
 ```
-cd ${SRCDIR}/python; sudo python setup.py develop; cd -
+sudo python setup.py develop
 ```
 
 ## Compile-time configuration
