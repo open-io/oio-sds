@@ -335,7 +335,7 @@ oio_str_lower(register gchar *s)
 }
 
 void
-oio_str_gstring_append_json_blob(GString *base, const char *s, ssize_t len)
+oio_str_gstring_append_json_blob(GString *base, const char *s, int len)
 {
 	for (ssize_t i = 0; (len < 0 && *s) || i < len; i++) {
 		if (*s < 0) {  // (part of a) unicode character
