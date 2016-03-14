@@ -1,7 +1,7 @@
 from gunicorn.app.base import BaseApplication
 from gunicorn.glogging import Logger
 
-from oio.common.utils import get_logger
+from oio.common.utils import get_logger, read_conf
 
 
 class Application(BaseApplication):
@@ -71,3 +71,14 @@ class ServiceLogger(Logger):
         # do not log status requests
         if environ.get('PATH_INFO', '/') != '/status':
             super(ServiceLogger, self).access(resp, req, environ, request_time)
+
+
+def init_request_processor(conf_file, app_name, app_factory, *args, **kwargs):
+    conf = read_conf(conf_file, app_name)
+    if 'logger' in kwargs:
+        logger = kwargs.pop('logger')
+    else:
+        logger = get_logger(conf, app_name,
+                            verbose=kwargs.pop('verbose', False))
+    app = app_factory(conf)
+    return (app, conf, logger, app_name)

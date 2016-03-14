@@ -15,7 +15,7 @@ class MetaStat(HttpStat):
         try:
             resp, body = self.agent.client._request(
                     'POST', self.uri, params=self.params)
-            return self._parse_stats_lines(resp)
+            return self._parse_stats_lines(resp.text)
         except Exception as e:
             self.logger.debug("get_stats error: %s", e)
             return {}
