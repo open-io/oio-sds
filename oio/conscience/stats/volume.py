@@ -38,5 +38,6 @@ class VolumeStat(BaseStat):
             return {}
 
         stats = {"stat.io": 100.0 * self.oio_sys_io_idle(self.volume),
-                 "stat.space": 100.0 * self.oio_sys_space_idle(self.volume)}
+                 "stat.space": 100.0 * self.oio_sys_space_idle(self.volume),
+                 "tag.vol": self.volume}
         return stats

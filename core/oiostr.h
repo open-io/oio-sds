@@ -101,7 +101,7 @@ void oio_str_gstring_append_json_string (GString *base, const char *s);
 
 /* appends to 'base' the JSON acceptable version of 's'. If 'len' is less
  * than zero, stop at the first null-character. */
-void oio_str_gstring_append_json_blob(GString *base, const char *s, ssize_t len);
+void oio_str_gstring_append_json_blob(GString *base, const char *s, int len);
 
 /* appends "<k>":"<v>" where k and v are added with
    oio_str_gstring_append_json_string() */
