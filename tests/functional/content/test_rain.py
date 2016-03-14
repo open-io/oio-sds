@@ -28,7 +28,7 @@ from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
 from oio.content.content import ChunksHelper
 from oio.content.factory import ContentFactory
-from oio.content.rain import RainContent, READ_CHUNK_SIZE
+from oio.content.rain import RainContent
 from tests.functional.content.test_content import md5_stream, random_data, \
     md5_data
 from tests.utils import BaseTestCase
@@ -80,21 +80,18 @@ class TestRainContent(BaseTestCase):
         if metachunk_nb == 0:
             metachunk_nb = 1  # special case for empty content
 
-        nb_chunks_min = metachunk_nb * (k + m) - (k - 1)
+        nb_chunks_min = metachunk_nb * (1 + m)
         nb_chunks_max = metachunk_nb * (k + m)
-        self.assertEquals(len(chunks) >= nb_chunks_min, True)
-        self.assertEquals(len(chunks) <= nb_chunks_max, True)
+        self.assertGreaterEqual(len(chunks), nb_chunks_min)
+        self.assertLessEqual(len(chunks), nb_chunks_max)
 
         for metapos in range(metachunk_nb):
             chunks_at_pos = content.chunks.filter(metapos=metapos)
             data_chunks_at_pos = chunks_at_pos.filter(is_parity=False)
             parity_chunks_at_pos = chunks_at_pos.filter(is_parity=True)
 
-            if metapos < metachunk_nb - 1:
-                self.assertEqual(len(data_chunks_at_pos), k)
-            else:
-                self.assertEquals(len(data_chunks_at_pos) >= 1, True)
-                self.assertEquals(len(data_chunks_at_pos) <= k, True)
+            self.assertEquals(len(data_chunks_at_pos) >= 1, True)
+            self.assertEquals(len(data_chunks_at_pos) <= k, True)
             self.assertEqual(len(parity_chunks_at_pos), m)
 
             for chunk in chunks_at_pos:
@@ -307,5 +304,9 @@ class TestRainContent(BaseTestCase):
 
         download_iter = content.download()
 
-        self.assertEqual(download_iter.next(), data[0:READ_CHUNK_SIZE-1])
+        dl_data = ""
+        for buf in download_iter:
+            dl_data += buf
+        self.assertEqual(len(dl_data), len(data))
+        self.assertEqual(dl_data, data)
         download_iter.close()
