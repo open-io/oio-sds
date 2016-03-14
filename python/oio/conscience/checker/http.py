@@ -1,3 +1,4 @@
+from oio.common.http import http_connect
 from oio.common import exceptions as exc
 from oio.conscience.checker.base import BaseChecker
 
@@ -13,17 +14,29 @@ class HttpChecker(BaseChecker):
 
         self.host = self.checker_conf['host']
         self.port = self.checker_conf['port']
-        self.uri = self.checker_conf['uri']
-        self.name = 'http|%s|%s|%s' % (self.host, self.port, self.uri)
-        self.url = 'http://%s:%s/%s' % \
-            (self.host, self.port, self.uri.lstrip('/'))
+        self.path = self.checker_conf['uri']
+        self.name = '%s|http|%s|%s|%s' % \
+            (self.srv_type, self.host, self.port, self.path)
         self.session = self.agent.session
 
     def check(self):
         success = False
+        resp = None
         try:
-            resp = self.session.get(self.url)
-            if resp.status_code == 200:
+            conn = http_connect(self.host, self.port, 'GET', self.path)
+            resp = conn.getresponse()
+            if resp.status == 200:
                 success = True
+            else:
+                raise Exception("status code != 200: %s" % resp.status)
+        except Exception as e:
+            self.logger.warn('ERROR performing http check: %s', e)
         finally:
+            if resp:
+                try:
+                    resp.force_close()
+                except Exception:
+                    pass
+            if not success:
+                self.logger.warn('http check failed')
             return success
