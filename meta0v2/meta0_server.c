@@ -42,7 +42,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "./meta0_gridd_dispatcher.h"
 
 static struct zk_manager_s *m0zkmanager = NULL;
-static gboolean zk_registered = FALSE;
 static struct meta0_backend_s *m0 = NULL;
 static struct meta0_disp_s *m0disp = NULL;
 
@@ -52,20 +51,13 @@ _register_to_zookeeper(struct sqlx_service_s *ss)
 	if (ss->url && ss->zk_url && m0zkmanager) {
 		GError *err = create_zk_node(m0zkmanager, NULL, ss->url->str, ss->url->str);
 		if (err) {
-			GRID_WARN("Failed to register meta0 [%s] to zookeeper", ss->url->str);
+			GRID_WARN("Failed to register meta0 [%s] to zookeeper: %s",
+					ss->url->str, err->message);
 			g_clear_error(&err);
 			return FALSE;
 		}
 	}
 	return TRUE;
-}
-
-static void
-_task_zk_registration(gpointer p)
-{
-	EXTRA_ASSERT(p != NULL);
-	if (!zk_registered)
-		zk_registered = _register_to_zookeeper(PSRV(p));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -143,22 +135,17 @@ _post_config(struct sqlx_service_s *ss)
 		err = zk_srv_manager_create(ss->ns_name, ss->zk_url,
 				NAME_SRVTYPE_META0, &m0zkmanager);
 		if (err) {
-			GRID_WARN("Zk manager init failed : (%d) %s",err->code, err->message);
+			GRID_WARN("Zk manager init failed: (%d) %s",
+					err->code, err->message);
 			g_clear_error(&err);
 			return FALSE;
 		}
 
 		gboolean done = FALSE;
 		while (!done && grid_main_is_running()) {
-			err = create_zk_node(m0zkmanager, NULL, ss->url->str, ss->url->str);
-			if (!err) {
-				done = TRUE;
-			} else {
-				GRID_WARN("Meta0's zookeeper node creation failure : (%d) %s",
-						err->code, err->message);
-				g_clear_error(&err);
+			done = _register_to_zookeeper(ss);
+			if (!done)
 				g_usleep(1 * G_TIME_SPAN_SECOND);
-			}
 		}
 		if (!done) {
 			GRID_INFO("Stopped while registering in Zookeeper");
@@ -177,8 +164,6 @@ _post_config(struct sqlx_service_s *ss)
 
 	sqlx_repository_configure_change_callback(ss->repository,
 			_callback_change, NULL);
-
-	grid_task_queue_register(ss->gtq_admin, 7, _task_zk_registration, NULL, ss);
 
 	return TRUE;
 }
