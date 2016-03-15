@@ -2,9 +2,6 @@ import os
 import sys
 import socket
 from urlparse import urlparse
-from itertools import chain
-import threading
-from select import select
 from cStringIO import StringIO as BytesIO
 
 
@@ -35,70 +32,6 @@ class ResponseError(BeanstalkError):
 
 class InvalidResponse(BeanstalkError):
     pass
-
-
-class ConnectionPool(object):
-    @classmethod
-    def from_url(cls, url, **kwargs):
-        url = urlparse(url)
-        url_options = {}
-        url_options.update({
-            'host': url.hostname,
-            'port': int(url.port or 11300)})
-        kwargs.update(url_options)
-        return cls(**kwargs)
-
-    def __init__(self, max_connections=None, **kwargs):
-        max_connections = max_connections or 2 ** 31
-        if not isinstance(max_connections, int) or max_connections < 0:
-            raise ValueError('"max_connections" must be a positive integer')
-
-        self.connection_options = kwargs
-        self.max_connections = max_connections
-        self.reset()
-
-    def reset(self):
-        self.pid = os.getpid()
-        self._created_connections = 0
-        self._available_connections = []
-        self._in_use_connections = set()
-        self._check_lock = threading.Lock()
-
-    def _checkpid(self):
-        if self.pid != os.getpid():
-            with self._check_lock:
-                if self.pid == os.getpid():
-                    return
-                self.disconnect()
-                self.reset()
-
-    def get_connection(self):
-        self._checkpid()
-        try:
-            connection = self._available_connections.pop()
-        except IndexError:
-            connection = self.make_connection()
-        self._in_use_connections.add(connection)
-        return connection
-
-    def make_connection(self):
-        if self._created_connections >= self.max_connections:
-            raise ConnectionError("Too many connections")
-        self._created_connections += 1
-        return Connection(**self.connection_options)
-
-    def release(self, connection):
-        self._checkpid()
-        if connection.pid != self.pid:
-            return
-        self._in_use_connections.remove(connection)
-        self._available_connections.append(connection)
-
-    def disconnect(self):
-        all_conns = chain(self._available_connections,
-                          self._in_use_connections)
-        for conn in all_conns:
-            conn.disconnect()
 
 
 class Reader(object):
@@ -224,6 +157,16 @@ class BaseParser(object):
 
 
 class Connection(object):
+    @classmethod
+    def from_url(cls, url, **kwargs):
+        url = urlparse(url)
+        url_options = {}
+        url_options.update({
+            'host': url.hostname,
+            'port': int(url.port or 11300)})
+        kwargs.update(url_options)
+        return cls(**kwargs)
+
     def __init__(self, host='localhost', port=11300, socket_timeout=None,
                  retry_on_timeout=False, socket_connect_timeout=None,
                  socket_keepalive=False, socket_keepalive_options=None,
@@ -312,14 +255,6 @@ class Connection(object):
         except socket.error:
             pass
         self._sock = None
-
-    def can_read(self, timeout=0):
-        sock = self._sock
-        if not sock:
-            self.connect()
-            sock = self._sock
-        return self._parser.can_read() or \
-            bool(select([sock], [], [], timeout)[0])
 
     def pack_command(self, command, body, *args):
         output = []
@@ -416,14 +351,14 @@ class Beanstalk(object):
 
     @classmethod
     def from_url(cls, url, **kwargs):
-        connection_pool = ConnectionPool.from_url(url, **kwargs)
-        return cls(connection_pool=connection_pool)
+        connection = Connection.from_url(url, **kwargs)
+        return cls(connection=connection)
 
     def __init__(self, host='localhost', port=11300, socket_timeout=None,
                  socket_connect_timeout=None, socket_keepalive=None,
                  retry_on_timeout=False, socket_keepalive_options=None,
-                 max_connections=None, connection_pool=None):
-        if not connection_pool:
+                 max_connections=None, connection=None):
+        if not connection:
             self.host = host
             self.port = port
             self.socket_timeout = socket_timeout
@@ -438,16 +373,15 @@ class Beanstalk(object):
                 'max_connections': max_connections
             }
 
-            connection_pool = ConnectionPool(**kwargs)
-        self.connection_pool = connection_pool
+            connection = Connection(**kwargs)
+        self.connection = connection
         self.response_callbacks = self.__class__.RESPONSE_CALLBACKS.copy()
         self.expected_ok = self.__class__.EXPECTED_OK.copy()
         self.expected_err = self.__class__.EXPECTED_ERR.copy()
 
     def execute_command(self, *args, **kwargs):
-        pool = self.connection_pool
+        connection = self.connection
         command_name = args[0]
-        connection = pool.get_connection()
         try:
             connection.send_command(*args, **kwargs)
             return self.parse_response(connection, command_name, **kwargs)
@@ -457,8 +391,6 @@ class Beanstalk(object):
                 raise
             connection.send_command(*args, **kwargs)
             return self.parse_response(connection, command_name, **kwargs)
-        finally:
-            pool.release(connection)
 
     def parse_response(self, connection, command_name, **kwargs):
         response = connection.read_response()
