@@ -181,15 +181,15 @@ zk_main_watch(zhandle_t *zh, int type, int state, const char *path,
 	(void) zh;
 	(void) path;
 
-	if (type == ZOO_SESSION_EVENT) {
-		if (state == ZOO_CONNECTING_STATE) {
-			if (ss->zh)
-				zookeeper_close(ss->zh);
-			if (NULL != ss->on_exit)
-				ss->on_exit(ss->on_exit_ctx);
-			ss->zh = zookeeper_init(ss->zk_url, zk_main_watch,
-				SQLX_SYNC_DEFAULT_ZK_TIMEOUT, &ss->zk_id, ss, 0);
-		}
+	if (type == ZOO_SESSION_EVENT &&
+			state == ZOO_CONNECTING_STATE) {
+		GRID_WARN("Zookeeper: (re)connecting to [%s]", ss->zk_url);
+		if (ss->zh)
+			zookeeper_close(ss->zh);
+		if (NULL != ss->on_exit)
+			ss->on_exit(ss->on_exit_ctx);
+		ss->zh = zookeeper_init(ss->zk_url, zk_main_watch,
+			SQLX_SYNC_DEFAULT_ZK_TIMEOUT, &ss->zk_id, ss, 0);
 	}
 	else {
 		if (state == ZOO_EXPIRED_SESSION_STATE) {
@@ -197,9 +197,6 @@ zk_main_watch(zhandle_t *zh, int type, int state, const char *path,
 		}
 		else if (state == ZOO_AUTH_FAILED_STATE) {
 			GRID_WARN("Zookeeper: auth problem to [%s]", ss->zk_url);
-		}
-		else if (state == ZOO_CONNECTING_STATE) {
-			GRID_WARN("Zookeeper: (re)connecting to [%s]", ss->zk_url);
 		}
 		else if (state == ZOO_ASSOCIATING_STATE) {
 			GRID_DEBUG("Zookeeper: associating to [%s]", ss->zk_url);

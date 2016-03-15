@@ -3,8 +3,9 @@ import signal
 import os
 import sys
 
-from eventlet import GreenPile
-from eventlet import Timeout
+import greenlet
+import eventlet
+from eventlet import GreenPile, Timeout, greenthread
 
 from oio.conscience.client import ConscienceClient
 from oio.rdir.client import RdirClient
@@ -21,6 +22,10 @@ ACCOUNT_SERVICE_TIMEOUT = 60
 
 
 ACCOUNT_SERVICE = 'account'
+
+
+class StopServe(Exception):
+    pass
 
 
 class Worker(object):
@@ -86,21 +91,35 @@ class EventType(object):
     PING = "ping"
 
 
+def _stop(client, server):
+    try:
+        client.wait()
+    except greenlet.GreenletExit:
+        pass
+    except Exception:
+        greenthread.kill(server, *sys.exc_info())
+
+
 class EventWorker(Worker):
     def init(self):
+        eventlet.monkey_patch(os=False)
         self.session = requests.Session()
         self.cs = ConscienceClient(self.conf)
         self.rdir = RdirClient(self.conf)
         self._acct_addr = None
         self.acct_update = 0
+        self.graceful_timeout = 1
         self.acct_refresh_interval = int_value(
             self.conf.get('acct_refresh_interval'), 60
         )
+        self.concurrency = int_value(self.conf.get('concurrency'), 1000)
         self.acct_update = true_value(self.conf.get('acct_update', True))
         self.rdir_update = true_value(self.conf.get('rdir_update', True))
-        queue_url = self.conf.get('queue_url', 'tcp://127.0.0.1:11300')
-        self.beanstalk = Beanstalk.from_url(queue_url)
         super(EventWorker, self).init()
+
+    def notify(self):
+        """TODO"""
+        pass
 
     def safe_decode_job(self, job):
         try:
@@ -109,22 +128,44 @@ class EventWorker(Worker):
             self.logger.warn('ERROR decoding job "%s"', str(e.message))
             return None
 
-    def safe_ack(self, job_id):
-        try:
-            self.beanstalk.delete(job_id)
-        except Exception as e:
-            self.logger.warn('ERROR unable to ack job "%s"', str(e.message))
-
     def run(self):
+        queue_url = self.conf.get('queue_url', 'tcp://127.0.0.1:11300')
+        self.beanstalk = Beanstalk.from_url(queue_url)
+
+        gt = eventlet.spawn(
+            self.handle)
+
+        while self.alive:
+            self.notify()
+            try:
+                eventlet.sleep(1.0)
+            except AssertionError:
+                self.alive = False
+                break
+
+        self.notify()
         try:
-            while self.alive:
+            with Timeout(self.graceful_timeout) as t:
+                gt.kill(StopServe())
+                gt.wait()
+        except Timeout as te:
+            if te != t:
+                raise
+            gt.kill()
+
+    def handle(self):
+        try:
+            while True:
                 job_id, data = self.beanstalk.reserve()
-                event = self.safe_decode_job(data)
-                if event:
-                    self.process_event(event)
-                self.safe_ack(job_id)
-        except Exception as e:
-            self.logger.warn('ERROR in worker "%s"', e)
+                try:
+                    event = self.safe_decode_job(data)
+                    if event:
+                        self.process_event(event)
+                    self.beanstalk.delete(job_id)
+                except Exception:
+                    self.logger.exception("ERROR handling event %s", job_id)
+        except StopServe:
+            self.logger.info('Stopping event handler')
 
     def process_event(self, event):
         handler = self.get_handler(event)

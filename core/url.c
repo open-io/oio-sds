@@ -41,6 +41,8 @@ struct oio_url_s
 	guint8 flags;
 };
 
+static int _is_set (const char *s) { return NULL!=s && 0!=*s; }
+
 /* ------------------------------------------------------------------------- */
 
 gboolean
@@ -166,7 +168,7 @@ _clean_url (struct oio_url_s *u)
 static int
 _compute_id (struct oio_url_s *url)
 {
-	if (!url->ns || !*url->ns || !url->user || !*url->user)
+	if (!_is_set(url->ns) || !_is_set(url->account) || !_is_set(url->user))
 		return 0;
 
 	url->hexid[0] = '\0';
@@ -305,8 +307,6 @@ oio_url_set(struct oio_url_s *u, enum oio_url_field_e f, const char *v)
 	g_assert_not_reached();
 	return NULL;
 }
-
-static int _is_set (const char *s) { return NULL!=s && 0!=*s; }
 
 int
 oio_url_has(const struct oio_url_s *u, enum oio_url_field_e f)
