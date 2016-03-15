@@ -1,3 +1,5 @@
+from oio.common.utils import json
+from oio.common.http import http_connect
 from oio.conscience.stats.base import BaseStat
 
 
@@ -5,10 +7,10 @@ class HttpStat(BaseStat):
     """Fetch stats using HTTP, expects one stat per line"""
 
     def configure(self):
-        self.stat_conf['path'] = self.stat_conf.get('path', '').lstrip('/')
         self.parser = self.stat_conf.get('parser', 'lines')
-        self.url = 'http://{host}:{port}/{path}'.format(**self.stat_conf)
-        self.session = self.agent.session
+        self.path = self.stat_conf['path'].lstrip('/')
+        self.host = self.stat_conf['host']
+        self.port = self.stat_conf['port']
         if self.parser == 'json':
             # use json parser (account and rdir style)
             self._parse_func = self._parse_stats_json
@@ -17,9 +19,8 @@ class HttpStat(BaseStat):
             self._parse_func = self._parse_stats_lines
 
     @staticmethod
-    def _parse_stats_lines(resp):
+    def _parse_stats_lines(body):
         """Converts each line to a dictionary entry"""
-        body = resp.text
         data = {}
         for line in body.splitlines():
             parts = line.split()
@@ -40,15 +41,27 @@ class HttpStat(BaseStat):
         return data
 
     @staticmethod
-    def _parse_stats_json(resp):
+    def _parse_stats_json(body):
         """Prefix each entry with 'stat.'"""
-        body = resp.json()
+        body = json.loads(body)
         return {'stat.' + k: body[k] for k in body.keys()}
 
     def get_stats(self):
+        result = {}
+        resp = None
         try:
-            resp = self.session.get(self.url)
-            return self._parse_func(resp)
+            conn = http_connect(self.host, self.port, 'GET', self.path)
+            resp = conn.getresponse()
+            if resp.status == 200:
+                result = self._parse_func(resp.read())
+            else:
+                raise Exception("status code != 200: %s" % resp.status)
         except Exception as e:
             self.logger.debug("get_stats error: %s", e)
-            return {}
+        finally:
+            if resp:
+                try:
+                    resp.force_close()
+                except Exception:
+                    pass
+            return result
