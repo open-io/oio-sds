@@ -74,6 +74,7 @@ free_string_vector(struct String_vector * sv)
 	sv->count=0;
 }
 
+// TODO: factorize with the similar function in sqliterepo/synchro.h
 static void
 zk_main_watch(zhandle_t *zh, int type, int state, const char *path,
 		void *watcherCtx)
@@ -81,36 +82,35 @@ zk_main_watch(zhandle_t *zh, int type, int state, const char *path,
 	const gchar *zkurl;
 	struct zk_manager_s *manager;
 
-	GRID_INFO("%s(%p,%d,%d,%s,%p)", __FUNCTION__,
+	GRID_DEBUG("%s(%p,%d,%d,%s,%p)", __FUNCTION__,
 			zh, type, state, path, watcherCtx);
 
 	manager = watcherCtx;
 	zkurl = manager->zk_url;
 
-	if (type == ZOO_SESSION_EVENT) {
-		if (state == ZOO_CONNECTING_STATE) {
-			zookeeper_close(manager->zh);
-			manager->zh = zookeeper_init(manager->zk_url, zk_main_watch,
-					4000, NULL, manager, 0);
-			if (!manager->zh) {
-				GRID_ERROR("ZooKeeper init failure: (%d) %s",
-						errno, strerror(errno));
-				abort();
-			}
+	if (type == ZOO_SESSION_EVENT &&
+			state == ZOO_CONNECTING_STATE) {
+		GRID_WARN("Zookeeper: (re)connecting to [%s]", zkurl);
+		zookeeper_close(manager->zh);
+		manager->zh = zookeeper_init(manager->zk_url, zk_main_watch,
+				4000, NULL, manager, 0);
+		if (!manager->zh) {
+			GRID_ERROR("ZooKeeper init failure: (%d) %s",
+					errno, strerror(errno));
+			abort();
 		}
-	}
-	else {
+	} else {
 		if (state == ZOO_EXPIRED_SESSION_STATE) {
 			GRID_WARN("Zookeeper: expired session to [%s]", zkurl);
 		}
 		else if (state == ZOO_AUTH_FAILED_STATE) {
 			GRID_WARN("Zookeeper: auth problem to [%s]", zkurl);
 		}
-		else if (state == ZOO_CONNECTING_STATE) {
-			GRID_WARN("Zookeeper: (re)connecting to [%s]", zkurl);
-		}
 		else if (state == ZOO_ASSOCIATING_STATE) {
 			GRID_DEBUG("Zookeeper: associating to [%s]", zkurl);
+		}
+		else if (state == ZOO_CONNECTED_STATE) {
+			GRID_INFO("Zookeeper: connected to [%s]", zkurl);
 		}
 	}
 }
@@ -133,21 +133,21 @@ zk_srv_manager_create(gchar *namespace, gchar *url, gchar *srvType,
 
 	manager->zk_url = g_strdup(url);
 	g_snprintf(manager->zk_dir, sizeof(manager->zk_dir),
-		"/hc/ns/%s/srv/%s", namespace,srvType);
+			"/hc/ns/%s/srv/%s", namespace, srvType);
 
-	manager->zh = zookeeper_init( url, zk_main_watch, 4000, NULL, manager, 0);
-	if ( !manager->zh )
+	manager->zh = zookeeper_init(url, zk_main_watch, 4000, NULL, manager, 0);
+	if (!manager->zh)
 		return NEWERROR(errno, "ZooKeeper init failure: %s", strerror(errno));
 
-	//check if zk_dir node exist . zk_dir Node should be created by zk-boostrap.py
+	/* Check if zk_dir node exists.
+	 * zk_dir node should be created by zk-boostrap.py */
 	rc = zoo_exists(manager->zh, manager->zk_dir, 0, &my_stat);
-	if ( rc == ZNONODE ) {
-		return NEWERROR(0, "zk base node [%s] doesn't exist, zk code [%d]",
+	if (rc == ZNONODE) {
+		GRID_WARN("zk base node [%s] doesn't exist, zk code (%d). "
+				"Please run zk-bootstrap.py.",
 				manager->zk_dir, rc);
-	}
-
-	if ( rc != ZOK) {
-		GRID_WARN("Failed to connect to zookeeper, zk code [%d]",rc);
+	} else if (rc != ZOK) {
+		GRID_WARN("Failed to connect to zookeeper, zk code (%d)", rc);
 	}
 
 	*result = manager;
@@ -188,13 +188,24 @@ create_zk_node(struct zk_manager_s *manager, gchar *subdir, gchar *name, gchar *
 	gchar *path = get_fullpath(manager, subdir, name);
 	STRING_STACKIFY(path);
 
-	GRID_TRACE("create node %s , full path [%s]", name, path);
+	GRID_TRACE("create node %s, full path [%s]", name, path);
 
+	errno = 0;
 	int rc = zoo_create(manager->zh, path, data, strlen(data),
 			&ZOO_OPEN_ACL_UNSAFE, 0, buffer, sizeof(buffer)-1);
 
-	if (rc != ZOK && rc != ZNODEEXISTS)
-		return  NEWERROR(0, "Failed to create Zk node [%s], zk code [%d]", name, rc );
+	if (rc != ZOK && rc != ZNODEEXISTS) {
+		const char prefix[] = "Failed to create Zk node [%s]: (%d) %s";
+		switch (rc) {
+		case ZCONNECTIONLOSS:
+			return NEWERROR(CODE_NETWORK_ERROR, prefix, name, rc,
+					"no connection to zookeeper");
+		case ZNONODE:
+			return NEWERROR(0, prefix, name, rc, "missing parent node");
+		default:
+			return NEWERROR(0, prefix, name, rc, "");
+		}
+	}
 	return NULL;
 }
 
