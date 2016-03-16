@@ -352,6 +352,7 @@ def paths_gen(volume_path):
 
 
 def read_user_xattr(fd):
+    it = {}
     try:
         it = xattr.get_all(fd)
     except IOError as e:
