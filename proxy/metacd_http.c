@@ -288,7 +288,7 @@ _expire_services (struct lru_tree_s *lru, time_t delay)
 		gulong when = (gulong)v;
 		if (when >= oldest)
 			break;
-		lru_tree_steal_last(srv_known, (void**)&k, &v);
+		lru_tree_steal_last(lru, (void**)&k, &v);
 		g_free(k);
 		++ count;
 	});
