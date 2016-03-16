@@ -1,4 +1,5 @@
 import time
+from random import random
 
 from oio.blob.utils import check_volume, read_chunk_metadata
 from oio.rdir.client import RdirClient
@@ -6,20 +7,22 @@ from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
 from oio.common.utils import get_logger, int_value, ratelimit, paths_gen
 
-SLEEP_TIME = 30
 
-
-class BlobIndexerWorker(object):
-
-    def __init__(self, conf, logger, volume):
-        self.conf = conf
-        self.logger = logger
+class BlobIndexer(Daemon):
+    def __init__(self, conf, **kwargs):
+        super(BlobIndexer, self).__init__(conf)
+        self.logger = get_logger(conf)
+        volume = conf.get('volume')
+        if not volume:
+            raise exc.ConfigurationException('No volume specified for indexer')
         self.volume = volume
         self.passes = 0
         self.errors = 0
         self.last_reported = 0
         self.chunks_run_time = 0
         self.total_chunks_processed = 0
+        self.interval = int_value(
+            conf.get('interval'), 300)
         self.report_interval = int_value(
             conf.get('report_interval'), 3600)
         self.max_chunks_per_second = int_value(
@@ -72,6 +75,8 @@ class BlobIndexerWorker(object):
                 'chunk_rate': self.total_chunks_processed / elapsed
             }
         )
+        if elapsed < self.interval:
+            time.sleep(self.interval - elapsed)
 
     def safe_update_index(self, path):
         try:
@@ -106,24 +111,10 @@ class BlobIndexerWorker(object):
                                          meta['chunk_id'],
                                          **data)
 
-
-class BlobIndexer(Daemon):
-    def __init__(self, conf, **kwargs):
-        super(BlobIndexer, self).__init__(conf)
-        self.logger = get_logger(conf)
-        volume = conf.get('volume')
-        if not volume:
-            raise exc.ConfigurationException('No volume specified for indexer')
-        self.volume = volume
-
     def run(self, *args, **kwargs):
+        time.sleep(random() * self.interval)
         while True:
             try:
-                worker = BlobIndexerWorker(self.conf, self.logger, self.volume)
-                worker.index_pass()
+                self.index_pass()
             except Exception as e:
                 self.logger.exception('ERROR during indexing: %s' % e)
-            self._sleep()
-
-    def _sleep(self):
-        time.sleep(SLEEP_TIME)

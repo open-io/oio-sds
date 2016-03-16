@@ -2,6 +2,7 @@
 namespace = NS
 user = openio
 volume = /var/lib/oio/sds/vol1/NS/rawx-1/
+interval = 300
 report_interval = 5
 chunks_per_second = 30
 autocreate = true
