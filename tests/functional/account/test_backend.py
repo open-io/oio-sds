@@ -11,8 +11,8 @@ class TestAccountBackend(BaseTestCase):
     def setUp(self):
         super(TestAccountBackend, self).setUp()
         _, _, self.redis_host, self.redis_port = self.get_service('redis')
-        self.conn = redis.Redis(host=self.redis_host, port=self.redis_port,
-                                db=3)
+        self.conn = redis.StrictRedis(
+                host=self.redis_host, port=self.redis_port, db=3)
         self.conn.flushdb()
 
     def tearDown(self):
@@ -120,6 +120,7 @@ class TestAccountBackend(BaseTestCase):
         account_id = 'test'
         self.assertEqual(backend.create_account(account_id), account_id)
         name = 'c'
+        old_mtime = Timestamp(time() - 1).normal
         mtime = Timestamp(time()).normal
 
         # initial container
@@ -130,18 +131,25 @@ class TestAccountBackend(BaseTestCase):
         # delete event
         sleep(.00001)
         dtime = Timestamp(time()).normal
-        backend.update_container(account_id, name, 0, dtime, 0, 0)
+        backend.update_container(account_id, name, mtime, dtime, 0, 0)
         res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)
-        self.assertFalse(self.conn.exists('container:%s:%s' % (account_id,
-                                                               name)))
+        self.assertTrue(
+            self.conn.ttl('container:%s:%s' % (account_id, name)) >= 1)
 
         # same event
-        backend.update_container(account_id, name, 0, dtime, 0, 0)
+        backend.update_container(account_id, name, mtime, dtime, 0, 0)
         res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)
-        self.assertFalse(self.conn.exists('container:%s:%s' % (account_id,
-                                                               name)))
+        self.assertTrue(
+            self.conn.ttl('container:%s:%s' % (account_id, name)) >= 1)
+
+        # old event
+        backend.update_container(account_id, name, old_mtime, 0, 0, 0)
+        res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
+        self.assertEqual(len(res), 0)
+        self.assertTrue(
+            self.conn.ttl('container:%s:%s' % (account_id, name)) >= 1)
 
     def test_utf8_container(self):
         backend = AccountBackend({}, self.conn)
@@ -166,15 +174,15 @@ class TestAccountBackend(BaseTestCase):
         backend.update_container(account_id, name, 0, dtime, 0, 0)
         res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)
-        self.assertFalse(self.conn.exists('container:%s:%s' % (account_id,
-                                                               name)))
+        self.assertTrue(
+            self.conn.ttl('container:%s:%s' % (account_id, name)) >= 1)
 
-        # ensure it ha been removed
+        # ensure it has been removed
         backend.update_container(account_id, name, 0, dtime, 0, 0)
         res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)
-        self.assertFalse(self.conn.exists('container:%s:%s' % (account_id,
-                                                               name)))
+        self.assertTrue(
+            self.conn.ttl('container:%s:%s' % (account_id, name)) >= 1)
 
     def test_update_container(self):
         backend = AccountBackend({}, self.conn)
@@ -236,8 +244,8 @@ class TestAccountBackend(BaseTestCase):
         backend.update_container(account_id, name, 0, mtime, 0, 0)
         res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)
-        self.assertFalse(self.conn.exists('container:%s:%s' % (account_id,
-                                                               name)))
+        self.assertTrue(
+            self.conn.ttl('container:%s:%s' % (account_id, name)) >= 1)
 
         # New event
         sleep(.00001)
@@ -247,6 +255,9 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(res[0], name)
         self.assertEqual(self.conn.hget('container:%s:%s' %
                                         (account_id, name), 'mtime'), mtime)
+        # ensure ttl has been removed
+        self.assertEqual(
+            self.conn.ttl('container:%s:%s' % (account_id, name)), -1)
 
     def test_list_containers(self):
         backend = AccountBackend({}, self.conn)
