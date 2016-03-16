@@ -9,6 +9,8 @@ from oio.common.utils import int_value
 from oio.common.utils import true_value
 
 
+EXPIRE_TIME = 60  # seconds
+
 account_fields = ['ns', 'name', 'ctime', 'containers', 'objects',
                   'bytes', 'storage_policy']
 
@@ -250,11 +252,12 @@ class AccountBackend(object):
 
         ct = {name: 0}
         pipeline = conn.pipeline(True)
+        pipeline.hmset(AccountBackend.ckey(account_id, name), record)
         if deleted:
-            pipeline.delete(AccountBackend.ckey(account_id, name))
+            pipeline.expire(AccountBackend.ckey(account_id, name), EXPIRE_TIME)
             pipeline.zrem('containers:%s' % account_id, name)
         else:
-            pipeline.hmset(AccountBackend.ckey(account_id, name), record)
+            pipeline.persist(AccountBackend.ckey(account_id, name))
             pipeline.zadd('containers:%s' % account_id, **ct)
         if incr_object_count:
             pipeline.hincrby('account:%s' % account_id, 'objects',
