@@ -3,7 +3,7 @@ import os
 import xattr
 import mock
 
-from oio.blob.indexer import BlobIndexerWorker
+from oio.blob.indexer import BlobIndexer
 from oio.common.exceptions import FaultyChunk
 from oio.rdir.client import RdirClient
 from tests.functional.rdir.common import generate_id
@@ -16,8 +16,10 @@ class TestIndexerCrawler(BaseTestCase):
 
         self.namespace = self.conf['namespace']
 
-        self.gridconf = {"namespace": self.namespace}
-        self.rdir_client = RdirClient(self.gridconf)
+        self.rawx_conf = self.conf['rawx'][0]
+        self.conf = {"namespace": self.namespace,
+                     "volume": self.rawx_conf['path']}
+        self.rdir_client = RdirClient(self.conf)
 
     def tearDown(self):
         super(TestIndexerCrawler, self).tearDown()
@@ -63,21 +65,20 @@ class TestIndexerCrawler(BaseTestCase):
         return None
 
     def _test_index_chunk(self, alias="toto"):
-        rawx_conf = self.conf['rawx'][0]
 
         # create a fake chunk
         chunk_path, container_id, content_id, chunk_id = self._create_chunk(
-            rawx_conf['path'], alias)
+            self.rawx_conf['path'], alias)
 
         # index the chunk
-        indexer = BlobIndexerWorker(self.gridconf, None, rawx_conf['path'])
+        indexer = BlobIndexer(self.conf)
 
         with mock.patch('oio.blob.indexer.time.time',
                         mock.MagicMock(return_value=1234)):
             indexer.update_index(chunk_path)
 
         # check rdir
-        check_value = self._rdir_get(rawx_conf['addr'], container_id,
+        check_value = self._rdir_get(self.rawx_conf['addr'], container_id,
                                      content_id, chunk_id)
 
         self.assertIsNotNone(check_value)
@@ -98,7 +99,7 @@ class TestIndexerCrawler(BaseTestCase):
             indexer.update_index(chunk_path)
 
         # check rdir
-        check_value = self._rdir_get(rawx_conf['addr'], container_id,
+        check_value = self._rdir_get(self.rawx_conf['addr'], container_id,
                                      content_id, chunk_id)
 
         self.assertIsNotNone(check_value)
@@ -112,16 +113,14 @@ class TestIndexerCrawler(BaseTestCase):
         return self._test_index_chunk('a%%%s%d%xàç"\r\n{0}€ 1+1=2/\\$\t_')
 
     def test_index_chunk_missing_xattr(self):
-        rawx_conf = self.conf['rawx'][0]
-
         # create a fake chunk
         chunk_path, container_id, content_id, chunk_id = self._create_chunk(
-            rawx_conf['path'])
+            self.rawx_conf['path'])
 
         # remove mandatory xattr
         xattr.removexattr(chunk_path, 'user.grid.chunk.hash')
 
         # try to index the chunk
-        indexer = BlobIndexerWorker(self.gridconf, None, rawx_conf['path'])
+        indexer = BlobIndexer(self.conf)
 
         self.assertRaises(FaultyChunk, indexer.update_index, chunk_path)
