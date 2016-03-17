@@ -20,6 +20,7 @@ link_directories(
 add_executable(metacd_http
     metacd_http.c
     common.c
+    admin_actions.c
     cache_actions.c
     cs_actions.c
     lb_actions.c
@@ -36,6 +37,7 @@ target_link_libraries(metacd_http
 		metautils server hcresolve gridcluster
 		meta2v2remote meta2v2utils
 		meta1remote sqlitereporemote
+		meta0remote meta0utils
 		${GLIB2_LIBRARIES} ${JSONC_LIBRARIES} ${CURL_LIBRARIES})
 
 install(TARGETS metacd_http 

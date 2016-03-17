@@ -77,18 +77,24 @@ dump_and_clean_list(GSList *list)
 {
 	GRID_INFO("(Start of META0 content)");
 	if (list) {
+		gboolean first = TRUE;
 		GPtrArray *array = meta0_utils_list_to_array(list);
 		meta0_utils_list_clean(list);
-		for (guint i = 0; i<array->len ;i++) {
+		g_print("{");
+		for (guint i = 0; i < array->len; i++) {
 			gchar **v;
 			if (NULL != (v = array->pdata[i])) {
+				if (!first)
+					g_print(",\n");
 				guint16 p = i;
-				gchar *joined = g_strjoinv("|", v);
-				g_print("%02X%02X %s\n", ((guint8*)&p)[0],
+				gchar *joined = g_strjoinv("\",\"", v);
+				g_print("\"%02X%02X\":[\"%s\"]", ((guint8*)&p)[0],
 						((guint8*)&p)[1], joined);
 				g_free(joined);
+				first = FALSE;
 			}
 		}
+		g_print("}");
 
 		meta0_utils_array_clean(array);
 	}

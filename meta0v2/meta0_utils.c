@@ -258,7 +258,7 @@ meta0_utils_array_get_urlv(GPtrArray *array, const guint8 *bytes)
 	gchar **v;
 
 	EXTRA_ASSERT(array != NULL);
-	EXTRA_ASSERT(array->len == 65536);
+	EXTRA_ASSERT(array->len == CID_PREFIX_COUNT);
 	v = array->pdata[meta0_utils_bytes_to_prefix(bytes)];
 	return v ? g_strdupv(v) : NULL;
 }
@@ -275,8 +275,8 @@ meta0_utils_array_create(void)
 	guint i;
 	GPtrArray *array;
 
-	array = g_ptr_array_sized_new(65536);
-	for (i=0; i<65536 ;i++)
+	array = g_ptr_array_sized_new(CID_PREFIX_COUNT);
+	for (i = 0; i < CID_PREFIX_COUNT; i++)
 		g_ptr_array_add(array, NULL);
 	return array;
 }
@@ -398,20 +398,21 @@ addr_info_t *
 meta0_utils_getMeta0addr(gchar *namespace, GSList **m0_lst, GSList *exclude)
 {
 	addr_info_t *a = NULL;
-	if (*m0_lst  == NULL) {
-		GError *err = conscience_get_services (namespace, NAME_SRVTYPE_META0, FALSE, m0_lst);
+	if (*m0_lst == NULL) {
+		GError *err = conscience_get_services(namespace, NAME_SRVTYPE_META0,
+				FALSE, m0_lst);
 		if (err) {
-			GRID_WARN("Failed to get Meta0 addresses to namespace %s: (%d) %s",
+			GRID_WARN("Failed to get Meta0 addresses for namespace %s: (%d) %s",
 					namespace, err->code, err->message);
 			g_clear_error(&err);
 			return NULL;
 		}
 	}
 	GSList *m0;
-	for (m0 = *m0_lst; m0 && m0->data; m0=m0->next) {
+	for (m0 = *m0_lst; m0 && m0->data; m0 = m0->next) {
 		service_info_t *srv = m0->data;
-		if (_is_usable_meta0(&(srv->addr),exclude))
-			a=&(srv->addr);
+		if (_is_usable_meta0(&(srv->addr), exclude))
+			a = &(srv->addr);
 	}
 	return a;
 }

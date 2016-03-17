@@ -619,10 +619,11 @@ metautils_message_extract_body_string(MESSAGE msg, gchar **result)
 	}
 
 	register gchar *c, *last;
-	for (c=b,last=b+bsize; c < last ;c++) {
+	for (c = b, last = b + bsize; c < last; c++) {
 		if (!g_ascii_isprint(*c))
 			return NEWERROR(CODE_BAD_REQUEST,
-					"Body contains non printable characters");
+					"Body contains non printable characters at offset %td",
+					((void*)c - b));
 	}
 
 	*result = g_strndup((gchar*)b, bsize);

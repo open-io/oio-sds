@@ -66,8 +66,7 @@ if [ -n "$ADD_META2" ] && [ "$ADD_META2" -gt 0 ] ; then
 	NB_META2=$((NB_META2+$ADD_META2))
 fi
 
-NB_META1=`expr ${REPLICATION_DIRECTORY} \* 7`
-#NB_META1=${REPLICATION_DIRECTORY}
+NB_META1=${REPLICATION_DIRECTORY}
 if [ -n "$ADD_META1" ] && [ "$ADD_META1" -gt 0 ] ; then
 	NB_META1=$((NB_META1+$ADD_META1))
 fi
@@ -212,8 +211,7 @@ wait_for_srvtype "(meta0|meta1)" $((1+REPLICATION_DIRECTORY))
 timestamp
 
 M0=$(${PREFIX}-test-config.py -t meta0 -1)
-${PREFIX}-meta0-init -O "NbReplicas=${REPLICATION_DIRECTORY}" -O IgnoreDistance=on $M0
-${PREFIX}-meta0-client "$M0" reload
+openio directory bootstrap --replicas ${REPLICATION_DIRECTORY} "$NS"
 
 timestamp
 ${PREFIX}-unlock-all.sh -n "$NS"

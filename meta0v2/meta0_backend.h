@@ -64,8 +64,16 @@ struct sqlx_repository_s* meta0_backend_get_repository(
 
 void meta0_backend_reload_requested(struct meta0_backend_s *m0);
 
-GError* meta0_backend_fill(struct meta0_backend_s *m0, guint replicas,
+GError* meta0_backend_fill_rr(struct meta0_backend_s *m0, guint replicas,
 		const char * const *urls);
+
+/**
+ * Replace the current meta0 mapping by the content of the provided
+ * JSON hash. The hash may contain holes, in which case the previous
+ * entries of the mapping will be kept.
+ */
+GError* meta0_backend_fill_from_json(struct meta0_backend_s *m0,
+		const char *json_mapping);
 
 GError * meta0_backend_reload(struct meta0_backend_s *m0);
 

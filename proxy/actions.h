@@ -102,6 +102,10 @@ enum http_rc_e action_admin_freeze (struct req_args_s *args);
 enum http_rc_e action_admin_enable (struct req_args_s *args);
 enum http_rc_e action_admin_disable (struct req_args_s *args);
 
+// Administration requests other than SQLX
+
+enum http_rc_e action_admin_meta0_list(struct req_args_s *args);
+enum http_rc_e action_admin_meta0_force(struct req_args_s *args);
 
 // Deprecated action handlers with no equivalent yet in recent routes
 

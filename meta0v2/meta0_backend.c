@@ -21,6 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <json-c/json.h>
 
 #include <metautils/lib/metacomm.h>
 #include <sqliterepo/sqliterepo.h>
@@ -72,7 +73,7 @@ _array_check(GPtrArray *gpa)
 	guint i;
 	gchar **v;
 
-	if (gpa->len != 65536)
+	if (gpa->len != CID_PREFIX_COUNT)
 		return NEWERROR(EINVAL, "Invalid cache size");
 
 	for (i=0; i<gpa->len ;i++) {
@@ -359,7 +360,7 @@ _fill_in__transaction (sqlite3 *db, const char * const *urls, guint max, guint s
 		return SQLITE_GERROR(db, rc);
 
 	/* One partition for each url */
-	for (idx=0; idx<65536 ;idx++) {
+	for (idx = 0; idx < CID_PREFIX_COUNT; idx++) {
 
 		const char * const *purl = urls + ((idx+shift) % max);
 		guint16 index16 = idx;
@@ -383,11 +384,14 @@ _fill_in__transaction (sqlite3 *db, const char * const *urls, guint max, guint s
 	return err;
 }
 
+/**
+ * Assign prefixes to meta1 in a round-robin fashion.
+ */
 static GError*
-_fill(struct sqlx_sqlite3_s *sq3, guint replicas, const char * const *m1urls)
+_fill_rr(struct sqlx_sqlite3_s *sq3, guint replicas, const char * const *m1urls)
 {
 	const guint max = oio_strv_length(m1urls);
-	EXTRA_ASSERT(max > 0 && max < 65536);
+	EXTRA_ASSERT(max > 0 && max < CID_PREFIX_COUNT);
 
 	struct sqlx_repctx_s *repctx = NULL;
 	GError *err = sqlx_transaction_begin(sq3, &repctx);
@@ -402,6 +406,62 @@ _fill(struct sqlx_sqlite3_s *sq3, guint replicas, const char * const *m1urls)
 	if (!err)
 		sqlx_transaction_notify_huge_changes(repctx);
 	return sqlx_transaction_end(repctx, err);
+}
+
+static GError *
+_json_to_meta0_mapping(const char *json_mapping, GPtrArray **result)
+{
+	GError *err = NULL;
+	GPtrArray *urls_by_pfx = NULL;
+	json_object *jbody = NULL;
+	json_tokener *parser = json_tokener_new();
+
+	jbody = json_tokener_parse_ex(parser, json_mapping, strlen(json_mapping));
+
+	if (json_tokener_get_error(parser) != json_tokener_success) {
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid JSON");
+	} else if (!json_object_is_type(jbody, json_type_object)) {
+		err = NEWERROR(CODE_BAD_REQUEST,
+				"Invalid JSON object: must be a hash");
+	} else {
+		urls_by_pfx = meta0_utils_array_create();
+		json_object_object_foreach(jbody, pfx_str, urls_obj) {
+			guint8 pfx[2] = {0, 0};
+			int url_count = json_object_array_length(urls_obj);
+			oio_str_hex2bin(pfx_str, pfx, 2);
+			for (int i = 0; i < url_count; i++) {
+				const char *url = json_object_get_string(
+						json_object_array_get_idx(urls_obj, i));
+				meta0_utils_array_add(urls_by_pfx, pfx, url);
+			}
+		}
+	}
+
+	json_tokener_free(parser);
+	if (err)
+		meta0_utils_array_clean(urls_by_pfx);
+	else
+		*result = urls_by_pfx;
+	return err;
+}
+
+static GError*
+_fill_mapping_holes(struct meta0_backend_s *m0, GPtrArray *mapping)
+{
+	GError *err = NULL;
+
+	for (int idx = 0; idx < CID_PREFIX_COUNT && !err; idx++) {
+		gchar **url = mapping->pdata[idx];
+		guint16 index16 = idx;
+
+		if (url && *url)
+			continue;
+
+		err = meta0_backend_get_one(m0,
+				(guint8*)&index16, (gchar***)&mapping->pdata[idx]);
+	}
+
+	return err;
 }
 
 static GError *
@@ -477,7 +537,7 @@ _assign_prefixes(sqlite3 *db, const GPtrArray *new_assign_prefixes,
 	guint idx;
 	sqlite3_stmt *stmt = NULL;
 
-	if ( !init ) {
+	if (!init) {
 		sqlite3_prepare_debug(rc, db, "DELETE FROM meta1", -1, &stmt, NULL);
 		if (rc != SQLITE_OK && rc != SQLITE_DONE)
 			return SQLITE_GERROR(db, rc);
@@ -494,21 +554,21 @@ _assign_prefixes(sqlite3 *db, const GPtrArray *new_assign_prefixes,
 		sqlite3_finalize_debug(rc, stmt);
 	}
 
-	sqlite3_prepare_debug(rc, db, "INSERT  INTO meta1"
+	sqlite3_prepare_debug(rc, db, "INSERT INTO meta1"
 			" (prefix,addr) VALUES (?,?)", -1, &stmt, NULL);
 
 	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
 		return SQLITE_GERROR(db, rc);
 	}
 
-	for (idx=0; idx<65536 ;idx++) {
-
+	for (idx = 0; idx < CID_PREFIX_COUNT; idx++) {
 		gchar **url = new_assign_prefixes->pdata[idx];
 		guint16 index16 = idx;
 
-		if (!url || ! *url )
+		if (!url || !*url)
 			continue;
-		for (; *url ;url++) {
+
+		for (; *url; url++) {
 			sqlite3_reset(stmt);
 			sqlite3_clear_bindings(stmt);
 			sqlite3_bind_blob(stmt, 1, &index16, 2, NULL);
@@ -528,7 +588,6 @@ _assign_prefixes(sqlite3 *db, const GPtrArray *new_assign_prefixes,
 	sqlite3_finalize_debug(rc, stmt);
 
 	return err;
-
 }
 
 static GError *
@@ -552,7 +611,7 @@ _record_meta1ref(sqlite3 *db, const GPtrArray *new_assign_meta1ref)
 	for (idx=0; idx < new_assign_meta1ref->len; idx++) {
 		gchar *m1ref = new_assign_meta1ref->pdata[idx];
 		gchar *addr, *ref, *nb;
-		if ( ! meta0_utils_unpack_meta1ref(m1ref,&addr,&ref,&nb) )
+		if (!meta0_utils_unpack_meta1ref(m1ref,&addr,&ref,&nb))
 			continue;
 		sqlite3_reset(stmt);
 		sqlite3_clear_bindings(stmt);
@@ -605,7 +664,8 @@ _delete_meta1_ref(sqlite3 *db, gchar *meta1_ref)
 /* ------------------------------------------------------------------------- */
 
 GError*
-meta0_backend_fill(struct meta0_backend_s *m0, guint replicas, const char * const *m1urls)
+meta0_backend_fill_rr(struct meta0_backend_s *m0, guint replicas,
+		const char * const *m1urls)
 {
 	EXTRA_ASSERT(m0 != NULL);
 	EXTRA_ASSERT(replicas < 65535);
@@ -614,10 +674,47 @@ meta0_backend_fill(struct meta0_backend_s *m0, guint replicas, const char * cons
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m0, M0V2_OPENBASE_MASTERONLY, &sq3);
 	if (!err) {
-		err = _fill(sq3, replicas, m1urls);
+		err = _fill_rr(sq3, replicas, m1urls);
 		_unlock_and_close(sq3);
 	}
 
+	return err;
+}
+
+GError*
+meta0_backend_fill_from_json(struct meta0_backend_s *m0,
+		const char *json_mapping)
+{
+	EXTRA_ASSERT(m0 != NULL);
+	EXTRA_ASSERT(json_mapping != NULL);
+
+	GError *err = NULL;
+	GPtrArray *mapping = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	struct sqlx_repctx_s *repctx = NULL;
+
+	err = _json_to_meta0_mapping(json_mapping, &mapping);
+	if (err)
+		goto cleanup;
+
+	err = _fill_mapping_holes(m0, mapping);
+	if (err)
+		goto cleanup;
+
+	err = _open_and_lock(m0, M0V2_OPENBASE_MASTERONLY, &sq3);
+	if (err)
+		goto cleanup;
+
+	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
+		err = _assign_prefixes(sq3->db, mapping, 0);
+		if (!err)
+			sqlx_transaction_notify_huge_changes(repctx);
+		err = sqlx_transaction_end(repctx, err);
+	}
+	_unlock_and_close(sq3);
+
+cleanup:
+	meta0_utils_array_clean(mapping);
 	return err;
 }
 

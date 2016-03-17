@@ -1,24 +1,54 @@
+"""Meta0 client and meta1 balancing operations"""
 import random
-import sys
-import time
+
+from oio.common.utils import json
+from oio.common.client import Client
 from oio.conscience.client import ConscienceClient
 
 
-class Meta0Mapping(object):
+class Meta0Client(Client):
+    """Meta0 administration client"""
+
+    def __init__(self, conf, **kwargs):
+        super(Meta0Client, self).__init__(conf, **kwargs)
+
+    def _make_uri(self, target):
+        """Build a request URI"""
+        uri = 'v3.0/%s/%s' % (self.ns, target)
+        return uri
+
+    def force(self, mapping):
+        """
+        Force the meta0 prefix mapping.
+        The mapping may be partial to force only a subset of the prefixes.
+        """
+        uri = self._make_uri('admin/meta0_force')
+        self._request('POST', uri, data=mapping)
+
+    def list(self):
+        """Get the meta0 prefix mapping"""
+        uri = self._make_uri('admin/meta0_list')
+        _, obody = self._request('GET', uri)
+        return obody
+
+
+class PrefixMapping(object):
     """Represents the content of the meta0 database"""
 
     TOTAL_PREFIXES = 65536
 
-    def __init__(self, namespace, replicas=3, verbose=False, **kwargs):
+    def __init__(self, namespace, replicas=3, logger=None, **kwargs):
         self.namespace = namespace
         self.replicas = replicas
         self.cs = kwargs.get("conscience_client",
                              ConscienceClient({"namespace": namespace}))
+        self.m0 = kwargs.get("meta0_client",
+                             Meta0Client({"namespace": namespace}))
         self.svc_by_pfx = dict()
         self.services = dict()
         for svc in self.cs.all_services("meta1"):
             self.services[svc["addr"]] = svc
-        self.verbose = verbose
+        self.logger = logger
 
     def get_loc(self, svc, default=None):
         """
@@ -47,6 +77,43 @@ class Meta0Mapping(object):
             svc = self.services.get(svc, {"addr": svc})
         return svc.get("prefixes", set([]))
 
+    def to_json(self):
+        """
+        Serialize the mapping to a JSON string suitable
+        as input for 'meta0_force' request.
+        """
+        simplified = dict()
+        for pfx, services in self.svc_by_pfx.iteritems():
+            simplified[pfx] = [x['addr'] for x in services]
+        return json.dumps(simplified)
+
+    def load(self, json_mapping=None):
+        """
+        Load the mapping from the cluster,
+        from a JSON string or from a dictionary.
+        """
+        if isinstance(json_mapping, basestring):
+            raw_mapping = json.loads(json_mapping)
+        elif isinstance(json_mapping, dict):
+            raw_mapping = json_mapping
+        else:
+            raw_mapping = self.m0.list()
+
+        for pfx, services_addrs in raw_mapping.iteritems():
+            services = list()
+            for svc_addr in services_addrs:
+                svc = self.services.get(svc_addr, {"addr": svc_addr})
+                services.append(svc)
+            for svc in services:
+                pfx_set = svc.get("prefixes", set([]))
+                pfx_set.add(pfx)
+                svc["prefixes"] = pfx_set
+            self.svc_by_pfx[pfx] = services
+
+    def force(self):
+        """Upload the current mapping to the meta0 services"""
+        self.m0.force(self.to_json().strip())
+
     def _find_services(self, known=None, lookup=None, max_lookup=50):
         """Call `lookup` to find `self.replicas` different services"""
         services = known if known else list([])
@@ -56,7 +123,7 @@ class Meta0Mapping(object):
             iterations += 1
             svc = lookup(services)
             if not svc:
-                continue
+                break
             loc = self.get_loc(svc)
             if loc not in known_locations:
                 known_locations.add(loc)
@@ -76,14 +143,18 @@ class Meta0Mapping(object):
             known = list([])
         filtered = [x for x in self.services.itervalues()
                     if self.get_score(x) >= min_score]
+        # Reverse the list so we can quickly pop the service
+        # with less managed prefixes
+        filtered.sort(key=(lambda x: len(self.get_managed_prefixes(x))),
+                      reverse=True)
 
         def _lookup(known2):
-            try:
-                return min((x for x in filtered if x not in known2),
-                           key=(lambda x: len(self.get_managed_prefixes(x))))
-            except ValueError:
-                return None
-        return self._find_services(known, _lookup, 2*self.replicas)
+            while filtered:
+                svc = filtered.pop()
+                if svc not in known2:
+                    return svc
+            return None
+        return self._find_services(known, _lookup, len(filtered))
 
     def bootstrap(self, strategy=None):
         """
@@ -93,9 +164,11 @@ class Meta0Mapping(object):
         if not strategy:
             strategy = self.find_services_random
         for pfx_int in xrange(0, self.__class__.TOTAL_PREFIXES):
-            if (self.verbose and
+            if (self.logger and
                     (pfx_int % (self.__class__.TOTAL_PREFIXES / 10)) == 0):
-                print pfx_int / (self.__class__.TOTAL_PREFIXES / 100), '%'
+                self.logger.info("%d%%",
+                                 pfx_int /
+                                 (self.__class__.TOTAL_PREFIXES / 100))
             pfx = "%04X" % pfx_int
             services = strategy()
             for svc in services:
@@ -117,21 +190,27 @@ class Meta0Mapping(object):
 
     def check_replicas(self):
         """Check that all prefixes have the right number of replicas"""
+        error = False
         grand_total = 0
         for pfx, services in self.svc_by_pfx.iteritems():
             if len(services) < self.replicas:
                 print ("Prefix %s is managed by only %d services (%d required)"
                        % (pfx, len(services), self.replicas))
-                print services
+                print [x["addr"] for x in services]
+                error = True
             grand_total += len(services)
         print ("Grand total: %d (expected: %d)" %
                (grand_total, self.TOTAL_PREFIXES * self.replicas))
+        return not error
 
     def decommission(self, svc, pfx_to_remove=None, strategy=None):
         """
         Unassign all prefixes of `pfx_to_remove` from `svc`,
         and assign them to other services using `strategy`.
         """
+        if isinstance(svc, basestring):
+            svc = self.services[svc]
+        svc["score"] = 0
         if not pfx_to_remove:
             pfx_to_remove = list(svc["prefixes"])
         if not strategy:
@@ -153,8 +232,9 @@ class Meta0Mapping(object):
         ideal_pfx_by_svc = (self.__class__.TOTAL_PREFIXES * self.replicas /
                             len([x for x in self.services.itervalues()
                                  if self.get_score(x) > 0]))
-        if self.verbose:
-            print "Ideal number of prefixes per meta1: %d" % ideal_pfx_by_svc
+        if self.logger:
+            self.logger.info("Ideal number of prefixes per meta1: %d",
+                             ideal_pfx_by_svc)
         candidates = self.services.values()
         candidates.sort(key=(lambda x: len(self.get_managed_prefixes(x))))
         while candidates:
@@ -169,51 +249,6 @@ class Meta0Mapping(object):
                 for pfx in pfxs:
                     moved_prefixes.add(pfx)
                     loops += 1
-        if self.verbose:
-            print "Rebalance moved %d prefixes" % len(moved_prefixes)
-
-
-if __name__ == "__main__":
-    print "Making service list for ", sys.argv[1]
-    mapping = Meta0Mapping(sys.argv[1])
-    start = time.time()
-    mapping.bootstrap()
-    end = time.time()
-    print "Bootstrap took %fs" % (end - start)
-    COUNT = mapping.count_pfx_by_svc()
-    print COUNT
-    mapping.check_replicas()
-
-    print
-    print "Now, rebalance"
-    start = time.time()
-    mapping.rebalance()
-    end = time.time()
-    print "Rebalance took %fs" % (end - start)
-    COUNT = mapping.count_pfx_by_svc()
-    print COUNT
-    mapping.check_replicas()
-
-    print
-    SVC = mapping.services.values()[0]
-    print "Now, decommission %s" % SVC["addr"]
-    SVC["score"] = 0
-    start = time.time()
-    mapping.decommission(SVC)
-    end = time.time()
-    print "Decommission took %fs" % (end - start)
-    COUNT = mapping.count_pfx_by_svc()
-    print COUNT
-    mapping.check_replicas()
-
-    print
-    print "Re-enable %s and rebalance" % SVC["addr"]
-    SVC["score"] = 1
-    start = time.time()
-    mapping.rebalance()
-    end = time.time()
-    print "Rebalance took %fs" % (end - start)
-    COUNT = mapping.count_pfx_by_svc()
-    print COUNT
-    mapping.check_replicas()
-    sys.exit(0)
+        if self.logger:
+            self.logger.info("Rebalance moved %d prefixes",
+                             len(moved_prefixes))

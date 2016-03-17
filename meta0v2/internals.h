@@ -24,6 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_M0_GETONE              "M0_GET"
 # define NAME_MSGNAME_M0_RELOAD              "M0_RELOAD"
 # define NAME_MSGNAME_M0_RESET               "M0_RESET"
+# define NAME_MSGNAME_M0_FORCE               "M0_FORCE"
 # define NAME_MSGNAME_M0_FILL                "M0_FILL"
 # define NAME_MSGNAME_M0_V2_FILL             "M0_V2FILL"
 # define NAME_MSGNAME_M0_ASSIGN              "M0_ASSIGN_PREFIX"

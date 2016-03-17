@@ -448,7 +448,7 @@ _assign(GList *working_m1list, GSList *unref_m1list)
 			loop = FALSE;
 		}
 
-		if (nb_treat_prefixes == 65536)
+		if (nb_treat_prefixes == CID_PREFIX_COUNT)
 			loop = FALSE;
 
 	} while (loop);
@@ -557,7 +557,7 @@ _init_assign(gchar *ns_name, GList **working_m1list,GSList **unref_m1list)
 		goto errorLabel;
 	}
 
-	context->avgscore = (65536 * context->replica) / nb_M1;
+	context->avgscore = (CID_PREFIX_COUNT * context->replica) / nb_M1;
 	GRID_DEBUG("average meta1 score %d", context->avgscore);
 
 	GList *work = g_list_first(*working_m1list);
@@ -755,7 +755,7 @@ _initContext(struct meta0_backend_s *m0)
 		if (v != NULL) {
 			for (; *v; v++)
 				context->replica++;
-			if (context->replica > 65536) {
+			if (context->replica > CID_PREFIX_COUNT) {
 				return NEWERROR(EINVAL, "Invalid number of replicas [%d]",
 						context->replica);
 			}
@@ -795,7 +795,7 @@ meta0_assign_fill(struct meta0_backend_s *m0, gchar *ns_name, guint replicas,
 		goto errorLabel;
 
 	while (replicas--) {
-		for (idx = 0; idx < 65536; idx++) {
+		for (idx = 0; idx < CID_PREFIX_COUNT; idx++) {
 			working_m1list = g_list_sort(working_m1list, meta0_assign_sort_by_score);
 			d_aM1 = _select_dest_assign_m1(working_m1list, NULL,
 					(guint8*)(&idx), TRUE, nodist);
