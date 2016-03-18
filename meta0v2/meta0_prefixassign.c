@@ -460,9 +460,9 @@ _assign(GList *working_m1list,GSList *unref_m1list)
 
 static GError *
 _init_assign(gchar *ns_name, GList **working_m1list,GSList **unref_m1list)
-{ 
+{
 	GSList *m1_list = NULL;
-	GError *error = conscience_get_services (ns_name, "meta1", &m1_list);
+	GError *error = conscience_get_services (ns_name, NAME_SRVTYPE_META1, FALSE, &m1_list);
 	if (!m1_list) {
 		if ( error) {
 			GRID_ERROR("failed to init meta1 service list :(%d) %s", error->code, error->message);

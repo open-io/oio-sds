@@ -81,7 +81,6 @@ namespace_info_copy(namespace_info_t* src, namespace_info_t* dst)
 
 	memcpy(dst->name, src->name, sizeof(src->name));
 	dst->chunk_size = src->chunk_size;
-	memcpy(&(dst->addr), &(src->addr), sizeof(addr_info_t));
 
 #define NSI_COPY_TABLE_REF(SRC, DST) \
 	if ((SRC) != NULL) {\
@@ -105,7 +104,6 @@ namespace_info_dup(namespace_info_t* src)
 	namespace_info_t *dst = g_malloc0(sizeof(namespace_info_t));
 	memcpy(dst->name, src->name, sizeof(src->name));
 	dst->chunk_size = src->chunk_size;
-	memcpy(&(dst->addr), &(src->addr), sizeof(addr_info_t));
 
 	dst->options = _copy_hash(src->options);
 	dst->storage_policy = _copy_hash(src->storage_policy);
@@ -141,7 +139,6 @@ namespace_info_init(namespace_info_t *ni)
 		return;
 	ni->chunk_size = 0;
 	memset(ni->name, 0, sizeof(ni->name));
-	memset(&ni->addr, 0, sizeof(ni->addr));
 	ni->options = _copy_hash(NULL);
 	ni->storage_policy = _copy_hash(NULL);
 	ni->data_security = _copy_hash(NULL);
@@ -371,7 +368,7 @@ namespace_info_encode_json(GString *out, struct namespace_info_s *ni)
 {
 	g_string_append_c(out, '{');
 	g_string_append_printf(out, "\"ns\":\"%s\",", ni->name);
-	g_string_append_printf(out, "\"chunksize\":\"%"G_GINT64_FORMAT"\",",
+	g_string_append_printf(out, "\"chunksize\":%"G_GINT64_FORMAT",",
 			ni->chunk_size);
 
 	_encode_json_properties(out, ni->options, "options");

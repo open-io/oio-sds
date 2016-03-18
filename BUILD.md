@@ -8,7 +8,7 @@ When building only the SDK, OpenIO only depends on:
 * cmake, make : involved in the build process.
 * bison, flex : generates expression parsers.
 * glib2, glib2-devel
-* curl, libcurl, libcurl-devel 
+* curl, libcurl, libcurl-devel
 * json-c, json-c-devel
 * [asn1c](https://github.com/open-io/asn1c) : our ASN.1 codec, forked from [Lev Walkin's excellent ASN.1 codec](https://github.com/vlm/asn1c). The purpose of our fork is simply to provide codec for explicitely sized integers (int{8,16,32,64} instead of long int).
 
@@ -26,6 +26,7 @@ Building the entire project will require the SDK dependencies, but also:
 * zookeeper-devel, libzookeeper\_mt.so : building with distribution's zookeeper client is OK, but the package ships with a lot of dependencies, including the openjdk. We recommand to use the official Oracle/Sun JDK, and to build your own zookeeper client from the source to avoid a huge waste of space and bandwith.
 * python-setuptools
 * python-pbr
+* beanstalkd: you need it to have the event-agent working
 
 In addition, a few python modules are required at runtime:
 * python-eventlet
@@ -78,7 +79,7 @@ make DESTDIR=${install_dir} install
 
 Install python module:
 ```
-cd ${SRCDIR}/python; sudo python setup.py develop; cd -
+sudo python setup.py develop
 ```
 
 ## Compile-time configuration
@@ -122,9 +123,12 @@ Used by `gcc`
 | PROXYD_DEFAULT_TTL_CSM0 | 0 | Maximum TTL (in seconds) for conscience entries in the proxyd cache. |
 | PROXYD_DEFAULT_MAX_CSM0 | 0 | Maximum number of conscience's items in the proxyd cache. |
 | PROXYD_PERIOD_RELOAD_NSINFO | 30 |  |
+| PROXYD_PERIOD_RELOAD_CSURL | 30 |  |
+| PROXYD_PERIOD_RELOAD_SRVTYPES | 30 |  |
 | PROXYD_PERIOD_RELOAD_M0INFO | 30 |  |
 | PROXYD_TTL_DEAD_LOCAL_SERVICES | 30 |  |
-| PROXYD_TTL_DOWN_SERVICES | 5 |  |
+| PROXYD_TTL_DOWN_SERVICES | 5 | In seconds |
+| PROXYD_TTL_KNOWN_SERVICES | 3600 | In seconds |
 | PROXYD_DEFAULT_TIMEOUT_CONSCIENCE | 5000 |  |
 | PROXYD_DEFAULT_PERIOD_DOWNSTREAM | 10 |  |
 | PROXYD_DEFAULT_PERIOD_UPSTREAM | 1 |  |
@@ -149,7 +153,7 @@ Used by `gcc`
 | M2V2_ADMIN_STORAGE_POLICY | M2V2_ADMIN_PREFIX_SYS "policy.storage" |  |
 | M2V2_ADMIN_KEEP_DELETED_DELAY | M2V2_ADMIN_PREFIX_SYS "keep_deleted_delay" |  |
 | META2_INIT_FLAG | M2V2_ADMIN_PREFIX_SYS "init" |  |
-| CS_CLIENT_TIMEOUT | 10.0 | <double> value telling the default timeout for conscience requests, in seconds. |
+| CS_CLIENT_TIMEOUT | 2.0 | <double> value telling the default timeout for conscience requests, in seconds. |
 | M0V2_CLIENT_TIMEOUT | 10.0 | <double> value telling the default timeout for meta0 requests, in seconds. |
 | M1V2_CLIENT_TIMEOUT | 10.0 | <double> value telling the default timeout for meta1 requests, in seconds. |
 | M2V2_CLIENT_TIMEOUT | 10.0 | <double> value telling the default timeout for meta2 requests, in seconds. |

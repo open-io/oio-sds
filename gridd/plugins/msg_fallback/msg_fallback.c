@@ -40,25 +40,20 @@ plugin_matcher(MESSAGE m, void *param, GError ** err)
 static gint
 plugin_handler(MESSAGE m, gint fd, void *param, GError ** err)
 {
-	gint rc;
-	struct request_context_s req_ctx;
-	struct reply_context_s ctx;
+	struct request_context_s req_ctx = {0};
+	struct reply_context_s ctx = {0};
 
-	(void) param;
-	memset(&req_ctx, 0x00, sizeof(struct request_context_s));
-	memset(&ctx, 0x00, sizeof(struct reply_context_s));
+	(void) param, (void) err;
 	gettimeofday(&(req_ctx.tv_start), NULL);
 	req_ctx.fd = fd;
 	req_ctx.request = m;
 	ctx.req_ctx = &req_ctx;
 
-	reply_context_set_message(&ctx, CODE_NOT_FOUND, "No message handler found, check your NS configuration");
+	reply_context_set_message(&ctx, CODE_NOT_FOUND, "no handler found");
 	reply_context_log_access(&ctx, NULL);
-
-	rc = reply_context_reply(&ctx, err);
+	reply_context_reply(&ctx, NULL);
 	reply_context_clear(&ctx, TRUE);
-
-	return rc;
+	return 1;
 }
 
 static gint

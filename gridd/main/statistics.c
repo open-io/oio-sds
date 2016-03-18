@@ -70,28 +70,18 @@ srvstat_get_gvariant(const gchar *name)
 gboolean
 srvstat_set_gvariant(const gchar *name, GVariant *gv)
 {
-	gchar *pKey;
-	
 	if (!name || !gv) {
 		WARN("Invalid parameter (name=%p gv=%p)", name, gv);
 		return FALSE;
 	}
 
-	if (TRACE2_ENABLED()) {
-		gchar *str = g_variant_print(gv, TRUE);
-		TRACE2("Inserting stat <%s,%s>", name, str);
-		g_free(str);
-	}
-
 	if (!ht_stats)
 		srvstat_init();
 
-	pKey = g_strdup(name);
-
+	gchar *pKey = g_strdup(name);
 	g_rw_lock_writer_lock (&rw_lock);
 	g_hash_table_insert (ht_stats, pKey, gv);
 	g_rw_lock_writer_unlock (&rw_lock);
-
 	return TRUE;
 }
 

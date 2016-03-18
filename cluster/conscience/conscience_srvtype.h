@@ -121,22 +121,21 @@ struct conscience_srv_s *conscience_srvtype_register_srv(struct
  * @param srvinfo
  * @return
  */
-gboolean conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype,
-    GError ** error, struct service_info_s *srvinfo, gboolean keep_score);
+struct conscience_srv_s * conscience_srvtype_refresh(
+		struct conscience_srvtype_s *srvtype, struct service_info_s *srvinfo);
 
 /**
  * Removes the service-type holder all the services which
  * expired.
  * 
  * @param srvtype a valid service-type holder
- * @param err a double pointer to a GError structure set on failure
  * @param callback if supplied, called on each service removed 
  * @param udata arbitrary caller data passed to each callback call,
  * if such a callback has been provided.
  * @return the number of service removed
  */
-gint conscience_srvtype_remove_expired(struct conscience_srvtype_s *srvtype,
-    GError ** err, service_callback_f * callback, gpointer udata);
+guint conscience_srvtype_remove_expired(struct conscience_srvtype_s *srvtype,
+		service_callback_f * callback, gpointer udata);
 
 /**
  * Executes the given callback on all the services registered in the
@@ -184,32 +183,6 @@ void conscience_srvtype_remove_srv(struct conscience_srvtype_s *srvtype, struct 
  * @return the number of registered services matching the conditions
  */
 guint conscience_srvtype_count_srv(struct conscience_srvtype_s *srvtype, gboolean include_expired);
-
-/**
- * Get a copy of the serialized configuration of the given service-type
- * holder.
- *
- * The caller is responsible to free the returned GByteArray, including
- * its internal data (@see g_byte_array_free()).
- *
- * We admit such a configuration is not volatile, thus it is cached in
- * the structure. This cached value will be freed with a call to
- * conscience_srvtype_destroy().
- * 
- * @param srvtype a valid service-type holder.
- * @param err a GError double pointer set on error.
- * @result a newly allocated GByteArray or NULL in case of failure.
- */
-GByteArray* conscience_get_serialized_configuration(
-		struct conscience_srvtype_s *srvtype, GError ** err);
-
-/**
- * @param srvtype
- * @param err
- * @return
- */
-GByteArray* conscience_srvtype_get_config(
-		struct conscience_srvtype_s * srvtype, GError ** err);
 
 /**
  * Sets acceptable default value in the configuration parameters

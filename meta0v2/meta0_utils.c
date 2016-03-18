@@ -398,7 +398,7 @@ meta0_utils_getMeta0addr(gchar *namespace, GSList **m0_lst, GSList *exclude)
 {
 	addr_info_t *a = NULL;
 	if (*m0_lst  == NULL) {
-		GError *err = conscience_get_services (namespace, NAME_SRVTYPE_META0, m0_lst);
+		GError *err = conscience_get_services (namespace, NAME_SRVTYPE_META0, FALSE, m0_lst);
 		if (err) {
 			GRID_WARN("Failed to get Meta0 addresses to namespace %s: (%d) %s",
 					namespace, err->code, err->message);

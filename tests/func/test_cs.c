@@ -98,7 +98,9 @@ test_proxied_deregister (void)
 			GRID_DEBUG("turn=%d id=%s url=%s score=%d",
 					i, preg->id, preg->url, score);
 		}
-		err = oio_cs_client__list_services (cs, srvtype, on_reg);
+		err = oio_cs_client__list_services (cs, srvtype, FALSE, on_reg);
+		g_assert_no_error (err);
+		err = oio_cs_client__list_services (cs, srvtype, TRUE, on_reg);
 		g_assert_no_error (err);
 		err = oio_cs_client__flush_services (cs, srvtype);
 		g_assert_no_error (err);
@@ -113,16 +115,27 @@ test_proxied_list (void)
 	struct oio_cs_client_s *cs = oio_cs_client__create_proxied (ns);
 	g_assert_nonnull (cs);
 	for (int i=0; i<8 ;++i) {
-		err = oio_cs_client__list_services (cs, NULL, NULL);
+		err = oio_cs_client__list_services (cs, NULL, FALSE, NULL);
 		g_assert_error (err, GQ(), CODE_BAD_REQUEST);
 		g_clear_error (&err);
-		err = oio_cs_client__list_services (cs, "", NULL);
+		err = oio_cs_client__list_services (cs, NULL, TRUE, NULL);
 		g_assert_error (err, GQ(), CODE_BAD_REQUEST);
 		g_clear_error (&err);
-		err = oio_cs_client__list_services (cs, "xXxXxXxXx", NULL);
+		err = oio_cs_client__list_services (cs, "", FALSE, NULL);
+		g_assert_error (err, GQ(), CODE_BAD_REQUEST);
+		g_clear_error (&err);
+		err = oio_cs_client__list_services (cs, "", TRUE, NULL);
+		g_assert_error (err, GQ(), CODE_BAD_REQUEST);
+		g_clear_error (&err);
+		err = oio_cs_client__list_services (cs, "xXxXxXxXx", FALSE, NULL);
 		g_assert_error (err, GQ(), CODE_SRVTYPE_NOTMANAGED);
 		g_clear_error (&err);
-		err = oio_cs_client__list_services (cs, srvtype, NULL);
+		err = oio_cs_client__list_services (cs, "xXxXxXxXx", TRUE, NULL);
+		g_assert_error (err, GQ(), CODE_SRVTYPE_NOTMANAGED);
+		g_clear_error (&err);
+		err = oio_cs_client__list_services (cs, srvtype, FALSE, NULL);
+		g_assert_no_error (err);
+		err = oio_cs_client__list_services (cs, srvtype, TRUE, NULL);
 		g_assert_no_error (err);
 	}
 	oio_cs_client__destroy (cs);

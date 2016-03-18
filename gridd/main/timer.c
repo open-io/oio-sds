@@ -104,27 +104,17 @@ srvtimer_fire(guint64 ticks)
 {
 	void timers_iterator(gpointer d, gpointer u)
 	{
-		struct srvtimer_s *st;
-
+		g_assert_nonnull (d);
 		(void) u;
-		if (!d) {
-			WARN("invalid parameter");
-			return;
-		}
-
-		st = (struct srvtimer_s *) d;
-
+		struct srvtimer_s *st = (struct srvtimer_s *) d;
 		if (st->ticks <= ticks) {
 			if (st->fire)
 				st->fire(st->u);
 			st->ticks = ticks + st->freq;
 		}
-
 	}
 
-	TRACE("Firing the timers...");
 	g_rw_lock_reader_lock(&rw_lock);
 	g_slist_foreach(timers_regular, timers_iterator, NULL);
 	g_rw_lock_reader_unlock(&rw_lock);
-	TRACE("Timers fired");
 }

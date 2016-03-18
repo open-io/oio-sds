@@ -3,7 +3,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
 include_directories(BEFORE . .. ../..)
 
-add_library(gridcluster SHARED gridcluster.c message.c)
+add_library(gridcluster SHARED gridcluster.c)
 
 set_target_properties(gridcluster PROPERTIES SOVERSION ${ABI_VERSION})
 

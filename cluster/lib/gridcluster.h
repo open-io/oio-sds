@@ -21,56 +21,26 @@ License along with this library.
 # define OIO_SDS__cluster__lib__gridcluster_h 1
 
 #include <metautils/lib/metatypes.h>
-#include <cluster/agent/gridagent.h>
 
 #define NS_ACL_ALLOW_OPTION "allow"
 
 #define NS_ACL_DENY_OPTION "deny"
 
-# define OIO_CFG_ZOOKEEPER    "zookeeper"
-# define OIO_CFG_CONSCIENCE   "conscience"
-# define OIO_CFG_AGENT        "agent"
-# define OIO_CFG_ACCOUNTAGENT "event-agent"
-
-# define gridcluster_get_zookeeper(ns)  oio_cfg_get_value((ns), OIO_CFG_ZOOKEEPER)
-# define gridcluster_get_eventagent(ns) oio_cfg_get_value((ns), OIO_CFG_ACCOUNTAGENT)
-# define gridcluster_get_conscience(ns) oio_cfg_get_value((ns), OIO_CFG_CONSCIENCE)
-
-extern gboolean oio_cluster_allow_agent;
 extern gboolean oio_cluster_allow_proxy;
 
 struct service_info_s;
 void metautils_srvinfo_ensure_tags (struct service_info_s *si);
 
-/* Requests explicitely to the conscience ----------------------------------- */
-
-GError * conscience_remote_get_namespace (const char *cs, struct namespace_info_s **out);
-GError * conscience_remote_get_services (const char *cs, const gchar *type, gboolean full, GSList **out);
-GError * conscience_remote_get_types (const char *cs, GSList **out);
-GError * conscience_remote_push_services (const char *cs, GSList *ls);
-GError * conscience_remote_remove_services(const char *cs, const char *type, GSList *ls);
-
 /* Requests the the best target (conscience, agent proxy) ------------------- */
 
 GError* conscience_get_namespace (const char *ns, struct namespace_info_s **out);
-GError* conscience_get_services (const char *ns, const char *type, GSList **out);
+GError* conscience_get_services (const char *ns, const char *type,
+		gboolean full, GSList **out);
 GError* conscience_get_types (const char *ns, GSList **out);
 GError* conscience_push_service (const char *ns, struct service_info_s *si);
 GError* conscience_remove_services (const char *ns, const char *type);
 
 GError* register_namespace_service (const struct service_info_s *si);
-
-/* -------------------------------------------------------------------------- */
-
-GSList *list_local_services(GError **error);
-
-struct task_s {
-	char id[MAX_TASKID_LENGTH]; /**< The task id */
-	gint64 period;              /**< how many seconds between each run */
-	guint8 busy;                /**< TRUE if the task is currently running */
-};
-
-GSList *list_tasks(GError **error);
 
 /* -------------------------------------------------------------------------- */
 
@@ -113,6 +83,6 @@ gchar* gridcluster_get_nsinfo_strvalue(struct namespace_info_s *nsinfo,
 gint64 gridcluster_get_nsinfo_int64(struct namespace_info_s *nsinfo,
 		const gchar* key, gint64 def);
 
-gchar * gridcluster_get_agent(void);
+gchar* gridcluster_get_conscience(const char *ns);
 
 #endif /*OIO_SDS__cluster__lib__gridcluster_h*/

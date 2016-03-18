@@ -844,25 +844,19 @@ _task_reconfigure_events (gpointer p)
 void
 sqlx_task_reload_lb (struct sqlx_service_s *ss)
 {
-	static volatile gboolean already_succeeded = FALSE;
-	static volatile guint tick_reload = 0;
-	static volatile guint period_reload = 1;
-
 	EXTRA_ASSERT(ss != NULL);
+	ADAPTIVE_PERIOD_DECLARE();
 
 	if (!grid_main_is_running ())
 		return;
 	if (!ss->lb || !ss->nsinfo)
 		return;
-	if (already_succeeded && 0 != (tick_reload++ % period_reload))
+	if (ADAPTIVE_PERIOD_SKIP())
 		return;
 
 	GError *err = _reload_lbpool(ss->lb, FALSE);
 	if (!err) {
-		already_succeeded = TRUE;
-		period_reload ++;
-		period_reload = CLAMP(period_reload,2,10);
-		tick_reload = 1;
+		ADAPTIVE_PERIOD_ONSUCCESS(10);
 	} else {
 		GRID_WARN("Failed to reload the LB pool services: (%d) %s",
 				err->code, err->message);
@@ -877,7 +871,7 @@ _reload_lbpool(struct grid_lbpool_s *glp, gboolean flush)
 {
 	gboolean _reload_srvtype(const gchar *ns, const gchar *srvtype) {
 		GSList *list_srv = NULL;
-		GError *err = conscience_get_services (ns, srvtype, &list_srv);
+		GError *err = conscience_get_services (ns, srvtype, FALSE, &list_srv);
 		if (err) {
 			GRID_WARN("Gridagent/conscience error: Failed to list the services"
 					" of type [%s]: code=%d %s", srvtype, err->code,

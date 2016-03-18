@@ -96,6 +96,16 @@ extern "C" {
 # endif
 
 /* in seconds */
+# ifndef PROXYD_PERIOD_RELOAD_CSURL
+#  define PROXYD_PERIOD_RELOAD_CSURL 30
+# endif
+
+/* in seconds */
+# ifndef PROXYD_PERIOD_RELOAD_SRVTYPES
+#  define PROXYD_PERIOD_RELOAD_SRVTYPES 30
+# endif
+
+/* in seconds */
 # ifndef PROXYD_PERIOD_RELOAD_NSINFO
 #  define PROXYD_PERIOD_RELOAD_NSINFO 30
 # endif
@@ -113,6 +123,11 @@ extern "C" {
 /* in seconds */
 # ifndef PROXYD_TTL_DOWN_SERVICES
 #  define PROXYD_TTL_DOWN_SERVICES 5
+# endif
+
+/* in seconds */
+# ifndef PROXYD_TTL_KNOWN_SERVICES
+#  define PROXYD_TTL_KNOWN_SERVICES 3600
 # endif
 
 # ifndef PROXYD_DEFAULT_PERIOD_DOWNSTREAM
@@ -172,7 +187,7 @@ extern "C" {
 # endif
 
 # ifndef CS_CLIENT_TIMEOUT
-#  define CS_CLIENT_TIMEOUT 3.0
+#  define CS_CLIENT_TIMEOUT 2.0
 # endif
 
 # ifndef RAWX_BUF_MIN
@@ -205,8 +220,14 @@ extern "C" {
 # define OIO_CFG_PROXY_DIRECTORY  "proxy-directory"
 # define OIO_CFG_PROXY_CONTAINERS "proxy-containers"
 
-# define oio_cfg_get_proxy(ns)        oio_cfg_get_value((ns), OIO_CFG_PROXY)
-# define oio_cfg_get_proxylocal(ns)   oio_cfg_get_value((ns), OIO_CFG_PROXYLOCAL)
+# define OIO_CFG_ZOOKEEPER    "zookeeper"
+# define OIO_CFG_CONSCIENCE   "conscience"
+# define OIO_CFG_ACCOUNTAGENT "event-agent"
+
+# define gridcluster_get_zookeeper(ns)  oio_cfg_get_value((ns), OIO_CFG_ZOOKEEPER)
+# define gridcluster_get_eventagent(ns) oio_cfg_get_value((ns), OIO_CFG_ACCOUNTAGENT)
+# define oio_cfg_get_proxy(ns)          oio_cfg_get_value((ns), OIO_CFG_PROXY)
+# define oio_cfg_get_proxylocal(ns)     oio_cfg_get_value((ns), OIO_CFG_PROXYLOCAL)
 
 /** @return NULL if the NS was not found or the key not defined for the NS */
 gchar* oio_cfg_get_value (const gchar *ns, const gchar *what);

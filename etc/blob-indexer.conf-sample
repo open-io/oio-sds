@@ -1,0 +1,12 @@
+[blob-indexer]
+namespace = NS
+user = openio
+volume = /var/lib/oio/sds/vol1/NS/rawx-1/
+interval = 300
+report_interval = 5
+chunks_per_second = 30
+autocreate = true
+log_level = INFO
+log_facility = LOG_LOCAL0
+log_address = /dev/log
+syslog_prefix = OIO,OPENIO,blob-index,1

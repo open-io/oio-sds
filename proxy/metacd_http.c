@@ -31,16 +31,19 @@ static GThread *admin_thread = NULL;
 static GThread *upstream_thread = NULL;
 static GThread *downstream_thread = NULL;
 
-time_t nsinfo_refresh_delay = PROXYD_PERIOD_RELOAD_NSINFO;
+guint csurl_refresh_delay = PROXYD_PERIOD_RELOAD_CSURL;
+guint srvtypes_refresh_delay = PROXYD_PERIOD_RELOAD_SRVTYPES;
+guint nsinfo_refresh_delay = PROXYD_PERIOD_RELOAD_NSINFO;
 time_t nsinfo_refresh_m0 = PROXYD_PERIOD_RELOAD_M0INFO;
 time_t cs_expire_local_services = PROXYD_TTL_DEAD_LOCAL_SERVICES;
 time_t cs_down_services = PROXYD_TTL_DOWN_SERVICES;
+time_t cs_known_services = PROXYD_TTL_KNOWN_SERVICES;
 
 // Configuration
 
 static GSList *config_urlv = NULL;
 
-static gint lb_downstream_delay = PROXYD_DEFAULT_PERIOD_DOWNSTREAM;
+static guint lb_downstream_delay = PROXYD_DEFAULT_PERIOD_DOWNSTREAM;
 static guint lb_upstream_delay = PROXYD_DEFAULT_PERIOD_UPSTREAM;
 static guint dir_low_ttl = PROXYD_DEFAULT_TTL_SERVICES;
 static guint dir_low_max = PROXYD_DEFAULT_MAX_SERVICES;
@@ -53,7 +56,8 @@ struct hc_resolver_s *resolver = NULL;
 gchar *nsname = NULL;
 
 GMutex csurl_mutex = {0};
-gchar *csurl = NULL;
+gchar **csurl = NULL;
+gsize csurl_count = 0;
 
 GMutex push_mutex = {0};
 struct lru_tree_s *push_queue = NULL;
@@ -65,6 +69,7 @@ gchar **srvtypes = NULL;
 
 GMutex srv_mutex = {0};
 struct lru_tree_s *srv_down = NULL;
+struct lru_tree_s *srv_known = NULL;
 
 // Misc. handlers --------------------------------------------------------------
 
@@ -101,10 +106,11 @@ action_status(struct req_args_s *args)
 	g_string_append_printf(gstr, "gauge cache.srv.ttl = %lu\n", s.services.ttl);
 	g_string_append_printf(gstr, "gauge cache.srv.clock = %lu\n", s.clock);
 
-	gint64 count_down = 0;
-	SRV_DO(count_down = lru_tree_count(srv_down));
-	g_string_append_printf(gstr, "gauge down.srv = %"G_GINT64_FORMAT"\n",
-			count_down);
+	gint64 count = 0;
+	SRV_DO(count = lru_tree_count(srv_down));
+	g_string_append_printf(gstr, "gauge down.srv = %"G_GINT64_FORMAT"\n", count);
+	SRV_DO(count = lru_tree_count(srv_known));
+	g_string_append_printf(gstr, "gauge known.srv = %"G_GINT64_FORMAT"\n", count);
 
 	args->rp->set_body_gstr(gstr);
 	args->rp->set_status(HTTP_CODE_OK, "OK");
@@ -238,7 +244,7 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 		rp->subject(oio_url_get(url, OIOURL_HEXID));
 		gq_count = (*matchings)->last->gq_count;
 		gq_time = (*matchings)->last->gq_time;
-		GRID_TRACE("URL %s", oio_url_get(args.url, OIOURL_WHOLE));
+		GRID_TRACE("%s %s URL %s", __FUNCTION__, ruri.path, oio_url_get(args.url, OIOURL_WHOLE));
 		req_handler_f handler = (*matchings)->last->u;
 		rc = (*handler) (&args);
 	}
@@ -265,27 +271,45 @@ _push_queue_create (void)
 
 // Administrative tasks --------------------------------------------------------
 
-static void
-_task_expire_services_down (gpointer p)
+static guint
+_expire_services (struct lru_tree_s *lru, time_t delay)
 {
-	(void) p;
 	gchar *k = NULL;
 	gpointer v = NULL;
 	guint count = 0;
 
-	gulong oldest = oio_ext_monotonic_seconds() - cs_down_services;
+	g_assert (delay >= 0);
+	gulong oldest = oio_ext_monotonic_seconds();
+	oldest = (oldest > (gulong)delay) ? oldest - (gulong)delay : 0;
 
-	SRV_DO(while (lru_tree_get_last(srv_down, (void**)&k, &v)) {
+	SRV_DO(while (lru_tree_get_last(lru, (void**)&k, &v)) {
 		EXTRA_ASSERT(k != NULL);
 		EXTRA_ASSERT(v != NULL);
 		gulong when = (gulong)v;
 		if (when >= oldest)
 			break;
-		lru_tree_steal_last(srv_down, (void**)&k, &v);
+		lru_tree_steal_last(lru, (void**)&k, &v);
 		g_free(k);
 		++ count;
 	});
 
+	return count;
+}
+
+static void
+_task_expire_services_known (gpointer p)
+{
+	(void) p;
+	guint count = _expire_services (srv_known, cs_known_services);
+	if (count)
+		GRID_INFO("Forgot %u services", count);
+}
+
+static void
+_task_expire_services_down (gpointer p)
+{
+	(void) p;
+	guint count = _expire_services (srv_down, cs_down_services);
 	if (count)
 		GRID_INFO("re-enabled %u services", count);
 }
@@ -332,13 +356,17 @@ _reload_srvtype(const char *type)
 		GRID_TRACE ("SRV loaded %u [%s]", g_slist_length(list), type);
 	}
 
-	/* Update the score of the local services with the services received
-	   from the conscience. Though not mandatory, this is usefull for
-	   administrator that can watch the scores from the local services only. */
+	/* reloads the known services */
+	gulong now = oio_ext_monotonic_seconds ();
+	SRV_DO(for (GSList *l=list; l ;l=l->next) {
+		gchar *k = service_info_key (l->data);
+		lru_tree_insert (srv_known, k, (void*)now);
+	});
+
+	/* reloads the LB */
 	if (list) {
 		for (GSList *l=list; l ;l=l->next)
 			PUSH_DO(_local_score_update(l->data));
-
 	}
 
 	/* reload the LB */
@@ -359,10 +387,16 @@ _reload_srvtype(const char *type)
 static void
 _task_reload_lbpool (gpointer p)
 {
+	ADAPTIVE_PERIOD_DECLARE();
 	(void) p;
+
+	if (ADAPTIVE_PERIOD_SKIP())
+		return;
+
 	CSURL(cs);
 	if (!cs) return;
 
+	ADAPTIVE_PERIOD_ONSUCCESS(lb_downstream_delay);
 	gchar **tt = NULL;
 	NSINFO_DO(tt = g_strdupv_inline(srvtypes));
 
@@ -378,17 +412,41 @@ _task_reload_lbpool (gpointer p)
 static void
 _task_reload_csurl (gpointer p)
 {
+	ADAPTIVE_PERIOD_DECLARE ();
 	(void) p;
-	gchar *cs = gridcluster_get_conscience(nsname);
-	CSURL_DO(oio_str_reuse (&csurl, cs));
+
+	if (ADAPTIVE_PERIOD_SKIP())
+		return;
+
+	gchar *s = oio_cfg_get_value(nsname, OIO_CFG_CONSCIENCE);
+	STRING_STACKIFY(s);
+	if (s) {
+		ADAPTIVE_PERIOD_ONSUCCESS(csurl_refresh_delay);
+		gchar **newcs = g_strsplit(s, ",", -1);
+		if (newcs) {
+			CSURL_DO(do {
+				gchar **tmp = csurl;
+				csurl = newcs;
+				newcs = tmp;
+				csurl_count = g_strv_length (csurl);
+			} while (0));
+			g_strfreev (newcs);
+		}
+	}
 }
 
 static void
 _task_reload_nsinfo (gpointer p)
 {
+	ADAPTIVE_PERIOD_DECLARE ();
 	(void) p;
+
 	CSURL(cs);
-	if (!cs) return;
+	if (!cs)
+		return;
+
+	if (ADAPTIVE_PERIOD_SKIP())
+		return;
 
 	struct namespace_info_s *ni = NULL;
 	GError *err = conscience_remote_get_namespace (cs, &ni);
@@ -397,6 +455,7 @@ _task_reload_nsinfo (gpointer p)
 			nsname, cs, err->code, err->message);
 		g_clear_error (&err);
 	} else {
+		ADAPTIVE_PERIOD_ONSUCCESS(nsinfo_refresh_delay);
 		NSINFO_DO(namespace_info_copy (ni, &nsinfo));
 		namespace_info_free (ni);
 	}
@@ -405,9 +464,15 @@ _task_reload_nsinfo (gpointer p)
 static void
 _task_reload_srvtypes (gpointer p)
 {
+	ADAPTIVE_PERIOD_DECLARE ();
 	(void) p;
+
 	CSURL(cs);
-	if (!cs) return;
+	if (!cs)
+		return;
+
+	if (ADAPTIVE_PERIOD_SKIP ())
+		return;
 
 	GSList *list = NULL;
 	GError *err = conscience_remote_get_types (cs, &list);
@@ -416,6 +481,10 @@ _task_reload_srvtypes (gpointer p)
 			nsname, cs, err->code, err->message);
 		g_clear_error (&err);
 		return;
+	} else {
+		ADAPTIVE_PERIOD_ONSUCCESS(srvtypes_refresh_delay);
+		GRID_DEBUG("SRVTYPES reloaded %u for [%s]",
+				g_slist_length(list), nsname);
 	}
 
 	gchar **newset = (gchar **) metautils_list_to_array (list);
@@ -556,11 +625,15 @@ grid_main_get_options (void)
 			"An additional URL to bind to (might be used several time).\n"
 			"\t\tAccepts UNIX and INET sockets." },
 
-		{"LbRefresh", OT_INT, {.i = &lb_downstream_delay},
-			"Interval between load-balancer service refreshes (seconds)\n"
-			"\t\t-1 to disable, 0 to never refresh"},
-		{"NsinfoRefresh", OT_TIME, {.t = &nsinfo_refresh_delay},
+		{"LbRefresh", OT_INT, {.u = &lb_downstream_delay},
+			"Interval between load-balancer service refreshes (seconds)\n"},
+
+		{"RefreshNamespace", OT_TIME, {.u = &nsinfo_refresh_delay},
 			"Interval between NS configuration's refreshes (seconds)"},
+		{"RefreshConscience", OT_TIME, {.u = &csurl_refresh_delay},
+			"Interval between CS urls refreshes (seconds)"},
+		{"RefreshTypes", OT_TIME, {.u = &srvtypes_refresh_delay},
+			"Interval between service types refreshes (seconds)"},
 
 		{"SrvPush", OT_INT, {.u = &lb_upstream_delay},
 			"Interval between load-balancer service refreshes (seconds)\n"
@@ -632,6 +705,10 @@ grid_main_specific_fini (void)
 		lru_tree_destroy (srv_down);
 		srv_down = NULL;
 	}
+	if (srv_known) {
+		lru_tree_destroy (srv_known);
+		srv_known = NULL;
+	}
 	if (push_queue) {
 		lru_tree_destroy (push_queue);
 		push_queue = NULL;
@@ -646,7 +723,10 @@ grid_main_specific_fini (void)
 	g_mutex_clear(&push_mutex);
 	g_mutex_clear(&csurl_mutex);
 	g_mutex_clear(&srv_mutex);
-	oio_str_clean (&csurl);
+
+	if (csurl) g_strfreev (csurl);
+	csurl = NULL;
+	csurl_count = 0;
 
 	g_slist_free_full (config_urlv, g_free);
 	config_urlv = NULL;
@@ -659,6 +739,7 @@ configure_request_handlers (void)
 
 	SET("/status/#GET", action_status);
 
+	SET("/forward/stats/#POST", action_forward_stats);
 	SET("/forward/$ACTION/#POST", action_forward);
 
 	SET("/cache/status/#GET", action_cache_status);
@@ -763,9 +844,14 @@ grid_main_configure (int argc, char **argv)
 	g_mutex_init (&srv_mutex);
 
 	nsname = g_strdup (cfg_namespace);
-	csurl = gridcluster_get_conscience (nsname);
 	g_strlcpy (nsinfo.name, cfg_namespace, sizeof (nsinfo.name));
 	nsinfo.chunk_size = 1;
+
+	_task_reload_csurl (NULL);
+	if (!csurl || !csurl_count) {
+		GRID_ERROR("No conscience URL configured");
+		return FALSE;
+	}
 
 	path_parser = path_parser_init ();
 	configure_request_handlers ();
@@ -783,8 +869,8 @@ grid_main_configure (int argc, char **argv)
 			gq_time_all, 0, gq_time_unexpected, 0);
 
 	lbpool = grid_lbpool_create (nsname);
-	srv_down = lru_tree_create((GCompareFunc)g_strcmp0, g_free,
-			NULL, LTO_NOATIME);
+	srv_down = lru_tree_create((GCompareFunc)g_strcmp0, g_free, NULL, LTO_NOATIME);
+	srv_known = lru_tree_create((GCompareFunc)g_strcmp0, g_free, NULL, LTO_NOATIME);
 
 	resolver = hc_resolver_create1 (oio_ext_monotonic_seconds());
 	enum hc_resolver_flags_e f = 0;
@@ -816,7 +902,7 @@ grid_main_configure (int argc, char **argv)
 	// Prepare a queue responsible for the downstream from the conscience
 	downstream_gtq = grid_task_queue_create ("downstream");
 
-	grid_task_queue_register (downstream_gtq, (guint) lb_downstream_delay,
+	grid_task_queue_register (downstream_gtq, (guint) 1,
 		(GDestroyNotify) _task_reload_lbpool, NULL, NULL);
 
 	// Now prepare a queue for administrative tasks, such as cache expiration,
@@ -824,19 +910,22 @@ grid_main_configure (int argc, char **argv)
 	admin_gtq = grid_task_queue_create ("admin");
 
 	grid_task_queue_register (admin_gtq, 1,
+		(GDestroyNotify) _task_expire_services_known, NULL, NULL);
+
+	grid_task_queue_register (admin_gtq, 1,
 		(GDestroyNotify) _task_expire_services_down, NULL, NULL);
 
 	grid_task_queue_register (admin_gtq, 1,
 		(GDestroyNotify) _task_expire_resolver, NULL, NULL);
 
-	grid_task_queue_register (admin_gtq, nsinfo_refresh_delay,
+	grid_task_queue_register (admin_gtq, 1,
 		(GDestroyNotify) _task_reload_csurl, NULL, NULL);
 
-	grid_task_queue_register (admin_gtq, nsinfo_refresh_delay,
-		(GDestroyNotify) _task_reload_nsinfo, NULL, NULL);
-
-	grid_task_queue_register (admin_gtq, nsinfo_refresh_delay,
+	grid_task_queue_register (admin_gtq, 1,
 		(GDestroyNotify) _task_reload_srvtypes, NULL, NULL);
+
+	grid_task_queue_register (admin_gtq, 1,
+		(GDestroyNotify) _task_reload_nsinfo, NULL, NULL);
 
 	network_server_bind_host (server, cfg_main_url, handler_action,
 			(network_transport_factory) transport_http_factory0);

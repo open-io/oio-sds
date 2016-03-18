@@ -48,8 +48,7 @@ plugin_matcher (MESSAGE m, void *param, GError **err)
 static gint
 handler_get_stats(struct request_context_s *req_ctx, GError **err)
 {
-	struct reply_context_s ctx;
-	memset(&ctx, 0x00, sizeof(struct reply_context_s));
+	struct reply_context_s ctx = {0};
 	ctx.req_ctx = req_ctx;
 
 	GString *gs = g_string_new ("");
@@ -63,14 +62,12 @@ handler_get_stats(struct request_context_s *req_ctx, GError **err)
 	}
 
 	srvstat_foreach_gvariant("*", msg_append_field, NULL);
-
 	reply_context_set_body(&ctx, gs->str, gs->len, REPLYCTX_DESTROY_ON_CLEAN);
+	g_string_free (gs, FALSE);
 	reply_context_set_message(&ctx, 200, "OK");
 	reply_context_log_access(&ctx, NULL);
 	reply_context_reply(&ctx, err);
 	reply_context_clear(&ctx, TRUE);
-
-	g_string_free (gs, FALSE);
 	return 1;
 }
 

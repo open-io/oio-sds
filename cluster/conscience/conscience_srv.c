@@ -163,38 +163,18 @@ conscience_srv_compute_score(struct conscience_srv_s
 
 	/*some sanity checks */
 	d = floor(d);
-	if (isnan(d)) {
-		WARN("[%s] computed score is NAN", service->description);
+	if (isnan(d))
 		d = 0.0;
-	}
-	else if (d < 0.0) {
-		WARN("[%s] Score underflow : %f <- 0", service->description, d);
-		d = 0.0;
-	}
-	else if (d > 100.0) {
-		WARN("[%s] Score overflow : %f <- 100", service->description, d);
-		d = 100.0;
-	}
-
-	current = d;
-	if (current<0) {
-		WARN("[%s] CONVERSION failure [%f] -> [%d]", service->description, d, current);
-		current = 0;
-	}
+	current = floor(d);
 
 	if (service->score.value>=0) {
 		if (srvtype->score_variation_bound>0) {
-			register gint32 max;
-			max = service->score.value + srvtype->score_variation_bound;
+			gint32 max = service->score.value + srvtype->score_variation_bound;
 			current = MIN(current,max);
-		}
-		else if (current>service->score.value+1) {
-			current = (current + service->score.value) / 2;
 		}
 	}
 
-	service->score.value = MAX(0,current);
-	service->score.timestamp = oio_ext_real_time () / G_TIME_SPAN_SECOND;
+	service->score.value = CLAMP(current,0,100);
 	return &(service->score);
 }
 
@@ -204,7 +184,7 @@ conscience_srv_lock_score( struct conscience_srv_s *srv, gint s )
 	if (!srv)
 		return;
 	srv->score.value = s;
-	srv->score.timestamp = oio_ext_real_time () / G_TIME_SPAN_SECOND;
+	srv->score.timestamp = oio_ext_monotonic_seconds ();
 	srv->locked = TRUE;
 }
 
