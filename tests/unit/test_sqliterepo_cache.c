@@ -78,9 +78,11 @@ test_lock (void)
 {
 	sqlx_cache_t *cache = sqlx_cache_init();
 	g_assert(cache != NULL);
+	sqlx_cache_set_max_bases (cache, 16);
 	sqlx_cache_set_close_hook(cache, sqlite_close);
 	for (int i=0; i<5 ;++i)
 		_round_lock (cache);
+	sqlx_cache_debug(cache);
 	sqlx_cache_expire(cache, 0, 0);
 	sqlx_cache_clean(cache);
 }
@@ -90,6 +92,7 @@ _round_init (void)
 {
 	sqlx_cache_t *cache = sqlx_cache_init();
 	g_assert(cache != NULL);
+	sqlx_cache_set_max_bases (cache, 16);
 	sqlx_cache_set_close_hook(cache, sqlite_close);
 	sqlx_cache_debug(cache);
 	sqlx_cache_expire(cache, 0, 0);

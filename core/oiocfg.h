@@ -133,6 +133,11 @@ extern "C" {
 # endif
 
 /* in oio_ext_monotonic_time() precision */
+# ifndef PROXYD_TTL_MASTER_SERVICES
+#  define PROXYD_TTL_MASTER_SERVICES (1*G_TIME_SPAN_HOUR)
+# endif
+
+/* in oio_ext_monotonic_time() precision */
 # ifndef PROXYD_TTL_DOWN_SERVICES
 #  define PROXYD_TTL_DOWN_SERVICES (5*G_TIME_SPAN_SECOND)
 # endif
@@ -224,18 +229,6 @@ extern "C" {
 
 # ifndef CS_CLIENT_TIMEOUT
 #  define CS_CLIENT_TIMEOUT 2.0
-# endif
-
-# ifndef RAWX_BUF_MIN
-#  define RAWX_BUF_MIN 8192
-# endif
-
-# ifndef RAWX_BUF_MAX
-#  define RAWX_BUF_MAX 1048576
-# endif
-
-# ifndef RAWX_LOSTFOUND_FOLDER
-#  define RAWX_LOSTFOUND_FOLDER "_lost+found"
 # endif
 
 # ifndef RAWX_HEADER_PREFIX

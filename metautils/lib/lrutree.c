@@ -191,7 +191,6 @@ lru_tree_insert(struct lru_tree_s *lt, gpointer k, gpointer v)
 gpointer
 lru_tree_get(struct lru_tree_s *lt, gconstpointer k)
 {
-
 	EXTRA_ASSERT(lt != NULL);
 	EXTRA_ASSERT(k != NULL);
 
@@ -304,4 +303,3 @@ lru_tree_remove_exceeding (struct lru_tree_s *lt, guint count)
 	}
 	return removed;
 }
-

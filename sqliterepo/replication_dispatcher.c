@@ -1528,7 +1528,7 @@ _handler_DESCR(struct gridd_reply_ctx_s *reply,
 {
 	GError *err = NULL;
 	struct sqlx_name_mutable_s name = {0};
-	gchar descr[512] = "?";
+	gchar descr[1024] = "?";
 
 	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {

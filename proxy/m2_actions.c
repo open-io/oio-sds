@@ -21,30 +21,72 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <metautils/lib/metautils.h>
 #include <meta2v2/meta2_utils_json.h>
+#include <meta2v2/meta2_bean.h>
 #include <meta2v2/autogen.h>
 
 #include "common.h"
 #include "actions.h"
 
 static void
-_get_meta2_realtype (struct req_args_s *args, gchar *d, gsize dlen,
-		const char *prefix)
+_get_meta2_realtype (struct req_args_s *args, gchar *d, gsize dlen)
 {
 	const char *type = oio_url_get (args->url, OIOURL_TYPE);
 	if (type && *type) {
-		g_snprintf(d, dlen, "%s%s.%s", prefix, NAME_SRVTYPE_META2, type);
+		g_snprintf(d, dlen, "%s.%s", NAME_SRVTYPE_META2, type);
 	} else {
-		g_snprintf(d, dlen, "%s%s", prefix, NAME_SRVTYPE_META2);
+		g_strlcpy(d, NAME_SRVTYPE_META2, dlen);
 	}
 }
 
 static GError *
-_resolve_meta2 (struct req_args_s *args,
-		GError * (*hook) (struct meta1_service_url_s *, gboolean *))
+_resolve_meta2 (struct req_args_s *args, enum preference_e how,
+		request_packer_f pack, GSList **out)
+{
+	if (out) *out = NULL;
+
+	gchar realtype[64];
+	_get_meta2_realtype (args, realtype, sizeof(realtype));
+	CLIENT_CTX(ctx, args, realtype, 1);
+	ctx.which = how;
+
+	GError *err = gridd_request_replicated (&ctx, pack);
+
+	if (err) {
+		GRID_DEBUG("M2V2 call failed: %d %s", err->code, err->message);
+	} else if (out) {
+		g_assert (ctx.bodyv != NULL);
+		for (guint i=0; i<ctx.count ;++i) {
+			GByteArray *b = ctx.bodyv[i];
+			if (b) {
+				GSList *l = bean_sequence_unmarshall (b->data, b->len);
+				if (l) {
+					*out = metautils_gslist_precat (*out, l);
+				}
+			}
+		}
+	}
+
+	client_clean (&ctx);
+	return err;
+}
+
+static GError *
+_resolve_meta2_for_list (struct req_args_s *args, request_packer_f pack,
+		struct list_result_s *out)
 {
 	gchar realtype[64];
-	_get_meta2_realtype (args, realtype, sizeof(realtype), "");
-	return _resolve_service_and_do (realtype, 0, args->url, hook);
+	_get_meta2_realtype (args, realtype, sizeof(realtype));
+	CLIENT_CTX_SLAVE(ctx, args, realtype, 1);
+	ctx.decoder_data = out;
+	ctx.decoder = m2v2_list_result_extract;
+
+	GError *err = gridd_request_replicated (&ctx, pack);
+
+	if (err)
+		GRID_DEBUG("M2V2 call failed: %d %s", err->code, err->message);
+
+	client_clean (&ctx);
+	return err;
 }
 
 static void
@@ -139,45 +181,8 @@ _sort_aliases_by_name (struct bean_ALIASES_s *a0, struct bean_ALIASES_s *a1)
 	return g_strcmp0 (ALIASES_get_alias(a0)->str, ALIASES_get_alias(a1)->str);
 }
 
-#define COMA(gs,first) do { \
-	if (!first) g_string_append_c (gs, ','); else first = FALSE; \
-} while (0);
-
 static void
-_dump_json_prefixes (GString *gstr, gchar **prefixes)
-{
-	g_string_append (gstr, "\"prefixes\":[");
-	if (prefixes) {
-		gboolean first = TRUE;
-		for (gchar **pp=prefixes; *pp ;++pp) {
-			COMA(gstr,first);
-			g_string_append_c (gstr, '"');
-			oio_str_gstring_append_json_string (gstr, *pp);
-			g_string_append_c (gstr, '"');
-		}
-	}
-	g_string_append_c (gstr, ']');
-}
-
-static void
-_dump_json_properties (GString *gstr, GTree *properties)
-{
-	g_string_append (gstr, "\"properties\":{");
-	if (properties) {
-		gboolean first = TRUE;
-		gboolean _func (gpointer k, gpointer v, gpointer i) {
-			(void) i;
-			COMA(gstr,first);
-			oio_str_gstring_append_json_pair (gstr, (const char *)k, (const char *)v);
-			return FALSE;
-		}
-		g_tree_foreach (properties, _func, NULL);
-	}
-	g_string_append (gstr, "}");
-}
-
-static void
-_dump_json_beans (GString *gstr, GSList *aliases, GTree *headers)
+_dump_json_aliases_and_headers (GString *gstr, GSList *aliases, GTree *headers)
 {
 	g_string_append (gstr, "\"objects\":[");
 	gboolean first = TRUE;
@@ -231,15 +236,9 @@ _dump_json_beans (GString *gstr, GSList *aliases, GTree *headers)
 	g_string_append_c (gstr, ']');
 }
 
-static enum http_rc_e
-_reply_list_result (struct req_args_s *args, GError * err, GSList * beans,
-		gchar **prefixes, GTree *properties)
+static void
+_dump_json_beans (GString *gstr, GSList *beans)
 {
-	if (err)
-		return _reply_m2_error (args, err);
-	if (!beans && (args->flags & FLAG_NOEMPTY))
-		return _reply_notfound_error (args, NEWERROR (CODE_CONTENT_NOTFOUND, "No bean found"));
-
 	GSList *aliases = NULL;
 	GTree *headers = g_tree_new ((GCompareFunc)metautils_gba_cmp);
 
@@ -252,21 +251,67 @@ _reply_list_result (struct req_args_s *args, GError * err, GSList * beans,
 	}
 
 	aliases = g_slist_sort (aliases, (GCompareFunc)_sort_aliases_by_name);
-
-	/* Dump the prefixes */
-	GString *gstr = g_string_new ("{");
-	_dump_json_prefixes (gstr, prefixes);
-	g_string_append_c (gstr, ',');
-	_dump_json_properties (gstr, properties);
-	g_string_append_c (gstr, ',');
-	_dump_json_beans (gstr, aliases, headers);
-	g_string_append_c (gstr, '}');
-
-	/* And now the beans */
-	_bean_cleanl2 (beans);
+	_dump_json_aliases_and_headers (gstr, aliases, headers);
 
 	g_slist_free (aliases);
 	g_tree_destroy (headers);
+}
+
+static void
+_dump_json_prefixes (GString *gstr, GTree *tree_prefixes)
+{
+	gchar **prefixes = gtree_string_keys (tree_prefixes);
+	g_string_append (gstr, "\"prefixes\":[");
+	if (prefixes) {
+		gboolean first = TRUE;
+		for (gchar **pp=prefixes; *pp ;++pp) {
+			COMA(gstr,first);
+			g_string_append_c (gstr, '"');
+			oio_str_gstring_append_json_string (gstr, *pp);
+			g_string_append_c (gstr, '"');
+		}
+		g_free (prefixes);
+	}
+	g_string_append_c (gstr, ']');
+}
+
+static void
+_dump_json_properties (GString *gstr, GTree *properties)
+{
+	g_string_append (gstr, "\"properties\":{");
+	if (properties) {
+		gboolean first = TRUE;
+		gboolean _func (gpointer k, gpointer v, gpointer i) {
+			(void) i;
+			COMA(gstr,first);
+			oio_str_gstring_append_json_pair (gstr, (const char *)k, (const char *)v);
+			return FALSE;
+		}
+		g_tree_foreach (properties, _func, NULL);
+	}
+	g_string_append (gstr, "}");
+}
+
+static enum http_rc_e
+_reply_list_result (struct req_args_s *args, GError * err,
+		struct list_result_s *out, GTree *tree_prefixes)
+{
+	if (err)
+		return _reply_m2_error (args, err);
+	if (!out->beans && (args->flags & FLAG_NOEMPTY))
+		return _reply_notfound_error (args, NEWERROR (CODE_CONTENT_NOTFOUND, "No bean found"));
+
+	if (!err)
+		_container_new_props_to_headers (args, out->props);
+
+	GString *gstr = g_string_new ("{");
+	_dump_json_prefixes (gstr, tree_prefixes);
+	g_string_append_c (gstr, ',');
+	_dump_json_properties (gstr, out->props);
+	g_string_append_c (gstr, ',');
+	_dump_json_beans (gstr, out->beans);
+	g_string_append_c (gstr, '}');
+
 	return _reply_success_json (args, gstr);
 }
 
@@ -530,7 +575,7 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody, GS
 			else {
 				oio_url_set (args->url, OIOURL_CONTENTID, s);
 				CONTENTS_HEADERS_set_id (header, h);
-				/* XXX JFS: this is clean to have uniform CONTENT ID among all
+				/* JFS: this is clean to have uniform CONTENT ID among all
 				 * the beans, but it is a bit useless since this requires more
 				 * bytes on the network and can be done in the META2 server */
 				for (GSList *l=beans; l ;l=l->next) {
@@ -789,18 +834,15 @@ _m2_container_create (struct req_args_s *args)
 			PROXYD_HEADER_MODE, "autocreate");
 	gchar **properties = _container_headers_to_props (args);
 
-	GError *hook_m2 (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		struct m2v2_create_params_s param = {
-			OPT("stgpol"), OPT("verpol"), properties, FALSE
-		};
-		return m2v2_remote_execute_CREATE (m2->host, args->url, &param);
-	}
+	struct m2v2_create_params_s param = {
+		OPT("stgpol"), OPT("verpol"), properties, FALSE
+	};
+	PACKER_VOID (_pack) { return m2v2_remote_pack_CREATE (args->url, &param); }
 
 	GError *err;
 retry:
 	GRID_TRACE("Container creation %s", oio_url_get (args->url, OIOURL_WHOLE));
-	err = _resolve_meta2 (args, hook_m2);
+	err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 	if (err && CODE_IS_NOTFOUND(err->code)) {
 		if (autocreate) {
 			GRID_DEBUG("Resource not found, autocreation: (%d) %s",
@@ -810,7 +852,7 @@ retry:
 			GError *hook_dir (const gchar *m1) {
 				gchar **urlv = NULL;
 				gchar realtype[64];
-				_get_meta2_realtype (args, realtype, sizeof(realtype), "");
+				_get_meta2_realtype (args, realtype, sizeof(realtype));
 				GError *e = meta1v2_remote_link_service (m1, args->url,
 						realtype, FALSE, TRUE, &urlv);
 				if (!e && urlv && *urlv) {
@@ -836,11 +878,7 @@ static void
 _re_enable (struct req_args_s *args, struct sqlx_name_s *name)
 {
 	GByteArray* _pack_enable () { return sqlx_pack_ENABLE (name); }
-	GError * _enable (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return _gba_request (m2, _pack_enable, NULL);
-	}
-	GError *e = _resolve_meta2 (args, _enable);
+	GError *e = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack_enable, NULL);
 	if (e) {
 		GRID_INFO("Failed to un-freeze [%s]", oio_url_get(args->url, OIOURL_WHOLE));
 		g_clear_error (&e);
@@ -863,18 +901,14 @@ action_m2_container_destroy (struct req_args_s *args)
 	struct sqlx_name_s *name = sqlx_name_mutable_to_const(&n);
 	/* TODO(jfs): manage container subtype */
 	sqlx_name_fill (&n, args->url, NAME_SRVTYPE_META2, 1);
-	/* XXX(jfs): pre-loads the locations of the container. We will need this
-	   at the destroy step. */
+	/* pre-loads the locations of the container. We will need this at the
+	 * destroy step. */
 	err = hc_resolve_reference_service (resolver, args->url, n.type, &urlv);
 
 	/* 1. FREEZE the base to avoid writings during the operation */
 	if (!err) {
-		GByteArray* _pack_freeze () { return sqlx_pack_FREEZE (name); }
-		GError * _freeze (struct meta1_service_url_s *m2, gboolean *next) {
-			(void) next;
-			return _gba_request (m2, _pack_freeze, NULL);
-		}
-		if (NULL != (err = _resolve_meta2 (args, _freeze))) {
+		PACKER_VOID (_pack) { return sqlx_pack_FREEZE (name); }
+		if (NULL != (err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL))) {
 			/* rollback! */
 			_re_enable (args, name);
 			goto clean_and_exit;
@@ -885,18 +919,11 @@ action_m2_container_destroy (struct req_args_s *args)
 	   contents removed. */
 	if (!err) {
 		if (hdr_flush || opt_flush) {
-			GError * _flush (struct meta1_service_url_s *m2, gboolean *next) {
-				(void) next;
-				return m2v2_remote_execute_FLUSH (m2->host, args->url,
-						M2V2_CLIENT_TIMEOUT_HUGE);
-			}
-			err = _resolve_meta2 (args, _flush);
+			PACKER_VOID(_pack) { return m2v2_remote_pack_FLUSH (args->url); }
+			err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 		} else if (!hdr_force && !opt_force) {
-			GError * _check (struct meta1_service_url_s *m2, gboolean *next) {
-				(void) next;
-				return m2v2_remote_execute_ISEMPTY (m2->host, args->url);
-			}
-			err = _resolve_meta2 (args, _check);
+			PACKER_VOID(_pack) { return m2v2_remote_pack_ISEMPTY (args->url); }
+			err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 		}
 		if (NULL != err) {
 			/* rollback! */
@@ -944,82 +971,51 @@ clean_and_exit:
 /* CONTAINER action resources ----------------------------------------------- */
 
 static enum http_rc_e
-action_m2_container_purge (struct req_args_s *args, struct json_object *jargs)
+action_m2_container_purge (struct req_args_s *args, struct json_object *j UNUSED)
 {
-	(void) jargs;
-	GSList *beans = NULL;
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_PURGE (m2->host, args->url,
-				M2V2_CLIENT_TIMEOUT_HUGE);
-	}
-	GError *err = _resolve_meta2 (args, hook);
-	return _reply_beans (args, err, beans);
-}
-
-static enum http_rc_e
-action_m2_container_flush (struct req_args_s *args, struct json_object *jargs)
-{
-	(void) jargs;
-	GSList *beans = NULL;
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_FLUSH (m2->host, args->url,
-				M2V2_CLIENT_TIMEOUT_HUGE);
-	}
-	GError *err = _resolve_meta2 (args, hook);
-	return _reply_beans (args, err, beans);
-}
-
-static enum http_rc_e
-action_m2_container_dedup (struct req_args_s *args, struct json_object *jargs)
-{
-	(void) jargs;
-	GError *err;
-	gboolean first = TRUE;
-	GString *gstr = g_string_new ("{\"msg\":[");
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		gchar *msg = NULL;
-		GError *e = m2v2_remote_execute_DEDUP (m2->host, args->url,
-				M2V2_CLIENT_TIMEOUT_HUGE);
-		if (msg) {
-			if (!first)
-				g_string_append_c (gstr, ',');
-			first = FALSE;
-			g_string_append_c (gstr, '"');
-			g_string_append (gstr, msg);	// TODO escape this!
-			g_string_append_c (gstr, '"');
-			g_free (msg);
-		}
-		return e;
-	}
-	err = _resolve_meta2 (args, hook);
+	PACKER_VOID(_pack) { return m2v2_remote_pack_PURGE (args->url); }
+	GError *err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 	if (NULL != err) {
-		g_string_free (gstr, TRUE);
 		g_prefix_error (&err, "M2 error: ");
 		return _reply_common_error (args, err);
 	}
-
-	g_string_append (gstr, "]}");
-	return _reply_success_json (args, gstr);
+	return _reply_success_json (args, NULL);
 }
 
 static enum http_rc_e
-action_m2_container_touch (struct req_args_s *args, struct json_object *jargs)
+action_m2_container_flush (struct req_args_s *args, struct json_object *j UNUSED)
 {
-	(void) jargs;
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_touch_container_ex (m2->host, args->url, 0);
+	PACKER_VOID(_pack) { return m2v2_remote_pack_FLUSH (args->url); }
+	GError *err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
+	if (NULL != err) {
+		g_prefix_error (&err, "M2 error: ");
+		return _reply_common_error (args, err);
 	}
-	GError *err = _resolve_meta2 (args, hook);
+	return _reply_success_json (args, NULL);
+}
+
+static enum http_rc_e
+action_m2_container_dedup (struct req_args_s *args, struct json_object *j UNUSED)
+{
+	PACKER_VOID(_pack) { return m2v2_remote_pack_DEDUP (args->url); }
+	GError *err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
+	if (NULL != err) {
+		g_prefix_error (&err, "M2 error: ");
+		return _reply_common_error (args, err);
+	}
+	return _reply_success_json (args, NULL);
+}
+
+static enum http_rc_e
+action_m2_container_touch (struct req_args_s *args, struct json_object *j UNUSED)
+{
+	PACKER_VOID(_pack) { return m2v2_remote_pack_TOUCHB (args->url, 0); }
+	GError *err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 	if (NULL != err) {
 		if (CODE_IS_NOTFOUND(err->code))
 			return _reply_forbidden_error (args, err);
 		return _reply_m2_error (args, err);
 	}
-
 	return _reply_success_json (args, NULL);
 }
 
@@ -1033,11 +1029,8 @@ action_m2_container_raw_insert (struct req_args_s *args, struct json_object *jar
 	if (!beans)
 		return _reply_format_error (args, BADREQ("Empty beans list"));
 
-	GError * hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_RAW_ADD (m2->host, args->url, beans);
-	}
-	err = _resolve_meta2 (args, hook);
+	PACKER_VOID(_pack) { return m2v2_remote_pack_RAW_ADD (args->url, beans); }
+	err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 	if (NULL != err)
 		return _reply_m2_error (args, err);
 	return _reply_success_json (args, NULL);
@@ -1053,11 +1046,8 @@ action_m2_container_raw_delete (struct req_args_s *args, struct json_object *jar
 	if (!beans)
 		return _reply_format_error (args, BADREQ("Empty beans list"));
 
-	GError * hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_RAW_DEL (m2->host, args->url, beans);
-	}
-	err = _resolve_meta2 (args, hook);
+	PACKER_VOID(_pack) { return m2v2_remote_pack_RAW_DEL (args->url, beans); }
+	err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 	if (NULL != err)
 		return _reply_m2_error (args, err);
 	return _reply_success_json (args, NULL);
@@ -1086,29 +1076,30 @@ action_m2_container_raw_update (struct req_args_s *args, struct json_object *jar
 	if (!err && (g_slist_length(beans_new) != g_slist_length(beans_old)))
 		err = BADREQ("Length mismatch for bean sets");
 
-	GError * hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_RAW_SUBST (m2->host, args->url, beans_new, beans_old);
+	if (!err) {
+		PACKER_VOID(_pack) {
+			return m2v2_remote_pack_RAW_SUBST (args->url, beans_new, beans_old);
+		}
+		err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 	}
-	if (!err)
-		err = _resolve_meta2 (args, hook);
+
 	_bean_cleanl2 (beans_old);
 	_bean_cleanl2 (beans_new);
-
 	if (NULL != err)
 		return _reply_m2_error (args, err);
 	return _reply_success_json (args, NULL);
 }
 
-/* XXX JFS: You talk to a meta2 with its subtype, because it is a "high level"
+/* JFS: You talk to a meta2 with its subtype, because it is a "high level"
  * interaction with the DB, while sqlx access are quiet raw and "low level"
  * DB calls. So that they do not consider the same kind of type. SQLX want to
  * a fully qualified type, not just the subtype. */
 static void
 _add_meta2_type (struct req_args_s *args)
 {
-	gchar realtype[64];
-	_get_meta2_realtype (args, realtype, sizeof(realtype), "type=");
+	gchar realtype[64] = "type=";
+	gsize l = strlen(realtype);
+	_get_meta2_realtype (args, realtype+l, sizeof(realtype)-l);
 	OIO_STRV_APPEND_COPY (args->req_uri->query_tokens, realtype);
 	OIO_STRV_APPEND_COPY (args->req_uri->query_tokens, "seq=1");
 }
@@ -1181,18 +1172,99 @@ action_container_destroy (struct req_args_s *args)
    return action_m2_container_destroy (args);
 }
 
+typedef GByteArray* (*list_packer_f) (struct list_params_s *);
+
+static GError *
+_list_loop (struct req_args_s *args, struct list_params_s *in0, struct list_result_s *out0,
+		GTree *tree_prefixes, list_packer_f packer)
+{
+	GError *err = NULL;
+	gboolean stop = FALSE;
+	guint count = 0;
+	struct list_params_s in = *in0;
+
+	char delimiter = _delimiter (args);
+	GRID_DEBUG("Listing [%s] max=%"G_GINT64_FORMAT" delim=%c prefix=%s"
+			" marker=%s end=%s", oio_url_get(args->url, OIOURL_WHOLE),
+			in0->maxkeys, delimiter, in0->prefix,
+			in0->marker_start, in0->marker_end);
+
+	PACKER_VOID(_pack) { return packer(&in); }
+
+	while (!err && !stop && grid_main_is_running()) {
+
+		struct list_result_s out = {0};
+		m2v2_list_result_init (&out);
+
+		/* patch the input parameters */
+		if (in0->maxkeys > 0)
+			in.maxkeys = in0->maxkeys - (count + g_tree_nnodes(tree_prefixes));
+		if (out0->next_marker)
+			in.marker_start = out0->next_marker;
+
+		/* Action */
+		err = _resolve_meta2_for_list (args, _pack, &out);
+		if (NULL != err) {
+			m2v2_list_result_clean (&out);
+			break;
+		}
+
+		/* Manage the properties */
+		gchar **keys = gtree_string_keys (out.props);
+		if (keys) {
+			for (gchar **pk=keys; *pk ;++pk) {
+				gchar *v = g_tree_lookup (out.props, *pk);
+				g_tree_steal (out.props, *pk);
+				g_tree_replace (out0->props, *pk, v);
+			}
+			g_free (keys);
+		}
+
+		/* Manage the beans */
+		oio_str_reuse (&out0->next_marker, out.next_marker);
+		out.next_marker = NULL;
+		if (out.beans) {
+			struct filter_ctx_s ctx;
+			ctx.beans = out0->beans;
+			ctx.prefixes = tree_prefixes;
+			ctx.count = count;
+			ctx.prefix = in0->prefix;
+			ctx.delimiter = delimiter;
+			_filter (&ctx, out.beans);
+			out.beans = NULL;
+			count = ctx.count;
+			out0->beans = ctx.beans;
+		}
+
+		if (in0->maxkeys > 0 && in0->maxkeys <= (count + g_tree_nnodes(tree_prefixes))) {
+			/* enough elements received */
+			out0->truncated = out.truncated;
+			stop = TRUE;
+		} else if (!out.truncated) {
+			/* no more elements expected, the meta2 told us */
+			out0->truncated = FALSE;
+			stop = TRUE;
+		} else if (out.truncated && !out0->next_marker) {
+			GRID_ERROR("BUG : meta2 must return a ");
+			err = NEWERROR(CODE_PLATFORM_ERROR, "BUG in meta2 : list truncated but no marker returned");
+			stop = TRUE;
+		}
+
+		m2v2_list_result_clean (&out);
+	}
+
+	return err;
+}
+
 enum http_rc_e
 action_container_list (struct req_args_s *args)
 {
 	struct list_result_s list_out = {0};
 	struct list_params_s list_in = {0};
 	GError *err = NULL;
-	guint count = 0;
-	char delimiter = 0;
 	GTree *tree_prefixes = NULL;
-	GTree *tree_properties = NULL;
 
-	/* Triggers special listings */
+	/* Triggers special listing modes */
 	const char *chunk_id = g_tree_lookup (args->rq->tree_headers, PROXYD_HEADER_PREFIX "list-chunk-id");
 	const char *content_hash_hex = g_tree_lookup (args->rq->tree_headers, PROXYD_HEADER_PREFIX "list-content-hash");
 	GBytes *content_hash = NULL;
@@ -1203,79 +1275,12 @@ action_container_list (struct req_args_s *args)
 		content_hash = g_byte_array_free_to_bytes (gba);
 	}
 
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		GError *e = NULL;
-		struct list_params_s in = list_in;
-		struct list_result_s out = {NULL,NULL,FALSE};
-		while (grid_main_is_running()) {
-
-			/* patch the input parameters */
-			if (list_in.maxkeys > 0)
-				in.maxkeys = list_in.maxkeys - (count + g_tree_nnodes(tree_prefixes));
-			if (list_out.next_marker)
-				in.marker_start = list_out.next_marker;
-
-			/* Action */
-			gchar **props = NULL;
-			if (chunk_id)
-				e = m2v2_remote_execute_LIST_BY_CHUNKID (m2->host, args->url, chunk_id, &in, &out);
-			else if (content_hash)
-				e = m2v2_remote_execute_LIST_BY_HEADERHASH (m2->host, args->url, content_hash, &in, &out);
-			else
-				e = m2v2_remote_execute_LIST (m2->host, args->url, &in, &out, &props);
-
-			/* Manage the output */
-			if (NULL != e)
-				return e;
-			if (props && tree_properties) {
-				for (gchar **p=props; *p && *(p+1) ;p+=2)
-					g_tree_replace (tree_properties, g_strdup(*p), g_strdup(*(p+1)));
-			}
-			if (props) g_strfreev (props);
-			props = NULL;
-
-			/* transmit the output */
-			oio_str_reuse (&list_out.next_marker, out.next_marker);
-			out.next_marker = NULL;
-			if (out.beans) {
-				struct filter_ctx_s ctx;
-				ctx.beans = list_out.beans;
-				ctx.prefixes = tree_prefixes;
-				ctx.count = count;
-				ctx.prefix = list_in.prefix;
-				ctx.delimiter = delimiter;
-				_filter (&ctx, out.beans);
-				out.beans = NULL;
-				count = ctx.count;
-				list_out.beans = ctx.beans;
-			}
-
-			/* enough elements received */
-			if (list_in.maxkeys > 0 && list_in.maxkeys <= (count + g_tree_nnodes(tree_prefixes))) {
-				list_out.truncated = out.truncated;
-				return NULL;
-			}
-			/* no more elements expected, the meta2 told us */
-			if (!out.truncated) {
-				list_out.truncated = FALSE;
-				return NULL;
-			}
-			if (out.truncated && !list_out.next_marker) {
-				GRID_ERROR("BUG : meta2 must return a ");
-				return NEWERROR(CODE_PLATFORM_ERROR, "BUG in meta2 : list truncated but no marker returned");
-			}
-		}
-
-		return e;
-	}
-
+	/* Init the listing options common to all the modes */
 	list_in.flag_headers = ~0;
 	list_in.flag_nodeleted = ~0;
 	list_in.prefix = OPT("prefix");
 	list_in.marker_start = OPT("marker");
 	list_in.marker_end = OPT("marker_end");
-	delimiter = _delimiter (args);
 	if (OPT("deleted"))
 		list_in.flag_nodeleted = 0;
 	if (OPT("all"))
@@ -1283,16 +1288,21 @@ action_container_list (struct req_args_s *args)
 	if (!err)
 		err = _max (args, &list_in.maxkeys);
 	if (!err) {
-		tree_properties = g_tree_new_full (metautils_strcmp3, NULL, g_free, g_free);
 		tree_prefixes = g_tree_new_full (metautils_strcmp3, NULL, g_free, NULL);
+		m2v2_list_result_init (&list_out);
 	}
 
-	GRID_DEBUG("Listing [%s] max=%"G_GINT64_FORMAT" delim=%c prefix=%s marker=%s end=%s",
-			oio_url_get(args->url, OIOURL_WHOLE), list_in.maxkeys, delimiter,
-			list_in.prefix, list_in.marker_start, list_in.marker_end);
+	if (!err) {
+		GByteArray* _pack (struct list_params_s *in) {
+			if (chunk_id)
+				return m2v2_remote_pack_LIST_BY_CHUNKID (args->url, in, chunk_id);
+			if (content_hash)
+				return m2v2_remote_pack_LIST_BY_HEADERHASH (args->url, in, content_hash);
+			return m2v2_remote_pack_LIST (args->url, in);
+		}
+		err = _list_loop (args, &list_in, &list_out, tree_prefixes, _pack);
+	}
 
-	if (!err)
-		err = _resolve_meta2 (args, hook);
 	if (!err) {
 		args->rp->add_header(PROXYD_HEADER_PREFIX "list-truncated",
 				g_strdup(list_out.truncated ? "true" : "false"));
@@ -1302,18 +1312,12 @@ action_container_list (struct req_args_s *args)
 		}
 	}
 
-	gchar **keys_prefixes = NULL;
-	if (!err)
-		keys_prefixes = gtree_string_keys (tree_prefixes);
-	if (!err)
-		_container_new_props_to_headers (args, tree_properties);
-	enum http_rc_e rc = _reply_list_result (args, err, list_out.beans,
-			keys_prefixes, tree_properties);
-	if (keys_prefixes) g_free (keys_prefixes);
+	enum http_rc_e rc = _reply_list_result (args, err, &list_out, tree_prefixes);
+
 	if (tree_prefixes) g_tree_destroy (tree_prefixes);
-	if (tree_properties) g_tree_destroy (tree_properties);
 	if (content_hash) g_bytes_unref (content_hash);
-	oio_str_clean (&list_out.next_marker);
+	m2v2_list_result_clean (&list_out);
+
 	return rc;
 }
 
@@ -1321,31 +1325,30 @@ enum http_rc_e
 action_container_show (struct req_args_s *args)
 {
 	GError *err = NULL;
-	GByteArray **bodies = NULL;
 
-	struct sqlx_name_mutable_s n = {NULL,NULL,NULL};
-	sqlx_name_fill (&n, args->url, NAME_SRVTYPE_META2, 1);
+	CLIENT_CTX(ctx,args,NAME_SRVTYPE_META2,1);
+
 	GByteArray* packer () {
-		return sqlx_pack_PROPGET (sqlx_name_mutable_to_const(&n));
+		return sqlx_pack_PROPGET (sqlx_name_mutable_to_const(&ctx.name));
 	}
-	err = _gbav_request (n.type, 0, args->url, packer, NULL, &bodies);
-	sqlx_name_clean(&n);
+	err = gridd_request_replicated (&ctx, packer);
 
 	if (err) {
-		metautils_gba_cleanv (bodies);
+		client_clean (&ctx);
 		return _reply_m2_error (args, err);
 	}
 
 	GSList *pairs = NULL;
-	err = metautils_unpack_bodyv (bodies, &pairs, key_value_pairs_unmarshall);
-	metautils_gba_cleanv (bodies);
+	err = metautils_unpack_bodyv (ctx.bodyv, &pairs, key_value_pairs_unmarshall);
 	if (err) {
 		g_slist_free_full (pairs, (GDestroyNotify)key_value_pair_clean);
+		client_clean (&ctx);
 		return _reply_system_error(args, err);
 	}
 
 	_container_old_props_to_headers (args, pairs);
 	g_slist_free_full (pairs, (GDestroyNotify)key_value_pair_clean);
+	client_clean (&ctx);
 	return _reply_success_json (args, NULL);
 }
 
@@ -1434,14 +1437,12 @@ action_m2_content_beans (struct req_args_s *args, struct json_object *jargs)
 	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
 	GError *err = NULL;
 	GSList *beans = NULL;
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_BEANS (m2->host, args->url, stgpol, size, 0, &beans);
-	}
+	PACKER_VOID(_pack) { return m2v2_remote_pack_BEANS (args->url, stgpol, size, 0); }
 
 retry:
 	GRID_TRACE("Content preparation %s", oio_url_get (args->url, OIOURL_WHOLE));
-	err = _resolve_meta2 (args, hook);
+	beans = NULL;
+	err = _resolve_meta2 (args, CLIENT_PREFER_SLAVE, _pack, &beans);
 
 	// Maybe manage autocreation
 	if (err && CODE_IS_NOTFOUND(err->code)) {
@@ -1502,13 +1503,11 @@ _m2_json_spare (struct req_args_s *args, struct json_object *jbody, GSList ** ou
 	if (!notin && !broken)
 		return BADREQ("Empty beans sets");
 
-	GSList *obeans = NULL;
-	GError *hook (struct meta1_service_url_s * m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_SPARE (m2->host, args->url,
-				OPT("stgpol"), notin, broken, &obeans);
+	PACKER_VOID(_pack) {
+		return m2v2_remote_pack_SPARE (args->url, OPT("stgpol"), notin, broken);
 	}
-	err = _resolve_meta2 (args, hook);
+	GSList *obeans = NULL;
+	err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, &obeans);
 	_bean_cleanl2 (broken);
 	_bean_cleanl2 (notin);
 	EXTRA_ASSERT ((err != NULL) ^ (obeans != NULL));
@@ -1531,11 +1530,8 @@ static enum http_rc_e
 action_m2_content_touch (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_touch_content (m2->host, args->url);
-	}
-	GError *err = _resolve_meta2 (args, hook);
+	PACKER_VOID(_pack) { return m2v2_remote_pack_TOUCHC (args->url); }
+	GError *err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);
@@ -1563,11 +1559,8 @@ action_m2_content_link (struct req_args_s *args, struct json_object *jargs)
 	if (!oio_url_set (args->url, OIOURL_CONTENTID, id))
 		return _reply_m2_error (args, BADREQ("Expected: id (hexa string)"));
 
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_LINK (m2->host, args->url);
-	}
-	err = _resolve_meta2 (args, hook);
+	PACKER_VOID(_pack) { return m2v2_remote_pack_LINK (args->url); }
+	err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);
@@ -1605,11 +1598,8 @@ action_m2_content_propset (struct req_args_s *args, struct json_object *jargs)
 	if (OPT("flush"))
 		flags |= M2V2_FLAG_FLUSH;
 
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_PROP_SET (m2->host, args->url, flags, beans);
-	}
-	GError *err = _resolve_meta2 (args, hook);
+	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_SET (args->url, flags, beans); }
+	GError *err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 	_bean_cleanl2 (beans);
 	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
@@ -1638,32 +1628,25 @@ action_m2_content_propdel (struct req_args_s *args, struct json_object *jargs)
 		names = g_slist_prepend (names, g_strdup(json_object_get_string(item)));
 	}
 
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_PROP_DEL (m2->host, args->url, names);
-	}
-	GError *err = _resolve_meta2 (args, hook);
+	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_DEL (args->url, names); }
+	GError *err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 	g_slist_free_full (names, g_free0);
 	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);
 }
 
+#define PROPGET_FLAGS M2V2_FLAG_ALLPROPS|M2V2_FLAG_NOFORMATCHECK
+
 static enum http_rc_e
 action_m2_content_propget (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
-	// TODO manage the version of the content
-	gint64 version = 0;
-	(void) version;
+	/* TODO manage the version of the content */
 
 	GSList *beans = NULL;
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_PROP_GET (m2->host, args->url,
-				M2V2_FLAG_ALLPROPS|M2V2_FLAG_NOFORMATCHECK, &beans);
-	}
-	GError *err = _resolve_meta2 (args, hook);
+	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_GET (args->url, PROPGET_FLAGS); }
+	GError *err = _resolve_meta2 (args, CLIENT_PREFER_SLAVE, _pack, &beans);
 	return _reply_properties (args, err, beans);
 }
 
@@ -1677,7 +1660,7 @@ _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 
 	gboolean append = _request_has_flag (args, PROXYD_HEADER_MODE, "append");
 	gboolean force = _request_has_flag (args, PROXYD_HEADER_MODE, "force");
-	GSList *ibeans = NULL;
+	GSList *ibeans = NULL, *obeans = NULL;
 	GError *err;
 
 	if (NULL != (err = _load_simplified_content (args, jbody, &ibeans))) {
@@ -1685,20 +1668,13 @@ _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 		return err;
 	}
 
-	GError *hook (struct meta1_service_url_s * m2, gboolean *next) {
-		(void) next;
-		GSList *obeans = NULL;
-		GError *e = NULL;
-		if (force)
-			e = m2v2_remote_execute_OVERWRITE (m2->host, args->url, ibeans);
-		else if (append)
-			e = m2v2_remote_execute_APPEND (m2->host, args->url, ibeans, &obeans);
-		else
-			e = m2v2_remote_execute_PUT (m2->host, args->url, ibeans, &obeans);
-		_bean_cleanl2 (obeans);
-		return e;
+	PACKER_VOID(_pack) {
+		if (force) return m2v2_remote_pack_OVERWRITE (args->url, ibeans);
+		if (append) return m2v2_remote_pack_APPEND (args->url, ibeans);
+		return m2v2_remote_pack_PUT (args->url, ibeans);
 	}
-	err = _resolve_meta2 (args, hook);
+	err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, &obeans);
+	_bean_cleanl2 (obeans);
 	_bean_cleanl2 (ibeans);
 	return err;
 }
@@ -1747,22 +1723,16 @@ enum http_rc_e
 action_content_show (struct req_args_s *args)
 {
 	GSList *beans = NULL;
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_GET (m2->host, args->url, 0, &beans);
-	}
-	GError *err = _resolve_meta2 (args, hook);
+	PACKER_VOID(_pack) { return m2v2_remote_pack_GET (args->url, 0); }
+	GError *err = _resolve_meta2 (args, CLIENT_PREFER_SLAVE, _pack, &beans);
 	return _reply_simplified_beans (args, err, beans, TRUE);
 }
 
 enum http_rc_e
 action_content_delete (struct req_args_s *args)
 {
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_DEL (m2->host, args->url);
-	}
-	GError *err = _resolve_meta2 (args, hook);
+	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url); }
+	GError *err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 	return _reply_m2_error (args, err);
 }
 
@@ -1825,11 +1795,10 @@ action_content_copy (struct req_args_s *args)
 		return _reply_format_error(args, BADREQ("Invalid source/target URL"));
 	}
 
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_COPY (m2->host, target_url, oio_url_get(args->url, OIOURL_PATH));
+	PACKER_VOID(_pack) {
+		return m2v2_remote_pack_COPY (target_url, oio_url_get(args->url, OIOURL_PATH));
 	}
-	GError *err = _resolve_meta2 (args, hook);
+	GError *err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 	oio_url_pclean(&target_url);
 	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);

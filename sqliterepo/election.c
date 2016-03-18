@@ -834,45 +834,6 @@ member_log_event(struct election_member_s *member, enum election_step_e pre,
 	plog->post = member->step;
 }
 
-static gchar*
-member_dump_log(struct election_member_s *member)
-{
-	GString *out= g_string_new("\n\tP: ");
-
-	/* local url */
-	g_string_append(out, member_get_url(member));
-
-	/* the peers */
-	gchar **peers = NULL;
-	GError *err = member_get_peers(member, FALSE, &peers);
-	if (err != NULL) {
-		g_string_append_printf(out, "NOT MANAGED (%d) %s",
-				err->code, err->message);
-		g_clear_error(&err);
-	}
-	else if (peers) {
-		for (gchar **p = peers; *p ;p++) {
-			g_string_append_c(out, '|');
-			g_string_append(out, *p);
-		}
-		g_strfreev(peers);
-	}
-
-	/* then the livelog */
-	guint idx = member->log_index - 1;
-	for (guint i=0; i<EVENTLOG_SIZE ;i++,idx--) {
-		struct logged_event_s *plog = member->log + (idx % EVENTLOG_SIZE);
-		if (!plog->pre && !plog->post)
-			break;
-		g_string_append_printf(out, "\n\t%s:%s:%s",
-				_step2str(plog->pre),
-				_evt2str(plog->event),
-				_step2str(plog->post));
-	}
-
-	return g_string_free(out, FALSE);
-}
-
 static void
 member_descr(const struct election_member_s *m, gchar *d, gsize ds)
 {
@@ -1065,6 +1026,78 @@ election_manager_exit_all(struct election_manager_s *manager, gint64 duration,
 	GRID_INFO("No more active elections");
 }
 
+#define GS_APPEND_LEN(gs,str) g_string_append_len(gs, str, sizeof(str)-1);
+
+static void
+member_json (struct election_member_s *m, GString *gs)
+{
+	g_string_append (gs, "{");
+
+	/* description */
+	g_string_append (gs, "\"local\":{");
+	oio_str_gstring_append_json_pair_int (gs, "id", m->myid);
+	g_string_append_c (gs, ',');
+	oio_str_gstring_append_json_pair (gs, "url", member_get_url(m));
+	g_string_append_c (gs, ',');
+	oio_str_gstring_append_json_pair (gs, "state", _step2str(m->step));
+	g_string_append (gs, "},\"master\":{");
+	oio_str_gstring_append_json_pair_int (gs, "id", m->master_id);
+	g_string_append_c (gs, ',');
+	oio_str_gstring_append_json_pair (gs, "url", m->master_url);
+	g_string_append (gs, "},\"base\":{");
+	oio_str_gstring_append_json_pair (gs, "name", m->name.base);
+	g_string_append_c (gs, ',');
+	oio_str_gstring_append_json_pair (gs, "type", m->name.type);
+	g_string_append_c (gs, ',');
+	oio_str_gstring_append_json_pair (gs, "zk", hashstr_str(m->key));
+	g_string_append (gs, "},\"#\":{");
+	oio_str_gstring_append_json_pair_int (gs, "R", m->refcount);
+	g_string_append_c (gs, ',');
+	oio_str_gstring_append_json_pair_int (gs, "P", m->pending_PIPEFROM);
+	g_string_append_c (gs, ',');
+	oio_str_gstring_append_json_pair_int (gs, "V", m->pending_GETVERS);
+	g_string_append_c (gs, '}');
+
+	/* the peers */
+	GS_APPEND_LEN(gs, ",\"peers\":");
+	gchar **peers = NULL;
+	GError *err = member_get_peers(m, FALSE, &peers);
+	if (err != NULL) {
+		g_string_append_printf(gs, "{\"status\":%d", err->code);
+		oio_str_gstring_append_json_pair (gs, "message", err->message);
+		g_string_append_c (gs, '}');
+	} else if (peers) {
+		g_string_append_c (gs, '[');
+		for (gchar **p = peers; *p ;p++) {
+			if (p!=peers)
+				g_string_append_c(gs, ',');
+			g_string_append_c (gs, '"');
+			oio_str_gstring_append_json_string(gs, *p);
+			g_string_append_c (gs, '"');
+		}
+		g_strfreev(peers);
+		g_string_append_c (gs, ']');
+	} else {
+		GS_APPEND_LEN(gs, "null");
+	}
+
+	/* then the livelog */
+	GS_APPEND_LEN(gs, ",\"log\":[");
+	guint idx = m->log_index - 1;
+	for (guint i=0; i<EVENTLOG_SIZE ;i++,idx--) {
+		struct logged_event_s *plog = m->log + (idx % EVENTLOG_SIZE);
+		if (!plog->pre && !plog->post)
+			break;
+		if (i!=0)
+			g_string_append_c(gs, ',');
+		g_string_append_printf(gs, "\"%s:%s:%s\"", _step2str(plog->pre),
+				_evt2str(plog->event), _step2str(plog->post));
+	}
+	g_string_append_c (gs, ']');
+
+	g_string_append_c (gs, '}');
+}
+
 void
 election_manager_whatabout (struct election_manager_s *m,
 		const struct sqlx_name_s *n, gchar *d, gsize ds)
@@ -1078,23 +1111,23 @@ election_manager_whatabout (struct election_manager_s *m,
 	hashstr_t *key = sqliterepo_hash_name(n);
 	g_mutex_lock(&m->lock);
 	struct election_member_s *member = _LOCKED_get_member(m, key);
+	g_free(key);
+
+	GString *gs = g_string_new("");
 	if (member) {
-		member_descr (member, d, ds);
+		member_json (member, gs);
 		member_unref (member);
-		gchar *log = member_dump_log(member);
-		g_strlcat(d, log, ds);
-		g_free(log);
-	}
-	else {
+	} else {
 		if (election_manager_get_mode(m) == ELECTION_MODE_NONE)
-			g_snprintf(d, ds, "Replication disabled by configuration");
+			g_string_append (gs, "{}");
 		else
-			g_snprintf(d, ds, "No election for [%s][%s] [%s]",
-					n->base, n->type, hashstr_str(key));
+			g_string_append (gs, "null");
 	}
 	g_mutex_unlock(&m->lock);
 
-	g_free(key);
+	g_strlcpy (d, gs->str, ds);
+	GRID_WARN("XXX %s", gs->str);
+	g_string_free (gs, TRUE);
 }
 
 /* XXX Zookeeper callbacks ----------------------------------------------------

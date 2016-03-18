@@ -19,12 +19,21 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "common.h"
 
+void
+_append_status (GString *out, gint code, const char * msg)
+{
+	g_assert (out != NULL);
+	g_string_append_printf (out, "\"status\":%d,\"message\":\"", code);
+	oio_str_gstring_append_json_string (out, msg);
+	g_string_append_c (out, '"');
+}
+
 GString *
 _create_status (gint code, const gchar * msg)
 {
 	GString *gstr = g_string_sized_new (256);
 	g_string_append_c (gstr, '{');
-	g_string_append_printf (gstr, "\"status\":%d,\"message\":\"%s\"", code, msg);
+	_append_status (gstr, code, msg);
 	g_string_append_c (gstr, '}');
 	return gstr;
 }
