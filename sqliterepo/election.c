@@ -2299,12 +2299,14 @@ election_manager_play_timers (struct election_manager_s *manager, guint max)
 		   avoids loops and wrong game on pointers. */
 		GSList *l0 = _DEQUE_extract (beacon);
 		for (GSList *l=l0; l && (!max || count < max) ;l=l->next) {
+
 			struct election_member_s *m = l->data;
 			enum sqlx_action_e action = _member_get_next_action (m);
 			if (GRID_TRACE_ENABLED()) {
 				member_descr (m, descr, sizeof(descr));
 				GRID_TRACE("action [%s] %s", _action2str(action), descr);
 			}
+
 			if (action == ACTION_EXPIRE) {
 				if (m->refcount == 1) {
 					count ++;

@@ -242,7 +242,7 @@ action_sqlx_copyto (struct req_args_s *args, struct json_object *jargs)
 		struct gridd_client_s *c = gridd_client_create(to, req, NULL, NULL);
 		g_byte_array_unref (req);
 		gridd_client_start (c);
-		gridd_client_set_timeout (c, 30.0);
+		gridd_client_set_timeout (c, SQLX_RESYNC_TIMEOUT);
 		GError *e = gridd_client_loop (c);
 		gridd_client_free (c);
 		if (!first)
