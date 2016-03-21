@@ -761,17 +761,14 @@ _task_react_elections(gpointer p)
 	if (!PSRV(p)->flag_replicable)
 		return;
 
-	guint count = 0;
+	gint64 t = oio_ext_monotonic_time();
+	guint count = election_manager_play_timers (PSRV(p)->election_manager);
+	t = t - oio_ext_monotonic_time();
 
-	const gint64 deadline = oio_ext_monotonic_time() +
-		500 * G_TIME_SPAN_MILLISECOND;
-	while (election_manager_play_timers (PSRV(p)->election_manager)) {
-		++ count;
-		if (oio_ext_monotonic_time () > deadline)
-			break;
+	if (count || t > (500*G_TIME_SPAN_MILLISECOND)) {
+		GRID_DEBUG("Reacted %u elections in %"G_GINT64_FORMAT"ms",
+				count, t / G_TIME_SPAN_MILLISECOND);
 	}
-	if (count)
-		GRID_DEBUG("Reacted %u elections", count);
 }
 
 static void

@@ -150,10 +150,10 @@ enum hook_type_e
 {
 	CREATE = 1,
 	DELETE,
-	EXISTS_DONE, EXISTS_WATCH,
-	GET_DONE, GET_WATCH,
-	CHILDREN_DONE, CHILDREN_WATCH,
-	SIBLINGS_DONE, SIBLINGS_WATCH,
+	EXISTS_DONE,
+	GET_DONE,
+	CHILDREN_DONE,
+	SIBLINGS_DONE,
 };
 
 static const char *
@@ -163,13 +163,9 @@ _pending_2str (enum hook_type_e t)
 		ON_ENUM(,CREATE);
 		ON_ENUM(,DELETE);
 		ON_ENUM(,EXISTS_DONE);
-		ON_ENUM(,EXISTS_WATCH);
 		ON_ENUM(,GET_DONE);
-		ON_ENUM(,GET_WATCH);
 		ON_ENUM(,CHILDREN_DONE);
-		ON_ENUM(,CHILDREN_WATCH);
 		ON_ENUM(,SIBLINGS_DONE);
-		ON_ENUM(,SIBLINGS_WATCH);
 	}
 
 	g_assert_not_reached ();
@@ -279,10 +275,6 @@ _sync_awexists (struct sqlx_sync_s *ss, const char *path,
 	(void) watcher, (void) watcherCtx;
 	(void) completion, (void) data;
 	GRID_DEBUG (".oO %s %s", __FUNCTION__, path);
-	if (watcher) {
-		enum hook_type_e val = EXISTS_WATCH;
-		g_array_append_vals (ss->pending, &val, 1);
-	}
 	if (completion) {
 		enum hook_type_e val = EXISTS_DONE;
 		g_array_append_vals (ss->pending, &val, 1);
@@ -298,10 +290,6 @@ static int _sync_awget (struct sqlx_sync_s *ss, const char *path,
 	(void) watcher, (void) watcherCtx;
 	(void) completion, (void) data;
 	GRID_DEBUG (".oO %s %s", __FUNCTION__, path);
-	if (watcher) {
-		enum hook_type_e val = GET_WATCH;
-		g_array_append_vals (ss->pending, &val, 1);
-	}
 	if (completion) {
 		enum hook_type_e val = GET_DONE;
 		g_array_append_vals (ss->pending, &val, 1);
@@ -318,10 +306,6 @@ _sync_awget_children (struct sqlx_sync_s *ss, const char *path,
 	(void) watcher, (void) watcherCtx;
 	(void) completion, (void) data;
 	GRID_DEBUG (".oO %s %s", __FUNCTION__, path);
-	if (watcher) {
-		enum hook_type_e val = CHILDREN_WATCH;
-		g_array_append_vals (ss->pending, &val, 1);
-	}
 	if (completion) {
 		enum hook_type_e val = CHILDREN_DONE;
 		g_array_append_vals (ss->pending, &val, 1);
@@ -338,10 +322,6 @@ _sync_awget_siblings (struct sqlx_sync_s *ss, const char *path,
 	(void) watcher, (void) watcherCtx;
 	(void) completion, (void) data;
 	GRID_DEBUG (".oO %s %s", __FUNCTION__, path);
-	if (watcher) {
-		enum hook_type_e val = SIBLINGS_WATCH;
-		g_array_append_vals (ss->pending, &val, 1);
-	}
 	if (completion) {
 		enum hook_type_e val = SIBLINGS_DONE;
 		g_array_append_vals (ss->pending, &val, 1);
@@ -492,7 +472,6 @@ test_single (void)
 	struct election_manager_s *manager = NULL;
 	GArray *iv = g_array_new (0,0,sizeof(gint64));
 	GError *err = NULL;
-	gboolean rc = 0;
 	gint64 i64 = 0;
 	guint u = 0;
 
@@ -552,8 +531,7 @@ test_single (void)
 	_test_transition (EVT_NONE, NULL, STEP_CANDREQ);
 #endif
 
-	rc = election_manager_play_timers (manager);
-	g_assert_false (rc);
+	g_assert_cmpuint (0, ==, election_manager_play_timers (manager));
 
 	g_array_remove_index_fast (sync->pending, 0);
 	_pending (0);
@@ -566,26 +544,28 @@ test_single (void)
 		g_free (s);
 		g_free (key);
 	} while (0);
-	_pending (EXISTS_WATCH, EXISTS_DONE, SIBLINGS_DONE, 0);
+	_pending (EXISTS_DONE, SIBLINGS_DONE, 0);
 
 	g_array_set_size (iv,0); /* there 2 nodes: 1,2 (MUST be sorted) */
 	i64 = 1; g_array_append_vals (iv, &i64, 1);
 	i64 = 2; g_array_append_vals (iv, &i64, 1);
 	_test_transition (EVT_LIST_OK, iv, STEP_PRELEAD);
-	g_array_remove_index (sync->pending, 2);
-	_pending (EXISTS_WATCH, EXISTS_DONE, 0);
-	_test_unref();
-	g_assert_cmpuint (_refcount(), ==, 2);
-
-	CLOCK += manager->delay_expire_pending + 1;
-	g_assert_cmpuint (_refcount(), ==, 2);
-	g_assert_false (election_manager_play_timers (manager));
-
 	g_array_remove_index (sync->pending, 1);
+	_pending (EXISTS_DONE, 0);
 	_test_unref();
-	g_assert_cmpuint (_refcount(), ==, 1);
+	g_assert_cmpuint (_refcount(), ==, 2);
 
-	g_assert_true (election_manager_play_timers (manager));
+	CLOCK += manager->delay_fail_pending + 1;
+	g_assert_cmpuint (_refcount(), ==, 2);
+	g_assert_cmpuint (1, ==, election_manager_play_timers (manager));
+	g_assert_cmpuint (0, ==, election_manager_play_timers (manager));
+	CLOCK += manager->delay_expire_failed + 1;
+	g_assert_cmpuint (1, ==, election_manager_play_timers (manager));
+
+	_pending (EXISTS_DONE, DELETE, 0);
+	g_assert_cmpuint (_refcount(), ==, 3);
+
+	g_assert_cmpuint (0, ==, election_manager_play_timers (manager));
 
 	election_manager_clean (manager);
 	sqlx_peering__destroy (peering);
@@ -655,7 +635,7 @@ test_election_init(void)
 		g_free (n.base);
 	}
 
-	election_manager_clean(m);
+	election_manager_clean (m);
 	sqlx_peering__destroy (peering);
 	sqlx_sync_close (sync);
 	sqlx_sync_clear (sync);

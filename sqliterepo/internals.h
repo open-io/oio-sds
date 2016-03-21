@@ -104,7 +104,7 @@ License along with this library.
 	EXTRA_ASSERT((M)->vtable); \
 	/* EXTRA_ASSERT((M)->sync); */ \
 	EXTRA_ASSERT((M)->peering); \
-	EXTRA_ASSERT((M)->lrutree_members != NULL);\
+	EXTRA_ASSERT((M)->members_by_key != NULL);\
 	CONFIG_CHECK((M)->config); \
 } while (0)
 

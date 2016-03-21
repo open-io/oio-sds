@@ -48,12 +48,13 @@ enum sqlx_action_e
 	ACTION_FAIL,
 	ACTION_RETRY, /* re-send getvers */
 	ACTION_RESTART,
+	ACTION_LEAVE,
 	ACTION_EXPIRE
 };
 
 enum election_step_e
 {
-	STEP_NONE,
+	STEP_NONE = 0,
 	STEP_CANDREQ,
 	STEP_CANDOK,
 	STEP_LEAVING,
@@ -62,6 +63,7 @@ enum election_step_e
 	STEP_LOST,
 	STEP_LEADER,
 	STEP_FAILED,
+#define STEP_MAX (STEP_FAILED+1)
 };
 
 enum event_type_e
@@ -95,11 +97,20 @@ enum event_type_e
 	EVT_LEAVE_KO,
 };
 
+/* @private */
 struct logged_event_s
 {
 	enum event_type_e event   :8;
 	enum election_step_e pre  :8;
 	enum election_step_e post :8;
+};
+
+/* @private */
+struct deque_beacon_s
+{
+	guint count;
+	struct election_member_s *first;
+	struct election_member_s *last;
 };
 
 struct election_manager_s
@@ -115,20 +126,20 @@ struct election_manager_s
 	/* do not free or change the fields below */
 	const struct replication_config_s *config;
 
-	struct lru_tree_s *lrutree_members; /* all the elections */
-	GPtrArray *garbage_member_keys;
 	GMutex lock;
+	GTree *members_by_key;
+	struct deque_beacon_s members_by_state[STEP_MAX];
 
 	/* how long we accept to wait for a status. */
 	gint64 delay_wait;
 
 	/* how long we wait before expiring a base */
 	gint64 delay_expire_none;
-	gint64 delay_expire_pending;
 	gint64 delay_expire_final;
+	gint64 delay_expire_failed;
 
 	/* how long we wait before failing a stalled election */
-	gint64 delay_fail_idle;
+	gint64 delay_fail_pending;
 
 	/* how long we wait before restarting a failed election. */
 	gint64 delay_retry_pending;
@@ -148,6 +159,9 @@ struct election_manager_s
 
 struct election_member_s
 {
+	struct election_member_s *prev;
+	struct election_member_s *next;
+
 	struct election_manager_s *manager;
 	struct sqlx_name_mutable_s name;
 	hashstr_t *key;
@@ -277,7 +291,81 @@ _thlocal_get_manager (void)
 	return g_private_get (&th_local_key_manager);
 }
 
-/* XXX Misc helpers -------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+static void
+_DEQUE_remove (struct election_member_s *m)
+{
+	EXTRA_ASSERT(m != NULL);
+	EXTRA_ASSERT(m->step < STEP_MAX);
+	struct deque_beacon_s *beacon = m->manager->members_by_state + m->step;
+	EXTRA_ASSERT(beacon->count > 0);
+
+	struct election_member_s *prev = m->prev, *next = m->next;
+	if (beacon->first == m) beacon->first = next;
+	if (beacon->last == m) beacon->last = prev;
+	if (prev) prev->next = next;
+	if (next) next->prev = prev;
+	m->prev = m->next = NULL;
+	-- beacon->count;
+}
+
+static void
+_DEQUE_add (struct election_member_s *m)
+{
+	EXTRA_ASSERT(m != NULL);
+	EXTRA_ASSERT(m->step < STEP_MAX);
+	EXTRA_ASSERT(m->prev == NULL);
+	EXTRA_ASSERT(m->next == NULL);
+	struct deque_beacon_s *beacon = m->manager->members_by_state + m->step;
+
+	m->prev = beacon->last;
+	beacon->last = m;
+
+	if (!beacon->first) {
+		m->next = beacon->first;
+		beacon->first = m;
+	}
+	++ beacon->count;
+}
+
+static struct election_member_s *
+_DEQUE_locate_by_uid (struct deque_beacon_s *beacon, const guint32 uid)
+{
+	for (struct election_member_s *m=beacon->last; m ; m=m->prev) {
+		if (m->uid == uid)
+			return m;
+	}
+	return NULL;
+}
+
+/* Locate an item by its UID.
+   Used for long-term watchers, we target first the statues usually worn by
+   items when it happens. */
+static struct election_member_s *
+_manager_locate_by_uid (struct election_manager_s *manager, const guint32 uid)
+{
+	/* We also known that we have nothing to do with a member with no
+	   election started, so we choose this as iteration stop. */
+	static const int steps[] = {
+		STEP_LEAVING, /* legitimate + short list */
+		STEP_FAILED, /* legitimate + short list */
+		STEP_LEADER, STEP_LOST,
+		STEP_PRELEAD, STEP_PRELOST,
+		STEP_CANDOK, STEP_CANDREQ,
+		STEP_NONE /* must be last */,
+	};
+
+	for (const int *p = steps; *p != STEP_NONE ; ++p) {
+		struct election_member_s *out =
+			_DEQUE_locate_by_uid (manager->members_by_state + *p, uid);
+		if (out)
+			return out;
+	}
+	return NULL;
+}
+
+/* XXX Misc helpers --------------------------------------------------------- */
 
 static gboolean
 _is_over (const gint64 last, const gint64 delay)
@@ -317,6 +405,7 @@ _action2str(enum sqlx_action_e action)
 		ON_ENUM(ACTION_,FAIL);
 		ON_ENUM(ACTION_,RETRY);
 		ON_ENUM(ACTION_,RESTART);
+		ON_ENUM(ACTION_,LEAVE);
 		ON_ENUM(ACTION_,EXPIRE);
 	}
 
@@ -391,20 +480,19 @@ election_manager_create(struct replication_config_s *config,
 	manager->vtable = &VTABLE;
 	manager->delay_wait = SQLX_DELAY_MAXWAIT;
 	manager->delay_expire_none = 5 * G_TIME_SPAN_MINUTE;
-	manager->delay_expire_pending = 5 * G_TIME_SPAN_MINUTE;
 	manager->delay_expire_final = 5 * G_TIME_SPAN_MINUTE;
-	manager->delay_fail_idle = SQLX_DELAY_MAXIDLE;
+	manager->delay_expire_failed = 5 * G_TIME_SPAN_MINUTE;
+	manager->delay_fail_pending = SQLX_DELAY_MAXIDLE;
 	manager->delay_retry_failed = SQLX_DELAY_RESTART_FAILED;
 	manager->delay_retry_pending = SQLX_DELAY_ELECTION_REPLAY;
 	manager->delay_ping_pending = SQLX_DELAY_PING_PENDING;
 	manager->delay_ping_final = SQLX_DELAY_PING_FINAL;
 	manager->delay_ping_failed = SQLX_DELAY_PING_FAILED;
 	manager->config = config;
-	manager->lrutree_members = lru_tree_create(
-			(GCompareFunc)hashstr_quick_cmp,
-			g_free, NULL, 0);
 
 	g_mutex_init(&manager->lock);
+	manager->members_by_key = g_tree_new_full (hashstr_quick_cmpdata, NULL, NULL, NULL);
+
 	for (guint i=0; i<SQLX_MAX_COND ;i++)
 		g_cond_init(manager->conds + i);
 
@@ -477,35 +565,21 @@ election_manager_get_mode (const struct election_manager_s *m)
 	return ((struct abstract_election_manager_s*)m)->vtable->get_mode(m);
 }
 
-static gboolean
-_count_runner(hashstr_t *k, struct election_member_s *member,
-		struct election_counts_s *count)
+static struct election_counts_s
+_NOLOCK_count (struct election_manager_s *manager)
 {
-	(void) k;
-	++ count->total;
-	switch (member->step) {
-		case STEP_NONE:
-			++ count->none;
-			return FALSE;
-		case STEP_CANDREQ:
-		case STEP_CANDOK:
-		case STEP_LEAVING:
-		case STEP_PRELOST:
-		case STEP_PRELEAD:
-			++ count->pending;
-			return FALSE;
-		case STEP_LOST:
-			++ count->slave;
-			return FALSE;
-		case STEP_LEADER:
-			++ count->master;
-			return FALSE;
-		case STEP_FAILED:
-			++ count->failed;
-			return FALSE;
-	}
-	g_assert_not_reached ();
-	return TRUE;
+	struct election_counts_s count = {0};
+	count.none = manager->members_by_state[STEP_NONE].count;
+	count.pending += manager->members_by_state[STEP_CANDREQ].count;
+	count.pending += manager->members_by_state[STEP_CANDOK].count;
+	count.pending += manager->members_by_state[STEP_LEAVING].count;
+	count.pending += manager->members_by_state[STEP_PRELOST].count;
+	count.pending += manager->members_by_state[STEP_PRELEAD].count;
+	count.slave = manager->members_by_state[STEP_LOST].count;
+	count.master = manager->members_by_state[STEP_LEADER].count;
+	count.failed = manager->members_by_state[STEP_FAILED].count;
+	count.total = count.none + count.pending + count.master + count.slave + count.failed;
+	return count;
 }
 
 struct election_counts_s
@@ -514,11 +588,8 @@ election_manager_count(struct election_manager_s *manager)
 	MANAGER_CHECK(manager);
 	EXTRA_ASSERT (manager->vtable == &VTABLE);
 
-	struct election_counts_s count = {0};
-
 	g_mutex_lock(&manager->lock);
-	lru_tree_foreach_DEQ(manager->lrutree_members,
-			(GTraverseFunc) _count_runner, &count);
+	struct election_counts_s count = _NOLOCK_count (manager);
 	g_mutex_unlock(&manager->lock);
 	return count;
 }
@@ -558,28 +629,28 @@ _manager_clean(struct election_manager_s *manager)
 {
 	if (!manager)
 		return;
-	if (manager->lrutree_members) {
-		gchar *key = NULL;
-		struct election_member_s *member = NULL;
-		struct election_counts_s count = {0};
 
-		lru_tree_foreach_DEQ(manager->lrutree_members,
-				(GTraverseFunc) _count_runner, &count);
-		GRID_DEBUG("%d elections still alive at manager shutdown:",
-				count.total);
-		GRID_DEBUG("%d masters, %d slaves, %d pending, %d failed, %d exited",
-				count.master, count.slave, count.pending, count.failed,
-				count.none);
+	struct election_counts_s count = _NOLOCK_count(manager);
+	GRID_DEBUG("%d elections still alive at manager shutdown: %d masters, "
+			"%d slaves, %d pending, %d failed, %d exited",
+			count.total, count.master, count.slave, count.pending,
+			count.failed, count.none);
 
-		while (lru_tree_steal_first(manager->lrutree_members,
-				(gpointer*)&key,
-				(gpointer*)&member)) {
-			g_free(key);
-			member_unref(member);
-			member_destroy(member);
+	if (manager->members_by_key)
+		g_tree_destroy (manager->members_by_key);
+
+	/* Ensure all the items are unlinked */
+	for (int i=STEP_NONE; i<STEP_MAX ;++i) {
+		struct deque_beacon_s *beacon = manager->members_by_state + i;
+		while (beacon->first != NULL) {
+			struct election_member_s *m = beacon->first;
+			_DEQUE_remove(m);
+			m->refcount = 0; /* ugly quirk that cope with an assert on refcount */
+			member_destroy (m);
 		}
-		lru_tree_destroy(manager->lrutree_members);
+		g_assert (beacon->count == 0);
 	}
+
 	g_mutex_clear(&manager->lock);
 	for (guint i=0; i<SQLX_MAX_COND; i++)
 		g_cond_clear(manager->conds + i);
@@ -638,12 +709,6 @@ member_decache_peers(struct election_member_s *m)
 {
 	GError *err = member_get_peers(m, TRUE, NULL);
 	if (err) g_clear_error(&err);
-}
-
-static void
-member_kickoff(struct election_member_s *m)
-{
-	transition(m, EVT_NONE, NULL);
 }
 
 static void
@@ -737,8 +802,10 @@ member_set_id(struct election_member_s *m, gint64 id)
 static void
 member_set_status(struct election_member_s *m, enum election_step_e s)
 {
+	_DEQUE_remove (m);
 	m->last_status = oio_ext_monotonic_time ();
 	m->step = s;
+	_DEQUE_add (m);
 	if (STATUS_FINAL(s)) {
 		member_debug(__FUNCTION__, "FINAL", m);
 		member_signal(m);
@@ -897,14 +964,11 @@ member_group_master(struct election_member_s *member, GArray *i64v)
 static gboolean
 member_in_group(struct election_member_s *member, GArray *i64v)
 {
-	guint i;
-	gint64 i64;
-
 	EXTRA_ASSERT(i64v != NULL);
 	if (member->myid < 0)
 		return FALSE;
-	for (i=0; i<i64v->len ;i++) {
-		i64 = g_array_index(i64v, gint64, i);
+	for (guint i=0; i<i64v->len ;i++) {
+		gint64 i64 = g_array_index(i64v, gint64, i);
 		if (i64 == member->myid)
 			return TRUE;
 	}
@@ -914,7 +978,7 @@ member_in_group(struct election_member_s *member, GArray *i64v)
 static struct election_member_s *
 _LOCKED_get_member (struct election_manager_s *ma, const hashstr_t *k)
 {
-	struct election_member_s *m = lru_tree_get (ma->lrutree_members, k);
+	struct election_member_s *m = g_tree_lookup (ma->members_by_key, k);
 	if (m) member_ref (m);
 	return m;
 }
@@ -940,7 +1004,8 @@ _LOCKED_init_member(struct election_manager_s *manager,
 		member->myid = member->master_id = -1;
 		member->refcount = 2;
 
-		lru_tree_insert(manager->lrutree_members, hashstr_dup(key), member);
+		_DEQUE_add (member);
+		g_tree_replace(manager->members_by_key, member->key, member);
 	}
 	g_free(key);
 	return member;
@@ -955,40 +1020,21 @@ manager_get_member (struct election_manager_s *m, const hashstr_t *k)
 	return member;
 }
 
-static gboolean
-_count(gpointer k, gpointer v, gpointer u)
-{
-	(void) k;
-	MEMBER_CHECK(v);
-	enum election_step_e step = MEMBER(v)->step;
-	if (step != STEP_NONE && step != STEP_FAILED)
-		++ *((guint*)u);
-	return FALSE;
-}
-
 static guint
 manager_count_active(struct election_manager_s *manager)
 {
-	guint count = 0;
-	g_mutex_lock(&manager->lock);
-	lru_tree_foreach_TREE(manager->lrutree_members, _count, &count);
-	g_mutex_unlock(&manager->lock);
-	return count;
+	struct election_counts_s count = election_manager_count (manager);
+	return count.pending + count.master + count.slave;
 }
 
-static void
-manager_send_EXITING(struct election_manager_s *manager)
+static gboolean
+_run_exit (gpointer k, gpointer v, gpointer i)
 {
-	gboolean send_exit(gpointer k, gpointer v, gpointer u) {
-		(void) k; (void) u;
-		MEMBER_CHECK(v);
-		if (MEMBER(v)->step != STEP_NONE)
-			transition(v, EVT_EXITING, NULL);
-		return FALSE;
-	}
-
-	lru_tree_foreach_TREE(manager->lrutree_members, send_exit, NULL);
-	GRID_INFO("EXIT order sent");
+	(void) k, (void) i;
+	struct election_member_s *m = v;
+	if (m->step != STEP_NONE && m->step != STEP_LEAVING)
+		transition(m, EVT_EXITING, NULL);
+	return FALSE;
 }
 
 void
@@ -1000,10 +1046,10 @@ election_manager_exit_all(struct election_manager_s *manager, gint64 duration,
 	EXTRA_ASSERT (manager->vtable == &VTABLE);
 	gint64 pivot = oio_ext_monotonic_time () + duration;
 
-	/* Order the node to exit */
+	/* Order the nodes to exit */
 	g_mutex_lock(&manager->lock);
 	manager->exiting = TRUE;
-	manager_send_EXITING(manager);
+	g_tree_foreach (manager->members_by_key, _run_exit, NULL);
 	g_mutex_unlock(&manager->lock);
 
 	for (guint count; 0 < (count = manager_count_active(manager)) ;) {
@@ -1177,15 +1223,7 @@ _find_member (void *d)
 
 	struct election_member_s *member = NULL;
 	g_mutex_lock (&manager->lock);
-	gboolean _locate (gpointer k, gpointer v, gpointer u) {
-		(void) k, (void) u;
-		if (((struct election_member_s*)v)->uid == GPOINTER_TO_UINT(d)) {
-			member = v;
-			return TRUE;
-		}
-		return FALSE;
-	}
-	lru_tree_foreach_DEQ (manager->lrutree_members, _locate, NULL);
+	member = _manager_locate_by_uid(manager, GPOINTER_TO_UINT(d));
 	if (member) {
 		member_ref (member);
 		return member;
@@ -1410,10 +1448,9 @@ wait_for_final_status(struct election_member_s *m, gint64 deadline)
 {
 	while (!STATUS_FINAL(m->step)) {
 
-		member_kickoff(m);
-
 		const gint64 now = oio_ext_monotonic_time();
 		m->last_atime = now;
+		transition(m, EVT_NONE, NULL);
 
 		/* compare internal timers to our fake'able clock */
 		if (now > deadline) {
@@ -1451,7 +1488,7 @@ _election_get_status(struct election_manager_s *mgr,
 
 	g_mutex_lock(&mgr->lock);
 	struct election_member_s *m = _LOCKED_init_member(mgr, n, TRUE);
-	member_kickoff(m);
+	transition(m, EVT_NONE, NULL);
 
 	if (!wait_for_final_status(m, deadline)) // TIMEOUT!
 		rc = STEP_FAILED;
@@ -1624,8 +1661,6 @@ _result_GETVERS (GError *enet,
 static void
 defer_GETVERS(struct election_member_s *member)
 {
-	guint pending = 0;
-
 	MEMBER_CHECK(member);
 	GRID_TRACE2("%s(%p)", __FUNCTION__, member);
 
@@ -1638,11 +1673,10 @@ defer_GETVERS(struct election_member_s *member)
 		return;
 	}
 
-	pending = peers ? g_strv_length(peers) : 0;
-
 	if (member->sent_GETVERS > 0)
 		member_debug(__FUNCTION__ , "GETVERS req lost", member);
 
+	const guint pending = peers ? g_strv_length(peers) : 0;
 	member->sent_GETVERS = pending;
 	member->pending_GETVERS = pending;
 	member->reqid_GETVERS = manager_next_reqid(member->manager);
@@ -1668,6 +1702,9 @@ member_ask_RESYNC_if_not_pending(struct election_member_s *member)
 static void
 become_failed (struct election_member_s *member)
 {
+	/* setting last_USE to now avoids sending USE as soon as arrived in
+	   the set of FAILED elections. */
+	member->last_USE = oio_ext_monotonic_time ();
 	member_set_status(member, STEP_FAILED);
 }
 
@@ -1679,7 +1716,7 @@ become_leaver(struct election_member_s *member)
 	member_set_status(member, STEP_LEAVING);
 	int zrc = step_LeaveElection_start(member);
 	if (zrc != ZOK)
-		member_set_status(member, STEP_FAILED);
+		become_failed (member);
 }
 
 static void
@@ -1688,7 +1725,7 @@ become_candidate(struct election_member_s *member)
 	member_reset_master(member);
 	member_set_status(member, STEP_CANDOK);
 	if (ZOK != step_ListGroup_start(member))
-		member_set_status(member, STEP_FAILED);
+		become_failed (member);
 }
 
 static void
@@ -1698,22 +1735,19 @@ restart_election(struct election_member_s *member)
 		return become_leaver(member);
 
 	member_reset(member);
-	if (member->manager->exiting) {
-		member_set_status(member, STEP_NONE);
-		return;
-	}
+	if (member->manager->exiting)
+		return member_set_status(member, STEP_NONE);
 
 	member->requested_USE = 0;
 
 	member_set_status(member, STEP_CANDREQ);
-	if (!defer_USE(member)) {
-		member_set_status(member, STEP_FAILED);
-		return;
-	}
+	if (!defer_USE(member))
+		return become_failed (member);
+
 	int zrc = step_StartElection_start(member);
 	if (ZOK != zrc) {
 		member_warn_failed_creation(member, zrc);
-		member_set_status(member, STEP_FAILED);
+		return become_failed (member);
 	}
 }
 
@@ -1781,18 +1815,22 @@ _member_get_next_action (const struct election_member_s *m)
 	switch (m->step) {
 
 		case STEP_NONE:
-			if (_is_over(m->last_atime, M->delay_expire_none))
+			if (_is_over(m->last_status, M->delay_expire_none))
 				return ACTION_EXPIRE;
+			return ACTION_NONE;
+
+		case STEP_LEAVING:
+			if (_is_over (m->last_status, M->delay_fail_pending))
+				return ACTION_FAIL;
+			if (_is_over (m->last_status, M->delay_retry_pending))
+				return ACTION_RETRY;
 			return ACTION_NONE;
 
 		case STEP_CANDREQ:
 		case STEP_CANDOK:
-		case STEP_LEAVING:
 		case STEP_PRELOST:
 		case STEP_PRELEAD:
-			if (_is_over (m->last_atime, M->delay_expire_pending))
-				return ACTION_EXPIRE;
-			if (_is_over (m->last_status, M->delay_fail_idle))
+			if (_is_over (m->last_status, M->delay_fail_pending))
 				return ACTION_FAIL;
 			if (_is_over (m->last_status, M->delay_retry_pending))
 				return ACTION_RETRY;
@@ -1803,14 +1841,14 @@ _member_get_next_action (const struct election_member_s *m)
 		case STEP_LOST:
 		case STEP_LEADER:
 			if (_is_over (m->last_atime, M->delay_expire_final))
-				return ACTION_EXPIRE;
+				return ACTION_LEAVE;
 			if (_is_over (m->last_USE, M->delay_ping_final))
 				return ACTION_PING;
 			return ACTION_NONE;
 
 		case STEP_FAILED:
-			if (_is_over (m->last_atime, M->delay_expire_final))
-				return ACTION_EXPIRE;
+			if (_is_over (m->last_atime, M->delay_expire_failed))
+				return ACTION_LEAVE;
 			if (_is_over (m->last_status, M->delay_retry_failed))
 				return ACTION_RESTART;
 			if (_is_over (m->last_USE, M->delay_ping_failed))
@@ -1840,7 +1878,7 @@ _member_react (struct election_member_s *member,
 
 		case EVT_DISCONNECTED:
 			member_reset(member);
-			return member_set_status(member, STEP_FAILED);
+			return become_failed (member);
 
 		case EVT_RESYNC_DONE:
 			EXTRA_ASSERT(evt_arg != NULL);
@@ -1871,11 +1909,11 @@ _member_react (struct election_member_s *member,
 						return;
 					}
 					if (!defer_USE(member))
-						return member_set_status(member, STEP_FAILED);
+						return become_failed (member);
 					zrc = step_StartElection_start(member);
 					if (ZOK != zrc) {
 						member_warn_failed_creation(member, zrc);
-						return member_set_status(member, STEP_FAILED);
+						return become_failed (member);
 					}
 					return member_set_status(member, STEP_CANDREQ);
 				case EVT_RESYNC_REQ:
@@ -2175,25 +2213,25 @@ static void
 _member_play_timer (struct election_member_s *member,
 		enum sqlx_action_e action)
 {
+	if (action != ACTION_NONE && action != ACTION_PING)
+		GRID_DEBUG("%s -> %s!", hashstr_str(member->key), _action2str(action));
+
 	switch (action) {
 		case ACTION_NONE:
 			return;
 		case ACTION_PING:
-			GRID_TRACE("PING!");
 			return (void) defer_USE (member);
 		case ACTION_FAIL:
-			GRID_TRACE("FAIL!");
-			return member_set_status (member, STEP_FAILED);
+			return become_failed (member);
 		case ACTION_RETRY:
-			GRID_TRACE("RETRY!");
 			defer_GETVERS (member);
 			member->last_status = oio_ext_monotonic_time ();
 			return;
 		case ACTION_RESTART:
-			GRID_TRACE("RESTART!");
 			return restart_election (member);
+		case ACTION_LEAVE:
+			return become_leaver (member);
 		case ACTION_EXPIRE:
-			GRID_TRACE("EXPIRE!");
 			return;
 	}
 }
@@ -2228,31 +2266,63 @@ transition_error(struct election_member_s *member,
 	g_assert_not_reached();
 }
 
-gboolean
-election_manager_play_timers (struct election_manager_s *m)
+static GSList *
+_DEQUE_extract (struct deque_beacon_s *beacon)
 {
-	gboolean rc = FALSE;
-	struct hashstr_s *k = NULL;
-	struct election_member_s *member = NULL;
+	GSList *out = NULL;
+	for (struct election_member_s *m=beacon->first; m ;m=m->next)
+		out = g_slist_prepend (out, m);
+	return g_slist_reverse (out);
+}
 
-	g_mutex_lock (&m->lock);
-	if (lru_tree_get_first (m->lrutree_members, (void**)&k, (void**)&member)) {
-		enum sqlx_action_e action = _member_get_next_action (member);
-		GRID_DEBUG("[%s] action [%s] refcount %u", hashstr_str(member->key),
-				_action2str(action), member->refcount);
-		if (action == ACTION_EXPIRE) {
-			if (member->refcount == 1) { /* 1 for the lrutree_members */
-				rc = TRUE;
-				lru_tree_remove (m->lrutree_members, member->key);
-				member_unref (member);
-				member_destroy (member);
+guint
+election_manager_play_timers (struct election_manager_s *manager)
+{
+	static const int steps[] = {
+		STEP_NONE,
+		STEP_FAILED, STEP_LEADER, STEP_LOST,
+		//STEP_LEAVING,
+		STEP_PRELEAD, STEP_PRELOST, STEP_CANDOK, STEP_CANDREQ,
+		-1 /* stops the iteration */
+	};
+
+	gboolean count = 0;
+	char descr[512];
+
+	g_mutex_lock (&manager->lock);
+	for (const int *pi=steps; *pi >= 0 ;++pi) {
+		struct deque_beacon_s *beacon = manager->members_by_state + *pi;
+		if (!beacon->first)
+			continue;
+		/* working on an item of the list might alterate the list, and even
+		   move the item itself to the tail. so working with a temp. list
+		   avoids loops and wrong game on pointers. */
+		GSList *l0 = _DEQUE_extract (beacon);
+		for (GSList *l=l0; l ;l=l->next) {
+			struct election_member_s *m = l->data;
+			enum sqlx_action_e action = _member_get_next_action (m);
+			if (GRID_TRACE_ENABLED()) {
+				member_descr (m, descr, sizeof(descr));
+				GRID_TRACE("action [%s] %s", _action2str(action), descr);
 			}
-		} else if (action != ACTION_NONE) {
-			rc = TRUE;
-			_member_play_timer (member, action);
+			if (action == ACTION_EXPIRE) {
+				if (m->refcount == 1) {
+					count ++;
+					_DEQUE_remove (m);
+					g_tree_remove (manager->members_by_key, m->key);
+					member_unref (m);
+					member_destroy (m);
+				}
+			} else {
+				if (action != ACTION_NONE)
+					count ++;
+				_member_play_timer (m, action);
+			}
 		}
+		g_slist_free (l0);
+		l0 = NULL;
 	}
-	g_mutex_unlock (&m->lock);
+	g_mutex_unlock (&manager->lock);
 
-	return rc;
+	return count;
 }
