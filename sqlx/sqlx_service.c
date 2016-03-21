@@ -44,6 +44,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "sqlx_service.h"
 #include "oio_events_queue.h"
 
+#ifndef SQLX_MAX_TIMER_PER_ROUND
+# define SQLX_MAX_TIMER_PER_ROUND 1000
+#endif
+
 // common_main hooks
 static struct grid_main_option_s * sqlx_service_get_options(void);
 static const char * sqlx_service_usage(void);
@@ -516,6 +520,7 @@ sqlx_service_configure(int argc, char **argv)
 static void
 sqlx_service_set_defaults(void)
 {
+	SRV.max_elections_timers_per_round = SQLX_MAX_TIMER_PER_ROUND;
 	SRV.open_timeout = DEFAULT_CACHE_OPEN_TIMEOUT / G_TIME_SPAN_MILLISECOND;
 	SRV.cnx_backlog = 50;
 
@@ -762,7 +767,8 @@ _task_react_elections(gpointer p)
 		return;
 
 	gint64 t = oio_ext_monotonic_time();
-	guint count = election_manager_play_timers (PSRV(p)->election_manager);
+	guint count = election_manager_play_timers (PSRV(p)->election_manager,
+			PSRV(p)->max_elections_timers_per_round);
 	t = t - oio_ext_monotonic_time();
 
 	if (count || t > (500*G_TIME_SPAN_MILLISECOND)) {

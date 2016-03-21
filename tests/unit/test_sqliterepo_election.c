@@ -531,7 +531,7 @@ test_single (void)
 	_test_transition (EVT_NONE, NULL, STEP_CANDREQ);
 #endif
 
-	g_assert_cmpuint (0, ==, election_manager_play_timers (manager));
+	g_assert_cmpuint (0, ==, election_manager_play_timers (manager, 0));
 
 	g_array_remove_index_fast (sync->pending, 0);
 	_pending (0);
@@ -557,21 +557,26 @@ test_single (void)
 
 	CLOCK += manager->delay_fail_pending + 1;
 	g_assert_cmpuint (_refcount(), ==, 2);
-	g_assert_cmpuint (1, ==, election_manager_play_timers (manager));
-	g_assert_cmpuint (0, ==, election_manager_play_timers (manager));
+	g_assert_cmpuint (1, ==, election_manager_play_timers (manager, 0));
+	g_assert_cmpuint (0, ==, election_manager_play_timers (manager, 0));
 	CLOCK += manager->delay_expire_failed + 1;
-	g_assert_cmpuint (1, ==, election_manager_play_timers (manager));
+	g_assert_cmpuint (1, ==, election_manager_play_timers (manager, 0));
 
 	_pending (EXISTS_DONE, DELETE, 0);
 	g_assert_cmpuint (_refcount(), ==, 3);
 
-	g_assert_cmpuint (0, ==, election_manager_play_timers (manager));
+	g_assert_cmpuint (0, ==, election_manager_play_timers (manager, 0));
 
 	election_manager_clean (manager);
 	sqlx_peering__destroy (peering);
 	sqlx_sync_close (sync);
 	sqlx_sync_clear (sync);
 	g_array_free (iv, TRUE);
+}
+
+static void
+test_sets (void)
+{
 }
 
 static void
@@ -664,5 +669,6 @@ main(int argc, char **argv)
 	g_test_add_func("/sqlx/election/create_ok", test_create_ok);
 	g_test_add_func("/sqlx/election/election_init", test_election_init);
 	g_test_add_func ("/sqliterepo/election/single", test_single);
+	g_test_add_func ("/sqliterepo/election/sets", test_sets);
 	return g_test_run();
 }

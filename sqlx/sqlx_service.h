@@ -113,6 +113,7 @@ struct sqlx_service_s
 	guint max_bases;
 	guint max_passive;
 	guint max_active;
+	guint max_elections_timers_per_round;
 
 	//-------------------------------------------------------------------
 	// Variables used during the startup time of the server, but not used

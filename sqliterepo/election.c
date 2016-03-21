@@ -109,8 +109,8 @@ struct logged_event_s
 struct deque_beacon_s
 {
 	guint count;
-	struct election_member_s *first;
-	struct election_member_s *last;
+	struct election_member_s *front;
+	struct election_member_s *back;
 };
 
 struct election_manager_s
@@ -302,8 +302,8 @@ _DEQUE_remove (struct election_member_s *m)
 	EXTRA_ASSERT(beacon->count > 0);
 
 	struct election_member_s *prev = m->prev, *next = m->next;
-	if (beacon->first == m) beacon->first = next;
-	if (beacon->last == m) beacon->last = prev;
+	if (beacon->front == m) beacon->front = next;
+	if (beacon->back == m) beacon->back = prev;
 	if (prev) prev->next = next;
 	if (next) next->prev = prev;
 	m->prev = m->next = NULL;
@@ -319,12 +319,12 @@ _DEQUE_add (struct election_member_s *m)
 	EXTRA_ASSERT(m->next == NULL);
 	struct deque_beacon_s *beacon = m->manager->members_by_state + m->step;
 
-	m->prev = beacon->last;
-	beacon->last = m;
+	m->prev = beacon->back;
+	beacon->back = m;
 
-	if (!beacon->first) {
-		m->next = beacon->first;
-		beacon->first = m;
+	if (!beacon->front) {
+		m->next = beacon->front;
+		beacon->front = m;
 	}
 	++ beacon->count;
 }
@@ -332,7 +332,7 @@ _DEQUE_add (struct election_member_s *m)
 static struct election_member_s *
 _DEQUE_locate_by_uid (struct deque_beacon_s *beacon, const guint32 uid)
 {
-	for (struct election_member_s *m=beacon->last; m ; m=m->prev) {
+	for (struct election_member_s *m=beacon->back; m ; m=m->prev) {
 		if (m->uid == uid)
 			return m;
 	}
@@ -340,7 +340,7 @@ _DEQUE_locate_by_uid (struct deque_beacon_s *beacon, const guint32 uid)
 }
 
 /* Locate an item by its UID.
-   Used for long-term watchers, we target first the statues usually worn by
+   Used for long-term watchers, we target first the status usually worn by
    items when it happens. */
 static struct election_member_s *
 _manager_locate_by_uid (struct election_manager_s *manager, const guint32 uid)
@@ -642,8 +642,8 @@ _manager_clean(struct election_manager_s *manager)
 	/* Ensure all the items are unlinked */
 	for (int i=STEP_NONE; i<STEP_MAX ;++i) {
 		struct deque_beacon_s *beacon = manager->members_by_state + i;
-		while (beacon->first != NULL) {
-			struct election_member_s *m = beacon->first;
+		while (beacon->front != NULL) {
+			struct election_member_s *m = beacon->front;
 			_DEQUE_remove(m);
 			m->refcount = 0; /* ugly quirk that cope with an assert on refcount */
 			member_destroy (m);
@@ -2270,13 +2270,13 @@ static GSList *
 _DEQUE_extract (struct deque_beacon_s *beacon)
 {
 	GSList *out = NULL;
-	for (struct election_member_s *m=beacon->first; m ;m=m->next)
+	for (struct election_member_s *m=beacon->front; m ;m=m->next)
 		out = g_slist_prepend (out, m);
 	return g_slist_reverse (out);
 }
 
 guint
-election_manager_play_timers (struct election_manager_s *manager)
+election_manager_play_timers (struct election_manager_s *manager, guint max)
 {
 	static const int steps[] = {
 		STEP_NONE,
@@ -2286,19 +2286,19 @@ election_manager_play_timers (struct election_manager_s *manager)
 		-1 /* stops the iteration */
 	};
 
-	gboolean count = 0;
+	guint count = 0;
 	char descr[512];
 
 	g_mutex_lock (&manager->lock);
-	for (const int *pi=steps; *pi >= 0 ;++pi) {
+	for (const int *pi=steps; *pi >= 0 && (!max || count < max) ;++pi) {
 		struct deque_beacon_s *beacon = manager->members_by_state + *pi;
-		if (!beacon->first)
+		if (!beacon->front)
 			continue;
 		/* working on an item of the list might alterate the list, and even
 		   move the item itself to the tail. so working with a temp. list
 		   avoids loops and wrong game on pointers. */
 		GSList *l0 = _DEQUE_extract (beacon);
-		for (GSList *l=l0; l ;l=l->next) {
+		for (GSList *l=l0; l && (!max || count < max) ;l=l->next) {
 			struct election_member_s *m = l->data;
 			enum sqlx_action_e action = _member_get_next_action (m);
 			if (GRID_TRACE_ENABLED()) {
@@ -2316,7 +2316,15 @@ election_manager_play_timers (struct election_manager_s *manager)
 			} else {
 				if (action != ACTION_NONE)
 					count ++;
+
+				enum election_step_e pre = m->step;
 				_member_play_timer (m, action);
+				enum election_step_e post = m->step;
+				if (pre == post) {
+					_DEQUE_remove (m);
+					_DEQUE_add (m);
+				}
+
 			}
 		}
 		g_slist_free (l0);
