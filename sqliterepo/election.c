@@ -192,11 +192,11 @@ struct election_member_s
 	guint log_index : 8;
 	enum election_step_e step : 8;
 
-	char requested_USE : 1;
-	char requested_PIPEFROM : 1;
-	char requested_EXIT : 1;
-	char pending_PIPEFROM : 1;
-	char pending_watch : 1;
+	unsigned char requested_USE : 1;
+	unsigned char requested_PIPEFROM : 1;
+	unsigned char requested_EXIT : 1;
+	unsigned char pending_PIPEFROM : 1;
+	unsigned char pending_watch : 1;
 
 	struct logged_event_s log[EVENTLOG_SIZE];
 };
