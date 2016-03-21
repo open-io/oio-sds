@@ -73,9 +73,6 @@ License along with this library.
 #  define SQLX_DELAY_PING_FINAL 300 * G_TIME_SPAN_SECOND
 # endif
 
-/* Timeout for SQLX_REPLICATE requests, in seconds */
-#define SQLX_REPLICATION_TIMEOUT 10.0
-
 /* Size of buffer for reading dump file */
 #define SQLX_DUMP_BUFFER_SIZE 32768
 
@@ -104,7 +101,7 @@ License along with this library.
 	EXTRA_ASSERT((M)->vtable); \
 	/* EXTRA_ASSERT((M)->sync); */ \
 	EXTRA_ASSERT((M)->peering); \
-	EXTRA_ASSERT((M)->lrutree_members != NULL);\
+	EXTRA_ASSERT((M)->members_by_key != NULL);\
 	CONFIG_CHECK((M)->config); \
 } while (0)
 

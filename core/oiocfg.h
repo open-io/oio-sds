@@ -170,6 +170,22 @@ extern "C" {
 #  define SQLX_CLIENT_TIMEOUT 30.0
 # endif
 
+/* Timeout for synchronisation requests (USE, GETVERS)
+   in seconds */
+# ifndef SQLX_SYNC_TIMEOUT
+#  define SQLX_SYNC_TIMEOUT 4.0
+# endif
+
+/* Timeout for SQLX_REPLICATE requests, in seconds */
+# ifndef SQLX_REPLI_TIMEOUT
+#  define SQLX_REPLI_TIMEOUT 10.0
+# endif
+
+/* Timeout for operations that require copying a DB */
+# ifndef SQLX_RESYNC_TIMEOUT
+#  define SQLX_RESYNC_TIMEOUT 30.0
+# endif
+
 # ifndef M2V2_CLIENT_TIMEOUT
 #  define M2V2_CLIENT_TIMEOUT 10.0
 # endif

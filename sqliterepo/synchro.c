@@ -406,7 +406,7 @@ _direct_use (struct sqlx_peering_s *self,
 	mc->client = gridd_client_factory_create_client (p->factory);
 	gridd_client_connect_url (mc->client, url);
 	gridd_client_request (mc->client, req, NULL, NULL);
-	gridd_client_set_timeout(mc->client, 1.0);
+	gridd_client_set_timeout(mc->client, SQLX_SYNC_TIMEOUT);
 	gridd_client_pool_defer(p->pool, mc);
 	g_byte_array_unref(req);
 }
@@ -459,7 +459,7 @@ _direct_pipefrom (struct sqlx_peering_s *self,
 
 	gridd_client_connect_url (mc->ec.client, url);
 	gridd_client_request(mc->ec.client, req, NULL, NULL);
-	gridd_client_set_timeout(mc->ec.client, 30.0);
+	gridd_client_set_timeout(mc->ec.client, SQLX_RESYNC_TIMEOUT);
 	gridd_client_pool_defer(p->pool, &mc->ec);
 
 	g_byte_array_unref(req);
@@ -553,7 +553,7 @@ _direct_getvers (struct sqlx_peering_s *self,
 	gridd_client_request (mc->ec.client, req, mc, on_reply_GETVERS);
 	g_byte_array_unref(req);
 
-	gridd_client_set_timeout(mc->ec.client, 1.0);
+	gridd_client_set_timeout(mc->ec.client, SQLX_SYNC_TIMEOUT);
 	gridd_client_pool_defer(p->pool, &mc->ec);
 }
 
