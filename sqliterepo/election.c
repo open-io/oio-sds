@@ -1754,8 +1754,15 @@ restart_election(struct election_member_s *member)
 static gboolean
 member_concerned_by_GETVERS(struct election_member_s *member, guint *reqid)
 {
-	if (*reqid != member->reqid_GETVERS)
+	if (*reqid > member->reqid_GETVERS) {
+		GRID_WARN("GETVERS replied from the future! (expected %u, got %u)",
+				member->reqid_GETVERS, *reqid);
 		return FALSE;
+	} else if (*reqid < member->reqid_GETVERS) {
+		GRID_WARN("GETVERS replied from the past! (expected %u, got %u)",
+				member->reqid_GETVERS, *reqid);
+		return FALSE;
+	}
 	if (member->pending_GETVERS > 0) {
 		if (! -- member->pending_GETVERS)
 			member->reqid_GETVERS = 0;
