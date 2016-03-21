@@ -471,7 +471,6 @@ test_single (void)
 	struct sqlx_peering_s *peering = NULL;
 	struct election_manager_s *manager = NULL;
 	GArray *iv = g_array_new (0,0,sizeof(gint64));
-	GError *err = NULL;
 	gint64 i64 = 0;
 	guint u = 0;
 
@@ -482,16 +481,14 @@ test_single (void)
 	peering = _peering_noop ();
 	g_assert_nonnull (peering);
 
-	err = election_manager_create (&config, &manager);
-	g_assert_no_error (err);
+	g_assert_no_error (election_manager_create (&config, &manager));
 	g_assert_nonnull (manager);
 	election_manager_set_sync (manager, sync);
 	election_manager_set_peering (manager, peering);
 
 	_test_notfound ();
 
-	err = _election_init (manager, &name);
-	g_assert_no_error (err);
+	g_assert_no_error (_election_init (manager, &name));
 
 	_test_nochange (EVT_LIST_OK, NULL);
 	_pending (0);
@@ -577,6 +574,57 @@ test_single (void)
 static void
 test_sets (void)
 {
+	struct replication_config_s config = {
+		_get_id, _get_peers, _get_vers, NULL, ELECTION_MODE_GROUP
+	};
+	struct sqlx_sync_s *sync = NULL;
+	struct sqlx_peering_s *peering = NULL;
+	struct election_manager_s *manager = NULL;
+
+	CLOCK_START = CLOCK = g_random_int ();
+
+	sync = _sync_factory__noop ();
+	g_assert_nonnull (sync);
+	peering = _peering_noop ();
+	g_assert_nonnull (peering);
+
+	g_assert_no_error (election_manager_create (&config, &manager));
+	g_assert_nonnull (manager);
+	election_manager_set_sync (manager, sync);
+	election_manager_set_peering (manager, peering);
+
+	/* Init several bases */
+	CLOCK ++;
+#define NB 16
+	for (int i=0; i<NB ;++i) {
+		gchar tmp[128];
+		g_snprintf (tmp, sizeof(tmp), "base-%d", i);
+		struct sqlx_name_s name = { .base = tmp, .type = "type", .ns = "NS", };
+		g_assert_no_error (_election_init (manager, &name));
+
+		hashstr_t *_k = sqliterepo_hash_name (&name);
+		struct election_member_s *m = manager_get_member (manager, _k);
+		g_free (_k);
+
+		member_set_status (m, STEP_PRELEAD);
+		m->last_USE = CLOCK;
+		m->last_atime = CLOCK;
+		m->myid = 1;
+		m->master_id = 1;
+	}
+	g_assert_cmpuint(NB, ==, manager->members_by_state[STEP_PRELEAD].count);
+	CLOCK += manager->delay_fail_pending + 1;
+	g_assert_cmpuint (1, ==, election_manager_play_timers (manager, 1));
+	g_assert_cmpuint(1, ==, manager->members_by_state[STEP_FAILED].count);
+	g_assert_cmpuint(NB-1, ==, manager->members_by_state[STEP_PRELEAD].count);
+	g_assert_cmpuint (2, ==, election_manager_play_timers (manager, 2));
+	g_assert_cmpuint(3, ==, manager->members_by_state[STEP_FAILED].count);
+	g_assert_cmpuint(NB-3, ==, manager->members_by_state[STEP_PRELEAD].count);
+
+	election_manager_clean (manager);
+	sqlx_peering__destroy (peering);
+	sqlx_sync_close (sync);
+	sqlx_sync_clear (sync);
 }
 
 static void

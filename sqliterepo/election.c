@@ -319,13 +319,13 @@ _DEQUE_add (struct election_member_s *m)
 	EXTRA_ASSERT(m->next == NULL);
 	struct deque_beacon_s *beacon = m->manager->members_by_state + m->step;
 
-	m->prev = beacon->back;
-	beacon->back = m;
-
-	if (!beacon->front) {
-		m->next = beacon->front;
-		beacon->front = m;
+	if (beacon->back) {
+		m->prev = beacon->back;
+		beacon->back->next = m;
 	}
+	beacon->back = m;
+	if (!beacon->front)
+		beacon->front = m;
 	++ beacon->count;
 }
 
@@ -2288,7 +2288,6 @@ election_manager_play_timers (struct election_manager_s *manager, guint max)
 
 	guint count = 0;
 	char descr[512];
-
 	g_mutex_lock (&manager->lock);
 	for (const int *pi=steps; *pi >= 0 && (!max || count < max) ;++pi) {
 		struct deque_beacon_s *beacon = manager->members_by_state + *pi;
