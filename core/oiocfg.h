@@ -198,6 +198,10 @@ extern "C" {
 #  define M1V2_CLIENT_TIMEOUT 10.0
 # endif
 
+# ifndef M0V2_INIT_TIMEOUT
+#  define M0V2_INIT_TIMEOUT 30.0
+# endif
+
 # ifndef M0V2_CLIENT_TIMEOUT
 #  define M0V2_CLIENT_TIMEOUT 10.0
 # endif
