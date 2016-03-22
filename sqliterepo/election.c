@@ -1590,7 +1590,7 @@ defer_PIPEFROM(struct election_member_s *member)
 
 		sqlx_peering__pipefrom (member->manager->peering, target,
 				sqlx_name_mutable_to_const(&member->name), source,
-				member->manager, member->pending_PIPEFROM, _result_PIPEFROM);
+				member->manager, member->reqid_PIPEFROM, _result_PIPEFROM);
 
 		member_debug(__FUNCTION__, "PIPEFROM scheduled", member);
 	}
@@ -1890,10 +1890,19 @@ _member_react (struct election_member_s *member,
 		case EVT_RESYNC_DONE:
 			EXTRA_ASSERT(evt_arg != NULL);
 			reqid = *((guint*)evt_arg);
-			if (reqid == member->reqid_PIPEFROM) {
-				member->pending_PIPEFROM = 0;
-				member->reqid_PIPEFROM = 0;
+			if (reqid > member->reqid_PIPEFROM) {
+				GRID_WARN("PIPEFROM replied from the future! "
+						"(expected reqid %u, got %u)",
+						member->reqid_PIPEFROM, reqid);
+				member->requested_PIPEFROM = 1;
+			} else if (reqid < member->reqid_PIPEFROM) {
+				GRID_WARN("PIPEFROM replied from the past! "
+						"(expected reqid %u, got %u)",
+						member->reqid_PIPEFROM, reqid);
+				member->requested_PIPEFROM = 1;
 			}
+			member->pending_PIPEFROM = 0;
+			member->reqid_PIPEFROM = 0;
 			break;
 
 		default:
@@ -2253,7 +2262,8 @@ transition(struct election_member_s *member, enum event_type_e evt,
 	if (evt != EVT_NONE || pre != post)
 		member_log_event(member, pre, evt);
 
-	if (member->requested_PIPEFROM && member->step == STEP_PRELOST && member->master_url)
+	if (member->requested_PIPEFROM && member->step == STEP_PRELOST &&
+			member->master_url)
 		defer_PIPEFROM(member);
 	if (member->requested_USE && (member->step == STEP_NONE))
 		restart_election(member);
