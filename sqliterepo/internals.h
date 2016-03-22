@@ -62,7 +62,7 @@ License along with this library.
 # endif
 
 # ifndef  SQLX_DELAY_PING_FAILED
-#  define SQLX_DELAY_PING_FAILED 2 * G_TIME_SPAN_SECOND
+#  define SQLX_DELAY_PING_FAILED 5 * G_TIME_SPAN_SECOND
 # endif
 
 # ifndef  SQLX_DELAY_PING_PENDING
@@ -70,7 +70,7 @@ License along with this library.
 # endif
 
 # ifndef  SQLX_DELAY_PING_FINAL
-#  define SQLX_DELAY_PING_FINAL 300 * G_TIME_SPAN_SECOND
+#  define SQLX_DELAY_PING_FINAL 15 * G_TIME_SPAN_MINUTE
 # endif
 
 /* Size of buffer for reading dump file */

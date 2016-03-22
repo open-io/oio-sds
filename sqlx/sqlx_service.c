@@ -45,7 +45,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "oio_events_queue.h"
 
 #ifndef SQLX_MAX_TIMER_PER_ROUND
-# define SQLX_MAX_TIMER_PER_ROUND 1000
+# define SQLX_MAX_TIMER_PER_ROUND 100
 #endif
 
 // common_main hooks
