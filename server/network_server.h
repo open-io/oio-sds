@@ -112,9 +112,6 @@ void network_server_set_max_workers(struct network_server_s *srv, guint max);
 
 void network_server_set_maxcnx(struct network_server_s *srv, guint max);
 
-void network_server_set_cnx_backlog(struct network_server_s *srv,
-		guint cnx_bl);
-
 typedef void (*network_transport_factory) (gpointer u,
 		struct network_client_s *clt);
 

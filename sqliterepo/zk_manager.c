@@ -31,6 +31,7 @@ License along with this library.
 #include "hash.h"
 #include "zk_manager.h"
 #include "internals.h"
+#include "synchro.h"
 
 struct zk_manager_s
 {
@@ -79,39 +80,42 @@ static void
 zk_main_watch(zhandle_t *zh, int type, int state, const char *path,
 		void *watcherCtx)
 {
-	const gchar *zkurl;
-	struct zk_manager_s *manager;
+	metautils_ignore_signals();
 
 	GRID_DEBUG("%s(%p,%d,%d,%s,%p)", __FUNCTION__,
 			zh, type, state, path, watcherCtx);
 
-	manager = watcherCtx;
-	zkurl = manager->zk_url;
+	struct zk_manager_s *manager = watcherCtx;
+	const char *zkurl = manager->zk_url;
 
-	if (type == ZOO_SESSION_EVENT &&
-			state == ZOO_CONNECTING_STATE) {
+	if (type != ZOO_SESSION_EVENT)
+		return;
+
+	if (state == ZOO_EXPIRED_SESSION_STATE) {
 		GRID_WARN("Zookeeper: (re)connecting to [%s]", zkurl);
-		zookeeper_close(manager->zh);
+		if (manager->zh)
+			zookeeper_close(manager->zh);
+
+		/* XXX(jfs): forget the previous ID and reconnect */
 		manager->zh = zookeeper_init(manager->zk_url, zk_main_watch,
-				4000, NULL, manager, 0);
+				SQLX_SYNC_DEFAULT_ZK_TIMEOUT, NULL, manager, 0);
 		if (!manager->zh) {
 			GRID_ERROR("ZooKeeper init failure: (%d) %s",
 					errno, strerror(errno));
 			abort();
 		}
-	} else {
-		if (state == ZOO_EXPIRED_SESSION_STATE) {
-			GRID_WARN("Zookeeper: expired session to [%s]", zkurl);
-		}
-		else if (state == ZOO_AUTH_FAILED_STATE) {
-			GRID_WARN("Zookeeper: auth problem to [%s]", zkurl);
-		}
-		else if (state == ZOO_ASSOCIATING_STATE) {
-			GRID_DEBUG("Zookeeper: associating to [%s]", zkurl);
-		}
-		else if (state == ZOO_CONNECTED_STATE) {
-			GRID_INFO("Zookeeper: connected to [%s]", zkurl);
-		}
+	}
+	else if (state == ZOO_AUTH_FAILED_STATE) {
+		GRID_WARN("Zookeeper: auth problem to [%s]", zkurl);
+	}
+	else if (state == ZOO_ASSOCIATING_STATE) {
+		GRID_DEBUG("Zookeeper: associating to [%s]", zkurl);
+	}
+	else if (state == ZOO_CONNECTED_STATE) {
+		GRID_INFO("Zookeeper: connected to [%s]", zkurl);
+	}
+	else {
+		GRID_INFO("Zookeeper: unmanaged event [%s]", zkurl);
 	}
 }
 
@@ -135,7 +139,8 @@ zk_srv_manager_create(gchar *namespace, gchar *url, gchar *srvType,
 	g_snprintf(manager->zk_dir, sizeof(manager->zk_dir),
 			"/hc/ns/%s/srv/%s", namespace, srvType);
 
-	manager->zh = zookeeper_init(url, zk_main_watch, 4000, NULL, manager, 0);
+	manager->zh = zookeeper_init(url, zk_main_watch,
+			SQLX_SYNC_DEFAULT_ZK_TIMEOUT, NULL, manager, 0);
 	if (!manager->zh)
 		return NEWERROR(errno, "ZooKeeper init failure: %s", strerror(errno));
 

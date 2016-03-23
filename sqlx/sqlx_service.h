@@ -109,7 +109,6 @@ struct sqlx_service_s
 	/* This is configured during the "configure" step, and can be overriden
 	   in the _post_config hook. */
 	gint64 open_timeout;
-	gint64 cnx_backlog;
 	guint max_bases;
 	guint max_passive;
 	guint max_active;
