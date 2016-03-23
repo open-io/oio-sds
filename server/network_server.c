@@ -230,7 +230,6 @@ network_server_init(void)
 
 	result->cnx_max_sys = maxfd;
 	result->cnx_max = (result->cnx_max_sys * 99) / 100;
-	result->cnx_backlog = 50;
 	result->wakeup[0] = wakeup[0];
 	result->wakeup[1] = wakeup[1];
 	result->epollfd = epoll_create(1024);
@@ -857,16 +856,6 @@ network_server_set_maxcnx(struct network_server_s *srv, guint max)
 	if (srv->cnx_max != emax) {
 		GRID_INFO("MAXCNX [%u] changed to [%u]", srv->cnx_max, emax);
 		srv->cnx_max = emax;
-	}
-}
-
-void
-network_server_set_cnx_backlog(struct network_server_s *srv, guint bl)
-{
-	EXTRA_ASSERT(srv != NULL);
-	if (bl != srv->cnx_backlog) {
-		GRID_INFO("CNX BACKLOG changed to [%u]", bl);
-		srv->cnx_backlog = bl;
 	}
 }
 

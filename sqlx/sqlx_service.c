@@ -110,8 +110,6 @@ static struct grid_main_option_s common_options[] =
 		"Timeout when opening bases in use by another thread "
 			"(milliseconds). -1 means wait forever, 0 return "
 			"immediately." },
-	{"CnxBacklog", OT_INT64, {.i64=&SRV.cnx_backlog},
-		"Number of connections allowed when all workers are busy"},
 
 	{"MaxBases", OT_UINT, {.u = &SRV.cfg_max_bases},
 		"Limits the number of concurrent open bases" },
@@ -443,7 +441,6 @@ sqlx_service_action(void)
 
 	gridd_client_pool_set_max(SRV.clients_pool, SRV.max_active);
 	network_server_set_maxcnx(SRV.server, SRV.max_passive);
-	network_server_set_cnx_backlog(SRV.server, SRV.cnx_backlog);
 	sqlx_repository_configure_maxbases(SRV.repository, SRV.max_bases);
 
 	election_manager_set_peering(SRV.election_manager, SRV.peering);
@@ -522,7 +519,6 @@ sqlx_service_set_defaults(void)
 {
 	SRV.max_elections_timers_per_round = SQLX_MAX_TIMER_PER_ROUND;
 	SRV.open_timeout = DEFAULT_CACHE_OPEN_TIMEOUT / G_TIME_SPAN_MILLISECOND;
-	SRV.cnx_backlog = 50;
 
 	SRV.cfg_max_bases = 0;
 	SRV.cfg_max_passive = 0;
