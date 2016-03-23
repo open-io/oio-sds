@@ -166,6 +166,10 @@ extern "C" {
 #  define COMMON_CLIENT_TIMEOUT 30.0
 # endif
 
+#ifndef SQLX_SYNC_DEFAULT_ZK_TIMEOUT
+# define SQLX_SYNC_DEFAULT_ZK_TIMEOUT 8765
+#endif
+
 # ifndef SQLX_CLIENT_TIMEOUT
 #  define SQLX_CLIENT_TIMEOUT 30.0
 # endif

@@ -20,10 +20,6 @@ License along with this library.
 #ifndef OIO_SDS__sqliterepo__synchro_h
 # define OIO_SDS__sqliterepo__synchro_h 1
 
-#ifndef SQLX_SYNC_DEFAULT_ZK_TIMEOUT
-# define SQLX_SYNC_DEFAULT_ZK_TIMEOUT 4000
-#endif
-
 /**
  * SYNCHRONICITY module :
  *
