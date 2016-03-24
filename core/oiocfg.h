@@ -162,6 +162,10 @@ extern "C" {
 #  define SQLITE_RELEASE_SIZE  (64*1024*1024)
 # endif
 
+# ifndef  COMMON_CNX_TIMEOUT
+#  define COMMON_CNX_TIMEOUT (2*G_TIME_SPAN_SECOND)
+# endif
+
 # ifndef COMMON_CLIENT_TIMEOUT
 #  define COMMON_CLIENT_TIMEOUT 30.0
 # endif
