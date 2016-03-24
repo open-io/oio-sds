@@ -112,11 +112,11 @@ static struct grid_main_option_s common_options[] =
 			"immediately." },
 
 	{"MaxBases", OT_UINT, {.u = &SRV.cfg_max_bases},
-		"Limits the number of concurrent open bases" },
+		"Limits the number of concurrent open bases (0=automatic)" },
 	{"MaxPassive", OT_UINT, {.u = &SRV.cfg_max_passive},
-		"Limits the number of concurrent passive connections" },
+		"Limits the number of concurrent passive connections (0=automatic)" },
 	{"MaxActive", OT_UINT, {.u = &SRV.cfg_max_active},
-		"Limits the number of concurrent active connections" },
+		"Limits the number of concurrent active connections (0=automatic)" },
 	{"MaxWorkers", OT_UINT, {.u=&SRV.cfg_max_workers},
 		"Limits the number of worker threads" },
 
@@ -216,13 +216,20 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 static gboolean
 _configure_limits(struct sqlx_service_s *ss)
 {
+	guint newval = 0, max = 0, total = 0, available = 0, min = 0;
+	gboolean changed = FALSE;
+	struct rlimit limit = {0, 0};
 #define CONFIGURE_LIMIT(cfg,real) do { \
-	real = (cfg > 0 && cfg < real) ? cfg : (limit.rlim_cur - 20) / 3; \
+	max = MIN(max, available); \
+	newval = (cfg > 0 && cfg < max) ? cfg : max; \
+	newval = newval > min? newval : min; \
+	changed |= newval != real; \
+	real = newval; \
+	available -= real; \
 } while (0)
-	struct rlimit limit = {0,0};
 
 	if (0 != getrlimit(RLIMIT_NOFILE, &limit)) {
-		GRID_ERROR("Max file descriptor unknown : getrlimit error "
+		GRID_ERROR("Max file descriptor unknown: getrlimit error "
 				"(errno=%d) %s", errno, strerror(errno));
 		return FALSE;
 	}
@@ -232,12 +239,39 @@ _configure_limits(struct sqlx_service_s *ss)
 		return FALSE;
 	}
 
-	GRID_INFO("Limits set to ACTIVES[%u] PASSIVES[%u] BASES[%u]",
-			SRV.max_active, SRV.max_passive, SRV.max_bases);
+	// We keep 20 FDs for unexpected cases (sqlite sometimes uses
+	// temporary files, event when we ask for memory journals).
+	total = (limit.rlim_cur - 20);
+	// If user sets outstanding values for the first 2 parameters,
+	// there is still 2% available for the 3rd.
+	max = total * 49 / 100;
+	// This is totally arbitrary.
+	min = total / 100;
 
-	CONFIGURE_LIMIT(ss->cfg_max_passive, ss->max_passive);
-	CONFIGURE_LIMIT(ss->cfg_max_active, ss->max_active);
-	CONFIGURE_LIMIT(ss->cfg_max_bases, ss->max_bases);
+	available = total;
+	// max_bases cannot be changed at runtime, so we set it first and
+	// clamp the other limits accordingly.
+	CONFIGURE_LIMIT(
+			(ss->cfg_max_bases > 0?
+				ss->cfg_max_bases : SQLX_MAX_BASES_PERCENT(total)),
+			ss->max_bases);
+	// max_passive > max_active permits answering to clients while
+	// managing internal procedures (elections, replications...).
+	CONFIGURE_LIMIT(
+			(ss->cfg_max_passive > 0?
+				ss->cfg_max_passive : SQLX_MAX_PASSIVE_PERCENT(total)),
+			ss->max_passive);
+	CONFIGURE_LIMIT(
+			(ss->cfg_max_active > 0?
+				ss->cfg_max_active : SQLX_MAX_ACTIVE_PERCENT(total)),
+			ss->max_active);
+
+	if (changed)
+		GRID_INFO("Limits set to ACTIVES[%u] PASSIVES[%u] BASES[%u] "
+				"(%u/%u available file descriptors)",
+				ss->max_active, ss->max_passive, ss->max_bases,
+				ss->max_active + ss->max_passive + ss->max_bases,
+				(guint)limit.rlim_cur);
 
 	return TRUE;
 #undef CONFIGURE_LIMIT

@@ -22,6 +22,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define PSRV(P) ((struct sqlx_service_s*)(P))
 
+#define SQLX_MAX_BASES_PERCENT(max)   (max * 30) / 100
+#define SQLX_MAX_PASSIVE_PERCENT(max) (max * 40) / 100
+#define SQLX_MAX_ACTIVE_PERCENT(max)  (max * 30) / 100
+
 struct election_manager_s;
 struct gridd_client_factory_s;
 struct gridd_client_pool_s;
