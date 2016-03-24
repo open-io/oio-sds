@@ -400,10 +400,7 @@ http_manage_request(struct req_ctx_s *r)
 	GTree *headers = NULL;
 	const gchar *content_type = "octet/stream";
 
-	struct {
-		guint8 *data;
-		gsize len;
-	} body;
+	GBytes *body = NULL;
 
 	void subject (const char *id) {
 		oio_str_replace (&r->uid, id);
@@ -412,8 +409,10 @@ http_manage_request(struct req_ctx_s *r)
 	void cleanup(void) {
 		oio_str_clean (&msg);
 		oio_str_clean (&access);
-		oio_str_clean ((gchar**)&body.data);
-		body.len = 0;
+		if (body) {
+			g_bytes_unref (body);
+			body = NULL;
+		}
 		if (headers) {
 			g_tree_destroy(headers);
 			headers = NULL;
@@ -439,23 +438,14 @@ http_manage_request(struct req_ctx_s *r)
 		add_header(n, g_string_free(v, FALSE));
 	}
 
-	void set_body (guint8 *d, gsize l) {
-		if (body.data)
-			g_free(body.data);
-		body.data = d;
-		body.len = l;
+	void set_body_bytes(GBytes *gb) {
+		if (body)
+			g_bytes_unref (body);
+		body = gb;
 	}
 
 	void set_body_gstr(GString *gstr) {
-		gsize len = gstr->len;
-		guint8 *data = (guint8*) g_string_free(gstr, FALSE);
-		set_body(data, len);
-	}
-
-	void set_body_gba(GByteArray *gba) {
-		gsize len = gba->len;
-		guint8 *data = g_byte_array_free(gba, FALSE);
-		set_body(data, len);
+		return set_body_bytes (g_string_free_to_bytes (gstr));
 	}
 
 	void finalize(void) {
@@ -481,12 +471,15 @@ http_manage_request(struct req_ctx_s *r)
 			}
 		}
 
+		gsize body_len = body ? g_bytes_get_size(body) : 0;
+
 		// Add body-related headers
-		if (content_type)
-			g_string_append_printf(buf, "Content-Type: %s\r\n", content_type);
-		g_string_append_printf(buf, "Content-Length: %"G_GSIZE_FORMAT"\r\n", body.len);
-		if (body.data && body.len)
+		if (body_len) {
+			if (content_type)
+				g_string_append_printf(buf, "Content-Type: %s\r\n", content_type);
 			g_string_append(buf, "Transfer-Encoding: identity\r\n");
+		}
+		g_string_append_printf(buf, "Content-Length: %"G_GSIZE_FORMAT"\r\n", body_len);
 
 		// Add Custom headers
 		g_tree_foreach(headers, sender, buf);
@@ -496,13 +489,11 @@ http_manage_request(struct req_ctx_s *r)
 		network_client_send_slab(r->client, data_slab_make_gstr(buf));
 
 		// Now send the body
-		if (body.data && body.len)
-			network_client_send_slab(r->client,
-					data_slab_make_buffer(body.data, body.len));
+		if (body)
+			network_client_send_slab(r->client, data_slab_make_gbytes(body));
+		body = NULL;
 
-		_access_log(r, code, body.len, access);
-		body.data = NULL;
-		body.len = 0;
+		_access_log(r, code, body_len, access);
 	}
 
 	void access_tail (const char *fmt, ...) {
@@ -519,7 +510,7 @@ http_manage_request(struct req_ctx_s *r)
 
 	void final_error(int c_, const char *m_) {
 		if (!finalized) {
-			set_body(NULL, 0);
+			set_body_bytes(NULL);
 			set_status(c_, m_);
 			finalize();
 			cleanup();
@@ -534,8 +525,7 @@ http_manage_request(struct req_ctx_s *r)
 		.set_content_type = set_content_type,
 		.add_header = add_header,
 		.add_header_gstr = add_header_gstr,
-		.set_body = set_body,
-		.set_body_gba = set_body_gba,
+		.set_body_bytes = set_body_bytes,
 		.set_body_gstr = set_body_gstr,
 		.subject = subject,
 		.finalize = finalize,
@@ -545,8 +535,6 @@ http_manage_request(struct req_ctx_s *r)
 
 	finalized = FALSE;
 	headers = g_tree_new_full(hashstr_quick_cmpdata, NULL, g_free, g_free);
-	body.data = NULL;
-	body.len = 0;
 
 	if (NULL == r->request->req_uri || NULL == r->request->cmd) {
 		final_error(HTTP_CODE_BAD_REQUEST, "Bad request");
@@ -574,13 +562,6 @@ http_manage_request(struct req_ctx_s *r)
 
 //------------------------------------------------------------------------------
 
-static void
-_lower(gchar *s)
-{
-	for (; *s ;++s)
-		*s = g_ascii_tolower(*s);
-}
-
 static int
 http_notify_input(struct network_client_s *clt)
 {
@@ -593,7 +574,7 @@ http_notify_input(struct network_client_s *clt)
 	}
 	void header_provider(const gchar *k0, const gchar *v) {
 		gchar *k = g_strdup(k0);
-		_lower(k);
+		oio_str_lower(k);
 		g_tree_replace(r.request->tree_headers, k, g_strdup(v));
 	}
 	void body_provider(const guint8 *data, gsize data_len) {

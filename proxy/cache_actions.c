@@ -48,7 +48,7 @@ action_forward_stats (struct req_args_s *args)
 	/* TODO(jfs): quite duplicated from _reply_json() but the original
 	   was not suitable. */
 	args->rp->set_status (200, "OK");
-	args->rp->set_body ((guint8*)packed, strlen(packed));
+	args->rp->set_body_bytes (g_bytes_new_take((guint8*)packed, strlen(packed)));
 	args->rp->finalize ();
 	return HTTPRC_DONE;
 }
@@ -128,7 +128,7 @@ action_forward (struct req_args_s *args)
 		/* TODO(jfs): quite duplicated from _reply_json() but the original
 		   was not suitable. */
 		args->rp->set_status (200, "OK");
-		args->rp->set_body ((guint8*)packed, strlen(packed));
+		args->rp->set_body_bytes (g_bytes_new_take((guint8*)packed, strlen(packed)));
 		args->rp->finalize ();
 		return HTTPRC_DONE;
 	}
@@ -147,7 +147,7 @@ action_forward (struct req_args_s *args)
 		/* TODO(jfs): quite duplicated from _reply_json() but the original
 		   was not suitable. */
 		args->rp->set_status (200, "OK");
-		args->rp->set_body ((guint8*)packed, strlen(packed));
+		args->rp->set_body_bytes (g_bytes_new_take((guint8*)packed, strlen(packed)));
 		args->rp->finalize ();
 		return HTTPRC_DONE;
 	}

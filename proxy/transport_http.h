@@ -46,9 +46,8 @@ struct http_reply_ctx_s
 	void (*set_content_type)(const gchar *type);
 	void (*add_header) (const gchar *name, gchar *v);
 	void (*add_header_gstr) (const gchar *name, GString *value);
-	void (*set_body) (guint8 *d, gsize l);
 	void (*set_body_gstr) (GString *gstr);
-	void (*set_body_gba) (GByteArray *gstr);
+	void (*set_body_bytes) (GBytes *bytes);
 
 	void (*subject) (const char *id);
 	void (*finalize) (void);
