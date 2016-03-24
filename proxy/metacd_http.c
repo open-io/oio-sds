@@ -71,6 +71,10 @@ GMutex srv_mutex = {0};
 struct lru_tree_s *srv_down = NULL;
 struct lru_tree_s *srv_known = NULL;
 
+GMutex wanted_mutex = {0};
+gchar **wanted_srvtypes = NULL;
+GBytes **wanted_prepared = NULL;
+
 // Misc. handlers --------------------------------------------------------------
 
 static enum http_rc_e
@@ -338,6 +342,41 @@ _local_score_update (const struct service_info_s *si0)
 	if (si) si->score.value = si0->score.value;
 }
 
+static GBytes *
+_NOLOCK_precache_list_of_services (const char *type, GBytes *encoded)
+{
+	if (!wanted_prepared)
+		wanted_prepared = g_malloc0(8 * sizeof(void*));
+
+	GBytes **pold = NOLOCK_service_lookup_wanted (type);
+	if (pold) {
+		GBytes *old = *pold;
+		*pold = encoded;
+		return old;
+	}
+
+	size_t nb = oio_ptrv_length (wanted_prepared);
+	wanted_prepared = g_realloc (wanted_prepared, sizeof(void*) * (nb+2));
+	wanted_prepared[nb] = encoded;
+	wanted_prepared[nb+1] = NULL;
+	return NULL;
+}
+
+static GBytes *
+_encode_wanted_services (const char *type, GSList *list)
+{
+	GString *encoded = g_string_new(type);
+	g_string_append_c (encoded, '\0');
+	g_string_append_c (encoded, '[');
+	for (GSList *l=list; l ;l=l->next) {
+		if (!l->data) continue;
+		if (l != list) g_string_append_c (encoded, ',');
+		service_info_encode_json (encoded, l->data, FALSE);
+	}
+	g_string_append_c (encoded, ']');
+	return g_string_free_to_bytes(encoded);
+}
+
 static void
 _reload_srvtype(const char *type)
 {
@@ -363,10 +402,17 @@ _reload_srvtype(const char *type)
 		lru_tree_insert (srv_known, k, (void*)now);
 	});
 
-	/* reloads the LB */
+	/* updates the score of the local services */
 	if (list) {
 		for (GSList *l=list; l ;l=l->next)
 			PUSH_DO(_local_score_update(l->data));
+	}
+
+	/* prepares a cache of services wanted by the clients */
+	if (flag_cache_enabled) {
+		GBytes *encoded = _encode_wanted_services (type, list);
+		WANTED_DO (encoded = _NOLOCK_precache_list_of_services (type, encoded));
+		g_bytes_unref (encoded);
 	}
 
 	/* reload the LB */
@@ -713,6 +759,18 @@ grid_main_specific_fini (void)
 		lru_tree_destroy (push_queue);
 		push_queue = NULL;
 	}
+	if (wanted_srvtypes) {
+		g_strfreev (wanted_srvtypes);
+		wanted_srvtypes = NULL;
+	}
+	if (wanted_prepared) {
+		for (GBytes **gb=wanted_prepared; *gb ;++gb) {
+			g_bytes_unref (*gb);
+			*gb = NULL;
+		}
+		g_free (wanted_prepared);
+		wanted_prepared = NULL;
+	}
 	if (srv_registered) {
 		lru_tree_destroy (srv_registered);
 		srv_registered = NULL;
@@ -723,6 +781,7 @@ grid_main_specific_fini (void)
 	g_mutex_clear(&push_mutex);
 	g_mutex_clear(&csurl_mutex);
 	g_mutex_clear(&srv_mutex);
+	g_mutex_clear(&wanted_mutex);
 
 	if (csurl) g_strfreev (csurl);
 	csurl = NULL;
@@ -842,6 +901,7 @@ grid_main_configure (int argc, char **argv)
 	g_mutex_init (&push_mutex);
 	g_mutex_init (&nsinfo_mutex);
 	g_mutex_init (&srv_mutex);
+	g_mutex_init (&wanted_mutex);
 
 	nsname = g_strdup (cfg_namespace);
 	g_strlcpy (nsinfo.name, cfg_namespace, sizeof (nsinfo.name));

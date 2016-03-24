@@ -303,8 +303,8 @@ action_conscience_list (struct req_args_s *args)
 {
 	args->rp->no_access();
 
-	const char *types = TYPE();
-	if (!types)
+	const char *type = TYPE();
+	if (!type)
 		return _reply_format_error (args, BADREQ("Missing type"));
 
 	gboolean full = _request_has_flag (args, PROXYD_HEADER_MODE, "full");
@@ -313,17 +313,38 @@ action_conscience_list (struct req_args_s *args)
 	if (NULL != (err = _cs_check_tokens(args)))
 		return _reply_notfound_error(args, err);
 
+	if (flag_cache_enabled) {
+		service_remember_wanted (type);
+		if (!full) {
+			GBytes *prepared = service_is_wanted (type);
+			if (prepared) {
+				gsize ltype = strlen (type) + 1;
+				gsize lmax = g_bytes_get_size (prepared);
+				GRID_TRACE("%s replied %"G_GSIZE_FORMAT" bytes from the cache",
+						__FUNCTION__, lmax - ltype);
+				GBytes *json = g_bytes_new_from_bytes (prepared, ltype, lmax-ltype);
+				g_bytes_unref (prepared);
+				return _reply_success_bytes (args, json);
+			} else {
+				GRID_TRACE("%s(%s) direct query: %s", __FUNCTION__, type, "cache miss");
+			}
+		} else {
+			GRID_TRACE("%s(%s) direct query: %s", __FUNCTION__, type, "stats expected");
+		}
+	} else {
+		GRID_TRACE("%s(%s) direct query: %s", __FUNCTION__, type, "cache disabled");
+	}
+
 	CSURL(cs);
 	GSList *sl = NULL;
-	err = conscience_remote_get_services (cs, types, full, &sl);
-
+	err = conscience_remote_get_services (cs, type, full, &sl);
 	if (NULL != err) {
 		g_slist_free_full (sl, (GDestroyNotify) service_info_clean);
 		g_prefix_error (&err, "Conscience error: ");
 		return _reply_system_error (args, err);
 	}
 
-	args->rp->access_tail ("%s=%u", types, g_slist_length(sl));
+	args->rp->access_tail ("%s=%u", type, g_slist_length(sl));
 	return _reply_success_json (args, _cs_pack_and_free_srvinfo_list (sl));
 }
 
