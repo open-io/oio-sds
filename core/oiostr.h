@@ -44,6 +44,10 @@ size_t oio_strv_length (const char * const *v);
 /* Count the size of the concatenation of all the strings in <v> */
 size_t oio_strv_length_total (const char * const *v);
 
+size_t oio_constptrv_length (const void * const *v);
+
+#define oio_ptrv_length(v) oio_constptrv_length((const void * const *)(v))
+
 void oio_str_reuse(gchar **dst, gchar *src);
 
 /* Reallocs <dst> and appends it <s>. <s> is reused and is not duplicated */
