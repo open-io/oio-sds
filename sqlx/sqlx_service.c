@@ -217,13 +217,11 @@ static gboolean
 _configure_limits(struct sqlx_service_s *ss)
 {
 	guint newval = 0, max = 0, total = 0, available = 0, min = 0;
-	gboolean changed = FALSE;
 	struct rlimit limit = {0, 0};
 #define CONFIGURE_LIMIT(cfg,real) do { \
 	max = MIN(max, available); \
 	newval = (cfg > 0 && cfg < max) ? cfg : max; \
 	newval = newval > min? newval : min; \
-	changed |= newval != real; \
 	real = newval; \
 	available -= real; \
 } while (0)
@@ -266,12 +264,11 @@ _configure_limits(struct sqlx_service_s *ss)
 				ss->cfg_max_active : SQLX_MAX_ACTIVE_PERCENT(total)),
 			ss->max_active);
 
-	if (changed)
-		GRID_INFO("Limits set to ACTIVES[%u] PASSIVES[%u] BASES[%u] "
-				"(%u/%u available file descriptors)",
-				ss->max_active, ss->max_passive, ss->max_bases,
-				ss->max_active + ss->max_passive + ss->max_bases,
-				(guint)limit.rlim_cur);
+	GRID_INFO("Limits set to ACTIVES[%u] PASSIVES[%u] BASES[%u] "
+			"(%u/%u available file descriptors)",
+			ss->max_active, ss->max_passive, ss->max_bases,
+			ss->max_active + ss->max_passive + ss->max_bases,
+			(guint)limit.rlim_cur);
 
 	return TRUE;
 #undef CONFIGURE_LIMIT

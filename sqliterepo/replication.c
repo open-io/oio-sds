@@ -669,7 +669,7 @@ sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err)
 		}
 		else {
 			if (ctx->errors->len > 0) {
-				GRID_WARN("Several COMMIT errors:%s", ctx->errors->str);
+				GRID_WARN("COMMIT errors on [%s.%s]:%s", ctx->sq3->name.base, ctx->sq3->name.type, ctx->errors->str);
 			}
 			if (ctx->resync_todo && ctx->resync_todo->len) {
 				// Detected the need of an explicit RESYNC on some SLAVES.

@@ -38,33 +38,17 @@ struct data_slab_s
 	enum {
 		STYPE_BUFFER=1,
 		STYPE_BUFFER_STATIC,
-		STYPE_FILE,
-		STYPE_PATH,
+		STYPE_GBYTES,
 		STYPE_EOF
 	} type;
 	union {
+		GBytes *gbytes;
 		struct {
 			guint start;
 			guint end;
 			guint alloc;
 			guint8 *buff;
 		} buffer;
-		struct {
-			off_t start;
-			off_t end;
-			int fd;
-		} file;
-		struct {
-			gchar *path;
-			enum {
-				FLAG_UNLINK = 0x0001,
-				FLAG_OFFSET = 0x0002,
-				FLAG_END  =   0x0004
-			} flags;
-			off_t start;
-			off_t end;
-			int fd;
-		} path;
 	} data;
 	struct data_slab_s *next;
 };
@@ -124,14 +108,7 @@ struct data_slab_s * data_slab_make_empty(gsize alloc);
 
 struct data_slab_s * data_slab_make_eof(void);
 
-struct data_slab_s * data_slab_make_file(int fd, off_t start, off_t end);
-
-struct data_slab_s * data_slab_make_path2(const gchar *path,
-		off_t start, off_t end);
-
-struct data_slab_s * data_slab_make_path(const gchar *path, gboolean must_unlink);
-
-struct data_slab_s * data_slab_make_tempfile(const gchar *path);
+struct data_slab_s * data_slab_make_gbytes(GBytes *gb);
 
 struct data_slab_s *
 data_slab_make_buffer2(guint8 *buff, gboolean tobefreed, gsize start,

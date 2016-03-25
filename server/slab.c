@@ -20,10 +20,6 @@ License along with this library.
 #include <stddef.h>
 #include <errno.h>
 #include <unistd.h>
-#include <fcntl.h>
-#include <sys/sendfile.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
 #include <sys/types.h>
 
 #include "slab.h"
@@ -32,31 +28,20 @@ License along with this library.
 static inline const gchar *
 data_slab_type2str(struct data_slab_s *ds)
 {
-	if (!ds)
-		return "!!!";
-
+	EXTRA_ASSERT(ds != NULL);
 	switch (ds->type) {
-		case STYPE_BUFFER:
-			return "BUFFER";
-		case STYPE_BUFFER_STATIC:
-			return "BUFFER_STATIC";
-		case STYPE_FILE:
-			return "FILE";
-		case STYPE_PATH:
-			return "PATH";
-		case STYPE_EOF:
-			return "EOF";
+		ON_ENUM(STYPE_,BUFFER);
+		ON_ENUM(STYPE_,BUFFER_STATIC);
+		ON_ENUM(STYPE_,GBYTES);
+		ON_ENUM(STYPE,_EOF);
 	}
-
+	g_assert_not_reached ();
 	return "???";
 }
 
 gsize
 data_slab_size(struct data_slab_s *ds)
 {
-	if (!ds)
-		return 0;
-
 	switch (ds->type) {
 		case STYPE_BUFFER:
 		case STYPE_BUFFER_STATIC:
@@ -65,16 +50,11 @@ data_slab_size(struct data_slab_s *ds)
 			if (ds->data.buffer.start >= ds->data.buffer.end)
 				return 0;
 			return (ds->data.buffer.end - ds->data.buffer.start);
-		case STYPE_FILE:
-			return ds->data.file.end - ds->data.file.start;
-		case STYPE_PATH:
-			if (ds->data.path.fd < 0)
-				return 0;
-			return ds->data.path.end - ds->data.path.start;
+		case STYPE_GBYTES:
+			return g_bytes_get_size (ds->data.gbytes);
 		case STYPE_EOF:
 			return 0;
 	}
-
 	g_assert_not_reached();
 	return 0;
 }
@@ -87,12 +67,8 @@ data_slab_has_data(struct data_slab_s *ds)
 		case STYPE_BUFFER_STATIC:
 			return ds->data.buffer.buff != NULL
 				&& (ds->data.buffer.start < ds->data.buffer.end);
-		case STYPE_FILE:
-			return ds->data.file.start < ds->data.file.end;
-		case STYPE_PATH:
-			if (ds->data.path.fd < 0)
-				return TRUE;
-			return ds->data.path.start < ds->data.path.end;
+		case STYPE_GBYTES:
+			return 0 < g_bytes_get_size (ds->data.gbytes);
 		case STYPE_EOF:
 			return FALSE;
 	}
@@ -112,19 +88,11 @@ data_slab_free(struct data_slab_s *ds)
 			}
 			break;
 		case STYPE_BUFFER_STATIC:
+			ds->data.buffer.buff = NULL;
+			ds->data.buffer.start = ds->data.buffer.end = 0;
 			break;
-		case STYPE_FILE:
-			if (ds->data.file.fd >= 0)
-				metautils_pclose(&(ds->data.file.fd));
-			break;
-		case STYPE_PATH:
-			if (ds->data.path.path) {
-				if (ds->data.path.flags & FLAG_UNLINK)
-					unlink(ds->data.path.path);
-				g_free(ds->data.path.path);
-			}
-			if (ds->data.path.fd >= 0)
-				metautils_pclose(&(ds->data.path.fd));
+		case STYPE_GBYTES:
+			g_bytes_unref (ds->data.gbytes);
 			break;
 		case STYPE_EOF:
 			break;
@@ -136,13 +104,10 @@ data_slab_free(struct data_slab_s *ds)
 void
 data_slab_sequence_clean_data(struct data_slab_sequence_s *dss)
 {
-	register struct data_slab_s *ds;
-
-	while (NULL != (ds = dss->first)) {
+	for (struct data_slab_s *ds; NULL != (ds = dss->first); ) {
 		dss->first = ds->next;
 		data_slab_free(ds);
 	}
-
 	dss->first = dss->last = NULL;
 }
 
@@ -182,50 +147,37 @@ data_slab_sequence_has_data(struct data_slab_sequence_s *dss)
 gboolean
 data_slab_send(struct data_slab_s *ds, int fd)
 {
-	off_t remaining;
 	ssize_t w;
 
 	switch (ds->type) {
 		case STYPE_BUFFER:
 		case STYPE_BUFFER_STATIC:
+			/* send */
 			errno = 0;
 			w = write(fd,
 					ds->data.buffer.buff + ds->data.buffer.start,
 					ds->data.buffer.end - ds->data.buffer.start);
 			if (w < 0)
 				return FALSE;
+			/* consume */
 			ds->data.buffer.start += (guint) w;
 			return TRUE;
 
-		case STYPE_FILE:
-			remaining = ds->data.file.end - ds->data.file.start;
-			w = sendfile(fd, ds->data.file.fd, &(ds->data.file.start), remaining);
-			if (w < 0)
-				return FALSE;
-			return TRUE;
-
-		case STYPE_PATH:
-
-			/* lazy file opening */
-			if (ds->data.path.fd < 0) {
-				ds->data.path.fd = open(ds->data.path.path, O_RDONLY);
-				if (0 > ds->data.path.fd)
+		case STYPE_GBYTES:
+			do {
+				gsize l = 0;
+				gconstpointer b = g_bytes_get_data (ds->data.gbytes, &l);
+				/* send */
+				errno = 0;
+				w = write(fd, b, l);
+				if (w < 0)
 					return FALSE;
-				if (!(ds->data.path.flags & FLAG_OFFSET))
-					ds->data.path.start = 0;
-				if (!(ds->data.path.flags & FLAG_END)) {
-					struct stat64 s;
-					if (0 > fstat64(ds->data.path.fd, &s))
-						return FALSE;
-					ds->data.path.end = s.st_size;
-				}
-			}
-			
-			/* send a chunk now */
-			remaining = ds->data.path.end - ds->data.path.start;
-			w = sendfile(fd, ds->data.path.fd, &(ds->data.path.start), remaining);
-			if (w < 0)
-				return FALSE;
+				/* consume */
+				GBytes *old = ds->data.gbytes;
+				ds->data.gbytes = g_bytes_new_from_bytes (old, w, l-w);
+				g_bytes_unref (old);
+				return TRUE;
+			} while (0);
 			return TRUE;
 
 		case STYPE_EOF:
@@ -233,7 +185,8 @@ data_slab_send(struct data_slab_s *ds, int fd)
 			return TRUE;
 	}
 
-	return TRUE;
+	g_assert_not_reached ();
+	return FALSE;
 }
 
 gboolean
@@ -267,11 +220,13 @@ data_slab_consume(struct data_slab_s *ds, guint8 **p_data, gsize *p_size)
 			EXTRA_ASSERT(ds->data.buffer.end <= ds->data.buffer.alloc);
 
 			return TRUE;
-		case STYPE_FILE:
-		case STYPE_PATH:
-			g_error("DESIGN ERROR : cannot consume data from a file slab");
-			return FALSE;
+
+		case STYPE_GBYTES:
 		case STYPE_EOF:
+			/* consuming from such sources is not managed yet, neither by the
+			   server that never fills them nor the be clients that do not
+			   manage them. */
+			g_assert_not_reached ();
 			return FALSE;
 	}
 
@@ -358,17 +313,10 @@ data_slab_trace(const gchar *tag, struct data_slab_s *ds)
 				ds->data.buffer.end,
 				data_slab_size(ds));
 			break;
-		case STYPE_FILE:
-			g_string_append_printf(gstr, "| fd=%d start=%ld end=%ld",
-				ds->data.file.fd,
-				(long) ds->data.file.start,
-				(long) ds->data.file.end);
-		case STYPE_PATH:
-			g_string_append_printf(gstr, "| fd=%d start=%ld end=%ld path=%s",
-				ds->data.path.fd,
-				(long) ds->data.path.start,
-				(long) ds->data.path.end,
-				ds->data.path.path);
+		case STYPE_GBYTES:
+			g_string_append_printf (gstr, "| gbytes=%p size=%"G_GSIZE_FORMAT,
+					ds->data.gbytes, g_bytes_get_size(ds->data.gbytes));
+			break;
 		case STYPE_EOF:
 			break;
 	}
@@ -437,52 +385,6 @@ data_slab_make_eof(void)
 }
 
 struct data_slab_s *
-data_slab_make_file(int fd, off_t start, off_t end)
-{
-	struct data_slab_s *ds = _slab();
-	ds->type = STYPE_FILE;
-	ds->data.file.start = start;
-	ds->data.file.end = end;
-	ds->data.file.fd = fd;
-	ds->next = NULL;
-	return ds;
-}
-
-struct data_slab_s *
-data_slab_make_path2(const gchar *path, off_t start, off_t end)
-{
-	struct data_slab_s *ds = _slab();
-	ds->type = STYPE_PATH;
-	ds->data.path.path = g_strdup(path);
-	ds->data.path.start = start;
-	ds->data.path.end = end;
-	ds->data.path.fd = -1;
-	ds->data.path.flags = FLAG_OFFSET|FLAG_END;
-	ds->next = NULL;
-	return ds;
-}
-
-struct data_slab_s *
-data_slab_make_path(const gchar *path, gboolean must_unlink)
-{
-	struct data_slab_s *ds = _slab();
-	ds->type = STYPE_PATH;
-	ds->data.path.path = g_strdup(path);
-	ds->data.path.start = 0;
-	ds->data.path.end = 0;
-	ds->data.path.fd = -1;
-	ds->data.path.flags = must_unlink ? FLAG_UNLINK : 0;
-	ds->next = NULL;
-	return ds;
-}
-
-struct data_slab_s *
-data_slab_make_tempfile(const gchar *path)
-{
-	return data_slab_make_path(path, TRUE);
-}
-
-struct data_slab_s *
 data_slab_make_buffer2(guint8 *buff, gboolean tobefreed, gsize start,
 		gsize end, gsize alloc)
 {
@@ -492,6 +394,16 @@ data_slab_make_buffer2(guint8 *buff, gboolean tobefreed, gsize start,
 	ds->data.buffer.end = end;
 	ds->data.buffer.alloc = alloc;
 	ds->data.buffer.buff = buff;
+	ds->next = NULL;
+	return ds;
+}
+
+struct data_slab_s *
+data_slab_make_gbytes(GBytes *gb)
+{
+	struct data_slab_s *ds = _slab();
+	ds->type = STYPE_GBYTES;
+	ds->data.gbytes = gb;
 	ds->next = NULL;
 	return ds;
 }

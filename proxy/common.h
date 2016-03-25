@@ -73,6 +73,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define PUSH_DO(Action) GUARDED_DO(push_mutex,Action)
 #define NSINFO_DO(Action) GUARDED_DO(nsinfo_mutex,Action)
 #define SRV_DO(Action) GUARDED_DO(srv_mutex,Action)
+#define WANTED_DO(Action) GUARDED_DO(wanted_mutex,Action)
 
 #define CSURL(C) gchar *C = NULL; do { \
 	C = proxy_get_csurl(); \
@@ -97,24 +98,44 @@ extern time_t cs_known_services;
 extern struct grid_lbpool_s *lbpool;
 extern struct hc_resolver_s *resolver;
 
-extern GMutex csurl_mutex;
-extern gchar **csurl;
-extern gsize csurl_count;
-
-extern GMutex push_mutex;
-/* staging area for services being sent up. <struct service_info_s*> */
-extern struct lru_tree_s *push_queue;
-/* holder for services registered within the last 5 seconds */
-extern struct lru_tree_s *srv_registered;
-
+/* Global NS info */
 extern GMutex nsinfo_mutex;
 extern gchar **srvtypes;
 extern struct namespace_info_s nsinfo;
+gboolean validate_namespace (const char * ns);
+gboolean validate_srvtype (const char * n);
+
+/* Periodically loads the consciennce's addresses from the local config
+   and keep this in cache. */
+extern GMutex csurl_mutex;
+extern gchar **csurl;
+extern gsize csurl_count;
+gchar * proxy_get_csurl (void);
+
+/* Periodically loads lists of services from the conscience, and keep this
+   in cache. */
+extern GMutex wanted_mutex;
+extern gchar **wanted_srvtypes;
+extern GBytes **wanted_prepared; /* formatted as <srvtype>+'\0'+<json> */
+void service_remember_wanted (const char *type);
+GBytes* service_is_wanted (const char *type); /* refcount++ */
+GBytes** NOLOCK_service_lookup_wanted (const char *type); /* refcount iso */
+
+/* Upstream of services registrations. */
+extern GMutex push_mutex;
+extern struct lru_tree_s *push_queue;
+extern struct lru_tree_s *srv_registered; /* registered srv seen within 5s */
 
 /* "IP:PORT" that had a problem */
 extern GMutex srv_mutex;
 extern struct lru_tree_s *srv_down;
+gboolean service_is_ok (gconstpointer p);
+void service_invalidate (gconstpointer n);
+
+/* Set of sevices that have been seen recently in the conscience */
 extern struct lru_tree_s *srv_known;
+void service_learn (const char *key);
+gboolean service_is_known (const char *key);
 
 enum
 {
@@ -142,17 +163,6 @@ struct sub_action_s
 
 typedef enum http_rc_e (*req_handler_f) (struct req_args_s *);
 
-gchar * proxy_get_csurl (void);
-
-gboolean validate_namespace (const char * ns);
-gboolean validate_srvtype (const char * n);
-
-/* check in <srv_down> */
-gboolean service_is_ok (gconstpointer p);
-void service_invalidate (gconstpointer n);
-void service_learn (const char *key);
-gboolean service_is_known (const char *key);
-
 const char * _req_get_option (struct req_args_s *args, const char *name);
 const char * _req_get_token (struct req_args_s *args, const char *name);
 
@@ -161,6 +171,8 @@ enum http_rc_e abstract_action (const char *tag, struct req_args_s *args,
 
 enum http_rc_e rest_action (struct req_args_s *args,
         enum http_rc_e (*handler) (struct req_args_s *, json_object *));
+
+/* -------------------------------------------------------------------------- */
 
 GError * _resolve_service_and_do (const char *t, gint64 seq, struct oio_url_s *u,
         GError * (*hook) (struct meta1_service_url_s *m1u, gboolean *next));
@@ -175,7 +187,11 @@ GError * _gbav_request (const char *t, gint64 seq, struct oio_url_s *u,
 
 gboolean _request_has_flag (struct req_args_s *args, const char *header, const char *flag);
 
+/* -------------------------------------------------------------------------- */
+
+enum http_rc_e _reply_bytes (struct req_args_s *args, int code, const char * msg, GBytes * bytes);
 enum http_rc_e _reply_json (struct req_args_s *args, int code, const char * msg, GString * gstr);
+
 enum http_rc_e _reply_format_error (struct req_args_s *args, GError *err);
 enum http_rc_e _reply_system_error (struct req_args_s *args, GError *err);
 enum http_rc_e _reply_bad_gateway (struct req_args_s *args, GError *err);
@@ -189,12 +205,16 @@ enum http_rc_e _reply_conflict_error (struct req_args_s *args, GError * err);
 enum http_rc_e _reply_nocontent (struct req_args_s *args);
 enum http_rc_e _reply_accepted (struct req_args_s *args);
 enum http_rc_e _reply_created (struct req_args_s *args);
+
+enum http_rc_e _reply_success_bytes (struct req_args_s *args, GBytes * bytes);
 enum http_rc_e _reply_success_json (struct req_args_s *args, GString * gstr);
 
 GString * _create_status (gint code, const char * msg);
 GString * _create_status_error (GError * e);
 
 enum http_rc_e _reply_common_error (struct req_args_s *args, GError *err);
+
+/* -------------------------------------------------------------------------- */
 
 GError * conscience_remote_get_namespace (const char *cs, namespace_info_t **out);
 GError * conscience_remote_get_services(const char *cs, const char *type,
