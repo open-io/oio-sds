@@ -23,32 +23,6 @@ License along with this library.
 #include <metautils/lib/metautils.h>
 #include <server/network_server.h>
 
-# ifndef  OIO_STAT_PREFIX_REQ
-#  define OIO_STAT_PREFIX_REQ "counter req.hits"
-# endif
-
-# ifndef  OIO_STAT_PREFIX_TIME
-#  define OIO_STAT_PREFIX_TIME "counter req.time"
-# endif
-
-/* How long (in microseconds) a connection might stay idle between two
- * requests */
-#ifndef  SERVER_DEFAULT_CNX_IDLE
-# define SERVER_DEFAULT_CNX_IDLE  (5 * G_TIME_SPAN_MINUTE)
-#endif
-
-/* How long (in microseconds) a connection might exist since its creation
- * (whatever it is active or not) */
-#ifndef  SERVER_DEFAULT_CNX_LIFETIME
-# define SERVER_DEFAULT_CNX_LIFETIME  (2 * G_TIME_SPAN_HOUR)
-#endif
-
-/* How long (in microseconds) a connection might exist since its creation
- * when it received no request at all */
-#ifndef  SERVER_DEFAULT_CNX_INACTIVE
-# define SERVER_DEFAULT_CNX_INACTIVE  (30 * G_TIME_SPAN_SECOND)
-#endif
-
 enum {
 	NETSERVER_THROUGHPUT = 0x0001,
 	NETSERVER_LATENCY    = 0x0002,

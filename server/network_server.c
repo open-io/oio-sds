@@ -58,8 +58,8 @@ static gboolean _endpoint_is_INET (struct endpoint_s *u);
 static GError * _endpoint_open (struct endpoint_s *u);
 static void _endpoint_close (struct endpoint_s *u);
 
-static struct network_client_s* _endpoint_manage_event(
-		struct network_server_s *srv, struct endpoint_s *e);
+static struct network_client_s* _endpoint_accept_one(
+		struct network_server_s *srv, const struct endpoint_s *e);
 
 static void _client_clean(struct network_server_s *srv,
 		struct network_client_s *client);
@@ -245,10 +245,12 @@ network_server_init(void)
 	result->gq_counter_cnx_accept = g_quark_from_static_string ("counter cnx.accept");
 	result->gq_counter_cnx_close =  g_quark_from_static_string ("counter cnx.close");
 
-	result->pool_stats = g_thread_pool_new ((GFunc)_cb_stats, result, 1, FALSE, NULL);
-	result->pool_workers = g_thread_pool_new ((GFunc)_cb_worker, result, -1, FALSE, NULL);
-	g_thread_pool_set_max_unused_threads (5);
-	g_thread_pool_set_max_idle_time (30000);
+	result->pool_stats =
+		g_thread_pool_new ((GFunc)_cb_stats, result, 1, TRUE, NULL);
+	result->pool_workers = g_thread_pool_new ((GFunc)_cb_worker, result,
+			SERVER_DEFAULT_THP_MAXWORKERS, FALSE, NULL);
+	g_thread_pool_set_max_unused_threads (SERVER_DEFAULT_THP_MAXUNUSED);
+	g_thread_pool_set_max_idle_time (SERVER_DEFAULT_THP_IDLE);
 
 	GRID_INFO("SERVER ready with epollfd[%d] pipe[%d,%d]",
 			result->epollfd, result->wakeup[0], result->wakeup[1]);
@@ -467,8 +469,6 @@ ARM_ENDPOINT(struct network_server_s *srv, struct endpoint_s *e, int how)
 			e->fd, epoll2str(how), errno, strerror(errno));
 }
 
-#define MAXEV 16
-
 static void
 _manage_client_event(struct network_server_s *srv,
 		struct network_client_s *clt, register int ev0)
@@ -492,39 +492,42 @@ _manage_client_event(struct network_server_s *srv,
 }
 
 static void
+_manage_endpoint_event (struct network_server_s *srv, struct endpoint_s *e)
+{
+	for (guint i=0; i<SERVER_DEFAULT_ACCEPT_MAX ;++i) {
+		struct network_client_s *clt = _endpoint_accept_one(srv, e);
+		if (!clt) break;
+		if (clt->current_error)
+			_client_clean(srv, clt);
+		else {
+			ARM_CLIENT(srv, clt, EPOLL_CTL_ADD);
+		}
+	}
+	ARM_ENDPOINT(srv, e, EPOLL_CTL_MOD);
+}
+
+static void
 _manage_events(struct network_server_s *srv)
 {
-	struct network_client_s *clt;
-	struct epoll_event allev[MAXEV], *pev;
-	int rc, erc;
+	int erc;
+	struct epoll_event *pev, allev[SERVER_DEFAULT_EPOLL_MAXEV];
 
-	(void) rc;
-	erc = epoll_wait(srv->epollfd, allev, MAXEV, 500);
+	erc = epoll_wait(srv->epollfd, allev, SERVER_DEFAULT_EPOLL_MAXEV, 500);
 	if (erc > 0) {
 		while (erc-- > 0) {
 			pev = allev+erc;
-
 			if (pev->data.ptr == srv->wakeup)
 				continue;
-			if (MAGIC_ENDPOINT == *((unsigned int*)(pev->data.ptr))) {
-				struct endpoint_s *e = pev->data.ptr;
-				while (NULL != (clt = _endpoint_manage_event(srv, e))) {
-					if (clt->current_error) {
-						_client_clean(srv, clt);
-					} else {
-						ARM_CLIENT(srv, clt, EPOLL_CTL_ADD);
-					}
-				}
-				ARM_ENDPOINT(srv, e, EPOLL_CTL_MOD);
-			}
-			else {
+			if (MAGIC_ENDPOINT == *((unsigned int*)(pev->data.ptr)))
+				_manage_endpoint_event (srv, pev->data.ptr);
+			else
 				_manage_client_event(srv, pev->data.ptr, pev->events);
-			}
 		}
 	}
 
 	_drain(srv->wakeup[0]);
 	ARM_WAKER(srv, EPOLL_CTL_MOD);
+	struct network_client_s *clt;
 	while (NULL != (clt = g_async_queue_try_pop(srv->queue_monitor))) {
 		EXTRA_ASSERT(clt->events != 0 && !(clt->events & CLT_ERROR));
 		ARM_CLIENT(srv, clt, EPOLL_CTL_MOD);
@@ -767,7 +770,7 @@ _endpoint_open(struct endpoint_s *u)
 }
 
 static struct network_client_s *
-_endpoint_manage_event(struct network_server_s *srv, struct endpoint_s *e)
+_endpoint_accept_one(struct network_server_s *srv, const struct endpoint_s *e)
 {
 	int fd;
 	struct sockaddr_storage ss;
