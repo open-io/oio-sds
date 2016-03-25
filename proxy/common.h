@@ -116,7 +116,7 @@ gchar * proxy_get_csurl (void);
    in cache. */
 extern GMutex wanted_mutex;
 extern gchar **wanted_srvtypes;
-extern GBytes **wanted_prepared; /* formatted as <srvtype>+'\0'+<json>+'\0' */
+extern GBytes **wanted_prepared; /* formatted as <srvtype>+'\0'+<json> */
 void service_remember_wanted (const char *type);
 GBytes* service_is_wanted (const char *type); /* refcount++ */
 GBytes** NOLOCK_service_lookup_wanted (const char *type); /* refcount iso */
