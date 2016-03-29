@@ -182,7 +182,12 @@ conscience_srvtype_remove_expired(struct conscience_srvtype_s * srvtype,
 	g_assert_nonnull (srvtype);
 
 	guint count = 0U;
-	time_t oldest = oio_ext_monotonic_seconds() - srvtype->score_expiration;
+
+	time_t oldest = oio_ext_monotonic_seconds();
+	if (oldest > srvtype->score_expiration)
+		oldest -= srvtype->score_expiration;
+	else
+		oldest = 0;
 
 	GHashTableIter iter;
 	gpointer key, value;
@@ -190,10 +195,11 @@ conscience_srvtype_remove_expired(struct conscience_srvtype_s * srvtype,
 	while (g_hash_table_iter_next(&iter, &key, &value)) {
 		struct conscience_srv_s *pService = value;
 		if (!pService->locked && pService->score.timestamp < oldest) {
-			if (callback)
-				callback(pService, u);
-			g_hash_table_iter_steal(&iter);
-			conscience_srv_destroy(pService);
+			if (pService->score.value > 0) {
+				if (callback)
+					callback(pService, u);
+				pService->score.value = 0;
+			}
 			count++;
 		}
 	}
