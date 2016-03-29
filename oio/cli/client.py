@@ -19,7 +19,7 @@ class InternalClient(object):
             self._rdir = RdirClient(self.conf, session=self.session)
         return self._rdir
 
-    def volume_show(self, volume):
+    def volume_dump(self, volume):
         info = self.rdir.status(volume)
         data = {}
         containers = info.get('container')

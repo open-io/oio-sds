@@ -404,9 +404,15 @@ oio_str_gstring_append_json_pair (GString *base, const char *k, const char *v)
 }
 
 size_t
-oio_strv_length (const char * const *v)
+oio_constptrv_length (const void * const *v)
 {
 	size_t count = 0;
 	if (v) for (; *v ;++v,++count) {}
 	return count;
+}
+
+size_t
+oio_strv_length (const char * const *v)
+{
+	return oio_ptrv_length (v);
 }

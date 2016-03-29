@@ -44,6 +44,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "sqlx_service.h"
 #include "oio_events_queue.h"
 
+#ifndef SQLX_MAX_TIMER_PER_ROUND
+# define SQLX_MAX_TIMER_PER_ROUND 100
+#endif
+
 // common_main hooks
 static struct grid_main_option_s * sqlx_service_get_options(void);
 static const char * sqlx_service_usage(void);
@@ -106,15 +110,13 @@ static struct grid_main_option_s common_options[] =
 		"Timeout when opening bases in use by another thread "
 			"(milliseconds). -1 means wait forever, 0 return "
 			"immediately." },
-	{"CnxBacklog", OT_INT64, {.i64=&SRV.cnx_backlog},
-		"Number of connections allowed when all workers are busy"},
 
 	{"MaxBases", OT_UINT, {.u = &SRV.cfg_max_bases},
-		"Limits the number of concurrent open bases" },
+		"Limits the number of concurrent open bases (0=automatic)" },
 	{"MaxPassive", OT_UINT, {.u = &SRV.cfg_max_passive},
-		"Limits the number of concurrent passive connections" },
+		"Limits the number of concurrent passive connections (0=automatic)" },
 	{"MaxActive", OT_UINT, {.u = &SRV.cfg_max_active},
-		"Limits the number of concurrent active connections" },
+		"Limits the number of concurrent active connections (0=automatic)" },
 	{"MaxWorkers", OT_UINT, {.u=&SRV.cfg_max_workers},
 		"Limits the number of worker threads" },
 
@@ -214,13 +216,18 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 static gboolean
 _configure_limits(struct sqlx_service_s *ss)
 {
+	guint newval = 0, max = 0, total = 0, available = 0, min = 0;
+	struct rlimit limit = {0, 0};
 #define CONFIGURE_LIMIT(cfg,real) do { \
-	real = (cfg > 0 && cfg < real) ? cfg : (limit.rlim_cur - 20) / 3; \
+	max = MIN(max, available); \
+	newval = (cfg > 0 && cfg < max) ? cfg : max; \
+	newval = newval > min? newval : min; \
+	real = newval; \
+	available -= real; \
 } while (0)
-	struct rlimit limit = {0,0};
 
 	if (0 != getrlimit(RLIMIT_NOFILE, &limit)) {
-		GRID_ERROR("Max file descriptor unknown : getrlimit error "
+		GRID_ERROR("Max file descriptor unknown: getrlimit error "
 				"(errno=%d) %s", errno, strerror(errno));
 		return FALSE;
 	}
@@ -230,12 +237,38 @@ _configure_limits(struct sqlx_service_s *ss)
 		return FALSE;
 	}
 
-	GRID_INFO("Limits set to ACTIVES[%u] PASSIVES[%u] BASES[%u]",
-			SRV.max_active, SRV.max_passive, SRV.max_bases);
+	// We keep 20 FDs for unexpected cases (sqlite sometimes uses
+	// temporary files, event when we ask for memory journals).
+	total = (limit.rlim_cur - 20);
+	// If user sets outstanding values for the first 2 parameters,
+	// there is still 2% available for the 3rd.
+	max = total * 49 / 100;
+	// This is totally arbitrary.
+	min = total / 100;
 
-	CONFIGURE_LIMIT(ss->cfg_max_passive, ss->max_passive);
-	CONFIGURE_LIMIT(ss->cfg_max_active, ss->max_active);
-	CONFIGURE_LIMIT(ss->cfg_max_bases, ss->max_bases);
+	available = total;
+	// max_bases cannot be changed at runtime, so we set it first and
+	// clamp the other limits accordingly.
+	CONFIGURE_LIMIT(
+			(ss->cfg_max_bases > 0?
+				ss->cfg_max_bases : SQLX_MAX_BASES_PERCENT(total)),
+			ss->max_bases);
+	// max_passive > max_active permits answering to clients while
+	// managing internal procedures (elections, replications...).
+	CONFIGURE_LIMIT(
+			(ss->cfg_max_passive > 0?
+				ss->cfg_max_passive : SQLX_MAX_PASSIVE_PERCENT(total)),
+			ss->max_passive);
+	CONFIGURE_LIMIT(
+			(ss->cfg_max_active > 0?
+				ss->cfg_max_active : SQLX_MAX_ACTIVE_PERCENT(total)),
+			ss->max_active);
+
+	GRID_INFO("Limits set to ACTIVES[%u] PASSIVES[%u] BASES[%u] "
+			"(%u/%u available file descriptors)",
+			ss->max_active, ss->max_passive, ss->max_bases,
+			ss->max_active + ss->max_passive + ss->max_bases,
+			(guint)limit.rlim_cur);
 
 	return TRUE;
 #undef CONFIGURE_LIMIT
@@ -439,7 +472,6 @@ sqlx_service_action(void)
 
 	gridd_client_pool_set_max(SRV.clients_pool, SRV.max_active);
 	network_server_set_maxcnx(SRV.server, SRV.max_passive);
-	network_server_set_cnx_backlog(SRV.server, SRV.cnx_backlog);
 	sqlx_repository_configure_maxbases(SRV.repository, SRV.max_bases);
 
 	election_manager_set_peering(SRV.election_manager, SRV.peering);
@@ -516,8 +548,8 @@ sqlx_service_configure(int argc, char **argv)
 static void
 sqlx_service_set_defaults(void)
 {
+	SRV.max_elections_timers_per_round = SQLX_MAX_TIMER_PER_ROUND;
 	SRV.open_timeout = DEFAULT_CACHE_OPEN_TIMEOUT / G_TIME_SPAN_MILLISECOND;
-	SRV.cnx_backlog = 50;
 
 	SRV.cfg_max_bases = 0;
 	SRV.cfg_max_passive = 0;
@@ -761,17 +793,15 @@ _task_react_elections(gpointer p)
 	if (!PSRV(p)->flag_replicable)
 		return;
 
-	guint count = 0;
+	gint64 t = oio_ext_monotonic_time();
+	guint count = election_manager_play_timers (PSRV(p)->election_manager,
+			PSRV(p)->max_elections_timers_per_round);
+	t = t - oio_ext_monotonic_time();
 
-	const gint64 deadline = oio_ext_monotonic_time() +
-		500 * G_TIME_SPAN_MILLISECOND;
-	while (election_manager_play_timers (PSRV(p)->election_manager)) {
-		++ count;
-		if (oio_ext_monotonic_time () > deadline)
-			break;
+	if (count || t > (500*G_TIME_SPAN_MILLISECOND)) {
+		GRID_DEBUG("Reacted %u elections in %"G_GINT64_FORMAT"ms",
+				count, t / G_TIME_SPAN_MILLISECOND);
 	}
-	if (count)
-		GRID_DEBUG("Reacted %u elections", count);
 }
 
 static void

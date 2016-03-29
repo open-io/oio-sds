@@ -337,3 +337,48 @@ service_is_known (const char *key)
 	SRV_DO(known = (NULL != lru_tree_get (srv_known, key)));
 	return known;
 }
+
+GBytes **
+NOLOCK_service_lookup_wanted (const char *type)
+{
+	if (!wanted_prepared)
+		return NULL;
+	for (GBytes **pw=wanted_prepared ; *pw ; pw++) {
+		if (!strcmp (type, (const char*)g_bytes_get_data(*pw,NULL)))
+			return pw;
+	}
+	return NULL;
+}
+
+void
+service_remember_wanted (const char *type)
+{
+	gsize i;
+	WANTED_DO(
+	if (!wanted_srvtypes) {
+		wanted_srvtypes = g_malloc0 (8 * sizeof(void*));
+		wanted_srvtypes[0] = g_strdup (type);
+	} else {
+		for (i=0; wanted_srvtypes[i] ;++i) {
+			if (!strcmp(type, wanted_srvtypes[i]))
+				break;
+		}
+		if (NULL == wanted_srvtypes[i]) {
+			wanted_srvtypes = g_realloc (wanted_srvtypes, sizeof(gchar*) * (i+2));
+			wanted_srvtypes[i] = g_strdup (type);
+			wanted_srvtypes[i+1] = NULL;
+		}
+	});
+}
+
+GBytes*
+service_is_wanted (const char *type)
+{
+	GBytes *out = NULL;
+	WANTED_DO(do {
+		GBytes **pold = NOLOCK_service_lookup_wanted (type);
+		if (pold)
+			out = g_bytes_ref (*pold);
+	} while (0));
+	return out;
+}

@@ -22,6 +22,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define PSRV(P) ((struct sqlx_service_s*)(P))
 
+#define SQLX_MAX_BASES_PERCENT(max)   (max * 30) / 100
+#define SQLX_MAX_PASSIVE_PERCENT(max) (max * 40) / 100
+#define SQLX_MAX_ACTIVE_PERCENT(max)  (max * 30) / 100
+
 struct election_manager_s;
 struct gridd_client_factory_s;
 struct gridd_client_pool_s;
@@ -109,10 +113,10 @@ struct sqlx_service_s
 	/* This is configured during the "configure" step, and can be overriden
 	   in the _post_config hook. */
 	gint64 open_timeout;
-	gint64 cnx_backlog;
 	guint max_bases;
 	guint max_passive;
 	guint max_active;
+	guint max_elections_timers_per_round;
 
 	//-------------------------------------------------------------------
 	// Variables used during the startup time of the server, but not used

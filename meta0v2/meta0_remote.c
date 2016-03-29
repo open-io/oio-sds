@@ -105,7 +105,8 @@ meta0_remote_fill(const char *m0, gchar **urls, guint nbreplicas)
 	gchar *body = g_strjoinv("\n", urls);
 	metautils_message_set_BODY(request, body, strlen(body));
 	g_free(body);
-	return _m0_remote_no_return (m0, message_marshall_gba_and_clean(request));
+	return gridd_client_exec (m0, M0V2_INIT_TIMEOUT,
+			message_marshall_gba_and_clean(request));
 }
 
 GError*
@@ -117,7 +118,8 @@ meta0_remote_fill_v2(const char *m0, guint nbreplicas, gboolean nodist)
 	metautils_message_add_field_strint64(request, NAME_MSGKEY_REPLICAS, nbreplicas);
 	if (nodist)
 		metautils_message_add_field_struint(request, NAME_MSGKEY_NODIST, nodist);
-	return _m0_remote_no_return (m0, message_marshall_gba_and_clean(request));
+	return gridd_client_exec (m0, M0V2_INIT_TIMEOUT,
+			message_marshall_gba_and_clean(request));
 }
 
 GError*

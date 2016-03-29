@@ -526,6 +526,7 @@ sqlx_repository_set_elections(sqlx_repository_t *repo,
 {
 	EXTRA_ASSERT(repo != NULL);
 	EXTRA_ASSERT(repo->election_manager == NULL);
+	EXTRA_ASSERT(manager != NULL);
 	if (repo)
 		repo->election_manager = manager;
 }
@@ -1012,6 +1013,13 @@ sqlx_repository_open_and_lock(sqlx_repository_t *repo,
 	}
 
 	_open_clean_args(&args);
+
+	/* XXX(jfs): patching the db handle so it has the lastest election_manager
+	   allows reusing a handle from the cache, and that was initiated during
+	   the _post_config hook (when the election_manager was not associated yet
+	   to the repository. */
+	if (!err && result)
+		(*result)->manager = repo->election_manager;
 
 	if (!err && repo->open_callback && result) {
 		err = repo->open_callback(*result, repo->open_callback_data);

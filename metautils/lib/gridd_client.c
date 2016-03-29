@@ -666,7 +666,7 @@ _client_expired(struct gridd_client_s *client, gint64 now)
 		case NONE:
 			return FALSE;
 		case CONNECTING:
-			return (now - client->tv_start) > G_TIME_SPAN_SECOND;
+			return (now - client->tv_start) > COMMON_CNX_TIMEOUT;
 		case REQ_SENDING:
 		case REP_READING_SIZE:
 		case REP_READING_DATA:

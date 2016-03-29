@@ -72,6 +72,11 @@ if [ -n "$ADD_META1" ] && [ "$ADD_META1" -gt 0 ] ; then
 fi
 
 opts="--nb-meta1=${NB_META1} --nb-meta2=${NB_META2}"
+
+if [ -n "$NB_META0" ] && [ "$NB_META0" -gt 0 ] ; then
+	opts="$opts --nb-meta0=${NB_META0}"
+fi
+
 if [ -n "$PORT" ] ; then opts="${opts} --port=${PORT}" ; fi
 if [ -n "$NB_RAWX" ] ; then opts="${opts} --nb-rawx=${NB_RAWX}" ; fi
 if [ -n "$CHUNKSIZE" ] ; then opts="${opts} --chunk-size=${CHUNKSIZE}" ; fi
@@ -98,17 +103,13 @@ timeout () {
 	((count=count+1))
 }
 
-list_services () {
-	${PREFIX}-cluster -r "$NS" | awk -F\| "/$1/{print \$3}"
-}
-
 wait_for_srvtype () {
 	echo "Waiting for the $2 $1 to get a score"
 	$PREFIX-wait-scored.sh -u -N "$2" -n "$NS" -s "$1" -t 15
 }
 
 reload_service_type () {
-	list_services "$1" | while read IP ; do
+	${PREFIX}-test-config.py -t "$1" | while read IP ; do
 		curl -X POST "http://${PROXY}/v3.0/forward/reload?id=$IP"
 	done
 }
@@ -208,10 +209,10 @@ timestamp
 wait_for_srvtype "(meta0|meta1)" $((1+REPLICATION_DIRECTORY))
 
 timestamp
-list_services "meta0" | while read URL ; do
-	${PREFIX}-meta0-init -O "NbReplicas=${REPLICATION_DIRECTORY}" -O IgnoreDistance=on "$URL"
-	${PREFIX}-meta0-client "$URL" reload
-done
+
+M0=$(${PREFIX}-test-config.py -t meta0 -1)
+${PREFIX}-meta0-init -O "NbReplicas=${REPLICATION_DIRECTORY}" -O IgnoreDistance=on $M0
+${PREFIX}-meta0-client "$M0" reload
 
 timestamp
 ${PREFIX}-unlock-all.sh -n "$NS"

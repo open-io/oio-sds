@@ -131,7 +131,7 @@ extern "C" {
 # endif
 
 # ifndef PROXYD_DEFAULT_PERIOD_DOWNSTREAM
-#  define PROXYD_DEFAULT_PERIOD_DOWNSTREAM 10 /*s*/
+#  define PROXYD_DEFAULT_PERIOD_DOWNSTREAM 2 /*s*/
 # endif
 
 # ifndef PROXYD_DEFAULT_PERIOD_UPSTREAM
@@ -162,12 +162,36 @@ extern "C" {
 #  define SQLITE_RELEASE_SIZE  (64*1024*1024)
 # endif
 
+# ifndef  COMMON_CNX_TIMEOUT
+#  define COMMON_CNX_TIMEOUT (2*G_TIME_SPAN_SECOND)
+# endif
+
 # ifndef COMMON_CLIENT_TIMEOUT
 #  define COMMON_CLIENT_TIMEOUT 30.0
 # endif
 
+#ifndef SQLX_SYNC_DEFAULT_ZK_TIMEOUT
+# define SQLX_SYNC_DEFAULT_ZK_TIMEOUT 8765
+#endif
+
 # ifndef SQLX_CLIENT_TIMEOUT
 #  define SQLX_CLIENT_TIMEOUT 30.0
+# endif
+
+/* Timeout for synchronisation requests (USE, GETVERS)
+   in seconds */
+# ifndef SQLX_SYNC_TIMEOUT
+#  define SQLX_SYNC_TIMEOUT 4.0
+# endif
+
+/* Timeout for SQLX_REPLICATE requests, in seconds */
+# ifndef SQLX_REPLI_TIMEOUT
+#  define SQLX_REPLI_TIMEOUT 10.0
+# endif
+
+/* Timeout for operations that require copying a DB */
+# ifndef SQLX_RESYNC_TIMEOUT
+#  define SQLX_RESYNC_TIMEOUT 30.0
 # endif
 
 # ifndef M2V2_CLIENT_TIMEOUT
@@ -180,6 +204,10 @@ extern "C" {
 
 # ifndef M1V2_CLIENT_TIMEOUT
 #  define M1V2_CLIENT_TIMEOUT 10.0
+# endif
+
+# ifndef M0V2_INIT_TIMEOUT
+#  define M0V2_INIT_TIMEOUT 30.0
 # endif
 
 # ifndef M0V2_CLIENT_TIMEOUT
@@ -212,6 +240,58 @@ extern "C" {
 
 # ifndef  OIO_CFG_EVTQ_MAXPENDING
 #  define OIO_CFG_EVTQ_MAXPENDING "events-max-pending"
+# endif
+
+/* Max number of events raised by epoll_wait */
+# ifndef  SERVER_DEFAULT_EPOLL_MAXEV
+#  define SERVER_DEFAULT_EPOLL_MAXEV 128
+# endif
+
+/* Number of acccept() performed each time epoll mentions the server socket
+   has activity */
+# ifndef  SERVER_DEFAULT_ACCEPT_MAX
+#  define SERVER_DEFAULT_ACCEPT_MAX 64
+# endif
+
+/* Max number of threads for the GThreadPool of the workers */
+# ifndef  SERVER_DEFAULT_THP_MAXWORKERS
+#  define SERVER_DEFAULT_THP_MAXWORKERS  -1
+# endif
+
+/* in number of threads */
+# ifndef  SERVER_DEFAULT_THP_MAXUNUSED
+#  define SERVER_DEFAULT_THP_MAXUNUSED  -1
+# endif
+
+/* in millisecond */
+# ifndef  SERVER_DEFAULT_THP_IDLE
+#  define SERVER_DEFAULT_THP_IDLE  30000
+# endif
+
+/* How long (in microseconds) a connection might stay idle between two
+ * requests */
+#ifndef  SERVER_DEFAULT_CNX_IDLE
+# define SERVER_DEFAULT_CNX_IDLE  (5 * G_TIME_SPAN_MINUTE)
+#endif
+
+/* How long (in microseconds) a connection might exist since its creation
+ * (whatever it is active or not) */
+#ifndef  SERVER_DEFAULT_CNX_LIFETIME
+# define SERVER_DEFAULT_CNX_LIFETIME  (2 * G_TIME_SPAN_HOUR)
+#endif
+
+/* How long (in microseconds) a connection might exist since its creation
+ * when it received no request at all */
+#ifndef  SERVER_DEFAULT_CNX_INACTIVE
+# define SERVER_DEFAULT_CNX_INACTIVE  (30 * G_TIME_SPAN_SECOND)
+#endif
+
+# ifndef  OIO_STAT_PREFIX_REQ
+#  define OIO_STAT_PREFIX_REQ "counter req.hits"
+# endif
+
+# ifndef  OIO_STAT_PREFIX_TIME
+#  define OIO_STAT_PREFIX_TIME "counter req.time"
 # endif
 
 # define OIO_CFG_PROXY        "proxy"

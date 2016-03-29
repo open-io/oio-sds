@@ -53,19 +53,31 @@ _reply_common_error (struct req_args_s *args, GError *err)
 }
 
 enum http_rc_e
-_reply_json (struct req_args_s *args, int code, const gchar * msg,
-	GString * gstr)
+_reply_bytes (struct req_args_s *args, int code, const gchar * msg,
+		GBytes * bytes)
 {
 	args->rp->set_status (code, msg);
-	if (gstr) {
-		if (gstr->len > 0)
+	if (bytes) {
+		if (g_bytes_get_size (bytes) > 0) {
 			args->rp->set_content_type ("application/json");
-		args->rp->set_body_gstr (gstr);
+			args->rp->set_body_bytes (bytes);
+		} else {
+			g_bytes_unref (bytes);
+			args->rp->set_body_bytes (NULL);
+		}
 	} else {
-		args->rp->set_body (NULL, 0);
+		args->rp->set_body_bytes (NULL);
 	}
 	args->rp->finalize ();
 	return HTTPRC_DONE;
+}
+
+enum http_rc_e
+_reply_json (struct req_args_s *args, int code, const gchar * msg,
+	GString * gstr)
+{
+	return _reply_bytes (args, code, msg,
+			gstr ? g_string_free_to_bytes (gstr) : NULL);
 }
 
 enum http_rc_e
@@ -154,6 +166,17 @@ enum http_rc_e
 _reply_created (struct req_args_s *args)
 {
 	return _reply_json (args, HTTP_CODE_CREATED, "Created", NULL);
+}
+
+enum http_rc_e
+_reply_success_bytes (struct req_args_s *args, GBytes *bytes)
+{
+	gsize l = 0;
+	gconstpointer b = bytes ? g_bytes_get_data (bytes, &l) : NULL;
+
+	const int code = b && l ? HTTP_CODE_OK : HTTP_CODE_NO_CONTENT;
+	const char *msg = b && l ? "OK" : "No Content";
+	return _reply_bytes (args, code, msg, bytes);
 }
 
 enum http_rc_e

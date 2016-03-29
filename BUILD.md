@@ -95,6 +95,11 @@ Used by `gcc`
 
 | Macro | Default | Description |
 | ----- | ------- | ----------- |
+| SERVER_DEFAULT_EPOLL_MAXEV | 128 | How many events maight be raised by epoll_wait() each round |
+| SERVER_DEFAULT_ACCEPT_MAX | 64 | How many clients are accepted each time the server has activity |
+| SERVER_DEFAULT_THP_MAXUNUSED | -1 | How many idle workers are allowed |
+| SERVER_DEFAULT_THP_MAXWORKERS | -1 | How many workers are allowed |
+| SERVER_DEFAULT_THP_IDLE | 30000 | How long (in milliseconds) a worker might remain idle before exiting. |
 | SERVER_DEFAULT_CNX_IDLE | "5 * G_TIME_SPAN_MINUTE" | How long (in microseconds) a connection might stay idle between two requests |
 | SERVER_DEFAULT_CNX_LIFETIME | "2 * G_TIME_SPAN_HOUR" | How long (in microseconds) a connection might exist since its creation (whatever it is active or not) |
 | SERVER_DEFAULT_CNX_INACTIVE | "30 * G_TIME_SPAN_SECOND" | How long (in microseconds) a connection might exist since its creation when it received no request at all. |

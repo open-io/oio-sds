@@ -17,6 +17,8 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
+#include <errno.h>
+
 #include <metautils/lib/metautils.h>
 
 #include <zookeeper.h>
@@ -177,35 +179,47 @@ zk_main_watch(zhandle_t *zh, int type, int state, const char *path,
 {
 	metautils_ignore_signals();
 
-	struct sqlx_sync_s *ss = watcherCtx;
-	(void) zh;
-	(void) path;
+	GRID_DEBUG("%s(%p,%d,%d,%s,%p)", __FUNCTION__,
+			zh, type, state, path, watcherCtx);
 
-	if (type == ZOO_SESSION_EVENT &&
-			state == ZOO_CONNECTING_STATE) {
+	struct sqlx_sync_s *ss = watcherCtx;
+	EXTRA_ASSERT (ss != NULL);
+
+	if (type != ZOO_SESSION_EVENT)
+		return;
+
+	if (state == ZOO_EXPIRED_SESSION_STATE) {
 		GRID_WARN("Zookeeper: (re)connecting to [%s]", ss->zk_url);
 		if (ss->zh)
 			zookeeper_close(ss->zh);
 		if (NULL != ss->on_exit)
 			ss->on_exit(ss->on_exit_ctx);
+
+		/* XXX(jfs): forget the previous ID and reconnect */
+		memset (&ss->zk_id, 0, sizeof(ss->zk_id));
 		ss->zh = zookeeper_init(ss->zk_url, zk_main_watch,
-			SQLX_SYNC_DEFAULT_ZK_TIMEOUT, &ss->zk_id, ss, 0);
+				SQLX_SYNC_DEFAULT_ZK_TIMEOUT, &ss->zk_id, ss, 0);
+		if (!ss->zh) {
+			GRID_ERROR("ZooKeeper init failure: (%d) %s",
+					errno, strerror(errno));
+			grid_main_set_status (2);
+			grid_main_stop ();
+		}
+	}
+	else if (state == ZOO_AUTH_FAILED_STATE) {
+		GRID_WARN("Zookeeper: auth problem to [%s]", ss->zk_url);
+	}
+	else if (state == ZOO_ASSOCIATING_STATE) {
+		GRID_DEBUG("Zookeeper: associating to [%s]", ss->zk_url);
+	}
+	else if (state == ZOO_CONNECTED_STATE) {
+		memcpy(&(ss->zk_id), zoo_client_id(ss->zh), sizeof(clientid_t));
+		GRID_INFO("Zookeeper: connected to [%s] id=%"G_GINT64_FORMAT,
+				ss->zk_url, ss->zk_id.client_id);
 	}
 	else {
-		if (state == ZOO_EXPIRED_SESSION_STATE) {
-			GRID_WARN("Zookeeper: expired session to [%s]", ss->zk_url);
-		}
-		else if (state == ZOO_AUTH_FAILED_STATE) {
-			GRID_WARN("Zookeeper: auth problem to [%s]", ss->zk_url);
-		}
-		else if (state == ZOO_ASSOCIATING_STATE) {
-			GRID_DEBUG("Zookeeper: associating to [%s]", ss->zk_url);
-		}
-		else if (state == ZOO_CONNECTED_STATE) {
-			memcpy(&(ss->zk_id), zoo_client_id(ss->zh), sizeof(clientid_t));
-			GRID_INFO("Zookeeper: connected to [%s] id=%"G_GINT64_FORMAT,
-					ss->zk_url, ss->zk_id.client_id);
-		}
+		GRID_INFO("Zookeeper: unmanaged event [%s] id=%"G_GINT64_FORMAT,
+				ss->zk_url, ss->zk_id.client_id);
 	}
 }
 
@@ -216,7 +230,8 @@ _open(struct sqlx_sync_s *ss)
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
 	if (NULL != ss->zh)
 		return NEWERROR(CODE_INTERNAL_ERROR, "BUG : ZK connection already initiated");
-	ss->zh = zookeeper_init(ss->zk_url, zk_main_watch, 4000, NULL, ss, 0);
+	ss->zh = zookeeper_init(ss->zk_url, zk_main_watch,
+			SQLX_SYNC_DEFAULT_ZK_TIMEOUT, NULL, ss, 0);
 	if (NULL == ss->zh)
 		return NEWERROR(CODE_INTERNAL_ERROR, "ZK connection failure");
 	return NULL;
@@ -406,7 +421,7 @@ _direct_use (struct sqlx_peering_s *self,
 	mc->client = gridd_client_factory_create_client (p->factory);
 	gridd_client_connect_url (mc->client, url);
 	gridd_client_request (mc->client, req, NULL, NULL);
-	gridd_client_set_timeout(mc->client, 1.0);
+	gridd_client_set_timeout(mc->client, SQLX_SYNC_TIMEOUT);
 	gridd_client_pool_defer(p->pool, mc);
 	g_byte_array_unref(req);
 }
@@ -459,7 +474,7 @@ _direct_pipefrom (struct sqlx_peering_s *self,
 
 	gridd_client_connect_url (mc->ec.client, url);
 	gridd_client_request(mc->ec.client, req, NULL, NULL);
-	gridd_client_set_timeout(mc->ec.client, 30.0);
+	gridd_client_set_timeout(mc->ec.client, SQLX_RESYNC_TIMEOUT);
 	gridd_client_pool_defer(p->pool, &mc->ec);
 
 	g_byte_array_unref(req);
@@ -553,7 +568,7 @@ _direct_getvers (struct sqlx_peering_s *self,
 	gridd_client_request (mc->ec.client, req, mc, on_reply_GETVERS);
 	g_byte_array_unref(req);
 
-	gridd_client_set_timeout(mc->ec.client, 1.0);
+	gridd_client_set_timeout(mc->ec.client, SQLX_SYNC_TIMEOUT);
 	gridd_client_pool_defer(p->pool, &mc->ec);
 }
 

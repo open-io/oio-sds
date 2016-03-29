@@ -154,10 +154,10 @@ GError* election_manager_create (struct replication_config_s *config,
 
 struct election_counts_s election_manager_count (struct election_manager_s *m);
 
-/* Perform the 'timer' action on the first election that needs it.
-   This includes expiring the election, retrying it, ping peers, etc.
-   Returns TRUE if at least one election has been managed. */
-gboolean election_manager_play_timers (struct election_manager_s *m);
+/* Perform the 'timer' action on one item of each status.
+   This includes expiring the election, retrying, pinging peers, etc.
+   Returns the number of items activated. */
+guint election_manager_play_timers (struct election_manager_s *m, guint max);
 
 void election_manager_exit_all (struct election_manager_s *m,
 		gint64 oldest, gboolean persist);

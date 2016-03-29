@@ -55,6 +55,8 @@ struct sqlx_repctx_s
 	// will send them a whole dump.
 	GPtrArray *resync_todo; // <gchar*>
 
+	GString *errors;
+
 	// Count the explicit changes, those matched
 	gint32 changes;
 
@@ -292,26 +294,24 @@ context_pending_to_rowset(sqlite3 *db, struct sqlx_repctx_s *ctx)
 static GError*
 _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx)
 {
-	GError *err = NULL;
-	GByteArray *encoded;
-	struct gridd_client_s **clients, **pc;
 	guint count_errors = 0, count_success = 0;
 
 	dump_request(__FUNCTION__, peers, "SQLX_REPLICATE",
 			sqlx_name_mutable_to_const(&ctx->sq3->name));
 
-	encoded = sqlx_pack_REPLICATE(
+	GByteArray *encoded = sqlx_pack_REPLICATE(
 			sqlx_name_mutable_to_const(&ctx->sq3->name),
 			&(ctx->sequence));
-	clients = gridd_client_create_many(peers, encoded, NULL, NULL);
+	struct gridd_client_s **clients =
+		gridd_client_create_many(peers, encoded, NULL, NULL);
 	g_byte_array_unref(encoded);
 
-	gridd_clients_set_timeout(clients, SQLX_REPLICATION_TIMEOUT);
+	gridd_clients_set_timeout(clients, SQLX_REPLI_TIMEOUT);
 
 	gridd_clients_start(clients);
-	err = gridd_clients_loop(clients);
+	GError *err = gridd_clients_loop(clients);
 	if (!err) {
-		for (pc=clients; pc && *pc ;pc++) {
+		for (struct gridd_client_s **pc=clients; pc && *pc ;pc++) {
 			GError *e = gridd_client_error(*pc);
 			if (!e)
 				++ count_success;
@@ -331,9 +331,11 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx)
 					++ count_success;
 					g_ptr_array_add(ctx->resync_todo, g_strdup(
 							gridd_client_url(*pc)));
-				}
-				else
+				} else {
 					++ count_errors;
+					g_string_append_printf (ctx->errors, " [%s/%d/%s]",
+							gridd_client_url(*pc), e->code, e->message);
+				}
 				g_clear_error(&e);
 			}
 		}
@@ -380,10 +382,9 @@ _defer_synchronous_RESYNC(struct sqlx_repctx_s *ctx)
 static int
 _perform_REPLICATE(struct sqlx_repctx_s *ctx)
 {
-	GError *err;
 	gchar **peers = NULL;
 
-	err = election_get_peers (ctx->sq3->manager,
+	GError *err = election_get_peers (ctx->sq3->manager,
 			sqlx_name_mutable_to_const(&ctx->sq3->name), FALSE, &peers);
 
 	if (err != NULL) {
@@ -504,6 +505,8 @@ sqlx_replication_free_context(struct sqlx_repctx_s *ctx)
 		g_tree_destroy(ctx->pending);
 	if (ctx->resync_todo)
 		g_ptr_array_free(ctx->resync_todo, TRUE);
+	if (ctx->errors)
+		g_string_free (ctx->errors, TRUE);
 	SLICE_FREE(struct sqlx_repctx_s, ctx);
 }
 
@@ -553,6 +556,8 @@ sqlx_transaction_prepare(struct sqlx_sqlite3_s *sq3,
 		sqlite3_rollback_hook(sq3->db, hook_rollback, repctx);
 		sqlite3_update_hook(sq3->db, (sqlite3_update_hook_f)hook_update, repctx);
 	}
+
+	repctx->errors = g_string_new ("");
 
 	*result = repctx;
 	return NULL;
@@ -656,15 +661,21 @@ sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err)
 		/* Apply the changes on the slaves. */
 		rc = sqlx_exec(ctx->sq3->db, "COMMIT");
 		if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-			err = SQLITE_GERROR(ctx->sq3->db, rc);
+			err = NEWERROR(rc, "(%s) %s%s", sqlite_strerror(rc),
+					sqlite3_errmsg(ctx->sq3->db), ctx->errors->str);
 			g_prefix_error(&err, "COMMIT failed: ");
 			// Restore the in-RAM cache
 			sqlx_admin_reload(ctx->sq3);
 		}
-		else if (ctx->resync_todo && ctx->resync_todo->len) {
-			// Detected the need of an explicit RESYNC on some SLAVES.
-			g_ptr_array_add(ctx->resync_todo, NULL);
-			sqlx_synchronous_resync(ctx, (gchar**)ctx->resync_todo->pdata);
+		else {
+			if (ctx->errors->len > 0) {
+				GRID_WARN("COMMIT errors on [%s.%s]:%s", ctx->sq3->name.base, ctx->sq3->name.type, ctx->errors->str);
+			}
+			if (ctx->resync_todo && ctx->resync_todo->len) {
+				// Detected the need of an explicit RESYNC on some SLAVES.
+				g_ptr_array_add(ctx->resync_todo, NULL);
+				sqlx_synchronous_resync(ctx, (gchar**)ctx->resync_todo->pdata);
+			}
 		}
 	}
 
