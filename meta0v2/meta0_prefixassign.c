@@ -613,7 +613,7 @@ _unref_meta1(gchar **urls)
 						error = NEWERROR(0,
 								"prefix %02X%02X managed by two meta1 present in the request",
 								((guint8*)p)[0], ((guint8*)p)[1]);
-						GRID_WARN(error->message);
+						GRID_WARN("%s", error->message);
 						goto errorLabel;
 					}
 					_treat_prefix(prefix_mask, (guint8*)p);
