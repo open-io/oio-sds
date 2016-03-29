@@ -182,7 +182,12 @@ conscience_srvtype_remove_expired(struct conscience_srvtype_s * srvtype,
 	g_assert_nonnull (srvtype);
 
 	guint count = 0U;
-	time_t oldest = oio_ext_monotonic_seconds() - srvtype->score_expiration;
+
+	time_t oldest = oio_ext_monotonic_seconds();
+	if (oldest > srvtype->score_expiration)
+		oldest -= srvtype->score_expiration;
+	else
+		oldest = 0;
 
 	GHashTableIter iter;
 	gpointer key, value;
