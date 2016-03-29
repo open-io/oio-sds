@@ -195,10 +195,11 @@ conscience_srvtype_remove_expired(struct conscience_srvtype_s * srvtype,
 	while (g_hash_table_iter_next(&iter, &key, &value)) {
 		struct conscience_srv_s *pService = value;
 		if (!pService->locked && pService->score.timestamp < oldest) {
-			if (callback)
-				callback(pService, u);
-			g_hash_table_iter_steal(&iter);
-			conscience_srv_destroy(pService);
+			if (pService->score.value > 0) {
+				if (callback)
+					callback(pService, u);
+				pService->score.value = 0;
+			}
 			count++;
 		}
 	}
