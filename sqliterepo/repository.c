@@ -333,7 +333,7 @@ sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 		repo->sync_mode_repli = cfg->sync_repli;
 	} else {
 		repo->sync_mode_solo = SQLX_SYNC_NORMAL;
-		repo->sync_mode_repli = SQLX_SYNC_NORMAL;
+		repo->sync_mode_repli = SQLX_SYNC_OFF;
 	}
 
 	repo->locator = _default_locator;
