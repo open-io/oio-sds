@@ -561,7 +561,7 @@ sqlx_service_set_defaults(void)
 	SRV.flag_cached_bases = TRUE;
 
 	SRV.sync_mode_solo = 1;
-	SRV.sync_mode_repli = 1;
+	SRV.sync_mode_repli = 0;
 
 	if (SRV.service_config->set_defaults)
 		SRV.service_config->set_defaults(&SRV);
