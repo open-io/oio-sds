@@ -331,9 +331,11 @@ sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 	if (cfg) {
 		repo->sync_mode_solo = cfg->sync_solo;
 		repo->sync_mode_repli = cfg->sync_repli;
+		repo->page_size = cfg->page_size;
 	} else {
 		repo->sync_mode_solo = SQLX_SYNC_NORMAL;
 		repo->sync_mode_repli = SQLX_SYNC_OFF;
+		repo->page_size = SQLX_DEFAULT_PAGE_SIZE;
 	}
 
 	repo->locator = _default_locator;
@@ -723,16 +725,17 @@ retry:
 	sq3->admin = g_tree_new_full(metautils_strcmp3, NULL,
 			g_free, metautils_gba_unref);
 
-	/* Set sqlite page size. The default of 1024 produces a lot of
-	 * fragmentation. We advise at least 4096. Big containers with a
-	 * lot of chunks should benefit from page sizes >=16384. */
 	sqlx_exec(handle, "PRAGMA foreign_keys = OFF");
 	sqlx_exec(handle, "PRAGMA journal_mode = MEMORY");
 	sqlx_exec(handle, "PRAGMA temp_store = MEMORY");
 	if (!_schema_has(sq3->db)) {
-		sqlx_exec (sq3->db,
-				"PRAGMA page_size = "SQLX_DEFAULT_PAGE_SIZE";"
-				"PRAGMA synchronous = OFF;");
+		if (sq3->repo->page_size >= 512) {
+			gchar line[128] = {0};
+			snprintf(line, sizeof(line),
+					"PRAGMA page_size = %u;", sq3->repo->page_size);
+			sqlx_exec(sq3->db, line);
+		}
+		sqlx_exec(sq3->db, "PRAGMA synchronous = OFF;");
 		sqlx_exec(sq3->db, "BEGIN");
 		_schema_apply (sq3->db, args->schema);
 	} else {

@@ -108,6 +108,7 @@ struct dav_rawx_server_conf_s {
 	int hash_depth;
 	int hash_width;
 	int fsync_on_close;
+	int fallocate;
 	char event_agent_addr[RAWX_EVENT_ADDR_SIZE];
 
 	/* Statistics involved data */

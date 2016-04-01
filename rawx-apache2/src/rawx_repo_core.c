@@ -707,6 +707,7 @@ rawx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 		return server_create_and_stat_error(resource_get_server_config(resource), p,
 			MAP_IO2HTTP(rv), 0, "An error occurred while opening a resource.");
 	}
+	// TODO(fvennetier): remove this option, we never proved its efficiency
 	else if (conf->FILE_buffer_size > 0) {
 		int s = CLAMP(conf->FILE_buffer_size, RAWX_BUF_MIN, RAWX_BUF_MAX);
 		char *buf = apr_pcalloc(p, s);
@@ -715,6 +716,19 @@ rawx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 					"setvbuf failed : (errno=%d) %s",
 					errno, strerror(errno));
 		}
+	}
+
+	/* Preallocate disk space for the chunk */
+	apr_int64_t chunk_size = 0;
+	if (ctx->chunk.size != NULL && conf->fallocate &&
+			(chunk_size = apr_strtoi64(ctx->chunk.size, NULL, 10)) > 0 &&
+			(rv = posix_fallocate(fileno(ds->f), 0, (off_t)chunk_size)) != 0) {
+		dav_error *err = server_create_and_stat_error(conf, p,
+				MAP_IO2HTTP(rv), 0,
+				"An error occurred while reserving storage space.");
+		fclose(ds->f);
+		unlink(ds->pathname);
+		return err;
 	}
 
 	/* TODO: try to create a storage_policy struct from request header */
