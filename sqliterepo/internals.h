@@ -80,7 +80,7 @@ License along with this library.
 #define SQLX_DUMP_CHUNK_SIZE (8*1024*1024)
 
 /* Page size at database creation (should be multiple of storage block size) */
-#define SQLX_DEFAULT_PAGE_SIZE "4096"
+#define SQLX_DEFAULT_PAGE_SIZE 4096
 
 #define MEMBER(D)   ((struct election_member_s*)(D))
 #define MMANAGER(D) MEMBER(D)->manager
@@ -149,6 +149,9 @@ struct sqlx_repository_s
 	/* Limits for the base's holder */
 	guint bases_count;
 	guint bases_max;
+
+	/* sqlite page size for new bases */
+	guint page_size;
 
 	enum sqlx_sync_mode_e sync_mode_solo;
 	enum sqlx_sync_mode_e sync_mode_repli;

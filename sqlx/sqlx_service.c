@@ -120,6 +120,9 @@ static struct grid_main_option_s common_options[] =
 	{"MaxWorkers", OT_UINT, {.u=&SRV.cfg_max_workers},
 		"Limits the number of worker threads" },
 
+	{"PageSize", OT_UINT, {.u=&SRV.cfg_page_size},
+		"Page size of SQLite databases (0=use sqlite default)" },
+
 	{"CacheEnabled", OT_BOOL, {.b = &SRV.flag_cached_bases},
 		"If set, each base will be cached in a way it won't be accessed"
 			" by several requests in the same time."},
@@ -555,6 +558,7 @@ sqlx_service_set_defaults(void)
 	SRV.cfg_max_passive = 0;
 	SRV.cfg_max_active = 0;
 	SRV.cfg_max_workers = 200;
+	SRV.cfg_page_size = 4096;
 	SRV.flag_replicable = TRUE;
 	SRV.flag_autocreate = TRUE;
 	SRV.flag_delete_on = TRUE;
