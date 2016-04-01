@@ -87,15 +87,11 @@ dav_rainx_create_server_config(apr_pool_t *p, server_rec *s)
 	conf = apr_pcalloc(p, sizeof(dav_rainx_server_conf));
 	conf->pool = p;
 	conf->cleanup = NULL;
-	conf->hash_depth = conf->hash_width = 2;
-	conf->headers_scheme = HEADER_SCHEME_V1;
-	conf->fsync_on_close = ~0;
-	conf->FILE_buffer_size = 0;
 	conf->socket_timeout = RAINX_DEFAULT_SOCKET_TIMEOUT;
-	
+
 	apr_snprintf(conf->lock.path, sizeof(conf->lock.path), "/var/run/httpd-lock.%d", getpid());
 	apr_snprintf(conf->shm.path, sizeof(conf->shm.path), "/var/run/httpd-shm.%d", getpid());
-	
+
 	return conf;
 }
 
@@ -112,11 +108,6 @@ dav_rainx_merge_server_config(apr_pool_t *p, void *base, void *overrides)
 	newconf = apr_pcalloc(p, sizeof(*newconf));
 	newconf->pool = p;
 	newconf->cleanup = NULL;
-	newconf->hash_depth = child->hash_depth;
-	newconf->hash_width = child->hash_width;
-	newconf->fsync_on_close = child->fsync_on_close;
-	newconf->headers_scheme = child->headers_scheme;
-	newconf->FILE_buffer_size = child->FILE_buffer_size;
 	memcpy(newconf->docroot, child->docroot, sizeof(newconf->docroot));
 	memcpy(newconf->ns_name, child->ns_name, sizeof(newconf->ns_name));
 	apr_thread_mutex_create(&(newconf->rainx_conf_lock),
@@ -125,36 +116,6 @@ dav_rainx_merge_server_config(apr_pool_t *p, void *base, void *overrides)
 
 	DAV_DEBUG_POOL(p, 0, "Configuration merged!");
 	return newconf;
-}
-
-static const char *
-dav_rainx_cmd_gridconfig_hash_width(cmd_parms *cmd, void *config, const char *arg1)
-{
-	dav_rainx_server_conf *conf;
-
-	(void) config;
-	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
-
-	conf = ap_get_module_config(cmd->server->module_config, &dav_rainx_module);
-	conf->hash_width = atoi(arg1);
-
-	DAV_DEBUG_POOL(cmd->pool, 0, "hash_width=[%d]", conf->hash_width);
-	return NULL;
-}
-
-static const char *
-dav_rainx_cmd_gridconfig_hash_depth(cmd_parms *cmd, void *config, const char *arg1)
-{
-	dav_rainx_server_conf *conf;
-
-	(void) config;
-	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
-
-	conf = ap_get_module_config(cmd->server->module_config, &dav_rainx_module);
-	conf->hash_depth = atoi(arg1);
-
-	DAV_DEBUG_POOL(cmd->pool, 0, "hash_depth=[%d]", conf->hash_depth);
-	return NULL;
 }
 
 static const char *
@@ -178,7 +139,7 @@ dav_rainx_cmd_gridconfig_docroot(cmd_parms *cmd, void *config, const char *arg1)
 			return apr_pstrcat(cmd->temp_pool, "Docroot for GridStorage chunks must be a directory : ", arg1, NULL);
 		}
 	} while (0);
-	
+
 	conf = ap_get_module_config(cmd->server->module_config, &dav_rainx_module);
 	memset(conf->docroot, 0x00, sizeof(conf->docroot));
 	apr_cpystrn(conf->docroot, arg1, sizeof(conf->docroot)-1);
@@ -239,49 +200,6 @@ dav_rainx_cmd_gridconfig_namespace(cmd_parms *cmd, void *config, const char *arg
 }
 
 static const char *
-dav_rainx_cmd_gridconfig_headers(cmd_parms *cmd, void *config, const char *arg1)
-{
-	dav_rainx_server_conf *conf;
-	(void) config;
-
-	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
-
-	conf = ap_get_module_config(cmd->server->module_config, &dav_rainx_module);
-
-	/* ensure a right default value */
-	conf->headers_scheme = HEADER_SCHEME_V1;
-
-	if (0 == apr_strnatcasecmp(arg1,"1"))
-		conf->headers_scheme = HEADER_SCHEME_V1;
-	else if (0 == apr_strnatcasecmp(arg1, "2"))
-		conf->headers_scheme = HEADER_SCHEME_V2;
-	else if (0 == apr_strnatcasecmp(arg1, "both"))
-		conf->headers_scheme = HEADER_SCHEME_V1 | HEADER_SCHEME_V2;
-	else
-		return apr_psprintf(cmd->pool, "Grid Headers scheme : invalid value [%s]", arg1);
-
-	return NULL;
-}
-
-static const char *
-dav_rainx_cmd_gridconfig_fsync(cmd_parms *cmd, void *config, const char *arg1)
-{
-	dav_rainx_server_conf *conf;
-	(void) config;
-
-	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
-
-	conf = ap_get_module_config(cmd->server->module_config, &dav_rainx_module);
-	conf->fsync_on_close = 0;
-	conf->fsync_on_close |= (0 == apr_strnatcasecmp(arg1,"on"));
-	conf->fsync_on_close |= (0 == apr_strnatcasecmp(arg1,"true"));
-	conf->fsync_on_close |= (0 == apr_strnatcasecmp(arg1,"yes"));
-	conf->fsync_on_close |= (0 == apr_strnatcasecmp(arg1,"enabled"));
-
-	return NULL;
-}
-
-static const char *
 dav_rainx_cmd_gridconfig_dirrun(cmd_parms *cmd, void *config, const char *arg1)
 {
 	dav_rainx_server_conf *conf;
@@ -295,30 +213,9 @@ dav_rainx_cmd_gridconfig_dirrun(cmd_parms *cmd, void *config, const char *arg1)
 		"%s/httpd-lock.%d", arg1, getpid());
 	apr_snprintf(conf->shm.path, sizeof(conf->shm.path),
 		"%s/httpd-shm.%d", arg1, getpid());
-	
+
 	DAV_DEBUG_POOL(cmd->pool, 0, "mutex_key=[%s]", conf->lock.path);
 	DAV_DEBUG_POOL(cmd->pool, 0, "shm_key=[%s]", conf->shm.path);
-
-	return NULL;
-}
-
-static const char *
-dav_rainx_cmd_gridconfig_upblock(cmd_parms *cmd, void *config, const char *arg1)
-{
-	dav_rainx_server_conf *conf;
-	(void) config;
-
-	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
-
-	conf = ap_get_module_config(cmd->server->module_config, &dav_rainx_module);
-
-	if (arg1 && *arg1) {
-		conf->FILE_buffer_size = atoi(arg1);
-		if (conf->FILE_buffer_size > 0 && conf->FILE_buffer_size < 8192)
-			conf->FILE_buffer_size = 8192;
-		else if (conf->FILE_buffer_size > 131072)
-			conf->FILE_buffer_size = 131072;
-	}
 
 	return NULL;
 }
@@ -366,7 +263,7 @@ dav_rainx_cmd_gridconfig_sock_timeout(cmd_parms *cmd, void *config, const char *
 	DAV_DEBUG_POOL(cmd->pool, 0,
 			"Socket timeout for rawx request is %" APR_TIME_T_FMT " microseconds",
 			conf->socket_timeout);
-	
+
 	return NULL;
 }
 
@@ -375,19 +272,19 @@ rainx_hook_child_init(apr_pool_t *pchild, server_rec *s)
 {
 	apr_status_t status;
 	dav_rainx_server_conf *conf;
-	
+
 	DAV_XDEBUG_POOL(pchild, 0, "%s()", __FUNCTION__);
 	conf = ap_get_module_config(s->module_config, &dav_rainx_module);
 	conf->cleanup = _stat_cleanup_child;
-	
+
 	status = server_init_child_stat(conf, pchild, pchild);
 	if (APR_SUCCESS != status)
 		DAV_ERROR_POOL(pchild, 0, "Failed to attach the RAWX statistics support");
-	
+
 	conf->cleanup = _stat_cleanup_child;
 }
 
-/* Dynamically shared modules are loaded twice by apache! 
+/* Dynamically shared modules are loaded twice by apache!
  * Then we set a dummy information in the server's pool's
  * userdata*/
 static int
@@ -427,13 +324,6 @@ rainx_hook_post_config(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp, s
 	gerr = NULL;
 	conf = ap_get_module_config(server->module_config, &dav_rainx_module);
 
-	/* perform some options consistency checks */
-	if (!(conf->headers_scheme & HEADER_SCHEME_V1) &&
-			!(conf->headers_scheme & HEADER_SCHEME_V2)) {
-		DAV_ERROR_POOL(plog, 0, "You cannot disable both V1 and V2 header scheme");
-		return DONE;
-	}
-
 	DAV_XDEBUG_POOL(plog, 0, "Checking the docroot XATTR lock for [%s]", conf->docroot);
 
 	/* Runs the configured servers and check they do not serve
@@ -459,7 +349,7 @@ rainx_hook_post_config(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp, s
 			DAV_DEBUG_POOL(plog, 0, "xattr-lock : testing addr [%s]", url);
 		}
 	}
-	
+
 	if (gerr)
 		g_clear_error(&gerr);
 
@@ -482,15 +372,10 @@ rainx_hook_post_config(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp, s
 
 static const command_rec dav_rainx_cmds[] =
 {
-    AP_INIT_TAKE1("grid_hash_width",  dav_rainx_cmd_gridconfig_hash_width,  NULL, RSRC_CONF, "hash width on a chunk's name"),
-    AP_INIT_TAKE1("grid_hash_depth",  dav_rainx_cmd_gridconfig_hash_depth,  NULL, RSRC_CONF, "hash depth on a chunk's name"),
     AP_INIT_TAKE1("grid_docroot",     dav_rainx_cmd_gridconfig_docroot,     NULL, RSRC_CONF, "chunks docroot"),
     AP_INIT_TAKE1("grid_namespace",   dav_rainx_cmd_gridconfig_namespace,   NULL, RSRC_CONF, "namespace name"),
     AP_INIT_TAKE1("grid_dir_run",     dav_rainx_cmd_gridconfig_dirrun,      NULL, RSRC_CONF, "run directory"),
-    AP_INIT_TAKE1("grid_fsync",       dav_rainx_cmd_gridconfig_fsync,       NULL, RSRC_CONF, "do fsync on file close"),
-    AP_INIT_TAKE1("grid_headers",     dav_rainx_cmd_gridconfig_headers,     NULL, RSRC_CONF, "which header scheme to adopt (1, 2, both)"),
     AP_INIT_TAKE1("grid_acl",         dav_rainx_cmd_gridconfig_acl,         NULL, RSRC_CONF, "enabled acl"),
-    AP_INIT_TAKE1("grid_upload_blocksize",    dav_rainx_cmd_gridconfig_upblock,     NULL, RSRC_CONF, "upload block size"),
     AP_INIT_TAKE1("grid_rawx_socket_timeout", dav_rainx_cmd_gridconfig_sock_timeout,       NULL, RSRC_CONF, "socket timeout for rawx connections (in microsecond)"),
     AP_INIT_TAKE1(NULL,  NULL,  NULL, RSRC_CONF, NULL)
 };
@@ -502,7 +387,7 @@ register_hooks(apr_pool_t *p)
 
 	ap_hook_post_config(rainx_hook_post_config, NULL, NULL, APR_HOOK_MIDDLE);
 	ap_hook_child_init(rainx_hook_child_init, NULL, NULL, APR_HOOK_MIDDLE);
-	
+
 	DAV_DEBUG_POOL(p, 0, "Hooks registered");
 }
 

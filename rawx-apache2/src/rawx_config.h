@@ -124,7 +124,6 @@ struct dav_rawx_server_conf_s {
 
 	int enabled_acl;
 	rawx_conf_t* rawx_conf;
-	ssize_t FILE_buffer_size; /**< negative or zero means 'unset', positive set the buffer size to this value, but we force a maximum of '131072' */
 };
 
 apr_status_t server_init_master_stat(dav_rawx_server_conf *conf, apr_pool_t *pool, apr_pool_t *plog);

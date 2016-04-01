@@ -184,9 +184,8 @@ grid_fsync             disabled
 # At the end of an upload, perform a fsync() on the directory holding the chunk
 grid_fsync_dir         enabled
 
-# If set, gives the internal FILE a buffer of this size. If not set (default),
-# let the default buffer used by the glibc.
-#grid_upload_blocksize 131072
+# Preallocate space for the chunk file (enabled by default)
+#grid_fallocate enabled
 
 # Triggers Access Control List (acl)
 # DO NOT USE, this is broken

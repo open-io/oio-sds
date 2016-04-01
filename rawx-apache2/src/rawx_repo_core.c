@@ -707,16 +707,6 @@ rawx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 		return server_create_and_stat_error(resource_get_server_config(resource), p,
 			MAP_IO2HTTP(rv), 0, "An error occurred while opening a resource.");
 	}
-	// TODO(fvennetier): remove this option, we never proved its efficiency
-	else if (conf->FILE_buffer_size > 0) {
-		int s = CLAMP(conf->FILE_buffer_size, RAWX_BUF_MIN, RAWX_BUF_MAX);
-		char *buf = apr_pcalloc(p, s);
-		if (0 != setvbuf(ds->f, buf, _IOFBF, (ssize_t)s)) {
-			DAV_DEBUG_REQ(resource->info->request, 0,
-					"setvbuf failed : (errno=%d) %s",
-					errno, strerror(errno));
-		}
-	}
 
 	/* Preallocate disk space for the chunk */
 	apr_int64_t chunk_size = 0;
