@@ -303,9 +303,11 @@ extern "C" {
 # define OIO_CFG_ZOOKEEPER    "zookeeper"
 # define OIO_CFG_CONSCIENCE   "conscience"
 # define OIO_CFG_ACCOUNTAGENT "event-agent"
+# define OIO_CFG_BEANSTALKD   "beanstalkd"
 
 # define gridcluster_get_zookeeper(ns)  oio_cfg_get_value((ns), OIO_CFG_ZOOKEEPER)
 # define gridcluster_get_eventagent(ns) oio_cfg_get_value((ns), OIO_CFG_ACCOUNTAGENT)
+# define oio_cfg_get_beanstalkd(ns)     oio_cfg_get_value((ns), OIO_CFG_BEANSTALKD)
 # define oio_cfg_get_proxy(ns)          oio_cfg_get_value((ns), OIO_CFG_PROXY)
 # define oio_cfg_get_proxylocal(ns)     oio_cfg_get_value((ns), OIO_CFG_PROXYLOCAL)
 

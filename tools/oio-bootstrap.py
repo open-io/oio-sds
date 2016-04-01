@@ -573,6 +573,7 @@ ${NOZK}zookeeper=${IP}:2181
 #proxy-local=${RUNDIR}/${NS}-proxy.sock
 proxy=${IP}:${PORT_PROXYD}
 event-agent=ipc://${RUNDIR}/event-agent.sock
+beanstalkd=127.0.0.1:11300
 conscience=${CS_ALL_PUB}
 """
 

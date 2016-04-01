@@ -38,7 +38,7 @@ int rawx_event_init(const char *addr);
 void rawx_event_destroy(void);
 
 /**
- * Send event to event agent. This function adds "when" token automatically. 
+ * Send event to event agent. This function adds "when" token automatically.
  *
  * @event_type name of the event
  * @data_json data event in json (this function will free it)
