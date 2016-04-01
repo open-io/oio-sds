@@ -59,7 +59,7 @@ service_invalidate (gconstpointer k)
 {
 	gulong now = oio_ext_monotonic_time () / G_TIME_SPAN_SECOND;
 	SRV_DO(lru_tree_insert (srv_down, g_strdup((const char *)k), (void*)now));
-	GRID_INFO("invalid at %lu %s", now, (const char*)k);
+	GRID_INFO("Service %s considered down", (const char*)k);
 }
 
 const char *
