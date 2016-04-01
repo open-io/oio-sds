@@ -179,7 +179,7 @@ struct event_s
 
 struct _zmq2agent_ctx_s
 {
-	GPtrArray *pending_events;
+	GList *pending_events;
 	struct _queue_AGENT_s *q;
 	const guint32 r;
 	void *zpull;
@@ -197,12 +197,11 @@ struct _gq2zmq_ctx_s
 #define more ZMQ_SNDMORE|ZMQ_MORE
 
 static gboolean
-_zmq2agent_send_event (struct _zmq2agent_ctx_s  *ctx, struct event_s *evt,
-		const char *dbg)
+_zmq2agent_send_event (time_t now, struct _zmq2agent_ctx_s  *ctx,
+		struct event_s *evt, const char *dbg)
 {
 	int rc;
 
-	const time_t now = oio_ext_monotonic_seconds ();
 	if (ctx->last_error == now) {
 		GRID_DEBUG("ZMQ2AGENT event delayed, stream paused");
 		return FALSE;
@@ -234,28 +233,35 @@ retry:
 static gboolean
 _zmq2agent_manage_event (guint32 r, struct _zmq2agent_ctx_s *ctx, zmq_msg_t *msg)
 {
+	const time_t now = oio_ext_monotonic_seconds();
 	if (!ctx->zagent) return TRUE;
 
 	const size_t len = zmq_msg_size(msg);
 	struct event_s *evt = g_malloc (sizeof(struct event_s) + len);
 	memcpy (evt->message, zmq_msg_data(msg), len);
+	evt->last_sent = now;
 	evt->rand = r;
 	evt->evtid = ctx->q->counter ++;
 	evt->procid = ctx->q->procid;
 	evt->size = len;
-	evt->last_sent = oio_ext_monotonic_seconds();
 	evt->recv_time = evt->last_sent;
 
-	g_ptr_array_add (ctx->pending_events, evt);
-	ctx->q->gauge_pending = ctx->pending_events->len;
+	ctx->pending_events = g_list_prepend (ctx->pending_events, evt);
+	ctx->q->gauge_pending ++;
 
 	gchar strid[1+ 2*HEADER_SIZE];
 	oio_str_bin2hex(evt, HEADER_SIZE, strid, sizeof(strid));
-
 	GRID_DEBUG("EVT:DEF %s (%u) %.*s", strid,
-			ctx->pending_events->len, evt->size, evt->message);
+			ctx->q->gauge_pending, evt->size, evt->message);
 
-	return _zmq2agent_send_event (ctx, evt, strid);
+	return _zmq2agent_send_event (now, ctx, evt, strid);
+}
+
+static gint
+_cmp (gconstpointer a, gconstpointer b)
+{
+	const struct event_s *e0 = a, *e1 = b;
+	return memcmp(e0, e1, HEADER_SIZE);
 }
 
 static void
@@ -264,23 +270,21 @@ _zmq2agent_manage_ack (struct _zmq2agent_ctx_s *ctx, zmq_msg_t *msg)
 	if (zmq_msg_size (msg) != HEADER_SIZE)
 		return;
 
+	gchar strid[1+(2*HEADER_SIZE)];
 	void *d = zmq_msg_data (msg);
-	for (guint i=0; i<ctx->pending_events->len ;i++) {
-		struct event_s *evt = g_ptr_array_index(ctx->pending_events, i);
-		if (!memcmp(evt, d, HEADER_SIZE)) {
-			if (GRID_DEBUG_ENABLED()) {
-				gchar strid[1+(2*HEADER_SIZE)];
-				oio_str_bin2hex(evt, HEADER_SIZE, strid, sizeof(strid));
-				GRID_DEBUG("EVT:ACK %s", strid);
-			}
-			g_free (evt), evt = NULL;
-			g_ptr_array_remove_index_fast (ctx->pending_events, i);
-			ctx->q->gauge_pending = ctx->pending_events->len;
-			++ ctx->q->counter_ack;
-			return;
-		}
+	oio_str_bin2hex(d, HEADER_SIZE, strid, sizeof(strid));
+
+	GList *li = g_list_find_custom (ctx->pending_events, d, _cmp);
+	if (!li) {
+		GRID_INFO("EVT:OUT %s", strid);
+		++ ctx->q->counter_ack_notfound;
+	} else {
+		GRID_DEBUG("EVT:ACK %s", strid);
+		ctx->pending_events = g_list_remove_link (ctx->pending_events, li);
+		g_list_free_full (li, g_free);
+		-- ctx->q->gauge_pending;
+		++ ctx->q->counter_ack;
 	}
-	++ ctx->q->counter_ack_notfound;
 }
 
 static void
@@ -288,13 +292,13 @@ _retry_events (struct _zmq2agent_ctx_s *ctx)
 {
 	gchar strid[1+(2*HEADER_SIZE)];
 	const time_t now = oio_ext_monotonic_seconds ();
-	const time_t oldest = now > 29 ? now - 29 : 0;
+	const time_t oldest = now > 5 ? now - 5 : 0;
 
-	for (guint i=0; i<ctx->pending_events->len ;i++) {
-		struct event_s *evt = g_ptr_array_index (ctx->pending_events, i);
+	for (GList *l=g_list_last(ctx->pending_events); l ;l=l->prev) {
+		struct event_s *evt = l->data;
 		if (evt->last_sent < oldest) {
 			oio_str_bin2hex(evt, HEADER_SIZE, strid, sizeof(strid));
-			if (!_zmq2agent_send_event (ctx, evt, strid))
+			if (!_zmq2agent_send_event (now, ctx, evt, strid))
 				break;
 		}
 	}
@@ -371,7 +375,7 @@ _zmq2agent_worker (struct _zmq2agent_ctx_s *ctx)
 					" ack=%"G_GINT64_FORMAT"+%"G_GINT64_FORMAT" queue=%u",
 					ctx->q->counter_received, ctx->q->counter_sent,
 					ctx->q->counter_ack, ctx->q->counter_ack_notfound,
-					ctx->pending_events->len);
+					ctx->q->gauge_pending);
 			last_debug = now;
 		}
 	}
@@ -435,8 +439,8 @@ oio_events_queue__run_agent (struct oio_events_queue_s *self,
 	int rc;
 	GError *err = NULL;
 	void *zctx = NULL, *zpush = NULL, *zpull = NULL, *zagent = NULL;
-	GPtrArray *pending_events = NULL;
 	GThread *th_gq2zmq = NULL, *th_zmq2agent = NULL;
+	struct _zmq2agent_ctx_s zmq2agent = {0};
 
 	struct _queue_AGENT_s *q = (struct _queue_AGENT_s *)self;
 	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_AGENT);
@@ -488,11 +492,6 @@ oio_events_queue__run_agent (struct oio_events_queue_s *self,
 		goto exit;
 	}
 
-	if (!(pending_events = g_ptr_array_new ())) {
-		err =  SYSERR("Memory allocation failure");
-		goto exit;
-	}
-
 	/* Runs the converter for GAsyncQueue to ZMQ */
 	struct _gq2zmq_ctx_s gq2zmq = { .queue = q->queue, .zpush = zpush, .running = running };
 	th_gq2zmq = g_thread_try_new("notifier-gq2zmq",
@@ -501,10 +500,9 @@ oio_events_queue__run_agent (struct oio_events_queue_s *self,
 		goto exit;
 
 	/* Runs the events worker */
-	struct _zmq2agent_ctx_s zmq2agent = {
-		.pending_events = pending_events, .q = q, .r = 0,
-		.zpull = zpull, .zagent = zagent
-	};
+	zmq2agent.q = q;
+	zmq2agent.zpull = zpull;
+	zmq2agent.zagent = zagent;
 	th_zmq2agent = g_thread_try_new("notifier-req",
 			(GThreadFunc) _zmq2agent_worker, &zmq2agent, &err);
 	if (err)
@@ -513,10 +511,7 @@ oio_events_queue__run_agent (struct oio_events_queue_s *self,
 exit:
 	if (th_zmq2agent) g_thread_join (th_zmq2agent);
 	if (th_gq2zmq) g_thread_join (th_gq2zmq);
-	if (pending_events) {
-		g_ptr_array_set_free_func (pending_events, g_free);
-		g_ptr_array_free (pending_events, TRUE);
-	}
+	if (zmq2agent.pending_events) g_list_free_full (zmq2agent.pending_events, g_free);
 	if (zagent) zmq_close (zagent);
 	if (zpull) zmq_close (zpull);
 	if (zpush) zmq_close (zpush);
