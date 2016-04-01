@@ -129,45 +129,11 @@ struct gridd_client_vtable_s VTABLE_CLIENT =
 	_client_fail
 };
 
-static int
-_connect(const gchar *url, GError **err)
-{
-	struct sockaddr_storage sas;
-	gsize sas_len = sizeof(sas);
-
-	if (!grid_string_to_sockaddr (url, (struct sockaddr*) &sas, &sas_len)) {
-		g_error_transmit(err, NEWERROR(EINVAL, "invalid URL"));
-		return -1;
-	}
-
-	int fd = socket_nonblock(sas.ss_family, SOCK_STREAM, 0);
-	if (0 > fd) {
-		g_error_transmit(err, NEWERROR(EINVAL, "socket error: (%d) %s", errno, strerror(errno)));
-		return -1;
-	}
-
-	sock_set_reuseaddr(fd, TRUE);
-
-	if (0 != metautils_syscall_connect (fd, (struct sockaddr*)&sas, sas_len)) {
-		if (errno != EINPROGRESS && errno != 0) {
-			g_error_transmit(err, NEWERROR(EINVAL, "connect error: (%d) %s", errno, strerror(errno)));
-			metautils_pclose (&fd);
-			return -1;
-		}
-	}
-
-	sock_set_linger_default(fd);
-	sock_set_nodelay(fd, TRUE);
-	sock_set_tcpquickack(fd, TRUE);
-	*err = NULL;
-	return fd;
-}
-
 static GError*
 _client_connect(struct gridd_client_s *client)
 {
 	GError *err = NULL;
-	client->fd = _connect(client->url, &err);
+	client->fd = sock_connect(client->url, &err);
 
 	if (client->fd < 0) {
 		EXTRA_ASSERT(err != NULL);

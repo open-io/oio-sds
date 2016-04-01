@@ -130,4 +130,8 @@ void sock_set_client_default(int fd);
  * @return the result of close() or -1 in case of error. */
 int metautils_pclose(int *pfd);
 
+/* Opens anon-blocking TCP socket then connect it to 'url' before returning
+ * it. 'err' is optional. */
+int sock_connect (const char *url, GError **err);
+
 #endif /*OIO_SDS__metautils__lib__metautils_sockets_h*/

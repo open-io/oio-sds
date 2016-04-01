@@ -31,6 +31,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <apr_strings.h>
 #include <mod_dav.h>
 
+#include <core/oio_sds.h>
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
 #include <rawx-lib/src/rawx.h>
@@ -325,7 +326,6 @@ rawx_hook_child_init(apr_pool_t *pchild, server_rec *s)
 {
 	apr_status_t status;
 	dav_rawx_server_conf *conf;
-	gchar *event_agent_addr;
 
 	DAV_XDEBUG_POOL(pchild, 0, "%s()", __FUNCTION__);
 	conf = ap_get_module_config(s->module_config, &dav_rawx_module);
@@ -337,11 +337,12 @@ rawx_hook_child_init(apr_pool_t *pchild, server_rec *s)
 
 	conf->cleanup = _cleanup_child;
 
-	event_agent_addr = gridcluster_get_eventagent(conf->ns_name);
-	if (!rawx_event_init(event_agent_addr))
+	gchar *event_agent_addr = gridcluster_get_eventagent(conf->ns_name);
+	if (!rawx_event_init(s, event_agent_addr))
 		DAV_ERROR_POOL(pchild, 0, "Failed to initialize event context");
 	g_free(event_agent_addr);
 
+	oio_log_to_syslog ();
 }
 
 /* Dynamically shared modules are loaded twice by apache!

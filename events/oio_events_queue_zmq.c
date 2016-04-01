@@ -24,53 +24,37 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <zmq.h>
 
 #include <core/oio_core.h>
-#include <core/internals.h>
 
 #include "oio_events_queue.h"
+#include "oio_events_queue_internals.h"
+#include "oio_events_queue_zmq.h"
 
 #define HEADER_SIZE 14
 
-#define EVTQ_CALL(self,F) VTABLE_CALL(self,struct oio_events_queue_abstract_s*,F)
-
-struct oio_events_queue_vtable_s
+struct event_s
 {
-	void (*destroy) (struct oio_events_queue_s *self);
-	void (*send) (struct oio_events_queue_s *self, gchar *msg);
-	gboolean (*is_stalled) (struct oio_events_queue_s *self);
+	/* fields used as unique key */
+	guint32 rand;
+	guint32 recv_time;
+	guint32 evtid;
+	guint16 procid;
+
+	/* and then the payload */
+	guint16 size;
+	gint64 last_sent;
+	guint8 message[];
 };
 
-struct oio_events_queue_abstract_s
-{
-	struct oio_events_queue_vtable_s *vtable;
-};
-
-void
-oio_events_queue__destroy (struct oio_events_queue_s *self)
-{
-	EVTQ_CALL(self,destroy)(self);
-}
-
-void
-oio_events_queue__send (struct oio_events_queue_s *self, gchar *msg)
-{
-	EVTQ_CALL(self,send)(self,msg);
-}
-
-gboolean
-oio_events_queue__is_stalled (struct oio_events_queue_s *self)
-{
-	EVTQ_CALL(self,is_stalled)(self);
-}
-
-/* -------------------------------------------------------------------------- */
-
-static void _agent_destroy (struct oio_events_queue_s *self);
-static void _agent_send (struct oio_events_queue_s *self, gchar *msg);
-static gboolean _agent_is_stalled (struct oio_events_queue_s *self);
+static void _q_destroy (struct oio_events_queue_s *self);
+static void _q_send (struct oio_events_queue_s *self, gchar *msg);
+static gboolean _q_is_stalled (struct oio_events_queue_s *self);
+static void _q_set_max_pending (struct oio_events_queue_s *self, guint v);
+static GError * _q_run (struct oio_events_queue_s *self,
+		gboolean (*running) (gboolean pending));
 
 static struct oio_events_queue_vtable_s vtable_AGENT =
 {
-	_agent_destroy, _agent_send, _agent_is_stalled
+	_q_destroy, _q_send, _q_is_stalled, _q_set_max_pending, _q_run
 };
 
 struct _queue_AGENT_s
@@ -107,76 +91,6 @@ struct _queue_AGENT_s
 
 };
 
-struct oio_events_queue_s *
-oio_events_queue_factory__create_agent (const char *zurl, guint max_pending)
-{
-	struct _queue_AGENT_s *self = g_malloc0 (sizeof(*self));
-	self->vtable = &vtable_AGENT;
-	self->queue = g_async_queue_new ();
-	self->url = g_strdup (zurl);
-	self->max_recv_per_round = 32;
-	self->max_events_in_queue = max_pending;
-	self->procid = getpid();
-	return (struct oio_events_queue_s *) self;
-}
-
-void
-oio_events_queue__set_max_pending (struct oio_events_queue_s *self,
-		guint max_pending)
-{
-	struct _queue_AGENT_s *q = (struct _queue_AGENT_s *)self;
-	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_AGENT);
-	if (q->max_events_in_queue != max_pending) {
-		GRID_NOTICE("max events in queue set to [%u]", max_pending);
-		q->max_events_in_queue = max_pending;
-	}
-}
-
-static void
-_agent_destroy (struct oio_events_queue_s *self)
-{
-	if (!self) return;
-	struct _queue_AGENT_s *q = (struct _queue_AGENT_s*) self;
-	EXTRA_ASSERT(q->vtable == &vtable_AGENT);
-	g_async_queue_unref (q->queue);
-	oio_str_clean (&q->url);
-	g_free (q);
-}
-
-static void
-_agent_send (struct oio_events_queue_s *self, gchar *msg)
-{
-	struct _queue_AGENT_s *q = (struct _queue_AGENT_s*) self;
-	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_AGENT);
-	g_async_queue_push (q->queue, msg);
-}
-
-static gboolean
-_agent_is_stalled (struct oio_events_queue_s *self)
-{
-	struct _queue_AGENT_s *q = (struct _queue_AGENT_s*) self;
-	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_AGENT);
-	const int l = g_async_queue_length (q->queue);
-	const guint waiting = q->gauge_pending;
-	return (waiting + (guint)(l>0?l:0)) >= q->max_events_in_queue;
-}
-
-/* -------------------------------------------------------------------------- */
-
-struct event_s
-{
-	/* fields used as unique key */
-	guint32 rand;
-	guint32 recv_time;
-	guint32 evtid;
-	guint16 procid;
-
-	/* and then the payload */
-	guint16 size;
-	gint64 last_sent;
-	guint8 message[];
-};
-
 struct _zmq2agent_ctx_s
 {
 	GList *pending_events;
@@ -190,9 +104,73 @@ struct _zmq2agent_ctx_s
 struct _gq2zmq_ctx_s
 {
 	GAsyncQueue *queue;
+	struct _queue_AGENT_s *q;
 	void *zpush;
-	gboolean (*running) (void);
+	gboolean (*running) (gboolean pending);
 };
+
+/* -------------------------------------------------------------------------- */
+
+GError *
+oio_events_queue_factory__create_zmq (const char *zurl,
+		struct oio_events_queue_s **out)
+{
+	EXTRA_ASSERT (zurl != NULL);
+	EXTRA_ASSERT (out != NULL);
+
+	struct _queue_AGENT_s *self = g_malloc0 (sizeof(*self));
+	self->vtable = &vtable_AGENT;
+	self->queue = g_async_queue_new ();
+	self->url = g_strdup (zurl);
+	self->max_recv_per_round = 32;
+	self->max_events_in_queue = OIO_EVTQ_MAXPENDING;
+	self->procid = getpid();
+
+	*out = (struct oio_events_queue_s *) self;
+	return NULL;
+}
+
+static void
+_q_set_max_pending (struct oio_events_queue_s *self, guint v)
+{
+	struct _queue_AGENT_s *q = (struct _queue_AGENT_s *)self;
+	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_AGENT);
+	if (q->max_events_in_queue != v) {
+		GRID_NOTICE("max events in queue set to [%u]", v);
+		q->max_events_in_queue = v;
+	}
+}
+
+static void
+_q_destroy (struct oio_events_queue_s *self)
+{
+	if (!self) return;
+	struct _queue_AGENT_s *q = (struct _queue_AGENT_s*) self;
+	EXTRA_ASSERT(q->vtable == &vtable_AGENT);
+	g_async_queue_unref (q->queue);
+	oio_str_clean (&q->url);
+	g_free (q);
+}
+
+static void
+_q_send (struct oio_events_queue_s *self, gchar *msg)
+{
+	struct _queue_AGENT_s *q = (struct _queue_AGENT_s*) self;
+	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_AGENT);
+	g_async_queue_push (q->queue, msg);
+}
+
+static gboolean
+_q_is_stalled (struct oio_events_queue_s *self)
+{
+	struct _queue_AGENT_s *q = (struct _queue_AGENT_s*) self;
+	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_AGENT);
+	const int l = g_async_queue_length (q->queue);
+	const guint waiting = q->gauge_pending;
+	return (waiting + (guint)(l>0?l:0)) >= q->max_events_in_queue;
+}
+
+/* -------------------------------------------------------------------------- */
 
 #define more ZMQ_SNDMORE|ZMQ_MORE
 
@@ -338,7 +316,7 @@ _zmq2agent_receive_events (GRand *r, struct _zmq2agent_ctx_s *ctx)
 	return !ended;
 }
 
-static gpointer
+static void
 _zmq2agent_worker (struct _zmq2agent_ctx_s *ctx)
 {
 	/* XXX(jfs): a dedicated PRNG avoids locking the glib's PRNG for each call
@@ -382,7 +360,6 @@ _zmq2agent_worker (struct _zmq2agent_ctx_s *ctx)
 
 	g_rand_free (r);
 	GRID_INFO ("Thread stopping [NOTIFY-ZMQ2AGENT]");
-	return ctx;
 }
 
 static gboolean
@@ -407,10 +384,16 @@ retry:
 	return rc;
 }
 
+static guint
+_gq2zmq_has_pending (struct _gq2zmq_ctx_s *ctx)
+{
+	return (0 < ctx->q->gauge_pending) || (0 < g_async_queue_length (ctx->queue));
+}
+
 static gpointer
 _gq2zmq_worker (struct _gq2zmq_ctx_s *ctx)
 {
-	while (ctx->running ()) { /* loop until stopped */
+	while (ctx->running (_gq2zmq_has_pending (ctx))) {
 		gchar *tmp =
 			(gchar*) g_async_queue_timeout_pop (ctx->queue, G_TIME_SPAN_SECOND);
 		if (tmp && !_forward_event (ctx->zpush, tmp))
@@ -432,14 +415,13 @@ static void _zset (void *z, int opt, int val) {
 	zmq_setsockopt (z, opt, &val, sizeof(val));
 }
 
-GError *
-oio_events_queue__run_agent (struct oio_events_queue_s *self,
-		gboolean (*running) (void))
+static GError *
+_q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 {
 	int rc;
 	GError *err = NULL;
 	void *zctx = NULL, *zpush = NULL, *zpull = NULL, *zagent = NULL;
-	GThread *th_gq2zmq = NULL, *th_zmq2agent = NULL;
+	GThread *th_gq2zmq = NULL;
 	struct _zmq2agent_ctx_s zmq2agent = {0};
 
 	struct _queue_AGENT_s *q = (struct _queue_AGENT_s *)self;
@@ -493,7 +475,9 @@ oio_events_queue__run_agent (struct oio_events_queue_s *self,
 	}
 
 	/* Runs the converter for GAsyncQueue to ZMQ */
-	struct _gq2zmq_ctx_s gq2zmq = { .queue = q->queue, .zpush = zpush, .running = running };
+	struct _gq2zmq_ctx_s gq2zmq = {
+		.queue = q->queue, .q = q, .zpush = zpush, .running = running
+	};
 	th_gq2zmq = g_thread_try_new("notifier-gq2zmq",
 			(GThreadFunc) _gq2zmq_worker, &gq2zmq, &err);
 	if (err)
@@ -503,13 +487,9 @@ oio_events_queue__run_agent (struct oio_events_queue_s *self,
 	zmq2agent.q = q;
 	zmq2agent.zpull = zpull;
 	zmq2agent.zagent = zagent;
-	th_zmq2agent = g_thread_try_new("notifier-req",
-			(GThreadFunc) _zmq2agent_worker, &zmq2agent, &err);
-	if (err)
-		goto exit;
+	_zmq2agent_worker (&zmq2agent);
 
 exit:
-	if (th_zmq2agent) g_thread_join (th_zmq2agent);
 	if (th_gq2zmq) g_thread_join (th_gq2zmq);
 	if (zmq2agent.pending_events) g_list_free_full (zmq2agent.pending_events, g_free);
 	if (zagent) zmq_close (zagent);

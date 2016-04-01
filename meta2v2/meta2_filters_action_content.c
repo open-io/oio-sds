@@ -24,6 +24,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <glib.h>
 
+#include <core/url_ext.h>
+#include <events/oio_events_queue.h>
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
 #include <server/transport_gridd.h>
@@ -38,8 +40,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/meta2_utils_json.h>
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
-#include <sqlx/oio_events_queue.h>
-#include <core/url_ext.h>
 
 enum content_action_e
 {
