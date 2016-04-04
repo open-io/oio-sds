@@ -274,12 +274,6 @@ grid_main_sighandler_stop(int s)
 }
 
 static void
-grid_main_sighandler_noop(int s)
-{
-	signal(s, grid_main_sighandler_noop);
-}
-
-static void
 grid_main_sighandler_USR1(int s)
 {
 	oio_log_verbose();
@@ -317,7 +311,7 @@ grid_main_install_sighandlers(void)
 
 	signal(SIGFPE,  grid_main_sighandler_exception);
 
-	signal(SIGPIPE, grid_main_sighandler_noop);
+	signal(SIGPIPE, SIG_IGN);
 	signal(SIGUSR1, grid_main_sighandler_USR1);
 	signal(SIGUSR2, grid_main_sighandler_USR2);
 	signal(SIGALRM, grid_main_sighandler_ALRM);
@@ -605,42 +599,18 @@ grid_main_cli(int argc, char ** argv, struct grid_main_callbacks * callbacks)
 	return grid_main_rc;
 }
 
-static void
-_prepare_sigset(sigset_t *set)
-{
-	sigemptyset(set);
-
-	sigaddset(set, SIGABRT);
-	sigaddset(set, SIGTERM);
-	sigaddset(set, SIGQUIT);
-	sigaddset(set, SIGINT);
-	sigaddset(set, SIGHUP);
-
-	//sigaddset(set, SIGFPE);
-
-	sigaddset(set, SIGPIPE);
-	sigaddset(set, SIGALRM);
-
-	sigaddset(set, SIGUSR1);
-	sigaddset(set, SIGUSR2);
-}
-
 void
 metautils_ignore_signals(void)
 {
-	sigset_t new_set, old_set;
+	sigset_t new_set;
 
-	_prepare_sigset(&new_set);
-	sigemptyset(&old_set);
-	if (0 > sigprocmask(SIG_BLOCK, &new_set, &old_set)) {
+	sigfillset(&new_set);
+	if (0 != sigprocmask(SIG_BLOCK, &new_set, NULL))
 		g_message("LIBC Some signals could not be blocked : %s", strerror(errno));
-	}
 
-	_prepare_sigset(&new_set);
-	sigemptyset(&old_set);
-	if (0 > pthread_sigmask(SIG_BLOCK, &new_set, &old_set)) {
+	sigfillset(&new_set);
+	if (0 != pthread_sigmask(SIG_BLOCK, &new_set, NULL))
 		g_message("PTHREAD Some signals could not be blocked : %s", strerror(errno));
-	}
 }
 
 void
