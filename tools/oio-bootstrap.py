@@ -572,7 +572,8 @@ template_local_ns = """
 ${NOZK}zookeeper=${IP}:2181
 #proxy-local=${RUNDIR}/${NS}-proxy.sock
 proxy=${IP}:${PORT_PROXYD}
-event-agent=ipc://${RUNDIR}/event-agent.sock
+event-agent=beanstalk://127.0.0.1:11300
+#event-agent=ipc://${RUNDIR}/event-agent.sock
 conscience=${CS_ALL_PUB}
 """
 

@@ -40,7 +40,7 @@ add_library(mod_dav_rawx MODULE
 set_target_properties(mod_dav_rawx PROPERTIES PREFIX "" SUFFIX .so)
 
 target_link_libraries(mod_dav_rawx
-		metautils rawx
+		metautils rawx oioevents
 		${APR_LIBRARIES} ${GLIB2_LIBRARIES}
 		${ZLIB_LIBRARIES} ${LZO_LIBRARIES}
 		${ZMQ_LIBRARIES})

@@ -29,7 +29,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  * @return 0 if KO, !=0 if OK
  */
-int rawx_event_init(const char *addr);
+int rawx_event_init(server_rec *s, const char *addr);
 
 
 /**
@@ -38,7 +38,7 @@ int rawx_event_init(const char *addr);
 void rawx_event_destroy(void);
 
 /**
- * Send event to event agent. This function adds "when" token automatically. 
+ * Send event to event agent. This function adds "when" token automatically.
  *
  * @event_type name of the event
  * @data_json data event in json (this function will free it)
@@ -46,15 +46,5 @@ void rawx_event_destroy(void);
  * @return 0 if KO, !=0 if OK
  */
 int rawx_event_send(const char *event_type, GString *data_json);
-
-/**
- * Send event to event agent.
- * Caller must manage all tokens (event_type, when...)
- *
- * @data_json full event content in json (this function will free it)
- *
- * @return 0 if KO, !=0 if OK
- */
-int rawx_event_send_raw(GString *json);
 
 #endif /*OIO_SDS__rawx_apache2__src__rawx_event_h*/

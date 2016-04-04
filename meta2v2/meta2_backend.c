@@ -26,7 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/election.h>
 
-#include <sqlx/oio_events_queue.h>
+#include <events/oio_events_queue.h>
 
 #include <meta0v2/meta0_remote.h>
 #include <meta0v2/meta0_utils.h>

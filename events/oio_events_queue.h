@@ -15,6 +15,8 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+#ifndef OIO_SDS__sqlx__oio_events_queue_h
+# define OIO_SDS__sqlx__oio_events_queue_h 1
 
 struct oio_events_queue_s;
 
@@ -23,24 +25,23 @@ void oio_events_queue__destroy (struct oio_events_queue_s *self);
 /* msg's ownership is given to the queue. msg has to be valid JSON */
 void oio_events_queue__send (struct oio_events_queue_s *self, gchar *msg);
 
-/* should emitters stop sending events */
+/* should emitters stop sending events? whatever, even if it returns TRUE,
+ * the queue won't deny events. */
 gboolean oio_events_queue__is_stalled (struct oio_events_queue_s *self);
 
-/* Event-agent based implementation ----------------------------------------- */
-
-/* Creates an agent-based event queue, with a maximum number of events "not yet
-   acknowledged" events set to <max_pending>. When ZERO, there is no limit
-   with all the (possible) consequences of memory outage */
-struct oio_events_queue_s * oio_events_queue_factory__create_agent (
-		const char *zurl, guint max_pending);
-
-/* Changes the window's width of events in flight. <max_pending> has the same
-   meaning as in oio_events_queue_factory__create_agent() */
+/* the queue might handle events asynchronously, and this is how to configure
+ * the number of events waiting */
 void oio_events_queue__set_max_pending (struct oio_events_queue_s *self,
-		guint max_pending);
+		guint max);
 
-/* <self> must have been created by oio_events_queue_factory__create_agent().
-   It internally loops until <running> returns FALSE */
-GError * oio_events_queue__run_agent (struct oio_events_queue_s *self,
-	gboolean (*running) (void));
+GError * oio_events_queue__run (struct oio_events_queue_s *self,
+		gboolean (*running) (gboolean pending));
 
+/* -------------------------------------------------------------------------- */
+
+/* find the appropriate implementation of event queue for the configuration
+ * given in 'cfg' */
+GError * oio_events_queue_factory__create (const char *cfg,
+		struct oio_events_queue_s **out);
+
+#endif /*OIO_SDS__sqlx__oio_events_queue_h*/
