@@ -26,6 +26,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
+#include <events/oio_events_queue.h>
+#include <events/oio_events_queue_zmq.h>
+#include <events/oio_events_queue_beanstalkd.h>
 #include <server/network_server.h>
 #include <server/stats_holder.h>
 #include <server/internals.h>
@@ -42,7 +45,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <glib.h>
 
 #include "sqlx_service.h"
-#include "oio_events_queue.h"
 
 #ifndef SQLX_MAX_TIMER_PER_ROUND
 # define SQLX_MAX_TIMER_PER_ROUND 100
@@ -119,6 +121,9 @@ static struct grid_main_option_s common_options[] =
 		"Limits the number of concurrent active connections (0=automatic)" },
 	{"MaxWorkers", OT_UINT, {.u=&SRV.cfg_max_workers},
 		"Limits the number of worker threads" },
+
+	{"PageSize", OT_UINT, {.u=&SRV.cfg_page_size},
+		"Page size of SQLite databases (0=use sqlite default)" },
 
 	{"CacheEnabled", OT_BOOL, {.b = &SRV.flag_cached_bases},
 		"If set, each base will be cached in a way it won't be accessed"
@@ -424,9 +429,10 @@ _configure_events_queue (struct sqlx_service_s *ss)
 		return TRUE;
 	}
 
-	ss->events_queue = oio_events_queue_factory__create_agent (url, OIO_EVTQ_MAXPENDING);
+	GError *err = oio_events_queue_factory__create(url, &ss->events_queue);
+
 	if (!ss->events_queue) {
-		GRID_WARN("Events queue creation failure");
+		GRID_WARN("Events queue creation failure: (%d) %s", err->code, err->message);
 		return FALSE;
 	}
 
@@ -555,13 +561,14 @@ sqlx_service_set_defaults(void)
 	SRV.cfg_max_passive = 0;
 	SRV.cfg_max_active = 0;
 	SRV.cfg_max_workers = 200;
+	SRV.cfg_page_size = 4096;
 	SRV.flag_replicable = TRUE;
 	SRV.flag_autocreate = TRUE;
 	SRV.flag_delete_on = TRUE;
 	SRV.flag_cached_bases = TRUE;
 
 	SRV.sync_mode_solo = 1;
-	SRV.sync_mode_repli = 1;
+	SRV.sync_mode_repli = 0;
 
 	if (SRV.service_config->set_defaults)
 		SRV.service_config->set_defaults(&SRV);
@@ -727,13 +734,20 @@ sqlite_service_main(int argc, char **argv,
 
 /* Tasks -------------------------------------------------------------------- */
 
+static gboolean
+_event_running (gboolean pending)
+{
+	(void) pending;
+	return grid_main_is_running ();
+}
+
 static gpointer
 _worker_queue (gpointer p)
 {
 	metautils_ignore_signals();
 	struct sqlx_service_s *ss = PSRV(p);
 	if (ss && ss->events_queue)
-		oio_events_queue__run_agent (ss->events_queue, grid_main_is_running);
+		oio_events_queue__run (ss->events_queue, _event_running);
 	return p;
 }
 

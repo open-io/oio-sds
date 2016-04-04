@@ -21,32 +21,29 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <zmq.h>
 
 #include <core/oio_core.h>
-#include <sqlx/oio_events_queue.h>
+#include <events/oio_events_queue.h>
 
-static gboolean immediately_done (void) { return FALSE; }
+static gboolean immediately_done (gboolean p) { (void) p; return FALSE; }
 
 static void
 test_queue_stalled (void)
 {
-	struct oio_events_queue_s *q =
-		oio_events_queue_factory__create_agent ("inproc://X", 100);
+	struct oio_events_queue_s *q = NULL;
+	GError *err = oio_events_queue_factory__create ("inproc://X", &q);
+	g_assert_no_error (err);
+	oio_events_queue__set_max_pending (q, 100);
 	g_assert_nonnull (q);
 
 	g_assert_false (oio_events_queue__is_stalled (q));
 	for (guint i=0; i<100 ;++i)
 		oio_events_queue__send (q, g_strdup ("x"));
 
-	/* XXX(jfs): ugly way to give a chance to the internal thread to consume
-	   events and update counters. */
-	g_thread_yield ();
-	g_usleep (100 * G_TIME_SPAN_MILLISECOND);
-
 	g_assert_true (oio_events_queue__is_stalled (q));
 	for (guint i=0; i<1000 ;++i)
 		oio_events_queue__send (q, g_strdup ("x"));
 	g_assert_true (oio_events_queue__is_stalled (q));
 
-	oio_events_queue__run_agent (q, immediately_done);
+	oio_events_queue__run (q, immediately_done);
 	oio_events_queue__destroy (q);
 }
 
@@ -57,8 +54,10 @@ test_queue_init (void)
 	for (guint i=0; i<16 ;i++) {
 		gchar url[64];
 		g_snprintf(url, sizeof(url), "inproc://%u", i);
-		struct oio_events_queue_s *q =
-			oio_events_queue_factory__create_agent (url, 100);
+		struct oio_events_queue_s *q = NULL;
+		GError *err = oio_events_queue_factory__create (url, &q);
+		g_assert_no_error (err);
+		oio_events_queue__set_max_pending (q, 100);
 		g_assert_nonnull (q);
 		l = g_slist_prepend (l, q);
 	}

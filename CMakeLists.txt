@@ -210,6 +210,10 @@ dir2macro("GCLUSTER_AGENT_SOCK_PATH")
 
 dir2macro("GS_CONFIG_NSINFO_REFRESH")
 
+dir2macro("OIO_EVT_BEANSTALKD_DEFAULT_PRIO")
+dir2macro("OIO_EVT_BEANSTALKD_DEFAULT_DELAY")
+dir2macro("OIO_EVT_BEANSTALKD_DEFAULT_TTR")
+
 dir2macro("OIO_ETC_DIR")
 dir2macro("OIO_CONFIG_FILE_PATH")
 dir2macro("OIO_CONFIG_DIR_PATH")
@@ -422,6 +426,7 @@ add_subdirectory(./meta1v2)
 add_subdirectory(./meta2v2)
 add_subdirectory(./proxy)
 add_subdirectory(./rainx)
+add_subdirectory(./events)
 add_subdirectory(./rawx-apache2/src)
 add_subdirectory(./rawx-lib/src)
 add_subdirectory(./rawx-lib/tools)

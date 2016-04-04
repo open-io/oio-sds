@@ -62,10 +62,12 @@ struct gridd_client_s
 	gpointer ctx;
 	client_on_reply on_reply;
 
-	gint64 tv_step;
-	gint64 tv_start;
-	gint64 delay_step;
-	gint64 delay_overall;
+	gint64 tv_connect; /* timestamp of the last connection */
+	gint64 tv_start; /* timestamp of the last startup */
+
+	gint64 delay_connect; /* max delay for a connection to be established */
+	gint64 delay_single; /* max delay for a single request, without redirection */
+	gint64 delay_overall; /* max delay with all possible redirections */
 
 	guint32 size;
 
@@ -129,45 +131,11 @@ struct gridd_client_vtable_s VTABLE_CLIENT =
 	_client_fail
 };
 
-static int
-_connect(const gchar *url, GError **err)
-{
-	struct sockaddr_storage sas;
-	gsize sas_len = sizeof(sas);
-
-	if (!grid_string_to_sockaddr (url, (struct sockaddr*) &sas, &sas_len)) {
-		g_error_transmit(err, NEWERROR(EINVAL, "invalid URL"));
-		return -1;
-	}
-
-	int fd = socket_nonblock(sas.ss_family, SOCK_STREAM, 0);
-	if (0 > fd) {
-		g_error_transmit(err, NEWERROR(EINVAL, "socket error: (%d) %s", errno, strerror(errno)));
-		return -1;
-	}
-
-	sock_set_reuseaddr(fd, TRUE);
-
-	if (0 != metautils_syscall_connect (fd, (struct sockaddr*)&sas, sas_len)) {
-		if (errno != EINPROGRESS && errno != 0) {
-			g_error_transmit(err, NEWERROR(EINVAL, "connect error: (%d) %s", errno, strerror(errno)));
-			metautils_pclose (&fd);
-			return -1;
-		}
-	}
-
-	sock_set_linger_default(fd);
-	sock_set_nodelay(fd, TRUE);
-	sock_set_tcpquickack(fd, TRUE);
-	*err = NULL;
-	return fd;
-}
-
 static GError*
 _client_connect(struct gridd_client_s *client)
 {
 	GError *err = NULL;
-	client->fd = _connect(client->url, &err);
+	client->fd = sock_connect(client->url, &err);
 
 	if (client->fd < 0) {
 		EXTRA_ASSERT(err != NULL);
@@ -176,7 +144,7 @@ _client_connect(struct gridd_client_s *client)
 	}
 
 	EXTRA_ASSERT(err == NULL);
-	client->tv_step = oio_ext_monotonic_time ();
+	client->tv_connect = oio_ext_monotonic_time ();
 	client->step = CONNECTING;
 	return NULL;
 }
@@ -436,7 +404,6 @@ _client_react(struct gridd_client_s *client)
 		return;
 	GError *err = NULL;
 
-	client->tv_step = oio_ext_monotonic_time ();
 retry:
 	if (!(err = _client_manage_event(client))) {
 		if (client->step == REP_READING_SIZE && client->reply
@@ -547,7 +514,9 @@ _client_set_timeout(struct gridd_client_s *client, gdouble seconds)
 	EXTRA_ASSERT(client != NULL);
 	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
 
-	client->delay_step = client->delay_overall = seconds * (gdouble) G_TIME_SPAN_SECOND;
+	client->delay_connect = COMMON_CNX_TIMEOUT;
+	client->delay_single = seconds * (gdouble) G_TIME_SPAN_SECOND;
+	client->delay_overall = seconds * (gdouble) G_TIME_SPAN_SECOND;
 }
 
 static GError*
@@ -666,12 +635,20 @@ _client_expired(struct gridd_client_s *client, gint64 now)
 		case NONE:
 			return FALSE;
 		case CONNECTING:
-			return (now - client->tv_start) > COMMON_CNX_TIMEOUT;
+			if (client->delay_connect > 0) {
+				if ((now - client->tv_connect) > client->delay_connect)
+					return TRUE;
+			}
+			if (client->delay_overall > 0) {
+				if ((now - client->tv_start) > client->delay_overall)
+					return TRUE;
+			}
+			return FALSE;
 		case REQ_SENDING:
 		case REP_READING_SIZE:
 		case REP_READING_DATA:
-			if (client->delay_step > 0) {
-				if ((now - client->tv_step) > client->delay_step)
+			if (client->delay_single > 0) {
+				if ((now - client->tv_connect) > client->delay_single)
 					return TRUE;
 			}
 			if (client->delay_overall > 0) {
@@ -740,7 +717,7 @@ _client_start(struct gridd_client_s *client)
 	EXTRA_ASSERT(client != NULL);
 	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
 
-	client->tv_start = client->tv_step = oio_ext_monotonic_time ();
+	client->tv_start = client->tv_connect = oio_ext_monotonic_time ();
 
 	if (client->step != NONE)
 		return FALSE;
@@ -804,7 +781,8 @@ gridd_client_create_empty(void)
 	client->fd = -1;
 	client->step = NONE;
 	client->delay_overall = GRIDC_DEFAULT_TIMEOUT_OVERALL * (gdouble)G_TIME_SPAN_SECOND;
-	client->delay_step = GRIDC_DEFAULT_TIMEOUT_STEP * (gdouble)G_TIME_SPAN_SECOND;
+	client->delay_single = GRIDC_DEFAULT_TIMEOUT_STEP * (gdouble)G_TIME_SPAN_SECOND;
+	client->tv_start = client->tv_connect = oio_ext_monotonic_time ();
 
 	return client;
 }

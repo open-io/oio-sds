@@ -31,6 +31,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <apr_strings.h>
 #include <mod_dav.h>
 
+#include <core/oio_sds.h>
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
 #include <rawx-lib/src/rawx.h>
@@ -83,7 +84,7 @@ dav_rawx_create_server_config(apr_pool_t *p, server_rec *s)
 	conf->hash_depth = 1;
 	conf->hash_width = 3;
 	conf->fsync_on_close = FSYNC_ON_CHUNK_DIR;
-	conf->FILE_buffer_size = 0;
+	conf->fallocate = 1;
 
 	return conf;
 }
@@ -104,7 +105,7 @@ dav_rawx_merge_server_config(apr_pool_t *p, void *base, void *overrides)
 	newconf->hash_depth = child->hash_depth;
 	newconf->hash_width = child->hash_width;
 	newconf->fsync_on_close = child->fsync_on_close;
-	newconf->FILE_buffer_size = child->FILE_buffer_size;
+	newconf->fallocate = child->fallocate;
 	memcpy(newconf->docroot, child->docroot, sizeof(newconf->docroot));
 	memcpy(newconf->ns_name, child->ns_name, sizeof(newconf->ns_name));
 	update_rawx_conf(p, &(newconf->rawx_conf), newconf->ns_name);
@@ -270,6 +271,20 @@ dav_rawx_cmd_gridconfig_fsync_dir(cmd_parms *cmd, void *config, const char *arg1
 }
 
 static const char *
+dav_rawx_cmd_gridconfig_fallocate(cmd_parms *cmd, void *config, const char *arg1)
+{
+	dav_rawx_server_conf *conf;
+	(void) config;
+
+	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
+
+	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
+	conf->fallocate = _str_to_boolean(arg1);
+
+	return NULL;
+}
+
+static const char *
 dav_rawx_cmd_gridconfig_dirrun(cmd_parms *cmd, void *config, const char *arg1)
 {
 	dav_rawx_server_conf *conf;
@@ -284,26 +299,6 @@ dav_rawx_cmd_gridconfig_dirrun(cmd_parms *cmd, void *config, const char *arg1)
 
 	DAV_DEBUG_POOL(cmd->pool, 0, "mutex_key=[%s]", conf->shm.path);
 	DAV_DEBUG_POOL(cmd->pool, 0, "shm_key=[%s]", conf->shm.path);
-
-	return NULL;
-}
-
-static const char *
-dav_rawx_cmd_gridconfig_upblock(cmd_parms *cmd, void *config, const char *arg1)
-{
-	dav_rawx_server_conf *conf;
-	(void) config;
-
-	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
-
-	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
-
-	if (arg1 && *arg1) {
-		int s = atoi(arg1);
-		if (s > 0) {
-			conf->FILE_buffer_size = CLAMP(s, RAWX_BUF_MIN, RAWX_BUF_MAX);
-		}
-	}
 
 	return NULL;
 }
@@ -331,7 +326,6 @@ rawx_hook_child_init(apr_pool_t *pchild, server_rec *s)
 {
 	apr_status_t status;
 	dav_rawx_server_conf *conf;
-	gchar *event_agent_addr;
 
 	DAV_XDEBUG_POOL(pchild, 0, "%s()", __FUNCTION__);
 	conf = ap_get_module_config(s->module_config, &dav_rawx_module);
@@ -343,11 +337,12 @@ rawx_hook_child_init(apr_pool_t *pchild, server_rec *s)
 
 	conf->cleanup = _cleanup_child;
 
-	event_agent_addr = gridcluster_get_eventagent(conf->ns_name);
-	if (!rawx_event_init(event_agent_addr))
+	gchar *event_agent_addr = gridcluster_get_eventagent(conf->ns_name);
+	if (!rawx_event_init(s, event_agent_addr))
 		DAV_ERROR_POOL(pchild, 0, "Failed to initialize event context");
 	g_free(event_agent_addr);
 
+	oio_log_to_syslog ();
 }
 
 /* Dynamically shared modules are loaded twice by apache!
@@ -525,8 +520,8 @@ static const command_rec dav_rawx_cmds[] =
     AP_INIT_TAKE1("grid_dir_run",     dav_rawx_cmd_gridconfig_dirrun,      NULL, RSRC_CONF, "run directory"),
     AP_INIT_TAKE1("grid_fsync",       dav_rawx_cmd_gridconfig_fsync,       NULL, RSRC_CONF, "do fsync on file close"),
     AP_INIT_TAKE1("grid_fsync_dir",   dav_rawx_cmd_gridconfig_fsync_dir,   NULL, RSRC_CONF, "do fsync on chunk direcory after renaming .pending"),
+    AP_INIT_TAKE1("grid_fallocate",   dav_rawx_cmd_gridconfig_fallocate,   NULL, RSRC_CONF, "call fallocate when receiving a chunk"),
     AP_INIT_TAKE1("grid_acl",         dav_rawx_cmd_gridconfig_acl,         NULL, RSRC_CONF, "enabled acl"),
-    AP_INIT_TAKE1("grid_upload_blocksize",    dav_rawx_cmd_gridconfig_upblock,     NULL, RSRC_CONF, "upload block size"),
     AP_INIT_TAKE1(NULL,  NULL,  NULL, RSRC_CONF, NULL)
 };
 

@@ -23,7 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # include <glib.h>
 # include <metautils/lib/metautils.h>
 # include <sqlx/sqlx_service.h>
-# include <sqlx/oio_events_queue.h>
+# include <events/oio_events_queue.h>
 
 #define M1_SQLITE_GERROR(db,RC) NEWERROR((RC), "(%s) %s", \
 		sqlite_strerror(RC), (db)?sqlite3_errmsg(db):"unkown error")

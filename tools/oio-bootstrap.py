@@ -184,9 +184,8 @@ grid_fsync             disabled
 # At the end of an upload, perform a fsync() on the directory holding the chunk
 grid_fsync_dir         enabled
 
-# If set, gives the internal FILE a buffer of this size. If not set (default),
-# let the default buffer used by the glibc.
-#grid_upload_blocksize 131072
+# Preallocate space for the chunk file (enabled by default)
+#grid_fallocate enabled
 
 # Triggers Access Control List (acl)
 # DO NOT USE, this is broken
@@ -573,7 +572,8 @@ template_local_ns = """
 ${NOZK}zookeeper=${IP}:2181
 #proxy-local=${RUNDIR}/${NS}-proxy.sock
 proxy=${IP}:${PORT_PROXYD}
-event-agent=ipc://${RUNDIR}/event-agent.sock
+event-agent=beanstalk://127.0.0.1:11300
+#event-agent=ipc://${RUNDIR}/event-agent.sock
 conscience=${CS_ALL_PUB}
 """
 
@@ -639,39 +639,53 @@ sqlx_schemas = (
     ("sqlx", ""),
     ("sqlx.mail", """
 CREATE TABLE IF NOT EXISTS box (
-		name TEXT NOT NULL PRIMARY KEY,
-		ro INT NOT NULL DEFAULT 0,
-		messages INT NOT NULL DEFAULT 0,
-		recent INT NOT NULL DEFAULT 0,
-		unseen INT NOT NULL DEFAULT 0,
-		uidnext INT NOT NULL DEFAULT 0,
-		uidvalidity INT NOT NULL DEFAULT 0);
+   name TEXT NOT NULL PRIMARY KEY,
+   ro INT NOT NULL DEFAULT 0,
+   messages INT NOT NULL DEFAULT 0,
+   recent INT NOT NULL DEFAULT 0,
+   unseen INT NOT NULL DEFAULT 0,
+   uidnext INT NOT NULL DEFAULT 1,
+   uidvalidity INT NOT NULL DEFAULT 0);
 
 CREATE TABLE IF NOT EXISTS boxattr (
-        box TEXT NOT NULL,
-        k TEXT NOT NULL,
-        v TEXT NOT NULL,
-        PRIMARY KEY (box,k));
+   box TEXT NOT NULL,
+   k TEXT NOT NULL,
+   v TEXT NOT NULL,
+   PRIMARY KEY (box,k));
 
 CREATE TABLE IF NOT EXISTS mail (
-        seq INTEGER PRIMARY KEY AUTOINCREMENT,
-        uid TEXT NOT NULL UNIQUE,
-        guid TEXT NOT NULL UNIQUE,
-        box TEXT NOT NULL,
-        oiourl TEXT NOT NULL,
-        len INTEGER NOT NULL,
-        hlen INTEGER NOT NULL);
+   seq INTEGER PRIMARY KEY AUTOINCREMENT,
+   box_uid INTEGER NOT NULL,
+   uid TEXT NOT NULL,
+   guid TEXT NOT NULL,
+   box TEXT NOT NULL,
+   oiourl TEXT NOT NULL,
+   len INTEGER NOT NULL,
+   hlen INTEGER NOT NULL,
+   flags INTEGER NOT NULL,
+   header TEXT NOT NULL);
 
 CREATE TABLE IF NOT EXISTS mailattr (
-        guid TEXT NOT NULL,
-        k TEXT NOT NULL,
-        v TEXT NOT NULL,
-        PRIMARY KEY (guid,k));
+   guid TEXT NOT NULL,
+   k TEXT NOT NULL,
+   v TEXT NOT NULL,
+   PRIMARY KEY (guid,k));
 
 CREATE INDEX IF NOT EXISTS boxattr_index_by_box ON boxattr(box);
 CREATE INDEX IF NOT EXISTS mail_index_by_box ON mail(box);
 CREATE INDEX IF NOT EXISTS mailattr_index_by_mail ON mailattr(guid);
-INSERT OR REPLACE INTO box (name,ro) VALUES ('INBOX', 1);
+
+CREATE TRIGGER IF NOT EXISTS mail_after_add AFTER INSERT ON mail
+BEGIN
+   UPDATE box SET
+      messages = messages + 1,
+      recent = recent + 1,
+      unseen = unseen + 1,
+      uidnext = uidnext + 1
+   WHERE name = new.box ;
+END ;
+
+INSERT OR REPLACE INTO box (name,ro) VALUES ('INBOX', 0);
 """),
 )
 

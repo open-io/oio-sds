@@ -539,7 +539,7 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 	GRID_DEBUG("Polling %u [%s]", replicas, ct->fulltype);
 
 	if (!(*err = _get_iterator(m1, ct, &iter))) {
-		struct lb_next_opt_ext_s opt = {0};
+		struct lb_next_opt_ext_s opt = {{0}};
 		opt.req.distance = MACRO_COND(replicas>1,1,0);
 		opt.req.max = replicas;
 		opt.req.duplicates = FALSE;
@@ -834,7 +834,7 @@ __relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
 		struct service_update_policies_s *pol = meta1_backend_get_svcupdate(in->m1);
 		EXTRA_ASSERT (pol != NULL);
 
-		struct lb_next_opt_ext_s opt = {0};
+		struct lb_next_opt_ext_s opt = {{0}};
 		opt.req.max = service_howmany_replicas (pol, in->ct->baretype);
 		opt.req.distance = opt.req.max > 1 ? 1 : 0;
 		opt.req.duplicates = FALSE;
