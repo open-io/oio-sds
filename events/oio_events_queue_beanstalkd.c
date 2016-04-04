@@ -193,7 +193,11 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 			struct iovec iov[3];
 			gsize msglen = strlen(msg);
 			GString *header = g_string_new ("");
-			g_string_printf (header, "put 0 0 30 %"G_GSIZE_FORMAT"\r\n", msglen);
+			g_string_printf (header, "put %u %u %u %"G_GSIZE_FORMAT"\r\n",
+					OIO_EVT_BEANSTALKD_DEFAULT_PRIO,
+					OIO_EVT_BEANSTALKD_DEFAULT_DELAY,
+					OIO_EVT_BEANSTALKD_DEFAULT_TTR,
+					msglen);
 			iov[0].iov_base = header->str;
 			iov[0].iov_len = header->len;
 			iov[1].iov_base = msg;

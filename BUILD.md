@@ -108,6 +108,12 @@ Used by `gcc`
 
 | Macro | Default | Description |
 | ----- | ------- | ----------- |
+| OIO_EVT_BEANSTALKD_DEFAULT_PRIO | 1<<31 |  |
+| OIO_EVT_BEANSTALKD_DEFAULT_DELAY | 0 |  |
+| OIO_EVT_BEANSTALKD_DEFAULT_TTR | 120 |  |
+
+| Macro | Default | Description |
+| ----- | ------- | ----------- |
 | GCLUSTER_RUN_DIR | "/var/run" | Prefix to spool. |
 | GCLUSTER_CONFIG_FILE_PATH | "/etc/oio/sds.conf" | System-wide configuration file |
 | GCLUSTER_CONFIG_DIR_PATH | "/etc/oio/sds.conf.d" | System-wide configuration directory for additional files. |
