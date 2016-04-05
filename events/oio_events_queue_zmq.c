@@ -28,6 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "oio_events_queue.h"
 #include "oio_events_queue_internals.h"
 #include "oio_events_queue_zmq.h"
+#include "oio_events_queue_buffer.h"
 
 #define HEADER_SIZE 14
 
@@ -47,14 +48,17 @@ struct event_s
 
 static void _q_destroy (struct oio_events_queue_s *self);
 static void _q_send (struct oio_events_queue_s *self, gchar *msg);
+static void _q_send_overwritable(struct oio_events_queue_s *self, gchar *key, gchar *msg);
 static gboolean _q_is_stalled (struct oio_events_queue_s *self);
 static void _q_set_max_pending (struct oio_events_queue_s *self, guint v);
+static void _q_set_buffering(struct oio_events_queue_s *self, gint64 v);
 static GError * _q_run (struct oio_events_queue_s *self,
 		gboolean (*running) (gboolean pending));
 
 static struct oio_events_queue_vtable_s vtable_AGENT =
 {
-	_q_destroy, _q_send, _q_is_stalled, _q_set_max_pending, _q_run
+	_q_destroy, _q_send, _q_send_overwritable, _q_is_stalled,
+	_q_set_max_pending, _q_set_buffering, _q_run
 };
 
 struct _queue_AGENT_s
@@ -89,6 +93,7 @@ struct _queue_AGENT_s
 	guint64 counter_ack;
 	guint64 counter_ack_notfound;
 
+	struct oio_events_queue_buffer_s buffer;
 };
 
 struct _zmq2agent_ctx_s
@@ -125,7 +130,7 @@ oio_events_queue_factory__create_zmq (const char *zurl,
 	self->max_recv_per_round = 32;
 	self->max_events_in_queue = OIO_EVTQ_MAXPENDING;
 	self->procid = getpid();
-
+	oio_events_queue_buffer_init(&(self->buffer), 1 * G_TIME_SPAN_SECOND);
 	*out = (struct oio_events_queue_s *) self;
 	return NULL;
 }
@@ -142,6 +147,14 @@ _q_set_max_pending (struct oio_events_queue_s *self, guint v)
 }
 
 static void
+_q_set_buffering(struct oio_events_queue_s *self, gint64 v)
+{
+	struct _queue_AGENT_s *q = (struct _queue_AGENT_s *)self;
+	oio_events_queue_buffer_set_delay(&(q->buffer), v);
+}
+
+
+static void
 _q_destroy (struct oio_events_queue_s *self)
 {
 	if (!self) return;
@@ -149,6 +162,7 @@ _q_destroy (struct oio_events_queue_s *self)
 	EXTRA_ASSERT(q->vtable == &vtable_AGENT);
 	g_async_queue_unref (q->queue);
 	oio_str_clean (&q->url);
+	oio_events_queue_buffer_clean(&(q->buffer));
 	g_free (q);
 }
 
@@ -158,6 +172,13 @@ _q_send (struct oio_events_queue_s *self, gchar *msg)
 	struct _queue_AGENT_s *q = (struct _queue_AGENT_s*) self;
 	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_AGENT);
 	g_async_queue_push (q->queue, msg);
+}
+
+	static void
+_q_send_overwritable(struct oio_events_queue_s *self, gchar *key, gchar *msg)
+{
+	struct _queue_AGENT_s *q = (struct _queue_AGENT_s*) self;
+	oio_events_queue_buffer_put(&(q->buffer), key, msg);
 }
 
 static gboolean
@@ -390,10 +411,26 @@ _gq2zmq_has_pending (struct _gq2zmq_ctx_s *ctx)
 	return (0 < ctx->q->gauge_pending) || (0 < g_async_queue_length (ctx->queue));
 }
 
+static void
+_maybe_send_overwritable(struct oio_events_queue_s *self)
+{
+	struct _queue_AGENT_s *q = (struct _queue_AGENT_s *)self;
+	gboolean __send(gpointer key, gpointer msg, gpointer udata)
+	{
+		(void) udata;
+		g_free(key);
+		_q_send(self, (gchar*)msg);
+		return TRUE;
+	}
+
+	oio_events_queue_buffer_maybe_flush(&(q->buffer), __send, NULL);
+}
+
 static gpointer
 _gq2zmq_worker (struct _gq2zmq_ctx_s *ctx)
 {
 	while (ctx->running (_gq2zmq_has_pending (ctx))) {
+		_maybe_send_overwritable((struct oio_events_queue_s *)ctx->q);
 		gchar *tmp =
 			(gchar*) g_async_queue_timeout_pop (ctx->queue, G_TIME_SPAN_SECOND);
 		if (tmp && !_forward_event (ctx->zpush, tmp))
