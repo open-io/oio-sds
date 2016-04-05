@@ -44,4 +44,6 @@ GError * oio_events_queue__run (struct oio_events_queue_s *self,
 GError * oio_events_queue_factory__create (const char *cfg,
 		struct oio_events_queue_s **out);
 
+GError * oio_events_queue_factory__check_config (const char *cfg);
+
 #endif /*OIO_SDS__sqlx__oio_events_queue_h*/
