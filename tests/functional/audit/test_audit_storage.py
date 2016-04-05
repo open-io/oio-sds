@@ -4,8 +4,7 @@ import random
 
 import os
 
-import xattr
-from oio.common.utils import get_logger, cid_from_name
+from oio.common.utils import get_logger, cid_from_name, xattr
 from oio.blob.auditor import BlobAuditorWorker
 from oio.common import exceptions as exc
 from oio.container.client import ContainerClient
