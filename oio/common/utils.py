@@ -46,6 +46,10 @@ except (ImportError, NotImplementedError):
     CPU_COUNT = 1
 
 
+def get_hub():
+    return 'poll'
+
+
 class NullLogger(object):
     def write(self, *args):
         pass

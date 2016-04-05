@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 
-from oio.common.utils import parse_options
+import eventlet.hubs
 from optparse import OptionParser
+from oio.common.utils import parse_options, get_hub
 from oio.event.agent import Runner
 from oio.event.consumer import EventWorker
 
 if __name__ == '__main__':
     parser = OptionParser("%prog CONFIG [options]")
     config, options = parse_options(parser)
+    eventlet.hubs.use_hub(get_hub())
     Runner(config, EventWorker, **options).run()
