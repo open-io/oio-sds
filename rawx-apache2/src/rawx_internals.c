@@ -112,15 +112,16 @@ dav_format_time(int style, apr_time_t sec, char *buf)
 			tms.tm_hour, tms.tm_min, tms.tm_sec);
 }
 
-void send_chunk_event(const char *type, const dav_resource *resource) {
-	int rc;
-	dav_rawx_server_conf *conf = resource_get_server_config(resource);
-
-	GString *json = g_string_sized_new(256);
-
 #define _PAIR_AND_COMMA(KEY,VAL) \
 	oio_str_gstring_append_json_pair(json, KEY, VAL);\
 	g_string_append_c(json, ',')
+
+void
+send_chunk_event(const char *type, const dav_resource *resource)
+{
+	dav_rawx_server_conf *conf = resource_get_server_config(resource);
+
+	GString *json = g_string_sized_new(512);
 
 	g_string_append_c(json, '{');
 
@@ -149,8 +150,19 @@ void send_chunk_event(const char *type, const dav_resource *resource) {
 
 	g_string_append_printf(json, "}");
 
-#undef _PAIR_AND_COMMA
-
-	rc = rawx_event_send(type, json);
-	DAV_DEBUG_REQ(resource->info->request, 0, "Event %s %s", type, rc ? "OK" : "KO");
+	const gint64 pre = oio_ext_monotonic_time ();
+	GError *err = rawx_event_send(type, json);
+	const gint64 post = oio_ext_monotonic_time ();
+	if (!err) {
+		if (post - pre > 5 * G_TIME_SPAN_SECOND) {
+			DAV_ERROR_REQ(resource->info->request, 0,
+					"Event LONG %s t=%"G_GINT64_FORMAT"ms", type,
+					(post-pre)/G_TIME_SPAN_MILLISECOND);
+		} else {
+			DAV_DEBUG_REQ(resource->info->request, 0, "Event OK %s", type);
+		}
+	} else {
+		DAV_ERROR_REQ(resource->info->request, err->code, "Event KO %s", type);
+		g_clear_error (&err);
+	}
 }
