@@ -240,6 +240,8 @@ _q_destroy (struct oio_events_queue_s *self)
 	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s*) self;
 	EXTRA_ASSERT(q->vtable == &vtable_BEANSTALKD);
 	g_async_queue_unref (q->queue);
+	oio_str_clean (&q->endpoint);
+	q->vtable = NULL;
 	g_free (q);
 }
 
