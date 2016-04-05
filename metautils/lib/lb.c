@@ -224,6 +224,7 @@ grid_lb_init(const gchar *ns, const gchar *srvtype)
 	g_strlcpy(lb->srvtype, srvtype, sizeof(lb->srvtype));
 	lb->shorten_ratio = 1.001;
 	lb->standard_deviation = FALSE;
+	lb->reset_delay = 60;
 	lb->version = 1;
 	lb->use_hook = NULL;
 	g_rec_mutex_init(&(lb->lock));
