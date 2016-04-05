@@ -130,7 +130,7 @@ update_rawx_conf(apr_pool_t* p, rawx_conf_t **rawx_conf, const gchar* ns_name)
 
 	new_conf->ni = ns_info;
 	new_conf->acl = _get_acl(p, ns_info);
-	new_conf->last_update = time(0);
+	new_conf->last_update = oio_ext_monotonic_seconds();
 
 	*rawx_conf = new_conf;
 	return TRUE;

@@ -95,24 +95,25 @@ static int
 _send (int fd, struct iovec *iov, unsigned int iovcount)
 {
 	int w;
-	struct pollfd pfd = {0};
-	pfd.fd = fd;
-	pfd.events = POLLIN;
 retry:
 	w = writev (fd, iov, 3);
 	if (w < 0) {
 		if (errno == EINTR)
 			goto retry;
 		if (errno == EAGAIN || errno == EWOULDBLOCK) {
+			struct pollfd pfd = {0};
+			pfd.fd = fd;
+			pfd.events = POLLOUT;
 			metautils_syscall_poll (&pfd, 1, 1000);
 			goto retry;
 		}
 		return 0;
 	}
 
-	while (w > 0) {
+	while (w > 0 && iovcount > 0) {
 		if (iov[0].iov_len <= (size_t)w) {
 			w -= iov[0].iov_len;
+			iov[0].iov_len = 0;
 			iov ++;
 			iovcount --;
 		} else {
@@ -120,10 +121,8 @@ retry:
 			w = 0;
 		}
 	}
-	if (iovcount > 0) {
-		metautils_syscall_poll (&pfd, 1, 1000);
+	if (iovcount > 0)
 		goto retry;
-	}
 
 	GRID_TRACE("BEANSTALKD put sent!");
 	return 1;
@@ -164,7 +163,7 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_BEANSTALKD);
 	EXTRA_ASSERT (running != NULL);
 
-	while ((*running)(g_async_queue_length(q->queue))) {
+	while ((*running)(0 < g_async_queue_length(q->queue))) {
 
 		/* find an event, prefering the last that failed */
 		gchar *msg = saved;
@@ -184,6 +183,11 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 					g_clear_error (&err);
 					saved = msg;
 					msg = NULL;
+
+					/* Avoid looping crazily until the beanstalkd becomes up
+					 * again, let's sleep a little bit. */
+					g_usleep (250 * G_TIME_SPAN_MILLISECOND);
+					continue;
 				} else {
 					GRID_DEBUG("BEANSTALKD: reconnected to %s", q->endpoint);
 				}
@@ -236,6 +240,8 @@ _q_destroy (struct oio_events_queue_s *self)
 	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s*) self;
 	EXTRA_ASSERT(q->vtable == &vtable_BEANSTALKD);
 	g_async_queue_unref (q->queue);
+	oio_str_clean (&q->endpoint);
+	q->vtable = NULL;
 	g_free (q);
 }
 
