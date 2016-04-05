@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import os
-import xattr
 import mock
 
+from oio.common.utils import xattr
 from oio.blob.indexer import BlobIndexer
 from oio.common.exceptions import FaultyChunk
 from oio.rdir.client import RdirClient
