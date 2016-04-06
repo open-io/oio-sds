@@ -491,7 +491,7 @@ action_ref_destroy (struct req_args_s *args)
 	if (!err || CODE_IS_NETWORK_ERROR(err->code)) {
 		/* Also decache on timeout, a majority of request succeed,
          * and it will probably silently succeed  */
-		NSINFO_DO(if (srvtypes) {
+		NSINFO_READ(if (srvtypes) {
 			for (gchar ** p = srvtypes; *p; ++p)
 				hc_decache_reference_service (resolver, args->url, *p);
 		});

@@ -1427,8 +1427,13 @@ retry:
 
 	// Patch the chunk size to ease putting contents with unknown size.
 	if (!err) {
-		gint64 chunk_size = 0;
-		NSINFO_DO(chunk_size = nsinfo.chunk_size);
+
+		/* 'ns_chunk_size' should be read in a critical section ... but
+		   nevermind 'cos it won't change often and will always be allocated,
+		   so I (jfs) accept to just read without protection. We thus save a
+		   lot of mutex operations on this. */
+		gint64 chunk_size = ns_chunk_size;
+
 		chunk_size = MAX(chunk_size,1);
 		for (GSList *l=beans; l ;l=l->next) {
 			if (l->data && (DESCR(l->data) == &descr_struct_CHUNKS)) {
