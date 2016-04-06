@@ -69,11 +69,28 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 	g_mutex_unlock(&Lock); \
 } while (0)
 
-#define CSURL_DO(Action) GUARDED_DO(csurl_mutex,Action)
+#define GUARDED_READ(Lock,Action) do { \
+	g_rw_lock_reader_lock(&Lock); \
+	do { Action ; } while (0); \
+	g_rw_lock_reader_unlock(&Lock); \
+} while (0)
+
+#define GUARDED_WRITE(Lock,Action) do { \
+	g_rw_lock_writer_lock(&Lock); \
+	do { Action ; } while (0); \
+	g_rw_lock_writer_unlock(&Lock); \
+} while (0)
+
+#define NSINFO_READ(Action) GUARDED_READ(nsinfo_rwlock,Action)
+#define NSINFO_WRITE(Action) GUARDED_WRITE(nsinfo_rwlock,Action)
+
 #define PUSH_DO(Action) GUARDED_DO(push_mutex,Action)
-#define NSINFO_DO(Action) GUARDED_DO(nsinfo_mutex,Action)
-#define SRV_DO(Action) GUARDED_DO(srv_mutex,Action)
-#define WANTED_DO(Action) GUARDED_DO(wanted_mutex,Action)
+
+#define SRV_READ(Action) GUARDED_READ(srv_rwlock,Action)
+#define SRV_WRITE(Action) GUARDED_WRITE(srv_rwlock,Action)
+
+#define WANTED_READ(Action) GUARDED_READ(wanted_rwlock,Action)
+#define WANTED_WRITE(Action) GUARDED_WRITE(wanted_rwlock,Action)
 
 #define CSURL(C) gchar *C = NULL; do { \
 	C = proxy_get_csurl(); \
@@ -82,6 +99,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 extern gchar *nsname;
 extern gboolean flag_cache_enabled;
+extern gboolean flag_local_scores;
 extern time_t nsinfo_refresh_m0;
 
 /* how long the proxy remembers the srv it registered ino the conscience */
@@ -99,22 +117,23 @@ extern struct grid_lbpool_s *lbpool;
 extern struct hc_resolver_s *resolver;
 
 /* Global NS info */
-extern GMutex nsinfo_mutex;
+extern GRWLock nsinfo_rwlock;
 extern gchar **srvtypes;
 extern struct namespace_info_s nsinfo;
+extern gint64 ns_chunk_size;
 gboolean validate_namespace (const char * ns);
 gboolean validate_srvtype (const char * n);
 
 /* Periodically loads the consciennce's addresses from the local config
    and keep this in cache. */
-extern GMutex csurl_mutex;
+extern GRWLock csurl_rwlock;
 extern gchar **csurl;
 extern gsize csurl_count;
 gchar * proxy_get_csurl (void);
 
 /* Periodically loads lists of services from the conscience, and keep this
    in cache. */
-extern GMutex wanted_mutex;
+extern GRWLock wanted_rwlock;
 extern gchar **wanted_srvtypes;
 extern GBytes **wanted_prepared; /* formatted as <srvtype>+'\0'+<json> */
 void service_remember_wanted (const char *type);
@@ -127,7 +146,7 @@ extern struct lru_tree_s *push_queue;
 extern struct lru_tree_s *srv_registered; /* registered srv seen within 5s */
 
 /* "IP:PORT" that had a problem */
-extern GMutex srv_mutex;
+extern GRWLock srv_rwlock;
 extern struct lru_tree_s *srv_down;
 gboolean service_is_ok (gconstpointer p);
 void service_invalidate (gconstpointer n);

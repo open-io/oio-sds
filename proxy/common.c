@@ -22,10 +22,10 @@ gchar *
 proxy_get_csurl (void)
 {
 	gchar *cs = NULL;
-	CSURL_DO(if (csurl && csurl_count) {
-		guint i = g_random_int_range(0, csurl_count);
-		cs = g_strdup(csurl[i]);
-	});
+	g_rw_lock_reader_lock (&csurl_rwlock);
+	guint i = g_random_int_range(0, csurl_count);
+	cs = g_strdup(csurl[i]);
+	g_rw_lock_reader_unlock (&csurl_rwlock);
 	return cs;
 }
 
@@ -39,7 +39,7 @@ gboolean
 validate_srvtype (const char * n)
 {
 	gboolean rc = FALSE;
-	NSINFO_DO(if (srvtypes) {
+	NSINFO_READ(if (srvtypes) {
 		for (gchar ** p = srvtypes; !rc && *p; ++p)
 			rc = !strcmp (*p, n);
 	});
@@ -50,7 +50,7 @@ gboolean
 service_is_ok (gconstpointer k)
 {
 	gpointer v;
-	SRV_DO(v = lru_tree_get (srv_down, k));
+	SRV_READ(v = lru_tree_get (srv_down, k));
 	return v == NULL;
 }
 
@@ -58,7 +58,7 @@ void
 service_invalidate (gconstpointer k)
 {
 	gulong now = oio_ext_monotonic_time () / G_TIME_SPAN_SECOND;
-	SRV_DO(lru_tree_insert (srv_down, g_strdup((const char *)k), (void*)now));
+	SRV_WRITE(lru_tree_insert (srv_down, g_strdup((const char *)k), (void*)now));
 	GRID_INFO("invalid at %lu %s", now, (const char*)k);
 }
 
@@ -327,14 +327,14 @@ service_learn (const char *key)
 {
 	gulong now = oio_ext_monotonic_seconds ();
 	gchar *k = g_strdup(key);
-	SRV_DO(lru_tree_insert(srv_known, k, (void*)now));
+	SRV_WRITE(lru_tree_insert(srv_known, k, (void*)now));
 }
 
 gboolean
 service_is_known (const char *key)
 {
 	gboolean known = FALSE;
-	SRV_DO(known = (NULL != lru_tree_get (srv_known, key)));
+	SRV_READ(known = (NULL != lru_tree_get (srv_known, key)));
 	return known;
 }
 
@@ -354,7 +354,7 @@ void
 service_remember_wanted (const char *type)
 {
 	gsize i;
-	WANTED_DO(
+	WANTED_WRITE(
 	if (!wanted_srvtypes) {
 		wanted_srvtypes = g_malloc0 (8 * sizeof(void*));
 		wanted_srvtypes[0] = g_strdup (type);
@@ -375,7 +375,7 @@ GBytes*
 service_is_wanted (const char *type)
 {
 	GBytes *out = NULL;
-	WANTED_DO(do {
+	WANTED_READ(do {
 		GBytes **pold = NOLOCK_service_lookup_wanted (type);
 		if (pold)
 			out = g_bytes_ref (*pold);
