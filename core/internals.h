@@ -47,6 +47,8 @@ extern "C" {
 		|| (C)==CODE_POLICY_NOT_SUPPORTED \
 		|| (C)==CODE_NAMESPACE_NOTMANAGED)
 
+#define VTABLE_HAS(self,T,F) (((T)self)->vtable-> F != NULL)
+
 #define VTABLE_CHECK(self,T,F) do { \
 	g_assert(self != NULL); \
 	g_assert(((T)self)->vtable != NULL); \

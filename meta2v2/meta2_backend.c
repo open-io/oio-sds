@@ -745,10 +745,7 @@ _container_state (struct sqlx_sqlite3_s *sq3)
 	}
 	void append_const (GString *gs, const char *k, const char *v) {
 		sep (gs);
-		if (v)
-			g_string_append_printf (gs, "\"%s\":\"%s\"", k, v);
-		else
-			g_string_append_printf (gs, "\"%s\":null", k);
+		oio_str_gstring_append_json_pair(gs, k, v);
 	}
 	void append (GString *gs, const char *k, gchar *v) {
 		append_const (gs, k, v);
@@ -780,7 +777,9 @@ meta2_backend_add_modified_container(struct meta2_backend_s *m2b,
 {
 	EXTRA_ASSERT(m2b != NULL);
 	if (m2b->notifier)
-		oio_events_queue__send (m2b->notifier, _container_state (sq3));
+		oio_events_queue__send_overwritable(m2b->notifier,
+				g_strdup(sqlx_admin_get_str(sq3, SQLX_ADMIN_BASENAME)),
+				_container_state (sq3));
 }
 
 GError*
