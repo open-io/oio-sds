@@ -2,7 +2,9 @@
 namespace = OPENIO
 user = openio
 bind_addr = ipc:///tmp/run/event-agent.sock
+# based on CPU count
 workers = 2
+concurrency = 10
 queue_location = /tmp/oio-event-queue.db
 retries_per_second = 30
 batch_size = 500
