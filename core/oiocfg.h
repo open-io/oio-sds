@@ -238,8 +238,17 @@ extern "C" {
 #  define OIO_EVTQ_MAXPENDING 1000
 # endif
 
+/* Delay between events queue flushes in seconds */
+# ifndef OIO_EVTQ_BUFFER_DELAY
+#  define OIO_EVTQ_BUFFER_DELAY 5
+# endif
+
 # ifndef  OIO_CFG_EVTQ_MAXPENDING
 #  define OIO_CFG_EVTQ_MAXPENDING "events-max-pending"
+# endif
+
+# ifndef  OIO_CFG_EVTQ_BUFFER_DELAY
+#  define OIO_CFG_EVTQ_BUFFER_DELAY "events-buffer-delay"
 # endif
 
 /* Max number of events raised by epoll_wait */

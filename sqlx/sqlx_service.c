@@ -860,23 +860,25 @@ _task_reconfigure_events (gpointer p)
 	if (!ni || !ni->options)
 		return;
 
-	gint64 i64 = OIO_EVTQ_MAXPENDING;
-	gchar *k;
-
-	/* without the prefix */
-	i64 = gridcluster_get_nsinfo_int64 (ni, OIO_CFG_EVTQ_MAXPENDING, i64);
-	GRID_TRACE("Looking for [%s]: %"G_GINT64_FORMAT, OIO_CFG_EVTQ_MAXPENDING, i64);
-
-	/* with the prefix */
-	k = g_strconcat (PSRV(p)->service_config->srvtype, ".",
-			OIO_CFG_EVTQ_MAXPENDING, NULL);
-	i64 = gridcluster_get_nsinfo_int64 (ni, k, i64);
-	GRID_TRACE("Looking for [%s]: %"G_GINT64_FORMAT, k, i64);
-	g_free(k);
+	gint64 i64 = namespace_info_get_srv_param_i64(ni, NULL,
+			PSRV(p)->service_config->srvtype,
+			OIO_CFG_EVTQ_MAXPENDING,
+			OIO_EVTQ_MAXPENDING);
+	GRID_TRACE("Looking for [%s]: %"G_GINT64_FORMAT,
+			OIO_CFG_EVTQ_MAXPENDING, i64);
 
 	if (i64 >= 0 && i64 < G_MAXUINT) {
 		guint u = (guint) i64;
 		oio_events_queue__set_max_pending (PSRV(p)->events_queue, u);
+	}
+
+	i64 = namespace_info_get_srv_param_i64(ni, NULL,
+			PSRV(p)->service_config->srvtype,
+			OIO_CFG_EVTQ_BUFFER_DELAY,
+			OIO_EVTQ_BUFFER_DELAY);
+	if (i64 >= 0 && i64 < 3600) {
+		oio_events_queue__set_buffering(PSRV(p)->events_queue,
+				i64 * G_TIME_SPAN_SECOND);
 	}
 }
 
