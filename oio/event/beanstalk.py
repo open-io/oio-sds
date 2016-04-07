@@ -1,6 +1,6 @@
 import os
 import sys
-import socket
+from eventlet.green import socket
 from urlparse import urlparse
 from cStringIO import StringIO as BytesIO
 
@@ -420,3 +420,7 @@ class Beanstalk(object):
 
     def delete(self, job_id):
         self.execute_command('delete', job_id)
+
+    def close(self):
+        if self.connection:
+            self.connection.disconnect()

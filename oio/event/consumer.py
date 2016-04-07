@@ -24,6 +24,18 @@ ACCOUNT_SERVICE_TIMEOUT = 60
 ACCOUNT_SERVICE = 'account'
 
 
+def _eventlet_stop(client, server, beanstalk):
+    try:
+        try:
+            client.wait()
+        finally:
+            beanstalk.close()
+    except greenlet.GreenletExit:
+        pass
+    except Exception:
+        greenthread.kill(server, *sys.exc_info())
+
+
 class StopServe(Exception):
     pass
 
@@ -69,7 +81,7 @@ class Worker(object):
 
     def handle_quit(self, sig, frame):
         self.alive = False
-        time.sleep(0.1)
+        eventlet.sleep(0.1)
         sys.exit(0)
 
     def parent_alive(self):
@@ -112,7 +124,6 @@ class EventWorker(Worker):
         self.acct_refresh_interval = int_value(
             self.conf.get('acct_refresh_interval'), 60
         )
-        self.concurrency = int_value(self.conf.get('concurrency'), 1000)
         self.acct_update = true_value(self.conf.get('acct_update', True))
         self.rdir_update = true_value(self.conf.get('rdir_update', True))
         super(EventWorker, self).init()
@@ -129,11 +140,18 @@ class EventWorker(Worker):
             return None
 
     def run(self):
+        coros = []
         queue_url = self.conf.get('queue_url', 'tcp://127.0.0.1:11300')
-        self.beanstalk = Beanstalk.from_url(queue_url)
+        concurrency = int_value(self.conf.get('concurrency'), 10)
 
-        gt = eventlet.spawn(
-            self.handle)
+        server_gt = greenthread.getcurrent()
+
+        for i in range(concurrency):
+            beanstalk = Beanstalk.from_url(queue_url)
+            gt = eventlet.spawn(self.handle, beanstalk)
+            gt.link(_eventlet_stop, server_gt, beanstalk)
+            coros.append(gt)
+            beanstalk, gt = None, None
 
         while self.alive:
             self.notify()
@@ -146,26 +164,26 @@ class EventWorker(Worker):
         self.notify()
         try:
             with Timeout(self.graceful_timeout) as t:
-                gt.kill(StopServe())
-                gt.wait()
+                [c.kill(StopServe()) for c in coros]
+                [c.wait() for c in coros]
         except Timeout as te:
             if te != t:
                 raise
-            gt.kill()
+            [c.kill() for c in coros]
 
-    def handle(self):
+    def handle(self, beanstalk):
         try:
             while True:
-                job_id, data = self.beanstalk.reserve()
+                job_id, data = beanstalk.reserve()
                 try:
                     event = self.safe_decode_job(data)
                     if event:
                         self.process_event(event)
-                    self.beanstalk.delete(job_id)
+                    beanstalk.delete(job_id)
                 except Exception:
                     self.logger.exception("ERROR handling event %s", job_id)
         except StopServe:
-            self.logger.info('Stopping event handler')
+            pass
 
     def process_event(self, event):
         handler = self.get_handler(event)
