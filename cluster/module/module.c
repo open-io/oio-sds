@@ -202,8 +202,7 @@ timer_expire_services(gpointer u)
 		/* XXX end of critical section */
 
 		if (count)
-			NOTICE("[NS=%s][SRVTYPE=%s] Removed [%u] expired services",
-				conscience_get_nsname(cs), str_name, count);
+			NOTICE("Expired [%u] [%s] services", count, str_name);
 	}
 
 	g_slist_foreach(list_type_names,g_free1,NULL);
@@ -318,7 +317,7 @@ _conscience_srv_prepare_cache(struct conscience_srv_s *srv)
 
 /* ------------------------------------------------------------------------- */
 
-static volatile gboolean hub_running = TRUE;
+static volatile gboolean hub_running = FALSE;
 static void *hub_zctx = NULL;
 static void *hub_zpub = NULL;
 static void *hub_zsub = NULL;
