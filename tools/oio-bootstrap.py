@@ -394,10 +394,11 @@ param_chunk_size=${CHUNK_SIZE}
 param_hub.me=tcp://${IP}:${PORT_HUB}
 param_hub.group=${CS_ALL_HUB}
 
-param_option.events-max-pending=1234
-param_option.meta2.events-max-pending=123
-param_option.sqlx.events-max-pending=12
-param_option.meta1.events-max-pending=456
+param_option.events-max-pending=10000
+param_option.meta2.events-max-pending=1000
+param_option.sqlx.events-max-pending=1000
+param_option.meta1.events-max-pending=100
+param_option.meta2.events-buffer-delay=5
 
 param_option.service_update_policy=meta2=KEEP|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|;rdir=KEEP|1|1|user_is_a_service=1
 param_option.lb.rawx=WRR?shorten_ratio=1.0&standard_deviation=no&reset_delay=60

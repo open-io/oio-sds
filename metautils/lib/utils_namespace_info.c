@@ -230,7 +230,7 @@ namespace_info_get_srv_param_gba(const namespace_info_t *ni,
 
 	if (srv_type != NULL) {
 		// Prefix the param name with the service type
-		g_snprintf(key, sizeof(key), "%s_%s", srv_type, param_name);
+		g_snprintf(key, sizeof(key), "%s.%s", srv_type, param_name);
 		res = namespace_hash_table_lookup(ni->options, ns_name, key);
 	}
 

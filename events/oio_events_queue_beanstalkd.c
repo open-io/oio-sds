@@ -92,7 +92,11 @@ static void
 _q_set_buffering(struct oio_events_queue_s *self, gint64 v)
 {
 	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s *)self;
-	oio_events_queue_buffer_set_delay(&(q->buffer), v);
+	if (q->buffer.delay != v) {
+		GRID_INFO("events buffering delay set to %"G_GINT64_FORMAT"s",
+				v / G_TIME_SPAN_SECOND);
+		oio_events_queue_buffer_set_delay(&(q->buffer), v);
+	}
 }
 
 static void
