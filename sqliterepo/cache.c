@@ -482,8 +482,9 @@ sqlx_cache_reset_bases(sqlx_cache_t *cache, guint max)
 			base->cond = cache->cond_array + (i % cache->cond_count);
 		}
 
-		GRID_INFO("SQLX cache size change from %u to %u", old,
-				cache->bases_count);
+		if (old != cache->bases_count)
+			GRID_INFO("SQLX cache size change from %u to %u", old,
+					cache->bases_count);
 	}
 
 	g_mutex_unlock(&cache->lock);

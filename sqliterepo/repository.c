@@ -398,7 +398,7 @@ sqlx_repository_configure_hash(sqlx_repository_t *repo, guint w, guint d)
 
 	repo->hash_depth = d;
 	repo->hash_width = w;
-	GRID_INFO("Repository path hash configured : depth=%u width=%u",
+	GRID_DEBUG("Repository path hash configured: depth=%u width=%u",
 			repo->hash_depth, repo->hash_width);
 }
 

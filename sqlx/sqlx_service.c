@@ -170,7 +170,7 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 	}
 	if (!ss->announce) {
 		ss->announce = g_string_new(ss->url->str);
-		GRID_NOTICE("No announce set, using endpoint [%s]", ss->announce->str);
+		GRID_DEBUG("No announce set, using endpoint [%s]", ss->announce->str);
 	}
 	if (!metautils_url_valid_for_bind(ss->url->str)) {
 		GRID_ERROR("Invalid URL as a endpoint [%s]", ss->url->str);
@@ -192,14 +192,13 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 				s, (unsigned int)sizeof(ss->ns_name));
 		return FALSE;
 	}
-	GRID_NOTICE("NS configured to [%s]", ss->ns_name);
+	GRID_DEBUG("NS configured to [%s]", ss->ns_name);
 
 	ss->lb = grid_lbpool_create (ss->ns_name);
 	if (!ss->lb) {
 		GRID_WARN("LB allocation failure");
 		return FALSE;
 	}
-	GRID_NOTICE("LB allocated");
 
 	s = g_strlcpy(ss->volume, argv[1], sizeof(ss->volume));
 	if (s >= sizeof(ss->volume)) {
@@ -207,13 +206,9 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 				s, (unsigned int) sizeof(ss->volume));
 		return FALSE;
 	}
-	GRID_NOTICE("Volume configured to [%s]", ss->volume);
+	GRID_DEBUG("Volume configured to [%s]", ss->volume);
 
 	ss->zk_url = gridcluster_get_zookeeper(ss->ns_name);
-	if (!ss->zk_url) {
-		GRID_INFO("No replication : no ZooKeeper URL configured");
-		return TRUE;
-	}
 
 	return TRUE;
 }
@@ -289,7 +284,7 @@ _init_configless_structures(struct sqlx_service_s *ss)
 			|| !(ss->resolver = hc_resolver_create1(oio_ext_monotonic_time() / G_TIME_SPAN_SECOND))
 			|| !(ss->gtq_admin = grid_task_queue_create("admin"))
 			|| !(ss->gtq_reload = grid_task_queue_create("reload"))) {
-		GRID_WARN("SERVICE init error : memory allocation failure");
+		GRID_WARN("SERVICE init error: memory allocation failure");
 		return FALSE;
 	}
 
@@ -308,7 +303,7 @@ static gboolean
 _configure_synchronism(struct sqlx_service_s *ss)
 {
 	if (!ss->zk_url) {
-		GRID_NOTICE("SYNC off (no ZK)");
+		GRID_NOTICE("SYNC off (no zookeeper)");
 		return TRUE;
 	}
 
@@ -326,7 +321,7 @@ _configure_synchronism(struct sqlx_service_s *ss)
 
 	GError *err = sqlx_sync_open(ss->sync);
 	if (err != NULL) {
-		GRID_WARN("SYNC init error : (%d) %s", err->code, err->message);
+		GRID_WARN("SYNC init error: (%d) %s", err->code, err->message);
 		g_clear_error(&err);
 		return FALSE;
 	}
@@ -337,7 +332,7 @@ _configure_synchronism(struct sqlx_service_s *ss)
 static gboolean
 _configure_replication(struct sqlx_service_s *ss)
 {
-	GRID_INFO("Got zookeeper URL [%s]", ss->zk_url);
+	GRID_DEBUG("Got zookeeper URL [%s]", ss->zk_url);
 	replication_config.mode = (ss->flag_replicable && ss->zk_url != NULL)
 		? ELECTION_MODE_QUORUM : ELECTION_MODE_NONE;
 	replication_config.ctx = ss;
@@ -349,7 +344,7 @@ _configure_replication(struct sqlx_service_s *ss)
 	GError *err = election_manager_create(&replication_config,
 			&ss->election_manager);
 	if (err != NULL) {
-		GRID_WARN("Replication init failure : (%d) %s",
+		GRID_WARN("Replication init failure: (%d) %s",
 				err->code, err->message);
 		g_clear_error(&err);
 		return FALSE;
