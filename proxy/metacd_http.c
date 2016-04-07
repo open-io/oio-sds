@@ -404,20 +404,20 @@ _reload_srvtype(const char *type)
 	});
 
 	/* updates the score of the local services */
-	if (list && flag_local_scores) {
+	if (flag_local_scores && NULL != list) {
 		for (GSList *l=list; l ;l=l->next)
 			PUSH_DO(_local_score_update(l->data));
 	}
 
 	/* prepares a cache of services wanted by the clients */
-	if (flag_cache_enabled) {
+	if (flag_cache_enabled && NULL != list) {
 		GBytes *encoded = _encode_wanted_services (type, list);
 		WANTED_WRITE (encoded = _NOLOCK_precache_list_of_services (type, encoded));
 		g_bytes_unref (encoded);
 	}
 
 	/* reload the LB */
-	if (list) {
+	if (NULL != list) {
 		GSList *l = list;
 		gboolean provide(struct service_info_s **p_si) {
 			if (!l) return FALSE;
