@@ -101,7 +101,7 @@ _q_set_max_pending (struct oio_events_queue_s *self, guint v)
 	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s *)self;
 	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_BEANSTALKD);
 	if (q->max_events_in_queue != v) {
-		GRID_NOTICE("max events in queue set to [%u]", v);
+		GRID_INFO("max events in queue set to [%u]", v);
 		q->max_events_in_queue = v;
 	}
 }

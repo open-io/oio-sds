@@ -252,7 +252,7 @@ network_server_init(void)
 	g_thread_pool_set_max_unused_threads (SERVER_DEFAULT_THP_MAXUNUSED);
 	g_thread_pool_set_max_idle_time (SERVER_DEFAULT_THP_IDLE);
 
-	GRID_INFO("SERVER ready with epollfd[%d] pipe[%d,%d]",
+	GRID_DEBUG("SERVER ready with epollfd[%d] pipe[%d,%d]",
 			result->epollfd, result->wakeup[0], result->wakeup[1]);
 
 	return result;

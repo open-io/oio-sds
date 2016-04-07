@@ -106,7 +106,7 @@ sqlx_sync_set_prefix(struct sqlx_sync_s *ss, const gchar *prefix)
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
 	oio_str_replace(&ss->zk_prefix, prefix);
-	GRID_NOTICE("SYNC prefix set to [%s]", prefix);
+	GRID_DEBUG("SYNC prefix set to [%s]", prefix);
 }
 
 void
@@ -116,7 +116,7 @@ sqlx_sync_set_hash(struct sqlx_sync_s *ss, guint w, guint d)
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
 	ss->hash_width = CLAMP(w,1,3);
 	ss->hash_depth = MIN(d,2);
-	GRID_NOTICE("SYNC hash set to [%ux%u]", w, d);
+	GRID_DEBUG("SYNC hash set to [%ux%u]", w, d);
 }
 
 static void
