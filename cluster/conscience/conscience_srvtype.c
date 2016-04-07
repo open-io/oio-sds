@@ -152,7 +152,7 @@ conscience_srvtype_register_srv(struct conscience_srvtype_s *srvtype,
 	memcpy(&(service->id), srvid, sizeof(struct conscience_srvid_s));
 	service->tags = g_ptr_array_new();
 	service->locked = FALSE;
-	service->score.timestamp = oio_ext_monotonic_seconds ();
+	service->score.timestamp = 0;
 	service->score.value = -1;
 	service->srvtype = srvtype;
 
@@ -199,8 +199,8 @@ conscience_srvtype_remove_expired(struct conscience_srvtype_s * srvtype,
 				if (callback)
 					callback(pService, u);
 				pService->score.value = 0;
+				count++;
 			}
-			count++;
 		}
 	}
 
@@ -342,8 +342,6 @@ conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_
 	if (!p_srv) {
 		p_srv = conscience_srvtype_register_srv(srvtype, NULL, &srvid);
 		g_assert_nonnull (p_srv);
-		p_srv->score.value = -1;
-		p_srv->score.timestamp = 0;
 	}
 
 	/* refresh the tags: create missing, replace existing
