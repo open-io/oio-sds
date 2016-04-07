@@ -38,5 +38,5 @@ class HttpChecker(BaseChecker):
                 except Exception:
                     pass
             if not success:
-                self.logger.warn('http check failed')
+                self.logger.warn('%s check failed', self.name)
             return success
