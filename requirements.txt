@@ -1,5 +1,4 @@
 eventlet>=0.15.2
-pyzmq>=14.3.1
 requests>=2.6.0
 flask>=0.10.1
 redis>=2.10.3
