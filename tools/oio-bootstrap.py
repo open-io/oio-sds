@@ -123,6 +123,7 @@ LoadModule authz_core_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_authz_core
 LoadModule setenvif_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_setenvif.so
 LoadModule dav_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_dav.so
 LoadModule mime_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mime.so
+LoadModule alias_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_alias.so
 LoadModule dav_rawx_module @APACHE2_MODULES_DIRS@/mod_dav_rawx.so
 
 <IfModule !unixd_module>
@@ -191,10 +192,13 @@ grid_fsync_dir         enabled
 # DO NOT USE, this is broken
 #grid_acl disabled
 
+Alias / /x/
+
 <Directory />
 DAV rawx
 AllowOverride None
 Require all granted
+Options -SymLinksIfOwnerMatch -FollowSymLinks -Includes -Indexes
 </Directory>
 
 <VirtualHost ${IP}:${PORT}>
