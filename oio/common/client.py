@@ -47,5 +47,5 @@ class Client(object):
 
     def _request(self, method, url, **kwargs):
         endpoint = self.endpoint
-        url = '/'.join([endpoint.rstrip('/'), url.lstrip('/')])
+        url = '/'.join((endpoint.rstrip('/'), url.lstrip('/')))
         return self._direct_request(method, url, **kwargs)
