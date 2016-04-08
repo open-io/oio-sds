@@ -522,28 +522,32 @@ _notify_request(struct req_ctx_s *ctx, GQuark gq_count, GQuark gq_time)
 			gq_time, diff, gq_time_all, diff);
 }
 
-static gboolean
+static gsize
 _reply_message(struct network_client_s *clt, MESSAGE reply)
 {
 	GByteArray *encoded = message_marshall_gba_and_clean(reply);
+	gsize encoded_size = encoded->len;
 	network_client_send_slab(clt, data_slab_make_gba(encoded));
-	return TRUE;
+	return encoded_size;
 }
 
 static gboolean
 _client_reply_fixed(struct req_ctx_s *req_ctx, gint code, const gchar *msg)
 {
 	EXTRA_ASSERT(!req_ctx->final_sent);
+
+	MESSAGE reply = metaXServer_reply_simple(req_ctx->request, code, msg);
+	gsize answer_size = _reply_message(req_ctx->client, reply);
+
 	if ((req_ctx->final_sent = is_code_final(code))) {
 		struct log_item_s item;
 		item.req_ctx = req_ctx;
 		item.code = code;
 		item.msg = msg;
-		item.out_len = 0;
+		item.out_len = answer_size;
 		network_client_log_access(&item);
 	}
-	MESSAGE reply = metaXServer_reply_simple(req_ctx->request, code, msg);
-	return _reply_message(req_ctx->client, reply);
+	return (gboolean) answer_size;
 }
 
 static void
@@ -620,16 +624,18 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 				metautils_message_add_field(answer, (gchar*)n, ((GByteArray*)v)->data, ((GByteArray*)v)->len);
 			}
 		}
+
 		/* encode and send */
+		gsize answer_size = _reply_message(req_ctx->client, answer);
+
 		if ((req_ctx->final_sent = is_code_final(code))) {
 			struct log_item_s item;
 			item.req_ctx = req_ctx;
 			item.code = code;
 			item.msg = msg;
-			item.out_len = 0;
+			item.out_len = answer_size;
 			network_client_log_access(&item);
 		}
-		_reply_message(req_ctx->client, answer);
 	}
 	void _send_error(gint code, GError *e) {
 		EXTRA_ASSERT(!req_ctx->final_sent);
