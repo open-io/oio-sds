@@ -52,8 +52,8 @@ typedef gboolean(*attr_writer_f) (int file, const gchar * key,
 
 /* ------------------------------------------------------------------------- */
 
-static volatile ssize_t longest_xattr = 256;
-static volatile ssize_t longest_xattr_list = 256;
+static volatile ssize_t longest_xattr = 1024;
+static volatile ssize_t longest_xattr_list = 2048;
 
 static ssize_t
 _getxattr(const char *path, int fd, const char *k, char *v, ssize_t vs)
@@ -87,8 +87,7 @@ retry:
 			g_free(buf);
 			errno = errsav;
 			return NULL;
-		}
-		else {
+		} else {
 			s = s*2;
 			longest_xattr = 1 + MAX(longest_xattr, s);
 			buf = g_realloc(buf, s);
