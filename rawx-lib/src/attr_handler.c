@@ -43,7 +43,6 @@ struct attr_handle_s
 	char *chunk_path;
 	int chunk_file_des;
 	char *attr_path;
-	int attr_file_des;
 	GHashTable *attr_hash;
 };
 
@@ -122,47 +121,6 @@ _write_to_xattr(int file, const gchar * key, const gchar * value, GError ** erro
 }
 
 static gboolean
-_write_to_attr_file(int file, const gchar * key, const gchar * value, GError ** error)
-{
-	ssize_t rc0, rc1, rc2, rc3;
-	ssize_t key_len, value_len;
-
-	if (file < 0 || !key || !value) {
-		SETERRCODE(error, EINVAL, "Invalid argument (%d %p %p)", file, key, value);
-		return FALSE;
-	}
-
-	key_len = strlen(key);
-	value_len = strlen(value);
-
-	rc0 = write(file, key, key_len);
-	if (rc0 != key_len) {
-		SETERRCODE(error, errno, "write error : %s", strerror(errno));
-		return FALSE;
-	}
-
-	rc1 = write(file, "=", 1);
-	if (rc1 != 1) {
-		SETERRCODE(error, errno, "write error : %s", strerror(errno));
-		return FALSE;
-	}
-
-	rc2 = write(file, value, value_len);
-	if (rc2 != value_len) {
-		SETERRCODE(error, errno, "write error : %s", strerror(errno));
-		return FALSE;
-	}
-
-	rc3 = write(file, "\n", 1);
-	if (rc3 != 1) {
-		SETERRCODE(error, errno, "write error : %s", strerror(errno));
-		return FALSE;
-	}
-
-	return TRUE;
-}
-
-static gboolean
 _write_attributes(GHashTable * attr_hash, int file, attr_writer_f writer, GError ** error)
 {
 	GHashTableIter iterator;
@@ -212,24 +170,7 @@ _commit_attr_handle(struct attr_handle_s *attr_handle, GError ** error)
 		}
 	}
 
-	/* Fallback to .attr file */
-	attr_handle->attr_file_des = open(attr_handle->attr_path, O_RDWR | O_CREAT | O_TRUNC, 0644);
-	if (attr_handle->attr_file_des < 0) {
-		SETERRCODE(error, errno, "File [%s] open failed : %s", attr_handle->attr_path, strerror(errno));
-		return FALSE;
-	}
-	else {
-		if (!_write_attributes(attr_handle->attr_hash, attr_handle->attr_file_des, _write_to_attr_file,
-				&local_error)) {
-			metautils_pclose(&(attr_handle->attr_file_des));
-			SETERROR(error, "Failed to write attributes to chunk.attr : %s", local_error->message);
-			g_clear_error(&local_error);
-			return FALSE;
-		}
-		metautils_pclose(&(attr_handle->attr_file_des));
-	}
-
-	return TRUE;
+	return FALSE;
 }
 
 static gboolean
@@ -275,7 +216,6 @@ _alloc_attr_handle(const gchar * chunk_path)
 	if (!attr_handle->attr_hash)
 		goto error_hash;
 
-	attr_handle->attr_file_des = -1;
 	attr_handle->chunk_file_des = -1;
 	return attr_handle;
 
@@ -309,8 +249,6 @@ _clean_attr_handle(struct attr_handle_s *attr_handle, int content_only)
 	}
 	if (attr_handle->chunk_file_des >= 0)
 		metautils_pclose(&(attr_handle->chunk_file_des));
-	if (attr_handle->attr_file_des >= 0)
-		metautils_pclose(&(attr_handle->attr_file_des));
 
 	if (!content_only)
 		g_free(attr_handle);

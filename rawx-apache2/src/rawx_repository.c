@@ -668,7 +668,6 @@ static dav_error *
 dav_rawx_remove_resource(dav_resource *resource, dav_response **response)
 {
 	char buff[128];
-	char attr_path[2048];
 	apr_pool_t *pool;
 	apr_status_t status;
 	dav_error *e = NULL;
@@ -705,18 +704,6 @@ dav_rawx_remove_resource(dav_resource *resource, dav_response **response)
 
 	resource->exists = 0;
 	resource->collection = 0;
-
-	memset(attr_path, 0x00, sizeof(attr_path));
-	apr_snprintf(attr_path, sizeof(attr_path), "%s.attr", resource_get_pathname(resource));
-	status = apr_file_remove(attr_path, pool);
-	if (status != APR_SUCCESS && !APR_STATUS_IS_ENOENT(status)) {
-		e = server_create_and_stat_error(resource_get_server_config(resource), pool,
-			HTTP_INTERNAL_SERVER_ERROR, 0, apr_pstrcat(pool,
-					"Failed to DELETE this chunk's  properties : ",
-					apr_strerror(status, buff, sizeof(buff)),
-					NULL));
-		goto end_remove;
-	}
 
 	server_inc_stat(resource_get_server_config(resource), RAWX_STATNAME_REP_2XX, 0);
 
