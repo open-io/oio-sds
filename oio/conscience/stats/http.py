@@ -24,19 +24,18 @@ class HttpStat(BaseStat):
         """Converts each line to a dictionary entry"""
         data = {}
         for line in body.splitlines():
-            parts = line.split()
+            parts = line.rsplit(None, 1)
             nparts = len(parts)
             if nparts > 1:
-                k, v = ' '.join(parts[:nparts-1]), parts[nparts-1]
                 # try to cast value to int or float
                 try:
-                    conv_v = int(v)
+                    conv_v = int(parts[1])
                 except ValueError:
                     try:
-                        conv_v = float(v)
+                        conv_v = float(parts[1])
                     except ValueError:
-                        conv_v = v
-                data[k] = conv_v
+                        conv_v = parts[1]
+                data[parts[0]] = conv_v
             else:
                 data[parts[0]] = None
         return data
