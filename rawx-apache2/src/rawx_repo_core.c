@@ -496,17 +496,14 @@ rawx_repo_check_request(request_rec *req, const char *root_dir, const char * lab
 	src = strrchr(req->uri, '/');
 	src = src ? src + 1 : req->uri;
 
-	if (0 == apr_strnatcasecmp(src, "info")) {
+	if (!strcmp(src, "info"))
 		return dav_rawx_info_get_resource(req, root_dir, label, use_checked_in, result_resource);
-	}
 
-	if (0 == apr_strnatcasecmp(src, "stat")) {
+	if (!strcmp(src, "stat"))
 		return dav_rawx_stat_get_resource(req, root_dir, label, use_checked_in, result_resource);
-	}
 
-	if (0 == apr_strnatcasecmp(src, "update")) {
+	if (!strcmp(src, "update"))
 		return dav_rawx_chunk_update_get_resource(req, root_dir, label, use_checked_in, result_resource);
-	}
 
 	if (g_str_has_prefix(src, "rawx/")) {
 		server_inc_request_stat(conf, RAWX_STATNAME_REQ_RAW, request_get_duration(req));
