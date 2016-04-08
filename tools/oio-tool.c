@@ -137,6 +137,25 @@ _sysstat (gchar **vols)
 	g_string_free (tmp, TRUE);
 }
 
+static int
+_ping(gchar *dest, gchar *to)
+{
+	gdouble timeout = g_ascii_strtod(to, NULL);
+	GByteArray *encoded = message_marshall_gba_and_clean (
+			metautils_message_create_named("REQ_PING"));
+	gint64 start = oio_ext_monotonic_time();
+	GError *err = gridd_client_exec(dest, timeout, encoded);
+	gint64 end = oio_ext_monotonic_time();
+	if (err) {
+		g_print("KO (%d) %s\n", err->code, err->message);
+		g_clear_error(&err);
+		return 1;
+	} else {
+		g_print("OK %lfs\n", (end - start) / (gdouble)G_TIME_SPAN_SECOND);
+		return 0;
+	}
+}
+
 int
 main (int argc, char **argv)
 {
@@ -145,6 +164,7 @@ main (int argc, char **argv)
 		g_printerr (" %s addr IP:PORT\n", argv[0]);
 		g_printerr (" %s cid  OIOURL\n", argv[0]);
 		g_printerr (" %s hash [PREFIX]\n", argv[0]);
+		g_printerr (" %s ping IP:PORT [TIMEOUT]\n", argv[0]);
 		g_printerr (" %s stat [path]...\n", argv[0]);
 		return 2;
 	}
@@ -165,6 +185,11 @@ main (int argc, char **argv)
 		}
 		_same_hash (argv[2], argc==4 ? argv[3] : "");
 		return 0;
+	} else if (!strcmp("ping", argv[1])) {
+		if (argc > 3)
+			return _ping(argv[2], argv[3]);
+		else
+			return _ping(argv[2], "10.0");
 	} else if (!strcmp("stat", argv[1])) {
 		_sysstat (argv+2);
 		return 0;
