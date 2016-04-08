@@ -188,10 +188,10 @@ def from_response(resp, body=None):
     if body:
         message = "n/a"
         status = None
-        if isinstance(body, dict):
+        try:
             message = body.get('message')
             status = body.get('status')
-        else:
+        except:
             message = body
         return cls(http_status, status, message)
     else:
