@@ -72,13 +72,13 @@ struct dav_stream
 	int fsync_on_close;
 	FILE *f;
 	gboolean compression;
-	void *buffer;	
+	void *buffer;
 	apr_size_t bufsize;
 	const char *pathname;
 	const char *final_pathname;
 	apr_size_t blocksize;
 	gulong compress_checksum;
-	guint32 compressed_size; 
+	guint32 compressed_size;
 	char *metadata_compress;
 	struct compression_ctx_s comp_ctx;
 
@@ -86,9 +86,12 @@ struct dav_stream
 	apr_size_t total_size;
 };
 
+#define RESOURCE_STAT_CHUNK_READ_ATTRS 0x01
+#define RESOURCE_STAT_CHUNK_PENDING    0x02
+
 dav_error * resource_init_decompression(dav_resource *resource, dav_rawx_server_conf *conf);
 
-void resource_stat_chunk(dav_resource *resource, int xattr_too);
+void resource_stat_chunk(dav_resource *resource, int flags);
 
 const char * request_load_chunk_info(request_rec *request, dav_resource *resource);
 

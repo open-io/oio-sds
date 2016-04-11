@@ -207,7 +207,14 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 	}
 
 	/* Check the chunk's existence */
-	resource_stat_chunk(resource, r->method_number == M_GET || r->method_number == M_OPTIONS);
+	int flags = (r->method_number == M_GET ||
+			r->method_number == M_OPTIONS ||
+			r->method_number == M_DELETE)?
+				 RESOURCE_STAT_CHUNK_READ_ATTRS : 0;
+	if (r->method_number == M_PUT || r->method_number == M_POST)
+		flags |= RESOURCE_STAT_CHUNK_PENDING;
+
+	resource_stat_chunk(resource, flags);
 
 	if (r->method_number == M_PUT || r->method_number == M_POST ||
 			r->method_number == M_MOVE ||
@@ -498,17 +505,20 @@ dav_rawx_deliver(const dav_resource *resource, ap_filter_t *output)
 		goto end_deliver;
 	}
 
-	/* Check if it is not a busy file */
-	char *pending_file = apr_pstrcat(pool, resource_get_pathname(resource), ".pending", NULL);
-	status = apr_stat(&info, pending_file, APR_FINFO_ATIME, pool);
-	if (APR_SUCCESS == status){
-		e = server_create_and_stat_error(conf, pool, HTTP_FORBIDDEN, 0, "File in pending mode.");
-		goto end_deliver;
-	}
-
 	ctx = resource->info;
 
 	if (ctx->update_only) {
+		/* Check if it is not a busy file. We accept reads during
+		 * compression but not attr updates. */
+		char *pending_file = apr_pstrcat(pool,
+				resource_get_pathname(resource), ".pending", NULL);
+		status = apr_stat(&info, pending_file, APR_FINFO_ATIME, pool);
+		if (status == APR_SUCCESS) {
+			e = server_create_and_stat_error(conf, pool, HTTP_FORBIDDEN,
+					0, "File in pending mode.");
+			goto end_deliver;
+		}
+
 		GError *error_local = NULL;
 		/* UPDATE chunk attributes and go on */
 		const char *path = resource_get_pathname(resource);
@@ -531,9 +541,11 @@ dav_rawx_deliver(const dav_resource *resource, ap_filter_t *output)
 			apr_file_t *fd = NULL;
 
 			/* Try to open the file but forbids a creation */
-			status = apr_file_open(&fd, resource_get_pathname(resource), APR_READ|APR_BINARY, 0, pool);
+			status = apr_file_open(&fd, resource_get_pathname(resource),
+					APR_READ|APR_BINARY|APR_BUFFERED, 0, pool);
 			if (APR_SUCCESS != status) {
-				e = server_create_and_stat_error(conf, pool, HTTP_FORBIDDEN, 0, "File permissions deny server access.");
+				e = server_create_and_stat_error(conf, pool, HTTP_FORBIDDEN,
+						0, "File permissions deny server access.");
 				goto end_deliver;
 			}
 
@@ -679,9 +691,6 @@ dav_rawx_remove_resource(dav_resource *resource, dav_response **response)
 			HTTP_CONFLICT, 0, "No DELETE on collections");
 		goto end_remove;
 	}
-
-	/* Deletion event needs chunk's attrs */
-	resource_stat_chunk(resource, 1);
 
 	status = apr_file_remove(resource_get_pathname(resource), pool);
 	if (APR_SUCCESS != status) {

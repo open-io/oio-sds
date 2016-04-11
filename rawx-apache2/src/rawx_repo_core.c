@@ -240,11 +240,11 @@ resource_init_decompression(dav_resource *resource, dav_rawx_server_conf *conf)
 /******************** REQUEST UTILITY FUNCTIONS ******************/
 
 void
-resource_stat_chunk(dav_resource *resource, int xattr_too)
+resource_stat_chunk(dav_resource *resource, int flags)
 {
 	apr_pool_t *pool;
 	dav_resource_private *ctx;
-	apr_status_t status;
+	apr_status_t status = APR_ENOENT;
 
 	ctx = resource->info;
 	pool = resource->pool;
@@ -254,12 +254,17 @@ resource_stat_chunk(dav_resource *resource, int xattr_too)
 		return;
 	}
 
-	char * tmp_path = apr_pstrcat(resource->pool, resource_get_pathname(resource), ".pending", NULL);
+	if (flags & RESOURCE_STAT_CHUNK_PENDING) {
+		char *tmp_path = apr_pstrcat(resource->pool,
+				resource_get_pathname(resource), ".pending", NULL);
+		status = apr_stat(&(resource->info->finfo), tmp_path,
+				APR_FINFO_NORM, resource->pool);
+	}
 
-	status = apr_stat(&(resource->info->finfo), tmp_path, APR_FINFO_NORM, resource->pool);
-
-	if(status != APR_SUCCESS)
-		status = apr_stat(&(resource->info->finfo), resource_get_pathname(resource), APR_FINFO_NORM, resource->pool);
+	if (status != APR_SUCCESS)
+		status = apr_stat(&(resource->info->finfo),
+				resource_get_pathname(resource),
+				APR_FINFO_NORM, resource->pool);
 
 	resource->collection = 0;
 	resource->exists = (status == APR_SUCCESS);
@@ -274,7 +279,7 @@ resource_stat_chunk(dav_resource *resource, int xattr_too)
 
 		memset(&(ctx->content), 0, sizeof(ctx->content));
 		memset(&(ctx->chunk), 0, sizeof(ctx->chunk));
-		if (xattr_too) {
+		if (flags & RESOURCE_STAT_CHUNK_READ_ATTRS) {
 			rc = get_rawx_info_in_attr(resource_get_pathname(resource), &err,
 					&(ctx->content), &(ctx->chunk));
 			if (!rc) {
