@@ -297,7 +297,6 @@ dav_rawx_open_stream(const dav_resource *resource, dav_stream_mode mode, dav_str
 
 	dav_stream *ds = NULL;
 	dav_error *e = rawx_repo_stream_create(resource, &ds);
-	fprintf(stderr, "XXX\n");
 	if ( NULL != e ) {
 		DAV_DEBUG_REQ(resource->info->request, 0, "Dav stream initialization failure");
 		return e;
@@ -467,7 +466,6 @@ dav_rawx_set_headers(request_rec *r, const dav_resource *resource)
 static dav_error *
 dav_rawx_deliver(const dav_resource *resource, ap_filter_t *output)
 {
-	fprintf(stderr, "XXX %s\n", __FUNCTION__);
 	dav_rawx_server_conf *conf;
 	apr_pool_t *pool;
 	apr_bucket_brigade *bb = NULL;
