@@ -8,44 +8,70 @@
 #include "mod_dav_rawx.h"
 #include "rawx_event.h"
 
-static char s_queue_address[1024];
+struct oio_events_queue_s *q = NULL;
+static GThread *th_queue = NULL;
+static volatile gboolean running = FALSE;
+static GError *s_err = NULL;
+
+static gboolean
+_running (gboolean pending)
+{
+	(void) pending; return running;
+}
+
+static gpointer
+_worker (gpointer p)
+{
+	EXTRA_ASSERT(running != FALSE);
+	EXTRA_ASSERT(q != NULL);
+	s_err = oio_events_queue__run (q, _running);
+	return p;
+}
 
 GError *
 rawx_event_init (const char *addr)
 {
 	if (!addr)
 		return NULL;
+
 	GError *err = oio_events_queue_factory__check_config (addr);
 	if (err) {
 		g_prefix_error (&err, "Configuration error: ");
 		return err;
 	}
-	s_queue_address[0] = 0;
-	g_strlcpy (s_queue_address, addr, sizeof(s_queue_address));
+
+	err = oio_events_queue_factory__create (addr, &q);
+	if (err) {
+		g_prefix_error (&err, "Event queue creation failed: ");
+		return err;
+	}
+
+	th_queue = g_thread_try_new ("oio-events-queue", _worker, NULL, &err);
+	if (err) {
+		g_prefix_error (&err, "Thread creation failed: ");
+		return err;
+	}
+
+	running = TRUE;
 	return NULL;
 }
 
 void
 rawx_event_destroy (void)
 {
-	s_queue_address[0] = 0;
+	running = FALSE;
+	g_thread_join (th_queue);
+	th_queue = NULL;
+	if (s_err)
+		g_clear_error(&s_err);
+	oio_events_queue__destroy (q);
+	q = NULL;
 }
-
-static gboolean _running (gboolean pending) { return pending; }
 
 GError *
 rawx_event_send (const char *event_type, GString *data_json)
 {
-	if (!s_queue_address[0])
-		return NULL;
-
-	struct oio_events_queue_s *q = NULL;
-
-	GError *err = oio_events_queue_factory__create (s_queue_address, &q);
-	if (err) {
-		g_prefix_error (&err, "Event queue creation failed: ");
-		return err;
-	}
+	EXTRA_ASSERT(q != NULL);
 
 	GString *json = g_string_sized_new(256);
 	g_string_append_printf(json,
@@ -60,8 +86,5 @@ rawx_event_send (const char *event_type, GString *data_json)
 	g_string_free(data_json, TRUE);
 	oio_events_queue__send (q, g_string_free (json, FALSE));
 
-	err = oio_events_queue__run (q, _running);
-	oio_events_queue__destroy (q);
-	q = NULL;
-	return err;
+	return NULL;
 }
