@@ -199,10 +199,10 @@ resource_init_decompression(dav_resource *resource, dav_rawx_server_conf *conf)
 	char *c = NULL;
 	dav_error *r = NULL;
 	GError *e = NULL;
-	GHashTable *comp_opt = NULL;
 
-	comp_opt = g_hash_table_new_full( g_str_hash, g_str_equal, g_free, g_free);
-	if(!get_compression_info_in_attr(resource_get_pathname(resource), &e, &comp_opt)){
+	GHashTable *comp_opt =
+		g_hash_table_new_full( g_str_hash, g_str_equal, g_free, g_free);
+	if (!get_compression_info_in_attr(resource_get_pathname(resource), &e, comp_opt)){
 		if(comp_opt)
 			g_hash_table_destroy(comp_opt);
 		if(e)
@@ -453,12 +453,16 @@ void
 request_fill_headers(request_rec *r, struct content_textinfo_s *c0,
 		struct chunk_textinfo_s *c1)
 {
-	gchar *decoded = g_uri_escape_string (c0->path, NULL, FALSE);
-
 	__set_header(r, "container-id",  c0->container_id);
 
 	__set_header(r, "content-id",           c0->content_id);
-	__set_header(r, "content-path",         decoded);
+
+	if (c0->path) {
+		gchar *decoded = g_uri_escape_string (c0->path, NULL, FALSE);
+		__set_header(r, "content-path",         decoded);
+		g_free (decoded);
+	}
+
 	__set_header(r, "content-size",         c0->size);
 	__set_header(r, "content-version",      c0->version);
 	__set_header(r, "content-chunksnb",     c0->chunk_nb);
@@ -471,8 +475,6 @@ request_fill_headers(request_rec *r, struct content_textinfo_s *c0,
 	__set_header(r, "chunk-size",        c1->size);
 	__set_header(r, "chunk-hash",        c1->hash);
 	__set_header(r, "chunk-pos",         c1->position);
-
-	g_free (decoded);
 }
 
 /*************************************************************************/
@@ -481,19 +483,11 @@ dav_error *
 rawx_repo_check_request(request_rec *req, const char *root_dir, const char * label,
 			int use_checked_in, dav_resource_private *ctx, dav_resource **result_resource)
 {
-	/* Ensure the chunkid in the URL has the approriated format and
-	 * increment the request counters */
-	int i;
-	const char *src;
 	dav_rawx_server_conf *conf = request_get_server_config(req);
 
-	if (g_str_has_prefix(req->uri, "/rawx/chunk/set")) {
-		ctx->update_only = TRUE;
-	} else {
-		ctx->update_only = FALSE;
-	}
+	ctx->update_only = g_str_has_prefix(req->uri, "/rawx/chunk/set");
 
-	src = strrchr(req->uri, '/');
+	char *src = strrchr(req->uri, '/');
 	src = src ? src + 1 : req->uri;
 
 	if (!strcmp(src, "info"))
@@ -505,34 +499,17 @@ rawx_repo_check_request(request_rec *req, const char *root_dir, const char * lab
 	if (!strcmp(src, "update"))
 		return dav_rawx_chunk_update_get_resource(req, root_dir, label, use_checked_in, result_resource);
 
-	if (g_str_has_prefix(src, "rawx/")) {
-		server_inc_request_stat(conf, RAWX_STATNAME_REQ_RAW, request_get_duration(req));
+	if (g_str_has_prefix(src, "rawx/"))
 		return server_create_and_stat_error(conf, req->pool,
 				HTTP_BAD_REQUEST, 0, "Raw request not yet implemented");
-	}
 
-	for (i=0; *src ; src++, i++) {
-		gchar c = g_ascii_toupper(*src);
-		if (!g_ascii_isdigit(c) && (c < 'A' || c > 'F') && i < 64) {
-			/* Only compare first 64 characters */
-			return server_create_and_stat_error(conf, req->pool,
-					HTTP_BAD_REQUEST, 0, "Invalid CHUNK id character");
-		} else if (i < 64) {
-			ctx->hex_chunkid[i] = c; // Upper case
-		} else if (i >= 64 && i < (int)(63 + sizeof(ctx->file_extension))) {
-			/* Consider extra characters are file extension */
-			ctx->file_extension[i-64] = *src; // Original case
-		}
-	}
-	if (i != 64 && req->method_number != M_MOVE) {
+	if (!oio_str_ishexa (src, 64))
 		return server_create_and_stat_error(conf, req->pool,
-				HTTP_BAD_REQUEST, 0, apr_psprintf(req->pool, "Invalid CHUNK id length: %d", i));
-	} else if (ctx->file_extension[0] != 0 &&
-			apr_strnatcasecmp(ctx->file_extension, ".corrupted")) {
-		return server_create_and_stat_error(conf, req->pool, HTTP_BAD_REQUEST,
-				0, apr_psprintf(req->pool, "Invalid extension: %s",
-				ctx->file_extension));
-	}
+				HTTP_BAD_REQUEST, 0, "Invalid CHUNK id character");
+
+	ctx->file_extension[0] = 0;
+	g_strlcpy(ctx->hex_chunkid, src, sizeof(ctx->hex_chunkid));
+	oio_str_upper (ctx->hex_chunkid);
 
 	return NULL;
 }
@@ -653,7 +630,7 @@ rawx_repo_commit_upload(dav_stream *stream)
 	return NULL;
 }
 
-dav_error *
+static dav_error *
 rawx_repo_ensure_directory(const dav_resource *resource)
 {
 	dav_resource_private *ctx = resource->info;
@@ -685,11 +662,9 @@ rawx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 	char * metadata_compress = NULL;
 	struct storage_policy_s *sp = NULL;
 	const struct data_treatments_s *dt = NULL;
+	int retryable = 1;
 
-	dav_stream *ds = NULL;
-
-	ds = apr_pcalloc(p, sizeof(*ds));
-
+	dav_stream *ds = apr_pcalloc(p, sizeof(*ds));
 	ds->fsync_on_close = conf->fsync_on_close;
 	ds->p = p;
 	ds->r = resource;
@@ -697,9 +672,16 @@ rawx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 	ds->pathname = apr_pstrcat(p, ctx->dirname, "/", ctx->hex_chunkid, ".pending", NULL);
 
 	/* Create busy chunk file */
+retry:
 	ds->f = fopen(ds->pathname, "w");
 
 	if (!ds->f) {
+		if (errno == ENOENT && retryable) {
+			retryable = 0;
+			dav_error *e = rawx_repo_ensure_directory (resource);
+			if (!e) goto retry;
+			return e;
+		}
 		DAV_DEBUG_REQ(resource->info->request, 0, "open(%s) failed : %s", ds->pathname, strerror(errno));
 		return server_create_and_stat_error(resource_get_server_config(resource), p,
 			MAP_IO2HTTP(rv), 0, "An error occurred while opening a resource.");

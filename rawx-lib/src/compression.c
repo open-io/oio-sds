@@ -75,20 +75,12 @@ end:
 static gboolean
 check_uncompressed_chunk(const gchar* path, GError** error)
 {
-	/* Check chunk exists */
 	gboolean status = FALSE;
-	struct stat *buf = NULL;
-	buf = g_malloc0(sizeof(struct stat));	
-	if(stat(path, buf) == -1) {
-		GSETERROR (error, "stat() failed\n");
-		goto end;
-	}
-	
-	GHashTable *compress_opt = NULL;
-	compress_opt = g_hash_table_new_full( g_str_hash, g_str_equal, g_free, g_free);
-	
+	GHashTable *compress_opt =
+		g_hash_table_new_full( g_str_hash, g_str_equal, g_free, g_free);
+
 	/* Check chunk not already compresssed */
-	if (get_compression_info_in_attr(path, error, &compress_opt)) {
+	if (get_compression_info_in_attr(path, error, compress_opt)) {
 		DEBUG("Compression info found");
 		gchar *compression = NULL;
 		compression = g_hash_table_lookup(compress_opt, NS_COMPRESSION_OPTION);
@@ -105,8 +97,6 @@ check_uncompressed_chunk(const gchar* path, GError** error)
 	status = TRUE;
 
 end:
-	if(buf)
-		g_free(buf);
 	if (compress_opt)
 		g_hash_table_destroy(compress_opt);
 
@@ -123,22 +113,22 @@ copy_fattr(const gchar *src, gchar* dst, GError **error)
 	content = g_malloc0(sizeof(struct content_textinfo_s));
 	chunk = g_malloc0(sizeof(struct chunk_textinfo_s));
 
-	if(!get_rawx_info_in_attr(src, error, content, chunk)) {
+	if (!get_rawx_info_in_attr(src, error, content, chunk)) {
 		GSETERROR(error, "Failed to load extended attributes from source file\n");
 		goto err;
 	}
-	
+
 	/*Check we are working with a gs chunk */
 	if(!chunk->id) {
 		GSETERROR(error, "No chunk_id found in source file extended attributes, may be this file is not a chunk\n");
 		goto err;
 	}
-		
+
 	if(!set_rawx_info_in_attr(dst, error, content, chunk)) {
 		GSETERROR(error, "Failed to set extended attributes to destination file\n");
 		goto err;
 	}
-	
+
 	status = TRUE;
 
 err:
@@ -171,14 +161,14 @@ compress_file(FILE *src, FILE *dst, struct compression_ctx_s * comp_ctx,
 		if(nb_read != bsize) {
 			/* check if we hit eof */
 			if(!feof(src) && ferror(src)) {
-				goto end;	
+				goto end;
 			} else {
 				if(nb_read > 0) {
 					gba = g_byte_array_new();
 					/* process data */
 					if(0 != comp_ctx->data_compressor(buf, nb_read, gba, checksum))
 						goto end;
-					
+
 					/* write compressed data */
 					nb_write = 0;
 					if ((nb_write = fwrite(gba->data, gba->len, 1, dst)) != 1) {
@@ -191,7 +181,7 @@ compress_file(FILE *src, FILE *dst, struct compression_ctx_s * comp_ctx,
 						gba = NULL;
 					}
 				}
-				break; 
+				break;
 			}
 		} else {
 			gba = g_byte_array_new();
@@ -203,21 +193,21 @@ compress_file(FILE *src, FILE *dst, struct compression_ctx_s * comp_ctx,
 			nb_write = 0;
 			if ((nb_write = fwrite(gba->data, gba->len, 1, dst)) != 1)
 				goto end;
-			
+
 			compressed_size+=gba->len;
 			if(gba)
 				g_byte_array_free(gba, TRUE);
 		}
-		
-	}	
+
+	}
 	status = TRUE;
 
 end:
-	if(buf)	
+	if(buf)
 		g_free(buf);
 	if(gba)
 		g_byte_array_free(gba, TRUE);
-	
+
 	return status;
 }
 
@@ -228,9 +218,9 @@ set_compress_attr(gchar* tmp_path, const gchar* algo, gint64 blocksize, GError *
 	gboolean status = FALSE;
 	gchar* metadata_compress = NULL;
 	gchar bs_str[sizeof(gint64)+1];
-	
+
 	g_snprintf(bs_str, sizeof(bs_str), "%"G_GINT64_FORMAT, blocksize);
-	
+
 	metadata_compress = g_strconcat(NS_COMPRESSION_OPTION, "=", NS_COMPRESSION_ON, ";",
 			NS_COMPRESS_ALGO_OPTION,"=", algo, ";",
 			NS_COMPRESS_BLOCKSIZE_OPTION, "=", bs_str, NULL);
@@ -240,29 +230,27 @@ set_compress_attr(gchar* tmp_path, const gchar* algo, gint64 blocksize, GError *
 	if (!set_compression_info_in_attr(tmp_path, error, metadata_compress)) {
 		goto err;
 	}
-	
-	
+
+
 	status = TRUE;
 err:
 	if(metadata_compress)
 		g_free(metadata_compress);
-	
+
 	return status;
-			
+
 
 }
 
 int
 compress_chunk(const gchar* path, const gchar* algo, const gint64 blocksize, gboolean preserve, GError ** error)
 {
-
 	GError *local_error = NULL;
 	int status = 0;
 	gchar *tmp_path = NULL;
 	gulong tmp_len;
 	guint32 compressed_size = 0;
 	struct compression_ctx_s* comp_ctx = NULL;
- 	struct stat *stat_buf = NULL;
 
 	guint8* buf = NULL;
 	gsize nb_read;
@@ -274,13 +262,13 @@ compress_chunk(const gchar* path, const gchar* algo, const gint64 blocksize, gbo
 	FILE *src = NULL;
 	FILE *dst = NULL;
 
-	/* Sanity check */	
+	/* Sanity check */
 	if(!path || ! algo) {
 		GSETERROR(error, "Invalid parameter %p\n", path);
 		return status;
 	}
-	
-	if(!check_uncompressed_chunk(path, &local_error)) {
+
+	if (!check_uncompressed_chunk(path, &local_error)) {
 		if(local_error) {
 			GSETERROR(error, "Chunk check failed :\n%s", local_error->message);
 			g_clear_error(&local_error);
@@ -289,7 +277,7 @@ compress_chunk(const gchar* path, const gchar* algo, const gint64 blocksize, gbo
 		return status;
 	}
 
-	tmp_len = strlen(path) +sizeof(".pending");	
+	tmp_len = strlen(path) +sizeof(".pending");
 	tmp_path = g_malloc0(tmp_len);
 	g_snprintf(tmp_path, tmp_len, "%s.pending", path);
 
@@ -303,27 +291,18 @@ compress_chunk(const gchar* path, const gchar* algo, const gint64 blocksize, gbo
 	if(!comp_ctx->checksum_initiator(&checksum)) {
 		GSETERROR(error, "Failed to init compression checksum\n");
 		goto end;
-        }
-	
-        stat_buf = g_malloc0(sizeof(struct stat));
-        if(stat(tmp_path, stat_buf) != -1) {
-                GSETERROR (error, "stat() success on pending file, cannot process : chunk busy\n");
-                goto end;
-        }
-
-	
-	do {
-	int fd;
-
-	if((fd = open(tmp_path, O_WRONLY|O_CREAT|O_EXCL, 0644)) == -1) {
-		GSETERROR(error, "Failed to create pending chunk file (%s)\n", strerror(errno));	
-		goto end;
 	}
-	
-	metautils_pclose(&fd);
+
+	do {
+		int fd;
+		if ((fd = open(tmp_path, O_WRONLY|O_CREAT|O_EXCL, 0644)) == -1) {
+			GSETERROR(error, "Failed to create pending chunk file (%s)\n", strerror(errno));
+			goto end;
+		}
+		metautils_pclose(&fd);
 	} while (0);
 
-	if(!copy_fattr(path, tmp_path, &local_error)) {
+	if (!copy_fattr(path, tmp_path, &local_error)) {
 		if(local_error) {
 			GSETERROR(error, "Failed to copy extended attributes to destination file:\n%s",local_error->message);
 			g_clear_error(&local_error);
@@ -333,7 +312,7 @@ compress_chunk(const gchar* path, const gchar* algo, const gint64 blocksize, gbo
 		goto end;
 	}
 	DEBUG("Extended attributes copied from src to dst\n");
-	
+
 	if(!set_compress_attr(tmp_path, algo, blocksize, &local_error)) {
 		if(local_error) {
 			GSETERROR(error, "Error while adding compression attibutes :\n %s", local_error->message);
@@ -341,7 +320,7 @@ compress_chunk(const gchar* path, const gchar* algo, const gint64 blocksize, gbo
 		}
 		goto end;
 	}
-	
+
 	DEBUG("Compression extended attributes successfully added\n");
 
 	src = fopen(path, "r");
@@ -352,7 +331,7 @@ compress_chunk(const gchar* path, const gchar* algo, const gint64 blocksize, gbo
 		GSETERROR(error, "Failed to compress source file\n");
 		goto end;
 	}
-	
+
 	int src_fd = fileno(src);
 
 	gsize bsize = blocksize;
@@ -365,7 +344,7 @@ compress_chunk(const gchar* path, const gchar* algo, const gint64 blocksize, gbo
 			/* check if we hit eof */
 			if(!feof(src) && ferror(src)) {
 				GSETERROR(error, "An error occured while reading data from source file\n");
-				goto end;	
+				goto end;
 			} else {
 				if(nb_read > 0) {
 					gba = g_byte_array_new();
@@ -387,7 +366,7 @@ compress_chunk(const gchar* path, const gchar* algo, const gint64 blocksize, gbo
 						gba = NULL;
 					}
 				}
-				break; 
+				break;
 			}
 		} else {
 			gba = g_byte_array_new();
@@ -403,16 +382,16 @@ compress_chunk(const gchar* path, const gchar* algo, const gint64 blocksize, gbo
 				GSETERROR(error, "An error occured while writing data in destination file\n");
 				goto end;
 			}
-			
+
 			compressed_size+=gba->len;
 			if(gba) {
 				g_byte_array_free(gba, TRUE);
 				gba = NULL;
 			}
 		}
-		
-	}	
-	
+
+	}
+
 	DEBUG("Chunk compressed");
 
 	if(comp_ctx->eof_writer(dst, checksum, &compressed_size) != 0) {
@@ -426,7 +405,7 @@ compress_chunk(const gchar* path, const gchar* algo, const gint64 blocksize, gbo
 	}
 
 	DEBUG("Compression footers successfully wrote");
-	
+
 	status = 1;
 
 end:
@@ -440,45 +419,40 @@ end:
 			WARN("Failed to fclose destination file");
 		dst = NULL;
 	}
-	
+
 	if(status == 1) {
 		/* TODO: stat old file, rename, paste stat*/
 		if(preserve) {
 			/* Need to set old file info in new file */
-			TRACE("Renaming and setting good informations to new file...");	
-			if(stat_buf)
-				g_free(stat_buf);
-			stat_buf = g_malloc0(sizeof(struct stat));
-			if(stat(path, stat_buf) == -1) {
+			TRACE("Renaming and setting good informations to new file...");
+			struct stat stat_buf = {0};
+			if(stat(path, &stat_buf) == -1) {
 				GSETERROR (error, "Failed to stat old file, cannot keep old file information, abort\n");
-				/* remove tmp file */	
+				/* remove tmp file */
 				DEBUG("Removing failed file");
 				if(remove(tmp_path) != 0)
 					WARN("Failed to remove tmp file [%s]", tmp_path);
 				status = 0;
 			} else {
 				TRACE("Updating Access / Modify / Change informations");
-				struct utimbuf* ut = NULL;
-				ut = g_malloc0(sizeof(struct utimbuf));
-				ut->actime = stat_buf->st_atime;
-				ut->modtime = stat_buf->st_mtime;
-				if (0 > chown(tmp_path, stat_buf->st_uid, stat_buf->st_gid)) {
+				struct utimbuf ut = {0};
+				ut.actime = stat_buf.st_atime;
+				ut.modtime = stat_buf.st_mtime;
+				if (0 > chown(tmp_path, stat_buf.st_uid, stat_buf.st_gid)) {
 					GSETERROR(error, "chown error: (%d) %s", errno, strerror(errno));
 					status = 0;
 				}
-				if(utime(tmp_path, ut) != 0) {
+				if (utime(tmp_path, &ut) != 0) {
 					GSETERROR(error, "Failed to set correct access time to new file");
 					status = 0;
 				}
-				if(ut)
-					g_free(ut);
 				if(status == 1) {
 					if(rename(tmp_path, path) != 0) {
 						GSETERROR(error, "Failed to rename tmp file");
 						status = 0;
 					}
 				} else {
-					/* remove tmp file */	
+					/* remove tmp file */
 					DEBUG("Removing failed file");
 					if(remove(tmp_path) != 0)
 						WARN("Failed to remove tmp file [%s]", tmp_path);
@@ -493,23 +467,20 @@ end:
 			TRACE("Renaming done");
 		}
 	} else {
-		/* remove tmp file */	
+		/* remove tmp file */
 		DEBUG("Removing failed file");
 		if(remove(tmp_path) != 0)
 			WARN("Failed to remove tmp file [%s]", tmp_path);
 	}
 
-	if(stat_buf)	
-		g_free(stat_buf);
-
-	if(buf)	
+	if(buf)
 		g_free(buf);
 	if(gba)
 		g_byte_array_free(gba, TRUE);
 
 	if(tmp_path)
 		g_free(tmp_path);
-	
+
 	return status;
 
 }
@@ -527,35 +498,34 @@ uncompress_chunk2(const gchar* path, gboolean preserve, gboolean keep_pending,
 	guint8* data = NULL;
 	gint64 bufsize, nb_read;
 	gint64 current_read;
-	struct stat *buf = NULL;
 	struct compressed_chunk_s *cp_chunk = NULL;
 	struct compression_ctx_s *comp_ctx = NULL;
-	
+
 
 	FILE *dst = NULL;
 
 	/* Check chunk exists */
-	buf = g_malloc0(sizeof(struct stat));	
 
 	DEBUG("Checking chunk exists");
 
-	if(stat(path, buf) == -1) {
+	struct stat buf = {0};
+	if(stat(path, &buf) == -1) {
 		GSETERROR (error, "stat() failed, chunk not found\n");
 		goto end;
 	}
 	DEBUG("File [%s] found", path);
-	
-	GHashTable *compress_opt = NULL;
-	compress_opt = g_hash_table_new_full( g_str_hash, g_str_equal, g_free, g_free);
 
-	if(!get_compression_info_in_attr(path, error, &compress_opt)) {
+	GHashTable *compress_opt =
+		g_hash_table_new_full( g_str_hash, g_str_equal, g_free, g_free);
+
+	if (!get_compression_info_in_attr(path, error, compress_opt)) {
 		GSETERROR(error, "Failed to get compression info in attr, chunk may be not compressed");
 		goto end;
 	}
-	
+
 	gchar * compression = NULL;
 	compression = (gchar*) g_hash_table_lookup(compress_opt, NS_COMPRESSION_OPTION);
-	
+
 	if (compression != NULL && g_ascii_strncasecmp(compression, NS_COMPRESSION_ON, strlen(compression)) != 0) {
 		GSETERROR(error, "Chunk not compressed, cannot nothing to do");
 		goto end;
@@ -570,30 +540,29 @@ uncompress_chunk2(const gchar* path, gboolean preserve, gboolean keep_pending,
 		GSETERROR(error, "Failed to init compressed chunk context");
 		goto end;
 	}
-	
 
 	DEBUG("Chunk check done");
 
-	tmp_len = strlen(path) +sizeof(".pending");	
+	tmp_len = strlen(path) +sizeof(".pending");
 	tmp_path = g_malloc0(tmp_len);
 	g_snprintf(tmp_path, tmp_len, "%s.pending", path);
 
 	DEBUG("Checking chunk not busy");
 
-	if(stat(tmp_path, buf) != -1) {
+	if(stat(tmp_path, &buf) != -1) {
 		DEBUG("Stats failed");
 		GSETERROR (error, "stat() success on pending file, cannot process : busy chunk\n");
 		goto end;
 	}
-	
+
 	do {
 	int fd;
 
 	if((fd = open(tmp_path, O_WRONLY|O_CREAT|O_EXCL, 0644)) == -1) {
-		GSETERROR(error, "Failed to create pending chunk file (%s)\n", strerror(errno));	
+		GSETERROR(error, "Failed to create pending chunk file (%s)\n", strerror(errno));
 		goto end;
 	}
-	
+
 	metautils_pclose(&fd);
 	} while (0);
 
@@ -611,7 +580,7 @@ uncompress_chunk2(const gchar* path, gboolean preserve, gboolean keep_pending,
 	gint64 chunk_size;
 	chunk_size = g_ascii_strtoll(cp_chunk->uncompressed_size, NULL, 10);
 
-	total_read = 0;	
+	total_read = 0;
 
 	DEBUG("Starting, total_read = %"G_GINT64_FORMAT", chunk_size = %"G_GINT64_FORMAT, total_read, chunk_size);
 
@@ -626,10 +595,10 @@ uncompress_chunk2(const gchar* path, gboolean preserve, gboolean keep_pending,
 			DEBUG("Currently read %"G_GINT64_FORMAT" bytes", current_read);
 			if(current_read < 0) {
 				if(local_error) {
-					GSETERROR(error, "An error occured while decompressing chunk : %s", local_error->message);	
+					GSETERROR(error, "An error occured while decompressing chunk : %s", local_error->message);
 					g_clear_error(&local_error);
 				} else
-					GSETERROR(error, "An error occured while decompressing chunk\n"); 
+					GSETERROR(error, "An error occured while decompressing chunk\n");
 				goto end;
 			} else if (current_read == 0) {
 				/* Premature end of file, will still write to pending */
@@ -669,25 +638,22 @@ end:
 			WARN("Failed to fclose destination file");
 		dst = NULL;
 	}
-	
+
 	if(status == 1) {
 		if(preserve) {
 			/* Need to set old file info in new file */
 			TRACE("Updating Access / Modify / Change informations");
-			struct utimbuf* ut = NULL;
-			ut = g_malloc0(sizeof(struct utimbuf));
-			ut->actime = buf->st_atime;
-			ut->modtime = buf->st_mtime;
-			if (0 > chown(tmp_path, buf->st_uid, buf->st_gid)) {
+			struct utimbuf ut = {0};
+			ut.actime = buf.st_atime;
+			ut.modtime = buf.st_mtime;
+			if (0 > chown(tmp_path, buf.st_uid, buf.st_gid)) {
 				GSETERROR(error, "chown error: (%d) %s", errno, strerror(errno));
 				status = 0;
 			}
-			if(utime(tmp_path, ut) != 0) {
+			if(utime(tmp_path, &ut) != 0) {
 				GSETERROR(error, "Failed to set correct access time to new file");
 				status = 0;
 			}
-			if(ut)
-				g_free(ut);
 			if(status == 1) {
 				if(rename(tmp_path, path) != 0) {
 					GSETERROR(error, "Failed to rename tmp file");
@@ -706,7 +672,7 @@ end:
 			if(rename(tmp_path, path) != 0) {
 				GSETERROR(error, "Failed to rename tmp file");
 				status = 0;
-			} 
+			}
 		}
 	} else if (keep_pending) {
 		INFO("Temporary file kept: %s", tmp_path);
@@ -720,15 +686,12 @@ end:
 	if(compress_opt)
 		g_hash_table_destroy(compress_opt);
 
-	if(buf)
-		g_free(buf);
-
 	if(data)
 		g_free(data);
 
 	if(tmp_path)
 		g_free(tmp_path);
-	
+
 	return status;
 }
 
