@@ -189,7 +189,7 @@ _commit_v2_attr_handle(int filedes, struct attr_handle_s *attr_handle, GError **
 }
 
 static struct attr_handle_s *
-_alloc_attr_handle(const gchar * chunk_path)
+_alloc_attr_handle(const gchar * chunk_path, gboolean preopen)
 {
 	struct attr_handle_s *attr_handle = NULL;
 
@@ -205,7 +205,10 @@ _alloc_attr_handle(const gchar * chunk_path)
 	if (!attr_handle->attr_hash)
 		goto error_hash;
 
-	attr_handle->chunk_file_des = -1;
+	if (preopen)
+		attr_handle->chunk_file_des = open(attr_handle->chunk_path, O_RDWR);
+	else
+		attr_handle->chunk_file_des = -1;
 	return attr_handle;
 
 error_hash:
@@ -253,7 +256,7 @@ retry:
 	size = listxattr(attr_handle->chunk_path, buf, s);
 	if (0 > size) {
 		if (errno != ERANGE) {
-			SETERRCODE(error, errno, "Failed to list xattr from file [%s] : %s",
+			SETERRCODE(error, errno, "Failed to list xattr from file [%s]: %s",
 					attr_handle->chunk_path, strerror(errno));
 			g_free(buf);
 			return FALSE;
@@ -273,9 +276,11 @@ retry:
 
 	for (last_name = buf, i = 0; i < size; i++) {
 		if (buf[i] == '\0') {
-			char *value = _getxattr_from_chunk(attr_handle->chunk_path, attr_handle->chunk_file_des, last_name);
+			char *value = _getxattr_from_chunk(attr_handle->chunk_path,
+					attr_handle->chunk_file_des, last_name);
 			if (NULL != value) {
-				g_hash_table_insert(attr_handle->attr_hash, g_strdup(last_name), value);
+				g_hash_table_insert(attr_handle->attr_hash,
+						g_strdup(last_name), value);
 			}
 			else if (errno == ENOATTR) {
 				/* XATTR disappeared ! */
@@ -301,7 +306,7 @@ _load_attr_from_file(const char *chunk_path, struct attr_handle_s** attr_handle,
 	struct attr_handle_s *ah = NULL;
 	GError *local_error = NULL;
 
-	if (!(ah = _alloc_attr_handle(chunk_path))) {
+	if (!(ah = _alloc_attr_handle(chunk_path, TRUE))) {
 		SETERRCODE(error, ENOMEM, "Memory allocation failure");
 		return FALSE;
 	}
@@ -330,7 +335,7 @@ error_and_exit:
 static gboolean
 _lazy_load_attr_from_file(const char *chunk_path, struct attr_handle_s** attr_handle, GError ** error)
 {
-	if (!(*attr_handle = _alloc_attr_handle(chunk_path))) {
+	if (!(*attr_handle = _alloc_attr_handle(chunk_path, FALSE))) {
 		SETERRCODE(error, ENOMEM, "Memory allocation failure");
 		return FALSE;
 	}
