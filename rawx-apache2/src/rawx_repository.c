@@ -592,6 +592,11 @@ dav_rawx_deliver(const dav_resource *resource, ap_filter_t *output)
 
 end_deliver:
 
+	if (bb) {
+		apr_brigade_destroy(bb);
+		bb = NULL;
+	}
+
 	/* Now we pass here even if an error occured, for process request duration */
 	server_inc_request_stat(resource_get_server_config(resource), RAWX_STATNAME_REQ_CHUNKGET,
 			request_get_duration(resource->info->request));
