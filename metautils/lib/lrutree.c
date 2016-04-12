@@ -27,7 +27,6 @@ struct _node_s
 	struct _node_s *prev;
 	struct _node_s *next;
 
-	gint64 ctime;
 	gint64 atime;
 	gpointer k;
 	gpointer v;
@@ -186,7 +185,7 @@ lru_tree_insert(struct lru_tree_s *lt, gpointer k, gpointer v)
 	}
 
 	_node_deq_push_front(lt, node);
-	node->ctime = node->atime = oio_ext_monotonic_time ();
+	node->atime = oio_ext_monotonic_time ();
 }
 
 gpointer
