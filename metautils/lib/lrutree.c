@@ -192,13 +192,12 @@ lru_tree_insert(struct lru_tree_s *lt, gpointer k, gpointer v)
 gpointer
 lru_tree_get(struct lru_tree_s *lt, gconstpointer k)
 {
-	struct _node_s fake, *node;
 
 	EXTRA_ASSERT(lt != NULL);
 	EXTRA_ASSERT(k != NULL);
 
-	fake.k = k;
-	node = RB_FIND(_tree_s, lt, &(lt->base), &fake);
+	const struct _node_s fake = {.k=k};
+	struct _node_s *node = RB_FIND(_tree_s, lt, &(lt->base), &fake);
 
 	if (!node)
 		return NULL;
@@ -232,32 +231,8 @@ lru_tree_remove(struct lru_tree_s *lt, gconstpointer k)
 	return TRUE;
 }
 
-gpointer
-lru_tree_steal(struct lru_tree_s *lt, gconstpointer k)
-{
-	struct _node_s fake, *node;
-	gpointer result;
-
-	EXTRA_ASSERT(lt != NULL);
-	EXTRA_ASSERT(k != NULL);
-
-	fake.k = k;
-	if (!(node = RB_FIND(_tree_s, lt, &(lt->base), &fake)))
-		return NULL;
-
-	RB_REMOVE(_tree_s, &(lt->base), node);
-	_node_deq_extract(lt, node);
-	-- lt->count;
-
-	result = node->v;
-	node->v = NULL;
-	_node_destroy(lt, node);
-	return result;
-}
-
 static gboolean
-_get(struct lru_tree_s *lt, gpointer *pk, gpointer *pv, struct _node_s *node,
-		int steal)
+_steal(struct lru_tree_s *lt, gpointer *pk, gpointer *pv, struct _node_s *node)
 {
 	EXTRA_ASSERT(pk != NULL);
 	EXTRA_ASSERT(pv != NULL);
@@ -269,61 +244,17 @@ _get(struct lru_tree_s *lt, gpointer *pk, gpointer *pv, struct _node_s *node,
 	*pk = node->k;
 	*pv = node->v;
 
-	if (steal) { // clean the structures
-		node->k = node->v = NULL;
-		RB_REMOVE(_tree_s, &(lt->base), node);
-		_node_deq_extract(lt, node);
-		_node_destroy(lt, node);
-		-- lt->count;
-	}
+	node->k = node->v = NULL;
+	RB_REMOVE(_tree_s, &(lt->base), node);
+	_node_deq_extract(lt, node);
+	_node_destroy(lt, node);
+	-- lt->count;
 
 	return TRUE;
 }
 
-gboolean
-lru_tree_get_first(struct lru_tree_s *lt, gpointer *pk, gpointer *pv)
-{
-	EXTRA_ASSERT(lt != NULL);
-	return _get(lt, pk, pv, lt->first, 0);
-}
-
-gboolean
-lru_tree_steal_first(struct lru_tree_s *lt, gpointer *pk, gpointer *pv)
-{
-	EXTRA_ASSERT(lt != NULL);
-	return _get(lt, pk, pv, lt->first, 1);
-}
-
-gboolean
-lru_tree_get_last(struct lru_tree_s *lt, gpointer *pk, gpointer *pv)
-{
-	EXTRA_ASSERT(lt != NULL);
-	return _get(lt, pk, pv, lt->last, 0);
-}
-
-gboolean
-lru_tree_steal_last(struct lru_tree_s *lt, gpointer *pk, gpointer *pv)
-{
-	EXTRA_ASSERT(lt != NULL);
-	return _get(lt, pk, pv, lt->last, 1);
-}
-
 void
-lru_tree_foreach_TREE(struct lru_tree_s *lt, GTraverseFunc h, gpointer hdata)
-{
-	struct _node_s *node = NULL;
-
-	EXTRA_ASSERT(lt != NULL);
-	EXTRA_ASSERT(h != NULL);
-
-	RB_FOREACH(node, _tree_s, &(lt->base)) {
-		if (h(node->k, node->v, hdata))
-			return;
-	}
-}
-
-void
-lru_tree_foreach_DEQ(struct lru_tree_s *lt, GTraverseFunc h, gpointer hdata)
+lru_tree_foreach(struct lru_tree_s *lt, GTraverseFunc h, gpointer hdata)
 {
 	EXTRA_ASSERT(lt != NULL);
 	EXTRA_ASSERT(h != NULL);
@@ -345,7 +276,7 @@ static void
 _remove_last (struct lru_tree_s *lt)
 {
 	gpointer k = NULL, v = NULL;
-	if (_get(lt, &k, &v, lt->last, TRUE)) {
+	if (_steal(lt, &k, &v, lt->last)) {
 		if (k && lt->kfree) lt->kfree (k);
 		if (v && lt->vfree) lt->vfree (v);
 	}

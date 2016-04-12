@@ -52,24 +52,7 @@ gpointer lru_tree_get(struct lru_tree_s *lt, gconstpointer k);
 /* Returns TRUE if the item keyed with 'k' has been removed. */
 gboolean lru_tree_remove(struct lru_tree_s *lt, gconstpointer k);
 
-/* Returns NULL if not found or the item associated to 'k' */
-gpointer lru_tree_steal(struct lru_tree_s *lt, gconstpointer k);
-
-gboolean lru_tree_get_first(struct lru_tree_s *lt, gpointer *pk,
-		gpointer *pv);
-
-gboolean lru_tree_steal_first(struct lru_tree_s *lt, gpointer *pk,
-		gpointer *pv);
-
-gboolean lru_tree_get_last(struct lru_tree_s *lt, gpointer *pk,
-		gpointer *pv);
-
-gboolean lru_tree_steal_last(struct lru_tree_s *lt, gpointer *pk,
-		gpointer *pv);
-
-void lru_tree_foreach_TREE(struct lru_tree_s *lt, GTraverseFunc h, gpointer hdata);
-
-void lru_tree_foreach_DEQ(struct lru_tree_s *lt, GTraverseFunc h, gpointer hdata);
+void lru_tree_foreach(struct lru_tree_s *lt, GTraverseFunc h, gpointer hdata);
 
 gint64 lru_tree_count(struct lru_tree_s *lt);
 

@@ -555,7 +555,7 @@ _task_push (gpointer p)
 	}
 
 	PUSH_DO(lru = push_queue; push_queue = _push_queue_create());
-	lru_tree_foreach_DEQ(lru, _list, NULL);
+	lru_tree_foreach(lru, _list, NULL);
 
 	if (!tmp) {
 		GRID_TRACE("Push: no service to be pushed");
