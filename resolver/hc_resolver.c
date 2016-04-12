@@ -81,7 +81,6 @@ hc_resolver_element_create (const char * const *value)
 	s = offsetof(struct cached_element_s, s) + oio_strv_length_total(value);
 
 	elt = g_malloc(s);
-	elt->use = 0;
 	elt->count_elements = oio_strv_length(value);
 	_strv_concat(elt->s, value);
 
@@ -91,7 +90,7 @@ hc_resolver_element_create (const char * const *value)
 /* Public API -------------------------------------------------------------- */
 
 struct hc_resolver_s*
-hc_resolver_create1(time_t now)
+hc_resolver_create(void)
 {
 	struct hc_resolver_s *resolver = g_malloc0(sizeof(struct hc_resolver_s));
 
@@ -105,7 +104,6 @@ hc_resolver_create1(time_t now)
 	resolver->services.cache = lru_tree_create((GCompareFunc)hashstr_quick_cmp,
 			g_free, g_free, 0);
 
-	resolver->bogonow = now;
 	g_mutex_init(&resolver->lock);
 	return resolver;
 }
@@ -156,11 +154,8 @@ hc_resolver_get_cached(struct hc_resolver_s *r, struct lru_tree_s *lru,
 	struct cached_element_s *elt;
 
 	g_mutex_lock(&r->lock);
-	if (NULL != (elt = lru_tree_get(lru, k))) {
-		if (!(r->flags & HC_RESOLVER_NOATIME))
-			elt->use = r->bogonow;
+	if (NULL != (elt = lru_tree_get(lru, k)))
 		result = hc_resolver_element_extract(elt);
-	}
 	g_mutex_unlock(&r->lock);
 
 	return result;
@@ -179,7 +174,6 @@ hc_resolver_store(struct hc_resolver_s *r, struct lru_tree_s *lru,
 	struct hashstr_s *k = hashstr_dup(key);
 
 	g_mutex_lock(&r->lock);
-	elt->use = r->bogonow;
 	lru_tree_insert(lru, k, elt);
 	g_mutex_unlock(&r->lock);
 }
@@ -558,43 +552,15 @@ hc_decache_reference_service(struct hc_resolver_s *r, struct oio_url_s *url,
 	g_free(hk);
 }
 
-void
-hc_resolver_set_now(struct hc_resolver_s *r, time_t now)
-{
-	EXTRA_ASSERT(r != NULL);
-	g_mutex_lock(&r->lock);
-	r->bogonow = now;
-	g_mutex_unlock(&r->lock);
-}
-
-static guint
-_resolver_expire(struct lru_tree_s *lru, time_t oldest)
-{
-	struct cached_element_s *elt = NULL;
-	struct hashstr_s *k = NULL;
-
-	guint count = 0;
-	while (lru_tree_get_last(lru, (void**)&k, (void**)&elt)) {
-		EXTRA_ASSERT(k != NULL);
-		EXTRA_ASSERT(elt != NULL);
-		if (oldest <= elt->use)
-			break;
-		lru_tree_steal_last(lru, (void**)&k, (void**)&elt);
-		metautils_pfree(&k);
-		metautils_pfree(&elt);
-		++ count;
-	}
-	return count;
-}
-
 static guint
 _LRU_expire(struct hc_resolver_s *r, struct lru_ext_s *l)
 {
-	guint count = 0;
 	EXTRA_ASSERT(r != NULL);
+	guint count = 0;
+	const gint64 now = oio_ext_monotonic_time();
 	g_mutex_lock(&r->lock);
 	if (l->ttl > 0 && l->cache != NULL)
-		count = _resolver_expire(l->cache, r->bogonow - l->ttl);
+		count = lru_tree_remove_older(l->cache, OLDEST(now, l->ttl));
 	g_mutex_unlock(&r->lock);
 	return count;
 }
@@ -615,34 +581,19 @@ hc_resolver_tell (struct hc_resolver_s *r, struct oio_url_s *url,
 	EXTRA_ASSERT(srvtype != NULL);
 	EXTRA_ASSERT(urlv != NULL);
 
+	if (r->flags & HC_RESOLVER_NOCACHE)
+		return;
+
 	struct hashstr_s *hk = _srv_key (srvtype, url);
 	hc_resolver_store (r, r->services.cache, hk, urlv);
 	g_free (hk);
 }
 
 static guint
-_resolver_purge(struct lru_tree_s *lru, guint umax)
-{
-	guint count = 0;
-
-	for (gint64 max = umax; max < lru_tree_count(lru) ;++count) {
-		struct cached_element_s *elt = NULL;
-		struct hashstr_s *k = NULL;
-		lru_tree_steal_last(lru, (void**)&k, (void**)&elt);
-		if (k) g_free(k); k = NULL;
-		if (elt) g_free(elt); elt = NULL;
-	}
-
-	return count;
-}
-
-static guint
 _LRU_purge(struct hc_resolver_s *r, struct lru_ext_s *l)
 {
-	guint count = 0;
 	g_mutex_lock(&r->lock);
-	if (l->max > 0 && l->cache != NULL)
-		count = _resolver_purge(l->cache, l->max);
+	guint count = lru_tree_remove_exceeding (l->cache, l->max);
 	g_mutex_unlock(&r->lock);
 	return count;
 }
@@ -657,17 +608,8 @@ hc_resolver_purge(struct hc_resolver_s *r)
 static void
 _lru_flush(struct lru_tree_s *lru)
 {
-	if (!lru)
-		return;
-
-	struct cached_element_s *elt = NULL;
-	struct hashstr_s *k = NULL;
-
-	while (lru_tree_get_last(lru, (void**)&k, (void**)&elt)) {
-		lru_tree_steal_last(lru, (void**)&k, (void**)&elt);
-		if (k) g_free(k); k = NULL;
-		if (elt) g_free(elt); elt = NULL;
-	}
+	if (!lru) return;
+	lru_tree_remove_exceeding (lru, 0);
 }
 
 void
@@ -692,7 +634,7 @@ static void
 _LRU_set_max(struct lru_ext_s *l, guint v) { if (l) l->max = v; }
 
 static void
-_LRU_set_ttl(struct lru_ext_s *l, time_t v) { if (l) l->ttl = v; }
+_LRU_set_ttl(struct lru_ext_s *l, gint64 v) { if (l) l->ttl = v; }
 
 void
 hc_resolver_set_max_services(struct hc_resolver_s *r, guint d)
@@ -702,7 +644,7 @@ hc_resolver_set_max_services(struct hc_resolver_s *r, guint d)
 }
 
 void
-hc_resolver_set_ttl_services(struct hc_resolver_s *r, time_t d)
+hc_resolver_set_ttl_services(struct hc_resolver_s *r, gint64 d)
 {
 	if (r)
 		_LRU_set_ttl(&r->services, d);
@@ -716,7 +658,7 @@ hc_resolver_set_max_csm0(struct hc_resolver_s *r, guint d)
 }
 
 void
-hc_resolver_set_ttl_csm0(struct hc_resolver_s *r, time_t d)
+hc_resolver_set_ttl_csm0(struct hc_resolver_s *r, gint64 d)
 {
 	if (r)
 		_LRU_set_ttl(&r->csm0, d);
@@ -728,12 +670,11 @@ hc_resolver_info(struct hc_resolver_s *r, struct hc_resolver_stats_s *s)
 	EXTRA_ASSERT(s != NULL);
 	EXTRA_ASSERT(r != NULL);
 	g_mutex_lock(&r->lock);
-	s->clock = r->bogonow;
 	s->csm0.max = r->csm0.max;
-	s->csm0.ttl = r->csm0.ttl;
+	s->csm0.ttl = r->csm0.ttl / G_TIME_SPAN_SECOND;
 	s->csm0.count = lru_tree_count(r->csm0.cache);
 	s->services.max = r->services.max;
-	s->services.ttl = r->services.ttl;
+	s->services.ttl = r->services.ttl / G_TIME_SPAN_SECOND;
 	s->services.count = lru_tree_count(r->services.cache);
 	g_mutex_unlock(&r->lock);
 }

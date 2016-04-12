@@ -57,9 +57,10 @@ service_is_ok (gconstpointer k)
 void
 service_invalidate (gconstpointer k)
 {
-	gulong now = oio_ext_monotonic_time () / G_TIME_SPAN_SECOND;
-	SRV_WRITE(lru_tree_insert (srv_down, g_strdup((const char *)k), (void*)now));
-	GRID_INFO("invalid at %lu %s", now, (const char*)k);
+	gchar *k0 = g_strdup((const char *)k);
+	SRV_WRITE(lru_tree_insert (srv_down, k0, GINT_TO_POINTER(1)));
+	if (GRID_DEBUG_ENABLED())
+		GRID_DEBUG("invalid at %lu %s", oio_ext_monotonic_seconds(), (const char*)k);
 }
 
 const char *
@@ -325,9 +326,8 @@ _request_has_flag (struct req_args_s *args, const char *header,
 void
 service_learn (const char *key)
 {
-	gulong now = oio_ext_monotonic_seconds ();
 	gchar *k = g_strdup(key);
-	SRV_WRITE(lru_tree_insert(srv_known, k, (void*)now));
+	SRV_WRITE(lru_tree_insert(srv_known, k, GINT_TO_POINTER(1)));
 }
 
 gboolean

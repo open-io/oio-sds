@@ -29,6 +29,8 @@ extern "C" {
 #  define EXTRA_ASSERT(X)
 # endif
 
+#define OLDEST(now,delay) (((now)>(delay)) ? ((now)-(delay)) : 0)
+
 #define ON_ENUM(P,E) case P##E: return #E
 
 #define CODE_IS_NETWORK_ERROR(C) ((C) < CODE_TEMPORARY)

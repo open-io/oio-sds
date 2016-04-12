@@ -250,7 +250,7 @@ _repo_wraper(const gchar *ns, gint64 maxvers, repo_test_f fr)
 
 	glp = _init_lb(ns);
 
-	resolver = hc_resolver_create1(oio_ext_monotonic_time() / G_TIME_SPAN_SECOND);
+	resolver = hc_resolver_create();
 	g_assert(resolver != NULL);
 
 	cfg.flags = SQLX_REPO_DELETEON;
@@ -292,7 +292,7 @@ _repo_failure(const gchar *ns)
 
 	glp = _init_lb(ns);
 
-	resolver = hc_resolver_create1(oio_ext_monotonic_time() / G_TIME_SPAN_SECOND);
+	resolver = hc_resolver_create();
 	g_assert(resolver != NULL);
 
 	cfg.flags = SQLX_REPO_DELETEON;
