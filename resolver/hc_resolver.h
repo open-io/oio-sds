@@ -46,7 +46,7 @@ struct oio_url_s;
 struct hc_resolver_s;
 
 /* Simple constructor */
-struct hc_resolver_s* hc_resolver_create1(time_t now);
+struct hc_resolver_s* hc_resolver_create(void);
 
 /* Change the internal flags of the resolver */
 void hc_resolver_configure (struct hc_resolver_s *r, enum hc_resolver_flags_e f);
@@ -68,17 +68,13 @@ void hc_resolver_destroy(struct hc_resolver_s *r);
 void hc_resolver_set_max_services(struct hc_resolver_s *r, guint d);
 
 /* @param d max cached entries from meta1 */
-void hc_resolver_set_ttl_services(struct hc_resolver_s *r, time_t d);
-
-/* @param d Timeout for services from conscience and meta0 */
-void hc_resolver_set_ttl_csm0(struct hc_resolver_s *r, time_t d);
+void hc_resolver_set_ttl_services(struct hc_resolver_s *r, gint64 d);
 
 /* @param d max cached services from conscience and meta0 */
 void hc_resolver_set_max_csm0(struct hc_resolver_s *r, guint d);
 
-/* Set the internal clock of the resolver. This has to be done in order
- * to manage expirations. */
-void hc_resolver_set_now(struct hc_resolver_s *r, time_t now);
+/* @param d Timeout for services from conscience and meta0 */
+void hc_resolver_set_ttl_csm0(struct hc_resolver_s *r, gint64 d);
 
 /* Applies time-based cache policies. */
 guint hc_resolver_expire(struct hc_resolver_s *r);
@@ -117,8 +113,6 @@ void hc_decache_reference(struct hc_resolver_s *r, struct oio_url_s *url);
 
 struct hc_resolver_stats_s
 {
-	time_t clock;
-
 	struct {
 		gint64 count;
 		guint max;

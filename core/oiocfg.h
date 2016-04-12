@@ -79,14 +79,16 @@ extern "C" {
 #  define PROXYD_PATH_MAXLEN 2048
 # endif
 
+/* in oio_ext_monotonic_time() precision */
 # ifndef PROXYD_DEFAULT_TTL_SERVICES
-#  define PROXYD_DEFAULT_TTL_SERVICES 3600
+#  define PROXYD_DEFAULT_TTL_SERVICES G_TIME_SPAN_HOUR
 # endif
 
 # ifndef PROXYD_DEFAULT_MAX_SERVICES
 #  define PROXYD_DEFAULT_MAX_SERVICES 200000
 # endif
 
+/* in oio_ext_monotonic_time() precision */
 # ifndef PROXYD_DEFAULT_TTL_CSM0
 #  define PROXYD_DEFAULT_TTL_CSM0 0
 # endif
@@ -116,26 +118,28 @@ extern "C" {
 # endif
 
 /* in seconds */
-# ifndef PROXYD_TTL_DEAD_LOCAL_SERVICES
-#  define PROXYD_TTL_DEAD_LOCAL_SERVICES 30
-# endif
-
-/* in seconds */
-# ifndef PROXYD_TTL_DOWN_SERVICES
-#  define PROXYD_TTL_DOWN_SERVICES 5
-# endif
-
-/* in seconds */
-# ifndef PROXYD_TTL_KNOWN_SERVICES
-#  define PROXYD_TTL_KNOWN_SERVICES 432000 /* 5 days in seconds */
-# endif
-
 # ifndef PROXYD_DEFAULT_PERIOD_DOWNSTREAM
-#  define PROXYD_DEFAULT_PERIOD_DOWNSTREAM 2 /*s*/
+#  define PROXYD_DEFAULT_PERIOD_DOWNSTREAM 2
 # endif
 
+/* in seconds */
 # ifndef PROXYD_DEFAULT_PERIOD_UPSTREAM
-#  define PROXYD_DEFAULT_PERIOD_UPSTREAM 1 /*s*/
+#  define PROXYD_DEFAULT_PERIOD_UPSTREAM 1
+# endif
+
+/* in oio_ext_monotonic_time() precision */
+# ifndef PROXYD_TTL_DEAD_LOCAL_SERVICES
+#  define PROXYD_TTL_DEAD_LOCAL_SERVICES (30*G_TIME_SPAN_SECOND)
+# endif
+
+/* in oio_ext_monotonic_time() precision */
+# ifndef PROXYD_TTL_DOWN_SERVICES
+#  define PROXYD_TTL_DOWN_SERVICES (5*G_TIME_SPAN_SECOND)
+# endif
+
+/* in oio_ext_monotonic_time() precision */
+# ifndef PROXYD_TTL_KNOWN_SERVICES
+#  define PROXYD_TTL_KNOWN_SERVICES (5*G_TIME_SPAN_DAY)
 # endif
 
 # ifndef GCLUSTER_RUN_DIR

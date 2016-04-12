@@ -281,7 +281,7 @@ _init_configless_structures(struct sqlx_service_s *ss)
 			|| !(ss->dispatcher = transport_gridd_build_empty_dispatcher())
 			|| !(ss->clients_pool = gridd_client_pool_create())
 			|| !(ss->clients_factory = gridd_client_factory_create())
-			|| !(ss->resolver = hc_resolver_create1(oio_ext_monotonic_time() / G_TIME_SPAN_SECOND))
+			|| !(ss->resolver = hc_resolver_create())
 			|| !(ss->gtq_admin = grid_task_queue_create("admin"))
 			|| !(ss->gtq_reload = grid_task_queue_create("reload"))) {
 		GRID_WARN("SERVICE init error: memory allocation failure");
@@ -788,7 +788,6 @@ _task_expire_resolver(gpointer p)
 	if (!grid_main_is_running ())
 		return;
 
-	hc_resolver_set_now(PSRV(p)->resolver, oio_ext_monotonic_time () / G_TIME_SPAN_SECOND);
 	guint count = hc_resolver_expire(PSRV(p)->resolver);
 	if (count)
 		GRID_DEBUG("Expired %u entries from the resolver cache", count);

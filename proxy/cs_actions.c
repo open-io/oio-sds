@@ -292,7 +292,7 @@ action_local_list (struct req_args_s *args)
 		return FALSE;
 	}
 
-	PUSH_DO(lru_tree_foreach_DEQ(srv_registered, _on_service, NULL));
+	PUSH_DO(lru_tree_foreach(srv_registered, _on_service, NULL));
 	g_string_append_c (gs, ']');
 
 	return _reply_success_json (args, gs);

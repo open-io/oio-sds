@@ -100,18 +100,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 extern gchar *nsname;
 extern gboolean flag_cache_enabled;
 extern gboolean flag_local_scores;
-extern time_t nsinfo_refresh_m0;
 
 /* how long the proxy remembers the srv it registered ino the conscience */
-extern time_t cs_expire_local_services;
+extern gint64 cs_expire_local_services;
 
 /* how long the proxy remembers dead services */
-/* TODO(jfs): convert time_t seconds to gint64 monotonic microseconds. */
-extern time_t cs_down_services;
+extern gint64 cs_down_services;
 
 /* how long the proxy remembers services from the conscience */
-/* TODO(jfs): convert time_t seconds to gint64 monotonic microseconds. */
-extern time_t cs_known_services;
+extern gint64 cs_known_services;
 
 extern struct grid_lbpool_s *lbpool;
 extern struct hc_resolver_s *resolver;

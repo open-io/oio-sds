@@ -38,11 +38,12 @@ main(int argc, char **argv)
 	lru_tree_get(lt, "plop");
 	lru_tree_get(lt, "plop");
 
-	gpointer k, v;
-	while (lru_tree_steal_first(lt, &k, &v)) {
+	gboolean _func (gpointer k, gpointer v, gpointer i) {
+		(void) i;
 		GRID_DEBUG("K %s %p", (gchar*)k, v);
-		g_free(k);
+		return FALSE;
 	}
+	lru_tree_foreach(lt, _func, NULL);
 
 	lru_tree_destroy(lt);
 	return 0;

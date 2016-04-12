@@ -213,7 +213,6 @@ action_cache_status (struct req_args_s *args)
 	hc_resolver_info (resolver, &s);
 
 	GString *gstr = g_string_new ("{");
-	g_string_append_printf (gstr, " \"clock\":%lu,", s.clock);
 	g_string_append_printf (gstr, " \"csm0\":{"
 		"\"count\":%" G_GINT64_FORMAT ",\"max\":%u,\"ttl\":%lu},",
 		s.csm0.count, s.csm0.max, s.csm0.ttl);
