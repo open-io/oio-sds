@@ -139,59 +139,54 @@ _sort_aliases_by_name (struct bean_ALIASES_s *a0, struct bean_ALIASES_s *a1)
 	return g_strcmp0 (ALIASES_get_alias(a0)->str, ALIASES_get_alias(a1)->str);
 }
 
-static enum http_rc_e
-_reply_aliases (struct req_args_s *args, GError * err, GSList * beans,
-		gchar **prefixes)
+#define COMA(gs,first) do { \
+	if (!first) g_string_append_c (gs, ','); else first = FALSE; \
+} while (0);
+
+static void
+_dump_json_prefixes (GString *gstr, gchar **prefixes)
 {
-	if (err)
-		return _reply_m2_error (args, err);
-	if (!beans && (args->flags & FLAG_NOEMPTY))
-		return _reply_notfound_error (args, NEWERROR (CODE_CONTENT_NOTFOUND, "No bean found"));
-
-	GSList *aliases = NULL, *headers = NULL;
-	for (GSList *l=beans; l ;l=l->next) {
-		if (DESCR(l->data) == &descr_struct_ALIASES)
-			aliases = g_slist_prepend (aliases, l->data);
-		else if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS)
-			headers = g_slist_prepend (headers, l->data);
-	}
-
-	gboolean first;
-	GString *gstr = g_string_new ("{");
-
-	// Dump the prefixes
+	g_string_append (gstr, "\"prefixes\":[");
 	if (prefixes) {
-		g_string_append (gstr, "\"prefixes\":[");
-		first = TRUE;
+		gboolean first = TRUE;
 		for (gchar **pp=prefixes; *pp ;++pp) {
-			if (!first)
-				g_string_append_c(gstr, ',');
-			first = FALSE;
-			g_string_append_printf (gstr, "\"%s\"", *pp);
+			COMA(gstr,first);
+			g_string_append_c (gstr, '"');
+			oio_str_gstring_append_json_string (gstr, *pp);
+			g_string_append_c (gstr, '"');
 		}
-		g_string_append (gstr, "],");
 	}
+	g_string_append_c (gstr, ']');
+}
 
-	// And now the beans
-	g_string_append (gstr, "\"objects\":[");
-	first = TRUE;
-	aliases = g_slist_sort (aliases, (GCompareFunc)_sort_aliases_by_name);
-	for (GSList *la = aliases; la ; la=la->next) {
-
-		if (!first)
-			g_string_append_c(gstr, ',');
-		first = FALSE;
-
-		struct bean_ALIASES_s *a = la->data;
-		// Look for the matching header
-		// TODO optimize this with a tree or a hashmap
-		struct bean_CONTENTS_HEADERS_s *h = NULL;
-		for (GSList *lh=headers; lh ; lh=lh->next) {
-			if (0 == metautils_gba_cmp(CONTENTS_HEADERS_get_id(lh->data), ALIASES_get_content(a))) {
-				h = lh->data;
-				break;
-			}
+static void
+_dump_json_properties (GString *gstr, GTree *properties)
+{
+	g_string_append (gstr, "\"properties\":{");
+	if (properties) {
+		gboolean first = TRUE;
+		gboolean _func (gpointer k, gpointer v, gpointer i) {
+			(void) i;
+			COMA(gstr,first);
+			oio_str_gstring_append_json_pair (gstr, (const char *)k, (const char *)v);
+			return FALSE;
 		}
+		g_tree_foreach (properties, _func, NULL);
+	}
+	g_string_append (gstr, "}");
+}
+
+static void
+_dump_json_beans (GString *gstr, GSList *aliases, GTree *headers)
+{
+	g_string_append (gstr, "\"objects\":[");
+	gboolean first = TRUE;
+	for (; aliases ; aliases=aliases->next) {
+		COMA(gstr,first);
+
+		struct bean_ALIASES_s *a = aliases->data;
+		struct bean_CONTENTS_HEADERS_s *h =
+			g_tree_lookup (headers, ALIASES_get_content(a));
 
 		g_string_append(gstr, "{\"name\":\"");
 		oio_str_gstring_append_json_string(gstr, ALIASES_get_alias(a)->str);
@@ -233,11 +228,45 @@ _reply_aliases (struct req_args_s *args, GError * err, GSList * beans,
 		}
 		g_string_append_c(gstr, '}');
 	}
-	g_string_append (gstr, "]}");
+	g_string_append_c (gstr, ']');
+}
+
+static enum http_rc_e
+_reply_list_result (struct req_args_s *args, GError * err, GSList * beans,
+		gchar **prefixes, GTree *properties)
+{
+	if (err)
+		return _reply_m2_error (args, err);
+	if (!beans && (args->flags & FLAG_NOEMPTY))
+		return _reply_notfound_error (args, NEWERROR (CODE_CONTENT_NOTFOUND, "No bean found"));
+
+	GSList *aliases = NULL;
+	GTree *headers = g_tree_new ((GCompareFunc)metautils_gba_cmp);
+
+	for (GSList *l=beans; l ;l=l->next) {
+		if (DESCR(l->data) == &descr_struct_ALIASES)
+			aliases = g_slist_prepend (aliases, l->data);
+		else if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
+			g_tree_insert (headers, CONTENTS_HEADERS_get_id(l->data), l->data);
+		}
+	}
+
+	aliases = g_slist_sort (aliases, (GCompareFunc)_sort_aliases_by_name);
+
+	/* Dump the prefixes */
+	GString *gstr = g_string_new ("{");
+	_dump_json_prefixes (gstr, prefixes);
+	g_string_append_c (gstr, ',');
+	_dump_json_properties (gstr, properties);
+	g_string_append_c (gstr, ',');
+	_dump_json_beans (gstr, aliases, headers);
+	g_string_append_c (gstr, '}');
+
+	/* And now the beans */
 	_bean_cleanl2 (beans);
 
 	g_slist_free (aliases);
-	g_slist_free (headers);
+	g_tree_destroy (headers);
 	return _reply_success_json (args, gstr);
 }
 
@@ -1181,13 +1210,13 @@ action_container_list (struct req_args_s *args)
 		struct list_result_s out = {NULL,NULL,FALSE};
 		while (grid_main_is_running()) {
 
-			// patch the input parameters
+			/* patch the input parameters */
 			if (list_in.maxkeys > 0)
 				in.maxkeys = list_in.maxkeys - (count + g_tree_nnodes(tree_prefixes));
 			if (list_out.next_marker)
 				in.marker_start = list_out.next_marker;
 
-			// Action
+			/* Action */
 			gchar **props = NULL;
 			if (chunk_id)
 				e = m2v2_remote_execute_LIST_BY_CHUNKID (m2->host, args->url, chunk_id, &in, &out);
@@ -1196,7 +1225,7 @@ action_container_list (struct req_args_s *args)
 			else
 				e = m2v2_remote_execute_LIST (m2->host, args->url, &in, &out, &props);
 
-			// Manage the output
+			/* Manage the output */
 			if (NULL != e)
 				return e;
 			if (props && tree_properties) {
@@ -1206,7 +1235,7 @@ action_container_list (struct req_args_s *args)
 			if (props) g_strfreev (props);
 			props = NULL;
 
-			// transmit the output
+			/* transmit the output */
 			oio_str_reuse (&list_out.next_marker, out.next_marker);
 			out.next_marker = NULL;
 			if (out.beans) {
@@ -1222,12 +1251,12 @@ action_container_list (struct req_args_s *args)
 				list_out.beans = ctx.beans;
 			}
 
-			// enough elements received
+			/* enough elements received */
 			if (list_in.maxkeys > 0 && list_in.maxkeys <= (count + g_tree_nnodes(tree_prefixes))) {
 				list_out.truncated = out.truncated;
 				return NULL;
 			}
-			// no more elements expected, the meta2 told us
+			/* no more elements expected, the meta2 told us */
 			if (!out.truncated) {
 				list_out.truncated = FALSE;
 				return NULL;
@@ -1278,7 +1307,8 @@ action_container_list (struct req_args_s *args)
 		keys_prefixes = gtree_string_keys (tree_prefixes);
 	if (!err)
 		_container_new_props_to_headers (args, tree_properties);
-	enum http_rc_e rc = _reply_aliases (args, err, list_out.beans, keys_prefixes);
+	enum http_rc_e rc = _reply_list_result (args, err, list_out.beans,
+			keys_prefixes, tree_properties);
 	if (keys_prefixes) g_free (keys_prefixes);
 	if (tree_prefixes) g_tree_destroy (tree_prefixes);
 	if (tree_properties) g_tree_destroy (tree_properties);
