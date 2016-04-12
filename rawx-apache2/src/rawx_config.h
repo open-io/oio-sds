@@ -113,9 +113,6 @@ struct dav_rawx_server_conf_s {
 
 	/* Statistics involved data */
 	struct {
-		apr_global_mutex_t *handle;
-	} lock;
-	struct {
 		char path[128];
 		apr_shm_t *handle;
 	} shm;

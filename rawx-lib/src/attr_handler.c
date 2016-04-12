@@ -23,8 +23,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <attr/xattr.h>
@@ -42,8 +40,6 @@ struct attr_handle_s
 	int xattr_supported;
 	char *chunk_path;
 	int chunk_file_des;
-	char *attr_path;
-	int attr_file_des;
 	GHashTable *attr_hash;
 };
 
@@ -52,8 +48,8 @@ typedef gboolean(*attr_writer_f) (int file, const gchar * key,
 
 /* ------------------------------------------------------------------------- */
 
-static volatile ssize_t longest_xattr = 256;
-static volatile ssize_t longest_xattr_list = 256;
+static volatile ssize_t longest_xattr = 1024;
+static volatile ssize_t longest_xattr_list = 2048;
 
 static ssize_t
 _getxattr(const char *path, int fd, const char *k, char *v, ssize_t vs)
@@ -80,30 +76,25 @@ _getxattr_from_chunk(const char *path, int fd, const char *attrname)
 	buf = g_malloc0(s);
 retry:
 	size = _getxattr(path, fd, attrname, buf, s);
-
-	if (0 > size) { /* error */
-		errsav = errno;
-		if (errno != ERANGE) {
-			g_free(buf);
-			errno = errsav;
-			return NULL;
-		}
-		else {
-			s = s*2;
-			longest_xattr = 1 + MAX(longest_xattr, s);
-			buf = g_realloc(buf, s);
-			memset(buf, 0, s);
-			goto retry;
-		}
-	}
-	else if (!size) { /* success but empty xattr */
-		g_free(buf);
-		return g_malloc0(1);
-	}
-	else {
-		/* success and buffer long enough */
+	if (size > 0)
+		return buf;
+	if (size == 0) {
+		*buf = 0;
 		return buf;
 	}
+
+	errsav = errno;
+	if (errno == ERANGE) {
+		s = s*2;
+		longest_xattr = 1 + MAX(longest_xattr, s);
+		buf = g_realloc(buf, s);
+		memset(buf, 0, s);
+		goto retry;
+	}
+
+	g_free(buf);
+	errno = errsav;
+	return NULL;
 }
 
 static gboolean
@@ -116,47 +107,6 @@ _write_to_xattr(int file, const gchar * key, const gchar * value, GError ** erro
 
 	if (0 > fsetxattr(file, key, value, strlen(value), 0)) {
 		SETERRCODE(error, errno, "Failed to add [%s/%s] to file xattr : %s", key, value, strerror(errno));
-		return FALSE;
-	}
-
-	return TRUE;
-}
-
-static gboolean
-_write_to_attr_file(int file, const gchar * key, const gchar * value, GError ** error)
-{
-	ssize_t rc0, rc1, rc2, rc3;
-	ssize_t key_len, value_len;
-
-	if (file < 0 || !key || !value) {
-		SETERRCODE(error, EINVAL, "Invalid argument (%d %p %p)", file, key, value);
-		return FALSE;
-	}
-
-	key_len = strlen(key);
-	value_len = strlen(value);
-
-	rc0 = write(file, key, key_len);
-	if (rc0 != key_len) {
-		SETERRCODE(error, errno, "write error : %s", strerror(errno));
-		return FALSE;
-	}
-
-	rc1 = write(file, "=", 1);
-	if (rc1 != 1) {
-		SETERRCODE(error, errno, "write error : %s", strerror(errno));
-		return FALSE;
-	}
-
-	rc2 = write(file, value, value_len);
-	if (rc2 != value_len) {
-		SETERRCODE(error, errno, "write error : %s", strerror(errno));
-		return FALSE;
-	}
-
-	rc3 = write(file, "\n", 1);
-	if (rc3 != 1) {
-		SETERRCODE(error, errno, "write error : %s", strerror(errno));
 		return FALSE;
 	}
 
@@ -213,24 +163,7 @@ _commit_attr_handle(struct attr_handle_s *attr_handle, GError ** error)
 		}
 	}
 
-	/* Fallback to .attr file */
-	attr_handle->attr_file_des = open(attr_handle->attr_path, O_RDWR | O_CREAT | O_TRUNC, 0644);
-	if (attr_handle->attr_file_des < 0) {
-		SETERRCODE(error, errno, "File [%s] open failed : %s", attr_handle->attr_path, strerror(errno));
-		return FALSE;
-	}
-	else {
-		if (!_write_attributes(attr_handle->attr_hash, attr_handle->attr_file_des, _write_to_attr_file,
-				&local_error)) {
-			metautils_pclose(&(attr_handle->attr_file_des));
-			SETERROR(error, "Failed to write attributes to chunk.attr : %s", local_error->message);
-			g_clear_error(&local_error);
-			return FALSE;
-		}
-		metautils_pclose(&(attr_handle->attr_file_des));
-	}
-
-	return TRUE;
+	return FALSE;
 }
 
 static gboolean
@@ -256,7 +189,7 @@ _commit_v2_attr_handle(int filedes, struct attr_handle_s *attr_handle, GError **
 }
 
 static struct attr_handle_s *
-_alloc_attr_handle(const gchar * chunk_path)
+_alloc_attr_handle(const gchar * chunk_path, gboolean preopen)
 {
 	struct attr_handle_s *attr_handle = NULL;
 
@@ -268,21 +201,17 @@ _alloc_attr_handle(const gchar * chunk_path)
 	if (!attr_handle->chunk_path)
 		goto error_chunk_path;
 
-	attr_handle->attr_path = g_strdup_printf("%s.attr", chunk_path);
-	if (!attr_handle->attr_path)
-		goto error_attr_path;
-
 	attr_handle->attr_hash = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 	if (!attr_handle->attr_hash)
 		goto error_hash;
 
-	attr_handle->attr_file_des = -1;
-	attr_handle->chunk_file_des = -1;
+	if (preopen)
+		attr_handle->chunk_file_des = open(attr_handle->chunk_path, O_RDWR);
+	else
+		attr_handle->chunk_file_des = -1;
 	return attr_handle;
 
 error_hash:
-	g_free(attr_handle->attr_path);
-error_attr_path:
 	g_free(attr_handle->chunk_path);
 error_chunk_path:
 	g_free(attr_handle);
@@ -300,67 +229,15 @@ _clean_attr_handle(struct attr_handle_s *attr_handle, int content_only)
 		g_free(attr_handle->chunk_path);
 		attr_handle->chunk_path = NULL;
 	}
-	if (attr_handle->attr_path) {
-		g_free(attr_handle->attr_path);
-		attr_handle->attr_path = NULL;
-	}
 	if (attr_handle->attr_hash) {
 		g_hash_table_destroy(attr_handle->attr_hash);
 		attr_handle->attr_hash = NULL;
 	}
 	if (attr_handle->chunk_file_des >= 0)
 		metautils_pclose(&(attr_handle->chunk_file_des));
-	if (attr_handle->attr_file_des >= 0)
-		metautils_pclose(&(attr_handle->attr_file_des));
 
 	if (!content_only)
 		g_free(attr_handle);
-}
-
-static gboolean
-_load_from_file_attr(struct attr_handle_s *attr_handle, GError ** error)
-{
-	FILE *stream;
-	struct stat chunk_stats;
-	char lineBuf[8192];
-
-	EXTRA_ASSERT(attr_handle != NULL);
-	EXTRA_ASSERT(attr_handle->attr_hash != NULL);
-
-	/* stat the file */
-	if (0 > stat(attr_handle->attr_path, &chunk_stats)) {
-		SETERRCODE(error, errno, "Attr file [%s] not found for chunk", attr_handle->attr_path);
-		return FALSE;
-	}
-
-	stream = fopen(attr_handle->attr_path, "r");
-	if (!stream) {
-		SETERRCODE(error, errno, "Failed to open stream to file [%s] : %s)",
-			attr_handle->attr_path, strerror(errno));
-		return FALSE;
-	}
-
-	while (fgets(lineBuf, sizeof(lineBuf), stream)) {
-		/* Remove trailing \n */
-		int line_len = strlen(lineBuf);
-		if (lineBuf[line_len-1] == '\n')
-			lineBuf[line_len-1] = '\0';
-
-		char **tokens = g_strsplit(lineBuf, ":", 2);
-
-		if (tokens) {
-			if (*tokens && *(tokens + 1)) {
-				g_hash_table_insert(attr_handle->attr_hash, *tokens, *(tokens + 1));
-				g_free(tokens);
-			}
-			else
-				g_strfreev(tokens);
-		}
-	}
-
-	fclose(stream);
-
-	return TRUE;
 }
 
 static gboolean
@@ -379,7 +256,7 @@ retry:
 	size = listxattr(attr_handle->chunk_path, buf, s);
 	if (0 > size) {
 		if (errno != ERANGE) {
-			SETERRCODE(error, errno, "Failed to list xattr from file [%s] : %s",
+			SETERRCODE(error, errno, "Failed to list xattr from file [%s]: %s",
 					attr_handle->chunk_path, strerror(errno));
 			g_free(buf);
 			return FALSE;
@@ -399,9 +276,11 @@ retry:
 
 	for (last_name = buf, i = 0; i < size; i++) {
 		if (buf[i] == '\0') {
-			char *value = _getxattr_from_chunk(attr_handle->chunk_path, attr_handle->chunk_file_des, last_name);
+			char *value = _getxattr_from_chunk(attr_handle->chunk_path,
+					attr_handle->chunk_file_des, last_name);
 			if (NULL != value) {
-				g_hash_table_insert(attr_handle->attr_hash, g_strdup(last_name), value);
+				g_hash_table_insert(attr_handle->attr_hash,
+						g_strdup(last_name), value);
 			}
 			else if (errno == ENOATTR) {
 				/* XATTR disappeared ! */
@@ -421,28 +300,21 @@ retry:
 }
 
 static gboolean
-_load_attr_from_file(const char *chunk_path, struct attr_handle_s** attr_handle, GError ** error)
+_load_attr_from_file(const char *chunk_path, struct attr_handle_s** attr_handle,
+		GError ** error)
 {
 	struct attr_handle_s *ah = NULL;
 	GError *local_error = NULL;
 
-	if (!(ah = _alloc_attr_handle(chunk_path))) {
+	if (!(ah = _alloc_attr_handle(chunk_path, TRUE))) {
 		SETERRCODE(error, ENOMEM, "Memory allocation failure");
 		return FALSE;
 	}
 
 	if (!_load_from_xattr(ah, &local_error)) {
-		if (!local_error) {
+		if (!local_error)
 			SETERRCODE(&local_error, 500, "Failed to load xattr : unknown error");
-			goto error_and_exit;
-		}
-		else if (local_error->code != ENOTSUP)
-			goto error_and_exit;
-		else {
-			g_clear_error(&local_error);
-			if (!_load_from_file_attr(ah, &local_error))
-				goto error_and_exit;
-		}
+		goto error_and_exit;
 	}
 
 	if (local_error)
@@ -463,7 +335,7 @@ error_and_exit:
 static gboolean
 _lazy_load_attr_from_file(const char *chunk_path, struct attr_handle_s** attr_handle, GError ** error)
 {
-	if (!(*attr_handle = _alloc_attr_handle(chunk_path))) {
+	if (!(*attr_handle = _alloc_attr_handle(chunk_path, FALSE))) {
 		SETERRCODE(error, ENOMEM, "Memory allocation failure");
 		return FALSE;
 	}
@@ -605,18 +477,6 @@ set_rawx_info_in_attr(const char *p, GError ** error, struct content_textinfo_s 
 }
 
 gboolean
-set_chunk_info_in_attr(const char *p, GError ** error, struct chunk_textinfo_s * cti)
-{
-	return set_rawx_full_info_in_attr (p, -1, error, NULL, cti, NULL, NULL);
-}
-
-gboolean
-set_content_info_in_attr(const char *p, GError ** error, struct content_textinfo_s * cti)
-{
-	return set_rawx_full_info_in_attr (p, -1, error, cti, NULL, NULL, NULL);
-}
-
-gboolean
 set_compression_info_in_attr(const char *p, GError ** error, const char *v)
 {
 	if (!v) {
@@ -638,21 +498,6 @@ set_chunk_compressed_size_in_attr(const char *p, GError ** error, guint32 v)
 
 #define GET(K,R) if (!_get_attr_from_handle(attr_handle, &e, ATTR_DOMAIN, K, &(R))) { \
 	goto error_get_attr; \
-}
-
-gboolean
-get_chunk_compressed_size_in_attr(const char *pathname, GError ** error, guint32* compressed_size)
-{
-	gchar* tmp = NULL;
-
-	if (!(tmp = _getxattr_from_chunk(pathname, -1, ATTR_DOMAIN "." ATTR_NAME_CHUNK_COMPRESSED_SIZE))) {
-		GSETCODE(error, errno, "compressedsize not found : %s", strerror(errno));
-		return FALSE;
-	}
-
-	*compressed_size = g_ascii_strtoll(tmp, NULL, 10);
-	g_free(tmp);
-	return TRUE;
 }
 
 gboolean
@@ -701,12 +546,6 @@ error_get_attr:
 }
 
 gboolean
-get_content_info_in_attr(const char *p, GError **e, struct content_textinfo_s *c)
-{
-	return get_rawx_info_in_attr (p, e, c, NULL);
-}
-
-gboolean
 get_chunk_info_in_attr(const char *p, GError **e, struct chunk_textinfo_s *c)
 {
 	return get_rawx_info_in_attr (p, e, NULL, c);
@@ -714,28 +553,25 @@ get_chunk_info_in_attr(const char *p, GError **e, struct chunk_textinfo_s *c)
 
 gboolean
 get_compression_info_in_attr(const char *pathname, GError ** error,
-		GHashTable ** table)
+		GHashTable *table)
 {
-	gchar *tmp;
+	EXTRA_ASSERT (pathname != NULL);
+	EXTRA_ASSERT (table != NULL);
 
-	if (!table || !*table || !pathname) {
-		SETERROR(error, "invalid parameter");
-		return FALSE;
-	}
-
-	tmp = _getxattr_from_chunk(pathname, -1,
+	gchar *tmp = _getxattr_from_chunk(pathname, -1,
 			ATTR_DOMAIN "." ATTR_NAME_CHUNK_METADATA_COMPRESS);
 
 	if (!tmp) {
 		if (errno != ENOATTR) {
-			GSETCODE(error, errno, "Failed to get compression attr : %s\n", strerror(errno));
+			GSETCODE(error, errno, "Failed to get compression attr: %s", strerror(errno));
 			return FALSE;
 		}
 	}
 	else {
 		if (*tmp) {
 			GHashTable *ht = metadata_unpack_string(tmp, NULL);
-			metadata_merge(*table, ht);
+			metadata_merge (table, ht);
+			g_hash_table_destroy (ht);
 		}
 		g_free(tmp);
 	}

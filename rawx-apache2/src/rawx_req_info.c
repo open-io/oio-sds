@@ -34,6 +34,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <apr_file_io.h>
 #include <apr_strings.h>
 #include <apr_buckets.h>
+#include <apr_atomic.h>
 
 #include <httpd.h>
 #include <http_log.h>
@@ -73,7 +74,8 @@ struct dav_resource_private {
 
 /* ------------------------------------------------------------------------- */
 
-#define STR_KV(Field,Name) apr_psprintf(pool, Name" %u\n", stats->body.Field)
+#define STR_KV(Field,Name) apr_psprintf(pool, Name" %u\n", \
+		apr_atomic_read32(&stats->body.Field))
 
 static const char *
 __gen_info(const dav_resource *resource, apr_pool_t *pool)
@@ -89,9 +91,7 @@ __gen_stats(const dav_resource *resource, apr_pool_t *pool)
 
 	dav_rawx_server_conf *c = resource_get_server_config(resource);
 
-	apr_global_mutex_lock(c->lock.handle);
 	struct shm_stats_s *stats = apr_shm_baseaddr_get(c->shm.handle);
-	apr_global_mutex_unlock(c->lock.handle);
 
 	return apr_pstrcat(pool,
 			STR_KV(time_all,       "counter req.time"),
