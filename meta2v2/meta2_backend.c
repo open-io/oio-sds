@@ -61,6 +61,13 @@ enum m2v2_open_type_e
 #define M2V2_OPEN_STATUS    0xF00
 };
 
+struct m2_prepare_data {
+	gint64 max_versions;
+	gint64 quota;
+	gint64 size;
+	gchar storage_policy[LIMIT_LENGTH_STGPOLICY];
+};
+
 static void
 _append_url (GString *gs, struct oio_url_s *url)
 {
@@ -117,6 +124,16 @@ m2b_keep_deleted_delay(struct meta2_backend_s *m2b)
 	return delay;
 }
 
+static gchar*
+m2b_storage_policy(struct meta2_backend_s *m2b)
+{
+	gchar *stgpol = NULL;
+	g_mutex_lock (&m2b->nsinfo_lock);
+	stgpol = namespace_storage_policy(m2b->nsinfo, NULL);
+	g_mutex_unlock (&m2b->nsinfo_lock);
+	return stgpol;
+}
+
 static gint64
 _maxvers(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
 {
@@ -127,6 +144,13 @@ static gint64
 _retention_delay(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
 {
 	return m2db_get_keep_deleted_delay(sq3, m2b_keep_deleted_delay(m2b));
+}
+
+static gchar*
+_stgpol(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
+{
+	gchar *stgpol = sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY);
+	return stgpol? stgpol : m2b_storage_policy(m2b);
 }
 
 /* Backend ------------------------------------------------------------------ */
@@ -178,6 +202,10 @@ meta2_backend_init(struct meta2_backend_s **result,
 	m2->policies = service_update_policies_create();
 	g_mutex_init(&m2->nsinfo_lock);
 	m2->flag_precheck_on_generate = TRUE;
+	// TODO: use a custom hash function
+	m2->prepare_data_cache = g_hash_table_new_full(g_str_hash, g_str_equal,
+			g_free, g_free);
+	g_rw_lock_init(&(m2->prepare_data_lock));
 
 	GError *err = sqlx_repository_configure_type(m2->repo,
 			NAME_SRVTYPE_META2, schema);
@@ -204,6 +232,9 @@ meta2_backend_clean(struct meta2_backend_s *m2)
 		service_update_policies_destroy(m2->policies);
 	if (m2->resolver)
 		m2->resolver = NULL;
+	g_hash_table_unref(m2->prepare_data_cache);
+	m2->prepare_data_cache = NULL;
+	g_rw_lock_clear(&(m2->prepare_data_lock));
 	g_mutex_clear(&m2->nsinfo_lock);
 	namespace_info_free(m2->nsinfo);
 	g_free(m2);
@@ -390,6 +421,15 @@ m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 
 	*result = sq3;
 	return NULL;
+}
+
+static GError *
+m2b_open_if_needed(struct meta2_backend_s *m2, struct oio_url_s *url,
+		enum m2v2_open_type_e how, struct sqlx_sqlite3_s **result)
+{
+	if (*result)
+		return NULL;
+	return m2b_open(m2, url, how, result);
 }
 
 static GError*
@@ -784,7 +824,7 @@ meta2_backend_add_modified_container(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_refresh_container_size(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, gboolean bRecalc)
+		struct oio_url_s *url, gboolean recompute)
 {
     GError *err = NULL;
     struct sqlx_sqlite3_s *sq3 = NULL;
@@ -793,7 +833,7 @@ meta2_backend_refresh_container_size(struct meta2_backend_s *m2b,
 	EXTRA_ASSERT(url != NULL);
 
 	if (!(err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY, &sq3))) {
-		if (bRecalc)
+		if (recompute)
 			m2db_set_size(sq3, m2db_get_container_size(sq3->db, FALSE));
 		meta2_backend_add_modified_container(m2b, sq3);
 		m2b_close(sq3);
@@ -1244,16 +1284,117 @@ _check_alias_doesnt_exist(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 	return err;
 }
 
+/* Create, save in cache, and possibly return m2_prepare_data */
+static void
+_meta2_backend_force_prepare_data_unlocked(struct meta2_backend_s *m2b,
+		const gchar *key, struct m2_prepare_data *pdata_out,
+		struct sqlx_sqlite3_s *sq3)
+{
+	GRID_DEBUG("Forcing M2_PREPARE data for %s", key);
+
+	struct m2_prepare_data *pdata = g_hash_table_lookup(
+			m2b->prepare_data_cache, key);
+	if (!pdata) {
+		pdata = g_malloc0(sizeof(struct m2_prepare_data));
+		g_hash_table_insert(m2b->prepare_data_cache, g_strdup(key), pdata);
+	}
+
+	pdata->max_versions = _maxvers(sq3, m2b);
+	pdata->quota = _quota(sq3, m2b);
+	pdata->size = m2db_get_size(sq3);
+	gchar *stgpol = _stgpol(sq3, m2b);
+	g_strlcpy(pdata->storage_policy, stgpol, LIMIT_LENGTH_STGPOLICY);
+	g_free(stgpol);
+
+	if (pdata_out)
+		memmove(pdata_out, pdata, sizeof(struct m2_prepare_data));
+}
+
+static void
+_meta2_backend_force_prepare_data(struct meta2_backend_s *m2b,
+		const gchar *key, struct sqlx_sqlite3_s *sq3)
+{
+	g_rw_lock_writer_lock(&(m2b->prepare_data_lock));
+	_meta2_backend_force_prepare_data_unlocked(m2b, key, NULL, sq3);
+	g_rw_lock_writer_unlock(&(m2b->prepare_data_lock));
+}
+
+void
+meta2_backend_change_callback(struct sqlx_sqlite3_s *sq3,
+		struct meta2_backend_s *m2b)
+{
+	gchar *account = sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT);
+	gchar *user = sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME);
+	struct oio_url_s *url = oio_url_empty();
+	oio_url_set(url, OIOURL_NS, m2b->ns_name);
+	oio_url_set(url, OIOURL_ACCOUNT, account);
+	oio_url_set(url, OIOURL_USER, user);
+
+	_meta2_backend_force_prepare_data(m2b,
+			oio_url_get(url, OIOURL_HEXID), sq3);
+
+	oio_url_clean(url);
+	g_free(user);
+	g_free(account);
+}
+
+/**
+ * Get m2_prepare_data from the cache if available. If it's not,
+ * get it from the database and return a pointer to the open database.
+ *
+ * @param m2b
+ * @param url
+ * @param pdata_out preallocated (on the stack) output prepare data
+ * @param sq3 output database pointer, in case we were forced to open it
+ */
+static GError*
+_meta2_backend_get_prepare_data(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, struct m2_prepare_data *pdata_out,
+		struct sqlx_sqlite3_s **sq3)
+{
+	GError *err = NULL;
+	struct m2_prepare_data *pdata = NULL;
+	const gchar *key = oio_url_get(url, OIOURL_HEXID);
+
+	g_rw_lock_reader_lock(&(m2b->prepare_data_lock));
+	pdata = g_hash_table_lookup(m2b->prepare_data_cache, key);
+	if (pdata)  // do this while still locked
+		memmove(pdata_out, pdata, sizeof(struct m2_prepare_data));
+	g_rw_lock_reader_unlock(&(m2b->prepare_data_lock));
+
+	if (!pdata) {
+		// Prepare data is not available. Open the base, take the writer lock
+		// and check again, in case another thread did the job while we were
+		// waiting for the base or the writer lock.
+		err = m2b_open(m2b, url,
+				M2V2_OPEN_MASTERSLAVE|M2V2_OPEN_ENABLED, sq3);
+		if (!err) {
+			g_rw_lock_writer_lock(&(m2b->prepare_data_lock));
+			pdata = g_hash_table_lookup(m2b->prepare_data_cache, key);
+			if (pdata) {
+				memmove(pdata_out, pdata, sizeof(struct m2_prepare_data));
+			} else {
+				_meta2_backend_force_prepare_data_unlocked(m2b, key,
+						pdata_out, *sq3);
+			}
+			g_rw_lock_writer_unlock(&(m2b->prepare_data_lock));
+		}
+	}
+	// Do not close sq3, the caller will do it
+	return err;
+}
+
 GError*
 meta2_backend_generate_beans(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, gint64 size, const gchar *polname, gboolean append, 
-		m2_onbean_cb cb, gpointer cb_data)
+		struct oio_url_s *url, gint64 size, const gchar *polname,
+		gboolean append, m2_onbean_cb cb, gpointer cb_data)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = NULL;
 	struct namespace_info_s *nsinfo;
 	struct storage_policy_s *policy = NULL;
 	struct grid_lb_iterator_s *iter = NULL;
+	struct m2_prepare_data pdata = {0};
 
 	GRID_TRACE("BEANS(%s,%"G_GINT64_FORMAT",%s)", oio_url_get(url, OIOURL_WHOLE),
 			size, polname);
@@ -1264,17 +1405,20 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 	if (!(nsinfo = meta2_backend_get_nsinfo(m2b)))
 		return NEWERROR(CODE_INTERNAL_ERROR, "NS not ready");
 
-	/* Several checks are to be performed on the container state */
-	err = m2b_open(m2b, url, M2V2_OPEN_MASTERSLAVE|M2V2_OPEN_ENABLED, &sq3);
-	if (!err) {
+	/* Get the data needed for the beans preparation.
+	 * This call may return an open database. */
+	_meta2_backend_get_prepare_data(m2b, url, &pdata, &sq3);
 
-		gint64 max_version = _maxvers(sq3, m2b);
-		if (m2b->flag_precheck_on_generate && VERSIONS_DISABLED(max_version)) {
+	if (m2b->flag_precheck_on_generate &&
+			VERSIONS_DISABLED(pdata.max_versions)) {
+		err = m2b_open_if_needed(m2b, url,
+				M2V2_OPEN_MASTERSLAVE|M2V2_OPEN_ENABLED, &sq3);
+		if (!err) {
 			/* If the versioning is not supported, we check the content
 			 * is not present */
 			err = _check_alias_doesnt_exist(sq3, url);
-			if(append) {
-				if(err) {
+			if (append) {
+				if (err) {
 					g_clear_error(&err);
 					err = NULL;
 				} else {
@@ -1283,33 +1427,46 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 				}
 			}
 		}
+	}
 
-		/* Now check the storage policy */
-		if (!err) {
-			if (polname) {
-				if (!(policy = storage_policy_init(nsinfo, polname)))
-					err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
-							"Invalid policy [%s]", polname);
-			} else {
-				err = m2db_get_storage_policy(sq3, url, nsinfo, append, &policy);
-				if (err || !policy) {
-					gchar *def = namespace_storage_policy(nsinfo, oio_url_get(url, OIOURL_NS));
-					if (NULL != def) {
-						if (!(policy = storage_policy_init(nsinfo, def)))
-							err = NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy [%s]", def);
-						g_free(def);
-					}
+	/* Now check the storage policy */
+	if (!err) {
+		if (append) {
+			/* When appending, we must get the storage policy of
+			 * the existing content, thus we must open the base. */
+			err = m2b_open_if_needed(m2b, url,
+					M2V2_OPEN_MASTERSLAVE|M2V2_OPEN_ENABLED, &sq3);
+			if (!err)
+				err = m2db_get_storage_policy(sq3, url, nsinfo, append,
+						&policy);
+			if (err || !policy) {
+				gchar *def = namespace_storage_policy(nsinfo,
+						oio_url_get(url, OIOURL_NS));
+				if (NULL != def) {
+					if (!(policy = storage_policy_init(nsinfo, def)))
+						err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
+								"Invalid policy [%s]", def);
+					g_free(def);
 				}
 			}
+		} else {
+			if (!polname)
+				polname = pdata.storage_policy;
+
+			if (!(policy = storage_policy_init(nsinfo, polname))) {
+				err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
+							"Invalid policy [%s]", polname);
+			}
 		}
-
-		/* check container not full */
-		gint64 quota = _quota(sq3, m2b);
-		if(quota > 0 && quota <= m2db_get_size(sq3))
-			err = NEWERROR(CODE_CONTAINER_FULL, "Container's quota reached (%"G_GINT64_FORMAT" bytes)", quota);
-
-		m2b_close(sq3);
 	}
+
+	/* check container not full */
+	if (!err && pdata.quota > 0 && pdata.quota <= pdata.size)
+		err = NEWERROR(CODE_CONTAINER_FULL,
+				"Container's quota reached (%"G_GINT64_FORMAT" bytes)",
+				pdata.quota);
+
+	m2b_close(sq3);
 
 	/* Let's continue to generate the beans, no need for an open container for the moment */
 	if (!err) {

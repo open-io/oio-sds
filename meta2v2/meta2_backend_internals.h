@@ -51,6 +51,10 @@ struct meta2_backend_s
 	gboolean flag_precheck_on_generate;
 
 	gchar ns_name[LIMIT_LENGTH_NSNAME];
+
+	// Cache for admin values useful for M2_PREPARE requests
+	GHashTable *prepare_data_cache;
+	GRWLock prepare_data_lock;
 };
 
 #endif /*OIO_SDS__meta2v2__meta2_backend_internals_h*/
