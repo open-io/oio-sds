@@ -20,6 +20,7 @@ License along with this library.
 
 #include <glib.h>
 
+#include "oioext.h"
 #include "oiostr.h"
 #include "oiourl.h"
 #include "internals.h"
@@ -213,15 +214,16 @@ oio_str_randomize(guint8 *buf, gsize buflen)
 		return;
 
 	// Fill 4 by 4
+	GRand *r = oio_ext_local_prng ();
 	gsize mod32 = buflen % 4;
 	gsize max32 = buflen / 4;
 	for (register gsize i32=0; i32 < max32 ; ++i32) {
-		raw.r32 = g_random_int();
+		raw.r32 = g_rand_int(r);
 		((guint32*)buf)[i32] = raw.r32;
 	}
 
 	// Finish with the potentially remaining unset bytes
-	raw.r32 = g_random_int();
+	raw.r32 = g_rand_int(r);
 	switch (mod32) {
 		case 3:
 			buf[ (max32*4) + 2 ] = raw.r8[2];

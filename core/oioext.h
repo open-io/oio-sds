@@ -78,6 +78,21 @@ void oio_ext_set_reqid (const char *reqid);
 /** Calls oio_ext_set_reqid() with a randomly generated string */
 void oio_ext_set_random_reqid (void);
 
+/* DO NOT FREE ... In facts, DO NOT EVEN CONSIDER USING THIS FUNCTION!
+ * Gets the PRNG associated to the local thread, and allocates on if none
+ * already present. Returns THE pointer locally stored. Freeing it will break
+ * things and make the world collapse. Freeing will cause Ragnarok, Mappo and
+ * Al-Qiyamah all together. */
+GRand * oio_ext_local_prng (void);
+
+gboolean oio_ext_rand_boolean (void);
+
+gdouble oio_ext_rand_double (void);
+
+guint32 oio_ext_rand_int (void);
+
+gint32 oio_ext_rand_int_range (gint32 low, gint32 up);
+
 /** Get a request-id stored in the thread-local, or NULL if not set */
 const char * oio_ext_get_reqid (void);
 
