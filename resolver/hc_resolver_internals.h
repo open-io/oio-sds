@@ -44,7 +44,6 @@ struct lru_tree_s;
 
 struct cached_element_s
 {
-	time_t use;
 	guint32 count_elements;
 	gchar s[]; /* Must be the last! */
 };
@@ -52,7 +51,7 @@ struct cached_element_s
 struct lru_ext_s
 {
 	struct lru_tree_s *cache;
-	time_t ttl;
+	gint64 ttl;
 	guint max;
 };
 
@@ -61,7 +60,6 @@ struct hc_resolver_s
 	GMutex lock;
 	struct lru_ext_s services;
 	struct lru_ext_s csm0;
-	time_t bogonow;
 	enum hc_resolver_flags_e flags;
 
 	/* called with the IP:PORT string */

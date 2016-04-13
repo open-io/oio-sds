@@ -6,18 +6,9 @@ import signal
 import time
 import os
 import eventlet
-import greenlet
-from eventlet import debug
-from eventlet.green import zmq, socket, threading
-from eventlet import spawn
-import oio.event.beanstalk
-from oio.event.beanstalk import Beanstalk
 from oio.common.utils import read_conf, get_logger, \
     int_value, CPU_COUNT, drop_privileges, \
     redirect_stdio
-
-oio.event.beanstalk.socket = socket
-oio.event.beanstalk.threading = threading
 
 
 class HaltServer(BaseException):
@@ -45,7 +36,6 @@ class Runner(object):
         self.worker_class = worker_class
         self.workers = {}
         self.sig_queue = []
-        debug.hub_exceptions(True)
 
     def start(self):
         self.logger.info('Starting event-agent')
@@ -64,47 +54,13 @@ class Runner(object):
         self.start()
 
         try:
-            def zmq_loop():
-                queue_location = self.conf.get('queue_url',
-                                               'tcp://127.0.0.1:11300')
-                beanstalk = Beanstalk.from_url(queue_location)
-                context = zmq.Context.instance()
-                socket = context.socket(zmq.ROUTER)
-                socket.set(zmq.LINGER, 1000)
-                bind_addr = self.conf.get('bind_addr',
-                                          'ipc:///tmp/run/event-agent.sock')
-                socket.bind(bind_addr)
-                context = context
-
-                while True:
-                    msg = socket.recv_multipart()
-                    if validate_msg(msg):
-                        data = msg[3]
-                        beanstalk.put(data)
-                        ack = msg[0:3]
-                        socket.send_multipart(ack)
-
             self.manage_workers()
-
-            def debug_this(gt):
-                try:
-                    gt.wait()
-                except greenlet.GreenletExit:
-                    pass
-                except Exception:
-                    eventlet.greenthread.kill(server_gt, *sys.exc_info())
-
-            server_gt = eventlet.greenthread.getcurrent()
-            self.zmq_greenlet = spawn(zmq_loop)
-            self.zmq_greenlet.link(debug_this)
 
             while True:
                 sig = self.sig_queue.pop(0) if len(self.sig_queue) else None
                 if sig is None:
                     eventlet.sleep(1)
                     self.manage_workers()
-                    if self.zmq_greenlet.dead:
-                        raise HaltServer("zmq greenlet is dead")
                     continue
 
                 if sig not in self.SIG_NAMES:
@@ -165,8 +121,6 @@ class Runner(object):
         while self.workers and time.time() < limit:
             eventlet.sleep(0.1)
         self.kill_workers(signal.SIGKILL)
-        if self.zmq_greenlet:
-            self.zmq_greenlet.kill()
 
     def reap_workers(self):
         try:

@@ -36,17 +36,21 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "oio_events_queue.h"
 #include "oio_events_queue_internals.h"
 #include "oio_events_queue_beanstalkd.h"
+#include "oio_events_queue_buffer.h"
 
 static void _q_destroy (struct oio_events_queue_s *self);
 static void _q_send (struct oio_events_queue_s *self, gchar *msg);
+static void _q_send_overwritable(struct oio_events_queue_s *self, gchar *key, gchar *msg);
 static gboolean _q_is_stalled (struct oio_events_queue_s *self);
 static void _q_set_max_pending (struct oio_events_queue_s *self, guint v);
+static void _q_set_buffering (struct oio_events_queue_s *self, gint64 v);
 static GError * _q_run (struct oio_events_queue_s *self,
 		gboolean (*running) (gboolean pending));
 
 static struct oio_events_queue_vtable_s vtable_BEANSTALKD =
 {
-	_q_destroy, _q_send, _q_is_stalled, _q_set_max_pending, _q_run
+	_q_destroy, _q_send, _q_send_overwritable, _q_is_stalled,
+	_q_set_max_pending, _q_set_buffering, _q_run
 };
 
 struct _queue_BEANSTALKD_s
@@ -55,6 +59,8 @@ struct _queue_BEANSTALKD_s
 	GAsyncQueue *queue;
 	gchar *endpoint;
 	guint max_events_in_queue;
+
+	struct oio_events_queue_buffer_s buffer;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -76,8 +82,21 @@ oio_events_queue_factory__create_beanstalkd (const char *endpoint,
 	self->max_events_in_queue = OIO_EVTQ_MAXPENDING;
 	self->endpoint = g_strdup (endpoint);
 
+	oio_events_queue_buffer_init(&(self->buffer), 1 * G_TIME_SPAN_SECOND);
+
 	*out = (struct oio_events_queue_s*) self;
 	return NULL;
+}
+
+static void
+_q_set_buffering(struct oio_events_queue_s *self, gint64 v)
+{
+	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s *)self;
+	if (q->buffer.delay != v) {
+		GRID_INFO("events buffering delay set to %"G_GINT64_FORMAT"s",
+				v / G_TIME_SPAN_SECOND);
+		oio_events_queue_buffer_set_delay(&(q->buffer), v);
+	}
 }
 
 static void
@@ -86,7 +105,7 @@ _q_set_max_pending (struct oio_events_queue_s *self, guint v)
 	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s *)self;
 	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_BEANSTALKD);
 	if (q->max_events_in_queue != v) {
-		GRID_NOTICE("max events in queue set to [%u]", v);
+		GRID_INFO("max events in queue set to [%u]", v);
 		q->max_events_in_queue = v;
 	}
 }
@@ -95,24 +114,25 @@ static int
 _send (int fd, struct iovec *iov, unsigned int iovcount)
 {
 	int w;
-	struct pollfd pfd = {0};
-	pfd.fd = fd;
-	pfd.events = POLLIN;
 retry:
 	w = writev (fd, iov, 3);
 	if (w < 0) {
 		if (errno == EINTR)
 			goto retry;
 		if (errno == EAGAIN || errno == EWOULDBLOCK) {
+			struct pollfd pfd = {0};
+			pfd.fd = fd;
+			pfd.events = POLLOUT;
 			metautils_syscall_poll (&pfd, 1, 1000);
 			goto retry;
 		}
 		return 0;
 	}
 
-	while (w > 0) {
+	while (w > 0 && iovcount > 0) {
 		if (iov[0].iov_len <= (size_t)w) {
 			w -= iov[0].iov_len;
+			iov[0].iov_len = 0;
 			iov ++;
 			iovcount --;
 		} else {
@@ -120,10 +140,8 @@ retry:
 			w = 0;
 		}
 	}
-	if (iovcount > 0) {
-		metautils_syscall_poll (&pfd, 1, 1000);
+	if (iovcount > 0)
 		goto retry;
-	}
 
 	GRID_TRACE("BEANSTALKD put sent!");
 	return 1;
@@ -154,6 +172,21 @@ _put (int fd, struct iovec *iov, unsigned int iovcount)
 	return r;
 }
 
+static void
+_maybe_send_overwritable(struct oio_events_queue_s *self)
+{
+	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s *)self;
+	gboolean __send(gpointer key, gpointer msg, gpointer udata)
+	{
+		(void) udata;
+		g_free(key);
+		_q_send(self, (gchar*)msg);
+		return TRUE;
+	}
+
+	oio_events_queue_buffer_maybe_flush(&(q->buffer), __send, NULL);
+}
+
 static GError *
 _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 {
@@ -164,7 +197,8 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_BEANSTALKD);
 	EXTRA_ASSERT (running != NULL);
 
-	while ((*running)(g_async_queue_length(q->queue))) {
+	while ((*running)(0 < g_async_queue_length(q->queue))) {
+		_maybe_send_overwritable(self);
 
 		/* find an event, prefering the last that failed */
 		gchar *msg = saved;
@@ -184,6 +218,11 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 					g_clear_error (&err);
 					saved = msg;
 					msg = NULL;
+
+					/* Avoid looping crazily until the beanstalkd becomes up
+					 * again, let's sleep a little bit. */
+					g_usleep (250 * G_TIME_SPAN_MILLISECOND);
+					continue;
 				} else {
 					GRID_DEBUG("BEANSTALKD: reconnected to %s", q->endpoint);
 				}
@@ -236,6 +275,9 @@ _q_destroy (struct oio_events_queue_s *self)
 	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s*) self;
 	EXTRA_ASSERT(q->vtable == &vtable_BEANSTALKD);
 	g_async_queue_unref (q->queue);
+	oio_str_clean (&q->endpoint);
+	oio_events_queue_buffer_clean(&(q->buffer));
+	q->vtable = NULL;
 	g_free (q);
 }
 
@@ -245,6 +287,13 @@ _q_send (struct oio_events_queue_s *self, gchar *msg)
 	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s*) self;
 	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_BEANSTALKD);
 	g_async_queue_push (q->queue, msg);
+}
+
+static void
+_q_send_overwritable(struct oio_events_queue_s *self, gchar *key, gchar *msg)
+{
+	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s*) self;
+	oio_events_queue_buffer_put(&(q->buffer), key, msg);
 }
 
 static gboolean

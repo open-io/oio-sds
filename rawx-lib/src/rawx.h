@@ -105,36 +105,6 @@ void chunk_textinfo_free_content(struct chunk_textinfo_s *cti);
 void content_textinfo_free_content(struct content_textinfo_s *cti);
 
 /**
- * Write the attributes in the structure in the extended attributes of
- * the file pointed by the given path.
- *
- * If the structure has fields with a NULL value, it is not an error and
- * the associated attribute won't be set.
- *
- * @param pathname the path of the chunk whose attributes should be set
- * @param error a pointer to a GError structure filled in case of error
- * @param cti the attributes of the chunk
- * @return 1 in case of success, 0 in case of error
- */
-gboolean set_chunk_info_in_attr( const char *pathname, GError **error,
-	struct chunk_textinfo_s *cti);
-
-/**
- * Write the attributes in the structure in the extended attributes of
- * the file pointed by the given path.
- *
- * If the structure has fields with a NULL value, it is not an error and
- * the associated attribute won't be set.
- *
- * @param pathname the path of the content whose attributes should be set
- * @param error a pointer to a GError structure filled in case of error
- * @param cti the attributes of the chunk
- * @return 1 in case of success, 0 in case of error
- */
-gboolean set_content_info_in_attr(const char *pathname, GError **error,
-	struct content_textinfo_s *cti);
-
-/**
  * Set both the content and the chunk attributes in the extended attributes
  * of the file pointed by the given path.
  *
@@ -166,8 +136,7 @@ gboolean set_rawx_info_in_attr(const char *pathname, GError **error,
  * @param compressed_size the chunk compressed size
  * @return 1 in case of success, 0 in case of error
  */
-gboolean set_rawx_full_info_in_attr(const char *pathname, int filedes, 
-	GError **error,
+gboolean set_rawx_full_info_in_attr(const char *pathname, int fd, GError **err,
 	struct content_textinfo_s *content, struct chunk_textinfo_s *chunk,
 	const char *compression_info, const char *compressed_size);
 
@@ -200,37 +169,6 @@ gboolean set_compression_info_in_attr(const char *pathname, GError **error,
  */
 gboolean set_chunk_compressed_size_in_attr(const char *pathname, GError **error,
         guint32 compressed_size);
-
-/**
- * Get the compression attributes in the extended attributes
- * of the file pointed by the given path.
- *
- * If one of the structure has fields with a NULL value, it is not an error
- * and the associated attribute won't be set.
- *
- * @param pathname the path of the content whose attributes should be set
- * @param error a pointer to a GError structure filled in case of error
- * @param the size of the compressed chunk
- * @return 1 in case of success, 0 in case of error
- */
-gboolean get_chunk_compressed_size_in_attr(const char *pathname, GError **error,
-        guint32* compressed_size);
-
-/**
- * Load the given attribute structure with the content extended attributes
- * of the chunk pointed by the given path.
- *
- * The structure fields (the pointers) are overwriten. If an
- * attribute is not found, the associated attribute is set to NULL in the
- * structure.
- *
- * @param pathname the path of the chunk whose attributes should be set
- * @param error a pointer to a GError structure filled in case of error
- * @param cti the content attributes structure
- * @return 1 in case of success, 0 in case of error
- */
-gboolean get_content_info_in_attr( const char *pathname, GError **error,
-	struct content_textinfo_s *cti);
 
 /**
  * Load the given attribute structure with the chunk extended attributes
@@ -278,7 +216,7 @@ gboolean get_rawx_info_in_attr(const char *pathname, GError **error,
  * @return 1 in case of success, 0 in case of error
  */
 gboolean get_compression_info_in_attr(const char *pathname, GError **error,
-	GHashTable **table);
+	GHashTable *table);
 
 #ifndef RAWXLOCK_ATTRNAME_URL
 # define RAWXLOCK_ATTRNAME_URL "user.rawx_server.address"

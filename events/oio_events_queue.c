@@ -21,6 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <glib.h>
 
 #include <core/oio_core.h>
+#include <metautils/lib/metautils_resolv.h>
 
 #include "oio_events_queue.h"
 #include "oio_events_queue_internals.h"
@@ -42,6 +43,20 @@ oio_events_queue__send (struct oio_events_queue_s *self, gchar *msg)
 	EVTQ_CALL(self,send)(self,msg);
 }
 
+void
+oio_events_queue__send_overwritable(struct oio_events_queue_s *self,
+		gchar *key, gchar *msg)
+{
+	EXTRA_ASSERT (msg != NULL);
+	if (VTABLE_HAS(self,struct oio_events_queue_abstract_s*,send_overwritable)
+			&& key && *key) {
+		EVTQ_CALL(self,send_overwritable)(self,key,msg);
+	} else {
+		EVTQ_CALL(self,send)(self,msg);
+		g_free(key);  // safe if key is NULL
+	}
+}
+
 gboolean
 oio_events_queue__is_stalled (struct oio_events_queue_s *self)
 {
@@ -52,6 +67,12 @@ void
 oio_events_queue__set_max_pending (struct oio_events_queue_s *self, guint v)
 {
 	EVTQ_CALL(self,set_max_pending)(self,v);
+}
+
+void
+oio_events_queue__set_buffering(struct oio_events_queue_s *self, gint64 us)
+{
+	EVTQ_CALL(self,set_buffering)(self,us);
 }
 
 GError *
@@ -85,6 +106,35 @@ oio_events_queue_factory__create (const char *cfg, struct oio_events_queue_s **o
 			|| NULL != (tmp = _has_prefix (cfg, "tcp://"))
 			|| NULL != (tmp = _has_prefix (cfg, "inproc://")))
 		return oio_events_queue_factory__create_zmq (cfg, out);
+
+	return BADREQ("implementation not recognized");
+}
+
+GError *
+oio_events_queue_factory__check_config (const char *cfg)
+{
+	const char *tmp;
+	if (!cfg)
+		return BADREQ("NULL configuration");
+	if (!*cfg)
+		return BADREQ("Empty configuration");
+
+	if (NULL != (tmp = _has_prefix (cfg, "beanstalk://"))) {
+		if (!metautils_url_valid_for_connect (tmp))
+			return BADREQ("Invalid beanstalkd URL");
+		return NULL;
+	}
+
+	if (NULL != (tmp = _has_prefix (cfg, "inproc://")))
+		return NULL;
+	if (NULL != (tmp = _has_prefix (cfg, "ipc://")))
+		return NULL;
+
+	if (NULL != (tmp = _has_prefix (cfg, "tcp://"))) {
+		if (!metautils_url_valid_for_connect (tmp))
+			return BADREQ("Invalid zmq/tcp URL");
+		return NULL;
+	}
 
 	return BADREQ("implementation not recognized");
 }

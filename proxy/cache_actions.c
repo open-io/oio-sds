@@ -32,7 +32,7 @@ action_forward_stats (struct req_args_s *args)
 	MESSAGE req = metautils_message_create_named("REQ_STATS");
 	GByteArray *encoded = message_marshall_gba_and_clean (req);
 	gchar *packed = NULL;
-	GError *err = gridd_client_exec_and_concat_string (id, 1.0, encoded, &packed);
+	GError *err = gridd_client_exec_and_concat_string (id, COMMON_STAT_TIMEOUT, encoded, &packed);
 	if (err) {
 		g_free0 (packed);
 		if (CODE_IS_NETWORK_ERROR(err->code)) {
@@ -80,7 +80,7 @@ action_forward (struct req_args_s *args)
 	if (!g_ascii_strcasecmp (action, "kill")) {
 		GByteArray *encoded = message_marshall_gba_and_clean (
 				metautils_message_create_named("REQ_KILL"));
-		err = gridd_client_exec (id, 1.0, encoded);
+		err = gridd_client_exec (id, COMMON_CLIENT_TIMEOUT, encoded);
 		if (err)
 			return _reply_common_error (args, err);
 		return _reply_success_json (args, NULL);
@@ -89,7 +89,7 @@ action_forward (struct req_args_s *args)
 		args->rp->no_access();
 		GByteArray *encoded = message_marshall_gba_and_clean (
 				metautils_message_create_named("REQ_PING"));
-		err = gridd_client_exec (id, 1.0, encoded);
+		err = gridd_client_exec (id, COMMON_CLIENT_TIMEOUT, encoded);
 		if (err)
 			return _reply_common_error (args, err);
 		return _reply_success_json (args, NULL);
@@ -99,7 +99,7 @@ action_forward (struct req_args_s *args)
 		metautils_message_add_field_str(req, "LIBC", "1");
 		metautils_message_add_field_str(req, "THREADS", "1");
 		GByteArray *encoded = message_marshall_gba_and_clean (req);
-		err = gridd_client_exec (id, 1.0, encoded);
+		err = gridd_client_exec (id, COMMON_CLIENT_TIMEOUT, encoded);
 		if (err)
 			return _reply_common_error (args, err);
 		return _reply_success_json (args, NULL);
@@ -108,7 +108,7 @@ action_forward (struct req_args_s *args)
 	if (!g_ascii_strcasecmp (action, "lean-sqlx")) {
 		GByteArray *encoded = message_marshall_gba_and_clean (
 				metautils_message_create_named(NAME_MSGNAME_SQLX_LEANIFY));
-		err = gridd_client_exec (id, 1.0, encoded);
+		err = gridd_client_exec (id, COMMON_CLIENT_TIMEOUT, encoded);
 		if (err)
 			return _reply_common_error (args, err);
 		return _reply_success_json (args, NULL);
@@ -119,7 +119,7 @@ action_forward (struct req_args_s *args)
 		MESSAGE req = metautils_message_create_named("REQ_VERSION");
 		GByteArray *encoded = message_marshall_gba_and_clean (req);
 		gchar *packed = NULL;
-		err = gridd_client_exec_and_concat_string (id, 1.0, encoded, &packed);
+		err = gridd_client_exec_and_concat_string (id, COMMON_CLIENT_TIMEOUT, encoded, &packed);
 		if (err) {
 			g_free0 (packed);
 			return _reply_common_error (args, err);
@@ -138,7 +138,7 @@ action_forward (struct req_args_s *args)
 		MESSAGE req = metautils_message_create_named("REQ_HANDLERS");
 		GByteArray *encoded = message_marshall_gba_and_clean (req);
 		gchar *packed = NULL;
-		err = gridd_client_exec_and_concat_string (id, 1.0, encoded, &packed);
+		err = gridd_client_exec_and_concat_string (id, COMMON_CLIENT_TIMEOUT, encoded, &packed);
 		if (err) {
 			g_free0 (packed);
 			return _reply_common_error (args, err);
@@ -213,7 +213,6 @@ action_cache_status (struct req_args_s *args)
 	hc_resolver_info (resolver, &s);
 
 	GString *gstr = g_string_new ("{");
-	g_string_append_printf (gstr, " \"clock\":%lu,", s.clock);
 	g_string_append_printf (gstr, " \"csm0\":{"
 		"\"count\":%" G_GINT64_FORMAT ",\"max\":%u,\"ttl\":%lu},",
 		s.csm0.count, s.csm0.max, s.csm0.ttl);

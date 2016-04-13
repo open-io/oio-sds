@@ -335,9 +335,9 @@ oio_str_lower(register gchar *s)
 }
 
 void
-oio_str_gstring_append_json_blob(GString *base, const char *s, int len)
+oio_str_gstring_append_json_blob(GString *base, const char *s0, int len)
 {
-	for (int i = 0; (len < 0 && *s) || i < len; i++) {
+	for (const char *s = s0; (len < 0 && *s) || (s - s0) < len ;) {
 		if (*s & (const char)0x80) {  // (part of a) unicode character
 			gunichar c = g_utf8_get_char_validated(s, -1);
 			if (c == (gunichar)-1) {

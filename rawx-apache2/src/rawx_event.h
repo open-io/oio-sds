@@ -29,7 +29,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  * @return 0 if KO, !=0 if OK
  */
-int rawx_event_init(server_rec *s, const char *addr);
+GError* rawx_event_init(const char *addr);
 
 
 /**
@@ -43,8 +43,8 @@ void rawx_event_destroy(void);
  * @event_type name of the event
  * @data_json data event in json (this function will free it)
  *
- * @return 0 if KO, !=0 if OK
+ * @return NULL if OK, or a GError describing the problem
  */
-int rawx_event_send(const char *event_type, GString *data_json);
+GError* rawx_event_send(const char *event_type, GString *data_json);
 
 #endif /*OIO_SDS__rawx_apache2__src__rawx_event_h*/

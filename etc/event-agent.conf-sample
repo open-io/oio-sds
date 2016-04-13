@@ -1,9 +1,10 @@
 [event-agent]
 namespace = OPENIO
 user = openio
-bind_addr = ipc:///tmp/run/event-agent.sock
+queue_url = tcp://127.0.0.1:11300
+# based on CPU count
 workers = 2
-queue_location = /tmp/oio-event-queue.db
+concurrency = 10
 retries_per_second = 30
 batch_size = 500
 acct_update = True

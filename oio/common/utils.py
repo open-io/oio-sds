@@ -6,14 +6,7 @@ import hashlib
 import pwd
 import sys
 import time
-import xattr
 import fcntl
-
-try:
-    import simplejson as json
-except ImportError:
-    import json  # noqa
-
 
 import eventlet
 import eventlet.semaphore
@@ -22,18 +15,39 @@ from eventlet.green import socket, threading
 from optparse import OptionParser
 from ConfigParser import SafeConfigParser
 
-
 from logging.handlers import SysLogHandler
 import logging
 logging.thread = eventlet.green.thread
 logging.threading = threading
 logging._lock = logging.threading.RLock()
 
+xattr = None
+try:
+    # try python-pyxattr
+    import xattr
+except ImportError:
+    pass
+if xattr:
+    try:
+        xattr.get_all
+    except AttributeError:
+        # fallback to pyxattr compat mode
+        from xattr import pyxattr_compat as xattr
+try:
+    import simplejson as json
+except ImportError:
+    import json  # noqa
+
+
 try:
     import multiprocessing
     CPU_COUNT = multiprocessing.cpu_count() or 1
 except (ImportError, NotImplementedError):
     CPU_COUNT = 1
+
+
+def get_hub():
+    return 'poll'
 
 
 class NullLogger(object):

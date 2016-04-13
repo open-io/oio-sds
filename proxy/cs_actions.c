@@ -242,7 +242,7 @@ action_conscience_info (struct req_args_s *args)
 
 		GString *out = g_string_new("");
 		g_string_append_c(out, '[');
-		NSINFO_DO(if (srvtypes && *srvtypes) {
+		NSINFO_READ(if (srvtypes && *srvtypes) {
 			g_string_append_c(out, '"');
 			g_string_append(out, *srvtypes);
 			g_string_append_c(out, '"');
@@ -261,7 +261,7 @@ action_conscience_info (struct req_args_s *args)
 		return _reply_notfound_error (args, err);
 
 	struct namespace_info_s ni = {{0}};
-	NSINFO_DO(namespace_info_copy (&nsinfo, &ni));
+	NSINFO_READ(namespace_info_copy (&nsinfo, &ni));
 
 	GString *gstr = g_string_new ("");
 	namespace_info_encode_json (gstr, &ni);
@@ -292,7 +292,7 @@ action_local_list (struct req_args_s *args)
 		return FALSE;
 	}
 
-	PUSH_DO(lru_tree_foreach_DEQ(srv_registered, _on_service, NULL));
+	PUSH_DO(lru_tree_foreach(srv_registered, _on_service, NULL));
 	g_string_append_c (gs, ']');
 
 	return _reply_success_json (args, gs);

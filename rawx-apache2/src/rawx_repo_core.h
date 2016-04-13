@@ -37,45 +37,48 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "rawx_config.h"
 
 /* context needed to identify a resource */
-struct dav_resource_private {
-	apr_pool_t *pool;        /* memory storage pool associated with request */
+struct dav_resource_private
+{
+	apr_pool_t *pool;
 	request_rec *request;
 
-	char dirname[1024];
-	char hex_chunkid[STRLEN_CHUNKID];
-	char file_extension[64];
-	gboolean compression;
-	char compress_algo[512];
+	char *forced_cp;
+	char *forced_cp_algo;
+	char *forced_cp_bs;
+
+	struct storage_policy_s *sp;
 
 	const char *fullpath;
+
 	apr_finfo_t finfo;
 	struct content_textinfo_s content;
 	struct chunk_textinfo_s chunk;
 	struct compression_ctx_s comp_ctx;
 	struct compressed_chunk_s cp_chunk;
 
-	/**/
-	char *forced_cp;
-	char *forced_cp_algo;
-	char *forced_cp_bs;
+	gboolean update_only : 8;
+	gboolean compression : 8;
 
-	gboolean update_only;
-	struct storage_policy_s *sp;
+	char hex_chunkid[STRLEN_CHUNKID];
+	char file_extension[32];
+	char compress_algo[128];
+	char dirname[512];
 };
 
-struct dav_stream {
+struct dav_stream
+{
 	const dav_resource *r;
 	apr_pool_t *p;
 	int fsync_on_close;
 	FILE *f;
 	gboolean compression;
-	void *buffer;	
+	void *buffer;
 	apr_size_t bufsize;
 	const char *pathname;
 	const char *final_pathname;
 	apr_size_t blocksize;
 	gulong compress_checksum;
-	guint32 compressed_size; 
+	guint32 compressed_size;
 	char *metadata_compress;
 	struct compression_ctx_s comp_ctx;
 
@@ -83,9 +86,12 @@ struct dav_stream {
 	apr_size_t total_size;
 };
 
+#define RESOURCE_STAT_CHUNK_READ_ATTRS 0x01
+#define RESOURCE_STAT_CHUNK_PENDING    0x02
+
 dav_error * resource_init_decompression(dav_resource *resource, dav_rawx_server_conf *conf);
 
-void resource_stat_chunk(dav_resource *resource, int xattr_too);
+void resource_stat_chunk(dav_resource *resource, int flags);
 
 const char * request_load_chunk_info(request_rec *request, dav_resource *resource);
 
@@ -104,8 +110,6 @@ dav_error * rawx_repo_write_last_data_crumble(dav_stream *stream);
 dav_error * rawx_repo_rollback_upload(dav_stream *stream);
 
 dav_error * rawx_repo_commit_upload(dav_stream *stream);
-
-dav_error * rawx_repo_ensure_directory(const dav_resource *resource);
 
 dav_error * rawx_repo_stream_create(const dav_resource *resource, dav_stream **result);
 

@@ -34,10 +34,10 @@ static GThread *downstream_thread = NULL;
 guint csurl_refresh_delay = PROXYD_PERIOD_RELOAD_CSURL;
 guint srvtypes_refresh_delay = PROXYD_PERIOD_RELOAD_SRVTYPES;
 guint nsinfo_refresh_delay = PROXYD_PERIOD_RELOAD_NSINFO;
-time_t nsinfo_refresh_m0 = PROXYD_PERIOD_RELOAD_M0INFO;
-time_t cs_expire_local_services = PROXYD_TTL_DEAD_LOCAL_SERVICES;
-time_t cs_down_services = PROXYD_TTL_DOWN_SERVICES;
-time_t cs_known_services = PROXYD_TTL_KNOWN_SERVICES;
+
+gint64 cs_expire_local_services = PROXYD_TTL_DEAD_LOCAL_SERVICES;
+gint64 cs_down_services = PROXYD_TTL_DOWN_SERVICES;
+gint64 cs_known_services = PROXYD_TTL_KNOWN_SERVICES;
 
 // Configuration
 
@@ -45,17 +45,19 @@ static GSList *config_urlv = NULL;
 
 static guint lb_downstream_delay = PROXYD_DEFAULT_PERIOD_DOWNSTREAM;
 static guint lb_upstream_delay = PROXYD_DEFAULT_PERIOD_UPSTREAM;
-static guint dir_low_ttl = PROXYD_DEFAULT_TTL_SERVICES;
+static guint dir_low_ttl = PROXYD_DEFAULT_TTL_SERVICES / G_TIME_SPAN_SECOND;
 static guint dir_low_max = PROXYD_DEFAULT_MAX_SERVICES;
-static guint dir_high_ttl = PROXYD_DEFAULT_TTL_CSM0;
+static guint dir_high_ttl = PROXYD_DEFAULT_TTL_CSM0 / G_TIME_SPAN_SECOND;
 static guint dir_high_max = PROXYD_DEFAULT_MAX_CSM0;
+
+gchar *nsname = NULL;
 gboolean flag_cache_enabled = TRUE;
+gboolean flag_local_scores = FALSE;
 
 struct grid_lbpool_s *lbpool = NULL;
 struct hc_resolver_s *resolver = NULL;
-gchar *nsname = NULL;
 
-GMutex csurl_mutex = {0};
+GRWLock csurl_rwlock = {0};
 gchar **csurl = NULL;
 gsize csurl_count = 0;
 
@@ -63,15 +65,16 @@ GMutex push_mutex = {0};
 struct lru_tree_s *push_queue = NULL;
 struct lru_tree_s *srv_registered = NULL;
 
-GMutex nsinfo_mutex = {0};
+GRWLock nsinfo_rwlock = {0};
 struct namespace_info_s nsinfo = {{0}};
 gchar **srvtypes = NULL;
+gint64 ns_chunk_size = 10*1024*1024;
 
-GMutex srv_mutex = {0};
+GRWLock srv_rwlock = {0};
 struct lru_tree_s *srv_down = NULL;
 struct lru_tree_s *srv_known = NULL;
 
-GMutex wanted_mutex = {0};
+GRWLock wanted_rwlock = {0};
 gchar **wanted_srvtypes = NULL;
 GBytes **wanted_prepared = NULL;
 
@@ -103,18 +106,15 @@ action_status(struct req_args_s *args)
 	g_string_append_printf(gstr, "gauge cache.dir.count = %"G_GINT64_FORMAT"\n", s.csm0.count);
 	g_string_append_printf(gstr, "gauge cache.dir.max = %u\n", s.csm0.max);
 	g_string_append_printf(gstr, "gauge cache.dir.ttl = %lu\n", s.csm0.ttl);
-	g_string_append_printf(gstr, "gauge cache.dir.clock = %lu\n", s.clock);
 
 	g_string_append_printf(gstr, "gauge cache.srv.count = %"G_GINT64_FORMAT"\n", s.services.count);
 	g_string_append_printf(gstr, "gauge cache.srv.max = %u\n", s.services.max);
 	g_string_append_printf(gstr, "gauge cache.srv.ttl = %lu\n", s.services.ttl);
-	g_string_append_printf(gstr, "gauge cache.srv.clock = %lu\n", s.clock);
 
-	gint64 count = 0;
-	SRV_DO(count = lru_tree_count(srv_down));
-	g_string_append_printf(gstr, "gauge down.srv = %"G_GINT64_FORMAT"\n", count);
-	SRV_DO(count = lru_tree_count(srv_known));
-	g_string_append_printf(gstr, "gauge known.srv = %"G_GINT64_FORMAT"\n", count);
+	gint64 cd, ck;
+	SRV_READ(cd = lru_tree_count(srv_down); ck = lru_tree_count(srv_known));
+	g_string_append_printf(gstr, "gauge down.srv = %"G_GINT64_FORMAT"\n", cd);
+	g_string_append_printf(gstr, "gauge known.srv = %"G_GINT64_FORMAT"\n", ck);
 
 	args->rp->set_body_gstr(gstr);
 	args->rp->set_status(HTTP_CODE_OK, "OK");
@@ -276,27 +276,12 @@ _push_queue_create (void)
 // Administrative tasks --------------------------------------------------------
 
 static guint
-_expire_services (struct lru_tree_s *lru, time_t delay)
+_expire_services (struct lru_tree_s *lru, const gint64 delay)
 {
-	gchar *k = NULL;
-	gpointer v = NULL;
+	if (delay <= 0) return 0;
+	const gint64 now = oio_ext_monotonic_time();
 	guint count = 0;
-
-	g_assert (delay >= 0);
-	gulong oldest = oio_ext_monotonic_seconds();
-	oldest = (oldest > (gulong)delay) ? oldest - (gulong)delay : 0;
-
-	SRV_DO(while (lru_tree_get_last(lru, (void**)&k, &v)) {
-		EXTRA_ASSERT(k != NULL);
-		EXTRA_ASSERT(v != NULL);
-		gulong when = (gulong)v;
-		if (when >= oldest)
-			break;
-		lru_tree_steal_last(lru, (void**)&k, &v);
-		g_free(k);
-		++ count;
-	});
-
+	SRV_WRITE(count = lru_tree_remove_older(lru, OLDEST(now,delay)));
 	return count;
 }
 
@@ -322,13 +307,12 @@ static void
 _task_expire_resolver (gpointer p)
 {
 	(void) p;
-	hc_resolver_set_now (resolver, oio_ext_monotonic_seconds());
-	guint count = hc_resolver_expire (resolver);
-	if (count)
-		GRID_DEBUG ("Expired %u resolver entries", count);
-	count = hc_resolver_purge (resolver);
-	if (count)
-		GRID_DEBUG ("Purged %u resolver ", count);
+	guint count_expire = hc_resolver_expire (resolver);
+	guint count_purge = hc_resolver_purge (resolver);
+	if (count_expire || count_purge) {
+		GRID_DEBUG ("Resolver: expired %u, purged %u",
+				count_expire, count_purge);
+	}
 }
 
 static void
@@ -336,8 +320,6 @@ _local_score_update (const struct service_info_s *si0)
 {
 	gchar *k = service_info_key (si0);
 	STRING_STACKIFY(k);
-	/* XXX(jfs): requires LTO_NOATIME to be set on <srv_registered> to avoid
-	   disturbing the sequence */
 	struct service_info_s *si = lru_tree_get (srv_registered, k);
 	if (si) si->score.value = si0->score.value;
 }
@@ -397,26 +379,26 @@ _reload_srvtype(const char *type)
 
 	/* reloads the known services */
 	gulong now = oio_ext_monotonic_seconds ();
-	SRV_DO(for (GSList *l=list; l ;l=l->next) {
+	SRV_WRITE(for (GSList *l=list; l ;l=l->next) {
 		gchar *k = service_info_key (l->data);
 		lru_tree_insert (srv_known, k, (void*)now);
 	});
 
 	/* updates the score of the local services */
-	if (list) {
+	if (flag_local_scores && NULL != list) {
 		for (GSList *l=list; l ;l=l->next)
 			PUSH_DO(_local_score_update(l->data));
 	}
 
 	/* prepares a cache of services wanted by the clients */
-	if (flag_cache_enabled) {
+	if (flag_cache_enabled && NULL != list) {
 		GBytes *encoded = _encode_wanted_services (type, list);
-		WANTED_DO (encoded = _NOLOCK_precache_list_of_services (type, encoded));
+		WANTED_WRITE (encoded = _NOLOCK_precache_list_of_services (type, encoded));
 		g_bytes_unref (encoded);
 	}
 
 	/* reload the LB */
-	if (list) {
+	if (NULL != list) {
 		GSList *l = list;
 		gboolean provide(struct service_info_s **p_si) {
 			if (!l) return FALSE;
@@ -444,7 +426,7 @@ _task_reload_lbpool (gpointer p)
 
 	ADAPTIVE_PERIOD_ONSUCCESS(lb_downstream_delay);
 	gchar **tt = NULL;
-	NSINFO_DO(tt = g_strdupv_inline(srvtypes));
+	NSINFO_READ(tt = g_strdupv_inline(srvtypes));
 
 	if (tt) {
 		for (gchar **t=tt; *t ;++t)
@@ -470,12 +452,14 @@ _task_reload_csurl (gpointer p)
 		ADAPTIVE_PERIOD_ONSUCCESS(csurl_refresh_delay);
 		gchar **newcs = g_strsplit(s, ",", -1);
 		if (newcs) {
-			CSURL_DO(do {
+			g_rw_lock_writer_lock (&csurl_rwlock);
+			do {
 				gchar **tmp = csurl;
 				csurl = newcs;
 				newcs = tmp;
 				csurl_count = g_strv_length (csurl);
-			} while (0));
+			} while (0);
+			g_rw_lock_writer_unlock (&csurl_rwlock);
 			g_strfreev (newcs);
 		}
 	}
@@ -502,7 +486,8 @@ _task_reload_nsinfo (gpointer p)
 		g_clear_error (&err);
 	} else {
 		ADAPTIVE_PERIOD_ONSUCCESS(nsinfo_refresh_delay);
-		NSINFO_DO(namespace_info_copy (ni, &nsinfo));
+		NSINFO_WRITE(namespace_info_copy (ni, &nsinfo);
+					 ns_chunk_size = nsinfo.chunk_size);
 		namespace_info_free (ni);
 	}
 }
@@ -537,47 +522,24 @@ _task_reload_srvtypes (gpointer p)
 	g_slist_free (list);
 	list = NULL;
 
-	NSINFO_DO(gchar **tmp = srvtypes;
+	NSINFO_WRITE(gchar **tmp = srvtypes;
 	srvtypes = newset;
-	newset = tmp;);
+	newset = tmp);
 
 	if (newset)
 		g_strfreev (newset);
-}
-
-static guint
-_expire_local (time_t pivot, GString *dbg)
-{
-	guint count = 0;
-	gchar *k = NULL;
-	struct service_info_s *si = NULL;
-
-	while (lru_tree_get_last (srv_registered, (void**)&k, (void**)&si)) {
-		if (si->score.timestamp > pivot)
-			break;
-		lru_tree_steal_last (srv_registered, (void**)&k, (void**)&si);
-		if (dbg->len < 128) {
-			if (dbg->len > 0) g_string_append_c (dbg, ',');
-			g_string_append (dbg, k);
-		}
-		g_free (k);
-		service_info_clean (si);
-		++ count;
-	}
-	return count;
 }
 
 static void
 _task_expire_local (gpointer p)
 {
 	(void) p;
-	time_t pivot = oio_ext_monotonic_seconds () - cs_expire_local_services;
-	GString *dbg = g_string_new ("");
+	const gint64 now = oio_ext_monotonic_time ();
+	const gint64 oldest = OLDEST(now,cs_expire_local_services);
 	guint count;
-	PUSH_DO(count = _expire_local (pivot, dbg));
+	PUSH_DO(count = lru_tree_remove_older (srv_registered, oldest));
 	if (count)
-		GRID_INFO("%u local services expired: %s", count, dbg->str);
-	g_string_free (dbg, TRUE);
+		GRID_INFO("%u local services", count);
 }
 
 static void
@@ -593,7 +555,7 @@ _task_push (gpointer p)
 	}
 
 	PUSH_DO(lru = push_queue; push_queue = _push_queue_create());
-	lru_tree_foreach_DEQ(lru, _list, NULL);
+	lru_tree_foreach(lru, _list, NULL);
 
 	if (!tmp) {
 		GRID_TRACE("Push: no service to be pushed");
@@ -689,6 +651,11 @@ grid_main_get_options (void)
 			"Disable caching for the conscience: services are pushed\n"
 			"synchronously and no cache is kept on a GET."},
 
+		{"LocalScores", OT_BOOL, {.b = &flag_local_scores},
+			"Enables the updates of the list of local services, so that\n"
+			"their score is displayed. This gives a pretty output but\n"
+			"requires CPU spent in critical sections."},
+
 		{"DirLowTtl", OT_UINT, {.u = &dir_low_ttl},
 			"Directory 'low' (meta1) TTL for cache elements"},
 		{"DirLowMax", OT_UINT, {.u = &dir_low_max},
@@ -777,11 +744,11 @@ grid_main_specific_fini (void)
 	}
 	namespace_info_clear (&nsinfo);
 	oio_str_clean (&nsname);
-	g_mutex_clear(&nsinfo_mutex);
+	g_rw_lock_clear(&nsinfo_rwlock);
 	g_mutex_clear(&push_mutex);
-	g_mutex_clear(&csurl_mutex);
-	g_mutex_clear(&srv_mutex);
-	g_mutex_clear(&wanted_mutex);
+	g_rw_lock_clear(&csurl_rwlock);
+	g_rw_lock_clear(&srv_rwlock);
+	g_rw_lock_clear(&wanted_rwlock);
 
 	if (csurl) g_strfreev (csurl);
 	csurl = NULL;
@@ -897,11 +864,11 @@ grid_main_configure (int argc, char **argv)
 	const char *cfg_main_url = argv[0];
 	const char *cfg_namespace = argv[1];
 
-	g_mutex_init (&csurl_mutex);
+	g_rw_lock_init (&csurl_rwlock);
 	g_mutex_init (&push_mutex);
-	g_mutex_init (&nsinfo_mutex);
-	g_mutex_init (&srv_mutex);
-	g_mutex_init (&wanted_mutex);
+	g_rw_lock_init (&nsinfo_rwlock);
+	g_rw_lock_init (&srv_rwlock);
+	g_rw_lock_init (&wanted_rwlock);
 
 	nsname = g_strdup (cfg_namespace);
 	g_strlcpy (nsinfo.name, cfg_namespace, sizeof (nsinfo.name));
@@ -932,16 +899,16 @@ grid_main_configure (int argc, char **argv)
 	srv_down = lru_tree_create((GCompareFunc)g_strcmp0, g_free, NULL, LTO_NOATIME);
 	srv_known = lru_tree_create((GCompareFunc)g_strcmp0, g_free, NULL, LTO_NOATIME);
 
-	resolver = hc_resolver_create1 (oio_ext_monotonic_seconds());
+	resolver = hc_resolver_create ();
 	enum hc_resolver_flags_e f = 0;
 	if (!flag_cache_enabled)
 		f |= HC_RESOLVER_NOCACHE;
 	hc_resolver_configure (resolver, f);
 	hc_resolver_qualify (resolver, service_is_ok);
 	hc_resolver_notify (resolver, service_invalidate);
-	hc_resolver_set_ttl_csm0 (resolver, dir_high_ttl);
+	hc_resolver_set_ttl_csm0 (resolver, dir_high_ttl * G_TIME_SPAN_SECOND);
 	hc_resolver_set_max_csm0 (resolver, dir_high_max);
-	hc_resolver_set_ttl_services (resolver, dir_low_ttl);
+	hc_resolver_set_ttl_services (resolver, dir_low_ttl * G_TIME_SPAN_SECOND);
 	hc_resolver_set_max_services (resolver, dir_low_max);
 	GRID_INFO ("RESOLVER limits HIGH[%u/%u] LOW[%u/%u]",
 		dir_high_max, dir_high_ttl, dir_low_max, dir_low_ttl);

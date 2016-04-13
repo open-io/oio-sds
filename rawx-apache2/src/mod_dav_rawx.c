@@ -179,6 +179,21 @@ dav_rawx_cmd_gridconfig_docroot(cmd_parms *cmd, void *config, const char *arg1)
 	return NULL;
 }
 
+static apr_status_t
+_cleanup (void *p)
+{
+	rawx_conf_t *conf = p;
+	if (NULL != conf->ni) {
+		namespace_info_free (conf->ni);
+		conf->ni = NULL;
+	}
+	if (NULL != conf->sp) {
+		storage_policy_clean (conf->sp);
+		conf->sp = NULL;
+	}
+	return APR_SUCCESS;
+}
+
 static const char *
 dav_rawx_cmd_gridconfig_namespace(cmd_parms *cmd, void *config, const char *arg1)
 {
@@ -196,27 +211,28 @@ dav_rawx_cmd_gridconfig_namespace(cmd_parms *cmd, void *config, const char *arg1
 	/* Prepare COMPRESSION / ACL CONF when we get ns name */
 	namespace_info_t* ns_info;
 	GError *local_error = conscience_get_namespace(conf->ns_name, &ns_info);
-        if(!ns_info) {
+	if (!ns_info) {
 		DAV_DEBUG_POOL(cmd->temp_pool, 0,
-			"Failed to get namespace info from ns [%s]", conf->ns_name);
+				"Failed to get namespace info from ns [%s]", conf->ns_name);
 		return apr_pstrcat(cmd->temp_pool, "Failed to get namespace info from ns: ",
 				conf->ns_name, NULL);
-        }
+	}
 
 	conf->rawx_conf = apr_palloc(cmd->pool, sizeof(rawx_conf_t));
+	apr_pool_cleanup_register (cmd->pool, conf->rawx_conf, _cleanup, _cleanup);
 
-	char * stgpol = NULL;
-	stgpol = namespace_storage_policy(ns_info, ns_info->name);
-	if(NULL != stgpol) {
+	gchar * stgpol = namespace_storage_policy(ns_info, ns_info->name);
+	if (NULL != stgpol) {
 		conf->rawx_conf->sp = storage_policy_init(ns_info, stgpol);
+		oio_str_clean (&stgpol);
 	} else {
 		conf->rawx_conf->sp = NULL;
 	}
+	g_assert (stgpol == NULL);
 
 	conf->rawx_conf->ni = ns_info;
-
 	conf->rawx_conf->acl = _get_acl(cmd->pool, ns_info);
-        conf->rawx_conf->last_update = time(0);
+	conf->rawx_conf->last_update = oio_ext_monotonic_seconds();
 
 	if(local_error)
 		g_clear_error(&local_error);
@@ -338,8 +354,12 @@ rawx_hook_child_init(apr_pool_t *pchild, server_rec *s)
 	conf->cleanup = _cleanup_child;
 
 	gchar *event_agent_addr = gridcluster_get_eventagent(conf->ns_name);
-	if (!rawx_event_init(s, event_agent_addr))
-		DAV_ERROR_POOL(pchild, 0, "Failed to initialize event context");
+	GError *err = rawx_event_init(event_agent_addr);
+	if (NULL != err) {
+		DAV_ERROR_POOL(pchild, 0, "Failed to initialize event context: (%d) %s",
+				err->code, err->message);
+		g_clear_error (&err);
+	}
 	g_free(event_agent_addr);
 
 	oio_log_to_syslog ();

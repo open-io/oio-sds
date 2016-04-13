@@ -37,7 +37,6 @@ In addition, a few python modules are required at runtime:
 * python-requests
 * python-simplejson
 * pyxattr (python-xattr on Debian/Ubuntu)
-* python-zmq
 
 The account service will require an up and running backend:
 * redis

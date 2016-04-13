@@ -8,41 +8,72 @@
 #include "mod_dav_rawx.h"
 #include "rawx_event.h"
 
-static struct oio_events_queue_s *q = NULL;
+struct oio_events_queue_s *q = NULL;
+static GThread *th_queue = NULL;
+static volatile gboolean running = FALSE;
+static GError *s_err = NULL;
 
-int
-rawx_event_init (server_rec *s, const char *addr)
+static gboolean
+_running (gboolean pending)
 {
-	if (addr == NULL)
-		return 1;
+	(void) pending; return running;
+}
 
-	GError *err = oio_events_queue_factory__create (addr, &q);
+static gpointer
+_worker (gpointer p)
+{
+	EXTRA_ASSERT(running != FALSE);
+	EXTRA_ASSERT(q != NULL);
+	s_err = oio_events_queue__run (q, _running);
+	return p;
+}
+
+GError *
+rawx_event_init (const char *addr)
+{
+	if (!addr)
+		return NULL;
+
+	GError *err = oio_events_queue_factory__check_config (addr);
 	if (err) {
-		ap_log_error (__FILE__, __LINE__, 0, APLOG_WARNING, 0, s,
-				"Event queue creation failed: (%d) %s", err->code, err->message);
-		g_clear_error (&err);
+		g_prefix_error (&err, "Configuration error: ");
+		return err;
 	}
-	return q != NULL;
+
+	err = oio_events_queue_factory__create (addr, &q);
+	if (err) {
+		g_prefix_error (&err, "Event queue creation failed: ");
+		return err;
+	}
+
+	th_queue = g_thread_try_new ("oio-events-queue", _worker, NULL, &err);
+	if (err) {
+		g_prefix_error (&err, "Thread creation failed: ");
+		return err;
+	}
+
+	running = TRUE;
+	return NULL;
 }
 
 void
 rawx_event_destroy (void)
 {
-	if (q != NULL)
-		oio_events_queue__destroy (q);
+	running = FALSE;
+	g_thread_join (th_queue);
+	th_queue = NULL;
+	if (s_err)
+		g_clear_error(&s_err);
+	oio_events_queue__destroy (q);
 	q = NULL;
 }
 
-static gboolean _running (gboolean pending) { return pending; }
-
-int
+GError *
 rawx_event_send (const char *event_type, GString *data_json)
 {
-	if (q == NULL)
-		return 1;
+	EXTRA_ASSERT(q != NULL);
 
 	GString *json = g_string_sized_new(256);
-
 	g_string_append_printf(json,
 			"{"
 			"\"event\":\"%s\","
@@ -52,10 +83,8 @@ rawx_event_send (const char *event_type, GString *data_json)
 			event_type,
 			oio_ext_real_time() / G_TIME_SPAN_SECOND,
 			data_json->str);
-
 	g_string_free(data_json, TRUE);
-
 	oio_events_queue__send (q, g_string_free (json, FALSE));
-	oio_events_queue__run (q, _running);
-	return 1;
+
+	return NULL;
 }

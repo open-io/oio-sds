@@ -28,7 +28,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #endif
 
 #include <unistd.h>
-#include <sys/stat.h>
 
 #include <apr.h>
 #include <apr_file_io.h>
@@ -146,22 +145,17 @@ static dav_error *
 dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 	int use_checked_in, dav_resource **result_resource)
 {
-	dav_resource_private ctx;
-	dav_resource *resource;
-	dav_rawx_server_conf *conf;
-	dav_error *e = NULL;
-
+	(void) use_checked_in;
 	*result_resource = NULL;
 
-	(void) use_checked_in;/* No way, we do not support versioning */
-	conf = request_get_server_config(r);
+	dav_rawx_server_conf *conf = request_get_server_config(r);
 
 	/* Check if client allowed to work with us */
-	if(conf->enabled_acl) {
+	if (conf->enabled_acl) {
 #if MODULE_MAGIC_COOKIE == 0x41503234UL /* "AP24" */
-		if(!authorized_personal_only(r->connection->client_ip, conf->rawx_conf->acl))
+		if (!authorized_personal_only(r->connection->client_ip, conf->rawx_conf->acl))
 #else
-		if(!authorized_personal_only(r->connection->remote_ip, conf->rawx_conf->acl))
+		if (!authorized_personal_only(r->connection->remote_ip, conf->rawx_conf->acl))
 #endif
 		{
 			return server_create_and_stat_error(conf, r->pool, HTTP_UNAUTHORIZED, 0, "Permission Denied (APO)");
@@ -169,17 +163,15 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 	}
 
 	/* Create private resource context descriptor */
-	memset(&ctx, 0x00, sizeof(ctx));
+	dav_resource_private ctx = {0};
 	ctx.pool = r->pool;
 	ctx.request = r;
 
-	e = rawx_repo_check_request(r, root_dir, label, use_checked_in, &ctx, result_resource);
+	dav_error *e = rawx_repo_check_request(r, root_dir, label, use_checked_in, &ctx, result_resource);
 	/* Return in case we have an error or if result_resource != null because it was an info request */
-	if(NULL != e || NULL != *result_resource) {
+	if (NULL != e || NULL != *result_resource) {
 		return e;
 	}
-
-	DAV_DEBUG_REQ(r, 0, "The chunk ID seems OK");
 
 	/* Build the hashed path */
 	if (conf->hash_width <= 0 || conf->hash_depth <= 0) {
@@ -187,7 +179,7 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 			"%.*s", (int)sizeof(conf->docroot), conf->docroot);
 	} else {
 		e = rawx_repo_configure_hash_dir(r, &ctx);
-		if( NULL != e) {
+		if ( NULL != e) {
 			return e;
 		}
 	}
@@ -195,7 +187,7 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 
 	/* All the checks on the URL have been passed, now build a resource */
 
-	resource = apr_pcalloc(r->pool, sizeof(*resource));
+	dav_resource *resource = apr_pcalloc(r->pool, sizeof(*resource));
 	resource->type = DAV_RESOURCE_TYPE_REGULAR;
 	resource->info = apr_pcalloc(r->pool, sizeof(ctx));;
 	memcpy(resource->info, &ctx, sizeof(ctx));
@@ -210,12 +202,19 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 
 	/* init compression context structure if we are in get method (for decompression) */
 
-	if(r->method_number == M_GET && !ctx.update_only) {
+	if (r->method_number == M_GET && !ctx.update_only) {
 		resource_init_decompression(resource, conf);
 	}
 
 	/* Check the chunk's existence */
-	resource_stat_chunk(resource, r->method_number == M_GET || r->method_number == M_OPTIONS);
+	int flags = (r->method_number == M_GET ||
+			r->method_number == M_OPTIONS ||
+			r->method_number == M_DELETE)?
+				 RESOURCE_STAT_CHUNK_READ_ATTRS : 0;
+	if (r->method_number == M_PUT || r->method_number == M_POST)
+		flags |= RESOURCE_STAT_CHUNK_PENDING;
+
+	resource_stat_chunk(resource, flags);
 
 	if (r->method_number == M_PUT || r->method_number == M_POST ||
 			r->method_number == M_MOVE ||
@@ -300,21 +299,12 @@ static dav_error *
 dav_rawx_open_stream(const dav_resource *resource, dav_stream_mode mode, dav_stream **stream)
 {
 	/* FIRST STEP OF PUT REQUEST */
-	dav_stream *ds = NULL;
-	dav_error *e = NULL;
-
 	(void) mode;
-
 	DAV_DEBUG_REQ(resource->info->request, 0, "%s(%s/%s)", __FUNCTION__, resource->info->dirname, resource->info->hex_chunkid);
 
-	e = rawx_repo_ensure_directory(resource);
-	if( NULL != e ) {
-		DAV_DEBUG_REQ(resource->info->request, 0, "Chunk directory creation failure");
-		return e;
-	}
-
-	e = rawx_repo_stream_create(resource, &ds);
-	if( NULL != e ) {
+	dav_stream *ds = NULL;
+	dav_error *e = rawx_repo_stream_create(resource, &ds);
+	if ( NULL != e ) {
 		DAV_DEBUG_REQ(resource->info->request, 0, "Dav stream initialization failure");
 		return e;
 	}
@@ -340,12 +330,12 @@ dav_rawx_close_stream(dav_stream *stream, int commit)
 		e = rawx_repo_rollback_upload(stream);
 	} else {
 		e = rawx_repo_write_last_data_crumble(stream);
-		if( NULL != e ) {
+		if ( NULL != e ) {
 			DAV_DEBUG_REQ(stream->r->info->request, 0, "Cannot commit, an error occured while writing end of data");
 			/* Must we did it ? */
 			dav_error *e_tmp = NULL;
 			e_tmp = rawx_repo_rollback_upload(stream);
-			if( NULL != e_tmp) {
+			if ( NULL != e_tmp) {
 				DAV_ERROR_REQ(stream->r->info->request, 0, "Error while rolling back upload : %s", e_tmp->desc);
 			}
 		} else {
@@ -354,8 +344,15 @@ dav_rawx_close_stream(dav_stream *stream, int commit)
 	}
 
 	/* stats update */
+	if (stream->total_size > 0) {
+		server_add_stat(resource_get_server_config(stream->r),
+				RAWX_STATNAME_REP_BWRITTEN,
+				stream->total_size, 0);
+	}
 	server_inc_request_stat(resource_get_server_config(stream->r),
-			RAWX_STATNAME_REQ_CHUNKPUT, request_get_duration(stream->r->info->request));
+			RAWX_STATNAME_REQ_CHUNKPUT,
+			request_get_duration(stream->r->info->request));
+
 	if (stream->md5) {
 		g_checksum_free (stream->md5);
 		stream->md5 = NULL;
@@ -378,9 +375,9 @@ dav_rawx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 		stream->bufsize += tmp;
 
 		/* If buffer full, compress if needed and write to distant file */
-		if(stream->blocksize - stream->bufsize <=0){
+		if (stream->blocksize - stream->bufsize <=0){
 			gsize nb_write = 0;
-			if(!stream->compression) {
+			if (!stream->compression) {
 				nb_write = fwrite(stream->buffer, stream->bufsize, 1, stream->f);
 				if (nb_write != 1) {
 					/* ### use something besides 500? */
@@ -391,7 +388,7 @@ dav_rawx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 				}
 			} else {
 				GByteArray *gba = g_byte_array_new();
-				if(stream->comp_ctx.data_compressor(stream->buffer, stream->bufsize, gba,
+				if (stream->comp_ctx.data_compressor(stream->buffer, stream->bufsize, gba,
 							&checksum)!=0) {
 					if (gba)
 						g_byte_array_free(gba, TRUE);
@@ -426,7 +423,6 @@ dav_rawx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 	g_checksum_update(stream->md5, buf, bufsize);
 	/* update total_size */
 	stream->total_size += bufsize;
-	server_add_stat(resource_get_server_config(stream->r), RAWX_STATNAME_REP_BWRITTEN, bufsize, 0);
 	return NULL;
 }
 
@@ -468,11 +464,10 @@ dav_rawx_set_headers(request_rec *r, const dav_resource *resource)
 	/* set up the Content-Length header */
 	ap_set_content_length(r, resource->info->finfo.size);
 
-	request_fill_headers(r, &(resource->info->content),
-			&(resource->info->chunk));
+	request_fill_headers(r, &(resource->info->content), &(resource->info->chunk));
 
 	/* compute metadata_compress if compressed content */
-	if(resource->info->compression) {
+	if (resource->info->compression) {
 		char *buf = apr_pstrcat(r->pool, "compression=on;compression_algorithm=", resource->info->compress_algo,
 				";compression_blocksize=", apr_psprintf(r->pool, "%d", resource->info->cp_chunk.block_size), ";", NULL);
 		apr_table_setn(r->headers_out, apr_pstrdup(r->pool, "metadatacompress"), buf);
@@ -510,24 +505,27 @@ dav_rawx_deliver(const dav_resource *resource, ap_filter_t *output)
 		goto end_deliver;
 	}
 
-	/* Check if it is not a busy file */
-	char *pending_file = apr_pstrcat(pool, resource_get_pathname(resource), ".pending", NULL);
-	status = apr_stat(&info, pending_file, APR_FINFO_ATIME, pool);
-	if (APR_SUCCESS == status){
-		e = server_create_and_stat_error(conf, pool, HTTP_FORBIDDEN, 0, "File in pending mode.");
-		goto end_deliver;
-	}
-
 	ctx = resource->info;
 
-	if(ctx->update_only) {
+	if (ctx->update_only) {
+		/* Check if it is not a busy file. We accept reads during
+		 * compression but not attr updates. */
+		char *pending_file = apr_pstrcat(pool,
+				resource_get_pathname(resource), ".pending", NULL);
+		status = apr_stat(&info, pending_file, APR_FINFO_ATIME, pool);
+		if (status == APR_SUCCESS) {
+			e = server_create_and_stat_error(conf, pool, HTTP_FORBIDDEN,
+					0, "File in pending mode.");
+			goto end_deliver;
+		}
+
 		GError *error_local = NULL;
 		/* UPDATE chunk attributes and go on */
 		const char *path = resource_get_pathname(resource);
 		FILE *f = NULL;
 		f = fopen(path, "r");
 		/* Try to open the file but forbids a creation */
-		if(!set_rawx_full_info_in_attr(path, fileno(f), &error_local,&(ctx->content),
+		if (!set_rawx_full_info_in_attr(path, fileno(f), &error_local,&(ctx->content),
 					&(ctx->chunk), NULL, NULL)) {
 			fclose(f);
 			e = server_create_and_stat_error(conf, pool,
@@ -539,13 +537,15 @@ dav_rawx_deliver(const dav_resource *resource, ap_filter_t *output)
 	} else {
 		bb = apr_brigade_create(pool, output->c->bucket_alloc);
 
-		if(!ctx->compression){
+		if (!ctx->compression){
 			apr_file_t *fd = NULL;
 
 			/* Try to open the file but forbids a creation */
-			status = apr_file_open(&fd, resource_get_pathname(resource), APR_READ|APR_BINARY, 0, pool);
+			status = apr_file_open(&fd, resource_get_pathname(resource),
+					APR_READ|APR_BINARY|APR_BUFFERED, 0, pool);
 			if (APR_SUCCESS != status) {
-				e = server_create_and_stat_error(conf, pool, HTTP_FORBIDDEN, 0, "File permissions deny server access.");
+				e = server_create_and_stat_error(conf, pool, HTTP_FORBIDDEN,
+						0, "File permissions deny server access.");
 				goto end_deliver;
 			}
 
@@ -579,7 +579,7 @@ dav_rawx_deliver(const dav_resource *resource, ap_filter_t *output)
 		if ((status = ap_pass_brigade(output, bb)) != APR_SUCCESS){
 			e = server_create_and_stat_error(conf, pool, HTTP_FORBIDDEN, 0, "Could not write contents to filter.");
 			/* close file */
-			if(ctx->cp_chunk.fd) {
+			if (ctx->cp_chunk.fd) {
 				fclose(ctx->cp_chunk.fd);
 			}
 			goto end_deliver;
@@ -588,13 +588,13 @@ dav_rawx_deliver(const dav_resource *resource, ap_filter_t *output)
 			g_free(ctx->cp_chunk.buf);
 			ctx->cp_chunk.buf = NULL;
 		}
-		if(ctx->cp_chunk.uncompressed_size){
+		if (ctx->cp_chunk.uncompressed_size){
 			g_free(ctx->cp_chunk.uncompressed_size);
 			ctx->cp_chunk.uncompressed_size = NULL;
 		}
 
 		/* close file */
-		if(ctx->cp_chunk.fd) {
+		if (ctx->cp_chunk.fd) {
 			fclose(ctx->cp_chunk.fd);
 		}
 
@@ -603,6 +603,11 @@ dav_rawx_deliver(const dav_resource *resource, ap_filter_t *output)
 	}
 
 end_deliver:
+
+	if (bb) {
+		apr_brigade_destroy(bb);
+		bb = NULL;
+	}
 
 	/* Now we pass here even if an error occured, for process request duration */
 	server_inc_request_stat(resource_get_server_config(resource), RAWX_STATNAME_REQ_CHUNKGET,
@@ -668,7 +673,6 @@ static dav_error *
 dav_rawx_remove_resource(dav_resource *resource, dav_response **response)
 {
 	char buff[128];
-	char attr_path[2048];
 	apr_pool_t *pool;
 	apr_status_t status;
 	dav_error *e = NULL;
@@ -688,9 +692,6 @@ dav_rawx_remove_resource(dav_resource *resource, dav_response **response)
 		goto end_remove;
 	}
 
-	/* Deletion event needs chunk's attrs */
-	resource_stat_chunk(resource, 1);
-
 	status = apr_file_remove(resource_get_pathname(resource), pool);
 	if (APR_SUCCESS != status) {
 		e = server_create_and_stat_error(resource_get_server_config(resource), pool,
@@ -705,18 +706,6 @@ dav_rawx_remove_resource(dav_resource *resource, dav_response **response)
 
 	resource->exists = 0;
 	resource->collection = 0;
-
-	memset(attr_path, 0x00, sizeof(attr_path));
-	apr_snprintf(attr_path, sizeof(attr_path), "%s.attr", resource_get_pathname(resource));
-	status = apr_file_remove(attr_path, pool);
-	if (status != APR_SUCCESS && !APR_STATUS_IS_ENOENT(status)) {
-		e = server_create_and_stat_error(resource_get_server_config(resource), pool,
-			HTTP_INTERNAL_SERVER_ERROR, 0, apr_pstrcat(pool,
-					"Failed to DELETE this chunk's  properties : ",
-					apr_strerror(status, buff, sizeof(buff)),
-					NULL));
-		goto end_remove;
-	}
 
 	server_inc_stat(resource_get_server_config(resource), RAWX_STATNAME_REP_2XX, 0);
 

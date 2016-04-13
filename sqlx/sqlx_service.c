@@ -170,7 +170,7 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 	}
 	if (!ss->announce) {
 		ss->announce = g_string_new(ss->url->str);
-		GRID_NOTICE("No announce set, using endpoint [%s]", ss->announce->str);
+		GRID_DEBUG("No announce set, using endpoint [%s]", ss->announce->str);
 	}
 	if (!metautils_url_valid_for_bind(ss->url->str)) {
 		GRID_ERROR("Invalid URL as a endpoint [%s]", ss->url->str);
@@ -192,14 +192,13 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 				s, (unsigned int)sizeof(ss->ns_name));
 		return FALSE;
 	}
-	GRID_NOTICE("NS configured to [%s]", ss->ns_name);
+	GRID_DEBUG("NS configured to [%s]", ss->ns_name);
 
 	ss->lb = grid_lbpool_create (ss->ns_name);
 	if (!ss->lb) {
 		GRID_WARN("LB allocation failure");
 		return FALSE;
 	}
-	GRID_NOTICE("LB allocated");
 
 	s = g_strlcpy(ss->volume, argv[1], sizeof(ss->volume));
 	if (s >= sizeof(ss->volume)) {
@@ -207,13 +206,9 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 				s, (unsigned int) sizeof(ss->volume));
 		return FALSE;
 	}
-	GRID_NOTICE("Volume configured to [%s]", ss->volume);
+	GRID_DEBUG("Volume configured to [%s]", ss->volume);
 
 	ss->zk_url = gridcluster_get_zookeeper(ss->ns_name);
-	if (!ss->zk_url) {
-		GRID_INFO("No replication : no ZooKeeper URL configured");
-		return TRUE;
-	}
 
 	return TRUE;
 }
@@ -286,10 +281,10 @@ _init_configless_structures(struct sqlx_service_s *ss)
 			|| !(ss->dispatcher = transport_gridd_build_empty_dispatcher())
 			|| !(ss->clients_pool = gridd_client_pool_create())
 			|| !(ss->clients_factory = gridd_client_factory_create())
-			|| !(ss->resolver = hc_resolver_create1(oio_ext_monotonic_time() / G_TIME_SPAN_SECOND))
+			|| !(ss->resolver = hc_resolver_create())
 			|| !(ss->gtq_admin = grid_task_queue_create("admin"))
 			|| !(ss->gtq_reload = grid_task_queue_create("reload"))) {
-		GRID_WARN("SERVICE init error : memory allocation failure");
+		GRID_WARN("SERVICE init error: memory allocation failure");
 		return FALSE;
 	}
 
@@ -308,7 +303,7 @@ static gboolean
 _configure_synchronism(struct sqlx_service_s *ss)
 {
 	if (!ss->zk_url) {
-		GRID_NOTICE("SYNC off (no ZK)");
+		GRID_NOTICE("SYNC off (no zookeeper)");
 		return TRUE;
 	}
 
@@ -326,7 +321,7 @@ _configure_synchronism(struct sqlx_service_s *ss)
 
 	GError *err = sqlx_sync_open(ss->sync);
 	if (err != NULL) {
-		GRID_WARN("SYNC init error : (%d) %s", err->code, err->message);
+		GRID_WARN("SYNC init error: (%d) %s", err->code, err->message);
 		g_clear_error(&err);
 		return FALSE;
 	}
@@ -337,7 +332,7 @@ _configure_synchronism(struct sqlx_service_s *ss)
 static gboolean
 _configure_replication(struct sqlx_service_s *ss)
 {
-	GRID_INFO("Got zookeeper URL [%s]", ss->zk_url);
+	GRID_DEBUG("Got zookeeper URL [%s]", ss->zk_url);
 	replication_config.mode = (ss->flag_replicable && ss->zk_url != NULL)
 		? ELECTION_MODE_QUORUM : ELECTION_MODE_NONE;
 	replication_config.ctx = ss;
@@ -349,7 +344,7 @@ _configure_replication(struct sqlx_service_s *ss)
 	GError *err = election_manager_create(&replication_config,
 			&ss->election_manager);
 	if (err != NULL) {
-		GRID_WARN("Replication init failure : (%d) %s",
+		GRID_WARN("Replication init failure: (%d) %s",
 				err->code, err->message);
 		g_clear_error(&err);
 		return FALSE;
@@ -793,7 +788,6 @@ _task_expire_resolver(gpointer p)
 	if (!grid_main_is_running ())
 		return;
 
-	hc_resolver_set_now(PSRV(p)->resolver, oio_ext_monotonic_time () / G_TIME_SPAN_SECOND);
 	guint count = hc_resolver_expire(PSRV(p)->resolver);
 	if (count)
 		GRID_DEBUG("Expired %u entries from the resolver cache", count);
@@ -865,23 +859,25 @@ _task_reconfigure_events (gpointer p)
 	if (!ni || !ni->options)
 		return;
 
-	gint64 i64 = OIO_EVTQ_MAXPENDING;
-	gchar *k;
-
-	/* without the prefix */
-	i64 = gridcluster_get_nsinfo_int64 (ni, OIO_CFG_EVTQ_MAXPENDING, i64);
-	GRID_TRACE("Looking for [%s]: %"G_GINT64_FORMAT, OIO_CFG_EVTQ_MAXPENDING, i64);
-
-	/* with the prefix */
-	k = g_strconcat (PSRV(p)->service_config->srvtype, ".",
-			OIO_CFG_EVTQ_MAXPENDING, NULL);
-	i64 = gridcluster_get_nsinfo_int64 (ni, k, i64);
-	GRID_TRACE("Looking for [%s]: %"G_GINT64_FORMAT, k, i64);
-	g_free(k);
+	gint64 i64 = namespace_info_get_srv_param_i64(ni, NULL,
+			PSRV(p)->service_config->srvtype,
+			OIO_CFG_EVTQ_MAXPENDING,
+			OIO_EVTQ_MAXPENDING);
+	GRID_TRACE("Looking for [%s]: %"G_GINT64_FORMAT,
+			OIO_CFG_EVTQ_MAXPENDING, i64);
 
 	if (i64 >= 0 && i64 < G_MAXUINT) {
 		guint u = (guint) i64;
 		oio_events_queue__set_max_pending (PSRV(p)->events_queue, u);
+	}
+
+	i64 = namespace_info_get_srv_param_i64(ni, NULL,
+			PSRV(p)->service_config->srvtype,
+			OIO_CFG_EVTQ_BUFFER_DELAY,
+			OIO_EVTQ_BUFFER_DELAY);
+	if (i64 >= 0 && i64 < 3600) {
+		oio_events_queue__set_buffering(PSRV(p)->events_queue,
+				i64 * G_TIME_SPAN_SECOND);
 	}
 }
 

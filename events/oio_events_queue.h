@@ -25,6 +25,12 @@ void oio_events_queue__destroy (struct oio_events_queue_s *self);
 /* msg's ownership is given to the queue. msg has to be valid JSON */
 void oio_events_queue__send (struct oio_events_queue_s *self, gchar *msg);
 
+/* Send an overwritable event, which may itself overwrite any previous event
+ * sent with the same key. The actual event sending will be delayed
+ * a little. */
+void oio_events_queue__send_overwritable(struct oio_events_queue_s *self,
+		gchar *key, gchar *msg);
+
 /* should emitters stop sending events? whatever, even if it returns TRUE,
  * the queue won't deny events. */
 gboolean oio_events_queue__is_stalled (struct oio_events_queue_s *self);
@@ -33,6 +39,10 @@ gboolean oio_events_queue__is_stalled (struct oio_events_queue_s *self);
  * the number of events waiting */
 void oio_events_queue__set_max_pending (struct oio_events_queue_s *self,
 		guint max);
+
+/* Set the overwritable events buffering delay */
+void oio_events_queue__set_buffering (struct oio_events_queue_s *self,
+		gint64 us);
 
 GError * oio_events_queue__run (struct oio_events_queue_s *self,
 		gboolean (*running) (gboolean pending));
@@ -43,5 +53,7 @@ GError * oio_events_queue__run (struct oio_events_queue_s *self,
  * given in 'cfg' */
 GError * oio_events_queue_factory__create (const char *cfg,
 		struct oio_events_queue_s **out);
+
+GError * oio_events_queue_factory__check_config (const char *cfg);
 
 #endif /*OIO_SDS__sqlx__oio_events_queue_h*/

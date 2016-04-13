@@ -123,6 +123,7 @@ LoadModule authz_core_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_authz_core
 LoadModule setenvif_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_setenvif.so
 LoadModule dav_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_dav.so
 LoadModule mime_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mime.so
+LoadModule alias_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_alias.so
 LoadModule dav_rawx_module @APACHE2_MODULES_DIRS@/mod_dav_rawx.so
 
 <IfModule !unixd_module>
@@ -191,10 +192,13 @@ grid_fsync_dir         enabled
 # DO NOT USE, this is broken
 #grid_acl disabled
 
+Alias / /x/
+
 <Directory />
 DAV rawx
 AllowOverride None
 Require all granted
+Options -SymLinksIfOwnerMatch -FollowSymLinks -Includes -Indexes
 </Directory>
 
 <VirtualHost ${IP}:${PORT}>
@@ -394,10 +398,11 @@ param_chunk_size=${CHUNK_SIZE}
 param_hub.me=tcp://${IP}:${PORT_HUB}
 param_hub.group=${CS_ALL_HUB}
 
-param_option.events-max-pending=1234
-param_option.meta2.events-max-pending=123
-param_option.sqlx.events-max-pending=12
-param_option.meta1.events-max-pending=456
+param_option.events-max-pending=10000
+param_option.meta2.events-max-pending=1000
+param_option.sqlx.events-max-pending=1000
+param_option.meta1.events-max-pending=100
+param_option.meta2.events-buffer-delay=5
 
 param_option.service_update_policy=meta2=KEEP|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|;rdir=KEEP|1|1|user_is_a_service=1
 param_option.lb.rawx=WRR?shorten_ratio=1.0&standard_deviation=no&reset_delay=60

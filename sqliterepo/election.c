@@ -37,7 +37,6 @@ License along with this library.
 
 #define EVENTLOG_SIZE 16
 #define STATUS_FINAL(e) ((e) >= STEP_LOST)
-#define OLDEST(now,delay) (now > delay ? now - delay : 0)
 
 typedef guint req_id_t;
 

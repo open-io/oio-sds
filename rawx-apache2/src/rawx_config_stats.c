@@ -59,17 +59,6 @@ server_init_master_stat(dav_rawx_server_conf *conf, apr_pool_t *pool, apr_pool_t
 	DAV_DEBUG_POOL(plog, 0, "%s: Attached to existing SHM segment at [%s]",
 			__FUNCTION__, conf->shm.path);
 
-	/* Create a processus lock*/
-	rc = apr_global_mutex_create(&(conf->lock.handle), conf->shm.path, APR_LOCK_DEFAULT, pool);
-	if (rc != APR_SUCCESS) {
-		DAV_ERROR_POOL(plog, 0, "%s : Cannot create a global_mutex at [%s] rc=%d : %s",
-			__FUNCTION__, conf->shm.path, rc, apr_strerror(rc, buff, sizeof(buff)));
-		(void) apr_shm_destroy(conf->shm.handle);
-		conf->shm.handle = NULL;
-		return rc;
-	}
-	DAV_DEBUG_POOL(plog, 0, "%s : globalmutex created at [%s]", __FUNCTION__, conf->shm.path);
-
 	return APR_SUCCESS;
 }
 
@@ -77,14 +66,6 @@ void
 server_master_stat_fini(dav_rawx_server_conf *conf, apr_pool_t *plog)
 {
 	DAV_XDEBUG_POOL(plog, 0, "%s()", __FUNCTION__);
-
-	if (conf->lock.handle) {
-		DAV_DEBUG_POOL(plog, 0, "%s: Destroying the globalmutex at [%s]", __FUNCTION__, conf->shm.path);
-		if (APR_SUCCESS != apr_global_mutex_destroy(conf->lock.handle)) {
-			DAV_ERROR_POOL(plog, 0, "Failed to destroy the global_mutex");
-		}
-		conf->lock.handle = NULL;
-	}
 
 	if (conf->shm.handle) {
 		DAV_DEBUG_POOL(plog, 0, "%s: Detaching the SHM segment at [%s]", __FUNCTION__, conf->shm.path);
@@ -102,16 +83,6 @@ server_init_child_stat(dav_rawx_server_conf *conf, apr_pool_t *pool, apr_pool_t 
 	apr_status_t rc;
 
 	DAV_XDEBUG_POOL(plog, 0, "%s()", __FUNCTION__);
-
-	/* Attaches the mutex */
-	DAV_DEBUG_POOL(plog, 0, "%s : Attaching the SHM global_mutex at [%s]", __FUNCTION__, conf->shm.path);
-	rc = apr_global_mutex_child_init(&(conf->lock.handle), conf->shm.path, pool);
-	if (APR_SUCCESS != rc) {
-		DAV_ERROR_POOL(plog, 0, "%s : Failed to attach the SHM global_mutex at [%s] rc=%d : %s",
-			__FUNCTION__, conf->shm.path, rc, apr_strerror(rc, buff, sizeof(buff)));
-		return rc;
-	}
-	DAV_DEBUG_POOL(plog, 0, "%s : globalmutex attached at [%s]", __FUNCTION__, conf->shm.path);
 
 	/* Atatches the SHM */
 	if (!conf->shm.handle) {
@@ -156,12 +127,9 @@ void
 server_add_stat(dav_rawx_server_conf *conf, const char *n, apr_uint32_t value, apr_uint32_t duration)
 {
 	EXTRA_ASSERT(NULL != conf->shm.handle);
-	EXTRA_ASSERT(NULL != conf->lock.handle);
 	EXTRA_ASSERT(n && n[0] && n[1]);
 
-	apr_global_mutex_lock(conf->lock.handle);
 	struct shm_stats_s *shm_stats = apr_shm_baseaddr_get(conf->shm.handle);
-	apr_global_mutex_unlock(conf->lock.handle);
 
 	if (!shm_stats)
 		return;

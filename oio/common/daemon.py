@@ -4,10 +4,9 @@ import signal
 import os
 from re import sub
 
-from oio.common.utils import read_conf
-from oio.common.utils import drop_privileges
-from oio.common.utils import redirect_stdio
-from oio.common.utils import get_logger
+import eventlet.hubs
+from oio.common.utils import read_conf, get_hub, drop_privileges, \
+    redirect_stdio, get_logger
 
 
 class Daemon(object):
@@ -33,6 +32,7 @@ class Daemon(object):
 
 
 def run_daemon(klass, conf_file, section_name=None, **kwargs):
+    eventlet.hubs.use_hub(get_hub())
     if section_name is None:
         section_name = sub(r'([a-z])([A-Z])', r'\1-\2', klass.__name__).lower()
     conf = read_conf(

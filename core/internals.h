@@ -29,6 +29,8 @@ extern "C" {
 #  define EXTRA_ASSERT(X)
 # endif
 
+#define OLDEST(now,delay) (((now)>(delay)) ? ((now)-(delay)) : 0)
+
 #define ON_ENUM(P,E) case P##E: return #E
 
 #define CODE_IS_NETWORK_ERROR(C) ((C) < CODE_TEMPORARY)
@@ -46,6 +48,8 @@ extern "C" {
 #define CODE_IS_NSIMPOSSIBLE(C) ((C)==CODE_POLICY_NOT_SATISFIABLE \
 		|| (C)==CODE_POLICY_NOT_SUPPORTED \
 		|| (C)==CODE_NAMESPACE_NOTMANAGED)
+
+#define VTABLE_HAS(self,T,F) (((T)self)->vtable-> F != NULL)
 
 #define VTABLE_CHECK(self,T,F) do { \
 	g_assert(self != NULL); \

@@ -10,6 +10,7 @@ class RdirClient(Client):
     def __init__(self, conf, **kwargs):
         super(RdirClient, self).__init__(conf, **kwargs)
         self.directory_client = DirectoryClient(conf, **kwargs)
+        self._addr_cache = dict()
 
     def _lookup_rdir_host(self, resp):
         host = None
@@ -26,8 +27,9 @@ class RdirClient(Client):
         return self.directory_client.show(
                 acct=RDIR_ACCT, ref=volume_id, srv_type='rdir')
 
-    # TODO keep rdir addr in local cache to avoid lookup requests
-    def _get_rdir_addr(self, volume_id, create=False):
+    def _get_rdir_addr(self, volume_id, create=False, nocache=False):
+        if not nocache and volume_id in self._addr_cache:
+            return self._addr_cache[volume_id]
         resp = {}
         try:
             resp = self.directory_client.show(acct=RDIR_ACCT, ref=volume_id,
@@ -44,19 +46,27 @@ class RdirClient(Client):
                 raise
             resp = self._link_rdir(volume_id)
             host = self._lookup_rdir_host(resp)
+        self._addr_cache[volume_id] = host
         return host
 
-    def _make_uri(self, action, volume_id, create=False):
-        rdir_host = self._get_rdir_addr(volume_id, create=create)
+    def _make_uri(self, action, volume_id, create=False, nocache=False):
+        rdir_host = self._get_rdir_addr(volume_id, create=create,
+                                        nocache=nocache)
         uri = 'http://%s/v1/%s/%s' % (rdir_host, self.ns, action)
         return uri
 
     def _rdir_request(self, volume, method, action, create=False, **kwargs):
-        uri = self._make_uri(action, volume, create=create)
         params = {'vol': volume}
         if create:
             params['create'] = '1'
-        resp, body = self._direct_request(method, uri, params=params, **kwargs)
+        uri = self._make_uri(action, volume, create=create)
+        try:
+            resp, body = self._direct_request(method, uri, params=params,
+                                              **kwargs)
+        except NotFound:
+            uri = self._make_uri(action, volume, create=create, nocache=True)
+            resp, body = self._direct_request(method, uri, params=params,
+                                              **kwargs)
         return resp, body
 
     def chunk_push(self, volume_id, container_id, content_id, chunk_id,

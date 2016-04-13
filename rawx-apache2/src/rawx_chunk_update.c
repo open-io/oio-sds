@@ -87,7 +87,7 @@ __get_chunkupdate_resource(const request_rec *r, const dav_hooks_repository *hoo
 	dav_resource *resource;
 
 	DAV_XDEBUG_REQ(r, 0, "%s(...)", __FUNCTION__);
-	
+
 	resource = apr_pcalloc(r->pool, sizeof(*resource));
 	resource->type = DAV_RESOURCE_TYPE_PRIVATE;
 	resource->hooks = hooks;
@@ -113,7 +113,7 @@ dav_rawx_chunk_update_get_resource(request_rec *r, const char *root_dir, const c
 
 	DAV_XDEBUG_REQ(r, 0, "%s(...)", __FUNCTION__);
 	*result_resource = NULL;
-	
+
 	if (r->method_number != M_GET)
 		return server_create_and_stat_error(request_get_server_config(r), r->pool,
 				HTTP_BAD_REQUEST, 0, apr_pstrdup(r->pool, "Invalid request method, only GET"));
@@ -152,7 +152,7 @@ dav_rawx_is_parent_resource_SPECIAL(const dav_resource *res1, const dav_resource
 static dav_error *
 __build_chunk_full_path(const dav_resource *resource, char **full_path)
 {
-	
+
 	const request_rec *r = resource->info->request;
 	dav_rawx_server_conf *conf = request_get_server_config(r);
 
@@ -163,7 +163,7 @@ __build_chunk_full_path(const dav_resource *resource, char **full_path)
 
 	uint i_p = 1;
 	uint i_uri = 1;
-		
+
 	p = apr_palloc(r->pool, (65 + 1 + (conf->hash_depth * conf->hash_width) + conf->hash_depth));
 
 	p[0] = '/';
@@ -173,7 +173,7 @@ __build_chunk_full_path(const dav_resource *resource, char **full_path)
 			p[i_p++] = r->uri[i_uri++];
 		p[i_p++] = '/';
 	}
-		
+
 	memcpy(p + i_p, r->uri + 1, 64);
 	i_p += 64;
 	p[i_p] = '\0';
@@ -195,7 +195,7 @@ _load_request_info(const dav_resource *resource, char **full_path, struct storag
 		return e;
 
 	DAV_DEBUG_REQ(r, 0, "Chunk path build from request: %s", *full_path);
-	
+
 	/* init loaded storage policy */
 	const char *pol_name = apr_table_get(r->headers_in, "storage-policy");
 	if (!pol_name) {
@@ -214,32 +214,23 @@ _load_request_info(const dav_resource *resource, char **full_path, struct storag
 
 static dav_error *
 _load_in_place_chunk_info(const dav_resource *r, const char *path, struct content_textinfo_s *content,
-		struct chunk_textinfo_s *chunk, GHashTable **comp_opt)
+		struct chunk_textinfo_s *chunk, GHashTable *comp_opt)
 {
 	dav_error *e = NULL;
 	GError *ge = NULL;
 	apr_pool_t *p = r->pool;
 	dav_rawx_server_conf *conf = resource_get_server_config(r);
-	
-	
-	apr_finfo_t finfo;
 
-	/* check chunk presence */
-
-	if(APR_SUCCESS != apr_stat(&finfo, path, APR_FINFO_NORM, p)) {
-		return server_create_and_stat_error(conf, r->pool, HTTP_NOT_FOUND,
-				0, "Chunk file not found");
-	}
-
-	if(!get_rawx_info_in_attr(path, &ge,
-				content, chunk)) {
-		if(NULL != ge) {	
-			e = server_create_and_stat_error(conf, p, HTTP_CONFLICT,
-				0, apr_pstrcat(p, "Failed to get chunk attributes: ", ge->message, NULL));
+	/* No need to check for the chunk's presence, getting its attributes will
+	 * fail if the chunk doesn't exists */
+	if (!get_rawx_info_in_attr(path, &ge, content, chunk)) {
+		if (NULL != ge) {
+			e = server_create_and_stat_error(conf, p, HTTP_CONFLICT, 0,
+					apr_pstrcat(p, "Failed to get chunk attributes: ", ge->message, NULL));
 			g_clear_error(&ge);
 		} else {
-			e = server_create_and_stat_error(conf, p, HTTP_CONFLICT,
-			                                0, "Failed to get chunk chunk attributes: No error specified");
+			e = server_create_and_stat_error(conf, p, HTTP_CONFLICT, 0,
+					"Failed to get chunk chunk attributes: No error specified");
 		}
 		return e;
 	}
@@ -260,7 +251,7 @@ _load_in_place_chunk_info(const dav_resource *r, const char *path, struct conten
 	str_replace_by_pooled_str(p, &(chunk->metadata));
 
 	if(!get_compression_info_in_attr(path, &ge, comp_opt)){
-		if(NULL != ge) {	
+		if(NULL != ge) {
 			e = server_create_and_stat_error(conf, p, HTTP_CONFLICT,
 				0, apr_pstrcat(p, "Failed to get chunk compression attributes: ", ge->message, NULL));
 			g_clear_error(&ge);
@@ -306,7 +297,7 @@ _is_storage_policy_already_applied(const struct data_treatments_s *dt, GHashTabl
 			}
 			return 1;
 		default:
-			return APR_SUCCESS;	
+			return APR_SUCCESS;
 	}
 }
 
@@ -370,7 +361,7 @@ dav_rawx_deliver_SPECIAL(const dav_resource *resource, ap_filter_t *output)
 	struct chunk_textinfo_s *chunk = NULL;
 	char *path = NULL;
 	apr_pool_t *p = resource->pool;
-	
+
 	/* Load request informations */
 	e = _load_request_info(resource, &path, &sp);
 	if (NULL != e) {
@@ -393,7 +384,7 @@ dav_rawx_deliver_SPECIAL(const dav_resource *resource, ap_filter_t *output)
 	content = apr_palloc(p, sizeof(struct content_textinfo_s));
 
 	/* Load in place informations (sys-metadata & metadatacompress) */
-	e = _load_in_place_chunk_info(resource, path, content, chunk, &comp_opt);
+	e = _load_in_place_chunk_info(resource, path, content, chunk, comp_opt);
 	if (NULL != e) {
 		DAV_ERROR_REQ(r, 0, "Failed to load in place chunk information: %s", e->desc);
 		goto end_deliver;

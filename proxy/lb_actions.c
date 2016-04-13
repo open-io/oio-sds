@@ -110,8 +110,8 @@ enum http_rc_e
 action_lb_choose (struct req_args_s *args)
 {
 	GError *err;
+	args->rp->no_access();
 	if (NULL != (err = _lb_check_tokens(args)))
 		return _reply_notfound_error (args, err);
-
 	return _lb (args, grid_lbpool_ensure_iterator(lbpool, POOL()));
 }
