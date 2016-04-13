@@ -95,6 +95,13 @@ dump_request(const gchar *func, gchar **targets,
 	g_free(tmp);
 }
 
+static gint
+_compare_rowid(gconstpointer a, gconstpointer b, gpointer unused)
+{
+	(void) unused;
+	return CMP(*(sqlite3_int64*)a, *(sqlite3_int64*)b);
+}
+
 static GTree*
 context_get_pending_table(GTree *tree, const hashstr_t *key)
 {
@@ -103,7 +110,7 @@ context_get_pending_table(GTree *tree, const hashstr_t *key)
 	if (NULL != (subtree = g_tree_lookup(tree, key)))
 		return subtree;
 
-	subtree = g_tree_new_full(hashstr_quick_cmpdata, NULL, g_free, NULL);
+	subtree = g_tree_new_full(_compare_rowid, NULL, g_free, NULL);
 	g_tree_insert(tree, hashstr_dup(key), subtree);
 	return subtree;
 }

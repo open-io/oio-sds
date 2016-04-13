@@ -59,6 +59,9 @@ GError* meta2_backend_poll_service(struct meta2_backend_s *m2,
 /** Return a string which contain m2_addr: "IP:PORT" */
 const gchar* meta2_backend_get_local_addr(struct meta2_backend_s *m2);
 
+void meta2_backend_change_callback(struct sqlx_sqlite3_s *sq3,
+		struct meta2_backend_s *m2b);
+
 /* -------------------------------------------------------------------------- */
 
 GError *meta2_backend_create_container(struct meta2_backend_s *m2,

@@ -165,6 +165,8 @@ _init_nsinfo(const gchar *ns, gint64 maxvers)
 	g_snprintf (str, sizeof(str), "%"G_GINT64_FORMAT, maxvers);
 	g_hash_table_insert(nsinfo->options, g_strdup("meta2_max_versions"),
 			metautils_gba_from_string(str));
+	g_hash_table_insert(nsinfo->options, g_strdup("storage_policy"),
+			metautils_gba_from_string("NONE"));
 
 	g_hash_table_insert(nsinfo->storage_policy, g_strdup("classic"),
 			metautils_gba_from_string("DUMMY:DUPONETWO:NONE"));
