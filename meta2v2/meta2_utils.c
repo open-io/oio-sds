@@ -1510,13 +1510,14 @@ static void
 _m2_generate_content_chunk(struct gen_ctx_s *ctx, struct service_info_s *si,
 		guint pos, gint64 cs, gint subpos, gboolean parity)
 {
-	gchar *chunkid, strpos[64];
-	gchar straddr[STRLEN_ADDRINFO], strid[STRLEN_CHUNKID];
+	guint8 binid[32];
+	gchar *chunkid, strpos[24], strid[65], straddr[STRLEN_ADDRINFO];
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
 
+	oio_str_randomize (binid, sizeof(binid));
+	oio_str_bin2hex (binid, sizeof(binid), strid, sizeof(strid));
 	grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
-	SHA256_randomized_string(strid, sizeof(strid));
 
 	if (subpos >= 0)
 		g_snprintf(strpos, sizeof(strpos), (parity ? "%u.p%d" : "%u.%d"), pos, subpos);

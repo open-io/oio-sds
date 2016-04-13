@@ -187,22 +187,19 @@ GError* meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 GError* meta2_backend_get_max_versions(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gint64 *result);
 
-/** Generate spare chunk (in form of a chunk_info list). This function takes
- * care of the storage policy during the chunks generation (distance,
- * nb_chunks,...) */
+/** Generate spare chunk. This function takes care of the storage policy during
+ * the chunks generation (distance, nb_chunks,...) */
 GError* meta2_backend_get_spare_chunks(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, const char *polname, GSList **result,
-		gboolean answer_beans);
+		struct oio_url_s *url, const char *polname, GSList **result);
 
-/** Generate spare chunk (in form of a chunk_info list). This function
- * takes care of some informations: the number of wanted chunks, the distance
- * between each chunk, a "not-in" list whose chunks may already used and for
- * which the distance of spare chunks must match, and a "broken" chunk list
- * which is the list of already tried chunks url (e.g for which rawx seems to
- * not work) */
+/** Generate spare chunk. This function takes care of some information:
+ * the number of wanted chunks, the distance between each chunk, a "not-in"
+ * list whose chunks may already used and for which the distance of spare
+ * chunks must match, and a "broken" chunk list which is the list of already
+ * tried chunks url (e.g for which rawx seems to not work) */
 GError* meta2_backend_get_conditionned_spare_chunks(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gint64 count, gint64 dist, const char *notin,
-		const char * broken, GSList **result, gboolean answer_beans);
+		const char * broken, GSList **result);
 
 /** Generate spare chunks (in form of a bean_CHUNKS_s list).  */
 GError* meta2_backend_get_conditionned_spare_chunks_v2(

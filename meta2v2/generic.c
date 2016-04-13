@@ -1244,64 +1244,6 @@ _bean_dup(gpointer bean)
 	return copy;
 }
 
-static GChecksum*
-_unique_random_SHA256(void)
-{
-	static guint64 seq = 0;
-	struct {
-		gint64 now;
-		pid_t pid, ppid;
-		uid_t uid;
-		gid_t gid;
-		guint64 seq;
-		long r[4];
-		gchar hostname[128];
-	} bulk;
-
-	memset(&bulk, 0, sizeof(bulk));
-	bulk.now = oio_ext_real_time ();
-	bulk.pid = getpid();
-	bulk.ppid = getppid();
-	bulk.uid = geteuid();
-	bulk.gid = getegid();
-	bulk.seq = ++seq;
-	bulk.r[0] = random();
-	bulk.r[1] = random();
-	bulk.r[2] = random();
-	bulk.r[3] = random();
-	gethostname(bulk.hostname, sizeof(bulk.hostname));
-
-	GChecksum *h = g_checksum_new(G_CHECKSUM_SHA256);
-	g_checksum_update(h, (guint8*)&bulk, sizeof(bulk));
-	return h;
-}
-
-gsize
-SHA256_randomized_buffer(guint8 *d, gsize dlen)
-{
-	GChecksum *h = _unique_random_SHA256();
-	g_checksum_get_digest(h, d, &dlen);
-	g_checksum_free(h);
-	return dlen;
-}
-
-gsize
-SHA256_randomized_string(gchar *d, gsize dlen)
-{
-	const gchar *hexa;
-	gsize s;
-	GChecksum *h;
-
-	h = _unique_random_SHA256();
-	hexa = g_checksum_get_string(h);
-	EXTRA_ASSERT(strlen(hexa) == 64);
-	s = g_strlcpy(d, hexa, dlen);
-	for (; *d ;d++)
-		*d = g_ascii_toupper(*d);
-	g_checksum_free(h);
-	return MIN(s,dlen);
-}
-
 gint
 _bean_compare_kind (gconstpointer b0, gconstpointer b1)
 {

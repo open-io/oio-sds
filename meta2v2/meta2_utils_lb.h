@@ -36,12 +36,10 @@ typedef gpointer (*srvinfo_to_chunk_f)(struct service_info_s *si);
  * @param lbp Pointer to a rawx load balancing pool
  * @param stgpol Pointer to the wanted storage policy
  * @param result Pointer to a list where spare chunks will be inserted
- * @param answer_beans If TRUE, the spare chunks will be (struct bean_CHUNKS_s*)
- *   instead of (chunk_info_t *)
  * @return A GError in case of error
  */
 GError* get_spare_chunks(struct grid_lbpool_s *lbp,
-		struct storage_policy_s *stgpol, GSList **result, gboolean use_beans);
+		struct storage_policy_s *stgpol, GSList **result);
 
 /**
  * Get spare chunks according to some criteria.
@@ -55,14 +53,11 @@ GError* get_spare_chunks(struct grid_lbpool_s *lbp,
  * @param broken_loc The list of locations (char*) that are known to be broken
  *   and that should be avoided, but do not count when computing distance
  * @param result Pointer to a list where spare chunks will be inserted
- * @param answer_beans If TRUE, the spare chunks will be (struct bean_CHUNKS_s*)
- *   instead of (chunk_info_t*)
  * @return A GError in case of error
  */
 GError* get_conditioned_spare_chunks(struct grid_lbpool_s *lbp,
 		gint64 count, gint64 dist, const struct storage_class_s *stgclass,
-		GSList *notin_loc, GSList *broken_loc, GSList **result,
-		gboolean answer_beans);
+		GSList *notin_loc, GSList *broken_loc, GSList **result);
 
 /**
  * Get spare chunks according to a storage policy and lists of already
@@ -76,13 +71,11 @@ GError* get_conditioned_spare_chunks(struct grid_lbpool_s *lbp,
  * @param broken The list of chunks that are known to be broken and whose
  *   location should be avoided (do not count when computing distance)
  * @param result Pointer to a list where spare chunks will be inserted
- * @param answer_beans If TRUE, the spare chunks will be (struct bean_CHUNKS_s*)
- *   instead of (chunk_info_t*)
  * @return A GError in case of error
  */
 GError* get_conditioned_spare_chunks2(struct grid_lbpool_s *lbp,
 		struct storage_policy_s *stgpol, GSList *notin, GSList *broken,
-		GSList **result, gboolean answer_beans);
+		GSList **result);
 
 /**
  * Get the service information of the rawx hosting a chunk.

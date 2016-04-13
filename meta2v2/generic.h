@@ -169,10 +169,6 @@ void _bean_list_cb(gpointer plist, gpointer bean);
 #define _bean_set_field(bean,pos) (HDR(bean)->fields |= (1<<(pos)))
 #define _bean_del_field(bean,pos) (HDR(bean)->fields &= ~(1<<(pos)))
 
-gsize SHA256_randomized_buffer(guint8 *d, gsize dlen);
-
-gsize SHA256_randomized_string(gchar *d, gsize dlen);
-
 GVariant* _gba_to_gvariant(GByteArray *gba);
 
 GVariant* _gb_to_gvariant(GBytes *gb);
