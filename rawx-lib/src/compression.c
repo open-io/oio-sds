@@ -500,8 +500,7 @@ uncompress_chunk2(const gchar* path, gboolean preserve, gboolean keep_pending,
 	gint64 current_read;
 	struct compressed_chunk_s *cp_chunk = NULL;
 	struct compression_ctx_s *comp_ctx = NULL;
-
-
+	GHashTable *compress_opt = NULL;
 	FILE *dst = NULL;
 
 	/* Check chunk exists */
@@ -515,8 +514,7 @@ uncompress_chunk2(const gchar* path, gboolean preserve, gboolean keep_pending,
 	}
 	DEBUG("File [%s] found", path);
 
-	GHashTable *compress_opt =
-		g_hash_table_new_full( g_str_hash, g_str_equal, g_free, g_free);
+	compress_opt = g_hash_table_new_full( g_str_hash, g_str_equal, g_free, g_free);
 
 	if (!get_compression_info_in_attr(path, error, compress_opt)) {
 		GSETERROR(error, "Failed to get compression info in attr, chunk may be not compressed");
