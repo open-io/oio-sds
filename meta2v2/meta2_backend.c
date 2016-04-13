@@ -818,7 +818,7 @@ meta2_backend_add_modified_container(struct meta2_backend_s *m2b,
 	EXTRA_ASSERT(m2b != NULL);
 	if (m2b->notifier)
 		oio_events_queue__send_overwritable(m2b->notifier,
-				g_strdup(sqlx_admin_get_str(sq3, SQLX_ADMIN_BASENAME)),
+				sqlx_admin_get_str(sq3, SQLX_ADMIN_BASENAME),
 				_container_state (sq3));
 }
 
@@ -1307,7 +1307,7 @@ _meta2_backend_force_prepare_data_unlocked(struct meta2_backend_s *m2b,
 	g_free(stgpol);
 
 	if (pdata_out)
-		memmove(pdata_out, pdata, sizeof(struct m2_prepare_data));
+		memcpy(pdata_out, pdata, sizeof(struct m2_prepare_data));
 }
 
 static void
@@ -1359,7 +1359,7 @@ _meta2_backend_get_prepare_data(struct meta2_backend_s *m2b,
 	g_rw_lock_reader_lock(&(m2b->prepare_data_lock));
 	pdata = g_hash_table_lookup(m2b->prepare_data_cache, key);
 	if (pdata)  // do this while still locked
-		memmove(pdata_out, pdata, sizeof(struct m2_prepare_data));
+		memcpy(pdata_out, pdata, sizeof(struct m2_prepare_data));
 	g_rw_lock_reader_unlock(&(m2b->prepare_data_lock));
 
 	if (!pdata) {
@@ -1372,7 +1372,7 @@ _meta2_backend_get_prepare_data(struct meta2_backend_s *m2b,
 			g_rw_lock_writer_lock(&(m2b->prepare_data_lock));
 			pdata = g_hash_table_lookup(m2b->prepare_data_cache, key);
 			if (pdata) {
-				memmove(pdata_out, pdata, sizeof(struct m2_prepare_data));
+				memcpy(pdata_out, pdata, sizeof(struct m2_prepare_data));
 			} else {
 				_meta2_backend_force_prepare_data_unlocked(m2b, key,
 						pdata_out, *sq3);
