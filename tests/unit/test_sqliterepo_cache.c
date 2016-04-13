@@ -51,7 +51,7 @@ _round_lock(sqlx_cache_t *cache)
 	g_assert_no_error (err);
 
 	for (int i=0; i<5 ;i++) {
-		gint id = g_random_int();
+		gint id = oio_ext_rand_int();
 		err = sqlx_cache_open_and_lock_base(cache, hn0, &id);
 		g_assert_no_error (err);
 		g_assert_cmpint(id0, ==, id);
@@ -65,7 +65,7 @@ _round_lock(sqlx_cache_t *cache)
 	g_clear_error (&err);
 
 	for (int i=0; i<5 ;i++) {
-		gint id = g_random_int ();
+		gint id = oio_ext_rand_int ();
 		err = sqlx_cache_open_and_lock_base(cache, hn1, &id);
 		g_assert_no_error (err);
 		err = sqlx_cache_unlock_and_close_base(cache, id, FALSE);
