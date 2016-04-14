@@ -40,6 +40,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqliterepo/synchro.h>
 #include <sqliterepo/replication_dispatcher.h>
 #include <sqliterepo/gridd_client_pool.h>
+#include <sqliterepo/internals.h>
 #include <resolver/hc_resolver.h>
 
 #include <glib.h>
@@ -265,10 +266,10 @@ _configure_limits(struct sqlx_service_s *ss)
 			ss->max_active);
 
 	GRID_INFO("Limits set to ACTIVES[%u] PASSIVES[%u] BASES[%u] "
-			"(%u/%u available file descriptors)",
+			"fd=%u/%u page_size=%u",
 			ss->max_active, ss->max_passive, ss->max_bases,
-			ss->max_active + ss->max_passive + ss->max_bases,
-			(guint)limit.rlim_cur);
+			ss->max_active + ss->max_passive + ss->max_bases, (guint)limit.rlim_cur,
+			ss->cfg_page_size);
 
 	return TRUE;
 #undef CONFIGURE_LIMIT
@@ -363,6 +364,10 @@ _configure_backend(struct sqlx_service_s *ss)
 	repository_config.flags |= ss->flag_autocreate ? SQLX_REPO_AUTOCREATE : 0;
 	repository_config.sync_solo = ss->sync_mode_solo;
 	repository_config.sync_repli = ss->sync_mode_repli;
+
+	repository_config.page_size = SQLX_DEFAULT_PAGE_SIZE;
+	if (ss->cfg_page_size > 512)
+		repository_config.page_size = ss->cfg_page_size;
 
 	GError *err = sqlx_repository_init(ss->volume, &repository_config,
 			&ss->repository);
@@ -556,7 +561,7 @@ sqlx_service_set_defaults(void)
 	SRV.cfg_max_passive = 0;
 	SRV.cfg_max_active = 0;
 	SRV.cfg_max_workers = 200;
-	SRV.cfg_page_size = 4096;
+	SRV.cfg_page_size = SQLX_DEFAULT_PAGE_SIZE;
 	SRV.flag_replicable = TRUE;
 	SRV.flag_autocreate = TRUE;
 	SRV.flag_delete_on = TRUE;
