@@ -366,7 +366,7 @@ _configure_backend(struct sqlx_service_s *ss)
 	repository_config.sync_repli = ss->sync_mode_repli;
 
 	repository_config.page_size = SQLX_DEFAULT_PAGE_SIZE;
-	if (ss->cfg_page_size > 512)
+	if (ss->cfg_page_size >= 512)
 		repository_config.page_size = ss->cfg_page_size;
 
 	GError *err = sqlx_repository_init(ss->volume, &repository_config,
