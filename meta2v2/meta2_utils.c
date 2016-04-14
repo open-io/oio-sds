@@ -33,7 +33,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define RANDOM_UID(uid,uid_size) \
 	struct { guint64 now; guint32 r; guint16 pid; guint16 th; } uid; \
 	uid.now = oio_ext_real_time (); \
-	uid.r = g_random_int(); \
+	uid.r = oio_ext_rand_int(); \
 	uid.pid = getpid(); \
 	uid.th = oio_log_current_thread_id(); \
 	gsize uid_size = sizeof(uid);

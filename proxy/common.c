@@ -21,10 +21,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 gchar *
 proxy_get_csurl (void)
 {
-	gchar *cs = NULL;
 	g_rw_lock_reader_lock (&csurl_rwlock);
-	guint i = g_random_int_range(0, csurl_count);
-	cs = g_strdup(csurl[i]);
+	const guint i = oio_ext_rand_int_range(0, csurl_count);
+	gchar *cs = g_strdup(csurl[i]);
 	g_rw_lock_reader_unlock (&csurl_rwlock);
 	return cs;
 }

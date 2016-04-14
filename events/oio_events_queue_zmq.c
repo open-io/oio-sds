@@ -318,7 +318,7 @@ _zmq2agent_receive_acks (struct _zmq2agent_ctx_s *ctx)
 }
 
 static gboolean
-_zmq2agent_receive_events (GRand *r, struct _zmq2agent_ctx_s *ctx)
+_zmq2agent_receive_events (struct _zmq2agent_ctx_s *ctx)
 {
 	int rc, ended = 0;
 	guint i = 0;
@@ -329,7 +329,7 @@ _zmq2agent_receive_events (GRand *r, struct _zmq2agent_ctx_s *ctx)
 		ended = (rc == 0); // empty frame is an EOF
 		if (rc > 0) {
 			++ ctx->q->counter_received;
-			if (!_zmq2agent_manage_event (g_rand_int(r), ctx, &msg))
+			if (!_zmq2agent_manage_event (oio_ext_rand_int(), ctx, &msg))
 				rc = 0; // make it break
 		}
 		zmq_msg_close (&msg);
@@ -343,8 +343,6 @@ _zmq2agent_worker (struct _zmq2agent_ctx_s *ctx)
 	/* XXX(jfs): a dedicated PRNG avoids locking the glib's PRNG for each call
 	   (such global locks are present in the GLib) and opening it with a seed
 	   from the glib's PRNG avoids syscalls to the special file /dev/urandom */
-	GRand *r = g_rand_new_with_seed (g_random_int ());
-
 	gint64 last_debug = oio_ext_monotonic_time ();
 
 	zmq_pollitem_t pi[2] = {
@@ -365,7 +363,7 @@ _zmq2agent_worker (struct _zmq2agent_ctx_s *ctx)
 			_zmq2agent_receive_acks (ctx);
 		_retry_events (ctx);
 		if (pi[0].revents)
-			run = _zmq2agent_receive_events (r, ctx);
+			run = _zmq2agent_receive_events (ctx);
 
 		/* Periodically write stats in the log */
 		gint64 now = oio_ext_monotonic_time ();
@@ -379,7 +377,6 @@ _zmq2agent_worker (struct _zmq2agent_ctx_s *ctx)
 		}
 	}
 
-	g_rand_free (r);
 	GRID_INFO ("Thread stopping [NOTIFY-ZMQ2AGENT]");
 }
 

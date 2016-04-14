@@ -61,7 +61,7 @@ gridcluster_get_conscience(const char *ns)
 	if (!urlv) return NULL;
 
 	const gsize len = g_strv_length (urlv);
-	const guint i = g_random_int_range(0,len);
+	const guint i = oio_ext_rand_int_range(0,len);
 	s = urlv[i];
 	urlv[i] = urlv[len-1];
 	urlv[len-1] = NULL;
