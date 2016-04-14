@@ -498,8 +498,8 @@ grid_lb_is_srv_available(struct grid_lb_s *lb, const struct service_info_s *si)
 	EXTRA_ASSERT(si != NULL);
 	EXTRA_ASSERT(lb != NULL);
 
-	EXTRA_ASSERT(!g_ascii_strncasecmp(si->type, lb->srvtype, sizeof(si->type)));
-	EXTRA_ASSERT(!g_ascii_strncasecmp(si->ns_name, lb->ns, sizeof(si->ns_name)));
+	EXTRA_ASSERT(!strcmp(si->type, lb->srvtype));
+	EXTRA_ASSERT(!strcmp(si->ns_name, lb->ns));
 
 	return grid_lb_is_addr_available(lb, &(si->addr));
 }

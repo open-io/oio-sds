@@ -125,10 +125,9 @@ glvl_to_lvl(GLogLevelFlags lvl)
 }
 
 static int
-get_facility(const gchar *domain)
+get_facility(const gchar *dom)
 {
-	return (domain && *domain == 'a' && !g_ascii_strcasecmp(domain, "access"))
-		? LOG_LOCAL1 : 0;
+	return (dom && *dom == 'a' && !strcmp(dom, "access")) ? LOG_LOCAL1 : 0;
 }
 
 #define REAL_LEVEL(L)   (guint32)((L) >> G_LOG_LEVEL_USER_SHIFT)

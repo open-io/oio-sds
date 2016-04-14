@@ -845,7 +845,7 @@ _db_del_FK_by_name(gpointer bean, const gchar *name, sqlite3 *db)
 	EXTRA_ASSERT(db != NULL);
 
 	for (fk=DESCR(bean)->fk; fk->name ;fk++) {
-		if (!g_ascii_strcasecmp(fk->name, name)) {
+		if (!strcmp(fk->name, name)) {
 			EXTRA_ASSERT(DESCR(bean) == fk->src || DESCR(bean) == fk->dst);
 			if (DESCR(bean) == fk->src)
 				return _db_del_FK(bean, fk->dst_fields, fk->dst,
@@ -872,7 +872,7 @@ _db_get_FK_by_name(gpointer bean, const gchar *name, sqlite3 *db,
 	EXTRA_ASSERT(cb != NULL);
 
 	for (fk=DESCR(bean)->fk; fk->name ;fk++) {
-		if (!g_ascii_strcasecmp(fk->name, name)) {
+		if (!strcmp(fk->name, name)) {
 			EXTRA_ASSERT(DESCR(bean) == fk->src || DESCR(bean) == fk->dst);
 			if (DESCR(bean) == fk->src)
 				return _db_get_FK(bean, fk->dst_fields, fk->dst,
@@ -935,7 +935,7 @@ _db_count_FK_by_name(gpointer bean, const gchar *name,
 	EXTRA_ASSERT(pcount != NULL);
 
 	for (fk=DESCR(bean)->fk; fk->name ;fk++) {
-		if (!g_ascii_strcasecmp(fk->name, name)) {
+		if (!strcmp(fk->name, name)) {
 			EXTRA_ASSERT(DESCR(bean) == fk->src || DESCR(bean) == fk->dst);
 			if (DESCR(bean) == fk->src)
 				return _db_count_FK(bean, fk->dst_fields, fk->dst,
@@ -1178,7 +1178,7 @@ _bean_create_child(gpointer bean, const gchar *fkname)
 	}
 
 	for (fk=DESCR(bean)->fk; fk->name ;fk++) {
-		if (!g_ascii_strcasecmp(fk->name, fkname)) {
+		if (!strcmp(fk->name, fkname)) {
 			EXTRA_ASSERT(DESCR(bean) == fk->src || DESCR(bean) == fk->dst);
 			if (DESCR(bean) == fk->src) {
 				dst_descr = fk->dst;

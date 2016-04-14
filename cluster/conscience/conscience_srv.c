@@ -126,16 +126,22 @@ conscience_srv_compute_score(struct conscience_srv_s
 	char *getTag(char *f) {
 		return getField("tag", f);
 	}
-	accessor_f *getAcc(char *b)
-	{
+	accessor_f *getAcc(char *b) {
 		if (!b)
 			return NULL;
-		if (!g_ascii_strcasecmp(b, "stat"))
-			return getStat;
-		if (!g_ascii_strcasecmp(b, "tag"))
-			return getTag;
-		DEBUG("[%s/%s/] invalid tag domain : [%s]", conscience->ns_info.name, srvtype->type_name, b);
-		return NULL;
+		switch (*b) {
+			case 's':
+				if (!strcmp(b, "stat"))
+					return getStat;
+				return NULL;
+			case 't':
+				if (!strcmp(b, "tag"))
+					return getTag;
+				return NULL;
+			default:
+				GRID_TRACE2("[%s/%s/] invalid tag domain : [%s]", conscience->ns_info.name, srvtype->type_name, b);
+				return NULL;
+		}
 	}
 
 	/*some sanity checks */
