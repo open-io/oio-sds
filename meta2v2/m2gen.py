@@ -344,17 +344,35 @@ the list."""
 			out.write("\t"+dquoted(t.name)+",\n")
 			out.write("\t"+dquoted(t.c_name)+",\n")
 			out.write("\t"+dquoted(t.sql_name)+",\n")
-			out.write('\t'+dquoted("SELECT "+(",".join(t.get_fields_names()))+" FROM "+t.sql_name)+',\n')
-			out.write('\t'+dquoted("SELECT COUNT(*) FROM "+t.sql_name)+',\n')
+			out.write("\t"+str(len(t.sql_name))+",\n")
+
+			sql = "DELETE FROM "+t.sql_name+" WHERE "
+			out.write('\t'+dquoted(sql)+',\n')
+			out.write('\t'+str(len(sql))+',\n')
+
+			sql = "SELECT "+(",".join(t.get_fields_names()))+" FROM "+t.sql_name
+			out.write('\t'+dquoted(sql)+',\n')
+			out.write('\t'+str(len(sql))+',\n')
+
+			sql = "SELECT COUNT(*) FROM "+t.sql_name
+			out.write('\t'+dquoted(sql)+',\n')
+			out.write('\t'+str(len(sql))+',\n')
 
 			t0 = ",".join(t.get_fields_names())
 			t1 = ",".join(['?' for f in t.fields])
-			out.write('\t'+dquoted("INSERT  INTO "+t.sql_name+"("+t0+") VALUES ("+t1+")")+',\n')
-			out.write('\t'+dquoted("REPLACE INTO "+t.sql_name+"("+t0+") VALUES ("+t1+")")+',\n')
+			sql = "INSERT  INTO "+t.sql_name+"("+t0+") VALUES ("+t1+")"
+			out.write('\t'+dquoted(sql)+',\n')
+			out.write('\t'+str(len(sql))+',\n')
+
+			sql = "REPLACE INTO "+t.sql_name+"("+t0+") VALUES ("+t1+")"
+			out.write('\t'+dquoted(sql)+',\n')
+			out.write('\t'+str(len(sql))+',\n')
 
 			t0 = ",".join([ f.name+'=?' for f in t.fields if not f.name in t.pk])
 			t1 = " AND ".join([f.name+'=?' for f in t.fields if f.name in t.pk])
-			out.write('\t'+dquoted("UPDATE "+t.name+" SET "+t0+" WHERE "+t1)+',\n')
+			sql = "UPDATE "+t.name+" SET "+t0+" WHERE "+t1
+			out.write('\t'+dquoted(sql)+',\n')
+			out.write('\t'+str(len(sql))+',\n')
 
 			out.write("\toffsetof(struct bean_"+t.c_name+"_s,fields),\n")
 			out.write("\tsizeof(struct bean_"+t.c_name+"_s),\n")

@@ -1489,7 +1489,7 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 GError*
 meta2_backend_get_conditionned_spare_chunks(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gint64 count, gint64 dist, const char *notin,
-		const char *broken, GSList **result, gboolean answer_beans)
+		const char *broken, GSList **result)
 {
 	GError *err = NULL;
 	GSList *notin2 = NULL;
@@ -1538,8 +1538,7 @@ meta2_backend_get_conditionned_spare_chunks(struct meta2_backend_s *m2b,
 	stgpol = storage_policy_init(m2b->nsinfo, NULL);
 
 	err = get_conditioned_spare_chunks(m2b->lb, count, dist,
-			storage_policy_get_storage_class(stgpol), notin2, broken2, result,
-			answer_beans);
+			storage_policy_get_storage_class(stgpol), notin2, broken2, result);
 
 	g_slist_free_full(notin2, (GDestroyNotify) service_info_gclean);
 	g_slist_free_full(broken2, (GDestroyNotify) service_info_gclean);
@@ -1591,36 +1590,26 @@ meta2_backend_get_conditionned_spare_chunks_v2(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, const gchar *polname, GSList *notin,
 		GSList *broken, GSList **result)
 {
-	GError *err = NULL;
 	struct storage_policy_s *pol = NULL;
-
-	err = _load_storage_policy(m2b, url, polname, &pol);
-	if (err != NULL)
-		return err;
-
-	err = get_conditioned_spare_chunks2(m2b->lb, pol, notin, broken,
-			result, TRUE);
-
-	storage_policy_clean(pol);
+	GError *err = _load_storage_policy(m2b, url, polname, &pol);
+	if (!err)
+		err = get_conditioned_spare_chunks2(m2b->lb, pol, notin, broken, result);
+	if (pol)
+		storage_policy_clean(pol);
 	return err;
 }
 
 GError*
 meta2_backend_get_spare_chunks(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		const char *polname, GSList **result, gboolean use_beans)
+		const char *polname, GSList **result)
 {
-	struct storage_policy_s *pol = NULL;
-	GError *err = NULL;
-
 	GRID_TRACE("SPARE(%s,%s)", oio_url_get(url, OIOURL_WHOLE), polname);
 	EXTRA_ASSERT(m2b != NULL);
 
-	err = _load_storage_policy(m2b, url, polname, &pol);
-
-	if (!err) {
-		err = get_spare_chunks(m2b->lb, pol, result, use_beans);
-	}
-
+	struct storage_policy_s *pol = NULL;
+	GError *err = _load_storage_policy(m2b, url, polname, &pol);
+	if (!err)
+		err = get_spare_chunks(m2b->lb, pol, result);
 	if (pol)
 		storage_policy_clean(pol);
 	return err;

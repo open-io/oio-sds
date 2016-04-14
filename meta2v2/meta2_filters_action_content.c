@@ -440,8 +440,7 @@ meta2_filter_action_generate_beans(struct gridd_filter_ctx_s *ctx,
 		if (strcmp(spare_type, M2V2_SPARE_BY_BLACKLIST) == 0) {
 			e = _spare_with_blacklist(m2b, ctx, obc, url, policy_str);
 		} else if (strcmp(spare_type, M2V2_SPARE_BY_STGPOL) == 0) {
-			e = meta2_backend_get_spare_chunks(m2b, url, policy_str,
-					&(obc->l), TRUE);
+			e = meta2_backend_get_spare_chunks(m2b, url, policy_str, &(obc->l));
 		} else {
 			e = NEWERROR(CODE_BAD_REQUEST, "Unknown type of spare request: %s", spare_type);
 		}

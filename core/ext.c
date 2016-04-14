@@ -47,7 +47,7 @@ static GSList*
 gslist_merge_random (GSList *l1, GSList *l2)
 {
 	GSList *next, *result = NULL;
-	GRand *r = g_rand_new_with_seed (g_random_int ());
+	GRand *r = oio_ext_local_prng ();
 	while (l1 || l2) {
 		if (l1 && l2) {
 			if (g_rand_boolean(r))
@@ -62,7 +62,6 @@ gslist_merge_random (GSList *l1, GSList *l2)
 				PREPEND(result,l2);
 		}
 	}
-	g_rand_free (r);
 	return result;
 }
 
@@ -93,7 +92,7 @@ oio_ext_gslist_shuffle (GSList *src)
 void
 oio_ext_array_shuffle (gpointer *array, gsize len)
 {
-	GRand *r = g_rand_new_with_seed (g_random_int ());
+	GRand *r = oio_ext_local_prng ();
 	while (len-- > 1) {
 		guint32 i = g_rand_int_range (r, 0, len+1);
 		if (i == len)
@@ -102,7 +101,6 @@ oio_ext_array_shuffle (gpointer *array, gsize len)
 		array[i] = array[len];
 		array[len] = tmp;
 	}
-	g_rand_free (r);
 }
 
 gsize
@@ -168,20 +166,79 @@ oio_ext_extract_json (struct json_object *obj,
 
 /* -------------------------------------------------------------------------- */
 
-static void _free0 (gpointer p) { if (p) g_free(p); }
+/* @private */
+struct oio_ext_local_s {
+	gchar *reqid;
+	GRand *prng;
+};
 
-static GPrivate th_local_key_reqid = G_PRIVATE_INIT(_free0);
+static void
+_local_free (gpointer p)
+{
+	struct oio_ext_local_s *l = p;
+	if (!l)
+		return;
+	oio_str_clean (&l->reqid);
+	if (l->prng) {
+		g_rand_free (l->prng);
+		l->prng = NULL;
+	}
+	g_free (l);
+}
+
+static GPrivate th_local_key = G_PRIVATE_INIT(_local_free);
+
+static struct oio_ext_local_s *
+_local_get (void)
+{
+	return g_private_get(&th_local_key);
+}
+
+static struct oio_ext_local_s *
+_local_ensure (void)
+{
+	struct oio_ext_local_s *l = _local_get ();
+	if (!l) {
+		l = g_malloc0 (sizeof(*l));
+		g_private_replace (&th_local_key, l);
+	}
+	return l;
+}
+
+GRand *
+oio_ext_local_prng (void)
+{
+	struct oio_ext_local_s *l = _local_ensure ();
+	if (!l->prng) {
+		union {
+			void *p;
+			guint32 u[2];
+			gint64 i;
+		} b;
+		guint32 seeds[3];
+		b.i = g_get_monotonic_time ();
+		seeds[0] = b.u[0] ^ getpid();
+		seeds[1] = b.u[1];
+		seeds[2] = g_random_int ();
+		b.p = g_thread_self();
+		seeds[1] = (seeds[1] ^ b.u[0]) ^ b.u[1];
+		l->prng = g_rand_new_with_seed_array (seeds, 3);
+	}
+	return l->prng;
+}
 
 const char *
 oio_ext_get_reqid (void)
 {
-	return g_private_get(&th_local_key_reqid);
+	const struct oio_ext_local_s *l = _local_ensure ();
+	return l->reqid;
 }
 
 void
 oio_ext_set_reqid (const char *reqid)
 {
-	 g_private_replace (&th_local_key_reqid, g_strdup (reqid));
+	struct oio_ext_local_s *l = _local_ensure ();
+	oio_str_replace (&l->reqid, reqid);
 }
 
 void
@@ -564,3 +621,28 @@ oio_sys_cpu_idle (void)
 
 	return out;
 }
+
+gboolean
+oio_ext_rand_boolean (void)
+{
+	return g_rand_boolean (oio_ext_local_prng ());
+}
+
+gdouble
+oio_ext_rand_double (void)
+{
+	return g_rand_double (oio_ext_local_prng());
+}
+
+guint32
+oio_ext_rand_int (void)
+{
+	return g_rand_int (oio_ext_local_prng ());
+}
+
+gint32
+oio_ext_rand_int_range (gint32 low, gint32 up)
+{
+	return g_rand_int_range (oio_ext_local_prng (), low, up);
+}
+

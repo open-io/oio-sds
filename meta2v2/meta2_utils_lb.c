@@ -62,33 +62,17 @@ service_info_from_chunk_id(struct grid_lbpool_s *glp,
 
 //------------------------------------------------------------------------------
 
-// TODO: export?
-static gpointer
-_gen_chunk_info(struct service_info_s *si)
-{
-	chunk_info_t *ci = g_malloc0(sizeof(chunk_info_t));
-	SHA256_randomized_buffer(ci->id.id, sizeof(ci->id.id));
-	memcpy(&(ci->id.addr), &(si->addr), sizeof(addr_info_t));
-	g_strlcpy(ci->id.vol,
-		service_info_get_tag_value(si, NAME_TAGNAME_RAWX_VOL, "/"),
-		sizeof(ci->id.vol));
-	ci->size = 0;
-	ci->position = 0;
-	ci->nb = 0;
-
-	return (gpointer)ci;
-}
-
-// TODO: export?
 static gpointer
 _gen_chunk_bean(struct service_info_s *si)
 {
-	gchar straddr[STRLEN_ADDRINFO], strid[STRLEN_CHUNKID];
+	guint8 binid[32];
+	gchar straddr[STRLEN_ADDRINFO], strid[65];
 	gchar *chunkid = NULL;
 	struct bean_CHUNKS_s *chunk = NULL;
 
+	oio_str_randomize (binid, sizeof(binid));
+	oio_str_bin2hex (binid, sizeof(binid), strid, sizeof(strid));
 	grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
-	SHA256_randomized_string(strid, sizeof(strid));
 	chunk = _bean_create(&descr_struct_CHUNKS);
 	chunkid = m2v2_build_chunk_url (straddr, strid);
 	CHUNKS_set2_id(chunk, chunkid);
@@ -101,8 +85,7 @@ _gen_chunk_bean(struct service_info_s *si)
 
 static GError*
 _poll_services(struct grid_lbpool_s *lbp, const gchar *srvtype,
-		struct lb_next_opt_ext_s *opt_ext,
-		GSList **result, gboolean use_beans)
+		struct lb_next_opt_ext_s *opt_ext, GSList **result)
 {
 	struct grid_lb_iterator_s *iter = NULL;
 	struct service_info_s **psi, **siv = NULL;
@@ -116,14 +99,8 @@ _poll_services(struct grid_lbpool_s *lbp, const gchar *srvtype,
 		return NEWERROR(CODE_PLATFORM_ERROR, "Cannot get services"
 				" list for the specified storage policy");
 
-	if (use_beans) {
-		for(psi=siv; *psi; ++psi)
-			*result = g_slist_prepend(*result, _gen_chunk_bean(*psi));
-	}
-	else {
-		for(psi=siv; *psi; ++psi)
-			*result = g_slist_prepend(*result, _gen_chunk_info(*psi));
-	}
+	for(psi=siv; *psi; ++psi)
+		*result = g_slist_prepend(*result, _gen_chunk_bean(*psi));
 
 	service_info_cleanv(siv, FALSE);
 	return NULL;
@@ -131,7 +108,7 @@ _poll_services(struct grid_lbpool_s *lbp, const gchar *srvtype,
 
 GError*
 get_spare_chunks(struct grid_lbpool_s *lbp, struct storage_policy_s *stgpol,
-		GSList **result, gboolean use_beans)
+		GSList **result)
 {
 	const char *k, *m, *cpstr, *diststr;
 	const struct data_security_s *ds = storage_policy_get_data_security(stgpol);
@@ -163,7 +140,7 @@ get_spare_chunks(struct grid_lbpool_s *lbp, struct storage_policy_s *stgpol,
 			return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy type");
 	}
 
-	return _poll_services(lbp, "rawx", &opt_ext, result, use_beans);
+	return _poll_services(lbp, "rawx", &opt_ext, result);
 }
 
 //------------------------------------------------------------------------------
@@ -172,7 +149,7 @@ GError*
 get_conditioned_spare_chunks(struct grid_lbpool_s *lbp,
 		gint64 count, gint64 dist, const struct storage_class_s *stgclass,
 		GSList *notin, GSList *broken,
-		GSList **result, gboolean answer_beans)
+		GSList **result)
 {
 	struct lb_next_opt_ext_s opt_ext;
 	memset(&opt_ext, 0, sizeof(opt_ext));
@@ -184,7 +161,7 @@ get_conditioned_spare_chunks(struct grid_lbpool_s *lbp,
 	opt_ext.srv_inplace = notin;
 	opt_ext.srv_forbidden = broken;
 
-	return _poll_services(lbp, "rawx", &opt_ext, result, answer_beans);
+	return _poll_services(lbp, "rawx", &opt_ext, result);
 }
 
 static GSList *
@@ -214,7 +191,7 @@ GError*
 get_conditioned_spare_chunks2(struct grid_lbpool_s *lbp,
 		struct storage_policy_s *stgpol,
 		GSList *already, GSList *broken,
-		GSList **result, gboolean answer_beans)
+		GSList **result)
 {
 	const struct data_security_s *ds = storage_policy_get_data_security(stgpol);
 	const struct storage_class_s *stgclass = storage_policy_get_storage_class(stgpol);
@@ -254,7 +231,7 @@ get_conditioned_spare_chunks2(struct grid_lbpool_s *lbp,
 
 	opt_ext.srv_forbidden = convert_chunks_to_srvinfo(lbp, broken);
 	opt_ext.srv_inplace = convert_chunks_to_srvinfo(lbp, already);
-	err = _poll_services(lbp, "rawx", &opt_ext, result, answer_beans);
+	err = _poll_services(lbp, "rawx", &opt_ext, result);
 	g_slist_free_full(opt_ext.srv_forbidden, (GDestroyNotify)service_info_clean);
 	g_slist_free_full(opt_ext.srv_inplace, (GDestroyNotify)service_info_clean);
 

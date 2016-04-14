@@ -425,7 +425,7 @@ test_content_put_prop_get(void)
 		GPtrArray *tmp;
 		GError *err;
 
-		CLOCK_START = CLOCK = g_random_int();
+		CLOCK_START = CLOCK = oio_ext_rand_int();
 
 		/* insert a new alias */
 		do {
@@ -507,7 +507,7 @@ test_content_put_get_delete(void)
 		GPtrArray *tmp;
 		GError *err;
 
-		CLOCK_START = CLOCK = g_random_int();
+		CLOCK_START = CLOCK = oio_ext_rand_int();
 
 		/* insert a new alias */
 		do {
@@ -614,7 +614,7 @@ test_content_append(void)
 		GError *err;
 		guint expected;
 
-		CLOCK_START = CLOCK = g_random_int();
+		CLOCK_START = CLOCK = oio_ext_rand_int();
 
 		/* generate the beans for an alias of 3 chunks */
 		beans = _create_alias(m2, u, NULL);
@@ -720,7 +720,7 @@ test_content_append_not_found(void)
 		GSList *beans = NULL, *newbeans = NULL;
 		GError *err;
 
-		CLOCK_START = CLOCK = g_random_int();
+		CLOCK_START = CLOCK = oio_ext_rand_int();
 		beans = _create_alias(m2, u, NULL);
 		CLOCK ++;
 
@@ -827,7 +827,7 @@ test_props_set_simple()
 		GSList *beans;
 		(void) maxver;
 
-		CLOCK_START = CLOCK = g_random_int();
+		CLOCK_START = CLOCK = oio_ext_rand_int();
 
 		/* add a content */
 		beans = _create_alias(m2, u, NULL);

@@ -67,11 +67,19 @@ struct bean_descriptor_s
 	const gchar *name;
 	const gchar *c_name;
 	const gchar *sql_name;
+	int sql_name_len;
+	const gchar *sql_delete;
+	int sql_delete_len;
 	const gchar *sql_select;
+	int sql_select_len;
 	const gchar *sql_count;
+	int sql_count_len;
 	const gchar *sql_insert;
+	int sql_insert_len;
 	const gchar *sql_replace;
+	int sql_replace_len;
 	const gchar *sql_update;
+	int sql_update_len;
 	const long offset_fields;
 	const long struct_size;
 	const guint count_fields;
@@ -168,10 +176,6 @@ void _bean_list_cb(gpointer plist, gpointer bean);
 #define _bean_has_field(bean,pos) (HDR(bean)->fields & (1<<(pos)))
 #define _bean_set_field(bean,pos) (HDR(bean)->fields |= (1<<(pos)))
 #define _bean_del_field(bean,pos) (HDR(bean)->fields &= ~(1<<(pos)))
-
-gsize SHA256_randomized_buffer(guint8 *d, gsize dlen);
-
-gsize SHA256_randomized_string(gchar *d, gsize dlen);
 
 GVariant* _gba_to_gvariant(GByteArray *gba);
 
