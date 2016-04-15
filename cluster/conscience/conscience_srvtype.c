@@ -334,14 +334,16 @@ conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_
 	struct conscience_srvid_s srvid;
 	memcpy(&(srvid.addr), &(si->addr), sizeof(addr_info_t));
 
-	struct service_tag_s *tag_first = service_info_get_tag(si->tags, NAME_TAGNAME_RAWX_FIRST);
-	gboolean first = tag_first && tag_first->type == STVT_BOOL && tag_first->value.b;
+	struct service_tag_s *tag_first =
+		service_info_get_tag(si->tags, NAME_TAGNAME_RAWX_FIRST);
+	gboolean really_first = FALSE;
 
 	/*register the service if necessary */
 	struct conscience_srv_s *p_srv = conscience_srvtype_get_srv(srvtype, &srvid);
 	if (!p_srv) {
 		p_srv = conscience_srvtype_register_srv(srvtype, NULL, &srvid);
 		g_assert_nonnull (p_srv);
+		really_first = tag_first && tag_first->type == STVT_BOOL && tag_first->value.b;
 	}
 
 	/* refresh the tags: create missing, replace existing
@@ -360,7 +362,7 @@ conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_
 
 	p_srv->score.timestamp = oio_ext_monotonic_seconds ();
 	if (si->score.value == SCORE_UNSET || si->score.value == SCORE_UNLOCK) {
-		if (first) {
+		if (really_first) {
 			GRID_TRACE2("SRV first [%s]", p_srv->description);
 			p_srv->score.value = 0;
 			p_srv->locked = TRUE;
