@@ -218,14 +218,14 @@ load_table_row(sqlite3 *db, const hashstr_t *name, gint64 rowid, Row_t *row,
 {
 	int rc;
 	sqlite3_stmt *stmt = NULL;
-	gchar *sql;
+	gchar sql[128] = {0};
 
 	GRID_TRACE2("%s(%p,%s,%"G_GINT64_FORMAT",%p,%p)", __FUNCTION__,
 			db, hashstr_str(name), rowid, row, table);
 
-	sql = g_strdup_printf("SELECT * FROM %s WHERE ROWID = ?", hashstr_str(name));
+	g_snprintf(sql, sizeof(sql), "SELECT * FROM %s WHERE ROWID = ?",
+			hashstr_str(name));
 	sqlite3_prepare_debug(rc, db, sql, -1, &stmt, NULL);
-	g_free(sql);
 
 	sqlite3_bind_int64(stmt, 1, rowid);
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt)))
