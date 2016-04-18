@@ -630,7 +630,7 @@ rawx_repo_commit_upload(dav_stream *stream)
 	request_fill_headers(stream->r->info->request,
 			&(stream->r->info->content), &(stream->r->info->chunk));
 
-	send_chunk_event("rawx.chunk.new", stream->r);
+	send_chunk_event("storage.chunk.new", stream->r);
 
 	return NULL;
 }

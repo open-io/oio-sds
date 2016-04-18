@@ -1199,7 +1199,7 @@ __notify_services(struct meta1_backend_s *m1, struct sqlx_sqlite3_s *sq3,
 	if (!err) {
 		struct meta1_service_url_s **services2 = expand_urlv(services);
 		GString *notif = g_string_sized_new(128);
-		g_string_append (notif, "{\"event\":\""NAME_SRVTYPE_META1".account.services\"");
+		g_string_append (notif, "{\"event\":\"account.services\"");
 		g_string_append_printf (notif, ",\"when\":%"G_GINT64_FORMAT, oio_ext_real_time());
 		g_string_append (notif, ",\"data\":{");
 		g_string_append(notif, "\"url\":\"");
