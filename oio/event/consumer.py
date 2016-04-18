@@ -92,14 +92,14 @@ class Worker(object):
 
 
 class EventType(object):
-    REFERENCE_UPDATE = "meta1.account.services"
-    CONTAINER_PUT = "meta2.container.create"
-    CONTAINER_DESTROY = "meta2.container.destroy"
-    CONTAINER_UPDATE = "meta2.container.state"
-    OBJECT_PUT = "meta2.content.new"
-    OBJECT_DELETE = "meta2.content.deleted"
-    CHUNK_PUT = "rawx.chunk.new"
-    CHUNK_DELETE = "rawx.chunk.delete"
+    REFERENCE_UPDATE = "account.services"
+    CONTAINER_PUT = "storage.container.new"
+    CONTAINER_DESTROY = "storage.container.deleted"
+    CONTAINER_UPDATE = "storage.container.state"
+    OBJECT_PUT = "storage.content.new"
+    OBJECT_DELETE = "storage.content.deleted"
+    CHUNK_PUT = "storage.chunk.new"
+    CHUNK_DELETE = "storage.chunk.deleted"
     PING = "ping"
 
 
@@ -188,7 +188,8 @@ class EventWorker(Worker):
     def process_event(self, event):
         handler = self.get_handler(event)
         if not handler:
-            self.logger.warn("ERROR no handler found for event")
+            self.logger.warn("ERROR no handler found for event '%s'",
+                             event.get('event', None))
             # mark as success
             return True
         success = True
