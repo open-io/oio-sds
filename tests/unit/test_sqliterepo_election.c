@@ -474,7 +474,7 @@ test_single (void)
 	gint64 i64 = 0;
 	guint u = 0;
 
-	CLOCK_START = CLOCK = g_random_int ();
+	CLOCK_START = CLOCK = oio_ext_rand_int ();
 
 	sync = _sync_factory__noop ();
 	g_assert_nonnull (sync);
@@ -581,7 +581,7 @@ test_sets (void)
 	struct sqlx_peering_s *peering = NULL;
 	struct election_manager_s *manager = NULL;
 
-	CLOCK_START = CLOCK = g_random_int ();
+	CLOCK_START = CLOCK = oio_ext_rand_int ();
 
 	sync = _sync_factory__noop ();
 	g_assert_nonnull (sync);
@@ -680,7 +680,7 @@ test_election_init(void)
 
 	for (int i=0; i<8 ;++i) {
 		struct sqlx_name_mutable_s n = {.ns="NS", .base=NULL, .type="type"};
-		n.base = g_strdup_printf("base-%"G_GUINT32_FORMAT, g_random_int());
+		n.base = g_strdup_printf("base-%"G_GUINT32_FORMAT, oio_ext_rand_int());
 		err = election_init(m, sqlx_name_mutable_to_const(&n));
 		g_assert_no_error(err);
 		err = election_exit(m, sqlx_name_mutable_to_const(&n));

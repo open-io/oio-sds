@@ -80,10 +80,11 @@ _checksum_file (const char *path, struct file_info_s *fi)
 static void
 _append_random_chars (gchar *d, const char *chars, guint n)
 {
+	GRand *r = oio_ext_local_prng ();
 	size_t len = strlen (chars);
 	gchar *p = d + strlen(d);
 	for (guint i=0; i<n ;i++)
-		*(p++) = chars [g_random_int_range (0, len)];
+		*(p++) = chars [g_rand_int_range (r, 0, len)];
 	*p = '\0';
 }
 

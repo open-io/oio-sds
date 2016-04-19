@@ -702,7 +702,7 @@ dav_rawx_remove_resource(dav_resource *resource, dav_response **response)
 		goto end_remove;
 	}
 
-	send_chunk_event("rawx.chunk.delete", resource);
+	send_chunk_event("storage.chunk.deleted", resource);
 
 	resource->exists = 0;
 	resource->collection = 0;

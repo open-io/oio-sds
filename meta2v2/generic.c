@@ -50,12 +50,11 @@ _gstr_assign(GString *base, GString *gstr)
 static void
 _gstr_randomize(GString *gstr)
 {
-	gint i, max;
-
+	GRand *r = oio_ext_local_prng ();
 	g_string_set_size(gstr, 0);
-	max = g_random_int_range(1, 15);
-	for (i=0; i<max ; i++) {
-		guint32 u32 = g_random_int_range(0, sizeof(random_chars)-1);
+	const gint max = g_rand_int_range(r, 1, 15);
+	for (gint i=0; i<max ; i++) {
+		guint32 u32 = g_rand_int_range(r, 0, sizeof(random_chars)-1);
 		g_string_append_c(gstr, random_chars[u32]);
 	}
 }
@@ -63,12 +62,11 @@ _gstr_randomize(GString *gstr)
 static void
 _gba_randomize(GByteArray *gba)
 {
-	gint i, max;
-
+	GRand *r = oio_ext_local_prng ();
 	g_byte_array_set_size(gba, 0);
-	max = g_random_int_range(1, 15);
-	for (i=0; i<max ; i+=4) {
-		guint32 u32 = g_random_int();
+	const gint max = g_rand_int_range(r, 1, 15);
+	for (gint i=0; i<max ; i+=4) {
+		guint32 u32 = g_rand_int(r);
 		g_byte_array_append(gba, (guint8*)&u32, sizeof(u32));
 	}
 	g_byte_array_set_size(gba, max);
@@ -316,12 +314,12 @@ _stmt_apply_GV_parameters(sqlite3_stmt *stmt, GVariant **params)
 }
 
 static GError *
-_db_prepare_statement(sqlite3 *db, const gchar *sql, sqlite3_stmt **result)
+_db_prepare_statement(sqlite3 *db, const gchar *sql, int len, sqlite3_stmt **result)
 {
 	gint rc;
 	sqlite3_stmt *stmt = NULL;
 
-	sqlite3_prepare_debug(rc, db, sql, -1, &stmt, NULL);
+	sqlite3_prepare_debug(rc, db, sql, len, &stmt, NULL);
 
 	if (rc != SQLITE_OK && rc != SQLITE_ROW)
 		return M2_SQLITE_GERROR(db,rc);
@@ -332,13 +330,13 @@ _db_prepare_statement(sqlite3 *db, const gchar *sql, sqlite3_stmt **result)
 }
 
 static GError*
-_db_execute(sqlite3 *db, const gchar *query, GVariant **params)
+_db_execute(sqlite3 *db, const gchar *query, int len, GVariant **params)
 {
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
 	gint rc;
 
-	err = _db_prepare_statement(db, query, &stmt);
+	err = _db_prepare_statement(db, query, len, &stmt);
 	if (NULL != err) {
 		g_prefix_error(&err, "Prepare error: ");
 		return err;
@@ -433,11 +431,14 @@ _db_get_bean(const struct bean_descriptor_s *descr,
 	EXTRA_ASSERT(cb != NULL);
 
 	if (!clause || !*clause)
-		err = _db_prepare_statement(db, descr->sql_select, &stmt);
+		err = _db_prepare_statement(db, descr->sql_select, descr->sql_select_len, &stmt);
 	else {
-		gchar *sql = g_strconcat(descr->sql_select, " WHERE ", clause, NULL);
-		err = _db_prepare_statement(db, sql, &stmt);
-		g_free(sql);
+		GString *sql = g_string_new("");
+		g_string_append_len (sql, descr->sql_select, descr->sql_select_len);
+		g_string_append_len (sql, " WHERE ", sizeof(" WHERE ")-1);
+		g_string_append (sql, clause);
+		err = _db_prepare_statement(db, sql->str, sql->len, &stmt);
+		g_string_free(sql, TRUE);
 	}
 
 	if (NULL != err) {
@@ -474,11 +475,14 @@ _db_count_bean(const struct bean_descriptor_s *descr,
 	EXTRA_ASSERT(pcount != NULL);
 
 	if (!clause || !*clause)
-		err = _db_prepare_statement(db, descr->sql_count, &stmt);
+		err = _db_prepare_statement(db, descr->sql_count, descr->sql_count_len, &stmt);
 	else {
-		gchar *sql = g_strconcat(descr->sql_count, " WHERE ", clause, NULL);
-		err = _db_prepare_statement(db, sql, &stmt);
-		g_free(sql);
+		GString *sql = g_string_new("");
+		g_string_append_len (sql, descr->sql_count, descr->sql_count_len);
+		g_string_append_len (sql, " WHERE ", sizeof(" WHERE ")-1);
+		g_string_append (sql, clause);
+		err = _db_prepare_statement(db, sql->str, sql->len, &stmt);
+		g_string_free(sql, TRUE);
 	}
 
 	if (NULL != err) {
@@ -504,12 +508,12 @@ _db_count_bean(const struct bean_descriptor_s *descr,
 
 /* DELETE ------------------------------------------------------------------- */
 
-static gchar *
+static GString *
 _bean_query_DELETE(gpointer bean)
 {
 	GString *gstr = g_string_new("");
-	g_string_printf(gstr, "DELETE FROM %s WHERE ", DESCR(bean)->sql_name);
-	return g_string_free(_bean_clause(bean, gstr, TRUE), FALSE);
+	g_string_append_len(gstr, DESCR(bean)->sql_delete, DESCR(bean)->sql_delete_len);
+	return _bean_clause(bean, gstr, TRUE);
 }
 
 GError*
@@ -530,15 +534,11 @@ _db_delete_bean(sqlite3 *db, gpointer bean)
 		return (GVariant**) g_ptr_array_free(v, FALSE);
 	}
 
-	gchar *sql;
-	GVariant **params;
-	GError *err;
-
-	sql = _bean_query_DELETE(bean);
-	params = _params_delete();
-	err = _db_execute(db, sql, params);
+	GVariant **params = _params_delete();
+	GString *sql = _bean_query_DELETE(bean);
+	GError *err = _db_execute(db, sql->str, sql->len, params);
 	gv_freev(params, FALSE);
-	g_free(sql);
+	g_string_free(sql, TRUE);
 
 	return err;
 }
@@ -547,13 +547,11 @@ GError*
 _db_delete(const struct bean_descriptor_s *descr, sqlite3 *db,
 		const gchar *clause, GVariant **params)
 {
-	gchar *sql;
-	GError *err;
-
-	sql = g_strdup_printf("DELETE FROM %s WHERE %s", descr->sql_name, clause);
-	err = _db_execute(db, sql, params);
-	g_free(sql);
-
+	GString *sql = g_string_new("");
+	g_string_append_len (sql, descr->sql_delete, descr->sql_delete_len);
+	g_string_append(sql, clause);
+	GError *err = _db_execute(db, sql->str, sql->len, params);
+	g_string_free(sql, TRUE);
 	return err;
 }
 
@@ -607,7 +605,7 @@ _db_insert_bean(sqlite3 *db, gpointer bean)
 	EXTRA_ASSERT(bean != NULL);
 
 	GVariant **params = _bean_params_insert_or_replace (bean);
-	GError *err = _db_execute(db, DESCR(bean)->sql_insert, params);
+	GError *err = _db_execute(db, DESCR(bean)->sql_insert, DESCR(bean)->sql_insert_len, params);
 	gv_freev(params, FALSE);
 	return err;
 }
@@ -646,11 +644,11 @@ _db_save_bean(sqlite3 *db, gpointer bean)
 
 	if (HDR(bean)->flags & BEAN_FLAG_TRANSIENT) {
 		params = _bean_params_insert_or_replace (bean);
-		err = _db_execute(db, DESCR(bean)->sql_replace, params);
+		err = _db_execute(db, DESCR(bean)->sql_replace, DESCR(bean)->sql_replace_len, params);
 	}
 	else {
 		params = _bean_params_update (bean);
-		err = _db_execute(db, DESCR(bean)->sql_update, params);
+		err = _db_execute(db, DESCR(bean)->sql_update, DESCR(bean)->sql_update_len, params);
 	}
 
 	gv_freev(params, FALSE);
@@ -1047,6 +1045,7 @@ _bean_debugl2 (const char *tag, GSList *beans)
 void
 _bean_randomize(gpointer bean, gboolean avoid_pk)
 {
+	GRand *r = oio_ext_local_prng ();
 	const struct field_descriptor_s *fd;
 
 	EXTRA_ASSERT(bean != NULL);
@@ -1061,13 +1060,13 @@ _bean_randomize(gpointer bean, gboolean avoid_pk)
 
 		switch (fd->type) {
 			case FT_BOOL:
-				*((gboolean*)pf) = g_random_int();
+				*((gboolean*)pf) = g_rand_boolean(r);
 				break;
 			case FT_INT:
-				*((gint64*)pf) = g_random_int();
+				*((gint64*)pf) = g_rand_int(r);
 				break;
 			case FT_REAL:
-				*((gdouble*)pf) = g_random_double();
+				*((gdouble*)pf) = g_rand_double(r);
 				break;
 			case FT_TEXT:
 				_gstr_randomize(GSTR(pf));
@@ -1242,64 +1241,6 @@ _bean_dup(gpointer bean)
 		}
 	}
 	return copy;
-}
-
-static GChecksum*
-_unique_random_SHA256(void)
-{
-	static guint64 seq = 0;
-	struct {
-		gint64 now;
-		pid_t pid, ppid;
-		uid_t uid;
-		gid_t gid;
-		guint64 seq;
-		long r[4];
-		gchar hostname[128];
-	} bulk;
-
-	memset(&bulk, 0, sizeof(bulk));
-	bulk.now = oio_ext_real_time ();
-	bulk.pid = getpid();
-	bulk.ppid = getppid();
-	bulk.uid = geteuid();
-	bulk.gid = getegid();
-	bulk.seq = ++seq;
-	bulk.r[0] = random();
-	bulk.r[1] = random();
-	bulk.r[2] = random();
-	bulk.r[3] = random();
-	gethostname(bulk.hostname, sizeof(bulk.hostname));
-
-	GChecksum *h = g_checksum_new(G_CHECKSUM_SHA256);
-	g_checksum_update(h, (guint8*)&bulk, sizeof(bulk));
-	return h;
-}
-
-gsize
-SHA256_randomized_buffer(guint8 *d, gsize dlen)
-{
-	GChecksum *h = _unique_random_SHA256();
-	g_checksum_get_digest(h, d, &dlen);
-	g_checksum_free(h);
-	return dlen;
-}
-
-gsize
-SHA256_randomized_string(gchar *d, gsize dlen)
-{
-	const gchar *hexa;
-	gsize s;
-	GChecksum *h;
-
-	h = _unique_random_SHA256();
-	hexa = g_checksum_get_string(h);
-	EXTRA_ASSERT(strlen(hexa) == 64);
-	s = g_strlcpy(d, hexa, dlen);
-	for (; *d ;d++)
-		*d = g_ascii_toupper(*d);
-	g_checksum_free(h);
-	return MIN(s,dlen);
 }
 
 gint

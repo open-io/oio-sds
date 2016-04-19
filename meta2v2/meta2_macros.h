@@ -60,6 +60,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define META2_INIT_FLAG M2V2_ADMIN_PREFIX_SYS "init"
 # endif
 
+# ifndef META2_EVENTS_PREFIX
+# define META2_EVENTS_PREFIX "storage"
+# endif
+
 /* -------------------------------------------------------------------------- */
 
 # define NAME_MSGNAME_M2V2_CREATE          "M2_CREATE"
