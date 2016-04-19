@@ -1,0 +1,20 @@
+[handler:storage.content.new]
+use = egg:oio#content_create
+
+[handler:storage.content.deleted]
+use = egg:oio#content_delete
+
+[handler:storage.container.new]
+use = egg:oio#container_create
+
+[handler:storage.container.deleted]
+use = egg:oio#container_destroy
+
+[handler:storage.container.state]
+use = egg:oio#container_update
+
+[handler:storage.chunk.new]
+use = egg:oio#chunk_create
+
+[handler:storage.chunk.deleted]
+use = egg:oio#chunk_delete

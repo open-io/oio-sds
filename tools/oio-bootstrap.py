@@ -586,15 +586,36 @@ template_event_agent = """
 [event-agent]
 namespace = ${NS}
 user = ${USER}
-bind_addr = ipc://${RUNDIR}/event-agent.sock
-queue_location = ${VOLUME}/queue.db
-retries_per_second = 30
-batch_size = 500
-workers = 5
+workers = 2
+concurrency = 5
+handlers_conf = ${CFGDIR}/event-handlers.conf
 log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
 syslog_prefix = OIO,${NS},event-agent
+"""
+
+template_event_agent_handlers = """
+[handler:storage.content.new]
+use = egg:oio#content_create
+
+[handler:storage.content.deleted]
+use = egg:oio#content_delete
+
+[handler:storage.container.new]
+use = egg:oio#container_create
+
+[handler:storage.container.deleted]
+use = egg:oio#container_destroy
+
+[handler:storage.container.state]
+use = egg:oio#container_update
+
+[handler:storage.chunk.new]
+use = egg:oio#chunk_create
+
+[handler:storage.chunk.deleted]
+use = egg:oio#chunk_delete
 """
 
 template_conscience_agent = """
@@ -992,6 +1013,9 @@ def generate(ns, ip, options={}, defaults={}):
     add_service(env)
     with open(CFGDIR + '/' + 'event-agent.conf', 'w+') as f:
         tpl = Template(template_event_agent)
+        f.write(tpl.safe_substitute(env))
+    with open(CFGDIR + '/' + 'event-handlers.conf', 'w+') as f:
+        tpl = Template(template_event_agent_handlers)
         f.write(tpl.safe_substitute(env))
 
     # Conscience agent configuration
