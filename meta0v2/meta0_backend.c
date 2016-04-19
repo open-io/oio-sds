@@ -399,6 +399,8 @@ _fill(struct sqlx_sqlite3_s *sq3, guint replicas, const char * const *m1urls)
 		if (err)
 			 break;
 	}
+	if (!err)
+		sqlx_transaction_notify_huge_changes(repctx);
 	return sqlx_transaction_end(repctx, err);
 }
 
@@ -725,8 +727,11 @@ meta0_backend_assign(struct meta0_backend_s *m0,
 	err = sqlx_transaction_begin(sq3, &repctx);
 	if (NULL == err) {
 		err = _assign_prefixes(sq3->db, new_assign_prefixes,init);
-		if (!err)
+		if (!err) {
 			err = _record_meta1ref(sq3->db, new_assign_meta1ref);
+			if (!err)
+				sqlx_transaction_notify_huge_changes(repctx);
+		}
 		err = sqlx_transaction_end(repctx, err);
 	}
 	_unlock_and_close(sq3);

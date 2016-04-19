@@ -215,7 +215,7 @@ extern "C" {
 # endif
 
 # ifndef M0V2_INIT_TIMEOUT
-#  define M0V2_INIT_TIMEOUT 30.0
+#  define M0V2_INIT_TIMEOUT 60.0
 # endif
 
 # ifndef M0V2_CLIENT_TIMEOUT
