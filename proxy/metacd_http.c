@@ -851,6 +851,9 @@ configure_request_handlers (void)
 	SET("/$NS/admin/freeze/#POST", action_admin_freeze);
 	SET("/$NS/admin/enable/#POST", action_admin_enable);
 	SET("/$NS/admin/disable/#POST", action_admin_disable);
+
+	SET("/$NS/admin/meta0_force/#POST", action_admin_meta0_force);
+	SET("/$NS/admin/meta0_list/#GET", action_admin_meta0_list);
 }
 
 static gboolean

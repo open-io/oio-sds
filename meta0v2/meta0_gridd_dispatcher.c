@@ -227,7 +227,8 @@ meta0_dispatch_v1_FILL(struct gridd_reply_ctx_s *reply,
 	guint nbreplicas = 1;
 
 	(void) ignored;
-	err = metautils_message_extract_struint(reply->request, NAME_MSGKEY_REPLICAS, &nbreplicas);
+	err = metautils_message_extract_struint(reply->request,
+			NAME_MSGKEY_REPLICAS, &nbreplicas);
 	if (err != NULL) {
 		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
@@ -241,7 +242,8 @@ meta0_dispatch_v1_FILL(struct gridd_reply_ctx_s *reply,
 
 	reply->subject("repl=%u|m1=%u", nbreplicas, g_strv_length(urls));
 
-	err = meta0_backend_fill(m0disp->m0, nbreplicas, (const char * const *)urls);
+	err = meta0_backend_fill_rr(m0disp->m0, nbreplicas,
+			(const char * const *)urls);
 	g_free(urls);
 
 	if (!err)
@@ -427,6 +429,36 @@ meta0_dispatch_v2_DESTROY_ZKNODE(struct gridd_reply_ctx_s *reply,
 	return TRUE;
 }
 
+static gboolean
+meta0_dispatch_v1_FORCE(struct gridd_reply_ctx_s *reply,
+		struct meta0_disp_s *m0disp, gpointer ignored)
+{
+	GError *err;
+	gchar *mapping = NULL;
+	(void) ignored;
+
+	err = metautils_message_extract_body_string(reply->request, &mapping);
+	if (err != NULL) {
+		reply->send_error(CODE_BAD_REQUEST, err);
+		return TRUE;
+	}
+
+	if (!mapping || !*mapping) {
+		err = NEWERROR(CODE_BAD_REQUEST, "Empty mapping provided");
+	} else {
+		err = meta0_backend_fill_from_json(m0disp->m0, mapping);
+	}
+
+	g_free(mapping);
+
+	if (!err)
+		reply->send_reply(CODE_FINAL_OK, "OK");
+	else
+		reply->send_error(0, err);
+
+	return TRUE;
+}
+
 /* ------------------------------------------------------------------------- */
 
 typedef gboolean (*hook) (struct gridd_reply_ctx_s *, gpointer, gpointer);
@@ -440,6 +472,7 @@ meta0_gridd_get_requests(void)
 		{NAME_MSGNAME_M0_FILL,                (hook) meta0_dispatch_v1_FILL,    NULL},
 		{NAME_MSGNAME_M0_RELOAD,              (hook) meta0_dispatch_v1_RELOAD,  NULL},
 		{NAME_MSGNAME_M0_RESET,               (hook) meta0_dispatch_v1_RESET,   NULL},
+		{NAME_MSGNAME_M0_FORCE,               (hook) meta0_dispatch_v1_FORCE,   NULL},
 		{NAME_MSGNAME_M0_ASSIGN,              (hook) meta0_dispatch_v2_ASSIGN_PREFIX, NULL},
 		{NAME_MSGNAME_M0_DISABLE_META1,       (hook) meta0_dispatch_v2_DISABLE_META1, NULL},
 		{NAME_MSGNAME_M0_V2_FILL,             (hook) meta0_dispatch_v2_FILL, NULL},

@@ -24,6 +24,8 @@ License along with this library.
 
 # include <metautils/lib/metatypes.h>
 
+#define CID_PREFIX_COUNT 65536
+
 /**
  * @addtogroup meta0v2_utils
  * @{

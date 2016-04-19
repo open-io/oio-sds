@@ -38,7 +38,7 @@ urlv_check (gchar **urlv)
 {
 	if (!urlv)
 		return FALSE;
-	for (gchar **u=urlv; *u ;u++) {
+	for (gchar **u = urlv; *u; u++) {
 		if (!metautils_url_valid_for_connect(*u)) {
 			GRID_WARN("Bad address [%s]", *u);
 			return FALSE;
@@ -48,11 +48,11 @@ urlv_check (gchar **urlv)
 }
 
 static addr_info_t *
-_getMeta0addr(GSList **m0_lst, GSList *exclude ) {
-	if ( namespace ) {
-		return  meta0_utils_getMeta0addr(namespace,m0_lst,exclude);
+_getMeta0addr(GSList **m0_lst, GSList *exclude) {
+	if (namespace) {
+		return  meta0_utils_getMeta0addr(namespace, m0_lst, exclude);
 	} else {
-		if ( !exclude )
+		if (!exclude)
 			return &addr;
 	}
 	return NULL;
@@ -66,11 +66,11 @@ meta0_action(void)
 	GSList *exclude = NULL;
 	addr_info_t *m0addr;
 
-	m0addr = _getMeta0addr(&m0_lst,exclude);
+	m0addr = _getMeta0addr(&m0_lst, exclude);
 	while (m0addr) {
 		gchar url[STRLEN_ADDRINFO];
-		grid_addrinfo_to_string(m0addr, url , sizeof(url));
-		if ( flag_fill_v1 )
+		grid_addrinfo_to_string(m0addr, url, sizeof(url));
+		if (flag_fill_v1)
 			err = meta0_remote_fill(url, urls, nbreplicas);
 		else
 			err = meta0_remote_fill_v2(url, nbreplicas, nodist);
@@ -78,8 +78,8 @@ meta0_action(void)
 		if (err) {
 			GRID_WARN("META0 error (%d): %s", err->code, err->message);
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
-				exclude=g_slist_prepend(exclude,m0addr);
-				m0addr = _getMeta0addr(&m0_lst,exclude);
+				exclude = g_slist_prepend(exclude, m0addr);
+				m0addr = _getMeta0addr(&m0_lst, exclude);
 			} else {
 				g_clear_error(&err);
 				m0addr = NULL;
@@ -103,11 +103,11 @@ static struct grid_main_option_s *
 meta0_get_options(void)
 {
 	static struct grid_main_option_s meta0_options[] = {
-		{"NbReplicas", OT_INT, {.i=&nbreplicas},
+		{"NbReplicas", OT_INT, {.i = &nbreplicas},
 			"Specificy a number of replicas (strictly greater than 0)"},
-		{"IgnoreDistance", OT_BOOL, {.b=&nodist},
+		{"IgnoreDistance", OT_BOOL, {.b = &nodist},
 			"Allow replication on meta1 services with the same IP"},
-		{NULL, 0, {.i=0}, NULL}
+		{NULL, 0, {.i = 0}, NULL}
 	};
 	return meta0_options;
 }
@@ -131,7 +131,7 @@ meta0_set_defaults(void)
 static gboolean
 meta0_configure(int argc, char **argv)
 {
-	if (argc < 1 ) {
+	if (argc < 1) {
 		GRID_WARN("Not enough options, see usage.");
 		return FALSE;
 	}
@@ -152,12 +152,12 @@ meta0_configure(int argc, char **argv)
 		GRID_NOTICE("META1 located from the conscience");
 	} else {
 		// meta1 addr
-		if (!urlv_check(argv+1)) {
+		if (!urlv_check(argv + 1)) {
 			GRID_WARN("Invalid META1 address");
 			return FALSE;
 		}
 
-		urls = g_strdupv(argv+1);
+		urls = g_strdupv(argv + 1);
 		flag_fill_v1 = TRUE;
 		GRID_INFO("Ready to configure [%u] explicit META1", g_strv_length(urls));
 	}
@@ -184,6 +184,6 @@ static struct grid_main_callbacks meta0_callbacks =
 int
 main(int argc, char ** argv)
 {
-	return grid_main_cli (argc, argv, &meta0_callbacks);
+	return grid_main_cli(argc, argv, &meta0_callbacks);
 }
 

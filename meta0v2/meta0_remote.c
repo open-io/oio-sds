@@ -123,6 +123,17 @@ meta0_remote_fill_v2(const char *m0, guint nbreplicas, gboolean nodist)
 }
 
 GError*
+meta0_remote_force(const char *m0, const gchar *mapping)
+{
+	if (!mapping || !*mapping)
+		return NEWERROR(CODE_BAD_REQUEST, "Empty JSON mapping");
+
+	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_FORCE);
+	metautils_message_set_BODY(request, mapping, strlen(mapping));
+	return _m0_remote_no_return(m0, message_marshall_gba_and_clean(request));
+}
+
+GError*
 meta0_remote_assign(const char *m0, gboolean nocheck)
 {
 	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_ASSIGN);

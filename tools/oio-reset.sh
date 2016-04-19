@@ -211,8 +211,7 @@ wait_for_srvtype "(meta0|meta1)" $((1+REPLICATION_DIRECTORY))
 timestamp
 
 M0=$(${PREFIX}-test-config.py -t meta0 -1)
-${PREFIX}-meta0-init -O "NbReplicas=${REPLICATION_DIRECTORY}" -O IgnoreDistance=on $M0
-${PREFIX}-meta0-client "$M0" reload
+openio directory bootstrap --replicas ${REPLICATION_DIRECTORY} "$NS"
 
 timestamp
 ${PREFIX}-unlock-all.sh -n "$NS"

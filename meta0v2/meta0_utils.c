@@ -61,24 +61,25 @@ meta0_utils_array_to_tree(GPtrArray *byprefix)
 }
 
 gboolean
-meta0_utils_check_url_from_base(gchar **url) {
+meta0_utils_check_url_from_base(gchar **url)
+{
 	gchar *colon;
 
-	if ( ! url )
+	if (!url)
 		return FALSE;
 	gchar *end = *url + strlen(*url);
 
-	if (! g_ascii_isdigit(*end)) {
+	if (!g_ascii_isdigit(*end)) {
 		/* Find the ':' separator */
-        	for (colon=end; colon>=*url && *colon != ':';colon--);
-        	if (colon<=*url || colon>=(end-1) || *colon!=':') {
+		for (colon = end; colon >= *url && *colon != ':'; colon--);
+		if (colon <= *url || colon >= (end-1) || *colon != ':') {
 			return FALSE;
 		}
 
 		colon++;
-		for (;colon<=end;colon++) {
-			if (! g_ascii_isdigit(*colon)) {
-				*colon='\0';
+		for (; colon <= end; colon++) {
+			if (!g_ascii_isdigit(*colon)) {
+				*colon = '\0';
 				break;
 			}
 		}
@@ -115,7 +116,7 @@ meta0_utils_list_to_tree(GSList *list)
 
 		g_tree_replace(result, hashstr_create(url), pfx);
 	}
-	
+
 	return result;
 }
 
@@ -257,7 +258,7 @@ meta0_utils_array_get_urlv(GPtrArray *array, const guint8 *bytes)
 	gchar **v;
 
 	EXTRA_ASSERT(array != NULL);
-	EXTRA_ASSERT(array->len == 65536);
+	EXTRA_ASSERT(array->len == CID_PREFIX_COUNT);
 	v = array->pdata[meta0_utils_bytes_to_prefix(bytes)];
 	return v ? g_strdupv(v) : NULL;
 }
@@ -274,8 +275,8 @@ meta0_utils_array_create(void)
 	guint i;
 	GPtrArray *array;
 
-	array = g_ptr_array_sized_new(65536);
-	for (i=0; i<65536 ;i++)
+	array = g_ptr_array_sized_new(CID_PREFIX_COUNT);
+	for (i = 0; i < CID_PREFIX_COUNT; i++)
 		g_ptr_array_add(array, NULL);
 	return array;
 }
@@ -288,7 +289,7 @@ meta0_utils_array_dup(GPtrArray *in)
 	GPtrArray *result;
 
 	result = g_ptr_array_sized_new(in->len);
-	for (i=0,max=in->len; i<max ;i++) {
+	for (i = 0, max = in->len; i < max; i++) {
 		if (!(v = in->pdata[i])) {
 			g_ptr_array_add(result, NULL);
 		} else {
@@ -327,55 +328,55 @@ meta0_utils_tree_add_url(GTree *tree, const guint8 *b, const gchar *url)
 void
 meta0_utils_array_meta1ref_clean(GPtrArray *array)
 {
-        guint i;
+	guint i;
 
-        if (!array)
-                return;
+	if (!array)
+		return;
 
-        for (i=0; i<array->len ;i++) {
-                gpointer p = array->pdata[i];
-                if (p) {
-                        g_free((gchar*)p);
+	for (i = 0; i < array->len; i++) {
+		gpointer p = array->pdata[i];
+		if (p) {
+			g_free((gchar*)p);
 		}
-        }
-        g_ptr_array_free(array, TRUE);
+	}
+	g_ptr_array_free(array, TRUE);
 }
 
 GPtrArray*
 meta0_utils_array_meta1ref_dup(GPtrArray *in)
 {
-        register guint i, max;
-        gchar *v;
-        GPtrArray *result;
+	register guint i, max;
+	gchar *v;
+	GPtrArray *result;
 
-        result = g_ptr_array_sized_new(in->len);
-        for (i=0,max=in->len; i<max ;i++) {
-                if (!(v = in->pdata[i]))
-                        continue;
-                g_ptr_array_add(result, g_strdup(v));
-        }
-        return result;
+	result = g_ptr_array_sized_new(in->len);
+	for (i = 0, max = in->len; i < max; i++) {
+		if (!(v = in->pdata[i]))
+			continue;
+		g_ptr_array_add(result, g_strdup(v));
+	}
+	return result;
 }
 
 gchar *
 meta0_utils_pack_meta1ref(gchar *addr, gchar *ref, gchar *nb)
 {
-	gchar * result=NULL;
-        result = g_strjoin("|",addr,ref,nb,NULL);
+	gchar *result = NULL;
+	result = g_strjoin("|", addr, ref, nb, NULL);
 	return result;
 }
 
 gboolean
 meta0_utils_unpack_meta1ref(const gchar *s_m1ref, gchar **addr, gchar **ref, gchar **nb)
 {
-	(void)addr ;(void) ref; (void) nb;
-	gchar** split_result = g_strsplit(s_m1ref,"|",-1);
-	if ( g_strv_length(split_result) != 3 )
-        	return FALSE;
+	(void) addr; (void) ref; (void) nb;
+	gchar** split_result = g_strsplit(s_m1ref, "|", -1);
+	if (g_strv_length(split_result) != 3)
+		return FALSE;
 
-	*addr=strdup(split_result[0]);
-	*ref=strdup(split_result[1]);
-	*nb=strdup(split_result[2]);
+	*addr = strdup(split_result[0]);
+	*ref = strdup(split_result[1]);
+	*nb = strdup(split_result[2]);
 
 	g_strfreev(split_result);
 	return TRUE;
@@ -385,32 +386,33 @@ meta0_utils_unpack_meta1ref(const gchar *s_m1ref, gchar **addr, gchar **ref, gch
 /* ------------------------------------------------------------------------- */
 static gboolean
 _is_usable_meta0(addr_info_t *m0addr, GSList *exclude) {
-        GSList *l = NULL;
-        for (l = exclude; l && l->data; l=l->next) {
-                if(addr_info_equal(l->data, m0addr))
-                        return FALSE;
-        }
-        return TRUE;
+	GSList *l = NULL;
+	for (l = exclude; l && l->data; l = l->next) {
+		if (addr_info_equal(l->data, m0addr))
+			return FALSE;
+	}
+	return TRUE;
 }
 
 addr_info_t *
 meta0_utils_getMeta0addr(gchar *namespace, GSList **m0_lst, GSList *exclude)
 {
 	addr_info_t *a = NULL;
-	if (*m0_lst  == NULL) {
-		GError *err = conscience_get_services (namespace, NAME_SRVTYPE_META0, FALSE, m0_lst);
+	if (*m0_lst == NULL) {
+		GError *err = conscience_get_services(namespace, NAME_SRVTYPE_META0,
+				FALSE, m0_lst);
 		if (err) {
-			GRID_WARN("Failed to get Meta0 addresses to namespace %s: (%d) %s",
+			GRID_WARN("Failed to get Meta0 addresses for namespace %s: (%d) %s",
 					namespace, err->code, err->message);
 			g_clear_error(&err);
 			return NULL;
 		}
 	}
 	GSList *m0;
-	for (m0 = *m0_lst; m0 && m0->data; m0=m0->next) {
+	for (m0 = *m0_lst; m0 && m0->data; m0 = m0->next) {
 		service_info_t *srv = m0->data;
-		if (_is_usable_meta0(&(srv->addr),exclude))
-			a=&(srv->addr);
+		if (_is_usable_meta0(&(srv->addr), exclude))
+			a = &(srv->addr);
 	}
 	return a;
 }
