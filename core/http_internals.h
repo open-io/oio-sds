@@ -144,6 +144,7 @@ struct oio_proxy_content_create_in_s
 	const char *content;
 	GString *chunks;
 	const char *hash;
+	const char *stgpol;
 };
 
 GError * oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,
