@@ -1198,13 +1198,8 @@ __notify_services(struct meta1_backend_s *m1, struct sqlx_sqlite3_s *sq3,
 	GError *err = __get_container_all_services(sq3, url, NULL, &services);
 	if (!err) {
 		struct meta1_service_url_s **services2 = expand_urlv(services);
-		GString *notif = g_string_sized_new(128);
-		g_string_append (notif, "{\"event\":\"account.services\"");
-		g_string_append_printf (notif, ",\"when\":%"G_GINT64_FORMAT, oio_ext_real_time());
-		g_string_append (notif, ",\"data\":{");
-		g_string_append(notif, "\"url\":\"");
-		oio_str_gstring_append_json_string(notif, oio_url_get(url, OIOURL_WHOLE));
-		g_string_append(notif, "\",\"services\":[");
+		GString *notif = oio_event__create ("account.services", url);
+		g_string_append (notif, ",\"data\":[");
 		if (services2) {
 			for (struct meta1_service_url_s **svc = services2; *svc ; svc++) {
 				if (svc != services2) // not at the beginning
@@ -1212,7 +1207,7 @@ __notify_services(struct meta1_backend_s *m1, struct sqlx_sqlite3_s *sq3,
 				meta1_service_url_encode_json(notif, *svc);
 			}
 		}
-		g_string_append(notif, "]}}");
+		g_string_append(notif, "]}");
 
 		oio_events_queue__send (m1->notifier, g_string_free(notif, FALSE));
 

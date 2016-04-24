@@ -68,26 +68,6 @@ struct m2_prepare_data {
 	gchar storage_policy[LIMIT_LENGTH_STGPOLICY];
 };
 
-static void
-_append_url (GString *gs, struct oio_url_s *url)
-{
-	void _append (const char *n, const char *v) {
-		if (v)
-			oio_str_gstring_append_json_pair(gs, n, v);
-		else
-			g_string_append_printf(gs, "\"%s\":null", n);
-	}
-	_append ("ns", oio_url_get(url, OIOURL_NS));
-	g_string_append_c (gs, ',');
-	_append ("account", oio_url_get(url, OIOURL_ACCOUNT));
-	g_string_append_c (gs, ',');
-	_append ("user", oio_url_get(url, OIOURL_USER));
-	g_string_append_c (gs, ',');
-	_append ("type", oio_url_get(url, OIOURL_TYPE));
-	g_string_append_c (gs, ',');
-	_append ("id", oio_url_get(url, OIOURL_HEXID));
-}
-
 static gint64
 _quota(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
 {
@@ -614,15 +594,8 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 			}
 			const enum election_status_e s = sq3->election;
 			if (!params->local && m2->notifier && (!s || s == ELECTION_LEADER)) {
-				GString *gs = g_string_new ("{");
-				g_string_append (gs, "\"event\":\"" META2_EVENTS_PREFIX
-						".container.new\"");
-				g_string_append_printf (gs, ",\"when\":%"G_GINT64_FORMAT,
-						oio_ext_real_time());
-				g_string_append (gs, ",\"data\":{");
-				g_string_append (gs, "\"url\":{");
-				_append_url (gs, url);
-				g_string_append (gs, "}}}");
+				GString *gs = oio_event__create (META2_EVENTS_PREFIX".container.new", url);
+				g_string_append (gs, ",\"data\":null}");
 				oio_events_queue__send (m2->notifier, g_string_free (gs, FALSE));
 			}
 		}
@@ -663,15 +636,8 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 		if (!err) {
 			GString *gs = NULL;
 			if (event && m2->notifier) {
-				gs = g_string_new ("{");
-				g_string_append (gs, "\"event\":\"" META2_EVENTS_PREFIX
-						".container.deleted\"");
-				g_string_append_printf (gs, ",\"when\":%"G_GINT64_FORMAT,
-						oio_ext_real_time());
-				g_string_append (gs, ",\"data\":{");
-				g_string_append (gs, "\"url\":{");
-				_append_url (gs, url);
-				g_string_append (gs, "}}}");
+				gs = oio_event__create (META2_EVENTS_PREFIX ".container.deleted", url);
+				g_string_append (gs, ",\"data\":null}");
 			}
 			m2b_destroy(sq3);
 			if (gs) {
@@ -791,27 +757,27 @@ _container_state (struct sqlx_sqlite3_s *sq3)
 		sep (gs);
 		oio_str_gstring_append_json_pair(gs, k, v);
 	}
-	void append (GString *gs, const char *k, gchar *v) {
-		append_const (gs, k, v);
-		g_free0 (v);
-	}
 
-	GString *gs = g_string_new("{");
-	append_const (gs, "event", META2_EVENTS_PREFIX ".container.state");
-	append_int64 (gs, "when", oio_ext_real_time());
-	g_string_append (gs, ",\"url\":{");
-	append (gs, "ns", sqlx_admin_get_str(sq3, SQLX_ADMIN_NAMESPACE));
-	append (gs, "account", sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT));
-	append (gs, "user", sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME));
-	append_const (gs, "type", sq3->name.type);
-	g_string_append (gs, "}, \"data\":{");
+	struct oio_url_s *u = sqlx_admin_get_url (sq3);
 
+	/* Patch the SUBTYPE: the URL must represent an object as managed by meta2
+	 * services (and also by end-user APIs). Unlike for sqlx services, the user
+	 * doesn't know anything about the meta2, and never mentions it in URL.
+	 * This is why we strip this from the service type. */
+	if (!strcmp(sq3->name.type, NAME_SRVTYPE_META2))
+		oio_url_set (u, OIOURL_TYPE, "");
+	else if (g_str_has_prefix (sq3->name.type, NAME_SRVTYPE_META2 "."))
+		oio_url_set (u, OIOURL_TYPE, sq3->name.type + sizeof(NAME_SRVTYPE_META2));
+
+	GString *gs = oio_event__create (META2_EVENTS_PREFIX ".container.state", u);
+	g_string_append (gs, ",\"data\":{");
 	append_const (gs, "policy", sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY));
 	append_int64 (gs, "ctime", m2db_get_ctime(sq3));
 	append_int64 (gs, "bytes-count", m2db_get_size(sq3));
 	append_int64 (gs, "object-count", 0);
 	g_string_append (gs, "}}");
 
+	oio_url_clean (u);
 	return g_string_free(gs, FALSE);
 }
 
