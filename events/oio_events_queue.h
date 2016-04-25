@@ -49,6 +49,14 @@ GError * oio_events_queue__run (struct oio_events_queue_s *self,
 
 /* -------------------------------------------------------------------------- */
 
+struct oio_url_s;
+
+void oio_event__init (GString *out, const char *type, struct oio_url_s *url);
+
+GString* oio_event__create (const char *type, struct oio_url_s *url);
+
+/* -------------------------------------------------------------------------- */
+
 /* find the appropriate implementation of event queue for the configuration
  * given in 'cfg' */
 GError * oio_events_queue_factory__create (const char *cfg,
