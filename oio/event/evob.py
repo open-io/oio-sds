@@ -22,6 +22,8 @@ def _event_env_property(field):
 class Event(object):
     job_id = _event_env_property('job_id')
     event_type = _event_env_property('event')
+    data = _event_env_property('data')
+    when = _event_env_property('when')
 
     def __init__(self, env):
         self.env = env

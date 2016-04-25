@@ -1,4 +1,4 @@
-from oio.event.evob import Event, EventError
+from oio.event.evob import Event, EventOk, EventError
 
 
 class Handler(object):
@@ -6,9 +6,11 @@ class Handler(object):
         self.app = app
         self.conf = conf
         self.logger = app.logger
+        self.rdir = self.app.rdir
+        self.session = self.app.session
 
     def process(self, event):
-        return EventError(event=event)
+        return EventOk(event=event)
 
     def __call__(self, env, cb):
         event = Event(env)

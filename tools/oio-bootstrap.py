@@ -597,25 +597,34 @@ syslog_prefix = OIO,${NS},event-agent
 
 template_event_agent_handlers = """
 [handler:storage.content.new]
-use = egg:oio#content_create
 
 [handler:storage.content.deleted]
-use = egg:oio#content_delete
+pipeline = content_cleaner
 
 [handler:storage.container.new]
-use = egg:oio#container_create
+pipeline = account_update
 
 [handler:storage.container.deleted]
-use = egg:oio#container_destroy
+pipeline = account_update
 
 [handler:storage.container.state]
-use = egg:oio#container_update
+pipeline = account_update
 
 [handler:storage.chunk.new]
-use = egg:oio#chunk_create
+pipeline = volume_index
 
 [handler:storage.chunk.deleted]
-use = egg:oio#chunk_delete
+pipeline = volume_index
+
+[filter:content_cleaner]
+use = egg:oio#content_cleaner
+
+[filter:account_update]
+use = egg:oio#account_update
+
+[filter:volume_index]
+use = egg:oio#volume_index
+
 """
 
 template_conscience_agent = """

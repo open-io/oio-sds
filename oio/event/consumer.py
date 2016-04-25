@@ -94,6 +94,11 @@ class Worker(object):
 class EventTypes(object):
     CHUNK_NEW = 'storage.chunk.new'
     CHUNK_DELETED = 'storage.chunk.deleted'
+    CONTAINER_NEW = 'storage.container.new'
+    CONTAINER_DELETED = 'storage.container.deleted'
+    CONTAINER_STATE = 'storage.container.state'
+    CONTENT_NEW = 'storage.content.new'
+    CONTENT_DELETED = 'storage.content.deleted'
 
 
 evt_types = [
