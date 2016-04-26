@@ -47,12 +47,12 @@ _round_lock(sqlx_cache_t *cache)
 	HASHSTR_ALLOCA(hn1, name1);
 
 	gint id0;
-	GError *err = sqlx_cache_open_and_lock_base(cache, hn0, &id0);
+	GError *err = sqlx_cache_open_and_lock_base(cache, hn0, FALSE, &id0);
 	g_assert_no_error (err);
 
 	for (int i=0; i<5 ;i++) {
 		gint id = oio_ext_rand_int();
-		err = sqlx_cache_open_and_lock_base(cache, hn0, &id);
+		err = sqlx_cache_open_and_lock_base(cache, hn0, FALSE, &id);
 		g_assert_no_error (err);
 		g_assert_cmpint(id0, ==, id);
 	}
@@ -66,7 +66,7 @@ _round_lock(sqlx_cache_t *cache)
 
 	for (int i=0; i<5 ;i++) {
 		gint id = oio_ext_rand_int ();
-		err = sqlx_cache_open_and_lock_base(cache, hn1, &id);
+		err = sqlx_cache_open_and_lock_base(cache, hn1, FALSE, &id);
 		g_assert_no_error (err);
 		err = sqlx_cache_unlock_and_close_base(cache, id, FALSE);
 		g_assert_no_error (err);
