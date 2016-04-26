@@ -1445,6 +1445,7 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 		.content = ul->hexid,
 		.chunks = request_body,
 		.hash = hash,
+		.stgpol = ul->stgpol,
 	};
 
 	GRID_TRACE("%s (%p) Saving %s", __FUNCTION__, ul, request_body->str);

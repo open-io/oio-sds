@@ -849,123 +849,124 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 			rain_params->m * sizeof(uint8_t*));
 
 	RAIN_ENV_INIT(rain_env, subpool)
-		if (!rain_encode((uint8_t*)stream->original_data, stream->original_data_size,
-					rain_params, &rain_env, (uint8_t**)coding_metachunks)) {
-			DAV_DEBUG_REQ(stream->r->info->request, 0,
-					"failed to calculate coding chunks");
-			e = server_create_and_stat_error(conf, stream->pool,
-					HTTP_INTERNAL_SERVER_ERROR, 0,
-					"Coding chunks calculation failed");
-			goto close_stream_error_label;
-		} else {
-			DAV_DEBUG_REQ(stream->r->info->request, 0,
-					"coding metachunks calculation succeeded");
 
-			/* List of thread references */
-			coding_put_params = (struct req_params_store**)apr_pcalloc(
-					stream->r->info->request->pool,
-					rain_params->m * sizeof(struct req_params_store*));
-			coding_subpools = (apr_pool_t**) apr_pcalloc(
-					stream->r->info->request->pool,
-					rain_params->m * sizeof(apr_pool_t*));
+	if (!rain_encode((uint8_t*)stream->original_data, stream->original_data_size,
+				rain_params, &rain_env, (uint8_t**)coding_metachunks)) {
+		DAV_DEBUG_REQ(stream->r->info->request, 0,
+				"failed to calculate coding chunks");
+		e = server_create_and_stat_error(conf, stream->pool,
+				HTTP_INTERNAL_SERVER_ERROR, 0,
+				"Coding chunks calculation failed");
+		goto close_stream_error_label;
+	} else {
+		DAV_DEBUG_REQ(stream->r->info->request, 0,
+				"coding metachunks calculation succeeded");
 
-			/* Filling the stream->r->info->m coding metachunks */
-			for (i = 0; i < rain_params->m; i++) {
-				/* Set there to rollback correctly in case of error */
-				stream->r->info->current_rawx = rain_params->k + i;
+		/* List of thread references */
+		coding_put_params = (struct req_params_store**)apr_pcalloc(
+				stream->r->info->request->pool,
+				rain_params->m * sizeof(struct req_params_store*));
+		coding_subpools = (apr_pool_t**) apr_pcalloc(
+				stream->r->info->request->pool,
+				rain_params->m * sizeof(apr_pool_t*));
 
-				/* Finalizing custom header values */
-				startid = strlen(stream->r->info->rawx_list[stream->r->info->current_rawx]) - 64;
-				custom_chunkid = apr_pstrdup(stream->r->info->request->pool,
-						stream->r->info->rawx_list[stream->r->info->current_rawx]
-						+ startid);
-				custom_chunkpos = apr_psprintf(stream->r->info->request->pool,
-						"%s.p%d", temp_chunk.position,
-						stream->r->info->current_rawx - rain_params->k);
-				custom_chunksize = apr_itoa(stream->r->info->request->pool,
-						subchunk_size);
-				custom_chunkhash = g_compute_checksum_for_data(G_CHECKSUM_MD5,
-						(const guchar*)coding_metachunks[i], subchunk_size);
-				apr_pool_create(&(coding_subpools[i]), stream->pool);
+		/* Filling the stream->r->info->m coding metachunks */
+		for (i = 0; i < rain_params->m; i++) {
+			/* Set there to rollback correctly in case of error */
+			stream->r->info->current_rawx = rain_params->k + i;
 
-				/* Initializing the PUT params structure */
-				coding_put_params[i] = (struct req_params_store*)apr_pcalloc(
-						coding_subpools[i], sizeof(struct req_params_store));
-				coding_put_params[i]->service_address = stream->r->info->rawx_list[stream->r->info->current_rawx];
-				coding_put_params[i]->data_to_send = (char*)coding_metachunks[i];
-				coding_put_params[i]->data_to_send_size = subchunk_size;
-				coding_put_params[i]->header = apr_psprintf(coding_subpools[i],
-					"%s\n"
-					RAWX_HEADER_PREFIX "chunk-id: %s\n"
-					RAWX_HEADER_PREFIX "chunk-pos: %s\n"
-					RAWX_HEADER_PREFIX "chunk-size: %s\n"
-					RAWX_HEADER_PREFIX "chunk-hash: %s",
-					custom_header, custom_chunkid, custom_chunkpos,
-					custom_chunksize, custom_chunkhash);
-				coding_put_params[i]->req_type = "PUT";
-				coding_put_params[i]->reply = apr_pcalloc(coding_subpools[i],
-						MAX_REPLY_HEADER_SIZE + REPLY_BUFFER_SIZE);
-				coding_put_params[i]->resource = stream->r;
-				/* APR_SUCCESS will set it to 0 */
-				coding_put_params[i]->req_status = INIT_REQ_STATUS;
-				coding_put_params[i]->pool = coding_subpools[i];
+			/* Finalizing custom header values */
+			startid = strlen(stream->r->info->rawx_list[stream->r->info->current_rawx]) - 64;
+			custom_chunkid = apr_pstrdup(stream->r->info->request->pool,
+					stream->r->info->rawx_list[stream->r->info->current_rawx]
+					+ startid);
+			custom_chunkpos = apr_psprintf(stream->r->info->request->pool,
+					"%s.p%d", temp_chunk.position,
+					stream->r->info->current_rawx - rain_params->k);
+			custom_chunksize = apr_itoa(stream->r->info->request->pool,
+					subchunk_size);
+			custom_chunkhash = g_compute_checksum_for_data(G_CHECKSUM_MD5,
+					(const guchar*)coding_metachunks[i], subchunk_size);
+			apr_pool_create(&(coding_subpools[i]), stream->pool);
 
-				/* Launching the PUT thread */
-				apr_threadattr_create(&(coding_put_params[i]->thd_attr),
-						coding_subpools[i]);
-				rv = apr_thread_create(&(coding_put_params[i]->thd_arr),
-						coding_put_params[i]->thd_attr, _put_to_rawx,
-						REQPARAMSSTORE_TO_POINTER(coding_put_params[i]),
-						coding_subpools[i]);
-				if (rv != APR_SUCCESS) {
-					coding_put_params[i]->req_status = rv;
-				}
+			/* Initializing the PUT params structure */
+			coding_put_params[i] = (struct req_params_store*)apr_pcalloc(
+					coding_subpools[i], sizeof(struct req_params_store));
+			coding_put_params[i]->service_address = stream->r->info->rawx_list[stream->r->info->current_rawx];
+			coding_put_params[i]->data_to_send = (char*)coding_metachunks[i];
+			coding_put_params[i]->data_to_send_size = subchunk_size;
+			coding_put_params[i]->header = apr_psprintf(coding_subpools[i],
+				"%s\n"
+				RAWX_HEADER_PREFIX "chunk-id: %s\n"
+				RAWX_HEADER_PREFIX "chunk-pos: %s\n"
+				RAWX_HEADER_PREFIX "chunk-size: %s\n"
+				RAWX_HEADER_PREFIX "chunk-hash: %s",
+				custom_header, custom_chunkid, custom_chunkpos,
+				custom_chunksize, custom_chunkhash);
+			coding_put_params[i]->req_type = "PUT";
+			coding_put_params[i]->reply = apr_pcalloc(coding_subpools[i],
+					MAX_REPLY_HEADER_SIZE + REPLY_BUFFER_SIZE);
+			coding_put_params[i]->resource = stream->r;
+			/* APR_SUCCESS will set it to 0 */
+			coding_put_params[i]->req_status = INIT_REQ_STATUS;
+			coding_put_params[i]->pool = coding_subpools[i];
 
-				update_response_list(stream,
-						stream->r->info->rawx_list[stream->r->info->current_rawx],
-						subchunk_size, custom_chunkhash, custom_chunkpos);
-
-				g_free(custom_chunkhash);
-				custom_chunkhash = NULL;
+			/* Launching the PUT thread */
+			apr_threadattr_create(&(coding_put_params[i]->thd_attr),
+					coding_subpools[i]);
+			rv = apr_thread_create(&(coding_put_params[i]->thd_arr),
+					coding_put_params[i]->thd_attr, _put_to_rawx,
+					REQPARAMSSTORE_TO_POINTER(coding_put_params[i]),
+					coding_subpools[i]);
+			if (rv != APR_SUCCESS) {
+				coding_put_params[i]->req_status = rv;
 			}
 
-			for (i = 0; i < rain_params->m; i++) {
-				if (coding_put_params[i] && coding_put_params[i]->thd_arr) {
-					apr_thread_join(&rv, coding_put_params[i]->thd_arr);
-					EXTRA_ASSERT(rv == APR_SUCCESS);
-				}
-			}
+			update_response_list(stream,
+					stream->r->info->rawx_list[stream->r->info->current_rawx],
+					subchunk_size, custom_chunkhash, custom_chunkpos);
 
-			/* Error management */
-			for (i = 0; i < rain_params->m; i++) {
-				if (coding_put_params[i]->req_status != APR_SUCCESS) {
-					if (!extract_code_message_reply(stream->r,
-								coding_put_params[i]->reply,
-								&reply_code, &reply_message)) {
-						DAV_DEBUG_REQ(stream->r->info->request, 0,
-								"error while putting the coding to the rawx %d: (%d) %s",
-								i, coding_put_params[i]->req_status,
-								coding_put_params[i]->reply);
-						e = server_create_and_stat_error(conf, stream->pool,
-								HTTP_INTERNAL_SERVER_ERROR, 0,
-								"Rain operation failed on put");
-						goto close_stream_error_label;
-					}
-					if (!g_str_has_prefix(reply_code, "20")) {
-						DAV_DEBUG_REQ(stream->r->info->request, 0,
-								"error while putting the coding to the rawx %d: (%d) %s",
-								i, coding_put_params[i]->req_status,
-								coding_put_params[i]->reply);
-						e = server_create_and_stat_error(conf, stream->pool,
-								atoi(reply_code), 0, reply_message);
-						goto close_stream_error_label;
-					}
-				}
-				else
-					DAV_DEBUG_REQ(stream->r->info->request, 0,
-							"coding rawx %d filled", i);
+			g_free(custom_chunkhash);
+			custom_chunkhash = NULL;
+		}
+
+		for (i = 0; i < rain_params->m; i++) {
+			if (coding_put_params[i] && coding_put_params[i]->thd_arr) {
+				apr_thread_join(&rv, coding_put_params[i]->thd_arr);
+				EXTRA_ASSERT(rv == APR_SUCCESS);
 			}
 		}
+
+		/* Error management */
+		for (i = 0; i < rain_params->m; i++) {
+			if (coding_put_params[i]->req_status != APR_SUCCESS) {
+				if (!extract_code_message_reply(stream->r,
+							coding_put_params[i]->reply,
+							&reply_code, &reply_message)) {
+					DAV_DEBUG_REQ(stream->r->info->request, 0,
+							"error while putting the coding to the rawx %d: (%d) %s",
+							i, coding_put_params[i]->req_status,
+							coding_put_params[i]->reply);
+					e = server_create_and_stat_error(conf, stream->pool,
+							HTTP_INTERNAL_SERVER_ERROR, 0,
+							"Rain operation failed on put");
+					goto close_stream_error_label;
+				}
+				if (!g_str_has_prefix(reply_code, "20")) {
+					DAV_DEBUG_REQ(stream->r->info->request, 0,
+							"error while putting the coding to the rawx %d: (%d) %s",
+							i, coding_put_params[i]->req_status,
+							coding_put_params[i]->reply);
+					e = server_create_and_stat_error(conf, stream->pool,
+							atoi(reply_code), 0, reply_message);
+					goto close_stream_error_label;
+				}
+			}
+			else
+				DAV_DEBUG_REQ(stream->r->info->request, 0,
+						"coding rawx %d filled", i);
+		}
+	}
 
 	/* Adding the list of actually stored metachunks
 	 * (ip:port/chunk_id|stored_size|md5_digest;...)
@@ -988,8 +989,10 @@ close_stream_error_label:
 		for (i = 0; i < rain_params->m; i++)
 			apr_pool_destroy(coding_subpools[i]);
 	}
-	apr_pool_destroy(subpool);
-	apr_pool_destroy(stream->pool);
+	if (subpool)
+		apr_pool_destroy(subpool);
+	if (stream->pool)
+		apr_pool_destroy(stream->pool);
 	if (stream->md5) {
 		g_checksum_free (stream->md5);
 		stream->md5 = NULL;
