@@ -971,9 +971,9 @@ def generate(ns, ip, options={}, defaults={}):
                 f.write(to_write)
 
     # redis
+    env = subenv({'SRVTYPE':'redis', 'SRVNUM':1, 'PORT':6379})
+    add_service(env)
     if options.ALLOW_REDIS is not None:
-        env = subenv({'SRVTYPE':'redis', 'SRVNUM':1, 'PORT':6379})
-        add_service(env)
         with open(gridinit(env), 'a+') as f:
             tpl = Template(template_redis_gridinit)
             f.write(tpl.safe_substitute(env))
