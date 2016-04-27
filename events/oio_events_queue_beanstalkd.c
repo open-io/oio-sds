@@ -38,6 +38,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "oio_events_queue_beanstalkd.h"
 #include "oio_events_queue_buffer.h"
 
+
+#define EXPO_BACKOFF(DELAY,TRY,MAX_TRIES) \
+	g_usleep((1 << MIN(TRY, MAX_TRIES)) * DELAY); \
+	TRY++
+
 static void _q_destroy (struct oio_events_queue_s *self);
 static void _q_send (struct oio_events_queue_s *self, gchar *msg);
 static void _q_send_overwritable(struct oio_events_queue_s *self, gchar *key, gchar *msg);
@@ -126,6 +131,8 @@ retry:
 			metautils_syscall_poll (&pfd, 1, 1000);
 			goto retry;
 		}
+		GRID_WARN("BEANSTALKD failed to put: [errno=%d] %s",
+				errno, strerror(errno));
 		return 0;
 	}
 
@@ -193,6 +200,7 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s *)self;
 	gchar *saved = NULL;
 	int fd = -1;
+	int try_count = 0;
 
 	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_BEANSTALKD);
 	EXTRA_ASSERT (running != NULL);
@@ -212,7 +220,24 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 			/* lazy-reconnection */
 			if (fd < 0) {
 				GError *err = NULL;
-				if (0 > (fd = sock_connect (q->endpoint, &err))) {
+				fd = sock_connect(q->endpoint, &err);
+				if (!err) {
+					/* As we use non-blocking sockets, we are not sure the
+					 * connection is actually open, and we must wait for the
+					 * socket to be writable or for an error to occur. */
+					int rc = 0;
+					struct pollfd pfd = {0};
+					do {
+						pfd.fd = fd;
+						pfd.events = POLLOUT;
+						pfd.revents = 0;
+					} while (!(rc = metautils_syscall_poll(&pfd, 1, 1000)));
+					if (pfd.revents != POLLOUT) {
+						err = socket_get_error(fd);
+						metautils_pclose(&fd);
+					}
+				}
+				if (err) {
 					GRID_WARN("BEANSTALKD: reconnection failed to %s: (%d) %s",
 							q->endpoint, err->code, err->message);
 					g_clear_error (&err);
@@ -221,10 +246,11 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 
 					/* Avoid looping crazily until the beanstalkd becomes up
 					 * again, let's sleep a little bit. */
-					g_usleep (250 * G_TIME_SPAN_MILLISECOND);
+					EXPO_BACKOFF(250 * G_TIME_SPAN_MILLISECOND, try_count, 4);
 					continue;
 				} else {
-					GRID_DEBUG("BEANSTALKD: reconnected to %s", q->endpoint);
+					GRID_INFO("BEANSTALKD: connected to %s", q->endpoint);
+					try_count = 0;
 				}
 			}
 
