@@ -1567,11 +1567,8 @@ _m2_generate_RAIN(struct gen_ctx_s *ctx)
 		opt.req.stgclass = stgclass;
 		opt.req.strict_stgclass = FALSE; // Accept ersatzes
 
-		if (!grid_lb_iterator_next_set(ctx->iter, &siv, &opt)) {
-			if (pos == 0)
-				err = NEWERROR(CODE_PLATFORM_ERROR,"No Rawx available");
-			else
-				err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "Not enough RAWX");
+		if (!grid_lb_iterator_next_set(ctx->iter, &siv, &opt, &err)) {
+			g_prefix_error(&err, "at position %u: ", pos);
 			break;
 		}
 
@@ -1618,11 +1615,8 @@ _m2_generate_DUPLI(struct gen_ctx_s *ctx)
 		opt.req.stgclass = stgclass;
 		opt.req.strict_stgclass = FALSE; // Accept ersatzes
 
-		if (!grid_lb_iterator_next_set(ctx->iter, &siv, &opt)) {
-			if ( pos == 0 )
-				err = NEWERROR(CODE_PLATFORM_ERROR,"No Rawx available");
-			else
-				err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "Not enough RAWX");
+		if (!grid_lb_iterator_next_set(ctx->iter, &siv, &opt, &err)) {
+			g_prefix_error(&err, "at position %u: ", pos);
 			break;
 		}
 

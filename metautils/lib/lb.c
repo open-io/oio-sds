@@ -1095,13 +1095,23 @@ _next_set(struct grid_lb_iterator_s *it, struct lb_next_opt_s *opt,
 
 gboolean
 grid_lb_iterator_next_set(struct grid_lb_iterator_s *iter,
-		struct service_info_s ***result, struct lb_next_opt_s *opt)
+		struct service_info_s ***result, struct lb_next_opt_s *opt,
+		GError **err)
 {
 	// Sanity checks
-	if (!iter || !iter->lb || !result || !opt || !opt->req.max)
+	if (!iter || !iter->lb || !result || !opt || !opt->req.max) {
+		if (err && !*err)
+			*err = NEWERROR(CODE_BAD_REQUEST, "invalid LB parameters");
 		return FALSE;
-	if (!opt->req.duplicates && opt->req.max > grid_lb_count_all(iter->lb))
+	}
+	if (!opt->req.duplicates && opt->req.max > grid_lb_count_all(iter->lb)) {
+		if (err && !*err)
+			*err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
+					"asked for %u services but "
+					"there is only %"G_GSIZE_FORMAT" in the pool",
+					opt->req.max, grid_lb_count_all(iter->lb));
 		return FALSE;
+	}
 	if (iter->lb->use_hook)
 		iter->lb->use_hook();
 
@@ -1125,6 +1135,11 @@ grid_lb_iterator_next_set(struct grid_lb_iterator_s *iter,
 
 	// Not enough servers found, fail
 	if (opt->req.max > (guint)g_tree_nnodes(polled)) {
+		if (err && !*err)
+			*err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
+					"asked for %u services "
+					"but found only %u matching the criteria",
+					opt->req.max, (guint)g_tree_nnodes(polled));
 		g_tree_foreach(polled, run_clean, NULL);
 		g_tree_destroy(polled);
 		return FALSE;
@@ -1175,14 +1190,15 @@ _ext_opt_filter(struct service_info_s *si, struct lb_next_opt_ext_s *opt_ext)
 
 gboolean
 grid_lb_iterator_next_set2(struct grid_lb_iterator_s *iter,
-		struct service_info_s ***result, struct lb_next_opt_ext_s *opt_ext)
+		struct service_info_s ***result, struct lb_next_opt_ext_s *opt_ext,
+		GError **err)
 {
 	struct lb_next_opt_s opt = {{0}};
 	memcpy(&(opt.req), &(opt_ext->req), sizeof(struct lb_next_opt_simple_s));
 
 	opt.filter.hook = (service_filter) _ext_opt_filter;
 	opt.filter.data = opt_ext;
-	return grid_lb_iterator_next_set(iter, result, &opt);
+	return grid_lb_iterator_next_set(iter, result, &opt, err);
 }
 
 GString *

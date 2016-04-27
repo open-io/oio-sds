@@ -90,15 +90,16 @@ _lb (struct req_args_s *args, struct grid_lb_iterator_s *iter)
 	opt.srv_inplace = NULL;
 	opt.srv_forbidden = NULL;
 
+	GError *err = NULL;
 	struct service_info_s **siv = NULL;
-	gboolean rc = grid_lb_iterator_next_set2(iter, &siv, &opt);
+	gboolean rc = grid_lb_iterator_next_set2(iter, &siv, &opt, &err);
 	if (stgcls)
 		storage_class_clean(stgcls);
 
 	if (!rc) {
 		service_info_cleanv(siv, FALSE);
-		return _reply_system_error (args, NEWERROR(
-					CODE_POLICY_NOT_SATISFIABLE, "Too constrained"));
+		g_prefix_error(&err, "Too constrained: ");
+		return _reply_system_error (args, err);
 	} else {
 		GString *gstr = _lb_pack_and_free_srvinfo_tab (siv);
 		service_info_cleanv (siv, FALSE);

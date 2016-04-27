@@ -225,11 +225,13 @@ struct lb_next_opt_ext_s
  * @return FALSE if not satisfiable
  */
 gboolean grid_lb_iterator_next_set(struct grid_lb_iterator_s *iter,
-		struct service_info_s ***si, struct lb_next_opt_s *opt);
+		struct service_info_s ***si, struct lb_next_opt_s *opt,
+		GError **err);
 
 /*! @see grid_lb_iterator_next_set() */
 gboolean grid_lb_iterator_next_set2(struct grid_lb_iterator_s *iter,
-		struct service_info_s ***si, struct lb_next_opt_ext_s *opt);
+		struct service_info_s ***si, struct lb_next_opt_ext_s *opt,
+		GError **err);
 
 GString * grid_lb_iterator_to_string (struct grid_lb_iterator_s *it);
 
