@@ -10,7 +10,8 @@ install:
   - pip install --upgrade pip virtualenv tox
   - pip install -r requirements.txt
 after_failure:
-  - journalctl -n 2000
+  - gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock status
+  - journalctl -n 5000
 script:
   - set -e
   - mkdir /tmp/oio
