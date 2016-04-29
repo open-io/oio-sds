@@ -53,9 +53,6 @@ struct namespace_info_s * meta2_backend_get_nsinfo(struct meta2_backend_s *m2);
  * valid NSinfo has been provided. */
 gboolean meta2_backend_initiated(struct meta2_backend_s *m2);
 
-GError* meta2_backend_poll_service(struct meta2_backend_s *m2,
-		const gchar *type, struct service_info_s **si);
-
 /** Return a string which contain m2_addr: "IP:PORT" */
 const gchar* meta2_backend_get_local_addr(struct meta2_backend_s *m2);
 

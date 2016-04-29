@@ -95,9 +95,9 @@ _poll_services(struct grid_lbpool_s *lbp, const gchar *srvtype,
 	if (!(iter = grid_lbpool_get_iterator(lbp, srvtype)))
 		return NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "No RAWX available");
 
-	if (!grid_lb_iterator_next_set2(iter, &siv, opt_ext))
-		return NEWERROR(CODE_PLATFORM_ERROR, "Cannot get services"
-				" list for the specified storage policy");
+	GError *err = NULL;
+	if (!grid_lb_iterator_next_set2(iter, &siv, opt_ext, &err))
+		return err;
 
 	for(psi=siv; *psi; ++psi)
 		*result = g_slist_prepend(*result, _gen_chunk_bean(*psi));
