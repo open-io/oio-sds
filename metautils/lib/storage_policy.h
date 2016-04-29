@@ -26,6 +26,7 @@ License along with this library.
 #define DS_KEY_K "k"
 #define DS_KEY_M "m"
 #define DS_KEY_ALGO "algo"
+#define DS_KEY_WEAK "weak"
 
 /* DATA TREATMENTS KEYS */
 #define DT_KEY_BLOCKSIZE "blocksize"
