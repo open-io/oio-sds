@@ -208,7 +208,7 @@ generate_set_and_check_uniform_repartition(struct grid_lb_iterator_s *iter,
 	opt.req.max = max_get;
 	opt.req.distance = 1;
 	opt.req.duplicates = TRUE;
-	gboolean rc = grid_lb_iterator_next_set(iter, &siv, &opt);
+	gboolean rc = grid_lb_iterator_next_set(iter, &siv, &opt, NULL);
 	g_assert(rc != FALSE);
 
 	_compute_repartition(used, siv);
@@ -246,7 +246,7 @@ _count_set(struct grid_lb_iterator_s *iter, guint max)
 	opt.req.distance = 1;
 	opt.req.duplicates = TRUE;
 
-	rc = grid_lb_iterator_next_set(iter, &siv, &opt);
+	rc = grid_lb_iterator_next_set(iter, &siv, &opt, NULL);
 	g_assert(rc != FALSE);
 
 	guint count = g_strv_length((gchar**)siv);

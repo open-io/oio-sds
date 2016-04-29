@@ -273,36 +273,6 @@ meta2_backend_get_nsinfo (struct meta2_backend_s *m2)
 	return out;
 }
 
-GError*
-meta2_backend_poll_service(struct meta2_backend_s *m2,
-		const gchar *type, struct service_info_s **si)
-{
-	struct grid_lb_iterator_s *iter;
-
-	EXTRA_ASSERT(m2 != NULL);
-	EXTRA_ASSERT(type != NULL);
-	EXTRA_ASSERT(si != NULL);
-
-	if (!(iter = grid_lbpool_get_iterator(m2->lb, type)))
-		return NEWERROR(CODE_SRVTYPE_NOTMANAGED, "no such service");
-
-	struct lb_next_opt_ext_s opt_ext;
-	memset(&opt_ext, 0, sizeof(opt_ext));
-	opt_ext.req.distance = 0;
-	opt_ext.req.max = 1;
-	opt_ext.req.duplicates = TRUE;
-	opt_ext.req.stgclass = NULL;
-	opt_ext.req.strict_stgclass = TRUE;
-
-	struct service_info_s **siv = NULL;
-	if (!grid_lb_iterator_next_set2(iter, &siv, &opt_ext))
-		return NEWERROR(CODE_SRVTYPE_NOTMANAGED, "no service available");
-
-	*si = service_info_dup(siv[0]);
-	service_info_cleanv(siv, FALSE);
-	return NULL;
-}
-
 gboolean
 meta2_backend_initiated(struct meta2_backend_s *m2)
 {

@@ -561,9 +561,8 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 			opt.filter.data = ct;
 		}
 
-		if (!grid_lb_iterator_next_set2(iter, &siv, &opt)) {
+		if (!grid_lb_iterator_next_set2(iter, &siv, &opt, err)) {
 			EXTRA_ASSERT(siv == NULL);
-			*err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "No service available");
 		}
 
 		grid_lb_iterator_clean(iter);
@@ -853,9 +852,8 @@ __relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
 			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "Too many services kept");
 
 		if (!err) {
-			if (!grid_lb_iterator_next_set2 (in->iterator, &polled, &opt)) {
+			if (!grid_lb_iterator_next_set2(in->iterator, &polled, &opt, &err)) {
 				EXTRA_ASSERT(polled == NULL);
-				err = NEWERROR (CODE_POLICY_NOT_SATISFIABLE, "No service available");
 			} else {
 				EXTRA_ASSERT(polled != NULL);
 			}
