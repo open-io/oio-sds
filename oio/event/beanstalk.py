@@ -340,12 +340,16 @@ class Beanstalk(object):
     EXPECTED_OK = dict_merge(
         {'reserve': ['RESERVED'],
          'delete': ['DELETED'],
+         'release': ['RELEASED'],
+         'bury': ['BURIED'],
          'put': ['INSERTED']}
 
     )
     EXPECTED_ERR = dict_merge(
         {'reserve': ['DEADLINE_SOON', 'TIMED_OUT'],
-         'delete': ['DELETED', 'NOT_FOUND'],
+         'delete': ['NOT_FOUND'],
+         'release': ['BURIED', 'NOT_FOUND'],
+         'bury': ['NOT_FOUND'],
          'put': ['JOB_TOO_BIG', 'BURIED', 'DRAINING']}
     )
 
@@ -417,6 +421,12 @@ class Beanstalk(object):
             return self.execute_command('reserve-with-timeout', timeout)
         else:
             return self.execute_command('reserve')
+
+    def bury(self, job_id, priority=DEFAULT_PRIORITY):
+        self.execute_command('bury', job_id, priority)
+
+    def release(self, job_id, priority=DEFAULT_PRIORITY, delay=0):
+        self.execute_command('release', job_id, priority, delay)
 
     def delete(self, job_id):
         self.execute_command('delete', job_id)
