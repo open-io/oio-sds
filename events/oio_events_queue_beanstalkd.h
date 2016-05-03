@@ -30,6 +30,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #  define OIO_EVT_BEANSTALKD_DEFAULT_TTR    120
 # endif
 
+# ifndef  OIO_EVT_BEANSTALKD_DEFAULT_TUBE
+#  define OIO_EVT_BEANSTALKD_DEFAULT_TUBE  "oio"
+# endif
+
 struct oio_events_queue_s;
 
 /* Creates an event queue based on beanstalkd, with the default maximum number

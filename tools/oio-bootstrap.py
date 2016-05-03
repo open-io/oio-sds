@@ -584,6 +584,7 @@ conscience=${CS_ALL_PUB}
 
 template_event_agent = """
 [event-agent]
+tube = oio
 namespace = ${NS}
 user = ${USER}
 workers = 2

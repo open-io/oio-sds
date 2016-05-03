@@ -110,6 +110,7 @@ Used by `gcc`
 | OIO_EVT_BEANSTALKD_DEFAULT_PRIO | 1<<31 |  |
 | OIO_EVT_BEANSTALKD_DEFAULT_DELAY | 0 |  |
 | OIO_EVT_BEANSTALKD_DEFAULT_TTR | 120 |  |
+| OIO_EVT_BEANSTALKD_DEFAULT_TUBE | "oio" |  |
 
 | Macro | Default | Description |
 | ----- | ------- | ----------- |

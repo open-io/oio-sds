@@ -342,7 +342,9 @@ class Beanstalk(object):
          'delete': ['DELETED'],
          'release': ['RELEASED'],
          'bury': ['BURIED'],
-         'put': ['INSERTED']}
+         'put': ['INSERTED'],
+         'use': ['USING'],
+         'watch': ['WATCHING']}
 
     )
     EXPECTED_ERR = dict_merge(
@@ -350,6 +352,8 @@ class Beanstalk(object):
          'delete': ['NOT_FOUND'],
          'release': ['BURIED', 'NOT_FOUND'],
          'bury': ['NOT_FOUND'],
+         'use': [],
+         'watch': [],
          'put': ['JOB_TOO_BIG', 'BURIED', 'DRAINING']}
     )
 
@@ -415,6 +419,12 @@ class Beanstalk(object):
         assert isinstance(body, str), 'body must be str'
         job_id = self.execute_command('put', priority, delay, ttr, body=body)
         return job_id
+
+    def use(self, tube):
+        self.execute_command('use', tube)
+
+    def watch(self, tube):
+        self.execute_command('watch', tube)
 
     def reserve(self, timeout=None):
         if timeout is not None:
