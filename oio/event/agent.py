@@ -159,6 +159,7 @@ class Runner(object):
             return pid
 
         # child process
+        signal.signal(signal.SIGCHLD, signal.SIG_DFL)
         worker_pid = os.getpid()
         try:
             self.logger.info("Booting worker with pid: %s", worker_pid)
