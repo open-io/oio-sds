@@ -41,8 +41,6 @@ struct oio_url_s
 	guint8 flags;
 };
 
-static int _is_set (const char *s) { return NULL!=s && 0!=*s; }
-
 /* ------------------------------------------------------------------------- */
 
 gboolean
@@ -168,7 +166,7 @@ _clean_url (struct oio_url_s *u)
 static int
 _compute_id (struct oio_url_s *url)
 {
-	if (!_is_set(url->ns) || !_is_set(url->account) || !_is_set(url->user))
+	if (!oio_str_is_set(url->ns) || !oio_str_is_set(url->account) || !oio_str_is_set(url->user))
 		return 0;
 
 	url->hexid[0] = '\0';
@@ -316,18 +314,18 @@ oio_url_has(const struct oio_url_s *u, enum oio_url_field_e f)
 
 	switch (f) {
 		case OIOURL_NS:
-			return _is_set(u->ns);
+			return oio_str_is_set(u->ns);
 		case OIOURL_ACCOUNT:
-			return _is_set(u->account);
+			return oio_str_is_set(u->account);
 		case OIOURL_USER:
-			return _is_set(u->user);
+			return oio_str_is_set(u->user);
 		case OIOURL_TYPE:
 			// the type has a default value
 			return TRUE;
 		case OIOURL_PATH:
-			return _is_set(u->path);
+			return oio_str_is_set(u->path);
 		case OIOURL_VERSION:
-			return _is_set(u->version);
+			return oio_str_is_set(u->version);
 		case OIOURL_WHOLE:
 			return TRUE;
 		case OIOURL_HEXID:
@@ -459,25 +457,29 @@ oio_url_to_json (GString *out, struct oio_url_s *u)
 	guint len = out->len;
 
 	oio_str_gstring_append_json_pair (out, "ns", u->ns);
-	if (u->account) {
+	if (oio_str_is_set(u->account)) {
 		if (len != out->len) g_string_append_c (out, ',');
 		oio_str_gstring_append_json_pair (out, "account", u->account);
 	}
-	if (u->user) {
+	if (oio_str_is_set(u->user)) {
 		if (len != out->len) g_string_append_c (out, ',');
 		oio_str_gstring_append_json_pair (out, "user", u->user);
 	}
-	if (u->type) {
+	if (oio_str_is_set(u->type)) {
 		if (len != out->len) g_string_append_c (out, ',');
 		oio_str_gstring_append_json_pair (out, "type", u->type);
 	}
-	if (u->path) {
+	if (oio_str_is_set(u->path)) {
 		if (len != out->len) g_string_append_c (out, ',');
 		oio_str_gstring_append_json_pair (out, "path", u->path);
 	}
-	if (u->content) {
+	if (oio_str_is_set(u->content)) {
 		if (len != out->len) g_string_append_c (out, ',');
 		oio_str_gstring_append_json_pair (out, "content", u->content);
+	}
+	if (u->hexid[0]) {
+		if (len != out->len) g_string_append_c (out, ',');
+		oio_str_gstring_append_json_pair (out, "id", u->hexid);
 	}
 }
 

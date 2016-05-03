@@ -21,6 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <glib.h>
 
 #include <core/oio_core.h>
+#include <core/url_ext.h>
 #include <metautils/lib/metautils_resolv.h>
 
 #include "oio_events_queue.h"
@@ -137,4 +138,27 @@ oio_events_queue_factory__check_config (const char *cfg)
 	}
 
 	return BADREQ("implementation not recognized");
+}
+
+void
+oio_event__init (GString *gs, const char *type, struct oio_url_s *url)
+{
+	oio_str_gstring_append_json_pair (gs, "event", type);
+	g_string_append_printf (gs, ",\"when\":%"G_GINT64_FORMAT, oio_ext_real_time());
+	if (!url)
+		g_string_append (gs, ",\"url\":null");
+	else {
+		g_string_append (gs, ",\"url\":{");
+		oio_url_to_json (gs, url);
+		g_string_append_c (gs, '}');
+	}
+}
+
+GString*
+oio_event__create (const char *type, struct oio_url_s *url)
+{
+	GString *gs = g_string_sized_new(512);
+	g_string_append_c (gs, '{');
+	oio_event__init (gs, type, url);
+	return gs;
 }

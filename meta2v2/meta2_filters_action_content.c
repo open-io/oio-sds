@@ -24,7 +24,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <glib.h>
 
-#include <core/url_ext.h>
 #include <events/oio_events_queue.h>
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
@@ -85,13 +84,11 @@ _notify_beans (struct meta2_backend_s *m2b, struct oio_url_s *url,
 		g_free0 (v);
 	}
 	void forward (GSList *list_of_beans) {
-		GString *gs = g_string_new ("{");
-		g_string_append_printf (gs, "\"event\":\"%s.%s\"",
-				META2_EVENTS_PREFIX, name);
-		append_int64 (gs, "when", oio_ext_real_time());
-		g_string_append (gs, ",\"url\":{");
-		oio_url_to_json (gs, url);
-		g_string_append (gs, "},\"data\":[");
+		gchar tmp[256];
+		g_snprintf (tmp, sizeof(tmp), "%s.%s", META2_EVENTS_PREFIX, name);
+
+		GString *gs = oio_event__create (tmp, url);
+		g_string_append (gs, ",\"data\":[");
 		meta2_json_dump_all_xbeans (gs, list_of_beans);
 		g_string_append (gs, "]}");
 		oio_events_queue__send (m2b->notifier, g_string_free (gs, FALSE));
