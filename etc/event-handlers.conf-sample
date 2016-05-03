@@ -1,0 +1,29 @@
+
+[handler:storage.content.new]
+
+[handler:storage.content.deleted]
+pipeline = content_cleaner
+
+[handler:storage.container.new]
+pipeline = account_update
+
+[handler:storage.container.deleted]
+pipeline = account_update
+
+[handler:storage.container.state]
+pipeline = account_update
+
+[handler:storage.chunk.new]
+pipeline = volume_index
+
+[handler:storage.chunk.deleted]
+pipeline = volume_index
+
+[filter:content_cleaner]
+use = egg:oio#content_cleaner
+
+[filter:account_update]
+use = egg:oio#account_update
+
+[filter:volume_index]
+use = egg:oio#volume_index

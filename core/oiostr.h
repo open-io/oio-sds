@@ -112,6 +112,8 @@ void oio_str_gstring_append_json_blob(GString *base, const char *s, int len);
 void oio_str_gstring_append_json_pair (GString *base,
 		const char *k, const char *v);
 
+static inline int oio_str_is_set (const char *s) { return NULL!=s && 0!=*s; }
+
 #ifdef __cplusplus
 }
 #endif

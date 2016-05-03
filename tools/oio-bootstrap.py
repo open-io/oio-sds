@@ -586,15 +586,45 @@ template_event_agent = """
 [event-agent]
 namespace = ${NS}
 user = ${USER}
-bind_addr = ipc://${RUNDIR}/event-agent.sock
-queue_location = ${VOLUME}/queue.db
-retries_per_second = 30
-batch_size = 500
-workers = 5
+workers = 2
+concurrency = 5
+handlers_conf = ${CFGDIR}/event-handlers.conf
 log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
 syslog_prefix = OIO,${NS},event-agent
+"""
+
+template_event_agent_handlers = """
+[handler:storage.content.new]
+
+[handler:storage.content.deleted]
+pipeline = content_cleaner
+
+[handler:storage.container.new]
+pipeline = account_update
+
+[handler:storage.container.deleted]
+pipeline = account_update
+
+[handler:storage.container.state]
+pipeline = account_update
+
+[handler:storage.chunk.new]
+pipeline = volume_index
+
+[handler:storage.chunk.deleted]
+pipeline = volume_index
+
+[filter:content_cleaner]
+use = egg:oio#content_cleaner
+
+[filter:account_update]
+use = egg:oio#account_update
+
+[filter:volume_index]
+use = egg:oio#volume_index
+
 """
 
 template_conscience_agent = """
@@ -941,9 +971,9 @@ def generate(ns, ip, options={}, defaults={}):
                 f.write(to_write)
 
     # redis
+    env = subenv({'SRVTYPE':'redis', 'SRVNUM':1, 'PORT':6379})
+    add_service(env)
     if options.ALLOW_REDIS is not None:
-        env = subenv({'SRVTYPE':'redis', 'SRVNUM':1, 'PORT':6379})
-        add_service(env)
         with open(gridinit(env), 'a+') as f:
             tpl = Template(template_redis_gridinit)
             f.write(tpl.safe_substitute(env))
@@ -992,6 +1022,9 @@ def generate(ns, ip, options={}, defaults={}):
     add_service(env)
     with open(CFGDIR + '/' + 'event-agent.conf', 'w+') as f:
         tpl = Template(template_event_agent)
+        f.write(tpl.safe_substitute(env))
+    with open(CFGDIR + '/' + 'event-handlers.conf', 'w+') as f:
+        tpl = Template(template_event_agent_handlers)
         f.write(tpl.safe_substitute(env))
 
     # Conscience agent configuration

@@ -5,7 +5,7 @@ import sys
 
 import greenlet
 import eventlet
-from eventlet import GreenPile, Timeout, greenthread
+from eventlet import Timeout, greenthread
 
 from oio.conscience.client import ConscienceClient
 from oio.rdir.client import RdirClient
@@ -13,11 +13,11 @@ from oio.event.beanstalk import Beanstalk
 from oio.common.http import requests
 from oio.common.utils import true_value, drop_privileges, \
         json, int_value
+from oio.event.evob import is_success, is_error
+from oio.event.loader import loadhandlers
 
 
 SLEEP_TIME = 1
-PARALLEL_CHUNKS_DELETE = 2
-CHUNK_TIMEOUT = 60
 ACCOUNT_SERVICE_TIMEOUT = 60
 
 
@@ -48,7 +48,7 @@ class Worker(object):
     def __init__(self, ppid, conf, logger):
         self.ppid = ppid
         self.conf = conf
-        self.booted = False
+        self.started = False
         self.aborted = False
         self.alive = True
         self.logger = logger
@@ -65,7 +65,7 @@ class Worker(object):
 
         self.init_signals()
 
-        self.booted = True
+        self.started = True
         # main loop
         self.run()
 
@@ -91,16 +91,21 @@ class Worker(object):
         return True
 
 
-class EventType(object):
-    REFERENCE_UPDATE = "account.services"
-    CONTAINER_PUT = "storage.container.new"
-    CONTAINER_DESTROY = "storage.container.deleted"
-    CONTAINER_UPDATE = "storage.container.state"
-    OBJECT_PUT = "storage.content.new"
-    OBJECT_DELETE = "storage.content.deleted"
-    CHUNK_PUT = "storage.chunk.new"
-    CHUNK_DELETE = "storage.chunk.deleted"
-    PING = "ping"
+class EventTypes(object):
+    CHUNK_NEW = 'storage.chunk.new'
+    CHUNK_DELETED = 'storage.chunk.deleted'
+    CONTAINER_NEW = 'storage.container.new'
+    CONTAINER_DELETED = 'storage.container.deleted'
+    CONTAINER_STATE = 'storage.container.state'
+    CONTENT_NEW = 'storage.content.new'
+    CONTENT_DELETED = 'storage.content.deleted'
+
+
+evt_types = [
+    'storage.content.new', 'storage.content.deleted',
+    'storage.container.new', 'storage.container.deleted',
+    'storage.container.state', 'storage.chunk.new',
+    'storage.chunk.deleted']
 
 
 def _stop(client, server):
@@ -126,17 +131,23 @@ class EventWorker(Worker):
         )
         self.acct_update = true_value(self.conf.get('acct_update', True))
         self.rdir_update = true_value(self.conf.get('rdir_update', True))
+        if 'handlers_conf' not in self.conf:
+            raise ValueError("'handlers_conf' path not defined in conf")
+        self.handlers = loadhandlers(
+            self.conf.get('handlers_conf'), evt_types, app=self)
         super(EventWorker, self).init()
 
     def notify(self):
         """TODO"""
         pass
 
-    def safe_decode_job(self, job):
+    def safe_decode_job(self, job_id, data):
         try:
-            return json.loads(job)
+            env = json.loads(data)
+            env['job_id'] = job_id
+            return env
         except Exception as e:
-            self.logger.warn('ERROR decoding job "%s"', str(e.message))
+            self.logger.warn('decoding job "%s"', str(e.message))
             return None
 
     def run(self):
@@ -176,55 +187,35 @@ class EventWorker(Worker):
             while True:
                 job_id, data = beanstalk.reserve()
                 try:
-                    event = self.safe_decode_job(data)
-                    if event:
-                        self.process_event(event)
-                    beanstalk.delete(job_id)
+                    event = self.safe_decode_job(job_id, data)
+                    self.process_event(job_id, event, beanstalk)
                 except Exception:
-                    self.logger.exception("ERROR handling event %s", job_id)
+                    beanstalk.bury(job_id)
+                    self.logger.exception("handling event %s (bury)", job_id)
         except StopServe:
             pass
 
-    def process_event(self, event):
+    def process_event(self, job_id, event, beanstalk):
         handler = self.get_handler(event)
         if not handler:
-            self.logger.warn("ERROR no handler found for event '%s'",
-                             event.get('event', None))
-            # mark as success
-            return True
-        success = True
-        try:
-            handler(event)
-        except Exception:
-            success = False
-        finally:
-            return success
+            self.logger.warn('no handler found for %r' % event)
+            beanstalk.delete(job_id)
+            return
+
+        def cb(status, msg):
+            if is_success(status):
+                beanstalk.delete(job_id)
+            elif is_error(status):
+                self.logger.warn('bury event %r' % event)
+                beanstalk.bury(job_id)
+            else:
+                self.logger.warn('release event %r' % event)
+                beanstalk.release(job_id)
+
+        handler(event, cb)
 
     def get_handler(self, event):
-        event_type = event.get('event')
-        if not event_type:
-            return None
-
-        if event_type == EventType.CONTAINER_PUT:
-            return self.handle_container_put
-        elif event_type == EventType.CONTAINER_DESTROY:
-            return self.handle_container_destroy
-        elif event_type == EventType.CONTAINER_UPDATE:
-            return self.handle_container_update
-        elif event_type == EventType.OBJECT_PUT:
-            return self.handle_object_put
-        elif event_type == EventType.OBJECT_DELETE:
-            return self.handle_object_delete
-        elif event_type == EventType.REFERENCE_UPDATE:
-            return self.handle_reference_update
-        elif event_type == EventType.CHUNK_PUT:
-            return self.handle_chunk_put
-        elif event_type == EventType.CHUNK_DELETE:
-            return self.handle_chunk_delete
-        elif event_type == EventType.PING:
-            return self.handle_ping
-        else:
-            return None
+        return self.handlers.get(event.get('event'), None)
 
     @property
     def acct_addr(self):
@@ -239,166 +230,3 @@ class EventWorker(Worker):
 
     def acct_refresh(self):
         return (time.time() - self.acct_update) > self.acct_refresh_interval
-
-    def handle_container_put(self, event):
-        """
-        Handle container creation.
-        :param event:
-        """
-        self.logger.debug('worker handle container put')
-        if not self.acct_update:
-            return
-        uri = 'http://%s/v1.0/account/container/update' % self.acct_addr
-        mtime = event.get('when')
-        data = event.get('data')
-        name = data.get('url').get('user')
-        account = data.get('url').get('account')
-
-        event = {'mtime': mtime, 'name': name}
-        self.session.post(uri, params={'id': account}, json=event)
-
-    def handle_container_update(self, event):
-        """
-        Handle container update.
-        :param event:
-        """
-        self.logger.debug('worker handle container update')
-        if not self.acct_update:
-            return
-        uri = 'http://%s/v1.0/account/container/update' % self.acct_addr
-        mtime = event.get('when')
-        data = event.get('data')
-        name = event.get('url').get('user')
-        account = event.get('url').get('account')
-        bytes_count = data.get('bytes-count', 0)
-        object_count = data.get('object-count', 0)
-
-        event = {
-            'mtime': mtime,
-            'name': name,
-            'bytes': bytes_count,
-            'objects': object_count
-        }
-        self.session.post(uri, params={'id': account}, json=event)
-
-    def handle_container_destroy(self, event):
-        """
-        Handle container destroy.
-        :param event:
-        """
-        self.logger.debug('worker handle container destroy')
-        if not self.acct_update:
-            return
-        uri = 'http://%s/v1.0/account/container/update' % self.acct_addr
-        dtime = event.get('when')
-        data = event.get('data')
-        name = data.get('url').get('user')
-        account = data.get('url').get('account')
-
-        event = {'dtime': dtime, 'name': name}
-        self.session.post(uri, params={'id': account}, data=json.dumps(event))
-
-    def handle_object_delete(self, event):
-        """
-        Handle object deletion.
-        Delete the chunks of the object.
-        :param event:
-        """
-        self.logger.debug('worker handle object delete')
-        pile = GreenPile(PARALLEL_CHUNKS_DELETE)
-
-        chunks = []
-
-        for item in event.get('data'):
-            if item.get('type') == 'chunks':
-                chunks.append(item)
-        if not len(chunks):
-            self.logger.warn('No chunks found in event data')
-            return
-
-        def delete_chunk(chunk):
-            resp = None
-            try:
-                with Timeout(CHUNK_TIMEOUT):
-                    resp = self.session.delete(chunk['id'])
-            except (Exception, Timeout) as e:
-                self.logger.warn('error while deleting chunk %s "%s"',
-                                 chunk['id'], str(e.message))
-            return resp
-
-        for chunk in chunks:
-            pile.spawn(delete_chunk, chunk)
-
-        resps = [resp for resp in pile if resp]
-
-        for resp in resps:
-            if resp.status_code == 204:
-                self.logger.debug('deleted chunk %s' % resp.url)
-            else:
-                self.logger.warn('failed to delete chunk %s' % resp.url)
-
-    def handle_object_put(self, event):
-        """
-        Handle object creation.
-        TODO
-        :param event:
-        """
-        self.logger.debug('worker handle object put')
-
-    def handle_reference_update(self, event):
-        """
-        Handle reference update.
-        TODO
-        :param event
-        """
-        self.logger.debug('worker handle reference update')
-
-    def handle_chunk_put(self, event):
-        """
-        Handle chunk creation.
-        :param event
-        """
-        if not self.rdir_update:
-            self.logger.debug('worker skip chunk creation')
-            return
-
-        self.logger.debug('worker handle chunk creation')
-
-        when = event.get('when')
-        data = event.get('data')
-        volume_id = data.get('volume_id')
-        del data['volume_id']
-        container_id = data.get('container_id')
-        del data['container_id']
-        content_id = data.get('content_id')
-        del data['content_id']
-        chunk_id = data.get('chunk_id')
-        del data['chunk_id']
-        data['mtime'] = when
-        self.rdir.chunk_push(volume_id, container_id, content_id, chunk_id,
-                             **data)
-
-    def handle_chunk_delete(self, event):
-        """
-        Handle chunk deletion.
-        :param event
-        """
-        if not self.rdir_update:
-            self.logger.debug('worker skip chunk deletion')
-            return
-
-        self.logger.debug('worker handle chunk deletion')
-
-        data = event.get('data')
-        volume_id = data.get('volume_id')
-        container_id = data.get('container_id')
-        content_id = data.get('content_id')
-        chunk_id = data.get('chunk_id')
-        self.rdir.chunk_delete(volume_id, container_id, content_id, chunk_id)
-
-    def handle_ping(self, event):
-        """
-        Handle ping
-        :param event
-        """
-        self.logger.debug('worker handle ping')
