@@ -1545,9 +1545,11 @@ _m2_generate_RAIN(struct gen_ctx_s *ctx)
 	/* Storage policy storage class */
 	const struct storage_class_s *stgclass;
 	gint distance, k, m;
+	gboolean weak;
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
 	distance = _policy_parameter(ctx->pol, DS_KEY_DISTANCE, 1);
+	weak = _policy_parameter(ctx->pol, DS_KEY_WEAK, FALSE);
 	k = _policy_parameter(ctx->pol, DS_KEY_K, 3);
 	m = _policy_parameter(ctx->pol, DS_KEY_M, 2);
 	stgclass = storage_policy_get_storage_class(ctx->pol);
@@ -1564,6 +1566,7 @@ _m2_generate_RAIN(struct gen_ctx_s *ctx)
 		opt.req.duplicates = (distance <= 0);
 		opt.req.max = k + m;
 		opt.req.distance = distance;
+		opt.req.weak_distance = weak;
 		opt.req.stgclass = stgclass;
 		opt.req.strict_stgclass = FALSE; // Accept ersatzes
 
@@ -1593,9 +1596,11 @@ _m2_generate_DUPLI(struct gen_ctx_s *ctx)
 	/* Storage policy storage class */
 	const struct storage_class_s *stgclass;
 	gint distance, copies;
+	gboolean weak;
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
 	distance = _policy_parameter(ctx->pol, DS_KEY_DISTANCE, 1);
+	weak = _policy_parameter(ctx->pol, DS_KEY_WEAK, FALSE);
 	copies = _policy_parameter(ctx->pol, DS_KEY_COPY_COUNT, 1);
 	stgclass = storage_policy_get_storage_class(ctx->pol);
 	_m2_generate_alias_header(ctx);
@@ -1612,6 +1617,7 @@ _m2_generate_DUPLI(struct gen_ctx_s *ctx)
 		opt.req.duplicates = (distance <= 0);
 		opt.req.max = copies;
 		opt.req.distance = distance;
+		opt.req.weak_distance = weak;
 		opt.req.stgclass = stgclass;
 		opt.req.strict_stgclass = FALSE; // Accept ersatzes
 

@@ -1458,69 +1458,6 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 	return err;
 }
 
-// TODO FIXME too many arguments
-// TODO 'url' seems only useful for logging purposes
-GError*
-meta2_backend_get_conditionned_spare_chunks(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, gint64 count, gint64 dist, const char *notin,
-		const char *broken, GSList **result)
-{
-	GError *err = NULL;
-	GSList *notin2 = NULL;
-	GSList *broken2 = NULL;
-	struct storage_policy_s *stgpol = NULL;
-
-	GSList * srvinfo_from_piped_chunkid(const char *str)
-	{
-		GError *err2 = NULL;
-		GSList *sil = NULL;
-
-		if(!str || strlen(str) <= 0)
-			return NULL;
-
-		char **urls = g_strsplit(str, "|", 0);
-		for (uint i = 0; i < g_strv_length(urls); i++) {
-			if (strlen(urls[i]) <= 0)
-				continue;
-			struct service_info_s *si = NULL;
-			err2 = service_info_from_chunk_id(m2b->lb, urls[i], &si);
-			if (NULL != si)
-				sil = g_slist_prepend(sil, si);
-			if (err2 != NULL) {
-				GRID_WARN("Failed getting service info from '%s': %s",
-						urls[i], err2->message);
-				g_clear_error(&err2);
-			}
-		}
-
-		g_strfreev(urls);
-		return sil;
-	}
-
-	(void) url;
-	GRID_TRACE("CONDITIONNED SPARE(%s, %"G_GINT64_FORMAT", %"G_GINT64_FORMAT", %s, %s)",
-			oio_url_get(url, OIOURL_WHOLE),
-			count,
-			dist,
-			notin,
-			broken);
-
-	notin2 = srvinfo_from_piped_chunkid(notin);
-	broken2 = srvinfo_from_piped_chunkid(broken);
-
-	// FIXME: storage class should come as parameter
-	stgpol = storage_policy_init(m2b->nsinfo, NULL);
-
-	err = get_conditioned_spare_chunks(m2b->lb, count, dist,
-			storage_policy_get_storage_class(stgpol), notin2, broken2, result);
-
-	g_slist_free_full(notin2, (GDestroyNotify) service_info_gclean);
-	g_slist_free_full(broken2, (GDestroyNotify) service_info_gclean);
-	storage_policy_clean(stgpol);
-
-	return err;
-}
-
 static GError*
 _load_storage_policy(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		const gchar *polname, struct storage_policy_s **pol)

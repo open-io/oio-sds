@@ -469,6 +469,7 @@ TWOCOPIES=NONE:DUPONETWO:NONE
 THREECOPIES=NONE:DUPONETHREE:NONE
 FIVECOPIES=NONE:DUPONEFIVE:NONE
 RAIN=NONE:RAIN:NONE
+WRAIN=NONE:WRAIN:NONE
 
 [STORAGE_CLASS]
 # <CLASS> = FALLBACK[,FALLBACK]...
@@ -481,6 +482,7 @@ DUPONETWO=DUP:distance=1|nb_copy=2
 DUPONETHREE=DUP:distance=1|nb_copy=3
 DUPONEFIVE=DUP:distance=1|nb_copy=5
 RAIN=RAIN:k=6|m=2|algo=liber8tion|distance=1
+WRAIN=RAIN:k=6|m=3|algo=crs|distance=1|weak=1
 
 [DATA_TREATMENTS]
 """
@@ -774,7 +776,6 @@ def generate(ns, ip, options={}, defaults={}):
 
     port_proxy = next_port()
     port_event_agent = next_port()
-    port_rdir = next_port()
 
     versioning = 1
     stgpol = "SINGLE"
@@ -814,7 +815,16 @@ def generate(ns, ip, options={}, defaults={}):
     def merge_env(add):
         env = dict(ENV)
         env.update(add)
+        if options.PROFILE == "valgrind":
+            orig_exe = env.get('EXE', env['EXE_PREFIX'])
+            new_exe = "valgrind --leak-check=full --leak-resolution=high\
+ --trace-children=yes --log-file=/tmp/%q{ORIG_EXE}.%p.valgrind " + orig_exe
+            env['env.ORIG_EXE'] = orig_exe
+            env['EXE'] = new_exe
+            env['env.G_DEBUG'] = "gc-friendly"
+            env['env.G_SLICE'] = "always-malloc"
         return env
+
     def subenv(add):
         env = merge_env(add)
         env['VOLUME'] = '{DATADIR}/{NS}-{SRVTYPE}-{SRVNUM}'.format(**env)
@@ -870,14 +880,16 @@ def generate(ns, ip, options={}, defaults={}):
                 f.write(tpl.safe_substitute(env))
 
     # meta* + sqlx
-    def generate_meta(t,n,tpl):
-        env = subenv({'SRVTYPE':t, 'SRVNUM':n, 'PORT':next_port(),
-                      'EXE':EXE_PREFIX + '-' + t + '-server'})
+    def generate_meta(t, n, tpl):
+        env = subenv({'SRVTYPE': t, 'SRVNUM': n, 'PORT': next_port(),
+                      'EXE': ENV['EXE_PREFIX'] + '-' + t + '-server'})
         add_service(env)
         # gridinit config
         tpl = Template(tpl)
         with open(gridinit(env), 'a+') as f:
             f.write(tpl.safe_substitute(env))
+            for key in (k for k in env.iterkeys() if k.startswith("env.")):
+                f.write("%s=%s\n" % (key, env[key]))
         # watcher
         tpl = Template(template_meta_watch)
         with open(watch(env), 'w+') as f:
@@ -1056,6 +1068,9 @@ def main():
     parser.add_option("--opensuse",
                       action="store_true", dest="OPENSUSE",
                       help="Customize some config files for Opensuse")
+    parser.add_option("--profile",
+                      action="store", type="string", dest='PROFILE',
+                      help="Use a code profiler (only valgrind is supported)")
 
     parser.add_option("--port",
                       action="store", type="int", dest="PORT_START")

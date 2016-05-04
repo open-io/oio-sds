@@ -913,7 +913,7 @@ _iterator_next_shorten(struct grid_lb_iterator_s *iter,
 				// We are asked to bypass shorten ratio, because no service
 				// matching our criteria has been found. We have to iterate
 				// over the whole list, so use RR.
-				GRID_DEBUG("Fallback to RR without shorten ratio");
+				GRID_TRACE("Fallback to RR without shorten ratio");
 				return __next_RR(iter->lb, iter, si, FALSE);
 			}
 		case LBIT_RAND:
@@ -992,15 +992,13 @@ _filter_matches(struct lb_next_opt_filter_s *f, struct service_info_s *si)
 }
 
 /**
- * Search for rawx servers that match storage class and distance requirements.
+ * Search for services that match storage class and distance requirements.
  *
- * @param max_server Number of servers to search for
- * @param req_dist Minimum distance between servers
+ * @param iter An iterator over services
+ * @param opt Load balancer options
  * @param stgclass The storage class that we want
- * @param iter An iterator over rawx services
- * @param location_blacklist Rawx locations (const gchar*) that we don't want,
- *   and that will be checked for minimum distance.
- * @param polled (out) Tree where to store the new rawx found (struct service_info_s)
+ * @param polled (out) Tree where to store the new rawx found (service_info_t)
+ * @param shorten whether to use shorten ratio or not
  */
 static void
 _search_servers(struct grid_lb_iterator_s *iter, struct lb_next_opt_s *opt,
@@ -1085,11 +1083,20 @@ _next_set(struct grid_lb_iterator_s *it, struct lb_next_opt_s *opt,
 		_search_servers(it, opt, stgclass, polled, FALSE);
 	}
 
-	while (opt->req.max > (guint)g_tree_nnodes(polled) && fallbacks) {
-		GRID_DEBUG("Fallback STGPOL");
-		if (NULL != fallbacks->data)
-			_search_servers(it, opt, fallbacks->data, polled, FALSE);
-		fallbacks = fallbacks->next;
+	GSList *fb_cur = fallbacks;
+	while (opt->req.max > (guint)g_tree_nnodes(polled) && fb_cur) {
+		if (fb_cur->data) {
+			GRID_DEBUG("Fallback to stgclass %s", (char *)fb_cur->data);
+			_search_servers(it, opt, fb_cur->data, polled, FALSE);
+		}
+		fb_cur = fb_cur->next;
+	}
+
+	if (opt->req.max > (guint)g_tree_nnodes(polled)
+			&& opt->req.weak_distance && opt->req.distance > 0) {
+		opt->req.distance--;
+		GRID_DEBUG("Reducing distance requirement to %u", opt->req.distance);
+		return _next_set(it, opt, stgclass, polled, fallbacks);
 	}
 }
 
@@ -1175,13 +1182,15 @@ _ext_opt_filter(struct service_info_s *si, struct lb_next_opt_ext_s *opt_ext)
 		}
 	}
 
-	// Check if the distance fits fits already choose services
-	for (l = opt_ext->srv_inplace; l; l=l->next) {
-		if (!(si0 = l->data))
-			continue;
-		guint d = distance_between_services(si, si0);
-		if (opt_ext->req.distance > d)
-			return FALSE;
+	// Check if the distance fits already chosen services
+	if (opt_ext->req.distance > 0) {
+		for (l = opt_ext->srv_inplace; l; l=l->next) {
+			if (!(si0 = l->data))
+				continue;
+			guint d = distance_between_services(si, si0);
+			if (opt_ext->req.distance > d)
+				return FALSE;
+		}
 	}
 
 	// Now the custom filter, if any

@@ -51,6 +51,21 @@ _build_si(const gchar *a, guint i)
 	return si;
 }
 
+static struct service_info_s *
+_build_si_loc(const gchar *a, guint i)
+{
+	struct service_info_s *si = _build_si(a, i);
+
+	if (!si->tags)
+		si->tags = g_ptr_array_new();
+	service_tag_t *tag = service_info_ensure_tag(si->tags, NAME_TAGNAME_RAWX_LOC);
+	char tag_loc[32] = {0};
+	g_snprintf(tag_loc, sizeof(tag_loc), "loc.%u", i);
+	service_tag_set_value_string(tag, tag_loc);
+
+	return si;
+}
+
 static guint
 _fill(struct grid_lb_s *lb, guint max)
 {
@@ -60,13 +75,10 @@ _fill(struct grid_lb_s *lb, guint max)
 		g_assert(p_si != NULL);
 		if (i >= max)
 			return FALSE;
-		*p_si = _build_si(ADDR_GOOD, i ++);
+		*p_si = _build_si_loc(ADDR_GOOD, i++);
 		count ++;
 		return TRUE;
 	}
-
-	i = count = 0;
-	grid_lb_reload(lb, &provide);
 
 	i = count = 0;
 	grid_lb_reload(lb, &provide);
@@ -120,7 +132,7 @@ check_not_found(struct grid_lb_iterator_s *iter)
 	check_presence(FALSE, iter, si);
 	service_info_clean(si);
 
-	si = _build_si(ADDR_GOOD, max_feed);
+	si = _build_si(ADDR_GOOD, max_feed + 1);
 	check_presence(FALSE, iter, si);
 	service_info_clean(si);
 
@@ -129,7 +141,7 @@ check_not_found(struct grid_lb_iterator_s *iter)
 	check_presence(FALSE, iter, si);
 	service_info_clean(si);
 
-	si = _build_si(ADDR_GOOD, max_feed);
+	si = _build_si(ADDR_GOOD, max_feed + 1);
 	check_presence(FALSE, iter, si);
 	service_info_clean(si);
 
@@ -207,6 +219,7 @@ generate_set_and_check_uniform_repartition(struct grid_lb_iterator_s *iter,
 	struct lb_next_opt_s opt = {{0}};
 	opt.req.max = max_get;
 	opt.req.distance = 1;
+	opt.req.weak_distance = 1;
 	opt.req.duplicates = TRUE;
 	gboolean rc = grid_lb_iterator_next_set(iter, &siv, &opt, NULL);
 	g_assert(rc != FALSE);
@@ -236,7 +249,8 @@ generate_1by1_and_check_uniform_repartition(struct grid_lb_iterator_s *iter,
 }
 
 static guint
-_count_set(struct grid_lb_iterator_s *iter, guint max)
+_count_set(struct grid_lb_iterator_s *iter, guint max, gboolean weak,
+		gboolean expect)
 {
 	struct service_info_s **siv = NULL;
 	gboolean rc;
@@ -244,14 +258,18 @@ _count_set(struct grid_lb_iterator_s *iter, guint max)
 	struct lb_next_opt_s opt = {{0}};
 	opt.req.max = max;
 	opt.req.distance = 1;
+	opt.req.weak_distance = weak;
 	opt.req.duplicates = TRUE;
 
 	rc = grid_lb_iterator_next_set(iter, &siv, &opt, NULL);
-	g_assert(rc != FALSE);
+	g_assert(rc == expect);
 
-	guint count = g_strv_length((gchar**)siv);
-	service_info_cleanv(siv, FALSE);
-	return count;
+	if (expect) {
+		guint count = g_strv_length((gchar**)siv);
+		service_info_cleanv(siv, FALSE);
+		return count;
+	}
+	return 0;
 }
 
 static guint
@@ -276,8 +294,28 @@ check_service_count(struct grid_lb_iterator_s *iter)
 	g_assert(iter != NULL);
 	check_not_found(iter);
 	g_assert(max_get == _count_single(iter, max_get));
-	g_assert((max_feed + 10) == _count_set(iter, max_feed + 10));
-	g_assert(max_get == _count_set(iter, max_get));
+
+	// Half the number of services in the pool -> should work
+	g_assert(_count_set(iter, max_feed / 2, FALSE, TRUE) == max_feed / 2);
+
+	// More services than the number in the pool -> should fail
+	g_assert(_count_set(iter, max_feed + 10, FALSE, FALSE) == 0);
+	// More services than the number in the pool, but weak distance -> should work
+	g_assert(_count_set(iter, max_feed + 10, TRUE, TRUE) == (max_feed + 10));
+
+	// Far more services than the number in the pool -> should fail
+	g_assert(_count_set(iter, max_get, FALSE, FALSE) == 0);
+	// Far more services than the number in the pool, but weak distance -> should work
+	g_assert(_count_set(iter, max_get, TRUE, TRUE) == max_get);
+}
+
+static void
+check_service_count_near_limit(struct grid_lb_iterator_s *iter)
+{
+	// One service less than the number in the pool -> should work
+	g_assert(_count_set(iter, max_feed - 2, FALSE, TRUE) == max_feed - 2);
+	// As much services as the number in the pool -> should work
+	g_assert(_count_set(iter, max_feed - 1, FALSE, TRUE) == max_feed - 1);
 }
 
 static void
@@ -290,6 +328,7 @@ test_lb_RR(void)
 	iter = grid_lb_iterator_round_robin(lb);
 
 	check_service_count(iter);
+	check_service_count_near_limit(iter);
 	generate_1by1_and_check_uniform_repartition(iter, 0.01);
 	generate_set_and_check_uniform_repartition(iter, 0.01);
 
@@ -306,6 +345,7 @@ test_lb_WRR(void)
 	lb = _build();
 	iter = grid_lb_iterator_weighted_round_robin(lb);
 	check_service_count(iter);
+	check_service_count_near_limit(iter);
 	grid_lb_iterator_clean(iter);
 	grid_lb_clean(lb);
 }

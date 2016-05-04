@@ -120,6 +120,8 @@ get_spare_chunks(struct grid_lbpool_s *lbp, struct storage_policy_s *stgpol,
 
 	diststr = data_security_get_param(ds, DS_KEY_DISTANCE);
 	opt_ext.req.distance = (NULL != diststr) ? atoi(diststr) : 1;
+	opt_ext.req.weak_distance = \
+			BOOL(data_security_get_int64_param(ds, DS_KEY_WEAK, 0));
 
 	switch (data_security_get_type(ds)) {
 		case RAIN:
@@ -144,25 +146,6 @@ get_spare_chunks(struct grid_lbpool_s *lbp, struct storage_policy_s *stgpol,
 }
 
 //------------------------------------------------------------------------------
-
-GError*
-get_conditioned_spare_chunks(struct grid_lbpool_s *lbp,
-		gint64 count, gint64 dist, const struct storage_class_s *stgclass,
-		GSList *notin, GSList *broken,
-		GSList **result)
-{
-	struct lb_next_opt_ext_s opt_ext;
-	memset(&opt_ext, 0, sizeof(opt_ext));
-	opt_ext.req.max = count;
-	opt_ext.req.distance = dist;
-	opt_ext.req.duplicates = (dist <= 0);
-	opt_ext.req.stgclass = stgclass;
-	opt_ext.req.strict_stgclass = FALSE;
-	opt_ext.srv_inplace = notin;
-	opt_ext.srv_forbidden = broken;
-
-	return _poll_services(lbp, "rawx", &opt_ext, result);
-}
 
 static GSList *
 convert_chunks_to_srvinfo(struct grid_lbpool_s *lbp, GSList *src)
@@ -200,6 +183,8 @@ get_conditioned_spare_chunks2(struct grid_lbpool_s *lbp,
 	memset(&opt_ext, 0, sizeof(opt_ext));
 	opt_ext.req.max = 0;
 	opt_ext.req.distance = data_security_get_int64_param(ds, DS_KEY_DISTANCE, 0);
+	opt_ext.req.weak_distance = \
+			BOOL(data_security_get_int64_param(ds, DS_KEY_WEAK, 0));
 	opt_ext.req.duplicates = (opt_ext.req.distance <= 0);
 	opt_ext.req.stgclass = stgclass;
 	opt_ext.req.strict_stgclass = FALSE;

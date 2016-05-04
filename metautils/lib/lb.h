@@ -178,6 +178,9 @@ struct lb_next_opt_simple_s
 	/** Required distance between services */
 	guint distance;
 
+	/** Is it allowed to weaken the distance requirements? */
+	gboolean weak_distance;
+
 	/** Is it allowed to choose several times the same service */
 	gboolean duplicates;
 

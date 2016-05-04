@@ -40,7 +40,7 @@ MONITOR_PERIOD=
 
 OPENSUSE=`grep -i opensuse /etc/*release || echo -n ''`
 
-while getopts "B:C:D:E:I:M:N:P:R:S:V:X:Zvb" opt; do
+while getopts "B:C:D:E:I:M:N:p:P:R:S:V:X:Zvb" opt; do
 	case $opt in
 		b) BIG=1 ;;
 		B) REPLICATION_BUCKET="${OPTARG}" ;;
@@ -50,6 +50,7 @@ while getopts "B:C:D:E:I:M:N:P:R:S:V:X:Zvb" opt; do
 		I) IP="${OPTARG}" ;;
 		M) MONITOR_PERIOD="${OPTARG}" ;;
 		N) NS="${OPTARG}" ;;
+		p) PROFILE="${OPTARG}" ;;
 		P) PORT="${OPTARG}" ;;
 		R) REDIS="${OPTARG}" ;;
 		S) STGPOL="${OPTARG}" ;;
@@ -82,6 +83,7 @@ if [ -n "$NB_RAWX" ] ; then opts="${opts} --nb-rawx=${NB_RAWX}" ; fi
 if [ -n "$CHUNKSIZE" ] ; then opts="${opts} --chunk-size=${CHUNKSIZE}" ; fi
 if [ -n "$MONITOR_PERIOD" ] ; then opts="${opts} --monitor-period=${MONITOR_PERIOD}" ; fi
 if [ "$REDIS" -gt 0 ] ; then opts="${opts} --allow-redis" ; fi
+if [ -n "$PROFILE" ] ; then opts="${opts} --profile=${PROFILE}" ; fi
 for srvtype in ${AVOID} ; do opts="${opts} --no-${srvtype}"; done
 if [ -n "$OPENSUSE" ]
 then

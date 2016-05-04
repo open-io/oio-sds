@@ -42,24 +42,6 @@ GError* get_spare_chunks(struct grid_lbpool_s *lbp,
 		struct storage_policy_s *stgpol, GSList **result);
 
 /**
- * Get spare chunks according to some criteria.
- *
- * @param lbp Pointer to a rawx load balancing pool
- * @param count The number of wanted spare chunks
- * @param dist The wanted distance between chunks
- * @param stgclass The wanted storage class for spare chunks
- * @param notin_loc The list of locations (char*) that are already know and
- *   that should count when computing distance between chunks
- * @param broken_loc The list of locations (char*) that are known to be broken
- *   and that should be avoided, but do not count when computing distance
- * @param result Pointer to a list where spare chunks will be inserted
- * @return A GError in case of error
- */
-GError* get_conditioned_spare_chunks(struct grid_lbpool_s *lbp,
-		gint64 count, gint64 dist, const struct storage_class_s *stgclass,
-		GSList *notin_loc, GSList *broken_loc, GSList **result);
-
-/**
  * Get spare chunks according to a storage policy and lists of already
  * known chunks. Will return enough spare chunks to complete a metachunk,
  * or just one if the metachunk seems already complete.
