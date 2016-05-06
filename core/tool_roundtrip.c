@@ -26,6 +26,8 @@ License along with this library.
 #include "oio_core.h"
 #include "oio_sds.h"
 
+#define STRING_SIZE 7
+
 #define MAYBERETURN(E,T) do { \
 	if (E) { \
 		g_printerr ("%s: (%d) %s\n", (T), \
@@ -80,11 +82,10 @@ _checksum_file (const char *path, struct file_info_s *fi)
 static void
 _append_random_chars (gchar *d, const char *chars, guint n)
 {
-	GRand *r = oio_ext_local_prng ();
 	size_t len = strlen (chars);
 	gchar *p = d + strlen(d);
 	for (guint i=0; i<n ;i++)
-		*(p++) = chars [g_rand_int_range (r, 0, len)];
+		*(p++) = chars [g_random_int_range (0, len)];
 	*p = '\0';
 }
 
@@ -115,10 +116,14 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 	if (!err && has) err = (struct oio_error_s*) NEWERROR(0,"content already present");
 	MAYBERETURN(err, "Check error");
 	GRID_INFO("Content absent as expected");
-
+	gchar value_property_1 [STRING_SIZE+1]="";
+	gchar value_property_2 [STRING_SIZE+1]="";
+	_append_random_chars (value_property_1, random_chars, STRING_SIZE);
+	_append_random_chars (value_property_2, random_chars, STRING_SIZE);
+	gchar *properties [5] = {value_property_1, value_property_1, value_property_2, value_property_2, NULL};
 	/* Then upload it */
 	struct oio_sds_ul_dst_s ul_dst = {
-		.url = url, .autocreate = 1, .out_size = 0, .content_id = content_id,
+		.url = url, .autocreate = 1, .out_size = 0, .content_id = content_id, .properties=(char**)properties,
 	};
 	err = oio_sds_upload_from_file (client, &ul_dst, path, 0, 0);
 	MAYBERETURN(err, "Upload error");
@@ -163,7 +168,6 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 	struct oio_url_s *url1 = oio_url_dup (url);
 	oio_url_set (url1, OIOURL_PATH, tmppath);
 	err = oio_sds_link (client, url1, content_id);
-	oio_url_pclean (&url1);
 	MAYBERETURN(err, "Link error: ");
 
 	/* List the container, the content must appear */
@@ -178,19 +182,41 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 	};
 	err = oio_sds_list (client, &list_in, &list_out);
 	MAYBERETURN(err, "List error");
-
+	gboolean test1 = FALSE, test2 = FALSE;
+	int cmp = 0;
+        GPtrArray *val = g_ptr_array_new();
+	void save_elements(void *ptrarray, char *k, char*v) {
+		GPtrArray *array = (GPtrArray *) ptrarray;
+		g_ptr_array_add(array,g_strdup(k));
+		g_ptr_array_add(array,g_strdup(v));
+	}
+	(void) test1; (void) test2; (void) cmp;
+	err = oio_sds_get_content_properties(client, url, save_elements, val);
+	g_ptr_array_add(val, NULL);
+	gchar **elts = (gchar **)g_ptr_array_free(val, FALSE);
+	MAYBERETURN(err, "get properties error");
+	if(g_strv_length(elts) != 4) {
+		return (struct oio_error_s*) NEWERROR(0, "error of properties!");
+	}
+	test1 = g_strcmp0(elts [0], value_property_1) && g_strcmp0(elts [1], value_property_1);
+	test2 = g_strcmp0(elts [2], value_property_2) && g_strcmp0(elts [3], value_property_2);
+	if(! (test1 && test2)) {
+		return (struct oio_error_s*) NEWERROR(0, "error of properties!");
+	}
+	g_strfreev(elts);
 	/* Remove the content from the content */
 	err = oio_sds_delete (client, url);
 	MAYBERETURN(err, "Delete error");
 	GRID_INFO("Content removed");
-
+	
 	/* Check the content is not preset anymore */
 	has = 0;
 	err = oio_sds_has (client, url, &has);
 	if (!err && has) err = (struct oio_error_s*) NEWERROR(0, "content still present");
 	MAYBERETURN(err, "Check error");
 	GRID_INFO("Content absent as expected");
-
+	err = oio_sds_delete (client, url1);
+	oio_url_pclean(&url1);
 	g_remove (tmppath);
 	oio_error_pfree (&err);
 	return NULL;
@@ -215,8 +241,8 @@ _roundtrip_autocontainer (struct oio_sds_s *client, struct oio_url_s *url,
 	struct oio_url_s *url_auto = oio_url_dup (url);
 	oio_url_set (url_auto, OIOURL_USER, auto_container);
 	err = (GError*) _roundtrip_common (client, url_auto, path);
+	oio_sds_delete_container(client, url_auto);
 	oio_url_pclean (&url_auto);
-
 	return (struct oio_error_s*) err;
 }
 
@@ -268,9 +294,14 @@ main(int argc, char **argv)
 
 	err = _roundtrip_common (client, url, path);
 	if (!err)
-		err = _roundtrip_autocontainer (client, url, path);
-
+	err = _roundtrip_autocontainer (client, url, path);
 	int rc = err != NULL;
+	err = oio_sds_delete_container(client, url);
+	if (err) {
+		g_printerr("error remove container %s", oio_error_message(err));
+		oio_error_pfree(&err);
+		return 4;
+	}
 	oio_error_pfree (&err);
 	oio_sds_pfree (&client);
 	oio_url_pclean (&url);
