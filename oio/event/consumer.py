@@ -19,9 +19,8 @@ from oio.event.loader import loadhandlers
 
 SLEEP_TIME = 1
 ACCOUNT_SERVICE_TIMEOUT = 60
-
-
 ACCOUNT_SERVICE = 'account'
+DEFAULT_TUBE = 'oio'
 
 
 def _eventlet_stop(client, server, beanstalk):
@@ -120,6 +119,7 @@ def _stop(client, server):
 class EventWorker(Worker):
     def init(self):
         eventlet.monkey_patch(os=False)
+        self.tube = self.conf.get("tube", DEFAULT_TUBE)
         self.session = requests.Session()
         self.cs = ConscienceClient(self.conf)
         self.rdir = RdirClient(self.conf)
@@ -152,7 +152,7 @@ class EventWorker(Worker):
 
     def run(self):
         coros = []
-        queue_url = self.conf.get('queue_url', 'tcp://127.0.0.1:11300')
+        queue_url = self.conf.get('queue_url', '127.0.0.1:11300')
         concurrency = int_value(self.conf.get('concurrency'), 10)
 
         server_gt = greenthread.getcurrent()
@@ -184,6 +184,8 @@ class EventWorker(Worker):
 
     def handle(self, beanstalk):
         try:
+            if self.tube:
+                beanstalk.watch(self.tube)
             while True:
                 job_id, data = beanstalk.reserve()
                 try:
