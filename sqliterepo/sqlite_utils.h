@@ -125,6 +125,8 @@ int sqlx_exec(sqlite3 *handle, const gchar *sql);
 
 struct sqlx_sqlite3_s;
 
+struct oio_url_s* sqlx_admin_get_url (struct sqlx_sqlite3_s *sq3);
+
 /* load the whole internal cached from the <admin> table. */
 void sqlx_admin_load(struct sqlx_sqlite3_s *sq3);
 
