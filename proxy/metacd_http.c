@@ -208,11 +208,6 @@ _metacd_load_url (struct req_args_s *args)
 static enum http_rc_e
 handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 {
-	gboolean _boolhdr (const gchar * n) {
-		return metautils_cfg_get_bool (
-			(gchar *) g_tree_lookup (rq->tree_headers, n), FALSE);
-	}
-
 	// Get a request id for the current request
 	const gchar *reqid = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_REQID);
 	if (reqid)
@@ -242,14 +237,11 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 		rp->finalize ();
 		rc = HTTPRC_DONE;
 	} else {
-		struct req_args_s args = {NULL,NULL,NULL, NULL,NULL, 0};
+		struct req_args_s args = {0};
 		args.req_uri = &ruri;
 		args.matchings = matchings;
 		args.rq = rq;
 		args.rp = rp;
-
-		if (_boolhdr (PROXYD_HEADER_NOEMPTY))
-			args.flags |= FLAG_NOEMPTY;
 
 		args.url = url = _metacd_load_url (&args);
 		rp->subject(oio_url_get(url, OIOURL_HEXID));

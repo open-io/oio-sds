@@ -240,7 +240,7 @@ context_pending_inc_versions(struct sqlx_repctx_s *ctx)
 	gboolean _on_table(hashstr_t *k, GTree *rows, gpointer u0) {
 		(void) u0;
 		if (g_tree_nnodes(rows) > 0) {
-			if (0 != g_ascii_strcasecmp(hashstr_str(k), "main.admin")) {
+			if (0 != strcmp(hashstr_str(k), "main.admin")) {
 				gsize max = sizeof("version:")+hashstr_len(k);
 				gchar buf[max];
 				g_snprintf(buf, max, "version:%s", hashstr_str(k));

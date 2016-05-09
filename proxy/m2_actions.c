@@ -298,11 +298,10 @@ _reply_list_result (struct req_args_s *args, GError * err,
 {
 	if (err)
 		return _reply_m2_error (args, err);
-	if (!out->beans && (args->flags & FLAG_NOEMPTY))
-		return _reply_notfound_error (args, NEWERROR (CODE_CONTENT_NOTFOUND, "No bean found"));
 
-	if (!err)
-		_container_new_props_to_headers (args, out->props);
+	/* TODO to be removed as soon as all the clients consime the properties
+	 * in the headers. */
+	_container_new_props_to_headers (args, out->props);
 
 	GString *gstr = g_string_new ("{");
 	_dump_json_prefixes (gstr, tree_prefixes);
@@ -318,8 +317,6 @@ _reply_list_result (struct req_args_s *args, GError * err,
 static enum http_rc_e
 _reply_beans (struct req_args_s *args, GError * err, GSList * beans)
 {
-	if (!err && !beans && (args->flags & FLAG_NOEMPTY))
-		err = NEWERROR (CODE_CONTENT_NOTFOUND, "No bean found");
 	if (err)
 		return _reply_m2_error (args, err);
 
@@ -561,13 +558,15 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody, GS
 		beans = g_slist_prepend (beans, header);
 		CONTENTS_HEADERS_set2_id (header, (guint8*)"0", 1);
 
-		gchar *s = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-policy");
+		gchar *s = g_tree_lookup(args->rq->tree_headers,
+				PROXYD_HEADER_PREFIX "content-meta-policy");
 		if (NULL != s)
 			CONTENTS_HEADERS_set2_policy (header, s);
 	}
 
 	if (!err) { // Content ID
-		gchar *s = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-id");
+		gchar *s = g_tree_lookup(args->rq->tree_headers,
+				PROXYD_HEADER_PREFIX "content-meta-id");
 		if (NULL != s) {
 			GByteArray *h = metautils_gba_from_hexstring (s);
 			if (!h)
@@ -589,7 +588,8 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody, GS
 	}
 
 	if (!err) { // Content hash
-		gchar *s = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-hash");
+		gchar *s = g_tree_lookup(args->rq->tree_headers,
+				PROXYD_HEADER_PREFIX "content-meta-hash");
 		if (NULL != s) {
 			GByteArray *h = NULL;
 			if (!(err = _get_hash (s, &h)))
@@ -599,7 +599,8 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody, GS
 	}
 
 	if (!err) { // Content length
-		gchar *s = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-length");
+		gchar *s = g_tree_lookup(args->rq->tree_headers,
+				PROXYD_HEADER_PREFIX "content-meta-length");
 		if (!s)
 			err = BADREQ("Header: missing content length");
 		else {
@@ -622,12 +623,14 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody, GS
 	if (!err) {
 		// Extract the content-type
 		gchar *s;
-		s = g_tree_lookup (args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-mime-type");
+		s = g_tree_lookup (args->rq->tree_headers,
+				PROXYD_HEADER_PREFIX "content-meta-mime-type");
 		if (s)
 			CONTENTS_HEADERS_set2_mime_type (header, s);
 
 		// Extract the chunking method
-		s = g_tree_lookup (args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-chunk-method");
+		s = g_tree_lookup (args->rq->tree_headers,
+				PROXYD_HEADER_PREFIX "content-meta-chunk-method");
 		if (s)
 			CONTENTS_HEADERS_set2_chunk_method (header, s);
 	}
@@ -639,7 +642,8 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody, GS
 		ALIASES_set_content (alias, CONTENTS_HEADERS_get_id (header));
 
 		if (!err) { // aliases version
-			gchar *s = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-version");
+			gchar *s = g_tree_lookup(args->rq->tree_headers,
+					PROXYD_HEADER_PREFIX "content-meta-version");
 			if (s) {
 				errno = 0;
 				gchar *end = NULL;
@@ -1264,9 +1268,12 @@ action_container_list (struct req_args_s *args)
 	GError *err = NULL;
 	GTree *tree_prefixes = NULL;
 
-	/* Triggers special listing modes */
-	const char *chunk_id = g_tree_lookup (args->rq->tree_headers, PROXYD_HEADER_PREFIX "list-chunk-id");
-	const char *content_hash_hex = g_tree_lookup (args->rq->tree_headers, PROXYD_HEADER_PREFIX "list-content-hash");
+	/* Triggers special listings */
+	const char *chunk_id = g_tree_lookup (args->rq->tree_headers,
+			PROXYD_HEADER_PREFIX "list-chunk-id");
+	const char *content_hash_hex = g_tree_lookup (args->rq->tree_headers,
+			PROXYD_HEADER_PREFIX "list-content-hash");
+
 	GBytes *content_hash = NULL;
 	if (content_hash_hex) {
 		GByteArray *gba = NULL;

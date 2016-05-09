@@ -59,7 +59,7 @@ extern "C" {
 # endif
 
 # ifndef PROXYD_HEADER_PREFIX
-#  define PROXYD_HEADER_PREFIX "X-oio-"
+#  define PROXYD_HEADER_PREFIX "x-oio-"
 # endif
 
 # ifndef PROXYD_HEADER_MODE

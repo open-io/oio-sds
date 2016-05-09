@@ -200,8 +200,6 @@ struct req_args_s
 
 	struct http_request_s *rq;
 	struct http_reply_ctx_s *rp;
-
-	guint32 flags;
 };
 
 struct sub_action_s

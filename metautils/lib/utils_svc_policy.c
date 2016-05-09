@@ -70,7 +70,7 @@ _get_from_array(const gchar *name, struct kv_s *pkv,
 {
 	if (name && *name && pkv) {
 		for (; pkv->name ;pkv++) {
-			if (!g_ascii_strcasecmp(pkv->name, name)) {
+			if (!strcmp(pkv->name, name)) {
 				*result = pkv->policy;
 				return NULL;
 			}
