@@ -285,6 +285,10 @@ gridd_request_replicated (struct client_ctx_s *ctx, request_packer_f pack)
 		return err;
 	} else {
 		EXTRA_ASSERT(m1uv != NULL);
+		if (!*m1uv) {
+			g_strfreev (m1uv);
+			return NEWERROR (CODE_CONTAINER_NOTFOUND, "No service located");
+		}
 		meta1_urlv_shift_addr (m1uv);
 		_sort_services (ctx, election_key, m1uv);
 	}
