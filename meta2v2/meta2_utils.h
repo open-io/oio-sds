@@ -52,13 +52,6 @@ struct list_params_s
 	guint8 flag_headers:1;
 };
 
-struct list_result_s
-{
-	GSList *beans;
-	gchar *next_marker;
-	gboolean truncated;
-};
-
 struct dup_alias_params_s
 {
 	struct sqlx_sqlite3_s *sq3;

@@ -114,6 +114,13 @@ Used by `gcc`
 
 | Macro | Default | Description |
 | ----- | ------- | ----------- |
+| OIO_EVTQ_BUFFER_DELAY | 5 | ----------- |
+| OIO_CFG_EVTQ_MAXPENDING | "events-max-pending" |  |
+| OIO_CFG_EVTQ_BUFFER_DELAY | "events-buffer-delay" |  |
+| OIO_EVTQ_MAXPENDING | 1000 | Default queue length for services emitting events (meta1, meta2). Beyond this limit, the queue will be reported as 'stalled' so that the services can properly manage this. |
+
+| Macro | Default | Description |
+| ----- | ------- | ----------- |
 | GCLUSTER_RUN_DIR | "/var/run" | Prefix to spool. |
 | GCLUSTER_CONFIG_FILE_PATH | "/etc/oio/sds.conf" | System-wide configuration file |
 | GCLUSTER_CONFIG_DIR_PATH | "/etc/oio/sds.conf.d" | System-wide configuration directory for additional files. |
@@ -123,13 +130,12 @@ Used by `gcc`
 
 | Macro | Default | Description |
 | ----- | ------- | ----------- |
-| RAWX_HEADER_PREFIX | "X-oio-chunk-meta-" | Prefix applied to proxyd's URL, second version (with accounts) |
 | PROXYD_PREFIX | "v3.0" | Prefix applied to proxyd's URL, second version (with accounts) |
 | PROXYD_HEADER_PREFIX | "X-oio-" | Prefix for all the headers sent to the proxy |
 | PROXYD_HEADER_REQID | PROXYD_HEADER_PREFIX "req-id" | Header whose value is printed in access log, destined to agregate several requests belonging to the same session. |
 | PROXYD_HEADER_NOEMPTY | PROXYD_HEADER_PREFIX "no-empty-list" | Flag sent to the proxy to turn empty list (results) into 404 not found. |
 | PROXYD_PATH_MAXLEN | 2048 | Maximum length for path to be accepted in requests. |
-| PROXYD_DEFAULT_TTL_SERVICES | 3600 | Idem for services entries. |
+| PROXYD_DEFAULT_TTL_SERVICES | G_TIME_SPAN_HOUR | Idem for services entries. |
 | PROXYD_DEFAULT_MAX_SERVICES | 200000 | Idem for service entries. |
 | PROXYD_DEFAULT_TTL_CSM0 | 0 | Maximum TTL (in seconds) for conscience entries in the proxyd cache. |
 | PROXYD_DEFAULT_MAX_CSM0 | 0 | Maximum number of conscience's items in the proxyd cache. |
@@ -137,14 +143,24 @@ Used by `gcc`
 | PROXYD_PERIOD_RELOAD_CSURL | 30 |  |
 | PROXYD_PERIOD_RELOAD_SRVTYPES | 30 |  |
 | PROXYD_PERIOD_RELOAD_M0INFO | 30 |  |
-| PROXYD_TTL_DEAD_LOCAL_SERVICES | 30 |  |
-| PROXYD_TTL_DOWN_SERVICES | 5 | In seconds |
-| PROXYD_TTL_KNOWN_SERVICES | 3600 | In seconds |
-| PROXYD_DEFAULT_TIMEOUT_CONSCIENCE | 5000 |  |
-| PROXYD_DEFAULT_PERIOD_DOWNSTREAM | 10 |  |
+| PROXYD_DEFAULT_PERIOD_DOWNSTREAM | 2 |  |
 | PROXYD_DEFAULT_PERIOD_UPSTREAM | 1 |  |
-| OIO_M2V2_LISTRESULT_BATCH | 1000 |  |
-| OIO_EVTQ_MAXPENDING | 1000 | Default queue length for services emitting events (meta1, meta2). Beyond this limit, the queue will be reported as 'stalled' so that the services can properly manage this. |
+| PROXYD_TTL_DEAD_LOCAL_SERVICES | 30 * G_TIME_SPAN_SECOND |  |
+| PROXYD_TTL_DOWN_SERVICES | 5 * G_TIME_SPAN_SECOND |  |
+| PROXYD_TTL_KNOWN_SERVICES | 5 * G_TIME_SPAN_DAY |  |
+| PROXYD_TTL_MASTER_SERVICES | 5 * G_TIME_SPAN_SECOND |  |
+
+| Macro | Default | Description |
+| ----- | ------- | ----------- |
+| MALLOC_TRIM_SIZE | 0 |  |
+| PERIODIC_MALLOC_TRIM_SIZE | 0 |  |
+| OIO_STAT_PREFIX_REQ | "counter req.hits" |  |
+| OIO_STAT_PREFIX_TIME | "counter req.time" |  |
+| SQLITE_RELEASE_SIZE | 64MiB |  |
+
+| Macro | Default | Description |
+| ----- | ------- | ----------- |
+| SQLX_SYNC_DEFAULT_ZK_TIMEOUT | 8765 |  |
 | SQLX_DIR_SCHEMAS | NULL | Default directory used to gather applicative schema of SQLX bases. NULL by default, meaning that no directory is set, so that there is no attempt to load a schema. |
 | SQLX_ADMIN_PREFIX_SYS  | "sys." | Prefix used for keys used in admin table of sqlite bases |
 | SQLX_ADMIN_PREFIX_USER | "user." | Prefix used for keys used in admin table of sqlite bases |
@@ -154,6 +170,10 @@ Used by `gcc`
 | SQLX_ADMIN_BASENAME  | SQLX_ADMIN_PREFIX_SYS "sqlx.name" | Key used in admin table of sqlite bases |
 | SQLX_ADMIN_BASETYPE  | SQLX_ADMIN_PREFIX_SYS "sqlx.type" | Key used in admin table of sqlite bases |
 | SQLX_ADMIN_NAMESPACE | SQLX_ADMIN_PREFIX_SYS "sqlx.ns" | Key used in admin table of sqlite bases |
+
+| Macro | Default | Description |
+| ----- | ------- | ----------- |
+| OIO_M2V2_LISTRESULT_BATCH | 1000 |  |
 | M2V2_ADMIN_PREFIX_SYS | SQLX_ADMIN_PREFIX_SYS "m2." |  |
 | M2V2_ADMIN_PREFIX_USER | SQLX_ADMIN_PREFIX_USER "m2." |  |
 | M2V2_ADMIN_VERSION | M2V2_ADMIN_PREFIX_SYS "version" |  |
@@ -164,8 +184,23 @@ Used by `gcc`
 | M2V2_ADMIN_STORAGE_POLICY | M2V2_ADMIN_PREFIX_SYS "policy.storage" |  |
 | M2V2_ADMIN_KEEP_DELETED_DELAY | M2V2_ADMIN_PREFIX_SYS "keep_deleted_delay" |  |
 | META2_INIT_FLAG | M2V2_ADMIN_PREFIX_SYS "init" |  |
+
+| Macro | Default | Description |
+| ----- | ------- | ----------- |
+| RAWX_HEADER_PREFIX | "X-oio-chunk-meta-" | Prefix applied to proxyd's URL, second version (with accounts) |
+
+| Macro | Default | Description |
+| ----- | ------- | ----------- |
 | CS_CLIENT_TIMEOUT | 2.0 | <double> value telling the default timeout for conscience requests, in seconds. |
 | M0V2_CLIENT_TIMEOUT | 10.0 | <double> value telling the default timeout for meta0 requests, in seconds. |
+| M0V2_INIT_TIMEOUT | 30.0 | <double> value telling the default timeout for meta0 requests, in seconds. |
 | M1V2_CLIENT_TIMEOUT | 10.0 | <double> value telling the default timeout for meta1 requests, in seconds. |
 | M2V2_CLIENT_TIMEOUT | 10.0 | <double> value telling the default timeout for meta2 requests, in seconds. |
-
+| M2V2_CLIENT_TIMEOUT_HUGE | 10.0 | <double> value telling the default timeout for meta2 requests, in seconds. |
+| SQLX_CLIENT_TIMEOUT | 30.0 | <double> value telling the default timeout for sqlx requests, in seconds. |
+| SQLX_SYNC_TIMEOUT | 4.0 | <double> value telling the default timeout for sqlx requests, in seconds. |
+| SQLX_REPLI_TIMEOUT | 10.0 | <double> value telling the default timeout for sqlx requests, in seconds. |
+| SQLX_RESYNC_TIMEOUT | 30.0 | <double> value telling the default timeout for sqlx requests, in seconds. |
+| COMMON_CNX_TIMEOUT | 2 * G_TIME_SPAN_SECOND | In monotonic clock's precision |
+| COMMON_CLIENT_TIMEOUT | 30.0 | In monotonic clock's precision |
+| COMMON_STAT_TIMEOUT | 5.0 | <double> value telling the default timeout for /stat requests outgoing the proxy, in seconds. |

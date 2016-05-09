@@ -58,6 +58,7 @@ struct sqlx_base_s
 	GThread *owner; /*!< The current owner of the database. Changed under the
 					  global lock */
 	GCond *cond;
+	GCond *cond_prio;
 
 	gpointer handle;
 
@@ -89,6 +90,7 @@ struct sqlx_cache_s
 	guint bases_count;
 	sqlx_base_t *bases;
 	GCond *cond_array;
+	GCond *cond_prio_array;
 	gsize cond_count;
 
 	guint32 heat_threshold;
@@ -382,6 +384,7 @@ _expire_base(sqlx_cache_t *cache, sqlx_base_t *b)
 	/* the base is for the given thread, it is time to REALLY close it.
 	 * But this can take a lot of time. So we can release the pool,
 	 * free the handle and unlock the cache */
+	g_cond_signal(b->cond_prio);
 	g_cond_signal(b->cond);
 	g_mutex_unlock(&cache->lock);
 	if (cache->close_hook)
@@ -430,6 +433,7 @@ _expire_specific_base(sqlx_cache_t *cache, sqlx_base_t *b, gint64 now,
 	 * (this arrives when someone tries to read it again after
 	 * waiting exactly the grace delay), we must notify him so it can
 	 * retry (and open it in another file descriptor). */
+	g_cond_signal(b->cond_prio);
 	g_cond_signal(b->cond);
 
 	return 1;
@@ -480,6 +484,7 @@ sqlx_cache_reset_bases(sqlx_cache_t *cache, guint max)
 			base->link.prev = base->link.next = -1;
 			SQLX_UNSHIFT(cache, base, &(cache->beacon_free), SQLX_BASE_FREE);
 			base->cond = cache->cond_array + (i % cache->cond_count);
+			base->cond_prio = cache->cond_prio_array + (i % cache->cond_count);
 		}
 
 		if (old != cache->bases_count)
@@ -532,14 +537,17 @@ sqlx_cache_init(void)
 	cache->bases_count = SQLX_MAX_BASES;
 	cache->cond_count = SQLX_MAX_COND;
 	cache->cond_array = g_malloc0(cache->cond_count * sizeof(GCond));
+	cache->cond_prio_array = g_malloc0(cache->cond_count * sizeof(GCond));
 	cache->open_timeout = 0;
 	BEACON_RESET(&(cache->beacon_free));
 	BEACON_RESET(&(cache->beacon_idle));
 	BEACON_RESET(&(cache->beacon_idle_hot));
 	BEACON_RESET(&(cache->beacon_used));
 
-	for (i=0; i<cache->cond_count ;i++)
+	for (i = 0; i < cache->cond_count; i++) {
 		g_cond_init(cache->cond_array + i);
+		g_cond_init(cache->cond_prio_array + i);
+	}
 
 	sqlx_cache_reset_bases(cache, cache->bases_count);
 	return cache;
@@ -578,9 +586,12 @@ sqlx_cache_clean(sqlx_cache_t *cache)
 
 	g_mutex_clear(&cache->lock);
 	if (cache->cond_array) {
-		for (guint i=0; i<cache->cond_count ;i++)
+		for (guint i = 0; i < cache->cond_count; i++) {
 			g_cond_clear(cache->cond_array + i);
+			g_cond_clear(cache->cond_prio_array + i);
+		}
 		g_free(cache->cond_array);
+		g_free(cache->cond_prio_array);
 	}
 	if (cache->bases_by_name)
 		g_tree_destroy(cache->bases_by_name);
@@ -590,7 +601,7 @@ sqlx_cache_clean(sqlx_cache_t *cache)
 
 GError *
 sqlx_cache_open_and_lock_base(sqlx_cache_t *cache, const hashstr_t *hname,
-		gint *result)
+		gboolean urgent, gint *result)
 {
 	gint bd;
 	GError *err = NULL;
@@ -631,6 +642,8 @@ retry:
 	}
 	else {
 		base = GET(cache, bd);
+		GCond *wait_cond = urgent? base->cond_prio : base->cond;
+
 		gint64 now = oio_ext_monotonic_time ();
 
 		if (now > deadline) {
@@ -664,7 +677,7 @@ retry:
 							hashstr_str(hname), oio_log_thread_id(base->owner));
 					/* The lock is held by another thread/request.
 					   XXX(jfs): do not use 'now' because it can be a fake clock */
-					g_cond_wait_until(base->cond, &cache->lock,
+					g_cond_wait_until(wait_cond, &cache->lock,
 							g_get_monotonic_time() + oio_cache_period_cond_wait);
 					goto retry;
 				}
@@ -677,7 +690,7 @@ retry:
 				EXTRA_ASSERT(base->owner != NULL);
 				/* Just wait for a notification then retry
 				   XXX(jfs): do not use 'now' because it can be a fake clock */
-				g_cond_wait_until(base->cond, &cache->lock,
+				g_cond_wait_until(wait_cond, &cache->lock,
 						g_get_monotonic_time() + oio_cache_period_cond_wait);
 				goto retry;
 		}
@@ -689,6 +702,7 @@ retry:
 			EXTRA_ASSERT(base->owner == g_thread_self());
 			EXTRA_ASSERT(base->count_open > 0);
 		}
+		g_cond_signal(base->cond_prio);
 		g_cond_signal(base->cond);
 	}
 	g_mutex_unlock(&cache->lock);
@@ -751,6 +765,7 @@ sqlx_cache_unlock_and_close_base(sqlx_cache_t *cache, gint bd, gboolean force)
 
 	if (base && !err)
 		sqlx_base_debug(__FUNCTION__, base);
+	g_cond_signal(base->cond_prio);
 	g_cond_signal(base->cond);
 	g_mutex_unlock(&cache->lock);
 	return err;

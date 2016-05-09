@@ -84,7 +84,7 @@ MESSAGE message_unmarshall(const guint8 *buf, gsize len, GError ** error);
 /** Calls message_marshall_gba() then metautils_message_destroy() on 'm'. */
 GByteArray* message_marshall_gba_and_clean(MESSAGE m);
 
-typedef gint (body_decoder_f)(GSList **r, const void *b, gsize l, GError **e);
+typedef gint (*body_decoder_f)(GSList **r, const void *b, gsize l, GError **e);
 
 /** Adds a new custom field in the list of the message. Now check is made to
  * know whether the given field is already present or not. The given new value
