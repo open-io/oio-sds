@@ -8,13 +8,15 @@ class NotifyFilter(Filter):
     def init(self):
         queue_url = self.conf.get('queue_url', 'tcp://127.0.0.1:11300')
         self.beanstalk = Beanstalk.from_url(queue_url)
+        tube = self.conf.get('tube', 'notif')
+        self.beanstalk.use(tube)
 
     def process(self, env, cb):
         data = json.dumps(env)
         try:
             self.beanstalk.put(data)
         except Exception as e:
-            self.app.logger.warn("failed to notify event: %s" % str(e))
+            self.logger.warn("failed to notify event: %s" % str(e))
             return EventError(event=Event(env))(env, cb)
         return self.app(env, cb)
 
