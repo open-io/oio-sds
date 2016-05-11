@@ -2,6 +2,7 @@
 namespace = OPENIO
 user = openio
 queue_url = tcp://127.0.0.1:11300
+tube = oio
 # based on CPU count
 workers = 2
 concurrency = 10

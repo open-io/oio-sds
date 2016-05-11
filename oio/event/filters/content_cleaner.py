@@ -32,7 +32,7 @@ class ContentReaperFilter(Filter):
                             resp = conn.getresponse()
                             resp.chunk = chunk
                     except (Exception, Timeout) as e:
-                        self.app.logger.warn(
+                        self.logger.warn(
                             'error while deleting chunk %s "%s"',
                             chunk['id'], str(e.message))
                     return resp
@@ -44,7 +44,7 @@ class ContentReaperFilter(Filter):
 
                 for resp in resps:
                     if resp.status != 204:
-                        self.app.logger.warn(
+                        self.logger.warn(
                             'failed to delete chunk %s (HTTP %s)',
                             resp.chunk['id'], resp.status)
         return self.app(env, cb)
