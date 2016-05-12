@@ -326,26 +326,9 @@ __load_one_header(request_rec *request, const char *name, char **dst)
 	return 1;
 }
 
-static int
-__load_one_header_lc(request_rec *request, const char *name, char **dst)
-{
-	size_t len = strlen(name);
-	char *lc = alloca(len+1);
-	memcpy(lc, name, len+1);
-	for (char *p=lc+1; *p ;++p) *p = tolower(*p);
-
-	const char *value = apr_table_get(request->headers_in, lc);
-	if (!value)
-		return 0;
-	*dst = apr_pstrdup(request->pool, value);
-	return 1;
-}
-
 #define LOAD_HEADER2(Where,Name) do { \
-	if (!resource->info->Where) { \
-		if (!__load_one_header(request, Name, &(resource->info->Where))) \
-			__load_one_header_lc(request, Name, &(resource->info->Where)); \
-	} \
+	if (!resource->info->Where) \
+		__load_one_header(request, Name, &(resource->info->Where)); \
 } while (0)
 
 static void
@@ -376,16 +359,16 @@ request_load_chunk_info(request_rec *request, dav_resource *resource)
 	LOAD_HEADER2(chunk.position,     RAWX_HEADER_PREFIX "chunk-pos");
 	LOAD_HEADER2(chunk.hash,         RAWX_HEADER_PREFIX "chunk-hash");
 
-	if (!resource->info->content.container_id) return "container-id";
-	if (!resource->info->content.content_id) return "content-id";
+	if (!resource->info->content.container_id) return "container-id (missing)";
+	if (!resource->info->content.content_id) return "content-id (missing)";
 
-	if (!resource->info->content.storage_policy) return "storage-policy";
-	if (!resource->info->content.chunk_method) return "chunk-method";
-	if (!resource->info->content.mime_type) return "mime-type";
+	if (!resource->info->content.storage_policy) return "storage-policy (missing)";
+	if (!resource->info->content.chunk_method) return "chunk-method (missing)";
+	if (!resource->info->content.mime_type) return "mime-type (missing)";
 
-	if (!resource->info->content.path) return "content-path";
-	if (!resource->info->content.version) return "version";
-	if (!resource->info->chunk.position) return "chunk-pos";
+	if (!resource->info->content.path) return "content-path (missing)";
+	if (!resource->info->content.version) return "version (missing)";
+	if (!resource->info->chunk.position) return "chunk-pos (missing)";
 
 	_up (resource->info->content.container_id);
 	_up (resource->info->content.content_id);
@@ -393,16 +376,16 @@ request_load_chunk_info(request_rec *request, dav_resource *resource)
 	_up (resource->info->chunk.id);
 
 	if (!oio_str_ishexa(resource->info->content.container_id, 64))
-		return "container-id";
+		return "container-id (not hexa)";
 	if (!oio_str_ishexa1(resource->info->content.content_id))
-		return "content-id";
+		return "content-id (not hexa)";
 
 	if (resource->info->chunk.id &&
 		!oio_str_ishexa1(resource->info->chunk.id))
-		return "chunk-id";
+		return "chunk-id (not hexa)";
 	if (resource->info->chunk.hash && resource->info->chunk.hash[0] &&
 		!oio_str_ishexa1(resource->info->chunk.hash))
-		return "chunk-hash";
+		return "chunk-hash (not hexa)";
 
 	return NULL;
 }

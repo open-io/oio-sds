@@ -32,17 +32,16 @@ License along with this library.
 /* -------------------------------------------------------------------------- */
 
 
-static GString * _build_json(const char* const *src)
+static GString *
+_build_json (const char* const *src)
 {
-	GString *json = g_string_new("{");
+	GString *json = g_string_new ("{");
 	for (int i = 0; src [i] && src [i+1] ; i +=2 ) {
-		if(i != 0)
-			g_string_append(json,",");
-		oio_str_gstring_append_json_pair(json, src [i],
-						 src [i+1]);
-
+		if (i != 0)
+			g_string_append (json,",");
+		oio_str_gstring_append_json_pair (json, src [i], src [i+1]);
 	}
-	g_string_append(json, "}");
+	g_string_append (json, "}");
 	return json;
 }
 
@@ -59,7 +58,7 @@ enum _prefix_e { PREFIX_CONSCIENCE, PREFIX_REFERENCE, PREFIX_CONTAINER };
 static GString *
 _curl_url_prefix (const char *ns, enum _prefix_e which)
 {
-	GString *hu = g_string_new("http://");
+	GString *hu = g_string_new ("http://");
 
 	if (!ns) {
 		GRID_WARN ("BUG No namespace configured!");
@@ -180,7 +179,7 @@ _body_parse_error (GString *b)
 
 	struct json_object *jcode, *jmsg;
 	struct oio_ext_json_mapping_s map[] = {
-		{"status", &jcode, json_type_int,    0},
+		{"status", &jcode, json_type_int, 0},
 		{"message",  &jmsg,  json_type_string, 0},
 		{NULL, NULL, 0, 0}
 	};
@@ -257,7 +256,7 @@ _has_prefix_len (char **pb, size_t *plen, const char *prefix)
 		return FALSE;
 
 	while (*prefix) {
-		if (!(blen--) || g_ascii_tolower(*(b++)) != *(prefix++))
+		if (!(blen--) || g_ascii_tolower(*(b++)) != g_ascii_tolower(*(prefix++)))
 			return FALSE;
 	}
 
@@ -452,12 +451,11 @@ _set_properties(CURL *h, GString *http_url, const char* const *values)
 	err = _proxy_call (h, "POST", http_url->str, &i, NULL);
 	g_string_free(i.body, TRUE);
 	return err;
-	
 }
 
 GError *
 oio_proxy_call_container_set_properties (CURL *h, struct oio_url_s *u,
-				       const char* const *values)
+		const char* const *values)
 {
 	GString *http_url = _curl_container_url (u, "set_properties");
 	GError *err = _set_properties(h, http_url, values);
@@ -468,9 +466,9 @@ oio_proxy_call_container_set_properties (CURL *h, struct oio_url_s *u,
 
 GError *
 oio_proxy_call_content_set_properties (CURL *h, struct oio_url_s *u,
-				       const char* const *values)
+		const char* const *values)
 {
-        GString *http_url = _curl_content_url (u, "set_properties");
+	GString *http_url = _curl_content_url (u, "set_properties");
 	GError *err = _set_properties(h, http_url, values);
 	g_string_free (http_url, TRUE);
 	return err;

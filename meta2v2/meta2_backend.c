@@ -788,7 +788,6 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	gint64 max_versions;
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -796,7 +795,7 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
 		struct sqlx_repctx_s *repctx = NULL;
-		max_versions = _maxvers(sq3, m2b);
+		const gint64 max_versions = _maxvers(sq3, m2b);
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_delete_alias(sq3, max_versions, url, cb, u0))) {
 				m2db_increment_version(sq3);

@@ -203,7 +203,7 @@ oio_str_hash_name(guint8 *p, const char *ns, const char *account, const char *us
 }
 
 void
-oio_str_randomize(guint8 *buf, gsize buflen)
+oio_buf_randomize(guint8 *buf, gsize buflen)
 {
 	union {
 		guint32 r32;
@@ -232,6 +232,16 @@ oio_str_randomize(guint8 *buf, gsize buflen)
 		case 1:
 			buf[ (max32*4) + 0 ] = raw.r8[0];
 	}
+}
+
+void
+oio_str_randomize (gchar *d, gsize dlen, const char *set)
+{
+	size_t len = strlen (set);
+	GRand *r = oio_ext_local_prng ();
+	for (gsize i=0; i<dlen ;i++)
+		d[i] = set [g_rand_int_range (r, 0, len)];
+	d[dlen-1] = '\0';
 }
 
 const char *

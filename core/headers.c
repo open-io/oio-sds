@@ -20,7 +20,10 @@ License along with this library.
 #include <curl/curl.h>
 
 #include "oio_core.h"
+#include "internals.h"
 #include "http_internals.h"
+
+volatile enum oio_header_case_e oio_header_case = OIO_HDRCASE_NONE;
 
 void
 oio_headers_common (struct oio_headers_s *h)
@@ -42,10 +45,42 @@ oio_headers_clear (struct oio_headers_s *h)
 	}
 }
 
+static void
+_purify_case (gchar *s)
+{
+	GRand *r = NULL;
+
+	switch (oio_header_case) {
+		case OIO_HDRCASE_NONE:
+			return;
+		case OIO_HDRCASE_LOW:
+			for (gchar *p=s; *p && *p != ':' ;++p)
+				*p = g_ascii_tolower (*p);
+			return;
+		case OIO_HDRCASE_1CAP:
+			for (gchar *p=s; *p && *p != ':' ;++p) {
+				if (p==s) continue;
+				if (*(p-1) == '-')
+					*p = g_ascii_toupper (*p);
+			}
+			return;
+		case OIO_HDRCASE_RANDOM:
+			r = oio_ext_local_prng ();
+			for (gchar *p=s; *p && *p != ':' ;++p) {
+				*p = g_rand_boolean(r) ? g_ascii_tolower (*p) : g_ascii_toupper(*p);
+			}
+			return;
+		default:
+			g_assert_not_reached();
+			return;
+	}
+}
+
 void
 oio_headers_add (struct oio_headers_s *h, const char *k, const char *v)
 {
 	gchar *s = g_strdup_printf("%s: %s", k, v);
+	_purify_case (s);
 	h->gheaders = g_slist_prepend (h->gheaders, s);
 	h->headers = curl_slist_append (h->headers, h->gheaders->data);
 }

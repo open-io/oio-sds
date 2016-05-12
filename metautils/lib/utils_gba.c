@@ -19,14 +19,6 @@ License along with this library.
 
 #include "metautils.h"
 
-void
-metautils_gba_randomize(GByteArray *gba)
-{
-	if (unlikely(NULL == gba))
-		return ;
-	oio_str_randomize(gba->data, gba->len);
-}
-
 static int
 metautils_buffer_cmp(const guint8 * const d0, const guint l0,
 		const guint8 * const d1, const guint l1)

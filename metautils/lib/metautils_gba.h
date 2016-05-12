@@ -42,9 +42,6 @@ gboolean metautils_gba_equal(const GByteArray *a, const GByteArray *b);
 /** 3-way comparison */
 int metautils_gba_cmp(const GByteArray *a, const GByteArray *b);
 
-/** Replaces the contents of <gba> with random content of the same length */
-void metautils_gba_randomize(GByteArray *gba);
-
 /** Calls g_byte_array_free() on GByteArray in GLib containers */
 void metautils_gba_clean(gpointer p);
 

@@ -198,6 +198,16 @@ extern time_hook_f oio_time_monotonic;
  * Microsecond precision */
 extern time_hook_f oio_time_real;
 
+enum oio_header_case_e
+{
+	OIO_HDRCASE_NONE,
+	OIO_HDRCASE_LOW,
+	OIO_HDRCASE_1CAP,
+	OIO_HDRCASE_RANDOM,
+};
+
+volatile enum oio_header_case_e oio_header_case;
+
 /* -------------------------------------------------------------------------- */
 
 # ifndef GQ
