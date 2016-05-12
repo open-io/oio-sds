@@ -5,6 +5,7 @@ from urllib import quote
 from eventlet import patcher
 from eventlet.green.httplib import HTTPConnection, HTTPResponse, _UNKNOWN, \
         CONTINUE, HTTPMessage
+from oio.common.utils import json
 
 requests = patcher.import_patched('requests.__init__')
 
@@ -79,6 +80,24 @@ class CustomHttpConnection(HTTPConnection):
         logging.debug('HTTP %s %s:%s %s' %
                       (self._method, self.host, self.port, self._path))
         return response
+
+
+def http_request(ipaddr, port, method, path, headers=None, query_string=None,
+                 body=None):
+    headers = headers or {}
+
+    if isinstance(body, dict):
+        body = json.dumps(body)
+        headers['Content-Type'] = 'application/json'
+    headers['Content-Length'] = len(body)
+    conn = http_connect(ipaddr, port, method, path, headers=headers,
+                        query_string=query_string)
+    conn.send(body)
+    resp = conn.getresponse()
+    body = resp.read()
+    resp.close()
+    conn.close()
+    return resp, body
 
 
 def http_connect(ipaddr, port, method, path, headers=None, query_string=None):

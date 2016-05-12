@@ -1,7 +1,13 @@
+from eventlet import Timeout
+from urlparse import urlparse
+from urllib import urlencode
+from oio.common.http import http_request
 from oio.event.evob import Event
 from oio.event.consumer import EventTypes
 from oio.event.filters.base import Filter
 
+
+ACCOUNT_TIMEOUT = 30
 
 CONTAINER_EVENTS = [
         EventTypes.CONTAINER_STATE,
@@ -15,8 +21,7 @@ class AccountUpdateFilter(Filter):
         event = Event(env)
 
         if event.event_type in CONTAINER_EVENTS:
-            uri = 'http://%s/v1.0/account/container/update' % \
-                    self.app.app.acct_addr
+            uri = '/v1.0/account/container/update'
             mtime = event.when
             data = event.data
             url = event.env.get('url')
@@ -30,7 +35,14 @@ class AccountUpdateFilter(Filter):
                 body['dtime'] = mtime
             elif event.event_type == EventTypes.CONTAINER_NEW:
                 body['mtime'] = mtime
-            self.app.session.post(uri, params={'id': account}, json=body)
+            query = urlencode({'id': account})
+            p = urlparse('http://' + self.app.app.acct_addr)
+            try:
+                with Timeout(ACCOUNT_TIMEOUT):
+                    resp, body = http_request(p.hostname, p.port, 'POST', uri,
+                                              query_string=query, body=body)
+            except (Exception, Timeout) as e:
+                self.logger.warn('error updating account "%s"', str(e.message))
         return self.app(env, cb)
 
 
