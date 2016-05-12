@@ -24,6 +24,7 @@ from oio.content.rain import RainContent
 
 
 class ContentFactory(object):
+    DEFAULT_DATASEC = "plain", {"nb_copy": "1", "distance": "0"}
     def __init__(self, conf):
         self.conf = conf
         self.logger = get_logger(conf)
@@ -38,9 +39,14 @@ class ContentFactory(object):
             self.logger.error("Storage policy '%s' not found" % stgpol_name)
             raise InconsistentContent("Storage policy not found")
 
-        stgclass_name, datasec_name, datatreat_name = stgpol.split(':')
-        if datasec_name == 'NONE':
-            return "DUP", {"nb_copy": "1", "distance": "0"}
+        if stgpol_name == 'NONE':
+            return self.__class__.DEFAULT_DATASEC
+
+        tokens = stgpol.split(':')
+        stgclass_name = tokens.pop(0)
+        datasec_name = tokens.pop(0)
+        if datasec_name == 'plain' or datasec_name == 'NONE':
+            return self.__class__.DEFAULT_DATASEC
 
         try:
             datasec = self.ns_info["data_security"][datasec_name]
@@ -48,9 +54,9 @@ class ContentFactory(object):
             self.logger.error("Data security '%s' not found" % datasec_name)
             raise InconsistentContent("Data security not found")
 
-        ds_type, ds_args = datasec.split(':')
+        ds_type, ds_args = datasec.split('/')
         args = {}
-        for arg in ds_args.split('|'):
+        for arg in ds_args.split(','):
             key, value = arg.split('=')
             args[key] = value
 
@@ -66,9 +72,9 @@ class ContentFactory(object):
 
         pol_type, pol_args = self._extract_datasec(meta['policy'])
 
-        if pol_type == "DUP":
+        if pol_type == "plain":
             return DupContent(self.conf, container_id, meta, chunks, pol_args)
-        elif pol_type == "RAIN":
+        elif pol_type == "ec":
             return RainContent(self.conf, container_id, meta, chunks, pol_args)
 
         raise InconsistentContent("Unknown storage policy")
@@ -79,9 +85,9 @@ class ContentFactory(object):
 
         pol_type, pol_args = self._extract_datasec(meta['policy'])
 
-        if pol_type == "DUP":
+        if pol_type == "plain":
             return DupContent(self.conf, container_id, meta, chunks, pol_args)
-        elif pol_type == "RAIN":
+        elif pol_type == "ec":
             return RainContent(self.conf, container_id, meta, chunks, pol_args)
 
         raise InconsistentContent("Unknown storage policy")

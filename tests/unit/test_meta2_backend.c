@@ -169,21 +169,18 @@ _init_nsinfo(const gchar *ns, gint64 maxvers)
 			metautils_gba_from_string("NONE"));
 
 	g_hash_table_insert(nsinfo->storage_policy, g_strdup("classic"),
-			metautils_gba_from_string("DUMMY:DUPONETWO:NONE"));
+			metautils_gba_from_string("DUMMY:DUPONETWO"));
 	g_hash_table_insert(nsinfo->storage_policy, g_strdup("polcheck"),
-			metautils_gba_from_string("DUMMY:DUPONETHREE:SIMCOMP"));
+			metautils_gba_from_string("DUMMY:DUPONETHREE"));
 	g_hash_table_insert(nsinfo->storage_policy, g_strdup("secure"),
-			metautils_gba_from_string("DUMMY:DUP_SECURE:NONE"));
+			metautils_gba_from_string("DUMMY:DUP_SECURE"));
 
 	g_hash_table_insert(nsinfo->data_security, g_strdup("DUPONETWO"),
-			metautils_gba_from_string("DUP:distance=1|nb_copy=2"));
+			metautils_gba_from_string("plain/distance=1,nb_copy=2"));
 	g_hash_table_insert(nsinfo->data_security, g_strdup("DUPONETHREE"),
-			metautils_gba_from_string("DUP:distance=1|nb_copy=3"));
+			metautils_gba_from_string("plain/distance=1,nb_copy=3"));
 	g_hash_table_insert(nsinfo->data_security, g_strdup("DUP_SECURE"),
-			metautils_gba_from_string("DUP:distance=4|nb_copy=2"));
-
-	g_hash_table_insert(nsinfo->data_treatments, g_strdup("SIMCOMP"),
-			metautils_gba_from_string("COMP:algo=ZLIB|blocksize=262144"));
+			metautils_gba_from_string("plain/distance=4,nb_copy=2"));
 
 	return nsinfo;
 }

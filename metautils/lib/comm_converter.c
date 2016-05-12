@@ -785,7 +785,6 @@ namespace_info_ASN2API(const NamespaceInfo_t *asn, namespace_info_t *api)
 	api->options = list_conversion(&(asn->options));
 	api->storage_policy = list_conversion(&(asn->storagePolicy));
 	api->data_security = list_conversion(&(asn->dataSecurity));
-	api->data_treatments = list_conversion(&(asn->dataTreatments));
 	api->storage_class = list_conversion(&(asn->storageClass));
 	return TRUE;
 }
@@ -848,9 +847,6 @@ namespace_info_API2ASN(const namespace_info_t * api, NamespaceInfo_t * asn)
 		return FALSE;
 
 	if(!hashtable_conversion(api->data_security, &(asn->dataSecurity), key_value_pairs_convert_from_map))
-		return FALSE;
-
-	if(!hashtable_conversion(api->data_treatments, &(asn->dataTreatments), key_value_pairs_convert_from_map))
 		return FALSE;
 
 	if(!hashtable_conversion(api->storage_class, &(asn->storageClass), key_value_pairs_convert_from_map))

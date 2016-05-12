@@ -36,6 +36,7 @@ License along with this library.
 #include "internals.h"
 
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/storage_policy.h>
 
 struct oio_sds_s
 {
@@ -69,15 +70,16 @@ _get_proxy_handle (struct oio_sds_s *sds)
 
 /* Chunk parsing helpers (JSON) --------------------------------------------- */
 
+struct chunk_position_s
+{
+	guint meta;
+	guint intra;
+};
+
 struct chunk_s
 {
+	struct chunk_position_s position;
 	gsize size;
-	struct chunk_position_s {
-		guint meta;
-		guint intra;
-		gboolean ec : 8; /* composite position ? */
-		gboolean parity : 8;
-	} position;
 	gchar hexhash[STRLEN_CHUNKHASH];
 	guint32 score;
 	gchar url[1];
@@ -90,8 +92,6 @@ struct metachunk_s
 	gsize size;
 	/* offset in the original segment */
 	gsize offset;
-	/* TRUE==rain, FALSE==replication */
-	gboolean ec;
 	GSList *chunks;
 };
 
@@ -102,8 +102,6 @@ _compare_chunks (const struct chunk_s *c0, const struct chunk_s *c1)
 	int c = CMP(c0->position.meta, c1->position.meta);
 	if (c) return c;
 	c = CMP(c0->position.intra, c1->position.intra);
-	if (c) return c;
-	c = CMP(c0->position.parity, c1->position.parity);
 	if (c) return c;
 	return CMP(c0->score, c1->score);
 }
@@ -138,29 +136,17 @@ _load_one_chunk (struct json_object *jurl, struct json_object *jsize,
 	if (jscore != NULL)
 		result->score = (gint32)json_object_get_int64(jscore);
 	s = json_object_get_string(jpos);
+
 	result->position.meta = atoi(s);
-	if (NULL != (s = strchr(s, '.'))) {
-		result->position.ec = 1;
-		if (*(s+1) == 'p') {
-			result->position.parity = 1;
-			result->position.intra = atoi(s+2);
-		} else {
-			result->position.intra = atoi(s+1);
-		}
-	}
+	if (NULL != (s = strchr(s, '.')))
+		result->position.intra = atoi(s+1);
 	return result;
 }
 
 static const char *
-_chunk_pack_position (struct chunk_s *c, gchar *buf, gsize len)
+_chunk_pack_position (const struct chunk_s *c, gchar *buf, gsize len)
 {
-	if (c->position.ec)
-		g_snprintf (buf, len, "%u.%s%u",
-				c->position.meta,
-				(c->position.parity ? "p" : ""),
-				c->position.intra);
-	else
-		g_snprintf (buf, len, "%u", c->position.meta);
+	g_snprintf (buf, len, "%u.%u", c->position.meta, c->position.intra);
 	return buf;
 }
 
@@ -238,9 +224,12 @@ _get_meta_bound (GSList *lchunks)
 }
 
 static GError *
-_organize_chunks (GSList *lchunks, struct metachunk_s ***result)
+_organize_chunks (GSList *lchunks, struct metachunk_s ***result,
+		const char *chunk_method)
 {
 	*result = NULL;
+	if (!oio_str_prefixed(chunk_method, STGPOL_DSPREFIX_PLAIN, "/"))
+		return NEWERROR(CODE_NOT_IMPLEMENTED, "Erasure coding not managed YET");
 
 	if (!lchunks)
 		return NEWERROR(CODE_INTERNAL_ERROR, "No chunk received");
@@ -257,48 +246,24 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result)
 		guint i = c->position.meta;
 		out[i]->chunks = g_slist_insert_sorted(out[i]->chunks, c,
 				(GCompareFunc)_compare_chunks);
-		if (c->position.ec)
-			out[i]->ec = TRUE;
-	}
-	for (guint i=0; i<meta_bound ;++i) {
-		if (!out[i]->chunks || out[i]->ec)
-			continue;
-		struct chunk_s *first = out[i]->chunks->data;
-		for (GSList *l=out[i]->chunks; l ;l=l->next) {
-			struct chunk_s *c = l->data;
-			if (c->position.intra != first->position.intra)
-				out[i]->ec = TRUE;
-		}
 	}
 
-	/* check the sequence of metachunks has no gap */
+	/* check the sequence of metachunks has no gap. In addition we
+	 * apply a shuffling of the chunks to avoid preferring always the
+	 * same 'first' chunk returned by the proxy. */
 	for (guint i=0; i<meta_bound ;++i) {
 		if (!out[i]->chunks) {
 			_metachunk_cleanv (out);
 			return NEWERROR (0, "Invalid chunk sequence: gap found at [%u]", i);
 		}
-	}
-
-	for (guint i=0; i<meta_bound ;++i) {
-		if (out[i]->ec)
-			out[i]->chunks = g_slist_sort (out[i]->chunks, (GCompareFunc)_compare_chunks);
-		else {
-			if (!oio_sds_no_shuffle)
-				out[i]->chunks = oio_ext_gslist_shuffle (out[i]->chunks);
-		}
+		if (!oio_sds_no_shuffle)
+			out[i]->chunks = oio_ext_gslist_shuffle (out[i]->chunks);
 	}
 
 	/* Compute each metachunk's size */
 	for (guint i=0; i<meta_bound ;++i) {
-		if (out[i]->ec) {
-			for (GSList *l=out[i]->chunks; l ;l=l->next) {
-				if (((struct chunk_s*)(l->data))->position.parity)
-					continue;
-				out[i]->size += ((struct chunk_s*)(l->data))->size;
-			}
-		} else {
-			out[i]->size = ((struct chunk_s*)(out[i]->chunks->data))->size;
-		}
+		/* TODO the size computation doesn't manage yet any EC */
+		out[i]->size = ((struct chunk_s*)(out[i]->chunks->data))->size;
 	}
 
 	/* Compute each metachunk's offset in the main content */
@@ -565,7 +530,8 @@ _download_range_from_metachunk_replicated (struct _download_ctx_s *dl,
 	GSList *tail_chunks = meta->chunks;
 
 	while (r0.size > 0) {
-		GRID_DEBUG("%s at %"G_GSIZE_FORMAT"+%"G_GSIZE_FORMAT, __FUNCTION__, r0.offset, r0.size);
+		GRID_DEBUG("%s at %"G_GSIZE_FORMAT"+%"G_GSIZE_FORMAT,
+				__FUNCTION__, r0.offset, r0.size);
 
 		if (!tail_chunks)
 			return NEWERROR (CODE_PLATFORM_ERROR, "Too many failures");
@@ -587,65 +553,15 @@ _download_range_from_metachunk_replicated (struct _download_ctx_s *dl,
 	return NULL;
 }
 
-static GError *
-_download_range_from_metachunk_rained (struct _download_ctx_s *dl,
-		struct oio_sds_dl_range_s *range, struct metachunk_s *meta)
-{
-	GRID_TRACE("%s", __FUNCTION__);
-	struct oio_sds_dl_range_s r0 = *range;
-	GSList *tail_chunks = meta->chunks;
-
-	while (r0.size > 0) {
-
-		if (!tail_chunks)
-			return NEWERROR (CODE_PLATFORM_ERROR, "Range not satisfiable");
-		struct chunk_s *chunk = tail_chunks->data;
-		tail_chunks = tail_chunks->next;
-
-#ifdef HAVE_EXTRA_DEBUG
-		gchar strpos[32];
-		GRID_TRACE("Range %"G_GSIZE_FORMAT"+%"G_GSIZE_FORMAT
-				" CHUNK size=%"G_GSIZE_FORMAT" pos=%s %s",
-				r0.offset, r0.size, chunk->size,
-				_chunk_pack_position(chunk, strpos, sizeof(strpos)),
-				chunk->url);
-#endif
-
-		if (chunk->position.parity) {
-			GRID_TRACE2("Skipped: parity");
-			continue;
-		}
-
-		if (r0.offset >= chunk->size) {
-			GRID_TRACE2("Skipped: out of range");
-			r0.offset -= chunk->size;
-			continue;
-		}
-
-		/* adjust the range to the chunk's boundaries */
-		struct oio_sds_dl_range_s r1 = r0;
-		r1.size = MIN(r1.size, chunk->size);
-
-		size_t nbread = 0;
-		GError *err = _download_range_from_chunk (dl, &r1, chunk, &nbread);
-		g_assert (nbread <= r0.size);
-		if (err)
-			return err;
-		r0.size -= nbread;
-	}
-
-	return NULL;
-}
-
 /* The range is relative to the metachunk, not the whole content */
 static GError *
 _download_range_from_metachunk (struct _download_ctx_s *dl,
 		struct oio_sds_dl_range_s *range, struct metachunk_s *meta)
 {
 	GRID_TRACE ("%s %"G_GSIZE_FORMAT"+%"G_GSIZE_FORMAT
-			" from [%i] ec=%d #=%u %"G_GSIZE_FORMAT"+%"G_GSIZE_FORMAT,
+			" from [%i] #=%u %"G_GSIZE_FORMAT"+%"G_GSIZE_FORMAT,
 			__FUNCTION__, range->offset, range->size,
-			meta->meta, meta->ec, g_slist_length (meta->chunks),
+			meta->meta, g_slist_length (meta->chunks),
 			meta->offset, meta->size);
 
 	g_assert (meta->chunks != NULL);
@@ -653,8 +569,7 @@ _download_range_from_metachunk (struct _download_ctx_s *dl,
 	g_assert (range->size <= meta->size);
 	g_assert (range->offset + range->size <= meta->size);
 
-	if (meta->ec)
-		return _download_range_from_metachunk_rained (dl, range, meta);
+	/* TODO manage EC here */
 	return _download_range_from_metachunk_replicated (dl, range, meta);
 }
 
@@ -791,7 +706,7 @@ _download_to_hook (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 			.sds = sds, .dst = dst, .src = src, .chunks = chunks,
 			.metachunks = NULL
 		};
-		if (!(err = _organize_chunks(chunks, &dl.metachunks))) {
+		if (!(err = _organize_chunks(chunks, &dl.metachunks, STGPOL_DSPREFIX_PLAIN))) {
 			g_assert (dl.metachunks != NULL);
 			err = _download (&dl);
 			_metachunk_cleanv (dl.metachunks);
@@ -1123,7 +1038,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 	if (!err) {
 		struct metachunk_s **out = NULL;
 		ul->chunks = g_slist_sort (ul->chunks, (GCompareFunc)_compare_chunks);
-		if (NULL != (err = _organize_chunks (ul->chunks, &out)))
+		if (NULL != (err = _organize_chunks (ul->chunks, &out, ul->chunk_method)))
 			g_prefix_error (&err, "Logic: ");
 		else for (struct metachunk_s **p=out; *p ;++p)
 			g_queue_push_tail (ul->metachunk_ready, *p);

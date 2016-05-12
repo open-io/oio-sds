@@ -423,7 +423,7 @@ _init_rain_encoding(dav_rainx_server_conf *srv_conf,
 			apr_storage_policy_clean, apr_pool_cleanup_null);
 
 	datasec = storage_policy_get_data_security(sp);
-	if (RAIN != data_security_get_type(datasec)) {
+	if (STGPOL_DS_EC != data_security_get_type(datasec)) {
 		err_msg = apr_psprintf(res_priv->pool,
 				"Data security type for policy '%s' is not RAIN",
 				stgpol_str);

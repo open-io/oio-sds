@@ -55,18 +55,9 @@ void namespace_info_free(struct namespace_info_s* ns_info);
 void namespace_info_reset(namespace_info_t *ni);
 void namespace_info_init(namespace_info_t *ni);
 
-/* Calls namespace_info_free() on p1 and ignores p2.
- * Mainly used with g*list_foreach() functions of the GLib2
- * to clean at once whole lists of namespace_info_s structures. */
-void namespace_info_gclean(gpointer p1, gpointer p2);
-
 /* Get the data_security definition from the specified key */
 gchar * namespace_info_get_data_security(struct namespace_info_s *ni,
 		const gchar *data_sec_key);
-
-/* Get the data_treatments definition from the specified key */
-gchar * namespace_info_get_data_treatments(struct namespace_info_s *ni,
-		const gchar *data_treat_key);
 
 /* Get the storage_class definition from the specified key */
 gchar * namespace_info_get_storage_class(struct namespace_info_s *ni,

@@ -1205,18 +1205,8 @@ module_init_storage_conf(struct conscience_s *cs, const gchar *stg_pol_in_option
 		WARN("Data security rules not correctly loaded from file [%s] : %s", filepath, e->message);
 		return e;
 	}
-	g_hash_table_foreach(cs->ns_info.data_security,
-			(GHFunc)_check_for_keyword, (gchar*[2]){DATA_SECURITY_NONE, "data security"});
-
-	// XXX TREATMENTS
-	cs->ns_info.data_treatments = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
-	e = fill_hashtable_with_group(cs->ns_info.data_treatments, stg_conf_file, NAME_GROUPNAME_DATA_TREATMENTS);
-	if( NULL != e) {
-		WARN("Data treatments rules not correctly loaded from file [%s] : %s", filepath, e->message);
-		return e;
-	}
-	g_hash_table_foreach(cs->ns_info.data_treatments,
-			(GHFunc)_check_for_keyword, (gchar*[2]){DATA_TREATMENT_NONE, "data treatment"});
+	g_hash_table_foreach(cs->ns_info.data_security, (GHFunc)_check_for_keyword,
+			(gchar*[2]){DATA_SECURITY_NONE, "data security"});
 
 	// XXX CLASSES
 	cs->ns_info.storage_class = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
@@ -1550,7 +1540,6 @@ plugin_reload(GHashTable * params, GError ** err)
 	/* storage conf reload */
 	g_hash_table_destroy(conscience->ns_info.storage_policy);
 	g_hash_table_destroy(conscience->ns_info.data_security);
-	g_hash_table_destroy(conscience->ns_info.data_treatments);
 	g_hash_table_destroy(conscience->ns_info.storage_class);
 	*err = module_init_storage_conf(conscience, namespace_storage_policy(&conscience->ns_info, conscience->ns_info.name),
 			g_hash_table_lookup(params, KEY_STG_CONF));

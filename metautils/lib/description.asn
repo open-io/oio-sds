@@ -64,7 +64,10 @@ BEGIN
 		options        [3] NamespaceInfoValueList,
 		storagePolicy  [4] NamespaceInfoValueList,
 		dataSecurity   [5] NamespaceInfoValueList,
+
+		-- TODO remove this field in the next Major release
 		dataTreatments [6] NamespaceInfoValueList,
+
 		storageClass   [7] NamespaceInfoValueList
 	}
 

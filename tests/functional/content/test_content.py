@@ -74,33 +74,33 @@ class TestContentFactory(BaseTestCase):
     def test_extract_datasec(self):
         self.content_factory.ns_info = {
             "data_security": {
-                "DUPONETWO": "DUP:distance=1|nb_copy=2",
-                "RAIN": "RAIN:k=6|m=2|algo=liber8tion"
+                "DUPONETWO": "plain/distance=1,nb_copy=2",
+                "RAIN": "ec/k=6,m=2,algo=J:Vand"
             },
             "storage_policy": {
-                "RAIN": "NONE:RAIN:NONE",
-                "SINGLE": "NONE:NONE:NONE",
-                "TWOCOPIES": "NONE:DUPONETWO:NONE"
+                "RAIN": "NONE:RAIN",
+                "SINGLE": "NONE:NONE",
+                "TWOCOPIES": "NONE:DUPONETWO"
             }
         }
 
         ds_type, ds_args = self.content_factory._extract_datasec("RAIN")
-        self.assertEqual(ds_type, "RAIN")
+        self.assertEqual(ds_type, "ec")
         self.assertEqual(ds_args, {
             "k": "6",
             "m": "2",
-            "algo": "liber8tion"
+            "algo": "J:Vand"
         })
 
         ds_type, ds_args = self.content_factory._extract_datasec("SINGLE")
-        self.assertEqual(ds_type, "DUP")
+        self.assertEqual(ds_type, "plain")
         self.assertEqual(ds_args, {
             "nb_copy": "1",
             "distance": "0"
         })
 
         ds_type, ds_args = self.content_factory._extract_datasec("TWOCOPIES")
-        self.assertEqual(ds_type, "DUP")
+        self.assertEqual(ds_type, "plain")
         self.assertEqual(ds_args, {
             "nb_copy": "2",
             "distance": "1"
@@ -127,7 +127,7 @@ class TestContentFactory(BaseTestCase):
         chunks = [
             {
                 "url": "http://127.0.0.1:6012/A0A0",
-                "pos": "0.p0", "size": 512,
+                "pos": "0.0", "size": 512,
                 "hash": "E7D4E4AD460971CA2E3141F2102308D4"},
             {
                 "url": "http://127.0.0.1:6010/A01",
@@ -135,11 +135,11 @@ class TestContentFactory(BaseTestCase):
                 "hash": "760AB5DA7C51A3654F1CA622687CD6C3"},
             {
                 "url": "http://127.0.0.1:6011/A00",
-                "pos": "0.0", "size": 512,
+                "pos": "0.2", "size": 512,
                 "hash": "B1D08B86B8CAA90A2092CCA0DF9201DB"},
             {
                 "url": "http://127.0.0.1:6013/A0A1",
-                "pos": "0.p1", "size": 512,
+                "pos": "0.3", "size": 512,
                 "hash": "DA9D7F72AEEA5791565724424CE45C16"}
         ]
         self.content_factory.container_client.content_show = Mock(
@@ -150,13 +150,13 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(c.length, 658)
         self.assertEqual(c.path, "tox.ini")
         self.assertEqual(c.version, "1450176946676289")
-        self.assertEqual(c.algo, "liber8tion")
+        self.assertEqual(c.algo, "EC:Vand")
         self.assertEqual(c.k, 6)
         self.assertEqual(c.m, 2)
         self.assertEqual(len(c.chunks), 4)
-        self.assertEqual(c.chunks[0].raw(), chunks[2])
+        self.assertEqual(c.chunks[0].raw(), chunks[0])
         self.assertEqual(c.chunks[1].raw(), chunks[1])
-        self.assertEqual(c.chunks[2].raw(), chunks[0])
+        self.assertEqual(c.chunks[2].raw(), chunks[2])
         self.assertEqual(c.chunks[3].raw(), chunks[3])
 
     def test_get_dup(self):
@@ -218,11 +218,11 @@ class TestContentFactory(BaseTestCase):
         chunks = [
             {
                 "url": "http://127.0.0.1:6010/0_p1",
-                "pos": "0.p1", "size": 1048576,
+                "pos": "0.3", "size": 1048576,
                 "hash": "00000000000000000000000000000000"},
             {
                 "url": "http://127.0.0.1:6011/0_p0",
-                "pos": "0.p0", "size": 1048576,
+                "pos": "0.2", "size": 1048576,
                 "hash": "00000000000000000000000000000000"},
             {
                 "url": "http://127.0.0.1:6016/0_1",
@@ -242,7 +242,7 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(c.length, 1000)
         self.assertEqual(c.path, "titi")
         self.assertEqual(c.version, "1450341162332663")
-        self.assertEqual(c.algo, "liber8tion")
+        self.assertEqual(c.algo, "EC:Vand")
         self.assertEqual(c.k, 6)
         self.assertEqual(c.m, 2)
         self.assertEqual(len(c.chunks), 4)
