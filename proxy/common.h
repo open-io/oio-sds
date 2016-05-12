@@ -63,12 +63,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define SEQ()     OPT("seq")
 #define VERSION() OPT("version")
 
-#define GUARDED_DO(Lock,Action) do { \
-	g_mutex_lock(&Lock); \
-	do { Action ; } while (0); \
-	g_mutex_unlock(&Lock); \
-} while (0)
-
 #define GUARDED_READ(Lock,Action) do { \
 	g_rw_lock_reader_lock(&Lock); \
 	do { Action ; } while (0); \
@@ -81,34 +75,61 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 	g_rw_lock_writer_unlock(&Lock); \
 } while (0)
 
-#define NSINFO_READ(Action) GUARDED_READ(nsinfo_rwlock,Action)
+#define NSINFO_READ(Action)  GUARDED_READ(nsinfo_rwlock,Action)
 #define NSINFO_WRITE(Action) GUARDED_WRITE(nsinfo_rwlock,Action)
 
-#define PUSH_DO(Action) GUARDED_DO(push_mutex,Action)
+#define REG_READ(Action)  GUARDED_READ(reg_rwlock,Action)
+#define REG_WRITE(Action) GUARDED_WRITE(reg_rwlock,Action)
 
-#define SRV_READ(Action) GUARDED_READ(srv_rwlock,Action)
+#define PUSH_READ(Action)  GUARDED_READ(push_rwlock,Action)
+#define PUSH_WRITE(Action) GUARDED_WRITE(push_rwlock,Action)
+
+#define SRV_READ(Action)  GUARDED_READ(srv_rwlock,Action)
 #define SRV_WRITE(Action) GUARDED_WRITE(srv_rwlock,Action)
 
-#define WANTED_READ(Action) GUARDED_READ(wanted_rwlock,Action)
+#define WANTED_READ(Action)  GUARDED_READ(wanted_rwlock,Action)
 #define WANTED_WRITE(Action) GUARDED_WRITE(wanted_rwlock,Action)
+
+#define MASTER_READ(Action)  GUARDED_READ(master_rwlock,Action)
+#define MASTER_WRITE(Action) GUARDED_WRITE(master_rwlock,Action)
 
 #define CSURL(C) gchar *C = NULL; do { \
 	C = proxy_get_csurl(); \
 	STRING_STACKIFY(C); \
 } while (0)
 
+#define COMA(gs,first) do { \
+	if (!first) \
+		g_string_append_c (gs, ','); \
+	else \
+		first = FALSE; \
+} while (0)
+
+enum preference_e {
+	CLIENT_ANY = 0,
+	CLIENT_RUN_ALL,
+	CLIENT_PREFER_SLAVE,
+	CLIENT_PREFER_MASTER
+};
+
+const char * _pref2str(enum preference_e p);
+
 extern gchar *nsname;
 extern gboolean flag_cache_enabled;
 extern gboolean flag_local_scores;
 
 /* how long the proxy remembers the srv it registered ino the conscience */
-extern gint64 cs_expire_local_services;
+extern gint64 ttl_expire_local_services;
 
 /* how long the proxy remembers dead services */
-extern gint64 cs_down_services;
+extern gint64 ttl_down_services;
 
 /* how long the proxy remembers services from the conscience */
-extern gint64 cs_known_services;
+extern gint64 ttl_known_services;
+
+/* how long the proxy remembers which service is the master for a given
+   election */
+extern gint64 ttl_expire_master_services;
 
 extern struct grid_lbpool_s *lbpool;
 extern struct hc_resolver_s *resolver;
@@ -138,26 +159,38 @@ GBytes* service_is_wanted (const char *type); /* refcount++ */
 GBytes** NOLOCK_service_lookup_wanted (const char *type); /* refcount iso */
 
 /* Upstream of services registrations. */
-extern GMutex push_mutex;
+extern GRWLock push_rwlock;
 extern struct lru_tree_s *push_queue;
+
+extern GRWLock reg_rwlock;
 extern struct lru_tree_s *srv_registered; /* registered srv seen within 5s */
 
-/* "IP:PORT" that had a problem */
 extern GRWLock srv_rwlock;
-extern struct lru_tree_s *srv_down;
+extern struct lru_tree_s *srv_down; /* "IP:PORT" that had a problem */
 gboolean service_is_ok (gconstpointer p);
 void service_invalidate (gconstpointer n);
-
-/* Set of sevices that have been seen recently in the conscience */
-extern struct lru_tree_s *srv_known;
+extern struct lru_tree_s *srv_known; /* services seen since 'ever' */
 void service_learn (const char *key);
 gboolean service_is_known (const char *key);
+
+/* Set of items requiring an election, associated to the latest known master */
+extern GRWLock master_rwlock;
+extern struct lru_tree_s *srv_master;
+gboolean service_is_slave (const char *obj, const char *master);
+gboolean service_is_master (const char *obj, const char *master);
+void service_learn_master (const char *obj, const char *master);
+guint service_expire_masters (gint64 oldest);
 
 enum
 {
 	/* consider empty results sets as errors */
 	FLAG_NOEMPTY = 0x0001,
 };
+
+typedef GByteArray * (request_packer_f) (const struct sqlx_name_s *);
+
+#define PACKER_VOID(N) GByteArray * N (const struct sqlx_name_s *u UNUSED)
+#define PACKER(N)      GByteArray * N (const struct sqlx_name_s *n)
 
 struct req_args_s
 {
@@ -167,8 +200,6 @@ struct req_args_s
 
 	struct http_request_s *rq;
 	struct http_reply_ctx_s *rp;
-
-	guint32 flags;
 };
 
 struct sub_action_s
@@ -190,16 +221,49 @@ enum http_rc_e rest_action (struct req_args_s *args,
 
 /* -------------------------------------------------------------------------- */
 
-GError * _resolve_service_and_do (const char *t, gint64 seq, struct oio_url_s *u,
-        GError * (*hook) (struct meta1_service_url_s *m1u, gboolean *next));
+struct client_ctx_s {
+	/* Allows overriding the default that will populate the urlv/bodyv/errorv
+	 * at the end of the structure */
+	client_on_reply decoder;
+	gpointer decoder_data;
+
+	/* input */
+	struct sqlx_name_mutable_s name;
+	struct oio_url_s *url;
+	const char *type;
+	gint64 seq;
+	enum preference_e which;
+	gdouble timeout;
+
+	/* output */
+	guint count;
+	gchar **urlv;
+	GError **errorv;
+	GByteArray **bodyv;
+
+	GByteArray *single_body;
+};
+
+void client_init (struct client_ctx_s *ctx, struct req_args_s *args,
+	   const char *srvtype, gint seq);
+
+void client_clean (struct client_ctx_s *ctx);
+
+#define CLIENT_CTX(ctx,args,type,seq) \
+	struct client_ctx_s ctx = {0}; \
+	client_init (&ctx, args, type, seq) \
+
+#define CLIENT_CTX_MASTER(ctx,args,type,seq) \
+	CLIENT_CTX(ctx,args,type,seq); \
+	ctx.which = CLIENT_PREFER_MASTER
+
+#define CLIENT_CTX_SLAVE(ctx,args,type,seq) \
+	CLIENT_CTX(ctx,args,type,seq); \
+	ctx.which = CLIENT_PREFER_SLAVE
 
 GError * _m1_locate_and_action (struct oio_url_s *url, GError * (*hook) ());
 
-GError * _gba_request (struct meta1_service_url_s *m1u,
-		GByteArray * (reqbuilder) (void), GByteArray ** out);
-
-GError * _gbav_request (const char *t, gint64 seq, struct oio_url_s *u,
-		GByteArray * builder (void), gchar ***outurl, GByteArray ***out);
+GError * gridd_request_replicated (struct client_ctx_s *, request_packer_f);
 
 gboolean _request_has_flag (struct req_args_s *args, const char *header, const char *flag);
 
@@ -225,6 +289,7 @@ enum http_rc_e _reply_created (struct req_args_s *args);
 enum http_rc_e _reply_success_bytes (struct req_args_s *args, GBytes * bytes);
 enum http_rc_e _reply_success_json (struct req_args_s *args, GString * gstr);
 
+void _append_status (GString *out, gint code, const char * msg);
 GString * _create_status (gint code, const char * msg);
 GString * _create_status_error (GError * e);
 

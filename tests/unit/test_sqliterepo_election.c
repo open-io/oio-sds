@@ -707,6 +707,50 @@ test_create_ok(void)
 	}
 }
 
+static void
+test_sequence (void)
+{
+	struct replication_config_s config = {
+		_get_id, _get_peers, _get_vers, NULL, ELECTION_MODE_GROUP
+	};
+	struct sqlx_sync_s *sync = NULL;
+	struct sqlx_peering_s *peering = NULL;
+	struct election_manager_s *manager = NULL;
+
+	CLOCK_START = CLOCK = g_random_int ();
+
+	sync = _sync_factory__noop ();
+	g_assert_nonnull (sync);
+	peering = _peering_noop ();
+	g_assert_nonnull (peering);
+
+	g_assert_no_error (election_manager_create (&config, &manager));
+	g_assert_nonnull (manager);
+	election_manager_set_sync (manager, sync);
+	election_manager_set_peering (manager, peering);
+
+	struct sqlx_name_s name = { .base = "base", .type = "type", .ns = "NS", };
+	name.base = "A";
+	g_assert_no_error (_election_init (manager, &name));
+	name.base = "B";
+	g_assert_no_error (_election_init (manager, &name));
+	name.base = "C";
+	g_assert_no_error (_election_init (manager, &name));
+
+	g_printerr ("\n");
+	gboolean _on_election (gpointer k, gpointer v, gpointer i UNUSED) {
+		struct election_member_s *m = v;
+		g_printerr("%s -> %s\n", hashstr_str(k), m->name.base);
+		return FALSE;
+	}
+	g_tree_foreach (manager->members_by_key, _on_election, NULL);
+
+	election_manager_clean (manager);
+	sqlx_peering__destroy (peering);
+	sqlx_sync_close (sync);
+	sqlx_sync_clear (sync);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -718,5 +762,6 @@ main(int argc, char **argv)
 	g_test_add_func("/sqlx/election/election_init", test_election_init);
 	g_test_add_func ("/sqliterepo/election/single", test_single);
 	g_test_add_func ("/sqliterepo/election/sets", test_sets);
+	g_test_add_func ("/sqliterepo/manager/sequence", test_sequence);
 	return g_test_run();
 }

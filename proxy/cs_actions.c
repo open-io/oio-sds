@@ -194,10 +194,10 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 			g_assert_not_reached();
 	}
 
-	if (cs_expire_local_services > 0) {
+	if (ttl_expire_local_services > 0) {
 		struct service_info_s *v = service_info_dup (si);
 		v->score.timestamp = oio_ext_monotonic_seconds ();
-		PUSH_DO(
+		REG_WRITE(
 			const struct service_info_s *si0 = lru_tree_get(srv_registered, k);
 			if (si0) v->score.value = si0->score.value;
 			lru_tree_insert (srv_registered, g_strdup(k), v);
@@ -210,7 +210,7 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 	if (flag_cache_enabled) {
 		GString *gstr = g_string_new ("");
 		service_info_encode_json (gstr, si, TRUE);
-		PUSH_DO(lru_tree_insert(push_queue, service_info_key(si), si));
+		PUSH_WRITE(lru_tree_insert(push_queue, service_info_key(si), si));
 		return _reply_success_json (args, gstr);
 	} else {
 		CSURL(cs);
@@ -292,7 +292,7 @@ action_local_list (struct req_args_s *args)
 		return FALSE;
 	}
 
-	PUSH_DO(lru_tree_foreach(srv_registered, _on_service, NULL));
+	REG_READ(lru_tree_foreach(srv_registered, _on_service, NULL));
 	g_string_append_c (gs, ']');
 
 	return _reply_success_json (args, gs);

@@ -60,6 +60,7 @@ enum sqlx_open_type_e
 
 	SQLX_OPEN_CREATE      = 0x10,
 	SQLX_OPEN_NOREFCHECK  = 0x20,
+	SQLX_OPEN_URGENT      = 0x40,
 #define SQLX_OPEN_FLAGS     0x0F0
 
 	// Set an OR'ed combination of the following flags to require

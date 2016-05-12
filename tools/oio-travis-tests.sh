@@ -6,7 +6,17 @@ function dump_syslog {
 	if ! [ -r /var/log/syslog ] ; then
 		cmd="sudo tail"
 	fi
-	$cmd -n 500 /var/log/syslog
+	echo
+	$cmd -n 1000 /var/log/syslog
+	echo
+	ps -efjH
+	echo
+	ulimit -a
+	echo
+	python --version
+	pip show setuptools
+	echo
+	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock status2
 }
 
 trap dump_syslog EXIT

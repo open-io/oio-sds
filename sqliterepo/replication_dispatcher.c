@@ -1360,7 +1360,7 @@ _handler_GETVERS(struct gridd_reply_ctx_s *reply,
 	}
 
 	err = sqlx_repository_open_and_lock(repo, CONST(&name),
-			SQLX_OPEN_LOCAL, &sq3, NULL);
+			SQLX_OPEN_LOCAL|SQLX_OPEN_URGENT, &sq3, NULL);
 	if (NULL != err) {
 		g_prefix_error(&err, "Open/lock: ");
 		reply->send_error(0, err);
@@ -1423,7 +1423,7 @@ _handler_REPLICATE(struct gridd_reply_ctx_s *reply,
 	}
 
 	err = sqlx_repository_open_and_lock(repo, CONST(&name),
-			SQLX_OPEN_LOCAL|SQLX_OPEN_CREATE, &sq3, NULL);
+			SQLX_OPEN_LOCAL|SQLX_OPEN_CREATE|SQLX_OPEN_URGENT, &sq3, NULL);
 	if (NULL != err) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -1528,7 +1528,7 @@ _handler_DESCR(struct gridd_reply_ctx_s *reply,
 {
 	GError *err = NULL;
 	struct sqlx_name_mutable_s name = {0};
-	gchar descr[512] = "?";
+	gchar descr[1024] = "?";
 
 	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {

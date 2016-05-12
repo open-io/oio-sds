@@ -61,6 +61,9 @@ void sqlx_name_dup   (struct sqlx_name_mutable_s *dst,
 void sqlx_name_fill  (struct sqlx_name_mutable_s *n, struct oio_url_s *url,
 		const char *srvtype, gint64 seq);
 
+void sqlx_name_fill_type_asis  (struct sqlx_name_mutable_s *n,
+		struct oio_url_s *url, const char *srvtype, gint64 seq);
+
 gboolean sqlx_name_extract (const struct sqlx_name_s *n, struct oio_url_s *url,
 		const char *srvtype, gint64 *pseq);
 

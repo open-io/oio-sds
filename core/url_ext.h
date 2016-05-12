@@ -27,9 +27,6 @@ License along with this library.
  */
 #include <glib.h>
 
-#define oio_url_get_option_names oio_url_get_option_names
-#define oio_url_to_json          oio_url_to_json
-
 struct oio_url_s;
 
 /** Return the names of all the options registered. Free the result

@@ -73,17 +73,10 @@ rawx_event_send (const char *event_type, GString *data_json)
 {
 	EXTRA_ASSERT(q != NULL);
 
-	GString *json = g_string_sized_new(256);
-	g_string_append_printf(json,
-			"{"
-			"\"event\":\"%s\","
-			"\"when\":%"G_GINT64_FORMAT","
-			"\"data\":%s"
-			"}",
-			event_type,
-			oio_ext_real_time() / G_TIME_SPAN_SECOND,
-			data_json->str);
-	g_string_free(data_json, TRUE);
+	GString *json = oio_event__create (event_type, NULL);
+	g_string_append_printf(json, ",\"data\":%.*s}",
+			(int) data_json->len, data_json->str);
+	g_string_free (data_json, TRUE);
 	oio_events_queue__send (q, g_string_free (json, FALSE));
 
 	return NULL;

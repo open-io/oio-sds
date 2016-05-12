@@ -209,7 +209,7 @@ action_cache_set_ttl_low (struct req_args_s *args)
 enum http_rc_e
 action_cache_status (struct req_args_s *args)
 {
-	struct hc_resolver_stats_s s = {0};
+	struct hc_resolver_stats_s s = {{0}};
 	hc_resolver_info (resolver, &s);
 
 	GString *gstr = g_string_new ("{");

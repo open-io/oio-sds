@@ -550,8 +550,8 @@ sqlx_repository_get_cache(struct sqlx_repository_s *r)
 const gchar*
 sqlx_repository_get_local_addr(struct sqlx_repository_s *repo)
 {
-    struct election_manager_s* em = sqlx_repository_get_elections_manager(repo);
-    if (em)
+	struct election_manager_s* em = sqlx_repository_get_elections_manager(repo);
+	if (em)
 		return election_manager_get_local (em);
 	return NULL;
 }
@@ -568,6 +568,7 @@ struct open_args_s
 
 	gboolean create : 1;
 	gboolean no_refcheck : 1;
+	gboolean urgent : 1;
 	gboolean is_replicated : 1;
 };
 
@@ -654,7 +655,7 @@ sqlx_admin_reload(struct sqlx_sqlite3_s *sq3)
 
 	sqlx_admin_load (sq3);
 	sqlx_admin_ensure_versions (sq3);
-    sqlx_admin_save_lazy_tnx (sq3);
+	sqlx_admin_save_lazy_tnx (sq3);
 	sq3->admin_dirty = 0;
 	GRID_TRACE("Loaded %u ADMIN from [%s.%s]", g_tree_nnodes(sq3->admin),
 			sq3->name.base, sq3->name.type);
@@ -765,7 +766,8 @@ __open_maybe_cached(struct open_args_s *args, struct sqlx_sqlite3_s **result)
 	GError *e0;
 	gint bd = -1;
 
-	e0 = sqlx_cache_open_and_lock_base(args->repo->cache, args->realname, &bd);
+	e0 = sqlx_cache_open_and_lock_base(args->repo->cache, args->realname,
+		   args->urgent, &bd);
 	if (e0 != NULL) {
 		g_prefix_error(&e0, "cache error: ");
 		return e0;
@@ -977,6 +979,7 @@ sqlx_repository_open_and_lock(sqlx_repository_t *repo,
 		return err;
 	args.no_refcheck = BOOL(how & SQLX_OPEN_NOREFCHECK);
 	args.create = BOOL(how & SQLX_OPEN_CREATE);
+	args.urgent = BOOL(how & SQLX_OPEN_URGENT);
 
 	switch (how & SQLX_OPEN_REPLIMODE) {
 		case SQLX_OPEN_LOCAL:

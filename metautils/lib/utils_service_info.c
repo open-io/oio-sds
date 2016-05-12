@@ -357,12 +357,11 @@ service_info_get_tag(GPtrArray * a, const gchar * name)
 	if (!a || !name || !a->len)
 		return NULL;
 
-	gsize len = strnlen(name, LIMIT_LENGTH_TAGNAME);
 	for (guint i=0; i<a->len ;i++) {
 		struct service_tag_s *pSrv = g_ptr_array_index(a, i);
 		if (!pSrv)
 			return NULL;
-		if (!g_ascii_strncasecmp(pSrv->name, name, len))
+		if (!strcmp(pSrv->name, name))
 			return pSrv;
 	}
 	return NULL;
@@ -390,21 +389,15 @@ service_info_ensure_tag(GPtrArray * a, const gchar * name)
 void
 service_info_remove_tag(GPtrArray * a, const gchar * name)
 {
-	gsize len;
-	register guint i, max;
-
 	if (!a || !name || a->len <= 0)
 		return;
 
-	len = MIN(strlen(name) + 1, LIMIT_LENGTH_TAGNAME);
-
-	for (i = 0, max = a->len; i < max; i++) {
-		struct service_tag_s *pSrv;
-
-		pSrv = g_ptr_array_index(a, i);
+	const guint max = a->len;
+	for (guint i = 0; i < max; i++) {
+		struct service_tag_s *pSrv = g_ptr_array_index(a, i);
 		if (!pSrv)
 			continue;
-		if (!g_ascii_strncasecmp(pSrv->name, name, len)) {
+		if (!strcmp(pSrv->name, name)) {
 			service_tag_destroy(pSrv);
 			g_ptr_array_remove_index_fast(a, i);
 			return;

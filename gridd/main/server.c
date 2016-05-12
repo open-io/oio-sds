@@ -1369,61 +1369,6 @@ start_threads (void)
 
 /* ------------------------------------------------------------------------- */
 
-#if 0
-static int
-reload_config(void)
-{
-	GKeyFile *cfgFile = NULL;
-	cfgFile = g_key_file_new ();
-	int status = 0;
-	GError *err= NULL;
-
-	/*Parse the configuration*/
-	g_key_file_set_list_separator (cfgFile, ',');
-
-	if (!g_key_file_load_from_file (cfgFile, config_file, G_KEY_FILE_NONE, &err)) {
-		if(err && err->message)
-			ERROR("Cannot parse the configuration : %s",err->message);
-		else
-			ERROR("Cannot parse the configuration : no error");
-		goto errorLabel;
-	}
-
-	/*loads the default values*/
-	if (!reload_defaults (cfgFile, &err)) {
-		if(err && err->message)
-			ERROR("Cannot set the default value from configuration: %s",err->message);
-		else
-			ERROR("Cannot set the default value from configuration: no error");
-		goto errorLabel;
-	}
-
-	if(!prepare_plugins_reload(cfgFile, &err)){
-		if(err && err->message)
-			ERROR("Cannot set the default value from configuration: %s",err->message);
-		else
-			ERROR("Cannot set the default value from configuration: no error");
-		goto errorLabel;
-	}
-
-	/*init all the loaded plugins*/
-	if (!plugin_holder_reload_all(&err)) {
-		if(err && err->message)
-			ERROR("Cannot update plugins configuration: %s",err->message);
-		else
-			ERROR("Cannot update plugins configuration: no error");
-		goto errorLabel;
-	}
-
-	status = 1;
-
-errorLabel:
-
-	g_key_file_free (cfgFile);
-	return status;
-}
-#endif
-
 static void
 main_action (void)
 {
