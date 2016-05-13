@@ -53,6 +53,7 @@ install(TARGETS
 install(PROGRAMS
 			zk-bootstrap.py
 			zk-reset.py
+			${EXE_PREFIX}-get-parameters-from-config.py
 			${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-unlock-all.sh
 			${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-wait-scored.sh
 			${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-bootstrap.py

@@ -34,6 +34,6 @@ func_tests () {
 echo -e "\n### UNIT tests\n"
 make -C tests/unit test
 
-func_tests -B 1 -D 1 -f "${PWD}/etc/oio-bootstrap-config-test1.json"
-func_tests -B 1 -D 1 -f "${PWD}/etc/oio-bootstrap-config-test2.json"
+func_tests -f "${PWD}/etc/oio-bootstrap-config-test1.json"
+func_tests -f "${PWD}/etc/oio-bootstrap-config-test2.json"
 

@@ -3,8 +3,8 @@
 {
     "zookeeper": true,
     "monitor-period": 1,
-    "m2-replicas": 1,
     "sqlx-replicas": 1,
+    "m2-replicas": 1,
     "m2-stgpol": "THREECOPIES",
     "chunk-size": 65536,
     "redis": true,

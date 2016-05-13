@@ -947,12 +947,9 @@ def generate(ns, ip, options={}, defaults={}):
         for i in range(1, 1+getint(options ['meta0'].get(SERVICE_NUMBER, None), defaults['NB_M0'])):
             generate_meta('meta0', i, template_gridinit_meta)
     if options ['meta1'].get(IS_PRESENT, None) is True:
-        print 'meta1 : '+ str(1 + getint(options ['meta2'].get(SERVICE_NUMBER,None), meta2_replicas))
-                
         for i in range(1, 1+getint(options ['meta1'].get(SERVICE_NUMBER, None), defaults['NB_M1'])):
             generate_meta('meta1', i, template_gridinit_meta)
     if options ['meta2'].get(IS_PRESENT, None) is True:
-        print 'meta2 : '+ str(1 + getint(options ['meta2'].get(SERVICE_NUMBER, None), meta2_replicas))
         for i in range(1, 1+getint(options ['meta2'].get(SERVICE_NUMBER, None), meta2_replicas)):
             generate_meta('meta2', i, template_gridinit_meta)
     if options ['sqlx'].get(IS_PRESENT, None) is True:
@@ -1108,18 +1105,7 @@ def init_dic():
     dic ['sqlx'] = {SERVICE_NUMBER : None, IS_PRESENT : True}
     dic ['rawx'] = {SERVICE_NUMBER : None, IS_PRESENT : True}
     dic ['rainx'] = {SERVICE_NUMBER : None, IS_PRESENT : True}
-    #dic [BIG] = None
-    #dic [OPENSUSE] = None
     dic [ZOOKEEPER] = True
-    #dic [ALLOW_REDIS] = None
-    #dic [MONITOR_PERIOD] = None
-    #dic [M2_REPLICAS] = None
-    #dic [M2_VERSIONS] = None
-    #dic [M2_STGPOL] = None
-    #dic [PROFILE] = None
-    #dic [PORT_START] = None
-    #dic [CHUNK_SIZE] = None
-    #dic [SQLX_REPLICAS] = None
     return dic
 
 def _byteify(data, ignore_dicts = False):
@@ -1147,12 +1133,11 @@ def main():
     opts = init_dic()
     if options.FILE_PARAMETER is not None :
         f = open(options.FILE_PARAMETER, 'r')
-        if (options.FILE_PARAMETER.find('.json') != -1) :
-            opts = json.load(f, object_hook=_byteify)
-        elif (options.FILE_PARAMETER.find('.yml') != -1) :
+        if options.FILE_PARAMETER.find('.json') != -1 :
+            opts = json.load(f, object_hook=_byteify) 
+        elif options.FILE_PARAMETER.find('.yml') != -1 :
             opts = yaml.load(f)
         f.close()
-    print opts
     if opts.get(BIG,None) is True:
         generate(args[0], args[1], opts, defaults_multi)
     else :

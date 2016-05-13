@@ -30,10 +30,8 @@ ZKSLOW=0
 PORT=
 verbose=0
 OPENSUSE=`grep -i opensuse /etc/*release || echo -n ''`
-while getopts "B:D:I:N:f:S:V:X:Zvb" opt; do
+while getopts "I:N:f:S:V:X:Zvb" opt; do
     case $opt in
-	        B) REPLICATION_BUCKET="${OPTARG}" ;;
-		D) REPLICATION_DIRECTORY="${OPTARG}" ;;
 		I) IP="${OPTARG}" ;;
 		N) NS="${OPTARG}" ;;
 		f) FILE_BOOTSTRAP_CONFIG="${OPTARG}" ;;
@@ -42,8 +40,37 @@ while getopts "B:D:I:N:f:S:V:X:Zvb" opt; do
 		\?) exit 1 ;;
 	esac
 done
+SERVICES="nb-services"
+M1_STR="meta1"
+M2_STR="meta2"
+M2_REPLICAS="m2-replicas"
+if [ -n "$FILE_BOOTSTRAP_CONFIG" ]; then
+    CMD_NB_M1=`oio-get-parameters-from-config.py ${FILE_BOOTSTRAP_CONFIG} ${M1_STR} ${SERVICES}`
+    CMD_NB_M2=`oio-get-parameters-from-config.py ${FILE_BOOTSTRAP_CONFIG} ${M2_STR} ${SERVICES}`
+    CMD_NB_M2_REPLICAS=`oio-get-parameters-from-config.py ${FILE_BOOTSTRAP_CONFIG} ${M2_REPLICAS}`
+fi
+   
+if [ -n "$CMD_NB_M2_REPLICAS" ]; then
+    REPLICATION_BUCKET=$CMD_NB_M2_REPLICAS
+fi
+
+if [ -n "$CMD_NB_M1" ]; then
+    REPLICATION_DIRECTORY=$CMD_NB_M1
+fi
+
+if [ -n "CMD_NB_M2" ]; then
+    NB_META2=${CMD_NB_M2}
+else
+    NB_META2=${REPLICATION_BUCKET}
+fi
+
+NB_META1=${REPLICATION_DIRECTORY}
+
 opts=""
-if [ -n "$FILE_BOOTSTRAP_CONFIG" ] ; then opts="--file=$FILE_BOOTSTRAP_CONFIG" ; fi
+
+if [ -n "$FILE_BOOTSTRAP_CONFIG" ] ; then
+    opts="--file=$FILE_BOOTSTRAP_CONFIG" ;
+fi
 
 timeout () {
 	num=$1 ; shift
@@ -79,10 +106,10 @@ G_DEBUG_LEVEL=WARN
 if [ $verbose != 0 ] ; then
 	G_DEBUG_LEVEL=TRACE
 	echo "# $0" \
-	        "-f \"${FILE_BOOTSTRAP_CONFIG}\"" \
 		"-I \"${IP}\"" \
 		"-N \"${NS}\"" \
-		"-Z \"${ZKSLOW}\""
+		"-Z \"${ZKSLOW}\"" \
+		"-f \"${FILE_BOOTSTRAP_CONFIG}\""
 fi
 export G_DEBUG_LEVEL
 
