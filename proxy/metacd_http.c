@@ -34,10 +34,12 @@ static GThread *downstream_thread = NULL;
 guint csurl_refresh_delay = PROXYD_PERIOD_RELOAD_CSURL;
 guint srvtypes_refresh_delay = PROXYD_PERIOD_RELOAD_SRVTYPES;
 guint nsinfo_refresh_delay = PROXYD_PERIOD_RELOAD_NSINFO;
+time_t nsinfo_refresh_m0 = PROXYD_PERIOD_RELOAD_M0INFO;
 
-gint64 cs_expire_local_services = PROXYD_TTL_DEAD_LOCAL_SERVICES;
-gint64 cs_down_services = PROXYD_TTL_DOWN_SERVICES;
-gint64 cs_known_services = PROXYD_TTL_KNOWN_SERVICES;
+gint64 ttl_expire_local_services = PROXYD_TTL_DEAD_LOCAL_SERVICES;
+gint64 ttl_down_services = PROXYD_TTL_DOWN_SERVICES;
+gint64 ttl_known_services = PROXYD_TTL_KNOWN_SERVICES;
+gint64 ttl_expire_master_services = PROXYD_TTL_MASTER_SERVICES;
 
 // Configuration
 
@@ -61,14 +63,19 @@ GRWLock csurl_rwlock = {0};
 gchar **csurl = NULL;
 gsize csurl_count = 0;
 
-GMutex push_mutex = {0};
+GRWLock push_rwlock = {0};
 struct lru_tree_s *push_queue = NULL;
+
+GRWLock reg_rwlock = {0};
 struct lru_tree_s *srv_registered = NULL;
 
 GRWLock nsinfo_rwlock = {0};
 struct namespace_info_s nsinfo = {{0}};
 gchar **srvtypes = NULL;
 gint64 ns_chunk_size = 10*1024*1024;
+
+GRWLock master_rwlock = {0};
+struct lru_tree_s *srv_master = NULL;
 
 GRWLock srv_rwlock = {0};
 struct lru_tree_s *srv_down = NULL;
@@ -201,11 +208,6 @@ _metacd_load_url (struct req_args_s *args)
 static enum http_rc_e
 handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 {
-	gboolean _boolhdr (const gchar * n) {
-		return metautils_cfg_get_bool (
-			(gchar *) g_tree_lookup (rq->tree_headers, n), FALSE);
-	}
-
 	// Get a request id for the current request
 	const gchar *reqid = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_REQID);
 	if (reqid)
@@ -235,14 +237,11 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 		rp->finalize ();
 		rc = HTTPRC_DONE;
 	} else {
-		struct req_args_s args = {NULL,NULL,NULL, NULL,NULL, 0};
+		struct req_args_s args = {0};
 		args.req_uri = &ruri;
 		args.matchings = matchings;
 		args.rq = rq;
 		args.rp = rp;
-
-		if (_boolhdr (PROXYD_HEADER_NOEMPTY))
-			args.flags |= FLAG_NOEMPTY;
 
 		args.url = url = _metacd_load_url (&args);
 		rp->subject(oio_url_get(url, OIOURL_HEXID));
@@ -276,37 +275,53 @@ _push_queue_create (void)
 // Administrative tasks --------------------------------------------------------
 
 static guint
-_expire_services (struct lru_tree_s *lru, const gint64 delay)
+_lru_tree_expire (GRWLock *rw, struct lru_tree_s *lru, const gint64 delay)
 {
 	if (delay <= 0) return 0;
 	const gint64 now = oio_ext_monotonic_time();
-	guint count = 0;
-	SRV_WRITE(count = lru_tree_remove_older(lru, OLDEST(now,delay)));
+	g_rw_lock_writer_lock (rw);
+	guint count = lru_tree_remove_older (lru, OLDEST(now,delay));
+	g_rw_lock_writer_unlock (rw);
 	return count;
 }
 
 static void
-_task_expire_services_known (gpointer p)
+_task_expire_services_master (gpointer p UNUSED)
 {
-	(void) p;
-	guint count = _expire_services (srv_known, cs_known_services);
+	guint count = _lru_tree_expire (&master_rwlock, srv_master,
+			ttl_expire_master_services);
+	if (count)
+		GRID_DEBUG("Expired %u masters", count);
+}
+
+static void
+_task_expire_services_known (gpointer p UNUSED)
+{
+	guint count = _lru_tree_expire (&srv_rwlock, srv_known, ttl_known_services);
 	if (count)
 		GRID_INFO("Forgot %u services", count);
 }
 
 static void
-_task_expire_services_down (gpointer p)
+_task_expire_services_down (gpointer p UNUSED)
 {
-	(void) p;
-	guint count = _expire_services (srv_down, cs_down_services);
+	guint count = _lru_tree_expire (&srv_rwlock, srv_down, ttl_down_services);
 	if (count)
-		GRID_INFO("re-enabled %u services", count);
+		GRID_INFO("Re-enabled %u services", count);
 }
 
 static void
-_task_expire_resolver (gpointer p)
+_task_expire_local (gpointer p UNUSED)
 {
-	(void) p;
+	guint count = _lru_tree_expire (&reg_rwlock, srv_registered,
+			ttl_expire_local_services);
+	if (count)
+		GRID_INFO("Expired %u local services", count);
+}
+
+static void
+_task_expire_resolver (gpointer p UNUSED)
+{
 	guint count_expire = hc_resolver_expire (resolver);
 	guint count_purge = hc_resolver_purge (resolver);
 	if (count_expire || count_purge) {
@@ -316,7 +331,7 @@ _task_expire_resolver (gpointer p)
 }
 
 static void
-_local_score_update (const struct service_info_s *si0)
+_NOLOCK_local_score_update (const struct service_info_s *si0)
 {
 	gchar *k = service_info_key (si0);
 	STRING_STACKIFY(k);
@@ -387,7 +402,7 @@ _reload_srvtype(const char *type)
 	/* updates the score of the local services */
 	if (flag_local_scores && NULL != list) {
 		for (GSList *l=list; l ;l=l->next)
-			PUSH_DO(_local_score_update(l->data));
+			REG_WRITE(_NOLOCK_local_score_update(l->data));
 	}
 
 	/* prepares a cache of services wanted by the clients */
@@ -413,10 +428,9 @@ _reload_srvtype(const char *type)
 }
 
 static void
-_task_reload_lbpool (gpointer p)
+_task_reload_lbpool (gpointer p UNUSED)
 {
 	ADAPTIVE_PERIOD_DECLARE();
-	(void) p;
 
 	if (ADAPTIVE_PERIOD_SKIP())
 		return;
@@ -438,10 +452,9 @@ _task_reload_lbpool (gpointer p)
 }
 
 static void
-_task_reload_csurl (gpointer p)
+_task_reload_csurl (gpointer p UNUSED)
 {
 	ADAPTIVE_PERIOD_DECLARE ();
-	(void) p;
 
 	if (ADAPTIVE_PERIOD_SKIP())
 		return;
@@ -466,10 +479,9 @@ _task_reload_csurl (gpointer p)
 }
 
 static void
-_task_reload_nsinfo (gpointer p)
+_task_reload_nsinfo (gpointer p UNUSED)
 {
 	ADAPTIVE_PERIOD_DECLARE ();
-	(void) p;
 
 	CSURL(cs);
 	if (!cs)
@@ -493,10 +505,9 @@ _task_reload_nsinfo (gpointer p)
 }
 
 static void
-_task_reload_srvtypes (gpointer p)
+_task_reload_srvtypes (gpointer p UNUSED)
 {
 	ADAPTIVE_PERIOD_DECLARE ();
-	(void) p;
 
 	CSURL(cs);
 	if (!cs)
@@ -531,21 +542,8 @@ _task_reload_srvtypes (gpointer p)
 }
 
 static void
-_task_expire_local (gpointer p)
+_task_push (gpointer p UNUSED)
 {
-	(void) p;
-	const gint64 now = oio_ext_monotonic_time ();
-	const gint64 oldest = OLDEST(now,cs_expire_local_services);
-	guint count;
-	PUSH_DO(count = lru_tree_remove_older (srv_registered, oldest));
-	if (count)
-		GRID_INFO("%u local services", count);
-}
-
-static void
-_task_push (gpointer p)
-{
-	(void) p;
 	struct lru_tree_s *lru = NULL;
 	GSList *tmp = NULL;
 	gboolean _list (gpointer k, gpointer v, gpointer u) {
@@ -554,7 +552,7 @@ _task_push (gpointer p)
 		return FALSE;
 	}
 
-	PUSH_DO(lru = push_queue; push_queue = _push_queue_create());
+	PUSH_WRITE(lru = push_queue; push_queue = _push_queue_create());
 	lru_tree_foreach(lru, _list, NULL);
 
 	if (!tmp) {
@@ -722,6 +720,10 @@ grid_main_specific_fini (void)
 		lru_tree_destroy (srv_known);
 		srv_known = NULL;
 	}
+	if (srv_master) {
+		lru_tree_destroy (srv_master);
+		srv_master = NULL;
+	}
 	if (push_queue) {
 		lru_tree_destroy (push_queue);
 		push_queue = NULL;
@@ -745,10 +747,12 @@ grid_main_specific_fini (void)
 	namespace_info_clear (&nsinfo);
 	oio_str_clean (&nsname);
 	g_rw_lock_clear(&nsinfo_rwlock);
-	g_mutex_clear(&push_mutex);
+	g_rw_lock_clear(&reg_rwlock);
+	g_rw_lock_clear(&push_rwlock);
 	g_rw_lock_clear(&csurl_rwlock);
 	g_rw_lock_clear(&srv_rwlock);
 	g_rw_lock_clear(&wanted_rwlock);
+	g_rw_lock_clear(&master_rwlock);
 
 	if (csurl) g_strfreev (csurl);
 	csurl = NULL;
@@ -868,10 +872,12 @@ grid_main_configure (int argc, char **argv)
 	const char *cfg_namespace = argv[1];
 
 	g_rw_lock_init (&csurl_rwlock);
-	g_mutex_init (&push_mutex);
+	g_rw_lock_init (&push_rwlock);
+	g_rw_lock_init (&reg_rwlock);
 	g_rw_lock_init (&nsinfo_rwlock);
 	g_rw_lock_init (&srv_rwlock);
 	g_rw_lock_init (&wanted_rwlock);
+	g_rw_lock_init (&master_rwlock);
 
 	nsname = g_strdup (cfg_namespace);
 	g_strlcpy (nsinfo.name, cfg_namespace, sizeof (nsinfo.name));
@@ -901,6 +907,7 @@ grid_main_configure (int argc, char **argv)
 	lbpool = grid_lbpool_create (nsname);
 	srv_down = lru_tree_create((GCompareFunc)g_strcmp0, g_free, NULL, LTO_NOATIME);
 	srv_known = lru_tree_create((GCompareFunc)g_strcmp0, g_free, NULL, LTO_NOATIME);
+	srv_master = lru_tree_create((GCompareFunc)g_strcmp0, g_free, g_free, LTO_NOATIME);
 
 	resolver = hc_resolver_create ();
 	enum hc_resolver_flags_e f = 0;
@@ -941,9 +948,10 @@ grid_main_configure (int argc, char **argv)
 
 	grid_task_queue_register (admin_gtq, 1,
 		(GDestroyNotify) _task_expire_services_known, NULL, NULL);
-
 	grid_task_queue_register (admin_gtq, 1,
 		(GDestroyNotify) _task_expire_services_down, NULL, NULL);
+	grid_task_queue_register (admin_gtq, 1,
+		(GDestroyNotify) _task_expire_services_master, NULL, NULL);
 
 	grid_task_queue_register (admin_gtq, 1,
 		(GDestroyNotify) _task_expire_resolver, NULL, NULL);

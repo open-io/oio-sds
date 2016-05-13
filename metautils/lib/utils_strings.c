@@ -33,7 +33,7 @@ int
 metautils_strcmp3(gconstpointer a, gconstpointer b, gpointer ignored)
 {
 	(void) ignored;
-	return g_strcmp0(a, b);
+	return strcmp(a, b);
 }
 
 static const gchar *

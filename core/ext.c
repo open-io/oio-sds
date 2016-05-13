@@ -496,7 +496,7 @@ _get_major_minor (const gchar *path, guint *pmaj, guint *pmin)
 	/* ensure an entry exists */
 	for (GSList *l=majmin_cache; l && !out; l=l->next) {
 		struct path_maj_min_s *p = l->data;
-		if (p && !g_strcmp0(path, p->path))
+		if (p && !strcmp(path, p->path))
 			out = p;
 	}
 	if (!out) {

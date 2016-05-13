@@ -63,6 +63,7 @@ struct _queue_BEANSTALKD_s
 	struct oio_events_queue_vtable_s *vtable;
 	GAsyncQueue *queue;
 	gchar *endpoint;
+	gchar *tube;
 	guint max_events_in_queue;
 
 	struct oio_events_queue_buffer_s buffer;
@@ -84,6 +85,7 @@ oio_events_queue_factory__create_beanstalkd (const char *endpoint,
 	struct _queue_BEANSTALKD_s *self = g_malloc0 (sizeof(*self));
 	self->vtable = &vtable_BEANSTALKD;
 	self->queue = g_async_queue_new ();
+	self->tube = g_strdup(OIO_EVT_BEANSTALKD_DEFAULT_TUBE);
 	self->max_events_in_queue = OIO_EVTQ_MAXPENDING;
 	self->endpoint = g_strdup (endpoint);
 
@@ -120,7 +122,7 @@ _send (int fd, struct iovec *iov, unsigned int iovcount)
 {
 	int w;
 retry:
-	w = writev (fd, iov, 3);
+	w = writev (fd, iov, iovcount);
 	if (w < 0) {
 		if (errno == EINTR)
 			goto retry;
@@ -155,7 +157,7 @@ retry:
 }
 
 static int
-_put (int fd, struct iovec *iov, unsigned int iovcount)
+_send_and_read_reply (int fd, struct iovec *iov, unsigned int iovcount)
 {
 	if (!_send(fd, iov, iovcount))
 		return 0;
@@ -194,6 +196,69 @@ _maybe_send_overwritable(struct oio_events_queue_s *self)
 	oio_events_queue_buffer_maybe_flush(&(q->buffer), __send, NULL);
 }
 
+static gboolean
+_put (int fd, gchar *msg, size_t msglen)
+{
+	struct iovec iov[3];
+
+	GString *header = g_string_new ("");
+	g_string_printf (header, "put %u %u %u %"G_GSIZE_FORMAT"\r\n",
+			OIO_EVT_BEANSTALKD_DEFAULT_PRIO,
+			OIO_EVT_BEANSTALKD_DEFAULT_DELAY,
+			OIO_EVT_BEANSTALKD_DEFAULT_TTR,
+			msglen);
+	iov[0].iov_base = header->str;
+	iov[0].iov_len = header->len;
+	iov[1].iov_base = msg;
+	iov[1].iov_len = msglen;
+	iov[2].iov_base = "\r\n";
+	iov[2].iov_len = 2;
+
+	int rc = _send_and_read_reply (fd, iov, 3);
+	g_string_free (header, TRUE);
+	header = NULL;
+	return rc;
+}
+
+static GError *
+_use_tube (int fd, const char *name)
+{
+	gchar buf[256];
+
+	if (!oio_str_is_set(name))
+		return NULL;
+
+	gsize len = g_snprintf(buf, sizeof(buf), "USE %s\r\n", name);
+
+	if (len >= sizeof(buf))
+		return NEWERROR(CODE_INTERNAL_ERROR, "BUG: tube name too long");
+
+	struct iovec iov[1];
+	iov[0].iov_base = buf;
+	iov[0].iov_len = len;
+
+	if (_send_and_read_reply (fd, iov, 1))
+		return NULL;
+
+	return NEWERROR(CODE_NETWORK_ERROR, "beanstalkd error: (%d) %s",
+			errno, strerror(errno));
+}
+
+static GError *
+_poll_out (int fd)
+{
+	int rc = 0;
+	struct pollfd pfd = {0};
+	do {
+		pfd.fd = fd;
+		pfd.events = POLLOUT;
+		pfd.revents = 0;
+	} while (!(rc = metautils_syscall_poll(&pfd, 1, 1000)));
+	if (pfd.revents != POLLOUT)
+		return socket_get_error(fd);
+	return NULL;
+}
+
 static GError *
 _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 {
@@ -214,38 +279,25 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 		if (!msg) msg = g_async_queue_timeout_pop (q->queue, G_TIME_SPAN_SECOND);
 		if (!msg) continue;
 
-		/* forward hat event */
+		/* forward the event */
 		if (*msg) {
 
-			/* lazy-reconnection */
+			/* lazy-reconnection, with backoff sleeping to avoid crazy-looping */
 			if (fd < 0) {
 				GError *err = NULL;
 				fd = sock_connect(q->endpoint, &err);
-				if (!err) {
-					/* As we use non-blocking sockets, we are not sure the
-					 * connection is actually open, and we must wait for the
-					 * socket to be writable or for an error to occur. */
-					int rc = 0;
-					struct pollfd pfd = {0};
-					do {
-						pfd.fd = fd;
-						pfd.events = POLLOUT;
-						pfd.revents = 0;
-					} while (!(rc = metautils_syscall_poll(&pfd, 1, 1000)));
-					if (pfd.revents != POLLOUT) {
-						err = socket_get_error(fd);
-						metautils_pclose(&fd);
-					}
-				}
+				if (!err)
+					err = _poll_out (fd);
+				if (!err)
+					err = _use_tube (fd, q->tube);
 				if (err) {
+					metautils_pclose(&fd);
 					GRID_WARN("BEANSTALKD: reconnection failed to %s: (%d) %s",
 							q->endpoint, err->code, err->message);
 					g_clear_error (&err);
 					saved = msg;
 					msg = NULL;
 
-					/* Avoid looping crazily until the beanstalkd becomes up
-					 * again, let's sleep a little bit. */
 					EXPO_BACKOFF(250 * G_TIME_SPAN_MILLISECOND, try_count, 4);
 					continue;
 				} else {
@@ -255,30 +307,12 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 			}
 
 			/* prepare the header, and the buffers to be sent */
-			struct iovec iov[3];
-			gsize msglen = strlen(msg);
-			GString *header = g_string_new ("");
-			g_string_printf (header, "put %u %u %u %"G_GSIZE_FORMAT"\r\n",
-					OIO_EVT_BEANSTALKD_DEFAULT_PRIO,
-					OIO_EVT_BEANSTALKD_DEFAULT_DELAY,
-					OIO_EVT_BEANSTALKD_DEFAULT_TTR,
-					msglen);
-			iov[0].iov_base = header->str;
-			iov[0].iov_len = header->len;
-			iov[1].iov_base = msg;
-			iov[1].iov_len = msglen;
-			iov[2].iov_base = "\r\n";
-			iov[2].iov_len = 2;
-
-			if (!_put (fd, iov, 3)) {
+			if (!_put (fd, msg, strlen(msg))) {
 				sock_set_linger(fd, 1, 1);
 				metautils_pclose (&fd);
 				saved = msg;
 				msg = NULL;
 			}
-
-			g_string_free (header, TRUE);
-			header = NULL;
 		}
 
 		oio_str_clean (&msg);
@@ -302,6 +336,7 @@ _q_destroy (struct oio_events_queue_s *self)
 	EXTRA_ASSERT(q->vtable == &vtable_BEANSTALKD);
 	g_async_queue_unref (q->queue);
 	oio_str_clean (&q->endpoint);
+	oio_str_clean (&q->tube);
 	oio_events_queue_buffer_clean(&(q->buffer));
 	q->vtable = NULL;
 	g_free (q);

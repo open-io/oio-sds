@@ -405,6 +405,16 @@ oio_str_gstring_append_json_pair (GString *base, const char *k, const char *v)
 	}
 }
 
+void
+oio_str_gstring_append_json_pair_int (GString *base, const char *k, gint64 v)
+{
+	g_string_append_c (base, '"');
+	g_string_append (base, k);
+	g_string_append_c (base, '"');
+	g_string_append_c (base, ':');
+	g_string_append_printf(base, "%"G_GINT64_FORMAT, v);
+}
+
 size_t
 oio_constptrv_length (const void * const *v)
 {

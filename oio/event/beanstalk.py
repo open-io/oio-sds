@@ -340,12 +340,20 @@ class Beanstalk(object):
     EXPECTED_OK = dict_merge(
         {'reserve': ['RESERVED'],
          'delete': ['DELETED'],
-         'put': ['INSERTED']}
+         'release': ['RELEASED'],
+         'bury': ['BURIED'],
+         'put': ['INSERTED'],
+         'use': ['USING'],
+         'watch': ['WATCHING']}
 
     )
     EXPECTED_ERR = dict_merge(
         {'reserve': ['DEADLINE_SOON', 'TIMED_OUT'],
-         'delete': ['DELETED', 'NOT_FOUND'],
+         'delete': ['NOT_FOUND'],
+         'release': ['BURIED', 'NOT_FOUND'],
+         'bury': ['NOT_FOUND'],
+         'use': [],
+         'watch': [],
          'put': ['JOB_TOO_BIG', 'BURIED', 'DRAINING']}
     )
 
@@ -359,8 +367,6 @@ class Beanstalk(object):
                  retry_on_timeout=False, socket_keepalive_options=None,
                  max_connections=None, connection=None):
         if not connection:
-            self.host = host
-            self.port = port
             self.socket_timeout = socket_timeout
             kwargs = {
                 'host': host,
@@ -412,11 +418,23 @@ class Beanstalk(object):
         job_id = self.execute_command('put', priority, delay, ttr, body=body)
         return job_id
 
+    def use(self, tube):
+        self.execute_command('use', tube)
+
+    def watch(self, tube):
+        self.execute_command('watch', tube)
+
     def reserve(self, timeout=None):
         if timeout is not None:
             return self.execute_command('reserve-with-timeout', timeout)
         else:
             return self.execute_command('reserve')
+
+    def bury(self, job_id, priority=DEFAULT_PRIORITY):
+        self.execute_command('bury', job_id, priority)
+
+    def release(self, job_id, priority=DEFAULT_PRIORITY, delay=0):
+        self.execute_command('release', job_id, priority, delay)
 
     def delete(self, job_id):
         self.execute_command('delete', job_id)

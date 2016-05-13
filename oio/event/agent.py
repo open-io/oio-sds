@@ -18,6 +18,9 @@ class HaltServer(BaseException):
 
 
 class Runner(object):
+
+    WORKER_START_ERROR = 3
+
     SIGNALS = [getattr(signal, "SIG%s" % x)
                for x in "HUP QUIT INT TERM".split()]
     SIG_NAMES = dict(
@@ -128,6 +131,10 @@ class Runner(object):
                 wpid, status = os.waitpid(-1, os.WNOHANG)
                 if not wpid:
                     break
+                exitcode = status >> 8
+                if exitcode == self.WORKER_START_ERROR:
+                    reason = "Worker failed to start"
+                    raise HaltServer(reason, self.WORKER_START_ERROR)
                 worker = self.workers.pop(wpid, None)
                 if not worker:
                     continue
@@ -152,6 +159,7 @@ class Runner(object):
             return pid
 
         # child process
+        signal.signal(signal.SIGCHLD, signal.SIG_DFL)
         worker_pid = os.getpid()
         try:
             self.logger.info("Booting worker with pid: %s", worker_pid)
@@ -161,6 +169,8 @@ class Runner(object):
             raise
         except:
             self.logger.exception("Exception in worker process")
+            if not worker.started:
+                sys.exit(self.WORKER_START_ERROR)
             sys.exit(-1)
         finally:
             self.logger.info("Worker exiting (pid: %s)", worker_pid)

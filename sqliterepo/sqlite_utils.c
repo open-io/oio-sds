@@ -387,3 +387,18 @@ sqlx_alert_dirty_base(struct sqlx_sqlite3_s *sq3, const char *msg)
 	g_assert (!sq3->admin_dirty);
 }
 
+struct oio_url_s*
+sqlx_admin_get_url (struct sqlx_sqlite3_s *sq3)
+{
+	EXTRA_ASSERT(sq3 != NULL);
+	struct oio_url_s *u = oio_url_empty ();
+	void _set (int which, const char *k) {
+		const char *s = sqlx_admin_get_str(sq3, k);
+		if (s) oio_url_set (u, which, s);
+	}
+	_set (OIOURL_NS, SQLX_ADMIN_NAMESPACE);
+	_set (OIOURL_ACCOUNT, SQLX_ADMIN_ACCOUNT);
+	_set (OIOURL_USER, SQLX_ADMIN_USERNAME);
+	oio_url_set (u, OIOURL_TYPE, sq3->name.type);
+	return u;
+}

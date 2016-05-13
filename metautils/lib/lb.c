@@ -498,8 +498,8 @@ grid_lb_is_srv_available(struct grid_lb_s *lb, const struct service_info_s *si)
 	EXTRA_ASSERT(si != NULL);
 	EXTRA_ASSERT(lb != NULL);
 
-	EXTRA_ASSERT(!g_ascii_strncasecmp(si->type, lb->srvtype, sizeof(si->type)));
-	EXTRA_ASSERT(!g_ascii_strncasecmp(si->ns_name, lb->ns, sizeof(si->ns_name)));
+	EXTRA_ASSERT(!strcmp(si->type, lb->srvtype));
+	EXTRA_ASSERT(!strcmp(si->ns_name, lb->ns));
 
 	return grid_lb_is_addr_available(lb, &(si->addr));
 }
@@ -838,10 +838,9 @@ static gboolean
 __next_RAND(struct grid_lb_s *lb, struct service_info_s **si)
 {
 	struct service_info_s *result = NULL;
-	register guint idx = rand();
 
 	grid_lb_lock(lb);
-	result = _get_by_score(lb, idx);
+	result = _get_by_score(lb, oio_ext_rand_int_range(0,lb->size_max));
 	grid_lb_unlock(lb);
 
 	return _result(si, result);
@@ -874,12 +873,11 @@ __next_SRAND(struct grid_lb_s *lb, struct service_info_s **si)
 	}
 
 	struct service_info_s *result = NULL;
-	needle = rand();
 
 	grid_lb_lock(lb);
 	if (lb->gpa->len > 0) {
 		if (lb->sum_scored) {
-			needle = needle % lb->sum_scored;
+			needle = oio_ext_rand_int_range (0, lb->sum_scored);
 			ga = lb->sorted_by_score;
 			result = _get_by_score(lb, dichotomic_search(0, ga->len));
 		}

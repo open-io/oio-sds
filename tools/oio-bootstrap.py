@@ -586,17 +586,48 @@ conscience=${CS_ALL_PUB}
 
 template_event_agent = """
 [event-agent]
+tube = oio
 namespace = ${NS}
 user = ${USER}
-bind_addr = ipc://${RUNDIR}/event-agent.sock
-queue_location = ${VOLUME}/queue.db
-retries_per_second = 30
-batch_size = 500
-workers = 5
+workers = 2
+concurrency = 5
+handlers_conf = ${CFGDIR}/event-handlers.conf
 log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
 syslog_prefix = OIO,${NS},event-agent
+"""
+
+template_event_agent_handlers = """
+[handler:storage.content.new]
+
+[handler:storage.content.deleted]
+pipeline = content_cleaner
+
+[handler:storage.container.new]
+pipeline = account_update
+
+[handler:storage.container.deleted]
+pipeline = account_update
+
+[handler:storage.container.state]
+pipeline = account_update
+
+[handler:storage.chunk.new]
+pipeline = volume_index
+
+[handler:storage.chunk.deleted]
+pipeline = volume_index
+
+[filter:content_cleaner]
+use = egg:oio#content_cleaner
+
+[filter:account_update]
+use = egg:oio#account_update
+
+[filter:volume_index]
+use = egg:oio#volume_index
+
 """
 
 template_conscience_agent = """
@@ -652,7 +683,8 @@ CREATE TABLE IF NOT EXISTS box (
    recent INT NOT NULL DEFAULT 0,
    unseen INT NOT NULL DEFAULT 0,
    uidnext INT NOT NULL DEFAULT 1,
-   uidvalidity INT NOT NULL DEFAULT 0);
+   uidvalidity INT NOT NULL DEFAULT 0,
+   keywords TEXT);
 
 CREATE TABLE IF NOT EXISTS boxattr (
    box TEXT NOT NULL,
@@ -672,24 +704,34 @@ CREATE TABLE IF NOT EXISTS mail (
    flags INTEGER NOT NULL,
    header TEXT NOT NULL);
 
-CREATE TABLE IF NOT EXISTS mailattr (
-   guid TEXT NOT NULL,
-   k TEXT NOT NULL,
-   v TEXT NOT NULL,
-   PRIMARY KEY (guid,k));
-
 CREATE INDEX IF NOT EXISTS boxattr_index_by_box ON boxattr(box);
 CREATE INDEX IF NOT EXISTS mail_index_by_box ON mail(box);
-CREATE INDEX IF NOT EXISTS mailattr_index_by_mail ON mailattr(guid);
 
 CREATE TRIGGER IF NOT EXISTS mail_after_add AFTER INSERT ON mail
 BEGIN
+   UPDATE mail SET box_uid = (SELECT uidnext FROM box WHERE name = new.box) WHERE guid = new.guid AND box = new.box AND uid = new.uid;
    UPDATE box SET
       messages = messages + 1,
       recent = recent + 1,
       unseen = unseen + 1,
       uidnext = uidnext + 1
    WHERE name = new.box ;
+END ;
+
+CREATE TRIGGER IF NOT EXISTS mail_after_delete AFTER DELETE ON mail
+BEGIN
+   UPDATE box SET
+      messages = messages - 1
+   WHERE name = old.box ;
+END ;
+
+CREATE TRIGGER IF NOT EXISTS mail_after_update AFTER UPDATE OF flags ON mail
+BEGIN
+   UPDATE mail SET flags = flags & ~(32) WHERE box = new.box;
+   UPDATE box SET
+      recent = 0,
+      unseen = unseen + ((old.flags & 8) AND ((new.flags & 8) != (old.flags & 8))) - ((new.flags & 8) AND ((new.flags & 8) != (old.flags & 8)))
+   WHERE name = old.box ;
 END ;
 
 INSERT OR REPLACE INTO box (name,ro) VALUES ('INBOX', 0);
@@ -953,9 +995,9 @@ def generate(ns, ip, options={}, defaults={}):
                 f.write(to_write)
 
     # redis
+    env = subenv({'SRVTYPE':'redis', 'SRVNUM':1, 'PORT':6379})
+    add_service(env)
     if options.ALLOW_REDIS is not None:
-        env = subenv({'SRVTYPE':'redis', 'SRVNUM':1, 'PORT':6379})
-        add_service(env)
         with open(gridinit(env), 'a+') as f:
             tpl = Template(template_redis_gridinit)
             f.write(tpl.safe_substitute(env))
@@ -1004,6 +1046,9 @@ def generate(ns, ip, options={}, defaults={}):
     add_service(env)
     with open(CFGDIR + '/' + 'event-agent.conf', 'w+') as f:
         tpl = Template(template_event_agent)
+        f.write(tpl.safe_substitute(env))
+    with open(CFGDIR + '/' + 'event-handlers.conf', 'w+') as f:
+        tpl = Template(template_event_agent_handlers)
         f.write(tpl.safe_substitute(env))
 
     # Conscience agent configuration

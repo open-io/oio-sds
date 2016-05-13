@@ -253,16 +253,14 @@ _has_prefix_len (char **pb, size_t *plen, const char *prefix)
 {
 	char *b = *pb;
 	size_t blen = *plen;
-	if (!b)
+	if (!b || !blen)
 		return FALSE;
-	while (blen && !g_ascii_isalnum(b[blen-1]))
-		blen --;
-	if (!blen)
-		return FALSE;
+
 	while (*prefix) {
 		if (!(blen--) || g_ascii_tolower(*(b++)) != *(prefix++))
 			return FALSE;
 	}
+
 	*pb = b;
 	*plen = blen;
 	return TRUE;

@@ -18,6 +18,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "common.h"
 
+const char *
+_pref2str(enum preference_e p)
+{
+	switch (p) {
+		ON_ENUM(CLIENT_,ANY);
+		ON_ENUM(CLIENT_,RUN_ALL);
+		ON_ENUM(CLIENT_,PREFER_SLAVE);
+		ON_ENUM(CLIENT_,PREFER_MASTER);
+	}
+	g_assert_not_reached ();
+	return "?";
+}
+
 gchar *
 proxy_get_csurl (void)
 {
@@ -60,6 +73,41 @@ service_invalidate (gconstpointer k)
 	SRV_WRITE(lru_tree_insert (srv_down, k0, GINT_TO_POINTER(1)));
 	if (GRID_DEBUG_ENABLED())
 		GRID_DEBUG("invalid at %lu %s", oio_ext_monotonic_seconds(), (const char*)k);
+}
+
+gboolean
+service_is_slave (const char *obj, const char *master)
+{
+	gboolean rc;
+	MASTER_READ(
+		gchar *v = lru_tree_get(srv_master, obj);
+		rc = (v != NULL) && strcmp(v, master));
+	return rc;
+}
+
+gboolean
+service_is_master (const char *obj, const char *master)
+{
+	gboolean rc;
+	MASTER_READ(
+		gchar *v = lru_tree_get(srv_master, obj);
+		rc = (v != NULL) && !strcmp(v, master));
+	return rc;
+}
+
+void
+service_learn_master (const char *obj, const char *master)
+{
+	gchar *k = g_strdup (obj), *v = g_strdup (master);
+	MASTER_WRITE(lru_tree_insert(srv_master, k, v));
+}
+
+guint
+service_expire_masters (gint64 oldest)
+{
+	guint count = 0;
+	MASTER_WRITE(count = lru_tree_remove_older (srv_master, oldest));
+	return count;
 }
 
 const char *
@@ -150,155 +198,185 @@ rest_action (struct req_args_s *args,
 	return rc;
 }
 
-static gboolean
-_qualify_service_url (gconstpointer p)
+/* -------------------------------------------------------------------------- */
+
+#ifdef HAVE_EXTRA_DEBUG
+static void
+_debug_services (const char *tag, gchar **m1uv)
 {
-	gboolean rc = FALSE;
-	gchar *u = meta1_strurl_get_address ((const char*)p);
-	if (u)
-		rc = service_is_ok (u);
-	g_free (u);
-	return rc;
+	if (!GRID_TRACE_ENABLED()) return;
+	gchar *tmp = g_strjoinv(",", m1uv);
+	GRID_TRACE("%s%s", tag, tmp);
+	g_free (tmp);
+}
+#else
+# define _debug_services(...)
+#endif
+
+static void
+_sort_services (struct client_ctx_s *ctx, const char *k, gchar **m1uv)
+{
+	GRID_TRACE("Sorting for %s", _pref2str(ctx->which));
+	_debug_services ("PRE sort: ", m1uv);
+
+	gsize pivot = g_strv_length (m1uv);
+
+	if (pivot) /* prefer services recently available */
+		pivot = oio_ext_array_partition ((void**)m1uv, pivot, service_is_ok);
+
+	if (pivot && ctx->which != CLIENT_RUN_ALL) {
+		/* among available services, prefer those expected SLAVE/MASTER */
+		gboolean _master (gconstpointer p) {
+			return service_is_master (k, p);
+		}
+		gboolean _slave (gconstpointer p) {
+			return service_is_slave (k, p);
+		}
+		switch (ctx->which) {
+			case CLIENT_PREFER_SLAVE:
+				pivot = oio_ext_array_partition ((void**)m1uv, pivot, _slave);
+				break;
+			case CLIENT_PREFER_MASTER:
+				pivot = oio_ext_array_partition ((void**)m1uv, pivot, _master);
+				break;
+			default:
+				break;
+		}
+		if (pivot)
+			oio_ext_array_shuffle ((void**)m1uv, pivot);
+	}
+	_debug_services ("POST sort: ", m1uv);
+}
+
+static gboolean
+_on_reply (gpointer p, MESSAGE reply)
+{
+	GByteArray **pbody = p, *b = NULL;
+	EXTRA_ASSERT (pbody != NULL);
+	GError *e = metautils_message_extract_body_gba (reply, &b);
+	if (e)
+		g_clear_error (&e);
+	else {
+		if (*pbody) g_byte_array_unref (*pbody);
+		*pbody = b;
+	}
+	return TRUE;
 }
 
 GError *
-_resolve_service_and_do (const char *t, gint64 seq, struct oio_url_s *u,
-		GError * (*hook) (struct meta1_service_url_s *m1u, gboolean *next))
+gridd_request_replicated (struct client_ctx_s *ctx, request_packer_f pack)
 {
-	gchar **uv = NULL;
 	GError *err = NULL;
-	guint failures = 0;
+	g_assert (ctx != NULL);
 
-	if (*t == '#')
-		err = hc_resolve_reference_directory (resolver, u, &uv);
+	gchar *election_key = g_strconcat (ctx->name.base, "/", ctx->name.type, NULL);
+	STRING_STACKIFY(election_key);
+
+	/* Locate the services */
+	gchar **m1uv = NULL;
+	if (*ctx->type == '#')
+		err = hc_resolve_reference_directory (resolver, ctx->url, &m1uv);
 	else
-		err = hc_resolve_reference_service (resolver, u, t, &uv);
+		err = hc_resolve_reference_service (resolver, ctx->url, ctx->type, &m1uv);
 
-	EXTRA_ASSERT(BOOL(uv!=NULL) ^ BOOL(err!=NULL));
-
-	if (NULL != err) {
-		g_prefix_error (&err, "Resolution error: ");
+	if (err) {
+		EXTRA_ASSERT(m1uv == NULL);
+		g_prefix_error (&err, "Directory error: ");
 		return err;
-	}
-
-	if (!*uv)
-		err = NEWERROR (CODE_CONTAINER_NOTFOUND, "No service located");
-	else {
-		/* just consider the URL part. The resolver already pre-shuffled it. */
-
-		gsize pivot = oio_ext_array_partition ((void**)uv, g_strv_length(uv),
-				_qualify_service_url);
-		if (pivot > 0 && !oio_dir_no_shuffle)
-			oio_ext_array_shuffle ((void**)uv, pivot);
-
-		for (gchar **pm2 = uv; *pm2; ++pm2) {
-			struct meta1_service_url_s *m1u = meta1_unpack_url (*pm2);
-
-			if (seq > 0 && seq != m1u->seq) {
-				meta1_service_url_clean (m1u);
-				continue;
-			}
-			if (*t == '#' && strcmp(t+1, m1u->srvtype)) {
-				meta1_service_url_clean (m1u);
-				continue;
-			}
-
-			gboolean next = FALSE;
-			err = hook (m1u, &next);
-			if (err && CODE_IS_NETWORK_ERROR(err->code))
-				service_invalidate (m1u->host);
-			meta1_service_url_clean (m1u);
-
-			if (!err) {
-				if (!next)
-					goto exit;
-			} else {
-				++ failures;
-				GRID_DEBUG ("HOOK error : (%d) %s", err->code, err->message);
-				if (!next && !CODE_IS_NETWORK_ERROR(err->code)) {
-					g_prefix_error (&err, "HOOK error: ");
-					goto exit;
-				}
-				g_clear_error (&err);
-			}
+	} else {
+		EXTRA_ASSERT(m1uv != NULL);
+		if (!*m1uv) {
+			g_strfreev (m1uv);
+			return NEWERROR (CODE_CONTAINER_NOTFOUND, "No service located");
 		}
-		if (!err && failures == g_strv_length(uv))
-			err = NEWERROR (CODE_PLATFORM_ERROR, "No reply");
+		meta1_urlv_shift_addr (m1uv);
+		_sort_services (ctx, election_key, m1uv);
 	}
-exit:
-	g_strfreev (uv);
+
+	/* Perform the sequence of requests. */
+	GPtrArray
+		*urlv = g_ptr_array_new (), /* <gchar*> */
+		*errorv = g_ptr_array_new (), /* <GError*> */
+		*bodyv = g_ptr_array_new (); /* <GByteArray*> */
+
+	GByteArray *packed = pack(sqlx_name_mutable_to_const(&ctx->name));
+
+	gboolean stop = FALSE;
+	for (gchar **pu=m1uv; *pu && !stop ;++pu) {
+
+		/* TODO ensure the service match the expected TYPE and SEQ */
+
+		/* Send a unitary request now */
+		GByteArray *body = NULL;
+
+		struct gridd_client_s *client = NULL;
+
+		if (!ctx->decoder) {
+			client = gridd_client_create (*pu, packed, &body, _on_reply);
+		} else {
+			client = gridd_client_create (*pu, packed, ctx->decoder_data, ctx->decoder);
+		}
+
+		g_ptr_array_add (urlv, g_strdup(*pu));
+
+		gridd_client_start (client);
+		gridd_client_set_timeout (client, ctx->timeout);
+		if (!(err = gridd_client_loop (client)))
+			err = gridd_client_error (client);
+
+		g_ptr_array_add (bodyv, body);
+
+		if (err) {
+			g_ptr_array_add (errorv, g_error_copy(err));
+		} else {
+			g_ptr_array_add (errorv, NEWERROR(CODE_FINAL_OK, "OK"));
+		}
+
+		/* Check for a possible redirection */
+		const char *actual = gridd_client_url (client);
+		if (actual && 0 != strcmp(actual, *pu)) {
+			gchar *k = g_strdup(election_key);
+			gchar *v = g_strdup (actual);
+			GRID_DEBUG("MASTER %s %s", v, k);
+			MASTER_WRITE(lru_tree_insert (srv_master, k, v));
+		}
+
+		if (err && CODE_IS_NETWORK_ERROR(err->code)) {
+			service_invalidate(*pu);
+			g_clear_error (&err);
+		}
+
+		if (err) {
+			if (ctx->which == CLIENT_RUN_ALL) {
+				g_clear_error (&err);
+				err = NULL;
+			} else {
+				stop = TRUE;
+			}
+		} else {
+			if (ctx->which != CLIENT_RUN_ALL)
+				stop = TRUE;
+		}
+
+		gridd_client_free (client);
+		client = NULL;
+	}
+
+	g_byte_array_unref (packed);
+	g_strfreev (m1uv);
+
+	ctx->count = urlv->len;
+	g_ptr_array_add (urlv, NULL);
+	g_ptr_array_add (bodyv, NULL);
+	g_ptr_array_add (errorv, NULL);
+	ctx->urlv = (gchar**) g_ptr_array_free (urlv, FALSE);
+	ctx->bodyv = (GByteArray**) g_ptr_array_free (bodyv, FALSE);
+	ctx->errorv = (GError**) g_ptr_array_free (errorv, FALSE);
+
 	return err;
 }
 
-GError *
-_gba_request (struct meta1_service_url_s *m1u,
-		GByteArray * (reqbuilder) (void),
-		GByteArray ** out)
-{
-	gboolean _on_reply (gpointer ctx, MESSAGE reply) {
-		GByteArray **pgba = ctx;
-		GError *e = metautils_message_extract_body_gba (reply, pgba);
-		if (e) g_clear_error (&e);
-		return TRUE;
-	}
-
-	GByteArray *body = NULL;
-	GByteArray *req = reqbuilder();
-	struct gridd_client_s *c = gridd_client_create(m1u->host, req,
-			&body, _on_reply);
-	g_byte_array_unref (req);
-	gridd_client_start (c);
-	gridd_client_set_timeout (c, 1.0);
-	GError *e = gridd_client_loop (c);
-	if (!e)
-		e = gridd_client_error (c);
-	gridd_client_free (c);
-
-	if (!e && out)
-		*out = g_byte_array_ref (body);
-	metautils_gba_unref (body);
-	return e;
-}
-
-GError *
-_gbav_request (const char *t, gint64 seq, struct oio_url_s *u,
-		GByteArray * builder (void),
-		gchar ***outurl, GByteArray ***out)
-{
-	GPtrArray *url = g_ptr_array_new (), *tmp = g_ptr_array_new ();
-	GError* hook (struct meta1_service_url_s *m1u, gboolean *next) {
-		GByteArray *body = NULL;
-		*next = FALSE;
-		GError *e = _gba_request (m1u, builder, &body);
-		if (!e && body) {
-			g_ptr_array_add (tmp, g_byte_array_ref (body));
-			g_ptr_array_add (url, g_strdup(m1u->host));
-		}
-		if (body)
-			g_byte_array_unref (body);
-		return e;
-	}
-	GError *e = _resolve_service_and_do (t, seq, u, hook);
-	if (!e) {
-		if (out) {
-			*out = (GByteArray**) metautils_gpa_to_array (tmp, TRUE);
-			tmp = NULL;
-		}
-		if (outurl) {
-			*outurl = (gchar**) metautils_gpa_to_array (url, TRUE);
-			url = NULL;
-		}
-	}
-	if (url) {
-		g_ptr_array_set_free_func (url, g_free);
-		g_ptr_array_free (url, TRUE);
-	}
-	if (tmp) {
-		g_ptr_array_set_free_func (tmp, metautils_gba_unref);
-		g_ptr_array_free (tmp, TRUE);
-	}
-	return e;
-}
+/* -------------------------------------------------------------------------- */
 
 gboolean
 _request_has_flag (struct req_args_s *args, const char *header,
@@ -380,4 +458,33 @@ service_is_wanted (const char *type)
 			out = g_bytes_ref (*pold);
 	} while (0));
 	return out;
+}
+
+void
+client_init (struct client_ctx_s *ctx, struct req_args_s *args,
+	   const char *srvtype, gint seq)
+{
+	memset(ctx, 0, sizeof(*ctx));
+	ctx->url = args->url;
+	ctx->type = srvtype;
+	ctx->seq = seq;
+	sqlx_name_fill_type_asis (&ctx->name, args->url, srvtype, ctx->seq);
+	ctx->timeout = COMMON_CLIENT_TIMEOUT;
+	ctx->which = CLIENT_ANY;
+}
+
+void
+client_clean (struct client_ctx_s *ctx)
+{
+	sqlx_name_clean(&ctx->name);
+	if (ctx->urlv)
+		g_strfreev (ctx->urlv);
+	if (ctx->errorv) {
+		for (GError **pe=ctx->errorv; *pe ;pe++)
+			g_clear_error(pe);
+		g_free (ctx->errorv);
+	}
+	if (ctx->bodyv)
+		metautils_gba_cleanv (ctx->bodyv);
+	memset (ctx, 0, sizeof(*ctx));
 }

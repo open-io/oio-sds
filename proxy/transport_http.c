@@ -134,7 +134,8 @@ _manage_and_renew_header(struct http_parser_s *parser, GString *buf)
 	if (*(sep++) != ' ')
 		return FALSE;
 
-	if (!g_ascii_strcasecmp(header, "Content-Length"))
+	oio_str_lower (header);
+	if (*header == 'c' && !strcmp(header, "content-length"))
 		parser->content_length = g_ascii_strtoll(sep, NULL, 10);
 
 	if (parser->header_provider)
@@ -268,22 +269,13 @@ http_parser_destroy(struct http_parser_s *parser)
 	g_free(parser);
 }
 
-static gint
-_cmp (gconstpointer p0, gconstpointer p1, gpointer p2)
-{
-	(void) p2;
-	g_assert (p0 != NULL);
-	g_assert (p1 != NULL);
-	return g_ascii_strcasecmp(p0, p1);
-}
-
 static struct http_request_s *
 http_request_create(struct network_client_s *client)
 {
 	struct http_request_s *req;
 	req = g_malloc0(sizeof(*req));
 	req->client = client;
-	req->tree_headers = g_tree_new_full(_cmp, NULL, g_free, g_free);
+	req->tree_headers = g_tree_new_full(metautils_strcmp3, NULL, g_free, g_free);
 	req->body = g_byte_array_new();
 	return req;
 }
@@ -431,7 +423,7 @@ http_manage_request(struct req_ctx_s *r)
 
 	void add_header(const gchar *n, gchar *v) {
 		EXTRA_ASSERT(!finalized);
-		g_tree_replace(headers, (gpointer)g_strdup(n), v);
+		g_tree_replace(headers, g_strdup(n), v);
 	}
 
 	void add_header_gstr(const gchar *n, GString *v) {
@@ -568,14 +560,13 @@ http_notify_input(struct network_client_s *clt)
 	struct req_ctx_s r = {0};
 
 	void command_provider(const gchar *c, const gchar *s, const gchar *v) {
-		r.request->cmd = g_strdup(c);
+		r.request->cmd = g_ascii_strup(c, -1);
 		r.request->req_uri = g_strdup(s);
-		r.request->version = g_strdup(v);
+		r.request->version = g_ascii_strup(v, -1);
 	}
-	void header_provider(const gchar *k0, const gchar *v) {
-		gchar *k = g_strdup(k0);
-		oio_str_lower(k);
-		g_tree_replace(r.request->tree_headers, k, g_strdup(v));
+	void header_provider(const gchar *k, const gchar *v) {
+		/* 'k' should be already lowercase */
+		g_tree_replace(r.request->tree_headers, g_strdup(k), g_strdup(v));
 	}
 	void body_provider(const guint8 *data, gsize data_len) {
 		g_byte_array_append(r.request->body, data, data_len);
