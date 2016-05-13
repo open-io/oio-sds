@@ -896,10 +896,8 @@ action_m2_container_destroy (struct req_args_s *args)
 	gchar **urlv = NULL;
 	struct sqlx_name_mutable_s n = {NULL,NULL,NULL};
 
-	const gboolean hdr_flush = _request_has_flag (args, PROXYD_HEADER_MODE, "flush");
-	const gboolean opt_flush = metautils_cfg_get_bool(OPT("flush"), FALSE);
-	const gboolean hdr_force = _request_has_flag (args, PROXYD_HEADER_MODE, "force");
-	const gboolean opt_force = metautils_cfg_get_bool(OPT("force"), FALSE);
+	const gboolean flush = _request_get_flag (args, PROXYD_HEADER_MODE, "flush", FALSE);
+	const gboolean force = _request_get_flag (args, PROXYD_HEADER_MODE, "force", FALSE);
 
 	/* TODO(jfs): const! */
 	struct sqlx_name_s *name = sqlx_name_mutable_to_const(&n);
@@ -922,10 +920,10 @@ action_m2_container_destroy (struct req_args_s *args)
 	/* 2. FLUSH the base on the MASTER, so events are generated for all the
 	   contents removed. */
 	if (!err) {
-		if (hdr_flush || opt_flush) {
+		if (flush) {
 			PACKER_VOID(_pack) { return m2v2_remote_pack_FLUSH (args->url); }
 			err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
-		} else if (!hdr_force && !opt_force) {
+		} else if (!force) {
 			PACKER_VOID(_pack) { return m2v2_remote_pack_ISEMPTY (args->url); }
 			err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 		}
@@ -951,8 +949,8 @@ action_m2_container_destroy (struct req_args_s *args)
 
 	/* 4. DESTROY each local base */
 	if (!err && urlv && *urlv) {
-		const guint32 flag_force = (hdr_force||opt_force) ? M2V2_DESTROY_FORCE : 0;
-		const guint32 flag_flush = (hdr_flush||opt_flush) ? M2V2_DESTROY_FLUSH : 0;
+		const guint32 flag_force = (force) ? M2V2_DESTROY_FORCE : 0;
+		const guint32 flag_flush = (flush) ? M2V2_DESTROY_FLUSH : 0;
 
 		meta1_urlv_shift_addr(urlv);
 		err = m2v2_remote_execute_DESTROY (urlv[0], args->url,
