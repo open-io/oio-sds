@@ -27,7 +27,7 @@ typedef guint64 oio_location_t;
 typedef guint8 oio_weight_t;
 
 /* the sum of all the weights in a slot shall not overflow the capacity of
- * an oio_weight_acc_t. We internally need this to enweight polls */
+ * an oio_weight_acc_t. We internally need this to enweight pools */
 typedef guint32 oio_weight_acc_t;
 
 typedef void (*oio_lb_on_id_f) (oio_location_t, const char *);
@@ -44,9 +44,10 @@ struct oio_lb_pool_s;
 /* Destroy the load-balancing pool pointed by <self>. */
 void oio_lb_pool__destroy (struct oio_lb_pool_s *self);
 
-/* Returns <count> ID from <self> that are not in <avoid> (supposed to be
+/* Returns IDs from <self> that are not in <avoids> (supposed to be
  * small). <on_id> will be called once for each ID polled. One ID won't be
- * returned more than once. */
+ * returned more than once. The number of IDs returned is the number of
+ * targets of the pool. */
 guint oio_lb_pool__poll (struct oio_lb_pool_s *self,
 		const oio_location_t *avoids,
 		oio_lb_on_id_f on_id);
@@ -84,7 +85,7 @@ struct oio_lb_pool_s * oio_lb_world__create_pool (
 		struct oio_lb_world_s *world, const char *name);
 
 /* Tell the given world-based pool that it must target the given set of slots.
- * The slots sequence is come-separated. It is an error to call this on a
+ * The slots sequence is coma-separated. It is an error to call this on a
  * not world-based pool. */
 void oio_lb_world__add_pool_target (struct oio_lb_pool_s *self, const char *to);
 

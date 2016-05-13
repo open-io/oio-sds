@@ -56,7 +56,7 @@ struct _slot_item_s
 	struct _lb_item_s *item;
 };
 
-/* Set of services matchig the same macro "everything-but-the-location"
+/* Set of services matching the same macro "everything-but-the-location"
    criteria. */
 struct oio_lb_slot_s
 {
@@ -76,7 +76,7 @@ struct oio_lb_slot_s
 	   When set, the slot cannot be used for polling elements. */
 	guint8 flag_dirty_weights : 1;
 
-	/* Does the slit need to be re-sorted by location.
+	/* Does the slot need to be re-sorted by location.
 	   When set, the slot cannot be used to be searched by location */
 	guint8 flag_dirty_order : 1;
 
@@ -148,7 +148,7 @@ _item_is_to_be_avoided (const oio_location_t * avoids,
 	if (!avoids)
 		return FALSE;
 	const oio_location_t loc = mask & item;
-	for (const oio_location_t *pp=avoids; *pp ;++pp) {
+	for (const oio_location_t *pp=avoids; *pp; ++pp) {
 		if (loc == (mask & *pp))
 			return TRUE;
 	}
@@ -208,8 +208,8 @@ _slot_rehash (struct oio_lb_slot_s *slot)
 		const guint max = slot->items->len;
 		for (guint i=0; i<max ;++i) {
 			struct _slot_item_s *si = &SLOT_ITEM(slot,i);
-			si->acc_weight = sum;
 			sum += si->item->weight;
+			si->acc_weight = sum;
 		}
 		slot->sum_weight = sum;
 	}
@@ -251,9 +251,11 @@ _accept_item (struct oio_lb_slot_s *slot, oio_location_t mask,
 {
 	const struct _lb_item_s *item = _slot_get (slot, i);
 	const oio_location_t loc = item->location;
-	if (_item_is_to_be_avoided (ctx->avoids, loc, mask))
+	// User provided avoids -> unmasked
+	if (_item_is_to_be_avoided(ctx->avoids, loc, (oio_location_t)-1))
 		return FALSE;
-	if (_item_is_to_be_avoided (ctx->polled, loc, (oio_location_t)-1))
+	// Previous loops avoids -> masked
+	if (_item_is_to_be_avoided(ctx->polled, loc, mask))
 		return FALSE;
 	ctx->on_id (loc, item->id);
 	*(ctx->next_polled) = loc;
@@ -261,10 +263,10 @@ _accept_item (struct oio_lb_slot_s *slot, oio_location_t mask,
 }
 
 /* Perform a weighted-random polling in the slot.
- * Starting at the "closest" match, perform a ZigZag lookup and for
+ * Starting at the "closest" match, perform a shuffled lookup and for
  * each item check the polled item is not in the set to be avoided.
- * The purpose of the ZigZag is to stay as close as possible to the
- * closest weight. */
+ * The purpose of the shuffled lookup is to jump to an item with
+ * a distant location. */
 static gboolean
 _local_slot__poll (struct oio_lb_slot_s *slot, gboolean masked,
 		struct polling_ctx_s *ctx)
@@ -290,14 +292,12 @@ _local_slot__poll (struct oio_lb_slot_s *slot, gboolean masked,
 	g_assert (i >= 0);
 	g_assert ((guint)i < slot->items->len);
 
-	/* do the ZigZag */
 	oio_location_t mask = masked ? slot->location_mask : (oio_location_t)-1;
-	guint minus = i, plus = i+1;
-	while (minus > 0 || plus < slot->items->len) {
-		if (minus > 0 && _accept_item (slot, mask, ctx, minus--))
+	guint iter = 0;
+	while (iter++ < slot->items->len) {
+		if (_accept_item(slot, mask, ctx, i))
 			return TRUE;
-		if (plus < slot->items->len && _accept_item(slot, mask, ctx, plus++))
-			return TRUE;
+		i = (i + (1 << 31) - 1) % slot->items->len;  // not prime but OK
 	}
 
 	GRID_TRACE2("%s avoided everything in slot=%s", __FUNCTION__, slot->name);
@@ -312,7 +312,7 @@ _local_target__poll (struct oio_lb_pool_LOCAL_s *lb,
 
 	/* each target is a sequence of '\0'-separated strings, terminated with
 	 * an empty string. Each string is the name of a slot */
-	for (const char *name = target; *name ;name+=1+strlen(name)) {
+	for (const char *name = target; *name; name += 1+strlen(name)) {
 		struct oio_lb_slot_s *slot = oio_lb_world__get_slot (lb->world, name);
 		if (!slot)
 			GRID_DEBUG ("Slot [%s] not ready", name);
@@ -336,7 +336,7 @@ _local__poll (struct oio_lb_pool_s *self,
 	/* count the expected targets to build a temporary storage for
 	 * polled locations */
 	guint count_targets = 0;
-	for (gchar **ptarget=lb->targets; *ptarget ;++ptarget)
+	for (gchar **ptarget = lb->targets; *ptarget; ++ptarget)
 		count_targets ++;
 	oio_location_t polled[count_targets+1];
 	memset (polled, 0, sizeof(oio_location_t) * (1+count_targets));
@@ -349,10 +349,10 @@ _local__poll (struct oio_lb_pool_s *self,
 	};
 
 	/* each target must provide an item. For each target, try the slots with
-	 * with their connstraints, and if no reply has been made, retry without
+	 * their constraints, and if no reply has been made, retry without
 	 * the constraints. */
 	guint count = 0;
-	for (gchar **ptarget=lb->targets; *ptarget ;++ptarget) {
+	for (gchar **ptarget = lb->targets; *ptarget; ++ptarget) {
 		gboolean done = _local_target__poll (lb, *ptarget, TRUE, &ctx);
 		if (!done)
 			done = _local_target__poll (lb, *ptarget, FALSE, &ctx);
@@ -588,9 +588,11 @@ oio_lb_world__feed_slot (struct oio_lb_world_s *self, const char *name,
 static void
 _slot_debug (struct oio_lb_slot_s *slot, const char *name)
 {
-	GRID_DEBUG ("slot=%s num=%u sum=%"G_GUINT32_FORMAT" content:",
-			name, slot->items->len, slot->sum_weight);
-	for (guint i=0; i<slot->items->len ;++i) {
+	GRID_DEBUG("slot=%s num=%u sum=%"G_GUINT32_FORMAT" flags=%d content:",
+			name, slot->items->len, slot->sum_weight,
+			slot->flag_dirty_weights | slot->flag_dirty_order<<1 |
+			slot->flag_rehash_on_update<<2);
+	for (guint i = 0; i < slot->items->len; ++i) {
 		const struct _slot_item_s *si = &SLOT_ITEM(slot,i);
 		GRID_DEBUG ("- [%s,%"OIO_LOC_FORMAT"] w=%u/%"G_GUINT32_FORMAT,
 				si->item->id, si->item->location, si->item->weight, si->acc_weight);
