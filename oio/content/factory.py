@@ -25,6 +25,7 @@ from oio.content.rain import RainContent
 
 class ContentFactory(object):
     DEFAULT_DATASEC = "plain", {"nb_copy": "1", "distance": "0"}
+
     def __init__(self, conf):
         self.conf = conf
         self.logger = get_logger(conf)
@@ -43,7 +44,7 @@ class ContentFactory(object):
             return self.__class__.DEFAULT_DATASEC
 
         tokens = stgpol.split(':')
-        stgclass_name = tokens.pop(0)
+        tokens.pop(0)
         datasec_name = tokens.pop(0)
         if datasec_name == 'plain' or datasec_name == 'NONE':
             return self.__class__.DEFAULT_DATASEC

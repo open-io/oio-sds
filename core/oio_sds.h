@@ -37,6 +37,9 @@ enum oio_sds_config_e
 
 	/* expects an <int> used for its boolean value */
 	OIOSDS_CFG_FLAG_SYNCATDOWNLOAD,
+
+	/* expects an <int> used for its boolean value */
+	OIOSDS_CFG_FLAG_USE_SWIFT,
 };
 
 /* API-global --------------------------------------------------------------- */
@@ -106,7 +109,7 @@ struct oio_error_s* oio_sds_create (struct oio_sds_s *sds, struct oio_url_s *url
 
 /* Download ----------------------------------------------------------------- */
 
-/* Expected to return 0 when the data's managemenr succeeded, and something
+/* Expected to return the number of bytes read, and something
  * else when it failed. */
 typedef int (*oio_sds_dl_hook_f) (void*, const unsigned char*, size_t);
 
@@ -207,7 +210,7 @@ struct oio_error_s * oio_sds_upload_commit (struct oio_sds_ul_s *ul);
 
 struct oio_error_s * oio_sds_upload_abort (struct oio_sds_ul_s *ul);
 
-/* Tells if the upload is ready to be accept data */
+/* Tells if the upload is ready to accept data */
 int oio_sds_upload_greedy (struct oio_sds_ul_s *ul);
 
 /* Tells if the upload is ready to be (in)validated */

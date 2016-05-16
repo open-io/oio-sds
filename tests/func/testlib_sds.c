@@ -248,7 +248,7 @@ _count (void *i, const unsigned char *b, size_t l)
 {
 	(void) b;
 	*((size_t*)i) += l;
-	return 0;
+	return l;
 }
 
 void
