@@ -313,6 +313,7 @@ extern "C" {
 # define OIO_CFG_ZOOKEEPER    "zookeeper"
 # define OIO_CFG_CONSCIENCE   "conscience"
 # define OIO_CFG_ACCOUNTAGENT "event-agent"
+# define OIO_CFG_SWIFT        "swift"
 
 # define gridcluster_get_zookeeper(ns)  oio_cfg_get_value((ns), OIO_CFG_ZOOKEEPER)
 # define gridcluster_get_eventagent(ns) oio_cfg_get_value((ns), OIO_CFG_ACCOUNTAGENT)
@@ -339,6 +340,9 @@ gchar * oio_cfg_get_proxy_directory (const char *ns);
 /** get the url of the proxy dedicated to the containers, with a fallback
  * on a proxy capable of everything */
 gchar * oio_cfg_get_proxy_containers (const char *ns);
+
+/** get the url of the swift gateway */
+gchar * oio_cfg_get_swift(const char *ns);
 
 #ifdef __cplusplus
 }
