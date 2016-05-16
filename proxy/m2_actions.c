@@ -102,7 +102,6 @@ _reply_m2_error (struct req_args_s *args, GError * err)
 {
 	if (!err)
 		return _reply_success_json (args, NULL);
-	g_prefix_error (&err, "M2 error: ");
 	if (err->code == CODE_CONTAINER_NOTEMPTY)
 		return _reply_conflict_error (args, err);
 	return _reply_common_error (args, err);
@@ -901,10 +900,11 @@ action_m2_container_destroy (struct req_args_s *args)
 	const gboolean hdr_force = _request_has_flag (args, PROXYD_HEADER_MODE, "force");
 	const gboolean opt_force = metautils_cfg_get_bool(OPT("force"), FALSE);
 
-	/* TODO(jfs): const! */
+	/* TODO make this const! */
 	struct sqlx_name_s *name = sqlx_name_mutable_to_const(&n);
-	/* TODO(jfs): manage container subtype */
+	/* XXX manage container subtype */
 	sqlx_name_fill (&n, args->url, NAME_SRVTYPE_META2, 1);
+
 	/* pre-loads the locations of the container. We will need this at the
 	 * destroy step. */
 	err = hc_resolve_reference_service (resolver, args->url, n.type, &urlv);
@@ -979,10 +979,8 @@ action_m2_container_purge (struct req_args_s *args, struct json_object *j UNUSED
 {
 	PACKER_VOID(_pack) { return m2v2_remote_pack_PURGE (args->url); }
 	GError *err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
-	if (NULL != err) {
-		g_prefix_error (&err, "M2 error: ");
+	if (NULL != err)
 		return _reply_common_error (args, err);
-	}
 	return _reply_success_json (args, NULL);
 }
 
@@ -991,10 +989,8 @@ action_m2_container_flush (struct req_args_s *args, struct json_object *j UNUSED
 {
 	PACKER_VOID(_pack) { return m2v2_remote_pack_FLUSH (args->url); }
 	GError *err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
-	if (NULL != err) {
-		g_prefix_error (&err, "M2 error: ");
+	if (NULL != err)
 		return _reply_common_error (args, err);
-	}
 	return _reply_success_json (args, NULL);
 }
 
@@ -1003,10 +999,8 @@ action_m2_container_dedup (struct req_args_s *args, struct json_object *j UNUSED
 {
 	PACKER_VOID(_pack) { return m2v2_remote_pack_DEDUP (args->url); }
 	GError *err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
-	if (NULL != err) {
-		g_prefix_error (&err, "M2 error: ");
+	if (NULL != err)
 		return _reply_common_error (args, err);
-	}
 	return _reply_success_json (args, NULL);
 }
 

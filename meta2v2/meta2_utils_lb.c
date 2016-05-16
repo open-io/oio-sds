@@ -70,7 +70,7 @@ _gen_chunk_bean(struct service_info_s *si)
 	gchar *chunkid = NULL;
 	struct bean_CHUNKS_s *chunk = NULL;
 
-	oio_str_randomize (binid, sizeof(binid));
+	oio_buf_randomize (binid, sizeof(binid));
 	oio_str_bin2hex (binid, sizeof(binid), strid, sizeof(strid));
 	grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
 	chunk = _bean_create(&descr_struct_CHUNKS);

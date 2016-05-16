@@ -222,7 +222,7 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 		const char *missing = request_load_chunk_info(r, resource);
 		if (missing != NULL) {
 			return server_create_and_stat_error(request_get_server_config(r), r->pool,
-				HTTP_BAD_REQUEST, 0, apr_pstrcat(r->pool, "Missing header ", missing, NULL));
+				HTTP_BAD_REQUEST, 0, apr_pstrcat(r->pool, "Header error: ", missing, NULL));
 		}
 	}
 

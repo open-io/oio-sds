@@ -249,7 +249,7 @@ oio_ext_set_random_reqid (void)
 		guint8 buf[14];
 	} bulk;
 	bulk.pid = getpid();
-	oio_str_randomize(bulk.buf, sizeof(bulk.buf));
+	oio_buf_randomize(bulk.buf, sizeof(bulk.buf));
 
 	char hex[33];
 	oio_str_bin2hex((guint8*)&bulk, sizeof(bulk), hex, sizeof(hex));

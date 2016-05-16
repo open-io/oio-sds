@@ -996,6 +996,9 @@ oio_sds_upload_init (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst)
 {
 	if (!sds || !dst)
 		return NULL;
+	if (dst->content_id && !oio_str_ishexa1(dst->content_id))
+		return NULL;
+
 	oio_ext_set_reqid (sds->session_id);
 
 	struct oio_sds_ul_s *ul = g_malloc0 (sizeof(*ul));
@@ -1008,8 +1011,10 @@ oio_sds_upload_init (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst)
 	ul->buffer_tail = g_queue_new ();
 	ul->metachunk_ready = g_queue_new ();
 
-	if (dst->content_id)
+	if (dst->content_id) {
+		EXTRA_ASSERT(oio_str_ishexa1 (dst->content_id));
 		oio_str_replace (&ul->hexid, dst->content_id);
+	}
 	return ul;
 }
 
@@ -1084,6 +1089,10 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 		};
 		err = oio_proxy_call_content_prepare (ul->sds->h, ul->dst->url,
 				size, ul->dst->autocreate, &out);
+
+		if (!err && out.header_content && !oio_str_ishexa1 (out.header_content))
+			err = SYSERR("returned content-id not hexadecimal");
+
 		if (err)
 			g_prefix_error (&err, "Proxy: ");
 		else {
@@ -1107,6 +1116,8 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 		oio_str_clean (&out.header_chunk_method);
 		oio_str_clean (&out.header_mime_type);
 	} while (0);
+
+	EXTRA_ASSERT(!ul->hexid || oio_str_ishexa1(ul->hexid));
 
 	/* Parse the output, as a JSON array of objects with fields
 	 * depicting chunks */
@@ -1280,6 +1291,10 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 				"%s", ul->chunk_method);
 		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-mime-type",
 				"%s", ul->mime_type);
+
+		/* FIXME fix the fake value */
+		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-chunksnb",
+				"%d", 1);
 
 		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-id",
 				"%s", strrchr(c->url, '/')+1);
@@ -1461,7 +1476,8 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 	if(err)
 		return (struct oio_error_s*) err;
 	if(NULL != ul->dst->properties)
-		return (struct oio_error_s*) oio_proxy_call_content_set_properties(ul->sds->h, ul->dst->url, (const char* const*)ul->dst->properties);
+		return (struct oio_error_s*) oio_proxy_call_content_set_properties
+			(ul->sds->h, ul->dst->url, (const char* const*)ul->dst->properties);
 	return NULL;
 }
 
@@ -1565,6 +1581,8 @@ oio_sds_upload (struct oio_sds_s *sds, struct oio_sds_ul_src_s *src,
 {
 	if (!sds || !src || !dst)
 		return (struct oio_error_s*) BADREQ("Missing parameter");
+	if (dst->content_id && !oio_str_ishexa1 (dst->content_id))
+		return (struct oio_error_s*) BADREQ("content_id not hexadecimal");
 
 	if (src->type == OIO_UL_SRC_HOOK_SEQUENTIAL)
 		return (struct oio_error_s*) _upload_sequential (sds, dst, src);
@@ -1592,6 +1610,8 @@ oio_sds_upload_from_file (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 {
 	if (!sds || !dst || !local)
 		return (struct oio_error_s*) BADREQ("Invalid argument");
+	if (dst->content_id && !oio_str_ishexa1 (dst->content_id))
+		return (struct oio_error_s*) BADREQ("content_id not hexadecimal");
 
 	int fd = -1;
 	FILE *in = NULL;
@@ -1632,6 +1652,8 @@ oio_sds_upload_from_buffer (struct oio_sds_s *sds,
 {
 	if (!sds || !dst || !base)
 		return (struct oio_error_s*) BADREQ("Invalid argument");
+	if (dst->content_id && !oio_str_ishexa1 (dst->content_id))
+		return (struct oio_error_s*) BADREQ("content_id not hexadecimal");
 
 	FILE *in = NULL;
 	GError *err = NULL;
@@ -1898,7 +1920,10 @@ oio_sds_link (struct oio_sds_s *sds, struct oio_url_s *url, const char *content_
 {
 	if (!sds || !url || !content_id)
 		return (struct oio_error_s*) BADREQ("Missing argument");
+	if (!oio_str_ishexa1 (content_id))
+		return (struct oio_error_s*) BADREQ("content_id not hexadecimal");
 	oio_ext_set_reqid (sds->session_id);
+
 	return (struct oio_error_s*) oio_proxy_call_content_link (sds->h, url, content_id);
 }
 
@@ -1926,6 +1951,7 @@ oio_sds_delete (struct oio_sds_s *sds, struct oio_url_s *url)
 	if (!sds || !url)
 		return (struct oio_error_s*) BADREQ("Missing argument");
 	oio_ext_set_reqid (sds->session_id);
+
 	return (struct oio_error_s*) oio_proxy_call_content_delete (sds->h, url);
 }
 
@@ -1935,8 +1961,8 @@ oio_sds_delete_container (struct oio_sds_s *sds, struct oio_url_s *url)
 	if (!sds || !url)
 		return (struct oio_error_s*) BADREQ("Missing argument");
 	oio_ext_set_reqid (sds->session_id);
-	return (struct oio_error_s*) oio_proxy_call_container_delete (sds->h,
-								      url);
+
+	return (struct oio_error_s*) oio_proxy_call_container_delete (sds->h, url);
 }
 
 struct oio_error_s*
@@ -1945,6 +1971,7 @@ oio_sds_has (struct oio_sds_s *sds, struct oio_url_s *url, int *phas)
 	if (!sds || !url || !phas)
 		return (struct oio_error_s*) BADREQ("Missing argument");
 	oio_ext_set_reqid (sds->session_id);
+
 	GError *err = oio_proxy_call_content_show (sds->h, url, NULL);
 	*phas = (err == NULL);
 	if (err && (CODE_IS_NOTFOUND(err->code) || err->code == CODE_NOT_FOUND))
@@ -1953,75 +1980,70 @@ oio_sds_has (struct oio_sds_s *sds, struct oio_url_s *url, int *phas)
 }
 
 struct oio_error_s*
-oio_sds_get_container_properties(struct oio_sds_s *sds,
-				 struct oio_url_s *url,
-				 on_element fct,
-				 void *ctx) {
-	gchar *buf = NULL;
-	gchar *tmp = NULL;
-	GString *value = NULL;
-	struct oio_error_s *err;
+oio_sds_get_container_properties(struct oio_sds_s *sds, struct oio_url_s *url,
+		on_element_f fct, void *ctx)
+{
 	if (!sds || !url)
 		return (struct oio_error_s*) BADREQ("Missing argument");
+	oio_ext_set_reqid (sds->session_id);
+
+	GString *value = NULL;
+	struct oio_error_s *err;
 	err = (struct oio_error_s*) oio_proxy_call_container_get_properties(sds->h, url, &value);
 	if (err)
 		return err;
-	buf = g_string_free(value, FALSE);
-	json_object *json = json_tokener_parse(buf);
+
+	json_object *json = json_tokener_parse(value->str);
 	json_object_object_foreach(json,key,val) {
-		tmp = (char*) json_object_get_string(val);
-		fct(ctx, key, tmp);
+		fct(ctx, key, json_object_get_string(val));
 	}
 	json_object_put(json);
-	g_free(buf);
+	g_string_free (value, TRUE);
 	return err;
-	
 }
 
 struct oio_error_s*
-oio_sds_set_container_properties (struct oio_sds_s *sds,
-				  struct oio_url_s *url,
-				  const gchar * const *values) {
+oio_sds_set_container_properties (struct oio_sds_s *sds, struct oio_url_s *url,
+		const char * const *values)
+{
 	if (!sds || !url || !values)
 		return (struct oio_error_s*) BADREQ("Missing argument");
+	oio_ext_set_reqid (sds->session_id);
+
 	return (struct oio_error_s*) oio_proxy_call_container_set_properties(sds->h, url, values);
 }
 
-
 struct oio_error_s*
-oio_sds_get_content_properties(struct oio_sds_s *sds,
-			       struct oio_url_s *url,
-			       on_element fct,
-			       void *ctx) {
-	gchar *buf = NULL;
-	gchar *tmp = NULL;
-	GString *value = NULL;
-	struct oio_error_s *err;
+oio_sds_get_content_properties(struct oio_sds_s *sds, struct oio_url_s *url,
+		on_element_f fct, void *ctx)
+{
 	if (!sds || !url)
 		return (struct oio_error_s*) BADREQ("Missing argument");
+	oio_ext_set_reqid (sds->session_id);
+
+	GString *value = NULL;
+	struct oio_error_s *err;
 	err = (struct oio_error_s*) oio_proxy_call_content_get_properties(sds->h, url, &value);
 	if (err)
 		return err;
-	buf = g_string_free(value, FALSE);
-	json_object *json = json_tokener_parse(buf);
+
+	json_object *json = json_tokener_parse(value->str);
 	json_object_object_foreach(json,key,val) {
-		tmp = (char*) json_object_get_string(val);
-		fct(ctx, key, tmp);
+		fct(ctx, key, json_object_get_string(val));
 	}
 	json_object_put(json);
-	g_free(buf);
+	g_string_free(value, TRUE);
 	return err;
-
 }
 
-
-
 struct oio_error_s*
-oio_sds_set_content_properties (struct oio_sds_s *sds,
-				struct oio_url_s *url,
-				const gchar * const *values) {
+oio_sds_set_content_properties (struct oio_sds_s *sds, struct oio_url_s *url,
+		const char * const *values)
+{
 	if (!sds || !url || !values)
 		return (struct oio_error_s*) BADREQ("Missing argument");
+	oio_ext_set_reqid (sds->session_id);
+
 	return (struct oio_error_s*) oio_proxy_call_content_set_properties(sds->h, url, values);
 }
 
