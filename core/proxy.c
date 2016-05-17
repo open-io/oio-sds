@@ -200,7 +200,7 @@ struct view_GString_s
 };
 
 static size_t
-_read_GString (void *b, size_t s, size_t n, struct view_GString_s *in)
+_read_GString (char *b, size_t s, size_t n, struct view_GString_s *in)
 {
 	size_t remaining = in->data->len - in->done;
 	size_t available = s * n;
@@ -309,7 +309,7 @@ _proxy_call_notime (CURL *h, const char *method, const char *url,
 	if (in && in->body) {
 		view_input.data = in->body;
 		gint64 len = in->body->len;
-		curl_easy_setopt (h, CURLOPT_READFUNCTION, _read_GString);
+		curl_easy_setopt (h, CURLOPT_READFUNCTION, (curl_read_callback)_read_GString);
 		curl_easy_setopt (h, CURLOPT_READDATA, &view_input);
 		curl_easy_setopt (h, CURLOPT_UPLOAD, 1L);
 		curl_easy_setopt (h, CURLOPT_INFILESIZE_LARGE, len);
