@@ -355,7 +355,7 @@ _done_reading (struct http_put_dest_s *dest, const char *why)
 }
 
 static size_t
-cb_read(void *data, size_t s, size_t n, struct http_put_dest_s *dest)
+cb_read(char *data, size_t s, size_t n, struct http_put_dest_s *dest)
 {
 	g_assert (dest->state == HTTP_SINGLE_BEGIN || dest->state == HTTP_SINGLE_REQUEST);
 	dest->state = HTTP_SINGLE_REQUEST;
@@ -461,7 +461,8 @@ _start_upload(struct http_put_s *p)
 			http_put_dest_add_header(dest, "Transfer-Encoding", "chunked");
 		http_put_dest_add_header(dest, "Expect", " ");
 
-		curl_easy_setopt(dest->handle, CURLOPT_READFUNCTION, cb_read);
+		curl_easy_setopt(dest->handle, CURLOPT_READFUNCTION,
+				(curl_read_callback)cb_read);
 		curl_easy_setopt(dest->handle, CURLOPT_READDATA, dest);
 		curl_easy_setopt(dest->handle, CURLOPT_WRITEFUNCTION, cb_write);
 		curl_easy_setopt(dest->handle, CURLOPT_HTTPHEADER, dest->curl_headers);
