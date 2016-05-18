@@ -399,6 +399,17 @@ _request_has_flag (struct req_args_s *args, const char *header,
 	g_strfreev (tokens);
 	return rc;
 }
+	
+gboolean
+_request_get_flag (struct req_args_s *args, const char *header, const char *flag, const gboolean default_value)
+{
+	const gchar *v = OPT(flag);
+	if (NULL != v) {
+		gboolean result = metautils_cfg_get_bool(v, FALSE);
+		return result;
+	}
+	return _request_has_flag(args, header, flag) ? TRUE : default_value;
+}
 
 void
 service_learn (const char *key)
