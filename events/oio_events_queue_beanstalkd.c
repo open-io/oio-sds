@@ -228,7 +228,7 @@ _use_tube (int fd, const char *name)
 	if (!oio_str_is_set(name))
 		return NULL;
 
-	gsize len = g_snprintf(buf, sizeof(buf), "USE %s\r\n", name);
+	gsize len = g_snprintf(buf, sizeof(buf), "use %s\r\n", name);
 
 	if (len >= sizeof(buf))
 		return NEWERROR(CODE_INTERNAL_ERROR, "BUG: tube name too long");
