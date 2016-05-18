@@ -378,6 +378,11 @@ oio_error_message (const struct oio_error_s *e)
 struct oio_error_s *
 oio_sds_init (struct oio_sds_s **out, const char *ns)
 {
+	if (!out)
+		return (struct oio_error_s*) BADREQ("Invalid argument");
+	if (!ns)
+		return (struct oio_error_s*) BADREQ("No namespace");
+
 	oio_ext_set_random_reqid ();
 	oio_log_lazy_init ();
 
@@ -447,8 +452,7 @@ oio_sds_configure (struct oio_sds_s *sds, enum oio_sds_config_e what,
 struct oio_error_s*
 oio_sds_create (struct oio_sds_s *sds, struct oio_url_s *url)
 {
-	GError *err = NULL;
-	err = oio_proxy_call_container_create(sds->h, url);
+	GError *err = oio_proxy_call_container_create(sds->h, url);
 	return (struct oio_error_s *) err;
 }
 
