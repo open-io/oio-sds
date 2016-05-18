@@ -180,14 +180,14 @@ _body_parse_error (GString *b)
 }
 
 static size_t
-_write_NOOP (void *data, size_t s, size_t n, void *ignored)
+_write_NOOP (char *data, size_t s, size_t n, void *ignored)
 {
 	(void) data, (void) ignored;
 	return s*n;
 }
 
 static size_t
-_write_GString (void *b, size_t s, size_t n, GString *out)
+_write_GString (char *b, size_t s, size_t n, GString *out)
 {
 	g_string_append_len (out, (gchar*)b, s*n);
 	return s*n;
@@ -309,7 +309,8 @@ _proxy_call_notime (CURL *h, const char *method, const char *url,
 	if (in && in->body) {
 		view_input.data = in->body;
 		gint64 len = in->body->len;
-		curl_easy_setopt (h, CURLOPT_READFUNCTION, (curl_read_callback)_read_GString);
+		curl_easy_setopt (h, CURLOPT_READFUNCTION,
+				(curl_read_callback)_read_GString);
 		curl_easy_setopt (h, CURLOPT_READDATA, &view_input);
 		curl_easy_setopt (h, CURLOPT_UPLOAD, 1L);
 		curl_easy_setopt (h, CURLOPT_INFILESIZE_LARGE, len);
@@ -321,10 +322,12 @@ _proxy_call_notime (CURL *h, const char *method, const char *url,
 	}
 
 	if (out && out->body) {
-		curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
+		curl_easy_setopt (h, CURLOPT_WRITEFUNCTION,
+				(curl_write_callback)_write_GString);
 		curl_easy_setopt (h, CURLOPT_WRITEDATA, out->body);
 	} else {
-		curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_NOOP);
+		curl_easy_setopt (h, CURLOPT_WRITEFUNCTION,
+				(curl_write_callback)_write_NOOP);
 	}
 
 	CURLcode rc = curl_easy_perform (h);

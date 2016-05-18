@@ -502,12 +502,13 @@ _download_range_from_chunk (struct _download_ctx_s *dl,
 		const struct oio_sds_dl_range_s *range, struct chunk_s *c0,
 		size_t *p_nbread)
 {
-	size_t _write_wrapper (void *data, size_t s, size_t n, void *ignored) {
+	size_t _write_wrapper (char *data, size_t s, size_t n, void *ignored) {
 		(void) ignored;
 		size_t total = s*n;
 		/* TODO compute a MD5SUM */
 		/* TODO guard against to many bytes received from the rawx */
-		if (0 == dl->dst->data.hook.cb (dl->dst->data.hook.ctx, data, total)) {
+		if (0 == dl->dst->data.hook.cb (dl->dst->data.hook.ctx,
+					(const unsigned char*)data, total)) {
 			GRID_TRACE("user callback managed %"G_GSIZE_FORMAT" bytes", total);
 			*p_nbread += total;
 			return total;

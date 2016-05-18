@@ -408,18 +408,19 @@ cb_read(char *data, size_t s, size_t n, struct http_put_dest_s *dest)
 }
 
 static size_t
-cb_write(void *data, size_t size, size_t nmemb, gpointer nothing)
+cb_write(char *data, size_t size, size_t nmemb, gpointer nothing)
 {
 	(void)data, (void)nothing;
 	return size * nmemb;
 }
 
 static size_t
-cb_header(void *ptr, size_t size, size_t nmemb, struct http_put_dest_s *dest)
+cb_header(char *ptr, size_t size, size_t nmemb, void *raw_dest)
 {
 	g_assert(ptr != NULL);
-	g_assert(dest != NULL);
+	g_assert(raw_dest != NULL);
 
+	struct http_put_dest_s *dest = raw_dest;
 	int len = size * nmemb;
 	gchar *header = ptr; /* /!\ not nul-terminated */
 	gchar *tmp = g_strstr_len(header, len, ":");
@@ -464,7 +465,8 @@ _start_upload(struct http_put_s *p)
 		curl_easy_setopt(dest->handle, CURLOPT_READFUNCTION,
 				(curl_read_callback)cb_read);
 		curl_easy_setopt(dest->handle, CURLOPT_READDATA, dest);
-		curl_easy_setopt(dest->handle, CURLOPT_WRITEFUNCTION, cb_write);
+		curl_easy_setopt(dest->handle, CURLOPT_WRITEFUNCTION,
+				(curl_write_callback)cb_write);
 		curl_easy_setopt(dest->handle, CURLOPT_HTTPHEADER, dest->curl_headers);
 		curl_easy_setopt(dest->handle, CURLOPT_HEADERFUNCTION, cb_header);
 		curl_easy_setopt(dest->handle, CURLOPT_HEADERDATA, dest);
@@ -488,7 +490,7 @@ _manage_curl_events (struct http_put_s *p)
 			CURLcode curl_ret = msg->data.result;
 			struct http_put_dest_s *dest = NULL;
 
-			curl_easy_getinfo(easy, CURLINFO_PRIVATE, &dest);
+			curl_easy_getinfo(easy, CURLINFO_PRIVATE, (char**)&dest);
 			g_assert (easy == dest->handle);
 			g_assert (dest->state != HTTP_SINGLE_FINISHED);
 			dest->state = HTTP_SINGLE_FINISHED;
