@@ -265,9 +265,7 @@ GError * _m1_locate_and_action (struct oio_url_s *url, GError * (*hook) ());
 
 GError * gridd_request_replicated (struct client_ctx_s *, request_packer_f);
 
-gboolean _request_get_flag(struct req_args_s *args, const char *header, const char *flag, gboolean default_value);
-
-gboolean _request_has_flag (struct req_args_s *args, const char *header, const char *flag);
+gboolean _request_get_flag(struct req_args_s *args, const char *flag);
 
 /* -------------------------------------------------------------------------- */
 

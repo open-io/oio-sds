@@ -378,8 +378,8 @@ gridd_request_replicated (struct client_ctx_s *ctx, request_packer_f pack)
 
 /* -------------------------------------------------------------------------- */
 
-gboolean
-_request_has_flag (struct req_args_s *args, const char *header,
+static gboolean
+_has_flag_in_headers (struct req_args_s *args, const char *header,
 		const char *flag)
 {
 	const char *v = g_tree_lookup(args->rq->tree_headers, header);
@@ -399,16 +399,14 @@ _request_has_flag (struct req_args_s *args, const char *header,
 	g_strfreev (tokens);
 	return rc;
 }
-	
+
 gboolean
-_request_get_flag (struct req_args_s *args, const char *header, const char *flag, const gboolean default_value)
+_request_get_flag (struct req_args_s *args, const char *flag)
 {
 	const gchar *v = OPT(flag);
-	if (NULL != v) {
-		gboolean result = metautils_cfg_get_bool(v, FALSE);
-		return result;
-	}
-	return _request_has_flag(args, header, flag) ? TRUE : default_value;
+	if (NULL != v)
+		return metautils_cfg_get_bool(v, FALSE);
+	return _has_flag_in_headers (args, PROXYD_HEADER_MODE, flag);
 }
 
 void

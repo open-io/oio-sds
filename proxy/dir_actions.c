@@ -178,8 +178,8 @@ action_dir_srv_link (struct req_args_s *args, struct json_object *jargs)
 	const char *type = TYPE();
 	if (!type)
 		return _reply_format_error (args, BADREQ("No service type provided"));
-	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
-	gboolean dryrun = _request_has_flag (args, PROXYD_HEADER_MODE, "dryrun");
+	gboolean autocreate = _request_get_flag (args, "autocreate");
+	gboolean dryrun = _request_get_flag (args, "dryrun");
 
 	gchar **urlv = NULL;
 	GError *hook (const char * m1) {
@@ -211,8 +211,8 @@ action_dir_srv_force (struct req_args_s *args, struct json_object *jargs)
 	if (!type)
 		return _reply_format_error (args, BADREQ("No service type provided"));
 
-	gboolean force = _request_has_flag (args, PROXYD_HEADER_MODE, "replace");
-	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
+	gboolean force = _request_get_flag (args, "replace");
+	gboolean autocreate = _request_get_flag (args, "autocreate");
 
 	GError *hook (const char * m1) {
 		gchar *packed = meta1_pack_url (m1u);
@@ -251,8 +251,8 @@ action_dir_srv_renew (struct req_args_s *args, struct json_object *jargs)
 	const char *type = TYPE();
 	if (!type)
 		return _reply_format_error (args, BADREQ("No service type provided"));
-	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
-	gboolean dryrun = _request_has_flag (args, PROXYD_HEADER_MODE, "dryrun");
+	gboolean autocreate = _request_get_flag (args, "autocreate");
+	gboolean dryrun = _request_get_flag (args, "dryrun");
 
 	gchar **urlv = NULL;
 	GError *hook (const char * m1) {
@@ -287,7 +287,7 @@ action_dir_srv_relink (struct req_args_s *args, struct json_object *jargs)
 	if (!type)
 		return _reply_format_error (args, BADREQ("No service type provided"));
 
-	gboolean dryrun = _request_has_flag (args, PROXYD_HEADER_MODE, "dryrun");
+	gboolean dryrun = _request_get_flag (args, "dryrun");
 
 	struct json_object *jkept, *jrepl;
 	struct oio_ext_json_mapping_s mapping[] = {
@@ -482,7 +482,7 @@ action_ref_show (struct req_args_s *args)
 enum http_rc_e
 action_ref_destroy (struct req_args_s *args)
 {
-	gboolean force = _request_has_flag (args, PROXYD_HEADER_MODE, "force");
+	gboolean force = _request_get_flag (args, "force");
 
 	GError *hook (const char * m1) {
 		return meta1v2_remote_delete_reference (m1, args->url, force);

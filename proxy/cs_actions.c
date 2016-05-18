@@ -307,7 +307,7 @@ action_conscience_list (struct req_args_s *args)
 	if (!type)
 		return _reply_format_error (args, BADREQ("Missing type"));
 
-	gboolean full = _request_has_flag (args, PROXYD_HEADER_MODE, "full");
+	gboolean full = _request_get_flag (args, "full");
 
 	GError *err;
 	if (NULL != (err = _cs_check_tokens(args)))
