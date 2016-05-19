@@ -367,8 +367,6 @@ class Beanstalk(object):
                  retry_on_timeout=False, socket_keepalive_options=None,
                  max_connections=None, connection=None):
         if not connection:
-            self.host = host
-            self.port = port
             self.socket_timeout = socket_timeout
             kwargs = {
                 'host': host,
