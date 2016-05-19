@@ -186,6 +186,7 @@ class EventWorker(Worker):
         try:
             if self.tube:
                 beanstalk.watch(self.tube)
+                beanstalk.use(self.tube)
             while True:
                 job_id, data = beanstalk.reserve()
                 try:

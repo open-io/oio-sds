@@ -586,6 +586,7 @@ template_local_ns = """
 ${NOZK}zookeeper=${IP}:2181
 #proxy-local=${RUNDIR}/${NS}-proxy.sock
 proxy=${IP}:${PORT_PROXYD}
+#swift=http://${IP}:5000
 event-agent=beanstalk://127.0.0.1:11300
 #event-agent=ipc://${RUNDIR}/event-agent.sock
 conscience=${CS_ALL_PUB}
@@ -690,7 +691,8 @@ CREATE TABLE IF NOT EXISTS box (
    recent INT NOT NULL DEFAULT 0,
    unseen INT NOT NULL DEFAULT 0,
    uidnext INT NOT NULL DEFAULT 1,
-   uidvalidity INT NOT NULL DEFAULT 0);
+   uidvalidity INT NOT NULL DEFAULT 0,
+   keywords TEXT);
 
 CREATE TABLE IF NOT EXISTS boxattr (
    box TEXT NOT NULL,
@@ -710,24 +712,34 @@ CREATE TABLE IF NOT EXISTS mail (
    flags INTEGER NOT NULL,
    header TEXT NOT NULL);
 
-CREATE TABLE IF NOT EXISTS mailattr (
-   guid TEXT NOT NULL,
-   k TEXT NOT NULL,
-   v TEXT NOT NULL,
-   PRIMARY KEY (guid,k));
-
 CREATE INDEX IF NOT EXISTS boxattr_index_by_box ON boxattr(box);
 CREATE INDEX IF NOT EXISTS mail_index_by_box ON mail(box);
-CREATE INDEX IF NOT EXISTS mailattr_index_by_mail ON mailattr(guid);
 
 CREATE TRIGGER IF NOT EXISTS mail_after_add AFTER INSERT ON mail
 BEGIN
+   UPDATE mail SET box_uid = (SELECT uidnext FROM box WHERE name = new.box) WHERE guid = new.guid AND box = new.box AND uid = new.uid;
    UPDATE box SET
       messages = messages + 1,
       recent = recent + 1,
       unseen = unseen + 1,
       uidnext = uidnext + 1
    WHERE name = new.box ;
+END ;
+
+CREATE TRIGGER IF NOT EXISTS mail_after_delete AFTER DELETE ON mail
+BEGIN
+   UPDATE box SET
+      messages = messages - 1
+   WHERE name = old.box ;
+END ;
+
+CREATE TRIGGER IF NOT EXISTS mail_after_update AFTER UPDATE OF flags ON mail
+BEGIN
+   UPDATE mail SET flags = flags & ~(32) WHERE box = new.box;
+   UPDATE box SET
+      recent = 0,
+      unseen = unseen + ((old.flags & 8) AND ((new.flags & 8) != (old.flags & 8))) - ((new.flags & 8) AND ((new.flags & 8) != (old.flags & 8)))
+   WHERE name = old.box ;
 END ;
 
 INSERT OR REPLACE INTO box (name,ro) VALUES ('INBOX', 0);
