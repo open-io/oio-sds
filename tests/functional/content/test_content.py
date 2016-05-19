@@ -75,7 +75,7 @@ class TestContentFactory(BaseTestCase):
         self.content_factory.ns_info = {
             "data_security": {
                 "DUPONETWO": "plain/distance=1,nb_copy=2",
-                "RAIN": "ec/k=6,m=2,algo=J:Vand"
+                "RAIN": "ec/k=6,m=2,algo=isa_l_rs_vand"
             },
             "storage_policy": {
                 "RAIN": "NONE:RAIN",
@@ -89,7 +89,7 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(ds_args, {
             "k": "6",
             "m": "2",
-            "algo": "J:Vand"
+            "algo": "isa_l_rs_vand"
         })
 
         ds_type, ds_args = self.content_factory._extract_datasec("SINGLE")
@@ -150,7 +150,7 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(c.length, 658)
         self.assertEqual(c.path, "tox.ini")
         self.assertEqual(c.version, "1450176946676289")
-        self.assertEqual(c.algo, "EC:Vand")
+        self.assertEqual(c.algo, "isa_l_rs_vand")
         self.assertEqual(c.k, 6)
         self.assertEqual(c.m, 2)
         self.assertEqual(len(c.chunks), 4)
@@ -242,7 +242,7 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(c.length, 1000)
         self.assertEqual(c.path, "titi")
         self.assertEqual(c.version, "1450341162332663")
-        self.assertEqual(c.algo, "EC:Vand")
+        self.assertEqual(c.algo, "isa_l_rs_vand")
         self.assertEqual(c.k, 6)
         self.assertEqual(c.m, 2)
         self.assertEqual(len(c.chunks), 4)
