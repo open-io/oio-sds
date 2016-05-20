@@ -19,6 +19,7 @@
 import errno
 import grp
 import json
+import yaml
 import os
 import pwd
 from string import Template
@@ -754,6 +755,22 @@ LIBDIR = CODEDIR + '/@LD_LIBDIR@'
 PATH = HOME+"/.local/bin:@CMAKE_INSTALL_PREFIX@/bin:/usr/sbin"
 port = 6000
 
+# Constants for the configuration of oio-bootstrap
+IS_PRESENT = 'present'
+SERVICE_NUMBER = 'nb-services'
+ALLOW_REDIS = 'redis'
+BIG = 'big'
+OPENSUSE = 'opensuse'
+ZOOKEEPER = 'zookeeper'
+MONITOR_PERIOD = 'monitor-period'
+M2_REPLICAS = 'm2-replicas'
+M2_VERSIONS = 'm2-versions'
+M2_STGPOL = 'm2-stgpol'
+SQLX_REPLICAS='sqlx-replicas'
+PROFILE = 'profile'
+PORT_START = 'port-start'
+CHUNK_SIZE = 'chunk-size'                       
+
 defaults_small = {'NB_CS':1, 'NB_M0':1, 'NB_M1':1, 'NB_M2':1, 'NB_SQLX':1,
             'NB_RAWX':2, 'NB_RAINX':1}
 
@@ -812,7 +829,7 @@ def generate(ns, ip, options={}, defaults={}):
         return int(v)
 
     global port
-    port = getint(options.PORT_START, 6000)
+    port = getint(options.get('port-start', None), 6000)
 
     all_services = {}
 
@@ -822,13 +839,13 @@ def generate(ns, ip, options={}, defaults={}):
     versioning = 1
     stgpol = "SINGLE"
 
-    meta2_replicas = getint(options.M2_REPLICAS, defaults['NB_M2'])
-    sqlx_replicas = getint(options.SQLX_REPLICAS, defaults['NB_SQLX'])
+    meta2_replicas = getint(options.get(M2_REPLICAS, None), defaults['NB_M2'])
+    sqlx_replicas = getint(options.get(SQLX_REPLICAS, None), defaults['NB_SQLX'])
 
-    if options.M2_VERSIONS is not None:
-        versioning = int(options.M2_VERSIONS)
-    if options.M2_STGPOL is not None:
-        stgpol = str(options.M2_STGPOL)
+    if options.get(M2_VERSIONS,None) is not None:
+        versioning = options [M2_VERSIONS]
+    if options.get(M2_STGPOL,None) is not None:
+        stgpol = options [M2_STGPOL]
 
     ENV = dict(IP=ip, NS=ns, HOME=HOME, EXE_PREFIX=EXE_PREFIX,
                PATH=PATH, LIBDIR=LIBDIR,
@@ -857,7 +874,7 @@ def generate(ns, ip, options={}, defaults={}):
     def merge_env(add):
         env = dict(ENV)
         env.update(add)
-        if options.PROFILE == "valgrind":
+        if options.get(PROFILE, None) == "valgrind":
             orig_exe = env.get('EXE', env['EXE_PREFIX'])
             new_exe = "valgrind --leak-check=full --leak-resolution=high\
  --trace-children=yes --log-file=/tmp/%q{ORIG_EXE}.%p.valgrind " + orig_exe
@@ -872,9 +889,9 @@ def generate(ns, ip, options={}, defaults={}):
         env['VOLUME'] = '{DATADIR}/{NS}-{SRVTYPE}-{SRVNUM}'.format(**env)
         return env
 
-    ENV['CHUNK_SIZE'] = getint(options.CHUNK_SIZE, 1024*1024)
-    ENV['MONITOR_PERIOD'] = getint(options.MONITOR_PERIOD, 5)
-    if options.NO_ZOOKEEPER is not None:
+    ENV['CHUNK_SIZE'] = getint( options.get(CHUNK_SIZE, None), 1024*1024)
+    ENV['MONITOR_PERIOD'] = getint( options.get(MONITOR_PERIOD, None), 5)
+    if options.get(ZOOKEEPER, None) is True:
         ENV['NOZK'] = '#'
     else:
         ENV['NOZK'] = ''
@@ -899,13 +916,13 @@ def generate(ns, ip, options={}, defaults={}):
         f.write(tpl.safe_substitute(ENV))
 
     # consciences
-    if options.NO_CS is None:
+    if options ['conscience'].get(IS_PRESENT, None) is True:
         cs = list()
         with open('{CFGDIR}/{NS}-policies.conf'.format(**ENV), 'w+') as f:
             tpl = Template(template_conscience_policies)
             f.write(tpl.safe_substitute(ENV))
         # Prepare a list of consciences
-        for num in range(1, 1+getint(options.NB_CS, defaults['NB_CS'])):
+        for num in range(1, 1+getint(options ['conscience'].get(SERVICE_NUMBER, None), defaults['NB_CS'])):
             cs.append((num, next_port(), next_port()))
         ENV.update({
                     'CS_ALL_PUB': ','.join([str(ip)+':'+str(pub) for _,pub,_ in cs]),
@@ -937,22 +954,22 @@ def generate(ns, ip, options={}, defaults={}):
         with open(watch(env), 'w+') as f:
             f.write(tpl.safe_substitute(env))
 
-    if options.NO_META0 is None:
-        for i in range(1, 1+getint(options.NB_META0, defaults['NB_M0'])):
+    if options ['meta0'].get(IS_PRESENT, None) is True:
+        for i in range(1, 1+getint(options ['meta0'].get(SERVICE_NUMBER, None), defaults['NB_M0'])):
             generate_meta('meta0', i, template_gridinit_meta)
-    if options.NO_META1 is None:
-        for i in range(1, 1+getint(options.NB_META1, defaults['NB_M1'])):
+    if options ['meta1'].get(IS_PRESENT, None) is True:
+        for i in range(1, 1+getint(options ['meta1'].get(SERVICE_NUMBER, None), defaults['NB_M1'])):
             generate_meta('meta1', i, template_gridinit_meta)
-    if options.NO_META2 is None:
-        for i in range(1, 1+getint(options.NB_META2, meta2_replicas)):
+    if options ['meta2'].get(IS_PRESENT, None) is True:
+        for i in range(1, 1+getint(options ['meta2'].get(SERVICE_NUMBER, None), meta2_replicas)):
             generate_meta('meta2', i, template_gridinit_meta)
-    if options.NO_SQLX is None:
-        for i in range(1, 1+getint(options.NB_SQLX, sqlx_replicas)):
+    if options ['sqlx'].get(IS_PRESENT, None) is True:
+        for i in range(1, 1+getint(options ['sqlx'].get(SERVICE_NUMBER, None), sqlx_replicas)):
             generate_meta('sqlx', i, template_gridinit_sqlx)
 
     # RAWX
-    if options.NO_RAWX is None:
-        for num in range(1, 1+getint(options.NB_RAWX, defaults['NB_RAWX'])):
+    if options ['rawx'].get(IS_PRESENT, None) is True:
+        for num in range(1, 1+getint(options ['rawx'].get(SERVICE_NUMBER, None), defaults['NB_RAWX'])):
             env = subenv({'SRVTYPE':'rawx', 'SRVNUM':num, 'PORT':next_port()})
             add_service(env)
             # gridinit
@@ -962,7 +979,7 @@ def generate(ns, ip, options={}, defaults={}):
             # service
             tpl = Template(template_rawx_service)
             to_write = tpl.safe_substitute(env)
-            if options.OPENSUSE:
+            if options.get(OPENSUSE, None) is True:
                 to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
             with open(config(env), 'w+') as f:
                 f.write(to_write)
@@ -973,8 +990,8 @@ def generate(ns, ip, options={}, defaults={}):
                 f.write(to_write)
 
     # rainx
-    if options.NO_RAINX is None:
-        for num in range(1, 1+getint(options.NB_RAINX, defaults['NB_RAINX'])):
+    if options ['rainx'].get(IS_PRESENT, None) is True:
+        for num in range(1, 1+getint(options ['rainx'].get(SERVICE_NUMBER), defaults['NB_RAINX'])):
             env = subenv({'SRVTYPE':'rainx', 'SRVNUM':num, 'PORT':next_port()})
             add_service(env)
             # gridinit
@@ -984,7 +1001,7 @@ def generate(ns, ip, options={}, defaults={}):
             # service
             tpl = Template(template_rainx_service)
             to_write = tpl.safe_substitute(env)
-            if options.OPENSUSE:
+            if options.get(OPENSUSE,None) is True:
                 to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
             with open(config(env), 'w+') as f:
                 f.write(to_write)
@@ -997,7 +1014,7 @@ def generate(ns, ip, options={}, defaults={}):
     # redis
     env = subenv({'SRVTYPE':'redis', 'SRVNUM':1, 'PORT':6379})
     add_service(env)
-    if options.ALLOW_REDIS is not None:
+    if options.get(ALLOW_REDIS, None) is True:
         with open(gridinit(env), 'a+') as f:
             tpl = Template(template_redis_gridinit)
             f.write(tpl.safe_substitute(env))
@@ -1090,80 +1107,53 @@ def generate(ns, ip, options={}, defaults={}):
         f.write(json.dumps(all_services, indent=2, sort_keys=True))
 
 
+def init_dic():
+    dic = {}
+    dic ['conscience'] = {SERVICE_NUMBER : None, IS_PRESENT : True}
+    dic ['meta0'] = {SERVICE_NUMBER : None, IS_PRESENT : True}
+    dic ['meta1'] = {SERVICE_NUMBER : None, IS_PRESENT : True}
+    dic ['meta2'] = {SERVICE_NUMBER : None, IS_PRESENT : True}
+    dic ['sqlx'] = {SERVICE_NUMBER : None, IS_PRESENT : True}
+    dic ['rawx'] = {SERVICE_NUMBER : None, IS_PRESENT : True}
+    dic ['rainx'] = {SERVICE_NUMBER : None, IS_PRESENT : True}
+    dic [ZOOKEEPER] = True
+    return dic
+
+def _byteify(data, ignore_dicts = False):
+    # if this is a unicode string, return its string representation
+    if isinstance(data, unicode):
+        return data.encode('utf-8')
+        # if this is a list of values, return list of byteified values
+    if isinstance(data, list):
+        return [ _byteify(item, ignore_dicts=True) for item in data ]
+    # if this is a dictionary, return dictionary of byteified keys and values
+    # but only if we haven't already byteified it
+    if isinstance(data, dict) and not ignore_dicts:
+        return {
+            _byteify(key, ignore_dicts=True): _byteify(value, ignore_dicts=True)
+            for key, value in data.iteritems()
+        }
+    # if it's anything else, return it in its original form
+    return data
+
 def main():
     from optparse import OptionParser as OptionParser
     parser = OptionParser()
-
-    parser.add_option("-b", "--big",
-                      action="store_true", dest="BIG",
-                      help="By default, deploy manny services")
-
-    parser.add_option("-B", "--bucket-replicas",
-                      action="store", type="int", dest="M2_REPLICAS",
-                      help="Number of containers replicas")
-    parser.add_option("-X", "--sqlx-replicas",
-                      action="store", type="int", dest="SQLX_REPLICAS",
-                      help="Number of bases replicas")
-    parser.add_option("-V", "--versioning",
-                      action="store", type="int", dest="M2_VERSIONS",
-                      help="Number of contents versions")
-    parser.add_option("-S", "--stgpol",
-                      action="store", type="string", dest="M2_STGPOL",
-                      help="How many replicas for META2")
-    parser.add_option("--opensuse",
-                      action="store_true", dest="OPENSUSE",
-                      help="Customize some config files for Opensuse")
-    parser.add_option("--profile",
-                      action="store", type="string", dest='PROFILE',
-                      help="Use a code profiler (only valgrind is supported)")
-
-    parser.add_option("--port",
-                      action="store", type="int", dest="PORT_START")
-    parser.add_option("--chunk-size",
-                      action="store", type="int", dest="CHUNK_SIZE")
-    parser.add_option("--no-zookeeper",
-                      action="store_true", dest="NO_ZOOKEEPER")
-    parser.add_option("--allow-redis",
-                      action="store_true", dest="ALLOW_REDIS")
-    parser.add_option("--monitor-period",
-                      action="store", type="int", dest="MONITOR_PERIOD")
-
-    parser.add_option("--no-conscience",
-                      action="store_true", dest="NO_CS")
-    parser.add_option("--no-meta0",
-                      action="store_true", dest="NO_META0")
-    parser.add_option("--no-meta1",
-                      action="store_true", dest="NO_META1")
-    parser.add_option("--no-meta2",
-                      action="store_true", dest="NO_META2")
-    parser.add_option("--no-sqlx",
-                      action="store_true", dest="NO_SQLX")
-    parser.add_option("--no-rawx",
-                      action="store_true", dest="NO_RAWX")
-    parser.add_option("--no-rainx",
-                      action="store_true", dest="NO_RAINX")
-
-    parser.add_option("--nb-conscience",
-                      action="store", type="int", dest="NB_CS")
-    parser.add_option("--nb-meta0",
-                      action="store", type="int", dest="NB_META0")
-    parser.add_option("--nb-meta1",
-                      action="store", type="int", dest="NB_META1")
-    parser.add_option("--nb-meta2",
-                      action="store", type="int", dest="NB_META2")
-    parser.add_option("--nb-sqlx",
-                      action="store", type="int", dest="NB_SQLX")
-    parser.add_option("--nb-rawx",
-                      action="store", type="int", dest="NB_RAWX")
-    parser.add_option("--nb-rainx",
-                      action="store", type="int", dest="NB_RAINX")
-
+    parser.add_option("--file", action="store", type="string", dest="FILE_PARAMETER")
     options, args = parser.parse_args()
-    if options.BIG is not None:
-        generate(args[0], args[1], options, defaults_multi)
-    else:
-        generate(args[0], args[1], options, defaults_small)
-
+    opts = init_dic()
+    if options.FILE_PARAMETER is not None :
+        f = open(options.FILE_PARAMETER, 'r')
+        if options.FILE_PARAMETER.find('.json') != -1 :
+            opts = json.load(f, object_hook=_byteify) 
+        elif options.FILE_PARAMETER.find('.yml') != -1 :
+            opts = yaml.load(f)
+        f.close()
+    if opts.get(BIG,None) is True:
+        generate(args[0], args[1], opts, defaults_multi)
+    else :
+        generate(args[0], args[1], opts, defaults_small)
+                                    
 
 if __name__ == '__main__':
     main()
