@@ -1,6 +1,6 @@
 from oio.common.utils import json
 from oio.event.evob import EventError, Event
-from oio.event.beanstalk import Beanstalk
+from oio.event.beanstalk import Beanstalk, ConnectionError
 from oio.event.filters.base import Filter
 
 
@@ -8,13 +8,16 @@ class NotifyFilter(Filter):
     def init(self):
         queue_url = self.conf.get('queue_url', 'tcp://127.0.0.1:11300')
         self.beanstalk = Beanstalk.from_url(queue_url)
-        tube = self.conf.get('tube', 'notif')
-        self.beanstalk.use(tube)
+        self.tube = self.conf.get('tube', 'notif')
+        self.beanstalk.use(self.tube)
 
     def process(self, env, cb):
         data = json.dumps(env)
         try:
+            # TODO we could retry the put
             self.beanstalk.put(data)
+        except ConnectionError:
+            self.logger.warn("beanstalk notify failed")
         except Exception as e:
             self.logger.warn("failed to notify event: %s" % str(e))
             return EventError(event=Event(env))(env, cb)
