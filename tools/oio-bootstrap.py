@@ -481,16 +481,15 @@ REASONABLYSLOW=NONE
 DUPONETWO=plain/distance=1,nb_copy=2
 DUPONETHREE=plain/distance=1,nb_copy=3
 DUPONEFIVE=plain/distance=1,nb_copy=5
-RAIN=ec/k=6,m=2,algo=EC:Vand,distance=1
-WRAIN=ec/k=6,m=3,algo=J:Vand,distance=1,weak=1
+RAIN=ec/k=6,m=3,algo=isa_l_rs_vand,distance=1
+WRAIN=ec/k=6,m=3,algo=isa_l_rs_vand,distance=1,weak=1
 
-# "none"     EC_BACKEND_NULL
-# "J:Vand"   EC_BACKEND_JERASURE_RS_VAND
-# "J:Cauchy" EC_BACKEND_JERASURE_RS_CAUCHY
-# "XOR"      EC_BACKEND_FLAT_XOR_HD
-# "ISA:Vand" EC_BACKEND_ISA_L_RS_VAND
-# "SHSS"     EC_BACKEND_SHSS
-# "EC:Vand"  EC_BACKEND_LIBERASURECODE_RS_VAND
+# "jerasure_rs_vand"   EC_BACKEND_JERASURE_RS_VAND
+# "jerasure_rs_cauchy" EC_BACKEND_JERASURE_RS_CAUCHY
+# "flat_xor_hd"      EC_BACKEND_FLAT_XOR_HD
+# "isa_l_rs_vand" EC_BACKEND_ISA_L_RS_VAND
+# "shss"     EC_BACKEND_SHSS
+# "liberasurecode_rs_vand"  EC_BACKEND_LIBERASURECODE_RS_VAND
 
 """
 

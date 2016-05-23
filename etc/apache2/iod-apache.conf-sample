@@ -1,0 +1,30 @@
+LoadModule mpm_worker_module /usr/lib/apache2/modules/mod_mpm_worker.so
+LoadModule authz_core_module /usr/lib/apache2/modules/mod_authz_core.so
+LoadModule wsgi_module /usr/lib/apache2/modules/mod_wsgi.so
+
+<IfModule !log_config_module>
+  LoadModule log_config_module /usr/lib/apache2/modules/mod_log_config.so
+</IfModule>
+
+# iod
+Listen 127.0.0.1:5000
+ServerName localhost
+PidFile /var/run/oio/sds/OPENIO-iod-1.pid
+
+User openio
+Group openio
+WSGIDaemonProcess iod-1 processes=2 threads=1 user=openio group=openio
+WSGIProcessGroup iod-1
+WSGIApplicationGroup iod-1
+WSGIScriptAlias / /etc/oio/sds/OPENIO/conf/iod.wsgi
+WSGISocketPrefix /var/run/oio/sds/run
+LimitRequestFields 200
+
+LogFormat "%h %l %t \"%r\" %>s %b %D" log/common
+ErrorLog /var/log/oio/sds/OPENIO/logs/iod.error
+LogLevel debug
+CustomLog /var/log/oio/sds/OPENIO/sds/logs/access.log log/common
+
+<VirtualHost 127.0.0.1:5000>
+# Leave Empty
+</VirtualHost>
