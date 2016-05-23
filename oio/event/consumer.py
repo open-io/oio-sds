@@ -9,7 +9,7 @@ from eventlet import Timeout, greenthread
 
 from oio.conscience.client import ConscienceClient
 from oio.rdir.client import RdirClient
-from oio.event.beanstalk import Beanstalk
+from oio.event.beanstalk import Beanstalk, ConnectionError
 from oio.common.http import requests
 from oio.common.utils import true_value, drop_privileges, \
         json, int_value
@@ -21,6 +21,8 @@ SLEEP_TIME = 1
 ACCOUNT_SERVICE_TIMEOUT = 60
 ACCOUNT_SERVICE = 'account'
 DEFAULT_TUBE = 'oio'
+
+BEANSTALK_RECONNECTION = 2.0
 
 
 def _eventlet_stop(client, server, beanstalk):
@@ -183,15 +185,28 @@ class EventWorker(Worker):
             [c.kill() for c in coros]
 
     def handle(self, beanstalk):
+        conn_error = False
         try:
-            if self.tube:
-                beanstalk.watch(self.tube)
-                beanstalk.use(self.tube)
+            beanstalk.use(self.tube)
+            beanstalk.watch(self.tube)
             while True:
-                job_id, data = beanstalk.reserve()
+                try:
+                    job_id, data = beanstalk.reserve()
+                    if conn_error:
+                        self.logger.warn("beanstalk reconnected")
+                        conn_error = False
+                except ConnectionError:
+                    if not conn_error:
+                        self.logger.warn("beanstalk connection error")
+                        conn_error = True
+                    eventlet.sleep(BEANSTALK_RECONNECTION)
+                    continue
                 try:
                     event = self.safe_decode_job(job_id, data)
                     self.process_event(job_id, event, beanstalk)
+                except ConnectionError:
+                    self.logger.warn(
+                        "beanstalk connection error during processing")
                 except Exception:
                     beanstalk.bury(job_id)
                     self.logger.exception("handling event %s (bury)", job_id)
