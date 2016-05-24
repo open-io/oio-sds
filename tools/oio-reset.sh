@@ -26,72 +26,51 @@ GRIDINIT_SOCK=${SDS}/run/gridinit.sock
 
 REPLICATION_DIRECTORY=1
 REPLICATION_BUCKET=1
-STGPOL="SINGLE"
-VERSIONING=1
-AVOID=""
 ZKSLOW=0
-CHUNKSIZE=
-REDIS=0
 PORT=
 verbose=0
-NB_RAWX=3
-BIG=0
-MONITOR_PERIOD=
-
 OPENSUSE=`grep -i opensuse /etc/*release || echo -n ''`
-
-while getopts "B:C:D:E:I:M:N:p:P:R:S:V:X:Zvb" opt; do
-	case $opt in
-		b) BIG=1 ;;
-		B) REPLICATION_BUCKET="${OPTARG}" ;;
-		C) CHUNKSIZE="${OPTARG}" ;;
-		D) REPLICATION_DIRECTORY="${OPTARG}" ;;
-		E) NB_RAWX="${OPTARG}" ;;
+while getopts "I:N:f:S:V:X:Zvb" opt; do
+    case $opt in
 		I) IP="${OPTARG}" ;;
-		M) MONITOR_PERIOD="${OPTARG}" ;;
 		N) NS="${OPTARG}" ;;
-		p) PROFILE="${OPTARG}" ;;
-		P) PORT="${OPTARG}" ;;
-		R) REDIS="${OPTARG}" ;;
-		S) STGPOL="${OPTARG}" ;;
-		V) VERSIONING="${OPTARG}" ;;
-		X) AVOID="${AVOID} ${OPTARG}" ;;
+		f) FILE_BOOTSTRAP_CONFIG="${OPTARG}" ;;
 		Z) ZKSLOW=1 ;;
 		v) ((verbose=verbose+1)) ;;
 		\?) exit 1 ;;
 	esac
 done
+SERVICES="nb-services"
+M1_STR="meta1"
+M2_STR="meta2"
+M2_REPLICAS="m2-replicas"
+if [ -n "$FILE_BOOTSTRAP_CONFIG" ]; then
+    CMD_NB_M1=`oio-get-parameters-from-config.py ${FILE_BOOTSTRAP_CONFIG} ${M1_STR} ${SERVICES}`
+    CMD_NB_M2=`oio-get-parameters-from-config.py ${FILE_BOOTSTRAP_CONFIG} ${M2_STR} ${SERVICES}`
+    CMD_NB_M2_REPLICAS=`oio-get-parameters-from-config.py ${FILE_BOOTSTRAP_CONFIG} ${M2_REPLICAS}`
+fi
+   
+if [ -n "$CMD_NB_M2_REPLICAS" ]; then
+    REPLICATION_BUCKET=$CMD_NB_M2_REPLICAS
+fi
 
-NB_META2=${REPLICATION_BUCKET}
-if [ -n "$ADD_META2" ] && [ "$ADD_META2" -gt 0 ] ; then
-	NB_META2=$((NB_META2+$ADD_META2))
+if [ -n "$CMD_NB_M1" ]; then
+    REPLICATION_DIRECTORY=$CMD_NB_M1
+fi
+
+if [ -n "CMD_NB_M2" ]; then
+    NB_META2=${CMD_NB_M2}
+else
+    NB_META2=${REPLICATION_BUCKET}
 fi
 
 NB_META1=${REPLICATION_DIRECTORY}
-if [ -n "$ADD_META1" ] && [ "$ADD_META1" -gt 0 ] ; then
-	NB_META1=$((NB_META1+$ADD_META1))
+
+opts=""
+
+if [ -n "$FILE_BOOTSTRAP_CONFIG" ] ; then
+    opts="--file=$FILE_BOOTSTRAP_CONFIG" ;
 fi
-
-opts="--nb-meta1=${NB_META1} --nb-meta2=${NB_META2}"
-
-if [ -n "$NB_META0" ] && [ "$NB_META0" -gt 0 ] ; then
-	opts="$opts --nb-meta0=${NB_META0}"
-fi
-
-if [ -n "$PORT" ] ; then opts="${opts} --port=${PORT}" ; fi
-if [ -n "$NB_RAWX" ] ; then opts="${opts} --nb-rawx=${NB_RAWX}" ; fi
-if [ -n "$CHUNKSIZE" ] ; then opts="${opts} --chunk-size=${CHUNKSIZE}" ; fi
-if [ -n "$MONITOR_PERIOD" ] ; then opts="${opts} --monitor-period=${MONITOR_PERIOD}" ; fi
-if [ "$REDIS" -gt 0 ] ; then opts="${opts} --allow-redis" ; fi
-if [ -n "$PROFILE" ] ; then opts="${opts} --profile=${PROFILE}" ; fi
-for srvtype in ${AVOID} ; do opts="${opts} --no-${srvtype}"; done
-if [ -n "$OPENSUSE" ]
-then
-	echo $PATH | grep -q '/usr/sbin' || PATH="$PATH:/usr/sbin"
-	opts="${opts} --opensuse"
-fi
-
-if [ "$BIG" -gt 0 ] ; then opts="${opts} -b" ; fi
 
 timeout () {
 	num=$1 ; shift
@@ -127,19 +106,10 @@ G_DEBUG_LEVEL=WARN
 if [ $verbose != 0 ] ; then
 	G_DEBUG_LEVEL=TRACE
 	echo "# $0" \
-		"-B \"${REPLICATION_BUCKET}\"" \
-		"-C \"${CHUNKSIZE}\"" \
-		"-D \"${REPLICATION_DIRECTORY}\"" \
-		"-E \"${NB_RAWX}\"" \
 		"-I \"${IP}\"" \
-		"-M \"${MONITOR_PERIOD}\"" \
 		"-N \"${NS}\"" \
-		"-P \"${PORT}\"" \
-		"-R \"${REDIS}\"" \
-		"-S \"${STGPOL}\"" \
-		"-V \"${VERSIONING}\"" \
-		"-X \"${AVOID}\"" \
-		"-Z \"${ZKSLOW}\""
+		"-Z \"${ZKSLOW}\"" \
+		"-f \"${FILE_BOOTSTRAP_CONFIG}\""
 fi
 export G_DEBUG_LEVEL
 
@@ -172,9 +142,6 @@ done
 # Generate a new configuration and start the new gridinit
 mkdir -p "$OIO" && cd "$OIO" && (rm -rf sds.conf sds/{conf,data,run,logs})
 ${PREFIX}-bootstrap.py \
-		-B "$REPLICATION_BUCKET" \
-		-V "$VERSIONING" \
-		-S "$STGPOL" \
 		${opts} "$NS" "$IP"
 
 gridinit -s OIO,gridinit -d ${SDS}/conf/gridinit.conf
