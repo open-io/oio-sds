@@ -834,8 +834,7 @@ _filter (struct filter_ctx_s *ctx, GSList *l)
 static GError *
 _m2_container_create (struct req_args_s *args)
 {
-	gboolean autocreate = _request_has_flag (args,
-			PROXYD_HEADER_MODE, "autocreate");
+	gboolean autocreate = _request_get_flag (args, "autocreate");
 	gchar **properties = _container_headers_to_props (args);
 
 	struct m2v2_create_params_s param = {
@@ -896,10 +895,8 @@ action_m2_container_destroy (struct req_args_s *args)
 	gchar **urlv = NULL;
 	struct sqlx_name_mutable_s n = {NULL,NULL,NULL};
 
-	const gboolean hdr_flush = _request_has_flag (args, PROXYD_HEADER_MODE, "flush");
-	const gboolean opt_flush = metautils_cfg_get_bool(OPT("flush"), FALSE);
-	const gboolean hdr_force = _request_has_flag (args, PROXYD_HEADER_MODE, "force");
-	const gboolean opt_force = metautils_cfg_get_bool(OPT("force"), FALSE);
+	const gboolean flush = _request_get_flag (args, "flush");
+	const gboolean force = _request_get_flag (args, "force");
 
 	/* TODO(jfs): const! */
 	struct sqlx_name_s *name = sqlx_name_mutable_to_const(&n);
@@ -922,10 +919,10 @@ action_m2_container_destroy (struct req_args_s *args)
 	/* 2. FLUSH the base on the MASTER, so events are generated for all the
 	   contents removed. */
 	if (!err) {
-		if (hdr_flush || opt_flush) {
+		if (flush) {
 			PACKER_VOID(_pack) { return m2v2_remote_pack_FLUSH (args->url); }
 			err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
-		} else if (!hdr_force && !opt_force) {
+		} else if (!force) {
 			PACKER_VOID(_pack) { return m2v2_remote_pack_ISEMPTY (args->url); }
 			err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 		}
@@ -951,8 +948,8 @@ action_m2_container_destroy (struct req_args_s *args)
 
 	/* 4. DESTROY each local base */
 	if (!err && urlv && *urlv) {
-		const guint32 flag_force = (hdr_force||opt_force) ? M2V2_DESTROY_FORCE : 0;
-		const guint32 flag_flush = (hdr_flush||opt_flush) ? M2V2_DESTROY_FLUSH : 0;
+		const guint32 flag_force = (force) ? M2V2_DESTROY_FORCE : 0;
+		const guint32 flag_flush = (flush) ? M2V2_DESTROY_FLUSH : 0;
 
 		meta1_urlv_shift_addr(urlv);
 		err = m2v2_remote_execute_DESTROY (urlv[0], args->url,
@@ -1441,7 +1438,7 @@ action_m2_content_beans (struct req_args_s *args, struct json_object *jargs)
 	if ((end && *end) || errno == ERANGE || errno == EINVAL)
 		return _reply_format_error (args, BADREQ("Invalid size format"));
 
-	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
+	gboolean autocreate = _request_get_flag (args, "autocreate");
 	GError *err = NULL;
 	GSList *beans = NULL;
 	PACKER_VOID(_pack) { return m2v2_remote_pack_BEANS (args->url, stgpol, size, 0); }
@@ -1665,8 +1662,8 @@ _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 	if (!jbody)
 		return BADREQ("Invalid JSON body");
 
-	gboolean append = _request_has_flag (args, PROXYD_HEADER_MODE, "append");
-	gboolean force = _request_has_flag (args, PROXYD_HEADER_MODE, "force");
+	gboolean append = _request_get_flag (args, "append");
+	gboolean force = _request_get_flag (args, "force");
 	GSList *ibeans = NULL, *obeans = NULL;
 	GError *err;
 
@@ -1699,8 +1696,7 @@ action_content_put (struct req_args_s *args)
 	if (json_tokener_success != json_tokener_get_error (parser))
 		err = BADREQ("Invalid JSON");
 	else {
-		gboolean autocreate = _request_has_flag (args,
-				PROXYD_HEADER_MODE, "autocreate");
+		gboolean autocreate = _request_get_flag (args, "autocreate");
 retry:
 		err = _m2_json_put (args, jbody);
 		if (err && CODE_IS_NOTFOUND(err->code)) {
