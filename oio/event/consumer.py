@@ -187,8 +187,9 @@ class EventWorker(Worker):
     def handle(self, beanstalk):
         conn_error = False
         try:
-            beanstalk.use(self.tube)
-            beanstalk.watch(self.tube)
+            if self.tube:
+                beanstalk.use(self.tube)
+                beanstalk.watch(self.tube)
             while True:
                 try:
                     job_id, data = beanstalk.reserve()

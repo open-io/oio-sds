@@ -472,7 +472,7 @@ _download_range_from_chunk (struct _download_ctx_s *dl,
 		const struct oio_sds_dl_range_s *range, struct chunk_s *c0,
 		size_t *p_nbread)
 {
-	size_t _write_wrapper (void *data, size_t s, size_t n, void *ignored) {
+	size_t _write_wrapper (char *data, size_t s, size_t n, void *ignored) {
 		(void) ignored;
 		size_t total = s*n;
 		if (total + *p_nbread > range->size) {
@@ -481,7 +481,8 @@ _download_range_from_chunk (struct _download_ctx_s *dl,
 			total = range->size - *p_nbread;
 		}
 		/* TODO compute a MD5SUM */
-		int sent = dl->dst->data.hook.cb (dl->dst->data.hook.ctx, data, total);
+		int sent = dl->dst->data.hook.cb(dl->dst->data.hook.ctx,
+				(const unsigned char*)data, total);
 		*p_nbread += sent;
 		if ((size_t)sent == total) {
 			GRID_TRACE("user callback managed %"G_GSIZE_FORMAT" bytes", total);
