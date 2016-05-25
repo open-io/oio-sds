@@ -8,7 +8,7 @@ from oiopy.io import ChunkReader
 from werkzeug.wrappers import Request, Response
 
 
-SYS_PREFIX = 'x-oio-'
+SYS_PREFIX = 'x-oio-chunk-meta-'
 
 sys_headers = {
     'chunk_pos': '%schunk-pos' % SYS_PREFIX,
@@ -17,29 +17,34 @@ sys_headers = {
     'content_id': '%scontent-id' % SYS_PREFIX,
     'content_mime_type': '%scontent-mime-type' % SYS_PREFIX,
     'content_length': '%scontent-length' % SYS_PREFIX,
-    'content_chunkmethod': '%scontent-chunkmethod' % SYS_PREFIX,
+    'content_chunkmethod': '%scontent-chunk-method' % SYS_PREFIX,
     'content_path': '%scontent-path' % SYS_PREFIX,
     'content_chunksnb': '%scontent-chunksnb' % SYS_PREFIX,
     'content_hash': '%scontent-hash' % SYS_PREFIX,
     'content_version': '%scontent-version' % SYS_PREFIX,
-    'content_policy': '%scontent-policy' % SYS_PREFIX,
+    'content_policy': '%scontent-storage-policy' % SYS_PREFIX,
     'container_id': '%scontainer-id' % SYS_PREFIX,
 }
 
 
 def load_sysmeta(request):
     h = request.headers
-    sysmeta = {}
-    sysmeta['id'] = h[sys_headers['content_id']]
-    sysmeta['version'] = h[sys_headers['content_version']]
-    sysmeta['content_path'] = h[sys_headers['content_path']]
-    sysmeta['content_length'] = h[sys_headers['content_length']]
-    sysmeta['chunk_method'] = h[sys_headers['content_chunkmethod']]
-    sysmeta['mime_type'] = h[sys_headers['content_mime_type']]
-    sysmeta['policy'] = h[sys_headers['content_policy']]
-    sysmeta['content_chunksnb'] = h[sys_headers['content_chunksnb']]
-    sysmeta['container_id'] = h[sys_headers['container_id']]
-    return sysmeta
+    try:
+        sysmeta = {}
+        sysmeta['id'] = h[sys_headers['content_id']]
+        sysmeta['version'] = h[sys_headers['content_version']]
+        sysmeta['content_path'] = h[sys_headers['content_path']]
+        sysmeta['content_length'] = h.get(sys_headers['content_length'], "0")
+        sysmeta['chunk_method'] = h[sys_headers['content_chunkmethod']]
+        sysmeta['mime_type'] = h[sys_headers['content_mime_type']]
+        sysmeta['policy'] = h[sys_headers['content_policy']]
+        sysmeta['content_chunksnb'] = h.get(sys_headers['content_chunksnb'],
+                                            "1")
+        sysmeta['container_id'] = h[sys_headers['container_id']]
+        return sysmeta
+    except KeyError:
+        print h
+        raise
 
 
 def load_meta_chunk(request, nb_chunks, pos=None):
@@ -47,7 +52,7 @@ def load_meta_chunk(request, nb_chunks, pos=None):
     meta_chunk = []
     for i in xrange(nb_chunks):
         chunk_url = h['%schunk-%s' % (SYS_PREFIX, i)]
-        chunk_pos = '%s.%s' % (pos, i) if pos else str(i)
+        chunk_pos = '%s.%d' % (pos, i) if pos else str(i)
         chunk = {
             'url': chunk_url,
             'pos': chunk_pos,
@@ -63,7 +68,7 @@ def part_iter_to_bytes_iter(stream):
             yield x
 
 
-class IOD(object):
+class ECD(object):
     def __init__(self, conf):
         self.conf = conf
 
@@ -100,18 +105,24 @@ class IOD(object):
 
     def dispatch_request(self, req):
         if req.method == 'PUT':
-            source = req.stream
+            source = req.input_stream
             size = req.content_length
             sysmeta = load_sysmeta(req)
             storage_method = STORAGE_METHODS.load(sysmeta['chunk_method'])
+
             if storage_method.ec:
-                nb_chunks = storage_method.ec_nb_data + \
-                    storage_method.ec_nb_parity
+                if not size:
+                    # FIXME: get chunk size from proxy
+                    size = (storage_method.ec_nb_data * 10 *
+                            storage_method.ec_segment_size)
+                nb_chunks = (storage_method.ec_nb_data +
+                             storage_method.ec_nb_parity)
                 pos = req.headers[sys_headers['chunk_pos']]
                 meta_chunk = load_meta_chunk(req, nb_chunks, pos)
                 return self.write_ec_meta_chunk(source, size, storage_method,
                                                 sysmeta, meta_chunk)
             else:
+                # FIXME: check and fix size
                 meta_chunk = load_meta_chunk(req, nb_chunks)
                 return self.write_repli_meta_chunk(source, size,
                                                    storage_method, sysmeta,
@@ -144,7 +155,7 @@ class IOD(object):
 
 
 def create_app():
-    app = IOD({})
+    app = ECD({})
     set_logger()
     return app
 

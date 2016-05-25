@@ -515,6 +515,8 @@ oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,
 		g_strdup_printf("%s", in->hash),
 		g_strdup(PROXYD_HEADER_PREFIX "content-meta-policy"),
 		g_strdup_printf("%s", in->stgpol?: "NONE"),
+		g_strdup(PROXYD_HEADER_PREFIX "content-meta-chunk-method"),
+		g_strdup_printf("%s", in->chunk_method?: "plain"),
 		NULL
 	};
 	struct http_ctx_s i = { .headers = hdrin, .body = in ? in->chunks : NULL };

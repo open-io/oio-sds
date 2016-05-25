@@ -44,13 +44,12 @@ struct oio_sds_s
 	gchar *ns;
 	gchar *proxy;
 	gchar *proxy_local;
-	gchar *swift_url;
+	gchar *ecd;  // Erasure Coding Daemon
 	struct {
 		int proxy;
 		int rawx;
 	} timeout;
 	gboolean sync_after_download;
-	gboolean use_swift;
 	CURL *h;
 };
 
@@ -226,12 +225,9 @@ _get_meta_bound (GSList *lchunks)
 }
 
 static GError *
-_organize_chunks (GSList *lchunks, struct metachunk_s ***result,
-		const char *chunk_method)
+_organize_chunks (GSList *lchunks, struct metachunk_s ***result)
 {
 	*result = NULL;
-	if (!oio_str_prefixed(chunk_method, STGPOL_DSPREFIX_PLAIN, "/"))
-		return NEWERROR(CODE_NOT_IMPLEMENTED, "Erasure coding not managed YET");
 
 	if (!lchunks)
 		return NEWERROR(CODE_INTERNAL_ERROR, "No chunk received");
@@ -264,7 +260,8 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result,
 
 	/* Compute each metachunk's size */
 	for (guint i=0; i<meta_bound ;++i) {
-		/* TODO the size computation doesn't manage yet any EC */
+		/* Even with EC, the value of the 'chunk_size' attribute stored with each
+		 * chunk is the size of the metachunk. */
 		out[i]->size = ((struct chunk_s*)(out[i]->chunks->data))->size;
 	}
 
@@ -360,9 +357,8 @@ oio_sds_init (struct oio_sds_s **out, const char *ns)
 	(*out)->ns = g_strdup (ns);
 	(*out)->proxy_local = oio_cfg_get_proxylocal (ns);
 	(*out)->proxy = oio_cfg_get_proxy_containers (ns);
-	(*out)->swift_url = oio_cfg_get_swift(ns);
+	(*out)->ecd = oio_cfg_get_ecd(ns);
 	(*out)->sync_after_download = TRUE;
-	(*out)->use_swift = FALSE;
 	(*out)->h = _get_proxy_handle (*out);
 	return NULL;
 }
@@ -375,7 +371,7 @@ oio_sds_free (struct oio_sds_s *sds)
 	oio_str_clean (&sds->ns);
 	oio_str_clean (&sds->proxy);
 	oio_str_clean (&sds->proxy_local);
-	oio_str_clean(&sds->swift_url);
+	oio_str_clean(&sds->ecd);
 	if (sds->h)
 		curl_easy_cleanup (sds->h);
 	SLICE_FREE (struct oio_sds_s, sds);
@@ -434,6 +430,7 @@ struct _download_ctx_s
 	struct oio_sds_s *sds;
 	struct oio_sds_dl_src_s *src;
 	struct oio_sds_dl_dst_s *dst;
+	char *chunk_method;
 
 	struct metachunk_s **metachunks;
 	GSList *chunks;
@@ -473,8 +470,8 @@ _dl_debug (const char *caller, struct oio_sds_dl_src_s *src,
 /* The range is relative to the chunk */
 static GError *
 _download_range_from_chunk (struct _download_ctx_s *dl,
-		const struct oio_sds_dl_range_s *range, struct chunk_s *c0,
-		size_t *p_nbread)
+		const struct oio_sds_dl_range_s *range, const char *c0_url,
+		const char const **headers_opt, size_t *p_nbread)
 {
 	size_t _write_wrapper (char *data, size_t s, size_t n, void *ignored) {
 		(void) ignored;
@@ -504,22 +501,26 @@ _download_range_from_chunk (struct _download_ctx_s *dl,
 			"bytes=%"G_GSIZE_FORMAT"-%"G_GSIZE_FORMAT,
 			range->offset, range->offset + range->size - 1);
 
-	GRID_DEBUG ("%s Range:%s/%"G_GSIZE_FORMAT" %s", __FUNCTION__,
-			str_range, c0->size, c0->url);
+	GRID_DEBUG ("%s Range:%s %s", __FUNCTION__,
+			str_range, c0_url);
 
 	CURL *h = _curl_get_handle_blob ();
 	struct oio_headers_s headers = {NULL,NULL};
 	oio_headers_common (&headers);
 	oio_headers_add (&headers, "Range", str_range);
+	for (; headers_opt && headers_opt[0] && headers_opt[1]; headers_opt += 2) {
+		oio_headers_add(&headers, g_strdup(headers_opt[0]),
+				g_strdup(headers_opt[1]));
+	}
 	curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 	curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "GET");
-	curl_easy_setopt (h, CURLOPT_URL, c0->url);
+	curl_easy_setopt (h, CURLOPT_URL, c0_url);
 	curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_wrapper);
 	curl_easy_setopt (h, CURLOPT_WRITEDATA, dl->dst->data.hook.ctx);
 
 	CURLcode rc = curl_easy_perform (h);
 	if (rc != CURLE_OK) {
-		err = NEWERROR(0, "CURL: download error [%s]: (%d) %s", c0->url,
+		err = NEWERROR(0, "CURL: download error [%s]: (%d) %s", c0_url,
 				rc, curl_easy_strerror(rc));
 	} else {
 		long code = 0;
@@ -555,7 +556,8 @@ _download_range_from_metachunk_replicated (struct _download_ctx_s *dl,
 
 		/* Attempt a read */
 		size_t nbread = 0;
-		GError *err = _download_range_from_chunk (dl, range, chunk, &nbread);
+		GError *err = _download_range_from_chunk (dl, range,
+				chunk->url, NULL, &nbread);
 		g_assert (nbread <= r0.size);
 		if (err) {
 			/* TODO manage the error kind to allow a retry */
@@ -568,6 +570,54 @@ _download_range_from_metachunk_replicated (struct _download_ctx_s *dl,
 		}
 	}
 
+	return NULL;
+}
+
+static GError *
+_download_range_from_metachunk_ec(struct _download_ctx_s *dl,
+		const struct oio_sds_dl_range_s *range, struct metachunk_s *meta)
+{
+	GRID_DEBUG("%s", __FUNCTION__);
+	struct oio_sds_dl_range_s r0 = *range;
+
+	char url[128] = {0};
+	g_snprintf(url, sizeof(url), "http://%s/", dl->sds->ecd);
+
+	GPtrArray *headers = g_ptr_array_new_with_free_func(g_free);
+	for (GSList *l = meta->chunks; l; l = l->next) {
+		struct chunk_s *chunk = l->data;
+		g_ptr_array_add(headers, g_strdup_printf("%schunk-%u",
+					RAWX_HEADER_PREFIX, chunk->position.intra));
+		g_ptr_array_add(headers, g_strdup(chunk->url));
+	}
+	g_ptr_array_add(headers, g_strdup(RAWX_HEADER_PREFIX"chunk-size"));
+	g_ptr_array_add(headers, g_strdup_printf("%"G_GSIZE_FORMAT, meta->size));
+	g_ptr_array_add(headers, g_strdup(RAWX_HEADER_PREFIX"content-chunk-method"));
+	g_ptr_array_add(headers, g_strdup(dl->chunk_method));
+	g_ptr_array_add(headers, NULL);
+
+	while (r0.size > 0) {
+		GRID_DEBUG("%s at %"G_GSIZE_FORMAT"+%"G_GSIZE_FORMAT,
+				__FUNCTION__, r0.offset, r0.size);
+
+		/* Attempt a read */
+		size_t nbread = 0;
+		GError *err = _download_range_from_chunk(dl, range, url,
+				(const char**)headers->pdata, &nbread);
+		g_assert (nbread <= r0.size);
+		if (err) {
+			/* TODO manage the error kind to allow a retry */
+			g_ptr_array_free(headers, TRUE);
+			return err;
+		} else if (r0.size == G_MAXSIZE) {
+			r0.size = 0;
+		} else {
+			r0.offset += nbread;
+			r0.size -= nbread;
+		}
+	}
+
+	g_ptr_array_free(headers, TRUE);
 	return NULL;
 }
 
@@ -587,7 +637,8 @@ _download_range_from_metachunk (struct _download_ctx_s *dl,
 	g_assert (range->size <= meta->size);
 	g_assert (range->offset + range->size <= meta->size);
 
-	/* TODO manage EC here */
+	if (oio_str_prefixed(dl->chunk_method, STGPOL_DSPREFIX_EC, "/"))
+		return _download_range_from_metachunk_ec(dl, range, meta);
 	return _download_range_from_metachunk_replicated (dl, range, meta);
 }
 
@@ -601,7 +652,8 @@ _download_range (struct _download_ctx_s *dl, struct oio_sds_dl_range_s *range)
 	struct oio_sds_dl_range_s r0 = *range;
 
 	for (struct metachunk_s **p=dl->metachunks; *p ;++p) {
-		if ((r0.offset >= (*p)->offset) && (r0.offset < (*p)->offset + (*p)->size)) {
+		if ((r0.offset >= (*p)->offset)
+				&& (r0.offset < (*p)->offset + (*p)->size)) {
 			struct oio_sds_dl_range_s r1;
 			r1.offset = r0.offset - (*p)->offset;
 			gsize maxsize = (*p)->size - r1.offset;
@@ -682,22 +734,6 @@ _write_FILE (gpointer ctx, const guint8 *buf, gsize len)
 	return total;
 }
 
-static struct chunk_s *
-_build_swift_fake_chunk(struct oio_sds_s *sds, struct oio_sds_dl_src_s *src)
-{
-	/* Simulate one big chunk. */
-	struct chunk_s *c = g_malloc0(sizeof(struct chunk_s) + 127);
-	g_snprintf(c->url, 128, "%s/v1/%s/%s/%s",
-			sds->swift_url,
-			oio_url_get(src->url, OIOURL_ACCOUNT),
-			oio_url_get(src->url, OIOURL_USER),
-			oio_url_get(src->url, OIOURL_PATH));
-	/* We don't know the size yet. Specifying a huge size will make
-	 * the range tests pass. */
-	c->size = G_MAXSIZE;
-	return c;
-}
-
 static struct oio_error_s*
 _download_to_hook (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 		struct oio_sds_dl_dst_s *dst)
@@ -710,69 +746,54 @@ _download_to_hook (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 
 	GError *err = NULL;
 
+	char *chunk_method = NULL;
 	GSList *chunks = NULL;
 	GString *reply_body = g_string_new("");
 
-	if (sds->use_swift) {
-		if (!sds->swift_url || !sds->swift_url[0])
-			err = NEWERROR(CODE_BAD_REQUEST, "No swift url configured!");
-		else
-			chunks = g_slist_prepend(chunks, _build_swift_fake_chunk(sds, src));
-	} else {
-		/* Get the beans */
-		char **headers = NULL;
-		err = oio_proxy_call_content_show (sds->h, src->url, reply_body,
-				&headers);
+	/* Get the beans */
+	char **headers = NULL;
+	err = oio_proxy_call_content_show (sds->h, src->url, reply_body,
+			&headers);
 
-		/* Parse the beans */
-		if (!err) {
-			GRID_TRACE("Body: %s", reply_body->str);
-			struct json_tokener *tok = json_tokener_new ();
-			struct json_object *jbody = json_tokener_parse_ex (tok,
-					reply_body->str, reply_body->len);
-			json_tokener_free (tok);
-			if (!json_object_is_type(jbody, json_type_array)) {
-				err = NEWERROR(0, "Invalid JSON from the OIO proxy");
+	/* Parse the beans */
+	if (!err) {
+		GRID_TRACE("Body: %s", reply_body->str);
+		struct json_tokener *tok = json_tokener_new ();
+		struct json_object *jbody = json_tokener_parse_ex (tok,
+				reply_body->str, reply_body->len);
+		json_tokener_free (tok);
+		if (!json_object_is_type(jbody, json_type_array)) {
+			err = NEWERROR(0, "Invalid JSON from the OIO proxy");
+		} else {
+			if (NULL != (err = _chunks_load (&chunks, jbody))) {
+				g_prefix_error (&err, "Parsing: ");
 			} else {
-				if (NULL != (err = _chunks_load (&chunks, jbody))) {
-					g_prefix_error (&err, "Parsing: ");
-				} else {
-					GRID_DEBUG("%s Got %u beans", __FUNCTION__,
-							g_slist_length (chunks));
-				}
-			}
-			json_object_put (jbody);
-
-			/* Verify that we are not uploading with erasure coding.
-			 * TODO: implement erasure coding in C */
-			for (char **header = headers; header && *header; header += 2) {
-				if (!g_ascii_strcasecmp(*header, "content-meta-chunk-method")
-						&& !oio_str_prefixed(*(header+1),
-							STGPOL_DSPREFIX_PLAIN, "/")) {
-					if (sds->swift_url && sds->swift_url[0]) {
-						GRID_DEBUG("using swift gateway "
-								"to decode erasure coding");
-						g_slist_free_full(chunks, g_free);
-						chunks = g_slist_prepend(NULL,
-								_build_swift_fake_chunk(sds, src));
-					} else {
-						err = NEWERROR(CODE_NOT_IMPLEMENTED,
-							"C client cannot do erasure coding "
-							"without swift gateway");
-					}
-					break;
-				}
+				GRID_DEBUG("%s Got %u beans", __FUNCTION__,
+						g_slist_length (chunks));
 			}
 		}
-		g_strfreev(headers);
+		json_object_put (jbody);
+
+		for (char **header = headers; header && *header; header += 2) {
+			if (!g_ascii_strcasecmp(*header, "content-meta-chunk-method")) {
+				chunk_method = g_strdup(*(header+1));
+				if (oio_str_prefixed(chunk_method, STGPOL_DSPREFIX_EC, "/")
+						&& !(sds->ecd && sds->ecd[0])) {
+					err = NEWERROR(CODE_NOT_IMPLEMENTED,
+						"C client cannot do erasure coding without ecd");
+				}
+				break;
+			}
+		}
 	}
+	g_strfreev(headers);
 
 	if (!err) {
 		struct _download_ctx_s dl = {
-			.sds = sds, .dst = dst, .src = src, .chunks = chunks,
-			.metachunks = NULL
+			.sds = sds, .dst = dst, .src = src, .chunk_method = chunk_method,
+			.metachunks = NULL, .chunks = chunks,
 		};
-		if (!(err = _organize_chunks(chunks, &dl.metachunks, STGPOL_DSPREFIX_PLAIN))) {
+		if (!(err = _organize_chunks(chunks, &dl.metachunks))) {
 			g_assert (dl.metachunks != NULL);
 			err = _download (&dl);
 			_metachunk_cleanv (dl.metachunks);
@@ -782,6 +803,7 @@ _download_to_hook (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 	/* cleanup and exit */
 	g_string_free (reply_body, TRUE);
 	g_slist_free_full (chunks, g_free);
+	g_free(chunk_method);
 	return (struct oio_error_s*) err;
 }
 
@@ -1038,15 +1060,16 @@ oio_sds_upload_greedy (struct oio_sds_ul_s *ul)
 	return NULL != ul && !ul->finished && ul->ready_for_data;
 }
 
+int
+oio_sds_upload_is_ec(struct oio_sds_ul_s *ul)
+{
+	return oio_str_prefixed(ul->chunk_method, STGPOL_DSPREFIX_EC, "/");
+}
+
 struct oio_error_s *
 oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 {
 	g_assert (ul != NULL);
-
-	if (ul->sds->use_swift) {
-		ul->chunk_size = size;
-		return NULL;
-	}
 
 	GError *err = NULL;
 	GString *request_body = g_string_new("");
@@ -1106,10 +1129,9 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 
 		/* Verify we are not doing erasure coding.
 		 * TODO: implement erasure coding in C */
-		if (!oio_str_prefixed(ul->chunk_method, STGPOL_DSPREFIX_PLAIN, "/")) {
-			if (ul->sds->swift_url && ul->sds->swift_url[0]) {
-				GRID_DEBUG("using swift gateway "
-						"for erasure coding");
+		if (!oio_sds_upload_is_ec(ul)) {
+			if (ul->sds->ecd && ul->sds->ecd[0]) {
+				GRID_DEBUG("using ecd gateway for erasure coding");
 				g_slist_free_full(ul->chunks, g_free);
 				ul->chunks = NULL;
 				ul->chunk_size = size;
@@ -1126,7 +1148,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 	if (!err) {
 		struct metachunk_s **out = NULL;
 		ul->chunks = g_slist_sort (ul->chunks, (GCompareFunc)_compare_chunks);
-		if (NULL != (err = _organize_chunks (ul->chunks, &out, ul->chunk_method)))
+		if (NULL != (err = _organize_chunks (ul->chunks, &out)))
 			g_prefix_error (&err, "Logic: ");
 		else
 			for (struct metachunk_s **p = out; *p; ++p)
@@ -1170,6 +1192,7 @@ static GError *
 _sds_upload_finish (struct oio_sds_ul_s *ul)
 {
 	GRID_TRACE("%s (%p)", __FUNCTION__, ul);
+	g_assert(ul->mc != NULL);
 	GError *err = NULL;
 
 	guint failures = http_put_get_failure_number (ul->put);
@@ -1178,7 +1201,7 @@ _sds_upload_finish (struct oio_sds_ul_s *ul)
 
 	if (failures >= total) {
 		err = NEWERROR(CODE_PLATFORM_ERROR, "No upload succeeded");
-	} else if (ul->mc && !ul->sds->use_swift) {
+	} else {
 		/* patch the chunk sizes and positions */
 		ul->mc->size = ul->local_done;
 		for (GSList *l=ul->mc->chunks; l ;l=l->next) {
@@ -1195,6 +1218,7 @@ _sds_upload_finish (struct oio_sds_ul_s *ul)
 				oio_str_upper (c->hexhash);
 			}
 		}
+		// TODO: in case of EC, we may wanna read response headers
 
 		/* store the structure in holders for further commit/abort */
 		ul->chunks_done = g_slist_concat (ul->chunks_done, ul->chunks);
@@ -1214,29 +1238,32 @@ _sds_upload_finish (struct oio_sds_ul_s *ul)
 	return err;
 }
 
-/* Mimics the behavior of _sds_upload_renew but adds only
- * one destination: the swift gateway. */
-static GError *
-_sds_upload_renew_swift(struct oio_sds_ul_s *ul)
+static void
+_sds_upload_add_headers(struct oio_sds_ul_s *ul, struct http_put_dest_s *dest)
 {
-	char full_url[256] = {0};
+	http_put_dest_add_header (dest, PROXYD_HEADER_REQID,
+			"%s", oio_ext_get_reqid());
 
-	g_assert (NULL == ul->put);
-	g_assert (NULL == ul->http_dests);
+	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "container-id",
+			"%s", oio_url_get (ul->dst->url, OIOURL_HEXID));
 
-	g_snprintf(full_url, sizeof(full_url), "%s/v1/%s/%s/%s",
-			ul->sds->swift_url,
-			oio_url_get(ul->dst->url, OIOURL_ACCOUNT),
-			oio_url_get(ul->dst->url, OIOURL_USER),
-			oio_url_get(ul->dst->url, OIOURL_PATH));
-	/* Here, chunk_size is the full size of the object. We MUST pass
-	 * it until the swift gateway supports 'Transfer-Encoding: chunked'. */
-	ul->put = http_put_create(ul->chunk_size, ul->chunk_size);
-	struct http_put_dest_s *dest = http_put_add_dest(ul->put, full_url,
-			GINT_TO_POINTER(1));  // FIXME:
-	ul->http_dests = g_slist_append(ul->http_dests, dest);
-	ul->started = TRUE;
-	return NULL;
+	gchar *escaped = g_uri_escape_string (oio_url_get (
+				ul->dst->url, OIOURL_PATH), NULL, TRUE);
+	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-path",
+			"%s", escaped);
+	g_free (escaped);
+
+	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-version",
+			"%" G_GINT64_FORMAT, ul->version);
+	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-id",
+			"%s", ul->hexid);
+
+	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-storage-policy",
+			"%s", ul->stgpol);
+	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-chunk-method",
+			"%s", ul->chunk_method);
+	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-mime-type",
+			"%s", ul->mime_type);
 }
 
 static GError *
@@ -1279,43 +1306,42 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 
 	/* Initiate the PolyPut (c) with all its targets */
 	ul->put = http_put_create (-1, ul->chunk_size);
-	for (GSList *l=ul->mc->chunks; l ;l=l->next) {
-		struct chunk_s *c = l->data;
-		struct http_put_dest_s *dest = http_put_add_dest (ul->put, c->url, c);
-
-		http_put_dest_add_header (dest, PROXYD_HEADER_REQID,
-				"%s", oio_ext_get_reqid());
-
-		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "container-id",
-				"%s", oio_url_get (ul->dst->url, OIOURL_HEXID));
-
-		gchar *escaped = g_uri_escape_string (oio_url_get (
-					ul->dst->url, OIOURL_PATH), NULL, TRUE);
-		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-path",
-				"%s", escaped);
-		g_free (escaped);
-
-		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-version",
-				"%" G_GINT64_FORMAT, ul->version);
-		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-id",
-				"%s", ul->hexid);
-
-		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-storage-policy",
-				"%s", ul->stgpol);
-		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-chunk-method",
-				"%s", ul->chunk_method);
-		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-mime-type",
-				"%s", ul->mime_type);
-
-		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-id",
-				"%s", strrchr(c->url, '/')+1);
-
-		gchar strpos[32];
-		_chunk_pack_position (c, strpos, sizeof(strpos));
+	if (oio_sds_upload_is_ec(ul)) {
+		// TODO: allow getting ecd from proxy
+		char ecd[128] = {0};
+		g_snprintf(ecd, sizeof(ecd), "http://%s/", ul->sds->ecd);
+		struct http_put_dest_s *dest = http_put_add_dest(ul->put, ecd, ul->mc);
+		_sds_upload_add_headers(ul, dest);
+		int chunks_nb = 0;
+		for (GSList *l = ul->mc->chunks; l; l = l->next, chunks_nb++) {
+			struct chunk_s *chunk = l->data;
+			char key[64] = {0};
+			g_snprintf(key, sizeof(key), "%s%s-%u",
+					RAWX_HEADER_PREFIX, "chunk", chunk->position.intra);
+			http_put_dest_add_header(dest, key, "%s", chunk->url);
+		}
+		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunks-nb",
+				"%d", chunks_nb);
 		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-pos",
-				"%s", strpos);
-
+				"%u", ul->mc->meta);
 		ul->http_dests = g_slist_append (ul->http_dests, dest);
+	} else {
+		for (GSList *l=ul->mc->chunks; l ;l=l->next) {
+			struct chunk_s *c = l->data;
+			struct http_put_dest_s *dest = http_put_add_dest (ul->put, c->url, c);
+
+			_sds_upload_add_headers(ul, dest);
+
+			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-id",
+					"%s", strrchr(c->url, '/')+1);
+
+			gchar strpos[32];
+			_chunk_pack_position (c, strpos, sizeof(strpos));
+			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-pos",
+					"%s", strpos);
+
+			ul->http_dests = g_slist_append (ul->http_dests, dest);
+		}
 	}
 
 	ul->checksum_chunk = g_checksum_new (G_CHECKSUM_MD5);
@@ -1382,12 +1408,7 @@ oio_sds_upload_step (struct oio_sds_ul_s *ul)
 				 * we need at least one empty chunk to be able to rebuid the
 				 * content. So we re-enqueue the buffer and let the PUT happen. */
 				g_queue_push_head (ul->buffer_tail, buf);
-				GError *err = NULL;
-				if ((ul->sds->use_swift || ul->mc == NULL)
-						&& ul->sds->swift_url != NULL)
-					err = _sds_upload_renew_swift(ul);
-				else
-					err = _sds_upload_renew (ul);
+				GError *err = _sds_upload_renew (ul);
 				if (NULL != err) {
 					GRID_TRACE("%s (%p) Failed to renew the upload", __FUNCTION__, ul);
 					return (struct oio_error_s*) err;
@@ -1461,9 +1482,6 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 
 	if (ul->put && !http_put_done (ul->put))
 		return (struct oio_error_s *) SYSERR("RAWX upload not completed");
-	else if ((ul->sds->use_swift || ul->mc == NULL)
-			&& ul->sds->swift_url != NULL)
-		return NULL;
 
 	gint64 size = 0;
 	for (GList *l=g_list_first(ul->metachunk_done); l ;l=g_list_next(l))
@@ -1483,6 +1501,7 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 		.chunks = request_body,
 		.hash = hash,
 		.stgpol = ul->stgpol,
+		.chunk_method = ul->chunk_method,
 	};
 
 	GRID_TRACE("%s (%p) Saving %s", __FUNCTION__, ul, request_body->str);

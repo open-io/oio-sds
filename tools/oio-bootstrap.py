@@ -279,6 +279,49 @@ Require all granted
 </VirtualHost>
 """
 
+template_wsgi_service_host = """
+LoadModule mpm_worker_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mpm_worker.so
+LoadModule authz_core_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_authz_core.so
+LoadModule wsgi_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_wsgi.so
+
+<IfModule !log_config_module>
+  LoadModule log_config_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_log_config.so
+</IfModule>
+
+Listen ${IP}:${PORT}
+PidFile ${RUNDIR}/${NS}-${SRVTYPE}-${SRVNUM}.pid
+ServerRoot ${TMPDIR}
+ServerName localhost
+ServerSignature Off
+ServerTokens Prod
+DocumentRoot ${RUNDIR}
+
+User  ${USER}
+Group ${GROUP}
+
+LogFormat "%h %l %t \\"%r\\" %>s %b %D" log/common
+ErrorLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-errors.log
+CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-access.log log/common env=!nolog
+LogLevel info
+
+WSGIDaemonProcess ${SRVTYPE}-${SRVNUM} processes=2 threads=1 user=${USER} group=${GROUP}
+WSGIProcessGroup ${SRVTYPE}-${SRVNUM}
+WSGIApplicationGroup ${SRVTYPE}-${SRVNUM}
+WSGIScriptAlias / ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.wsgi
+WSGISocketPrefix ${RUNDIR}/
+WSGIChunkedRequest On
+LimitRequestFields 200
+
+<VirtualHost ${IP}:${PORT}>
+# Leave Empty
+</VirtualHost>
+"""
+
+template_wsgi_service_descr = """
+from oio.${SRVTYPE}.app import create_app
+application = create_app()
+"""
+
 template_meta_watch = """
 host: ${IP}
 port: ${PORT}
@@ -559,7 +602,7 @@ start_at_boot=false
 command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O DirectorySchemas=${CFGDIR}/sqlx/schemas -O Endpoint=${IP}:${PORT} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
 """
 
-template_gridinit_rawx = """
+template_gridinit_httpd = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 command=${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
@@ -764,7 +807,7 @@ port = 6000
 
 # Constants for the configuration of oio-bootstrap
 IS_PRESENT = 'present'
-SERVICE_NUMBER = 'nb-services'
+SVC_NB = 'nb-services'
 ALLOW_REDIS = 'redis'
 BIG = 'big'
 OPENSUSE = 'opensuse'
@@ -779,10 +822,10 @@ PORT_START = 'port-start'
 CHUNK_SIZE = 'chunk-size'
 
 defaults_small = {'NB_CS': 1, 'NB_M0': 1, 'NB_M1': 1, 'NB_M2': 1, 'NB_SQLX': 1,
-                  'NB_RAWX': 2, 'NB_RAINX': 1}
+                  'NB_RAWX': 2, 'NB_RAINX': 1, 'NB_ECD': 1}
 
 defaults_multi = {'NB_CS': 3, 'NB_M0': 1, 'NB_M1': 5, 'NB_M2': 5, 'NB_SQLX': 5,
-                  'NB_RAWX': 7, 'NB_RAINX': 3}
+                  'NB_RAWX': 7, 'NB_RAINX': 3, 'NB_ECD': 1}
 
 # XXX When /usr/sbin/httpd is present we suspect a Redhat/Centos/Fedora
 # environment. If not, we consider being in a Ubuntu/Debian environment.
@@ -809,6 +852,10 @@ def config(env):
 
 def watch(env):
     return '{WATCHDIR}/{NS}-{SRVTYPE}-{SRVNUM}.yml'.format(**env)
+
+
+def wsgi(env):
+    return '{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.wsgi'.format(**env)
 
 
 def gridinit(env):
@@ -933,7 +980,7 @@ def generate(ns, ip, options={}, defaults={}):
             tpl = Template(template_conscience_policies)
             f.write(tpl.safe_substitute(ENV))
         # Prepare a list of consciences
-        for num in range(1, 1+getint(options['conscience'].get(SERVICE_NUMBER, None), defaults['NB_CS'])):
+        for num in range(1, 1+getint(options['conscience'].get(SVC_NB, None), defaults['NB_CS'])):
             cs.append((num, next_port(), next_port()))
         ENV.update({
                     'CS_ALL_PUB': ','.join([str(ip)+':'+str(pub) for _, pub, _ in cs]),
@@ -966,25 +1013,25 @@ def generate(ns, ip, options={}, defaults={}):
             f.write(tpl.safe_substitute(env))
 
     if options['meta0'].get(IS_PRESENT, None):
-        for i in range(1, 1+getint(options['meta0'].get(SERVICE_NUMBER, None), defaults['NB_M0'])):
+        for i in range(1, 1+getint(options['meta0'].get(SVC_NB, None), defaults['NB_M0'])):
             generate_meta('meta0', i, template_gridinit_meta)
     if options['meta1'].get(IS_PRESENT, None):
-        for i in range(1, 1+getint(options['meta1'].get(SERVICE_NUMBER, None), defaults['NB_M1'])):
+        for i in range(1, 1+getint(options['meta1'].get(SVC_NB, None), defaults['NB_M1'])):
             generate_meta('meta1', i, template_gridinit_meta)
     if options['meta2'].get(IS_PRESENT, None):
-        for i in range(1, 1+getint(options['meta2'].get(SERVICE_NUMBER, None), meta2_replicas)):
+        for i in range(1, 1+getint(options['meta2'].get(SVC_NB, None), meta2_replicas)):
             generate_meta('meta2', i, template_gridinit_meta)
     if options['sqlx'].get(IS_PRESENT, None):
-        for i in range(1, 1+getint(options['sqlx'].get(SERVICE_NUMBER, None), sqlx_replicas)):
+        for i in range(1, 1+getint(options['sqlx'].get(SVC_NB, None), sqlx_replicas)):
             generate_meta('sqlx', i, template_gridinit_sqlx)
 
     # RAWX
     if options['rawx'].get(IS_PRESENT, None):
-        for num in range(1, 1+getint(options['rawx'].get(SERVICE_NUMBER, None), defaults['NB_RAWX'])):
+        for num in range(1, 1+getint(options['rawx'].get(SVC_NB, None), defaults['NB_RAWX'])):
             env = subenv({'SRVTYPE': 'rawx', 'SRVNUM': num, 'PORT': next_port()})
             add_service(env)
             # gridinit
-            tpl = Template(template_gridinit_rawx)
+            tpl = Template(template_gridinit_httpd)
             with open(gridinit(env), 'a+') as f:
                 f.write(tpl.safe_substitute(env))
             # service
@@ -1002,11 +1049,11 @@ def generate(ns, ip, options={}, defaults={}):
 
     # rainx
     if options['rainx'].get(IS_PRESENT, None):
-        for num in range(1, 1+getint(options['rainx'].get(SERVICE_NUMBER), defaults['NB_RAINX'])):
+        for num in range(1, 1+getint(options['rainx'].get(SVC_NB), defaults['NB_RAINX'])):
             env = subenv({'SRVTYPE': 'rainx', 'SRVNUM': num, 'PORT': next_port()})
             add_service(env)
             # gridinit
-            tpl = Template(template_gridinit_rainx)
+            tpl = Template(template_gridinit_httpd)
             with open(gridinit(env), 'a+') as f:
                 f.write(tpl.safe_substitute(env))
             # service
@@ -1020,6 +1067,31 @@ def generate(ns, ip, options={}, defaults={}):
             tpl = Template(template_rainx_watch)
             to_write = tpl.safe_substitute(env)
             with open(watch(env), 'w+') as f:
+                f.write(to_write)
+
+    # ecd
+    if options['ecd'].get(IS_PRESENT, False):
+        ecd_nb = 1+getint(options['ecd'].get(SVC_NB), defaults['NB_ECD'])
+        for num in range(1, ecd_nb):
+            env = subenv({'SRVTYPE': 'ecd',
+                          'SRVNUM': num,
+                          'PORT': next_port()})
+            add_service(env)
+            # gridinit
+            tpl = Template(template_gridinit_httpd)
+            with open(gridinit(env), 'a+') as f:
+                f.write(tpl.safe_substitute(env))
+            # service
+            tpl = Template(template_wsgi_service_host)
+            to_write = tpl.safe_substitute(env)
+            if options.get(OPENSUSE, False):
+                to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
+            with open(config(env), 'w+') as f:
+                f.write(to_write)
+            # service desc
+            tpl = Template(template_wsgi_service_descr)
+            to_write = tpl.safe_substitute(env)
+            with open(wsgi(env), 'w+') as f:
                 f.write(to_write)
 
     # redis
@@ -1120,13 +1192,14 @@ def generate(ns, ip, options={}, defaults={}):
 
 def init_dic():
     dic = {}
-    dic['conscience'] = {SERVICE_NUMBER: None, IS_PRESENT: True}
-    dic['meta0'] = {SERVICE_NUMBER: None, IS_PRESENT: True}
-    dic['meta1'] = {SERVICE_NUMBER: None, IS_PRESENT: True}
-    dic['meta2'] = {SERVICE_NUMBER: None, IS_PRESENT: True}
-    dic['sqlx'] = {SERVICE_NUMBER: None, IS_PRESENT: True}
-    dic['rawx'] = {SERVICE_NUMBER: None, IS_PRESENT: True}
-    dic['rainx'] = {SERVICE_NUMBER: None, IS_PRESENT: True}
+    dic['conscience'] = {SVC_NB: None, IS_PRESENT: True}
+    dic['meta0'] = {SVC_NB: None, IS_PRESENT: True}
+    dic['meta1'] = {SVC_NB: None, IS_PRESENT: True}
+    dic['meta2'] = {SVC_NB: None, IS_PRESENT: True}
+    dic['sqlx'] = {SVC_NB: None, IS_PRESENT: True}
+    dic['rawx'] = {SVC_NB: None, IS_PRESENT: True}
+    dic['rainx'] = {SVC_NB: None, IS_PRESENT: True}
+    dic['ecd'] = {SVC_NB: None, IS_PRESENT: True}
     dic[ZOOKEEPER] = True
     return dic
 
@@ -1158,9 +1231,9 @@ def main():
     if options.FILE_PARAMETER is not None:
         f = open(options.FILE_PARAMETER, 'r')
         if options.FILE_PARAMETER.find('.json') != -1:
-            opts = json.load(f, object_hook=_byteify) 
+            opts.update(json.load(f, object_hook=_byteify))
         elif options.FILE_PARAMETER.find('.yml') != -1:
-            opts = yaml.load(f)
+            opts.update(yaml.load(f))
         f.close()
     if opts.get(BIG, None):
         generate(args[0], args[1], opts, defaults_multi)

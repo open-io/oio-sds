@@ -216,6 +216,9 @@ int oio_sds_upload_greedy (struct oio_sds_ul_s *ul);
 /* Tells if the upload is ready to be (in)validated */
 int oio_sds_upload_done (struct oio_sds_ul_s *ul);
 
+/* Tells if the upload will use erasure coding */
+int oio_sds_upload_is_ec(struct oio_sds_ul_s *ul);
+
 void oio_sds_upload_clean (struct oio_sds_ul_s *ul);
 
 /* "Male" upload API
