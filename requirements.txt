@@ -1,7 +1,7 @@
 eventlet>=0.15.2
 requests>=2.6.0
 flask>=0.10.1
-werkzeug>=0.10.4
+werkzeug>=0.9.1
 redis>=2.10.3
 gunicorn>=19.4.5
 pyxattr>=0.4
