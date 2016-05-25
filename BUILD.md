@@ -30,7 +30,7 @@ Building the entire project will require the SDK dependencies, but also:
 
 In addition, a few python modules are required at runtime:
 * python-eventlet
-* python-flask
+* python-werkzeug
 * python-gunicorn
 * python-plyvel
 * python-redis
