@@ -842,9 +842,9 @@ def generate(ns, ip, options={}, defaults={}):
     meta2_replicas = getint(options.get(M2_REPLICAS, None), defaults['NB_M2'])
     sqlx_replicas = getint(options.get(SQLX_REPLICAS, None), defaults['NB_SQLX'])
 
-    if options.get(M2_VERSIONS,None) is not None:
+    if options.get(M2_VERSIONS,None):
         versioning = options [M2_VERSIONS]
-    if options.get(M2_STGPOL,None) is not None:
+    if options.get(M2_STGPOL,None):
         stgpol = options [M2_STGPOL]
 
     ENV = dict(IP=ip, NS=ns, HOME=HOME, EXE_PREFIX=EXE_PREFIX,
@@ -891,7 +891,7 @@ def generate(ns, ip, options={}, defaults={}):
 
     ENV['CHUNK_SIZE'] = getint( options.get(CHUNK_SIZE, None), 1024*1024)
     ENV['MONITOR_PERIOD'] = getint( options.get(MONITOR_PERIOD, None), 5)
-    if options.get(ZOOKEEPER, None) is True:
+    if options.get(ZOOKEEPER, None):
         ENV['NOZK'] = '#'
     else:
         ENV['NOZK'] = ''
@@ -916,7 +916,7 @@ def generate(ns, ip, options={}, defaults={}):
         f.write(tpl.safe_substitute(ENV))
 
     # consciences
-    if options ['conscience'].get(IS_PRESENT, None) is True:
+    if options ['conscience'].get(IS_PRESENT, None):
         cs = list()
         with open('{CFGDIR}/{NS}-policies.conf'.format(**ENV), 'w+') as f:
             tpl = Template(template_conscience_policies)
@@ -953,22 +953,21 @@ def generate(ns, ip, options={}, defaults={}):
         tpl = Template(template_meta_watch)
         with open(watch(env), 'w+') as f:
             f.write(tpl.safe_substitute(env))
-
-    if options ['meta0'].get(IS_PRESENT, None) is True:
+    if options ['meta0'].get(IS_PRESENT, None):
         for i in range(1, 1+getint(options ['meta0'].get(SERVICE_NUMBER, None), defaults['NB_M0'])):
             generate_meta('meta0', i, template_gridinit_meta)
-    if options ['meta1'].get(IS_PRESENT, None) is True:
+    if options ['meta1'].get(IS_PRESENT, None):
         for i in range(1, 1+getint(options ['meta1'].get(SERVICE_NUMBER, None), defaults['NB_M1'])):
             generate_meta('meta1', i, template_gridinit_meta)
-    if options ['meta2'].get(IS_PRESENT, None) is True:
+    if options ['meta2'].get(IS_PRESENT, None):
         for i in range(1, 1+getint(options ['meta2'].get(SERVICE_NUMBER, None), meta2_replicas)):
             generate_meta('meta2', i, template_gridinit_meta)
-    if options ['sqlx'].get(IS_PRESENT, None) is True:
+    if options ['sqlx'].get(IS_PRESENT, None):
         for i in range(1, 1+getint(options ['sqlx'].get(SERVICE_NUMBER, None), sqlx_replicas)):
             generate_meta('sqlx', i, template_gridinit_sqlx)
 
     # RAWX
-    if options ['rawx'].get(IS_PRESENT, None) is True:
+    if options ['rawx'].get(IS_PRESENT, None):
         for num in range(1, 1+getint(options ['rawx'].get(SERVICE_NUMBER, None), defaults['NB_RAWX'])):
             env = subenv({'SRVTYPE':'rawx', 'SRVNUM':num, 'PORT':next_port()})
             add_service(env)
@@ -979,7 +978,7 @@ def generate(ns, ip, options={}, defaults={}):
             # service
             tpl = Template(template_rawx_service)
             to_write = tpl.safe_substitute(env)
-            if options.get(OPENSUSE, None) is True:
+            if options.get(OPENSUSE, None):
                 to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
             with open(config(env), 'w+') as f:
                 f.write(to_write)
@@ -990,7 +989,7 @@ def generate(ns, ip, options={}, defaults={}):
                 f.write(to_write)
 
     # rainx
-    if options ['rainx'].get(IS_PRESENT, None) is True:
+    if options ['rainx'].get(IS_PRESENT, None):
         for num in range(1, 1+getint(options ['rainx'].get(SERVICE_NUMBER), defaults['NB_RAINX'])):
             env = subenv({'SRVTYPE':'rainx', 'SRVNUM':num, 'PORT':next_port()})
             add_service(env)
@@ -1001,7 +1000,7 @@ def generate(ns, ip, options={}, defaults={}):
             # service
             tpl = Template(template_rainx_service)
             to_write = tpl.safe_substitute(env)
-            if options.get(OPENSUSE,None) is True:
+            if options.get(OPENSUSE,None):
                 to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
             with open(config(env), 'w+') as f:
                 f.write(to_write)
@@ -1014,7 +1013,7 @@ def generate(ns, ip, options={}, defaults={}):
     # redis
     env = subenv({'SRVTYPE':'redis', 'SRVNUM':1, 'PORT':6379})
     add_service(env)
-    if options.get(ALLOW_REDIS, None) is True:
+    if options.get(ALLOW_REDIS, None):
         with open(gridinit(env), 'a+') as f:
             tpl = Template(template_redis_gridinit)
             f.write(tpl.safe_substitute(env))
@@ -1149,7 +1148,7 @@ def main():
         elif options.FILE_PARAMETER.find('.yml') != -1 :
             opts = yaml.load(f)
         f.close()
-    if opts.get(BIG,None) is True:
+    if opts.get(BIG,None):
         generate(args[0], args[1], opts, defaults_multi)
     else :
         generate(args[0], args[1], opts, defaults_small)
