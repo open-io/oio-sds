@@ -66,7 +66,7 @@ retry:
 /* -------------------------------------------------------------------------- */
 
 #define SET(K,V) if (K) { \
-	if ((V) && !fsetxattr(fd, ATTR_DOMAIN "." K, V, strlen(V), 0)) \
+	if ((V) && 0 > fsetxattr(fd, ATTR_DOMAIN "." K, V, strlen(V), 0)) \
 		goto error_set_attr; \
 }
 
@@ -133,11 +133,11 @@ set_rawx_info_to_file (const char *p, GError **error, struct chunk_textinfo_s *c
 gboolean
 set_compression_info_in_attr(const char *p, GError ** error, const char *v)
 {
-	ssize_t rc = lsetxattr(p, ATTR_DOMAIN "." ATTR_NAME_CHUNK_METADATA_COMPRESS,
+	int rc = lsetxattr(p, ATTR_DOMAIN "." ATTR_NAME_CHUNK_METADATA_COMPRESS,
 			v, strlen(v), 0);
 	if (rc < 0)
 		GSETCODE(error, errno, "setxattr error: (%d) %s", errno, strerror(errno));
-	return rc > 0;
+	return rc == 0;
 }
 
 gboolean
@@ -145,11 +145,11 @@ set_chunk_compressed_size_in_attr(const char *p, GError ** error, guint32 v)
 {
 	gchar buf[32] = "";
 	g_snprintf (buf, sizeof(buf), "%"G_GUINT32_FORMAT, v);
-	ssize_t rc = lsetxattr(p, ATTR_DOMAIN ATTR_NAME_CHUNK_COMPRESSED_SIZE,
+	int rc = lsetxattr(p, ATTR_DOMAIN ATTR_NAME_CHUNK_COMPRESSED_SIZE,
 			buf, strlen(buf), 0);
 	if (rc < 0)
 		GSETCODE(error, errno, "setxattr error: (%d) %s", errno, strerror(errno));
-	return rc > 0;
+	return rc == 0;
 }
 
 /* -------------------------------------------------------------------------- */

@@ -14,23 +14,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import StringIO
-import hashlib
-import os
-import time
-
-import math
-from testtools.matchers import NotEquals
-
-from oio.blob.client import BlobClient
-from oio.common.exceptions import UnrecoverableContent, OrphanChunk, NotFound
-from oio.common.utils import cid_from_name
-from oio.container.client import ContainerClient
-from oio.content.content import ChunksHelper
-from oio.content.factory import ContentFactory
-from oio.content.rain import RainContent
-from tests.functional.content.test_content import md5_stream, random_data, \
-    md5_data
 from tests.utils import BaseTestCase
 
 
