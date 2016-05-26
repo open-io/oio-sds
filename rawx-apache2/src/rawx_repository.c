@@ -227,8 +227,8 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 	}
 
 	if (r->method_number == M_POST || r->method_number == M_PUT) {
-		if (resource->info->chunk.id) {
-			if (0 != apr_strnatcasecmp(resource->info->chunk.id, resource->info->hex_chunkid))
+		if (resource->info->chunk.chunk_id) {
+			if (0 != apr_strnatcasecmp(resource->info->chunk.chunk_id, resource->info->hex_chunkid))
 				return server_create_and_stat_error(request_get_server_config(r), r->pool,
 						HTTP_BAD_REQUEST, 0, "chunk-id mismatch");
 		}
@@ -464,7 +464,7 @@ dav_rawx_set_headers(request_rec *r, const dav_resource *resource)
 	/* set up the Content-Length header */
 	ap_set_content_length(r, resource->info->finfo.size);
 
-	request_fill_headers(r, &(resource->info->content), &(resource->info->chunk));
+	request_fill_headers(r, &(resource->info->chunk));
 
 	/* compute metadata_compress if compressed content */
 	if (resource->info->compression) {
@@ -525,8 +525,7 @@ dav_rawx_deliver(const dav_resource *resource, ap_filter_t *output)
 		FILE *f = NULL;
 		f = fopen(path, "r");
 		/* Try to open the file but forbids a creation */
-		if (!set_rawx_full_info_in_attr(path, fileno(f), &error_local,&(ctx->content),
-					&(ctx->chunk), NULL, NULL)) {
+		if (!set_rawx_info_to_fd(fileno(f), &error_local, &(ctx->chunk))) {
 			fclose(f);
 			e = server_create_and_stat_error(conf, pool,
 					HTTP_FORBIDDEN, 0, apr_pstrdup(pool, gerror_get_message(error_local)));

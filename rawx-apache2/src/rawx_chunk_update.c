@@ -213,8 +213,7 @@ _load_request_info(const dav_resource *resource, char **full_path, struct storag
 }
 
 static dav_error *
-_load_in_place_chunk_info(const dav_resource *r, const char *path, struct content_textinfo_s *content,
-		struct chunk_textinfo_s *chunk, GHashTable *comp_opt)
+_load_in_place_chunk_info(const dav_resource *r, const char *path, struct chunk_textinfo_s *chunk, GHashTable *comp_opt)
 {
 	dav_error *e = NULL;
 	GError *ge = NULL;
@@ -223,7 +222,7 @@ _load_in_place_chunk_info(const dav_resource *r, const char *path, struct conten
 
 	/* No need to check for the chunk's presence, getting its attributes will
 	 * fail if the chunk doesn't exists */
-	if (!get_rawx_info_in_attr(path, &ge, content, chunk)) {
+	if (!get_rawx_info_from_file(path, &ge, chunk)) {
 		if (NULL != ge) {
 			e = server_create_and_stat_error(conf, p, HTTP_CONFLICT, 0,
 					apr_pstrcat(p, "Failed to get chunk attributes: ", ge->message, NULL));
@@ -235,20 +234,22 @@ _load_in_place_chunk_info(const dav_resource *r, const char *path, struct conten
 		return e;
 	}
 
-	str_replace_by_pooled_str(p, &(content->container_id));
+	str_replace_by_pooled_str(p, &(chunk->container_id));
 
-	str_replace_by_pooled_str(p, &(content->content_id));
-	str_replace_by_pooled_str(p, &(content->path));
-	str_replace_by_pooled_str(p, &(content->version));
-	str_replace_by_pooled_str(p, &(content->size));
-	str_replace_by_pooled_str(p, &(content->chunk_nb));
-	str_replace_by_pooled_str(p, &(content->storage_policy));
+	str_replace_by_pooled_str(p, &(chunk->content_id));
+	str_replace_by_pooled_str(p, &(chunk->content_path));
+	str_replace_by_pooled_str(p, &(chunk->content_version));
+	str_replace_by_pooled_str(p, &(chunk->content_size));
+	str_replace_by_pooled_str(p, &(chunk->content_chunk_nb));
 
-	str_replace_by_pooled_str(p, &(chunk->id));
-	str_replace_by_pooled_str(p, &(chunk->size));
-	str_replace_by_pooled_str(p, &(chunk->hash));
-	str_replace_by_pooled_str(p, &(chunk->position));
-	str_replace_by_pooled_str(p, &(chunk->metadata));
+	str_replace_by_pooled_str(p, &(chunk->content_storage_policy));
+	str_replace_by_pooled_str(p, &(chunk->content_chunk_method));
+	str_replace_by_pooled_str(p, &(chunk->content_mime_type));
+
+	str_replace_by_pooled_str(p, &(chunk->chunk_id));
+	str_replace_by_pooled_str(p, &(chunk->chunk_size));
+	str_replace_by_pooled_str(p, &(chunk->chunk_position));
+	str_replace_by_pooled_str(p, &(chunk->chunk_hash));
 
 	if(!get_compression_info_in_attr(path, &ge, comp_opt)){
 		if(NULL != ge) {
@@ -274,7 +275,6 @@ dav_rawx_deliver_SPECIAL(const dav_resource *resource, ap_filter_t *output)
 	struct storage_policy_s *sp = NULL;
 	const request_rec *r = resource->info->request;
 	GHashTable *comp_opt = NULL;
-	struct content_textinfo_s *content = NULL;
 	struct chunk_textinfo_s *chunk = NULL;
 	char *path = NULL;
 	apr_pool_t *p = resource->pool;
@@ -294,10 +294,9 @@ dav_rawx_deliver_SPECIAL(const dav_resource *resource, ap_filter_t *output)
 	comp_opt = g_hash_table_new_full( g_str_hash, g_str_equal, g_free, g_free);
 	apr_pool_cleanup_register(p, comp_opt, apr_hash_table_clean, apr_pool_cleanup_null);
 	chunk = apr_palloc(p, sizeof(struct chunk_textinfo_s));
-	content = apr_palloc(p, sizeof(struct content_textinfo_s));
 
 	/* Load in place informations (sys-metadata & metadatacompress) */
-	e = _load_in_place_chunk_info(resource, path, content, chunk, comp_opt);
+	e = _load_in_place_chunk_info(resource, path, chunk, comp_opt);
 	if (NULL != e) {
 		DAV_ERROR_REQ(r, 0, "Failed to load in place chunk information: %s", e->desc);
 		goto end_deliver;

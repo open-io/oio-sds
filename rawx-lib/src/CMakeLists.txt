@@ -16,7 +16,6 @@ link_directories(
 add_library(rawx SHARED
 		attr_handler.c
 		compression.c
-		utils_rawx_maintenance.c
 		lzo_compress.c
 		zlib_compress.c)
 

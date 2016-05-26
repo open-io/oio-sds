@@ -325,6 +325,7 @@ oio_strv_length_total (const char * const *v)
 void
 oio_str_upper(register gchar *s)
 {
+	if (!s) return;
 	for (; *s ;++s)
 		*s = g_ascii_toupper(*s);
 }

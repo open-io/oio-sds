@@ -51,7 +51,6 @@ struct dav_resource_private
 	const char *fullpath;
 
 	apr_finfo_t finfo;
-	struct content_textinfo_s content;
 	struct chunk_textinfo_s chunk;
 	struct compression_ctx_s comp_ctx;
 	struct compressed_chunk_s cp_chunk;
@@ -97,8 +96,7 @@ const char * request_load_chunk_info(request_rec *request, dav_resource *resourc
 
 void request_parse_query(request_rec *r, dav_resource *resource);
 
-void request_fill_headers(request_rec *r, struct content_textinfo_s *c0,
-		struct chunk_textinfo_s *c1);
+void request_fill_headers(request_rec *r, struct chunk_textinfo_s *c1);
 
 dav_error * rawx_repo_check_request(request_rec *req, const char *root_dir, const char *label,
 		int use_checked_in, dav_resource_private *ctx, dav_resource **result_resource);
