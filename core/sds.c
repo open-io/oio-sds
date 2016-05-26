@@ -1129,7 +1129,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 
 		/* Verify we are not doing erasure coding.
 		 * TODO: implement erasure coding in C */
-		if (!oio_sds_upload_is_ec(ul)) {
+		if (oio_sds_upload_is_ec(ul)) {
 			if (ul->sds->ecd && ul->sds->ecd[0]) {
 				GRID_DEBUG("using ecd gateway for erasure coding");
 				g_slist_free_full(ul->chunks, g_free);
@@ -1139,12 +1139,12 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 			} else {
 				err = NEWERROR(CODE_NOT_IMPLEMENTED,
 						"C client cannot do erasure coding "
-						"without swift gateway");
+						"without ecd gateway");
 			}
 		}
 	}
 
-	/* prepare the set of chunks to detect replication or erasure coding. */
+	/* Organize the set of chunks into metachunks. */
 	if (!err) {
 		struct metachunk_s **out = NULL;
 		ul->chunks = g_slist_sort (ul->chunks, (GCompareFunc)_compare_chunks);
