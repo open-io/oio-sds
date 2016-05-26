@@ -237,15 +237,121 @@ resource_init_decompression(dav_resource *resource, dav_rawx_server_conf *conf)
 
 /******************** REQUEST UTILITY FUNCTIONS ******************/
 
+static int
+_load_field(apr_pool_t *pool, apr_table_t *table, const char *name, char **dst)
+{
+	const char *value = apr_table_get(table, name);
+	if (!value)
+		return 0;
+	gchar *decoded = g_uri_unescape_string (value, NULL);
+	*dst = apr_pstrdup (pool, decoded);
+	g_free (decoded);
+	return 1;
+}
+
+#define REPLACE_FIELD(S) str_replace_by_pooled_str(pool, &(cti->S))
+
+#define LAZY_LOAD_FIELD(Where,Name) do { \
+	if (!cti->Where) \
+		_load_field(pool, src, RAWX_HEADER_PREFIX Name, &(cti->Where)); \
+} while (0)
+
+#define OVERLOAD_FIELD(Where,Name) do { \
+	_load_field(pool, src, RAWX_HEADER_PREFIX Name, &(cti->Where)); \
+} while (0)
+
+static gboolean _null_or_hexa1 (const char *s) { return !s || oio_str_ishexa1(s); }
+
+static void
+chunk_info_fields__glib2apr (apr_pool_t *pool, struct chunk_textinfo_s *cti)
+{
+	REPLACE_FIELD(container_id);
+
+	REPLACE_FIELD(content_id);
+	REPLACE_FIELD(content_path);
+	REPLACE_FIELD(content_version);
+	REPLACE_FIELD(content_size);
+	REPLACE_FIELD(content_chunk_nb);
+
+	REPLACE_FIELD(content_storage_policy);
+	REPLACE_FIELD(content_chunk_method);
+	REPLACE_FIELD(content_mime_type);
+
+	REPLACE_FIELD(metachunk_size);
+
+	REPLACE_FIELD(chunk_id);
+	REPLACE_FIELD(chunk_size);
+	REPLACE_FIELD(chunk_position);
+	REPLACE_FIELD(chunk_hash);
+}
+
+void
+request_overload_chunk_info_from_trailers(request_rec *request,
+		struct chunk_textinfo_s *cti)
+{
+	apr_table_t *src = request->trailers_in;
+	apr_pool_t *pool = request->pool;
+
+	OVERLOAD_FIELD(metachunk_size, "metachunk-size");
+	OVERLOAD_FIELD(chunk_size,     "chunk-size");
+	OVERLOAD_FIELD(chunk_hash,     "chunk-hash");
+}
+
+void
+request_load_chunk_info_from_headers(request_rec *request,
+		struct chunk_textinfo_s *cti)
+{
+	apr_table_t *src = request->headers_in;
+	apr_pool_t *pool = request->pool;
+
+	LAZY_LOAD_FIELD(container_id,           "container-id");
+	LAZY_LOAD_FIELD(content_id,             "content-id");
+	LAZY_LOAD_FIELD(content_path,           "content-path");
+	LAZY_LOAD_FIELD(content_version,        "content-version");
+	LAZY_LOAD_FIELD(content_size,           "content-size");
+	LAZY_LOAD_FIELD(content_chunk_nb,       "content-chunksnb");
+	LAZY_LOAD_FIELD(content_storage_policy, "content-storage-policy");
+	LAZY_LOAD_FIELD(content_mime_type,      "content-mime-type");
+	LAZY_LOAD_FIELD(content_chunk_method,   "content-chunk-method");
+	LAZY_LOAD_FIELD(metachunk_size,         "metachunk-size");
+	LAZY_LOAD_FIELD(chunk_id,               "chunk-id");
+	LAZY_LOAD_FIELD(chunk_size,             "chunk-size");
+	LAZY_LOAD_FIELD(chunk_position,         "chunk-pos");
+	LAZY_LOAD_FIELD(chunk_hash,             "chunk-hash");
+}
+
+const char *
+check_chunk_info(const struct chunk_textinfo_s * const cti)
+{
+	if (!cti->container_id) return "container-id";
+	if (!cti->content_id) return "content-id";
+	if (!cti->content_storage_policy) return "storage-policy";
+	if (!cti->content_chunk_method) return "chunk-method";
+	//if (!cti->content_mime_type) return "mime-type";
+	if (!cti->content_path) return "content-path";
+	if (!cti->content_version) return "version";
+	if (!cti->chunk_position) return "chunk-pos";
+
+	oio_str_upper (cti->container_id);
+	oio_str_upper (cti->content_id);
+	oio_str_upper (cti->chunk_hash);
+	oio_str_upper (cti->chunk_id);
+
+	if (!oio_str_ishexa(cti->container_id, 64)) return "container-id";
+	if (!_null_or_hexa1(cti->content_id)) return "content-id";
+	if (!_null_or_hexa1(cti->chunk_id)) return "chunk-id";
+	if (!_null_or_hexa1(cti->chunk_hash)) return "chunk-hash";
+
+	return NULL;
+}
+
 void
 resource_stat_chunk(dav_resource *resource, int flags)
 {
-	apr_pool_t *pool;
 	dav_resource_private *ctx;
 	apr_status_t status = APR_ENOENT;
 
 	ctx = resource->info;
-	pool = resource->pool;
 
 	if (resource->type != DAV_RESOURCE_TYPE_REGULAR || resource->collection) {
 		DAV_ERROR_RES(resource, 0, "Cannot stat a anything else a chunk");
@@ -284,97 +390,12 @@ resource_stat_chunk(dav_resource *resource, int flags)
 						apr_pstrdup(resource->pool, gerror_get_message(err)));
 			}
 			else {
-				REPLACE_FIELD(pool, chunk, container_id);
-
-				REPLACE_FIELD(pool, chunk, content_id);
-				REPLACE_FIELD(pool, chunk, content_path);
-				REPLACE_FIELD(pool, chunk, content_version);
-				REPLACE_FIELD(pool, chunk, content_size);
-				REPLACE_FIELD(pool, chunk, content_chunk_nb);
-
-				REPLACE_FIELD(pool, chunk, content_storage_policy);
-				REPLACE_FIELD(pool, chunk, content_chunk_method);
-				REPLACE_FIELD(pool, chunk, content_mime_type);
-
-				REPLACE_FIELD(pool, chunk, metachunk_size);
-
-				REPLACE_FIELD(pool, chunk, chunk_id);
-				REPLACE_FIELD(pool, chunk, chunk_size);
-				REPLACE_FIELD(pool, chunk, chunk_position);
-				REPLACE_FIELD(pool, chunk, chunk_hash);
+				chunk_info_fields__glib2apr (resource->pool, &resource->info->chunk);
 			}
 			if (err)
 				g_clear_error(&err);
 		}
 	}
-}
-
-static int
-_load_field(apr_pool_t *pool, apr_table_t *table, const char *name, char **dst)
-{
-	const char *value = apr_table_get(table, name);
-	if (!value)
-		return 0;
-	gchar *decoded = g_uri_unescape_string (value, NULL);
-	*dst = apr_pstrdup (pool, decoded);
-	g_free (decoded);
-	return 1;
-}
-
-#define LOAD_HEADER(Where,Name) do { \
-	if (!resource->info->Where) \
-		_load_field(request->pool, request->headers_in, Name, &(resource->info->Where)); \
-} while (0)
-
-#define LOAD_TRAILER(Where,Name) do { \
-	if (!resource->info->Where) \
-		_load_field(request->pool, request->trailers_in, Name, &(resource->info->Where)); \
-} while (0)
-
-static gboolean _null_or_hexa1 (const char *s) { return !s || oio_str_ishexa1(s); }
-
-const char *
-request_load_chunk_info(request_rec *request, dav_resource *resource)
-{
-	LOAD_HEADER(chunk.container_id, RAWX_HEADER_PREFIX "container-id");
-
-	LOAD_HEADER(chunk.content_id,       RAWX_HEADER_PREFIX "content-id");
-	LOAD_HEADER(chunk.content_path,     RAWX_HEADER_PREFIX "content-path");
-	LOAD_HEADER(chunk.content_version,  RAWX_HEADER_PREFIX "content-version");
-	LOAD_HEADER(chunk.content_size,     RAWX_HEADER_PREFIX "content-size");
-	LOAD_HEADER(chunk.content_chunk_nb, RAWX_HEADER_PREFIX "content-chunksnb");
-
-	LOAD_HEADER(chunk.content_storage_policy, RAWX_HEADER_PREFIX "content-storage-policy");
-	LOAD_HEADER(chunk.content_mime_type,      RAWX_HEADER_PREFIX "content-mime-type");
-	LOAD_HEADER(chunk.content_chunk_method,   RAWX_HEADER_PREFIX "content-chunk-method");
-
-	LOAD_HEADER(chunk.metachunk_size, RAWX_HEADER_PREFIX "metachunk-size");
-
-	LOAD_HEADER(chunk.chunk_id,       RAWX_HEADER_PREFIX "chunk-id");
-	LOAD_HEADER(chunk.chunk_size,     RAWX_HEADER_PREFIX "chunk-size");
-	LOAD_HEADER(chunk.chunk_position, RAWX_HEADER_PREFIX "chunk-pos");
-	LOAD_HEADER(chunk.chunk_hash,     RAWX_HEADER_PREFIX "chunk-hash");
-
-	if (!resource->info->chunk.container_id) return "container-id";
-	if (!resource->info->chunk.content_id) return "content-id";
-	if (!resource->info->chunk.content_storage_policy) return "storage-policy";
-	if (!resource->info->chunk.content_chunk_method) return "chunk-method";
-	//if (!resource->info->chunk.content_mime_type) return "mime-type";
-	if (!resource->info->chunk.content_path) return "content-path";
-	if (!resource->info->chunk.content_version) return "version";
-	if (!resource->info->chunk.chunk_position) return "chunk-pos";
-
-	oio_str_upper (resource->info->chunk.container_id);
-	oio_str_upper (resource->info->chunk.content_id);
-	oio_str_upper (resource->info->chunk.chunk_hash);
-	oio_str_upper (resource->info->chunk.chunk_id);
-
-	if (!oio_str_ishexa(resource->info->chunk.container_id, 64)) return "container-id";
-	if (!_null_or_hexa1(resource->info->chunk.content_id)) return "content-id";
-	if (!_null_or_hexa1(resource->info->chunk.chunk_id)) return "chunk-id";
-	if (!_null_or_hexa1(resource->info->chunk.chunk_hash)) return "chunk-hash";
-
-	return NULL;
 }
 
 void
@@ -579,12 +600,35 @@ rawx_repo_rollback_upload(dav_stream *stream)
 	return NULL;
 }
 
+#define DUP(F) do { \
+	if (stream->r->info->chunk . F) \
+		fake. F = apr_pstrdup(stream->r->pool, stream->r->info->chunk. F); \
+} while (0)
+
 dav_error *
 rawx_repo_commit_upload(dav_stream *stream)
 {
-	dav_error *e = NULL;
+	struct chunk_textinfo_s fake = {0};
+	DUP(container_id);
+	DUP(content_id);
+	DUP(content_path);
+	DUP(content_version);
+	DUP(content_size);
+	DUP(content_chunk_nb);
+	DUP(content_storage_policy);
+	DUP(content_chunk_method);
+	DUP(content_mime_type);
+	DUP(metachunk_size);
+	DUP(chunk_id);
+	DUP(chunk_size);
+	DUP(chunk_hash);
+	DUP(chunk_position);
+	DUP(compression_metadata);
+	DUP(compression_size);
 
-	e = _set_chunk_extended_attributes(stream);
+	request_overload_chunk_info_from_trailers (stream->r->info->request, &fake);
+
+	dav_error *e = _set_chunk_extended_attributes(stream);
 	if( NULL != e) {
 		DAV_DEBUG_REQ(stream->r->info->request, 0, "Failed to set chunk extended attributes : %s", e->desc);
 		return e;

@@ -45,8 +45,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define ATTR_NAME_CHUNK_POS  "chunk.position"
 # define ATTR_NAME_CHUNK_HASH "chunk.hash"
 
-# define ATTR_NAME_CHUNK_METADATA_COMPRESS "chunk.metadatacompress"
-# define ATTR_NAME_CHUNK_COMPRESSED_SIZE   "chunk.compressedsize"
+# define ATTR_NAME_CHUNK_METADATA_COMPRESS "compression.metadata"
+# define ATTR_NAME_CHUNK_COMPRESSED_SIZE   "compression.size"
 
 #define NS_RAWX_BUFSIZE_OPTION "rawx_bufsize"
 
@@ -103,15 +103,12 @@ typedef struct chunk_textinfo_s
 void chunk_textinfo_free_content(struct chunk_textinfo_s *cti);
 
 gboolean set_rawx_info_to_file (const char *p, GError **error, struct chunk_textinfo_s *chunk);
-
 gboolean set_rawx_info_to_fd (int fd, GError **err, struct chunk_textinfo_s *chunk);
 
 gboolean set_compression_info_in_attr(const char *p, GError **error, const char *v);
-
 gboolean set_chunk_compressed_size_in_attr(const char *p, GError **error, guint32 v);
 
 gboolean get_rawx_info_from_file (const char *p, GError **error, struct chunk_textinfo_s *chunk);
-
 gboolean get_rawx_info_from_fd (int fd, GError **error, struct chunk_textinfo_s *chunk);
 
 gboolean get_compression_info_in_attr(const char *p, GError **error, GHashTable *table);

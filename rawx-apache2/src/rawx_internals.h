@@ -113,8 +113,6 @@ apr_uint64_t request_get_duration(const request_rec *req);
 
 void str_replace_by_pooled_str(apr_pool_t *pool, char ** pstr);
 
-# define REPLACE_FIELD(P,S,W) str_replace_by_pooled_str((P), &(ctx-> S . W ))
-
 void dav_format_time(int style, apr_time_t sec, char *buf);
 
 void send_chunk_event(const char *type, const dav_resource *resource);

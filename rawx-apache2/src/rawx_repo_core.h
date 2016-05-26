@@ -92,7 +92,13 @@ dav_error * resource_init_decompression(dav_resource *resource, dav_rawx_server_
 
 void resource_stat_chunk(dav_resource *resource, int flags);
 
-const char * request_load_chunk_info(request_rec *request, dav_resource *resource);
+void request_load_chunk_info_from_headers(request_rec *request,
+		struct chunk_textinfo_s *cti);
+
+void request_overload_chunk_info_from_trailers(request_rec *request,
+		struct chunk_textinfo_s *cti);
+
+const char * check_chunk_info(const struct chunk_textinfo_s * const cti);
 
 void request_parse_query(request_rec *r, dav_resource *resource);
 

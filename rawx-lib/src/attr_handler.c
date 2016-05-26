@@ -309,7 +309,12 @@ chunk_textinfo_free_content(struct chunk_textinfo_s *cti)
 	oio_str_clean (&cti->content_version);
 	oio_str_clean (&cti->content_size);
 	oio_str_clean (&cti->content_chunk_nb);
+
 	oio_str_clean (&cti->content_storage_policy);
+	oio_str_clean (&cti->content_chunk_method);
+	oio_str_clean (&cti->content_mime_type);
+
+	oio_str_clean (&cti->metachunk_size);
 
 	oio_str_clean (&cti->chunk_id);
 	oio_str_clean (&cti->chunk_size);
