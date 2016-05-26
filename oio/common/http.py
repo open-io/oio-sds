@@ -114,6 +114,10 @@ def http_connect(ipaddr, port, method, path, headers=None, query_string=None):
     conn.putrequest(method, path)
     if headers:
         for header, value in headers.items():
-            conn.putheader(header, str(value))
+            if isinstance(value, list):
+                for k in value:
+                    conn.putheader(header, str(k))
+            else:
+                conn.putheader(header, str(value))
     conn.endheaders()
     return conn
