@@ -1507,8 +1507,8 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 }
 
 static void
-_m2_generate_content_chunk(struct gen_ctx_s *ctx, struct service_info_s *si,
-		guint pos, gint64 cs, gint subpos, gboolean parity)
+_gen_chunk(struct gen_ctx_s *ctx, struct service_info_s *si,
+		gint64 cs, guint pos, gint subpos)
 {
 	guint8 binid[32];
 	gchar *chunkid, strpos[24], strid[65], straddr[STRLEN_ADDRINFO];
@@ -1519,10 +1519,10 @@ _m2_generate_content_chunk(struct gen_ctx_s *ctx, struct service_info_s *si,
 	oio_str_bin2hex (binid, sizeof(binid), strid, sizeof(strid));
 	grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
 
-	if (subpos >= 0)
-		g_snprintf(strpos, sizeof(strpos), (parity ? "%u.p%d" : "%u.%d"), pos, subpos);
-	else
+	if (subpos < 0)
 		g_snprintf(strpos, sizeof(strpos), "%u", pos);
+	else
+		g_snprintf(strpos, sizeof(strpos), "%u.%d", pos, subpos);
 
 	chunkid = m2v2_build_chunk_url (straddr, strid);
 
@@ -1539,98 +1539,44 @@ _m2_generate_content_chunk(struct gen_ctx_s *ctx, struct service_info_s *si,
 }
 
 static GError*
-_m2_generate_RAIN(struct gen_ctx_s *ctx)
+_m2_generate_chunks(struct gen_ctx_s *ctx,
+		gint64 mcs /* effective meta-chunk's size */,
+		guint count,
+		gboolean subpos)
 {
 	GError *err = NULL;
-	/* Storage policy storage class */
-	const struct storage_class_s *stgclass;
-	gint distance, k, m;
-	gboolean weak;
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
-	distance = _policy_parameter(ctx->pol, DS_KEY_DISTANCE, 1);
-	weak = _policy_parameter(ctx->pol, DS_KEY_WEAK, FALSE);
-	k = _policy_parameter(ctx->pol, DS_KEY_K, 3);
-	m = _policy_parameter(ctx->pol, DS_KEY_M, 2);
-	stgclass = storage_policy_get_storage_class(ctx->pol);
+	const gint distance = _policy_parameter(ctx->pol, DS_KEY_DISTANCE, 1);
+	const gboolean weak = _policy_parameter(ctx->pol, DS_KEY_WEAK, FALSE);
+	const struct storage_class_s *stgclass =
+		storage_policy_get_storage_class(ctx->pol);
+
 	_m2_generate_alias_header(ctx);
 
-	(void) distance;
-
 	guint pos = 0;
-	for (gint64 s=0; s < MAX(ctx->size,1) ;) {
+	gint64 esize = MAX(ctx->size,1);
+	for (gint64 s=0; s < esize ;s+=mcs,++pos) {
+
+		struct lb_next_opt_s opt;
+		memset(&opt, 0, sizeof(opt));
+		opt.req.duplicates = (distance <= 0);
+		opt.req.max = count;
+		opt.req.distance = distance;
+		opt.req.weak_distance = weak;
+		opt.req.stgclass = stgclass;
+		opt.req.strict_stgclass = FALSE; // Accept ersatzes
+
 		struct service_info_s **siv = NULL;
-
-		struct lb_next_opt_s opt;
-		memset(&opt, 0, sizeof(opt));
-		opt.req.duplicates = (distance <= 0);
-		opt.req.max = k + m;
-		opt.req.distance = distance;
-		opt.req.weak_distance = weak;
-		opt.req.stgclass = stgclass;
-		opt.req.strict_stgclass = FALSE; // Accept ersatzes
-
 		if (!grid_lb_iterator_next_set(ctx->iter, &siv, &opt, &err)) {
 			g_prefix_error(&err, "at position %u: ", pos);
 			break;
 		}
 
-		for (gint i=0; siv[i] ;++i) {
-			gboolean parity = (i >= k);
-			_m2_generate_content_chunk(ctx, siv[i], pos, ctx->chunk_size,
-					(parity ? i-k : i), parity);
-		}
+		for (gint i=0; NULL != siv[i] ;++i)
+			_gen_chunk (ctx, siv[i], ctx->chunk_size, pos, subpos?i:-1);
 
 		service_info_cleanv(siv, FALSE);
-		++ pos;
-		s += ctx->chunk_size;
-	}
-
-	return err;
-}
-
-static GError*
-_m2_generate_DUPLI(struct gen_ctx_s *ctx)
-{
-	GError *err = NULL;
-	/* Storage policy storage class */
-	const struct storage_class_s *stgclass;
-	gint distance, copies;
-	gboolean weak;
-
-	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
-	distance = _policy_parameter(ctx->pol, DS_KEY_DISTANCE, 1);
-	weak = _policy_parameter(ctx->pol, DS_KEY_WEAK, FALSE);
-	copies = _policy_parameter(ctx->pol, DS_KEY_COPY_COUNT, 1);
-	stgclass = storage_policy_get_storage_class(ctx->pol);
-	_m2_generate_alias_header(ctx);
-
-	(void) distance;
-
-	guint pos = 0;
-	for (gint64 s=0; s < MAX(ctx->size,1) ; s += ctx->chunk_size) {
-		struct service_info_s **psi, **siv = NULL;
-
-		struct lb_next_opt_s opt;
-		memset(&opt, 0, sizeof(opt));
-		// suppose that duplicates have distance=0 between them
-		opt.req.duplicates = (distance <= 0);
-		opt.req.max = copies;
-		opt.req.distance = distance;
-		opt.req.weak_distance = weak;
-		opt.req.stgclass = stgclass;
-		opt.req.strict_stgclass = FALSE; // Accept ersatzes
-
-		if (!grid_lb_iterator_next_set(ctx->iter, &siv, &opt, &err)) {
-			g_prefix_error(&err, "at position %u: ", pos);
-			break;
-		}
-
-		for (psi=siv; *psi ;++psi)
-			_m2_generate_content_chunk(ctx, *psi, pos, ctx->chunk_size, -1, FALSE);
-
-		service_info_cleanv(siv, FALSE);
-		++ pos;
 	}
 
 	return err;
@@ -1667,14 +1613,17 @@ m2_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
 	ctx.cb_data = cb_data;
 
 	if (!pol)
-		return _m2_generate_DUPLI(&ctx);
+		return _m2_generate_chunks(&ctx, chunk_size, 1, 0);
 
+	gint64 nb, k, m;
 	switch (data_security_get_type(storage_policy_get_data_security(pol))) {
-		case RAIN:
-			return _m2_generate_RAIN(&ctx);
-		case DS_NONE:
-		case DUPLI:
-			return _m2_generate_DUPLI(&ctx);
+		case STGPOL_DS_PLAIN:
+			nb = _policy_parameter(pol, DS_KEY_COPY_COUNT, 1);
+			return _m2_generate_chunks(&ctx, chunk_size, nb, 0);
+		case STGPOL_DS_EC:
+			k = _policy_parameter(pol, DS_KEY_K, 6);
+			m = _policy_parameter(pol, DS_KEY_M, 4);
+			return _m2_generate_chunks(&ctx, k*chunk_size, k+m, -1);
 		default:
 			return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy type");
 	}

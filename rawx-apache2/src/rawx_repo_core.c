@@ -666,8 +666,9 @@ rawx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 	apr_status_t rv = 0;
 	char * metadata_compress = NULL;
 	struct storage_policy_s *sp = NULL;
-	const struct data_treatments_s *dt = NULL;
 	int retryable = 1;
+
+	volatile int should_compress = 0;
 
 	dav_stream *ds = apr_pcalloc(p, sizeof(*ds));
 	ds->fsync_on_close = conf->fsync_on_close;
@@ -712,14 +713,10 @@ retry:
 		apr_pool_cleanup_register(p, sp, apr_storage_policy_clean,
 				apr_pool_cleanup_null);
 
-	dt = storage_policy_get_data_treatments(sp);
+	if (ctx->forced_cp)
+		should_compress = g_ascii_strncasecmp(ctx->forced_cp, "true", 4);
 
-	gint match = -1;
-
-	if(ctx->forced_cp)
-		match = g_ascii_strncasecmp(ctx->forced_cp, "true", 4);
-
-	if((!dt || COMPRESSION != data_treatments_get_type(dt)) && (match != 0)){
+	if (!should_compress) {
 		DAV_DEBUG_REQ(resource->info->request, 0 , "Compression Mode OFF");
 		ds->blocksize = g_ascii_strtoll(DEFAULT_BLOCK_SIZE, NULL, 10); /* conf->rawx_conf->blocksize; */
 		ds->buffer = apr_pcalloc(p, ds->blocksize);
@@ -727,38 +724,19 @@ retry:
 	} else {
 		DAV_DEBUG_REQ(resource->info->request, 0 , "Compression Mode ON");
 		ds->compression = TRUE;
-		if(NULL != dt && COMPRESSION == data_treatments_get_type(dt)) {
-			/* compression configured "normally" */
-			const char *bs = NULL;
-			const char *algo = NULL;
-			bs = data_treatments_get_param(dt, DT_KEY_BLOCKSIZE);
-			if(!bs)
-				bs = DEFAULT_BLOCK_SIZE;
-			algo = data_treatments_get_param(dt, DT_KEY_ALGO);
-			if(!algo)
-				algo = DEFAULT_COMPRESSION_ALGO;
-			ds->blocksize = g_ascii_strtoll(bs, NULL, 10);
-
-			metadata_compress = apr_pstrcat(p, NS_COMPRESSION_OPTION, "=", NS_COMPRESSION_ON, ";",
-					NS_COMPRESS_ALGO_OPTION,"=", algo, ";",
-					NS_COMPRESS_BLOCKSIZE_OPTION, "=", bs, NULL);
-
-			init_compression_ctx(&(ds->comp_ctx), algo);
-		} else {
-			/* compression forced by request header */
-			if(!ctx->forced_cp_algo || !ctx->forced_cp_bs){
-				return server_create_and_stat_error(resource_get_server_config(resource), p,
-						HTTP_BAD_REQUEST, 0,
-						apr_pstrcat(p, "Failed to get compression info from incoming request", NULL));
-			}
-			ds->blocksize = strtol(ctx->forced_cp_bs, NULL, 10);
-
-			metadata_compress = apr_pstrcat(p, NS_COMPRESSION_OPTION, "=", NS_COMPRESSION_ON, ";",
-					NS_COMPRESS_ALGO_OPTION,"=", ctx->forced_cp_algo, ";",
-					NS_COMPRESS_BLOCKSIZE_OPTION, "=", ctx->forced_cp_bs, NULL);
-
-			init_compression_ctx(&(ds->comp_ctx), ctx->forced_cp_algo);
+		/* compression forced by request header */
+		if(!ctx->forced_cp_algo || !ctx->forced_cp_bs){
+			return server_create_and_stat_error(resource_get_server_config(resource), p,
+					HTTP_BAD_REQUEST, 0,
+					apr_pstrcat(p, "Failed to get compression info from incoming request", NULL));
 		}
+		ds->blocksize = strtol(ctx->forced_cp_bs, NULL, 10);
+
+		metadata_compress = apr_pstrcat(p, NS_COMPRESSION_OPTION, "=", NS_COMPRESSION_ON, ";",
+				NS_COMPRESS_ALGO_OPTION,"=", ctx->forced_cp_algo, ";",
+				NS_COMPRESS_BLOCKSIZE_OPTION, "=", ctx->forced_cp_bs, NULL);
+
+		init_compression_ctx(&(ds->comp_ctx), ctx->forced_cp_algo);
 
 		ds->buffer = apr_pcalloc(p, ds->blocksize);
 		ds->bufsize = 0;

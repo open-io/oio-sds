@@ -31,13 +31,6 @@ struct data_security_s
 	GHashTable *params;
 };
 
-struct data_treatments_s
-{
-	gchar *name;
-	enum data_treatments_e type;
-	GHashTable *params;
-};
-
 struct storage_class_s
 {
 	gchar *name;
@@ -48,7 +41,6 @@ struct storage_policy_s
 {
 	gchar *name;
 	struct data_security_s *datasec;
-	struct data_treatments_s *datatreat;
 	struct storage_class_s *stgclass;
 };
 

@@ -146,11 +146,11 @@ def test_get(lib):
              {"url": "http://%s/%s%d" % (urls[1], czero, 4),
               "pos": "0.0", "size": 16, "hash": hash_zero},
              {"url": "http://%s/%s%d" % (urls[2], czero, 5),
-              "pos": "0.1", "size": 16, "hash": hash_zero},
+              "pos": "1.0", "size": 16, "hash": hash_zero},
              {"url": "http://%s/%s%d" % (urls[3], czero, 6),
-              "pos": "0.2", "size": 16, "hash": hash_zero},
+              "pos": "2.0", "size": 16, "hash": hash_zero},
              {"url": "http://%s/%s%d" % (urls[3], czero, 7),
-              "pos": "0.3", "size": 16, "hash": hash_zero},
+              "pos": "3.0", "size": 16, "hash": hash_zero},
              ]))),
     ]
     for s in services:
