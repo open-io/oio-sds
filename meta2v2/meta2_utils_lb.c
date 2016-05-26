@@ -124,19 +124,16 @@ get_spare_chunks(struct grid_lbpool_s *lbp, struct storage_policy_s *stgpol,
 			BOOL(data_security_get_int64_param(ds, DS_KEY_WEAK, 0));
 
 	switch (data_security_get_type(ds)) {
-		case RAIN:
+		case STGPOL_DS_EC:
 			k = data_security_get_param(ds, DS_KEY_K);
 			m = data_security_get_param(ds, DS_KEY_M);
 			if (!k || !m)
 				return NEWERROR(CODE_BAD_REQUEST, "Invalid RAIN policy (missing K and/or M)");
 			opt_ext.req.max = atoi(k) + atoi(m);
 			break;
-		case DUPLI:
+		case STGPOL_DS_PLAIN:
 			cpstr = data_security_get_param(ds, DS_KEY_COPY_COUNT);
 			opt_ext.req.max = (NULL != cpstr) ? atoi(cpstr) : 1;
-			break;
-		case DS_NONE:
-			opt_ext.req.max = 1;
 			break;
 		default:
 			return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy type");
@@ -192,15 +189,12 @@ get_conditioned_spare_chunks2(struct grid_lbpool_s *lbp,
 	opt_ext.srv_forbidden = NULL;
 
 	switch (data_security_get_type(ds)) {
-		case DUPLI:
+		case STGPOL_DS_PLAIN:
 			opt_ext.req.max = data_security_get_int64_param(ds, DS_KEY_COPY_COUNT, 1);
 			break;
-		case RAIN:
+		case STGPOL_DS_EC:
 			opt_ext.req.max = data_security_get_int64_param(ds, DS_KEY_K, 1)
 				+ data_security_get_int64_param(ds, DS_KEY_M, 0);
-			break;
-		case DS_NONE:
-			opt_ext.req.max = 1;
 			break;
 		default:
 			return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid storage policy");

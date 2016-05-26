@@ -29,11 +29,11 @@ _init_ns (struct namespace_info_s *ni)
 				"\"ns\":\"%s\","
 				"\"chunksize\":%i,"
 				"\"storage_policy\":{"
-					"\"rain32\":\"NONE:RAIN32:NONE\","
-					"\"dupli3\":\"NONE:DUPLI3:NONE\","
-					"\"classic\":\"NONE:DUPONETWO:NONE\","
-					"\"polcheck\":\"NONE:DUPONETHREE:SIMCOMP\","
-					"\"secure\":\"NONE:DUP_SECURE:NONE\""
+					"\"rain32\":\"NONE:RAIN32\","
+					"\"dupli3\":\"NONE:DUPLI3\","
+					"\"classic\":\"NONE:DUPONETWO\","
+					"\"polcheck\":\"NONE:DUPONETHREE\","
+					"\"secure\":\"NONE:DUP_SECURE\""
 				"},"
 				"\"data_security\":{"
 					"\"DUPLI3\":\"DUP:distance=0|nb_copy=3\","
@@ -41,9 +41,6 @@ _init_ns (struct namespace_info_s *ni)
 					"\"DUPONETWO\":\"DUP:distance=1|nb_copy=2\","
 					"\"DUPONETHREE\":\"DUP:distance=1|nb_copy=3\","
 					"\"DUP_SECURE\":\"DUP:distance=4|nb_copy=2\""
-				"},"
-				"\"data_treatments\":{"
-					"\"SIMCOMP\":\"COMP:algo=ZLIB|blocksize=262144\""
 				"},"
 				"\"storage_class\":{"
 					"\"GOLD\":\"SILVER:BRONZE:CLAY\","
@@ -85,7 +82,6 @@ test_stgclass_no_fallback ()
 	g_assert(0 == g_slist_length(sc->fallbacks));
 	g_assert(storage_class_is_satisfied2(sc, "CLAY", TRUE));
 	g_assert(storage_class_is_satisfied2(NULL, "CLAY", TRUE));
-	g_assert(storage_class_is_satisfied("DUMMY", "CLAY"));
 	g_assert(storage_class_is_satisfied("NONE", "CLAY"));
 	g_assert(storage_class_is_satisfied("", "CLAY"));
 	g_assert(storage_class_is_satisfied(NULL, "CLAY"));

@@ -406,14 +406,20 @@ oio_proxy_call_container_get_properties (CURL *h, struct oio_url_s *u,
 }
 
 GError *
-oio_proxy_call_content_show (CURL *h, struct oio_url_s *u, GString *out)
+oio_proxy_call_content_show (CURL *h, struct oio_url_s *u, GString *out,
+		char ***hout)
 {
 	GString *http_url = _curl_content_url (u, "show");
-	if (!http_url) return BADNS();
-
-	struct http_ctx_s o = { .headers = NULL, .body = out };
+	if (!http_url)
+		return BADNS();
+	struct http_ctx_s o = {
+			.headers = hout? g_malloc0(sizeof(char**)) : NULL,
+			.body = out
+	};
 	GError *err = _proxy_call (h, "GET", http_url->str, NULL, &o);
 	g_string_free (http_url, TRUE);
+	if (hout)
+		*hout = o.headers;
 	return err;
 }
 
@@ -509,6 +515,8 @@ oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,
 		g_strdup_printf("%s", in->hash),
 		g_strdup(PROXYD_HEADER_PREFIX "content-meta-policy"),
 		g_strdup_printf("%s", in->stgpol?: "NONE"),
+		g_strdup(PROXYD_HEADER_PREFIX "content-meta-chunk-method"),
+		g_strdup_printf("%s", in->chunk_method?: "plain"),
 		NULL
 	};
 	struct http_ctx_s i = { .headers = hdrin, .body = in ? in->chunks : NULL };

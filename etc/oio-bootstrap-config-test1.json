@@ -1,7 +1,5 @@
-
-
 {
-    "zookeeper": true,
+    "zookeeper": false,
     "monitor-period": 1,
     "sqlx-replicas": 1,
     "m2-replicas": 1,

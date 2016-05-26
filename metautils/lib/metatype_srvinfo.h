@@ -105,4 +105,10 @@ void service_info_encode_json(GString *out, const struct service_info_s *si,
 
 gchar * service_info_key (const struct service_info_s *si);
 
+/** Compute the distance between two string representing rawx locations */
+guint distance_between_location(const gchar *loc1, const gchar *loc2);
+
+guint distance_between_services(struct service_info_s *s0,
+		struct service_info_s *s1);
+
 #endif /*OIO_SDS__metautils__lib__metatype_srvinfo_h*/
