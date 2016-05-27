@@ -7,35 +7,35 @@
     "chunk-size": 65536,
     "redis": true,
     "big": true,
-    
+
     "conscience": {
-	"present": true
+        "present": true
     },
 
     "meta0": {
-	"present": true
+        "present": true
     },
 
     "meta1": {
-	"present": true,
-	"nb-services": 1
+        "present": true,
+        "nb-services": 1
     },
 
     "meta2": {
-	"present": true,
-	"nb-services": 1
+        "present": true,
+        "nb-services": 1
     },
 
     "sqlx": {
-	"present": true
+        "present": true
     },
 
     "rawx": {
-	"present": true,
-	"nb-services": 5
+        "present": true,
+        "nb-services": 5
     },
 
     "rainx": {
-	"present": true
+        "present": true
     }
 }

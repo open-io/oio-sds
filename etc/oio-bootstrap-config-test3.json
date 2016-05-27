@@ -1,10 +1,10 @@
 {
-    "zookeeper": false,
+    "zookeeper": true,
     "monitor-period": 1,
-    "sqlx-replicas": 1,
-    "m2-replicas": 1,
-    "m2-stgpol": "SINGLE",
-    "chunk-size": 1000,
+    "sqlx-replicas": 3,
+    "m2-replicas": 3,
+    "m2-stgpol": "THREECOPIES",
+    "chunk-size": 65536,
     "redis": true,
     "big": true,
 
@@ -18,12 +18,12 @@
 
     "meta1": {
         "present": true,
-        "nb-services": 1
+        "nb-services": 3
     },
 
     "meta2": {
         "present": true,
-        "nb-services": 1
+        "nb-services": 3
     },
 
     "sqlx": {
@@ -32,7 +32,7 @@
 
     "rawx": {
         "present": true,
-        "nb-services": 3
+        "nb-services": 5
     },
 
     "rainx": {
