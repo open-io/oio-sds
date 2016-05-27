@@ -2,6 +2,7 @@ from __future__ import print_function
 import sys
 import os
 import json
+import yaml
 import testtools
 import requests
 import random
@@ -17,12 +18,12 @@ def get_config(defaults=None):
     if defaults is not None:
         conf.update(defaults)
 
-    default_conf_path = os.path.expanduser('~/.oio/sds/conf/test.conf')
+    default_conf_path = os.path.expanduser('~/.oio/sds/conf/test.yml')
     conf_file = os.environ.get('SDS_TEST_CONFIG_FILE', default_conf_path)
 
     try:
         with open(conf_file, 'r') as f:
-            conf = json.load(f)
+            conf = yaml.load(f)
     except SystemExit:
         if not os.path.exists(conf_file):
             reason = 'file not found'
@@ -40,7 +41,7 @@ class BaseTestCase(testtools.TestCase):
     _last_cache_flush = 0
 
     def get_service_url(self, srvtype, i=0):
-        allsrv = self.conf[srvtype]
+        allsrv = self.conf['services'][srvtype]
         srv = allsrv[i]
         return srv['num'], srv['path'], srv['addr']
 
@@ -76,10 +77,9 @@ class BaseTestCase(testtools.TestCase):
     def setUp(self):
         super(BaseTestCase, self).setUp()
         self.conf = get_config()
-        self.uri = 'http://' + self.conf['proxy'][0]['addr']
+        self.uri = 'http://' + self.conf['proxy']
         self.ns = self.conf['namespace']
-        if 'account' in self.conf:
-            self.account = self.conf['account']
+        self.account = self.conf['account']
         self.session = requests.session()
         self._flush_cs('echo')
 
@@ -118,12 +118,12 @@ class BaseTestCase(testtools.TestCase):
         resp = self.session.post(url, '')
         self.assertEqual(resp.status_code / 100, 2)
         for srvtype in ('meta1', 'meta2'):
-            for t in self.conf[srvtype]:
+            for t in self.conf['services'][srvtype]:
                 url = self.uri + '/v3.0/forward/flush'
                 resp = self.session.post(url, params={'id': t['addr']})
                 self.assertEqual(resp.status_code, 204)
         for srvtype in ('meta1', 'meta2'):
-            for t in self.conf[srvtype]:
+            for t in self.conf['services'][srvtype]:
                 url = self.uri + '/v3.0/forward/reload'
                 resp = self.session.post(url, params={'id': t['addr']})
                 self.assertEqual(resp.status_code, 204)

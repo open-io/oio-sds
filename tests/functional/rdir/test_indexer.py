@@ -16,7 +16,7 @@ class TestIndexerCrawler(BaseTestCase):
 
         self.namespace = self.conf['namespace']
 
-        self.rawx_conf = self.conf['rawx'][0]
+        self.rawx_conf = self.conf['services']['rawx'][0]
         self.conf = {"namespace": self.namespace,
                      "volume": self.rawx_conf['path']}
         self.rdir_client = RdirClient(self.conf)

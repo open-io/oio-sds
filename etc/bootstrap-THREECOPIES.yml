@@ -1,0 +1,6 @@
+zookeeper: false
+storage_policy: "THREECOPIES"
+redis: true
+
+rawx:
+  count: 5

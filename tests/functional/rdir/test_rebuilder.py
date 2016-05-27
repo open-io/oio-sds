@@ -84,8 +84,8 @@ class TestChunk(object):
         h.update(data)
         self.hash = h.hexdigest().upper()
         self.pos = pos
-        self.url = "http://%s/%s" % (self.test_conf['rawx'][rawx]['addr'],
-                                     self.id)
+        self.url = "http://%s/%s" % \
+            (self.test_conf['services']['rawx'][rawx]['addr'], self.id)
         self.content = content
 
     def get_create_meta2(self):
@@ -128,6 +128,8 @@ class TestRebuilderCrawler(BaseTestCase):
         self.container_name = "TestRebuilderCrawler%d" % int(time.time())
         self.container_client.container_create(acct=self.account,
                                                ref=self.container_name)
+        rawx_num, rawx_path, rawx_addr = self.get_service_url('rawx')
+        self.rawx_addr = rawx_addr
 
     def _push_content(self, content):
         for c in content.chunks:
@@ -156,8 +158,7 @@ class TestRebuilderCrawler(BaseTestCase):
         self._push_content(content)
 
         # rebuild the first rawx
-        rebuilder = BlobRebuilderWorker(self.gridconf, None,
-                                        self.conf['rawx'][0]['addr'])
+        rebuilder = BlobRebuilderWorker(self.gridconf, None, self.rawx_addr)
 
         rebuilder.chunk_rebuild(content.container_id, content.content_id,
                                 content.chunks[0].id)
@@ -195,7 +196,7 @@ class TestRebuilderCrawler(BaseTestCase):
 
         # check rtime flag in rdir
         rdir_client = RdirClient(self.gridconf)
-        res = rdir_client.chunk_fetch(self.conf['rawx'][0]['addr'])
+        res = rdir_client.chunk_fetch(self.rawx_addr)
         key = (content.container_id, content.content_id, content.chunks[0].id)
         for i_container, i_content, i_chunk, i_value in res:
             if (i_container, i_content, i_chunk) == key:
@@ -203,7 +204,7 @@ class TestRebuilderCrawler(BaseTestCase):
 
         self.assertIsNotNone(check_value.get('rtime'))
 
-    @unittest.skipIf(len(get_config()['rawx']) != 3,
+    @unittest.skipIf(len(get_config()['services']['rawx']) != 3,
                      "The number of rawx must be 3")
     def test_rebuild_no_spare(self):
         # push a new content
@@ -217,8 +218,7 @@ class TestRebuilderCrawler(BaseTestCase):
         self._push_content(content)
 
         # rebuild the first rawx
-        rebuilder = BlobRebuilderWorker(self.gridconf, None,
-                                        self.conf['rawx'][0]['addr'])
+        rebuilder = BlobRebuilderWorker(self.gridconf, None, self.rawx_addr)
 
         self.assertRaises(SpareChunkException, rebuilder.chunk_rebuild,
                           content.container_id, content.content_id,
@@ -235,8 +235,7 @@ class TestRebuilderCrawler(BaseTestCase):
         self._push_content(content)
 
         # rebuild the first rawx
-        rebuilder = BlobRebuilderWorker(self.gridconf, None,
-                                        self.conf['rawx'][0]['addr'])
+        rebuilder = BlobRebuilderWorker(self.gridconf, None, self.rawx_addr)
 
         # Force upload to raise an exception
         with patch('oio.content.content.BlobClient') as MockClass:
@@ -247,8 +246,7 @@ class TestRebuilderCrawler(BaseTestCase):
                               content.chunks[0].id)
 
     def test_rebuild_nonexistent_chunk(self):
-        rebuilder = BlobRebuilderWorker(self.gridconf, None,
-                                        self.conf['rawx'][0]['addr'])
+        rebuilder = BlobRebuilderWorker(self.gridconf, None, self.rawx_addr)
 
         # try to rebuild an nonexistant chunk
         self.assertRaises(OrphanChunk, rebuilder.chunk_rebuild,
@@ -265,8 +263,7 @@ class TestRebuilderCrawler(BaseTestCase):
         self._push_content(content)
 
         # rebuild the first rawx
-        rebuilder = BlobRebuilderWorker(self.gridconf, None,
-                                        self.conf['rawx'][0]['addr'])
+        rebuilder = BlobRebuilderWorker(self.gridconf, None, self.rawx_addr)
 
         # try to rebuild an nonexistant chunk
         self.assertRaises(OrphanChunk, rebuilder.chunk_rebuild,
@@ -282,8 +279,7 @@ class TestRebuilderCrawler(BaseTestCase):
         self._push_content(content)
 
         # rebuild the first rawx
-        rebuilder = BlobRebuilderWorker(self.gridconf, None,
-                                        self.conf['rawx'][0]['addr'])
+        rebuilder = BlobRebuilderWorker(self.gridconf, None, self.rawx_addr)
 
         # try to rebuild chunk without copy
         self.assertRaises(UnrecoverableContent, rebuilder.chunk_rebuild,
