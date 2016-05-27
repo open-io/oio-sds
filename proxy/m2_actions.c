@@ -844,7 +844,9 @@ _m2_container_create (struct req_args_s *args)
 
 	GError *err;
 retry:
-	GRID_TRACE("Container creation %s", oio_url_get (args->url, OIOURL_WHOLE));
+	GRID_TRACE("Container creation %s (%s autocreate)",
+			oio_url_get (args->url, OIOURL_WHOLE),
+			autocreate ? "with" : "without");
 	err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 	if (err && CODE_IS_NOTFOUND(err->code)) {
 		if (autocreate) {
