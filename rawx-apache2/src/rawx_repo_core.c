@@ -62,36 +62,15 @@ __set_header(request_rec *r, const char *n, const char *v)
 }
 
 static dav_error *
-_set_chunk_extended_attributes(dav_stream *stream)
+_set_chunk_extended_attributes(dav_stream *stream, struct chunk_textinfo_s *cti)
 {
 	GError *ge = NULL;
 	dav_error *e = NULL;
 
-	/* Save the new Chunk's hash in the XATTR, in upppercase! */
-	gchar *hex = g_ascii_strup (g_checksum_get_string(stream->md5), -1);
-	stream->r->info->chunk.chunk_hash = apr_pstrdup(stream->p, hex);
-	g_free (hex);
-
-	stream->r->info->chunk.chunk_size = apr_psprintf(stream->r->pool, "%d", (int)stream->total_size);
-
-	if (stream->compressed_size) {
-		char size[32];
-		apr_snprintf(size, 32, "%d", stream->compressed_size);
-		oio_str_replace (&(stream->r->info->chunk.compression_metadata), stream->metadata_compress);
-		oio_str_replace (&(stream->r->info->chunk.compression_size), size);
-
-		if (!set_rawx_info_to_fd(fileno(stream->f), &ge, &(stream->r->info->chunk)))
-			e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
-					HTTP_FORBIDDEN, 0, apr_pstrdup(stream->p, gerror_get_message(ge)));
-	} else {
-		if (!set_rawx_info_to_fd(fileno(stream->f), &ge, &(stream->r->info->chunk)))
-			e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
-					HTTP_FORBIDDEN, 0, apr_pstrdup(stream->p, gerror_get_message(ge)));
-	}
-
-	if(ge)
-		g_clear_error(&ge);
-
+	if (!set_rawx_info_to_fd(fileno(stream->f), &ge, cti))
+		e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
+				HTTP_FORBIDDEN, 0, apr_pstrdup(stream->p, gerror_get_message(ge)));
+	if (ge) g_clear_error (&ge);
 	return e;
 }
 
@@ -626,9 +605,26 @@ rawx_repo_commit_upload(dav_stream *stream)
 	DUP(compression_metadata);
 	DUP(compression_size);
 
+	/* patch the xattr with explicit values from the trailers, then ensure
+	 * values that could be missing */
 	request_overload_chunk_info_from_trailers (stream->r->info->request, &fake);
+	if (!fake.chunk_hash) {
+		gchar *hex = g_ascii_strup (g_checksum_get_string(stream->md5), -1);
+		fake.chunk_hash = apr_pstrdup(stream->p, hex);
+		g_free (hex);
+	}
+	if (!fake.chunk_size) {
+		fake.chunk_size = apr_psprintf(stream->r->pool, "%d", (int)stream->total_size);
+	}
+	if (stream->compressed_size) {
+		char size[32];
+		apr_snprintf(size, 32, "%d", stream->compressed_size);
+		oio_str_replace (&(fake.compression_metadata), stream->metadata_compress);
+		oio_str_replace (&(fake.compression_size), size);
+	}
 
-	dav_error *e = _set_chunk_extended_attributes(stream);
+	/* ok, save now */
+	dav_error *e = _set_chunk_extended_attributes(stream, &fake);
 	if( NULL != e) {
 		DAV_DEBUG_REQ(stream->r->info->request, 0, "Failed to set chunk extended attributes : %s", e->desc);
 		return e;
