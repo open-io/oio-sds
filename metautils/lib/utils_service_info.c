@@ -1,7 +1,7 @@
 /*
 OpenIO SDS metautils
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -468,6 +468,19 @@ service_info_key (const struct service_info_s *si)
 		return g_strdup_printf("%s|%s|%s", si->ns_name, si->type, explicit);
 	grid_addrinfo_to_string(&si->addr, addr, sizeof(struct addr_info_s));
 	return g_strdup_printf("%s|%s|%s", si->ns_name, si->type, addr);
+}
+
+void
+service_info_to_lb_item(const struct service_info_s *si,
+		struct oio_lb_item_s *item)
+{
+	g_assert_nonnull(si);
+	g_assert_nonnull(item);
+	item->location = location_from_addr_info(&(si->addr));
+	item->weight = si->score.value;
+	gchar *key = service_info_key(si);
+	strcpy(item->id, key);
+	g_free(key);
 }
 
 //------------------------------------------------------------------------------

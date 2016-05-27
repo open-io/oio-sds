@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -201,7 +201,7 @@ _get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
 static gboolean
 _post_config(struct sqlx_service_s *ss)
 {
-	GError *err = meta1_backend_init (&m1, ss->ns_name, ss->repository, ss->lb);
+	GError *err = meta1_backend_init (&m1, ss->ns_name, ss->repository, ss->lb2);
 	if (NULL != err) {
 		GRID_WARN("META1 backend init failure: (%d) %s", err->code, err->message);
 		g_clear_error (&err);

@@ -1,3 +1,21 @@
+/*
+OpenIO SDS load-balancing
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #include <string.h>
 
 #include <glib.h>
@@ -17,11 +35,17 @@ struct oio_lb_pool_vtable_s
 	guint (*poll) (struct oio_lb_pool_s *self,
 			const oio_location_t * avoids,
 			oio_lb_on_id_f on_id);
+
+	guint (*patch) (struct oio_lb_pool_s *self,
+			const oio_location_t * avoids,
+			oio_location_t * known,
+			oio_lb_on_id_f on_id);
 };
 
 struct oio_lb_pool_abstract_s
 {
 	struct oio_lb_pool_vtable_s *vtable;
+	gchar *name;
 };
 
 #define CFG_CALL(self,F) VTABLE_CALL(self,struct oio_lb_pool_abstract_s*,F)
@@ -38,6 +62,16 @@ oio_lb_pool__poll (struct oio_lb_pool_s *self,
 		oio_lb_on_id_f on_id)
 {
 	CFG_CALL(self,poll)(self, avoids, on_id);
+}
+
+// FIXME: return a GError*
+guint
+oio_lb_pool__patch(struct oio_lb_pool_s *self,
+		const oio_location_t * avoids,
+		oio_location_t * known,
+		oio_lb_on_id_f on_id)
+{
+	CFG_CALL(self, patch)(self, avoids, known, on_id);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -93,8 +127,8 @@ struct oio_lb_world_s
 struct oio_lb_pool_LOCAL_s
 {
 	struct oio_lb_pool_vtable_s *vtable;
+	gchar *name;
 
-	gchar * name;
 	struct oio_lb_world_s *world;
 	gchar ** targets;
 };
@@ -105,9 +139,14 @@ static guint _local__poll (struct oio_lb_pool_s *self,
 		const oio_location_t * avoids,
 		oio_lb_on_id_f on_id);
 
+static guint _local__patch(struct oio_lb_pool_s *self,
+		const oio_location_t * avoids,
+		oio_location_t * known,
+		oio_lb_on_id_f on_id);
+
 static struct oio_lb_pool_vtable_s vtable_LOCAL =
 {
-	_local__destroy, _local__poll
+	_local__destroy, _local__poll, _local__patch
 };
 
 static struct _lb_item_s *
@@ -132,6 +171,9 @@ oio_lb_world__get_slot (struct oio_lb_world_s *world, const char *name)
 #define CITEM(p) CSLOT(p)->item
 #define TAB_ITEM(t,i)  g_array_index ((t), struct _slot_item_s, i)
 #define SLOT_ITEM(s,i) TAB_ITEM (s->items, i)
+
+static guint _search_first_at_location(GArray *tab, const oio_location_t needle,
+		const guint start, const guint end);
 
 static int
 _compare_stored_items_by_location (const void *k0, const void *k)
@@ -257,6 +299,8 @@ _accept_item (struct oio_lb_slot_s *slot, oio_location_t mask,
 	// Previous loops avoids -> masked
 	if (_item_is_to_be_avoided(ctx->polled, loc, mask))
 		return FALSE;
+	GRID_TRACE("Accepting item %s (%lu) from slot %s",
+			item->id, loc, slot->name);
 	ctx->on_id (loc, item->id);
 	*(ctx->next_polled) = loc;
 	return TRUE;
@@ -300,7 +344,7 @@ _local_slot__poll (struct oio_lb_slot_s *slot, gboolean masked,
 		i = (i + (1 << 31) - 1) % slot->items->len;  // not prime but OK
 	}
 
-	GRID_TRACE2("%s avoided everything in slot=%s", __FUNCTION__, slot->name);
+	GRID_TRACE("%s avoided everything in slot=%s", __FUNCTION__, slot->name);
 	return FALSE;
 }
 
@@ -308,7 +352,8 @@ static gboolean
 _local_target__poll (struct oio_lb_pool_LOCAL_s *lb,
 		const char *target, gboolean masked, struct polling_ctx_s *ctx)
 {
-	GRID_TRACE2("%s pool=%s mask=%d", __FUNCTION__, lb->name, masked);
+	GRID_TRACE2("%s pool=%s mask=%d target=%s",
+			__FUNCTION__, lb->name, masked, target);
 
 	/* each target is a sequence of '\0'-separated strings, terminated with
 	 * an empty string. Each string is the name of a slot */
@@ -327,19 +372,69 @@ _local__poll (struct oio_lb_pool_s *self,
 		const oio_location_t * avoids,
 		void (*on_id) (oio_location_t location, const char *id))
 {
-	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
-	g_assert (lb != NULL);
-	g_assert (lb->vtable == &vtable_LOCAL);
-	g_assert (lb->world != NULL);
-	g_assert (lb->targets != NULL);
+	return _local__patch(self, avoids, NULL, on_id);
+}
 
-	/* count the expected targets to build a temporary storage for
+static gboolean
+_local_target__is_satisfied(struct oio_lb_pool_LOCAL_s *lb,
+		const char *target, struct polling_ctx_s *ctx)
+{
+	if (!*(ctx->next_polled))
+		return FALSE;
+
+	/* Iterate over the slots of the target to find if one of the
+	** already known locations is inside, and thus satisfies the target. */
+	for (const char *name = target; *name; name += strlen(name)+1) {
+		struct oio_lb_slot_s *slot = oio_lb_world__get_slot(lb->world, name);
+		if (!slot) {
+			GRID_DEBUG ("Slot [%s] not ready", name);
+			continue;
+		}
+		oio_location_t *known = ctx->next_polled;
+		do {
+			guint pos = _search_first_at_location(slot->items,
+					*known, 0, slot->items->len-1);
+			if (pos != (guint)-1) {
+				/* The current item is in a slot referenced by our target.
+				** Place this item at the beginning of ctx->next_polled so
+				** we won't consider it during the next call. */
+				if (known != ctx->next_polled) {
+					oio_location_t prev = *(ctx->next_polled);
+					*(ctx->next_polled) = *known;
+					*known = prev;
+				}
+				return TRUE;
+			}
+		} while (*(++known));
+	}
+	return FALSE;
+}
+
+static guint
+_local__patch(struct oio_lb_pool_s *self,
+		const oio_location_t *avoids, oio_location_t *known,
+		void (*on_id) (oio_location_t location, const char *id))
+{
+	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
+	g_assert(lb != NULL);
+	g_assert(lb->vtable == &vtable_LOCAL);
+	g_assert(lb->world != NULL);
+	g_assert(lb->targets != NULL);
+
+	/* Count the expected targets to build a temp storage for
 	 * polled locations */
-	guint count_targets = 0;
+	int count_targets = 0;
 	for (gchar **ptarget = lb->targets; *ptarget; ++ptarget)
-		count_targets ++;
+		count_targets++;
+
+	/* Copy the array of known locations because we don't know
+	 * if its allocated length is enough */
 	oio_location_t polled[count_targets+1];
-	memset (polled, 0, sizeof(oio_location_t) * (1+count_targets));
+	int i = 0;
+	for (; known && known[i]; i++)
+		polled[i] = known[i];
+	for (; i < count_targets; i++)
+		polled[i] = 0;
 
 	struct polling_ctx_s ctx = {
 		.on_id = on_id,
@@ -348,21 +443,20 @@ _local__poll (struct oio_lb_pool_s *self,
 		.next_polled = polled,
 	};
 
-	/* each target must provide an item. For each target, try the slots with
-	 * their constraints, and if no reply has been made, retry without
-	 * the constraints. */
 	guint count = 0;
 	for (gchar **ptarget = lb->targets; *ptarget; ++ptarget) {
-		gboolean done = _local_target__poll (lb, *ptarget, TRUE, &ctx);
+		gboolean done = _local_target__is_satisfied(lb, *ptarget, &ctx);
 		if (!done)
-			done = _local_target__poll (lb, *ptarget, FALSE, &ctx);
+			done = _local_target__poll(lb, *ptarget, TRUE, &ctx);
+		if (!done)
+			done = _local_target__poll(lb, *ptarget, FALSE, &ctx);
 		if (!done) {
 			/* the strings is '\0' separated, printf won't display it */
-			GRID_WARN ("No service polled from target [%s]", *ptarget);
+			GRID_WARN("No service polled from target [%s]", *ptarget);
 			return 0;
 		}
-		++ ctx.next_polled;
-		++ count;
+		++ctx.next_polled;
+		++count;
 	}
 	return count;
 }
@@ -467,6 +561,26 @@ oio_lb_world__count_items (struct oio_lb_world_s *self)
 	return g_tree_nnodes (self->items);
 }
 
+guint
+oio_lb_world__count_slot_items(struct oio_lb_world_s *self, const char *name)
+{
+	g_assert (self != NULL);
+	struct oio_lb_slot_s *slot = oio_lb_world__get_slot(self, name);
+	if (!slot)
+		return 0;
+	return slot->items->len;
+}
+
+gboolean
+oio_lb_world__is_id_available(struct oio_lb_world_s *self, const char *id)
+{
+	oio_weight_t weight = 0;
+	struct _lb_item_s *item0 = g_tree_lookup(self->items, id);
+	if (item0)
+		weight = item0->weight;
+	return weight > 0;
+}
+
 void
 oio_lb_world__create_slot (struct oio_lb_world_s *self, const char *name)
 {
@@ -551,9 +665,14 @@ oio_lb_world__feed_slot (struct oio_lb_world_s *self, const char *name,
 
 		/* look for the slice of items AT THE OLD LOCATION (maybe it changed) */
 		guint i0 = (guint)-1;
-		if (slot->items->len)
+		if (slot->flag_dirty_order) {
+			/* Linear search from the beginning */
+			i0 = 0;
+		} else if (slot->items->len) {
+			/* Dichotomic search, faster if items are sorted */
 			i0 = _search_first_at_location (slot->items, item0->location,
 					0, slot->items->len-1);
+		}
 
 		if (i0 != (guint)-1) {
 			/* then iterate on the location to find it precisely. */
@@ -609,4 +728,67 @@ oio_lb_world__debug (struct oio_lb_world_s *self)
 		return FALSE;
 	}
 	g_tree_foreach (self->slots, (GTraverseFunc)_on_slot, NULL);
+}
+
+
+/* -- LB pools management ------------------------------------------------- */
+
+struct oio_lb_s *
+oio_lb__create()
+{
+	struct oio_lb_s *lb = g_malloc0(sizeof(struct oio_lb_s));
+	g_rw_lock_init(&lb->lock);
+	lb->pools = g_hash_table_new_full(g_str_hash, g_str_equal,
+			NULL, (GDestroyNotify)oio_lb_pool__destroy);
+	return lb;
+}
+
+void
+oio_lb__clear(struct oio_lb_s **lb)
+{
+	struct oio_lb_s *lb2 = *lb;
+	g_rw_lock_writer_lock(&lb2->lock);
+	*lb = NULL;
+	g_hash_table_destroy(lb2->pools);
+	lb2->pools = NULL;
+	g_rw_lock_writer_unlock(&lb2->lock);
+	g_rw_lock_clear(&lb2->lock);
+	memset(lb2, 0, sizeof(struct oio_lb_s));
+	g_free(lb2);
+}
+
+void
+oio_lb__force_pool(struct oio_lb_s *lb, struct oio_lb_pool_s *pool)
+{
+	struct oio_lb_pool_abstract_s *apool = (struct oio_lb_pool_abstract_s *)pool;
+	g_rw_lock_writer_lock(&lb->lock);
+	g_hash_table_replace(lb->pools, (gpointer)apool->name, apool);
+	g_rw_lock_writer_unlock(&lb->lock);
+}
+
+guint
+oio_lb__poll_pool(struct oio_lb_s *lb, const char *name,
+		const oio_location_t * avoids, oio_lb_on_id_f on_id)
+{
+	guint res = 0;
+	g_rw_lock_reader_lock(&lb->lock);
+	struct oio_lb_pool_s *pool = g_hash_table_lookup(lb->pools, name);
+	if (pool)
+		res = oio_lb_pool__poll(pool, avoids, on_id);
+	g_rw_lock_reader_unlock(&lb->lock);
+	return res;
+}
+
+guint
+oio_lb__patch_with_pool(struct oio_lb_s *lb, const char *name,
+		const oio_location_t *avoids, oio_location_t *known,
+		oio_lb_on_id_f on_id)
+{
+	guint res = 0;
+	g_rw_lock_reader_lock(&lb->lock);
+	struct oio_lb_pool_s *pool = g_hash_table_lookup(lb->pools, name);
+	if (pool)
+		res = oio_lb_pool__patch(pool, avoids, known, on_id);
+	g_rw_lock_reader_unlock(&lb->lock);
+	return res;
 }

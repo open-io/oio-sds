@@ -376,6 +376,7 @@ _populate_headers_with_alias (struct req_args_s *args, struct bean_ALIASES_s *al
 			g_strdup_printf("%"G_GINT64_FORMAT, ALIASES_get_ctime(alias)));
 }
 
+// FIXME: there is similar code in meta2v2/meta2_utils_lb.c
 static service_info_t*
 _service_info_from_chunk_id(struct grid_lbpool_s *lbp, const gchar *id)
 {

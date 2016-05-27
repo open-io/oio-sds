@@ -185,6 +185,27 @@ test_uniform_repartition(gconstpointer raw_test_data)
 }
 
 static void
+test_local_feed_twice(void)
+{
+	struct oio_lb_world_s *world = oio_lb_local__create_world();
+	struct oio_lb_item_s *srv0 = g_malloc0(8 + sizeof (struct oio_lb_item_s));
+	struct oio_lb_item_s *srv1 = g_malloc0(8 + sizeof (struct oio_lb_item_s));
+	srv0->location = 42 + 65536;
+	srv0->weight = 42;
+	g_sprintf(srv0->id, "ID-%d", 42);
+	srv1->location = 43 + 65536;
+	srv1->weight = 42;
+	g_sprintf(srv1->id, "ID-%d", 43);
+
+	oio_lb_world__create_slot(world, "0");
+	oio_lb_world__feed_slot(world, "0", srv1);
+	oio_lb_world__feed_slot(world, "0", srv0);
+	oio_lb_world__feed_slot(world, "0", srv0);
+
+	g_assert_cmpuint(2, ==, oio_lb_world__count_slot_items(world, "0"));
+}
+
+static void
 test_local_feed (void)
 {
 	struct oio_lb_world_s *world = oio_lb_local__create_world ();
@@ -278,6 +299,7 @@ main(int argc, char **argv)
 	g_test_add_func("/core/lb/local/world", test_local_world);
 	g_test_add_func("/core/lb/local/pool", test_local_pool);
 	g_test_add_func("/core/lb/local/feed", test_local_feed);
+	g_test_add_func("/core/lb/local/feed_twice", test_local_feed_twice);
 	g_test_add_func("/core/lb/local/poll", test_local_poll);
 
 	_add_repartition_test(30, 1, 1);

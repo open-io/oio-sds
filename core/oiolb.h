@@ -1,7 +1,6 @@
 /*
 OpenIO SDS load-balancing
-Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -52,6 +51,12 @@ guint oio_lb_pool__poll (struct oio_lb_pool_s *self,
 		const oio_location_t *avoids,
 		oio_lb_on_id_f on_id);
 
+/* Like oio_lb_pool__poll(), but provide an array of known locations. */
+guint oio_lb_pool__patch(struct oio_lb_pool_s *self,
+		const oio_location_t *avoids,
+		oio_location_t *known,
+		oio_lb_on_id_f on_id);
+
 /* -------------------------------------------------------------------------- */
 
 /* A world is something you feed with services and that will arrange them for
@@ -72,6 +77,8 @@ void oio_lb_world__debug (struct oio_lb_world_s *self);
 
 guint oio_lb_world__count_slots (struct oio_lb_world_s *self);
 guint oio_lb_world__count_items (struct oio_lb_world_s *self);
+guint oio_lb_world__count_slot_items(struct oio_lb_world_s *self, const char *name);
+gboolean oio_lb_world__is_id_available(struct oio_lb_world_s *self, const char *id);
 
 /* Ensure the slot exists in the  given world. */
 void oio_lb_world__create_slot (struct oio_lb_world_s *self, const char *name);
@@ -88,5 +95,32 @@ struct oio_lb_pool_s * oio_lb_world__create_pool (
  * The slots sequence is coma-separated. It is an error to call this on a
  * not world-based pool. */
 void oio_lb_world__add_pool_target (struct oio_lb_pool_s *self, const char *to);
+
+
+/* -- LB pools management ------------------------------------------------- */
+
+struct oio_lb_s {
+	GRWLock lock;
+	GHashTable *pools;
+};
+
+struct oio_lb_s *oio_lb__create(void);
+void oio_lb__clear(struct oio_lb_s **lb);
+
+/** Set or replace a pool. The key to access the pool is the name
+ * of the pool as set at pool creation. Thread-safe. */
+void oio_lb__force_pool(struct oio_lb_s *lb, struct oio_lb_pool_s*);
+
+void oio_lb__delete_pool(struct oio_lb_s *lb, const char *name);
+
+/** Calls oio_lb_pool__poll() on the pool `name`. Thread-safe. */
+guint oio_lb__poll_pool(struct oio_lb_s *lb, const char *name,
+		const oio_location_t * avoids, oio_lb_on_id_f on_id);
+
+/** Calls oio_lb_pool__patch() on the pool `name`. Thread-safe. */
+guint oio_lb__patch_with_pool(struct oio_lb_s *lb, const char *name,
+		const oio_location_t *avoids, oio_location_t *known,
+		oio_lb_on_id_f on_id);
+
 
 #endif /*OIO_SDS__core__oiolb_h*/

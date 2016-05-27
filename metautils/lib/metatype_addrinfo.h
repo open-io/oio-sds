@@ -29,4 +29,7 @@ guint addr_info_hash(gconstpointer k);
 #define addr_info_clean  g_free0
 #define addr_info_gclean g_free1
 
+/** Generate a location from the byte representation of the address */
+oio_location_t location_from_addr_info(const struct addr_info_s *addr);
+
 #endif /*OIO_SDS__metautils__lib__metatype_addrinfo_h*/

@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqlx
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -90,7 +90,10 @@ struct sqlx_service_s
 	struct network_server_s *server;
 	struct gridd_request_dispatcher_s *dispatcher;
 	struct hc_resolver_s *resolver;
-	struct grid_lbpool_s *lb;
+	struct grid_lbpool_s *lb2;  // Will disappear soon
+	struct oio_lb_s *lb;
+	struct oio_lb_world_s *lb_world;
+	GHashTable *lb_pools;
 
 	struct oio_events_queue_s *events_queue;
 	GThread *thread_queue;

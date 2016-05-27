@@ -1,7 +1,7 @@
 /*
 OpenIO SDS metautils
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -104,6 +104,10 @@ void service_info_encode_json(GString *out, const struct service_info_s *si,
 		gboolean full);
 
 gchar * service_info_key (const struct service_info_s *si);
+
+/** Fill a preallocated LB item from a service description */
+void service_info_to_lb_item(const struct service_info_s *si,
+		struct oio_lb_item_s *item);
 
 /** Compute the distance between two string representing rawx locations */
 guint distance_between_location(const gchar *loc1, const gchar *loc2);
