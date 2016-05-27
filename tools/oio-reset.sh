@@ -17,6 +17,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 set -e
 
+
+call_oio_parameter() {
+    echo $(oio-get-parameters-from-config.py "$@")
+}
+
 PREFIX="@EXE_PREFIX@"
 NS=NS
 IP=127.0.0.1
@@ -45,9 +50,12 @@ M1_STR="meta1"
 M2_STR="meta2"
 M2_REPLICAS="m2-replicas"
 if [ -n "$FILE_BOOTSTRAP_CONFIG" ]; then
-    CMD_NB_M1=`oio-get-parameters-from-config.py ${FILE_BOOTSTRAP_CONFIG} ${M1_STR} ${SERVICES}`
-    CMD_NB_M2=`oio-get-parameters-from-config.py ${FILE_BOOTSTRAP_CONFIG} ${M2_STR} ${SERVICES}`
-    CMD_NB_M2_REPLICAS=`oio-get-parameters-from-config.py ${FILE_BOOTSTRAP_CONFIG} ${M2_REPLICAS}`
+    if  [ ${FILE_BOOTSTRAP_CONFIG::1} != "/" ]; then
+	FILE_BOOTSTRAP_CONFIG=${PWD}/${FILE_BOOTSTRAP_CONFIG}
+    fi
+    CMD_NB_M1=$(call_oio_parameter ${FILE_BOOTSTRAP_CONFIG} ${M1_STR} ${SERVICES})
+    CMD_NB_M2=$(call_oio_parameter ${FILE_BOOTSTRAP_CONFIG} ${M2_STR} ${SERVICES})
+    CMD_NB_M2_REPLICAS=$(call_oio_parameter ${FILE_BOOTSTRAP_CONFIG} ${M2_REPLICAS})
 fi
    
 if [ -n "$CMD_NB_M2_REPLICAS" ]; then

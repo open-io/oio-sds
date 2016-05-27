@@ -900,9 +900,9 @@ def generate(ns, ip, options={}, defaults={}):
     meta2_replicas = getint(options.get(M2_REPLICAS, None), defaults['NB_M2'])
     sqlx_replicas = getint(options.get(SQLX_REPLICAS, None), defaults['NB_SQLX'])
 
-    if options.get(M2_VERSIONS, None) is not None:
+    if options.get(M2_VERSIONS, None):
         versioning = options[M2_VERSIONS]
-    if options.get(M2_STGPOL, None) is not None:
+    if options.get(M2_STGPOL, None):
         stgpol = options[M2_STGPOL]
 
     ENV = dict(IP=ip, NS=ns, HOME=HOME, EXE_PREFIX=EXE_PREFIX,
