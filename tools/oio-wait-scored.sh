@@ -53,10 +53,6 @@ while getopts "N:s:t:n:lu" opt ; do
 	esac
 done
 
-if [ -z "$NS" ] && [ -n "$LOCAL" ] ; then
-	NS=$(${PREFIX}-test-config.py -n)
-fi
-
 if [ -z "$NS" ] ; then
 	echo "No namespace configured"
 	exit 1

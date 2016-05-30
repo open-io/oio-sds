@@ -44,7 +44,8 @@ class TestBlobAuditorFunctional(BaseTestCase):
             string.digits
         self.chars_id = string.digits + 'ABCDEF'
 
-        self.rawx = 'http://' + self.conf["rawx"][0]['addr']
+        rawx_num, rawx_path, rawx_addr = self.get_service_url('rawx')
+        self.rawx = 'http://' + rawx_addr
 
         self.h = hashlib.new('md5')
 

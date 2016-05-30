@@ -38,7 +38,7 @@ class TestRainContent(BaseTestCase):
     def setUp(self):
         super(TestRainContent, self).setUp()
 
-        if len(self.conf['rawx']) < 12:
+        if len(self.conf['services']['rawx']) < 12:
             self.skipTest("Not enough rawx. "
                           "Rain tests needs more than 12 rawx to run")
 
@@ -61,9 +61,9 @@ class TestRainContent(BaseTestCase):
     def _test_upload(self, data_size):
         data = random_data(data_size)
         content = self.content_factory.new(self.container_id, "titi",
-                                           len(data), "RAIN")
+                                           len(data), "EC")
         k = 6
-        m = 2
+        m = 3
         self.assertEqual(type(content), RainContent)
 
         content.upload(StringIO.StringIO(data))
@@ -73,7 +73,7 @@ class TestRainContent(BaseTestCase):
         chunks = ChunksHelper(chunks)
         self.assertEqual(meta['hash'], md5_data(data))
         self.assertEqual(meta['length'], str(len(data)))
-        self.assertEqual(meta['policy'], "RAIN")
+        self.assertEqual(meta['policy'], "EC")
         self.assertEqual(meta['name'], "titi")
 
         metachunk_nb = int(math.ceil(float(len(data)) / self.chunk_size))
@@ -132,7 +132,7 @@ class TestRainContent(BaseTestCase):
     def test_chunks_cleanup_when_upload_failed(self):
         data = random_data(2 * self.chunk_size)
         content = self.content_factory.new(self.container_id, "titi",
-                                           len(data), "RAIN")
+                                           len(data), "EC")
         self.assertEqual(type(content), RainContent)
 
         # set bad url for position 1
@@ -147,7 +147,7 @@ class TestRainContent(BaseTestCase):
     def _test_rebuild(self, data_size, broken_pos_list):
         data = os.urandom(data_size)
         old_content = self.content_factory.new(self.container_id, "titi",
-                                               len(data), "RAIN")
+                                               len(data), "EC")
         self.assertEqual(type(old_content), RainContent)
 
         old_content.upload(StringIO.StringIO(data))
@@ -223,7 +223,7 @@ class TestRainContent(BaseTestCase):
 
     def _new_content(self, data, broken_pos_list=[]):
         old_content = self.content_factory.new(self.container_id, "titi",
-                                               len(data), "RAIN")
+                                               len(data), "EC")
         self.assertEqual(type(old_content), RainContent)
 
         old_content.upload(StringIO.StringIO(data))

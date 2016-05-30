@@ -51,8 +51,9 @@ class TestBlobFunctional(BaseTestCase):
         super(TestBlobFunctional, self).setUp()
         self.namespace = self.conf['namespace']
         self.test_dir = self.conf['sds_path']
-        self.rawx = 'http://' + self.conf["rawx"][0]['addr']
-        self.rawx_path = self.conf["rawx"][0]['path'] + '/'
+        rawx_num, rawx_path, rawx_addr = self.get_service_url('rawx')
+        self.rawx = 'http://' + rawx_addr
+        self.rawx_path = rawx_path + '/'
         self.session = requests.session()
 
     def tearDown(self):

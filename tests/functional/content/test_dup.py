@@ -37,7 +37,7 @@ class TestDupContent(BaseTestCase):
     def setUp(self):
         super(TestDupContent, self).setUp()
 
-        if len(self.conf['rawx']) < 3:
+        if len(self.conf['services']['rawx']) < 3:
             self.skipTest("Not enough rawx. "
                           "Dup tests needs more than 2 rawx to run")
 
@@ -206,13 +206,13 @@ class TestDupContent(BaseTestCase):
         self._test_rebuild("TWOCOPIES", 1, [(0, 1)], (0, 1))
 
     def test_3copies_content_chunksize_bytes_2broken_rebuild_pos_0_idx_1(self):
-        if len(self.conf['rawx']) <= 3:
+        if len(self.conf['services']['rawx']) <= 3:
             self.skipTest("Need more than 3 rawx")
         self._test_rebuild("THREECOPIES", self.chunk_size,
                            [(0, 0), (0, 1)], (0, 1))
 
     def test_3copies_content_2xchksize_bytes_2broken_rebuild_pos_1_idx_2(self):
-        if len(self.conf['rawx']) <= 3:
+        if len(self.conf['services']['rawx']) <= 3:
             self.skipTest("Need more than 3 rawx")
         self._test_rebuild("THREECOPIES", 2 * self.chunk_size,
                            [(1, 0), (1, 2)], (1, 2))
