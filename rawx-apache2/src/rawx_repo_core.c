@@ -321,6 +321,16 @@ check_chunk_info(const struct chunk_textinfo_s * const cti)
 	if (!_null_or_hexa1(cti->chunk_id)) return "chunk-id";
 	if (!_null_or_hexa1(cti->chunk_hash)) return "chunk-hash";
 
+	if (cti->metachunk_size && !oio_str_is_number(cti->metachunk_size))
+		return "metachunk-size";
+
+	if (cti->chunk_size && !oio_str_is_number(cti->chunk_size))
+		return "chunk-size";
+
+	if (g_str_has_prefix(cti->content_chunk_method, "ec/")
+			&& !cti->metachunk_size)
+		return "metachunk-size";
+
 	return NULL;
 }
 
@@ -587,7 +597,9 @@ rawx_repo_rollback_upload(dav_stream *stream)
 dav_error *
 rawx_repo_commit_upload(dav_stream *stream)
 {
+	dav_error *e = NULL;
 	struct chunk_textinfo_s fake = {0};
+
 	DUP(container_id);
 	DUP(content_id);
 	DUP(content_path);
@@ -623,8 +635,16 @@ rawx_repo_commit_upload(dav_stream *stream)
 		oio_str_replace (&(fake.compression_size), size);
 	}
 
+	const char *error_with_field = check_chunk_info (&fake);
+	if (error_with_field != NULL) {
+		e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
+				HTTP_FORBIDDEN, 0,
+				apr_pstrcat(stream->p, "Error with xattr/header ", error_with_field, NULL));
+		return e;
+	}
+
 	/* ok, save now */
-	dav_error *e = _set_chunk_extended_attributes(stream, &fake);
+	e = _set_chunk_extended_attributes(stream, &fake);
 	if( NULL != e) {
 		DAV_DEBUG_REQ(stream->r->info->request, 0, "Failed to set chunk extended attributes : %s", e->desc);
 		return e;

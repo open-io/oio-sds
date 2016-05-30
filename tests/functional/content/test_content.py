@@ -75,20 +75,20 @@ class TestContentFactory(BaseTestCase):
         self.content_factory.ns_info = {
             "data_security": {
                 "DUPONETWO": "plain/distance=1,nb_copy=2",
-                "RAIN": "ec/k=6,m=2,algo=isa_l_rs_vand"
+                "EC": "ec/k=6,m=3,algo=isa_l_rs_vand"
             },
             "storage_policy": {
-                "RAIN": "NONE:RAIN",
+                "EC": "NONE:EC",
                 "SINGLE": "NONE:NONE",
                 "TWOCOPIES": "NONE:DUPONETWO"
             }
         }
 
-        ds_type, ds_args = self.content_factory._extract_datasec("RAIN")
+        ds_type, ds_args = self.content_factory._extract_datasec("EC")
         self.assertEqual(ds_type, "ec")
         self.assertEqual(ds_args, {
             "k": "6",
-            "m": "2",
+            "m": "3",
             "algo": "isa_l_rs_vand"
         })
 
@@ -121,7 +121,7 @@ class TestContentFactory(BaseTestCase):
             "length": "658",
             "mime-type": "application/octet-stream",
             "name": "tox.ini",
-            "policy": "RAIN",
+            "policy": "EC",
             "version": "1450176946676289"
         }
         chunks = [
@@ -212,7 +212,7 @@ class TestContentFactory(BaseTestCase):
             "length": "1000",
             "mime-type": "application/octet-stream",
             "name": "titi",
-            "policy": "RAIN",
+            "policy": "EC",
             "version": "1450341162332663"
         }
         chunks = [
@@ -236,7 +236,7 @@ class TestContentFactory(BaseTestCase):
         self.content_factory.container_client.content_prepare = Mock(
             return_value=(meta, chunks))
         c = self.content_factory.new("xxx_container_id", "titi",
-                                     1000, "RAIN")
+                                     1000, "EC")
         self.assertEqual(type(c), RainContent)
         self.assertEqual(c.content_id, "F4B1C8DD132705007DE8B43D0709DAA2")
         self.assertEqual(c.length, 1000)
@@ -259,16 +259,16 @@ class TestContentFactory(BaseTestCase):
                                         old_content.content_id)
 
     def _test_change_policy(self, data_size, old_policy, new_policy):
-        if (old_policy == "RAIN" or new_policy == "RAIN") \
-                and len(self.conf['rawx']) < 8:
-            self.skipTest("RAIN: Need more than 8 rawx to run")
+        if (old_policy == "EC" or new_policy == "EC") \
+                and len(self.conf['services']['rawx']) < 8:
+            self.skipTest("EC: Need more than 8 rawx to run")
 
         data = random_data(data_size)
         obj_type = {
             "SINGLE": DupContent,
             "TWOCOPIES": DupContent,
             "THREECOPIES": DupContent,
-            "RAIN": RainContent
+            "EC": RainContent
         }
         old_content = self._new_content(old_policy, data)
         self.assertEqual(type(old_content), obj_type[old_policy])
@@ -289,29 +289,29 @@ class TestContentFactory(BaseTestCase):
 
         self.assertEqual(downloaded_data, data)
 
-    def test_change_content_0_byte_policy_single_to_rain(self):
-        self._test_change_policy(0, "SINGLE", "RAIN")
+    def test_change_content_0_byte_policy_single_to_ec(self):
+        self._test_change_policy(0, "SINGLE", "EC")
 
-    def test_change_content_0_byte_policy_rain_to_twocopies(self):
-        self._test_change_policy(0, "RAIN", "TWOCOPIES")
+    def test_change_content_0_byte_policy_ec_to_twocopies(self):
+        self._test_change_policy(0, "EC", "TWOCOPIES")
 
-    def test_change_content_1_byte_policy_single_to_rain(self):
-        self._test_change_policy(1, "SINGLE", "RAIN")
+    def test_change_content_1_byte_policy_single_to_ec(self):
+        self._test_change_policy(1, "SINGLE", "EC")
 
-    def test_change_content_chunksize_bytes_policy_twocopies_to_rain(self):
-        self._test_change_policy(self.chunk_size, "TWOCOPIES", "RAIN")
+    def test_change_content_chunksize_bytes_policy_twocopies_to_ec(self):
+        self._test_change_policy(self.chunk_size, "TWOCOPIES", "EC")
 
-    def test_change_content_2xchunksize_bytes_policy_threecopies_to_rain(self):
-        self._test_change_policy(self.chunk_size * 2, "THREECOPIES", "RAIN")
+    def test_change_content_2xchunksize_bytes_policy_threecopies_to_ec(self):
+        self._test_change_policy(self.chunk_size * 2, "THREECOPIES", "EC")
 
-    def test_change_content_1_byte_policy_rain_to_threecopies(self):
-        self._test_change_policy(1, "RAIN", "THREECOPIES")
+    def test_change_content_1_byte_policy_ec_to_threecopies(self):
+        self._test_change_policy(1, "EC", "THREECOPIES")
 
-    def test_change_content_chunksize_bytes_policy_rain_to_twocopies(self):
-        self._test_change_policy(self.chunk_size, "RAIN", "TWOCOPIES")
+    def test_change_content_chunksize_bytes_policy_ec_to_twocopies(self):
+        self._test_change_policy(self.chunk_size, "EC", "TWOCOPIES")
 
-    def test_change_content_2xchunksize_bytes_policy_rain_to_single(self):
-        self._test_change_policy(self.chunk_size * 2, "RAIN", "SINGLE")
+    def test_change_content_2xchunksize_bytes_policy_ec_to_single(self):
+        self._test_change_policy(self.chunk_size * 2, "EC", "SINGLE")
 
     def test_change_content_0_byte_policy_twocopies_to_threecopies(self):
         self._test_change_policy(0, "TWOCOPIES", "THREECOPIES")
@@ -375,9 +375,9 @@ class TestContentFactory(BaseTestCase):
         self._test_move_chunk("TWOCOPIES")
 
     def test_rain_move_chunk(self):
-        if len(self.conf['rawx']) < 9:
+        if len(self.conf['services']['rawx']) < 9:
             self.skipTest("Need more than 8 rawx")
-        self._test_move_chunk("RAIN")
+        self._test_move_chunk("EC")
 
     def test_move_chunk_not_in_content(self):
         data = random_data(self.chunk_size)

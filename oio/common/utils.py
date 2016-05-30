@@ -7,6 +7,7 @@ import pwd
 import sys
 import time
 import fcntl
+import yaml
 
 import eventlet
 import eventlet.semaphore
@@ -237,7 +238,6 @@ def read_conf(conf_path, section_name=None, defaults=None, use_yaml=False):
 
 
 def parse_config(conf_path):
-    import yaml
     with open(conf_path, 'r') as f:
         conf = yaml.load(f)
     return conf

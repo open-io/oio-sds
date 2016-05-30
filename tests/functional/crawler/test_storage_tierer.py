@@ -38,7 +38,7 @@ class TestStorageTierer(BaseTestCase):
                          "content_fetch_limit": 2,
                          "account": self.test_account,
                          "outdated_threshold": 0,
-                         "new_policy": "RAIN"}
+                         "new_policy": "EC"}
         self.content_factory = ContentFactory(self.gridconf)
         self.container_client = ContainerClient(self.gridconf)
         self._populate()

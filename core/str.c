@@ -17,6 +17,7 @@ License along with this library.
 */
 
 #include <string.h>
+#include <errno.h>
 
 #include <glib.h>
 
@@ -437,4 +438,19 @@ oio_str_prefixed (const char *s, const char *p, const char *sep)
 		return FALSE;
 	s += strlen(p);
 	return !*s || g_str_has_prefix (s, sep);
+}
+
+int
+oio_str_is_number (const char *s)
+{
+	if (!oio_str_is_set(s))
+		return 0;
+	gchar *end = NULL;
+	errno = 0;
+	gint64 mcs = g_ascii_strtoll(s, &end, 10);
+	if (errno == ERANGE || (mcs == 0 && errno == EINVAL))
+		return 0;
+	if (!end || *end != '\0')
+		return 0;
+	return 1;
 }

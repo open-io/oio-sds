@@ -21,8 +21,84 @@ class TestRainContent(BaseTestCase):
     def setUp(self):
         super(TestRainContent, self).setUp()
 
+        if len(self.conf['services']['rawx']) < 12:
+            self.skipTest("Not enough rawx. "
+                          "Rain tests needs more than 12 rawx to run")
+
+        self.namespace = self.conf['namespace']
+        self.account = self.conf['account']
+        self.chunk_size = self.conf['chunk_size']
+        self.gridconf = {"namespace": self.namespace}
+        self.content_factory = ContentFactory(self.gridconf)
+        self.container_client = ContainerClient(self.gridconf)
+        self.blob_client = BlobClient()
+        self.container_name = "TestRainContent%f" % time.time()
+        self.container_client.container_create(acct=self.account,
+                                               ref=self.container_name)
+        self.container_id = cid_from_name(self.account,
+                                          self.container_name).upper()
+
     def tearDown(self):
         super(TestRainContent, self).tearDown()
+
+    def _test_upload(self, data_size):
+        data = random_data(data_size)
+        content = self.content_factory.new(self.container_id, "titi",
+                                           len(data), "EC")
+        k = 6
+        m = 3
+        self.assertEqual(type(content), RainContent)
+
+        content.upload(StringIO.StringIO(data))
+
+        meta, chunks = self.container_client.content_show(
+            cid=self.container_id, content=content.content_id)
+        chunks = ChunksHelper(chunks)
+        self.assertEqual(meta['hash'], md5_data(data))
+        self.assertEqual(meta['length'], str(len(data)))
+        self.assertEqual(meta['policy'], "EC")
+        self.assertEqual(meta['name'], "titi")
+
+        metachunk_nb = int(math.ceil(float(len(data)) / self.chunk_size))
+        if metachunk_nb == 0:
+            metachunk_nb = 1  # special case for empty content
+
+        nb_chunks_min = metachunk_nb * (1 + m)
+        nb_chunks_max = metachunk_nb * (k + m)
+        self.assertGreaterEqual(len(chunks), nb_chunks_min)
+        self.assertLessEqual(len(chunks), nb_chunks_max)
+
+        for metapos in range(metachunk_nb):
+            chunks_at_pos = content.chunks.filter(metapos=metapos)
+            data_chunks_at_pos = chunks_at_pos.filter(is_parity=False)
+            parity_chunks_at_pos = chunks_at_pos.filter(is_parity=True)
+
+            self.assertEquals(len(data_chunks_at_pos) >= 1, True)
+            self.assertEquals(len(data_chunks_at_pos) <= k, True)
+            self.assertEqual(len(parity_chunks_at_pos), m)
+
+            for chunk in chunks_at_pos:
+                meta, stream = self.blob_client.chunk_get(chunk.url)
+                self.assertEqual(md5_stream(stream), chunk.hash)
+                self.assertEqual(meta['content_size'], str(len(data)))
+                self.assertEqual(meta['content_path'], "titi")
+                self.assertEqual(meta['content_cid'], self.container_id)
+                self.assertEqual(meta['content_id'], meta['content_id'])
+                self.assertEqual(meta['chunk_id'], chunk.id)
+                self.assertEqual(meta['chunk_pos'], chunk.pos)
+                self.assertEqual(meta['chunk_hash'], chunk.hash)
+
+            data_begin = metapos * self.chunk_size
+            data_end = metapos * self.chunk_size + self.chunk_size
+            target_metachunk_hash = md5_data(data[data_begin:data_end])
+
+            metachunk_hash = hashlib.md5()
+            for chunk in data_chunks_at_pos:
+                meta, stream = self.blob_client.chunk_get(chunk.url)
+                for d in stream:
+                    metachunk_hash.update(d)
+            self.assertEqual(metachunk_hash.hexdigest().upper(),
+                             target_metachunk_hash)
 
     def test_upload_0_byte(self):
         self.skipTest("to be re-implemented with the lastest EC methods")
@@ -37,7 +113,65 @@ class TestRainContent(BaseTestCase):
         self.skipTest("to be re-implemented with the lastest EC methods")
 
     def test_chunks_cleanup_when_upload_failed(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
+        data = random_data(2 * self.chunk_size)
+        content = self.content_factory.new(self.container_id, "titi",
+                                           len(data), "EC")
+        self.assertEqual(type(content), RainContent)
+
+        # set bad url for position 1
+        for chunk in content.chunks.filter(pos="1.p0"):
+            chunk.url = "http://127.0.0.1:9/DEADBEEF"
+
+        self.assertRaises(Exception, content.upload, StringIO.StringIO(data))
+        for chunk in content.chunks.exclude(pos="1.p0"):
+            self.assertRaises(NotFound,
+                              self.blob_client.chunk_head, chunk.url)
+
+    def _test_rebuild(self, data_size, broken_pos_list):
+        data = os.urandom(data_size)
+        old_content = self.content_factory.new(self.container_id, "titi",
+                                               len(data), "EC")
+        self.assertEqual(type(old_content), RainContent)
+
+        old_content.upload(StringIO.StringIO(data))
+
+        # get the new structure of the uploaded content
+        uploaded_content = self.content_factory.get(self.container_id,
+                                                    old_content.content_id)
+
+        old_info = {}
+        for pos in broken_pos_list:
+            old_info[pos] = {}
+            c = uploaded_content.chunks.filter(pos=pos)[0]
+            old_info[pos]["url"] = c.url
+            old_info[pos]["id"] = c.id
+            old_info[pos]["hash"] = c.hash
+            chunk_id_to_rebuild = c.id
+            meta, stream = self.blob_client.chunk_get(c.url)
+            old_info[pos]["dl_meta"] = meta
+            old_info[pos]["dl_hash"] = md5_stream(stream)
+            # delete the chunk
+            self.blob_client.chunk_delete(c.url)
+
+        # rebuild the broken chunks
+        uploaded_content.rebuild_chunk(chunk_id_to_rebuild)
+
+        # get the new structure of the content
+        rebuilt_content = self.content_factory.get(self.container_id,
+                                                   uploaded_content.content_id)
+        self.assertEqual(type(rebuilt_content), RainContent)
+
+        for pos in broken_pos_list:
+            c = rebuilt_content.chunks.filter(pos=pos)[0]
+            rebuilt_meta, rebuilt_stream = self.blob_client.chunk_get(c.url)
+            self.assertEqual(rebuilt_meta["chunk_id"], c.id)
+            self.assertEqual(md5_stream(rebuilt_stream),
+                             old_info[pos]["dl_hash"])
+            self.assertEqual(c.hash, old_info[pos]["hash"])
+            self.assertThat(c.url, NotEquals(old_info[pos]["url"]))
+            del old_info[pos]["dl_meta"]["chunk_id"]
+            del rebuilt_meta["chunk_id"]
+            self.assertEqual(rebuilt_meta, old_info[pos]["dl_meta"])
 
     def test_content_0_byte_rebuild_pos_0_0(self):
         self.skipTest("to be re-implemented with the lastest EC methods")
@@ -70,7 +204,19 @@ class TestRainContent(BaseTestCase):
         self.skipTest("to be re-implemented with the lastest EC methods")
 
     def _new_content(self, data, broken_pos_list=[]):
-        self.skipTest("to be re-implemented with the lastest EC methods")
+        old_content = self.content_factory.new(self.container_id, "titi",
+                                               len(data), "EC")
+        self.assertEqual(type(old_content), RainContent)
+
+        old_content.upload(StringIO.StringIO(data))
+
+        for pos in broken_pos_list:
+            c = old_content.chunks.filter(pos=pos)[0]
+            self.blob_client.chunk_delete(c.url)
+
+        # get the new structure of the uploaded content
+        return self.content_factory.get(self.container_id,
+                                        old_content.content_id)
 
     def test_orphan_chunk(self):
         self.skipTest("to be re-implemented with the lastest EC methods")
