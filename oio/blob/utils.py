@@ -36,6 +36,11 @@ chunk_xattr_keys = {
     'content_policy': 'grid.content.storage_policy',
     'content_chunksnb': 'grid.content.nbchunk'}
 
+chunk_xattr_keys_optional = {
+        'chunk_hash': True,
+        'chunk_size': True,
+        'metachunk_size': True}
+
 
 volume_xattr_keys = {
     'namespace': 'server.ns',
@@ -60,6 +65,8 @@ def read_chunk_metadata(fd):
     meta = {}
     for k, v in chunk_xattr_keys.iteritems():
         if v not in raw_meta:
-            raise exc.MissingAttribute(v)
-        meta[k] = raw_meta[v]
+            if k not in chunk_xattr_keys_optional:
+                raise exc.MissingAttribute(v)
+        else:
+            meta[k] = raw_meta[v]
     return meta
