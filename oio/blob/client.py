@@ -20,6 +20,8 @@ def gen_put_headers(meta):
         chunk_headers['content_chunkmethod']: meta['content_chunkmethod'],
         chunk_headers['content_policy']: meta['content_policy']
         }
+    if meta.get('metachunk_size'):
+        headers.update({chunk_headers['metachunk_size']: meta['metachunk_size']})
     if meta.get('chunk_hash'):
         headers.update({chunk_headers['chunk_hash']: meta['chunk_hash']})
     if meta.get('content_chunksnb'):
@@ -34,9 +36,9 @@ def extract_headers_meta(headers):
         try:
             meta[k] = headers[chunk_headers[k]]
         except KeyError as e:
-            # 'content_chunksnb' is optional
-            if k != 'content_chunksnb':
-                raise e
+            # some fields are optional
+            if k != 'content_chunksnb' and k != 'metachunk_size' and k != 'chunk_hash':
+                raise
 
     return meta
 

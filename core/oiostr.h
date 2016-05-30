@@ -119,6 +119,8 @@ static inline int oio_str_is_set (const char *s) { return NULL!=s && 0!=*s; }
 
 int oio_str_prefixed (const char *s, const char *p, const char *sep);
 
+int oio_str_is_number (const char *s);
+
 #ifdef __cplusplus
 }
 #endif

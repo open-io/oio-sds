@@ -107,24 +107,20 @@ static gboolean
 copy_fattr(const gchar *src, gchar* dst, GError **error)
 {
 	gboolean status = FALSE;
-	struct content_textinfo_s *content = NULL;
-	struct chunk_textinfo_s *chunk = NULL;
+	struct chunk_textinfo_s chunk = {0};
 
-	content = g_malloc0(sizeof(struct content_textinfo_s));
-	chunk = g_malloc0(sizeof(struct chunk_textinfo_s));
-
-	if (!get_rawx_info_in_attr(src, error, content, chunk)) {
+	if (!get_rawx_info_from_file(src, error, &chunk)) {
 		GSETERROR(error, "Failed to load extended attributes from source file\n");
 		goto err;
 	}
 
 	/*Check we are working with a gs chunk */
-	if(!chunk->id) {
+	if (!chunk.chunk_id) {
 		GSETERROR(error, "No chunk_id found in source file extended attributes, may be this file is not a chunk\n");
 		goto err;
 	}
 
-	if(!set_rawx_info_in_attr(dst, error, content, chunk)) {
+	if (!set_rawx_info_to_file(dst, error, &chunk)) {
 		GSETERROR(error, "Failed to set extended attributes to destination file\n");
 		goto err;
 	}
@@ -132,14 +128,7 @@ copy_fattr(const gchar *src, gchar* dst, GError **error)
 	status = TRUE;
 
 err:
-	if(chunk) {
-		chunk_textinfo_free_content(chunk);
-		g_free(chunk);
-	}
-	if(content) {
-		content_textinfo_free_content(content);
-		g_free(content);
-	}
+    chunk_textinfo_free_content(&chunk);
 	return status;
 }
 

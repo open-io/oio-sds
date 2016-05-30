@@ -166,7 +166,7 @@ timestamp
 gridinit_cmd -S "$GRIDINIT_SOCK" reload >/dev/null
 gridinit_cmd -S "$GRIDINIT_SOCK" start "@${NS}"
 timestamp
-wait_for_srvtype "(sqlx|rawx|rainx|meta2)" $((2 + NB_RAWX + REPLI_CONTAINER))
+wait_for_srvtype "(sqlx|rawx|meta2)" $((2+NB_RAWX+REPLICATION_BUCKET))
 timestamp
 wait_for_srvtype "(meta0|meta1)" $((1 + REPLI_DIRECTORY))
 

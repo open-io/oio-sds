@@ -26,25 +26,27 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # define ATTR_DOMAIN "user.grid"
 
-# define ATTR_NAME_CHUNK_ID                "chunk.id"
-# define ATTR_NAME_CHUNK_SIZE              "chunk.size"
-# define ATTR_NAME_CHUNK_HASH              "chunk.hash"
-# define ATTR_NAME_CHUNK_POS               "chunk.position"
-# define ATTR_NAME_CHUNK_METADATA          "chunk.metadata"
-# define ATTR_NAME_CHUNK_METADATA_COMPRESS "chunk.metadatacompress"
-# define ATTR_NAME_CHUNK_COMPRESSED_SIZE   "chunk.compressedsize"
+# define ATTR_NAME_CONTENT_CONTAINER "content.container"
 
-# define ATTR_NAME_CONTENT_PATH        "content.path"
-# define ATTR_NAME_CONTENT_ID          "content.id"
-# define ATTR_NAME_CONTENT_VERSION     "content.version"
-# define ATTR_NAME_CONTENT_SIZE        "content.size"
-# define ATTR_NAME_CONTENT_NBCHUNK     "content.nbchunk"
+# define ATTR_NAME_CONTENT_ID      "content.id"
+# define ATTR_NAME_CONTENT_PATH    "content.path"
+# define ATTR_NAME_CONTENT_VERSION "content.version"
+# define ATTR_NAME_CONTENT_SIZE    "content.size"
+# define ATTR_NAME_CONTENT_NBCHUNK "content.nbchunk"
 
 # define ATTR_NAME_CONTENT_STGPOL      "content.storage_policy"
-# define ATTR_NAME_CONTENT_MIMETYPE    "content.mime_type"
 # define ATTR_NAME_CONTENT_CHUNKMETHOD "content.chunk_method"
+# define ATTR_NAME_CONTENT_MIMETYPE    "content.mime_type"
 
-# define ATTR_NAME_CONTENT_CONTAINER "content.container"
+# define ATTR_NAME_METACHUNK_SIZE "metachunk.size"
+
+# define ATTR_NAME_CHUNK_ID   "chunk.id"
+# define ATTR_NAME_CHUNK_SIZE "chunk.size"
+# define ATTR_NAME_CHUNK_POS  "chunk.position"
+# define ATTR_NAME_CHUNK_HASH "chunk.hash"
+
+# define ATTR_NAME_CHUNK_METADATA_COMPRESS "compression.metadata"
+# define ATTR_NAME_CHUNK_COMPRESSED_SIZE   "compression.size"
 
 #define NS_RAWX_BUFSIZE_OPTION "rawx_bufsize"
 
@@ -56,184 +58,59 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define RAWX_CONF_TIMEOUT 10LLU
 #define NS_COMPRESSION_ON "on"
 
-typedef struct rawx_conf_s rawx_conf_t;
-
 struct rawx_conf_s
 {
-	/* gboolean compression;
-	gchar* compression_algorithm;
-	gint64 blocksize; */
 	namespace_info_t *ni;
 	struct storage_policy_s *sp;
 	GSList* acl;
 	gint64 last_update;
 };
 
-typedef struct chunk_textinfo_s
-{
-	gchar *id;           /**< The chunk id */
-	gchar *size;         /**< The chunk size */
-	gchar *position;     /**< The chunk position */
-	gchar *hash;         /**< The chunk hash */
-	gchar *metadata;     /**< The chunk metadata */
-} chunk_textinfo_t;
-
-typedef struct content_textinfo_s
-{
-	gchar *container_id;    /**< The container id */
-
-	gchar *content_id;      /**< The content id */
-	gchar *path;            /**< The alias path */
-	gchar *version;         /**< The content version */
-	gchar *size;            /**< The content size */
-	gchar *chunk_nb;        /**< The number of chunks */
-
-	gchar *storage_policy;
-	gchar *chunk_method;
-	gchar *mime_type;
-
-	gchar *rawx_list; /**< The rawx list (introduced by the rainx service) */
-	gchar *spare_rawx_list; /**< The rawx list for reconstruction (introduced by the rainx service) */
-} content_textinfo_t;
-
-
-#define chunk_info_clean  g_free0
-#define chunk_info_gclean g_free1
-
-void chunk_textinfo_free_content(struct chunk_textinfo_s *cti);
-
-void content_textinfo_free_content(struct content_textinfo_s *cti);
-
-/**
- * Set both the content and the chunk attributes in the extended attributes
- * of the file pointed by the given path.
- *
- * If one of the structure has fields with a NULL value, it is not an error
- * and the associated attribute won't be set.
- *
- * @param pathname the path of the content whose attributes should be set
- * @param error a pointer to a GError structure filled in case of error
- * @param content the content attributes
- * @param chunk the chunk attributes
- * @return 1 in case of success, 0 in case of error
- */
-gboolean set_rawx_info_in_attr(const char *pathname, GError **error,
-	struct content_textinfo_s *content, struct chunk_textinfo_s *chunk);
-
-/**
- * Set both the content and the chunk attributes in the extended attributes
- * of the file pointed by the given path.
- *
- * If one of the structure has fields with a NULL value, it is not an error
- * and the associated attribute won't be set.
- *
- * @param pathname the path of the content whose attributes should be set
- * @param filedes the already opened filedes of the content whose attributes should be set
- * @param error a pointer to a GError structure filled in case of error
- * @param content the content attributes
- * @param chunk the chunk attribute
- * @param compression_info the chunk compression informations (algo, bs)
- * @param compressed_size the chunk compressed size
- * @return 1 in case of success, 0 in case of error
- */
-gboolean set_rawx_full_info_in_attr(const char *pathname, int fd, GError **err,
-	struct content_textinfo_s *content, struct chunk_textinfo_s *chunk,
-	const char *compression_info, const char *compressed_size);
-
-/**
- * Set the compression attributes in the extended attributes
- * of the file pointed by the given path.
- *
- * If one of the structure has fields with a NULL value, it is not an error
- * and the associated attribute won't be set.
- *
- * @param pathname the path of the content whose attributes should be set
- * @param error a pointer to a GError structure filled in case of error
- * @param ns_name the name of the namespace
- * @return 1 in case of success, 0 in case of error
- */
-gboolean set_compression_info_in_attr(const char *pathname, GError **error,
-	const char *ns_name);
-
-/**
- * Set the compression attributes in the extended attributes
- * of the file pointed by the given path.
- *
- * If one of the structure has fields with a NULL value, it is not an error
- * and the associated attribute won't be set.
- *
- * @param pathname the path of the content whose attributes should be set
- * @param error a pointer to a GError structure filled in case of error
- * @param the size of the compressed chunk
- * @return 1 in case of success, 0 in case of error
- */
-gboolean set_chunk_compressed_size_in_attr(const char *pathname, GError **error,
-        guint32 compressed_size);
-
-/**
- * Load the given attribute structure with the chunk extended attributes
- * of the chunk pointed by the given path.
- *
- * The structure fields (the pointers) are overwriten. If an
- * attribute is not found, the associated attribute is set to NULL in the
- * structure.
- *
- * @param pathname the path of the chunk whose attributes should be set
- * @param error a pointer to a GError structure filled in case of error
- * @param cti the chunk attributes structure
- * @return 1 in case of success, 0 in case of error
- */
-gboolean get_chunk_info_in_attr(const char *pathname, GError **error,
-	struct chunk_textinfo_s *cti);
-
-/**
- * Load both attribute structures with the chunk attributes and the
- * content attributes of the chunk pointed by the given path.
- *
- * The structure fields (the pointers) are overwriten. If an
- * attribute is not found, the associated attribute is set to NULL in the
- * structure.
- *
- * @param pathname the path of the chunk whose attributes should be set
- * @param error a pointer to a GError structure filled in case of error
- * @param cti the chunk attributes structure
- * @return 1 in case of success, 0 in case of error
- */
-gboolean get_rawx_info_in_attr(const char *pathname, GError **error,
-	struct content_textinfo_s *content, struct chunk_textinfo_s *chunk);
-
-/**
- * Load the given attribute structure with the chunk extended attributes
- * of the chunk pointed by the given path.
- *
- * The structure fields (the pointers) are overwriten. If an
- * attribute is not found, the associated attribute is set to NULL in the
- * structure.
- *
- * @param pathname the path of the chunk whose attributes should be set
- * @param error a pointer to a GError structure filled in case of error
- * @param table the compression attributes table
- * @return 1 in case of success, 0 in case of error
- */
-gboolean get_compression_info_in_attr(const char *pathname, GError **error,
-	GHashTable *table);
-
-#ifndef RAWXLOCK_ATTRNAME_URL
-# define RAWXLOCK_ATTRNAME_URL "user.rawx_server.address"
-#endif
-
-#ifndef RAWXLOCK_ATTRNAME_NS
-# define RAWXLOCK_ATTRNAME_NS "user.rawx_server.namespace"
-#endif
-
-#ifndef RAWXLOCK_FLAG_OVERWRITE
-# define RAWXLOCK_FLAG_OVERWRITE 0x00010000
-#endif
+typedef struct rawx_conf_s rawx_conf_t;
 
 /* Clean a rawx config, but do not free the structure.  */
 void rawx_conf_clean(rawx_conf_t *c);
 
 /* Clean a rawx config, and free the structure.  */
 void rawx_conf_gclean(rawx_conf_t *c);
+
+typedef struct chunk_textinfo_s
+{
+	gchar *container_id;
+
+	gchar *content_id;
+	gchar *content_path;
+	gchar *content_version;
+	gchar *content_size;
+	gchar *content_chunk_nb;
+
+	gchar *content_storage_policy;
+	gchar *content_chunk_method;
+	gchar *content_mime_type;
+
+	gchar *metachunk_size;
+
+	gchar *chunk_id;
+	gchar *chunk_size;
+	gchar *chunk_position;
+	gchar *chunk_hash;
+
+	gchar *compression_metadata;
+	gchar *compression_size;
+
+} chunk_textinfo_t;
+
+void chunk_textinfo_free_content(struct chunk_textinfo_s *cti);
+
+gboolean set_rawx_info_to_file (const char *p, GError **error, struct chunk_textinfo_s *chunk);
+gboolean set_rawx_info_to_fd (int fd, GError **err, struct chunk_textinfo_s *chunk);
+
+gboolean set_compression_info_in_attr(const char *p, GError **error, const char *v);
+gboolean set_chunk_compressed_size_in_attr(const char *p, GError **error, guint32 v);
+
+gboolean get_rawx_info_from_file (const char *p, GError **error, struct chunk_textinfo_s *chunk);
+gboolean get_rawx_info_from_fd (int fd, GError **error, struct chunk_textinfo_s *chunk);
+
+gboolean get_compression_info_in_attr(const char *p, GError **error, GHashTable *table);
 
 #endif /*OIO_SDS__rawx_lib__src__rawx_h*/

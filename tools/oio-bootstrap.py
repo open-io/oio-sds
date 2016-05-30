@@ -209,78 +209,6 @@ Options -SymLinksIfOwnerMatch -FollowSymLinks -Includes -Indexes
 </VirtualHost>
 """
 
-template_rainx_service = """
-LoadModule mpm_worker_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mpm_worker.so
-LoadModule authz_core_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_authz_core.so
-LoadModule setenvif_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_setenvif.so
-LoadModule dav_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_dav.so
-# Do not chang
-LoadModule mime_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mime.so
-LoadModule dav_rainx_module @APACHE2_MODULES_DIRS@/mod_dav_rainx.so
-
-<IfModule !unixd_module>
-  LoadModule unixd_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_unixd.so
-</IfModule>
-<IfModule !log_config_module>
-  LoadModule log_config_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_log_config.so
-</IfModule>
-
-Listen ${IP}:${PORT}
-PidFile ${RUNDIR}/${NS}-${SRVTYPE}-${SRVNUM}.pid
-ServerRoot ${TMPDIR}
-ServerName localhost
-ServerSignature Off
-ServerTokens Prod
-DocumentRoot ${RUNDIR}
-TypesConfig /etc/mime.types
-
-User  ${USER}
-Group ${GROUP}
-
-LogFormat "%h %l %t \\"%r\\" %>s %b %D" log/common
-ErrorLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-errors.log
-SetEnvIf Request_URI "/(stat|info)$" nolog
-CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-access.log log/common env=!nolog
-LogLevel info
-
-<IfModule mod_env.c>
-SetEnv nokeepalive 1
-SetEnv downgrade-1.0 1
-SetEnv force-response-1.0 1
-</IfModule>
-
-<IfModule prefork.c>
-MaxClients 10
-StartServers 5
-MinSpareServers 5
-MaxSpareServers 10
-</IfModule>
-
-<IfModule worker.c>
-StartServers 1
-MaxClients 10
-MinSpareThreads 2
-MaxSpareThreads 10
-ThreadsPerChild 10
-MaxRequestsPerChild 0
-</IfModule>
-
-DavDepthInfinity Off
-
-grid_namespace ${NS}
-grid_dir_run ${RUNDIR}
-
-<Directory />
-DAV rainx
-AllowOverride None
-Require all granted
-</Directory>
-
-<VirtualHost ${IP}:${PORT}>
-# DO NOT REMOVE (even if empty) !
-</VirtualHost>
-"""
-
 template_wsgi_service_host = """
 LoadModule mpm_worker_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mpm_worker.so
 LoadModule authz_core_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_authz_core.so
@@ -347,18 +275,6 @@ checks:
 
 stats:
     - {type: http, path: /status, parser: json}
-    - {type: system}
-"""
-
-template_rainx_watch = """
-host: ${IP}
-port: ${PORT}
-type: rainx
-checks:
-    - {type: http, uri: /info}
-
-stats:
-    - {type: rawx, path: /stat}
     - {type: system}
 """
 
@@ -487,10 +403,6 @@ param_service.rdir.score_timeout=120
 param_service.rdir.score_variation_bound=5
 param_service.rdir.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
 
-param_service.rainx.score_timeout=120
-param_service.rainx.score_variation_bound=5
-param_service.rainx.score_expr=(num stat.cpu)
-
 param_service.redis.score_timeout=120
 param_service.redis.score_variation_bound=5
 param_service.redis.score_expr=(num stat.cpu)
@@ -605,15 +517,6 @@ command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O DirectorySchemas=${CFGDIR}/s
 """
 
 template_gridinit_httpd = """
-[Service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-command=${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
-enabled=true
-start_at_boot=false
-on_die=respawn
-"""
-
-template_gridinit_rainx = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 command=${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
@@ -1085,30 +988,6 @@ def generate(options):
                 f.write(to_write)
             # watcher
             tpl = Template(template_rawx_watch)
-            to_write = tpl.safe_substitute(env)
-            with open(watch(env), 'w+') as f:
-                f.write(to_write)
-
-    # rainx
-    nb_rainx = getint(options['rainx'].get(SVC_NB), defaults['NB_RAINX'])
-    if nb_rainx:
-        for num in range(nb_rainx):
-            env = subenv({'SRVTYPE': 'rainx', 'SRVNUM': num + 1,
-                          'PORT': next_port()})
-            add_service(env)
-            # gridinit
-            tpl = Template(template_gridinit_httpd)
-            with open(gridinit(env), 'a+') as f:
-                f.write(tpl.safe_substitute(env))
-            # service
-            tpl = Template(template_rainx_service)
-            to_write = tpl.safe_substitute(env)
-            if options.get(OPENSUSE, None):
-                to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
-            with open(config(env), 'w+') as f:
-                f.write(to_write)
-            # watcher
-            tpl = Template(template_rainx_watch)
             to_write = tpl.safe_substitute(env)
             with open(watch(env), 'w+') as f:
                 f.write(to_write)
