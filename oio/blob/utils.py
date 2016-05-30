@@ -37,6 +37,7 @@ chunk_xattr_keys = {
     'content_chunksnb': 'grid.content.nbchunk'}
 
 chunk_xattr_keys_optional = {
+        'content_chunksnb': True,
         'chunk_hash': True,
         'chunk_size': True,
         'metachunk_size': True}
