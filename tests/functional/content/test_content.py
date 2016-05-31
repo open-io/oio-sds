@@ -112,7 +112,7 @@ class TestContentFactory(BaseTestCase):
 
     def test_get_rain(self):
         meta = {
-            "chunk-method": "plain/rain?algo=liber8tion&k=6&m=2",
+            "chunk-method": "ec/algo=isa_l_rs_vand,k=6,m=2",
             "ctime": "1450176946",
             "deleted": "False",
             "hash": "E952A419957A6E405BFC53EC65483F73",
@@ -161,7 +161,7 @@ class TestContentFactory(BaseTestCase):
 
     def test_get_dup(self):
         meta = {
-            "chunk-method": "plain/bytes",
+            "chunk-method": "plain/nb_copy=2",
             "ctime": "1450176946",
             "deleted": "False",
             "hash": "E952A419957A6E405BFC53EC65483F73",
@@ -203,7 +203,7 @@ class TestContentFactory(BaseTestCase):
 
     def test_new_rain(self):
         meta = {
-            "chunk-method": "plain/rain?algo=liber8tion&k=6&m=2",
+            "chunk-method": "ec/algo=isa_l_rs_vand,k=6,m=2",
             "ctime": "1450341162",
             "deleted": "False",
             "hash": "",
