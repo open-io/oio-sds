@@ -321,6 +321,15 @@ check_chunk_info(const struct chunk_textinfo_s * const cti)
 	if (!_null_or_hexa1(cti->chunk_id)) return "chunk-id";
 	if (!_null_or_hexa1(cti->chunk_hash)) return "chunk-hash";
 
+	return NULL;
+}
+
+const char *
+check_chunk_info_with_trailers(const struct chunk_textinfo_s * const cti)
+{
+	const char *msg = check_chunk_info (cti);
+	if (NULL != msg) return msg;
+
 	if (cti->metachunk_size && !oio_str_is_number(cti->metachunk_size))
 		return "metachunk-size";
 
@@ -635,11 +644,11 @@ rawx_repo_commit_upload(dav_stream *stream)
 		oio_str_replace (&(fake.compression_size), size);
 	}
 
-	const char *error_with_field = check_chunk_info (&fake);
-	if (error_with_field != NULL) {
+	const char *msg = check_chunk_info_with_trailers (&fake);
+	if (msg != NULL) {
 		e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
 				HTTP_FORBIDDEN, 0,
-				apr_pstrcat(stream->p, "Error with xattr/header ", error_with_field, NULL));
+				apr_pstrcat(stream->p, "Error with xattr/header ", msg, NULL));
 		return e;
 	}
 
@@ -657,7 +666,7 @@ rawx_repo_commit_upload(dav_stream *stream)
 		return e;
 	}
 
-	request_fill_headers(stream->r->info->request, &(stream->r->info->chunk));
+	request_fill_headers(stream->r->info->request, &fake);
 
 	send_chunk_event("storage.chunk.new", stream->r);
 

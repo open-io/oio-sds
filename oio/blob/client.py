@@ -1,7 +1,7 @@
 from urllib import quote_plus
 from oio.common.http import requests
 from oio.common import exceptions as exc
-from oio.blob.utils import chunk_headers
+from oio.blob.utils import chunk_headers, chunk_xattr_keys_optional
 
 
 READ_BUFFER_SIZE = 65535
@@ -20,13 +20,14 @@ def gen_put_headers(meta):
         chunk_headers['content_chunkmethod']: meta['content_chunkmethod'],
         chunk_headers['content_policy']: meta['content_policy']
         }
-    if meta.get('metachunk_size'):
-        headers.update({chunk_headers['metachunk_size']: meta['metachunk_size']})
-    if meta.get('chunk_hash'):
-        headers.update({chunk_headers['chunk_hash']: meta['chunk_hash']})
-    if meta.get('content_chunksnb'):
-        headers.update(
-            {chunk_headers['content_chunksnb']: meta['content_chunksnb']})
+
+    def update_field(k):
+        if meta.get(k):
+            headers.update({chunk_headers[k]: meta[k]})
+
+    update_field('metachunk_size')
+    update_field('chunk_hash')
+    update_field('content_chunksnb')
     return {k: quote_plus(str(v)) for (k, v) in headers.iteritems()}
 
 
@@ -36,9 +37,8 @@ def extract_headers_meta(headers):
         try:
             meta[k] = headers[chunk_headers[k]]
         except KeyError as e:
-            # some fields are optional
-            if k != 'content_chunksnb' and k != 'metachunk_size' and k != 'chunk_hash':
-                raise
+            if k not in chunk_xattr_keys_optional:
+                raise e
 
     return meta
 
