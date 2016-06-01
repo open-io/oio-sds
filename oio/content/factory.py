@@ -20,9 +20,10 @@ from oio.common.utils import get_logger
 from oio.conscience.client import ConscienceClient
 from oio.container.client import ContainerClient
 from oio.content.dup import DupContent
-from oio.content.rain import RainContent
+from oio.content.ec import ECContent
 
 
+# TODO review with new EC
 class ContentFactory(object):
     DEFAULT_DATASEC = "plain", {"nb_copy": "1", "distance": "0"}
 
@@ -76,7 +77,7 @@ class ContentFactory(object):
         if pol_type == "plain":
             return DupContent(self.conf, container_id, meta, chunks, pol_args)
         elif pol_type == "ec":
-            return RainContent(self.conf, container_id, meta, chunks, pol_args)
+            return ECContent(self.conf, container_id, meta, chunks, pol_args)
 
         raise InconsistentContent("Unknown storage policy")
 
@@ -89,7 +90,7 @@ class ContentFactory(object):
         if pol_type == "plain":
             return DupContent(self.conf, container_id, meta, chunks, pol_args)
         elif pol_type == "ec":
-            return RainContent(self.conf, container_id, meta, chunks, pol_args)
+            return ECContent(self.conf, container_id, meta, chunks, pol_args)
 
         raise InconsistentContent("Unknown storage policy")
 

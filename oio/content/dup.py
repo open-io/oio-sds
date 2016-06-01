@@ -21,6 +21,7 @@ from oio.common import exceptions as exc
 from oio.common.exceptions import UnrecoverableContent, NotFound
 
 
+# TODO update using ECD
 class DupContent(Content):
     def __init__(self, conf, container_id, metadata, chunks, stgpol_args):
         super(DupContent, self).__init__(conf, container_id, metadata,

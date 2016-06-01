@@ -28,15 +28,15 @@ from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
 from oio.content.content import ChunksHelper
 from oio.content.factory import ContentFactory
-from oio.content.rain import RainContent
+from oio.content.ec import ECContent
 from tests.functional.content.test_content import md5_stream, random_data, \
             md5_data
 from tests.utils import BaseTestCase
 
 
-class TestRainContent(BaseTestCase):
+class TestECContent(BaseTestCase):
     def setUp(self):
-        super(TestRainContent, self).setUp()
+        super(TestECContent, self).setUp()
 
         if len(self.conf['services']['rawx']) < 12:
             self.skipTest("Not enough rawx. "
@@ -56,7 +56,7 @@ class TestRainContent(BaseTestCase):
                                           self.container_name).upper()
 
     def tearDown(self):
-        super(TestRainContent, self).tearDown()
+        super(TestECContent, self).tearDown()
 
     def _test_upload(self, data_size):
         data = random_data(data_size)
@@ -64,7 +64,7 @@ class TestRainContent(BaseTestCase):
                                            len(data), "EC")
         k = 6
         m = 3
-        self.assertEqual(type(content), RainContent)
+        self.assertEqual(type(content), ECContent)
 
         content.upload(StringIO.StringIO(data))
 
@@ -133,7 +133,7 @@ class TestRainContent(BaseTestCase):
         data = random_data(2 * self.chunk_size)
         content = self.content_factory.new(self.container_id, "titi",
                                            len(data), "EC")
-        self.assertEqual(type(content), RainContent)
+        self.assertEqual(type(content), ECContent)
 
         # set bad url for position 1
         for chunk in content.chunks.filter(pos="1.p0"):
@@ -148,7 +148,7 @@ class TestRainContent(BaseTestCase):
         data = os.urandom(data_size)
         old_content = self.content_factory.new(self.container_id, "titi",
                                                len(data), "EC")
-        self.assertEqual(type(old_content), RainContent)
+        self.assertEqual(type(old_content), ECContent)
 
         old_content.upload(StringIO.StringIO(data))
 
@@ -176,7 +176,7 @@ class TestRainContent(BaseTestCase):
         # get the new structure of the content
         rebuilt_content = self.content_factory.get(self.container_id,
                                                    uploaded_content.content_id)
-        self.assertEqual(type(rebuilt_content), RainContent)
+        self.assertEqual(type(rebuilt_content), ECContent)
 
         for pos in broken_pos_list:
             c = rebuilt_content.chunks.filter(pos=pos)[0]
@@ -223,7 +223,7 @@ class TestRainContent(BaseTestCase):
     def _new_content(self, data, broken_pos_list=[]):
         old_content = self.content_factory.new(self.container_id, "titi",
                                                len(data), "EC")
-        self.assertEqual(type(old_content), RainContent)
+        self.assertEqual(type(old_content), ECContent)
 
         old_content.upload(StringIO.StringIO(data))
 
