@@ -82,7 +82,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
                       'content_path': self.content.path,
                       'content_cid': self.content.id_container,
                       'content_mimetype': 'application/octet-stream',
-                      'content_chunkmethod': 'bytes',
+                      'content_chunkmethod': 'plain',
                       'content_policy': 'TESTPOLICY',
                       'content_id': '0000',
                       'content_version': 1,

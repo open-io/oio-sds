@@ -1,4 +1,4 @@
-# Copyright (C) 2015 OpenIO, original work as part of
+# Copyright (C) 2015-2016 OpenIO, original work as part of
 # OpenIO Software Defined Storage
 #
 # This library is free software; you can redistribute it and/or
@@ -14,6 +14,23 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import StringIO
+import hashlib
+import os
+import time
+
+import math
+from testtools.matchers import NotEquals
+
+from oio.blob.client import BlobClient
+from oio.common.exceptions import NotFound
+from oio.common.utils import cid_from_name
+from oio.container.client import ContainerClient
+from oio.content.content import ChunksHelper
+from oio.content.factory import ContentFactory
+from oio.content.rain import RainContent
+from tests.functional.content.test_content import md5_stream, random_data, \
+            md5_data
 from tests.utils import BaseTestCase
 
 
