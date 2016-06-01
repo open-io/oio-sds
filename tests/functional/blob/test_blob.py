@@ -29,7 +29,7 @@ class TestBlobFunctional(BaseTestCase):
             'x-oio-chunk-meta-content-version': '1456938361143740',
             'x-oio-chunk-meta-content-path': 'test-plop',
             'x-oio-chunk-meta-content-mime-type': 'application/octet-stream',
-            'x-oio-chunk-meta-content-chunk-method': 'bytes',
+            'x-oio-chunk-meta-content-chunk-method': 'plain',
             'x-oio-chunk-meta-content-storage-policy': 'TESTPOLICY',
             'x-oio-chunk-meta-content-size': len(data),
             'x-oio-chunk-meta-content-chunksnb': 1,

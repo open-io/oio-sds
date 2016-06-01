@@ -260,8 +260,8 @@ class TestContentFactory(BaseTestCase):
 
     def _test_change_policy(self, data_size, old_policy, new_policy):
         if (old_policy == "EC" or new_policy == "EC") \
-                and len(self.conf['services']['rawx']) < 8:
-            self.skipTest("EC: Need more than 8 rawx to run")
+                and len(self.conf['services']['rawx']) < 9:
+            self.skipTest("EC: Need more than 9 rawx to run")
 
         data = random_data(data_size)
         obj_type = {
@@ -376,7 +376,7 @@ class TestContentFactory(BaseTestCase):
 
     def test_rain_move_chunk(self):
         if len(self.conf['services']['rawx']) < 9:
-            self.skipTest("Need more than 8 rawx")
+            self.skipTest("Need more than 9 rawx")
         self._test_move_chunk("EC")
 
     def test_move_chunk_not_in_content(self):

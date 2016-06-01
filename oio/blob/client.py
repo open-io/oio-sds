@@ -21,13 +21,10 @@ def gen_put_headers(meta):
         chunk_headers['content_policy']: meta['content_policy']
         }
 
-    def update_field(k):
+    for k in ['metachunk_size', 'chunk_hash', 'content_chunksnb']:
         if meta.get(k):
             headers.update({chunk_headers[k]: meta[k]})
 
-    update_field('metachunk_size')
-    update_field('chunk_hash')
-    update_field('content_chunksnb')
     return {k: quote_plus(str(v)) for (k, v) in headers.iteritems()}
 
 

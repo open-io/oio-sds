@@ -463,7 +463,7 @@ request_fill_headers(request_rec *r, struct chunk_textinfo_s *c)
 	__set_header(r, "content-chunk-method",   c->content_chunk_method);
 	__set_header(r, "content-mime-type",      c->content_mime_type);
 
-	__set_header(r, "metachunk-size", c->chunk_id);
+	__set_header(r, "metachunk-size", c->metachunk_size);
 
 	__set_header(r, "chunk-id",   c->chunk_id);
 	__set_header(r, "chunk-size", c->chunk_size);

@@ -100,7 +100,7 @@ class BlobIndexer(Daemon):
                 'content_nbchunks': meta['content_chunksnb'],
                 'content_path': meta['content_path'],
                 'content_size': meta['content_size'],
-                'chunk_hash': meta['chunk_hash'],
+                'chunk_hash': meta.get('chunk_hash', None),
                 'chunk_position': meta['chunk_pos'],
                 'chunk_size': meta['chunk_size'],
                 'mtime': int(time.time())

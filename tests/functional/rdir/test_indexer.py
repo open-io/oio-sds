@@ -51,7 +51,7 @@ class TestIndexerCrawler(BaseTestCase):
         xattr.setxattr(chunk_path, 'user.grid.content.storage_policy',
                                    'TESTPOLICY')
         xattr.setxattr(chunk_path, 'user.grid.content.chunk_method',
-                                   'bytes')
+                                   'plain')
         xattr.setxattr(chunk_path, 'user.grid.content.version', '0')
 
         return chunk_path, container_id, content_id, chunk_id
@@ -118,7 +118,7 @@ class TestIndexerCrawler(BaseTestCase):
             self.rawx_conf['path'])
 
         # remove mandatory xattr
-        xattr.removexattr(chunk_path, 'user.grid.chunk.hash')
+        xattr.removexattr(chunk_path, 'user.grid.content.chunk_method')
 
         # try to index the chunk
         indexer = BlobIndexer(self.conf)
