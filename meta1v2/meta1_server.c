@@ -201,7 +201,7 @@ _get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
 static gboolean
 _post_config(struct sqlx_service_s *ss)
 {
-	GError *err = meta1_backend_init (&m1, ss->ns_name, ss->repository, ss->lb2);
+	GError *err = meta1_backend_init(&m1, ss->ns_name, ss->repository, ss->lb);
 	if (NULL != err) {
 		GRID_WARN("META1 backend init failure: (%d) %s", err->code, err->message);
 		g_clear_error (&err);

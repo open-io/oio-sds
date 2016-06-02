@@ -40,6 +40,8 @@ struct oio_lb_pool_vtable_s
 			const oio_location_t * avoids,
 			oio_location_t * known,
 			oio_lb_on_id_f on_id);
+	gboolean (*is_id_available) (struct oio_lb_pool_s *self,
+			const char *id);
 };
 
 struct oio_lb_pool_abstract_s
@@ -72,6 +74,13 @@ oio_lb_pool__patch(struct oio_lb_pool_s *self,
 		oio_lb_on_id_f on_id)
 {
 	CFG_CALL(self, patch)(self, avoids, known, on_id);
+}
+
+gboolean
+oio_lb_pool__is_id_available(struct oio_lb_pool_s *self,
+		const char *id)
+{
+	CFG_CALL(self, is_id_available)(self, id);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -144,9 +153,12 @@ static guint _local__patch(struct oio_lb_pool_s *self,
 		oio_location_t * known,
 		oio_lb_on_id_f on_id);
 
+static gboolean _local__is_id_available(struct oio_lb_pool_s *self,
+		const char *id);
+
 static struct oio_lb_pool_vtable_s vtable_LOCAL =
 {
-	_local__destroy, _local__poll, _local__patch
+	_local__destroy, _local__poll, _local__patch, _local__is_id_available
 };
 
 static struct _lb_item_s *
@@ -461,6 +473,16 @@ _local__patch(struct oio_lb_pool_s *self,
 	return count;
 }
 
+static gboolean
+_local__is_id_available(struct oio_lb_pool_s *self,
+		const char *id)
+{
+	g_assert (self != NULL);
+	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
+	// TODO: refine this: look only in slots targeted by the pool
+	return oio_lb_world__is_id_available(lb->world, id);
+}
+
 static void
 _local__destroy (struct oio_lb_pool_s *self)
 {
@@ -680,7 +702,10 @@ oio_lb_world__feed_slot (struct oio_lb_world_s *self, const char *name,
 				if (item0 == _slot_get(slot,i)) {
 					found = TRUE;
 					/* we found the old item, now check the loca matches */
-					if (item0->location != item->location) {
+					if (item0->weight <= 0) {
+						g_array_remove_index_fast(slot->items, i);
+						slot->flag_dirty_order = 1;
+					} else if (item0->location != item->location) {
 						item0->location = item->location;
 						slot->flag_dirty_order = 1;
 					}
@@ -690,7 +715,7 @@ oio_lb_world__feed_slot (struct oio_lb_world_s *self, const char *name,
 	}
 	g_assert_nonnull (item0);
 
-	if (!found) {
+	if (!found && item0->weight > 0) {
 		++ item0->refcount;
 		struct _slot_item_s fake = {0, item0};
 		g_array_append_vals (slot->items, &fake, 1);
@@ -789,6 +814,19 @@ oio_lb__patch_with_pool(struct oio_lb_s *lb, const char *name,
 	struct oio_lb_pool_s *pool = g_hash_table_lookup(lb->pools, name);
 	if (pool)
 		res = oio_lb_pool__patch(pool, avoids, known, on_id);
+	g_rw_lock_reader_unlock(&lb->lock);
+	return res;
+}
+
+gboolean
+oio_lb__is_id_available_in_pool(struct oio_lb_s *lb, const char *name,
+		const char *id)
+{
+	gboolean res = FALSE;
+	g_rw_lock_reader_lock(&lb->lock);
+	struct oio_lb_pool_s *pool = g_hash_table_lookup(lb->pools, name);
+	if (pool)
+		res = oio_lb_pool__is_id_available(pool, id);
 	g_rw_lock_reader_unlock(&lb->lock);
 	return res;
 }

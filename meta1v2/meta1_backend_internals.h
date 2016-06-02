@@ -32,7 +32,8 @@ struct meta1_backend_s
 {
 	const char *type;
 	struct sqlx_repository_s *repo;
-	struct grid_lbpool_s *lb;
+	struct oio_lb_s *lb;
+	struct grid_lbpool_s *lb2;
 
 	struct service_update_policies_s *svcupdate;
 	struct meta1_prefixes_set_s *prefixes;

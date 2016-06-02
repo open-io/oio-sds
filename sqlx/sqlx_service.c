@@ -76,7 +76,6 @@ static gpointer _worker_clients (gpointer p);
 
 static const struct gridd_request_descr_s * _get_service_requests (void);
 
-static GError* _reload_lbpool(struct grid_lbpool_s *glp, gboolean flush);
 static GError* _reload_lb_world(struct oio_lb_world_s *lbw);
 
 // Static variables
@@ -197,12 +196,6 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 		return FALSE;
 	}
 	GRID_DEBUG("NS configured to [%s]", ss->ns_name);
-
-	ss->lb2 = grid_lbpool_create (ss->ns_name);
-	if (!ss->lb2) {
-		GRID_WARN("LB allocation failure");
-		return FALSE;
-	}
 
 	ss->lb_world = oio_lb_local__create_world();
 	ss->lb = oio_lb__create();
@@ -669,11 +662,6 @@ sqlx_service_specific_fini(void)
 		SRV.election_manager = NULL;
 	}
 
-	if (SRV.lb2) {
-		grid_lbpool_destroy (SRV.lb2);
-		SRV.lb2 = NULL;
-	}
-
 	if (SRV.lb)
 		oio_lb__clear(&SRV.lb);
 
@@ -908,82 +896,17 @@ sqlx_task_reload_lb (struct sqlx_service_s *ss)
 
 	if (!grid_main_is_running ())
 		return;
-	if (!ss->lb2 || !ss->nsinfo)
-		return;
 	if (ADAPTIVE_PERIOD_SKIP())
 		return;
 
-	GError *err = _reload_lbpool(ss->lb2, FALSE);
-	if (!err) {
-		ADAPTIVE_PERIOD_ONSUCCESS(10);
-	} else {
-		GRID_WARN("Failed to reload the LB pool services: (%d) %s",
-				err->code, err->message);
-		g_clear_error(&err);
-	}
-
-	grid_lbpool_reconfigure(ss->lb2, ss->nsinfo);
-
-	err = _reload_lb_world(ss->lb_world);
+	GError *err = _reload_lb_world(ss->lb_world);
 	if (err) {
 		GRID_WARN("Failed to reload LB world: %s", err->message);
 		g_clear_error(&err);
+	} else {
+		ADAPTIVE_PERIOD_ONSUCCESS(10);
 	}
 	oio_lb_world__debug(ss->lb_world);
-}
-
-static GError*
-_reload_lbpool(struct grid_lbpool_s *glp, gboolean flush)
-{
-	gboolean _reload_srvtype(const gchar *ns, const gchar *srvtype) {
-		GSList *list_srv = NULL;
-		GError *err = conscience_get_services (ns, srvtype, FALSE, &list_srv);
-		if (err) {
-			GRID_WARN("Gridagent/conscience error: Failed to list the services"
-					" of type [%s]: code=%d %s", srvtype, err->code,
-					err->message);
-			g_clear_error(&err);
-			return FALSE;
-		}
-
-		if (list_srv || flush) {
-			GSList *l = list_srv;
-
-			gboolean provide(struct service_info_s **p_si) {
-				if (!l)
-					return FALSE;
-				*p_si = l->data;
-				l->data = NULL;
-				l = l->next;
-				return TRUE;
-			}
-			grid_lbpool_reload(glp, srvtype, provide);
-			g_slist_free(list_srv);
-		}
-
-		return TRUE;
-	}
-
-	GSList *list_srvtypes = NULL;
-	GError *err = conscience_get_types (SRV.ns_name, &list_srvtypes);
-	if (err)
-		g_prefix_error(&err, "LB pool reload error: ");
-	else {
-		guint errors = 0;
-		for (GSList *l=list_srvtypes; l ;l=l->next) {
-			if (!l->data)
-				continue;
-			if (!_reload_srvtype(SRV.ns_name, l->data))
-				++ errors;
-		}
-
-		if (errors)
-			GRID_DEBUG("Reloaded %u service types, with %u errors",
-					g_slist_length(list_srvtypes), errors);
-	}
-
-	g_slist_free_full (list_srvtypes, g_free);
-	return err;
 }
 
 static void
@@ -1142,7 +1065,7 @@ _dispatch_RELOAD (struct gridd_reply_ctx_s *reply, gpointer pss, gpointer i)
 	struct sqlx_service_s *ss = pss;
 	g_assert (ss != NULL);
 
-	GError *err = _reload_lbpool(ss->lb2, TRUE);
+	GError *err = _reload_lb_world(ss->lb_world);
 	if (err)
 		reply->send_error (0, err);
 	else
@@ -1156,7 +1079,6 @@ _dispatch_FLUSH (struct gridd_reply_ctx_s *reply, gpointer pss, gpointer i)
 	(void) i;
 	struct sqlx_service_s *ss = pss;
 	g_assert(ss != NULL);
-	/* if (ss->lb) grid_lbpool_flush (ss->lb); */
 	if (ss->resolver) {
 		hc_resolver_flush_csm0 (ss->resolver);
 		hc_resolver_flush_services (ss->resolver);

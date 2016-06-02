@@ -57,6 +57,9 @@ guint oio_lb_pool__patch(struct oio_lb_pool_s *self,
 		oio_location_t *known,
 		oio_lb_on_id_f on_id);
 
+/* Tell is an ID is in the pool and available */
+gboolean oio_lb_pool__is_id_available(struct oio_lb_pool_s *self,
+		const char *id);
 /* -------------------------------------------------------------------------- */
 
 /* A world is something you feed with services and that will arrange them for
@@ -122,5 +125,8 @@ guint oio_lb__patch_with_pool(struct oio_lb_s *lb, const char *name,
 		const oio_location_t *avoids, oio_location_t *known,
 		oio_lb_on_id_f on_id);
 
+/** Checks if an ID is available in a pool */
+gboolean oio_lb__is_id_available_in_pool(struct oio_lb_s *lb,
+		const char *name, const char *id);
 
 #endif /*OIO_SDS__core__oiolb_h*/

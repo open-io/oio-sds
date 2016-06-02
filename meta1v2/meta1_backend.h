@@ -82,7 +82,7 @@ struct meta1_backend_s;
  * This creates an internal sqlx_repository_t constructor. */
 GError * meta1_backend_init(struct meta1_backend_s **out,
 		const char *ns, struct sqlx_repository_s *repo,
-		struct grid_lbpool_s *glp);
+		struct oio_lb_s *lb);
 
 /* Returns the set of prefixes internally managed
  * Please do not free the internal META1 prefixes set, this is done

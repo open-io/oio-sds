@@ -90,7 +90,6 @@ struct sqlx_service_s
 	struct network_server_s *server;
 	struct gridd_request_dispatcher_s *dispatcher;
 	struct hc_resolver_s *resolver;
-	struct grid_lbpool_s *lb2;  // Will disappear soon
 	struct oio_lb_s *lb;
 	struct oio_lb_world_s *lb_world;
 	GHashTable *lb_pools;
