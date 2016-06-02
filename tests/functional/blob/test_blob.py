@@ -28,11 +28,9 @@ class TestBlobFunctional(BaseTestCase):
             'x-oio-chunk-meta-content-id': '0123456789ABCDEF',
             'x-oio-chunk-meta-content-version': '1456938361143740',
             'x-oio-chunk-meta-content-path': 'test-plop',
-            'x-oio-chunk-meta-content-mime-type': 'application/octet-stream',
-            'x-oio-chunk-meta-content-chunk-method': 'plain',
+            'x-oio-chunk-meta-content-chunk-method':
+                'ec/algo=isa_l_rs_vand,k=6,m=3',
             'x-oio-chunk-meta-content-storage-policy': 'TESTPOLICY',
-            'x-oio-chunk-meta-content-size': len(data),
-            'x-oio-chunk-meta-content-chunksnb': 1,
             'x-oio-chunk-meta-container-id': '1'*64,
             'x-oio-chunk-meta-chunk-id': name,
             'x-oio-chunk-meta-chunk-size': len(data),
@@ -59,8 +57,7 @@ class TestBlobFunctional(BaseTestCase):
 
     def _http_request(self, chunkurl, method, body, headers, trailers=None):
         parsed = urlparse(chunkurl)
-        # add transfer-encoding: chunked
-        if body:
+        if method == 'PUT':
             headers['transfer-encoding'] = 'chunked'
         if trailers:
             headers['Trailer'] = list()
@@ -69,14 +66,15 @@ class TestBlobFunctional(BaseTestCase):
 
         conn = http_connect(parsed.hostname, parsed.port, method, parsed.path,
                             headers)
-        if body:
-            conn.send('%x\r\n%s\r\n' % (len(body), body))
+        if method == 'PUT':
+            if body:
+                conn.send('%x\r\n%s\r\n' % (len(body), body))
             conn.send('0\r\n')
             if trailers:
                 for k, v in trailers.iteritems():
-                    conn.send('%s:%s\r\n' % (k, v))
+                    conn.send('%s: %s\r\n' % (k, v))
             conn.send('\r\n')
-        if body:
+        if method == 'PUT':
             del headers['transfer-encoding']
         if trailers:
             for k in trailers:
@@ -100,8 +98,10 @@ class TestBlobFunctional(BaseTestCase):
             for h in remove_headers:
                 del headers[h]
 
-        # TODO should also include meta-chunk-size
-        trailers = {'x-oio-chunk-meta-chunk-hash': chunkhash}
+        # we do not really care about the actual value
+        metachunk_size = 9 * length
+        # TODO should also include meta-chunk-hash
+        trailers = {'x-oio-chunk-meta-metachunk-size': metachunk_size}
 
         self._check_not_present(chunkurl)
 
@@ -126,7 +126,7 @@ class TestBlobFunctional(BaseTestCase):
         resp, body = self._http_request(chunkurl, 'GET', '', {})
         self.assertEqual(resp.status, 200)
         self.assertEqual(body, chunkdata)
-        headers['x-oio-chunk-meta-chunk-hash'] = chunkhash
+        headers['x-oio-chunk-meta-metachunk-size'] = metachunk_size
         for k, v in headers.items():
             self.assertEqual(resp.getheader(k), str(v))
 
@@ -191,10 +191,6 @@ class TestBlobFunctional(BaseTestCase):
                         remove_headers=['x-oio-chunk-meta-content-id'])
         self._cycle_put(32, 400,
                         remove_headers=['x-oio-chunk-meta-content-version'])
-        self._cycle_put(32, 201,
-                        remove_headers=['x-oio-chunk-meta-content-chunksnb'])
-        self._cycle_put(32, 201,
-                        remove_headers=['x-oio-chunk-meta-content-size'])
         self._cycle_put(32, 400,
                         remove_headers=['x-oio-chunk-meta-content-path'])
         self._cycle_put(32, 400,
