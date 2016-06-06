@@ -27,8 +27,7 @@ from oio.common.exceptions import SpareChunkException, OrphanChunk, \
 from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
 from oio.rdir.client import RdirClient
-from tests.functional.rdir.common import generate_id
-from tests.utils import BaseTestCase, get_config
+from tests.utils import BaseTestCase, get_config, random_id
 
 
 class TestContent(object):
@@ -38,7 +37,7 @@ class TestContent(object):
         self.account = account
         self.container_name = container_name
         self.content_name = content_name
-        self.content_id = generate_id(32)
+        self.content_id = random_id(32)
         self.container_id = cid_from_name(self.account,
                                           self.container_name).upper()
         self.checksum = 32 * '0'
@@ -77,7 +76,7 @@ class TestContent(object):
 class TestChunk(object):
     def __init__(self, test_conf, data, pos, rawx, content):
         self.test_conf = test_conf
-        self.id = generate_id(64)
+        self.id = random_id(64)
         self.data = data
         self.size = len(data)
         h = hashlib.new('md5')
