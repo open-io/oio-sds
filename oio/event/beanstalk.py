@@ -1,5 +1,6 @@
 import os
 import sys
+from oio.common.utils import yaml
 from eventlet.green import socket
 from urlparse import urlparse
 from cStringIO import StringIO as BytesIO
@@ -343,6 +344,15 @@ def dict_merge(*dicts):
     return merged
 
 
+def parse_yaml(connection, response, **kwargs):
+    (status, results) = response
+    size = results[0]
+    body = connection.read_body(int(size))
+    if size > 0 and not body:
+        raise ResponseError()
+    return yaml.load(body)
+
+
 def parse_body(connection, response, **kwargs):
     (status, results) = response
     job_id = results[0]
@@ -355,7 +365,8 @@ def parse_body(connection, response, **kwargs):
 
 class Beanstalk(object):
     RESPONSE_CALLBACKS = dict_merge(
-        {'reserve': parse_body}
+        {'reserve': parse_body,
+         'stats-tube': parse_yaml}
     )
     EXPECTED_OK = dict_merge(
         {'reserve': ['RESERVED'],
@@ -364,7 +375,8 @@ class Beanstalk(object):
          'bury': ['BURIED'],
          'put': ['INSERTED'],
          'use': ['USING'],
-         'watch': ['WATCHING']}
+         'watch': ['WATCHING'],
+         'stats-tube': ['OK']}
 
     )
     EXPECTED_ERR = dict_merge(
@@ -372,6 +384,7 @@ class Beanstalk(object):
          'delete': ['NOT_FOUND'],
          'release': ['BURIED', 'NOT_FOUND'],
          'bury': ['NOT_FOUND'],
+         'stats-tube': ['NOT_FOUND'],
          'use': [],
          'watch': [],
          'put': ['JOB_TOO_BIG', 'BURIED', 'DRAINING']}
@@ -455,6 +468,9 @@ class Beanstalk(object):
 
     def delete(self, job_id):
         self.execute_command('delete', job_id)
+
+    def stats_tube(self, tube):
+        return self.execute_command('stats-tube', tube)
 
     def close(self):
         if self.connection:
