@@ -38,9 +38,10 @@ struct oio_lb_pool_vtable_s
 
 	guint (*patch) (struct oio_lb_pool_s *self,
 			const oio_location_t * avoids,
-			oio_location_t * known,
+			const oio_location_t * known,
 			oio_lb_on_id_f on_id);
-	gboolean (*is_id_available) (struct oio_lb_pool_s *self,
+
+	struct oio_lb_item_s* (*get_item) (struct oio_lb_pool_s *self,
 			const char *id);
 };
 
@@ -70,17 +71,17 @@ oio_lb_pool__poll (struct oio_lb_pool_s *self,
 guint
 oio_lb_pool__patch(struct oio_lb_pool_s *self,
 		const oio_location_t * avoids,
-		oio_location_t * known,
+		const oio_location_t * known,
 		oio_lb_on_id_f on_id)
 {
 	CFG_CALL(self, patch)(self, avoids, known, on_id);
 }
 
-gboolean
-oio_lb_pool__is_id_available(struct oio_lb_pool_s *self,
+struct oio_lb_item_s *
+oio_lb_pool__get_item(struct oio_lb_pool_s *self,
 		const char *id)
 {
-	CFG_CALL(self, is_id_available)(self, id);
+	CFG_CALL(self, get_item)(self, id);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -100,7 +101,7 @@ struct _slot_item_s
 };
 
 /* Set of services matching the same macro "everything-but-the-location"
-   criteria. */
+ * criteria. */
 struct oio_lb_slot_s
 {
 	oio_location_t location_mask;
@@ -129,6 +130,7 @@ struct oio_lb_slot_s
 /* All the load-balancing information */
 struct oio_lb_world_s
 {
+	GRWLock lock;
 	GTree *slots;
 	GTree *items;
 };
@@ -150,15 +152,15 @@ static guint _local__poll (struct oio_lb_pool_s *self,
 
 static guint _local__patch(struct oio_lb_pool_s *self,
 		const oio_location_t * avoids,
-		oio_location_t * known,
+		const oio_location_t * known,
 		oio_lb_on_id_f on_id);
 
-static gboolean _local__is_id_available(struct oio_lb_pool_s *self,
+static struct oio_lb_item_s *_local__get_item(struct oio_lb_pool_s *self,
 		const char *id);
 
 static struct oio_lb_pool_vtable_s vtable_LOCAL =
 {
-	_local__destroy, _local__poll, _local__patch, _local__is_id_available
+	_local__destroy, _local__poll, _local__patch, _local__get_item
 };
 
 static struct _lb_item_s *
@@ -172,7 +174,7 @@ _item_make (guint location, const char *id)
 }
 
 static struct oio_lb_slot_s *
-oio_lb_world__get_slot (struct oio_lb_world_s *world, const char *name)
+oio_lb_world__get_slot_unlocked(struct oio_lb_world_s *world, const char *name)
 {
 	g_assert (world != NULL);
 	g_assert (name != NULL && *name != 0);
@@ -366,17 +368,21 @@ _local_target__poll (struct oio_lb_pool_LOCAL_s *lb,
 {
 	GRID_TRACE2("%s pool=%s mask=%d target=%s",
 			__FUNCTION__, lb->name, masked, target);
+	gboolean res = FALSE;
 
+	g_rw_lock_reader_lock(&lb->world->lock);
 	/* each target is a sequence of '\0'-separated strings, terminated with
 	 * an empty string. Each string is the name of a slot */
-	for (const char *name = target; *name; name += 1+strlen(name)) {
-		struct oio_lb_slot_s *slot = oio_lb_world__get_slot (lb->world, name);
+	for (const char *name = target; *name && !res; name += 1+strlen(name)) {
+		struct oio_lb_slot_s *slot = oio_lb_world__get_slot_unlocked(
+				lb->world, name);
 		if (!slot)
 			GRID_DEBUG ("Slot [%s] not ready", name);
 		else if (_local_slot__poll (slot, masked, ctx))
-			return TRUE;
+			res = TRUE;
 	}
-	return FALSE;
+	g_rw_lock_reader_unlock(&lb->world->lock);
+	return res;
 }
 
 static guint
@@ -397,7 +403,8 @@ _local_target__is_satisfied(struct oio_lb_pool_LOCAL_s *lb,
 	/* Iterate over the slots of the target to find if one of the
 	** already known locations is inside, and thus satisfies the target. */
 	for (const char *name = target; *name; name += strlen(name)+1) {
-		struct oio_lb_slot_s *slot = oio_lb_world__get_slot(lb->world, name);
+		struct oio_lb_slot_s *slot = oio_lb_world__get_slot_unlocked(
+				lb->world, name);
 		if (!slot) {
 			GRID_DEBUG ("Slot [%s] not ready", name);
 			continue;
@@ -424,7 +431,7 @@ _local_target__is_satisfied(struct oio_lb_pool_LOCAL_s *lb,
 
 static guint
 _local__patch(struct oio_lb_pool_s *self,
-		const oio_location_t *avoids, oio_location_t *known,
+		const oio_location_t *avoids, const oio_location_t *known,
 		void (*on_id) (oio_location_t location, const char *id))
 {
 	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
@@ -473,14 +480,14 @@ _local__patch(struct oio_lb_pool_s *self,
 	return count;
 }
 
-static gboolean
-_local__is_id_available(struct oio_lb_pool_s *self,
+struct oio_lb_item_s *
+_local__get_item(struct oio_lb_pool_s *self,
 		const char *id)
 {
 	g_assert (self != NULL);
 	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
 	// TODO: refine this: look only in slots targeted by the pool
-	return oio_lb_world__is_id_available(lb->world, id);
+	return oio_lb_world__get_item(lb->world, id);
 }
 
 static void
@@ -524,6 +531,7 @@ struct oio_lb_world_s *
 oio_lb_local__create_world (void)
 {
 	struct oio_lb_world_s *self = g_malloc0 (sizeof(*self));
+	g_rw_lock_init(&self->lock);
 	self->slots = g_tree_new_full (oio_str_cmp3, NULL,
 			g_free, (GDestroyNotify) _slot_destroy);
 	self->items = g_tree_new_full (oio_str_cmp3, NULL,
@@ -536,10 +544,17 @@ oio_lb_world__destroy (struct oio_lb_world_s *self)
 {
 	if (!self)
 		return;
-	if (self->slots)
+	g_rw_lock_writer_lock(&self->lock);
+	if (self->slots) {
 		g_tree_destroy (self->slots);
-	if (self->items)
+		self->slots = NULL;
+	}
+	if (self->items) {
 		g_tree_destroy (self->items);
+		self->items = NULL;
+	}
+	g_rw_lock_writer_unlock(&self->lock);
+	g_rw_lock_clear(&self->lock);
 	g_free (self);
 }
 
@@ -558,14 +573,19 @@ oio_lb_world__create_pool (struct oio_lb_world_s *world, const char *name)
 static struct oio_lb_slot_s *
 _world_create_slot (struct oio_lb_world_s *self, const char *name)
 {
-	struct oio_lb_slot_s *slot = oio_lb_world__get_slot (self, name);
-	if (NULL != slot)
-		return slot;
-	slot = g_malloc0 (sizeof(*slot));
-	slot->name = g_strdup (name);
-	slot->location_mask = ((oio_location_t)-1) - 0xFF;
-	slot->items = g_array_new (FALSE, TRUE, sizeof(struct _slot_item_s));
-	g_tree_replace (self->slots, g_strdup (name), slot);
+	struct oio_lb_slot_s *slot = NULL;
+	g_rw_lock_reader_lock(&self->lock);
+	slot = oio_lb_world__get_slot_unlocked(self, name);
+	g_rw_lock_reader_unlock(&self->lock);
+	if (!slot) {
+		slot = g_malloc0(sizeof(*slot));
+		slot->name = g_strdup(name);
+		slot->location_mask = ((oio_location_t)-1) - 0xFF;
+		slot->items = g_array_new(FALSE, TRUE, sizeof(struct _slot_item_s));
+		g_rw_lock_writer_lock(&self->lock);
+		g_tree_replace(self->slots, g_strdup(name), slot);
+		g_rw_lock_writer_unlock(&self->lock);
+	}
 	return slot;
 }
 
@@ -573,34 +593,51 @@ guint
 oio_lb_world__count_slots (struct oio_lb_world_s *self)
 {
 	g_assert (self != NULL);
-	return g_tree_nnodes (self->slots);
+	gint nnodes = 0;
+	g_rw_lock_reader_lock(&self->lock);
+	nnodes = g_tree_nnodes (self->slots);
+	g_rw_lock_reader_unlock(&self->lock);
+	return nnodes;
 }
 
 guint
 oio_lb_world__count_items (struct oio_lb_world_s *self)
 {
 	g_assert (self != NULL);
-	return g_tree_nnodes (self->items);
+	gint nnodes = 0;
+	g_rw_lock_reader_lock(&self->lock);
+	nnodes = g_tree_nnodes (self->items);
+	g_rw_lock_reader_unlock(&self->lock);
+	return nnodes;
 }
 
 guint
 oio_lb_world__count_slot_items(struct oio_lb_world_s *self, const char *name)
 {
 	g_assert (self != NULL);
-	struct oio_lb_slot_s *slot = oio_lb_world__get_slot(self, name);
-	if (!slot)
-		return 0;
-	return slot->items->len;
+	guint len = 0;
+	g_rw_lock_reader_lock(&self->lock);
+	struct oio_lb_slot_s *slot = oio_lb_world__get_slot_unlocked(self, name);
+	if (slot)
+		len = slot->items->len;
+	g_rw_lock_reader_unlock(&self->lock);
+	return len;
 }
 
-gboolean
-oio_lb_world__is_id_available(struct oio_lb_world_s *self, const char *id)
+struct oio_lb_item_s*
+oio_lb_world__get_item(struct oio_lb_world_s *self, const char *id)
 {
-	oio_weight_t weight = 0;
+	struct oio_lb_item_s *item = NULL;
+	g_rw_lock_reader_lock(&self->lock);
 	struct _lb_item_s *item0 = g_tree_lookup(self->items, id);
-	if (item0)
-		weight = item0->weight;
-	return weight > 0;
+	if (item0) {
+		item = g_malloc0(sizeof(struct oio_lb_item_s) + strlen(id) + 1);
+		item->location = item0->location;
+		item->weight = item0->weight;
+		strcpy(item->id, id);
+	}
+	g_rw_lock_reader_unlock(&self->lock);
+	return item;
 }
 
 void
@@ -652,9 +689,9 @@ _search_first_at_location (GArray *tab, const oio_location_t needle,
 	return _search_first_at_location (tab, needle, start, i_pivot);
 }
 
-void
-oio_lb_world__feed_slot (struct oio_lb_world_s *self, const char *name,
-		const struct oio_lb_item_s *item)
+static void
+oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
+		const char *name, const struct oio_lb_item_s *item)
 {
 	g_assert (self != NULL);
 	g_assert (name != NULL && *name != '\0');
@@ -664,7 +701,7 @@ oio_lb_world__feed_slot (struct oio_lb_world_s *self, const char *name,
 
 	gboolean found = FALSE;
 
-	struct oio_lb_slot_s *slot = oio_lb_world__get_slot (self, name);
+	struct oio_lb_slot_s *slot = oio_lb_world__get_slot_unlocked(self, name);
 	if (!slot)
 		return;
 
@@ -691,7 +728,7 @@ oio_lb_world__feed_slot (struct oio_lb_world_s *self, const char *name,
 			/* Linear search from the beginning */
 			i0 = 0;
 		} else if (slot->items->len) {
-			/* Dichotomic search, faster if items are sorted */
+			/* Dichotomic search, faster when items are sorted */
 			i0 = _search_first_at_location (slot->items, item0->location,
 					0, slot->items->len-1);
 		}
@@ -729,6 +766,15 @@ oio_lb_world__feed_slot (struct oio_lb_world_s *self, const char *name,
 		_slot_rehash (slot);
 }
 
+void
+oio_lb_world__feed_slot (struct oio_lb_world_s *self, const char *name,
+		const struct oio_lb_item_s *item)
+{
+	g_rw_lock_writer_lock(&self->lock);
+	oio_lb_world__feed_slot_unlocked(self, name, item);
+	g_rw_lock_writer_unlock(&self->lock);
+}
+
 static void
 _slot_debug (struct oio_lb_slot_s *slot, const char *name)
 {
@@ -752,7 +798,9 @@ oio_lb_world__debug (struct oio_lb_world_s *self)
 		_slot_debug (slot, name);
 		return FALSE;
 	}
+	g_rw_lock_reader_lock(&self->lock);
 	g_tree_foreach (self->slots, (GTraverseFunc)_on_slot, NULL);
+	g_rw_lock_reader_unlock(&self->lock);
 }
 
 
@@ -806,7 +854,7 @@ oio_lb__poll_pool(struct oio_lb_s *lb, const char *name,
 
 guint
 oio_lb__patch_with_pool(struct oio_lb_s *lb, const char *name,
-		const oio_location_t *avoids, oio_location_t *known,
+		const oio_location_t *avoids, const oio_location_t *known,
 		oio_lb_on_id_f on_id)
 {
 	guint res = 0;
@@ -818,15 +866,15 @@ oio_lb__patch_with_pool(struct oio_lb_s *lb, const char *name,
 	return res;
 }
 
-gboolean
-oio_lb__is_id_available_in_pool(struct oio_lb_s *lb, const char *name,
+struct oio_lb_item_s *
+oio_lb__get_item_from_pool(struct oio_lb_s *lb, const char *name,
 		const char *id)
 {
-	gboolean res = FALSE;
+	struct oio_lb_item_s *res = NULL;
 	g_rw_lock_reader_lock(&lb->lock);
 	struct oio_lb_pool_s *pool = g_hash_table_lookup(lb->pools, name);
 	if (pool)
-		res = oio_lb_pool__is_id_available(pool, id);
+		res = oio_lb_pool__get_item(pool, id);
 	g_rw_lock_reader_unlock(&lb->lock);
 	return res;
 }

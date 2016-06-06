@@ -459,15 +459,43 @@ service_info_check_storage_class(const struct service_info_s *si, const gchar *w
 	return storage_class_is_satisfied(wanted_class, actual_class);
 }
 
+void
+oio_parse_service_key(const char *key, gchar **ns, gchar **type, gchar **id)
+{
+	char **toks = g_strsplit(key, "|", -1);
+	if (ns && toks[0])
+		*ns = toks[0];
+	else
+		g_free(toks[0]);
+
+	if (type && toks[1])
+		*type = toks[1];
+	else
+		g_free(toks[1]);
+
+	if (id && toks[2])
+		*id = toks[2];
+	else
+		g_free(toks[2]);
+
+	g_free(toks);
+}
+
+gchar *
+oio_make_service_key(const char *ns_name, const char *type, const char *id)
+{
+	return g_strdup_printf("%s|%s|%s", ns_name, type, id);
+}
+
 gchar *
 service_info_key (const struct service_info_s *si)
 {
 	gchar addr[STRLEN_ADDRINFO];
 	const char *explicit = service_info_get_tag_value(si, "tag.id", NULL);
 	if (explicit)
-		return g_strdup_printf("%s|%s|%s", si->ns_name, si->type, explicit);
+		return oio_make_service_key(si->ns_name, si->type, explicit);
 	grid_addrinfo_to_string(&si->addr, addr, sizeof(struct addr_info_s));
-	return g_strdup_printf("%s|%s|%s", si->ns_name, si->type, addr);
+	return oio_make_service_key(si->ns_name, si->type, addr);
 }
 
 void

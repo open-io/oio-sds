@@ -25,7 +25,7 @@ _lb_check_tokens (struct req_args_s *args)
 {
 	if (!validate_namespace(NS()))
 		return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Invalid NS");
-	if (POOL() && !validate_srvtype(POOL()))
+	if (TYPE() && !validate_srvtype(TYPE()))
 		return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Invalid POOL");
 	return NULL;
 }
@@ -33,73 +33,66 @@ _lb_check_tokens (struct req_args_s *args)
 // New handlers ----------------------------------------------------------------
 
 static GString *
-_lb_pack_and_free_srvinfo_tab (struct service_info_s **siv)
+_lb_pack_and_free_srvid_tab(const char **ids)
 {
 	GString *gstr = g_string_sized_new (512);
 	g_string_append_c(gstr, '[');
-	for (struct service_info_s **pp = siv; *pp ;pp++) {
-		if (siv != pp)
+	for (const char **pp = ids; *pp; pp++) {
+		if (pp != ids)
 			g_string_append_c(gstr, ',');
-		service_info_encode_json(gstr, *pp, FALSE);
+
+		gchar *straddr = NULL;
+		oio_parse_service_key(*pp, NULL, NULL, &straddr);
+		g_string_append_printf(gstr,
+				"{\"addr\":\"%s\",\"id\":\"%s\"}",
+				straddr, *pp);
+		g_free(straddr);
 	}
 	g_string_append_c(gstr, ']');
 	return gstr;
 }
 
 static enum http_rc_e
-_lb (struct req_args_s *args, struct grid_lb_iterator_s *iter)
+_lb(struct req_args_s *args, const char *srvtype)
 {
-	const char *tagk, *tagv, *cls, *sz;
-	gboolean _filter_tag (struct service_info_s *si, gpointer u) {
-		(void)u;
-		if (!tagk)
-			return TRUE;
-		if (!si || !si->tags)
-			return FALSE;
+	enum http_rc_e code;
+	const char *cls, *sz;
 
-		struct service_tag_s *tag = service_info_get_tag(si->tags, tagk);
-		if (!tag)
-			return FALSE;
-		if (!tagv) // No value specified, the presence is enough
-			return TRUE;
-
-		gchar tmp[128];
-		service_tag_to_string(tag, tmp, sizeof(tmp));
-		return 0 == strcmp(tmp, tagv);
-	}
-
-	if (!iter)
-		return _reply_system_error (args, NEWERROR (
-					CODE_SRVTYPE_NOTMANAGED, "Type not managed"));
-
-	tagk = OPT("tagk");
-	tagv = OPT("tagv");
 	cls = OPT("stgcls");
 	sz = OPT("size");
+	guint howmany = sz ? atoi(sz) : 1;
 
-	// Terribly configurable and poorly implemented LB
-	struct storage_class_s *stgcls = storage_class_init(&nsinfo, cls);
-	struct lb_next_opt_ext_s opt = {0};
-	opt.distance = 1;
-	opt.max = sz ? atoi(sz) : 1;
-	if (stgcls) opt.stgclass = stgcls;
-	if (tagk) opt.filter.hook = _filter_tag;
+	struct oio_lb_pool_s *pool = oio_lb_world__create_pool(lb_world, srvtype);
+	GString *targets = g_string_sized_new(64);
+	if (cls)
+		g_string_append_printf(targets, "%s-%s,", srvtype, cls);
+	g_string_append_printf(targets, "%s", srvtype);
+	GRID_DEBUG("Temporary pool [%s] will target [%s] %u times",
+			srvtype, targets->str, howmany);
+	for (; howmany > 0; howmany--)
+		oio_lb_world__add_pool_target(pool, targets->str);
+	g_string_free(targets, TRUE);
 
-	GError *err = NULL;
-	struct service_info_s **siv = NULL;
-	gboolean rc = grid_lb_iterator_next_set2(iter, &siv, &opt, &err);
-	if (stgcls)
-		storage_class_clean(stgcls);
-
-	if (!rc) {
-		service_info_cleanv(siv, FALSE);
-		g_prefix_error(&err, "Too constrained: ");
-		return _reply_system_error (args, err);
-	} else {
-		GString *gstr = _lb_pack_and_free_srvinfo_tab (siv);
-		service_info_cleanv (siv, FALSE);
-		return _reply_success_json (args, gstr);
+	GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
+	void _on_id(oio_location_t loc, const char *id)
+	{
+		(void)loc;
+		g_ptr_array_add(ids, g_strdup(id));
 	}
+	if (!oio_lb_pool__poll(pool, NULL, _on_id)) {
+		code = _reply_common_error(args,
+				NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
+					"found only %u services matching the criteria",
+					ids->len));
+	} else {
+		g_ptr_array_add(ids, NULL);
+		GString *gstr = _lb_pack_and_free_srvid_tab((const char**)ids->pdata);
+		code = _reply_success_json(args, gstr);
+	}
+
+	oio_lb_pool__destroy(pool);
+	g_ptr_array_free(ids, TRUE);
+	return code;
 }
 
 enum http_rc_e
@@ -109,5 +102,120 @@ action_lb_choose (struct req_args_s *args)
 	args->rp->no_access();
 	if (NULL != (err = _lb_check_tokens(args)))
 		return _reply_notfound_error (args, err);
-	return _lb (args, grid_lbpool_ensure_iterator(lbpool, POOL()));
+	return _lb(args, TYPE());
+}
+
+static oio_location_t *
+_json_to_locations(struct json_object *arr)
+{
+	if (!arr)
+		return NULL;
+	GArray *out = g_array_new(TRUE, TRUE, sizeof(oio_location_t));
+	int len = json_object_array_length(arr);
+	for (int i = 0; i < len; i++) {
+		oio_location_t loc = json_object_get_int64(
+				json_object_array_get_idx(arr, i));
+		g_array_append_val(out, loc);
+	}
+	return (oio_location_t*) g_array_free(out, FALSE);
+}
+
+static oio_location_t *
+_json_ids_to_locations(struct json_object *arr, oio_location_t *prev)
+{
+	if (!arr)
+		return prev;
+	int len = 0;
+	while (prev[len] != 0)
+		len++;
+	GArray *out = g_array_new(TRUE, TRUE, sizeof(oio_location_t));
+	g_array_append_vals(out, prev, len);
+	g_free(prev);
+	len = json_object_array_length(arr);
+	for (int i = 0; i < len; i++) {
+		const char *id = json_object_get_string(
+				json_object_array_get_idx(arr, i));
+		struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, id);
+		if (item) {
+			g_array_append_val(out, item->location);
+			g_free(item);
+		}
+	}
+	return (oio_location_t*) g_array_free(out, FALSE);
+}
+
+static enum http_rc_e
+_poll(struct req_args_s *args, struct json_object *body)
+{
+	enum http_rc_e code;
+	const char *policy = OPT("policy");
+
+	if (!body || !json_object_is_type(body, json_type_object))
+		return _reply_format_error(args, BADREQ("Expected: json object"));
+
+	struct json_object *javoid, *javoid_locs, *jknown, *jknown_locs;
+	struct oio_ext_json_mapping_s mapping[] = {
+		{"avoid",           &javoid,       json_type_array, 0},
+		{"avoid_locations", &javoid_locs,  json_type_array, 0},
+		{"known",           &jknown,       json_type_array, 0},
+		{"known_locations", &jknown_locs,  json_type_array, 0},
+		{NULL, NULL, 0, 0}
+	};
+	GError *err = oio_ext_extract_json(body, mapping);
+	if (err)
+		return _reply_common_error(args, err);
+
+	oio_location_t *avoid = _json_to_locations(javoid_locs);
+	oio_location_t *known = _json_to_locations(jknown_locs);
+	avoid = _json_ids_to_locations(javoid, avoid);
+	known = _json_ids_to_locations(jknown, known);
+
+	GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
+	void _on_id(oio_location_t loc, const char *id)
+	{
+		(void)loc;
+		g_ptr_array_add(ids, g_strdup(id));
+	}
+	if (!oio_lb__patch_with_pool(lb, policy, avoid, known, _on_id)) {
+		code = _reply_common_error(args,
+				NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
+					"found only %u services matching the criteria",
+					ids->len));
+	} else {
+		gboolean first = TRUE;
+		GString *out = g_string_new("[");
+		void _build_json(const char *id, gpointer unused)
+		{
+			(void)unused;
+			if (!first)
+				g_string_append_c(out, ',');
+			first = FALSE;
+			g_string_append_c(out, '"');
+			oio_str_gstring_append_json_string(out, id);
+			g_string_append_c(out, '"');
+		}
+		g_ptr_array_foreach(ids, (GFunc)_build_json, NULL);
+		g_string_append_c(out, ']');
+		g_ptr_array_free(ids, TRUE);
+		code = _reply_json(args, CODE_FINAL_OK, "OK", out);
+	}
+
+	g_free(avoid);
+	g_free(known);
+	return code;
+}
+
+enum http_rc_e
+action_lb_poll(struct req_args_s *args)
+{
+	GError *err = NULL;
+	args->rp->no_access();
+	if (!validate_namespace(NS()))
+		err = NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Invalid NS");
+	else if (!OPT("policy"))
+		err = BADREQ("Missing policy parameter");
+
+	if (err)
+		return _reply_notfound_error(args, err);
+	return rest_action(args, _poll);
 }

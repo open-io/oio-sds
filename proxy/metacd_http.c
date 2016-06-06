@@ -52,11 +52,12 @@ static guint dir_low_max = PROXYD_DEFAULT_MAX_SERVICES;
 static guint dir_high_ttl = PROXYD_DEFAULT_TTL_CSM0 / G_TIME_SPAN_SECOND;
 static guint dir_high_max = PROXYD_DEFAULT_MAX_CSM0;
 
-gchar *nsname = NULL;
+gchar *ns_name = NULL;
 gboolean flag_cache_enabled = TRUE;
 gboolean flag_local_scores = FALSE;
 
-struct grid_lbpool_s *lbpool = NULL;
+struct oio_lb_world_s *lb_world = NULL;
+struct oio_lb_s *lb = NULL;
 struct hc_resolver_s *resolver = NULL;
 
 GRWLock csurl_rwlock = {0};
@@ -414,21 +415,22 @@ _reload_srvtype(const char *type)
 
 	/* reload the LB */
 	if (NULL != list) {
-		GSList *l = list;
-		gboolean provide(struct service_info_s **p_si) {
-			if (!l) return FALSE;
-			*p_si = l->data;
-			l->data = NULL;
-			l = l->next;
-			return TRUE;
-		}
-		grid_lbpool_reload(lbpool, type, provide);
-		g_slist_free(list);
+		oio_lb_world__feed_service_info_list(lb_world, list);
+
+		struct service_update_policies_s *pols = service_update_policies_create();
+		gchar *pols_cfg = gridcluster_get_service_update_policy(&nsinfo);
+		service_update_reconfigure(pols, pols_cfg);
+		g_free(pols_cfg);
+		oio_lb__force_pool(lb,
+				oio_lb_pool__from_service_policy(lb_world, type, pols));
+		service_update_policies_destroy(pols);
+
+		g_slist_free_full(list, (GDestroyNotify)service_info_clean);
 	}
 }
 
 static void
-_task_reload_lbpool (gpointer p UNUSED)
+_task_reload_lb(gpointer p UNUSED)
 {
 	ADAPTIVE_PERIOD_DECLARE();
 
@@ -448,7 +450,7 @@ _task_reload_lbpool (gpointer p UNUSED)
 		g_free (tt);
 	}
 
-	grid_lbpool_reconfigure(lbpool, &nsinfo);
+	oio_lb_world__reload_storage_policies(lb_world, lb, &nsinfo);
 }
 
 static void
@@ -459,7 +461,7 @@ _task_reload_csurl (gpointer p UNUSED)
 	if (ADAPTIVE_PERIOD_SKIP())
 		return;
 
-	gchar *s = oio_cfg_get_value(nsname, OIO_CFG_CONSCIENCE);
+	gchar *s = oio_cfg_get_value(ns_name, OIO_CFG_CONSCIENCE);
 	STRING_STACKIFY(s);
 	if (s) {
 		ADAPTIVE_PERIOD_ONSUCCESS(csurl_refresh_delay);
@@ -494,7 +496,7 @@ _task_reload_nsinfo (gpointer p UNUSED)
 	GError *err = conscience_remote_get_namespace (cs, &ni);
 	if (err) {
 		GRID_WARN ("NSINFO reload error [%s] from [%s]: (%d) %s",
-			nsname, cs, err->code, err->message);
+			ns_name, cs, err->code, err->message);
 		g_clear_error (&err);
 	} else {
 		ADAPTIVE_PERIOD_ONSUCCESS(nsinfo_refresh_delay);
@@ -520,13 +522,13 @@ _task_reload_srvtypes (gpointer p UNUSED)
 	GError *err = conscience_remote_get_types (cs, &list);
 	if (err != NULL) {
 		GRID_WARN ("SRVTYPES reload error [%s] from [%s] : (%d) %s",
-			nsname, cs, err->code, err->message);
+			ns_name, cs, err->code, err->message);
 		g_clear_error (&err);
 		return;
 	} else {
 		ADAPTIVE_PERIOD_ONSUCCESS(srvtypes_refresh_delay);
 		GRID_DEBUG("SRVTYPES reloaded %u for [%s]",
-				g_slist_length(list), nsname);
+				g_slist_length(list), ns_name);
 	}
 
 	gchar **newset = (gchar **) metautils_list_to_array (list);
@@ -704,9 +706,12 @@ grid_main_specific_fini (void)
 		path_parser_clean (path_parser);
 		path_parser = NULL;
 	}
-	if (lbpool) {
-		grid_lbpool_destroy (lbpool);
-		lbpool = NULL;
+	if (lb) {
+		oio_lb__clear(&lb);
+	}
+	if (lb_world) {
+		oio_lb_world__destroy(lb_world);
+		lb_world = NULL;
 	}
 	if (resolver) {
 		hc_resolver_destroy (resolver);
@@ -745,7 +750,7 @@ grid_main_specific_fini (void)
 		srv_registered = NULL;
 	}
 	namespace_info_clear (&nsinfo);
-	oio_str_clean (&nsname);
+	oio_str_clean (&ns_name);
 	g_rw_lock_clear(&nsinfo_rwlock);
 	g_rw_lock_clear(&reg_rwlock);
 	g_rw_lock_clear(&push_rwlock);
@@ -785,6 +790,7 @@ configure_request_handlers (void)
 
 	// Load Balancing
 	SET("/$NS/lb/choose/#GET", action_lb_choose);
+	SET("/$NS/lb/poll/#POST", action_lb_poll);
 
 	// Local services
 	SET ("/$NS/local/list/#GET", action_local_list);
@@ -832,6 +838,7 @@ configure_request_handlers (void)
     SET("/$NS/content/link/#POST", action_content_link);
     SET("/$NS/content/delete/#POST", action_content_delete);
     SET("/$NS/content/show/#GET", action_content_show);
+    SET("/$NS/content/locate/#GET", action_content_show);
     SET("/$NS/content/prepare/#POST", action_content_prepare);
     SET("/$NS/content/get_properties/#POST", action_content_prop_get);
     SET("/$NS/content/set_properties/#POST", action_content_prop_set);
@@ -879,7 +886,7 @@ grid_main_configure (int argc, char **argv)
 	g_rw_lock_init (&wanted_rwlock);
 	g_rw_lock_init (&master_rwlock);
 
-	nsname = g_strdup (cfg_namespace);
+	ns_name = g_strdup (cfg_namespace);
 	g_strlcpy (nsinfo.name, cfg_namespace, sizeof (nsinfo.name));
 	nsinfo.chunk_size = 1;
 
@@ -904,7 +911,8 @@ grid_main_configure (int argc, char **argv)
 			gq_count_all, 0, gq_count_unexpected, 0,
 			gq_time_all, 0, gq_time_unexpected, 0);
 
-	lbpool = grid_lbpool_create (nsname);
+	lb_world = oio_lb_local__create_world();
+	lb = oio_lb__create();
 	srv_down = lru_tree_create((GCompareFunc)g_strcmp0, g_free, NULL, LTO_NOATIME);
 	srv_known = lru_tree_create((GCompareFunc)g_strcmp0, g_free, NULL, LTO_NOATIME);
 	srv_master = lru_tree_create((GCompareFunc)g_strcmp0, g_free, g_free, LTO_NOATIME);
@@ -940,7 +948,7 @@ grid_main_configure (int argc, char **argv)
 	downstream_gtq = grid_task_queue_create ("downstream");
 
 	grid_task_queue_register (downstream_gtq, (guint) 1,
-		(GDestroyNotify) _task_reload_lbpool, NULL, NULL);
+		(GDestroyNotify) _task_reload_lb, NULL, NULL);
 
 	// Now prepare a queue for administrative tasks, such as cache expiration,
 	// configuration reloadings, etc.

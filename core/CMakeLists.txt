@@ -13,14 +13,14 @@ link_directories(
 		${CURL_LIBRARY_DIRS}
 		${JSONC_LIBRARY_DIRS})
 
-add_library(oiocore SHARED url.c cfg.c str.c ext.c log.c)
+add_library(oiocore SHARED url.c cfg.c str.c ext.c log.c lb.c)
 target_link_libraries(oiocore
 		${JSONC_LIBRARIES} ${GLIB2_LIBRARIES})
 set_target_properties(oiocore PROPERTIES
 		PUBLIC_HEADER "oio_core.h"
 		SOVERSION ${ABI_VERSION})
 
-add_library(oiosds SHARED sds.c proxy.c headers.c http_put.c dir.c cs.c lb.c)
+add_library(oiosds SHARED sds.c proxy.c headers.c http_put.c dir.c cs.c)
 target_link_libraries(oiosds oiocore
 		${GLIB2_LIBRARIES} ${CURL_LIBRARIES} ${JSONC_LIBRARIES})
 set_target_properties(oiosds PROPERTIES

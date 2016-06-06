@@ -54,12 +54,14 @@ guint oio_lb_pool__poll (struct oio_lb_pool_s *self,
 /* Like oio_lb_pool__poll(), but provide an array of known locations. */
 guint oio_lb_pool__patch(struct oio_lb_pool_s *self,
 		const oio_location_t *avoids,
-		oio_location_t *known,
+		const oio_location_t *known,
 		oio_lb_on_id_f on_id);
 
-/* Tell is an ID is in the pool and available */
-gboolean oio_lb_pool__is_id_available(struct oio_lb_pool_s *self,
+/* Get an item from its ID. Returns NULL if the ID is isn't known.
+ * The result must be freed with g_free(). */
+struct oio_lb_item_s *oio_lb_pool__get_item(struct oio_lb_pool_s *self,
 		const char *id);
+
 /* -------------------------------------------------------------------------- */
 
 /* A world is something you feed with services and that will arrange them for
@@ -81,7 +83,10 @@ void oio_lb_world__debug (struct oio_lb_world_s *self);
 guint oio_lb_world__count_slots (struct oio_lb_world_s *self);
 guint oio_lb_world__count_items (struct oio_lb_world_s *self);
 guint oio_lb_world__count_slot_items(struct oio_lb_world_s *self, const char *name);
-gboolean oio_lb_world__is_id_available(struct oio_lb_world_s *self, const char *id);
+
+/** Get an item from the world. The result must be freed with g_free(). */
+struct oio_lb_item_s *oio_lb_world__get_item(struct oio_lb_world_s *self,
+		const char *id);
 
 /* Ensure the slot exists in the  given world. */
 void oio_lb_world__create_slot (struct oio_lb_world_s *self, const char *name);
@@ -122,11 +127,12 @@ guint oio_lb__poll_pool(struct oio_lb_s *lb, const char *name,
 
 /** Calls oio_lb_pool__patch() on the pool `name`. Thread-safe. */
 guint oio_lb__patch_with_pool(struct oio_lb_s *lb, const char *name,
-		const oio_location_t *avoids, oio_location_t *known,
+		const oio_location_t *avoids, const oio_location_t *known,
 		oio_lb_on_id_f on_id);
 
-/** Checks if an ID is available in a pool */
-gboolean oio_lb__is_id_available_in_pool(struct oio_lb_s *lb,
+/** Get an item from a pool. Returns NULL if ID isn't known.
+ *  The result must be freed with g_free(). */
+struct oio_lb_item_s *oio_lb__get_item_from_pool(struct oio_lb_s *lb,
 		const char *name, const char *id);
 
 #endif /*OIO_SDS__core__oiolb_h*/

@@ -164,6 +164,10 @@ extern int sqlite_service_main(int argc, char **argv,
 
 void sqlx_service_set_custom_options (struct grid_main_option_s *options);
 
+GError* sqlx_reload_lb_service_types(struct oio_lb_world_s *lbw,
+		GSList *list_srvtypes);
+
+// FIXME: this is only used in meta1
 /** Reloads the optional (grid_lbpool_s*). Exposed to let the
  * server enable it in its post-config hook. This is destined to
  * be registered in a task queue. */

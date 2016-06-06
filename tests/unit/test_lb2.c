@@ -101,7 +101,7 @@ _test_uniform_repartition(int services, int slots, int targets)
 	int targets_per_slot[slots];
 	int actual_svc_per_slot[slots];
 	int svc_per_slot = (services-1) / slots + 1;
-	int shots = 20000;
+	int shots = 10000;
 
 	GRID_DEBUG("Creating world with %d slots, %d services (%d services per slot)",
 			slots, services, svc_per_slot);

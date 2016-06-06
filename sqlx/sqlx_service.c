@@ -888,6 +888,62 @@ _task_reconfigure_events (gpointer p)
 	}
 }
 
+GError*
+sqlx_reload_lb_service_types(struct oio_lb_world_s *lbw,
+		GSList *list_srvtypes)
+{
+	GError *err = NULL;
+	struct service_update_policies_s *pols = service_update_policies_create();
+	gchar *pols_cfg = gridcluster_get_service_update_policy(SRV.nsinfo);
+	service_update_reconfigure(pols, pols_cfg);
+	g_free(pols_cfg);
+
+	gboolean _reload_srvtype(const gchar *ns, const gchar *srvtype) {
+		GSList *list_srv = NULL;
+		err = conscience_get_services(ns, srvtype, FALSE, &list_srv);
+		if (err) {
+			GRID_WARN("Gridagent/conscience error: Failed to list the services"
+					" of type [%s]: code=%d %s", srvtype, err->code,
+					err->message);
+			g_clear_error(&err);
+			return FALSE;
+		}
+
+		oio_lb_world__feed_service_info_list(lbw, list_srv);
+		oio_lb__force_pool(SRV.lb,
+				oio_lb_pool__from_service_policy(lbw, srvtype, pols));
+
+		g_slist_free_full(list_srv, (GDestroyNotify)service_info_clean);
+		return TRUE;
+	}
+
+	guint errors = 0;
+	for (GSList *l = list_srvtypes; l; l = l->next) {
+		if (!l->data)
+			continue;
+		if (!_reload_srvtype(SRV.ns_name, l->data))
+			++errors;
+	}
+
+	service_update_policies_destroy(pols);
+	return err;
+}
+
+static GError*
+_reload_lb_world(struct oio_lb_world_s *lbw)
+{
+	GSList *list_srvtypes = NULL;
+	GError *err = conscience_get_types(SRV.ns_name, &list_srvtypes);
+	if (err)
+		g_prefix_error(&err, "LB pool reload error: ");
+	else
+		err = sqlx_reload_lb_service_types(lbw, list_srvtypes);
+	g_slist_free_full(list_srvtypes, g_free);
+
+	oio_lb_world__reload_storage_policies(lbw, SRV.lb, SRV.nsinfo);
+	return err;
+}
+
 void
 sqlx_task_reload_lb (struct sqlx_service_s *ss)
 {
@@ -907,153 +963,6 @@ sqlx_task_reload_lb (struct sqlx_service_s *ss)
 		ADAPTIVE_PERIOD_ONSUCCESS(10);
 	}
 	oio_lb_world__debug(ss->lb_world);
-}
-
-static void
-oio_lb_world__feed_service_info_list(struct oio_lb_world_s *lbw,
-		GSList *services)
-{
-	for (GSList *l = services; l; l = l->next) {
-		char slot_name[128] = {0};
-		struct service_info_s *srv = l->data;
-		/* Allocate item on the stack, it will be copied later */
-		struct oio_lb_item_s *item = g_alloca(sizeof(struct oio_lb_item_s)+128);
-		service_info_to_lb_item(srv, item);
-
-		/* Insert the service in a slot named after its storage class */
-		g_snprintf(slot_name, sizeof(slot_name), "%s-%s",
-				srv->type, service_info_get_stgclass(srv, STORAGE_CLASS_NONE));
-		oio_lb_world__create_slot(lbw, slot_name);
-		oio_lb_world__feed_slot(lbw, slot_name, item);
-
-		// TODO: insert the service in slots named after its tags
-
-		/* Insert the service in the main pool */
-		g_snprintf(slot_name, sizeof(slot_name), "%s", srv->type);
-		oio_lb_world__create_slot(lbw, slot_name);
-		oio_lb_world__feed_slot(lbw, slot_name, item);
-	}
-}
-
-static struct oio_lb_pool_s *
-oio_lb_pool__from_service_policy(struct oio_lb_world_s *lbw,
-		const gchar *srvtype, struct service_update_policies_s *pols)
-{
-	/* Create a pool with as many targets as required
-	** by the service update policy */
-	struct oio_lb_pool_s *pool = oio_lb_world__create_pool(lbw, srvtype);
-	GString *targets = g_string_sized_new(64);
-	// TODO: maybe add a target with a tag (service_update_tagfilter())
-	g_string_append_printf(targets, "%s-%s", srvtype, STORAGE_CLASS_NONE);
-	g_string_append_printf(targets, ",%s", srvtype);
-
-	guint howmany = service_howmany_replicas(pols, srvtype);
-	GRID_DEBUG("pool [%s] will target [%s] %u times",
-			srvtype, targets->str, howmany);
-	for (; howmany > 0; howmany--)
-		oio_lb_world__add_pool_target(pool, targets->str);
-
-	g_string_free(targets, TRUE);
-	return pool;
-}
-
-static struct oio_lb_pool_s *
-oio_lb_pool__from_storage_policy(struct oio_lb_world_s *lbw,
-		const struct storage_policy_s *stgpol)
-{
-	const struct storage_class_s *stgclass = \
-			storage_policy_get_storage_class(stgpol);
-	const char *stgpol_name = storage_policy_get_name(stgpol);
-
-	/* Build the list of slots */
-	GString *targets = g_string_sized_new(64);
-	g_string_append_printf(targets, NAME_SRVTYPE_RAWX"-%s",
-			storage_class_get_name(stgclass));
-	const GSList *fallbacks = storage_class_get_fallbacks(stgclass);
-	for (const GSList *l = fallbacks; l; l = l->next)
-		g_string_append_printf(targets, ","NAME_SRVTYPE_RAWX"-%s",
-				(const char*)l->data);
-
-	/* Build a pool for the storage policy */
-	struct oio_lb_pool_s *pool = oio_lb_world__create_pool(lbw,
-			stgpol_name);
-
-	/* Add the list of slots as target for the pool */
-	gint64 howmany = storage_policy_get_nb_chunks(stgpol);
-	GRID_DEBUG("pool [%s] will target [%s] %"G_GINT64_FORMAT" times",
-			stgpol_name, targets->str, howmany);
-	for (; howmany > 0; howmany--)
-		oio_lb_world__add_pool_target(pool, targets->str);
-
-	g_string_free(targets, TRUE);
-	return pool;
-}
-
-static GError*
-_reload_lb_world(struct oio_lb_world_s *lbw)
-{
-	struct service_update_policies_s *pols = service_update_policies_create();
-	// FIXME: protect nsinfo
-	gchar *pols_cfg = gridcluster_get_service_update_policy(SRV.nsinfo);
-	service_update_reconfigure(pols, pols_cfg);
-	g_free(pols_cfg);
-
-	gboolean _reload_srvtype(const gchar *ns, const gchar *srvtype) {
-		GSList *list_srv = NULL;
-		GError *err = conscience_get_services(ns, srvtype, FALSE, &list_srv);
-		if (err) {
-			GRID_WARN("Gridagent/conscience error: Failed to list the services"
-					" of type [%s]: code=%d %s", srvtype, err->code,
-					err->message);
-			g_clear_error(&err);
-			return FALSE;
-		}
-
-		oio_lb_world__feed_service_info_list(lbw, list_srv);
-		oio_lb__force_pool(SRV.lb,
-				oio_lb_pool__from_service_policy(lbw, srvtype, pols));
-
-		g_slist_free(list_srv);
-		return TRUE;
-	}
-
-	GSList *list_srvtypes = NULL;
-	GError *err = conscience_get_types(SRV.ns_name, &list_srvtypes);
-	if (err)
-		g_prefix_error(&err, "LB pool reload error: ");
-	else {
-		guint errors = 0;
-		for (GSList *l = list_srvtypes; l; l = l->next) {
-			if (!l->data)
-				continue;
-			if (!_reload_srvtype(SRV.ns_name, l->data))
-				++errors;
-		}
-
-		GRID_DEBUG("Reloaded %u service types, with %u errors",
-				g_slist_length(list_srvtypes), errors);
-	}
-
-	g_slist_free_full(list_srvtypes, g_free);
-
-	/* For the special case of rawx services,
-	** add a pool for each storage policy */
-	void _make_pools(gpointer key, gpointer val, gpointer udata)
-	{
-		(void)udata;
-		(void)val;
-		const char *stgpol_name = key;
-		struct storage_policy_s *stgpol = storage_policy_init(SRV.nsinfo,
-				stgpol_name);
-		struct oio_lb_pool_s *pool = \
-				oio_lb_pool__from_storage_policy(SRV.lb_world, stgpol);
-		oio_lb__force_pool(SRV.lb, pool);
-		storage_policy_clean(stgpol);
-	}
-
-	g_hash_table_foreach(SRV.nsinfo->storage_policy, _make_pools, NULL);
-
-	return err;
 }
 
 /* Specific requests handlers ----------------------------------------------- */

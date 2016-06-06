@@ -44,7 +44,7 @@ proxy_get_csurl (void)
 gboolean
 validate_namespace (const char * ns)
 {
-	return 0 == strcmp (ns, nsname);
+	return 0 == strcmp (ns, ns_name);
 }
 
 gboolean

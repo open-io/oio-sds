@@ -103,6 +103,12 @@ GError* service_info_load_json(const gchar *encoded,
 void service_info_encode_json(GString *out, const struct service_info_s *si,
 		gboolean full);
 
+/** Build a key for a service from its type and ID */
+gchar * oio_make_service_key(const char *ns_name, const char *type, const char *id);
+
+/** Extract namespace, type and ID from a service key */
+void oio_parse_service_key(const char *key, gchar **ns, gchar **type, gchar **id);
+
 gchar * service_info_key (const struct service_info_s *si);
 
 /** Fill a preallocated LB item from a service description */

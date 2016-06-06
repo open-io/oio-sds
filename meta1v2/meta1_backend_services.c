@@ -542,8 +542,10 @@ __get_services_up(struct meta1_backend_s *m1, struct meta1_service_url_s **src)
 			char key[128];
 			g_snprintf(key, sizeof(key), "%s|%s|%s",
 					m1->ns_name, ct.baretype, (*pe)->host);
-			one_is_up = oio_lb__is_id_available_in_pool(m1->lb,
+			struct oio_lb_item_s *item = oio_lb__get_item_from_pool(m1->lb,
 					ct.baretype, key);
+			one_is_up = item? item->weight > 0 : FALSE;
+			g_free(item);
 			compound_type_clean(&ct);
 		}
 		if (one_is_up) {

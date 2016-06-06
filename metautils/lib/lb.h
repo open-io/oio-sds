@@ -152,4 +152,29 @@ struct service_info_s* grid_lbpool_get_service_from_url(
 /*! flush all the sets registered in the given pool */
 void grid_lbpool_flush(struct grid_lbpool_s *glp);
 
+
+/* -- New style load balancing -------------------------------------------- */
+
+/** Insert or update a list of services in a LB world */
+void oio_lb_world__feed_service_info_list(struct oio_lb_world_s *lbw,
+		GSList *services);
+
+/** Create a service pool for each declared storage policy
+ * @see oio_lb_pool__from_storage_policy */
+void oio_lb_world__reload_storage_policies(struct oio_lb_world_s *lbw,
+		struct oio_lb_s *lb, struct namespace_info_s *nsinfo);
+
+/** Create a service pool returning sets of services satisfying
+ * the specified service update policy */
+struct oio_lb_pool_s *oio_lb_pool__from_service_policy(
+		struct oio_lb_world_s *lbw,
+		const gchar *srvtype,
+		struct service_update_policies_s *pols);
+
+/** Create a service pool returning sets of services satisfying
+ * the specified storage policy */
+struct oio_lb_pool_s *oio_lb_pool__from_storage_policy(
+		struct oio_lb_world_s *lbw,
+		const struct storage_policy_s *stgpol);
+
 #endif /*OIO_SDS__metautils__lib__lb_h*/
