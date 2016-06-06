@@ -39,6 +39,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define ATTR_NAME_CONTENT_MIMETYPE    "content.mime_type"
 
 # define ATTR_NAME_METACHUNK_SIZE "metachunk.size"
+# define ATTR_NAME_METACHUNK_HASH "metachunk.hash"
 
 # define ATTR_NAME_CHUNK_ID   "chunk.id"
 # define ATTR_NAME_CHUNK_SIZE "chunk.size"
@@ -89,6 +90,7 @@ typedef struct chunk_textinfo_s
 	gchar *content_mime_type;
 
 	gchar *metachunk_size;
+	gchar *metachunk_hash;
 
 	gchar *chunk_id;
 	gchar *chunk_size;

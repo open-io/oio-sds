@@ -1,6 +1,4 @@
-import string
 import hashlib
-import random
 
 import os
 
@@ -9,7 +7,8 @@ from oio.blob.auditor import BlobAuditorWorker
 from oio.common import exceptions as exc
 from oio.container.client import ContainerClient
 from oio.blob.client import BlobClient
-from tests.utils import BaseTestCase
+from oio.blob.utils import chunk_xattr_keys
+from tests.utils import BaseTestCase, random_str, random_id
 
 
 class TestContent(object):
@@ -28,10 +27,6 @@ class TestChunk(object):
         self.md5 = md5
 
 
-def rand_generator(dictionary, n):
-    return ''.join(random.choice(dictionary) for _ in range(n))
-
-
 class TestBlobAuditorFunctional(BaseTestCase):
     def setUp(self):
         super(TestBlobAuditorFunctional, self).setUp()
@@ -39,10 +34,6 @@ class TestBlobAuditorFunctional(BaseTestCase):
         self.account = self.conf['account']
 
         self.test_dir = self.conf['sds_path']
-
-        self.chars = string.ascii_lowercase + string.ascii_uppercase +\
-            string.digits
-        self.chars_id = string.digits + 'ABCDEF'
 
         rawx_num, rawx_path, rawx_addr = self.get_service_url('rawx')
         self.rawx = 'http://' + rawx_addr
@@ -54,18 +45,18 @@ class TestBlobAuditorFunctional(BaseTestCase):
         self.container_c = ContainerClient(conf)
         self.blob_c = BlobClient()
 
-        self.ref = rand_generator(self.chars, 8)
+        self.ref = random_str(8)
 
         self.container_c.container_create(self.account, self.ref)
 
-        self.url_rand = rand_generator(self.chars_id, 64)
+        self.url_rand = random_id(64)
 
-        self.data = rand_generator(self.chars, 1280)
+        self.data = random_str(1280)
         self.h.update(self.data)
         self.hash_rand = self.h.hexdigest().lower()
 
         self.content = TestContent(
-            rand_generator(self.chars, 6), len(self.data), self.url_rand, 1)
+            random_str(6), len(self.data), self.url_rand, 1)
 
         self.content.id_container = cid_from_name(
             self.account, self.ref).upper()
@@ -77,12 +68,9 @@ class TestBlobAuditorFunctional(BaseTestCase):
                             "size": self.chunk.size,
                             "url":  self.chunk_url}
 
-        chunk_meta = {'content_size': self.content.size,
-                      'content_chunksnb': self.content.nb_chunks,
-                      'content_path': self.content.path,
+        chunk_meta = {'content_path': self.content.path,
                       'content_cid': self.content.id_container,
-                      'content_mimetype': 'application/octet-stream',
-                      'content_chunkmethod': 'plain',
+                      'content_chunkmethod': 'plain/nb_copy=3',
                       'content_policy': 'TESTPOLICY',
                       'content_id': '0000',
                       'content_version': 1,
@@ -135,7 +123,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
     def test_chunk_corrupted(self):
         self.init_content()
         with open(self.chunk_path, "w") as f:
-            f.write(rand_generator(self.chars, 1280))
+            f.write(random_str(1280))
 
         self.assertRaises(exc.CorruptedChunk, self.auditor.chunk_audit,
                           self.chunk_path)
@@ -143,49 +131,41 @@ class TestBlobAuditorFunctional(BaseTestCase):
     def test_chunk_bad_size(self):
         self.init_content()
         with open(self.chunk_path, "w") as f:
-            f.write(rand_generator(self.chars, 320))
-
-        self.assertRaises(exc.FaultyChunk, self.auditor.chunk_audit,
-                          self.chunk_path)
-
-    def test_xattr_bad_content_nbchunk(self):
-        self.init_content()
-        xattr.setxattr(self.chunk_path, 'user.grid.content.nbchunk', '42')
+            f.write(random_str(320))
 
         self.assertRaises(exc.FaultyChunk, self.auditor.chunk_audit,
                           self.chunk_path)
 
     def test_xattr_bad_chunk_size(self):
         self.init_content()
-        xattr.setxattr(self.chunk_path, 'user.grid.chunk.size', '-1')
+        xattr.setxattr(
+            self.chunk_path, 'user.' + chunk_xattr_keys['chunk_size'], '-1')
 
         self.assertRaises(exc.FaultyChunk, self.auditor.chunk_audit,
                           self.chunk_path)
 
     def test_xattr_bad_chunk_hash(self):
         self.init_content()
-        xattr.setxattr(self.chunk_path, 'user.grid.chunk.hash', 'WRONG_HASH')
-
+        xattr.setxattr(
+            self.chunk_path, 'user.' + chunk_xattr_keys['chunk_hash'],
+            'WRONG_HASH')
         self.assertRaises(exc.CorruptedChunk, self.auditor.chunk_audit,
-                          self.chunk_path)
-
-    def test_xattr_bad_content_size(self):
-        self.init_content()
-        xattr.setxattr(self.chunk_path, 'user.grid.content.size', '-1')
-
-        self.assertRaises(exc.FaultyChunk, self.auditor.chunk_audit,
                           self.chunk_path)
 
     def test_xattr_bad_content_path(self):
         self.init_content()
-        xattr.setxattr(self.chunk_path, 'user.grid.content.path', 'WRONG_PATH')
+        xattr.setxattr(
+            self.chunk_path, 'user.' + chunk_xattr_keys['content_path'],
+            'WRONG_PATH')
 
         self.assertRaises(exc.OrphanChunk, self.auditor.chunk_audit,
                           self.chunk_path)
 
     def test_xattr_bad_chunk_id(self):
         self.init_content()
-        xattr.setxattr(self.chunk_path, 'user.grid.chunk.id', 'WRONG_ID')
+        xattr.setxattr(
+            self.chunk_path, 'user.' + chunk_xattr_keys['chunk_id'],
+            'WRONG_ID')
 
         self.assertRaises(exc.OrphanChunk, self.auditor.chunk_audit,
                           self.chunk_path)
@@ -193,7 +173,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
     def test_xattr_bad_content_container(self):
         self.init_content()
         xattr.setxattr(
-            self.chunk_path, 'user.grid.content.container',
+            self.chunk_path, 'user.' + chunk_xattr_keys['content_cid'],
             self.bad_container_id)
         self.assertRaises(exc.OrphanChunk, self.auditor.chunk_audit,
                           self.chunk_path)
@@ -202,6 +182,9 @@ class TestBlobAuditorFunctional(BaseTestCase):
         self.init_content()
         xattr.setxattr(self.chunk_path, 'user.grid.chunk.position', '42')
 
+        xattr.setxattr(
+            self.chunk_path, 'user.' + chunk_xattr_keys['chunk_pos'],
+            '42')
         self.assertRaises(exc.FaultyChunk, self.auditor.chunk_audit,
                           self.chunk_path)
 
@@ -233,13 +216,6 @@ class TestBlobAuditorFunctional(BaseTestCase):
 
     def test_chunk_bad_url(self):
         self.chunk_proxy['url'] = '%s/WRONG_ID' % self.rawx
-        self.init_content()
-
-        self.assertRaises(exc.OrphanChunk, self.auditor.chunk_audit,
-                          self.chunk_path)
-
-    def test_content_bad_path(self):
-        self.content.path = 'BAD_PATH'
         self.init_content()
 
         self.assertRaises(exc.OrphanChunk, self.auditor.chunk_audit,

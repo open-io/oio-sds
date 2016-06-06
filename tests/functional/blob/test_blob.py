@@ -18,6 +18,7 @@ def random_buffer(dictionary, n):
     return ''.join(t)[:n]
 
 
+# TODO we should the content of events sent by the rawx
 class TestBlobFunctional(BaseTestCase):
 
     def chunkid(self):
@@ -34,6 +35,7 @@ class TestBlobFunctional(BaseTestCase):
             'x-oio-chunk-meta-container-id': '1'*64,
             'x-oio-chunk-meta-chunk-id': name,
             'x-oio-chunk-meta-chunk-size': len(data),
+            'x-oio-chunk-meta-chunk-hash': md5(data).hexdigest().upper(),
             'x-oio-chunk-meta-chunk-pos': 0,
         }
 
@@ -77,8 +79,7 @@ class TestBlobFunctional(BaseTestCase):
         if method == 'PUT':
             del headers['transfer-encoding']
         if trailers:
-            for k in trailers:
-                del headers['Trailer']
+            del headers['Trailer']
 
         resp = conn.getresponse()
         body = resp.read()
@@ -90,9 +91,6 @@ class TestBlobFunctional(BaseTestCase):
         chunkdata = random_buffer(string.printable, length)
         chunkurl = self._rawx_url(chunkid)
         chunkpath = self._chunk_path(chunkid)
-        h = md5()
-        h.update(chunkdata)
-        chunkhash = h.hexdigest().upper()
         headers = self._chunk_attr(chunkid, chunkdata)
         if remove_headers:
             for h in remove_headers:
@@ -100,8 +98,11 @@ class TestBlobFunctional(BaseTestCase):
 
         # we do not really care about the actual value
         metachunk_size = 9 * length
+        # TODO take random legit value
+        metachunk_hash = md5().hexdigest()
         # TODO should also include meta-chunk-hash
-        trailers = {'x-oio-chunk-meta-metachunk-size': metachunk_size}
+        trailers = {'x-oio-chunk-meta-metachunk-size': metachunk_size,
+                    'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
 
         self._check_not_present(chunkurl)
 
@@ -127,6 +128,7 @@ class TestBlobFunctional(BaseTestCase):
         self.assertEqual(resp.status, 200)
         self.assertEqual(body, chunkdata)
         headers['x-oio-chunk-meta-metachunk-size'] = metachunk_size
+        headers['x-oio-chunk-meta-metachunk-hash'] = metachunk_hash.upper()
         for k, v in headers.items():
             self.assertEqual(resp.getheader(k), str(v))
 

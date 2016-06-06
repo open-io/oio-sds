@@ -97,7 +97,6 @@ class TestDupContent(BaseTestCase):
             for chunk in chunks_at_pos:
                 meta, stream = self.blob_client.chunk_get(chunk.url)
                 self.assertEqual(md5_stream(stream), chunk_hash)
-                self.assertEqual(meta['content_size'], str(len(data)))
                 self.assertEqual(meta['content_path'], "titi")
                 self.assertEqual(meta['content_cid'], self.container_id)
                 self.assertEqual(meta['content_id'], meta['content_id'])

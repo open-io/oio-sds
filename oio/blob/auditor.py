@@ -185,14 +185,6 @@ class BlobAuditorWorker(object):
                 if chunk_data['pos'] != meta['chunk_pos']:
                     raise exc.FaultyChunk('Invalid chunk position found')
 
-                # Check content data
-                if content_attr['length'] != meta['content_size']:
-                    raise exc.FaultyChunk('Invalid content size found')
-
-                if len(metachunks) != int(meta['content_chunksnb']):
-                    self.logger.warn('Invalid number of chunks found')
-                    raise exc.FaultyChunk('Invalid number of chunks found')
-
             except exc.NotFound:
                 raise exc.OrphanChunk('Chunk not found in container')
 

@@ -128,8 +128,8 @@ class BlobRebuilderWorker(object):
 
     def dryrun_chunk_rebuild(self, container_id, content_id, chunk_id):
         self.logger.info("[dryrun] Rebuilding "
-                         "container %s, content %s, chunk %s"
-                         % (container_id, content_id, chunk_id))
+                         "container %s, content %s, chunk %s",
+                         container_id, content_id, chunk_id)
         self.passes += 1
 
     def safe_chunk_rebuild(self, container_id, content_id, chunk_id):
@@ -143,8 +143,8 @@ class BlobRebuilderWorker(object):
         self.passes += 1
 
     def chunk_rebuild(self, container_id, content_id, chunk_id):
-        self.logger.info('Rebuilding (container %s, content %s, chunk %s)'
-                         % (container_id, content_id, chunk_id))
+        self.logger.info('Rebuilding (container %s, content %s, chunk %s)',
+                         container_id, content_id, chunk_id)
 
         try:
             content = self.content_factory.get(container_id, content_id)

@@ -257,6 +257,7 @@ chunk_info_fields__glib2apr (apr_pool_t *pool, struct chunk_textinfo_s *cti)
 	REPLACE_FIELD(content_mime_type);
 
 	REPLACE_FIELD(metachunk_size);
+	REPLACE_FIELD(metachunk_hash);
 
 	REPLACE_FIELD(chunk_id);
 	REPLACE_FIELD(chunk_size);
@@ -271,6 +272,7 @@ request_overload_chunk_info_from_trailers(request_rec *request,
 	apr_table_t *src = request->trailers_in;
 	apr_pool_t *pool = request->pool;
 
+	OVERLOAD_FIELD(metachunk_hash, "metachunk-hash");
 	OVERLOAD_FIELD(metachunk_size, "metachunk-size");
 	OVERLOAD_FIELD(chunk_size,     "chunk-size");
 	OVERLOAD_FIELD(chunk_hash,     "chunk-hash");
@@ -292,6 +294,7 @@ request_load_chunk_info_from_headers(request_rec *request,
 	LAZY_LOAD_FIELD(content_storage_policy, "content-storage-policy");
 	LAZY_LOAD_FIELD(content_mime_type,      "content-mime-type");
 	LAZY_LOAD_FIELD(content_chunk_method,   "content-chunk-method");
+	LAZY_LOAD_FIELD(metachunk_hash,         "metachunk-hash");
 	LAZY_LOAD_FIELD(metachunk_size,         "metachunk-size");
 	LAZY_LOAD_FIELD(chunk_id,               "chunk-id");
 	LAZY_LOAD_FIELD(chunk_size,             "chunk-size");
@@ -333,12 +336,21 @@ check_chunk_info_with_trailers(const struct chunk_textinfo_s * const cti)
 	if (cti->metachunk_size && !oio_str_is_number(cti->metachunk_size))
 		return "metachunk-size";
 
+	oio_str_upper (cti->metachunk_hash);
+
+	if (!_null_or_hexa1(cti->metachunk_hash))
+		return "metachunk-hash";
+
 	if (cti->chunk_size && !oio_str_is_number(cti->chunk_size))
 		return "chunk-size";
 
 	if (g_str_has_prefix(cti->content_chunk_method, "ec/")
 			&& !cti->metachunk_size)
 		return "metachunk-size";
+
+	if (g_str_has_prefix(cti->content_chunk_method, "ec/")
+			&& !cti->metachunk_hash)
+		return "metachunk-hash";
 
 	return NULL;
 }
@@ -464,6 +476,7 @@ request_fill_headers(request_rec *r, struct chunk_textinfo_s *c)
 	__set_header(r, "content-mime-type",      c->content_mime_type);
 
 	__set_header(r, "metachunk-size", c->metachunk_size);
+	__set_header(r, "metachunk-hash", c->metachunk_hash);
 
 	__set_header(r, "chunk-id",   c->chunk_id);
 	__set_header(r, "chunk-size", c->chunk_size);
@@ -619,6 +632,7 @@ rawx_repo_commit_upload(dav_stream *stream)
 	DUP(content_chunk_method);
 	DUP(content_mime_type);
 	DUP(metachunk_size);
+	DUP(metachunk_hash);
 	DUP(chunk_id);
 	DUP(chunk_size);
 	DUP(chunk_hash);
