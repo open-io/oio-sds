@@ -76,6 +76,19 @@ m2v2_build_chunk_url (const char *srv, const char *id)
 	return g_strconcat("http://", srv, "/", id, NULL);
 }
 
+static gchar*
+m2v2_build_chunk_url_storage (const struct storage_policy_s *pol,
+			      const gchar *str_id)
+{
+	switch(data_security_get_type(storage_policy_get_data_security(pol))) {
+	case STGPOL_DS_BACKBLAZE:
+		return g_strconcat("b2://backblaze/", str_id, NULL);
+	default:
+		return NULL;
+	}
+	return NULL;
+}
+
 void
 m2v2_position_encode (GString *out, struct m2v2_position_s *p)
 {
@@ -1506,25 +1519,42 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 	ctx->cb(ctx->cb_data, header);
 }
 
+static int
+is_storage_not_rawx(struct storage_policy_s *pol)
+{
+	switch(data_security_get_type(storage_policy_get_data_security(pol))) {
+	case STGPOL_DS_BACKBLAZE:
+		return TRUE;
+	default:
+		return FALSE;
+	}
+	return FALSE;
+}
+
 static void
 _gen_chunk(struct gen_ctx_s *ctx, struct service_info_s *si,
 		gint64 cs, guint pos, gint subpos)
 {
+	int size = si?STRLEN_ADDRINFO:16;
 	guint8 binid[32];
-	gchar *chunkid, strpos[24], strid[65], straddr[STRLEN_ADDRINFO];
+	gchar *chunkid, strpos[24], strid[65], straddr[size];
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
 
 	oio_str_randomize (binid, sizeof(binid));
 	oio_str_bin2hex (binid, sizeof(binid), strid, sizeof(strid));
-	grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
-
+	if (si)
+		grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
+	
 	if (subpos < 0)
 		g_snprintf(strpos, sizeof(strpos), "%u", pos);
 	else
 		g_snprintf(strpos, sizeof(strpos), "%u.%d", pos, subpos);
 
-	chunkid = m2v2_build_chunk_url (straddr, strid);
+	if (si)
+		chunkid = m2v2_build_chunk_url (straddr, strid);
+	else
+		chunkid = m2v2_build_chunk_url_storage (ctx->pol, strid);
 
 	struct bean_CHUNKS_s *chunk = _bean_create(&descr_struct_CHUNKS);
 	CHUNKS_set2_id(chunk, chunkid);
@@ -1568,15 +1598,19 @@ _m2_generate_chunks(struct gen_ctx_s *ctx,
 		opt.req.strict_stgclass = FALSE; // Accept ersatzes
 
 		struct service_info_s **siv = NULL;
-		if (!grid_lb_iterator_next_set(ctx->iter, &siv, &opt, &err)) {
-			g_prefix_error(&err, "at position %u: ", pos);
-			break;
+		if (!is_storage_not_rawx(ctx->pol)) {
+			if (!grid_lb_iterator_next_set(ctx->iter, &siv, &opt, &err)) {
+				g_prefix_error(&err, "at position %u: ", pos);
+				break;
+			}
+		
+			for (gint i=0; NULL != siv[i] ;++i)
+				_gen_chunk (ctx, siv[i], ctx->chunk_size, pos, subpos?i:-1);
+
+			service_info_cleanv(siv, FALSE);
 		}
-
-		for (gint i=0; NULL != siv[i] ;++i)
-			_gen_chunk (ctx, siv[i], ctx->chunk_size, pos, subpos?i:-1);
-
-		service_info_cleanv(siv, FALSE);
+		else
+			_gen_chunk (ctx, NULL, ctx->chunk_size, pos, -1);
 	}
 
 	return err;
@@ -1617,6 +1651,7 @@ m2_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
 
 	gint64 nb, k, m;
 	switch (data_security_get_type(storage_policy_get_data_security(pol))) {
+	        case STGPOL_DS_BACKBLAZE:
 		case STGPOL_DS_PLAIN:
 			nb = _policy_parameter(pol, DS_KEY_COPY_COUNT, 1);
 			return _m2_generate_chunks(&ctx, chunk_size, nb, 0);

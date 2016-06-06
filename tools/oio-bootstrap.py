@@ -428,6 +428,7 @@ THREECOPIES=NONE:DUPONETHREE
 FIVECOPIES=NONE:DUPONEFIVE
 EC=NONE:EC
 WEC=NONE:WEC
+BACKBLAZE=NONE:BACKBLAZE
 
 [STORAGE_CLASS]
 # <CLASS> = FALLBACK[,FALLBACK]...
@@ -441,6 +442,7 @@ DUPONETHREE=plain/distance=1,nb_copy=3
 DUPONEFIVE=plain/distance=1,nb_copy=5
 EC=ec/k=6,m=3,algo=isa_l_rs_vand,distance=1
 WEC=ec/k=6,m=3,algo=isa_l_rs_vand,distance=1,weak=1
+BACKBLAZE=backblaze/account_id=${BACKBLAZE_ACCOUNT_ID},bucket_name=${BACKBLAZE_BUCKET_NAME},distance=0,nb_copy=1
 
 # "jerasure_rs_vand"   EC_BACKEND_JERASURE_RS_VAND
 # "jerasure_rs_cauchy" EC_BACKEND_JERASURE_RS_CAUCHY
@@ -726,6 +728,8 @@ SQLX_REPLICAS = 'sqlx_replicas'
 PROFILE = 'profile'
 PORT_START = 'port_start'
 CHUNK_SIZE = 'chunk_size'
+BACKBLAZE_ACCOUNT_ID = 'backblaze.account_id'
+BACKBLAZE_BUCKET_NAME = 'backblaze.bucket_name'
 
 defaults = {
     'NS': 'OPENIO',
@@ -815,7 +819,8 @@ def generate(options):
         stgpol = options[M2_STGPOL]
     ns = options.get('ns') or defaults['NS']
     ip = options.get('ip') or defaults['IP']
-
+    backblaze_account_id = options.get(BACKBLAZE_ACCOUNT_ID) or '0'
+    backblaze_bucket_name = options.get(BACKBLAZE_BUCKET_NAME) or '0'
     ENV = dict(IP=ip,
                NS=ns,
                HOME=HOME,
@@ -844,6 +849,8 @@ def generate(options):
                SQLX_REPLICAS=sqlx_replicas,
                SQLX_DISTANCE=str(1),
                APACHE2_MODULES_SYSTEM_DIR=APACHE2_MODULES_SYSTEM_DIR,
+               BACKBLAZE_ACCOUNT_ID=backblaze_account_id,
+               BACKBLAZE_BUCKET_NAME=backblaze_bucket_name,
                HTTPD_BINARY=HTTPD_BINARY)
 
     def merge_env(add):

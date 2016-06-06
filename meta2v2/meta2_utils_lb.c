@@ -131,6 +131,7 @@ get_spare_chunks(struct grid_lbpool_s *lbp, struct storage_policy_s *stgpol,
 				return NEWERROR(CODE_BAD_REQUEST, "Invalid RAIN policy (missing K and/or M)");
 			opt_ext.req.max = atoi(k) + atoi(m);
 			break;
+	        case STGPOL_DS_BACKBLAZE:
 		case STGPOL_DS_PLAIN:
 			cpstr = data_security_get_param(ds, DS_KEY_COPY_COUNT);
 			opt_ext.req.max = (NULL != cpstr) ? atoi(cpstr) : 1;
@@ -189,6 +190,7 @@ get_conditioned_spare_chunks2(struct grid_lbpool_s *lbp,
 	opt_ext.srv_forbidden = NULL;
 
 	switch (data_security_get_type(ds)) {
+	        case STGPOL_DS_BACKBLAZE:
 		case STGPOL_DS_PLAIN:
 			opt_ext.req.max = data_security_get_int64_param(ds, DS_KEY_COPY_COUNT, 1);
 			break;

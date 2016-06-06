@@ -26,6 +26,8 @@ License along with this library.
 #define DS_KEY_M "m"
 #define DS_KEY_ALGO "algo"
 #define DS_KEY_WEAK "weak"
+#define DS_KEY_ACCOUNT_ID "account_id"
+#define DS_KEY_BUCKET_NAME "bucket_name"
 
 #define STORAGE_POLICY_NONE "NONE"
 #define STORAGE_CLASS_NONE "NONE"
@@ -33,11 +35,13 @@ License along with this library.
 
 #define STGPOL_DSPREFIX_PLAIN "plain"
 #define STGPOL_DSPREFIX_EC "ec"
+#define STGPOL_DSPREFIX_BACKBLAZE "backblaze"
 
 enum data_security_e
 {
 	STGPOL_DS_PLAIN,
 	STGPOL_DS_EC,
+	STGPOL_DS_BACKBLAZE
 };
 
 /** Forward declarations */
