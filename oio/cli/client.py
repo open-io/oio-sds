@@ -35,7 +35,7 @@ class InternalClient(object):
             self._cluster = ConscienceClient(self.conf, session=self.session)
         return self._cluster
 
-    def volume_dump(self, volume):
+    def volume_show(self, volume):
         info = self.rdir.status(volume)
         data = {}
         containers = info.get('container')
