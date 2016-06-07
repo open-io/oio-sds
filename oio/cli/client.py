@@ -35,6 +35,21 @@ class InternalClient(object):
             self._cluster = ConscienceClient(self.conf, session=self.session)
         return self._cluster
 
+    def event_stats(self, tube=None):
+        return self.event.stats(tube)
+
+    def cluster_list(self, srv_type):
+        return self.cluster.all_services(srv_type)
+
+    def cluster_info(self):
+        return self.cluster.info()
+
+    def volume_admin_show(self, volume):
+        return self.rdir.admin_show(volume)
+
+    def volume_admin_clear(self, volume):
+        return self.rdir.admin_clear(volume)
+
     def volume_show(self, volume):
         info = self.rdir.status(volume)
         data = {}
@@ -44,14 +59,14 @@ class InternalClient(object):
             data['container.%s' % ct] = json.dumps(containers[ct])
         return data
 
-    def event_stats(self):
-        return self.event.stats()
+    def volume_admin_lock(self, volume, key):
+        return self.rdir.admin_lock(volume, key)
 
-    def cluster_list(self, srv_type):
-        return self.cluster.all_services(srv_type)
+    def volume_admin_unlock(self, volume):
+        return self.rdir.admin_unlock(volume)
 
-    def cluster_info(self):
-        return self.cluster.info()
+    def volume_admin_incident(self, volume, date):
+        return self.rdir.admin_incident_set(volume, date)
 
 
 def make_client(instance):

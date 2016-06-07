@@ -4,17 +4,6 @@ import argparse
 
 from oio.blob.rebuilder import BlobRebuilderWorker
 from oio.common.utils import get_logger
-from oio.rdir.client import RdirClient
-
-
-def force_unlock(conf, volume):
-    client = RdirClient(conf)
-    client.admin_unlock(volume)
-
-
-def set_incident_date(conf, volume, date):
-    client = RdirClient(conf)
-    client.admin_incident_set(volume, date)
 
 
 def make_arg_parser():
@@ -35,13 +24,6 @@ def make_arg_parser():
     parser.add_argument('volume', help="The volume id to rebuild")
     parser.add_argument('--dry-run', action='store_true',
                         help="Display actions but do nothing")
-    parser.add_argument('--incident-date', type=int,
-                        metavar="timestamp unix in seconds",
-                        help="Set the incident date in a number "
-                             "of seconds since January 1, 1970")
-    parser.add_argument('--force-unlock', action='store_true',
-                        help="Remove the lock held by an other user before "
-                             "beginning the rebuild")
     parser.add_argument('--rdir-fetch-limit', type=int,
                         help="Maximum of entries returned in "
                              "each rdir response")
@@ -81,15 +63,6 @@ if __name__ == '__main__':
     conf['namespace'] = args.namespace
 
     logger = get_logger(conf, None, not args.quiet)
-
-    if args.force_unlock:
-        logger.info("Unlock the volume %s" % args.volume)
-        force_unlock(conf, args.volume)
-
-    if args.incident_date is not None:
-        logger.info("Set incident date for volume %s to %d"
-                    % (args.volume, args.incident_date))
-        set_incident_date(conf, args.volume, args.incident_date)
 
     try:
         worker = BlobRebuilderWorker(conf, logger, args.volume)

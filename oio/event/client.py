@@ -14,5 +14,6 @@ class EventClient(Client):
             self._beanstalk = Beanstalk.from_url(self.queue_url)
         return self._beanstalk
 
-    def stats(self):
-        return self.beanstalk.stats_tube('oio')
+    def stats(self, tube=None):
+        tube = tube or 'oio'
+        return self.beanstalk.stats_tube(tube)
