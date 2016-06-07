@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import StringIO
+from cStringIO import StringIO
 
 import math
 import time
@@ -26,20 +26,19 @@ from oio.common.exceptions import NotFound, UnrecoverableContent
 from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
 from oio.content.content import ChunksHelper
-from oio.content.dup import DupContent
 from oio.content.factory import ContentFactory
 from tests.functional.content.test_content import random_data, md5_data, \
     md5_stream
-from tests.utils import BaseTestCase
+from tests.utils import BaseTestCase, random_str
 
 
-class TestDupContent(BaseTestCase):
+class TestPlainContent(BaseTestCase):
     def setUp(self):
-        super(TestDupContent, self).setUp()
+        super(TestPlainContent, self).setUp()
 
-        if len(self.conf['services']['rawx']) < 3:
-            self.skipTest("Not enough rawx. "
-                          "Dup tests needs more than 2 rawx to run")
+        if len(self.conf['services']['rawx']) < 4:
+            self.skipTest(
+                "Plain tests needs more than 3 rawx to run")
 
         self.namespace = self.conf['namespace']
         self.account = self.conf['account']
@@ -48,40 +47,42 @@ class TestDupContent(BaseTestCase):
         self.content_factory = ContentFactory(self.gridconf)
         self.container_client = ContainerClient(self.gridconf)
         self.blob_client = BlobClient()
-        self.container_name = "TestDupContent%f" % time.time()
+        self.container_name = "TestPlainContent-%f" % time.time()
         self.container_client.container_create(acct=self.account,
                                                ref=self.container_name)
         self.container_id = cid_from_name(self.account,
                                           self.container_name).upper()
+        self.content = random_str(64)
+        self.stgpol = "SINGLE"
+        self.stgpol_twocopies = "TWOCOPIES"
+        self.stgpol_threecopies = "THREECOPIES"
 
-    def tearDown(self):
-        super(TestDupContent, self).tearDown()
-
-    def _test_upload(self, stgpol, data_size):
+    def _test_create(self, stgpol, data_size):
         data = random_data(data_size)
-        content = self.content_factory.new(self.container_id, "titi",
+        content = self.content_factory.new(self.container_id, self.content,
                                            len(data), stgpol)
-        self.assertEqual(type(content), DupContent)
 
-        content.upload(StringIO.StringIO(data))
+        content.create(StringIO(data))
 
         meta, chunks = self.container_client.content_show(
             cid=self.container_id, content=content.content_id)
-        chunks = ChunksHelper(chunks)
         self.assertEqual(meta['hash'], md5_data(data))
         self.assertEqual(meta['length'], str(len(data)))
         self.assertEqual(meta['policy'], stgpol)
-        self.assertEqual(meta['name'], "titi")
+        self.assertEqual(meta['name'], self.content)
 
         metachunk_nb = int(math.ceil(float(len(data)) / self.chunk_size))
         if metachunk_nb == 0:
             metachunk_nb = 1  # special case for empty content
 
-        if stgpol == "THREECOPIES":
+        chunks = ChunksHelper(chunks)
+
+        # TODO NO NO NO
+        if stgpol == self.stgpol_threecopies:
             nb_copy = 3
-        elif stgpol == "TWOCOPIES":
+        elif stgpol == self.stgpol_twocopies:
             nb_copy = 2
-        elif stgpol == "SINGLE":
+        elif stgpol == self.stgpol:
             nb_copy = 1
 
         self.assertEqual(len(chunks), metachunk_nb * nb_copy)
@@ -97,52 +98,36 @@ class TestDupContent(BaseTestCase):
             for chunk in chunks_at_pos:
                 meta, stream = self.blob_client.chunk_get(chunk.url)
                 self.assertEqual(md5_stream(stream), chunk_hash)
-                self.assertEqual(meta['content_path'], "titi")
+                self.assertEqual(meta['content_path'], self.content)
                 self.assertEqual(meta['content_cid'], self.container_id)
                 self.assertEqual(meta['content_id'], meta['content_id'])
                 self.assertEqual(meta['chunk_id'], chunk.id)
                 self.assertEqual(meta['chunk_pos'], str(pos))
                 self.assertEqual(meta['chunk_hash'], chunk_hash)
 
-    def test_twocopies_upload_0_byte(self):
-        self._test_upload("TWOCOPIES", 0)
+    def test_twocopies_create_0_byte(self):
+        self._test_create(self.stgpol_twocopies, 0)
 
-    def test_twocopies_upload_1_byte(self):
-        self._test_upload("TWOCOPIES", 1)
+    def test_twocopies_create_1_byte(self):
+        self._test_create(self.stgpol_twocopies, 1)
 
-    def test_twocopies_upload_chunksize_bytes(self):
-        self._test_upload("TWOCOPIES", self.chunk_size)
+    def test_twocopies_create_chunksize_bytes(self):
+        self._test_create(self.stgpol_twocopies, self.chunk_size)
 
-    def test_twocopies_upload_chunksize_plus_1_bytes(self):
-        self._test_upload("TWOCOPIES", self.chunk_size + 1)
+    def test_twocopies_create_chunksize_plus_1_bytes(self):
+        self._test_create(self.stgpol_twocopies, self.chunk_size + 1)
 
-    def test_single_upload_0_byte(self):
-        self._test_upload("SINGLE", 0)
+    def test_single_create_0_byte(self):
+        self._test_create(self.stgpol, 0)
 
-    def test_single_upload_chunksize_plus_1_bytes(self):
-        self._test_upload("SINGLE", self.chunk_size + 1)
-
-    def test_chunks_cleanup_when_upload_failed(self):
-        data = random_data(2 * self.chunk_size)
-        content = self.content_factory.new(self.container_id, "titi",
-                                           len(data), "TWOCOPIES")
-        self.assertEqual(type(content), DupContent)
-
-        # set bad url for position 1
-        for chunk in content.chunks.filter(pos=1):
-            chunk.url = "http://127.0.0.1:9/DEADBEEF"
-
-        self.assertRaises(Exception, content.upload, StringIO.StringIO(data))
-        for chunk in content.chunks.exclude(pos=1):
-            self.assertRaises(NotFound,
-                              self.blob_client.chunk_head, chunk.url)
+    def test_single_create_chunksize_plus_1_bytes(self):
+        self._test_create(self.stgpol, self.chunk_size + 1)
 
     def _new_content(self, stgpol, data, broken_pos_list=[]):
-        old_content = self.content_factory.new(self.container_id, "titi",
-                                               len(data), stgpol)
-        self.assertEqual(type(old_content), DupContent)
+        old_content = self.content_factory.new(
+            self.container_id, self.content, len(data), stgpol)
 
-        old_content.upload(StringIO.StringIO(data))
+        old_content.create(StringIO(data))
 
         broken_chunks_info = {}
         for pos, idx in broken_pos_list:
@@ -166,8 +151,8 @@ class TestDupContent(BaseTestCase):
     def _test_rebuild(self, stgpol, data_size, broken_pos_list,
                       full_rebuild_pos):
         data = random_data(data_size)
-        content, broken_chunks_info = self._new_content(stgpol,
-                                                        data, broken_pos_list)
+        content, broken_chunks_info = self._new_content(
+            stgpol, data, broken_pos_list)
 
         rebuild_pos, rebuild_idx = full_rebuild_pos
         rebuild_chunk_info = broken_chunks_info[rebuild_pos][rebuild_idx]
@@ -176,7 +161,6 @@ class TestDupContent(BaseTestCase):
         # get the new structure of the content
         rebuilt_content = self.content_factory.get(self.container_id,
                                                    content.content_id)
-        self.assertEqual(type(rebuilt_content), DupContent)
 
         # find the rebuilt chunk
         for c in rebuilt_content.chunks.filter(pos=rebuild_pos):
@@ -199,66 +183,67 @@ class TestDupContent(BaseTestCase):
             self.assertEqual(meta, rebuild_chunk_info["dl_meta"])
 
     def test_2copies_content_0_byte_1broken_rebuild_pos_0_idx_0(self):
-        self._test_rebuild("TWOCOPIES", 0, [(0, 0)], (0, 0))
+        self._test_rebuild(self.stgpol_twocopies, 0, [(0, 0)], (0, 0))
 
     def test_2copies_content_1_byte_1broken_rebuild_pos_0_idx_1(self):
-        self._test_rebuild("TWOCOPIES", 1, [(0, 1)], (0, 1))
+        self._test_rebuild(self.stgpol_twocopies, 1, [(0, 1)], (0, 1))
 
     def test_3copies_content_chunksize_bytes_2broken_rebuild_pos_0_idx_1(self):
         if len(self.conf['services']['rawx']) <= 3:
             self.skipTest("Need more than 3 rawx")
-        self._test_rebuild("THREECOPIES", self.chunk_size,
+        self._test_rebuild(self.stgpol_threecopies, self.chunk_size,
                            [(0, 0), (0, 1)], (0, 1))
 
     def test_3copies_content_2xchksize_bytes_2broken_rebuild_pos_1_idx_2(self):
-        if len(self.conf['services']['rawx']) <= 3:
-            self.skipTest("Need more than 3 rawx")
-        self._test_rebuild("THREECOPIES", 2 * self.chunk_size,
+        self._test_rebuild(self.stgpol_threecopies, 2 * self.chunk_size,
                            [(1, 0), (1, 2)], (1, 2))
 
     def test_2copies_content_0_byte_2broken_rebuild_pos_0_idx_0(self):
         with ExpectedException(UnrecoverableContent):
-            self._test_rebuild("TWOCOPIES", 0, [(0, 0), (0, 1)], (0, 0))
+            self._test_rebuild(
+                self.stgpol_twocopies, 0, [(0, 0), (0, 1)], (0, 0))
 
-    def _test_download(self, stgpol, data_size, broken_pos_list):
+    def _test_fetch(self, stgpol, data_size, broken_pos_list):
         data = random_data(data_size)
         content, _ = self._new_content(stgpol, data, broken_pos_list)
 
-        downloaded_data = "".join(content.download())
+        fetched_data = "".join(content.fetch())
 
-        self.assertEqual(downloaded_data, data)
+        self.assertEqual(fetched_data, data)
 
         for pos, idx in broken_pos_list:
             # check nothing has been rebuilt
             c = content.chunks.filter(pos=pos)[0]
             self.assertRaises(NotFound, self.blob_client.chunk_delete, c.url)
 
-    def test_twocopies_download_content_0_byte_without_broken_chunks(self):
-        self._test_download("TWOCOPIES", 0, [])
+    def test_twocopies_fetch_content_0_byte_without_broken_chunks(self):
+        self._test_fetch(self.stgpol_twocopies, 0, [])
 
-    def test_twocopies_download_content_0_byte_with_broken_0_0(self):
-        self._test_download("TWOCOPIES", 0, [(0, 0)])
+    def test_twocopies_fetch_content_0_byte_with_broken_0_0(self):
+        self._test_fetch(self.stgpol_twocopies, 0, [(0, 0)])
 
-    def test_twocopies_download_content_1_byte_without_broken_chunks(self):
-        self._test_download("TWOCOPIES", 1, [])
+    def test_twocopies_fetch_content_1_byte_without_broken_chunks(self):
+        self._test_fetch(self.stgpol_twocopies, 1, [])
 
-    def test_twocopies_download_content_1_byte_with_broken_0_0(self):
-        self._test_download("TWOCOPIES", 1, [(0, 0)])
+    def test_twocopies_fetch_content_1_byte_with_broken_0_0(self):
+        self._test_fetch(self.stgpol_twocopies, 1, [(0, 0)])
 
-    def test_twocopies_download_chunksize_bytes_without_broken_chunks(self):
-        self._test_download("TWOCOPIES", self.chunk_size, [])
+    def test_twocopies_fetch_chunksize_bytes_without_broken_chunks(self):
+        self._test_fetch(self.stgpol_twocopies, self.chunk_size, [])
 
-    def test_twocopies_download_2xchuksize_bytes_with_broken_0_0_and_1_0(self):
-        self._test_download("TWOCOPIES", self.chunk_size * 2, [(0, 0), (1, 0)])
+    def test_twocopies_fetch_2xchuksize_bytes_with_broken_0_0_and_1_0(self):
+        self._test_fetch(
+            self.stgpol_twocopies, self.chunk_size * 2, [(0, 0), (1, 0)])
 
-    def test_twocopies_download_content_chunksize_bytes_2_broken_chunks(self):
+    def test_twocopies_fetch_content_chunksize_bytes_2_broken_chunks(self):
         data = random_data(self.chunk_size)
-        content, _ = self._new_content("TWOCOPIES", data, [(0, 0), (0, 1)])
-        gen = content.download()
+        content, _ = self._new_content(
+            self.stgpol_twocopies, data, [(0, 0), (0, 1)])
+        gen = content.fetch()
         self.assertRaises(UnrecoverableContent, gen.next)
 
-    def test_single_download_content_1_byte_without_broken_chunks(self):
-        self._test_download("SINGLE", 1, [])
+    def test_single_fetch_content_1_byte_without_broken_chunks(self):
+        self._test_fetch(self.stgpol, 1, [])
 
-    def test_single_download_chunksize_bytes_plus_1_without_broken_chunk(self):
-        self._test_download("SINGLE", self.chunk_size * 2, [])
+    def test_single_fetch_chunksize_bytes_plus_1_without_broken_chunk(self):
+        self._test_fetch(self.stgpol, self.chunk_size * 2, [])
