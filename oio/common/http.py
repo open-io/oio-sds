@@ -77,8 +77,8 @@ class CustomHttpConnection(HTTPConnection):
 
     def getresponse(self):
         response = HTTPConnection.getresponse(self)
-        logging.debug('HTTP %s %s:%s %s' %
-                      (self._method, self.host, self.port, self._path))
+        logging.debug('HTTP %s %s:%s %s',
+                      self._method, self.host, self.port, self._path)
         return response
 
 

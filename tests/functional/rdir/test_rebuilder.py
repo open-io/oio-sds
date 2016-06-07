@@ -27,8 +27,7 @@ from oio.common.exceptions import SpareChunkException, OrphanChunk, \
 from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
 from oio.rdir.client import RdirClient
-from tests.functional.rdir.common import generate_id
-from tests.utils import BaseTestCase, get_config
+from tests.utils import BaseTestCase, get_config, random_id
 
 
 class TestContent(object):
@@ -38,10 +37,10 @@ class TestContent(object):
         self.account = account
         self.container_name = container_name
         self.content_name = content_name
-        self.content_id = generate_id(32)
+        self.content_id = random_id(32)
         self.container_id = cid_from_name(self.account,
                                           self.container_name).upper()
-        self.hash = 32 * '0'
+        self.checksum = 32 * '0'
         self.version = "0"
         self.size = 0
         self.chunks = []
@@ -77,30 +76,29 @@ class TestContent(object):
 class TestChunk(object):
     def __init__(self, test_conf, data, pos, rawx, content):
         self.test_conf = test_conf
-        self.id = generate_id(64)
+        self.id = random_id(64)
         self.data = data
         self.size = len(data)
         h = hashlib.new('md5')
         h.update(data)
-        self.hash = h.hexdigest().upper()
+        self.checksum = h.hexdigest().upper()
         self.pos = pos
         self.url = "http://%s/%s" % \
             (self.test_conf['services']['rawx'][rawx]['addr'], self.id)
         self.content = content
 
     def get_create_meta2(self):
-        return {"hash": self.hash, "pos": self.pos,
+        return {"hash": self.checksum, "pos": self.pos,
                 "size": self.size, "url": self.url}
 
     def get_create_xattr(self):
-        chunk_meta = {'content_size': self.content.size,
-                      'content_path': self.content.content_name,
+        chunk_meta = {'content_path': self.content.content_name,
                       'content_cid': self.content.container_id,
                       'content_id': self.content.content_id,
                       'content_policy': 'TESTPOLICY',
                       'content_chunkmethod': 'plain',
-                      'content_mimetype': 'application/octet-stream',
                       'metachunk_size': self.content.size,
+                      'metachunk_hash': self.content.checksum,
                       'chunk_pos': self.pos,
                       'chunk_id': self.id,
                       'chunk_pos': self.pos,
@@ -109,10 +107,10 @@ class TestChunk(object):
 
     def __str__(self):
         return "[chunk: id=%s, pos=%s, url=%s, hash=%s]" % (
-            self.id, self.pos, self.url, self.hash)
+            self.id, self.pos, self.url, self.checksum)
 
 
-# TODO the rebuilding mechanism is now tested in content/test_[dup|rain]
+# TODO the rebuilding mechanism is now tested in content/test_[dup|ec]
 # so these tests shouldn't test if chunks are really rebuild but they
 # should test if the rdir is correctly updated.
 class TestRebuilderCrawler(BaseTestCase):
@@ -140,7 +138,7 @@ class TestRebuilderCrawler(BaseTestCase):
                                              ref=content.container_name,
                                              path=content.content_name,
                                              size=content.size,
-                                             checksum=content.hash,
+                                             checksum=content.checksum,
                                              content_id=content.content_id,
                                              stgpol=content.stgpol,
                                              data=content.get_create_meta2())
@@ -177,21 +175,20 @@ class TestRebuilderCrawler(BaseTestCase):
 
         new_chunk_id = new_chunk_info['url'].split('/')[-1]
 
-        self.assertEqual(new_chunk_info['hash'], content.chunks[0].hash)
+        self.assertEqual(new_chunk_info['hash'], content.chunks[0].checksum)
         self.assertEqual(new_chunk_info['pos'], content.chunks[0].pos)
         self.assertEqual(new_chunk_info['size'], content.chunks[0].size)
 
         # check chunk information
         meta, stream = self.blob_client.chunk_get(new_chunk_info['url'])
 
-        self.assertEqual(meta['content_size'], str(content.chunks[0].size))
         self.assertEqual(meta['content_path'], content.content_name)
         self.assertEqual(meta['content_cid'], content.container_id)
         self.assertEqual(meta['content_id'], content.content_id)
         self.assertEqual(meta['chunk_id'], new_chunk_id)
         self.assertEqual(meta['chunk_pos'], content.chunks[0].pos)
         self.assertEqual(meta['content_version'], content.version)
-        self.assertEqual(meta['chunk_hash'], content.chunks[0].hash)
+        self.assertEqual(meta['chunk_hash'], content.chunks[0].checksum)
 
         self.assertEqual(stream.next(), content.chunks[0].data)
 

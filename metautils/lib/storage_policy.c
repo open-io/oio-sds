@@ -400,6 +400,16 @@ _rain_policy_to_chunk_method(const struct data_security_s *datasec)
 	return result;
 }
 
+static GString *
+_plain_policy_to_chunk_method(const struct data_security_s *datasec)
+{
+	GString *result = g_string_new("plain/");
+	const gint64 nb_copy = data_security_get_int64_param(datasec, DS_KEY_COPY_COUNT, 3);
+	g_string_append_printf(result,
+			"nb_copy=%" G_GINT64_FORMAT"", nb_copy);
+	return result;
+}
+
 GString *
 storage_policy_to_chunk_method(const struct storage_policy_s *sp)
 {
@@ -409,7 +419,7 @@ storage_policy_to_chunk_method(const struct storage_policy_s *sp)
 		case STGPOL_DS_EC:
 			return _rain_policy_to_chunk_method(datasec);
 		case STGPOL_DS_PLAIN:
-			return g_string_new(STGPOL_DSPREFIX_PLAIN);
+			return _plain_policy_to_chunk_method(datasec);
 		default:
 			g_assert_not_reached();
 	}

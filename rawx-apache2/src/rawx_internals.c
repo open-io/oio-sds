@@ -140,6 +140,7 @@ send_chunk_event(const char *type, const dav_resource *resource)
 	_PAIR_AND_COMMA("content_mime_type", resource->info->chunk.content_mime_type);
 	_PAIR_AND_COMMA("content_chunk_method", resource->info->chunk.content_chunk_method);
 	_PAIR_AND_COMMA("metachunk_size", resource->info->chunk.metachunk_size);
+	_PAIR_AND_COMMA("metachunk_hash", resource->info->chunk.metachunk_hash);
 
 	_PAIR_AND_COMMA("chunk_id", resource->info->chunk.chunk_id);
 	_PAIR_AND_COMMA("chunk_size", resource->info->chunk.chunk_size);

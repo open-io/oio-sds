@@ -4,10 +4,10 @@ import mock
 
 from oio.common.utils import xattr
 from oio.blob.indexer import BlobIndexer
+from oio.blob.utils import chunk_xattr_keys
 from oio.common.exceptions import FaultyChunk
 from oio.rdir.client import RdirClient
-from tests.functional.rdir.common import generate_id
-from tests.utils import BaseTestCase
+from tests.utils import BaseTestCase, random_id
 
 
 class TestIndexerCrawler(BaseTestCase):
@@ -25,9 +25,9 @@ class TestIndexerCrawler(BaseTestCase):
         super(TestIndexerCrawler, self).tearDown()
 
     def _create_chunk(self, rawx_path, alias="toto"):
-        container_id = generate_id(64)
-        content_id = generate_id(64)
-        chunk_id = generate_id(64)
+        container_id = random_id(64)
+        content_id = random_id(32)
+        chunk_id = random_id(64)
 
         chunk_dir = "%s/%s" % (rawx_path, chunk_id[0:3])
         if not os.path.isdir(chunk_dir):
@@ -37,22 +37,29 @@ class TestIndexerCrawler(BaseTestCase):
         with open(chunk_path, "w") as f:
             f.write("toto")
 
-        xattr.setxattr(chunk_path, 'user.grid.chunk.hash', 32 * '0')
-        xattr.setxattr(chunk_path, 'user.grid.chunk.id', chunk_id)
-        xattr.setxattr(chunk_path, 'user.grid.chunk.position', '0')
-        xattr.setxattr(chunk_path, 'user.grid.chunk.size', '4')
-        xattr.setxattr(chunk_path, 'user.grid.content.container', container_id)
-        xattr.setxattr(chunk_path, 'user.grid.content.id', content_id)
-        xattr.setxattr(chunk_path, 'user.grid.content.nbchunk', '1')
-        xattr.setxattr(chunk_path, 'user.grid.content.path', alias)
-        xattr.setxattr(chunk_path, 'user.grid.content.size', '4')
-        xattr.setxattr(chunk_path, 'user.grid.content.mime_type',
-                                   'application/octet-stream')
-        xattr.setxattr(chunk_path, 'user.grid.content.storage_policy',
-                                   'TESTPOLICY')
-        xattr.setxattr(chunk_path, 'user.grid.content.chunk_method',
-                                   'plain')
-        xattr.setxattr(chunk_path, 'user.grid.content.version', '0')
+        xattr.setxattr(
+            chunk_path, 'user.' + chunk_xattr_keys['chunk_hash'], 32 * '0')
+        xattr.setxattr(
+            chunk_path, 'user.' + chunk_xattr_keys['chunk_id'], chunk_id)
+        xattr.setxattr(
+            chunk_path, 'user.' + chunk_xattr_keys['chunk_pos'], '0')
+        xattr.setxattr(
+            chunk_path, 'user.' + chunk_xattr_keys['chunk_size'], '4')
+        xattr.setxattr(
+            chunk_path, 'user.' + chunk_xattr_keys['content_cid'],
+            container_id)
+        xattr.setxattr(
+            chunk_path, 'user.' + chunk_xattr_keys['content_id'], content_id)
+        xattr.setxattr(
+            chunk_path, 'user.' + chunk_xattr_keys['content_path'], alias)
+        xattr.setxattr(
+            chunk_path, 'user.' + chunk_xattr_keys['content_policy'],
+            'TESTPOLICY')
+        xattr.setxattr(
+            chunk_path, 'user.' + chunk_xattr_keys['content_chunkmethod'],
+            'plain/nb_copy=3')
+        xattr.setxattr(
+            chunk_path, 'user.' + chunk_xattr_keys['content_version'], '0')
 
         return chunk_path, container_id, content_id, chunk_id
 
@@ -83,15 +90,7 @@ class TestIndexerCrawler(BaseTestCase):
 
         self.assertIsNotNone(check_value)
 
-        # _rdir_get returns unicode
-        self.assertEqual(check_value['content_nbchunks'], 1)
-        self.assertEqual(check_value['chunk_hash'], 32 * '0')
-        self.assertEqual(check_value['content_size'], 4)
-        self.assertEqual(check_value['content_path'], alias.decode("utf8"))
-        self.assertEqual(check_value['chunk_position'], '0')
-        self.assertEqual(check_value['chunk_size'], 4)
         self.assertEqual(check_value['mtime'], 1234)
-        self.assertEqual(check_value['content_version'], 0)
 
         # index a chunk already indexed
         with mock.patch('oio.blob.indexer.time.time',
@@ -118,7 +117,8 @@ class TestIndexerCrawler(BaseTestCase):
             self.rawx_conf['path'])
 
         # remove mandatory xattr
-        xattr.removexattr(chunk_path, 'user.grid.content.chunk_method')
+        xattr.removexattr(
+            chunk_path, 'user.' + chunk_xattr_keys['content_cid'])
 
         # try to index the chunk
         indexer = BlobIndexer(self.conf)
