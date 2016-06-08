@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -33,7 +33,6 @@ struct meta1_backend_s
 	const char *type;
 	struct sqlx_repository_s *repo;
 	struct oio_lb_s *lb;
-	struct grid_lbpool_s *lb2;
 
 	struct service_update_policies_s *svcupdate;
 	struct meta1_prefixes_set_s *prefixes;

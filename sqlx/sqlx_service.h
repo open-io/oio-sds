@@ -168,7 +168,7 @@ GError* sqlx_reload_lb_service_types(struct oio_lb_world_s *lbw,
 		GSList *list_srvtypes);
 
 // FIXME: this is only used in meta1
-/** Reloads the optional (grid_lbpool_s*). Exposed to let the
+/** Reloads the optional (oio_lb_s*). Exposed to let the
  * server enable it in its post-config hook. This is destined to
  * be registered in a task queue. */
 void sqlx_task_reload_lb(struct sqlx_service_s *ss);

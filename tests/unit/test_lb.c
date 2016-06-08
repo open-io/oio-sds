@@ -1,7 +1,6 @@
 /*
-OpenIO SDS metautils
-Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+OpenIO SDS core / LB
+Copyright (C) 2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -17,373 +16,306 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#include <stddef.h>
-#include <string.h>
 #include <stdlib.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <math.h>
-
+#include <glib.h>
+#include <core/oiolb.h>
 #include <metautils/lib/metautils.h>
 
-#define SRVTYPE "sqlx"
-
-#define ADDR_GOOD "127.0.0.1"
-#define ADDR_BAD  "127.0.0.2"
-#define NS "NS"
-
-static guint max_feed = 37;
-static guint max_get = 5001;
-
-static struct service_info_s *
-_build_si(const gchar *a, guint i)
+static struct oio_lb_item_s *
+_srv (int i)
 {
-	struct service_info_s *si;
-
-	si = g_malloc0(sizeof(*si));
-	g_strlcpy(si->ns_name, NS, sizeof(si->ns_name));
-	g_strlcpy(si->type, SRVTYPE, sizeof(si->type));
-	si->addr.addr.v4 = inet_addr(a);
-	si->addr.type = TADDR_V4;
-	si->addr.port = htons(i+2);
-	si->score.value = i;
-	si->score.timestamp = oio_ext_real_time () / G_TIME_SPAN_SECOND;
-	return si;
+	size_t len = 8 + sizeof (struct oio_lb_item_s);
+	struct oio_lb_item_s *srv = g_malloc0 (len);
+	srv->location = 65430 - i;
+	srv->weight = 90 + i;
+	sprintf(srv->id, "ID-%04d", i);
+	return srv;
 }
 
-static struct service_info_s *
-_build_si_loc(const gchar *a, guint i)
+static void
+test_local_poll (void)
 {
-	struct service_info_s *si = _build_si(a, i);
+	struct oio_lb_world_s *world = oio_lb_local__create_world ();
+	oio_lb_world__create_slot (world, "0");
+	oio_lb_world__create_slot (world, "1");
+	oio_lb_world__create_slot (world, "2");
+	oio_lb_world__create_slot (world, "*");
 
-	if (!si->tags)
-		si->tags = g_ptr_array_new();
-	service_tag_t *tag = service_info_ensure_tag(si->tags, NAME_TAGNAME_RAWX_LOC);
-	char tag_loc[32] = {0};
-	g_snprintf(tag_loc, sizeof(tag_loc), "loc.%u", i);
-	service_tag_set_value_string(tag, tag_loc);
-
-	return si;
-}
-
-static guint
-_fill(struct grid_lbpool_s *lbp, const char *srvtype, guint max)
-{
-	guint i, count;
-
-	gboolean provide(struct service_info_s **p_si) {
-		g_assert(p_si != NULL);
-		if (i >= max)
-			return FALSE;
-		*p_si = _build_si_loc(ADDR_GOOD, i++);
-		count ++;
-		return TRUE;
+	/* fill some services */
+	for (int i = 0; i < 1024; ++i) {
+		struct oio_lb_item_s *srv = _srv (i);
+		oio_lb_world__feed_slot (world, (i%2)? "1":"0", srv);
+		if (!(i%3))
+			oio_lb_world__feed_slot (world, "2", srv);
+		oio_lb_world__feed_slot (world, "*", srv);
+		g_free (srv);
 	}
 
-	i = count = 0;
-	grid_lbpool_reload(lbp, srvtype, &provide);
+	oio_lb_world__debug (world);
 
-	g_assert(count == max);
-	return count;
-}
+	/* create a pool and poll it */
+	struct oio_lb_pool_s *pool = oio_lb_world__create_pool (world, "pool-test");
+	oio_lb_world__add_pool_target (pool, "0,1,*");
+	oio_lb_world__add_pool_target (pool, "2,1,*");
+	g_assert_cmpuint (oio_lb_world__count_slots (world), ==, 4);
 
-static void
-check_presence(gboolean expected, struct grid_lb_iterator_s *iter,
-		struct service_info_s *si)
-{
-	gchar *k = service_info_key (si);
-	STRING_STACKIFY(k);
-	k = strrchr(k, '|') + 1;  // Hack to make the test pass until we remove it
-	gboolean available = grid_lb_iterator_is_url_available(iter, k);
-	g_assert(BOOL(available) == BOOL(expected));
-}
-
-static void
-check_not_found(struct grid_lb_iterator_s *iter)
-{
-	struct service_info_s *si;
-
-	si = _build_si(ADDR_GOOD, 1);
-	check_presence(TRUE, iter, si);
-	service_info_clean(si);
-
-	si = _build_si(ADDR_BAD, 1);
-	check_presence(FALSE, iter, si);
-	service_info_clean(si);
-
-	si = _build_si(ADDR_BAD, 1);
-	si->addr.port = htons(1U);
-	check_presence(FALSE, iter, si);
-	service_info_clean(si);
-
-	si = _build_si(ADDR_GOOD, max_feed + 1);
-	check_presence(FALSE, iter, si);
-	service_info_clean(si);
-
-	si = _build_si(ADDR_GOOD, 1);
-	si->addr.port = htons(1U);
-	check_presence(FALSE, iter, si);
-	service_info_clean(si);
-
-	si = _build_si(ADDR_GOOD, max_feed + 1);
-	check_presence(FALSE, iter, si);
-	service_info_clean(si);
-
-	si = _build_si(ADDR_GOOD, 0);
-	check_presence(FALSE, iter, si);
-	service_info_clean(si);
-}
-
-static gint
-cmp_addr(gconstpointer a, gconstpointer b, gpointer user_data)
-{
-	(void) user_data;
-	return addr_info_compare(a, b);
-}
-
-static void
-_compute_repartition(GTree *used, struct service_info_s **siv)
-{
-	while (*siv) {
-		struct service_info_s *si = *siv;
-		guint *pi = g_tree_lookup(used, &(si->addr));
-		if (!pi) {
-			pi = g_malloc0(sizeof(guint));
-			*pi = 1;
-			g_tree_insert(used, g_memdup(&(si->addr), sizeof(struct addr_info_s)), pi);
+	/* now poll some pools */
+	for (int i = 0; i < 4096; i++) {
+		guint count_rc, count;
+		void _on_item (oio_location_t location, const char *id) {
+			(void) location, (void) id;
+			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT, id, location);
+			++ count;
 		}
-		else {
-			++ *pi;
+		count = 0;
+		count_rc = oio_lb_pool__poll (pool, NULL, _on_item);
+		g_assert_cmpuint (count_rc, ==, count);
+		g_assert_cmpuint (count_rc, ==, 2);
+	}
+
+	oio_lb_world__debug (world);
+
+	oio_lb_pool__destroy (pool);
+	oio_lb_world__destroy (world);
+}
+
+static struct oio_lb_item_s *
+_srv2(int i, int svc_per_slot)
+{
+	size_t len = 8 + sizeof (struct oio_lb_item_s);
+	struct oio_lb_item_s *srv = g_malloc0 (len);
+	srv->location = i % svc_per_slot + i / svc_per_slot * 256 + 1;
+	srv->weight = 80;
+	sprintf(srv->id, "ID-%04d", i);
+	GRID_TRACE("Built service id=%s,location=%lu,weight=%d",
+			srv->id, srv->location, srv->weight);
+	return srv;
+}
+
+static void
+_test_uniform_repartition(int services, int slots, int targets)
+{
+	struct oio_lb_world_s *world = oio_lb_local__create_world ();
+	void *slot_names_raw = alloca(5 * slots);
+	char *slot_names[slots];
+	int targets_per_slot[slots];
+	int actual_svc_per_slot[slots];
+	int svc_per_slot = (services-1) / slots + 1;
+	int shots = 10000;
+
+	GRID_DEBUG("Creating world with %d slots, %d services (%d services per slot)",
+			slots, services, svc_per_slot);
+	for (int i = 0; i < slots; i++) {
+		targets_per_slot[i] = 0;
+		actual_svc_per_slot[i] = 0;
+		slot_names[i] = slot_names_raw + 5*i;
+		sprintf(slot_names[i], "%04d", i);
+		oio_lb_world__create_slot(world, slot_names[i]);
+	}
+	oio_lb_world__create_slot(world, "*");
+
+	/* fill some services */
+	for (int i = 0; i < services; i++) {
+		struct oio_lb_item_s *srv = _srv2(i, svc_per_slot);
+		oio_lb_world__feed_slot(world, slot_names[i/svc_per_slot], srv);
+		oio_lb_world__feed_slot(world, "*", srv);
+		actual_svc_per_slot[i/svc_per_slot]++;
+		g_free(srv);
+	}
+
+	/* create a pool and poll it */
+	GRID_DEBUG("Creating a pool with %d targets", targets);
+	struct oio_lb_pool_s *pool = oio_lb_world__create_pool(world, "pool-test");
+	for (int i = 0; i < targets; i++) {
+		char target[16] = {0};
+		sprintf(target, "%04d,*", i % slots);
+		targets_per_slot[i % slots]++;
+		oio_lb_world__add_pool_target(pool, target);
+	}
+	g_assert_cmpuint(oio_lb_world__count_slots(world), ==, slots+1);
+
+	int counts[services];
+	memset(counts, 0, services * sizeof(int));
+	/* now poll some pools */
+	for (int i = 0; i < shots; i++) {
+		guint count_rc, count;
+		void _on_item(oio_location_t location, const char *id) {
+			(void) location, (void) id;
+			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT, id, location);
+			++count;
+			counts[atoi(id+3)]++;
 		}
+		count = 0;
+		count_rc = oio_lb_pool__poll(pool, NULL, _on_item);
+		g_assert_cmpuint(count_rc, ==, count);
+		g_assert_cmpuint(count_rc, ==, targets);
+	}
+
+	oio_lb_world__debug(world);
+
+	GRID_DEBUG("Repartition with %d targets:", targets);
+	for (int i = 0; i < services; i++) {
+		int slot = i/svc_per_slot;
+		int ideal_count = targets_per_slot[slot] * shots / actual_svc_per_slot[slot];
+		int min_count = ideal_count * 85 / 100;
+		int max_count = ideal_count * 115 / 100;
+		GRID_DEBUG("service %04d (slot %d) chosen %d times (min/ideal/max/diff: %d/%d/%d/%+2.2f%%)",
+				i, slot, counts[i], min_count, ideal_count, max_count,
+				counts[i]*100.0f/(float)ideal_count - 100.0f);
+		g_assert_cmpint(counts[i], >=, min_count);
+		g_assert_cmpint(counts[i], <=, max_count);
+	}
+
+	oio_lb_pool__destroy(pool);
+	oio_lb_world__destroy(world);
+}
+
+struct repartition_test_s {
+	int services;
+	int slots;
+	int targets;
+};
+
+static void
+test_uniform_repartition(gconstpointer raw_test_data)
+{
+	const struct repartition_test_s *test_data = raw_test_data;
+	return _test_uniform_repartition(test_data->services,
+			test_data->slots, test_data->targets);
+}
+
+static void
+test_local_feed_twice(void)
+{
+	struct oio_lb_world_s *world = oio_lb_local__create_world();
+	struct oio_lb_item_s *srv0 = g_malloc0(8 + sizeof (struct oio_lb_item_s));
+	struct oio_lb_item_s *srv1 = g_malloc0(8 + sizeof (struct oio_lb_item_s));
+	srv0->location = 42 + 65536;
+	srv0->weight = 42;
+	g_sprintf(srv0->id, "ID-%d", 42);
+	srv1->location = 43 + 65536;
+	srv1->weight = 42;
+	g_sprintf(srv1->id, "ID-%d", 43);
+
+	oio_lb_world__create_slot(world, "0");
+	oio_lb_world__feed_slot(world, "0", srv1);
+	oio_lb_world__feed_slot(world, "0", srv0);
+	oio_lb_world__feed_slot(world, "0", srv0);
+
+	g_assert_cmpuint(2, ==, oio_lb_world__count_slot_items(world, "0"));
+}
+
+static void
+test_local_feed (void)
+{
+	struct oio_lb_world_s *world = oio_lb_local__create_world ();
+	oio_lb_world__create_slot (world, "0");
+	oio_lb_world__create_slot (world, "1");
+	oio_lb_world__create_slot (world, "2");
+	oio_lb_world__create_slot (world, "3");
+	oio_lb_world__create_slot (world, "*");
+	struct oio_lb_pool_s *pool = oio_lb_world__create_pool (world, "pool-test");
+	oio_lb_world__add_pool_target (pool, "0,1,2,3,*");
+	oio_lb_world__add_pool_target (pool, "1,2,3,0,*");
+	oio_lb_world__add_pool_target (pool, "2,3,0,1,*");
+	oio_lb_world__add_pool_target (pool, "3,0,1,2,*");
+	g_assert_cmpuint (oio_lb_world__count_slots (world), ==, 5);
+
+	for (int j = 0; j < 8; ++j) {
+		struct oio_lb_item_s *srv = g_malloc0 (8 + sizeof (struct oio_lb_item_s));
+		for (int i = 0; i < 8; ++i) {
+			srv->location = 65430 - i;
+			srv->weight = 90 + i;
+			strcpy (srv->id, "ID-");
+			srv->id[strlen(srv->id)] = '0' + i;
+			oio_lb_world__feed_slot (world, "*", srv);
+			if (!(i%2)) oio_lb_world__feed_slot (world, "0", srv);
+			if (!(i%3)) oio_lb_world__feed_slot (world, "1", srv);
+			if (!(i%4)) oio_lb_world__feed_slot (world, "2", srv);
+			if (!(i%5)) oio_lb_world__feed_slot (world, "3", srv);
+		}
+		g_free (srv);
+	}
+	g_assert_cmpuint (oio_lb_world__count_slots (world), ==, 5);
+	g_assert_cmpuint (oio_lb_world__count_items (world), ==, 8);
+
+	oio_lb_world__debug (world);
+	oio_lb_pool__destroy (pool);
+	oio_lb_world__destroy (world);
+}
+
+static void
+test_local_pool (void)
+{
+	struct oio_lb_world_s *world = oio_lb_local__create_world ();
+	oio_lb_world__create_slot (world, "0");
+	oio_lb_world__create_slot (world, "1");
+	oio_lb_world__create_slot (world, "2");
+	oio_lb_world__create_slot (world, "3");
+	for (int i=0; i<8 ;++i) {
+		struct oio_lb_pool_s *pool = oio_lb_world__create_pool (world, "pool-test");
+		oio_lb_world__add_pool_target (pool, "0,1,2,3");
+		oio_lb_world__add_pool_target (pool, "1,2,3,0");
+		oio_lb_world__add_pool_target (pool, "2,3,0,1");
+		oio_lb_world__add_pool_target (pool, "3,0,1,2");
+		oio_lb_pool__destroy (pool);
+	}
+	oio_lb_world__destroy (world);
+}
+
+static void
+test_local_world (void)
+{
+	for (int i=0; i<8 ;++i) {
+		struct oio_lb_world_s *world = oio_lb_local__create_world ();
+		for (int j=0; j<8 ;++j) {
+			char tmp[] = {'s', 'l', 'o', 't', '-', j+'0', 0};
+			for (int k=0; k<4 ;++k)
+				oio_lb_world__create_slot (world, tmp);
+		}
+		oio_lb_world__destroy (world);
 	}
 }
 
 static void
-_check_repartition_uniform(GTree *used, gdouble ratio)
+_add_repartition_test(int services, int slots, int targets)
 {
-	gint64 count = 0, total = 0;
-	gdouble average = 0.0, min = 0.0, max = 0.0;
-
-	gboolean hook_sum(gpointer ai, guint *pi, gpointer ignored) {
-		(void) ai, (void) ignored;
-		total += *pi;
-		++ count;
-		return FALSE;
-	}
-	gboolean hook_check(gpointer ai, guint *pi, gpointer ignored) {
-		(void) ai, (void) ignored;
-		gdouble current = *pi;
-		g_debug("count=%f average=%f min=%f max=%f", current, average, min, max);
-		g_assert(current <= max);
-		g_assert(current >= min);
-		return FALSE;
-	}
-
-	g_tree_foreach(used, (GTraverseFunc)hook_sum, NULL);
-	if (count > 0) {
-		average = (gdouble)total / (gdouble)count;
-		min = floor(average * (1.0 - ratio));
-		max = ceil(average * (1.0 + ratio));
-	}
-	g_tree_foreach(used, (GTraverseFunc)hook_check, NULL);
-	g_assert((guint)g_tree_nnodes(used) == max_feed - 1);
+	char name[128] = {0};
+	snprintf(name, sizeof(name), "/core/lb/local/poll_%d_%d_%d",
+			services, slots, targets);
+	struct repartition_test_s *test_data = \
+			g_malloc0(sizeof(struct repartition_test_s));
+	test_data->services = services;
+	test_data->slots = slots;
+	test_data->targets = targets;
+	g_test_add_data_func_full(name, test_data,
+			test_uniform_repartition, g_free);
 }
-
-static void
-generate_set_and_check_uniform_repartition(struct grid_lb_iterator_s *iter,
-		gdouble ratio)
-{
-	struct service_info_s **siv = NULL;
-	GTree *used = g_tree_new_full(cmp_addr, NULL, g_free, g_free);
-
-	struct lb_next_opt_ext_s opt = {0};
-	opt.max = max_get;
-	opt.distance = 1;
-	opt.weak_distance = 1;
-	opt.duplicates = TRUE;
-	gboolean rc = grid_lb_iterator_next_set2(iter, &siv, &opt, NULL);
-	g_assert(rc != FALSE);
-
-	_compute_repartition(used, siv);
-	_check_repartition_uniform(used, ratio);
-	g_tree_destroy(used);
-	service_info_cleanv(siv, FALSE);
-}
-
-static void
-generate_1by1_and_check_uniform_repartition(struct grid_lb_iterator_s *iter,
-		gdouble ratio)
-{
-	GTree *used = g_tree_new_full(cmp_addr, NULL, g_free, g_free);
-	for (guint i=0; i<max_get; ++i) {
-		struct service_info_s **siv = NULL;
-		struct lb_next_opt_ext_s opt = {0};
-		opt.max = 1;
-		if (!grid_lb_iterator_next_set2(iter, &siv, &opt, NULL))
-			break;
-		if (!siv)
-			break;
-		_compute_repartition(used, siv);
-		service_info_cleanv(siv, FALSE);
-	}
-	_check_repartition_uniform(used, ratio);
-	g_tree_destroy(used);
-}
-
-static guint
-_count_set(struct grid_lb_iterator_s *iter, guint max, gboolean weak,
-		gboolean expect)
-{
-	struct service_info_s **siv = NULL;
-	gboolean rc;
-
-	struct lb_next_opt_ext_s opt = {0};
-	opt.max = max;
-	opt.distance = 1;
-	opt.weak_distance = weak;
-	opt.duplicates = TRUE;
-
-	rc = grid_lb_iterator_next_set2(iter, &siv, &opt, NULL);
-	g_assert(rc == expect);
-
-	if (expect) {
-		guint count = g_strv_length((gchar**)siv);
-		service_info_cleanv(siv, FALSE);
-		return count;
-	}
-	return 0;
-}
-
-static guint
-_count_single(struct grid_lb_iterator_s *iter, guint max)
-{
-	guint count = 0;
-
-	while ((max--) > 0) {
-		struct service_info_s **siv = NULL;
-		struct lb_next_opt_ext_s opt = {0};
-		opt.max = 1;
-		if (!grid_lb_iterator_next_set2(iter, &siv, &opt, NULL))
-			break;
-		service_info_cleanv(siv, FALSE);
-		count ++;
-	}
-
-	return count;
-}
-
-static void
-check_service_count(struct grid_lb_iterator_s *iter)
-{
-	g_assert(iter != NULL);
-	check_not_found(iter);
-	g_assert(max_get == _count_single(iter, max_get));
-
-	// Half the number of services in the pool -> should work
-	g_assert(_count_set(iter, max_feed / 2, FALSE, TRUE) == max_feed / 2);
-
-	// More services than the number in the pool -> should fail
-	g_assert(_count_set(iter, max_feed + 10, FALSE, FALSE) == 0);
-	// More services than the number in the pool, but weak distance -> should work
-	g_assert(_count_set(iter, max_feed + 10, TRUE, TRUE) == (max_feed + 10));
-
-	// Far more services than the number in the pool -> should fail
-	g_assert(_count_set(iter, max_get, FALSE, FALSE) == 0);
-	// Far more services than the number in the pool, but weak distance -> should work
-	g_assert(_count_set(iter, max_get, TRUE, TRUE) == max_get);
-}
-
-static void
-check_service_count_near_limit(struct grid_lb_iterator_s *iter)
-{
-	// One service less than the number in the pool -> should work
-	g_assert(_count_set(iter, max_feed - 2, FALSE, TRUE) == max_feed - 2);
-	// As much services as the number in the pool -> should work
-	g_assert(_count_set(iter, max_feed - 1, FALSE, TRUE) == max_feed - 1);
-}
-
-static void
-test_lb_RR(void)
-{
-	struct grid_lbpool_s *lbp = grid_lbpool_create (NS);
-	struct grid_lb_iterator_s *iter = grid_lbpool_ensure_iterator (lbp, SRVTYPE);
-	grid_lbpool_configure_string (lbp, SRVTYPE, "RR");
-	_fill (lbp, SRVTYPE, max_feed);
-
-	check_service_count(iter);
-	check_service_count_near_limit(iter);
-	generate_1by1_and_check_uniform_repartition(iter, 0.01);
-	generate_set_and_check_uniform_repartition(iter, 0.01);
-
-	grid_lb_iterator_clean(iter);
-	grid_lbpool_destroy (lbp);
-}
-
-static void
-test_lb_WRR(void)
-{
-	struct grid_lbpool_s *lbp = grid_lbpool_create (NS);
-	struct grid_lb_iterator_s *iter = grid_lbpool_ensure_iterator (lbp, SRVTYPE);
-	grid_lbpool_configure_string (lbp, SRVTYPE, "WRR");
-	_fill (lbp, SRVTYPE, max_feed);
-
-	check_service_count(iter);
-	check_service_count_near_limit(iter);
-
-	grid_lb_iterator_clean(iter);
-	grid_lbpool_destroy(lbp);
-}
-
-static void
-test_lb_RAND(void)
-{
-	struct grid_lbpool_s *lbp = grid_lbpool_create (NS);
-	struct grid_lb_iterator_s *iter = grid_lbpool_ensure_iterator (lbp, SRVTYPE);
-	grid_lbpool_configure_string (lbp, SRVTYPE, "RAND");
-	_fill (lbp, SRVTYPE, max_feed);
-
-	check_service_count(iter);
-	generate_1by1_and_check_uniform_repartition(iter, 0.3);
-	generate_set_and_check_uniform_repartition(iter, 0.3);
-
-	grid_lb_iterator_clean(iter);
-	grid_lbpool_destroy(lbp);
-}
-
-static void
-test_lb_WRAND(void)
-{
-	struct grid_lbpool_s *lbp = grid_lbpool_create (NS);
-	struct grid_lb_iterator_s *iter = grid_lbpool_ensure_iterator (lbp, SRVTYPE);
-	grid_lbpool_configure_string (lbp, SRVTYPE, "WRAND");
-	_fill (lbp, SRVTYPE, max_feed);
-
-	check_service_count(iter);
-
-	grid_lb_iterator_clean(iter);
-	grid_lbpool_destroy (lbp);
-}
-
-static void
-test_pool_create_destroy(void)
-{
-	struct grid_lbpool_s *glp = grid_lbpool_create("NS");
-	g_assert(glp != NULL);
-	grid_lbpool_destroy(glp);
-}
-
-/* -------------------------------------------------------------------------- */
 
 int
 main(int argc, char **argv)
 {
 	HC_TEST_INIT(argc,argv);
-	g_test_add_func("/grid/lb/WRAND", test_lb_WRAND);
-	g_test_add_func("/grid/lb/RAND", test_lb_RAND);
-	g_test_add_func("/grid/lb/WRR", test_lb_WRR);
-	g_test_add_func("/grid/lb/RR", test_lb_RR);
-	g_test_add_func("/grid/pool/create_destroy", test_pool_create_destroy);
+	g_test_add_func("/core/lb/local/world", test_local_world);
+	g_test_add_func("/core/lb/local/pool", test_local_pool);
+	g_test_add_func("/core/lb/local/feed", test_local_feed);
+	g_test_add_func("/core/lb/local/feed_twice", test_local_feed_twice);
+	g_test_add_func("/core/lb/local/poll", test_local_poll);
+
+	_add_repartition_test(30, 1, 1);
+	_add_repartition_test(30, 1, 3);
+	_add_repartition_test(30, 1, 9);
+	_add_repartition_test(30, 1, 18);
+
+	_add_repartition_test(9, 1, 9);
+	_add_repartition_test(88, 3, 18);
+
+	_add_repartition_test(30, 3, 9);
+	_add_repartition_test(40, 4, 9);
+	_add_repartition_test(30, 3, 10);
+	_add_repartition_test(40, 4, 10);
+	_add_repartition_test(36, 18, 18);
+
 	return g_test_run();
 }
 

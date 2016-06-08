@@ -1,7 +1,7 @@
 /*
 OpenIO SDS cluster
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -113,25 +113,7 @@ print_formated_namespace(namespace_info_t * ns)
 		service_update_policies_destroy(pol);
 	}
 
-	/* dump the rawx load-balancing for the meta2 */
-	struct grid_lbpool_s *glp = grid_lbpool_create (ns->name);
-	grid_lbpool_reconfigure (glp, ns);
-	gboolean first = TRUE;
-	void _dump (const char *srvtype) {
-		struct grid_lb_iterator_s *it = grid_lbpool_ensure_iterator (glp, srvtype);
-		GString *gs = grid_lb_iterator_to_string (it);
-		g_print("%20s : %s=%s\n", first ? "LB(meta2)" : "", srvtype, gs->str);
-		g_string_free (gs, TRUE);
-		first = FALSE;
-	}
-	if (!types) {
-		_dump (NAME_SRVTYPE_RAWX);
-	} else for (GSList *l=types; l ;l=l->next) {
-		_dump (l->data);
-	}
-
 	g_slist_free_full (types, g_free);
-	grid_lbpool_destroy (glp);
 	g_print("\n");
 }
 
