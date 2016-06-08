@@ -33,7 +33,7 @@ class TestChunk(unittest.TestCase):
         self.assertEqual(c.hash, "E952A419957A6E405BFC53EC65483F73")
         self.assertEqual(c.id, "AABBCC")
         self.assertEqual(c.host, "127.0.0.1:6010")
-        self.assertFalse(c.is_subchunk)
+        self.assertFalse(c.ec)
         self.assertEqual(c.data, data)
         self.assertEqual(c.raw(), data)
 
@@ -43,11 +43,10 @@ class TestChunk(unittest.TestCase):
             "pos": "0.1", "size": 1048576,
             "hash": "00000000000000000000000000000000"}
         c = Chunk(data)
-        self.assertEqual(c.is_parity, False)
         self.assertEqual(c.pos, "0.1")
         self.assertEqual(c.metapos, "0")
         self.assertEqual(c.subpos, "1")
-        self.assertTrue(c.is_subchunk)
+        self.assertTrue(c.ec)
 
     def test_comparison_no_ec(self):
         c1 = Chunk({

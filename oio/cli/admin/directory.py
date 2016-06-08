@@ -1,32 +1,31 @@
-"""Meta0 actions for the 'openio' CLI"""
-
 import logging
 
 from cliff.command import Command
 from oio.directory.meta0 import PrefixMapping
 
 
-class Meta0Cmd(Command):
-    """Base class for meta0 subcommands"""
+class DirectoryCmd(Command):
+    """Base class for directory subcommands"""
 
-    log = logging.getLogger(__name__ + '.Meta0')
+    log = logging.getLogger(__name__ + '.Directory')
 
     def get_parser(self, prog_name):
-        parser = super(Meta0Cmd, self).get_parser(prog_name)
+        parser = super(DirectoryCmd, self).get_parser(prog_name)
         parser.add_argument('--replicas', metavar='<N>', dest='replicas',
                             type=int, default=3,
                             help='Set the number of replicas')
-        parser.add_argument('ns', metavar='<NAMESPACE>',
-                            help='Namespace name')
         return parser
 
     def get_prefix_mapping(self, parsed_args):
-        return PrefixMapping(parsed_args.ns, replicas=parsed_args.replicas,
-                             logger=self.log)
+        meta0_client = self.app.client_manager.admin.meta0
+        conscience_client = self.app.client_manager.admin.cluster
+        return PrefixMapping(
+            meta0_client, conscience_client, replicas=parsed_args.replicas,
+            logger=self.log)
 
 
-class Meta0Init(Meta0Cmd):
-    """Initialize the meta0"""
+class DirectoryInit(DirectoryCmd):
+    """Initialize the directory"""
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
@@ -42,8 +41,8 @@ class Meta0Init(Meta0Cmd):
         mapping.force()
 
 
-class Meta0List(Meta0Cmd):
-    """List the content of the meta0"""
+class DirectoryList(DirectoryCmd):
+    """List the content of the directory"""
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
@@ -52,8 +51,8 @@ class Meta0List(Meta0Cmd):
         print mapping.to_json()
 
 
-class Meta0Rebalance(Meta0Cmd):
-    """Rebalance the container prefixes over all the available meta1"""
+class DirectoryRebalance(DirectoryCmd):
+    """Rebalance the container prefixes"""
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
@@ -63,11 +62,11 @@ class Meta0Rebalance(Meta0Cmd):
         mapping.force()
 
 
-class Meta0Decommission(Meta0Cmd):
+class DirectoryDecommission(DirectoryCmd):
     """Decommission a Meta1 service"""
 
     def get_parser(self, prog_name):
-        parser = super(Meta0Decommission, self).get_parser(prog_name)
+        parser = super(DirectoryDecommission, self).get_parser(prog_name)
         parser.add_argument('addr', metavar='<ADDR>',
                             help='Address of service to decommission')
         return parser

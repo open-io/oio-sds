@@ -12,7 +12,7 @@ class ClusterShow(show.ShowOne):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
-        data = self.app.client_manager.storage_internal.cluster_info()
+        data = self.app.client_manager.admin.cluster_info()
         output = list()
         output.append(('namespace', data['ns']))
         output.append(('chunksize', data['chunksize']))
@@ -46,7 +46,7 @@ class ClusterList(lister.Lister):
 
         results = []
         for srv_type in parsed_args.srv_types:
-            data = self.app.client_manager.storage_internal.cluster_list(
+            data = self.app.client_manager.admin.cluster_list(
                 srv_type)
             for srv in data:
                 tags = srv['tags']

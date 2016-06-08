@@ -5,17 +5,17 @@ install:
   - sudo apt-add-repository "deb http://archive.ubuntu.com/ubuntu trusty-backports main restricted universe multiverse"
   - sudo apt-add-repository "deb http://mirror.openio.io/pub/repo/openio/sds/15.12/ trusty/"
   - sudo apt-get update -qq
-  - sudo apt-get install -y --force-yes libglib2.0-dev libzookeeper-mt-dev libzmq3-dev libcurl4-gnutls-dev libapreq2-dev libsqlite3-dev libattr1-dev libevent-dev apache2 apache2-dev libapache2-mod-wsgi liblzo2-dev openio-gridinit openio-asn1c libjson-c-dev flex bison curl libleveldb1 libleveldb-dev libattr1-dev python-all-dev python-virtualenv beanstalkd
+  - sudo apt-get install -y --force-yes libglib2.0-dev libzookeeper-mt-dev libzmq3-dev libcurl4-gnutls-dev libapreq2-dev libsqlite3-dev libattr1-dev libevent-dev apache2 apache2-dev libapache2-mod-wsgi liblzo2-dev openio-gridinit openio-asn1c libjson-c-dev flex bison curl libleveldb1 libleveldb-dev libattr1-dev python-all-dev python-virtualenv beanstalkd liberasurecode-dev
   - virtualenv $HOME/oio && source $HOME/oio/bin/activate
   - pip install --upgrade pip setuptools virtualenv tox
-  - pip install --upgrade -r requirements.txt
+  - pip install --upgrade -r all-requirements.txt
   - pip install --upgrade -r test-requirements.txt
 script:
   - set -e
   - mkdir /tmp/oio
   - source $HOME/oio/bin/activate
   - cmake -DCMAKE_INSTALL_PREFIX="/tmp/oio" -DLD_LIBDIR="lib" -DCMAKE_BUILD_TYPE="Debug" -DSTACK_PROTECTOR=1 -DZK_LIBDIR="/usr/lib" -DZK_INCDIR="/usr/include/zookeeper" -DLIBRAIN_LIBDIR="/usr/lib" -DLIBRAIN_INCDIR="/usr/include" -DAPACHE2_LIBDIR="/usr/lib/apache2" -DAPACHE2_INCDIR="/usr/include/apache2" -DAPACHE2_MODDIR=/tmp/oio/lib/apache2/module .
-  - make -j 8 all install
+  - make all install
   - python setup.py install
   - export G_DEBUG_LEVEL=D PATH="$PATH:/tmp/oio/bin" LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/tmp/oio/lib"
   - ./tools/oio-travis-tests.sh

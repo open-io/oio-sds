@@ -9,9 +9,12 @@ import time
 import fcntl
 import yaml
 
+import codecs
 import eventlet
+
 import eventlet.semaphore
 from eventlet.green import socket, threading
+from urllib import quote as _quote
 
 from optparse import OptionParser
 from ConfigParser import SafeConfigParser
@@ -74,6 +77,45 @@ class StreamToLogger(object):
 
     def flush(self):
         pass
+
+
+utf8_decoder = codecs.getdecoder('utf-8')
+utf8_encoder = codecs.getencoder('utf-8')
+
+
+def quote(value, safe='/'):
+    if isinstance(value, unicode):
+        (value, _len) = utf8_encoder(value, 'replace')
+    (valid_utf8_str, _len) = utf8_decoder(value, 'replace')
+    return _quote(valid_utf8_str.encode('utf-8'), safe)
+
+
+def name2cid(account, ref):
+    h = hashlib.sha256()
+    for v in [account, '\0', ref]:
+        h.update(v)
+    return h.hexdigest()
+
+
+class ContextPool(eventlet.GreenPool):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        for coroutine in list(self.coroutines_running):
+            coroutine.kill()
+
+
+def env(*vars, **kwargs):
+    """Search for the first defined of possibly many env vars
+    Returns the first environment variable defined in vars, or
+    returns the default defined in kwargs.
+    """
+    for v in vars:
+        value = os.environ.get(v, None)
+        if value:
+            return value
+    return kwargs.get('default', '')
 
 
 def set_fd_non_blocking(fd):
@@ -428,3 +470,31 @@ def cid_from_name(account, ref):
     for v in [account, '\0', ref]:
         h.update(v)
     return h.hexdigest()
+
+
+def convert_ranges(ranges, length):
+    if length is None or not ranges or ranges == []:
+        return None
+    result = []
+    for r in ranges:
+        start, end = r
+        if start is None:
+            if end == 0:
+                # bytes=-0
+                continue
+            elif end > length:
+                # all content must be returned
+                result.append((0, length))
+            else:
+                result.append((length - end, length))
+            continue
+        if end is None:
+            if start < length:
+                result.append((start, length))
+            else:
+                # skip
+                continue
+        elif start < length:
+            result.append((start, min(end, length)))
+
+    return result

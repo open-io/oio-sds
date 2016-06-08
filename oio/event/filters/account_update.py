@@ -39,7 +39,7 @@ class AccountUpdateFilter(Filter):
             p = urlparse('http://' + self.app.app.acct_addr)
             try:
                 with Timeout(ACCOUNT_TIMEOUT):
-                    resp, body = http_request(p.hostname, p.port, 'POST', uri,
+                    resp, body = http_request(p.netloc, 'POST', uri,
                                               query_string=query, body=body)
             except (Exception, Timeout) as e:
                 self.logger.warn('error updating account "%s"', str(e.message))

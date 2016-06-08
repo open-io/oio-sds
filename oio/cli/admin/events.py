@@ -19,6 +19,6 @@ class StatsEvents(show.ShowOne):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
-        data = self.app.client_manager.storage_internal.event_stats(
+        data = self.app.client_manager.admin.event_stats(
             parsed_args.tube)
         return zip(*sorted(data.iteritems()))

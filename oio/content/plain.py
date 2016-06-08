@@ -15,11 +15,11 @@
 # License along with this library.
 
 
-from oiopy import io
-from oiopy.ec import ECWriteHandler
-from oiopy.replication import ReplicatedWriteHandler
-from oiopy.object_storage import _sort_chunks, get_meta_ranges
-from oiopy.storage_method import STORAGE_METHODS
+from oio.api import io
+from oio.api.ec import ECWriteHandler
+from oio.api.replication import ReplicatedWriteHandler
+from oio.api.object_storage import _sort_chunks, get_meta_ranges
+from oio.common.storage_method import STORAGE_METHODS
 from oio.content.content import Content
 from oio.common import exceptions as exc
 from oio.common.exceptions import UnrecoverableContent
