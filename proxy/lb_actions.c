@@ -125,12 +125,14 @@ _json_ids_to_locations(struct json_object *arr, oio_location_t *prev)
 {
 	if (!arr)
 		return prev;
-	int len = 0;
-	while (prev[len] != 0)
-		len++;
 	GArray *out = g_array_new(TRUE, TRUE, sizeof(oio_location_t));
-	g_array_append_vals(out, prev, len);
-	g_free(prev);
+	int len = 0;
+	if (prev) {
+		while (prev[len] != 0)
+			len++;
+		g_array_append_vals(out, prev, len);
+		g_free(prev);
+	}
 	len = json_object_array_length(arr);
 	for (int i = 0; i < len; i++) {
 		const char *id = json_object_get_string(
@@ -154,7 +156,8 @@ _poll(struct req_args_s *args, struct json_object *body)
 	if (body && !json_object_is_type(body, json_type_object))
 		return _reply_format_error(args, BADREQ("Expected: json object"));
 
-	struct json_object *javoid, *javoid_locs, *jknown, *jknown_locs;
+	struct json_object *javoid = NULL, *javoid_locs = NULL;
+	struct json_object *jknown = NULL, *jknown_locs = NULL;
 	struct oio_ext_json_mapping_s mapping[] = {
 		{"avoid",           &javoid,       json_type_array, 0},
 		{"avoid_locations", &javoid_locs,  json_type_array, 0},
