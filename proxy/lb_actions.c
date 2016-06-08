@@ -26,7 +26,7 @@ _lb_check_tokens (struct req_args_s *args)
 	if (!validate_namespace(NS()))
 		return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Invalid NS");
 	if (TYPE() && !validate_srvtype(TYPE()))
-		return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Invalid POOL");
+		return NEWERROR(CODE_SRVTYPE_NOTMANAGED, "Invalid TYPE");
 	return NULL;
 }
 
@@ -147,10 +147,11 @@ _json_ids_to_locations(struct json_object *arr, oio_location_t *prev)
 static enum http_rc_e
 _poll(struct req_args_s *args, struct json_object *body)
 {
+	GError *err = NULL;
 	enum http_rc_e code;
 	const char *policy = OPT("policy");
 
-	if (!body || !json_object_is_type(body, json_type_object))
+	if (body && !json_object_is_type(body, json_type_object))
 		return _reply_format_error(args, BADREQ("Expected: json object"));
 
 	struct json_object *javoid, *javoid_locs, *jknown, *jknown_locs;
@@ -161,8 +162,7 @@ _poll(struct req_args_s *args, struct json_object *body)
 		{"known_locations", &jknown_locs,  json_type_array, 0},
 		{NULL, NULL, 0, 0}
 	};
-	GError *err = oio_ext_extract_json(body, mapping);
-	if (err)
+	if (body && (err = oio_ext_extract_json(body, mapping)))
 		return _reply_common_error(args, err);
 
 	oio_location_t *avoid = _json_to_locations(javoid_locs);
@@ -182,22 +182,9 @@ _poll(struct req_args_s *args, struct json_object *body)
 					"found only %u services matching the criteria",
 					ids->len));
 	} else {
-		gboolean first = TRUE;
-		GString *out = g_string_new("[");
-		void _build_json(const char *id, gpointer unused)
-		{
-			(void)unused;
-			if (!first)
-				g_string_append_c(out, ',');
-			first = FALSE;
-			g_string_append_c(out, '"');
-			oio_str_gstring_append_json_string(out, id);
-			g_string_append_c(out, '"');
-		}
-		g_ptr_array_foreach(ids, (GFunc)_build_json, NULL);
-		g_string_append_c(out, ']');
-		g_ptr_array_free(ids, TRUE);
-		code = _reply_json(args, CODE_FINAL_OK, "OK", out);
+		g_ptr_array_add(ids, NULL);
+		GString *gstr = _lb_pack_and_free_srvid_tab((const char**)ids->pdata);
+		code = _reply_json(args, CODE_FINAL_OK, "OK", gstr);
 	}
 
 	g_free(avoid);

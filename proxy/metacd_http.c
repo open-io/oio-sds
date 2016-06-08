@@ -451,6 +451,7 @@ _task_reload_lb(gpointer p UNUSED)
 	}
 
 	oio_lb_world__reload_storage_policies(lb_world, lb, &nsinfo);
+	oio_lb_world__debug(lb_world);
 }
 
 static void

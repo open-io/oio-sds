@@ -77,6 +77,9 @@ struct oio_lb_world_s * oio_lb_local__create_world (void);
 /* Vishnu, destroyer of worlds */
 void oio_lb_world__destroy (struct oio_lb_world_s *self);
 
+/* Flush all items of all slots */
+void oio_lb_world__flush(struct oio_lb_world_s *self);
+
 /* Use this carefully, it GRID_DEBUG() all the items in the given world */
 void oio_lb_world__debug (struct oio_lb_world_s *self);
 

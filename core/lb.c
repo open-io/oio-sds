@@ -212,23 +212,35 @@ _item_is_to_be_avoided (const oio_location_t * avoids,
 }
 
 static void
-_slot_destroy (struct oio_lb_slot_s *slot)
+_slot_flush(struct oio_lb_slot_s *slot)
 {
 	if (!slot)
 		return;
 	if (slot->items) {
 		const guint max = slot->items->len;
-		for (guint i=0; i<max ;++i) { /* unref all the elements */
+		for (guint i = 0; i<max; ++i) { /* unref all the elements */
 			struct _slot_item_s *si = &SLOT_ITEM(slot,i);
 			struct _lb_item_s *it = si->item;
 			if (NULL != it) {
-				g_assert (it->refcount > 0);
+				g_assert(it->refcount > 0);
 				-- it->refcount;
 			}
 			si->acc_weight = 0;
 			si->item = NULL;
 		}
+		g_array_set_size(slot->items, 0);
+	}
+}
+
+static void
+_slot_destroy (struct oio_lb_slot_s *slot)
+{
+	if (!slot)
+		return;
+	if (slot->items) {
+		_slot_flush(slot);
 		g_array_free (slot->items, TRUE);
+		slot->items = NULL;
 	}
 	oio_str_clean (&slot->name);
 	g_free (slot);
@@ -537,6 +549,36 @@ oio_lb_local__create_world (void)
 	self->items = g_tree_new_full (oio_str_cmp3, NULL,
 			g_free, g_free);
 	return self;
+}
+
+void
+oio_lb_world__flush(struct oio_lb_world_s *self)
+{
+	if (!self)
+		return;
+
+	gboolean _slot_flush_cb(gpointer key, gpointer value, gpointer unused)
+	{
+		(void) key;
+		(void) unused;
+		struct oio_lb_slot_s *slot = value;
+		_slot_flush(slot);
+		return FALSE;
+	}
+
+	g_rw_lock_writer_lock(&self->lock);
+
+	if (self->slots) {
+		g_tree_foreach(self->slots, _slot_flush_cb, NULL);
+	}
+
+	if (self->items) {
+		g_tree_unref(self->items);
+		self->items = g_tree_new_full (oio_str_cmp3, NULL,
+				g_free, g_free);
+	}
+
+	g_rw_lock_writer_unlock(&self->lock);
 }
 
 void
