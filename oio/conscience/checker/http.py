@@ -17,13 +17,14 @@ class HttpChecker(BaseChecker):
         self.path = self.checker_conf['uri']
         self.name = '%s|http|%s|%s|%s' % \
             (self.srv_type, self.host, self.port, self.path)
+        self.netloc = '%s:%s' % (self.host, self.port)
         self.session = self.agent.session
 
     def check(self):
         success = False
         resp = None
         try:
-            conn = http_connect(self.host, self.port, 'GET', self.path)
+            conn = http_connect(self.netloc, 'GET', self.path)
             resp = conn.getresponse()
             if resp.status == 200:
                 success = True

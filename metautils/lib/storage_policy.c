@@ -404,7 +404,7 @@ static GString *
 _plain_policy_to_chunk_method(const struct data_security_s *datasec)
 {
 	GString *result = g_string_new("plain/");
-	const gint64 nb_copy = data_security_get_int64_param(datasec, DS_KEY_COPY_COUNT, 3);
+	const gint64 nb_copy = data_security_get_int64_param(datasec, DS_KEY_COPY_COUNT, 1);
 	g_string_append_printf(result,
 			"nb_copy=%" G_GINT64_FORMAT"", nb_copy);
 	return result;

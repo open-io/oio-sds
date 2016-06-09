@@ -143,10 +143,10 @@ class Rdir(object):
         start_after = decoded.get('start_after')
         limit = decoded.get('limit')
         if limit is not None and limit <= 0:
-            return BadRequest('limit must be greate than 0')
+            return BadRequest('limit must be greater than 0')
         rebuild = decoded.get('rebuild', False)
         if not isinstance(rebuild, bool):
-            return BadRequest('limit must be true or false')
+            return BadRequest('rebuild must be true or false')
 
         data = self.backend.chunk_fetch(volume, start_after=start_after,
                                         limit=limit, rebuild=rebuild)

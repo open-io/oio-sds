@@ -66,7 +66,7 @@ class TestBlobFunctional(BaseTestCase):
             for k, v in trailers.iteritems():
                 headers['Trailer'].append(k)
 
-        conn = http_connect(parsed.hostname, parsed.port, method, parsed.path,
+        conn = http_connect(parsed.netloc, method, parsed.path,
                             headers)
         if method == 'PUT':
             if body:

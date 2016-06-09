@@ -127,6 +127,12 @@ class RdirClient(Client):
         resp, resp_body = self._rdir_request(volume, 'GET', 'rdir/admin/show')
         return resp_body
 
+    def admin_clear(self, volume, clear_all=False):
+        body = {'all': clear_all}
+        resp, resp_body = self._rdir_request(
+            volume, 'POST', 'rdir/admin/clear', json=body)
+        return resp_body
+
     def status(self, volume):
         resp, resp_body = self._rdir_request(volume, 'GET', 'rdir/status')
         return resp_body

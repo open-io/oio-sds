@@ -27,8 +27,7 @@ class ContentReaperFilter(Filter):
                     p = urlparse(chunk['id'])
                     try:
                         with Timeout(CHUNK_TIMEOUT):
-                            conn = http_connect(
-                                p.hostname, p.port, 'DELETE', p.path)
+                            conn = http_connect(p.netloc, 'DELETE', p.path)
                             resp = conn.getresponse()
                             resp.chunk = chunk
                     except (Exception, Timeout) as e:

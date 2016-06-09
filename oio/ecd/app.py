@@ -1,9 +1,8 @@
 from hashlib import md5
-from oiopy import set_logger
-from oiopy.storage_method import STORAGE_METHODS
-from oiopy.ec import ECChunkWriteHandler, ECChunkDownloadHandler
-from oiopy.replication import ReplicatedChunkWriteHandler
-from oiopy.io import ChunkReader
+from oio.common.storage_method import STORAGE_METHODS
+from oio.api.ec import ECChunkWriteHandler, ECChunkDownloadHandler
+from oio.api.replication import ReplicatedChunkWriteHandler
+from oio.api.io import ChunkReader
 
 from werkzeug.wrappers import Request, Response
 
@@ -156,7 +155,6 @@ class ECD(object):
 
 def create_app():
     app = ECD({})
-    set_logger()
     return app
 
 if __name__ == '__main__':

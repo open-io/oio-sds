@@ -19,7 +19,7 @@ from oio.common.exceptions import NotFound
 from oio.common.utils import get_logger
 from oio.conscience.client import ConscienceClient
 from oio.container.client import ContainerClient
-from oio.content.dup import DupContent
+from oio.content.plain import PlainContent
 from oio.content.ec import ECContent
 
 
@@ -75,7 +75,8 @@ class ContentFactory(object):
         pol_type, pol_args = self._extract_datasec(meta['policy'])
 
         if pol_type == "plain":
-            return DupContent(self.conf, container_id, meta, chunks, pol_args)
+            return PlainContent(
+                self.conf, container_id, meta, chunks, pol_args)
         elif pol_type == "ec":
             return ECContent(self.conf, container_id, meta, chunks, pol_args)
 
@@ -88,7 +89,8 @@ class ContentFactory(object):
         pol_type, pol_args = self._extract_datasec(meta['policy'])
 
         if pol_type == "plain":
-            return DupContent(self.conf, container_id, meta, chunks, pol_args)
+            return PlainContent(
+                self.conf, container_id, meta, chunks, pol_args)
         elif pol_type == "ec":
             return ECContent(self.conf, container_id, meta, chunks, pol_args)
 
@@ -96,14 +98,14 @@ class ContentFactory(object):
 
     def change_policy(self, container_id, content_id, new_policy):
         old_content = self.get(container_id, content_id)
-        if old_content.stgpol_name == new_policy:
+        if old_content.stgpol == new_policy:
             return old_content
 
         new_content = self.new(container_id, old_content.path,
                                old_content.length, new_policy)
 
-        stream = old_content.download()
-        new_content.upload(GeneratorIO(stream))
+        stream = old_content.fetch()
+        new_content.create(GeneratorIO(stream))
         # the old content is automatically deleted because the new content has
         # the same name (but not the same id)
         return new_content
