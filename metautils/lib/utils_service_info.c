@@ -507,7 +507,7 @@ service_info_to_lb_item(const struct service_info_s *si,
 	item->location = location_from_addr_info(&(si->addr));
 	item->weight = si->score.value;
 	gchar *key = service_info_key(si);
-	strcpy(item->id, key);
+	g_strlcpy(item->id, key, LIMIT_LENGTH_SRVID);
 	g_free(key);
 }
 

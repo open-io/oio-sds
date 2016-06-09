@@ -50,11 +50,11 @@ void
 oio_lb_world__feed_service_info_list(struct oio_lb_world_s *lbw,
 		GSList *services)
 {
+	struct oio_lb_item_s *item = g_alloca(sizeof(struct oio_lb_item_s)
+			+ LIMIT_LENGTH_SRVID);
 	for (GSList *l = services; l; l = l->next) {
 		char slot_name[128] = {0};
 		struct service_info_s *srv = l->data;
-		/* Allocate item on the stack, it will be copied later */
-		struct oio_lb_item_s *item = g_alloca(sizeof(struct oio_lb_item_s)+128);
 		service_info_to_lb_item(srv, item);
 
 		/* Insert the service in a slot named after its storage class */
@@ -69,6 +69,7 @@ oio_lb_world__feed_service_info_list(struct oio_lb_world_s *lbw,
 		g_snprintf(slot_name, sizeof(slot_name), "%s", srv->type);
 		oio_lb_world__create_slot(lbw, slot_name);
 		oio_lb_world__feed_slot(lbw, slot_name, item);
+		memset(item, 0, sizeof(struct oio_lb_item_s) + LIMIT_LENGTH_SRVID);
 	}
 }
 

@@ -55,6 +55,9 @@ License along with this library.
 #define LIMIT_LENGTH_BASETYPE 32
 
 /** The maximum length of a service type name */
+#define LIMIT_LENGTH_SRVID 64
+
+/** The maximum length of a service id */
 #define LIMIT_LENGTH_SRVTYPE 32
 
 /** The maximum length of service options */

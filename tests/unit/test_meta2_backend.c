@@ -195,11 +195,11 @@ _init_lb(int nb_services)
 
 	lb_world = oio_lb_local__create_world();
 	oio_lb_world__create_slot (lb_world, "*");
+	struct oio_lb_item_s *item = g_alloca(sizeof(*item) + LIMIT_LENGTH_SRVID);
 	for (int i = 0; i < nb_services; i++) {
-		struct oio_lb_item_s *item = g_alloca(sizeof(*item) + 64);
 		item->location = 65536 + 6000 + i;
 		item->weight = 50;
-		g_sprintf(item->id, "127.0.0.1:%d", 6000+i);
+		g_snprintf(item->id, LIMIT_LENGTH_SRVID, "127.0.0.1:%d", 6000+i);
 		oio_lb_world__feed_slot(lb_world, "*", item);
 	}
 	oio_lb_world__debug(lb_world);
