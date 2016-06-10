@@ -1,0 +1,6 @@
+zookeeper: false
+storage_policy: "17COPIES"
+redis: true
+
+rawx:
+  count: 16
