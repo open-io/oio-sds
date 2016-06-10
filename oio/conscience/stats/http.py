@@ -11,6 +11,7 @@ class HttpStat(BaseStat):
         self.path = self.stat_conf['path'].lstrip('/')
         self.host = self.stat_conf['host']
         self.port = self.stat_conf['port']
+        self.netloc = '%s:%s' % (self.host, self.port)
         if self.parser == 'json':
             # use json parser (account and rdir style)
             self._parse_func = self._parse_stats_json
@@ -50,7 +51,7 @@ class HttpStat(BaseStat):
         result = {}
         resp = None
         try:
-            conn = http_connect(self.host, self.port, 'GET', self.path)
+            conn = http_connect(self.netloc, 'GET', self.path)
             resp = conn.getresponse()
             if resp.status == 200:
                 result = self._parse_func(resp.read())

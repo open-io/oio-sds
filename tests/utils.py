@@ -7,6 +7,20 @@ import testtools
 import requests
 import random
 import time
+import string
+
+random_chars = string.ascii_lowercase + string.ascii_uppercase +\
+    string.digits
+
+random_chars_id = 'ABCDEF' + string.digits
+
+
+def random_str(n, chars=random_chars):
+    return ''.join(random.choice(chars) for _ in range(n))
+
+
+def random_id(n):
+    return random_str(n, chars=random_chars_id)
 
 
 def trim_srv(srv):

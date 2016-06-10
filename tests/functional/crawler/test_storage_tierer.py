@@ -76,7 +76,7 @@ class TestStorageTierer(BaseTestCase):
         content = self.content_factory.new(container_id, content_name,
                                            len(data), stgpol)
 
-        content.upload(StringIO.StringIO(data))
+        content.create(StringIO.StringIO(data))
         return content
 
     def tearDown(self):

@@ -126,13 +126,11 @@ __fill_info(GHashTable *params, const char *info)
 static int
 _parse_data_security(struct data_security_s *ds, const char *config)
 {
-	GRID_INFO("config : %s ", config);
 	if (oio_str_prefixed (config, STGPOL_DSPREFIX_PLAIN, "/")) {
 		ds->type = STGPOL_DS_PLAIN;
 	} else if (oio_str_prefixed (config, "ec", "/")) {
 		ds->type = STGPOL_DS_EC;
 	} else if (oio_str_prefixed (config, "backblaze", "/")) {
-		GRID_INFO("config : type bon");
 		ds->type = STGPOL_DS_BACKBLAZE;
 	} else {
 		return 0;
@@ -418,6 +416,14 @@ _backblaze_policy_to_chunk_method(const struct data_security_s *datasec)
 			       account_id, bucket_name);
 	return result;
 }
+_plain_policy_to_chunk_method(const struct data_security_s *datasec)
+{
+	GString *result = g_string_new("plain/");
+	const gint64 nb_copy = data_security_get_int64_param(datasec, DS_KEY_COPY_COUNT, 1);
+	g_string_append_printf(result,
+			"nb_copy=%" G_GINT64_FORMAT"", nb_copy);
+	return result;
+}
 
 GString *
 storage_policy_to_chunk_method(const struct storage_policy_s *sp)
@@ -428,8 +434,8 @@ storage_policy_to_chunk_method(const struct storage_policy_s *sp)
 			return _rain_policy_to_chunk_method(datasec);
 	        case STGPOL_DS_BACKBLAZE:
 			return _backblaze_policy_to_chunk_method(datasec);
-	        case STGPOL_DS_PLAIN:
-			return g_string_new(STGPOL_DSPREFIX_PLAIN);
+		case STGPOL_DS_PLAIN:
+			return _plain_policy_to_chunk_method(datasec);
 		default:
 			g_assert_not_reached();
 	}

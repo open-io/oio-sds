@@ -84,6 +84,7 @@ set_rawx_info_to_fd (int fd, GError **error, struct chunk_textinfo_s *cti)
 	oio_str_upper(cti->container_id);
 	oio_str_upper(cti->content_id);
 	oio_str_upper(cti->chunk_hash);
+	oio_str_upper(cti->metachunk_hash);
 
 	SET(ATTR_NAME_CONTENT_CONTAINER, cti->container_id);
 
@@ -98,6 +99,7 @@ set_rawx_info_to_fd (int fd, GError **error, struct chunk_textinfo_s *cti)
 	SET(ATTR_NAME_CONTENT_MIMETYPE,    cti->content_mime_type);
 
 	SET(ATTR_NAME_METACHUNK_SIZE, cti->metachunk_size);
+	SET(ATTR_NAME_METACHUNK_HASH, cti->metachunk_hash);
 
 	SET(ATTR_NAME_CHUNK_ID,   cti->chunk_id);
 	SET(ATTR_NAME_CHUNK_SIZE, cti->chunk_size);
@@ -206,6 +208,7 @@ get_rawx_info_from_fd (int fd, GError **error, struct chunk_textinfo_s *cti)
 	GET(ATTR_NAME_CONTENT_MIMETYPE,    cti->content_mime_type);
 
 	GET(ATTR_NAME_METACHUNK_SIZE, cti->metachunk_size);
+	GET(ATTR_NAME_METACHUNK_HASH, cti->metachunk_hash);
 
 	GET(ATTR_NAME_CHUNK_ID,   cti->chunk_id);
 	GET(ATTR_NAME_CHUNK_SIZE, cti->chunk_size);
@@ -315,6 +318,7 @@ chunk_textinfo_free_content(struct chunk_textinfo_s *cti)
 	oio_str_clean (&cti->content_mime_type);
 
 	oio_str_clean (&cti->metachunk_size);
+	oio_str_clean (&cti->metachunk_hash);
 
 	oio_str_clean (&cti->chunk_id);
 	oio_str_clean (&cti->chunk_size);

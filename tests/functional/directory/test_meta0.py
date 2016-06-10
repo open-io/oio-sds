@@ -1,6 +1,6 @@
-
 from tests.utils import BaseTestCase
 from oio.directory.meta0 import PrefixMapping
+from oio.directory.meta0 import Meta0Client
 
 
 class FakeConscienceClient(object):
@@ -24,11 +24,11 @@ class TestPrefixMapping(BaseTestCase):
     def setUp(self):
         super(TestPrefixMapping, self).setUp()
         self.cs_client = FakeConscienceClient()
+        self.m0_client = Meta0Client({'namespace': self.ns})
 
     def test_bootstrap_3_services(self):
         self.cs_client.generate_services(3)
-        mapping = PrefixMapping(self.ns,
-                                conscience_client=self.cs_client)
+        mapping = PrefixMapping(self.m0_client, self.cs_client)
         mapping.bootstrap()
         n_pfx_by_svc = mapping.count_pfx_by_svc()
         for count in n_pfx_by_svc.itervalues():
@@ -37,8 +37,7 @@ class TestPrefixMapping(BaseTestCase):
 
     def test_bootstrap_3_services_rebalanced(self):
         self.cs_client.generate_services(3)
-        mapping = PrefixMapping(self.ns,
-                                conscience_client=self.cs_client)
+        mapping = PrefixMapping(self.m0_client, self.cs_client)
         mapping.bootstrap()
         mapping.rebalance()
         n_pfx_by_svc = mapping.count_pfx_by_svc()
@@ -49,8 +48,8 @@ class TestPrefixMapping(BaseTestCase):
         n = 20
         replicas = 3
         self.cs_client.generate_services(n, locations=10)
-        mapping = PrefixMapping(self.ns, replicas=replicas,
-                                conscience_client=self.cs_client)
+        mapping = PrefixMapping(self.m0_client, self.cs_client,
+                                replicas=replicas)
         mapping.bootstrap()
         n_pfx_by_svc = mapping.count_pfx_by_svc()
         ideal = PrefixMapping.TOTAL_PREFIXES * replicas / n
@@ -63,8 +62,8 @@ class TestPrefixMapping(BaseTestCase):
         n = 20
         replicas = 3
         self.cs_client.generate_services(n, locations=7)
-        mapping = PrefixMapping(self.ns, replicas=replicas,
-                                conscience_client=self.cs_client)
+        mapping = PrefixMapping(self.m0_client, self.cs_client,
+                                replicas=replicas)
         mapping.bootstrap()
         mapping.rebalance()
         self.assertTrue(mapping.check_replicas())
@@ -79,8 +78,8 @@ class TestPrefixMapping(BaseTestCase):
         n = 20
         replicas = 3
         self.cs_client.generate_services(n, locations=7)
-        mapping = PrefixMapping(self.ns, replicas=replicas,
-                                conscience_client=self.cs_client)
+        mapping = PrefixMapping(self.m0_client, self.cs_client,
+                                replicas=replicas)
         mapping.bootstrap()
         mapping.rebalance()
         self.assertTrue(mapping.check_replicas())

@@ -172,7 +172,7 @@ wait_for_srvtype "(meta0|meta1)" $((1 + REPLI_DIRECTORY))
 
 timestamp
 
-openio directory bootstrap --replicas ${REPLI_DIRECTORY} "$NS"
+openio --oio-ns "$NS" directory bootstrap --replicas ${REPLI_DIRECTORY}
 
 timestamp
 # unlock all services

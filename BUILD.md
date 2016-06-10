@@ -37,6 +37,8 @@ In addition, there some additional dependencies at runtime:
 * python-simplejson
 * pyxattr (python-xattr on Debian/Ubuntu)
 * libapache2-mod-wsgi (as named on Ubuntu), the WSGI module pour apache2
+* python-cliff
+* python-pyeclib
 
 The account service will require an up and running backend:
 * redis
@@ -76,10 +78,11 @@ make test
 make DESTDIR=${install_dir} install
 ```
 
-Install python module:
+Install python module (preferably inside a virtualenv):
 ```
-sudo python setup.py develop
+python setup.py develop
 ```
+
 
 ## Compile-time configuration
 

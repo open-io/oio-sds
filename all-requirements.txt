@@ -1,3 +1,4 @@
+cliff>=1.13.0
 eventlet>=0.15.2
 requests>=2.6.0
 werkzeug>=0.9.1
@@ -7,4 +8,4 @@ pyxattr>=0.4
 simplejson>=2.0.9
 plyvel>=0.9
 PyYAML>=3.10
-oiopy>=0.7.1
+PyECLib>=1.2.0

@@ -84,40 +84,40 @@ class Rdir(object):
         self.backend.create(volume)
         return Response(status=201)
 
+    def _check_push(self, meta):
+        data = {}
+        missing_keys = []
+
+        def add_keys(keys, transform_func=None, required=True):
+            for k in keys:
+                if k in meta:
+                    if transform_func:
+                        data[k] = transform_func(meta[k])
+                    else:
+                        data[k] = meta[k]
+                else:
+                    if required:
+                        missing_keys.append(k)
+
+        add_keys(['container_id', 'content_id', 'chunk_id'])
+        add_keys(['mtime', 'rtime'], lambda k: int(k), False)
+        if missing_keys:
+            raise BadRequest('Missing %s' % missing_keys)
+        return data
+
     def on_rdir_push(self, req):
         volume = self._get_volume(req)
         decoded = json.loads(req.get_data())
-        chunk_id = decoded.get('chunk_id')
-        if chunk_id is None:
-            return BadRequest('Missing token chunk_id')
-        container_id = decoded.get('container_id')
-        if container_id is None:
-            return BadRequest('Missing token container_id')
-        content_id = decoded.get('content_id')
-        if content_id is None:
-            return BadRequest('Missing token content_id')
-        data = {}
-        allowed_tokens_int = ['content_version', 'content_nbchunks',
-                              'content_size', 'chunk_size', 'mtime', 'rtime']
-        for token in allowed_tokens_int:
-            if token in decoded:
-                data[token] = int(decoded[token])
-
-        allowed_tokens_str = ['content_path', 'content_storage_policy',
-                              'content_mime_type', 'content_chunk_method',
-                              'chunk_hash', 'chunk_position']
-        for token in allowed_tokens_str:
-            if token in decoded:
-                data[token] = decoded[token]
+        data = self._check_push(decoded)
 
         try:
-            self.backend.chunk_push(volume, container_id, content_id, chunk_id,
-                                    **data)
+            self.backend.chunk_push(volume, **data)
         except NoSuchDB:
             if req.args.get('create'):
                 self.backend.create(volume)
-            self.backend.chunk_push(volume, container_id, content_id, chunk_id,
-                                    **data)
+                self.backend.chunk_push(volume, **data)
+            else:
+                return NotFound('No such volume')
         return Response(status=204)
 
     def on_rdir_delete(self, req):
@@ -143,10 +143,10 @@ class Rdir(object):
         start_after = decoded.get('start_after')
         limit = decoded.get('limit')
         if limit is not None and limit <= 0:
-            return BadRequest('limit must be greate than 0')
+            return BadRequest('limit must be greater than 0')
         rebuild = decoded.get('rebuild', False)
         if not isinstance(rebuild, bool):
-            return BadRequest('limit must be true or false')
+            return BadRequest('rebuild must be true or false')
 
         data = self.backend.chunk_fetch(volume, start_after=start_after,
                                         limit=limit, rebuild=rebuild)

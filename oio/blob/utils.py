@@ -5,42 +5,41 @@ RAWX_HEADER_PREFIX = 'x-oio-chunk-meta-'
 
 
 chunk_headers = {
-    'content_cid': '%scontainer-id' % RAWX_HEADER_PREFIX,
-    'metachunk_size': '%smetachunk-size' % RAWX_HEADER_PREFIX,
-    'chunk_id': '%schunk-id' % RAWX_HEADER_PREFIX,
     'chunk_hash': '%schunk-hash' % RAWX_HEADER_PREFIX,
+    'chunk_id': '%schunk-id' % RAWX_HEADER_PREFIX,
     'chunk_pos': '%schunk-pos' % RAWX_HEADER_PREFIX,
-    'content_chunksnb': '%scontent-chunksnb' % RAWX_HEADER_PREFIX,
+    'chunk_size': '%schunk-size' % RAWX_HEADER_PREFIX,
+    'content_chunkmethod': '%scontent-chunk-method' % RAWX_HEADER_PREFIX,
+    'content_cid': '%scontainer-id' % RAWX_HEADER_PREFIX,
     'content_id': '%scontent-id' % RAWX_HEADER_PREFIX,
     'content_path': '%scontent-path' % RAWX_HEADER_PREFIX,
-    'content_size': '%scontent-size' % RAWX_HEADER_PREFIX,
-    'content_mimetype': '%scontent-mime-type' % RAWX_HEADER_PREFIX,
-    'content_chunkmethod': '%scontent-chunk-method' % RAWX_HEADER_PREFIX,
     'content_policy': '%scontent-storage-policy' % RAWX_HEADER_PREFIX,
-    'content_version': '%scontent-version' % RAWX_HEADER_PREFIX}
+    'content_version': '%scontent-version' % RAWX_HEADER_PREFIX,
+    'metachunk_hash': '%smetachunk-hash' % RAWX_HEADER_PREFIX,
+    'metachunk_size': '%smetachunk-size' % RAWX_HEADER_PREFIX,
+}
 
 chunk_xattr_keys = {
-    'metachunk_size': 'grid.metachunk.size',
     'chunk_hash': 'grid.chunk.hash',
-    'chunk_size': 'grid.chunk.size',
     'chunk_id': 'grid.chunk.id',
     'chunk_pos': 'grid.chunk.position',
-    'content_size': 'grid.content.size',
+    'chunk_size': 'grid.chunk.size',
+    'content_chunkmethod': 'grid.content.chunk_method',
     'content_cid': 'grid.content.container',
     'content_id': 'grid.content.id',
     'content_path': 'grid.content.path',
-    'content_id': 'grid.content.id',
-    'content_version': 'grid.content.version',
-    'content_mimetype': 'grid.content.mime_type',
-    'content_chunkmethod': 'grid.content.chunk_method',
     'content_policy': 'grid.content.storage_policy',
-    'content_chunksnb': 'grid.content.nbchunk'}
+    'content_version': 'grid.content.version',
+    'metachunk_hash': 'grid.metachunk.hash',
+    'metachunk_size': 'grid.metachunk.size',
+}
 
 chunk_xattr_keys_optional = {
         'content_chunksnb': True,
         'chunk_hash': True,
         'chunk_size': True,
-        'metachunk_size': True}
+        'metachunk_size': True,
+        'metachunk_hash': True}
 
 
 volume_xattr_keys = {

@@ -33,36 +33,22 @@ class TestChunk(unittest.TestCase):
         self.assertEqual(c.hash, "E952A419957A6E405BFC53EC65483F73")
         self.assertEqual(c.id, "AABBCC")
         self.assertEqual(c.host, "127.0.0.1:6010")
-        self.assertFalse(c.is_subchunk)
+        self.assertFalse(c.ec)
         self.assertEqual(c.data, data)
         self.assertEqual(c.raw(), data)
 
-    def test_chunk_rain(self):
+    def test_chunk_ec(self):
         data = {
             "url": "http://127.0.0.1:6016/AA",
             "pos": "0.1", "size": 1048576,
             "hash": "00000000000000000000000000000000"}
         c = Chunk(data)
-        self.assertEqual(c.is_parity, False)
         self.assertEqual(c.pos, "0.1")
         self.assertEqual(c.metapos, "0")
         self.assertEqual(c.subpos, "1")
-        self.assertTrue(c.is_subchunk)
+        self.assertTrue(c.ec)
 
-    def test_chunk_rain_parity(self):
-        data = {
-            "url": "http://127.0.0.1:6011/BB",
-            "pos": "0.p0", "size": 1048576,
-            "hash": "00000000000000000000000000000000"}
-        c = Chunk(data)
-        self.assertEqual(c.is_parity, True)
-        self.assertEqual(c.pos, "0.p0")
-        self.assertEqual(c.metapos, "0")
-        self.assertEqual(c.subpos, "p0")
-        self.assertTrue(c.is_subchunk)
-        self.assertEqual(c.paritypos, "0")
-
-    def test_comparison_no_rain(self):
+    def test_comparison_no_ec(self):
         c1 = Chunk({
             "url": "http://127.0.0.1:6011/BB",
             "pos": "0", "size": 1048576,
@@ -82,7 +68,7 @@ class TestChunk(unittest.TestCase):
         self.assertFalse(c2 > c3)
         self.assertFalse(c2 == c3)
 
-    def test_comparison_rain(self):
+    def test_comparison_ec(self):
         c1 = Chunk({
             "url": "http://127.0.0.1:6011/BB",
             "pos": "0.0", "size": 1048576,
@@ -97,11 +83,11 @@ class TestChunk(unittest.TestCase):
             "hash": "00000000000000000000000000000000"})
         c4 = Chunk({
             "url": "http://127.0.0.1:6011/BB",
-            "pos": "0.p0", "size": 1048576,
+            "pos": "0.2", "size": 1048576,
             "hash": "00000000000000000000000000000000"})
         c5 = Chunk({
             "url": "http://127.0.0.1:6011/BB",
-            "pos": "0.p1", "size": 1048576,
+            "pos": "0.3", "size": 1048576,
             "hash": "00000000000000000000000000000000"})
         self.assertTrue(c1 < c2)
         self.assertTrue(c2 < c3)
@@ -147,55 +133,55 @@ class TestChunksHelper(unittest.TestCase):
                                self.dup_c2_1, self.dup_c2_2]
         self.dup_chunks = ChunksHelper(self.dup_chunks_raw)
 
-        self.rain_c0_0 = {
+        self.ec_c0_0 = {
             "url": "http://127.0.0.1:6017/C0_0",
             "pos": "0.0", "size": 1048576,
             "hash": "00000000000000000000000000000000"}
-        self.rain_c0_1 = {
+        self.ec_c0_1 = {
             "url": "http://127.0.0.1:6016/C0_1",
             "pos": "0.1", "size": 1048576,
             "hash": "00000000000000000000000000000000"}
-        self.rain_c0_p = {
+        self.ec_c0_2 = {
             "url": "http://127.0.0.1:6011/C0_P",
-            "pos": "0.p0", "size": 1048576,
+            "pos": "0.2", "size": 1048576,
             "hash": "00000000000000000000000000000000"}
-        self.rain_c1_0 = {
+        self.ec_c1_0 = {
             "url": "http://127.0.0.1:6017/C1_0",
             "pos": "1.0", "size": 1048576,
             "hash": "00000000000000000000000000000000"}
-        self.rain_c1_1 = {
+        self.ec_c1_1 = {
             "url": "http://127.0.0.1:6016/C1_1",
             "pos": "1.1", "size": 1048576,
             "hash": "00000000000000000000000000000000"}
-        self.rain_c1_p = {
+        self.ec_c1_2 = {
             "url": "http://127.0.0.1:6011/C1_P",
-            "pos": "1.p0", "size": 1048576,
+            "pos": "1.2", "size": 1048576,
             "hash": "00000000000000000000000000000000"}
-        self.rain_chunks_raw = [self.rain_c0_0, self.rain_c0_1, self.rain_c0_p,
-                                self.rain_c1_0, self.rain_c1_1, self.rain_c1_p]
-        self.rain_chunks = ChunksHelper(self.rain_chunks_raw)
+        self.ec_chunks_raw = [self.ec_c0_0, self.ec_c0_1, self.ec_c0_2,
+                              self.ec_c1_0, self.ec_c1_1, self.ec_c1_2]
+        self.ec_chunks = ChunksHelper(self.ec_chunks_raw)
 
     def tearDown(self):
         super(TestChunksHelper, self).tearDown()
 
     def test_sort_dup(self):
-        rain_chunks = ChunksHelper([
+        chunks = ChunksHelper([
             self.dup_c2_2, self.dup_c2_1,
             self.dup_c1_2, self.dup_c1_1
         ])
-        self.assertEqual(rain_chunks.raw(), [
+        self.assertEqual(chunks.raw(), [
             self.dup_c1_1, self.dup_c1_2,
             self.dup_c2_1, self.dup_c2_2
         ])
 
-    def test_sort_rain(self):
-        rain_chunks = ChunksHelper([
-            self.rain_c1_p, self.rain_c1_1, self.rain_c1_0,
-            self.rain_c0_p, self.rain_c0_1, self.rain_c0_0
+    def test_sort_ec(self):
+        ec_chunks = ChunksHelper([
+            self.ec_c1_2, self.ec_c1_1, self.ec_c1_0,
+            self.ec_c0_2, self.ec_c0_1, self.ec_c0_0
         ])
-        self.assertEqual(rain_chunks.raw(), [
-            self.rain_c0_0, self.rain_c0_1, self.rain_c0_p,
-            self.rain_c1_0, self.rain_c1_1, self.rain_c1_p
+        self.assertEqual(ec_chunks.raw(), [
+            self.ec_c0_0, self.ec_c0_1, self.ec_c0_2,
+            self.ec_c1_0, self.ec_c1_1, self.ec_c1_2
         ])
 
     def test_dup_search(self):
@@ -228,29 +214,22 @@ class TestChunksHelper(unittest.TestCase):
         res4 = res3.exclude()
         self.assertEqual(res4.raw(), [self.dup_c1_1])
 
-    def test_rain_search(self):
-        res1 = self.rain_chunks.filter(metapos="1")
-        self.assertEqual(res1.raw(), [self.rain_c1_0, self.rain_c1_1,
-                                      self.rain_c1_p])
+    def test_ec_search(self):
+        res1 = self.ec_chunks.filter(metapos="1")
+        self.assertEqual(res1.raw(), [self.ec_c1_0, self.ec_c1_1,
+                                      self.ec_c1_2])
 
-        res2 = res1.filter(is_parity=True)
-        self.assertEqual(res2.raw(), [self.rain_c1_p])
+        res3 = self.ec_chunks.filter(subpos="1")
+        self.assertEqual(res3.raw(), [self.ec_c0_1, self.ec_c1_1])
 
-        res3 = self.rain_chunks.filter(subpos="1")
-        self.assertEqual(res3.raw(), [self.rain_c0_1, self.rain_c1_1])
+    def test_ec_exclude(self):
+        res2 = self.ec_chunks.exclude(metapos="1")
+        self.assertEqual(res2.raw(), [self.ec_c0_0, self.ec_c0_1,
+                                      self.ec_c0_2])
 
-    def test_rain_exclude(self):
-        res1 = self.rain_chunks.exclude(is_parity=True)
-        self.assertEqual(res1.raw(), [self.rain_c0_0, self.rain_c0_1,
-                                      self.rain_c1_0, self.rain_c1_1])
-
-        res2 = self.rain_chunks.exclude(metapos="1")
-        self.assertEqual(res2.raw(), [self.rain_c0_0, self.rain_c0_1,
-                                      self.rain_c0_p])
-
-        res3 = self.rain_chunks.exclude(subpos="p0")
-        self.assertEqual(res3.raw(), [self.rain_c0_0, self.rain_c0_1,
-                                      self.rain_c1_0, self.rain_c1_1])
+        res3 = self.ec_chunks.exclude(subpos="2")
+        self.assertEqual(res3.raw(), [self.ec_c0_0, self.ec_c0_1,
+                                      self.ec_c1_0, self.ec_c1_1])
 
     def test_one(self):
         res1 = self.dup_chunks.filter(id="C2C2").one()

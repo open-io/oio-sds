@@ -1150,7 +1150,6 @@ def main():
     opts['meta2'] = {SVC_NB: None}
     opts['sqlx'] = {SVC_NB: None}
     opts['rawx'] = {SVC_NB: None}
-    opts['rainx'] = {SVC_NB: None}
     opts['ecd'] = {SVC_NB: None}
 
     if options.config:

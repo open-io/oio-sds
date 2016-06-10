@@ -30,9 +30,9 @@ from oio.common.exceptions import InconsistentContent, NotFound, \
     ContentNotFound, ClientException, OrphanChunk
 from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
-from oio.content.dup import DupContent
 from oio.content.factory import ContentFactory
-from oio.content.rain import RainContent
+from oio.content.plain import PlainContent
+from oio.content.ec import ECContent
 from tests.utils import BaseTestCase
 
 
@@ -110,9 +110,9 @@ class TestContentFactory(BaseTestCase):
                           self.content_factory._extract_datasec,
                           "UnKnOwN")
 
-    def test_get_rain(self):
+    def test_get_ec(self):
         meta = {
-            "chunk-method": "plain/rain?algo=liber8tion&k=6&m=2",
+            "chunk-method": "ec/algo=isa_l_rs_vand,k=6,m=2",
             "ctime": "1450176946",
             "deleted": "False",
             "hash": "E952A419957A6E405BFC53EC65483F73",
@@ -145,7 +145,7 @@ class TestContentFactory(BaseTestCase):
         self.content_factory.container_client.content_show = Mock(
             return_value=(meta, chunks))
         c = self.content_factory.get("xxx_container_id", "xxx_content_id")
-        self.assertEqual(type(c), RainContent)
+        self.assertEqual(type(c), ECContent)
         self.assertEqual(c.content_id, "3FA2C4A1ED2605005335A276890EC458")
         self.assertEqual(c.length, 658)
         self.assertEqual(c.path, "tox.ini")
@@ -159,9 +159,9 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(c.chunks[2].raw(), chunks[2])
         self.assertEqual(c.chunks[3].raw(), chunks[3])
 
-    def test_get_dup(self):
+    def test_get_plain(self):
         meta = {
-            "chunk-method": "plain/bytes",
+            "chunk-method": "plain/nb_copy=2",
             "ctime": "1450176946",
             "deleted": "False",
             "hash": "E952A419957A6E405BFC53EC65483F73",
@@ -186,7 +186,7 @@ class TestContentFactory(BaseTestCase):
         self.content_factory.container_client.content_show = Mock(
             return_value=(meta, chunks))
         c = self.content_factory.get("xxx_container_id", "xxx_content_id")
-        self.assertEqual(type(c), DupContent)
+        self.assertEqual(type(c), PlainContent)
         self.assertEqual(c.content_id, "3FA2C4A1ED2605005335A276890EC458")
         self.assertEqual(c.length, 658)
         self.assertEqual(c.path, "tox.ini")
@@ -201,9 +201,9 @@ class TestContentFactory(BaseTestCase):
         self.assertRaises(ContentNotFound, self.content_factory.get,
                           self.container_id, "1234")
 
-    def test_new_rain(self):
+    def test_new_ec(self):
         meta = {
-            "chunk-method": "plain/rain?algo=liber8tion&k=6&m=2",
+            "chunk-method": "ec/algo=isa_l_rs_vand,k=6,m=2",
             "ctime": "1450341162",
             "deleted": "False",
             "hash": "",
@@ -237,7 +237,7 @@ class TestContentFactory(BaseTestCase):
             return_value=(meta, chunks))
         c = self.content_factory.new("xxx_container_id", "titi",
                                      1000, "EC")
-        self.assertEqual(type(c), RainContent)
+        self.assertEqual(type(c), ECContent)
         self.assertEqual(c.content_id, "F4B1C8DD132705007DE8B43D0709DAA2")
         self.assertEqual(c.length, 1000)
         self.assertEqual(c.path, "titi")
@@ -254,21 +254,20 @@ class TestContentFactory(BaseTestCase):
     def _new_content(self, stgpol, data, path="titi"):
         old_content = self.content_factory.new(self.container_id, path,
                                                len(data), stgpol)
-        old_content.upload(StringIO.StringIO(data))
+        old_content.create(StringIO.StringIO(data))
         return self.content_factory.get(self.container_id,
                                         old_content.content_id)
 
     def _test_change_policy(self, data_size, old_policy, new_policy):
-        if (old_policy == "EC" or new_policy == "EC") \
-                and len(self.conf['services']['rawx']) < 9:
-            self.skipTest("EC: Need more than 9 rawx to run")
+        if (old_policy == "EC" or new_policy == "EC"):
+            self.skipTest("TODO update to new EC")
 
         data = random_data(data_size)
         obj_type = {
-            "SINGLE": DupContent,
-            "TWOCOPIES": DupContent,
-            "THREECOPIES": DupContent,
-            "EC": RainContent
+            "SINGLE": PlainContent,
+            "TWOCOPIES": PlainContent,
+            "THREECOPIES": PlainContent,
+            "EC": ECContent
         }
         old_content = self._new_content(old_policy, data)
         self.assertEqual(type(old_content), obj_type[old_policy])
@@ -285,7 +284,7 @@ class TestContentFactory(BaseTestCase):
                                                changed_content.content_id)
         self.assertEqual(type(new_content), obj_type[new_policy])
 
-        downloaded_data = "".join(new_content.download())
+        downloaded_data = "".join(new_content.fetch())
 
         self.assertEqual(downloaded_data, data)
 
@@ -374,9 +373,8 @@ class TestContentFactory(BaseTestCase):
     def test_twocopies_move_chunk(self):
         self._test_move_chunk("TWOCOPIES")
 
-    def test_rain_move_chunk(self):
-        if len(self.conf['services']['rawx']) < 9:
-            self.skipTest("Need more than 9 rawx")
+    def test_ec_move_chunk(self):
+        self.skipTest("TODO update to new EC")
         self._test_move_chunk("EC")
 
     def test_move_chunk_not_in_content(self):

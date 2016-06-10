@@ -3,7 +3,6 @@ import random
 
 from oio.common.utils import json
 from oio.common.client import Client
-from oio.conscience.client import ConscienceClient
 
 
 class Meta0Client(Client):
@@ -37,13 +36,11 @@ class PrefixMapping(object):
 
     TOTAL_PREFIXES = 65536
 
-    def __init__(self, namespace, replicas=3, logger=None, **kwargs):
-        self.namespace = namespace
+    def __init__(self, meta0_client, conscience_client, replicas=3,
+                 logger=None, **kwargs):
+        self.cs = conscience_client
+        self.m0 = meta0_client
         self.replicas = replicas
-        self.cs = kwargs.get("conscience_client",
-                             ConscienceClient({"namespace": namespace}))
-        self.m0 = kwargs.get("meta0_client",
-                             Meta0Client({"namespace": namespace}))
         self.svc_by_pfx = dict()
         self.services = dict()
         for svc in self.cs.all_services("meta1"):

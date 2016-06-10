@@ -1,4 +1,5 @@
 import logging
+import re
 import socket
 from urllib import quote
 
@@ -77,12 +78,12 @@ class CustomHttpConnection(HTTPConnection):
 
     def getresponse(self):
         response = HTTPConnection.getresponse(self)
-        logging.debug('HTTP %s %s:%s %s' %
-                      (self._method, self.host, self.port, self._path))
+        logging.debug('HTTP %s %s:%s %s',
+                      self._method, self.host, self.port, self._path)
         return response
 
 
-def http_request(ipaddr, port, method, path, headers=None, query_string=None,
+def http_request(host, method, path, headers=None, query_string=None,
                  body=None):
     headers = headers or {}
 
@@ -90,7 +91,7 @@ def http_request(ipaddr, port, method, path, headers=None, query_string=None,
         body = json.dumps(body)
         headers['Content-Type'] = 'application/json'
     headers['Content-Length'] = len(body)
-    conn = http_connect(ipaddr, port, method, path, headers=headers,
+    conn = http_connect(host, method, path, headers=headers,
                         query_string=query_string)
     conn.send(body)
     resp = conn.getresponse()
@@ -100,14 +101,14 @@ def http_request(ipaddr, port, method, path, headers=None, query_string=None,
     return resp, body
 
 
-def http_connect(ipaddr, port, method, path, headers=None, query_string=None):
+def http_connect(host, method, path, headers=None, query_string=None):
     if isinstance(path, unicode):
         try:
             path = path.encode('utf-8')
         except UnicodeError as e:
             logging.exception('ERROR encoding to UTF-8: %s', str(e))
     path = quote('/' + path)
-    conn = CustomHttpConnection('%s:%s' % (ipaddr, port))
+    conn = CustomHttpConnection(host)
     if query_string:
         path += '?' + query_string
     conn.path = path
@@ -121,3 +122,104 @@ def http_connect(ipaddr, port, method, path, headers=None, query_string=None):
                 conn.putheader(header, str(value))
     conn.endheaders()
     return conn
+
+_token = r'[^()<>@,;:\"/\[\]?={}\x00-\x20\x7f]+'
+_ext_pattern = re.compile(
+    r'(?:\s*;\s*(' + _token + r')\s*(?:=\s*(' + _token +
+    r'|"(?:[^"\\]|\\.)*"))?)')
+
+
+def parse_content_type(raw_content_type):
+    param_list = []
+    if raw_content_type:
+        if ';' in raw_content_type:
+            content_type, params = raw_content_type.split(';', 1)
+            params = ';' + params
+            for p in _ext_pattern.findall(params):
+                k = p[0].strip()
+                v = p[1].strip()
+                param_list.append((k, v))
+    return raw_content_type, param_list
+
+
+_content_range_pattern = re.compile(r'^bytes (\d+)-(\d+)/(\d+)$')
+
+
+def parse_content_range(raw_content_range):
+    found = re.search(_content_range_pattern, raw_content_range)
+    if not found:
+        raise ValueError('invalid content-range %r' % (raw_content_range,))
+    return tuple(int(x) for x in found.groups())
+
+
+def http_header_from_ranges(ranges):
+    s = 'bytes='
+    for i, (start, end) in enumerate(ranges):
+        if end:
+            if end < 0:
+                raise ValueError("Invalid range (%s, %s)" % (start, end))
+            elif start is not None and end < start:
+                raise ValueError("Invalid range (%s, %s)" % (start, end))
+        else:
+            if start is None:
+                raise ValueError("Invalid range (%s, %s)" % (start, end))
+
+        if start is not None:
+            s += str(start)
+        s += '-'
+
+        if end is not None:
+            s += str(end)
+        if i < len(ranges) - 1:
+            s += ','
+    return s
+
+
+def ranges_from_http_header(val):
+    if not val.startswith('bytes='):
+        raise ValueError('Invalid Range value: %s' % val)
+    ranges = []
+    for r in val[6:].split(','):
+        start, end = r.split('-', 1)
+        if start:
+            start = int(start)
+        else:
+            start = None
+        if end:
+            end = int(end)
+            if end < 0:
+                raise ValueError('Invalid byterange value: %s' % val)
+            elif start is not None and end < start:
+                raise ValueError('Invalid byterange value: %s' % val)
+        else:
+            end = None
+            if start is None:
+                raise ValueError('Invalid byterange value: %s' % val)
+        ranges.append((start, end))
+    return ranges
+
+
+class HeadersDict(dict):
+    def __init__(self, headers, **kwargs):
+        if headers:
+            self.update(headers)
+        self.update(kwargs)
+
+    def update(self, data):
+        if hasattr(data, 'keys'):
+            for key in data.keys():
+                self[key.title()] = data[key]
+        else:
+            for k, v in data:
+                self[k.title()] = v
+
+    def __setitem__(self, k, v):
+        if v is None:
+            self.pop(k.title(), None)
+        return dict.__setitem__(self, k.title(), v)
+
+    def get(self, k, default=None):
+        return dict.get(self, k.title(), default)
+
+    def pop(self, k, default=None):
+        return dict.pop(self, k.title(), default)
