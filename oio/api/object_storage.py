@@ -27,6 +27,9 @@ from oio.api.directory import DirectoryAPI
 from oio.api.ec import ECWriteHandler, ECChunkDownloadHandler, \
     obj_range_to_meta_chunk_range
 from oio.api.replication import ReplicatedWriteHandler
+from oio.api.backblaze_http import Backblaze, BackblazeException
+from oio.api.backblaze import BackblazeWriteHandler, \
+    BackblazeChunkDownloadHandler, BackblazeDeleteHandler
 from oio.common import constants
 from oio.common import utils
 from oio.common.constants import object_headers
@@ -253,7 +256,8 @@ class ObjectStorageAPI(API):
     def object_create(self, account, container, file_or_path=None, data=None,
                       etag=None, obj_name=None, content_type=None,
                       content_encoding=None, content_length=None,
-                      metadata=None, policy=None, headers=None):
+                      metadata=None, policy=None, headers=None,
+                      application_key=None):
         if (data, file_or_path) == (None, None):
             raise exc.MissingData()
         src = data if data is not None else file_or_path
@@ -288,23 +292,38 @@ class ObjectStorageAPI(API):
         if src is data:
             return self._object_create(
                 account, container, obj_name, StringIO(data), sysmeta,
-                metadata=metadata, policy=policy, headers=headers)
+                metadata=metadata, policy=policy, headers=headers,
+                application_key=application_key)
         elif hasattr(file_or_path, "read"):
             return self._object_create(
                 account, container, obj_name, src, sysmeta, metadata=metadata,
-                policy=policy, headers=headers)
+                policy=policy, headers=headers,
+                application_key=application_key)
         else:
             with open(file_or_path, "rb") as f:
                 return self._object_create(
                     account, container, obj_name, f, sysmeta,
-                    metadata=metadata, policy=policy, headers=headers)
+                    metadata=metadata, policy=policy, headers=headers,
+                    application_key=application_key)
 
     @handle_object_not_found
-    def object_delete(self, account, container, obj, headers=None):
+    def object_delete(self, account, container, obj, headers={},
+                      application_key=None):
         uri = self._make_uri('content/delete')
         params = self._make_params(account, container, obj)
-        resp, resp_body = self._request(
-            'POST', uri, params=params, headers=headers)
+        meta, raw_chunks = self.object_analyze(
+            account, container, obj, headers=headers)
+        chunk_method = meta['chunk-method']
+        storage_method = STORAGE_METHODS.load(chunk_method)
+        meta['ns'] = self.namespace
+        meta['container_id'] = utils.name2cid(account, container)
+        chunks = _sort_chunks(raw_chunks, storage_method.ec)
+        if storage_method.backblaze:
+            backblaze_infos = self._put_meta_backblaze(storage_method,
+                                                       application_key)
+            BackblazeDeleteHandler(meta, chunks, backblaze_infos).delete()
+            resp, resp_body = self._request(
+                'POST', uri, params=params, headers=headers)
 
     @handle_container_not_found
     def object_list(self, account, container, limit=None, marker=None,
@@ -343,15 +362,21 @@ class ObjectStorageAPI(API):
         return meta, resp_body
 
     def object_fetch(self, account, container, obj, ranges=None,
-                     headers=None):
+                     headers=None, application_key=None):
         meta, raw_chunks = self.object_analyze(
             account, container, obj, headers=headers)
         chunk_method = meta['chunk-method']
         storage_method = STORAGE_METHODS.load(chunk_method)
         chunks = _sort_chunks(raw_chunks, storage_method.ec)
+        meta['container_id'] = utils.name2cid(account, container)
+        meta['ns'] = self.namespace
         if storage_method.ec:
             stream = self._fetch_stream_ec(meta, chunks, ranges,
                                            storage_method, headers)
+        elif storage_method.backblaze:
+            stream = self._fetch_stream_backblaze(meta, chunks, ranges,
+                                                  storage_method,
+                                                  application_key)
         else:
             stream = self._fetch_stream(meta, chunks, ranges, storage_method,
                                         headers)
@@ -450,7 +475,8 @@ class ObjectStorageAPI(API):
         return resp.headers, resp_body
 
     def _object_create(self, account, container, obj_name, source,
-                       sysmeta, metadata=None, policy=None, headers=None):
+                       sysmeta, metadata=None, policy=None, headers=None,
+                       application_key=None):
         meta, raw_chunks = self._content_prepare(
             account, container, obj_name, sysmeta['content_length'],
             policy=policy, headers=headers)
@@ -467,10 +493,17 @@ class ObjectStorageAPI(API):
         chunks = _sort_chunks(raw_chunks, storage_method.ec)
         sysmeta['content_path'] = obj_name
         sysmeta['container_id'] = utils.name2cid(account, container)
+        sysmeta['ns'] = self.namespace
 
         if storage_method.ec:
             handler = ECWriteHandler(source, sysmeta, chunks, storage_method,
                                      headers=headers)
+        elif storage_method.backblaze:
+            backblaze_infos = self._put_meta_backblaze(storage_method,
+            application_key)
+            handler = BackblazeWriteHandler(source, sysmeta,
+                                            chunks, storage_method,
+                                            headers, backblaze_infos)
         else:
             handler = ReplicatedWriteHandler(source, sysmeta, chunks,
                                              storage_method, headers=headers)
@@ -533,3 +566,55 @@ class ObjectStorageAPI(API):
                 for d in part_info['iter']:
                     yield d
             stream.close()
+
+    def _put_meta_backblaze(self, storage_method, application_key):
+        if not (application_key and storage_method.bucket_name != '0'
+                and storage_method.account_id != '0'):
+            raise exc.ClientException("The client is missing backblaze parameters")
+        meta = {}
+        meta['backblaze.account_id'] = storage_method.account_id
+        meta['backblaze.application_key'] = application_key
+        meta['bucket_name'] = storage_method.bucket_name
+        backblaze = Backblaze(storage_method.account_id, application_key)
+        meta['authorization'] = backblaze.authorization_token
+        meta['uploadToken'] = backblaze._get_upload_token_by_bucket_name(
+            storage_method.bucket_name)
+        return meta
+
+    def _fetch_stream_backblaze(self, meta, chunks, ranges, storage_method,
+                                                                application_key):
+        backblaze_infos = self._put_meta_backblaze(storage_method,
+                                                   application_key)
+        total_bytes = 0
+        current_offset = 0
+        size = None
+        offset = 0
+        if ranges:
+            offset = ranges[pos][0]
+            size = ranges[pos][1]
+            
+        if size is None:
+                size = int(meta["length"])
+        
+        for pos in range(len(chunks)):
+            chunk_size = int(chunks[pos][0]["size"])
+            if total_bytes >= size:
+                break
+            if current_offset + chunk_size > offset:
+                if current_offset < offset:
+                    _offset = offset - current_offset
+                else:
+                    _offset = 0
+                if chunk_size + total_bytes > size:
+                    _size = size - total_bytes
+                else:
+                    _size = chunk_size
+            handler = BackblazeChunkDownloadHandler(meta, chunks[pos],
+                                                    _size, _offset,
+                                                    backblaze_infos=backblaze_infos)
+            stream = handler.get_stream()
+            if not stream:
+                raise exc.OioException("Error while downloading")
+            total_bytes += len(stream)
+            yield stream
+            current_offset += chunk_size

@@ -39,6 +39,11 @@ class CreateObject(lister.Lister):
             metavar='<policy>',
             help='Storage Policy'
         )
+        parser.add_argument(
+            '--application-key',
+            metavar='<application_key>',
+            help='application key'
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -48,7 +53,8 @@ class CreateObject(lister.Lister):
         policy = parsed_args.policy
         objs = parsed_args.objects
         names = parsed_args.name
-
+        application_key = parsed_args.application_key
+        
         def get_file_size(f):
             currpos = f.tell()
             f.seek(0, 2)
@@ -66,7 +72,8 @@ class CreateObject(lister.Lister):
                     file_or_path=f,
                     obj_name=name,
                     content_length=get_file_size(f),
-                    policy=policy)
+                    policy=policy,
+                    application_key=application_key)
 
                 results.append((name, data[1], data[2].upper()))
 
@@ -93,18 +100,24 @@ class DeleteObject(command.Command):
             nargs='+',
             help='Object(s) to delete'
         )
+        parser.add_argument(
+            '--application-key',
+            metavar='<application_key>',
+            help='application key'
+        )
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
-
+        application_key = parsed_args.application_key
         container = parsed_args.container
 
         for obj in parsed_args.objects:
             self.app.client_manager.storage.object_delete(
                 self.app.client_manager.get_account(),
                 container,
-                obj
+                obj,
+                application_key=application_key
             )
 
 
@@ -217,6 +230,11 @@ class SaveObject(command.Command):
             metavar='<object>',
             help='Object to save'
         )
+        parser.add_argument(
+            '--application-key',
+            metavar='<application_key>',
+            help='application key'
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -229,10 +247,12 @@ class SaveObject(command.Command):
         if not file:
             file = obj
 
+        application_key = parsed_args.application_key
         meta, stream = self.app.client_manager.storage.object_fetch(
             self.app.client_manager.get_account(),
             container,
-            obj
+            obj,
+            application_key=application_key
         )
         if not os.path.exists(os.path.dirname(file)):
             if len(os.path.dirname(file)) > 0:

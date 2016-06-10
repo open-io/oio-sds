@@ -76,6 +76,19 @@ m2v2_build_chunk_url (const char *srv, const char *id)
 	return g_strconcat("http://", srv, "/", id, NULL);
 }
 
+static gchar*
+m2v2_build_chunk_url_storage (const struct storage_policy_s *pol,
+			      const gchar *str_id)
+{
+	switch(data_security_get_type(storage_policy_get_data_security(pol))) {
+	case STGPOL_DS_BACKBLAZE:
+		return g_strconcat("b2://b2/", str_id, NULL);
+	default:
+		return NULL;
+	}
+	return NULL;
+}
+
 void
 m2v2_position_encode (GString *out, struct m2v2_position_s *p)
 {
@@ -1476,7 +1489,6 @@ static void
 _m2_generate_alias_header(struct gen_ctx_s *ctx)
 {
 	const gchar *p;
-	GString *chunk_method;
 	p = ctx->pol ? storage_policy_get_name(ctx->pol) : "none";
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
@@ -1500,10 +1512,23 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 	CONTENTS_HEADERS_set_ctime(header, now / G_TIME_SPAN_SECOND);
 	CONTENTS_HEADERS_set_mtime(header, now / G_TIME_SPAN_SECOND);
 	CONTENTS_HEADERS_set2_mime_type(header, OIO_DEFAULT_MIMETYPE);
-	chunk_method = storage_policy_to_chunk_method(ctx->pol);
+
+	GString *chunk_method = storage_policy_to_chunk_method(ctx->pol);
 	CONTENTS_HEADERS_set_chunk_method(header, chunk_method);
 	g_string_free(chunk_method, TRUE);
 	ctx->cb(ctx->cb_data, header);
+}
+
+static int
+is_stgpol_backblaze(const struct storage_policy_s *pol)
+{
+	switch(data_security_get_type(storage_policy_get_data_security(pol))) {
+		case STGPOL_DS_BACKBLAZE:
+			return TRUE;
+		default:
+			return FALSE;
+	}
+	return FALSE;
 }
 
 static void
@@ -1523,7 +1548,10 @@ _gen_chunk(struct gen_ctx_s *ctx, gchar *straddr,
 	else
 		g_snprintf(strpos, sizeof(strpos), "%u.%d", pos, subpos);
 
-	chunkid = m2v2_build_chunk_url (straddr, strid);
+	if (straddr)
+		chunkid = m2v2_build_chunk_url (straddr, strid);
+	else
+		chunkid = m2v2_build_chunk_url_storage (ctx->pol, strid);
 
 	struct bean_CHUNKS_s *chunk = _bean_create(&descr_struct_CHUNKS);
 	CHUNKS_set2_id(chunk, chunkid);
@@ -1566,9 +1594,13 @@ _m2_generate_chunks(struct gen_ctx_s *ctx,
 					pos, ids->len);
 		}
 		if (!err) {
-			for (int i = 0; i < (int)ids->len; i++) {
-				_gen_chunk(ctx, g_ptr_array_index(ids, i),
-						ctx->chunk_size, pos, subpos? i : -1);
+			if (is_stgpol_backblaze(ctx->pol)) {
+				// Shortcut for backblaze
+				_gen_chunk(ctx, NULL, ctx->chunk_size, pos, -1);
+			} else {
+				for (int i = 0; i < (int)ids->len; i++)
+					_gen_chunk(ctx, g_ptr_array_index(ids, i),
+							ctx->chunk_size, pos, subpos? i : -1);
 			}
 		}
 		g_ptr_array_free(ids, TRUE);
@@ -1611,6 +1643,7 @@ m2_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
 
 	gint64 k;
 	switch (data_security_get_type(storage_policy_get_data_security(pol))) {
+	        case STGPOL_DS_BACKBLAZE:
 		case STGPOL_DS_PLAIN:
 			return _m2_generate_chunks(&ctx, chunk_size, 0);
 		case STGPOL_DS_EC:
