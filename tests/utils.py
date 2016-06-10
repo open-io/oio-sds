@@ -14,6 +14,10 @@ random_chars = string.ascii_lowercase + string.ascii_uppercase +\
 
 random_chars_id = 'ABCDEF' + string.digits
 
+CODE_NAMESPACE_NOTMANAGED = 418
+CODE_SRVTYPE_NOTMANAGED = 453
+CODE_POLICY_NOT_SATISFIABLE = 481
+
 
 def random_str(n, chars=random_chars):
     return ''.join(random.choice(chars) for _ in range(n))
@@ -69,6 +73,9 @@ class BaseTestCase(testtools.TestCase):
 
     def _url_cs(self, action):
         return self._url("conscience") + '/' + action
+
+    def _url_lb(self, action):
+        return self._url("lb") + '/' + action
 
     def _url_ref(self, action):
         return self._url("reference") + '/' + action
@@ -143,15 +150,18 @@ class BaseTestCase(testtools.TestCase):
                 self.assertEqual(resp.status_code, 204)
         BaseTestCase._last_cache_flush = time.time()
 
-    def _addr(self):
-        return '127.0.0.2:' + str(random.randint(7000, 65535))
+    def _addr(self, low=7000, high=65535):
+        return '127.0.0.2:' + str(random.randint(low, high))
 
-    def _srv(self, srvtype):
-        return {'ns': self.ns,
+    def _srv(self, srvtype, extra_tags={}, lowport=7000, highport=65535):
+        outd = {'ns': self.ns,
                 'type': str(srvtype),
-                'addr': self._addr(),
+                'addr': self._addr(low=lowport, high=highport),
                 'score': random.randint(0, 100),
                 'tags': {'stat.cpu': 1, 'tag.vol': 'test', 'tag.up': True}}
+        if extra_tags:
+            outd["tags"].update(extra_tags)
+        return outd
 
     def assertIsError(self, body, expected_code_oio):
         self.assertIsInstance(body, dict)

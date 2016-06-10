@@ -133,20 +133,13 @@ expand_urlv(struct meta1_service_url_s **uv)
 }
 
 static struct meta1_service_url_s*
-_siv_to_url(struct service_info_s **siv)
+_ids_to_url(char **ids)
 {
 	struct meta1_service_url_s *m1u = g_malloc0 (sizeof(*m1u));
-	GString *u = g_string_new("");
-
-	for (struct service_info_s **p=siv; *p ; p++) {
-		gchar str[STRLEN_ADDRINFO];
-		grid_addrinfo_to_string(&((*p)->addr), str, sizeof(str));
-		if (u->len > 0)
-			g_string_append_c(u, ',');
-		g_string_append(u, str);
-	}
-	g_strlcpy (m1u->host, u->str, sizeof(m1u->host));
-	g_string_free(u, TRUE);
+	meta1_urlv_shift_addr(ids);
+	char *joined = g_strjoinv(",", ids);
+	g_strlcpy (m1u->host, joined, sizeof(m1u->host));
+	g_free(joined);
 	return m1u;
 }
 
@@ -454,78 +447,26 @@ __delete_service(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 
 //------------------------------------------------------------------------------
 
-static gboolean
-_filter_tag(struct service_info_s *si, gpointer u)
+// TODO(srvid): do not suppose url is an IP address
+static oio_location_t *
+__locations_from_m1srvurl(struct meta1_service_url_s **urls)
 {
-	struct compound_type_s *ct = u;
-
-	EXTRA_ASSERT(ct != NULL);
-	if (!ct->req.k)
-		return TRUE;
-
-	struct service_tag_s *tag = service_info_get_tag(si->tags, ct->req.k);
-	if (NULL == tag)
-		return FALSE;
-
-	switch (tag->type) {
-		case STVT_BUF:
-			return !fnmatch(ct->req.v, tag->value.buf, 0);
-		case STVT_STR:
-			return !fnmatch(ct->req.v, tag->value.s, 0);
-		default:
-			return FALSE;
-	}
-}
-
-static GError*
-_get_iterator(struct meta1_backend_s *m1, struct compound_type_s *ct,
-		struct grid_lb_iterator_s **result)
-{
-	struct grid_lb_iterator_s *r =
-		grid_lbpool_get_iterator(m1->lb, ct->baretype);
-
-	if (!r) {
-		*result = NULL;
-		return NEWERROR(CODE_SRVTYPE_NOTMANAGED, "type [%s] not managed", ct->baretype);
-	}
-
-	*result = grid_lb_iterator_share(r);
-	return NULL;
-}
-
-static GError*
-_get_iterator2(struct meta1_backend_s *m1, const char *srvtype,
-		struct grid_lb_iterator_s **result)
-{
-	struct compound_type_s ct = {0};
-
-	*result = NULL;
-
-	GError *err = compound_type_parse(&ct, srvtype);
-	if (NULL != err) {
-		g_prefix_error(&err, "Type parsing error: ");
-		return err;
-	}
-
-	err = _get_iterator(m1, &ct, result);
-	if (err)
-		g_prefix_error(&err, "LB error: ");
-	compound_type_clean(&ct);
-	return err;
-}
-
-static GSList *
-__srvinfo_from_m1srvurl(struct grid_lbpool_s *glp, const char *type,
-		struct meta1_service_url_s **urls)
-{
-	GSList *out = NULL;
-	struct service_info_s* srvinfo = NULL;
+	GArray *out = g_array_new(TRUE, TRUE, sizeof(oio_location_t));
 	struct meta1_service_url_s **cursor = NULL;
 	for (cursor = urls; cursor && *cursor; cursor++) {
-		srvinfo = grid_lbpool_get_service_from_url(glp, type, (*cursor)->host);
-		out = g_slist_prepend(out, srvinfo);
+		struct meta1_service_url_s **extracted;
+		extracted = expand_url(*cursor);
+		addr_info_t ai = {{0}};
+		if (!grid_string_to_addrinfo((*extracted)->host, &ai))
+			GRID_WARN("Could not parse [%s] to addrinfo", (*cursor)->host);
+		else {
+			oio_location_t loc = location_from_addr_info(&ai);
+			g_array_append_val(out, loc);
+		}
+		meta1_service_url_cleanv(extracted);
+		extracted = NULL;
 	}
-	return out;
+	return (oio_location_t*)g_array_free(out, FALSE);
 }
 
 static struct meta1_service_url_s *
@@ -533,92 +474,88 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 		struct compound_type_s *ct, guint seq,
 		struct meta1_service_url_s **used, GError **err)
 {
-	struct grid_lb_iterator_s *iter = NULL;
-	struct service_info_s **siv = NULL;
-
 	GRID_DEBUG("Polling %u [%s]", replicas, ct->fulltype);
 
-	if (!(*err = _get_iterator(m1, ct, &iter))) {
-		struct lb_next_opt_ext_s opt = {{0}};
-		opt.req.distance = MACRO_COND(replicas>1,1,0);
-		opt.req.max = replicas;
-		opt.req.duplicates = FALSE;
-		opt.req.stgclass = NULL;
-		opt.req.strict_stgclass = TRUE;
-		opt.srv_forbidden = __srvinfo_from_m1srvurl(m1->lb, ct->baretype, used);
-
-		if (ct->req.k && !strcmp(ct->req.k, NAME_TAGNAME_USER_IS_SERVICE)) {
-			gchar *srvurl = g_strdup_printf("1||%s|", ct->req.v);
-			struct meta1_service_url_s *inplace[2] = {
-					meta1_unpack_url(srvurl), NULL};
-			/* If ct->req.v is not an addr, srv_inplace will contain NULL */
-			opt.srv_inplace = __srvinfo_from_m1srvurl(m1->lb, NULL, inplace);
-			opt.req.distance = 1;
-			meta1_service_url_clean(inplace[0]);
-			g_free(srvurl);
-		} else {
-			opt.filter.hook = _filter_tag;
-			opt.filter.data = ct;
-		}
-
-		if (!grid_lb_iterator_next_set2(iter, &siv, &opt, err)) {
-			EXTRA_ASSERT(siv == NULL);
-		}
-
-		grid_lb_iterator_clean(iter);
-		iter = NULL;
-		g_slist_free_full(opt.srv_forbidden, (GDestroyNotify)service_info_clean);
-		g_slist_free_full(opt.srv_inplace, (GDestroyNotify)service_info_clean);
+	// ----------------------------------------------------------------------
+	GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
+	oio_location_t *avoid = __locations_from_m1srvurl(used);
+	oio_location_t *known = NULL;
+	if (ct->req.k && !strcmp(ct->req.k, NAME_TAGNAME_USER_IS_SERVICE)) {
+		gchar srvurl[64] = {0};
+		g_snprintf(srvurl, sizeof(srvurl), "1||%s|", ct->req.v);
+		struct meta1_service_url_s *inplace[2] = {
+				meta1_unpack_url(srvurl), NULL};
+		/* If ct->req.v is not an addr, known will contain NULL */
+		// FIXME: this should be in `avoid` instead of `known`
+		// but avoids are compared without the location mask
+		known = __locations_from_m1srvurl(inplace);
+		meta1_service_url_clean(inplace[0]);
+	}
+	void _on_id(oio_location_t loc, const char *id)
+	{
+		(void)loc;
+		g_ptr_array_add(ids, g_strdup(id));
+	}
+	if (!oio_lb__patch_with_pool(m1->lb, ct->baretype, avoid, known, _on_id)) {
+		*err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
+				"found only %u services matching the criteria",
+				ids->len);
 	}
 
-	if(NULL != *err)
-		return NULL;
+	struct meta1_service_url_s *m1u = NULL;
+	if (!*err) {
+		g_ptr_array_add(ids, NULL);
+		m1u = _ids_to_url((char**)ids->pdata);
+		g_strlcpy(m1u->srvtype, ct->type, sizeof(m1u->srvtype));
+		m1u->seq = seq;
+	}
 
-	struct meta1_service_url_s *m1u = _siv_to_url (siv);
-	service_info_cleanv(siv, FALSE);
-	siv = NULL;
-	g_strlcpy(m1u->srvtype, ct->type, sizeof(m1u->srvtype));
-	m1u->seq = seq;
+	g_ptr_array_free(ids, TRUE);
+	g_free(known);
+	g_free(avoid);
+
 	return m1u;
 }
 
 static struct meta1_service_url_s **
 __get_services_up(struct meta1_backend_s *m1, struct meta1_service_url_s **src)
 {
-	struct grid_lb_iterator_s *iter = NULL;
-
 	if (!src || !*src)
 		return NULL;
 
-	GError *err = _get_iterator2(m1, (*src)->srvtype, &iter);
-	if (NULL != err) {
-		GRID_WARN("No iterator available on type [%s] : (%d) %s",
-				(*src)->srvtype, err->code, err->message);
-		g_clear_error(&err);
-		return NULL;
-	}
-
+	GError *err = NULL;
 	GPtrArray *gpa = g_ptr_array_new();
-	for (; *src ;src++) {
+	for (; *src; src++) {
 		gboolean one_is_up = FALSE;
 		struct meta1_service_url_s **pe, **extracted;
 
 		// This converts a compound (comma-separated) URL into an array
 		// of unitary URLs. Each unitary URL is checked as is.
 		extracted = expand_url(*src);
-		for (pe=extracted; !one_is_up && *pe ;pe++)
-			one_is_up = grid_lb_iterator_is_url_available(iter, (*pe)->host);
+		for (pe = extracted; !one_is_up && *pe; pe++) {
+			struct compound_type_s ct;
+			if ((err = compound_type_parse(&ct, (*pe)->srvtype))) {
+				GRID_WARN("Failed to parse service type: %s", err->message);
+				g_clear_error(&err);
+				continue;
+			}
+			char key[128];
+			g_snprintf(key, sizeof(key), "%s|%s|%s",
+					m1->ns_name, ct.baretype, (*pe)->host);
+			struct oio_lb_item_s *item = oio_lb__get_item_from_pool(m1->lb,
+					ct.baretype, key);
+			one_is_up = item? item->weight > 0 : FALSE;
+			g_free(item);
+			compound_type_clean(&ct);
+		}
 		if (one_is_up) {
-			for (pe=extracted; *pe ;pe++)
+			for (pe = extracted; *pe; pe++)
 				g_ptr_array_add(gpa, meta1_url_dup(*pe));
 		}
 
 		meta1_service_url_cleanv(extracted);
 		extracted = NULL;
 	}
-
-	grid_lb_iterator_clean(iter);
-	iter = NULL;
 
 	if (gpa->len <= 0) {
 		g_ptr_array_free(gpa, TRUE);
@@ -741,7 +678,6 @@ struct m1v2_relink_input_s {
 	struct sqlx_sqlite3_s *sq3;
 	struct oio_url_s *url;
 	struct compound_type_s *ct;
-	struct grid_lb_iterator_s *iterator;
 	struct meta1_service_url_s **kept;
 	struct meta1_service_url_s **replaced;
 	gboolean dryrun;
@@ -814,7 +750,7 @@ static GError *
 __relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
 {
 	GError *err = NULL;
-	struct service_info_s **polled = NULL;
+	GPtrArray *ids = NULL;
 	struct meta1_service_url_s *packed = NULL;
 
 	struct meta1_service_url_s *ref = (in->kept && in->kept[0])
@@ -833,41 +769,42 @@ __relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
 		struct service_update_policies_s *pol = meta1_backend_get_svcupdate(in->m1);
 		EXTRA_ASSERT (pol != NULL);
 
-		struct lb_next_opt_ext_s opt = {{0}};
-		opt.req.max = service_howmany_replicas (pol, in->ct->baretype);
-		opt.req.distance = opt.req.max > 1 ? 1 : 0;
-		opt.req.duplicates = FALSE;
-		opt.req.stgclass = NULL;
-		opt.req.strict_stgclass = TRUE;
-		opt.filter.hook = NULL;
-		opt.filter.data = NULL;
+		guint max_svc = service_howmany_replicas(pol, in->ct->baretype);
+
+		oio_location_t *known = NULL;
+		oio_location_t *avoids = NULL;
 		if (in->kept)
-			opt.srv_inplace = __srvinfo_from_m1srvurl (in->m1->lb,
-					in->ct->baretype, in->kept);
+			known = __locations_from_m1srvurl(in->kept);
 		if (in->replaced)
-			opt.srv_forbidden = __srvinfo_from_m1srvurl (in->m1->lb,
-					in->ct->baretype, in->replaced);
+			avoids = __locations_from_m1srvurl(in->replaced);
 
-		if (g_slist_length(opt.srv_inplace) >= opt.req.max)
+		if (g_strv_length((char**)known) >= max_svc) {
 			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "Too many services kept");
-
-		if (!err) {
-			if (!grid_lb_iterator_next_set2(in->iterator, &polled, &opt, &err)) {
-				EXTRA_ASSERT(polled == NULL);
-			} else {
-				EXTRA_ASSERT(polled != NULL);
+		} else {
+			ids = g_ptr_array_new_with_free_func(g_free);
+			void _on_id(oio_location_t loc, const char *id)
+			{
+				(void)loc;
+				g_ptr_array_add(ids, g_strdup(id));
 			}
+			if (!oio_lb__patch_with_pool(in->m1->lb, in->ct->baretype,
+					avoids, known, _on_id)) {
+				err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
+						"found only %u services matching the criteria",
+						ids->len);
+			}
+			g_ptr_array_add(ids, NULL);
 		}
 
-		g_slist_free_full (opt.srv_forbidden, (GDestroyNotify)service_info_clean);
-		g_slist_free_full (opt.srv_inplace, (GDestroyNotify)service_info_clean);
+		g_free(avoids);
+		g_free(known);
 	}
 
 	/* Services have been polled, them save them.
 	 * We MUST use the same SEQ number. Since the service are packed in one
 	 * entry, we can save them with a single SQL statement. */
 	if (!err && !in->dryrun) {
-		packed = _siv_to_url (polled);
+		packed = _ids_to_url((char**)ids->pdata);
 		packed->seq = ref->seq;
 		strcpy (packed->srvtype, ref->srvtype);
 		err = __save_service (in->sq3, in->url, packed, TRUE);
@@ -881,7 +818,7 @@ __relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
 		meta1_service_url_cleanv (newset);
 	}
 
-	service_info_cleanv (polled, FALSE);
+	g_ptr_array_free(ids, TRUE);
 	meta1_service_url_clean (packed);
 	return err;
 }
@@ -1115,7 +1052,6 @@ meta1_backend_services_relink(struct meta1_backend_s *m1,
 
 	struct meta1_service_url_s **ukept = NULL, **urepl = NULL;
 	/* fields to be prefetched */
-	struct grid_lb_iterator_s *iterator = NULL;
 	struct compound_type_s ct = {0};
 
 	ukept = __parse_and_expand (kept);
@@ -1141,15 +1077,9 @@ meta1_backend_services_relink(struct meta1_backend_s *m1,
 		}
 	}
 
-	/* prefetch some fields from the backend: the compound type (so it is
-	 * parsed only once), the iterator (so we can already poll services, out
-	 * of the sqlite3 transaction) */
+	/* prefetch the compound type (so it is parsed only once) */
 	if (NULL != (err = compound_type_parse(&ct, ref->srvtype))) {
 		err = NEWERROR(CODE_BAD_REQUEST, "Invalid service type");
-		goto out;
-	}
-	if (NULL != (err = _get_iterator (m1, &ct, &iterator))) {
-		err = NEWERROR(CODE_BAD_REQUEST, "Service type not managed");
 		goto out;
 	}
 
@@ -1161,8 +1091,7 @@ meta1_backend_services_relink(struct meta1_backend_s *m1,
 			if (!(err = __info_user(sq3, url, FALSE, NULL))) {
 				struct m1v2_relink_input_s in = {
 					.m1 = m1, .sq3 = sq3, .url = url,
-					.iterator = iterator, .ct = &ct,
-					.kept = ukept, .replaced = urepl,
+					.ct = &ct, .kept = ukept, .replaced = urepl,
 					.dryrun = dryrun
 				};
 				err = __relink_container_services(&in, out);
@@ -1178,7 +1107,6 @@ meta1_backend_services_relink(struct meta1_backend_s *m1,
 out:
 	meta1_service_url_cleanv (ukept);
 	meta1_service_url_cleanv (urepl);
-	grid_lb_iterator_clean (iterator);
 	compound_type_clean (&ct);
 	return err;
 }

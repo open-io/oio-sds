@@ -1,13 +1,8 @@
 import logging
 
 from tests.utils import BaseTestCase
-
+from tests.utils import CODE_SRVTYPE_NOTMANAGED
 import simplejson as json
-
-
-# TODO(jfs) There should be only one referece for error codes
-CODE_NAMESPACE_NOTMANAGED = 418
-CODE_SRVTYPE_NOTMANAGED = 453
 
 
 class TestConscienceFunctional(BaseTestCase):

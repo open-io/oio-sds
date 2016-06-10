@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -44,6 +44,32 @@ _task_reconfigure_m2(gpointer p)
 	if (!PSRV(p)->nsinfo)
 		return;
 	meta2_backend_configure_nsinfo(m2, PSRV(p)->nsinfo);
+}
+
+static void
+_task_reload_m2_lb(gpointer p)
+{
+	ADAPTIVE_PERIOD_DECLARE();
+	if (!PSRV(p)->nsinfo)
+		return;
+
+	if (ADAPTIVE_PERIOD_SKIP())
+		return;
+
+	/* In meta2, we are only interrested in rawx services */
+	GSList *svctypes = g_slist_prepend(NULL, NAME_SRVTYPE_RAWX);
+	GError *err = sqlx_reload_lb_service_types(PSRV(p)->lb_world, svctypes);
+	if (err) {
+		GRID_WARN("Failed to reload "NAME_SRVTYPE_RAWX" services: %s",
+				err->message);
+		g_clear_error(&err);
+	} else {
+		ADAPTIVE_PERIOD_ONSUCCESS(10);
+	}
+	g_slist_free(svctypes);
+
+	oio_lb_world__reload_storage_policies(PSRV(p)->lb_world,
+			PSRV(p)->lb, PSRV(p)->nsinfo);
 }
 
 static gchar **
@@ -194,7 +220,7 @@ _post_config(struct sqlx_service_s *ss)
 	grid_task_queue_register(ss->gtq_reload, 5,
 			_task_reconfigure_m2, NULL, ss);
 	grid_task_queue_register(ss->gtq_reload, 1,
-			(GDestroyNotify)sqlx_task_reload_lb, NULL, ss);
+			(GDestroyNotify)_task_reload_m2_lb, NULL, ss);
 
 	m2->notifier = ss->events_queue;
 	return TRUE;

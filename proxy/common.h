@@ -114,7 +114,7 @@ enum preference_e {
 
 const char * _pref2str(enum preference_e p);
 
-extern gchar *nsname;
+extern gchar *ns_name;
 extern gboolean flag_cache_enabled;
 extern gboolean flag_local_scores;
 
@@ -131,7 +131,8 @@ extern gint64 ttl_known_services;
    election */
 extern gint64 ttl_expire_master_services;
 
-extern struct grid_lbpool_s *lbpool;
+extern struct oio_lb_world_s *lb_world;
+extern struct oio_lb_s *lb;
 extern struct hc_resolver_s *resolver;
 
 /* Global NS info */

@@ -25,8 +25,6 @@ extern "C" {
 
 # include <glib.h>
 
-#define HC_TEST_INIT(argc,argv) oio_ext_init_test(&argc,&argv)
-
 # ifdef HAVE_NO_SLICE
 #  define SLICE_NEW0(T)    g_try_new0(T,1)
 #  define SLICE_NEW(T)     g_try_new(T,1)
@@ -42,6 +40,15 @@ extern "C" {
 #  define SLICE_FREE(T,P)  g_slice_free(T,(P))
 #  define SLICE_FREE1(S,P) g_slice_free1((S),(P))
 # endif
+
+// Return -1 if A<B, 0 if A==B, 1 if A>B
+#define CMP(a,b) (((a) > (b)) - ((a) < (b)))
+
+#define BOOL(C) ((C)!=0)
+
+#define MACRO_COND(C,A,B) ((B) ^ (((A)^(B)) & -BOOL(C)))
+
+#define HC_TEST_INIT(argc,argv) oio_ext_init_test(&argc,&argv)
 
 void oio_ext_init_test (int *argc, char ***argv);
 

@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -21,6 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define OIO_SDS__meta2v2__meta2_utils_h 1
 
 # include <sqlite3.h>
+# include <core/oiolb.h>
 # include <metautils/lib/metautils.h>
 # include <meta2v2/autogen.h>
 # include <meta2v2/meta2_utils.h>
@@ -37,8 +38,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 struct storage_policy_s;
 struct oio_url_s;
-struct grid_lb_iterator_s;
-struct lb_next_opt_s;
 struct sqlx_sqlite3_s;
 
 struct list_params_s
@@ -169,7 +168,6 @@ struct m2db_put_args_s
 	gint64 max_versions;
 	struct oio_url_s *url;
 	struct namespace_info_s *nsinfo;
-	struct grid_lbpool_s *lbpool;
 };
 
 GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *in,
@@ -185,7 +183,7 @@ GError* m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, namespace_info_t *ni,
 		m2_onbean_cb cb, gpointer u0);
 
 GError* m2_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
-		struct storage_policy_s *pol, struct grid_lb_iterator_s *iter,
+		struct storage_policy_s *pol, struct oio_lb_s *lb,
 		m2_onbean_cb cb, gpointer cb_data);
 
 GError* m2db_set_storage_policy(struct sqlx_sqlite3_s *sq3, const gchar *polname,
@@ -233,8 +231,6 @@ GError* m2db_dup_all_aliases(struct sqlx_sqlite3_s *sq3,
 /* --------- TYPE CONVERSION ---------- */
 
 char * extract_url_from_chunk(struct bean_CHUNKS_s *chunk);
-
-char * location_from_chunk(struct bean_CHUNKS_s *chunk, struct grid_lbpool_s *glp);
 
 void m2v2_dup_alias(struct dup_alias_params_s *params, gpointer bean);
 

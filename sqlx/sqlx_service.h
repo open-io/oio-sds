@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqlx
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -90,7 +90,9 @@ struct sqlx_service_s
 	struct network_server_s *server;
 	struct gridd_request_dispatcher_s *dispatcher;
 	struct hc_resolver_s *resolver;
-	struct grid_lbpool_s *lb;
+	struct oio_lb_s *lb;
+	struct oio_lb_world_s *lb_world;
+	GHashTable *lb_pools;
 
 	struct oio_events_queue_s *events_queue;
 	GThread *thread_queue;
@@ -162,7 +164,11 @@ extern int sqlite_service_main(int argc, char **argv,
 
 void sqlx_service_set_custom_options (struct grid_main_option_s *options);
 
-/** Reloads the optional (grid_lbpool_s*). Exposed to let the
+GError* sqlx_reload_lb_service_types(struct oio_lb_world_s *lbw,
+		GSList *list_srvtypes);
+
+// FIXME: this is only used in meta1
+/** Reloads the optional (oio_lb_s*). Exposed to let the
  * server enable it in its post-config hook. This is destined to
  * be registered in a task queue. */
 void sqlx_task_reload_lb(struct sqlx_service_s *ss);

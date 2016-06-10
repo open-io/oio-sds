@@ -24,6 +24,8 @@ License along with this library.
 #include <poll.h>
 #include <unistd.h>
 
+#include <core/oiolb.h>
+
 #include "metautils.h"
 
 static gboolean
@@ -157,3 +159,19 @@ addr_info_hash(gconstpointer k)
 	return djb_hash_buf((guint8 *) &addr, sizeof(addr_info_t));
 }
 
+oio_location_t
+location_from_addr_info(const struct addr_info_s *addr)
+{
+	oio_location_t out = 0;
+	if (addr->type == TADDR_V4)
+		out = addr->addr.v4 << 16;
+	else
+		out = (guint64)addr->addr.v6[0] << 16
+			| (guint64)addr->addr.v6[1] << 24
+			| (guint64)addr->addr.v6[2] << 32
+			| (guint64)addr->addr.v6[3] << 40
+			| (guint64)addr->addr.v6[4] << 48
+			| (guint64)addr->addr.v6[5] << 56;
+	out |= addr->port;
+	return out;
+}

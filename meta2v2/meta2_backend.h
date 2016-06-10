@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -20,10 +20,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__meta2v2__meta2_backend_h
 # define OIO_SDS__meta2v2__meta2_backend_h 1
 
+# include <core/oiolb.h>
 # include <meta2v2/meta2_utils.h>
 # include <glib.h>
 
-struct grid_lbpool_s;
 struct meta2_backend_s;
 struct event_config_s;
 struct sqlx_repository_s;
@@ -33,7 +33,7 @@ struct hc_resolver_s;
 /** Builds a meta2 backend for the given NAMESPACE.  */
 GError* meta2_backend_init(struct meta2_backend_s **result,
 		struct sqlx_repository_s *repo, const gchar *ns_name,
-		struct grid_lbpool_s *glp, struct hc_resolver_s *resolver);
+		struct oio_lb_s *lb, struct hc_resolver_s *resolver);
 
 void meta2_backend_clean(struct meta2_backend_s *m2);
 
