@@ -23,7 +23,7 @@ def _get_sha1(data):
     return generate.hexdigest()
 
 class Backblaze(object):
-    BACKBLAZE_MAX_CHUNK_SIZE = 200000000
+    BACKBLAZE_MAX_CHUNK_SIZE = 209715200
     def __init__(self, account_id, application_key,
                  authorization_required=None, upload_required=None,
                  upload_part=False):
@@ -90,7 +90,6 @@ class Backblaze(object):
                                                     js.dumps(body), True)
 
     def _end_big_file(self, file_id, sha1_array):
-        print str(file_id) + ' ' + str(sha1_array)
         body = {'fileId':file_id, 'partSha1Array':sha1_array}
         headers = {'Authorization':
                    self.authorization_required['authorizationToken']}

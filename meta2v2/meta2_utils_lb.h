@@ -20,6 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__meta2v2__meta2_utils_lb_h
 # define OIO_SDS__meta2v2__meta2_utils_lb_h 1
 
+#include <core/oiolb.h>
 #include <metautils/lib/metautils.h>
 #include <glib.h>
 
@@ -33,13 +34,13 @@ typedef gpointer (*srvinfo_to_chunk_f)(struct service_info_s *si);
  * Get as many spare chunks as required to upload one metachunk with the
  * specified storage policy.
  *
- * @param lbp Pointer to a rawx load balancing pool
- * @param stgpol Pointer to the wanted storage policy
+ * @param lb Pointer to a load balancer
+ * @param stgpol_name Name of the wanted storage policy
  * @param result Pointer to a list where spare chunks will be inserted
  * @return A GError in case of error
  */
-GError* get_spare_chunks(struct grid_lbpool_s *lbp,
-		struct storage_policy_s *stgpol, GSList **result);
+GError* get_spare_chunks(struct oio_lb_s *lb,
+		const char *stgpol_name, GSList **result);
 
 /**
  * Get spare chunks according to a storage policy and lists of already
@@ -55,20 +56,8 @@ GError* get_spare_chunks(struct grid_lbpool_s *lbp,
  * @param result Pointer to a list where spare chunks will be inserted
  * @return A GError in case of error
  */
-GError* get_conditioned_spare_chunks2(struct grid_lbpool_s *lbp,
-		struct storage_policy_s *stgpol, GSList *notin, GSList *broken,
+GError* get_conditioned_spare_chunks(struct oio_lb_s *lbp,
+		const char *stgpol, GSList *notin, GSList *broken,
 		GSList **result);
-
-/**
- * Get the service information of the rawx hosting a chunk.
- *
- * @param lbp Pointer to a rawx load balancing pool
- * @param chunk_id The complete chunk id (with URL)
- * @param srvinfo Place where to store the service info (use
- *   service_info_clean to free)
- * @return A GError in case of error
- */
-GError* service_info_from_chunk_id(struct grid_lbpool_s *glp,
-		const gchar *chunk_id, service_info_t **srvinfo);
 
 #endif /*OIO_SDS__meta2v2__meta2_utils_lb_h*/

@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -41,6 +41,8 @@ static gint64 chunk_size = 3000;
 static gint64 chunks_count = 3;
 static volatile gint64 CLOCK_START = 0;
 static volatile gint64 CLOCK = 0;
+
+static struct oio_lb_world_s *lb_world = NULL;
 
 #define CHECK_ALIAS_VERSION(m2,u,v) do {\
 	gint64 _v = 0, _v0 = (v); \
@@ -169,11 +171,11 @@ _init_nsinfo(const gchar *ns, gint64 maxvers)
 			metautils_gba_from_string("NONE"));
 
 	g_hash_table_insert(nsinfo->storage_policy, g_strdup("classic"),
-			metautils_gba_from_string("DUMMY:DUPONETWO"));
+			metautils_gba_from_string("NONE:DUPONETWO"));
 	g_hash_table_insert(nsinfo->storage_policy, g_strdup("polcheck"),
-			metautils_gba_from_string("DUMMY:DUPONETHREE"));
+			metautils_gba_from_string("NONE:DUPONETHREE"));
 	g_hash_table_insert(nsinfo->storage_policy, g_strdup("secure"),
-			metautils_gba_from_string("DUMMY:DUP_SECURE"));
+			metautils_gba_from_string("NONE:DUP_SECURE"));
 
 	g_hash_table_insert(nsinfo->data_security, g_strdup("DUPONETWO"),
 			metautils_gba_from_string("plain/distance=1,nb_copy=2"));
@@ -185,53 +187,36 @@ _init_nsinfo(const gchar *ns, gint64 maxvers)
 	return nsinfo;
 }
 
-static struct grid_lbpool_s *
-_init_lb(const gchar *ns)
+static struct oio_lb_s *
+_init_lb(int nb_services)
 {
-	struct def_s { const gchar *url, *loc; };
-	static struct def_s defs[] = {
-		{"127.0.0.1:1025","site0.salle0.baie0.device0"},
-		{"127.0.0.1:1026","site0.salle0.baie0.device1"},
-		{"127.0.0.1:1027","site0.salle0.baie1.device0"},
-		{"127.0.0.1:1028","site0.salle1.baie0.device0"},
-		{"127.0.0.1:1029","site0.salle1.baie1.device0"},
-		{"127.0.0.1:1030","site0.salle1.baie0.device1"},
-		{NULL,NULL}
-	};
+	if (lb_world)
+		oio_lb_world__destroy(lb_world);
 
-	struct def_s *pdef = defs;
-	gint score = 0;
-
-	gboolean provide(struct service_info_s **p_si) {
-		struct service_info_s *si;
-		if (!pdef->url)
-			return FALSE;
-
-		si = g_malloc0(sizeof(*si));
-		g_strlcpy(si->ns_name, "NS", sizeof(si->ns_name));
-		g_strlcpy(si->type, NAME_SRVTYPE_RAWX, sizeof(si->type));
-		si->score.timestamp = oio_ext_real_time() / G_TIME_SPAN_SECOND;
-		si->score.value = ++score;
-		grid_string_to_addrinfo(pdef->url, &(si->addr));
-
-		pdef++;
-		*p_si = si;
-		return TRUE;
+	lb_world = oio_lb_local__create_world();
+	oio_lb_world__create_slot (lb_world, "*");
+	struct oio_lb_item_s *item = g_alloca(sizeof(*item) + LIMIT_LENGTH_SRVID);
+	for (int i = 0; i < nb_services; i++) {
+		item->location = 65536 + 6000 + i;
+		item->weight = 50;
+		g_snprintf(item->id, LIMIT_LENGTH_SRVID, "127.0.0.1:%d", 6000+i);
+		oio_lb_world__feed_slot(lb_world, "*", item);
 	}
+	oio_lb_world__debug(lb_world);
 
-	struct grid_lbpool_s *glp = grid_lbpool_create(ns);
-	g_assert(glp != NULL);
-	grid_lbpool_configure_string(glp, "rawx", "RR");
-	grid_lbpool_reload(glp, "rawx", provide);
-	return glp;
+	struct oio_lb_pool_s *pool = oio_lb_world__create_pool(lb_world, "NONE");
+	oio_lb_world__add_pool_target(pool, "*");
+	struct oio_lb_s *lb = oio_lb__create();
+	oio_lb__force_pool(lb, pool);
+	return lb;
 }
 
 static void
-_repo_wraper(const gchar *ns, gint64 maxvers, repo_test_f fr)
+_repo_wrapper(const gchar *ns, gint64 maxvers, repo_test_f fr)
 {
 	gchar repodir[512];
 	GError *err = NULL;
-	struct grid_lbpool_s *glp = NULL;
+	struct oio_lb_s *lb = NULL;
 	struct meta2_backend_s *backend = NULL;
 	struct sqlx_repository_s *repository = NULL;
 	struct hc_resolver_s *resolver = NULL;
@@ -247,7 +232,7 @@ _repo_wraper(const gchar *ns, gint64 maxvers, repo_test_f fr)
 			g_get_home_dir(), getpid());
 	g_mkdir_with_parents(repodir, 0755);
 
-	glp = _init_lb(ns);
+	lb = _init_lb(6);
 
 	resolver = hc_resolver_create();
 	g_assert(resolver != NULL);
@@ -258,7 +243,7 @@ _repo_wraper(const gchar *ns, gint64 maxvers, repo_test_f fr)
 	err = sqlx_repository_init(repodir, &cfg, &repository);
 	g_assert_no_error(err);
 
-	err = meta2_backend_init(&backend, repository, ns, glp, resolver);
+	err = meta2_backend_init(&backend, repository, ns, lb, resolver);
 	g_assert_no_error(err);
 	meta2_backend_configure_nsinfo(backend, nsinfo);
 
@@ -268,7 +253,6 @@ _repo_wraper(const gchar *ns, gint64 maxvers, repo_test_f fr)
 	meta2_backend_clean(backend);
 	sqlx_repository_clean(repository);
 	hc_resolver_destroy(resolver);
-	grid_lbpool_destroy(glp);
 	namespace_info_free (nsinfo);
 }
 
@@ -280,7 +264,7 @@ _repo_failure(const gchar *ns)
 	struct meta2_backend_s *backend = NULL;
 	struct sqlx_repository_s *repository = NULL;
 	struct hc_resolver_s *resolver = NULL;
-	struct grid_lbpool_s *glp = NULL;
+	struct oio_lb_s *lb = NULL;
 	struct sqlx_repo_config_s cfg = {0};
 
 	g_assert(ns != NULL);
@@ -289,7 +273,7 @@ _repo_failure(const gchar *ns)
 			g_get_home_dir(), getpid());
 	g_mkdir_with_parents(repodir, 0755);
 
-	glp = _init_lb(ns);
+	lb = _init_lb(6);
 
 	resolver = hc_resolver_create();
 	g_assert(resolver != NULL);
@@ -297,14 +281,13 @@ _repo_failure(const gchar *ns)
 	cfg.flags = SQLX_REPO_DELETEON;
 	err = sqlx_repository_init(repodir, &cfg, &repository);
 	g_assert_no_error(err);
-	err = meta2_backend_init(&backend, repository, ns, glp, resolver);
+	err = meta2_backend_init(&backend, repository, ns, lb, resolver);
 	g_assert_error(err, GQ(), CODE_BAD_REQUEST);
 	g_clear_error (&err);
 
 	meta2_backend_clean(backend);
 	sqlx_repository_clean(repository);
 	hc_resolver_destroy(resolver);
-	grid_lbpool_destroy (glp);
 }
 
 static void
@@ -336,7 +319,7 @@ _container_wraper(const char *ns, gint64 maxvers, container_test_f cf)
 
 	GRID_INFO("--- %"G_GINT64_FORMAT" %s ------------------------------------"
 			"-----------------", maxvers, ns);
-	_repo_wraper(ns, maxvers, test);
+	_repo_wrapper(ns, maxvers, test);
 }
 
 static void
@@ -352,7 +335,7 @@ _container_wraper_allversions (const char *ns, container_test_f cf)
 static void
 test_backend_create_destroy(void)
 {
-	_repo_wraper("NS", 0, NULL);
+	_repo_wrapper("NS", 0, NULL);
 }
 
 static void
@@ -371,7 +354,7 @@ test_backend_strange_ns(void)
 	for (guint len=1; len<LIMIT_LENGTH_NSNAME ;len++) {
 		memset(ns, 0, sizeof(ns));
 		memset(ns, 'x', len);
-		_repo_wraper(ns, 0, test);
+		_repo_wrapper(ns, 0, test);
 	}
 
 	/* too long NS is an error */

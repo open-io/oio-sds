@@ -112,7 +112,6 @@ class BackblazeChunkWriteHandler(object):
                                                   source, self.checksum)
         return self._upload_chunks(conn, size, sha1, md5, random_path)
 
-    #TODO : testing this method, with really big files !
     def _stream_big_chunks(self, source, conn):
         max_chunk_size = conn['backblaze'].BACKBLAZE_MAX_CHUNK_SIZE
         sha1_array = []
@@ -137,7 +136,6 @@ class BackblazeChunkWriteHandler(object):
                 tries = tries - 1
                 if tries == 0:
                     raise exc.OioException('Error in beginning upload')
-        
         file_id = res['fileId']
         count = 1
         bytes_read = size + 1
@@ -150,7 +148,7 @@ class BackblazeChunkWriteHandler(object):
                 else:
                     to_read = max_chunk_size
                 try:
-                    sha1, res = conn['backblaze'].upload_part(file_id,
+                    res, sha1 = conn['backblaze'].upload_part(file_id,
                                                               fd, count, sha1)
                     break
                 except BackblazeException:
@@ -161,7 +159,7 @@ class BackblazeChunkWriteHandler(object):
                         os.remove(random_path)
                         raise exc.OioException('Error upload')
             count = count + 1
-            sha1_array += sha1
+            sha1_array.append(sha1)
             fd.close()
             os.remove(random_path)
             size, sha1, md5, random_path = _get_hashs(to_read,
@@ -170,14 +168,13 @@ class BackblazeChunkWriteHandler(object):
             bytes_read = bytes_read + size
             if size == 0:
                 break
-
         tries = TRY_REQUEST_NUMBER
         while True:
             try:
                 res = conn['backblaze'].upload_part_end(file_id,
                                                         sha1_array)
                 break
-            except BackblazeException:
+            except BackblazeException as e:
                 tries = tries - 1
                 if tries == 0:
                     raise exc.OioException('Error end upload')

@@ -21,7 +21,7 @@ class ConscienceClient(Client):
         - tagv:   value of the tag to be matched (required if tagk specified)
         """
         uri = self._make_uri('lb/choose')
-        params = {'pool': pool}
+        params = {'type': pool}
         params.update(kwargs)
         resp, body = self._request('GET', uri, params=params)
         if resp.status_code == 200:

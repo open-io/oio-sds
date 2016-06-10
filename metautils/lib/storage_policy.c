@@ -1,7 +1,7 @@
 /*
 OpenIO SDS metautils
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -198,7 +198,7 @@ storage_class_init (struct namespace_info_s *ni, const char *name)
 
 	struct storage_class_s *result = g_malloc(sizeof(struct storage_class_s));
 	result->name = g_strdup(name);
-	gchar **fallbacks = g_strsplit(config, ":", 0);
+	gchar **fallbacks = g_strsplit(config, ",", 0);
 	result->fallbacks = metautils_array_to_list((void**)fallbacks);
 
 	g_free(fallbacks); // XXX Pointers reused !
@@ -416,6 +416,8 @@ _backblaze_policy_to_chunk_method(const struct data_security_s *datasec)
 			       account_id, bucket_name);
 	return result;
 }
+
+static GString *
 _plain_policy_to_chunk_method(const struct data_security_s *datasec)
 {
 	GString *result = g_string_new("plain/");
@@ -432,11 +434,25 @@ storage_policy_to_chunk_method(const struct storage_policy_s *sp)
 	switch (data_security_get_type(datasec)) {
 		case STGPOL_DS_EC:
 			return _rain_policy_to_chunk_method(datasec);
-	        case STGPOL_DS_BACKBLAZE:
+		case STGPOL_DS_BACKBLAZE:
 			return _backblaze_policy_to_chunk_method(datasec);
 		case STGPOL_DS_PLAIN:
 			return _plain_policy_to_chunk_method(datasec);
 		default:
 			g_assert_not_reached();
+	}
+}
+
+gint64
+storage_policy_get_nb_chunks(const struct storage_policy_s *sp)
+{
+	const struct data_security_s *dsec = storage_policy_get_data_security(sp);
+	switch (data_security_get_type(dsec)) {
+		case STGPOL_DS_EC:
+			return (data_security_get_int64_param(dsec, DS_KEY_K, 6)
+					+ data_security_get_int64_param(dsec, DS_KEY_M, 4));
+		case STGPOL_DS_PLAIN:
+		default:
+			return data_security_get_int64_param(dsec, DS_KEY_COPY_COUNT, 1);
 	}
 }

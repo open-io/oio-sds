@@ -376,28 +376,39 @@ _populate_headers_with_alias (struct req_args_s *args, struct bean_ALIASES_s *al
 			g_strdup_printf("%"G_GINT64_FORMAT, ALIASES_get_ctime(alias)));
 }
 
-static service_info_t*
-_service_info_from_chunk_id(struct grid_lbpool_s *lbp, const gchar *id)
+static gchar *
+_service_key(const gchar *prefix, const gchar *id)
 {
-	gchar addr[STRLEN_ADDRINFO] = {0};
-	gchar *start = strstr(id, "://");  // skip "http://"
-	int offset = start? start - id + 3 : 0;
-	memmove(addr, id+offset, strchr(id+offset, '/') - id - offset);
-	service_info_t *si = grid_lbpool_get_service_from_url(lbp,
-			NAME_SRVTYPE_RAWX, addr);
-	return si;
+	gchar actual_type[LIMIT_LENGTH_SRVTYPE] = {0};
+	if (!strcmp(prefix, "http")) {
+		strcpy(actual_type, NAME_SRVTYPE_RAWX);
+	} else {
+		strcpy(actual_type, prefix);
+	}
+	return oio_make_service_key(ns_name, actual_type, id);
 }
 
 static gint32
-_score_from_chunk_id(struct grid_lbpool_s *lbp, const gchar *id)
+_score_from_chunk_id(const gchar *id)
 {
-	gint32 score = 0;
-	service_info_t *si = _service_info_from_chunk_id(lbp, id);
-	if (si != NULL) {
-		score = si->score.value;
-		service_info_clean(si);
+	gchar svc_prefix[LIMIT_LENGTH_SRVTYPE] = {0};
+	gchar svc_id[STRLEN_ADDRINFO] = {0};
+	gchar *start = strstr(id, "://");
+	int offset = 0;
+	if (start) {
+		strncpy(svc_prefix, id, start - id);
+		offset = start - id + 3;
+	} else {
+		strcpy(svc_prefix, "http");
 	}
-	return score;
+	/* XXX FIXME not robust enough, maybe no more '/' */
+	strncpy(svc_id, id+offset, strchr(id+offset, '/') - id - offset);
+	gchar *svc_key = _service_key(svc_prefix, svc_id);
+	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, svc_key);
+	gint32 res = item? item->weight : 0;
+	g_free(item);
+	g_free(svc_key);
+	return res;
 }
 
 static enum http_rc_e
@@ -425,7 +436,7 @@ _reply_simplified_beans (struct req_args_s *args, GError *err,
 
 			// Serialize the chunk
 			struct bean_CHUNKS_s *chunk = l0->data;
-			gint32 score = _score_from_chunk_id(lbpool, CHUNKS_get_id(chunk)->str);
+			gint32 score = _score_from_chunk_id(CHUNKS_get_id(chunk)->str);
 			g_string_append_printf (gstr, "{\"url\":\"%s\"", CHUNKS_get_id (chunk)->str);
 			g_string_append_printf (gstr, ",\"pos\":\"%s\"", CHUNKS_get_position (chunk)->str);
 			g_string_append_printf (gstr, ",\"size\":%"G_GINT64_FORMAT, CHUNKS_get_size (chunk));

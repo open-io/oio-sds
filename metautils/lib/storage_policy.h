@@ -1,7 +1,7 @@
 /*
 OpenIO SDS metautils
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -59,13 +59,17 @@ struct storage_policy_s * storage_policy_dup(const struct storage_policy_s *sp);
 
 /**
  * @param sp the storage policy
- * @return a string which represents the storage policy
+ * @return a string which represents the chunk method
  */
 GString * storage_policy_to_chunk_method(const struct storage_policy_s *sp);
 
 void storage_policy_clean(struct storage_policy_s *sp);
 
 const char * storage_policy_get_name(const struct storage_policy_s *sp);
+
+/** Get the number of chunks required to form a metachunk
+ * (nb_copy for plain, k+m for EC). */
+gint64 storage_policy_get_nb_chunks(const struct storage_policy_s *sp);
 
 const struct data_security_s *storage_policy_get_data_security(
 		const struct storage_policy_s *sp);

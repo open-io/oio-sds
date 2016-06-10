@@ -19,7 +19,7 @@ add_test(NAME cache/lru COMMAND test_cache_lru)
 
 add_executable(test_lb test_lb.c)
 target_link_libraries(test_lb metautils ${COMMON})
-add_test(NAME metautils/lb COMMAND test_lb)
+add_test(NAME core/lb COMMAND test_lb)
 
 add_executable(test_stg_policy test_stg_policy.c)
 target_link_libraries(test_stg_policy ${COMMON})

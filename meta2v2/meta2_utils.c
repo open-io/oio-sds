@@ -82,7 +82,7 @@ m2v2_build_chunk_url_storage (const struct storage_policy_s *pol,
 {
 	switch(data_security_get_type(storage_policy_get_data_security(pol))) {
 	case STGPOL_DS_BACKBLAZE:
-		return g_strconcat("b2://backblaze/", str_id, NULL);
+		return g_strconcat("b2://b2/", str_id, NULL);
 	default:
 		return NULL;
 	}
@@ -1462,8 +1462,8 @@ out:
 struct gen_ctx_s
 {
 	struct oio_url_s *url;
-	struct storage_policy_s *pol;
-	struct grid_lb_iterator_s *iter;
+	const struct storage_policy_s *pol;
+	struct oio_lb_s *lb;
 	guint8 *uid;
 	gsize uid_size;
 	guint8 h[16];
@@ -1489,7 +1489,6 @@ static void
 _m2_generate_alias_header(struct gen_ctx_s *ctx)
 {
 	const gchar *p;
-	GString *chunk_method;
 	p = ctx->pol ? storage_policy_get_name(ctx->pol) : "none";
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
@@ -1513,45 +1512,43 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 	CONTENTS_HEADERS_set_ctime(header, now / G_TIME_SPAN_SECOND);
 	CONTENTS_HEADERS_set_mtime(header, now / G_TIME_SPAN_SECOND);
 	CONTENTS_HEADERS_set2_mime_type(header, OIO_DEFAULT_MIMETYPE);
-	chunk_method = storage_policy_to_chunk_method(ctx->pol);
+
+	GString *chunk_method = storage_policy_to_chunk_method(ctx->pol);
 	CONTENTS_HEADERS_set_chunk_method(header, chunk_method);
 	g_string_free(chunk_method, TRUE);
 	ctx->cb(ctx->cb_data, header);
 }
 
 static int
-is_storage_not_rawx(struct storage_policy_s *pol)
+is_stgpol_backblaze(const struct storage_policy_s *pol)
 {
 	switch(data_security_get_type(storage_policy_get_data_security(pol))) {
-	case STGPOL_DS_BACKBLAZE:
-		return TRUE;
-	default:
-		return FALSE;
+		case STGPOL_DS_BACKBLAZE:
+			return TRUE;
+		default:
+			return FALSE;
 	}
 	return FALSE;
 }
 
 static void
-_gen_chunk(struct gen_ctx_s *ctx, struct service_info_s *si,
+_gen_chunk(struct gen_ctx_s *ctx, gchar *straddr,
 		gint64 cs, guint pos, gint subpos)
 {
-	int size = si?STRLEN_ADDRINFO:16;
 	guint8 binid[32];
-	gchar *chunkid, strpos[24], strid[65], straddr[size];
+	gchar *chunkid, strpos[24], strid[65];
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
 
 	oio_str_randomize (binid, sizeof(binid));
 	oio_str_bin2hex (binid, sizeof(binid), strid, sizeof(strid));
-	if (si)
-		grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
-	
+
 	if (subpos < 0)
 		g_snprintf(strpos, sizeof(strpos), "%u", pos);
 	else
 		g_snprintf(strpos, sizeof(strpos), "%u.%d", pos, subpos);
 
-	if (si)
+	if (straddr)
 		chunkid = m2v2_build_chunk_url (straddr, strid);
 	else
 		chunkid = m2v2_build_chunk_url_storage (ctx->pol, strid);
@@ -1570,47 +1567,43 @@ _gen_chunk(struct gen_ctx_s *ctx, struct service_info_s *si,
 
 static GError*
 _m2_generate_chunks(struct gen_ctx_s *ctx,
-		gint64 mcs /* effective meta-chunk's size */,
-		guint count,
+		gint64 mcs /* actual metachunk size */,
 		gboolean subpos)
 {
 	GError *err = NULL;
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
-	const gint distance = _policy_parameter(ctx->pol, DS_KEY_DISTANCE, 1);
-	const gboolean weak = _policy_parameter(ctx->pol, DS_KEY_WEAK, FALSE);
-	const struct storage_class_s *stgclass =
-		storage_policy_get_storage_class(ctx->pol);
 
 	_m2_generate_alias_header(ctx);
 
 	guint pos = 0;
-	gint64 esize = MAX(ctx->size,1);
-	for (gint64 s=0; s < esize ;s+=mcs,++pos) {
-
-		struct lb_next_opt_s opt;
-		memset(&opt, 0, sizeof(opt));
-		opt.req.duplicates = (distance <= 0);
-		opt.req.max = count;
-		opt.req.distance = distance;
-		opt.req.weak_distance = weak;
-		opt.req.stgclass = stgclass;
-		opt.req.strict_stgclass = FALSE; // Accept ersatzes
-
-		struct service_info_s **siv = NULL;
-		if (!is_storage_not_rawx(ctx->pol)) {
-			if (!grid_lb_iterator_next_set(ctx->iter, &siv, &opt, &err)) {
-				g_prefix_error(&err, "at position %u: ", pos);
-				break;
-			}
-		
-			for (gint i=0; NULL != siv[i] ;++i)
-				_gen_chunk (ctx, siv[i], ctx->chunk_size, pos, subpos?i:-1);
-
-			service_info_cleanv(siv, FALSE);
+	gint64 esize = MAX(ctx->size, 1);
+	for (gint64 s = 0; s < esize && !err; s += mcs, ++pos) {
+		GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
+		void _on_id(oio_location_t loc, const char *id)
+		{
+			(void)loc;
+			char *shifted = g_strdup(id);
+			meta1_url_shift_addr(shifted);
+			g_ptr_array_add(ids, shifted);
 		}
-		else
-			_gen_chunk (ctx, NULL, ctx->chunk_size, pos, -1);
+		if (!oio_lb__poll_pool(ctx->lb, storage_policy_get_name(ctx->pol),
+					NULL, _on_id)) {
+			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "at position %u: "
+					"found only %u services matching the criteria",
+					pos, ids->len);
+		}
+		if (!err) {
+			if (is_stgpol_backblaze(ctx->pol)) {
+				// Shortcut for backblaze
+				_gen_chunk(ctx, NULL, ctx->chunk_size, pos, -1);
+			} else {
+				for (int i = 0; i < (int)ids->len; i++)
+					_gen_chunk(ctx, g_ptr_array_index(ids, i),
+							ctx->chunk_size, pos, subpos? i : -1);
+			}
+		}
+		g_ptr_array_free(ids, TRUE);
 	}
 
 	return err;
@@ -1618,12 +1611,11 @@ _m2_generate_chunks(struct gen_ctx_s *ctx,
 
 GError*
 m2_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
-		struct storage_policy_s *pol, struct grid_lb_iterator_s *iter,
+		struct storage_policy_s *pol, struct oio_lb_s *lb,
 		m2_onbean_cb cb, gpointer cb_data)
 {
 	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(url, OIOURL_WHOLE));
 	EXTRA_ASSERT(url != NULL);
-	EXTRA_ASSERT(iter != NULL);
 
 	if (!oio_url_has(url, OIOURL_PATH))
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
@@ -1638,27 +1630,25 @@ m2_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
 
 	ctx.url = url;
 	ctx.pol = pol;
-	ctx.iter = iter;
 	ctx.uid = (guint8*) &uid;
 	ctx.uid_size = uid_size;
 	ctx.size = size;
 	ctx.chunk_size = chunk_size;
 	ctx.cb = cb;
 	ctx.cb_data = cb_data;
+	ctx.lb = lb;
 
 	if (!pol)
-		return _m2_generate_chunks(&ctx, chunk_size, 1, 0);
+		return _m2_generate_chunks(&ctx, chunk_size, 0);
 
-	gint64 nb, k, m;
+	gint64 k;
 	switch (data_security_get_type(storage_policy_get_data_security(pol))) {
 	        case STGPOL_DS_BACKBLAZE:
 		case STGPOL_DS_PLAIN:
-			nb = _policy_parameter(pol, DS_KEY_COPY_COUNT, 1);
-			return _m2_generate_chunks(&ctx, chunk_size, nb, 0);
+			return _m2_generate_chunks(&ctx, chunk_size, 0);
 		case STGPOL_DS_EC:
 			k = _policy_parameter(pol, DS_KEY_K, 6);
-			m = _policy_parameter(pol, DS_KEY_M, 4);
-			return _m2_generate_chunks(&ctx, k*chunk_size, k+m, -1);
+			return _m2_generate_chunks(&ctx, k*chunk_size, -1);
 		default:
 			return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy type");
 	}

@@ -1,7 +1,7 @@
 /*
 OpenIO SDS metautils
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -373,12 +373,11 @@ service_howmany_replicas2(struct service_update_policies_s *pol,
 		struct hashstr_s *htype)
 {
 	struct element_s *el;
-	guint count;
+	guint count = 1;
 
 	EXTRA_ASSERT(pol != NULL);
 	EXTRA_ASSERT(htype != NULL);
 
-	count = 0;
 	if (pol && htype) {
 		g_mutex_lock(&pol->lock);
 		if (NULL != (el = g_tree_lookup(pol->tree_elements, htype)))

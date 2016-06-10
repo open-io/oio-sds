@@ -26,7 +26,7 @@ endif()
 
 set(CMAKE_C_FLAGS "-g -fPIC -pipe -Wall -Wextra -std=gnu99")
 
-# XXX(jfs): necessary to benefit from zero'ed static allocation of structures
+# necessary to benefit from zero'ed static allocation of structures
 # as proposed by C99. (we only allocate the first field and let the compiler
 # init the others to zero.
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-missing-field-initializers")

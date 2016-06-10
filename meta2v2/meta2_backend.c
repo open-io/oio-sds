@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -164,11 +164,11 @@ meta2_backend_get_local_addr(struct meta2_backend_s *m2)
 GError *
 meta2_backend_init(struct meta2_backend_s **result,
 		struct sqlx_repository_s *repo, const gchar *ns,
-		struct grid_lbpool_s *glp, struct hc_resolver_s *resolver)
+		struct oio_lb_s *lb, struct hc_resolver_s *resolver)
 {
 	EXTRA_ASSERT(result != NULL);
 	EXTRA_ASSERT(repo != NULL);
-	EXTRA_ASSERT(glp != NULL);
+	EXTRA_ASSERT(lb != NULL);
 	EXTRA_ASSERT(resolver != NULL);
 
 	if (!*ns || strlen(ns) >= LIMIT_LENGTH_NSNAME)
@@ -178,7 +178,7 @@ meta2_backend_init(struct meta2_backend_s **result,
 	g_strlcpy(m2->ns_name, ns, sizeof(m2->ns_name));
 	m2->type = NAME_SRVTYPE_META2;
 	m2->repo = repo;
-	m2->lb = glp;
+	m2->lb = lb;
 	m2->policies = service_update_policies_create();
 	g_mutex_init(&m2->nsinfo_lock);
 	m2->flag_precheck_on_generate = TRUE;
@@ -766,8 +766,8 @@ GError*
 meta2_backend_refresh_container_size(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gboolean recompute)
 {
-    GError *err = NULL;
-    struct sqlx_sqlite3_s *sq3 = NULL;
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -833,7 +833,6 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		args.url = url;
 		args.max_versions = _maxvers(sq3, m2b);
 		args.nsinfo = meta2_backend_get_nsinfo(m2b);
-		args.lbpool = m2b->lb;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_put_alias(&args, in, out_deleted, out_added)))
@@ -870,7 +869,6 @@ meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		args.url = url;
 		args.max_versions = _maxvers(sq3, m2b);
 		args.nsinfo = meta2_backend_get_nsinfo(m2b);
-		args.lbpool = m2b->lb;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_copy_alias(&args, src)))
@@ -907,7 +905,6 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		args.url = url;
 		args.max_versions = _maxvers(sq3, m2b);
 		args.nsinfo = meta2_backend_get_nsinfo(m2b);
-		args.lbpool = m2b->lb;
 
 		if (!(err = _transaction_begin(sq3,url, &repctx))) {
 			if (!(err = m2db_force_alias(&args, in, out_deleted, out_added)))
@@ -1004,7 +1001,7 @@ meta2_backend_delete_beans(struct meta2_backend_s *m2b,
 }
 
 GError*
-meta2_backend_update_beans(struct meta2_backend_s *m2b, struct oio_url_s *url, 
+meta2_backend_update_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		GSList *new_chunks, GSList *old_chunks)
 {
 	GError *err = NULL;
@@ -1333,7 +1330,6 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 	GError *err = NULL;
 	struct namespace_info_s *nsinfo;
 	struct storage_policy_s *policy = NULL;
-	struct grid_lb_iterator_s *iter = NULL;
 	struct m2_prepare_data pdata = {0};
 
 	GRID_TRACE("BEANS(%s,%"G_GINT64_FORMAT",%s)", oio_url_get(url, OIOURL_WHOLE),
@@ -1410,13 +1406,9 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 
 	/* Let's continue to generate the beans, no need for an open container for the moment */
 	if (!err) {
-		iter = grid_lbpool_get_iterator(m2b->lb, "rawx");
-		if (!iter)
-			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "No RAWX available");
-		else
-			err = m2_generate_beans(url, size,
-					namespace_chunk_size(nsinfo, oio_url_get(url, OIOURL_NS)),
-					policy, iter, cb, cb_data);
+		err = m2_generate_beans(url, size,
+				namespace_chunk_size(nsinfo, oio_url_get(url, OIOURL_NS)),
+				policy, m2b->lb, cb, cb_data);
 	}
 
 	namespace_info_free(nsinfo);
@@ -1470,7 +1462,8 @@ meta2_backend_get_conditionned_spare_chunks_v2(struct meta2_backend_s *m2b,
 	struct storage_policy_s *pol = NULL;
 	GError *err = _load_storage_policy(m2b, url, polname, &pol);
 	if (!err)
-		err = get_conditioned_spare_chunks2(m2b->lb, pol, notin, broken, result);
+		err = get_conditioned_spare_chunks(m2b->lb,
+				storage_policy_get_name(pol), notin, broken, result);
 	if (pol)
 		storage_policy_clean(pol);
 	return err;
@@ -1483,10 +1476,12 @@ meta2_backend_get_spare_chunks(struct meta2_backend_s *m2b, struct oio_url_s *ur
 	GRID_TRACE("SPARE(%s,%s)", oio_url_get(url, OIOURL_WHOLE), polname);
 	EXTRA_ASSERT(m2b != NULL);
 
+	// TODO: we can avoid instantiating storage policy
+	// but we need to review several function calls
 	struct storage_policy_s *pol = NULL;
 	GError *err = _load_storage_policy(m2b, url, polname, &pol);
 	if (!err)
-		err = get_spare_chunks(m2b->lb, pol, result);
+		err = get_spare_chunks(m2b->lb, storage_policy_get_name(pol), result);
 	if (pol)
 		storage_policy_clean(pol);
 	return err;
