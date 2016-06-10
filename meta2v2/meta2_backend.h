@@ -122,33 +122,38 @@ GError* meta2_backend_refresh_container_size(struct meta2_backend_s *m2b,
 
 GError* meta2_backend_put_alias(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *in,
-		GSList **out_deleted, GSList **out_added);
+		GSList **out_deleted, GSList **out_added,
+		gint64 *content_event_seq);
 
 GError* meta2_backend_copy_alias(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, const char *src);
 
 GError* meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *beans,
-		m2_onbean_cb cb, gpointer u0);
+		m2_onbean_cb cb, gpointer u0,
+		gint64 *content_event_seq);
 
 /** Update a content with the given chunks replacing the existing chunks
  *  at the same position. */
 GError *meta2_backend_update_content(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *in,
-		GSList **out_deleted, GSList **out_added);
+		GSList **out_deleted, GSList **out_added,
+		gint64 *content_event_seq);
 
 /** Create a new version of the ALIAS but with the given chunks linked to
  * the existing CONTENT.  */
 GError* meta2_backend_force_alias(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *in,
-		GSList **out_deleted, GSList **out_added);
+		GSList **out_deleted, GSList **out_added,
+		gint64 *content_event_seq);
 
 /* TODO manage properties */
 GError* meta2_backend_link_content (struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GBytes *content_id);
 
 GError* meta2_backend_delete_alias(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0);
+		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0,
+		gint64 *content_event_seq);
 
 /* Properties -------------------------------------------------------------- */
 

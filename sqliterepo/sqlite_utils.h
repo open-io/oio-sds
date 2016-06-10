@@ -146,7 +146,7 @@ void sqlx_admin_set_gba_and_clean(struct sqlx_sqlite3_s *sq3, const gchar *k, GB
 gboolean sqlx_admin_init_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 v);
 gboolean sqlx_admin_init_str(struct sqlx_sqlite3_s *sq3, const gchar *k, const gchar *v);
 
-void sqlx_admin_inc_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 delta);
+gint64 sqlx_admin_inc_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 delta);
 
 gint64 sqlx_admin_get_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 def);
 gchar* sqlx_admin_get_str(struct sqlx_sqlite3_s *sq3, const gchar *k);

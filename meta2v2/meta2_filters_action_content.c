@@ -62,13 +62,15 @@ struct all_vers_cb_args
 
 static void
 _notify_beans (struct meta2_backend_s *m2b, struct oio_url_s *url,
-		GSList *beans, const char *name)
+		GSList *beans, const char *name, gint64 seq)
 {
 	void forward (GSList *list_of_beans) {
 		gchar tmp[256];
 		g_snprintf (tmp, sizeof(tmp), "%s.%s", META2_EVENTS_PREFIX, name);
 
 		GString *gs = oio_event__create (tmp, url);
+		if (seq >= 0)
+			g_string_append_printf(gs, ",\"seq\":%"G_GINT64_FORMAT, seq);
 		g_string_append (gs, ",\"data\":[");
 		meta2_json_dump_all_xbeans (gs, list_of_beans);
 		g_string_append (gs, "]}");
@@ -117,6 +119,7 @@ static int
 _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 {
 	GError *e = NULL;
+	gint64 seq = -1;
 	gint rc = FILTER_OK;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
@@ -133,12 +136,13 @@ _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 			" (update)":"");
 
 	if (NULL != meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_OVERWRITE)) {
-		e = meta2_backend_force_alias(m2b, url, beans, &deleted, &added);
+		e = meta2_backend_force_alias(m2b, url, beans, &deleted, &added, &seq);
 	} else if (meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_UPDATE)) {
 		reply->subject("(update)");
-		e = meta2_backend_update_content(m2b, url, beans, &deleted, &added);
+		e = meta2_backend_update_content(m2b, url, beans, &deleted, &added,
+				&seq);
 	} else {
-		e = meta2_backend_put_alias(m2b, url, beans, &deleted, &added);
+		e = meta2_backend_put_alias(m2b, url, beans, &deleted, &added, &seq);
 	}
 
 	if (NULL != e) {
@@ -146,9 +150,10 @@ _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 		meta2_filter_ctx_set_error(ctx, e);
 		rc = FILTER_KO;
 	} else {
-		_notify_beans (m2b, url, added, "content.new");
+		// If there are deleted beans, `seq` has been incremented by 2
 		if (deleted)
-			_notify_beans (m2b, url, deleted, "content.deleted");
+			_notify_beans(m2b, url, deleted, "content.deleted", seq-1);
+		_notify_beans(m2b, url, added, "content.new", seq);
 		_on_bean_ctx_send_list(obc);
 		rc = FILTER_OK;
 	}
@@ -210,6 +215,7 @@ meta2_filter_action_append_content(struct gridd_filter_ctx_s *ctx,
 {
 	TRACE_FILTER();
 	(void) reply;
+	gint64 seq = -1;
 	GError *e = NULL;
 	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
@@ -217,7 +223,8 @@ meta2_filter_action_append_content(struct gridd_filter_ctx_s *ctx,
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 	GRID_DEBUG("Appending %d beans", g_slist_length(beans));
 
-	e = meta2_backend_append_to_alias(m2b, url, beans, _bean_list_cb, &obc->l);
+	e = meta2_backend_append_to_alias(m2b, url, beans,
+			_bean_list_cb, &obc->l, &seq);
 	if(NULL != e) {
 		GRID_DEBUG("Fail to append to alias (%s)", oio_url_get(url, OIOURL_WHOLE));
 		meta2_filter_ctx_set_error(ctx, e);
@@ -225,7 +232,7 @@ meta2_filter_action_append_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	_notify_beans (m2b, url, obc->l, "content.append");
+	_notify_beans(m2b, url, obc->l, "content.append", seq);
 	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
@@ -270,13 +277,14 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	(void) reply;
+	gint64 seq = -1;
 	GError *e = NULL;
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 
 	TRACE_FILTER();
-	e = meta2_backend_delete_alias(m2b, url, _bean_list_cb, &obc->l);
+	e = meta2_backend_delete_alias(m2b, url, _bean_list_cb, &obc->l, &seq);
 	if (NULL != e) {
 		GRID_DEBUG("Fail to delete alias for url: %s", oio_url_get(url, OIOURL_WHOLE));
 		meta2_filter_ctx_set_error(ctx, e);
@@ -284,7 +292,7 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	_notify_beans(m2b, url, obc->l, "content.deleted");
+	_notify_beans(m2b, url, obc->l, "content.deleted", seq);
 	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;

@@ -762,6 +762,14 @@ meta2_backend_add_modified_container(struct meta2_backend_s *m2b,
 				_container_state (sq3));
 }
 
+static gint64
+meta2_backend_inc_content_event_seq(struct meta2_backend_s *m2b UNUSED,
+		struct sqlx_sqlite3_s *sq3, gint64 delta)
+{
+	EXTRA_ASSERT(sq3 != NULL);
+	return sqlx_admin_inc_i64(sq3, M2V2_ADMIN_PREFIX_SYS "seq.content", delta);
+}
+
 GError*
 meta2_backend_refresh_container_size(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gboolean recompute)
@@ -784,8 +792,9 @@ meta2_backend_refresh_container_size(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_delete_alias(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0)
+		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0, gint64 *seq)
 {
+	gint64 _seq = -1;
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 
@@ -799,11 +808,15 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_delete_alias(sq3, max_versions, url, cb, u0))) {
 				m2db_increment_version(sq3);
+				_seq = meta2_backend_inc_content_event_seq(m2b, sq3, 1);
 			}
 			err = sqlx_transaction_end(repctx, err);
 		}
-		if (!err)
+		if (!err) {
 			meta2_backend_add_modified_container(m2b, sq3);
+			if (seq)
+				*seq = _seq;
+		}
 		m2b_close(sq3);
 	}
 
@@ -812,8 +825,9 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		GSList *in, GSList **out_deleted, GSList **out_added)
+		GSList *in, GSList **out_deleted, GSList **out_added, gint64 *seq)
 {
+	gint64 _seq = -1;
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
@@ -834,11 +848,17 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		args.nsinfo = meta2_backend_get_nsinfo(m2b);
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (!(err = m2db_put_alias(&args, in, out_deleted, out_added)))
+			if (!(err = m2db_put_alias(&args, in, out_deleted, out_added))) {
 				m2db_increment_version(sq3);
+				_seq = meta2_backend_inc_content_event_seq(m2b, sq3,
+						out_deleted && *out_deleted? 2 : 1);
+			}
 			err = sqlx_transaction_end(repctx, err);
-			if (!err)
+			if (!err) {
 				meta2_backend_add_modified_container(m2b, sq3);
+				if (seq)
+					*seq = _seq;
+			}
 		}
 		m2b_close(sq3);
 
@@ -884,8 +904,9 @@ meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 
 GError *
 meta2_backend_update_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		GSList *in, GSList **out_deleted, GSList **out_added)
+		GSList *in, GSList **out_deleted, GSList **out_added, gint64 *seq)
 {
+	gint64 _seq = -1;
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
@@ -899,11 +920,17 @@ meta2_backend_update_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_update_content(sq3, url, in,
-						out_deleted, out_added)))
+						out_deleted, out_added))) {
 				m2db_increment_version(sq3);
+				_seq = meta2_backend_inc_content_event_seq(m2b, sq3,
+						out_deleted && *out_deleted? 2 : 1);
+			}
 			err = sqlx_transaction_end(repctx, err);
-			if (!err)
+			if (!err) {
 				meta2_backend_add_modified_container(m2b, sq3);
+				if (seq)
+					*seq = _seq;
+			}
 		}
 		m2b_close(sq3);
 	}
@@ -913,8 +940,9 @@ meta2_backend_update_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 
 GError*
 meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		GSList *in, GSList **out_deleted, GSList **out_added)
+		GSList *in, GSList **out_deleted, GSList **out_added, gint64 *seq)
 {
+	gint64 _seq = -1;
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
@@ -935,12 +963,18 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		args.nsinfo = meta2_backend_get_nsinfo(m2b);
 
 		if (!(err = _transaction_begin(sq3,url, &repctx))) {
-			if (!(err = m2db_force_alias(&args, in, out_deleted, out_added)))
+			if (!(err = m2db_force_alias(&args, in, out_deleted, out_added))) {
 				m2db_increment_version(sq3);
+				_seq = meta2_backend_inc_content_event_seq(m2b, sq3,
+						out_deleted && *out_deleted? 2 : 1);
+			}
 			err = sqlx_transaction_end(repctx, err);
 		}
-		if (!err)
+		if (!err) {
 			meta2_backend_add_modified_container(m2b, sq3);
+			if (seq)
+				*seq = _seq;
+		}
 		namespace_info_free(args.nsinfo);
 
 		m2b_close(sq3);
@@ -1097,8 +1131,9 @@ meta2_backend_get_alias_version(struct meta2_backend_s *m2b,
 GError*
 meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *beans,
-		m2_onbean_cb cb, gpointer u0)
+		m2_onbean_cb cb, gpointer u0, gint64 *seq)
 {
+	gint64 _seq = -1;
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
@@ -1116,12 +1151,18 @@ meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 	if (!err) {
 		max_versions = _maxvers(sq3, m2b);
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (!(err = m2db_append_to_alias(sq3, nsinfo, max_versions, url, beans, cb, u0)))
+			if (!(err = m2db_append_to_alias(sq3, nsinfo, max_versions, url,
+						beans, cb, u0))) {
 				m2db_increment_version(sq3);
+				_seq = meta2_backend_inc_content_event_seq(m2b, sq3, 1);
+			}
 			err = sqlx_transaction_end(repctx, err);
 		}
-		if (!err)
+		if (!err) {
 			meta2_backend_add_modified_container(m2b, sq3);
+			if (seq)
+				*seq = _seq;
+		}
 		m2b_close(sq3);
 	}
 

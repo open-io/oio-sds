@@ -146,16 +146,17 @@ sqlx_admin_init_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 v)
 	return TRUE;
 }
 
-void
+gint64
 sqlx_admin_inc_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 delta)
 {
+	gint64 new_val = delta;
 	gchar *s = sqlx_admin_get_str(sq3, k);
-	if (!s)
-		sqlx_admin_set_i64(sq3, k, delta);
-	else {
-		sqlx_admin_set_i64(sq3, k, delta + g_ascii_strtoll(s, NULL, 10));
+	if (s) {
+		new_val += g_ascii_strtoll(s, NULL, 10);
 		g_free(s);
 	}
+	sqlx_admin_set_i64(sq3, k, new_val);
+	return new_val;
 }
 
 void
