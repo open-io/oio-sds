@@ -106,8 +106,8 @@ set_rawx_info_to_fd (int fd, GError **error, struct chunk_textinfo_s *cti)
 	SET(ATTR_NAME_CHUNK_HASH, cti->chunk_hash);
 	SET(ATTR_NAME_CHUNK_POS,  cti->chunk_position);
 
-	SET(ATTR_NAME_CHUNK_POS,  cti->compression_metadata);
-	SET(ATTR_NAME_CHUNK_POS,  cti->compression_size);
+	SET(ATTR_NAME_CHUNK_METADATA_COMPRESS, cti->compression_metadata);
+	SET(ATTR_NAME_CHUNK_COMPRESSED_SIZE,   cti->compression_size);
 
 	return TRUE;
 

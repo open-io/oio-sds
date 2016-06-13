@@ -154,7 +154,7 @@ _write_data_crumble_COMP(dav_stream *stream, gulong *checksum)
 					"An error occurred while writing to a "
 					"resource.");
 		} else {
-			stream->compressed_size+=gba->len;
+			stream->compressed_size += gba->len;
 		}
 	} else {
 		/* ### use something besides 500? */
@@ -178,37 +178,43 @@ resource_init_decompression(dav_resource *resource, dav_rawx_server_conf *conf)
 	GError *e = NULL;
 
 	GHashTable *comp_opt =
-		g_hash_table_new_full( g_str_hash, g_str_equal, g_free, g_free);
-	if (!get_compression_info_in_attr(resource_get_pathname(resource), &e, comp_opt)){
-		if(comp_opt)
+			g_hash_table_new_full( g_str_hash, g_str_equal, g_free, g_free);
+	if (!get_compression_info_in_attr(
+			resource_get_pathname(resource), &e, comp_opt)) {
+		if (comp_opt)
 			g_hash_table_destroy(comp_opt);
-		if(e)
+		if (e)
 			g_clear_error(&e);
-		return server_create_and_stat_error(conf, resource->pool, HTTP_CONFLICT, 0, "Failed to get chunk compression in attr");
+		return server_create_and_stat_error(conf, resource->pool,
+				HTTP_CONFLICT, 0, "Failed to get chunk compression from attr");
 	}
 	c = g_hash_table_lookup(comp_opt, NS_COMPRESSION_OPTION);
-	if (c && 0 == g_ascii_strcasecmp(c, NS_COMPRESSION_ON)) {
+	if (c && !g_ascii_strcasecmp(c, NS_COMPRESSION_ON)) {
 		resource->info->compression = TRUE;
 	} else {
 		resource->info->compression = FALSE;
 	}
 
-	if(resource->info->compression){
+	if (resource->info->compression) {
 		// init compression method according to algo choice
 		char *algo = g_hash_table_lookup(comp_opt, NS_COMPRESS_ALGO_OPTION);
-		memset(resource->info->compress_algo, 0, sizeof(resource->info->compress_algo));
-		memcpy(resource->info->compress_algo, algo, MIN(strlen(algo), sizeof(resource->info->compress_algo)));
+		memset(resource->info->compress_algo, 0,
+				sizeof(resource->info->compress_algo));
+		memcpy(resource->info->compress_algo, algo, MIN(strlen(algo),
+					sizeof(resource->info->compress_algo)));
 		init_compression_ctx(&(resource->info->comp_ctx), algo);
-		if (0 != resource->info->comp_ctx.chunk_initiator(&(resource->info->cp_chunk),
-					(char*)resource->info->fullpath)) {
-			r = server_create_and_stat_error(resource_get_server_config(resource), resource->pool,
-					HTTP_INTERNAL_SERVER_ERROR, 0, "Failed to init chunk bucket");
+		if (resource->info->comp_ctx.chunk_initiator(
+				&(resource->info->cp_chunk), resource->info->fullpath)) {
+			r = server_create_and_stat_error(
+					resource_get_server_config(resource), resource->pool,
+					HTTP_INTERNAL_SERVER_ERROR, 0,
+					"Failed to init chunk bucket");
 		}
 	}
-	if(comp_opt)
+	if (comp_opt)
 		g_hash_table_destroy(comp_opt);
 
-	if(NULL != e)
+	if (e)
 		g_clear_error(&e);
 
 	return r;
@@ -411,47 +417,38 @@ resource_stat_chunk(dav_resource *resource, int flags)
 void
 request_parse_query(request_rec *r, dav_resource *resource)
 {
-	/* Sanity check */
-	if(!r->parsed_uri.query)
+	if (!r->parsed_uri.query)
 		return;
 
 	char *query = NULL;
 	query = apr_pstrdup(r->pool, r->parsed_uri.query);
 
-	/* Expected cp=true&algo=XXXX&bs=XXXX */
+	/* Expected comp=true&algo=XXXX&bs=XXXX */
 	char *k = NULL;
 	char *v = NULL;
 	char *last = NULL;
 
 	k = apr_strtok(query, "=&", &last);
-	v = apr_strtok(NULL, "=&",&last);
+	v = apr_strtok(NULL, "=&", &last);
 
-	if(!k || !v)
+	if (!k || !v)
 		goto end;
 
-	if(0 == apr_strnatcasecmp(k, "comp"))
-		resource->info->forced_cp = apr_pstrdup(r->pool, v);
-	if(0 == apr_strnatcasecmp(k, "algo"))
-		resource->info->forced_cp_algo = apr_pstrdup(r->pool, v);
-	if(0 == apr_strnatcasecmp(k, "bs"))
-		resource->info->forced_cp_bs = apr_pstrdup(r->pool, v);
-
-	while(1) {
-		k = apr_strtok(NULL, "=&", &last);
-		v = apr_strtok(NULL, "=&", &last);
-		if(!k || !v)
-			break;
-		if(0 == apr_strnatcasecmp(k, "comp"))
+	do {
+		if (!apr_strnatcasecmp(k, "comp"))
 			resource->info->forced_cp = apr_pstrdup(r->pool, v);
-		if(0 == apr_strnatcasecmp(k, "algo"))
+		if (!apr_strnatcasecmp(k, "algo"))
 			resource->info->forced_cp_algo = apr_pstrdup(r->pool, v);
-		if(0 == apr_strnatcasecmp(k, "bs"))
+		if (!apr_strnatcasecmp(k, "bs"))
 			resource->info->forced_cp_bs = apr_pstrdup(r->pool, v);
-
-	}
+	} while ((k = apr_strtok(NULL, "=&", &last)) &&
+			(v = apr_strtok(NULL, "=&", &last)));
 
 end:
-	if(!resource->info->forced_cp)
+	DAV_DEBUG_REQ(r, 0, "forced_cp=%s, forced_cp_algo=%s, forced_cp_bs=%s",
+			resource->info->forced_cp, resource->info->forced_cp_algo,
+			resource->info->forced_cp_bs);
+	if (!resource->info->forced_cp)
 		resource->info->forced_cp = apr_pstrdup(r->pool, "false");
 }
 
@@ -567,16 +564,16 @@ rawx_repo_write_last_data_crumble(dav_stream *stream)
 	checksum = stream->compress_checksum;
 
 	/* If buffer contain data, compress it if needed and write it to distant file */
-	if( 0 < stream->bufsize ) {
-		if(!stream->compression) {
+	if (0 < stream->bufsize ) {
+		if (!stream->compression) {
 			e = _write_data_crumble_UNCOMP(stream);
 		} else {
 			e = _write_data_crumble_COMP(stream, &checksum);
 		}
 	}
 	/* write eof & checksum */
-	if( !e && stream->compression ) {
-		if( 0 != stream->comp_ctx.eof_writer(stream->f, checksum, &(stream->compressed_size))) {
+	if (!e && stream->compression) {
+		if (stream->comp_ctx.eof_writer(stream->f, checksum, &(stream->compressed_size))) {
 			/* ### use something besides 500? */
 			e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
 					HTTP_INTERNAL_SERVER_ERROR, 0,
@@ -654,29 +651,31 @@ rawx_repo_commit_upload(dav_stream *stream)
 	if (stream->compressed_size) {
 		char size[32];
 		apr_snprintf(size, 32, "%d", stream->compressed_size);
-		oio_str_replace (&(fake.compression_metadata), stream->metadata_compress);
-		oio_str_replace (&(fake.compression_size), size);
+		oio_str_replace(&(fake.compression_metadata), stream->metadata_compress);
+		oio_str_replace(&(fake.compression_size), size);
 	}
 
 	const char *msg = check_chunk_info_with_trailers (&fake);
 	if (msg != NULL) {
-		e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
-				HTTP_FORBIDDEN, 0,
+		e = server_create_and_stat_error(resource_get_server_config(stream->r),
+				stream->p, HTTP_FORBIDDEN, 0,
 				apr_pstrcat(stream->p, "Error with xattr/header ", msg, NULL));
 		return e;
 	}
 
 	/* ok, save now */
 	e = _set_chunk_extended_attributes(stream, &fake);
-	if( NULL != e) {
-		DAV_DEBUG_REQ(stream->r->info->request, 0, "Failed to set chunk extended attributes : %s", e->desc);
+	if (e) {
+		DAV_DEBUG_REQ(stream->r->info->request, 0,
+				"Failed to set chunk extended attributes: %s", e->desc);
 		return e;
 	}
 
 	e = _finalize_chunk_creation(stream);
 
-	if( NULL != e ) {
-		DAV_DEBUG_REQ(stream->r->info->request, 0, "Failed to finalize chunk file creation : %s", e->desc);
+	if (e) {
+		DAV_DEBUG_REQ(stream->r->info->request, 0,
+				"Failed to finalize chunk file creation: %s", e->desc);
 		return e;
 	}
 
@@ -766,7 +765,7 @@ retry:
 				apr_pool_cleanup_null);
 
 	if (ctx->forced_cp)
-		should_compress = g_ascii_strncasecmp(ctx->forced_cp, "true", 4);
+		should_compress = !g_ascii_strncasecmp(ctx->forced_cp, "true", 4);
 
 	if (!should_compress) {
 		DAV_DEBUG_REQ(resource->info->request, 0 , "Compression Mode OFF");
@@ -777,7 +776,7 @@ retry:
 		DAV_DEBUG_REQ(resource->info->request, 0 , "Compression Mode ON");
 		ds->compression = TRUE;
 		/* compression forced by request header */
-		if(!ctx->forced_cp_algo || !ctx->forced_cp_bs){
+		if (!ctx->forced_cp_algo || !ctx->forced_cp_bs){
 			return server_create_and_stat_error(resource_get_server_config(resource), p,
 					HTTP_BAD_REQUEST, 0,
 					apr_pstrcat(p, "Failed to get compression info from incoming request", NULL));
