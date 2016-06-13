@@ -33,24 +33,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <ctype.h>
 
 #include <metautils/lib/metautils.h>
+#include <cluster/lib/gridcluster.h>
 #include <rawx-lib/src/rawx.h>
 
 #include "rawx_repo_core.h"
 #include "rawx_internals.h"
 #include "rawx_event.h"
 
-#define DEFAULT_BLOCK_SIZE "5242880"
+#define DEFAULT_BLOCK_SIZE 1048576
 #define DEFAULT_COMPRESSION_ALGO "ZLIB"
 
 /******************** INTERNALS METHODS **************************/
-
-static apr_status_t
-apr_storage_policy_clean(void *p)
-{
-	struct storage_policy_s *sp = (struct storage_policy_s *) p;
-	storage_policy_clean(sp);
-	return APR_SUCCESS;
-}
 
 static void
 __set_header(request_rec *r, const char *n, const char *v)
@@ -716,10 +709,9 @@ rawx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 	dav_rawx_server_conf *conf = resource_get_server_config(resource);
 	apr_status_t rv = 0;
 	char * metadata_compress = NULL;
-	struct storage_policy_s *sp = NULL;
 	int retryable = 1;
 
-	volatile int should_compress = 0;
+	int should_compress = 0;
 
 	dav_stream *ds = apr_pcalloc(p, sizeof(*ds));
 	ds->fsync_on_close = conf->fsync_on_close;
@@ -757,36 +749,34 @@ retry:
 		return err;
 	}
 
-	/* TODO: try to create a storage_policy struct from request header */
-	/* if not possible, get it from rawx_conf (default namespace conf) */
-	DAV_DEBUG_REQ(resource->info->request, 0 , "stg_pol init from local sp");
-	if (NULL != (sp = storage_policy_dup(conf->rawx_conf->sp)))
-		apr_pool_cleanup_register(p, sp, apr_storage_policy_clean,
-				apr_pool_cleanup_null);
-
-	if (ctx->forced_cp)
+	if (conf->compression_algo && *conf->compression_algo) {
+		should_compress = TRUE;
+		ctx->forced_cp_algo = apr_pstrdup(p, conf->compression_algo);
+	} else if (ctx->forced_cp) {
 		should_compress = !g_ascii_strncasecmp(ctx->forced_cp, "true", 4);
+	}
 
-	if (!should_compress) {
-		DAV_DEBUG_REQ(resource->info->request, 0 , "Compression Mode OFF");
-		ds->blocksize = g_ascii_strtoll(DEFAULT_BLOCK_SIZE, NULL, 10); /* conf->rawx_conf->blocksize; */
+	if (!should_compress ||
+			!namespace_in_compression_mode(conf->rawx_conf->ni)) {
+		ds->blocksize = DEFAULT_BLOCK_SIZE;
 		ds->buffer = apr_pcalloc(p, ds->blocksize);
 		ds->bufsize = 0;
 	} else {
-		DAV_DEBUG_REQ(resource->info->request, 0 , "Compression Mode ON");
 		ds->compression = TRUE;
-		/* compression forced by request header */
-		if (!ctx->forced_cp_algo || !ctx->forced_cp_bs){
-			return server_create_and_stat_error(resource_get_server_config(resource), p,
-					HTTP_BAD_REQUEST, 0,
-					apr_pstrcat(p, "Failed to get compression info from incoming request", NULL));
-		}
-		ds->blocksize = strtol(ctx->forced_cp_bs, NULL, 10);
+		if (ctx->forced_cp_bs)
+			ds->blocksize = strtol(ctx->forced_cp_bs, NULL, 10);
+		else
+			ds->blocksize = DEFAULT_BLOCK_SIZE;
 
-		metadata_compress = apr_pstrcat(p, NS_COMPRESSION_OPTION, "=", NS_COMPRESSION_ON, ";",
+		if (!ctx->forced_cp_algo)
+			ctx->forced_cp_algo = DEFAULT_COMPRESSION_ALGO;
+
+		metadata_compress = apr_pstrcat(p,
+				NS_COMPRESSION_OPTION, "=", NS_COMPRESSION_ON, ";",
 				NS_COMPRESS_ALGO_OPTION,"=", ctx->forced_cp_algo, ";",
 				NS_COMPRESS_BLOCKSIZE_OPTION, "=", ctx->forced_cp_bs, NULL);
 
+		DAV_DEBUG_REQ(resource->info->request, 0 , "%s", metadata_compress);
 		init_compression_ctx(&(ds->comp_ctx), ctx->forced_cp_algo);
 
 		ds->buffer = apr_pcalloc(p, ds->blocksize);

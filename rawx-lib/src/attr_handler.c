@@ -289,10 +289,6 @@ rawx_conf_clean(rawx_conf_t* c)
 		namespace_info_free(c->ni);
 		c->ni = NULL;
 	}
-	if(c->sp) {
-		storage_policy_clean(c->sp);
-		c->sp = NULL;
-	}
 	if(c->acl) {
 		g_slist_foreach(c->acl, _rawx_acl_clean, NULL);
 		g_slist_free(c->acl);

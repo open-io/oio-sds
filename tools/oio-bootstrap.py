@@ -195,6 +195,9 @@ grid_fsync_dir         enabled
 # DO NOT USE, this is broken
 #grid_acl disabled
 
+# Enable zlib compression ('lzo' is also available)
+grid_compression ${COMPRESSION}
+
 Alias / /x/
 
 <Directory />
@@ -370,7 +373,7 @@ param_option.service_update_policy=meta2=KEEP|${M2_REPLICAS}|${M2_DISTANCE};sqlx
 param_option.lb.rawx=WRR?shorten_ratio=1.0&standard_deviation=no&reset_delay=60
 param_option.meta2_max_versions=${VERSIONING}
 param_option.meta2_keep_deleted_delay=86400
-param_option.compression=none
+param_option.compression=on
 param_option.container_max_size=50000000
 param_option.FLATNS_hash_offset=0
 param_option.FLATNS_hash_size=0
@@ -726,6 +729,7 @@ SQLX_REPLICAS = 'sqlx_replicas'
 PROFILE = 'profile'
 PORT_START = 'port_start'
 CHUNK_SIZE = 'chunk_size'
+COMPRESSION = 'compression'
 
 defaults = {
     'NS': 'OPENIO',
@@ -740,7 +744,8 @@ defaults = {
     'NB_ECD': 1,
     'REPLI_SQLX': 1,
     'REPLI_M2': 1,
-    'REPLI_M1': 1}
+    'REPLI_M1': 1,
+    'COMPRESSION': "off"}
 
 # XXX When /usr/sbin/httpd is present we suspect a Redhat/Centos/Fedora
 # environment. If not, we consider being in a Ubuntu/Debian environment.
@@ -970,10 +975,13 @@ def generate(options):
 
     # RAWX
     nb_rawx = getint(options['rawx'].get(SVC_NB), defaults['NB_RAWX'])
+    compression = options['rawx'].get(COMPRESSION, "off")
     if nb_rawx:
         for num in range(nb_rawx):
-            env = subenv({'SRVTYPE': 'rawx', 'SRVNUM': num + 1,
-                          'PORT': next_port()})
+            env = subenv({'SRVTYPE': 'rawx',
+                          'SRVNUM': num + 1,
+                          'PORT': next_port(),
+                          'COMPRESSION': compression})
             add_service(env)
             # gridinit
             tpl = Template(template_gridinit_httpd)

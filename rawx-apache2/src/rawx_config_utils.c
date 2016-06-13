@@ -78,7 +78,7 @@ _get_acl(apr_pool_t *p, namespace_info_t *ns_info)
 {
 	GSList *acl = NULL;
 	GByteArray* acl_allow, *acl_deny;
-	
+
 	if (!ns_info || !ns_info->options)
 		return NULL;
 
@@ -88,7 +88,7 @@ _get_acl(apr_pool_t *p, namespace_info_t *ns_info)
 	acl = g_slist_concat(parse_acl(acl_allow, TRUE), parse_acl(acl_deny, FALSE));
 	if (!acl)
 		return NULL;
-		
+
 	GSList *src, *dst;
 	guint i, list_length;
 
@@ -122,12 +122,6 @@ update_rawx_conf(apr_pool_t* p, rawx_conf_t **rawx_conf, const gchar* ns_name)
 		return FALSE;
 
 	new_conf = apr_palloc(p, sizeof(rawx_conf_t));
-	char * stgpol = NULL;
-	stgpol = namespace_storage_policy(ns_info, ns_info->name);
-	if(NULL != stgpol) {
-		new_conf->sp = storage_policy_init(ns_info, stgpol);
-	}
-
 	new_conf->ni = ns_info;
 	new_conf->acl = _get_acl(p, ns_info);
 	new_conf->last_update = oio_ext_monotonic_seconds();

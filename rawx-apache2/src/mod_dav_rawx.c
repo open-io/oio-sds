@@ -187,10 +187,6 @@ _cleanup (void *p)
 		namespace_info_free (conf->ni);
 		conf->ni = NULL;
 	}
-	if (NULL != conf->sp) {
-		storage_policy_clean (conf->sp);
-		conf->sp = NULL;
-	}
 	return APR_SUCCESS;
 }
 
@@ -220,15 +216,6 @@ dav_rawx_cmd_gridconfig_namespace(cmd_parms *cmd, void *config, const char *arg1
 
 	conf->rawx_conf = apr_palloc(cmd->pool, sizeof(rawx_conf_t));
 	apr_pool_cleanup_register (cmd->pool, conf->rawx_conf, _cleanup, _cleanup);
-
-	gchar * stgpol = namespace_storage_policy(ns_info, ns_info->name);
-	if (NULL != stgpol) {
-		conf->rawx_conf->sp = storage_policy_init(ns_info, stgpol);
-		oio_str_clean (&stgpol);
-	} else {
-		conf->rawx_conf->sp = NULL;
-	}
-	g_assert (stgpol == NULL);
 
 	conf->rawx_conf->ni = ns_info;
 	conf->rawx_conf->acl = _get_acl(cmd->pool, ns_info);
@@ -333,6 +320,24 @@ dav_rawx_cmd_gridconfig_acl(cmd_parms *cmd, void *config, const char *arg1)
 	conf->enabled_acl |= (0 == apr_strnatcasecmp(arg1,"true"));
 	conf->enabled_acl |= (0 == apr_strnatcasecmp(arg1,"yes"));
 	conf->enabled_acl |= (0 == apr_strnatcasecmp(arg1,"enabled"));
+
+	return NULL;
+}
+
+static const char *
+dav_rawx_cmd_gridconfig_compression(cmd_parms *cmd, void *config, const char *arg1)
+{
+	dav_rawx_server_conf *conf;
+	(void) config;
+
+	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
+
+	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
+	if (apr_strnatcasecmp(arg1, "off") &&
+			apr_strnatcasecmp(arg1, "disabled") &&
+			apr_strnatcasecmp(arg1, "false") &&
+			apr_strnatcasecmp(arg1, "0"))
+		strncpy(conf->compression_algo, arg1, sizeof(conf->compression_algo));
 
 	return NULL;
 }
@@ -542,6 +547,7 @@ static const command_rec dav_rawx_cmds[] =
     AP_INIT_TAKE1("grid_fsync_dir",   dav_rawx_cmd_gridconfig_fsync_dir,   NULL, RSRC_CONF, "do fsync on chunk direcory after renaming .pending"),
     AP_INIT_TAKE1("grid_fallocate",   dav_rawx_cmd_gridconfig_fallocate,   NULL, RSRC_CONF, "call fallocate when receiving a chunk"),
     AP_INIT_TAKE1("grid_acl",         dav_rawx_cmd_gridconfig_acl,         NULL, RSRC_CONF, "enabled acl"),
+    AP_INIT_TAKE1("grid_compression", dav_rawx_cmd_gridconfig_compression, NULL, RSRC_CONF, "enable compression ('zlib' or 'lzo')'"),
     AP_INIT_TAKE1(NULL,  NULL,  NULL, RSRC_CONF, NULL)
 };
 
