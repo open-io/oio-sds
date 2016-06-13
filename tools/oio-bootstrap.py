@@ -534,7 +534,7 @@ template_local_ns = """
 ${NOZK}zookeeper=${IP}:2181
 #proxy-local=${RUNDIR}/${NS}-proxy.sock
 proxy=${IP}:${PORT_PROXYD}
-#swift=http://${IP}:5000
+ecd=${IP}:${PORT_ECD}
 event-agent=beanstalk://127.0.0.1:11300
 #event-agent=ipc://${RUNDIR}/event-agent.sock
 conscience=${CS_ALL_PUB}
@@ -801,6 +801,7 @@ def generate(options):
     final_services = {}
 
     port_proxy = next_port()
+    port_ecd = next_port()
 
     versioning = 1
     stgpol = "SINGLE"
@@ -839,6 +840,7 @@ def generate(options):
                VERSIONING=versioning,
                STGPOL=stgpol,
                PORT_PROXYD=port_proxy,
+               PORT_ECD=port_ecd,
                M2_REPLICAS=meta2_replicas,
                M2_DISTANCE=str(1),
                SQLX_REPLICAS=sqlx_replicas,
@@ -992,30 +994,6 @@ def generate(options):
             with open(watch(env), 'w+') as f:
                 f.write(to_write)
 
-    # ecd
-    ecd_nb = getint(options['ecd'].get(SVC_NB), defaults['NB_ECD'])
-    if ecd_nb:
-        for num in range(ecd_nb):
-            env = subenv({'SRVTYPE': 'ecd',
-                          'SRVNUM': num + 1,
-                          'PORT': next_port()})
-            add_service(env)
-            # gridinit
-            tpl = Template(template_gridinit_httpd)
-            with open(gridinit(env), 'a+') as f:
-                f.write(tpl.safe_substitute(env))
-            # service
-            tpl = Template(template_wsgi_service_host)
-            to_write = tpl.safe_substitute(env)
-            if options.get(OPENSUSE, False):
-                to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
-            with open(config(env), 'w+') as f:
-                f.write(to_write)
-            # service desc
-            tpl = Template(template_wsgi_service_descr)
-            to_write = tpl.safe_substitute(env)
-            with open(wsgi(env), 'w+') as f:
-                f.write(to_write)
 
     # redis
     env = subenv({'SRVTYPE': 'redis', 'SRVNUM': 1, 'PORT': 6379})
@@ -1037,6 +1015,25 @@ def generate(options):
     with open(gridinit(env), 'a+') as f:
         tpl = Template(template_proxy_gridinit)
         f.write(tpl.safe_substitute(env))
+
+    # ecd
+    env = subenv({'SRVTYPE': 'ecd', 'SRVNUM': 1, 'PORT': port_ecd})
+    add_service(env)
+    tpl = Template(template_gridinit_httpd)
+    with open(gridinit(env), 'a+') as f:
+        f.write(tpl.safe_substitute(env))
+    # service
+    tpl = Template(template_wsgi_service_host)
+    to_write = tpl.safe_substitute(env)
+    if options.get(OPENSUSE, False):
+        to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
+    with open(config(env), 'w+') as f:
+        f.write(to_write)
+    # service desc
+    tpl = Template(template_wsgi_service_descr)
+    to_write = tpl.safe_substitute(env)
+    with open(wsgi(env), 'w+') as f:
+        f.write(to_write)
 
     # account
     env = subenv({'SRVTYPE': 'account', 'SRVNUM': 1, 'PORT': next_port()})
@@ -1143,7 +1140,6 @@ def main():
     opts['meta2'] = {SVC_NB: None}
     opts['sqlx'] = {SVC_NB: None}
     opts['rawx'] = {SVC_NB: None}
-    opts['ecd'] = {SVC_NB: None}
 
     if options.config:
         with open(options.config, 'r') as f:
