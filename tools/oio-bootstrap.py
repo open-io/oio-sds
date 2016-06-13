@@ -439,8 +439,8 @@ REASONABLYSLOW=NONE
 DUPONETWO=plain/distance=1,nb_copy=2
 DUPONETHREE=plain/distance=1,nb_copy=3
 DUPONEFIVE=plain/distance=1,nb_copy=5
-EC=ec/k=6,m=3,algo=isa_l_rs_vand,distance=1
-WEC=ec/k=6,m=3,algo=isa_l_rs_vand,distance=1,weak=1
+EC=ec/k=6,m=3,algo=liberasurecode_rs_vand,distance=1
+WEC=ec/k=6,m=3,algo=liberasurecode_rs_vand,distance=1,weak=1
 
 # "jerasure_rs_vand"   EC_BACKEND_JERASURE_RS_VAND
 # "jerasure_rs_cauchy" EC_BACKEND_JERASURE_RS_CAUCHY

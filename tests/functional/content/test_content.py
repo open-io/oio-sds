@@ -78,7 +78,7 @@ class TestContentFactory(BaseTestCase):
 
     def test_get_ec(self):
         meta = {
-            "chunk-method": "ec/algo=isa_l_rs_vand,k=6,m=2",
+            "chunk-method": "ec/algo=liberasurecode_rs_vand,k=6,m=2",
             "ctime": "1450176946",
             "deleted": "False",
             "hash": "E952A419957A6E405BFC53EC65483F73",
@@ -166,7 +166,7 @@ class TestContentFactory(BaseTestCase):
 
     def test_new_ec(self):
         meta = {
-            "chunk-method": "ec/algo=isa_l_rs_vand,k=6,m=2",
+            "chunk-method": "ec/algo=liberasurecode_rs_vand,k=6,m=2",
             "ctime": "1450341162",
             "deleted": "False",
             "hash": "",
