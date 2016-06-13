@@ -43,7 +43,7 @@ class TestECContent(BaseTestCase):
 
         if len(self.conf['services']['rawx']) < 12:
             self.skipTest("Not enough rawx. "
-                          "EC tests needs more than 12 rawx to run")
+                          "EC tests needs at least 12 rawx to run")
 
         self.namespace = self.conf['namespace']
         self.account = self.conf['account']

@@ -33,7 +33,7 @@ from oio.container.client import ContainerClient
 from oio.content.factory import ContentFactory
 from oio.content.plain import PlainContent
 from oio.content.ec import ECContent
-from tests.utils import BaseTestCase
+from tests.utils import BaseTestCase, ec
 
 
 def md5_stream(stream):
@@ -56,6 +56,7 @@ def random_data(data_size):
 class TestContentFactory(BaseTestCase):
     def setUp(self):
         super(TestContentFactory, self).setUp()
+
         self.namespace = self.conf['namespace']
         self.chunk_size = self.conf['chunk_size']
         self.gridconf = {"namespace": self.namespace}
@@ -245,31 +246,39 @@ class TestContentFactory(BaseTestCase):
 
         self.assertEqual(downloaded_data, data)
 
+    @ec
     def test_change_content_0_byte_policy_single_to_ec(self):
         self._test_change_policy(0, self.stgpol, self.stgpol_ec)
 
+    @ec
     def test_change_content_0_byte_policy_ec_to_twocopies(self):
         self._test_change_policy(0, self.stgpol_ec, self.stgpol_twocopies)
 
+    @ec
     def test_change_content_1_byte_policy_single_to_ec(self):
         self._test_change_policy(1, self.stgpol, self.stgpol_ec)
 
+    @ec
     def test_change_content_chunksize_bytes_policy_twocopies_to_ec(self):
         self._test_change_policy(
             self.chunk_size, self.stgpol_twocopies, self.stgpol_ec)
 
+    @ec
     def test_change_content_2xchunksize_bytes_policy_threecopies_to_ec(self):
         self._test_change_policy(
             self.chunk_size * 2, self.stgpol_threecopies, self.stgpol_ec)
 
+    @ec
     def test_change_content_1_byte_policy_ec_to_threecopies(self):
         self._test_change_policy(
             1, self.stgpol_ec, self.stgpol_threecopies)
 
+    @ec
     def test_change_content_chunksize_bytes_policy_ec_to_twocopies(self):
         self._test_change_policy(
             self.chunk_size, self.stgpol_ec, self.stgpol_twocopies)
 
+    @ec
     def test_change_content_2xchunksize_bytes_policy_ec_to_single(self):
         self._test_change_policy(
             self.chunk_size * 2, self.stgpol_ec, self.stgpol)
@@ -339,6 +348,7 @@ class TestContentFactory(BaseTestCase):
     def test_twocopies_move_chunk(self):
         self._test_move_chunk(self.stgpol_twocopies)
 
+    @ec
     def test_ec_move_chunk(self):
         self._test_move_chunk(self.stgpol_ec)
 
