@@ -1,6 +1,6 @@
-zookeeper: true
+zookeeper: false
 storage_policy: "EC"
 chunk_size: 1048576
 
 rawx:
-  count: 9
+  count: 12
