@@ -1,7 +1,7 @@
 from urllib import quote_plus
 from oio.common.http import requests
 from oio.common import exceptions as exc
-from oio.blob.utils import chunk_headers, chunk_xattr_keys_optional
+from oio.common.constants import chunk_headers, chunk_xattr_keys_optional
 
 
 READ_BUFFER_SIZE = 65535
@@ -9,7 +9,7 @@ READ_BUFFER_SIZE = 65535
 
 def gen_put_headers(meta):
     headers = {
-        chunk_headers['content_cid']: meta['content_cid'],
+        chunk_headers['container_id']: meta['container_id'],
         chunk_headers['chunk_id']: meta['chunk_id'],
         chunk_headers['chunk_pos']: meta['chunk_pos'],
         chunk_headers['content_id']: meta['content_id'],
@@ -19,8 +19,9 @@ def gen_put_headers(meta):
         chunk_headers['content_policy']: meta['content_policy']}
 
     for k in ['metachunk_hash', 'metachunk_size', 'chunk_hash']:
-        if meta.get(k):
-            headers.update({chunk_headers[k]: meta[k]})
+        v = meta.get(k)
+        if v is not None:
+            headers[chunk_headers[k]] = meta[k]
 
     return {k: quote_plus(str(v)) for (k, v) in headers.iteritems()}
 

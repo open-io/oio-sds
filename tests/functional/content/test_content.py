@@ -26,7 +26,7 @@ from testtools.matchers import Not
 from testtools.testcase import ExpectedException
 
 from oio.blob.client import BlobClient
-from oio.common.exceptions import InconsistentContent, NotFound, \
+from oio.common.exceptions import NotFound, \
     ContentNotFound, ClientException, OrphanChunk
 from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
@@ -67,48 +67,13 @@ class TestContentFactory(BaseTestCase):
                                                ref=self.container_name)
         self.container_id = cid_from_name(self.account,
                                           self.container_name).upper()
+        self.stgpol = "SINGLE"
+        self.stgpol_twocopies = "TWOCOPIES"
+        self.stgpol_threecopies = "THREECOPIES"
+        self.stgpol_ec = "EC"
 
     def tearDown(self):
         super(TestContentFactory, self).tearDown()
-
-    def test_extract_datasec(self):
-        self.content_factory.ns_info = {
-            "data_security": {
-                "DUPONETWO": "plain/distance=1,nb_copy=2",
-                "EC": "ec/k=6,m=3,algo=isa_l_rs_vand"
-            },
-            "storage_policy": {
-                "EC": "NONE:EC",
-                "SINGLE": "NONE:NONE",
-                "TWOCOPIES": "NONE:DUPONETWO"
-            }
-        }
-
-        ds_type, ds_args = self.content_factory._extract_datasec("EC")
-        self.assertEqual(ds_type, "ec")
-        self.assertEqual(ds_args, {
-            "k": "6",
-            "m": "3",
-            "algo": "isa_l_rs_vand"
-        })
-
-        ds_type, ds_args = self.content_factory._extract_datasec("SINGLE")
-        self.assertEqual(ds_type, "plain")
-        self.assertEqual(ds_args, {
-            "nb_copy": "1",
-            "distance": "0"
-        })
-
-        ds_type, ds_args = self.content_factory._extract_datasec("TWOCOPIES")
-        self.assertEqual(ds_type, "plain")
-        self.assertEqual(ds_args, {
-            "nb_copy": "2",
-            "distance": "1"
-        })
-
-        self.assertRaises(InconsistentContent,
-                          self.content_factory._extract_datasec,
-                          "UnKnOwN")
 
     def test_get_ec(self):
         meta = {
@@ -121,7 +86,7 @@ class TestContentFactory(BaseTestCase):
             "length": "658",
             "mime-type": "application/octet-stream",
             "name": "tox.ini",
-            "policy": "EC",
+            "policy": self.stgpol_ec,
             "version": "1450176946676289"
         }
         chunks = [
@@ -150,9 +115,7 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(c.length, 658)
         self.assertEqual(c.path, "tox.ini")
         self.assertEqual(c.version, "1450176946676289")
-        self.assertEqual(c.algo, "isa_l_rs_vand")
-        self.assertEqual(c.k, 6)
-        self.assertEqual(c.m, 3)
+        # TODO test storage method
         self.assertEqual(len(c.chunks), 4)
         self.assertEqual(c.chunks[0].raw(), chunks[0])
         self.assertEqual(c.chunks[1].raw(), chunks[1])
@@ -170,7 +133,7 @@ class TestContentFactory(BaseTestCase):
             "length": "658",
             "mime-type": "application/octet-stream",
             "name": "tox.ini",
-            "policy": "TWOCOPIES",
+            "policy": self.stgpol_twocopies,
             "version": "1450176946676289"
         }
         chunks = [
@@ -191,8 +154,7 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(c.length, 658)
         self.assertEqual(c.path, "tox.ini")
         self.assertEqual(c.version, "1450176946676289")
-        self.assertEqual(c.nb_copy, 2)
-        self.assertEqual(c.distance, 1)
+        # TODO test storage_method
         self.assertEqual(len(c.chunks), 2)
         self.assertEqual(c.chunks[0].raw(), chunks[0])
         self.assertEqual(c.chunks[1].raw(), chunks[1])
@@ -212,7 +174,7 @@ class TestContentFactory(BaseTestCase):
             "length": "1000",
             "mime-type": "application/octet-stream",
             "name": "titi",
-            "policy": "EC",
+            "policy": self.stgpol_ec,
             "version": "1450341162332663"
         }
         chunks = [
@@ -236,15 +198,13 @@ class TestContentFactory(BaseTestCase):
         self.content_factory.container_client.content_prepare = Mock(
             return_value=(meta, chunks))
         c = self.content_factory.new("xxx_container_id", "titi",
-                                     1000, "EC")
+                                     1000, self.stgpol_ec)
         self.assertEqual(type(c), ECContent)
         self.assertEqual(c.content_id, "F4B1C8DD132705007DE8B43D0709DAA2")
         self.assertEqual(c.length, 1000)
         self.assertEqual(c.path, "titi")
         self.assertEqual(c.version, "1450341162332663")
-        self.assertEqual(c.algo, "isa_l_rs_vand")
-        self.assertEqual(c.k, 6)
-        self.assertEqual(c.m, 3)
+        # TODO test storage_method
         self.assertEqual(len(c.chunks), 4)
         self.assertEqual(c.chunks[0].raw(), chunks[3])
         self.assertEqual(c.chunks[1].raw(), chunks[2])
@@ -259,15 +219,12 @@ class TestContentFactory(BaseTestCase):
                                         old_content.content_id)
 
     def _test_change_policy(self, data_size, old_policy, new_policy):
-        if (old_policy == "EC" or new_policy == "EC"):
-            self.skipTest("TODO update to new EC")
-
         data = random_data(data_size)
         obj_type = {
-            "SINGLE": PlainContent,
-            "TWOCOPIES": PlainContent,
-            "THREECOPIES": PlainContent,
-            "EC": ECContent
+            self.stgpol: PlainContent,
+            self.stgpol_twocopies: PlainContent,
+            self.stgpol_threecopies: PlainContent,
+            self.stgpol_ec: ECContent
         }
         old_content = self._new_content(old_policy, data)
         self.assertEqual(type(old_content), obj_type[old_policy])
@@ -289,52 +246,61 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(downloaded_data, data)
 
     def test_change_content_0_byte_policy_single_to_ec(self):
-        self._test_change_policy(0, "SINGLE", "EC")
+        self._test_change_policy(0, self.stgpol, self.stgpol_ec)
 
     def test_change_content_0_byte_policy_ec_to_twocopies(self):
-        self._test_change_policy(0, "EC", "TWOCOPIES")
+        self._test_change_policy(0, self.stgpol_ec, self.stgpol_twocopies)
 
     def test_change_content_1_byte_policy_single_to_ec(self):
-        self._test_change_policy(1, "SINGLE", "EC")
+        self._test_change_policy(1, self.stgpol, self.stgpol_ec)
 
     def test_change_content_chunksize_bytes_policy_twocopies_to_ec(self):
-        self._test_change_policy(self.chunk_size, "TWOCOPIES", "EC")
+        self._test_change_policy(
+            self.chunk_size, self.stgpol_twocopies, self.stgpol_ec)
 
     def test_change_content_2xchunksize_bytes_policy_threecopies_to_ec(self):
-        self._test_change_policy(self.chunk_size * 2, "THREECOPIES", "EC")
+        self._test_change_policy(
+            self.chunk_size * 2, self.stgpol_threecopies, self.stgpol_ec)
 
     def test_change_content_1_byte_policy_ec_to_threecopies(self):
-        self._test_change_policy(1, "EC", "THREECOPIES")
+        self._test_change_policy(
+            1, self.stgpol_ec, self.stgpol_threecopies)
 
     def test_change_content_chunksize_bytes_policy_ec_to_twocopies(self):
-        self._test_change_policy(self.chunk_size, "EC", "TWOCOPIES")
+        self._test_change_policy(
+            self.chunk_size, self.stgpol_ec, self.stgpol_twocopies)
 
     def test_change_content_2xchunksize_bytes_policy_ec_to_single(self):
-        self._test_change_policy(self.chunk_size * 2, "EC", "SINGLE")
+        self._test_change_policy(
+            self.chunk_size * 2, self.stgpol_ec, self.stgpol)
 
     def test_change_content_0_byte_policy_twocopies_to_threecopies(self):
-        self._test_change_policy(0, "TWOCOPIES", "THREECOPIES")
+        self._test_change_policy(
+            0, self.stgpol_twocopies, self.stgpol_threecopies)
 
     def test_change_content_chunksize_bytes_policy_single_to_twocopies(self):
-        self._test_change_policy(self.chunk_size, "SINGLE", "TWOCOPIES")
+        self._test_change_policy(
+            self.chunk_size, self.stgpol, self.stgpol_twocopies)
 
     def test_change_content_2xchunksize_bytes_policy_3copies_to_single(self):
-        self._test_change_policy(self.chunk_size * 2, "THREECOPIES", "SINGLE")
+        self._test_change_policy(
+            self.chunk_size * 2, self.stgpol_threecopies, self.stgpol)
 
     def test_change_content_with_same_policy(self):
         data = random_data(10)
-        old_content = self._new_content("TWOCOPIES", data)
+        old_content = self._new_content(self.stgpol_twocopies, data)
         changed_content = self.content_factory.change_policy(
-            old_content.container_id, old_content.content_id, "TWOCOPIES")
+            old_content.container_id, old_content.content_id,
+            self.stgpol_twocopies)
         self.assertEqual(old_content.content_id, changed_content.content_id)
 
     def test_change_policy_unknown_content(self):
         self.assertRaises(ContentNotFound, self.content_factory.change_policy,
-                          self.container_id, "1234", "SINGLE")
+                          self.container_id, "1234", self.stgpol)
 
     def test_change_policy_unknown_storage_policy(self):
         data = random_data(10)
-        old_content = self._new_content("TWOCOPIES", data)
+        old_content = self._new_content(self.stgpol_twocopies, data)
         self.assertRaises(ClientException, self.content_factory.change_policy,
                           self.container_id, old_content.content_id, "UnKnOwN")
 
@@ -368,18 +334,17 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(new_chunk_meta, chunk_meta)
 
     def test_single_move_chunk(self):
-        self._test_move_chunk("SINGLE")
+        self._test_move_chunk(self.stgpol)
 
     def test_twocopies_move_chunk(self):
-        self._test_move_chunk("TWOCOPIES")
+        self._test_move_chunk(self.stgpol_twocopies)
 
     def test_ec_move_chunk(self):
-        self.skipTest("TODO update to new EC")
-        self._test_move_chunk("EC")
+        self._test_move_chunk(self.stgpol_ec)
 
     def test_move_chunk_not_in_content(self):
         data = random_data(self.chunk_size)
-        content = self._new_content("TWOCOPIES", data)
+        content = self._new_content(self.stgpol_twocopies, data)
         with ExpectedException(OrphanChunk):
             content.move_chunk("1234")
 
@@ -399,7 +364,7 @@ class TestContentFactory(BaseTestCase):
                 ]
         answers = dict()
         for cname in strange_paths:
-            content = self._new_content("SINGLE", "nobody cares", cname)
+            content = self._new_content(self.stgpol, "nobody cares", cname)
             answers[cname] = content
         listing = self.container_client.container_list(self.account,
                                                        self.container_name)

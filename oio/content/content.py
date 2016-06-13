@@ -25,12 +25,12 @@ from oio.container.client import ContainerClient
 
 
 class Content(object):
-    def __init__(self, conf, container_id, metadata, chunks, stgpol_args):
+    def __init__(self, conf, container_id, metadata, chunks, storage_method):
         self.conf = conf
         self.container_id = container_id
         self.metadata = metadata
         self.chunks = ChunksHelper(chunks)
-        self.stgpol_args = stgpol_args
+        self.storage_method = storage_method
         self.logger = get_logger(self.conf)
         self.cs_client = ConscienceClient(conf)
         self.blob_client = BlobClient()
@@ -66,13 +66,13 @@ class Content(object):
     def _update_spare_chunk(self, current_chunk, new_url):
         old = [{'type': 'chunk',
                 'id': current_chunk.url,
-                'hash': current_chunk.hash,
+                'hash': current_chunk.checksum,
                 'size': current_chunk.size,
                 'pos': current_chunk.pos,
                 'content': self.content_id}]
         new = [{'type': 'chunk',
                 'id': new_url,
-                'hash': current_chunk.hash,
+                'hash': current_chunk.checksum,
                 'size': current_chunk.size,
                 'pos': current_chunk.pos,
                 'content': self.content_id}]
@@ -134,10 +134,10 @@ class Chunk(object):
         d = self.pos.split('.', 1)
         if len(d) > 1:
             ec = True
-            self._metapos = d[0]
-            self._subpos = d[1]
+            self._metapos = int(d[0])
+            self._subpos = int(d[1])
         else:
-            self._metapos = self._pos
+            self._metapos = int(self._pos)
             ec = False
         self._ec = ec
 
@@ -182,12 +182,12 @@ class Chunk(object):
         return self.url.split('/')[2]
 
     @property
-    def hash(self):
+    def checksum(self):
         return self._data["hash"].upper()
 
-    @hash.setter
-    def hash(self, new_hash):
-        self._data["hash"] = new_hash
+    @checksum.setter
+    def checksum(self, new_checksum):
+        self._data["hash"] = new_checksum
 
     @property
     def data(self):
@@ -197,16 +197,16 @@ class Chunk(object):
         return self._data
 
     def __str__(self):
-        return "[Chunk %s]" % self.url
+        return "[Chunk %s (%s)]" % (self.url, self.pos)
 
     def __cmp__(self, other):
         if self.metapos != other.metapos:
-            return cmp(int(self.metapos), int(other.metapos))
+            return cmp(self.metapos, other.metapos)
 
         if not self.ec:
             return cmp(self.id, other.id)
 
-        return cmp(int(self.subpos), int(other.subpos))
+        return cmp(self.subpos, other.subpos)
 
 
 class ChunksHelper(object):
@@ -226,9 +226,9 @@ class ChunksHelper(object):
                 continue
             if pos is not None and c.pos != str(pos):
                 continue
-            if metapos is not None and c.metapos != str(metapos):
+            if metapos is not None and c.metapos != metapos:
                 continue
-            if subpos is not None and c.subpos != str(subpos):
+            if subpos is not None and c.subpos != subpos:
                 continue
             found.append(c)
         return ChunksHelper(found, False)
@@ -240,9 +240,9 @@ class ChunksHelper(object):
                 continue
             if pos is not None and c.pos == str(pos):
                 continue
-            if metapos is not None and c.metapos == str(metapos):
+            if metapos is not None and c.metapos == metapos:
                 continue
-            if subpos is not None and c.subpos == str(subpos):
+            if subpos is not None and c.subpos == subpos:
                 continue
             found.append(c)
         return ChunksHelper(found, False)
