@@ -728,8 +728,8 @@ SQLX_REPLICAS = 'sqlx_replicas'
 PROFILE = 'profile'
 PORT_START = 'port_start'
 CHUNK_SIZE = 'chunk_size'
-BACKBLAZE_ACCOUNT_ID = 'backblaze.account_id'
-BACKBLAZE_BUCKET_NAME = 'backblaze.bucket_name'
+ACCOUNT_ID = 'account_id'
+BUCKET_NAME = 'bucket_name'
 
 defaults = {
     'NS': 'OPENIO',
@@ -819,8 +819,8 @@ def generate(options):
         stgpol = options[M2_STGPOL]
     ns = options.get('ns') or defaults['NS']
     ip = options.get('ip') or defaults['IP']
-    backblaze_account_id = options.get(BACKBLAZE_ACCOUNT_ID) or '0'
-    backblaze_bucket_name = options.get(BACKBLAZE_BUCKET_NAME) or '0'
+    backblaze_account_id = options.get('backblaze', {}).get(ACCOUNT_ID)
+    backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
     ENV = dict(IP=ip,
                NS=ns,
                HOME=HOME,

@@ -1,8 +1,9 @@
 import unittest
-import io
 import sys
 from oio.api.backblaze_http import Backblaze
-import random, string
+import random
+import string
+
 
 def _generate_false_metadata(ns, container_id, name):
     return {
@@ -12,15 +13,20 @@ def _generate_false_metadata(ns, container_id, name):
         'name': name
         }
 
+
 def _get_name(ns, container_id, name):
     return ns + '/' + container_id + '/' + name
 
+
 def _random_word(length):
     return ''.join(random.choice(string.lowercase) for i in range(length))
+
+
 class BackblazeTest(unittest.TestCase):
     APPLICATION_KEY = None
     ACCOUNT_ID = None
     BUCKET_NAME = None
+
     def __init__(self, *args, **kwargs):
         super(BackblazeTest, self).__init__(*args, **kwargs)
         if not (self.APPLICATION_KEY and self.ACCOUNT_ID and self.BUCKET_NAME):
@@ -28,7 +34,8 @@ class BackblazeTest(unittest.TestCase):
         else:
             self.backblaze_test = Backblaze(self.ACCOUNT_ID,
                                             self.APPLICATION_KEY)
-    #TODO : make the test compatible with travis
+
+    # TODO: make the test compatible with travis
     def test_backblaze(self):
         return
         self.assertTrue(self.backblaze_test is not None)
@@ -55,7 +62,7 @@ class BackblazeTest(unittest.TestCase):
         self.assertFalse(res)
         size_after_delete = self.backblaze_test.get_size(self.BUCKET_NAME)
         self.assertTrue(size_after_delete == size)
-        
+
 if __name__ == '__main__':
     if len(sys.argv) > 3:
         BackblazeTest.BUCKET_NAME = sys.argv.pop()

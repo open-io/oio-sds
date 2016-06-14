@@ -54,7 +54,7 @@ class CreateObject(lister.Lister):
         objs = parsed_args.objects
         names = parsed_args.name
         application_key = parsed_args.application_key
-        
+
         def get_file_size(f):
             currpos = f.tell()
             f.seek(0, 2)
@@ -243,9 +243,9 @@ class SaveObject(command.Command):
         container = parsed_args.container
         obj = parsed_args.object
 
-        file = parsed_args.file
-        if not file:
-            file = obj
+        filename = parsed_args.file
+        if not filename:
+            filename = obj
 
         application_key = parsed_args.application_key
         meta, stream = self.app.client_manager.storage.object_fetch(
@@ -254,12 +254,12 @@ class SaveObject(command.Command):
             obj,
             application_key=application_key
         )
-        if not os.path.exists(os.path.dirname(file)):
-            if len(os.path.dirname(file)) > 0:
-                os.makedirs(os.path.dirname(file))
-        with open(file, 'wb') as f:
+        if not os.path.exists(os.path.dirname(filename)):
+            if len(os.path.dirname(filename)) > 0:
+                os.makedirs(os.path.dirname(filename))
+        with open(filename, 'wb') as ofile:
             for chunk in stream:
-                f.write(chunk)
+                ofile.write(chunk)
 
 
 class ListObject(lister.Lister):
