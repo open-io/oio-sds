@@ -157,8 +157,8 @@ _test_uniform_repartition(int services, int slots, int targets)
 	for (int i = 0; i < services; i++) {
 		int slot = i/svc_per_slot;
 		int ideal_count = targets_per_slot[slot] * shots / actual_svc_per_slot[slot];
-		int min_count = ideal_count * 85 / 100;
-		int max_count = ideal_count * 115 / 100;
+		int min_count = ideal_count * 80 / 100;
+		int max_count = ideal_count * 120 / 100;
 		GRID_DEBUG("service %04d (slot %d) chosen %d times (min/ideal/max/diff: %d/%d/%d/%+2.2f%%)",
 				i, slot, counts[i], min_count, ideal_count, max_count,
 				counts[i]*100.0f/(float)ideal_count - 100.0f);
