@@ -233,6 +233,24 @@ class Backblaze(object):
         link = _recover_true_path(metadata, metadata['name'])
         return self.download_by_path_name(bucket_name, link, headers)
 
+    def get_backblaze_infos(self, bucket_name):
+        res = self.get_list_file_names(bucket_name)
+        size = 0
+        number = 0
+        for chunk_list in res:
+            for file_info in chunk_list:
+                size = file_info['size'] + size
+                number = number + 1
+        return (size, number)
+    
+    def get_file_number(self, bucket_name):
+        res = self.get_list_file_names(bucket_name)
+        size = 0
+        for chunk_list in res:
+            for file_info in chunk_list:
+                size = size + 1
+        return size
+
     def get_size(self, bucket_name):
         res = self.get_list_file_names(bucket_name)
         size = 0
