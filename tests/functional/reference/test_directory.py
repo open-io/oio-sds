@@ -36,7 +36,7 @@ class TestDirectoryFunctional(BaseTestCase):
         self.assertEqual(resp.status_code, 404)
 
     def test_reference_cycle(self):
-        params = self.param_ref('plop-0')
+        params = self.param_ref(self._random_user())
         resp = self.session.post(self._url_ref('destroy'), params=params)
 
         resp = self.session.get(self._url_ref('show'), params=params)
@@ -79,7 +79,7 @@ class TestDirectoryFunctional(BaseTestCase):
         self.assertEqual(resp.status_code, 400)
 
     def test_references_properties_cycle(self):
-        params = self.param_ref('plop-0')
+        params = self.param_ref(self._random_user())
         body = json.dumps(['prop1'])
 
         resp = self.session.post(self._url_ref('del_properties'),
@@ -113,7 +113,7 @@ class TestDirectoryFunctional(BaseTestCase):
         self.assertEqual(resp.status_code, 204)
 
     def test_services_cycle(self):
-        params = self.param_srv('plop-0', 'echo')
+        params = self.param_srv(self._random_user(), 'echo')
         resp = self.session.post(self._url_ref('create'), params=params)
 
         resp = self.session.get(self._url_ref('show'), params=params)
