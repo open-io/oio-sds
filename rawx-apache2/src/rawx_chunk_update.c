@@ -64,14 +64,6 @@ struct dav_resource_private {
 /* ------------------------------------------------------------------------- */
 
 static apr_status_t
-apr_storage_policy_clean(void *p)
-{
-	struct storage_policy_s *sp = (struct storage_policy_s *) p;
-	storage_policy_clean(sp);
-	return APR_SUCCESS;
-}
-
-static apr_status_t
 apr_hash_table_clean(void *p)
 {
 	GHashTable *ht = (GHashTable *) p;
@@ -184,7 +176,7 @@ __build_chunk_full_path(const dav_resource *resource, char **full_path)
 }
 
 static dav_error *
-_load_request_info(const dav_resource *resource, char **full_path, struct storage_policy_s **sp)
+_load_request_info(const dav_resource *resource, char **full_path)
 {
 	dav_error *e = NULL;
 	const request_rec *r = resource->info->request;
@@ -195,19 +187,6 @@ _load_request_info(const dav_resource *resource, char **full_path, struct storag
 		return e;
 
 	DAV_DEBUG_REQ(r, 0, "Chunk path build from request: %s", *full_path);
-
-	/* init loaded storage policy */
-	const char *pol_name = apr_table_get(r->headers_in, "storage-policy");
-	if (!pol_name) {
-		return server_create_and_stat_error(request_get_server_config(r), r->pool,
-				HTTP_BAD_REQUEST, 0, "No storage-policy specified");
-	}
-	DAV_DEBUG_REQ(r, 0, "Policy found in request: %s", pol_name);
-
-	dav_rawx_server_conf *conf = resource_get_server_config(resource);
-
-	*sp = storage_policy_init(conf->rawx_conf->ni, pol_name);
-	apr_pool_cleanup_register(r->pool, *sp, apr_storage_policy_clean, apr_pool_cleanup_null);
 
 	return NULL;
 }
@@ -272,7 +251,6 @@ dav_rawx_deliver_SPECIAL(const dav_resource *resource, ap_filter_t *output)
 {
 	(void) output;
 	dav_error *e = NULL;
-	struct storage_policy_s *sp = NULL;
 	const request_rec *r = resource->info->request;
 	GHashTable *comp_opt = NULL;
 	struct chunk_textinfo_s *chunk = NULL;
@@ -280,14 +258,9 @@ dav_rawx_deliver_SPECIAL(const dav_resource *resource, ap_filter_t *output)
 	apr_pool_t *p = resource->pool;
 
 	/* Load request informations */
-	e = _load_request_info(resource, &path, &sp);
+	e = _load_request_info(resource, &path);
 	if (NULL != e) {
 		DAV_ERROR_REQ(r, 0, "Failed to load request informations: %s", e->desc);
-		goto end_deliver;
-	}
-
-	if(!sp) {
-		DAV_DEBUG_REQ(r, 0, "Storage policy not initialized with value found in header, don't do anything");
 		goto end_deliver;
 	}
 

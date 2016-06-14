@@ -434,7 +434,7 @@ oio_strv_length (const char * const *v)
 int
 oio_str_prefixed (const char *s, const char *p, const char *sep)
 {
-	if (!g_str_has_prefix (s, p))
+	if (!oio_str_is_set(s) || !g_str_has_prefix (s, p))
 		return FALSE;
 	s += strlen(p);
 	return !*s || g_str_has_prefix (s, sep);
