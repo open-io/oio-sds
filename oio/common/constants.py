@@ -49,3 +49,31 @@ chunk_headers = {
     "metachunk_size": "%smetachunk-size" % CHUNK_METADATA_PREFIX,
     "metachunk_hash": "%smetachunk-hash" % CHUNK_METADATA_PREFIX
 }
+
+chunk_xattr_keys = {
+    'chunk_hash': 'grid.chunk.hash',
+    'chunk_id': 'grid.chunk.id',
+    'chunk_pos': 'grid.chunk.position',
+    'chunk_size': 'grid.chunk.size',
+    'content_chunkmethod': 'grid.content.chunk_method',
+    'container_id': 'grid.content.container',
+    'content_id': 'grid.content.id',
+    'content_path': 'grid.content.path',
+    'content_policy': 'grid.content.storage_policy',
+    'content_version': 'grid.content.version',
+    'metachunk_hash': 'grid.metachunk.hash',
+    'metachunk_size': 'grid.metachunk.size',
+}
+
+chunk_xattr_keys_optional = {
+        'content_chunksnb': True,
+        'chunk_hash': True,
+        'chunk_size': True,
+        'metachunk_size': True,
+        'metachunk_hash': True}
+
+
+volume_xattr_keys = {
+    'namespace': 'server.ns',
+    'type': 'server.type',
+    'id': 'server.id'}

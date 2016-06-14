@@ -97,7 +97,7 @@ class BlobIndexer(Daemon):
                     'Missing extended attribute %s' % e)
             data = {'mtime': int(time.time())}
             self.index_client.chunk_push(self.volume_id,
-                                         meta['content_cid'],
+                                         meta['container_id'],
                                          meta['content_id'],
                                          meta['chunk_id'],
                                          **data)

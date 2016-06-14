@@ -14,24 +14,27 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import StringIO
-import hashlib
 import os
 import time
 
 import math
-from testtools.matchers import NotEquals
+import random
+from cStringIO import StringIO
 
 from oio.blob.client import BlobClient
-from oio.common.exceptions import NotFound
 from oio.common.utils import cid_from_name
+from oio.common.exceptions import OrphanChunk, NotFound, \
+    UnrecoverableContent, OioException
 from oio.container.client import ContainerClient
 from oio.content.content import ChunksHelper
 from oio.content.factory import ContentFactory
 from oio.content.ec import ECContent
 from tests.functional.content.test_content import md5_stream, random_data, \
             md5_data
-from tests.utils import BaseTestCase
+from tests.utils import BaseTestCase, random_str
+
+
+DAT_LEGIT_SIZE = 1024
 
 
 class TestECContent(BaseTestCase):
@@ -40,7 +43,7 @@ class TestECContent(BaseTestCase):
 
         if len(self.conf['services']['rawx']) < 12:
             self.skipTest("Not enough rawx. "
-                          "Rain tests needs more than 12 rawx to run")
+                          "EC tests needs at least 12 rawx to run")
 
         self.namespace = self.conf['namespace']
         self.account = self.conf['account']
@@ -49,120 +52,95 @@ class TestECContent(BaseTestCase):
         self.content_factory = ContentFactory(self.gridconf)
         self.container_client = ContainerClient(self.gridconf)
         self.blob_client = BlobClient()
-        self.container_name = "TestRainContent%f" % time.time()
+        self.container_name = "TestECContent%f" % time.time()
         self.container_client.container_create(acct=self.account,
                                                ref=self.container_name)
         self.container_id = cid_from_name(self.account,
                                           self.container_name).upper()
+        self.content = random_str(64)
+        self.stgpol = "EC"
+        self.size = 1024*1024 + 320
+        self.k = 6
+        self.m = 3
 
     def tearDown(self):
         super(TestECContent, self).tearDown()
 
-    def _test_upload(self, data_size):
+    def random_chunks(self, nb):
+        l = random.sample(xrange(self.k + self.m), nb)
+        return ["0.%s" % i for i in l]
+
+    def _test_create(self, data_size):
+        # generate random test data
         data = random_data(data_size)
-        content = self.content_factory.new(self.container_id, "titi",
-                                           len(data), "EC")
-        k = 6
-        m = 3
+        # using factory create new EC content
+        content = self.content_factory.new(
+            self.container_id, self.content, len(data), self.stgpol)
+        # verify the factory gave us an ECContent
         self.assertEqual(type(content), ECContent)
 
-        content.upload(StringIO.StringIO(data))
+        # perform the content creation
+        content.create(StringIO(data))
 
         meta, chunks = self.container_client.content_show(
             cid=self.container_id, content=content.content_id)
+        # verify metadata
         chunks = ChunksHelper(chunks)
         self.assertEqual(meta['hash'], md5_data(data))
         self.assertEqual(meta['length'], str(len(data)))
-        self.assertEqual(meta['policy'], "EC")
-        self.assertEqual(meta['name'], "titi")
+        self.assertEqual(meta['policy'], self.stgpol)
+        self.assertEqual(meta['name'], self.content)
 
-        metachunk_nb = int(math.ceil(float(len(data)) / self.chunk_size))
-        if metachunk_nb == 0:
-            metachunk_nb = 1  # special case for empty content
+        metachunk_nb = int(math.ceil(float(len(data)) / self.chunk_size)) \
+            if len(data) != 0 else 1
 
-        nb_chunks_min = metachunk_nb * (1 + m)
-        nb_chunks_max = metachunk_nb * (k + m)
-        self.assertGreaterEqual(len(chunks), nb_chunks_min)
-        self.assertLessEqual(len(chunks), nb_chunks_max)
-
+        # verify each metachunk
         for metapos in range(metachunk_nb):
             chunks_at_pos = content.chunks.filter(metapos=metapos)
-            data_chunks_at_pos = chunks_at_pos.filter(is_parity=False)
-            parity_chunks_at_pos = chunks_at_pos.filter(is_parity=True)
-
-            self.assertEquals(len(data_chunks_at_pos) >= 1, True)
-            self.assertEquals(len(data_chunks_at_pos) <= k, True)
-            self.assertEqual(len(parity_chunks_at_pos), m)
 
             for chunk in chunks_at_pos:
                 meta, stream = self.blob_client.chunk_get(chunk.url)
-                self.assertEqual(md5_stream(stream), chunk.hash)
-                self.assertEqual(meta['content_size'], str(len(data)))
-                self.assertEqual(meta['content_path'], "titi")
-                self.assertEqual(meta['content_cid'], self.container_id)
+                self.assertEqual(meta['metachunk_size'], str(chunk.size))
+                self.assertEqual(meta['metachunk_hash'], chunk.checksum)
+                self.assertEqual(meta['content_path'], self.content)
+                self.assertEqual(meta['container_id'], self.container_id)
                 self.assertEqual(meta['content_id'], meta['content_id'])
                 self.assertEqual(meta['chunk_id'], chunk.id)
                 self.assertEqual(meta['chunk_pos'], chunk.pos)
-                self.assertEqual(meta['chunk_hash'], chunk.hash)
+                self.assertEqual(meta['chunk_hash'], md5_stream(stream))
 
-            data_begin = metapos * self.chunk_size
-            data_end = metapos * self.chunk_size + self.chunk_size
-            target_metachunk_hash = md5_data(data[data_begin:data_end])
+    def test_create_0_byte(self):
+        self._test_create(0)
 
-            metachunk_hash = hashlib.md5()
-            for chunk in data_chunks_at_pos:
-                meta, stream = self.blob_client.chunk_get(chunk.url)
-                for d in stream:
-                    metachunk_hash.update(d)
-            self.assertEqual(metachunk_hash.hexdigest().upper(),
-                             target_metachunk_hash)
+    def test_create_1_byte(self):
+        self._test_create(1)
 
-    def test_upload_0_byte(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
-
-    def test_upload_1_byte(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
-
-    def test_upload_chunksize_bytes(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
-
-    def test_upload_chunksize_plus_1_bytes(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
-
-    def test_chunks_cleanup_when_upload_failed(self):
-        data = random_data(2 * self.chunk_size)
-        content = self.content_factory.new(self.container_id, "titi",
-                                           len(data), "EC")
-        self.assertEqual(type(content), ECContent)
-
-        # set bad url for position 1
-        for chunk in content.chunks.filter(pos="1.p0"):
-            chunk.url = "http://127.0.0.1:9/DEADBEEF"
-
-        self.assertRaises(Exception, content.upload, StringIO.StringIO(data))
-        for chunk in content.chunks.exclude(pos="1.p0"):
-            self.assertRaises(NotFound,
-                              self.blob_client.chunk_head, chunk.url)
+    def test_create(self):
+        self._test_create(DAT_LEGIT_SIZE)
 
     def _test_rebuild(self, data_size, broken_pos_list):
+        # generate test data
         data = os.urandom(data_size)
-        old_content = self.content_factory.new(self.container_id, "titi",
-                                               len(data), "EC")
+        # create initial content
+        old_content = self.content_factory.new(
+            self.container_id, self.content, len(data), self.stgpol)
+        # verify factory work as intended
         self.assertEqual(type(old_content), ECContent)
 
-        old_content.upload(StringIO.StringIO(data))
+        # perform initial content creation
+        old_content.create(StringIO(data))
 
-        # get the new structure of the uploaded content
         uploaded_content = self.content_factory.get(self.container_id,
                                                     old_content.content_id)
 
+        # break the content
         old_info = {}
         for pos in broken_pos_list:
             old_info[pos] = {}
             c = uploaded_content.chunks.filter(pos=pos)[0]
             old_info[pos]["url"] = c.url
             old_info[pos]["id"] = c.id
-            old_info[pos]["hash"] = c.hash
+            old_info[pos]["hash"] = c.checksum
             chunk_id_to_rebuild = c.id
             meta, stream = self.blob_client.chunk_get(c.url)
             old_info[pos]["dl_meta"] = meta
@@ -170,63 +148,58 @@ class TestECContent(BaseTestCase):
             # delete the chunk
             self.blob_client.chunk_delete(c.url)
 
-        # rebuild the broken chunks
-        uploaded_content.rebuild_chunk(chunk_id_to_rebuild)
+            # rebuild the broken chunks
+            uploaded_content.rebuild_chunk(chunk_id_to_rebuild)
 
-        # get the new structure of the content
         rebuilt_content = self.content_factory.get(self.container_id,
                                                    uploaded_content.content_id)
+        # sanity check
         self.assertEqual(type(rebuilt_content), ECContent)
 
+        # verify rebuild result
         for pos in broken_pos_list:
             c = rebuilt_content.chunks.filter(pos=pos)[0]
             rebuilt_meta, rebuilt_stream = self.blob_client.chunk_get(c.url)
             self.assertEqual(rebuilt_meta["chunk_id"], c.id)
             self.assertEqual(md5_stream(rebuilt_stream),
                              old_info[pos]["dl_hash"])
-            self.assertEqual(c.hash, old_info[pos]["hash"])
-            self.assertThat(c.url, NotEquals(old_info[pos]["url"]))
+            self.assertEqual(c.checksum, old_info[pos]["hash"])
+            self.assertNotEqual(c.url, old_info[pos]["url"])
             del old_info[pos]["dl_meta"]["chunk_id"]
             del rebuilt_meta["chunk_id"]
             self.assertEqual(rebuilt_meta, old_info[pos]["dl_meta"])
 
-    def test_content_0_byte_rebuild_pos_0_0(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
+    def test_content_0_byte_rebuild(self):
+        self._test_rebuild(0, self.random_chunks(1))
 
-    def test_content_0_byte_rebuild_pos_0_0_and_0_p0(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
+    def test_content_0_byte_rebuild_advanced(self):
+        self._test_rebuild(0, self.random_chunks(3))
 
-    def test_content_1_byte_rebuild_pos_0_0(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
+    def test_content_1_byte_rebuild(self):
+        self._test_rebuild(1, self.random_chunks(1))
 
-    def test_content_1_byte_rebuild_pos_0_p0(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
+    def test_content_1_byte_rebuild_advanced(self):
+        self._test_rebuild(1, self.random_chunks(3))
 
-    def test_content_1_byte_rebuild_pos_0_0_and_0_p0(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
+    def test_content_rebuild(self):
+        self._test_rebuild(DAT_LEGIT_SIZE, self.random_chunks(1))
 
-    def test_content_chunksize_bytes_rebuild_pos_0_0(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
+    def test_content_rebuild_advanced(self):
+        self._test_rebuild(DAT_LEGIT_SIZE, self.random_chunks(3))
 
-    def test_content_chunksize_bytes_rebuild_pos_0_0_and_0_1(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
-
-    def test_content_chunksize_bytes_rebuild_pos_0_0_and_0_p0(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
-
-    def test_content_chunksize_bytes_rebuild_pos_0_p0_and_0_p1(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
-
-    def test_content_chunksize_bytes_rebuild_more_than_k_chunk(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
+    def test_content_rebuild_unrecoverable(self):
+        self.assertRaises(
+            UnrecoverableContent, self._test_rebuild, DAT_LEGIT_SIZE,
+            self.random_chunks(4))
 
     def _new_content(self, data, broken_pos_list=[]):
-        old_content = self.content_factory.new(self.container_id, "titi",
-                                               len(data), "EC")
+        old_content = self.content_factory.new(
+            self.container_id, self.content, len(data), self.stgpol)
         self.assertEqual(type(old_content), ECContent)
 
-        old_content.upload(StringIO.StringIO(data))
+        old_content.create(StringIO(data))
 
+        # break content
         for pos in broken_pos_list:
             c = old_content.chunks.filter(pos=pos)[0]
             self.blob_client.chunk_delete(c.url)
@@ -236,37 +209,44 @@ class TestECContent(BaseTestCase):
                                         old_content.content_id)
 
     def test_orphan_chunk(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
+        content = self._new_content(random_data(10))
+        self.assertRaises(OrphanChunk, content.rebuild_chunk, "invalid")
 
-    def test_rebuild_on_the_fly(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
+    def _test_fetch(self, data_size, broken_pos_list=None):
+        broken_pos_list = broken_pos_list or []
+        test_data = random_data(data_size)
+        content = self._new_content(test_data, broken_pos_list)
 
-    def _test_download(self, data_size, broken_pos_list):
-        self.skipTest("to be re-implemented with the lastest EC methods")
+        data = "".join(content.fetch())
 
-    def test_download_content_0_byte_without_broken_chunks(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
+        self.assertEqual(len(data), len(test_data))
+        self.assertEqual(md5_data(data), md5_data(test_data))
 
-    def test_download_content_1_byte_without_broken_chunks(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
+        # verify that chunks are broken
+        for pos in broken_pos_list:
+            chunk = content.chunks.filter(pos=pos)[0]
+            self.assertRaises(
+                NotFound, self.blob_client.chunk_delete, chunk.url)
 
-    def test_download_content_chunksize_bytes_without_broken_chunks(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
+    def test_fetch_content_0_byte(self):
+        self._test_fetch(0)
 
-    def test_download_content_chunksize_plus_1_without_broken_chunks(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
+    def test_fetch_content_1_byte(self):
+        self._test_fetch(1)
 
-    def test_download_content_0_byte_with_broken_0_0_and_0_p0(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
+    def test_fetch_content(self):
+        self._test_fetch(DAT_LEGIT_SIZE)
 
-    def test_download_content_1_byte_with_broken_0_0_and_0_p0(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
+    def test_fetch_content_0_byte_broken(self):
+        self._test_fetch(0, self.random_chunks(3))
 
-    def test_download_content_2xchunksize_with_broken_0_2_and_1_0(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
+    def test_fetch_content_1_byte_broken(self):
+        self._test_fetch(1, self.random_chunks(3))
 
-    def test_download_content_chunksize_bytes_with_3_broken_chunks(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
+    def test_fetch_content_broken(self):
+        self._test_fetch(DAT_LEGIT_SIZE, self.random_chunks(3))
 
-    def test_download_interrupt_close(self):
-        self.skipTest("to be re-implemented with the lastest EC methods")
+    def test_fetch_content_unrecoverable(self):
+        broken_chunks = self.random_chunks(4)
+        self.assertRaises(
+            OioException, self._test_fetch, DAT_LEGIT_SIZE, broken_chunks)

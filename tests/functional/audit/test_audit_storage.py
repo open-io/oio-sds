@@ -7,7 +7,7 @@ from oio.blob.auditor import BlobAuditorWorker
 from oio.common import exceptions as exc
 from oio.container.client import ContainerClient
 from oio.blob.client import BlobClient
-from oio.blob.utils import chunk_xattr_keys
+from oio.common.constants import chunk_xattr_keys
 from tests.utils import BaseTestCase, random_str, random_id
 
 
@@ -69,7 +69,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
                             "url":  self.chunk_url}
 
         chunk_meta = {'content_path': self.content.path,
-                      'content_cid': self.content.id_container,
+                      'container_id': self.content.id_container,
                       'content_chunkmethod': 'plain/nb_copy=3',
                       'content_policy': 'TESTPOLICY',
                       'content_id': '0000',
@@ -173,7 +173,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
     def test_xattr_bad_content_container(self):
         self.init_content()
         xattr.setxattr(
-            self.chunk_path, 'user.' + chunk_xattr_keys['content_cid'],
+            self.chunk_path, 'user.' + chunk_xattr_keys['container_id'],
             self.bad_container_id)
         self.assertRaises(exc.OrphanChunk, self.auditor.chunk_audit,
                           self.chunk_path)

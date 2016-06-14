@@ -132,13 +132,13 @@ class BlobMoverWorker(object):
 
     def chunk_move(self, path):
         meta = self.load_chunk_metadata(path)
-        content_cid = meta['content_cid']
+        container_id = meta['container_id']
         content_id = meta['content_id']
         chunk_id = meta['chunk_id']
         chunk_url = 'http://%s/%s' % (self.address, meta['chunk_id'])
 
         try:
-            content = self.content_factory.get(content_cid, content_id)
+            content = self.content_factory.get(container_id, content_id)
         except ContentNotFound:
             raise exc.OrphanChunk('Content not found')
 

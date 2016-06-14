@@ -30,7 +30,7 @@ class TestChunk(unittest.TestCase):
         self.assertEqual(c.url, "http://127.0.0.1:6010/AABBCC")
         self.assertEqual(c.pos, "0")
         self.assertEqual(c.size, 10)
-        self.assertEqual(c.hash, "E952A419957A6E405BFC53EC65483F73")
+        self.assertEqual(c.checksum, "E952A419957A6E405BFC53EC65483F73")
         self.assertEqual(c.id, "AABBCC")
         self.assertEqual(c.host, "127.0.0.1:6010")
         self.assertFalse(c.ec)
@@ -44,8 +44,8 @@ class TestChunk(unittest.TestCase):
             "hash": "00000000000000000000000000000000"}
         c = Chunk(data)
         self.assertEqual(c.pos, "0.1")
-        self.assertEqual(c.metapos, "0")
-        self.assertEqual(c.subpos, "1")
+        self.assertEqual(c.metapos, 0)
+        self.assertEqual(c.subpos, 1)
         self.assertTrue(c.ec)
 
     def test_comparison_no_ec(self):
@@ -102,8 +102,8 @@ class TestChunk(unittest.TestCase):
             "hash": "00000000000000000000000000000000"})
         c.url = "http://0.0.0.0:0000/AA"
         self.assertEqual(c.url, "http://0.0.0.0:0000/AA")
-        c.hash = "AzErTy"
-        self.assertEqual(c.hash, "AZERTY")
+        c.checksum = "AzErTy"
+        self.assertEqual(c.checksum, "AZERTY")
         c.size = 1234
         self.assertEqual(c.size, 1234)
 
@@ -215,19 +215,19 @@ class TestChunksHelper(unittest.TestCase):
         self.assertEqual(res4.raw(), [self.dup_c1_1])
 
     def test_ec_search(self):
-        res1 = self.ec_chunks.filter(metapos="1")
+        res1 = self.ec_chunks.filter(metapos=1)
         self.assertEqual(res1.raw(), [self.ec_c1_0, self.ec_c1_1,
                                       self.ec_c1_2])
 
-        res3 = self.ec_chunks.filter(subpos="1")
+        res3 = self.ec_chunks.filter(subpos=1)
         self.assertEqual(res3.raw(), [self.ec_c0_1, self.ec_c1_1])
 
     def test_ec_exclude(self):
-        res2 = self.ec_chunks.exclude(metapos="1")
+        res2 = self.ec_chunks.exclude(metapos=1)
         self.assertEqual(res2.raw(), [self.ec_c0_0, self.ec_c0_1,
                                       self.ec_c0_2])
 
-        res3 = self.ec_chunks.exclude(subpos="2")
+        res3 = self.ec_chunks.exclude(subpos=2)
         self.assertEqual(res3.raw(), [self.ec_c0_0, self.ec_c0_1,
                                       self.ec_c1_0, self.ec_c1_1])
 
