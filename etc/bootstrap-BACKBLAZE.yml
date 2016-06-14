@@ -2,5 +2,7 @@ zookeeper: false
 storage_policy: "SINGLE"
 chunk_size: 1048576
 redis: true
+backblaze.bucket_name: "put-your-bucket-here"
+backblaze.account_id: "put-your-app-id-here"
 rawx:
   count: 3
