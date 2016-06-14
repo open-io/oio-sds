@@ -1,29 +1,46 @@
-import requests
-from requests import exceptions
+# Copyright (C) 2016 OpenIO SAS
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 3.0 of the License, or (at your option) any later version.
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library.
+
 import base64
 import hashlib
 import json as js
+import requests
+from requests import exceptions
 from oio.api import io
+
+
 def _format_autorization_required(account_id, application_key):
     return 'Basic ' + base64.b64encode(account_id+':'+application_key)
 
+
 def _recover_true_path(metadata, chunk_path):
     return metadata['ns'] + '/' + metadata['container_id'] + \
-        '/'  + chunk_path
+        '/' + chunk_path
+
 
 def _get_sha1(data):
     generate = hashlib.sha1()
-    if not isinstance(data, str):
-        for chunk in iter(lambda: data.read(io.WRITE_CHUNK_SIZE),
-                          b''):
+    if not isinstance(data, basestring):
+        for chunk in iter(lambda: data.read(io.WRITE_CHUNK_SIZE), b''):
             generate.update(chunk)
             data.seek(0, 0)
     else:
         generate.update(data)
     return generate.hexdigest()
 
+
 class Backblaze(object):
     BACKBLAZE_MAX_CHUNK_SIZE = 209715200
+
     def __init__(self, account_id, application_key,
                  authorization_required=None, upload_required=None,
                  upload_part=False):
@@ -50,7 +67,7 @@ class Backblaze(object):
                                                     json=True)
 
     def _recover_list_buckets_token(self):
-        body = {'accountId':self.account_id}
+        body = {'accountId': self.account_id}
         headers = {'Authorization':
                    self.authorization_required['authorizationToken']}
         url = '%s/b2api/v1/b2_list_buckets' % \
@@ -69,7 +86,7 @@ class Backblaze(object):
             return None
 
     def _get_upload_token(self, bucket_id):
-        body = {'bucketId':bucket_id}
+        body = {'bucketId': bucket_id}
         headers = {'Authorization':
                    self.authorization_required['authorizationToken']}
         url_upload = '%s/b2api/v1/b2_get_upload_url' % \
@@ -77,10 +94,11 @@ class Backblaze(object):
         return Requests().get_response_from_request('POST', url_upload,
                                                     headers,
                                                     js.dumps(body), True)
+
     def _begin_big_file(self, bucket_id, metadata):
-        body = {'bucketId':bucket_id,
-                'fileName':_recover_true_path(metadata, metadata['name']),
-                'contentType':metadata['mime_type']}
+        body = {'bucketId': bucket_id,
+                'fileName': _recover_true_path(metadata, metadata['name']),
+                'contentType': metadata['mime_type']}
         headers = {'Authorization':
                    self.authorization_required['authorizationToken']}
         url_upload = '%s/b2api/v1/b2_start_large_file' % \
@@ -90,16 +108,17 @@ class Backblaze(object):
                                                     js.dumps(body), True)
 
     def _end_big_file(self, file_id, sha1_array):
-        body = {'fileId':file_id, 'partSha1Array':sha1_array}
+        body = {'fileId': file_id, 'partSha1Array': sha1_array}
         headers = {'Authorization':
                    self.authorization_required['authorizationToken']}
         url_upload = '%s/b2api/v1/b2_finish_large_file' % \
-        self.authorization_required['apiUrl']
+            self.authorization_required['apiUrl']
         return Requests().get_response_from_request('POST', url_upload,
                                                     headers,
                                                     js.dumps(body), True)
+
     def _get_upload_part_token(self, file_id):
-        body = {'fileId':file_id}
+        body = {'fileId': file_id}
         headers = {'Authorization':
                    self.authorization_required['authorizationToken']}
         url_upload = '%s/b2api/v1/b2_get_upload_part_url' % \
@@ -110,9 +129,9 @@ class Backblaze(object):
 
     def _recover_upload_part_file(self, data, sha1, part_number):
         headers = {
-            'Authorization':self.upload_part_token['authorizationToken'],
+            'Authorization': self.upload_part_token['authorizationToken'],
             'X-Bz-Part-Number': part_number,
-            'X-Bz-Content-Sha1':sha1,
+            'X-Bz-Content-Sha1': sha1,
         }
         upload_url = self.upload_part_token['uploadUrl']
         resp = Requests().get_response_from_request('POST', upload_url,
@@ -121,10 +140,10 @@ class Backblaze(object):
 
     def _recover_upload_file(self, metadata, data, sha1):
         headers = {
-            'Authorization':self.upload_token['authorizationToken'],
-            'X-Bz-File-Name':_recover_true_path(metadata, metadata['name']),
-            'Content-Type':metadata['mime_type'],
-            'X-Bz-Content-Sha1':sha1,
+            'Authorization': self.upload_token['authorizationToken'],
+            'X-Bz-File-Name': _recover_true_path(metadata, metadata['name']),
+            'Content-Type': metadata['mime_type'],
+            'X-Bz-Content-Sha1': sha1,
         }
         upload_url = self.upload_token['uploadUrl']
         resp = Requests().get_response_from_request('POST', upload_url,
@@ -144,18 +163,17 @@ class Backblaze(object):
                                                     headers, None)
 
     def _list_file_names(self, bucket_id):
-        start_file_name = True 
-        content_list = []
+        start_file_name = True
         url_list = '%s/b2api/v1/b2_list_file_names' % \
                    self.authorization_required['apiUrl']
         headers = {'Authorization':
                    self.authorization_required['authorizationToken']}
         while start_file_name:
             if start_file_name and start_file_name is not True:
-                body = {'bucketId':bucket_id,
-                        'startFileName':start_file_name}
+                body = {'bucketId': bucket_id,
+                        'startFileName': start_file_name}
             else:
-                body = {'bucketId':bucket_id}
+                body = {'bucketId': bucket_id}
             result = Requests().get_response_from_request('POST', url_list,
                                                           headers,
                                                           js.dumps(body),
@@ -174,7 +192,7 @@ class Backblaze(object):
     def _delete_file_version(self, file_id, filename):
         headers = {'Authorization':
                    self.authorization_required['authorizationToken']}
-        body = {'fileId':file_id, 'fileName':filename}
+        body = {'fileId': file_id, 'fileName': filename}
         url_delete = '%s/b2api/v1/b2_delete_file_version' % \
                      self.authorization_required['apiUrl']
         return Requests().get_response_from_request('POST', url_delete,
@@ -184,6 +202,7 @@ class Backblaze(object):
     @property
     def authorization_token(self):
         return self.authorization_required
+
     def get_list_buckets(self):
         return self._recover_list_buckets_token()
 
@@ -258,7 +277,7 @@ class Backblaze(object):
             for file_info in chunk_list:
                 size = file_info['size'] + size
         return size
-    
+
     def delete(self, bucket_name, metadata):
         filename = _recover_true_path(metadata, metadata['name'])
         file_id = self._get_id_file_by_file_name(bucket_name, filename)
@@ -266,6 +285,7 @@ class Backblaze(object):
 
     def delete_by_path_name(self, file_id, file_name):
         return self._delete_file_version(file_id, file_name)
+
 
 class Requests(object):
     def __init__(self, error_handler=None):
@@ -287,7 +307,7 @@ class Requests(object):
                                         headers=headers)
             elif content_type == 'POST':
                 response = requests.post(url, data=file_descriptor,
-                                  headers=headers)
+                                         headers=headers)
         except exceptions.Timeout:
             raise
         except exceptions.TooManyRedirects:
@@ -316,7 +336,7 @@ class BackblazeException(Exception):
         self._message = message
 
     def __str__(self):
-        return 'Backblaze error !'
+        return '(%d) %s' % (self.status_code, self.message)
 
     @property
     def status_code(self):

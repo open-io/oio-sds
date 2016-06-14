@@ -12,13 +12,12 @@
 
 import logging
 import hashlib
-import os
-import random
-import string
+from tempfile import TemporaryFile
 from urlparse import urlparse
 from oio.api import io
 from oio.common.exceptions import SourceReadError, OioException
 from oio.api.backblaze_http import Backblaze, BackblazeException
+
 logger = logging.getLogger(__name__)
 WORD_LENGTH = 10
 TRY_REQUEST_NUMBER = 3
@@ -44,19 +43,13 @@ def _connect_put(chunk, sysmeta, backblaze_info):
     return conn
 
 
-def _random_word(length):
-    return ''.join(random.choice(string.lowercase) for i in range(length))
-
-
-def _get_hashs(size, source, checksum, character=None):
+def _read_to_temp(size, source, checksum, temp, first_byte=None):
     sha1 = hashlib.sha1()
-    random_path = '/tmp/' + _random_word(WORD_LENGTH)
-    fd = open(random_path, 'wb')
-    if character:
+    if first_byte:
         bytes_transferred = 1
-        sha1.update(character)
-        checksum.update(character)
-        fd.write(character)
+        sha1.update(first_byte)
+        checksum.update(first_byte)
+        temp.write(first_byte)
     else:
         bytes_transferred = 0
     while True:
@@ -67,17 +60,16 @@ def _get_hashs(size, source, checksum, character=None):
             read_size = remaining_bytes
         try:
             data = source.read(read_size)
-        except (ValueError, IOError) as e:
-            raise SourceReadError((str(e)))
+        except (ValueError, IOError) as err:
+            raise SourceReadError((str(err)))
         if len(data) == 0:
             break
         sha1.update(data)
         checksum.update(data)
-        fd.write(data)
+        temp.write(data)
         bytes_transferred += len(data)
-    fd.close()
-    return (bytes_transferred, sha1.hexdigest(), checksum.hexdigest(),
-            random_path)
+    temp.seek(0)
+    return bytes_transferred, sha1.hexdigest(), checksum.hexdigest()
 
 
 class BackblazeChunkWriteHandler(object):
@@ -89,47 +81,44 @@ class BackblazeChunkWriteHandler(object):
         self.storage_method = storage_method
         self.backblaze_info = backblaze_info
 
-    def _upload_chunks(self, conn, size, sha1, md5, random_path):
+    def _upload_chunks(self, conn, size, sha1, md5, temp):
         try_number = TRY_REQUEST_NUMBER
         while True:
-            fd = open(random_path, 'rb')
             self.meta_chunk['size'] = size
             try:
+                logger.info("sha1: %s", sha1)
                 conn['backblaze'].upload(self.backblaze_info['bucket_name'],
-                                         self.sysmeta, fd, sha1)
+                                         self.sysmeta, temp, sha1)
                 break
             except BackblazeException as b2e:
-                fd.seek(0, 0)
+                temp.seek(0)
                 if try_number == 0:
-                    fd.close()
-                    os.remove(random_path)
                     raise OioException('backblaze upload error: %s'
                                        % str(b2e))
                 try_number -= 1
 
-        fd.close()
-        os.remove(random_path)
         self.meta_chunk['hash'] = md5
         return self.meta_chunk["size"], [self.meta_chunk]
 
-    def _stream_small_chunks(self, source, conn):
-        size, sha1, md5, random_path = _get_hashs(self.meta_chunk['size'],
-                                                  source, self.checksum)
-        return self._upload_chunks(conn, size, sha1, md5, random_path)
+    def _stream_small_chunks(self, source, conn, temp):
+        size, sha1, md5 = _read_to_temp(self.meta_chunk['size'],
+                                        source, self.checksum, temp)
+        return self._upload_chunks(conn, size, sha1, md5, temp)
 
-    def _stream_big_chunks(self, source, conn):
+    def _stream_big_chunks(self, source, conn, temp):
         max_chunk_size = conn['backblaze'].BACKBLAZE_MAX_CHUNK_SIZE
         sha1_array = []
         res = None
-        size, sha1, md5, random_path = _get_hashs(
-            max_chunk_size, source, self.checksum)
+        size, sha1, md5 = _read_to_temp(max_chunk_size, source,
+                                        self.checksum, temp)
+
         # obligated to read max_chunk_size + 1 bytes
         # if the size of the file is max_chunk_size
         # backblaze will not take it because
         # the upload part must have at least 2 parts
-        character = source.read(1)
-        if not character:
-            return self._upload_chunks(conn, size, sha1, md5, random_path)
+        first_byte = source.read(1)
+        if not first_byte:
+            return self._upload_chunks(conn, size, sha1, md5, temp)
 
         tries = TRY_REQUEST_NUMBER
         while True:
@@ -143,35 +132,33 @@ class BackblazeChunkWriteHandler(object):
                     raise OioException('Error at the beginning of upload: %s'
                                        % str(b2e))
         file_id = res['fileId']
-        count = 1
+        part_num = 1
         bytes_read = size + 1
         tries = TRY_REQUEST_NUMBER
         while True:
-            fd = open(random_path, 'rb')
             while True:
                 if bytes_read + max_chunk_size > self.meta_chunk['size']:
                     to_read = self.meta_chunk['size'] - bytes_read
                 else:
                     to_read = max_chunk_size
                 try:
-                    res, sha1 = conn['backblaze'].upload_part(file_id,
-                                                              fd, count, sha1)
+                    res, sha1 = conn['backblaze'].upload_part(file_id, temp,
+                                                              part_num, sha1)
                     break
                 except BackblazeException as b2e:
-                    fd.seek(0, 0)
+                    temp.seek(0)
                     tries = tries - 1
                     if tries == 0:
-                        fd.close()
-                        os.remove(random_path)
                         raise OioException('Error during upload: %s'
                                            % str(b2e))
-            count = count + 1
+            part_num += 1
             sha1_array.append(sha1)
-            fd.close()
-            os.remove(random_path)
-            size, sha1, md5, random_path = _get_hashs(to_read, source,
-                                                      self.checksum, character)
-            character = None
+            temp.seek(0)
+            temp.truncate(0)
+            size, sha1, md5 = _read_to_temp(to_read, source,
+                                            self.checksum, temp,
+                                            first_byte)
+            first_byte = None
             bytes_read = bytes_read + size
             if size == 0:
                 break
@@ -193,10 +180,11 @@ class BackblazeChunkWriteHandler(object):
     def stream(self, source):
         conn = _connect_put(self.meta_chunk, self.sysmeta,
                             self.backblaze_info)
-        if self.meta_chunk["size"] > conn['backblaze'].\
-           BACKBLAZE_MAX_CHUNK_SIZE:
-            return self._stream_big_chunks(source, conn)
-        return self._stream_small_chunks(source, conn)
+        with TemporaryFile() as temp:
+            if (self.meta_chunk["size"] >
+                    conn['backblaze'].BACKBLAZE_MAX_CHUNK_SIZE):
+                return self._stream_big_chunks(source, conn, temp)
+            return self._stream_small_chunks(source, conn, temp)
 
 
 class BackblazeWriteHandler(io.WriteHandler):

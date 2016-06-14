@@ -593,12 +593,13 @@ class ObjectStorageAPI(API):
         current_offset = 0
         size = None
         offset = 0
+        # FIXME: this probably doesn't work
         if ranges:
-            offset = ranges[pos][0]
-            size = ranges[pos][1]
+            offset = ranges[0][0]
+            size = ranges[0][1]
 
         if size is None:
-                size = int(meta["length"])
+            size = int(meta["length"])
 
         for pos in range(len(chunks)):
             chunk_size = int(chunks[pos][0]["size"])
