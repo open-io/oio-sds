@@ -69,6 +69,9 @@ class BaseTestCase(testtools.TestCase):
 
     _last_cache_flush = 0
 
+    def _random_user(self):
+        return "user-" + random_str(16, "0123456789ABCDEF")
+
     def get_service_url(self, srvtype, i=0):
         allsrv = self.conf['services'][srvtype]
         srv = allsrv[i]
@@ -126,11 +129,13 @@ class BaseTestCase(testtools.TestCase):
             # Flushing the proxy's service cache may make further tests
             # fail. By sleeping a bit, we allow the proxy to reload
             # its service cache.
-            time.sleep(12)
+            time.sleep(6)
 
     def _flush_cs(self, srvtype):
         params = {'type': srvtype}
         resp = self.session.post(self._url_cs("deregister"), params=params)
+        self.assertEqual(resp.status_code / 100, 2)
+        resp = self.session.post(self._url_cs("flush"), params=params)
         self.assertEqual(resp.status_code / 100, 2)
 
     def _register_srv(self, srv):
@@ -161,13 +166,14 @@ class BaseTestCase(testtools.TestCase):
                 self.assertEqual(resp.status_code, 204)
         BaseTestCase._last_cache_flush = time.time()
 
-    def _addr(self, low=7000, high=65535):
-        return '127.0.0.2:' + str(random.randint(low, high))
+    def _addr(self, low=7000, high=65535, ip="127.0.0.2"):
+        return ip + ':' + str(random.randint(low, high))
 
-    def _srv(self, srvtype, extra_tags={}, lowport=7000, highport=65535):
+    def _srv(self, srvtype, extra_tags={}, lowport=7000, highport=65535,
+             ip="127.0.0.2"):
         outd = {'ns': self.ns,
                 'type': str(srvtype),
-                'addr': self._addr(low=lowport, high=highport),
+                'addr': self._addr(low=lowport, high=highport, ip=ip),
                 'score': random.randint(0, 100),
                 'tags': {'stat.cpu': 1, 'tag.vol': 'test', 'tag.up': True}}
         if extra_tags:

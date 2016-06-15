@@ -164,7 +164,7 @@ static struct oio_lb_pool_vtable_s vtable_LOCAL =
 };
 
 static struct _lb_item_s *
-_item_make (guint location, const char *id)
+_item_make (oio_location_t location, const char *id)
 {
 	int len = strlen (id);
 	struct _lb_item_s *out = g_malloc0 (sizeof(struct _lb_item_s) + len + 1);
@@ -325,7 +325,7 @@ _accept_item (struct oio_lb_slot_s *slot, oio_location_t mask,
 	// Previous loops avoids -> masked
 	if (_item_is_to_be_avoided(ctx->polled, loc, mask))
 		return FALSE;
-	GRID_TRACE("Accepting item %s (%lu) from slot %s",
+	GRID_TRACE("Accepting item %s (0x%016lX) from slot %s",
 			item->id, loc, slot->name);
 	ctx->on_id (loc, item->id);
 	*(ctx->next_polled) = loc;
@@ -622,7 +622,7 @@ _world_create_slot (struct oio_lb_world_s *self, const char *name)
 	if (!slot) {
 		slot = g_malloc0(sizeof(*slot));
 		slot->name = g_strdup(name);
-		slot->location_mask = ((oio_location_t)-1) - 0xFF;
+		slot->location_mask = ~0xFFFF;
 		slot->items = g_array_new(FALSE, TRUE, sizeof(struct _slot_item_s));
 		g_rw_lock_writer_lock(&self->lock);
 		g_tree_replace(self->slots, g_strdup(name), slot);
@@ -739,7 +739,7 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 	g_assert (name != NULL && *name != '\0');
 	g_assert (item != NULL);
 	GRID_TRACE2 ("> Feeding [%s,%"G_GUINT64_FORMAT"] in slot=%s",
-			item->id, (guint64) item->location, name);
+			item->id, item->location, name);
 
 	gboolean found = FALSE;
 

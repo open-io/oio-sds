@@ -33,7 +33,7 @@ _lb_check_tokens (struct req_args_s *args)
 // New handlers ----------------------------------------------------------------
 
 static GString *
-_lb_pack_and_free_srvid_tab(const char **ids)
+_lb_pack_srvid_tab(const char **ids)
 {
 	GString *gstr = g_string_sized_new (512);
 	g_string_append_c(gstr, '[');
@@ -74,8 +74,7 @@ _lb(struct req_args_s *args, const char *srvtype)
 	g_string_free(targets, TRUE);
 
 	GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
-	void _on_id(oio_location_t loc, const char *id)
-	{
+	void _on_id(oio_location_t loc, const char *id) {
 		(void)loc;
 		g_ptr_array_add(ids, g_strdup(id));
 	}
@@ -86,7 +85,7 @@ _lb(struct req_args_s *args, const char *srvtype)
 					ids->len));
 	} else {
 		g_ptr_array_add(ids, NULL);
-		GString *gstr = _lb_pack_and_free_srvid_tab((const char**)ids->pdata);
+		GString *gstr = _lb_pack_srvid_tab((const char**)ids->pdata);
 		code = _reply_success_json(args, gstr);
 	}
 
@@ -174,8 +173,7 @@ _poll(struct req_args_s *args, struct json_object *body)
 	known = _json_ids_to_locations(jknown, known);
 
 	GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
-	void _on_id(oio_location_t loc, const char *id)
-	{
+	void _on_id(oio_location_t loc, const char *id) {
 		(void)loc;
 		g_ptr_array_add(ids, g_strdup(id));
 	}
@@ -186,10 +184,11 @@ _poll(struct req_args_s *args, struct json_object *body)
 					ids->len));
 	} else {
 		g_ptr_array_add(ids, NULL);
-		GString *gstr = _lb_pack_and_free_srvid_tab((const char**)ids->pdata);
+		GString *gstr = _lb_pack_srvid_tab((const char**)ids->pdata);
 		code = _reply_json(args, CODE_FINAL_OK, "OK", gstr);
 	}
 
+	g_ptr_array_free(ids, TRUE);
 	g_free(avoid);
 	g_free(known);
 	return code;

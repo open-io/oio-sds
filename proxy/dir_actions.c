@@ -365,15 +365,17 @@ static enum http_rc_e
 action_dir_prop_set (struct req_args_s *args, struct json_object *jargs)
 {
 	GError *err = NULL;
-	gchar **pairs = NULL;
 	gboolean flush = NULL != OPT("flush");
 
 	// Parse the <string>:<string> mapping.
 	GPtrArray *v = g_ptr_array_new ();
 	guint count = 0;
 	if (jargs) {
-		if (!json_object_is_type (jargs, json_type_object))
+		if (!json_object_is_type (jargs, json_type_object)) {
+			g_ptr_array_add (v, NULL);
+			g_strfreev ((gchar **) g_ptr_array_free(v, FALSE));
 			return _reply_format_error (args, BADREQ("Invalid pairs"));
+		}
 		json_object_object_foreach (jargs, key, val) {
 			++count;
 			if (!json_object_is_type (val, json_type_string)) {
@@ -385,21 +387,15 @@ action_dir_prop_set (struct req_args_s *args, struct json_object *jargs)
 		}
 	}
 
+	g_ptr_array_add (v, NULL);
 	if (!err) {
-		g_ptr_array_add (v, NULL);
-		pairs = (gchar **) g_ptr_array_free (v, FALSE);
-	} else {
-		g_ptr_array_free (v, TRUE);
-	}
-
-	GError *hook (const char * m1) {
-		return meta1v2_remote_reference_set_property (m1, args->url, pairs, flush);
-	}
-
-	if (!err) {
+		GError *hook (const char * m1) {
+			return meta1v2_remote_reference_set_property (m1, args->url,
+					(gchar**) v->pdata, flush);
+		}
 		err = _m1_locate_and_action (args->url, hook);
-		g_free (pairs);
 	}
+	g_strfreev ((gchar **) g_ptr_array_free(v, FALSE));
 	if (!err)
 		return _reply_success_json (args, NULL);
 	return _reply_common_error (args, err);
