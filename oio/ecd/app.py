@@ -25,7 +25,6 @@ sys_headers = {
     'content_version': '%scontent-version' % SYS_PREFIX,
     'content_policy': '%scontent-storage-policy' % SYS_PREFIX,
     'container_id': '%scontainer-id' % SYS_PREFIX,
-    'ns': '%sns' % SYS_PREFIX,
 }
 
 
@@ -44,7 +43,6 @@ def load_sysmeta(request):
                                             "1")
         sysmeta['container_id'] = h[sys_headers['container_id']]
         sysmeta['size'] = h[sys_headers['chunk_size']]
-        sysmeta['ns'] = h[sys_headers['ns']]
         return sysmeta
     except KeyError:
         print h
@@ -144,10 +142,8 @@ class ECD(object):
     def read_backblaze_meta_chunk(self, req, storage_method, meta_chunk):
         headers = {}
         application_key = self.conf['application-key']
-        ns = req.headers[sys_headers['ns']]
         container_id = req.headers[sys_headers['container_id']]
-        sysmeta = {'ns': ns,
-                   'container_id': container_id}
+        sysmeta = {'container_id': container_id}
 
         meta = _put_meta_backblaze(storage_method, application_key)
         handler = BackblazeDownloadHandler(sysmeta, [meta_chunk],

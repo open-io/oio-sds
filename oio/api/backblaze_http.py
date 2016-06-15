@@ -25,8 +25,7 @@ def _format_autorization_required(account_id, application_key):
 
 
 def _recover_true_path(metadata, chunk_path):
-    return metadata['ns'] + '/' + metadata['container_id'] + \
-        '/' + chunk_path
+    return metadata['container_id'] + '/' + chunk_path
 
 
 def _get_sha1(data):
