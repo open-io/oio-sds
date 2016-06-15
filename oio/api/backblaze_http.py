@@ -10,13 +10,11 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import requests
 from requests import exceptions, Session, Request
 import base64
 import hashlib
 import json as js
 import requests
-from requests import exceptions
 from oio.api import io
 
 
@@ -262,7 +260,7 @@ class Backblaze(object):
                 size = file_info['size'] + size
                 number = number + 1
         return (size, number)
-    
+
     def get_file_number(self, bucket_name):
         res = self.get_list_file_names(bucket_name)
         size = 0
@@ -317,7 +315,7 @@ class Requests(object):
             try:
                 raise BackblazeException(response.status_code,
                                          response.json()['message'])
-            except ValueError as e:
+            except ValueError:
                 raise BackblazeException(response.status_code,
                                          response.text)
         return response
@@ -340,6 +338,7 @@ class BackblazeException(Exception):
 
     def __str__(self):
         return '(%d) %s' % (self.status_code, self.message)
+
     @property
     def status_code(self):
         return self._status_code

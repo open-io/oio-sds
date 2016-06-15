@@ -86,7 +86,7 @@ class BackblazeChunkWriteHandler(object):
         while True:
             self.meta_chunk['size'] = size
             try:
-                logger.info("sha1: %s", sha1)
+                logger.debug("sha1: %s", sha1)
                 conn['backblaze'].upload(self.backblaze_info['bucket_name'],
                                          self.sysmeta, temp, sha1)
                 break
@@ -181,7 +181,7 @@ class BackblazeChunkWriteHandler(object):
         conn = _connect_put(self.meta_chunk, self.sysmeta,
                             self.backblaze_info)
         with TemporaryFile() as temp:
-            if (self.meta_chunk["size"] >
+            if ("size" not in self.meta_chunk or self.meta_chunk["size"] >
                     conn['backblaze'].BACKBLAZE_MAX_CHUNK_SIZE):
                 return self._stream_big_chunks(source, conn, temp)
             return self._stream_small_chunks(source, conn, temp)
@@ -285,7 +285,8 @@ class BackblazeChunkDownloadHandler(object):
         if data:
             result = data
         return result
-    
+
+
 class BackblazeDownloadHandler:
     def __init__(self, sysmeta, meta_chunks, backblaze_infos, headers):
         self.meta_chunks = meta_chunks
@@ -294,7 +295,6 @@ class BackblazeDownloadHandler:
         self.sysmeta = sysmeta
 
     def _get_streams(self):
-        print self.meta_chunks
         for pos in range(len(self.meta_chunks)):
             handler = BackblazeChunkDownloadHandler(self.sysmeta,
                                                     self.meta_chunks[pos],
@@ -302,8 +302,8 @@ class BackblazeDownloadHandler:
                                                     self.backblaze_infos)
             stream = handler.get_stream()
             if not stream:
-                raise exc.OioException("Error while downloading")
+                raise OioException("Error while downloading")
             yield stream
-            
+
     def get_iter(self):
-        yield self._get_streams() 
+        yield self._get_streams()

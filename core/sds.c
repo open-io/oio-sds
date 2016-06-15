@@ -602,6 +602,11 @@ _download_range_from_metachunk_ec(struct _download_ctx_s *dl,
 	g_ptr_array_add(headers, g_strdup_printf("%"G_GSIZE_FORMAT, meta->size));
 	g_ptr_array_add(headers, g_strdup(RAWX_HEADER_PREFIX"content-chunk-method"));
 	g_ptr_array_add(headers, g_strdup(dl->chunk_method));
+
+	// FIXME: this should not be required
+	g_ptr_array_add(headers, g_strdup(RAWX_HEADER_PREFIX"container-id"));
+	g_ptr_array_add(headers, g_strdup(oio_url_get(dl->src->url, OIOURL_HEXID)));
+
 	g_ptr_array_add(headers, NULL);
 
 	while (r0.size > 0) {

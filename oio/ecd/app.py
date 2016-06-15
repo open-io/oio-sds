@@ -42,7 +42,6 @@ def load_sysmeta(request):
         sysmeta['content_chunksnb'] = h.get(sys_headers['content_chunksnb'],
                                             "1")
         sysmeta['container_id'] = h[sys_headers['container_id']]
-        sysmeta['size'] = h[sys_headers['chunk_size']]
         return sysmeta
     except KeyError:
         print h
@@ -77,8 +76,8 @@ def part_backblaze_to_bytes_iter(stream):
 
 
 def _put_meta_backblaze(storage_method, application_key):
-    if not (application_key and storage_method.bucket_name != '0'
-            and storage_method.account_id != '0'):
+    if not (application_key and storage_method.bucket_name != '0' and
+            storage_method.account_id != '0'):
         raise exc.OioException("The client is missing backblaze parameters")
     meta = {}
     meta['backblaze.account_id'] = storage_method.account_id
@@ -108,7 +107,7 @@ class ECD(object):
         meta_checksum = md5()
         application_key = self.conf['application-key']
         upload_chunk = meta_chunk[0]
-        upload_chunk['size'] = sysmeta['size']
+        # upload_chunk['size'] = sysmeta['size']
         meta = _put_meta_backblaze(storage_method, application_key)
         handler = BackblazeChunkWriteHandler(sysmeta, upload_chunk,
                                              meta_checksum, storage_method,
@@ -144,7 +143,6 @@ class ECD(object):
         application_key = self.conf['application-key']
         container_id = req.headers[sys_headers['container_id']]
         sysmeta = {'container_id': container_id}
-
         meta = _put_meta_backblaze(storage_method, application_key)
         handler = BackblazeDownloadHandler(sysmeta, [meta_chunk],
                                            meta, headers)
@@ -195,12 +193,11 @@ class ECD(object):
                     int(req.headers[sys_headers['chunk_size']])
                 return self.read_ec_meta_chunk(storage_method, meta_chunk)
             elif storage_method.backblaze:
-                nb_chunks = int(req.headers[sys_headers['nb_chunks']])
-                meta_chunk = load_meta_chunk(req, nb_chunks)
+                meta_chunk = load_meta_chunk(req, 1)
                 return self.read_backblaze_meta_chunk(req, storage_method,
                                                       meta_chunk)
             else:
-                nb_chunks = int(req.headers[sys_headers['nb_chunks']])
+                nb_chunks = int(req.headers[sys_headers['content_chunksnb']])
                 meta_chunk = load_meta_chunk(req, nb_chunks)
                 return self.read_meta_chunk(storage_method, meta_chunk)
         else:
@@ -221,4 +218,5 @@ def create_app(conf={}):
 
 if __name__ == '__main__':
     from werkzeug.serving import run_simple
-    run_simple('127.0.0.1', 5000, app, use_debugger=True, use_reloader=True)
+    run_simple('127.0.0.1', 5000, create_app(),
+               use_debugger=True, use_reloader=True)

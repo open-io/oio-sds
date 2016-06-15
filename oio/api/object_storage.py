@@ -29,8 +29,7 @@ from oio.api.ec import ECWriteHandler, ECChunkDownloadHandler, \
 from oio.api.replication import ReplicatedWriteHandler
 from oio.api.backblaze_http import Backblaze
 from oio.api.backblaze import BackblazeWriteHandler, \
-    BackblazeChunkDownloadHandler, BackblazeDeleteHandler, \
-    BackblazeDownloadHandler
+    BackblazeChunkDownloadHandler, BackblazeDeleteHandler
 from oio.common import constants
 from oio.common import utils
 from oio.common.constants import object_headers
@@ -616,9 +615,9 @@ class ObjectStorageAPI(API):
                     _size = size - total_bytes
                 else:
                     _size = chunk_size
-            handler = BackblazeChunkDownloadHandler(meta, chunks[pos],
-                                                    _size, _offset,
-                                                    backblaze_info=backblaze_info)
+            handler = BackblazeChunkDownloadHandler(
+                    meta, chunks[pos], _size, _offset,
+                    backblaze_info=backblaze_info)
             stream = handler.get_stream()
             if not stream:
                 raise exc.OioException("Error while downloading")

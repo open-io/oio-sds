@@ -5,7 +5,7 @@ import random
 import string
 
 
-def _generate_false_metadata(ns, container_id, name):
+def _generate_fake_metadata(container_id, name):
     return {
         'mime_type': 'application/octet-stream',
         'container_id': container_id,
@@ -42,7 +42,7 @@ class BackblazeTest(unittest.TestCase):
         container_id = _random_word(10)
         true_filename = _get_name(container_id, filename)
         size = self.backblaze_test.get_size(self.BUCKET_NAME)
-        meta = _generate_false_metadata(ns, container_id, filename)
+        meta = _generate_fake_metadata(container_id, filename)
         content = _random_word(100)
         res = self.backblaze_test.upload(self.BUCKET_NAME, meta, content)
         self.assertTrue(res)
