@@ -16,7 +16,6 @@
 
 
 from oio.api import io
-from oio.api.ec import ECWriteHandler
 from oio.api.replication import ReplicatedWriteHandler
 from oio.api.object_storage import _sort_chunks, get_meta_ranges
 from oio.common.storage_method import STORAGE_METHODS
@@ -26,12 +25,6 @@ from oio.common.exceptions import UnrecoverableContent
 
 
 class PlainContent(Content):
-    def __init__(self, conf, container_id, metadata, chunks, stgpol_args):
-        super(PlainContent, self).__init__(
-            conf, container_id, metadata, chunks, stgpol_args)
-        self.nb_copy = int(stgpol_args["nb_copy"])
-        self.distance = int(stgpol_args["distance"])
-
     def fetch(self):
         storage_method = STORAGE_METHODS.load(self.chunk_method)
         chunks = _sort_chunks(self.chunks.raw(), storage_method.ec)
@@ -69,12 +62,8 @@ class PlainContent(Content):
 
         # TODO deal with headers
         headers = {}
-        if storage_method.ec:
-            handler = ECWriteHandler(
-                stream, sysmeta, chunks, storage_method, headers=headers)
-        else:
-            handler = ReplicatedWriteHandler(
-                stream, sysmeta, chunks, storage_method, headers=headers)
+        handler = ReplicatedWriteHandler(
+            stream, sysmeta, chunks, storage_method, headers=headers)
         final_chunks, bytes_transferred, content_checksum = handler.stream()
 
         # TODO sanity checks

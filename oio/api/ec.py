@@ -951,7 +951,7 @@ class ECRebuildHandler(object):
                 break
         else:
             logger.error('Unable to read enough valid sources to rebuild')
-            raise exc.OioException('Unable to rebuild chunk')
+            raise exc.UnrecoverableContent('Unable to rebuild chunk')
 
         rebuild_iter = self._make_rebuild_iter(resps[:nb_data])
         return rebuild_iter

@@ -46,7 +46,7 @@ class TestIndexerCrawler(BaseTestCase):
         xattr.setxattr(
             chunk_path, 'user.' + chunk_xattr_keys['chunk_size'], '4')
         xattr.setxattr(
-            chunk_path, 'user.' + chunk_xattr_keys['content_cid'],
+            chunk_path, 'user.' + chunk_xattr_keys['container_id'],
             container_id)
         xattr.setxattr(
             chunk_path, 'user.' + chunk_xattr_keys['content_id'], content_id)
@@ -118,7 +118,7 @@ class TestIndexerCrawler(BaseTestCase):
 
         # remove mandatory xattr
         xattr.removexattr(
-            chunk_path, 'user.' + chunk_xattr_keys['content_cid'])
+            chunk_path, 'user.' + chunk_xattr_keys['container_id'])
 
         # try to index the chunk
         indexer = BlobIndexer(self.conf)

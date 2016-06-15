@@ -161,10 +161,10 @@ class BlobAuditorWorker(object):
                     self.total_bytes_processed += buf_len
 
             try:
-                content_cid = meta['content_cid']
+                container_id = meta['container_id']
                 content_path = meta['content_path']
                 content_attr, data = self.container_client.content_show(
-                    cid=content_cid, path=content_path)
+                    cid=container_id, path=content_path)
 
                 # Check chunk data
                 chunk_data = None

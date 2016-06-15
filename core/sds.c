@@ -1132,10 +1132,6 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 		if (oio_sds_upload_is_ec(ul)) {
 			if (ul->sds->ecd && ul->sds->ecd[0]) {
 				GRID_DEBUG("using ecd gateway for erasure coding");
-				g_slist_free_full(ul->chunks, g_free);
-				ul->chunks = NULL;
-				ul->chunk_size = size;
-				goto cleanup;
 			} else {
 				err = NEWERROR(CODE_NOT_IMPLEMENTED,
 						"C client cannot do erasure coding "
@@ -1168,7 +1164,6 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 #undef LAZYSET
 	}
 
-cleanup:
 	g_string_free (request_body, TRUE);
 	g_string_free (reply_body, TRUE);
 	return (struct oio_error_s*) err;

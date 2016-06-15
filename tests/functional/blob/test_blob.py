@@ -30,7 +30,7 @@ class TestBlobFunctional(BaseTestCase):
             'x-oio-chunk-meta-content-version': '1456938361143740',
             'x-oio-chunk-meta-content-path': 'test-plop',
             'x-oio-chunk-meta-content-chunk-method':
-                'ec/algo=isa_l_rs_vand,k=6,m=3',
+                'ec/algo=liberasurecode_rs_vand,k=6,m=3',
             'x-oio-chunk-meta-content-storage-policy': 'TESTPOLICY',
             'x-oio-chunk-meta-container-id': '1'*64,
             'x-oio-chunk-meta-chunk-id': name,

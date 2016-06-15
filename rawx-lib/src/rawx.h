@@ -62,7 +62,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 struct rawx_conf_s
 {
 	namespace_info_t *ni;
-	struct storage_policy_s *sp;
 	GSList* acl;
 	gint64 last_update;
 };

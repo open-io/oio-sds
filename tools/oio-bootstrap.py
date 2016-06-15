@@ -195,6 +195,9 @@ grid_fsync_dir         enabled
 # DO NOT USE, this is broken
 #grid_acl disabled
 
+# Enable compression ('zlib' or 'lzo' or 'off')
+grid_compression ${COMPRESSION}
+
 Alias / /x/
 
 <Directory />
@@ -370,7 +373,7 @@ param_option.service_update_policy=meta2=KEEP|${M2_REPLICAS}|${M2_DISTANCE};sqlx
 param_option.lb.rawx=WRR?shorten_ratio=1.0&standard_deviation=no&reset_delay=60
 param_option.meta2_max_versions=${VERSIONING}
 param_option.meta2_keep_deleted_delay=86400
-param_option.compression=none
+param_option.compression=on
 param_option.container_max_size=50000000
 param_option.FLATNS_hash_offset=0
 param_option.FLATNS_hash_size=0
@@ -427,7 +430,6 @@ TWOCOPIES=NONE:DUPONETWO
 THREECOPIES=NONE:DUPONETHREE
 FIVECOPIES=NONE:DUPONEFIVE
 EC=NONE:EC
-WEC=NONE:WEC
 BACKBLAZE=NONE:BACKBLAZE
 
 [STORAGE_CLASS]
@@ -440,8 +442,7 @@ REASONABLYSLOW=NONE
 DUPONETWO=plain/distance=1,nb_copy=2
 DUPONETHREE=plain/distance=1,nb_copy=3
 DUPONEFIVE=plain/distance=1,nb_copy=5
-EC=ec/k=6,m=3,algo=isa_l_rs_vand,distance=1
-WEC=ec/k=6,m=3,algo=isa_l_rs_vand,distance=1,weak=1
+EC=ec/k=6,m=3,algo=liberasurecode_rs_vand,distance=1
 BACKBLAZE=backblaze/account_id=${BACKBLAZE_ACCOUNT_ID},bucket_name=${BACKBLAZE_BUCKET_NAME},distance=0,nb_copy=1
 
 # "jerasure_rs_vand"   EC_BACKEND_JERASURE_RS_VAND
@@ -536,7 +537,7 @@ template_local_ns = """
 ${NOZK}zookeeper=${IP}:2181
 #proxy-local=${RUNDIR}/${NS}-proxy.sock
 proxy=${IP}:${PORT_PROXYD}
-#swift=http://${IP}:5000
+ecd=${IP}:${PORT_ECD}
 event-agent=beanstalk://127.0.0.1:11300
 #event-agent=ipc://${RUNDIR}/event-agent.sock
 conscience=${CS_ALL_PUB}
@@ -730,6 +731,7 @@ PORT_START = 'port_start'
 CHUNK_SIZE = 'chunk_size'
 ACCOUNT_ID = 'account_id'
 BUCKET_NAME = 'bucket_name'
+COMPRESSION = 'compression'
 
 defaults = {
     'NS': 'OPENIO',
@@ -744,7 +746,8 @@ defaults = {
     'NB_ECD': 1,
     'REPLI_SQLX': 1,
     'REPLI_M2': 1,
-    'REPLI_M1': 1}
+    'REPLI_M1': 1,
+    'COMPRESSION': "off"}
 
 # XXX When /usr/sbin/httpd is present we suspect a Redhat/Centos/Fedora
 # environment. If not, we consider being in a Ubuntu/Debian environment.
@@ -805,6 +808,7 @@ def generate(options):
     final_services = {}
 
     port_proxy = next_port()
+    port_ecd = next_port()
 
     versioning = 1
     stgpol = "SINGLE"
@@ -844,6 +848,7 @@ def generate(options):
                VERSIONING=versioning,
                STGPOL=stgpol,
                PORT_PROXYD=port_proxy,
+               PORT_ECD=port_ecd,
                M2_REPLICAS=meta2_replicas,
                M2_DISTANCE=str(1),
                SQLX_REPLICAS=sqlx_replicas,
@@ -977,10 +982,13 @@ def generate(options):
 
     # RAWX
     nb_rawx = getint(options['rawx'].get(SVC_NB), defaults['NB_RAWX'])
+    compression = options['rawx'].get(COMPRESSION, "off")
     if nb_rawx:
         for num in range(nb_rawx):
-            env = subenv({'SRVTYPE': 'rawx', 'SRVNUM': num + 1,
-                          'PORT': next_port()})
+            env = subenv({'SRVTYPE': 'rawx',
+                          'SRVNUM': num + 1,
+                          'PORT': next_port(),
+                          'COMPRESSION': compression})
             add_service(env)
             # gridinit
             tpl = Template(template_gridinit_httpd)
@@ -999,30 +1007,6 @@ def generate(options):
             with open(watch(env), 'w+') as f:
                 f.write(to_write)
 
-    # ecd
-    ecd_nb = getint(options['ecd'].get(SVC_NB), defaults['NB_ECD'])
-    if ecd_nb:
-        for num in range(ecd_nb):
-            env = subenv({'SRVTYPE': 'ecd',
-                          'SRVNUM': num + 1,
-                          'PORT': next_port()})
-            add_service(env)
-            # gridinit
-            tpl = Template(template_gridinit_httpd)
-            with open(gridinit(env), 'a+') as f:
-                f.write(tpl.safe_substitute(env))
-            # service
-            tpl = Template(template_wsgi_service_host)
-            to_write = tpl.safe_substitute(env)
-            if options.get(OPENSUSE, False):
-                to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
-            with open(config(env), 'w+') as f:
-                f.write(to_write)
-            # service desc
-            tpl = Template(template_wsgi_service_descr)
-            to_write = tpl.safe_substitute(env)
-            with open(wsgi(env), 'w+') as f:
-                f.write(to_write)
 
     # redis
     env = subenv({'SRVTYPE': 'redis', 'SRVNUM': 1, 'PORT': 6379})
@@ -1044,6 +1028,25 @@ def generate(options):
     with open(gridinit(env), 'a+') as f:
         tpl = Template(template_proxy_gridinit)
         f.write(tpl.safe_substitute(env))
+
+    # ecd
+    env = subenv({'SRVTYPE': 'ecd', 'SRVNUM': 1, 'PORT': port_ecd})
+    add_service(env)
+    tpl = Template(template_gridinit_httpd)
+    with open(gridinit(env), 'a+') as f:
+        f.write(tpl.safe_substitute(env))
+    # service
+    tpl = Template(template_wsgi_service_host)
+    to_write = tpl.safe_substitute(env)
+    if options.get(OPENSUSE, False):
+        to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
+    with open(config(env), 'w+') as f:
+        f.write(to_write)
+    # service desc
+    tpl = Template(template_wsgi_service_descr)
+    to_write = tpl.safe_substitute(env)
+    with open(wsgi(env), 'w+') as f:
+        f.write(to_write)
 
     # account
     env = subenv({'SRVTYPE': 'account', 'SRVNUM': 1, 'PORT': next_port()})
@@ -1150,7 +1153,6 @@ def main():
     opts['meta2'] = {SVC_NB: None}
     opts['sqlx'] = {SVC_NB: None}
     opts['rawx'] = {SVC_NB: None}
-    opts['ecd'] = {SVC_NB: None}
 
     if options.config:
         with open(options.config, 'r') as f:

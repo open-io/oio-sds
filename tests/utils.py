@@ -8,6 +8,7 @@ import requests
 import random
 import time
 import string
+from functools import wraps
 
 random_chars = string.ascii_lowercase + string.ascii_uppercase +\
     string.digits
@@ -17,6 +18,16 @@ random_chars_id = 'ABCDEF' + string.digits
 CODE_NAMESPACE_NOTMANAGED = 418
 CODE_SRVTYPE_NOTMANAGED = 453
 CODE_POLICY_NOT_SATISFIABLE = 481
+
+
+def ec(fnc):
+    @wraps(fnc)
+    def _wrapped(self):
+        if len(self.conf['services']['rawx']) < 12:
+            self.skipTest("Not enough rawx. "
+                          "EC tests needs at least 12 rawx to run")
+        fnc(self)
+    return _wrapped
 
 
 def random_str(n, chars=random_chars):

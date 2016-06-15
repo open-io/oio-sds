@@ -99,7 +99,7 @@ class TestPlainContent(BaseTestCase):
                 meta, stream = self.blob_client.chunk_get(chunk.url)
                 self.assertEqual(md5_stream(stream), chunk_hash)
                 self.assertEqual(meta['content_path'], self.content)
-                self.assertEqual(meta['content_cid'], self.container_id)
+                self.assertEqual(meta['container_id'], self.container_id)
                 self.assertEqual(meta['content_id'], meta['content_id'])
                 self.assertEqual(meta['chunk_id'], chunk.id)
                 self.assertEqual(meta['chunk_pos'], str(pos))
@@ -138,7 +138,7 @@ class TestPlainContent(BaseTestCase):
             broken_chunks_info[pos][idx] = {
                 "url": c.url,
                 "id": c.id,
-                "hash": c.hash,
+                "hash": c.checksum,
                 "dl_meta": meta,
                 "dl_hash": md5_stream(stream)
             }
@@ -176,7 +176,7 @@ class TestPlainContent(BaseTestCase):
             self.assertEqual(meta["chunk_id"], c.id)
             self.assertEqual(md5_stream(stream),
                              rebuild_chunk_info["dl_hash"])
-            self.assertEqual(c.hash, rebuild_chunk_info["hash"])
+            self.assertEqual(c.checksum, rebuild_chunk_info["hash"])
             self.assertThat(c.url, NotEquals(rebuild_chunk_info["url"]))
             del meta["chunk_id"]
             del rebuild_chunk_info["dl_meta"]["chunk_id"]
