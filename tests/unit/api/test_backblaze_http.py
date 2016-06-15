@@ -9,13 +9,12 @@ def _generate_false_metadata(ns, container_id, name):
     return {
         'mime_type': 'application/octet-stream',
         'container_id': container_id,
-        'ns': ns,
         'name': name
         }
 
 
-def _get_name(ns, container_id, name):
-    return ns + '/' + container_id + '/' + name
+def _get_name(container_id, name):
+    return container_id + '/' + name
 
 
 def _random_word(length):
@@ -40,9 +39,8 @@ class BackblazeTest(unittest.TestCase):
         return
         self.assertTrue(self.backblaze_test is not None)
         filename = _random_word(10)
-        ns = _random_word(10)
         container_id = _random_word(10)
-        true_filename = _get_name(ns, container_id, filename)
+        true_filename = _get_name(container_id, filename)
         size = self.backblaze_test.get_size(self.BUCKET_NAME)
         meta = _generate_false_metadata(ns, container_id, filename)
         content = _random_word(100)

@@ -29,7 +29,8 @@ from oio.api.ec import ECWriteHandler, ECChunkDownloadHandler, \
 from oio.api.replication import ReplicatedWriteHandler
 from oio.api.backblaze_http import Backblaze
 from oio.api.backblaze import BackblazeWriteHandler, \
-    BackblazeChunkDownloadHandler, BackblazeDeleteHandler
+    BackblazeChunkDownloadHandler, BackblazeDeleteHandler, \
+    BackblazeDownloadHandler
 from oio.common import constants
 from oio.common import utils
 from oio.common.constants import object_headers
@@ -313,17 +314,18 @@ class ObjectStorageAPI(API):
         params = self._make_params(account, container, obj)
         meta, raw_chunks = self.object_analyze(
             account, container, obj, headers=headers)
-        chunk_method = meta['chunk-method']
-        storage_method = STORAGE_METHODS.load(chunk_method)
-        meta['ns'] = self.namespace
-        meta['container_id'] = utils.name2cid(account, container)
-        chunks = _sort_chunks(raw_chunks, storage_method.ec)
-        if storage_method.backblaze:
-            backblaze_info = self._put_meta_backblaze(storage_method,
-                                                      application_key)
-            BackblazeDeleteHandler(meta, chunks, backblaze_info).delete()
-            resp, resp_body = self._request(
-                'POST', uri, params=params, headers=headers)
+        if meta:
+            chunk_method = meta['chunk-method']
+            storage_method = STORAGE_METHODS.load(chunk_method)
+            meta['ns'] = self.namespace
+            meta['container_id'] = utils.name2cid(account, container)
+            chunks = _sort_chunks(raw_chunks, storage_method.ec)
+            if storage_method.backblaze:
+                backblaze_info = self._put_meta_backblaze(storage_method,
+                                                          application_key)
+                BackblazeDeleteHandler(meta, chunks, backblaze_info).delete()
+        resp, resp_body = self._request(
+            'POST', uri, params=params, headers=headers)
 
     @handle_container_not_found
     def object_list(self, account, container, limit=None, marker=None,
@@ -358,6 +360,8 @@ class ObjectStorageAPI(API):
         params = self._make_params(account, container, obj)
         resp, resp_body = self._request(
             'GET', uri, params=params, headers=headers)
+        if not resp:
+            return None, resp_body
         meta = _make_object_metadata(resp.headers)
         return meta, resp_body
 
@@ -593,15 +597,13 @@ class ObjectStorageAPI(API):
         current_offset = 0
         size = None
         offset = 0
-        # FIXME: this probably doesn't work
-        if ranges:
-            offset = ranges[0][0]
-            size = ranges[0][1]
-
-        if size is None:
-            size = int(meta["length"])
-
         for pos in range(len(chunks)):
+            if ranges:
+                offset = ranges[pos][0]
+                size = ranges[pos][1]
+
+            if size is None:
+                size = int(meta["length"])
             chunk_size = int(chunks[pos][0]["size"])
             if total_bytes >= size:
                 break
@@ -614,9 +616,9 @@ class ObjectStorageAPI(API):
                     _size = size - total_bytes
                 else:
                     _size = chunk_size
-            handler = BackblazeChunkDownloadHandler(
-                    meta, chunks[pos], _size, _offset,
-                    backblaze_info=backblaze_info)
+            handler = BackblazeChunkDownloadHandler(meta, chunks[pos],
+                                                    _size, _offset,
+                                                    backblaze_info=backblaze_info)
             stream = handler.get_stream()
             if not stream:
                 raise exc.OioException("Error while downloading")

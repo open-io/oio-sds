@@ -244,9 +244,9 @@ class BackblazeChunkDownloadHandler(object):
         self.failed_chunks = []
         self.chunks = chunks
         headers = headers or {}
-        h_range = "bytes=%d-" % offset
         end = None
-        if size >= 0:
+        if size > 0:
+            h_range = "bytes=%d-" % offset
             end = (size + offset - 1)
             h_range += str(end)
             headers["Range"] = h_range
@@ -285,3 +285,25 @@ class BackblazeChunkDownloadHandler(object):
         if data:
             result = data
         return result
+    
+class BackblazeDownloadHandler:
+    def __init__(self, sysmeta, meta_chunks, backblaze_infos, headers):
+        self.meta_chunks = meta_chunks
+        self.backblaze_infos = backblaze_infos
+        self.headers = headers
+        self.sysmeta = sysmeta
+
+    def _get_streams(self):
+        print self.meta_chunks
+        for pos in range(len(self.meta_chunks)):
+            handler = BackblazeChunkDownloadHandler(self.sysmeta,
+                                                    self.meta_chunks[pos],
+                                                    0, 0, None,
+                                                    self.backblaze_infos)
+            stream = handler.get_stream()
+            if not stream:
+                raise exc.OioException("Error while downloading")
+            yield stream
+            
+    def get_iter(self):
+        yield self._get_streams() 
