@@ -29,7 +29,8 @@ from oio.api.ec import ECWriteHandler, ECChunkDownloadHandler, \
 from oio.api.replication import ReplicatedWriteHandler
 from oio.api.backblaze_http import Backblaze
 from oio.api.backblaze import BackblazeWriteHandler, \
-    BackblazeChunkDownloadHandler, BackblazeDeleteHandler
+    BackblazeChunkDownloadHandler, BackblazeDeleteHandler, \
+    BackblazeDownloadHandler
 from oio.common import constants
 from oio.common import utils
 from oio.common.constants import object_headers
@@ -593,15 +594,13 @@ class ObjectStorageAPI(API):
         current_offset = 0
         size = None
         offset = 0
-        # FIXME: this probably doesn't work
-        if ranges:
-            offset = ranges[0][0]
-            size = ranges[0][1]
-
-        if size is None:
-            size = int(meta["length"])
-
         for pos in range(len(chunks)):
+            if ranges:
+                offset = ranges[pos][0]
+                size = ranges[pos][1]
+            
+            if size is None:
+                size = int(meta["length"])
             chunk_size = int(chunks[pos][0]["size"])
             if total_bytes >= size:
                 break

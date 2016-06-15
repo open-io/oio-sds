@@ -10,6 +10,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import requests
+from requests import exceptions, Session, Request
 import base64
 import hashlib
 import json as js
@@ -300,14 +302,12 @@ class Requests(object):
         return None
 
     def _get_response(self, content_type, url, headers, file_descriptor):
+        s = Session()
         response = None
+        req = Request(content_type, url, headers=headers, data=file_descriptor)
+        prepared = req.prepare()
         try:
-            if content_type == 'GET':
-                response = requests.get(url, data=file_descriptor,
-                                        headers=headers)
-            elif content_type == 'POST':
-                response = requests.post(url, data=file_descriptor,
-                                         headers=headers)
+            response = s.send(prepared)
         except exceptions.Timeout:
             raise
         except exceptions.TooManyRedirects:
@@ -315,8 +315,12 @@ class Requests(object):
         except exceptions.RequestException:
             raise
         if response.status_code != requests.codes.ok:
-            raise BackblazeException(response.status_code,
-                                     response.json()['message'])
+            try:
+                raise BackblazeException(response.status_code,
+                                         response.json()['message'])
+            except ValueError as e:
+                raise BackblazeException(response.status_code,
+                                         response.text)
         return response
 
     def get_response_from_request(self, content_type, url, headers=None,
@@ -326,7 +330,7 @@ class Requests(object):
             return self._get_json_response(content_type, url,
                                            header, file_descriptor)
         return self._get_response(content_type, url,
-                                  header, file_descriptor).text
+                                  header, file_descriptor).content
 
 
 class BackblazeException(Exception):
@@ -337,7 +341,6 @@ class BackblazeException(Exception):
 
     def __str__(self):
         return '(%d) %s' % (self.status_code, self.message)
-
     @property
     def status_code(self):
         return self._status_code

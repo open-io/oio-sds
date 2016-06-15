@@ -248,8 +248,10 @@ LimitRequestFields 200
 """
 
 template_wsgi_service_descr = """
+dic={'application-key': \'${BACKBLAZE_APPLICATION_KEY}\'
+}
 from oio.${SRVTYPE}.app import create_app
-application = create_app()
+application = create_app(dic)
 """
 
 template_meta_watch = """
@@ -730,7 +732,7 @@ PORT_START = 'port_start'
 CHUNK_SIZE = 'chunk_size'
 ACCOUNT_ID = 'account_id'
 BUCKET_NAME = 'bucket_name'
-
+APPLICATION_KEY = 'application_key'
 defaults = {
     'NS': 'OPENIO',
     'IP': '127.0.0.1',
@@ -821,6 +823,7 @@ def generate(options):
     ip = options.get('ip') or defaults['IP']
     backblaze_account_id = options.get('backblaze', {}).get(ACCOUNT_ID)
     backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
+    backblaze_application_key = options.get('backblaze', {}).get(APPLICATION_KEY)
     ENV = dict(IP=ip,
                NS=ns,
                HOME=HOME,
@@ -851,6 +854,7 @@ def generate(options):
                APACHE2_MODULES_SYSTEM_DIR=APACHE2_MODULES_SYSTEM_DIR,
                BACKBLAZE_ACCOUNT_ID=backblaze_account_id,
                BACKBLAZE_BUCKET_NAME=backblaze_bucket_name,
+               BACKBLAZE_APPLICATION_KEY=backblaze_application_key,
                HTTPD_BINARY=HTTPD_BINARY)
 
     def merge_env(add):
