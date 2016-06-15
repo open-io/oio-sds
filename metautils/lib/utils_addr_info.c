@@ -164,14 +164,14 @@ location_from_addr_info(const struct addr_info_s *addr)
 {
 	oio_location_t out = 0;
 	if (addr->type == TADDR_V4)
-		out = addr->addr.v4 << 16;
+		out = ((oio_location_t)addr->addr.v4) << 16;
 	else
-		out = (guint64)addr->addr.v6[0] << 16
-			| (guint64)addr->addr.v6[1] << 24
-			| (guint64)addr->addr.v6[2] << 32
-			| (guint64)addr->addr.v6[3] << 40
-			| (guint64)addr->addr.v6[4] << 48
-			| (guint64)addr->addr.v6[5] << 56;
+		out = (oio_location_t)addr->addr.v6[0] << 16
+			| (oio_location_t)addr->addr.v6[1] << 24
+			| (oio_location_t)addr->addr.v6[2] << 32
+			| (oio_location_t)addr->addr.v6[3] << 40
+			| (oio_location_t)addr->addr.v6[4] << 48
+			| (oio_location_t)addr->addr.v6[5] << 56;
 	out |= addr->port;
 	return out;
 }

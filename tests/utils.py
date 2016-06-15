@@ -166,13 +166,14 @@ class BaseTestCase(testtools.TestCase):
                 self.assertEqual(resp.status_code, 204)
         BaseTestCase._last_cache_flush = time.time()
 
-    def _addr(self, low=7000, high=65535):
-        return '127.0.0.2:' + str(random.randint(low, high))
+    def _addr(self, low=7000, high=65535, ip="127.0.0.2"):
+        return ip + ':' + str(random.randint(low, high))
 
-    def _srv(self, srvtype, extra_tags={}, lowport=7000, highport=65535):
+    def _srv(self, srvtype, extra_tags={}, lowport=7000, highport=65535,
+             ip="127.0.0.2"):
         outd = {'ns': self.ns,
                 'type': str(srvtype),
-                'addr': self._addr(low=lowport, high=highport),
+                'addr': self._addr(low=lowport, high=highport, ip=ip),
                 'score': random.randint(0, 100),
                 'tags': {'stat.cpu': 1, 'tag.vol': 'test', 'tag.up': True}}
         if extra_tags:

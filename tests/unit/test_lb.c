@@ -24,9 +24,10 @@ License along with this library.
 static struct oio_lb_item_s *
 _srv (int i)
 {
+	oio_location_t loc = i+1; // discard 0
 	size_t len = 8 + sizeof (struct oio_lb_item_s);
 	struct oio_lb_item_s *srv = g_malloc0 (len);
-	srv->location = 65430 - i;
+	srv->location = ((loc & ~0xFF) << 16) | (loc & 0xFF);
 	srv->weight = 90 + i;
 	sprintf(srv->id, "ID-%04d", i);
 	return srv;
@@ -79,12 +80,57 @@ test_local_poll (void)
 	oio_lb_world__destroy (world);
 }
 
+static void
+test_local_poll_same_low_bits(void)
+{
+	struct oio_lb_world_s *world = oio_lb_local__create_world();
+	oio_lb_world__create_slot(world, "0");
+	oio_lb_world__create_slot(world, "*");
+
+	/* fill some services */
+	for (int i = 0; i < 3; ++i) {
+		struct oio_lb_item_s *srv = _srv((i << 16) + 0x66);
+		oio_lb_world__feed_slot(world, "0", srv);
+		oio_lb_world__feed_slot(world, "*", srv);
+		g_free(srv);
+	}
+
+	oio_lb_world__debug(world);
+
+	/* create a pool and poll it */
+	struct oio_lb_pool_s *pool = oio_lb_world__create_pool(world, "pool-test");
+	oio_lb_world__add_pool_target(pool, "0,*");
+	oio_lb_world__add_pool_target(pool, "0,*");
+	oio_lb_world__add_pool_target(pool, "0,*");
+	g_assert_cmpuint (oio_lb_world__count_slots(world), ==, 2);
+
+	/* now poll some pools */
+	for (int i = 0; i < 4096; i++) {
+		guint count_rc, count;
+		void _on_item (oio_location_t location, const char *id) {
+			(void) location, (void) id;
+			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT, id, location);
+			++ count;
+		}
+		count = 0;
+		count_rc = oio_lb_pool__poll(pool, NULL, _on_item);
+		g_assert_cmpuint(count_rc, ==, count);
+		g_assert_cmpuint(count_rc, ==, 3);
+	}
+
+	oio_lb_world__debug(world);
+
+	oio_lb_pool__destroy(pool);
+	oio_lb_world__destroy(world);
+}
+
 static struct oio_lb_item_s *
 _srv2(int i, int svc_per_slot)
 {
 	size_t len = 8 + sizeof (struct oio_lb_item_s);
 	struct oio_lb_item_s *srv = g_malloc0 (len);
-	srv->location = i % svc_per_slot + i / svc_per_slot * 256 + 1;
+	oio_location_t loc = i;
+	srv->location = loc % svc_per_slot + loc / svc_per_slot * 65536 + 1;
 	srv->weight = 80;
 	sprintf(srv->id, "ID-%04d", i);
 	GRID_TRACE("Built service id=%s,location=%lu,weight=%d",
@@ -301,6 +347,8 @@ main(int argc, char **argv)
 	g_test_add_func("/core/lb/local/feed", test_local_feed);
 	g_test_add_func("/core/lb/local/feed_twice", test_local_feed_twice);
 	g_test_add_func("/core/lb/local/poll", test_local_poll);
+	g_test_add_func("/core/lb/local/poll_same_low",
+			test_local_poll_same_low_bits);
 
 	_add_repartition_test(30, 1, 1);
 	_add_repartition_test(30, 1, 3);
