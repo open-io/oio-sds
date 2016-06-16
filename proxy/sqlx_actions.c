@@ -84,7 +84,9 @@ _sqlx_action_noreturn (struct req_args_s *args, enum preference_e how,
 
 	CLIENT_CTX (ctx, args, dirtype, seq);
 	ctx.which = how;
-	return _sqlx_action_noreturn_TAIL (args, &ctx, pack);
+	enum http_rc_e rc = _sqlx_action_noreturn_TAIL (args, &ctx, pack);
+	client_clean(&ctx);
+	return rc;
 }
 
 /* ---------------------------------------------------------------------------*/
@@ -132,7 +134,9 @@ action_sqlx_copyto (struct req_args_s *args, struct json_object *jargs)
 	ctx.which = CLIENT_PREFER_MASTER;
 	PACKER(_pack) { return sqlx_pack_PIPEFROM(n, to); }
 
-	return _sqlx_action_noreturn_TAIL (args, &ctx, _pack);
+	enum http_rc_e rc = _sqlx_action_noreturn_TAIL (args, &ctx, _pack);
+	client_clean(&ctx);
+	return rc;
 }
 
 enum http_rc_e

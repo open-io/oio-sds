@@ -1036,13 +1036,16 @@ action_m2_container_raw_insert (struct req_args_s *args, struct json_object *jar
 {
 	GSList *beans = NULL;
 	GError *err = m2v2_json_load_setof_xbean (jargs, &beans);
-	if (err)
+	if (err) {
+		EXTRA_ASSERT(beans == NULL);
 		return _reply_format_error (args, err);
+	}
 	if (!beans)
 		return _reply_format_error (args, BADREQ("Empty beans list"));
 
 	PACKER_VOID(_pack) { return m2v2_remote_pack_RAW_ADD (args->url, beans); }
 	err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
+	_bean_cleanl2(beans);
 	if (NULL != err)
 		return _reply_m2_error (args, err);
 	return _reply_success_json (args, NULL);
@@ -1053,13 +1056,16 @@ action_m2_container_raw_delete (struct req_args_s *args, struct json_object *jar
 {
 	GSList *beans = NULL;
 	GError *err = m2v2_json_load_setof_xbean (jargs, &beans);
-	if (err)
+	if (err) {
+		EXTRA_ASSERT(beans == NULL);
 		return _reply_format_error (args, err);
+	}
 	if (!beans)
 		return _reply_format_error (args, BADREQ("Empty beans list"));
 
 	PACKER_VOID(_pack) { return m2v2_remote_pack_RAW_DEL (args->url, beans); }
 	err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
+	_bean_cleanl2(beans);
 	if (NULL != err)
 		return _reply_m2_error (args, err);
 	return _reply_success_json (args, NULL);

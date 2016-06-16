@@ -1,3 +1,4 @@
+import logging
 import simplejson as json
 import unittest
 from tests.utils import BaseTestCase
@@ -35,7 +36,7 @@ class TestDirectoryFunctional(BaseTestCase):
         self.assertEqual(resp.status_code, 404)
 
     def test_reference_cycle(self):
-        params = self.param_ref('plop-0')
+        params = self.param_ref(self._random_user())
         resp = self.session.post(self._url_ref('destroy'), params=params)
 
         resp = self.session.get(self._url_ref('show'), params=params)
@@ -78,7 +79,7 @@ class TestDirectoryFunctional(BaseTestCase):
         self.assertEqual(resp.status_code, 400)
 
     def test_references_properties_cycle(self):
-        params = self.param_ref('plop-0')
+        params = self.param_ref(self._random_user())
         body = json.dumps(['prop1'])
 
         resp = self.session.post(self._url_ref('del_properties'),
@@ -112,7 +113,7 @@ class TestDirectoryFunctional(BaseTestCase):
         self.assertEqual(resp.status_code, 204)
 
     def test_services_cycle(self):
-        params = self.param_srv('plop-0', 'echo')
+        params = self.param_srv(self._random_user(), 'echo')
         resp = self.session.post(self._url_ref('create'), params=params)
 
         resp = self.session.get(self._url_ref('show'), params=params)
@@ -121,12 +122,15 @@ class TestDirectoryFunctional(BaseTestCase):
         self.assertIsInstance(body, dict)
         self.assertItemsEqual(body['srv'], [])
 
-        # XXX(jfs): now the servies are locked at first registration, it is
-        # easier to force their score than registering/unlocking/registering
-        # (to let the score be computed).
-        srv0, srv1 = self._srv('echo'), self._srv('echo')
+        self._flush_cs('echo')
+        srv0 = self._srv('echo')
         srv0['score'] = 1
         self._lock_srv(srv0)
+        srv1 = self._srv('echo')
+        srv1['score'] = 0
+        self._lock_srv(srv1)
+        logging.debug("srv0 = %s", repr(srv0))
+        logging.debug("srv1 = %s", repr(srv1))
         self._reload()
 
         # Initial link
@@ -137,7 +141,9 @@ class TestDirectoryFunctional(BaseTestCase):
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
         self.assertIsInstance(body, dict)
-        self.assertEqual(body['srv'][0]['host'], srv0['addr'])
+        logging.debug("Got services %s", repr(body))
+        self.assertIn(srv0['addr'], [x['host']
+                      for x in body['srv'] if x['type'] == 'echo'])
 
         # second identical link
         resp = self.session.post(self._url_ref('link'), params=params)

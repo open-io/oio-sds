@@ -301,10 +301,20 @@ class AnalyzeContainer(show.ShowOne):
         info = {'account': data['sys.account'],
                 'base_name': data['sys.name'],
                 'name': data['sys.user.name'],
-                'meta2': []}
+                'meta0': list(),
+                'meta1': list(),
+                'meta2': list()}
+
         for d in data_dir['srv']:
             if d['type'] == 'meta2':
                 info['meta2'].append(d['host'])
 
-        info['meta2'] = ', '.join(s for s in info['meta2'])
+        for d in data_dir['dir']:
+            if d['type'] == 'meta0':
+                info['meta0'].append(d['host'])
+            if d['type'] == 'meta1':
+                info['meta1'].append(d['host'])
+
+        for stype in ["meta0", "meta1", "meta2"]:
+            info[stype] = ', '.join(info[stype])
         return zip(*sorted(info.iteritems()))

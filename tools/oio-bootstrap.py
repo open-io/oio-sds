@@ -430,7 +430,7 @@ template_conscience_policies = """
 SINGLE=NONE:NONE
 TWOCOPIES=NONE:DUPONETWO
 THREECOPIES=NONE:DUPONETHREE
-FIVECOPIES=NONE:DUPONEFIVE
+17COPIES=NONE:DUP17
 EC=NONE:EC
 BACKBLAZE=NONE:BACKBLAZE
 
@@ -443,7 +443,7 @@ REASONABLYSLOW=NONE
 [DATA_SECURITY]
 DUPONETWO=plain/distance=1,nb_copy=2
 DUPONETHREE=plain/distance=1,nb_copy=3
-DUPONEFIVE=plain/distance=1,nb_copy=5
+DUP17=plain/distance=1,nb_copy=17
 EC=ec/k=6,m=3,algo=liberasurecode_rs_vand,distance=1
 BACKBLAZE=backblaze/account_id=${BACKBLAZE_ACCOUNT_ID},bucket_name=${BACKBLAZE_BUCKET_NAME},distance=0,nb_copy=1
 

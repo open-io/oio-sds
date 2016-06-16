@@ -15,6 +15,12 @@ class BaseLbTest(BaseTestCase):
                               highport=lowport+100)
             self._lock_srv(srvin)
 
+    def fill_sameport(self, count=1):
+        for num in range(count):
+            srvin = self._srv('echo', lowport=7000, highport=7000,
+                              ip='127.0.0.%d' % (2+num))
+            self._lock_srv(srvin)
+
 
 class TestLbChoose(BaseLbTest):
 
@@ -82,6 +88,19 @@ class TestLbChoose(BaseLbTest):
         # the last one should not be 'fast' since there is only 3
         # and we don't want duplicates (and there is a default fallback)
         self.assertLess(int(parsed[3]["addr"].split(':')[1]), 8000)
+
+    def test_choose_3_sameport(self):
+        # Thanks to Vladimir
+        self._reload()
+        self.fill_sameport(3)
+        time.sleep(2)
+        resp = self.session.get(self._url_lb('choose'),
+                                params={'type': 'echo',
+                                        'size': 3})
+        self.assertEqual(resp.status_code, 200)
+        parsed = resp.json()
+        self.assertIsInstance(parsed, list)
+        self.assertEqual(3, len(parsed))
 
 
 class TestLbPoll(BaseLbTest):
