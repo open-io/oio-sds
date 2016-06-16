@@ -401,6 +401,7 @@ _score_from_chunk_id(const gchar *id)
 	} else {
 		strcpy(svc_prefix, "http");
 	}
+	/* XXX FIXME not robust enough, maybe no more '/' */
 	strncpy(svc_id, id+offset, strchr(id+offset, '/') - id - offset);
 	gchar *svc_key = _service_key(svc_prefix, svc_id);
 	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, svc_key);

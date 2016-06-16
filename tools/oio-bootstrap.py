@@ -195,7 +195,7 @@ grid_fsync_dir         enabled
 # DO NOT USE, this is broken
 #grid_acl disabled
 
-# Enable zlib compression ('lzo' is also available)
+# Enable compression ('zlib' or 'lzo' or 'off')
 grid_compression ${COMPRESSION}
 
 Alias / /x/
@@ -251,8 +251,10 @@ LimitRequestFields 200
 """
 
 template_wsgi_service_descr = """
+dic={'application-key': \'${BACKBLAZE_APPLICATION_KEY}\'
+}
 from oio.${SRVTYPE}.app import create_app
-application = create_app()
+application = create_app(dic)
 """
 
 template_meta_watch = """
@@ -430,7 +432,7 @@ TWOCOPIES=NONE:DUPONETWO
 THREECOPIES=NONE:DUPONETHREE
 17COPIES=NONE:DUP17
 EC=NONE:EC
-WEC=NONE:WEC
+BACKBLAZE=NONE:BACKBLAZE
 
 [STORAGE_CLASS]
 # <CLASS> = FALLBACK[,FALLBACK]...
@@ -443,7 +445,7 @@ DUPONETWO=plain/distance=1,nb_copy=2
 DUPONETHREE=plain/distance=1,nb_copy=3
 DUP17=plain/distance=1,nb_copy=17
 EC=ec/k=6,m=3,algo=liberasurecode_rs_vand,distance=1
-WEC=ec/k=6,m=3,algo=liberasurecode_rs_vand,distance=1,weak=1
+BACKBLAZE=backblaze/account_id=${BACKBLAZE_ACCOUNT_ID},bucket_name=${BACKBLAZE_BUCKET_NAME},distance=0,nb_copy=1
 
 # "jerasure_rs_vand"   EC_BACKEND_JERASURE_RS_VAND
 # "jerasure_rs_cauchy" EC_BACKEND_JERASURE_RS_CAUCHY
@@ -729,7 +731,10 @@ SQLX_REPLICAS = 'sqlx_replicas'
 PROFILE = 'profile'
 PORT_START = 'port_start'
 CHUNK_SIZE = 'chunk_size'
+ACCOUNT_ID = 'account_id'
+BUCKET_NAME = 'bucket_name'
 COMPRESSION = 'compression'
+APPLICATION_KEY = 'application_key'
 
 defaults = {
     'NS': 'OPENIO',
@@ -821,7 +826,9 @@ def generate(options):
         stgpol = options[M2_STGPOL]
     ns = options.get('ns') or defaults['NS']
     ip = options.get('ip') or defaults['IP']
-
+    backblaze_account_id = options.get('backblaze', {}).get(ACCOUNT_ID)
+    backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
+    backblaze_application_key = options.get('backblaze', {}).get(APPLICATION_KEY)
     ENV = dict(IP=ip,
                NS=ns,
                HOME=HOME,
@@ -851,6 +858,9 @@ def generate(options):
                SQLX_REPLICAS=sqlx_replicas,
                SQLX_DISTANCE=str(1),
                APACHE2_MODULES_SYSTEM_DIR=APACHE2_MODULES_SYSTEM_DIR,
+               BACKBLAZE_ACCOUNT_ID=backblaze_account_id,
+               BACKBLAZE_BUCKET_NAME=backblaze_bucket_name,
+               BACKBLAZE_APPLICATION_KEY=backblaze_application_key,
                HTTPD_BINARY=HTTPD_BINARY)
 
     def merge_env(add):

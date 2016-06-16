@@ -130,6 +130,8 @@ _parse_data_security(struct data_security_s *ds, const char *config)
 		ds->type = STGPOL_DS_PLAIN;
 	} else if (oio_str_prefixed (config, "ec", "/")) {
 		ds->type = STGPOL_DS_EC;
+	} else if (oio_str_prefixed (config, "backblaze", "/")) {
+		ds->type = STGPOL_DS_BACKBLAZE;
 	} else {
 		return 0;
 	}
@@ -401,6 +403,21 @@ _rain_policy_to_chunk_method(const struct data_security_s *datasec)
 }
 
 static GString *
+_backblaze_policy_to_chunk_method(const struct data_security_s *datasec)
+{
+	GString *result = g_string_new("backblaze/");
+
+	const char *account_id = data_security_get_param(datasec,
+							 DS_KEY_ACCOUNT_ID);
+	const char *bucket_name = data_security_get_param(datasec,
+							DS_KEY_BUCKET_NAME);
+	
+	g_string_append_printf(result, "account_id=%s,bucket_name=%s",
+			       account_id, bucket_name);
+	return result;
+}
+
+static GString *
 _plain_policy_to_chunk_method(const struct data_security_s *datasec)
 {
 	GString *result = g_string_new("plain/");
@@ -414,10 +431,11 @@ GString *
 storage_policy_to_chunk_method(const struct storage_policy_s *sp)
 {
 	const struct data_security_s *datasec = storage_policy_get_data_security(sp);
-
 	switch (data_security_get_type(datasec)) {
 		case STGPOL_DS_EC:
 			return _rain_policy_to_chunk_method(datasec);
+		case STGPOL_DS_BACKBLAZE:
+			return _backblaze_policy_to_chunk_method(datasec);
 		case STGPOL_DS_PLAIN:
 			return _plain_policy_to_chunk_method(datasec);
 		default:

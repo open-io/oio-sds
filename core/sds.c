@@ -50,6 +50,7 @@ struct oio_sds_s
 		int rawx;
 	} timeout;
 	gboolean sync_after_download;
+	gchar *auth_token;
 	CURL *h;
 };
 
@@ -209,6 +210,13 @@ _chunks_load (GSList **out, struct json_object *jtab)
 	else
 		g_slist_free_full (chunks, g_free);
 	return err;
+}
+
+static int
+_chunk_method_needs_ecd(const char *chunk_method)
+{
+	return oio_str_prefixed(chunk_method, STGPOL_DSPREFIX_BACKBLAZE, "/") ||
+			oio_str_prefixed(chunk_method, STGPOL_DSPREFIX_EC, "/");
 }
 
 static guint
@@ -594,6 +602,11 @@ _download_range_from_metachunk_ec(struct _download_ctx_s *dl,
 	g_ptr_array_add(headers, g_strdup_printf("%"G_GSIZE_FORMAT, meta->size));
 	g_ptr_array_add(headers, g_strdup(RAWX_HEADER_PREFIX"content-chunk-method"));
 	g_ptr_array_add(headers, g_strdup(dl->chunk_method));
+
+	// FIXME: this should not be required
+	g_ptr_array_add(headers, g_strdup(RAWX_HEADER_PREFIX"container-id"));
+	g_ptr_array_add(headers, g_strdup(oio_url_get(dl->src->url, OIOURL_HEXID)));
+
 	g_ptr_array_add(headers, NULL);
 
 	while (r0.size > 0) {
@@ -637,7 +650,7 @@ _download_range_from_metachunk (struct _download_ctx_s *dl,
 	g_assert (range->size <= meta->size);
 	g_assert (range->offset + range->size <= meta->size);
 
-	if (oio_str_prefixed(dl->chunk_method, STGPOL_DSPREFIX_EC, "/"))
+	if (_chunk_method_needs_ecd(dl->chunk_method))
 		return _download_range_from_metachunk_ec(dl, range, meta);
 	return _download_range_from_metachunk_replicated (dl, range, meta);
 }
@@ -777,10 +790,10 @@ _download_to_hook (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 		for (char **header = headers; header && *header; header += 2) {
 			if (!g_ascii_strcasecmp(*header, "content-meta-chunk-method")) {
 				chunk_method = g_strdup(*(header+1));
-				if (oio_str_prefixed(chunk_method, STGPOL_DSPREFIX_EC, "/")
+				if (_chunk_method_needs_ecd(chunk_method)
 						&& !(sds->ecd && sds->ecd[0])) {
 					err = NEWERROR(CODE_NOT_IMPLEMENTED,
-						"C client cannot do erasure coding without ecd");
+							"cannot download this without ecd");
 				}
 				break;
 			}
@@ -1061,9 +1074,9 @@ oio_sds_upload_greedy (struct oio_sds_ul_s *ul)
 }
 
 int
-oio_sds_upload_is_ec(struct oio_sds_ul_s *ul)
+oio_sds_upload_needs_ecd(struct oio_sds_ul_s *ul)
 {
-	return oio_str_prefixed(ul->chunk_method, STGPOL_DSPREFIX_EC, "/");
+	return _chunk_method_needs_ecd(ul->chunk_method);
 }
 
 struct oio_error_s *
@@ -1129,13 +1142,12 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 
 		/* Verify we are not doing erasure coding.
 		 * TODO: implement erasure coding in C */
-		if (oio_sds_upload_is_ec(ul)) {
+		if (oio_sds_upload_needs_ecd(ul)) {
 			if (ul->sds->ecd && ul->sds->ecd[0]) {
-				GRID_DEBUG("using ecd gateway for erasure coding");
+				GRID_DEBUG("using ecd gateway");
 			} else {
 				err = NEWERROR(CODE_NOT_IMPLEMENTED,
-						"C client cannot do erasure coding "
-						"without ecd gateway");
+						"cannot upload this without ecd");
 			}
 		}
 	}
@@ -1301,7 +1313,7 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 
 	/* Initiate the PolyPut (c) with all its targets */
 	ul->put = http_put_create (-1, ul->chunk_size);
-	if (oio_sds_upload_is_ec(ul)) {
+	if (oio_sds_upload_needs_ecd(ul)) {
 		// TODO: allow getting ecd from proxy
 		char ecd[128] = {0};
 		g_snprintf(ecd, sizeof(ecd), "http://%s/", ul->sds->ecd);
