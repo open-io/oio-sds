@@ -238,7 +238,7 @@ CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-access.log log/common env=!n
 LogLevel info
 
 WSGIDaemonProcess ${SRVTYPE}-${SRVNUM} processes=2 threads=1 user=${USER} group=${GROUP}
-WSGIProcessGroup ${SRVTYPE}-${SRVNUM}
+#WSGIProcessGroup ${SRVTYPE}-${SRVNUM}
 WSGIApplicationGroup ${SRVTYPE}-${SRVNUM}
 WSGIScriptAlias / ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.wsgi
 WSGISocketPrefix ${RUNDIR}/
