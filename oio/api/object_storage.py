@@ -438,7 +438,7 @@ class ObjectStorageAPI(API):
 
     def _get_service_url(self, srv_type):
         uri = self._make_uri('lb/choose')
-        params = {'pool': srv_type}
+        params = {'type': srv_type}
         resp, resp_body = self._request('GET', uri, params=params)
         if resp.status_code == 200:
             instance_info = resp_body[0]
