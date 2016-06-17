@@ -1016,7 +1016,7 @@ module_configure_srvtype(struct conscience_s *cs, GError ** err,
 	struct conscience_srvtype_s *srvtype;
 
 	if (!what || !value) {
-		GSETERROR(err, "Invalid Key/Value pair : %s/%s", what, value);
+		GSETERROR(err, "Invalid Key/Value pair: %s/%s", what, value);
 		return FALSE;
 	}
 
@@ -1026,29 +1026,39 @@ module_configure_srvtype(struct conscience_s *cs, GError ** err,
 	else
 		srvtype = conscience_get_srvtype(cs, err, type, MODE_AUTOCREATE);
 	if (!srvtype) {
-		GSETERROR(err, "Failled to init a ServiceType");
+		GSETERROR(err, "Failed to init a ServiceType");
 		return FALSE;
 	}
 
 	/*adjust the parameter */
 	if (0 == g_ascii_strcasecmp(what, KEY_SCORE_TIMEOUT)) {
 		srvtype->score_expiration = g_ascii_strtoll(value, NULL, 10);
-		INFO("[NS=%s][SRVTYPE=%s] score expiration interval set to [%ld] seconds", cs->ns_info.name,
-		    srvtype->type_name, srvtype->score_expiration);
+		INFO("[NS=%s][SRVTYPE=%s] score expiration set to [%ld] seconds",
+				cs->ns_info.name, srvtype->type_name,
+				srvtype->score_expiration);
 		return TRUE;
 	}
 	else if (0 == g_ascii_strcasecmp(what, KEY_SCORE_VARBOUND)) {
 		srvtype->score_variation_bound = g_ascii_strtoll(value, NULL, 10);
-		INFO("[NS=%s][SRVTYPE=%s] score variation bound set to [%d]", cs->ns_info.name, srvtype->type_name, srvtype->score_variation_bound);
+		INFO("[NS=%s][SRVTYPE=%s] score variation bound set to [%d]",
+				cs->ns_info.name, srvtype->type_name,
+				srvtype->score_variation_bound);
 		return TRUE;
 	}
 	else if (0 == g_ascii_strcasecmp(what, KEY_SCORE_EXPR)) {
 		if (conscience_srvtype_set_type_expression(srvtype, err, value)) {
-			INFO("[NS=%s][SRVTYPE=%s] score expression set to [%s]", cs->ns_info.name, srvtype->type_name,
-			    value);
+			INFO("[NS=%s][SRVTYPE=%s] score expression set to [%s]",
+					cs->ns_info.name, srvtype->type_name, value);
 			return TRUE;
 		}
 		return FALSE;
+	}
+	else if (0 == g_ascii_strcasecmp(what, KEY_SCORE_LOCK)) {
+		srvtype->lock_at_first_register = metautils_cfg_get_bool(value, TRUE);
+		INFO("[NS=%s][SRVTYPE=%s] lock at first register: %s",
+				cs->ns_info.name, srvtype->type_name,
+				srvtype->lock_at_first_register? "yes":"no");
+		return TRUE;
 	}
 	else if (0 == g_ascii_strcasecmp(what, KEY_ALERT_LIMIT)) {
 		srvtype->alert_frequency_limit = g_ascii_strtoll(value, NULL, 10);
@@ -1056,7 +1066,8 @@ module_configure_srvtype(struct conscience_s *cs, GError ** err,
 		    srvtype->type_name, srvtype->alert_frequency_limit);
 	}
 
-	WARN("[NS=%s][SRVTYPE=%s] parameter not recognized [%s] (ignored!)", cs->ns_info.name, srvtype->type_name, what);
+	WARN("[NS=%s][SRVTYPE=%s] parameter not recognized [%s] (ignored!)",
+			cs->ns_info.name, srvtype->type_name, what);
 	return TRUE;
 }
 

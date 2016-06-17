@@ -156,8 +156,12 @@ buffer_split(const void *buf, gsize buflen, const gchar *sep, gint max_tokens)
 gboolean
 metautils_cfg_get_bool(const gchar *value, gboolean def)
 {
-	static const gchar *array_yes[] = {"yes", "true", "on", "enable", "enabled", NULL};
-	static const gchar *array_no[] = {"no", "false", "off", "disable", "disabled", NULL};
+	static const gchar *array_yes[] = {
+		"yes", "true", "on", "enable", "enabled", "1", "yeah", NULL
+	};
+	static const gchar *array_no[] = {
+		"no", "false", "off", "disable", "disabled", "0", "nope", NULL
+	};
 
 	if (!value)
 		return def;

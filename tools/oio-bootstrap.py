@@ -384,10 +384,12 @@ param_option.storage_policy=${STGPOL}
 
 param_storage_conf=${CFGDIR}/${NS}-policies.conf
 
+param_service.meta0.lock_at_first_register=false
 param_service.meta0.score_timeout=3600
 param_service.meta0.score_variation_bound=5
 param_service.meta0.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
 
+param_service.meta1.lock_at_first_register=false
 param_service.meta1.score_timeout=120
 param_service.meta1.score_variation_bound=5
 param_service.meta1.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
@@ -412,6 +414,7 @@ param_service.redis.score_timeout=120
 param_service.redis.score_variation_bound=5
 param_service.redis.score_expr=(num stat.cpu)
 
+param_service.oiofs.lock_at_first_register=false
 param_service.oiofs.score_timeout=120
 param_service.oiofs.score_variation_bound=5
 param_service.oiofs.score_expr=(num stat.cpu)
