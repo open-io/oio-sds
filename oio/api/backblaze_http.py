@@ -13,6 +13,7 @@
 from requests import exceptions, Session, Request
 import base64
 import hashlib
+import ConfigParser
 import json as js
 import requests
 from oio.api import io
@@ -35,6 +36,50 @@ def _get_sha1(data):
     else:
         generate.update(data)
     return generate.hexdigest()
+
+
+class BackblazeUtils(object):
+
+    b2_authorization_list = {}
+
+    @staticmethod
+    def put_meta_backblaze(storage_method, application_key_path=None,
+                           renew=False):
+        if not (storage_method.bucket_name and
+                storage_method.account_id and application_key_path):
+            message = "%s (bucket_name=%s, account_id=%s)" % \
+                      ('missing backblaze parameters: ',
+                       storage_method.bucket_name, storage_method.account_id)
+            raise BackblazeUtilsException(message)
+        key = '%s.%s' % (storage_method.account_id, storage_method.bucket_name)
+        if not renew:
+            authorization = BackblazeUtils.b2_authorization_list.get(key, None)
+            if authorization:
+                return authorization
+        config = ConfigParser.ConfigParser()
+        application_key = None
+        with open(application_key_path) as f:
+            try:
+                config.readfp(f)
+            except IOError:
+                raise BackblazeUtilsException('file don\'t exist')
+            application_key = config.get('backblaze',
+                                         '%s.%s.application_key'
+                                         % (storage_method.account_id,
+                                            storage_method.bucket_name))
+        if not application_key:
+            raise BackblazeUtilsException('application_key not present')
+        meta = {}
+        meta['backblaze.account_id'] = storage_method.account_id
+        meta['backblaze.application_key'] = application_key
+        meta['bucket_name'] = storage_method.bucket_name
+        backblaze = Backblaze(storage_method.account_id,
+                              application_key)
+        meta['authorization'] = backblaze.authorization_token
+        meta['uploadToken'] = backblaze._get_upload_token_by_bucket_name(
+            storage_method.bucket_name)
+        BackblazeUtils.b2_authorization_list[key] = meta
+        return meta
 
 
 class Backblaze(object):
@@ -82,7 +127,7 @@ class Backblaze(object):
             if tmp['bucketName'] == bucket_name:
                 self.liste_bucket_id[bucket_name] = tmp['bucketId']
                 return tmp['bucketId']
-            return None
+        return None
 
     def _get_upload_token(self, bucket_id):
         body = {'bucketId': bucket_id}
@@ -314,10 +359,14 @@ class Requests(object):
         if response.status_code != requests.codes.ok:
             try:
                 raise BackblazeException(response.status_code,
-                                         response.json()['message'])
+                                         response.json()['message'],
+                                         response,
+                                         headers)
             except ValueError:
                 raise BackblazeException(response.status_code,
-                                         response.text)
+                                         response.text,
+                                         response,
+                                         headers)
         return response
 
     def get_response_from_request(self, content_type, url, headers=None,
@@ -330,11 +379,21 @@ class Requests(object):
                                   header, file_descriptor).content
 
 
+class BackblazeUtilsException(Exception):
+    def __init__(self, string):
+        self._string = string
+
+    def __str__(self):
+        return self._string
+
+
 class BackblazeException(Exception):
-    def __init__(self, status_code, message):
+    def __init__(self, status_code, message, response, headers_send):
         super(BackblazeException, self).__init__()
         self._status_code = status_code
         self._message = message
+        self._response = response
+        self._headers_send = headers_send
 
     def __str__(self):
         return '(%d) %s' % (self.status_code, self.message)
@@ -346,3 +405,11 @@ class BackblazeException(Exception):
     @property
     def message(self):
         return self._message
+
+    @property
+    def headers_send(self):
+        return self._headers_send
+
+    @property
+    def headers_received(self):
+        return self._response.headers

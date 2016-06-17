@@ -40,9 +40,9 @@ class CreateObject(lister.Lister):
             help='Storage Policy'
         )
         parser.add_argument(
-            '--application-key',
-            metavar='<application_key>',
-            help='application key'
+            '--key-file',
+            metavar='<key_file>',
+            help='file containing keys'
         )
         return parser
 
@@ -53,8 +53,9 @@ class CreateObject(lister.Lister):
         policy = parsed_args.policy
         objs = parsed_args.objects
         names = parsed_args.name
-        application_key = parsed_args.application_key
-
+        key_file = parsed_args.key_file
+        if key_file and key_file[0] != '/':
+            key_file = os.getcwd() + '/' + key_file
         def get_file_size(f):
             currpos = f.tell()
             f.seek(0, 2)
@@ -73,7 +74,7 @@ class CreateObject(lister.Lister):
                     obj_name=name,
                     content_length=get_file_size(f),
                     policy=policy,
-                    application_key=application_key)
+                    key_file=key_file)
 
                 results.append((name, data[1], data[2].upper()))
 
@@ -100,24 +101,17 @@ class DeleteObject(command.Command):
             nargs='+',
             help='Object(s) to delete'
         )
-        parser.add_argument(
-            '--application-key',
-            metavar='<application_key>',
-            help='application key'
-        )
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
-        application_key = parsed_args.application_key
         container = parsed_args.container
 
         for obj in parsed_args.objects:
             self.app.client_manager.storage.object_delete(
                 self.app.client_manager.get_account(),
                 container,
-                obj,
-                application_key=application_key
+                obj
             )
 
 
@@ -231,9 +225,9 @@ class SaveObject(command.Command):
             help='Object to save'
         )
         parser.add_argument(
-            '--application-key',
-            metavar='<application_key>',
-            help='application key'
+            '--key-file',
+            metavar='<key_file>',
+            help='file containing the keys'
         )
         return parser
 
@@ -242,17 +236,18 @@ class SaveObject(command.Command):
 
         container = parsed_args.container
         obj = parsed_args.object
-
+        key_file = parsed_args.key_file
+        if key_file and key_file[0] != '/':
+            key_file = os.getcwd() + '/' + key_file
         filename = parsed_args.file
         if not filename:
             filename = obj
 
-        application_key = parsed_args.application_key
         meta, stream = self.app.client_manager.storage.object_fetch(
             self.app.client_manager.get_account(),
             container,
             obj,
-            application_key=application_key
+            key_file=key_file
         )
         if not os.path.exists(os.path.dirname(filename)):
             if len(os.path.dirname(filename)) > 0:

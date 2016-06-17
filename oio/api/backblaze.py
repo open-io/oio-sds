@@ -17,7 +17,7 @@ from urlparse import urlparse
 from oio.api import io
 from oio.common.exceptions import SourceReadError, OioException
 from oio.api.backblaze_http import Backblaze, BackblazeException
-
+import eventlet
 logger = logging.getLogger(__name__)
 WORD_LENGTH = 10
 TRY_REQUEST_NUMBER = 3
@@ -86,15 +86,22 @@ class BackblazeChunkWriteHandler(object):
         while True:
             self.meta_chunk['size'] = size
             try:
-                logger.debug("sha1: %s", sha1)
                 conn['backblaze'].upload(self.backblaze_info['bucket_name'],
                                          self.sysmeta, temp, sha1)
                 break
             except BackblazeException as b2e:
                 temp.seek(0)
                 if try_number == 0:
+                    logger.debug('headers sent: %s'
+                                 % str(b2e.headers_send))
                     raise OioException('backblaze upload error: %s'
                                        % str(b2e))
+                else:
+                    sleep_time_default = pow(2,
+                                             TRY_REQUEST_NUMBER - try_number)
+                    sleep = b2e.headers_received.get("Retry-After",
+                                                     sleep_time_default)
+                    eventlet.sleep(sleep)
                 try_number -= 1
 
         self.meta_chunk['hash'] = md5
@@ -127,10 +134,14 @@ class BackblazeChunkWriteHandler(object):
                     self.backblaze_info['bucket_name'], self.sysmeta)
                 break
             except BackblazeException as b2e:
-                tries = tries - 1
+                tries -= 1
                 if tries == 0:
+                    logger.debug('headers sent: %s'
+                                 % str(b2e.headers_send))
                     raise OioException('Error at the beginning of upload: %s'
                                        % str(b2e))
+                else:
+                    eventlet.sleep(pow(2, TRY_REQUEST_NUMBER - tries))
         file_id = res['fileId']
         part_num = 1
         bytes_read = size + 1
@@ -149,8 +160,14 @@ class BackblazeChunkWriteHandler(object):
                     temp.seek(0)
                     tries = tries - 1
                     if tries == 0:
+                        logger.debug("headers sent: %s"
+                                     % str(b2e.headers_send))
                         raise OioException('Error during upload: %s'
                                            % str(b2e))
+                    else:
+                        val_tmp = pow(2, TRY_REQUEST_NUMBER - tries)
+                        eventlet.sleep(b2e.headers_received.get('Retry-After',
+                                                                val_tmp))
             part_num += 1
             sha1_array.append(sha1)
             temp.seek(0)
@@ -171,9 +188,12 @@ class BackblazeChunkWriteHandler(object):
             except BackblazeException as b2e:
                 tries = tries - 1
                 if tries == 0:
+                    logger.warn('headers send: %s'
+                                % str(b2e.headers_send))
                     raise OioException('Error at the end of upload: %s'
                                        % str(b2e))
-
+                else:
+                    eventlet.sleep(pow(2, TRY_REQUEST_NUMBER - tries))
         self.meta_chunk['hash'] = md5
         return bytes_read, [self.meta_chunk]
 
@@ -222,13 +242,17 @@ class BackblazeDeleteHandler(object):
     def _delete(self, conn):
         sysmeta = conn['sysmeta']
         try_number = TRY_REQUEST_NUMBER
-        try:
-            conn['backblaze'].delete(self.backblaze_info['bucket_name'],
-                                     sysmeta)
-        except BackblazeException as b2e:
-            if try_number == 0:
-                raise OioException('backblaze delete error: %s'
-                                   % str(b2e))
+        while True:
+            try:
+                conn['backblaze'].delete(self.backblaze_info['bucket_name'],
+                                         sysmeta)
+                break
+            except BackblazeException as b2e:
+                if try_number == 0:
+                    raise OioException('backblaze delete error: %s'
+                                       % str(b2e))
+                else:
+                    eventlet.sleep(pow(2, TRY_REQUEST_NUMBER - try_number))
             try_number -= 1
 
     def delete(self):
@@ -273,14 +297,18 @@ class BackblazeChunkDownloadHandler(object):
         data = None
         for chunk in self.chunks:
             self.meta['name'] = _get_name(chunk)
-            try:
-                try_number = TRY_REQUEST_NUMBER
-                data = source.download(self.backblaze_info['bucket_name'],
-                                       self.meta, self.headers)
-            except BackblazeException as b2e:
-                if try_number == 0:
-                    raise OioException('backblaze download error: %s'
-                                       % str(b2e))
+            try_number = TRY_REQUEST_NUMBER
+            while True:
+                try:
+                    data = source.download(self.backblaze_info['bucket_name'],
+                                           self.meta, self.headers)
+                    break
+                except BackblazeException as b2e:
+                    if try_number == 0:
+                        raise OioException('backblaze download error: %s'
+                                           % str(b2e))
+                    else:
+                        eventlet.sleep(pow(2, TRY_REQUEST_NUMBER - try_number))
                 try_number -= 1
         if data:
             result = data
