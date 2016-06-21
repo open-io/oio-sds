@@ -179,17 +179,28 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 		g_ptr_array_add(array,g_strdup(v));
 	}
 	err = oio_sds_get_content_properties(client, url, save_elements, val);
-	g_ptr_array_add(val, NULL);
-	gchar **elts = (gchar **)g_ptr_array_free(val, FALSE);
-	MAYBERETURN(err, "get properties error");
-	if (g_strv_length(elts) != 4)
+	MAYBERETURN(err, "GetProperties error");
+	if (val->len != 4)
 		return (struct oio_error_s*) NEWERROR(0, "error of properties!");
 
+	g_ptr_array_add(val, NULL);
+	gchar **elts = (gchar **) g_ptr_array_free(val, FALSE);
 	const gboolean t1 = g_strcmp0(elts [0], prop1) && g_strcmp0(elts [1], prop1);
 	const gboolean t2 = g_strcmp0(elts [2], prop2) && g_strcmp0(elts [3], prop2);
 	if (!t1 || !t2)
 		return (struct oio_error_s*) NEWERROR(0, "error of properties!");
 	g_strfreev(elts);
+
+	/* get details on the content */
+	void _on_metachunk (void *i UNUSED, guint seq, gsize offt, gsize len) {
+		GRID_INFO("metachunk: %u, %"G_GSIZE_FORMAT" %"G_GSIZE_FORMAT,
+				seq, offt, len);
+	}
+	void _on_property (void *i UNUSED, const char *k, const char *v) {
+		GRID_INFO("property: '%s' -> '%s'", k, v);
+	}
+	err = oio_sds_show_content (client, url, NULL, _on_metachunk, _on_property);
+	MAYBERETURN(err, "Show error");
 
 	/* Remove the content from the content */
 	err = oio_sds_delete (client, url);

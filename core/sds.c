@@ -210,7 +210,7 @@ _chunks_load (GSList **out, struct json_object *jtab)
 	}
 
 	if (!err)
-		*out = g_slist_reverse (chunks);
+		*out = chunks;
 	else
 		g_slist_free_full (chunks, g_free);
 	return err;
@@ -254,20 +254,23 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result)
 	for (GSList *l=lchunks; l ;l=l->next) {
 		struct chunk_s *c = l->data;
 		guint i = c->position.meta;
-		out[i]->chunks = g_slist_insert_sorted(out[i]->chunks, c,
-				(GCompareFunc)_compare_chunks);
+		struct metachunk_s *mc = out[i];
+		mc->chunks = g_slist_prepend(mc->chunks, c);
 	}
 
 	/* check the sequence of metachunks has no gap. In addition we
 	 * apply a shuffling of the chunks to avoid preferring always the
 	 * same 'first' chunk returned by the proxy. */
 	for (guint i=0; i<meta_bound ;++i) {
-		if (!out[i]->chunks) {
+		struct metachunk_s *mc = out[i];
+		if (!mc->chunks) {
 			_metachunk_cleanv (out);
 			return NEWERROR (0, "Invalid chunk sequence: gap found at [%u]", i);
 		}
 		if (!oio_sds_no_shuffle)
-			out[i]->chunks = oio_ext_gslist_shuffle (out[i]->chunks);
+			mc->chunks = oio_ext_gslist_shuffle (mc->chunks);
+		else
+			mc->chunks = g_slist_sort(mc->chunks, (GCompareFunc)_compare_chunks);
 	}
 
 	/* Compute each metachunk's size */
@@ -432,6 +435,72 @@ oio_sds_create (struct oio_sds_s *sds, struct oio_url_s *url)
 {
 	GError *err = oio_proxy_call_container_create(sds->h, url);
 	return (struct oio_error_s *) err;
+}
+
+
+/* Helper to show a content ------------------------------------------------- */
+
+typedef void oio_sds_chunk_reporter_f (gpointer data, struct chunk_s *chunk);
+
+static GError *
+_show_content (struct oio_sds_s *sds, struct oio_url_s *url, void *cb_data,
+		oio_sds_chunk_reporter_f cb_chunks,
+		oio_sds_property_reporter_f cb_props)
+{
+	EXTRA_ASSERT (sds != NULL);
+	EXTRA_ASSERT (url != NULL);
+
+	GError *err = NULL;
+	GSList *chunks = NULL;
+	GString *reply_body = g_string_new("");
+	gchar **props = NULL;
+
+	/* Get the beans */
+	err = oio_proxy_call_content_show (sds->h, url,
+		   cb_chunks ? reply_body : NULL, cb_props ? &props : NULL);
+
+	/* Parse the beans */
+	if (!err && reply_body->len > 0) {
+		GRID_TRACE("Body: %s", reply_body->str);
+		struct json_tokener *tok = json_tokener_new ();
+		struct json_object *jbody = json_tokener_parse_ex (tok,
+				reply_body->str, reply_body->len);
+		json_tokener_free (tok);
+		if (!json_object_is_type(jbody, json_type_array)) {
+			err = NEWERROR(0, "Invalid JSON from the OIO proxy");
+		} else {
+			if (NULL != (err = _chunks_load (&chunks, jbody))) {
+				g_prefix_error (&err, "Parsing: ");
+			} else {
+				GRID_DEBUG("%s Got %u beans", __FUNCTION__,
+						g_slist_length (chunks));
+			}
+		}
+		json_object_put (jbody);
+	}
+
+	if (!err) {
+		/* First, report the properties */
+		if (cb_props) {
+			for (gchar **p=props; *p && *(p+1) ;p+=2)
+				cb_props (cb_data, *p, *(p+1));
+		}
+
+		/* then the chunks */
+		if (cb_chunks) {
+			for (GSList *l=chunks; l ;l=l->next)
+				cb_chunks(cb_data, l->data);
+			g_slist_free (chunks);
+		} else {
+			g_slist_free_full (chunks, g_free);
+		}
+		chunks = NULL;
+	}
+
+	g_slist_free_full (chunks, g_free);
+	if (props) g_strfreev (props);
+	g_string_free (reply_body, TRUE);
+	return err;
 }
 
 
@@ -762,48 +831,24 @@ _download_to_hook (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 	_dl_debug (__FUNCTION__, src, dst);
 
 	GError *err = NULL;
-
-	char *chunk_method = NULL;
+	gchar *chunk_method = NULL;
 	GSList *chunks = NULL;
-	GString *reply_body = g_string_new("");
 
 	/* Get the beans */
-	char **headers = NULL;
-	err = oio_proxy_call_content_show (sds->h, src->url, reply_body,
-			&headers);
+	void _on_prop (void *i UNUSED, const char *k, const char *v) {
+		if (!g_ascii_strcasecmp(k, "content-meta-chunk-method"))
+			chunk_method = g_strdup(v);
+	}
+	void _on_chunk (void *i UNUSED, struct chunk_s *chunk) {
+		chunks = g_slist_prepend (chunks, chunk);
+	}
+	err = _show_content (sds, src->url, NULL, _on_chunk, _on_prop);
 
 	/* Parse the beans */
 	if (!err) {
-		GRID_TRACE("Body: %s", reply_body->str);
-		struct json_tokener *tok = json_tokener_new ();
-		struct json_object *jbody = json_tokener_parse_ex (tok,
-				reply_body->str, reply_body->len);
-		json_tokener_free (tok);
-		if (!json_object_is_type(jbody, json_type_array)) {
-			err = NEWERROR(0, "Invalid JSON from the OIO proxy");
-		} else {
-			if (NULL != (err = _chunks_load (&chunks, jbody))) {
-				g_prefix_error (&err, "Parsing: ");
-			} else {
-				GRID_DEBUG("%s Got %u beans", __FUNCTION__,
-						g_slist_length (chunks));
-			}
-		}
-		json_object_put (jbody);
-
-		for (char **header = headers; header && *header; header += 2) {
-			if (!g_ascii_strcasecmp(*header, "content-meta-chunk-method")) {
-				chunk_method = g_strdup(*(header+1));
-				if (_chunk_method_needs_ecd(chunk_method)
-						&& !(sds->ecd && sds->ecd[0])) {
-					err = NEWERROR(CODE_NOT_IMPLEMENTED,
-							"cannot download this without ecd");
-				}
-				break;
-			}
-		}
+		if (chunk_method && _chunk_method_needs_ecd(chunk_method) && !oio_str_is_set(sds->ecd))
+			err = NEWERROR(CODE_NOT_IMPLEMENTED, "cannot download this without ecd");
 	}
-	g_strfreev(headers);
 
 	if (!err) {
 		struct _download_ctx_s dl = {
@@ -818,7 +863,6 @@ _download_to_hook (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 	}
 
 	/* cleanup and exit */
-	g_string_free (reply_body, TRUE);
 	g_slist_free_full (chunks, g_free);
 	g_free(chunk_method);
 	return (struct oio_error_s*) err;
@@ -1170,7 +1214,6 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 	/* Organize the set of chunks into metachunks. */
 	if (!err) {
 		struct metachunk_s **out = NULL;
-		ul->chunks = g_slist_sort (ul->chunks, (GCompareFunc)_compare_chunks);
 		if (NULL != (err = _organize_chunks (ul->chunks, &out)))
 			g_prefix_error (&err, "Logic: ");
 		else
@@ -1573,7 +1616,7 @@ _ul_debug (const char *caller, struct oio_sds_ul_src_s *src,
 
 static GError *
 _upload_sequential (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
-		    struct oio_sds_ul_src_s *src)
+		struct oio_sds_ul_src_s *src)
 {
 	_ul_debug(__FUNCTION__, src, dst);
 	if (!src->data.hook.cb)
@@ -1709,7 +1752,7 @@ oio_sds_upload_from_file (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 
 struct oio_error_s*
 oio_sds_upload_from_buffer (struct oio_sds_s *sds,
-			    struct oio_sds_ul_dst_s *dst, void *base, size_t len)
+		struct oio_sds_ul_dst_s *dst, void *base, size_t len)
 {
 	if (!sds || !dst || !base)
 		return (struct oio_error_s*) BADREQ("Invalid argument");
@@ -2024,6 +2067,49 @@ oio_sds_delete_container (struct oio_sds_s *sds, struct oio_url_s *url)
 	oio_ext_set_reqid (sds->session_id);
 
 	return (struct oio_error_s*) oio_proxy_call_container_delete (sds->h, url);
+}
+
+struct oio_error_s*
+oio_sds_show_content (struct oio_sds_s *sds, struct oio_url_s *url,
+		void *cb_data,
+		oio_sds_metachunk_reporter_f cb_metachunks,
+		oio_sds_property_reporter_f cb_props)
+{
+	if (!sds || !url)
+		return (struct oio_error_s*) BADREQ("Missing argument");
+	oio_ext_set_reqid (sds->session_id);
+
+	GError *err = NULL;
+	gsize offset = 0;
+	GSList *chunks = NULL;
+
+	void _on_prop (void *i UNUSED, const char *k, const char *v) {
+		return cb_props (cb_data, k, v);
+	}
+	void _on_chunk (void *i UNUSED, struct chunk_s *chunk) {
+		chunks = g_slist_prepend (chunks, chunk);
+	}
+
+	if (!(err = _show_content (sds, url, NULL, _on_chunk, _on_prop))) {
+		GTree *positions_seen = g_tree_new_full(oio_str_cmp3, NULL, g_free, NULL);
+		chunks = g_slist_sort (chunks, (GCompareFunc)_compare_chunks);
+		for (GSList *l=chunks; l ;l=l->next) {
+			const struct chunk_s *chunk = l->data;
+			gchar *position = g_strdup_printf("%u", chunk->position.meta);
+			if (g_tree_lookup(positions_seen, position)) {
+				g_free (position);
+			} else {
+				if (cb_metachunks)
+					cb_metachunks(cb_data, chunk->position.meta, offset, chunk->size);
+				offset += chunk->size;
+				g_tree_replace (positions_seen, position, GINT_TO_POINTER(1));
+			}
+		}
+		g_tree_destroy (positions_seen);
+	}
+
+	g_slist_free_full (chunks, g_free);
+	return (struct oio_error_s*) err;
 }
 
 struct oio_error_s*
