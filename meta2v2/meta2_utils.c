@@ -863,8 +863,6 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 	if (VERSIONS_DISABLED(max_versions) || VERSIONS_SUSPENDED(max_versions) ||
 			oio_url_has(url, OIOURL_VERSION) || ALIASES_get_deleted(alias)) {
 
-		GRID_TRACE("deleting now");
-
 		GSList *deleted_beans = NULL;
 		err = _real_delete(sq3, beans, &deleted_beans);
 		/* Client asked to remove no-more referenced beans, we tell him which */
@@ -880,10 +878,6 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		if (!err)
 			err = _db_del_FK_by_name (alias, "properties", sq3->db);
 
-	} else if (oio_url_has(url, OIOURL_VERSION)) {
-		/* Alias is in a snapshot but user explicitly asked for its deletion */
-		err = NEWERROR(CODE_NOT_ALLOWED,
-				"Cannot delete a content belonging to a snapshot");
 	} else {
 		gint64 now = oio_ext_real_time () / G_TIME_SPAN_SECOND;
 		/* Create a new version marked as deleted */
@@ -1540,7 +1534,7 @@ _gen_chunk(struct gen_ctx_s *ctx, gchar *straddr,
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
 
-	oio_str_randomize (binid, sizeof(binid));
+	oio_buf_randomize (binid, sizeof(binid));
 	oio_str_bin2hex (binid, sizeof(binid), strid, sizeof(strid));
 
 	if (subpos < 0)

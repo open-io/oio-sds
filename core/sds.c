@@ -31,6 +31,8 @@ License along with this library.
 
 #include "oio_core.h"
 #include "oio_sds.h"
+#include "oiostr.h"
+
 #include "http_put.h"
 #include "http_internals.h"
 #include "internals.h"
@@ -1012,6 +1014,9 @@ oio_sds_upload_init (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst)
 {
 	if (!sds || !dst)
 		return NULL;
+	if (dst->content_id && !oio_str_ishexa1(dst->content_id))
+		return NULL;
+
 	oio_ext_set_reqid (sds->session_id);
 
 	struct oio_sds_ul_s *ul = g_malloc0 (sizeof(*ul));
@@ -1024,8 +1029,10 @@ oio_sds_upload_init (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst)
 	ul->buffer_tail = g_queue_new ();
 	ul->metachunk_ready = g_queue_new ();
 
-	if (dst->content_id)
+	if (dst->content_id) {
+		EXTRA_ASSERT(oio_str_ishexa1 (dst->content_id));
 		oio_str_replace (&ul->hexid, dst->content_id);
+	}
 	return ul;
 }
 
@@ -1105,6 +1112,10 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 		};
 		err = oio_proxy_call_content_prepare (ul->sds->h, ul->dst->url,
 				size, ul->dst->autocreate, &out);
+
+		if (!err && out.header_content && !oio_str_ishexa1 (out.header_content))
+			err = SYSERR("returned content-id not hexadecimal");
+
 		if (err)
 			g_prefix_error (&err, "Proxy: ");
 		else {
@@ -1128,6 +1139,8 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 		oio_str_clean (&out.header_chunk_method);
 		oio_str_clean (&out.header_mime_type);
 	} while (0);
+
+	EXTRA_ASSERT(!ul->hexid || oio_str_ishexa1(ul->hexid));
 
 	/* Parse the output, as a JSON array of objects with fields
 	 * depicting chunks */
@@ -1516,13 +1529,17 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 	GRID_TRACE("%s (%p) Saving %s", __FUNCTION__, ul, request_body->str);
 	GError *err = oio_proxy_call_content_create (ul->sds->h, ul->dst->url,
 			&in, reply_body);
-
 	if (ul->chunks_failed)
 		_chunks_remove (ul->sds->h, ul->chunks_failed);
 
 	g_string_free (request_body, TRUE);
 	g_string_free (reply_body, TRUE);
-	return (struct oio_error_s*) err;
+	if(err)
+		return (struct oio_error_s*) err;
+	if(NULL != ul->dst->properties)
+		return (struct oio_error_s*) oio_proxy_call_content_set_properties
+			(ul->sds->h, ul->dst->url, (const char* const*)ul->dst->properties);
+	return NULL;
 }
 
 struct oio_error_s *
@@ -1556,7 +1573,7 @@ _ul_debug (const char *caller, struct oio_sds_ul_src_s *src,
 
 static GError *
 _upload_sequential (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
-		struct oio_sds_ul_src_s *src)
+		    struct oio_sds_ul_src_s *src)
 {
 	_ul_debug(__FUNCTION__, src, dst);
 	if (!src->data.hook.cb)
@@ -1573,7 +1590,7 @@ _upload_sequential (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 	 * call the proxy as soon as a new chunk is necessary, then issuing
 	 * several calls to the proxy. */
 	if (src->data.hook.size > 0 && src->data.hook.size != (size_t)-1)
-		err = oio_sds_upload_prepare (ul, src->data.hook.size);
+		err = oio_sds_upload_prepare(ul, src->data.hook.size);
 
 	while (!err && !oio_sds_upload_done (ul)) {
 		GRID_TRACE("%s (%p) not done yet", __FUNCTION__, ul);
@@ -1625,6 +1642,8 @@ oio_sds_upload (struct oio_sds_s *sds, struct oio_sds_ul_src_s *src,
 {
 	if (!sds || !src || !dst)
 		return (struct oio_error_s*) BADREQ("Missing parameter");
+	if (dst->content_id && !oio_str_ishexa1 (dst->content_id))
+		return (struct oio_error_s*) BADREQ("content_id not hexadecimal");
 
 	if (src->type == OIO_UL_SRC_HOOK_SEQUENTIAL)
 		return (struct oio_error_s*) _upload_sequential (sds, dst, src);
@@ -1648,10 +1667,12 @@ _read_FILE (void *u, unsigned char *ptr, size_t len)
 
 struct oio_error_s*
 oio_sds_upload_from_file (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
-		const char *local, size_t off, size_t len)
+			  const char *local, size_t off, size_t len)
 {
 	if (!sds || !dst || !local)
 		return (struct oio_error_s*) BADREQ("Invalid argument");
+	if (dst->content_id && !oio_str_ishexa1 (dst->content_id))
+		return (struct oio_error_s*) BADREQ("content_id not hexadecimal");
 
 	int fd = -1;
 	FILE *in = NULL;
@@ -1688,10 +1709,12 @@ oio_sds_upload_from_file (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 
 struct oio_error_s*
 oio_sds_upload_from_buffer (struct oio_sds_s *sds,
-		struct oio_sds_ul_dst_s *dst, void *base, size_t len)
+			    struct oio_sds_ul_dst_s *dst, void *base, size_t len)
 {
 	if (!sds || !dst || !base)
 		return (struct oio_error_s*) BADREQ("Invalid argument");
+	if (dst->content_id && !oio_str_ishexa1 (dst->content_id))
+		return (struct oio_error_s*) BADREQ("content_id not hexadecimal");
 
 	FILE *in = NULL;
 	GError *err = NULL;
@@ -1958,7 +1981,10 @@ oio_sds_link (struct oio_sds_s *sds, struct oio_url_s *url, const char *content_
 {
 	if (!sds || !url || !content_id)
 		return (struct oio_error_s*) BADREQ("Missing argument");
+	if (!oio_str_ishexa1 (content_id))
+		return (struct oio_error_s*) BADREQ("content_id not hexadecimal");
 	oio_ext_set_reqid (sds->session_id);
+
 	return (struct oio_error_s*) oio_proxy_call_content_link (sds->h, url, content_id);
 }
 
@@ -1986,7 +2012,18 @@ oio_sds_delete (struct oio_sds_s *sds, struct oio_url_s *url)
 	if (!sds || !url)
 		return (struct oio_error_s*) BADREQ("Missing argument");
 	oio_ext_set_reqid (sds->session_id);
+
 	return (struct oio_error_s*) oio_proxy_call_content_delete (sds->h, url);
+}
+
+struct oio_error_s*
+oio_sds_delete_container (struct oio_sds_s *sds, struct oio_url_s *url)
+{
+	if (!sds || !url)
+		return (struct oio_error_s*) BADREQ("Missing argument");
+	oio_ext_set_reqid (sds->session_id);
+
+	return (struct oio_error_s*) oio_proxy_call_container_delete (sds->h, url);
 }
 
 struct oio_error_s*
@@ -2001,6 +2038,75 @@ oio_sds_has (struct oio_sds_s *sds, struct oio_url_s *url, int *phas)
 		g_clear_error(&err);
 	return (struct oio_error_s*) err;
 }
+
+struct oio_error_s*
+oio_sds_get_container_properties(struct oio_sds_s *sds, struct oio_url_s *url,
+		on_element_f fct, void *ctx)
+{
+	if (!sds || !url)
+		return (struct oio_error_s*) BADREQ("Missing argument");
+	oio_ext_set_reqid (sds->session_id);
+
+	GString *value = NULL;
+	struct oio_error_s *err;
+	err = (struct oio_error_s*) oio_proxy_call_container_get_properties(sds->h, url, &value);
+	if (err)
+		return err;
+
+	json_object *json = json_tokener_parse(value->str);
+	json_object_object_foreach(json,key,val) {
+		fct(ctx, key, json_object_get_string(val));
+	}
+	json_object_put(json);
+	g_string_free (value, TRUE);
+	return err;
+}
+
+struct oio_error_s*
+oio_sds_set_container_properties (struct oio_sds_s *sds, struct oio_url_s *url,
+		const char * const *values)
+{
+	if (!sds || !url || !values)
+		return (struct oio_error_s*) BADREQ("Missing argument");
+	oio_ext_set_reqid (sds->session_id);
+
+	return (struct oio_error_s*) oio_proxy_call_container_set_properties(sds->h, url, values);
+}
+
+struct oio_error_s*
+oio_sds_get_content_properties(struct oio_sds_s *sds, struct oio_url_s *url,
+		on_element_f fct, void *ctx)
+{
+	if (!sds || !url)
+		return (struct oio_error_s*) BADREQ("Missing argument");
+	oio_ext_set_reqid (sds->session_id);
+
+	GString *value = NULL;
+	struct oio_error_s *err;
+	err = (struct oio_error_s*) oio_proxy_call_content_get_properties(sds->h, url, &value);
+	if (err)
+		return err;
+
+	json_object *json = json_tokener_parse(value->str);
+	json_object_object_foreach(json,key,val) {
+		fct(ctx, key, json_object_get_string(val));
+	}
+	json_object_put(json);
+	g_string_free(value, TRUE);
+	return err;
+}
+
+struct oio_error_s*
+oio_sds_set_content_properties (struct oio_sds_s *sds, struct oio_url_s *url,
+		const char * const *values)
+{
+	if (!sds || !url || !values)
+		return (struct oio_error_s*) BADREQ("Missing argument");
+	oio_ext_set_reqid (sds->session_id);
+
+	return (struct oio_error_s*) oio_proxy_call_content_set_properties(sds->h, url, values);
+}
+
 
 char **
 oio_sds_get_compile_options (void)
@@ -2055,4 +2161,3 @@ oio_sds_get_compile_options (void)
 	g_ptr_array_free (tmp, TRUE);
 	return out;
 }
-

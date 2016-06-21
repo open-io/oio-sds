@@ -1,3 +1,4 @@
+
 /*
 OpenIO SDS core library
 Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
@@ -29,6 +30,21 @@ License along with this library.
 #include "internals.h"
 
 /* -------------------------------------------------------------------------- */
+
+
+static GString *
+_build_json (const char* const *src)
+{
+	GString *json = g_string_new ("{");
+	for (int i = 0; src [i] && src [i+1] ; i +=2 ) {
+		if (i != 0)
+			g_string_append (json,",");
+		oio_str_gstring_append_json_pair (json, src [i], src [i+1]);
+	}
+	g_string_append (json, "}");
+	return json;
+}
+
 
 static void
 _ptrv_free_content (gchar **tab)
@@ -167,7 +183,7 @@ _body_parse_error (GString *b)
 
 	struct json_object *jcode, *jmsg;
 	struct oio_ext_json_mapping_s map[] = {
-		{"status", &jcode, json_type_int,    0},
+		{"status", &jcode, json_type_int, 0},
 		{"message",  &jmsg,  json_type_string, 0},
 		{NULL, NULL, 0, 0}
 	};
@@ -244,7 +260,7 @@ _has_prefix_len (char **pb, size_t *plen, const char *prefix)
 		return FALSE;
 
 	while (*prefix) {
-		if (!(blen--) || g_ascii_tolower(*(b++)) != *(prefix++))
+		if (!(blen--) || g_ascii_tolower(*(b++)) != g_ascii_tolower(*(prefix++)))
 			return FALSE;
 	}
 
@@ -258,7 +274,12 @@ _header_callback(char *b, size_t s, size_t n, void *u)
 {
 	struct http_ctx_s *o = u;
 	size_t total = n*s;
-	if (!o || !o->headers || !_has_prefix_len (&b, &total, "x-oio-"))
+
+	if (!o || !o->headers) /* caller not interested in headers */
+		return total;
+	if (!_has_prefix_len (&b, &total, "x-oio-"))
+		return total;
+	if (total > 8192) /* header too big */
 		return total;
 
 	gchar tmp[total+1];
@@ -383,6 +404,15 @@ oio_proxy_call_container_create (CURL *h, struct oio_url_s *u)
 }
 
 GError *
+oio_proxy_call_container_delete (CURL *h, struct oio_url_s *u)
+{
+	GString *http_url = _curl_container_url (u, "destroy");
+	GError *err = _proxy_call (h, "POST", http_url->str, NULL, NULL);
+	g_string_free(http_url, TRUE);
+	return err;
+}
+
+GError *
 oio_proxy_call_container_get_properties (CURL *h, struct oio_url_s *u,
 		GString **props_str)
 {
@@ -406,14 +436,73 @@ oio_proxy_call_container_get_properties (CURL *h, struct oio_url_s *u,
 }
 
 GError *
+oio_proxy_call_content_get_properties (CURL *h, struct oio_url_s *u,
+					 GString **props_str)
+{
+	GString *http_url = _curl_content_url (u, "get_properties");
+	struct http_ctx_s out_ctx = {0};
+	if (props_str && *props_str)
+		out_ctx.body = *props_str;
+	else
+		out_ctx.body = g_string_sized_new(512);
+
+	GError *err = _proxy_call (h, "POST", http_url->str, NULL, &out_ctx);
+
+	g_string_free(http_url, TRUE);
+	if (props_str && !*props_str && !err)
+		*props_str = out_ctx.body;
+	else
+		g_string_free(out_ctx.body, TRUE);
+	return err;
+}
+
+static GError *
+_set_properties(CURL *h, GString *http_url, const char* const *values)
+{
+	GError *err = NULL;
+	GString *json = _build_json(values);
+	struct http_ctx_s i = {
+		.body = json
+	};
+	err = _proxy_call (h, "POST", http_url->str, &i, NULL);
+	g_string_free(i.body, TRUE);
+	return err;
+}
+
+GError *
+oio_proxy_call_container_set_properties (CURL *h, struct oio_url_s *u,
+		const char* const *values)
+{
+	GString *http_url = _curl_container_url (u, "set_properties");
+	if (!http_url) return BADNS();
+
+	GError *err = _set_properties(h, http_url, values);
+	g_string_free (http_url, TRUE);
+	return err;
+}
+
+
+GError *
+oio_proxy_call_content_set_properties (CURL *h, struct oio_url_s *u,
+		const char* const *values)
+{
+	GString *http_url = _curl_content_url (u, "set_properties");
+	if (!http_url) return BADNS();
+
+	GError *err = _set_properties(h, http_url, values);
+	g_string_free (http_url, TRUE);
+	return err;
+}
+
+GError *
 oio_proxy_call_content_show (CURL *h, struct oio_url_s *u, GString *out,
 		char ***hout)
 {
 	GString *http_url = _curl_content_url (u, "show");
-	if (!http_url)
-		return BADNS();
+	if (!http_url) return BADNS();
+
 	struct http_ctx_s o = {
-			.headers = hout? g_malloc0(sizeof(char**)) : NULL,
+			.headers = hout ? g_malloc0(sizeof(gchar*)) : NULL,
 			.body = out
 	};
 	GError *err = _proxy_call (h, "GET", http_url->str, NULL, &o);

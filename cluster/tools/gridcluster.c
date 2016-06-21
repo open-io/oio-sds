@@ -144,11 +144,9 @@ print_formated_services(const gchar * type, GSList * services)
 static void
 print_raw_services(const gchar * ns, const gchar * type, GSList * services)
 {
-	GSList *l;
-
 	if (!services)
 		return;
-	for (l = services; l; l = l->next) {
+	for (GSList *l = services; l; l = l->next) {
 		struct service_info_s *si;
 		char str_score[32];
 		char str_addr[STRLEN_ADDRINFO];
@@ -392,45 +390,49 @@ main(int argc, char **argv)
 		error = conscience_get_types (namespace, &services_types);
 
 		if (error) {
-				g_printerr("Failed to get the services list: %s\n", gerror_get_message(error));
-				goto exit_label;
-		} else if (!services_types) {
-			g_print("No service type known in namespace=%s\n", namespace);
-		} else {
-			for (GSList *st = services_types; st; st = st->next) {
-				GSList *list_services = NULL;
-				gchar *str_type = st->data;
-
-				/* Generate the list */
-				gboolean full = has_flag_full && has_raw;
-				error = conscience_get_services (namespace, str_type, full,
-						&list_services);
-
-				/* Dump the list */
-				if (error && !list_services) {
-					g_printerr("No service known for namespace %s and service"
-							" type %s : %s\n",
-							namespace, str_type, gerror_get_message(error));
-				}
-				else {
-					if (has_raw)
-						print_raw_services(namespace, str_type, list_services);
-					else
-						print_formated_services(str_type, list_services);
-				}
-
-				if (error)
-					g_clear_error(&error);
-
-				/* Clean the list */
-				if (list_services) {
-					g_slist_foreach(list_services, service_info_gclean, NULL);
-					g_slist_free(list_services);
-					list_services = NULL;
-				}
-			}
-			g_slist_free_full (services_types, g_free);
+			g_printerr("Failed to get the services list: %s\n", gerror_get_message(error));
+			goto exit_label;
 		}
+		if (!services_types) {
+			g_print("No service type known in namespace=%s\n", namespace);
+			goto success_label;
+		}
+
+		services_types = g_slist_sort_with_data(services_types, oio_str_cmp3, NULL);
+
+		for (GSList *st = services_types; st; st = st->next) {
+			GSList *list_services = NULL;
+			gchar *str_type = st->data;
+
+			/* Generate the list */
+			gboolean full = has_flag_full && has_raw;
+			error = conscience_get_services (namespace, str_type, full,
+					&list_services);
+
+			/* Dump the list */
+			if (error && !list_services) {
+				g_printerr("No service known for namespace %s and service"
+						" type %s : %s\n",
+						namespace, str_type, gerror_get_message(error));
+			}
+			else {
+				if (has_raw)
+					print_raw_services(namespace, str_type, list_services);
+				else
+					print_formated_services(str_type, list_services);
+			}
+
+			if (error)
+				g_clear_error(&error);
+
+			/* Clean the list */
+			if (list_services) {
+				g_slist_foreach(list_services, service_info_gclean, NULL);
+				g_slist_free(list_services);
+				list_services = NULL;
+			}
+		}
+		g_slist_free_full (services_types, g_free);
 	}
 
 success_label:

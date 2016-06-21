@@ -110,9 +110,14 @@ GError * oio_proxy_call_reference_link (CURL *h, struct oio_url_s *u,
 /* Links the meta2 then triggers container creation */
 GError * oio_proxy_call_container_create (CURL *h, struct oio_url_s *u);
 
+GError * oio_proxy_call_container_delete (CURL *h, struct oio_url_s *u);
+
 /* Get all meta2 properties as a JSON string */
 GError * oio_proxy_call_container_get_properties (CURL *h,
-    struct oio_url_s *u, GString **props_str);
+		struct oio_url_s *u, GString **props_str);
+
+GError * oio_proxy_call_container_set_properties (CURL *h,
+		struct oio_url_s *u, const gchar * const *values);
 
 /* Get the list of chunks of a content (as JSON),
  * and optionnally the list of response header keys/values. */
@@ -123,6 +128,11 @@ GError * oio_proxy_call_content_delete (CURL *h, struct oio_url_s *u);
 
 GError * oio_proxy_call_content_link (CURL *h, struct oio_url_s *u,
 		const char *id);
+
+GError * oio_proxy_call_content_set_properties (CURL *h,
+		struct oio_url_s *u, const gchar * const *values);
+GError * oio_proxy_call_content_get_properties (CURL *h,
+		struct oio_url_s *u, GString ** props_str);
 
 struct oio_proxy_content_prepare_out_s
 {

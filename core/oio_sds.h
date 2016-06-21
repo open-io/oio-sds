@@ -113,7 +113,11 @@ int oio_sds_configure (struct oio_sds_s *sds, enum oio_sds_config_e what,
 /* Create / destroy --------------------------------------------------------- */
 
 /* Links the meta2 then triggers container creation */
-struct oio_error_s* oio_sds_create (struct oio_sds_s *sds, struct oio_url_s *url);
+struct oio_error_s* oio_sds_create (struct oio_sds_s *sds,
+				    struct oio_url_s *url);
+
+struct oio_error_s* oio_sds_delete_container(struct oio_sds_s *sds,
+					     struct oio_url_s *url);
 
 
 /* Download ----------------------------------------------------------------- */
@@ -196,6 +200,8 @@ struct oio_sds_ul_dst_s
 
 	/* Optional: the unique content name */
 	const char *content_id;
+
+	char **properties;
 };
 
 /* "Female" upload API
@@ -225,7 +231,8 @@ int oio_sds_upload_greedy (struct oio_sds_ul_s *ul);
 /* Tells if the upload is ready to be (in)validated */
 int oio_sds_upload_done (struct oio_sds_ul_s *ul);
 
-/* Tells if the upload will need erasure coding daemon */
+/* Tells if the upload will need a data-daemon aside.
+ * TODO rename to be more generic (not only EC requires side daemon) */
 int oio_sds_upload_needs_ecd(struct oio_sds_ul_s *ul);
 
 void oio_sds_upload_clean (struct oio_sds_ul_s *ul);
@@ -267,14 +274,13 @@ struct oio_error_s* oio_sds_upload (struct oio_sds_s *sds,
 /* Simply wraps oio_sds_upload() without the autocreation flag
  * set. */
 struct oio_error_s* oio_sds_upload_from_file (struct oio_sds_s *sds,
-		struct oio_sds_ul_dst_s *dst,
-		const char *local, size_t off, size_t len);
+		struct oio_sds_ul_dst_s *dst, const char *local,
+		size_t off, size_t len);
 
 /* Simply wraps oio_sds_upload() without the autocreation flag
  * set. */
 struct oio_error_s* oio_sds_upload_from_buffer (struct oio_sds_s *sds,
-		struct oio_sds_ul_dst_s *dst,
-		void *base, size_t len);
+		struct oio_sds_ul_dst_s *dst, void *base, size_t len);
 
 
 /* List --------------------------------------------------------------------- */
@@ -334,7 +340,7 @@ struct oio_sds_usage_s
 };
 
 struct oio_error_s* oio_sds_get_usage (struct oio_sds_s *sds,
-    struct oio_url_s *u, struct oio_sds_usage_s *out);
+		struct oio_url_s *u, struct oio_sds_usage_s *out);
 
 /* Misc. -------------------------------------------------------------------- */
 
@@ -344,6 +350,23 @@ struct oio_error_s* oio_sds_delete (struct oio_sds_s *sds, struct oio_url_s *u);
 /* currently works with fully qualified urls (content) */
 struct oio_error_s* oio_sds_has (struct oio_sds_s *sds, struct oio_url_s *url,
 		int *phas);
+
+
+typedef void (*on_element_f) (void *ctx, const char *key, const char *value);
+
+/* Get properties of a file: fct function will be called for each k,v couple */
+struct oio_error_s* oio_sds_get_content_properties (struct oio_sds_s *sds,
+		struct oio_url_s *url, on_element_f fct, void* ctx);
+/*Set properties of a file with the val values */
+struct oio_error_s* oio_sds_set_content_properties(struct oio_sds_s *sds,
+		struct oio_url_s *url, const char * const *val);
+
+/* Get properties of a container: fct function will be called for each k,v couple */
+struct oio_error_s* oio_sds_get_container_properties (struct oio_sds_s *sds,
+		struct oio_url_s *url, on_element_f fct, void* ctx);
+/*Set properties of a file with the val values */
+struct oio_error_s* oio_sds_set_container_properties(struct oio_sds_s *sds,
+		struct oio_url_s *url, const char * const *val);
 
 /* Creates an alias named 'url' pointing on the physical content 'content_id'
  * in the same container.
