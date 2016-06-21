@@ -1,10 +1,11 @@
 zookeeper: false
-storage_policy: "SINGLE"
+storage_policy: "BACKBLAZE"
 chunk_size: 1048576
 redis: true
 
 backblaze:
   bucket_name: ""
   account_id: ""
+  application_key: ""
 rawx:
   count: 3

@@ -82,7 +82,7 @@ class Backblaze(object):
             if tmp['bucketName'] == bucket_name:
                 self.liste_bucket_id[bucket_name] = tmp['bucketId']
                 return tmp['bucketId']
-            return None
+        return None
 
     def _get_upload_token(self, bucket_id):
         body = {'bucketId': bucket_id}
