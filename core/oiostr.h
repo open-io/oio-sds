@@ -120,6 +120,12 @@ void oio_str_gstring_append_json_pair_int (GString *base,
 
 static inline int oio_str_is_set (const char *s) { return NULL!=s && 0!=*s; }
 
+int oio_str_prefixed (const char *s, const char *p, const char *sep);
+
+int oio_str_is_number (const char *s);
+
+int oio_str_cmp3 (const void *a, const void *b, void *ignored);
+
 #ifdef __cplusplus
 }
 #endif

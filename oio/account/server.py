@@ -14,125 +14,136 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import flask
-from flask import request
-from flask import current_app
+
+from werkzeug.wrappers import Request, Response
+from werkzeug.routing import Map, Rule
+from werkzeug.exceptions import HTTPException, NotFound, BadRequest, \
+    Conflict, InternalServerError
 
 from oio.account.backend import AccountBackend
-from oio.common.utils import json
+from oio.common.utils import json, get_logger
 
 
-def get_backend():
-    return current_app.backend
+class Account(object):
+    def __init__(self, conf, backend, logger=None):
+        self.conf = conf
+        self.backend = backend
+        self.logger = logger or get_logger(conf)
 
-# Accounts --------------------------------------------------------------------
+        self.url_map = Map([
+            Rule('/status', endpoint='status'),
+            Rule('/v1.0/account/create', endpoint='account_create'),
+            Rule('/v1.0/account/delete', endpoint='account_delete'),
+            Rule('/v1.0/account/update', endpoint='account_update'),
+            Rule('/v1.0/account/show', endpoint='account_show'),
+            Rule('/v1.0/account/containers', endpoint='account_containers'),
+            Rule('/v1.0/account/container/update',
+                 endpoint='account_container_update')
+        ])
 
-account_api = flask.Blueprint('account_api', __name__)
+    def _get_account_id(self, req):
+        account_id = req.args.get('id')
+        if not account_id:
+            raise BadRequest('Missing Account ID')
+        return account_id
 
+    def on_status(self, req):
+        status = self.backend.status()
+        return Response(json.dumps(status), mimetype='text/json')
 
-@account_api.route('/status', methods=['GET'])
-def status():
-    status = get_backend().status()
-    return flask.Response(json.dumps(status), mimetype='text/json')
+    def on_account_create(self, req):
+        account_id = self._get_account_id(req)
+        id = self.backend.create_account(account_id)
+        if id:
+            return Response(id, 201)
+        else:
+            return Response(status=202)
 
+    def on_account_delete(self, req):
+        account_id = self._get_account_id(req)
+        result = self.backend.delete_account(account_id)
+        if result is None:
+            return NotFound('No such account')
+        if result is False:
+            return Conflict('Account not empty')
+        else:
+            return Response(status=204)
 
-@account_api.route('/v1.0/account/create', methods=['PUT'])
-def account_create():
-    account_id = request.args.get('id')
-    if not account_id:
-        return flask.Response('Missing Account ID', 400)
-    id = get_backend().create_account(account_id)
-    if id:
-        return flask.Response(id, 201)
-    else:
-        return flask.Response('', 202)
+    def on_account_update(self, req):
+        account_id = self._get_account_id(req)
+        decoded = json.loads(req.get_data())
+        metadata = decoded.get('metadata')
+        to_delete = decoded.get('to_delete')
+        success = self.backend.update_account_metadata(
+            account_id, metadata, to_delete)
+        if success:
+            return Response(status=204)
+        return NotFound('Account not found')
 
+    def on_account_show(self, req):
+        account_id = self._get_account_id(req)
+        raw = self.backend.info_account(account_id)
+        if raw is not None:
+            return Response(json.dumps(raw), mimetype='text/json')
+        return NotFound('Account not found')
 
-@account_api.route('/v1.0/account/delete', methods=['POST'])
-def account_delete():
-    account_id = request.args.get('id')
-    if not account_id:
-        return flask.Response('Missing Account ID', 400)
-    result = get_backend().delete_account(account_id)
-    if result is None:
-        return flask.Response('No such account', 404)
-    if result is False:
-        return flask.Response('Account not empty', 409)
-    else:
-        return flask.Response('', 204)
+    def on_account_containers(self, req):
+        account_id = self._get_account_id(req)
 
+        info = self.backend.info_account(account_id)
+        if not info:
+            return NotFound('Account not found')
 
-@account_api.route('/v1.0/account/update', methods=['POST'])
-def account_update():
-    account_id = request.args.get('id')
-    if not account_id:
-        return flask.Response('Missing Account ID', 400)
-    decoded = flask.request.get_json(force=True)
-    metadata = decoded.get('metadata')
-    to_delete = decoded.get('to_delete')
-    if get_backend().update_account_metadata(account_id, metadata, to_delete):
-        return flask.Response('', 204)
-    return 'Account not found', 404
+        marker = req.args.get('marker', '')
+        end_marker = req.args.get('end_marker', '')
+        prefix = req.args.get('prefix', '')
+        limit = int(req.args.get('limit', '1000'))
+        delimiter = req.args.get('delimiter', '')
 
+        user_list = self.backend.list_containers(
+            account_id, limit=limit, marker=marker, end_marker=end_marker,
+            prefix=prefix, delimiter=delimiter)
 
-@account_api.route('/v1.0/account/show', methods=['HEAD', 'GET'])
-def account_info():
-    account_id = request.args.get('id')
-    if not account_id:
-        return flask.Response('Missing Account ID', 400)
-    raw = get_backend().info_account(account_id)
-    if raw is not None:
-        return flask.Response(json.dumps(raw), mimetype='text/json')
-    return "Account not found", 404
+        info['listing'] = user_list
+        result = json.dumps(info)
+        return Response(result, mimetype='text/json')
 
+    def on_account_container_update(self, req):
+        account_id = self._get_account_id(req)
+        d = json.loads(req.get_data())
+        name = d.get('name')
+        mtime = d.get('mtime')
+        dtime = d.get('dtime')
+        object_count = d.get('objects')
+        bytes_used = d.get('bytes')
+        info = self.backend.update_container(
+            account_id, name, mtime, dtime, object_count, bytes_used)
+        result = json.dumps(info)
+        return Response(result)
 
-@account_api.route('/v1.0/account/containers', methods=['GET'])
-def account_list_containers():
-    account_id = request.args.get('id')
-    if not account_id:
-        return flask.Response('Missing Account ID', 400)
+    def dispatch_request(self, req):
+        adapter = self.url_map.bind_to_environ(req.environ)
+        try:
+            endpoint, values = adapter.match()
+            return getattr(self, 'on_' + endpoint)(req)
+        except NotFound:
+            return BadRequest()
+        except HTTPException as e:
+            return e
+        except Exception:
+            self.logger.exception('ERROR Unhandled exception in request')
+            return InternalServerError()
 
-    info = get_backend().info_account(account_id)
-    if not info:
-        return "Account not found", 404
+    def wsgi_app(self, environ, start_response):
+        req = Request(environ)
+        resp = self.dispatch_request(req)
+        return resp(environ, start_response)
 
-    marker = request.args.get('marker', '')
-    end_marker = request.args.get('end_marker', '')
-    prefix = request.args.get('prefix', '')
-    limit = int(request.args.get('limit', '1000'))
-    delimiter = request.args.get('delimiter', '')
-
-    user_list = get_backend().list_containers(
-        account_id, limit=limit, marker=marker, end_marker=end_marker,
-        prefix=prefix, delimiter=delimiter
-    )
-
-    info['listing'] = user_list
-    result = json.dumps(info)
-    return flask.Response(result, mimetype='text/json')
-
-
-# Containers ------------------------------------------------------------------
-
-@account_api.route('/v1.0/account/container/update', methods=['POST'])
-def container_update():
-    account_id = request.args.get('id')
-    d = flask.request.get_json(force=True)
-    name = d.get('name')
-    mtime = d.get('mtime')
-    dtime = d.get('dtime')
-    object_count = d.get('objects')
-    bytes_used = d.get('bytes')
-    result = get_backend().update_container(
-        account_id, name, mtime, dtime, object_count, bytes_used)
-    return result
+    def __call__(self, environ, start_response):
+        return self.wsgi_app(environ, start_response)
 
 
 def create_app(conf, **kwargs):
-    app = flask.Flask(__name__)
-    app.backend = AccountBackend(conf)
-    app.register_blueprint(account_api)
-    # we want exceptions to be logged
-    if conf.get('log_level') == 'DEBUG':
-        app.config['PROPAGATE_EXCEPTIONS'] = True
+    backend = AccountBackend(conf)
+    app = Account(conf, backend)
     return app

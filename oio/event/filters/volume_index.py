@@ -22,14 +22,7 @@ class VolumeIndexFilter(Filter):
             else:
                 args = {
                     'mtime': event.when,
-                    'chunk_hash': data['chunk_hash'],
-                    'chunk_position': data['chunk_position'],
-                    'content_path': data['content_path'],
-                    'content_version': data['content_version'],
-                    'content_chunk_method': data['content_chunk_method'],
-                    'content_mime_type': data['content_mime_type'],
-                    'content_storage_policy': data['content_storage_policy'],
-                    'content_nbchunks': data['content_nbchunks']}
+                }
                 self.app.rdir.chunk_push(
                     volume_id, container_id, content_id, chunk_id, **args)
         return self.app(env, cb)

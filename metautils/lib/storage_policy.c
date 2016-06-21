@@ -1,7 +1,7 @@
 /*
 OpenIO SDS metautils
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -26,15 +26,11 @@ static GHashTable * _params (void) {
 }
 
 static gboolean _is_none(const gchar *s) {
-	return !s || !*s || !g_ascii_strcasecmp(s,"none");
+	return !oio_str_is_set(s) || !g_ascii_strcasecmp(s,"none");
 }
 
-static gboolean _is_any(const gchar *s) {
-	return _is_none(s) || !g_ascii_strcasecmp(s, STORAGE_CLASS_ANY);
-}
-
-static gboolean _is_off(const gchar *s) {
-	return _is_any(s) || !g_ascii_strcasecmp(s,"off");
+static gboolean _is_plain(const gchar *s) {
+	return _is_none(s) || !g_ascii_strcasecmp(s, STGPOL_DSPREFIX_PLAIN);
 }
 
 /* Destructors ------------------------------------------------------------- */
@@ -51,18 +47,6 @@ _data_security_clean(struct data_security_s *ds)
 	g_free(ds);
 }
 
-static void
-_data_treatments_clean(struct data_treatments_s *dt)
-{
-	if (!dt)
-		return;
-
-	oio_str_clean(&dt->name);
-	if (NULL != dt->params)
-		g_hash_table_destroy(dt->params);
-	g_free(dt);
-}
-
 void
 storage_class_clean(struct storage_class_s *sc)
 {
@@ -74,13 +58,6 @@ storage_class_clean(struct storage_class_s *sc)
 }
 
 void
-storage_class_gclean(gpointer u, gpointer ignored)
-{
-	(void) ignored;
-	storage_class_clean((struct storage_class_s*)u);
-}
-
-void
 storage_policy_clean(struct storage_policy_s *sp)
 {
 	if (!sp)
@@ -89,18 +66,9 @@ storage_policy_clean(struct storage_policy_s *sp)
 	oio_str_clean(&sp->name);
 	if (NULL != sp->datasec)
 		_data_security_clean(sp->datasec);
-	if (NULL != sp->datatreat)
-		_data_treatments_clean(sp->datatreat);
 	if (NULL != sp->stgclass)
 		storage_class_clean(sp->stgclass);
 	g_free(sp);
-}
-
-void
-storage_policy_gclean(gpointer u, gpointer ignored)
-{
-	(void) ignored;
-	storage_policy_clean((struct storage_policy_s*) u);
 }
 
 /* Dummy implementations --------------------------------------------------- */
@@ -109,17 +77,7 @@ static struct storage_class_s *
 _dummy_stgclass(void)
 {
 	struct storage_class_s *result = g_malloc0(sizeof(struct storage_class_s));
-	result->name  = g_strdup(STORAGE_CLASS_ANY);
-	return result;
-}
-
-static struct data_treatments_s*
-_dummy_datatreat(void)
-{
-	struct data_treatments_s *result = g_malloc0(sizeof(struct data_treatments_s));
-	result->name = g_strdup(DATA_TREATMENT_NONE);
-	result->type = DT_NONE;
-	result->params = _params();
+	result->name  = g_strdup(STORAGE_CLASS_NONE);
 	return result;
 }
 
@@ -127,8 +85,8 @@ static struct data_security_s *
 _dummy_datasec(void)
 {
 	struct data_security_s *result = g_malloc0(sizeof(struct data_security_s));
-	result->name = g_strdup(DATA_SECURITY_NONE);
-	result->type = DS_NONE;
+	result->name = g_strdup(STGPOL_DSPREFIX_PLAIN);
+	result->type = STGPOL_DS_PLAIN;
 	result->params = _params();
 	return result;
 }
@@ -139,7 +97,6 @@ _dummy_stgpol(void)
 	struct storage_policy_s *result = g_malloc0(sizeof(struct storage_policy_s));
 	result->name = g_strdup(STORAGE_POLICY_NONE);
 	result->datasec = _dummy_datasec();
-	result->datatreat = _dummy_datatreat();
 	result->stgclass = _dummy_stgclass();
 	return result;
 }
@@ -149,7 +106,7 @@ _dummy_stgpol(void)
 static void
 __fill_info(GHashTable *params, const char *info)
 {
-	gchar **tok = g_strsplit(info, "|", 0);
+	gchar **tok = g_strsplit_set(info, "|,", 0);
 	if (!tok)
 		return;
 
@@ -167,76 +124,21 @@ __fill_info(GHashTable *params, const char *info)
 }
 
 static int
-_parse_data_treatments(struct data_treatments_s *dt, const char *config)
-{
-	gchar **tok = g_strsplit(config, ":", 2);
-	if (!tok)
-		return 0;
-	if (!tok[0] || !tok[1]) {
-		g_strfreev(tok);
-		return 0;
-	}
-
-	if (g_str_has_prefix(tok[0], "COMP")) {
-		dt->type = COMPRESSION;
-	} else if (g_str_has_prefix(tok[0],"CYPHER")) {
-		dt->type = CYPHER;
-	} else {
-		g_strfreev(tok);
-		return 0;
-	}
-
-	__fill_info(dt->params, tok[1]);
-	g_strfreev(tok);
-	return 1;
-}
-
-static struct data_treatments_s *
-_load_data_treatments(namespace_info_t *ni, const char *key)
-{
-	if (_is_off(key))
-		return _dummy_datatreat();
-	if (!ni)
-		return NULL;
-
-	gchar *config = namespace_info_get_data_treatments(ni, key);
-	if (!config)
-		return NULL;
-
-	struct data_treatments_s *dt = g_malloc0(sizeof(struct data_treatments_s));
-	dt->name = g_strdup(key);
-	dt->params = _params();
-	dt->type = DT_NONE;
-
-	int rc = _parse_data_treatments(dt, config);
-	g_free(config);
-	if (rc)
-		return dt;
-	_data_treatments_clean(dt);
-	return NULL;
-}
-
-static int
 _parse_data_security(struct data_security_s *ds, const char *config)
 {
-	gchar **tok = g_strsplit(config, ":", 2);
-	if (!tok)
-		return 0;
-	if (!tok[0] || !tok[1]) {
-		g_strfreev(tok);
-		return 0;
-	}
-
-	if (g_str_has_prefix(tok[0], "DUP")) {
-		ds->type = DUPLI;
-	} else if (g_str_has_prefix(tok[0],"RAIN")) {
-		ds->type = RAIN;
+	if (oio_str_prefixed (config, STGPOL_DSPREFIX_PLAIN, "/")) {
+		ds->type = STGPOL_DS_PLAIN;
+	} else if (oio_str_prefixed (config, "ec", "/")) {
+		ds->type = STGPOL_DS_EC;
+	} else if (oio_str_prefixed (config, "backblaze", "/")) {
+		ds->type = STGPOL_DS_BACKBLAZE;
 	} else {
-		g_strfreev(tok);
 		return 0;
 	}
 
-	__fill_info(ds->params, tok[1]);
+	gchar **tok = g_strsplit(config, "/", 2);
+	if (tok[1])
+		__fill_info(ds->params, tok[1]);
 	g_strfreev(tok);
 	return 1;
 }
@@ -244,7 +146,7 @@ _parse_data_security(struct data_security_s *ds, const char *config)
 static struct data_security_s *
 _load_data_security(namespace_info_t *ni, const gchar *key)
 {
-	if (_is_off(key))
+	if (_is_plain(key))
 		return _dummy_datasec();
 	if (!ni)
 		return NULL;
@@ -255,7 +157,7 @@ _load_data_security(namespace_info_t *ni, const gchar *key)
 
 	struct data_security_s *ds = g_malloc0(sizeof(struct data_security_s));
 	ds->name = g_strdup(key);
-	ds->type = DS_NONE;
+	ds->type = STGPOL_DS_PLAIN;
 	ds->params = _params();
 
 	int rc = _parse_data_security(ds, config);
@@ -275,10 +177,9 @@ _load_storage_policy(struct storage_policy_s *sp, GByteArray *gba, namespace_inf
 
 	if (!tok)
 		return 0;
-	int rc = (3 == g_strv_length(tok))
+	int rc = (2 == g_strv_length(tok))
 		&& NULL != (sp->stgclass = storage_class_init(ni, tok[0]))
-		&& NULL != (sp->datasec = _load_data_security(ni, tok[1]))
-		&& NULL != (sp->datatreat = _load_data_treatments(ni, tok[2]));
+		&& NULL != (sp->datasec = _load_data_security(ni, tok[1]));
 	g_strfreev(tok);
 	return rc;
 }
@@ -286,7 +187,7 @@ _load_storage_policy(struct storage_policy_s *sp, GByteArray *gba, namespace_inf
 struct storage_class_s *
 storage_class_init (struct namespace_info_s *ni, const char *name)
 {
-	if (_is_any (name))
+	if (_is_none (name))
 		return _dummy_stgclass();
 	if (!ni)
 		return NULL;
@@ -297,7 +198,7 @@ storage_class_init (struct namespace_info_s *ni, const char *name)
 
 	struct storage_class_s *result = g_malloc(sizeof(struct storage_class_s));
 	result->name = g_strdup(name);
-	gchar **fallbacks = g_strsplit(config, ":", 0);
+	gchar **fallbacks = g_strsplit(config, ",", 0);
 	result->fallbacks = metautils_array_to_list((void**)fallbacks);
 
 	g_free(fallbacks); // XXX Pointers reused !
@@ -308,7 +209,7 @@ storage_class_init (struct namespace_info_s *ni, const char *name)
 struct storage_policy_s *
 storage_policy_init(namespace_info_t *ni, const char *name)
 {
-	if (_is_any(name))
+	if (_is_plain(name))
 		return _dummy_stgpol();
 	if (!ni)
 		return NULL;
@@ -364,21 +265,6 @@ _data_security_dup(struct data_security_s *ds)
 	return r;
 }
 
-static struct data_treatments_s *
-_data_treatments_dup(struct data_treatments_s *dt)
-{
-	struct data_treatments_s *r = NULL;
-
-	r = g_malloc0(sizeof(struct data_treatments_s));
-	r->type = dt->type;
-	if(NULL != dt->name)
-		r->name = g_strdup(dt->name);
-	if(NULL != dt->params)
-		r->params = __copy_params(dt->params);
-
-	return r;
-}
-
 static struct storage_class_s *
 _storage_class_dup(struct storage_class_s *sc)
 {
@@ -411,8 +297,6 @@ storage_policy_dup(const struct storage_policy_s *sp)
 		r->stgclass = _storage_class_dup(sp->stgclass);
 	if (NULL != sp->datasec)
 		r->datasec = _data_security_dup(sp->datasec);
-	if (NULL != sp->datatreat)
-		r->datatreat = _data_treatments_dup(sp->datatreat);
 
 	return r;
 }
@@ -431,28 +315,16 @@ storage_policy_get_data_security(const struct storage_policy_s *sp)
 	return (NULL != sp) ? sp->datasec : NULL;
 }
 
-const struct data_treatments_s *
-storage_policy_get_data_treatments(const struct storage_policy_s *sp)
-{
-	return (NULL != sp) ? sp->datatreat : NULL;
-}
-
 const struct storage_class_s *
 storage_policy_get_storage_class(const struct storage_policy_s *sp)
 {
 	return (NULL != sp) ? sp->stgclass : NULL;
 }
 
-const gchar *
-data_security_get_name(const struct data_security_s *ds)
-{
-	return (NULL != ds) ? ds->name : NULL;
-}
-
 enum data_security_e
 data_security_get_type(const struct data_security_s *ds)
 {
-	return (NULL != ds) ? ds->type : DS_NONE;
+	return (NULL != ds) ? ds->type : STGPOL_DS_PLAIN;
 }
 
 const char *
@@ -480,37 +352,6 @@ data_security_get_int64_param(const struct data_security_s *ds, const char *key,
 }
 
 const gchar *
-data_security_type_name(enum data_security_e type)
-{
-	switch (type) {
-		case DUPLI:
-			return "DUPLI";
-		case RAIN:
-			return "RAIN";
-		case DS_NONE:
-		default:
-			return "NONE";
-	}
-}
-
-enum data_treatments_e
-data_treatments_get_type(const struct data_treatments_s *ds)
-{
-	if (NULL != ds)
-		return ds->type;
-	return DT_NONE;
-}
-
-const char *
-data_treatments_get_param(const struct data_treatments_s *dt, const char *key)
-{
-	if(NULL != dt && NULL != dt->params)
-		return g_hash_table_lookup(dt->params, key);
-
-	return NULL;
-}
-
-const gchar *
 storage_class_get_name(const struct storage_class_s *sc)
 {
 	return (sc != NULL)? sc->name : NULL;
@@ -525,7 +366,7 @@ storage_class_get_fallbacks(const struct storage_class_s *sc)
 gboolean
 storage_class_is_satisfied(const gchar *wsc, const gchar *asc)
 {
-	return _is_any(wsc) || (asc && !g_ascii_strcasecmp(wsc, asc));
+	return _is_none(wsc) || (asc && !g_ascii_strcasecmp(wsc, asc));
 }
 
 gboolean
@@ -547,16 +388,42 @@ storage_class_is_satisfied2(const struct storage_class_s *wsc,
 }
 
 static GString *
-_rain_policy_to_chunk_method(const struct data_security_s *datasec) {
-	GString *result = g_string_new("plain/rain?");
+_rain_policy_to_chunk_method(const struct data_security_s *datasec)
+{
+	GString *result = g_string_new("ec/");
 
-	gint64 k = data_security_get_int64_param(datasec, DS_KEY_K, 0);
-	gint64 m = data_security_get_int64_param(datasec, DS_KEY_M, 0);
+	const gint64 k = data_security_get_int64_param(datasec, DS_KEY_K, 6);
+	const gint64 m = data_security_get_int64_param(datasec, DS_KEY_M, 4);
 	const char *algo = data_security_get_param(datasec, DS_KEY_ALGO);
 
-	g_string_append_printf(result, "algo=%s&k=%" G_GINT64_FORMAT
-			"&m=%" G_GINT64_FORMAT, algo, k, m);
+	g_string_append_printf(result,
+			"algo=%s,k=%" G_GINT64_FORMAT",m=%" G_GINT64_FORMAT, algo, k, m);
 
+	return result;
+}
+
+static GString *
+_backblaze_policy_to_chunk_method(const struct data_security_s *datasec)
+{
+	GString *result = g_string_new("backblaze/");
+
+	const char *account_id = data_security_get_param(datasec,
+							 DS_KEY_ACCOUNT_ID);
+	const char *bucket_name = data_security_get_param(datasec,
+							DS_KEY_BUCKET_NAME);
+	
+	g_string_append_printf(result, "account_id=%s,bucket_name=%s",
+			       account_id, bucket_name);
+	return result;
+}
+
+static GString *
+_plain_policy_to_chunk_method(const struct data_security_s *datasec)
+{
+	GString *result = g_string_new("plain/");
+	const gint64 nb_copy = data_security_get_int64_param(datasec, DS_KEY_COPY_COUNT, 1);
+	g_string_append_printf(result,
+			"nb_copy=%" G_GINT64_FORMAT"", nb_copy);
 	return result;
 }
 
@@ -564,15 +431,28 @@ GString *
 storage_policy_to_chunk_method(const struct storage_policy_s *sp)
 {
 	const struct data_security_s *datasec = storage_policy_get_data_security(sp);
-
 	switch (data_security_get_type(datasec)) {
-		case RAIN:
+		case STGPOL_DS_EC:
 			return _rain_policy_to_chunk_method(datasec);
-		case DS_NONE:
-		case DUPLI:
-			return g_string_new("plain/bytes");
+		case STGPOL_DS_BACKBLAZE:
+			return _backblaze_policy_to_chunk_method(datasec);
+		case STGPOL_DS_PLAIN:
+			return _plain_policy_to_chunk_method(datasec);
 		default:
 			g_assert_not_reached();
 	}
 }
 
+gint64
+storage_policy_get_nb_chunks(const struct storage_policy_s *sp)
+{
+	const struct data_security_s *dsec = storage_policy_get_data_security(sp);
+	switch (data_security_get_type(dsec)) {
+		case STGPOL_DS_EC:
+			return (data_security_get_int64_param(dsec, DS_KEY_K, 6)
+					+ data_security_get_int64_param(dsec, DS_KEY_M, 4));
+		case STGPOL_DS_PLAIN:
+		default:
+			return data_security_get_int64_param(dsec, DS_KEY_COPY_COUNT, 1);
+	}
+}

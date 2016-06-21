@@ -186,6 +186,12 @@ oio_cfg_get_proxy_containers (const char *ns)
 	return v ? v : oio_cfg_get_proxy(ns);
 }
 
+gchar *
+oio_cfg_get_swift(const char *ns)
+{
+	return oio_cfg_get_value(ns, OIO_CFG_SWIFT);
+}
+
 /* -------------------------------------------------------------------------- */
 
 #define CFG_CALL(self,F) VTABLE_CALL(self,struct oio_cfg_handle_abstract_s*,F)

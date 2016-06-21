@@ -158,7 +158,8 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 		if (!authorized_personal_only(r->connection->remote_ip, conf->rawx_conf->acl))
 #endif
 		{
-			return server_create_and_stat_error(conf, r->pool, HTTP_UNAUTHORIZED, 0, "Permission Denied (APO)");
+			return server_create_and_stat_error(conf, r->pool,
+					HTTP_UNAUTHORIZED, 0, "Permission Denied (APO)");
 		}
 	}
 
@@ -167,9 +168,11 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 	ctx.pool = r->pool;
 	ctx.request = r;
 
-	dav_error *e = rawx_repo_check_request(r, root_dir, label, use_checked_in, &ctx, result_resource);
-	/* Return in case we have an error or if result_resource != null because it was an info request */
-	if (NULL != e || NULL != *result_resource) {
+	dav_error *e = rawx_repo_check_request(r, root_dir, label, use_checked_in,
+			&ctx, result_resource);
+	/* Return in case we have an error or
+	 * if result_resource != null because it was an info request */
+	if (e || *result_resource) {
 		return e;
 	}
 
@@ -183,10 +186,9 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 			return e;
 		}
 	}
-	DAV_DEBUG_REQ(r, 0, "Hashed directory : %.*s", (int)sizeof(ctx.dirname), ctx.dirname);
+	DAV_DEBUG_REQ(r, 0, "Hashed directory: %.*s", (int)sizeof(ctx.dirname), ctx.dirname);
 
-	/* All the checks on the URL have been passed, now build a resource */
-
+	/* All the checks on the URL have passed, now build a resource */
 	dav_resource *resource = apr_pcalloc(r->pool, sizeof(*resource));
 	resource->type = DAV_RESOURCE_TYPE_REGULAR;
 	resource->info = apr_pcalloc(r->pool, sizeof(ctx));;
@@ -200,8 +202,7 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 		resource->info->file_extension,
 		NULL);
 
-	/* init compression context structure if we are in get method (for decompression) */
-
+	/* init compression context structure if we are in get method */
 	if (r->method_number == M_GET && !ctx.update_only) {
 		resource_init_decompression(resource, conf);
 	}
@@ -219,16 +220,17 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 	if (r->method_number == M_PUT || r->method_number == M_POST ||
 			r->method_number == M_MOVE ||
 			(r->method_number == M_GET && ctx.update_only)) {
-		const char *missing = request_load_chunk_info(r, resource);
+		request_load_chunk_info_from_headers(r, &(resource->info->chunk));
+		const char *missing = check_chunk_info(&resource->info->chunk);
 		if (missing != NULL) {
 			return server_create_and_stat_error(request_get_server_config(r), r->pool,
-				HTTP_BAD_REQUEST, 0, apr_pstrcat(r->pool, "Header error: ", missing, NULL));
+				HTTP_BAD_REQUEST, 0, apr_pstrcat(r->pool, "missing or invalid header ", missing, NULL));
 		}
 	}
 
 	if (r->method_number == M_POST || r->method_number == M_PUT) {
-		if (resource->info->chunk.id) {
-			if (0 != apr_strnatcasecmp(resource->info->chunk.id, resource->info->hex_chunkid))
+		if (resource->info->chunk.chunk_id) {
+			if (0 != apr_strnatcasecmp(resource->info->chunk.chunk_id, resource->info->hex_chunkid))
 				return server_create_and_stat_error(request_get_server_config(r), r->pool,
 						HTTP_BAD_REQUEST, 0, "chunk-id mismatch");
 		}
@@ -323,20 +325,22 @@ dav_rawx_close_stream(dav_stream *stream, int commit)
 
 	dav_error *e = NULL;
 
-	DAV_DEBUG_REQ(stream->r->info->request, 0, "Closing (%s) the stream to [%s]",
-		(commit ? "commit" : "rollback"), stream->pathname);
+	DAV_DEBUG_REQ(stream->r->info->request, 0,
+			"Closing (%s) the stream to [%s]",
+			(commit ? "commit" : "rollback"), stream->pathname);
 
 	if (!commit) {
 		e = rawx_repo_rollback_upload(stream);
 	} else {
 		e = rawx_repo_write_last_data_crumble(stream);
-		if ( NULL != e ) {
-			DAV_DEBUG_REQ(stream->r->info->request, 0, "Cannot commit, an error occured while writing end of data");
-			/* Must we did it ? */
+		if (e) {
+			DAV_DEBUG_REQ(stream->r->info->request, 0,
+					"Cannot commit, an error occured while writing end of data");
 			dav_error *e_tmp = NULL;
 			e_tmp = rawx_repo_rollback_upload(stream);
-			if ( NULL != e_tmp) {
-				DAV_ERROR_REQ(stream->r->info->request, 0, "Error while rolling back upload : %s", e_tmp->desc);
+			if (e_tmp) {
+				DAV_ERROR_REQ(stream->r->info->request, 0,
+						"Error while rolling back upload: %s", e_tmp->desc);
 			}
 		} else {
 			e = rawx_repo_commit_upload(stream);
@@ -354,7 +358,7 @@ dav_rawx_close_stream(dav_stream *stream, int commit)
 			request_get_duration(stream->r->info->request));
 
 	if (stream->md5) {
-		g_checksum_free (stream->md5);
+		g_checksum_free(stream->md5);
 		stream->md5 = NULL;
 	}
 	return e;
@@ -464,7 +468,7 @@ dav_rawx_set_headers(request_rec *r, const dav_resource *resource)
 	/* set up the Content-Length header */
 	ap_set_content_length(r, resource->info->finfo.size);
 
-	request_fill_headers(r, &(resource->info->content), &(resource->info->chunk));
+	request_fill_headers(r, &(resource->info->chunk));
 
 	/* compute metadata_compress if compressed content */
 	if (resource->info->compression) {
@@ -525,8 +529,7 @@ dav_rawx_deliver(const dav_resource *resource, ap_filter_t *output)
 		FILE *f = NULL;
 		f = fopen(path, "r");
 		/* Try to open the file but forbids a creation */
-		if (!set_rawx_full_info_in_attr(path, fileno(f), &error_local,&(ctx->content),
-					&(ctx->chunk), NULL, NULL)) {
+		if (!set_rawx_info_to_fd(fileno(f), &error_local, &(ctx->chunk))) {
 			fclose(f);
 			e = server_create_and_stat_error(conf, pool,
 					HTTP_FORBIDDEN, 0, apr_pstrdup(pool, gerror_get_message(error_local)));

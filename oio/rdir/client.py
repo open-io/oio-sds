@@ -52,7 +52,7 @@ class RdirClient(Client):
     def _make_uri(self, action, volume_id, create=False, nocache=False):
         rdir_host = self._get_rdir_addr(volume_id, create=create,
                                         nocache=nocache)
-        uri = 'http://%s/v1/%s/%s' % (rdir_host, self.ns, action)
+        uri = 'http://%s/v1/%s' % (rdir_host, action)
         return uri
 
     def _rdir_request(self, volume, method, action, create=False, **kwargs):
@@ -125,6 +125,12 @@ class RdirClient(Client):
 
     def admin_show(self, volume):
         resp, resp_body = self._rdir_request(volume, 'GET', 'rdir/admin/show')
+        return resp_body
+
+    def admin_clear(self, volume, clear_all=False):
+        body = {'all': clear_all}
+        resp, resp_body = self._rdir_request(
+            volume, 'POST', 'rdir/admin/clear', json=body)
         return resp_body
 
     def status(self, volume):

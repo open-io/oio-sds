@@ -92,7 +92,6 @@ namespace_info_copy(namespace_info_t* src, namespace_info_t* dst)
 	NSI_COPY_TABLE_REF(src->options, dst->options);
 	NSI_COPY_TABLE_REF(src->storage_policy, dst->storage_policy);
 	NSI_COPY_TABLE_REF(src->data_security, dst->data_security);
-	NSI_COPY_TABLE_REF(src->data_treatments, dst->data_treatments);
 	NSI_COPY_TABLE_REF(src->storage_class, dst->storage_class);
 
 #undef NSI_COPY_TABLE_REF
@@ -108,7 +107,6 @@ namespace_info_dup(namespace_info_t* src)
 	dst->options = _copy_hash(src->options);
 	dst->storage_policy = _copy_hash(src->storage_policy);
 	dst->data_security = _copy_hash(src->data_security);
-	dst->data_treatments = _copy_hash(src->data_treatments);
 	dst->storage_class = _copy_hash(src->storage_class);
 	return dst;
 }
@@ -124,8 +122,6 @@ namespace_info_clear(namespace_info_t* ns_info)
 		g_hash_table_unref(ns_info->storage_policy);
 	if (ns_info->data_security != NULL)
 		g_hash_table_unref(ns_info->data_security);
-	if (ns_info->data_treatments != NULL)
-		g_hash_table_unref(ns_info->data_treatments);
 	if (ns_info->storage_class != NULL)
 		g_hash_table_unref(ns_info->storage_class);
 
@@ -142,7 +138,6 @@ namespace_info_init(namespace_info_t *ni)
 	ni->options = _copy_hash(NULL);
 	ni->storage_policy = _copy_hash(NULL);
 	ni->data_security = _copy_hash(NULL);
-	ni->data_treatments = _copy_hash(NULL);
 	ni->storage_class = _copy_hash(NULL);
 }
 
@@ -164,34 +159,12 @@ namespace_info_free(namespace_info_t* ns_info)
 	g_free(ns_info);
 }
 
-void
-namespace_info_gclean(gpointer p1, gpointer p2)
-{
-	(void) p2;
-	if (p1)
-		namespace_info_free((struct namespace_info_s*)p1);
-}
-
 gchar *
 namespace_info_get_data_security(namespace_info_t *ni, const gchar *data_sec_key)
 {
 	if(NULL != ni->data_security) {
 		GByteArray *gba = NULL;
 		gba = g_hash_table_lookup(ni->data_security, data_sec_key);
-		if(NULL != gba) {
-			return g_strndup((gchar*)gba->data, gba->len);
-		}
-	}
-
-	return NULL;
-}
-
-gchar *
-namespace_info_get_data_treatments(namespace_info_t *ni, const gchar *data_treat_key)
-{
-	if(NULL != ni->data_treatments) {
-		GByteArray *gba = NULL;
-		gba = g_hash_table_lookup(ni->data_treatments, data_treat_key);
 		if(NULL != gba) {
 			return g_strndup((gchar*)gba->data, gba->len);
 		}
@@ -309,7 +282,6 @@ namespace_info_init_json_object(struct json_object *obj,
 	if (NULL != (err = _load_hash(obj, "options", ni->options))
 			|| NULL != (err = _load_hash(obj, "storage_policy", ni->storage_policy))
 			|| NULL != (err = _load_hash(obj, "data_security", ni->data_security))
-			|| NULL != (err = _load_hash(obj, "data_treatments", ni->data_treatments))
 			|| NULL != (err = _load_hash(obj, "storage_class", ni->storage_class)))
 		return err;
 
@@ -378,8 +350,6 @@ namespace_info_encode_json(GString *out, struct namespace_info_s *ni)
 	_encode_json_properties(out, ni->storage_class, "storage_class");
 	g_string_append_c(out, ',');
 	_encode_json_properties(out, ni->data_security, "data_security");
-	g_string_append_c(out, ',');
-	_encode_json_properties(out, ni->data_treatments, "data_treatments");
 	g_string_append_c(out, '}');
 }
 

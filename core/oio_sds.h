@@ -19,6 +19,10 @@ License along with this library.
 #ifndef OIO_SDS__sdk__oio_sds_h
 #define OIO_SDS__sdk__oio_sds_h 1
 
+/* Version started to be defined in June, 2016. Version prior to 20160600
+ * have no ABI incompatibilities. */
+#define OIO_SDS_VERSION 20160600
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -73,6 +77,14 @@ void oio_log_more (void);
  */
 char ** oio_sds_get_compile_options (void);
 
+#ifdef OIO_SDS_VERSION
+/* Returns the integer version of the API. Compare the version returned to the
+ * version you know from the OIO_SDS_VERSION macro. If it differs, the only
+ * behavior to have is upgrading your header AND your library to the same
+ * level. */
+unsigned int oio_sds_version (void);
+#endif /* defined OIO_SDS_VERSION */
+
 /* Error management --------------------------------------------------------- */
 
 void oio_error_free (struct oio_error_s *e);
@@ -110,7 +122,7 @@ struct oio_error_s* oio_sds_delete_container(struct oio_sds_s *sds,
 
 /* Download ----------------------------------------------------------------- */
 
-/* Expected to return 0 when the data's managemenr succeeded, and something
+/* Expected to return the number of bytes read, and something
  * else when it failed. */
 typedef int (*oio_sds_dl_hook_f) (void*, const unsigned char*, size_t);
 
@@ -213,11 +225,15 @@ struct oio_error_s * oio_sds_upload_commit (struct oio_sds_ul_s *ul);
 
 struct oio_error_s * oio_sds_upload_abort (struct oio_sds_ul_s *ul);
 
-/* Tells if the upload is ready to be accept data */
+/* Tells if the upload is ready to accept data */
 int oio_sds_upload_greedy (struct oio_sds_ul_s *ul);
 
 /* Tells if the upload is ready to be (in)validated */
 int oio_sds_upload_done (struct oio_sds_ul_s *ul);
+
+/* Tells if the upload will need a data-daemon aside.
+ * TODO rename to be more generic (not only EC requires side daemon) */
+int oio_sds_upload_needs_ecd(struct oio_sds_ul_s *ul);
 
 void oio_sds_upload_clean (struct oio_sds_ul_s *ul);
 

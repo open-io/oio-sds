@@ -29,25 +29,22 @@ _init_ns (struct namespace_info_s *ni)
 				"\"ns\":\"%s\","
 				"\"chunksize\":%i,"
 				"\"storage_policy\":{"
-					"\"rain32\":\"NONE:RAIN32:NONE\","
-					"\"dupli3\":\"NONE:DUPLI3:NONE\","
-					"\"classic\":\"NONE:DUPONETWO:NONE\","
-					"\"polcheck\":\"NONE:DUPONETHREE:SIMCOMP\","
-					"\"secure\":\"NONE:DUP_SECURE:NONE\""
+					"\"rain32\":\"NONE:RAIN32\","
+					"\"dupli3\":\"NONE:DUPLI3\","
+					"\"classic\":\"NONE:DUPONETWO\","
+					"\"polcheck\":\"NONE:DUPONETHREE\","
+					"\"secure\":\"NONE:DUP_SECURE\""
 				"},"
 				"\"data_security\":{"
-					"\"DUPLI3\":\"DUP:distance=0|nb_copy=3\","
-					"\"RAIN32\":\"RAIN:distance=0|k=3|m=2\","
-					"\"DUPONETWO\":\"DUP:distance=1|nb_copy=2\","
-					"\"DUPONETHREE\":\"DUP:distance=1|nb_copy=3\","
-					"\"DUP_SECURE\":\"DUP:distance=4|nb_copy=2\""
-				"},"
-				"\"data_treatments\":{"
-					"\"SIMCOMP\":\"COMP:algo=ZLIB|blocksize=262144\""
+					"\"DUPLI3\":\"plain/distance=0,nb_copy=3\","
+					"\"RAIN32\":\"ec/algo=isa_l_rs_vand,distance=0,k=3,m=2\","
+					"\"DUPONETWO\":\"plain/distance=1,nb_copy=2\","
+					"\"DUPONETHREE\":\"plain/distance=1,nb_copy=3\","
+					"\"DUP_SECURE\":\"plain/distance=4,nb_copy=2\""
 				"},"
 				"\"storage_class\":{"
-					"\"GOLD\":\"SILVER:BRONZE:CLAY\","
-					"\"SILVER\":\"BRONZE:CLAY\","
+					"\"GOLD\":\"SILVER,BRONZE,CLAY\","
+					"\"SILVER\":\"BRONZE,CLAY\","
 					"\"BRONZE\":\"CLAY\","
 					"\"CLAY\":\"\""
 				"},"
@@ -85,7 +82,6 @@ test_stgclass_no_fallback ()
 	g_assert(0 == g_slist_length(sc->fallbacks));
 	g_assert(storage_class_is_satisfied2(sc, "CLAY", TRUE));
 	g_assert(storage_class_is_satisfied2(NULL, "CLAY", TRUE));
-	g_assert(storage_class_is_satisfied("DUMMY", "CLAY"));
 	g_assert(storage_class_is_satisfied("NONE", "CLAY"));
 	g_assert(storage_class_is_satisfied("", "CLAY"));
 	g_assert(storage_class_is_satisfied(NULL, "CLAY"));

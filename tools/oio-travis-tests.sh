@@ -1,6 +1,13 @@
 set -e
 export COLUMNS=512 LANG=
 
+SRCDIR=$PWD
+WRKDIR=$PWD
+if [ $# -eq 2 ] ; then
+	SRCDIR="$1"
+	WRKDIR="$2"
+fi
+
 function dump_syslog {
 	cmd=tail
 	if ! [ -r /var/log/syslog ] ; then
@@ -26,14 +33,17 @@ func_tests () {
 	export OIO_NS="NS-${RANDOM}" OIO_ACCOUNT="ACCT-$RANDOM" OIO_USER=USER-$RANDOM OIO_PATH=PATH-$RANDOM
 	oio-reset.sh -v -v -N $OIO_NS $@
 	echo -e "END OF RESET" | logger -t TEST
+	cd $SRCDIR
 	tox && tox -e func
+	cd $WRKDIR
 	make -C tests/func test
 	./core/tool_roundtrip /etc/passwd
 }
 
 echo -e "\n### UNIT tests\n"
+cd $WRKDIR
 make -C tests/unit test
 
-func_tests -S "SINGLE" -M 1 -E 3 -C 1000 -B 1 -D 1 -R 1 -X zookeeper
-func_tests -S "THREECOPIES" -M 1 -E 5 -C 65536 -B 1 -D 1 -R 1 -X zookeeper
-
+func_tests -f "${SRCDIR}/etc/bootstrap-SINGLE.yml"
+func_tests -f "${SRCDIR}/etc/bootstrap-3COPIES-11RAWX.yml"
+func_tests -f "${SRCDIR}/etc/bootstrap-EC.yml"

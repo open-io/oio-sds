@@ -58,33 +58,29 @@ enum _prefix_e { PREFIX_CONSCIENCE, PREFIX_REFERENCE, PREFIX_CONTAINER };
 static GString *
 _curl_url_prefix (const char *ns, enum _prefix_e which)
 {
-	GString *hu = g_string_new ("http://");
-
 	if (!ns) {
 		GRID_WARN ("BUG No namespace configured!");
-		g_string_append (hu, "proxy");
-	} else {
-		gchar *s = NULL;
-
-		if (which == PREFIX_CONSCIENCE)
-			s = oio_cfg_get_proxy_conscience (ns);
-		else if (which == PREFIX_CONTAINER)
-			s = oio_cfg_get_proxy_containers (ns);
-		else if (which == PREFIX_REFERENCE)
-			s = oio_cfg_get_proxy_directory (ns);
-
-		if (!s)
-			s = oio_cfg_get_proxy (ns);
-
-		if (!s) {
-			GRID_WARN ("No proxy configured!");
-			g_string_append (hu, "proxy");
-		} else {
-			g_string_append (hu, s);
-			g_free (s);
-		}
+		return NULL;
 	}
 
+	gchar *s = NULL;
+
+	if (which == PREFIX_CONSCIENCE)
+		s = oio_cfg_get_proxy_conscience (ns);
+	else if (which == PREFIX_CONTAINER)
+		s = oio_cfg_get_proxy_containers (ns);
+	else if (which == PREFIX_REFERENCE)
+		s = oio_cfg_get_proxy_directory (ns);
+	if (!s)
+		s = oio_cfg_get_proxy (ns);
+	if (!s) {
+		GRID_WARN ("No proxy configured!");
+		return NULL;
+	}
+
+	GString *hu = g_string_new("http://");
+	g_string_append (hu, s);
+	g_free (s);
 	return hu;
 }
 
@@ -113,6 +109,8 @@ static GString *
 _curl_reference_url (struct oio_url_s *u, const char *action)
 {
 	GString *hu = _curl_url_prefix_reference (u);
+	if (!hu) return NULL;
+
 	g_string_append_printf (hu, "/%s/%s/reference/%s", PROXYD_PREFIX,
 			oio_url_get(u, OIOURL_NS), action);
 	_append (hu, '?', "acct", oio_url_get (u, OIOURL_ACCOUNT));
@@ -124,6 +122,8 @@ static GString *
 _curl_conscience_url (const char *ns, const char *action)
 {
 	GString *hu = _curl_url_prefix (ns, PREFIX_CONSCIENCE);
+	if (!hu) return NULL;
+
 	g_string_append_printf (hu, "/%s/%s/conscience/%s", PROXYD_PREFIX,
 			ns, action);
 	return hu;
@@ -142,6 +142,8 @@ static GString *
 _curl_container_url (struct oio_url_s *u, const char *action)
 {
 	GString *hu = _curl_url_prefix_containers (u);
+	if (!hu) return NULL;
+
 	g_string_append_printf (hu, "/%s/%s/container/%s", PROXYD_PREFIX,
 			oio_url_get(u, OIOURL_NS), action);
 	_append (hu, '?', "acct", oio_url_get (u, OIOURL_ACCOUNT));
@@ -154,6 +156,8 @@ static GString *
 _curl_content_url (struct oio_url_s *u, const char *action)
 {
 	GString *hu = _curl_url_prefix_containers (u);
+	if (!hu) return NULL;
+
 	g_string_append_printf (hu, "/%s/%s/content/%s", PROXYD_PREFIX,
 			oio_url_get(u, OIOURL_NS), action);
 	_append (hu, '?', "acct", oio_url_get (u, OIOURL_ACCOUNT));
@@ -196,14 +200,14 @@ _body_parse_error (GString *b)
 }
 
 static size_t
-_write_NOOP (void *data, size_t s, size_t n, void *ignored)
+_write_NOOP (char *data, size_t s, size_t n, void *ignored)
 {
 	(void) data, (void) ignored;
 	return s*n;
 }
 
 static size_t
-_write_GString (void *b, size_t s, size_t n, GString *out)
+_write_GString (char *b, size_t s, size_t n, GString *out)
 {
 	g_string_append_len (out, (gchar*)b, s*n);
 	return s*n;
@@ -216,7 +220,7 @@ struct view_GString_s
 };
 
 static size_t
-_read_GString (void *b, size_t s, size_t n, struct view_GString_s *in)
+_read_GString (char *b, size_t s, size_t n, struct view_GString_s *in)
 {
 	size_t remaining = in->data->len - in->done;
 	size_t available = s * n;
@@ -270,7 +274,12 @@ _header_callback(char *b, size_t s, size_t n, void *u)
 {
 	struct http_ctx_s *o = u;
 	size_t total = n*s;
-	if (!o || !o->headers || !_has_prefix_len (&b, &total, "x-oio-"))
+
+	if (!o || !o->headers) /* caller not interested in headers */
+		return total;
+	if (!_has_prefix_len (&b, &total, "x-oio-"))
+		return total;
+	if (total > 8192) /* header too big */
 		return total;
 
 	gchar tmp[total+1];
@@ -325,7 +334,8 @@ _proxy_call_notime (CURL *h, const char *method, const char *url,
 	if (in && in->body) {
 		view_input.data = in->body;
 		gint64 len = in->body->len;
-		curl_easy_setopt (h, CURLOPT_READFUNCTION, _read_GString);
+		curl_easy_setopt (h, CURLOPT_READFUNCTION,
+				(curl_read_callback)_read_GString);
 		curl_easy_setopt (h, CURLOPT_READDATA, &view_input);
 		curl_easy_setopt (h, CURLOPT_UPLOAD, 1L);
 		curl_easy_setopt (h, CURLOPT_INFILESIZE_LARGE, len);
@@ -337,10 +347,12 @@ _proxy_call_notime (CURL *h, const char *method, const char *url,
 	}
 
 	if (out && out->body) {
-		curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
+		curl_easy_setopt (h, CURLOPT_WRITEFUNCTION,
+				(curl_write_callback)_write_GString);
 		curl_easy_setopt (h, CURLOPT_WRITEDATA, out->body);
 	} else {
-		curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_NOOP);
+		curl_easy_setopt (h, CURLOPT_WRITEFUNCTION,
+				(curl_write_callback)_write_NOOP);
 	}
 
 	CURLcode rc = curl_easy_perform (h);
@@ -382,6 +394,8 @@ GError *
 oio_proxy_call_container_create (CURL *h, struct oio_url_s *u)
 {
 	GString *http_url = _curl_container_url (u, "create");
+	if (!http_url) return BADNS();
+
 	gchar *hdrin[] = {PROXYD_HEADER_MODE, "autocreate", NULL};
 	struct http_ctx_s i = { .headers = hdrin, .body = NULL };
 	GError *err = _proxy_call (h, "POST", http_url->str, &i, NULL);
@@ -403,6 +417,8 @@ oio_proxy_call_container_get_properties (CURL *h, struct oio_url_s *u,
 		GString **props_str)
 {
 	GString *http_url = _curl_container_url (u, "get_properties");
+	if (!http_url) return BADNS();
+
 	struct http_ctx_s out_ctx = {0};
 	if (props_str && *props_str)
 		out_ctx.body = *props_str;
@@ -458,6 +474,8 @@ oio_proxy_call_container_set_properties (CURL *h, struct oio_url_s *u,
 		const char* const *values)
 {
 	GString *http_url = _curl_container_url (u, "set_properties");
+	if (!http_url) return BADNS();
+
 	GError *err = _set_properties(h, http_url, values);
 	g_string_free (http_url, TRUE);
 	return err;
@@ -469,18 +487,28 @@ oio_proxy_call_content_set_properties (CURL *h, struct oio_url_s *u,
 		const char* const *values)
 {
 	GString *http_url = _curl_content_url (u, "set_properties");
+	if (!http_url) return BADNS();
+
 	GError *err = _set_properties(h, http_url, values);
 	g_string_free (http_url, TRUE);
 	return err;
 }
 
 GError *
-oio_proxy_call_content_show (CURL *h, struct oio_url_s *u, GString *out)
+oio_proxy_call_content_show (CURL *h, struct oio_url_s *u, GString *out,
+		char ***hout)
 {
 	GString *http_url = _curl_content_url (u, "show");
-	struct http_ctx_s o = { .headers = NULL, .body = out };
+	if (!http_url) return BADNS();
+
+	struct http_ctx_s o = {
+			.headers = hout ? g_malloc0(sizeof(gchar*)) : NULL,
+			.body = out
+	};
 	GError *err = _proxy_call (h, "GET", http_url->str, NULL, &o);
 	g_string_free (http_url, TRUE);
+	if (hout)
+		*hout = o.headers;
 	return err;
 }
 
@@ -488,6 +516,8 @@ GError *
 oio_proxy_call_content_delete (CURL *h, struct oio_url_s *u)
 {
 	GString *http_url = _curl_content_url (u, "delete");
+	if (!http_url) return BADNS();
+
 	GError *err = _proxy_call (h, "POST", http_url->str, NULL, NULL);
 	g_string_free (http_url, TRUE);
 	return err;
@@ -496,8 +526,10 @@ oio_proxy_call_content_delete (CURL *h, struct oio_url_s *u)
 GError *
 oio_proxy_call_content_link (CURL *h, struct oio_url_s *u, const char *id)
 {
-	struct http_ctx_s i = { .headers = NULL, .body = _gs_vprintf("{\"id\":\"%s\"}", id) };
 	GString *http_url = _curl_content_url (u, "link");
+	if (!http_url) return BADNS();
+
+	struct http_ctx_s i = { .headers = NULL, .body = _gs_vprintf("{\"id\":\"%s\"}", id) };
 	GError *err = _proxy_call (h, "POST", http_url->str, &i, NULL);
 	g_string_free (http_url, TRUE);
 	g_string_free (i.body, TRUE);
@@ -509,6 +541,9 @@ oio_proxy_call_content_prepare (CURL *h, struct oio_url_s *u,
 		gsize size, gboolean autocreate,
 		struct oio_proxy_content_prepare_out_s *out)
 {
+	GString *http_url = _curl_content_url (u, "prepare");
+	if (!http_url) return BADNS();
+
 	gchar *hdrin[] = {
 		PROXYD_HEADER_MODE, autocreate ? "autocreate" : NULL,
 		NULL
@@ -522,7 +557,7 @@ oio_proxy_call_content_prepare (CURL *h, struct oio_url_s *u,
 		.headers = g_malloc0(sizeof(void*)),
 		.body = out ? out->body : NULL
 	};
-	GString *http_url = _curl_content_url (u, "prepare");
+
 	GError *err = _proxy_call (h, "POST", http_url->str, &i, &o);
 	if (!err && out && o.headers) {
 		for (gchar **p=o.headers; *p && *(p+1) ;p+=2) {
@@ -552,6 +587,8 @@ oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,
 		struct oio_proxy_content_create_in_s *in, GString *out)
 {
 	GString *http_url = _curl_content_url (u, "create");
+	if (!http_url) return BADNS();
+
 	if (in->content) {
 		g_string_append (http_url, "&id=");
 		g_string_append_uri_escaped (http_url, in->content, NULL, TRUE);
@@ -567,6 +604,8 @@ oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,
 		g_strdup_printf("%s", in->hash),
 		g_strdup(PROXYD_HEADER_PREFIX "content-meta-policy"),
 		g_strdup_printf("%s", in->stgpol?: "NONE"),
+		g_strdup(PROXYD_HEADER_PREFIX "content-meta-chunk-method"),
+		g_strdup_printf("%s", in->chunk_method?: "plain"),
 		NULL
 	};
 	struct http_ctx_s i = { .headers = hdrin, .body = in ? in->chunks : NULL };
@@ -583,6 +622,8 @@ oio_proxy_call_content_list (CURL *h, struct oio_url_s *u, GString *out,
 		guint max, char delim)
 {
 	GString *http_url = _curl_container_url (u, "list");
+	if (!http_url) return BADNS();
+
 	if (prefix) _append (http_url, '&', "prefix", prefix);
 	if (marker) _append (http_url, '&', "marker", marker);
 	if (end) _append (http_url, '&', "end", end);
@@ -602,6 +643,8 @@ oio_proxy_call_reference_show (CURL *h, struct oio_url_s *u,
 		const char *t, GString *out)
 {
 	GString *http_url = _curl_reference_url (u, "show");
+	if (!http_url) return BADNS();
+
 	if (t) _append(http_url, '&', "type", t);
 
 	struct http_ctx_s o = { .headers = NULL, .body = out };
@@ -616,6 +659,8 @@ GError *
 oio_proxy_call_reference_create (CURL *h, struct oio_url_s *u)
 {
 	GString *http_url = _curl_reference_url (u, "create");
+	if (!http_url) return BADNS();
+
 	GError *err = _proxy_call (h, "POST", http_url->str, NULL, NULL);
 	g_string_free(http_url, TRUE);
 	return err;
@@ -626,6 +671,8 @@ oio_proxy_call_reference_link (CURL *h, struct oio_url_s *u,
 		const char *srvtype, gboolean autocreate, GString *out)
 {
 	GString *http_url = _curl_reference_url (u, "link");
+	if (!http_url) return BADNS();
+
 	_append (http_url, '&', "type", srvtype);
 	gchar *hdrin[] = {
 		g_strdup(PROXYD_HEADER_MODE),
@@ -649,6 +696,8 @@ GError *
 oio_proxy_call_conscience_register (CURL *h, const char *ns, GString *in)
 {
 	GString *http_url = _curl_conscience_url (ns, "register");
+	if (!http_url) return BADNS();
+
 	struct http_ctx_s i = { .headers = NULL, .body = in };
 	GError *err = _proxy_call (h, "POST", http_url->str, &i, NULL);
 	g_string_free(http_url, TRUE);
@@ -659,6 +708,8 @@ GError *
 oio_proxy_call_conscience_lock (CURL *h, const char *ns, GString *in)
 {
 	GString *http_url = _curl_conscience_url (ns, "lock");
+	if (!http_url) return BADNS();
+
 	struct http_ctx_s i = { .headers = NULL, .body = in };
 	GError *err = _proxy_call (h, "POST", http_url->str, &i, NULL);
 	g_string_free(http_url, TRUE);
@@ -669,6 +720,8 @@ GError *
 oio_proxy_call_conscience_deregister (CURL *h, const char *ns, GString *in)
 {
 	GString *http_url = _curl_conscience_url (ns, "deregister");
+	if (!http_url) return BADNS();
+
 	struct http_ctx_s i = { .headers = NULL, .body = in };
 	GError *err = _proxy_call (h, "POST", http_url->str, &i, NULL);
 	g_string_free(http_url, TRUE);
@@ -679,6 +732,8 @@ GError *
 oio_proxy_call_conscience_flush (CURL *h, const char *ns, const char *srvtype)
 {
 	GString *http_url = _curl_conscience_url (ns, "flush");
+	if (!http_url) return BADNS();
+
 	_append (http_url, '?', "type", srvtype);
 	GError *err = _proxy_call (h, "POST", http_url->str, NULL, NULL);
 	g_string_free(http_url, TRUE);
@@ -689,6 +744,8 @@ GError *
 oio_proxy_call_conscience_unlock (CURL *h, const char *ns, GString *in)
 {
 	GString *http_url = _curl_conscience_url (ns, "unlock");
+	if (!http_url) return BADNS();
+
 	struct http_ctx_s i = { .headers = NULL, .body = in };
 	GError *err = _proxy_call (h, "POST", http_url->str, &i, NULL);
 	g_string_free(http_url, TRUE);
@@ -700,6 +757,8 @@ oio_proxy_call_conscience_list (CURL *h, const char *ns,
 		const char *srvtype, gboolean full, GString *out)
 {
 	GString *http_url = _curl_conscience_url (ns, "list");
+	if (!http_url) return BADNS();
+
 	_append (http_url, '?', "type", srvtype);
 	gchar *hdrin[] = {
 		g_strdup(PROXYD_HEADER_MODE),
@@ -722,6 +781,8 @@ oio_proxy_call_conscience_list_types (CURL *h, const char *ns,
 		GString *out)
 {
 	GString *http_url = _curl_conscience_url (ns, "info");
+	if (!http_url) return BADNS();
+
 	_append (http_url, '?', "what", "types");
 	struct http_ctx_s o = { .headers = NULL, .body = out };
 	GError *err = _proxy_call (h, "GET", http_url->str, NULL, &o);
@@ -734,6 +795,8 @@ GError *
 oio_proxy_call_conscience_info (CURL *h, const char *ns, GString *out)
 {
 	GString *http_url = _curl_conscience_url (ns, "info");
+	if (!http_url) return BADNS();
+
 	struct http_ctx_s o = { .headers = NULL, .body = out };
 	GError *err = _proxy_call (h, "GET", http_url->str, NULL, &o);
 	g_strfreev (o.headers);

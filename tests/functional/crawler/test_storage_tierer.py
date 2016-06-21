@@ -38,7 +38,7 @@ class TestStorageTierer(BaseTestCase):
                          "content_fetch_limit": 2,
                          "account": self.test_account,
                          "outdated_threshold": 0,
-                         "new_policy": "RAIN"}
+                         "new_policy": "EC"}
         self.content_factory = ContentFactory(self.gridconf)
         self.container_client = ContainerClient(self.gridconf)
         self._populate()
@@ -76,7 +76,7 @@ class TestStorageTierer(BaseTestCase):
         content = self.content_factory.new(container_id, content_name,
                                            len(data), stgpol)
 
-        content.upload(StringIO.StringIO(data))
+        content.create(StringIO.StringIO(data))
         return content
 
     def tearDown(self):

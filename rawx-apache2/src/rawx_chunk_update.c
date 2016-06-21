@@ -64,14 +64,6 @@ struct dav_resource_private {
 /* ------------------------------------------------------------------------- */
 
 static apr_status_t
-apr_storage_policy_clean(void *p)
-{
-	struct storage_policy_s *sp = (struct storage_policy_s *) p;
-	storage_policy_clean(sp);
-	return APR_SUCCESS;
-}
-
-static apr_status_t
 apr_hash_table_clean(void *p)
 {
 	GHashTable *ht = (GHashTable *) p;
@@ -184,7 +176,7 @@ __build_chunk_full_path(const dav_resource *resource, char **full_path)
 }
 
 static dav_error *
-_load_request_info(const dav_resource *resource, char **full_path, struct storage_policy_s **sp)
+_load_request_info(const dav_resource *resource, char **full_path)
 {
 	dav_error *e = NULL;
 	const request_rec *r = resource->info->request;
@@ -196,25 +188,11 @@ _load_request_info(const dav_resource *resource, char **full_path, struct storag
 
 	DAV_DEBUG_REQ(r, 0, "Chunk path build from request: %s", *full_path);
 
-	/* init loaded storage policy */
-	const char *pol_name = apr_table_get(r->headers_in, "storage-policy");
-	if (!pol_name) {
-		return server_create_and_stat_error(request_get_server_config(r), r->pool,
-				HTTP_BAD_REQUEST, 0, "No storage-policy specified");
-	}
-	DAV_DEBUG_REQ(r, 0, "Policy found in request: %s", pol_name);
-
-	dav_rawx_server_conf *conf = resource_get_server_config(resource);
-
-	*sp = storage_policy_init(conf->rawx_conf->ni, pol_name);
-	apr_pool_cleanup_register(r->pool, *sp, apr_storage_policy_clean, apr_pool_cleanup_null);
-
 	return NULL;
 }
 
 static dav_error *
-_load_in_place_chunk_info(const dav_resource *r, const char *path, struct content_textinfo_s *content,
-		struct chunk_textinfo_s *chunk, GHashTable *comp_opt)
+_load_in_place_chunk_info(const dav_resource *r, const char *path, struct chunk_textinfo_s *chunk, GHashTable *comp_opt)
 {
 	dav_error *e = NULL;
 	GError *ge = NULL;
@@ -223,7 +201,7 @@ _load_in_place_chunk_info(const dav_resource *r, const char *path, struct conten
 
 	/* No need to check for the chunk's presence, getting its attributes will
 	 * fail if the chunk doesn't exists */
-	if (!get_rawx_info_in_attr(path, &ge, content, chunk)) {
+	if (!get_rawx_info_from_file(path, &ge, chunk)) {
 		if (NULL != ge) {
 			e = server_create_and_stat_error(conf, p, HTTP_CONFLICT, 0,
 					apr_pstrcat(p, "Failed to get chunk attributes: ", ge->message, NULL));
@@ -235,20 +213,22 @@ _load_in_place_chunk_info(const dav_resource *r, const char *path, struct conten
 		return e;
 	}
 
-	str_replace_by_pooled_str(p, &(content->container_id));
+	str_replace_by_pooled_str(p, &(chunk->container_id));
 
-	str_replace_by_pooled_str(p, &(content->content_id));
-	str_replace_by_pooled_str(p, &(content->path));
-	str_replace_by_pooled_str(p, &(content->version));
-	str_replace_by_pooled_str(p, &(content->size));
-	str_replace_by_pooled_str(p, &(content->chunk_nb));
-	str_replace_by_pooled_str(p, &(content->storage_policy));
+	str_replace_by_pooled_str(p, &(chunk->content_id));
+	str_replace_by_pooled_str(p, &(chunk->content_path));
+	str_replace_by_pooled_str(p, &(chunk->content_version));
+	str_replace_by_pooled_str(p, &(chunk->content_size));
+	str_replace_by_pooled_str(p, &(chunk->content_chunk_nb));
 
-	str_replace_by_pooled_str(p, &(chunk->id));
-	str_replace_by_pooled_str(p, &(chunk->size));
-	str_replace_by_pooled_str(p, &(chunk->hash));
-	str_replace_by_pooled_str(p, &(chunk->position));
-	str_replace_by_pooled_str(p, &(chunk->metadata));
+	str_replace_by_pooled_str(p, &(chunk->content_storage_policy));
+	str_replace_by_pooled_str(p, &(chunk->content_chunk_method));
+	str_replace_by_pooled_str(p, &(chunk->content_mime_type));
+
+	str_replace_by_pooled_str(p, &(chunk->chunk_id));
+	str_replace_by_pooled_str(p, &(chunk->chunk_size));
+	str_replace_by_pooled_str(p, &(chunk->chunk_position));
+	str_replace_by_pooled_str(p, &(chunk->chunk_hash));
 
 	if(!get_compression_info_in_attr(path, &ge, comp_opt)){
 		if(NULL != ge) {
@@ -265,146 +245,41 @@ _load_in_place_chunk_info(const dav_resource *r, const char *path, struct conten
 	return NULL;
 }
 
-static int
-_is_storage_policy_already_applied(const struct data_treatments_s *dt, GHashTable *comp_opt)
-{
-	const char *c = NULL;
-
-	switch (data_treatments_get_type(dt)) {
-		case COMPRESSION:
-			c = g_hash_table_lookup(comp_opt, NS_COMPRESSION_OPTION);
-			if(NULL != c && g_ascii_strcasecmp(c, NS_COMPRESSION_ON)) {
-				/* check algo & bsize */
-				const char *pol_algo = NULL;
-				const char *pol_bs = NULL;
-				const char *current_algo = NULL;
-				const char *current_bs = NULL;
-				pol_algo = data_treatments_get_param(dt, DT_KEY_ALGO);
-				pol_bs = data_treatments_get_param(dt, DT_KEY_BLOCKSIZE);
-				current_algo = g_hash_table_lookup(comp_opt, NS_COMPRESS_ALGO_OPTION);
-				current_bs = g_hash_table_lookup(comp_opt, NS_COMPRESS_BLOCKSIZE_OPTION);
-				if(NULL != pol_algo && NULL != current_algo && 0 == g_ascii_strcasecmp(pol_algo, current_algo)) {
-					if(NULL != pol_bs && NULL != current_bs && 0 == g_ascii_strcasecmp(pol_bs, current_bs)) {
-						return APR_SUCCESS;
-					}
-				}
-			}
-			return 1;
-		case DT_NONE:
-			c = g_hash_table_lookup(comp_opt, NS_COMPRESSION_OPTION);
-			if(!c || 0 == g_ascii_strcasecmp(c, NS_COMPRESSION_OFF)) {
-				return APR_SUCCESS;
-			}
-			return 1;
-		default:
-			return APR_SUCCESS;
-	}
-}
-
-static dav_error *
-_update_chunk_storage(const dav_resource *resource, const char *path, const struct data_treatments_s *dt, GHashTable *comp_opt)
-{
-	GError *e = NULL;
-	dav_error *de = NULL;
-	const char *c = NULL;
-	const request_rec *r = resource->info->request;
-	c = g_hash_table_lookup(comp_opt, NS_COMPRESSION_OPTION);
-	if(NULL != c && 0 == g_ascii_strcasecmp(c, NS_COMPRESSION_ON)) {
-		DAV_DEBUG_REQ(r, 0, "In place chunk is compressed, uncompress it");
-		if(1 != uncompress_chunk(path, TRUE, &e)) {
-			de = server_create_and_stat_error(request_get_server_config(r),
-					r->pool, HTTP_INTERNAL_SERVER_ERROR, 0,
-					apr_pstrcat(r->pool, "Failed to uncompress chunk : ",
-					((NULL != e)? e->message : "No error specified"), NULL));
-			if(NULL != e)
-				g_clear_error(&e);
-			return de;
-		}
-		DAV_DEBUG_REQ(r, 0, "Chunk uncompressed");
-	}
-
-	if(COMPRESSION == data_treatments_get_type(dt)) {
-		DAV_DEBUG_REQ(r, 0, "Re compressing chunk");
-		const char *algo = data_treatments_get_param(dt, DT_KEY_ALGO);
-		const char *bs = data_treatments_get_param(dt, DT_KEY_BLOCKSIZE);
-		if(!algo || !bs) {
-			return server_create_and_stat_error(request_get_server_config(r),
-					r->pool, HTTP_INTERNAL_SERVER_ERROR, 0,
-					apr_pstrcat(r->pool, "Cannot compress chunk, missing info: ",
-						algo, "|", bs, NULL));
-		}
-
-		if(1 != compress_chunk(path, algo, g_ascii_strtoll(bs, NULL, 10), TRUE, &e)) {
-			de = server_create_and_stat_error(request_get_server_config(r),
-					r->pool, HTTP_INTERNAL_SERVER_ERROR, 0,
-					apr_pstrcat(r->pool, "Failed to compress chunk : ",
-						((NULL != e)? e->message : "No error specified"), NULL));
-			if(NULL != e)
-				g_clear_error(&e);
-			return de;
-		}
-	}
-
-	return NULL;
-}
 
 static dav_error *
 dav_rawx_deliver_SPECIAL(const dav_resource *resource, ap_filter_t *output)
 {
 	(void) output;
 	dav_error *e = NULL;
-	struct storage_policy_s *sp = NULL;
-	const struct data_treatments_s *dt = NULL;
 	const request_rec *r = resource->info->request;
 	GHashTable *comp_opt = NULL;
-	struct content_textinfo_s *content = NULL;
 	struct chunk_textinfo_s *chunk = NULL;
 	char *path = NULL;
 	apr_pool_t *p = resource->pool;
 
 	/* Load request informations */
-	e = _load_request_info(resource, &path, &sp);
+	e = _load_request_info(resource, &path);
 	if (NULL != e) {
 		DAV_ERROR_REQ(r, 0, "Failed to load request informations: %s", e->desc);
 		goto end_deliver;
 	}
 
-	if(!sp) {
-		DAV_DEBUG_REQ(r, 0, "Storage policy not initialized with value found in header, don't do anything");
-		goto end_deliver;
-	}
-
-	dt = storage_policy_get_data_treatments(sp);
-	if(!dt)
-		DAV_DEBUG_REQ(r, 0, "Data treatments not defined for this policy");
-
 	comp_opt = g_hash_table_new_full( g_str_hash, g_str_equal, g_free, g_free);
 	apr_pool_cleanup_register(p, comp_opt, apr_hash_table_clean, apr_pool_cleanup_null);
 	chunk = apr_palloc(p, sizeof(struct chunk_textinfo_s));
-	content = apr_palloc(p, sizeof(struct content_textinfo_s));
 
 	/* Load in place informations (sys-metadata & metadatacompress) */
-	e = _load_in_place_chunk_info(resource, path, content, chunk, comp_opt);
+	e = _load_in_place_chunk_info(resource, path, chunk, comp_opt);
 	if (NULL != e) {
 		DAV_ERROR_REQ(r, 0, "Failed to load in place chunk information: %s", e->desc);
 		goto end_deliver;
 	}
 
-	DAV_DEBUG_REQ(r, 0, "In place chunk info loaded, compression status : %s", (gchar*)g_hash_table_lookup(comp_opt, NS_COMPRESSION_OPTION));
-
-	/* check chunk not in required state */
-	if (APR_SUCCESS != _is_storage_policy_already_applied(dt, comp_opt)) {
-		DAV_DEBUG_REQ(r, 0, "Storage policy not already applied, apply it!");
-		/* operate the data treatments */
-		e = _update_chunk_storage(resource, path, dt, comp_opt);
-		if (NULL != e) {
-			DAV_ERROR_REQ(r, 0, "Failed to update chunk storage: %s", e->desc);
-			goto end_deliver;
-		}
-		DAV_DEBUG_REQ(r, 0, "Chunk storage updated");
-	} else {
-		DAV_DEBUG_REQ(r, 0, "Storage policy already applied, don't do anything!");
-	}
+	DAV_ERROR_REQ(r, 0, "Failed to update chunk storage: PAYMENT REQUIRED"
+			" to compress data (we accept bitcoins)");
+	dav_rawx_server_conf *conf = resource_get_server_config(resource);
+	e = server_create_and_stat_error(conf, p, HTTP_PAYMENT_REQUIRED,
+			0, "Pay more to manage compression");
 
 end_deliver:
 	/* stats inc */

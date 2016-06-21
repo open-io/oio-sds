@@ -55,6 +55,9 @@ License along with this library.
 #define LIMIT_LENGTH_BASETYPE 32
 
 /** The maximum length of a service type name */
+#define LIMIT_LENGTH_SRVID 64
+
+/** The maximum length of a service id */
 #define LIMIT_LENGTH_SRVTYPE 32
 
 /** The maximum length of service options */
@@ -167,7 +170,6 @@ typedef struct namespace_info_s
 	GHashTable* options;             /**< A hash of namespace options (gchar*) -> (GByteArray*) */
 	GHashTable* storage_policy;	 /**< Storage policies definitions name = STG_CLASS:DATA_SEC:DATA_THREAT */
 	GHashTable* data_security;	 /**< Data security definitions name = TYPE:OTHER_INFO */
-	GHashTable* data_treatments;	 /**< Data treatments definitions name = TYPE:OTHER_INFO */
 	GHashTable* storage_class;	 /**< Storage class definitions name = fallback_1:[...]:fallback_N */
 } namespace_info_t;
 

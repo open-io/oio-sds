@@ -19,7 +19,6 @@ Building the entire project will require the SDK dependencies, but also:
 * apr, apr-util-devel, apr-devel : internally used by RAINX and RAWX modules
 * attr, libattr-devel : we use xattr a lot to stamp RAWX chunks and repositories base directory.
 * [gridinit](https://github.com/open-io/gridinit)
-* [librain](https://github.com/open-io/librain)
 * lzo, lzo-devel : RAWX compression
 * sqlite, sqlite-devel : base storage for META{0,1,2} and SQLX services.
 * zeromq3, zeromq3-devel : communication of events between services and forward agents.
@@ -28,15 +27,18 @@ Building the entire project will require the SDK dependencies, but also:
 * python-pbr
 * beanstalkd: you need it to have the event-agent working
 
-In addition, a few python modules are required at runtime:
+In addition, there some additional dependencies at runtime:
 * python-eventlet
-* python-flask
+* python-werkzeug
 * python-gunicorn
 * python-plyvel
 * python-redis
 * python-requests
 * python-simplejson
 * pyxattr (python-xattr on Debian/Ubuntu)
+* libapache2-mod-wsgi (as named on Ubuntu), the WSGI module pour apache2
+* python-cliff
+* python-pyeclib
 
 The account service will require an up and running backend:
 * redis
@@ -76,10 +78,11 @@ make test
 make DESTDIR=${install_dir} install
 ```
 
-Install python module:
+Install python module (preferably inside a virtualenv):
 ```
-sudo python setup.py develop
+python setup.py develop
 ```
+
 
 ## Compile-time configuration
 
@@ -88,7 +91,7 @@ Used by `cmake`
 | Macro | Default | Description |
 | ----- | ------- | ----------- |
 | OIOSDS_RELEASE | "master" | Global release name |
-| OIOSDS_API_VERSION_SHORT | "1.0" | Minor version number |
+| OIOSDS_PROJECT_VERSION_SHORT | "1.0" | Minor version number |
 
 Used by `gcc`
 

@@ -110,6 +110,7 @@ struct dav_rawx_server_conf_s {
 	int fsync_on_close;
 	int fallocate;
 	char event_agent_addr[RAWX_EVENT_ADDR_SIZE];
+	char compression_algo[64];
 
 	/* Statistics involved data */
 	struct {

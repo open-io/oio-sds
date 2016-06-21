@@ -119,8 +119,10 @@ GError * oio_proxy_call_container_get_properties (CURL *h,
 GError * oio_proxy_call_container_set_properties (CURL *h,
 		struct oio_url_s *u, const gchar * const *values);
 
+/* Get the list of chunks of a content (as JSON),
+ * and optionnally the list of response header keys/values. */
 GError * oio_proxy_call_content_show (CURL *h, struct oio_url_s *u,
-		GString *out);
+		GString *out, char ***hout);
 
 GError * oio_proxy_call_content_delete (CURL *h, struct oio_url_s *u);
 
@@ -155,6 +157,7 @@ struct oio_proxy_content_create_in_s
 	GString *chunks;
 	const char *hash;
 	const char *stgpol;
+	const char *chunk_method;
 };
 
 GError * oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,

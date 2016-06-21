@@ -132,7 +132,8 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 	err = (struct oio_error_s*) _checksum_file (tmppath, &fi);
 	MAYBERETURN(err, "Checksum error (copy): ");
 	if (fi.fs != fi0.fs)
-		MAYBERETURN(NEWERROR(0, "Copy sizes mismatch"), "Validation error");
+		MAYBERETURN(NEWERROR(0, "Copy sizes mismatch (expected %zu, got %zu)",
+					fi0.fs, fi.fs), "Validation error");
 	if (0 != memcmp(fi.h, fi0.h, fi.hs))
 		MAYBERETURN(NEWERROR(0, "Copy hash mismatch"), "Validation error");
 	GRID_INFO("The original file and its copy match");

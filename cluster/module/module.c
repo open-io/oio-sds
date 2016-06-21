@@ -1016,7 +1016,7 @@ module_configure_srvtype(struct conscience_s *cs, GError ** err,
 	struct conscience_srvtype_s *srvtype;
 
 	if (!what || !value) {
-		GSETERROR(err, "Invalid Key/Value pair : %s/%s", what, value);
+		GSETERROR(err, "Invalid Key/Value pair: %s/%s", what, value);
 		return FALSE;
 	}
 
@@ -1026,29 +1026,39 @@ module_configure_srvtype(struct conscience_s *cs, GError ** err,
 	else
 		srvtype = conscience_get_srvtype(cs, err, type, MODE_AUTOCREATE);
 	if (!srvtype) {
-		GSETERROR(err, "Failled to init a ServiceType");
+		GSETERROR(err, "Failed to init a ServiceType");
 		return FALSE;
 	}
 
 	/*adjust the parameter */
 	if (0 == g_ascii_strcasecmp(what, KEY_SCORE_TIMEOUT)) {
 		srvtype->score_expiration = g_ascii_strtoll(value, NULL, 10);
-		INFO("[NS=%s][SRVTYPE=%s] score expiration interval set to [%ld] seconds", cs->ns_info.name,
-		    srvtype->type_name, srvtype->score_expiration);
+		INFO("[NS=%s][SRVTYPE=%s] score expiration set to [%ld] seconds",
+				cs->ns_info.name, srvtype->type_name,
+				srvtype->score_expiration);
 		return TRUE;
 	}
 	else if (0 == g_ascii_strcasecmp(what, KEY_SCORE_VARBOUND)) {
 		srvtype->score_variation_bound = g_ascii_strtoll(value, NULL, 10);
-		INFO("[NS=%s][SRVTYPE=%s] score variation bound set to [%d]", cs->ns_info.name, srvtype->type_name, srvtype->score_variation_bound);
+		INFO("[NS=%s][SRVTYPE=%s] score variation bound set to [%d]",
+				cs->ns_info.name, srvtype->type_name,
+				srvtype->score_variation_bound);
 		return TRUE;
 	}
 	else if (0 == g_ascii_strcasecmp(what, KEY_SCORE_EXPR)) {
 		if (conscience_srvtype_set_type_expression(srvtype, err, value)) {
-			INFO("[NS=%s][SRVTYPE=%s] score expression set to [%s]", cs->ns_info.name, srvtype->type_name,
-			    value);
+			INFO("[NS=%s][SRVTYPE=%s] score expression set to [%s]",
+					cs->ns_info.name, srvtype->type_name, value);
 			return TRUE;
 		}
 		return FALSE;
+	}
+	else if (0 == g_ascii_strcasecmp(what, KEY_SCORE_LOCK)) {
+		srvtype->lock_at_first_register = metautils_cfg_get_bool(value, TRUE);
+		INFO("[NS=%s][SRVTYPE=%s] lock at first register: %s",
+				cs->ns_info.name, srvtype->type_name,
+				srvtype->lock_at_first_register? "yes":"no");
+		return TRUE;
 	}
 	else if (0 == g_ascii_strcasecmp(what, KEY_ALERT_LIMIT)) {
 		srvtype->alert_frequency_limit = g_ascii_strtoll(value, NULL, 10);
@@ -1056,7 +1066,8 @@ module_configure_srvtype(struct conscience_s *cs, GError ** err,
 		    srvtype->type_name, srvtype->alert_frequency_limit);
 	}
 
-	WARN("[NS=%s][SRVTYPE=%s] parameter not recognized [%s] (ignored!)", cs->ns_info.name, srvtype->type_name, what);
+	WARN("[NS=%s][SRVTYPE=%s] parameter not recognized [%s] (ignored!)",
+			cs->ns_info.name, srvtype->type_name, what);
 	return TRUE;
 }
 
@@ -1205,18 +1216,8 @@ module_init_storage_conf(struct conscience_s *cs, const gchar *stg_pol_in_option
 		WARN("Data security rules not correctly loaded from file [%s] : %s", filepath, e->message);
 		return e;
 	}
-	g_hash_table_foreach(cs->ns_info.data_security,
-			(GHFunc)_check_for_keyword, (gchar*[2]){DATA_SECURITY_NONE, "data security"});
-
-	// XXX TREATMENTS
-	cs->ns_info.data_treatments = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
-	e = fill_hashtable_with_group(cs->ns_info.data_treatments, stg_conf_file, NAME_GROUPNAME_DATA_TREATMENTS);
-	if( NULL != e) {
-		WARN("Data treatments rules not correctly loaded from file [%s] : %s", filepath, e->message);
-		return e;
-	}
-	g_hash_table_foreach(cs->ns_info.data_treatments,
-			(GHFunc)_check_for_keyword, (gchar*[2]){DATA_TREATMENT_NONE, "data treatment"});
+	g_hash_table_foreach(cs->ns_info.data_security, (GHFunc)_check_for_keyword,
+			(gchar*[2]){DATA_SECURITY_NONE, "data security"});
 
 	// XXX CLASSES
 	cs->ns_info.storage_class = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
@@ -1550,7 +1551,6 @@ plugin_reload(GHashTable * params, GError ** err)
 	/* storage conf reload */
 	g_hash_table_destroy(conscience->ns_info.storage_policy);
 	g_hash_table_destroy(conscience->ns_info.data_security);
-	g_hash_table_destroy(conscience->ns_info.data_treatments);
 	g_hash_table_destroy(conscience->ns_info.storage_class);
 	*err = module_init_storage_conf(conscience, namespace_storage_policy(&conscience->ns_info, conscience->ns_info.name),
 			g_hash_table_lookup(params, KEY_STG_CONF));

@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -69,11 +69,9 @@ enum m1v2_getsrv_e
 	M1V2_GETSRV_DRYRUN = 0x02,
 };
 
-struct grid_lb_iterator_s;
 struct meta1_prefixes_set_s;
 struct sqlx_repository_s;
 struct sqlx_sqlite3_s;
-struct grid_lbpool_s;
 struct oio_url_s;
 
 struct meta1_backend_s;
@@ -82,7 +80,7 @@ struct meta1_backend_s;
  * This creates an internal sqlx_repository_t constructor. */
 GError * meta1_backend_init(struct meta1_backend_s **out,
 		const char *ns, struct sqlx_repository_s *repo,
-		struct grid_lbpool_s *glp);
+		struct oio_lb_s *lb);
 
 /* Returns the set of prefixes internally managed
  * Please do not free the internal META1 prefixes set, this is done

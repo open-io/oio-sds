@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
-# @EXE_PREFIX@-bootstrap.py, a script initating a local configuration of OpenIO SDS.
-# Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+# @EXE_PREFIX@-bootstrap.py, a script initating a local configuration
+# of OpenIO SDS.
+# Copyright (C) 2015 OpenIO, original work as part of
+# OpenIO Software Defined Storage
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -18,11 +20,12 @@
 
 import errno
 import grp
-import json
+import yaml
 import os
 import pwd
 from string import Template
 import re
+import argparse
 
 template_redis = """
 daemonize no
@@ -192,6 +195,9 @@ grid_fsync_dir         enabled
 # DO NOT USE, this is broken
 #grid_acl disabled
 
+# Enable compression ('zlib' or 'lzo' or 'off')
+grid_compression ${COMPRESSION}
+
 Alias / /x/
 
 <Directory />
@@ -206,18 +212,11 @@ Options -SymLinksIfOwnerMatch -FollowSymLinks -Includes -Indexes
 </VirtualHost>
 """
 
-template_rainx_service = """
+template_wsgi_service_host = """
 LoadModule mpm_worker_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mpm_worker.so
 LoadModule authz_core_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_authz_core.so
-LoadModule setenvif_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_setenvif.so
-LoadModule dav_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_dav.so
-# Do not chang
-LoadModule mime_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mime.so
-LoadModule dav_rainx_module @APACHE2_MODULES_DIRS@/mod_dav_rainx.so
+LoadModule wsgi_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_wsgi.so
 
-<IfModule !unixd_module>
-  LoadModule unixd_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_unixd.so
-</IfModule>
 <IfModule !log_config_module>
   LoadModule log_config_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_log_config.so
 </IfModule>
@@ -229,53 +228,33 @@ ServerName localhost
 ServerSignature Off
 ServerTokens Prod
 DocumentRoot ${RUNDIR}
-TypesConfig /etc/mime.types
 
 User  ${USER}
 Group ${GROUP}
 
 LogFormat "%h %l %t \\"%r\\" %>s %b %D" log/common
 ErrorLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-errors.log
-SetEnvIf Request_URI "/(stat|info)$" nolog
 CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-access.log log/common env=!nolog
 LogLevel info
 
-<IfModule mod_env.c>
-SetEnv nokeepalive 1
-SetEnv downgrade-1.0 1
-SetEnv force-response-1.0 1
-</IfModule>
-
-<IfModule prefork.c>
-MaxClients 10
-StartServers 5
-MinSpareServers 5
-MaxSpareServers 10
-</IfModule>
-
-<IfModule worker.c>
-StartServers 1
-MaxClients 10
-MinSpareThreads 2
-MaxSpareThreads 10
-ThreadsPerChild 10
-MaxRequestsPerChild 0
-</IfModule>
-
-DavDepthInfinity Off
-
-grid_namespace ${NS}
-grid_dir_run ${RUNDIR}
-
-<Directory />
-DAV rainx
-AllowOverride None
-Require all granted
-</Directory>
+WSGIDaemonProcess ${SRVTYPE}-${SRVNUM} processes=2 threads=1 user=${USER} group=${GROUP}
+#WSGIProcessGroup ${SRVTYPE}-${SRVNUM}
+WSGIApplicationGroup ${SRVTYPE}-${SRVNUM}
+WSGIScriptAlias / ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.wsgi
+WSGISocketPrefix ${RUNDIR}/
+WSGIChunkedRequest On
+LimitRequestFields 200
 
 <VirtualHost ${IP}:${PORT}>
-# DO NOT REMOVE (even if empty) !
+# Leave Empty
 </VirtualHost>
+"""
+
+template_wsgi_service_descr = """
+dic={'application-key': \'${BACKBLAZE_APPLICATION_KEY}\'
+}
+from oio.${SRVTYPE}.app import create_app
+application = create_app(dic)
 """
 
 template_meta_watch = """
@@ -301,18 +280,6 @@ checks:
 
 stats:
     - {type: http, path: /status, parser: json}
-    - {type: system}
-"""
-
-template_rainx_watch = """
-host: ${IP}
-port: ${PORT}
-type: rainx
-checks:
-    - {type: http, uri: /info}
-
-stats:
-    - {type: rawx, path: /stat}
     - {type: system}
 """
 
@@ -408,7 +375,7 @@ param_option.service_update_policy=meta2=KEEP|${M2_REPLICAS}|${M2_DISTANCE};sqlx
 param_option.lb.rawx=WRR?shorten_ratio=1.0&standard_deviation=no&reset_delay=60
 param_option.meta2_max_versions=${VERSIONING}
 param_option.meta2_keep_deleted_delay=86400
-param_option.compression=none
+param_option.compression=on
 param_option.container_max_size=50000000
 param_option.FLATNS_hash_offset=0
 param_option.FLATNS_hash_size=0
@@ -417,10 +384,12 @@ param_option.storage_policy=${STGPOL}
 
 param_storage_conf=${CFGDIR}/${NS}-policies.conf
 
+param_service.meta0.lock_at_first_register=false
 param_service.meta0.score_timeout=3600
 param_service.meta0.score_variation_bound=5
 param_service.meta0.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
 
+param_service.meta1.lock_at_first_register=false
 param_service.meta1.score_timeout=120
 param_service.meta1.score_variation_bound=5
 param_service.meta1.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
@@ -441,14 +410,11 @@ param_service.rdir.score_timeout=120
 param_service.rdir.score_variation_bound=5
 param_service.rdir.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
 
-param_service.rainx.score_timeout=120
-param_service.rainx.score_variation_bound=5
-param_service.rainx.score_expr=(num stat.cpu)
-
 param_service.redis.score_timeout=120
 param_service.redis.score_variation_bound=5
 param_service.redis.score_expr=(num stat.cpu)
 
+param_service.oiofs.lock_at_first_register=false
 param_service.oiofs.score_timeout=120
 param_service.oiofs.score_variation_bound=5
 param_service.oiofs.score_expr=(num stat.cpu)
@@ -464,12 +430,12 @@ param_service.echo.score_expr=(num stat.cpu)
 
 template_conscience_policies = """
 [STORAGE_POLICY]
-SINGLE=NONE:NONE:NONE
-TWOCOPIES=NONE:DUPONETWO:NONE
-THREECOPIES=NONE:DUPONETHREE:NONE
-FIVECOPIES=NONE:DUPONEFIVE:NONE
-RAIN=NONE:RAIN:NONE
-WRAIN=NONE:WRAIN:NONE
+SINGLE=NONE:NONE
+TWOCOPIES=NONE:DUPONETWO
+THREECOPIES=NONE:DUPONETHREE
+17COPIES=NONE:DUP17
+EC=NONE:EC
+BACKBLAZE=NONE:BACKBLAZE
 
 [STORAGE_CLASS]
 # <CLASS> = FALLBACK[,FALLBACK]...
@@ -478,13 +444,19 @@ PRETTYGOOD=REASONABLYSLOW,NONE
 REASONABLYSLOW=NONE
 
 [DATA_SECURITY]
-DUPONETWO=DUP:distance=1|nb_copy=2
-DUPONETHREE=DUP:distance=1|nb_copy=3
-DUPONEFIVE=DUP:distance=1|nb_copy=5
-RAIN=RAIN:k=6|m=2|algo=liber8tion|distance=1
-WRAIN=RAIN:k=6|m=3|algo=crs|distance=1|weak=1
+DUPONETWO=plain/distance=1,nb_copy=2
+DUPONETHREE=plain/distance=1,nb_copy=3
+DUP17=plain/distance=1,nb_copy=17
+EC=ec/k=6,m=3,algo=liberasurecode_rs_vand,distance=1
+BACKBLAZE=backblaze/account_id=${BACKBLAZE_ACCOUNT_ID},bucket_name=${BACKBLAZE_BUCKET_NAME},distance=0,nb_copy=1
 
-[DATA_TREATMENTS]
+# "jerasure_rs_vand"   EC_BACKEND_JERASURE_RS_VAND
+# "jerasure_rs_cauchy" EC_BACKEND_JERASURE_RS_CAUCHY
+# "flat_xor_hd"      EC_BACKEND_FLAT_XOR_HD
+# "isa_l_rs_vand" EC_BACKEND_ISA_L_RS_VAND
+# "shss"     EC_BACKEND_SHSS
+# "liberasurecode_rs_vand"  EC_BACKEND_LIBERASURECODE_RS_VAND
+
 """
 
 template_gridinit_header = """
@@ -552,16 +524,7 @@ start_at_boot=false
 command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O DirectorySchemas=${CFGDIR}/sqlx/schemas -O Endpoint=${IP}:${PORT} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
 """
 
-template_gridinit_rawx = """
-[Service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-command=${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
-enabled=true
-start_at_boot=false
-on_die=respawn
-"""
-
-template_gridinit_rainx = """
+template_gridinit_httpd = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 command=${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
@@ -579,6 +542,7 @@ template_local_ns = """
 ${NOZK}zookeeper=${IP}:2181
 #proxy-local=${RUNDIR}/${NS}-proxy.sock
 proxy=${IP}:${PORT_PROXYD}
+ecd=${IP}:${PORT_ECD}
 event-agent=beanstalk://127.0.0.1:11300
 #event-agent=ipc://${RUNDIR}/event-agent.sock
 conscience=${CS_ALL_PUB}
@@ -754,11 +718,42 @@ LIBDIR = CODEDIR + '/@LD_LIBDIR@'
 PATH = HOME+"/.local/bin:@CMAKE_INSTALL_PREFIX@/bin:/usr/sbin"
 port = 6000
 
-defaults_small = {'NB_CS':1, 'NB_M0':1, 'NB_M1':1, 'NB_M2':1, 'NB_SQLX':1,
-            'NB_RAWX':2, 'NB_RAINX':1}
+# Constants for the configuration of oio-bootstrap
+NS = 'ns'
+IP = 'ip'
+SVC_NB = 'count'
+ALLOW_REDIS = 'redis'
+OPENSUSE = 'opensuse'
+ZOOKEEPER = 'zookeeper'
+MONITOR_PERIOD = 'monitor_period'
+M1_REPLICAS = 'directory_replicas'
+M2_REPLICAS = 'container_replicas'
+M2_VERSIONS = 'container_versions'
+M2_STGPOL = 'storage_policy'
+SQLX_REPLICAS = 'sqlx_replicas'
+PROFILE = 'profile'
+PORT_START = 'port_start'
+CHUNK_SIZE = 'chunk_size'
+ACCOUNT_ID = 'account_id'
+BUCKET_NAME = 'bucket_name'
+COMPRESSION = 'compression'
+APPLICATION_KEY = 'application_key'
 
-defaults_multi = {'NB_CS':3, 'NB_M0':1, 'NB_M1':5, 'NB_M2':5, 'NB_SQLX':5,
-            'NB_RAWX':7, 'NB_RAINX':3}
+defaults = {
+    'NS': 'OPENIO',
+    'IP': '127.0.0.1',
+    'NB_CS': 1,
+    'NB_M0': 1,
+    'NB_M1': 1,
+    'NB_M2': 1,
+    'NB_SQLX': 1,
+    'NB_RAWX': 3,
+    'NB_RAINX': 0,
+    'NB_ECD': 1,
+    'REPLI_SQLX': 1,
+    'REPLI_M2': 1,
+    'REPLI_M1': 1,
+    'COMPRESSION': "off"}
 
 # XXX When /usr/sbin/httpd is present we suspect a Redhat/Centos/Fedora
 # environment. If not, we consider being in a Ubuntu/Debian environment.
@@ -772,20 +767,21 @@ if not os.path.exists('/usr/sbin/httpd'):
     APACHE2_MODULES_SYSTEM_DIR = '/usr/lib/apache2/'
 
 
-def record(env):
-    out = {'addr':str(env['IP']) + ':' + str(env['PORT']), 'num':env['SRVNUM']}
-    if 'VOLUME' in env:
-        out['path'] = env['VOLUME']
-    return out
-
 def config(env):
     return '{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.conf'.format(**env)
+
 
 def watch(env):
     return '{WATCHDIR}/{NS}-{SRVTYPE}-{SRVNUM}.yml'.format(**env)
 
+
+def wsgi(env):
+    return '{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.wsgi'.format(**env)
+
+
 def gridinit(env):
     return '{CFGDIR}/gridinit.conf'.format(**env)
+
 
 def mkdir_noerror(d):
     try:
@@ -805,34 +801,46 @@ def next_port():
     return res
 
 
-def generate(ns, ip, options={}, defaults={}):
+def generate(options):
     def getint(v, default):
         if v is None:
             return int(default)
         return int(v)
 
     global port
-    port = getint(options.PORT_START, 6000)
+    port = getint(options.get('port-start'), 6000)
 
-    all_services = {}
+    final_conf = {}
+    final_services = {}
 
     port_proxy = next_port()
-    port_event_agent = next_port()
+    port_ecd = next_port()
 
     versioning = 1
     stgpol = "SINGLE"
 
-    meta2_replicas = getint(options.M2_REPLICAS, defaults['NB_M2'])
-    sqlx_replicas = getint(options.SQLX_REPLICAS, defaults['NB_SQLX'])
+    meta1_replicas = getint(options.get(M1_REPLICAS), defaults['REPLI_M1'])
+    meta2_replicas = getint(options.get(M2_REPLICAS), defaults['REPLI_M2'])
+    sqlx_replicas = getint(options.get(SQLX_REPLICAS), defaults['REPLI_SQLX'])
 
-    if options.M2_VERSIONS is not None:
-        versioning = int(options.M2_VERSIONS)
-    if options.M2_STGPOL is not None:
-        stgpol = str(options.M2_STGPOL)
-
-    ENV = dict(IP=ip, NS=ns, HOME=HOME, EXE_PREFIX=EXE_PREFIX,
-               PATH=PATH, LIBDIR=LIBDIR,
-               OIODIR=OIODIR, SDSDIR=SDSDIR, TMPDIR=TMPDIR,
+    if options.get(M2_VERSIONS):
+        versioning = options[M2_VERSIONS]
+    if options.get(M2_STGPOL):
+        stgpol = options[M2_STGPOL]
+    ns = options.get('ns') or defaults['NS']
+    ip = options.get('ip') or defaults['IP']
+    backblaze_account_id = options.get('backblaze', {}).get(ACCOUNT_ID)
+    backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
+    backblaze_application_key = options.get('backblaze', {}).get(APPLICATION_KEY)
+    ENV = dict(IP=ip,
+               NS=ns,
+               HOME=HOME,
+               EXE_PREFIX=EXE_PREFIX,
+               PATH=PATH,
+               LIBDIR=LIBDIR,
+               OIODIR=OIODIR,
+               SDSDIR=SDSDIR,
+               TMPDIR=TMPDIR,
                DATADIR=DATADIR,
                CFGDIR=CFGDIR,
                RUNDIR=RUNDIR,
@@ -847,17 +855,21 @@ def generate(ns, ip, options={}, defaults={}):
                VERSIONING=versioning,
                STGPOL=stgpol,
                PORT_PROXYD=port_proxy,
+               PORT_ECD=port_ecd,
                M2_REPLICAS=meta2_replicas,
                M2_DISTANCE=str(1),
                SQLX_REPLICAS=sqlx_replicas,
                SQLX_DISTANCE=str(1),
                APACHE2_MODULES_SYSTEM_DIR=APACHE2_MODULES_SYSTEM_DIR,
+               BACKBLAZE_ACCOUNT_ID=backblaze_account_id,
+               BACKBLAZE_BUCKET_NAME=backblaze_bucket_name,
+               BACKBLAZE_APPLICATION_KEY=backblaze_application_key,
                HTTPD_BINARY=HTTPD_BINARY)
 
     def merge_env(add):
         env = dict(ENV)
         env.update(add)
-        if options.PROFILE == "valgrind":
+        if options.get(PROFILE) == "valgrind":
             orig_exe = env.get('EXE', env['EXE_PREFIX'])
             new_exe = "valgrind --leak-check=full --leak-resolution=high\
  --trace-children=yes --log-file=/tmp/%q{ORIG_EXE}.%p.valgrind " + orig_exe
@@ -872,12 +884,12 @@ def generate(ns, ip, options={}, defaults={}):
         env['VOLUME'] = '{DATADIR}/{NS}-{SRVTYPE}-{SRVNUM}'.format(**env)
         return env
 
-    ENV['CHUNK_SIZE'] = getint(options.CHUNK_SIZE, 1024*1024)
-    ENV['MONITOR_PERIOD'] = getint(options.MONITOR_PERIOD, 5)
-    if options.NO_ZOOKEEPER is not None:
-        ENV['NOZK'] = '#'
-    else:
+    ENV['CHUNK_SIZE'] = getint(options.get(CHUNK_SIZE), 1024*1024)
+    ENV['MONITOR_PERIOD'] = getint(options.get(MONITOR_PERIOD), 5)
+    if options.get(ZOOKEEPER):
         ENV['NOZK'] = ''
+    else:
+        ENV['NOZK'] = '#'
 
     mkdir_noerror(SDSDIR)
     mkdir_noerror(CODEDIR)
@@ -889,30 +901,42 @@ def generate(ns, ip, options={}, defaults={}):
 
     def add_service(env):
         t = env['SRVTYPE']
-        if t not in all_services:
-            all_services[t] = []
-        all_services[t].append(record(env))
+        if t not in final_services:
+            final_services[t] = []
+
+        out = {'num': env['SRVNUM']}
+        if 'PORT' in env:
+            out['addr'] = '%s:%s' % (env['IP'], env['PORT'])
+        if 'VOLUME' in env:
+            out['path'] = env['VOLUME']
+        final_services[t].append(out)
 
     # gridinit header
     with open(gridinit(ENV), 'w+') as f:
         tpl = Template(template_gridinit_header)
         f.write(tpl.safe_substitute(ENV))
 
-    # consciences
-    if options.NO_CS is None:
+    # conscience
+    nb_conscience = getint(options['conscience'].get(SVC_NB),
+                           defaults['NB_CS'])
+    if nb_conscience:
         cs = list()
         with open('{CFGDIR}/{NS}-policies.conf'.format(**ENV), 'w+') as f:
             tpl = Template(template_conscience_policies)
             f.write(tpl.safe_substitute(ENV))
         # Prepare a list of consciences
-        for num in range(1, 1+getint(options.NB_CS, defaults['NB_CS'])):
-            cs.append((num, next_port(), next_port()))
+        for num in range(nb_conscience):
+            cs.append((num + 1, next_port(), next_port()))
         ENV.update({
-                    'CS_ALL_PUB': ','.join([str(ip)+':'+str(pub) for _,pub,_ in cs]),
-                    'CS_ALL_HUB': ','.join(['tcp://'+str(ip)+':'+str(hub) for _,_,hub in cs]),
+            'CS_ALL_PUB': ','.join(
+                [str(ip)+':'+str(pub) for _, pub, _ in cs]),
+            'CS_ALL_HUB': ','.join(
+                ['tcp://'+str(ip)+':'+str(hub) for _, _, hub in cs]),
         })
+
         for num, pub, hub in cs:
-            env = subenv({'SRVTYPE':'conscience', 'SRVNUM':num, 'PORT':pub, 'PORT_HUB':hub})
+            env = subenv({'SRVTYPE': 'conscience', 'SRVNUM': num,
+                          'PORT': pub, 'PORT_HUB': hub})
             add_service(env)
             with open(gridinit(env), 'a+') as f:
                 tpl = Template(template_conscience_gridinit)
@@ -937,32 +961,51 @@ def generate(ns, ip, options={}, defaults={}):
         with open(watch(env), 'w+') as f:
             f.write(tpl.safe_substitute(env))
 
-    if options.NO_META0 is None:
-        for i in range(1, 1+getint(options.NB_META0, defaults['NB_M0'])):
-            generate_meta('meta0', i, template_gridinit_meta)
-    if options.NO_META1 is None:
-        for i in range(1, 1+getint(options.NB_META1, defaults['NB_M1'])):
-            generate_meta('meta1', i, template_gridinit_meta)
-    if options.NO_META2 is None:
-        for i in range(1, 1+getint(options.NB_META2, meta2_replicas)):
-            generate_meta('meta2', i, template_gridinit_meta)
-    if options.NO_SQLX is None:
-        for i in range(1, 1+getint(options.NB_SQLX, sqlx_replicas)):
-            generate_meta('sqlx', i, template_gridinit_sqlx)
+    # meta0
+    nb_meta0 = max(getint(options['meta0'].get(SVC_NB), defaults['NB_M0']),
+                   defaults['NB_M0'])
+    if nb_meta0:
+        for i in range(nb_meta0):
+            generate_meta('meta0', i + 1, template_gridinit_meta)
+
+    # meta1
+    nb_meta1 = max(getint(options['meta1'].get(SVC_NB), defaults['NB_M1']),
+                   meta1_replicas)
+    if nb_meta1:
+        for i in range(nb_meta1):
+            generate_meta('meta1', i + 1, template_gridinit_meta)
+
+    # meta2
+    nb_meta2 = max(getint(options['meta2'].get(SVC_NB), defaults['NB_M2']),
+                   meta2_replicas)
+    if nb_meta2:
+        for i in range(nb_meta2):
+            generate_meta('meta2', i + 1, template_gridinit_meta)
+
+    # sqlx
+    nb_sqlx = getint(options['sqlx'].get(SVC_NB), sqlx_replicas)
+    if nb_sqlx:
+        for i in range(nb_sqlx):
+            generate_meta('sqlx', i + 1, template_gridinit_sqlx)
 
     # RAWX
-    if options.NO_RAWX is None:
-        for num in range(1, 1+getint(options.NB_RAWX, defaults['NB_RAWX'])):
-            env = subenv({'SRVTYPE':'rawx', 'SRVNUM':num, 'PORT':next_port()})
+    nb_rawx = getint(options['rawx'].get(SVC_NB), defaults['NB_RAWX'])
+    compression = options['rawx'].get(COMPRESSION, "off")
+    if nb_rawx:
+        for num in range(nb_rawx):
+            env = subenv({'SRVTYPE': 'rawx',
+                          'SRVNUM': num + 1,
+                          'PORT': next_port(),
+                          'COMPRESSION': compression})
             add_service(env)
             # gridinit
-            tpl = Template(template_gridinit_rawx)
+            tpl = Template(template_gridinit_httpd)
             with open(gridinit(env), 'a+') as f:
                 f.write(tpl.safe_substitute(env))
             # service
             tpl = Template(template_rawx_service)
             to_write = tpl.safe_substitute(env)
-            if options.OPENSUSE:
+            if options.get(OPENSUSE, None):
                 to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
             with open(config(env), 'w+') as f:
                 f.write(to_write)
@@ -972,32 +1015,11 @@ def generate(ns, ip, options={}, defaults={}):
             with open(watch(env), 'w+') as f:
                 f.write(to_write)
 
-    # rainx
-    if options.NO_RAINX is None:
-        for num in range(1, 1+getint(options.NB_RAINX, defaults['NB_RAINX'])):
-            env = subenv({'SRVTYPE':'rainx', 'SRVNUM':num, 'PORT':next_port()})
-            add_service(env)
-            # gridinit
-            tpl = Template(template_gridinit_rainx)
-            with open(gridinit(env), 'a+') as f:
-                f.write(tpl.safe_substitute(env))
-            # service
-            tpl = Template(template_rainx_service)
-            to_write = tpl.safe_substitute(env)
-            if options.OPENSUSE:
-                to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
-            with open(config(env), 'w+') as f:
-                f.write(to_write)
-            # watcher
-            tpl = Template(template_rainx_watch)
-            to_write = tpl.safe_substitute(env)
-            with open(watch(env), 'w+') as f:
-                f.write(to_write)
 
     # redis
-    env = subenv({'SRVTYPE':'redis', 'SRVNUM':1, 'PORT':6379})
+    env = subenv({'SRVTYPE': 'redis', 'SRVNUM': 1, 'PORT': 6379})
     add_service(env)
-    if options.ALLOW_REDIS is not None:
+    if options.get(ALLOW_REDIS):
         with open(gridinit(env), 'a+') as f:
             tpl = Template(template_redis_gridinit)
             f.write(tpl.safe_substitute(env))
@@ -1009,14 +1031,33 @@ def generate(ns, ip, options={}, defaults={}):
             f.write(tpl.safe_substitute(env))
 
     # proxy
-    env = subenv({'SRVTYPE':'proxy', 'SRVNUM': 1, 'PORT':port_proxy})
+    env = subenv({'SRVTYPE': 'proxy', 'SRVNUM': 1, 'PORT': port_proxy})
     add_service(env)
     with open(gridinit(env), 'a+') as f:
         tpl = Template(template_proxy_gridinit)
         f.write(tpl.safe_substitute(env))
 
+    # ecd
+    env = subenv({'SRVTYPE': 'ecd', 'SRVNUM': 1, 'PORT': port_ecd})
+    add_service(env)
+    tpl = Template(template_gridinit_httpd)
+    with open(gridinit(env), 'a+') as f:
+        f.write(tpl.safe_substitute(env))
+    # service
+    tpl = Template(template_wsgi_service_host)
+    to_write = tpl.safe_substitute(env)
+    if options.get(OPENSUSE, False):
+        to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
+    with open(config(env), 'w+') as f:
+        f.write(to_write)
+    # service desc
+    tpl = Template(template_wsgi_service_descr)
+    to_write = tpl.safe_substitute(env)
+    with open(wsgi(env), 'w+') as f:
+        f.write(to_write)
+
     # account
-    env = subenv({'SRVTYPE':'account','SRVNUM':1, 'PORT':next_port()})
+    env = subenv({'SRVTYPE': 'account', 'SRVNUM': 1, 'PORT': next_port()})
     add_service(env)
     with open(gridinit(env), 'a+') as f:
         tpl = Template(template_account_gridinit)
@@ -1029,7 +1070,7 @@ def generate(ns, ip, options={}, defaults={}):
         f.write(tpl.safe_substitute(env))
 
     # rdir
-    env = subenv({'SRVTYPE':'rdir', 'SRVNUM':1, 'PORT':next_port()})
+    env = subenv({'SRVTYPE': 'rdir', 'SRVNUM': 1, 'PORT': next_port()})
     add_service(env)
     with open(gridinit(env), 'a+') as f:
         tpl = Template(template_rdir_gridinit)
@@ -1042,7 +1083,7 @@ def generate(ns, ip, options={}, defaults={}):
         f.write(tpl.safe_substitute(env))
 
     # Event agent configuration
-    env = subenv({'SRVTYPE':'event-agent', 'SRVNUM':1, 'PORT': port_event_agent})
+    env = subenv({'SRVTYPE': 'event-agent', 'SRVNUM': 1})
     add_service(env)
     with open(CFGDIR + '/' + 'event-agent.conf', 'w+') as f:
         tpl = Template(template_event_agent)
@@ -1052,7 +1093,7 @@ def generate(ns, ip, options={}, defaults={}):
         f.write(tpl.safe_substitute(env))
 
     # Conscience agent configuration
-    env = subenv({'SRVTYPE':'conscience-agent', 'SRVNUM':1, 'PORT': port_event_agent})
+    env = subenv({'SRVTYPE': 'conscience-agent', 'SRVNUM': 1})
     with open(CFGDIR + '/' + 'conscience-agent.yml', 'w+') as f:
         tpl = Template(template_conscience_agent)
         f.write(tpl.safe_substitute(env))
@@ -1075,94 +1116,62 @@ def generate(ns, ip, options={}, defaults={}):
         tpl = Template(template_local_ns)
         f.write(tpl.safe_substitute(ENV))
 
-    # ensure the services'es volumes
-    for srvtype in all_services:
-        for rec in all_services[srvtype]:
+    # ensure volumes
+    for srvtype in final_services:
+        for rec in final_services[srvtype]:
             if 'path' in rec:
                 mkdir_noerror(rec['path'])
 
-    all_services["namespace"] = ns
-    all_services["chunk_size"] = ENV['CHUNK_SIZE']
-    all_services["stgpol"] = stgpol
-    all_services["account"] = 'test_account'
-    all_services["sds_path"] = SDSDIR
-    with open('{CFGDIR}/test.conf'.format(**ENV), 'w+') as f:
-        f.write(json.dumps(all_services, indent=2, sort_keys=True))
+    final_conf["services"] = final_services
+    final_conf["namespace"] = ns
+    final_conf["chunk_size"] = ENV['CHUNK_SIZE']
+    final_conf["storage_policy"] = stgpol
+    final_conf["account"] = 'test_account'
+    final_conf["sds_path"] = SDSDIR
+    final_conf["proxy"] = final_services['proxy'][0]['addr']
+    final_conf[M2_REPLICAS] = meta2_replicas
+    final_conf[M1_REPLICAS] = meta1_replicas
+    with open('{CFGDIR}/test.yml'.format(**ENV), 'w+') as f:
+        f.write(yaml.dump(final_conf))
+    return final_conf
+
+
+def dump_config(conf):
+    print 'PROXY=%s' % conf['proxy']
+    print 'REPLI_CONTAINER=%s' % conf[M2_REPLICAS]
+    print 'REPLI_DIRECTORY=%s' % conf[M1_REPLICAS]
 
 
 def main():
-    from optparse import OptionParser as OptionParser
-    parser = OptionParser()
+    parser = argparse.ArgumentParser(description='OpenIO bootstrap tool')
 
-    parser.add_option("-b", "--big",
-                      action="store_true", dest="BIG",
-                      help="By default, deploy manny services")
+    parser.add_argument("namespace", help="Namespace name")
+    parser.add_argument("ip", help="IP to use")
+    parser.add_argument("-c", "--conf", action="store", dest='config',
+                        help="Bootstrap configuration file")
+    parser.add_argument("-d", "--dump", action="store_true", default=False,
+                        dest='dump_config', help="Dump results")
 
-    parser.add_option("-B", "--bucket-replicas",
-                      action="store", type="int", dest="M2_REPLICAS",
-                      help="Number of containers replicas")
-    parser.add_option("-X", "--sqlx-replicas",
-                      action="store", type="int", dest="SQLX_REPLICAS",
-                      help="Number of bases replicas")
-    parser.add_option("-V", "--versioning",
-                      action="store", type="int", dest="M2_VERSIONS",
-                      help="Number of contents versions")
-    parser.add_option("-S", "--stgpol",
-                      action="store", type="string", dest="M2_STGPOL",
-                      help="How many replicas for META2")
-    parser.add_option("--opensuse",
-                      action="store_true", dest="OPENSUSE",
-                      help="Customize some config files for Opensuse")
-    parser.add_option("--profile",
-                      action="store", type="string", dest='PROFILE',
-                      help="Use a code profiler (only valgrind is supported)")
+    options = parser.parse_args()
+    opts = {}
+    opts[ZOOKEEPER] = True
+    opts['conscience'] = {SVC_NB: None}
+    opts['meta0'] = {SVC_NB: None}
+    opts['meta1'] = {SVC_NB: None}
+    opts['meta2'] = {SVC_NB: None}
+    opts['sqlx'] = {SVC_NB: None}
+    opts['rawx'] = {SVC_NB: None}
 
-    parser.add_option("--port",
-                      action="store", type="int", dest="PORT_START")
-    parser.add_option("--chunk-size",
-                      action="store", type="int", dest="CHUNK_SIZE")
-    parser.add_option("--no-zookeeper",
-                      action="store_true", dest="NO_ZOOKEEPER")
-    parser.add_option("--allow-redis",
-                      action="store_true", dest="ALLOW_REDIS")
-    parser.add_option("--monitor-period",
-                      action="store", type="int", dest="MONITOR_PERIOD")
-
-    parser.add_option("--no-conscience",
-                      action="store_true", dest="NO_CS")
-    parser.add_option("--no-meta0",
-                      action="store_true", dest="NO_META0")
-    parser.add_option("--no-meta1",
-                      action="store_true", dest="NO_META1")
-    parser.add_option("--no-meta2",
-                      action="store_true", dest="NO_META2")
-    parser.add_option("--no-sqlx",
-                      action="store_true", dest="NO_SQLX")
-    parser.add_option("--no-rawx",
-                      action="store_true", dest="NO_RAWX")
-    parser.add_option("--no-rainx",
-                      action="store_true", dest="NO_RAINX")
-
-    parser.add_option("--nb-conscience",
-                      action="store", type="int", dest="NB_CS")
-    parser.add_option("--nb-meta0",
-                      action="store", type="int", dest="NB_META0")
-    parser.add_option("--nb-meta1",
-                      action="store", type="int", dest="NB_META1")
-    parser.add_option("--nb-meta2",
-                      action="store", type="int", dest="NB_META2")
-    parser.add_option("--nb-sqlx",
-                      action="store", type="int", dest="NB_SQLX")
-    parser.add_option("--nb-rawx",
-                      action="store", type="int", dest="NB_RAWX")
-    parser.add_option("--nb-rainx",
-                      action="store", type="int", dest="NB_RAINX")
-
-    options, args = parser.parse_args()
-    if options.BIG is not None:
-        generate(args[0], args[1], options, defaults_multi)
-    else:
-        generate(args[0], args[1], options, defaults_small)
+    if options.config:
+        with open(options.config, 'r') as f:
+            data = yaml.load(f)
+            if data:
+                opts.update(data)
+    opts['ns'] = options.namespace
+    opts['ip'] = options.ip
+    final_conf = generate(opts)
+    if options.dump_config:
+        dump_config(final_conf)
 
 
 if __name__ == '__main__':

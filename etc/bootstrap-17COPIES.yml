@@ -1,0 +1,6 @@
+zookeeper: false
+storage_policy: "17COPIES"
+chunk_size: 1048576
+redis: true
+rawx:
+  count: 17

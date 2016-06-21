@@ -1,7 +1,7 @@
 /*
 OpenIO SDS metautils
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -103,6 +103,22 @@ GError* service_info_load_json(const gchar *encoded,
 void service_info_encode_json(GString *out, const struct service_info_s *si,
 		gboolean full);
 
+/** Build a key for a service from its type and ID */
+gchar * oio_make_service_key(const char *ns_name, const char *type, const char *id);
+
+/** Extract namespace, type and ID from a service key */
+void oio_parse_service_key(const char *key, gchar **ns, gchar **type, gchar **id);
+
 gchar * service_info_key (const struct service_info_s *si);
+
+/** Fill a preallocated LB item from a service description */
+void service_info_to_lb_item(const struct service_info_s *si,
+		struct oio_lb_item_s *item);
+
+/** Compute the distance between two string representing rawx locations */
+guint distance_between_location(const gchar *loc1, const gchar *loc2);
+
+guint distance_between_services(struct service_info_s *s0,
+		struct service_info_s *s1);
 
 #endif /*OIO_SDS__metautils__lib__metatype_srvinfo_h*/

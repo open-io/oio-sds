@@ -164,7 +164,7 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 
 	if (!si->ns_name[0]) {
 		GRID_TRACE2("%s NS forced to %s", __FUNCTION__, si->ns_name);
-		g_strlcpy (si->ns_name, nsname, sizeof(si->ns_name));
+		g_strlcpy (si->ns_name, ns_name, sizeof(si->ns_name));
 	} else if (!validate_namespace (si->ns_name)) {
 		service_info_clean (si);
 		return _reply_format_error (args, BADNS());
@@ -307,7 +307,7 @@ action_conscience_list (struct req_args_s *args)
 	if (!type)
 		return _reply_format_error (args, BADREQ("Missing type"));
 
-	gboolean full = _request_has_flag (args, PROXYD_HEADER_MODE, "full");
+	gboolean full = _request_get_flag (args, "full");
 
 	GError *err;
 	if (NULL != (err = _cs_check_tokens(args)))

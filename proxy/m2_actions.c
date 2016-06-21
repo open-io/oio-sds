@@ -375,28 +375,39 @@ _populate_headers_with_alias (struct req_args_s *args, struct bean_ALIASES_s *al
 			g_strdup_printf("%"G_GINT64_FORMAT, ALIASES_get_ctime(alias)));
 }
 
-static service_info_t*
-_service_info_from_chunk_id(struct grid_lbpool_s *lbp, const gchar *id)
+static gchar *
+_service_key(const gchar *prefix, const gchar *id)
 {
-	gchar addr[STRLEN_ADDRINFO] = {0};
-	gchar *start = strstr(id, "://");  // skip "http://"
-	int offset = start? start - id + 3 : 0;
-	memmove(addr, id+offset, strchr(id+offset, '/') - id - offset);
-	service_info_t *si = grid_lbpool_get_service_from_url(lbp,
-			NAME_SRVTYPE_RAWX, addr);
-	return si;
+	gchar actual_type[LIMIT_LENGTH_SRVTYPE] = {0};
+	if (!strcmp(prefix, "http")) {
+		strcpy(actual_type, NAME_SRVTYPE_RAWX);
+	} else {
+		strcpy(actual_type, prefix);
+	}
+	return oio_make_service_key(ns_name, actual_type, id);
 }
 
 static gint32
-_score_from_chunk_id(struct grid_lbpool_s *lbp, const gchar *id)
+_score_from_chunk_id(const gchar *id)
 {
-	gint32 score = 0;
-	service_info_t *si = _service_info_from_chunk_id(lbp, id);
-	if (si != NULL) {
-		score = si->score.value;
-		service_info_clean(si);
+	gchar svc_prefix[LIMIT_LENGTH_SRVTYPE] = {0};
+	gchar svc_id[STRLEN_ADDRINFO] = {0};
+	gchar *start = strstr(id, "://");
+	int offset = 0;
+	if (start) {
+		strncpy(svc_prefix, id, start - id);
+		offset = start - id + 3;
+	} else {
+		strcpy(svc_prefix, "http");
 	}
-	return score;
+	/* XXX FIXME not robust enough, maybe no more '/' */
+	strncpy(svc_id, id+offset, strchr(id+offset, '/') - id - offset);
+	gchar *svc_key = _service_key(svc_prefix, svc_id);
+	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, svc_key);
+	gint32 res = item? item->weight : 0;
+	g_free(item);
+	g_free(svc_key);
+	return res;
 }
 
 static enum http_rc_e
@@ -424,7 +435,7 @@ _reply_simplified_beans (struct req_args_s *args, GError *err,
 
 			// Serialize the chunk
 			struct bean_CHUNKS_s *chunk = l0->data;
-			gint32 score = _score_from_chunk_id(lbpool, CHUNKS_get_id(chunk)->str);
+			gint32 score = _score_from_chunk_id(CHUNKS_get_id(chunk)->str);
 			g_string_append_printf (gstr, "{\"url\":\"%s\"", CHUNKS_get_id (chunk)->str);
 			g_string_append_printf (gstr, ",\"pos\":\"%s\"", CHUNKS_get_position (chunk)->str);
 			g_string_append_printf (gstr, ",\"size\":%"G_GINT64_FORMAT, CHUNKS_get_size (chunk));
@@ -833,8 +844,7 @@ _filter (struct filter_ctx_s *ctx, GSList *l)
 static GError *
 _m2_container_create (struct req_args_s *args)
 {
-	gboolean autocreate = _request_has_flag (args,
-			PROXYD_HEADER_MODE, "autocreate");
+	gboolean autocreate = _request_get_flag (args, "autocreate");
 	gchar **properties = _container_headers_to_props (args);
 
 	struct m2v2_create_params_s param = {
@@ -895,10 +905,8 @@ action_m2_container_destroy (struct req_args_s *args)
 	gchar **urlv = NULL;
 	struct sqlx_name_mutable_s n = {NULL,NULL,NULL};
 
-	const gboolean hdr_flush = _request_has_flag (args, PROXYD_HEADER_MODE, "flush");
-	const gboolean opt_flush = metautils_cfg_get_bool(OPT("flush"), FALSE);
-	const gboolean hdr_force = _request_has_flag (args, PROXYD_HEADER_MODE, "force");
-	const gboolean opt_force = metautils_cfg_get_bool(OPT("force"), FALSE);
+	const gboolean flush = _request_get_flag (args, "flush");
+	const gboolean force = _request_get_flag (args, "force");
 
 	/* TODO make this const! */
 	struct sqlx_name_s *name = sqlx_name_mutable_to_const(&n);
@@ -922,10 +930,10 @@ action_m2_container_destroy (struct req_args_s *args)
 	/* 2. FLUSH the base on the MASTER, so events are generated for all the
 	   contents removed. */
 	if (!err) {
-		if (hdr_flush || opt_flush) {
+		if (flush) {
 			PACKER_VOID(_pack) { return m2v2_remote_pack_FLUSH (args->url); }
 			err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
-		} else if (!hdr_force && !opt_force) {
+		} else if (!force) {
 			PACKER_VOID(_pack) { return m2v2_remote_pack_ISEMPTY (args->url); }
 			err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 		}
@@ -951,8 +959,8 @@ action_m2_container_destroy (struct req_args_s *args)
 
 	/* 4. DESTROY each local base */
 	if (!err && urlv && *urlv) {
-		const guint32 flag_force = (hdr_force||opt_force) ? M2V2_DESTROY_FORCE : 0;
-		const guint32 flag_flush = (hdr_flush||opt_flush) ? M2V2_DESTROY_FLUSH : 0;
+		const guint32 flag_force = (force) ? M2V2_DESTROY_FORCE : 0;
+		const guint32 flag_flush = (flush) ? M2V2_DESTROY_FLUSH : 0;
 
 		meta1_urlv_shift_addr(urlv);
 		err = m2v2_remote_execute_DESTROY (urlv[0], args->url,
@@ -1022,13 +1030,16 @@ action_m2_container_raw_insert (struct req_args_s *args, struct json_object *jar
 {
 	GSList *beans = NULL;
 	GError *err = m2v2_json_load_setof_xbean (jargs, &beans);
-	if (err)
+	if (err) {
+		EXTRA_ASSERT(beans == NULL);
 		return _reply_format_error (args, err);
+	}
 	if (!beans)
 		return _reply_format_error (args, BADREQ("Empty beans list"));
 
 	PACKER_VOID(_pack) { return m2v2_remote_pack_RAW_ADD (args->url, beans); }
 	err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
+	_bean_cleanl2(beans);
 	if (NULL != err)
 		return _reply_m2_error (args, err);
 	return _reply_success_json (args, NULL);
@@ -1039,13 +1050,16 @@ action_m2_container_raw_delete (struct req_args_s *args, struct json_object *jar
 {
 	GSList *beans = NULL;
 	GError *err = m2v2_json_load_setof_xbean (jargs, &beans);
-	if (err)
+	if (err) {
+		EXTRA_ASSERT(beans == NULL);
 		return _reply_format_error (args, err);
+	}
 	if (!beans)
 		return _reply_format_error (args, BADREQ("Empty beans list"));
 
 	PACKER_VOID(_pack) { return m2v2_remote_pack_RAW_DEL (args->url, beans); }
 	err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
+	_bean_cleanl2(beans);
 	if (NULL != err)
 		return _reply_m2_error (args, err);
 	return _reply_success_json (args, NULL);
@@ -1435,7 +1449,7 @@ action_m2_content_beans (struct req_args_s *args, struct json_object *jargs)
 	if ((end && *end) || errno == ERANGE || errno == EINVAL)
 		return _reply_format_error (args, BADREQ("Invalid size format"));
 
-	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
+	gboolean autocreate = _request_get_flag (args, "autocreate");
 	GError *err = NULL;
 	GSList *beans = NULL;
 	PACKER_VOID(_pack) { return m2v2_remote_pack_BEANS (args->url, stgpol, size, 0); }
@@ -1659,8 +1673,8 @@ _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 	if (!jbody)
 		return BADREQ("Invalid JSON body");
 
-	gboolean append = _request_has_flag (args, PROXYD_HEADER_MODE, "append");
-	gboolean force = _request_has_flag (args, PROXYD_HEADER_MODE, "force");
+	gboolean append = _request_get_flag (args, "append");
+	gboolean force = _request_get_flag (args, "force");
 	GSList *ibeans = NULL, *obeans = NULL;
 	GError *err;
 
@@ -1693,8 +1707,7 @@ action_content_put (struct req_args_s *args)
 	if (json_tokener_success != json_tokener_get_error (parser))
 		err = BADREQ("Invalid JSON");
 	else {
-		gboolean autocreate = _request_has_flag (args,
-				PROXYD_HEADER_MODE, "autocreate");
+		gboolean autocreate = _request_get_flag (args, "autocreate");
 retry:
 		err = _m2_json_put (args, jbody);
 		if (err && CODE_IS_NOTFOUND(err->code)) {

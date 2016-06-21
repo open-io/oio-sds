@@ -42,6 +42,7 @@ struct conscience_srvtype_s
 	gint32 score_variation_bound; /**<absolute upper bound to a score increase.*/
 	gchar *score_expr_str;	      /**<String form of the expression*/
 	struct expr_s *score_expr;/**<Preparsed expression*/
+	gboolean lock_at_first_register;
 
 	GHashTable *config_ht;	 /**<Maps (gchar*) to (GByteArray*)*/
 	GByteArray *config_serialized;	/**<Preserialized configuration sent to the agents*/

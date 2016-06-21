@@ -14,11 +14,11 @@ find_package(PkgConfig)
 if (NOT DEFINED OIOSDS_RELEASE)
 	set(OIOSDS_RELEASE master)
 endif ()
-if (NOT DEFINED OIOSDS_API_VERSION_SHORT)
-	set(OIOSDS_API_VERSION_SHORT "1.0")
+if (NOT DEFINED OIOSDS_PROJECT_VERSION_SHORT)
+	set(OIOSDS_PROJECT_VERSION_SHORT "1.0")
 endif ()
 
-set(OIOSDS_API_VERSION "${OIOSDS_RELEASE}/${OIOSDS_API_VERSION_SHORT}")
+set(OIOSDS_PROJECT_VERSION "${OIOSDS_RELEASE}/${OIOSDS_PROJECT_VERSION_SHORT}")
 
 if (NOT ABI_VERSION)
 	set(ABI_VERSION 0)
@@ -26,7 +26,7 @@ endif()
 
 set(CMAKE_C_FLAGS "-g -fPIC -pipe -Wall -Wextra -std=gnu99")
 
-# XXX(jfs): necessary to benefit from zero'ed static allocation of structures
+# necessary to benefit from zero'ed static allocation of structures
 # as proposed by C99. (we only allocate the first field and let the compiler
 # init the others to zero.
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-missing-field-initializers")
@@ -65,8 +65,8 @@ add_definitions(-D_LARGEFILE_SOURCE)
 add_definitions(-D_LARGEFILE64_SOURCE)
 add_definitions(-D_FILE_OFFSET_BITS=64)
 add_definitions(-DHAVE_SOCKLEN_T)
-add_definitions(-DOIOSDS_API_VERSION="${OIOSDS_API_VERSION}")
-if (CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+add_definitions(-DOIOSDS_PROJECT_VERSION="${OIOSDS_PROJECT_VERSION}")
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 	MESSAGE("DEBUG symbols enabled")
 	add_definitions(-DG_ERRORCHECK_MUTEXES)
 	add_definitions(-DHAVE_EXTRA_ASSERT=1)
@@ -369,7 +369,6 @@ if (NOT SDK_ONLY)
 option_or_system(ASN1C asn1cskeletons)
 option_or_system(APACHE2 modules/mod_webdav.so httpd.h)
 option_or_system(ATTR attr attr/xattr.h)
-option_or_system(LIBRAIN rain librain.h)
 option_or_system(LZO lzo2 lzo1.h lzo1x.h lzoutil.h)
 option_or_system(ZK zookeeper_mt zookeeper.h)
 option_or_system(ZLIB z zlib.h)
@@ -390,7 +389,7 @@ print_found("LIBMEMCACHED")
 check_found("CURL" "GLIB2" "JSONC")
 
 if (NOT SDK_ONLY)
-check_found("APR" "APACHE2" "ASN1C" "ATTR" "LIBRAIN" "LZO"
+check_found("APR" "APACHE2" "ASN1C" "ATTR" "LZO"
 		"SQLITE3" "ZMQ" "ZK" "PYTHONINTERP")
 
 if (DEFINED APACHE2_MODDIR)
@@ -427,7 +426,6 @@ add_subdirectory(./meta0v2)
 add_subdirectory(./meta1v2)
 add_subdirectory(./meta2v2)
 add_subdirectory(./proxy)
-add_subdirectory(./rainx)
 add_subdirectory(./events)
 add_subdirectory(./rawx-apache2/src)
 add_subdirectory(./rawx-lib/src)

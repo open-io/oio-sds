@@ -33,24 +33,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <ctype.h>
 
 #include <metautils/lib/metautils.h>
+#include <cluster/lib/gridcluster.h>
 #include <rawx-lib/src/rawx.h>
 
 #include "rawx_repo_core.h"
 #include "rawx_internals.h"
 #include "rawx_event.h"
 
-#define DEFAULT_BLOCK_SIZE "5242880"
+#define DEFAULT_BLOCK_SIZE 1048576
 #define DEFAULT_COMPRESSION_ALGO "ZLIB"
 
 /******************** INTERNALS METHODS **************************/
-
-static apr_status_t
-apr_storage_policy_clean(void *p)
-{
-	struct storage_policy_s *sp = (struct storage_policy_s *) p;
-	storage_policy_clean(sp);
-	return APR_SUCCESS;
-}
 
 static void
 __set_header(request_rec *r, const char *n, const char *v)
@@ -62,38 +55,15 @@ __set_header(request_rec *r, const char *n, const char *v)
 }
 
 static dav_error *
-_set_chunk_extended_attributes(dav_stream *stream)
+_set_chunk_extended_attributes(dav_stream *stream, struct chunk_textinfo_s *cti)
 {
 	GError *ge = NULL;
 	dav_error *e = NULL;
 
-	/* Save the new Chunk's hash in the XATTR, in upppercase! */
-	gchar *hex = g_ascii_strup (g_checksum_get_string(stream->md5), -1);
-	stream->r->info->chunk.hash = apr_pstrdup(stream->p, hex);
-	g_free (hex);
-
-	stream->r->info->chunk.size = apr_psprintf(stream->r->pool, "%d", (int)stream->total_size);
-
-	if (stream->compressed_size) {
-		char size[32];
-		apr_snprintf(size, 32, "%d", stream->compressed_size);
-		if(!set_rawx_full_info_in_attr(stream->pathname, fileno(stream->f), &ge,
-					&(stream->r->info->content), &(stream->r->info->chunk),
-					stream->metadata_compress, size)) {
-			e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
-					HTTP_FORBIDDEN, 0, apr_pstrdup(stream->p, gerror_get_message(ge)));
-		}
-	} else {
-		if(!set_rawx_full_info_in_attr(stream->pathname, fileno(stream->f), &ge, &(stream->r->info->content),
-					&(stream->r->info->chunk), NULL, NULL)) {
-			e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
-					HTTP_FORBIDDEN, 0, apr_pstrdup(stream->p, gerror_get_message(ge)));
-		}
-	}
-
-	if(ge)
-		g_clear_error(&ge);
-
+	if (!set_rawx_info_to_fd(fileno(stream->f), &ge, cti))
+		e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
+				HTTP_FORBIDDEN, 0, apr_pstrdup(stream->p, gerror_get_message(ge)));
+	if (ge) g_clear_error (&ge);
 	return e;
 }
 
@@ -177,7 +147,7 @@ _write_data_crumble_COMP(dav_stream *stream, gulong *checksum)
 					"An error occurred while writing to a "
 					"resource.");
 		} else {
-			stream->compressed_size+=gba->len;
+			stream->compressed_size += gba->len;
 		}
 	} else {
 		/* ### use something besides 500? */
@@ -201,37 +171,43 @@ resource_init_decompression(dav_resource *resource, dav_rawx_server_conf *conf)
 	GError *e = NULL;
 
 	GHashTable *comp_opt =
-		g_hash_table_new_full( g_str_hash, g_str_equal, g_free, g_free);
-	if (!get_compression_info_in_attr(resource_get_pathname(resource), &e, comp_opt)){
-		if(comp_opt)
+			g_hash_table_new_full( g_str_hash, g_str_equal, g_free, g_free);
+	if (!get_compression_info_in_attr(
+			resource_get_pathname(resource), &e, comp_opt)) {
+		if (comp_opt)
 			g_hash_table_destroy(comp_opt);
-		if(e)
+		if (e)
 			g_clear_error(&e);
-		return server_create_and_stat_error(conf, resource->pool, HTTP_CONFLICT, 0, "Failed to get chunk compression in attr");
+		return server_create_and_stat_error(conf, resource->pool,
+				HTTP_CONFLICT, 0, "Failed to get chunk compression from attr");
 	}
 	c = g_hash_table_lookup(comp_opt, NS_COMPRESSION_OPTION);
-	if (c && 0 == g_ascii_strcasecmp(c, NS_COMPRESSION_ON)) {
+	if (c && !g_ascii_strcasecmp(c, NS_COMPRESSION_ON)) {
 		resource->info->compression = TRUE;
 	} else {
 		resource->info->compression = FALSE;
 	}
 
-	if(resource->info->compression){
+	if (resource->info->compression) {
 		// init compression method according to algo choice
 		char *algo = g_hash_table_lookup(comp_opt, NS_COMPRESS_ALGO_OPTION);
-		memset(resource->info->compress_algo, 0, sizeof(resource->info->compress_algo));
-		memcpy(resource->info->compress_algo, algo, MIN(strlen(algo), sizeof(resource->info->compress_algo)));
+		memset(resource->info->compress_algo, 0,
+				sizeof(resource->info->compress_algo));
+		memcpy(resource->info->compress_algo, algo, MIN(strlen(algo),
+					sizeof(resource->info->compress_algo)));
 		init_compression_ctx(&(resource->info->comp_ctx), algo);
-		if (0 != resource->info->comp_ctx.chunk_initiator(&(resource->info->cp_chunk),
-					(char*)resource->info->fullpath)) {
-			r = server_create_and_stat_error(resource_get_server_config(resource), resource->pool,
-					HTTP_INTERNAL_SERVER_ERROR, 0, "Failed to init chunk bucket");
+		if (resource->info->comp_ctx.chunk_initiator(
+				&(resource->info->cp_chunk), resource->info->fullpath)) {
+			r = server_create_and_stat_error(
+					resource_get_server_config(resource), resource->pool,
+					HTTP_INTERNAL_SERVER_ERROR, 0,
+					"Failed to init chunk bucket");
 		}
 	}
-	if(comp_opt)
+	if (comp_opt)
 		g_hash_table_destroy(comp_opt);
 
-	if(NULL != e)
+	if (e)
 		g_clear_error(&e);
 
 	return r;
@@ -239,15 +215,152 @@ resource_init_decompression(dav_resource *resource, dav_rawx_server_conf *conf)
 
 /******************** REQUEST UTILITY FUNCTIONS ******************/
 
+static int
+_load_field(apr_pool_t *pool, apr_table_t *table, const char *name, char **dst)
+{
+	const char *value = apr_table_get(table, name);
+	if (!value)
+		return 0;
+	gchar *decoded = g_uri_unescape_string (value, NULL);
+	*dst = apr_pstrdup (pool, decoded);
+	g_free (decoded);
+	return 1;
+}
+
+#define REPLACE_FIELD(S) str_replace_by_pooled_str(pool, &(cti->S))
+
+#define LAZY_LOAD_FIELD(Where,Name) do { \
+	if (!cti->Where) \
+		_load_field(pool, src, RAWX_HEADER_PREFIX Name, &(cti->Where)); \
+} while (0)
+
+#define OVERLOAD_FIELD(Where,Name) do { \
+	_load_field(pool, src, RAWX_HEADER_PREFIX Name, &(cti->Where)); \
+} while (0)
+
+static gboolean _null_or_hexa1 (const char *s) { return !s || oio_str_ishexa1(s); }
+
+static void
+chunk_info_fields__glib2apr (apr_pool_t *pool, struct chunk_textinfo_s *cti)
+{
+	REPLACE_FIELD(container_id);
+
+	REPLACE_FIELD(content_id);
+	REPLACE_FIELD(content_path);
+	REPLACE_FIELD(content_version);
+	REPLACE_FIELD(content_size);
+	REPLACE_FIELD(content_chunk_nb);
+
+	REPLACE_FIELD(content_storage_policy);
+	REPLACE_FIELD(content_chunk_method);
+	REPLACE_FIELD(content_mime_type);
+
+	REPLACE_FIELD(metachunk_size);
+	REPLACE_FIELD(metachunk_hash);
+
+	REPLACE_FIELD(chunk_id);
+	REPLACE_FIELD(chunk_size);
+	REPLACE_FIELD(chunk_position);
+	REPLACE_FIELD(chunk_hash);
+}
+
+void
+request_overload_chunk_info_from_trailers(request_rec *request,
+		struct chunk_textinfo_s *cti)
+{
+	apr_table_t *src = request->trailers_in;
+	apr_pool_t *pool = request->pool;
+
+	OVERLOAD_FIELD(metachunk_hash, "metachunk-hash");
+	OVERLOAD_FIELD(metachunk_size, "metachunk-size");
+	OVERLOAD_FIELD(chunk_size,     "chunk-size");
+	OVERLOAD_FIELD(chunk_hash,     "chunk-hash");
+}
+
+void
+request_load_chunk_info_from_headers(request_rec *request,
+		struct chunk_textinfo_s *cti)
+{
+	apr_table_t *src = request->headers_in;
+	apr_pool_t *pool = request->pool;
+
+	LAZY_LOAD_FIELD(container_id,           "container-id");
+	LAZY_LOAD_FIELD(content_id,             "content-id");
+	LAZY_LOAD_FIELD(content_path,           "content-path");
+	LAZY_LOAD_FIELD(content_version,        "content-version");
+	LAZY_LOAD_FIELD(content_size,           "content-size");
+	LAZY_LOAD_FIELD(content_chunk_nb,       "content-chunksnb");
+	LAZY_LOAD_FIELD(content_storage_policy, "content-storage-policy");
+	LAZY_LOAD_FIELD(content_mime_type,      "content-mime-type");
+	LAZY_LOAD_FIELD(content_chunk_method,   "content-chunk-method");
+	LAZY_LOAD_FIELD(metachunk_hash,         "metachunk-hash");
+	LAZY_LOAD_FIELD(metachunk_size,         "metachunk-size");
+	LAZY_LOAD_FIELD(chunk_id,               "chunk-id");
+	LAZY_LOAD_FIELD(chunk_size,             "chunk-size");
+	LAZY_LOAD_FIELD(chunk_position,         "chunk-pos");
+	LAZY_LOAD_FIELD(chunk_hash,             "chunk-hash");
+}
+
+const char *
+check_chunk_info(const struct chunk_textinfo_s * const cti)
+{
+	if (!cti->container_id) return "container-id";
+	if (!cti->content_id) return "content-id";
+	if (!cti->content_storage_policy) return "storage-policy";
+	if (!cti->content_chunk_method) return "chunk-method";
+	//if (!cti->content_mime_type) return "mime-type";
+	if (!cti->content_path) return "content-path";
+	if (!cti->content_version) return "version";
+	if (!cti->chunk_position) return "chunk-pos";
+
+	oio_str_upper (cti->container_id);
+	oio_str_upper (cti->content_id);
+	oio_str_upper (cti->chunk_hash);
+	oio_str_upper (cti->chunk_id);
+
+	if (!oio_str_ishexa(cti->container_id, 64)) return "container-id";
+	if (!_null_or_hexa1(cti->content_id)) return "content-id";
+	if (!_null_or_hexa1(cti->chunk_id)) return "chunk-id";
+	if (!_null_or_hexa1(cti->chunk_hash)) return "chunk-hash";
+
+	return NULL;
+}
+
+const char *
+check_chunk_info_with_trailers(const struct chunk_textinfo_s * const cti)
+{
+	const char *msg = check_chunk_info (cti);
+	if (NULL != msg) return msg;
+
+	if (cti->metachunk_size && !oio_str_is_number(cti->metachunk_size))
+		return "metachunk-size";
+
+	oio_str_upper (cti->metachunk_hash);
+
+	if (!_null_or_hexa1(cti->metachunk_hash))
+		return "metachunk-hash";
+
+	if (cti->chunk_size && !oio_str_is_number(cti->chunk_size))
+		return "chunk-size";
+
+	if (g_str_has_prefix(cti->content_chunk_method, "ec/")
+			&& !cti->metachunk_size)
+		return "metachunk-size";
+
+	if (g_str_has_prefix(cti->content_chunk_method, "ec/")
+			&& !cti->metachunk_hash)
+		return "metachunk-hash";
+
+	return NULL;
+}
+
 void
 resource_stat_chunk(dav_resource *resource, int flags)
 {
-	apr_pool_t *pool;
 	dav_resource_private *ctx;
 	apr_status_t status = APR_ENOENT;
 
 	ctx = resource->info;
-	pool = resource->pool;
 
 	if (resource->type != DAV_RESOURCE_TYPE_REGULAR || resource->collection) {
 		DAV_ERROR_RES(resource, 0, "Cannot stat a anything else a chunk");
@@ -277,36 +390,16 @@ resource_stat_chunk(dav_resource *resource, int flags)
 
 		DAV_DEBUG_RES(resource, 0, "Resource exists [%s]", resource_get_pathname(resource));
 
-		memset(&(ctx->content), 0, sizeof(ctx->content));
 		memset(&(ctx->chunk), 0, sizeof(ctx->chunk));
 		if (flags & RESOURCE_STAT_CHUNK_READ_ATTRS) {
-			rc = get_rawx_info_in_attr(resource_get_pathname(resource), &err,
-					&(ctx->content), &(ctx->chunk));
+			rc = get_rawx_info_from_file(resource_get_pathname(resource), &err, &(ctx->chunk));
 			if (!rc) {
 				DAV_DEBUG_RES(resource, 0, "Chunk xattr loading error [%s] : %s",
 						resource_get_pathname(resource),
 						apr_pstrdup(resource->pool, gerror_get_message(err)));
 			}
 			else {
-				REPLACE_FIELD(pool, content, container_id);
-				REPLACE_FIELD(pool, content, content_id);
-				REPLACE_FIELD(pool, content, path);
-				REPLACE_FIELD(pool, content, version);
-				REPLACE_FIELD(pool, content, size);
-				REPLACE_FIELD(pool, content, chunk_nb);
-
-				REPLACE_FIELD(pool, content, storage_policy);
-				REPLACE_FIELD(pool, content, chunk_method);
-				REPLACE_FIELD(pool, content, mime_type);
-
-				REPLACE_FIELD(pool, content, rawx_list);
-				REPLACE_FIELD(pool, content, spare_rawx_list);
-
-				REPLACE_FIELD(pool, chunk, id);
-				REPLACE_FIELD(pool, chunk, size);
-				REPLACE_FIELD(pool, chunk, position);
-				REPLACE_FIELD(pool, chunk, hash);
-				REPLACE_FIELD(pool, chunk, metadata);
+				chunk_info_fields__glib2apr (resource->pool, &resource->info->chunk);
 			}
 			if (err)
 				g_clear_error(&err);
@@ -314,155 +407,71 @@ resource_stat_chunk(dav_resource *resource, int flags)
 	}
 }
 
-static int
-__load_one_header(request_rec *request, const char *name, char **dst)
-{
-	const char *value = apr_table_get(request->headers_in, name);
-	if (!value)
-		return 0;
-	gchar *decoded = g_uri_unescape_string (value, NULL);
-	*dst = apr_pstrdup (request->pool, decoded);
-	g_free (decoded);
-	return 1;
-}
-
-#define LOAD_HEADER2(Where,Name) do { \
-	if (!resource->info->Where) \
-		__load_one_header(request, Name, &(resource->info->Where)); \
-} while (0)
-
-static void
-_up (gchar *s)
-{
-	if (s) {
-		do { *s = g_ascii_toupper(*s); } while (*(s++));
-	}
-}
-
-const char *
-request_load_chunk_info(request_rec *request, dav_resource *resource)
-{
-	LOAD_HEADER2(content.container_id,   RAWX_HEADER_PREFIX "container-id");
-
-	LOAD_HEADER2(content.content_id,     RAWX_HEADER_PREFIX "content-id");
-	LOAD_HEADER2(content.path,           RAWX_HEADER_PREFIX "content-path");
-	LOAD_HEADER2(content.version,        RAWX_HEADER_PREFIX "content-version");
-	LOAD_HEADER2(content.size,           RAWX_HEADER_PREFIX "content-size");
-	LOAD_HEADER2(content.chunk_nb,       RAWX_HEADER_PREFIX "content-chunksnb");
-
-	LOAD_HEADER2(content.storage_policy, RAWX_HEADER_PREFIX "content-storage-policy");
-	LOAD_HEADER2(content.mime_type,      RAWX_HEADER_PREFIX "content-mime-type");
-	LOAD_HEADER2(content.chunk_method,   RAWX_HEADER_PREFIX "content-chunk-method");
-
-	LOAD_HEADER2(chunk.id,           RAWX_HEADER_PREFIX "chunk-id");
-	LOAD_HEADER2(chunk.size,         RAWX_HEADER_PREFIX "chunk-size");
-	LOAD_HEADER2(chunk.position,     RAWX_HEADER_PREFIX "chunk-pos");
-	LOAD_HEADER2(chunk.hash,         RAWX_HEADER_PREFIX "chunk-hash");
-
-	if (!resource->info->content.container_id) return "container-id (missing)";
-	if (!resource->info->content.content_id) return "content-id (missing)";
-
-	if (!resource->info->content.storage_policy) return "storage-policy (missing)";
-	if (!resource->info->content.chunk_method) return "chunk-method (missing)";
-	if (!resource->info->content.mime_type) return "mime-type (missing)";
-
-	if (!resource->info->content.path) return "content-path (missing)";
-	if (!resource->info->content.version) return "version (missing)";
-	if (!resource->info->chunk.position) return "chunk-pos (missing)";
-
-	_up (resource->info->content.container_id);
-	_up (resource->info->content.content_id);
-	_up (resource->info->chunk.hash);
-	_up (resource->info->chunk.id);
-
-	if (!oio_str_ishexa(resource->info->content.container_id, 64))
-		return "container-id (not hexa)";
-	if (!oio_str_ishexa1(resource->info->content.content_id))
-		return "content-id (not hexa)";
-
-	if (resource->info->chunk.id &&
-		!oio_str_ishexa1(resource->info->chunk.id))
-		return "chunk-id (not hexa)";
-	if (resource->info->chunk.hash && resource->info->chunk.hash[0] &&
-		!oio_str_ishexa1(resource->info->chunk.hash))
-		return "chunk-hash (not hexa)";
-
-	return NULL;
-}
-
 void
 request_parse_query(request_rec *r, dav_resource *resource)
 {
-	/* Sanity check */
-	if(!r->parsed_uri.query)
+	if (!r->parsed_uri.query)
 		return;
 
 	char *query = NULL;
 	query = apr_pstrdup(r->pool, r->parsed_uri.query);
 
-	/* Expected cp=true&algo=XXXX&bs=XXXX */
+	/* Expected comp=true&algo=XXXX&bs=XXXX */
 	char *k = NULL;
 	char *v = NULL;
 	char *last = NULL;
 
 	k = apr_strtok(query, "=&", &last);
-	v = apr_strtok(NULL, "=&",&last);
+	v = apr_strtok(NULL, "=&", &last);
 
-	if(!k || !v)
+	if (!k || !v)
 		goto end;
 
-	if(0 == apr_strnatcasecmp(k, "comp"))
-		resource->info->forced_cp = apr_pstrdup(r->pool, v);
-	if(0 == apr_strnatcasecmp(k, "algo"))
-		resource->info->forced_cp_algo = apr_pstrdup(r->pool, v);
-	if(0 == apr_strnatcasecmp(k, "bs"))
-		resource->info->forced_cp_bs = apr_pstrdup(r->pool, v);
-
-	while(1) {
-		k = apr_strtok(NULL, "=&", &last);
-		v = apr_strtok(NULL, "=&", &last);
-		if(!k || !v)
-			break;
-		if(0 == apr_strnatcasecmp(k, "comp"))
+	do {
+		if (!apr_strnatcasecmp(k, "comp"))
 			resource->info->forced_cp = apr_pstrdup(r->pool, v);
-		if(0 == apr_strnatcasecmp(k, "algo"))
+		if (!apr_strnatcasecmp(k, "algo"))
 			resource->info->forced_cp_algo = apr_pstrdup(r->pool, v);
-		if(0 == apr_strnatcasecmp(k, "bs"))
+		if (!apr_strnatcasecmp(k, "bs"))
 			resource->info->forced_cp_bs = apr_pstrdup(r->pool, v);
-
-	}
+	} while ((k = apr_strtok(NULL, "=&", &last)) &&
+			(v = apr_strtok(NULL, "=&", &last)));
 
 end:
-	if(!resource->info->forced_cp)
+	DAV_DEBUG_REQ(r, 0, "forced_cp=%s, forced_cp_algo=%s, forced_cp_bs=%s",
+			resource->info->forced_cp, resource->info->forced_cp_algo,
+			resource->info->forced_cp_bs);
+	if (!resource->info->forced_cp)
 		resource->info->forced_cp = apr_pstrdup(r->pool, "false");
 }
 
 void
-request_fill_headers(request_rec *r, struct content_textinfo_s *c0,
-		struct chunk_textinfo_s *c1)
+request_fill_headers(request_rec *r, struct chunk_textinfo_s *c)
 {
-	__set_header(r, "container-id",  c0->container_id);
+	__set_header(r, "container-id",  c->container_id);
 
-	__set_header(r, "content-id",           c0->content_id);
-
-	if (c0->path) {
-		gchar *decoded = g_uri_escape_string (c0->path, NULL, FALSE);
-		__set_header(r, "content-path",         decoded);
+	if (c->content_path) {
+		gchar *decoded = g_uri_escape_string (c->content_path, NULL, FALSE);
+		__set_header(r, "content-path", decoded);
 		g_free (decoded);
 	}
 
-	__set_header(r, "content-size",         c0->size);
-	__set_header(r, "content-version",      c0->version);
-	__set_header(r, "content-chunksnb",     c0->chunk_nb);
+	__set_header(r, "content-id",       c->content_id);
+	__set_header(r, "content-size",     c->content_size);
+	__set_header(r, "content-version",  c->content_version);
+	__set_header(r, "content-chunksnb", c->content_chunk_nb);
 
-	__set_header(r, "content-storage-policy", c0->storage_policy);
-	__set_header(r, "content-chunk-method",   c0->chunk_method);
-	__set_header(r, "content-mime-type",      c0->mime_type);
+	__set_header(r, "content-storage-policy", c->content_storage_policy);
+	__set_header(r, "content-chunk-method",   c->content_chunk_method);
+	__set_header(r, "content-mime-type",      c->content_mime_type);
 
-	__set_header(r, "chunk-id",          c1->id);
-	__set_header(r, "chunk-size",        c1->size);
-	__set_header(r, "chunk-hash",        c1->hash);
-	__set_header(r, "chunk-pos",         c1->position);
+	__set_header(r, "metachunk-size", c->metachunk_size);
+	__set_header(r, "metachunk-hash", c->metachunk_hash);
+
+	__set_header(r, "chunk-id",   c->chunk_id);
+	__set_header(r, "chunk-size", c->chunk_size);
+	__set_header(r, "chunk-hash", c->chunk_hash);
+	__set_header(r, "chunk-pos",  c->chunk_position);
 }
 
 /*************************************************************************/
@@ -548,16 +557,16 @@ rawx_repo_write_last_data_crumble(dav_stream *stream)
 	checksum = stream->compress_checksum;
 
 	/* If buffer contain data, compress it if needed and write it to distant file */
-	if( 0 < stream->bufsize ) {
-		if(!stream->compression) {
+	if (0 < stream->bufsize ) {
+		if (!stream->compression) {
 			e = _write_data_crumble_UNCOMP(stream);
 		} else {
 			e = _write_data_crumble_COMP(stream, &checksum);
 		}
 	}
 	/* write eof & checksum */
-	if( !e && stream->compression ) {
-		if( 0 != stream->comp_ctx.eof_writer(stream->f, checksum, &(stream->compressed_size))) {
+	if (!e && stream->compression) {
+		if (stream->comp_ctx.eof_writer(stream->f, checksum, &(stream->compressed_size))) {
 			/* ### use something besides 500? */
 			e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
 					HTTP_INTERNAL_SERVER_ERROR, 0,
@@ -592,26 +601,78 @@ rawx_repo_rollback_upload(dav_stream *stream)
 	return NULL;
 }
 
+#define DUP(F) do { \
+	if (stream->r->info->chunk . F) \
+		fake. F = apr_pstrdup(stream->r->pool, stream->r->info->chunk. F); \
+} while (0)
+
 dav_error *
 rawx_repo_commit_upload(dav_stream *stream)
 {
 	dav_error *e = NULL;
+	struct chunk_textinfo_s fake = {0};
 
-	e = _set_chunk_extended_attributes(stream);
-	if( NULL != e) {
-		DAV_DEBUG_REQ(stream->r->info->request, 0, "Failed to set chunk extended attributes : %s", e->desc);
+	DUP(container_id);
+	DUP(content_id);
+	DUP(content_path);
+	DUP(content_version);
+	DUP(content_size);
+	DUP(content_chunk_nb);
+	DUP(content_storage_policy);
+	DUP(content_chunk_method);
+	DUP(content_mime_type);
+	DUP(metachunk_size);
+	DUP(metachunk_hash);
+	DUP(chunk_id);
+	DUP(chunk_size);
+	DUP(chunk_hash);
+	DUP(chunk_position);
+	DUP(compression_metadata);
+	DUP(compression_size);
+
+	/* patch the xattr with explicit values from the trailers, then ensure
+	 * values that could be missing */
+	request_overload_chunk_info_from_trailers (stream->r->info->request, &fake);
+	if (!fake.chunk_hash) {
+		gchar *hex = g_ascii_strup (g_checksum_get_string(stream->md5), -1);
+		fake.chunk_hash = apr_pstrdup(stream->p, hex);
+		g_free (hex);
+	}
+	if (!fake.chunk_size) {
+		fake.chunk_size = apr_psprintf(stream->r->pool, "%d", (int)stream->total_size);
+	}
+	if (stream->compressed_size) {
+		char size[32];
+		apr_snprintf(size, 32, "%d", stream->compressed_size);
+		oio_str_replace(&(fake.compression_metadata), stream->metadata_compress);
+		oio_str_replace(&(fake.compression_size), size);
+	}
+
+	const char *msg = check_chunk_info_with_trailers (&fake);
+	if (msg != NULL) {
+		e = server_create_and_stat_error(resource_get_server_config(stream->r),
+				stream->p, HTTP_FORBIDDEN, 0,
+				apr_pstrcat(stream->p, "Error with xattr/header ", msg, NULL));
+		return e;
+	}
+
+	/* ok, save now */
+	e = _set_chunk_extended_attributes(stream, &fake);
+	if (e) {
+		DAV_DEBUG_REQ(stream->r->info->request, 0,
+				"Failed to set chunk extended attributes: %s", e->desc);
 		return e;
 	}
 
 	e = _finalize_chunk_creation(stream);
 
-	if( NULL != e ) {
-		DAV_DEBUG_REQ(stream->r->info->request, 0, "Failed to finalize chunk file creation : %s", e->desc);
+	if (e) {
+		DAV_DEBUG_REQ(stream->r->info->request, 0,
+				"Failed to finalize chunk file creation: %s", e->desc);
 		return e;
 	}
 
-	request_fill_headers(stream->r->info->request,
-			&(stream->r->info->content), &(stream->r->info->chunk));
+	request_fill_headers(stream->r->info->request, &fake);
 
 	send_chunk_event("storage.chunk.new", stream->r);
 
@@ -648,9 +709,9 @@ rawx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 	dav_rawx_server_conf *conf = resource_get_server_config(resource);
 	apr_status_t rv = 0;
 	char * metadata_compress = NULL;
-	struct storage_policy_s *sp = NULL;
-	const struct data_treatments_s *dt = NULL;
 	int retryable = 1;
+
+	int should_compress = 0;
 
 	dav_stream *ds = apr_pcalloc(p, sizeof(*ds));
 	ds->fsync_on_close = conf->fsync_on_close;
@@ -677,8 +738,8 @@ retry:
 
 	/* Preallocate disk space for the chunk */
 	apr_int64_t chunk_size = 0;
-	if (ctx->chunk.size != NULL && conf->fallocate &&
-			(chunk_size = apr_strtoi64(ctx->chunk.size, NULL, 10)) > 0 &&
+	if (ctx->chunk.chunk_size != NULL && conf->fallocate &&
+			(chunk_size = apr_strtoi64(ctx->chunk.chunk_size, NULL, 10)) > 0 &&
 			(rv = posix_fallocate(fileno(ds->f), 0, (off_t)chunk_size)) != 0) {
 		dav_error *err = server_create_and_stat_error(conf, p,
 				MAP_IO2HTTP(rv), 0,
@@ -688,60 +749,35 @@ retry:
 		return err;
 	}
 
-	/* TODO: try to create a storage_policy struct from request header */
-	/* if not possible, get it from rawx_conf (default namespace conf) */
-	DAV_DEBUG_REQ(resource->info->request, 0 , "stg_pol init from local sp");
-	if (NULL != (sp = storage_policy_dup(conf->rawx_conf->sp)))
-		apr_pool_cleanup_register(p, sp, apr_storage_policy_clean,
-				apr_pool_cleanup_null);
+	if (conf->compression_algo && *conf->compression_algo) {
+		should_compress = TRUE;
+		ctx->forced_cp_algo = apr_pstrdup(p, conf->compression_algo);
+	} else if (ctx->forced_cp) {
+		should_compress = !g_ascii_strncasecmp(ctx->forced_cp, "true", 4);
+	}
 
-	dt = storage_policy_get_data_treatments(sp);
-
-	gint match = -1;
-
-	if(ctx->forced_cp)
-		match = g_ascii_strncasecmp(ctx->forced_cp, "true", 4);
-
-	if((!dt || COMPRESSION != data_treatments_get_type(dt)) && (match != 0)){
-		DAV_DEBUG_REQ(resource->info->request, 0 , "Compression Mode OFF");
-		ds->blocksize = g_ascii_strtoll(DEFAULT_BLOCK_SIZE, NULL, 10); /* conf->rawx_conf->blocksize; */
+	if (!should_compress ||
+			!namespace_in_compression_mode(conf->rawx_conf->ni)) {
+		ds->blocksize = DEFAULT_BLOCK_SIZE;
 		ds->buffer = apr_pcalloc(p, ds->blocksize);
 		ds->bufsize = 0;
 	} else {
-		DAV_DEBUG_REQ(resource->info->request, 0 , "Compression Mode ON");
 		ds->compression = TRUE;
-		if(NULL != dt && COMPRESSION == data_treatments_get_type(dt)) {
-			/* compression configured "normally" */
-			const char *bs = NULL;
-			const char *algo = NULL;
-			bs = data_treatments_get_param(dt, DT_KEY_BLOCKSIZE);
-			if(!bs)
-				bs = DEFAULT_BLOCK_SIZE;
-			algo = data_treatments_get_param(dt, DT_KEY_ALGO);
-			if(!algo)
-				algo = DEFAULT_COMPRESSION_ALGO;
-			ds->blocksize = g_ascii_strtoll(bs, NULL, 10);
-
-			metadata_compress = apr_pstrcat(p, NS_COMPRESSION_OPTION, "=", NS_COMPRESSION_ON, ";",
-					NS_COMPRESS_ALGO_OPTION,"=", algo, ";",
-					NS_COMPRESS_BLOCKSIZE_OPTION, "=", bs, NULL);
-
-			init_compression_ctx(&(ds->comp_ctx), algo);
-		} else {
-			/* compression forced by request header */
-			if(!ctx->forced_cp_algo || !ctx->forced_cp_bs){
-				return server_create_and_stat_error(resource_get_server_config(resource), p,
-						HTTP_BAD_REQUEST, 0,
-						apr_pstrcat(p, "Failed to get compression info from incoming request", NULL));
-			}
+		if (ctx->forced_cp_bs)
 			ds->blocksize = strtol(ctx->forced_cp_bs, NULL, 10);
+		else
+			ds->blocksize = DEFAULT_BLOCK_SIZE;
 
-			metadata_compress = apr_pstrcat(p, NS_COMPRESSION_OPTION, "=", NS_COMPRESSION_ON, ";",
-					NS_COMPRESS_ALGO_OPTION,"=", ctx->forced_cp_algo, ";",
-					NS_COMPRESS_BLOCKSIZE_OPTION, "=", ctx->forced_cp_bs, NULL);
+		if (!ctx->forced_cp_algo)
+			ctx->forced_cp_algo = DEFAULT_COMPRESSION_ALGO;
 
-			init_compression_ctx(&(ds->comp_ctx), ctx->forced_cp_algo);
-		}
+		metadata_compress = apr_pstrcat(p,
+				NS_COMPRESSION_OPTION, "=", NS_COMPRESSION_ON, ";",
+				NS_COMPRESS_ALGO_OPTION,"=", ctx->forced_cp_algo, ";",
+				NS_COMPRESS_BLOCKSIZE_OPTION, "=", ctx->forced_cp_bs, NULL);
+
+		DAV_DEBUG_REQ(resource->info->request, 0 , "%s", metadata_compress);
+		init_compression_ctx(&(ds->comp_ctx), ctx->forced_cp_algo);
 
 		ds->buffer = apr_pcalloc(p, ds->blocksize);
 		ds->bufsize = 0;

@@ -17,6 +17,7 @@ License along with this library.
 */
 
 #include <string.h>
+#include <errno.h>
 
 #include <glib.h>
 
@@ -335,6 +336,7 @@ oio_strv_length_total (const char * const *v)
 void
 oio_str_upper(register gchar *s)
 {
+	if (!s) return;
 	for (; *s ;++s)
 		*s = g_ascii_toupper(*s);
 }
@@ -437,4 +439,35 @@ size_t
 oio_strv_length (const char * const *v)
 {
 	return oio_ptrv_length (v);
+}
+
+int
+oio_str_prefixed (const char *s, const char *p, const char *sep)
+{
+	if (!oio_str_is_set(s) || !g_str_has_prefix (s, p))
+		return FALSE;
+	s += strlen(p);
+	return !*s || g_str_has_prefix (s, sep);
+}
+
+int
+oio_str_is_number (const char *s)
+{
+	if (!oio_str_is_set(s))
+		return 0;
+	gchar *end = NULL;
+	errno = 0;
+	gint64 mcs = g_ascii_strtoll(s, &end, 10);
+	if (errno == ERANGE || (mcs == 0 && errno == EINVAL))
+		return 0;
+	if (!end || *end != '\0')
+		return 0;
+	return 1;
+}
+
+int
+oio_str_cmp3 (const void *a, const void *b, void *ignored)
+{
+	(void) ignored;
+	return g_strcmp0 (a,b);
 }

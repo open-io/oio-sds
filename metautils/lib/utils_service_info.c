@@ -1,7 +1,7 @@
 /*
 OpenIO SDS metautils
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -459,15 +459,56 @@ service_info_check_storage_class(const struct service_info_s *si, const gchar *w
 	return storage_class_is_satisfied(wanted_class, actual_class);
 }
 
+void
+oio_parse_service_key(const char *key, gchar **ns, gchar **type, gchar **id)
+{
+	char **toks = g_strsplit(key, "|", -1);
+	if (ns && toks[0])
+		*ns = toks[0];
+	else
+		g_free(toks[0]);
+
+	if (type && toks[1])
+		*type = toks[1];
+	else
+		g_free(toks[1]);
+
+	if (id && toks[2])
+		*id = toks[2];
+	else
+		g_free(toks[2]);
+
+	g_free(toks);
+}
+
+gchar *
+oio_make_service_key(const char *ns_name, const char *type, const char *id)
+{
+	return g_strdup_printf("%s|%s|%s", ns_name, type, id);
+}
+
 gchar *
 service_info_key (const struct service_info_s *si)
 {
 	gchar addr[STRLEN_ADDRINFO];
 	const char *explicit = service_info_get_tag_value(si, "tag.id", NULL);
 	if (explicit)
-		return g_strdup_printf("%s|%s|%s", si->ns_name, si->type, explicit);
+		return oio_make_service_key(si->ns_name, si->type, explicit);
 	grid_addrinfo_to_string(&si->addr, addr, sizeof(struct addr_info_s));
-	return g_strdup_printf("%s|%s|%s", si->ns_name, si->type, addr);
+	return oio_make_service_key(si->ns_name, si->type, addr);
+}
+
+void
+service_info_to_lb_item(const struct service_info_s *si,
+		struct oio_lb_item_s *item)
+{
+	g_assert_nonnull(si);
+	g_assert_nonnull(item);
+	item->location = location_from_addr_info(&(si->addr));
+	item->weight = si->score.value;
+	gchar *key = service_info_key(si);
+	g_strlcpy(item->id, key, LIMIT_LENGTH_SRVID);
+	g_free(key);
 }
 
 //------------------------------------------------------------------------------
@@ -606,3 +647,75 @@ service_info_load_json(const gchar *encoded, struct service_info_s **out,
 	return err;
 }
 
+gchar*
+get_rawx_location(service_info_t* rawx)
+{
+	const gchar *loc = service_info_get_rawx_location(rawx, NULL);
+	return loc && *loc ? g_strdup(loc) : NULL;
+}
+
+guint
+distance_between_location(const gchar *loc1, const gchar *loc2)
+{
+	/* The arrays of tokens. */
+	gchar **split_loc1, **split_loc2;
+	/* Used to iterate over the arrays of tokens. */
+	gchar **iter_tok1, **iter_tok2;
+	/* The current tokens. */
+	gchar *cur_tok1, *cur_tok2;
+	/* Stores the greatest number of tokens in both location names. */
+	guint num_tok = 0U;
+	/* Number of the current token. */
+	guint cur_iter = 0U;
+	/* TRUE if a different token was found. */
+	gboolean found_diff = FALSE;
+	/* Distance between 2 tokens. */
+	guint token_dist;
+
+	if ((!loc1 || !*loc1) && (!loc2 || !*loc2))
+		return 1U;
+
+	split_loc1 = g_strsplit(loc1, ".", 0);
+	split_loc2 = g_strsplit(loc2, ".", 0);
+
+	iter_tok1 = split_loc1;
+	iter_tok2 = split_loc2;
+
+	cur_tok2 = *iter_tok2;
+
+	while ((cur_tok1 = *iter_tok1++)) {
+		num_tok++;
+		if (cur_tok2 && (cur_tok2 = *iter_tok2++) && !found_diff) {
+			cur_iter++;
+			/* if both tokens are equal, continue */
+			/* else set the found_diff flag to TRUE, keep the value of cur_iter and continue to set num_tok */
+			if (g_strcmp0(cur_tok1, cur_tok2))
+				found_diff = TRUE;
+		}
+	}
+
+	/* if loc2 has more tokens than loc1, increase num_tok to this value */
+	if (cur_tok2) {
+		while (*iter_tok2++)
+			num_tok++;
+	}
+
+	/* Frees the arrays of tokens. */
+	g_strfreev(split_loc1);
+	g_strfreev(split_loc2);
+
+	token_dist = num_tok - cur_iter + 1;
+
+	/* If the token distance is 1 and the last tokens are equal (ie both locations are equal) -> return 0. */
+	/* If the token distance is 1 and the last tokens are different -> return 1. */
+	/* If the token distance is > 1, then return 2^(token_dist). */
+	return token_dist > 1U ? 1U << (token_dist - 1U) : (found_diff ? 1U : 0U);
+}
+
+guint
+distance_between_services(struct service_info_s *s0, struct service_info_s *s1)
+{
+	return distance_between_location(
+			service_info_get_rawx_location(s0, ""),
+			service_info_get_rawx_location(s1, ""));
+}

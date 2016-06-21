@@ -135,7 +135,7 @@ class TestMeta2Containers(BaseTestCase):
                        p+"hash": "0"*32,
                        p+"length": "0",
                        p+"mime-type": "application/octet-stream",
-                       p+"chunk-method": "plain/bytes"}
+                       p+"chunk-method": "plain/nb_copy=3"}
             p = self.param_content(self.ref, name)
             body = json.dumps([chunk, ])
             resp = self.session.post(self.url_content('create'),

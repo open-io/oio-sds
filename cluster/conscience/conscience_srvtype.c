@@ -51,7 +51,8 @@ destroy_gba(gpointer p)
 struct conscience_srvtype_s *
 conscience_srvtype_create(struct conscience_s *conscience, const char *type)
 {
-	struct conscience_srvtype_s *srvtype = g_malloc0(sizeof(struct conscience_srvtype_s));
+	struct conscience_srvtype_s *srvtype =
+			g_malloc0(sizeof(struct conscience_srvtype_s));
 
 	/*sets a default expression that always fits*/
 	if (!conscience_srvtype_set_type_expression(srvtype, NULL, "100")) {
@@ -76,8 +77,10 @@ conscience_srvtype_create(struct conscience_s *conscience, const char *type)
 		g_strlcpy(srvtype->type_name, type, sizeof(srvtype->type_name));
 	srvtype->alert_frequency_limit = 0;
 	srvtype->score_variation_bound = 0;
+	srvtype->lock_at_first_register = TRUE;
 	srvtype->conscience = conscience;
-	srvtype->services_ring.next = srvtype->services_ring.prev = &(srvtype->services_ring);
+	srvtype->services_ring.next = &(srvtype->services_ring);
+	srvtype->services_ring.prev = &(srvtype->services_ring);
 	return srvtype;
 }
 
@@ -362,7 +365,7 @@ conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_
 
 	p_srv->score.timestamp = oio_ext_monotonic_seconds ();
 	if (si->score.value == SCORE_UNSET || si->score.value == SCORE_UNLOCK) {
-		if (really_first) {
+		if (really_first && srvtype->lock_at_first_register) {
 			GRID_TRACE2("SRV first [%s]", p_srv->description);
 			p_srv->score.value = 0;
 			p_srv->locked = TRUE;

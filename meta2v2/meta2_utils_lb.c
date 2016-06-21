@@ -29,32 +29,28 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <glib.h>
 
-GError*
-service_info_from_chunk_id(struct grid_lbpool_s *glp,
-		const gchar *chunk_id, service_info_t **srvinfo)
+static GError*
+location_from_chunk_id(const gchar *chunk_id, oio_location_t *location)
 {
-	GError *err = NULL;
-	struct service_info_s *si = NULL;
+	g_assert_nonnull(location);
 
+	GError *err = NULL;
 	if (chunk_id == NULL || strlen(chunk_id) <= 0)
 		return NEWERROR(CODE_INTERNAL_ERROR, "emtpy chunk id");
 
-	// TODO FIXME Factorizes this with client/c/lib/loc_context.c and
-	// TODO FIXME meta2v2/meta2_utils_lb.c, rawx-mover/src/main.c
+	// TODO(srvid): do not suppose url contains an IP address
 	char **tok = g_regex_split_simple(
 			"(([[:digit:]]{1,3}\\.){3}[[:digit:]]{1,3}:[[:digit:]]{1,5})",
 			chunk_id, 0, 0);
 	if (!tok || g_strv_length(tok) < 3)
 		err = NEWERROR(CODE_INTERNAL_ERROR, "could not parse chunk id");
 
-	if (err == NULL) {
-		si = grid_lbpool_get_service_from_url(glp, "rawx", tok[1]);
-		if (si == NULL)
-			err = NEWERROR(CODE_INTERNAL_ERROR,
-					"unable to find service info from %s", tok[1]);
-		else
-			*srvinfo = si;
-	}
+	addr_info_t ai = {{0}};
+	if (!err && !grid_string_to_addrinfo(tok[1], &ai))
+		err = NEWERROR(CODE_INTERNAL_ERROR,
+				"could not parse [%s] to addrinfo", tok[1]);
+	if (!err)
+		*location = location_from_addr_info(&ai);
 
 	g_strfreev(tok);
 	return err;
@@ -62,17 +58,17 @@ service_info_from_chunk_id(struct grid_lbpool_s *glp,
 
 //------------------------------------------------------------------------------
 
+// TODO: factorize with _gen_chunk() from meta2_utils.c
 static gpointer
-_gen_chunk_bean(struct service_info_s *si)
+_gen_chunk_bean(const char *straddr)
 {
 	guint8 binid[32];
-	gchar straddr[STRLEN_ADDRINFO], strid[65];
+	gchar strid[65];
 	gchar *chunkid = NULL;
 	struct bean_CHUNKS_s *chunk = NULL;
 
 	oio_buf_randomize (binid, sizeof(binid));
 	oio_str_bin2hex (binid, sizeof(binid), strid, sizeof(strid));
-	grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
 	chunk = _bean_create(&descr_struct_CHUNKS);
 	chunkid = m2v2_build_chunk_url (straddr, strid);
 	CHUNKS_set2_id(chunk, chunkid);
@@ -83,143 +79,91 @@ _gen_chunk_bean(struct service_info_s *si)
 
 //------------------------------------------------------------------------------
 
-static GError*
-_poll_services(struct grid_lbpool_s *lbp, const gchar *srvtype,
-		struct lb_next_opt_ext_s *opt_ext, GSList **result)
-{
-	struct grid_lb_iterator_s *iter = NULL;
-	struct service_info_s **psi, **siv = NULL;
-
-	if (!lbp || !srvtype)
-		return NEWERROR(CODE_INTERNAL_ERROR, "Invalid parameter");
-	if (!(iter = grid_lbpool_get_iterator(lbp, srvtype)))
-		return NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "No RAWX available");
-
-	GError *err = NULL;
-	if (!grid_lb_iterator_next_set2(iter, &siv, opt_ext, &err))
-		return err;
-
-	for(psi=siv; *psi; ++psi)
-		*result = g_slist_prepend(*result, _gen_chunk_bean(*psi));
-
-	service_info_cleanv(siv, FALSE);
-	return NULL;
-}
-
 GError*
-get_spare_chunks(struct grid_lbpool_s *lbp, struct storage_policy_s *stgpol,
+get_spare_chunks(struct oio_lb_s *lb, const char *stgpol_name,
 		GSList **result)
 {
-	const char *k, *m, *cpstr, *diststr;
-	const struct data_security_s *ds = storage_policy_get_data_security(stgpol);
-	struct lb_next_opt_ext_s opt_ext;
-
-	memset(&opt_ext, 0, sizeof(opt_ext));
-	opt_ext.req.stgclass = storage_policy_get_storage_class(stgpol);
-	opt_ext.req.strict_stgclass = TRUE;
-
-	diststr = data_security_get_param(ds, DS_KEY_DISTANCE);
-	opt_ext.req.distance = (NULL != diststr) ? atoi(diststr) : 1;
-	opt_ext.req.weak_distance = \
-			BOOL(data_security_get_int64_param(ds, DS_KEY_WEAK, 0));
-
-	switch (data_security_get_type(ds)) {
-		case RAIN:
-			k = data_security_get_param(ds, DS_KEY_K);
-			m = data_security_get_param(ds, DS_KEY_M);
-			if (!k || !m)
-				return NEWERROR(CODE_BAD_REQUEST, "Invalid RAIN policy (missing K and/or M)");
-			opt_ext.req.max = atoi(k) + atoi(m);
-			break;
-		case DUPLI:
-			cpstr = data_security_get_param(ds, DS_KEY_COPY_COUNT);
-			opt_ext.req.max = (NULL != cpstr) ? atoi(cpstr) : 1;
-			break;
-		case DS_NONE:
-			opt_ext.req.max = 1;
-			break;
-		default:
-			return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy type");
+	GError *err = NULL;
+	GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
+	void _on_id(oio_location_t loc, const char *id)
+	{
+		(void)loc;
+		char *shifted = g_strdup(id);
+		meta1_url_shift_addr(shifted);
+		g_ptr_array_add(ids, shifted);
 	}
-
-	return _poll_services(lbp, "rawx", &opt_ext, result);
+	if (!oio_lb__poll_pool(lb, stgpol_name, NULL, _on_id)) {
+		err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
+				"found only %u services matching the criteria",
+				ids->len);
+	}
+	if (!err) {
+		for (int i = 0; i < (int)ids->len; i++) {
+			*result = g_slist_prepend(*result,
+					_gen_chunk_bean(g_ptr_array_index(ids, i)));
+		}
+	}
+	g_ptr_array_free(ids, TRUE);
+	return err;
 }
 
 //------------------------------------------------------------------------------
 
-static GSList *
-convert_chunks_to_srvinfo(struct grid_lbpool_s *lbp, GSList *src)
+static oio_location_t *
+convert_chunks_to_locations(GSList *src)
 {
-	GSList *result = NULL;
+	GError *err = NULL;
+	GArray *result = g_array_new(TRUE, TRUE, sizeof(oio_location_t));
 
-	for (GSList *l=src; l ;l=l->next) {
+	for (GSList *l = src; l; l = l->next) {
 		if (!l->data || DESCR(l->data) != &descr_struct_CHUNKS)
 			continue;
 
-		struct service_info_s *si = NULL;
-		GError *e = service_info_from_chunk_id(lbp, CHUNKS_get_id(l->data)->str, &si);
-		if (NULL != e) {
-			GRID_WARN("CHUNK -> ServiceInfo conversion error : (%d) %s",
-					e->code, e->message);
-			g_clear_error(&e);
+		oio_location_t loc = 0;
+		err = location_from_chunk_id(CHUNKS_get_id(l->data)->str, &loc);
+		if (err) {
+			GRID_WARN("CHUNK -> location conversion error: (%d) %s",
+					err->code, err->message);
+			g_clear_error(&err);
 			continue;
 		}
-		result = g_slist_prepend(result, si);
+		g_array_append_val(result, loc);
 	}
 
-	return result;
+	return (oio_location_t*) g_array_free(result, FALSE);
 }
 
 GError*
-get_conditioned_spare_chunks2(struct grid_lbpool_s *lbp,
-		struct storage_policy_s *stgpol,
-		GSList *already, GSList *broken,
-		GSList **result)
+get_conditioned_spare_chunks(struct oio_lb_s *lb, const char *stgpol,
+		GSList *already, GSList *broken, GSList **result)
 {
-	const struct data_security_s *ds = storage_policy_get_data_security(stgpol);
-	const struct storage_class_s *stgclass = storage_policy_get_storage_class(stgpol);
+	GError *err = NULL;
+	GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
+	oio_location_t *avoid = convert_chunks_to_locations(broken);
+	oio_location_t *known = convert_chunks_to_locations(already);
 
-	struct lb_next_opt_ext_s opt_ext;
-	memset(&opt_ext, 0, sizeof(opt_ext));
-	opt_ext.req.max = 0;
-	opt_ext.req.distance = data_security_get_int64_param(ds, DS_KEY_DISTANCE, 0);
-	opt_ext.req.weak_distance = \
-			BOOL(data_security_get_int64_param(ds, DS_KEY_WEAK, 0));
-	opt_ext.req.duplicates = (opt_ext.req.distance <= 0);
-	opt_ext.req.stgclass = stgclass;
-	opt_ext.req.strict_stgclass = FALSE;
-	opt_ext.srv_inplace = NULL;
-	opt_ext.srv_forbidden = NULL;
-
-	switch (data_security_get_type(ds)) {
-		case DUPLI:
-			opt_ext.req.max = data_security_get_int64_param(ds, DS_KEY_COPY_COUNT, 1);
-			break;
-		case RAIN:
-			opt_ext.req.max = data_security_get_int64_param(ds, DS_KEY_K, 1)
-				+ data_security_get_int64_param(ds, DS_KEY_M, 0);
-			break;
-		case DS_NONE:
-			opt_ext.req.max = 1;
-			break;
-		default:
-			return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid storage policy");
+	void _on_id(oio_location_t loc, const char *id)
+	{
+		(void)loc;
+		char *shifted = g_strdup(id);
+		meta1_url_shift_addr(shifted);
+		g_ptr_array_add(ids, shifted);
+	}
+	if (!oio_lb__patch_with_pool(lb, stgpol, avoid, known, _on_id)) {
+		err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
+				"found only %u services matching the criteria",
+				ids->len);
+	}
+	if (!err) {
+		for (int i = 0; i < (int)ids->len; i++) {
+			*result = g_slist_prepend(*result,
+					_gen_chunk_bean(g_ptr_array_index(ids, i)));
+		}
 	}
 
-	guint count = g_slist_length(already);
-	if (opt_ext.req.max > count)
-		opt_ext.req.max = opt_ext.req.max - count;
-	else
-		opt_ext.req.max = 1;
-
-	GError *err = NULL;
-
-	opt_ext.srv_forbidden = convert_chunks_to_srvinfo(lbp, broken);
-	opt_ext.srv_inplace = convert_chunks_to_srvinfo(lbp, already);
-	err = _poll_services(lbp, "rawx", &opt_ext, result);
-	g_slist_free_full(opt_ext.srv_forbidden, (GDestroyNotify)service_info_clean);
-	g_slist_free_full(opt_ext.srv_inplace, (GDestroyNotify)service_info_clean);
-
+	g_ptr_array_free(ids, TRUE);
+	g_free(avoid);
+	g_free(known);
 	return err;
 }
 

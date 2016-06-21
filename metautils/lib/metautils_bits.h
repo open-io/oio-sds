@@ -24,13 +24,6 @@ License along with this library.
 
 /* A place for all the macros playing with integer bits */
 
-/* Return -1 if A<B, 0 if A==B, 1 if A>B */
-# define CMP(a,b) (((a) > (b)) - ((a) < (b)))
-
-# define BOOL(C) ((C)!=0)
-
-# define MACRO_COND(C,A,B) ((B) ^ (((A)^(B)) & -BOOL(C)))
-
 # ifdef __GNUC__
 #  define likely(x)       __builtin_expect(BOOL(x),1)
 #  define unlikely(x)     __builtin_expect(BOOL(x),0)

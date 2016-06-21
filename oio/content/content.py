@@ -14,42 +14,38 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import sys
 import requests
 
-from oio.blob.client import BlobClient
 from oio.common import exceptions as exc
 from oio.common.exceptions import ClientException, OrphanChunk
 from oio.common.utils import get_logger
+from oio.blob.client import BlobClient
 from oio.conscience.client import ConscienceClient
 from oio.container.client import ContainerClient
 
-WRITE_CHUNK_SIZE = 65536
-READ_CHUNK_SIZE = 65536
-
 
 class Content(object):
-    def __init__(self, conf, container_id, metadata, chunks, stgpol_args):
+    def __init__(self, conf, container_id, metadata, chunks, storage_method):
         self.conf = conf
         self.container_id = container_id
         self.metadata = metadata
         self.chunks = ChunksHelper(chunks)
-        self.stgpol_args = stgpol_args
+        self.storage_method = storage_method
         self.logger = get_logger(self.conf)
         self.cs_client = ConscienceClient(conf)
-        self.container_client = ContainerClient(self.conf)
         self.blob_client = BlobClient()
+        self.container_client = ContainerClient(self.conf)
         self.session = requests.Session()
         self.content_id = self.metadata["id"]
-        self.stgpol_name = self.metadata["policy"]
+        self.stgpol = self.metadata["policy"]
         self.path = self.metadata["name"]
         self.length = int(self.metadata["length"])
         self.version = self.metadata["version"]
-        self.hash = self.metadata["hash"]
+        self.checksum = self.metadata["hash"]
         self.mime_type = self.metadata["mime-type"]
         self.chunk_method = self.metadata["chunk-method"]
 
-    def _meta2_get_spare_chunk(self, chunks_notin, chunks_broken):
+    def _get_spare_chunk(self, chunks_notin, chunks_broken):
         spare_data = {
             "notin": ChunksHelper(chunks_notin, False).raw(),
             "broken": ChunksHelper(chunks_broken, False).raw()
@@ -57,7 +53,7 @@ class Content(object):
         try:
             spare_resp = self.container_client.content_spare(
                 cid=self.container_id, content=self.content_id,
-                data=spare_data, stgpol=self.stgpol_name)
+                data=spare_data, stgpol=self.stgpol)
         except ClientException as e:
             raise exc.SpareChunkException("No spare chunk (%s)" % e.message)
 
@@ -67,16 +63,16 @@ class Content(object):
 
         return url_list
 
-    def _meta2_update_spare_chunk(self, current_chunk, new_url):
+    def _update_spare_chunk(self, current_chunk, new_url):
         old = [{'type': 'chunk',
                 'id': current_chunk.url,
-                'hash': current_chunk.hash,
+                'hash': current_chunk.checksum,
                 'size': current_chunk.size,
                 'pos': current_chunk.pos,
                 'content': self.content_id}]
         new = [{'type': 'chunk',
                 'id': new_url,
-                'hash': current_chunk.hash,
+                'hash': current_chunk.checksum,
                 'size': current_chunk.size,
                 'pos': current_chunk.pos,
                 'content': self.content_id}]
@@ -85,39 +81,20 @@ class Content(object):
         self.container_client.container_raw_update(
             cid=self.container_id, data=update_data)
 
-    def _meta2_create_object(self):
-        self.container_client.content_create(cid=self.container_id,
-                                             path=self.path,
-                                             content_id=self.content_id,
-                                             stgpol=self.stgpol_name,
-                                             size=self.length,
-                                             checksum=self.hash,
-                                             version=self.version,
-                                             chunk_method=self.chunk_method,
-                                             mime_type=self.mime_type,
-                                             data=self.chunks.raw())
+    def _create_object(self):
+        self.container_client.content_create(
+            cid=self.container_id, path=self.path, content_id=self.content_id,
+            stgpol=self.stgpol, size=self.length, checksum=self.checksum,
+            version=self.version, chunk_method=self.chunk_method,
+            mime_type=self.mime_type, data=self.chunks.raw())
 
     def rebuild_chunk(self, chunk_id):
         raise NotImplementedError()
 
-    def upload(self, stream):
-        try:
-            self._upload(stream)
-        except:
-            # Keep the stack trace
-            exc_info = sys.exc_info()
-            for chunk in self.chunks:
-                try:
-                    self.blob_client.chunk_delete(chunk.url)
-                except:
-                    self.logger.warn("Failed to delete %s", chunk.url)
-            # Raise with the original stack trace
-            raise exc_info[0], exc_info[1], exc_info[2]
-
-    def _upload(self, stream):
+    def create(self, stream):
         raise NotImplementedError()
 
-    def download(self):
+    def fetch(self):
         raise NotImplementedError()
 
     def delete(self):
@@ -132,14 +109,13 @@ class Content(object):
         other_chunks = self.chunks.filter(
             metapos=current_chunk.metapos).exclude(id=chunk_id).all()
 
-        spare_urls = self._meta2_get_spare_chunk(other_chunks,
-                                                 [current_chunk])
+        spare_urls = self._get_spare_chunk(other_chunks, [current_chunk])
 
         self.logger.debug("copy chunk from %s to %s",
                           current_chunk.url, spare_urls[0])
         self.blob_client.chunk_copy(current_chunk.url, spare_urls[0])
 
-        self._meta2_update_spare_chunk(current_chunk, spare_urls[0])
+        self._update_spare_chunk(current_chunk, spare_urls[0])
 
         try:
             self.blob_client.chunk_delete(current_chunk.url)
@@ -154,6 +130,20 @@ class Content(object):
 class Chunk(object):
     def __init__(self, chunk):
         self._data = chunk
+        self._pos = chunk['pos']
+        d = self.pos.split('.', 1)
+        if len(d) > 1:
+            ec = True
+            self._metapos = int(d[0])
+            self._subpos = int(d[1])
+        else:
+            self._metapos = int(self._pos)
+            ec = False
+        self._ec = ec
+
+    @property
+    def ec(self):
+        return self._ec
 
     @property
     def url(self):
@@ -165,27 +155,15 @@ class Chunk(object):
 
     @property
     def pos(self):
-        return self._data["pos"]
+        return self._pos
 
     @property
     def metapos(self):
-        return self.pos.split('.')[0]
+        return self._metapos
 
     @property
     def subpos(self):
-        return self.pos.split('.')[1]
-
-    @property
-    def is_subchunk(self):
-        return len(self.pos.split('.')) > 1
-
-    @property
-    def is_parity(self):
-        return self.subpos[0] == 'p'
-
-    @property
-    def paritypos(self):
-        return self.subpos[1:]
+        return self._subpos
 
     @property
     def size(self):
@@ -204,12 +182,12 @@ class Chunk(object):
         return self.url.split('/')[2]
 
     @property
-    def hash(self):
+    def checksum(self):
         return self._data["hash"].upper()
 
-    @hash.setter
-    def hash(self, new_hash):
-        self._data["hash"] = new_hash
+    @checksum.setter
+    def checksum(self, new_checksum):
+        self._data["hash"] = new_checksum
 
     @property
     def data(self):
@@ -219,25 +197,16 @@ class Chunk(object):
         return self._data
 
     def __str__(self):
-        return "[Chunk %s]" % self.id
+        return "[Chunk %s (%s)]" % (self.url, self.pos)
 
     def __cmp__(self, other):
         if self.metapos != other.metapos:
-            return cmp(int(self.metapos), int(other.metapos))
+            return cmp(self.metapos, other.metapos)
 
-        if not self.is_subchunk:
+        if not self.ec:
             return cmp(self.id, other.id)
 
-        if not self.is_parity and not other.is_parity:
-            return cmp(int(self.subpos), int(other.subpos))
-
-        if self.is_parity and other.is_parity:
-            return cmp(self.subpos, other.subpos)
-
-        if self.is_parity:
-            return 1
-
-        return -1
+        return cmp(self.subpos, other.subpos)
 
 
 class ChunksHelper(object):
@@ -250,36 +219,30 @@ class ChunksHelper(object):
             self.chunks = chunks
         self.chunks.sort()
 
-    def filter(self, id=None, pos=None, metapos=None, subpos=None,
-               is_parity=None):
+    def filter(self, id=None, pos=None, metapos=None, subpos=None):
         found = []
         for c in self.chunks:
             if id is not None and c.id != id:
                 continue
             if pos is not None and c.pos != str(pos):
                 continue
-            if metapos is not None and c.metapos != str(metapos):
+            if metapos is not None and c.metapos != metapos:
                 continue
-            if subpos is not None and c.subpos != str(subpos):
-                continue
-            if is_parity is not None and c.is_parity != is_parity:
+            if subpos is not None and c.subpos != subpos:
                 continue
             found.append(c)
         return ChunksHelper(found, False)
 
-    def exclude(self, id=None, pos=None, metapos=None, subpos=None,
-                is_parity=None):
+    def exclude(self, id=None, pos=None, metapos=None, subpos=None):
         found = []
         for c in self.chunks:
             if id is not None and c.id == id:
                 continue
             if pos is not None and c.pos == str(pos):
                 continue
-            if metapos is not None and c.metapos == str(metapos):
+            if metapos is not None and c.metapos == metapos:
                 continue
-            if subpos is not None and c.subpos == str(subpos):
-                continue
-            if is_parity is not None and c.is_parity == is_parity:
+            if subpos is not None and c.subpos == subpos:
                 continue
             found.append(c)
         return ChunksHelper(found, False)

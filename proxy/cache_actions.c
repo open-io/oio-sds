@@ -158,7 +158,7 @@ action_forward (struct req_args_s *args)
 enum http_rc_e
 action_cache_flush_local (struct req_args_s *args)
 {
-	grid_lbpool_flush (lbpool);
+	oio_lb_world__flush(lb_world);
 	hc_resolver_flush_csm0 (resolver);
 	hc_resolver_flush_services (resolver);
 	return _reply_success_json (args, NULL);

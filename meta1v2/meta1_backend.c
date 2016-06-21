@@ -36,11 +36,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 GError *
 meta1_backend_init(struct meta1_backend_s **out, const char *ns,
-		struct sqlx_repository_s *repo, struct grid_lbpool_s *glp)
+		struct sqlx_repository_s *repo, struct oio_lb_s *lb)
 {
 	EXTRA_ASSERT(out != NULL);
 	EXTRA_ASSERT(repo != NULL);
-	EXTRA_ASSERT(glp != NULL);
 
 	if (!*ns || strlen(ns) >= LIMIT_LENGTH_NSNAME)
 		return BADREQ("Invalid namespace name");
@@ -48,7 +47,7 @@ meta1_backend_init(struct meta1_backend_s **out, const char *ns,
 	struct meta1_backend_s *m1 = g_malloc0(sizeof(*m1));
 	g_strlcpy (m1->ns_name, ns, sizeof(m1->ns_name));
 	m1->type = NAME_SRVTYPE_META1;
-	m1->lb = glp;
+	m1->lb = lb;
 	m1->repo = repo;
 	m1->prefixes = meta1_prefixes_init();
 	m1->svcupdate = service_update_policies_create();

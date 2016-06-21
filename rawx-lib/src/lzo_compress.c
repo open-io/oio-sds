@@ -426,13 +426,13 @@ lzo_compressed_chunk_init(struct compressed_chunk_s *chunk, const gchar *path)
 	memset(&cti, 0, sizeof(cti));
 	
 	/* Get chunk uncompressed size in his attr */
-	if (!get_chunk_info_in_attr(path, &error, &cti)){
+	if (!get_rawx_info_from_file(path, &error, &cti)){
 		DEBUG("Failed to get chunk info in attr : %s\n", error->message);
 		g_clear_error(&error);
 		return 1;
 	}
 
-	chunk->uncompressed_size = g_strdup(cti.size);
+	chunk->uncompressed_size = g_strdup(cti.chunk_size);
 	DEBUG("size get in attr = %s", chunk->uncompressed_size);
 
 	/* Read magic header & flags */

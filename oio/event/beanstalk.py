@@ -1,5 +1,6 @@
 import os
 import sys
+from oio.common.utils import yaml
 from eventlet.green import socket
 from urlparse import urlparse
 from cStringIO import StringIO as BytesIO
@@ -167,10 +168,11 @@ class Connection(object):
         kwargs.update(url_options)
         return cls(**kwargs)
 
-    def __init__(self, host='localhost', port=11300, socket_timeout=None,
-                 retry_on_timeout=False, socket_connect_timeout=None,
-                 socket_keepalive=False, socket_keepalive_options=None,
-                 encoding='utf-8', socket_read_size=65536):
+    def __init__(self, host='localhost', port=11300, use_tubes=None,
+                 watch_tubes=None, socket_timeout=None,
+                 socket_connect_timeout=None, socket_keepalive=False,
+                 socket_keepalive_options=None, encoding='utf-8',
+                 socket_read_size=65536):
         self.pid = os.getpid()
         self.host = host
         self.port = port
@@ -179,9 +181,16 @@ class Connection(object):
         self.socket_connect_timeout = socket_connect_timeout
         self.socket_keepalive = socket_keepalive
         self.socket_keepalive_options = socket_keepalive_options
-        self.retry_on_timeout = retry_on_timeout
         self._sock = None
         self._parser = BaseParser(socket_read_size=socket_read_size)
+        self.use_tubes = use_tubes or []
+        self.watch_tubes = watch_tubes or []
+
+    def use(self, tube):
+        self.use_tubes.append(tube)
+
+    def watch(self, tube):
+        self.watch_tubes.append(tube)
 
     def connect(self):
         if self._sock:
@@ -244,6 +253,18 @@ class Connection(object):
 
     def on_connect(self):
         self._parser.on_connect(self)
+        for use_tube in self.use_tubes:
+            self._use(use_tube)
+        for watch_tube in self.watch_tubes:
+            self._watch(watch_tube)
+
+    def _use(self, tube):
+        self.send_command('use', tube)
+        self.read_response()
+
+    def _watch(self, tube):
+        self.send_command('watch', tube)
+        self.read_response()
 
     def disconnect(self):
         self._parser.on_disconnect()
@@ -323,6 +344,15 @@ def dict_merge(*dicts):
     return merged
 
 
+def parse_yaml(connection, response, **kwargs):
+    (status, results) = response
+    size = results[0]
+    body = connection.read_body(int(size))
+    if size > 0 and not body:
+        raise ResponseError()
+    return yaml.load(body)
+
+
 def parse_body(connection, response, **kwargs):
     (status, results) = response
     job_id = results[0]
@@ -335,7 +365,8 @@ def parse_body(connection, response, **kwargs):
 
 class Beanstalk(object):
     RESPONSE_CALLBACKS = dict_merge(
-        {'reserve': parse_body}
+        {'reserve': parse_body,
+         'stats-tube': parse_yaml}
     )
     EXPECTED_OK = dict_merge(
         {'reserve': ['RESERVED'],
@@ -344,7 +375,8 @@ class Beanstalk(object):
          'bury': ['BURIED'],
          'put': ['INSERTED'],
          'use': ['USING'],
-         'watch': ['WATCHING']}
+         'watch': ['WATCHING'],
+         'stats-tube': ['OK']}
 
     )
     EXPECTED_ERR = dict_merge(
@@ -352,6 +384,7 @@ class Beanstalk(object):
          'delete': ['NOT_FOUND'],
          'release': ['BURIED', 'NOT_FOUND'],
          'bury': ['NOT_FOUND'],
+         'stats-tube': ['NOT_FOUND'],
          'use': [],
          'watch': [],
          'put': ['JOB_TOO_BIG', 'BURIED', 'DRAINING']}
@@ -391,12 +424,9 @@ class Beanstalk(object):
         try:
             connection.send_command(*args, **kwargs)
             return self.parse_response(connection, command_name, **kwargs)
-        except (ConnectionError, TimeoutError) as e:
+        except (ConnectionError, TimeoutError):
             connection.disconnect()
-            if not connection.retry_on_timeout and isinstance(e, TimeoutError):
-                raise
-            connection.send_command(*args, **kwargs)
-            return self.parse_response(connection, command_name, **kwargs)
+            raise
 
     def parse_response(self, connection, command_name, **kwargs):
         response = connection.read_response()
@@ -419,10 +449,10 @@ class Beanstalk(object):
         return job_id
 
     def use(self, tube):
-        self.execute_command('use', tube)
+        self.connection.use(tube)
 
     def watch(self, tube):
-        self.execute_command('watch', tube)
+        self.connection.watch(tube)
 
     def reserve(self, timeout=None):
         if timeout is not None:
@@ -438,6 +468,9 @@ class Beanstalk(object):
 
     def delete(self, job_id):
         self.execute_command('delete', job_id)
+
+    def stats_tube(self, tube):
+        return self.execute_command('stats-tube', tube)
 
     def close(self):
         if self.connection:

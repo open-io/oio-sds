@@ -14,47 +14,22 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.common.exceptions import ContentNotFound, InconsistentContent
+from oio.common.exceptions import ContentNotFound
 from oio.common.exceptions import NotFound
 from oio.common.utils import get_logger
-from oio.conscience.client import ConscienceClient
 from oio.container.client import ContainerClient
-from oio.content.dup import DupContent
-from oio.content.rain import RainContent
+from oio.content.plain import PlainContent
+from oio.content.ec import ECContent
+from oio.common.storage_method import STORAGE_METHODS
 
 
 class ContentFactory(object):
+    DEFAULT_DATASEC = "plain", {"nb_copy": "1", "distance": "0"}
+
     def __init__(self, conf):
         self.conf = conf
         self.logger = get_logger(conf)
-        self.cs_client = ConscienceClient(conf)
         self.container_client = ContainerClient(conf)
-        self.ns_info = self.cs_client.info()
-
-    def _extract_datasec(self, stgpol_name):
-        try:
-            stgpol = self.ns_info["storage_policy"][stgpol_name]
-        except KeyError:
-            self.logger.error("Storage policy '%s' not found" % stgpol_name)
-            raise InconsistentContent("Storage policy not found")
-
-        stgclass_name, datasec_name, datatreat_name = stgpol.split(':')
-        if datasec_name == 'NONE':
-            return "DUP", {"nb_copy": "1", "distance": "0"}
-
-        try:
-            datasec = self.ns_info["data_security"][datasec_name]
-        except KeyError:
-            self.logger.error("Data security '%s' not found" % datasec_name)
-            raise InconsistentContent("Data security not found")
-
-        ds_type, ds_args = datasec.split(':')
-        args = {}
-        for arg in ds_args.split('|'):
-            key, value = arg.split('=')
-            args[key] = value
-
-        return ds_type, args
 
     def get(self, container_id, content_id):
         try:
@@ -64,38 +39,32 @@ class ContentFactory(object):
             raise ContentNotFound("Content %s/%s not found" % (container_id,
                                   content_id))
 
-        pol_type, pol_args = self._extract_datasec(meta['policy'])
+        chunk_method = meta['chunk-method']
+        storage_method = STORAGE_METHODS.load(chunk_method)
 
-        if pol_type == "DUP":
-            return DupContent(self.conf, container_id, meta, chunks, pol_args)
-        elif pol_type == "RAIN":
-            return RainContent(self.conf, container_id, meta, chunks, pol_args)
-
-        raise InconsistentContent("Unknown storage policy")
+        cls = ECContent if storage_method.ec else PlainContent
+        return cls(self.conf, container_id, meta, chunks, storage_method)
 
     def new(self, container_id, path, size, policy):
         meta, chunks = self.container_client.content_prepare(
             cid=container_id, path=path, size=size, stgpol=policy)
 
-        pol_type, pol_args = self._extract_datasec(meta['policy'])
+        chunk_method = meta['chunk-method']
+        storage_method = STORAGE_METHODS.load(chunk_method)
 
-        if pol_type == "DUP":
-            return DupContent(self.conf, container_id, meta, chunks, pol_args)
-        elif pol_type == "RAIN":
-            return RainContent(self.conf, container_id, meta, chunks, pol_args)
-
-        raise InconsistentContent("Unknown storage policy")
+        cls = ECContent if storage_method.ec else PlainContent
+        return cls(self.conf, container_id, meta, chunks, storage_method)
 
     def change_policy(self, container_id, content_id, new_policy):
         old_content = self.get(container_id, content_id)
-        if old_content.stgpol_name == new_policy:
+        if old_content.stgpol == new_policy:
             return old_content
 
         new_content = self.new(container_id, old_content.path,
                                old_content.length, new_policy)
 
-        stream = old_content.download()
-        new_content.upload(GeneratorIO(stream))
+        stream = old_content.fetch()
+        new_content.create(GeneratorIO(stream))
         # the old content is automatically deleted because the new content has
         # the same name (but not the same id)
         return new_content

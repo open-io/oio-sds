@@ -112,9 +112,10 @@ dav_format_time(int style, apr_time_t sec, char *buf)
 			tms.tm_hour, tms.tm_min, tms.tm_sec);
 }
 
-#define _PAIR_AND_COMMA(KEY,VAL) \
-	oio_str_gstring_append_json_pair(json, KEY, VAL);\
-	g_string_append_c(json, ',')
+#define _PAIR_AND_COMMA(KEY,VAL) if (VAL) { \
+	g_string_append_c(json, ','); \
+	oio_str_gstring_append_json_pair(json, KEY, VAL); \
+}
 
 void
 send_chunk_event(const char *type, const dav_resource *resource)
@@ -125,28 +126,26 @@ send_chunk_event(const char *type, const dav_resource *resource)
 
 	g_string_append_c(json, '{');
 
-	_PAIR_AND_COMMA("volume_id", conf->rawx_id);
-	_PAIR_AND_COMMA("container_id", resource->info->content.container_id);
-	_PAIR_AND_COMMA("content_id", resource->info->content.content_id);
-	_PAIR_AND_COMMA("content_version", resource->info->content.version);
-	_PAIR_AND_COMMA("content_path", resource->info->content.path);
-	_PAIR_AND_COMMA("content_storage_policy", resource->info->content.storage_policy);
-	_PAIR_AND_COMMA("content_mime_type", resource->info->content.mime_type);
-	_PAIR_AND_COMMA("content_chunk_method", resource->info->content.chunk_method);
-	_PAIR_AND_COMMA("chunk_id", resource->info->chunk.id);
-	_PAIR_AND_COMMA("chunk_hash", resource->info->chunk.hash);
-	_PAIR_AND_COMMA("chunk_position", resource->info->chunk.position);
-	oio_str_gstring_append_json_pair(json, "chunk_size", resource->info->chunk.size);
+	oio_str_gstring_append_json_pair(json, "volume_id", conf->rawx_id);
 
-	if (resource->info->content.size)
-		g_string_append_printf(json,
-				",\"content_size\":\"%s\"",
-				resource->info->content.size);
+	_PAIR_AND_COMMA("container_id", resource->info->chunk.container_id);
 
-	if (resource->info->content.chunk_nb)
-		g_string_append_printf(json,
-				",\"content_nbchunks\":\"%s\"",
-				resource->info->content.chunk_nb);
+	_PAIR_AND_COMMA("content_id", resource->info->chunk.content_id);
+	_PAIR_AND_COMMA("content_path", resource->info->chunk.content_path);
+	_PAIR_AND_COMMA("content_version", resource->info->chunk.content_version);
+	_PAIR_AND_COMMA("content_size", resource->info->chunk.content_size);
+	_PAIR_AND_COMMA("content_nbchunks", resource->info->chunk.content_chunk_nb);
+
+	_PAIR_AND_COMMA("content_storage_policy", resource->info->chunk.content_storage_policy);
+	_PAIR_AND_COMMA("content_mime_type", resource->info->chunk.content_mime_type);
+	_PAIR_AND_COMMA("content_chunk_method", resource->info->chunk.content_chunk_method);
+	_PAIR_AND_COMMA("metachunk_size", resource->info->chunk.metachunk_size);
+	_PAIR_AND_COMMA("metachunk_hash", resource->info->chunk.metachunk_hash);
+
+	_PAIR_AND_COMMA("chunk_id", resource->info->chunk.chunk_id);
+	_PAIR_AND_COMMA("chunk_size", resource->info->chunk.chunk_size);
+	_PAIR_AND_COMMA("chunk_position", resource->info->chunk.chunk_position);
+	_PAIR_AND_COMMA("chunk_hash", resource->info->chunk.chunk_hash);
 
 	g_string_append_printf(json, "}");
 
