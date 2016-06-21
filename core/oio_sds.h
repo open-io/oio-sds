@@ -19,6 +19,10 @@ License along with this library.
 #ifndef OIO_SDS__sdk__oio_sds_h
 #define OIO_SDS__sdk__oio_sds_h 1
 
+/* Version started to be defined in June, 2016. Version prior to 20160600
+ * have no ABI incompatibilities. */
+#define OIO_SDS_VERSION 20160600
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -72,6 +76,14 @@ void oio_log_more (void);
  * The output has to be freed with free().
  */
 char ** oio_sds_get_compile_options (void);
+
+#ifdef OIO_SDS_VERSION
+/* Returns the integer version of the API. Compare the version returned to the
+ * version you know from the OIO_SDS_VERSION macro. If it differs, the only
+ * behavior to have is upgrading your header AND your library to the same
+ * level. */
+unsigned int oio_sds_version (void);
+#endif /* defined OIO_SDS_VERSION */
 
 /* Error management --------------------------------------------------------- */
 

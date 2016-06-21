@@ -38,6 +38,8 @@ License along with this library.
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/storage_policy.h>
 
+unsigned int oio_sds_version (void) { return OIO_SDS_VERSION; }
+
 struct oio_sds_s
 {
 	gchar *session_id;
