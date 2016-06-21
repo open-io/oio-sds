@@ -27,10 +27,9 @@ License along with this library.
 #include "oio_sds.h"
 
 #define MAYBERETURN(E,T) do { \
-	if (E) { \
-		g_printerr ("%s: (%d) %s\n", (T), \
-				oio_error_code((struct oio_error_s*)(E)), \
-				oio_error_message((struct oio_error_s*)(E))); \
+	struct oio_error_s *_e = (struct oio_error_s*)(E); \
+	if (_e) { \
+		g_printerr ("%s: (%d) %s\n", (T), oio_error_code(_e), oio_error_message(_e)); \
 		return err; \
 	} \
 } while (0)
@@ -77,21 +76,13 @@ _checksum_file (const char *path, struct file_info_s *fi)
 	return NULL;
 }
 
-static void
-_append_random_chars (gchar *d, const char *chars, guint n)
-{
-	GRand *r = oio_ext_local_prng ();
-	size_t len = strlen (chars);
-	gchar *p = d + strlen(d);
-	for (guint i=0; i<n ;i++)
-		*(p++) = chars [g_rand_int_range (r, 0, len)];
-	*p = '\0';
-}
-
 static struct oio_error_s *
 _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 		const char *path)
 {
+	gchar tmppath[256], content_id[17] = "", prop1 [7]="", prop2[37]="";
+	gchar *properties [5] = {prop1, prop1, prop2, prop2, NULL};
+
 	struct file_info_s fi, fi0;
 	struct oio_error_s *err = NULL;
 	int has = 0;
@@ -99,13 +90,13 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 	err = (struct oio_error_s*) _checksum_file (path, &fi0);
 	MAYBERETURN(err, "Checksum error (original): ");
 
-	gchar tmppath[256] = "";
+	oio_str_randomize(prop1, sizeof(prop1), random_chars);
+	oio_str_randomize(prop2, sizeof(prop2), random_chars);
+	oio_str_randomize (content_id, sizeof(content_id), hex_chars);
 	g_snprintf (tmppath, sizeof(tmppath),
 			"/tmp/test-roundtrip-%d-%"G_GINT64_FORMAT"-",
 			getpid(), oio_ext_real_time());
-	_append_random_chars (tmppath, random_chars, 16);
-	gchar content_id[17] = "";
-	_append_random_chars (content_id, hex_chars, 16);
+	oio_str_randomize (tmppath+strlen(tmppath), 17, random_chars);
 
 	GRID_INFO ("Roundtrip on local(%s) distant(%s) content_id(%s)", tmppath,
 			oio_url_get (url, OIOURL_WHOLE), content_id);
@@ -116,9 +107,10 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 	MAYBERETURN(err, "Check error");
 	GRID_INFO("Content absent as expected");
 
-	/* Then upload it */
+	/* Upload the content */
 	struct oio_sds_ul_dst_s ul_dst = {
-		.url = url, .autocreate = 1, .out_size = 0, .content_id = content_id,
+		.url = url, .autocreate = 1, .out_size = 0,
+		.content_id = content_id, .properties=(char**)properties,
 	};
 	err = oio_sds_upload_from_file (client, &ul_dst, path, 0, 0);
 	MAYBERETURN(err, "Upload error");
@@ -164,7 +156,6 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 	struct oio_url_s *url1 = oio_url_dup (url);
 	oio_url_set (url1, OIOURL_PATH, tmppath);
 	err = oio_sds_link (client, url1, content_id);
-	oio_url_pclean (&url1);
 	MAYBERETURN(err, "Link error: ");
 
 	/* List the container, the content must appear */
@@ -180,6 +171,26 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 	err = oio_sds_list (client, &list_in, &list_out);
 	MAYBERETURN(err, "List error");
 
+	/* list the properties on the content */
+	GPtrArray *val = g_ptr_array_new();
+	void save_elements(void *ptrarray, const char *k, const char*v) {
+		GPtrArray *array = (GPtrArray *) ptrarray;
+		g_ptr_array_add(array,g_strdup(k));
+		g_ptr_array_add(array,g_strdup(v));
+	}
+	err = oio_sds_get_content_properties(client, url, save_elements, val);
+	g_ptr_array_add(val, NULL);
+	gchar **elts = (gchar **)g_ptr_array_free(val, FALSE);
+	MAYBERETURN(err, "get properties error");
+	if (g_strv_length(elts) != 4)
+		return (struct oio_error_s*) NEWERROR(0, "error of properties!");
+
+	const gboolean t1 = g_strcmp0(elts [0], prop1) && g_strcmp0(elts [1], prop1);
+	const gboolean t2 = g_strcmp0(elts [2], prop2) && g_strcmp0(elts [3], prop2);
+	if (!t1 || !t2)
+		return (struct oio_error_s*) NEWERROR(0, "error of properties!");
+	g_strfreev(elts);
+
 	/* Remove the content from the content */
 	err = oio_sds_delete (client, url);
 	MAYBERETURN(err, "Delete error");
@@ -192,8 +203,33 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 	MAYBERETURN(err, "Check error");
 	GRID_INFO("Content absent as expected");
 
+	/* TODO deleting twice SHOULD fail. */
+	/* TODO setting properties on the content MUST fail */
+	/* TODO getting properties from the content MUST fail */
+
+	oio_url_pclean(&url1);
 	g_remove (tmppath);
 	oio_error_pfree (&err);
+	return NULL;
+}
+
+static struct oio_error_s *
+_roundtrip_header_case (struct oio_sds_s *client, struct oio_url_s *url,
+		const char *path)
+{
+	struct oio_error_s *err;
+	oio_header_case = OIO_HDRCASE_NONE;
+	if (NULL != (err = _roundtrip_common (client, url, path)))
+		return err;
+	oio_header_case = OIO_HDRCASE_LOW;
+	if (NULL != (err = _roundtrip_common (client, url, path)))
+		return err;
+	oio_header_case = OIO_HDRCASE_1CAP;
+	if (NULL != (err = _roundtrip_common (client, url, path)))
+		return err;
+	oio_header_case = OIO_HDRCASE_RANDOM;
+	if (NULL != (err = _roundtrip_common (client, url, path)))
+		return err;
 	return NULL;
 }
 
@@ -215,9 +251,8 @@ _roundtrip_autocontainer (struct oio_sds_s *client, struct oio_url_s *url,
 	/* build a new URL with the computed container name */
 	struct oio_url_s *url_auto = oio_url_dup (url);
 	oio_url_set (url_auto, OIOURL_USER, auto_container);
-	err = (GError*) _roundtrip_common (client, url_auto, path);
+	err = (GError*) _roundtrip_header_case (client, url_auto, path);
 	oio_url_pclean (&url_auto);
-
 	return (struct oio_error_s*) err;
 }
 
@@ -267,11 +302,11 @@ main(int argc, char **argv)
 	}
 	GRID_INFO("Client ready to [%s]", oio_url_get (url, OIOURL_NS));
 
-	err = _roundtrip_common (client, url, path);
+	err = _roundtrip_header_case (client, url, path);
 	if (!err)
 		err = _roundtrip_autocontainer (client, url, path);
-
 	int rc = err != NULL;
+
 	oio_error_pfree (&err);
 	oio_sds_pfree (&client);
 	oio_url_pclean (&url);

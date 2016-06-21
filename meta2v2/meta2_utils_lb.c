@@ -67,7 +67,7 @@ _gen_chunk_bean(const char *straddr)
 	gchar *chunkid = NULL;
 	struct bean_CHUNKS_s *chunk = NULL;
 
-	oio_str_randomize (binid, sizeof(binid));
+	oio_buf_randomize (binid, sizeof(binid));
 	oio_str_bin2hex (binid, sizeof(binid), strid, sizeof(strid));
 	chunk = _bean_create(&descr_struct_CHUNKS);
 	chunkid = m2v2_build_chunk_url (straddr, strid);

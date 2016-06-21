@@ -50,26 +50,15 @@ _gstr_assign(GString *base, GString *gstr)
 static void
 _gstr_randomize(GString *gstr)
 {
-	GRand *r = oio_ext_local_prng ();
-	g_string_set_size(gstr, 0);
-	const gint max = g_rand_int_range(r, 1, 15);
-	for (gint i=0; i<max ; i++) {
-		guint32 u32 = g_rand_int_range(r, 0, sizeof(random_chars)-1);
-		g_string_append_c(gstr, random_chars[u32]);
-	}
+	g_string_set_size(gstr, oio_ext_rand_int_range(1, 17));
+	oio_str_randomize(gstr->str, gstr->len, random_chars);
 }
 
 static void
 _gba_randomize(GByteArray *gba)
 {
-	GRand *r = oio_ext_local_prng ();
-	g_byte_array_set_size(gba, 0);
-	const gint max = g_rand_int_range(r, 1, 15);
-	for (gint i=0; i<max ; i+=4) {
-		guint32 u32 = g_rand_int(r);
-		g_byte_array_append(gba, (guint8*)&u32, sizeof(u32));
-	}
-	g_byte_array_set_size(gba, max);
+	g_byte_array_set_size(gba, oio_ext_rand_int_range(1, 19));
+	oio_buf_randomize (gba->data, gba->len);
 }
 
 static GByteArray *

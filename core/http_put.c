@@ -705,6 +705,10 @@ _curl_get_handle_blob (void)
 	curl_easy_setopt (h, CURLOPT_PROXY, NULL);
 	curl_easy_setopt (h, CURLOPT_SOCKOPTDATA, NULL);
 	curl_easy_setopt (h, CURLOPT_SOCKOPTFUNCTION, _curl_set_sockopt_blob);
+	if (GRID_TRACE2_ENABLED()) {
+		curl_easy_setopt (h, CURLOPT_DEBUGFUNCTION, _trace);
+		curl_easy_setopt (h, CURLOPT_VERBOSE, 1L);
+	}
 	return h;
 }
 
@@ -719,7 +723,7 @@ _curl_get_handle_proxy (void)
 	curl_easy_setopt (h, CURLOPT_FRESH_CONNECT, 0L);
 	curl_easy_setopt (h, CURLOPT_SOCKOPTDATA, NULL);
 	curl_easy_setopt (h, CURLOPT_SOCKOPTFUNCTION, _curl_set_sockopt_proxy);
-	if (GRID_TRACE_ENABLED()) {
+	if (GRID_TRACE2_ENABLED()) {
 		curl_easy_setopt (h, CURLOPT_DEBUGFUNCTION, _trace);
 		curl_easy_setopt (h, CURLOPT_VERBOSE, 1L);
 	}
