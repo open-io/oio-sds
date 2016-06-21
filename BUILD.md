@@ -91,7 +91,7 @@ Used by `cmake`
 | Macro | Default | Description |
 | ----- | ------- | ----------- |
 | OIOSDS_RELEASE | "master" | Global release name |
-| OIOSDS_API_VERSION_SHORT | "1.0" | Minor version number |
+| OIOSDS_PROJECT_VERSION_SHORT | "1.0" | Minor version number |
 
 Used by `gcc`
 
