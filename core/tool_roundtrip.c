@@ -139,16 +139,18 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 	GRID_INFO("The original file and its copy match");
 
 	/* Get it an other way in a buffer. */
-	guint8 buf[1024];
-	struct oio_sds_dl_dst_s dl_dst = {
-		.type = OIO_DL_DST_BUFFER,
-		.data = {.buffer = {.ptr = buf, .length=1024}}
-	};
-	struct oio_sds_dl_src_s dl_src = {
-		.url = url,
-		.ranges = NULL,
-	};
-	err = oio_sds_download (client, &dl_src, &dl_dst);
+	do {
+		guint8 buf[1024];
+		struct oio_sds_dl_dst_s dl_dst = {
+			.type = OIO_DL_DST_BUFFER,
+			.data = {.buffer = {.ptr = buf, .length=1024}}
+		};
+		struct oio_sds_dl_src_s dl_src = {
+			.url = url,
+			.ranges = NULL,
+		};
+		err = oio_sds_download (client, &dl_src, &dl_dst);
+	} while (0);
 	MAYBERETURN(err, "Download error");
 	GRID_INFO("Content downloaded to a buffer");
 
@@ -179,24 +181,85 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 		g_ptr_array_add(array,g_strdup(v));
 	}
 	err = oio_sds_get_content_properties(client, url, save_elements, val);
-	g_ptr_array_add(val, NULL);
-	gchar **elts = (gchar **)g_ptr_array_free(val, FALSE);
-	MAYBERETURN(err, "get properties error");
-	if (g_strv_length(elts) != 4)
+	MAYBERETURN(err, "GetProperties error");
+	if (val->len != 4)
 		return (struct oio_error_s*) NEWERROR(0, "error of properties!");
 
+	g_ptr_array_add(val, NULL);
+	gchar **elts = (gchar **) g_ptr_array_free(val, FALSE);
 	const gboolean t1 = g_strcmp0(elts [0], prop1) && g_strcmp0(elts [1], prop1);
 	const gboolean t2 = g_strcmp0(elts [2], prop2) && g_strcmp0(elts [3], prop2);
 	if (!t1 || !t2)
 		return (struct oio_error_s*) NEWERROR(0, "error of properties!");
 	g_strfreev(elts);
 
+	/* get details on the content */
+	gsize max_offset = 0;
+	gsize max_size = 0;
+	void _on_metachunk (void *i UNUSED, guint seq, gsize offt, gsize len) {
+		GRID_INFO("metachunk: %u, %"G_GSIZE_FORMAT" %"G_GSIZE_FORMAT,
+				seq, offt, len);
+		max_offset = MAX(max_offset, offt);
+		max_size = MAX(max_size, offt+len);
+	}
+	void _on_property (void *i UNUSED, const char *k, const char *v) {
+		GRID_INFO("property: '%s' -> '%s'", k, v);
+	}
+	err = oio_sds_show_content (client, url, NULL, _on_metachunk, _on_property);
+	MAYBERETURN(err, "Show error");
+
+	/* if there is more than one metachunk, voluntarily ask a range crossing
+	 * the borders of a metachunk */
+	if (max_offset > 0 && max_size > 0 && max_offset != max_size) {
+		GRID_DEBUG("max_offset=%"G_GSIZE_FORMAT" max_size=%"G_GSIZE_FORMAT,
+				max_offset, max_size);
+		struct oio_sds_dl_range_s range = {
+			.offset = max_offset - 1,
+			.size = 2,
+		};
+		struct oio_sds_dl_range_s *rangev[] = { &range, NULL };
+		struct oio_sds_dl_src_s dl_src = { .url = url, .ranges = rangev, };
+
+		/* first attempt with a buffer voluntarily too small */
+		guint8 buf[2];
+		struct oio_sds_dl_dst_s dl_dst = {
+			.type = OIO_DL_DST_BUFFER,
+			.data = {.buffer = {.ptr = buf, .length=1}}
+		};
+		err = oio_sds_download (client, &dl_src, &dl_dst);
+		if (!err)
+			return (struct oio_error_s*)SYSERR("Unexpected success: DL of a range in a buffer too small");
+		g_clear_error ((GError**)&err);
+
+		/* second attempt with a buffer exactly the expected size */
+		dl_dst.data.buffer.length = 2;
+		err = oio_sds_download (client, &dl_src, &dl_dst);
+		MAYBERETURN(err, "Download error");
+		GRID_INFO("Content downloaded to a buffer");
+
+		/* try to download the end of a metachunk */
+		dl_dst.data.buffer.length = 2;
+		range.offset = max_offset - 1;
+		range.size = 1;
+		err = oio_sds_download (client, &dl_src, &dl_dst);
+		MAYBERETURN(err, "Download error");
+		GRID_INFO("Content downloaded to a buffer");
+
+		/* try to download the start of a metachunk */
+		dl_dst.data.buffer.length = 2;
+		range.offset = max_offset;
+		range.size = 1;
+		err = oio_sds_download (client, &dl_src, &dl_dst);
+		MAYBERETURN(err, "Download error");
+		GRID_INFO("Content downloaded to a buffer");
+	}
+
 	/* Remove the content from the content */
 	err = oio_sds_delete (client, url);
 	MAYBERETURN(err, "Delete error");
 	GRID_INFO("Content removed");
 
-	/* Check the content is not preset anymore */
+	/* Check the content is not present anymore */
 	has = 0;
 	err = oio_sds_has (client, url, &has);
 	if (!err && has) err = (struct oio_error_s*) NEWERROR(0, "content still present");

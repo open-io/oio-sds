@@ -1,4 +1,3 @@
-
 /*
 OpenIO SDS core library
 Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
@@ -496,7 +495,7 @@ oio_proxy_call_content_set_properties (CURL *h, struct oio_url_s *u,
 
 GError *
 oio_proxy_call_content_show (CURL *h, struct oio_url_s *u, GString *out,
-		char ***hout)
+		gchar ***hout)
 {
 	GString *http_url = _curl_content_url (u, "show");
 	if (!http_url) return BADNS();

@@ -21,7 +21,7 @@ License along with this library.
 
 /* Version started to be defined in June, 2016. Version prior to 20160600
  * have no ABI incompatibilities. */
-#define OIO_SDS_VERSION 20160600
+#define OIO_SDS_VERSION 20160601
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,6 +42,21 @@ enum oio_sds_config_e
 	/* expects an <int> used for its boolean value */
 	OIOSDS_CFG_FLAG_SYNCATDOWNLOAD,
 };
+
+/* How properties are reported.
+ * @param key the name of the property
+ * @param value its value ... suprising isn't it? */
+typedef void (*oio_sds_property_reporter_f) (void *cb_data,
+		const char *key, const char *value);
+
+/* How hints on the internal chunking are reported.
+ * @param seq the sequence number
+ * @param offset the offset of the metachunk in the whole content
+ * @param length the size of the metachunk */
+typedef void (*oio_sds_metachunk_reporter_f) (void *cb_data,
+		unsigned int seq, size_t offset, size_t length);
+
+
 
 /* API-global --------------------------------------------------------------- */
 
@@ -85,6 +100,8 @@ char ** oio_sds_get_compile_options (void);
 unsigned int oio_sds_version (void);
 #endif /* defined OIO_SDS_VERSION */
 
+
+
 /* Error management --------------------------------------------------------- */
 
 void oio_error_free (struct oio_error_s *e);
@@ -94,6 +111,8 @@ void oio_error_pfree (struct oio_error_s **pe);
 int oio_error_code (const struct oio_error_s *e);
 
 const char * oio_error_message (const struct oio_error_s *e);
+
+
 
 /* Client-related features -------------------------------------------------- */
 
@@ -110,6 +129,8 @@ void oio_sds_pfree (struct oio_sds_s **psds);
 int oio_sds_configure (struct oio_sds_s *sds, enum oio_sds_config_e what,
 		void *pv, unsigned int vlen);
 
+
+
 /* Create / destroy --------------------------------------------------------- */
 
 /* Links the meta2 then triggers container creation */
@@ -118,6 +139,7 @@ struct oio_error_s* oio_sds_create (struct oio_sds_s *sds,
 
 struct oio_error_s* oio_sds_delete_container(struct oio_sds_s *sds,
 					     struct oio_url_s *url);
+
 
 
 /* Download ----------------------------------------------------------------- */
@@ -184,9 +206,21 @@ struct oio_error_s* oio_sds_download (struct oio_sds_s *sds,
 struct oio_error_s* oio_sds_download_to_file (struct oio_sds_s *sds,
 		struct oio_url_s *u, const char *local);
 
-/* --------------------------------------------------------------------------
- * Upload
- * -------------------------------------------------------------------------- */
+/* Tells how is the ccontent internally split.
+ * Helps applications to paginate the downloads, with pages aligned on chunks
+ * boundaries.
+ *
+ * @param cb_data not even checked, implementation-dependant
+ * @param cb_metachunks ignored if NULL
+ * @param cb_props ignoed if NULL */
+struct oio_error_s* oio_sds_show_content (struct oio_sds_s *sds,
+		struct oio_url_s *u, void *cb_data,
+		oio_sds_metachunk_reporter_f cb_metachunks,
+		oio_sds_property_reporter_f cb_props);
+
+
+
+/* Upload ------------------------------------------------------------------- */
 
 struct oio_sds_ul_dst_s
 {
@@ -283,6 +317,7 @@ struct oio_error_s* oio_sds_upload_from_buffer (struct oio_sds_s *sds,
 		struct oio_sds_ul_dst_s *dst, void *base, size_t len);
 
 
+
 /* List --------------------------------------------------------------------- */
 
 struct oio_sds_list_param_s
@@ -342,6 +377,8 @@ struct oio_sds_usage_s
 struct oio_error_s* oio_sds_get_usage (struct oio_sds_s *sds,
 		struct oio_url_s *u, struct oio_sds_usage_s *out);
 
+
+
 /* Misc. -------------------------------------------------------------------- */
 
 /* works with fully qualified urls (content) */
@@ -382,7 +419,6 @@ struct oio_error_s* oio_sds_link (struct oio_sds_s *sds, struct oio_url_s *url,
 struct oio_error_s* oio_sds_link_or_upload (struct oio_sds_s *sds,
 		struct oio_sds_ul_src_s *src, struct oio_sds_ul_dst_s *dst);
 
-/* DEPRECATED --------------------------------------------------------------- */
 
 #ifdef __cplusplus
 }
