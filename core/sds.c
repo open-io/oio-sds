@@ -924,7 +924,9 @@ _download_to_buffer (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 			total += (*p)->size;
 		if (total > dst->data.buffer.length)
 			return (struct oio_error_s*) NEWERROR (CODE_BAD_REQUEST,
-					"Buffer too small for the specified ranges");
+					"Buffer too small (%"G_GSIZE_FORMAT") "
+					"for the specified ranges (%"G_GSIZE_FORMAT")",
+					dst->data.buffer.length, total);
 	} else {
 		/* No range specified: we need more information to fake a range, e.g.
 		 * the first 'dst->data.buffer.length' of the content. */
