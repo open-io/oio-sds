@@ -40,8 +40,6 @@ License along with this library.
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/storage_policy.h>
 
-unsigned int oio_sds_version (void) { return OIO_SDS_VERSION; }
-
 struct oio_sds_s
 {
 	gchar *session_id;
@@ -60,6 +58,62 @@ struct oio_sds_s
 
 struct oio_error_s;
 struct oio_url_s;
+
+unsigned int oio_sds_version (void) { return OIO_SDS_VERSION; }
+
+char **
+oio_sds_get_compile_options (void)
+{
+	GPtrArray *tmp = g_ptr_array_new ();
+	void _add (const gchar *k, const gchar *v) {
+		g_ptr_array_add (tmp, g_strdup(k));
+		g_ptr_array_add (tmp, g_strdup(v));
+	}
+	void _add_double (const gchar *k, gdouble v) {
+		gchar s[32];
+		_add (k, g_ascii_dtostr (s, sizeof(s), v));
+	}
+	void _add_integer (const gchar *k, gint64 v) {
+		gchar s[24];
+		g_snprintf (s, sizeof(s), "%"G_GINT64_FORMAT, v);
+		_add (k, s);
+	}
+#define _ADD_STR(S) _add(#S,S)
+#define _ADD_DBL(S) _add_double(#S,S)
+#define _ADD_INT(S) _add_integer(#S,S)
+	_ADD_STR (PROXYD_PREFIX);
+	_ADD_STR (PROXYD_HEADER_PREFIX);
+	_ADD_STR (PROXYD_HEADER_REQID);
+	_ADD_STR (PROXYD_HEADER_NOEMPTY);
+	_ADD_INT (PROXYD_PATH_MAXLEN);
+	_ADD_DBL (PROXYD_DEFAULT_TTL_CSM0);
+	_ADD_DBL (PROXYD_DEFAULT_TTL_SERVICES);
+	_ADD_INT (PROXYD_DEFAULT_MAX_CSM0);
+	_ADD_INT (PROXYD_DEFAULT_MAX_SERVICES);
+
+	_ADD_STR (GCLUSTER_RUN_DIR);
+	_ADD_STR (OIO_ETC_DIR);
+	_ADD_STR (OIO_CONFIG_FILE_PATH);
+	_ADD_STR (OIO_CONFIG_DIR_PATH);
+	_ADD_STR (OIO_CONFIG_LOCAL_PATH);
+	_ADD_STR (GCLUSTER_AGENT_SOCK_PATH);
+
+	_ADD_DBL (COMMON_CLIENT_TIMEOUT);
+	_ADD_DBL (CS_CLIENT_TIMEOUT);
+	_ADD_DBL (M0V2_CLIENT_TIMEOUT);
+	_ADD_DBL (M1V2_CLIENT_TIMEOUT);
+	_ADD_DBL (M2V2_CLIENT_TIMEOUT);
+	_ADD_DBL (M2V2_CLIENT_TIMEOUT_HUGE);
+	_ADD_DBL (SQLX_CLIENT_TIMEOUT);
+
+	char **out = calloc (1+tmp->len, sizeof(void*));
+	for (guint i=0; i<tmp->len ;++i)
+		out[i] = strdup((char*) tmp->pdata[i]);
+	for (guint i=0; i<tmp->len ;++i)
+		g_free (tmp->pdata[i]);
+	g_ptr_array_free (tmp, TRUE);
+	return out;
+}
 
 static CURL *
 _get_proxy_handle (struct oio_sds_s *sds)
@@ -140,7 +194,7 @@ _load_one_chunk (struct json_object *jurl, struct json_object *jsize,
 	strcpy (result->url, s);
 	result->size = json_object_get_int64(jsize);
 	if (jscore != NULL)
-		result->score = (gint32)json_object_get_int64(jscore);
+		result->score = (guint32)json_object_get_int64(jscore);
 	s = json_object_get_string(jpos);
 
 	result->position.meta = atoi(s);
@@ -281,7 +335,7 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result)
 	}
 
 	/* Compute each metachunk's offset in the main content */
-	gint64 offset = 0;
+	gsize offset = 0;
 	for (guint i=0; i<meta_bound ;++i) {
 		out[i]->offset = offset;
 		offset += out[i]->size;
@@ -558,32 +612,34 @@ _download_range_from_chunk (struct _download_ctx_s *dl,
 		(void) ignored;
 		size_t total = s*n;
 		if (total + *p_nbread > range->size) {
-			GRID_WARN("server gave us more data than expected (%zu/%zu)",
+			GRID_WARN("server gave us more data than expected "
+					"(%"G_GSIZE_FORMAT"/%"G_GSIZE_FORMAT")",
 					total, (size_t)(range->size - *p_nbread));
 			total = range->size - *p_nbread;
 		}
+
 		/* TODO compute a MD5SUM */
+
 		int sent = dl->dst->data.hook.cb(dl->dst->data.hook.ctx,
 				(const unsigned char*)data, total);
-		*p_nbread += sent;
 		if ((size_t)sent == total) {
 			GRID_TRACE("user callback managed %"G_GSIZE_FORMAT" bytes", total);
+			*p_nbread += (size_t ) sent;
 			return s*n;  // Make libcurl think we read the whole buffer
 		} else {
-			GRID_WARN("user callback failed: %d/%zu bytes sent", sent, total);
+			GRID_WARN("user callback failed: %d/%"G_GSIZE_FORMAT" bytes sent",
+					  sent, total);
 			return sent;
 		}
 	}
 
 	GError *err = NULL;
-	gchar str_range[64];
 
+	gchar str_range[64] = "";
 	g_snprintf (str_range, sizeof(str_range),
 			"bytes=%"G_GSIZE_FORMAT"-%"G_GSIZE_FORMAT,
 			range->offset, range->offset + range->size - 1);
-
-	GRID_DEBUG ("%s Range:%s %s", __FUNCTION__,
-			str_range, c0_url);
+	GRID_DEBUG ("%s Range:%s %s", __FUNCTION__, str_range, c0_url);
 
 	CURL *h = _curl_get_handle_blob ();
 	struct oio_headers_s headers = {NULL,NULL};
@@ -1285,7 +1341,7 @@ _sds_upload_finish (struct oio_sds_ul_s *ul)
 				oio_str_upper (c->hexhash);
 			}
 		}
-		// TODO: in case of EC, we may wanna read response headers
+		/* TODO: in case of EC, we may wanna read response headers */
 
 		/* store the structure in holders for further commit/abort */
 		ul->chunks_done = g_slist_concat (ul->chunks_done, ul->chunks);
@@ -1842,14 +1898,18 @@ _notify_list_result (struct oio_sds_list_listener_s *listener,
 			json_object_array_length(jobjects),
 			json_object_array_length(jprefixes));
 
-	*pcount = json_object_array_length(jobjects);
-	for (int i=*pcount; i>0 && !err ;i--) {
-		struct json_object *jitem = json_object_array_get_idx (jobjects, i-1);
-		err = _notify_list_item (listener, jitem);
+	const int count_objects = json_object_array_length(jobjects);
+	if (count_objects >= 0)
+		*pcount = (size_t) count_objects;
+	for (int i=count_objects; i>0 && !err ;i--) {
+		struct json_object *it = json_object_array_get_idx (jobjects, i-1);
+		err = _notify_list_item (listener, it);
 	}
-	for (int i=json_object_array_length(jprefixes); i>0 && !err ;i--) {
-		struct json_object *jitem = json_object_array_get_idx (jprefixes, i-1);
-		err = _notify_list_prefix (listener, jitem);
+
+	const int count_prefixes = json_object_array_length(jprefixes);
+	for (int i = count_prefixes; i > 0 && !err; i--) {
+		struct json_object *it = json_object_array_get_idx(jprefixes, i-1);
+		err = _notify_list_prefix(listener, it);
 	}
 
 	return err;
@@ -1948,8 +2008,7 @@ oio_sds_list (struct oio_sds_s *sds, struct oio_sds_list_param_s *param,
 		}
 		/* truncated */
 		if (!nextnext) {
-			err = NEWERROR(CODE_PLATFORM_ERROR, "Proxy replied a truncated"
-					" list, but no end marker present");
+			err = ERRPTF("Truncated list without end marker");
 			oio_str_clean (&next);
 			oio_str_clean (&nextnext);
 			break;
@@ -2193,59 +2252,4 @@ oio_sds_set_content_properties (struct oio_sds_s *sds, struct oio_url_s *url,
 	oio_ext_set_reqid (sds->session_id);
 
 	return (struct oio_error_s*) oio_proxy_call_content_set_properties(sds->h, url, values);
-}
-
-
-char **
-oio_sds_get_compile_options (void)
-{
-	GPtrArray *tmp = g_ptr_array_new ();
-	void _add (const gchar *k, const gchar *v) {
-		g_ptr_array_add (tmp, g_strdup(k));
-		g_ptr_array_add (tmp, g_strdup(v));
-	}
-	void _add_double (const gchar *k, gdouble v) {
-		gchar s[32];
-		_add (k, g_ascii_dtostr (s, sizeof(s), v));
-	}
-	void _add_integer (const gchar *k, gint64 v) {
-		gchar s[24];
-		g_snprintf (s, sizeof(s), "%"G_GINT64_FORMAT, v);
-		_add (k, s);
-	}
-#define _ADD_STR(S) _add(#S,S)
-#define _ADD_DBL(S) _add_double(#S,S)
-#define _ADD_INT(S) _add_integer(#S,S)
-	_ADD_STR (PROXYD_PREFIX);
-	_ADD_STR (PROXYD_HEADER_PREFIX);
-	_ADD_STR (PROXYD_HEADER_REQID);
-	_ADD_STR (PROXYD_HEADER_NOEMPTY);
-	_ADD_INT (PROXYD_PATH_MAXLEN);
-	_ADD_DBL (PROXYD_DEFAULT_TTL_CSM0);
-	_ADD_DBL (PROXYD_DEFAULT_TTL_SERVICES);
-	_ADD_INT (PROXYD_DEFAULT_MAX_CSM0);
-	_ADD_INT (PROXYD_DEFAULT_MAX_SERVICES);
-
-	_ADD_STR (GCLUSTER_RUN_DIR);
-	_ADD_STR (OIO_ETC_DIR);
-	_ADD_STR (OIO_CONFIG_FILE_PATH);
-	_ADD_STR (OIO_CONFIG_DIR_PATH);
-	_ADD_STR (OIO_CONFIG_LOCAL_PATH);
-	_ADD_STR (GCLUSTER_AGENT_SOCK_PATH);
-
-	_ADD_DBL (COMMON_CLIENT_TIMEOUT);
-	_ADD_DBL (CS_CLIENT_TIMEOUT);
-	_ADD_DBL (M0V2_CLIENT_TIMEOUT);
-	_ADD_DBL (M1V2_CLIENT_TIMEOUT);
-	_ADD_DBL (M2V2_CLIENT_TIMEOUT);
-	_ADD_DBL (M2V2_CLIENT_TIMEOUT_HUGE);
-	_ADD_DBL (SQLX_CLIENT_TIMEOUT);
-
-	char **out = calloc (1+tmp->len, sizeof(void*));
-	for (guint i=0; i<tmp->len ;++i)
-		out[i] = strdup((char*) tmp->pdata[i]);
-	for (guint i=0; i<tmp->len ;++i)
-		g_free (tmp->pdata[i]);
-	g_ptr_array_free (tmp, TRUE);
-	return out;
 }

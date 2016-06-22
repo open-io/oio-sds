@@ -221,6 +221,7 @@ GError * oio_error_debug (GQuark gq, int code, const char *fmt, ...);
 #  define NEWERROR(CODE, FMT,...) g_error_new(GQ(), (CODE), FMT, ##__VA_ARGS__)
 # endif
 
+#define ERRPTF(FMT,...) NEWERROR(CODE_PLATFORM_ERROR, FMT, ##__VA_ARGS__)
 #define NYI()           NEWERROR(CODE_NOT_IMPLEMENTED, "NYI")
 #define BADREQ(FMT,...) NEWERROR(CODE_BAD_REQUEST, FMT, ##__VA_ARGS__)
 #define BADNS()         NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Unexpected NS")

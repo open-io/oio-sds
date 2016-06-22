@@ -21,7 +21,7 @@ License along with this library.
 
 /* Version started to be defined in June, 2016. Version prior to 20160600
  * have no ABI incompatibilities. */
-#define OIO_SDS_VERSION 20160601
+#define OIO_SDS_VERSION 20160602
 
 #ifdef __cplusplus
 extern "C" {
@@ -226,8 +226,11 @@ struct oio_sds_ul_dst_s
 {
 	struct oio_url_s *url;
 
-	/* Should the container be autocreated */
-	int autocreate;
+	/* should the container be autocreated */
+	unsigned int autocreate : 1;
+
+	/* should the data be appended to the content in place */
+	unsigned int append : 1;
 
 	/* output variable: how many bytes have been uploaded */
 	size_t out_size;
@@ -237,6 +240,8 @@ struct oio_sds_ul_dst_s
 
 	char **properties;
 };
+
+#define OIO_SDS_UPLOAD_DST_INIT {NULL,0,0,0,NULL,NULL}
 
 /* "Female" upload API
  * The sequence is managed by the caller: an upload context has to be
