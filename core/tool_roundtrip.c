@@ -108,10 +108,14 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 	GRID_INFO("Content absent as expected");
 
 	/* Upload the content */
-	struct oio_sds_ul_dst_s ul_dst = {
-		.url = url, .autocreate = 1, .out_size = 0,
-		.content_id = content_id, .properties=(char**)properties,
-	};
+	struct oio_sds_ul_dst_s ul_dst = OIO_SDS_UPLOAD_DST_INIT;
+	ul_dst.url = url;
+	ul_dst.autocreate = 1;
+	ul_dst.append = 0;
+	ul_dst.out_size = 0;
+	ul_dst.content_id = content_id;
+	ul_dst.properties = (char**) properties;
+
 	err = oio_sds_upload_from_file (client, &ul_dst, path, 0, 0);
 	MAYBERETURN(err, "Upload error");
 	GRID_INFO("Content uploaded");
@@ -213,15 +217,21 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 	if (max_offset > 0 && max_size > 0 && max_offset != max_size) {
 		GRID_DEBUG("max_offset=%"G_GSIZE_FORMAT" max_size=%"G_GSIZE_FORMAT,
 				max_offset, max_size);
-		struct oio_sds_dl_range_s range = {
+		guint8 buf[4];
+		struct oio_sds_dl_range_s range0 = {
 			.offset = max_offset - 1,
 			.size = 2,
 		};
-		struct oio_sds_dl_range_s *rangev[] = { &range, NULL };
+		struct oio_sds_dl_range_s range1 = {
+			.offset = max_offset + 1,
+			.size = 2,
+		};
+		struct oio_sds_dl_range_s *rangev[3] = {NULL, NULL, NULL};
 		struct oio_sds_dl_src_s dl_src = { .url = url, .ranges = rangev, };
 
 		/* first attempt with a buffer voluntarily too small */
-		guint8 buf[2];
+		rangev[0] = &range0;
+		rangev[1] = NULL;
 		struct oio_sds_dl_dst_s dl_dst = {
 			.type = OIO_DL_DST_BUFFER,
 			.data = {.buffer = {.ptr = buf, .length=1}}
@@ -232,23 +242,43 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 		g_clear_error ((GError**)&err);
 
 		/* second attempt with a buffer exactly the expected size */
+		rangev[0] = &range0;
+		rangev[1] = NULL;
 		dl_dst.data.buffer.length = 2;
 		err = oio_sds_download (client, &dl_src, &dl_dst);
 		MAYBERETURN(err, "Download error");
 		GRID_INFO("Content downloaded to a buffer");
 
+		/* now with 2 contiguous ranges */
+		rangev[0] = &range0;
+		rangev[1] = &range1;
+		dl_dst.data.buffer.length = 4;
+		err = oio_sds_download (client, &dl_src, &dl_dst);
+		MAYBERETURN(err, "Download error");
+		GRID_INFO("Content downloaded to a buffer");
+
+		/* now with 2 non-contiguous ranges */
+		rangev[0] = &range1;
+		rangev[1] = &range0;
+		dl_dst.data.buffer.length = 4;
+		err = oio_sds_download (client, &dl_src, &dl_dst);
+		MAYBERETURN(err, "Download error");
+		GRID_INFO("Content downloaded to a buffer");
+
 		/* try to download the end of a metachunk */
+		rangev[0] = &range0;
+		rangev[1] = NULL;
 		dl_dst.data.buffer.length = 2;
-		range.offset = max_offset - 1;
-		range.size = 1;
+		range0.offset = max_offset - 1;
+		range0.size = 1;
 		err = oio_sds_download (client, &dl_src, &dl_dst);
 		MAYBERETURN(err, "Download error");
 		GRID_INFO("Content downloaded to a buffer");
 
 		/* try to download the start of a metachunk */
 		dl_dst.data.buffer.length = 2;
-		range.offset = max_offset;
-		range.size = 1;
+		range0.offset = max_offset;
+		range0.size = 1;
 		err = oio_sds_download (client, &dl_src, &dl_dst);
 		MAYBERETURN(err, "Download error");
 		GRID_INFO("Content downloaded to a buffer");
