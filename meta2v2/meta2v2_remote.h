@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -109,6 +109,7 @@ GByteArray* m2v2_remote_pack_SPARE(struct oio_url_s *url, const char *pol,
 
 GByteArray* m2v2_remote_pack_PUT(struct oio_url_s *url, GSList *beans);
 GByteArray* m2v2_remote_pack_OVERWRITE(struct oio_url_s *url, GSList *beans);
+GByteArray* m2v2_remote_pack_UPDATE(struct oio_url_s *url, GSList *beans);
 GByteArray* m2v2_remote_pack_APPEND(struct oio_url_s *url, GSList *beans);
 
 GByteArray* m2v2_remote_pack_LINK(struct oio_url_s *url);

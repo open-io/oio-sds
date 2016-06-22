@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -277,7 +277,8 @@ meta2_filter_extract_header_optional_overwrite(struct gridd_filter_ctx_s *ctx,
 	GError *e = NULL;
 	gchar buf[64];
 	TRACE_FILTER();
-	EXTRACT_STRING(NAME_MSGKEY_OVERWRITE, TRUE);
+	EXTRACT_OPT(NAME_MSGKEY_OVERWRITE);
+	EXTRACT_OPT(NAME_MSGKEY_UPDATE);
 	return FILTER_OK;
 }
 

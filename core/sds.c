@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -1418,8 +1418,8 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 		ul->mc->offset = last->offset + last->size;
 		ul->mc->meta = last->meta + 1;
 	} else {
-		ul->mc->offset = 0;
-		ul->mc->meta = 0;
+		ul->mc->offset = ul->dst->offset;
+		ul->mc->meta = ul->dst->meta_pos;
 	}
 	/* then patch each chunk with the same meta-position */
 	for (GSList *l=ul->mc->chunks; l ;l=l->next) {
@@ -1606,7 +1606,7 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 	if (ul->put && !http_put_done (ul->put))
 		return (struct oio_error_s *) SYSERR("RAWX upload not completed");
 
-	gint64 size = 0;
+	gint64 size = ul->dst->offset;
 	for (GList *l=g_list_first(ul->metachunk_done); l ;l=g_list_next(l))
 		size += ((struct metachunk_s*) l->data)->size;
 
@@ -1625,6 +1625,7 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 		.hash = hash,
 		.stgpol = ul->stgpol,
 		.chunk_method = ul->chunk_method,
+		.update = ul->dst->partial,
 	};
 
 	GRID_TRACE("%s (%p) Saving %s", __FUNCTION__, ul, request_body->str);
@@ -1635,9 +1636,9 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 
 	g_string_free (request_body, TRUE);
 	g_string_free (reply_body, TRUE);
-	if(err)
+	if (err)
 		return (struct oio_error_s*) err;
-	if(NULL != ul->dst->properties)
+	if (ul->dst->properties)
 		return (struct oio_error_s*) oio_proxy_call_content_set_properties
 			(ul->sds->h, ul->dst->url, (const char* const*)ul->dst->properties);
 	return NULL;

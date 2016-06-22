@@ -160,6 +160,9 @@ GError* m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 GError* m2db_link_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		GBytes *id);
 
+GError* m2db_update_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
+		GSList *beans, GSList **out_deleted, GSList **out_added);
+
 /* ------------------------------------------------------------------------- */
 
 struct m2db_put_args_s

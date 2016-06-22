@@ -1,7 +1,7 @@
 /*
 OpenIO SDS proxy
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -847,6 +847,7 @@ configure_request_handlers (void)
     SET("/$NS/content/touch/#POST", action_content_touch);
     SET("/$NS/content/spare/#POST", action_content_spare);
     SET("/$NS/content/copy/#POST", action_content_copy);
+    SET("/$NS/content/update/#POST", action_content_update);
 
     // Admin
 	SET("/$NS/admin/ping/#POST", action_admin_ping);

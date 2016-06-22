@@ -1,7 +1,7 @@
 /*
 OpenIO SDS metautils
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -115,6 +115,7 @@ License along with this library.
 #define NAME_MSGKEY_STGPOLICY          "SP"
 #define NAME_MSGKEY_TRUNCATED          "TRUNC"
 #define NAME_MSGKEY_TYPENAME           "T"
+#define NAME_MSGKEY_UPDATE             "UPDATE"
 #define NAME_MSGKEY_URL                "URL"
 #define NAME_MSGKEY_USER               "USR"
 #define NAME_MSGKEY_VALUE              "V"

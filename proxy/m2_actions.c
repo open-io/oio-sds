@@ -1,7 +1,7 @@
 /*
 OpenIO SDS proxy
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -549,7 +549,8 @@ _load_simplified_chunks (struct json_object *jbody, GSList **out)
 }
 
 static GError *
-_load_simplified_content (struct req_args_s *args, struct json_object *jbody, GSList **out)
+_load_simplified_content (struct req_args_s *args, struct json_object *jbody,
+		GSList **out)
 {
 	GError *err = NULL;
 	GSList *beans = NULL;
@@ -713,8 +714,8 @@ _container_headers_to_props (struct req_args_s *args)
 			g_ptr_array_add (tmp, g_strconcat ("sys.", k, NULL));
 			g_ptr_array_add (tmp, g_strdup (v));
 		}
-        /* no management here for properties with raw format. there are
-         * other requests handlers for that kind of ugly tweaks. */
+		/* no management here for properties with raw format. there are
+		 * other requests handlers for that kind of ugly tweaks. */
 		return FALSE;
 	}
 	tmp = g_ptr_array_new ();
@@ -1181,13 +1182,14 @@ action_container_create (struct req_args_s *args)
 enum http_rc_e
 action_container_destroy (struct req_args_s *args)
 {
-   return action_m2_container_destroy (args);
+	return action_m2_container_destroy (args);
 }
 
 typedef GByteArray* (*list_packer_f) (struct list_params_s *);
 
 static GError *
-_list_loop (struct req_args_s *args, struct list_params_s *in0, struct list_result_s *out0,
+_list_loop (struct req_args_s *args, struct list_params_s *in0,
+		struct list_result_s *out0,
 		GTree *tree_prefixes, list_packer_f packer)
 {
 	GError *err = NULL;
@@ -1370,61 +1372,61 @@ action_container_show (struct req_args_s *args)
 enum http_rc_e
 action_container_touch (struct req_args_s *args)
 {
-    return rest_action (args, action_m2_container_touch);
+	return rest_action (args, action_m2_container_touch);
 }
 
 enum http_rc_e
 action_container_dedup (struct req_args_s *args)
 {
-    return rest_action (args, action_m2_container_dedup);
+	return rest_action (args, action_m2_container_dedup);
 }
 
 enum http_rc_e
 action_container_purge (struct req_args_s *args)
 {
-    return rest_action (args, action_m2_container_purge);
+	return rest_action (args, action_m2_container_purge);
 }
 
 enum http_rc_e
 action_container_flush (struct req_args_s *args)
 {
-    return rest_action (args, action_m2_container_flush);
+	return rest_action (args, action_m2_container_flush);
 }
 
 enum http_rc_e
 action_container_prop_get (struct req_args_s *args)
 {
-    return rest_action (args, action_m2_container_propget);
+	return rest_action (args, action_m2_container_propget);
 }
 
 enum http_rc_e
 action_container_prop_set (struct req_args_s *args)
 {
-    return rest_action (args, action_m2_container_propset);
+	return rest_action (args, action_m2_container_propset);
 }
 
 enum http_rc_e
 action_container_prop_del (struct req_args_s *args)
 {
-    return rest_action (args, action_m2_container_propdel);
+	return rest_action (args, action_m2_container_propdel);
 }
 
 enum http_rc_e
 action_container_raw_insert (struct req_args_s *args)
 {
-    return rest_action (args, action_m2_container_raw_insert);
+	return rest_action (args, action_m2_container_raw_insert);
 }
 
 enum http_rc_e
 action_container_raw_update (struct req_args_s *args)
 {
-    return rest_action (args, action_m2_container_raw_update);
+	return rest_action (args, action_m2_container_raw_update);
 }
 
 enum http_rc_e
 action_container_raw_delete (struct req_args_s *args)
 {
-    return rest_action (args, action_m2_container_raw_delete);
+	return rest_action (args, action_m2_container_raw_delete);
 }
 
 
@@ -1728,9 +1730,40 @@ retry:
 }
 
 enum http_rc_e
+action_content_update(struct req_args_s *args)
+{
+	GError *err = NULL;
+	json_tokener *parser = json_tokener_new ();
+	json_object *jbody = NULL;
+	if (args->rq->body->len)
+		jbody = json_tokener_parse_ex (parser,
+				(char *) args->rq->body->data, args->rq->body->len);
+
+	if (json_tokener_success != json_tokener_get_error (parser))
+		err = BADREQ("Invalid JSON");
+	else {
+		GSList *ibeans = NULL, *obeans = NULL;
+		err = _load_simplified_content(args, jbody, &ibeans);
+		if (!err) {
+			PACKER_VOID(_pack) {
+				return m2v2_remote_pack_UPDATE(args->url, ibeans);
+			}
+			err = _resolve_meta2(args, CLIENT_PREFER_MASTER, _pack, &obeans);
+		}
+		_bean_cleanl2(obeans);
+		_bean_cleanl2(ibeans);
+	}
+
+	if (jbody)
+		json_object_put (jbody);
+	json_tokener_free (parser);
+	return _reply_m2_error (args, err);
+}
+
+enum http_rc_e
 action_content_prepare (struct req_args_s *args)
 {
-    return rest_action (args, action_m2_content_beans);
+	return rest_action (args, action_m2_content_beans);
 }
 
 enum http_rc_e
@@ -1753,31 +1786,31 @@ action_content_delete (struct req_args_s *args)
 enum http_rc_e
 action_content_touch (struct req_args_s *args)
 {
-    return rest_action (args, action_m2_content_touch);
+	return rest_action (args, action_m2_content_touch);
 }
 
 enum http_rc_e
 action_content_link (struct req_args_s *args)
 {
-    return rest_action (args, action_m2_content_link);
+	return rest_action (args, action_m2_content_link);
 }
 
 enum http_rc_e
 action_content_spare (struct req_args_s *args)
 {
-    return rest_action (args, action_m2_content_spare);
+	return rest_action (args, action_m2_content_spare);
 }
 
 enum http_rc_e
 action_content_prop_get (struct req_args_s *args)
 {
-    return rest_action (args, action_m2_content_propget);
+	return rest_action (args, action_m2_content_propget);
 }
 
 enum http_rc_e
 action_content_prop_set (struct req_args_s *args)
 {
-    return rest_action (args, action_m2_content_propset);
+	return rest_action (args, action_m2_content_propset);
 }
 
 enum http_rc_e

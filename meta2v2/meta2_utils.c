@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -78,7 +78,7 @@ m2v2_build_chunk_url (const char *srv, const char *id)
 
 static gchar*
 m2v2_build_chunk_url_storage (const struct storage_policy_s *pol,
-			      const gchar *str_id)
+		const gchar *str_id)
 {
 	switch(data_security_get_type(storage_policy_get_data_security(pol))) {
 	case STGPOL_DS_BACKBLAZE:
@@ -387,7 +387,8 @@ m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *u,
 	}
 
 	/* recurse on headers if allowed */
-	if (!err && cb && ((flags & M2V2_FLAG_HEADERS) || !(flags & M2V2_FLAG_NORECURSION))) {
+	if (!err && cb && ((flags & M2V2_FLAG_HEADERS) ||
+			!(flags & M2V2_FLAG_NORECURSION))) {
 		for (guint i=0; !err && i<tmp->len ;i++) {
 			struct bean_ALIASES_s *alias = tmp->pdata[i];
 			if (!alias)
@@ -517,8 +518,8 @@ _list_params_to_sql_clause(struct list_params_s *lp, GString *clause,
 	if (headers) {
 		lazy_and();
 		if (headers->next) {
-			g_string_append (clause, " content_id IN (");
-			for (GSList *l=headers; l ;l=l->next) {
+			g_string_append (clause, " content IN (");
+			for (GSList *l=headers; l; l=l->next) {
 				if (l != headers)
 					g_string_append_c (clause, ',');
 				g_string_append_c (clause, '?');
@@ -527,7 +528,7 @@ _list_params_to_sql_clause(struct list_params_s *lp, GString *clause,
 			}
 			g_string_append (clause, ")");
 		} else {
-			g_string_append (clause, " content_id = ?");
+			g_string_append (clause, " content = ?");
 			GByteArray *gba = CONTENTS_HEADERS_get_id (headers->data);
 			g_ptr_array_add (params, _gba_to_gvariant (gba));
 		}
@@ -1070,12 +1071,149 @@ m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 		err = m2db_real_put_alias(args->sq3, &args2);
 	}
 
-	if(!err)
-       m2db_set_size(args->sq3, m2db_get_size(args->sq3) + size);
+	if (!err)
+		m2db_set_size(args->sq3, m2db_get_size(args->sq3) + size);
 
 	if (latest)
 		_bean_clean(latest);
 
+	return err;
+}
+
+static gint
+_tree_compare_int(gconstpointer a, gconstpointer b)
+{
+	return CMP(GPOINTER_TO_INT(a), GPOINTER_TO_INT(b));
+}
+
+static void
+_extract_chunks_sizes_positions(GSList *beans,
+		GSList **chunks, gint64 *size, GTree *positions)
+{
+	for (GSList *l = beans; l; l = l->next) {
+		gpointer bean = l->data;
+		if (bean && &descr_struct_CHUNKS == DESCR(bean)) {
+			struct bean_CHUNKS_s *chunk = _bean_dup(bean);
+			*chunks = g_slist_prepend(*chunks, chunk);
+			gint64 pos = g_ascii_strtoll(
+					CHUNKS_get_position(chunk)->str, NULL, 10);
+			if (!g_tree_lookup(positions, GINT_TO_POINTER(pos))) {
+				*size += CHUNKS_get_size(chunk);
+				g_tree_insert(positions,
+						GINT_TO_POINTER(pos), GINT_TO_POINTER(1));
+			}
+		}
+	}
+}
+
+GError*
+m2db_update_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
+		GSList *beans, GSList **out_deleted, GSList **out_added)
+{
+	EXTRA_ASSERT(sq3 != NULL);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(oio_url_has(url, OIOURL_PATH) ||
+			oio_url_has(url, OIOURL_CONTENTID));
+
+	GSList *aliases = NULL, *old_beans = NULL, *new_beans = NULL;
+
+	/* Compute the size of the metachunks we are adding. Build and use a tree
+	 * to avoid adding several times for the same metachunk, and later to
+	 * find which beans we must remove from the database. */
+	GTree *positions_seen = g_tree_new(_tree_compare_int);
+	gint64 added_size = 0;
+	_extract_chunks_sizes_positions(beans,
+			&new_beans, &added_size, positions_seen);
+
+	/* Make sure we load the beans by content id */
+	struct oio_url_s *local_url = NULL;
+	if (!oio_url_has(url, OIOURL_CONTENTID)) {
+		GRID_WARN("Updating chunks by content path (%s), other paths "
+				"linked to the same content id won't be notified!",
+				oio_url_get(url, OIOURL_WHOLE));
+		local_url = oio_url_dup(url);
+	} else {
+		local_url = oio_url_empty();
+		oio_url_set(local_url, OIOURL_NS, oio_url_get(url, OIOURL_NS));
+		oio_url_set(local_url, OIOURL_HEXID, oio_url_get(url, OIOURL_HEXID));
+		oio_url_set(local_url, OIOURL_CONTENTID,
+				oio_url_get(url, OIOURL_CONTENTID));
+	}
+
+	/* Find which beans we must remove from the database */
+	GTree *old_positions_seen = g_tree_new(_tree_compare_int);
+	struct bean_CONTENTS_HEADERS_s *header = NULL;
+	void _keep_or_free(gpointer udata, gpointer bean) {
+		(void)udata;
+		if (DESCR(bean) == &descr_struct_CHUNKS) {
+			struct bean_CHUNKS_s *chunk = bean;
+			gint64 pos = g_ascii_strtoll(
+					CHUNKS_get_position(chunk)->str, NULL, 10);
+			if (g_tree_lookup(positions_seen, GINT_TO_POINTER(pos))) {
+				old_beans = g_slist_prepend(old_beans, chunk);
+				if (!g_tree_lookup(old_positions_seen, GINT_TO_POINTER(pos))) {
+					g_tree_insert(old_positions_seen,
+							GINT_TO_POINTER(pos), GINT_TO_POINTER(1));
+					added_size -= CHUNKS_get_size(chunk);
+				}
+			} else {
+				_bean_clean(bean);
+			}
+		} else if (DESCR(bean) == &descr_struct_ALIASES) {
+			aliases = g_slist_prepend(aliases, bean);
+		} else if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
+			header = bean;
+		} else {
+			g_assert_not_reached();
+			_bean_clean(bean);
+		}
+	}
+	GError *err = m2db_get_alias(sq3, local_url,
+			M2V2_FLAG_HEADERS|M2V2_FLAG_NOPROPS, _keep_or_free, NULL);
+	if (err)
+		goto cleanup;
+
+	/* Update size (in header) and mtime (in alias and header) */
+	const gint64 now = oio_ext_real_time() / G_TIME_SPAN_SECOND;
+	CONTENTS_HEADERS_set_size(header,
+			CONTENTS_HEADERS_get_size(header) + added_size);
+	CONTENTS_HEADERS_set2_hash(header, (guint8*)"", 0);
+	CONTENTS_HEADERS_set_mtime(header, now);
+	new_beans = g_slist_prepend(new_beans, header);
+	header = NULL;
+	for (GSList *l = aliases; l; l = l->next) {
+		struct bean_ALIASES_s *alias = _bean_dup(l->data);
+		ALIASES_set_mtime(alias, now);
+		new_beans = g_slist_prepend(new_beans, alias);
+	}
+	err = _db_save_beans_list(sq3->db, new_beans);
+
+	/* Remove old chunks from the database */
+	for (GSList *l = old_beans; l && !err; l = l->next) {
+		err = _db_delete_bean(sq3->db, l->data);
+	}
+	if (err)
+		goto cleanup;
+
+	/* Update the size of the container and notify the caller with new beans */
+	m2db_set_size(sq3, m2db_get_size(sq3) + added_size);
+	if (out_deleted) {
+		*out_deleted = old_beans;
+		old_beans = NULL;
+	}
+	if (out_added) {
+		*out_added = new_beans;
+		new_beans = NULL;
+	}
+
+cleanup:
+	_bean_clean(header);
+	_bean_cleanl2(aliases);
+	_bean_cleanl2(new_beans);
+	_bean_cleanl2(old_beans);
+	g_tree_destroy(old_positions_seen);
+	g_tree_destroy(positions_seen);
+	oio_url_clean(local_url);
 	return err;
 }
 
@@ -1396,31 +1534,42 @@ out:
 
 /* Link -------------------------------------------------------------------- */
 
+static GError*
+_load_content(struct sqlx_sqlite3_s *sq3, GBytes *content_id,
+		struct bean_CONTENTS_HEADERS_s **header)
+{
+	GPtrArray *tmp = g_ptr_array_new();
+	GVariant *params[2] = {NULL, NULL};
+	params[0] = _gb_to_gvariant(content_id);
+	GError *err = CONTENTS_HEADERS_load(sq3->db, " id = ? LIMIT 1",
+			params, _bean_buffer_cb, tmp);
+	metautils_gvariant_unrefv(params);
+	if (!err) {
+		if (tmp->len == 1) {
+			if (header)
+				*header = g_ptr_array_index(tmp, 0);
+			else
+				_bean_clean(g_ptr_array_index(tmp, 0));
+		} else {
+			g_assert(tmp->len == 0);
+			err = NEWERROR(CODE_CONTENT_NOTFOUND,
+					"no content with such an ID");
+		}
+	}
+	g_ptr_array_free(tmp, TRUE);
+	return err;
+}
+
 GError*
 m2db_link_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		GBytes *content_id)
 {
-	GError *err = NULL;
-
-	size_t len = 0;
-	const void *bin = g_bytes_get_data (content_id, &len);
-
 	/* check the content exists */
-	GPtrArray *tmp = g_ptr_array_new ();
-	GVariant *params[2] = {NULL, NULL};
-	params[0] = _gb_to_gvariant(content_id);
-	err = CONTENTS_HEADERS_load (sq3->db, " id = ? LIMIT 1",
-			params, _bean_buffer_cb, tmp);
-	metautils_gvariant_unrefv(params);
+	GError *err = _load_content(sq3, content_id, NULL);
 	if (err) {
 		g_prefix_error (&err, "Check failed: ");
 		goto out;
 	}
-	if (tmp->len <= 0) {
-		err = NEWERROR (CODE_CONTENT_NOTFOUND, "no content with such an ID");
-		goto out;
-	}
-	g_assert (tmp->len == 1);
 
 	/* get the latest alias */
 	gint64 version = -1;
@@ -1437,6 +1586,8 @@ m2db_link_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	gint64 now = oio_ext_real_time () / G_TIME_SPAN_SECOND;
 	struct bean_ALIASES_s *a = _bean_create (&descr_struct_ALIASES);
 	ALIASES_set2_alias (a, oio_url_get(url, OIOURL_PATH));
+	size_t len = 0;
+	const void *bin = g_bytes_get_data (content_id, &len);
 	ALIASES_set2_content (a, bin, len);
 	ALIASES_set_version (a, version + 1);
 	ALIASES_set_ctime (a, now);
@@ -1447,7 +1598,6 @@ m2db_link_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	if (err)
 		g_prefix_error (&err, "Save failed: ");
 out:
-	_bean_cleanv2 (tmp);
 	return err;
 }
 
@@ -1637,7 +1787,7 @@ m2_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
 
 	gint64 k;
 	switch (data_security_get_type(storage_policy_get_data_security(pol))) {
-	        case STGPOL_DS_BACKBLAZE:
+		case STGPOL_DS_BACKBLAZE:
 		case STGPOL_DS_PLAIN:
 			return _m2_generate_chunks(&ctx, chunk_size, 0);
 		case STGPOL_DS_EC:
