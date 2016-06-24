@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -290,6 +290,47 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 	GRID_INFO("Content removed");
 
 	/* Check the content is not present anymore */
+	has = 0;
+	err = oio_sds_has (client, url, &has);
+	if (!err && has) err = (struct oio_error_s*) NEWERROR(0, "content still present");
+	MAYBERETURN(err, "Check error");
+	GRID_INFO("Content absent as expected");
+
+	/* **** */
+
+	GRID_INFO("--- Partial upload ---");
+	oio_str_randomize (content_id, sizeof(content_id), hex_chars);
+	err = oio_sds_upload_from_file (client, &ul_dst, path, 0, 0);
+	MAYBERETURN(err, "Upload error");
+	GRID_INFO("Content part 0 uploaded");
+
+	ul_dst.offset = fi0.fs;
+	ul_dst.meta_pos = 1;
+	ul_dst.partial = TRUE;
+	err = oio_sds_upload_from_file (client, &ul_dst, path, 0, 0);
+	MAYBERETURN(err, "Upload error");
+	GRID_INFO("Content part 1 uploaded");
+
+	ul_dst.offset = 0;
+	ul_dst.meta_pos = 0;
+	ul_dst.partial = TRUE;
+	err = oio_sds_upload_from_file (client, &ul_dst, path, 0, 0);
+	MAYBERETURN(err, "Upload error");
+	GRID_INFO("Content part 0 uploaded again");
+
+	/* Check it is now present */
+	has = 0;
+	err = oio_sds_has (client, url, &has);
+	if (!err && !has) err = (struct oio_error_s*) NEWERROR(0, "content not found");
+	MAYBERETURN(err, "Check error");
+	GRID_INFO("Content present as expected");
+
+	/* Remove the content from the content */
+	err = oio_sds_delete (client, url);
+	MAYBERETURN(err, "Delete error");
+	GRID_INFO("Content removed");
+
+	/* Check the content is not preset anymore */
 	has = 0;
 	err = oio_sds_has (client, url, &has);
 	if (!err && has) err = (struct oio_error_s*) NEWERROR(0, "content still present");

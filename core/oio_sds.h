@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -21,7 +21,7 @@ License along with this library.
 
 /* Version started to be defined in June, 2016. Version prior to 20160600
  * have no ABI incompatibilities. */
-#define OIO_SDS_VERSION 20160602
+#define OIO_SDS_VERSION 20160603
 
 #ifdef __cplusplus
 extern "C" {
@@ -238,7 +238,16 @@ struct oio_sds_ul_dst_s
 	/* Optional: the unique content name */
 	const char *content_id;
 
+	/* NULL-terminated array of property keys and values */
 	char **properties;
+
+	/* Do a partial upload */
+	int partial;
+	/* Position of the first metachunk that is to be modified */
+	int meta_pos;
+	/* Offset of the first byte of the metachunk, relative to the
+	 * beginning of the content, used to check write alignment. */
+	size_t offset;
 };
 
 #define OIO_SDS_UPLOAD_DST_INIT {NULL,0,0,0,NULL,NULL}

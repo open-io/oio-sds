@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -246,6 +246,15 @@ m2v2_remote_pack_OVERWRITE(struct oio_url_s *url, GSList *beans)
 	GByteArray *body = bean_sequence_marshall(beans);
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_PUT, url, body);
 	metautils_message_add_field_str(msg, NAME_MSGKEY_OVERWRITE, "1");
+	return message_marshall_gba_and_clean(msg);
+}
+
+GByteArray*
+m2v2_remote_pack_UPDATE(struct oio_url_s *url, GSList *beans)
+{
+	GByteArray *body = bean_sequence_marshall(beans);
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_PUT, url, body);
+	metautils_message_add_field_str(msg, NAME_MSGKEY_UPDATE, "1");
 	return message_marshall_gba_and_clean(msg);
 }
 

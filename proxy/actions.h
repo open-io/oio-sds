@@ -1,7 +1,7 @@
 /*
 OpenIO SDS proxy
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -85,6 +85,7 @@ enum http_rc_e action_content_touch (struct req_args_s *args);
 enum http_rc_e action_content_spare (struct req_args_s *args);
 enum http_rc_e action_content_copy (struct req_args_s *args);
 enum http_rc_e action_content_link (struct req_args_s *args);
+enum http_rc_e action_content_update(struct req_args_s *args);
 
 // Admin on SQLX bases
 

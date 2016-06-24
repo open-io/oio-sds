@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -99,12 +99,6 @@ _fake_cfg_namespaces (struct oio_cfg_handle_s *cfg0)
 	g_tree_foreach (cfg->values, (GTraverseFunc)_run, NULL);
 
 	gchar **items = g_malloc0 ((1 + g_tree_nnodes(cfg->values)) * sizeof(gchar*));
-	gchar **p = items;
-	gboolean _fill (gchar *k, gchar *v, gpointer i) {
-		(void) v, (void) i;
-		*(p++) = g_strdup (k);
-		return FALSE;
-	}
 	g_tree_foreach (cfg->values, (GTraverseFunc)_run, NULL);
 
 	g_tree_destroy (tmp);

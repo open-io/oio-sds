@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -64,25 +64,6 @@ static void
 _notify_beans (struct meta2_backend_s *m2b, struct oio_url_s *url,
 		GSList *beans, const char *name)
 {
-	void sep (GString *gs) {
-		if (gs->len > 1 && !strchr(",[{", gs->str[gs->len-1]))
-			g_string_append_c (gs, ',');
-	}
-	void append_int64 (GString *gs, const char *k, gint64 v) {
-		sep (gs);
-		g_string_append_printf (gs, "\"%s\":%"G_GINT64_FORMAT, k, v);
-	}
-	void append_const (GString *gs, const char *k, const char *v) {
-		sep (gs);
-		if (v)
-			g_string_append_printf (gs, "\"%s\":\"%s\"", k, v);
-		else
-			g_string_append_printf (gs, "\"%s\":null", k);
-	}
-	void append (GString *gs, const char *k, gchar *v) {
-		append_const (gs, k, v);
-		g_free0 (v);
-	}
 	void forward (GSList *list_of_beans) {
 		gchar tmp[256];
 		g_snprintf (tmp, sizeof(tmp), "%s.%s", META2_EVENTS_PREFIX, name);
@@ -144,13 +125,18 @@ _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 
 	GSList *added = NULL, *deleted = NULL;
 
-	GRID_DEBUG("Putting %d beans in [%s]%s", g_slist_length(beans),
+	GRID_DEBUG("Putting %d beans in [%s]%s%s", g_slist_length(beans),
 			oio_url_get(url, OIOURL_WHOLE),
 			meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_OVERWRITE)?
-			" (overwrite)":"");
+			" (overwrite)":"",
+			meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_UPDATE)?
+			" (update)":"");
 
 	if (NULL != meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_OVERWRITE)) {
 		e = meta2_backend_force_alias(m2b, url, beans, &deleted, &added);
+	} else if (meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_UPDATE)) {
+		reply->subject("(update)");
+		e = meta2_backend_update_content(m2b, url, beans, &deleted, &added);
 	} else {
 		e = meta2_backend_put_alias(m2b, url, beans, &deleted, &added);
 	}
@@ -318,7 +304,7 @@ meta2_filter_action_set_content_properties(struct gridd_filter_ctx_s *ctx,
 	const char *fstr = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FLAGS);
 	if (NULL != fstr)
 		flags = atoi(fstr);
-	
+
 	if (!oio_url_has(url, OIOURL_PATH))
 		e = NEWERROR(CODE_BAD_REQUEST, "Missing content path");
 	else
