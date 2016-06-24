@@ -80,7 +80,7 @@ _gen_chunk_bean(const char *straddr)
 //------------------------------------------------------------------------------
 
 GError*
-get_spare_chunks(struct oio_lb_s *lb, const char *stgpol_name,
+get_spare_chunks(struct oio_lb_s *lb, const char *pool,
 		GSList **result)
 {
 	GError *err = NULL;
@@ -92,10 +92,10 @@ get_spare_chunks(struct oio_lb_s *lb, const char *stgpol_name,
 		meta1_url_shift_addr(shifted);
 		g_ptr_array_add(ids, shifted);
 	}
-	if (!oio_lb__poll_pool(lb, stgpol_name, NULL, _on_id)) {
+	if (!oio_lb__poll_pool(lb, pool, NULL, _on_id)) {
 		err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
-				"found only %u services matching the criteria",
-				ids->len);
+				"found only %u services matching the criteria (pool=%s)",
+				ids->len, pool);
 	}
 	if (!err) {
 		for (int i = 0; i < (int)ids->len; i++) {
@@ -134,7 +134,7 @@ convert_chunks_to_locations(GSList *src)
 }
 
 GError*
-get_conditioned_spare_chunks(struct oio_lb_s *lb, const char *stgpol,
+get_conditioned_spare_chunks(struct oio_lb_s *lb, const char *pool,
 		GSList *already, GSList *broken, GSList **result)
 {
 	GError *err = NULL;
@@ -149,7 +149,7 @@ get_conditioned_spare_chunks(struct oio_lb_s *lb, const char *stgpol,
 		meta1_url_shift_addr(shifted);
 		g_ptr_array_add(ids, shifted);
 	}
-	if (!oio_lb__patch_with_pool(lb, stgpol, avoid, known, _on_id)) {
+	if (!oio_lb__patch_with_pool(lb, pool, avoid, known, _on_id)) {
 		err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
 				"found only %u services matching the criteria",
 				ids->len);

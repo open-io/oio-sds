@@ -290,7 +290,9 @@ conscience_srvtype_set_type_expression(struct conscience_srvtype_s * srvtype,
 
 	pE = NULL;
 	if (expr_parse(expr_str, &pE)) {
-		GSETCODE(err, CODE_INTERNAL_ERROR, "Failed to parse the expression");
+		GSETCODE(err, CODE_INTERNAL_ERROR,
+				"Failed to parse expression '%s'",
+				expr_str);
 		return FALSE;
 	}
 

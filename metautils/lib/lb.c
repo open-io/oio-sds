@@ -57,15 +57,25 @@ oio_lb_world__feed_service_info_list(struct oio_lb_world_s *lbw,
 		struct service_info_s *srv = l->data;
 		service_info_to_lb_item(srv, item);
 
-		/* Insert the service in a slot named after its storage class */
-		g_snprintf(slot_name, sizeof(slot_name), "%s-%s",
-				srv->type, service_info_get_stgclass(srv, STORAGE_CLASS_NONE));
-		oio_lb_world__create_slot(lbw, slot_name);
-		oio_lb_world__feed_slot(lbw, slot_name, item);
+		/* Insert the service in slots described in tag.slots */
+		const gchar *slot_list_str = service_info_get_tag_value(srv,
+				NAME_TAGNAME_SLOTS, NULL);
+		if (slot_list_str) {
+			gchar **tokens = g_strsplit(slot_list_str, OIO_CSV_SEP, -1);
+			for (gchar **token = tokens; token && *token; token++) {
+				/* Ensure the slot name is prefixed by the type of service */
+				if (!g_str_has_prefix(*token, srv->type))
+					g_snprintf(slot_name, sizeof(slot_name), "%s-%s",
+							srv->type, *token);
+				else
+					g_strlcpy(slot_name, *token, sizeof(slot_name));
+				oio_lb_world__create_slot(lbw, slot_name);
+				oio_lb_world__feed_slot(lbw, slot_name, item);
+			}
+			g_strfreev(tokens);
+		}
 
-		// TODO: insert the service in slots named after its tags
-
-		/* Insert the service in the main pool */
+		/* Insert the service in the main slot */
 		g_snprintf(slot_name, sizeof(slot_name), "%s", srv->type);
 		oio_lb_world__create_slot(lbw, slot_name);
 		oio_lb_world__feed_slot(lbw, slot_name, item);
@@ -77,22 +87,46 @@ void
 oio_lb_world__reload_storage_policies(struct oio_lb_world_s *lbw,
 		struct oio_lb_s *lb, struct namespace_info_s *nsinfo)
 {
-	/* For the special case of rawx services,
-	** add a pool for each storage policy */
-	void _make_pools(gpointer key, gpointer val, gpointer udata)
+	void _make_pools(gpointer key, gpointer val UNUSED, gpointer udata UNUSED)
 	{
-		(void)udata;
-		(void)val;
 		const char *stgpol_name = key;
 		struct storage_policy_s *stgpol = storage_policy_init(nsinfo,
 				stgpol_name);
-		struct oio_lb_pool_s *pool = \
-				oio_lb_pool__from_storage_policy(lbw, stgpol);
-		oio_lb__force_pool(lb, pool);
+		const gchar *pool_name = storage_policy_get_service_pool(stgpol);
+		if (!oio_lb__has_pool(lb, pool_name)) {
+			struct oio_lb_pool_s *pool = \
+					oio_lb_pool__from_storage_policy(lbw, stgpol);
+			GRID_INFO("No service pool [%s] for storage policy [%s], "
+					"creating one", pool_name, stgpol_name);
+			oio_lb__force_pool(lb, pool);
+		}
 		storage_policy_clean(stgpol);
 	}
 
 	g_hash_table_foreach(nsinfo->storage_policy, _make_pools, NULL);
+}
+
+void
+oio_lb_world__reload_pools(struct oio_lb_world_s *lbw,
+		struct oio_lb_s *lb, struct namespace_info_s *nsinfo)
+{
+	GRID_DEBUG("Loading pools from configuration");
+	void _reload_pool(const gchar *name, GByteArray *def,
+			gpointer unused UNUSED) {
+		if (!def) {
+			GRID_DEBUG("pool [%s] definition is NULL", name);
+			return;
+		}
+		char *str_def = g_alloca(def->len + 1);
+		strncpy(str_def, (const char*)def->data, def->len);
+		str_def[def->len] = '\0';
+		struct oio_lb_pool_s *pool = NULL;
+		pool = oio_lb_world__create_pool(lbw, name);
+		GRID_DEBUG("pool [%s] will target [%s]", name, str_def);
+		oio_lb_world__add_pool_targets(pool, str_def);
+		oio_lb__force_pool(lb, pool);
+	}
+	g_hash_table_foreach(nsinfo->service_pools, (GHFunc)_reload_pool, NULL);
 }
 
 struct oio_lb_pool_s *
@@ -103,9 +137,7 @@ oio_lb_pool__from_service_policy(struct oio_lb_world_s *lbw,
 	** by the service update policy */
 	struct oio_lb_pool_s *pool = oio_lb_world__create_pool(lbw, srvtype);
 	GString *targets = g_string_sized_new(64);
-	// TODO: maybe add a target with a tag (service_update_tagfilter())
-	g_string_append_printf(targets, "%s-%s", srvtype, STORAGE_CLASS_NONE);
-	g_string_append_printf(targets, ",%s", srvtype);
+	g_string_append_printf(targets, "%s", srvtype);
 
 	guint howmany = service_howmany_replicas(pols, srvtype);
 	GRID_DEBUG("pool [%s] will target [%s] %u times",
@@ -121,30 +153,17 @@ struct oio_lb_pool_s *
 oio_lb_pool__from_storage_policy(struct oio_lb_world_s *lbw,
 		const struct storage_policy_s *stgpol)
 {
-	const struct storage_class_s *stgclass = \
-			storage_policy_get_storage_class(stgpol);
-	const char *stgpol_name = storage_policy_get_name(stgpol);
-
-	/* Build the list of slots */
-	GString *targets = g_string_sized_new(64);
-	g_string_append_printf(targets, NAME_SRVTYPE_RAWX"-%s",
-			storage_class_get_name(stgclass));
-	const GSList *fallbacks = storage_class_get_fallbacks(stgclass);
-	for (const GSList *l = fallbacks; l; l = l->next)
-		g_string_append_printf(targets, ","NAME_SRVTYPE_RAWX"-%s",
-				(const char*)l->data);
+	const char *pool_name = storage_policy_get_name(stgpol);
 
 	/* Build a pool for the storage policy */
-	struct oio_lb_pool_s *pool = oio_lb_world__create_pool(lbw,
-			stgpol_name);
+	struct oio_lb_pool_s *pool = oio_lb_world__create_pool(lbw, pool_name);
 
 	/* Add the list of slots as target for the pool */
 	gint64 howmany = storage_policy_get_nb_chunks(stgpol);
 	GRID_DEBUG("pool [%s] will target [%s] %"G_GINT64_FORMAT" times",
-			stgpol_name, targets->str, howmany);
+			pool_name, NAME_SRVTYPE_RAWX, howmany);
 	for (; howmany > 0; howmany--)
-		oio_lb_world__add_pool_target(pool, targets->str);
+		oio_lb_world__add_pool_target(pool, NAME_SRVTYPE_RAWX);
 
-	g_string_free(targets, TRUE);
 	return pool;
 }

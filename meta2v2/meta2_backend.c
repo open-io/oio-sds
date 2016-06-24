@@ -1491,7 +1491,7 @@ meta2_backend_get_conditionned_spare_chunks_v2(struct meta2_backend_s *m2b,
 	GError *err = _load_storage_policy(m2b, url, polname, &pol);
 	if (!err)
 		err = get_conditioned_spare_chunks(m2b->lb,
-				storage_policy_get_name(pol), notin, broken, result);
+				storage_policy_get_service_pool(pol), notin, broken, result);
 	if (pol)
 		storage_policy_clean(pol);
 	return err;
@@ -1509,7 +1509,8 @@ meta2_backend_get_spare_chunks(struct meta2_backend_s *m2b, struct oio_url_s *ur
 	struct storage_policy_s *pol = NULL;
 	GError *err = _load_storage_policy(m2b, url, polname, &pol);
 	if (!err)
-		err = get_spare_chunks(m2b->lb, storage_policy_get_name(pol), result);
+		err = get_spare_chunks(m2b->lb, storage_policy_get_service_pool(pol),
+				result);
 	if (pol)
 		storage_policy_clean(pol);
 	return err;

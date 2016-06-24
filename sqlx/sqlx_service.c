@@ -76,7 +76,8 @@ static gpointer _worker_clients (gpointer p);
 
 static const struct gridd_request_descr_s * _get_service_requests (void);
 
-static GError* _reload_lb_world(struct oio_lb_world_s *lbw);
+static GError* _reload_lb_world(
+		struct oio_lb_world_s *lbw, struct oio_lb_s *lb);
 
 // Static variables
 static struct sqlx_service_s SRV = {{0}};
@@ -889,7 +890,7 @@ _task_reconfigure_events (gpointer p)
 }
 
 GError*
-sqlx_reload_lb_service_types(struct oio_lb_world_s *lbw,
+sqlx_reload_lb_service_types(struct oio_lb_world_s *lbw, struct oio_lb_s *lb,
 		GSList *list_srvtypes)
 {
 	GError *err = NULL;
@@ -910,8 +911,14 @@ sqlx_reload_lb_service_types(struct oio_lb_world_s *lbw,
 		}
 
 		oio_lb_world__feed_service_info_list(lbw, list_srv);
-		oio_lb__force_pool(SRV.lb,
-				oio_lb_pool__from_service_policy(lbw, srvtype, pols));
+
+		if (!oio_lb__has_pool(lb, srvtype)) {
+			GRID_DEBUG("Automatically creating pool for service type [%s]",
+					srvtype);
+			oio_lb__force_pool(lb,
+					oio_lb_pool__from_service_policy(lbw, srvtype, pols));
+		}
+
 
 		g_slist_free_full(list_srv, (GDestroyNotify)service_info_clean);
 		return TRUE;
@@ -930,17 +937,16 @@ sqlx_reload_lb_service_types(struct oio_lb_world_s *lbw,
 }
 
 static GError*
-_reload_lb_world(struct oio_lb_world_s *lbw)
+_reload_lb_world(struct oio_lb_world_s *lbw, struct oio_lb_s *lb)
 {
 	GSList *list_srvtypes = NULL;
 	GError *err = conscience_get_types(SRV.ns_name, &list_srvtypes);
 	if (err)
 		g_prefix_error(&err, "LB pool reload error: ");
 	else
-		err = sqlx_reload_lb_service_types(lbw, list_srvtypes);
+		err = sqlx_reload_lb_service_types(lbw, lb, list_srvtypes);
 	g_slist_free_full(list_srvtypes, g_free);
 
-	oio_lb_world__reload_storage_policies(lbw, SRV.lb, SRV.nsinfo);
 	return err;
 }
 
@@ -955,7 +961,8 @@ sqlx_task_reload_lb (struct sqlx_service_s *ss)
 	if (ADAPTIVE_PERIOD_SKIP())
 		return;
 
-	GError *err = _reload_lb_world(ss->lb_world);
+	oio_lb_world__reload_pools(ss->lb_world, ss->lb, SRV.nsinfo);
+	GError *err = _reload_lb_world(ss->lb_world, ss->lb);
 	if (err) {
 		GRID_WARN("Failed to reload LB world: %s", err->message);
 		g_clear_error(&err);
@@ -974,7 +981,7 @@ _dispatch_RELOAD (struct gridd_reply_ctx_s *reply, gpointer pss, gpointer i)
 	struct sqlx_service_s *ss = pss;
 	g_assert (ss != NULL);
 
-	GError *err = _reload_lb_world(ss->lb_world);
+	GError *err = _reload_lb_world(ss->lb_world, ss->lb);
 	if (err)
 		reply->send_error (0, err);
 	else

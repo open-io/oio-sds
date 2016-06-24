@@ -445,20 +445,6 @@ service_info_get_rawx_volume(const struct service_info_s *si, const gchar *d)
 	return service_info_get_tag_value(si, NAME_TAGNAME_RAWX_VOL, d);
 }
 
-const gchar *
-service_info_get_stgclass(const struct service_info_s *si, const gchar *d)
-{
-	return service_info_get_tag_value(si, NAME_TAGNAME_RAWX_STGCLASS, d);
-}
-
-gboolean
-service_info_check_storage_class(const struct service_info_s *si, const gchar *wanted_class)
-{
-	const gchar *actual_class = service_info_get_tag_value(si,
-			NAME_TAGNAME_RAWX_STGCLASS, NULL);
-	return storage_class_is_satisfied(wanted_class, actual_class);
-}
-
 void
 oio_parse_service_key(const char *key, gchar **ns, gchar **type, gchar **id)
 {

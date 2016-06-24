@@ -30,9 +30,13 @@ struct namespace_info_s;
 void oio_lb_world__feed_service_info_list(struct oio_lb_world_s *lbw,
 		GSList *services);
 
-/** Create a service pool for each declared storage policy
+/** Check there is a pool for each storage policy. If not, create a dummy one.
  * @see oio_lb_pool__from_storage_policy */
 void oio_lb_world__reload_storage_policies(struct oio_lb_world_s *lbw,
+		struct oio_lb_s *lb, struct namespace_info_s *nsinfo);
+
+/** Create service pools from string definitions. */
+void oio_lb_world__reload_pools(struct oio_lb_world_s *lbw,
 		struct oio_lb_s *lb, struct namespace_info_s *nsinfo);
 
 /** Create a service pool returning sets of services satisfying

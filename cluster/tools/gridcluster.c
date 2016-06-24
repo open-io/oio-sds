@@ -71,8 +71,8 @@ print_formated_namespace(namespace_info_t * ns)
 
 	print_formatted_hashtable(ns->options, "Option");
 	print_formatted_hashtable(ns->storage_policy, "Storage Policy");
-	print_formatted_hashtable(ns->storage_class, "Storage Class");
 	print_formatted_hashtable(ns->data_security, "Data Security");
+	print_formatted_hashtable(ns->service_pools, "Service Pool");
 
 	GError *err = NULL;
 	GSList *types = NULL;

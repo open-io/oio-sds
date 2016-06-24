@@ -262,6 +262,8 @@ host: ${IP}
 port: ${PORT}
 type: ${SRVTYPE}
 location: hem.oio.vol${SRVNUM}
+slots:
+    - ${SRVTYPE}
 checks:
     - {type: tcp}
 
@@ -277,7 +279,8 @@ port: ${PORT}
 type: account
 checks:
     - {type: tcp}
-
+slots:
+    - ${SRVTYPE}
 stats:
     - {type: http, path: /status, parser: json}
     - {type: system}
@@ -290,7 +293,9 @@ type: rawx
 location: hem.oio.vol${SRVNUM}
 checks:
     - {type: http, uri: /info}
-
+slots:
+    - ${SRVTYPE}
+    - ${EXTRASLOT}
 stats:
     - {type: volume, path: ${VOLUME}}
     - {type: rawx, path: /stat}
@@ -304,7 +309,8 @@ type: rdir
 location: hem.oio.db${SRVNUM}
 checks:
     - {type: tcp}
-
+slots:
+    - ${SRVTYPE}
 stats:
     - {type: volume, path: ${VOLUME}}
     - {type: http, path: /status, parser: json}
@@ -318,7 +324,8 @@ type: redis
 location: hem.oio.db${SRVNUM}
 checks:
     - {type: tcp}
-
+slots:
+    - ${SRVTYPE}
 stats:
     - {type: volume, path: ${VOLUME}}
     - {type: system}
@@ -383,6 +390,7 @@ param_option.FLATNS_hash_bitlength=17
 param_option.storage_policy=${STGPOL}
 
 param_storage_conf=${CFGDIR}/${NS}-policies.conf
+param_service_conf=${CFGDIR}/${NS}-services.conf
 
 param_service.meta0.lock_at_first_register=false
 param_service.meta0.score_timeout=3600
@@ -431,17 +439,11 @@ param_service.echo.score_expr=(num stat.cpu)
 template_conscience_policies = """
 [STORAGE_POLICY]
 SINGLE=NONE:NONE
-TWOCOPIES=NONE:DUPONETWO
-THREECOPIES=NONE:DUPONETHREE
-17COPIES=NONE:DUP17
+TWOCOPIES=rawxevenodd:DUPONETWO
+THREECOPIES=rawx3:DUPONETHREE
+17COPIES=rawx17:DUP17
 EC=NONE:EC
 BACKBLAZE=NONE:BACKBLAZE
-
-[STORAGE_CLASS]
-# <CLASS> = FALLBACK[,FALLBACK]...
-SUPERFAST=PRETTYGOOD,REASONABLYSLOW,NONE
-PRETTYGOOD=REASONABLYSLOW,NONE
-REASONABLYSLOW=NONE
 
 [DATA_SECURITY]
 DUPONETWO=plain/distance=1,nb_copy=2
@@ -459,11 +461,37 @@ BACKBLAZE=backblaze/account_id=${BACKBLAZE_ACCOUNT_ID},bucket_name=${BACKBLAZE_B
 
 """
 
-template_other_sources = """
+template_credentials = """
 [backblaze]
 ${BACKBLAZE_ACCOUNT_ID}.${BACKBLAZE_BUCKET_NAME}.application_key=${BACKBLAZE_APPLICATION_KEY}
 """
 
+template_conscience_services = """[pools]
+meta2=${M2_REPLICAS},meta2
+rdir=1,rdir
+account=1,account
+rawx2=2,rawx
+rawx3=3,rawx
+rawx6=9,rawx
+rawx17=17,rawx
+rawxevenodd=1,rawx-even;1,rawx-odd
+
+# Pick 3 SSD rawx, or any rawx if SSD is not available
+fastrawx3=3,rawx-ssd,rawx
+
+# Pick one rawx in Europe, one in USA, one in Asia, or anywhere if none available
+zonedrawx3=1,rawx-europe,rawx;1,rawx-usa,rawx;1,rawx-asia,rawx
+
+
+[score_expr]
+meta0=(((num stat.cpu)>0) * 100)
+
+[score_timeout]
+
+[score_variation_bound]
+
+[score_lock_at_first_register]
+"""
 
 template_gridinit_header = """
 [Default]
@@ -839,8 +867,7 @@ def generate(options):
     ip = options.get('ip') or defaults['IP']
     backblaze_account_id = options.get('backblaze', {}).get(ACCOUNT_ID)
     backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
-    backblaze_application_key = options.get('backblaze', {}).get(
-        APPLICATION_KEY)
+    backblaze_app_key = options.get('backblaze', {}).get(APPLICATION_KEY)
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(IP=ip,
                NS=ns,
@@ -873,7 +900,7 @@ def generate(options):
                APACHE2_MODULES_SYSTEM_DIR=APACHE2_MODULES_SYSTEM_DIR,
                BACKBLAZE_ACCOUNT_ID=backblaze_account_id,
                BACKBLAZE_BUCKET_NAME=backblaze_bucket_name,
-               BACKBLAZE_APPLICATION_KEY=backblaze_application_key,
+               BACKBLAZE_APPLICATION_KEY=backblaze_app_key,
                KEY_FILE=key_file,
                HTTPD_BINARY=HTTPD_BINARY)
 
@@ -934,6 +961,9 @@ def generate(options):
         cs = list()
         with open('{CFGDIR}/{NS}-policies.conf'.format(**ENV), 'w+') as f:
             tpl = Template(template_conscience_policies)
+            f.write(tpl.safe_substitute(ENV))
+        with open('{CFGDIR}/{NS}-services.conf'.format(**ENV), 'w+') as f:
+            tpl = Template(template_conscience_services)
             f.write(tpl.safe_substitute(ENV))
         # Prepare a list of consciences
         for num in range(nb_conscience):
@@ -1007,7 +1037,9 @@ def generate(options):
             env = subenv({'SRVTYPE': 'rawx',
                           'SRVNUM': num + 1,
                           'PORT': next_port(),
-                          'COMPRESSION': compression})
+                          'COMPRESSION': compression,
+                          'EXTRASLOT': ('rawx-even' if num % 2 else 'rawx-odd')
+                          })
             add_service(env)
             # gridinit
             tpl = Template(template_gridinit_httpd)
@@ -1025,7 +1057,6 @@ def generate(options):
             to_write = tpl.safe_substitute(env)
             with open(watch(env), 'w+') as f:
                 f.write(to_write)
-
 
     # redis
     env = subenv({'SRVTYPE': 'redis', 'SRVNUM': 1, 'PORT': 6379})
@@ -1128,7 +1159,7 @@ def generate(options):
         f.write(tpl.safe_substitute(ENV))
 
     with open('{KEY_FILE}'.format(**ENV), 'w+') as f:
-        tpl = Template(template_other_sources)
+        tpl = Template(template_credentials)
         f.write(tpl.safe_substitute(ENV))
         
     # ensure volumes

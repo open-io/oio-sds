@@ -31,10 +31,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_CS_PUSH_SRV     "CS_PSH"
 # define NAME_MSGNAME_CS_RM_SRV       "CS_DEL"
 
-# define NAME_GROUPNAME_STORAGE_POLICY		"STORAGE_POLICY"
-# define NAME_GROUPNAME_DATA_SECURITY		"DATA_SECURITY"
-# define NAME_GROUPNAME_DATA_TREATMENTS		"DATA_TREATMENTS"
-# define NAME_GROUPNAME_STORAGE_CLASS		"STORAGE_CLASS"
+# define NAME_GROUPNAME_STORAGE_POLICY   "STORAGE_POLICY"
+# define NAME_GROUPNAME_DATA_SECURITY    "DATA_SECURITY"
+# define NAME_GROUPNAME_DATA_TREATMENTS  "DATA_TREATMENTS"
+# define NAME_GROUPNAME_SERVICE_POOLS    "pools"
+# define NAME_GROUPNAME_SCORE_EXPR       "score_expr"
+# define NAME_GROUPNAME_SCORE_TIMEOUT    "score_timeout"
+# define NAME_GROUPNAME_SCORE_VARBOUND   "score_variation_bound"
+# define NAME_GROUPNAME_SCORE_LOCK       "score_lock_at_first_register"
 # define STG_CONF_STR_MAX_LENGTH			50
 
 # define KEY_NAMESPACE "namespace"
@@ -44,6 +48,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define KEY_SCORE_TIMEOUT "score_timeout"
 # define KEY_SCORE_EXPR "score_expr"
 # define KEY_STG_CONF "storage_conf"
+# define KEY_SVC_CONF "service_conf"
 # define KEY_SCORE_VARBOUND "score_variation_bound"
 # define KEY_SCORE_LOCK "lock_at_first_register"
 

@@ -1731,11 +1731,11 @@ _m2_generate_chunks(struct gen_ctx_s *ctx,
 			meta1_url_shift_addr(shifted);
 			g_ptr_array_add(ids, shifted);
 		}
-		if (!oio_lb__poll_pool(ctx->lb, storage_policy_get_name(ctx->pol),
-					NULL, _on_id)) {
+		const char *pool = storage_policy_get_service_pool(ctx->pol);
+		if (!oio_lb__poll_pool(ctx->lb, pool, NULL, _on_id)) {
 			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "at position %u: "
-					"found only %u services matching the criteria",
-					pos, ids->len);
+					"found only %u services matching the criteria (pool=%s)",
+					pos, ids->len, pool);
 		}
 		if (!err) {
 			if (is_stgpol_backblaze(ctx->pol)) {

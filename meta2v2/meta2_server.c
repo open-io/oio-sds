@@ -56,9 +56,13 @@ _task_reload_m2_lb(gpointer p)
 	if (ADAPTIVE_PERIOD_SKIP())
 		return;
 
+	oio_lb_world__reload_pools(PSRV(p)->lb_world, PSRV(p)->lb,
+			PSRV(p)->nsinfo);
+
 	/* In meta2, we are only interrested in rawx services */
 	GSList *svctypes = g_slist_prepend(NULL, NAME_SRVTYPE_RAWX);
-	GError *err = sqlx_reload_lb_service_types(PSRV(p)->lb_world, svctypes);
+	GError *err = sqlx_reload_lb_service_types(PSRV(p)->lb_world, PSRV(p)->lb,
+			svctypes);
 	if (err) {
 		GRID_WARN("Failed to reload "NAME_SRVTYPE_RAWX" services: %s",
 				err->message);
@@ -70,6 +74,7 @@ _task_reload_m2_lb(gpointer p)
 
 	oio_lb_world__reload_storage_policies(PSRV(p)->lb_world,
 			PSRV(p)->lb, PSRV(p)->nsinfo);
+	oio_lb_world__debug(PSRV(p)->lb_world);
 }
 
 static gchar **

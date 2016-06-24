@@ -167,10 +167,11 @@ typedef struct namespace_info_s
 {
 	gchar name[LIMIT_LENGTH_NSNAME]; /**< The namespace name */
 	chunk_size_t chunk_size;	 /**< The chunk size in the namespace */
-	GHashTable* options;             /**< A hash of namespace options (gchar*) -> (GByteArray*) */
+	GHashTable* options;         /**< A hash of namespace options (gchar*) -> (GByteArray*) */
 	GHashTable* storage_policy;	 /**< Storage policies definitions name = STG_CLASS:DATA_SEC:DATA_THREAT */
 	GHashTable* data_security;	 /**< Data security definitions name = TYPE:OTHER_INFO */
-	GHashTable* storage_class;	 /**< Storage class definitions name = fallback_1:[...]:fallback_N */
+	GHashTable* storage_class;   /**< Storage class definitions name = fallback_1:[...]:fallback_N */
+	GHashTable* service_pools;   /**< Service policies definitions name = GSList<char*> */
 } namespace_info_t;
 
 /**
