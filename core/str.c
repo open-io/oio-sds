@@ -236,7 +236,7 @@ oio_buf_randomize(guint8 *buf, gsize buflen)
 }
 
 void
-oio_str_randomize (gchar *d, gsize dlen, const char *set)
+oio_str_randomize (gchar *d, const gsize dlen, const char *set)
 {
 	size_t len = strlen (set);
 	GRand *r = oio_ext_local_prng ();
@@ -466,8 +466,7 @@ oio_str_is_number (const char *s)
 }
 
 int
-oio_str_cmp3 (const void *a, const void *b, void *ignored)
+oio_str_cmp3 (const void *a, const void *b, void *i UNUSED)
 {
-	(void) ignored;
 	return g_strcmp0 (a,b);
 }

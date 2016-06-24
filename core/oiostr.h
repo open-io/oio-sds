@@ -77,7 +77,7 @@ gsize oio_str_bin2hex(const void *s, size_t sS, char *d, size_t dS);
 void oio_str_hash_name(guint8 *d, const char *ns, const char *account, const char *user);
 
 /** Fills 'd' with 'dlen' random characters */
-void oio_str_randomize(gchar *d, gsize dlen, const char *set);
+void oio_str_randomize(gchar *d, const gsize dlen, const char *set);
 
 /** Fills 'b' with 'blen' random bytes */
 void oio_buf_randomize(guint8 *b, gsize blen);

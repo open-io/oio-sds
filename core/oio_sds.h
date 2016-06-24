@@ -238,7 +238,7 @@ struct oio_sds_ul_dst_s
 	/* Optional: the unique content name */
 	const char *content_id;
 
-	char **properties;
+	const char * const * properties;
 };
 
 #define OIO_SDS_UPLOAD_DST_INIT {NULL,0,0,0,NULL,NULL}

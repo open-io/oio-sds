@@ -158,6 +158,7 @@ struct oio_proxy_content_create_in_s
 	const char *hash;
 	const char *stgpol;
 	const char *chunk_method;
+	unsigned int append : 1;
 };
 
 GError * oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,

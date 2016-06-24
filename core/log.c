@@ -25,6 +25,7 @@ License along with this library.
 
 #include <glib.h>
 
+#include "internals.h"
 #include "oiolog.h"
 #include "oioext.h"
 
@@ -168,22 +169,13 @@ _append_message(GString *gstr, const gchar *msg)
 	g_string_append(gstr, msg);
 }
 
-void
-oio_log_noop(const gchar *log_domain, GLogLevelFlags log_level,
-		const gchar *message, gpointer user_data)
-{
-	(void) log_domain;
-	(void) log_level;
-	(void) message;
-	(void) user_data;
-}
+void oio_log_noop(const gchar *d UNUSED, GLogLevelFlags l UNUSED,
+		const gchar *m UNUSED, gpointer u UNUSED) { }
 
 void
 oio_log_syslog(const gchar *log_domain, GLogLevelFlags log_level,
-		const gchar *message, gpointer user_data)
+		const gchar *message, gpointer user_data UNUSED)
 {
-	(void) user_data;
-
 	if (!glvl_allowed(log_level))
 		return;
 
@@ -214,11 +206,10 @@ oio_log_syslog(const gchar *log_domain, GLogLevelFlags log_level,
 
 static void
 _logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
-		const gchar *message, gpointer user_data)
+		const gchar *message, gpointer user_data UNUSED)
 {
 	static guint longest_prefix = 38;
 	GString *gstr = g_string_sized_new(256);
-	(void) user_data;
 
 	g_string_append_printf(gstr, "%"G_GINT64_FORMAT" %d %04X ",
 			g_get_monotonic_time () / G_TIME_SPAN_MILLISECOND,
