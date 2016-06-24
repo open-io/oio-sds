@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -159,6 +159,7 @@ struct oio_proxy_content_create_in_s
 	const char *stgpol;
 	const char *chunk_method;
 	unsigned int append : 1;
+	unsigned int update : 1; // accept holes in metachunk positions
 };
 
 GError * oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,

@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, work as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -584,13 +584,18 @@ GError *
 oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,
 		struct oio_proxy_content_create_in_s *in, GString *out)
 {
-	GString *http_url = _curl_content_url (u, "create");
+	GString *http_url = NULL;
+	if (in->update)
+		http_url = _curl_content_url (u, "update");
+	else
+		http_url = _curl_content_url (u, "create");
 	if (!http_url) return BADNS();
 
 	if (in->content) {
 		g_string_append (http_url, "&id=");
 		g_string_append_uri_escaped (http_url, in->content, NULL, TRUE);
 	}
+
 	gchar *hdrin[] = {
 		g_strdup(PROXYD_HEADER_PREFIX "content-meta-id"),
 		g_strdup_printf("%s", in->content),

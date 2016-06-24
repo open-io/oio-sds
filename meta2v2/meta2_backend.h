@@ -100,12 +100,12 @@ GError* meta2_backend_get_alias(struct meta2_backend_s *m2b,
 /** Delete all the beans listed, regardless of their type. This is REALLY
  * DANGEROUS, do not use this feature. */
 GError* meta2_backend_delete_beans(struct meta2_backend_s *m2b,
-                struct oio_url_s *url, GSList *beans);
+		struct oio_url_s *url, GSList *beans);
 
 /** Inserts all the beans listed, as is, regardless of their type. This is REALLY
  * DANGEROUS, do not use this feature. */
 GError* meta2_backend_insert_beans(struct meta2_backend_s *m2b,
-                struct oio_url_s *url, GSList *beans);
+		struct oio_url_s *url, GSList *beans);
 
 /** Updates all the beans listed (old by new), as is, regardless of their type.
  * This is REALLY DANGEROUS, do not use this feature. */
@@ -115,10 +115,10 @@ GError* meta2_backend_update_beans(struct meta2_backend_s *m2b,
 /** Filters out only the CONTENTS-typed beans and call
  * meta2_backend_delete_beans() */
 GError* meta2_backend_delete_chunks(struct meta2_backend_s *m2b,
-                struct oio_url_s *url, GSList *beans);
+		struct oio_url_s *url, GSList *beans);
 
 GError* meta2_backend_refresh_container_size(struct meta2_backend_s *m2b,
-				struct oio_url_s *url, gboolean bRecalc);
+		struct oio_url_s *url, gboolean bRecalc);
 
 GError* meta2_backend_put_alias(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *in,
@@ -131,11 +131,17 @@ GError* meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *beans,
 		m2_onbean_cb cb, gpointer u0);
 
+/** Update a content with the given chunks replacing the existing chunks
+ *  at the same position. */
+GError *meta2_backend_update_content(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, GSList *in,
+		GSList **out_deleted, GSList **out_added);
+
 /** Create a new version of the ALIAS but with the given chunks linked to
  * the existing CONTENT.  */
 GError* meta2_backend_force_alias(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *in,
-		 GSList **out_deleted, GSList **out_added);
+		GSList **out_deleted, GSList **out_added);
 
 /* TODO manage properties */
 GError* meta2_backend_link_content (struct meta2_backend_s *m2b,

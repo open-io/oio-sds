@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -430,7 +430,7 @@ static gridd_filter M2V2_FILTERS_touch_container_v1[] =
 	meta2_filter_check_url_cid,
 	meta2_filter_check_optional_ns_name,
 	meta2_filter_check_backend,
-    meta2_filter_extract_header_flags32,
+	meta2_filter_extract_header_flags32,
 	meta2_filter_action_touch_container_v1, /* XXX TODO FIXME NOOP in facts */
 	meta2_filter_reply_success,
 	NULL

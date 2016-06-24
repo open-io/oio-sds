@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -34,6 +34,20 @@ static const char random_chars[] =
 	"0123456789";
 
 static const char hex_chars[] = "0123456789ABCDEF";
+
+static const char *source_path = NULL;
+
+struct oio_sds_s *client = NULL;
+
+struct oio_url_s *url = NULL;
+
+typedef void (*test_func_f) (const char * const *);
+
+struct test_data_s
+{
+	enum oio_header_case_e header_case;
+	test_func_f func;
+};
 
 static int
 _on_item (void *ctx UNUSED, const struct oio_sds_list_item_s *item)
@@ -74,7 +88,6 @@ _checksum_file (const char *path, struct file_info_s *fi)
 	err = oio_sds_has (client, url, &has); \
 	if (!err && has) err = (struct oio_error_s*) NEWERROR(0,"content already present"); \
 	NOERROR(err); \
-	GRID_INFO("Content absent as expected"); \
 } while (0)
 
 #define CHECK_PRESENT(ckient,url) do { \
@@ -83,13 +96,11 @@ _checksum_file (const char *path, struct file_info_s *fi)
 	if (!err && !has) \
 		err = (struct oio_error_s*) NEWERROR(0, "content not found"); \
 	NOERROR(err); \
-	GRID_INFO("Content present as expected"); \
 } while (0)
 
 static void
-_roundtrip_tail (struct oio_sds_s *client, struct oio_url_s *url,
-		struct file_info_s *fi0,
-		const char * content_id, const char * const * properties)
+_roundtrip_tail (struct file_info_s *fi0, const char * content_id,
+		const char * const * properties)
 {
 	guint8 buf[1024];
 	gchar tmppath[256];
@@ -104,7 +115,7 @@ _roundtrip_tail (struct oio_sds_s *client, struct oio_url_s *url,
 	url1 = oio_url_dup (url);
 	oio_url_set (url1, OIOURL_PATH, tmppath);
 
-	GRID_INFO ("Roundtrip on local(%s) distant(%s) content_id(%s)", tmppath,
+	GRID_DEBUG ("Roundtrip on local(%s) distant(%s) content_id(%s)", tmppath,
 			oio_url_get (url, OIOURL_WHOLE), content_id);
 
 	CHECK_PRESENT(client,url);
@@ -112,18 +123,14 @@ _roundtrip_tail (struct oio_sds_s *client, struct oio_url_s *url,
 	/* Get it to validate the content is accessible */
 	err = oio_sds_download_to_file (client, url, tmppath);
 	NOERROR(err);
-	GRID_INFO("Content downloaded to a file");
 
 	/* Validate the original and the copy match */
 	_checksum_file (tmppath, &fi);
-
-	if (fi.fs != fi0->fs)
+	if (NULL != fi0 && fi.fs != fi0->fs)
 		NOERROR(NEWERROR(0, "Copy sizes mismatch (expected %zu, got %zu)", fi0->fs, fi.fs));
 
-	if (0 != memcmp(fi.h, fi0->h, fi.hs))
+	if (NULL != fi0 && 0 != memcmp(fi.h, fi0->h, fi.hs))
 		NOERROR(NEWERROR(0, "Copy hash mismatch"));
-
-	GRID_INFO("The original file and its copy match");
 
 	/* Get it an other way in a buffer. */
 	do {
@@ -138,7 +145,6 @@ _roundtrip_tail (struct oio_sds_s *client, struct oio_url_s *url,
 		err = oio_sds_download (client, &dl_src, &dl_dst);
 	} while (0);
 	NOERROR(err);
-	GRID_INFO("Content downloaded to a buffer");
 
 	/* link the container */
 	err = oio_sds_link (client, url1, content_id);
@@ -161,31 +167,15 @@ _roundtrip_tail (struct oio_sds_s *client, struct oio_url_s *url,
 
 	/* list the properties on the content */
 	GPtrArray *val = g_ptr_array_new();
-	void save_elements(void *ptrarray, const char *k, const char*v) {
-		GPtrArray *array = (GPtrArray *) ptrarray;
-		g_ptr_array_add(array,g_strdup(k));
-		g_ptr_array_add(array,g_strdup(v));
+	void save_elements(void *u UNUSED, const char *k, const char *v) {
+		g_ptr_array_add(val, g_strdup(k));
+		g_ptr_array_add(val, g_strdup(v));
 	}
-	err = oio_sds_get_content_properties(client, url, save_elements, val);
+	err = oio_sds_get_content_properties(client, url, save_elements, NULL);
 	NOERROR(err);
-	if (val->len != 4)
-		NOERROR(NEWERROR(0, "Wrong properties number"));
-
-	g_ptr_array_add(val, NULL);
-	gchar **elts = (gchar **) g_ptr_array_free(val, FALSE);
-	if (GRID_TRACE2_ENABLED()) {
-		for (gchar **prop=elts; *prop && *(prop+1) ;prop+=2)
-			GRID_TRACE2("Property got: [%s] -> [%s]", *prop, *(prop+1));
-		for (const char * const * prop=properties; *prop && *(prop+1) ;prop+=2)
-			GRID_TRACE2("Property expected: [%s] -> [%s]", *prop, *(prop+1));
-	}
-	gboolean t00 = !g_strcmp0(elts [0], properties[0]) && !g_strcmp0(elts [1], properties[1]);
-	gboolean t01 = !g_strcmp0(elts [2], properties[2]) && !g_strcmp0(elts [3], properties[3]);
-	gboolean t10 = !g_strcmp0(elts [0], properties[2]) && !g_strcmp0(elts [1], properties[3]);
-	gboolean t11 = !g_strcmp0(elts [2], properties[0]) && !g_strcmp0(elts [3], properties[1]);
-	if (!(t00 && t01) && !(t10 && t11))
-		NOERROR(NEWERROR(0, "Wrong properties values"));
-	g_strfreev(elts);
+	g_assert_cmpuint (val->len, ==, oio_strv_length(properties));
+	g_ptr_array_set_free_func (val, g_free);
+	g_ptr_array_free (val, TRUE);
 
 	/* get details on the content */
 	gsize max_offset = 0, max_size = 0;
@@ -289,24 +279,60 @@ _roundtrip_tail (struct oio_sds_s *client, struct oio_url_s *url,
 	g_remove (tmppath);
 }
 
-/* Upload the content at once then check the content is OK */
 static void
-_roundtrip_with_file_upload (struct oio_sds_s *client, struct oio_url_s *url,
-		const char *path, const char * const * properties)
+_roundtrip_put_multipart (const char * const * properties)
 {
-	g_printerr("\n*** %s ***\n", __FUNCTION__);
-
 	struct oio_error_s *err = NULL;
 	const size_t cidlen = 1 + 2 * oio_ext_rand_int_range (7,15);
 	gchar content_id[cidlen];
 	oio_str_randomize (content_id, cidlen, hex_chars);
 
 	struct file_info_s fi0 = FILE_INFO_INIT;
-	_checksum_file (path, &fi0);
+	_checksum_file (source_path, &fi0);
 
 	CHECK_ABSENT(client,url);
 
-	GRID_INFO("Uploading from local file [%s] with id [%s]", path, content_id);
+	struct oio_sds_ul_dst_s ul_dst = OIO_SDS_UPLOAD_DST_INIT;
+	ul_dst.url = url;
+	ul_dst.autocreate = 1;
+	ul_dst.out_size = 0;
+	ul_dst.content_id = content_id;
+	ul_dst.properties = properties;
+
+	err = oio_sds_upload_from_file (client, &ul_dst, source_path, 0, 0);
+	NOERROR(err);
+
+	ul_dst.offset = fi0.fs;
+	ul_dst.meta_pos = 1;
+	ul_dst.partial = TRUE;
+	err = oio_sds_upload_from_file (client, &ul_dst, source_path, 0, 0);
+	NOERROR(err);
+
+	ul_dst.offset = 0;
+	ul_dst.meta_pos = 0;
+	ul_dst.partial = TRUE;
+	err = oio_sds_upload_from_file (client, &ul_dst, source_path, 0, 0);
+	NOERROR(err);
+
+	_roundtrip_tail (NULL, content_id, properties);
+
+	oio_error_pfree (&err);
+}
+
+/* Upload the content at once then check the content is OK */
+static void
+_roundtrip_put_from_file (const char * const * properties)
+{
+	struct oio_error_s *err = NULL;
+	const size_t cidlen = 1 + 2 * oio_ext_rand_int_range (7,15);
+	gchar content_id[cidlen];
+	oio_str_randomize (content_id, cidlen, hex_chars);
+
+	struct file_info_s fi0 = FILE_INFO_INIT;
+	_checksum_file (source_path, &fi0);
+
+	CHECK_ABSENT(client,url);
+
 	struct oio_sds_ul_dst_s ul_dst = OIO_SDS_UPLOAD_DST_INIT;
 	ul_dst.url = url;
 	ul_dst.autocreate = 1;
@@ -314,22 +340,18 @@ _roundtrip_with_file_upload (struct oio_sds_s *client, struct oio_url_s *url,
 	ul_dst.out_size = 0;
 	ul_dst.content_id = content_id;
 	ul_dst.properties = properties;
-	err = oio_sds_upload_from_file (client, &ul_dst, path, 0, 0);
+	err = oio_sds_upload_from_file (client, &ul_dst, source_path, 0, 0);
 	NOERROR(err);
-	GRID_INFO("Content uploaded");
 
-	_roundtrip_tail (client, url, &fi0, content_id, (const char * const *)properties);
+	_roundtrip_tail (&fi0, content_id, properties);
 
 	oio_error_pfree (&err);
 }
 
 /* Perform subsequent appends then check the content is OK */
 static void
-_roundtrip_with_append (struct oio_sds_s *client, struct oio_url_s *url,
-		const char * const * properties)
+_roundtrip_append (const char * const * properties)
 {
-	g_printerr("\n*** %s ***\n", __FUNCTION__);
-
 	struct oio_error_s *err = NULL;
 	struct file_info_s fi0 = FILE_INFO_INIT ;
 	const size_t cidlen = 1 + 2 * oio_ext_rand_int_range (7,15);
@@ -342,7 +364,7 @@ _roundtrip_with_append (struct oio_sds_s *client, struct oio_url_s *url,
 	fi0.hs = g_checksum_type_get_length (G_CHECKSUM_SHA256);
 
 	const int max =  oio_ext_rand_int_range(7,17);
-	GRID_INFO("Uploading from [%u] blocks with id [%s]", max, content_id);
+	GRID_DEBUG("Uploading from [%u] blocks with id [%s]", max, content_id);
 	for (int i=0; i<max ;++i) {
 		const size_t bufsize = oio_ext_rand_int_range(15,129);
 		guint8 buf [bufsize];
@@ -361,52 +383,20 @@ _roundtrip_with_append (struct oio_sds_s *client, struct oio_url_s *url,
 		err = oio_sds_upload_from_buffer (client, &ul_dst, buf, sizeof(buf));
 		NOERROR(err);
 	}
-	GRID_INFO("Content uploaded");
+	GRID_DEBUG("Content uploaded");
 
 	g_checksum_get_digest (checksum, fi0.h, &fi0.hs);
 	g_checksum_free (checksum);
-	_roundtrip_tail (client, url, &fi0, content_id, (const char * const *)properties);
+	_roundtrip_tail (&fi0, content_id, (const char * const *)properties);
 
 	oio_error_pfree (&err);
 }
 
-/* Now the case is set, check with a content uploaded at once, then built
- * with subsequent append */
 static void
-_roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
-		const char *path)
-{
-	gchar prop1 [7]="", prop2 [37]="";
-	gchar *properties [5] = {prop1, prop1, prop2, prop2, NULL};
-
-	oio_str_randomize (prop1, sizeof(prop1), random_chars);
-	oio_str_randomize (prop2, sizeof(prop2), random_chars);
-
-	_roundtrip_with_file_upload (client, url, path, (const char * const *)properties);
-	_roundtrip_with_append (client, url, (const char * const *) properties);
-}
-
-/* check with all the Case manglings */
-static void
-_roundtrip_header_case (struct oio_sds_s *client, struct oio_url_s *url,
-		const char *path)
-{
-	oio_header_case = OIO_HDRCASE_NONE;
-	_roundtrip_common (client, url, path);
-	oio_header_case = OIO_HDRCASE_LOW;
-	_roundtrip_common (client, url, path);
-	oio_header_case = OIO_HDRCASE_1CAP;
-	_roundtrip_common (client, url, path);
-	oio_header_case = OIO_HDRCASE_RANDOM;
-	_roundtrip_common (client, url, path);
-}
-
-static void
-_roundtrip_autocontainer (struct oio_sds_s *client, struct oio_url_s *url,
-		const char *path)
+_roundtrip_put_autocontainer (const char * const * properties)
 {
 	struct file_info_s fi;
-	_checksum_file (path, &fi);
+	_checksum_file (source_path, &fi);
 
 	/* compute the autocontainer with the SHA1, consider only the first 17 bits */
 	char tmp[65];
@@ -418,25 +408,64 @@ _roundtrip_autocontainer (struct oio_sds_s *client, struct oio_url_s *url,
 	/* build a new URL with the computed container name */
 	struct oio_url_s *url_auto = oio_url_dup (url);
 	oio_url_set (url_auto, OIOURL_USER, auto_container);
-	_roundtrip_header_case (client, url_auto, path);
+	_roundtrip_put_from_file (properties);
 	oio_url_pclean (&url_auto);
 }
+
+static void
+_test_cycle (gconstpointer d)
+{
+	const struct test_data_s *test_data = (const struct test_data_s*) d;
+
+	GPtrArray *tmp = g_ptr_array_new ();
+	for (int i=2*oio_ext_rand_int_range(0,9); i>0 ;--i) {
+		int len = oio_ext_rand_int_range (2,23);
+		gchar *str = g_malloc0(len);
+		oio_str_randomize (str, len, random_chars);
+		g_ptr_array_add (tmp, str);
+	}
+	g_ptr_array_sort(tmp, (GCompareFunc)g_strcmp0);
+	g_ptr_array_add (tmp, NULL);
+
+	oio_header_case = test_data->header_case;
+
+	test_data->func((const char * const *) tmp->pdata);
+	g_ptr_array_set_free_func (tmp, g_free);
+	g_ptr_array_free (tmp, TRUE);
+}
+
+static void
+_add_test (const char *name, enum oio_header_case_e c,
+		test_func_f func)
+{
+	struct test_data_s *td = g_malloc0(sizeof(*td));
+	td->header_case = c;
+	td->func = func;
+	g_test_add_data_func_full(name, td, _test_cycle, g_free);
+}
+
+#define ADD_TEST(tag,hcase,fn) do { \
+	gchar buf[256]; \
+	g_snprintf(buf, sizeof(buf), "/oiosds/%s/%s", tag, #hcase); \
+	_add_test(buf, hcase, fn); \
+} while (0)
 
 int
 main(int argc, char **argv)
 {
-	oio_log_to_stderr();
+	HC_TEST_INIT(argc,argv);
+
 	oio_sds_default_autocreate = 1;
-	oio_log_init_level_from_env("G_DEBUG_LEVEL");
 
 	if (argc != 2) {
 		g_printerr ("Usage: %s PATH\n", argv[0]);
 		return 1;
 	}
 
-	const char *path = argv[1];
+	source_path = argv[1];
 
-	struct oio_url_s *url = oio_url_empty ();
+	/* Ensure the URL exists */
+	url = oio_url_empty ();
 	oio_url_set (url, OIOURL_NS, g_getenv("OIO_NS"));
 	oio_url_set (url, OIOURL_ACCOUNT, g_getenv("OIO_ACCOUNT"));
 	oio_url_set (url, OIOURL_USER, g_getenv("OIO_USER"));
@@ -454,9 +483,8 @@ main(int argc, char **argv)
 				oio_url_has (url, OIOURL_TYPE)?"ok":"missing");
 		return 3;
 	}
-	GRID_INFO("URL valid [%s]", oio_url_get (url, OIOURL_WHOLE));
+	GRID_DEBUG("URL valid [%s]", oio_url_get (url, OIOURL_WHOLE));
 
-	struct oio_sds_s *client = NULL;
 	struct oio_error_s *err = NULL;
 
 	/* Initiate a client */
@@ -464,16 +492,33 @@ main(int argc, char **argv)
 	if (err) {
 		g_printerr ("Client init error: (%d) %s\n", oio_error_code(err),
 				oio_error_message(err));
+		oio_error_pfree (&err);
 		return 4;
 	}
-	GRID_INFO("Client ready to [%s]", oio_url_get (url, OIOURL_NS));
+	GRID_DEBUG("Client ready to [%s]", oio_url_get (url, OIOURL_NS));
 
-	_roundtrip_header_case (client, url, path);
-	_roundtrip_autocontainer (client, url, path);
+	struct test_def_s {
+		const char *tag;
+		test_func_f func;
+	} putv[] = {
+		{ "put/file/asis", _roundtrip_put_from_file },
+		{ "put/file/autocontainer", _roundtrip_put_autocontainer },
+		{ "append/buffer/asis",_roundtrip_append },
+		{ "update/file/asis", _roundtrip_put_multipart },
+		{ NULL, NULL }
+	};
 
-	oio_error_pfree (&err);
+	for (struct test_def_s *pdef=putv; pdef->tag && pdef->func ;++pdef) {
+		ADD_TEST (pdef->tag, OIO_HDRCASE_NONE, pdef->func);
+	}
+	ADD_TEST ("put/file/asis", OIO_HDRCASE_LOW,    _roundtrip_put_from_file);
+	ADD_TEST ("put/file/asis", OIO_HDRCASE_1CAP,   _roundtrip_put_from_file);
+	ADD_TEST ("put/file/asis", OIO_HDRCASE_RANDOM, _roundtrip_put_from_file);
+
+	int rc = g_test_run();
+
 	oio_sds_pfree (&client);
 	oio_url_pclean (&url);
-	return 0;
+	return rc;
 }
 

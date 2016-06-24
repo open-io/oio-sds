@@ -431,7 +431,7 @@ size_t
 oio_constptrv_length (const void * const *v)
 {
 	size_t count = 0;
-	if (v) for (; *v ;++v,++count) {}
+	if (v) while (*(v++)) { ++count; }
 	return count;
 }
 
