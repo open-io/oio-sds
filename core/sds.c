@@ -642,10 +642,8 @@ _download_range_from_chunk (struct _download_ctx_s *dl,
 	struct oio_headers_s headers = {NULL,NULL};
 	oio_headers_common (&headers);
 	oio_headers_add (&headers, "Range", str_range);
-	for (; headers_opt && headers_opt[0] && headers_opt[1]; headers_opt += 2) {
-		oio_headers_add(&headers, g_strdup(headers_opt[0]),
-				g_strdup(headers_opt[1]));
-	}
+	for (; headers_opt && headers_opt[0] && headers_opt[1]; headers_opt += 2)
+		oio_headers_add(&headers, headers_opt[0], headers_opt[1]);
 	curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 	curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "GET");
 	curl_easy_setopt (h, CURLOPT_URL, c0_url);
