@@ -21,7 +21,7 @@ License along with this library.
 
 /* Version started to be defined in June, 2016. Version prior to 20160600
  * have no ABI incompatibilities. */
-#define OIO_SDS_VERSION 20160603
+#define OIO_SDS_VERSION 20160604
 
 #ifdef __cplusplus
 extern "C" {
@@ -232,6 +232,9 @@ struct oio_sds_ul_dst_s
 	/* should the data be appended to the content in place */
 	unsigned int append : 1;
 
+	/* Do a partial upload */
+	unsigned int partial : 1;
+
 	/* output variable: how many bytes have been uploaded */
 	size_t out_size;
 
@@ -239,18 +242,17 @@ struct oio_sds_ul_dst_s
 	const char *content_id;
 
 	/* NULL-terminated array of property keys and values */
-	char **properties;
+	const char * const * properties;
 
-	/* Do a partial upload */
-	int partial;
 	/* Position of the first metachunk that is to be modified */
 	int meta_pos;
+
 	/* Offset of the first byte of the metachunk, relative to the
 	 * beginning of the content, used to check write alignment. */
 	size_t offset;
 };
 
-#define OIO_SDS_UPLOAD_DST_INIT {NULL,0,0,0,NULL,NULL}
+#define OIO_SDS_UPLOAD_DST_INIT {NULL, 0, 0, 0, 0, NULL, NULL, 0, 0}
 
 /* "Female" upload API
  * The sequence is managed by the caller: an upload context has to be
@@ -408,6 +410,7 @@ typedef void (*on_element_f) (void *ctx, const char *key, const char *value);
 /* Get properties of a file: fct function will be called for each k,v couple */
 struct oio_error_s* oio_sds_get_content_properties (struct oio_sds_s *sds,
 		struct oio_url_s *url, on_element_f fct, void* ctx);
+
 /*Set properties of a file with the val values */
 struct oio_error_s* oio_sds_set_content_properties(struct oio_sds_s *sds,
 		struct oio_url_s *url, const char * const *val);
@@ -415,6 +418,7 @@ struct oio_error_s* oio_sds_set_content_properties(struct oio_sds_s *sds,
 /* Get properties of a container: fct function will be called for each k,v couple */
 struct oio_error_s* oio_sds_get_container_properties (struct oio_sds_s *sds,
 		struct oio_url_s *url, on_element_f fct, void* ctx);
+
 /*Set properties of a file with the val values */
 struct oio_error_s* oio_sds_set_container_properties(struct oio_sds_s *sds,
 		struct oio_url_s *url, const char * const *val);

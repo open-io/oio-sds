@@ -557,10 +557,8 @@ oio_lb_world__flush(struct oio_lb_world_s *self)
 	if (!self)
 		return;
 
-	gboolean _slot_flush_cb(gpointer key, gpointer value, gpointer unused)
+	gboolean _slot_flush_cb(gpointer k UNUSED, gpointer value, gpointer u UNUSED)
 	{
-		(void) key;
-		(void) unused;
 		struct oio_lb_slot_s *slot = value;
 		_slot_flush(slot);
 		return FALSE;
@@ -835,8 +833,7 @@ void
 oio_lb_world__debug (struct oio_lb_world_s *self)
 {
 	g_assert_nonnull (self);
-	gboolean _on_slot (gchar *name, struct oio_lb_slot_s *slot, void *i) {
-		(void) i;
+	gboolean _on_slot (gchar *name, struct oio_lb_slot_s *slot, void *i UNUSED) {
 		_slot_debug (slot, name);
 		return FALSE;
 	}

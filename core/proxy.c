@@ -199,9 +199,8 @@ _body_parse_error (GString *b)
 }
 
 static size_t
-_write_NOOP (char *data, size_t s, size_t n, void *ignored)
+_write_NOOP (char *d UNUSED, size_t s, size_t n, void *i UNUSED)
 {
-	(void) data, (void) ignored;
 	return s*n;
 }
 
@@ -610,8 +609,17 @@ oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,
 		g_strdup_printf("%s", in->stgpol?: "NONE"),
 		g_strdup(PROXYD_HEADER_PREFIX "content-meta-chunk-method"),
 		g_strdup_printf("%s", in->chunk_method?: "plain"),
+		NULL,
+		NULL,
 		NULL
 	};
+
+	if (in->append) {
+		gsize len = oio_ptrv_length(hdrin);
+		hdrin[len] = g_strdup(PROXYD_HEADER_MODE);
+		hdrin[len+1] = g_strdup("append");
+	}
+
 	struct http_ctx_s i = { .headers = hdrin, .body = in ? in->chunks : NULL };
 	struct http_ctx_s o = { .headers = NULL, .body = out };
 	GError *err = _proxy_call (h, "POST", http_url->str, &i, &o);

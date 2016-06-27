@@ -116,14 +116,12 @@ oio_sds_get_compile_options (void)
 }
 
 static CURL *
-_get_proxy_handle (struct oio_sds_s *sds)
+_get_proxy_handle (struct oio_sds_s *sds UNUSED)
 {
 	CURL *h = _curl_get_handle_proxy ();
 #if (LIBCURL_VERSION_MAJOR > 7) || ((LIBCURL_VERSION_MAJOR == 7) && (LIBCURL_VERSION_MINOR >= 40))
 	if (sds->proxy_local)
 		curl_easy_setopt (h, CURLOPT_UNIX_SOCKET_PATH, sds->proxy_local);
-#else
-	(void) sds;
 #endif
 	return h;
 }
@@ -526,7 +524,7 @@ _show_content (struct oio_sds_s *sds, struct oio_url_s *url, void *cb_data,
 			if (NULL != (err = _chunks_load (&chunks, jbody))) {
 				g_prefix_error (&err, "Parsing: ");
 			} else {
-				GRID_DEBUG("%s Got %u beans", __FUNCTION__,
+				GRID_TRACE("%s Got %u beans", __FUNCTION__,
 						g_slist_length (chunks));
 			}
 		}
@@ -608,8 +606,7 @@ _download_range_from_chunk (struct _download_ctx_s *dl,
 		const struct oio_sds_dl_range_s *range, const char *c0_url,
 		const char const **headers_opt, size_t *p_nbread)
 {
-	size_t _write_wrapper (char *data, size_t s, size_t n, void *ignored) {
-		(void) ignored;
+	size_t _write_wrapper (char *data, size_t s, size_t n, void *ignored UNUSED) {
 		size_t total = s*n;
 		if (total + *p_nbread > range->size) {
 			GRID_WARN("server gave us more data than expected "
@@ -639,16 +636,14 @@ _download_range_from_chunk (struct _download_ctx_s *dl,
 	g_snprintf (str_range, sizeof(str_range),
 			"bytes=%"G_GSIZE_FORMAT"-%"G_GSIZE_FORMAT,
 			range->offset, range->offset + range->size - 1);
-	GRID_DEBUG ("%s Range:%s %s", __FUNCTION__, str_range, c0_url);
+	GRID_TRACE ("%s Range:%s %s", __FUNCTION__, str_range, c0_url);
 
 	CURL *h = _curl_get_handle_blob ();
 	struct oio_headers_s headers = {NULL,NULL};
 	oio_headers_common (&headers);
 	oio_headers_add (&headers, "Range", str_range);
-	for (; headers_opt && headers_opt[0] && headers_opt[1]; headers_opt += 2) {
-		oio_headers_add(&headers, g_strdup(headers_opt[0]),
-				g_strdup(headers_opt[1]));
-	}
+	for (; headers_opt && headers_opt[0] && headers_opt[1]; headers_opt += 2)
+		oio_headers_add(&headers, headers_opt[0], headers_opt[1]);
 	curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 	curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "GET");
 	curl_easy_setopt (h, CURLOPT_URL, c0_url);
@@ -678,12 +673,12 @@ static GError *
 _download_range_from_metachunk_replicated (struct _download_ctx_s *dl,
 		const struct oio_sds_dl_range_s *range, struct metachunk_s *meta)
 {
-	GRID_DEBUG("%s", __FUNCTION__);
+	GRID_TRACE("%s", __FUNCTION__);
 	struct oio_sds_dl_range_s r0 = *range;
 	GSList *tail_chunks = meta->chunks;
 
 	while (r0.size > 0) {
-		GRID_DEBUG("%s at %"G_GSIZE_FORMAT"+%"G_GSIZE_FORMAT,
+		GRID_TRACE("%s at %"G_GSIZE_FORMAT"+%"G_GSIZE_FORMAT,
 				__FUNCTION__, r0.offset, r0.size);
 
 		if (!tail_chunks)
@@ -714,7 +709,7 @@ static GError *
 _download_range_from_metachunk_ec(struct _download_ctx_s *dl,
 		const struct oio_sds_dl_range_s *range, struct metachunk_s *meta)
 {
-	GRID_DEBUG("%s", __FUNCTION__);
+	GRID_TRACE("%s", __FUNCTION__);
 	struct oio_sds_dl_range_s r0 = *range;
 
 	char url[128] = {0};
@@ -739,7 +734,7 @@ _download_range_from_metachunk_ec(struct _download_ctx_s *dl,
 	g_ptr_array_add(headers, NULL);
 
 	while (r0.size > 0) {
-		GRID_DEBUG("%s at %"G_GSIZE_FORMAT"+%"G_GSIZE_FORMAT,
+		GRID_TRACE("%s at %"G_GSIZE_FORMAT"+%"G_GSIZE_FORMAT,
 				__FUNCTION__, r0.offset, r0.size);
 
 		/* Attempt a read */
@@ -1591,16 +1586,15 @@ oio_sds_upload_step (struct oio_sds_ul_s *ul)
 }
 
 static void
-_chunks_remove (CURL *h, GSList *chunks)
+_chunks_remove (CURL *h UNUSED, GSList *chunks UNUSED)
 {
-	(void) h, (void) chunks;
 	/* TODO JFS */
 }
 
 struct oio_error_s *
 oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 {
-	GRID_TRACE("%s (%p)", __FUNCTION__, ul);
+	GRID_TRACE("%s (%p) append=%u", __FUNCTION__, ul, ul->dst->append);
 	g_assert (ul != NULL);
 
 	if (ul->put && !http_put_done (ul->put))
@@ -1625,7 +1619,8 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 		.hash = hash,
 		.stgpol = ul->stgpol,
 		.chunk_method = ul->chunk_method,
-		.update = ul->dst->partial,
+		.append = BOOL(ul->dst->append),
+		.update = BOOL(ul->dst->partial),
 	};
 
 	GRID_TRACE("%s (%p) Saving %s", __FUNCTION__, ul, request_body->str);
@@ -1973,8 +1968,7 @@ oio_sds_list (struct oio_sds_s *sds, struct oio_sds_list_param_s *param,
 
 	for (;;) {
 		gchar *nextnext = NULL;
-		int _hook_bound (void *ctx, const char *next_marker) {
-			(void) ctx;
+		int _hook_bound (void *ctx UNUSED, const char *next_marker) {
 			oio_str_replace (&nextnext, next_marker);
 			return 0;
 		}

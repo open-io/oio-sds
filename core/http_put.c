@@ -342,9 +342,8 @@ http_put_get_md5(struct http_put_s *p, guint8 *buffer, gsize size)
 /* -------------------------------------------------------------------------- */
 
 static size_t
-_done_reading (struct http_put_dest_s *dest, const char *why)
+_done_reading (struct http_put_dest_s *dest, const char *why UNUSED)
 {
-	(void) why;
 	if (dest->buffer) {
 		g_bytes_unref (dest->buffer);
 		dest->buffer = NULL;
@@ -408,9 +407,8 @@ cb_read(char *data, size_t s, size_t n, struct http_put_dest_s *dest)
 }
 
 static size_t
-cb_write(char *data, size_t size, size_t nmemb, gpointer nothing)
+cb_write(char *data UNUSED, size_t size, size_t nmemb, gpointer u UNUSED)
 {
-	(void)data, (void)nothing;
 	return size * nmemb;
 }
 
@@ -637,9 +635,9 @@ retry:
 /* -------------------------------------------------------------------------- */
 
 static int
-_trace(CURL *h, curl_infotype t, char *data, size_t size, void *u)
+_trace(CURL *h UNUSED, curl_infotype t, char *data UNUSED, size_t size UNUSED,
+		void *u UNUSED)
 {
-	(void) h, (void) u, (void) data, (void) size;
 	switch (t) {
 		case CURLINFO_TEXT:
 			GRID_TRACE2("CURL: %.*s", (int)size, data);
@@ -700,6 +698,8 @@ CURL *
 _curl_get_handle_blob (void)
 {
 	CURL *h = curl_easy_init ();
+	curl_easy_setopt (h, CURLOPT_FORBID_REUSE, 1L);
+	curl_easy_setopt (h, CURLOPT_FRESH_CONNECT, 1L);
 	curl_easy_setopt (h, CURLOPT_USERAGENT, OIOSDS_http_agent);
 	curl_easy_setopt (h, CURLOPT_NOPROGRESS, 1L);
 	curl_easy_setopt (h, CURLOPT_PROXY, NULL);

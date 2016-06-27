@@ -19,7 +19,8 @@ License along with this library.
 
 #include <glib.h>
 
-#include <oio_core.h>
+#include "oio_core.h"
+#include "internals.h"
 #include "oio_sds.h"
 
 static void
@@ -31,10 +32,8 @@ _strfreev (char **tab)
 }
 
 int
-main (int argc, char **argv)
+main (int argc UNUSED, char **argv UNUSED)
 {
-	(void) argc, (void) argv;
-
 	char **tab = oio_sds_get_compile_options ();
 	g_print ("COMPILE-TIME OPTIONS\n");
 	for (char **p=tab; *p && *(p+1) ;p+=2)

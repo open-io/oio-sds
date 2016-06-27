@@ -158,7 +158,8 @@ struct oio_proxy_content_create_in_s
 	const char *hash;
 	const char *stgpol;
 	const char *chunk_method;
-	gboolean update;  // accept holes in metachunk positions
+	unsigned int append : 1;
+	unsigned int update : 1; // accept holes in metachunk positions
 };
 
 GError * oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,

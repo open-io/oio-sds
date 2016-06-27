@@ -111,6 +111,7 @@ extern "C" {
 #define LOG_FLAG_TRIM_DOMAIN 0x01
 #define LOG_FLAG_PURIFY 0x02
 #define LOG_FLAG_COLUMNIZE 0x04
+#define LOG_FLAG_PRETTYTIME 0x04
 
 /** Cruising debug level. 
  * Should not be altered by the application after the program has started. */
