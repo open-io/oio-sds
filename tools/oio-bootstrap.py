@@ -155,18 +155,18 @@ CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-access.log log/common env=!n
 LogLevel info
 
 <IfModule prefork.c>
-MaxClients 10
 StartServers 5
-MinSpareServers 5
-MaxSpareServers 10
+MaxClients 40
+MinSpareServers 2
+MaxSpareServers 40
 </IfModule>
 
 <IfModule worker.c>
-StartServers 1
-MaxClients 10
+StartServers 2
+MaxClients 40
 MinSpareThreads 2
-MaxSpareThreads 10
-ThreadsPerChild 10
+MaxSpareThreads 40
+ThreadsPerChild 20
 MaxRequestsPerChild 0
 </IfModule>
 
