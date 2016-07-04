@@ -669,6 +669,7 @@ extract_parameters (GKeyFile *kf, const char *s, const char *p, GError **err)
 	gchar **all_keys=NULL, **current_key=NULL;
 	gsize size=0;
 	GHashTable *ht=NULL;
+	size_t pref_len = p? strlen(p) : 0;
 
 	ht = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
 
@@ -679,7 +680,7 @@ extract_parameters (GKeyFile *kf, const char *s, const char *p, GError **err)
 	}
 	for (current_key=all_keys; current_key && *current_key ;current_key++)
 	{
-		if (!g_ascii_strncasecmp(*current_key,p,strlen(p)))
+		if (g_str_has_prefix(*current_key, p))
 		{
 			gchar *value = NULL;
 			value = g_key_file_get_value (kf, s, *current_key, err);
@@ -688,7 +689,7 @@ extract_parameters (GKeyFile *kf, const char *s, const char *p, GError **err)
 				GSETERROR (err, "Cannot get the value");
 				goto error;
 			}
-			g_hash_table_insert (ht, g_strdup(*current_key + strlen(p)), value);
+			g_hash_table_insert(ht, g_strdup(*current_key + pref_len), value);
 		}
 	}
 
@@ -1267,17 +1268,17 @@ load_configuration (const char *cfg_path, GError **err)
 		GSETERROR (err, "an error occured during the plugins initialization");
 		goto errorLabel;
 	}
-	
+
 	INFO ("Plug-in's loaded!");
 
 	/*then load the servers from the configuration file*/
 	if (!load_servers (cfgFile, err)) {
-		GSETERROR (err, "Cannot servers from the configuration");
+		GSETERROR(err, "Cannot load servers");
 		goto errorLabel;
 	}
 
 	INFO ("Server threads loaded!");
-	
+
 	g_key_file_free (cfgFile);
 	return 1;
 errorLabel:

@@ -16,9 +16,7 @@ class ConscienceClient(Client):
         Get the next service instances from the specified pool.
         Available options:
         - size:   number of services to get
-        - stgcls: storage class of the services
-        - tagk:   name of the tag to be matched
-        - tagv:   value of the tag to be matched (required if tagk specified)
+        - slot:   comma-separated list of slots to poll
         """
         uri = self._make_uri('lb/choose')
         params = {'type': pool}

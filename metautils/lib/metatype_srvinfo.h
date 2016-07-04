@@ -76,14 +76,6 @@ const gchar * service_info_get_rawx_location(const struct service_info_s *si,
 const gchar * service_info_get_rawx_volume(const struct service_info_s *si,
 		const gchar *def);
 
-const gchar * service_info_get_stgclass(const struct service_info_s *si,
-		const gchar *def);
-
-/* Tests if the storage class of a service complies with
- * a specific storage class. */
-gboolean service_info_check_storage_class(const struct service_info_s *si,
-		const gchar *wanted_class);
-
 gchar* get_rawx_location(service_info_t* rawx);
 
 #define metautils_rawx_get_location(si) \

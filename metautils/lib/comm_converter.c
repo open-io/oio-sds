@@ -110,7 +110,8 @@ static void api_gclean(gpointer p1, gpointer p2)
 
 static gssize
 abstract_sequence_unmarshall(const struct abstract_sequence_handler_s *h,
-    GSList ** list, const void *asn1_encoded, gsize asn1_encoded_size, GError ** err)
+		GSList ** list, const void *asn1_encoded, gsize asn1_encoded_size,
+		GError ** err)
 {
 	gssize consumed;
 	void *result = NULL;
@@ -786,6 +787,7 @@ namespace_info_ASN2API(const NamespaceInfo_t *asn, namespace_info_t *api)
 	api->storage_policy = list_conversion(&(asn->storagePolicy));
 	api->data_security = list_conversion(&(asn->dataSecurity));
 	api->storage_class = list_conversion(&(asn->storageClass));
+	api->service_pools = list_conversion(&(asn->servicePools));
 	return TRUE;
 }
 
@@ -850,6 +852,10 @@ namespace_info_API2ASN(const namespace_info_t * api, NamespaceInfo_t * asn)
 		return FALSE;
 
 	if(!hashtable_conversion(api->storage_class, &(asn->storageClass), key_value_pairs_convert_from_map))
+		return FALSE;
+
+	if (!hashtable_conversion(api->service_pools, &(asn->servicePools),
+			key_value_pairs_convert_from_map))
 		return FALSE;
 
 	return TRUE;

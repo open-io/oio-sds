@@ -29,11 +29,11 @@ _init_ns (struct namespace_info_s *ni)
 				"\"ns\":\"%s\","
 				"\"chunksize\":%i,"
 				"\"storage_policy\":{"
-					"\"rain32\":\"NONE:RAIN32\","
-					"\"dupli3\":\"NONE:DUPLI3\","
-					"\"classic\":\"NONE:DUPONETWO\","
-					"\"polcheck\":\"NONE:DUPONETHREE\","
-					"\"secure\":\"NONE:DUP_SECURE\""
+					"\"rain32\":\"5RAWX:RAIN32\","
+					"\"dupli3\":\"3RAWX:DUPLI3\","
+					"\"classic\":\"2RAWX:DUPONETWO\","
+					"\"polcheck\":\"3RAWX3ZONES:DUPONETHREE\","
+					"\"secure\":\"2RAWX2ZONES:DUP_SECURE\""
 				"},"
 				"\"data_security\":{"
 					"\"DUPLI3\":\"plain/distance=0,nb_copy=3\","
@@ -42,11 +42,12 @@ _init_ns (struct namespace_info_s *ni)
 					"\"DUPONETHREE\":\"plain/distance=1,nb_copy=3\","
 					"\"DUP_SECURE\":\"plain/distance=4,nb_copy=2\""
 				"},"
-				"\"storage_class\":{"
-					"\"GOLD\":\"SILVER,BRONZE,CLAY\","
-					"\"SILVER\":\"BRONZE,CLAY\","
-					"\"BRONZE\":\"CLAY\","
-					"\"CLAY\":\"\""
+				"\"service_pools\":{"
+					"\"2RAWX\":\"2,rawx\","
+					"\"3RAWX\":\"3,rawx\","
+					"\"5RAWX\":\"5,rawx\","
+					"\"3RAWX3ZONES\":\"1,rawx-USA,rawx;1,rawx-EUROPE,rawx;1,rawx-ASIA,rawx\","
+					"\"2RAWX2ZONES\":\"1,rawx-USA,rawx-EUROPE;1,rawx-ASIA\""
 				"},"
 				"\"options\":{"
 				"}"
@@ -60,52 +61,11 @@ _init_ns (struct namespace_info_s *ni)
 }
 
 static void
-test_stgclass_not_found ()
+test_service_pool(void)
 {
 	struct namespace_info_s ni;
 	_init_ns(&ni);
-
-	struct storage_class_s *sc = storage_class_init(&ni, "PLATINE");
-	g_assert(sc == NULL);
-
-	namespace_info_clear(&ni);
-}
-
-static void
-test_stgclass_no_fallback ()
-{
-	struct namespace_info_s ni;
-	_init_ns(&ni);
-
-	struct storage_class_s *sc = storage_class_init(&ni, "CLAY");
-	g_assert(sc != NULL);
-	g_assert(0 == g_slist_length(sc->fallbacks));
-	g_assert(storage_class_is_satisfied2(sc, "CLAY", TRUE));
-	g_assert(storage_class_is_satisfied2(NULL, "CLAY", TRUE));
-	g_assert(storage_class_is_satisfied("NONE", "CLAY"));
-	g_assert(storage_class_is_satisfied("", "CLAY"));
-	g_assert(storage_class_is_satisfied(NULL, "CLAY"));
-	storage_class_clean(sc);
-
-	namespace_info_clear(&ni);
-}
-
-static void
-test_stgclass_with_fallback ()
-{
-	struct namespace_info_s ni;
-	_init_ns(&ni);
-
-	struct storage_class_s *sc = storage_class_init(&ni, "SILVER");
-	g_assert(sc != NULL);
-	g_assert(2 == g_slist_length(sc->fallbacks));
-	g_assert(0 == strcmp("BRONZE", (gchar*) g_slist_nth_data(sc->fallbacks, 0)));
-	g_assert(0 == strcmp("CLAY", (gchar*) g_slist_nth_data(sc->fallbacks, 1)));
-	g_assert(!storage_class_is_satisfied2(sc, "CLAY", TRUE));
-	g_assert(storage_class_is_satisfied2(sc, "CLAY", FALSE));
-	storage_class_clean(sc);
-
-	namespace_info_clear(&ni);
+	g_assert_cmpuint(g_hash_table_size(ni.service_pools), ==, 5);
 }
 
 #if 0
@@ -126,9 +86,7 @@ int
 main(int argc, char **argv)
 {
 	HC_TEST_INIT(argc,argv);
-	g_test_add_func("/metautils/stgclass/not_found", test_stgclass_not_found);
-	g_test_add_func("/metautils/stgclass/with_fallback", test_stgclass_with_fallback);
-	g_test_add_func("/metautils/stgclass/no_fallback", test_stgclass_no_fallback);
+	g_test_add_func("/metautils/svcpool", test_service_pool);
 #if 0
 	g_test_add_func("/metautils/datasec", test_datasec);
 	g_test_add_func("/metautils/stgpol", test_stgpol);

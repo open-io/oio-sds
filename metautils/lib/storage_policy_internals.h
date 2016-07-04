@@ -31,17 +31,11 @@ struct data_security_s
 	GHashTable *params;
 };
 
-struct storage_class_s
-{
-	gchar *name;
-	GSList *fallbacks;
-};
-
 struct storage_policy_s
 {
 	gchar *name;
+	gchar *service_pool;
 	struct data_security_s *datasec;
-	struct storage_class_s *stgclass;
 };
 
 #endif /*OIO_SDS__metautils__lib__storage_policy_internals_h*/

@@ -10,6 +10,12 @@ rise: 1
 fall: 1
 # Location of the service (used to check distance between services)
 location: hem.oio.srv1.vol1
+# List of load balancer slots in which the service must appear
+slots:
+    - rawx
+    - rawx-europe
+    - rawx-ssd
+    - rawx-europe-ssd
 # Checks configuration
 checks:
 # General check configuration

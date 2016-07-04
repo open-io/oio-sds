@@ -1011,7 +1011,7 @@ plugin_handler(MESSAGE m, gint cnx, void *param, GError ** err)
 
 static gboolean
 module_configure_srvtype(struct conscience_s *cs, GError ** err,
-    const gchar * type, const gchar * what, const gchar * value)
+		const gchar * type, const gchar * what, const gchar * value)
 {
 	struct conscience_srvtype_s *srvtype;
 
@@ -1063,7 +1063,7 @@ module_configure_srvtype(struct conscience_s *cs, GError ** err,
 	else if (0 == g_ascii_strcasecmp(what, KEY_ALERT_LIMIT)) {
 		srvtype->alert_frequency_limit = g_ascii_strtoll(value, NULL, 10);
 		INFO("[NS=%s][SRVTYPE=%s] Alert limit set to %ld", cs->ns_info.name,
-		    srvtype->type_name, srvtype->alert_frequency_limit);
+				srvtype->type_name, srvtype->alert_frequency_limit);
 	}
 
 	WARN("[NS=%s][SRVTYPE=%s] parameter not recognized [%s] (ignored!)",
@@ -1219,19 +1219,86 @@ module_init_storage_conf(struct conscience_s *cs, const gchar *stg_pol_in_option
 	g_hash_table_foreach(cs->ns_info.data_security, (GHFunc)_check_for_keyword,
 			(gchar*[2]){DATA_SECURITY_NONE, "data security"});
 
-	// XXX CLASSES
-	cs->ns_info.storage_class = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
-	e = fill_hashtable_with_group(cs->ns_info.storage_class, stg_conf_file, NAME_GROUPNAME_STORAGE_CLASS);
-	if( NULL != e) {
-		WARN("Storage class rules not correctly loaded from file [%s] : %s", filepath, e->message);
-		return e;
-	}
-	g_hash_table_foreach(cs->ns_info.storage_class,
-			(GHFunc)_check_for_keyword, (gchar*[2]){STORAGE_CLASS_NONE, "storage class"});
-
 	INFO("[NS=%s] storage conf loaded successfully from file [%s]",
 			cs->ns_info.name, filepath);
 	return NULL;
+}
+
+static GError *
+_load_service_section(struct conscience_s *cs, GKeyFile *svc_conf_file,
+		const gchar *section, const gchar *old_key)
+{
+	GHashTable *content = g_hash_table_new_full(
+			g_str_hash, g_str_equal, g_free, metautils_gba_unref);
+	GError *err = fill_hashtable_with_group(content, svc_conf_file, section);
+	if (err) {
+		g_hash_table_destroy(content);
+		return err;
+	}
+	void _configure_section(gchar *svc, GByteArray *gba, gpointer u UNUSED) {
+		GError *local_err = NULL;
+		module_configure_srvtype(cs, &local_err, svc, old_key,
+				(const char*)gba->data);
+		if (local_err) {
+			GRID_WARN("Failed to set %s for %s: %s",
+					section, svc, local_err->message);
+			g_clear_error(&local_err);
+		}
+	}
+	g_hash_table_foreach(content, (GHFunc)_configure_section, NULL);
+	g_hash_table_destroy(content);
+	return err;
+}
+
+static GError *
+module_init_service_conf(struct conscience_s *cs, const gchar *filepath)
+{
+	if (!filepath) {
+		GRID_INFO("[NS=%s] no service configuration file defined, "
+				"using old style configuration", cs->ns_info.name);
+		return NULL;
+	}
+
+	GError *err = NULL;
+	GKeyFile *svc_conf_file = g_key_file_new();
+
+	if (!g_key_file_load_from_file(svc_conf_file, filepath,
+			G_KEY_FILE_NONE, &err)) {
+		GRID_WARN("[NS=%s] service configuration init failed: %s",
+				cs->ns_info.name, err->message);
+		g_key_file_free(svc_conf_file);
+		return err;
+	}
+
+	// service pools
+	cs->ns_info.service_pools = g_hash_table_new_full(g_str_hash, g_str_equal,
+			g_free, metautils_gba_unref);
+	err = fill_hashtable_with_group(cs->ns_info.service_pools, svc_conf_file,
+			NAME_GROUPNAME_SERVICE_POOLS);
+	if (err) {
+		g_prefix_error(&err, "Error collecting service pools from file [%s]",
+				filepath);
+		return err;
+	}
+
+	if (!err)
+		err = _load_service_section(cs, svc_conf_file,
+				NAME_GROUPNAME_SCORE_EXPR, KEY_SCORE_EXPR);
+	if (!err)
+		err = _load_service_section(cs, svc_conf_file,
+				NAME_GROUPNAME_SCORE_TIMEOUT, KEY_SCORE_TIMEOUT);
+	if (!err)
+		err = _load_service_section(cs, svc_conf_file,
+				NAME_GROUPNAME_SCORE_VARBOUND, KEY_SCORE_VARBOUND);
+	if (!err)
+		err = _load_service_section(cs, svc_conf_file,
+				NAME_GROUPNAME_SCORE_LOCK, KEY_SCORE_LOCK);
+
+	if (!err)
+		GRID_INFO("[NS=%s] service configuration loaded successfully from [%s]",
+				cs->ns_info.name, filepath);
+	g_key_file_free(svc_conf_file);
+	return err;
 }
 
 static gboolean
@@ -1242,10 +1309,11 @@ module_init_srvtype_from_cfg(struct conscience_s *cs, GHashTable * params, GErro
 	GRegex *service_param_regex = NULL;
 	GMatchInfo *match_info = NULL;
 
-	service_param_regex = g_regex_new("service\\.([^.]+)\\.(.+)", G_REGEX_CASELESS, G_REGEX_MATCH_NOTEMPTY, NULL);
+	service_param_regex = g_regex_new("service\\.([^.]+)\\.(.+)",
+			G_REGEX_CASELESS, G_REGEX_MATCH_NOTEMPTY, NULL);
 	if (!service_param_regex) {
-		GSETERROR(err,
-		    "Invalid regex for parameters parsing. Contact the development team, or Jethro Gibbs (NCIS).");
+		GSETERROR(err, "Invalid regex for parameters parsing. "
+				"Contact the development team, or Jethro Gibbs (NCIS).");
 		return FALSE;
 	}
 
@@ -1256,10 +1324,12 @@ module_init_srvtype_from_cfg(struct conscience_s *cs, GHashTable * params, GErro
 			g_match_info_free(match_info);
 			match_info = NULL;
 		}
-		if (!g_regex_match(service_param_regex, (gchar *) k, G_REGEX_MATCH_NOTEMPTY, &match_info))
-			TRACE("Parameter skipped : [%s] (does not match %s)", (gchar *) k, g_regex_get_pattern(service_param_regex));
+		if (!g_regex_match(service_param_regex, (gchar *) k,
+				G_REGEX_MATCH_NOTEMPTY, &match_info))
+			TRACE("Parameter skipped: [%s] (does not match %s)", (gchar *) k,
+					g_regex_get_pattern(service_param_regex));
 		else if (g_match_info_get_match_count(match_info) != 3)
-			WARN("Ignored parameter (invalid key) : %s", (gchar *) k);
+			WARN("Ignored parameter (invalid key): %s", (gchar *) k);
 		else {
 			gboolean rc_local;
 			gchar *type_str, *what;
@@ -1415,75 +1485,87 @@ _init_hub (GHashTable *params)
 static gint
 plugin_init(GHashTable * params, GError ** err)
 {
-	gchar *str;
+	gchar *str, *ns_name = NULL;
 
 	g_rec_mutex_init(&counters_mutex);
 	g_rec_mutex_init(&conscience_nsinfo_mutex);
 
 	/*NAMEPSACE name */
-	if (!(str = g_hash_table_lookup(params, KEY_NAMESPACE))) {
+	if (!(ns_name = g_hash_table_lookup(params, KEY_NAMESPACE))) {
 		GSETERROR(err, "The configuration must contain a '%s' key with the namespace name", KEY_NAMESPACE);
 		return -1;
 	}
-	if (!(conscience = conscience_create_named(str, err))) {
+	if (!(conscience = conscience_create_named(ns_name, err))) {
 		GSETERROR(err, "Conscience allocation failure");
 		return -1;
 	}
-	NOTICE("[NS=%s] Configuring a new conscience", conscience->ns_info.name);
+	NOTICE("[NS=%s] Configuring a new conscience", ns_name);
 
 	/*CHUNK SIZE */
 	if (!(str = g_hash_table_lookup(params, KEY_CHUNK_SIZE))) {
 		GSETERROR(err, "[NS=%s] Missing key '%s' (chunk size in bytes)",
-		    conscience->ns_info.name, KEY_CHUNK_SIZE);
+				ns_name, KEY_CHUNK_SIZE);
 		goto error;
 	}
 	conscience->ns_info.chunk_size = g_ascii_strtoll(str, NULL, 10);
-	NOTICE("[NS=%s] Chunk size set to %"G_GINT64_FORMAT, conscience->ns_info.name, conscience->ns_info.chunk_size);
+	NOTICE("[NS=%s] Chunk size set to %"G_GINT64_FORMAT, ns_name, conscience->ns_info.chunk_size);
 
 	/* Serialization optimizations */
 	str = g_hash_table_lookup(params, KEY_SERIALIZE_SRVINFO_TAGS);
 	if (NULL != str)
 		flag_serialize_srvinfo_tags = metautils_cfg_get_bool(str, DEF_SERIALIZE_SRVINFO_TAGS);
-	NOTICE("[NS=%s] Tags in serialized service_info  [%s]", conscience->ns_info.name,
+	NOTICE("[NS=%s] Tags in serialized service_info  [%s]", ns_name,
 			(flag_serialize_srvinfo_tags ? "ENABLED" : "DISABLED"));
 
 	str = g_hash_table_lookup(params, KEY_SERIALIZE_SRVINFO_STATS);
 	if (NULL != str)
 		flag_serialize_srvinfo_stats = metautils_cfg_get_bool(str, DEF_SERIALIZE_SRVINFO_STATS);
-	NOTICE("[NS=%s] Stats in serialized service_info  [%s]", conscience->ns_info.name,
+	NOTICE("[NS=%s] Stats in serialized service_info  [%s]", ns_name,
 			(flag_serialize_srvinfo_stats ? "ENABLED" : "DISABLED"));
 
 	/*Overall alerting maximum per-service frequency*/
 	if (!(str = g_hash_table_lookup(params, KEY_ALERT_LIMIT)))
 		NOTICE("[NS=%s] No overall alert_frequency_limit set, default kept to [%ld] seconds",
-			conscience->ns_info.name, time_default_alert_frequency);
+			ns_name, time_default_alert_frequency);
 	else {
 		time_default_alert_frequency = g_ascii_strtoll(str,NULL,10);
-		NOTICE("[NS=%s] Overall alert_frequency_limit set to [%ld] seconds", conscience->ns_info.name, time_default_alert_frequency);
+		NOTICE("[NS=%s] Overall alert_frequency_limit set to [%ld] seconds", ns_name, time_default_alert_frequency);
 	}
 
 	/* OPTIONS initialization */
 	if (!module_init_options(conscience, params, err)) {
-		GSETERROR(err, "[NS=%s] options init failed", conscience->ns_info.name);
+		GSETERROR(err, "[NS=%s] options init failed", ns_name);
 		goto error;
 	}
 
 	/* storage conf initialization */
-	*err = module_init_storage_conf(conscience, namespace_storage_policy(&conscience->ns_info, conscience->ns_info.name),
+	*err = module_init_storage_conf(conscience,
+			namespace_storage_policy(&conscience->ns_info, ns_name),
 			g_hash_table_lookup(params, KEY_STG_CONF));
 	if( NULL != *err ) {
-		g_prefix_error(err, "[NS=%s] storage conf init failed", conscience->ns_info.name);
+		g_prefix_error(err, "[NS=%s] storage conf init failed", ns_name);
 		goto error;
 	}
 
 	/*SERVICES initiation*/
 	if (!module_init_known_service_types(conscience, params, err)) {
-		GSETERROR(err, "[NS=%s] known service types init failed", conscience->ns_info.name);
+		GSETERROR(err, "[NS=%s] known service types init failed", ns_name);
 		goto error;
 	}
 
+	/* TODO: remove this!*/
+	/* service conf initialization (old style) */
 	if (!module_init_srvtype_from_cfg(conscience, params, err)) {
 		GSETERROR(err, "Configuration error");
+		goto error;
+	}
+
+	/* service conf initialization (new style) */
+	*err = module_init_service_conf(conscience,
+			g_hash_table_lookup(params, KEY_SVC_CONF));
+	if (*err) {
+		g_prefix_error(err, "[NS=%s] service conf init failed",
+				ns_name);
 		goto error;
 	}
 
@@ -1508,6 +1590,8 @@ plugin_init(GHashTable * params, GError ** err)
 
 	return 1;
 error:
+	GRID_ERROR("Conscience loading failed: %s",
+			*err?(*err)->message:"unknown error");
 	conscience_destroy(conscience);
 	conscience = NULL;
 	return -1;
@@ -1531,7 +1615,7 @@ plugin_reload(GHashTable * params, GError ** err)
 	/*CHUNK SIZE */
 	if (!(str = g_hash_table_lookup(params, KEY_CHUNK_SIZE))) {
 		GSETERROR(err, "[NS=%s] Missing key '%s' (chunk size in bytes)",
-		    conscience->ns_info.name, KEY_CHUNK_SIZE);
+				conscience->ns_info.name, KEY_CHUNK_SIZE);
 		goto error;
 	}
 	conscience->ns_info.chunk_size = g_ascii_strtoll(str, NULL, 10);

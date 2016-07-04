@@ -417,13 +417,19 @@ _reload_srvtype(const char *type)
 	if (NULL != list) {
 		oio_lb_world__feed_service_info_list(lb_world, list);
 
-		struct service_update_policies_s *pols = service_update_policies_create();
-		gchar *pols_cfg = gridcluster_get_service_update_policy(&nsinfo);
-		service_update_reconfigure(pols, pols_cfg);
-		g_free(pols_cfg);
-		oio_lb__force_pool(lb,
-				oio_lb_pool__from_service_policy(lb_world, type, pols));
-		service_update_policies_destroy(pols);
+		if (!oio_lb__has_pool(lb, type)) {
+			struct service_update_policies_s *pols =
+					service_update_policies_create();
+			gchar *pols_cfg = NULL;
+			NSINFO_READ(pols_cfg = gridcluster_get_service_update_policy(&nsinfo));
+			service_update_reconfigure(pols, pols_cfg);
+			g_free(pols_cfg);
+			GRID_DEBUG("Automatically creating pool for service type [%s]",
+					type);
+			oio_lb__force_pool(lb,
+					oio_lb_pool__from_service_policy(lb_world, type, pols));
+			service_update_policies_destroy(pols);
+		}
 
 		g_slist_free_full(list, (GDestroyNotify)service_info_clean);
 	}
@@ -444,13 +450,15 @@ _task_reload_lb(gpointer p UNUSED)
 	gchar **tt = NULL;
 	NSINFO_READ(tt = g_strdupv_inline(srvtypes));
 
+	oio_lb_world__reload_pools(lb_world, lb, &nsinfo);
+	oio_lb_world__reload_storage_policies(lb_world, lb, &nsinfo);
+
 	if (tt) {
 		for (gchar **t=tt; *t ;++t)
 			_reload_srvtype (*t);
 		g_free (tt);
 	}
 
-	oio_lb_world__reload_storage_policies(lb_world, lb, &nsinfo);
 	oio_lb_world__debug(lb_world);
 }
 
@@ -787,7 +795,7 @@ configure_request_handlers (void)
 	SET("/cache/max/low/$COUNT/#POST", action_cache_set_max_low);
 	SET("/cache/max/high/$COUNT/#POST", action_cache_set_max_high);
 
-    // New routes
+	// New routes
 
 	// Load Balancing
 	SET("/$NS/lb/choose/#GET", action_lb_choose);
@@ -805,51 +813,51 @@ configure_request_handlers (void)
 	SET("/$NS/conscience/lock/#POST", action_conscience_lock);
 	SET("/$NS/conscience/unlock/#POST", action_conscience_unlock);
 
-    // Directory
-    SET("/$NS/reference/create/#POST", action_ref_create);
-    SET("/$NS/reference/destroy/#POST", action_ref_destroy);
-    SET("/$NS/reference/show/#GET", action_ref_show);
-    SET("/$NS/reference/get_properties/#POST", action_ref_prop_get);
-    SET("/$NS/reference/set_properties/#POST", action_ref_prop_set);
-    SET("/$NS/reference/del_properties/#POST", action_ref_prop_del);
-    SET("/$NS/reference/link/#POST", action_ref_link);
-    SET("/$NS/reference/unlink/#POST", action_ref_unlink);
-    SET("/$NS/reference/force/#POST", action_ref_force);
-    SET("/$NS/reference/renew/#POST", action_ref_renew);
+	// Directory
+	SET("/$NS/reference/create/#POST", action_ref_create);
+	SET("/$NS/reference/destroy/#POST", action_ref_destroy);
+	SET("/$NS/reference/show/#GET", action_ref_show);
+	SET("/$NS/reference/get_properties/#POST", action_ref_prop_get);
+	SET("/$NS/reference/set_properties/#POST", action_ref_prop_set);
+	SET("/$NS/reference/del_properties/#POST", action_ref_prop_del);
+	SET("/$NS/reference/link/#POST", action_ref_link);
+	SET("/$NS/reference/unlink/#POST", action_ref_unlink);
+	SET("/$NS/reference/force/#POST", action_ref_force);
+	SET("/$NS/reference/renew/#POST", action_ref_renew);
 
-    // Meta2
-    // Container
-    SET("/$NS/container/create/#POST", action_container_create);
-    SET("/$NS/container/destroy/#POST", action_container_destroy);
-    SET("/$NS/container/show/#GET", action_container_show);
-    SET("/$NS/container/list/#GET", action_container_list);
-    SET("/$NS/container/get_properties/#POST", action_container_prop_get);
-    SET("/$NS/container/set_properties/#POST", action_container_prop_set);
-    SET("/$NS/container/del_properties/#POST", action_container_prop_del);
-    SET("/$NS/container/touch/#POST", action_container_touch);
-    SET("/$NS/container/dedup/#POST", action_container_dedup);
-    SET("/$NS/container/purge/#POST", action_container_purge);
-    SET("/$NS/container/flush/#POST", action_container_flush);
-    SET("/$NS/container/raw_insert/#POST", action_container_raw_insert);
-    SET("/$NS/container/raw_update/#POST", action_container_raw_update);
-    SET("/$NS/container/raw_delete/#POST", action_container_raw_delete);
+	// Meta2
+	// Container
+	SET("/$NS/container/create/#POST", action_container_create);
+	SET("/$NS/container/destroy/#POST", action_container_destroy);
+	SET("/$NS/container/show/#GET", action_container_show);
+	SET("/$NS/container/list/#GET", action_container_list);
+	SET("/$NS/container/get_properties/#POST", action_container_prop_get);
+	SET("/$NS/container/set_properties/#POST", action_container_prop_set);
+	SET("/$NS/container/del_properties/#POST", action_container_prop_del);
+	SET("/$NS/container/touch/#POST", action_container_touch);
+	SET("/$NS/container/dedup/#POST", action_container_dedup);
+	SET("/$NS/container/purge/#POST", action_container_purge);
+	SET("/$NS/container/flush/#POST", action_container_flush);
+	SET("/$NS/container/raw_insert/#POST", action_container_raw_insert);
+	SET("/$NS/container/raw_update/#POST", action_container_raw_update);
+	SET("/$NS/container/raw_delete/#POST", action_container_raw_delete);
 
-    // Content
-    SET("/$NS/content/create/#POST", action_content_put);
-    SET("/$NS/content/link/#POST", action_content_link);
-    SET("/$NS/content/delete/#POST", action_content_delete);
-    SET("/$NS/content/show/#GET", action_content_show);
-    SET("/$NS/content/locate/#GET", action_content_show);
-    SET("/$NS/content/prepare/#POST", action_content_prepare);
-    SET("/$NS/content/get_properties/#POST", action_content_prop_get);
-    SET("/$NS/content/set_properties/#POST", action_content_prop_set);
-    SET("/$NS/content/del_properties/#POST", action_content_prop_del);
-    SET("/$NS/content/touch/#POST", action_content_touch);
-    SET("/$NS/content/spare/#POST", action_content_spare);
-    SET("/$NS/content/copy/#POST", action_content_copy);
-    SET("/$NS/content/update/#POST", action_content_update);
+	// Content
+	SET("/$NS/content/create/#POST", action_content_put);
+	SET("/$NS/content/link/#POST", action_content_link);
+	SET("/$NS/content/delete/#POST", action_content_delete);
+	SET("/$NS/content/show/#GET", action_content_show);
+	SET("/$NS/content/locate/#GET", action_content_show);
+	SET("/$NS/content/prepare/#POST", action_content_prepare);
+	SET("/$NS/content/get_properties/#POST", action_content_prop_get);
+	SET("/$NS/content/set_properties/#POST", action_content_prop_set);
+	SET("/$NS/content/del_properties/#POST", action_content_prop_del);
+	SET("/$NS/content/touch/#POST", action_content_touch);
+	SET("/$NS/content/spare/#POST", action_content_spare);
+	SET("/$NS/content/copy/#POST", action_content_copy);
+	SET("/$NS/content/update/#POST", action_content_update);
 
-    // Admin
+	// Admin
 	SET("/$NS/admin/ping/#POST", action_admin_ping);
 	SET("/$NS/admin/info/#POST", action_admin_info);
 	SET("/$NS/admin/status/#POST", action_admin_status);

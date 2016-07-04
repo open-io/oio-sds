@@ -107,6 +107,11 @@ struct oio_lb_pool_s * oio_lb_world__create_pool (
  * not world-based pool. */
 void oio_lb_world__add_pool_target (struct oio_lb_pool_s *self, const char *to);
 
+/* Tell the given world-based pool that it must target the given set of slots.
+ * This function expects a string formatted like
+ * "2,meta2-fast-europe,meta2-slow-europe;1,meta2-fast-usa,meta2-slow-usa" */
+void oio_lb_world__add_pool_targets(struct oio_lb_pool_s *self,
+		const gchar *targets);
 
 /* -- LB pools management ------------------------------------------------- */
 
@@ -117,6 +122,8 @@ struct oio_lb_s {
 
 struct oio_lb_s *oio_lb__create(void);
 void oio_lb__clear(struct oio_lb_s **lb);
+
+gboolean oio_lb__has_pool(struct oio_lb_s *lb, const char *name);
 
 /** Set or replace a pool. The key to access the pool is the name
  * of the pool as set at pool creation. Thread-safe. */

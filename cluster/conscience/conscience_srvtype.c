@@ -54,12 +54,7 @@ conscience_srvtype_create(struct conscience_s *conscience, const char *type)
 	struct conscience_srvtype_s *srvtype =
 			g_malloc0(sizeof(struct conscience_srvtype_s));
 
-	/*sets a default expression that always fits*/
-	if (!conscience_srvtype_set_type_expression(srvtype, NULL, "100")) {
-		ERROR("Failed to force the score to 100");
-		conscience_srvtype_destroy(srvtype);
-		return NULL;
-	}
+	conscience_srvtype_init(srvtype);
 
 	/*allocate the hashtables */
 	srvtype->services_ht = g_hash_table_new_full(hash_service_id,
@@ -75,9 +70,6 @@ conscience_srvtype_create(struct conscience_s *conscience, const char *type)
 
 	if (type)
 		g_strlcpy(srvtype->type_name, type, sizeof(srvtype->type_name));
-	srvtype->alert_frequency_limit = 0;
-	srvtype->score_variation_bound = 0;
-	srvtype->lock_at_first_register = TRUE;
 	srvtype->conscience = conscience;
 	srvtype->services_ring.next = &(srvtype->services_ring);
 	srvtype->services_ring.prev = &(srvtype->services_ring);
@@ -275,6 +267,7 @@ conscience_srvtype_init(struct conscience_srvtype_s *srvtype)
 	srvtype->alert_frequency_limit = 30;
 	srvtype->score_expiration = 300;
 	srvtype->score_variation_bound = 5;
+	srvtype->lock_at_first_register = TRUE;
 }
 
 gboolean
@@ -290,7 +283,9 @@ conscience_srvtype_set_type_expression(struct conscience_srvtype_s * srvtype,
 
 	pE = NULL;
 	if (expr_parse(expr_str, &pE)) {
-		GSETCODE(err, CODE_INTERNAL_ERROR, "Failed to parse the expression");
+		GSETCODE(err, CODE_INTERNAL_ERROR,
+				"Failed to parse expression '%s'",
+				expr_str);
 		return FALSE;
 	}
 

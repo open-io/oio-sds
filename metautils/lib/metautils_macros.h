@@ -44,7 +44,7 @@ License along with this library.
 # define NAME_TAGNAME_RAWX_UP "tag.up"
 # define NAME_TAGNAME_RAWX_FIRST "tag.1"
 # define NAME_TAGNAME_RAWX_LOC "tag.loc"
-# define NAME_TAGNAME_RAWX_STGCLASS "tag.stgclass"
+# define NAME_TAGNAME_SLOTS "tag.slots"
 
 # define NAME_TAGNAME_AGENT_CHECK "tag.agent_check"
 

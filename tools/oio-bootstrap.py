@@ -262,6 +262,8 @@ host: ${IP}
 port: ${PORT}
 type: ${SRVTYPE}
 location: hem.oio.vol${SRVNUM}
+slots:
+    - ${SRVTYPE}
 checks:
     - {type: tcp}
 
@@ -277,7 +279,8 @@ port: ${PORT}
 type: account
 checks:
     - {type: tcp}
-
+slots:
+    - ${SRVTYPE}
 stats:
     - {type: http, path: /status, parser: json}
     - {type: system}
@@ -290,7 +293,9 @@ type: rawx
 location: hem.oio.vol${SRVNUM}
 checks:
     - {type: http, uri: /info}
-
+slots:
+    - ${SRVTYPE}
+    - ${EXTRASLOT}
 stats:
     - {type: volume, path: ${VOLUME}}
     - {type: rawx, path: /stat}
@@ -304,7 +309,8 @@ type: rdir
 location: hem.oio.db${SRVNUM}
 checks:
     - {type: tcp}
-
+slots:
+    - ${SRVTYPE}
 stats:
     - {type: volume, path: ${VOLUME}}
     - {type: http, path: /status, parser: json}
@@ -318,7 +324,8 @@ type: redis
 location: hem.oio.db${SRVNUM}
 checks:
     - {type: tcp}
-
+slots:
+    - ${SRVTYPE}
 stats:
     - {type: volume, path: ${VOLUME}}
     - {type: system}
@@ -382,88 +389,133 @@ param_option.FLATNS_hash_size=0
 param_option.FLATNS_hash_bitlength=17
 param_option.storage_policy=${STGPOL}
 
+# Storage policies definitions
 param_storage_conf=${CFGDIR}/${NS}-policies.conf
 
-param_service.meta0.lock_at_first_register=false
-param_service.meta0.score_timeout=3600
-param_service.meta0.score_variation_bound=5
-param_service.meta0.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+# Service scoring and pools definitions
+param_service_conf=${CFGDIR}/${NS}-services.conf
 
-param_service.meta1.lock_at_first_register=false
-param_service.meta1.score_timeout=120
-param_service.meta1.score_variation_bound=5
-param_service.meta1.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
-
-param_service.meta2.score_timeout=120
-param_service.meta2.score_variation_bound=5
-param_service.meta2.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
-
-param_service.rawx.score_timeout=120
-param_service.rawx.score_variation_bound=5
-param_service.rawx.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
-
-param_service.sqlx.score_timeout=120
-param_service.sqlx.score_variation_bound=5
-param_service.sqlx.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
-
-param_service.rdir.score_timeout=120
-param_service.rdir.score_variation_bound=5
-param_service.rdir.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
-
-param_service.redis.score_timeout=120
-param_service.redis.score_variation_bound=5
-param_service.redis.score_expr=(num stat.cpu)
-
-param_service.oiofs.lock_at_first_register=false
-param_service.oiofs.score_timeout=120
-param_service.oiofs.score_variation_bound=5
-param_service.oiofs.score_expr=(num stat.cpu)
-
-param_service.account.score_timeout=120
-param_service.account.score_variation_bound=5
-param_service.account.score_expr=(num stat.cpu)
-
-param_service.echo.score_timeout=120
-param_service.echo.score_variation_bound=5
-param_service.echo.score_expr=(num stat.cpu)
+# For an easy transition, it is still possible to define
+# service score expression, variation, timeout and lock here.
+#
+#param_service.meta0.lock_at_first_register=false
+#param_service.meta0.score_timeout=3600
+#param_service.meta0.score_variation_bound=5
+#param_service.meta0.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
 """
 
 template_conscience_policies = """
 [STORAGE_POLICY]
+# Storage policy definitions
+# ---------------------------
+#
+# The first word is the service pool to use,
+# the second word is the data security to use.
+
 SINGLE=NONE:NONE
-TWOCOPIES=NONE:DUPONETWO
-THREECOPIES=NONE:DUPONETHREE
-17COPIES=NONE:DUP17
+TWOCOPIES=rawxevenodd:DUPONETWO
+THREECOPIES=rawx3:DUPONETHREE
+17COPIES=rawx17:DUP17
 EC=NONE:EC
 BACKBLAZE=NONE:BACKBLAZE
 
-[STORAGE_CLASS]
-# <CLASS> = FALLBACK[,FALLBACK]...
-SUPERFAST=PRETTYGOOD,REASONABLYSLOW,NONE
-PRETTYGOOD=REASONABLYSLOW,NONE
-REASONABLYSLOW=NONE
-
 [DATA_SECURITY]
+# Data security definitions
+# --------------------------
+#
+# The first word is the kind of data security ("plain", "ec" or "backblaze"),
+# after the '/' are the parameters of the data security.
+
 DUPONETWO=plain/distance=1,nb_copy=2
 DUPONETHREE=plain/distance=1,nb_copy=3
 DUP17=plain/distance=1,nb_copy=17
+
 EC=ec/k=6,m=3,algo=liberasurecode_rs_vand,distance=1
+
+# List of possible values for the "algo" parameter of "ec" data security:
+# "jerasure_rs_vand"       EC_BACKEND_JERASURE_RS_VAND
+# "jerasure_rs_cauchy"     EC_BACKEND_JERASURE_RS_CAUCHY
+# "flat_xor_hd"            EC_BACKEND_FLAT_XOR_HD
+# "isa_l_rs_vand"          EC_BACKEND_ISA_L_RS_VAND
+# "shss"                   EC_BACKEND_SHSS
+# "liberasurecode_rs_vand" EC_BACKEND_LIBERASURECODE_RS_VAND
+
 BACKBLAZE=backblaze/account_id=${BACKBLAZE_ACCOUNT_ID},bucket_name=${BACKBLAZE_BUCKET_NAME},distance=0,nb_copy=1
-
-# "jerasure_rs_vand"   EC_BACKEND_JERASURE_RS_VAND
-# "jerasure_rs_cauchy" EC_BACKEND_JERASURE_RS_CAUCHY
-# "flat_xor_hd"      EC_BACKEND_FLAT_XOR_HD
-# "isa_l_rs_vand" EC_BACKEND_ISA_L_RS_VAND
-# "shss"     EC_BACKEND_SHSS
-# "liberasurecode_rs_vand"  EC_BACKEND_LIBERASURECODE_RS_VAND
-
 """
 
-template_other_sources = """
+template_credentials = """
 [backblaze]
 ${BACKBLAZE_ACCOUNT_ID}.${BACKBLAZE_BUCKET_NAME}.application_key=${BACKBLAZE_APPLICATION_KEY}
 """
 
+template_conscience_services = """[pools]
+# Pools for each service type
+# ----------------------------
+#
+# The value is a ';'-separated of targets.
+# Each target is a ','-separated list of:
+# - the number of services to pick,
+# - the name of a slot where to pick the services,
+# - the name of a slot where to pick services if there is
+#   not enough in the previous slot
+# - and so on...
+#
+# Pool are automatically created if not defined in configuration.
+
+meta2=${M2_REPLICAS},meta2
+rdir=1,rdir
+account=1,account
+
+
+# Pools of rawx services for storage policies
+# --------------------------------------------
+
+# Pick 3 SSD rawx, or any rawx if SSD is not available
+fastrawx3=3,rawx-ssd,rawx
+
+# Pick one "even" and one "odd" rawx
+rawxevenodd=1,rawx-even;1,rawx-odd
+
+# Try to pick one "even" and one "odd" rawx, and a generic one
+rawx3=1,rawx-even,rawx;1,rawx-odd,rawx;1,rawx
+
+# Pick one rawx in Europe, one in USA, one in Asia, or anywhere if none available
+zonedrawx3=1,rawx-europe,rawx;1,rawx-usa,rawx;1,rawx-asia,rawx
+
+
+[score_expr]
+meta0=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+meta1=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+meta2=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+rawx=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+sqlx=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+rdir=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+redis=(num stat.cpu)
+account=(num stat.cpu)
+echo=(num stat.cpu)
+oiofs=(num stat.cpu)
+
+[score_timeout]
+# Defaults to 300s
+meta0=3600
+meta1=120
+meta2=120
+rawx=120
+sqlx=120
+rdir=120
+redis=120
+oiofs=120
+account=120
+echo=30
+
+[score_variation_bound]
+# Defaults to 5s
+
+[score_lock_at_first_register]
+meta0=false
+meta1=false
+oiofs=false
+"""
 
 template_gridinit_header = """
 [Default]
@@ -839,8 +891,7 @@ def generate(options):
     ip = options.get('ip') or defaults['IP']
     backblaze_account_id = options.get('backblaze', {}).get(ACCOUNT_ID)
     backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
-    backblaze_application_key = options.get('backblaze', {}).get(
-        APPLICATION_KEY)
+    backblaze_app_key = options.get('backblaze', {}).get(APPLICATION_KEY)
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(IP=ip,
                NS=ns,
@@ -873,7 +924,7 @@ def generate(options):
                APACHE2_MODULES_SYSTEM_DIR=APACHE2_MODULES_SYSTEM_DIR,
                BACKBLAZE_ACCOUNT_ID=backblaze_account_id,
                BACKBLAZE_BUCKET_NAME=backblaze_bucket_name,
-               BACKBLAZE_APPLICATION_KEY=backblaze_application_key,
+               BACKBLAZE_APPLICATION_KEY=backblaze_app_key,
                KEY_FILE=key_file,
                HTTPD_BINARY=HTTPD_BINARY)
 
@@ -934,6 +985,9 @@ def generate(options):
         cs = list()
         with open('{CFGDIR}/{NS}-policies.conf'.format(**ENV), 'w+') as f:
             tpl = Template(template_conscience_policies)
+            f.write(tpl.safe_substitute(ENV))
+        with open('{CFGDIR}/{NS}-services.conf'.format(**ENV), 'w+') as f:
+            tpl = Template(template_conscience_services)
             f.write(tpl.safe_substitute(ENV))
         # Prepare a list of consciences
         for num in range(nb_conscience):
@@ -1007,7 +1061,9 @@ def generate(options):
             env = subenv({'SRVTYPE': 'rawx',
                           'SRVNUM': num + 1,
                           'PORT': next_port(),
-                          'COMPRESSION': compression})
+                          'COMPRESSION': compression,
+                          'EXTRASLOT': ('rawx-even' if num % 2 else 'rawx-odd')
+                          })
             add_service(env)
             # gridinit
             tpl = Template(template_gridinit_httpd)
@@ -1025,7 +1081,6 @@ def generate(options):
             to_write = tpl.safe_substitute(env)
             with open(watch(env), 'w+') as f:
                 f.write(to_write)
-
 
     # redis
     env = subenv({'SRVTYPE': 'redis', 'SRVNUM': 1, 'PORT': 6379})
@@ -1128,7 +1183,7 @@ def generate(options):
         f.write(tpl.safe_substitute(ENV))
 
     with open('{KEY_FILE}'.format(**ENV), 'w+') as f:
-        tpl = Template(template_other_sources)
+        tpl = Template(template_credentials)
         f.write(tpl.safe_substitute(ENV))
         
     # ensure volumes

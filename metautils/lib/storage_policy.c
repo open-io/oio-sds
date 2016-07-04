@@ -48,16 +48,6 @@ _data_security_clean(struct data_security_s *ds)
 }
 
 void
-storage_class_clean(struct storage_class_s *sc)
-{
-	if (!sc)
-		return;
-	oio_str_clean(&sc->name);
-	g_slist_free_full(sc->fallbacks, g_free);
-	g_free(sc);
-}
-
-void
 storage_policy_clean(struct storage_policy_s *sp)
 {
 	if (!sp)
@@ -66,20 +56,14 @@ storage_policy_clean(struct storage_policy_s *sp)
 	oio_str_clean(&sp->name);
 	if (NULL != sp->datasec)
 		_data_security_clean(sp->datasec);
-	if (NULL != sp->stgclass)
-		storage_class_clean(sp->stgclass);
+	if (sp->service_pool) {
+		g_free(sp->service_pool);
+		sp->service_pool = NULL;
+	}
 	g_free(sp);
 }
 
 /* Dummy implementations --------------------------------------------------- */
-
-static struct storage_class_s *
-_dummy_stgclass(void)
-{
-	struct storage_class_s *result = g_malloc0(sizeof(struct storage_class_s));
-	result->name  = g_strdup(STORAGE_CLASS_NONE);
-	return result;
-}
 
 static struct data_security_s *
 _dummy_datasec(void)
@@ -97,7 +81,7 @@ _dummy_stgpol(void)
 	struct storage_policy_s *result = g_malloc0(sizeof(struct storage_policy_s));
 	result->name = g_strdup(STORAGE_POLICY_NONE);
 	result->datasec = _dummy_datasec();
-	result->stgclass = _dummy_stgclass();
+	result->service_pool = g_strdup(NAME_SRVTYPE_RAWX);
 	return result;
 }
 
@@ -143,6 +127,16 @@ _parse_data_security(struct data_security_s *ds, const char *config)
 	return 1;
 }
 
+static gchar *
+_load_service_pool(const gchar *sp_name, const gchar *key)
+{
+	if (!key || !key[0] ||
+			!g_ascii_strcasecmp(key, STORAGE_POLICY_NONE)) {
+		return g_strdup(sp_name);
+	}
+	return g_strdup(key);
+}
+
 static struct data_security_s *
 _load_data_security(namespace_info_t *ni, const gchar *key)
 {
@@ -169,7 +163,8 @@ _load_data_security(namespace_info_t *ni, const gchar *key)
 }
 
 static int
-_load_storage_policy(struct storage_policy_s *sp, GByteArray *gba, namespace_info_t *ni)
+_load_storage_policy(struct storage_policy_s *sp, GByteArray *gba,
+		namespace_info_t *ni)
 {
 	gchar *str = g_strndup((gchar *)gba->data, gba->len);
 	gchar **tok = g_strsplit(str, ":", 3);
@@ -178,32 +173,10 @@ _load_storage_policy(struct storage_policy_s *sp, GByteArray *gba, namespace_inf
 	if (!tok)
 		return 0;
 	int rc = (2 == g_strv_length(tok))
-		&& NULL != (sp->stgclass = storage_class_init(ni, tok[0]))
+		&& NULL != (sp->service_pool = _load_service_pool(sp->name, tok[0]))
 		&& NULL != (sp->datasec = _load_data_security(ni, tok[1]));
 	g_strfreev(tok);
 	return rc;
-}
-
-struct storage_class_s *
-storage_class_init (struct namespace_info_s *ni, const char *name)
-{
-	if (_is_none (name))
-		return _dummy_stgclass();
-	if (!ni)
-		return NULL;
-
-	gchar *config = namespace_info_get_storage_class(ni, name);
-	if (!config)
-		return NULL;
-
-	struct storage_class_s *result = g_malloc(sizeof(struct storage_class_s));
-	result->name = g_strdup(name);
-	gchar **fallbacks = g_strsplit(config, ",", 0);
-	result->fallbacks = metautils_array_to_list((void**)fallbacks);
-
-	g_free(fallbacks); // XXX Pointers reused !
-	g_free(config);
-	return result;
 }
 
 struct storage_policy_s *
@@ -265,22 +238,6 @@ _data_security_dup(struct data_security_s *ds)
 	return r;
 }
 
-static struct storage_class_s *
-_storage_class_dup(struct storage_class_s *sc)
-{
-	struct storage_class_s *copy = NULL;
-	copy = g_malloc0(sizeof(struct storage_class_s));
-	if (sc->name != NULL)
-		copy->name = g_strdup(sc->name);
-
-	void _dup_elm(gchar *fallback, GSList **list) {
-		*list = g_slist_prepend(*list, g_strdup(fallback));
-	}
-	g_slist_foreach(sc->fallbacks, (GFunc)_dup_elm, &(copy->fallbacks));
-	copy->fallbacks = g_slist_reverse(copy->fallbacks);
-	return copy;
-}
-
 struct storage_policy_s *
 storage_policy_dup(const struct storage_policy_s *sp)
 {
@@ -293,8 +250,8 @@ storage_policy_dup(const struct storage_policy_s *sp)
 
 	if (NULL != sp->name)
 		r->name = g_strdup(sp->name);
-	if (NULL != sp->stgclass)
-		r->stgclass = _storage_class_dup(sp->stgclass);
+	if (sp->service_pool)
+		r->service_pool = g_strdup(sp->service_pool);
 	if (NULL != sp->datasec)
 		r->datasec = _data_security_dup(sp->datasec);
 
@@ -315,10 +272,10 @@ storage_policy_get_data_security(const struct storage_policy_s *sp)
 	return (NULL != sp) ? sp->datasec : NULL;
 }
 
-const struct storage_class_s *
-storage_policy_get_storage_class(const struct storage_policy_s *sp)
+const gchar *
+storage_policy_get_service_pool(const struct storage_policy_s *sp)
 {
-	return (NULL != sp) ? sp->stgclass : NULL;
+	return (NULL != sp) ? sp->service_pool : NULL;
 }
 
 enum data_security_e
@@ -351,42 +308,6 @@ data_security_get_int64_param(const struct data_security_s *ds, const char *key,
 	return res;
 }
 
-const gchar *
-storage_class_get_name(const struct storage_class_s *sc)
-{
-	return (sc != NULL)? sc->name : NULL;
-}
-
-const GSList *
-storage_class_get_fallbacks(const struct storage_class_s *sc)
-{
-	return (sc != NULL)? sc->fallbacks : NULL;
-}
-
-gboolean
-storage_class_is_satisfied(const gchar *wsc, const gchar *asc)
-{
-	return _is_none(wsc) || (asc && !g_ascii_strcasecmp(wsc, asc));
-}
-
-gboolean
-storage_class_is_satisfied2(const struct storage_class_s *wsc,
-		const gchar *asc, gboolean strict)
-{
-	if (wsc == NULL || storage_class_is_satisfied(wsc->name, asc))
-		return TRUE;
-	if (strict)
-		return FALSE;
-
-	for (GSList *l = wsc->fallbacks; l != NULL ; l = l->next) {
-		if (!l->data)
-			continue;
-		if (storage_class_is_satisfied((gchar*)l->data, asc))
-			return TRUE;
-	}
-	return FALSE;
-}
-
 static GString *
 _rain_policy_to_chunk_method(const struct data_security_s *datasec)
 {
@@ -411,9 +332,9 @@ _backblaze_policy_to_chunk_method(const struct data_security_s *datasec)
 							 DS_KEY_ACCOUNT_ID);
 	const char *bucket_name = data_security_get_param(datasec,
 							DS_KEY_BUCKET_NAME);
-	
+
 	g_string_append_printf(result, "account_id=%s,bucket_name=%s",
-			       account_id, bucket_name);
+			account_id, bucket_name);
 	return result;
 }
 

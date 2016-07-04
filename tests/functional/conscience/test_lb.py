@@ -7,10 +7,10 @@ from tests.utils import CODE_SRVTYPE_NOTMANAGED, CODE_POLICY_NOT_SATISFIABLE
 
 class BaseLbTest(BaseTestCase):
 
-    def fill_stgclass(self, stgclass, count=1, lowport=7000):
+    def fill_slots(self, slots, count=1, lowport=7000):
         for num in range(count):
             srvin = self._srv('echo',
-                              extra_tags={"tag.stgclass": stgclass},
+                              extra_tags={"tag.slots": ','.join(slots)},
                               lowport=lowport,
                               highport=lowport+100)
             self._lock_srv(srvin)
@@ -57,28 +57,28 @@ class TestLbChoose(BaseLbTest):
                                 params={'type': 'rowix'})
         self.assertError(resp, 404, CODE_SRVTYPE_NOTMANAGED)
 
-    def test_choose_1_stgclass(self):
+    def test_choose_1_slot(self):
         self._reload()
-        self.fill_stgclass("fast", 3, 8000)
-        self.fill_stgclass("slow", 3, 7000)
+        self.fill_slots(["fast"], 3, 8000)
+        self.fill_slots(["slow"], 3, 7000)
         time.sleep(2)
         resp = self.session.get(self._url_lb('choose'),
                                 params={'type': 'echo',
-                                        'stgcls': 'fast'})
+                                        'slot': 'fast'})
         self.assertEqual(resp.status_code, 200)
         parsed = resp.json()
         self.assertIsInstance(parsed, list)
         self.assertEqual(1, len(parsed))
         self.assertGreaterEqual(parsed[0]["addr"].split(':')[1], 8000)
 
-    def test_choose_4_stgclass(self):
+    def test_choose_4_slot(self):
         self._reload()
-        self.fill_stgclass("fast", 3, 8000)
-        self.fill_stgclass("slow", 3, 7000)
+        self.fill_slots(["fast"], 3, 8000)
+        self.fill_slots(["slow"], 3, 7000)
         time.sleep(2)
         resp = self.session.get(self._url_lb('choose'),
                                 params={'type': 'echo',
-                                        'stgcls': 'fast',
+                                        'slot': 'fast',
                                         'size': 4})
         self.assertEqual(resp.status_code, 200)
         parsed = resp.json()

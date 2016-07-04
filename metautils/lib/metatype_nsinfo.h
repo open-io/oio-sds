@@ -59,10 +59,6 @@ void namespace_info_init(namespace_info_t *ni);
 gchar * namespace_info_get_data_security(struct namespace_info_s *ni,
 		const gchar *data_sec_key);
 
-/* Get the storage_class definition from the specified key */
-gchar * namespace_info_get_storage_class(struct namespace_info_s *ni,
-		const gchar *stgclass_key);
-
 struct json_object;
 
 GError * namespace_info_init_json_object(struct json_object *obj,

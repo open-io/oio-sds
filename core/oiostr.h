@@ -25,6 +25,11 @@ License along with this library.
 extern "C" {
 #endif
 
+#define OIO_CSV_SEP_C  ','
+#define OIO_CSV_SEP    ","
+#define OIO_CSV_SEP2_C ';'
+#define OIO_CSV_SEP2   ";"
+
 #define oio_pfree0(pp,repl) do { \
 	if (NULL != *(pp)) \
 		g_free(*pp); \

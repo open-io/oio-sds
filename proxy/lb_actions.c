@@ -56,16 +56,22 @@ static enum http_rc_e
 _lb(struct req_args_s *args, const char *srvtype)
 {
 	enum http_rc_e code;
-	const char *cls, *sz;
+	const char *slot, *sz;
 
-	cls = OPT("stgcls");
+	slot = OPT("slot");
 	sz = OPT("size");
 	guint howmany = sz ? atoi(sz) : 1;
 
 	struct oio_lb_pool_s *pool = oio_lb_world__create_pool(lb_world, srvtype);
 	GString *targets = g_string_sized_new(64);
-	if (cls)
-		g_string_append_printf(targets, "%s-%s,", srvtype, cls);
+	if (slot) {
+		if (g_str_has_prefix(slot, srvtype)) {
+			g_string_append(targets, slot);
+			g_string_append_c(targets, OIO_CSV_SEP_C);
+		} else {
+			g_string_append_printf(targets, "%s-%s"OIO_CSV_SEP, srvtype, slot);
+		}
+	}
 	g_string_append_printf(targets, "%s", srvtype);
 	GRID_DEBUG("Temporary pool [%s] will target [%s] %u times",
 			srvtype, targets->str, howmany);
@@ -150,7 +156,8 @@ _poll(struct req_args_s *args, struct json_object *body)
 {
 	GError *err = NULL;
 	enum http_rc_e code;
-	const char *policy = OPT("policy");
+	const gchar *policy = OPT("policy");
+	const gchar *pool = OPT("pool");
 
 	if (body && !json_object_is_type(body, json_type_object))
 		return _reply_format_error(args, BADREQ("Expected: json object"));
@@ -167,6 +174,21 @@ _poll(struct req_args_s *args, struct json_object *body)
 	if (body && (err = oio_ext_extract_json(body, mapping)))
 		return _reply_common_error(args, err);
 
+	if (pool) {
+		pool = g_strdup(pool);
+	} else {
+		struct storage_policy_s *sp = NULL;
+		NSINFO_READ(sp = storage_policy_init(&nsinfo, policy));
+		if (!sp) {
+			storage_policy_clean(sp);
+			return _reply_common_error(args, NEWERROR(
+					CODE_POLICY_NOT_SATISFIABLE,
+					"Invalid storage policy: %s", policy));
+		}
+		pool = g_strdup(storage_policy_get_service_pool(sp));
+		storage_policy_clean(sp);
+	}
+
 	oio_location_t *avoid = _json_to_locations(javoid_locs);
 	oio_location_t *known = _json_to_locations(jknown_locs);
 	avoid = _json_ids_to_locations(javoid, avoid);
@@ -177,7 +199,7 @@ _poll(struct req_args_s *args, struct json_object *body)
 		(void)loc;
 		g_ptr_array_add(ids, g_strdup(id));
 	}
-	if (!oio_lb__patch_with_pool(lb, policy, avoid, known, _on_id)) {
+	if (!oio_lb__patch_with_pool(lb, pool, avoid, known, _on_id)) {
 		code = _reply_common_error(args,
 				NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
 					"found only %u services matching the criteria",
@@ -191,6 +213,7 @@ _poll(struct req_args_s *args, struct json_object *body)
 	g_ptr_array_free(ids, TRUE);
 	g_free(avoid);
 	g_free(known);
+	g_free((gpointer)pool);
 	return code;
 }
 
@@ -201,8 +224,8 @@ action_lb_poll(struct req_args_s *args)
 	args->rp->no_access();
 	if (!validate_namespace(NS()))
 		err = NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Invalid NS");
-	else if (!OPT("policy"))
-		err = BADREQ("Missing policy parameter");
+	else if (!OPT("policy") && !OPT("pool"))
+		err = BADREQ("Missing policy or pool parameter");
 
 	if (err)
 		return _reply_notfound_error(args, err);

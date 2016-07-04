@@ -19,6 +19,7 @@ License along with this library.
 #include <string.h>
 
 #include <glib.h>
+#include <json.h>
 
 #include "oiolb.h"
 #include "oiostr.h"
@@ -528,13 +529,35 @@ oio_lb_world__add_pool_target (struct oio_lb_pool_s *self, const char *to)
 	memcpy (copy, to, tolen + 1);
 	copy [tolen+1] = '\0';
 	for (gchar *p=copy; *p ;) {
-		if (!(p = strchr (p, ','))) break; else *(p++) = '\0';
+		if (!(p = strchr (p, OIO_CSV_SEP_C))) break; else *(p++) = '\0';
 	}
 
 	const gsize len = g_strv_length (lb->targets);
 	lb->targets = g_realloc (lb->targets, (len+2) * sizeof(gchar*));
 	lb->targets [len] = copy;
 	lb->targets [len+1] = NULL;
+}
+
+void
+oio_lb_world__add_pool_targets(struct oio_lb_pool_s *self,
+		const gchar *targets)
+{
+	gchar **toks = g_strsplit(targets, OIO_CSV_SEP2, -1);
+	for (gchar **num_target = toks; num_target && *num_target; num_target++) {
+		/* the string is supposed to start with a number and a comma */
+		const char *target = strchr(*num_target, OIO_CSV_SEP_C);
+		char *end = NULL;
+		gint64 count = g_ascii_strtoll(*num_target, &end, 10u);
+		if (end != target) {
+			count = 1;
+			target = *num_target;
+		} else {
+			target++;
+		}
+		for (int j = 0; j < count; j++)
+			oio_lb_world__add_pool_target(self, target);
+	}
+	g_strfreev(toks);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -876,6 +899,16 @@ oio_lb__force_pool(struct oio_lb_s *lb, struct oio_lb_pool_s *pool)
 	g_rw_lock_writer_lock(&lb->lock);
 	g_hash_table_replace(lb->pools, (gpointer)apool->name, apool);
 	g_rw_lock_writer_unlock(&lb->lock);
+}
+
+gboolean
+oio_lb__has_pool(struct oio_lb_s *lb, const char *name)
+{
+	gboolean res = FALSE;
+	g_rw_lock_reader_lock(&lb->lock);
+	res = (g_hash_table_lookup(lb->pools, name) != NULL);
+	g_rw_lock_reader_unlock(&lb->lock);
+	return res;
 }
 
 guint
