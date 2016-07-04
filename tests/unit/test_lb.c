@@ -249,6 +249,9 @@ test_local_feed_twice(void)
 	oio_lb_world__feed_slot(world, "0", srv0);
 
 	g_assert_cmpuint(2, ==, oio_lb_world__count_slot_items(world, "0"));
+	g_free(srv0);
+	g_free(srv1);
+	oio_lb_world__destroy(world);
 }
 
 static void

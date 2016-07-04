@@ -393,8 +393,11 @@ sqlx_admin_get_url (struct sqlx_sqlite3_s *sq3)
 	EXTRA_ASSERT(sq3 != NULL);
 	struct oio_url_s *u = oio_url_empty ();
 	void _set (int which, const char *k) {
-		const char *s = sqlx_admin_get_str(sq3, k);
-		if (s) oio_url_set (u, which, s);
+		gchar *s = sqlx_admin_get_str(sq3, k);
+		if (s) {
+			oio_url_set (u, which, s);
+			g_free (s);
+		}
 	}
 	_set (OIOURL_NS, SQLX_ADMIN_NAMESPACE);
 	_set (OIOURL_ACCOUNT, SQLX_ADMIN_ACCOUNT);
