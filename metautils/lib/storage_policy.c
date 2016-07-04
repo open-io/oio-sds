@@ -56,8 +56,10 @@ storage_policy_clean(struct storage_policy_s *sp)
 	oio_str_clean(&sp->name);
 	if (NULL != sp->datasec)
 		_data_security_clean(sp->datasec);
-	if (sp->service_pool)
+	if (sp->service_pool) {
 		g_free(sp->service_pool);
+		sp->service_pool = NULL;
+	}
 	g_free(sp);
 }
 
@@ -79,7 +81,7 @@ _dummy_stgpol(void)
 	struct storage_policy_s *result = g_malloc0(sizeof(struct storage_policy_s));
 	result->name = g_strdup(STORAGE_POLICY_NONE);
 	result->datasec = _dummy_datasec();
-	result->service_pool = NAME_SRVTYPE_RAWX;
+	result->service_pool = g_strdup(NAME_SRVTYPE_RAWX);
 	return result;
 }
 

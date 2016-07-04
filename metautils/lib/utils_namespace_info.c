@@ -212,9 +212,6 @@ _load_hash (struct json_object *obj, const gchar *k, GHashTable *dst)
 		if (json_object_is_type(val, json_type_string))
 			g_hash_table_insert(dst, g_strdup(key), metautils_gba_from_string(
 					json_object_get_string(val)));
-		else if (json_object_is_type(val, json_type_array)) {
-			;
-		}
 	}
 	return NULL;
 }

@@ -204,7 +204,8 @@ _init_lb(int nb_services)
 	}
 	oio_lb_world__debug(lb_world);
 
-	struct oio_lb_pool_s *pool = oio_lb_world__create_pool(lb_world, "NONE");
+	struct oio_lb_pool_s *pool = oio_lb_world__create_pool(lb_world,
+			NAME_SRVTYPE_RAWX);
 	oio_lb_world__add_pool_target(pool, "*");
 	struct oio_lb_s *lb = oio_lb__create();
 	oio_lb__force_pool(lb, pool);
