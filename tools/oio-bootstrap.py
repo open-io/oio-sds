@@ -389,55 +389,29 @@ param_option.FLATNS_hash_size=0
 param_option.FLATNS_hash_bitlength=17
 param_option.storage_policy=${STGPOL}
 
+# Storage policies definitions
 param_storage_conf=${CFGDIR}/${NS}-policies.conf
+
+# Service scoring and pools definitions
 param_service_conf=${CFGDIR}/${NS}-services.conf
 
-param_service.meta0.lock_at_first_register=false
-param_service.meta0.score_timeout=3600
-param_service.meta0.score_variation_bound=5
-param_service.meta0.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
-
-param_service.meta1.lock_at_first_register=false
-param_service.meta1.score_timeout=120
-param_service.meta1.score_variation_bound=5
-param_service.meta1.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
-
-param_service.meta2.score_timeout=120
-param_service.meta2.score_variation_bound=5
-param_service.meta2.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
-
-param_service.rawx.score_timeout=120
-param_service.rawx.score_variation_bound=5
-param_service.rawx.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
-
-param_service.sqlx.score_timeout=120
-param_service.sqlx.score_variation_bound=5
-param_service.sqlx.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
-
-param_service.rdir.score_timeout=120
-param_service.rdir.score_variation_bound=5
-param_service.rdir.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
-
-param_service.redis.score_timeout=120
-param_service.redis.score_variation_bound=5
-param_service.redis.score_expr=(num stat.cpu)
-
-param_service.oiofs.lock_at_first_register=false
-param_service.oiofs.score_timeout=120
-param_service.oiofs.score_variation_bound=5
-param_service.oiofs.score_expr=(num stat.cpu)
-
-param_service.account.score_timeout=120
-param_service.account.score_variation_bound=5
-param_service.account.score_expr=(num stat.cpu)
-
-param_service.echo.score_timeout=120
-param_service.echo.score_variation_bound=5
-param_service.echo.score_expr=(num stat.cpu)
+# For an easy transition, it is still possible to define
+# service score expression, variation, timeout and lock here.
+#
+#param_service.meta0.lock_at_first_register=false
+#param_service.meta0.score_timeout=3600
+#param_service.meta0.score_variation_bound=5
+#param_service.meta0.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
 """
 
 template_conscience_policies = """
 [STORAGE_POLICY]
+# Storage policy definitions
+# ---------------------------
+#
+# The first word is the service pool to use,
+# the second word is the data security to use.
+
 SINGLE=NONE:NONE
 TWOCOPIES=rawxevenodd:DUPONETWO
 THREECOPIES=rawx3:DUPONETHREE
@@ -446,19 +420,27 @@ EC=NONE:EC
 BACKBLAZE=NONE:BACKBLAZE
 
 [DATA_SECURITY]
+# Data security definitions
+# --------------------------
+#
+# The first word is the kind of data security ("plain", "ec" or "backblaze"),
+# after the '/' are the parameters of the data security.
+
 DUPONETWO=plain/distance=1,nb_copy=2
 DUPONETHREE=plain/distance=1,nb_copy=3
 DUP17=plain/distance=1,nb_copy=17
+
 EC=ec/k=6,m=3,algo=liberasurecode_rs_vand,distance=1
+
+# List of possible values for the "algo" parameter of "ec" data security:
+# "jerasure_rs_vand"       EC_BACKEND_JERASURE_RS_VAND
+# "jerasure_rs_cauchy"     EC_BACKEND_JERASURE_RS_CAUCHY
+# "flat_xor_hd"            EC_BACKEND_FLAT_XOR_HD
+# "isa_l_rs_vand"          EC_BACKEND_ISA_L_RS_VAND
+# "shss"                   EC_BACKEND_SHSS
+# "liberasurecode_rs_vand" EC_BACKEND_LIBERASURECODE_RS_VAND
+
 BACKBLAZE=backblaze/account_id=${BACKBLAZE_ACCOUNT_ID},bucket_name=${BACKBLAZE_BUCKET_NAME},distance=0,nb_copy=1
-
-# "jerasure_rs_vand"   EC_BACKEND_JERASURE_RS_VAND
-# "jerasure_rs_cauchy" EC_BACKEND_JERASURE_RS_CAUCHY
-# "flat_xor_hd"      EC_BACKEND_FLAT_XOR_HD
-# "isa_l_rs_vand" EC_BACKEND_ISA_L_RS_VAND
-# "shss"     EC_BACKEND_SHSS
-# "liberasurecode_rs_vand"  EC_BACKEND_LIBERASURECODE_RS_VAND
-
 """
 
 template_credentials = """
@@ -467,30 +449,72 @@ ${BACKBLAZE_ACCOUNT_ID}.${BACKBLAZE_BUCKET_NAME}.application_key=${BACKBLAZE_APP
 """
 
 template_conscience_services = """[pools]
+# Pools for each service type
+# ----------------------------
+#
+# The value is a ';'-separated of targets.
+# Each target is a ','-separated list of:
+# - the number of services to pick,
+# - the name of a slot where to pick the services,
+# - the name of a slot where to pick services if there is
+#   not enough in the previous slot
+# - and so on...
+#
+# Pool are automatically created if not defined in configuration.
+
 meta2=${M2_REPLICAS},meta2
 rdir=1,rdir
 account=1,account
-rawx2=2,rawx
-rawx3=3,rawx
-rawx6=9,rawx
-rawx17=17,rawx
-rawxevenodd=1,rawx-even;1,rawx-odd
+
+
+# Pools of rawx services for storage policies
+# --------------------------------------------
 
 # Pick 3 SSD rawx, or any rawx if SSD is not available
 fastrawx3=3,rawx-ssd,rawx
+
+# Pick one "even" and one "odd" rawx
+rawxevenodd=1,rawx-even;1,rawx-odd
+
+# Try to pick one "even" and one "odd" rawx, and a generic one
+rawx3=1,rawx-even,rawx;1,rawx-odd,rawx;1,rawx
 
 # Pick one rawx in Europe, one in USA, one in Asia, or anywhere if none available
 zonedrawx3=1,rawx-europe,rawx;1,rawx-usa,rawx;1,rawx-asia,rawx
 
 
 [score_expr]
-meta0=(((num stat.cpu)>0) * 100)
+meta0=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+meta1=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+meta2=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+rawx=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+sqlx=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+rdir=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+redis=(num stat.cpu)
+account=(num stat.cpu)
+echo=(num stat.cpu)
+oiofs=(num stat.cpu)
 
 [score_timeout]
+# Defaults to 300s
+meta0=3600
+meta1=120
+meta2=120
+rawx=120
+sqlx=120
+rdir=120
+redis=120
+oiofs=120
+account=120
+echo=30
 
 [score_variation_bound]
+# Defaults to 5s
 
 [score_lock_at_first_register]
+meta0=false
+meta1=false
+oiofs=false
 """
 
 template_gridinit_header = """
