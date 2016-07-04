@@ -679,6 +679,9 @@ template_event_agent_handlers = """
 [handler:storage.content.deleted]
 pipeline = content_cleaner
 
+[handler:storage.content.touch]
+pipeline = tiering
+
 [handler:storage.container.new]
 pipeline = account_update
 
@@ -693,6 +696,11 @@ pipeline = volume_index
 
 [handler:storage.chunk.deleted]
 pipeline = volume_index
+
+[filter:tiering]
+use = egg:oio#tiering
+tiering_settings_file = /tmp/tiering_file.yml
+key_file = ${KEY_FILE}
 
 [filter:content_cleaner]
 use = egg:oio#content_cleaner

@@ -8,6 +8,7 @@ from oio.common.exceptions import OioException
 from oio.api.backblaze import BackblazeDeleteHandler
 from oio.api.backblaze_http import BackblazeUtils
 from oio.common.storage_method import STORAGE_METHODS
+from oio.common import utils
 CHUNK_TIMEOUT = 60
 PARALLEL_CHUNKS_DELETE = 3
 NB_TRIES = 3
@@ -44,7 +45,10 @@ class ContentReaperFilter(Filter):
 
                 def delete_chunk_backblaze(chunks, url, storage_method):
                     meta = {}
-                    meta['container_id'] = url['id']
+                    account = url['account']
+                    container = url['user']
+                    meta['container_id'] = utils.name2cid(account,
+                                                          container).upper()
                     chunk_list = []
                     for chunk in chunks:
                         chunk['url'] = chunk['id']

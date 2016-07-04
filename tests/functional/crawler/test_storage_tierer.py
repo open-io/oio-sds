@@ -24,6 +24,8 @@ from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
 from oio.content.factory import ContentFactory
 from oio.crawler.storage_tierer import StorageTiererWorker
+from oio.crawler.filter.base import StorageTiererFilters, \
+    STORAGE_TIERER_FILTERS, InvalidStorageTiererFilterException
 from tests.functional.content.test_content import random_data
 from tests.utils import BaseTestCase
 
@@ -94,11 +96,14 @@ class TestStorageTierer(BaseTestCase):
         self.gridconf["outdated_threshold"] = 0
         worker = StorageTiererWorker(self.gridconf, Mock())
         gen = worker._list_contents()
-        self.assertEqual(gen.next(), (
+        container_tmp, obj = gen.next()
+        self.assertEqual((container_tmp, obj['content']), (
             self.container_1_id, self.container_1_content_0.content_id))
-        self.assertEqual(gen.next(), (
+        container_tmp, obj = gen.next()
+        self.assertEqual((container_tmp, obj['content']), (
             self.container_2_id, self.container_2_content_0.content_id))
-        self.assertEqual(gen.next(), (
+        container_tmp, obj = gen.next()
+        self.assertEqual((container_tmp, obj['content']), (
             self.container_2_id, self.container_2_content_1.content_id))
         self.assertRaises(StopIteration, gen.next)
 
@@ -119,11 +124,14 @@ class TestStorageTierer(BaseTestCase):
         with mock.patch('oio.crawler.storage_tierer.time.time',
                         mock.MagicMock(return_value=now+2)):
             gen = worker._list_contents()
-        self.assertEqual(gen.next(), (
+        container_id, obj = gen.next()
+        self.assertEqual((container_id, obj['content']), (
             self.container_1_id, self.container_1_content_0.content_id))
-        self.assertEqual(gen.next(), (
+        container_id, obj = gen.next()
+        self.assertEqual((container_id, obj['content']), (
             self.container_2_id, self.container_2_content_0.content_id))
-        self.assertEqual(gen.next(), (
+        container_id, obj = gen.next()
+        self.assertEqual((container_id, obj['content']), (
             self.container_2_id, self.container_2_content_1.content_id))
         self.assertRaises(StopIteration, gen.next)
 
@@ -131,6 +139,20 @@ class TestStorageTierer(BaseTestCase):
         self.gridconf["new_policy"] = "SINGLE"
         worker = StorageTiererWorker(self.gridconf, Mock())
         gen = worker._list_contents()
-        self.assertEqual(gen.next(), (
+        container_id, obj = gen.next()
+        self.assertEqual((container_id, obj['content']), (
             self.container_2_id, self.container_2_content_1.content_id))
         self.assertRaises(StopIteration, gen.next)
+
+    def test_storage_filter_none(self):
+        filters = StorageTiererFilters(STORAGE_TIERER_FILTERS)
+        filter_none = filters.load({'type': 'none'})
+        self.assertEqual(str(filter_none), 'none')
+        container_id = 'container_screen'
+        obj = None
+        self.assertEqual(filter_none.filter_content((container_id, obj)), True)
+
+    def test_storage_filter_exception(self):
+        filter_exception = StorageTiererFilters(STORAGE_TIERER_FILTERS)
+        self.assertRaises(InvalidStorageTiererFilterException,
+                          filter_exception.load, {'type': 'error'})

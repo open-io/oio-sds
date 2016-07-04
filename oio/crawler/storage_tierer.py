@@ -7,12 +7,14 @@ from oio.common.exceptions import NotFound
 from oio.common.utils import get_logger, int_value, ratelimit, cid_from_name
 from oio.container.client import ContainerClient
 from oio.content.factory import ContentFactory
-
+from oio.crawler.filter.base import STORAGE_TIERER_FILTERS, TYPE,\
+    StorageTiererFilters, InvalidStorageTiererFilterException
 SLEEP_TIME = 30
 
 CONF_ACCOUNT = 'account'
 CONF_OUTDATED_THRESHOLD = 'outdated_threshold'
 CONF_NEW_POLICY = 'new_policy'
+CONF_FILTER_CONF = 'filter_conf'
 
 
 class StorageTiererWorker(object):
@@ -40,6 +42,7 @@ class StorageTiererWorker(object):
         self.outdated_threshold = int_value(
             conf.get(CONF_OUTDATED_THRESHOLD), 9999999999)
         self.new_policy = conf.get(CONF_NEW_POLICY)
+        self.filter_conf = conf.get(CONF_FILTER_CONF, {TYPE: 'none'})
 
     def _list_containers(self):
         container = None
@@ -52,37 +55,71 @@ class StorageTiererWorker(object):
             for container, _, _, _ in resp["listing"]:
                 yield container
 
+    def _recover_content_by_content_name(self, container, path):
+        marker = None
+        while True:
+            try:
+                resp = self.container_client.container_list(
+                    acct=self.account, ref=container,
+                    limit=self.content_fetch_limit, marker=marker)
+            except NotFound:
+                self.logger.warn("Container %s in account "
+                                 "but not found" % container)
+                break
+            if len(resp["objects"]) == 0:
+                break
+            for obj in resp["objects"]:
+                marker = obj["name"]
+                if obj['name'] == path:
+                    return obj
+        return None
+
+    def _list_content(self, container):
+        marker = None
+        while True:
+            try:
+                resp = self.container_client.container_list(
+                    acct=self.account, ref=container,
+                    limit=self.content_fetch_limit, marker=marker)
+            except NotFound:
+                self.logger.warn("Container %s in account "
+                                 "but not found" % container)
+                break
+            if len(resp["objects"]) == 0:
+                break
+            for obj in resp["objects"]:
+                marker = obj["name"]
+                if obj["mtime"] > time.time() - self.outdated_threshold:
+                    continue
+                if obj["policy"] == self.new_policy:
+                    continue
+                container_id = cid_from_name(self.account, container)
+                yield (container_id, obj)
+
     def _list_contents(self):
         for container in self._list_containers():
-            marker = None
-            while True:
-                try:
-                    resp = self.container_client.container_list(
-                        acct=self.account, ref=container,
-                        limit=self.content_fetch_limit, marker=marker)
-                except NotFound:
-                    self.logger.warn("Container %s in account "
-                                     "but not found" % container)
-                    break
-                if len(resp["objects"]) == 0:
-                    break
-                for obj in resp["objects"]:
-                    marker = obj["name"]
-                    if obj["mtime"] > time.time() - self.outdated_threshold:
-                        continue
-                    if obj["policy"] == self.new_policy:
-                        continue
-                    container_id = cid_from_name(self.account, container)
-                    yield (container_id, obj["content"])
+            for container_id, obj in self._list_content(container):
+                yield (container_id, obj)
+
+    def _try_change_policy(self, container_id, obj):
+        content_id = obj['content']
+        is_filter = False
+        try:
+            filter_tierer = StorageTiererFilters(STORAGE_TIERER_FILTERS).load(
+                self.filter_conf)
+        except InvalidStorageTiererFilterException:
+            filter_tierer = None
+        if filter_tierer:
+            is_filter = filter_tierer.filter_content((container_id, obj))
+        if is_filter:
+            self.safe_change_policy(container_id, content_id)
 
     def run(self):
         start_time = report_time = time.time()
 
         total_errors = 0
-
-        for (container_id, content_id) in self._list_contents():
-            self.safe_change_policy(container_id, content_id)
-
+        for (container_id, obj) in self._list_contents():
+            self._try_change_policy(container_id, obj)
             self.contents_run_time = ratelimit(
                 self.contents_run_time,
                 self.max_contents_per_second
@@ -126,7 +163,7 @@ class StorageTiererWorker(object):
         except Exception:
             self.errors += 1
             self.logger.exception("ERROR while changing policy for content "
-                                  "%s/%s", (container_id, content_id))
+                                  "%s/%s" % (container_id, content_id))
         self.passes += 1
 
     def change_policy(self, container_id, content_id):

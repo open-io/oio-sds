@@ -60,7 +60,7 @@ struct all_vers_cb_args
 	gpointer udata_out;
 };
 
-static void
+void
 _notify_beans (struct meta2_backend_s *m2b, struct oio_url_s *url,
 		GSList *beans, const char *name)
 {

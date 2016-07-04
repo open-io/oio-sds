@@ -594,7 +594,7 @@ class ObjectStorageAPI(API):
         for pos in range(len(chunks)):
             if ranges:
                 offset = ranges[pos][0]
-                size = ranges[pos][1]
+                size = ranges[pos][1] - offset
 
             if size is None:
                 size = int(meta["length"])

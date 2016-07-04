@@ -19,6 +19,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #ifndef OIO_SDS__meta2v2__meta2_filters_h
 # define OIO_SDS__meta2v2__meta2_filters_h 1
+#include <glib.h>
+#include <meta2_backend_internals.h>
 
 #if 0
 #define TRACE_FILTER() GRID_TRACE("FILTER %s:%d %s", __FILE__, __LINE__, __FUNCTION__)
@@ -43,6 +45,9 @@ struct on_bean_ctx_s *_on_bean_ctx_init(struct gridd_filter_ctx_s *ctx,
 void _on_bean_ctx_send_list(struct on_bean_ctx_s *obc);
 
 void _on_bean_ctx_clean(struct on_bean_ctx_s *obc);
+
+void _notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
+		   GSList *beans, const char *name);
 
 /* -------------------------------------------------------------------------- */
 
