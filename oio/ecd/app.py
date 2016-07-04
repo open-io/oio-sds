@@ -4,9 +4,9 @@ from oio.api.ec import ECChunkWriteHandler, ECChunkDownloadHandler
 from oio.api.replication import ReplicatedChunkWriteHandler
 from oio.api.backblaze import BackblazeChunkWriteHandler, \
     BackblazeDownloadHandler
-from oio.api.backblaze_http import Backblaze
+from oio.api.backblaze_http import BackblazeUtils, BackblazeUtilsException
 from oio.api.io import ChunkReader
-from oio.common import exceptions as exc
+from oio.common.exceptions import OioException
 from werkzeug.wrappers import Request, Response
 
 SYS_PREFIX = 'x-oio-chunk-meta-'
@@ -75,21 +75,6 @@ def part_backblaze_to_bytes_iter(stream):
             yield fd
 
 
-def _put_meta_backblaze(storage_method, application_key):
-    if not (application_key and storage_method.bucket_name != '0' and
-            storage_method.account_id != '0'):
-        raise exc.OioException("The client is missing backblaze parameters")
-    meta = {}
-    meta['backblaze.account_id'] = storage_method.account_id
-    meta['backblaze.application_key'] = application_key
-    meta['bucket_name'] = storage_method.bucket_name
-    backblaze = Backblaze(storage_method.account_id, application_key)
-    meta['authorization'] = backblaze.authorization_token
-    meta['uploadToken'] = backblaze._get_upload_token_by_bucket_name(
-        storage_method.bucket_name)
-    return meta
-
-
 class ECD(object):
     def __init__(self, conf):
         self.conf = conf
@@ -105,14 +90,19 @@ class ECD(object):
     def write_backblaze_meta_chunk(self, source, size, storage_method, sysmeta,
                                    meta_chunk):
         meta_checksum = md5()
-        application_key = self.conf['application-key']
         upload_chunk = meta_chunk[0]
-        # upload_chunk['size'] = sysmeta['size']
-        meta = _put_meta_backblaze(storage_method, application_key)
+        key_file = self.conf.get('key_file')
+        try:
+            meta = BackblazeUtils.put_meta_backblaze(storage_method, key_file)
+        except BackblazeUtilsException as e:
+            return Response(str(e), 500)
         handler = BackblazeChunkWriteHandler(sysmeta, upload_chunk,
                                              meta_checksum, storage_method,
                                              meta)
-        bytes_transferred, chunks = handler.stream(source)
+        try:
+            bytes_transferred, chunks = handler.stream(source)
+        except OioException as e:
+            return Response(str(e), 503)
         return Response("OK")
 
     def write_repli_meta_chunk(self, source, size, storage_method, sysmeta,
@@ -140,14 +130,20 @@ class ECD(object):
 
     def read_backblaze_meta_chunk(self, req, storage_method, meta_chunk):
         headers = {}
-        application_key = self.conf['application-key']
         container_id = req.headers[sys_headers['container_id']]
         sysmeta = {'container_id': container_id}
-        meta = _put_meta_backblaze(storage_method, application_key)
+        key_file = self.conf.get('key_file')
+        try:
+            meta = BackblazeUtils.put_meta_backblaze(storage_method, key_file)
+        except BackblazeUtilsException as e:
+            return Response(e, 500)
         handler = BackblazeDownloadHandler(sysmeta, [meta_chunk],
                                            meta, headers)
         stream = handler.get_iter()
-        return Response(part_backblaze_to_bytes_iter(stream), 200)
+        try:
+            return Response(part_backblaze_to_bytes_iter(stream), 200)
+        except OioException as e:
+            return Response(str(e), 503)
 
     def dispatch_request(self, req):
         if req.method == 'PUT':

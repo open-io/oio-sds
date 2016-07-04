@@ -27,6 +27,7 @@ from string import Template
 import re
 import argparse
 
+
 template_redis = """
 daemonize no
 pidfile ${RUNDIR}/redis.pid
@@ -251,10 +252,9 @@ LimitRequestFields 200
 """
 
 template_wsgi_service_descr = """
-dic={'application-key': \'${BACKBLAZE_APPLICATION_KEY}\'
-}
+conf = {'key_file': '${KEY_FILE}'}
 from oio.${SRVTYPE}.app import create_app
-application = create_app(dic)
+application = create_app(conf)
 """
 
 template_meta_watch = """
@@ -459,6 +459,12 @@ BACKBLAZE=backblaze/account_id=${BACKBLAZE_ACCOUNT_ID},bucket_name=${BACKBLAZE_B
 
 """
 
+template_other_sources = """
+[backblaze]
+${BACKBLAZE_ACCOUNT_ID}.${BACKBLAZE_BUCKET_NAME}.application_key=${BACKBLAZE_APPLICATION_KEY}
+"""
+
+
 template_gridinit_header = """
 [Default]
 listen=${RUNDIR}/gridinit.sock
@@ -585,6 +591,7 @@ pipeline = volume_index
 
 [filter:content_cleaner]
 use = egg:oio#content_cleaner
+key_file = ${KEY_FILE}
 
 [filter:account_update]
 use = egg:oio#account_update
@@ -738,6 +745,7 @@ ACCOUNT_ID = 'account_id'
 BUCKET_NAME = 'bucket_name'
 COMPRESSION = 'compression'
 APPLICATION_KEY = 'application_key'
+KEY_FILE='key_file'
 
 defaults = {
     'NS': 'OPENIO',
@@ -831,7 +839,9 @@ def generate(options):
     ip = options.get('ip') or defaults['IP']
     backblaze_account_id = options.get('backblaze', {}).get(ACCOUNT_ID)
     backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
-    backblaze_application_key = options.get('backblaze', {}).get(APPLICATION_KEY)
+    backblaze_application_key = options.get('backblaze', {}).get(
+        APPLICATION_KEY)
+    key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(IP=ip,
                NS=ns,
                HOME=HOME,
@@ -864,6 +874,7 @@ def generate(options):
                BACKBLAZE_ACCOUNT_ID=backblaze_account_id,
                BACKBLAZE_BUCKET_NAME=backblaze_bucket_name,
                BACKBLAZE_APPLICATION_KEY=backblaze_application_key,
+               KEY_FILE=key_file,
                HTTPD_BINARY=HTTPD_BINARY)
 
     def merge_env(add):
@@ -1116,6 +1127,10 @@ def generate(options):
         tpl = Template(template_local_ns)
         f.write(tpl.safe_substitute(ENV))
 
+    with open('{KEY_FILE}'.format(**ENV), 'w+') as f:
+        tpl = Template(template_other_sources)
+        f.write(tpl.safe_substitute(ENV))
+        
     # ensure volumes
     for srvtype in final_services:
         for rec in final_services[srvtype]:
