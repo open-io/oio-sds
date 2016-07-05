@@ -179,13 +179,14 @@ _roundtrip_tail (struct file_info_s *fi0, const char * content_id,
 
 	/* get details on the content */
 	gsize max_offset = 0, max_size = 0;
-	void _on_metachunk (void *i UNUSED, guint seq, gsize offt, gsize len) {
+	void _on_metachunk (void *i UNUSED, guint seq UNUSED, gsize offt, gsize len) {
 		GRID_TRACE2("metachunk: %u, %"G_GSIZE_FORMAT" %"G_GSIZE_FORMAT,
 				seq, offt, len);
 		max_offset = MAX(max_offset, offt);
 		max_size = MAX(max_size, offt+len);
 	}
-	void _on_property (void *i UNUSED, const char *k, const char *v) {
+	void _on_property (void *i UNUSED, const char *k UNUSED,
+			const char *v UNUSED) {
 		GRID_TRACE2("property: '%s' -> '%s'", k, v);
 	}
 	err = oio_sds_show_content (client, url, NULL, _on_metachunk, _on_property);
