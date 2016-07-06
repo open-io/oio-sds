@@ -56,6 +56,7 @@ class CreateObject(lister.Lister):
         key_file = parsed_args.key_file
         if key_file and key_file[0] != '/':
             key_file = os.getcwd() + '/' + key_file
+
         def get_file_size(f):
             currpos = f.tell()
             f.seek(0, 2)
