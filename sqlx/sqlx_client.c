@@ -39,6 +39,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define CLIENT_CALL(self,F) VTABLE_CALL(self,struct oio_sqlx_client_abstract_s*,F)
 #define FACTORY_CALL(self,F) VTABLE_CALL(self,struct oio_sqlx_client_factory_abstract_s*,F)
 
+gboolean oio_sqlx_debug_requests = FALSE;
+
 void
 oio_sqlx_client__destroy (struct oio_sqlx_client_s *self)
 {
@@ -51,12 +53,53 @@ oio_sqlx_client__create_db (struct oio_sqlx_client_s *self)
 	CLIENT_CALL(self,create_db)(self);
 }
 
+#ifdef HAVE_EXTRA_DEBUG
+static void
+_debug_statement(guint index,
+		GPtrArray *stmt,
+		struct oio_sqlx_statement_result_s *result)
+{
+	GRID_DEBUG("Query %u", index);
+	do {
+		const guint max = stmt->len;
+		GRID_DEBUG(" SQL %s", (gchar*) stmt->pdata[0]);
+		GString *gstr = g_string_new("");
+		for (guint i=1; i<max; ++i)
+			g_string_append_printf(gstr, ",%s", (gchar*)stmt->pdata[i]);
+		GRID_DEBUG(" Params: %s", gstr->str);
+		g_string_free(gstr, TRUE);
+	} while (0);
+	do {
+		const guint max = result->rows->len;
+		GRID_DEBUG("Rows %u", max);
+		for (guint irow=0; irow<max ;++irow) {
+			gchar *sfields = g_strjoinv(",", result->rows->pdata[irow]);
+			GRID_DEBUG(" row=%u %s", irow, sfields);
+			g_free (sfields);
+		}
+	} while (0);
+}
+#endif
+
 GError *
 oio_sqlx_client__execute_batch (struct oio_sqlx_client_s *self,
 		struct oio_sqlx_batch_s *batch,
 		struct oio_sqlx_batch_result_s **out_result)
 {
-	CLIENT_CALL(self,execute_batch)(self, batch, out_result);
+	VTABLE_CHECK(self,struct oio_sqlx_client_abstract_s*,execute_batch);
+	GError *err =
+		VTABLE_CALL_NOCHECK(self,struct oio_sqlx_client_abstract_s*,execute_batch)
+		(self,batch,out_result);
+	if (oio_sqlx_debug_requests) {
+#ifdef HAVE_EXTRA_DEBUG
+		const guint max = batch->statements->len;
+		for (guint i=0; i<max; ++i)
+			_debug_statement (i,
+					batch->statements->pdata[i],
+					(*out_result)->results->pdata[i]);
+#endif /*HAVE_EXTRA_DEBUG*/
+	}
+	return err;
 }
 
 GError *
@@ -159,6 +202,21 @@ oio_sqlx_batch__is_empty (struct oio_sqlx_batch_s *self)
 	EXTRA_ASSERT (self != NULL);
 	EXTRA_ASSERT(self->statements != NULL);
 	return self->statements->len <= 0;
+}
+
+guint
+oio_sqlx_batch_result__count_errors (struct oio_sqlx_batch_result_s *self)
+{
+	EXTRA_ASSERT(self != NULL);
+	EXTRA_ASSERT(self->results != NULL);
+	guint count = 0;
+	const guint max = self->results->len;
+	for (guint i=0; i<max ;++i) {
+		struct oio_sqlx_statement_result_s *res = self->results->pdata[i];
+		if (NULL != res->err)
+			++ count;
+	}
+	return count;
 }
 
 guint

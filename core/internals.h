@@ -59,9 +59,11 @@ extern "C" {
 	g_assert(((T)self)->vtable-> F != NULL); \
 } while (0)
 
+#define VTABLE_CALL_NOCHECK(self,T,F) ((T)self)->vtable->F
+
 #define VTABLE_CALL(self,T,F) \
 	VTABLE_CHECK(self,T,F); \
-	return ((T)self)->vtable-> F
+	return VTABLE_CALL_NOCHECK(self,T,F)
 
 #define ADAPTIVE_PERIOD_DECLARE() \
 	static volatile gboolean already_succeeded = FALSE; \
