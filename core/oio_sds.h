@@ -317,6 +317,8 @@ struct oio_sds_ul_src_s
 	} data;
 };
 
+#define OIO_SDS_UPLOAD_SRC_INIT {.type=0, .data={ .hook={.cb=NULL, .ctx=NULL, .size=0}}}
+
 /* works with fully qualified urls (content) and local paths */
 struct oio_error_s* oio_sds_upload (struct oio_sds_s *sds,
 		struct oio_sds_ul_src_s *src, struct oio_sds_ul_dst_s *dst);
