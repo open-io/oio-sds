@@ -296,6 +296,8 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result)
 	if (!lchunks)
 		return NEWERROR(CODE_INTERNAL_ERROR, "No chunk received");
 	const guint meta_bound = _get_meta_bound (lchunks);
+	if (meta_bound > 1024*1024)
+		return NEWERROR(CODE_INTERNAL_ERROR, "Too many metachunks");
 
 	/* build the metachunk */
 	struct metachunk_s **out = g_malloc0 ((meta_bound+1) * sizeof(void*));
@@ -1255,7 +1257,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 		/* Verify we are not doing erasure coding.
 		 * TODO: implement erasure coding in C */
 		if (oio_sds_upload_needs_ecd(ul)) {
-			if (ul->sds->ecd && ul->sds->ecd[0]) {
+			if (oio_str_is_set(ul->sds->ecd)) {
 				GRID_DEBUG("using ecd gateway");
 			} else {
 				err = NEWERROR(CODE_NOT_IMPLEMENTED,
@@ -1412,10 +1414,14 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 		struct metachunk_s *last = (g_list_last (ul->metachunk_done))->data;
 		ul->mc->offset = last->offset + last->size;
 		ul->mc->meta = last->meta + 1;
-	} else {
+	} else if (BOOL(ul->dst->partial)) {
 		ul->mc->offset = ul->dst->offset;
 		ul->mc->meta = ul->dst->meta_pos;
+	} else {
+		ul->mc->offset = 0;
+		ul->mc->meta = 0;
 	}
+
 	/* then patch each chunk with the same meta-position */
 	for (GSList *l=ul->mc->chunks; l ;l=l->next) {
 		struct chunk_s *c = l->data;
@@ -1646,7 +1652,7 @@ oio_sds_upload_abort (struct oio_sds_ul_s *ul)
 	g_assert (ul != NULL);
 	if (ul->chunks_failed)
 		_chunks_remove (ul->sds->h, ul->chunks_failed);
-	return (struct oio_error_s *) NEWERROR(CODE_NOT_IMPLEMENTED, "NYI");
+	return (struct oio_error_s *) NYI();
 }
 
 static void
