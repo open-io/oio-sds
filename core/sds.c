@@ -1786,12 +1786,11 @@ _read_FILE (void *u, unsigned char *ptr, size_t len)
 {
 	FILE *in = u;
 	GRID_TRACE("Reading at most %"G_GSIZE_FORMAT, len);
-	if (ferror(in))
-		return OIO_SDS_UL__ERROR;
-	if (feof(in))
-		return OIO_SDS_UL__DONE;
 	size_t r = fread(ptr, 1, len, in);
-	return (r == 0) ? OIO_SDS_UL__NODATA : r;
+	if (0 != r) return r;
+	if (ferror(in)) return OIO_SDS_UL__ERROR;
+	if (feof(in)) return OIO_SDS_UL__DONE;
+	return OIO_SDS_UL__NODATA;
 }
 
 struct oio_error_s*
