@@ -488,7 +488,7 @@ class ObjectStorageAPI(API):
             handler = ECWriteHandler(source, sysmeta, chunks, storage_method,
                                      headers=headers)
         elif storage_method.backblaze:
-            backblaze_info = self._put_meta_backblaze(storage_method, key_file)
+            backblaze_info = self._b2_credentials(storage_method, key_file)
             handler = BackblazeWriteHandler(source, sysmeta,
                                             chunks, storage_method,
                                             headers, backblaze_info)
@@ -555,16 +555,16 @@ class ObjectStorageAPI(API):
                     yield d
             stream.close()
 
-    def _put_meta_backblaze(self, storage_method, key_file):
+    def _b2_credentials(self, storage_method, key_file):
         try:
-            return BackblazeUtils.put_meta_backblaze(storage_method,
-                                                     key_file)
-        except BackblazeUtilsException as e:
-            raise exc.OioException(str(e))
+            return BackblazeUtils.get_credentials(storage_method,
+                                                  key_file)
+        except BackblazeUtilsException as err:
+            raise exc.OioException(str(err))
 
     def _fetch_stream_backblaze(self, meta, chunks, ranges,
                                 storage_method, key_file):
-        backblaze_info = self._put_meta_backblaze(storage_method, key_file)
+        backblaze_info = self._b2_credentials(storage_method, key_file)
         total_bytes = 0
         current_offset = 0
         size = None
@@ -589,7 +589,7 @@ class ObjectStorageAPI(API):
                 else:
                     _size = chunk_size
             handler = BackblazeChunkDownloadHandler(
-                meta, chunks[pos], _size, _offset,
+                meta, chunks[pos], _offset, _size,
                 backblaze_info=backblaze_info)
             stream = handler.get_stream()
             if not stream:

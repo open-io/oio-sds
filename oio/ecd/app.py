@@ -3,7 +3,7 @@ from oio.common.storage_method import STORAGE_METHODS
 from oio.api.ec import ECChunkWriteHandler, ECChunkDownloadHandler
 from oio.api.replication import ReplicatedChunkWriteHandler
 from oio.api.backblaze import BackblazeChunkWriteHandler, \
-    BackblazeDownloadHandler
+    BackblazeChunkDownloadHandler
 from oio.api.backblaze_http import BackblazeUtils, BackblazeUtilsException
 from oio.api.io import ChunkReader
 from oio.common.exceptions import OioException
@@ -93,12 +93,12 @@ class ECD(object):
         upload_chunk = meta_chunk[0]
         key_file = self.conf.get('key_file')
         try:
-            meta = BackblazeUtils.put_meta_backblaze(storage_method, key_file)
-        except BackblazeUtilsException as e:
-            return Response(str(e), 500)
+            creds = BackblazeUtils.get_credentials(storage_method, key_file)
+        except BackblazeUtilsException as exc:
+            return Response(exc, 500)
         handler = BackblazeChunkWriteHandler(sysmeta, upload_chunk,
                                              meta_checksum, storage_method,
-                                             meta)
+                                             creds)
         try:
             bytes_transferred, chunks = handler.stream(source)
         except OioException as e:
@@ -113,37 +113,47 @@ class ECD(object):
         bytes_transferred, checksum, chunks = handler.stream(source, size)
         return Response("OK")
 
-    def read_ec_meta_chunk(self, storage_method, meta_chunk):
-        meta_start = None
-        meta_end = None
+    def read_ec_meta_chunk(self, storage_method, meta_chunk,
+                           meta_start=None, meta_end=None):
         headers = {}
         handler = ECChunkDownloadHandler(storage_method, meta_chunk,
                                          meta_start, meta_end, headers)
         stream = handler.get_stream()
         return Response(part_iter_to_bytes_iter(stream), 200)
 
-    def read_meta_chunk(self, storage_method, meta_chunk):
-        headers = {}
-        handler = ChunkReader(meta_chunk, headers)
+    def read_meta_chunk(self, storage_method, meta_chunk,
+                        headers={}):
+        handler = ChunkReader(meta_chunk, None, headers)
         stream = handler.get_iter()
         return Response(part_iter_to_bytes_iter(stream), 200)
 
-    def read_backblaze_meta_chunk(self, req, storage_method, meta_chunk):
-        headers = {}
+    def read_backblaze_meta_chunk(self, req, storage_method, meta_chunk,
+                                  meta_start=None, meta_end=None):
         container_id = req.headers[sys_headers['container_id']]
         sysmeta = {'container_id': container_id}
         key_file = self.conf.get('key_file')
         try:
-            meta = BackblazeUtils.put_meta_backblaze(storage_method, key_file)
-        except BackblazeUtilsException as e:
-            return Response(e, 500)
-        handler = BackblazeDownloadHandler(sysmeta, [meta_chunk],
-                                           meta, headers)
-        stream = handler.get_iter()
-        try:
-            return Response(part_backblaze_to_bytes_iter(stream), 200)
-        except OioException as e:
-            return Response(str(e), 503)
+            creds = BackblazeUtils.get_credentials(storage_method, key_file)
+        except BackblazeUtilsException as exc:
+            return Response(exc, 500)
+        if meta_start is not None:
+            if meta_start < 0:
+                offset = meta_start
+                size = -meta_start
+            elif meta_end is not None:
+                offset = meta_start
+                size = meta_end - meta_start + 1
+            else:
+                offset = meta_start
+                size = None
+        elif meta_end is not None:
+            offset = 0
+            size = meta_end + 1
+        handler = BackblazeChunkDownloadHandler(sysmeta, meta_chunk,
+                                                offset, size,
+                                                None, creds)
+        stream = handler.get_stream()
+        return Response(stream, 200)
 
     def dispatch_request(self, req):
         if req.method == 'PUT':
@@ -181,21 +191,38 @@ class ECD(object):
         elif req.method == 'GET':
             chunk_method = req.headers[sys_headers['content_chunkmethod']]
             storage_method = STORAGE_METHODS.load(chunk_method)
+            if req.range and req.range.ranges:
+                # Werkzeug give us non-inclusive ranges, but we use inclusive
+                start = req.range.ranges[0][0]
+                if req.range.ranges[0][1] is not None:
+                    end = req.range.ranges[0][1] - 1
+                else:
+                    end = None
+                my_range = (start, end)
+            else:
+                my_range = (None, None)
+
             if storage_method.ec:
                 nb_chunks = storage_method.ec_nb_data + \
                     storage_method.ec_nb_parity
                 meta_chunk = load_meta_chunk(req, nb_chunks)
                 meta_chunk[0]['size'] = \
                     int(req.headers[sys_headers['chunk_size']])
-                return self.read_ec_meta_chunk(storage_method, meta_chunk)
+                return self.read_ec_meta_chunk(storage_method, meta_chunk,
+                                               my_range[0], my_range[1])
             elif storage_method.backblaze:
                 meta_chunk = load_meta_chunk(req, 1)
                 return self.read_backblaze_meta_chunk(req, storage_method,
-                                                      meta_chunk)
+                                                      meta_chunk,
+                                                      my_range[0], my_range[1])
             else:
                 nb_chunks = int(req.headers[sys_headers['content_chunksnb']])
                 meta_chunk = load_meta_chunk(req, nb_chunks)
-                return self.read_meta_chunk(storage_method, meta_chunk)
+                headers = dict()
+                if req.range and req.range.ranges:
+                    headers['Range'] = req.range.to_header()
+                return self.read_meta_chunk(storage_method, meta_chunk,
+                                            headers)
         else:
             return Response(status=403)
 

@@ -472,7 +472,7 @@ def cid_from_name(account, ref):
     return h.hexdigest()
 
 
-def convert_ranges(ranges, length):
+def fix_ranges(ranges, length):
     if length is None or not ranges or ranges == []:
         return None
     result = []
@@ -482,19 +482,19 @@ def convert_ranges(ranges, length):
             if end == 0:
                 # bytes=-0
                 continue
-            elif end > length:
+            elif end >= length:
                 # all content must be returned
-                result.append((0, length))
+                result.append((0, length-1))
             else:
-                result.append((length - end, length))
+                result.append((length - end, length-1))
             continue
         if end is None:
             if start < length:
-                result.append((start, length))
+                result.append((start, length-1))
             else:
                 # skip
                 continue
         elif start < length:
-            result.append((start, min(end, length)))
+            result.append((start, min(end, length-1)))
 
     return result

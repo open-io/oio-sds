@@ -42,7 +42,7 @@ class CreateObject(lister.Lister):
         parser.add_argument(
             '--key-file',
             metavar='<key_file>',
-            help='file containing keys'
+            help='File containing application keys'
         )
         return parser
 

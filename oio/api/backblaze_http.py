@@ -15,7 +15,6 @@ import base64
 import hashlib
 import ConfigParser
 import json as js
-import requests
 from oio.api import io
 
 
@@ -43,8 +42,8 @@ class BackblazeUtils(object):
     b2_authorization_list = {}
 
     @staticmethod
-    def put_meta_backblaze(storage_method, application_key_path=None,
-                           renew=False):
+    def get_credentials(storage_method, application_key_path=None,
+                        renew=False):
         if not (storage_method.bucket_name and
                 storage_method.account_id and application_key_path):
             message = "%s (bucket_name=%s, account_id=%s)" % \
@@ -57,26 +56,28 @@ class BackblazeUtils(object):
             if authorization:
                 return authorization
         config = ConfigParser.ConfigParser()
-        application_key = None
-        with open(application_key_path) as f:
+        app_key = None
+        with open(application_key_path) as app_key_f:
             try:
-                config.readfp(f)
-            except IOError:
-                raise BackblazeUtilsException('file don\'t exist')
-            application_key = config.get('backblaze',
-                                         '%s.%s.application_key'
-                                         % (storage_method.account_id,
-                                            storage_method.bucket_name))
-        if not application_key:
-            raise BackblazeUtilsException('application_key not present')
+                config.readfp(app_key_f)
+            except IOError as exc:
+                raise BackblazeUtilsException(
+                    "Failed to load application key: %s"
+                    % exc)
+            app_key = config.get('backblaze',
+                                 '%s.%s.application_key'
+                                 % (storage_method.account_id,
+                                    storage_method.bucket_name))
+        if not app_key:
+            raise BackblazeUtilsException('application key not found')
         meta = {}
         meta['backblaze.account_id'] = storage_method.account_id
-        meta['backblaze.application_key'] = application_key
+        meta['backblaze.application_key'] = app_key
         meta['bucket_name'] = storage_method.bucket_name
         backblaze = Backblaze(storage_method.account_id,
-                              application_key)
+                              app_key)
         meta['authorization'] = backblaze.authorization_token
-        meta['uploadToken'] = backblaze._get_upload_token_by_bucket_name(
+        meta['upload_token'] = backblaze._get_upload_token_by_bucket_name(
             storage_method.bucket_name)
         BackblazeUtils.b2_authorization_list[key] = meta
         return meta
@@ -356,7 +357,7 @@ class Requests(object):
             raise
         except exceptions.RequestException:
             raise
-        if response.status_code != requests.codes.ok:
+        if (response.status_code / 100) != 2:
             try:
                 raise BackblazeException(response.status_code,
                                          response.json()['message'],
