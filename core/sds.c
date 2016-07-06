@@ -1115,6 +1115,10 @@ oio_sds_upload_init (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst)
 		return NULL;
 	if (dst->content_id && !oio_str_ishexa1(dst->content_id))
 		return NULL;
+	if (dst->partial || dst->append) {
+		if (!dst->content_id)
+			return NULL;
+	}
 
 	oio_ext_set_reqid (sds->session_id);
 
@@ -1747,6 +1751,11 @@ oio_sds_upload (struct oio_sds_s *sds, struct oio_sds_ul_src_s *src,
 		return (struct oio_error_s*) BADREQ("Missing parameter");
 	if (dst->content_id && !oio_str_ishexa1 (dst->content_id))
 		return (struct oio_error_s*) BADREQ("content_id not hexadecimal");
+	if (dst->partial || dst->append) {
+		if (!dst->content_id)
+			return (struct oio_error_s*) BADREQ("Append/Partial uploads"
+					" require a content_id");
+	}
 
 	if (src->type == OIO_UL_SRC_HOOK_SEQUENTIAL)
 		return (struct oio_error_s*) _upload_sequential (sds, dst, src);
@@ -2101,6 +2110,8 @@ oio_sds_link_or_upload (struct oio_sds_s *sds, struct oio_sds_ul_src_s *src,
 		return (struct oio_error_s*) BADREQ("Missing argument");
 	if (!dst->content_id)
 		return (struct oio_error_s*) BADREQ("Missing content ID");
+	if (dst->partial || dst->append)
+		return (struct oio_error_s*) BADREQ("Append and Partial uploads forbidden");
 
 	struct oio_error_s *err = oio_sds_link (sds, dst->url, dst->content_id);
 	if (!err)

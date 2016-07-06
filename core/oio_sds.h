@@ -226,22 +226,28 @@ struct oio_sds_ul_dst_s
 {
 	struct oio_url_s *url;
 
-	/* should the container be autocreated */
+	/* Should the container be autocreated */
 	unsigned int autocreate : 1;
 
-	/* should the data be appended to the content in place */
+	/* Should the data be appended to the content in place. When set to 1,
+	 * `content_id` and `meta_pos` must be set. */
 	unsigned int append : 1;
 
-	/* Do a partial upload */
+	/* Do a partial upload. When set to 1, `content_id` and `meta_pos` are
+	 * mandatory. */
 	unsigned int partial : 1;
 
 	/* output variable: how many bytes have been uploaded */
 	size_t out_size;
 
-	/* Optional: the unique content name */
+	/* The unique content name.
+	 * Optional when both `partial` and `append` are set to 0.
+	 * When set, it MUST be an hexadecimal string (with an even number of
+	 * characters). */
 	const char *content_id;
 
-	/* NULL-terminated array of property keys and values */
+	/* NULL-terminated array of property keys and values.
+	 * Set to NULL when you have no property to set upon the upload. */
 	const char * const * properties;
 
 	/* Position of the first metachunk that is to be modified */
