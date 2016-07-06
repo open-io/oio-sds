@@ -498,6 +498,7 @@ typedef void oio_sds_chunk_reporter_f (gpointer data, struct chunk_s *chunk);
 
 static GError *
 _show_content (struct oio_sds_s *sds, struct oio_url_s *url, void *cb_data,
+		oio_sds_info_reporter_f cb_info,
 		oio_sds_chunk_reporter_f cb_chunks,
 		oio_sds_property_reporter_f cb_props)
 {
@@ -511,7 +512,8 @@ _show_content (struct oio_sds_s *sds, struct oio_url_s *url, void *cb_data,
 
 	/* Get the beans */
 	err = oio_proxy_call_content_show (sds->h, url,
-		   cb_chunks ? reply_body : NULL, cb_props ? &props : NULL);
+		   cb_chunks ? reply_body : NULL,
+		   cb_props ? &props : NULL);
 
 	/* Parse the beans */
 	if (!err && reply_body->len > 0) {
@@ -534,13 +536,28 @@ _show_content (struct oio_sds_s *sds, struct oio_url_s *url, void *cb_data,
 	}
 
 	if (!err) {
-		/* First, report the properties */
-		if (cb_props) {
-			for (gchar **p=props; *p && *(p+1) ;p+=2)
-				cb_props (cb_data, *p, *(p+1));
+
+		/* First, report the user-properties */
+		for (gchar **p=props; *p && *(p+1) ;p+=2) {
+			if (!g_str_has_prefix(*p, "content-meta-"))
+				continue;
+			const char *k = *p + sizeof("content-meta-") - 1;
+			if (g_str_has_prefix(k, "x-")) {
+				if (cb_props)
+					cb_props (cb_data, k+2, *(p+1));
+			} else if (cb_info) {
+				if (!strcmp(k, "hash"))
+					cb_info (cb_data, OIO_SDS_CONTENT_HASH, *(p+1));
+				else if (!strcmp(k, "id"))
+					cb_info (cb_data, OIO_SDS_CONTENT_ID, *(p+1));
+				else if (!strcmp(k, "version"))
+					cb_info (cb_data, OIO_SDS_CONTENT_VERSION, *(p+1));
+				else if (!strcmp(k, "length"))
+					cb_info (cb_data, OIO_SDS_CONTENT_SIZE, *(p+1));
+			}
 		}
 
-		/* then the chunks */
+		/* Eventually the chunks */
 		if (cb_chunks) {
 			for (GSList *l=chunks; l ;l=l->next)
 				cb_chunks(cb_data, l->data);
@@ -895,7 +912,7 @@ _download_to_hook (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 	void _on_chunk (void *i UNUSED, struct chunk_s *chunk) {
 		chunks = g_slist_prepend (chunks, chunk);
 	}
-	err = _show_content (sds, src->url, NULL, _on_chunk, _on_prop);
+	err = _show_content (sds, src->url, NULL, NULL, _on_chunk, _on_prop);
 
 	/* Parse the beans */
 	if (!err) {
@@ -2145,6 +2162,7 @@ oio_sds_delete_container (struct oio_sds_s *sds, struct oio_url_s *url)
 struct oio_error_s*
 oio_sds_show_content (struct oio_sds_s *sds, struct oio_url_s *url,
 		void *cb_data,
+		oio_sds_info_reporter_f cb_info,
 		oio_sds_metachunk_reporter_f cb_metachunks,
 		oio_sds_property_reporter_f cb_props)
 {
@@ -2162,8 +2180,13 @@ oio_sds_show_content (struct oio_sds_s *sds, struct oio_url_s *url,
 	void _on_chunk (void *i UNUSED, struct chunk_s *chunk) {
 		chunks = g_slist_prepend (chunks, chunk);
 	}
+	void _on_info (void *i UNUSED, enum oio_sds_content_key_e k, const char *v) {
+		return cb_info (cb_data, k, v);
+	}
 
-	if (!(err = _show_content (sds, url, NULL, _on_chunk, _on_prop))) {
+	err = _show_content (sds, url, NULL,
+			cb_info ? _on_info : NULL, _on_chunk, _on_prop);
+	if (!err) {
 		GTree *positions_seen = g_tree_new_full(oio_str_cmp3, NULL, g_free, NULL);
 		chunks = g_slist_sort (chunks, (GCompareFunc)_compare_chunks);
 		for (GSList *l=chunks; l ;l=l->next) {
