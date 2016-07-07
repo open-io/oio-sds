@@ -67,53 +67,6 @@ struct file_info_s
 
 #define FILE_INFO_INIT {"",0,0}
 
-static void
-putget (const gint64 size)
-{
-	struct oio_error_s *err = NULL;
-
-	struct oio_url_s *url_random = oio_url_dup(url);
-	gchar path[32];
-	oio_str_randomize(path, oio_ext_rand_int_range(7,32), random_chars);
-	oio_url_set (url_random, OIOURL_PATH, path);
-
-	/* generate a buffer to work in. First we fill it of random bytes */
-	guint8 *buffer = g_malloc(size);
-	g_assert_nonnull (buffer);
-	oio_buf_randomize (buffer, size);
-	gchar *pre_hash =
-		g_compute_checksum_for_data (G_CHECKSUM_MD5, buffer, size);
-	g_assert_nonnull (pre_hash);
-	oio_str_upper(pre_hash);
-	do {
-		FILE *out = fopen("/tmp/pre", "w");
-		size_t w = fwrite(buffer, size, 1, out);
-		fflush(out);
-		fclose(out);
-		g_assert_cmpuint(w, ==, 1);
-	} while (0);
-
-	/* Uploads the content */
-	do {
-		struct oio_sds_ul_dst_s dst = OIO_SDS_UPLOAD_DST_INIT;
-		dst.url = url_random;
-		dst.autocreate = 1;
-		err = oio_sds_upload_from_buffer (client, &dst, buffer, size);
-		g_assert_no_error((GError*)err);
-	} while (0);
-
-	/* check the hash and size known by OIO */
-	void _cb (void *i UNUSED, enum oio_sds_content_key_e k, const char *v) {
-		if (k == OIO_SDS_CONTENT_HASH)
-			g_assert_cmpstr(pre_hash, ==, v);
-		else if (k == OIO_SDS_CONTENT_SIZE) {
-			gint64 oio_size = g_ascii_strtoll(v, NULL, 10);
-			g_assert_cmpint(size, ==, oio_size);
-		}
-	}
-	err = oio_sds_show_content (client, url_random, NULL, _cb, NULL, NULL);
-	g_assert_no_error((GError*)err);
-
 #define GET(RealSize) \
 do { \
 	/* ensure the buffer has the expected real size */ \
@@ -138,13 +91,61 @@ do { \
 	oio_str_upper(post_hash); \
 	g_assert_cmpstr(pre_hash, ==, post_hash); \
 	oio_str_clean (&post_hash); \
-	/* Dump the downloaded content into a file */ \
-	FILE *out = fopen("/tmp/post", "w"); \
-	g_assert_nonnull(out); \
-	size_t w = fwrite(buffer, dst.out_size, 1, out); \
-	g_assert_cmpuint(w, ==, 1); \
-	fclose(out); \
+	if (GRID_TRACE2_ENABLED()) { /* Dump the downloaded content into a file */ \
+		FILE *out = fopen("/tmp/post", "w"); \
+		g_assert_nonnull(out); \
+		size_t w = fwrite(buffer, dst.out_size, 1, out); \
+		g_assert_cmpuint(w, ==, 1); \
+		fclose(out); \
+	} \
 } while (0)
+
+static void
+putget (const gint64 size)
+{
+	struct oio_error_s *err = NULL;
+
+	struct oio_url_s *url_random = oio_url_dup(url);
+	gchar path[32];
+	oio_str_randomize(path, oio_ext_rand_int_range(7,32), random_chars);
+	oio_url_set (url_random, OIOURL_PATH, path);
+
+	/* generate a buffer to work in. First we fill it of random bytes */
+	guint8 *buffer = g_malloc(size);
+	g_assert_nonnull (buffer);
+	oio_buf_randomize (buffer, size);
+	gchar *pre_hash =
+		g_compute_checksum_for_data (G_CHECKSUM_MD5, buffer, size);
+	g_assert_nonnull (pre_hash);
+	oio_str_upper(pre_hash);
+	if (GRID_TRACE2_ENABLED()) {
+		FILE *out = fopen("/tmp/pre", "w");
+		size_t w = fwrite(buffer, size, 1, out);
+		fflush(out);
+		fclose(out);
+		g_assert_cmpuint(w, ==, 1);
+	}
+
+	/* Uploads the content */
+	do {
+		struct oio_sds_ul_dst_s dst = OIO_SDS_UPLOAD_DST_INIT;
+		dst.url = url_random;
+		dst.autocreate = 1;
+		err = oio_sds_upload_from_buffer (client, &dst, buffer, size);
+		g_assert_no_error((GError*)err);
+	} while (0);
+
+	/* check the hash and size known by OIO */
+	void _cb (void *i UNUSED, enum oio_sds_content_key_e k, const char *v) {
+		if (k == OIO_SDS_CONTENT_HASH)
+			g_assert_cmpstr(pre_hash, ==, v);
+		else if (k == OIO_SDS_CONTENT_SIZE) {
+			gint64 oio_size = g_ascii_strtoll(v, NULL, 10);
+			g_assert_cmpint(size, ==, oio_size);
+		}
+	}
+	err = oio_sds_show_content (client, url_random, NULL, _cb, NULL, NULL);
+	g_assert_no_error((GError*)err);
 
 	/* download the file with a buffer too large */
 	GET(size+1);
