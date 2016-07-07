@@ -713,11 +713,14 @@ _download_range_from_metachunk_replicated (struct _download_ctx_s *dl,
 		if (err) {
 			/* TODO manage the error kind to allow a retry */
 			return err;
-		} else if (r0.size == G_MAXSIZE) {
-			r0.size = 0;
 		} else {
-			r0.offset += nbread;
-			r0.size -= nbread;
+			dl->dst->out_size += nbread;
+			if (r0.size == G_MAXSIZE) {
+				r0.size = 0;
+			} else {
+				r0.offset += nbread;
+				r0.size -= nbread;
+			}
 		}
 	}
 
@@ -879,15 +882,20 @@ static int
 _write_FILE (gpointer ctx, const guint8 *buf, gsize len)
 {
 	FILE *out = ctx;
-	gsize total = 0;
+	gsize sent = 0;
 	errno = 0;
-	while (total < len) {
-		if (ferror(out))
-			break;
-		size_t w = fwrite (buf, 1, len-total, out);
-		total += w;
+	while (sent < len) {
+		size_t w = fwrite (buf+sent, 1, len-sent, out);
+		if (w > 0)
+			sent += w;
+		else {
+			if (ferror(out))
+				break;
+			if (feof(out))
+				break;
+		}
 	}
-	return total;
+	return sent;
 }
 
 static struct oio_error_s*
