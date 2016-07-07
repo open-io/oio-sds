@@ -1724,27 +1724,43 @@ _upload_sequential (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 	if (src->data.hook.size > 0 && src->data.hook.size != (size_t)-1)
 		err = oio_sds_upload_prepare(ul, src->data.hook.size);
 
+	size_t sent = 0;
+	const size_t blen = 131072;
+	guint8 *b = g_malloc(blen);
+
 	while (!err && !oio_sds_upload_done (ul)) {
 		GRID_TRACE("%s (%p) not done yet", __FUNCTION__, ul);
 
 		/* feed the upload queue */
 		if (oio_sds_upload_greedy (ul)) {
-			GRID_TRACE("%s (%p) greedy!", __FUNCTION__, ul);
-			guint8 b[8192];
-			size_t l = src->data.hook.cb (src->data.hook.ctx, b, sizeof(b));
-			switch (l) {
-				case OIO_SDS_UL__ERROR:
-					err = (struct oio_error_s*) SYSERR("data hook error");
-					break;
-				case OIO_SDS_UL__DONE:
-					err = oio_sds_upload_feed (ul, b, 0);
-					break;
-				case OIO_SDS_UL__NODATA:
-					GRID_INFO("%s No data ready from user's hook", __FUNCTION__);
-					break;
-				default:
-					err = oio_sds_upload_feed (ul, b, l);
-					break;
+			size_t max = blen;
+			if (src->data.hook.size > 0 && src->data.hook.size != (size_t)-1) {
+				const size_t remaining = src->data.hook.size - sent;
+				max = MIN(remaining, max);
+				GRID_TRACE("%s (%p) greedy, expecting %"G_GSIZE_FORMAT" bytes "
+						"(%"G_GSIZE_FORMAT" remain among %"G_GSIZE_FORMAT")",
+						__FUNCTION__, ul, max, remaining, src->data.hook.size);
+			}
+
+			if (0 == max) {
+				err = oio_sds_upload_feed (ul, b, 0);
+			} else {
+				size_t l = src->data.hook.cb (src->data.hook.ctx, b, max);
+				switch (l) {
+					case OIO_SDS_UL__ERROR:
+						err = (struct oio_error_s*) SYSERR("data hook error");
+						break;
+					case OIO_SDS_UL__DONE:
+						err = oio_sds_upload_feed (ul, b, 0);
+						break;
+					case OIO_SDS_UL__NODATA:
+						GRID_INFO("%s No data ready from user's hook", __FUNCTION__);
+						break;
+					default:
+						err = oio_sds_upload_feed (ul, b, l);
+						sent += l;
+						break;
+				}
 			}
 		}
 
@@ -1752,6 +1768,8 @@ _upload_sequential (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 		if (!err)
 			err = oio_sds_upload_step (ul);
 	}
+
+	oio_pfree0(&b, NULL);
 
 	if (!err)
 		err = oio_sds_upload_commit (ul);
