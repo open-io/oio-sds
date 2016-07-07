@@ -55,6 +55,7 @@ static int _upload (int argc, char **argv, gboolean append, int replace) {
 		return remaining;
 	}
 
+	gchar *content_id = NULL;
 	struct oio_sds_ul_src_s src = OIO_SDS_UPLOAD_SRC_INIT;
 	src.type = OIO_UL_SRC_HOOK_SEQUENTIAL;
 	src.data.hook.cb = _gen;
@@ -67,9 +68,20 @@ static int _upload (int argc, char **argv, gboolean append, int replace) {
 	dst.append = BOOL(append);
 	dst.partial = BOOL(replace >= 0);
 	dst.meta_pos = replace;
+
+	if (dst.append || dst.partial) {
+		void _cb(void *i UNUSED, enum oio_sds_content_key_e k, const char *v) {
+			if (k == OIO_SDS_CONTENT_ID)
+				content_id = g_strdup(v);
+		}
+		err = oio_sds_show_content (sds, url, NULL, _cb, NULL, NULL);
+		g_assert_no_error(GERROR(err));
+		dst.content_id = content_id;
+	}
+
 	err = oio_sds_upload(sds, &src, &dst);
 	g_assert_no_error(GERROR(err));
-
+	oio_str_clean (&content_id);
 	oio_sds_pfree (&sds);
 	return 0;
 }
