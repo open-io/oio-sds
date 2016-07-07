@@ -251,7 +251,7 @@ _chunks_load (GSList **out, struct json_object *jtab)
 
 		const char *h = json_object_get_string(jhash);
 		if (!oio_str_ishexa(h, 2*sizeof(chunk_hash_t)))
-			err = NEWERROR(0, "JSON: invalid chunk hash: not hexa of %"G_GSIZE_FORMAT,
+			err = SYSERR("JSON: invalid chunk hash: not hexa of %"G_GSIZE_FORMAT,
 					2*sizeof(chunk_hash_t));
 		else {
 			struct chunk_s *c = _load_one_chunk(jurl, jsize, jpos, jscore);
@@ -294,10 +294,10 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result)
 	*result = NULL;
 
 	if (!lchunks)
-		return NEWERROR(CODE_INTERNAL_ERROR, "No chunk received");
+		return SYSERR("No chunk received");
 	const guint meta_bound = _get_meta_bound (lchunks);
 	if (meta_bound > 1024*1024)
-		return NEWERROR(CODE_INTERNAL_ERROR, "Too many metachunks");
+		return SYSERR("Too many metachunks");
 
 	/* build the metachunk */
 	struct metachunk_s **out = g_malloc0 ((meta_bound+1) * sizeof(void*));
@@ -319,7 +319,7 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result)
 		struct metachunk_s *mc = out[i];
 		if (!mc->chunks) {
 			_metachunk_cleanv (out);
-			return NEWERROR (0, "Invalid chunk sequence: gap found at [%u]", i);
+			return SYSERR("Invalid chunk sequence: gap found at [%u]", i);
 		}
 		if (!oio_sds_no_shuffle)
 			mc->chunks = oio_ext_gslist_shuffle (mc->chunks);
@@ -523,7 +523,7 @@ _show_content (struct oio_sds_s *sds, struct oio_url_s *url, void *cb_data,
 				reply_body->str, reply_body->len);
 		json_tokener_free (tok);
 		if (!json_object_is_type(jbody, json_type_array)) {
-			err = NEWERROR(0, "Invalid JSON from the OIO proxy");
+			err = SYSERR("Invalid JSON from the OIO proxy");
 		} else {
 			if (NULL != (err = _chunks_load (&chunks, jbody))) {
 				g_prefix_error (&err, "Parsing: ");
@@ -627,6 +627,7 @@ _download_range_from_chunk (struct _download_ctx_s *dl,
 {
 	size_t _write_wrapper (char *data, size_t s, size_t n, void *ignored UNUSED) {
 		size_t total = s*n;
+	GRID_WARN("%s len=%"G_GSIZE_FORMAT, __FUNCTION__, total);
 		if (total + *p_nbread > range->size) {
 			GRID_WARN("server gave us more data than expected "
 					"(%"G_GSIZE_FORMAT"/%"G_GSIZE_FORMAT")",
@@ -671,13 +672,13 @@ _download_range_from_chunk (struct _download_ctx_s *dl,
 
 	CURLcode rc = curl_easy_perform (h);
 	if (rc != CURLE_OK) {
-		err = NEWERROR(0, "CURL: download error [%s]: (%d) %s", c0_url,
+		err = SYSERR("CURL: download error [%s]: (%d) %s", c0_url,
 				rc, curl_easy_strerror(rc));
 	} else {
 		long code = 0;
 		rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
 		if (2 != (code/100))
-			err = NEWERROR(0, "Download: (%ld)", code);
+			err = SYSERR("Download: (%ld)", code);
 	}
 
 	curl_easy_cleanup (h);
@@ -701,7 +702,7 @@ _download_range_from_metachunk_replicated (struct _download_ctx_s *dl,
 				__FUNCTION__, r0.offset, r0.size);
 
 		if (!tail_chunks)
-			return NEWERROR (CODE_PLATFORM_ERROR, "Too many failures");
+			return ERRPTF("Too many failures");
 		struct chunk_s *chunk = tail_chunks->data;
 		tail_chunks = tail_chunks->next;
 
@@ -851,11 +852,11 @@ _download (struct _download_ctx_s *dl)
 	if (dl->src->ranges && dl->src->ranges[0]) {
 		for (struct oio_sds_dl_range_s **p=dl->src->ranges; *p ;++p) {
 			if ((*p)->offset >= total)
-				return NEWERROR (CODE_BAD_REQUEST, "Range not satisfiable");
+				return BADREQ("Range not satisfiable");
 			if ((*p)->size > total)
-				return NEWERROR (CODE_BAD_REQUEST, "Range not satisfiable");
+				return BADREQ("Range not satisfiable");
 			if ((*p)->offset + (*p)->size > total)
-				return NEWERROR (CODE_BAD_REQUEST, "Range not satisfiable");
+				return BADREQ("Range not satisfiable");
 		}
 	} else {
 		if (dl->dst->data.hook.length == (size_t)-1) {
@@ -905,7 +906,7 @@ _download_to_hook (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 	g_assert (dst->type == OIO_DL_DST_HOOK_SEQUENTIAL);
 	dst->out_size = 0;
 	if (!dst->data.hook.cb)
-		return (struct oio_error_s*) NEWERROR (CODE_BAD_REQUEST, "Missing callback");
+		return (struct oio_error_s*) BADREQ("Missing callback");
 	_dl_debug (__FUNCTION__, src, dst);
 
 	GError *err = NULL;
@@ -958,8 +959,7 @@ _download_to_file (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 
 	fd = open (dst->data.file.path, O_CREAT|O_EXCL|O_WRONLY, 0644);
 	if (fd < 0) {
-		err = (struct oio_error_s*) NEWERROR (CODE_INTERNAL_ERROR,
-				"open() error: (%d) %s", errno, strerror(errno));
+		err = (struct oio_error_s*) SYSERR("open() error: (%d) %s", errno, strerror(errno));
 	} else {
 		out = fdopen(fd, "a");
 		if (out) {
@@ -973,8 +973,8 @@ _download_to_file (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 				} }
 			};
 			err = _download_to_hook (sds, src, &snk0);
-			dst->out_size = snk0.out_size;
 			fclose (out);
+			dst->out_size = snk0.out_size;
 		}
 		if (!err) {
 			posix_fadvise (fd, 0, 0, POSIX_FADV_DONTNEED);
@@ -1001,7 +1001,7 @@ _download_to_buffer (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 		for (struct oio_sds_dl_range_s **p=src->ranges; *p ;++p)
 			total += (*p)->size;
 		if (total > dst->data.buffer.length)
-			return (struct oio_error_s*) NEWERROR (CODE_BAD_REQUEST,
+			return (struct oio_error_s*) BADREQ(
 					"Buffer too small (%"G_GSIZE_FORMAT") "
 					"for the specified ranges (%"G_GSIZE_FORMAT")",
 					dst->data.buffer.length, total);
@@ -1012,8 +1012,7 @@ _download_to_buffer (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 
 	out = fmemopen(dst->data.buffer.ptr, dst->data.buffer.length, "w");
 	if (!out) {
-		err = (struct oio_error_s*) NEWERROR (CODE_INTERNAL_ERROR,
-				"fmemopen() error: (%d) %s", errno, strerror(errno));
+		err = (struct oio_error_s*) SYSERR("fmemopen() error: (%d) %s", errno, strerror(errno));
 	} else {
 		struct oio_sds_dl_dst_s dst0 = {
 			.out_size = 0,
@@ -1025,9 +1024,8 @@ _download_to_buffer (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 			} }
 		};
 		err = _download_to_hook (sds, src, &dst0);
-		if (out)
-			fclose (out);
 		dst->out_size = dst0.out_size;
+		fclose (out);
 	}
 	return err;
 }
@@ -1048,7 +1046,7 @@ oio_sds_download (struct oio_sds_s *sds, struct oio_sds_dl_src_s *dl,
 		return _download_to_file (sds, dl, snk);
 	if (snk->type == OIO_DL_DST_BUFFER)
 		return _download_to_buffer (sds, dl, snk);
-	return (struct oio_error_s*) NEWERROR (CODE_INTERNAL_ERROR, "Sink type not supported");
+	return (struct oio_error_s*) SYSERR("Sink type not supported");
 }
 
 struct oio_error_s*
@@ -1277,7 +1275,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 		struct json_object *jbody = json_tokener_parse_ex (tok,
 				reply_body->str, reply_body->len);
 		if (!json_object_is_type(jbody, json_type_array))
-			err = NEWERROR(0, "Invalid JSON from the OIO proxy");
+			err = SYSERR("Invalid JSON from the OIO proxy");
 		else if (NULL != (err = _chunks_load (&ul->chunks, jbody)))
 			g_prefix_error (&err, "Parsing: ");
 		json_object_put (jbody);
@@ -1349,7 +1347,7 @@ _sds_upload_finish (struct oio_sds_ul_s *ul)
 	GRID_TRACE("%s uploads %u/%u failed", __FUNCTION__, failures, total);
 
 	if (failures >= total) {
-		err = NEWERROR(CODE_PLATFORM_ERROR, "No upload succeeded");
+		err = ERRPTF("No upload succeeded");
 	} else {
 		/* patch the chunk sizes and positions */
 		ul->mc->size = ul->local_done;
@@ -1803,7 +1801,7 @@ oio_sds_upload (struct oio_sds_s *sds, struct oio_sds_ul_src_s *src,
 	if (src->type == OIO_UL_SRC_HOOK_SEQUENTIAL)
 		return (struct oio_error_s*) _upload_sequential (sds, dst, src);
 
-	return (struct oio_error_s*) NEWERROR(0, "Invalid argument: %s",
+	return (struct oio_error_s*) BADREQ("Invalid argument: %s",
 			"source type not managed");
 }
 
@@ -1991,7 +1989,7 @@ _single_list (struct oio_sds_list_param_s *param,
 		struct json_object *jbody = json_tokener_parse_ex (tok,
 				reply_body->str, reply_body->len);
 		if (!json_object_is_type(jbody, json_type_object)) {
-			err = NEWERROR(0, "Invalid JSON from the OIO proxy");
+			err = ERRPTF("Invalid JSON from the OIO proxy");
 		} else {
 			size_t count_items = 0;
 			if (!(err = _notify_list_result (listener, jbody, &count_items)))
@@ -2010,9 +2008,9 @@ oio_sds_list (struct oio_sds_s *sds, struct oio_sds_list_param_s *param,
 		struct oio_sds_list_listener_s *listener)
 {
 	if (!sds || !param || !listener || !param->url)
-		return (struct oio_error_s*) NEWERROR(CODE_BAD_REQUEST, "Missing argument");
+		return (struct oio_error_s*) BADREQ("Missing argument");
 	if (!oio_url_has_fq_container (param->url))
-		return (struct oio_error_s*) NEWERROR(CODE_BAD_REQUEST, "Partial URI");
+		return (struct oio_error_s*) BADREQ("Partial URI");
 	oio_ext_set_reqid (sds->session_id);
 
 	GRID_DEBUG("LIST prefix %s marker %s end %s max %"G_GSIZE_FORMAT,
