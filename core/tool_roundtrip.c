@@ -25,6 +25,7 @@ License along with this library.
 #include "internals.h"
 #include "oio_core.h"
 #include "oio_sds.h"
+#include "oioext.h"
 
 #define NOERROR(E) g_assert_no_error((GError*)(E))
 
@@ -65,6 +66,119 @@ struct file_info_s
 };
 
 #define FILE_INFO_INIT {"",0,0}
+
+#define GET(RealSize) \
+do { \
+	/* ensure the buffer has the expected real size */ \
+	buffer = g_realloc (buffer, RealSize); \
+	g_assert_nonnull (buffer); \
+	memset(buffer, 0, RealSize); \
+	/* down and check the size of the result */ \
+	struct oio_sds_dl_dst_s dst = {0}; \
+	dst.type = OIO_DL_DST_BUFFER; \
+	dst.data.buffer.ptr = buffer; \
+	dst.data.buffer.length = RealSize; \
+	struct oio_sds_dl_src_s src = {0}; \
+	src.url = url_random; \
+	src.ranges = NULL; \
+	err = oio_sds_download (client, &src, &dst); \
+	g_assert_no_error((GError*)err); \
+	g_assert_cmpuint(dst.out_size, ==, size); \
+	/* Check the hash of the downloaded content */ \
+	gchar *post_hash = \
+		g_compute_checksum_for_data(G_CHECKSUM_MD5, buffer, dst.out_size); \
+	g_assert_nonnull(post_hash); \
+	oio_str_upper(post_hash); \
+	g_assert_cmpstr(pre_hash, ==, post_hash); \
+	oio_str_clean (&post_hash); \
+	if (GRID_TRACE2_ENABLED()) { /* Dump the downloaded content into a file */ \
+		FILE *out = fopen("/tmp/post", "w"); \
+		g_assert_nonnull(out); \
+		size_t w = fwrite(buffer, dst.out_size, 1, out); \
+		g_assert_cmpuint(w, ==, 1); \
+		fclose(out); \
+	} \
+} while (0)
+
+static void
+putget (const gint64 size)
+{
+	struct oio_error_s *err = NULL;
+
+	struct oio_url_s *url_random = oio_url_dup(url);
+	gchar path[32];
+	oio_str_randomize(path, oio_ext_rand_int_range(7,32), random_chars);
+	oio_url_set (url_random, OIOURL_PATH, path);
+
+	/* generate a buffer to work in. First we fill it of random bytes */
+	guint8 *buffer = g_malloc(size);
+	g_assert_nonnull (buffer);
+	oio_buf_randomize (buffer, size);
+	gchar *pre_hash =
+		g_compute_checksum_for_data (G_CHECKSUM_MD5, buffer, size);
+	g_assert_nonnull (pre_hash);
+	oio_str_upper(pre_hash);
+	if (GRID_TRACE2_ENABLED()) {
+		FILE *out = fopen("/tmp/pre", "w");
+		size_t w = fwrite(buffer, size, 1, out);
+		fflush(out);
+		fclose(out);
+		g_assert_cmpuint(w, ==, 1);
+	}
+
+	/* Uploads the content */
+	do {
+		struct oio_sds_ul_dst_s dst = OIO_SDS_UPLOAD_DST_INIT;
+		dst.url = url_random;
+		dst.autocreate = 1;
+		err = oio_sds_upload_from_buffer (client, &dst, buffer, size);
+		g_assert_no_error((GError*)err);
+	} while (0);
+
+	/* check the hash and size known by OIO */
+	void _cb (void *i UNUSED, enum oio_sds_content_key_e k, const char *v) {
+		if (k == OIO_SDS_CONTENT_HASH)
+			g_assert_cmpstr(pre_hash, ==, v);
+		else if (k == OIO_SDS_CONTENT_SIZE) {
+			gint64 oio_size = g_ascii_strtoll(v, NULL, 10);
+			g_assert_cmpint(size, ==, oio_size);
+		}
+	}
+	err = oio_sds_show_content (client, url_random, NULL, _cb, NULL, NULL);
+	g_assert_no_error((GError*)err);
+
+	/* download the file with a buffer too large */
+	GET(size+1);
+	GET(size);
+
+	oio_pfree0 (&buffer, NULL);
+	oio_url_pclean (&url_random);
+	oio_str_clean (&pre_hash);
+}
+
+static void
+putget_all_sizes (void)
+{
+	const gchar *v = g_getenv("OIO_CHUNK_SIZE");
+	if (!v) {
+		g_test_skip("No chunk size configured");
+		return;
+	}
+	gint64 chunksize = g_ascii_strtoll(v, NULL, 10);
+	if (chunksize > 10*1024*1024) {
+		g_test_skip("chunk size too big");
+		return;
+	}
+	g_assert(chunksize != 0);
+	g_assert(chunksize != G_MAXINT64);
+	g_assert(chunksize != G_MININT64);
+
+	for (gsize i=1; i<7 ;++i) {
+		putget ((i*chunksize)-1);
+		putget ((i*chunksize));
+		putget ((i*chunksize)+1);
+	}
+}
 
 static void
 _checksum_file (const char *path, struct file_info_s *fi)
@@ -180,16 +294,20 @@ _roundtrip_tail (struct file_info_s *fi0, const char * content_id,
 	/* get details on the content */
 	gsize max_offset = 0, max_size = 0;
 	void _on_metachunk (void *i UNUSED, guint seq UNUSED, gsize offt, gsize len) {
-		GRID_TRACE2("metachunk: %u, %"G_GSIZE_FORMAT" %"G_GSIZE_FORMAT,
+		GRID_DEBUG("metachunk: %u, %"G_GSIZE_FORMAT" %"G_GSIZE_FORMAT,
 				seq, offt, len);
 		max_offset = MAX(max_offset, offt);
 		max_size = MAX(max_size, offt+len);
 	}
 	void _on_property (void *i UNUSED, const char *k UNUSED,
 			const char *v UNUSED) {
-		GRID_TRACE2("property: '%s' -> '%s'", k, v);
+		GRID_DEBUG("property: '%s' -> '%s'", k, v);
 	}
-	err = oio_sds_show_content (client, url, NULL, _on_metachunk, _on_property);
+	void _on_info (void *i UNUSED, enum oio_sds_content_key_e k, const char *v) {
+		GRID_DEBUG("info: '%d' -> '%s'", k, v);
+	}
+	err = oio_sds_show_content (client, url, NULL, _on_info, _on_metachunk,
+			_on_property);
 	NOERROR(err);
 
 	/* if there is more than one metachunk, voluntarily ask a range crossing
@@ -499,6 +617,11 @@ main(int argc, char **argv)
 	}
 	GRID_DEBUG("Client ready to [%s]", oio_url_get (url, OIOURL_NS));
 
+	/* Initiate simple put/get tests that check the size/hash are correct */
+	g_test_add_func("/oiosds/putget", putget_all_sizes);
+
+	/* then add a variety of tests that involve multiple appends, metachunk
+	 * replacements */
 	struct test_def_s {
 		const char *tag;
 		test_func_f func;
@@ -509,16 +632,13 @@ main(int argc, char **argv)
 		{ "update/file/asis", _roundtrip_put_multipart },
 		{ NULL, NULL }
 	};
-
-	for (struct test_def_s *pdef=putv; pdef->tag && pdef->func ;++pdef) {
+	for (struct test_def_s *pdef=putv; pdef->tag && pdef->func ;++pdef)
 		ADD_TEST (pdef->tag, OIO_HDRCASE_NONE, pdef->func);
-	}
 	ADD_TEST ("put/file/asis", OIO_HDRCASE_LOW,    _roundtrip_put_from_file);
 	ADD_TEST ("put/file/asis", OIO_HDRCASE_1CAP,   _roundtrip_put_from_file);
 	ADD_TEST ("put/file/asis", OIO_HDRCASE_RANDOM, _roundtrip_put_from_file);
 
 	int rc = g_test_run();
-
 	oio_sds_pfree (&client);
 	oio_url_pclean (&url);
 	return rc;

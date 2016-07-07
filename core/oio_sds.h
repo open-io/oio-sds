@@ -21,7 +21,7 @@ License along with this library.
 
 /* Version started to be defined in June, 2016. Version prior to 20160600
  * have no ABI incompatibilities. */
-#define OIO_SDS_VERSION 20160604
+#define OIO_SDS_VERSION 20160707
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,6 +42,21 @@ enum oio_sds_config_e
 	/* expects an <int> used for its boolean value */
 	OIOSDS_CFG_FLAG_SYNCATDOWNLOAD,
 };
+
+enum oio_sds_content_key_e
+{
+	OIO_SDS_CONTENT_ID = 1,
+	OIO_SDS_CONTENT_VERSION = 2,
+	OIO_SDS_CONTENT_HASH = 3,
+	OIO_SDS_CONTENT_SIZE = 4,
+	OIO_SDS_CONTENT_CHUNKMETHOD = 5,
+};
+
+/* How properties are reported.
+ * @param key the name of the property
+ * @param value its value ... suprising isn't it? */
+typedef void (*oio_sds_info_reporter_f) (void *cb_data,
+		enum oio_sds_content_key_e key, const char *value);
 
 /* How properties are reported.
  * @param key the name of the property
@@ -211,10 +226,12 @@ struct oio_error_s* oio_sds_download_to_file (struct oio_sds_s *sds,
  * boundaries.
  *
  * @param cb_data not even checked, implementation-dependant
+ * @param cb_info ignored if NULL
  * @param cb_metachunks ignored if NULL
  * @param cb_props ignoed if NULL */
 struct oio_error_s* oio_sds_show_content (struct oio_sds_s *sds,
 		struct oio_url_s *u, void *cb_data,
+		oio_sds_info_reporter_f cb_info,
 		oio_sds_metachunk_reporter_f cb_metachunks,
 		oio_sds_property_reporter_f cb_props);
 
@@ -226,22 +243,28 @@ struct oio_sds_ul_dst_s
 {
 	struct oio_url_s *url;
 
-	/* should the container be autocreated */
+	/* Should the container be autocreated */
 	unsigned int autocreate : 1;
 
-	/* should the data be appended to the content in place */
+	/* Should the data be appended to the content in place. When set to 1,
+	 * `content_id` and `meta_pos` must be set. */
 	unsigned int append : 1;
 
-	/* Do a partial upload */
+	/* Do a partial upload. When set to 1, `content_id` and `meta_pos` are
+	 * mandatory. */
 	unsigned int partial : 1;
 
 	/* output variable: how many bytes have been uploaded */
 	size_t out_size;
 
-	/* Optional: the unique content name */
+	/* The unique content name.
+	 * Optional when both `partial` and `append` are set to 0.
+	 * When set, it MUST be an hexadecimal string (with an even number of
+	 * characters). */
 	const char *content_id;
 
-	/* NULL-terminated array of property keys and values */
+	/* NULL-terminated array of property keys and values.
+	 * Set to NULL when you have no property to set upon the upload. */
 	const char * const * properties;
 
 	/* Position of the first metachunk that is to be modified */
@@ -316,6 +339,8 @@ struct oio_sds_ul_src_s
 		} hook;
 	} data;
 };
+
+#define OIO_SDS_UPLOAD_SRC_INIT {.type=0, .data={ .hook={.cb=NULL, .ctx=NULL, .size=0}}}
 
 /* works with fully qualified urls (content) and local paths */
 struct oio_error_s* oio_sds_upload (struct oio_sds_s *sds,
