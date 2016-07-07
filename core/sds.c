@@ -513,7 +513,7 @@ _show_content (struct oio_sds_s *sds, struct oio_url_s *url, void *cb_data,
 	/* Get the beans */
 	err = oio_proxy_call_content_show (sds->h, url,
 		   cb_chunks ? reply_body : NULL,
-		   cb_props ? &props : NULL);
+		   cb_props || cb_info ? &props : NULL);
 
 	/* Parse the beans */
 	if (!err && reply_body->len > 0) {
@@ -554,6 +554,8 @@ _show_content (struct oio_sds_s *sds, struct oio_url_s *url, void *cb_data,
 					cb_info (cb_data, OIO_SDS_CONTENT_VERSION, *(p+1));
 				else if (!strcmp(k, "length"))
 					cb_info (cb_data, OIO_SDS_CONTENT_SIZE, *(p+1));
+				else if (!strcmp(k, "chunk-method"))
+					cb_info (cb_data, OIO_SDS_CONTENT_CHUNKMETHOD, *(p+1));
 			}
 		}
 
@@ -627,7 +629,6 @@ _download_range_from_chunk (struct _download_ctx_s *dl,
 {
 	size_t _write_wrapper (char *data, size_t s, size_t n, void *ignored UNUSED) {
 		size_t total = s*n;
-	GRID_WARN("%s len=%"G_GSIZE_FORMAT, __FUNCTION__, total);
 		if (total + *p_nbread > range->size) {
 			GRID_WARN("server gave us more data than expected "
 					"(%"G_GSIZE_FORMAT"/%"G_GSIZE_FORMAT")",
@@ -710,7 +711,7 @@ _download_range_from_metachunk_replicated (struct _download_ctx_s *dl,
 		size_t nbread = 0;
 		GError *err = _download_range_from_chunk (dl, range,
 				chunk->url, NULL, &nbread);
-		g_assert (nbread <= r0.size);
+		g_assert_cmpuint (nbread, <=, r0.size);
 		if (err) {
 			/* TODO manage the error kind to allow a retry */
 			return err;
@@ -764,16 +765,19 @@ _download_range_from_metachunk_ec(struct _download_ctx_s *dl,
 		size_t nbread = 0;
 		GError *err = _download_range_from_chunk(dl, range, url,
 				(const char**)headers->pdata, &nbread);
-		g_assert (nbread <= r0.size);
+		g_assert_cmpuint (nbread, <=, r0.size);
 		if (err) {
 			/* TODO manage the error kind to allow a retry */
 			g_ptr_array_free(headers, TRUE);
 			return err;
-		} else if (r0.size == G_MAXSIZE) {
-			r0.size = 0;
 		} else {
-			r0.offset += nbread;
-			r0.size -= nbread;
+			dl->dst->out_size += nbread;
+			if (r0.size == G_MAXSIZE) {
+				r0.size = 0;
+			} else {
+				r0.offset += nbread;
+				r0.size -= nbread;
+			}
 		}
 	}
 
@@ -787,8 +791,8 @@ _download_range_from_metachunk (struct _download_ctx_s *dl,
 		struct oio_sds_dl_range_s *range, struct metachunk_s *meta)
 {
 	GRID_TRACE ("%s %"G_GSIZE_FORMAT"+%"G_GSIZE_FORMAT
-			" from [%i] #=%u %"G_GSIZE_FORMAT"+%"G_GSIZE_FORMAT,
-			__FUNCTION__, range->offset, range->size,
+			" chunk-method=%s from [%i] #=%u %"G_GSIZE_FORMAT"+%"G_GSIZE_FORMAT,
+			__FUNCTION__, range->offset, range->size, dl->chunk_method,
 			meta->meta, g_slist_length (meta->chunks),
 			meta->offset, meta->size);
 
@@ -836,6 +840,10 @@ static GError *
 _download (struct _download_ctx_s *dl)
 {
 	g_assert (dl->dst->type == OIO_DL_DST_HOOK_SEQUENTIAL);
+
+	if (!oio_str_is_set(dl->chunk_method))
+		return SYSERR("Download impossible: chunk-method not set");
+
 	struct oio_sds_dl_range_s **ranges = dl->src->ranges;
 	struct oio_sds_dl_range_s range_auto = {0,0};
 	struct oio_sds_dl_range_s *range_autov[2] = {&range_auto, NULL};
@@ -914,21 +922,18 @@ _download_to_hook (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 	GSList *chunks = NULL;
 
 	/* Get the beans */
-	void _on_prop (void *i UNUSED, const char *k, const char *v) {
-		if (!g_ascii_strcasecmp(k, "content-meta-chunk-method"))
+	void _on_info (void *i UNUSED, enum oio_sds_content_key_e k, const char *v) {
+		if (k == OIO_SDS_CONTENT_CHUNKMETHOD)
 			chunk_method = g_strdup(v);
 	}
 	void _on_chunk (void *i UNUSED, struct chunk_s *chunk) {
 		chunks = g_slist_prepend (chunks, chunk);
 	}
-	err = _show_content (sds, src->url, NULL, NULL, _on_chunk, _on_prop);
 
 	/* Parse the beans */
-	if (!err) {
-		if (chunk_method && _chunk_method_needs_ecd(chunk_method) && !oio_str_is_set(sds->ecd))
-			err = NEWERROR(CODE_NOT_IMPLEMENTED, "cannot download this without ecd");
-	}
+	err = _show_content (sds, src->url, NULL, _on_info, _on_chunk, NULL);
 
+	/* download from the beans */
 	if (!err) {
 		struct _download_ctx_s dl = {
 			.sds = sds, .dst = dst, .src = src, .chunk_method = chunk_method,

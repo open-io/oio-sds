@@ -21,7 +21,7 @@ License along with this library.
 
 /* Version started to be defined in June, 2016. Version prior to 20160600
  * have no ABI incompatibilities. */
-#define OIO_SDS_VERSION 20160605
+#define OIO_SDS_VERSION 20160707
 
 #ifdef __cplusplus
 extern "C" {
@@ -49,6 +49,7 @@ enum oio_sds_content_key_e
 	OIO_SDS_CONTENT_VERSION = 2,
 	OIO_SDS_CONTENT_HASH = 3,
 	OIO_SDS_CONTENT_SIZE = 4,
+	OIO_SDS_CONTENT_CHUNKMETHOD = 5,
 };
 
 /* How properties are reported.
