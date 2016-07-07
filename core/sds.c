@@ -1010,7 +1010,7 @@ _download_to_buffer (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 		 * the first 'dst->data.buffer.length' of the content. */
 	}
 
-	out = fmemopen(dst->data.buffer.ptr, dst->data.buffer.length, "w");
+	out = fmemopen(dst->data.buffer.ptr, dst->data.buffer.length, "wb");
 	if (!out) {
 		err = (struct oio_error_s*) SYSERR("fmemopen() error: (%d) %s", errno, strerror(errno));
 	} else {
