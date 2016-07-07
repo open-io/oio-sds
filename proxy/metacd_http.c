@@ -448,10 +448,11 @@ _task_reload_lb(gpointer p UNUSED)
 
 	ADAPTIVE_PERIOD_ONSUCCESS(lb_downstream_delay);
 	gchar **tt = NULL;
-	NSINFO_READ(tt = g_strdupv_inline(srvtypes));
-
-	oio_lb_world__reload_pools(lb_world, lb, &nsinfo);
-	oio_lb_world__reload_storage_policies(lb_world, lb, &nsinfo);
+	NSINFO_READ(
+		tt = g_strdupv_inline(srvtypes);
+		oio_lb_world__reload_pools(lb_world, lb, &nsinfo);
+		oio_lb_world__reload_storage_policies(lb_world, lb, &nsinfo);
+	);
 
 	if (tt) {
 		for (gchar **t=tt; *t ;++t)

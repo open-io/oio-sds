@@ -87,6 +87,14 @@ void
 oio_lb_world__reload_storage_policies(struct oio_lb_world_s *lbw,
 		struct oio_lb_s *lb, struct namespace_info_s *nsinfo)
 {
+	EXTRA_ASSERT(lbw != NULL);
+	EXTRA_ASSERT(lb != NULL);
+	EXTRA_ASSERT(nsinfo != NULL);
+
+	if (!nsinfo->storage_policy) {
+		GRID_INFO("Not checking storage policies: configuration is NULL");
+		return;
+	}
 	void _make_pools(gpointer key, gpointer val UNUSED, gpointer udata UNUSED)
 	{
 		const char *stgpol_name = key;
@@ -110,6 +118,14 @@ void
 oio_lb_world__reload_pools(struct oio_lb_world_s *lbw,
 		struct oio_lb_s *lb, struct namespace_info_s *nsinfo)
 {
+	EXTRA_ASSERT(lbw != NULL);
+	EXTRA_ASSERT(lb != NULL);
+	EXTRA_ASSERT(nsinfo != NULL);
+
+	if (!nsinfo->service_pools) {
+		GRID_INFO("Not loading service pools: configuration is NULL");
+		return;
+	}
 	GRID_DEBUG("Loading pools from configuration");
 	void _reload_pool(const gchar *name, GByteArray *def,
 			gpointer unused UNUSED) {

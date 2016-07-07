@@ -77,7 +77,7 @@ static gpointer _worker_clients (gpointer p);
 static const struct gridd_request_descr_s * _get_service_requests (void);
 
 static GError* _reload_lb_world(
-		struct oio_lb_world_s *lbw, struct oio_lb_s *lb);
+		struct oio_lb_world_s *lbw, struct oio_lb_s *lb, gboolean flush);
 
 // Static variables
 static struct sqlx_service_s SRV = {{0}};
@@ -937,8 +937,11 @@ sqlx_reload_lb_service_types(struct oio_lb_world_s *lbw, struct oio_lb_s *lb,
 }
 
 static GError*
-_reload_lb_world(struct oio_lb_world_s *lbw, struct oio_lb_s *lb)
+_reload_lb_world(struct oio_lb_world_s *lbw, struct oio_lb_s *lb,
+		gboolean flush)
 {
+	if (flush)
+		oio_lb_world__flush(lbw);
 	GSList *list_srvtypes = NULL;
 	GError *err = conscience_get_types(SRV.ns_name, &list_srvtypes);
 	if (err)
@@ -962,7 +965,7 @@ sqlx_task_reload_lb (struct sqlx_service_s *ss)
 		return;
 
 	oio_lb_world__reload_pools(ss->lb_world, ss->lb, SRV.nsinfo);
-	GError *err = _reload_lb_world(ss->lb_world, ss->lb);
+	GError *err = _reload_lb_world(ss->lb_world, ss->lb, FALSE);
 	if (err) {
 		GRID_WARN("Failed to reload LB world: %s", err->message);
 		g_clear_error(&err);
@@ -981,7 +984,7 @@ _dispatch_RELOAD (struct gridd_reply_ctx_s *reply, gpointer pss, gpointer i)
 	struct sqlx_service_s *ss = pss;
 	g_assert (ss != NULL);
 
-	GError *err = _reload_lb_world(ss->lb_world, ss->lb);
+	GError *err = _reload_lb_world(ss->lb_world, ss->lb, TRUE);
 	if (err)
 		reply->send_error (0, err);
 	else
