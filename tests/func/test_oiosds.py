@@ -123,16 +123,22 @@ def test_get(lib):
         (("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""),
             (503, {}, "")),
         (("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""),
-            (200, {}, "[]")),
+			(200, {
+				"x-oio-content-meta-chunk-method":"plain"
+				}, "[]")),
 
         (("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""),
-            (200, {}, json.dumps([
+			(200, {
+				"x-oio-content-meta-chunk-method":"plain"
+				}, json.dumps([
                 {"url": "http://%s/%s%d" % (urls[1], czero, 0),
                  "pos": "0", "size": 64, "hash": hash_zero},
                                  ]))),
 
         (("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""),
-            (200, {}, json.dumps([
+            (200, {
+				"x-oio-content-meta-chunk-method":"plain"
+				}, json.dumps([
              {"url": "http://%s/%s%d" % (urls[1], czero, 1),
               "pos": "0", "size": 64, "hash": hash_zero},
              {"url": "http://%s/%s%d" % (urls[2], czero, 2),
@@ -142,7 +148,9 @@ def test_get(lib):
              ]))),
 
         (("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""),
-            (200, {}, json.dumps([
+			(200, {
+				"x-oio-content-meta-chunk-method":"plain"
+				}, json.dumps([
              {"url": "http://%s/%s%d" % (urls[1], czero, 4),
               "pos": "0.0", "size": 16, "hash": hash_zero},
              {"url": "http://%s/%s%d" % (urls[2], czero, 5),
