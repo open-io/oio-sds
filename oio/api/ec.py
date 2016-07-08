@@ -24,7 +24,7 @@ from oio.common.exceptions import ChunkReadTimeout, ChunkWriteTimeout, \
     ConnectionTimeout, SourceReadTimeout, SourceReadError
 from oio.common.http import HeadersDict, parse_content_range, \
     ranges_from_http_header
-from oio.common.utils import convert_ranges
+from oio.common.utils import fix_ranges
 from oio.api import io
 from oio.common.constants import chunk_headers
 
@@ -116,7 +116,7 @@ def meta_chunk_range_to_segment_range(meta_start, meta_end, segment_size):
         meta_chunk_range_to_segment_range(100, 600, 512) = (0, 1023)
         meta_chunk_range_to_segment_range(300, None, 256) = (256, None)
 
-    :returns: a typle (segment_start, segment_end)
+    :returns: a tuple (segment_start, segment_end)
 
         * segment_start is the first byte of the first segment,
           or None if suffix byte range
@@ -147,6 +147,9 @@ class ECChunkDownloadHandler(object):
         self.chunks = chunks
         self.meta_start = meta_start
         self.meta_end = meta_end
+        # the meta chunk length
+        # (the amount of actual data stored into the meta chunk)
+        self.meta_length = self.chunks[0]['size']
         self.headers = headers
         self.connection_timeout = connection_timeout
         self.response_timeout = response_timeout
@@ -166,6 +169,8 @@ class ECChunkDownloadHandler(object):
         # read all the meta chunk
         if self.meta_start is None and self.meta_end is None:
             return range_infos
+        if self.meta_start is not None and self.meta_start < 0:
+            self.meta_start = self.meta_length + self.meta_start
 
         segment_start, segment_end = meta_chunk_range_to_segment_range(
             self.meta_start, self.meta_end, segment_size)
@@ -192,10 +197,6 @@ class ECChunkDownloadHandler(object):
 
     def get_stream(self):
         range_infos = self._get_range_infos()
-
-        # the meta chunk length
-        # (the amount of actual data stored into the meta chunk)
-        meta_length = self.chunks[0]['size']
         chunk_iter = iter(self.chunks)
 
         # we use eventlet GreenPool to manage readers
@@ -219,7 +220,7 @@ class ECChunkDownloadHandler(object):
             fragment_length = int(resp_headers.get('Content-Length'))
             r = [it for reader, it in readers]
             stream = ECStream(self.storage_method, r, range_infos,
-                              meta_length, fragment_length)
+                              self.meta_length, fragment_length)
             # start the stream
             stream.start()
             return stream
@@ -368,7 +369,7 @@ class ECStream(object):
         except ValueError:
             return (None, None)
 
-        result = convert_ranges(ranges, length)
+        result = fix_ranges(ranges, length)
         if not result:
             return (None, None)
         else:
@@ -457,7 +458,13 @@ class ECStream(object):
                          range_info['resp_fragment_end'])
                     results.setdefault(k, []).append(range_info)
 
-                range_info = results[(fragment_start, fragment_end)].pop(0)
+                try:
+                    range_info = results[(fragment_start, fragment_end)].pop(0)
+                except KeyError:
+                    logger.error("Invalid range: %s, available: %s",
+                                 repr((fragment_start, fragment_end)),
+                                 results.keys())
+                    raise
                 segment_iter = self._decode_segments(fragment_iters)
 
                 if not range_info['satisfiable']:

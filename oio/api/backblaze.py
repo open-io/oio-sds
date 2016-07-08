@@ -36,7 +36,7 @@ def _connect_put(chunk, sysmeta, backblaze_info):
     conn['backblaze'] = Backblaze(backblaze_info['backblaze.account_id'],
                                   backblaze_info['backblaze.application_key'],
                                   backblaze_info['authorization'],
-                                  backblaze_info['uploadToken'])
+                                  backblaze_info['upload_token'])
     meta = sysmeta
     meta['name'] = chunk_path
     conn['sysmeta'] = meta
@@ -263,16 +263,20 @@ class BackblazeDeleteHandler(object):
 
 
 class BackblazeChunkDownloadHandler(object):
-    def __init__(self, meta, chunks, size, offset,
+    def __init__(self, meta, chunks, offset, size,
                  headers=None, backblaze_info=None):
         self.failed_chunks = []
         self.chunks = chunks
         headers = headers or {}
         end = None
-        if size > 0:
-            h_range = "bytes=%d-" % offset
-            end = (size + offset - 1)
-            h_range += str(end)
+        if size > 0 or offset:
+            if offset < 0:
+                h_range = "bytes=%d" % offset
+            elif size is not None:
+                h_range = "bytes=%d-%d" % (offset,
+                                           size + offset - 1)
+            else:
+                h_range = "bytes=%d-" % offset
             headers["Range"] = h_range
         self.headers = headers
         self.begin = offset
@@ -315,10 +319,11 @@ class BackblazeChunkDownloadHandler(object):
         return result
 
 
-class BackblazeDownloadHandler:
-    def __init__(self, sysmeta, meta_chunks, backblaze_infos, headers):
+class BackblazeDownloadHandler(object):
+    def __init__(self, sysmeta, meta_chunks, backblaze_info, headers,
+                 range_start=None, range_end=None):
         self.meta_chunks = meta_chunks
-        self.backblaze_infos = backblaze_infos
+        self.backblaze_info = backblaze_info
         self.headers = headers
         self.sysmeta = sysmeta
 
@@ -327,7 +332,7 @@ class BackblazeDownloadHandler:
             handler = BackblazeChunkDownloadHandler(self.sysmeta,
                                                     self.meta_chunks[pos],
                                                     0, 0, None,
-                                                    self.backblaze_infos)
+                                                    self.backblaze_info)
             stream = handler.get_stream()
             if not stream:
                 raise OioException("Error while downloading")
