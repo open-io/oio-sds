@@ -169,7 +169,7 @@ struct oio_lb_pool_s *
 oio_lb_pool__from_storage_policy(struct oio_lb_world_s *lbw,
 		const struct storage_policy_s *stgpol)
 {
-	const char *pool_name = storage_policy_get_name(stgpol);
+	const char *pool_name = storage_policy_get_service_pool(stgpol);
 
 	/* Build a pool for the storage policy */
 	struct oio_lb_pool_s *pool = oio_lb_world__create_pool(lbw, pool_name);
