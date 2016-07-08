@@ -6,7 +6,6 @@ import yaml
 import testtools
 import requests
 import random
-import time
 import string
 from functools import wraps
 
@@ -67,8 +66,6 @@ def get_config(defaults=None):
 
 class BaseTestCase(testtools.TestCase):
 
-    _last_cache_flush = 0
-
     def _random_user(self):
         return "user-" + random_str(16, "0123456789ABCDEF")
 
@@ -124,12 +121,7 @@ class BaseTestCase(testtools.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        now = time.time()
-        if (now - cls._last_cache_flush) < 12:
-            # Flushing the proxy's service cache may make further tests
-            # fail. By sleeping a bit, we allow the proxy to reload
-            # its service cache.
-            time.sleep(6)
+        pass
 
     def _flush_cs(self, srvtype):
         params = {'type': srvtype}
@@ -150,21 +142,29 @@ class BaseTestCase(testtools.TestCase):
         resp = self.session.post(self._url_cs("unlock"), json.dumps(srv))
         self.assertEqual(resp.status_code, 200)
 
-    def _reload(self):
+    def _flush_proxy(self):
         url = self.uri + '/v3.0/cache/flush/local'
         resp = self.session.post(url, '')
         self.assertEqual(resp.status_code / 100, 2)
+
+    def _flush_meta(self):
         for srvtype in ('meta1', 'meta2'):
             for t in self.conf['services'][srvtype]:
                 url = self.uri + '/v3.0/forward/flush'
                 resp = self.session.post(url, params={'id': t['addr']})
                 self.assertEqual(resp.status_code, 204)
+
+    def _reload_meta(self):
         for srvtype in ('meta1', 'meta2'):
             for t in self.conf['services'][srvtype]:
                 url = self.uri + '/v3.0/forward/reload'
                 resp = self.session.post(url, params={'id': t['addr']})
                 self.assertEqual(resp.status_code, 204)
-        BaseTestCase._last_cache_flush = time.time()
+
+    def _reload(self):
+        self._flush_proxy()
+        self._flush_meta()
+        self._reload_meta()
 
     def _addr(self, low=7000, high=65535, ip="127.0.0.2"):
         return ip + ':' + str(random.randint(low, high))

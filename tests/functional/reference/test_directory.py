@@ -122,15 +122,14 @@ class TestDirectoryFunctional(BaseTestCase):
         self.assertIsInstance(body, dict)
         self.assertItemsEqual(body['srv'], [])
 
-        self._flush_cs('echo')
         srv0 = self._srv('echo')
-        srv0['score'] = 1
-        self._lock_srv(srv0)
         srv1 = self._srv('echo')
+
+        srv0['score'] = 1
         srv1['score'] = 0
+        self._flush_cs('echo')
+        self._lock_srv(srv0)
         self._lock_srv(srv1)
-        logging.debug("srv0 = %s", repr(srv0))
-        logging.debug("srv1 = %s", repr(srv1))
         self._reload()
 
         # Initial link
@@ -162,6 +161,7 @@ class TestDirectoryFunctional(BaseTestCase):
         # Force a relink with a 0 score, then relink
         srv0['score'] = 0
         srv1['score'] = 1
+        self._flush_cs('echo')
         self._lock_srv(srv0)
         self._lock_srv(srv1)
         self._reload()
@@ -200,7 +200,8 @@ class TestDirectoryFunctional(BaseTestCase):
         # Renew while linked
         srv0['score'] = 1
         srv1['score'] = 0
-        self._unlock_srv(srv0)
+        self._flush_cs('echo')
+        self._lock_srv(srv0)
         self._lock_srv(srv1)
         self._reload()
 
