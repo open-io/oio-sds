@@ -413,7 +413,7 @@ template_conscience_policies = """
 # the second word is the data security to use.
 
 SINGLE=NONE:NONE
-TWOCOPIES=rawxevenodd:DUPONETWO
+TWOCOPIES=rawx2:DUPONETWO
 THREECOPIES=rawx3:DUPONETHREE
 17COPIES=rawx17:DUP17
 EC=NONE:EC
@@ -475,6 +475,9 @@ fastrawx3=3,rawx-ssd,rawx
 
 # Pick one "even" and one "odd" rawx
 rawxevenodd=1,rawx-even;1,rawx-odd
+
+# As with rawxevenodd, but with permissive fallback on any rawx
+rawx2=1,rawx-even,rawx;1,rawx-odd,rawx
 
 # Try to pick one "even" and one "odd" rawx, and a generic one
 rawx3=1,rawx-even,rawx;1,rawx-odd,rawx;1,rawx
