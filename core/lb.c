@@ -27,6 +27,11 @@ License along with this library.
 #include "oiolog.h"
 #include "internals.h"
 
+
+// actually not prime but OK
+#define OIO_LB_SHUFFLE_JUMP ((1UL << 31) - 1)
+
+
 typedef guint16 oio_refcount_t;
 
 struct oio_lb_pool_vtable_s
@@ -105,8 +110,6 @@ struct _slot_item_s
  * criteria. */
 struct oio_lb_slot_s
 {
-	oio_location_t location_mask;
-
 	/* the sum of all the individual weights. */
 	oio_weight_acc_t sum_weight;
 
@@ -143,6 +146,8 @@ struct oio_lb_pool_LOCAL_s
 
 	struct oio_lb_world_s *world;
 	gchar ** targets;
+
+	oio_location_t location_mask;
 };
 
 static void _local__destroy (struct oio_lb_pool_s *self);
@@ -339,15 +344,15 @@ _accept_item (struct oio_lb_slot_s *slot, oio_location_t mask,
  * The purpose of the shuffled lookup is to jump to an item with
  * a distant location. */
 static gboolean
-_local_slot__poll (struct oio_lb_slot_s *slot, gboolean masked,
+_local_slot__poll (struct oio_lb_slot_s *slot, oio_location_t mask,
 		struct polling_ctx_s *ctx)
 {
 	if (_slot_needs_rehash (slot))
 		_slot_rehash (slot);
 
-	GRID_TRACE2("%s slot=%s sum=%"G_GUINT32_FORMAT" items=%d mask=%u",
+	GRID_TRACE2("%s slot=%s sum=%"G_GUINT32_FORMAT" items=%d mask=%016lX",
 			__FUNCTION__, slot->name, slot->sum_weight, slot->items->len,
-			masked);
+			mask);
 
 	if (slot->sum_weight == 0) {
 		GRID_TRACE2("%s no service available", __FUNCTION__);
@@ -363,12 +368,11 @@ _local_slot__poll (struct oio_lb_slot_s *slot, gboolean masked,
 	g_assert (i >= 0);
 	g_assert ((guint)i < slot->items->len);
 
-	oio_location_t mask = masked ? slot->location_mask : (oio_location_t)-1;
 	guint iter = 0;
 	while (iter++ < slot->items->len) {
 		if (_accept_item(slot, mask, ctx, i))
 			return TRUE;
-		i = (i + (1 << 31) - 1) % slot->items->len;  // not prime but OK
+		i = (i + OIO_LB_SHUFFLE_JUMP) % slot->items->len;
 	}
 
 	GRID_TRACE("%s avoided everything in slot=%s", __FUNCTION__, slot->name);
@@ -391,7 +395,8 @@ _local_target__poll (struct oio_lb_pool_LOCAL_s *lb,
 				lb->world, name);
 		if (!slot)
 			GRID_DEBUG ("Slot [%s] not ready", name);
-		else if (_local_slot__poll (slot, masked, ctx))
+		else if (_local_slot__poll (slot,
+				masked? lb->location_mask : (oio_location_t)-1L, ctx))
 			res = TRUE;
 	}
 	g_rw_lock_reader_unlock(&lb->world->lock);
@@ -630,6 +635,7 @@ oio_lb_world__create_pool (struct oio_lb_world_s *world, const char *name)
 	lb->name = g_strdup (name);
 	lb->world = world;
 	lb->targets = g_malloc0 (4 * sizeof(gchar*));
+	lb->location_mask = ~0xFFFFUL;
 	return (struct oio_lb_pool_s*) lb;
 }
 
@@ -643,7 +649,6 @@ _world_create_slot (struct oio_lb_world_s *self, const char *name)
 	if (!slot) {
 		slot = g_malloc0(sizeof(*slot));
 		slot->name = g_strdup(name);
-		slot->location_mask = ~0xFFFF;
 		slot->items = g_array_new(FALSE, TRUE, sizeof(struct _slot_item_s));
 		g_rw_lock_writer_lock(&self->lock);
 		g_tree_replace(self->slots, g_strdup(name), slot);
