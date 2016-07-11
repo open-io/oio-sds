@@ -634,23 +634,40 @@ retry:
 
 /* -------------------------------------------------------------------------- */
 
+static const char *
+_trace_tag (const curl_infotype t)
+{
+	switch (t) {
+		case CURLINFO_TEXT:
+			return "CURL:";
+		case CURLINFO_HEADER_IN:
+			return "CURL<";
+		case CURLINFO_HEADER_OUT:
+			return "CURL>";
+		default:
+			return NULL;
+	}
+}
+
 static int
 _trace(CURL *h UNUSED, curl_infotype t, char *data UNUSED, size_t size UNUSED,
 		void *u UNUSED)
 {
-	switch (t) {
-		case CURLINFO_TEXT:
-			GRID_TRACE2("CURL: %.*s", (int)size, data);
-			return 0;
-		case CURLINFO_HEADER_IN:
-			GRID_TRACE2("CURL< %.*s", (int)size, data);
-			return 0;
-		case CURLINFO_HEADER_OUT:
-			GRID_TRACE2("CURL> %.*s", (int)size, data);
-			return 0;
-		default:
-			return 0;
+	GString *tmp = g_string_new("");
+	for (; size>0 ;++data,--size) {
+		if (g_ascii_isprint(*data) && !g_ascii_isspace(*data)) {
+			g_string_append_c (tmp, *data);
+		} else {
+			g_string_append_c (tmp, ' ');
+		}
 	}
+
+	const char *tag = _trace_tag(t);
+	if (tag) {
+		GRID_TRACE2("%s %.*s", tag, (int)tmp->len, tmp->str);
+	}
+	g_string_free (tmp, TRUE);
+	return 0;
 }
 
 static int

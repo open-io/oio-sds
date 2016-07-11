@@ -351,3 +351,28 @@ oio_log_lazy_init (void)
 	}
 }
 
+static void
+_handler_wrapper(const gchar *d UNUSED, GLogLevelFlags l,
+		const gchar *m UNUSED, gpointer u)
+{
+	if (!glvl_allowed(l))
+		return;
+
+	oio_log_handler_f handler = u;
+	switch (glvl_to_lvl(l)) {
+		case LOG_ERR:
+			return handler(OIO_LOG_ERROR, "%s", m);
+		case LOG_WARNING:
+			return handler(OIO_LOG_WARNING, "%s", m);
+		default:
+			return handler(OIO_LOG_INFO, "%s", m);
+	}
+}
+
+void
+oio_log_set_handler (oio_log_handler_f handler)
+{
+	g_assert_nonnull(handler);
+	g_log_set_default_handler(_handler_wrapper, handler);
+}
+
