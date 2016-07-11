@@ -59,10 +59,9 @@ _debug_statement(guint index,
 		GPtrArray *stmt,
 		struct oio_sqlx_statement_result_s *result)
 {
-	GRID_DEBUG("Query %u", index);
 	do {
 		const guint max = stmt->len;
-		GRID_DEBUG(" SQL %s", (gchar*) stmt->pdata[0]);
+		GRID_DEBUG("#%u SQL %s", index, (gchar*) stmt->pdata[0]);
 		GString *gstr = g_string_new("");
 		for (guint i=1; i<max; ++i)
 			g_string_append_printf(gstr, ",%s", (gchar*)stmt->pdata[i]);
@@ -71,10 +70,9 @@ _debug_statement(guint index,
 	} while (0);
 	do {
 		const guint max = result->rows->len;
-		GRID_DEBUG("Rows %u", max);
 		for (guint irow=0; irow<max ;++irow) {
 			gchar *sfields = g_strjoinv(",", result->rows->pdata[irow]);
-			GRID_DEBUG(" row=%u %s", irow, sfields);
+			GRID_DEBUG(" row=%u/%u %s", irow, max, sfields);
 			g_free (sfields);
 		}
 	} while (0);
