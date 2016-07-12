@@ -25,6 +25,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 extern "C" {
 #endif
 
+extern gboolean oio_sqlx_debug_requests;
+
 /* -------------------------------------------------------------------------- */
 
 struct oio_sqlx_output_ctx_s
@@ -52,6 +54,9 @@ struct oio_sqlx_batch_result_s;
 void oio_sqlx_batch_result__destroy (struct oio_sqlx_batch_result_s *self);
 
 guint oio_sqlx_batch_result__count_statements (
+		struct oio_sqlx_batch_result_s *self);
+
+guint oio_sqlx_batch_result__count_errors (
 		struct oio_sqlx_batch_result_s *self);
 
 /* Collect information about the given statement in the result set.

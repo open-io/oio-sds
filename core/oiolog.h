@@ -113,7 +113,7 @@ extern "C" {
 #define LOG_FLAG_COLUMNIZE 0x04
 #define LOG_FLAG_PRETTYTIME 0x04
 
-/** Cruising debug level. 
+/** Cruising debug level.
  * Should not be altered by the application after the program has started. */
 extern int oio_log_level_default;
 
@@ -154,6 +154,18 @@ void oio_log_syslog(const gchar *log_domain, GLogLevelFlags log_level,
 guint16 oio_log_thread_id(GThread *thread);
 
 guint16 oio_log_current_thread_id(void);
+
+enum oio_log_level_e {
+	OIO_LOG_ERROR,
+	OIO_LOG_WARNING,
+	OIO_LOG_INFO,
+	OIO_LOG_DEBUG,
+};
+
+typedef void (*oio_log_handler_f) (enum oio_log_level_e lvl, const char *fmt, ...)
+	__attribute__ ((format (printf, 2, 3)));
+
+void oio_log_set_handler (oio_log_handler_f handler);
 
 #ifdef __cplusplus
 }

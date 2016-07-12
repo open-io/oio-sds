@@ -699,9 +699,7 @@ log_address = /dev/log
 syslog_prefix = OIO,${NS},rdir,1
 """
 
-sqlx_schemas = (
-    ("sqlx", ""),
-    ("sqlx.mail", """
+sqlx_schema_dovecot = """
 CREATE TABLE IF NOT EXISTS box (
    name TEXT NOT NULL PRIMARY KEY,
    ro INT NOT NULL DEFAULT 0,
@@ -735,7 +733,12 @@ CREATE INDEX IF NOT EXISTS mail_index_by_box ON mail(box);
 
 CREATE TRIGGER IF NOT EXISTS mail_after_add AFTER INSERT ON mail
 BEGIN
-   UPDATE mail SET box_uid = (SELECT uidnext FROM box WHERE name = new.box) WHERE guid = new.guid AND box = new.box AND uid = new.uid;
+   -- Lazy mailbox creation. Eases the tests but breaks the IMAP
+   -- compliance.
+   --INSERT OR IGNORE INTO box (name) VALUES (new.box);
+   UPDATE mail SET
+      box_uid = (SELECT uidnext FROM box WHERE name = new.box)
+   WHERE guid = new.guid AND box = new.box AND uid = new.uid;
    UPDATE box SET
       messages = messages + 1,
       recent = recent + 1,
@@ -761,7 +764,11 @@ BEGIN
 END ;
 
 INSERT OR REPLACE INTO box (name,ro) VALUES ('INBOX', 0);
-"""),
+"""
+
+sqlx_schemas = (
+    ("sqlx", sqlx_schema_dovecot),
+    ("sqlx.mail", sqlx_schema_dovecot),
 )
 
 HOME = str(os.environ['HOME'])
