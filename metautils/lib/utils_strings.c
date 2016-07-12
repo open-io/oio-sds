@@ -19,6 +19,8 @@ License along with this library.
 
 #include <string.h>
 
+#include <core/oiostr.h>
+
 #include "metautils_bits.h"
 #include "metautils_macros.h"
 #include "metautils_errors.h"
@@ -156,27 +158,7 @@ buffer_split(const void *buf, gsize buflen, const gchar *sep, gint max_tokens)
 gboolean
 metautils_cfg_get_bool(const gchar *value, gboolean def)
 {
-	static const gchar *array_yes[] = {
-		"yes", "true", "on", "enable", "enabled", "1", "yeah", NULL
-	};
-	static const gchar *array_no[] = {
-		"no", "false", "off", "disable", "disabled", "0", "nope", NULL
-	};
-
-	if (!value)
-		return def;
-
-	for (const gchar **s=array_yes; *s ;s++) {
-		if (!g_ascii_strcasecmp(value, *s))
-			return TRUE;
-	}
-
-	for (const gchar **s=array_no; *s ;s++) {
-		if (!g_ascii_strcasecmp(value, *s))
-			return FALSE;
-	}
-
-	return def;
+	return oio_str_parse_bool(value, def);
 }
 
 gboolean

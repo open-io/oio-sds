@@ -26,6 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <glob.h>
 
 #include <zmq.h>
 #include <glib.h>
@@ -1071,6 +1072,46 @@ module_configure_srvtype(struct conscience_s *cs, GError ** err,
 	return TRUE;
 }
 
+static void
+module_configure_srvpool(struct conscience_s *cs, GError ** err,
+		const gchar *pool, const gchar * what, const gchar * value)
+{
+	EXTRA_ASSERT(pool != NULL);
+	EXTRA_ASSERT(what != NULL && *what != '\0');
+
+	if (!value || !*value) {
+		GSETERROR(err, "value is empty");
+		return;
+	}
+
+	GHashTable *svc_pools = cs->ns_info.service_pools;
+	GByteArray *gba = g_hash_table_lookup(svc_pools, pool);
+	if (!strcmp(what, KEY_POOL_TARGETS)) {
+		/* Targets are passed without key, but must start with a digit */
+		if (*value < '0' || *value > '9')
+			return;
+		if (!gba) {
+			gba = metautils_gba_from_string(value);
+			g_hash_table_insert(svc_pools, g_strdup(pool), gba);
+		} else {
+			g_byte_array_append(gba, (guint8*)";", 1);
+			g_byte_array_append(gba, (guint8*)value, strlen(value));
+		}
+	} else {
+		if (!gba) {
+			gchar buf[256] = {0};
+			g_snprintf(buf, sizeof(buf), "%s=%s", what, value);
+			gba = metautils_gba_from_string(buf);
+			g_hash_table_insert(svc_pools, g_strdup(pool), gba);
+		} else {
+			g_byte_array_append(gba, (guint8*)";", 1);
+			g_byte_array_append(gba, (guint8*)what, strlen(what));
+			g_byte_array_append(gba, (guint8*)"=", 1);
+			g_byte_array_append(gba, (guint8*)value, strlen(value));
+		}
+	}
+}
+
 static GHashTable*
 module_init_valuelist(GHashTable * params, GError ** err, GRegex *value_regex)
 {
@@ -1225,9 +1266,17 @@ module_init_storage_conf(struct conscience_s *cs, const gchar *stg_pol_in_option
 }
 
 static GError *
-_load_service_section(struct conscience_s *cs, GKeyFile *svc_conf_file,
-		const gchar *section, const gchar *old_key)
+_load_service_type_section(struct conscience_s *cs, GKeyFile *svc_conf_file,
+		const gchar *section)
 {
+	/*** sample **************************************************************
+	[type:meta0]
+	score_expr = root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+	score_variation_bound = 5
+	score_timeout = 300
+	lock_at_first_register = false
+	*************************************************************************/
+	const char *svc = section + strlen(GROUP_PREFIX_TYPE);
 	GHashTable *content = g_hash_table_new_full(
 			g_str_hash, g_str_equal, g_free, metautils_gba_unref);
 	GError *err = fill_hashtable_with_group(content, svc_conf_file, section);
@@ -1235,13 +1284,13 @@ _load_service_section(struct conscience_s *cs, GKeyFile *svc_conf_file,
 		g_hash_table_destroy(content);
 		return err;
 	}
-	void _configure_section(gchar *svc, GByteArray *gba, gpointer u UNUSED) {
+	void _configure_section(gchar *key, GByteArray *gba, gpointer u UNUSED) {
 		GError *local_err = NULL;
-		module_configure_srvtype(cs, &local_err, svc, old_key,
-				(const char*)gba->data);
+		module_configure_srvtype(cs, &local_err, svc, key,
+				(const char*)gba->data);  // FIXME: no '\0'
 		if (local_err) {
 			GRID_WARN("Failed to set %s for %s: %s",
-					section, svc, local_err->message);
+					key, svc, local_err->message);
 			g_clear_error(&local_err);
 		}
 	}
@@ -1251,53 +1300,96 @@ _load_service_section(struct conscience_s *cs, GKeyFile *svc_conf_file,
 }
 
 static GError *
-module_init_service_conf(struct conscience_s *cs, const gchar *filepath)
+_load_service_pool_section(struct conscience_s *cs, GKeyFile *svc_conf_file,
+		const gchar *section)
 {
-	if (!filepath) {
-		GRID_INFO("[NS=%s] no service configuration file defined, "
-				"using old style configuration", cs->ns_info.name);
-		return NULL;
+	/*** sample **************************************************************
+	[pool:rawx3]
+	targets = 1,rawx-even,rawx;1,rawx-odd,rawx;1,rawx
+	mask = FFFFFFFFFFFF0000
+	*************************************************************************/
+	const char *pool = section + strlen(GROUP_PREFIX_POOL);
+	GHashTable *content = g_hash_table_new_full(
+			g_str_hash, g_str_equal, g_free, metautils_gba_unref);
+	GError *err = fill_hashtable_with_group(content, svc_conf_file, section);
+	if (err) {
+		g_hash_table_destroy(content);
+		return err;
 	}
+	void _configure_section(gchar *key, GByteArray *gba, gpointer u UNUSED) {
+		GError *local_err = NULL;
+		module_configure_srvpool(cs, &local_err, pool, key,
+				(const char*)gba->data);  // FIXME: no '\0'
+		if (local_err) {
+			GRID_WARN("Failed to set %s for %s: %s",
+					key, pool, local_err->message);
+			g_clear_error(&local_err);
+		}
+	}
+	g_hash_table_foreach(content, (GHFunc)_configure_section, NULL);
+	g_hash_table_destroy(content);
+	return NULL;
+}
 
+static GError *
+_module_init_service_conf(struct conscience_s *cs, const gchar *filepath)
+{
 	GError *err = NULL;
 	GKeyFile *svc_conf_file = g_key_file_new();
 
 	if (!g_key_file_load_from_file(svc_conf_file, filepath,
 			G_KEY_FILE_NONE, &err)) {
-		GRID_WARN("[NS=%s] service configuration init failed: %s",
-				cs->ns_info.name, err->message);
+		GRID_WARN("[NS=%s] service configuration from %s failed: %s",
+				cs->ns_info.name, filepath, err->message);
 		g_key_file_free(svc_conf_file);
 		return err;
+	} else {
+		GRID_INFO("Loading service configuration from %s", filepath);
 	}
 
-	// service pools
+	gchar **groups = g_key_file_get_groups(svc_conf_file, NULL);
+	for (gchar **group = groups; group && *group; group++) {
+		if (g_str_has_prefix(*group, GROUP_PREFIX_POOL)) {
+			_load_service_pool_section(cs, svc_conf_file, *group);
+		} else if (g_str_has_prefix(*group, GROUP_PREFIX_TYPE)) {
+			_load_service_type_section(cs, svc_conf_file, *group);
+		} else {
+			GRID_WARN("Unknown configuration group: [%s] in file %s",
+					*group, filepath);
+		}
+	}
+	g_strfreev(groups);
+	return err;
+}
+
+static GError *
+module_init_service_conf_glob(struct conscience_s *cs, const gchar *pattern)
+{
+	GError *err = NULL;
 	cs->ns_info.service_pools = g_hash_table_new_full(g_str_hash, g_str_equal,
 			g_free, metautils_gba_unref);
-	err = fill_hashtable_with_group(cs->ns_info.service_pools, svc_conf_file,
-			NAME_GROUPNAME_SERVICE_POOLS);
-	if (err) {
-		g_prefix_error(&err, "Error collecting service pools from file [%s]",
-				filepath);
-		return err;
+
+	glob_t globbuf;
+	int rc = glob(pattern, GLOB_MARK|GLOB_NOSORT|GLOB_BRACE, NULL, &globbuf);
+	switch (rc) {
+	case 0:
+		break;
+	case GLOB_NOMATCH:
+		GSETERROR(&err, "No file matched [%s]", pattern);
+		break;
+	default:
+		GSETERROR(&err, "Failed to do pattern matching with [%s] (code %d)",
+				pattern, rc);
+		break;
 	}
 
-	if (!err)
-		err = _load_service_section(cs, svc_conf_file,
-				NAME_GROUPNAME_SCORE_EXPR, KEY_SCORE_EXPR);
-	if (!err)
-		err = _load_service_section(cs, svc_conf_file,
-				NAME_GROUPNAME_SCORE_TIMEOUT, KEY_SCORE_TIMEOUT);
-	if (!err)
-		err = _load_service_section(cs, svc_conf_file,
-				NAME_GROUPNAME_SCORE_VARBOUND, KEY_SCORE_VARBOUND);
-	if (!err)
-		err = _load_service_section(cs, svc_conf_file,
-				NAME_GROUPNAME_SCORE_LOCK, KEY_SCORE_LOCK);
+	for (char **path = globbuf.gl_pathv; !err && path && *path; path++) {
+		if (g_str_has_suffix(*path, "/"))
+			continue;
+		err = _module_init_service_conf(cs, *path);
+	}
 
-	if (!err)
-		GRID_INFO("[NS=%s] service configuration loaded successfully from [%s]",
-				cs->ns_info.name, filepath);
-	g_key_file_free(svc_conf_file);
+	globfree(&globbuf);
 	return err;
 }
 
@@ -1561,7 +1653,7 @@ plugin_init(GHashTable * params, GError ** err)
 	}
 
 	/* service conf initialization (new style) */
-	*err = module_init_service_conf(conscience,
+	*err = module_init_service_conf_glob(conscience,
 			g_hash_table_lookup(params, KEY_SVC_CONF));
 	if (*err) {
 		g_prefix_error(err, "[NS=%s] service conf init failed",

@@ -484,13 +484,38 @@ service_info_key (const struct service_info_s *si)
 	return oio_make_service_key(si->ns_name, si->type, addr);
 }
 
+/* Take djb2 hash of each part of the '.'-separated string,
+ * keep the 16 (or 8) LSB of each hash to build a 64 integer. */
+static oio_location_t
+_location_from_dotted_string(const char *dotted)
+{
+	gchar **toks = g_strsplit(dotted, ".", 8);
+	unsigned int shift = (g_strv_length(toks) <= 4)? 16 : 8;
+	oio_location_t mask = (1u << shift) - 1u;
+	oio_location_t location = 0;
+	for (gchar **tok = toks; tok && *tok; tok++) {
+		struct hash_len_s hl = djb_hash_str(*tok);
+		location = (location << shift) | (hl.h & mask);
+	}
+	return location;
+}
+
 void
 service_info_to_lb_item(const struct service_info_s *si,
 		struct oio_lb_item_s *item)
 {
 	g_assert_nonnull(si);
 	g_assert_nonnull(item);
-	item->location = location_from_addr_info(&(si->addr));
+	/* Take location from:
+	 * - tag.loc as a hexadecimal number or
+	 * - tag.log as a hash dot-separated string or
+	 * - IP address and port */
+	const gchar *loc_str = service_info_get_tag_value(si, "tag.loc", NULL);
+	if (!loc_str) {
+		item->location = location_from_addr_info(&(si->addr));
+	} else if (!(item->location = g_ascii_strtoull(loc_str, NULL, 16))) {
+		item->location = _location_from_dotted_string(loc_str);
+	}
 	item->weight = si->score.value;
 	gchar *key = service_info_key(si);
 	g_strlcpy(item->id, key, LIMIT_LENGTH_SRVID);

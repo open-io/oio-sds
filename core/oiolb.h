@@ -21,7 +21,7 @@ License along with this library.
 # include <stdbool.h>
 # include <glib.h>
 
-#define OIO_LOC_FORMAT G_GUINT64_FORMAT
+#define OIO_LOC_FORMAT "016lX"
 typedef guint64 oio_location_t;
 typedef guint8 oio_weight_t;
 
@@ -101,6 +101,13 @@ void oio_lb_world__feed_slot (struct oio_lb_world_s *self, const char *slot,
 /* Create a world-based implementation of a service pool. */
 struct oio_lb_pool_s * oio_lb_world__create_pool (
 		struct oio_lb_world_s *world, const char *name);
+
+/* Set a pool option.
+ * Known options are:
+ * - "mask": a hexadecimal mask to compute distance between items (64 bits)
+ * - "reverse": look for service close to each other (boolean) */
+void oio_lb_world__set_pool_option(struct oio_lb_pool_s *self, const char *key,
+		const char *value);
 
 /* Tell the given world-based pool that it must target the given set of slots.
  * The slots sequence is coma-separated. It is an error to call this on a
