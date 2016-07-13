@@ -1194,6 +1194,7 @@ fill_hashtable_with_group(GHashTable *ht, GKeyFile *conf_file, const gchar *grou
 				WARN("Duplicate key [%s][%s], new value [%s]", group_name, keys[i], v);
 			}
 			g_hash_table_insert (ht, g_strdup(keys[i]), metautils_gba_from_string(v));
+			g_free(v);
 		}
 		g_strfreev(keys);
 		return e;
@@ -1262,6 +1263,7 @@ module_init_storage_conf(struct conscience_s *cs, const gchar *stg_pol_in_option
 
 	INFO("[NS=%s] storage conf loaded successfully from file [%s]",
 			cs->ns_info.name, filepath);
+	g_key_file_free(stg_conf_file);
 	return NULL;
 }
 
@@ -1307,6 +1309,8 @@ _load_service_pool_section(struct conscience_s *cs, GKeyFile *svc_conf_file,
 	[pool:rawx3]
 	targets = 1,rawx-even,rawx;1,rawx-odd,rawx;1,rawx
 	mask = FFFFFFFFFFFF0000
+	mask_max_shift = 16
+	nearby_mode=false
 	*************************************************************************/
 	const char *pool = section + strlen(GROUP_PREFIX_POOL);
 	GHashTable *content = g_hash_table_new_full(
@@ -1350,15 +1354,20 @@ _module_init_service_conf(struct conscience_s *cs, const gchar *filepath)
 	gchar **groups = g_key_file_get_groups(svc_conf_file, NULL);
 	for (gchar **group = groups; group && *group; group++) {
 		if (g_str_has_prefix(*group, GROUP_PREFIX_POOL)) {
-			_load_service_pool_section(cs, svc_conf_file, *group);
+			err = _load_service_pool_section(cs, svc_conf_file, *group);
 		} else if (g_str_has_prefix(*group, GROUP_PREFIX_TYPE)) {
-			_load_service_type_section(cs, svc_conf_file, *group);
+			err = _load_service_type_section(cs, svc_conf_file, *group);
 		} else {
 			GRID_WARN("Unknown configuration group: [%s] in file %s",
 					*group, filepath);
 		}
+		if (err) {
+			GRID_WARN("%s", err->message);
+			g_clear_error(&err);
+		}
 	}
 	g_strfreev(groups);
+	g_key_file_free(svc_conf_file);
 	return err;
 }
 

@@ -452,6 +452,9 @@ template_service_pools = """
 # Service pools declarations
 # ----------------------------
 #
+# Pool are automatically created if not defined in configuration,
+# according to storage policy or service update policy rules.
+#
 # "targets" is a ';'-separated list.
 # Each target is a ','-separated list of:
 # - the number of services to pick,
@@ -460,12 +463,16 @@ template_service_pools = """
 #   not enough in the previous slot
 # - and so on...
 #
-# "mask" is a 64 bits hexadecimal mask used to check service distance.
-# It defaults to FFFFFFFFFFFF0000. For power users only.
-# Don't modify it unless you know what you are doing.
+# "nearby_mode" is a boolean telling to find services close to each other.
 #
-# Pool are automatically created if not defined in configuration,
-# according to storage policy or service update policy rules.
+#### power user options, don't modify it unless you know what you are doing
+# "mask" is a 64 bits hexadecimal mask used to check service distance.
+# It defaults to FFFFFFFFFFFF0000.
+#
+# "mask_max_shift" is the maximum number of bits to shift the mask
+# to degrade it when distance requirement are not satisfiable.
+# It defaults to 16.
+#
 
 [pool:meta2]
 targets=${M2_REPLICAS},meta2
@@ -496,9 +503,15 @@ targets=1,rawx-even,rawx;1,rawx-odd,rawx;1,rawx
 # Pick one rawx in Europe, one in USA, one in Asia, or anywhere if none available
 targets=1,rawx-europe,rawx;1,rawx-usa,rawx;1,rawx-asia,rawx
 
-[pool:rawx3samehost]
+[pool:rawx3nearby]
 targets=3,rawx
-mask=FFFFFFFFFFFF0003
+mask=FFFFFFFFFFFFFFF7
+nearby_mode=true
+
+[pool:rawx3faraway]
+targets=3,rawx
+mask=FFFFFFFF00000000
+mask_max_shift=24
 
 """
 

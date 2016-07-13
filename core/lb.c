@@ -148,7 +148,8 @@ struct oio_lb_pool_LOCAL_s
 	gchar ** targets;
 
 	oio_location_t location_mask;
-	gboolean reversed;  // TODO: change name
+	gint location_mask_max_shift : 16;
+	gboolean nearby_mode : 16;
 };
 
 static void _local__destroy (struct oio_lb_pool_s *self);
@@ -405,10 +406,16 @@ _local_slot__poll (struct oio_lb_slot_s *slot, oio_location_t mask,
 
 static gboolean
 _local_target__poll (struct oio_lb_pool_LOCAL_s *lb,
-		const char *target, gboolean masked, struct polling_ctx_s *ctx)
+		const char *target, gint mask_shift, struct polling_ctx_s *ctx)
 {
-	GRID_TRACE2("%s pool=%s mask=%d target=%s",
-			__FUNCTION__, lb->name, masked, target);
+	oio_location_t mask = lb->location_mask;
+	if (lb->nearby_mode)
+		mask <<= mask_shift;  // Decrease number of differentiating bits
+	else
+		mask >>= mask_shift;  // Increase number of differentiating bits
+
+	GRID_TRACE2("%s pool=%s mask=%"OIO_LOC_FORMAT" target=%s",
+			__FUNCTION__, lb->name, mask, target);
 	gboolean res = FALSE;
 
 	g_rw_lock_reader_lock(&lb->world->lock);
@@ -419,9 +426,7 @@ _local_target__poll (struct oio_lb_pool_LOCAL_s *lb,
 				lb->world, name);
 		if (!slot)
 			GRID_DEBUG ("Slot [%s] not ready", name);
-		else if (_local_slot__poll (slot,
-				masked? lb->location_mask : (oio_location_t)-1L,
-				lb->reversed, ctx))
+		else if (_local_slot__poll (slot, mask, lb->nearby_mode, ctx))
 			res = TRUE;
 	}
 	g_rw_lock_reader_unlock(&lb->world->lock);
@@ -508,10 +513,11 @@ _local__patch(struct oio_lb_pool_s *self,
 	guint count = 0;
 	for (gchar **ptarget = lb->targets; *ptarget; ++ptarget) {
 		gboolean done = _local_target__is_satisfied(lb, *ptarget, &ctx);
-		if (!done)
-			done = _local_target__poll(lb, *ptarget, TRUE, &ctx);
-		if (!done)
-			done = _local_target__poll(lb, *ptarget, FALSE, &ctx);
+		gint mask_shift = 0;
+		while (!done && mask_shift <= lb->location_mask_max_shift) {
+			done = _local_target__poll(lb, *ptarget, mask_shift, &ctx);
+			mask_shift += 8;  // Degrade mask by 8 bits (two hex digit)
+		}
 		if (!done) {
 			/* the strings is '\0' separated, printf won't display it */
 			GRID_WARN("No service polled from target [%s]", *ptarget);
@@ -576,10 +582,12 @@ oio_lb_world__set_pool_option(struct oio_lb_pool_s *self, const char *key,
 	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
 	if (!key || !*key)
 		return;
-	if (!strcmp(key, "mask")) {
+	if (!strcmp(key, OIO_LB_OPT_MASK)) {
 		lb->location_mask = g_ascii_strtoull(value, NULL, 16u);
-	} else if (!strcmp(key, "reverse")) {
-
+	} else if (!strcmp(key, OIO_LB_OPT_MASK_MAX_SHIFT)) {
+		lb->location_mask_max_shift = (gint)g_ascii_strtoull(value, NULL, 0u);
+	} else if (!strcmp(key, OIO_LB_OPT_NEARBY)) {
+		lb->nearby_mode = oio_str_parse_bool(value, FALSE);
 	} else {
 		GRID_WARN("Invalid pool option: %s", key);
 	}
@@ -686,6 +694,8 @@ oio_lb_world__create_pool (struct oio_lb_world_s *world, const char *name)
 	lb->world = world;
 	lb->targets = g_malloc0 (4 * sizeof(gchar*));
 	lb->location_mask = ~0xFFFFUL;
+	lb->location_mask_max_shift = 16;
+	lb->nearby_mode = FALSE;
 	return (struct oio_lb_pool_s*) lb;
 }
 

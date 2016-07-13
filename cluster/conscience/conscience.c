@@ -160,6 +160,8 @@ conscience_destroy(struct conscience_s *conscience)
 	if (conscience->default_srvtype)
 		conscience_srvtype_destroy(conscience->default_srvtype);
 
+	namespace_info_clear(&conscience->ns_info);
+
 	memset(conscience, 0x00, sizeof(struct conscience_s));
 	g_free(conscience);
 }

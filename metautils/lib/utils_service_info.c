@@ -497,6 +497,7 @@ _location_from_dotted_string(const char *dotted)
 		struct hash_len_s hl = djb_hash_str(*tok);
 		location = (location << shift) | (hl.h & mask);
 	}
+	g_strfreev(toks);
 	return location;
 }
 

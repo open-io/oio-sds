@@ -102,10 +102,15 @@ void oio_lb_world__feed_slot (struct oio_lb_world_s *self, const char *slot,
 struct oio_lb_pool_s * oio_lb_world__create_pool (
 		struct oio_lb_world_s *world, const char *name);
 
-/* Set a pool option.
- * Known options are:
- * - "mask": a hexadecimal mask to compute distance between items (64 bits)
- * - "reverse": look for service close to each other (boolean) */
+
+/* Set a mask (hexadecimal string, 64b) to compute distance between items */
+#define OIO_LB_OPT_MASK           "mask"
+/* Set maximum number of bits to add to the mask to degrade it */
+#define OIO_LB_OPT_MASK_MAX_SHIFT "mask_max_shift"
+/* Look for services close to each other (boolean string) */
+#define OIO_LB_OPT_NEARBY         "nearby_mode"
+
+/* Set a pool option. */
 void oio_lb_world__set_pool_option(struct oio_lb_pool_s *self, const char *key,
 		const char *value);
 
