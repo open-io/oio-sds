@@ -197,6 +197,30 @@ oio_lb_world__get_slot_unlocked(struct oio_lb_world_s *world, const char *name)
 static guint _search_first_at_location(GArray *tab, const oio_location_t needle,
 		const guint start, const guint end);
 
+/* Take djb2 hash of each part of the '.'-separated string,
+ * keep the 16 (or 8) LSB of each hash to build a 64 integer. */
+oio_location_t
+location_from_dotted_string(const char *dotted)
+{
+	// http://www.cse.yorku.ca/~oz/hash.html
+	guint32 _djb2(const gchar *str) {
+		guint32 hash = 5381;
+		guint32 c = 0;
+		while ((c = *str++))
+			hash = ((hash << 5) + hash) + c;
+		return hash;
+	}
+	gchar **toks = g_strsplit(dotted, ".", 8);
+	unsigned int shift = (g_strv_length(toks) <= 4)? 16 : 8;
+	oio_location_t mask = (1u << shift) - 1u;
+	oio_location_t location = 0;
+	for (gchar **tok = toks; tok && *tok; tok++) {
+		location = (location << shift) | (_djb2(*tok) & mask);
+	}
+	g_strfreev(toks);
+	return location;
+}
+
 static int
 _compare_stored_items_by_location (const void *k0, const void *k)
 {
@@ -583,7 +607,14 @@ oio_lb_world__set_pool_option(struct oio_lb_pool_s *self, const char *key,
 	if (!key || !*key)
 		return;
 	if (!strcmp(key, OIO_LB_OPT_MASK)) {
-		lb->location_mask = g_ascii_strtoull(value, NULL, 16u);
+		if (value[0] == '/') {
+			guint64 mask_bits = g_ascii_strtoull(value+1, NULL, 10u);
+			lb->location_mask = (~(oio_location_t)0) << (64 - mask_bits);
+			GRID_TRACE("pool [%s] mask=%s interpreted as 0x%"OIO_LOC_FORMAT,
+					lb->name, value, lb->location_mask);
+		} else {
+			lb->location_mask = g_ascii_strtoull(value, NULL, 0u);
+		}
 	} else if (!strcmp(key, OIO_LB_OPT_MASK_MAX_SHIFT)) {
 		lb->location_mask_max_shift = (gint)g_ascii_strtoull(value, NULL, 0u);
 	} else if (!strcmp(key, OIO_LB_OPT_NEARBY)) {

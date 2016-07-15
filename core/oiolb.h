@@ -62,6 +62,10 @@ guint oio_lb_pool__patch(struct oio_lb_pool_s *self,
 struct oio_lb_item_s *oio_lb_pool__get_item(struct oio_lb_pool_s *self,
 		const char *id);
 
+/* Take djb2 hash of each part of the '.'-separated string,
+ * keep the 16 (or 8) LSB of each hash to build a 64 integer. */
+oio_location_t location_from_dotted_string(const char *dotted);
+
 /* -------------------------------------------------------------------------- */
 
 /* A world is something you feed with services and that will arrange them for

@@ -467,7 +467,7 @@ template_service_pools = """
 #
 #### power user options, don't modify it unless you know what you are doing
 # "mask" is a 64 bits hexadecimal mask used to check service distance.
-# It defaults to FFFFFFFFFFFF0000.
+# It defaults to FFFFFFFFFFFF0000. It can also be specified as "/48".
 #
 # "mask_max_shift" is the maximum number of bits to shift the mask
 # to degrade it when distance requirement are not satisfiable.
@@ -505,7 +505,7 @@ targets=1,rawx-europe,rawx;1,rawx-usa,rawx;1,rawx-asia,rawx
 
 [pool:rawx3nearby]
 targets=3,rawx
-mask=FFFFFFFFFFFFFFF7
+mask=/62
 nearby_mode=true
 
 [pool:rawx3faraway]
