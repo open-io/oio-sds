@@ -15,9 +15,11 @@ import hashlib
 from tempfile import TemporaryFile
 from urlparse import urlparse
 from oio.api import io
-from oio.common.exceptions import SourceReadError, OioException
+from oio.common.exceptions import OioException
 from oio.api.backblaze_http import Backblaze, BackblazeException
+from oio.common.cryptography_tools import CryptographyTools
 import eventlet
+import base64
 logger = logging.getLogger(__name__)
 WORD_LENGTH = 10
 TRY_REQUEST_NUMBER = 3
@@ -43,35 +45,6 @@ def _connect_put(chunk, sysmeta, backblaze_info):
     return conn
 
 
-def _read_to_temp(size, source, checksum, temp, first_byte=None):
-    sha1 = hashlib.sha1()
-    if first_byte:
-        bytes_transferred = 1
-        sha1.update(first_byte)
-        checksum.update(first_byte)
-        temp.write(first_byte)
-    else:
-        bytes_transferred = 0
-    while True:
-        remaining_bytes = size - bytes_transferred
-        if io.WRITE_CHUNK_SIZE < remaining_bytes:
-            read_size = io.WRITE_CHUNK_SIZE
-        else:
-            read_size = remaining_bytes
-        try:
-            data = source.read(read_size)
-        except (ValueError, IOError) as err:
-            raise SourceReadError((str(err)))
-        if len(data) == 0:
-            break
-        sha1.update(data)
-        checksum.update(data)
-        temp.write(data)
-        bytes_transferred += len(data)
-    temp.seek(0)
-    return bytes_transferred, sha1.hexdigest(), checksum.hexdigest()
-
-
 class BackblazeChunkWriteHandler(object):
     def __init__(self, sysmeta, meta_chunk, checksum,
                  storage_method, backblaze_info):
@@ -83,8 +56,10 @@ class BackblazeChunkWriteHandler(object):
 
     def _upload_chunks(self, conn, size, sha1, md5, temp):
         try_number = TRY_REQUEST_NUMBER
+        temp.seek(0)
         while True:
             self.meta_chunk['size'] = size
+            self.sysmeta['size'] = size
             try:
                 conn['backblaze'].upload(self.backblaze_info['bucket_name'],
                                          self.sysmeta, temp, sha1)
@@ -107,27 +82,20 @@ class BackblazeChunkWriteHandler(object):
         self.meta_chunk['hash'] = md5
         return self.meta_chunk["size"], [self.meta_chunk]
 
-    def _stream_small_chunks(self, source, conn, temp):
-        size, sha1, md5 = _read_to_temp(self.meta_chunk['size'],
-                                        source, self.checksum, temp)
+    def _stream_small_chunks(self, conn, param, gen, temp):
+        size = param['ciphered_bytes']
+        sha1 = self.sha1.hexdigest()
+        md5 = self.checksum.hexdigest()
         return self._upload_chunks(conn, size, sha1, md5, temp)
 
-    def _stream_big_chunks(self, source, conn, temp):
-        max_chunk_size = conn['backblaze'].BACKBLAZE_MAX_CHUNK_SIZE
-        sha1_array = []
-        res = None
-        size, sha1, md5 = _read_to_temp(max_chunk_size, source,
-                                        self.checksum, temp)
-
-        # obligated to read max_chunk_size + 1 bytes
-        # if the size of the file is max_chunk_size
-        # backblaze will not take it because
-        # the upload part must have at least 2 parts
-        first_byte = source.read(1)
-        if not first_byte:
-            return self._upload_chunks(conn, size, sha1, md5, temp)
-
+    def _stream_big_chunks(self, conn, param, gen, temp):
+        size = param['ciphered_bytes']
+        sha1 = self.sha1.hexdigest()
+        self.sha1 = hashlib.sha1()
+        part_num = 1
+        cont = True
         tries = TRY_REQUEST_NUMBER
+        sha1_array = []
         while True:
             try:
                 res = conn['backblaze'].upload_part_begin(
@@ -143,15 +111,10 @@ class BackblazeChunkWriteHandler(object):
                 else:
                     eventlet.sleep(pow(2, TRY_REQUEST_NUMBER - tries))
         file_id = res['fileId']
-        part_num = 1
-        bytes_read = size + 1
+        bytes_read = 0
         tries = TRY_REQUEST_NUMBER
         while True:
             while True:
-                if bytes_read + max_chunk_size > self.meta_chunk['size']:
-                    to_read = self.meta_chunk['size'] - bytes_read
-                else:
-                    to_read = max_chunk_size
                 try:
                     res, sha1 = conn['backblaze'].upload_part(file_id, temp,
                                                               part_num, sha1)
@@ -168,17 +131,18 @@ class BackblazeChunkWriteHandler(object):
                         val_tmp = pow(2, TRY_REQUEST_NUMBER - tries)
                         eventlet.sleep(b2e.headers_received.get('Retry-After',
                                                                 val_tmp))
-            part_num += 1
             sha1_array.append(sha1)
             temp.seek(0)
             temp.truncate(0)
-            size, sha1, md5 = _read_to_temp(to_read, source,
-                                            self.checksum, temp,
-                                            first_byte)
-            first_byte = None
-            bytes_read = bytes_read + size
-            if size == 0:
+            if not cont:
                 break
+            bytes_read += size
+            param = next(gen)
+            size = param['ciphered_bytes']
+            cont = not param['over']
+            part_num += 1
+            sha1 = self.sha1.hexdigest()
+            self.sha1 = hashlib.sha1()
         tries = TRY_REQUEST_NUMBER
         while True:
             try:
@@ -194,17 +158,39 @@ class BackblazeChunkWriteHandler(object):
                                        % str(b2e))
                 else:
                     eventlet.sleep(pow(2, TRY_REQUEST_NUMBER - tries))
+        md5 = self.checksum.hexdigest()
         self.meta_chunk['hash'] = md5
         return bytes_read, [self.meta_chunk]
 
     def stream(self, source):
         conn = _connect_put(self.meta_chunk, self.sysmeta,
                             self.backblaze_info)
+        size = self.meta_chunk.get('size', None)
+
+        def _separate_tokens(data):
+            return base64.urlsafe_b64decode(data)
+
+        def _update_hashs(data):
+            self.checksum.update(data)
+            self.sha1.update(data)
+
+        self.sha1 = hashlib.sha1()
+        hooks = {'on_ciphered_data': _separate_tokens,
+                 'on_write': _update_hashs}
         with TemporaryFile() as temp:
-            if ("size" not in self.meta_chunk or self.meta_chunk["size"] >
-                    conn['backblaze'].BACKBLAZE_MAX_CHUNK_SIZE):
-                return self._stream_big_chunks(source, conn, temp)
-            return self._stream_small_chunks(source, conn, temp)
+            # we recover the information generator
+            gen = self.backblaze_info['encryption'].read_and_encrypt(
+                source, size, Backblaze.BACKBLAZE_MAX_CHUNK_SIZE, temp,
+                hooks)
+            # we recover the first part
+            result = next(gen)
+            over = result['over']
+            # if the is_big parameter is True, it means that the content is
+            # greater than b2_max_chunk_size
+            if not over:
+                return self._stream_big_chunks(conn, result, gen, temp)
+            else:
+                return self._stream_small_chunks(conn, result, gen, temp)
 
 
 class BackblazeWriteHandler(io.WriteHandler):
@@ -267,28 +253,26 @@ class BackblazeChunkDownloadHandler(object):
         self.failed_chunks = []
         self.chunks = chunks
         headers = headers or {}
-        end = None
-        if size > 0 or offset:
-            if offset < 0:
-                h_range = "bytes=%d" % offset
-            elif size is not None:
-                h_range = "bytes=%d-%d" % (offset,
-                                           size + offset - 1)
-            else:
-                h_range = "bytes=%d-" % offset
-            headers["Range"] = h_range
         self.headers = headers
         self.begin = offset
-        self.end = end
+        self.end = self.begin + size
         self.meta = meta
         self.backblaze_info = backblaze_info
 
     def get_stream(self):
+        def _base64ify(stream):
+            while True:
+                content = stream.read(CryptographyTools.READ_SIZE)
+                if len(content) == 0:
+                    break
+                yield base64.urlsafe_b64encode(content)
+        hooks_decrypt = {'buffer_to_tokens': _base64ify}
         source = self._get_chunk_source()
-        stream = None
         if source:
             stream = self._make_stream(source)
-        return stream
+            return self.backblaze_info['encryption'].decrypt_from_buffer(
+                stream, self.begin, self.end, hooks=hooks_decrypt)
+        return None
 
     def _get_chunk_source(self):
         return Backblaze(self.backblaze_info['backblaze.account_id'],

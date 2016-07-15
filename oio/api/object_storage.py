@@ -616,6 +616,7 @@ class ObjectStorageAPI(API):
             stream = handler.get_stream()
             if not stream:
                 raise exc.OioException("Error while downloading")
-            total_bytes += len(stream)
-            yield stream
+            for content in stream:
+                yield content
+                total_bytes += len(content)
             current_offset += chunk_size

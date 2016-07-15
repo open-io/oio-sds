@@ -9,3 +9,4 @@ simplejson>=2.0.9
 plyvel>=0.9
 PyYAML>=3.10
 PyECLib>=1.2.0
+cryptography>=1.4
