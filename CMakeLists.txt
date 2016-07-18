@@ -384,8 +384,16 @@ set(ASN1C_EXE_OPTS "-fwide-types")
 endif (NOT SDK_ONLY)
 
 # Check every required module is present
+if (NOT DEFINED ALLOW_HIREDIS)
+	MESSAGE("hiredis disabled by default, activate with -DALLOW_HIREDIS=1")
+endif ()
 print_found("HIREDIS")
+
+if (NOT DEFINED ALLOW_LIBMEMCACHED)
+	MESSAGE("libmemcached disabled by default, activate with -DALLOW_LIBMEMCACHED=1")
+endif ()
 print_found("LIBMEMCACHED")
+
 check_found("CURL" "GLIB2" "JSONC")
 
 if (NOT SDK_ONLY)
