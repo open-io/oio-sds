@@ -60,16 +60,17 @@ class ECContent(Content):
         return stream
 
     def _fetch_stream(self, chunks, storage_method, headers):
-        meta_ranges = get_meta_ranges([(None, None)], chunks)
-        for pos, meta_range in meta_ranges.iteritems():
-            meta_start, meta_end = meta_range
-            handler = ECChunkDownloadHandler(
-                storage_method, chunks[pos], meta_start, meta_end, headers)
-            stream = handler = handler.get_stream()
-            for part_info in stream:
-                for d in part_info['iter']:
-                    yield d
-            stream.close()
+        meta_range_list = get_meta_ranges([(None, None)], chunks)
+        for meta_range_dict in meta_range_list:
+            for pos, meta_range in meta_range_dict.iteritems():
+                meta_start, meta_end = meta_range
+                handler = ECChunkDownloadHandler(
+                    storage_method, chunks[pos], meta_start, meta_end, headers)
+                stream = handler = handler.get_stream()
+                for part_info in stream:
+                    for d in part_info['iter']:
+                        yield d
+                stream.close()
 
     def create(self, stream):
         sysmeta = {}

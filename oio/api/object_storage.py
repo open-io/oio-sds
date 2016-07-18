@@ -45,8 +45,8 @@ def get_meta_ranges(ranges, chunks):
     for obj_start, obj_end in ranges:
         meta_ranges = obj_range_to_meta_chunk_range(obj_start, obj_end,
                                                     meta_sizes)
-        range_infos += meta_ranges
-    return meta_ranges
+        range_infos.append(meta_ranges)
+    return range_infos
 
 
 def handle_container_not_found(fnc):
@@ -526,34 +526,36 @@ class ObjectStorageAPI(API):
         headers = headers or {}
         ranges = ranges or [(None, None)]
 
-        meta_ranges = get_meta_ranges(ranges, chunks)
+        meta_range_list = get_meta_ranges(ranges, chunks)
 
-        for pos, meta_range in meta_ranges.iteritems():
-            meta_start, meta_end = meta_range
-            reader = io.ChunkReader(iter(chunks[pos]), io.READ_CHUNK_SIZE,
-                                    headers)
-            it = reader.get_iter()
-            if not it:
-                raise exc.OioException("Error while downloading")
-            for part in it:
-                for d in part['iter']:
-                    total_bytes += len(d)
-                    yield d
+        for meta_range_dict in meta_range_list:
+            for pos, meta_range in meta_range_dict.iteritems():
+                meta_start, meta_end = meta_range
+                reader = io.ChunkReader(iter(chunks[pos]), io.READ_CHUNK_SIZE,
+                                        headers)
+                it = reader.get_iter()
+                if not it:
+                    raise exc.OioException("Error while downloading")
+                for part in it:
+                    for d in part['iter']:
+                        total_bytes += len(d)
+                        yield d
 
     def _fetch_stream_ec(self, meta, chunks, ranges, storage_method, headers):
         ranges = ranges or [(None, None)]
 
-        meta_ranges = get_meta_ranges(ranges, chunks)
+        meta_range_list = get_meta_ranges(ranges, chunks)
 
-        for pos, meta_range in meta_ranges.iteritems():
-            meta_start, meta_end = meta_range
-            handler = ECChunkDownloadHandler(storage_method, chunks[pos],
-                                             meta_start, meta_end, headers)
-            stream = handler.get_stream()
-            for part_info in stream:
-                for d in part_info['iter']:
-                    yield d
-            stream.close()
+        for meta_range_dict in meta_range_list:
+            for pos, meta_range in meta_range_dict.iteritems():
+                meta_start, meta_end = meta_range
+                handler = ECChunkDownloadHandler(storage_method, chunks[pos],
+                                                 meta_start, meta_end, headers)
+                stream = handler.get_stream()
+                for part_info in stream:
+                    for d in part_info['iter']:
+                        yield d
+                stream.close()
 
     def _b2_credentials(self, storage_method, key_file):
         try:
