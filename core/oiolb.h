@@ -21,7 +21,7 @@ License along with this library.
 # include <stdbool.h>
 # include <glib.h>
 
-#define OIO_LOC_FORMAT G_GUINT64_FORMAT
+#define OIO_LOC_FORMAT "016lX"
 typedef guint64 oio_location_t;
 typedef guint8 oio_weight_t;
 
@@ -62,6 +62,10 @@ guint oio_lb_pool__patch(struct oio_lb_pool_s *self,
 struct oio_lb_item_s *oio_lb_pool__get_item(struct oio_lb_pool_s *self,
 		const char *id);
 
+/* Take djb2 hash of each part of the '.'-separated string,
+ * keep the 16 (or 8) LSB of each hash to build a 64 integer. */
+oio_location_t location_from_dotted_string(const char *dotted);
+
 /* -------------------------------------------------------------------------- */
 
 /* A world is something you feed with services and that will arrange them for
@@ -101,6 +105,18 @@ void oio_lb_world__feed_slot (struct oio_lb_world_s *self, const char *slot,
 /* Create a world-based implementation of a service pool. */
 struct oio_lb_pool_s * oio_lb_world__create_pool (
 		struct oio_lb_world_s *world, const char *name);
+
+
+/* Set a mask (hexadecimal string, 64b) to compute distance between items */
+#define OIO_LB_OPT_MASK           "mask"
+/* Set maximum number of bits to add to the mask to degrade it */
+#define OIO_LB_OPT_MASK_MAX_SHIFT "mask_max_shift"
+/* Look for services close to each other (boolean string) */
+#define OIO_LB_OPT_NEARBY         "nearby_mode"
+
+/* Set a pool option. */
+void oio_lb_world__set_pool_option(struct oio_lb_pool_s *self, const char *key,
+		const char *value);
 
 /* Tell the given world-based pool that it must target the given set of slots.
  * The slots sequence is coma-separated. It is an error to call this on a

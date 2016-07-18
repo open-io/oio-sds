@@ -393,7 +393,7 @@ param_option.storage_policy=${STGPOL}
 param_storage_conf=${CFGDIR}/${NS}-policies.conf
 
 # Service scoring and pools definitions
-param_service_conf=${CFGDIR}/${NS}-services.conf
+param_service_conf=${CFGDIR}/${NS}-service-{pool,type}*.conf
 
 # For an easy transition, it is still possible to define
 # service score expression, variation, timeout and lock here.
@@ -448,11 +448,14 @@ template_credentials = """
 ${BACKBLAZE_ACCOUNT_ID}.${BACKBLAZE_BUCKET_NAME}.application_key=${BACKBLAZE_APPLICATION_KEY}
 """
 
-template_conscience_services = """[pools]
-# Pools for each service type
+template_service_pools = """
+# Service pools declarations
 # ----------------------------
 #
-# The value is a ';'-separated of targets.
+# Pool are automatically created if not defined in configuration,
+# according to storage policy or service update policy rules.
+#
+# "targets" is a ';'-separated list.
 # Each target is a ','-separated list of:
 # - the number of services to pick,
 # - the name of a slot where to pick the services,
@@ -460,64 +463,108 @@ template_conscience_services = """[pools]
 #   not enough in the previous slot
 # - and so on...
 #
-# Pool are automatically created if not defined in configuration.
+# "nearby_mode" is a boolean telling to find services close to each other.
+#
+#### power user options, don't modify it unless you know what you are doing
+# "mask" is a 64 bits hexadecimal mask used to check service distance.
+# It defaults to FFFFFFFFFFFF0000. It can also be specified as "/48".
+#
+# "mask_max_shift" is the maximum number of bits to shift the mask
+# to degrade it when distance requirement are not satisfiable.
+# It defaults to 16.
+#
 
-meta2=${M2_REPLICAS},meta2
-rdir=1,rdir
-account=1,account
+[pool:meta2]
+targets=${M2_REPLICAS},meta2
 
+[pool:rdir]
+targets=1,rdir
 
-# Pools of rawx services for storage policies
-# --------------------------------------------
+[pool:account]
+targets=1,account
 
+[pool:fastrawx3]
 # Pick 3 SSD rawx, or any rawx if SSD is not available
-fastrawx3=3,rawx-ssd,rawx
+targets=3,rawx-ssd,rawx
 
+[pool:rawxevenodd]
 # Pick one "even" and one "odd" rawx
-rawxevenodd=1,rawx-even;1,rawx-odd
+targets=1,rawx-even;1,rawx-odd
 
+[pool:rawx2]
 # As with rawxevenodd, but with permissive fallback on any rawx
-rawx2=1,rawx-even,rawx;1,rawx-odd,rawx
+targets=1,rawx-even,rawx;1,rawx-odd,rawx
 
+[pool:rawx3]
 # Try to pick one "even" and one "odd" rawx, and a generic one
-rawx3=1,rawx-even,rawx;1,rawx-odd,rawx;1,rawx
+targets=1,rawx-even,rawx;1,rawx-odd,rawx;1,rawx
 
+[pool:zonedrawx3]
 # Pick one rawx in Europe, one in USA, one in Asia, or anywhere if none available
-zonedrawx3=1,rawx-europe,rawx;1,rawx-usa,rawx;1,rawx-asia,rawx
+targets=1,rawx-europe,rawx;1,rawx-usa,rawx;1,rawx-asia,rawx
 
+[pool:rawx3nearby]
+targets=3,rawx
+mask=/62
+nearby_mode=true
 
-[score_expr]
-meta0=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
-meta1=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
-meta2=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
-rawx=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
-sqlx=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
-rdir=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
-redis=(num stat.cpu)
-account=(num stat.cpu)
-echo=(num stat.cpu)
-oiofs=(num stat.cpu)
+[pool:rawx3faraway]
+targets=3,rawx
+mask=FFFFFFFF00000000
+mask_max_shift=24
 
-[score_timeout]
+"""
+
+template_service_types = """
+# Service types declatations
+# ---------------------------
+
+[type:meta0]
+score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
 # Defaults to 300s
-meta0=3600
-meta1=120
-meta2=120
-rawx=120
-sqlx=120
-rdir=120
-redis=120
-oiofs=120
-account=120
-echo=30
-
-[score_variation_bound]
+score_timeout=3600
 # Defaults to 5s
+score_variation_bound=20
+# Defaults to true
+lock_at_first_register=false
 
-[score_lock_at_first_register]
-meta0=false
-meta1=false
-oiofs=false
+[type:meta1]
+score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+score_timeout=120
+lock_at_first_register=false
+
+[type:meta2]
+score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+score_timeout=120
+
+[type:rawx]
+score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+score_timeout=120
+
+[type:sqlx]
+score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+score_timeout=120
+
+[type:rdir]
+score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+score_timeout=120
+
+[type:redis]
+score_expr=(num stat.cpu)
+score_timeout=120
+
+[type:account]
+score_expr=(num stat.cpu)
+score_timeout=120
+
+[type:echo]
+score_expr=(num stat.cpu)
+score_timeout=30
+
+[type:oiofs]
+score_expr=(num stat.cpu)
+score_timeout=120
+lock_at_first_register=false
 """
 
 template_gridinit_header = """
@@ -996,8 +1043,11 @@ def generate(options):
         with open('{CFGDIR}/{NS}-policies.conf'.format(**ENV), 'w+') as f:
             tpl = Template(template_conscience_policies)
             f.write(tpl.safe_substitute(ENV))
-        with open('{CFGDIR}/{NS}-services.conf'.format(**ENV), 'w+') as f:
-            tpl = Template(template_conscience_services)
+        with open('{CFGDIR}/{NS}-service-pools.conf'.format(**ENV), 'w+') as f:
+            tpl = Template(template_service_pools)
+            f.write(tpl.safe_substitute(ENV))
+        with open('{CFGDIR}/{NS}-service-types.conf'.format(**ENV), 'w+') as f:
+            tpl = Template(template_service_types)
             f.write(tpl.safe_substitute(ENV))
         # Prepare a list of consciences
         for num in range(nb_conscience):
@@ -1195,7 +1245,7 @@ def generate(options):
     with open('{KEY_FILE}'.format(**ENV), 'w+') as f:
         tpl = Template(template_credentials)
         f.write(tpl.safe_substitute(ENV))
-        
+
     # ensure volumes
     for srvtype in final_services:
         for rec in final_services[srvtype]:

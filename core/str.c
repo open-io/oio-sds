@@ -162,6 +162,32 @@ oio_str_hex2bin(const char *s0, guint8 *d, gsize dlen)
 	return TRUE;
 }
 
+gboolean
+oio_str_parse_bool(const gchar *value, gboolean def)
+{
+	static const gchar *array_yes[] = {
+		"yes", "true", "on", "enable", "enabled", "1", "yeah", NULL
+	};
+	static const gchar *array_no[] = {
+		"no", "false", "off", "disable", "disabled", "0", "nope", NULL
+	};
+
+	if (!value)
+		return def;
+
+	for (const gchar **s=array_yes; *s ;s++) {
+		if (!g_ascii_strcasecmp(value, *s))
+			return TRUE;
+	}
+
+	for (const gchar **s=array_no; *s ;s++) {
+		if (!g_ascii_strcasecmp(value, *s))
+			return FALSE;
+	}
+
+	return def;
+}
+
 gsize
 oio_str_bin2hex(const void *s, size_t sS, char *d, size_t dS)
 {

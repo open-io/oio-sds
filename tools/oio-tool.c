@@ -156,16 +156,30 @@ _ping(gchar *dest, gchar *to)
 	}
 }
 
+static void
+_print_loc(const char *dotted_loc)
+{
+	oio_location_t loc = location_from_dotted_string(dotted_loc);
+	g_print("%s\t%"OIO_LOC_FORMAT"\n", dotted_loc, loc);
+}
+
 int
 main (int argc, char **argv)
 {
 	if (argc < 2) {
-		g_printerr ("Usage:i\n");
+		g_printerr ("Usage:\n");
+		g_printerr ("Print hex representation of the address\n");
 		g_printerr (" %s addr IP:PORT\n", argv[0]);
+		g_printerr ("Print hex representation of container ID\n");
 		g_printerr (" %s cid  OIOURL\n", argv[0]);
+		g_printerr ("\n");
 		g_printerr (" %s hash [PREFIX]\n", argv[0]);
+		g_printerr ("Ping a service\n");
 		g_printerr (" %s ping IP:PORT [TIMEOUT]\n", argv[0]);
+		g_printerr ("Get free CPU, IO and space statistics\n");
 		g_printerr (" %s stat [path]...\n", argv[0]);
+		g_printerr ("Compute 64b integer location from dotted string\n");
+		g_printerr (" %s location DOTTED_STRING...\n", argv[0]);
 		return 2;
 	}
 	oio_ext_set_random_reqid ();
@@ -192,6 +206,10 @@ main (int argc, char **argv)
 			return _ping(argv[2], "10.0");
 	} else if (!strcmp("stat", argv[1])) {
 		_sysstat (argv+2);
+		return 0;
+	} else if (!strcmp("location", argv[1])) {
+		for (int i = 2; i < argc; ++i)
+			_print_loc(argv[i]);
 		return 0;
 	}
 

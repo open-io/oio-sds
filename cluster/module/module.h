@@ -52,6 +52,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define KEY_SCORE_VARBOUND "score_variation_bound"
 # define KEY_SCORE_LOCK "lock_at_first_register"
 
+# define KEY_POOL_TARGETS "targets"
+# define KEY_POOL_MASK    "mask"
+
+# define GROUP_PREFIX_TYPE "type:"
+# define GROUP_PREFIX_POOL "pool:"
+
 # define DEF_SERIALIZE_SRVINFO_CACHED FALSE
 
 # define KEY_SERIALIZE_SRVINFO_TAGS   "serialize_srvinfo_tags"

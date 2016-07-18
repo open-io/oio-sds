@@ -73,6 +73,9 @@ gboolean oio_str_ishexa1(const char *s);
 /** Convert an hexa string to its binary form */
 gboolean oio_str_hex2bin(const char * src, guint8* dst, gsize dlen);
 
+/** Convert a string into a boolean */
+gboolean oio_str_parse_bool(const gchar *value, gboolean def);
+
 /** Fills d (which size is dS) with the hexadecimal alpha-numerical
  * representation of the content of s (which size is sS) */
 gsize oio_str_bin2hex(const void *s, size_t sS, char *d, size_t dS);
