@@ -83,14 +83,25 @@ _notify_beans (struct meta2_backend_s *m2b, struct oio_url_s *url,
 	else {
 		/* first, notify everything but the chunks */
 		GSList *non_chunks = NULL;
+		struct bean_CONTENTS_HEADERS_s *header = NULL;
 		for (GSList *l=beans; l ;l=l->next) {
-			if (&descr_struct_CHUNKS != DESCR(l->data))
+			if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
+				if (header)
+					GRID_WARN("Several content headers in same event!");
+				else
+					header = l->data;
 				non_chunks = g_slist_prepend (non_chunks, l->data);
+			} else if (&descr_struct_CHUNKS != DESCR(l->data)) {
+				non_chunks = g_slist_prepend (non_chunks, l->data);
+			}
 		}
 		if (non_chunks) {
 			forward (non_chunks);
 			g_slist_free (non_chunks);
 		}
+
+		if (!header)
+			GRID_WARN("No content header in event data! (type: %s)", name);
 
 		/* then notify each chunks by batches of 16 items */
 		GSList *batch = NULL;
@@ -100,12 +111,18 @@ _notify_beans (struct meta2_backend_s *m2b, struct oio_url_s *url,
 				continue;
 			batch = g_slist_prepend (batch, l->data);
 			if (!((++count)%16)) {
+				/* We send the header each time because the event handlers
+				 * may need the chunk method, which is not saved in chunks. */
+				if (header)
+					batch = g_slist_prepend(batch, header);
 				forward (batch);
 				g_slist_free (batch);
 				batch = NULL;
 			}
 		}
 		if (batch) {
+			if (header)
+				batch = g_slist_prepend(batch, header);
 			forward (batch);
 			g_slist_free (batch);
 			batch = NULL;

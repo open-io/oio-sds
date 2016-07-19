@@ -42,28 +42,27 @@ class ContentReaperFilter(Filter):
                             chunk['id'], str(e.message))
                     return resp
 
-                def delete_chunk_backblaze(chunks, url,
-                                           content_headers, storage_method):
+                def delete_chunk_backblaze(chunks, url, storage_method):
                     meta = {}
                     meta['container_id'] = url['id']
                     chunk_list = []
                     for chunk in chunks:
                         chunk['url'] = chunk['id']
-                        chunk_list.append([chunk])
+                        chunk_list.append(chunk)
                     key_file = self.conf.get('key_file')
-                    backblaze_info = BackblazeUtils.put_meta_backblaze(
+                    backblaze_info = BackblazeUtils.get_credentials(
                         storage_method, key_file)
                     try:
                         BackblazeDeleteHandler(meta, chunk_list,
                                                backblaze_info).delete()
                     except OioException as e:
                         self.logger.warn('delete failed: %s' % str(e))
+
                 chunk_method = content_headers['chunk-method']
-                # don't load storage method else than with b2
-                if chunk_method.find('backblaze') != -1:
+                # don't load storage method other than backblaze
+                if chunk_method.startswith('backblaze'):
                     storage_method = STORAGE_METHODS.load(chunk_method)
-                    delete_chunk_backblaze(chunks, url,
-                                           content_headers, storage_method)
+                    delete_chunk_backblaze(chunks, url, storage_method)
                     return self.app(env, cb)
                 for chunk in chunks:
                     pile.spawn(delete_chunk, chunk)

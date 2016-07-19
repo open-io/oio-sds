@@ -863,12 +863,15 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 {
 	GError *err;
 	struct bean_ALIASES_s *alias = NULL;
+	struct bean_CONTENTS_HEADERS_s *header = NULL;
 	GSList *beans = NULL;
 
 	void _search_alias_and_size(gpointer ignored, gpointer bean) {
 		(void) ignored;
 		if (DESCR(bean) == &descr_struct_ALIASES)
 			alias = _bean_dup(bean);
+		else if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS)
+			header = bean;
 		beans = g_slist_prepend(beans, bean);
 	}
 
@@ -900,12 +903,20 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 
 		GSList *deleted_beans = NULL;
 		err = _real_delete(sq3, beans, &deleted_beans);
-		/* Client asked to remove no-more referenced beans, we tell him which */
-		for (GSList *bean = deleted_beans; bean; bean = bean->next) {
-			if (cb)
+		if (cb) {
+			gboolean header_encountered = FALSE;
+			/* Client asked to remove no-more referenced beans,
+			 * we tell him which */
+			for (GSList *bean = deleted_beans; bean; bean = bean->next) {
+				if (bean->data == header)
+					header_encountered = TRUE;
 				cb(u0, _bean_dup(bean->data));
+			}
+			/* Header hasn't been deleted but contains useful information */
+			if (!header_encountered)
+				cb(u0, _bean_dup(header));
 		}
-		// XXX deleted_beans's contents are direct pointers to the original beans.
+		// deleted_beans contains direct pointers to the original beans
 		g_slist_free(deleted_beans);
 
 		// sqliterepo might disable foreign keys management, so that we have
@@ -1260,7 +1271,7 @@ m2db_update_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	GSList *aliases = NULL, *old_beans = NULL, *new_beans = NULL;
 
 	/* Compute the size of the metachunks we are adding. Build and use a tree
-	 * to avoid adding several times for the same metachunk, and later to
+	 * to avoid counting several times the same metachunk, and later to
 	 * find which beans we must remove from the database. */
 	GTree *positions_seen = g_tree_new(_tree_compare_int);
 	gint64 added_size = 0;
@@ -1305,12 +1316,12 @@ m2db_update_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 
 	/* Update size (in header) and mtime (in alias and header) */
 	const gint64 now = oio_ext_real_time() / G_TIME_SPAN_SECOND;
-	CONTENTS_HEADERS_set_size(header,
+	struct bean_CONTENTS_HEADERS_s *new_header = _bean_dup(header);
+	CONTENTS_HEADERS_set_size(new_header,
 			CONTENTS_HEADERS_get_size(header) + added_size);
-	CONTENTS_HEADERS_set2_hash(header, (guint8*)"", 0);
-	CONTENTS_HEADERS_set_mtime(header, now);
-	new_beans = g_slist_prepend(new_beans, header);
-	header = NULL;
+	CONTENTS_HEADERS_set2_hash(new_header, (guint8*)"", 0);
+	CONTENTS_HEADERS_set_mtime(new_header, now);
+	new_beans = g_slist_prepend(new_beans, new_header);
 	for (GSList *l = aliases; l; l = l->next) {
 		struct bean_ALIASES_s *alias = _bean_dup(l->data);
 		ALIASES_set_mtime(alias, now);
@@ -1328,7 +1339,8 @@ m2db_update_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	/* Update the size of the container and notify the caller with new beans */
 	m2db_set_size(sq3, m2db_get_size(sq3) + added_size);
 	if (out_deleted) {
-		*out_deleted = old_beans;
+		*out_deleted = g_slist_prepend(old_beans, header);
+		header = NULL;
 		old_beans = NULL;
 	}
 	if (out_added) {

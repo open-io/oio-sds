@@ -171,7 +171,8 @@ class BackblazeStorageMethod(StorageMethod):
 def load_methods():
     global _STORAGE_METHODS
     methods = {'plain': ReplicatedStorageMethod,
-               'ec': ECStorageMethod, 'backblaze': BackblazeStorageMethod}
+               'ec': ECStorageMethod,
+               'backblaze': BackblazeStorageMethod}
     _STORAGE_METHODS = StorageMethods(methods)
 
 

@@ -256,8 +256,7 @@ class BackblazeDeleteHandler(object):
             try_number -= 1
 
     def delete(self):
-        for pos in range(len(self.chunks)):
-            chunk = self.chunks[pos][0]
+        for chunk in self.chunks:
             conn = _connect_put(chunk, self.meta, self.backblaze_info)
             self._delete(conn)
 
