@@ -364,8 +364,10 @@ _handler_wrapper(const gchar *d UNUSED, GLogLevelFlags l,
 			return handler(OIO_LOG_ERROR, "%s", m);
 		case LOG_WARNING:
 			return handler(OIO_LOG_WARNING, "%s", m);
-		default:
+		case LOG_INFO:
 			return handler(OIO_LOG_INFO, "%s", m);
+		default:
+			return handler(OIO_LOG_DEBUG, "%s", m);
 	}
 }
 
