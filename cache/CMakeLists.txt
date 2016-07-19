@@ -11,23 +11,26 @@ install(TARGETS oiocache
 		RUNTIME DESTINATION bin
 		PUBLIC_HEADER DESTINATION include)
 
-if (HIREDIS_FOUND)
-	add_library(oiocache_redis SHARED cache_redis.c)
-	target_link_libraries(oiocache_redis ${HIREDIS_LIBRARIES})
+if (DEFINED ALLOW_HIREDIS)
+	if (HIREDIS_FOUND)
+		add_library(oiocache_redis SHARED cache_redis.c)
+		target_link_libraries(oiocache_redis ${HIREDIS_LIBRARIES})
 
-	install(TARGETS oiocache_redis
-	        LIBRARY DESTINATION ${LD_LIBDIR}
-			RUNTIME DESTINATION bin
-			PUBLIC_HEADER DESTINATION include)
+		install(TARGETS oiocache_redis
+				LIBRARY DESTINATION ${LD_LIBDIR}
+				RUNTIME DESTINATION bin
+				PUBLIC_HEADER DESTINATION include)
+	endif ()
 endif ()
 
-if (LIBMEMCACHED_FOUND)
-	add_library(oiocache_memcached SHARED cache_memcached.c)
-	target_link_libraries(oiocache_memcached ${LIBMEMCACHED_LIBRARIES})
+if (DEFINED ALLOW_LIBMEMCACHED)
+	if (LIBMEMCACHED_FOUND)
+		add_library(oiocache_memcached SHARED cache_memcached.c)
+		target_link_libraries(oiocache_memcached ${LIBMEMCACHED_LIBRARIES})
 
-	install(TARGETS oiocache_memcached
-	        LIBRARY DESTINATION ${LD_LIBDIR}
-			RUNTIME DESTINATION bin
-			PUBLIC_HEADER DESTINATION include)
+		install(TARGETS oiocache_memcached
+				LIBRARY DESTINATION ${LD_LIBDIR}
+				RUNTIME DESTINATION bin
+				PUBLIC_HEADER DESTINATION include)
+	endif ()
 endif ()
-
