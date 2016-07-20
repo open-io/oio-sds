@@ -857,6 +857,7 @@ configure_request_handlers (void)
 	SET("/$NS/content/spare/#POST", action_content_spare);
 	SET("/$NS/content/copy/#POST", action_content_copy);
 	SET("/$NS/content/update/#POST", action_content_update);
+	SET("/$NS/content/truncate/#POST", action_content_truncate);
 
 	// Admin
 	SET("/$NS/admin/ping/#POST", action_admin_ping);

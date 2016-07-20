@@ -77,6 +77,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_M2V2_APPEND          "M2_APPEND"
 # define NAME_MSGNAME_M2V2_GET             "M2_GET"
 # define NAME_MSGNAME_M2V2_DEL             "M2_DEL"
+# define NAME_MSGNAME_M2V2_TRUNC           "M2_TRUNC"
 # define NAME_MSGNAME_M2V2_LIST            "M2_LST"
 # define NAME_MSGNAME_M2V2_LCHUNK          "M2_LCHUNK"
 # define NAME_MSGNAME_M2V2_LHID            "M2_LHID"

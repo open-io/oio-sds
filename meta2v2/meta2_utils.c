@@ -66,6 +66,12 @@ _m2db_count_alias_versions(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 	return v;
 }
 
+static gint
+_tree_compare_int(gconstpointer a, gconstpointer b)
+{
+	return CMP(GPOINTER_TO_INT(a), GPOINTER_TO_INT(b));
+}
+
 #define FORMAT_ERROR(v,s,e) (!(v) && errno == EINVAL)
 #define RANGE_ERROR(v) ((v) == G_MININT64 || (v) == G_MAXINT64)
 #define STRTOLL_ERROR(v,s,e) (FORMAT_ERROR(v,s,e) || RANGE_ERROR(v))
@@ -266,6 +272,34 @@ m2db_set_quota(struct sqlx_sqlite3_s *sq3, gint64 quota)
 }
 
 /* GET ---------------------------------------------------------------------- */
+
+struct _sorted_content_s {
+	struct bean_CONTENTS_HEADERS_s *header;
+	GSList *aliases;    // GSList<struct bean_ALIASES_s*>
+	GSList *properties; // GSList<struct bean_PROPERTIES_s*>
+	GTree *metachunks;  // GTree<gint,GSList<struct bean_CHUNKS_s*>>
+};
+
+static void
+_sort_content_cb(gpointer sorted_content, gpointer bean)
+{
+	struct _sorted_content_s *content = sorted_content;
+	if (DESCR(bean) == &descr_struct_ALIASES) {
+		content->aliases = g_slist_prepend(content->aliases, bean);
+	} else if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
+		content->header = bean;
+	} else if (DESCR(bean) == &descr_struct_CHUNKS) {
+		gint64 pos = g_ascii_strtoll(
+				CHUNKS_get_position(bean)->str, NULL, 10);
+		GSList *mc = g_tree_lookup(content->metachunks, GINT_TO_POINTER(pos));
+		mc = g_slist_prepend(mc, bean);
+		g_tree_insert(content->metachunks, GINT_TO_POINTER(pos), mc);
+	} else if (DESCR(bean) == &descr_struct_PROPERTIES) {
+		content->properties = g_slist_prepend(content->properties, bean);
+	} else {
+		g_assert_not_reached();
+	}
+}
 
 static GError*
 _manage_header(sqlite3 *db, struct bean_CONTENTS_HEADERS_s *bean,
@@ -900,6 +934,120 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 	return err;
 }
 
+static struct oio_url_s *
+_dup_content_id_url(struct oio_url_s *url)
+{
+	struct oio_url_s *local_url = NULL;
+	if (!oio_url_has(url, OIOURL_CONTENTID)) {
+		GRID_WARN("Updating chunks by content path (%s), other paths "
+				"linked to the same content id won't be notified!",
+				oio_url_get(url, OIOURL_WHOLE));
+		local_url = oio_url_dup(url);
+	} else {
+		local_url = oio_url_empty();
+		oio_url_set(local_url, OIOURL_NS, oio_url_get(url, OIOURL_NS));
+		oio_url_set(local_url, OIOURL_HEXID, oio_url_get(url, OIOURL_HEXID));
+		oio_url_set(local_url, OIOURL_CONTENTID,
+				oio_url_get(url, OIOURL_CONTENTID));
+	}
+	return local_url;
+}
+
+GError*
+m2db_truncate_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
+		gint64 truncate_size, GSList **out_deleted, GSList **out_added)
+{
+	GError *err = NULL;
+	struct _sorted_content_s content = {
+		.header = NULL,
+		.aliases = NULL,
+		.properties = NULL,
+		.metachunks = g_tree_new(_tree_compare_int),
+	};
+	GSList *discarded = NULL, *kept = NULL;
+	struct oio_url_s *local_url = _dup_content_id_url(url);
+
+	if ((err = m2db_get_alias(sq3, local_url, M2V2_FLAG_NOPROPS|M2V2_FLAG_HEADERS,
+			_sort_content_cb, &content)))
+		goto cleanup;
+	EXTRA_ASSERT(content.properties == NULL);
+
+	if (truncate_size > CONTENTS_HEADERS_get_size(content.header)) {
+		err = BADREQ("truncate operation cannot grow contents");
+		goto cleanup;
+	}
+
+	gint64 offset = 0;
+	gboolean chunk_boundary_found = FALSE;
+	gboolean _discard_extra_chunks(gpointer key, gpointer value,
+			gpointer data UNUSED) {
+		gint64 pos = GPOINTER_TO_INT(key);
+		GSList *mc = value;
+		gint64 current_size = CHUNKS_get_size(mc->data);
+		if (offset >= truncate_size) {
+			chunk_boundary_found |= (offset == truncate_size);
+			/* We should never discard position 0: when content size is 0,
+			 * we keep a chunk to be able to reconstruct the content if
+			 * the directory has been lost. */
+			if (pos == 0) {
+				kept = metautils_gslist_precat(mc, kept);
+			} else {
+				discarded = metautils_gslist_precat(mc, discarded);
+			}
+		} else {
+			kept = metautils_gslist_precat(mc, kept);
+		}
+		offset += current_size;
+		return FALSE;
+	}
+	g_tree_foreach(content.metachunks, _discard_extra_chunks, NULL);
+
+	if (!chunk_boundary_found)
+		GRID_WARN("Truncation not done on metachunk boundary for %s",
+				oio_url_get(url, OIOURL_WHOLE));
+
+	for (GSList *l = discarded; l && !err; l = l->next)
+		err = _db_delete_bean(sq3->db, l->data);
+	if (err)
+		goto cleanup;
+
+	/* Update size and mtime in header */
+	const gint64 now = oio_ext_real_time() / G_TIME_SPAN_SECOND;
+	CONTENTS_HEADERS_set_size(content.header, truncate_size);
+	CONTENTS_HEADERS_set2_hash(content.header, (guint8*)"", 0);
+	CONTENTS_HEADERS_set_mtime(content.header, now);
+	kept = g_slist_prepend(kept, content.header);
+	content.header = NULL;
+
+	/* Update mtime in aliases */
+	for (GSList *l = content.aliases; l; l = l->next) {
+		struct bean_ALIASES_s *alias = l->data;
+		ALIASES_set_mtime(alias, now);
+		kept = g_slist_prepend(kept, alias);
+	}
+	g_slist_free(content.aliases);
+	content.aliases = NULL;
+	err = _db_save_beans_list(sq3->db, kept);
+
+	if (!err) {
+		*out_added = kept;
+		*out_deleted = discarded;
+		// prevent cleanup
+		kept = NULL;
+		discarded = NULL;
+	}
+
+cleanup:
+	_bean_clean(content.header);
+	_bean_cleanl2(content.aliases);
+	// Don't free values, they are in kept, discarded, out_added or out_deleted
+	g_tree_destroy(content.metachunks);
+	_bean_cleanl2(kept);
+	_bean_cleanl2(discarded);
+	oio_url_clean(local_url);
+	return err;
+}
+
 /* PUT commons -------------------------------------------------------------- */
 
 struct put_args_s
@@ -1080,12 +1228,6 @@ m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 	return err;
 }
 
-static gint
-_tree_compare_int(gconstpointer a, gconstpointer b)
-{
-	return CMP(GPOINTER_TO_INT(a), GPOINTER_TO_INT(b));
-}
-
 static void
 _extract_chunks_sizes_positions(GSList *beans,
 		GSList **chunks, gint64 *size, GTree *positions)
@@ -1126,19 +1268,7 @@ m2db_update_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 			&new_beans, &added_size, positions_seen);
 
 	/* Make sure we load the beans by content id */
-	struct oio_url_s *local_url = NULL;
-	if (!oio_url_has(url, OIOURL_CONTENTID)) {
-		GRID_WARN("Updating chunks by content path (%s), other paths "
-				"linked to the same content id won't be notified!",
-				oio_url_get(url, OIOURL_WHOLE));
-		local_url = oio_url_dup(url);
-	} else {
-		local_url = oio_url_empty();
-		oio_url_set(local_url, OIOURL_NS, oio_url_get(url, OIOURL_NS));
-		oio_url_set(local_url, OIOURL_HEXID, oio_url_get(url, OIOURL_HEXID));
-		oio_url_set(local_url, OIOURL_CONTENTID,
-				oio_url_get(url, OIOURL_CONTENTID));
-	}
+	struct oio_url_s *local_url = _dup_content_id_url(url);
 
 	/* Find which beans we must remove from the database */
 	GTree *old_positions_seen = g_tree_new(_tree_compare_int);

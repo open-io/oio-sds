@@ -1761,6 +1761,25 @@ action_content_update(struct req_args_s *args)
 }
 
 enum http_rc_e
+action_content_truncate(struct req_args_s *args)
+{
+	GError *err = NULL;
+	const char *size_str = OPT("size");
+	char *end = NULL;
+	gint64 size = 0;
+	if (!size_str ||
+			(!(size = g_ascii_strtoll(size_str, &end, 10)) && end == size_str))
+		err = BADREQ("Missing/invalid size parameter: %s", OPT("size"));
+	else {
+		PACKER_VOID(_pack) {
+			return m2v2_remote_pack_TRUNC(args->url, size);
+		}
+		err = _resolve_meta2(args, CLIENT_PREFER_MASTER, _pack, NULL);
+	}
+	return _reply_m2_error(args, err);
+}
+
+enum http_rc_e
 action_content_prepare (struct req_args_s *args)
 {
 	return rest_action (args, action_m2_content_beans);

@@ -280,6 +280,14 @@ m2v2_remote_pack_DEL(struct oio_url_s *url)
 }
 
 GByteArray*
+m2v2_remote_pack_TRUNC(struct oio_url_s *url, gint64 size)
+{
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_TRUNC, url, NULL);
+	metautils_message_add_field_strint64(msg, NAME_MSGKEY_CONTENTLENGTH, size);
+	return message_marshall_gba_and_clean(msg);
+}
+
+GByteArray*
 m2v2_remote_pack_RAW_DEL(struct oio_url_s *url, GSList *beans)
 {
 	GByteArray *body = bean_sequence_marshall(beans);

@@ -118,6 +118,8 @@ GByteArray* m2v2_remote_pack_COPY(struct oio_url_s *url, const char *src);
 
 GByteArray* m2v2_remote_pack_DEL(struct oio_url_s *url);
 
+GByteArray* m2v2_remote_pack_TRUNC(struct oio_url_s *url, gint64 size);
+
 GByteArray* m2v2_remote_pack_GET(struct oio_url_s *url, guint32 flags);
 GByteArray* m2v2_remote_pack_LIST(struct oio_url_s *url, struct list_params_s *p);
 GByteArray* m2v2_remote_pack_LIST_BY_CHUNKID(struct oio_url_s *url, struct list_params_s *p, const char *chunk);
