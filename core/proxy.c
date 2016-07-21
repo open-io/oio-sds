@@ -535,6 +535,24 @@ oio_proxy_call_content_link (CURL *h, struct oio_url_s *u, const char *id)
 }
 
 GError *
+oio_proxy_call_content_truncate (CURL *h, struct oio_url_s *u, gint64 size)
+{
+	GString *http_url = _curl_content_url(u, "truncate");
+	if (!http_url)
+		return BADNS();
+
+	gchar size_str[16] = {0};
+	g_snprintf(size_str, sizeof(size_str), "%"G_GINT64_FORMAT, size);
+
+	_append(http_url, '&', "content", oio_url_get(u, OIOURL_CONTENTID));
+	_append(http_url, '&', "size", size_str);
+
+	GError *err = _proxy_call(h, "POST", http_url->str, NULL, NULL);
+	g_string_free(http_url, TRUE);
+	return err;
+}
+
+GError *
 oio_proxy_call_content_prepare (CURL *h, struct oio_url_s *u,
 		gsize size, gboolean autocreate,
 		struct oio_proxy_content_prepare_out_s *out)

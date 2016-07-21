@@ -438,6 +438,65 @@ _roundtrip_put_multipart (const char * const * properties)
 	oio_error_pfree (&err);
 }
 
+static void
+_roundtrip_put_multipart_truncate (const char * const * properties)
+{
+	struct oio_error_s *err = NULL;
+	const size_t cidlen = 1 + 2 * oio_ext_rand_int_range (7,15);
+	gchar content_id[cidlen];
+	oio_str_randomize (content_id, cidlen, hex_chars);
+
+	struct file_info_s fi0 = FILE_INFO_INIT;
+	_checksum_file (source_path, &fi0);
+
+	CHECK_ABSENT(client,url);
+
+	struct oio_sds_ul_dst_s ul_dst = OIO_SDS_UPLOAD_DST_INIT;
+	ul_dst.url = url;
+	ul_dst.autocreate = 1;
+	ul_dst.out_size = 0;
+	ul_dst.content_id = content_id;
+	ul_dst.properties = properties;
+
+	err = oio_sds_upload_from_file (client, &ul_dst, source_path, 0, 0);
+	NOERROR(err);
+
+	ul_dst.offset = fi0.fs;
+	ul_dst.meta_pos = 1;
+	ul_dst.partial = TRUE;
+	err = oio_sds_upload_from_file (client, &ul_dst, source_path, 0, 0);
+	NOERROR(err);
+
+	size_t content_size = 0;
+	void _get_size(void *cb_data UNUSED,
+			enum oio_sds_content_key_e key, const char *value) {
+		if (key == OIO_SDS_CONTENT_SIZE)
+			content_size = g_ascii_strtoll(value, NULL, 10);
+	}
+	size_t metachunk_size = 0;
+	void _get_mc_size_(void *cb_data UNUSED,
+			unsigned int seq, size_t offset, size_t length) {
+		if (seq == 0 && offset == 0)
+			metachunk_size = length;
+	}
+
+	err = oio_sds_show_content(client, url, NULL, _get_size, _get_mc_size_,
+			NULL);
+	NOERROR(err);
+	g_assert_cmpint(fi0.fs + metachunk_size, ==, content_size);
+
+	err = oio_sds_truncate(client, url, metachunk_size);
+	NOERROR(err);
+
+	err = oio_sds_show_content(client, url, NULL, _get_size, NULL, NULL);
+	NOERROR(err);
+	g_assert_cmpint(content_size, ==, metachunk_size);
+
+	_roundtrip_tail (NULL, content_id, properties);
+
+	oio_error_pfree (&err);
+}
+
 /* Upload the content at once then check the content is OK */
 static void
 _roundtrip_put_from_file (const char * const * properties)
@@ -630,6 +689,7 @@ main(int argc, char **argv)
 		{ "put/file/autocontainer", _roundtrip_put_autocontainer },
 		{ "append/buffer/asis",_roundtrip_append },
 		{ "update/file/asis", _roundtrip_put_multipart },
+		{ "truncate/file/asis", _roundtrip_put_multipart_truncate },
 		{ NULL, NULL }
 	};
 	for (struct test_def_s *pdef=putv; pdef->tag && pdef->func ;++pdef)

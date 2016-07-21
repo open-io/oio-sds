@@ -318,6 +318,8 @@ meta2_filter_action_truncate_content(struct gridd_filter_ctx_s *ctx,
 	if (added)
 		_notify_beans(m2b, url, added, "content.new");
 
+	_bean_cleanl2(added);
+	_bean_cleanl2(deleted);
 	return FILTER_OK;
 }
 

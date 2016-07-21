@@ -21,7 +21,7 @@ License along with this library.
 
 /* Version started to be defined in June, 2016. Version prior to 20160600
  * have no ABI incompatibilities. */
-#define OIO_SDS_VERSION 20160707
+#define OIO_SDS_VERSION 20160721
 
 #ifdef __cplusplus
 extern "C" {
@@ -150,10 +150,10 @@ int oio_sds_configure (struct oio_sds_s *sds, enum oio_sds_config_e what,
 
 /* Links the meta2 then triggers container creation */
 struct oio_error_s* oio_sds_create (struct oio_sds_s *sds,
-				    struct oio_url_s *url);
+		struct oio_url_s *url);
 
 struct oio_error_s* oio_sds_delete_container(struct oio_sds_s *sds,
-					     struct oio_url_s *url);
+		struct oio_url_s *url);
 
 
 
@@ -411,8 +411,8 @@ struct oio_error_s* oio_sds_list (struct oio_sds_s *sds,
 
 struct oio_sds_usage_s
 {
-  size_t used_bytes;
-  size_t quota_bytes;
+	size_t used_bytes;
+	size_t quota_bytes;
 };
 
 struct oio_error_s* oio_sds_get_usage (struct oio_sds_s *sds,
@@ -462,6 +462,11 @@ struct oio_error_s* oio_sds_link (struct oio_sds_s *sds, struct oio_url_s *url,
 struct oio_error_s* oio_sds_link_or_upload (struct oio_sds_s *sds,
 		struct oio_sds_ul_src_s *src, struct oio_sds_ul_dst_s *dst);
 
+/* Truncate a content to the specified size, which must be on a metachunk
+ * boundary (you can use oio_sds_show_content() to find it).
+ * It is preferable to specify the content by its ID instead of its path. */
+struct oio_error_s* oio_sds_truncate(struct oio_sds_s *sds,
+		struct oio_url_s *u, size_t size);
 
 #ifdef __cplusplus
 }

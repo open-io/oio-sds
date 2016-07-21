@@ -284,16 +284,16 @@ static void
 _sort_content_cb(gpointer sorted_content, gpointer bean)
 {
 	struct _sorted_content_s *content = sorted_content;
-	if (DESCR(bean) == &descr_struct_ALIASES) {
-		content->aliases = g_slist_prepend(content->aliases, bean);
-	} else if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
-		content->header = bean;
-	} else if (DESCR(bean) == &descr_struct_CHUNKS) {
+	if (DESCR(bean) == &descr_struct_CHUNKS) {
 		gint64 pos = g_ascii_strtoll(
 				CHUNKS_get_position(bean)->str, NULL, 10);
 		GSList *mc = g_tree_lookup(content->metachunks, GINT_TO_POINTER(pos));
 		mc = g_slist_prepend(mc, bean);
 		g_tree_insert(content->metachunks, GINT_TO_POINTER(pos), mc);
+	} else if (DESCR(bean) == &descr_struct_ALIASES) {
+		content->aliases = g_slist_prepend(content->aliases, bean);
+	} else if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
+		content->header = bean;
 	} else if (DESCR(bean) == &descr_struct_PROPERTIES) {
 		content->properties = g_slist_prepend(content->properties, bean);
 	} else {
@@ -939,7 +939,7 @@ _dup_content_id_url(struct oio_url_s *url)
 {
 	struct oio_url_s *local_url = NULL;
 	if (!oio_url_has(url, OIOURL_CONTENTID)) {
-		GRID_WARN("Updating chunks by content path (%s), other paths "
+		GRID_WARN("Updating content by path (%s), other paths "
 				"linked to the same content id won't be notified!",
 				oio_url_get(url, OIOURL_WHOLE));
 		local_url = oio_url_dup(url);
@@ -977,34 +977,34 @@ m2db_truncate_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		goto cleanup;
 	}
 
-	gint64 offset = 0;
+	gint64 offset = 0, kept_size = 0;
 	gboolean chunk_boundary_found = FALSE;
 	gboolean _discard_extra_chunks(gpointer key, gpointer value,
 			gpointer data UNUSED) {
 		gint64 pos = GPOINTER_TO_INT(key);
 		GSList *mc = value;
 		gint64 current_size = CHUNKS_get_size(mc->data);
-		if (offset >= truncate_size) {
+		/* We should never discard position 0: when content size is 0,
+		 * we keep a chunk to be able to reconstruct the content if
+		 * the directory has been lost. */
+		if (offset >= truncate_size && pos > 0) {
 			chunk_boundary_found |= (offset == truncate_size);
-			/* We should never discard position 0: when content size is 0,
-			 * we keep a chunk to be able to reconstruct the content if
-			 * the directory has been lost. */
-			if (pos == 0) {
-				kept = metautils_gslist_precat(mc, kept);
-			} else {
-				discarded = metautils_gslist_precat(mc, discarded);
-			}
+			discarded = metautils_gslist_precat(mc, discarded);
 		} else {
 			kept = metautils_gslist_precat(mc, kept);
+			kept_size += current_size;
 		}
 		offset += current_size;
 		return FALSE;
 	}
 	g_tree_foreach(content.metachunks, _discard_extra_chunks, NULL);
 
-	if (!chunk_boundary_found)
-		GRID_WARN("Truncation not done on metachunk boundary for %s",
-				oio_url_get(url, OIOURL_WHOLE));
+	if (!chunk_boundary_found && kept_size != truncate_size) {
+		err = BADREQ("Cannot truncate %s at %"G_GINT64_FORMAT" bytes, "
+				"nearest metachunk boundary is at %"G_GINT64_FORMAT" bytes.",
+				oio_url_get(url, OIOURL_WHOLE), truncate_size, kept_size);
+		goto cleanup;
+	}
 
 	for (GSList *l = discarded; l && !err; l = l->next)
 		err = _db_delete_bean(sq3->db, l->data);
