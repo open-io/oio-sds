@@ -33,17 +33,18 @@ class PlainContent(Content):
         return stream
 
     def _fetch_stream(self, chunks, storage_method, headers):
-        meta_ranges = get_meta_ranges([(None, None)], chunks)
-        for pos, meta_range in meta_ranges.iteritems():
-            meta_start, meta_end = meta_range
-            reader = io.ChunkReader(iter(chunks[pos]), io.READ_CHUNK_SIZE,
-                                    headers)
-            it = reader.get_iter()
-            if not it:
-                raise UnrecoverableContent("Error while downloading")
-            for part in it:
-                for d in part['iter']:
-                    yield d
+        meta_range_list = get_meta_ranges([(None, None)], chunks)
+        for meta_range_dict in meta_range_list:
+            for pos, meta_range in meta_range_dict.iteritems():
+                meta_start, meta_end = meta_range
+                reader = io.ChunkReader(iter(chunks[pos]), io.READ_CHUNK_SIZE,
+                                        headers)
+                it = reader.get_iter()
+                if not it:
+                    raise UnrecoverableContent("Error while downloading")
+                for part in it:
+                    for d in part['iter']:
+                        yield d
 
     def create(self, stream):
         sysmeta = {}
