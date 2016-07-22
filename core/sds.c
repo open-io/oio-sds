@@ -856,7 +856,7 @@ _download (struct _download_ctx_s *dl)
 	GRID_TRACE2("computed size = %"G_GSIZE_FORMAT, total);
 
 	/* validate the ranges do not point out of the content, or ensure at least
-	 * a range is none is set. */
+	 * a range is set. */
 	if (dl->src->ranges && dl->src->ranges[0]) {
 		for (struct oio_sds_dl_range_s **p=dl->src->ranges; *p ;++p) {
 			if ((*p)->offset >= total)
@@ -2168,6 +2168,17 @@ oio_sds_link_or_upload (struct oio_sds_s *sds, struct oio_sds_ul_src_s *src,
 }
 
 struct oio_error_s*
+oio_sds_truncate (struct oio_sds_s *sds, struct oio_url_s *url, size_t size)
+{
+	if (!sds || !url)
+		return (struct oio_error_s*) BADREQ("Missing argument");
+	oio_ext_set_reqid (sds->session_id);
+
+	return (struct oio_error_s*) oio_proxy_call_content_truncate(
+			sds->h, url, size);
+}
+
+struct oio_error_s*
 oio_sds_delete (struct oio_sds_s *sds, struct oio_url_s *url)
 {
 	if (!sds || !url)
@@ -2213,7 +2224,7 @@ oio_sds_show_content (struct oio_sds_s *sds, struct oio_url_s *url,
 	}
 
 	err = _show_content (sds, url, NULL,
-			cb_info ? _on_info : NULL, _on_chunk, _on_prop);
+			cb_info? _on_info : NULL, _on_chunk, cb_props? _on_prop : NULL);
 	if (!err) {
 		GTree *positions_seen = g_tree_new_full(oio_str_cmp3, NULL, g_free, NULL);
 		chunks = g_slist_sort (chunks, (GCompareFunc)_compare_chunks);

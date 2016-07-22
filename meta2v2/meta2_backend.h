@@ -137,6 +137,12 @@ GError *meta2_backend_update_content(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *in,
 		GSList **out_deleted, GSList **out_added);
 
+/** Truncate a content at the metachunk whose offset is immediately
+ * superior to truncate_size */
+GError * meta2_backend_truncate_content(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, gint64 truncate_size,
+		GSList **out_deleted, GSList **out_added);
+
 /** Create a new version of the ALIAS but with the given chunks linked to
  * the existing CONTENT.  */
 GError* meta2_backend_force_alias(struct meta2_backend_s *m2b,

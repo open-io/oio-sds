@@ -319,6 +319,22 @@ static gridd_filter M2V2_DELETE_FILTERS[] =
 	NULL
 };
 
+static gridd_filter M2V2_TRUNCATE_FILTERS[] =
+{
+	meta2_filter_extract_header_url,
+	meta2_filter_extract_header_string_size,
+	meta2_filter_fill_subject,
+	meta2_filter_check_url_cid,
+	meta2_filter_check_backend,
+	meta2_filter_check_ns_name,
+	meta2_filter_check_ns_is_master,
+	meta2_filter_check_ns_not_wormed,
+	meta2_filter_check_events_not_stalled,
+	meta2_filter_action_truncate_content,
+	meta2_filter_reply_success,
+	NULL
+};
+
 static gridd_filter M2V2_PROPSET_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
@@ -462,6 +478,7 @@ meta2_gridd_get_v2_requests(void)
 		{NAME_MSGNAME_M2V2_LINK,    (hook) meta2_dispatch_all, M2V2_LINK_FILTERS},
 		{NAME_MSGNAME_M2V2_APPEND,  (hook) meta2_dispatch_all, M2V2_APPEND_FILTERS},
 		{NAME_MSGNAME_M2V2_DEL,     (hook) meta2_dispatch_all, M2V2_DELETE_FILTERS},
+		{NAME_MSGNAME_M2V2_TRUNC,   (hook) meta2_dispatch_all, M2V2_TRUNCATE_FILTERS},
 
 		{NAME_MSGNAME_M2V2_LIST,    (hook) meta2_dispatch_all, M2V2_LIST_FILTERS},
 		{NAME_MSGNAME_M2V2_LCHUNK,  (hook) meta2_dispatch_all, M2V2_LCHUNK_FILTERS},

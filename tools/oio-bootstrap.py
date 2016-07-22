@@ -673,6 +673,8 @@ syslog_prefix = OIO,${NS},event-agent
 template_event_agent_handlers = """
 [handler:storage.content.new]
 
+[handler:storage.content.append]
+
 [handler:storage.content.deleted]
 pipeline = content_cleaner
 

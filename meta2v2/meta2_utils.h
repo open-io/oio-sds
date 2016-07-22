@@ -163,6 +163,9 @@ GError* m2db_link_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 GError* m2db_update_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		GSList *beans, GSList **out_deleted, GSList **out_added);
 
+GError* m2db_truncate_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
+		gint64 truncate_size, GSList **out_deleted, GSList **out_added);
+
 /* ------------------------------------------------------------------------- */
 
 struct m2db_put_args_s

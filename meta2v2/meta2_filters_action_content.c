@@ -83,14 +83,25 @@ _notify_beans (struct meta2_backend_s *m2b, struct oio_url_s *url,
 	else {
 		/* first, notify everything but the chunks */
 		GSList *non_chunks = NULL;
+		struct bean_CONTENTS_HEADERS_s *header = NULL;
 		for (GSList *l=beans; l ;l=l->next) {
-			if (&descr_struct_CHUNKS != DESCR(l->data))
+			if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
+				if (header)
+					GRID_WARN("Several content headers in same event!");
+				else
+					header = l->data;
 				non_chunks = g_slist_prepend (non_chunks, l->data);
+			} else if (&descr_struct_CHUNKS != DESCR(l->data)) {
+				non_chunks = g_slist_prepend (non_chunks, l->data);
+			}
 		}
 		if (non_chunks) {
 			forward (non_chunks);
 			g_slist_free (non_chunks);
 		}
+
+		if (!header)
+			GRID_WARN("No content header in event data! (type: %s)", name);
 
 		/* then notify each chunks by batches of 16 items */
 		GSList *batch = NULL;
@@ -100,12 +111,18 @@ _notify_beans (struct meta2_backend_s *m2b, struct oio_url_s *url,
 				continue;
 			batch = g_slist_prepend (batch, l->data);
 			if (!((++count)%16)) {
+				/* We send the header each time because the event handlers
+				 * may need the chunk method, which is not saved in chunks. */
+				if (header)
+					batch = g_slist_prepend(batch, header);
 				forward (batch);
 				g_slist_free (batch);
 				batch = NULL;
 			}
 		}
 		if (batch) {
+			if (header)
+				batch = g_slist_prepend(batch, header);
 			forward (batch);
 			g_slist_free (batch);
 			batch = NULL;
@@ -121,6 +138,7 @@ _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
+	// FIXME: this context is useless: we do not answer beans anymore
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 
 	GSList *added = NULL, *deleted = NULL;
@@ -287,6 +305,38 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 	_notify_beans(m2b, url, obc->l, "content.deleted");
 	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
+	return FILTER_OK;
+}
+
+int
+meta2_filter_action_truncate_content(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	(void) reply;
+	GError *err = NULL;
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	const char *trunc_size_str = meta2_filter_ctx_get_param(ctx,
+			NAME_MSGKEY_CONTENTLENGTH);
+	gint64 truncate_size = g_ascii_strtoll(trunc_size_str, NULL, 10);
+	GSList *added = NULL, *deleted = NULL;
+
+	TRACE_FILTER();
+	err = meta2_backend_truncate_content(m2b, url, truncate_size,
+			&deleted, &added);
+	if (err != NULL) {
+		GRID_DEBUG("Fail to truncate content %s", oio_url_get(url, OIOURL_WHOLE));
+		meta2_filter_ctx_set_error(ctx, err);
+		return FILTER_KO;
+	}
+
+	if (deleted)
+		_notify_beans(m2b, url, deleted, "content.deleted");
+	if (added)
+		_notify_beans(m2b, url, added, "content.new");
+
+	_bean_cleanl2(added);
+	_bean_cleanl2(deleted);
 	return FILTER_OK;
 }
 

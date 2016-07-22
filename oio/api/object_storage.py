@@ -533,6 +533,7 @@ class ObjectStorageAPI(API):
                 meta_start, meta_end = meta_range
                 reader = io.ChunkReader(iter(chunks[pos]), io.READ_CHUNK_SIZE,
                                         headers)
+                reader.fill_ranges(meta_start, meta_end, meta_end-meta_start+1)
                 it = reader.get_iter()
                 if not it:
                     raise exc.OioException("Error while downloading")
