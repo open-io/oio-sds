@@ -497,7 +497,8 @@ service_info_to_lb_item(const struct service_info_s *si,
 	const gchar *loc_str = service_info_get_tag_value(si, "tag.loc", NULL);
 	if (!loc_str) {
 		item->location = location_from_addr_info(&(si->addr));
-	} else if (!(item->location = g_ascii_strtoull(loc_str, NULL, 16))) {
+	} else if (!g_str_has_prefix(loc_str, "0x") ||
+			!(item->location = g_ascii_strtoull(loc_str, NULL, 16))) {
 		item->location = location_from_dotted_string(loc_str);
 	}
 	item->weight = si->score.value;

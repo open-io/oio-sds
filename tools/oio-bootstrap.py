@@ -516,7 +516,7 @@ mask_max_shift=24
 """
 
 template_service_types = """
-# Service types declatations
+# Service types declarations
 # ---------------------------
 
 [type:meta0]
