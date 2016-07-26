@@ -153,8 +153,8 @@ addr_info_hash(gconstpointer k)
 	/*forces a NULL's padding if the address if ipv4 */
 	if (addr.type == TADDR_V4)
 		memset(
-		    ((guint8 *) & (addr.addr.v4)) + sizeof(addr.addr.v4),
-		    0x00, sizeof(addr.addr.v6) - sizeof(addr.addr.v4));
+			((guint8 *) & (addr.addr.v4)) + sizeof(addr.addr.v4),
+			0x00, sizeof(addr.addr.v6) - sizeof(addr.addr.v4));
 
 	return djb_hash_buf((guint8 *) &addr, sizeof(addr_info_t));
 }
@@ -164,14 +164,14 @@ location_from_addr_info(const struct addr_info_s *addr)
 {
 	oio_location_t out = 0;
 	if (addr->type == TADDR_V4)
-		out = ((oio_location_t)addr->addr.v4) << 16;
-	else
-		out = (oio_location_t)addr->addr.v6[0] << 16
-			| (oio_location_t)addr->addr.v6[1] << 24
-			| (oio_location_t)addr->addr.v6[2] << 32
-			| (oio_location_t)addr->addr.v6[3] << 40
-			| (oio_location_t)addr->addr.v6[4] << 48
-			| (oio_location_t)addr->addr.v6[5] << 56;
-	out |= addr->port;
+		out = ((oio_location_t)ntohl(addr->addr.v4)) << 16;
+	else  // Network is big-endian, we keep the least significant bytes
+		out = (oio_location_t)addr->addr.v6[15] << 16
+			| (oio_location_t)addr->addr.v6[14] << 24
+			| (oio_location_t)addr->addr.v6[13] << 32
+			| (oio_location_t)addr->addr.v6[12] << 40
+			| (oio_location_t)addr->addr.v6[11] << 48
+			| (oio_location_t)addr->addr.v6[10] << 56;
+	out |= (oio_location_t)ntohs(addr->port);
 	return out;
 }
