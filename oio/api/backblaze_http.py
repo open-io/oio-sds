@@ -71,8 +71,6 @@ class BackblazeUtils(object):
                                     storage_method.bucket_name))
         if not app_key:
             raise BackblazeUtilsException('application key not found')
-        if not encryption_key:
-            raise BackblazeUtilsException('encryption key not found')
         meta = {}
         meta['backblaze.account_id'] = storage_method.account_id
         meta['backblaze.application_key'] = app_key
@@ -82,6 +80,8 @@ class BackblazeUtils(object):
         meta['authorization'] = backblaze.authorization_token
         meta['upload_token'] = backblaze._get_upload_token_by_bucket_name(
             storage_method.bucket_name)
+        if encryption_key == 'None':
+            encryption_key = None
         meta['encryption'] = CryptographyTools(encryption_key)
         BackblazeUtils.b2_authorization_list[key] = meta
         return meta

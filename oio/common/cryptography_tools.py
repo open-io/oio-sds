@@ -1,3 +1,15 @@
+# Copyright (C) 2016 OpenIO SAS
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 3.0 of the License, or (at your option) any later version.
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library.
+
 from cryptography.fernet import Fernet
 from cryptography.fernet import InvalidToken
 from oio.common.exceptions import SourceReadError, OioException
@@ -16,25 +28,34 @@ class CryptographyToolsException(Exception):
 # to work. If this cryptography tool has vuln, change this tool to use the new
 # cryptography module.
 # the from_crypt_function_to_actual_crypt take into account this possibility
-# and can change the crypt of the data
+# and can change the encryption of the data
 class CryptographyTools(object):
     READ_SIZE = 65536
+    BLOCK_SIZE = 128
+    VERSION_SIZE = 8
+    TIMESTAMP_SIZE = 64
+    HMAC_SIZE = 256
     crypt = None
 
-    def __init__(self, key):
-        self.crypt = Fernet(key)
+    def __init__(self, key=None):
+        if key:
+            self.crypt = Fernet(key)
 
     @staticmethod
     def generate_key():
         return Fernet.generate_key()
 
     def encrypt(self, message):
+        if not self.crypt:
+            return message
         try:
             return self.crypt.encrypt(message)
         except TypeError:
             raise CryptographyToolsException("Error cryptography")
 
     def decrypt(self, cipher):
+        if not self.crypt:
+            return cipher
         try:
             return self.crypt.decrypt(cipher)
         except TypeError:
@@ -49,29 +70,37 @@ class CryptographyTools(object):
         return self.encrypt(decrypt_content)
 
     def _generate_dict(self, over, bytes_read, ciphered_bytes, content=None):
+        """
+        generate a dictionnary with some informations,
+        see the function read_and encrypt for more details
+        """
         return {'over': over,
                 'bytes_read': bytes_read,
                 'ciphered_bytes': ciphered_bytes,
                 'content': content}
 
-    # Read chunk_size bytes from the fd file_descriptor variable
-    # Every max_bytes_read of ciphered data, this file yield a dictionnary
-    # with these parameters :
-    # over : the value is true if the read is over
-    # bytes_read : the number of bytes read by the function
-    # ciphered_bytes : the number of ciphered-bytes read by the function
-    # content : if fd_out is None, this dictionnary entry returns
-    # the ciphered_content
-    # WARNING : every fd_out writing is in the responsability of the programmer
-    # if you must seek, truncate or others operations, the responsability is
-    # your own!
-    # Hooks available :
-    # on_ciphered_data(data) -> new_ciphered_data
-    # treatment to make with the data encrypted
-    # on_write(data) -> None
-    # treatment to make with the data written or sended
     def read_and_encrypt(self, fd, chunk_size, max_bytes_read,
                          fd_out=None, hooks={}):
+        """
+        Read chunk_size bytes from the fd file_descriptor variable
+        Every max_bytes_read of ciphered data, this file yield a dictionnary
+        with these parameters:
+        - over : the value is true if the read is over
+        - bytes_read : the number of bytes read by the function
+        - ciphered_bytes : the number of ciphered-bytes read by the function
+        - content : if fd_out is None, this dictionnary entry returns the ciphered_content
+
+        WARNING : every fd_out writing is in the responsability of the programmer.
+        if you must seek, truncate or others operations, the responsability is
+        your own!
+
+        Hooks available:
+        - def on_ciphered_data(data) -> new_ciphered_data
+        treatment to make with the data encrypted
+
+        - def on_write(data) -> None
+        treatment to make with the data written or sended
+        """
         bytes_transferred = 0
         file_transferred = 0
         nb_file = 0
@@ -135,22 +164,29 @@ class CryptographyTools(object):
             if fd_out:
                 fd_out.flush()
             # False is just the end of the file
-            yield self._generate_dict(True, len(data), max_bytes_read, content)
+            yield self._generate_dict(True, len(data),
+                                      file_transferred, content)
 
-    # Takes a fd and decrypt the content of ciphered content in the descriptor
-    # yielding every tokens available
-    # one hook available :
-    # buffer_to_tokens(stream) : generator
-    # -> isolate the fd into multiple tokens to be decrypted
-    def decrypt_from_buffer(self, stream, begin, end, hooks={}):
+    def decrypt_from_stream(self, stream, begin, end, hooks={}):
+        """
+        decrypt the content of ciphered content in the stream variable
+
+        The function yield every tokens available
+        one hook is available :
+        def stream_to_tokens(stream) : generator
+        -> isolate the fd into multiple tokens to be decrypted
+        """
         actual = 0
         token_nb = 0
 
-        def _buffer_to_tokens(stream):
-            for i in stream:
-                yield i
+        def _stream_to_tokens(stream):
+            while True:
+                content = stream.read(CryptographyTools.READ_SIZE)
+                if len(content) == 0:
+                    break
+                yield content
 
-        f = hooks.get('buffer_to_tokens', _buffer_to_tokens)
+        f = hooks.get('stream_to_tokens', _stream_to_tokens)
         # recover each sentence (encrypted Token)
         for i in f(stream):
             try:
@@ -172,7 +208,12 @@ class CryptographyTools(object):
                 raise OioException('Cryptography exception: %s' % (str(e)))
 
     def get_token_size(self, data_size):
-        remains_size = (data_size * 8) % 128
-        encrypt_entire_size = 128 - remains_size + (data_size * 8)
-        overhead_size = 128 + 8 + 64 + 256
+        remains_size = (data_size * 8) % BLOCK_SIZE
+        # size of padding
+        encrypt_entire_size = BLOCK_SIZE - remains_size + (data_size * 8)
+        # BLOCK_SIZE is the size of the IV (initialization vector)
+        overhead_size = BLOCK_SIZE + VERSION_SIZE + TIMESTAMP_SIZE + HMAC_SIZE
         return (overhead_size + encrypt_entire_size) / 8
+
+    def is_noop(self):
+        return False if self.crypt else True

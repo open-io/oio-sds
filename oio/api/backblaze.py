@@ -168,6 +168,8 @@ class BackblazeChunkWriteHandler(object):
         size = self.meta_chunk.get('size', None)
 
         def _separate_tokens(data):
+            if self.backblaze_info['encryption'].is_noop():
+                return data
             return base64.urlsafe_b64decode(data)
 
         def _update_hashs(data):
@@ -185,7 +187,7 @@ class BackblazeChunkWriteHandler(object):
             # we recover the first part
             result = next(gen)
             over = result['over']
-            # if the is_big parameter is True, it means that the content is
+            # if the over parameter is False, it means that the content is
             # greater than b2_max_chunk_size
             if not over:
                 return self._stream_big_chunks(conn, result, gen, temp)
@@ -265,12 +267,16 @@ class BackblazeChunkDownloadHandler(object):
                 content = stream.read(CryptographyTools.READ_SIZE)
                 if len(content) == 0:
                     break
-                yield base64.urlsafe_b64encode(content)
-        hooks_decrypt = {'buffer_to_tokens': _base64ify}
+                if not self.backblaze_info['encryption'].is_noop():
+                    yield base64.urlsafe_b64encode(content)
+                else:
+                    yield content
+
+        hooks_decrypt = {'stream_to_tokens': _base64ify}
         source = self._get_chunk_source()
         if source:
             stream = self._make_stream(source)
-            return self.backblaze_info['encryption'].decrypt_from_buffer(
+            return self.backblaze_info['encryption'].decrypt_from_stream(
                 stream, self.begin, self.end, hooks=hooks_decrypt)
         return None
 

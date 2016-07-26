@@ -26,7 +26,6 @@ import pwd
 from string import Template
 import re
 import argparse
-from oio.common.cryptography_tools import CryptographyTools
 
 template_redis = """
 daemonize no
@@ -956,7 +955,7 @@ def generate(options):
     backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
     backblaze_app_key = options.get('backblaze', {}).get(APPLICATION_KEY)
     encryption_key = options.get(ENCRYPTION_KEY,
-                                 CryptographyTools.generate_key())
+                                 None)
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(IP=ip,
                NS=ns,
