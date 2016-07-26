@@ -99,6 +99,7 @@ class IncidentAdminVolume(lister.Lister):
             '--date',
             metavar='<key>',
             default=[],
+            type=int,
             action='append',
             help='Incident date to set')
         return parser
