@@ -23,7 +23,7 @@ class ShowAdminVolume(show.ShowOne):
 
         output = list()
         output.append(('volume', parsed_args.volume))
-        data = self.app.client_manager.storage_internal.volume_admin_show(
+        data = self.app.client_manager.admin.volume_admin_show(
             volume=parsed_args.volume)
         for k, v in sorted(data.iteritems()):
             output.append((k, v))
@@ -52,7 +52,7 @@ class ClearAdminVolume(lister.Lister):
 
         results = list()
         for volume in volumes:
-            self.app.client_manager.storage_internal.volume_admin_clear(
+            self.app.client_manager.admin.volume_admin_clear(
                     volume)
             results.append((volume, True))
         columns = ('Volume', 'Success')
@@ -76,7 +76,7 @@ class ShowVolume(show.ShowOne):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
-        data = self.app.client_manager.storage_internal.volume_show(
+        data = self.app.client_manager.admin.volume_show(
             volume=parsed_args.volume
         )
         return zip(*sorted(data.iteritems()))
@@ -112,7 +112,7 @@ class IncidentAdminVolume(lister.Lister):
         results = list()
         for volume in volumes:
             date = dates.pop(0) if dates else int(time.time())
-            self.app.client_manager.storage_internal.volume_admin_incident(
+            self.app.client_manager.admin.volume_admin_incident(
                     volume, date)
             results.append((volume, date))
         columns = ('Volume', 'Date')
@@ -146,7 +146,7 @@ class LockAdminVolume(lister.Lister):
 
         results = list()
         for volume in volumes:
-            self.app.client_manager.storage_internal.volume_admin_lock(
+            self.app.client_manager.admin.volume_admin_lock(
                 volume, key)
             results.append((volume, True))
         columns = ('Volume', 'Success')
@@ -174,7 +174,7 @@ class UnlockAdminVolume(lister.Lister):
 
         results = list()
         for volume in volumes:
-            self.app.client_manager.storage_internal.volume_admin_unlock(
+            self.app.client_manager.admin.volume_admin_unlock(
                 volume)
             results.append((volume, True))
         columns = ('Volume', 'Success')
