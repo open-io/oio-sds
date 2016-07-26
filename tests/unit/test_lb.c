@@ -327,6 +327,102 @@ test_local_world (void)
 }
 
 static void
+_test_service_info_to_lb_item(const char *source0, oio_location_t expect)
+{
+	GError *err = NULL;
+	struct service_info_s *svc0 = NULL;
+	err = service_info_load_json(source0, &svc0, TRUE);
+	g_assert_no_error(err);
+
+	size_t item_size = sizeof(struct oio_lb_item_s) + LIMIT_LENGTH_SRVID;
+	struct oio_lb_item_s *item0 = g_alloca(item_size);
+	service_info_to_lb_item(svc0, item0);
+
+	g_assert_cmpuint(78u, ==, item0->weight);
+	g_assert_cmpuint(expect, ==, item0->location);
+
+	service_info_clean(svc0);
+}
+
+static void
+test_lb_item_loc_user(void)
+{
+	const char *source0 = "{\
+		\"addr\": \"127.0.0.1:6015\",\
+		\"score\": 78,\
+		\"tags\": {\
+			\"tag.loc\": \"abcd.hem.oio.vol8\",\
+			\"tag.slots\": \"rawx,rawx-even\",\
+			\"tag.up\": true,\
+			\"tag.vol\": \"/home/fvennetier/.oio/sds/data/NS-rawx-8\"\
+		}\
+	}";
+	return _test_service_info_to_lb_item(source0, 0xEE4F7ABF990CAA8Eu);
+}
+
+static void
+test_lb_item_loc_user_long(void)
+{
+	const char *source0 = "{\
+		\"addr\": \"127.0.0.1:6015\",\
+		\"score\": 78,\
+		\"tags\": {\
+			\"tag.loc\": \"hem.dc2.room1.rack2.server3.vol8\",\
+			\"tag.slots\": \"rawx,rawx-even\",\
+			\"tag.up\": true,\
+			\"tag.vol\": \"/home/fvennetier/.oio/sds/data/NS-rawx-8\"\
+		}\
+	}";
+	return _test_service_info_to_lb_item(source0, 0x0000BF3E13784F8Eu);
+}
+
+static void
+test_lb_item_loc_hex(void)
+{
+	const char *source1 = "{\
+		\"addr\": \"127.0.0.1:6015\",\
+		\"score\": 78,\
+		\"tags\": {\
+			\"tag.loc\": \"0xEE4F7ABF990CAA8E\",\
+			\"tag.slots\": \"rawx,rawx-even\",\
+			\"tag.up\": true,\
+			\"tag.vol\": \"/home/fvennetier/.oio/sds/data/NS-rawx-8\"\
+		}\
+	}";
+	return _test_service_info_to_lb_item(source1, 0xEE4F7ABF990CAA8Eu);
+}
+
+static void
+test_lb_item_loc_ipv4(void)
+{
+	const char *source2 = "{\
+		\"addr\": \"127.0.0.1:6015\",\
+		\"score\": 78,\
+		\"tags\": {\
+			\"tag.slots\": \"rawx,rawx-even\",\
+			\"tag.up\": true,\
+			\"tag.vol\": \"/home/fvennetier/.oio/sds/data/NS-rawx-8\"\
+		}\
+	}";
+	return _test_service_info_to_lb_item(source2, 0x00007F000001177Fu);
+}
+
+static void
+test_lb_item_loc_ipv6(void)
+{
+	const char *source3 = "{\
+		\"addr\": \"[dead:beef:feed:face:cafe:babe:baad:c0de]:51966\",\
+		\"score\": 78,\
+		\"tags\": {\
+			\"tag.slots\": \"rawx,rawx-even\",\
+			\"tag.up\": true,\
+			\"tag.vol\": \"/home/fvennetier/.oio/sds/data/NS-rawx-8\"\
+		}\
+	}";
+	return _test_service_info_to_lb_item(source3, 0xBABEBAADC0DECAFEu);
+}
+
+static void
 _add_repartition_test(int services, int slots, int targets)
 {
 	char name[128] = {0};
@@ -345,6 +441,11 @@ int
 main(int argc, char **argv)
 {
 	HC_TEST_INIT(argc,argv);
+	g_test_add_func("/metautils/lb/item/user", test_lb_item_loc_user);
+	g_test_add_func("/metautils/lb/item/user_long", test_lb_item_loc_user_long);
+	g_test_add_func("/metautils/lb/item/hex", test_lb_item_loc_hex);
+	g_test_add_func("/metautils/lb/item/ipv4", test_lb_item_loc_ipv4);
+	g_test_add_func("/metautils/lb/item/ipv6", test_lb_item_loc_ipv6);
 	g_test_add_func("/core/lb/local/world", test_local_world);
 	g_test_add_func("/core/lb/local/pool", test_local_pool);
 	g_test_add_func("/core/lb/local/feed", test_local_feed);

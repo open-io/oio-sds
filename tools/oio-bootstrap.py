@@ -261,7 +261,7 @@ template_meta_watch = """
 host: ${IP}
 port: ${PORT}
 type: ${SRVTYPE}
-location: hem.oio.vol${SRVNUM}
+location: abcd.hem.oio.vol${SRVNUM}
 slots:
     - ${SRVTYPE}
 checks:
@@ -290,7 +290,7 @@ template_rawx_watch = """
 host: ${IP}
 port: ${PORT}
 type: rawx
-location: hem.oio.vol${SRVNUM}
+location: abcd.hem.oio.vol${SRVNUM}
 checks:
     - {type: http, uri: /info}
 slots:
