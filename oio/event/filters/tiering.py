@@ -12,9 +12,7 @@ class TieringFilter(Filter):
 
     def process(self, env, cb):
         event = Event(env)
-
         if event.event_type == EventTypes.CONTENT_TOUCH:
-            self.logger.warn("event : " + str(env))
             url = env.get('url')
             account = url[CONF_ACCOUNT]
             ns = url['ns']
@@ -29,10 +27,14 @@ class TieringFilter(Filter):
                            'container_id': container_id,
                            'path': path}
             try:
+                # for now, the config file come with the parameter
+                # tiering_settings_file
                 settings_file = self.conf.get('tiering_settings_file')
                 with open(settings_file) as f:
                     conf_yaml = yaml.load(f)
             except ValueError:
+                conf_yaml = {}
+            except IOError:
                 conf_yaml = {}
             conf_filter.update(conf_yaml)
             new_policy = conf_filter.get(CONF_NEW_POLICY, None)

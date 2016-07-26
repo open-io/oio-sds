@@ -34,7 +34,7 @@ class BackblazeContent(Content):
     def _fetch_stream(self, chunks, storage_method, headers):
         key_file = self.conf.get('key_file')
         try:
-            backblaze_info = BackblazeUtils.put_meta_backblaze(
+            backblaze_info = BackblazeUtils.get_credentials(
                 storage_method, key_file)
         except BackblazeUtilsException:
             raise
@@ -67,7 +67,7 @@ class BackblazeContent(Content):
         sysmeta['container_id'] = self.container_id
         key_file = self.conf.get('key_file')
         try:
-            backblaze_info = BackblazeUtils.put_meta_backblaze(
+            backblaze_info = BackblazeUtils.get_credentials(
                 storage_method, key_file)
         except BackblazeUtilsException:
             raise

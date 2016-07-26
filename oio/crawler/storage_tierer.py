@@ -104,6 +104,8 @@ class StorageTiererWorker(object):
     def _try_change_policy(self, container_id, obj):
         content_id = obj['content']
         is_filter = False
+        conf_filter = {'obj_infos': obj}
+        conf_filter.update(self.filter_conf)
         try:
             filter_tierer = StorageTiererFilters(STORAGE_TIERER_FILTERS).load(
                 self.filter_conf)
