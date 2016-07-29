@@ -156,6 +156,19 @@ retry:
 	return 1;
 }
 
+static gboolean _is_good_response(gchar *buf)
+{
+	#define INSERTED_PREFIX "INSERTED"
+	#define USING_PREFIX "USING"
+	
+	if (g_str_has_prefix(buf, INSERTED_PREFIX))
+		return TRUE;
+	else if(g_str_has_prefix(buf, USING_PREFIX))
+		return TRUE;
+	return FALSE;
+	
+}
+
 static int
 _send_and_read_reply (int fd, struct iovec *iov, unsigned int iovcount)
 {
@@ -164,6 +177,7 @@ _send_and_read_reply (int fd, struct iovec *iov, unsigned int iovcount)
 
 	GError *err = NULL;
 	guint8 buf[256];
+	memset(buf, '\0', 256);
 	int r = sock_to_read (fd, 1000, buf, sizeof(buf), &err);
 	if (r < 0) {
 		GRID_WARN("reply error: (%d) %s", err->code, err->message);
@@ -171,9 +185,12 @@ _send_and_read_reply (int fd, struct iovec *iov, unsigned int iovcount)
 	} else if (r == 0) {
 		GRID_WARN("reply error: closed by peer");
 		r = 0;
+	} else if (!_is_good_response((gchar*) buf)) {
+		r = 0;
+		GRID_WARN("reply error: %s", buf);
 	} else {
-		GRID_TRACE("Reply: %.*s", r, buf);
 		r = 1;
+		GRID_TRACE("Reply: %.*s", r, buf);
 	}
 
 	if (err)
