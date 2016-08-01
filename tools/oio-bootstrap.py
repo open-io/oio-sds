@@ -999,7 +999,6 @@ def generate(options):
             env['env.G_DEBUG'] = "gc-friendly"
             env['env.G_SLICE'] = "always-malloc"
         return env
-
     def subenv(add):
         env = merge_env(add)
         env['VOLUME'] = '{DATADIR}/{NS}-{SRVTYPE}-{SRVNUM}'.format(**env)

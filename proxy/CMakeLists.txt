@@ -15,7 +15,8 @@ include_directories(AFTER
 link_directories(
 		${GLIB2_LIBRARY_DIRS}
 		${CURL_LIBRARY_DIRS}
-		${JSONC_LIBRARY_DIRS})
+		${JSONC_LIBRARY_DIRS}
+		${YAML_LIBRARY_DIRS})
 
 add_executable(metacd_http
     metacd_http.c
@@ -35,10 +36,25 @@ bin_prefix(metacd_http -proxy)
 
 target_link_libraries(metacd_http
 		metautils server hcresolve gridcluster
-		meta2v2remote meta2v2utils
+		meta2v2remote meta2v2utils oiocache
 		meta1remote sqlitereporemote
 		meta0remote meta0utils
-		${GLIB2_LIBRARIES} ${JSONC_LIBRARIES} ${CURL_LIBRARIES})
+		${GLIB2_LIBRARIES} ${JSONC_LIBRARIES} ${CURL_LIBRARIES} ${YAML_LIBRARIES})
+
+if (DEFINED ALLOW_HIREDIS)
+  if (HIREDIS_FOUND)
+    target_link_libraries(metacd_http
+      oiocache_redis)
+  endif ()
+endif ()
+
+if (DEFINED ALLOW_LIBMEMCACHED)
+  if (LIBMEMCACHED_FOUND)
+    target_link_libraries(metacd_http
+      oiocache_memcached)
+  endif ()
+endif ()
+
 
 install(TARGETS metacd_http 
 		LIBRARY DESTINATION ${LD_LIBDIR}

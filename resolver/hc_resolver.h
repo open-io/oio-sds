@@ -21,6 +21,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define OIO_SDS__resolver__hc_resolver_h 1
 
 # include <glib.h>
+# include <cache/cache.h>
+
+#define CACHE_TO_CHAR_SEPARATOR ";"
+#define CACHE_TO_CHAR_SEPARATOR_2 " "
 
 enum hc_resolver_flags_e
 {
@@ -46,7 +50,7 @@ struct oio_url_s;
 struct hc_resolver_s;
 
 /* Simple constructor */
-struct hc_resolver_s* hc_resolver_create(void);
+struct hc_resolver_s* hc_resolver_create(struct oio_cache_s*, struct oio_cache_s*);
 
 /* Change the internal flags of the resolver */
 void hc_resolver_configure (struct hc_resolver_s *r, enum hc_resolver_flags_e f);

@@ -58,3 +58,25 @@ oio_cache_get(struct oio_cache_s *c, const char *k, gchar **out)
 	return ((struct oio_cache_abstract_s*)c)->vtable->get(c,k,out);
 }
 
+/**
+ * in case of manual expiration, cleanup the cache value older than the expiration time
+ * in case of automatic expiration, nothing is done
+ **/
+guint
+oio_cache_cleanup_older(struct oio_cache_s *c, const gint64 limit)
+{
+	g_assert(c != NULL);
+	g_assert(((struct oio_cache_abstract_s*)c)->vtable != NULL);
+	g_assert(((struct oio_cache_abstract_s*)c)->vtable->cleanup_older != NULL);
+	return ((struct oio_cache_abstract_s*)c)->vtable->cleanup_older(c,limit);
+
+}
+
+guint oio_cache_cleanup_exceeding(struct oio_cache_s *c, const guint limit)
+{
+	g_assert(c != NULL);
+	g_assert(((struct oio_cache_abstract_s*)c)->vtable != NULL);
+	g_assert(((struct oio_cache_abstract_s*)c)->vtable->cleanup_exceeding != NULL);
+	return ((struct oio_cache_abstract_s*)c)->vtable->cleanup_exceeding(c, limit);
+}
+

@@ -1,0 +1,51 @@
+srv-down:
+ type: multilayer
+ args:
+   - type: lru-tree
+     args:
+       name: srv-down-lru
+   - type: redis
+     args:
+       address: 127.0.0.1
+       port: 6379
+       timeout: 0
+       expiration-time: 10
+
+srv-known:
+ type: multilayer
+ args:
+   - type: lru-tree
+     args:
+       name: srv-known-lru
+   - type: redis
+     args:
+       address: 127.0.0.1
+       port: 6379
+       timeout: 0
+       expiration-time: 10
+
+resolver-services:
+ type: multilayer
+ args:
+   - type: lru-tree
+     args:
+       name: srv-known-lru
+   - type: redis
+     args:
+       address: 127.0.0.1
+       port: 6379
+       timeout: 0
+       expiration-time: 10
+
+resolver-csm0:
+ type: multilayer
+ args:
+   - type: lru-tree
+     args:
+       name: srv-known-lru
+   - type: redis
+     args:
+       address: 127.0.0.1
+       port: 6379
+       timeout: 0
+       expiration-time: 10

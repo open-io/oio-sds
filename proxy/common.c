@@ -32,6 +32,11 @@ _pref2str(enum preference_e p)
 }
 
 gchar *
+_get_cache_key(const gchar *key, const gchar* cache_name){
+	return g_strdup_printf("%s-%s",cache_name,key);
+}
+
+gchar *
 proxy_get_csurl (void)
 {
 	g_rw_lock_reader_lock (&csurl_rwlock);
@@ -61,18 +66,39 @@ validate_srvtype (const char * n)
 gboolean
 service_is_ok (gconstpointer k)
 {
-	gpointer v;
-	SRV_READ(v = lru_tree_get (srv_down, k));
-	return v == NULL;
+	enum oio_cache_status_e v;
+	gchar* value = NULL;
+	gchar* new_key = _get_cache_key(k,SRV_DOWN_STR);
+	gint64 between = oio_ext_monotonic_time();
+        v = oio_cache_get (srv_down, (const char*)new_key, &value);
+	between = oio_ext_monotonic_time() - between;
+	if (GRID_DEBUG_ENABLED())
+		GRID_DEBUG("s_i_o get->srv_down : %lu",between);
+	if (NULL != value)
+		g_free(value);
+	g_free(new_key);
+	return v == OIO_CACHE_OK;
 }
 
 void
 service_invalidate (gconstpointer k)
 {
-	gchar *k0 = g_strdup((const char *)k);
-	SRV_WRITE(lru_tree_insert (srv_down, k0, GINT_TO_POINTER(1)));
+	enum oio_cache_status_e v;
+	gchar* new_key = _get_cache_key(k, SRV_DOWN_STR);
+	gint64 between;
+	do
+		{
+			between = oio_ext_monotonic_time();
+		        v = oio_cache_put(srv_down, (const char*)new_key, NOT_IMPORTANT);
+			between = oio_ext_monotonic_time() - between;
+			if (GRID_DEBUG_ENABLED())
+				GRID_DEBUG("s_i put->srv_down : %lu",between);
+		}
+	while(v == OIO_CACHE_FAIL || v == OIO_CACHE_DISCONNECTED); // a definir
+	(void) v;
 	if (GRID_DEBUG_ENABLED())
 		GRID_DEBUG("invalid at %lu %s", oio_ext_monotonic_seconds(), (const char*)k);
+	g_free(new_key);
 }
 
 gboolean
@@ -412,16 +438,38 @@ _request_get_flag (struct req_args_s *args, const char *flag)
 void
 service_learn (const char *key)
 {
-	gchar *k = g_strdup(key);
-	SRV_WRITE(lru_tree_insert(srv_known, k, GINT_TO_POINTER(1)));
+	enum oio_cache_status_e v;
+	gint64 between;
+	gchar *new_key = _get_cache_key(key,SRV_KNOWN_STR); 
+	do
+		{
+			between = oio_ext_monotonic_time();
+		        v = oio_cache_put(srv_known, (char*) new_key, NOT_IMPORTANT);
+			between = oio_ext_monotonic_time() - between;
+			if (GRID_DEBUG_ENABLED())
+				GRID_DEBUG("s_l put->srv_known : %lu", between);
+		}
+	while(v == OIO_CACHE_FAIL || v == OIO_CACHE_DISCONNECTED); // a definir
+	(void) v;
+	g_free(new_key);
 }
 
 gboolean
 service_is_known (const char *key)
 {
-	gboolean known = FALSE;
-	SRV_READ(known = (NULL != lru_tree_get (srv_known, key)));
-	return known;
+	gchar *tmp = NULL;
+	gchar *new_key = _get_cache_key(key, SRV_KNOWN_STR);
+	enum oio_cache_status_e v;
+	gint64 between = oio_ext_monotonic_time();
+        v =  oio_cache_get (srv_known, new_key, &tmp);
+	between = oio_ext_monotonic_time() - between;
+	if (GRID_DEBUG_ENABLED())
+		GRID_DEBUG("s_i_k get->srv_known : %lu", between);
+	if (NULL != tmp) {
+		g_free(tmp);
+	}
+	g_free(new_key);
+	return v == OIO_CACHE_OK ;
 }
 
 GBytes **

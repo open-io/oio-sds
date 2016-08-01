@@ -48,9 +48,9 @@ struct cached_element_s
 	gchar s[]; /* Must be the last! */
 };
 
-struct lru_ext_s
+struct cache_ext_s
 {
-	struct lru_tree_s *cache;
+	struct oio_cache_s *cache;
 	gint64 ttl;
 	guint max;
 };
@@ -58,8 +58,8 @@ struct lru_ext_s
 struct hc_resolver_s
 {
 	GMutex lock;
-	struct lru_ext_s services;
-	struct lru_ext_s csm0;
+	struct cache_ext_s services;
+	struct cache_ext_s csm0;
 	enum hc_resolver_flags_e flags;
 
 	/* called with the IP:PORT string */

@@ -1,0 +1,9 @@
+#ifndef __AUTOGEN_H__
+#define __AUTOGEN_H__
+
+#cmakedefine LIBMEMCACHED_FOUND
+#cmakedefine HIREDIS_FOUND
+#cmakedefine ALLOW_HIREDIS
+#cmakedefine ALLOW_LIBMEMCACHED
+
+#endif

@@ -22,40 +22,96 @@ License along with this library.
 
 #include "cache_redis.h"
 
+#include <glib.h>
+
+
 struct oio_cache_redis_s;
 
 static void _redis_destroy (struct oio_cache_s *self);
-static enum oio_cache_status_e _redis_put (struct oio_cache_s *self, const char *k, const char *v);
-static enum oio_cache_status_e _redis_del (struct oio_cache_s *self, const char *k);
-static enum oio_cache_status_e _redis_get (struct oio_cache_s *self, const char *k, gchar **out);
+static enum oio_cache_status_e _redis_put (struct oio_cache_s *self,
+					   const char *k, const char *v);
+static enum oio_cache_status_e _redis_del (struct oio_cache_s *self,
+					   const char *k);
+static enum oio_cache_status_e _redis_get (struct oio_cache_s *self,
+					   const char *k, gchar **out);
+static guint _redis_cleanup_older(struct oio_cache_s *self,
+				  const gint64 expiration_time);
+static guint _redis_cleanup_exceeding(struct oio_cache_s *self,
+				      const guint limit);
 
 static struct oio_cache_vtable_s vtable_redis =
 {
-	_redis_destroy, _redis_put, _redis_del, _redis_get
+	_redis_destroy, _redis_put, _redis_del,
+	_redis_get, _redis_cleanup_older, _redis_cleanup_exceeding
 };
 
 struct oio_cache_redis_s
 {
 	const struct oio_cache_vtable_s *vtable;
 	struct redisContext *redis;
+	gint64 expiration_time; 
 };
+
+/* Concurrency ----------------------------------------------------------- */
+
+static GMutex _redis_mutex = {0};
+
+static struct redisReply*
+_redis_command (struct redisContext *c, const char *cmd,
+		const char *k, const char* v)
+{
+	struct redisReply *reply;
+	g_mutex_lock(&_redis_mutex);
+	if (NULL == v)
+		reply = redisCommand(c,cmd,k);
+	else
+		reply = redisCommand(c,cmd,k,v);
+	g_mutex_unlock(&_redis_mutex);
+	return reply;
+}
+
+static struct redisReply**
+_redis_pipeline_command (struct redisContext *c, const char **cmd,
+			 const char **k, const char** v, const gint cmd_nb)
+{
+	gint tmp;
+	struct redisReply **replies = g_malloc0(sizeof(struct redisReply*) * cmd_nb);
+	if (NULL == replies)
+		return NULL;
+	g_mutex_lock(&_redis_mutex);
+	for(tmp = 0; tmp < cmd_nb; tmp++) {
+		if(NULL == v [tmp])
+			redisAppendCommand(c, cmd[tmp], k[tmp]);
+		else
+			redisAppendCommand(c, cmd[tmp], k[tmp], v[tmp]);
+	}
+	for(tmp = 0; tmp < cmd_nb; tmp++) {
+		redisGetReply(c, (void**) &(replies [tmp])); 
+	}
+	g_mutex_unlock(&_redis_mutex);
+	return replies;
+}
+
 
 /* Constructors ------------------------------------------------------------- */
 
 struct oio_cache_s *
-oio_cache_make_redis (const char *ip, int port, const struct timeval timeout)
+oio_cache_make_redis (const char *ip, int port, const struct timeval timeout,
+		      const gint64 expiration_time)
 {
 	EXTRA_ASSERT (ip != NULL);
 	struct oio_cache_redis_s *self = SLICE_NEW0 (struct oio_cache_redis_s);
 	self->vtable = &vtable_redis;
 	self->redis = redisConnectWithTimeout (ip, port, timeout);
+	self->expiration_time = expiration_time;
 	return (struct oio_cache_s*) self;
 }
 
 /* Handling ----------------------------------------------------------------- */
 
 static enum oio_cache_status_e
-redis_parse_reply(struct redisContext *ctx, struct redisReply *reply, gchar **out)
+redis_parse_reply(struct redisContext *ctx, struct redisReply *reply,
+		  gchar **out)
 {
 	enum oio_cache_status_e status;
 
@@ -135,10 +191,34 @@ _redis_destroy (struct oio_cache_s *self)
 }
 
 static enum oio_cache_status_e
+_redis_put_pipeline (struct oio_cache_s *self, const char *k, const char *v)
+{
+	enum oio_cache_status_e status;
+	struct redisReply **reply;
+	struct oio_cache_redis_s *c = (struct oio_cache_redis_s*) self;
+	char* expiration_time = g_strdup_printf("%"G_GINT64_FORMAT,c->expiration_time);
+	if (!expiration_time)
+		return OIO_CACHE_FAIL;
+	char *keys [] = {(char*)k,(char*)k};
+	char *values[] = {(char*)v,(char*)expiration_time};
+	char *commands[] = {"SET %s %s", "EXPIRE %s %s"};
+	reply = _redis_pipeline_command(c->redis, (const char**)commands, (const char**)keys, (const char**)values, 2);
+	// juste pour le free ....
+	status = redis_parse_reply(c->redis,reply [1], NULL); 
+	status = redis_parse_reply(c->redis,reply [0], NULL);
+	g_free(expiration_time);
+	g_free(reply);
+	return status;
+}
+
+static enum oio_cache_status_e
 _redis_put (struct oio_cache_s *self, const char *k, const char *v)
 {
 	struct oio_cache_redis_s *c = (struct oio_cache_redis_s*) self;
-	struct redisReply *reply = redisCommand (c->redis, "SET %s %s", k, v);
+	if (c->expiration_time != NO_EXPIRATION_TIME) {
+		return _redis_put_pipeline(self, k, v);
+	}
+	struct redisReply *reply = _redis_command (c->redis, "SET %s %s", k, v);
 	return redis_parse_reply (c->redis, reply, NULL);
 }
 
@@ -146,7 +226,7 @@ static enum oio_cache_status_e
 _redis_del (struct oio_cache_s *self, const char *k)
 {
 	struct oio_cache_redis_s *c = (struct oio_cache_redis_s*) self;
-	struct redisReply *reply = redisCommand (c->redis, "DEL %s", k);
+	struct redisReply *reply = _redis_command (c->redis, "DEL %s", k, NULL);
 	return redis_parse_reply (c->redis, reply, NULL);
 }
 
@@ -154,6 +234,22 @@ static enum oio_cache_status_e
 _redis_get (struct oio_cache_s *self, const char *k, gchar **out)
 {
 	struct oio_cache_redis_s *c = (struct oio_cache_redis_s*) self;
-	struct redisReply *reply = redisCommand (c->redis, "GET %s", k);
+	struct redisReply *reply = _redis_command (c->redis, "GET %s", k, NULL);
 	return redis_parse_reply (c->redis, reply, out);
 }
+
+static guint
+_redis_cleanup_older (struct oio_cache_s *self, const gint64 expiration_time)
+{
+	(void) self; (void) expiration_time;
+	return 0;
+}
+
+static guint
+_redis_cleanup_exceeding (struct oio_cache_s *self, const guint limit)
+{
+	(void) self; (void) limit;
+	return 0;
+}
+
+

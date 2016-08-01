@@ -11,7 +11,7 @@ add_library(hcresolve SHARED
 		hc_resolver.c)
 
 target_link_libraries(hcresolve
-		meta0remote meta1remote metautils gridcluster
+		meta0remote meta1remote metautils gridcluster oiocache
 		${GLIB2_LIBRARIES})
 
 install(TARGETS hcresolve

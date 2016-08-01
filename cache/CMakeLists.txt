@@ -3,7 +3,9 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
 include_directories(BEFORE . ..)
 
-add_library(oiocache SHARED cache.c cache_noop.c cache_lru.c cache_multilayer.c)
+CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/autogen.h.in ${CMAKE_CURRENT_SOURCE_DIR}/autogen.h)
+
+add_library(oiocache SHARED cache.c cache_noop.c cache_lru.c cache_multilayer.c autogen.h)
 target_link_libraries(oiocache metautils ${GLIB2_LIBRARIES})
 
 install(TARGETS oiocache
@@ -21,6 +23,7 @@ if (DEFINED ALLOW_HIREDIS)
 				RUNTIME DESTINATION bin
 				PUBLIC_HEADER DESTINATION include)
 	endif ()
+
 endif ()
 
 if (DEFINED ALLOW_LIBMEMCACHED)

@@ -20,7 +20,8 @@ License along with this library.
 # define OIO_SDS__cache__cache_redis_h 1
 
 #include "cache.h"
-
-struct oio_cache_s * oio_cache_make_redis (const char *ip, int port, const struct timeval timeout);
+struct oio_cache_s * oio_cache_make_redis (const char *ip, int port,
+					   const struct timeval timeout,
+					   const gint64 expiration_time);
 
 #endif /*OIO_SDS__cache__cache_redis_h*/
