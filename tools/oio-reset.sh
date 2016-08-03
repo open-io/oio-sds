@@ -24,6 +24,7 @@ IP=127.0.0.1
 OIO=$HOME/.oio
 SDS=$OIO/sds
 GRIDINIT_SOCK=${SDS}/run/gridinit.sock
+BOOTSTRAP_CONFIG=
 
 ZKSLOW=0
 ZKRESET=0
@@ -34,7 +35,13 @@ while getopts "I:N:f:Z:Cvb" opt; do
     case $opt in
         I) IP="${OPTARG}" ;;
         N) NS="${OPTARG}" ;;
-        f) BOOTSTRAP_CONFIG="${OPTARG}" ;;
+        f) if [ -n "$OPTARG" ]; then
+			if  [ ${OPTARG::1} != "/" ]; then
+				BOOTSTRAP_CONFIG="${BOOTSTRAP_CONFIG} --conf ${PWD}/${OPTARG}"
+			else
+				BOOTSTRAP_CONFIG="${BOOTSTRAP_CONFIG} --conf ${OPTARG}"
+			fi
+		fi ;;
         Z) ZKSLOW=1 ;;
         C) ZKRESET=1 ;;
         v) ((verbose=verbose+1)) ;;
@@ -46,14 +53,6 @@ SERVICES="nb-services"
 M1_STR="meta1"
 M2_STR="meta2"
 M2_REPLICAS="m2-replicas"
-
-if [ -n "$BOOTSTRAP_CONFIG" ]; then
-    if  [ ${BOOTSTRAP_CONFIG::1} != "/" ]; then
-        BOOTSTRAP_CONFIG=${PWD}/${BOOTSTRAP_CONFIG}
-    fi
-fi
-
-
 
 timeout () {
     num=$1 ; shift
@@ -87,7 +86,7 @@ if [ $verbose != 0 ] ; then
         "-N \"${NS}\"" \
         "-Z \"${ZKSLOW}\"" \
         "-C \"${ZKRESET}\"" \
-        "-f \"${BOOTSTRAP_CONFIG}\""
+        "${BOOTSTRAP_CONFIG}"
 fi
 export G_DEBUG_LEVEL
 
@@ -119,18 +118,11 @@ done
 
 # Generate a new configuration and start the new gridinit
 
-opts=""
-
-if [ -n "$BOOTSTRAP_CONFIG" ] ; then
-    opts="--conf $BOOTSTRAP_CONFIG" ;
-fi
-
 mkdir -p "$OIO" && cd "$OIO" && (rm -rf sds.conf sds/{conf,data,run,logs})
-${PREFIX}-bootstrap.py "$NS" "$IP" -d ${opts} > /tmp/oio-bootstrap.$$
+${PREFIX}-bootstrap.py "$NS" "$IP" -d ${BOOTSTRAP_CONFIG} > /tmp/oio-bootstrap.$$
 
 # Variables
 # PROXY
-# REPLI_CONTAINER
 # REPLI_DIRECTORY
 
 . /tmp/oio-bootstrap.$$
@@ -166,13 +158,17 @@ timestamp
 gridinit_cmd -S "$GRIDINIT_SOCK" reload >/dev/null
 gridinit_cmd -S "$GRIDINIT_SOCK" start "@${NS}"
 timestamp
-wait_for_srvtype "(sqlx|rawx|meta2)" $((2+NB_RAWX+REPLICATION_BUCKET))
+COUNT=$(${PREFIX}-test-config.py -c -t meta2 -t rawx -t sqlx)
+wait_for_srvtype "(sqlx|rawx|meta2)" $((2 + COUNT))
 timestamp
-wait_for_srvtype "(meta0|meta1)" $((1 + REPLI_DIRECTORY))
+COUNT=$(${PREFIX}-test-config.py -c -t meta0 -t meta1)
+wait_for_srvtype "(meta0|meta1)" $((1 + COUNT))
 
 timestamp
 
-openio --oio-ns "$NS" directory bootstrap --replicas ${REPLI_DIRECTORY}
+openio \
+	--oio-ns "$NS" directory bootstrap \
+	--replicas $(${PREFIX}-test-config.py -c -t meta1)
 
 timestamp
 # unlock all services
