@@ -29,6 +29,9 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/oio-bootstrap.py
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/oio-sds.pc.in
 		${CMAKE_CURRENT_BINARY_DIR}/oio-sds.pc
 		@ONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/oio-test-config.py
+		${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-test-config.py
+		@ONLY)
 
 add_custom_command(OUTPUT ${OUTPUT}
 				   COMMAND ${CMAKE_COMMAND} -E touch ${OUTPUT}
@@ -52,6 +55,7 @@ install(PROGRAMS
 			${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-unlock-all.sh
 			${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-wait-scored.sh
 			${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-bootstrap.py
+			${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-test-config.py
 			${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-reset.sh
 		DESTINATION bin)
 
