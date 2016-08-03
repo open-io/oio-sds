@@ -445,6 +445,5 @@ add_subdirectory(./sqlx)
 add_subdirectory(./tools)
 add_subdirectory(./tests/unit)
 add_subdirectory(./tests/func)
-add_subdirectory(./tests/unit/event)
 endif (NOT SDK_ONLY)
 

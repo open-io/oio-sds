@@ -59,13 +59,15 @@ struct server_stat_msg_s /* sent by the workers */
 	gboolean increment : 1; /* FALSE -> reset */
 };
 
+typedef void (*network_transport_cleaner_f) (
+			struct transport_client_context_s*);
+
 struct network_transport_s
 {
 	/* Associate private data to the  */
 	struct transport_client_context_s *client_context;
 
-	void (*clean_context) (
-			struct transport_client_context_s*);
+	network_transport_cleaner_f clean_context;
 
 	/* Be notified that a piece of data is ready */
 	int (*notify_input)  (struct network_client_s *);
@@ -122,6 +124,13 @@ void network_server_bind_host(struct network_server_s *srv,
 void network_server_bind_host_throughput(struct network_server_s *srv,
 		const gchar *url, gpointer factory_udata,
 		network_transport_factory factory);
+
+/* returns a NULL-terminated array of strings, containing the actual IP:PORT
+ * the server has been bond to, in the order they have been declared.
+ * @param srv MUST be a valid server
+ * @return a valid (but maybe empty) array of string, NULL terminated. Free it
+ *         with g_strfreev() */
+gchar** network_server_endpoints (struct network_server_s *srv);
 
 void network_server_bind_host_lowlatency(struct network_server_s *srv,
 		const gchar *url, gpointer factory_udata,
