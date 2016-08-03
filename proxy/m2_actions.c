@@ -555,6 +555,9 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody,
 	GError *err = NULL;
 	GSList *beans = NULL;
 
+	const char *content_path = PATH();
+	if (!content_path)
+		return BADREQ("URL: missing path");
 	if (!json_object_is_type(jbody, json_type_array))
 		return BADREQ ("JSON: Not an array");
 	if (json_object_array_length(jbody) <= 0)
@@ -649,7 +652,7 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody,
 	if (!err) {
 		struct bean_ALIASES_s *alias = _bean_create (&descr_struct_ALIASES);
 		beans = g_slist_prepend (beans, alias);
-		ALIASES_set2_alias (alias, PATH());
+		ALIASES_set2_alias (alias, content_path);
 		ALIASES_set_content (alias, CONTENTS_HEADERS_get_id (header));
 
 		if (!err) { // aliases version
