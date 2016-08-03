@@ -153,7 +153,7 @@ class ShowObject(show.ShowOne):
                 'version': data['version'],
                 'mime-type': data['mime-type'],
                 'size': data['length'],
-                'hash': data['hash'].lower(),
+                'hash': data['hash'],
                 'ctime': data['ctime'],
                 'policy': data['policy']}
         for k, v in data['properties'].iteritems():

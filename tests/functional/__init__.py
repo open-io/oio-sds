@@ -66,8 +66,7 @@ class TestCase(testtools.TestCase):
 
     def assert_show_fields(self, items, fields):
         for item in items:
-            for key in item.iteritems():
-                self.assertIn(key, fields)
+            self.assertIn(item, fields)
 
     def assert_list_fields(self, items, fields):
         for item in items:
