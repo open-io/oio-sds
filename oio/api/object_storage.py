@@ -32,6 +32,7 @@ from oio.api.backblaze import BackblazeWriteHandler, \
     BackblazeChunkDownloadHandler
 from oio.common import constants
 from oio.common import utils
+from oio.common.http import http_header_from_ranges
 from oio.common.constants import object_headers
 from oio.common.storage_method import STORAGE_METHODS
 
@@ -531,9 +532,10 @@ class ObjectStorageAPI(API):
         for meta_range_dict in meta_range_list:
             for pos, meta_range in meta_range_dict.iteritems():
                 meta_start, meta_end = meta_range
+                if meta_start is not None and meta_end is not None:
+                    headers['Range'] = http_header_from_ranges([meta_range])
                 reader = io.ChunkReader(iter(chunks[pos]), io.READ_CHUNK_SIZE,
                                         headers)
-                reader.fill_ranges(meta_start, meta_end, meta_end-meta_start+1)
                 it = reader.get_iter()
                 if not it:
                     raise exc.OioException("Error while downloading")
