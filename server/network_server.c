@@ -370,6 +370,21 @@ network_server_bind_host_throughput(struct network_server_s *srv, const gchar *u
 	_srv_bind_host(srv, url, u, factory, NETSERVER_THROUGHPUT);
 }
 
+gchar**
+network_server_endpoints (struct network_server_s *srv)
+{
+	g_assert_nonnull(srv);
+	GPtrArray *tmp = g_ptr_array_new();
+	for (struct endpoint_s **pe=srv->endpointv; pe && *pe ;++pe) {
+		if ((*pe)->fd < 0)
+			continue;
+		g_ptr_array_add (tmp,
+				g_strdup_printf("%s:%d", (*pe)->url, (*pe)->port_real));
+	}
+	g_ptr_array_add (tmp, NULL);
+	return (gchar**) g_ptr_array_free(tmp, FALSE);
+}
+
 void
 network_server_close_servers(struct network_server_s *srv)
 {

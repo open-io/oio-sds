@@ -13,13 +13,21 @@ link_directories(
 
 set(COMMON oiocore oiosds metautils ${GLIB2_LIBRARIES})
 
-add_executable(test_cache_lru test_cache_lru.c)
-target_link_libraries(test_cache_lru oiocache)
-add_test(NAME cache/lru COMMAND test_cache_lru)
-
 add_executable(test_lb test_lb.c)
 target_link_libraries(test_lb metautils ${COMMON})
 add_test(NAME core/lb COMMAND test_lb)
+
+add_executable(test_oio_ext test_ext.c)
+target_link_libraries(test_oio_ext ${COMMON})
+add_test(NAME core/ext COMMAND test_oio_ext)
+
+add_executable(test_oio_url test_url.c)
+target_link_libraries(test_oio_url ${COMMON})
+add_test(NAME core/url COMMAND test_oio_url)
+
+add_executable(test_cache_lru test_cache_lru.c)
+target_link_libraries(test_cache_lru oiocache)
+add_test(NAME cache/lru COMMAND test_cache_lru)
 
 add_executable(test_stg_policy test_stg_policy.c)
 target_link_libraries(test_stg_policy ${COMMON})
@@ -57,14 +65,6 @@ add_executable(test_error test_error.c)
 target_link_libraries(test_error ${COMMON})
 add_test(NAME metautils/err COMMAND test_error)
 
-add_executable(test_oio_ext test_ext.c)
-target_link_libraries(test_oio_ext ${COMMON})
-add_test(NAME core/ext COMMAND test_oio_ext)
-
-add_executable(test_oio_url test_url.c)
-target_link_libraries(test_oio_url ${COMMON})
-add_test(NAME core/url COMMAND test_oio_url)
-
 add_executable(test_meta2_backend test_meta2_backend.c)
 target_link_libraries(test_meta2_backend meta2v2 ${COMMON})
 add_test(NAME meta2/backend COMMAND test_meta2_backend)
@@ -95,5 +95,9 @@ add_test(NAME sqlx/client/mem COMMAND test_sqlx_client_mem)
 
 add_executable(test_events_queue test_events_queue.c)
 target_link_libraries(test_events_queue sqlxsrv oioevents ${COMMON})
-add_test(NAME sqlx/events COMMAND test_events_queue)
+add_test(NAME events/abstract COMMAND test_events_queue)
+
+add_executable(test_events_beanstalkd test_events_beanstalkd.c)
+target_link_libraries(test_events_beanstalkd ${COMMON} oioevents server)
+add_test(NAME events/beanstalkd COMMAND test_events_beanstalkd)
 
