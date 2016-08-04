@@ -375,38 +375,30 @@ _populate_headers_with_alias (struct req_args_s *args, struct bean_ALIASES_s *al
 			g_strdup_printf("%"G_GINT64_FORMAT, ALIASES_get_ctime(alias)));
 }
 
-static gchar *
-_service_key(const gchar *prefix, const gchar *id)
-{
-	gchar actual_type[LIMIT_LENGTH_SRVTYPE] = {0};
-	if (!strcmp(prefix, "http")) {
-		strcpy(actual_type, NAME_SRVTYPE_RAWX);
-	} else {
-		strcpy(actual_type, prefix);
-	}
-	return oio_make_service_key(ns_name, actual_type, id);
-}
-
 static gint32
-_score_from_chunk_id(const gchar *id)
+_score_from_chunk_id (const char *id)
 {
-	gchar svc_prefix[LIMIT_LENGTH_SRVTYPE] = {0};
-	gchar svc_id[STRLEN_ADDRINFO] = {0};
-	gchar *start = strstr(id, "://");
-	int offset = 0;
-	if (start) {
-		strncpy(svc_prefix, id, start - id);
-		offset = start - id + 3;
+	gchar *k = NULL;
+	if (g_str_has_prefix(id, "http://")) {
+		const char * start = id + sizeof("http://") - 1;
+		const char * first_slash = strchr(start, '/');
+		if (!first_slash)
+			return 0U;
+		gchar *tmp = g_strndup (start, first_slash - start);
+		k = oio_make_service_key (ns_name, NAME_SRVTYPE_RAWX, tmp);
+		g_free (tmp);
+	} else if (g_str_has_prefix(id, "b2/") || g_str_has_prefix(id, "b2:")) {
+		k = oio_make_service_key(ns_name, "b2", strrchr(id, '/'));
+	} else if (g_str_has_prefix(id, "k/")) {
+		k = oio_make_service_key(ns_name, "k", strrchr(id, '/'));
 	} else {
-		strcpy(svc_prefix, "http");
+		return 0U;
 	}
-	/* XXX FIXME not robust enough, maybe no more '/' */
-	strncpy(svc_id, id+offset, strchr(id+offset, '/') - id - offset);
-	gchar *svc_key = _service_key(svc_prefix, svc_id);
-	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, svc_key);
-	gint32 res = item? item->weight : 0;
+
+	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, k);
+	gint32 res = item ? item->weight : 0;
 	g_free(item);
-	g_free(svc_key);
+	g_free(k);
 	return res;
 }
 
@@ -555,6 +547,9 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody,
 	GError *err = NULL;
 	GSList *beans = NULL;
 
+	const char *content_path = PATH();
+	if (!content_path)
+		return BADREQ("URL: missing path");
 	if (!json_object_is_type(jbody, json_type_array))
 		return BADREQ ("JSON: Not an array");
 	if (json_object_array_length(jbody) <= 0)
@@ -649,7 +644,7 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody,
 	if (!err) {
 		struct bean_ALIASES_s *alias = _bean_create (&descr_struct_ALIASES);
 		beans = g_slist_prepend (beans, alias);
-		ALIASES_set2_alias (alias, PATH());
+		ALIASES_set2_alias (alias, content_path);
 		ALIASES_set_content (alias, CONTENTS_HEADERS_get_id (header));
 
 		if (!err) { // aliases version

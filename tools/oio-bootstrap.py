@@ -379,6 +379,7 @@ param_option.meta1.events-max-pending=100
 param_option.meta2.events-buffer-delay=5
 
 param_option.service_update_policy=meta2=KEEP|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|;rdir=KEEP|1|1|user_is_a_service=1
+
 param_option.lb.rawx=WRR?shorten_ratio=1.0&standard_deviation=no&reset_delay=60
 param_option.meta2_max_versions=${VERSIONING}
 param_option.meta2_keep_deleted_delay=86400
@@ -1279,7 +1280,7 @@ def main():
 
     parser.add_argument("namespace", help="Namespace name")
     parser.add_argument("ip", help="IP to use")
-    parser.add_argument("-c", "--conf", action="store", dest='config',
+    parser.add_argument("-c", "--conf", action="append", dest='config',
                         help="Bootstrap configuration file")
     parser.add_argument("-d", "--dump", action="store_true", default=False,
                         dest='dump_config', help="Dump results")
@@ -1295,10 +1296,12 @@ def main():
     opts['rawx'] = {SVC_NB: None}
 
     if options.config:
-        with open(options.config, 'r') as f:
-            data = yaml.load(f)
-            if data:
-                opts.update(data)
+        for path in options.config:
+            with open(path, 'r') as f:
+                data = yaml.load(f)
+                if data:
+                    opts.update(data)
+
     opts['ns'] = options.namespace
     opts['ip'] = options.ip
     final_conf = generate(opts)

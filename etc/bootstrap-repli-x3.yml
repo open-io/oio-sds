@@ -1,0 +1,7 @@
+zookeeper: true
+directory_replicas: 3
+container_replicas: 3
+meta2:
+  count: 3
+meta1:
+  count: 3
