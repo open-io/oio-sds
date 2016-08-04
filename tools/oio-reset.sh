@@ -174,6 +174,7 @@ timestamp
 # unlock all services
 $PREFIX-unlock-all.sh -n "$NS"
 $PREFIX-wait-scored.sh -n "$NS" -t 60
+$PREFIX-flush-all.sh -n "$NS"
 
 timestamp
 find $SDS -type d | xargs chmod a+rx

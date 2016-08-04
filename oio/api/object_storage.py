@@ -137,7 +137,8 @@ class ObjectStorageAPI(API):
         self.directory = DirectoryAPI(
             namespace,
             endpoint,
-            session=self.session
+            session=self.session,
+            admin_mode=self.admin_mode
         )
         self.namespace = namespace
 
