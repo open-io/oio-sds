@@ -50,25 +50,6 @@ License along with this library.
 #define NS_COMPRESS_OPT_NAME "compression"
 #define NS_COMPRESS_OPT_VALUE_ON "on"
 
-gchar*
-gridcluster_get_conscience(const char *ns)
-{
-	gchar *s = oio_cfg_get_value(ns, OIO_CFG_CONSCIENCE);
-	if (!s) return NULL;
-	STRING_STACKIFY(s);
-
-	gchar **urlv = g_strsplit(s, ",", -1);
-	if (!urlv) return NULL;
-
-	const gsize len = g_strv_length (urlv);
-	const guint i = oio_ext_rand_int_range(0,len);
-	s = urlv[i];
-	urlv[i] = urlv[len-1];
-	urlv[len-1] = NULL;
-	g_strfreev (urlv);
-	return s;
-}
-
 /* -------------------------------------------------------------------------- */
 
 GError *
