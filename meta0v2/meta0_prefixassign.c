@@ -201,8 +201,6 @@ _select_prefix(GArray *prefixes, guint8 *treat_prefixes)
 	}
 
 	g_array_free(prefixes, TRUE);
-	prefixes = NULL;
-
 	return FALSE;
 }
 
