@@ -29,10 +29,6 @@ GError * meta1v2_remote_create_reference (const char *m1, struct oio_url_s *url)
 GError * meta1v2_remote_delete_reference(const char *m1, struct oio_url_s *url,
 		gboolean force);
 
-GError * meta1v2_remote_has_reference(const char *m1, struct oio_url_s *url,
-		struct oio_url_s ***out);
-
-
 GError * meta1v2_remote_list_reference_services(const char *m1,
 		struct oio_url_s *url, const char *srvtype, gchar ***out);
 
@@ -50,9 +46,6 @@ GError * meta1v2_remote_renew_reference_service(const char *m1, struct oio_url_s
 
 GError * meta1v2_remote_force_reference_service(const char *m1, struct oio_url_s *url,
 		const char *m1url, gboolean ac, gboolean force);
-
-GError * meta1v2_remote_configure_reference_service(const char *m1, struct oio_url_s *url,
-		const char *m1url);
 
 
 GError * meta1v2_remote_reference_get_property(const char *m1, struct oio_url_s *url,

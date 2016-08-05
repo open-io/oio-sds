@@ -82,32 +82,6 @@ meta1v2_remote_create_reference (const char *to, struct oio_url_s *url)
 }
 
 GError *
-meta1v2_remote_has_reference (const char *to, struct oio_url_s *url,
-		struct oio_url_s ***out)
-{
-	EXTRA_ASSERT(url != NULL);
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_USERINFO);
-	metautils_message_add_url_no_type (req, url);
-	if (!out)
-		return oneway_request(to, message_marshall_gba_and_clean(req));
-
-	*out = NULL;
-	gchar **tab = NULL;
-	GError *e = list_request (to, message_marshall_gba_and_clean(req), &tab);
-	if (e) return e;
-
-	gsize len = g_strv_length (tab);
-	*out = g_malloc0 ((1 + len) * sizeof(void*));
-	struct oio_url_s **p = *out;
-	for (guint i=0; i<len ;i++) {
-		*p = oio_url_init (tab[i]);
-		if (*p) p++;
-	}
-	g_strfreev (tab);
-	return NULL;
-}
-
-GError *
 meta1v2_remote_delete_reference (const char *to, struct oio_url_s *url,
 		gboolean force)
 {
@@ -206,18 +180,6 @@ meta1v2_remote_force_reference_service(const char *to, struct oio_url_s *url,
 		metautils_message_add_field_str (req, NAME_MSGKEY_AUTOCREATE, "1");
 	if (force)
 		metautils_message_add_field_str (req, NAME_MSGKEY_FORCE, "1");
-	return oneway_request(to, message_marshall_gba_and_clean(req));
-}
-
-GError *
-meta1v2_remote_configure_reference_service(const char *to, struct oio_url_s *url,
-		const char *m1url)
-{
-	EXTRA_ASSERT(url != NULL);
-	EXTRA_ASSERT(m1url != NULL);
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVCONFIG);
-	metautils_message_add_url_no_type (req, url);
-	metautils_message_add_body_unref (req, metautils_gba_from_string(m1url));
 	return oneway_request(to, message_marshall_gba_and_clean(req));
 }
 
