@@ -88,14 +88,6 @@ meta2_filter_fill_subject(struct gridd_filter_ctx_s *ctx,
 	return FILTER_OK;
 }
 
-#define FILL_URL_FIELD(K, F) do { \
-	tmp = meta2_filter_ctx_get_param(ctx, K); \
-	if(NULL != tmp) { \
-		oio_url_set(url, F, tmp); \
-		tmp = NULL; \
-	} \
-} while(0)
-
 int
 meta2_filter_reply_fail(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)

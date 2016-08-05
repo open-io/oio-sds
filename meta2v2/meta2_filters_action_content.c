@@ -47,19 +47,6 @@ enum content_action_e
 	DELETE,
 };
 
-struct content_info_s
-{
-	enum content_action_e action;
-	GSList *beans;
-};
-
-struct all_vers_cb_args
-{
-	const gchar *contentid;
-	gconstpointer udata_in;
-	gpointer udata_out;
-};
-
 static void
 _notify_beans (struct meta2_backend_s *m2b, struct oio_url_s *url,
 		GSList *beans, const char *name)
