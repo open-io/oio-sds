@@ -1855,7 +1855,7 @@ action_content_copy (struct req_args_s *args)
 			|| !oio_url_has(target_url, OIOURL_PATH)
 			|| !oio_url_has(args->url, OIOURL_HEXID)
 			|| !oio_url_has(args->url, OIOURL_NS)
-			|| strcmp(oio_url_get(target_url, OIOURL_HEXID), oio_url_get(args->url, OIOURL_HEXID))
+			|| strcmp(oio_url_get(target_url, OIOURL_NS), oio_url_get(args->url, OIOURL_NS))
 			|| strcmp(oio_url_get(target_url, OIOURL_HEXID), oio_url_get(args->url, OIOURL_HEXID))) {
 		oio_url_pclean(&target_url);
 		return _reply_format_error(args, BADREQ("Invalid source/target URL"));
