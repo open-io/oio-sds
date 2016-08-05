@@ -107,21 +107,11 @@ void expr_clean(struct expr_s *pE);
 /**
  *
  */
-int expr_check(struct expr_s *pE);
-
-/**
- *
- */
 int expr_parse(const char *pBuf, struct expr_s **pE);
 
 /**
  *
  */
 int expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv);
-
-/**
- *
- */
-const char *expr_type2str(enum expr_type_e t);
 
 #endif /*OIO_SDS__metautils__lib__expr_h*/

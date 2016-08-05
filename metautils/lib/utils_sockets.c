@@ -45,16 +45,17 @@ static gint
 errno_to_errcode(int e)
 {
 	switch (e) {
-	case ERRNO_RESETBYPEER:
-		return ERRCODE_CONN_RESET;
-	case ERRNO_CONNREFUSED:
-		return ERRCODE_CONN_REFUSED;
-	case ERRNO_NOROUTETOHOST:
-		return ERRCODE_CONN_TIMEOUT;
-	case ERRNO_NOTCONNECTED:
-		return ERRCODE_CONN_NOTCONNECTED;
+		case ERRNO_RESETBYPEER:
+			return ERRCODE_CONN_RESET;
+		case ERRNO_CONNREFUSED:
+			return ERRCODE_CONN_REFUSED;
+		case ERRNO_NOROUTETOHOST:
+			return ERRCODE_CONN_TIMEOUT;
+		case ERRNO_NOTCONNECTED:
+			return ERRCODE_CONN_NOTCONNECTED;
+		default:
+			return 0;
 	}
-	return 0;
 }
 
 static struct metautils_sockets_vtable_s VTABLE = {

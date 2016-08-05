@@ -90,8 +90,7 @@ add_library(metautils SHARED
 		utils_syscall.c metautils_syscall.h
 		lrutree.c lrutree.h tree.h
 		storage_policy.c storage_policy.h
-		expr.2str.c
-		expr.clean.c
+        expr.clean.c
 		expr.eval.c
 		expr.lex.c expr.yacc.c expr.yacc.h
 		expr.h

@@ -957,7 +957,6 @@ namespace_info_unmarshall(const guint8 * buf, gsize buf_len, GError ** err)
 		return result;
 
 	namespace_info_free(result);
-	result = NULL;
 
 	GSETCODE(err, CODE_INTERNAL_ERROR, "ASN.1 to API mapping failure");
 	return NULL;

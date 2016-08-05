@@ -600,7 +600,7 @@ metautils_message_extract_body_gba(MESSAGE msg, GByteArray **result)
 		return NEWERROR(CODE_BAD_REQUEST, "No body");
 
 	*result = g_byte_array_new();
-	if (b && bsize)
+	if (bsize > 0)
 		g_byte_array_append(*result, b, bsize);
 	return NULL;
 }
@@ -613,7 +613,7 @@ metautils_message_extract_body_string(MESSAGE msg, gchar **result)
 	if (!b)
 		return NEWERROR(CODE_BAD_REQUEST, "No body");
 
-	if (!b || !bsize) {
+	if (!bsize) {
 		*result = g_malloc0(sizeof(void*));
 		return NULL;
 	}
