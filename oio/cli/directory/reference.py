@@ -63,7 +63,7 @@ class ShowReference(show.ShowOne):
         return zip(*sorted(info.iteritems()))
 
 
-class CreateReference(command.Command):
+class CreateReference(lister.Lister):
     """Create reference"""
 
     log = logging.getLogger(__name__ + '.CreateReference')
@@ -81,11 +81,16 @@ class CreateReference(command.Command):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
+        results = []
+        account = self.app.client_manager.get_account()
         for reference in parsed_args.references:
-            self.app.client_manager.directory.create(
-                self.app.client_manager.get_account(),
-                reference=reference
-            )
+            created = self.app.client_manager.directory.create(
+                account, reference=reference)
+            results.append((reference, created))
+
+        columns = ('Name', 'Created')
+        l = (r for r in results)
+        return columns, l
 
 
 class DeleteReference(command.Command):

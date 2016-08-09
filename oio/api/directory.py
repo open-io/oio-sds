@@ -63,10 +63,12 @@ class DirectoryAPI(API):
         params = self._make_params(account, reference)
         resp, resp_body = self._request(
             'POST', uri, params=params, headers=headers)
-        if resp.status_code in (200, 201):
-            return resp_body
-        else:
+        if resp.status_code not in (201, 202):
             raise exceptions.from_response(resp, resp_body)
+        if resp.status_code == 201:
+            return True
+        else:
+            return False
 
     def delete(self, account, reference, headers=None):
         uri = self._make_uri('reference/destroy')

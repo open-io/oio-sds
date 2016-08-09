@@ -1,5 +1,5 @@
 from oio.common.client import Client
-from oio.common.exceptions import ClientException, NotFound
+from oio.common.exceptions import ClientException, NotFound, VolumeException
 from oio.directory.client import DirectoryClient
 
 
@@ -36,7 +36,7 @@ class RdirClient(Client):
                                               srv_type='rdir')
         except NotFound:
             if not create:
-                raise
+                raise VolumeException('No such volume %s' % volume_id)
 
         try:
             host = self._lookup_rdir_host(resp)

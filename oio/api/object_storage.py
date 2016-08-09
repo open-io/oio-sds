@@ -50,6 +50,17 @@ def get_meta_ranges(ranges, chunks):
     return range_infos
 
 
+def handle_account_not_found(fnc):
+    @wraps(fnc)
+    def _wrapped(self, account, *args, **kwargs):
+        try:
+            return fnc(self, account, *args, **kwargs)
+        except exc.NotFound as e:
+            e.message = "Account '%s' does not exist." % account
+            raise exc.NoSuchAccount(e)
+    return _wrapped
+
+
 def handle_container_not_found(fnc):
     @wraps(fnc)
     def _wrapped(self, account, container, *args, **kwargs):
@@ -139,6 +150,7 @@ class ObjectStorageAPI(API):
         created = (resp.status_code == 201)
         return created
 
+    @handle_account_not_found
     def account_delete(self, account, headers=None):
         uri = '/v1.0/account/delete'
         account_id = utils.quote(account, '')
@@ -146,6 +158,7 @@ class ObjectStorageAPI(API):
         resp, resp_body = self._account_request('POST', uri, params=params,
                                                 headers=headers)
 
+    @handle_account_not_found
     def account_show(self, account, headers=None):
         uri = "/v1.0/account/show"
         account_id = utils.quote(account, '')
@@ -154,6 +167,7 @@ class ObjectStorageAPI(API):
                                                 headers=headers)
         return resp_body
 
+    @handle_account_not_found
     def account_update(self, account, metadata, to_delete=None, headers=None):
         uri = "/v1.0/account/update"
         account_id = utils.quote(account, '')
@@ -162,9 +176,11 @@ class ObjectStorageAPI(API):
         resp, resp_body = self._account_request('POST', uri, params=params,
                                                 data=data, headers=headers)
 
+    @handle_account_not_found
     def account_set_properties(self, account, properties, headers=None):
         self.account_update(account, properties, headers=headers)
 
+    @handle_account_not_found
     def account_del_properties(self, account, properties, headers=None):
         self.account_update(account, None, properties, headers=headers)
 
@@ -200,6 +216,7 @@ class ObjectStorageAPI(API):
         except exc.Conflict as e:
             raise exc.ContainerNotEmpty(e)
 
+    @handle_account_not_found
     def container_list(self, account, limit=None, marker=None,
                        end_marker=None, prefix=None, delimiter=None,
                        headers=None):

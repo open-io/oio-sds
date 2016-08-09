@@ -2,6 +2,7 @@ import logging
 
 from cliff import command
 from cliff import show
+from cliff import lister
 from oio.cli.utils import KeyValueAction
 
 
@@ -25,6 +26,8 @@ class ShowAccount(show.ShowOne):
         data = self.app.client_manager.storage.account_show(
             account=parsed_args.account
         )
+        data['account'] = data['id']
+        del data['id']
         return zip(*sorted(data.iteritems()))
 
 
@@ -52,7 +55,7 @@ class DeleteAccount(command.Command):
             )
 
 
-class CreateAccount(command.Command):
+class CreateAccount(lister.Lister):
     """Create account"""
 
     log = logging.getLogger(__name__ + '.CreateAccount')
@@ -70,11 +73,15 @@ class CreateAccount(command.Command):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
+        results = []
         for account in parsed_args.accounts:
-            data = self.app.client_manager.storage.account_create(
-                account=account
-            )
-            self.log.debug('account create result: %s' % data)
+            result = self.app.client_manager.storage.account_create(
+                account=account)
+            results.append((account, result))
+
+        columns = ('Name', 'Created')
+        l = (r for r in results)
+        return columns, l
 
 
 class SetAccount(command.Command):

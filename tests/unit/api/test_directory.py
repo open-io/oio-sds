@@ -57,7 +57,7 @@ class DirectoryTest(unittest.TestCase):
     def test_create_already_exists(self):
         api = self.api
         resp = FakeAPIResponse()
-        resp.status_code = 200
+        resp.status_code = 202
         api._request = Mock(return_value=(resp, None))
         api.create(self.account, self.name)
         uri = "%s/reference/create" % self.uri_base

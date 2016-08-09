@@ -38,6 +38,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "oio_events_queue_beanstalkd.h"
 #include "oio_events_queue_buffer.h"
 
+#define INSERTED_PREFIX "INSERTED"
+#define USING_PREFIX "USING"
 
 #define EXPO_BACKOFF(DELAY,TRY,MAX_TRIES) \
 	g_usleep((1 << MIN(TRY, MAX_TRIES)) * DELAY); \
@@ -57,6 +59,12 @@ static struct oio_events_queue_vtable_s vtable_BEANSTALKD =
 	_q_destroy, _q_send, _q_send_overwritable, _q_is_stalled,
 	_q_set_max_pending, _q_set_buffering, _q_run
 };
+
+/* Used by tests to intercept the result of the parsing of beanstalkd
+ * replies */
+typedef void (*_queue_BEANSTALKD_interceptor_f) (GError *err);
+
+static _queue_BEANSTALKD_interceptor_f intercept_errors = NULL;
 
 struct _queue_BEANSTALKD_s
 {
@@ -156,55 +164,44 @@ retry:
 	return 1;
 }
 
-static gboolean _is_good_response(gchar *buf)
+static gboolean
+_is_success(gchar *buf)
 {
-	#define INSERTED_PREFIX "INSERTED"
-	#define USING_PREFIX "USING"
-	
-	if (g_str_has_prefix(buf, INSERTED_PREFIX))
-		return TRUE;
-	else if(g_str_has_prefix(buf, USING_PREFIX))
-		return TRUE;
-	return FALSE;
-	
+	return g_str_has_prefix(buf, INSERTED_PREFIX)
+		|| g_str_has_prefix(buf, USING_PREFIX);
 }
 
-static int
+static GError *
 _send_and_read_reply (int fd, struct iovec *iov, unsigned int iovcount)
 {
 	if (!_send(fd, iov, iovcount))
-		return 0;
+		return NEWERROR(CODE_NETWORK_ERROR,
+				"send error: (%d) %s",
+				errno, strerror(errno));
 
 	GError *err = NULL;
 	guint8 buf[256];
-	memset(buf, '\0', 256);
-	int r = sock_to_read (fd, 1000, buf, sizeof(buf), &err);
-	if (r < 0) {
-		GRID_WARN("reply error: (%d) %s", err->code, err->message);
-		r = 0;
-	} else if (r == 0) {
-		GRID_WARN("reply error: closed by peer");
-		r = 0;
-	} else if (!_is_good_response((gchar*) buf)) {
-		r = 0;
-		GRID_WARN("reply error: %s", buf);
-	} else {
-		r = 1;
-		GRID_TRACE("Reply: %.*s", r, buf);
-	}
+	int r = sock_to_read (fd, 1000, buf, sizeof(buf)-1, &err);
+	if (r < 0)
+		return NEWERROR(CODE_NETWORK_ERROR,
+				"read error: (%d) %s", err->code, err->message);
+	if (r == 0)
+		return NEWERROR(CODE_NETWORK_ERROR,
+				"read error: closed by peer: (%d) %s",
+				errno, strerror(errno));
 
-	if (err)
-		g_clear_error (&err);
-	return r;
+	buf[r+1] = 0;
+
+	if (!_is_success((gchar*) buf))
+		return NEWERROR(CODE_BAD_REQUEST, "reply error: unexpected");
+	return NULL;
 }
 
 static void
 _maybe_send_overwritable(struct oio_events_queue_s *self)
 {
 	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s *)self;
-	gboolean __send(gpointer key, gpointer msg, gpointer udata)
-	{
-		(void) udata;
+	gboolean __send(gpointer key, gpointer msg, gpointer u UNUSED) {
 		g_free(key);
 		_q_send(self, (gchar*)msg);
 		return TRUE;
@@ -213,38 +210,35 @@ _maybe_send_overwritable(struct oio_events_queue_s *self)
 	oio_events_queue_buffer_maybe_flush(&(q->buffer), __send, NULL);
 }
 
-static gboolean
+static GError *
 _put (int fd, gchar *msg, size_t msglen)
 {
+	gchar buf[256];
 	struct iovec iov[3];
 
-	GString *header = g_string_new ("");
-	g_string_printf (header, "put %u %u %u %"G_GSIZE_FORMAT"\r\n",
+	gsize len = g_snprintf (buf, sizeof(buf),
+			"put %u %u %u %"G_GSIZE_FORMAT"\r\n",
 			OIO_EVT_BEANSTALKD_DEFAULT_PRIO,
 			OIO_EVT_BEANSTALKD_DEFAULT_DELAY,
 			OIO_EVT_BEANSTALKD_DEFAULT_TTR,
 			msglen);
-	iov[0].iov_base = header->str;
-	iov[0].iov_len = header->len;
+	iov[0].iov_base = buf;
+	iov[0].iov_len = len;
 	iov[1].iov_base = msg;
 	iov[1].iov_len = msglen;
 	iov[2].iov_base = "\r\n";
 	iov[2].iov_len = 2;
 
-	int rc = _send_and_read_reply (fd, iov, 3);
-	g_string_free (header, TRUE);
-	header = NULL;
-	return rc;
+	return _send_and_read_reply (fd, iov, 3);
 }
 
 static GError *
 _use_tube (int fd, const char *name)
 {
-	gchar buf[256];
-
 	if (!oio_str_is_set(name))
 		return NULL;
 
+	gchar buf[256];
 	gsize len = g_snprintf(buf, sizeof(buf), "use %s\r\n", name);
 
 	if (len >= sizeof(buf))
@@ -253,12 +247,7 @@ _use_tube (int fd, const char *name)
 	struct iovec iov[1];
 	iov[0].iov_base = buf;
 	iov[0].iov_len = len;
-
-	if (_send_and_read_reply (fd, iov, 1))
-		return NULL;
-
-	return NEWERROR(CODE_NETWORK_ERROR, "beanstalkd error: (%d) %s",
-			errno, strerror(errno));
+	return _send_and_read_reply (fd, iov, 1);
 }
 
 static GError *
@@ -298,15 +287,18 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 
 		/* forward the event */
 		if (*msg) {
+			GError *err = NULL;
 
 			/* lazy-reconnection, with backoff sleeping to avoid crazy-looping */
 			if (fd < 0) {
-				GError *err = NULL;
 				fd = sock_connect(q->endpoint, &err);
 				if (!err)
 					err = _poll_out (fd);
-				if (!err)
+				if (!err) {
 					err = _use_tube (fd, q->tube);
+					if (intercept_errors)
+						(*intercept_errors) (err);
+				}
 				if (err) {
 					metautils_pclose(&fd);
 					GRID_WARN("BEANSTALKD: reconnection failed to %s: (%d) %s",
@@ -324,7 +316,11 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 			}
 
 			/* prepare the header, and the buffers to be sent */
-			if (!_put (fd, msg, strlen(msg))) {
+			err = _put (fd, msg, strlen(msg));
+			if (intercept_errors)
+				(*intercept_errors) (err);
+			if (err) {
+				g_clear_error (&err);
 				sock_set_linger(fd, 1, 1);
 				metautils_pclose (&fd);
 				saved = msg;

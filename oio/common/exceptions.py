@@ -126,6 +126,10 @@ class ContainerNotEmpty(OioException):
     pass
 
 
+class NoSuchAccount(OioException):
+    pass
+
+
 class NoSuchContainer(OioException):
     pass
 
@@ -165,6 +169,10 @@ class ChunkWriteTimeout(Timeout):
 
 
 class ChunkReadTimeout(Timeout):
+    pass
+
+
+class VolumeException(OioException):
     pass
 
 

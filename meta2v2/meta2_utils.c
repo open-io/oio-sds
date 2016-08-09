@@ -88,7 +88,7 @@ m2v2_build_chunk_url_storage (const struct storage_policy_s *pol,
 {
 	switch(data_security_get_type(storage_policy_get_data_security(pol))) {
 	case STGPOL_DS_BACKBLAZE:
-		return g_strconcat("b2://b2/", str_id, NULL);
+		return g_strconcat("b2/", str_id, NULL);
 	default:
 		return NULL;
 	}
