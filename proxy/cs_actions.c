@@ -30,7 +30,7 @@ conscience_remote_get_namespace (const char *cs, namespace_info_t **out)
 	GError *err = gridd_client_exec_and_concat (cs, CS_CLIENT_TIMEOUT,
 			message_marshall_gba_and_clean(req), &gba);
 	if (err) {
-		g_assert (gba == NULL);
+		EXTRA_ASSERT (gba == NULL);
 		g_prefix_error(&err, "request: ");
 		return err;
 	}
@@ -55,12 +55,20 @@ conscience_remote_get_services(const char *cs, const char *type, gboolean full,
 			message_marshall_gba_and_clean(req), out, service_info_unmarshall);
 }
 
-GError *
-conscience_remote_get_types(const char *cs, GSList **out)
-{
+GError * conscience_remote_get_types(const char *cs, gchar ***out) {
 	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_CS_GET_SRVNAMES);
-	return gridd_client_exec_and_decode (cs, CS_CLIENT_TIMEOUT,
-			message_marshall_gba_and_clean(req), out, strings_unmarshall);
+	gchar *json = NULL;
+	GError *err = gridd_client_exec_and_concat_string (cs, CS_CLIENT_TIMEOUT,
+			message_marshall_gba_and_clean(req), &json);
+	EXTRA_ASSERT((err != NULL) ^ (json != NULL));
+	if (!err) {
+		err = STRV_decode_buffer((guint8*)json, strlen(json), out);
+		if (out) {
+			EXTRA_ASSERT((err != NULL) ^ (*out != NULL));
+		}
+		g_free(json);
+	}
+	return err;
 }
 
 GError *

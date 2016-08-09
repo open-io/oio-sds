@@ -243,10 +243,6 @@ metautils_message_get_NAME (MESSAGE m, gsize *l)
 { return message_get_param(m, MP_NAME, l); }
 
 void*
-metautils_message_get_VERSION (MESSAGE m, gsize *l)
-{ return message_get_param(m, MP_VERSION, l); }
-
-void*
 metautils_message_get_BODY (MESSAGE m, gsize *l)
 { return message_get_param(m, MP_BODY, l); }
 
@@ -259,24 +255,12 @@ metautils_message_set_NAME (MESSAGE m, const void *b, gsize l)
 { return message_set_param(m, MP_NAME, b, l); }
 
 void
-metautils_message_set_VERSION (MESSAGE m, const void *b, gsize l)
-{ return message_set_param(m, MP_VERSION, b, l); }
-
-void
 metautils_message_set_BODY (MESSAGE m, const void *b, gsize l)
 { return message_set_param(m, MP_BODY, b, l); }
 
 gboolean
 metautils_message_has_ID (MESSAGE m)
 { return NULL != metautils_message_get_ID(m,NULL); }
-
-gboolean
-metautils_message_has_NAME (MESSAGE m)
-{ return NULL != metautils_message_get_NAME(m,NULL); }
-
-gboolean
-metautils_message_has_VERSION (MESSAGE m)
-{ return NULL != metautils_message_get_VERSION(m,NULL); }
 
 gboolean
 metautils_message_has_BODY (MESSAGE m)
@@ -330,25 +314,6 @@ metautils_message_get_field_names(MESSAGE m)
 	}
 
 	return array;
-}
-
-GHashTable*
-metautils_message_get_fields (MESSAGE m)
-{
-	EXTRA_ASSERT(m != NULL);
-
-	GHashTable *hash = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_clean);
-
-	for (int i=0,max=m->content.list.count; i<max; i++) {
-		Parameter_t *p = m->content.list.array[i];
-		if (p && p->name.buf && p->value.buf) {
-			g_hash_table_replace (hash,
-					g_strndup ((const gchar*)p->name.buf, p->name.size),
-					g_byte_array_append (g_byte_array_new(), p->value.buf, p->value.size));
-		}
-	}
-
-	return hash;
 }
 
 void
@@ -480,37 +445,6 @@ metautils_message_add_body_unref (MESSAGE m, GByteArray *body)
 }
 
 GError *
-metautils_message_extract_body_strv(MESSAGE msg, gchar ***result)
-{
-	gsize bsize = 0;
-	void *b = metautils_message_get_BODY(msg, &bsize);
-	if (!b) {
-		*result = g_malloc0(sizeof(gchar*));
-		return NULL;
-	}
-
-	*result = metautils_decode_lines(b, ((gchar*)b)+bsize);
-	return NULL;
-}
-
-GError *
-metautils_message_extract_prefix(MESSAGE msg, const gchar *n,
-		guint8 *d, gsize *dsize)
-{
-	gsize fsize = 0;
-	void *f = metautils_message_get_field(msg, n, &fsize);
-	if (!f || fsize)
-		return NEWERROR(CODE_BAD_REQUEST, "Missing ID prefix at '%s'", n);
-	if (fsize > *dsize)
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid ID prefix at '%s'", n);
-
-	memset(d, 0, *dsize);
-	memcpy(d, f, fsize);
-	*dsize = fsize;
-	return NULL;
-}
-
-GError *
 metautils_message_extract_cid(MESSAGE msg, const gchar *n, container_id_t *cid)
 {
 	gsize fsize = 0;
@@ -628,23 +562,6 @@ metautils_message_extract_body_string(MESSAGE msg, gchar **result)
 
 	*result = g_strndup((gchar*)b, bsize);
 	return NULL;
-}
-
-GError *
-metautils_unpack_bodyv (GByteArray **bodyv, GSList **result,
-		body_decoder_f decoder)
-{
-	GError *err = NULL;
-	GSList *items = NULL;
-	for (GByteArray **p=bodyv; *p && !err ;++p) {
-		GSList *l = NULL;
-		if (!decoder (&l, (*p)->data, (*p)->len, NULL))
-			err = NEWERROR (CODE_PROXY_ERROR, "Bad payload from service");
-		else
-			items = metautils_gslist_precat (items, l);
-	}
-	*result = items;
-	return err;
 }
 
 GError *

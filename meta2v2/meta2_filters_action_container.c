@@ -43,7 +43,6 @@ int
 meta2_filter_action_create_container(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	(void) reply;
 	struct m2v2_create_params_s params = {NULL,NULL,NULL,0};
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
@@ -54,31 +53,29 @@ meta2_filter_action_create_container(struct gridd_filter_ctx_s *ctx,
 	params.version_policy = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_VERPOLICY);
 	params.local = (meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_LOCAL) != NULL);
 
-	gchar **headers = metautils_message_get_field_names (reply->request);
-	GPtrArray *tmp = g_ptr_array_new ();
-	for (gchar **p=headers; *p ;++p) {
-		if (!g_str_has_prefix(*p, NAME_MSGKEY_PREFIX_PROPERTY))
-			continue;
-		g_ptr_array_add (tmp, g_strdup((*p) + sizeof(NAME_MSGKEY_PREFIX_PROPERTY) - 1));
-		g_ptr_array_add (tmp, metautils_message_extract_string_copy (reply->request, *p));
+	gsize len = 0;
+	void *buf = metautils_message_get_BODY(reply->request, &len);
+	err = KV_decode_buffer(buf, len, &params.properties);
+	if (err) {
+		meta2_filter_ctx_set_error(ctx, err);
+		return FILTER_KO;
 	}
-	params.properties = (gchar**) metautils_gpa_to_array (tmp, TRUE);
-	g_strfreev (headers);
-	headers = NULL;
 
-retry:
-	err = meta2_backend_create_container(m2b, url, &params);
-	if (err != NULL && err->code == CODE_REDIRECT && retry-- > 0 &&
+	while (!err) {
+		if (!(err = meta2_backend_create_container(m2b, url, &params)))
+			break;
+		if (err != NULL && err->code == CODE_REDIRECT && retry-- > 0 &&
 			!g_strcmp0(err->message, meta2_backend_get_local_addr(m2b))) {
-		GRID_WARN("Redirecting on myself!?! Retrying request immediately");
-		g_clear_error(&err);
-		hc_decache_reference_service(m2b->resolver, url, NAME_SRVTYPE_META2);
-		goto retry;
+			GRID_WARN(
+					"Redirecting on myself!?! Retrying request immediately");
+			g_clear_error(&err);
+			hc_decache_reference_service(m2b->resolver, url,
+										 NAME_SRVTYPE_META2);
+		}
 	}
 
-	g_strfreev (params.properties);
+	g_strfreev(params.properties);
 	params.properties = NULL;
-
 	if (!err)
 		return FILTER_OK;
 	meta2_filter_ctx_set_error(ctx, err);
@@ -87,9 +84,8 @@ retry:
 
 int
 meta2_filter_action_empty_container(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
+		struct gridd_reply_ctx_s *reply UNUSED)
 {
-	(void) reply;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 
@@ -149,9 +145,8 @@ meta2_filter_action_delete_container(struct gridd_filter_ctx_s *ctx,
 
 int
 meta2_filter_action_purge_container(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
+		struct gridd_reply_ctx_s *reply UNUSED)
 {
-	(void) reply;
 	GError *err = meta2_backend_purge_container(
 			meta2_filter_ctx_get_backend(ctx),
 			meta2_filter_ctx_get_url(ctx));
@@ -164,9 +159,8 @@ meta2_filter_action_purge_container(struct gridd_filter_ctx_s *ctx,
 
 int
 meta2_filter_action_flush_container(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
+		struct gridd_reply_ctx_s *reply UNUSED)
 {
-	(void) reply;
 	GError *err = meta2_backend_flush_container(
 			meta2_filter_ctx_get_backend(ctx),
 			meta2_filter_ctx_get_url(ctx));
@@ -179,9 +173,8 @@ meta2_filter_action_flush_container(struct gridd_filter_ctx_s *ctx,
 
 int
 meta2_filter_action_dedup_contents(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
+		struct gridd_reply_ctx_s *reply UNUSED)
 {
-	(void) reply;
 	GError *err = meta2_backend_dedup_contents(
 			meta2_filter_ctx_get_backend(ctx),
 			meta2_filter_ctx_get_url(ctx));

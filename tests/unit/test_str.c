@@ -166,6 +166,52 @@ test_prefix (void)
 	g_assert (!metautils_str_has_caseprefix ("X", "Xa"));
 }
 
+#define test_V_cycle(Kind,Input,Expected) do { \
+	GString *encoded = Kind##_encode_gstr(Input); \
+	g_assert_nonnull (encoded); \
+	gchar **output = NULL; \
+	GError *err = Kind##_decode_buffer ((guint8*)encoded->str, encoded->len, &output); \
+	g_string_free(encoded, TRUE); \
+	g_assert((err != NULL) ^ (output != NULL)); \
+	g_assert_no_error(err); \
+	g_assert_cmpuint(g_strv_length(Expected), ==, g_strv_length(output)); \
+	for (guint i=0,max=g_strv_length(Expected); i<max ; i++) \
+		g_assert_cmpstr(Expected[i], ==, output[i]); \
+	g_strfreev(output); \
+} while (0)
+
+static void
+test_STRV_cycle (gchar **input, gchar **expected)
+{
+	test_V_cycle(STRV, input, expected);
+}
+
+static void
+test_KV_cycle (gchar **input, gchar **expected)
+{
+	test_V_cycle(KV, input, expected);
+}
+
+static void
+test_STRV_ok (void)
+{
+	gchar *input[] = {"A", "B", "C", NULL}, *output[] = {"A", "B", "C", NULL};
+	for (gint i=3; i>=0 ;i--) {
+		input[i] = output[i] = NULL;
+		test_STRV_cycle(input, output);
+	}
+}
+
+static void
+test_KV_ok (void)
+{
+	gchar *input[] = {"A", "B", "C", NULL}, *output[] = {"A", "B", "C", NULL};
+	for (gint i=3; i>=0 ;i--) {
+		input[i] = output[i - (i%2)] = NULL;
+		test_KV_cycle(input, output);
+	}
+}
+
 int
 main(int argc, char **argv)
 {
@@ -175,6 +221,8 @@ main(int argc, char **argv)
 	g_test_add_func("/core/str/replace", test_replace);
 	g_test_add_func("/core/str/ishexa", test_is_hexa);
 	g_test_add_func("/core/str/bin", test_bin);
+	g_test_add_func("/core/str/kv", test_KV_ok);
+	g_test_add_func("/core/str/strv", test_STRV_ok);
 	g_test_add_func("/core/str/autocontainer", test_autocontainer);
 
 	g_test_add_func("/metautils/str/clean", test_clean);

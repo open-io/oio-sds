@@ -143,35 +143,16 @@ enum http_rc_e
 action_sqlx_propset (struct req_args_s *args, struct json_object *jargs)
 {
 	enum http_rc_e rc;
-	GError *err = NULL;
-	GSList *pairs = NULL;
-
-	if (jargs) {
-		if (!json_object_is_type (jargs, json_type_object))
-			return _reply_format_error (args, BADREQ("Invalid pairs"));
-		json_object_object_foreach(jargs,sk,jv) {
-			if (json_object_is_type (jv, json_type_string)) {
-				struct key_value_pair_s *kv = key_value_pair_create (sk,
-						(guint8*) json_object_get_string(jv), json_object_get_string_len(jv));
-				pairs = g_slist_prepend (pairs, kv);
-			} else if (json_object_is_type (jv, json_type_null)) {
-				struct key_value_pair_s *kv = key_value_pair_create (sk, NULL, 0);
-				pairs = g_slist_prepend (pairs, kv);
-			} else {
-				err = BADREQ("Invalid value for [%s]", sk);
-				break;
-			}
-		}
-	}
-
+	gchar **kv = NULL;
+	GError *err = KV_decode_object(jargs, &kv);
 	if (!err) {
 		gboolean flush = NULL != OPT("flush");
-		PACKER(_pack) { return sqlx_pack_PROPSET_pairs (n, flush, pairs); }
+		PACKER(_pack) { return sqlx_pack_PROPSET_tab (n, flush, kv); }
 		rc = _sqlx_action_noreturn (args, CLIENT_PREFER_MASTER, _pack);
 	} else {
 		rc = _reply_common_error (args, err);
 	}
-	g_slist_free_full (pairs, (GDestroyNotify)key_value_pair_clean);
+	g_strfreev (kv);
 	return rc;
 }
 
@@ -200,32 +181,27 @@ action_sqlx_propget (struct req_args_s *args, struct json_object *jargs)
 	}
 
 	// Decode the output of the services
-	GSList *pairs = NULL;
-	err = metautils_unpack_bodyv (ctx.bodyv, &pairs, key_value_pairs_unmarshall);
-	if (err) {
-		g_slist_free_full (pairs, (GDestroyNotify)key_value_pair_clean);
+	GByteArray *first = ctx.bodyv[0];
+	gchar **pairs = NULL;
+	err = KV_decode_buffer(first->data, first->len, &pairs);
+	EXTRA_ASSERT((err != NULL) ^ (pairs != NULL));
+	if (err)
 		return _reply_system_error(args, err);
-	}
 
-	GString *out = g_string_new ("{");
-	for (GSList *l=pairs; l ;l=l->next) {
-		if (out->len > 1)
-			g_string_append_c (out, ',');
-		struct key_value_pair_s *kv = l->data;
-		if (!kv)
-			continue;
-		if (!kv->value)
-			g_string_append_printf (out, "\"%s\":null", kv->key);
-		else {
-			g_string_append_printf(out, "\"%s\":\"", kv->key);
-			oio_str_gstring_append_json_blob(out,
-					(const char*)kv->value->data, kv->value->len);
-			g_string_append_c(out, '"');
-		}
-	}
-	g_string_append_c (out, '}');
+	gchar **user = KV_extract_prefixed(pairs, "user.");
+	gchar **nonuser = KV_extract_not_prefixed(pairs, "user.");
 
-	g_slist_free_full (pairs, (GDestroyNotify)key_value_pair_clean);
+	GString *out = g_string_new("");
+	g_string_append(out, "{\"properties\":");
+	KV_encode_gstr2(out, user);
+	g_string_append(out, ",\"system\":");
+	KV_encode_gstr2(out, nonuser);
+	g_string_append(out, "}");
+
+	g_free(user);
+	g_free(nonuser);
+	g_strfreev(pairs);
+
 	client_clean (&ctx);
 	return _reply_success_json (args, out);
 }

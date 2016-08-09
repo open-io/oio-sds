@@ -210,37 +210,6 @@ timer_expire_services(gpointer u)
 	g_slist_free(list_type_names);
 }
 
-static gboolean
-request_body_matches_namespace(struct request_context_s *req_ctx, GError **err)
-{
-	GSList *list_ns = NULL;
-	int rc;
-
-	gsize body_size = 0;
-	void *body = metautils_message_get_BODY(req_ctx->request, &body_size);
-	if (!body)
-		return TRUE;
-
-	if (!strings_unmarshall(&list_ns, body, body_size, err)) {
-		GSETERROR(err, "Invalid request body");
-		return FALSE;
-	}
-
-	if (1 != g_slist_length(list_ns)) {
-		GSETCODE(err, CODE_BAD_REQUEST, "Too many namespaces, this conscience only manage exactly 1 NS");
-		rc = FALSE;
-	}
-	else {
-		gchar local_ns[LIMIT_LENGTH_NSNAME];
-		g_strlcpy(local_ns, conscience->ns_info.name, sizeof(local_ns));
-		rc = (0 == g_ascii_strcasecmp(local_ns, (gchar*)list_ns->data));
-	}
-
-	g_slist_foreach(list_ns, g_free1, NULL);
-	g_slist_free(list_ns);
-	return rc;
-}
-
 /* ------------------------------------------------------------------------- */
 
 static void
@@ -807,18 +776,6 @@ handler_get_ns_info(struct request_context_s *req_ctx)
 
 	init_reply_ctx_with_request(req_ctx, &ctx);
 
-	if (!request_body_matches_namespace(req_ctx, &(ctx.warning))) {
-		if (!ctx.warning)
-			GSETCODE(&(ctx.warning), CODE_NAMESPACE_NOTMANAGED, "Invalid namespace");
-		reply_context_clear(&ctx, FALSE);
-		reply_context_set_message(&ctx, gerror_get_code(ctx.warning),
-				gerror_get_message(ctx.warning));
-		(void) reply_context_reply(&ctx, &(ctx.warning));
-		reply_context_log_access(&ctx, NULL);
-		reply_context_clear(&ctx, TRUE);
-		return 1;
-	}
-
 	g_rec_mutex_lock(&conscience_nsinfo_mutex);
 	gba = namespace_info_marshall(&(conscience->ns_info), &(ctx.warning));
 	g_rec_mutex_unlock(&conscience_nsinfo_mutex);
@@ -844,30 +801,34 @@ handler_get_services_types(struct request_context_s *req_ctx)
 	struct reply_context_s ctx;
 	GHashTableIter iterator;
 	gpointer k, v;
-	GSList *list_names;
 	GByteArray *gba_names;
 
 	init_reply_ctx_with_request(req_ctx, &(ctx));
-	list_names = NULL;
 
 	/* We avoid calling the similar feature from the conscience because
 	 * it makes a deep copy of the list. We do not perform any blocking
 	 * operation on the list, so we build ourselves a hollow copy and we
 	 * marshal it. */
 
-	/* XXX start of critical section */
+	GSList *namel = NULL;
+	/* start of critical section */
 	conscience_lock_srvtypes(conscience,'r');
 	g_hash_table_iter_init(&iterator, conscience->srvtypes);
 	while (g_hash_table_iter_next(&iterator, &k, &v)) {
-		if (k)
-			list_names = g_slist_prepend(list_names, k);
+		if (k) {
+			/* no copy, this only works because the types of services are
+			 * stable and never destroyed */
+			namel = g_slist_prepend(namel, k);
+		}
 	}
-
-	gba_names = strings_marshall_gba(list_names, &(ctx.warning));
 	conscience_unlock_srvtypes(conscience);
-	/* XXX end of critical section */
+	/* end of critical section */
 
-	g_slist_free(list_names);
+	/* do not free the pointers, they haven't been copied */
+	gchar **namev = (gchar**) metautils_list_to_array(namel);
+	g_slist_free (namel);
+	gba_names = STRV_encode_gba(namev);
+	g_free(namev);
 
 	/* Now we can manage the potential error and reply */
 	if (!gba_names) {

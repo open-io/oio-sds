@@ -93,22 +93,13 @@ __replace_property(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	return err;
 }
 
-static GError *
+GError *
 __set_container_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		gchar **props)
 {
 	GError *err = NULL;
-
-	for (gchar *p; !err && (p = *props) ;props++) {
-		gchar *name, *eq, *value;
-
-		name = p;
-		eq = strchr(name, '=');
-		value = eq + 1;
-		*eq = '\0';
-		err = __replace_property(sq3, url, name, value);
-	}
-
+	for (gchar **p=props; !err && *p && *(p+1) ;p+=2)
+		err = __replace_property(sq3, url, *p, *(p+1));
 	return err;
 }
 

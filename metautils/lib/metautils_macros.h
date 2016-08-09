@@ -46,16 +46,7 @@ License along with this library.
 # define NAME_TAGNAME_RAWX_LOC "tag.loc"
 # define NAME_TAGNAME_SLOTS "tag.slots"
 
-# define NAME_TAGNAME_AGENT_CHECK "tag.agent_check"
-
 # define NAME_TAGNAME_USER_IS_SERVICE "user_is_a_service"
-
-/* A flag usable in metacnx_ctx_s.flags to keep the connection alive */
-#define METACNX_FLAGMASK_KEEPALIVE 0x00000001
-
-#define REPSEQ_FINAL         0x00000001
-#define REPSEQ_ERROR         0X00000002
-#define REPSEQ_BODYMANDATORY 0x00000004
 
 #define NAME_MSGNAME_METAREPLY         "RP"
 

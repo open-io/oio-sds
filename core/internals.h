@@ -54,9 +54,9 @@ extern "C" {
 #define VTABLE_HAS(self,T,F) (((T)self)->vtable-> F != NULL)
 
 #define VTABLE_CHECK(self,T,F) do { \
-	g_assert(self != NULL); \
-	g_assert(((T)self)->vtable != NULL); \
-	g_assert(((T)self)->vtable-> F != NULL); \
+	EXTRA_ASSERT(self != NULL); \
+	EXTRA_ASSERT(((T)self)->vtable != NULL); \
+	EXTRA_ASSERT(((T)self)->vtable-> F != NULL); \
 } while (0)
 
 #define VTABLE_CALL_NOCHECK(self,T,F) ((T)self)->vtable->F

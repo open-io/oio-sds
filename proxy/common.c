@@ -135,66 +135,15 @@ _req_get_token (struct req_args_s *args, const char *name)
 }
 
 enum http_rc_e
-abstract_action (const char *tag, struct req_args_s *args, struct sub_action_s *sub)
-{
-	enum http_rc_e rc;
-	json_tokener *parser = json_tokener_new ();
-	json_object *jbody = NULL;
-
-	if (args->rq->body->len)
-		jbody = json_tokener_parse_ex (parser,
-				(char *) args->rq->body->data, args->rq->body->len);
-
-	if (json_tokener_success != json_tokener_get_error (parser))
-		rc = _reply_format_error (args, BADREQ ("Invalid JSON"));
-	else if (!json_object_is_type (jbody, json_type_object))
-		rc = _reply_format_error (args, BADREQ ("Invalid JSON object (%s)", tag));
-	else {
-		json_object *jargs = NULL, *jaction = NULL;
-		if (!json_object_object_get_ex (jbody, "action", &jaction)
-				|| !json_object_is_type (jaction, json_type_string))
-			rc = _reply_forbidden_error (args, BADREQ ("No/Bad action (%s)", tag));
-		else if (!json_object_object_get_ex (jbody, "args", &jargs))
-			rc = _reply_forbidden_error (args, BADREQ ("No/Bad arguments (%s)", tag));
-		else {
-			const char *action = json_object_get_string (jaction);
-			args->rp->access_tail ("action=%s", action);
-			for (; sub->handler ;++sub) {
-				if (!strcmp(action, sub->verb)) {
-					rc = sub->handler(args, jargs);
-					goto exit;
-				}
-			}
-			rc = _reply_forbidden_error (args, BADREQ ("Unexpected action (%s)", tag));
-		}
-	}
-exit:
-	if (jbody)
-		json_object_put (jbody);
-	json_tokener_free (parser);
-	return rc;
-}
-
-enum http_rc_e
 rest_action (struct req_args_s *args,
 		enum http_rc_e (*handler) (struct req_args_s *, json_object *))
 {
-	enum http_rc_e rc;
-	json_tokener *parser = json_tokener_new ();
 	json_object *jbody = NULL;
-
-	if (args->rq->body->len)
-		jbody = json_tokener_parse_ex (parser,
-				(char *) args->rq->body->data, args->rq->body->len);
-
-	if (json_tokener_success != json_tokener_get_error (parser))
-		rc = _reply_format_error (args, BADREQ("Invalid JSON"));
-	else
-		rc = handler(args, jbody);
-
-	if (jbody)
-		json_object_put (jbody);
-	json_tokener_free (parser);
+	GError *err = JSON_parse_gba(args->rq->body, &jbody);
+	if (err)
+		return _reply_format_error (args, BADREQ("Invalid JSON"));
+	enum http_rc_e rc = handler(args, jbody);
+	json_object_put (jbody);
 	return rc;
 }
 
@@ -267,7 +216,7 @@ GError *
 gridd_request_replicated (struct client_ctx_s *ctx, request_packer_f pack)
 {
 	GError *err = NULL;
-	g_assert (ctx != NULL);
+	EXTRA_ASSERT (ctx != NULL);
 
 	gchar *election_key = g_strconcat (ctx->name.base, "/", ctx->name.type, NULL);
 	STRING_STACKIFY(election_key);
@@ -378,10 +327,8 @@ gridd_request_replicated (struct client_ctx_s *ctx, request_packer_f pack)
 
 /* -------------------------------------------------------------------------- */
 
-static gboolean
-_has_flag_in_headers (struct req_args_s *args, const char *header,
-		const char *flag)
-{
+static gboolean _has_flag_in_headers (struct req_args_s *args,
+		const char *header, const char *flag) {
 	const char *v = g_tree_lookup(args->rq->tree_headers, header);
 	if (!v)	return FALSE;
 
@@ -400,33 +347,25 @@ _has_flag_in_headers (struct req_args_s *args, const char *header,
 	return rc;
 }
 
-gboolean
-_request_get_flag (struct req_args_s *args, const char *flag)
-{
+gboolean _request_get_flag (struct req_args_s *args, const char *flag) {
 	const gchar *v = OPT(flag);
 	if (NULL != v)
 		return metautils_cfg_get_bool(v, FALSE);
 	return _has_flag_in_headers (args, PROXYD_HEADER_MODE, flag);
 }
 
-void
-service_learn (const char *key)
-{
+void service_learn (const char *key) {
 	gchar *k = g_strdup(key);
 	SRV_WRITE(lru_tree_insert(srv_known, k, GINT_TO_POINTER(1)));
 }
 
-gboolean
-service_is_known (const char *key)
-{
+gboolean service_is_known (const char *key) {
 	gboolean known = FALSE;
 	SRV_READ(known = (NULL != lru_tree_get (srv_known, key)));
 	return known;
 }
 
-GBytes **
-NOLOCK_service_lookup_wanted (const char *type)
-{
+GBytes **NOLOCK_service_lookup_wanted (const char *type) {
 	if (!wanted_prepared)
 		return NULL;
 	for (GBytes **pw=wanted_prepared ; *pw ; pw++) {
@@ -436,9 +375,7 @@ NOLOCK_service_lookup_wanted (const char *type)
 	return NULL;
 }
 
-void
-service_remember_wanted (const char *type)
-{
+void service_remember_wanted (const char *type) {
 	gsize i;
 	WANTED_WRITE(
 	if (!wanted_srvtypes) {
@@ -457,9 +394,7 @@ service_remember_wanted (const char *type)
 	});
 }
 
-GBytes*
-service_is_wanted (const char *type)
-{
+GBytes* service_is_wanted (const char *type) {
 	GBytes *out = NULL;
 	WANTED_READ(do {
 		GBytes **pold = NOLOCK_service_lookup_wanted (type);
@@ -469,10 +404,8 @@ service_is_wanted (const char *type)
 	return out;
 }
 
-void
-client_init (struct client_ctx_s *ctx, struct req_args_s *args,
-	   const char *srvtype, gint seq)
-{
+void client_init (struct client_ctx_s *ctx, struct req_args_s *args,
+		const char *srvtype, gint seq) {
 	memset(ctx, 0, sizeof(*ctx));
 	ctx->url = args->url;
 	ctx->type = srvtype;
@@ -482,9 +415,7 @@ client_init (struct client_ctx_s *ctx, struct req_args_s *args,
 	ctx->which = CLIENT_ANY;
 }
 
-void
-client_clean (struct client_ctx_s *ctx)
-{
+void client_clean (struct client_ctx_s *ctx) {
 	sqlx_name_clean(&ctx->name);
 	if (ctx->urlv)
 		g_strfreev (ctx->urlv);

@@ -171,7 +171,7 @@ _curl_content_url (struct oio_url_s *u, const char *action)
 static GError *
 _body_parse_error (GString *b)
 {
-	g_assert (b != NULL);
+	EXTRA_ASSERT (b != NULL);
 	struct json_tokener *tok = json_tokener_new ();
 	struct json_object *jbody = json_tokener_parse_ex (tok, b->str, b->len);
 	json_tokener_free (tok);
@@ -302,9 +302,9 @@ static GError *
 _proxy_call_notime (CURL *h, const char *method, const char *url,
 		struct http_ctx_s *in, struct http_ctx_s *out)
 {
-	g_assert (h != NULL);
-	g_assert (method != NULL);
-	g_assert (url != NULL);
+	EXTRA_ASSERT (h != NULL);
+	EXTRA_ASSERT (method != NULL);
+	EXTRA_ASSERT (url != NULL);
 	struct view_GString_s view_input = {.data=NULL, .done=0};
 
 	GError *err = NULL;

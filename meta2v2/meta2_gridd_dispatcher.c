@@ -368,7 +368,6 @@ static gridd_filter M2V2_PROPDEL_FILTERS[] =
 	meta2_filter_check_url_cid,
 	meta2_filter_check_backend,
 	meta2_filter_check_ns_name,
-	meta2_filter_extract_body_strings,
 	meta2_filter_action_del_content_properties,
 	meta2_filter_reply_success,
 	NULL

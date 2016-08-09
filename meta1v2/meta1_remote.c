@@ -22,62 +22,37 @@ License along with this library.
 #include "./internals.h"
 #include "./meta1_remote.h"
 
-static gboolean
-on_reply(gpointer ctx, MESSAGE reply)
-{
-	GByteArray *out = ctx;
-	gsize bsize = 0;
-	void *b = metautils_message_get_BODY(reply, &bsize);
-	if (b) {
-		if (out != NULL)
-			g_byte_array_append(out, b, bsize);
-	}
-
-	g_byte_array_append(out, (const guint8*)"", 1);
-	g_byte_array_set_size(out, out->len - 1);
-	return TRUE;
-}
-
-static GError *
-list_request(const char *to, GByteArray *req, gchar ***out)
-{
+static GError *list_request(const char *to, GByteArray *req, gchar ***out) {
 	EXTRA_ASSERT(to != NULL);
 	EXTRA_ASSERT(req != NULL);
 
-	GByteArray *gba = g_byte_array_new();
-	struct gridd_client_s *client = gridd_client_create(to, req, gba, on_reply);
+	GByteArray *gba = NULL;
+	GError *err = gridd_client_exec_and_concat(to, 30.0, req,
+											   out ? &gba : NULL);
 	g_byte_array_unref (req);
 
-	GError *e = gridd_client_run(client);
-	gridd_client_free(client);
-
-	if (e) {
-		g_byte_array_free(gba, TRUE);
-		return e;
+	if (NULL != err) {
+		if (gba)
+			g_byte_array_free(gba, TRUE);
+		return err;
 	}
-
-	if (out)
-		*out = metautils_decode_lines((gchar*)gba->data, (gchar*)(gba->data + gba->len));
-	if (out && !*out)
-		e = NEWERROR(CODE_BAD_REQUEST, "Invalid buffer content");
-	g_byte_array_free(gba, TRUE);
-	return e;
+	return gba ? STRV_decode_buffer(gba->data, gba->len, out) : NULL;
 }
 
-static GError *
-oneway_request (const char *to, GByteArray *req)
-{
+static GError *oneway_request (const char *to, GByteArray *req) {
 	return list_request (to, req, NULL);
 }
 
 /* ------------------------------------------------------------------------- */
 
 GError *
-meta1v2_remote_create_reference (const char *to, struct oio_url_s *url)
+meta1v2_remote_create_reference (const char *to, struct oio_url_s *url,
+		gchar **properties)
 {
 	EXTRA_ASSERT(url != NULL);
 	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_USERCREATE);
 	metautils_message_add_url_no_type (req, url);
+	metautils_message_add_body_unref(req, KV_encode_gba(properties));
 	return oneway_request(to, message_marshall_gba_and_clean(req));
 }
 
@@ -192,7 +167,7 @@ meta1v2_remote_reference_set_property(const char *to, struct oio_url_s *url,
 	metautils_message_add_url_no_type (req, url);
 	if (flush)
 		metautils_message_add_field_str (req, NAME_MSGKEY_FLUSH, "1");
-	metautils_message_add_body_unref (req, metautils_encode_lines(pairs));
+	metautils_message_add_body_unref (req, KV_encode_gba(pairs));
 	return oneway_request(to, message_marshall_gba_and_clean(req));
 }
 
@@ -204,7 +179,7 @@ meta1v2_remote_reference_get_property(const char *to, struct oio_url_s *url,
 	EXTRA_ASSERT(result != NULL);
 	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_PROPGET);
 	metautils_message_add_url_no_type (req, url);
-	metautils_message_add_body_unref (req, metautils_encode_lines(keys));
+	metautils_message_add_body_unref (req, STRV_encode_gba(keys));
 	return list_request(to, message_marshall_gba_and_clean(req), result);
 }
 
@@ -215,7 +190,7 @@ meta1v2_remote_reference_del_property(const char *to, struct oio_url_s *url,
 	EXTRA_ASSERT(url != NULL);
 	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_PROPDEL);
 	metautils_message_add_url_no_type (req, url);
-	metautils_message_add_body_unref (req, metautils_encode_lines(keys));
+	metautils_message_add_body_unref (req, STRV_encode_gba(keys));
 	return oneway_request(to, message_marshall_gba_and_clean(req));
 }
 

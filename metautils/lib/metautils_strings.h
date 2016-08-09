@@ -53,8 +53,6 @@ gchar **buffer_split(const void *buf, gsize buflen, const gchar * separator, gin
 
 gchar** metautils_decode_lines(const gchar *start, const gchar *end);
 
-GByteArray* metautils_encode_lines(gchar **strv);
-
 /** Calls g_strcmp0(a,b) and ignores its third argument. */
 int metautils_strcmp3(gconstpointer a, gconstpointer b, gpointer ignored);
 
@@ -68,9 +66,7 @@ void g_free0(gpointer p);
 /** g_free0(p1) and ignores p2 */
 void g_free1(gpointer p1, gpointer p2);
 
-/** g_free0(p2) and ignores p1 */
-void g_free2(gpointer p1, gpointer p2);
-
+/* TODO move this is core/ */
 gboolean metautils_str_has_caseprefix (const char *str, const char *prefix);
 
 #endif /*OIO_SDS__metautils__lib__metautils_strings_h*/

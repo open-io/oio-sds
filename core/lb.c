@@ -184,8 +184,8 @@ _item_make (oio_location_t location, const char *id)
 static struct oio_lb_slot_s *
 oio_lb_world__get_slot_unlocked(struct oio_lb_world_s *world, const char *name)
 {
-	g_assert (world != NULL);
-	g_assert (name != NULL && *name != 0);
+	EXTRA_ASSERT (world != NULL);
+	EXTRA_ASSERT (oio_str_is_set(name));
 	return g_tree_lookup (world->slots, name);
 }
 
@@ -268,7 +268,7 @@ _slot_flush(struct oio_lb_slot_s *slot)
 			struct _slot_item_s *si = &SLOT_ITEM(slot,i);
 			struct _lb_item_s *it = si->item;
 			if (NULL != it) {
-				g_assert(it->refcount > 0);
+				EXTRA_ASSERT(it->refcount > 0);
 				-- it->refcount;
 			}
 			si->acc_weight = 0;
@@ -335,8 +335,8 @@ static int
 _search_closest_weight (GArray *tab, const guint32 needle,
 		const guint start, const guint end)
 {
-	g_assert (start < tab->len);
-	g_assert (end < tab->len);
+	EXTRA_ASSERT (start < tab->len);
+	EXTRA_ASSERT (end < tab->len);
 	if (start >= end)
 		return end;
 	const guint i_pivot = start + ((end - start) / 2);
@@ -414,8 +414,8 @@ _local_slot__poll (struct oio_lb_slot_s *slot, oio_location_t mask,
 			slot->items->len - 1);
 	GRID_TRACE2("%s random_weight=%"G_GUINT32_FORMAT" at %d",
 			__FUNCTION__, random_weight, i);
-	g_assert (i >= 0);
-	g_assert ((guint)i < slot->items->len);
+	EXTRA_ASSERT (i >= 0);
+	EXTRA_ASSERT ((guint)i < slot->items->len);
 
 	guint iter = 0;
 	while (iter++ < slot->items->len) {
@@ -507,10 +507,10 @@ _local__patch(struct oio_lb_pool_s *self,
 		void (*on_id) (oio_location_t location, const char *id))
 {
 	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
-	g_assert(lb != NULL);
-	g_assert(lb->vtable == &vtable_LOCAL);
-	g_assert(lb->world != NULL);
-	g_assert(lb->targets != NULL);
+	EXTRA_ASSERT(lb != NULL);
+	EXTRA_ASSERT(lb->vtable == &vtable_LOCAL);
+	EXTRA_ASSERT(lb->world != NULL);
+	EXTRA_ASSERT(lb->targets != NULL);
 
 	/* Count the expected targets to build a temp storage for
 	 * polled locations */
@@ -557,7 +557,7 @@ struct oio_lb_item_s *
 _local__get_item(struct oio_lb_pool_s *self,
 		const char *id)
 {
-	g_assert (self != NULL);
+	EXTRA_ASSERT (self != NULL);
 	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
 	// TODO: refine this: look only in slots targeted by the pool
 	return oio_lb_world__get_item(lb->world, id);
@@ -566,9 +566,9 @@ _local__get_item(struct oio_lb_pool_s *self,
 static void
 _local__destroy (struct oio_lb_pool_s *self)
 {
-	g_assert (self != NULL);
+	EXTRA_ASSERT (self != NULL);
 	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
-	g_assert (lb->vtable == &vtable_LOCAL);
+	EXTRA_ASSERT (lb->vtable == &vtable_LOCAL);
 	g_strfreev (lb->targets);
 	oio_str_clean (&lb->name);
 	g_free (lb);
@@ -577,11 +577,11 @@ _local__destroy (struct oio_lb_pool_s *self)
 void
 oio_lb_world__add_pool_target (struct oio_lb_pool_s *self, const char *to)
 {
-	g_assert (self != NULL);
+	EXTRA_ASSERT (self != NULL);
 	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
-	g_assert (lb->vtable == &vtable_LOCAL);
-	g_assert (lb->world != NULL);
-	g_assert (lb->targets != NULL);
+	EXTRA_ASSERT (lb->vtable == &vtable_LOCAL);
+	EXTRA_ASSERT (lb->world != NULL);
+	EXTRA_ASSERT (lb->targets != NULL);
 
 	/* prepare the string to be easy to parse. */
 	gsize tolen = strlen (to);
@@ -602,7 +602,7 @@ void
 oio_lb_world__set_pool_option(struct oio_lb_pool_s *self, const char *key,
 		const char *value)
 {
-	g_assert (self != NULL);
+	EXTRA_ASSERT (self != NULL);
 	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
 	if (!key || !*key)
 		return;
@@ -718,7 +718,7 @@ oio_lb_world__destroy (struct oio_lb_world_s *self)
 struct oio_lb_pool_s *
 oio_lb_world__create_pool (struct oio_lb_world_s *world, const char *name)
 {
-	g_assert (world != NULL);
+	EXTRA_ASSERT (world != NULL);
 	struct oio_lb_pool_LOCAL_s *lb = g_malloc0 (sizeof(struct oio_lb_pool_LOCAL_s));
 	lb->vtable = &vtable_LOCAL;
 	lb->name = g_strdup (name);
@@ -751,7 +751,7 @@ _world_create_slot (struct oio_lb_world_s *self, const char *name)
 guint
 oio_lb_world__count_slots (struct oio_lb_world_s *self)
 {
-	g_assert (self != NULL);
+	EXTRA_ASSERT (self != NULL);
 	gint nnodes = 0;
 	g_rw_lock_reader_lock(&self->lock);
 	nnodes = g_tree_nnodes (self->slots);
@@ -762,7 +762,7 @@ oio_lb_world__count_slots (struct oio_lb_world_s *self)
 guint
 oio_lb_world__count_items (struct oio_lb_world_s *self)
 {
-	g_assert (self != NULL);
+	EXTRA_ASSERT (self != NULL);
 	gint nnodes = 0;
 	g_rw_lock_reader_lock(&self->lock);
 	nnodes = g_tree_nnodes (self->items);
@@ -773,7 +773,7 @@ oio_lb_world__count_items (struct oio_lb_world_s *self)
 guint
 oio_lb_world__count_slot_items(struct oio_lb_world_s *self, const char *name)
 {
-	g_assert (self != NULL);
+	EXTRA_ASSERT (self != NULL);
 	guint len = 0;
 	g_rw_lock_reader_lock(&self->lock);
 	struct oio_lb_slot_s *slot = oio_lb_world__get_slot_unlocked(self, name);
@@ -802,15 +802,15 @@ oio_lb_world__get_item(struct oio_lb_world_s *self, const char *id)
 void
 oio_lb_world__create_slot (struct oio_lb_world_s *self, const char *name)
 {
-	g_assert (self != NULL);
-	g_assert (name != NULL && *name != '\0');
+	EXTRA_ASSERT (self != NULL);
+	EXTRA_ASSERT (oio_str_is_set(name));
 	(void) _world_create_slot (self, name);
 }
 
 static oio_location_t
 _location_at_position (GArray *tab, const guint i)
 {
-	g_assert (i < tab->len);
+	EXTRA_ASSERT (i < tab->len);
 	return TAB_ITEM(tab,i).item->location;
 }
 
@@ -818,7 +818,7 @@ static int
 _slide_to_first_at_location (GArray *tab, const oio_location_t needle,
 		guint i)
 {
-	g_assert_cmpint (needle, ==, _location_at_position(tab,i));
+	EXTRA_ASSERT (needle == _location_at_position(tab,i));
 	for (; i>0 ;--i) {
 		if (needle != _location_at_position (tab, i-1))
 			return i;
@@ -832,8 +832,8 @@ static guint
 _search_first_at_location (GArray *tab, const oio_location_t needle,
 		const guint start, const guint end)
 {
-	g_assert (start < tab->len);
-	g_assert (end < tab->len);
+	EXTRA_ASSERT (start < tab->len);
+	EXTRA_ASSERT (end < tab->len);
 
 	if (start == end) {
 		/* not found ? */
@@ -852,9 +852,9 @@ static void
 oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 		const char *name, const struct oio_lb_item_s *item)
 {
-	g_assert (self != NULL);
-	g_assert (name != NULL && *name != '\0');
-	g_assert (item != NULL);
+	EXTRA_ASSERT (self != NULL);
+	EXTRA_ASSERT (item != NULL);
+	EXTRA_ASSERT (oio_str_is_set(name));
 	GRID_TRACE2 ("> Feeding [%s,%"G_GUINT64_FORMAT"] in slot=%s",
 			item->id, item->location, name);
 
@@ -909,7 +909,7 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 			}
 		}
 	}
-	g_assert_nonnull (item0);
+	EXTRA_ASSERT (item0 != NULL);
 
 	if (!found && item0->weight > 0) {
 		++ item0->refcount;
@@ -951,7 +951,7 @@ _slot_debug (struct oio_lb_slot_s *slot, const char *name)
 void
 oio_lb_world__debug (struct oio_lb_world_s *self)
 {
-	g_assert_nonnull (self);
+	EXTRA_ASSERT (self != NULL);
 	gboolean _on_slot (gchar *name, struct oio_lb_slot_s *slot, void *i UNUSED) {
 		_slot_debug (slot, name);
 		return FALSE;

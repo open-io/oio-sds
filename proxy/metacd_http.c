@@ -528,8 +528,10 @@ _task_reload_srvtypes (gpointer p UNUSED)
 	if (ADAPTIVE_PERIOD_SKIP ())
 		return;
 
-	GSList *list = NULL;
-	GError *err = conscience_remote_get_types (cs, &list);
+	gchar **types = NULL;
+	GError *err = conscience_remote_get_types (cs, &types);
+	EXTRA_ASSERT((err != NULL) ^ (types != NULL));
+
 	if (err != NULL) {
 		GRID_WARN ("SRVTYPES reload error [%s] from [%s] : (%d) %s",
 			ns_name, cs, err->code, err->message);
@@ -538,19 +540,13 @@ _task_reload_srvtypes (gpointer p UNUSED)
 	} else {
 		ADAPTIVE_PERIOD_ONSUCCESS(srvtypes_refresh_delay);
 		GRID_DEBUG("SRVTYPES reloaded %u for [%s]",
-				g_slist_length(list), ns_name);
+				g_strv_length(types), ns_name);
 	}
 
-	gchar **newset = (gchar **) metautils_list_to_array (list);
-	g_slist_free (list);
-	list = NULL;
+	NSINFO_WRITE(gchar **tmp = srvtypes; srvtypes = types; types = tmp);
 
-	NSINFO_WRITE(gchar **tmp = srvtypes;
-	srvtypes = newset;
-	newset = tmp);
-
-	if (newset)
-		g_strfreev (newset);
+	if (types)
+		g_strfreev (types);
 }
 
 static void

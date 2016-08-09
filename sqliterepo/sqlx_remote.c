@@ -281,37 +281,19 @@ sqlx_pack_PROPGET(const struct sqlx_name_s *name)
 GByteArray *
 sqlx_pack_PROPDEL(const struct sqlx_name_s *name, const gchar * const *keys)
 {
-	GSList *names = metautils_array_to_list((void**)keys);
-	GByteArray *body = strings_marshall_gba(names, NULL);
-	g_slist_free(names);
-
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PROPDEL, name);
-	metautils_message_add_body_unref(req, body);
+	metautils_message_add_body_unref(req, STRV_encode_gba((gchar**)keys));
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray *
-sqlx_pack_PROPSET_pairs(const struct sqlx_name_s *name, gboolean flush, GSList *pairs)
+sqlx_pack_PROPSET_tab(const struct sqlx_name_s *name, gboolean flush, gchar **kv)
 {
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PROPSET, name);
 	if (flush)
 		metautils_message_add_field_strint (req, NAME_MSGKEY_FLUSH, 1);
-	metautils_message_add_body_unref (req, key_value_pairs_marshall_gba (pairs, NULL));
+	metautils_message_add_body_unref (req, KV_encode_gba((gchar**)kv));
 	return message_marshall_gba_and_clean(req);
-}
-
-GByteArray *
-sqlx_pack_PROPSET_tab(const struct sqlx_name_s *name, gboolean flush, gchar const * const *kv)
-{
-	GSList  *pairs = NULL;
-	for (const gchar * const *p=kv; p && *p && *(p+1) ;p+=2) {
-		struct key_value_pair_s *tmp = key_value_pair_create (
-				*p, (guint8*)*(p+1), strlen(*(p+1)));
-		pairs = g_slist_prepend (pairs, tmp);
-	}
-	GByteArray *body = sqlx_pack_PROPSET_pairs (name, flush, pairs);
-	g_slist_free_full (pairs, (GDestroyNotify)key_value_pair_clean);
-	return body;
 }
 
 void

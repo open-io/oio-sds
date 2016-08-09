@@ -1069,11 +1069,8 @@ member_json (struct election_member_s *m, GString *gs)
 	} else if (peers) {
 		g_string_append_c (gs, '[');
 		for (gchar **p = peers; *p ;p++) {
-			if (p!=peers)
-				g_string_append_c(gs, ',');
-			g_string_append_c (gs, '"');
-			oio_str_gstring_append_json_string(gs, *p);
-			g_string_append_c (gs, '"');
+			if (p!=peers) g_string_append_c(gs, ',');
+			oio_str_gstring_append_json_quote(gs, *p);
 		}
 		g_strfreev(peers);
 		g_string_append_c (gs, ']');

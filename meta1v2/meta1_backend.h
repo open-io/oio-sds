@@ -98,9 +98,10 @@ struct service_update_policies_s* meta1_backend_get_svcupdate(
  * Also cleans the SQLX repository inside. */
 void meta1_backend_clean(struct meta1_backend_s *m1);
 
-
+/* @param properties a NULL-terminated array of (2*N) strings representing N
+ * <key,value> pairs, where [2i] is the i-nd key and [2i+1] the i-nd value. */
 GError* meta1_backend_user_create(struct meta1_backend_s *m1,
-		struct oio_url_s *url);
+		struct oio_url_s *url, gchar **properties);
 
 GError* meta1_backend_user_destroy(struct meta1_backend_s *m1,
 		struct oio_url_s *url, gboolean force);

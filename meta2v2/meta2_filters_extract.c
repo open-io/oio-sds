@@ -163,28 +163,6 @@ meta2_filter_extract_body_beans(struct gridd_filter_ctx_s *ctx,
 	return FILTER_OK;
 }
 
-static void list_clean (gpointer p) { g_slist_free_full(p, g_free0); }
-
-int
-meta2_filter_extract_body_strings(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GSList *l = NULL;
-	const char *opt = meta2_filter_ctx_get_param(ctx, "BODY_OPT");
-
-	TRACE_FILTER();
-
-	GError *err = metautils_message_extract_body_encoded (reply->request, (opt==NULL), &l, strings_unmarshall);
-	if (err) {
-		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_BAD_REQUEST,
-					"Invalid request, Empty / Invalid body"));
-		return FILTER_KO;
-	}
-
-	meta2_filter_ctx_set_input_udata(ctx, l, list_clean);
-	return FILTER_OK;
-}
-
 int
 meta2_filter_extract_header_append(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)

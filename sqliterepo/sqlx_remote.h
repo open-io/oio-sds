@@ -100,10 +100,8 @@ GByteArray* sqlx_pack_PROPDEL (const struct sqlx_name_s *name, const gchar * con
  *   kv[2i] is the key
  *   kv[2i+1] if the value.
  */
-GByteArray* sqlx_pack_PROPSET_tab (const struct sqlx_name_s *name, gboolean flush, const gchar * const *kv);
-
-/* @param pairs GSList of <key_value_pair_s*> */
-GByteArray* sqlx_pack_PROPSET_pairs (const struct sqlx_name_s *name, gboolean flush, GSList *pairs);
+GByteArray* sqlx_pack_PROPSET_tab (const struct sqlx_name_s *name,
+		gboolean flush, gchar **kv);
 
 GByteArray* sqlx_pack_EXITELECTION(const struct sqlx_name_s *name);
 GByteArray* sqlx_pack_USE(const struct sqlx_name_s *name);

@@ -1785,7 +1785,7 @@ _handler_PROPDEL(struct gridd_reply_ctx_s *reply,
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_name_mutable_s name = {0};
-	GError *err;
+	GError *err = NULL;
 	guint32 flags = 0;
 
 	(void) ignored;
@@ -1795,9 +1795,15 @@ _handler_PROPDEL(struct gridd_reply_ctx_s *reply,
 	}
 	SQLXNAME_STACKIFY(name);
 
-	GSList *keys = NULL;
-	err = metautils_message_extract_body_encoded (reply->request, TRUE, &keys,
-			strings_unmarshall);
+	gsize len = 0;
+	void *buf = metautils_message_get_BODY(reply->request, &len);
+	if (!buf) {
+		reply->send_error(0, BADREQ("Missing body"));
+		return TRUE;
+	}
+
+	gchar **keys = NULL;
+	err = STRV_decode_buffer(buf, len, &keys);
 	if (NULL != err) {
 		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
@@ -1814,11 +1820,11 @@ _handler_PROPDEL(struct gridd_reply_ctx_s *reply,
 		if (!(flags & FLAG_LOCAL))
 			err = sqlx_transaction_begin(sq3, &repctx);
 		if (!err) {
-			if (!keys)
+			if (!keys )
 				sqlx_admin_del_all_user (sq3);
 			else {
-				for (GSList *lk=keys; lk ;lk=lk->next)
-					sqlx_admin_del (sq3, lk->data);
+				for (gchar **pk=keys; pk && *pk ;++pk)
+					sqlx_admin_del (sq3, *pk);
 			}
 		}
 
@@ -1834,7 +1840,8 @@ _handler_PROPDEL(struct gridd_reply_ctx_s *reply,
 			reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
-	g_slist_free_full (keys, g_free0);
+	if (keys)
+		g_strfreev(keys);
 	return TRUE;
 }
 
@@ -1863,19 +1870,20 @@ _handler_PROPGET(struct gridd_reply_ctx_s *reply,
 		g_prefix_error(&err, "Open/lock: ");
 		reply->send_error(0, err);
 	} else {
-		GSList *pairs = NULL;
+		GPtrArray *tmp = g_ptr_array_new();
 		gchar **keys = sqlx_admin_get_keys (sq3);
-		for (gchar **p=keys; p && *p ;++p) {
-			gchar *v = sqlx_admin_get_str(sq3, *p);
-			if (!v)
-				continue;
-			struct key_value_pair_s *kv = key_value_pair_create (*p, (guint8*)v, strlen(v));
-			pairs = g_slist_prepend (pairs, kv);
-			g_free (v);
+		if (keys) {
+			for (gchar **p=keys; *p ;++p) {
+				gchar *v = sqlx_admin_get_str(sq3, *p);
+				g_ptr_array_add(tmp, *p);
+				g_ptr_array_add(tmp, v ? v : g_strdup(""));
+			}
 		}
-		g_strfreev (keys);
-		GByteArray *body = key_value_pairs_marshall_gba(pairs, NULL);
-		g_slist_free_full (pairs, (GDestroyNotify)key_value_pair_clean);
+		g_free (keys); /*< pointers reused! */
+		g_ptr_array_add (tmp, NULL);
+		gchar **pairs = (gchar**) g_ptr_array_free(tmp, FALSE);
+		GByteArray *body = KV_encode_gba (pairs);
+		g_strfreev(pairs);
 
 		sqlx_repository_unlock_and_close_noerror(sq3);
 
@@ -1902,22 +1910,22 @@ _handler_PROPSET(struct gridd_reply_ctx_s *reply,
 	}
 	SQLXNAME_STACKIFY(name);
 
-	GSList *pairs = NULL;
-	err = metautils_message_extract_body_encoded (reply->request,
-			TRUE, &pairs, key_value_pairs_unmarshall);
+	gchar **pairs = NULL;
+	gsize length = 0;
+	void *body = metautils_message_get_BODY(reply->request, &length);
+	err = KV_decode_buffer (body, length, &pairs);
+	EXTRA_ASSERT((err != NULL) ^ (pairs != NULL));
+
 	if (NULL != err) {
 		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
 	}
 
 	/* check the format */
-	for (GSList *l=pairs; !err && l ;l=l->next) {
-		if (!l->data)
-			continue;
-		struct key_value_pair_s *kv = l->data;
+	for (gchar **p=pairs; !err && *p && *(p+1); p+=2) {
 		if (!(flags & FLAG_NOCHECK)
-				&& !g_str_has_prefix (kv->key, SQLX_ADMIN_PREFIX_SYS)
-				&& !g_str_has_prefix(kv->key, SQLX_ADMIN_PREFIX_USER))
+				&& !g_str_has_prefix (*p, SQLX_ADMIN_PREFIX_SYS)
+				&& !g_str_has_prefix (*p, SQLX_ADMIN_PREFIX_USER))
 			err = NEWERROR(CODE_BAD_REQUEST, "Invalid property name");
 	}
 	if (NULL != err)
@@ -1940,17 +1948,12 @@ _handler_PROPSET(struct gridd_reply_ctx_s *reply,
 		if (flags & FLAG_FLUSH)
 			sqlx_admin_del_all_user (sq3);
 		/* insertion */
-		for (GSList *l=pairs; !err && l ;l=l->next) {
-			if (!l->data)
-				continue;
-			struct key_value_pair_s *kv = l->data;
-			if (kv->value && kv->value->data && kv->value->len) {
-				sqlx_admin_set_gba_and_clean (sq3, kv->key, kv->value);
+		for (gchar **p=pairs; !err && *p && *(p+1); p+=2) {
+			if (oio_str_is_set(*(p+1))) {
+				sqlx_admin_set_str (sq3, *p, *(p+1));
 			} else {
-				sqlx_admin_del (sq3, kv->key);
-				metautils_gba_unref (kv->value);
+				sqlx_admin_del (sq3, *p);
 			}
-			kv->value = NULL;
 		}
 
 		if (!(flags&FLAG_LOCAL))
@@ -1965,7 +1968,7 @@ label_exit:
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");
-	g_slist_free_full (pairs, (GDestroyNotify)key_value_pair_clean);
+	g_strfreev(pairs);
 	return TRUE;
 }
 

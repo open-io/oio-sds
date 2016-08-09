@@ -107,10 +107,10 @@ gsize
 oio_ext_array_partition (gpointer *array, gsize len,
 		gboolean (*predicate)(gconstpointer))
 {
-	g_assert (array != NULL);
-	g_assert (predicate != NULL);
+	EXTRA_ASSERT (array != NULL);
+	EXTRA_ASSERT (predicate != NULL);
 
-	if (!len)
+	if (!len || !predicate)
 		return 0;
 
 	/* qualify each item, so that we call the predicate only once */
@@ -144,8 +144,8 @@ GError *
 oio_ext_extract_json (struct json_object *obj,
 		struct oio_ext_json_mapping_s *tab)
 {
-	g_assert (obj != NULL);
-	g_assert (tab != NULL);
+	EXTRA_ASSERT (obj != NULL);
+	EXTRA_ASSERT (tab != NULL);
 	for (struct oio_ext_json_mapping_s *p=tab; p->out ;p++)
 		*(p->out) = NULL;
 	if (!json_object_is_type(obj, json_type_object))

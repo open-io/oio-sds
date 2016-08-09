@@ -94,23 +94,6 @@ metautils_decode_lines(const gchar *start, const gchar *end)
 	return result;
 }
 
-GByteArray*
-metautils_encode_lines(gchar **strv)
-{
-	GByteArray *gba = g_byte_array_new();
-	if (strv) {
-		gchar **p;
-		for (p=strv; *p ;++p) {
-			g_byte_array_append(gba, (guint8*)*p, strlen(*p));
-			g_byte_array_append(gba, (guint8*)"\n", 1);
-		}
-	}
-
-	g_byte_array_append(gba, (guint8*)"", 1);
-	g_byte_array_set_size(gba, gba->len - 1);
-	return gba;
-}
-
 gchar **
 g_strdupv_inline(gchar **src)
 {
@@ -155,6 +138,7 @@ buffer_split(const void *buf, gsize buflen, const gchar *sep, gint max_tokens)
 	return sp;
 }
 
+/* TODO remove this */
 gboolean
 metautils_cfg_get_bool(const gchar *value, gboolean def)
 {
