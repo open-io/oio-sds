@@ -268,6 +268,8 @@ gridd_request_replicated (struct client_ctx_s *ctx, request_packer_f pack)
 
 		g_ptr_array_add (urlv, g_strdup(*pu));
 
+		if (ctx->which == CLIENT_RUN_ALL)
+			gridd_client_no_redirect (client);
 		gridd_client_start (client);
 		gridd_client_set_timeout (client, ctx->timeout);
 		if (!(err = gridd_client_loop (client)))

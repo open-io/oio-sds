@@ -347,6 +347,7 @@ class Requests(object):
     def _get_response(self, content_type, url, headers, file_descriptor):
         s = Session()
         response = None
+        headers = dict([k, str(headers[k])] for k in headers)
         req = Request(content_type, url, headers=headers, data=file_descriptor)
         prepared = req.prepare()
         try:

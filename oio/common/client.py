@@ -18,6 +18,9 @@ class Client(object):
         self.endpoint = 'http://%s' % ns_conf.get('proxy')
 
     def _direct_request(self, method, full_url, **kwargs):
+        headers = kwargs.get('headers') or {}
+        headers = dict([k, str(headers[k])] for k in headers)
+        kwargs['headers'] = headers
         resp = self.session.request(method, full_url, **kwargs)
         try:
             body = resp.json()

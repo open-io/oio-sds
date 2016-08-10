@@ -1,4 +1,3 @@
-zookeeper: false
 storage_policy: "EC"
 chunk_size: 1048576
 redis: true
