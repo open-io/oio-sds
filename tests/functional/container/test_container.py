@@ -131,7 +131,7 @@ class TestMeta2Containers(BaseTestCase):
             p = "X-oio-content-meta-"
             headers = {p+"policy": "NONE",
                        p+"id": h,
-                       p+"version": 0,
+                       p+"version": "0",
                        p+"hash": "0"*32,
                        p+"length": "0",
                        p+"mime-type": "application/octet-stream",
@@ -480,7 +480,7 @@ class TestMeta2Contents(BaseTestCase):
         chunks = resp.json()
 
         headers = {'X-oio-action-mode': 'autocreate',
-                   'X-oio-content-meta-length': 1024}
+                   'X-oio-content-meta-length': '1024'}
         resp = self.session.post(self.url_content('create'),
                                  params=params,
                                  headers=headers,
@@ -511,14 +511,14 @@ class TestMeta2Contents(BaseTestCase):
         self.assertError(resp, 403, 406)
 
         resp = self.session.post(self.url_content('prepare'),
-                                 data=json.dumps({'size': 1024}),
+                                 data=json.dumps({'size': '1024'}),
                                  params=params,
                                  headers=headers)
         self.assertEqual(resp.status_code, 200)
         chunks = resp.json()
 
         headers = {'X-oio-action-mode': 'autocreate',
-                   'X-oio-content-meta-length': 1024}
+                   'X-oio-content-meta-length': '1024'}
         resp = self.session.post(self.url_content('create'),
                                  params=params,
                                  headers=headers,
