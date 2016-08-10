@@ -33,7 +33,8 @@ class API(object):
         url = '/'.join([endpoint.rstrip('/'), url.lstrip('/')])
         if not session:
             session = self.session
-
+        headers = kwargs.get('headers') or {}
+        kwargs['headers'] = dict([k, str(headers[k])] for k in headers)
         resp = session.request(method, url, **kwargs)
         try:
             body = resp.json()
