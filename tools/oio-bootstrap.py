@@ -1287,7 +1287,7 @@ def main():
 
     options = parser.parse_args()
     opts = {}
-    opts[ZOOKEEPER] = True
+    opts[ZOOKEEPER] = False
     opts['conscience'] = {SVC_NB: None}
     opts['meta0'] = {SVC_NB: None}
     opts['meta1'] = {SVC_NB: None}
