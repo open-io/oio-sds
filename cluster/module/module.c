@@ -1697,7 +1697,6 @@ plugin_reload(GHashTable * params, GError ** err)
 	/* storage conf reload */
 	g_hash_table_destroy(conscience->ns_info.storage_policy);
 	g_hash_table_destroy(conscience->ns_info.data_security);
-	g_hash_table_destroy(conscience->ns_info.storage_class);
 	*err = module_init_storage_conf(conscience, namespace_storage_policy(&conscience->ns_info, conscience->ns_info.name),
 			g_hash_table_lookup(params, KEY_STG_CONF));
 	if( NULL != *err ) {
