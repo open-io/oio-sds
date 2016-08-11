@@ -250,11 +250,11 @@ _gba_to_bool(GByteArray *gba, gboolean def)
 	if (!gba || !gba->data || !gba->len)
 		return def;
 	if (!gba->data[ gba->len - 1 ])
-		return metautils_cfg_get_bool((gchar*)gba->data, def);
+		return oio_str_parse_bool((gchar*)gba->data, def);
 	gchar *str = g_alloca(gba->len + 1);
 	memset(str, 0, gba->len + 1);
 	memcpy(str, gba->data, gba->len);
-	return metautils_cfg_get_bool(str, def);
+	return oio_str_parse_bool(str, def);
 }
 
 static GByteArray *

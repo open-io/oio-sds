@@ -431,7 +431,7 @@ _reply_simplified_beans (struct req_args_s *args, GError *err,
 		}
 		else if (&descr_struct_ALIASES == DESCR(l0->data)) {
 			alias = l0->data;
-			if (ALIASES_get_deleted(alias) && !metautils_cfg_get_bool(OPT("deleted"),FALSE)) {
+			if (ALIASES_get_deleted(alias) && !oio_str_parse_bool(OPT("deleted"),FALSE)) {
 				if (gstr)
 					g_string_free (gstr, TRUE);
 				_bean_cleanl2(beans);
@@ -546,7 +546,7 @@ _load_properties_from_json_array (struct json_object *jobj, GSList **out)
 	for (gchar **p=kv; *p && *(p+1) ;p+=2) {
 		const char *k = *p;
 		const char *v = *(p+1);
-		if (!metautils_str_has_caseprefix (k, PROXYD_HEADER_PREFIX "content-meta-x-"))
+		if (!oio_str_caseprefixed(k, PROXYD_HEADER_PREFIX "content-meta-x-"))
 			return FALSE;
 		const char *rk = k + sizeof(PROXYD_HEADER_PREFIX "content-meta-x-") - 1;
 		struct bean_PROPERTIES_s *prop = _bean_create (&descr_struct_PROPERTIES);

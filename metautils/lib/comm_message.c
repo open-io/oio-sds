@@ -676,7 +676,7 @@ metautils_message_extract_boolean(MESSAGE msg, const gchar *n,
 		return err;
 	}
 	if (v)
-		*v = metautils_cfg_get_bool (tmp, *v);
+		*v = oio_str_parse_bool (tmp, *v);
 	return NULL;
 }
 

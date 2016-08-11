@@ -352,7 +352,7 @@ static gboolean _has_flag_in_headers (struct req_args_s *args,
 gboolean _request_get_flag (struct req_args_s *args, const char *flag) {
 	const gchar *v = OPT(flag);
 	if (NULL != v)
-		return metautils_cfg_get_bool(v, FALSE);
+		return oio_str_parse_bool(v, FALSE);
 	return _has_flag_in_headers (args, PROXYD_HEADER_MODE, flag);
 }
 

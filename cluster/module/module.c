@@ -1016,7 +1016,7 @@ module_configure_srvtype(struct conscience_s *cs, GError ** err,
 		return FALSE;
 	}
 	else if (0 == g_ascii_strcasecmp(what, KEY_SCORE_LOCK)) {
-		srvtype->lock_at_first_register = metautils_cfg_get_bool(value, TRUE);
+		srvtype->lock_at_first_register = oio_str_parse_bool(value, TRUE);
 		INFO("[NS=%s][SRVTYPE=%s] lock at first register: %s",
 				cs->ns_info.name, srvtype->type_name,
 				srvtype->lock_at_first_register? "yes":"no");
@@ -1575,13 +1575,13 @@ plugin_init(GHashTable * params, GError ** err)
 	/* Serialization optimizations */
 	str = g_hash_table_lookup(params, KEY_SERIALIZE_SRVINFO_TAGS);
 	if (NULL != str)
-		flag_serialize_srvinfo_tags = metautils_cfg_get_bool(str, DEF_SERIALIZE_SRVINFO_TAGS);
+		flag_serialize_srvinfo_tags = oio_str_parse_bool(str, DEF_SERIALIZE_SRVINFO_TAGS);
 	NOTICE("[NS=%s] Tags in serialized service_info  [%s]", ns_name,
 			(flag_serialize_srvinfo_tags ? "ENABLED" : "DISABLED"));
 
 	str = g_hash_table_lookup(params, KEY_SERIALIZE_SRVINFO_STATS);
 	if (NULL != str)
-		flag_serialize_srvinfo_stats = metautils_cfg_get_bool(str, DEF_SERIALIZE_SRVINFO_STATS);
+		flag_serialize_srvinfo_stats = oio_str_parse_bool(str, DEF_SERIALIZE_SRVINFO_STATS);
 	NOTICE("[NS=%s] Stats in serialized service_info  [%s]", ns_name,
 			(flag_serialize_srvinfo_stats ? "ENABLED" : "DISABLED"));
 

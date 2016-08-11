@@ -336,7 +336,7 @@ http_put_get_md5(struct http_put_s *p, guint8 *buffer, gsize size)
 	EXTRA_ASSERT (p != NULL);
 	EXTRA_ASSERT (buffer != NULL);
 	memset (buffer, 0, size);
-	/* XXX TODO */
+	/* TODO FIXME */
 }
 
 /* -------------------------------------------------------------------------- */

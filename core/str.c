@@ -431,6 +431,15 @@ int oio_str_prefixed (const char *s, const char *p, const char *sep) {
 	return !*s || g_str_has_prefix (s, sep);
 }
 
+int oio_str_caseprefixed(const char *str, const char *prefix) {
+	const char *s = str, *p = prefix;
+	for (; *s && *p ;++s,++p) {
+		if (g_ascii_tolower (*s) != g_ascii_tolower (*p))
+			return FALSE;
+	}
+	return !*p;
+}
+
 int oio_str_is_number (const char *s) {
 	if (!oio_str_is_set(s))
 		return 0;
