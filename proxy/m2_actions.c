@@ -758,20 +758,22 @@ _reply_properties (struct req_args_s *args, GError * err, GSList * beans)
 	}
 
 	gboolean first = TRUE;
-	GString *gs = g_string_new("{");
+	GString *gs = g_string_new("{\"properties\":{");
 	for (GSList *l=beans; l ;l=l->next) {
 		if (DESCR(l->data) != &descr_struct_PROPERTIES)
 			continue;
-		if (!first)
-			g_string_append_c(gs, ',');
+		if (!first) g_string_append_c(gs, ',');
 		first = FALSE;
 		struct bean_PROPERTIES_s *bean = l->data;
-		g_string_append_printf(gs, "\"%s\":\"%.*s\"",
-							   PROPERTIES_get_key(bean)->str,
-							   PROPERTIES_get_value(bean)->len,
-							   PROPERTIES_get_value(bean)->data);
+		oio_str_gstring_append_json_quote(gs, PROPERTIES_get_key(bean)->str);
+		g_string_append_c(gs, ':');
+		g_string_append_c(gs, '"');
+		oio_str_gstring_append_json_blob(gs,
+										 (gchar*)PROPERTIES_get_value(bean)->data,
+										 PROPERTIES_get_value(bean)->len);
+		g_string_append_c(gs, '"');
 	}
-	g_string_append_c(gs, '}');
+	for (int i=0; i<2 ;++i) g_string_append_c(gs, '}');
 
 	_bean_cleanl2 (beans);
 	return _reply_success_json (args, gs);
@@ -1156,15 +1158,10 @@ static enum http_rc_e
 _m2_container_create (struct req_args_s *args, struct json_object *jbody)
 {
 	gchar **properties = NULL;
-	GError *err = KV_decode_object (jbody, &properties);
+	GError *err = KV_read_usersys_properties(jbody, &properties);
 	EXTRA_ASSERT((err != NULL) ^ (properties != NULL));
 	if (err)
 		return _reply_m2_error(args, err);
-
-	/* all the properties from the body belong to the "user." domain. The prefix
-	 * is implicit, we need to add it now. */
-	for (gchar **p=properties; *p && *(p+1); p+=2)
-		oio_str_reuse(p, g_strconcat("user.", *p, NULL));
 
 	err = _m2_container_create_with_properties(args, properties);
 	g_strfreev (properties);
@@ -1580,21 +1577,19 @@ static enum http_rc_e action_m2_content_propset (struct req_args_s *args,
 	GSList *beans = NULL;
 
 	if (jargs) {
-		if (!json_object_is_type(jargs, json_type_object))
-			return _reply_format_error (args, BADREQ("Object argument expected"));
-		json_object_object_foreach(jargs,sk,jv) {
+		gchar **kv = NULL;
+		GError *err = KV_read_properties(jargs, &kv, "properties");
+		if (err)
+			return _reply_format_error (args, err);
+		for (gchar **p=kv; *p && *(p+1) ;p+=2) {
 			struct bean_PROPERTIES_s *prop = _bean_create (&descr_struct_PROPERTIES);
-			PROPERTIES_set2_key (prop, sk);
-			if (json_object_is_type (jv, json_type_null)) {
-				PROPERTIES_set2_value (prop, (guint8*)"", 0);
-			} else {
-				const char *sv = json_object_get_string (jv);
-				PROPERTIES_set2_value (prop, (guint8*)sv, strlen(sv));
-			}
+			PROPERTIES_set2_key (prop, *p);
+			PROPERTIES_set2_value (prop, (guint8*)*(p+1), strlen(*(p+1)));
 			PROPERTIES_set2_alias (prop, oio_url_get (args->url, OIOURL_PATH));
 			PROPERTIES_set_version (prop, version);
 			beans = g_slist_prepend (beans, prop);
 		}
+		g_strfreev(kv);
 	}
 
 	guint32 flags = 0;

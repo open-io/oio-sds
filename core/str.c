@@ -24,6 +24,7 @@ License along with this library.
 #include "oioext.h"
 #include "oiostr.h"
 #include "oiourl.h"
+#include "oiolog.h"
 #include "internals.h"
 
 static guint8 masks[] = {
@@ -487,7 +488,7 @@ GError* JSON_parse_buffer (const guint8 *b, gsize l, struct json_object **o) {
 
 GError* JSON_parse_gba (GByteArray *gba, struct json_object **out) {
 	EXTRA_ASSERT(out != NULL);
-	if (!gba) {
+	if (!gba || !gba->data || !gba->len) {
 	   *out = NULL;
 	   return NULL;
 	}
@@ -519,6 +520,7 @@ GByteArray *STRV_encode_gba(gchar **kv) {
 
 GError * STRV_decode_object (struct json_object *jobj, gchar ***out) {
 	EXTRA_ASSERT(out != NULL);
+
 	if (!jobj || json_object_is_type(jobj, json_type_null)) {
 		*out = g_malloc0(sizeof(gchar*));
 		return NULL;

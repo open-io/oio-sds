@@ -1123,7 +1123,6 @@ election_manager_whatabout (struct election_manager_s *m,
 	g_mutex_unlock(&m->lock);
 
 	g_strlcpy (d, gs->str, ds);
-	GRID_WARN("XXX %s", gs->str);
 	g_string_free (gs, TRUE);
 }
 

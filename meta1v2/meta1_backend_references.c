@@ -130,9 +130,15 @@ meta1_backend_user_create(struct meta1_backend_s *m1,
 			err = NEWERROR(CODE_CONTAINER_EXISTS, "User already created");
 		else {
 			g_clear_error(&err);
-			if (!(err = __create_user(sq3, url))) {
-				if (properties && *properties)
-					err = __set_container_properties(sq3, url, properties);
+			err = __create_user(sq3, url);
+			if (!err || err->code == CODE_USER_EXISTS) {
+				if (properties && *properties) {
+					GError *e = __set_container_properties(sq3, url, properties);
+					if (e) {
+						if (err) g_clear_error(&err);
+						err = e;
+					}
+				}
 			}
 		}
 		err = sqlx_transaction_end(repctx, err);
