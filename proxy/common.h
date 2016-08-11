@@ -259,6 +259,13 @@ GError * _m1_locate_and_action (struct oio_url_s *url, GError * (*hook) ());
 
 GError * gridd_request_replicated (struct client_ctx_s *, request_packer_f);
 
+GError * KV_read_properties (struct json_object *j, gchar ***out, const char *section);
+
+/** Wraps KV_read_properties() to concat system's properties and user's ones
+ * with the proper prefix.
+ * @see KV_read_properties() */
+GError * KV_read_usersys_properties (struct json_object *j, gchar ***out);
+
 /* -------------------------------------------------------------------------- */
 
 enum http_rc_e _reply_bytes (struct req_args_s *args, int code, const char * msg, GBytes * bytes);

@@ -29,74 +29,13 @@ License along with this library.
 
 void g_free0(gpointer p) { if (p) g_free(p); }
 void g_free1(gpointer p1, gpointer p2) { (void) p2; g_free0(p1); }
-void g_free2(gpointer p1, gpointer p2) { (void) p1; g_free0(p2); }
 
-int
-metautils_strcmp3(gconstpointer a, gconstpointer b, gpointer ignored)
-{
+int metautils_strcmp3(gconstpointer a, gconstpointer b, gpointer ignored) {
 	(void) ignored;
 	return strcmp(a, b);
 }
 
-static const gchar *
-strchr_guarded(const gchar *start, const gchar *end, gchar needle)
-{
-	for (; start < end ;start++) {
-		if (needle == *start)
-			return start;
-	}
-	return NULL;
-}
-
-static gboolean
-strn_isprint(const gchar *start, const gchar *end)
-{
-	while (start < end) {
-		register gchar c = *(start++);
-		if (!g_ascii_isprint(c) && !g_ascii_isspace(c) && c!='\n')
-			return FALSE;
-	}
-	return TRUE;
-}
-
-gchar **
-metautils_decode_lines(const gchar *start, const gchar *end)
-{
-	if (!start)
-		return NULL;
-	if (!end)
-		end = start + strlen(start);
-	else if (end < start)
-		return NULL;
-	if (!strn_isprint(start, end))
-		return NULL;
-
-	GSList *lines = NULL;
-	while (start < end) {
-		for (; start < end && *start == '\n'; start++);
-		const gchar *p;
-		if (!(p = strchr_guarded(start, end, '\n'))) {
-			gchar *l = g_strndup(start, end-start);
-			lines = g_slist_prepend(lines, l);
-			break;
-		}
-		else {
-			if (p > start) {
-				gchar *l = g_strndup(start, p-start);
-				lines = g_slist_prepend(lines, l);
-			}
-			start = p + 1;
-		}
-	}
-
-	gchar **result = (gchar**) metautils_list_to_array(lines);
-	g_slist_free(lines);
-	return result;
-}
-
-gchar **
-g_strdupv_inline(gchar **src)
-{
+gchar ** g_strdupv_inline(gchar **src) {
 	if (!src)
 		return NULL;
 	if (!*src)
@@ -124,9 +63,8 @@ g_strdupv_inline(gchar **src)
 	return (gchar**)raw;
 }
 
-gchar **
-buffer_split(const void *buf, gsize buflen, const gchar *sep, gint max_tokens)
-{
+gchar ** buffer_split(const void *buf, gsize buflen, const gchar *sep,
+		gint max_tokens) {
 	gchar **sp, *tmp;
 
 	if (!buf || buflen <= 0)
@@ -137,22 +75,3 @@ buffer_split(const void *buf, gsize buflen, const gchar *sep, gint max_tokens)
 	g_free(tmp);
 	return sp;
 }
-
-/* TODO remove this */
-gboolean
-metautils_cfg_get_bool(const gchar *value, gboolean def)
-{
-	return oio_str_parse_bool(value, def);
-}
-
-gboolean
-metautils_str_has_caseprefix (const char *str, const char *prefix)
-{
-	const char *s = str, *p = prefix;
-	for (; *s && *p ;++s,++p) {
-		if (g_ascii_tolower (*s) != g_ascii_tolower (*p))
-			return FALSE;
-	}
-	return !*p;
-}
-

@@ -41,32 +41,24 @@ License along with this library.
 	for (gchar **p=(V); *p ;++p) { STRING_STACKIFY(*p); } \
 } while (0)
 
+#define metautils_str_upper oio_str_upper
+
+#define metautils_str_lower oio_str_lower
+
 /** @return to be freed with g_free(), not g_strfreev() */
 gchar ** g_strdupv_inline (gchar **src);
-
-#define metautils_str_upper oio_str_upper
-#define metautils_str_lower oio_str_lower
 
 /** Splits the given buffer (considered as a non NULL-terminated) into
  * newly allocated tokens (wrapping g_strsplit()) */
 gchar **buffer_split(const void *buf, gsize buflen, const gchar * separator, gint max_tokens);
 
-gchar** metautils_decode_lines(const gchar *start, const gchar *end);
-
 /** Calls g_strcmp0(a,b) and ignores its third argument. */
 int metautils_strcmp3(gconstpointer a, gconstpointer b, gpointer ignored);
-
-/** Returns the boolean value of the textual and human readable boolean
- * string (yes, true, on, yes, 1) */
-gboolean metautils_cfg_get_bool(const gchar *value, gboolean def);
 
 /** g_free(p) if p is not NULL */
 void g_free0(gpointer p);
 
 /** g_free0(p1) and ignores p2 */
 void g_free1(gpointer p1, gpointer p2);
-
-/* TODO move this is core/ */
-gboolean metautils_str_has_caseprefix (const char *str, const char *prefix);
 
 #endif /*OIO_SDS__metautils__lib__metautils_strings_h*/

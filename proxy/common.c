@@ -140,8 +140,7 @@ rest_action (struct req_args_s *args,
 {
 	json_object *jbody = NULL;
 	GError *err = JSON_parse_gba(args->rq->body, &jbody);
-	if (err)
-		return _reply_format_error (args, BADREQ("Invalid JSON"));
+	if (err) return _reply_format_error (args, err);
 	enum http_rc_e rc = handler(args, jbody);
 	json_object_put (jbody);
 	return rc;
@@ -162,9 +161,8 @@ _debug_services (const char *tag, gchar **m1uv)
 # define _debug_services(...)
 #endif
 
-static void
-_sort_services (struct client_ctx_s *ctx, const char *k, gchar **m1uv)
-{
+static void _sort_services (struct client_ctx_s *ctx,
+		const char *k, gchar **m1uv) {
 	GRID_TRACE("Sorting for %s", _pref2str(ctx->which));
 	_debug_services ("PRE sort: ", m1uv);
 
@@ -197,9 +195,7 @@ _sort_services (struct client_ctx_s *ctx, const char *k, gchar **m1uv)
 	_debug_services ("POST sort: ", m1uv);
 }
 
-static gboolean
-_on_reply (gpointer p, MESSAGE reply)
-{
+static gboolean _on_reply (gpointer p, MESSAGE reply) {
 	GByteArray **pbody = p, *b = NULL;
 	EXTRA_ASSERT (pbody != NULL);
 	GError *e = metautils_message_extract_body_gba (reply, &b);
@@ -212,9 +208,8 @@ _on_reply (gpointer p, MESSAGE reply)
 	return TRUE;
 }
 
-GError *
-gridd_request_replicated (struct client_ctx_s *ctx, request_packer_f pack)
-{
+GError *gridd_request_replicated (struct client_ctx_s *ctx,
+		request_packer_f pack) {
 	GError *err = NULL;
 	EXTRA_ASSERT (ctx != NULL);
 
@@ -268,6 +263,8 @@ gridd_request_replicated (struct client_ctx_s *ctx, request_packer_f pack)
 
 		g_ptr_array_add (urlv, g_strdup(*pu));
 
+		if (ctx->which == CLIENT_RUN_ALL)
+			gridd_client_no_redirect (client);
 		gridd_client_start (client);
 		gridd_client_set_timeout (client, ctx->timeout);
 		if (!(err = gridd_client_loop (client)))
@@ -350,7 +347,7 @@ static gboolean _has_flag_in_headers (struct req_args_s *args,
 gboolean _request_get_flag (struct req_args_s *args, const char *flag) {
 	const gchar *v = OPT(flag);
 	if (NULL != v)
-		return metautils_cfg_get_bool(v, FALSE);
+		return oio_str_parse_bool(v, FALSE);
 	return _has_flag_in_headers (args, PROXYD_HEADER_MODE, flag);
 }
 
@@ -427,4 +424,52 @@ void client_clean (struct client_ctx_s *ctx) {
 	if (ctx->bodyv)
 		metautils_gba_cleanv (ctx->bodyv);
 	memset (ctx, 0, sizeof(*ctx));
+}
+
+GError * KV_read_properties (struct json_object *j, gchar ***out,
+		const char *section) {
+
+	EXTRA_ASSERT(out != NULL);
+	EXTRA_ASSERT(oio_str_is_set(section));
+
+	*out = NULL;
+	if (!json_object_is_type(j, json_type_object))
+		return BADREQ("Object argument expected");
+	struct json_object *jprops = NULL;
+
+	if (!json_object_object_get_ex(j, section, &jprops)) {
+		*out = g_malloc0(sizeof(gchar*));
+		return NULL;
+	}
+
+	GError *err = NULL;
+	if (!json_object_is_type(jprops, json_type_object)) {
+		err = BADREQ("Bad \"properties\" field");
+	} else {
+		err = KV_decode_object(jprops, out);
+	}
+
+	return err;
+}
+
+GError * KV_read_usersys_properties (struct json_object *j, gchar ***out) {
+	gchar **user = NULL;
+	GError *err = KV_read_properties(j, &user, "properties");
+	if (err)
+		return err;
+
+	gchar **sys = NULL;
+	err = KV_read_properties(j, &sys, "system");
+	if (err) {
+		g_strfreev(user);
+		return err;
+	}
+
+	for (gchar **p = user; *p && *(p + 1); p += 2)
+		oio_str_reuse(p, g_strconcat("user.", *p, NULL));
+	gchar **kv = (gchar **) oio_ext_array_concat((gpointer) user, (gpointer) sys);
+	g_free(user);
+	g_free(sys);
+	*out = kv;
+	return NULL;
 }

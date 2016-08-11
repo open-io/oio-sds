@@ -145,7 +145,7 @@ class ContainerClient(Client):
         params = self._make_params(acct, ref, path, cid=cid)
         data = json.dumps(data)
         hdrs = gen_headers()
-        hdrs.update({'x-oio-content-meta-length': size,
+        hdrs.update({'x-oio-content-meta-length': str(size),
                      'x-oio-content-meta-hash': checksum})
         if content_id is not None:
             hdrs['x-oio-content-meta-id'] = content_id

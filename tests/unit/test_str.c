@@ -153,17 +153,17 @@ test_lower(void)
 static void
 test_prefix (void)
 {
-	g_assert (metautils_str_has_caseprefix ("X", "X"));
-	g_assert (metautils_str_has_caseprefix ("X", "x"));
-	g_assert (metautils_str_has_caseprefix ("Xa", "X"));
-	g_assert (metautils_str_has_caseprefix ("Xa", "x"));
+	g_assert (oio_str_caseprefixed("X", "X"));
+	g_assert (oio_str_caseprefixed("X", "x"));
+	g_assert (oio_str_caseprefixed("Xa", "X"));
+	g_assert (oio_str_caseprefixed("Xa", "x"));
 
-	g_assert (!metautils_str_has_caseprefix ("X", "Y"));
-	g_assert (!metautils_str_has_caseprefix ("X", "y"));
-	g_assert (!metautils_str_has_caseprefix ("Xa", "Y"));
-	g_assert (!metautils_str_has_caseprefix ("Xa", "y"));
+	g_assert (!oio_str_caseprefixed("X", "Y"));
+	g_assert (!oio_str_caseprefixed("X", "y"));
+	g_assert (!oio_str_caseprefixed("Xa", "Y"));
+	g_assert (!oio_str_caseprefixed("Xa", "y"));
 
-	g_assert (!metautils_str_has_caseprefix ("X", "Xa"));
+	g_assert (!oio_str_caseprefixed("X", "Xa"));
 }
 
 #define test_V_cycle(Kind,Input,Expected) do { \

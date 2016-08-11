@@ -50,33 +50,33 @@ expr:
 	| ID_TK DOT_TK ID_TK { $$ = makeAccessor ($1, $3); }
 	| PAROP_TK expr PARCL_TK { $$ = $2; }
 
-	| UN_STRLEN_TK expr { /*TODO*/ $$ = makeUnary (UN_STRLEN_ET,$2); }
-	| UN_STRNUM_TK expr { /*TODO*/ $$ = makeUnary (UN_STRNUM_ET,$2); }
+	| UN_STRLEN_TK expr { $$ = makeUnary (UN_STRLEN_ET,$2); }
+	| UN_STRNUM_TK expr { $$ = makeUnary (UN_STRNUM_ET,$2); }
 
-	| UN_NUMSUP_TK expr { /*TODO*/ $$ = makeUnary (UN_NUMSUP_ET,$2); }
-	| UN_NUMINF_TK expr { /*TODO*/ $$ = makeUnary (UN_NUMINF_ET,$2); }
-	| UN_NUMNOT_TK expr { /*TODO*/ $$ = makeUnary (UN_NUMNOT_ET,$2); }
+	| UN_NUMSUP_TK expr { $$ = makeUnary (UN_NUMSUP_ET,$2); }
+	| UN_NUMINF_TK expr { $$ = makeUnary (UN_NUMINF_ET,$2); }
+	| UN_NUMNOT_TK expr { $$ = makeUnary (UN_NUMNOT_ET,$2); }
 
-	| expr BIN_NUMAND_TK expr { /*TODO*/ $$ = makeBinary (BIN_NUMAND_ET,$1,$3); }
-	| expr BIN_NUMXOR_TK expr { /*TODO*/ $$ = makeBinary (BIN_NUMXOR_ET,$1,$3); }
-	| expr BIN_NUMOR_TK  expr { /*TODO*/ $$ = makeBinary (BIN_NUMOR_ET,$1,$3); }
+	| expr BIN_NUMAND_TK expr { $$ = makeBinary (BIN_NUMAND_ET,$1,$3); }
+	| expr BIN_NUMXOR_TK expr { $$ = makeBinary (BIN_NUMXOR_ET,$1,$3); }
+	| expr BIN_NUMOR_TK  expr { $$ = makeBinary (BIN_NUMOR_ET,$1,$3); }
 
-	| BIN_ROOT_TK PAROP_TK expr COMA_TK  expr PARCL_TK { /*TODO*/ $$ = makeBinary (BIN_ROOT_ET,$3,$5); }
+	| BIN_ROOT_TK PAROP_TK expr COMA_TK  expr PARCL_TK { $$ = makeBinary (BIN_ROOT_ET,$3,$5); }
 	
-	| expr BIN_STRCMP_TK expr { /*TODO*/ $$ = makeBinary (BIN_STRCMP_ET,$1,$3); }
+	| expr BIN_STRCMP_TK expr { $$ = makeBinary (BIN_STRCMP_ET,$1,$3); }
 
-	| expr BIN_NUMCMP_TK expr { /*TODO*/ $$ = makeBinary (BIN_NUMCMP_ET,$1,$3); }
-	| expr BIN_NUMEQ_TK expr  { /*TODO*/ $$ = makeBinary (BIN_NUMEQ_ET,$1,$3); }
-	| expr BIN_NUMNEQ_TK expr { /*TODO*/ $$ = makeBinary (BIN_NUMNEQ_ET,$1,$3); }
-	| expr BIN_NUMLT_TK expr  { /*TODO*/ $$ = makeBinary (BIN_NUMLT_ET,$1,$3); }
-	| expr BIN_NUMLE_TK expr  { /*TODO*/ $$ = makeBinary (BIN_NUMLE_ET,$1,$3); }
-	| expr BIN_NUMGT_TK expr  { /*TODO*/ $$ = makeBinary (BIN_NUMGT_ET,$1,$3); }
-	| expr BIN_NUMGE_TK expr  { /*TODO*/ $$ = makeBinary (BIN_NUMGE_ET,$1,$3); }
-	| expr BIN_NUMADD_TK expr { /*TODO*/ $$ = makeBinary (BIN_NUMADD_ET,$1,$3); }
-	| expr BIN_NUMSUB_TK expr { /*TODO*/ $$ = makeBinary (BIN_NUMSUB_ET,$1,$3); }
-	| expr BIN_NUMMUL_TK expr { /*TODO*/ $$ = makeBinary (BIN_NUMMUL_ET,$1,$3); }
-	| expr BIN_NUMDIV_TK expr { /*TODO*/ $$ = makeBinary (BIN_NUMDIV_ET,$1,$3); }
-	| expr BIN_NUMMOD_TK expr { /*TODO*/ $$ = makeBinary (BIN_NUMMOD_ET,$1,$3); }
+	| expr BIN_NUMCMP_TK expr { $$ = makeBinary (BIN_NUMCMP_ET,$1,$3); }
+	| expr BIN_NUMEQ_TK expr  { $$ = makeBinary (BIN_NUMEQ_ET,$1,$3); }
+	| expr BIN_NUMNEQ_TK expr { $$ = makeBinary (BIN_NUMNEQ_ET,$1,$3); }
+	| expr BIN_NUMLT_TK expr  { $$ = makeBinary (BIN_NUMLT_ET,$1,$3); }
+	| expr BIN_NUMLE_TK expr  { $$ = makeBinary (BIN_NUMLE_ET,$1,$3); }
+	| expr BIN_NUMGT_TK expr  { $$ = makeBinary (BIN_NUMGT_ET,$1,$3); }
+	| expr BIN_NUMGE_TK expr  { $$ = makeBinary (BIN_NUMGE_ET,$1,$3); }
+	| expr BIN_NUMADD_TK expr { $$ = makeBinary (BIN_NUMADD_ET,$1,$3); }
+	| expr BIN_NUMSUB_TK expr { $$ = makeBinary (BIN_NUMSUB_ET,$1,$3); }
+	| expr BIN_NUMMUL_TK expr { $$ = makeBinary (BIN_NUMMUL_ET,$1,$3); }
+	| expr BIN_NUMDIV_TK expr { $$ = makeBinary (BIN_NUMDIV_ET,$1,$3); }
+	| expr BIN_NUMMOD_TK expr { $$ = makeBinary (BIN_NUMMOD_ET,$1,$3); }
 
 	;
 %%

@@ -24,6 +24,7 @@ License along with this library.
 #include "oioext.h"
 #include "oiostr.h"
 #include "oiourl.h"
+#include "oiolog.h"
 #include "internals.h"
 
 static guint8 masks[] = {
@@ -431,6 +432,15 @@ int oio_str_prefixed (const char *s, const char *p, const char *sep) {
 	return !*s || g_str_has_prefix (s, sep);
 }
 
+int oio_str_caseprefixed(const char *str, const char *prefix) {
+	const char *s = str, *p = prefix;
+	for (; *s && *p ;++s,++p) {
+		if (g_ascii_tolower (*s) != g_ascii_tolower (*p))
+			return FALSE;
+	}
+	return !*p;
+}
+
 int oio_str_is_number (const char *s) {
 	if (!oio_str_is_set(s))
 		return 0;
@@ -478,7 +488,7 @@ GError* JSON_parse_buffer (const guint8 *b, gsize l, struct json_object **o) {
 
 GError* JSON_parse_gba (GByteArray *gba, struct json_object **out) {
 	EXTRA_ASSERT(out != NULL);
-	if (!gba) {
+	if (!gba || !gba->data || !gba->len) {
 	   *out = NULL;
 	   return NULL;
 	}
@@ -510,6 +520,7 @@ GByteArray *STRV_encode_gba(gchar **kv) {
 
 GError * STRV_decode_object (struct json_object *jobj, gchar ***out) {
 	EXTRA_ASSERT(out != NULL);
+
 	if (!jobj || json_object_is_type(jobj, json_type_null)) {
 		*out = g_malloc0(sizeof(gchar*));
 		return NULL;

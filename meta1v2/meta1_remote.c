@@ -22,25 +22,36 @@ License along with this library.
 #include "./internals.h"
 #include "./meta1_remote.h"
 
-static GError *list_request(const char *to, GByteArray *req, gchar ***out) {
+static GError *array_request(const char *to, GByteArray *req,
+		GError* (*decoder) (guint8*, gsize, gchar***), gchar ***out) {
 	EXTRA_ASSERT(to != NULL);
 	EXTRA_ASSERT(req != NULL);
 
 	GByteArray *gba = NULL;
-	GError *err = gridd_client_exec_and_concat(to, 30.0, req,
-											   out ? &gba : NULL);
-	g_byte_array_unref (req);
+	GError *err = gridd_client_exec_and_concat(to, 30.0, req, out ? &gba : NULL);
 
 	if (NULL != err) {
 		if (gba)
 			g_byte_array_free(gba, TRUE);
 		return err;
 	}
-	return gba ? STRV_decode_buffer(gba->data, gba->len, out) : NULL;
+	/* TODO check the reply even if not interested in the result */
+	err = gba ? (*decoder)(gba->data, gba->len, out) : NULL;
+	if (gba)
+		g_byte_array_free(gba, TRUE);
+	return err;
+}
+
+static GError *STRV_request(const char *to, GByteArray *req, gchar ***out) {
+	return array_request(to, req, STRV_decode_buffer, out);
+}
+
+static GError *KV_request(const char *to, GByteArray *req, gchar ***out) {
+	return array_request(to, req, KV_decode_buffer, out);
 }
 
 static GError *oneway_request (const char *to, GByteArray *req) {
-	return list_request (to, req, NULL);
+	return STRV_request(to, req, NULL);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -52,7 +63,8 @@ meta1v2_remote_create_reference (const char *to, struct oio_url_s *url,
 	EXTRA_ASSERT(url != NULL);
 	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_USERCREATE);
 	metautils_message_add_url_no_type (req, url);
-	metautils_message_add_body_unref(req, KV_encode_gba(properties));
+	if (properties && *properties)
+		metautils_message_add_body_unref(req, KV_encode_gba(properties));
 	return oneway_request(to, message_marshall_gba_and_clean(req));
 }
 
@@ -82,7 +94,7 @@ meta1v2_remote_link_service(const char *to, struct oio_url_s *url,
 		metautils_message_add_field_str (req, NAME_MSGKEY_DRYRUN, "1");
 	if (ac)
 		metautils_message_add_field_str (req, NAME_MSGKEY_AUTOCREATE, "1");
-	return list_request(to, message_marshall_gba_and_clean(req), result);
+	return STRV_request(to, message_marshall_gba_and_clean(req), result);
 }
 
 GError *
@@ -93,7 +105,7 @@ meta1v2_remote_list_reference_services(const char *to, struct oio_url_s *url,
 	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVLIST);
 	metautils_message_add_url_no_type (req, url);
 	metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, srvtype);
-	return list_request(to, message_marshall_gba_and_clean(req), result);
+	return STRV_request(to, message_marshall_gba_and_clean(req), result);
 }
 
 GError *
@@ -139,7 +151,7 @@ meta1v2_remote_renew_reference_service(const char *to, struct oio_url_s *url,
 		metautils_message_add_field_str (req, NAME_MSGKEY_DRYRUN, "1");
 	if (autocreate)
 		metautils_message_add_field_str (req, NAME_MSGKEY_AUTOCREATE, "1");
-	return list_request(to, message_marshall_gba_and_clean(req), result);
+	return STRV_request(to, message_marshall_gba_and_clean(req), result);
 }
 
 GError *
@@ -180,7 +192,7 @@ meta1v2_remote_reference_get_property(const char *to, struct oio_url_s *url,
 	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_PROPGET);
 	metautils_message_add_url_no_type (req, url);
 	metautils_message_add_body_unref (req, STRV_encode_gba(keys));
-	return list_request(to, message_marshall_gba_and_clean(req), result);
+	return KV_request(to, message_marshall_gba_and_clean(req), result);
 }
 
 GError *
@@ -202,14 +214,14 @@ meta1v2_remote_list_services_by_prefix(const char *to, struct oio_url_s *url,
     MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVALLONM1);
 	metautils_message_add_url_no_type (req, url);
 	metautils_message_add_cid (req, NAME_MSGKEY_PREFIX, oio_url_get_id(url));
-    return list_request(to, message_marshall_gba_and_clean(req), result);
+    return STRV_request(to, message_marshall_gba_and_clean(req), result);
 }
 
 GError *
 meta1v2_remote_get_prefixes(const char *to, gchar *** result)
 {
 	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_GETPREFIX);
-	return list_request(to, message_marshall_gba_and_clean(req), result);
+	return STRV_request(to, message_marshall_gba_and_clean(req), result);
 }
 
 GError *
@@ -224,6 +236,6 @@ meta1v2_remote_relink_service(const char *m1, struct oio_url_s *url,
 		metautils_message_add_field_str (req, NAME_MSGKEY_NOTIN, replaced);
 	if (dryrun)
 		metautils_message_add_field_str (req, NAME_MSGKEY_DRYRUN, "1");
-	return list_request (m1, message_marshall_gba_and_clean(req), out);
+	return STRV_request(m1, message_marshall_gba_and_clean(req), out);
 }
 

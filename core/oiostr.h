@@ -31,11 +31,7 @@ extern "C" {
 #define OIO_CSV_SEP2_C ';'
 #define OIO_CSV_SEP2   ";"
 
-#define oio_pfree0(pp,repl) do { \
-	if (NULL != *(pp)) \
-		g_free(*pp); \
-	*(pp) = (repl); \
-} while (0)
+#define oio_pfree0(pp,repl) do { if (*pp) g_free(*pp); *(pp) = (repl); } while (0)
 
 #define oio_pfree(pp,repl) do { \
 	if (NULL != (pp)) \
@@ -133,6 +129,8 @@ void oio_str_gstring_append_json_pair_int (GString *base,
 static inline int oio_str_is_set (const char *s) { return NULL!=s && 0!=*s; }
 
 int oio_str_prefixed (const char *s, const char *p, const char *sep);
+
+int oio_str_caseprefixed(const char *str, const char *prefix);
 
 int oio_str_is_number (const char *s);
 

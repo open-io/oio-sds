@@ -30,16 +30,10 @@ BEGIN
 
 	NamespaceInfo ::= SEQUENCE {
 		name           [0] PrintableString,
-		addr           [1] AddrInfo,
 		chunkSize      [2] INTEGER,
 		options        [3] ParameterSequence,
 		storagePolicy  [4] ParameterSequence,
 		dataSecurity   [5] ParameterSequence,
-
-		-- TODO remove these 2 fields in the next major release
-		dataTreatments [6] ParameterSequence,
-		storageClass   [7] ParameterSequence,
-
 		servicePools   [8] ParameterSequence
 	}
 

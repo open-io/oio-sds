@@ -648,7 +648,6 @@ namespace_info_ASN2API(const NamespaceInfo_t *asn, namespace_info_t *api)
 	api->options = list_conversion(&(asn->options));
 	api->storage_policy = list_conversion(&(asn->storagePolicy));
 	api->data_security = list_conversion(&(asn->dataSecurity));
-	api->storage_class = list_conversion(&(asn->storageClass));
 	api->service_pools = list_conversion(&(asn->servicePools));
 	return TRUE;
 }
@@ -699,25 +698,20 @@ namespace_info_API2ASN(const namespace_info_t * api, NamespaceInfo_t * asn)
 	OCTET_STRING_fromBuf(&(asn->name), api->name, strlen(api->name));
 	asn_int64_to_INTEGER(&(asn->chunkSize), api->chunk_size);
 
-	/* TODO(jfs): remove this in the next release (kept for backward compliance) */
-	struct addr_info_s dummy;
-	grid_string_to_addrinfo ("0.0.0.0:0", &dummy);
-	addr_info_API2ASN(&dummy, &(asn->addr));
-
-	if (!hashtable_conversion(api->options, &(asn->options), key_value_pairs_convert_from_map))
+	if (!hashtable_conversion(api->options, &(asn->options),
+							  key_value_pairs_convert_from_map))
 		return FALSE;
 
-	if(!hashtable_conversion(api->storage_policy, &(asn->storagePolicy), key_value_pairs_convert_from_map))
+	if (!hashtable_conversion(api->storage_policy, &(asn->storagePolicy),
+							  key_value_pairs_convert_from_map))
 		return FALSE;
 
-	if(!hashtable_conversion(api->data_security, &(asn->dataSecurity), key_value_pairs_convert_from_map))
-		return FALSE;
-
-	if(!hashtable_conversion(api->storage_class, &(asn->storageClass), key_value_pairs_convert_from_map))
+	if (!hashtable_conversion(api->data_security, &(asn->dataSecurity),
+							  key_value_pairs_convert_from_map))
 		return FALSE;
 
 	if (!hashtable_conversion(api->service_pools, &(asn->servicePools),
-			key_value_pairs_convert_from_map))
+							  key_value_pairs_convert_from_map))
 		return FALSE;
 
 	return TRUE;
@@ -731,8 +725,6 @@ namespace_info_cleanASN(NamespaceInfo_t * asn, gboolean only_content)
 	asn->options.list.free = free_Parameter;
 	asn->storagePolicy.list.free = free_Parameter;
 	asn->dataSecurity.list.free = free_Parameter;
-	asn->dataTreatments.list.free = free_Parameter;
-	asn->storageClass.list.free = free_Parameter;
 	if (only_content)
 		ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NamespaceInfo, asn);
 	else

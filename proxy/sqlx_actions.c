@@ -143,16 +143,18 @@ enum http_rc_e
 action_sqlx_propset (struct req_args_s *args, struct json_object *jargs)
 {
 	enum http_rc_e rc;
+	GError *err = NULL;
+
 	gchar **kv = NULL;
-	GError *err = KV_decode_object(jargs, &kv);
+	err = KV_read_usersys_properties(jargs, &kv);
 	if (!err) {
-		gboolean flush = NULL != OPT("flush");
-		PACKER(_pack) { return sqlx_pack_PROPSET_tab (n, flush, kv); }
-		rc = _sqlx_action_noreturn (args, CLIENT_PREFER_MASTER, _pack);
-	} else {
-		rc = _reply_common_error (args, err);
+		gboolean flush = _request_get_flag(args, "flush");
+		PACKER(_pack) { return sqlx_pack_PROPSET_tab(n, flush, kv); }
+		rc = _sqlx_action_noreturn(args, CLIENT_PREFER_MASTER, _pack);
+		g_strfreev(kv);
 	}
-	g_strfreev (kv);
+	if (err)
+		rc = _reply_common_error (args, err);
 	return rc;
 }
 
