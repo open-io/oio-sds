@@ -704,6 +704,9 @@ use = egg:oio#account_update
 [filter:volume_index]
 use = egg:oio#volume_index
 
+[filter:logger]
+use = egg:oio#logger
+
 """
 
 template_conscience_agent = """
