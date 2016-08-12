@@ -125,6 +125,7 @@ template_rawx_service = """
 LoadModule mpm_worker_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mpm_worker.so
 LoadModule authz_core_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_authz_core.so
 LoadModule setenvif_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_setenvif.so
+LoadModule env_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_env.so
 LoadModule dav_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_dav.so
 LoadModule mime_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mime.so
 LoadModule alias_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_alias.so
@@ -149,7 +150,12 @@ TypesConfig /etc/mime.types
 User  ${USER}
 Group ${GROUP}
 
-LogFormat "%h %l %t \\"%r\\" %>s %b %D" log/common
+SetEnv INFO_SERVICES OIO,${NS},${SRVTYPE},${SRVNUM}
+SetEnv LOG_TYPE access
+SetEnv LEVEL INF
+SetEnv HOSTNAME oio
+SetEnv REQUEST_ID_HEADER x-oio-req-id
+LogFormat "%{%b %d %T}t %{HOSTNAME}e %{INFO_SERVICES}e %{pid}P %{tid}P %{LOG_TYPE}e %{LEVEL}e %{Host}i %a %m %>s %D %O %{${META_HEADER}-container-id}i %{x-oio-req-id}i \\"%{${META_HEADER}-container-id}i %{${META_HEADER}-content-id}i %{${META_HEADER}-chunk-pos}i\\"" log/common
 ErrorLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-errors.log
 SetEnvIf Request_URI "/(stat|info)$" nolog
 CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-access.log log/common env=!nolog
@@ -858,7 +864,7 @@ BUCKET_NAME = 'bucket_name'
 COMPRESSION = 'compression'
 APPLICATION_KEY = 'application_key'
 KEY_FILE='key_file'
-
+META_HEADER='x-oio-chunk-meta'
 defaults = {
     'NS': 'OPENIO',
     'IP': '127.0.0.1',
@@ -986,7 +992,8 @@ def generate(options):
                BACKBLAZE_BUCKET_NAME=backblaze_bucket_name,
                BACKBLAZE_APPLICATION_KEY=backblaze_app_key,
                KEY_FILE=key_file,
-               HTTPD_BINARY=HTTPD_BINARY)
+               HTTPD_BINARY=HTTPD_BINARY,
+               META_HEADER=META_HEADER)
 
     def merge_env(add):
         env = dict(ENV)
