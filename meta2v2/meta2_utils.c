@@ -1406,9 +1406,6 @@ GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
         _patch_beans_with_contentid(beans, (guint8*)&uid, uid_size);
 	}
 
-    if (version < 0)
-        version = oio_ext_real_seconds();
-
     /* needed for later: the latest content in place. Fetch it once for all */
     if (NULL != (err = m2db_latest_alias(args->sq3, args->url, &latest))) {
 		if (err->code != CODE_CONTENT_NOTFOUND) {
@@ -1417,6 +1414,22 @@ GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
         }
         GRID_TRACE("Alias not yet present (1)");
 		g_clear_error(&err);
+	}
+
+	/* Manage the potential conflict with the latest alias in place. */
+	if (version > 0) {
+		/* version explicitely specified */
+		if (latest && version == ALIASES_get_version(latest)) {
+			/* TODO decide if it is better to alter the version to insert though */
+			err = NEWERROR(CODE_CONTENT_EXISTS, "Alias already saved");
+		} else {
+			/* TODO check the PUT doesn't override an alias in place that is not the latest */
+		}
+	} else {
+		/* version unset, let's deduce it from the alias in place */
+		version = oio_ext_real_seconds();
+		if (latest && ALIASES_get_version(latest) == version)
+			version ++;
 	}
 
 	gint64 max_versions = m2db_get_max_versions(args->sq3,

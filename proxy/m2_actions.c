@@ -534,30 +534,22 @@ _load_simplified_chunks (struct json_object *jbody, GSList **out)
 	return err;
 }
 
-static GError *
-_load_properties_from_json_array (struct json_object *jobj, GSList **out)
+static GSList *
+_load_properties_from_strv (gchar **props)
 {
-	gchar **kv = NULL;
-	GError *err = KV_decode_object(jobj, &kv);
-	if (err)
-		return err;
-
 	GSList *beans = NULL;
-	for (gchar **p=kv; *p && *(p+1) ;p+=2) {
+	for (gchar **p=props; *p && *(p+1) ;p+=2) {
 		const char *k = *p;
 		const char *v = *(p+1);
-		if (!oio_str_caseprefixed(k, PROXYD_HEADER_PREFIX "content-meta-x-"))
-			return FALSE;
-		const char *rk = k + sizeof(PROXYD_HEADER_PREFIX "content-meta-x-") - 1;
+		if (!oio_str_is_set(k))
+			continue;
 		struct bean_PROPERTIES_s *prop = _bean_create (&descr_struct_PROPERTIES);
 		PROPERTIES_set_version (prop, 0); // still unknown
-		PROPERTIES_set2_key (prop, rk);
+		PROPERTIES_set2_key (prop, k);
 		PROPERTIES_set2_value (prop, (guint8*)v, strlen((gchar*)v));
 		beans = g_slist_prepend (beans, prop);
 	}
-
-	*out = beans;
-	return NULL;
+	return beans;
 }
 
 static GError *
@@ -707,35 +699,33 @@ _load_content_from_json_array(struct req_args_s *args,
 	return err;
 }
 
-static GError *
-_load_content_from_json_object(struct req_args_s *args,
-		struct json_object *jbody, GSList **out)
-{
+static GError * _load_content_from_json_object(struct req_args_s *args,
+		struct json_object *jbody, GSList **out) {
+
 	if (!json_object_is_type(jbody, json_type_object))
 		return BADREQ ("JSON: Not an object");
 
-	GError *err = NULL;
-	struct json_object *jprops = NULL, *jchunks = NULL;
-
-	if (json_object_object_get_ex(jbody, "properties", &jprops) &&
-			json_object_object_get_ex(jbody, "chunks", &jchunks)) {
-
-		err = _load_content_from_json_array(args, jchunks, out);
-		if (!err) {
-			GSList *beans = NULL;
-			if (!(err = _load_alias_from_headers(args, out)))
+	struct json_object *jchunks = NULL;
+	gchar **props = NULL;
+	GError *err = KV_read_properties(jbody, &props, "properties");
+	if (err) {
+		g_prefix_error(&err, "properties error");
+	} else {
+		if (!json_object_object_get_ex(jbody, "chunks", &jchunks)) {
+			err = BADREQ("No [chunks] field");
+		} else {
+			/* load the content the "old way", from an array of chunks and the
+			 * header. Then if there is no error, complete it with properties */
+			if (!(err = _load_content_from_json_array(args, jchunks, out))) {
+				GSList *beans = _load_properties_from_strv(props);
+				for (GSList *l=beans; l ;l=l->next)
+					PROPERTIES_set2_alias(l->data, oio_url_get(args->url, OIOURL_PATH));
 				*out = metautils_gslist_precat(*out, beans);
+			}
 		}
-
-		if (!err) {
-			GSList *beans = NULL;
-			if (!(err = _load_properties_from_json_array(jprops, &beans)))
-				*out = metautils_gslist_precat(*out, beans);
-		}
+		if (props)
+			g_strfreev(props);
 	}
-
-	if (jprops) json_object_put(jprops);
-	if (jchunks) json_object_put(jchunks);
 	return err;
 }
 
