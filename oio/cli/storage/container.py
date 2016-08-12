@@ -20,17 +20,25 @@ class CreateContainer(lister.Lister):
             nargs='+',
             help='New container name(s)'
         )
+        parser.add_argument(
+            '--property',
+            metavar='<key=value>',
+            action=KeyValueAction,
+            help='Property to add/update for the container(s)'
+        )
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
+        properties = parsed_args.property
         results = []
         account = self.app.client_manager.get_account()
         for container in parsed_args.containers:
             success = self.app.client_manager.storage.container_create(
                 account,
-                container)
+                container,
+                metadata=properties)
             results.append((container, success))
 
         columns = ('Name', 'Created')

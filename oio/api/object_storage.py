@@ -191,14 +191,10 @@ class ObjectStorageAPI(API):
 
         headers = headers or {}
         headers['x-oio-action-mode'] = 'autocreate'
-        if metadata:
-            headers_meta = {}
-            for k, v in metadata.iteritems():
-                headers_meta['%suser-%s' % (
-                    constants.CONTAINER_METADATA_PREFIX, k)] = v
-            headers.update(headers_meta)
+        metadata = metadata or {}
+        data = {'properties': metadata}
         resp, resp_body = self._request(
-            'POST', uri, params=params, headers=headers)
+            'POST', uri, params=params, data=json.dumps(data), headers=headers)
         if resp.status_code not in (204, 201):
             raise exc.from_response(resp, resp_body)
         if resp.status_code == 201:
@@ -475,10 +471,11 @@ class ObjectStorageAPI(API):
         return resp.headers, resp_body
 
     def _content_create(self, account, container, obj_name, final_chunks,
-                        headers=None):
+                        metadata=None, headers=None):
         uri = self._make_uri('content/create')
         params = self._make_params(account, container, obj_name)
-        data = json.dumps(final_chunks)
+        metadata = metadata or {}
+        data = json.dumps({'chunks': final_chunks, 'properties': metadata})
         resp, resp_body = self._request(
             'POST', uri, data=data, params=params, headers=headers)
         return resp.headers, resp_body
@@ -531,12 +528,9 @@ class ObjectStorageAPI(API):
         h[object_headers['mime_type']] = sysmeta['mime_type']
         h[object_headers['chunk_method']] = sysmeta['chunk_method']
 
-        if metadata:
-            for k, v in metadata.iteritems():
-                h['%sx-%s' % (constants.OBJECT_METADATA_PREFIX, k)] = v
-
-        m, body = self._content_create(account, container, obj_name,
-                                       final_chunks, headers=h)
+        m, body = self._content_create(
+            account, container, obj_name, final_chunks, metadata=metadata,
+            headers=h)
         return final_chunks, bytes_transferred, content_checksum
 
     def _fetch_stream(self, meta, chunks, ranges, storage_method, headers):

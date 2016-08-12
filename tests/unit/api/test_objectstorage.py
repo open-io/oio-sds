@@ -123,8 +123,9 @@ class ObjectStorageTest(unittest.TestCase):
         uri = "%s/container/create" % self.uri_base
         params = {'acct': self.account, 'ref': name}
         self.headers['x-oio-action-mode'] = 'autocreate'
+        data = json.dumps({'properties': {}})
         api._request.assert_called_once_with(
-            'POST', uri, params=params, headers=self.headers)
+            'POST', uri, params=params, data=data, headers=self.headers)
 
     def test_container_create_exist(self):
         api = self.api

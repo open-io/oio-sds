@@ -58,11 +58,13 @@ class DirectoryAPI(API):
             'GET', uri, params=params, headers=headers)
         return resp_body
 
-    def create(self, account, reference, headers=None):
+    def create(self, account, reference, metadata=None, headers=None):
         uri = self._make_uri('reference/create')
         params = self._make_params(account, reference)
+        metadata = metadata or {}
+        data = json.dumps({'properties': metadata})
         resp, resp_body = self._request(
-            'POST', uri, params=params, headers=headers)
+            'POST', uri, params=params, data=data, headers=headers)
         if resp.status_code not in (201, 202):
             raise exceptions.from_response(resp, resp_body)
         if resp.status_code == 201:

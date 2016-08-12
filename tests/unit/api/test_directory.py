@@ -51,8 +51,9 @@ class DirectoryTest(unittest.TestCase):
         uri = "%s/reference/create" % self.uri_base
         params = {'acct': self.account, 'ref': self.name}
 
+        data = json.dumps({'properties': {}})
         api._request.assert_called_with(
-            'POST', uri, params=params, headers=None)
+            'POST', uri, params=params, data=data, headers=None)
 
     def test_create_already_exists(self):
         api = self.api
@@ -63,8 +64,33 @@ class DirectoryTest(unittest.TestCase):
         uri = "%s/reference/create" % self.uri_base
         params = {'acct': self.account, 'ref': self.name}
 
+        data = json.dumps({'properties': {}})
         api._request.assert_called_once_with(
-            'POST', uri, params=params, headers=None)
+            'POST', uri, params=params, data=data, headers=None)
+
+    def test_create_metadata(self):
+        api = self.api
+        resp = FakeAPIResponse()
+        resp.status_code = 201
+        api._request = Mock(return_value=(resp, None))
+
+        metadata = {}
+        k1 = random_str(32)
+        v1 = random_str(32)
+
+        k2 = random_str(32)
+        v2 = random_str(32)
+
+        metadata[k1] = v1
+        metadata[k2] = v2
+
+        api.create(self.account, self.name, metadata)
+        uri = "%s/reference/create" % self.uri_base
+        params = {'acct': self.account, 'ref': self.name}
+
+        data = json.dumps({'properties': metadata})
+        api._request.assert_called_once_with(
+            'POST', uri, params=params, data=data, headers=None)
 
     def test_create_error(self):
         api = self.api
