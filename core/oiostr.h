@@ -153,8 +153,6 @@ GByteArray * KV_encode_gba(gchar **kv);
 GError * KV_decode_object(struct json_object *j, gchar ***out);
 GError * KV_decode_buffer(guint8 *buf, gsize len, gchar ***out);
 
-gchar ** KV_convert_to_pairs (gchar **kv);
-
 /* Returns a valid KV where all the keys have the given prefix.
  * WARNING the array returned holds pointers to the same buffer than the
  * input, so DO NOT FREE each string but just the holder array.

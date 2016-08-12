@@ -648,17 +648,6 @@ GError * KV_decode_object(struct json_object *jobj, gchar ***out) {
 	return NULL;
 }
 
-gchar ** KV_convert_to_pairs (gchar **kv) {
-	if (!kv)
-		return g_malloc0(sizeof(gchar**));
-	g_assert_nonnull(kv);
-	GPtrArray *tmp = g_ptr_array_new();
-	for (gchar **p = kv; *p && *(p+1) ;p+=2)
-		g_ptr_array_add(tmp, g_strdup_printf("%s=%s", *p, *(p + 1)));
-	g_ptr_array_add (tmp, NULL);
-	return (gchar**) g_ptr_array_free(tmp, FALSE);
-}
-
 gchar ** KV_extract_prefixed (gchar **kv, const char *prefix) {
 
 	/* only possible output: empty array */
