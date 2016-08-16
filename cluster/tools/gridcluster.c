@@ -30,7 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 static void
 usage(void)
 {
-	g_printerr("Usage: gridcluster [OPTION]... <NAMESPACE>...\n\n");
+	g_printerr("Usage: oio-cluster [OPTION]... <NAMESPACE>...\n\n");
 	g_printerr("  %-20s\t%s\n", "--clear-services SERVICE    ", "Clear all local RAWX reference in cluster.");
 	g_printerr("  %-20s\t%s\n", "--full,                     ", "Show full services.");
 	g_printerr("  %-20s\t%s\n", "--lb-config,                ", "Prints to stdout the namespace LB configuration ");

@@ -49,8 +49,17 @@ class AdminClient(object):
     def cluster_list(self, srv_type):
         return self.cluster.all_services(srv_type)
 
+    def cluster_local_list(self):
+        return self.cluster.local_services()
+
     def cluster_info(self):
         return self.cluster.info()
+
+    def cluster_flush(self, srv_type):
+        return self.cluster.flush(srv_type)
+
+    def cluster_unlock_score(self, srv_type):
+        return self.cluster.unlock_score(srv_type)
 
     def volume_admin_show(self, volume):
         return self.volume.admin_show(volume)

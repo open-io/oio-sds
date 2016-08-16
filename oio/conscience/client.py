@@ -43,6 +43,15 @@ class ConscienceClient(Client):
             raise OioException("ERROR while getting list of %s services"
                                % type_)
 
+    def local_services(self):
+        uri = self._make_uri("local/list")
+        resp, body = self._request('GET', uri)
+        if resp.status_code == 200:
+            return body
+        else:
+            # FIXME: add resp error message
+            raise OioException("ERROR while getting list of %s services")
+
     def register(self, pool, service_definition):
         uri = self._make_uri('conscience/register')
         data = json.dumps(service_definition)
@@ -52,3 +61,12 @@ class ConscienceClient(Client):
         uri = self._make_uri("conscience/info")
         resp, body = self._request("GET", uri)
         return body
+
+    def unlock_score(self, infos_srv):
+        uri = self._make_uri("conscience/unlock")
+        resp, body = self._request('POST', uri, data=json.dumps(infos_srv))
+
+    def flush(self, srv_type):
+        type_dic = {'type': srv_type}
+        uri = self._make_uri('conscience/flush')
+        resp, body = self._request('POST', uri, params=type_dic)
