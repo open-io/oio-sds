@@ -38,12 +38,6 @@ def gen_names():
             yield i, '{0}/{1}/plop'.format(c0, c1)
 
 
-def gen_props(n, v):
-    """Generates 'n' properties tuples, whose value is prefixed with 'v'"""
-    for i in range(n):
-        yield "k{0}".format(i), v+str(i)
-
-
 class TestMeta2Containers(BaseTestCase):
 
     def setUp(self):
@@ -81,32 +75,6 @@ class TestMeta2Containers(BaseTestCase):
                                  params=params,
                                  headers={'X-oio-action-mode': 'force'})
         self.assertEqual(resp.status_code, 204)
-
-    def test_cycle_container(self):
-        params = self.param_ref(self.ref)
-
-        resp = self.session.post(
-            self.url_container('get_properties'), params=params)
-        self.assertEqual(resp.status_code, 404)
-
-        # test create without reference
-        self._create(params, 403, False)
-        self._create(params, 204)
-
-        resp = self.session.post(
-            self.url_container('get_properties'), params=params)
-        self.assertEqual(resp.status_code, 200)
-        # TODO check body
-        # TODO check the headers
-
-        self._create(params, 201)
-
-        self._delete(params)
-        resp = self.session.post(self.url_container('destroy'), params=params)
-        self.assertEqual(resp.status_code, 404)
-
-        resp = self.session.get(self.url_container('show'), params=params)
-        self.assertEqual(resp.status_code, 404)
 
     def check_list_output(self, body, nbobj, nbpref):
         self.assertIsInstance(body, dict)
@@ -183,130 +151,6 @@ class TestMeta2Containers(BaseTestCase):
         self.assertEqual(resp.status_code, 200)
         self.check_list_output(resp.json(), 8, 0)
         del params['marker_end']
-
-    def check_prop_output(self, body, ref):
-        self.assertIsInstance(body, dict)
-        self.assertDictEqual(body['properties'], ref)
-
-    def test_properties_noent(self):
-        params = self.param_ref(self.ref)
-
-        resp = self.session.post(self.url_container('get_properties'),
-                                 params=params)
-        self.assertEqual(resp.status_code, 404)
-        resp = self.session.post(self.url_container('set_properties'),
-                                 params=params)
-        self.assertEqual(resp.status_code, 404)
-        resp = self.session.post(self.url_container('del_properties'),
-                                 params=params, data=json.dumps([]))
-        self.assertEqual(resp.status_code, 404)
-
-    def test_properties_none(self):
-        params = self.param_ref(self.ref)
-        self._create(params, 204)
-
-        # check no props after creation
-        resp = self.session.post(self.url_container('get_properties'),
-                                 params=params)
-        self.assertEqual(resp.status_code, 200)
-        body = resp.json()
-        self.assertIsInstance(body, dict)
-        self.assertGreater(len(body), 0)
-        self.assertDictEqual(body['properties'], {})
-
-        # check set/del works on no set
-        # TODO DAFUQ??
-        resp = self.session.post(self.url_container('set_properties'),
-                                 params=params)
-        self.assertEqual(resp.status_code, 200)
-
-        resp = self.session.post(self.url_container('del_properties'),
-                                 params=params, data=json.dumps([]))
-        self.assertEqual(resp.status_code, 200)
-
-    def test_properties(self):
-        params = self.param_ref(self.ref)
-        self._create(params, 204)
-
-        # Check the simple SET works
-        props = dict(gen_props(256, 'val'))
-        data = {'properties': props}
-        resp = self.session.post(self.url_container('set_properties'),
-                                 params=params, data=json.dumps(data))
-        self.assertEqual(resp.status_code, 200)
-
-        resp = self.session.post(self.url_container('get_properties'),
-                                 params=params)
-        self.assertEqual(resp.status_code, 200)
-        self.check_prop_output(resp.json(), props)
-
-        # check SET overriding works
-        change = {"k0": "XXX"}
-        data = {'properties': change}
-        resp = self.session.post(self.url_container('set_properties'),
-                                 params=params, data=json.dumps(data))
-        self.assertEqual(resp.status_code, 200)
-
-        props.update(change)
-        resp = self.session.post(self.url_container('get_properties'),
-                                 params=params)
-        self.assertEqual(resp.status_code, 200)
-        self.check_prop_output(resp.json(), props)
-
-        # check the FLUSH/REPLACE works
-        props = dict(gen_props(16, 'XXXX'))
-        params1 = dict(params)
-        params1['flush'] = '1'
-        data = {'properties': props}
-        resp = self.session.post(self.url_container('set_properties'),
-                                 params=params1, data=json.dumps(data))
-        self.assertEqual(resp.status_code, 200)
-
-        resp = self.session.post(self.url_container('get_properties'),
-                                 params=params)
-        self.assertEqual(resp.status_code, 200)
-        self.check_prop_output(resp.json(), props)
-
-        # check the simple delete works
-        resp = self.session.post(self.url_container('del_properties'),
-                                 params=params, data=json.dumps(["k0"]))
-        self.assertEqual(resp.status_code, 200)
-
-        del data["k0"]
-        resp = self.session.post(self.url_container('get_properties'),
-                                 params=params)
-        self.assertEqual(resp.status_code, 200)
-        self.check_prop_output(resp.json(), props)
-
-        # check the DELETE(all) works
-        resp = self.session.post(self.url_container('del_properties'),
-                                 params=params, data=json.dumps([]))
-        self.assertEqual(resp.status_code, 200)
-
-        data = dict()
-        resp = self.session.post(self.url_container('get_properties'),
-                                 params=params)
-        self.assertEqual(resp.status_code, 200)
-        self.check_prop_output(resp.json(), data)
-
-        # check the FLUSH works
-        props = dict(gen_props(32, "foo"))
-        data = {'properties': props}
-        resp = self.session.post(self.url_container('set_properties'),
-                                 params=params, data=json.dumps(data))
-        self.assertEqual(resp.status_code, 200)
-
-        resp = self.session.post(self.url_container('get_properties'),
-                                 params=params)
-        self.assertEqual(resp.status_code, 200)
-        self.check_prop_output(resp.json(), props)
-
-        params1 = dict(params)
-        params1['flush'] = '1'
-        resp = self.session.post(self.url_container('set_properties'),
-                                 params=params1, data=json.dumps({}))
-        self.assertEqual(resp.status_code, 200)
-        self.check_prop_output(resp.json(), {})
 
     def test_touch(self):
         params = self.param_ref(self.ref)
