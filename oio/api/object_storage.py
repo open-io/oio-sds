@@ -246,6 +246,17 @@ class ObjectStorageAPI(API):
                 account, container, metadata, clear, headers=headers)
 
     @handle_container_not_found
+    def container_get_properties(self, account, container, properties=None,
+                                 headers=None):
+        uri = self._make_uri('container/get_properties')
+        params = self._make_params(account, container)
+        data = properties or []
+        resp, resp_body = self._request(
+            'POST', uri, params=params, data=json.dumps(data),
+            headers=headers)
+        return resp_body
+
+    @handle_container_not_found
     def container_set_properties(self, account, container, properties,
                                  clear=False, headers=None):
         params = self._make_params(account, container)
@@ -254,9 +265,10 @@ class ObjectStorageAPI(API):
             params.update({'flush': 1})
 
         uri = self._make_uri('container/set_properties')
+        data = json.dumps({'properties': properties})
 
         resp, resp_body = self._request(
-            'POST', uri, data=json.dumps(properties), params=params,
+            'POST', uri, data=data, params=params,
             headers=headers)
 
     @handle_container_not_found
@@ -266,8 +278,9 @@ class ObjectStorageAPI(API):
 
         uri = self._make_uri('container/del_properties')
 
+        data = json.dumps(properties)
         resp, resp_body = self._request(
-            'POST', uri, data=json.dumps(properties), params=params,
+            'POST', uri, data=data, params=params,
             headers=headers)
 
     @handle_container_not_found
@@ -395,7 +408,7 @@ class ObjectStorageAPI(API):
             'POST', uri, params=params, headers=headers)
 
         meta = _make_object_metadata(resp.headers)
-        meta['properties'] = resp_body
+        meta['properties'] = resp_body['properties']
         return meta
 
     def object_update(self, account, container, obj, metadata, clear=False,

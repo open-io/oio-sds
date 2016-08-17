@@ -27,21 +27,6 @@ class DirectoryTest(unittest.TestCase):
         api._request.assert_called_once_with(
             'GET', uri, params=params, headers=None)
 
-    def test_has(self):
-        api = self.api
-        resp = FakeAPIResponse()
-        api._request = Mock(return_value=(resp, None))
-        uri = "%s/reference/has" % self.uri_base
-        params = {'acct': self.account, 'ref': self.name}
-        self.assertTrue(api.has(self.account, self.name))
-        api._request.assert_called_once_with(
-            'GET', uri, params=params, headers=None)
-
-    def test_has_not_found(self):
-        api = self.api
-        api._request = Mock(side_effect=exceptions.NotFound("No reference"))
-        self.assertFalse(api.has(self.account, self.name))
-
     def test_create(self):
         api = self.api
         resp = FakeAPIResponse()
@@ -199,7 +184,7 @@ class DirectoryTest(unittest.TestCase):
         api.set_properties(self.account, self.name, properties)
         uri = "%s/reference/set_properties" % self.uri_base
         params = {'acct': self.account, 'ref': self.name}
-        data = json.dumps(properties)
+        data = json.dumps({'properties': properties})
         api._request.assert_called_once_with(
             'POST', uri, data=data, params=params, headers=None)
 

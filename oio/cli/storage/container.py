@@ -76,9 +76,7 @@ class SetContainer(command.Command):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
-        properties = {}
-        for k, v in parsed_args.property.iteritems():
-            properties['user.%s' % k] = v
+        properties = parsed_args.property
 
         self.app.client_manager.storage.container_set_properties(
             self.app.client_manager.get_account(),
@@ -138,14 +136,14 @@ class ShowContainer(show.ShowOne):
             parsed_args.container
         )
 
-        info = {'account': data['sys.account'],
-                'base_name': data['sys.name'],
-                'container': data['sys.user.name'],
-                'ctime': data['sys.m2.ctime'],
-                'bytes_usage': data.get('sys.m2.usage', 0)}
-        for k, v in data.iteritems():
-            if k.startswith('user.'):
-                info['meta.' + k[len('meta.'):]] = v
+        sys = data['system']
+        info = {'account': sys['sys.account'],
+                'base_name': sys['sys.name'],
+                'container': sys['sys.user.name'],
+                'ctime': sys['sys.m2.ctime'],
+                'bytes_usage': sys.get('sys.m2.usage', 0)}
+        for k, v in data['properties'].iteritems():
+            info['meta.' + k] = v
         return zip(*sorted(info.iteritems()))
 
 
@@ -235,9 +233,7 @@ class UnsetContainer(command.Command):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
-        properties = []
-        for p in parsed_args.property:
-            properties.append('user.%s' % p)
+        properties = parsed_args.property
 
         self.app.client_manager.storage.container_del_properties(
             self.app.client_manager.get_account(),

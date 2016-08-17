@@ -58,7 +58,7 @@ class ShowReference(show.ShowOne):
             parsed_args.reference)
         info = {'account': account,
                 'name': reference}
-        for k, v in data.iteritems():
+        for k, v in data['properties'].iteritems():
             info['meta.' + k] = v
         return zip(*sorted(info.iteritems()))
 
