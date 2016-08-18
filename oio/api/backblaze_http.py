@@ -18,6 +18,7 @@ import json as js
 from oio.api import io
 from oio.common.cryptography_tools import CryptographyTools
 
+
 def _format_autorization_required(account_id, application_key):
     return 'Basic ' + base64.b64encode(account_id+':'+application_key)
 
@@ -339,6 +340,7 @@ class Backblaze(object):
 
 class Requests(object):
     B2_TIMEOUT = 45
+
     def __init__(self, error_handler=None):
         self.error_handler = error_handler
 

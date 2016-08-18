@@ -1,5 +1,4 @@
 import logging
-from oio.api.object_storage import ObjectStorageAPI
 
 LOG = logging.getLogger(__name__)
 

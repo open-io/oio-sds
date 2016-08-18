@@ -8,8 +8,6 @@ from oio.api.backblaze_http import BackblazeUtils, BackblazeUtilsException
 from oio.api.io import ChunkReader
 from oio.common.exceptions import OioException
 from werkzeug.wrappers import Request, Response
-import logging
-
 
 SYS_PREFIX = 'x-oio-chunk-meta-'
 

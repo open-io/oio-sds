@@ -1,11 +1,9 @@
-import io
 import logging
-import os
 
 from cliff import command
 
-from oio.cli.utils import KeyValueAction
 from oio.common.cryptography_tools import CryptographyTools
+
 
 class GenerateEncryptionKey(command.Command):
     """Generate an Encryption Key"""
@@ -18,4 +16,3 @@ class GenerateEncryptionKey(command.Command):
 
     def take_action(self, parsed_args):
         print CryptographyTools.generate_key()
-

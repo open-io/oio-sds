@@ -69,9 +69,10 @@ class CryptographyTools(object):
         decrypt_content = decrypt(cipher)
         return self.encrypt(decrypt_content)
 
-    def _generate_dict(self, over, bytes_read, ciphered_bytes, content=None):
+    def _generate_encryption_result(self, over, bytes_read,
+                                    ciphered_bytes, content=None):
         """
-        generate a dictionnary with some informations,
+        generate a dictionnary with the result of encryption function,
         see the function read_and encrypt for more details
         """
         return {'over': over,
@@ -88,9 +89,11 @@ class CryptographyTools(object):
         - over : the value is true if the read is over
         - bytes_read : the number of bytes read by the function
         - ciphered_bytes : the number of ciphered-bytes read by the function
-        - content : if fd_out is None, this dictionnary entry returns the ciphered_content
+        - content : if fd_out is None,
+                    this dictionnary entry returns the ciphered_content
 
-        WARNING : every fd_out writing is in the responsability of the programmer.
+        WARNING : every fd_out writing is in the responsability
+                  of the programmer.
         if you must seek, truncate or others operations, the responsability is
         your own!
 
@@ -143,8 +146,9 @@ class CryptographyTools(object):
                     fd_out.flush()
                 else:
                     content += to_write
-                yield self._generate_dict(False, bytes_transferred,
-                                          max_bytes_read, content)
+                yield self._generate_encryption_result(False,
+                                                       bytes_transferred,
+                                                       max_bytes_read, content)
                 f(remains)
                 if fd_out:
                     fd_out.write(remains)
@@ -164,8 +168,8 @@ class CryptographyTools(object):
             if fd_out:
                 fd_out.flush()
             # False is just the end of the file
-            yield self._generate_dict(True, len(data),
-                                      file_transferred, content)
+            yield self._generate_encryption_result(True, len(data),
+                                                   file_transferred, content)
 
     def decrypt_from_stream(self, stream, begin, end, hooks={}):
         """
@@ -208,11 +212,12 @@ class CryptographyTools(object):
                 raise OioException('Cryptography exception: %s' % (str(e)))
 
     def get_token_size(self, data_size):
-        remains_size = (data_size * 8) % BLOCK_SIZE
+        remains_size = (data_size * 8) % self.BLOCK_SIZE
         # size of padding
-        encrypt_entire_size = BLOCK_SIZE - remains_size + (data_size * 8)
+        encrypt_entire_size = self.BLOCK_SIZE - remains_size + (data_size * 8)
         # BLOCK_SIZE is the size of the IV (initialization vector)
-        overhead_size = BLOCK_SIZE + VERSION_SIZE + TIMESTAMP_SIZE + HMAC_SIZE
+        overhead_size = self.BLOCK_SIZE + self.VERSION_SIZE
+        overhead_size += self.TIMESTAMP_SIZE + self.HMAC_SIZE
         return (overhead_size + encrypt_entire_size) / 8
 
     def is_noop(self):
