@@ -153,12 +153,14 @@ m2v2_position_decode (const char *s)
 	return out;
 }
 
-guint64
-m2db_get_container_size(sqlite3 *db, gboolean check_alias)
+void
+m2db_get_container_size_and_obj_count(sqlite3 *db, gboolean check_alias,
+		guint64 *size_out, gint64 *obj_count_out)
 {
 	guint64 size = 0;
+	gint64 obj_count = 0;
 	gchar tmp[512];
-	g_snprintf(tmp, sizeof(tmp), "%s%s", "SELECT SUM(size) FROM contents",
+	g_snprintf(tmp, sizeof(tmp), "%s%s", "SELECT SUM(size),COUNT(id) FROM contents",
 			!check_alias ? "" :
 			" WHERE EXISTS (SELECT content FROM aliases WHERE content = id)");
 	const gchar *sql = tmp;
@@ -175,6 +177,7 @@ m2db_get_container_size(sqlite3 *db, gboolean check_alias)
 		else if (stmt) {
 			while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 				size = sqlite3_column_int64(stmt, 0);
+				obj_count = sqlite3_column_int64(stmt, 1);
 			}
 			if (rc != SQLITE_OK && rc != SQLITE_DONE) {
 				grc = rc;
@@ -184,7 +187,10 @@ m2db_get_container_size(sqlite3 *db, gboolean check_alias)
 
 		stmt = NULL;
 	}
-	return size;
+	if (size_out)
+		*size_out = size;
+	if (obj_count_out)
+		*obj_count_out = obj_count;
 }
 
 gint64
@@ -246,6 +252,19 @@ m2db_get_quota(struct sqlx_sqlite3_s *sq3, gint64 def)
 {
 	return sqlx_admin_get_i64(sq3, M2V2_ADMIN_QUOTA, def);
 }
+
+gint64
+m2db_get_obj_count(struct sqlx_sqlite3_s *sq3)
+{
+	return sqlx_admin_get_i64(sq3, M2V2_ADMIN_OBJ_COUNT, 0);
+}
+
+void
+m2db_set_obj_count(struct sqlx_sqlite3_s *sq3, gint64 count)
+{
+	sqlx_admin_set_i64(sq3, M2V2_ADMIN_OBJ_COUNT, count);
+}
+
 
 /* GET ---------------------------------------------------------------------- */
 
@@ -817,7 +836,8 @@ _real_delete(struct sqlx_sqlite3_s *sq3, GSList *beans, GSList **deleted_beans)
 		}
 	}
 
-	// recompute container size
+	// recompute container size and object count
+	gint64 obj_count = m2db_get_obj_count(sq3);
 	for (GSList *l = deleted; l ;l=l->next) {
 		if (&descr_struct_CONTENTS_HEADERS == DESCR(l->data)) {
 			gint64 decrement = CONTENTS_HEADERS_get_size(l->data);
@@ -825,8 +845,10 @@ _real_delete(struct sqlx_sqlite3_s *sq3, GSList *beans, GSList **deleted_beans)
 			m2db_set_size(sq3, size);
 			GRID_DEBUG("CONTAINER size = %"G_GINT64_FORMAT
 					" (lost %"G_GINT64_FORMAT")", size, decrement);
+			obj_count--;
 		}
 	}
+	m2db_set_obj_count(sq3, obj_count);
 
 	g_slist_free(deleted);
 	deleted = NULL;
@@ -1000,6 +1022,7 @@ m2db_truncate_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 
 	/* Update size and mtime in header */
 	const gint64 now = oio_ext_real_time() / G_TIME_SPAN_SECOND;
+	gint64 sz_gap = CONTENTS_HEADERS_get_size(content.header) - truncate_size;
 	CONTENTS_HEADERS_set_size(content.header, truncate_size);
 	CONTENTS_HEADERS_set2_hash(content.header, (guint8*)"", 0);
 	CONTENTS_HEADERS_set_mtime(content.header, now);
@@ -1017,6 +1040,7 @@ m2db_truncate_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	err = _db_save_beans_list(sq3->db, kept);
 
 	if (!err) {
+		m2db_set_size(sq3, m2db_get_size(sq3) - sz_gap);
 		*out_added = kept;
 		*out_deleted = discarded;
 		// prevent cleanup
@@ -1225,9 +1249,11 @@ GError* m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 		g_clear_error(&err);
 	}
 
-	g_clear_error(&err);
 	_patch_beans_defaults(beans);
 	_patch_beans_with_time(beans, oio_ext_real_seconds());
+
+	gint64 added_size = 0;
+	gint64 obj_count = m2db_get_obj_count(args->sq3);
 
 	if (!latest) {
 		/* put everything (and patch everything */
@@ -1237,8 +1263,8 @@ GError* m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 		err = m2db_real_put_alias(args->sq3, beans,
 				out_added ? _bean_list_cb : NULL, out_added);
 		if (!err) {
-			m2db_set_size(args->sq3,
-						  m2db_get_size(args->sq3) + _fetch_content_size(beans));
+			added_size = _fetch_content_size(beans);
+			obj_count++;
 		}
 	} else {
 		/* We found an ALIAS with the same name and version. Just add the chunks
@@ -1246,7 +1272,7 @@ GError* m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 		GByteArray *gba = ALIASES_get_content (latest);
 		_patch_beans_with_version(beans, ALIASES_get_version(latest));
 		_patch_beans_with_contentid(beans, gba->data, gba->len);
-		for (GSList *l=beans; l ;l=l->next) {
+		for (GSList *l = beans; l; l = l->next) {
 			gpointer bean = l->data;
 			if (DESCR(bean) != &descr_struct_CHUNKS &&
 				DESCR(bean) != &descr_struct_PROPERTIES)
@@ -1257,6 +1283,11 @@ GError* m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 			}
 		}
 		/* TODO need to recompute the container's size */
+	}
+
+	if (!err) {
+		m2db_set_size(args->sq3, m2db_get_size(args->sq3) + added_size);
+		m2db_set_obj_count(args->sq3, obj_count);
 	}
 
 	if (latest)
@@ -1469,6 +1500,7 @@ suspended:
     if (!err) {
         m2db_set_size(args->sq3,
                       m2db_get_size(args->sq3) + _fetch_content_size(beans));
+		m2db_set_obj_count(args->sq3, m2db_get_obj_count(args->sq3) + 1);
     }
 
 	/* Purge the latest alias if the condition was met */
@@ -2273,8 +2305,11 @@ m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 	sqlx_exec(sq3->db, "DELETE FROM chunks WHERE NOT EXISTS "
 			"(SELECT content FROM aliases WHERE aliases.content = chunks.content)");
 
-	guint64 size = m2db_get_container_size(sq3->db, FALSE);
+	guint64 size = 0u;
+	gint64 obj_count = 0;
+	m2db_get_container_size_and_obj_count(sq3->db, FALSE, &size, &obj_count);
 	m2db_set_size(sq3, (gint64)size);
+	m2db_set_obj_count(sq3, obj_count);
 
 	/* TODO(jfs): send the beans to the event-agent */
 	_bean_cleanv2 (tmp);
@@ -2286,9 +2321,11 @@ m2db_deduplicate_contents(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 {
 	GError *err = NULL;
 	GSList *impacted_aliases = NULL;
-	guint64 size_before = m2db_get_container_size(sq3->db, TRUE);
+	guint64 size_before = 0u;
+	m2db_get_container_size_and_obj_count(sq3->db, TRUE, &size_before, NULL);
 	guint64 saved_space = dedup_aliases(sq3->db, url, &impacted_aliases, &err);
-	guint64 size_after = m2db_get_container_size(sq3->db, TRUE);
+	guint64 size_after = 0u;
+	m2db_get_container_size_and_obj_count(sq3->db, TRUE, &size_after, NULL);
 
 	GRID_INFO("DEDUP [%s]"
 			"%"G_GUINT64_FORMAT" bytes saved "

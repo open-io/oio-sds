@@ -741,7 +741,7 @@ _container_state (struct sqlx_sqlite3_s *sq3)
 	append_const (gs, "policy", sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY));
 	append_int64 (gs, "ctime", m2db_get_ctime(sq3));
 	append_int64 (gs, "bytes-count", m2db_get_size(sq3));
-	append_int64 (gs, "object-count", 0);
+	append_int64 (gs, "object-count", m2db_get_obj_count(sq3));
 	g_string_append (gs, "}}");
 
 	oio_url_clean (u);
@@ -770,8 +770,14 @@ meta2_backend_refresh_container_size(struct meta2_backend_s *m2b,
 	EXTRA_ASSERT(url != NULL);
 
 	if (!(err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY, &sq3))) {
-		if (recompute)
-			m2db_set_size(sq3, m2db_get_container_size(sq3->db, FALSE));
+		if (recompute) {
+			guint64 size = 0u;
+			gint64 count = 0;
+			m2db_get_container_size_and_obj_count(sq3->db, FALSE,
+					&size, &count);
+			m2db_set_size(sq3, size);
+			m2db_set_obj_count(sq3, count);
+		}
 		meta2_backend_add_modified_container(m2b, sq3);
 		m2b_close(sq3);
 	}
