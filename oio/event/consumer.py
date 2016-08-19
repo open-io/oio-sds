@@ -100,13 +100,13 @@ class EventTypes(object):
     CONTAINER_STATE = 'storage.container.state'
     CONTENT_NEW = 'storage.content.new'
     CONTENT_DELETED = 'storage.content.deleted'
-
+    CONTENT_TOUCH = 'storage.content.touch'
 
 evt_types = [
     'storage.content.new', 'storage.content.deleted',
     'storage.container.new', 'storage.container.deleted',
     'storage.container.state', 'storage.chunk.new',
-    'storage.chunk.deleted']
+    'storage.chunk.deleted', 'storage.content.touch']
 
 
 def _stop(client, server):

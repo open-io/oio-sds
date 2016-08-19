@@ -20,7 +20,9 @@ from oio.common.utils import get_logger
 from oio.container.client import ContainerClient
 from oio.content.plain import PlainContent
 from oio.content.ec import ECContent
+from oio.content.backblaze import BackblazeContent
 from oio.common.storage_method import STORAGE_METHODS
+from oio.api import io
 
 
 class ContentFactory(object):
@@ -42,7 +44,12 @@ class ContentFactory(object):
         chunk_method = meta['chunk-method']
         storage_method = STORAGE_METHODS.load(chunk_method)
 
-        cls = ECContent if storage_method.ec else PlainContent
+        if storage_method.ec:
+            cls = ECContent
+        elif storage_method.backblaze:
+            cls = BackblazeContent
+        else:
+            cls = PlainContent
         return cls(self.conf, container_id, meta, chunks, storage_method)
 
     def new(self, container_id, path, size, policy):
@@ -51,8 +58,12 @@ class ContentFactory(object):
 
         chunk_method = meta['chunk-method']
         storage_method = STORAGE_METHODS.load(chunk_method)
-
-        cls = ECContent if storage_method.ec else PlainContent
+        if storage_method.ec:
+            cls = ECContent
+        elif storage_method.backblaze:
+            cls = BackblazeContent
+        else:
+            cls = PlainContent
         return cls(self.conf, container_id, meta, chunks, storage_method)
 
     def change_policy(self, container_id, content_id, new_policy):
@@ -64,6 +75,10 @@ class ContentFactory(object):
                                old_content.length, new_policy)
 
         stream = old_content.fetch()
+        # TODO this timeout must be configurable,
+        # to prevent backblaze latency
+        if old_content.stgpol == 'BACKBLAZE':
+            io.CLIENT_TIMEOUT = 10
         new_content.create(GeneratorIO(stream))
         # the old content is automatically deleted because the new content has
         # the same name (but not the same id)

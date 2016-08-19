@@ -1,0 +1,8 @@
+# two types available : none or python_script
+type: ''
+# new_policy -> storage policy
+new_policy: ''
+filter_conf:
+ # link of the python_file
+ python_file: ''
+ tiering_time: 10

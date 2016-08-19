@@ -679,6 +679,9 @@ template_event_agent_handlers = """
 [handler:storage.content.deleted]
 pipeline = content_cleaner
 
+[handler:storage.content.touch]
+pipeline = tiering
+
 [handler:storage.container.new]
 pipeline = account_update
 
@@ -693,6 +696,11 @@ pipeline = volume_index
 
 [handler:storage.chunk.deleted]
 pipeline = volume_index
+
+[filter:tiering]
+use = egg:oio#tiering
+tiering_settings_file = ${TIERING_SETTINGS_FILE}
+key_file = ${KEY_FILE}
 
 [filter:content_cleaner]
 use = egg:oio#content_cleaner
@@ -857,7 +865,8 @@ ACCOUNT_ID = 'account_id'
 BUCKET_NAME = 'bucket_name'
 COMPRESSION = 'compression'
 APPLICATION_KEY = 'application_key'
-KEY_FILE='key_file'
+KEY_FILE = 'key_file'
+TIERING_SETTINGS_FILE = 'tiering_settings_file'
 
 defaults = {
     'NS': 'OPENIO',
@@ -952,6 +961,7 @@ def generate(options):
     backblaze_account_id = options.get('backblaze', {}).get(ACCOUNT_ID)
     backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
     backblaze_app_key = options.get('backblaze', {}).get(APPLICATION_KEY)
+    tiering_settings_file = options.get(TIERING_SETTINGS_FILE, None)
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(IP=ip,
                NS=ns,
@@ -985,6 +995,7 @@ def generate(options):
                BACKBLAZE_ACCOUNT_ID=backblaze_account_id,
                BACKBLAZE_BUCKET_NAME=backblaze_bucket_name,
                BACKBLAZE_APPLICATION_KEY=backblaze_app_key,
+               TIERING_SETTINGS_FILE=tiering_settings_file,
                KEY_FILE=key_file,
                HTTPD_BINARY=HTTPD_BINARY)
 
