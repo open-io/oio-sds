@@ -16,6 +16,7 @@ import hashlib
 import ConfigParser
 import json as js
 from oio.api import io
+from oio.common.cryptography_tools import CryptographyTools
 
 
 def _format_autorization_required(account_id, application_key):
@@ -64,6 +65,7 @@ class BackblazeUtils(object):
                 raise BackblazeUtilsException(
                     "Failed to load application key: %s"
                     % exc)
+            encryption_key = config.get('general', 'encryption_key')
             app_key = config.get('backblaze',
                                  '%s.%s.application_key'
                                  % (storage_method.account_id,
@@ -79,6 +81,9 @@ class BackblazeUtils(object):
         meta['authorization'] = backblaze.authorization_token
         meta['upload_token'] = backblaze._get_upload_token_by_bucket_name(
             storage_method.bucket_name)
+        if encryption_key == 'None':
+            encryption_key = None
+        meta['encryption'] = CryptographyTools(encryption_key)
         BackblazeUtils.b2_authorization_list[key] = meta
         return meta
 
@@ -192,6 +197,7 @@ class Backblaze(object):
             'Content-Type': metadata['mime_type'],
             'X-Bz-Content-Sha1': sha1,
         }
+        headers['Content-Length'] = metadata['size']
         upload_url = self.upload_token['uploadUrl']
         resp = Requests().get_response_from_request('POST', upload_url,
                                                     headers, data, True)
@@ -207,7 +213,7 @@ class Backblaze(object):
                      (self.authorization_required['downloadUrl'], bucket_name,
                       link)
         return Requests().get_response_from_request('GET', url_upload,
-                                                    headers, None)
+                                                    headers, None, stream=True)
 
     def _list_file_names(self, bucket_id):
         start_file_name = True
@@ -335,6 +341,8 @@ class Backblaze(object):
 
 
 class Requests(object):
+    B2_TIMEOUT = 45
+
     def __init__(self, error_handler=None):
         self.error_handler = error_handler
 
@@ -346,14 +354,16 @@ class Requests(object):
             return response.json()
         return None
 
-    def _get_response(self, content_type, url, headers, file_descriptor):
+    def _get_response(self, content_type, url, headers, file_descriptor,
+                      stream=False):
         s = Session()
         response = None
         headers = dict([k, str(headers[k])] for k in headers)
-        req = Request(content_type, url, headers=headers, data=file_descriptor)
+        req = Request(content_type, url, headers=headers,
+                      data=file_descriptor)
         prepared = req.prepare()
         try:
-            response = s.send(prepared)
+            response = s.send(prepared, stream=stream, timeout=self.B2_TIMEOUT)
         except exceptions.Timeout:
             raise
         except exceptions.TooManyRedirects:
@@ -374,17 +384,22 @@ class Requests(object):
         return response
 
     def get_response_from_request(self, content_type, url, headers=None,
-                                  file_descriptor=None, json=False):
+                                  file_descriptor=None, json=False,
+                                  stream=False):
         header = headers or {}
         if json:
             return self._get_json_response(content_type, url,
                                            header, file_descriptor)
-        return self._get_response(content_type, url,
-                                  header, file_descriptor).content
+        response = self._get_response(content_type, url,
+                                      header, file_descriptor, stream)
+        if stream:
+            return response.raw
+        return response.content
 
 
 class BackblazeUtilsException(Exception):
     def __init__(self, string):
+        super(BackblazeUtilsException, self).__init__()
         self._string = string
 
     def __str__(self):

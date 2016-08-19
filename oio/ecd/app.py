@@ -69,12 +69,6 @@ def part_iter_to_bytes_iter(stream):
             yield x
 
 
-def part_backblaze_to_bytes_iter(stream):
-    for itera in stream:
-        for fd in itera:
-            yield fd
-
-
 class ECD(object):
     def __init__(self, conf):
         self.conf = conf
@@ -136,6 +130,8 @@ class ECD(object):
             creds = BackblazeUtils.get_credentials(storage_method, key_file)
         except BackblazeUtilsException as exc:
             return Response(exc, 500)
+        offset = 0
+        size = 0
         if meta_start is not None:
             if meta_start < 0:
                 offset = meta_start

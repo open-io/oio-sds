@@ -27,7 +27,6 @@ from string import Template
 import re
 import argparse
 
-
 template_redis = """
 daemonize no
 pidfile ${RUNDIR}/redis.pid
@@ -240,7 +239,7 @@ LogLevel info
 
 WSGIDaemonProcess ${SRVTYPE}-${SRVNUM} processes=2 threads=1 user=${USER} group=${GROUP}
 #WSGIProcessGroup ${SRVTYPE}-${SRVNUM}
-WSGIApplicationGroup ${SRVTYPE}-${SRVNUM}
+WSGIApplicationGroup %{GLOBAL}
 WSGIScriptAlias / ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.wsgi
 WSGISocketPrefix ${RUNDIR}/
 WSGIChunkedRequest On
@@ -445,6 +444,8 @@ BACKBLAZE=backblaze/account_id=${BACKBLAZE_ACCOUNT_ID},bucket_name=${BACKBLAZE_B
 """
 
 template_credentials = """
+[general]
+encryption_key=${ENCRYPTION_KEY}
 [backblaze]
 ${BACKBLAZE_ACCOUNT_ID}.${BACKBLAZE_BUCKET_NAME}.application_key=${BACKBLAZE_APPLICATION_KEY}
 """
@@ -858,6 +859,7 @@ BUCKET_NAME = 'bucket_name'
 COMPRESSION = 'compression'
 APPLICATION_KEY = 'application_key'
 KEY_FILE='key_file'
+ENCRYPTION_KEY='encryption_key'
 
 defaults = {
     'NS': 'OPENIO',
@@ -952,6 +954,8 @@ def generate(options):
     backblaze_account_id = options.get('backblaze', {}).get(ACCOUNT_ID)
     backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
     backblaze_app_key = options.get('backblaze', {}).get(APPLICATION_KEY)
+    encryption_key = options.get(ENCRYPTION_KEY,
+                                 None)
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(IP=ip,
                NS=ns,
@@ -985,6 +989,7 @@ def generate(options):
                BACKBLAZE_ACCOUNT_ID=backblaze_account_id,
                BACKBLAZE_BUCKET_NAME=backblaze_bucket_name,
                BACKBLAZE_APPLICATION_KEY=backblaze_app_key,
+               ENCRYPTION_KEY=encryption_key,
                KEY_FILE=key_file,
                HTTPD_BINARY=HTTPD_BINARY)
 
