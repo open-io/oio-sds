@@ -1710,6 +1710,8 @@ GError* m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 			cb(u0, _bean_dup(header));
 		}
 	}
+	if (!err)
+		m2db_set_size(sq3, m2db_get_size(sq3) + added_size);
 
 out:
 	_bean_cleanl2(newchunks);
