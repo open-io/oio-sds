@@ -1607,6 +1607,7 @@ GError* m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		GSList *beans, m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;
+	GSList *newchunks = NULL;
 
 	// Sanity checks
 	GRID_TRACE("M2 APPEND(%s)", oio_url_get(url, OIOURL_WHOLE));
@@ -1640,28 +1641,34 @@ GError* m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		return m2db_put_alias(&args, beans, NULL, NULL);
 	}
 
-	/* alias present! Extract the chunks now, for later */
-	GSList *newchunks = NULL;
-	for (GSList *l=beans; l ;l=l->next) {
-		gpointer bean = l->data;
-		if (bean && &descr_struct_CHUNKS == DESCR(bean))
-			newchunks = g_slist_prepend (newchunks, _bean_dup (bean));
-	}
+	/* a content is present, let's append the chunks. Let's start by filtering
+	 * the chunks. */
+	gint64 added_size = 0;
+	GTree *positions_seen = g_tree_new(_tree_compare_int);
+	_extract_chunks_sizes_positions(beans,
+			&newchunks, &added_size, positions_seen);
+	g_tree_destroy(positions_seen);
 
 	/* For the beans in place, get the position of the last chunk (meta), and
 	 * the current content ID */
 	gint64 last_position = -1;
 	GBytes *content_id = NULL;
+	struct bean_CONTENTS_HEADERS_s *header = NULL;
+	const gint64 now = oio_ext_real_time() / G_TIME_SPAN_SECOND;
 	for (guint i=0; i<tmp->len ;++i) {
 		gpointer bean = tmp->pdata[i];
 		if (&descr_struct_CONTENTS_HEADERS == DESCR(bean)) {
-			struct bean_CONTENTS_HEADERS_s *header = bean;
+			header = bean;
 			GByteArray *gba = CONTENTS_HEADERS_get_id (header);
 			if (gba) {
 				if (content_id)
 					g_bytes_unref (content_id);
 				content_id = g_bytes_new (gba->data, gba->len);
 			}
+			gint64 size = CONTENTS_HEADERS_get_size(header) + added_size;
+			CONTENTS_HEADERS_set_size(header, size);
+			CONTENTS_HEADERS_set2_hash(header, (guint8*)"", 0);
+			CONTENTS_HEADERS_set_mtime(header, now);
 		}
 		else if (&descr_struct_CHUNKS == DESCR(bean)) {
 			struct bean_CHUNKS_s *chunk = bean;
@@ -1689,18 +1696,23 @@ GError* m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 
 	g_bytes_unref (content_id);
 
+	/* Save the modified content header */
+	if ((err = _db_save_bean(sq3->db, header)))
+		goto out;
+
 	/* Now insert each chunk bean */
 	if (!(err = _db_insert_beans_list (sq3->db, newchunks))) {
 		if (cb) {
 			for (GSList *l=newchunks; l ;l=l->next) {
 				cb (u0, l->data);
-				l->data = NULL;
+				l->data = NULL;  // prevent double free
 			}
+			cb(u0, _bean_dup(header));
 		}
 	}
-	_bean_cleanl2 (newchunks);
 
 out:
+	_bean_cleanl2(newchunks);
 	_bean_cleanv2(tmp);
 	return err;
 }
