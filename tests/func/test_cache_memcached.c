@@ -15,19 +15,20 @@ Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
-
 #include <core/oio_core.h>
 #include <cache/cache.h>
 #include <cache/cache_memcached.h>
 
 #include "tests/common/test_cache_abstract.c"
 
+#define DEFAULT_IP "127.0.0.1"
+#define DEFAULT_PORT 11211
+
 static void
 test_cache_cycle_memcached (void)
 {
-	// TODO those should probably be passed as args
-	char *ip = "127.0.0.1";
-	int port = 11211;
+	char *ip = DEFAULT_IP;
+	int port = DEFAULT_PORT;
 
 	struct oio_cache_s * c = oio_cache_make_memcached (ip, port);
 

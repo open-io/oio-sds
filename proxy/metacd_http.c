@@ -27,6 +27,9 @@ static struct grid_task_queue_s *admin_gtq = NULL;
 static struct grid_task_queue_s *upstream_gtq = NULL;
 static struct grid_task_queue_s *downstream_gtq = NULL;
 
+static struct oio_cache_s *resolver_services = NULL;
+static struct oio_cache_s *resolver_csm0 = NULL;
+
 static GThread *admin_thread = NULL;
 static GThread *upstream_thread = NULL;
 static GThread *downstream_thread = NULL;
@@ -51,6 +54,7 @@ static guint dir_low_ttl = PROXYD_DEFAULT_TTL_SERVICES / G_TIME_SPAN_SECOND;
 static guint dir_low_max = PROXYD_DEFAULT_MAX_SERVICES;
 static guint dir_high_ttl = PROXYD_DEFAULT_TTL_CSM0 / G_TIME_SPAN_SECOND;
 static guint dir_high_max = PROXYD_DEFAULT_MAX_CSM0;
+static GString *cfg_cache_config_file = NULL;
 
 gchar *ns_name = NULL;
 gboolean flag_cache_enabled = TRUE;
@@ -79,13 +83,15 @@ GRWLock master_rwlock = {0};
 struct lru_tree_s *srv_master = NULL;
 
 GRWLock srv_rwlock = {0};
-struct lru_tree_s *srv_down = NULL;
-struct lru_tree_s *srv_known = NULL;
+struct oio_cache_s *srv_down = NULL;
+struct oio_cache_s *srv_known = NULL;
 
 GRWLock wanted_rwlock = {0};
 gchar **wanted_srvtypes = NULL;
 GBytes **wanted_prepared = NULL;
 
+static struct oio_cache_s*
+_oio_proxy_cache_create(yaml_parser_t*, yaml_event_t*);
 // Misc. handlers --------------------------------------------------------------
 
 static enum http_rc_e
@@ -119,10 +125,13 @@ action_status(struct req_args_s *args)
 	g_string_append_printf(gstr, "gauge cache.srv.max = %u\n", s.services.max);
 	g_string_append_printf(gstr, "gauge cache.srv.ttl = %lu\n", s.services.ttl);
 
-	gint64 cd, ck;
-	SRV_READ(cd = lru_tree_count(srv_down); ck = lru_tree_count(srv_known));
-	g_string_append_printf(gstr, "gauge down.srv = %"G_GINT64_FORMAT"\n", cd);
-	g_string_append_printf(gstr, "gauge known.srv = %"G_GINT64_FORMAT"\n", ck);
+	/* SOME TRACE : CAN'T WORK ANYMORE CAUSE OF NEW CACHE IMPLEMENTATION */
+	/*
+	  gint64 cd,ck;
+	  SRV_READ(cd = count = lru_tree_count(srv_down); ck = count = lru_tree_count(srv_known);)
+	  g_string_append_printf(gstr, "gauge down.srv = %"G_GINT64_FORMAT"\n", cd);
+	  g_string_append_printf(gstr, "gauge known.srv = %"G_GINT64_FORMAT"\n", ck);
+	*/
 
 	args->rp->set_body_gstr(gstr);
 	args->rp->set_status(HTTP_CODE_OK, "OK");
@@ -279,13 +288,27 @@ _push_queue_create (void)
 
 // Administrative tasks --------------------------------------------------------
 
+
 static guint
-_lru_tree_expire (GRWLock *rw, struct lru_tree_s *lru, const gint64 delay)
+_lru_tree_expire(GRWLock *rw, struct lru_tree_s *lru, const gint64 delay)
 {
 	if (delay <= 0) return 0;
 	const gint64 now = oio_ext_monotonic_time();
+	guint count = 0;
 	g_rw_lock_writer_lock (rw);
-	guint count = lru_tree_remove_older (lru, OLDEST(now,delay));
+	count = lru_tree_remove_older (lru, OLDEST(now, delay));
+	g_rw_lock_writer_unlock (rw);
+	return count;
+}
+
+static guint
+_oio_cache_expire (GRWLock *rw, struct oio_cache_s *cache, const gint64 delay)
+{
+	if (delay <= 0) return 0;
+	const gint64 now = oio_ext_monotonic_time();
+	guint count = 0;
+	g_rw_lock_writer_lock (rw);
+        count = oio_cache_cleanup_older(cache, OLDEST(now,delay));
 	g_rw_lock_writer_unlock (rw);
 	return count;
 }
@@ -302,7 +325,8 @@ _task_expire_services_master (gpointer p UNUSED)
 static void
 _task_expire_services_known (gpointer p UNUSED)
 {
-	guint count = _lru_tree_expire (&srv_rwlock, srv_known, ttl_known_services);
+	guint count = _oio_cache_expire (&srv_rwlock, srv_known,
+					 ttl_known_services);
 	if (count)
 		GRID_INFO("Forgot %u services", count);
 }
@@ -310,7 +334,7 @@ _task_expire_services_known (gpointer p UNUSED)
 static void
 _task_expire_services_down (gpointer p UNUSED)
 {
-	guint count = _lru_tree_expire (&srv_rwlock, srv_down, ttl_down_services);
+	guint count = _oio_cache_expire (&srv_rwlock, srv_down, ttl_down_services);
 	if (count)
 		GRID_INFO("Re-enabled %u services", count);
 }
@@ -396,12 +420,23 @@ _reload_srvtype(const char *type)
 	if (GRID_TRACE_ENABLED()) {
 		GRID_TRACE ("SRV loaded %u [%s]", g_slist_length(list), type);
 	}
-
+	
 	/* reloads the known services */
-	gulong now = oio_ext_monotonic_seconds ();
+	// enlever srv_write est il possible?
+        gint64 between;
+	const gint64 now = oio_ext_monotonic_time();
 	SRV_WRITE(for (GSList *l=list; l ;l=l->next) {
 		gchar *k = service_info_key (l->data);
-		lru_tree_insert (srv_known, k, (void*)now);
+		gchar *now_string = NULL;
+		now_string = g_strdup_printf("%lu",now);
+		gchar *new_key=_get_cache_key(k, SRV_KNOWN_STR);
+		between = oio_ext_monotonic_time();
+		oio_cache_put (srv_known, (const char*)new_key, (const char*)now_string);
+		between = oio_ext_monotonic_time() - between;
+		GRID_INFO("_r_s put->srv_known : %lu",between);
+		g_free(now_string);
+		g_free(new_key);
+		g_free(k);
 	});
 
 	/* updates the score of the local services */
@@ -460,7 +495,9 @@ _task_reload_lb(gpointer p UNUSED)
 
 	if (tt) {
 		for (gchar **t=tt; *t ;++t)
-			_reload_srvtype (*t);
+			{
+				_reload_srvtype (*t);
+			}
 		g_free (tt);
 	}
 
@@ -678,6 +715,10 @@ grid_main_get_options (void)
 			"Directory 'high' (cs+meta0) TTL for cache elements"},
 		{"DirHighMax", OT_UINT, {.u = &dir_high_max},
 			"Directory 'high' (cs+meta0) MAX cached elements"},
+
+		{"CacheConfigFile", OT_STRING,
+		 {.str = &cfg_cache_config_file},
+		 "Cache configuration yaml file"},
 		{NULL, 0, {.i = 0}, NULL}
 	};
 
@@ -732,11 +773,11 @@ grid_main_specific_fini (void)
 		resolver = NULL;
 	}
 	if (srv_down) {
-		lru_tree_destroy (srv_down);
+		oio_cache_destroy (srv_down);
 		srv_down = NULL;
 	}
 	if (srv_known) {
-		lru_tree_destroy (srv_known);
+		oio_cache_destroy (srv_known);
 		srv_known = NULL;
 	}
 	if (srv_master) {
@@ -883,6 +924,456 @@ configure_request_handlers (void)
 	SET("/$NS/admin/meta0_list/#GET", action_admin_meta0_list);
 }
 
+static void
+_free_key_value (struct key_value_s* values)
+{
+	if (NULL != values->key)
+		g_free(values->key);
+	if (NULL != values->value)
+		g_free(values->value);
+}
+
+static void
+_put_key_value (struct key_value_s* values, const int i, char* value)
+{
+	if ((i & 0x1) == 0)
+		values->key = value;
+	else
+		values->value = value;
+}
+
+static struct oio_cache_s*
+_oio_proxy_cache_lru_create (yaml_parser_t* parser,
+			     yaml_event_t* event)
+{
+	struct oio_cache_s* cache_tmp;
+	struct lru_tree_s *tree = lru_tree_create((GCompareFunc)g_strcmp0, g_free, g_free, 0);
+	do {
+		if (!yaml_parser_parse(parser, event)) {
+			GRID_ERROR("lru - error parse");
+		        return NULL;
+		}
+		
+		switch(event->type)
+			{
+			case YAML_NO_EVENT: break;
+				/* Stream start/end */
+			case YAML_STREAM_START_EVENT:  break;
+			case YAML_STREAM_END_EVENT: break;
+				/* Block delimeters */
+			case YAML_DOCUMENT_START_EVENT:break;
+			case YAML_DOCUMENT_END_EVENT:break;
+			case YAML_SEQUENCE_START_EVENT:
+				break; 
+			case YAML_SEQUENCE_END_EVENT:
+				break;
+			case YAML_MAPPING_START_EVENT:
+				break; 
+			case YAML_MAPPING_END_EVENT:
+				yaml_event_delete(event);
+				cache_tmp = oio_cache_make_LRU(tree);
+				return cache_tmp;
+				break;
+			case YAML_ALIAS_EVENT: break;
+			case YAML_SCALAR_EVENT:
+				break;
+
+			}
+		if (event->type != YAML_STREAM_END_EVENT)
+			yaml_event_delete(event);
+	} while(event->type != YAML_STREAM_END_EVENT);
+	return NULL;
+}
+
+#if (defined(HIREDIS_FOUND) && defined(ALLOW_HIREDIS)) || (defined(LIBMEMCACHED_FOUND) && defined(ALLOW_LIBMEMCACHED))
+static void _put_args (yaml_parser_t* parser, yaml_event_t* event,
+		       struct key_value_s** fields)
+{
+	int i = 0;
+	char* str_tmp;
+	do {
+		if (!yaml_parser_parse(parser, event)) {
+			GRID_ERROR("parse error");
+		        return ;
+		}
+		
+		switch(event->type)
+			{
+			case YAML_NO_EVENT: break;
+				/* Stream start/end */
+			case YAML_STREAM_START_EVENT:  break;
+			case YAML_STREAM_END_EVENT: break;
+				/* Block delimeters */
+			case YAML_DOCUMENT_START_EVENT:break;
+			case YAML_DOCUMENT_END_EVENT:break;
+			case YAML_SEQUENCE_START_EVENT:
+				break;
+			case YAML_SEQUENCE_END_EVENT:
+				break;
+			case YAML_MAPPING_START_EVENT:
+				break;
+			case YAML_MAPPING_END_EVENT:
+				yaml_event_delete(event);
+				return;
+				break;
+			case YAML_ALIAS_EVENT: break;
+			case YAML_SCALAR_EVENT:
+				str_tmp = g_strdup((char*)(event->data).scalar.value);				
+				if (NULL == str_tmp) {
+					yaml_event_delete(event);
+					return;
+				}
+				_put_key_value(fields [i/2],i,str_tmp); 
+				i++;
+				break;
+			}
+		if (event->type != YAML_STREAM_END_EVENT)
+			yaml_event_delete(event);
+	} while(event->type != YAML_STREAM_END_EVENT);
+}
+#endif
+
+#if defined(HIREDIS_FOUND) && defined(ALLOW_HIREDIS)
+static struct oio_cache_s*
+_oio_proxy_cache_redis_create (yaml_parser_t* parser,
+			       yaml_event_t* event)
+{
+	gint64 expiration_time_val;
+	char* tol_tmp;
+	int port_val;
+	gint64 timeout_val;
+	struct oio_cache_s* cache_tmp;
+	struct timeval timeout_s;
+	struct key_value_s ip = {NULL,NULL};
+	struct key_value_s port = {NULL, NULL};
+	struct key_value_s timeout = {NULL, NULL};
+	struct key_value_s expiration_time = {NULL, NULL};
+	struct key_value_s* values [4] = {&ip,&port,&timeout,&expiration_time};
+	gboolean failed = FALSE;
+        _put_args(parser,event,values);
+	expiration_time_val = g_ascii_strtoll(expiration_time.value,
+					      &tol_tmp,10);
+	/* verification of g_ascii_strtol success*/
+	if (!(*(expiration_time.value) != '\0' && *tol_tmp=='\0')) {
+		failed = TRUE;
+		GRID_ERROR("Error strtoll expiration time");
+	}
+	port_val = g_ascii_strtoll(port.value,&tol_tmp,10);
+	/* verification of g_ascii_strtol success*/
+	if (!((port.value) != '\0' && *tol_tmp=='\0')) {
+		GRID_ERROR("Error strtoll port");
+		failed = TRUE;
+	}
+	timeout_val = g_ascii_strtoll(timeout.value,&tol_tmp,10);
+	/* verification of g_ascii_strtol success*/
+	if (!(*(timeout.value) != '\0' && *tol_tmp=='\0')) {
+		GRID_ERROR("Error strtoll timeout");
+		failed = TRUE;
+	}
+	(void) timeout_val;
+	if (failed)
+		cache_tmp = NULL;
+	else {
+		memset(&timeout_s, 0, sizeof(struct timeval));
+		timeout_s.tv_sec = (time_t) timeout_val;
+		cache_tmp = oio_cache_make_redis(ip.value, port_val,
+						 timeout_s,
+						 expiration_time_val);
+	}
+	_free_key_value(&ip);
+	_free_key_value(&port);
+	_free_key_value(&timeout);
+	_free_key_value(&expiration_time);
+	return cache_tmp;
+}
+#endif
+
+#if defined(LIBMEMCACHED_FOUND) && defined(ALLOW_LIBMEMCACHED)
+static struct oio_cache_s*
+_oio_proxy_cache_memcached_create (yaml_parser_t* parser,
+				   yaml_event_t* event)
+{
+	gint64 port_val;
+	char* tol_tmp;
+	struct oio_cache_s* cache_tmp;
+	struct key_value_s ip = {NULL, NULL};
+	struct key_value_s port = {NULL, NULL};
+	struct key_value_s* values [2] = {&ip, &port};
+	_put_args(parser, event, values);
+	port_val = g_ascii_strtoll(port.value, &tol_tmp, 10);
+	/* verification of g_ascii_strtol success*/
+	if (port.value != '\0' && *tol_tmp=='\0') {
+		GRID_ERROR("Error strtoll port");
+		cache_tmp = NULL;
+	}
+	else
+		cache_tmp = oio_cache_make_memcached(ip.value, port_val);
+	_free_key_value(&ip);
+	_free_key_value(&port);
+	return cache_tmp;
+}
+#endif
+
+static struct oio_cache_s*
+_oio_proxy_cache_multilayer_create (yaml_parser_t* parser,
+				    yaml_event_t* event)
+{
+	GSList* caches = NULL;
+	struct oio_cache_s* cache_tmp;
+	do {
+		if (!yaml_parser_parse(parser, event)) 
+		        return NULL;
+		
+		switch(event->type)
+			{ 
+			case YAML_NO_EVENT: break;
+				/* Stream start/end */
+			case YAML_STREAM_START_EVENT:  break;
+			case YAML_STREAM_END_EVENT: break;
+				/* Block delimeters */
+			case YAML_DOCUMENT_START_EVENT:break;
+			case YAML_DOCUMENT_END_EVENT:break;
+			case YAML_SEQUENCE_START_EVENT:
+				break; 
+			case YAML_SEQUENCE_END_EVENT:
+				yaml_event_delete(event);
+				return oio_cache_make_multilayer(caches);
+				break;
+			case YAML_MAPPING_START_EVENT:
+				cache_tmp = _oio_proxy_cache_create(parser,
+								    event);
+				if (cache_tmp == NULL) {
+					GRID_ERROR("multilayer : null cache");
+					yaml_event_delete(event);
+					return NULL;
+				}
+				caches = g_slist_append(caches, cache_tmp);
+				break; 
+			case YAML_MAPPING_END_EVENT:
+				break;
+			case YAML_ALIAS_EVENT: break;
+			case YAML_SCALAR_EVENT:
+				break;
+			}
+		if (event->type != YAML_STREAM_END_EVENT)
+			yaml_event_delete(event);
+	} while(event->type != YAML_STREAM_END_EVENT);
+	return NULL;
+}
+
+
+/**
+ * Set the cache in the config from the cache in parameters
+ * to add a new cache treated in the cache-config.yaml file, add this here !!!
+**/
+static void
+_set_cache (const char* cache_name, struct oio_cache_s* cache)
+{
+	if (strcmp(cache_name, SRV_DOWN_STR) == 0)
+		srv_down = cache;
+	if (strcmp(cache_name, SRV_KNOWN_STR) == 0)
+		srv_known = cache;
+	if (strcmp(cache_name, RESOLVER_SERVICES_STR) == 0)
+		resolver_services = cache;
+	if (strcmp(cache_name, RESOLVER_CSMETA0_STR) == 0)
+		resolver_csm0 = cache;
+}
+
+static void
+_set_cache_default ()
+{
+	gchar *cache_str = SRV_DOWN_STR";"SRV_KNOWN_STR";"\
+		RESOLVER_SERVICES_STR";"RESOLVER_CSMETA0_STR;
+	gchar **caches = g_strsplit(cache_str, ";", -1);
+	for (guint cache_counter = 0; cache_counter < g_strv_length(caches);
+	     cache_counter++) {
+		struct lru_tree_s *tree = lru_tree_create((GCompareFunc)g_strcmp0, g_free, g_free, 0);
+		_set_cache(caches[cache_counter], oio_cache_make_LRU(tree));
+	}
+	g_strfreev(caches);
+}
+
+/**
+ * Get the function to treat the cache
+ * To add a new cache implementation, please put this here !!!
+**/
+static struct oio_cache_s*(*_oio_get_cache_function (const struct key_value_s* cache_type)) (yaml_parser_t*, yaml_event_t*)
+{
+	#ifdef HIREDIS_FOUND
+	#endif
+	if (cache_type->value == NULL) {
+		GRID_ERROR("error in value initialization");
+		return NULL;
+	}
+#if defined(HIREDIS_FOUND) && defined(ALLOW_HIREDIS)
+	if (strcmp(cache_type->value, REDIS_STR) == 0)
+		return _oio_proxy_cache_redis_create;
+#endif
+#if defined(LIBMEMCACHED_FOUND) && defined(ALLOW_LIBMEMCACHED)
+	if (strcmp(cache_type->value, MEMCACHED_STR) == 0)
+		return _oio_proxy_cache_memcached_create;
+#endif
+	if (strcmp(cache_type->value, MULTILAYER_STR) == 0)
+		return _oio_proxy_cache_multilayer_create;
+	if (strcmp(cache_type->value, LRU_TREE_STR) == 0)
+		return _oio_proxy_cache_lru_create;
+	GRID_ERROR("error in config file");
+	return NULL;
+}
+
+static struct oio_cache_s*
+_oio_proxy_cache_create (yaml_parser_t* parser,
+			 yaml_event_t* event)
+{
+	struct oio_cache_s* (*function) (yaml_parser_t*, yaml_event_t*);
+	struct key_value_s cache_type = {NULL, NULL};
+	struct oio_cache_s* cache;
+	gchar* str_tmp;
+	int i = 0;
+	do {
+		if (!yaml_parser_parse(parser, event)) {
+			GRID_ERROR("parser error");
+			return NULL;
+		}
+		
+		switch(event->type)
+			{
+			case YAML_NO_EVENT: break;
+				/* Stream start/end */
+			case YAML_STREAM_START_EVENT:  break;
+			case YAML_STREAM_END_EVENT: break;
+				/* Block delimeters */
+			case YAML_DOCUMENT_START_EVENT:break;
+			case YAML_DOCUMENT_END_EVENT:break;
+			case YAML_SEQUENCE_START_EVENT:
+				function = _oio_get_cache_function(&cache_type);
+				if (!function) {
+					_free_key_value(&cache_type);
+					yaml_event_delete(event);
+					return NULL;
+				}
+				cache = function(parser, event);
+				_free_key_value(&cache_type);
+				yaml_event_delete(event);
+				return cache;
+				break; 
+			case YAML_SEQUENCE_END_EVENT:
+				break; 
+			case YAML_MAPPING_START_EVENT:
+				function =  _oio_get_cache_function(&cache_type);
+				if (!function) {
+					_free_key_value(&cache_type);
+					yaml_event_delete(event);
+					return NULL;
+				}
+				cache = function(parser, event);
+				_free_key_value(&cache_type);
+				yaml_event_delete(event);
+				return cache;
+				break;
+			case YAML_MAPPING_END_EVENT:
+				break;
+			case YAML_ALIAS_EVENT: break;
+			case YAML_SCALAR_EVENT:
+				str_tmp = g_strdup((char*) (event->data).scalar.value);
+				if (i / 2 == 0)
+					_put_key_value(&cache_type,
+						       i, str_tmp);
+				else
+					free(str_tmp);
+				i++;
+				break;
+			}
+		if (event->type != YAML_STREAM_END_EVENT)
+			yaml_event_delete(event);
+	} while(event->type != YAML_STREAM_END_EVENT);
+	return NULL;
+}
+
+static gboolean
+_oio_proxy_caches_create (const char *cache_cfg_file)
+{
+	if (!cache_cfg_file) {
+		if(GRID_DEBUG_ENABLED())
+			GRID_DEBUG("set default cache");
+		_set_cache_default();
+		return TRUE;
+	}
+	if (GRID_DEBUG_ENABLED())
+		GRID_DEBUG("set by cache_file");
+	FILE *fh = fopen(cache_cfg_file, "r");
+	yaml_parser_t parser;
+	char* cache_str_tmp;
+	gboolean first_mapping = TRUE;
+	int tmp = 0;
+	yaml_event_t  event;
+	struct oio_cache_s* cache;
+	/* Initialize parser */
+	if (!yaml_parser_initialize(&parser)) {
+		GRID_ERROR("parser initialisation error");
+		return FALSE;
+	}
+	if (fh == NULL) {
+		GRID_ERROR("File error %s", cache_cfg_file);
+	        return FALSE;
+	}
+
+	/* Set input file */
+	yaml_parser_set_input_file(&parser, fh);
+	do {
+		if (!yaml_parser_parse(&parser, &event)) {
+			GRID_ERROR("cache parser error");
+		        return FALSE;
+		}
+
+		switch(event.type)
+			{
+			case YAML_NO_EVENT: break;
+				/* Stream start/end */
+			case YAML_STREAM_START_EVENT:  break;
+			case YAML_STREAM_END_EVENT: break;
+				/* Block delimeters */
+			case YAML_DOCUMENT_START_EVENT: break;
+			case YAML_DOCUMENT_END_EVENT: break;
+			case YAML_SEQUENCE_START_EVENT: break; 
+			case YAML_SEQUENCE_END_EVENT: break; // not possible 
+			case YAML_MAPPING_START_EVENT:
+				if (!first_mapping) {
+					cache = _oio_proxy_cache_create(&parser, &event);
+					if(cache == NULL) {
+						return FALSE;
+						g_free(cache_str_tmp);
+					}
+					_set_cache(cache_str_tmp, cache);
+					g_free(cache_str_tmp);
+					first_mapping = TRUE;
+					tmp++;
+				}
+				first_mapping = FALSE;
+				break; 
+			case YAML_MAPPING_END_EVENT: break; // not possible
+			case YAML_ALIAS_EVENT: break;
+			case YAML_SCALAR_EVENT:
+				cache_str_tmp = g_strdup((char*) event.data.scalar.value);
+				if (NULL == cache_str_tmp) {
+					GRID_ERROR("No memory left !");
+					return FALSE;
+				}
+				break;
+			}
+		if (event.type != YAML_STREAM_END_EVENT)
+			yaml_event_delete(&event);
+	} while(event.type != YAML_STREAM_END_EVENT);
+	yaml_event_delete(&event);
+
+	/* Cleanup */
+	yaml_parser_delete(&parser);
+	fclose(fh);
+	return TRUE;
+}
+
+
+
 static gboolean
 grid_main_configure (int argc, char **argv)
 {
@@ -893,7 +1384,10 @@ grid_main_configure (int argc, char **argv)
 
 	const char *cfg_main_url = argv[0];
 	const char *cfg_namespace = argv[1];
-
+	const char *cache_config_file = NULL;
+	if (cfg_cache_config_file)
+		cache_config_file = cfg_cache_config_file->str;
+	
 	g_rw_lock_init (&csurl_rwlock);
 	g_rw_lock_init (&push_rwlock);
 	g_rw_lock_init (&reg_rwlock);
@@ -929,11 +1423,16 @@ grid_main_configure (int argc, char **argv)
 
 	lb_world = oio_lb_local__create_world();
 	lb = oio_lb__create();
-	srv_down = lru_tree_create((GCompareFunc)g_strcmp0, g_free, NULL, LTO_NOATIME);
-	srv_known = lru_tree_create((GCompareFunc)g_strcmp0, g_free, NULL, LTO_NOATIME);
-	srv_master = lru_tree_create((GCompareFunc)g_strcmp0, g_free, g_free, LTO_NOATIME);
+	/* caches creation */
+	gboolean result = _oio_proxy_caches_create(cache_config_file);
+	if (result == FALSE)
+		return FALSE;
+	srv_master = lru_tree_create((GCompareFunc)g_strcmp0, g_free,
+				     g_free, LTO_NOATIME);
 
-	resolver = hc_resolver_create ();
+	/* resolver creation */
+	resolver = hc_resolver_create (resolver_csm0, resolver_services);
+	
 	enum hc_resolver_flags_e f = 0;
 	if (!flag_cache_enabled)
 		f |= HC_RESOLVER_NOCACHE;

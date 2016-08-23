@@ -22,15 +22,18 @@ License along with this library.
 
 #include "tests/common/test_cache_abstract.c"
 
+#define DEFAULT_IP "127.0.0.1"
+#define DEFAULT_PORT 6379
 static void
 test_cache_cycle_redis (void)
 {
-	// TODO those should probably be passed as args
-	char *ip = "127.0.0.1";
-	int port = 6379;
+	
+	char *ip = DEFAULT_IP;
+	int port = DEFAULT_PORT;
+	
 	struct timeval timeout = {0,0};
 
-	struct oio_cache_s * c = oio_cache_make_redis (ip, port, timeout);
+	struct oio_cache_s * c = oio_cache_make_redis (ip, port, timeout, -1);
 
 	test_cache_cycle (c);
 	oio_cache_destroy (c);

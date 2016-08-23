@@ -56,9 +56,24 @@ _noop_get (struct oio_cache_s *self, const char *k, gchar **out)
 	return OIO_CACHE_NOTFOUND;
 }
 
+static guint
+_noop_cleanup_older (struct oio_cache_s *self, const gint64 expiration_time)
+{
+	(void) self; (void) expiration_time;
+	return 0;
+}
+
+static guint
+_noop_cleanup_exceeding (struct oio_cache_s *self, const guint limit)
+{
+	(void) self; (void) limit;
+	return 0;
+}
+
 static struct oio_cache_vtable_s vtable_NOOP =
 {
-	_noop_destroy, _noop_put, _noop_del, _noop_get
+	_noop_destroy, _noop_put, _noop_del, _noop_get,
+	_noop_cleanup_older, _noop_cleanup_exceeding
 };
 
 struct oio_cache_s *

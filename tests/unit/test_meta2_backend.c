@@ -168,7 +168,7 @@ _init_nsinfo(const gchar *ns, gint64 maxvers)
 	g_hash_table_insert(nsinfo->options, g_strdup("meta2_max_versions"),
 			metautils_gba_from_string(str));
 	g_hash_table_insert(nsinfo->options, g_strdup("storage_policy"),
-			metautils_gba_from_string("NONE"));
+			    metautils_gba_from_string("NONE"));
 
 	g_hash_table_insert(nsinfo->storage_policy, g_strdup("classic"),
 			metautils_gba_from_string("NONE:DUPONETWO"));
@@ -235,7 +235,13 @@ _repo_wrapper(const gchar *ns, gint64 maxvers, repo_test_f fr)
 
 	lb = _init_lb(6);
 
-	resolver = hc_resolver_create();
+	struct lru_tree_s *lru_resolver_1 = lru_tree_create((GCompareFunc)hashstr_quick_cmp, g_free, g_free, 0);
+	struct lru_tree_s *lru_resolver_2 = lru_tree_create((GCompareFunc)hashstr_quick_cmp, g_free, g_free, 0);
+	struct oio_cache_s* cache_1 = oio_cache_make_LRU(lru_resolver_1);
+	struct oio_cache_s* cache_2 = oio_cache_make_LRU(lru_resolver_2);
+	g_assert(NULL != cache_1);
+	g_assert(NULL != cache_2);
+	resolver = hc_resolver_create(cache_1, cache_2);
 	g_assert(resolver != NULL);
 
 	cfg.flags = SQLX_REPO_DELETEON;
@@ -276,7 +282,13 @@ _repo_failure(const gchar *ns)
 
 	lb = _init_lb(6);
 
-	resolver = hc_resolver_create();
+	struct lru_tree_s *lru_resolver_1 = lru_tree_create((GCompareFunc)hashstr_quick_cmp, g_free, g_free, 0);
+	struct lru_tree_s *lru_resolver_2 = lru_tree_create((GCompareFunc)hashstr_quick_cmp, g_free, g_free, 0);
+	struct oio_cache_s* cache_1 = oio_cache_make_LRU (lru_resolver_1);
+	struct oio_cache_s* cache_2 = oio_cache_make_LRU (lru_resolver_2);
+	g_assert(NULL != cache_1);
+	g_assert(NULL != cache_2);
+	resolver = hc_resolver_create(cache_1, cache_2);
 	g_assert(resolver != NULL);
 
 	cfg.flags = SQLX_REPO_DELETEON;

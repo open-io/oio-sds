@@ -22,13 +22,21 @@ License along with this library.
 struct oio_cache_multilayer_s;
 
 static void _multilayer_destroy (struct oio_cache_s *self);
-static enum oio_cache_status_e _multilayer_put (struct oio_cache_s *self, const char *k, const char *v);
-static enum oio_cache_status_e _multilayer_del (struct oio_cache_s *self, const char *k);
-static enum oio_cache_status_e _multilayer_get (struct oio_cache_s *self, const char *k, gchar **out);
+static enum oio_cache_status_e _multilayer_put (struct oio_cache_s *self,
+						const char *k, const char *v);
+static enum oio_cache_status_e _multilayer_del (struct oio_cache_s *self,
+						const char *k);
+static enum oio_cache_status_e _multilayer_get (struct oio_cache_s *self,
+						const char *k, gchar **out);
+static guint _multilayer_cleanup_older (struct oio_cache_s *self,
+					const gint64 expiration_time);
+static guint _multilayer_cleanup_exceeding (struct oio_cache_s *self,
+					    const guint limit);
 
 static struct oio_cache_vtable_s vtable_multilayer =
 {
-	_multilayer_destroy, _multilayer_put, _multilayer_del, _multilayer_get
+	_multilayer_destroy, _multilayer_put, _multilayer_del, _multilayer_get,
+	_multilayer_cleanup_older, _multilayer_cleanup_exceeding
 };
 
 struct oio_cache_multilayer_s
@@ -118,3 +126,26 @@ _multilayer_get (struct oio_cache_s *self, const char *k, gchar **out)
 	}
 	return rc; 
 }
+
+static guint
+_multilayer_cleanup_older (struct oio_cache_s *self, const gint64 expiration_time)
+{
+	guint tmp = 0;
+	struct oio_cache_multilayer_s *c = (struct oio_cache_multilayer_s*) self;
+	for (GSList *it = c->caches; it != NULL; it = it->next) {
+		tmp += oio_cache_cleanup_older(it->data, expiration_time);
+	}
+	return tmp; 
+}
+
+static guint
+_multilayer_cleanup_exceeding (struct oio_cache_s *self, const guint limit)
+{
+	guint tmp = 0;
+	struct oio_cache_multilayer_s *c = (struct oio_cache_multilayer_s*) self;
+	for (GSList *it = c->caches; it != NULL; it = it->next) {
+		tmp += oio_cache_cleanup_exceeding(it->data, limit);
+	}
+	return tmp;
+}
+

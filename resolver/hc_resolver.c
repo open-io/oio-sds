@@ -35,7 +35,7 @@ gdouble rc_resolver_timeout_m1 = -1.0;
 
 /* Packing */
 static void
-_strv_concat(register gchar *d, const char * const *src)
+_strv_concat (register gchar *d, const char * const *src)
 {
 	const char *s;
 	while (NULL != (s = *(src++))) {
@@ -48,7 +48,7 @@ _strv_concat(register gchar *d, const char * const *src)
 
 /* Unpacking */
 static void
-_strv_pointers(gchar **dst, gchar *src, guint count)
+_strv_pointers (gchar **dst, gchar *src, guint count)
 {
 	while (count--) {
 		register gsize s = strlen(src) + 1;
@@ -58,7 +58,7 @@ _strv_pointers(gchar **dst, gchar *src, guint count)
 }
 
 static gchar **
-hc_resolver_element_extract(struct cached_element_s *elt)
+hc_resolver_element_extract (struct cached_element_s *elt)
 {
 	if (!elt)
 		return NULL;
@@ -75,7 +75,6 @@ hc_resolver_element_create (const char * const *value)
 {
 	gsize s;
 	struct cached_element_s *elt;
-
 	EXTRA_ASSERT(value != NULL);
 
 	s = offsetof(struct cached_element_s, s) + oio_strv_length_total(value);
@@ -83,26 +82,65 @@ hc_resolver_element_create (const char * const *value)
 	elt = g_malloc(s);
 	elt->count_elements = oio_strv_length(value);
 	_strv_concat(elt->s, value);
-
 	return elt;
 }
+
+static gchar *
+_cache_element_to_string (struct cached_element_s *elt)
+{
+	int i = 0;
+	char** pointers = hc_resolver_element_extract(elt);
+	gchar* to_concat = g_strjoinv(CACHE_TO_CHAR_SEPARATOR_2,pointers);
+	gchar* result = g_strdup_printf("%d"CACHE_TO_CHAR_SEPARATOR"%s", elt->count_elements, to_concat);
+	for (i = 0; NULL != pointers[i]; i++)
+		g_free(pointers[i]);
+	g_free(to_concat);
+	g_free(pointers);
+	return result;
+}
+
+/* it is surely possible to pass char* into the cache and not struct cached_element */
+static struct cached_element_s *
+_string_to_cache_element (const char *str)
+{
+	gchar *tol_tmp;
+	gchar **val = g_strsplit(str, CACHE_TO_CHAR_SEPARATOR, 2);
+	gint64 count = g_ascii_strtoll(val [0], &tol_tmp, 10);
+	if (!(val [0] != '\0' && *tol_tmp == '\0' )) {
+		g_strfreev(val);
+		return NULL;
+	}
+	gchar** caches_str_split = g_strsplit(val [1],
+					      CACHE_TO_CHAR_SEPARATOR_2,count);
+	gsize s;
+	struct cached_element_s *result;
+	s = offsetof(struct cached_element_s, s) + oio_strv_length_total((const char * const *)caches_str_split);
+	result = g_malloc(s);
+	result->count_elements =  count;
+	_strv_concat(result->s, (const char * const *)caches_str_split);
+	g_strfreev(caches_str_split);
+	g_strfreev(val);
+	return result;
+}
+
+
 
 /* Public API -------------------------------------------------------------- */
 
 struct hc_resolver_s*
-hc_resolver_create(void)
+hc_resolver_create(struct oio_cache_s *resolver_csm0,
+		   struct oio_cache_s *resolver_services)
 {
+	(void) resolver_csm0; (void) resolver_services;
 	struct hc_resolver_s *resolver = g_malloc0(sizeof(struct hc_resolver_s));
 
 	resolver->csm0.max = HC_RESOLVER_DEFAULT_MAX_CSM0;
 	resolver->csm0.ttl = HC_RESOLVER_DEFAULT_TTL_CSM0;
-	resolver->csm0.cache = lru_tree_create((GCompareFunc)hashstr_quick_cmp,
-			g_free, g_free, 0);
+	resolver->csm0.cache = resolver_csm0;
 
 	resolver->services.max = HC_RESOLVER_DEFAULT_MAX_SERVICES;
 	resolver->services.ttl = HC_RESOLVER_DEFAULT_TTL_SERVICES;
-	resolver->services.cache = lru_tree_create((GCompareFunc)hashstr_quick_cmp,
-			g_free, g_free, 0);
+	resolver->services.cache = resolver_services;
 
 	g_mutex_init(&resolver->lock);
 	return resolver;
@@ -139,53 +177,67 @@ hc_resolver_destroy(struct hc_resolver_s *r)
 	if (!r)
 		return;
 	if (r->csm0.cache)
-		lru_tree_destroy(r->csm0.cache);
+		oio_cache_destroy(r->csm0.cache);
 	if (r->services.cache)
-		lru_tree_destroy(r->services.cache);
+		oio_cache_destroy(r->services.cache);
 	g_mutex_clear(&r->lock);
 	g_free(r);
 }
 
 static gchar **
-hc_resolver_get_cached(struct hc_resolver_s *r, struct lru_tree_s *lru,
+hc_resolver_get_cached(struct hc_resolver_s *r, struct oio_cache_s *cache,
 		const struct hashstr_s *k)
 {
+	(void) r;
 	gchar **result = NULL;
 	struct cached_element_s *elt;
-
-	g_mutex_lock(&r->lock);
-	if (NULL != (elt = lru_tree_get(lru, k)))
-		result = hc_resolver_element_extract(elt);
-	g_mutex_unlock(&r->lock);
-
+	char* value;
+	enum oio_cache_status_e status;
+	status = oio_cache_get(cache,k->s0,&value);
+	if(GRID_DEBUG_ENABLED()) {
+		GRID_DEBUG("resolver_get : key -> %s", k->s0);
+		GRID_DEBUG("resolver_get : value -> %s", value);
+	}
+	if(status != OIO_CACHE_OK)
+		return NULL;
+	elt = _string_to_cache_element(value);
+	if(NULL == elt)
+		return NULL;
+	result = hc_resolver_element_extract(elt);
+	g_free(elt);
+	g_free(value);
 	return result;
 }
 
 static void
-hc_resolver_store(struct hc_resolver_s *r, struct lru_tree_s *lru,
+hc_resolver_store(struct hc_resolver_s *r, struct oio_cache_s *cache,
 		const struct hashstr_s *key, const char * const *v)
 {
+	(void) r;
 	if (!v || !*v)
 		return;
 	if (r->flags & HC_RESOLVER_NOCACHE)
 		return;
-
 	struct cached_element_s *elt = hc_resolver_element_create(v);
-	struct hashstr_s *k = hashstr_dup(key);
-
-	g_mutex_lock(&r->lock);
-	lru_tree_insert(lru, k, elt);
-	g_mutex_unlock(&r->lock);
+	char* value = _cache_element_to_string(elt);
+	if (GRID_DEBUG_ENABLED()) {
+		GRID_DEBUG("resolver_store : key -> %s", key->s0);
+		GRID_DEBUG("resolver_store : value -> %s", value);
+	}
+	oio_cache_put(cache, key->s0, value);
+	g_free(value);
+	g_free(elt);
 }
 
 static void
-hc_resolver_forget(struct hc_resolver_s *r, struct lru_tree_s *lru,
+hc_resolver_forget(struct hc_resolver_s *r, struct oio_cache_s *cache,
 		const struct hashstr_s *k)
 {
-	if (lru) {
-		g_mutex_lock(&r->lock);
-		lru_tree_remove(lru, k);
-		g_mutex_unlock(&r->lock);
+	(void)r;
+	enum oio_cache_status_e status;
+	if (cache) {
+		status = oio_cache_del(cache, k->s0);
+		(void) status;
 	}
 }
 
@@ -233,14 +285,13 @@ _resolve_meta0(struct hc_resolver_s *r, const char *ns, gchar ***result)
 {
 	struct hashstr_s *hk;
 	GError *err = NULL;
-
 	GRID_TRACE2("%s(%s)", __FUNCTION__, ns);
 	hk = _m0_key(ns);
 
 	/* Try to hit the cache */
 	if (!(*result = hc_resolver_get_cached(r, r->csm0.cache, hk))) {
 		GSList *allm0;
-
+		g_strfreev(*result);
 		/* Now attempt a real resolution */
 		err = conscience_get_services (ns, NAME_SRVTYPE_META0, FALSE, &allm0);
 		if (!allm0 || err) {
@@ -253,7 +304,6 @@ _resolve_meta0(struct hc_resolver_s *r, const char *ns, gchar ***result)
 			g_slist_foreach(allm0, service_info_gclean, NULL);
 			g_slist_free(allm0);
 			allm0 = NULL;
-
 			/* then fill the cache */
 			hc_resolver_store(r, r->csm0.cache, hk,
 					(const char * const *) *result);
@@ -352,18 +402,19 @@ _resolve_meta1(struct hc_resolver_s *r, struct oio_url_s *u, gchar ***result)
 
 	/* Try to hit the cache */
 	if (!(*result = hc_resolver_get_cached(r, r->csm0.cache, hk))) {
+		g_strfreev(*result);
 		/* get a meta0, then store it in the cache */
 		gchar **m0urlv = NULL;
-
 		err = _resolve_meta0(r, oio_url_get(u, OIOURL_NS), &m0urlv);
 		if (err != NULL)
 			g_prefix_error(&err, "M0 resolution error: ");
 		else {
 			err = _resolve_m1_through_many_m0(r, (const char * const *)m0urlv,
 					oio_url_get_id(u), result);
-			if (!err)
+			if (!err) {
 				hc_resolver_store(r, r->csm0.cache, hk,
 						(const char * const *) *result);
+			}
 			g_strfreev(m0urlv);
 		}
 	}
@@ -553,14 +604,16 @@ hc_decache_reference_service(struct hc_resolver_s *r, struct oio_url_s *url,
 }
 
 static guint
-_LRU_expire(struct hc_resolver_s *r, struct lru_ext_s *l)
+_LRU_expire(struct hc_resolver_s *r, struct cache_ext_s *l)
 {
+	(void) r; (void) l;
+	return 0;
 	EXTRA_ASSERT(r != NULL);
 	guint count = 0;
 	const gint64 now = oio_ext_monotonic_time();
 	g_mutex_lock(&r->lock);
 	if (l->ttl > 0 && l->cache != NULL)
-		count = lru_tree_remove_older(l->cache, OLDEST(now, l->ttl));
+		count = oio_cache_cleanup_older(l->cache, OLDEST(now, l->ttl));
 	g_mutex_unlock(&r->lock);
 	return count;
 }
@@ -590,10 +643,10 @@ hc_resolver_tell (struct hc_resolver_s *r, struct oio_url_s *url,
 }
 
 static guint
-_LRU_purge(struct hc_resolver_s *r, struct lru_ext_s *l)
+_LRU_purge(struct hc_resolver_s *r, struct cache_ext_s *l)
 {
 	g_mutex_lock(&r->lock);
-	guint count = lru_tree_remove_exceeding (l->cache, l->max);
+	guint count = oio_cache_cleanup_exceeding (l->cache, l->max);
 	g_mutex_unlock(&r->lock);
 	return count;
 }
@@ -606,10 +659,11 @@ hc_resolver_purge(struct hc_resolver_s *r)
 }
 
 static void
-_lru_flush(struct lru_tree_s *lru)
+_lru_flush(struct oio_cache_s *lru)
 {
+	(void)lru;
 	if (!lru) return;
-	lru_tree_remove_exceeding (lru, 0);
+	  oio_cache_cleanup_exceeding (lru, 0);
 }
 
 void
@@ -631,10 +685,10 @@ hc_resolver_flush_services(struct hc_resolver_s *r)
 }
 
 static void
-_LRU_set_max(struct lru_ext_s *l, guint v) { if (l) l->max = v; }
+_LRU_set_max(struct cache_ext_s *l, guint v) { if (l) l->max = v; }
 
 static void
-_LRU_set_ttl(struct lru_ext_s *l, gint64 v) { if (l) l->ttl = v; }
+_LRU_set_ttl(struct cache_ext_s *l, gint64 v) { if (l) l->ttl = v; }
 
 void
 hc_resolver_set_max_services(struct hc_resolver_s *r, guint d)
@@ -672,10 +726,10 @@ hc_resolver_info(struct hc_resolver_s *r, struct hc_resolver_stats_s *s)
 	g_mutex_lock(&r->lock);
 	s->csm0.max = r->csm0.max;
 	s->csm0.ttl = r->csm0.ttl / G_TIME_SPAN_SECOND;
-	s->csm0.count = lru_tree_count(r->csm0.cache);
+	s->csm0.count = 0 /*lru_tree_count(r->csm0.cache)*/;
 	s->services.max = r->services.max;
 	s->services.ttl = r->services.ttl / G_TIME_SPAN_SECOND;
-	s->services.count = lru_tree_count(r->services.cache);
+	s->services.count = 0/*lru_tree_count(r->services.cache)*/;
 	g_mutex_unlock(&r->lock);
 }
 

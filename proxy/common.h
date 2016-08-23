@@ -27,9 +27,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <unistd.h>
 #include <string.h>
 #include <stdarg.h>
-
+#include <yaml.h>
 #include <glib.h>
+#include <glib/gprintf.h>
+
 #include <json-c/json.h>
+
+#include <cache/cache.h>
+#include <cache/cache_memcached.h>
+#include <cache/cache_redis.h>
 
 #include <core/url_ext.h>
 #include <metautils/lib/metautils.h>
@@ -166,11 +172,35 @@ extern struct lru_tree_s *push_queue;
 extern GRWLock reg_rwlock;
 extern struct lru_tree_s *srv_registered; /* registered srv seen within 5s */
 
+/* Cache implementation define */
+#define SRV_DOWN_STR "srv-down"
+#define SRV_KNOWN_STR "srv-known"
+#define RESOLVER_STR "resolver"
+#define SERVICES_STR "services"
+#define CSMETA0_STR "csm0"
+#define RESOLVER_SERVICES_STR RESOLVER_STR "-" SERVICES_STR
+#define RESOLVER_CSMETA0_STR RESOLVER_STR "-" CSMETA0_STR
+#define DEFAULT_REDIS_TIMEOUT {0,0}
+#define REDIS_STR "redis"
+#define LRU_TREE_STR "lru-tree"
+#define MEMCACHED_STR "memcached"
+#define MULTILAYER_STR "multilayer"
+#define NOOP_PREFIX "noop"
+#define NOT_IMPORTANT "42"
+
+gchar* _get_cache_key (const gchar *key, const gchar *cache_name);
+
+/* "IP:PORT" that had a problem */
+
 extern GRWLock srv_rwlock;
-extern struct lru_tree_s *srv_down; /* "IP:PORT" that had a problem */
+extern struct oio_cache_s *srv_down;
+
 gboolean service_is_ok (gconstpointer p);
 void service_invalidate (gconstpointer n);
-extern struct lru_tree_s *srv_known; /* services seen since 'ever' */
+
+/* Set of sevices that have been seen recently in the conscience */
+extern struct oio_cache_s *srv_known;
+
 void service_learn (const char *key);
 gboolean service_is_known (const char *key);
 
@@ -207,6 +237,12 @@ struct sub_action_s
 {
 	const char *verb;
 	enum http_rc_e (*handler) (struct req_args_s *, struct json_object *);
+};
+
+struct key_value_s
+{
+	char* key;
+	char* value;
 };
 
 typedef enum http_rc_e (*req_handler_f) (struct req_args_s *);

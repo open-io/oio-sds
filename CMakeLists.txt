@@ -345,11 +345,15 @@ set(APACHE2_LIBRARY_DIRS "${DEFAULT_LIBRARY_DIRS}/httpd")
 set(APACHE2_INCLUDE_DIRS "${DEFAULT_INCLUDE_DIRS}/httpd")
 set(ATTR_INCLUDE_DIRS "${DEFAULT_INCLUDE_DIRS}/attr")
 set(ZK_INCLUDE_DIRS "${DEFAULT_INCLUDE_DIRS}/zookeeper")
+set(YAML_LIBRARY_DIRS "${DEFAULT_LIBRARY_DIRS}/x86_64-linux-gnu/libyaml.so")
+set(YAML_INCLUDE_DIRS "${DEFAULT_INCLUDE_DIRS}")
 
 # check system configuration
 pkg_search_module(JSONC json json-c)
+pkg_search_module(YAML yaml yaml-0.1)
 pkg_check_modules(GLIB2 REQUIRED glib-2.0 gthread-2.0 gmodule-2.0)
 pkg_check_modules(CURL curl libcurl)
+
 
 if (NOT SDK_ONLY)
 pkg_check_modules(APR REQUIRED apr-1)
@@ -394,7 +398,7 @@ if (NOT DEFINED ALLOW_LIBMEMCACHED)
 endif ()
 print_found("LIBMEMCACHED")
 
-check_found("CURL" "GLIB2" "JSONC")
+check_found("CURL" "GLIB2" "JSONC" "YAML")
 
 if (NOT SDK_ONLY)
 check_found("APR" "APACHE2" "ASN1C" "ATTR" "LZO"

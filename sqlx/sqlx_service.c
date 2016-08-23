@@ -267,9 +267,9 @@ _configure_limits(struct sqlx_service_s *ss)
 
 	GRID_INFO("Limits set to ACTIVES[%u] PASSIVES[%u] BASES[%u] "
 			"fd=%u/%u page_size=%u",
-			ss->max_active, ss->max_passive, ss->max_bases,
-			ss->max_active + ss->max_passive + ss->max_bases, (guint)limit.rlim_cur,
-			ss->cfg_page_size);
+		  ss->max_active, ss->max_passive, ss->max_bases,
+		  ss->max_active + ss->max_passive + ss->max_bases, (guint)limit.rlim_cur,
+		  ss->cfg_page_size);
 
 	return TRUE;
 #undef CONFIGURE_LIMIT
@@ -278,11 +278,15 @@ _configure_limits(struct sqlx_service_s *ss)
 static gboolean
 _init_configless_structures(struct sqlx_service_s *ss)
 {
+	struct lru_tree_s* lru_1 = lru_tree_create((GCompareFunc)hashstr_quick_cmp, g_free, g_free, 0);
+	struct lru_tree_s* lru_2 = lru_tree_create((GCompareFunc)hashstr_quick_cmp, g_free, g_free, 0);
+	struct oio_cache_s* cache_1 = oio_cache_make_LRU(lru_1);
+	struct oio_cache_s* cache_2 = oio_cache_make_LRU(lru_2);
 	if (!(ss->server = network_server_init())
 			|| !(ss->dispatcher = transport_gridd_build_empty_dispatcher())
 			|| !(ss->clients_pool = gridd_client_pool_create())
 			|| !(ss->clients_factory = gridd_client_factory_create())
-			|| !(ss->resolver = hc_resolver_create())
+			|| !(ss->resolver = hc_resolver_create(cache_1,cache_2))
 			|| !(ss->gtq_admin = grid_task_queue_create("admin"))
 			|| !(ss->gtq_reload = grid_task_queue_create("reload"))) {
 		GRID_WARN("SERVICE init error: memory allocation failure");
@@ -561,7 +565,7 @@ sqlx_service_set_defaults(void)
 	SRV.cfg_max_passive = 0;
 	SRV.cfg_max_active = 0;
 	SRV.cfg_max_workers = 200;
-	SRV.cfg_page_size = SQLX_DEFAULT_PAGE_SIZE;
+	SRV.cfg_page_size = 4096;
 	SRV.flag_replicable = TRUE;
 	SRV.flag_autocreate = TRUE;
 	SRV.flag_delete_on = TRUE;
