@@ -70,6 +70,7 @@ M2V2_DECLARE_FILTER(meta2_filter_extract_header_append);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_string_size);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_overwrite);
 M2V2_DECLARE_FILTER(meta2_filter_extract_list_params);
+M2V2_DECLARE_FILTER(meta2_filter_extract_admin);
 
 M2V2_DECLARE_FILTER(meta2_filter_fill_subject);
 M2V2_DECLARE_FILTER(meta2_filter_reply_success);

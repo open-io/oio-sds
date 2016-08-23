@@ -82,6 +82,11 @@ class OpenIOShell(app.App):
             default=utils.env('OIO_PROXYD_URL'),
             help='Proxyd URL (Env: OIO_PROXYD_URL)'
         )
+        parser.add_argument(
+            "--admin",
+            dest='admin_mode',
+            action='store_true',
+            help='passing commands into admin mode')
 
         return clientmanager.build_plugin_option_parser(parser)
 
@@ -101,7 +106,8 @@ class OpenIOShell(app.App):
         options = {
             'namespace': self.options.ns,
             'account_name': self.options.account_name,
-            'proxyd_url': self.options.proxyd_url
+            'proxyd_url': self.options.proxyd_url,
+            'admin_mode': self.options.admin_mode
         }
 
         self.print_help_if_requested()

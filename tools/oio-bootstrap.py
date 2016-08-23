@@ -377,6 +377,8 @@ param_option.meta2.events-max-pending=1000
 param_option.sqlx.events-max-pending=1000
 param_option.meta1.events-max-pending=100
 param_option.meta2.events-buffer-delay=5
+param_option.state=${STATE}
+param_option.worm=${WORM}
 
 param_option.service_update_policy=meta2=KEEP|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|;rdir=KEEP|1|1|user_is_a_service=1
 
@@ -858,6 +860,11 @@ BUCKET_NAME = 'bucket_name'
 COMPRESSION = 'compression'
 APPLICATION_KEY = 'application_key'
 KEY_FILE='key_file'
+WORMED="worm"
+NS_STATE="state"
+MASTER_VALUE="master"
+SLAVE_VALUE="slave"
+STAND_ALONE_VALUE="stand_alone"
 
 defaults = {
     'NS': 'OPENIO',
@@ -952,6 +959,11 @@ def generate(options):
     backblaze_account_id = options.get('backblaze', {}).get(ACCOUNT_ID)
     backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
     backblaze_app_key = options.get('backblaze', {}).get(APPLICATION_KEY)
+    is_wormed = options.get('worm', False)
+    worm = '1' if is_wormed else '0'
+    state = options.get("state", None)
+    if state not in [MASTER_VALUE, SLAVE_VALUE, STAND_ALONE_VALUE]:
+        state = STAND_ALONE_VALUE
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(IP=ip,
                NS=ns,
@@ -986,7 +998,9 @@ def generate(options):
                BACKBLAZE_BUCKET_NAME=backblaze_bucket_name,
                BACKBLAZE_APPLICATION_KEY=backblaze_app_key,
                KEY_FILE=key_file,
-               HTTPD_BINARY=HTTPD_BINARY)
+               HTTPD_BINARY=HTTPD_BINARY,
+               STATE=state,
+               WORM=worm)
 
     def merge_env(add):
         env = dict(ENV)

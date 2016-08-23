@@ -216,6 +216,10 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 	else
 		oio_ext_set_random_reqid();
 
+	const gchar *admin = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_ADMIN);
+	gboolean is_admin;
+	is_admin = metautils_cfg_get_bool(admin, FALSE);
+	oio_ext_set_admin(is_admin);
 	// Then parse the request to find a handler
 	struct oio_url_s *url = NULL;
 	struct oio_requri_s ruri = {NULL, NULL, NULL, NULL};

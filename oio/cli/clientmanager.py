@@ -34,6 +34,7 @@ class ClientManager(object):
         self.session = None
         self.namespace = None
         self.setup_done = False
+        self._admin_mode = False
         root_logger = logging.getLogger('')
         LOG.setLevel(root_logger.getEffectiveLevel())
 
@@ -51,6 +52,11 @@ class ClientManager(object):
             LOG.info('Using parameters %s' % self._options)
             self.session = requests.Session()
             self.setup_done = True
+            self._admin_mode = self._options.get('admin_mode')
+
+    def get_admin_mode(self):
+        self.setup()
+        return self._admin_mode
 
     def get_endpoint(self, service_type):
         self.setup()

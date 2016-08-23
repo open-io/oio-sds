@@ -168,7 +168,8 @@ class ContainerClient(Client):
                        **kwargs):
         uri = self._make_uri('content/delete')
         params = self._make_params(acct, ref, path, cid=cid)
-        resp, body = self._request('POST', uri, params=params)
+        hdrs = gen_headers()
+        resp, body = self._request('POST', uri, params=params, headers=hdrs)
 
     def content_show(self, acct=None, ref=None, path=None, cid=None,
                      content=None, **kwargs):

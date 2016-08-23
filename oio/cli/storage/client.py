@@ -7,11 +7,13 @@ API_NAME = 'storage'
 
 
 def make_client(instance):
+    admin_mode = instance.get_admin_mode()
     endpoint = instance.get_endpoint('storage')
     client = ObjectStorageAPI(
         session=instance.session,
         endpoint=endpoint,
-        namespace=instance.namespace
+        namespace=instance.namespace,
+        admin_mode=admin_mode
     )
     return client
 

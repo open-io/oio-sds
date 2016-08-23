@@ -25,6 +25,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
+#include <metautils/lib/metautils_strings.h>
 #include <server/transport_gridd.h>
 #include <server/gridd_dispatcher_filters.h>
 #include <events/oio_events_queue.h>
@@ -36,6 +37,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/meta2v2_remote.h>
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
+#include <cluster/lib/gridcluster.h>
 
 static int
 _meta2_filter_check_ns_name(struct gridd_filter_ctx_s *ctx,
@@ -101,7 +103,24 @@ int
 meta2_filter_check_ns_is_master(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	(void) ctx, (void) reply;
+	(void) reply;
+	struct meta2_backend_s *backend = meta2_filter_ctx_get_backend(ctx);
+	g_mutex_lock(&backend->nsinfo_lock);
+	const char *state = namespace_get_state(backend->nsinfo);
+	g_mutex_unlock(&backend->nsinfo_lock);
+	const char *admin = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_ADMIN_COMMAND);
+	if (metautils_cfg_get_bool(admin, FALSE)) {
+		if (GRID_DEBUG_ENABLED())
+			GRID_DEBUG("admin mode is on");
+		return FILTER_OK;
+	}
+	
+	if (g_strcmp0(state, NS_STATE_VALUE_SLAVE) == 0) {
+		if (GRID_DEBUG_ENABLED())
+			GRID_DEBUG("NS is slave, operation failed");
+		meta2_filter_ctx_set_error(ctx, SYSERR("NS slave!"));
+		return FILTER_KO;
+	}
 	TRACE_FILTER();
 	return FILTER_OK;
 }
@@ -110,7 +129,23 @@ int
 meta2_filter_check_ns_not_wormed(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	(void) ctx, (void) reply;
+	(void) reply;
+	struct meta2_backend_s *backend = meta2_filter_ctx_get_backend(ctx);
+	g_mutex_lock(&backend->nsinfo_lock);
+	const gboolean wormed = namespace_in_worm_mode(backend->nsinfo);
+	g_mutex_unlock(&backend->nsinfo_lock);
+	const char *admin = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_ADMIN_COMMAND);
+	if (metautils_cfg_get_bool(admin, FALSE)) {
+		if (GRID_DEBUG_ENABLED())
+			GRID_DEBUG("admin mode is on");
+		return FILTER_OK;
+	}
+	if (wormed) {
+		if (GRID_DEBUG_ENABLED())
+			GRID_DEBUG("NS wormed!");
+		meta2_filter_ctx_set_error(ctx, SYSERR("NS wormed!"));
+		return FILTER_KO;
+	}
 	TRACE_FILTER();
 	return FILTER_OK;
 }
