@@ -231,7 +231,7 @@ class ObjectStorageAPI(API):
 
     @handle_container_not_found
     def container_show(self, account, container, headers=None):
-        uri = self._make_uri('container/get_properties')
+        uri = self._make_uri('container/show')
         params = self._make_params(account, container)
         resp, resp_body = self._request(
             'POST', uri, params=params, headers=headers)

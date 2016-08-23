@@ -203,9 +203,11 @@ class TestDirectoryAPI(BaseTestCase):
 
         # del_properties on unknown key
         key = random_str(32)
-        self.assertRaises(
-            exc.NotFound, self.api.del_properties, self.account, name,
-            [key])
+        # We do not check if a property exists before deleting it
+        # self.assertRaises(
+        #     exc.NotFound, self.api.del_properties, self.account, name,
+        #     [key])
+        self.api.del_properties(self.account, name, [key])
 
         data = self._get_properties(name)
         self.assertEqual(data['properties'], metadata)

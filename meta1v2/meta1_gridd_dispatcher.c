@@ -353,7 +353,7 @@ meta1_dispatch_v2_PROPDEL(struct gridd_reply_ctx_s *reply,
 		reply->send_error(CODE_BAD_REQUEST, err);
 	else {
 		err = meta1_backend_del_container_properties(m1, url, keys);
-		if (NULL != keys)
+		if (err)
 			reply->send_error(0, err);
 		else
 			reply->send_reply(CODE_FINAL_OK, "OK");

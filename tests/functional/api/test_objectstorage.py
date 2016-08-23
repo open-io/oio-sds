@@ -138,6 +138,7 @@ class TestObjectStorageAPI(BaseTestCase):
         data = self.api.container_get_properties(self.account, name)
         self.assertEqual(data['properties'], metadata)
 
+        # TODO: not implemented
         # container_get_properties specify key
         key = metadata.keys().pop(0)
 
