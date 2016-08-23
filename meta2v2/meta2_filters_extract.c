@@ -283,6 +283,17 @@ meta2_filter_extract_header_optional_overwrite(struct gridd_filter_ctx_s *ctx,
 }
 
 int
+meta2_filter_extract_admin(struct gridd_filter_ctx_s *ctx,
+			     struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	gchar buf[1024];
+	TRACE_FILTER();
+	EXTRACT_OPT(NAME_MSGKEY_ADMIN_COMMAND);
+	return FILTER_OK;
+}
+
+int
 meta2_filter_extract_list_params(struct gridd_filter_ctx_s *ctx,
         struct gridd_reply_ctx_s *reply)
 {

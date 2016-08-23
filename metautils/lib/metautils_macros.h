@@ -122,6 +122,14 @@ License along with this library.
 #define NAME_MSGKEY_VERPOLICY          "VP"
 #define NAME_MSGKEY_VERSION            "VER"
 
+#define NS_STATE_VALUE_MASTER "master"
+#define NS_STATE_VALUE_SLAVE "slave"
+#define NS_STATE_VALUE_STAND_ALONE "stand_alone"
+
+#define NAME_MSGKEY_ADMIN_COMMAND      "ADM_CMD"
+#define NAME_MSGKEY_NS_STATE      "STT"
+#define NAME_MSGKEY_WORMED      "WRM"
+
 #define NAME_MSGKEY_PREFIX_PROPERTY    "P:"
 
 enum {

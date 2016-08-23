@@ -46,6 +46,7 @@ License along with this library.
 #define NS_CONTAINER_MAX_SIZE_NAME "container_max_size"
 #define NS_STORAGE_POLICY_NAME "storage_policy"
 #define NS_CHUNK_SIZE_NAME "chunk_size"
+#define NS_STATE_NAME "state"
 #define NS_WORM_OPT_VALUE_ON "on"
 #define NS_COMPRESS_OPT_NAME "compression"
 #define NS_COMPRESS_OPT_VALUE_ON "on"
@@ -317,6 +318,13 @@ namespace_in_worm_mode(namespace_info_t* ns_info)
 {
 	GByteArray *val = namespace_param_gba(ns_info, NULL, NS_WORM_OPT_NAME);
 	return _gba_to_bool(val, FALSE);
+}
+
+gchar *
+namespace_get_state(namespace_info_t* ns_info)
+{
+	return gridcluster_get_nsinfo_strvalue(ns_info, NS_STATE_NAME,
+					       NS_STATE_VALUE_STAND_ALONE);
 }
 
 gint64

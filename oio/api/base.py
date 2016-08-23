@@ -13,6 +13,7 @@
 
 from oio.common import exceptions
 from oio.common.http import requests
+from oio.common.constants import ADMIN_HEADER
 
 
 class API(object):
@@ -26,6 +27,7 @@ class API(object):
             session = requests.Session()
         self.session = session
         self.endpoint = endpoint
+        self.admin_mode = kwargs.get('admin_mode', False)
 
     def _request(self, method, url, endpoint=None, session=None, **kwargs):
         if not endpoint:
@@ -34,7 +36,10 @@ class API(object):
         if not session:
             session = self.session
         headers = kwargs.get('headers') or {}
-        kwargs['headers'] = dict([k, str(headers[k])] for k in headers)
+        headers = dict([k, str(headers[k])] for k in headers)
+        value_admin = "1" if self.admin_mode else "0"
+        headers.update({ADMIN_HEADER: value_admin})
+        kwargs['headers'] = headers
         resp = session.request(method, url, **kwargs)
         try:
             body = resp.json()

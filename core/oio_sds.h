@@ -41,6 +41,9 @@ enum oio_sds_config_e
 
 	/* expects an <int> used for its boolean value */
 	OIOSDS_CFG_FLAG_SYNCATDOWNLOAD,
+
+	/* expects an <int> used for its boolean value */
+	OIOSDS_CFG_FLAG_ADMIN,
 };
 
 enum oio_sds_content_key_e

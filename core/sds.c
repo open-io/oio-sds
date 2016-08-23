@@ -52,6 +52,7 @@ struct oio_sds_s
 		int rawx;
 	} timeout;
 	gboolean sync_after_download;
+	gboolean admin;
 	gchar *auth_token;
 	CURL *h;
 };
@@ -428,6 +429,7 @@ oio_sds_init (struct oio_sds_s **out, const char *ns)
 	(*out)->proxy = oio_cfg_get_proxy_containers (ns);
 	(*out)->ecd = oio_cfg_get_ecd(ns);
 	(*out)->sync_after_download = TRUE;
+	(*out)->admin = FALSE;
 	(*out)->h = _get_proxy_handle (*out);
 	return NULL;
 }
@@ -476,6 +478,10 @@ oio_sds_configure (struct oio_sds_s *sds, enum oio_sds_config_e what,
 				return EINVAL;
 			sds->sync_after_download = BOOL(*(int*)pv);
 			return 0;
+	        case OIOSDS_CFG_FLAG_ADMIN:
+			if (vlen != sizeof(int))
+				return EINVAL;
+			sds->admin = BOOL(*(int*)pv);
 		default:
 			return EBADSLT;
 	}
@@ -1042,6 +1048,7 @@ oio_sds_download (struct oio_sds_s *sds, struct oio_sds_dl_src_s *dl,
 	if (!sds || !dl || !snk || !dl->url)
 		return (struct oio_error_s*) BADREQ("Missing argument");
 	oio_ext_set_reqid (sds->session_id);
+	oio_ext_set_admin (sds->admin);
 
 	snk->out_size = 0;
 
@@ -1149,7 +1156,8 @@ oio_sds_upload_init (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst)
 	}
 
 	oio_ext_set_reqid (sds->session_id);
-
+	oio_ext_set_admin (sds->admin);
+	
 	struct oio_sds_ul_s *ul = g_malloc0 (sizeof(*ul));
 	ul->finished = FALSE;
 	ul->ready_for_data = TRUE;
@@ -1395,6 +1403,9 @@ _sds_upload_add_headers(struct oio_sds_ul_s *ul, struct http_put_dest_s *dest)
 {
 	http_put_dest_add_header (dest, PROXYD_HEADER_REQID,
 			"%s", oio_ext_get_reqid());
+
+	http_put_dest_add_header (dest, PROXYD_HEADER_ADMIN,
+			"%s", oio_ext_is_admin()?"1":"0");
 
 	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "container-id",
 			"%s", oio_url_get (ul->dst->url, OIOURL_HEXID));
@@ -2017,7 +2028,8 @@ oio_sds_list (struct oio_sds_s *sds, struct oio_sds_list_param_s *param,
 	if (!oio_url_has_fq_container (param->url))
 		return (struct oio_error_s*) BADREQ("Partial URI");
 	oio_ext_set_reqid (sds->session_id);
-
+	oio_ext_set_admin (sds->admin);
+	
 	GRID_DEBUG("LIST prefix %s marker %s end %s max %"G_GSIZE_FORMAT,
 		param->prefix, param->marker, param->end, param->max_items);
 
@@ -2143,7 +2155,8 @@ oio_sds_link (struct oio_sds_s *sds, struct oio_url_s *url, const char *content_
 	if (!oio_str_ishexa1 (content_id))
 		return (struct oio_error_s*) BADREQ("content_id not hexadecimal");
 	oio_ext_set_reqid (sds->session_id);
-
+	oio_ext_set_admin (sds->admin);
+	
 	return (struct oio_error_s*) oio_proxy_call_content_link (sds->h, url, content_id);
 }
 
@@ -2184,6 +2197,7 @@ oio_sds_delete (struct oio_sds_s *sds, struct oio_url_s *url)
 	if (!sds || !url)
 		return (struct oio_error_s*) BADREQ("Missing argument");
 	oio_ext_set_reqid (sds->session_id);
+	oio_ext_set_admin (sds->admin);
 
 	return (struct oio_error_s*) oio_proxy_call_content_delete (sds->h, url);
 }
@@ -2194,7 +2208,8 @@ oio_sds_delete_container (struct oio_sds_s *sds, struct oio_url_s *url)
 	if (!sds || !url)
 		return (struct oio_error_s*) BADREQ("Missing argument");
 	oio_ext_set_reqid (sds->session_id);
-
+	oio_ext_set_admin (sds->admin);
+	
 	return (struct oio_error_s*) oio_proxy_call_container_delete (sds->h, url);
 }
 
@@ -2208,7 +2223,8 @@ oio_sds_show_content (struct oio_sds_s *sds, struct oio_url_s *url,
 	if (!sds || !url)
 		return (struct oio_error_s*) BADREQ("Missing argument");
 	oio_ext_set_reqid (sds->session_id);
-
+	oio_ext_set_admin (sds->admin);
+	
 	GError *err = NULL;
 	gsize offset = 0;
 	GSList *chunks = NULL;
@@ -2253,6 +2269,7 @@ oio_sds_has (struct oio_sds_s *sds, struct oio_url_s *url, int *phas)
 	if (!sds || !url || !phas)
 		return (struct oio_error_s*) BADREQ("Missing argument");
 	oio_ext_set_reqid (sds->session_id);
+	oio_ext_set_admin (sds->admin);
 	GError *err = oio_proxy_call_content_show (sds->h, url, NULL, NULL);
 	*phas = (err == NULL);
 	if (err && (CODE_IS_NOTFOUND(err->code) || err->code == CODE_NOT_FOUND))
@@ -2267,6 +2284,7 @@ oio_sds_get_container_properties(struct oio_sds_s *sds, struct oio_url_s *url,
 	if (!sds || !url)
 		return (struct oio_error_s*) BADREQ("Missing argument");
 	oio_ext_set_reqid (sds->session_id);
+	oio_ext_set_admin (sds->admin);
 
 	GString *value = NULL;
 	struct oio_error_s *err;
@@ -2290,6 +2308,7 @@ oio_sds_set_container_properties (struct oio_sds_s *sds, struct oio_url_s *url,
 	if (!sds || !url || !values)
 		return (struct oio_error_s*) BADREQ("Missing argument");
 	oio_ext_set_reqid (sds->session_id);
+	oio_ext_set_admin (sds->admin);
 
 	return (struct oio_error_s*) oio_proxy_call_container_set_properties(sds->h, url, values);
 }
@@ -2301,7 +2320,8 @@ oio_sds_get_content_properties(struct oio_sds_s *sds, struct oio_url_s *url,
 	if (!sds || !url)
 		return (struct oio_error_s*) BADREQ("Missing argument");
 	oio_ext_set_reqid (sds->session_id);
-
+	oio_ext_set_admin (sds->admin);
+	
 	GString *value = NULL;
 	struct oio_error_s *err;
 	err = (struct oio_error_s*) oio_proxy_call_content_get_properties(sds->h, url, &value);
@@ -2324,6 +2344,7 @@ oio_sds_set_content_properties (struct oio_sds_s *sds, struct oio_url_s *url,
 	if (!sds || !url || !values)
 		return (struct oio_error_s*) BADREQ("Missing argument");
 	oio_ext_set_reqid (sds->session_id);
+	oio_ext_set_admin (sds->admin);
 
 	return (struct oio_error_s*) oio_proxy_call_content_set_properties(sds->h, url, values);
 }
