@@ -218,7 +218,7 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 
 	const gchar *admin = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_ADMIN);
 	gboolean is_admin;
-	is_admin = metautils_cfg_get_bool(admin, FALSE);
+	is_admin = oio_str_parse_bool(admin, FALSE);
 	oio_ext_set_admin(is_admin);
 	// Then parse the request to find a handler
 	struct oio_url_s *url = NULL;

@@ -109,12 +109,12 @@ meta2_filter_check_ns_is_master(struct gridd_filter_ctx_s *ctx,
 	const char *state = namespace_get_state(backend->nsinfo);
 	g_mutex_unlock(&backend->nsinfo_lock);
 	const char *admin = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_ADMIN_COMMAND);
-	if (metautils_cfg_get_bool(admin, FALSE)) {
+	if (oio_str_parse_bool(admin, FALSE)) {
 		if (GRID_DEBUG_ENABLED())
 			GRID_DEBUG("admin mode is on");
 		return FILTER_OK;
 	}
-	
+
 	if (g_strcmp0(state, NS_STATE_VALUE_SLAVE) == 0) {
 		if (GRID_DEBUG_ENABLED())
 			GRID_DEBUG("NS is slave, operation failed");
@@ -135,7 +135,7 @@ meta2_filter_check_ns_not_wormed(struct gridd_filter_ctx_s *ctx,
 	const gboolean wormed = namespace_in_worm_mode(backend->nsinfo);
 	g_mutex_unlock(&backend->nsinfo_lock);
 	const char *admin = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_ADMIN_COMMAND);
-	if (metautils_cfg_get_bool(admin, FALSE)) {
+	if (oio_str_parse_bool(admin, FALSE)) {
 		if (GRID_DEBUG_ENABLED())
 			GRID_DEBUG("admin mode is on");
 		return FILTER_OK;
