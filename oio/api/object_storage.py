@@ -191,14 +191,10 @@ class ObjectStorageAPI(API):
 
         headers = headers or {}
         headers['x-oio-action-mode'] = 'autocreate'
-        if metadata:
-            headers_meta = {}
-            for k, v in metadata.iteritems():
-                headers_meta['%suser-%s' % (
-                    constants.CONTAINER_METADATA_PREFIX, k)] = v
-            headers.update(headers_meta)
+        metadata = metadata or {}
+        data = {'properties': metadata}
         resp, resp_body = self._request(
-            'POST', uri, params=params, headers=headers)
+            'POST', uri, params=params, data=json.dumps(data), headers=headers)
         if resp.status_code not in (204, 201):
             raise exc.from_response(resp, resp_body)
         if resp.status_code == 201:
@@ -250,6 +246,17 @@ class ObjectStorageAPI(API):
                 account, container, metadata, clear, headers=headers)
 
     @handle_container_not_found
+    def container_get_properties(self, account, container, properties=None,
+                                 headers=None):
+        uri = self._make_uri('container/get_properties')
+        params = self._make_params(account, container)
+        data = properties or []
+        resp, resp_body = self._request(
+            'POST', uri, params=params, data=json.dumps(data),
+            headers=headers)
+        return resp_body
+
+    @handle_container_not_found
     def container_set_properties(self, account, container, properties,
                                  clear=False, headers=None):
         params = self._make_params(account, container)
@@ -258,9 +265,10 @@ class ObjectStorageAPI(API):
             params.update({'flush': 1})
 
         uri = self._make_uri('container/set_properties')
+        data = json.dumps({'properties': properties})
 
         resp, resp_body = self._request(
-            'POST', uri, data=json.dumps(properties), params=params,
+            'POST', uri, data=data, params=params,
             headers=headers)
 
     @handle_container_not_found
@@ -270,8 +278,9 @@ class ObjectStorageAPI(API):
 
         uri = self._make_uri('container/del_properties')
 
+        data = json.dumps(properties)
         resp, resp_body = self._request(
-            'POST', uri, data=json.dumps(properties), params=params,
+            'POST', uri, data=data, params=params,
             headers=headers)
 
     @handle_container_not_found
@@ -399,7 +408,7 @@ class ObjectStorageAPI(API):
             'POST', uri, params=params, headers=headers)
 
         meta = _make_object_metadata(resp.headers)
-        meta['properties'] = resp_body
+        meta['properties'] = resp_body['properties']
         return meta
 
     def object_update(self, account, container, obj, metadata, clear=False,
@@ -475,10 +484,11 @@ class ObjectStorageAPI(API):
         return resp.headers, resp_body
 
     def _content_create(self, account, container, obj_name, final_chunks,
-                        headers=None):
+                        metadata=None, headers=None):
         uri = self._make_uri('content/create')
         params = self._make_params(account, container, obj_name)
-        data = json.dumps(final_chunks)
+        metadata = metadata or {}
+        data = json.dumps({'chunks': final_chunks, 'properties': metadata})
         resp, resp_body = self._request(
             'POST', uri, data=data, params=params, headers=headers)
         return resp.headers, resp_body
@@ -531,12 +541,9 @@ class ObjectStorageAPI(API):
         h[object_headers['mime_type']] = sysmeta['mime_type']
         h[object_headers['chunk_method']] = sysmeta['chunk_method']
 
-        if metadata:
-            for k, v in metadata.iteritems():
-                h['%sx-%s' % (constants.OBJECT_METADATA_PREFIX, k)] = v
-
-        m, body = self._content_create(account, container, obj_name,
-                                       final_chunks, headers=h)
+        m, body = self._content_create(
+            account, container, obj_name, final_chunks, metadata=metadata,
+            headers=h)
         return final_chunks, bytes_transferred, content_checksum
 
     def _fetch_stream(self, meta, chunks, ranges, storage_method, headers):
