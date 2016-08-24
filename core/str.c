@@ -654,7 +654,7 @@ gchar ** KV_extract_prefixed (gchar **kv, const char *prefix) {
 	if (!kv || !*kv || !*(kv+1))
 		return g_malloc0(sizeof(gchar*));
 
-	/* not prefix: Keep all the items */
+	/* no prefix: keep all the items */
 	if (!oio_str_is_set(prefix)) {
 		gsize len = g_strv_length(kv);
 		return g_memdup(kv, (len+1) * sizeof(gchar*));
@@ -678,7 +678,7 @@ gchar ** KV_extract_not_prefixed (gchar **kv, const char *prefix) {
 	if (!kv || !*kv || !*(kv+1))
 		return g_malloc0(sizeof(gchar*));
 
-	/* not prefix: Keep all the items */
+	/* no prefix: keep all the items */
 	if (!oio_str_is_set(prefix)) {
 		gsize len = g_strv_length(kv);
 		return g_memdup(kv, (len+1) * sizeof(gchar*));

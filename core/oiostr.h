@@ -157,7 +157,8 @@ GError * KV_decode_buffer(guint8 *buf, gsize len, gchar ***out);
  * WARNING the array returned holds pointers to the same buffer than the
  * input, so DO NOT FREE each string but just the holder array.
  * Example:
- *   KV_extract_prefixed({"a.b","v0, "b.c","v1", NULL},"a.") -> {"b","v0",NULL}
+ *   KV_extract_prefixed({"a.b", "v0", "b.c", "v1", NULL}, "a.")
+ *    -> {"b", "v0", NULL}
  */
 gchar ** KV_extract_prefixed (gchar **kv, const char *prefix);
 
