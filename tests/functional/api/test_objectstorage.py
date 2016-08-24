@@ -51,9 +51,8 @@ class TestObjectStorageAPI(BaseTestCase):
         self._create(name)
         # container_show on existing container
         res = self.api.container_show(self.account, name)
-        print res
-        self.assertIsNot(res['dir'], None)
-        self.assertIsNot(res['srv'], None)
+        self.assertIsNot(res['properties'], None)
+        self.assertIsNot(res['system'], None)
 
         self._delete(name)
         # container_show on deleted container
@@ -138,13 +137,6 @@ class TestObjectStorageAPI(BaseTestCase):
         data = self.api.container_get_properties(self.account, name)
         self.assertEqual(data['properties'], metadata)
 
-        # TODO: not implemented
-        # container_get_properties specify key
-        key = metadata.keys().pop(0)
-
-        data = self.api.container_get_properties(self.account, name, [key])
-        self.assertEqual(data['properties'], {key: metadata[key]})
-
         # clean
         self._clean(name, True)
 
@@ -152,6 +144,33 @@ class TestObjectStorageAPI(BaseTestCase):
         self.assertRaises(
             exc.NoSuchContainer, self.api.container_get_properties,
             self.account, name)
+
+    def test_container_get_properties_filtered(self):
+        self.skipTest("Server side properties filtering not implemented")
+        name = random_str(32)
+
+        res = self._create(name)
+        self.assertEqual(res, True)
+
+        # container_get_properties on existing container
+        data = self.api.container_get_properties(self.account, name)
+        self.assertEqual(data['properties'], {})
+
+        # container_get_properties
+        metadata = {
+            random_str(32): random_str(32),
+            random_str(32): random_str(32),
+        }
+        self._set_properties(name, metadata)
+
+        # container_get_properties specify key
+        key = metadata.keys().pop(0)
+
+        data = self.api.container_get_properties(self.account, name, [key])
+        self.assertEqual({key: metadata[key]}, data['properties'])
+
+        # clean
+        self._clean(name, True)
 
     def test_container_set_properties(self):
         name = random_str(32)
@@ -170,7 +189,7 @@ class TestObjectStorageAPI(BaseTestCase):
         self.assertEqual(res, True)
 
         # container_set_properties on existing container
-        self.api.set_properties(self.account, name, metadata)
+        self.api.container_set_properties(self.account, name, metadata)
         data = self._get_properties(name)
         self.assertEqual(data['properties'], metadata)
 
@@ -224,13 +243,14 @@ class TestObjectStorageAPI(BaseTestCase):
         # container_del_properties on existing container
         self.api.container_del_properties(self.account, name, [key])
         data = self._get_properties(name)
-        self.assertEqual(data['properties'], metadata)
+        self.assertNotIn(key, data['properties'])
 
-        # container_del_properties on unknown key
         key = random_str(32)
-        self.assertRaises(
-            exc.NoSuchContainer, self.api.container_del_properties,
-            self.account, name, [key])
+        # We do not check if a property exists before deleting it
+        # self.assertRaises(
+        #     exc.NoSuchContainer, self.api.container_del_properties,
+        #     self.account, name, [key])
+        self.api.container_del_properties(self.account, name, [key])
 
         data = self._get_properties(name)
         self.assertEqual(data['properties'], metadata)
@@ -241,4 +261,4 @@ class TestObjectStorageAPI(BaseTestCase):
         # container_del_properties on deleted container
         self.assertRaises(
             exc.NoSuchContainer, self.api.container_del_properties,
-            self.account, name, metadata)
+            self.account, name, metadata.keys())

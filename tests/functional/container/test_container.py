@@ -291,8 +291,10 @@ class TestMeta2Contents(BaseTestCase):
         self.assertError(resp, 403, 406)
 
         # No content
+        data = json.dumps({'properties': {}})
         resp = self.session.post(self.url_container('create'),
-                                 params=params, headers=headers)
+                                 params=params, headers=headers,
+                                 data=data)
         self.assertEqual(resp.status_code, 204)
         resp = self.session.post(self.url_content('copy'),
                                  headers=headers, params=params)
@@ -308,8 +310,10 @@ class TestMeta2Contents(BaseTestCase):
                                      params=params)
             self.assertEqual(resp.status_code, 200)
             body = resp.json()
+            print body
             self.assertIsInstance(body, dict)
-            self.assertDictEqual(body, expected)
+            self.assertIsInstance(body.get('properties'), dict)
+            self.assertDictEqual(expected, body['properties'])
 
         def del_ok(keys):
             resp = self.session.post(self.url_content('del_properties'),
@@ -390,8 +394,8 @@ class TestMeta2Contents(BaseTestCase):
         resp = self.session.get(self.url_content('show'), params=params)
         self.assertEqual(resp.status_code, 200)
 
-        to = '{0}/{1}/{2}/{3}-COPY'.format(self.ns, self.account,
-                                           self.ref, path)
+        to = '{0}/{1}/{2}//{3}-COPY'.format(self.ns, self.account,
+                                            self.ref, path)
         headers = {'Destination': to}
         resp = self.session.post(self.url_content('copy'),
                                  headers=headers, params=params)
