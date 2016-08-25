@@ -310,7 +310,6 @@ class TestMeta2Contents(BaseTestCase):
                                      params=params)
             self.assertEqual(resp.status_code, 200)
             body = resp.json()
-            print body
             self.assertIsInstance(body, dict)
             self.assertIsInstance(body.get('properties'), dict)
             self.assertDictEqual(expected, body['properties'])
@@ -322,7 +321,8 @@ class TestMeta2Contents(BaseTestCase):
 
         def set_ok(kv):
             resp = self.session.post(self.url_content('set_properties'),
-                                     params=params, data=json.dumps(kv))
+                                     params=params,
+                                     data=json.dumps({'properties': kv}))
             self.assertEqual(resp.status_code, 204)
 
         # GetProperties on no content
