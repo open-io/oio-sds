@@ -32,9 +32,11 @@ License along with this library.
 
 
 static GString *
-_build_json (const char* const *src)
+_build_json (const char* const *src, GString *json)
 {
-	GString *json = g_string_new ("{");
+	if (!json)
+		json = g_string_new ("");
+	g_string_append_c(json, '{');
 	for (int i = 0; src [i] && src [i+1] ; i +=2 ) {
 		if (i != 0)
 			g_string_append (json,",");
@@ -458,15 +460,14 @@ static GError *
 _set_properties(CURL *h, GString *http_url, const char* const *values)
 {
 	GError *err = NULL;
-	GString *json = _build_json(values);
-	GString *to_send = g_string_new(NULL);
-	g_string_printf(to_send, "{'properties': %s}", json->str);
+	GString *json = g_string_new("{\"properties\":");
+	json = _build_json(values, json);
+	g_string_append_c(json, '}');
 	struct http_ctx_s i = {
-		.body = to_send
+		.body = json
 	};
 	err = _proxy_call (h, "POST", http_url->str, &i, NULL);
 	g_string_free(i.body, TRUE);
-	g_string_free(json, TRUE);
 	return err;
 }
 
@@ -641,16 +642,13 @@ oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,
 		hdrin[len+1] = g_strdup("append");
 	}
 	GString *body = in? in->chunks : NULL;
-        if (in && !in->update && in->properties) {
-		GString *val = g_string_new("{'properties': ");
-		GString *json_properties = _build_json(in->properties);
-		g_string_append(val, json_properties->str);
-		g_string_append(val, ", 'chunks': ");
+	if (in && !in->update && in->properties) {
+		GString *val = g_string_new("{'properties':");
+		val = _build_json(in->properties, val);
+		g_string_append(val, ",'chunks':");
 		g_string_append(val, in->chunks->str);
 		g_string_append_c(val, '}');
 		body = val;
-		g_string_free(json_properties, TRUE);
-  
 	}
 	struct http_ctx_s i = { .headers = hdrin, .body = body };
 	struct http_ctx_s o = { .headers = NULL, .body = out };
