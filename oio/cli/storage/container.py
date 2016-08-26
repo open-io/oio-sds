@@ -302,9 +302,9 @@ class AnalyzeContainer(show.ShowOne):
         data_dir = self.app.client_manager.directory.get(
             account, container)
 
-        info = {'account': data['sys.account'],
-                'base_name': data['sys.name'],
-                'name': data['sys.user.name'],
+        info = {'account': data['system']['sys.account'],
+                'base_name': data['system']['sys.name'],
+                'name': data['system']['sys.user.name'],
                 'meta0': list(),
                 'meta1': list(),
                 'meta2': list()}

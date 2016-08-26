@@ -1530,13 +1530,22 @@ GError* m2db_copy_alias(struct m2db_put_args_s *args, const char *src_path)
 					   "Cannot copy content, source doesn't exist");
 
 	gint64 maxver = m2db_get_max_versions(args->sq3, args->ns_max_versions);
-	ALIASES_set_version(target, oio_ext_real_seconds());
-	ALIASES_set_deleted(target, FALSE);
+	if (!err) {
+		gint64 now = oio_ext_real_seconds();
+		target = _bean_dup(orig);
+		ALIASES_set2_alias(target, oio_url_get(url_target, OIOURL_PATH));
+		ALIASES_set_ctime(target, now);
+		ALIASES_set_mtime(target, now);
+		ALIASES_set_version(target, oio_ext_real_time());
+		ALIASES_set_deleted(target, FALSE);
+	}
 
 	/* source ok but special management for specific versioning modes */
 	if (!err && (VERSIONS_DISABLED(maxver) || VERSIONS_SUSPENDED(maxver))) {
 		err = m2db_latest_alias(args->sq3, url_target, &latest);
-		if (!err && latest)
+		if (err && CODE_IS_NOTFOUND(err->code))
+			g_clear_error(&err);
+		else if (!err && latest)
 			err = NEWERROR(CODE_CONTENT_EXISTS, "Destination already exists "
 					"(and versioning disabled)");
 	}

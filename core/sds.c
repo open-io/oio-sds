@@ -1157,7 +1157,7 @@ oio_sds_upload_init (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst)
 
 	oio_ext_set_reqid (sds->session_id);
 	oio_ext_set_admin (sds->admin);
-	
+
 	struct oio_sds_ul_s *ul = g_malloc0 (sizeof(*ul));
 	ul->finished = FALSE;
 	ul->ready_for_data = TRUE;
@@ -2319,19 +2319,21 @@ oio_sds_get_content_properties(struct oio_sds_s *sds, struct oio_url_s *url,
 		return (struct oio_error_s*) BADREQ("Missing argument");
 	oio_ext_set_reqid (sds->session_id);
 	oio_ext_set_admin (sds->admin);
-	
+
 	GString *value = NULL;
 	struct oio_error_s *err;
 	err = (struct oio_error_s*) oio_proxy_call_content_get_properties(sds->h, url, &value);
 	if (err)
 		return err;
 	json_object *json = json_tokener_parse(value->str);
-	json_object_object_foreach(json,key,property_properties_json) {
-		EXTRA_ASSERT(g_strcmp0("properties", key) == 0);
-		json_object_object_foreach(property_properties_json,
-					   property_key, property_value)
-		        fct(ctx, property_key,
-			    json_object_get_string(property_value));
+	json_object *props = NULL;
+	if (!json_object_object_get_ex(json, "properties", &props)) {
+		err = (struct oio_error_s *) SYSERR(
+				"Malformed answer received from proxy: no 'properties' key");
+	} else {
+		json_object_object_foreach(props, key, val) {
+			fct(ctx, key, json_object_get_string(val));
+		}
 	}
 	json_object_put(json);
 	g_string_free(value, TRUE);

@@ -190,8 +190,8 @@ action_sqlx_propget (struct req_args_s *args, struct json_object *jargs)
 	if (err)
 		return _reply_system_error(args, err);
 
-	gchar **user = KV_extract_prefixed(pairs, "user.");
-	gchar **nonuser = KV_extract_not_prefixed(pairs, "user.");
+	gchar **user = KV_extract_prefixed(pairs, SQLX_ADMIN_PREFIX_USER);
+	gchar **nonuser = KV_extract_not_prefixed(pairs, SQLX_ADMIN_PREFIX_USER);
 
 	GString *out = g_string_new("");
 	g_string_append(out, "{\"properties\":");
@@ -214,6 +214,14 @@ action_sqlx_propdel (struct req_args_s *args, struct json_object *jargs)
 	gchar **namev = _load_stringv (jargs);
 	if (!namev)
 		return _reply_format_error (args, BADREQ("Bad names"));
+
+	for (gchar **key = namev; key && *key; key++) {
+		if (!g_str_has_prefix(*key, SQLX_ADMIN_PREFIX_USER)) {
+			gchar *new_key = g_strdup_printf(SQLX_ADMIN_PREFIX_USER"%s", *key);
+			g_free(*key);
+			*key = new_key;
+		}
+	}
 
 	PACKER(packer) { return sqlx_pack_PROPDEL (n, (const gchar * const * )namev); }
 	enum http_rc_e rc = _sqlx_action_noreturn (args, CLIENT_PREFER_MASTER, packer);
