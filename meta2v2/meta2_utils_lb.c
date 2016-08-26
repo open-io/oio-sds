@@ -27,32 +27,41 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/meta2_utils_lb.h>
 #include <meta2v2/meta2_utils.h>
 
+#include <core/oiolb.h>
 #include <glib.h>
 
 static GError*
-location_from_chunk_id(const gchar *chunk_id, oio_location_t *location)
+location_from_chunk_id(const gchar *chunk_id, const gchar *ns_name,
+		struct oio_lb_pool_s *pool, oio_location_t *location)
 {
 	g_assert_nonnull(location);
-
 	GError *err = NULL;
 	if (chunk_id == NULL || strlen(chunk_id) <= 0)
 		return NEWERROR(CODE_INTERNAL_ERROR, "emtpy chunk id");
 
-	// TODO(srvid): do not suppose url contains an IP address
-	char **tok = g_regex_split_simple(
-			"(([[:digit:]]{1,3}\\.){3}[[:digit:]]{1,3}:[[:digit:]]{1,5})",
-			chunk_id, 0, 0);
-	if (!tok || g_strv_length(tok) < 3)
-		err = NEWERROR(CODE_INTERNAL_ERROR, "could not parse chunk id");
+	gchar *netloc = NULL;
+	oio_parse_chunk_url(chunk_id, NULL, &netloc, NULL);
+
+	if (pool) {
+		gchar *key = oio_make_service_key(ns_name, NAME_SRVTYPE_RAWX, netloc);
+		struct oio_lb_item_s *item = oio_lb_pool__get_item(pool, key);
+		g_free(key);
+		if (item) {
+			*location = item->location;
+			g_free(item);
+			goto out;
+		}
+	}
 
 	addr_info_t ai = {{0}};
-	if (!err && !grid_string_to_addrinfo(tok[1], &ai))
+	if (!err && !grid_string_to_addrinfo(netloc, &ai))
 		err = NEWERROR(CODE_INTERNAL_ERROR,
-				"could not parse [%s] to addrinfo", tok[1]);
+				"could not parse [%s] to addrinfo", netloc);
 	if (!err)
 		*location = location_from_addr_info(&ai);
 
-	g_strfreev(tok);
+out:
+	g_free(netloc);
 	return err;
 }
 
@@ -110,7 +119,8 @@ get_spare_chunks(struct oio_lb_s *lb, const char *pool,
 //------------------------------------------------------------------------------
 
 static oio_location_t *
-convert_chunks_to_locations(GSList *src)
+convert_chunks_to_locations(struct oio_lb_pool_s *pool, const gchar *ns_name,
+		GSList *src)
 {
 	GError *err = NULL;
 	GArray *result = g_array_new(TRUE, TRUE, sizeof(oio_location_t));
@@ -120,7 +130,8 @@ convert_chunks_to_locations(GSList *src)
 			continue;
 
 		oio_location_t loc = 0;
-		err = location_from_chunk_id(CHUNKS_get_id(l->data)->str, &loc);
+		err = location_from_chunk_id(CHUNKS_get_id(l->data)->str,
+				ns_name, pool, &loc);
 		if (err) {
 			GRID_WARN("CHUNK -> location conversion error: (%d) %s",
 					err->code, err->message);
@@ -135,12 +146,19 @@ convert_chunks_to_locations(GSList *src)
 
 GError*
 get_conditioned_spare_chunks(struct oio_lb_s *lb, const char *pool,
-		GSList *already, GSList *broken, GSList **result)
+		const gchar *ns_name, GSList *already, GSList *broken,
+		GSList **result)
 {
 	GError *err = NULL;
 	GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
-	oio_location_t *avoid = convert_chunks_to_locations(broken);
-	oio_location_t *known = convert_chunks_to_locations(already);
+
+	g_rw_lock_reader_lock(&lb->lock);
+	struct oio_lb_pool_s *pool_obj = g_hash_table_lookup(lb->pools, pool);
+	oio_location_t *avoid = convert_chunks_to_locations(pool_obj,
+			ns_name, broken);
+	oio_location_t *known = convert_chunks_to_locations(pool_obj,
+			ns_name, already);
+	g_rw_lock_reader_unlock(&lb->lock);
 
 	void _on_id(oio_location_t loc, const char *id)
 	{
