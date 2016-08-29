@@ -467,6 +467,34 @@ oio_parse_service_key(const char *key, gchar **ns, gchar **type, gchar **id)
 	g_free(toks);
 }
 
+void oio_parse_chunk_url(const gchar *url,
+		gchar **type, gchar **netloc, gchar **id)
+{
+	gchar *_type = NULL;
+	if (g_str_has_prefix(url, "http://")) {
+		_type = NAME_SRVTYPE_RAWX;
+		const char * start = url + sizeof("http://") - 1;
+		const char * first_slash = strchr(start, '/');
+		if (first_slash) {
+			if (netloc)
+				*netloc = g_strndup(start, first_slash - start);
+			if (id)
+				*id = g_strdup(first_slash + 1);
+		}
+	} else if (g_str_has_prefix(url, "b2/") || g_str_has_prefix(url, "b2:")) {
+		_type = "b2";
+		if (id)
+			*id = g_strdup(url + 3);
+	} else if (g_str_has_prefix(url, "k/")) {
+		_type = "k";
+		if (netloc)
+			*netloc = g_strdup(url + 2);
+	}
+
+	if (type)
+		*type = g_strdup(_type);
+}
+
 gchar *
 oio_make_service_key(const char *ns_name, const char *type, const char *id)
 {

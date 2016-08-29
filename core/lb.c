@@ -382,7 +382,7 @@ _accept_item (struct oio_lb_slot_s *slot, oio_location_t mask,
 	}
 	GRID_TRACE("Accepting item %s (0x%016lX) from slot %s",
 			item->id, loc, slot->name);
-	ctx->on_id (loc, item->id);
+	ctx->on_id((oio_location_t)loc, item->id);
 	*(ctx->next_polled) = loc;
 	return TRUE;
 }
