@@ -372,27 +372,19 @@ _populate_headers_with_alias (struct req_args_s *args, struct bean_ALIASES_s *al
 static gint32
 _score_from_chunk_id (const char *id)
 {
-	gchar *k = NULL;
-	if (g_str_has_prefix(id, "http://")) {
-		const char * start = id + sizeof("http://") - 1;
-		const char * first_slash = strchr(start, '/');
-		if (!first_slash)
-			return 0U;
-		gchar *tmp = g_strndup (start, first_slash - start);
-		k = oio_make_service_key (ns_name, NAME_SRVTYPE_RAWX, tmp);
-		g_free (tmp);
-	} else if (g_str_has_prefix(id, "b2/") || g_str_has_prefix(id, "b2:")) {
-		k = oio_make_service_key(ns_name, "b2", strrchr(id, '/'));
-	} else if (g_str_has_prefix(id, "k/")) {
-		k = oio_make_service_key(ns_name, "k", strrchr(id, '/'));
-	} else {
-		return 0U;
-	}
+	gchar *key = NULL, *type = NULL, *netloc = NULL;
 
-	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, k);
+	// FIXME: probably broken with B2 URLs
+	oio_parse_chunk_url(id, &type, &netloc, NULL);
+	key = oio_make_service_key(ns_name, type, netloc);
+
+	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
 	gint32 res = item ? item->weight : 0;
+
 	g_free(item);
-	g_free(k);
+	g_free(key);
+	g_free(netloc);
+	g_free(type);
 	return res;
 }
 
