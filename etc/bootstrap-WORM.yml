@@ -1,0 +1,7 @@
+zookeeper: false
+worm: true
+storage_policy: "THREECOPIES"
+chunk_size: 1048576
+redis: true
+rawx:
+  count: 3

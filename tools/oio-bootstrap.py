@@ -131,6 +131,10 @@ LoadModule mime_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mime.so
 LoadModule alias_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_alias.so
 LoadModule dav_rawx_module @APACHE2_MODULES_DIRS@/mod_dav_rawx.so
 
+<IfModule !mod_logio.c>
+  LoadModule logio_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_logio.so
+</IfModule>
+
 <IfModule !unixd_module>
   LoadModule unixd_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_unixd.so
 </IfModule>
@@ -154,11 +158,25 @@ SetEnv INFO_SERVICES OIO,${NS},${SRVTYPE},${SRVNUM}
 SetEnv LOG_TYPE access
 SetEnv LEVEL INF
 SetEnv HOSTNAME oio
-SetEnv REQUEST_ID_HEADER x-oio-req-id
-LogFormat "%{%b %d %T}t %{HOSTNAME}e %{INFO_SERVICES}e %{pid}P %{tid}P %{LOG_TYPE}e %{LEVEL}e %{Host}i %a %m %>s %D %O %{${META_HEADER}-container-id}i %{x-oio-req-id}i \\"%{${META_HEADER}-container-id}i %{${META_HEADER}-content-id}i %{${META_HEADER}-chunk-pos}i\\"" log/common
+
+SetEnvIf Remote_Addr "^" log-other-method=1
+SetEnvIf Remote_Addr "^" log-put=0 
+SetEnvIf Request_Method "PUT" log-put=1
+SetEnvIf Request_Method "PUT" !log-other-method 
+SetEnvIf log-put 0 !log-put
+
+LogFormat "%{%b %d %T}t %{HOSTNAME}e %{INFO_SERVICES}e %{pid}P %{tid}P %{LOG_TYPE}e %{LEVEL}e %{Host}i %a:%{remote}p %m %>s %D %O %{${META_HEADER}-container-id}i %{x-oio-req-id}i \\"%{${META_HEADER}-container-id}i %{${META_HEADER}-content-id}i %{${META_HEADER}-chunk-pos}i %U\\"" log/POST
+
+LogFormat "%{%b %d %T}t %{HOSTNAME}e %{INFO_SERVICES}e %{pid}P %{tid}P %{LOG_TYPE}e %{LEVEL}e %{Host}i %a:%{remote}p %m %>s %D %O \\"%U\\"" log/GET
+
 ErrorLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-errors.log
-SetEnvIf Request_URI "/(stat|info)$" nolog
-CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-access.log log/common env=!nolog
+SetEnvIf Request_URI "/(stat|info)$" nolog=1
+
+SetEnvIf nolog 1 !log-other-method
+SetEnvIf nolog 1 !log-put
+
+CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-access.log log/GET env=log-other-method
+CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-access.log log/POST env=log-put
 LogLevel info
 
 <IfModule prefork.c>
@@ -383,6 +401,8 @@ param_option.meta2.events-max-pending=1000
 param_option.sqlx.events-max-pending=1000
 param_option.meta1.events-max-pending=100
 param_option.meta2.events-buffer-delay=5
+param_option.state=${STATE}
+param_option.worm=${WORM}
 
 param_option.service_update_policy=meta2=KEEP|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|;rdir=KEEP|1|1|user_is_a_service=1
 
@@ -865,6 +885,11 @@ COMPRESSION = 'compression'
 APPLICATION_KEY = 'application_key'
 KEY_FILE='key_file'
 META_HEADER='x-oio-chunk-meta'
+WORMED="worm"
+NS_STATE="state"
+MASTER_VALUE="master"
+SLAVE_VALUE="slave"
+STAND_ALONE_VALUE="stand_alone"
 defaults = {
     'NS': 'OPENIO',
     'IP': '127.0.0.1',
@@ -958,6 +983,11 @@ def generate(options):
     backblaze_account_id = options.get('backblaze', {}).get(ACCOUNT_ID)
     backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
     backblaze_app_key = options.get('backblaze', {}).get(APPLICATION_KEY)
+    is_wormed = options.get('worm', False)
+    worm = '1' if is_wormed else '0'
+    state = options.get("state", None)
+    if state not in [MASTER_VALUE, SLAVE_VALUE, STAND_ALONE_VALUE]:
+        state = STAND_ALONE_VALUE
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(IP=ip,
                NS=ns,
@@ -993,7 +1023,9 @@ def generate(options):
                BACKBLAZE_APPLICATION_KEY=backblaze_app_key,
                KEY_FILE=key_file,
                HTTPD_BINARY=HTTPD_BINARY,
-               META_HEADER=META_HEADER)
+               META_HEADER=META_HEADER,
+               STATE=state,
+               WORM=worm)
 
     def merge_env(add):
         env = dict(ENV)

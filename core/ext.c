@@ -170,6 +170,7 @@ oio_ext_extract_json (struct json_object *obj,
 struct oio_ext_local_s {
 	gchar *reqid;
 	GRand *prng;
+	gboolean is_admin;
 };
 
 static void
@@ -255,6 +256,21 @@ oio_ext_set_random_reqid (void)
 	oio_str_bin2hex((guint8*)&bulk, sizeof(bulk), hex, sizeof(hex));
 	oio_ext_set_reqid(hex);
 }
+
+gboolean
+oio_ext_is_admin (void)
+{
+	const struct oio_ext_local_s *l = _local_ensure ();
+	return l->is_admin;
+}
+
+void
+oio_ext_set_admin (const gboolean admin)
+{
+	struct oio_ext_local_s *l = _local_ensure ();
+	l->is_admin = admin;
+}
+
 
 /* -------------------------------------------------------------------------- */
 

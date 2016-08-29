@@ -70,6 +70,10 @@ extern "C" {
 #  define PROXYD_HEADER_REQID PROXYD_HEADER_PREFIX "req-id"
 # endif
 
+# ifndef PROXYD_HEADER_ADMIN
+# define PROXYD_HEADER_ADMIN PROXYD_HEADER_PREFIX "admin"
+# endif
+
 # ifndef PROXYD_HEADER_NOEMPTY
 #  define PROXYD_HEADER_NOEMPTY PROXYD_HEADER_PREFIX "no-empty-list"
 # endif

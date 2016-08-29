@@ -37,11 +37,12 @@ class StorageMethods(object):
         if method:
             return method
         try:
-            chunk_method, params = parse_chunk_method(chunk_method)
-            cls = self.index[chunk_method]
+            storage_method, params = parse_chunk_method(chunk_method)
+            cls = self.index[storage_method]
         except Exception as e:
             raise exc.InvalidStorageMethod(str(e))
-        return cls.build(params)
+        self.cache[chunk_method] = cls.build(params)
+        return self.cache[chunk_method]
 
 
 class StorageMethod(object):

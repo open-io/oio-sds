@@ -11,6 +11,9 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+HEADER_PREFIX = 'x-oio-'
+ADMIN_HEADER = HEADER_PREFIX + 'admin'
+
 CONTAINER_METADATA_PREFIX = "x-oio-container-meta-"
 OBJECT_METADATA_PREFIX = "x-oio-content-meta-"
 CHUNK_METADATA_PREFIX = "x-oio-chunk-meta-"
