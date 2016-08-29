@@ -18,6 +18,7 @@ import json
 import logging
 import os
 from urllib import unquote
+from inspect import isgenerator
 
 
 from oio.common import exceptions as exc
@@ -287,8 +288,16 @@ class ObjectStorageAPI(API):
     @handle_container_not_found
     def object_create(self, account, container, file_or_path=None, data=None,
                       etag=None, obj_name=None, content_type=None,
-                      content_encoding=None, content_length=None,
-                      metadata=None, policy=None, headers=None, key_file=None):
+                      content_encoding=None, metadata=None, policy=None,
+                      headers=None, key_file=None,
+                      **_kwargs):
+        """
+        Create an object in `container` of `account` with data taken from
+        either `data` (str or generator) or `file_or_path` (path to a file
+        or file-like object).
+        The object will be named after `obj_name` if specified, or after
+        the base name of `file_or_path`.
+        """
         if (data, file_or_path) == (None, None):
             raise exc.MissingData()
         src = data if data is not None else file_or_path
@@ -304,20 +313,16 @@ class ObjectStorageAPI(API):
                 except AttributeError:
                     file_name = None
             obj_name = obj_name or file_name
+        elif isgenerator(src):
+            file_or_path = utils.GeneratorReader(src)
+            src = file_or_path
         if not obj_name:
             raise exc.MissingName(
                 "No name for the object has been specified"
             )
 
-        if isinstance(data, basestring):
-            content_length = len(data)
-
-        if content_length is None:
-            raise exc.MissingContentLength()
-
         sysmeta = {'mime_type': content_type,
                    'content_encoding': content_encoding,
-                   'content_length': content_length,
                    'etag': etag}
 
         if src is data:
@@ -484,6 +489,36 @@ class ObjectStorageAPI(API):
             headers=headers)
         return resp.headers, resp_body
 
+    def _content_preparer(self, account, container, obj_name,
+                          policy=None, headers=None):
+        # TODO: optimize by asking more than one metachunk at a time
+        resp_headers, first_body = self._content_prepare(
+                account, container, obj_name, 1, policy, headers)
+        storage_method = STORAGE_METHODS.load(
+            resp_headers[object_headers['chunk_method']])
+
+        def _fix_mc_pos(chunks, mc_pos):
+            for chunk in chunks:
+                raw_pos = chunk["pos"].split(".")
+                if storage_method.ec:
+                    chunk['num'] = int(raw_pos[1])
+                    chunk["pos"] = "%d.%d" % (mc_pos, chunk['num'])
+                else:
+                    chunk["pos"] = str(mc_pos)
+
+        def _metachunk_preparer():
+            mc_pos = 0
+            _fix_mc_pos(first_body, mc_pos)
+            yield first_body
+            while True:
+                mc_pos += 1
+                _, next_body = self._content_prepare(
+                        account, container, obj_name, 1, policy, headers)
+                _fix_mc_pos(next_body, mc_pos)
+                yield next_body
+
+        return resp_headers, _metachunk_preparer
+
     def _content_create(self, account, container, obj_name, final_chunks,
                         metadata=None, headers=None):
         uri = self._make_uri('content/create')
@@ -497,8 +532,8 @@ class ObjectStorageAPI(API):
     def _object_create(self, account, container, obj_name, source,
                        sysmeta, metadata=None, policy=None, headers=None,
                        key_file=None):
-        meta, raw_chunks = self._content_prepare(
-            account, container, obj_name, sysmeta['content_length'],
+        meta, chunk_prep = self._content_preparer(
+            account, container, obj_name,
             policy=policy, headers=headers)
         sysmeta['chunk_size'] = int(meta['X-oio-ns-chunk-size'])
         sysmeta['id'] = meta[object_headers['id']]
@@ -506,23 +541,21 @@ class ObjectStorageAPI(API):
         sysmeta['policy'] = meta[object_headers['policy']]
         sysmeta['mime_type'] = meta[object_headers['mime_type']]
         sysmeta['chunk_method'] = meta[object_headers['chunk_method']]
-
-        storage_method = STORAGE_METHODS.load(sysmeta['chunk_method'])
-
-        chunks = _sort_chunks(raw_chunks, storage_method.ec)
         sysmeta['content_path'] = obj_name
         sysmeta['container_id'] = utils.name2cid(account, container).upper()
         sysmeta['ns'] = self.namespace
+
+        storage_method = STORAGE_METHODS.load(sysmeta['chunk_method'])
         if storage_method.ec:
-            handler = ECWriteHandler(source, sysmeta, chunks, storage_method,
-                                     headers=headers)
+            handler = ECWriteHandler(source, sysmeta, chunk_prep,
+                                     storage_method, headers=headers)
         elif storage_method.backblaze:
             backblaze_info = self._b2_credentials(storage_method, key_file)
             handler = BackblazeWriteHandler(source, sysmeta,
-                                            chunks, storage_method,
+                                            chunk_prep, storage_method,
                                             headers, backblaze_info)
         else:
-            handler = ReplicatedWriteHandler(source, sysmeta, chunks,
+            handler = ReplicatedWriteHandler(source, sysmeta, chunk_prep,
                                              storage_method, headers=headers)
 
         final_chunks, bytes_transferred, content_checksum = handler.stream()

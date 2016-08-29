@@ -208,10 +208,10 @@ class BackblazeChunkWriteHandler(object):
 
 
 class BackblazeWriteHandler(io.WriteHandler):
-    def __init__(self, source, sysmeta, chunks,
+    def __init__(self, source, sysmeta, chunk_prep,
                  storage_method, headers, backblaze_info):
         super(BackblazeWriteHandler, self).__init__(source, sysmeta,
-                                                    chunks, storage_method,
+                                                    chunk_prep, storage_method,
                                                     headers=headers)
         self.backblaze_info = backblaze_info
 
@@ -219,14 +219,15 @@ class BackblazeWriteHandler(io.WriteHandler):
         global_checksum = hashlib.md5()
         total_bytes_transferred = 0
         content_chunks = []
-        for pos in range(len(self.chunks)):
-            meta_chunk = self.chunks[pos][0]
+        for meta_chunk in self.chunk_prep():
             handler = BackblazeChunkWriteHandler(
                 self.sysmeta, meta_chunk, global_checksum, self.storage_method,
                 self.backblaze_info)
             bytes_transferred, chunks = handler.stream(self.source)
             content_chunks += chunks
             total_bytes_transferred += bytes_transferred
+            if bytes_transferred == 0:
+                break
 
         content_checksum = global_checksum.hexdigest()
 

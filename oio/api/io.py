@@ -43,9 +43,16 @@ def close_source(source):
 
 
 class WriteHandler(object):
-    def __init__(self, source, sysmeta, chunks, storage_method, headers):
+    def __init__(self, source, sysmeta, chunk_preparer,
+                 storage_method, headers):
         self.source = source
-        self.chunks = chunks
+        if isinstance(chunk_preparer, dict):
+            def _sort_and_yield():
+                for pos in sorted(chunk_preparer.keys()):
+                    yield chunk_preparer[pos]
+            self.chunk_prep = _sort_and_yield
+        else:
+            self.chunk_prep = chunk_preparer
         self.sysmeta = sysmeta
         self.storage_method = storage_method
         self.headers = headers

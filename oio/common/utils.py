@@ -18,6 +18,7 @@ from urllib import quote as _quote
 
 from optparse import OptionParser
 from ConfigParser import SafeConfigParser
+from itertools import islice
 
 from logging.handlers import SysLogHandler
 import logging
@@ -498,3 +499,19 @@ def fix_ranges(ranges, length):
             result.append((start, min(end, length-1)))
 
     return result
+
+
+class GeneratorReader(object):
+    """Make a file-like object from a generator"""
+
+    def __init__(self, gen):
+        self.generator = gen
+
+    def read(self, size=None):
+        if size is not None:
+            return "".join(islice(self.generator, size))
+        return "".join(self.generator)
+
+    def __iter__(self):
+        for chunk in self.generator:
+            yield chunk
