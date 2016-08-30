@@ -195,8 +195,7 @@ gsize oio_str_bin2hex(const void *s, size_t sS, char *d, size_t dS) {
 }
 
 void oio_str_hash_name(guint8 *p,
-		const char *ns, const char *account, const char *user) {
-	EXTRA_ASSERT (oio_str_is_set(ns));
+		const char *ns UNUSED, const char *account, const char *user) {
 	EXTRA_ASSERT (oio_str_is_set(account));
 	EXTRA_ASSERT (oio_str_is_set(user));
 

@@ -228,6 +228,7 @@ http_put_dest_destroy(gpointer destination)
 		CURLMcode rc;
 		rc = curl_multi_remove_handle(dest->http_put->mhandle, dest->handle);
 		EXTRA_ASSERT(rc == CURLM_OK);
+		(void)rc;
 		curl_easy_cleanup(dest->handle);
 	}
 	if (dest->headers)
@@ -337,6 +338,7 @@ http_put_get_md5(struct http_put_s *p, guint8 *buffer, gsize size)
 	EXTRA_ASSERT (buffer != NULL);
 	memset (buffer, 0, size);
 	/* TODO FIXME */
+	(void)p;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -471,6 +473,7 @@ _start_upload(struct http_put_s *p)
 
 		CURLMcode rc = curl_multi_add_handle(p->mhandle, dest->handle);
 		EXTRA_ASSERT(rc == CURLM_OK);
+		(void)rc;
 	}
 }
 
@@ -504,6 +507,7 @@ _manage_curl_events (struct http_put_s *p)
 
 			CURLMcode rc = curl_multi_remove_handle(p->mhandle, dest->handle);
 			EXTRA_ASSERT(rc == CURLM_OK);
+			(void)rc;
 			curl_easy_cleanup(dest->handle);
 			dest->handle = NULL;
 			g_bytes_unref(dest->buffer);
