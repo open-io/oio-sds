@@ -62,6 +62,12 @@ struct oio_url_s;
 
 unsigned int oio_sds_version (void) { return OIO_SDS_VERSION; }
 
+/* glibc 2.22 removed binary mode of fmemopen.
+ * With this statement, we ask the compiler to link to the old version. */
+#if __GLIBC__ == 2 && __GLIBC_MINOR__ >= 22
+asm (".symver fmemopen, fmemopen@GLIBC_2.2.5");
+#endif
+
 char **
 oio_sds_get_compile_options (void)
 {
@@ -544,7 +550,7 @@ _show_content (struct oio_sds_s *sds, struct oio_url_s *url, void *cb_data,
 	if (!err) {
 
 		/* First, report the user-properties */
-		for (gchar **p=props; *p && *(p+1) ;p+=2) {
+		for (gchar **p = props; p && *p && *(p+1); p += 2) {
 			if (!g_str_has_prefix(*p, "content-meta-"))
 				continue;
 			const char *k = *p + sizeof("content-meta-") - 1;
