@@ -53,6 +53,7 @@ class PlainContent(Content):
         sysmeta['policy'] = self.stgpol
         sysmeta['mime_type'] = self.mime_type
         sysmeta['chunk_method'] = self.chunk_method
+        sysmeta['chunk_size'] = self.metadata['chunk-size']
 
         storage_method = STORAGE_METHODS.load(self.chunk_method)
 

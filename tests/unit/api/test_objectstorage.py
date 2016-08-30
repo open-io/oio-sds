@@ -214,14 +214,6 @@ class ObjectStorageTest(unittest.TestCase):
         self.assertRaises(exceptions.MissingName, api.object_create,
                           self.account, self.container, data="x")
 
-    def test_object_create_no_content_length(self):
-        api = self.api
-        name = random_str(32)
-        f = Mock()
-        self.assertRaises(
-            exceptions.MissingContentLength, api.object_create, self.account,
-            self.container, f, obj_name=name)
-
     def test_object_create_missing_file(self):
         api = self.api
         name = random_str(32)
