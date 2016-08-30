@@ -77,8 +77,9 @@ typedef void (*m2_onbean_cb) (gpointer u, gpointer bean);
 typedef gboolean (*m2_onprop_cb) (gpointer u, const gchar *k,
 		const guint8 *v, gsize vlen);
 
-/** Get the cumulated size of contents in the database.  */
-guint64 m2db_get_container_size(sqlite3 *db, gboolean check_alias);
+/** Get the cumulated size and number of contents in the database. */
+void m2db_get_container_size_and_obj_count(sqlite3 *db, gboolean check_alias,
+    guint64 *size, gint64 *count);
 
 gint64 m2db_get_max_versions(struct sqlx_sqlite3_s *sq3, gint64 def);
 
@@ -99,6 +100,10 @@ gint64 m2db_get_quota(struct sqlx_sqlite3_s *sq3, gint64 def);
 gint64 m2db_get_size(struct sqlx_sqlite3_s *sq3);
 
 void m2db_set_size(struct sqlx_sqlite3_s *sq3, gint64 size);
+
+gint64 m2db_get_obj_count(struct sqlx_sqlite3_s *sq3);
+
+void m2db_set_obj_count(struct sqlx_sqlite3_s *sq3, gint64 count);
 
 gint64 m2db_get_version(struct sqlx_sqlite3_s *sq3);
 
