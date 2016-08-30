@@ -93,34 +93,22 @@ __replace_property(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	return err;
 }
 
-static GError *
-__set_container_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
-		gchar **props)
-{
-	GError *err = NULL;
-
-	for (gchar *p; !err && (p = *props) ;props++) {
-		gchar *name, *eq, *value;
-
-		name = p;
-		eq = strchr(name, '=');
-		value = eq + 1;
-		*eq = '\0';
-		err = __replace_property(sq3, url, name, value);
+GError *__set_container_properties(struct sqlx_sqlite3_s *sq3,
+		struct oio_url_s *url, gchar **props) {
+	if (!props)
+		return NULL;
+	for (gchar **p = props; *p && *(p + 1); p += 2) {
+		GError *err = NULL;
+		err = __replace_property(sq3, url, *p, *(p + 1));
+		if (NULL != err)
+			return err;
 	}
-
-	return err;
+	return NULL;
 }
 
-static gchar *
-__pack_property(const unsigned char *n, int n_size,
-		const unsigned char *v, int v_size)
-{
-	GString *gstr = g_string_sized_new(n_size + v_size + 2);
-	g_string_append_len(gstr, (gchar*)n, n_size);
-	g_string_append_c(gstr, '=');
-	g_string_append_len(gstr, (gchar*)v, v_size);
-	return g_string_free(gstr, FALSE);
+static gchar* item(struct sqlite3_stmt *stmt, int i) {
+	return g_strndup((gchar*)sqlite3_column_text(stmt, i),
+					 sqlite3_column_bytes(stmt, i));
 }
 
 static GError *
@@ -137,10 +125,8 @@ __get_all_container_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url
 	else {
 		(void) sqlite3_bind_blob(stmt, 1, oio_url_get_id(url), oio_url_get_id_size(url), NULL);
 		while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
-			gchar *prop = __pack_property(
-					sqlite3_column_text(stmt, 0), sqlite3_column_bytes(stmt, 0),
-					sqlite3_column_text(stmt, 1), sqlite3_column_bytes(stmt, 1));
-			g_ptr_array_add(gpa, prop);
+			g_ptr_array_add(gpa, item(stmt, 0));
+			g_ptr_array_add(gpa, item(stmt, 1));
 		}
 		if (rc != SQLITE_DONE && rc != SQLITE_OK)
 			err = M1_SQLITE_GERROR(sq3->db, rc);
@@ -168,10 +154,8 @@ __get_one_property(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url, const gcha
 		(void) sqlite3_bind_blob(stmt, 1, oio_url_get_id(url), oio_url_get_id_size(url), NULL);
 		(void) sqlite3_bind_text(stmt, 2, name, -1, NULL);
 		while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
-			gchar *prop = __pack_property(
-					sqlite3_column_text(stmt, 0), sqlite3_column_bytes(stmt, 0),
-					sqlite3_column_text(stmt, 1), sqlite3_column_bytes(stmt, 1));
-			g_ptr_array_add(gpa, prop);
+			g_ptr_array_add(gpa, item(stmt, 0));
+			g_ptr_array_add(gpa, item(stmt, 1));
 		}
 		if (rc != SQLITE_OK && rc != SQLITE_DONE)
 			err = M1_SQLITE_GERROR(sq3->db, rc);
@@ -185,15 +169,12 @@ static GError *
 __get_container_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url, gchar **names, gchar ***result)
 {
 	GError *err = NULL;
-	GPtrArray *gpa;
-
-	gpa = g_ptr_array_new();
+	GPtrArray *gpa = g_ptr_array_new();
 
 	if (!names || !*names)
 		err = __get_all_container_properties(sq3, url, gpa);
 	else {
-		gchar **p;
-		for (p=names; !err && *p ;p++)
+		for (gchar **p=names; !err && *p ;p++)
 			err = __get_one_property(sq3, url, *p, gpa);
 	}
 
@@ -208,20 +189,12 @@ __get_container_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url, gc
 }
 
 static GError *
-__check_property_format(gchar **strv)
+__check_property_format(gchar **kv)
 {
-	guint line = 1;
-
-	for (; *strv ; strv++, line++) {
-		gchar *p_eq;
-		if (!(p_eq = strchr(*strv, '=')))
-			return NEWERROR(CODE_BAD_REQUEST, "line %u : no equal symbol", line);
-		if (p_eq == *strv)
-			return NEWERROR(CODE_BAD_REQUEST, "line %u : no name", line);
-		if (!*(p_eq+1))
-			return NEWERROR(CODE_BAD_REQUEST, "line %u : no value", line);
+	for (; *kv && *(kv+1); kv+=2) {
+		if (!oio_str_is_set(*kv))
+			return NEWERROR(CODE_BAD_REQUEST, "empty key");
 	}
-
 	return NULL;
 }
 

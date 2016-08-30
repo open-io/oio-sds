@@ -57,11 +57,6 @@ void meta0_backend_migrate(struct meta0_backend_s *m0);
 
 void meta0_backend_clean(struct meta0_backend_s *m0);
 
-GError* meta0_backend_check(struct meta0_backend_s *m0);
-
-struct sqlx_repository_s* meta0_backend_get_repository(
-		struct meta0_backend_s *m0);
-
 void meta0_backend_reload_requested(struct meta0_backend_s *m0);
 
 GError* meta0_backend_fill_rr(struct meta0_backend_s *m0, guint replicas,

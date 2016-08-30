@@ -122,7 +122,7 @@ GET_FLAG(GKeyFile *gkf, const gchar *section, const gchar *k, gboolean def)
 	if (!g_key_file_has_key(gkf, section, buf, NULL))
 		return def;
 	gchar *v = g_key_file_get_value(gkf, section, buf, NULL);
-	gboolean flag = metautils_cfg_get_bool(v, def);
+	gboolean flag = oio_str_parse_bool(v, def);
 	g_free(v);
 	return flag;
 }

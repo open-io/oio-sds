@@ -46,38 +46,21 @@ License along with this library.
 # define NAME_TAGNAME_RAWX_LOC "tag.loc"
 # define NAME_TAGNAME_SLOTS "tag.slots"
 
-# define NAME_TAGNAME_AGENT_CHECK "tag.agent_check"
-
 # define NAME_TAGNAME_USER_IS_SERVICE "user_is_a_service"
-
-/* A flag usable in metacnx_ctx_s.flags to keep the connection alive */
-#define METACNX_FLAGMASK_KEEPALIVE 0x00000001
-
-#define REPSEQ_FINAL         0x00000001
-#define REPSEQ_ERROR         0X00000002
-#define REPSEQ_BODYMANDATORY 0x00000004
 
 #define NAME_MSGNAME_METAREPLY         "RP"
 
 #define NAME_MSGKEY_ACCOUNT            "ACCT"
-#define NAME_MSGKEY_ACTION             "ACTION"
-#define NAME_MSGKEY_ALLOWUPDATE        "ALLOW_UPDATE"
 #define NAME_MSGKEY_APPEND             "APPEND"
 #define NAME_MSGKEY_AUTOCREATE         "AUTOCREATE"
 #define NAME_MSGKEY_BASENAME           "BNAME"
 #define NAME_MSGKEY_BASETYPE           "BTYPE"
-#define NAME_MSGKEY_BROKEN             "BROKEN"
-#define NAME_MSGKEY_CHECK              "CHECK_FLAGS"
-#define NAME_MSGKEY_CHECKONLY          "CHECKONLY"
 #define NAME_MSGKEY_CHUNKED            "CHUNKED"
 #define NAME_MSGKEY_CONTAINERID        "CID"
-#define NAME_MSGKEY_CONTAINERNAME      "CN"
 #define NAME_MSGKEY_CONTENTLENGTH      "CL"
 #define NAME_MSGKEY_CONTENTPATH        "CP"
 #define NAME_MSGKEY_CONTENTID          "CI"
 #define NAME_MSGKEY_COPY               "COPY"
-#define NAME_MSGKEY_COUNT              "COUNT"
-#define NAME_MSGKEY_DISTANCE           "DIST"
 #define NAME_MSGKEY_DRYRUN             "DRYRUN"
 #define NAME_MSGKEY_DST                "DST"
 #define NAME_MSGKEY_EVENT              "E"
@@ -87,11 +70,9 @@ License along with this library.
 #define NAME_MSGKEY_FULL               "FULL"
 #define NAME_MSGKEY_KEY                "K"
 #define NAME_MSGKEY_LOCAL              "LOCAL"
-#define NAME_MSGKEY_LOCK               "LOCK"
 #define NAME_MSGKEY_MARKER             "MRK"
 #define NAME_MSGKEY_MARKER_END         "MRK_END"
 #define NAME_MSGKEY_MAX_KEYS           "MAX_KEYS"
-#define NAME_MSGKEY_M1_MASTER          "M1_MASTER"
 #define NAME_MSGKEY_MESSAGE            "MSG"
 #define NAME_MSGKEY_METAURL            "METAURL"
 #define NAME_MSGKEY_NAMESPACE          "NS"
@@ -99,13 +80,10 @@ License along with this library.
 #define NAME_MSGKEY_NEW                "NEW"
 #define NAME_MSGKEY_NOCHECK            "NOCHECK"
 #define NAME_MSGKEY_NODIST             "NODIST"
-#define NAME_MSGKEY_NOREAL             "NOREAL"
 #define NAME_MSGKEY_NOTIN              "!IN"
 #define NAME_MSGKEY_OLD                "OLD"
 #define NAME_MSGKEY_OVERWRITE          "OVERWRITE"
 #define NAME_MSGKEY_PREFIX             "PREFIX"
-#define NAME_MSGKEY_POSITIONPREFIX     "POSITION_PREFIX"
-#define NAME_MSGKEY_PURGE              "PURGE"
 #define NAME_MSGKEY_QUERY              "Q"
 #define NAME_MSGKEY_REPLICAS           "REPLICAS"
 #define NAME_MSGKEY_SPARE              "SPARE"
@@ -116,9 +94,7 @@ License along with this library.
 #define NAME_MSGKEY_TRUNCATED          "TRUNC"
 #define NAME_MSGKEY_TYPENAME           "T"
 #define NAME_MSGKEY_UPDATE             "UPDATE"
-#define NAME_MSGKEY_URL                "URL"
 #define NAME_MSGKEY_USER               "USR"
-#define NAME_MSGKEY_VALUE              "V"
 #define NAME_MSGKEY_VERPOLICY          "VP"
 #define NAME_MSGKEY_VERSION            "VER"
 

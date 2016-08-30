@@ -26,7 +26,7 @@ License along with this library.
 #include <sys/stat.h>
 
 #include "metautils.h"
-#include "metautils_syscall.h"
+#include "common_main.h"
 
 char syslog_id[64] = "";
 static int syslog_opened = 0;
@@ -83,7 +83,7 @@ _set_opt(gchar **tokens)
 						*(opt->data.b) = TRUE;
 						return NULL;
 					}
-					*(opt->data.b) = metautils_cfg_get_bool(tokens[1], *(opt->data.b));
+					*(opt->data.b) = oio_str_parse_bool(tokens[1], *(opt->data.b));
 					return NULL;
 				case OT_INT:
 					i64 = g_ascii_strtoll(tokens[1], NULL, 10);

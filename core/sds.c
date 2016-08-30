@@ -157,7 +157,7 @@ struct metachunk_s
 static gint
 _compare_chunks (const struct chunk_s *c0, const struct chunk_s *c1)
 {
-	g_assert(c0 != NULL && c1 != NULL);
+	EXTRA_ASSERT(c0 != NULL && c1 != NULL);
 	int c = CMP(c0->position.meta, c1->position.meta);
 	if (c) return c;
 	c = CMP(c0->position.intra, c1->position.intra);
@@ -420,8 +420,8 @@ oio_sds_init (struct oio_sds_s **out, const char *ns)
 	oio_ext_set_random_reqid ();
 	oio_log_lazy_init ();
 
-	g_assert (out != NULL);
-	g_assert (ns != NULL);
+	EXTRA_ASSERT (out != NULL);
+	EXTRA_ASSERT (ns != NULL);
 	*out = SLICE_NEW0 (struct oio_sds_s);
 	(*out)->session_id = g_strdup(oio_ext_get_reqid());
 	(*out)->ns = g_strdup (ns);
@@ -717,7 +717,7 @@ _download_range_from_metachunk_replicated (struct _download_ctx_s *dl,
 		size_t nbread = 0;
 		GError *err = _download_range_from_chunk (dl, range,
 				chunk->url, NULL, &nbread);
-		g_assert_cmpuint (nbread, <=, r0.size);
+		EXTRA_ASSERT (nbread <= r0.size);
 		if (err) {
 			/* TODO manage the error kind to allow a retry */
 			return err;
@@ -771,7 +771,7 @@ _download_range_from_metachunk_ec(struct _download_ctx_s *dl,
 		size_t nbread = 0;
 		GError *err = _download_range_from_chunk(dl, range, url,
 				(const char**)headers->pdata, &nbread);
-		g_assert_cmpuint (nbread, <=, r0.size);
+		EXTRA_ASSERT (nbread <= r0.size);
 		if (err) {
 			/* TODO manage the error kind to allow a retry */
 			g_ptr_array_free(headers, TRUE);
@@ -802,10 +802,10 @@ _download_range_from_metachunk (struct _download_ctx_s *dl,
 			meta->meta, g_slist_length (meta->chunks),
 			meta->offset, meta->size);
 
-	g_assert (meta->chunks != NULL);
-	g_assert (range->offset < meta->size);
-	g_assert (range->size <= meta->size);
-	g_assert (range->offset + range->size <= meta->size);
+	EXTRA_ASSERT (meta->chunks != NULL);
+	EXTRA_ASSERT (range->offset < meta->size);
+	EXTRA_ASSERT (range->size <= meta->size);
+	EXTRA_ASSERT (range->offset + range->size <= meta->size);
 
 	if (_chunk_method_needs_ecd(dl->chunk_method))
 		return _download_range_from_metachunk_ec(dl, range, meta);
@@ -837,15 +837,15 @@ _download_range (struct _download_ctx_s *dl, struct oio_sds_dl_range_s *range)
 		}
 	}
 
-	g_assert (r0.size == 0);
-	g_assert (r0.offset == range->offset + range->size);
+	EXTRA_ASSERT (r0.size == 0);
+	EXTRA_ASSERT (r0.offset == range->offset + range->size);
 	return NULL;
 }
 
 static GError *
 _download (struct _download_ctx_s *dl)
 {
-	g_assert (dl->dst->type == OIO_DL_DST_HOOK_SEQUENTIAL);
+	EXTRA_ASSERT (dl->dst->type == OIO_DL_DST_HOOK_SEQUENTIAL);
 
 	if (!oio_str_is_set(dl->chunk_method))
 		return SYSERR("Download impossible: chunk-method not set");
@@ -917,7 +917,7 @@ static struct oio_error_s*
 _download_to_hook (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 		struct oio_sds_dl_dst_s *dst)
 {
-	g_assert (dst->type == OIO_DL_DST_HOOK_SEQUENTIAL);
+	EXTRA_ASSERT (dst->type == OIO_DL_DST_HOOK_SEQUENTIAL);
 	dst->out_size = 0;
 	if (!dst->data.hook.cb)
 		return (struct oio_error_s*) BADREQ("Missing callback");
@@ -946,7 +946,7 @@ _download_to_hook (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 			.metachunks = NULL, .chunks = chunks,
 		};
 		if (!(err = _organize_chunks(chunks, &dl.metachunks))) {
-			g_assert (dl.metachunks != NULL);
+			EXTRA_ASSERT (dl.metachunks != NULL);
 			err = _download (&dl);
 			_metachunk_cleanv (dl.metachunks);
 		}
@@ -1157,7 +1157,7 @@ oio_sds_upload_init (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst)
 
 	oio_ext_set_reqid (sds->session_id);
 	oio_ext_set_admin (sds->admin);
-	
+
 	struct oio_sds_ul_s *ul = g_malloc0 (sizeof(*ul));
 	ul->finished = FALSE;
 	ul->ready_for_data = TRUE;
@@ -1208,7 +1208,7 @@ int
 oio_sds_upload_done (struct oio_sds_ul_s *ul)
 {
 #ifdef HAVE_EXTRA_DEBUG
-	g_assert (ul != NULL);
+	EXTRA_ASSERT (ul != NULL);
 	if (ul->finished)
 		_assert_no_upload (ul);
 #endif
@@ -1230,7 +1230,7 @@ oio_sds_upload_needs_ecd(struct oio_sds_ul_s *ul)
 struct oio_error_s *
 oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 {
-	g_assert (ul != NULL);
+	EXTRA_ASSERT (ul != NULL);
 
 	GError *err = NULL;
 	GString *request_body = g_string_new("");
@@ -1339,7 +1339,7 @@ oio_sds_upload_feed (struct oio_sds_ul_s *ul,
 		const unsigned char *buf, size_t len)
 {
 	GRID_TRACE("%s (%p) <- %"G_GSIZE_FORMAT, __FUNCTION__, ul, len);
-	g_assert (ul != NULL);
+	EXTRA_ASSERT (ul != NULL);
 	g_assert (!ul->finished);
 	g_assert (ul->ready_for_data);
 	g_queue_push_tail (ul->buffer_tail, g_bytes_new (buf, len));
@@ -1352,7 +1352,7 @@ static GError *
 _sds_upload_finish (struct oio_sds_ul_s *ul)
 {
 	GRID_TRACE("%s (%p)", __FUNCTION__, ul);
-	g_assert(ul->mc != NULL);
+	EXTRA_ASSERT(ul->mc != NULL);
 	GError *err = NULL;
 
 	guint failures = http_put_get_failure_number (ul->put);
@@ -1367,7 +1367,7 @@ _sds_upload_finish (struct oio_sds_ul_s *ul)
 		for (GSList *l=ul->mc->chunks; l ;l=l->next) {
 			struct chunk_s *c = l->data;
 			c->size = ul->mc->size;
-			g_assert (c->position.meta == ul->mc->meta);
+			EXTRA_ASSERT (c->position.meta == ul->mc->meta);
 		}
 
 		if (ul->checksum_chunk) {
@@ -1436,9 +1436,9 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 
 	struct oio_error_s *err = NULL;
 
-	g_assert (NULL == ul->put);
-	g_assert (NULL == ul->http_dests);
-	g_assert (NULL == ul->checksum_chunk);
+	EXTRA_ASSERT (NULL == ul->put);
+	EXTRA_ASSERT (NULL == ul->http_dests);
+	EXTRA_ASSERT (NULL == ul->checksum_chunk);
 
 	ul->started = TRUE;
 
@@ -1450,7 +1450,7 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 		}
 		ul->mc = g_queue_pop_head (ul->metachunk_ready);
 	}
-	g_assert (NULL != ul->mc);
+	EXTRA_ASSERT (NULL != ul->mc);
 
 	/* patch the metachunk characteristics (position now known) */
 	if (ul->metachunk_done) {
@@ -1521,7 +1521,7 @@ oio_sds_upload_step (struct oio_sds_ul_s *ul)
 {
 	static const char *end = "";
 	GRID_TRACE("%s (%p)", __FUNCTION__, ul);
-	g_assert (ul != NULL);
+	EXTRA_ASSERT (ul != NULL);
 
 	if (ul->finished) {
 		GRID_TRACE("%s (%p) finished!", __FUNCTION__, ul);
@@ -1548,9 +1548,9 @@ oio_sds_upload_step (struct oio_sds_ul_s *ul)
 		}
 	} else {
 		/* No upload running ... */
-		g_assert (NULL == ul->http_dests);
-		g_assert (NULL == ul->checksum_chunk);
-		g_assert (0 == ul->local_done);
+		EXTRA_ASSERT (NULL == ul->http_dests);
+		EXTRA_ASSERT (NULL == ul->checksum_chunk);
+		EXTRA_ASSERT (0 == ul->local_done);
 
 		/* Check if we need to start a new one */
 		GRID_TRACE("%s (%p) No upload currently running", __FUNCTION__, ul);
@@ -1585,8 +1585,8 @@ oio_sds_upload_step (struct oio_sds_ul_s *ul)
 		return NULL;
 	}
 
-	g_assert (ul->put != NULL);
-	g_assert (0 != http_put_expected_bytes (ul->put));
+	EXTRA_ASSERT (ul->put != NULL);
+	EXTRA_ASSERT (0 != http_put_expected_bytes (ul->put));
 
 	/* An upload is really running, maybe feed it */
 	if (!g_queue_is_empty (ul->buffer_tail)) {
@@ -1595,12 +1595,12 @@ oio_sds_upload_step (struct oio_sds_ul_s *ul)
 
 		gsize len = g_bytes_get_size (buf);
 		gsize max = http_put_expected_bytes (ul->put);
-		g_assert (max != 0);
+		EXTRA_ASSERT (max != 0);
 
 		/* the upload still wants more bytes */
 		if (!len) {
 			GRID_TRACE("%s (%p) tail buffer", __FUNCTION__, ul);
-			g_assert (FALSE == ul->ready_for_data);
+			EXTRA_ASSERT (FALSE == ul->ready_for_data);
 		} else if (max > 0 && len > max) {
 			GRID_TRACE("%s (%p) %"G_GSIZE_FORMAT" accepted at most", __FUNCTION__, ul, max);
 			GBytes *first = g_bytes_new_from_bytes (buf, 0, max);
@@ -1644,7 +1644,7 @@ struct oio_error_s *
 oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 {
 	GRID_TRACE("%s (%p) append=%u", __FUNCTION__, ul, ul->dst->append);
-	g_assert (ul != NULL);
+	EXTRA_ASSERT (ul != NULL);
 
 	if (ul->put && !http_put_done (ul->put))
 		return (struct oio_error_s *) SYSERR("RAWX upload not completed");
@@ -1670,6 +1670,7 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 		.chunk_method = ul->chunk_method,
 		.append = BOOL(ul->dst->append),
 		.update = BOOL(ul->dst->partial),
+		.properties = ul->dst->properties
 	};
 
 	GRID_TRACE("%s (%p) Saving %s", __FUNCTION__, ul, request_body->str);
@@ -1682,9 +1683,6 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 	g_string_free (reply_body, TRUE);
 	if (err)
 		return (struct oio_error_s*) err;
-	if (ul->dst->properties)
-		return (struct oio_error_s*) oio_proxy_call_content_set_properties
-			(ul->sds->h, ul->dst->url, (const char* const*)ul->dst->properties);
 	return NULL;
 }
 
@@ -1692,7 +1690,7 @@ struct oio_error_s *
 oio_sds_upload_abort (struct oio_sds_ul_s *ul)
 {
 	GRID_TRACE("%s (%p)", __FUNCTION__, ul);
-	g_assert (ul != NULL);
+	EXTRA_ASSERT (ul != NULL);
 	if (ul->chunks_failed)
 		_chunks_remove (ul->sds->h, ul->chunks_failed);
 	return (struct oio_error_s *) NYI();
@@ -2321,16 +2319,21 @@ oio_sds_get_content_properties(struct oio_sds_s *sds, struct oio_url_s *url,
 		return (struct oio_error_s*) BADREQ("Missing argument");
 	oio_ext_set_reqid (sds->session_id);
 	oio_ext_set_admin (sds->admin);
-	
+
 	GString *value = NULL;
 	struct oio_error_s *err;
 	err = (struct oio_error_s*) oio_proxy_call_content_get_properties(sds->h, url, &value);
 	if (err)
 		return err;
-
 	json_object *json = json_tokener_parse(value->str);
-	json_object_object_foreach(json,key,val) {
-		fct(ctx, key, json_object_get_string(val));
+	json_object *props = NULL;
+	if (!json_object_object_get_ex(json, "properties", &props)) {
+		err = (struct oio_error_s *) SYSERR(
+				"Malformed answer received from proxy: no 'properties' key");
+	} else {
+		json_object_object_foreach(props, key, val) {
+			fct(ctx, key, json_object_get_string(val));
+		}
 	}
 	json_object_put(json);
 	g_string_free(value, TRUE);

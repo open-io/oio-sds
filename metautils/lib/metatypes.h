@@ -43,9 +43,6 @@ License along with this library.
 /** The maximum length of a service tag name */
 #define LIMIT_LENGTH_TAGNAME 32
 
-/** The maximum length of a location name */
-#define LIMIT_LENGTH_LOCNAME 64
-
 #define LIMIT_LENGTH_CHUNKURL 512
 
 #define LIMIT_LENGTH_REQID 128
@@ -139,28 +136,6 @@ typedef struct addr_info_s
 } addr_info_t;
 
 /**
- * Type to store a chunk id
- */
-typedef struct chunk_id_s
-{
-	hash_sha256_t id;			/**< The unique id */
-	addr_info_t addr;			/**< The RAWX addr on which the chunk is stored */
-	gchar vol[LIMIT_LENGTH_VOLUMENAME];	/**< The volume used by the RAWX on which the chunk is stored */
-} chunk_id_t;
-
-/**
- * Type to store a chunk info
- */
-typedef struct chunk_info_s
-{
-	chunk_id_t id;			/**< The chunk id */
-	chunk_size_t size;		/**< The chunk size */
-	chunk_position_t position;	/**< The chunk position */
-	chunk_hash_t hash;		/**< The chunk hash */
-	guint32 nb;			/**< The total number of chunks needed for the content this chunk belongs to */
-} chunk_info_t;
-
-/**
  * Type to store a namespace info
  */
 typedef struct namespace_info_s
@@ -170,7 +145,6 @@ typedef struct namespace_info_s
 	GHashTable* options;         /**< A hash of namespace options (gchar*) -> (GByteArray*) */
 	GHashTable* storage_policy;	 /**< Storage policies definitions name = STG_CLASS:DATA_SEC:DATA_THREAT */
 	GHashTable* data_security;	 /**< Data security definitions name = TYPE:OTHER_INFO */
-	GHashTable* storage_class;   /**< Storage class definitions name = fallback_1:[...]:fallback_N */
 	GHashTable* service_pools;   /**< Service policies definitions name = GSList<char*> */
 } namespace_info_t;
 

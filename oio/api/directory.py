@@ -38,19 +38,6 @@ class DirectoryAPI(API):
             params.update({'type': srv_type})
         return params
 
-    def has(self, account, reference, headers=None):
-        """
-        Check if the reference exists.
-        """
-        uri = self._make_uri('reference/has')
-        params = self._make_params(account, reference)
-        try:
-            resp, resp_body = self._request(
-                'GET', uri, params=params, headers=headers)
-        except exceptions.NotFound:
-            return False
-        return True
-
     def get(self, account, reference, headers=None):
         uri = self._make_uri('reference/show')
         params = self._make_params(account, reference)
@@ -58,11 +45,13 @@ class DirectoryAPI(API):
             'GET', uri, params=params, headers=headers)
         return resp_body
 
-    def create(self, account, reference, headers=None):
+    def create(self, account, reference, metadata=None, headers=None):
         uri = self._make_uri('reference/create')
         params = self._make_params(account, reference)
+        metadata = metadata or {}
+        data = json.dumps({'properties': metadata})
         resp, resp_body = self._request(
-            'POST', uri, params=params, headers=headers)
+            'POST', uri, params=params, data=data, headers=headers)
         if resp.status_code not in (201, 202):
             raise exceptions.from_response(resp, resp_body)
         if resp.status_code == 201:
@@ -147,7 +136,7 @@ class DirectoryAPI(API):
         params = self._make_params(account, reference)
         if clear:
             params.update({'flush': 1})
-        data = properties
+        data = {'properties': properties}
         resp, resp_body = self._request(
             'POST', uri, params=params, data=json.dumps(data),
             headers=headers)

@@ -28,9 +28,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <events/oio_events_queue.h>
 
-#include <meta0v2/meta0_remote.h>
-#include <meta0v2/meta0_utils.h>
-
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
 #include <meta2v2/meta2v2_remote.h>
@@ -830,8 +827,7 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		memset(&args, 0, sizeof(args));
 		args.sq3 = sq3;
 		args.url = url;
-		args.max_versions = _maxvers(sq3, m2b);
-		args.nsinfo = meta2_backend_get_nsinfo(m2b);
+		args.ns_max_versions = m2b_max_versions(m2b);
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_put_alias(&args, in, out_deleted, out_added)))
@@ -841,8 +837,6 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 				meta2_backend_add_modified_container(m2b, sq3);
 		}
 		m2b_close(sq3);
-
-		namespace_info_free(args.nsinfo);
 	}
 
 	return err;
@@ -866,8 +860,7 @@ meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		memset(&args, 0, sizeof(args));
 		args.sq3 = sq3;
 		args.url = url;
-		args.max_versions = _maxvers(sq3, m2b);
-		args.nsinfo = meta2_backend_get_nsinfo(m2b);
+		args.ns_max_versions = m2b_max_versions(m2b);
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_copy_alias(&args, src)))
@@ -875,8 +868,6 @@ meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			err = sqlx_transaction_end(repctx, err);
 		}
 		m2b_close(sq3);
-
-		namespace_info_free(args.nsinfo);
 	}
 
 	return err;
@@ -961,8 +952,7 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		memset(&args, 0, sizeof(args));
 		args.sq3 = sq3;
 		args.url = url;
-		args.max_versions = _maxvers(sq3, m2b);
-		args.nsinfo = meta2_backend_get_nsinfo(m2b);
+		args.ns_max_versions = m2b_max_versions(m2b);
 
 		if (!(err = _transaction_begin(sq3,url, &repctx))) {
 			if (!(err = m2db_force_alias(&args, in, out_deleted, out_added)))
@@ -971,7 +961,6 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		}
 		if (!err)
 			meta2_backend_add_modified_container(m2b, sq3);
-		namespace_info_free(args.nsinfo);
 
 		m2b_close(sq3);
 	}
@@ -1133,7 +1122,6 @@ meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
 	struct namespace_info_s *nsinfo = NULL;
-	gint64 max_versions;
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -1144,9 +1132,8 @@ meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
-		max_versions = _maxvers(sq3, m2b);
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (!(err = m2db_append_to_alias(sq3, nsinfo, max_versions, url, beans, cb, u0)))
+			if (!(err = m2db_append_to_alias(sq3, url, beans, cb, u0)))
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 		}

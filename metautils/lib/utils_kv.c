@@ -19,18 +19,6 @@ License along with this library.
 
 #include "metautils.h"
 
-struct key_value_pair_s*
-key_value_pair_create(const gchar *k, const guint8 *v, gsize vs)
-{
-	struct key_value_pair_s *kv;
-	kv = g_malloc0(sizeof(*kv));
-	kv->key = g_strdup(k);
-	kv->value = g_byte_array_new();
-	if (v && vs)
-		g_byte_array_append(kv->value, v, vs);
-	return kv;
-}
-
 struct kv_convert_ctx_s
 {
 	gboolean error_met;

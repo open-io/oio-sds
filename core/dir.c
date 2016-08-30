@@ -62,8 +62,7 @@ oio_directory__link (struct oio_directory_s *self,
 
 /* -------------------------------------------------------------------------- */
 
-struct oio_directory_PROXY_s
-{
+struct oio_directory_PROXY_s {
 	struct oio_directory_vtable_s *vtable;
 	gchar *ns;
 };
@@ -92,7 +91,7 @@ static struct oio_directory_vtable_s vtable_PROXY =
 struct oio_directory_s *
 oio_directory__create_proxy (const char *ns)
 {
-	g_assert (ns != NULL);
+	EXTRA_ASSERT (oio_str_is_set(ns));
 	struct oio_directory_PROXY_s *self = g_malloc0 (sizeof(*self));
 	self->vtable = &vtable_PROXY;
 	self->ns = g_strdup (ns);
@@ -102,9 +101,9 @@ oio_directory__create_proxy (const char *ns)
 static void
 _dir_proxy_destroy (struct oio_directory_s *self)
 {
-	g_assert (self != NULL);
+	EXTRA_ASSERT (self != NULL);
 	struct oio_directory_PROXY_s *d = (struct oio_directory_PROXY_s *) self;
-	g_assert (d->vtable == &vtable_PROXY);
+	EXTRA_ASSERT (d->vtable == &vtable_PROXY);
 	d->vtable = NULL;
 	oio_str_clean (&d->ns);
 	g_free (d);
@@ -144,9 +143,10 @@ _load_srvtab (struct json_object *jtab, gchar ***out)
 static GError *
 _dir_proxy_create (struct oio_directory_s *self, const struct oio_url_s *url)
 {
-	g_assert (self != NULL);
+	EXTRA_ASSERT (self != NULL);
 	struct oio_directory_PROXY_s *d = (struct oio_directory_PROXY_s *) self;
-	g_assert (d->vtable == &vtable_PROXY);
+	EXTRA_ASSERT (d->vtable == &vtable_PROXY);
+	(void)d;
 
 	struct oio_url_s *u = oio_url_dup (url);
 	CURL *h = _curl_get_handle_proxy ();
@@ -162,9 +162,10 @@ _dir_proxy_list (struct oio_directory_s *self,
 		const struct oio_url_s *url, const char *srvtype,
 		gchar ***out_dir, gchar ***out_srv)
 {
-	g_assert (self != NULL);
+	EXTRA_ASSERT (self != NULL);
 	struct oio_directory_PROXY_s *d = (struct oio_directory_PROXY_s *) self;
-	g_assert (d->vtable == &vtable_PROXY);
+	EXTRA_ASSERT (d->vtable == &vtable_PROXY);
+	(void)d;
 
 	GError *err = NULL;
 	GString *out = g_string_new ("");
@@ -206,9 +207,10 @@ _dir_proxy_link (struct oio_directory_s *self,
 			const struct oio_url_s *url, const char *srvtype,
 			gboolean autocreate, gchar ***out_srv)
 {
-	g_assert (self != NULL);
+	EXTRA_ASSERT (self != NULL);
 	struct oio_directory_PROXY_s *d = (struct oio_directory_PROXY_s *) self;
-	g_assert (d->vtable == &vtable_PROXY);
+	EXTRA_ASSERT (d->vtable == &vtable_PROXY);
+	(void)d;
 
 	GError *err = NULL;
 	GString *out = g_string_new ("");
@@ -234,4 +236,3 @@ _dir_proxy_link (struct oio_directory_s *self,
 
 	return err;
 }
-

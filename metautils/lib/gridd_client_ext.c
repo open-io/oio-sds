@@ -386,7 +386,6 @@ gridd_client_exec4 (const gchar *to, gdouble seconds, GByteArray *req,
 	if (tmp) {
 		g_ptr_array_set_free_func (tmp, (GDestroyNotify)g_byte_array_unref);
 		g_ptr_array_free (tmp, TRUE);
-		tmp = NULL;
 	}
 	return err;
 }
@@ -479,7 +478,6 @@ gridd_client_exec_and_decode (const gchar *to, gdouble seconds,
 				items = metautils_gslist_precat (items, l);
 		}
 		*out = items;
-		items = NULL;
 	}
 	metautils_gba_cleanv (bodies);
 	return err;

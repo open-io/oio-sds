@@ -47,19 +47,6 @@ enum content_action_e
 	DELETE,
 };
 
-struct content_info_s
-{
-	enum content_action_e action;
-	GSList *beans;
-};
-
-struct all_vers_cb_args
-{
-	const gchar *contentid;
-	gconstpointer udata_in;
-	gpointer udata_out;
-};
-
 static void
 _notify_beans (struct meta2_backend_s *m2b, struct oio_url_s *url,
 		GSList *beans, const char *name)
@@ -401,23 +388,25 @@ int
 meta2_filter_action_del_content_properties(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	(void) reply;
-	GError *e = NULL;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
-	GSList *namel = meta2_filter_ctx_get_input_udata(ctx);
 
 	TRACE_FILTER();
 
-	gchar **namev = (gchar**) metautils_list_to_array (namel);
-	e = meta2_backend_del_properties(m2b, url, namev);
-	metautils_pfree(&namev);
+	gsize len = 0;
+	void *buf = metautils_message_get_BODY(reply->request, &len);
+
+	gchar **namev = NULL;
+	GError *e = STRV_decode_buffer(buf, len, &namev);
+	if (!e) {
+		e = meta2_backend_del_properties(m2b, url, namev);
+		metautils_pfree(&namev);
+	}
 
 	if (NULL != e) {
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
 	}
-
 	return FILTER_OK;
 }
 

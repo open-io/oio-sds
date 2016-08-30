@@ -238,9 +238,9 @@ static struct oio_cs_client_vtable_s vtable_PROXY =
 void
 _cs_PROXY__destroy (struct oio_cs_client_s *self)
 {
-	g_assert (self != NULL);
+	EXTRA_ASSERT (self != NULL);
 	struct oio_cs_client_PROXY_s *cs = (struct oio_cs_client_PROXY_s*) self;
-	g_assert (cs->vtable == &vtable_PROXY);
+	EXTRA_ASSERT (cs->vtable == &vtable_PROXY);
 	oio_str_clean (&cs->ns);
 	SLICE_FREE (struct oio_cs_client_PROXY_s, cs);
 }
@@ -249,9 +249,9 @@ GError *
 _cs_PROXY__register_service (struct oio_cs_client_s *self,
 		const char *in_type, const struct oio_cs_registration_s *reg)
 {
-	g_assert (self != NULL);
+	EXTRA_ASSERT (self != NULL);
 	struct oio_cs_client_PROXY_s *cs = (struct oio_cs_client_PROXY_s*) self;
-	g_assert (cs->vtable == &vtable_PROXY);
+	EXTRA_ASSERT (cs->vtable == &vtable_PROXY);
 
 	if (!in_type || !*in_type)
 		return BADREQ("Missing srvtype");
@@ -275,9 +275,9 @@ _cs_PROXY__lock_service (struct oio_cs_client_s *self,
 		const char *in_type, const struct oio_cs_registration_s *reg,
 		int score)
 {
-	g_assert (self != NULL);
+	EXTRA_ASSERT (self != NULL);
 	struct oio_cs_client_PROXY_s *cs = (struct oio_cs_client_PROXY_s*) self;
-	g_assert (cs->vtable == &vtable_PROXY);
+	EXTRA_ASSERT (cs->vtable == &vtable_PROXY);
 
 	if (!in_type || !*in_type)
 		return BADREQ("Missing srvtype");
@@ -299,9 +299,9 @@ GError *
 _cs_PROXY__deregister_service (struct oio_cs_client_s *self,
 		const char *in_type, const struct oio_cs_registration_s *reg)
 {
-	g_assert (self != NULL);
+	EXTRA_ASSERT (self != NULL);
 	struct oio_cs_client_PROXY_s *cs = (struct oio_cs_client_PROXY_s*) self;
-	g_assert (cs->vtable == &vtable_PROXY);
+	EXTRA_ASSERT (cs->vtable == &vtable_PROXY);
 
 	if (!in_type || !*in_type)
 		return BADREQ("Missing srvtype");
@@ -322,9 +322,9 @@ _cs_PROXY__deregister_service (struct oio_cs_client_s *self,
 GError *
 _cs_PROXY__flush_services (struct oio_cs_client_s *self, const char *in_type)
 {
-	g_assert (self != NULL);
+	EXTRA_ASSERT (self != NULL);
 	struct oio_cs_client_PROXY_s *cs = (struct oio_cs_client_PROXY_s*) self;
-	g_assert (cs->vtable == &vtable_PROXY);
+	EXTRA_ASSERT (cs->vtable == &vtable_PROXY);
 
 	if (!in_type || !*in_type)
 		return BADREQ("Missing srvtype");
@@ -340,9 +340,9 @@ GError *
 _cs_PROXY__unlock_service (struct oio_cs_client_s *self,
 		const char *in_type, const struct oio_cs_registration_s *reg)
 {
-	g_assert (self != NULL);
+	EXTRA_ASSERT (self != NULL);
 	struct oio_cs_client_PROXY_s *cs = (struct oio_cs_client_PROXY_s*) self;
-	g_assert (cs->vtable == &vtable_PROXY);
+	EXTRA_ASSERT (cs->vtable == &vtable_PROXY);
 
 	if (!in_type || !*in_type)
 		return BADREQ("Missing srvtype");
@@ -366,9 +366,9 @@ _cs_PROXY__list_services (struct oio_cs_client_s *self,
 		const char *in_type, gboolean full,
 		void (*on_reg) (const struct oio_cs_registration_s *reg, int score))
 {
-	g_assert (self != NULL);
+	EXTRA_ASSERT (self != NULL);
 	struct oio_cs_client_PROXY_s *cs = (struct oio_cs_client_PROXY_s*) self;
-	g_assert (cs->vtable == &vtable_PROXY);
+	EXTRA_ASSERT (cs->vtable == &vtable_PROXY);
 
 	if (!in_type || !*in_type)
 		return BADREQ("Missing srvtype");
@@ -414,9 +414,9 @@ GError *
 _cs_PROXY__list_types (struct oio_cs_client_s *self,
 		void (*on_type) (const char *srvtype))
 {
-	g_assert (self != NULL);
+	EXTRA_ASSERT (self != NULL);
 	struct oio_cs_client_PROXY_s *cs = (struct oio_cs_client_PROXY_s*) self;
-	g_assert (cs->vtable == &vtable_PROXY);
+	EXTRA_ASSERT (cs->vtable == &vtable_PROXY);
 
 	GString *body = g_string_new ("");
 
@@ -457,4 +457,3 @@ oio_cs_client__create_proxied (const char *ns)
 	oio_str_replace (&cs->ns, ns);
 	return (struct oio_cs_client_s*) cs;
 }
-

@@ -374,7 +374,7 @@ _handler_wrapper(const gchar *d UNUSED, GLogLevelFlags l,
 void
 oio_log_set_handler (oio_log_handler_f handler)
 {
-	g_assert_nonnull(handler);
+	EXTRA_ASSERT(handler != NULL);
 	g_log_set_default_handler(_handler_wrapper, handler);
 }
 

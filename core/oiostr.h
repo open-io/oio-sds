@@ -20,6 +20,7 @@ License along with this library.
 #ifndef OIO_SDS__core__oiostr_h
 # define OIO_SDS__core__oiostr_h 1
 # include <glib.h>
+# include <json-c/json.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,11 +31,7 @@ extern "C" {
 #define OIO_CSV_SEP2_C ';'
 #define OIO_CSV_SEP2   ";"
 
-#define oio_pfree0(pp,repl) do { \
-	if (NULL != *(pp)) \
-		g_free(*pp); \
-	*(pp) = (repl); \
-} while (0)
+#define oio_pfree0(pp,repl) do { if (*pp) g_free(*pp); *(pp) = (repl); } while (0)
 
 #define oio_pfree(pp,repl) do { \
 	if (NULL != (pp)) \
@@ -114,6 +111,9 @@ void oio_str_lower(register gchar *s);
  * double quotes escaped and other characters are valid UTF-8 */
 void oio_str_gstring_append_json_string (GString *base, const char *s);
 
+/* calls oio_str_gstring_append_json_string() surrounded with double quotes */
+void oio_str_gstring_append_json_quote (GString *base, const char *s);
+
 /* appends to 'base' the JSON acceptable version of 's'. If 'len' is less
  * than zero, stop at the first null-character. */
 void oio_str_gstring_append_json_blob(GString *base, const char *s, int len);
@@ -130,9 +130,41 @@ static inline int oio_str_is_set (const char *s) { return NULL!=s && 0!=*s; }
 
 int oio_str_prefixed (const char *s, const char *p, const char *sep);
 
+int oio_str_caseprefixed(const char *str, const char *prefix);
+
 int oio_str_is_number (const char *s);
 
 int oio_str_cmp3 (const void *a, const void *b, void *ignored);
+
+/* Light wrappers around json-c, to return GLib errors */
+GError* JSON_parse_buffer (const guint8 *b, gsize l, struct json_object **o);
+GError* JSON_parse_gba (GByteArray *gba, struct json_object **o);
+
+/* JSON codec for arrays of strings */
+GString * STRV_encode_gstr(gchar **tab);
+GByteArray * STRV_encode_gba(gchar **tab);
+GError * STRV_decode_object (struct json_object *j, gchar ***out);
+GError * STRV_decode_buffer (guint8 *buf, gsize len, gchar ***out);
+
+/* JSON codec for <string> to <string> maps */
+GString * KV_encode_gstr(gchar **kv);
+void KV_encode_gstr2(GString *out, gchar **kv);
+GByteArray * KV_encode_gba(gchar **kv);
+GError * KV_decode_object(struct json_object *j, gchar ***out);
+GError * KV_decode_buffer(guint8 *buf, gsize len, gchar ***out);
+
+/* Returns a valid KV where all the keys have the given prefix.
+ * WARNING the array returned holds pointers to the same buffer than the
+ * input, so DO NOT FREE each string but just the holder array.
+ * Example:
+ *   KV_extract_prefixed({"a.b", "v0", "b.c", "v1", NULL}, "a.")
+ *    -> {"b", "v0", NULL}
+ */
+gchar ** KV_extract_prefixed (gchar **kv, const char *prefix);
+
+/* @see KV_extract_prefixed(), with the keys left untouched */
+gchar ** KV_extract_not_prefixed (gchar **kv, const char *prefix);
+
 
 #ifdef __cplusplus
 }

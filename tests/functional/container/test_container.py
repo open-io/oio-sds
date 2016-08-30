@@ -38,17 +38,6 @@ def gen_names():
             yield i, '{0}/{1}/plop'.format(c0, c1)
 
 
-def gen_props(n, v):
-    """Generates 'n' properties tuples, whose value is prefixed with 'v'"""
-    for i in range(n):
-        yield "user.k{0}".format(i), v+str(i)
-
-
-def user_props(b):
-    """Filters user's properties from the set of the container properties."""
-    return dict((k, v) for k, v in b.items() if k.startswith("user."))
-
-
 class TestMeta2Containers(BaseTestCase):
 
     def setUp(self):
@@ -68,10 +57,14 @@ class TestMeta2Containers(BaseTestCase):
         except:
             pass
 
-    def _create(self, params, code):
-        headers = {'X-oio-action-mode': 'autocreate'}
-        resp = self.session.post(self.url_container('create'),
-                                 params=params, headers=headers)
+    def _create(self, params, code, autocreate=True):
+        headers = {}
+        if autocreate:
+            headers['x-oio-action-mode'] = 'autocreate'
+        data = json.dumps({'properties': {}})
+        resp = self.session.post(
+            self.url_container('create'), params=params, data=data,
+            headers=headers)
         self.assertEqual(resp.status_code, code)
 
     def _delete(self, params):
@@ -82,30 +75,6 @@ class TestMeta2Containers(BaseTestCase):
                                  params=params,
                                  headers={'X-oio-action-mode': 'force'})
         self.assertEqual(resp.status_code, 204)
-
-    def test_cycle_container(self):
-        params = self.param_ref(self.ref)
-
-        resp = self.session.get(self.url_container('show'), params=params)
-        self.assertEqual(resp.status_code, 404)
-
-        resp = self.session.post(self.url_container('create'),
-                                 params=params)
-        self.assertEqual(resp.status_code, 403)
-        self._create(params, 204)
-
-        resp = self.session.get(self.url_container('show'), params=params)
-        self.assertEqual(resp.status_code, 204)
-        # TODO check the headers
-
-        self._create(params, 201)
-
-        self._delete(params)
-        resp = self.session.post(self.url_container('destroy'), params=params)
-        self.assertEqual(resp.status_code, 404)
-
-        resp = self.session.get(self.url_container('show'), params=params)
-        self.assertEqual(resp.status_code, 404)
 
     def check_list_output(self, body, nbobj, nbpref):
         self.assertIsInstance(body, dict)
@@ -182,120 +151,6 @@ class TestMeta2Containers(BaseTestCase):
         self.assertEqual(resp.status_code, 200)
         self.check_list_output(resp.json(), 8, 0)
         del params['marker_end']
-
-    def check_prop_output(self, body, ref):
-        self.assertIsInstance(body, dict)
-        self.assertDictEqual(user_props(body), ref)
-
-    def test_properties_noent(self):
-        params = self.param_ref(self.ref)
-
-        resp = self.session.post(self.url_container('get_properties'),
-                                 params=params)
-        self.assertEqual(resp.status_code, 404)
-        resp = self.session.post(self.url_container('set_properties'),
-                                 params=params)
-        self.assertEqual(resp.status_code, 404)
-        resp = self.session.post(self.url_container('del_properties'),
-                                 params=params, data=json.dumps([]))
-        self.assertEqual(resp.status_code, 404)
-
-    def test_properties_none(self):
-        params = self.param_ref(self.ref)
-        self._create(params, 204)
-
-        # chek no props after creation
-        resp = self.session.post(self.url_container('get_properties'),
-                                 params=params)
-        self.assertEqual(resp.status_code, 200)
-        body = resp.json()
-        self.assertIsInstance(body, dict)
-        self.assertGreater(len(body), 0)
-        self.assertDictEqual(user_props(body), {})
-
-        # check set/del works on no set
-        resp = self.session.post(self.url_container('set_properties'),
-                                 params=params)
-        self.assertEqual(resp.status_code, 200)
-
-        resp = self.session.post(self.url_container('del_properties'),
-                                 params=params, data=json.dumps([]))
-        self.assertEqual(resp.status_code, 200)
-
-    def test_properties(self):
-        params = self.param_ref(self.ref)
-        self._create(params, 204)
-
-        # Check the simple SET works
-        data = dict(gen_props(256, 'val'))
-        resp = self.session.post(self.url_container('set_properties'),
-                                 params=params, data=json.dumps(data))
-        self.assertEqual(resp.status_code, 200)
-
-        resp = self.session.post(self.url_container('get_properties'),
-                                 params=params)
-        self.assertEqual(resp.status_code, 200)
-        self.check_prop_output(resp.json(), data)
-
-        # check SET overriding works
-        change = {"user.k0": "XXX"}
-        resp = self.session.post(self.url_container('set_properties'),
-                                 params=params, data=json.dumps(change))
-        self.assertEqual(resp.status_code, 200)
-
-        data.update(change)
-        resp = self.session.post(self.url_container('get_properties'),
-                                 params=params)
-        self.assertEqual(resp.status_code, 200)
-        self.check_prop_output(resp.json(), data)
-
-        # check the FLUSH/REPLACE works
-        data = dict(gen_props(16, 'XXXX'))
-        params1 = dict(params)
-        params1['flush'] = '1'
-        resp = self.session.post(self.url_container('set_properties'),
-                                 params=params1, data=json.dumps(data))
-        self.assertEqual(resp.status_code, 200)
-
-        resp = self.session.post(self.url_container('get_properties'),
-                                 params=params)
-        self.assertEqual(resp.status_code, 200)
-        self.check_prop_output(resp.json(), data)
-
-        # check the simple delete works
-        resp = self.session.post(self.url_container('del_properties'),
-                                 params=params, data=json.dumps(["user.k0"]))
-        self.assertEqual(resp.status_code, 200)
-
-        del data["user.k0"]
-        resp = self.session.post(self.url_container('get_properties'),
-                                 params=params)
-        self.assertEqual(resp.status_code, 200)
-        self.check_prop_output(resp.json(), data)
-
-        # check the DELETE(all) works
-        resp = self.session.post(self.url_container('del_properties'),
-                                 params=params, data=json.dumps([]))
-        self.assertEqual(resp.status_code, 200)
-
-        data = dict()
-        resp = self.session.post(self.url_container('get_properties'),
-                                 params=params)
-        self.assertEqual(resp.status_code, 200)
-        self.check_prop_output(resp.json(), data)
-
-        # check the FLUSH works
-        data = dict(gen_props(32, "kjlkqjlxqjs"))
-        resp = self.session.post(self.url_container('set_properties'),
-                                 params=params, data=json.dumps(data))
-        self.assertEqual(resp.status_code, 200)
-
-        params1 = dict(params)
-        params1['flush'] = '1'
-        resp = self.session.post(self.url_container('set_properties'),
-                                 params=params1, data=json.dumps({}))
-        self.assertEqual(resp.status_code, 200)
-        self.check_prop_output(resp.json(), {})
 
     def test_touch(self):
         params = self.param_ref(self.ref)
@@ -436,8 +291,10 @@ class TestMeta2Contents(BaseTestCase):
         self.assertError(resp, 403, 406)
 
         # No content
+        data = json.dumps({'properties': {}})
         resp = self.session.post(self.url_container('create'),
-                                 params=params, headers=headers)
+                                 params=params, headers=headers,
+                                 data=data)
         self.assertEqual(resp.status_code, 204)
         resp = self.session.post(self.url_content('copy'),
                                  headers=headers, params=params)
@@ -454,7 +311,8 @@ class TestMeta2Contents(BaseTestCase):
             self.assertEqual(resp.status_code, 200)
             body = resp.json()
             self.assertIsInstance(body, dict)
-            self.assertDictEqual(body, expected)
+            self.assertIsInstance(body.get('properties'), dict)
+            self.assertDictEqual(expected, body['properties'])
 
         def del_ok(keys):
             resp = self.session.post(self.url_content('del_properties'),
@@ -463,7 +321,8 @@ class TestMeta2Contents(BaseTestCase):
 
         def set_ok(kv):
             resp = self.session.post(self.url_content('set_properties'),
-                                     params=params, data=json.dumps(kv))
+                                     params=params,
+                                     data=json.dumps({'properties': kv}))
             self.assertEqual(resp.status_code, 204)
 
         # GetProperties on no content
@@ -501,7 +360,7 @@ class TestMeta2Contents(BaseTestCase):
 
     def test_cycle_content(self):
         path = random_content()
-        headers = {'X-oio-action-mode': 'autocreate'}
+        headers = {'x-oio-action-mode': 'autocreate'}
         params = self.param_content(self.ref, path)
 
         resp = self.session.get(self.url_content('show'), params=params)
@@ -517,8 +376,8 @@ class TestMeta2Contents(BaseTestCase):
         self.assertEqual(resp.status_code, 200)
         chunks = resp.json()
 
-        headers = {'X-oio-action-mode': 'autocreate',
-                   'X-oio-content-meta-length': '1024'}
+        headers = {'x-oio-action-mode': 'autocreate',
+                   'x-oio-content-meta-length': '1024'}
         resp = self.session.post(self.url_content('create'),
                                  params=params,
                                  headers=headers,

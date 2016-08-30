@@ -33,12 +33,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "./meta1_gridd_dispatcher.h"
 #include "./internals.h"
 
-static GByteArray *
-marshall_stringv_and_clean(gchar ***pv)
-{
-	GByteArray *result = metautils_encode_lines(*pv);
-	g_strfreev(*pv);
-	*pv = NULL;
+static GByteArray *encode_and_clean(GByteArray* (*e)(gchar**), gchar **pv) {
+	GByteArray *result = (*e)(pv);
+	g_strfreev(pv);
 	return result;
 }
 
@@ -46,13 +43,23 @@ marshall_stringv_and_clean(gchar ***pv)
 
 static gboolean
 meta1_dispatch_v2_USERCREATE(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored)
+		struct meta1_backend_s *m1, gpointer ignored UNUSED)
 {
-	(void) ignored;
 	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
 
-	GError *err = meta1_backend_user_create(m1, url);
+	gsize length = 0;
+	void *body = metautils_message_get_BODY(reply->request, &length);
+	gchar **properties = NULL;
+	GError *err = KV_decode_buffer(body, length, &properties);
+	if (NULL != err) {
+		reply->send_error(0, err);
+		return TRUE;
+	}
+
+	err = meta1_backend_user_create(m1, url, properties);
+	g_strfreev(properties);
+
 	if (NULL != err)
 		reply->send_error(0, err);
 	else
@@ -64,12 +71,11 @@ meta1_dispatch_v2_USERCREATE(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 meta1_dispatch_v2_USERDESTROY(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored)
+		struct meta1_backend_s *m1, gpointer ignored UNUSED)
 {
 	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	gboolean force = metautils_message_extract_flag(reply->request, NAME_MSGKEY_FORCE, FALSE);
 	reply->subject("%s|%s|%d", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), force);
-	(void) ignored;
 
 	GError *err = meta1_backend_user_destroy(m1, url, force);
 	if (NULL != err)
@@ -83,48 +89,43 @@ meta1_dispatch_v2_USERDESTROY(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 meta1_dispatch_v2_USERINFO(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored)
+		struct meta1_backend_s *m1, gpointer ignored UNUSED)
 {
-	GError *err;
-	gchar **info = NULL;
 	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
-	(void) ignored;
 
-	if (NULL != (err = meta1_backend_user_info(m1, url, &info)))
+	gchar **info = NULL;
+	GError *err = meta1_backend_user_info(m1, url, &info);
+	if (NULL != err)
 		reply->send_error(0, err);
 	else {
-		reply->add_body(marshall_stringv_and_clean(&info));
+		reply->add_body(encode_and_clean(STRV_encode_gba, info));
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
-	if (info) g_strfreev (info);
 	oio_url_clean (url);
 	return TRUE;
 }
 
 static gboolean
 meta1_dispatch_v2_SRV_LINK(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored)
+		struct meta1_backend_s *m1, gpointer ignored UNUSED)
 {
 	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	gchar *srvtype = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
 	gboolean dryrun = metautils_message_extract_flag(reply->request, NAME_MSGKEY_DRYRUN, FALSE);
 	gboolean autocreate = metautils_message_extract_flag(reply->request, NAME_MSGKEY_AUTOCREATE, FALSE);
 	reply->subject("%s|%s|%s|%d", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), srvtype, dryrun);
-	(void) ignored;
 
 	gchar **result = NULL;
-	GError *err = meta1_backend_services_link (m1, url,
-			srvtype, dryrun, autocreate, &result);
+	GError *err = meta1_backend_services_link (m1, url, srvtype, dryrun, autocreate, &result);
 	if (NULL != err)
 		reply->send_error(0, err);
 	else {
-		reply->add_body(marshall_stringv_and_clean(&result));
+		reply->add_body(encode_and_clean(STRV_encode_gba, result));
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
-	if (result) g_strfreev (result);
 	oio_url_clean(url);
 	g_free0 (srvtype);
 	return TRUE;
@@ -132,25 +133,23 @@ meta1_dispatch_v2_SRV_LINK(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 meta1_dispatch_v2_SRV_RENEW(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored)
+		struct meta1_backend_s *m1, gpointer ignored UNUSED)
 {
 	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	gboolean ac = metautils_message_extract_flag(reply->request, NAME_MSGKEY_AUTOCREATE, FALSE);
 	gboolean dryrun = metautils_message_extract_flag(reply->request, NAME_MSGKEY_DRYRUN, FALSE);
 	gchar *srvtype = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
 	reply->subject("%s|%s|%s|%d", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), srvtype, dryrun);
-	(void) ignored;
 
 	gchar **result = NULL;
 	GError *err = meta1_backend_services_poll(m1, url, srvtype, ac, dryrun, &result);
 	if (NULL != err)
 		reply->send_error(0, err);
 	else {
-		reply->add_body(marshall_stringv_and_clean(&result));
+		reply->add_body(encode_and_clean(STRV_encode_gba, result));
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
-	if (result) g_strfreev (result);
 	oio_url_clean(url);
 	g_free0 (srvtype);
 	return TRUE;
@@ -158,71 +157,82 @@ meta1_dispatch_v2_SRV_RENEW(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 meta1_dispatch_v2_SRV_FORCE(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored)
+		struct meta1_backend_s *m1, gpointer ignored UNUSED)
 {
-	GError *err;
-	gchar *m1url = NULL;
 	struct oio_url_s *url = metautils_message_extract_url (reply->request);
-	reply->subject("%s|%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), m1url);
-	(void) ignored;
-
 	gboolean ac = metautils_message_extract_flag (reply->request, NAME_MSGKEY_AUTOCREATE, FALSE);
 	gboolean force = metautils_message_extract_flag (reply->request, NAME_MSGKEY_FORCE, FALSE);
-	if (NULL != (err = metautils_message_extract_body_string(reply->request, &m1url)))
-		reply->send_error(CODE_BAD_REQUEST, err);
-	else if (NULL != (err = meta1_backend_services_set(m1, url, m1url, ac, force)))
-		reply->send_error(0, err);
-	else
-		reply->send_reply(200, "OK");
+	reply->subject("%s|%s|?", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
 
-	g_free0 (m1url);
+	gchar *m1url = NULL;
+	GError *err = metautils_message_extract_body_string(reply->request, &m1url);
+	if (NULL != err)
+		reply->send_error(CODE_BAD_REQUEST, err);
+	else {
+		reply->subject("%s|%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), m1url);
+		err = meta1_backend_services_set(m1, url, m1url, ac, force);
+		g_free0 (m1url);
+		if (NULL != err)
+			reply->send_error(0, err);
+		else
+			reply->send_reply(200, "OK");
+	}
+
 	oio_url_clean (url);
 	return TRUE;
 }
 
 static gboolean
 meta1_dispatch_v2_SRV_CONFIG(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored)
+		struct meta1_backend_s *m1, gpointer ignored UNUSED)
 {
-	GError *err;
-	gchar *m1url = NULL;
 	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
-	(void) ignored;
 
-	if (NULL != (err = metautils_message_extract_body_string(reply->request, &m1url)))
+	gchar *m1url = NULL;
+	GError *err = metautils_message_extract_body_string(reply->request, &m1url);
+	if (NULL != err)
 		reply->send_error(CODE_BAD_REQUEST, err);
-	else if (NULL != (err = meta1_backend_services_config(m1, url, m1url)))
-		reply->send_error(0, err);
-	else
-		reply->send_reply(CODE_FINAL_OK, "OK");
+	else {
+		err = meta1_backend_services_config(m1, url, m1url);
+		g_free0 (m1url);
+		if (NULL != err)
+			reply->send_error(0, err);
+		else
+			reply->send_reply(CODE_FINAL_OK, "OK");
+	}
 
-	g_free0 (m1url);
 	oio_url_clean (url);
 	return TRUE;
 }
 
 static gboolean
 meta1_dispatch_v2_SRV_UNLINK(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored)
+		struct meta1_backend_s *m1, gpointer ignored UNUSED)
 {
-	gchar **urlv = NULL;
-	GError *err;
 	gchar *srvtype = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
 	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), srvtype);
-	(void) ignored;
 
 	if (!srvtype)
 		reply->send_error(CODE_BAD_REQUEST, NEWERROR(CODE_BAD_REQUEST, "Missing srvtype"));
-	else if (NULL != (err = metautils_message_extract_body_strv(reply->request, &urlv)))
-		reply->send_error(CODE_BAD_REQUEST, err);
-	else if (NULL != (err = meta1_backend_services_unlink(m1, url, srvtype, urlv)))
-		reply->send_error(0, err);
-	else
-		reply->send_reply(CODE_FINAL_OK, "OK");
+	else {
+		gsize length = 0;
+		void *body = metautils_message_get_BODY(reply->request, &length);
+		gchar **urlv = NULL;
+		GError *err = STRV_decode_buffer(body, length, &urlv);
+		if (NULL != err)
+			reply->send_error(CODE_BAD_REQUEST, err);
+		else {
+			err = meta1_backend_services_unlink(m1, url, srvtype, urlv);
+			if (NULL != err)
+				reply->send_error(0, err);
+			else
+				reply->send_reply(CODE_FINAL_OK, "OK");
+			g_strfreev (urlv);
+		}
+	}
 
-	if (urlv) g_strfreev (urlv);
 	oio_url_clean (url);
 	g_free0 (srvtype);
 	return TRUE;
@@ -230,159 +240,160 @@ meta1_dispatch_v2_SRV_UNLINK(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 meta1_dispatch_v2_SRV_LIST(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored)
+		struct meta1_backend_s *m1, gpointer ignored UNUSED)
 {
-	GError *err;
-	gchar **result = NULL;
 	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	gchar *srvtype = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
 	reply->subject("%s|%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), srvtype);
-	(void) ignored;
+	STRING_STACKIFY(srvtype);
 
-	if (NULL != (err = meta1_backend_services_list(m1, url, srvtype, &result)))
+	gchar **result = NULL;
+	GError *err = meta1_backend_services_list(m1, url, srvtype, &result);
+	if (NULL != err)
 		reply->send_error(0, err);
 	else {
-		reply->add_body(marshall_stringv_and_clean(&result));
+		reply->add_body(encode_and_clean(STRV_encode_gba, result));
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
-	if (result) g_strfreev (result);
 	oio_url_clean (url);
-	g_free0 (srvtype);
 	return TRUE;
 }
 
 static gboolean
 meta1_dispatch_v2_SRV_ALLONM1(struct gridd_reply_ctx_s *reply,
-        struct meta1_backend_s *m1, gpointer ignored)
+        struct meta1_backend_s *m1, gpointer ignored UNUSED)
 {
-	GError *err;
-	gchar **result = NULL;
 	struct oio_url_s *url = metautils_message_extract_url (reply->request);
     reply->subject("%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
     reply->send_reply(CODE_TEMPORARY, "Received");
-    (void) ignored;
 
-	if (NULL != (err = meta1_backend_services_all(m1, url, &result)))
+	gchar **result = NULL;
+	GError *err = meta1_backend_services_all(m1, url, &result);
+	if (NULL != err)
         reply->send_error(0, err);
     else {
-        reply->add_body(marshall_stringv_and_clean(&result));
+        reply->add_body(encode_and_clean(STRV_encode_gba, result));
         reply->send_reply(CODE_FINAL_OK, "OK");
     }
 
-	if (result) g_strfreev (result);
 	oio_url_clean (url);
     return TRUE;
 }
 
 static gboolean
 meta1_dispatch_v2_PROPGET(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored)
+		struct meta1_backend_s *m1, gpointer ignored UNUSED)
 {
-	GError *err;
-	gchar **strv = NULL, **result = NULL;
 	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
 
-	(void) ignored;
-
-	if (NULL != (err = metautils_message_extract_body_strv(reply->request, &strv)))
+	gsize length = 0;
+	void *body = metautils_message_get_BODY(reply->request, &length);
+	gchar **keys = NULL;
+	GError *err = STRV_decode_buffer(body, length, &keys);
+	if (NULL != err)
 		reply->send_error(CODE_BAD_REQUEST, err);
-	else if (NULL != (err = meta1_backend_get_container_properties(m1, url, strv, &result)))
-		reply->send_error(0, err);
 	else {
-		reply->add_body(marshall_stringv_and_clean(&result));
-		reply->send_reply(CODE_FINAL_OK, "OK");
+		gchar **result = NULL;
+		err = meta1_backend_get_container_properties(m1, url, keys, &result);
+		g_strfreev (keys);
+		if (NULL != err)
+			reply->send_error(0, err);
+		else {
+			reply->add_body(encode_and_clean(KV_encode_gba, result));
+			reply->send_reply(CODE_FINAL_OK, "OK");
+		}
 	}
 
-	if (strv) g_strfreev (strv);
-	if (result) g_strfreev (result);
 	oio_url_clean (url);
 	return TRUE;
 }
 
 static gboolean
 meta1_dispatch_v2_PROPSET(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored)
+		struct meta1_backend_s *m1, gpointer ignored UNUSED)
 {
-	GError *err;
-	gchar **strv = NULL;
 	struct oio_url_s *url = metautils_message_extract_url (reply->request);
-	gboolean flush = metautils_message_extract_flag(reply->request,
-			NAME_MSGKEY_FLUSH, FALSE);
+	gboolean flush = metautils_message_extract_flag(reply->request, NAME_MSGKEY_FLUSH, FALSE);
 	reply->subject("%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
-	(void) ignored;
 
-	if (NULL != (err = metautils_message_extract_body_strv(reply->request, &strv)))
+	gsize length = 0;
+	void *body = metautils_message_get_BODY(reply->request, &length);
+	gchar **props = NULL;
+	GError *err = KV_decode_buffer(body, length, &props);
+	if (NULL != err)
 		reply->send_error(CODE_BAD_REQUEST, err);
-	else if (NULL != (err = meta1_backend_set_container_properties(m1, url, strv, flush)))
-		reply->send_error(0, err);
-	else
-		reply->send_reply(CODE_FINAL_OK, "OK");
+	else {
+		err = meta1_backend_set_container_properties(m1, url, props, flush);
+		g_strfreev (props);
+		if (NULL != err)
+			reply->send_error(0, err);
+		else
+			reply->send_reply(CODE_FINAL_OK, "OK");
+	}
 
-	if (strv) g_strfreev (strv);
 	oio_url_clean (url);
 	return TRUE;
 }
 
 static gboolean
 meta1_dispatch_v2_PROPDEL(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored)
+		struct meta1_backend_s *m1, gpointer ignored UNUSED)
 {
-	GError *err;
-	gchar **strv = NULL;
 	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
-	(void) ignored;
 
-	if (NULL != (err = metautils_message_extract_body_strv(reply->request, &strv)))
+	gchar **keys = NULL;
+	gsize length = 0;
+	void *body = metautils_message_get_BODY(reply->request, &length);
+	GError *err = STRV_decode_buffer(body, length, &keys);
+
+	if (NULL != err)
 		reply->send_error(CODE_BAD_REQUEST, err);
-	else if (NULL != (err = meta1_backend_del_container_properties(m1, url, strv)))
-		reply->send_error(0, err);
-	else
-		reply->send_reply(CODE_FINAL_OK, "OK");
+	else {
+		err = meta1_backend_del_container_properties(m1, url, keys);
+		if (err)
+			reply->send_error(0, err);
+		else
+			reply->send_reply(CODE_FINAL_OK, "OK");
+		g_strfreev (keys);
+	}
 
-	if (strv) g_strfreev (strv);
 	oio_url_clean (url);
 	return TRUE;
 }
 
 static gboolean
 meta1_dispatch_v2_GET_PREFIX(struct gridd_reply_ctx_s *reply,
-	struct meta1_backend_s *m1, gpointer ignored)
+	struct meta1_backend_s *m1, gpointer ignored UNUSED)
 {
-	(void) ignored;
-	struct meta1_prefixes_set_s *m1ps = meta1_backend_get_prefixes(m1);
-	gchar **result = result = meta1_prefixes_get_all(m1ps);
+	gchar **result = meta1_prefixes_get_all(meta1_backend_get_prefixes(m1));
 	if (result)
-		reply->add_body(marshall_stringv_and_clean(&result));
+		reply->add_body(encode_and_clean(STRV_encode_gba, result));
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
 
 static gboolean
 meta1_dispatch_v2_SRVRELINK(struct gridd_reply_ctx_s *reply,
-	struct meta1_backend_s *m1, gpointer ignored)
+	struct meta1_backend_s *m1, gpointer ignored UNUSED)
 {
-	GError *err = NULL;
-	gchar *replaced = NULL, *kept = NULL, **newset = NULL;
-	struct oio_url_s *url = NULL;
-	(void) ignored;
-
-	url = metautils_message_extract_url (reply->request);
-	kept = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_OLD);
-	replaced = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_NOTIN);
+	struct oio_url_s *url = metautils_message_extract_url (reply->request);
+	gchar *kept = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_OLD);
+	gchar *replaced = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_NOTIN);
 	gboolean dryrun = metautils_message_extract_flag (reply->request, NAME_MSGKEY_DRYRUN, FALSE);
 	reply->subject("%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
 
 	if (!url) {
 		reply->send_error (0, NEWERROR(CODE_BAD_REQUEST, "Missing field (%s)", "url"));
 	} else {
-		err = meta1_backend_services_relink (m1, url, kept, replaced, dryrun, &newset);
+		gchar **newset = NULL;
+		GError *err = meta1_backend_services_relink (m1, url, kept, replaced, dryrun, &newset);
 		if (NULL != err) {
 			reply->send_error (0, err);
 		} else {
-			reply->add_body(marshall_stringv_and_clean(&newset));
+			reply->add_body(encode_and_clean(STRV_encode_gba, newset));
 			reply->send_reply (CODE_FINAL_OK, "OK");
 		}
 	}
@@ -390,7 +401,6 @@ meta1_dispatch_v2_SRVRELINK(struct gridd_reply_ctx_s *reply,
 	oio_url_pclean (&url);
 	g_free0 (kept);
 	g_free0 (replaced);
-	if (newset) g_strfreev (newset);
 	return TRUE;
 }
 

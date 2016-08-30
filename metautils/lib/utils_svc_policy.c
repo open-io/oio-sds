@@ -316,14 +316,12 @@ configure_strkv(GTree *tree, gchar *name)
 static GError*
 configure_newtree(GTree *tree, const gchar *cfg)
 {
-	const gchar *start, *end;
-
-	start = cfg;
-	end = NULL;
+	const gchar *start = cfg;
 
 	while (start && *start) {
 		GError *err;
 		gchar *str;
+		const gchar *end;
 
 		if (!(end = strchr(start, ';'))) {
 			str = g_strstrip(g_strdup(start));

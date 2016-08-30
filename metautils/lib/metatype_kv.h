@@ -32,7 +32,4 @@ void key_value_pair_clean(key_value_pair_t * kv);
 
 void key_value_pair_gclean(gpointer p, gpointer u);
 
-struct key_value_pair_s* key_value_pair_create(const gchar *k,
-		const guint8 *v, gsize vs);
-
 #endif /*OIO_SDS__metautils__lib__metatype_kv_h*/

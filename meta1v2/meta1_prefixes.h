@@ -46,14 +46,6 @@ GError* meta1_prefixes_load(struct meta1_prefixes_set_s *m1ps,
 		GArray **updated_prefixes,
 		gboolean *meta0_ok);
 
-/**
- * @param m1ps
- * @param local_url
- * @return NULL in case of success or the error that occured
- */
-GError* meta1_prefixes_manage_all(struct meta1_prefixes_set_s *m1ps,
-		const gchar *local_url);
-
 /** Destructor
  * @param m1ps destructor
  */
@@ -84,8 +76,6 @@ gchar ** meta1_prefixes_get_peers(struct meta1_prefixes_set_s *m1ps,
  * @return
  */
 gchar** meta1_prefixes_get_all(struct meta1_prefixes_set_s *m1ps);
-
-guint8* meta1_prefixes_get_cache(struct meta1_prefixes_set_s *m1ps);
 
 /** @} */
 

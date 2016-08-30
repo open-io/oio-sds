@@ -1,10 +1,6 @@
 AWL-MetaDirectory-Protocol DEFINITIONS AUTOMATIC TAGS ::=
 BEGIN
 
-	-- general purpose message structures
-
-	ContentList ::= SEQUENCE OF PrintableString
-
 	Parameter ::= SEQUENCE {
 			name PrintableString,
 			value OCTET STRING
@@ -30,49 +26,16 @@ BEGIN
 		port [1] INTEGER
 	}
 
-	AddrInfoSequence ::= SEQUENCE OF AddrInfo
-
-
-	-- Content information
-
-	ChunkId ::= SEQUENCE {
-		id   [0] OCTET STRING(SIZE(16)),
-		addr [1] AddrInfo,
-		vol  [2] PrintableString
-	}
-
-	ChunkInfo ::= SEQUENCE {
-		id       [0] ChunkId,
-		size     [1] INTEGER,
-		position [2] INTEGER,
-		nb       [3] INTEGER,
-		md5      [4] OCTET STRING(SIZE(16))
-	}
-
-	ChunkInfoSequence ::= SET OF ChunkInfo
-
-	-- Digested information spread by the cluster conscience
-
 	-- Namespace information
-
-	NamespaceInfoValueList ::= SET OF Parameter
 
 	NamespaceInfo ::= SEQUENCE {
 		name           [0] PrintableString,
-		addr           [1] AddrInfo,
 		chunkSize      [2] INTEGER,
-		options        [3] NamespaceInfoValueList,
-		storagePolicy  [4] NamespaceInfoValueList,
-		dataSecurity   [5] NamespaceInfoValueList,
-
-		-- TODO remove these 2 fields in the next major release
-		dataTreatments [6] NamespaceInfoValueList,
-		storageClass   [7] NamespaceInfoValueList,
-
-		servicePools   [8] NamespaceInfoValueList
+		options        [3] ParameterSequence,
+		storagePolicy  [4] ParameterSequence,
+		dataSecurity   [5] ParameterSequence,
+		servicePools   [8] ParameterSequence
 	}
-
-	NamespaceInfoSequence ::= SET OF NamespaceInfo
 
 	-- meta0 mapping information
 
@@ -81,7 +44,7 @@ BEGIN
 		addr   [1] AddrInfo
 	}
 
-	Meta0InfoSequence ::= SET OF Meta0Info
+	Meta0InfoSequence ::= SEQUENCE OF Meta0Info
 
 	-- Meta2V2 beans
 
@@ -156,17 +119,6 @@ BEGIN
 	}
 
 	ServiceInfoSequence ::= SEQUENCE OF ServiceInfo
-
-	-- Extended version of the Meta2RawContent, suitable for v1.5+ META2
-	-- contents representation.
-
-	Meta2Property ::= SEQUENCE {
-		name     [0] PrintableString,
-		version  [1] INTEGER,
-		value    [2] OCTET STRING
-	}
-
-	Meta2PropertySequence ::= SEQUENCE OF Meta2Property
 
 	-- SQLX related structures
 

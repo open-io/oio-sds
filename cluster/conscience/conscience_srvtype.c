@@ -228,33 +228,6 @@ conscience_srvtype_run_all(struct conscience_srvtype_s * srvtype,
 	return rc;
 }
 
-guint
-conscience_srvtype_count_srv(struct conscience_srvtype_s * srvtype,
-    gboolean include_expired)
-{
-	guint count = 0U;
-
-	if (!srvtype)
-		return 0U;
-
-	if (include_expired)
-		return g_hash_table_size(srvtype->services_ht);
-	else {
-		time_t oldest = oio_ext_monotonic_seconds () - srvtype->score_expiration;
-		struct conscience_srv_s *beacon = &(srvtype->services_ring);
-
-		for (struct conscience_srv_s *srv = beacon->next;
-				srv && srv != beacon;
-				srv = srv->next) {
-			if (srv->score.timestamp < oldest)
-				break;
-			count++;
-		}
-	}
-
-	return count;
-}
-
 void
 conscience_srvtype_init(struct conscience_srvtype_s *srvtype)
 {

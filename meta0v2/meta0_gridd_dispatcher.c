@@ -31,8 +31,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "meta0_gridd_dispatcher.h"
 #include "internals.h"
 
-struct meta0_disp_s
-{
+struct meta0_disp_s {
 	struct meta0_backend_s *m0;
 	struct zk_manager_s *m0zkmanager;
 	gchar *ns_name;
@@ -43,21 +42,16 @@ struct meta0_disp_s
 
 /* ------------------------------------------------------------------------- */
 
-static GTree*
-urlv_to_tree(const guint8 *prefix, gchar **urlv)
-{
-	gchar **u;
+static GTree* urlv_to_tree(const guint8 *prefix, gchar **urlv) {
 	GTree *tree = meta0_utils_tree_create();
-	for (u=urlv; u && *u ;u++)
+	if (urlv) for (gchar **u=urlv; *u ;u++)
 		meta0_utils_tree_add_url(tree, prefix, *u);
 	g_strfreev(urlv);
 	return tree;
 }
 
-static GError *
-extract_prefix(MESSAGE msg, const gchar *n,
-		gboolean mandatory, guint8 *prefix)
-{
+static GError * extract_prefix(MESSAGE msg, const gchar *n, gboolean mandatory,
+		guint8 *prefix) {
 	gsize f_size;
 	void *f = metautils_message_get_field(msg, n, &f_size);
 	if (!f) {
@@ -76,33 +70,25 @@ extract_prefix(MESSAGE msg, const gchar *n,
 
 /* -------------------------------------------------------------------------- */
 
-static GByteArray*
-_encode_meta0_list(GSList *list)
-{
+static GByteArray* _encode_meta0_list(GSList *list) {
 	GByteArray *encoded = meta0_info_marshall_gba(list, NULL);
 	meta0_utils_list_clean(list);
 	return encoded;
 }
 
-static GByteArray*
-_encode_meta0_array(GPtrArray *array)
-{
+static GByteArray* _encode_meta0_array(GPtrArray *array) {
 	GSList *list = meta0_utils_array_to_list(array);
 	meta0_utils_array_clean(array);
 	return _encode_meta0_list(list);
 }
 
-static GByteArray*
-_encode_meta0_tree(GTree *tree)
-{
+static GByteArray* _encode_meta0_tree(GTree *tree) {
 	GSList *list = meta0_utils_tree_to_list(tree);
 	g_tree_unref(tree);
 	return _encode_meta0_list(list);
 }
 
-static GByteArray*
-_get_encoded(struct meta0_disp_s *m0disp)
-{
+static GByteArray* _get_encoded(struct meta0_disp_s *m0disp) {
 	GError *err = NULL;
 	GByteArray *encoded = NULL;
 
@@ -125,24 +111,17 @@ _get_encoded(struct meta0_disp_s *m0disp)
 	return encoded;
 }
 
-static GByteArray*
-_encode_meta1ref(struct meta0_disp_s *m0disp)
-{
+static GByteArray* _encode_meta1ref(struct meta0_disp_s *m0disp) {
 	GError *err = NULL;
 	GByteArray *encoded = NULL;
-	GPtrArray *array = NULL;
 
 	g_mutex_lock(&m0disp->lock);
+	GPtrArray *array = NULL;
 	err = meta0_backend_get_all_meta1_ref(m0disp->m0, &array);
-	if(!err) {
-		guint i, max;
-		gchar **v0 = g_malloc0(sizeof(gchar*)* (array->len + 1));
-		for (i=0,max=array->len; i<max ;i++) {
-			v0[i] = g_strdup(array->pdata[i]);
-		}
-		v0[max]=NULL;
-
-		encoded=metautils_encode_lines(v0);
+	if (!err) {
+		if (array->len <= 0 || !array->pdata[array->len - 1])
+			g_ptr_array_add(array, NULL);
+		encoded = STRV_encode_gba((gchar**)array->pdata);
 	}
 	g_mutex_unlock(&m0disp->lock);
 
@@ -155,9 +134,7 @@ _encode_meta1ref(struct meta0_disp_s *m0disp)
 	return encoded;
 }
 
-static void
-_reload(struct meta0_disp_s *m0disp)
-{
+static void _reload(struct meta0_disp_s *m0disp) {
 	GError *err = NULL;
 	GPtrArray *array = NULL;
 
@@ -181,38 +158,32 @@ _reload(struct meta0_disp_s *m0disp)
 
 static gboolean
 meta0_dispatch_v1_GETONE(struct gridd_reply_ctx_s *reply,
-		struct meta0_disp_s *m0disp, gpointer ignored)
+		struct meta0_disp_s *m0disp, gpointer ignored UNUSED)
 {
-	GError *err;
 	guint8 prefix[2] = {0,0};
-	gchar **urlv = NULL;
 
-	(void) ignored;
-	err = extract_prefix(reply->request, NAME_MSGKEY_PREFIX, TRUE, prefix);
+	GError *err = extract_prefix(reply->request, NAME_MSGKEY_PREFIX, TRUE, prefix);
 	if (NULL != err) {
 		reply->send_error(CODE_BAD_REQUEST, err);
-		return TRUE;
+	} else {
+		reply->subject("%02X%02X", prefix[0], prefix[1]);
+		gchar **urlv = NULL;
+		err = meta0_backend_get_one(m0disp->m0, prefix, &urlv);
+		if (NULL != err) {
+			g_prefix_error(&err, "Backend error: ");
+			reply->send_error(CODE_INTERNAL_ERROR, err);
+		} else {
+			reply->add_body(_encode_meta0_tree(urlv_to_tree(prefix, urlv)));
+			reply->send_reply(CODE_FINAL_OK, "OK");
+		}
 	}
-
-	reply->subject("%02X%02X", prefix[0], prefix[1]);
-
-	err = meta0_backend_get_one(m0disp->m0, prefix, &urlv);
-	if (NULL != err) {
-		g_prefix_error(&err, "Backend error: ");
-		reply->send_error(CODE_INTERNAL_ERROR, err);
-		return TRUE;
-	}
-
-	reply->add_body(_encode_meta0_tree(urlv_to_tree(prefix, urlv)));
-	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
 
 static gboolean
 meta0_dispatch_v1_GETALL(struct gridd_reply_ctx_s *reply,
-		struct meta0_disp_s *m0disp, gpointer ignored)
+		struct meta0_disp_s *m0disp, gpointer ignored UNUSED)
 {
-	(void) ignored;
 	reply->add_body(_get_encoded(m0disp));
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
@@ -220,47 +191,41 @@ meta0_dispatch_v1_GETALL(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 meta0_dispatch_v1_FILL(struct gridd_reply_ctx_s *reply,
-		struct meta0_disp_s *m0disp, gpointer ignored)
+		struct meta0_disp_s *m0disp, gpointer ignored UNUSED)
 {
-	GError *err;
-	gchar **urls = NULL;
 	guint nbreplicas = 1;
-
-	(void) ignored;
-	err = metautils_message_extract_struint(reply->request,
+	GError *err = metautils_message_extract_struint(reply->request,
 			NAME_MSGKEY_REPLICAS, &nbreplicas);
 	if (err != NULL) {
 		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
 	}
 
-	err = metautils_message_extract_body_strv(reply->request, &urls);
+	gchar **urls = NULL;
+	gsize length = 0;
+	void *body = metautils_message_get_BODY(reply->request, &length);
+	err = STRV_decode_buffer(body, length, &urls);
 	if (err != NULL) {
 		reply->send_error(CODE_BAD_REQUEST, err);
-		return TRUE;
+	} else {
+		reply->subject("repl=%u|m1=%u", nbreplicas, g_strv_length(urls));
+		err = meta0_backend_fill_rr(m0disp->m0, nbreplicas,
+									(const char *const *) urls);
+		g_strfreev(urls);
+		if (!err)
+			reply->send_reply(CODE_FINAL_OK, "OK");
+		else
+			reply->send_error(0, err);
 	}
-
-	reply->subject("repl=%u|m1=%u", nbreplicas, g_strv_length(urls));
-
-	err = meta0_backend_fill_rr(m0disp->m0, nbreplicas,
-			(const char * const *)urls);
-	g_free(urls);
-
-	if (!err)
-		reply->send_reply(CODE_FINAL_OK, "OK");
-	else
-		reply->send_error(0, err);
-
 	return TRUE;
 }
 
 static gboolean
 meta0_dispatch_v1_RELOAD(struct gridd_reply_ctx_s *reply,
-		struct meta0_disp_s *m0disp, gpointer ignored)
+		struct meta0_disp_s *m0disp, gpointer ignored UNUSED)
 {
 	GError *err;
 
-	(void) ignored;
 	if (NULL != (err = meta0_backend_reload(m0disp->m0))) {
 		g_prefix_error(&err, "Backend error: ");
 		reply->send_error(0, err);
@@ -274,9 +239,8 @@ meta0_dispatch_v1_RELOAD(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 meta0_dispatch_v1_RESET(struct gridd_reply_ctx_s *reply,
-		struct meta0_disp_s *m0disp, gpointer ignored)
+		struct meta0_disp_s *m0disp, gpointer ignored UNUSED)
 {
-	(void) ignored;
 	gboolean flag_local = metautils_message_extract_flag (reply->request,
 			NAME_MSGKEY_LOCAL, FALSE);
 
@@ -293,9 +257,8 @@ meta0_dispatch_v1_RESET(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 meta0_dispatch_v2_FILL(struct gridd_reply_ctx_s *reply,
-		struct meta0_disp_s *m0disp, gpointer ignored)
+		struct meta0_disp_s *m0disp, gpointer ignored UNUSED)
 {
-	(void) ignored;
 	GError *err;
 	guint nbreplicas = 1;
 
@@ -321,9 +284,8 @@ meta0_dispatch_v2_FILL(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 meta0_dispatch_v2_ASSIGN_PREFIX(struct gridd_reply_ctx_s *reply,
-		struct meta0_disp_s *m0disp, gpointer ignored)
+		struct meta0_disp_s *m0disp, gpointer ignored UNUSED)
 {
-	(void) ignored;
 	gboolean nocheck = metautils_message_extract_flag(reply->request,
 			NAME_MSGKEY_NOCHECK, FALSE);
 
@@ -340,38 +302,34 @@ meta0_dispatch_v2_ASSIGN_PREFIX(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 meta0_dispatch_v2_DISABLE_META1(struct gridd_reply_ctx_s *reply,
-		struct meta0_disp_s *m0disp, gpointer ignored)
+		struct meta0_disp_s *m0disp, gpointer ignored UNUSED)
 {
-	(void) ignored;
 	gchar **urls = NULL;
-	GError *err = metautils_message_extract_body_strv(reply->request, &urls);
+	gsize length = 0;
+	void *body = metautils_message_get_BODY(reply->request, &length);
+	GError *err = STRV_decode_buffer(body, length, &urls);
 	if (err != NULL) {
-		reply->send_error(CODE_BAD_REQUEST, err);
-		return TRUE;
-	}
-
-	reply->subject("m1=%u", g_strv_length(urls));
-
-	gboolean nocheck = metautils_message_extract_flag(reply->request,
-			NAME_MSGKEY_NOCHECK, FALSE);
-	err = meta0_assign_disable_meta1(m0disp->m0, m0disp->ns_name, urls, nocheck);
-	if (NULL != err) {
-		g_prefix_error(&err, "disable meta1 error:");
 		reply->send_error(0, err);
-		return TRUE;
+	} else {
+		reply->subject("m1=%u", g_strv_length(urls));
+		gboolean nocheck = metautils_message_extract_flag(reply->request,
+				NAME_MSGKEY_NOCHECK, FALSE);
+		err = meta0_assign_disable_meta1(m0disp->m0, m0disp->ns_name, urls, nocheck);
+		if (NULL != err)
+			reply->send_error(0, err);
+		else {
+			_reload(m0disp);
+			reply->send_reply(CODE_FINAL_OK, "OK");
+		}
+		g_strfreev(urls);
 	}
-
-	_reload(m0disp);
-	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
 
 static gboolean
 meta0_dispatch_v2_META1_INFO(struct gridd_reply_ctx_s *reply,
-		struct meta0_disp_s *m0disp, gpointer ignored)
+		struct meta0_disp_s *m0disp, gpointer ignored UNUSED)
 {
-	(void) ignored;
-
 	reply->add_body(_encode_meta1ref(m0disp));
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
@@ -379,13 +337,10 @@ meta0_dispatch_v2_META1_INFO(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 meta0_dispatch_v2_DESTROY_META1REF(struct gridd_reply_ctx_s *reply,
-		struct meta0_disp_s *m0disp, gpointer ignored)
+		struct meta0_disp_s *m0disp, gpointer ignored UNUSED)
 {
-	GError *err;
 	gchar meta1url[STRLEN_ADDRINFO];
-	(void) ignored;
-
-	err = metautils_message_extract_string(reply->request,
+	GError *err = metautils_message_extract_string(reply->request,
 			NAME_MSGKEY_METAURL, meta1url, sizeof(meta1url));
 	if (err != NULL) {
 		reply->send_error(CODE_BAD_REQUEST, err);
@@ -406,13 +361,10 @@ meta0_dispatch_v2_DESTROY_META1REF(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 meta0_dispatch_v2_DESTROY_ZKNODE(struct gridd_reply_ctx_s *reply,
-		struct meta0_disp_s *m0disp, gpointer ignored)
+		struct meta0_disp_s *m0disp, gpointer ignored UNUSED)
 {
-	GError *err;
 	gchar meta0url[STRLEN_ADDRINFO];
-	(void) ignored;
-
-	err = metautils_message_extract_string(reply->request,
+	GError *err = metautils_message_extract_string(reply->request,
 			NAME_MSGKEY_METAURL, meta0url, sizeof(meta0url));
 	if (err != NULL) {
 		reply->send_error(CODE_BAD_REQUEST, err);
@@ -431,13 +383,10 @@ meta0_dispatch_v2_DESTROY_ZKNODE(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 meta0_dispatch_v1_FORCE(struct gridd_reply_ctx_s *reply,
-		struct meta0_disp_s *m0disp, gpointer ignored)
+		struct meta0_disp_s *m0disp, gpointer ignored UNUSED)
 {
-	GError *err;
 	gchar *mapping = NULL;
-	(void) ignored;
-
-	err = metautils_message_extract_body_string(reply->request, &mapping);
+	GError *err = metautils_message_extract_body_string(reply->request, &mapping);
 	if (err != NULL) {
 		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
@@ -463,9 +412,7 @@ meta0_dispatch_v1_FORCE(struct gridd_reply_ctx_s *reply,
 
 typedef gboolean (*hook) (struct gridd_reply_ctx_s *, gpointer, gpointer);
 
-const struct gridd_request_descr_s *
-meta0_gridd_get_requests(void)
-{
+const struct gridd_request_descr_s *meta0_gridd_get_requests(void) {
 	static struct gridd_request_descr_s descriptions[] = {
 		{NAME_MSGNAME_M0_GETALL,              (hook) meta0_dispatch_v1_GETALL,  NULL},
 		{NAME_MSGNAME_M0_GETONE,              (hook) meta0_dispatch_v1_GETONE,  NULL},
@@ -485,17 +432,13 @@ meta0_gridd_get_requests(void)
 	return descriptions;
 }
 
-void
-meta0_gridd_requested_reload(struct meta0_disp_s *m0disp)
-{
+void meta0_gridd_requested_reload(struct meta0_disp_s *m0disp) {
 	m0disp->reload_requested = TRUE;
 	meta0_backend_reload_requested(m0disp->m0);
 }
 
-struct meta0_disp_s*
-meta0_gridd_get_dispatcher(struct meta0_backend_s *m0,
-		struct zk_manager_s *m0zkmanager, gchar* ns_name)
-{
+struct meta0_disp_s* meta0_gridd_get_dispatcher(struct meta0_backend_s *m0,
+		struct zk_manager_s *m0zkmanager, gchar* ns_name) {
 	struct meta0_disp_s *result = g_malloc0(sizeof(*result));
 	result->ns_name = g_strdup(ns_name);
 	result->m0 = m0;
@@ -506,9 +449,7 @@ meta0_gridd_get_dispatcher(struct meta0_backend_s *m0,
 	return result;
 }
 
-void
-meta0_gridd_free_dispatcher(struct meta0_disp_s *m0disp)
-{
+void meta0_gridd_free_dispatcher(struct meta0_disp_s *m0disp) {
 	if (!m0disp)
 		return;
 	if (m0disp->encoded)
@@ -517,4 +458,3 @@ meta0_gridd_free_dispatcher(struct meta0_disp_s *m0disp)
 	g_mutex_clear(&m0disp->lock);
 	g_free(m0disp);
 }
-

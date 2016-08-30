@@ -58,15 +58,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define GROUP_PREFIX_TYPE "type:"
 # define GROUP_PREFIX_POOL "pool:"
 
-# define DEF_SERIALIZE_SRVINFO_CACHED FALSE
-
 # define KEY_SERIALIZE_SRVINFO_TAGS   "serialize_srvinfo_tags"
 # define DEF_SERIALIZE_SRVINFO_TAGS   TRUE
 
 # define KEY_SERIALIZE_SRVINFO_STATS  "serialize_srvinfo_stats"
 # define DEF_SERIALIZE_SRVINFO_STATS  FALSE
-
-# define DOMAIN_PERIODIC "conscience.dump"
 
 # define TIME_DEFAULT_ALERT_LIMIT 300L
 

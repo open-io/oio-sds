@@ -211,6 +211,7 @@ the list."""
         out.write("# define GENERATED_H 1\n")
         out.write("# include <glib.h>\n")
         out.write("# include <sqlite3.h>\n")
+        out.write("# include <meta2v2/generic.h>\n")
         out.write("\n")
         for t in self.allbeans.values():
             out.write("extern const struct bean_descriptor_s descr_struct_"+t.name.upper()+";\n")
@@ -227,7 +228,7 @@ the list."""
             u = t.name.upper()
             out.write("\n/* Loader and Saver for "+u+" */\n")
             out.write("\nGError* "+u+"_load(sqlite3 *db, const gchar *clause,\n")
-            out.write("\t\tGVariant **params, void (*cb)(gpointer u, gpointer bean), gpointer u);\n")
+            out.write("\t\tGVariant **params, on_bean_f cb, gpointer u);\n")
             out.write("\nGError* "+u+"_load_buffered(sqlite3 *db, const gchar *clause,")
             out.write(" GVariant **params, GPtrArray *result);\n")
             out.write("\nGError* "+u+"_save(sqlite3 *db,")

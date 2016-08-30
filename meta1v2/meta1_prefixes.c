@@ -140,11 +140,8 @@ _cache_load_from_m0(struct meta1_prefixes_set_s *m1ps,
 
 	if (by_prefix)
 		meta0_utils_array_clean(by_prefix);
-	by_prefix = NULL;
-
 	if (cache)
 		g_free(cache);
-	cache = NULL;
 
 	g_slist_foreach(m0info_list, meta0_info_gclean, NULL);
 	g_slist_free(m0info_list);
@@ -223,11 +220,10 @@ gboolean
 meta1_prefixes_is_managed(struct meta1_prefixes_set_s *m1ps,
 		const guint8 *bytes)
 {
-	gboolean rc = FALSE;
 	if (!m1ps || !m1ps->cache || !bytes)
 		return FALSE;
 	g_mutex_lock(&m1ps->lock);
-	rc = _cache_is_managed(m1ps->cache, bytes);
+	gboolean rc = _cache_is_managed(m1ps->cache, bytes);
 	g_mutex_unlock(&m1ps->lock);
 	return rc;
 }
@@ -244,29 +240,6 @@ meta1_prefixes_clean(struct meta1_prefixes_set_s *m1ps)
 	g_mutex_clear(&m1ps->lock);
 	memset(m1ps, 0, sizeof(*m1ps));
 	g_free(m1ps);
-}
-
-GError*
-meta1_prefixes_manage_all(struct meta1_prefixes_set_s *m1ps,
-		const gchar *local_url)
-{
-	gint32 i32;
-	guint16 u16;
-
-	EXTRA_ASSERT(m1ps != NULL);
-
-	g_mutex_lock(&m1ps->lock);
-	memset(m1ps->cache, ~0, 8192);
-	if (m1ps->by_prefix)
-		meta0_utils_array_clean(m1ps->by_prefix);
-	m1ps->by_prefix = meta0_utils_array_create();
-	for (i32=0; i32<65536 ;i32++) {
-		u16 = i32;
-		meta0_utils_array_add(m1ps->by_prefix, (guint8*)(&u16), local_url);
-	}
-	g_mutex_unlock(&m1ps->lock);
-
-	return NULL;
 }
 
 GError*
@@ -313,17 +286,6 @@ meta1_prefixes_get_all(struct meta1_prefixes_set_s *m1ps)
 	}
 	result[done] = NULL;
 
-	return result;
-}
-
-guint8*
-meta1_prefixes_get_cache(struct meta1_prefixes_set_s *m1ps)
-{
-	EXTRA_ASSERT(m1ps != NULL);
-
-	g_mutex_lock(&m1ps->lock);
-	guint8* result = g_memdup(m1ps->cache,8192);
-	g_mutex_unlock(&m1ps->lock);
 	return result;
 }
 
