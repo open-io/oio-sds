@@ -38,6 +38,12 @@ extern "C" {
 #  define OIO_SDS_CONTAINER_QUOTA "sys.m2.quota"
 # endif
 
+# ifdef M2V2_ADMIN_OBJ_COUNT
+#  define OIO_SDS_CONTAINER_OBJECTS M2V2_ADMIN_OBJ_COUNT
+# else
+#  define OIO_SDS_CONTAINER_OBJECTS "sys.m2.objects"
+# endif
+
 
 CURL * _curl_get_handle_blob (void);
 CURL * _curl_get_handle_proxy (void);

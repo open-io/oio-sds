@@ -2111,19 +2111,28 @@ oio_sds_get_usage (struct oio_sds_s *sds, struct oio_url_s *url,
 {
 	GString *props_str = NULL;
 	GError *err = NULL;
-	json_object *root = NULL, *usage = NULL, *quota = NULL;
+	json_object *root = NULL, *props = NULL, *syst = NULL;
+	json_object *usage = NULL, *quota = NULL, *objects = NULL;
 
 	err = oio_proxy_call_container_get_properties(sds->h, url, &props_str);
 	if (err)
 		goto end;
 	root = json_tokener_parse(props_str->str);
 
-	struct oio_ext_json_mapping_s map[] = {
-		{OIO_SDS_CONTAINER_USAGE, &usage,  json_type_string, 1},
-		{OIO_SDS_CONTAINER_QUOTA, &quota,  json_type_string, 0},
+	struct oio_ext_json_mapping_s map0[] = {
+		{"properties", &props, json_type_object, 0},
+		{"system",     &syst,  json_type_object, 1},
 		{NULL,NULL,0,0}
 	};
-	err = oio_ext_extract_json (root, map);
+	struct oio_ext_json_mapping_s map1[] = {
+		{OIO_SDS_CONTAINER_USAGE,   &usage,   json_type_string, 1},
+		{OIO_SDS_CONTAINER_QUOTA,   &quota,   json_type_string, 0},
+		{OIO_SDS_CONTAINER_OBJECTS, &objects, json_type_string, 0},
+		{NULL,NULL,0,0}
+	};
+	err = oio_ext_extract_json(root, map0);
+	if (!err)
+		err = oio_ext_extract_json(syst, map1);
 	if (err)
 		goto end;
 
@@ -2135,11 +2144,10 @@ oio_sds_get_usage (struct oio_sds_s *sds, struct oio_url_s *url,
 	else
 		out->quota_bytes = SIZE_MAX;
 
+	if (objects)
+		out->used_objects = (int) json_object_get_int64(objects);
+
 end:
-	if (quota)
-		json_object_put(quota);
-	if (usage)
-		json_object_put(usage);
 	if (root)
 		json_object_put(root);
 	if (props_str)
