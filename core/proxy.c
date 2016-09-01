@@ -397,8 +397,10 @@ oio_proxy_call_container_create (CURL *h, struct oio_url_s *u)
 	if (!http_url) return BADNS();
 
 	gchar *hdrin[] = {PROXYD_HEADER_MODE, "autocreate", NULL};
-	struct http_ctx_s i = { .headers = hdrin, .body = NULL };
+	GString *body = g_string_new("{}");
+	struct http_ctx_s i = { .headers = hdrin, .body = body };
 	GError *err = _proxy_call (h, "POST", http_url->str, &i, NULL);
+	g_string_free(body, TRUE);
 	g_string_free(http_url, TRUE);
 	return err;
 }
