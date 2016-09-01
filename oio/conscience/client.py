@@ -43,6 +43,16 @@ class ConscienceClient(Client):
             raise OioException("ERROR while getting list of %s services"
                                % type_)
 
+    def service_types(self):
+        uri = self._make_uri("conscience/info")
+        params = {'what': 'types'}
+        resp, body = self._request('GET', uri, params=params)
+        if resp.status_code == 200:
+            return body
+        else:
+            raise OioException("ERROR while getting services types: %s" %
+                               resp.text)
+
     def register(self, pool, service_definition):
         uri = self._make_uri('conscience/register')
         data = json.dumps(service_definition)
