@@ -28,7 +28,7 @@ class ClusterShow(show.ShowOne):
 
 
 class ClusterList(lister.Lister):
-    """Cluster List"""
+    """List services of the namespace"""
 
     log = logging.getLogger(__name__ + '.ClusterInfo')
 
@@ -36,15 +36,18 @@ class ClusterList(lister.Lister):
         parser = super(ClusterList, self).get_parser(prog_name)
         parser.add_argument(
             'srv_types',
-            metavar='<srv_types>',
-            nargs='+',
-            help='Service Type(s)')
+            metavar='<srv_type>',
+            nargs='*',
+            help='Type of services to list')
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
         results = []
+        if not parsed_args.srv_types:
+            parsed_args.srv_types = \
+                    self.app.client_manager.admin.cluster_list_types()
         for srv_type in parsed_args.srv_types:
             data = self.app.client_manager.admin.cluster_list(
                 srv_type)
