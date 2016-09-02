@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import time
+
 from werkzeug.wrappers import Request, Response
 from werkzeug.routing import Map, Rule
 from werkzeug.exceptions import HTTPException, NotFound, BadRequest, \
@@ -87,6 +89,7 @@ class Rdir(object):
     def _check_push(self, meta):
         data = {}
         missing_keys = []
+        time_limit = int(time.time())
 
         def add_keys(keys, transform_func=None, required=True):
             for k in keys:
@@ -99,8 +102,16 @@ class Rdir(object):
                     if required:
                         missing_keys.append(k)
 
+        def convert_and_check_time(source):
+            converted = int(source)
+            if converted > time_limit:
+                raise BadRequest("Modification or rebuild time" +
+                                 " seems to be in the future: %s" %
+                                 source)
+            return converted
+
         add_keys(['container_id', 'content_id', 'chunk_id'])
-        add_keys(['mtime', 'rtime'], lambda k: int(k), False)
+        add_keys(['mtime', 'rtime'], convert_and_check_time, False)
         if missing_keys:
             raise BadRequest('Missing %s' % missing_keys)
         return data

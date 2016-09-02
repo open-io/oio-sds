@@ -21,7 +21,7 @@ class VolumeIndexFilter(Filter):
                     volume_id, container_id, content_id, chunk_id)
             else:
                 args = {
-                    'mtime': event.when,
+                    'mtime': event.when / 1000000,  # seconds
                 }
                 self.app.rdir.chunk_push(
                     volume_id, container_id, content_id, chunk_id, **args)
