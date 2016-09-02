@@ -44,16 +44,6 @@ conscience_srv_ensure_tag(struct conscience_srv_s *service,
 }
 
 void
-conscience_srv_remove_tag(struct conscience_srv_s *service,
-    const char *name)
-{
-	if (service && name)
-		service_info_remove_tag(service->tags,name);
-}
-
-/* ------------------------------------------------------------------------- */
-
-void
 conscience_srv_destroy(struct conscience_srv_s *service)
 {
 	if (!service)
@@ -182,16 +172,6 @@ conscience_srv_compute_score(struct conscience_srv_s
 
 	service->score.value = CLAMP(current,0,100);
 	return &(service->score);
-}
-
-void
-conscience_srv_lock_score( struct conscience_srv_s *srv, gint s )
-{
-	if (!srv)
-		return;
-	srv->score.value = s;
-	srv->score.timestamp = oio_ext_monotonic_seconds ();
-	srv->locked = TRUE;
 }
 
 void

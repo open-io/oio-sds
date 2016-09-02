@@ -85,6 +85,7 @@ class BackblazeUtils(object):
 
 class Backblaze(object):
     BACKBLAZE_MAX_CHUNK_SIZE = 209715200
+    BACKBLAZE_BASE_API_URL = 'https://api.backblazeb2.com'
 
     def __init__(self, account_id, application_key,
                  authorization_required=None, upload_required=None,
@@ -107,7 +108,8 @@ class Backblaze(object):
         header = {'Authorization':
                   _format_autorization_required(self.account_id,
                                                 self.application_key)}
-        url_request = 'https://api.backblaze.com/b2api/v1/b2_authorize_account'
+        url_request = '%s/b2api/v1/b2_authorize_account' % \
+                      (self.BACKBLAZE_BASE_API_URL)
         return Requests().get_response_from_request('GET', url_request, header,
                                                     json=True)
 

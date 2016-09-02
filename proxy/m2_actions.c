@@ -54,7 +54,7 @@ _resolve_meta2 (struct req_args_s *args, enum preference_e how,
 	if (err) {
 		GRID_DEBUG("M2V2 call failed: %d %s", err->code, err->message);
 	} else if (out) {
-		g_assert (ctx.bodyv != NULL);
+		EXTRA_ASSERT(ctx.bodyv != NULL);
 		for (guint i=0; i<ctx.count ;++i) {
 			GByteArray *b = ctx.bodyv[i];
 			if (b) {
@@ -153,14 +153,10 @@ _container_single_prop_to_headers (struct req_args_s *args,
 }
 
 static void
-_container_old_props_to_headers (struct req_args_s *args, GSList *props)
+_container_old_props_to_headers (struct req_args_s *args, gchar **props)
 {
-	for (GSList *l = props; l ;l=l->next) {
-		const struct key_value_pair_s *kv = l->data;
-		GByteArray *gv = kv->value;
-		_container_single_prop_to_headers (args, kv->key, g_strndup(
-					(gchar*)(gv->data), gv->len));
-	}
+	for (gchar **p=props; *p && *(p+1) ;p+=2)
+		_container_single_prop_to_headers (args, *p, g_strdup(*(p+1)));
 }
 
 static void
@@ -192,10 +188,10 @@ _dump_json_aliases_and_headers (GString *gstr, GSList *aliases, GTree *headers)
 		struct bean_CONTENTS_HEADERS_s *h =
 			g_tree_lookup (headers, ALIASES_get_content(a));
 
-		g_string_append(gstr, "{\"name\":\"");
-		oio_str_gstring_append_json_string(gstr, ALIASES_get_alias(a)->str);
+		g_string_append(gstr, "{");
+		oio_str_gstring_append_json_pair(gstr, "name", ALIASES_get_alias(a)->str);
 		g_string_append_printf(gstr,
-				"\",\"ver\":%"G_GINT64_FORMAT
+				",\"ver\":%"G_GINT64_FORMAT
 				",\"ctime\":%"G_GINT64_FORMAT
 				",\"mtime\":%"G_GINT64_FORMAT
 				",\"deleted\":%s"
@@ -265,9 +261,7 @@ _dump_json_prefixes (GString *gstr, GTree *tree_prefixes)
 		gboolean first = TRUE;
 		for (gchar **pp=prefixes; *pp ;++pp) {
 			COMA(gstr,first);
-			g_string_append_c (gstr, '"');
-			oio_str_gstring_append_json_string (gstr, *pp);
-			g_string_append_c (gstr, '"');
+			oio_str_gstring_append_json_quote (gstr, *pp);
 		}
 		g_free (prefixes);
 	}
@@ -378,27 +372,19 @@ _populate_headers_with_alias (struct req_args_s *args, struct bean_ALIASES_s *al
 static gint32
 _score_from_chunk_id (const char *id)
 {
-	gchar *k = NULL;
-	if (g_str_has_prefix(id, "http://")) {
-		const char * start = id + sizeof("http://") - 1;
-		const char * first_slash = strchr(start, '/');
-		if (!first_slash)
-			return 0U;
-		gchar *tmp = g_strndup (start, first_slash - start);
-		k = oio_make_service_key (ns_name, NAME_SRVTYPE_RAWX, tmp);
-		g_free (tmp);
-	} else if (g_str_has_prefix(id, "b2/") || g_str_has_prefix(id, "b2:")) {
-		k = oio_make_service_key(ns_name, "b2", strrchr(id, '/'));
-	} else if (g_str_has_prefix(id, "k/")) {
-		k = oio_make_service_key(ns_name, "k", strrchr(id, '/'));
-	} else {
-		return 0U;
-	}
+	gchar *key = NULL, *type = NULL, *netloc = NULL;
 
-	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, k);
+	// FIXME: probably broken with B2 URLs
+	oio_parse_chunk_url(id, &type, &netloc, NULL);
+	key = oio_make_service_key(ns_name, type, netloc);
+
+	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
 	gint32 res = item ? item->weight : 0;
+
 	g_free(item);
-	g_free(k);
+	g_free(key);
+	g_free(netloc);
+	g_free(type);
 	return res;
 }
 
@@ -437,7 +423,7 @@ _reply_simplified_beans (struct req_args_s *args, GError *err,
 		}
 		else if (&descr_struct_ALIASES == DESCR(l0->data)) {
 			alias = l0->data;
-			if (ALIASES_get_deleted(alias) && !metautils_cfg_get_bool(OPT("deleted"),FALSE)) {
+			if (ALIASES_get_deleted(alias) && !oio_str_parse_bool(OPT("deleted"),FALSE)) {
 				if (gstr)
 					g_string_free (gstr, TRUE);
 				_bean_cleanl2(beans);
@@ -540,39 +526,47 @@ _load_simplified_chunks (struct json_object *jbody, GSList **out)
 	return err;
 }
 
+static GSList *
+_load_properties_from_strv (gchar **props)
+{
+	GSList *beans = NULL;
+	for (gchar **p=props; *p && *(p+1) ;p+=2) {
+		const char *k = *p;
+		const char *v = *(p+1);
+		if (!oio_str_is_set(k))
+			continue;
+		struct bean_PROPERTIES_s *prop = _bean_create (&descr_struct_PROPERTIES);
+		PROPERTIES_set_version (prop, 0); // still unknown
+		PROPERTIES_set2_key (prop, k);
+		PROPERTIES_set2_value (prop, (guint8*)v, strlen((gchar*)v));
+		beans = g_slist_prepend (beans, prop);
+	}
+	return beans;
+}
+
 static GError *
-_load_simplified_content (struct req_args_s *args, struct json_object *jbody,
-		GSList **out)
+_load_alias_from_headers(struct req_args_s *args, GSList **pbeans)
 {
 	GError *err = NULL;
-	GSList *beans = NULL;
-
-	const char *content_path = PATH();
-	if (!content_path)
-		return BADREQ("URL: missing path");
-	if (!json_object_is_type(jbody, json_type_array))
-		return BADREQ ("JSON: Not an array");
-	if (json_object_array_length(jbody) <= 0)
-		return BADREQ ("JSON: Empty array");
-
-	err = _load_simplified_chunks (jbody, &beans);
-
+	GSList *beans = *pbeans;
+	struct bean_ALIASES_s *alias = NULL;
 	struct bean_CONTENTS_HEADERS_s *header = NULL;
 
-	if (!err) {
-		header = _bean_create (&descr_struct_CONTENTS_HEADERS);
-		beans = g_slist_prepend (beans, header);
-		CONTENTS_HEADERS_set2_id (header, (guint8*)"0", 1);
+	header = _bean_create (&descr_struct_CONTENTS_HEADERS);
+	beans = g_slist_prepend (beans, header);
+	CONTENTS_HEADERS_set2_id(header, (guint8 *) "00", 2);
+	/* dummy (yet valid) content ID (must be hexa) */
 
+	do {
 		gchar *s = g_tree_lookup(args->rq->tree_headers,
-				PROXYD_HEADER_PREFIX "content-meta-policy");
+								 PROXYD_HEADER_PREFIX "content-meta-policy");
 		if (NULL != s)
-			CONTENTS_HEADERS_set2_policy (header, s);
-	}
+			CONTENTS_HEADERS_set2_policy(header, s);
+	} while (0);
 
 	if (!err) { // Content ID
 		gchar *s = g_tree_lookup(args->rq->tree_headers,
-				PROXYD_HEADER_PREFIX "content-meta-id");
+								 PROXYD_HEADER_PREFIX "content-meta-id");
 		if (NULL != s) {
 			GByteArray *h = metautils_gba_from_hexstring (s);
 			if (!h)
@@ -595,7 +589,7 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody,
 
 	if (!err) { // Content hash
 		gchar *s = g_tree_lookup(args->rq->tree_headers,
-				PROXYD_HEADER_PREFIX "content-meta-hash");
+								 PROXYD_HEADER_PREFIX "content-meta-hash");
 		if (NULL != s) {
 			GByteArray *h = NULL;
 			if (!(err = _get_hash (s, &h)))
@@ -606,7 +600,7 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody,
 
 	if (!err) { // Content length
 		gchar *s = g_tree_lookup(args->rq->tree_headers,
-				PROXYD_HEADER_PREFIX "content-meta-length");
+								 PROXYD_HEADER_PREFIX "content-meta-length");
 		if (!s)
 			err = BADREQ("Header: missing content length");
 		else {
@@ -626,30 +620,29 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody,
 		}
 	}
 
-	if (!err) {
-		// Extract the content-type
-		gchar *s;
-		s = g_tree_lookup (args->rq->tree_headers,
-				PROXYD_HEADER_PREFIX "content-meta-mime-type");
+	if (!err) { // Content-Type
+		gchar *s = g_tree_lookup(args->rq->tree_headers,
+						  PROXYD_HEADER_PREFIX "content-meta-mime-type");
 		if (s)
-			CONTENTS_HEADERS_set2_mime_type (header, s);
+			CONTENTS_HEADERS_set2_mime_type(header, s);
+	}
 
-		// Extract the chunking method
-		s = g_tree_lookup (args->rq->tree_headers,
-				PROXYD_HEADER_PREFIX "content-meta-chunk-method");
+	if (!err) { // Chunking method
+		gchar *s = g_tree_lookup (args->rq->tree_headers,
+						   PROXYD_HEADER_PREFIX "content-meta-chunk-method");
 		if (s)
 			CONTENTS_HEADERS_set2_chunk_method (header, s);
 	}
 
-	if (!err) {
-		struct bean_ALIASES_s *alias = _bean_create (&descr_struct_ALIASES);
-		beans = g_slist_prepend (beans, alias);
-		ALIASES_set2_alias (alias, content_path);
-		ALIASES_set_content (alias, CONTENTS_HEADERS_get_id (header));
+	if (!err) { // Load all the alias fields
+		alias = _bean_create(&descr_struct_ALIASES);
+		beans = g_slist_prepend(beans, alias);
+		ALIASES_set2_alias(alias, PATH());
+		ALIASES_set_content(alias, CONTENTS_HEADERS_get_id(header));
 
 		if (!err) { // aliases version
 			gchar *s = g_tree_lookup(args->rq->tree_headers,
-					PROXYD_HEADER_PREFIX "content-meta-version");
+									 PROXYD_HEADER_PREFIX "content-meta-version");
 			if (s) {
 				errno = 0;
 				gchar *end = NULL;
@@ -659,29 +652,36 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody,
 				else if (s64 == G_MAXINT64)
 					err = BADREQ("Header: content version overflow");
 				else if (s64 == 0 && end == s)
-					err = BADREQ("Header: invalid content version (parsing failed)");
+					err = BADREQ(
+							"Header: invalid content version (parsing failed)");
 				else if (*end != 0)
-					err = BADREQ("Header: invalid content version (trailing characters)");
+					err = BADREQ(
+							"Header: invalid content version (trailing characters)");
 				else
-					ALIASES_set_version (alias, s64);
+					ALIASES_set_version(alias, s64);
 			}
 		}
-
-		gboolean run_headers (gpointer k, gpointer v, gpointer u) {
-			(void)u;
-			if (!metautils_str_has_caseprefix ((gchar*)k, PROXYD_HEADER_PREFIX "content-meta-x-"))
-				return FALSE;
-			const gchar *rk = ((gchar*)k) + sizeof(PROXYD_HEADER_PREFIX "content-meta-x-") - 1;
-			struct bean_PROPERTIES_s *prop = _bean_create (&descr_struct_PROPERTIES);
-			PROPERTIES_set_alias (prop, ALIASES_get_alias(alias));
-			PROPERTIES_set_version (prop, 0); // still unknown
-			PROPERTIES_set2_key (prop, rk);
-			PROPERTIES_set2_value (prop, (guint8*)v, strlen((gchar*)v));
-			beans = g_slist_prepend (beans, prop);
-			return FALSE;
-		}
-		g_tree_foreach (args->rq->tree_headers, run_headers, NULL);
 	}
+
+	*pbeans = beans;
+	return err;
+}
+
+static GError *
+_load_content_from_json_array(struct req_args_s *args,
+		struct json_object *jbody, GSList **out)
+{
+	GError *err = NULL;
+	GSList *beans = NULL;
+
+	if (!json_object_is_type(jbody, json_type_array))
+		return BADREQ ("JSON: Not an array");
+	if (json_object_array_length(jbody) <= 0)
+		return BADREQ ("JSON: Empty array");
+
+	err = _load_simplified_chunks (jbody, &beans);
+	if (!err)
+		err = _load_alias_from_headers(args, &beans);
 
 	if (err)
 		_bean_cleanl2 (beans);
@@ -691,31 +691,34 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody,
 	return err;
 }
 
-static gchar **
-_container_headers_to_props (struct req_args_s *args)
-{
-	GPtrArray *tmp;
-	gboolean run_headers (char *k, char *v, gpointer u) {
-		(void)u;
-		if (!metautils_str_has_caseprefix (k, PROXYD_HEADER_PREFIX "container-meta-"))
-			return FALSE;
-		k += sizeof(PROXYD_HEADER_PREFIX "container-meta-") - 1;
-		if (g_str_has_prefix (k, "user-")) {
-			k += sizeof("user-") - 1;
-			g_ptr_array_add (tmp, g_strconcat ("user.", k, NULL));
-			g_ptr_array_add (tmp, g_strdup (v));
-		} else if (g_str_has_prefix (k, "sys-")) {
-			k += sizeof("sys-") - 1;
-			g_ptr_array_add (tmp, g_strconcat ("sys.", k, NULL));
-			g_ptr_array_add (tmp, g_strdup (v));
+static GError * _load_content_from_json_object(struct req_args_s *args,
+		struct json_object *jbody, GSList **out) {
+
+	if (!json_object_is_type(jbody, json_type_object))
+		return BADREQ ("JSON: Not an object");
+
+	struct json_object *jchunks = NULL;
+	gchar **props = NULL;
+	GError *err = KV_read_properties(jbody, &props, "properties");
+	if (err) {
+		g_prefix_error(&err, "properties error");
+	} else {
+		if (!json_object_object_get_ex(jbody, "chunks", &jchunks)) {
+			err = BADREQ("No [chunks] field");
+		} else {
+			/* load the content the "old way", from an array of chunks and the
+			 * header. Then if there is no error, complete it with properties */
+			if (!(err = _load_content_from_json_array(args, jchunks, out))) {
+				GSList *beans = _load_properties_from_strv(props);
+				for (GSList *l=beans; l ;l=l->next)
+					PROPERTIES_set2_alias(l->data, oio_url_get(args->url, OIOURL_PATH));
+				*out = metautils_gslist_precat(*out, beans);
+			}
 		}
-		/* no management here for properties with raw format. there are
-		 * other requests handlers for that kind of ugly tweaks. */
-		return FALSE;
+		if (props)
+			g_strfreev(props);
 	}
-	tmp = g_ptr_array_new ();
-	g_tree_foreach (args->rq->tree_headers, (GTraverseFunc)run_headers, NULL);
-	return (gchar**) metautils_gpa_to_array (tmp, TRUE);
+	return err;
 }
 
 static enum http_rc_e
@@ -737,19 +740,22 @@ _reply_properties (struct req_args_s *args, GError * err, GSList * beans)
 	}
 
 	gboolean first = TRUE;
-	GString *gs = g_string_new("{");
+	GString *gs = g_string_new("{\"properties\":{");
 	for (GSList *l=beans; l ;l=l->next) {
 		if (DESCR(l->data) != &descr_struct_PROPERTIES)
 			continue;
-		if (!first)
-			g_string_append_c(gs, ',');
+		if (!first) g_string_append_c(gs, ',');
 		first = FALSE;
 		struct bean_PROPERTIES_s *bean = l->data;
-		g_string_append_printf(gs, "\"%s\":\"%.*s\"",
-				PROPERTIES_get_key(bean)->str,
-				PROPERTIES_get_value(bean)->len, PROPERTIES_get_value(bean)->data);
+		oio_str_gstring_append_json_quote(gs, PROPERTIES_get_key(bean)->str);
+		g_string_append_c(gs, ':');
+		g_string_append_c(gs, '"');
+		oio_str_gstring_append_json_blob(gs,
+										 (gchar*)PROPERTIES_get_value(bean)->data,
+										 PROPERTIES_get_value(bean)->len);
+		g_string_append_c(gs, '"');
 	}
-	g_string_append_c(gs, '}');
+	for (int i=0; i<2 ;++i) g_string_append_c(gs, '}');
 
 	_bean_cleanl2 (beans);
 	return _reply_success_json (args, gs);
@@ -838,24 +844,22 @@ _filter (struct filter_ctx_s *ctx, GSList *l)
 }
 
 static GError *
-_m2_container_create (struct req_args_s *args)
+_m2_container_create_with_properties (struct req_args_s *args, char **props)
 {
 	gboolean autocreate = _request_get_flag (args, "autocreate");
-	gchar **properties = _container_headers_to_props (args);
-
 	struct m2v2_create_params_s param = {
-		OPT("stgpol"), OPT("verpol"), properties, FALSE
+			OPT("stgpol"), OPT("verpol"), props, FALSE
 	};
+	GError *err = NULL;
 	PACKER_VOID (_pack) { return m2v2_remote_pack_CREATE (args->url, &param); }
 
-	GError *err;
 retry:
 	GRID_TRACE("Container creation %s", oio_url_get (args->url, OIOURL_WHOLE));
 	err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 	if (err && CODE_IS_NOTFOUND(err->code)) {
 		if (autocreate) {
 			GRID_DEBUG("Resource not found, autocreation: (%d) %s",
-					err->code, err->message);
+					   err->code, err->message);
 			autocreate = FALSE; /* autocreate just once */
 			g_clear_error (&err);
 			GError *hook_dir (const gchar *m1) {
@@ -863,12 +867,12 @@ retry:
 				gchar realtype[64];
 				_get_meta2_realtype (args, realtype, sizeof(realtype));
 				GError *e = meta1v2_remote_link_service (m1, args->url,
-						realtype, FALSE, TRUE, &urlv);
+														 realtype, FALSE, TRUE, &urlv);
 				if (!e && urlv && *urlv) {
 					/* Explicitely feeding the meta1 avoids a subsequent
 					   call to meta1 to locate the meta2 */
 					hc_resolver_tell (resolver, args->url, realtype,
-							(const char * const *) urlv);
+									  (const char * const *) urlv);
 				}
 				if (urlv) g_strfreev (urlv);
 				return e;
@@ -879,7 +883,6 @@ retry:
 		}
 	}
 
-	g_strfreev (properties);
 	return err;
 }
 
@@ -1133,38 +1136,18 @@ action_m2_container_propdel (struct req_args_s *args, struct json_object *jargs)
 	return action_sqlx_propdel(args, jargs);
 }
 
-enum http_rc_e
-action_m2_container_stgpol (struct req_args_s *args, struct json_object *jargs)
+static enum http_rc_e
+_m2_container_create (struct req_args_s *args, struct json_object *jbody)
 {
-	if (!json_object_is_type(jargs, json_type_string))
-		return _reply_format_error (args, BADREQ ("Storage policy must be a string"));
+	gchar **properties = NULL;
+	GError *err = KV_read_usersys_properties(jbody, &properties);
+	EXTRA_ASSERT((err != NULL) ^ (properties != NULL));
+	if (err)
+		return _reply_m2_error(args, err);
 
-	struct json_object *fake_jargs = json_object_new_object();
-	json_object_object_add (fake_jargs, M2V2_ADMIN_STORAGE_POLICY, jargs);
+	err = _m2_container_create_with_properties(args, properties);
+	g_strfreev (properties);
 
-	enum http_rc_e rc = action_m2_container_propset (args, fake_jargs);
-	json_object_put (fake_jargs);
-	return rc;
-}
-
-enum http_rc_e
-action_m2_container_setvers (struct req_args_s *args, struct json_object *jargs)
-{
-	if (!json_object_is_type(jargs, json_type_int))
-		return _reply_format_error (args, BADREQ ("Versioning policy must be an integer"));
-
-	struct json_object *fake_jargs = json_object_new_object();
-	json_object_object_add (fake_jargs, M2V2_ADMIN_STORAGE_POLICY, jargs);
-
-	enum http_rc_e rc = action_m2_container_propset (args, fake_jargs);
-	json_object_put (fake_jargs);
-	return rc;
-}
-
-enum http_rc_e
-action_container_create (struct req_args_s *args)
-{
-	GError *err = _m2_container_create (args);
 	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	if (err && err->code == CODE_CONTAINER_EXISTS) {
@@ -1174,19 +1157,11 @@ action_container_create (struct req_args_s *args)
 	return _reply_m2_error (args, err);
 }
 
-enum http_rc_e
-action_container_destroy (struct req_args_s *args)
-{
-	return action_m2_container_destroy (args);
-}
-
 typedef GByteArray* (*list_packer_f) (struct list_params_s *);
 
-static GError *
-_list_loop (struct req_args_s *args, struct list_params_s *in0,
-		struct list_result_s *out0,
-		GTree *tree_prefixes, list_packer_f packer)
-{
+static GError * _list_loop (struct req_args_s *args,
+		struct list_params_s *in0, struct list_result_s *out0,
+		GTree *tree_prefixes, list_packer_f packer) {
 	GError *err = NULL;
 	gboolean stop = FALSE;
 	guint count = 0;
@@ -1195,8 +1170,8 @@ _list_loop (struct req_args_s *args, struct list_params_s *in0,
 	char delimiter = _delimiter (args);
 	GRID_DEBUG("Listing [%s] max=%"G_GINT64_FORMAT" delim=%c prefix=%s"
 			" marker=%s end=%s", oio_url_get(args->url, OIOURL_WHOLE),
-			in0->maxkeys, delimiter, in0->prefix,
-			in0->marker_start, in0->marker_end);
+			   in0->maxkeys, delimiter, in0->prefix,
+			   in0->marker_start, in0->marker_end);
 
 	PACKER_VOID(_pack) { return packer(&in); }
 
@@ -1265,9 +1240,15 @@ _list_loop (struct req_args_s *args, struct list_params_s *in0,
 	return err;
 }
 
-enum http_rc_e
-action_container_list (struct req_args_s *args)
-{
+enum http_rc_e action_container_create (struct req_args_s *args) {
+	return rest_action(args, _m2_container_create);
+}
+
+enum http_rc_e action_container_destroy (struct req_args_s *args) {
+	return action_m2_container_destroy (args);
+}
+
+enum http_rc_e action_container_list (struct req_args_s *args) {
 	struct list_result_s list_out = {0};
 	struct list_params_s list_in = {0};
 	GError *err = NULL;
@@ -1333,9 +1314,7 @@ action_container_list (struct req_args_s *args)
 	return rc;
 }
 
-enum http_rc_e
-action_container_show (struct req_args_s *args)
-{
+enum http_rc_e action_container_show (struct req_args_s *args) {
 	GError *err = NULL;
 
 	CLIENT_CTX(ctx,args,NAME_SRVTYPE_META2,1);
@@ -1350,87 +1329,83 @@ action_container_show (struct req_args_s *args)
 		return _reply_m2_error (args, err);
 	}
 
-	GSList *pairs = NULL;
-	err = metautils_unpack_bodyv (ctx.bodyv, &pairs, key_value_pairs_unmarshall);
+	gchar **pairs = NULL;
+	GByteArray *first = ctx.bodyv[0];
+	err = KV_decode_buffer(first->data, first->len, &pairs);
+	EXTRA_ASSERT((err != NULL) ^ (pairs != NULL));
+
 	if (err) {
-		g_slist_free_full (pairs, (GDestroyNotify)key_value_pair_clean);
 		client_clean (&ctx);
 		return _reply_system_error(args, err);
 	}
 
-	_container_old_props_to_headers (args, pairs);
-	g_slist_free_full (pairs, (GDestroyNotify)key_value_pair_clean);
+	/* In the reply's headers, we store only the "system" properties, i.e. those
+	 * that do not belong to the "user." domain */
+	gchar **sys = KV_extract_not_prefixed(pairs, "user.");
+	_container_old_props_to_headers (args, sys);
+	g_free(sys);
+
+	GString *body = g_string_new("");
+
+	/* In the reply's body, we then store only the "user." related properties
+	 * without the implicit prefix. For the sake of uniformity, we store these
+	 * properties under a json sub-object named "properties" */
+	gchar **user = KV_extract_prefixed(pairs, "user.");
+	g_string_append(body, "{\"properties\":");
+	KV_encode_gstr2(body, user);
+	g_string_append(body, "}");
+	g_free(user);
+
+	g_strfreev(pairs);
 	client_clean (&ctx);
-	return _reply_success_json (args, NULL);
+	return _reply_success_json (args, body);
 }
 
-enum http_rc_e
-action_container_touch (struct req_args_s *args)
-{
+enum http_rc_e action_container_touch (struct req_args_s *args) {
 	return rest_action (args, action_m2_container_touch);
 }
 
-enum http_rc_e
-action_container_dedup (struct req_args_s *args)
-{
+enum http_rc_e action_container_dedup (struct req_args_s *args) {
 	return rest_action (args, action_m2_container_dedup);
 }
 
-enum http_rc_e
-action_container_purge (struct req_args_s *args)
-{
+enum http_rc_e action_container_purge (struct req_args_s *args) {
 	return rest_action (args, action_m2_container_purge);
 }
 
-enum http_rc_e
-action_container_flush (struct req_args_s *args)
-{
+enum http_rc_e action_container_flush (struct req_args_s *args) {
 	return rest_action (args, action_m2_container_flush);
 }
 
-enum http_rc_e
-action_container_prop_get (struct req_args_s *args)
-{
+enum http_rc_e action_container_prop_get (struct req_args_s *args) {
 	return rest_action (args, action_m2_container_propget);
 }
 
-enum http_rc_e
-action_container_prop_set (struct req_args_s *args)
-{
+enum http_rc_e action_container_prop_set (struct req_args_s *args) {
 	return rest_action (args, action_m2_container_propset);
 }
 
-enum http_rc_e
-action_container_prop_del (struct req_args_s *args)
-{
+enum http_rc_e action_container_prop_del (struct req_args_s *args) {
 	return rest_action (args, action_m2_container_propdel);
 }
 
-enum http_rc_e
-action_container_raw_insert (struct req_args_s *args)
-{
+enum http_rc_e action_container_raw_insert (struct req_args_s *args) {
 	return rest_action (args, action_m2_container_raw_insert);
 }
 
-enum http_rc_e
-action_container_raw_update (struct req_args_s *args)
-{
+enum http_rc_e action_container_raw_update (struct req_args_s *args) {
 	return rest_action (args, action_m2_container_raw_update);
 }
 
-enum http_rc_e
-action_container_raw_delete (struct req_args_s *args)
-{
+enum http_rc_e action_container_raw_delete (struct req_args_s *args) {
 	return rest_action (args, action_m2_container_raw_delete);
 }
 
 
 /* CONTENT action resource -------------------------------------------------- */
 
-
-static enum http_rc_e
-action_m2_content_beans (struct req_args_s *args, struct json_object *jargs)
-{
+static enum http_rc_e action_m2_content_beans (struct req_args_s *args,
+		struct json_object *jargs) {
 	struct json_object *jsize = NULL, *jpol = NULL;
 	json_object_object_get_ex(jargs, "size", &jsize);
 	json_object_object_get_ex(jargs, "policy", &jpol);
@@ -1463,7 +1438,7 @@ retry:
 					err->code, err->message);
 			autocreate = FALSE;
 			g_clear_error (&err);
-			if (!(err = _m2_container_create (args)))
+			if (!(err = _m2_container_create_with_properties (args, NULL)))
 				goto retry;
 		}
 	}
@@ -1491,9 +1466,8 @@ retry:
 	return _reply_simplified_beans (args, err, beans, TRUE);
 }
 
-static GError *
-_m2_json_spare (struct req_args_s *args, struct json_object *jbody, GSList ** out)
-{
+static GError *_m2_json_spare (struct req_args_s *args,
+		struct json_object *jbody, GSList ** out) {
 	GSList *notin = NULL, *broken = NULL;
 	json_object *jnotin = NULL, *jbroken = NULL;
 	GError *err;
@@ -1530,17 +1504,15 @@ _m2_json_spare (struct req_args_s *args, struct json_object *jbody, GSList ** ou
 	return err;
 }
 
-static enum http_rc_e
-action_m2_content_spare (struct req_args_s *args, struct json_object *jargs)
-{
+static enum http_rc_e action_m2_content_spare (struct req_args_s *args,
+		struct json_object *jargs) {
 	GSList *beans = NULL;
 	GError *err = _m2_json_spare (args, jargs, &beans);
 	return _reply_beans (args, err, beans);
 }
 
-static enum http_rc_e
-action_m2_content_touch (struct req_args_s *args, struct json_object *jargs)
-{
+static enum http_rc_e action_m2_content_touch (struct req_args_s *args,
+		struct json_object *jargs) {
 	(void) jargs;
 	PACKER_VOID(_pack) { return m2v2_remote_pack_TOUCHC (args->url); }
 	GError *err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
@@ -1549,9 +1521,8 @@ action_m2_content_touch (struct req_args_s *args, struct json_object *jargs)
 	return _reply_m2_error (args, err);
 }
 
-static enum http_rc_e
-action_m2_content_link (struct req_args_s *args, struct json_object *jargs)
-{
+static enum http_rc_e action_m2_content_link (struct req_args_s *args,
+		struct json_object *jargs) {
 	if (NULL != CONTENT())
 		return _reply_m2_error (args, BADREQ("No content allowed in the URL"));
 
@@ -1578,9 +1549,8 @@ action_m2_content_link (struct req_args_s *args, struct json_object *jargs)
 	return _reply_m2_error (args, err);
 }
 
-static enum http_rc_e
-action_m2_content_propset (struct req_args_s *args, struct json_object *jargs)
-{
+static enum http_rc_e action_m2_content_propset (struct req_args_s *args,
+		struct json_object *jargs) {
 	if (CONTENT())
 		return _reply_m2_error (args, BADREQ("Content. not allowed in the URL"));
 
@@ -1589,21 +1559,19 @@ action_m2_content_propset (struct req_args_s *args, struct json_object *jargs)
 	GSList *beans = NULL;
 
 	if (jargs) {
-		if (!json_object_is_type(jargs, json_type_object))
-			return _reply_format_error (args, BADREQ("Object argument expected"));
-		json_object_object_foreach(jargs,sk,jv) {
+		gchar **kv = NULL;
+		GError *err = KV_read_properties(jargs, &kv, "properties");
+		if (err)
+			return _reply_format_error (args, err);
+		for (gchar **p=kv; *p && *(p+1) ;p+=2) {
 			struct bean_PROPERTIES_s *prop = _bean_create (&descr_struct_PROPERTIES);
-			PROPERTIES_set2_key (prop, sk);
-			if (json_object_is_type (jv, json_type_null)) {
-				PROPERTIES_set2_value (prop, (guint8*)"", 0);
-			} else {
-				const char *sv = json_object_get_string (jv);
-				PROPERTIES_set2_value (prop, (guint8*)sv, strlen(sv));
-			}
+			PROPERTIES_set2_key (prop, *p);
+			PROPERTIES_set2_value (prop, (guint8*)*(p+1), strlen(*(p+1)));
 			PROPERTIES_set2_alias (prop, oio_url_get (args->url, OIOURL_PATH));
 			PROPERTIES_set_version (prop, version);
 			beans = g_slist_prepend (beans, prop);
 		}
+		g_strfreev(kv);
 	}
 
 	guint32 flags = 0;
@@ -1618,9 +1586,8 @@ action_m2_content_propset (struct req_args_s *args, struct json_object *jargs)
 	return _reply_m2_error (args, err);
 }
 
-static enum http_rc_e
-action_m2_content_propdel (struct req_args_s *args, struct json_object *jargs)
-{
+static enum http_rc_e action_m2_content_propdel (struct req_args_s *args,
+		struct json_object *jargs) {
 	if (!json_object_is_type(jargs, json_type_array))
 		return _reply_format_error (args, BADREQ("Array argument expected"));
 
@@ -1629,20 +1596,15 @@ action_m2_content_propdel (struct req_args_s *args, struct json_object *jargs)
 	(void) version;
 
 	// build the payload
-	for (int i=json_object_array_length(jargs); i>0 ;i--) {
-		json_object *item = json_object_array_get_idx (jargs, i-1);
-		if (!json_object_is_type(item, json_type_string))
-			return _reply_format_error(args, BADREQ ("string expected as property name"));
-	}
-	GSList *names = NULL;
-	for (int i=json_object_array_length(jargs); i>0 ;i--) {
-		json_object *item = json_object_array_get_idx (jargs, i-1);
-		names = g_slist_prepend (names, g_strdup(json_object_get_string(item)));
-	}
+	gchar **namev = NULL;
+	GError *err = STRV_decode_object(jargs, &namev);
+	EXTRA_ASSERT((err != NULL) ^ (namev != NULL));
+	if (err)
+		return _reply_format_error(args, err);
 
-	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_DEL (args->url, names); }
-	GError *err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
-	g_slist_free_full (names, g_free0);
+	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_DEL (args->url, namev); }
+	err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
+	g_strfreev(namev);
 	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);
@@ -1650,9 +1612,8 @@ action_m2_content_propdel (struct req_args_s *args, struct json_object *jargs)
 
 #define PROPGET_FLAGS M2V2_FLAG_ALLPROPS|M2V2_FLAG_NOFORMATCHECK
 
-static enum http_rc_e
-action_m2_content_propget (struct req_args_s *args, struct json_object *jargs)
-{
+static enum http_rc_e action_m2_content_propget (struct req_args_s *args,
+		struct json_object *jargs) {
 	(void) jargs;
 	/* TODO manage the version of the content */
 
@@ -1662,11 +1623,8 @@ action_m2_content_propget (struct req_args_s *args, struct json_object *jargs)
 	return _reply_properties (args, err, beans);
 }
 
-/* CONTENT resources ------------------------------------------------------- */
-
-static GError *
-_m2_json_put (struct req_args_s *args, struct json_object *jbody)
-{
+static GError *_m2_json_put (struct req_args_s *args,
+		struct json_object *jbody) {
 	if (!jbody)
 		return BADREQ("Invalid JSON body");
 
@@ -1675,9 +1633,18 @@ _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 	GSList *ibeans = NULL, *obeans = NULL;
 	GError *err;
 
-	if (NULL != (err = _load_simplified_content (args, jbody, &ibeans))) {
-		_bean_cleanl2 (ibeans);
-		return err;
+	if (json_object_is_type(jbody, json_type_array)) {
+		err = _load_content_from_json_array(args, jbody, &ibeans);
+		if (NULL != err) {
+			_bean_cleanl2(ibeans);
+			return err;
+		}
+	} else if (json_object_is_type(jbody, json_type_object)) {
+		err = _load_content_from_json_object(args, jbody, &ibeans);
+		if (NULL != err) {
+			_bean_cleanl2(ibeans);
+			return err;
+		}
 	}
 
 	PACKER_VOID(_pack) {
@@ -1691,73 +1658,51 @@ _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 	return err;
 }
 
-enum http_rc_e
-action_content_put (struct req_args_s *args)
-{
+static enum http_rc_e action_m2_content_create (struct req_args_s *args,
+		struct json_object *jbody) {
+	gboolean autocreate = _request_get_flag(args, "autocreate");
 	GError *err = NULL;
-	json_tokener *parser = json_tokener_new ();
-	json_object *jbody = NULL;
-	if (args->rq->body->len)
-		jbody = json_tokener_parse_ex (parser,
-				(char *) args->rq->body->data, args->rq->body->len);
-
-	if (json_tokener_success != json_tokener_get_error (parser))
-		err = BADREQ("Invalid JSON");
-	else {
-		gboolean autocreate = _request_get_flag (args, "autocreate");
 retry:
-		err = _m2_json_put (args, jbody);
-		if (err && CODE_IS_NOTFOUND(err->code)) {
-			if (autocreate) {
-				GRID_DEBUG("Resource not found, autocreation");
-				autocreate = FALSE;
-				g_clear_error (&err);
-				if (!(err = _m2_container_create (args)))
-					goto retry;
-			}
+	err = _m2_json_put (args, jbody);
+	if (err && CODE_IS_NOTFOUND(err->code)) {
+		if (autocreate) {
+			GRID_DEBUG("Resource not found, autocreation");
+			autocreate = FALSE;
+			g_clear_error (&err);
+			if (!(err = _m2_container_create_with_properties (args, NULL)))
+				goto retry;
 		}
 	}
-
-	if (jbody)
-		json_object_put (jbody);
-	json_tokener_free (parser);
 	return _reply_m2_error (args, err);
 }
 
-enum http_rc_e
-action_content_update(struct req_args_s *args)
-{
-	GError *err = NULL;
-	json_tokener *parser = json_tokener_new ();
-	json_object *jbody = NULL;
-	if (args->rq->body->len)
-		jbody = json_tokener_parse_ex (parser,
-				(char *) args->rq->body->data, args->rq->body->len);
-
-	if (json_tokener_success != json_tokener_get_error (parser))
-		err = BADREQ("Invalid JSON");
-	else {
-		GSList *ibeans = NULL, *obeans = NULL;
-		err = _load_simplified_content(args, jbody, &ibeans);
-		if (!err) {
-			PACKER_VOID(_pack) {
-				return m2v2_remote_pack_UPDATE(args->url, ibeans);
-			}
-			err = _resolve_meta2(args, CLIENT_PREFER_MASTER, _pack, &obeans);
+static enum http_rc_e _m2_content_update(struct req_args_s *args,
+		struct json_object *jbody) {
+	GSList *ibeans = NULL, *obeans = NULL;
+	GError *err = _load_content_from_json_array(args, jbody, &ibeans);
+	if (!err) {
+		PACKER_VOID(_pack) {
+			return m2v2_remote_pack_UPDATE(args->url, ibeans);
 		}
-		_bean_cleanl2(obeans);
-		_bean_cleanl2(ibeans);
+		err = _resolve_meta2(args, CLIENT_PREFER_MASTER, _pack, &obeans);
 	}
-
-	if (jbody)
-		json_object_put (jbody);
-	json_tokener_free (parser);
+	_bean_cleanl2(obeans);
+	_bean_cleanl2(ibeans);
 	return _reply_m2_error (args, err);
 }
 
-enum http_rc_e
-action_content_truncate(struct req_args_s *args)
-{
+
+/* CONTENT resources ------------------------------------------------------- */
+
+enum http_rc_e action_content_put (struct req_args_s *args) {
+	return rest_action(args, action_m2_content_create);
+}
+
+enum http_rc_e action_content_update(struct req_args_s *args) {
+	return rest_action(args, _m2_content_update);
+}
+
+enum http_rc_e action_content_truncate(struct req_args_s *args) {
 	GError *err = NULL;
 	const char *size_str = OPT("size");
 	char *end = NULL;
@@ -1774,68 +1719,48 @@ action_content_truncate(struct req_args_s *args)
 	return _reply_m2_error(args, err);
 }
 
-enum http_rc_e
-action_content_prepare (struct req_args_s *args)
-{
+enum http_rc_e action_content_prepare (struct req_args_s *args) {
 	return rest_action (args, action_m2_content_beans);
 }
 
-enum http_rc_e
-action_content_show (struct req_args_s *args)
-{
+enum http_rc_e action_content_show (struct req_args_s *args) {
 	GSList *beans = NULL;
 	PACKER_VOID(_pack) { return m2v2_remote_pack_GET (args->url, 0); }
 	GError *err = _resolve_meta2 (args, CLIENT_PREFER_SLAVE, _pack, &beans);
 	return _reply_simplified_beans (args, err, beans, TRUE);
 }
 
-enum http_rc_e
-action_content_delete (struct req_args_s *args)
-{
+enum http_rc_e action_content_delete (struct req_args_s *args) {
 	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url); }
 	GError *err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 	return _reply_m2_error (args, err);
 }
 
-enum http_rc_e
-action_content_touch (struct req_args_s *args)
-{
+enum http_rc_e action_content_touch (struct req_args_s *args) {
 	return rest_action (args, action_m2_content_touch);
 }
 
-enum http_rc_e
-action_content_link (struct req_args_s *args)
-{
+enum http_rc_e action_content_link (struct req_args_s *args) {
 	return rest_action (args, action_m2_content_link);
 }
 
-enum http_rc_e
-action_content_spare (struct req_args_s *args)
-{
+enum http_rc_e action_content_spare (struct req_args_s *args) {
 	return rest_action (args, action_m2_content_spare);
 }
 
-enum http_rc_e
-action_content_prop_get (struct req_args_s *args)
-{
+enum http_rc_e action_content_prop_get (struct req_args_s *args) {
 	return rest_action (args, action_m2_content_propget);
 }
 
-enum http_rc_e
-action_content_prop_set (struct req_args_s *args)
-{
+enum http_rc_e action_content_prop_set (struct req_args_s *args) {
 	return rest_action (args, action_m2_content_propset);
 }
 
-enum http_rc_e
-action_content_prop_del (struct req_args_s *args)
-{
+enum http_rc_e action_content_prop_del (struct req_args_s *args) {
 	return rest_action (args, action_m2_content_propdel);
 }
 
-enum http_rc_e
-action_content_copy (struct req_args_s *args)
-{
+enum http_rc_e action_content_copy (struct req_args_s *args) {
 	const gchar *target = g_tree_lookup (args->rq->tree_headers, "destination");
 	if (!target)
 		return _reply_format_error(args, BADREQ("Missing target header"));
@@ -1850,7 +1775,7 @@ action_content_copy (struct req_args_s *args)
 			|| !oio_url_has(target_url, OIOURL_PATH)
 			|| !oio_url_has(args->url, OIOURL_HEXID)
 			|| !oio_url_has(args->url, OIOURL_NS)
-			|| strcmp(oio_url_get(target_url, OIOURL_HEXID), oio_url_get(args->url, OIOURL_HEXID))
+			|| strcmp(oio_url_get(target_url, OIOURL_NS), oio_url_get(args->url, OIOURL_NS))
 			|| strcmp(oio_url_get(target_url, OIOURL_HEXID), oio_url_get(args->url, OIOURL_HEXID))) {
 		oio_url_pclean(&target_url);
 		return _reply_format_error(args, BADREQ("Invalid source/target URL"));

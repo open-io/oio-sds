@@ -40,6 +40,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define M2V2_ADMIN_SIZE M2V2_ADMIN_PREFIX_SYS "usage"
 # endif
 
+# ifndef M2V2_ADMIN_OBJ_COUNT
+# define M2V2_ADMIN_OBJ_COUNT M2V2_ADMIN_PREFIX_SYS "objects"
+# endif
+
 # ifndef M2V2_ADMIN_CTIME
 # define M2V2_ADMIN_CTIME M2V2_ADMIN_PREFIX_SYS "ctime"
 # endif
@@ -90,7 +94,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_M2V2_RAW_DEL         "M2_RAWDEL"
 # define NAME_MSGNAME_M2V2_RAW_ADD         "M2_RAWADD"
 # define NAME_MSGNAME_M2V2_RAW_SUBST       "M2_RAWSUBST"
-# define NAME_MSGNAME_M2V2_HDR_FOLLOW      "M2_HDR_FOLLOW"
 # define NAME_MSGNAME_M2V2_EXITELECTION    "M2_LEAVE"
 # define NAME_MSGNAME_M2V1_TOUCH_CONTENT   "M2_CTOUCH"
 # define NAME_MSGNAME_M2V1_TOUCH_CONTAINER "M2_BTOUCH"

@@ -22,17 +22,11 @@ License along with this library.
 
 #include <metautils/lib/metatypes.h>
 
-#define DECLARE_MARSHALLER(Name) \
-gint Name (GSList *l, void **d, gsize *dSize, GError **err)
-
 #define DECLARE_MARSHALLER_GBA(Name) \
 GByteArray* Name (GSList *l, GError **err)
 
 #define DECLARE_UNMARSHALLER(Name) \
 gint Name (GSList **l, const void *buf, gsize len, GError **err)
-
-#define DECLARE_BODY_MANAGER(Name) \
-gint Name (GError **err, gpointer udata, gint code, guint8 *buf, gsize len)
 
 typedef struct Message Message_t;
 typedef Message_t* MESSAGE;
@@ -54,17 +48,13 @@ GError* metaXClient_reply_simple(MESSAGE reply, guint * status, gchar ** msg);
 
 void* metautils_message_get_ID (MESSAGE m, gsize *l);
 void* metautils_message_get_NAME (MESSAGE m, gsize *l);
-void* metautils_message_get_VERSION (MESSAGE m, gsize *l);
 void* metautils_message_get_BODY (MESSAGE m, gsize *l);
 
 void metautils_message_set_ID (MESSAGE m, const void *b, gsize l);
 void metautils_message_set_NAME (MESSAGE m, const void *b, gsize l);
-void metautils_message_set_VERSION (MESSAGE m, const void *b, gsize l);
 void metautils_message_set_BODY (MESSAGE m, const void *b, gsize l);
 
 gboolean metautils_message_has_ID (MESSAGE m);
-gboolean metautils_message_has_NAME (MESSAGE m);
-gboolean metautils_message_has_VERSION (MESSAGE m);
 gboolean metautils_message_has_BODY (MESSAGE m);
 
 /** Allocates all the internal structures of a hidden message. */
@@ -114,13 +104,8 @@ void* metautils_message_get_field(MESSAGE m, const char *name, gsize *vsize);
 
 gchar ** metautils_message_get_field_names(MESSAGE m);
 
-GHashTable* metautils_message_get_fields(MESSAGE m);
-
 GError* metautils_message_extract_cid(MESSAGE msg, const gchar *n,
 		container_id_t *cid);
-
-GError* metautils_message_extract_prefix(MESSAGE msg, const gchar *n,
-		guint8 *d, gsize *dsize);
 
 gboolean metautils_message_extract_flag(MESSAGE m, const gchar *n, gboolean d);
 
@@ -150,11 +135,6 @@ GError* metautils_message_extract_body_gba(MESSAGE msg, GByteArray **result);
 /** Upon success, ensures result will be a printable string with a trailing \0 */
 GError* metautils_message_extract_body_string(MESSAGE msg, gchar **result);
 
-GError* metautils_message_extract_body_strv(MESSAGE msg, gchar ***result);
-
-GError* metautils_unpack_bodyv (GByteArray **bodyv, GSList **result,
-		body_decoder_f decoder);
-
 GError* metautils_message_extract_body_encoded(MESSAGE msg, gboolean mandatory,
 		GSList **result, body_decoder_f decoder);
 
@@ -167,12 +147,6 @@ int metautils_asn1c_write_gba(const void *b, gsize bSize, void *key);
 
 DECLARE_MARSHALLER_GBA(meta0_info_marshall_gba);
 DECLARE_UNMARSHALLER(meta0_info_unmarshall);
-
-DECLARE_MARSHALLER_GBA(key_value_pairs_marshall_gba);
-DECLARE_UNMARSHALLER(key_value_pairs_unmarshall);
-
-DECLARE_MARSHALLER_GBA(strings_marshall_gba);
-DECLARE_UNMARSHALLER(strings_unmarshall);
 
 DECLARE_UNMARSHALLER(service_info_unmarshall);
 DECLARE_MARSHALLER_GBA(service_info_marshall_gba);

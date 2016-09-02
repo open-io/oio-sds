@@ -120,6 +120,7 @@ grid_string_to_sockaddr(const gchar *start, struct sockaddr *s, gsize *slen)
 
 	gchar *addr = g_strdup (start);
 	STRING_STACKIFY(addr);
+	EXTRA_ASSERT(addr != NULL);
 
 	if (*addr == '/') { // UNIX socket
 		struct sockaddr_un *sun = (struct sockaddr_un*) s;

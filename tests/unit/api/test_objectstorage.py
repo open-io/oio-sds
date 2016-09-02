@@ -123,8 +123,9 @@ class ObjectStorageTest(unittest.TestCase):
         uri = "%s/container/create" % self.uri_base
         params = {'acct': self.account, 'ref': name}
         self.headers['x-oio-action-mode'] = 'autocreate'
+        data = json.dumps({'properties': {}})
         api._request.assert_called_once_with(
-            'POST', uri, params=params, headers=self.headers)
+            'POST', uri, params=params, data=data, headers=self.headers)
 
     def test_container_create_exist(self):
         api = self.api
@@ -171,9 +172,10 @@ class ObjectStorageTest(unittest.TestCase):
         meta = {key: value}
         resp = FakeAPIResponse()
         api._request = Mock(return_value=(resp, None))
-        api.container_update(self.account, name, meta, headers=self.headers)
+        api.container_set_properties(
+            self.account, name, meta, headers=self.headers)
 
-        data = json.dumps(meta)
+        data = json.dumps({'properties': meta})
         uri = "%s/container/set_properties" % self.uri_base
         params = {'acct': self.account, 'ref': name}
         api._request.assert_called_once_with(
@@ -190,7 +192,7 @@ class ObjectStorageTest(unittest.TestCase):
                         object_headers["size"]: size,
                         object_headers["hash"]: content_hash,
                         object_headers["mime_type"]: content_type}
-        api._request = Mock(return_value=(resp, {}))
+        api._request = Mock(return_value=(resp, {'properties': {}}))
         obj = api.object_show(
             self.account, self.container, name, headers=self.headers)
 
@@ -211,14 +213,6 @@ class ObjectStorageTest(unittest.TestCase):
         api = self.api
         self.assertRaises(exceptions.MissingName, api.object_create,
                           self.account, self.container, data="x")
-
-    def test_object_create_no_content_length(self):
-        api = self.api
-        name = random_str(32)
-        f = Mock()
-        self.assertRaises(
-            exceptions.MissingContentLength, api.object_create, self.account,
-            self.container, f, obj_name=name)
 
     def test_object_create_missing_file(self):
         api = self.api

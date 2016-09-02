@@ -46,6 +46,9 @@ class AdminClient(object):
     def event_stats(self, tube=None):
         return self.event.stats(tube)
 
+    def cluster_list_types(self):
+        return self.cluster.service_types()
+
     def cluster_list(self, srv_type):
         return self.cluster.all_services(srv_type)
 

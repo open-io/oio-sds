@@ -30,6 +30,7 @@ oio_headers_common (struct oio_headers_s *h)
 {
 	oio_headers_add (h, "Expect", "");
 	oio_headers_add (h, PROXYD_HEADER_REQID, oio_ext_get_reqid());
+	oio_headers_add (h, PROXYD_HEADER_ADMIN, oio_ext_is_admin()?"1":"0");
 }
 
 void

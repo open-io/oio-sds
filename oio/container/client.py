@@ -42,11 +42,15 @@ class ContainerClient(Client):
             params.update({'content': content})
         return params
 
-    def container_create(self, acct=None, ref=None, cid=None, **kwargs):
+    def container_create(self, acct=None, ref=None, cid=None, metadata=None,
+                         **kwargs):
         uri = self._make_uri('container/create')
         params = self._make_params(acct, ref, cid=cid)
         hdrs = gen_headers()
-        resp, body = self._request('POST', uri, params=params, headers=hdrs)
+        metadata = metadata or {}
+        data = json.dumps({'properties': {}})
+        resp, body = self._request(
+            'POST', uri, params=params, data=data, headers=hdrs)
 
     def container_show(self, acct=None, ref=None, cid=None, **kwargs):
         uri = self._make_uri('container/show')
@@ -164,7 +168,8 @@ class ContainerClient(Client):
                        **kwargs):
         uri = self._make_uri('content/delete')
         params = self._make_params(acct, ref, path, cid=cid)
-        resp, body = self._request('POST', uri, params=params)
+        hdrs = gen_headers()
+        resp, body = self._request('POST', uri, params=params, headers=hdrs)
 
     def content_show(self, acct=None, ref=None, path=None, cid=None,
                      content=None, **kwargs):

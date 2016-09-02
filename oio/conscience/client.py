@@ -39,9 +39,8 @@ class ConscienceClient(Client):
         if resp.status_code == 200:
             return body
         else:
-            # FIXME: add resp error message
-            raise OioException("ERROR while getting list of %s services"
-                               % type_)
+            raise OioException("failed to get list of %s services: %s"
+                               % (type_, resp.text))
 
     def local_services(self):
         uri = self._make_uri("local/list")
@@ -49,8 +48,18 @@ class ConscienceClient(Client):
         if resp.status_code == 200:
             return body
         else:
-            # FIXME: add resp error message
-            raise OioException("ERROR while getting list of %s services")
+            raise OioException("failed to get list of local services: %s" %
+                               resp.text)
+
+    def service_types(self):
+        uri = self._make_uri("conscience/info")
+        params = {'what': 'types'}
+        resp, body = self._request('GET', uri, params=params)
+        if resp.status_code == 200:
+            return body
+        else:
+            raise OioException("ERROR while getting services types: %s" %
+                               resp.text)
 
     def register(self, pool, service_definition):
         uri = self._make_uri('conscience/register')

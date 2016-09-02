@@ -40,6 +40,12 @@ class CreateObject(lister.Lister):
             help='Storage Policy'
         )
         parser.add_argument(
+            '--property',
+            metavar='<key=value>',
+            action=KeyValueAction,
+            help='Property to add/update to the object(s)'
+        )
+        parser.add_argument(
             '--key-file',
             metavar='<key_file>',
             help='File containing application keys'
@@ -64,6 +70,7 @@ class CreateObject(lister.Lister):
             f.seek(currpos)
             return total_size
 
+        properties = parsed_args.property
         results = []
         for obj in objs:
             with io.open(obj, 'rb') as f:
@@ -75,6 +82,7 @@ class CreateObject(lister.Lister):
                     obj_name=name,
                     content_length=get_file_size(f),
                     policy=policy,
+                    metadata=properties,
                     key_file=key_file)
 
                 results.append((name, data[1], data[2].upper()))

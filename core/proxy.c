@@ -32,9 +32,11 @@ License along with this library.
 
 
 static GString *
-_build_json (const char* const *src)
+_build_json (const char* const *src, GString *json)
 {
-	GString *json = g_string_new ("{");
+	if (!json)
+		json = g_string_new ("");
+	g_string_append_c(json, '{');
 	for (int i = 0; src [i] && src [i+1] ; i +=2 ) {
 		if (i != 0)
 			g_string_append (json,",");
@@ -171,7 +173,7 @@ _curl_content_url (struct oio_url_s *u, const char *action)
 static GError *
 _body_parse_error (GString *b)
 {
-	g_assert (b != NULL);
+	EXTRA_ASSERT (b != NULL);
 	struct json_tokener *tok = json_tokener_new ();
 	struct json_object *jbody = json_tokener_parse_ex (tok, b->str, b->len);
 	json_tokener_free (tok);
@@ -302,9 +304,9 @@ static GError *
 _proxy_call_notime (CURL *h, const char *method, const char *url,
 		struct http_ctx_s *in, struct http_ctx_s *out)
 {
-	g_assert (h != NULL);
-	g_assert (method != NULL);
-	g_assert (url != NULL);
+	EXTRA_ASSERT (h != NULL);
+	EXTRA_ASSERT (method != NULL);
+	EXTRA_ASSERT (url != NULL);
 	struct view_GString_s view_input = {.data=NULL, .done=0};
 
 	GError *err = NULL;
@@ -395,8 +397,10 @@ oio_proxy_call_container_create (CURL *h, struct oio_url_s *u)
 	if (!http_url) return BADNS();
 
 	gchar *hdrin[] = {PROXYD_HEADER_MODE, "autocreate", NULL};
-	struct http_ctx_s i = { .headers = hdrin, .body = NULL };
+	GString *body = g_string_new("{}");
+	struct http_ctx_s i = { .headers = hdrin, .body = body };
 	GError *err = _proxy_call (h, "POST", http_url->str, &i, NULL);
+	g_string_free(body, TRUE);
 	g_string_free(http_url, TRUE);
 	return err;
 }
@@ -458,7 +462,9 @@ static GError *
 _set_properties(CURL *h, GString *http_url, const char* const *values)
 {
 	GError *err = NULL;
-	GString *json = _build_json(values);
+	GString *json = g_string_new("{\"properties\":");
+	json = _build_json(values, json);
+	g_string_append_c(json, '}');
 	struct http_ctx_s i = {
 		.body = json
 	};
@@ -637,11 +643,21 @@ oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,
 		hdrin[len] = g_strdup(PROXYD_HEADER_MODE);
 		hdrin[len+1] = g_strdup("append");
 	}
-
-	struct http_ctx_s i = { .headers = hdrin, .body = in ? in->chunks : NULL };
+	GString *body = in? in->chunks : NULL;
+	if (in && !in->update && in->properties) {
+		GString *val = g_string_new("{'properties':");
+		val = _build_json(in->properties, val);
+		g_string_append(val, ",'chunks':");
+		g_string_append(val, in->chunks->str);
+		g_string_append_c(val, '}');
+		body = val;
+	}
+	struct http_ctx_s i = { .headers = hdrin, .body = body };
 	struct http_ctx_s o = { .headers = NULL, .body = out };
 	GError *err = _proxy_call (h, "POST", http_url->str, &i, &o);
 	_ptrv_free_content (i.headers);
+	if (in && !in->update && in->properties)
+		g_string_free (body, TRUE);
 	g_string_free (http_url, TRUE);
 	return err;
 }

@@ -20,9 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "common.h"
 #include "actions.h"
 
-static GString *
-_pack_m1url_list (GString *gstr, gchar ** urlv)
-{
+static GString * _pack_m1url_list (GString *gstr, gchar ** urlv) {
 	if (!gstr)
 		gstr = g_string_new ("");
 	g_string_append_c (gstr, '[');
@@ -37,35 +35,14 @@ _pack_m1url_list (GString *gstr, gchar ** urlv)
 	return gstr;
 }
 
-static GString *
-_pack_and_freev_m1url_list (GString *gstr, gchar ** urlv)
-{
+static GString * _pack_and_freev_m1url_list (GString *gstr, gchar ** urlv) {
 	gstr = _pack_m1url_list (gstr, urlv);
 	g_strfreev (urlv);
 	return gstr;
 }
 
-static GString *
-_pack_and_freev_pairs (gchar ** pairs)
-{
-	GString *out = g_string_new ("{");
-	for (gchar ** pp = pairs; pp && *pp; ++pp) {
-		if (pp != pairs)
-			g_string_append_c (out, ',');
-		gchar *k = *pp;
-		gchar *sep = strchr (k, '=');
-		gchar *v = sep + 1;
-		g_string_append_printf (out, "\"%.*s\":\"%s\"", (int) (sep - k), k, v);
-	}
-	g_string_append_c (out, '}');
-	g_strfreev (pairs);
-	return out;
-}
-
-static GError *
-_m1_action (struct oio_url_s *url, gchar ** m1v,
-	GError * (*hook) (const char * m1))
-{
+static GError * _m1_action (struct oio_url_s *url, gchar ** m1v,
+		GError * (*hook) (const char * m1)) {
 	if (m1v && *m1v) {
 		gboolean _wrap (gconstpointer p) {
 			gchar *m1u = meta1_strurl_get_address ((const char*)p);
@@ -116,9 +93,7 @@ _m1_action (struct oio_url_s *url, gchar ** m1v,
 	return NEWERROR (CODE_UNAVAILABLE, "No meta1 answered");
 }
 
-GError *
-_m1_locate_and_action (struct oio_url_s *url, GError * (*hook) ())
-{
+GError * _m1_locate_and_action (struct oio_url_s *url, GError * (*hook) ()) {
 	gchar **m1v = NULL;
 	GError *err = hc_resolve_reference_directory (resolver, url, &m1v);
 	if (NULL != err) {
@@ -131,9 +106,8 @@ _m1_locate_and_action (struct oio_url_s *url, GError * (*hook) ())
 	return err;
 }
 
-static GError *
-decode_json_string_array (gchar *** pkeys, struct json_object *j)
-{
+static GError *decode_json_string_array (gchar *** pkeys,
+		struct json_object *j) {
 	gchar **keys = NULL;
 	GError *err = NULL;
 
@@ -336,28 +310,29 @@ action_dir_srv_relink (struct req_args_s *args, struct json_object *jargs)
 	return _reply_success_json (args, _pack_and_freev_m1url_list (NULL, newset));
 }
 
-/* -------------------------------------------------------------------------- */
-
 static enum http_rc_e
 action_dir_prop_get (struct req_args_s *args, struct json_object *jargs)
 {
-	gchar **keys = NULL;
+	gchar **pairs = NULL, **keys = NULL;
 	GError *err = decode_json_string_array (&keys, jargs);
-
-	// Execute the request
-	gchar **pairs = NULL;
-	GError *hook (const char * m1) {
-		return meta1v2_remote_reference_get_property (m1, args->url,
-				(*keys ? keys : NULL), &pairs);
-	}
-
 	if (!err) {
-		err = _m1_locate_and_action (args->url, hook);
-		g_strfreev (keys);
+		GError *hook(const char *m1) {
+			if (pairs) g_strfreev(pairs);
+			pairs = NULL;
+			return meta1v2_remote_reference_get_property(m1, args->url,
+														 keys, &pairs);
+		}
+		err = _m1_locate_and_action(args->url, hook);
+		g_strfreev(keys);
 		keys = NULL;
 	}
-	if (!err)
-		return _reply_success_json (args, _pack_and_freev_pairs (pairs));
+	if (!err) {
+		GString *gs = g_string_new("{\"properties\":");
+		KV_encode_gstr2(gs, pairs);
+		g_string_append_c(gs, '}');
+		g_strfreev(pairs);
+		return _reply_success_json(args, gs);
+	}
 	return _reply_common_error (args, err);
 }
 
@@ -367,35 +342,15 @@ action_dir_prop_set (struct req_args_s *args, struct json_object *jargs)
 	GError *err = NULL;
 	gboolean flush = NULL != OPT("flush");
 
-	// Parse the <string>:<string> mapping.
-	GPtrArray *v = g_ptr_array_new ();
-	guint count = 0;
-	if (jargs) {
-		if (!json_object_is_type (jargs, json_type_object)) {
-			g_ptr_array_add (v, NULL);
-			g_strfreev ((gchar **) g_ptr_array_free(v, FALSE));
-			return _reply_format_error (args, BADREQ("Invalid pairs"));
-		}
-		json_object_object_foreach (jargs, key, val) {
-			++count;
-			if (!json_object_is_type (val, json_type_string)) {
-				err = BADREQ ("Invalid property doc['pairs']['%s']", key);
-				break;
-			}
-			g_ptr_array_add (v, g_strdup_printf ("%s=%s", key,
-						json_object_get_string (val)));
-		}
-	}
+	gchar **pairs = NULL;
+	if (NULL != (err = KV_read_properties(jargs, &pairs, "properties")))
+		return _reply_format_error(args, err);
 
-	g_ptr_array_add (v, NULL);
-	if (!err) {
-		GError *hook (const char * m1) {
-			return meta1v2_remote_reference_set_property (m1, args->url,
-					(gchar**) v->pdata, flush);
-		}
-		err = _m1_locate_and_action (args->url, hook);
+	GError *hook (const char * m1) {
+		return meta1v2_remote_reference_set_property (m1, args->url, pairs, flush);
 	}
-	g_strfreev ((gchar **) g_ptr_array_free(v, FALSE));
+	err = _m1_locate_and_action (args->url, hook);
+	g_strfreev(pairs);
 	if (!err)
 		return _reply_success_json (args, NULL);
 	return _reply_common_error (args, err);
@@ -421,11 +376,10 @@ action_dir_prop_del (struct req_args_s *args, struct json_object *jargs)
 	return _reply_common_error (args, err);
 }
 
-enum http_rc_e
-action_ref_create (struct req_args_s *args)
-{
+static enum http_rc_e
+action_dir_ref_create_with_properties (struct req_args_s *args, gchar **props) {
 	GError *hook (const char * m1) {
-		return meta1v2_remote_create_reference (m1, args->url);
+		return meta1v2_remote_create_reference (m1, args->url, props);
 	}
 	GError *err = _m1_locate_and_action (args->url, hook);
 	if (!err)
@@ -437,9 +391,32 @@ action_ref_create (struct req_args_s *args)
 	return _reply_common_error (args, err);
 }
 
-enum http_rc_e
-action_ref_show (struct req_args_s *args)
-{
+static enum http_rc_e
+action_dir_ref_create (struct req_args_s *args, struct json_object *jargs) {
+	gchar **props = NULL;
+	if (jargs && json_object_is_type(jargs, json_type_object)) {
+		struct json_object *jprops = NULL;
+		if (json_object_object_get_ex(jargs, "properties", &jprops)) {
+			GError *err = KV_decode_object(jprops, &props);
+			if (jprops)
+				json_object_put(jprops);
+			if (err)
+				return _reply_format_error(args, err);
+		}
+	}
+
+	enum http_rc_e rc = action_dir_ref_create_with_properties (args, props);
+	g_strfreev(props);
+	return rc;
+}
+
+/* -------------------------------------------------------------------------- */
+
+enum http_rc_e action_ref_create (struct req_args_s *args) {
+	return rest_action(args, action_dir_ref_create);
+}
+
+enum http_rc_e action_ref_show (struct req_args_s *args) {
 	const char *type = TYPE();
 
 	if (!validate_namespace(NS()))
@@ -453,7 +430,7 @@ action_ref_show (struct req_args_s *args)
 	} else {
 		GError *hook (const char * m1) {
 			return meta1v2_remote_list_reference_services (m1, args->url,
-					type, &urlv);
+														   type, &urlv);
 		}
 		err = _m1_locate_and_action (args->url, hook);
 	}
@@ -475,9 +452,7 @@ action_ref_show (struct req_args_s *args)
 	return _reply_common_error (args, err);
 }
 
-enum http_rc_e
-action_ref_destroy (struct req_args_s *args)
-{
+enum http_rc_e action_ref_destroy (struct req_args_s *args) {
 	gboolean force = _request_get_flag (args, "force");
 
 	GError *hook (const char * m1) {
@@ -500,21 +475,15 @@ action_ref_destroy (struct req_args_s *args)
 	return _reply_common_error (args, err);
 }
 
-enum http_rc_e
-action_ref_relink (struct req_args_s *args)
-{
+enum http_rc_e action_ref_relink (struct req_args_s *args) {
     return rest_action (args, action_dir_srv_relink);
 }
 
-enum http_rc_e
-action_ref_link (struct req_args_s *args)
-{
+enum http_rc_e action_ref_link (struct req_args_s *args) {
     return rest_action (args, action_dir_srv_link);
 }
 
-enum http_rc_e
-action_ref_unlink (struct req_args_s *args)
-{
+enum http_rc_e action_ref_unlink (struct req_args_s *args) {
 	const char *type = TYPE();
 	if (!type)
 		return _reply_format_error (args, BADREQ("No service type provided"));
@@ -536,32 +505,22 @@ action_ref_unlink (struct req_args_s *args)
 	return _reply_common_error (args, err);
 }
 
-enum http_rc_e
-action_ref_renew (struct req_args_s *args)
-{
+enum http_rc_e action_ref_renew (struct req_args_s *args) {
     return rest_action (args, action_dir_srv_renew);
 }
 
-enum http_rc_e
-action_ref_force (struct req_args_s *args)
-{
+enum http_rc_e action_ref_force (struct req_args_s *args) {
     return rest_action (args, action_dir_srv_force);
 }
 
-enum http_rc_e
-action_ref_prop_get (struct req_args_s *args)
-{
+enum http_rc_e action_ref_prop_get (struct req_args_s *args) {
     return rest_action (args, action_dir_prop_get);
 }
 
-enum http_rc_e
-action_ref_prop_set (struct req_args_s *args)
-{
+enum http_rc_e action_ref_prop_set (struct req_args_s *args) {
     return rest_action (args, action_dir_prop_set);
 }
 
-enum http_rc_e
-action_ref_prop_del (struct req_args_s *args)
-{
+enum http_rc_e action_ref_prop_del (struct req_args_s *args) {
     return rest_action (args, action_dir_prop_del);
 }

@@ -421,17 +421,45 @@ _roundtrip_put_multipart (const char * const * properties)
 	err = oio_sds_upload_from_file (client, &ul_dst, source_path, 0, 0);
 	NOERROR(err);
 
-	ul_dst.offset = fi0.fs;
+	size_t content_size = 0;
+	void _get_size(void *cb_data UNUSED,
+			enum oio_sds_content_key_e key, const char *value) {
+		if (key == OIO_SDS_CONTENT_SIZE)
+			content_size = g_ascii_strtoll(value, NULL, 10);
+	}
+	size_t metachunk_size = 0;
+	void _get_mc_size_(void *cb_data UNUSED,
+			unsigned int seq, size_t offset, size_t length) {
+		if (seq == 0 && offset == 0)
+			metachunk_size = length;
+	}
+
+	err = oio_sds_show_content(client, url, NULL, NULL, _get_mc_size_,
+			NULL);
+	NOERROR(err);
+
+	ul_dst.offset = metachunk_size;
 	ul_dst.meta_pos = 1;
 	ul_dst.partial = TRUE;
 	err = oio_sds_upload_from_file (client, &ul_dst, source_path, 0, 0);
 	NOERROR(err);
+
+	err = oio_sds_show_content(client, url, NULL, _get_size, NULL,
+			NULL);
+	NOERROR(err);
+	g_assert_cmpint(fi0.fs + metachunk_size, ==, content_size);
+	gint extra = ((content_size - 1) % metachunk_size) + 1;
 
 	ul_dst.offset = 0;
 	ul_dst.meta_pos = 0;
 	ul_dst.partial = TRUE;
 	err = oio_sds_upload_from_file (client, &ul_dst, source_path, 0, 0);
 	NOERROR(err);
+
+	err = oio_sds_show_content(client, url, NULL, _get_size, NULL,
+			NULL);
+	NOERROR(err);
+	g_assert_cmpint(fi0.fs + extra, ==, content_size);
 
 	_roundtrip_tail (NULL, content_id, properties);
 
@@ -532,7 +560,7 @@ _roundtrip_append (const char * const * properties)
 {
 	struct oio_error_s *err = NULL;
 	struct file_info_s fi0 = FILE_INFO_INIT ;
-	const size_t cidlen = 1 + 2 * oio_ext_rand_int_range (7,15);
+	const size_t cidlen = 1 + 2 * oio_ext_rand_int_range (7, 15);
 	gchar content_id[cidlen];
 	oio_str_randomize (content_id, cidlen, hex_chars);
 
@@ -541,10 +569,17 @@ _roundtrip_append (const char * const * properties)
 	GChecksum *checksum = g_checksum_new (G_CHECKSUM_SHA256);
 	fi0.hs = g_checksum_type_get_length (G_CHECKSUM_SHA256);
 
-	const int max =  oio_ext_rand_int_range(7,17);
+	size_t content_size = 0;
+	void _get_size(void *cb_data UNUSED,
+			enum oio_sds_content_key_e key, const char *value) {
+		if (key == OIO_SDS_CONTENT_SIZE)
+			content_size = g_ascii_strtoll(value, NULL, 10);
+	}
+
+	const int max =  oio_ext_rand_int_range(7, 17);
 	GRID_DEBUG("Uploading from [%u] blocks with id [%s]", max, content_id);
-	for (int i=0; i<max ;++i) {
-		const size_t bufsize = oio_ext_rand_int_range(15,129);
+	for (int i = 0; i < max; ++i) {
+		const size_t bufsize = oio_ext_rand_int_range(15, 129);
 		guint8 buf [bufsize];
 		oio_buf_randomize(buf, bufsize);
 
@@ -560,6 +595,9 @@ _roundtrip_append (const char * const * properties)
 		ul_dst.properties = properties;
 		err = oio_sds_upload_from_buffer (client, &ul_dst, buf, sizeof(buf));
 		NOERROR(err);
+		err = oio_sds_show_content(client, url, NULL, _get_size, NULL, NULL);
+		NOERROR(err);
+		g_assert_cmpint(content_size, ==, fi0.fs);
 	}
 	GRID_DEBUG("Content uploaded");
 

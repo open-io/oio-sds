@@ -38,6 +38,12 @@ extern "C" {
 #  define OIO_SDS_CONTAINER_QUOTA "sys.m2.quota"
 # endif
 
+# ifdef M2V2_ADMIN_OBJ_COUNT
+#  define OIO_SDS_CONTAINER_OBJECTS M2V2_ADMIN_OBJ_COUNT
+# else
+#  define OIO_SDS_CONTAINER_OBJECTS "sys.m2.objects"
+# endif
+
 
 CURL * _curl_get_handle_blob (void);
 CURL * _curl_get_handle_proxy (void);
@@ -163,6 +169,7 @@ struct oio_proxy_content_create_in_s
 	const char *chunk_method;
 	unsigned int append : 1;
 	unsigned int update : 1; // accept holes in metachunk positions
+	const char * const * properties;
 };
 
 GError * oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,

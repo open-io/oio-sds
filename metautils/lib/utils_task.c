@@ -120,12 +120,6 @@ grid_task_queue_register(struct grid_task_queue_s *gtq, task_period_t period,
 	g_array_append_vals(gtq->tasks, &task, 1);
 }
 
-struct gtq_args_s
-{
-	gint64 period_millis;
-	struct grid_task_queue_s *gtq;
-};
-
 static gpointer
 _gtq_worker(gpointer p)
 {

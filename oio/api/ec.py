@@ -873,7 +873,6 @@ class ECWriteHandler(io.WriteHandler):
         # the platform chunk size
         chunk_size = self.sysmeta['chunk_size']
 
-        # TODO is that lazy? :D
         # this gives us an upper bound
         max_size = self.storage_method.ec_nb_data * chunk_size
         max_size = max_size - max_size % self.storage_method.ec_segment_size
@@ -887,9 +886,8 @@ class ECWriteHandler(io.WriteHandler):
         #  ..}
         #
         # iterate through the meta chunks
-        for pos in xrange(len(self.chunks)):
-            meta_chunk = self.chunks[pos]
-
+        bytes_transferred = -1
+        for meta_chunk in self.chunk_prep():
             handler = ECChunkWriteHandler(self.sysmeta, meta_chunk,
                                           global_checksum,
                                           self.storage_method)
@@ -905,6 +903,8 @@ class ECWriteHandler(io.WriteHandler):
             total_bytes_transferred += bytes_transferred
             # add the chunks to the content chunk list
             content_chunks += chunks
+            if bytes_transferred < max_size:
+                break
 
         # compute the final content checksum
         content_checksum = global_checksum.hexdigest()

@@ -17,7 +17,6 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#include <errno.h>
 #include <strings.h>
 
 #include <metautils/lib/metautils.h>
@@ -120,8 +119,8 @@ m2v2_list_result_extract (gpointer ctx, MESSAGE reply)
 	return TRUE;
 }
 
-GByteArray*
-m2v2_remote_pack_CREATE(struct oio_url_s *url, struct m2v2_create_params_s *pols)
+GByteArray* m2v2_remote_pack_CREATE(struct oio_url_s *url,
+		struct m2v2_create_params_s *pols)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_CREATE, url, NULL);
 	if (pols && pols->storage_policy)
@@ -129,11 +128,9 @@ m2v2_remote_pack_CREATE(struct oio_url_s *url, struct m2v2_create_params_s *pols
 	if (pols && pols->version_policy)
 		metautils_message_add_field_str(msg, NAME_MSGKEY_VERPOLICY, pols->version_policy);
 	if (pols && pols->properties) {
-		for (gchar **p=pols->properties; *p && *(p+1) ;p+=2) {
-			gchar *k = g_strconcat (NAME_MSGKEY_PREFIX_PROPERTY, *p, NULL);
-			metautils_message_add_field_str (msg, k, *(p+1));
-			g_free (k);
-		}
+		GString *gs = KV_encode_gstr(pols->properties);
+		metautils_message_set_BODY (msg, gs->str, gs->len);
+		g_string_free (gs, TRUE);
 	}
 
 	return message_marshall_gba_and_clean(msg);
@@ -380,9 +377,10 @@ m2v2_remote_pack_LIST_BY_HEADERID(struct oio_url_s *url, struct list_params_s *p
 }
 
 GByteArray*
-m2v2_remote_pack_PROP_DEL(struct oio_url_s *url, GSList *names)
+m2v2_remote_pack_PROP_DEL(struct oio_url_s *url, gchar **names)
 {
-	GByteArray *body = strings_marshall_gba(names, NULL);
+	GByteArray *body = g_bytes_unref_to_array(
+			g_string_free_to_bytes(STRV_encode_gstr(names)));
 	return _m2v2_pack_request(NAME_MSGNAME_M2V2_PROP_DEL, url, body);
 }
 

@@ -83,6 +83,7 @@ meta2_dispatch_all(struct gridd_reply_ctx_s *reply,
 static gridd_filter M2V2_CREATE_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
+	meta2_filter_extract_admin,
 	meta2_filter_fill_subject,
 	meta2_filter_check_url_cid,
 	meta2_filter_check_backend,
@@ -100,6 +101,7 @@ static gridd_filter M2V2_CREATE_FILTERS[] =
 static gridd_filter M2V2_DESTROY_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
+	meta2_filter_extract_admin,
 	meta2_filter_fill_subject,
 	meta2_filter_check_url_cid,
 	meta2_filter_check_backend,
@@ -141,6 +143,7 @@ static gridd_filter M2V2_HAS_FILTERS[] =
 static gridd_filter M2V2_PURGE_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
+	meta2_filter_extract_admin,
 	meta2_filter_fill_subject,
 	meta2_filter_check_url_cid,
 	meta2_filter_check_backend,
@@ -264,6 +267,7 @@ static gridd_filter M2V2_PUT_FILTERS[] =
 	meta2_filter_extract_header_copy,
 	meta2_filter_extract_header_optional_overwrite,
 	meta2_filter_extract_header_localflag,
+	meta2_filter_extract_admin,
 	meta2_filter_fill_subject,
 	meta2_filter_check_url_cid,
 	meta2_filter_check_backend,
@@ -279,6 +283,7 @@ static gridd_filter M2V2_APPEND_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_localflag,
+	meta2_filter_extract_admin,
 	meta2_filter_fill_subject,
 	meta2_filter_check_url_cid,
 	meta2_filter_check_backend,
@@ -308,6 +313,7 @@ static gridd_filter M2V2_DELETE_FILTERS[] =
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_localflag,
 	meta2_filter_extract_header_flags32,
+	meta2_filter_extract_admin,
 	meta2_filter_fill_subject,
 	meta2_filter_check_url_cid,
 	meta2_filter_check_backend,
@@ -323,6 +329,7 @@ static gridd_filter M2V2_TRUNCATE_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_string_size,
+	meta2_filter_extract_admin,
 	meta2_filter_fill_subject,
 	meta2_filter_check_url_cid,
 	meta2_filter_check_backend,
@@ -338,6 +345,7 @@ static gridd_filter M2V2_TRUNCATE_FILTERS[] =
 static gridd_filter M2V2_PROPSET_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
+	meta2_filter_extract_admin,
 	meta2_filter_fill_subject,
 	meta2_filter_check_url_cid,
 	meta2_filter_check_backend,
@@ -368,7 +376,6 @@ static gridd_filter M2V2_PROPDEL_FILTERS[] =
 	meta2_filter_check_url_cid,
 	meta2_filter_check_backend,
 	meta2_filter_check_ns_name,
-	meta2_filter_extract_body_strings,
 	meta2_filter_action_del_content_properties,
 	meta2_filter_reply_success,
 	NULL
@@ -385,6 +392,7 @@ static gridd_filter M2V2_EXITELECTION_FILTERS[] =
 static gridd_filter M2V2_RAW_DEL_filters[] =
 {
 	meta2_filter_extract_header_url,
+	meta2_filter_extract_admin,
 	meta2_filter_check_url_cid,
 	meta2_filter_fill_subject,
 	meta2_filter_check_backend,
@@ -400,6 +408,7 @@ static gridd_filter M2V2_RAW_DEL_filters[] =
 static gridd_filter M2V2_RAW_ADD_filters[] =
 {
 	meta2_filter_extract_header_url,
+	meta2_filter_extract_admin,
 	meta2_filter_fill_subject,
 	meta2_filter_check_url_cid,
 	meta2_filter_check_backend,
@@ -415,6 +424,7 @@ static gridd_filter M2V2_RAW_ADD_filters[] =
 static gridd_filter M2V2_RAW_SUBST_filters[] =
 {
 	meta2_filter_extract_header_url,
+	meta2_filter_extract_admin,
 	meta2_filter_fill_subject,
 	meta2_filter_check_url_cid,
 	meta2_filter_check_backend,

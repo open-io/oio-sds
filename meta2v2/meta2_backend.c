@@ -28,9 +28,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <events/oio_events_queue.h>
 
-#include <meta0v2/meta0_remote.h>
-#include <meta0v2/meta0_utils.h>
-
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
 #include <meta2v2/meta2v2_remote.h>
@@ -744,7 +741,7 @@ _container_state (struct sqlx_sqlite3_s *sq3)
 	append_const (gs, "policy", sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY));
 	append_int64 (gs, "ctime", m2db_get_ctime(sq3));
 	append_int64 (gs, "bytes-count", m2db_get_size(sq3));
-	append_int64 (gs, "object-count", 0);
+	append_int64 (gs, "object-count", m2db_get_obj_count(sq3));
 	g_string_append (gs, "}}");
 
 	oio_url_clean (u);
@@ -773,8 +770,14 @@ meta2_backend_refresh_container_size(struct meta2_backend_s *m2b,
 	EXTRA_ASSERT(url != NULL);
 
 	if (!(err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY, &sq3))) {
-		if (recompute)
-			m2db_set_size(sq3, m2db_get_container_size(sq3->db, FALSE));
+		if (recompute) {
+			guint64 size = 0u;
+			gint64 count = 0;
+			m2db_get_container_size_and_obj_count(sq3->db, FALSE,
+					&size, &count);
+			m2db_set_size(sq3, size);
+			m2db_set_obj_count(sq3, count);
+		}
 		meta2_backend_add_modified_container(m2b, sq3);
 		m2b_close(sq3);
 	}
@@ -830,8 +833,7 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		memset(&args, 0, sizeof(args));
 		args.sq3 = sq3;
 		args.url = url;
-		args.max_versions = _maxvers(sq3, m2b);
-		args.nsinfo = meta2_backend_get_nsinfo(m2b);
+		args.ns_max_versions = m2b_max_versions(m2b);
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_put_alias(&args, in, out_deleted, out_added)))
@@ -841,8 +843,6 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 				meta2_backend_add_modified_container(m2b, sq3);
 		}
 		m2b_close(sq3);
-
-		namespace_info_free(args.nsinfo);
 	}
 
 	return err;
@@ -866,8 +866,7 @@ meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		memset(&args, 0, sizeof(args));
 		args.sq3 = sq3;
 		args.url = url;
-		args.max_versions = _maxvers(sq3, m2b);
-		args.nsinfo = meta2_backend_get_nsinfo(m2b);
+		args.ns_max_versions = m2b_max_versions(m2b);
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_copy_alias(&args, src)))
@@ -875,8 +874,6 @@ meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			err = sqlx_transaction_end(repctx, err);
 		}
 		m2b_close(sq3);
-
-		namespace_info_free(args.nsinfo);
 	}
 
 	return err;
@@ -961,8 +958,7 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		memset(&args, 0, sizeof(args));
 		args.sq3 = sq3;
 		args.url = url;
-		args.max_versions = _maxvers(sq3, m2b);
-		args.nsinfo = meta2_backend_get_nsinfo(m2b);
+		args.ns_max_versions = m2b_max_versions(m2b);
 
 		if (!(err = _transaction_begin(sq3,url, &repctx))) {
 			if (!(err = m2db_force_alias(&args, in, out_deleted, out_added)))
@@ -971,7 +967,6 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		}
 		if (!err)
 			meta2_backend_add_modified_container(m2b, sq3);
-		namespace_info_free(args.nsinfo);
 
 		m2b_close(sq3);
 	}
@@ -1133,7 +1128,6 @@ meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
 	struct namespace_info_s *nsinfo = NULL;
-	gint64 max_versions;
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -1144,9 +1138,8 @@ meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
-		max_versions = _maxvers(sq3, m2b);
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (!(err = m2db_append_to_alias(sq3, nsinfo, max_versions, url, beans, cb, u0)))
+			if (!(err = m2db_append_to_alias(sq3, url, beans, cb, u0)))
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 		}
@@ -1521,7 +1514,8 @@ meta2_backend_get_conditionned_spare_chunks_v2(struct meta2_backend_s *m2b,
 	GError *err = _load_storage_policy(m2b, url, polname, &pol);
 	if (!err)
 		err = get_conditioned_spare_chunks(m2b->lb,
-				storage_policy_get_service_pool(pol), notin, broken, result);
+				storage_policy_get_service_pool(pol),
+				m2b->ns_name, notin, broken, result);
 	if (pol)
 		storage_policy_clean(pol);
 	return err;

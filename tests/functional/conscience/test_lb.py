@@ -84,10 +84,18 @@ class TestLbChoose(BaseLbTest):
         parsed = resp.json()
         self.assertIsInstance(parsed, list)
         self.assertEqual(4, len(parsed))
-        self.assertGreaterEqual(int(parsed[0]["addr"].split(':')[1]), 8000)
-        # the last one should not be 'fast' since there is only 3
-        # and we don't want duplicates (and there is a default fallback)
-        self.assertLess(int(parsed[3]["addr"].split(':')[1]), 8000)
+        fast_number = 0
+        slow_number = 0
+        for element in parsed:
+            if int(element['addr'].split(':')[1]) >= 8000:
+                fast_number += 1
+            else:
+                slow_number += 1
+        # One of the 4 services should not be 'fast' since there is only 3
+        # in the 'fast' slot, and we don't want duplicates, and
+        # there is a default fallback on any other service of the same type
+        self.assertEqual(fast_number, 3)
+        self.assertEqual(slow_number, 1)
 
     def test_choose_3_sameport(self):
         # Thanks to Vladimir

@@ -40,10 +40,38 @@ func_tests () {
 	./core/tool_roundtrip /etc/passwd
 }
 
+test_worm () {
+    export OIO_NS="NS-${RANDOM}" OIO_ACCOUNT="ACCT-$RANDOM" OIO_USER=USER-$\
+	   RANDOM OIO_PATH=PATH-$RANDOM
+    oio-reset.sh -v -v -N $OIO_NS $@
+    echo -e "END OF RESET" | logger -t TEST
+    cd $SRCDIR
+    export WORM=1
+    tox
+    echo "test_filters: begin WORM test"
+    nosetests tests.functional.m2_filters.test_filters
+    unset WORM
+}
+
+test_slave () {
+    export OIO_NS="NS-${RANDOM}" OIO_ACCOUNT="ACCT-$RANDOM" OIO_USER=USER-$\
+	   RANDOM OIO_PATH=PATH-$RANDOM
+    oio-reset.sh -v -v -N $OIO_NS $@
+    echo -e "END OF RESET" | logger -t TEST
+    cd $SRCDIR
+    export SLAVE=1
+    tox
+    echo "test_filters: begin SLAVE test"
+    nosetests tests.functional.m2_filters.test_filters
+    unset SLAVE
+}
+
 echo -e "\n### UNIT tests\n"
 cd $WRKDIR
 make -C tests/unit test
 
+test_worm -f "${SRCDIR}/etc/bootstrap-WORM.yml"
+test_slave -f "${SRCDIR}/etc/bootstrap-SLAVE.yml"
 func_tests -f "${SRCDIR}/etc/bootstrap-SINGLE.yml"
 func_tests -f "${SRCDIR}/etc/bootstrap-3COPIES-11RAWX.yml"
 func_tests -f "${SRCDIR}/etc/bootstrap-EC.yml"

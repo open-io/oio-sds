@@ -36,7 +36,6 @@ License along with this library.
 
 #define SLOT(P) ((struct score_slot_s*)P)
 
-typedef guint32 srv_weight_t;
 typedef guint32 srv_score_t;
 
 struct score_slot_s

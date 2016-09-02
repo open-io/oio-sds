@@ -182,12 +182,6 @@ gboolean service_is_master (const char *obj, const char *master);
 void service_learn_master (const char *obj, const char *master);
 guint service_expire_masters (gint64 oldest);
 
-enum
-{
-	/* consider empty results sets as errors */
-	FLAG_NOEMPTY = 0x0001,
-};
-
 typedef GByteArray * (request_packer_f) (const struct sqlx_name_s *);
 
 #define PACKER_VOID(N) GByteArray * N (const struct sqlx_name_s *u UNUSED)
@@ -214,11 +208,10 @@ typedef enum http_rc_e (*req_handler_f) (struct req_args_s *);
 const char * _req_get_option (struct req_args_s *args, const char *name);
 const char * _req_get_token (struct req_args_s *args, const char *name);
 
-enum http_rc_e abstract_action (const char *tag, struct req_args_s *args,
-		struct sub_action_s *sub);
-
 enum http_rc_e rest_action (struct req_args_s *args,
         enum http_rc_e (*handler) (struct req_args_s *, json_object *));
+
+gboolean _request_get_flag(struct req_args_s *args, const char *flag);
 
 /* -------------------------------------------------------------------------- */
 
@@ -266,7 +259,12 @@ GError * _m1_locate_and_action (struct oio_url_s *url, GError * (*hook) ());
 
 GError * gridd_request_replicated (struct client_ctx_s *, request_packer_f);
 
-gboolean _request_get_flag(struct req_args_s *args, const char *flag);
+GError * KV_read_properties (struct json_object *j, gchar ***out, const char *section);
+
+/** Wraps KV_read_properties() to concat system's properties and user's ones
+ * with the proper prefix.
+ * @see KV_read_properties() */
+GError * KV_read_usersys_properties (struct json_object *j, gchar ***out);
 
 /* -------------------------------------------------------------------------- */
 
@@ -301,7 +299,7 @@ enum http_rc_e _reply_common_error (struct req_args_s *args, GError *err);
 GError * conscience_remote_get_namespace (const char *cs, namespace_info_t **out);
 GError * conscience_remote_get_services(const char *cs, const char *type,
 		gboolean full, GSList **out);
-GError * conscience_remote_get_types(const char *cs, GSList **out);
+GError * conscience_remote_get_types(const char *cs, gchar ***out);
 GError * conscience_remote_push_services(const char *cs, GSList *ls);
 GError* conscience_remote_remove_services(const char *cs, const char *type,
 		GSList *ls);

@@ -27,7 +27,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # include <glib.h>
 
 # include <metautils/lib/metautils.h>
-# include <metautils/lib/metacomm.h>
 # include <sqliterepo/sqliterepo.h>
 # include <sqliterepo/sqlite_utils.h>
 # include <sqlx/sqlx_service.h>

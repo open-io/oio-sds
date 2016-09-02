@@ -22,23 +22,22 @@ add_custom_command(
 		REAL.c REAL.h
 		asn_application.h asn_codecs.h asn_codecs_prim.c asn_codecs_prim.h asn_internal.h
 
-		AddrInfo.c AddrInfo.h AddrInfoSequence.c AddrInfoSequence.h
-		ChunkId.c ChunkId.h
-		ChunkInfo.c ChunkInfo.h ChunkInfoSequence.c ChunkInfoSequence.h
-		ContentList.c ContentList.h
+		AddrInfo.c AddrInfo.h
 		Message.c Message.h
-		Meta0Info.c Meta0Info.h Meta0InfoSequence.c Meta0InfoSequence.h
-		Meta2Property.c Meta2Property.h Meta2PropertySequence.c Meta2PropertySequence.h
-		NamespaceInfoValueList.c NamespaceInfoValueList.h NamespaceInfo.c NamespaceInfo.h NamespaceInfoSequence.c NamespaceInfoSequence.h
-		Parameter.c Parameter.h ParameterSequence.c ParameterSequence.h
+		Meta0Info.c Meta0Info.h
+		Meta0InfoSequence.c Meta0InfoSequence.h
+		NamespaceInfo.c NamespaceInfo.h
+		Parameter.c Parameter.h
+		ParameterSequence.c ParameterSequence.h
 		Score.c Score.h
-		ServiceInfo.c ServiceInfo.h ServiceInfoSequence.c ServiceInfoSequence.h
 		ServiceTag.c ServiceTag.h
+		ServiceInfo.c ServiceInfo.h
+		ServiceInfoSequence.c ServiceInfoSequence.h
 
+		RowFieldType.c RowFieldType.h
 		RowFieldValue.c RowFieldValue.h
 		RowField.c RowField.h
 		RowFieldSequence.c RowFieldSequence.h
-		RowFieldType.c RowFieldType.h
 		Row.c Row.h
 		RowSet.c RowSet.h
 		RowName.c RowName.h
@@ -90,7 +89,6 @@ add_library(metautils SHARED
 		utils_syscall.c metautils_syscall.h
 		lrutree.c lrutree.h tree.h
 		storage_policy.c storage_policy.h
-		expr.2str.c
 		expr.clean.c
 		expr.eval.c
 		expr.lex.c expr.yacc.c expr.yacc.h
@@ -143,32 +141,14 @@ add_library(metautils SHARED
 
 		${CMAKE_CURRENT_BINARY_DIR}/AddrInfo.c
 		${CMAKE_CURRENT_BINARY_DIR}/AddrInfo.h
-		${CMAKE_CURRENT_BINARY_DIR}/AddrInfoSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/AddrInfoSequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/ChunkId.c
-		${CMAKE_CURRENT_BINARY_DIR}/ChunkId.h
-		${CMAKE_CURRENT_BINARY_DIR}/ChunkInfo.c
-		${CMAKE_CURRENT_BINARY_DIR}/ChunkInfo.h
-		${CMAKE_CURRENT_BINARY_DIR}/ChunkInfoSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/ChunkInfoSequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/ContentList.c
-		${CMAKE_CURRENT_BINARY_DIR}/ContentList.h
 		${CMAKE_CURRENT_BINARY_DIR}/Message.c
 		${CMAKE_CURRENT_BINARY_DIR}/Message.h
 		${CMAKE_CURRENT_BINARY_DIR}/Meta0Info.c
 		${CMAKE_CURRENT_BINARY_DIR}/Meta0Info.h
 		${CMAKE_CURRENT_BINARY_DIR}/Meta0InfoSequence.c
 		${CMAKE_CURRENT_BINARY_DIR}/Meta0InfoSequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2Property.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2Property.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2PropertySequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2PropertySequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/NamespaceInfoValueList.c
-		${CMAKE_CURRENT_BINARY_DIR}/NamespaceInfoValueList.h
 		${CMAKE_CURRENT_BINARY_DIR}/NamespaceInfo.c
 		${CMAKE_CURRENT_BINARY_DIR}/NamespaceInfo.h
-		${CMAKE_CURRENT_BINARY_DIR}/NamespaceInfoSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/NamespaceInfoSequence.h
 		${CMAKE_CURRENT_BINARY_DIR}/Parameter.c
 		${CMAKE_CURRENT_BINARY_DIR}/Parameter.h
 		${CMAKE_CURRENT_BINARY_DIR}/ParameterSequence.c

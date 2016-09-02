@@ -61,4 +61,7 @@ gboolean m1b_check_ns (struct meta1_backend_s *m1, const char *ns);
 
 gboolean m1b_check_ns_url (struct meta1_backend_s *m1, struct oio_url_s *url);
 
+GError * __set_container_properties(struct sqlx_sqlite3_s *sq3,
+		struct oio_url_s *url, gchar **props);
+
 #endif /*OIO_SDS__meta1v2__meta1_backend_internals_h*/

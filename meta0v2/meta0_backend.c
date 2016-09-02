@@ -66,29 +66,6 @@ m0_to_sqlx(enum m0v2_open_type_e t)
 	return SQLX_OPEN_LOCAL;
 }
 
-static GError*
-_array_check(GPtrArray *gpa)
-{
-	guint16 prefix;
-	guint i;
-	gchar **v;
-
-	if (gpa->len != CID_PREFIX_COUNT)
-		return NEWERROR(EINVAL, "Invalid cache size");
-
-	for (i=0; i<gpa->len ;i++) {
-		prefix = i;
-		if (!(v = gpa->pdata[i])) {
-			/* cache not loaded */
-			continue;
-		}
-		if (!*v)
-			return NEWERROR(EINVAL, "Prefix not managed (2) : %04X", prefix);
-	}
-
-	return NULL;
-}
-
 struct meta0_backend_s *
 meta0_backend_init(const gchar *ns, const gchar *id,
 		struct sqlx_repository_s *repo)
@@ -120,22 +97,6 @@ meta0_backend_clean(struct meta0_backend_s *m0)
 	g_free(m0);
 }
 
-GError*
-meta0_backend_check(struct meta0_backend_s *m0)
-{
-	EXTRA_ASSERT(m0 != NULL);
-	EXTRA_ASSERT(m0->array_by_prefix != NULL);
-
-	return _array_check(m0->array_by_prefix);
-}
-
-struct sqlx_repository_s*
-meta0_backend_get_repository(struct meta0_backend_s *m0)
-{
-	EXTRA_ASSERT(m0 != NULL);
-	return m0->repository;
-}
-
 void
 meta0_backend_reload_requested(struct meta0_backend_s *m0)
 {
@@ -162,7 +123,6 @@ meta0_backend_migrate(struct meta0_backend_s *m0)
 		// check if the erreur message is the ENOENT message ; DB doesn't exist
 		if  (  (strstr(err->message, strerror(ENOENT)) != NULL) ) {
 			g_clear_error(&err);
-			err = NULL;
 			err = sqlx_repository_open_and_lock(m0->repository, &n, SQLX_OPEN_LOCAL|SQLX_OPEN_CREATE,&handle, NULL);
 			if( !err ) {
 				// Migration (1.7 -> 1.8) from old meta0 database
@@ -755,7 +715,7 @@ meta0_backend_reset(struct meta0_backend_s *m0, gboolean flag_local)
 	}
 
 	_unlock_and_close (sq3);
-	return NULL;
+	return err;
 }
 
 GError*

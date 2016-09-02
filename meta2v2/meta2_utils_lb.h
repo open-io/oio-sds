@@ -49,6 +49,7 @@ GError* get_spare_chunks(struct oio_lb_s *lb,
  *
  * @param lbp Pointer to a rawx load balancing pool
  * @param stgpol Pointer to the wanted storage policy
+ * @param ns_name Name of the namespace
  * @param notin The list of chunks that are already known and that are taken
  *   into account when computing distance
  * @param broken The list of chunks that are known to be broken and whose
@@ -57,7 +58,8 @@ GError* get_spare_chunks(struct oio_lb_s *lb,
  * @return A GError in case of error
  */
 GError* get_conditioned_spare_chunks(struct oio_lb_s *lbp,
-		const char *stgpol, GSList *notin, GSList *broken,
+		const char *stgpol, const gchar *ns_name,
+		GSList *notin, GSList *broken,
 		GSList **result);
 
 #endif /*OIO_SDS__meta2v2__meta2_utils_lb_h*/

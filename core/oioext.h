@@ -59,6 +59,9 @@ GSList * oio_ext_gslist_shuffle(GSList *src);
  * greater than 1. */
 void oio_ext_array_shuffle (gpointer *array, gsize len);
 
+/** Reuses the pointers of t0 and t1 to buuld a new NULL-terminated array */
+void ** oio_ext_array_concat (void **t0, void **t1);
+
 /** Sorts 'src' in place, placing first the items with a TRUE predicate
  * then the items with a FALSE predicate */
 gsize oio_ext_array_partition (gpointer *array, gsize len,
@@ -102,6 +105,10 @@ gint32 oio_ext_rand_int_range (gint32 low, gint32 up);
 
 /** Get a request-id stored in the thread-local, or NULL if not set */
 const char * oio_ext_get_reqid (void);
+
+gboolean oio_ext_is_admin(void);
+
+void oio_ext_set_admin(const gboolean admin);
 
 gint64 oio_ext_real_time (void);
 

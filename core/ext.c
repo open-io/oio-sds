@@ -43,9 +43,7 @@ volatile int oio_sds_default_autocreate = 0;
 volatile int oio_sds_no_shuffle = 0;
 volatile int oio_dir_no_shuffle = 0;
 
-static GSList*
-gslist_merge_random (GSList *l1, GSList *l2)
-{
+static GSList*gslist_merge_random (GSList *l1, GSList *l2) {
 	GSList *next, *result = NULL;
 	GRand *r = oio_ext_local_prng ();
 	while (l1 || l2) {
@@ -65,9 +63,7 @@ gslist_merge_random (GSList *l1, GSList *l2)
 	return result;
 }
 
-static void
-gslist_split_in_two (GSList *src, GSList **r1, GSList **r2)
-{
+static void gslist_split_in_two (GSList *src, GSList **r1, GSList **r2) {
 	GSList *next, *l1 = NULL, *l2 = NULL;
 	while (src) {
 		if (src)
@@ -78,9 +74,7 @@ gslist_split_in_two (GSList *src, GSList **r1, GSList **r2)
 	*r1 = l1, *r2 = l2;
 }
 
-GSList *
-oio_ext_gslist_shuffle (GSList *src)
-{
+GSList *oio_ext_gslist_shuffle (GSList *src) {
 	GSList *l1=NULL, *l2=NULL;
 
 	gslist_split_in_two(src, &l1, &l2);
@@ -89,9 +83,7 @@ oio_ext_gslist_shuffle (GSList *src)
 		(l2 && l2->next) ? oio_ext_gslist_shuffle(l2) : l2);
 }
 
-void
-oio_ext_array_shuffle (gpointer *array, gsize len)
-{
+void oio_ext_array_shuffle (gpointer *array, gsize len) {
 	GRand *r = oio_ext_local_prng ();
 	while (len-- > 1) {
 		guint32 i = g_rand_int_range (r, 0, len+1);
@@ -103,14 +95,12 @@ oio_ext_array_shuffle (gpointer *array, gsize len)
 	}
 }
 
-gsize
-oio_ext_array_partition (gpointer *array, gsize len,
-		gboolean (*predicate)(gconstpointer))
-{
-	g_assert (array != NULL);
-	g_assert (predicate != NULL);
+gsize oio_ext_array_partition (gpointer *array, gsize len,
+		gboolean (*predicate)(gconstpointer)) {
+	EXTRA_ASSERT (array != NULL);
+	EXTRA_ASSERT (predicate != NULL);
 
-	if (!len)
+	if (!len || !predicate)
 		return 0;
 
 	/* qualify each item, so that we call the predicate only once */
@@ -140,12 +130,10 @@ oio_ext_array_partition (gpointer *array, gsize len,
 	return len;
 }
 
-GError *
-oio_ext_extract_json (struct json_object *obj,
-		struct oio_ext_json_mapping_s *tab)
-{
-	g_assert (obj != NULL);
-	g_assert (tab != NULL);
+GError *oio_ext_extract_json (struct json_object *obj,
+		struct oio_ext_json_mapping_s *tab) {
+	EXTRA_ASSERT (obj != NULL);
+	EXTRA_ASSERT (tab != NULL);
 	for (struct oio_ext_json_mapping_s *p=tab; p->out ;p++)
 		*(p->out) = NULL;
 	if (!json_object_is_type(obj, json_type_object))
@@ -164,17 +152,24 @@ oio_ext_extract_json (struct json_object *obj,
 	return NULL;
 }
 
+void ** oio_ext_array_concat (void **t0, void **t1) {
+	GPtrArray *tmp = g_ptr_array_new();
+	if (t0) for (void **p=t0; *p ;++p) g_ptr_array_add(tmp, *p);
+	if (t1) for (void **p=t1; *p ;++p) g_ptr_array_add(tmp, *p);
+	g_ptr_array_add(tmp, NULL);
+	return g_ptr_array_free(tmp, FALSE);
+}
+
 /* -------------------------------------------------------------------------- */
 
-/* @private */
+/** @private */
 struct oio_ext_local_s {
 	gchar *reqid;
 	GRand *prng;
+	gboolean is_admin;
 };
 
-static void
-_local_free (gpointer p)
-{
+static void _local_free (gpointer p) {
 	struct oio_ext_local_s *l = p;
 	if (!l)
 		return;
@@ -188,15 +183,11 @@ _local_free (gpointer p)
 
 static GPrivate th_local_key = G_PRIVATE_INIT(_local_free);
 
-static struct oio_ext_local_s *
-_local_get (void)
-{
+static struct oio_ext_local_s *_local_get (void) {
 	return g_private_get(&th_local_key);
 }
 
-static struct oio_ext_local_s *
-_local_ensure (void)
-{
+static struct oio_ext_local_s *_local_ensure (void) {
 	struct oio_ext_local_s *l = _local_get ();
 	if (!l) {
 		l = g_malloc0 (sizeof(*l));
@@ -205,9 +196,7 @@ _local_ensure (void)
 	return l;
 }
 
-GRand *
-oio_ext_local_prng (void)
-{
+GRand *oio_ext_local_prng (void) {
 	struct oio_ext_local_s *l = _local_ensure ();
 	if (!l->prng) {
 		union {
@@ -227,23 +216,17 @@ oio_ext_local_prng (void)
 	return l->prng;
 }
 
-const char *
-oio_ext_get_reqid (void)
-{
+const char *oio_ext_get_reqid (void) {
 	const struct oio_ext_local_s *l = _local_ensure ();
 	return l->reqid;
 }
 
-void
-oio_ext_set_reqid (const char *reqid)
-{
+void oio_ext_set_reqid (const char *reqid) {
 	struct oio_ext_local_s *l = _local_ensure ();
 	oio_str_replace (&l->reqid, reqid);
 }
 
-void
-oio_ext_set_random_reqid (void)
-{
+void oio_ext_set_random_reqid (void) {
 	struct {
 		pid_t pid:16;
 		guint8 buf[14];
@@ -255,6 +238,21 @@ oio_ext_set_random_reqid (void)
 	oio_str_bin2hex((guint8*)&bulk, sizeof(bulk), hex, sizeof(hex));
 	oio_ext_set_reqid(hex);
 }
+
+gboolean
+oio_ext_is_admin (void)
+{
+	const struct oio_ext_local_s *l = _local_ensure ();
+	return l->is_admin;
+}
+
+void
+oio_ext_set_admin (const gboolean admin)
+{
+	struct oio_ext_local_s *l = _local_ensure ();
+	l->is_admin = admin;
+}
+
 
 /* -------------------------------------------------------------------------- */
 
@@ -296,40 +294,29 @@ oio_error_debug (GQuark gq, int code, const char *fmt, ...)
 	g_string_free (gs, TRUE);
 	return err;
 }
-
 #endif
 
-gint64
-oio_ext_real_time (void)
-{
+gint64 oio_ext_real_time (void) {
 	if (oio_time_real)
 		return (*oio_time_real)();
 	return g_get_real_time();
 }
 
-gint64
-oio_ext_monotonic_time (void)
-{
+gint64 oio_ext_monotonic_time (void) {
 	if (oio_time_monotonic)
 		return (*oio_time_monotonic)();
 	return g_get_monotonic_time();
 }
 
-time_t
-oio_ext_real_seconds (void)
-{
+time_t oio_ext_real_seconds (void) {
 	return oio_ext_real_time () / G_TIME_SPAN_SECOND;
 }
 
-time_t
-oio_ext_monotonic_seconds (void)
-{
+time_t oio_ext_monotonic_seconds (void) {
 	return oio_ext_monotonic_time () / G_TIME_SPAN_SECOND;
 }
 
-void
-oio_ext_init_test (int *argc, char ***argv)
-{
+void oio_ext_init_test (int *argc, char ***argv) {
 	g_test_init (argc, argv, NULL);
 
 	char *sep = strrchr ((*argv)[0], '/');
@@ -353,8 +340,7 @@ struct maj_min_idle_s {
 };
 
 /** @private */
-struct path_maj_min_s
-{
+struct path_maj_min_s {
 	gint64 last_update;
 	int major;
 	int minor;
@@ -370,19 +356,14 @@ static GMutex majmin_lock = {0};
 void _constructor_idle_cache (void);
 void _destructor_idle_cache (void);
 
-
-static void
-_free_majmin_idle_list (GSList *l)
-{
+static void _free_majmin_idle_list (GSList *l) {
 	void _clean_idle (struct maj_min_idle_s *p) {
 		g_free (p);
 	}
 	g_slist_free_full (l, (GDestroyNotify)_clean_idle);
 }
 
-void __attribute__ ((constructor))
-_constructor_idle_cache (void)
-{
+void __attribute__ ((constructor)) _constructor_idle_cache (void) {
 	static volatile guint lazy_init = 1;
 	if (lazy_init) {
 		if (g_atomic_int_compare_and_exchange(&lazy_init, 1, 0)) {
@@ -392,9 +373,7 @@ _constructor_idle_cache (void)
 	}
 }
 
-void __attribute__ ((destructor))
-_destructor_idle_cache (void)
-{
+void __attribute__ ((destructor)) _destructor_idle_cache (void) {
 	_constructor_idle_cache ();
 
 	g_mutex_lock (&io_lock);
@@ -408,9 +387,7 @@ _destructor_idle_cache (void)
 	g_mutex_unlock (&majmin_lock);
 }
 
-static gdouble
-_compute_io_idle (guint major, guint minor)
-{
+static gdouble _compute_io_idle (guint major, guint minor) {
 	_constructor_idle_cache ();
 
 	gdouble idle = 0.01;
@@ -484,9 +461,7 @@ _compute_io_idle (guint major, guint minor)
 	return idle;
 }
 
-static int
-_get_major_minor (const gchar *path, guint *pmaj, guint *pmin)
-{
+static int _get_major_minor (const gchar *path, guint *pmaj, guint *pmin) {
 	_constructor_idle_cache ();
 
 	struct path_maj_min_s *out = NULL;
@@ -538,18 +513,14 @@ _get_major_minor (const gchar *path, guint *pmaj, guint *pmin)
 	return out != NULL;
 }
 
-gdouble
-oio_sys_io_idle (const char *vol)
-{
+gdouble oio_sys_io_idle (const char *vol) {
 	guint maj, min;
 	if (_get_major_minor(vol, &maj, &min))
 		return _compute_io_idle(maj, min);
 	return 0.01;
 }
 
-gdouble
-oio_sys_space_idle (const char *vol)
-{
+gdouble oio_sys_space_idle (const char *vol) {
 	struct statfs sfs;
 	if (statfs(vol, &sfs) < 0)
 		return 0.0;
@@ -563,9 +534,7 @@ oio_sys_space_idle (const char *vol)
 	return MIN(inode_ratio, block_ratio);
 }
 
-gdouble
-oio_sys_cpu_idle (void)
-{
+gdouble oio_sys_cpu_idle (void) {
 	static gdouble ratio_idle = 0.01;
 	static guint64 last_sum = 0;
 	static guint64 last_idle = 0;
@@ -622,27 +591,19 @@ oio_sys_cpu_idle (void)
 	return out;
 }
 
-gboolean
-oio_ext_rand_boolean (void)
-{
+gboolean oio_ext_rand_boolean (void) {
 	return g_rand_boolean (oio_ext_local_prng ());
 }
 
-gdouble
-oio_ext_rand_double (void)
-{
+gdouble oio_ext_rand_double (void) {
 	return g_rand_double (oio_ext_local_prng());
 }
 
-guint32
-oio_ext_rand_int (void)
-{
+guint32 oio_ext_rand_int (void) {
 	return g_rand_int (oio_ext_local_prng ());
 }
 
-gint32
-oio_ext_rand_int_range (gint32 low, gint32 up)
-{
+gint32 oio_ext_rand_int_range (gint32 low, gint32 up) {
 	return g_rand_int_range (oio_ext_local_prng (), low, up);
 }
 

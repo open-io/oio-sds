@@ -21,23 +21,15 @@ License along with this library.
 #include "metautils.h"
 
 #include "./AddrInfo.h"
-#include "./AddrInfoSequence.h"
-#include "./ChunkInfo.h"
-#include "./ChunkInfoSequence.h"
-#include "./ContentList.h"
-#include "./INTEGER.h"
 #include "./Meta0Info.h"
 #include "./Meta0InfoSequence.h"
-#include "./Meta2Property.h"
-#include "./Meta2PropertySequence.h"
 #include "./NamespaceInfo.h"
-#include "./NamespaceInfoSequence.h"
 #include "./Parameter.h"
 #include "./ParameterSequence.h"
 #include "./Score.h"
+#include "./ServiceTag.h"
 #include "./ServiceInfo.h"
 #include "./ServiceInfoSequence.h"
-#include "./ServiceTag.h"
 
 #include "./asn_SET_OF.h"
 
@@ -60,23 +52,6 @@ struct abstract_sequence_handler_s
 	abstract_api_cleaner_f clean_API;     /**< structure cleaner */
 	const gchar const *type_name;         /**< Type name used in error messages */
 };
-
-#define DEFINE_BODY_MANAGER(Name,Unmarshall) \
-gint Name (GError **err, gpointer udata, gint code, guint8 *body, gsize bodySize) {\
-	GSList **resL, *list;\
-	resL = (GSList**) udata; (void)code;\
-	if (!udata || !body || !bodySize) {\
-		GSETERROR(err,"Invalid parameter (%p %p %"G_GSIZE_FORMAT")", udata, body, bodySize);\
-		return FALSE;\
-	}\
-	list=NULL;\
-	if (0 >= Unmarshall (&list, body, bodySize, err)) {\
-		GSETERROR (err, "Cannot unserialize the content of the reply");\
-		return FALSE;\
-	}\
-	*resL = metautils_gslist_precat (*resL,list);\
-	return TRUE;\
-}
 
 #define DEFINE_SEQUENCE_MARSHALLER_GBA(Descr,Name) \
 GByteArray* Name (GSList *list, GError **err) {\
@@ -264,30 +239,6 @@ abstract_sequence_marshall(const struct abstract_sequence_handler_s * h, GSList 
 
 /* -------------------------------------------------------------------------- */
 
-static void
-free_OCTET_STRING(OCTET_STRING_t * os)
-{
-	if (!os) return;
-	OCTET_STRING_free(&asn_DEF_OCTET_STRING, os, 0);
-}
-
-/* -------------------------------------------------------------------------- */
-
-static gboolean
-key_value_pair_ASN2API(const Parameter_t * asn, key_value_pair_t * api)
-{
-	EXTRA_ASSERT (asn != NULL);
-	EXTRA_ASSERT (api != NULL);
-	if (asn->name.buf && asn->name.size)
-		api->key = g_strndup((const gchar*)asn->name.buf, asn->name.size);
-	else
-		api->key = g_strdup("");
-	api->value = g_byte_array_new();
-	if (asn->value.buf && asn->value.size)
-		g_byte_array_append(api->value, asn->value.buf, asn->value.size);
-	return TRUE;
-}
-
 static gboolean
 key_value_pair_API2ASN(const key_value_pair_t * api, Parameter_t * asn)
 {
@@ -315,21 +266,6 @@ free_Parameter(Parameter_t * asn_param)
 {
 	key_value_pair_cleanASN(asn_param, FALSE);
 }
-
-static struct abstract_sequence_handler_s descr_Parameter =
-{
-	sizeof(Parameter_t),
-	sizeof(key_value_pair_t),
-	&asn_DEF_ParameterSequence,
-	(abstract_converter_f) key_value_pair_ASN2API,
-	(abstract_converter_f) key_value_pair_API2ASN,
-	(abstract_asn_cleaner_f) key_value_pair_cleanASN,
-	(abstract_api_cleaner_f) key_value_pair_clean,
-	"key_value_pair"
-};
-
-DEFINE_SEQUENCE_MARSHALLER_GBA(&descr_Parameter, key_value_pairs_marshall_gba);
-DEFINE_SEQUENCE_UNMARSHALLER(&descr_Parameter, key_value_pairs_unmarshall);
 
 /* -------------------------------------------------------------------------- */
 
@@ -674,84 +610,10 @@ static const struct abstract_sequence_handler_s descr_Meta0Info =
 DEFINE_SEQUENCE_MARSHALLER_GBA(&descr_Meta0Info, meta0_info_marshall_gba)
 DEFINE_SEQUENCE_UNMARSHALLER(&descr_Meta0Info, meta0_info_unmarshall)
 
-/* -------------------------------------------------------------------------- */
-
-GByteArray *
-strings_marshall_gba(GSList * list, GError ** err)
-{
-	GByteArray *result = g_byte_array_sized_new (512);
-	if (!result) {
-		GSETERROR(err, "Failed to alloc byte array");
-		return NULL;
-	}
-
-	ContentList_t list_asn = {{0}};
-	for (GSList *l = list; l; l=l->next) {
-		char *s = l->data;
-		if (!s)
-			continue;
-		OCTET_STRING_t *os = OCTET_STRING_new_fromBuf(&asn_DEF_PrintableString, s, strlen(s));
-		if (!os)
-			continue;
-		asn_set_add(&(list_asn.list), os);
-	}
-
-	asn_enc_rval_t encRet;
-	encRet = der_encode(&asn_DEF_ContentList, &list_asn, metautils_asn1c_write_gba, result);
-	if (encRet.encoded == -1)
-		goto error_encode;
-
-	list_asn.list.free = free_OCTET_STRING;
-	ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_ContentList, &list_asn);
-	return result;
-
-error_encode:
-	GSETERROR(err, "Failed to encode arrays");
-	return NULL;
-}
-
-gint
-strings_unmarshall(GSList ** l, const void *buf, gsize len, GError ** err)
-{
-	if (!l || !buf || !len) {
-		GSETERROR(err, "Invalid parameter (l=%p buf=%p len=%"G_GSIZE_FORMAT")", l, buf, len);
-		return 0;
-	}
-
-	ContentList_t *asn = NULL;
-
-	asn_codec_ctx_t codecCtx;
-	codecCtx.max_stack_size = ASN1C_MAX_STACK;
-	asn_dec_rval_t decRet = ber_decode(&codecCtx, &asn_DEF_ContentList, (void**)&asn, buf, len);
-	switch (decRet.code) {
-		case RC_OK:
-			break;
-		case RC_FAIL:
-			GSETERROR(err, "Cannot deserialize: %s", "invalid content");
-			return 0;
-		case RC_WMORE:
-			GSETERROR(err, "Cannot deserialize: %s", "uncomplete content");
-			return 0;
-	}
-
-	GSList *result = NULL;
-	for (int i=0; i<asn->list.count ;i++) {
-		OCTET_STRING_t *s = asn->list.array[i];
-		if (!s)
-			continue;
-		result = g_slist_prepend(result, g_strndup((gchar*)s->buf, s->size));
-	}
-	*l = result;
-
-	asn->list.free = free_OCTET_STRING;
-	ASN_STRUCT_FREE(asn_DEF_ContentList, asn);
-	return 1;
-}
-
 /* NSINFO ------------------------------------------------------------------- */
 
 static GHashTable*
-list_conversion (const struct NamespaceInfoValueList *vl)
+list_conversion (const struct ParameterSequence *vl)
 {
 	EXTRA_ASSERT (vl != NULL);
 
@@ -786,14 +648,13 @@ namespace_info_ASN2API(const NamespaceInfo_t *asn, namespace_info_t *api)
 	api->options = list_conversion(&(asn->options));
 	api->storage_policy = list_conversion(&(asn->storagePolicy));
 	api->data_security = list_conversion(&(asn->dataSecurity));
-	api->storage_class = list_conversion(&(asn->storageClass));
 	api->service_pools = list_conversion(&(asn->servicePools));
 	return TRUE;
 }
 
 static gboolean
 hashtable_conversion(GHashTable *ht,
-		struct NamespaceInfoValueList *nsinfo_vlist,
+		struct ParameterSequence *nsinfo_vlist,
 		GSList* (*conv_func)(GHashTable *, gboolean, GError **))
 {
 	EXTRA_ASSERT (ht != NULL);
@@ -837,25 +698,20 @@ namespace_info_API2ASN(const namespace_info_t * api, NamespaceInfo_t * asn)
 	OCTET_STRING_fromBuf(&(asn->name), api->name, strlen(api->name));
 	asn_int64_to_INTEGER(&(asn->chunkSize), api->chunk_size);
 
-	/* TODO(jfs): remove this in the next release (kept for backward compliance) */
-	struct addr_info_s dummy;
-	grid_string_to_addrinfo ("0.0.0.0:0", &dummy);
-	addr_info_API2ASN(&dummy, &(asn->addr));
-
-	if (!hashtable_conversion(api->options, &(asn->options), key_value_pairs_convert_from_map))
+	if (!hashtable_conversion(api->options, &(asn->options),
+							  key_value_pairs_convert_from_map))
 		return FALSE;
 
-	if(!hashtable_conversion(api->storage_policy, &(asn->storagePolicy), key_value_pairs_convert_from_map))
+	if (!hashtable_conversion(api->storage_policy, &(asn->storagePolicy),
+							  key_value_pairs_convert_from_map))
 		return FALSE;
 
-	if(!hashtable_conversion(api->data_security, &(asn->dataSecurity), key_value_pairs_convert_from_map))
-		return FALSE;
-
-	if(!hashtable_conversion(api->storage_class, &(asn->storageClass), key_value_pairs_convert_from_map))
+	if (!hashtable_conversion(api->data_security, &(asn->dataSecurity),
+							  key_value_pairs_convert_from_map))
 		return FALSE;
 
 	if (!hashtable_conversion(api->service_pools, &(asn->servicePools),
-			key_value_pairs_convert_from_map))
+							  key_value_pairs_convert_from_map))
 		return FALSE;
 
 	return TRUE;
@@ -869,8 +725,6 @@ namespace_info_cleanASN(NamespaceInfo_t * asn, gboolean only_content)
 	asn->options.list.free = free_Parameter;
 	asn->storagePolicy.list.free = free_Parameter;
 	asn->dataSecurity.list.free = free_Parameter;
-	asn->dataTreatments.list.free = free_Parameter;
-	asn->storageClass.list.free = free_Parameter;
 	if (only_content)
 		ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NamespaceInfo, asn);
 	else
@@ -957,7 +811,6 @@ namespace_info_unmarshall(const guint8 * buf, gsize buf_len, GError ** err)
 		return result;
 
 	namespace_info_free(result);
-	result = NULL;
 
 	GSETCODE(err, CODE_INTERNAL_ERROR, "ASN.1 to API mapping failure");
 	return NULL;

@@ -47,11 +47,10 @@ _m0_remote_m0info (const char *m0, GByteArray *req, GSList **out)
 	if (!e) {
 		*out = result;
 		return NULL;
-	} else {
-		g_slist_free_full (result, (GDestroyNotify)meta0_info_clean);
-		*out = NULL;
-		return e;
 	}
+	g_slist_free_full (result, (GDestroyNotify)meta0_info_clean);
+	*out = NULL;
+	return e;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -59,9 +58,8 @@ _m0_remote_m0info (const char *m0, GByteArray *req, GSList **out)
 GError *
 meta0_remote_get_meta1_all(const char *m0, GSList **out)
 {
-	GByteArray *req = message_marshall_gba_and_clean (
-			metautils_message_create_named (NAME_MSGNAME_M0_GETALL));
-	return _m0_remote_m0info (m0, req, out);
+	MESSAGE request = metautils_message_create_named (NAME_MSGNAME_M0_GETALL);
+	return _m0_remote_m0info (m0, message_marshall_gba_and_clean (request), out);
 }
 
 GError*
@@ -76,9 +74,8 @@ meta0_remote_get_meta1_one(const char *m0, const guint8 *prefix,
 GError*
 meta0_remote_cache_refresh(const char *m0)
 {
-	GByteArray *gba = message_marshall_gba_and_clean (
-			metautils_message_create_named (NAME_MSGNAME_M0_RELOAD));
-	return _m0_remote_no_return (m0, gba);
+	MESSAGE request = metautils_message_create_named (NAME_MSGNAME_M0_RELOAD);
+	return _m0_remote_no_return (m0, message_marshall_gba_and_clean (request));
 }
 
 GError *
@@ -102,9 +99,7 @@ meta0_remote_fill(const char *m0, gchar **urls, guint nbreplicas)
 
 	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_FILL);
 	metautils_message_add_field_strint64(request, NAME_MSGKEY_REPLICAS, nbreplicas);
-	gchar *body = g_strjoinv("\n", urls);
-	metautils_message_set_BODY(request, body, strlen(body));
-	g_free(body);
+	metautils_message_add_body_unref(request, STRV_encode_gba(urls));
 	return gridd_client_exec (m0, M0V2_INIT_TIMEOUT,
 			message_marshall_gba_and_clean(request));
 }
@@ -119,7 +114,7 @@ meta0_remote_fill_v2(const char *m0, guint nbreplicas, gboolean nodist)
 	if (nodist)
 		metautils_message_add_field_struint(request, NAME_MSGKEY_NODIST, nodist);
 	return gridd_client_exec (m0, M0V2_INIT_TIMEOUT,
-			message_marshall_gba_and_clean(request));
+							  message_marshall_gba_and_clean(request));
 }
 
 GError*
@@ -150,9 +145,7 @@ meta0_remote_disable_meta1(const char *m0, gchar **urls, gboolean nocheck)
 	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_DISABLE_META1);
 	if (nocheck)
 		metautils_message_add_field_str(request, NAME_MSGKEY_NOCHECK, "yes");
-	gchar *body = g_strjoinv("\n", urls);
-	metautils_message_set_BODY(request, body, strlen(body));
-	g_free(body);
+	metautils_message_add_body_unref(request, STRV_encode_gba(urls));
 	return _m0_remote_no_return (m0, message_marshall_gba_and_clean(request));
 }
 
@@ -179,50 +172,18 @@ meta0_remote_destroy_meta0zknode(const char *m0, const char *urls)
 GError*
 meta0_remote_get_meta1_info(const char *m0, gchar ***out)
 {
-	GError *e = NULL;
-	gchar **result = NULL;
-
-	gboolean on_reply(gpointer c1, MESSAGE reply) {
-		(void) c1;
-
-		gchar **tmpResult = NULL;
-		if (NULL != (e = metautils_message_extract_body_strv (reply, &tmpResult))) {
-			GRID_WARN("GetMeta1Info : invalid reply");
-			g_clear_error (&e);
-			return FALSE;
-		}
-		if (tmpResult) {
-			guint len,resultlen,i;
-			gchar **v0;
-			if ( result != NULL )
-				resultlen=g_strv_length(result);
-			else
-				resultlen=0;
-			len = g_strv_length(tmpResult);
-			v0 = g_realloc(result, sizeof(gchar*) * (len + resultlen+1));
-			for ( i=0; i<len ; i++) {
-				v0[resultlen+i] = g_strdup(tmpResult[i]);
-			}
-			v0[len+resultlen]=NULL;
-			result = g_strdupv(v0);
-			g_strfreev(v0);
-			g_strfreev(tmpResult);
-		}
-		return TRUE;
-	}
-
 	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_GET_META1_INFO);
 	GByteArray *packed = message_marshall_gba_and_clean(request);
-	struct gridd_client_s *client = gridd_client_create(m0, packed, NULL, on_reply);
+	GByteArray *tmp = NULL;
+	GError *err = gridd_client_exec_and_concat(m0, M0V2_CLIENT_TIMEOUT, packed, &tmp);
 	g_byte_array_free(packed, TRUE);
-	e = gridd_client_run (client);
-	gridd_client_free(client);
 
-	if (e) {
-		g_strfreev(result);
-		return e;
+	if (err) {
+		if (tmp)
+			g_byte_array_free(tmp, TRUE);
+		return err;
 	}
-	*out = result;
-	return NULL;
+	err = STRV_decode_buffer(tmp->data, tmp->len, out);
+	g_byte_array_free(tmp, TRUE);
+	return err;
 }
-

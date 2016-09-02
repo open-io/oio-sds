@@ -21,7 +21,7 @@ License along with this library.
 
 /* Version started to be defined in June, 2016. Version prior to 20160600
  * have no ABI incompatibilities. */
-#define OIO_SDS_VERSION 20160721
+#define OIO_SDS_VERSION 20160901
 
 #ifdef __cplusplus
 extern "C" {
@@ -41,6 +41,9 @@ enum oio_sds_config_e
 
 	/* expects an <int> used for its boolean value */
 	OIOSDS_CFG_FLAG_SYNCATDOWNLOAD,
+
+	/* expects an <int> used for its boolean value */
+	OIOSDS_CFG_FLAG_ADMIN,
 };
 
 enum oio_sds_content_key_e
@@ -413,6 +416,7 @@ struct oio_sds_usage_s
 {
 	size_t used_bytes;
 	size_t quota_bytes;
+	int used_objects;
 };
 
 struct oio_error_s* oio_sds_get_usage (struct oio_sds_s *sds,

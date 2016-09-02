@@ -22,10 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "common.h"
 #include "actions.h"
 
-
-static GString*
-_m0_mapping_from_m1_list(GSList *m1_list)
-{
+static GString* _m0_mapping_from_m1_list(GSList *m1_list) {
 	gboolean first = TRUE;
 	GString *out = g_string_sized_new(65536 * 20);
 	GPtrArray *array = meta0_utils_list_to_array(m1_list);
@@ -56,9 +53,7 @@ _m0_mapping_from_m1_list(GSList *m1_list)
 }
 
 // TODO: factorize the two following functions
-enum http_rc_e
-action_admin_meta0_list(struct req_args_s *args)
-{
+enum http_rc_e action_admin_meta0_list(struct req_args_s *args) {
 	GError *err = NULL;
 	GSList *m0_lst = NULL;
 	GSList *m1_lst = NULL;
@@ -88,9 +83,7 @@ action_admin_meta0_list(struct req_args_s *args)
 	return _reply_common_error(args, err);
 }
 
-enum http_rc_e
-action_admin_meta0_force(struct req_args_s *args)
-{
+enum http_rc_e action_admin_meta0_force(struct req_args_s *args) {
 	GError *err = NULL;
 	GSList *m0_lst = NULL;
 
