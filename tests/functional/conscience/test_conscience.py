@@ -42,7 +42,7 @@ class TestConscienceFunctional(BaseTestCase):
         self.assertError(resp, 400, 400)
 
     def test_service_pool_put_missing_info(self):
-        for d in ('addr', 'score', 'type', ):
+        for d in ('addr', 'type', ):
             s = self._srv('echo')
             del s[d]
             logging.debug("Trying without [%s]", d)

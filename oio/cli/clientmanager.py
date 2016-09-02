@@ -49,7 +49,7 @@ class ClientManager(object):
                 proxyd_url = 'http://%s' % sds_conf.get('proxy')
                 self._options['proxyd_url'] = proxyd_url
             validate_options(self._options)
-            LOG.info('Using parameters %s' % self._options)
+            LOG.debug('Using parameters %s' % self._options)
             self.session = requests.Session()
             self.setup_done = True
             self._admin_mode = self._options.get('admin_mode')

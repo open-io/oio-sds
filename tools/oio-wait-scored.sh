@@ -37,7 +37,7 @@ maybe_unlock () {
 	if [ -n "$UNLOCK" ] ; then
 		opts="-n $NS"
 		if [ -n "$SRVTYPE" ] ; then opts="$opts -s $SRVTYPE" ; fi
-		$PREFIX-unlock-all.sh $opts
+		openio --oio-ns "$NS" cluster unlockall
 	fi
 }
 
