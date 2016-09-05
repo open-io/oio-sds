@@ -89,7 +89,7 @@ class Rdir(object):
     def _check_push(self, meta):
         data = {}
         missing_keys = []
-        time_limit = int(time.time())
+        time_limit = int(time.time()) + 10  # Allow 10s of clock drift
 
         def add_keys(keys, transform_func=None, required=True):
             for k in keys:
