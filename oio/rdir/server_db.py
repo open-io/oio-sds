@@ -19,7 +19,7 @@ import plyvel
 from plyvel import DB
 from functools import wraps
 from oio.common.exceptions import ServerException
-from oio.common.utils import json
+from oio.common.utils import json, get_logger
 
 
 class NoSuchDB(Exception):
@@ -49,6 +49,7 @@ class RdirBackend(object):
     def __init__(self, conf):
         self.db_path = conf.get('db_path')
         self.dbs = {}
+        self.logger = get_logger(conf)
         if not os.path.exists(self.db_path):
             os.makedirs(self.db_path)
 
@@ -116,6 +117,8 @@ class RdirBackend(object):
         incident_date = self.admin_get_incident_date(volume_id)
         if rebuild and incident_date is None:
             # No incident date set so no chunks needs to be rebuild
+            self.logger.info("Fetching chunks in order to rebuild" +
+                             " but no incident date set")
             return result
 
         db_iter = self._get_db_chunk(volume_id).iterator(
@@ -124,6 +127,7 @@ class RdirBackend(object):
         count = 0
         for key, value in db_iter:
             if limit is not None and count >= limit:
+                self.logger.debug("Chunk fetch limit reached (%d)", limit)
                 break
             data = json.loads(value)
             if rebuild:
