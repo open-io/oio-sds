@@ -135,8 +135,10 @@ class EventWorker(Worker):
         self.rdir_update = true_value(self.conf.get('rdir_update', True))
         if 'handlers_conf' not in self.conf:
             raise ValueError("'handlers_conf' path not defined in conf")
-        self.handlers = loadhandlers(
-            self.conf.get('handlers_conf'), evt_types, app=self)
+        self.handlers = loadhandlers(self.conf.get('handlers_conf'),
+                                     evt_types,
+                                     global_conf=self.conf,
+                                     app=self)
         super(EventWorker, self).init()
 
     def notify(self):
