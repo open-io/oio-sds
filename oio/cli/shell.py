@@ -114,7 +114,7 @@ class OpenIOShell(app.App):
         self.client_manager = clientmanager.ClientManager(options)
 
     def prepare_to_run_command(self, cmd):
-        self.log.info(
+        self.log.debug(
             'command: %s -> %s.%s',
             getattr(cmd, 'cmd_name', '<none>'),
             cmd.__class__.__module__,

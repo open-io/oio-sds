@@ -10,7 +10,7 @@ from oio.common.utils import load_namespace_conf
 class ClusterShow(show.ShowOne):
     """Show information of all services in the cluster"""
 
-    log = logging.getLogger(__name__ + '.ClusterInfo')
+    log = logging.getLogger(__name__ + '.ClusterShow')
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
@@ -105,13 +105,13 @@ class ClusterLocalList(lister.Lister):
         return columns, result_gen
 
 
-class ClusterUnlockService(command.Command):
+class ClusterUnlock(lister.Lister):
     """Unlock score"""
 
     log = logging.getLogger(__name__ + '.ClusterUnlock')
 
     def get_parser(self, prog_name):
-        parser = super(ClusterUnlockService, self).get_parser(prog_name)
+        parser = super(ClusterUnlock, self).get_parser(prog_name)
         parser.add_argument(
             'srv_type',
             metavar='<srv_type>',
@@ -123,37 +123,49 @@ class ClusterUnlockService(command.Command):
         )
         return parser
 
+    def _unlock_one(self, type_, addr):
+        service_info = {'type': type_, 'addr': addr}
+        try:
+            self.app.client_manager.admin.cluster_unlock_score(service_info)
+            yield type_, addr, "unlocked"
+        except Exception as exc:
+            yield type_, addr, str(exc)
+
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
-        addr = parsed_args.srv_addr
-        srv_type = parsed_args.srv_type
-        namespace = self.app.client_manager.admin.conf['namespace']
-        service_desc = "[%s|%s|%s]" % (namespace,
-                                       srv_type,
-                                       addr)
-        data = self.app.client_manager.admin.cluster_list(
-            srv_type)
-        for srv in data:
-            service_info = {'type': srv_type,
-                            'addr': srv['addr'],
-                            'score': -1}
-            if addr == service_info['addr']:
+        return (('Type', 'Service', 'Result'),
+                self._unlock_one(parsed_args.srv_type, parsed_args.srv_addr))
+
+
+class ClusterUnlockAll(lister.Lister):
+    """Unlock all services of the cluster"""
+
+    log = logging.getLogger(__name__ + '.ClusterUnlock')
+
+    def get_parser(self, prog_name):
+        return super(ClusterUnlockAll, self).get_parser(prog_name)
+
+    def _unlock_all(self):
+        types = self.app.client_manager.admin.cluster_list_types()
+        for type_ in types:
+            all_descr = self.app.client_manager.admin.cluster_list(type_)
+            for descr in all_descr:
+                descr['type'] = type_
                 try:
-                    self.app.client_manager.admin.cluster_unlock_score(
-                        service_info)
-                    self.log.warn("Service " + service_desc +
-                                  " has been successfully unlocked")
-                    return
-                except Exception as e:
-                    raise Exception('service unlock error: ' + str(e))
-        self.log.error('Failed to set score of service ' +
-                       service_desc + ': Invalid Service Description')
+                    self.app.client_manager.admin.cluster_unlock_score(descr)
+                    yield type_, descr['addr'], "unlocked"
+                except Exception as exc:
+                    yield type_, descr['addr'], str(exc)
+
+    def take_action(self, _parsed_args):
+        columns = ('Type', 'Service', 'Result')
+        return columns, self._unlock_all()
 
 
 class ClusterFlush(command.Command):
-    """flush all services in the cluster"""
+    """Flush all services of the cluster"""
 
-    log = logging.getLogger(__name__ + '.ClusterInfo')
+    log = logging.getLogger(__name__ + '.ClusterFlush')
 
     def get_parser(self, prog_name):
         parser = super(ClusterFlush, self).get_parser(prog_name)

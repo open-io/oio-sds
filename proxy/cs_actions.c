@@ -165,7 +165,7 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 			return _reply_system_error (args, err);
 	}
 
-	if (!si->type[0]) {
+	if (!si->type[0] && !service_info_get_tag(si->tags, "tag.id")) {
 		service_info_clean (si);
 		return _reply_format_error (args, BADREQ("Service type not specified"));
 	}

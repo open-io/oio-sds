@@ -172,7 +172,7 @@ openio \
 
 timestamp
 # unlock all services
-$PREFIX-unlock-all.sh -n "$NS"
+openio --oio-ns "$NS" cluster unlockall
 $PREFIX-wait-scored.sh -n "$NS" -t 60
 $PREFIX-flush-all.sh -n "$NS"
 

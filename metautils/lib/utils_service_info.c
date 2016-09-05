@@ -625,7 +625,7 @@ service_info_load_json_object(struct json_object *obj,
 		{"ns",    &ns,    json_type_string, !permissive},
 		{"type",  &type,  json_type_string, !permissive},
 		{"addr",  &url,   json_type_string, 1},
-		{"score", &score, json_type_int,    1},
+		{"score", &score, json_type_int,    !permissive},
 		{"tags",  &tags,  json_type_object, 0},
 		{NULL, NULL, 0, 0}
 	};
@@ -642,7 +642,8 @@ service_info_load_json_object(struct json_object *obj,
 	memcpy (&si->addr, &addr, sizeof(struct addr_info_s));
 	if (type)
 		g_strlcpy(si->type, json_object_get_string(type), sizeof(si->type));
-	si->score.value = json_object_get_int(score);
+	if (score)
+		si->score.value = json_object_get_int(score);
 
 	if (tags) { json_object_object_foreach(tags,key,val) {
 		if (!g_str_has_prefix(key, "tag.") && !g_str_has_prefix(key, "stat."))
