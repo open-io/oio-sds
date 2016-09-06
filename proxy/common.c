@@ -427,7 +427,7 @@ void client_clean (struct client_ctx_s *ctx) {
 }
 
 GError * KV_read_properties (struct json_object *j, gchar ***out,
-		const char *section) {
+		const char *section, gboolean fail_if_empty) {
 
 	EXTRA_ASSERT(out != NULL);
 	EXTRA_ASSERT(oio_str_is_set(section));
@@ -438,13 +438,15 @@ GError * KV_read_properties (struct json_object *j, gchar ***out,
 	struct json_object *jprops = NULL;
 
 	if (!json_object_object_get_ex(j, section, &jprops)) {
+		if (fail_if_empty)
+			return BADREQ("No \"%s\" field", section);
 		*out = g_malloc0(sizeof(gchar*));
 		return NULL;
 	}
 
 	GError *err = NULL;
 	if (!json_object_is_type(jprops, json_type_object)) {
-		err = BADREQ("Bad \"properties\" field");
+		err = BADREQ("Bad \"%s\" field", section);
 	} else {
 		err = KV_decode_object(jprops, out);
 	}
@@ -454,12 +456,12 @@ GError * KV_read_properties (struct json_object *j, gchar ***out,
 
 GError * KV_read_usersys_properties (struct json_object *j, gchar ***out) {
 	gchar **user = NULL;
-	GError *err = KV_read_properties(j, &user, "properties");
+	GError *err = KV_read_properties(j, &user, "properties", FALSE);
 	if (err)
 		return err;
 
 	gchar **sys = NULL;
-	err = KV_read_properties(j, &sys, "system");
+	err = KV_read_properties(j, &sys, "system", FALSE);
 	if (err) {
 		g_strfreev(user);
 		return err;

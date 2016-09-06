@@ -147,6 +147,8 @@ action_sqlx_propset (struct req_args_s *args, struct json_object *jargs)
 
 	gchar **kv = NULL;
 	err = KV_read_usersys_properties(jargs, &kv);
+	if (!err && !*kv)
+		err = BADREQ("No properties found in JSON object");
 	if (!err) {
 		gboolean flush = _request_get_flag(args, "flush");
 		PACKER(_pack) { return sqlx_pack_PROPSET_tab(n, flush, kv); }
@@ -215,13 +217,8 @@ action_sqlx_propdel (struct req_args_s *args, struct json_object *jargs)
 	if (!namev)
 		return _reply_format_error (args, BADREQ("Bad names"));
 
-	for (gchar **key = namev; key && *key; key++) {
-		if (!g_str_has_prefix(*key, SQLX_ADMIN_PREFIX_USER)) {
-			gchar *new_key = g_strdup_printf(SQLX_ADMIN_PREFIX_USER"%s", *key);
-			g_free(*key);
-			*key = new_key;
-		}
-	}
+	for (gchar **p = namev; p && *p; p++)
+		oio_str_reuse(p, g_strconcat("user.", *p, NULL));
 
 	PACKER(packer) { return sqlx_pack_PROPDEL (n, (const gchar * const * )namev); }
 	enum http_rc_e rc = _sqlx_action_noreturn (args, CLIENT_PREFER_MASTER, packer);

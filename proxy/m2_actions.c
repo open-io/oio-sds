@@ -699,7 +699,7 @@ static GError * _load_content_from_json_object(struct req_args_s *args,
 
 	struct json_object *jchunks = NULL;
 	gchar **props = NULL;
-	GError *err = KV_read_properties(jbody, &props, "properties");
+	GError *err = KV_read_properties(jbody, &props, "properties", FALSE);
 	if (err) {
 		g_prefix_error(&err, "properties error");
 	} else {
@@ -1560,7 +1560,7 @@ static enum http_rc_e action_m2_content_propset (struct req_args_s *args,
 
 	if (jargs) {
 		gchar **kv = NULL;
-		GError *err = KV_read_properties(jargs, &kv, "properties");
+		GError *err = KV_read_properties(jargs, &kv, "properties", TRUE);
 		if (err)
 			return _reply_format_error (args, err);
 		for (gchar **p=kv; *p && *(p+1) ;p+=2) {

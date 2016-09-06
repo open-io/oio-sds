@@ -343,7 +343,7 @@ action_dir_prop_set (struct req_args_s *args, struct json_object *jargs)
 	gboolean flush = NULL != OPT("flush");
 
 	gchar **pairs = NULL;
-	if (NULL != (err = KV_read_properties(jargs, &pairs, "properties")))
+	if (NULL != (err = KV_read_properties(jargs, &pairs, "properties", TRUE)))
 		return _reply_format_error(args, err);
 
 	GError *hook (const char * m1) {
