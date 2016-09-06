@@ -128,7 +128,7 @@ extern gint64 ttl_down_services;
 extern gint64 ttl_known_services;
 
 /* how long the proxy remembers which service is the master for a given
-   election */
+ * election */
 extern gint64 ttl_expire_master_services;
 
 extern struct oio_lb_world_s *lb_world;
@@ -144,14 +144,14 @@ gboolean validate_namespace (const char * ns);
 gboolean validate_srvtype (const char * n);
 
 /* Periodically loads the consciennce's addresses from the local config
-   and keep this in cache. */
+ * and keep this in cache. */
 extern GRWLock csurl_rwlock;
 extern gchar **csurl;
 extern gsize csurl_count;
 gchar * proxy_get_csurl (void);
 
 /* Periodically loads lists of services from the conscience, and keep this
-   in cache. */
+ * in cache. */
 extern GRWLock wanted_rwlock;
 extern gchar **wanted_srvtypes;
 extern GBytes **wanted_prepared; /* formatted as <srvtype>+'\0'+<json> */
@@ -209,7 +209,7 @@ const char * _req_get_option (struct req_args_s *args, const char *name);
 const char * _req_get_token (struct req_args_s *args, const char *name);
 
 enum http_rc_e rest_action (struct req_args_s *args,
-        enum http_rc_e (*handler) (struct req_args_s *, json_object *));
+		enum http_rc_e (*handler) (struct req_args_s *, json_object *));
 
 gboolean _request_get_flag(struct req_args_s *args, const char *flag);
 
@@ -259,7 +259,8 @@ GError * _m1_locate_and_action (struct oio_url_s *url, GError * (*hook) ());
 
 GError * gridd_request_replicated (struct client_ctx_s *, request_packer_f);
 
-GError * KV_read_properties (struct json_object *j, gchar ***out, const char *section);
+GError * KV_read_properties (struct json_object *j, gchar ***out,
+		const char *section, gboolean fail_if_empty);
 
 /** Wraps KV_read_properties() to concat system's properties and user's ones
  * with the proper prefix.
