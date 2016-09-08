@@ -17,6 +17,7 @@ from functools import wraps
 import json
 import logging
 import os
+import random
 from urllib import unquote
 from inspect import isgenerator
 
@@ -86,6 +87,21 @@ def handle_object_not_found(fnc):
     return _wrapped
 
 
+def wrand_choice_index(scores):
+    """Choose an element from the `scores` sequence and return its index"""
+    scores = list(scores)
+    total = sum(scores)
+    target = random.uniform(0, total)
+    upto = 0
+    index = 0
+    for score in scores:
+        if upto + score >= target:
+            return index
+        upto += score
+        index += 1
+    assert False, "Shouldn't get here"
+
+
 def _sort_chunks(raw_chunks, ec_security):
     chunks = dict()
     for chunk in raw_chunks:
@@ -98,9 +114,16 @@ def _sort_chunks(raw_chunks, ec_security):
         else:
             chunks[position] = []
             chunks[position].append(chunk)
+
     for clist in chunks.itervalues():
         clist.sort(lambda x, y: cmp(x.get("score", 0), y.get("score", 0)),
                    reverse=True)
+        if not ec_security and len(clist) > 1:
+            # When scores are close together (e.g. [95, 94, 94, 93, 50]),
+            # don't always start with the highest element.
+            first = wrand_choice_index(x.get("score", 0) for x in clist)
+            clist[0], clist[first] = clist[first], clist[0]
+
     return chunks
 
 

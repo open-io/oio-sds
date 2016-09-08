@@ -71,6 +71,11 @@ class ConscienceClient(Client):
         resp, body = self._request("GET", uri)
         return body
 
+    def lock_score(self, infos_srv):
+        uri = self._make_uri("conscience/lock")
+        resp, body = self._request('POST', uri, data=json.dumps(infos_srv))
+        return body
+
     def unlock_score(self, infos_srv):
         uri = self._make_uri("conscience/unlock")
         resp, body = self._request('POST', uri, data=json.dumps(infos_srv))

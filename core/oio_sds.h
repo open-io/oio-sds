@@ -44,6 +44,11 @@ enum oio_sds_config_e
 
 	/* expects an <int> used for its boolean value */
 	OIOSDS_CFG_FLAG_ADMIN,
+
+	/* Disable the shuffling of chunks before reading,
+	 * and instead sort them by score.
+	 * Expects an <int> used for its boolean value. */
+	OIOSDS_CFG_FLAG_NO_SHUFFLE,
 };
 
 enum oio_sds_content_key_e

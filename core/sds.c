@@ -53,6 +53,7 @@ struct oio_sds_s
 	} timeout;
 	gboolean sync_after_download;
 	gboolean admin;
+	gboolean no_shuffle;  // read the highest scored chunk instead of shuffling
 	gchar *auth_token;
 	CURL *h;
 };
@@ -296,7 +297,8 @@ _get_meta_bound (GSList *lchunks)
 }
 
 static GError *
-_organize_chunks (GSList *lchunks, struct metachunk_s ***result)
+_organize_chunks (GSList *lchunks, struct metachunk_s ***result,
+		gboolean no_shuffle)
 {
 	*result = NULL;
 
@@ -328,7 +330,7 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result)
 			_metachunk_cleanv (out);
 			return SYSERR("Invalid chunk sequence: gap found at [%u]", i);
 		}
-		if (!oio_sds_no_shuffle)
+		if (!no_shuffle)
 			mc->chunks = oio_ext_gslist_shuffle (mc->chunks);
 		else
 			mc->chunks = g_slist_sort(mc->chunks, (GCompareFunc)_compare_chunks);
@@ -435,6 +437,7 @@ oio_sds_init (struct oio_sds_s **out, const char *ns)
 	(*out)->proxy = oio_cfg_get_proxy_containers (ns);
 	(*out)->ecd = oio_cfg_get_ecd(ns);
 	(*out)->sync_after_download = TRUE;
+	(*out)->no_shuffle = oio_sds_no_shuffle;
 	(*out)->admin = FALSE;
 	(*out)->h = _get_proxy_handle (*out);
 	return NULL;
@@ -484,10 +487,16 @@ oio_sds_configure (struct oio_sds_s *sds, enum oio_sds_config_e what,
 				return EINVAL;
 			sds->sync_after_download = BOOL(*(int*)pv);
 			return 0;
-	        case OIOSDS_CFG_FLAG_ADMIN:
+		case OIOSDS_CFG_FLAG_ADMIN:
 			if (vlen != sizeof(int))
 				return EINVAL;
 			sds->admin = BOOL(*(int*)pv);
+			return 0;
+		case OIOSDS_CFG_FLAG_NO_SHUFFLE:
+			if (vlen != sizeof(int))
+				return EINVAL;
+			sds->no_shuffle = BOOL(*(int*)pv);
+			return 0;
 		default:
 			return EBADSLT;
 	}
@@ -951,7 +960,8 @@ _download_to_hook (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 			.sds = sds, .dst = dst, .src = src, .chunk_method = chunk_method,
 			.metachunks = NULL, .chunks = chunks,
 		};
-		if (!(err = _organize_chunks(chunks, &dl.metachunks))) {
+		err = _organize_chunks(chunks, &dl.metachunks, sds->no_shuffle);
+		if (!err) {
 			EXTRA_ASSERT (dl.metachunks != NULL);
 			err = _download (&dl);
 			_metachunk_cleanv (dl.metachunks);
@@ -1315,7 +1325,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 	/* Organize the set of chunks into metachunks. */
 	if (!err) {
 		struct metachunk_s **out = NULL;
-		if (NULL != (err = _organize_chunks (ul->chunks, &out)))
+		if ((err = _organize_chunks (ul->chunks, &out, ul->sds->no_shuffle)))
 			g_prefix_error (&err, "Logic: ");
 		else
 			for (struct metachunk_s **p = out; *p; ++p)
@@ -2033,7 +2043,7 @@ oio_sds_list (struct oio_sds_s *sds, struct oio_sds_list_param_s *param,
 		return (struct oio_error_s*) BADREQ("Partial URI");
 	oio_ext_set_reqid (sds->session_id);
 	oio_ext_set_admin (sds->admin);
-	
+
 	GRID_DEBUG("LIST prefix %s marker %s end %s max %"G_GSIZE_FORMAT,
 		param->prefix, param->marker, param->end, param->max_items);
 
@@ -2168,7 +2178,7 @@ oio_sds_link (struct oio_sds_s *sds, struct oio_url_s *url, const char *content_
 		return (struct oio_error_s*) BADREQ("content_id not hexadecimal");
 	oio_ext_set_reqid (sds->session_id);
 	oio_ext_set_admin (sds->admin);
-	
+
 	return (struct oio_error_s*) oio_proxy_call_content_link (sds->h, url, content_id);
 }
 
@@ -2221,7 +2231,7 @@ oio_sds_delete_container (struct oio_sds_s *sds, struct oio_url_s *url)
 		return (struct oio_error_s*) BADREQ("Missing argument");
 	oio_ext_set_reqid (sds->session_id);
 	oio_ext_set_admin (sds->admin);
-	
+
 	return (struct oio_error_s*) oio_proxy_call_container_delete (sds->h, url);
 }
 
@@ -2236,7 +2246,7 @@ oio_sds_show_content (struct oio_sds_s *sds, struct oio_url_s *url,
 		return (struct oio_error_s*) BADREQ("Missing argument");
 	oio_ext_set_reqid (sds->session_id);
 	oio_ext_set_admin (sds->admin);
-	
+
 	GError *err = NULL;
 	gsize offset = 0;
 	GSList *chunks = NULL;

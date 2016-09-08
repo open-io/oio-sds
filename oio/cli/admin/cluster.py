@@ -119,7 +119,7 @@ class ClusterUnlock(lister.Lister):
         parser.add_argument(
             'srv_addr',
             metavar='<srv_addr>',
-            help='addr of the service'
+            help='Network address of the service'
         )
         return parser
 
@@ -160,6 +160,39 @@ class ClusterUnlockAll(lister.Lister):
     def take_action(self, _parsed_args):
         columns = ('Type', 'Service', 'Result')
         return columns, self._unlock_all()
+
+
+class ClusterLock(ClusterUnlock):
+    """Lock score"""
+
+    log = logging.getLogger(__name__ + '.ClusterLock')
+
+    def get_parser(self, prog_name):
+        parser = super(ClusterLock, self).get_parser(prog_name)
+        parser.add_argument(
+            '-s', '--score',
+            metavar='<score>',
+            type=int,
+            default=0,
+            help='score to set'
+        )
+        return parser
+
+    def _lock_one(self, type_, addr, score):
+        service_info = {'type': type_, 'addr': addr, 'score': score}
+        try:
+            svc = self.app.client_manager.admin.cluster_lock_score(
+                    service_info)
+            yield type_, addr, "locked to %d" % int(svc.get("score", score))
+        except Exception as exc:
+            yield type_, addr, str(exc)
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+        return (('Type', 'Service', 'Result'),
+                self._lock_one(parsed_args.srv_type,
+                               parsed_args.srv_addr,
+                               parsed_args.score))
 
 
 class ClusterFlush(command.Command):
