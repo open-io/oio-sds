@@ -305,7 +305,7 @@ gchar *
 namespace_get_state(namespace_info_t* ns_info)
 {
 	return gridcluster_get_nsinfo_strvalue(ns_info, NS_STATE_NAME,
-					       NS_STATE_VALUE_STAND_ALONE);
+			NS_STATE_VALUE_STANDALONE);
 }
 
 gint64

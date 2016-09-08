@@ -61,6 +61,9 @@ class AdminClient(object):
     def cluster_flush(self, srv_type):
         return self.cluster.flush(srv_type)
 
+    def cluster_lock_score(self, srv_type):
+        return self.cluster.lock_score(srv_type)
+
     def cluster_unlock_score(self, srv_type):
         return self.cluster.unlock_score(srv_type)
 

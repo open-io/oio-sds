@@ -405,7 +405,6 @@ param_option.worm=${WORM}
 
 param_option.service_update_policy=meta2=KEEP|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|;rdir=KEEP|1|1|user_is_a_service=1
 
-param_option.lb.rawx=WRR?shorten_ratio=1.0&standard_deviation=no&reset_delay=60
 param_option.meta2_max_versions=${VERSIONING}
 param_option.meta2_keep_deleted_delay=86400
 param_option.compression=on
@@ -888,7 +887,8 @@ WORMED="worm"
 NS_STATE="state"
 MASTER_VALUE="master"
 SLAVE_VALUE="slave"
-STAND_ALONE_VALUE="stand_alone"
+STANDALONE_VALUE="standalone"
+
 defaults = {
     'NS': 'OPENIO',
     'IP': '127.0.0.1',
@@ -985,8 +985,8 @@ def generate(options):
     is_wormed = options.get('worm', False)
     worm = '1' if is_wormed else '0'
     state = options.get("state", None)
-    if state not in [MASTER_VALUE, SLAVE_VALUE, STAND_ALONE_VALUE]:
-        state = STAND_ALONE_VALUE
+    if state not in [MASTER_VALUE, SLAVE_VALUE, STANDALONE_VALUE]:
+        state = STANDALONE_VALUE
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(IP=ip,
                NS=ns,
