@@ -213,17 +213,24 @@ GError *gridd_request_replicated (struct client_ctx_s *ctx,
 	GError *err = NULL;
 	EXTRA_ASSERT (ctx != NULL);
 
+	gint retries = 1;
 	gchar *election_key = g_strconcat (ctx->name.base, "/", ctx->name.type, NULL);
 	STRING_STACKIFY(election_key);
 
 	/* Locate the services */
 	gchar **m1uv = NULL;
+ retry_resolv:
 	if (*ctx->type == '#')
 		err = hc_resolve_reference_directory (resolver, ctx->url, &m1uv);
 	else
 		err = hc_resolve_reference_service (resolver, ctx->url, ctx->type, &m1uv);
 
 	if (err) {
+		if (retries-- > 0 && err->code == CODE_RANGE_NOTFOUND) {
+			hc_decache_reference_service (resolver, ctx->url, "meta1");
+			hc_decache_reference(resolver, ctx->url);
+			goto retry_resolv;
+		}
 		EXTRA_ASSERT(m1uv == NULL);
 		g_prefix_error (&err, "Directory error: ");
 		return err;
