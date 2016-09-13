@@ -157,13 +157,14 @@ action_dir_srv_link (struct req_args_s *args, struct json_object *jargs)
 
 	gchar **urlv = NULL;
 	GError *hook (const char * m1) {
-		return meta1v2_remote_link_service (m1, args->url, type, dryrun, autocreate, &urlv);
+		return meta1v2_remote_link_service (m1, args->url, type, dryrun,
+				autocreate, &urlv);
 	}
 
 	GError *err = _m1_locate_and_action (args->url, hook);
 	if (!err || CODE_IS_NETWORK_ERROR(err->code)) {
 		/* Also decache on timeout, a majority of request succeed,
-         * and it will probably silently succeed  */
+		 * and it will probably silently succeed  */
 		hc_decache_reference_service (resolver, args->url, type);
 	}
 
@@ -206,7 +207,7 @@ action_dir_srv_force (struct req_args_s *args, struct json_object *jargs)
 
 	if (!err || CODE_IS_NETWORK_ERROR(err->code)) {
 		/* Also decache on timeout, a majority of request succeed,
-         * and it will probably silently succeed  */
+		 * and it will probably silently succeed  */
 		hc_decache_reference_service (resolver, args->url, type);
 	}
 
@@ -237,7 +238,7 @@ action_dir_srv_renew (struct req_args_s *args, struct json_object *jargs)
 
 	if (!err || CODE_IS_NETWORK_ERROR(err->code)) {
 		/* Also decache on timeout, a majority of request succeed,
-         * and it will probably silently succeed  */
+		 * and it will probably silently succeed  */
 		hc_decache_reference_service (resolver, args->url, type);
 	}
 
@@ -298,7 +299,7 @@ action_dir_srv_relink (struct req_args_s *args, struct json_object *jargs)
 
 	if (!err || CODE_IS_NETWORK_ERROR(err->code)) {
 		/* Also decache on timeout, a majority of request succeed,
-         * and it will probably silently succeed  */
+		 * and it will probably silently succeed  */
 		hc_decache_reference_service (resolver, args->url, type);
 	}
 
@@ -461,7 +462,7 @@ enum http_rc_e action_ref_destroy (struct req_args_s *args) {
 	GError *err = _m1_locate_and_action (args->url, hook);
 	if (!err || CODE_IS_NETWORK_ERROR(err->code)) {
 		/* Also decache on timeout, a majority of request succeed,
-         * and it will probably silently succeed  */
+		 * and it will probably silently succeed  */
 		NSINFO_READ(if (srvtypes) {
 			for (gchar ** p = srvtypes; *p; ++p)
 				hc_decache_reference_service (resolver, args->url, *p);
@@ -476,11 +477,11 @@ enum http_rc_e action_ref_destroy (struct req_args_s *args) {
 }
 
 enum http_rc_e action_ref_relink (struct req_args_s *args) {
-    return rest_action (args, action_dir_srv_relink);
+	return rest_action (args, action_dir_srv_relink);
 }
 
 enum http_rc_e action_ref_link (struct req_args_s *args) {
-    return rest_action (args, action_dir_srv_link);
+	return rest_action (args, action_dir_srv_link);
 }
 
 enum http_rc_e action_ref_unlink (struct req_args_s *args) {
@@ -496,7 +497,7 @@ enum http_rc_e action_ref_unlink (struct req_args_s *args) {
 
 	if (!err || CODE_IS_NETWORK_ERROR(err->code)) {
 		/* Also decache on timeout, a majority of request succeed,
-         * and it will probably silently succeed  */
+		 * and it will probably silently succeed  */
 		hc_decache_reference_service (resolver, args->url, type);
 	}
 
@@ -506,21 +507,21 @@ enum http_rc_e action_ref_unlink (struct req_args_s *args) {
 }
 
 enum http_rc_e action_ref_renew (struct req_args_s *args) {
-    return rest_action (args, action_dir_srv_renew);
+	return rest_action (args, action_dir_srv_renew);
 }
 
 enum http_rc_e action_ref_force (struct req_args_s *args) {
-    return rest_action (args, action_dir_srv_force);
+	return rest_action (args, action_dir_srv_force);
 }
 
 enum http_rc_e action_ref_prop_get (struct req_args_s *args) {
-    return rest_action (args, action_dir_prop_get);
+	return rest_action (args, action_dir_prop_get);
 }
 
 enum http_rc_e action_ref_prop_set (struct req_args_s *args) {
-    return rest_action (args, action_dir_prop_set);
+	return rest_action (args, action_dir_prop_set);
 }
 
 enum http_rc_e action_ref_prop_del (struct req_args_s *args) {
-    return rest_action (args, action_dir_prop_del);
+	return rest_action (args, action_dir_prop_del);
 }
