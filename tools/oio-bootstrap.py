@@ -697,10 +697,13 @@ syslog_prefix = OIO,${NS},event-agent
 
 template_event_agent_handlers = """
 [handler:storage.content.new]
+# pipeline = replication
 
 [handler:storage.content.append]
+# pipeline = replication
 
 [handler:storage.content.deleted]
+# pipeline = content_cleaner replication
 pipeline = content_cleaner
 
 [handler:storage.container.new]
@@ -727,6 +730,11 @@ use = egg:oio#account_update
 
 [filter:volume_index]
 use = egg:oio#volume_index
+
+[filter:replication]
+use = egg:oio#notify
+tube = oio-repli
+queue_url = beanstalk://127.0.0.1:11300
 
 """
 
@@ -757,6 +765,8 @@ syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 # Let this option empty to connect directly to redis_host
 #sentinel_hosts = 127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381
 sentinel_master_name = oio
+
+redis_host = ${IP}
 """
 
 template_rdir = """
