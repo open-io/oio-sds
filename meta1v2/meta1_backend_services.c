@@ -149,20 +149,22 @@ static GError *
 __del_container_srvtype_properties(struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url, const char *srvtype)
 {
-   GError *err = NULL;
-    gint rc;
-    sqlite3_stmt *stmt = NULL;
+	GError *err = NULL;
+	gint rc;
+	sqlite3_stmt *stmt = NULL;
 
-    sqlite3_prepare_debug(rc, sq3->db,
-        "DELETE FROM properties WHERE cid = ? AND name LIKE ?", -1, &stmt, NULL);
-    if (rc != SQLITE_OK && rc != SQLITE_DONE)
-        err = M1_SQLITE_GERROR(sq3->db, rc);
-    else {
-        int len = strlen(srvtype)+10;
-        gchar *tmp_name = g_malloc0(sizeof(gchar)*len);
+	sqlite3_prepare_debug(rc, sq3->db,
+			"DELETE FROM properties WHERE cid = ? AND name LIKE ?",
+			-1, &stmt, NULL);
+	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+		err = M1_SQLITE_GERROR(sq3->db, rc);
+	} else {
+		int len = strlen(srvtype)+10;
+		gchar *tmp_name = g_malloc0(sizeof(gchar)*len);
 		if (tmp_name) {
 			g_snprintf(tmp_name, len, "%s.%%", srvtype);
-			(void) sqlite3_bind_blob(stmt, 1, oio_url_get_id(url), oio_url_get_id_size(url), NULL);
+			(void) sqlite3_bind_blob(stmt, 1, oio_url_get_id(url),
+					oio_url_get_id_size(url), NULL);
 			(void) sqlite3_bind_text(stmt, 2, tmp_name, -1, NULL);
 			sqlite3_step_debug_until_end (rc, stmt);
 			if (rc != SQLITE_OK && rc != SQLITE_DONE)
@@ -189,7 +191,8 @@ __del_container_all_services(struct sqlx_sqlite3_s *sq3,
 	if (rc != SQLITE_OK)
 		err = M1_SQLITE_GERROR(sq3->db, rc);
 	else {
-		(void) sqlite3_bind_blob(stmt, 1, oio_url_get_id(url), oio_url_get_id_size(url), NULL);
+		(void) sqlite3_bind_blob(stmt, 1, oio_url_get_id(url),
+				oio_url_get_id_size(url), NULL);
 		(void) sqlite3_bind_text(stmt, 2, srvtype, -1, NULL);
 		sqlite3_step_debug_until_end (rc, stmt);
 		if (rc != SQLITE_OK && rc != SQLITE_DONE)
@@ -301,43 +304,46 @@ static GError *
 __get_all_services(struct sqlx_sqlite3_s *sq3,
 		struct meta1_service_url_s ***result)
 {
-    GError *err = NULL;
-    sqlite3_stmt *stmt = NULL;
-    GPtrArray *gpa;
-    int rc;
+	GError *err = NULL;
+	sqlite3_stmt *stmt = NULL;
+	GPtrArray *gpa;
+	int rc;
 
-    // Prepare the statement
-    sqlite3_prepare_debug(rc, sq3->db,
-            "SELECT DISTINCT srvtype,url FROM services order by srvtype,url", -1, &stmt, NULL);
-    if (rc != SQLITE_OK)
-        return M1_SQLITE_GERROR(sq3->db, rc);
+	// Prepare the statement
+	sqlite3_prepare_debug(rc, sq3->db,
+			"SELECT DISTINCT srvtype,url FROM services order by srvtype,url",
+			-1, &stmt, NULL);
+	if (rc != SQLITE_OK)
+		return M1_SQLITE_GERROR(sq3->db, rc);
 
-    // Run the result
-    gpa = g_ptr_array_new();
-    while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
-            struct meta1_service_url_s *u;
+	// Run the result
+	gpa = g_ptr_array_new();
+	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
+		struct meta1_service_url_s *u;
+		u = g_malloc0(sizeof(struct meta1_service_url_s) +
+				1 + sqlite3_column_bytes(stmt, 3));
+		u->seq = 0;
+		g_strlcpy(u->srvtype, (gchar*)sqlite3_column_text(stmt, 0),
+				sizeof(u->srvtype));
+		g_strlcpy(u->host,    (gchar*)sqlite3_column_text(stmt, 1),
+				sizeof(u->host)-1);
+		u->args[0] = '\0';
+		g_ptr_array_add(gpa, u);
+	}
 
-            u = g_malloc0(sizeof(struct meta1_service_url_s) + 1 + sqlite3_column_bytes(stmt, 3));
-            u->seq = 0;
-            g_strlcpy(u->srvtype, (gchar*)sqlite3_column_text(stmt, 0), sizeof(u->srvtype));
-            g_strlcpy(u->host,    (gchar*)sqlite3_column_text(stmt, 1), sizeof(u->host)-1);
-            u->args[0] = '\0';
-            g_ptr_array_add(gpa, u);
-    }
+	if (rc != SQLITE_DONE && rc != SQLITE_OK)
+		err = M1_SQLITE_GERROR(sq3->db, rc);
 
-    if (rc != SQLITE_DONE && rc != SQLITE_OK)
-        err = M1_SQLITE_GERROR(sq3->db, rc);
+	sqlite3_finalize_debug(rc, stmt);
 
-    sqlite3_finalize_debug(rc, stmt);
+	if (err) {
+		gpa_str_free(gpa);
+		return err;
+	}
 
-    if (err) {
-        gpa_str_free(gpa);
-        return err;
-    }
-
-    g_ptr_array_add(gpa, NULL);
-    *result = (struct meta1_service_url_s**) g_ptr_array_free(gpa, FALSE);
-    return NULL;
+	g_ptr_array_add(gpa, NULL);
+	*result = (struct meta1_service_url_s**) g_ptr_array_free(gpa, FALSE);
+	return NULL;
 }
 
 static GError *
@@ -457,9 +463,9 @@ __locations_from_m1srvurl(struct meta1_service_url_s **urls)
 		struct meta1_service_url_s **extracted;
 		extracted = expand_url(*cursor);
 		addr_info_t ai = {{0}};
-		if (!grid_string_to_addrinfo((*extracted)->host, &ai))
-			GRID_WARN("Could not parse [%s] to addrinfo", (*cursor)->host);
-		else {
+		if (!grid_string_to_addrinfo((*extracted)->host, &ai)) {
+			GRID_WARN("Could not parse [%s] to addrinfo", (*extracted)->host);
+		} else {
 			oio_location_t loc = location_from_addr_info(&ai);
 			g_array_append_val(out, loc);
 		}
@@ -593,7 +599,7 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 	 * balancer to compare the location of linked service against the
 	 * location of the container owner. */
 	if (ct->req.k && !strcmp(ct->req.k, NAME_TAGNAME_USER_IS_SERVICE)
-			&& (!ct->req.v || !ct->req.v[0])) {
+			&& (!ct->req.v || oio_str_parse_bool(ct->req.v, FALSE))) {
 		oio_str_replace(&(ct->req.v), oio_url_get(url, OIOURL_USER));
 	}
 
@@ -896,8 +902,8 @@ GError *
 meta1_backend_services_all(struct meta1_backend_s *m1,
 		struct oio_url_s *url, gchar ***result)
 {
-    struct sqlx_sqlite3_s *sq3 = NULL;
-    GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERSLAVE, &sq3);
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERSLAVE, &sq3);
 	if (err) return err;
 
 	struct sqlx_repctx_s *repctx = NULL;
@@ -912,10 +918,10 @@ meta1_backend_services_all(struct meta1_backend_s *m1,
 			meta1_service_url_cleanv(used);
 		}
 		err = sqlx_transaction_end(repctx, err);
-    }
+	}
 
 	sqlx_repository_unlock_and_close_noerror(sq3);
-    return err;
+	return err;
 }
 
 GError *

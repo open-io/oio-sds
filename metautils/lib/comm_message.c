@@ -122,9 +122,9 @@ message_marshall_gba(MESSAGE m, GError **err)
 		reqid = oio_ext_get_reqid ();
 		metautils_message_set_ID(m, (guint8*)reqid, strlen(reqid));
 	}
-	const gboolean admin = oio_ext_is_admin();
+
 	metautils_message_add_field_strint(m, NAME_MSGKEY_ADMIN_COMMAND,
-					   admin?1:0);
+			oio_ext_is_admin());
 
 	/*try to encode */
 	guint32 u32 = 0;
