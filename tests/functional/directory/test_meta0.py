@@ -1,6 +1,20 @@
 from tests.utils import BaseTestCase
 from oio.directory.meta0 import PrefixMapping
 from oio.directory.meta0 import Meta0Client
+import mock
+
+
+NUMBER = 0
+
+
+def fake_random_sample(prefixes, length):
+    global NUMBER
+    if NUMBER != 2:
+        fake_sample = list(prefixes)[length*NUMBER: length*(NUMBER + 1)]
+    else:
+        fake_sample = list(prefixes)[0:length]
+    NUMBER += 1
+    return fake_sample
 
 
 class FakeConscienceClient(object):
@@ -34,6 +48,22 @@ class TestPrefixMapping(BaseTestCase):
         for count in n_pfx_by_svc.itervalues():
             self.assertIn(count, range(PrefixMapping.TOTAL_PREFIXES - 5000,
                                        PrefixMapping.TOTAL_PREFIXES + 5000))
+
+    def test_rebalance_no_losing_services(self):
+        nb = 3
+        self.cs_client.generate_services(nb)
+        mapping = PrefixMapping(self.m0_client, self.cs_client)
+        mapping.bootstrap()
+        mapping.services['127.0.0.1:6004'] = {"addr": "127.0.1.1:6%03d" % nb,
+                                              "score": 100,
+                                              "tags": {"tag.loc": None},
+                                              'prefixes': set([])}
+        with mock.patch('oio.directory.meta0.random.sample',
+                        fake_random_sample):
+            mapping.rebalance()
+        n_pfx_by_svc = mapping.count_pfx_by_svc()
+        for count in n_pfx_by_svc.itervalues():
+            self.assertNotEqual(0, count)
 
     def test_bootstrap_3_services_rebalanced(self):
         self.cs_client.generate_services(3)
