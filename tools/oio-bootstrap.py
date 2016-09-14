@@ -443,6 +443,8 @@ THREECOPIES=rawx3:DUPONETHREE
 17COPIES=rawx17:DUP17
 EC=NONE:EC
 BACKBLAZE=NONE:BACKBLAZE
+KINETIC_PLAIN=kine3:KINETIC_PLAIN
+KINETIC_EC=kine3:KINETIC_EC
 
 [DATA_SECURITY]
 # Data security definitions
@@ -466,6 +468,9 @@ EC=ec/k=6,m=3,algo=liberasurecode_rs_vand,distance=1
 # "liberasurecode_rs_vand" EC_BACKEND_LIBERASURECODE_RS_VAND
 
 BACKBLAZE=backblaze/account_id=${BACKBLAZE_ACCOUNT_ID},bucket_name=${BACKBLAZE_BUCKET_NAME},distance=0,nb_copy=1
+
+KINETIC_PLAIN=kplain/currently=0,unused=0,argument=0,sequence=0
+KINETIC_EC=kec/currently=0,unused=0,argument=0,sequence=0
 """
 
 template_credentials = """
@@ -507,6 +512,12 @@ targets=1,rdir
 
 [pool:account]
 targets=1,account
+
+[pool:kine1]
+targets=1,kine
+
+[pool:kine3]
+targets=3,kine
 
 [pool:fastrawx3]
 # Pick 3 SSD rawx, or any rawx if SSD is not available
@@ -580,6 +591,10 @@ score_timeout=120
 
 [type:account]
 score_expr=(num stat.cpu)
+score_timeout=120
+
+[type:kine]
+score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * ((num stat.temp) > 5) * root(4,((num stat.cpu)*(num stat.space)*(num stat.io)*(num stat.temp)))
 score_timeout=120
 
 [type:echo]
@@ -676,6 +691,7 @@ ${NOZK}zookeeper=${IP}:2181
 #proxy-local=${RUNDIR}/${NS}-proxy.sock
 proxy=${IP}:${PORT_PROXYD}
 ecd=${IP}:${PORT_ECD}
+kinetic=${IP}:${PORT_KINED}
 event-agent=beanstalk://127.0.0.1:11300
 #event-agent=ipc://${RUNDIR}/event-agent.sock
 conscience=${CS_ALL_PUB}
@@ -975,6 +991,7 @@ def generate(options):
 
     port_proxy = next_port()
     port_ecd = next_port()
+    port_kinetic_proxy = next_port()
 
     versioning = 1
     stgpol = "SINGLE"
@@ -1022,6 +1039,7 @@ def generate(options):
                STGPOL=stgpol,
                PORT_PROXYD=port_proxy,
                PORT_ECD=port_ecd,
+               PORT_KINED=port_kinetic_proxy,
                M2_REPLICAS=meta2_replicas,
                M2_DISTANCE=str(1),
                SQLX_REPLICAS=sqlx_replicas,
@@ -1232,6 +1250,10 @@ def generate(options):
     to_write = tpl.safe_substitute(env)
     with open(wsgi(env), 'w+') as f:
         f.write(to_write)
+
+    # kinetic proxy
+    env = subenv({'SRVTYPE': 'kined', 'SRVNUM': 1, 'PORT': port_kinetic_proxy})
+    add_service(env)
 
     # account
     env = subenv({'SRVTYPE': 'account', 'SRVNUM': 1, 'PORT': next_port()})

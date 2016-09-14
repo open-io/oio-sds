@@ -1,0 +1,5 @@
+storage_policy: "KINETIC_EC"
+chunk_size: 1048576
+redis: true
+rawx:
+  count: 1
