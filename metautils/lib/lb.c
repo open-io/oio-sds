@@ -96,18 +96,23 @@ oio_lb_world__reload_storage_policies(struct oio_lb_world_s *lbw,
 	}
 	void _make_pools(gpointer key, gpointer val UNUSED, gpointer udata UNUSED)
 	{
-		const char *stgpol_name = key;
-		struct storage_policy_s *stgpol = storage_policy_init(nsinfo,
-				stgpol_name);
-		const gchar *pool_name = storage_policy_get_service_pool(stgpol);
-		if (!oio_lb__has_pool(lb, pool_name)) {
-			struct oio_lb_pool_s *pool = \
+		const char *polname = key;
+		struct storage_policy_s *stgpol = storage_policy_init(nsinfo, polname);
+		if (!stgpol) {
+			GRID_DEBUG("Storage policy [%s] not found or invalid", polname);
+		} else {
+			const char *pool_name = storage_policy_get_service_pool(stgpol);
+			if (!pool_name) {
+				GRID_DEBUG("No pool configured for policy [%s]", polname);
+			} else if (!oio_lb__has_pool(lb, pool_name)) {
+				struct oio_lb_pool_s *pool =
 					oio_lb_pool__from_storage_policy(lbw, stgpol);
-			GRID_INFO("No service pool [%s] for storage policy [%s], "
-					"creating one", pool_name, stgpol_name);
-			oio_lb__force_pool(lb, pool);
+				GRID_INFO("No service pool [%s] for storage policy [%s], "
+						"creating one", pool_name, polname);
+				oio_lb__force_pool(lb, pool);
+			}
+			storage_policy_clean(stgpol);
 		}
-		storage_policy_clean(stgpol);
 	}
 
 	g_hash_table_foreach(nsinfo->storage_policy, _make_pools, NULL);
