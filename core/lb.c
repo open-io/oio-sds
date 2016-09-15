@@ -1000,6 +1000,7 @@ oio_lb__force_pool(struct oio_lb_s *lb, struct oio_lb_pool_s *pool)
 gboolean
 oio_lb__has_pool(struct oio_lb_s *lb, const char *name)
 {
+	EXTRA_ASSERT(name != NULL);
 	gboolean res = FALSE;
 	g_rw_lock_reader_lock(&lb->lock);
 	res = (g_hash_table_lookup(lb->pools, name) != NULL);
@@ -1011,6 +1012,7 @@ guint
 oio_lb__poll_pool(struct oio_lb_s *lb, const char *name,
 		const oio_location_t * avoids, oio_lb_on_id_f on_id)
 {
+	EXTRA_ASSERT(name != NULL);
 	guint res = 0;
 	g_rw_lock_reader_lock(&lb->lock);
 	struct oio_lb_pool_s *pool = g_hash_table_lookup(lb->pools, name);
@@ -1025,6 +1027,7 @@ oio_lb__patch_with_pool(struct oio_lb_s *lb, const char *name,
 		const oio_location_t *avoids, const oio_location_t *known,
 		oio_lb_on_id_f on_id)
 {
+	EXTRA_ASSERT(name != NULL);
 	guint res = 0;
 	g_rw_lock_reader_lock(&lb->lock);
 	struct oio_lb_pool_s *pool = g_hash_table_lookup(lb->pools, name);
@@ -1038,6 +1041,7 @@ struct oio_lb_item_s *
 oio_lb__get_item_from_pool(struct oio_lb_s *lb, const char *name,
 		const char *id)
 {
+	EXTRA_ASSERT(name != NULL);
 	struct oio_lb_item_s *res = NULL;
 	g_rw_lock_reader_lock(&lb->lock);
 	struct oio_lb_pool_s *pool = g_hash_table_lookup(lb->pools, name);
