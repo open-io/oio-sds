@@ -30,7 +30,7 @@ static gboolean _is_none(const gchar *s) {
 }
 
 static gboolean _is_plain(const gchar *s) {
-	return _is_none(s) || !g_ascii_strcasecmp(s, STGPOL_DSPREFIX_PLAIN);
+	return _is_none(s) || !g_ascii_strcasecmp(s, STGPOL_DSPREFIX_RAWX_PLAIN);
 }
 
 /* Destructors ------------------------------------------------------------- */
@@ -69,8 +69,8 @@ static struct data_security_s *
 _dummy_datasec(void)
 {
 	struct data_security_s *result = g_malloc0(sizeof(struct data_security_s));
-	result->name = g_strdup(STGPOL_DSPREFIX_PLAIN);
-	result->type = STGPOL_DS_PLAIN;
+	result->name = g_strdup(STGPOL_DSPREFIX_RAWX_PLAIN);
+	result->type = STGPOL_DS_RAWX_PLAIN;
 	result->params = _params();
 	return result;
 }
@@ -110,15 +110,25 @@ __fill_info(GHashTable *params, const char *info)
 static int
 _parse_data_security(struct data_security_s *ds, const char *config)
 {
-	if (oio_str_prefixed (config, STGPOL_DSPREFIX_PLAIN, "/")) {
-		ds->type = STGPOL_DS_PLAIN;
-	} else if (oio_str_prefixed (config, "ec", "/")) {
-		ds->type = STGPOL_DS_EC;
-	} else if (oio_str_prefixed (config, "backblaze", "/")) {
-		ds->type = STGPOL_DS_BACKBLAZE;
-	} else {
-		return 0;
+#define MAP(S) {STGPOL_DSPREFIX_##S, STGPOL_DS_##S}
+	struct map_s { const char *prefix; enum data_security_e value; };
+	static const struct map_s map[] = {
+		MAP(BACKBLAZE),
+		MAP(RAWX_PLAIN),
+		MAP(RAWX_EC),
+		MAP(KINE_PLAIN),
+		MAP(KINE_EC),
+		{NULL,0}
+	};
+	gboolean done = FALSE;
+	for (const struct map_s *p=map; p->prefix && !done ;++p) {
+		if (oio_str_prefixed (config, p->prefix, "/")) {
+			ds->type = p->value;
+			done = TRUE;
+		}
 	}
+	if (!done)
+		return 0;
 
 	gchar **tok = g_strsplit(config, "/", 2);
 	if (tok[1])
@@ -151,7 +161,7 @@ _load_data_security(namespace_info_t *ni, const gchar *key)
 
 	struct data_security_s *ds = g_malloc0(sizeof(struct data_security_s));
 	ds->name = g_strdup(key);
-	ds->type = STGPOL_DS_PLAIN;
+	ds->type = STGPOL_DS_RAWX_PLAIN;
 	ds->params = _params();
 
 	int rc = _parse_data_security(ds, config);
@@ -162,7 +172,7 @@ _load_data_security(namespace_info_t *ni, const gchar *key)
 	return NULL;
 }
 
-static int
+static gboolean
 _load_storage_policy(struct storage_policy_s *sp, GByteArray *gba,
 		namespace_info_t *ni)
 {
@@ -171,8 +181,8 @@ _load_storage_policy(struct storage_policy_s *sp, GByteArray *gba,
 	g_free(str);
 
 	if (!tok)
-		return 0;
-	int rc = (2 == g_strv_length(tok))
+		return FALSE;
+	gboolean rc = (tok[0] && tok[1] && !tok[2])
 		&& NULL != (sp->service_pool = _load_service_pool(sp->name, tok[0]))
 		&& NULL != (sp->datasec = _load_data_security(ni, tok[1]));
 	g_strfreev(tok);
@@ -187,18 +197,11 @@ storage_policy_init(namespace_info_t *ni, const char *name)
 	if (!ni)
 		return NULL;
 
-	GByteArray *gba = NULL;
 	struct storage_policy_s *sp = g_malloc0(sizeof(struct storage_policy_s));
 	sp->name = g_strdup(name);
 
-	gba = g_hash_table_lookup(ni->storage_policy, name);
-	if (gba == NULL) {
-		/* set dirty flag, don't allow any getter */
-		storage_policy_clean(sp);
-		return NULL;
-	}
-	if (!_load_storage_policy(sp, gba, ni)) {
-		/* set dirty flag, don't allow any getter */
+	GByteArray *gba = g_hash_table_lookup(ni->storage_policy, name);
+	if (NULL == gba || !_load_storage_policy(sp, gba, ni)) {
 		storage_policy_clean(sp);
 		return NULL;
 	}
@@ -281,7 +284,7 @@ storage_policy_get_service_pool(const struct storage_policy_s *sp)
 enum data_security_e
 data_security_get_type(const struct data_security_s *ds)
 {
-	return (NULL != ds) ? ds->type : STGPOL_DS_PLAIN;
+	return (NULL != ds) ? ds->type : STGPOL_DS_RAWX_PLAIN;
 }
 
 const char *
@@ -309,7 +312,7 @@ data_security_get_int64_param(const struct data_security_s *ds, const char *key,
 }
 
 static GString *
-_rain_policy_to_chunk_method(const struct data_security_s *datasec)
+_rex_policy_to_chunk_method(const struct data_security_s *datasec)
 {
 	GString *result = g_string_new("ec/");
 
@@ -324,9 +327,40 @@ _rain_policy_to_chunk_method(const struct data_security_s *datasec)
 }
 
 static GString *
+_kplain_policy_to_chunk_method(const struct data_security_s *datasec)
+{
+	GString *result = g_string_new(STGPOL_DSPREFIX_KINE_PLAIN "/");
+
+	const gint64 nb_copy = data_security_get_int64_param(datasec, DS_KEY_COPY_COUNT, 1);
+	g_string_append_printf(result,
+			"nb_copy=%" G_GINT64_FORMAT"", nb_copy);
+
+	return result;
+}
+
+static GString *
+_kec_policy_to_chunk_method(const struct data_security_s *datasec)
+{
+	GString *result = g_string_new(STGPOL_DSPREFIX_KINE_EC "/");
+
+	const gint64 nb_copy = data_security_get_int64_param(datasec, DS_KEY_COPY_COUNT, 1);
+	g_string_append_printf(result,
+			"nb_copy=%" G_GINT64_FORMAT"", nb_copy);
+
+	const gint64 k = data_security_get_int64_param(datasec, DS_KEY_K, 6);
+	const gint64 m = data_security_get_int64_param(datasec, DS_KEY_M, 4);
+	const char *algo = data_security_get_param(datasec, DS_KEY_ALGO);
+
+	g_string_append_printf(result,
+			"algo=%s,k=%" G_GINT64_FORMAT",m=%" G_GINT64_FORMAT, algo, k, m);
+
+	return result;
+}
+
+static GString *
 _backblaze_policy_to_chunk_method(const struct data_security_s *datasec)
 {
-	GString *result = g_string_new("backblaze/");
+	GString *result = g_string_new(STGPOL_DSPREFIX_BACKBLAZE "/");
 
 	const char *account_id = data_security_get_param(datasec,
 							 DS_KEY_ACCOUNT_ID);
@@ -339,7 +373,7 @@ _backblaze_policy_to_chunk_method(const struct data_security_s *datasec)
 }
 
 static GString *
-_plain_policy_to_chunk_method(const struct data_security_s *datasec)
+_rplain_policy_to_chunk_method(const struct data_security_s *datasec)
 {
 	GString *result = g_string_new("plain/");
 	const gint64 nb_copy = data_security_get_int64_param(datasec, DS_KEY_COPY_COUNT, 1);
@@ -353,12 +387,16 @@ storage_policy_to_chunk_method(const struct storage_policy_s *sp)
 {
 	const struct data_security_s *datasec = storage_policy_get_data_security(sp);
 	switch (data_security_get_type(datasec)) {
-		case STGPOL_DS_EC:
-			return _rain_policy_to_chunk_method(datasec);
 		case STGPOL_DS_BACKBLAZE:
 			return _backblaze_policy_to_chunk_method(datasec);
-		case STGPOL_DS_PLAIN:
-			return _plain_policy_to_chunk_method(datasec);
+		case STGPOL_DS_RAWX_PLAIN:
+			return _rplain_policy_to_chunk_method(datasec);
+		case STGPOL_DS_RAWX_EC:
+			return _rex_policy_to_chunk_method(datasec);
+		case STGPOL_DS_KINE_PLAIN:
+			return _kplain_policy_to_chunk_method(datasec);
+		case STGPOL_DS_KINE_EC:
+			return _kec_policy_to_chunk_method(datasec);
 		default:
 			g_assert_not_reached();
 	}
@@ -369,10 +407,12 @@ storage_policy_get_nb_chunks(const struct storage_policy_s *sp)
 {
 	const struct data_security_s *dsec = storage_policy_get_data_security(sp);
 	switch (data_security_get_type(dsec)) {
-		case STGPOL_DS_EC:
+		case STGPOL_DS_BACKBLAZE:
+			return 1;
+		case STGPOL_DS_RAWX_EC:
+		case STGPOL_DS_KINE_EC:
 			return (data_security_get_int64_param(dsec, DS_KEY_K, 6)
 					+ data_security_get_int64_param(dsec, DS_KEY_M, 4));
-		case STGPOL_DS_PLAIN:
 		default:
 			return data_security_get_int64_param(dsec, DS_KEY_COPY_COUNT, 1);
 	}

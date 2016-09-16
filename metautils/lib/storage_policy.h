@@ -32,15 +32,20 @@ License along with this library.
 #define STORAGE_POLICY_NONE "NONE"
 #define DATA_SECURITY_NONE "NONE"
 
-#define STGPOL_DSPREFIX_PLAIN "plain"
-#define STGPOL_DSPREFIX_EC "ec"
 #define STGPOL_DSPREFIX_BACKBLAZE "backblaze"
+#define STGPOL_DSPREFIX_RAWX_PLAIN "plain"
+#define STGPOL_DSPREFIX_RAWX_EC    "ec"
+#define STGPOL_DSPREFIX_KINE_PLAIN "kplain"
+#define STGPOL_DSPREFIX_KINE_EC    "kec"
 
 enum data_security_e
 {
-	STGPOL_DS_PLAIN,
-	STGPOL_DS_EC,
-	STGPOL_DS_BACKBLAZE
+	/* TODO should we accept the 0 (a.k.a. not set) mapped on a real value? */
+	STGPOL_DS_RAWX_PLAIN = 0,
+	STGPOL_DS_RAWX_EC,
+	STGPOL_DS_KINE_PLAIN,
+	STGPOL_DS_KINE_EC,
+	STGPOL_DS_BACKBLAZE,
 };
 
 /** Forward declarations */

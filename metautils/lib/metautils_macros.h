@@ -30,6 +30,7 @@ License along with this library.
 # define NAME_SRVTYPE_META1 "meta1"
 # define NAME_SRVTYPE_META2 "meta2"
 # define NAME_SRVTYPE_RAWX  "rawx"
+# define NAME_SRVTYPE_KINE  "kine"
 # define NAME_SRVTYPE_SQLX  "sqlx"
 # define NAME_SRVTYPE_RDIR  "rdir"
 
