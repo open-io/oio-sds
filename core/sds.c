@@ -47,6 +47,7 @@ struct oio_sds_s
 	gchar *proxy;
 	gchar *proxy_local;
 	gchar *ecd;  // Erasure Coding Daemon
+	gchar *kined;  // Kinetic Drives proxy Daemon
 	struct {
 		int proxy;
 		int rawx;
@@ -280,7 +281,14 @@ static int
 _chunk_method_needs_ecd(const char *chunk_method)
 {
 	return oio_str_prefixed(chunk_method, STGPOL_DSPREFIX_BACKBLAZE, "/") ||
-			oio_str_prefixed(chunk_method, STGPOL_DSPREFIX_EC, "/");
+			oio_str_prefixed(chunk_method, STGPOL_DSPREFIX_RAWX_EC, "/");
+}
+
+static int
+_chunk_method_needs_kined(const char *chunk_method)
+{
+	return oio_str_prefixed(chunk_method, STGPOL_DSPREFIX_KINE_PLAIN, "/") ||
+			oio_str_prefixed(chunk_method, STGPOL_DSPREFIX_KINE_EC, "/");
 }
 
 static guint
@@ -352,6 +360,41 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result,
 
 	*result = out;
 	return NULL;
+}
+
+static gchar *
+_kinetic_url_extract_chunkid(const char *url)
+{
+	const char *sep;
+	if (!oio_str_is_set(url) || !(sep = strchr(url, '/')))
+		return NULL;
+	if (!oio_str_ishexa1(sep+1))
+		return NULL;
+	return g_strdup(sep+1);
+}
+
+static gchar *
+_kinetic_url_extract_address(const char *url)
+{
+	const char *sep;
+	if (!oio_str_is_set(url) || !(sep = strchr(url, '/')))
+		return NULL;
+
+	const size_t len = sep - url;
+	/* TODO need a macro with the maximum hostname length */
+	if (!len || len > 512)
+		return NULL;
+	gchar *tmp = g_strndup(url, len);
+	/*
+	// TODO it would be nice to check the URL is valid but the code below
+	// would require the use of metautils, then using WL's copyright.
+	// and we want to avoid this.
+	if (metautils_url_valid_for_connect(tmp)) {
+		g_free(tmp);
+		return NULL;
+	}
+	*/
+	return tmp;
 }
 
 /* Logging helpers ---------------------------------------------------------- */
@@ -436,6 +479,7 @@ oio_sds_init (struct oio_sds_s **out, const char *ns)
 	(*out)->proxy_local = oio_cfg_get_proxylocal (ns);
 	(*out)->proxy = oio_cfg_get_proxy_containers (ns);
 	(*out)->ecd = oio_cfg_get_ecd(ns);
+	(*out)->kined = oio_cfg_get_kinetic(ns);
 	(*out)->sync_after_download = TRUE;
 	(*out)->no_shuffle = oio_sds_no_shuffle;
 	(*out)->admin = FALSE;
@@ -452,6 +496,7 @@ oio_sds_free (struct oio_sds_s *sds)
 	oio_str_clean (&sds->proxy);
 	oio_str_clean (&sds->proxy_local);
 	oio_str_clean(&sds->ecd);
+	oio_str_clean(&sds->kined);
 	if (sds->h)
 		curl_easy_cleanup (sds->h);
 	SLICE_FREE (struct oio_sds_s, sds);
@@ -751,6 +796,59 @@ _download_range_from_metachunk_replicated (struct _download_ctx_s *dl,
 }
 
 static GError *
+_download_range_from_metachunk_kine(struct _download_ctx_s *dl,
+		const struct oio_sds_dl_range_s *range, struct metachunk_s *meta)
+{
+	GRID_TRACE("%s", __FUNCTION__);
+
+	GError *err = NULL;
+	char url[128] = {0};
+	struct oio_sds_dl_range_s r0 = *range;
+
+	/* The kinetic proxy want to the chunk_id in the URL and only the
+	 * addresses in the headers. The same chunk-id is used as a prefix
+	 * on each device. */
+	struct chunk_s *first_chunk = meta->chunks->data;
+	gchar *last_slash = strrchr(first_chunk->url, '/');
+	g_snprintf(url, sizeof(url), "http://%s/kinetic/v1/%s", dl->sds->kined, last_slash+1);
+
+	/* Tell the kinetic proxy the URL of the devices, but only the URL */
+	GPtrArray *headers = g_ptr_array_new_with_free_func(g_free);
+	for (GSList *l = meta->chunks; l; l = l->next) {
+		struct chunk_s *chunk = l->data;
+		g_ptr_array_add(headers, g_strdup("X-oio-target"));
+		g_ptr_array_add(headers, _kinetic_url_extract_address(chunk->url));
+		GRID_WARN("%s target %s", __FUNCTION__, chunk->url);
+	}
+	g_ptr_array_add (headers, NULL);
+
+	while (r0.size > 0 && !err) {
+		GRID_TRACE("%s at %"G_GSIZE_FORMAT"+%"G_GSIZE_FORMAT,
+				__FUNCTION__, r0.offset, r0.size);
+
+		/* Attempt a read */
+		size_t nbread = 0;
+		err = _download_range_from_chunk(dl, range, url,
+				(const char**)headers->pdata, &nbread);
+		EXTRA_ASSERT (nbread <= r0.size);
+		if (err) {
+			/* TODO manage the error kind to allow a retry */
+		} else {
+			dl->dst->out_size += nbread;
+			if (r0.size == G_MAXSIZE) {
+				r0.size = 0;
+			} else {
+				r0.offset += nbread;
+				r0.size -= nbread;
+			}
+		}
+	}
+
+	g_ptr_array_free(headers, TRUE);
+	return err;
+}
+
+static GError *
 _download_range_from_metachunk_ec(struct _download_ctx_s *dl,
 		const struct oio_sds_dl_range_s *range, struct metachunk_s *meta)
 {
@@ -824,6 +922,8 @@ _download_range_from_metachunk (struct _download_ctx_s *dl,
 
 	if (_chunk_method_needs_ecd(dl->chunk_method))
 		return _download_range_from_metachunk_ec(dl, range, meta);
+	if (_chunk_method_needs_kined(dl->chunk_method))
+		return _download_range_from_metachunk_kine(dl, range, meta);
 	return _download_range_from_metachunk_replicated (dl, range, meta);
 }
 
@@ -1237,10 +1337,44 @@ oio_sds_upload_greedy (struct oio_sds_ul_s *ul)
 	return NULL != ul && !ul->finished && ul->ready_for_data;
 }
 
-int
+static int
 oio_sds_upload_needs_ecd(struct oio_sds_ul_s *ul)
 {
 	return _chunk_method_needs_ecd(ul->chunk_method);
+}
+
+static int
+oio_sds_upload_needs_kined(struct oio_sds_ul_s *ul)
+{
+	return _chunk_method_needs_kined(ul->chunk_method);
+}
+
+static GError *
+_validate_kinetic_metachunk (struct metachunk_s *mc)
+{
+	GSList *first = mc->chunks;
+	if (!first)
+		return SYSERR("meta2 answered invalid Kinetic URL: %s", "no chunk");
+
+	struct chunk_s *first_chunk = first->data;
+	if (!first_chunk)
+		return SYSERR("meta2 answered invalid Kinetic URL: %s", "empty metachunk");
+
+	GError *err = NULL;
+	gchar *first_id = _kinetic_url_extract_chunkid(first_chunk->url);
+	for (GSList *l=first->next; l && !err ;l=l->next) {
+		struct chunk_s *chunk = l->data;
+		gchar *current_id = _kinetic_url_extract_chunkid (chunk->url);
+		if (!current_id) {
+			err = SYSERR("meta2 answered invalid Kinetic URL: %s", "no chunkid");
+		} else {
+			if (0 != strcmp(current_id, first_id))
+				err = SYSERR("meta2 answered invalid Kinetic URL: %s", "several chunkid");
+			g_free(current_id);
+		}
+	}
+	g_free(first_id);
+	return err;
 }
 
 struct oio_error_s *
@@ -1320,6 +1454,14 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 						"cannot upload this without ecd");
 			}
 		}
+		if (oio_sds_upload_needs_kined(ul)) {
+			if (oio_str_is_set(ul->sds->kined)) {
+				GRID_DEBUG("using kinetic proxy");
+			} else {
+				err = NEWERROR(CODE_NOT_IMPLEMENTED,
+						"cannot upload this without kinetic proxy");
+			}
+		}
 	}
 
 	/* Organize the set of chunks into metachunks. */
@@ -1327,9 +1469,22 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 		struct metachunk_s **out = NULL;
 		if ((err = _organize_chunks (ul->chunks, &out, ul->sds->no_shuffle)))
 			g_prefix_error (&err, "Logic: ");
-		else
-			for (struct metachunk_s **p = out; *p; ++p)
-				g_queue_push_tail (ul->metachunk_ready, *p);
+		else {
+			/* Special kinetic check: all the chunks must have the same
+			 * chunkid (the tail of the URL) */
+			if (oio_sds_upload_needs_kined(ul)) {
+				for (struct metachunk_s **p = out; *p && !err; ++p) {
+					err = _validate_kinetic_metachunk (*p);
+				}
+			}
+
+			if (!err) {
+				for (struct metachunk_s **p = out; *p ; ++p) {
+					g_queue_push_tail (ul->metachunk_ready, *p);
+				}
+			}
+		}
+
 		if (out)
 			g_free(out);
 	}
@@ -1445,6 +1600,89 @@ _sds_upload_add_headers(struct oio_sds_ul_s *ul, struct http_put_dest_s *dest)
 			"%s", ul->mime_type);
 }
 
+static void
+_sds_upload_create_rawx_upload (struct oio_sds_ul_s *ul)
+{
+	/* Sanity check on the chunk url, to avoid failing miserably */
+	for (GSList *l=ul->mc->chunks; l ;l=l->next) {
+		const struct chunk_s *c = l->data;
+		if (!strrchr(c->url, '/')) {
+			GRID_WARN("Invalid chunk found, bad URL format for [%s]", c->url);
+			return;
+		}
+	}
+
+	/* Initiate the PolyPut (c) with all its targets */
+	for (GSList *l=ul->mc->chunks; l ;l=l->next) {
+		struct chunk_s *c = l->data;
+		const char * chunkid = strrchr(c->url, '/') + 1;
+
+		struct http_put_dest_s *dest = http_put_add_dest (ul->put, c->url, c);
+
+		_sds_upload_add_headers(ul, dest);
+
+		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-id",
+				"%s", chunkid);
+
+		gchar strpos[32];
+		_chunk_pack_position (c, strpos, sizeof(strpos));
+		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-pos",
+				"%s", strpos);
+
+		ul->http_dests = g_slist_append (ul->http_dests, dest);
+	}
+}
+
+static void
+_sds_upload_create_kined_upload (struct oio_sds_ul_s *ul)
+{
+	/* TODO: allow getting the kinetic proxy from proxy */
+
+	char kined[128] = {0};
+	struct chunk_s *first_chunk = ul->mc->chunks->data;
+	gchar *last_slash = strrchr(first_chunk->url, '/');
+	g_snprintf(kined, sizeof(kined), "http://%s/kinetic/v1/%s", ul->sds->kined, last_slash+1);
+
+	struct http_put_dest_s *dest = http_put_add_dest(ul->put, kined, ul->mc);
+	_sds_upload_add_headers(ul, dest);
+	int chunks_nb = 0;
+	for (GSList *l = ul->mc->chunks; l; l = l->next, chunks_nb++) {
+		struct chunk_s *chunk = l->data;
+		gchar *url = _kinetic_url_extract_address(chunk->url);
+		http_put_dest_add_header(dest, "X-oio-target", "%s", url);
+	}
+	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunks-nb",
+			"%d", chunks_nb);
+	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-pos",
+			"%u", ul->mc->meta);
+	ul->http_dests = g_slist_append (ul->http_dests, dest);
+}
+
+static void
+_sds_upload_create_ecd_upload (struct oio_sds_ul_s *ul)
+{
+	/* TODO: allow getting ecd from proxy */
+
+	char ecd[128] = {0};
+	g_snprintf(ecd, sizeof(ecd), "http://%s/", ul->sds->ecd);
+
+	struct http_put_dest_s *dest = http_put_add_dest(ul->put, ecd, ul->mc);
+	_sds_upload_add_headers(ul, dest);
+	int chunks_nb = 0;
+	for (GSList *l = ul->mc->chunks; l; l = l->next, chunks_nb++) {
+		struct chunk_s *chunk = l->data;
+		char key[64] = {0};
+		g_snprintf(key, sizeof(key), "%s%s-%u",
+				RAWX_HEADER_PREFIX, "chunk", chunk->position.intra);
+		http_put_dest_add_header(dest, key, "%s", chunk->url);
+	}
+	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunks-nb",
+			"%d", chunks_nb);
+	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-pos",
+			"%u", ul->mc->meta);
+	ul->http_dests = g_slist_append (ul->http_dests, dest);
+}
+
 static GError *
 _sds_upload_renew (struct oio_sds_ul_s *ul)
 {
@@ -1487,45 +1725,16 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 		c->position.meta = ul->mc->meta;
 	}
 
-	/* Initiate the PolyPut (c) with all its targets */
+	/* prepare the upload */
 	ul->put = http_put_create (-1, ul->chunk_size);
 	if (oio_sds_upload_needs_ecd(ul)) {
-		// TODO: allow getting ecd from proxy
-		char ecd[128] = {0};
-		g_snprintf(ecd, sizeof(ecd), "http://%s/", ul->sds->ecd);
-		struct http_put_dest_s *dest = http_put_add_dest(ul->put, ecd, ul->mc);
-		_sds_upload_add_headers(ul, dest);
-		int chunks_nb = 0;
-		for (GSList *l = ul->mc->chunks; l; l = l->next, chunks_nb++) {
-			struct chunk_s *chunk = l->data;
-			char key[64] = {0};
-			g_snprintf(key, sizeof(key), "%s%s-%u",
-					RAWX_HEADER_PREFIX, "chunk", chunk->position.intra);
-			http_put_dest_add_header(dest, key, "%s", chunk->url);
-		}
-		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunks-nb",
-				"%d", chunks_nb);
-		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-pos",
-				"%u", ul->mc->meta);
-		ul->http_dests = g_slist_append (ul->http_dests, dest);
+		_sds_upload_create_ecd_upload (ul);
+	} else if (oio_sds_upload_needs_kined(ul)) {
+		_sds_upload_create_kined_upload (ul);
 	} else {
-		for (GSList *l=ul->mc->chunks; l ;l=l->next) {
-			struct chunk_s *c = l->data;
-			struct http_put_dest_s *dest = http_put_add_dest (ul->put, c->url, c);
-
-			_sds_upload_add_headers(ul, dest);
-
-			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-id",
-					"%s", strrchr(c->url, '/')+1);
-
-			gchar strpos[32];
-			_chunk_pack_position (c, strpos, sizeof(strpos));
-			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-pos",
-					"%s", strpos);
-
-			ul->http_dests = g_slist_append (ul->http_dests, dest);
-		}
+		_sds_upload_create_rawx_upload (ul);
 	}
+	/* TODO check there is at least one target registered */
 
 	ul->checksum_chunk = g_checksum_new (G_CHECKSUM_MD5);
 	GRID_TRACE("%s (%p) upload ready!", __FUNCTION__, ul);

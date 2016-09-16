@@ -312,10 +312,6 @@ int oio_sds_upload_greedy (struct oio_sds_ul_s *ul);
 /* Tells if the upload is ready to be (in)validated */
 int oio_sds_upload_done (struct oio_sds_ul_s *ul);
 
-/* Tells if the upload will need a data-daemon aside.
- * TODO rename to be more generic (not only EC requires side daemon) */
-int oio_sds_upload_needs_ecd(struct oio_sds_ul_s *ul);
-
 void oio_sds_upload_clean (struct oio_sds_ul_s *ul);
 
 /* "Male" upload API
