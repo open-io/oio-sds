@@ -274,6 +274,13 @@ class ListObject(lister.Lister):
     def get_parser(self, prog_name):
         parser = super(ListObject, self).get_parser(prog_name)
         parser.add_argument(
+            '--full',
+            dest='full_listing',
+            default=False,
+            help='Full listing',
+            action="store_true"
+        )
+        parser.add_argument(
             'container',
             metavar='<container>',
             help='Container to list'
@@ -310,15 +317,37 @@ class ListObject(lister.Lister):
 
         container = parsed_args.container
 
-        resp = self.app.client_manager.storage.object_list(
-            self.app.client_manager.get_account(),
-            container,
-            limit=parsed_args.limit,
-            marker=parsed_args.marker,
-            end_marker=parsed_args.end_marker,
-            prefix=parsed_args.prefix,
-            delimiter=parsed_args.delimiter
-        )
+        kwargs = {}
+        if parsed_args.prefix:
+            kwargs['prefix'] = parsed_args.prefix
+        if parsed_args.marker:
+            kwargs['marker'] = parsed_args.marker
+        if parsed_args.end_marker:
+            kwargs['end_marker'] = parsed_args.end_marker
+        if parsed_args.delimiter:
+            kwargs['delimiter'] = parsed_args.delimiter
+        if parsed_args.limit:
+            kwargs['limit'] = parsed_args.limit
+
+        account = self.app.client_manager.get_account()
+
+        if parsed_args.full_listing:
+            resp = self.app.client_manager.storage.object_list(
+                account, container, **kwargs)
+            listing = resp['objects']
+            while listing:
+                if not parsed_args.delimiter:
+                    marker = listing[-1]['name']
+                else:
+                    marker = listing[-1].get('name')
+                kwargs['marker'] = marker
+                listing = self.app.client_manager.storage.object_list(
+                    account, container, **kwargs)
+                if listing:
+                    resp[1].extend(listing)
+        else:
+            resp = self.app.client_manager.storage.object_list(
+                account, container, **kwargs)
         l = resp['objects']
         results = ((obj['name'], obj['size'], obj['hash']) for obj in l)
         columns = ('Name', 'Size', 'Hash')
