@@ -205,21 +205,29 @@ class ListContainer(lister.Lister):
 
         account = self.app.client_manager.get_account()
 
+        columns = ('Name', 'Bytes', 'Count')
+
         if parsed_args.full_listing:
-            l, meta = self.app.client_manager.storage.container_list(
-                account, **kwargs)
-            listing = l
-            while listing:
-                kwargs['marker'] = listing[-1][0]
-                listing, meta = self.app.client_manager.storage.container_list(
+            def full_list():
+                l, meta = self.app.client_manager.storage.container_list(
                     account, **kwargs)
-                if listing:
-                    l.extend(listing)
+                listing = l
+                for e in l:
+                    yield e
+
+                while listing:
+                    kwargs['marker'] = listing[-1][0]
+                    listing, meta = \
+                        self.app.client_manager.storage.container_list(
+                            account, **kwargs)
+                    if listing:
+                        for e in listing:
+                            yield e
+
+            l = full_list()
         else:
             l, meta = self.app.client_manager.storage.container_list(
                 account, **kwargs)
-
-        columns = ('Name', 'Bytes', 'Count')
 
         results = ((v[0], v[2], v[1]) for v in l)
         return columns, results

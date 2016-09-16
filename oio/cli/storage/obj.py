@@ -7,6 +7,7 @@ from cliff import lister
 from cliff import show
 
 from oio.cli.utils import KeyValueAction
+from oio.common.utils import Timestamp
 
 
 class CreateObject(lister.Lister):
@@ -281,6 +282,13 @@ class ListObject(lister.Lister):
             action="store_true"
         )
         parser.add_argument(
+            '--long',
+            dest='long_listing',
+            default=False,
+            help='Long listing',
+            action="store_true"
+        )
+        parser.add_argument(
             'container',
             metavar='<container>',
             help='Container to list'
@@ -332,25 +340,38 @@ class ListObject(lister.Lister):
         account = self.app.client_manager.get_account()
 
         if parsed_args.full_listing:
-            resp = self.app.client_manager.storage.object_list(
-                account, container, **kwargs)
-            listing = resp['objects']
-            while listing:
-                if not parsed_args.delimiter:
-                    marker = listing[-1]['name']
-                else:
-                    marker = listing[-1].get('name')
-                kwargs['marker'] = marker
-                listing = self.app.client_manager.storage.object_list(
+            def full_list():
+                resp = self.app.client_manager.storage.object_list(
                     account, container, **kwargs)
-                if listing:
-                    resp[1].extend(listing)
+                listing = resp['objects']
+                for e in listing:
+                    yield e
+
+                while listing:
+                    if not parsed_args.delimiter:
+                        marker = listing[-1]['name']
+                    else:
+                        marker = listing[-1].get('name')
+                    kwargs['marker'] = marker
+                    listing = self.app.client_manager.storage.object_list(
+                        account, container, **kwargs)['objects']
+                    if listing:
+                        for e in listing:
+                            yield e
+            l = full_list()
         else:
             resp = self.app.client_manager.storage.object_list(
                 account, container, **kwargs)
-        l = resp['objects']
-        results = ((obj['name'], obj['size'], obj['hash']) for obj in l)
-        columns = ('Name', 'Size', 'Hash')
+            l = resp['objects']
+        if parsed_args.long_listing:
+            results = (
+                (obj['name'], obj['size'], obj['hash'], obj['mime-type'],
+                 Timestamp(obj['ctime']).isoformat)
+                for obj in l)
+            columns = ('Name', 'Size', 'Hash', 'Content-Type', 'Last-Modified')
+        else:
+            results = ((obj['name'], obj['size'], obj['hash']) for obj in l)
+            columns = ('Name', 'Size', 'Hash')
         return (columns, results)
 
 
