@@ -59,8 +59,10 @@ _task_reload_m2_lb(gpointer p)
 	oio_lb_world__reload_pools(PSRV(p)->lb_world, PSRV(p)->lb,
 			PSRV(p)->nsinfo);
 
-	/* In meta2, we are only interrested in rawx services */
-	GSList *svctypes = g_slist_prepend(NULL, NAME_SRVTYPE_RAWX);
+	/* In meta2, we are only interrested in rawx and kinetic services */
+	GSList *svctypes = NULL;
+	svctypes = g_slist_prepend(svctypes, NAME_SRVTYPE_RAWX);
+	svctypes = g_slist_prepend(svctypes, NAME_SRVTYPE_KINE);
 	GError *err = sqlx_reload_lb_service_types(PSRV(p)->lb_world, PSRV(p)->lb,
 			svctypes);
 	if (err) {
