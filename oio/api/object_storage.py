@@ -32,6 +32,8 @@ from oio.api.replication import ReplicatedWriteHandler
 from oio.api.backblaze_http import BackblazeUtilsException, BackblazeUtils
 from oio.api.backblaze import BackblazeWriteHandler, \
     BackblazeChunkDownloadHandler
+from oio.api.kinetic import KineticWriteHandler, \
+    KineticChunkDownloadHandler
 from oio.common import constants
 from oio.common import utils
 from oio.common.http import http_header_from_ranges
@@ -421,6 +423,9 @@ class ObjectStorageAPI(API):
         if storage_method.ec:
             stream = self._fetch_stream_ec(meta, chunks, ranges,
                                            storage_method, headers)
+        elif storage_method.kinetic:
+            stream = self._fetch_stream_kinetic(meta, chunks, ranges,
+                                                storage_method)
         elif storage_method.backblaze:
             stream = self._fetch_stream_backblaze(meta, chunks, ranges,
                                                   storage_method, key_file)
@@ -572,6 +577,10 @@ class ObjectStorageAPI(API):
         if storage_method.ec:
             handler = ECWriteHandler(source, sysmeta, chunk_prep,
                                      storage_method, headers=headers)
+        elif storage_method.kinetic:
+            handler = KineticWriteHandler(source, sysmeta,
+                                          chunk_prep, storage_method,
+                                          headers)
         elif storage_method.backblaze:
             backblaze_info = self._b2_credentials(storage_method, key_file)
             handler = BackblazeWriteHandler(source, sysmeta,
@@ -677,6 +686,39 @@ class ObjectStorageAPI(API):
             handler = BackblazeChunkDownloadHandler(
                 meta, chunks[pos], _offset, _size,
                 backblaze_info=backblaze_info)
+            stream = handler.get_stream()
+            if not stream:
+                raise exc.OioException("Error while downloading")
+            total_bytes += len(stream)
+            yield stream
+            current_offset += chunk_size
+
+    def _fetch_stream_kinetic(self, meta, chunks, ranges, storage_method):
+        total_bytes = 0
+        current_offset = 0
+        size = None
+        offset = 0
+        for pos in range(len(chunks)):
+            if ranges:
+                offset = ranges[pos][0]
+                size = ranges[pos][1]
+
+            if size is None:
+                size = int(meta["length"])
+            chunk_size = int(chunks[pos][0]["size"])
+            if total_bytes >= size:
+                break
+            if current_offset + chunk_size > offset:
+                if current_offset < offset:
+                    _offset = offset - current_offset
+                else:
+                    _offset = 0
+                if chunk_size + total_bytes > size:
+                    _size = size - total_bytes
+                else:
+                    _size = chunk_size
+            handler = KineticChunkDownloadHandler(
+                meta, chunks[pos], _offset, _size)
             stream = handler.get_stream()
             if not stream:
                 raise exc.OioException("Error while downloading")

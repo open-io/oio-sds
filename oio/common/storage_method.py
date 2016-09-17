@@ -17,8 +17,10 @@ ec_type_to_pyeclib_type = {
 def parse_chunk_method(chunk_method):
     param_list = dict()
     if '/' in chunk_method:
-        chunk_method, params = chunk_method.split('/', 1)
-        params = params.split(',')
+        tokens = chunk_method.split('/', 1)
+        chunk_method, params = tokens[0], dict()
+        if len(tokens) > 1:
+            params = tokens[1].split(',')
         if len(params) >= 1:
             for p in params:
                 k, v = p.split('=', 1)
@@ -46,10 +48,11 @@ class StorageMethods(object):
 
 
 class StorageMethod(object):
-    def __init__(self, name, ec=False, backblaze=False):
+    def __init__(self, name, ec=False, backblaze=False, kinetic=False):
         self._name = name
         self._ec = ec
         self._backblaze = backblaze
+        self._kinetic = kinetic
 
     @property
     def name(self):
@@ -63,10 +66,40 @@ class StorageMethod(object):
     def backblaze(self):
         return self._backblaze
 
+    @property
+    def kinetic(self):
+        return self._kinetic
+
 
 class ReplicatedStorageMethod(StorageMethod):
     def __init__(self, name, nb_copy):
         super(ReplicatedStorageMethod, self).__init__(name=name)
+
+        try:
+            self._nb_copy = int(nb_copy)
+        except (TypeError, ValueError):
+            raise exc.InvalidStorageMethod('Invalid %r nb_copy' %
+                                           nb_copy)
+        self._quorum = (self._nb_copy + 1) // 2
+
+    @classmethod
+    def build(cls, params):
+        nb_copy = params.pop('nb_copy')
+        return cls('repli', nb_copy)
+
+    @property
+    def quorum(self):
+        return self._quorum
+
+    @property
+    def nb_copy(self):
+        return self._nb_copy
+
+
+class KineticPlainStorageMethod(StorageMethod):
+    def __init__(self, name, nb_copy):
+        super(KineticPlainStorageMethod, self).__init__(
+                name=name, kinetic=True)
 
         try:
             self._nb_copy = int(nb_copy)
@@ -173,7 +206,9 @@ def load_methods():
     global _STORAGE_METHODS
     methods = {'plain': ReplicatedStorageMethod,
                'ec': ECStorageMethod,
-               'backblaze': BackblazeStorageMethod}
+               'backblaze': BackblazeStorageMethod,
+               'kplain': KineticPlainStorageMethod,
+               'kec': None}
     _STORAGE_METHODS = StorageMethods(methods)
 
 
