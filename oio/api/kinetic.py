@@ -175,7 +175,9 @@ class Kinetic(object):
         r = Reader(data)
         s = Session()
         headers = dict([k, str(headers[k])] for k in headers)
-        req = Request('PUT', self._get_url(), headers=headers, data=r)
+        # TODO: compute the size here. Pay attention, the wrapper above
+        #       miserably cause the conexon to be reset.
+        req = Request('PUT', self._get_url(), headers=headers, data=data)
         prepared = req.prepare()
         s.send(prepared)
         return r.size
