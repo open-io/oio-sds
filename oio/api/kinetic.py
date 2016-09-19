@@ -162,25 +162,26 @@ class Kinetic(object):
 
             def read(self, size=-1):
                 b = self.src.read(size)
-                if b:
-                    self.size = self.size + len(b)
+                self.size += len(b)
                 return b
 
             def next(self):
-                return self.read()
+                block = self.read(io.WRITE_CHUNK_SIZE)
+                if len(block) == 0:
+                    # EOF
+                    raise StopIteration
+                return block
 
             def __iter__(self):
                 return self
 
-        r = Reader(data)
+        reader = Reader(data)
         s = Session()
         headers = dict([k, str(headers[k])] for k in headers)
-        # TODO: compute the size here. Pay attention, the wrapper above
-        #       miserably cause the conexon to be reset.
-        req = Request('PUT', self._get_url(), headers=headers, data=data)
+        req = Request('PUT', self._get_url(), headers=headers, data=reader)
         prepared = req.prepare()
         s.send(prepared)
-        return r.size
+        return reader.size
 
     def download(self, metadata, headers=None):
         return Requests().get_response_from_request(
@@ -201,8 +202,6 @@ class KineticChunkWriteHandler(object):
         conn = Kinetic(self.chunkid)
         targets = [mc['url'] for mc in self.meta_chunk]
         bytes_transferred = conn.upload(source, self.sysmeta, targets)
-        import logging
-        logging.warn(">>> %s", repr(bytes_transferred))
         return self.meta_chunk, bytes_transferred, ""
 
 
