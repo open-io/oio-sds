@@ -188,8 +188,9 @@ class Kinetic(object):
         headers = dict([k, str(headers[k])] for k in headers)
         req = Request('PUT', self._get_url(), headers=headers, data=reader)
         prepared = req.prepare()
-        s.send(prepared)
-        return reader.size
+        rep = s.send(prepared)
+        body = rep.json()
+        return reader.size, body['stream']['md5']
 
     def download(self, metadata, headers=None):
         return Requests().get_response_from_request(
@@ -209,9 +210,10 @@ class KineticChunkWriteHandler(object):
     def stream(self, source):
         conn = Kinetic(self.chunkid)
         targets = [mc['url'] for mc in self.meta_chunk]
-        bytes_transferred = conn.upload(source, self.sysmeta, targets)
-        self.meta_chunk[0]['size'] = bytes_transferred
-        return self.meta_chunk, bytes_transferred, ""
+        size, checksum = conn.upload(source, self.sysmeta, targets)
+        self.meta_chunk[0]['size'] = size
+        self.meta_chunk[0]['hash'] = checksum
+        return self.meta_chunk, size, checksum
 
 
 class KineticWriteHandler(io.WriteHandler):
