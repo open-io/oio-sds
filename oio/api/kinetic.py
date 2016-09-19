@@ -12,18 +12,19 @@
 
 import logging
 import hashlib
-from tempfile import TemporaryFile
+import json
 from urlparse import urlparse
-from oio.api import io
-from oio.common.exceptions import SourceReadError, OioException
-from requests import exceptions, Session, Request
 import eventlet
+from requests import exceptions, Session, Request
+from oio.api import io
+from oio.common.exceptions import OioException
+
 logger = logging.getLogger(__name__)
 WORD_LENGTH = 10
 TRY_REQUEST_NUMBER = 3
 
 
-def _get_name(chunk):
+def _chunk_id(chunk):
     raw_url = chunk["url"]
     parsed = urlparse(raw_url)
     return parsed.path.split('/')[-1]
@@ -65,7 +66,7 @@ class KineticException(Exception):
         return self._response.headers
 
 
-# FIXME duplicated from backblaze_http.py
+# FIXME: duplicated from backblaze_http.py
 class Requests(object):
     def __init__(self, error_handler=None):
         self.error_handler = error_handler
@@ -136,11 +137,11 @@ class Kinetic(object):
     def get_size(self, bucket_name):
         return 0
 
-    def delete(self, meta, targets):
+    def delete(self, *_args, **_kwargs):
         headers = {}
         body = {}
         return Requests().get_response_from_request(
-                'DELETE', self._get_url(), headers, js.dumps(body), True)
+                'DELETE', self._get_url(), headers, json.dumps(body), True)
 
     def upload(self, data, meta, targets):
         headers = {}
@@ -152,34 +153,36 @@ class Kinetic(object):
         for k, v in meta.items():
             headers['X-oio-meta-{0}'.format(k)] = v
 
-        #body = Requests().get_response_from_request(
+        # body = Requests().get_response_from_request(
         #        'PUT', self._get_url(), headers, data, False)
         class Reader(object):
             def __init__(self, src):
                 self.src = src
                 self.size = 0
-            def read(self,size=-1):
+
+            def read(self, size=-1):
                 b = self.src.read(size)
                 if b:
                     self.size = self.size + len(b)
                 return b
+
             def next(self):
                 return self.read()
+
             def __iter__(self):
                 return self
 
         r = Reader(data)
         s = Session()
-        response = None
         headers = dict([k, str(headers[k])] for k in headers)
         req = Request('PUT', self._get_url(), headers=headers, data=r)
         prepared = req.prepare()
-        response = s.send(prepared)
+        s.send(prepared)
         return r.size
 
     def download(self, metadata, headers=None):
         return Requests().get_response_from_request(
-                'GET', self._get_url(), headers, data, True)
+                'GET', self._get_url(), headers, json=True)
 
 
 class KineticChunkWriteHandler(object):
@@ -194,7 +197,7 @@ class KineticChunkWriteHandler(object):
 
     def stream(self, source):
         conn = Kinetic(self.chunkid)
-        targets = [ mc['url'] for mc in self.meta_chunk]
+        targets = [mc['url'] for mc in self.meta_chunk]
         bytes_transferred = conn.upload(source, self.sysmeta, targets)
         import logging
         logging.warn(">>> %s", repr(bytes_transferred))
@@ -234,24 +237,21 @@ class KineticDeleteHandler(object):
         self.chunks = chunks
 
     def _delete(self, conn):
-        sysmeta = conn['sysmeta']
         try_number = TRY_REQUEST_NUMBER
         while True:
             try:
-                conn['backblaze'].delete(self.backblaze_info['bucket_name'],
-                                         sysmeta)
+                conn.delete()
                 break
-            except KineticException as b2e:
+            except Exception as exc:
                 if try_number == 0:
-                    raise OioException('backblaze delete error: %s'
-                                       % str(b2e))
+                    raise OioException('delete error: %s' % exc)
                 else:
                     eventlet.sleep(pow(2, TRY_REQUEST_NUMBER - try_number))
             try_number -= 1
 
     def delete(self):
         for chunk in self.chunks:
-            conn = Kinetic()
+            conn = Kinetic(_chunk_id(chunk))
             self._delete(conn)
 
 
@@ -282,23 +282,22 @@ class KineticChunkDownloadHandler(object):
         return stream
 
     def _get_chunk_source(self):
-        return Kinetic()
+        return Kinetic(_chunk_id(self.chunks[0]))
 
     def _make_stream(self, source):
         result = None
         data = None
         for chunk in self.chunks:
-            self.meta['name'] = _get_name(chunk)
+            self.meta['name'] = _chunk_id(chunk)
             try_number = TRY_REQUEST_NUMBER
             while True:
                 try:
                     data = source.download(self.meta['chunk_id'],
                                            self.meta, self.headers)
                     break
-                except KineticException as b2e:
+                except KineticException as exc:
                     if try_number == 0:
-                        raise OioException('backblaze download error: %s'
-                                           % str(b2e))
+                        raise OioException('download error: %s' % exc)
                     else:
                         eventlet.sleep(pow(2, TRY_REQUEST_NUMBER - try_number))
                 try_number -= 1

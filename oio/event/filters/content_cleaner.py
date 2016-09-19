@@ -1,5 +1,5 @@
-from eventlet import Timeout, GreenPile
 from urlparse import urlparse
+from eventlet import Timeout, GreenPile
 from oio.common.http import http_connect
 from oio.event.evob import Event
 from oio.event.consumer import EventTypes
@@ -8,6 +8,7 @@ from oio.common.exceptions import OioException
 from oio.api.backblaze import BackblazeDeleteHandler
 from oio.api.backblaze_http import BackblazeUtils
 from oio.common.storage_method import STORAGE_METHODS
+
 CHUNK_TIMEOUT = 60
 PARALLEL_CHUNKS_DELETE = 3
 NB_TRIES = 3
@@ -36,10 +37,10 @@ class ContentReaperFilter(Filter):
                             conn = http_connect(p.netloc, 'DELETE', p.path)
                             resp = conn.getresponse()
                             resp.chunk = chunk
-                    except (Exception, Timeout) as e:
+                    except (Exception, Timeout) as exc:
                         self.logger.warn(
                             'error while deleting chunk %s "%s"',
-                            chunk['id'], str(e.message))
+                            chunk['id'], str(exc.message))
                     return resp
 
                 def delete_chunk_backblaze(chunks, url, storage_method):
@@ -50,13 +51,13 @@ class ContentReaperFilter(Filter):
                         chunk['url'] = chunk['id']
                         chunk_list.append(chunk)
                     key_file = self.conf.get('key_file')
-                    backblaze_info = BackblazeUtils.get_credentials(
+                    b2_creds = BackblazeUtils.get_credentials(
                         storage_method, key_file)
                     try:
                         BackblazeDeleteHandler(meta, chunk_list,
-                                               backblaze_info).delete()
-                    except OioException as e:
-                        self.logger.warn('delete failed: %s' % str(e))
+                                               b2_creds).delete()
+                    except OioException as exc:
+                        self.logger.warn('delete failed: %s' % str(exc))
 
                 chunk_method = content_headers['chunk-method']
                 # don't load storage method other than backblaze

@@ -15,18 +15,18 @@ ec_type_to_pyeclib_type = {
 
 
 def parse_chunk_method(chunk_method):
-    param_list = dict()
+    param_dict = dict()
     if '/' in chunk_method:
         tokens = chunk_method.split('/', 1)
-        chunk_method, params = tokens[0], dict()
+        chunk_method, params = tokens[0], list()
         if len(tokens) > 1:
             params = tokens[1].split(',')
         if len(params) >= 1:
             for p in params:
                 k, v = p.split('=', 1)
-                param_list[k] = v
+                param_dict[k] = v
 
-    return chunk_method, param_list
+    return chunk_method, param_dict
 
 
 class StorageMethods(object):
