@@ -11,6 +11,14 @@ add_executable(oio-tool oio-tool.c)
 bin_prefix(oio-tool -tool)
 target_link_libraries(oio-tool metautils ${GLIB2_LIBRARIES})
 
+add_executable(oio-put oio-put.c)
+bin_prefix(oio-put -put)
+target_link_libraries(oio-put oiocore oiosds ${GLIB2_LIBRARIES})
+
+add_executable(oio-get oio-get.c)
+bin_prefix(oio-get -get)
+target_link_libraries(oio-get oiocore oiosds ${GLIB2_LIBRARIES})
+
 
 set(OUTPUT      "${CMAKE_CURRENT_BINARY_DIR}/.timestamp")
 
