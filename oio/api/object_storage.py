@@ -693,6 +693,7 @@ class ObjectStorageAPI(API):
             yield stream
             current_offset += chunk_size
 
+    # FIXME: duplicated code
     def _fetch_stream_kinetic(self, meta, chunks, ranges, storage_method):
         total_bytes = 0
         current_offset = 0

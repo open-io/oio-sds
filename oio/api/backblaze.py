@@ -10,36 +10,38 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+# FIXME: this file is a mess
+
 import logging
 import hashlib
 from tempfile import TemporaryFile
 from urlparse import urlparse
+import eventlet
 from oio.api import io
 from oio.common.exceptions import SourceReadError, OioException
 from oio.api.backblaze_http import Backblaze, BackblazeException
-import eventlet
+
 logger = logging.getLogger(__name__)
 WORD_LENGTH = 10
 TRY_REQUEST_NUMBER = 3
 
 
-def _get_name(chunk):
+def _chunk_id(chunk):
     raw_url = chunk["url"]
     parsed = urlparse(raw_url)
     return parsed.path.split('/')[-1]
 
 
-def _connect_put(chunk, sysmeta, backblaze_info):
-    chunk_path = _get_name(chunk)
+def _connect_put(chunk, sysmeta, b2_creds):
+    chunk_id = _chunk_id(chunk)
     conn = {}
     conn['chunk'] = chunk
-    conn['backblaze'] = Backblaze(backblaze_info['backblaze.account_id'],
-                                  backblaze_info['backblaze.application_key'],
-                                  backblaze_info['authorization'],
-                                  backblaze_info['upload_token'])
-    meta = sysmeta
-    meta['name'] = chunk_path
-    conn['sysmeta'] = meta
+    conn['backblaze'] = Backblaze(b2_creds['backblaze.account_id'],
+                                  b2_creds['backblaze.application_key'],
+                                  b2_creds['authorization'],
+                                  b2_creds['upload_token'])
+    sysmeta['name'] = chunk_id
+    conn['sysmeta'] = sysmeta
     return conn
 
 
@@ -74,19 +76,22 @@ def _read_to_temp(size, source, checksum, temp, first_byte=None):
 
 class BackblazeChunkWriteHandler(object):
     def __init__(self, sysmeta, meta_chunk, checksum,
-                 storage_method, backblaze_info):
+                 storage_method, b2_creds):
         self.sysmeta = sysmeta
-        self.meta_chunk = meta_chunk
         self.checksum = checksum
         self.storage_method = storage_method
-        self.backblaze_info = backblaze_info
+        self.b2_creds = b2_creds
+        if len(meta_chunk) > 1:
+            logger.warn("More than one chunk in metachunk, " +
+                        "will use only the first")
+        self.chunk = meta_chunk[0]
 
     def _upload_chunks(self, conn, size, sha1, md5, temp):
         try_number = TRY_REQUEST_NUMBER
         while True:
-            self.meta_chunk['size'] = size
+            self.chunk['size'] = size
             try:
-                conn['backblaze'].upload(self.backblaze_info['bucket_name'],
+                conn['backblaze'].upload(self.b2_creds['bucket_name'],
                                          self.sysmeta, temp, sha1)
                 break
             except BackblazeException as b2e:
@@ -99,16 +104,18 @@ class BackblazeChunkWriteHandler(object):
                 else:
                     sleep_time_default = pow(2,
                                              TRY_REQUEST_NUMBER - try_number)
-                    sleep = b2e.headers_received.get("Retry-After",
+                    delay = b2e.headers_received.get("Retry-After",
                                                      sleep_time_default)
-                    eventlet.sleep(sleep)
+                    logger.info("Upload error (%s), will retry in %ds",
+                                b2e, delay)
+                    eventlet.sleep(delay)
                 try_number -= 1
 
-        self.meta_chunk['hash'] = md5
-        return self.meta_chunk["size"], [self.meta_chunk]
+        self.chunk['hash'] = md5
+        return self.chunk["size"], [self.chunk]
 
     def _stream_small_chunks(self, source, conn, temp):
-        size, sha1, md5 = _read_to_temp(self.meta_chunk['size'],
+        size, sha1, md5 = _read_to_temp(self.chunk['size'],
                                         source, self.checksum, temp)
         return self._upload_chunks(conn, size, sha1, md5, temp)
 
@@ -131,13 +138,13 @@ class BackblazeChunkWriteHandler(object):
         while True:
             try:
                 res = conn['backblaze'].upload_part_begin(
-                    self.backblaze_info['bucket_name'], self.sysmeta)
+                    self.b2_creds['bucket_name'], self.sysmeta)
                 break
             except BackblazeException as b2e:
                 tries -= 1
                 if tries == 0:
-                    logger.debug('headers sent: %s'
-                                 % str(b2e.headers_send))
+                    logger.debug('headers sent: %s',
+                                 str(b2e.headers_send))
                     raise OioException('Error at the beginning of upload: %s'
                                        % str(b2e))
                 else:
@@ -148,8 +155,8 @@ class BackblazeChunkWriteHandler(object):
         tries = TRY_REQUEST_NUMBER
         while True:
             while True:
-                if bytes_read + max_chunk_size > self.meta_chunk['size']:
-                    to_read = self.meta_chunk['size'] - bytes_read
+                if bytes_read + max_chunk_size > self.chunk['size']:
+                    to_read = self.chunk['size'] - bytes_read
                 else:
                     to_read = max_chunk_size
                 try:
@@ -160,8 +167,8 @@ class BackblazeChunkWriteHandler(object):
                     temp.seek(0)
                     tries = tries - 1
                     if tries == 0:
-                        logger.debug("headers sent: %s"
-                                     % str(b2e.headers_send))
+                        logger.debug("headers sent: %s",
+                                     str(b2e.headers_send))
                         raise OioException('Error during upload: %s'
                                            % str(b2e))
                     else:
@@ -188,20 +195,20 @@ class BackblazeChunkWriteHandler(object):
             except BackblazeException as b2e:
                 tries = tries - 1
                 if tries == 0:
-                    logger.warn('headers send: %s'
-                                % str(b2e.headers_send))
+                    logger.warn('headers send: %s',
+                                str(b2e.headers_send))
                     raise OioException('Error at the end of upload: %s'
                                        % str(b2e))
                 else:
                     eventlet.sleep(pow(2, TRY_REQUEST_NUMBER - tries))
-        self.meta_chunk['hash'] = md5
-        return bytes_read, [self.meta_chunk]
+        self.chunk['hash'] = md5
+        return bytes_read, [self.chunk]
 
     def stream(self, source):
-        conn = _connect_put(self.meta_chunk, self.sysmeta,
-                            self.backblaze_info)
+        conn = _connect_put(self.chunk, self.sysmeta,
+                            self.b2_creds)
         with TemporaryFile() as temp:
-            if ("size" not in self.meta_chunk or self.meta_chunk["size"] >
+            if ("size" not in self.chunk or self.chunk["size"] >
                     conn['backblaze'].BACKBLAZE_MAX_CHUNK_SIZE):
                 return self._stream_big_chunks(source, conn, temp)
             return self._stream_small_chunks(source, conn, temp)
@@ -209,11 +216,11 @@ class BackblazeChunkWriteHandler(object):
 
 class BackblazeWriteHandler(io.WriteHandler):
     def __init__(self, source, sysmeta, chunk_prep,
-                 storage_method, headers, backblaze_info):
+                 storage_method, headers, b2_creds):
         super(BackblazeWriteHandler, self).__init__(source, sysmeta,
                                                     chunk_prep, storage_method,
                                                     headers=headers)
-        self.backblaze_info = backblaze_info
+        self.b2_creds = b2_creds
 
     def stream(self):
         global_checksum = hashlib.md5()
@@ -222,7 +229,7 @@ class BackblazeWriteHandler(io.WriteHandler):
         for meta_chunk in self.chunk_prep():
             handler = BackblazeChunkWriteHandler(
                 self.sysmeta, meta_chunk, global_checksum, self.storage_method,
-                self.backblaze_info)
+                self.b2_creds)
             bytes_transferred, chunks = handler.stream(self.source)
             content_chunks += chunks
             total_bytes_transferred += bytes_transferred
@@ -235,17 +242,17 @@ class BackblazeWriteHandler(io.WriteHandler):
 
 
 class BackblazeDeleteHandler(object):
-    def __init__(self, meta, chunks, backblaze_info):
+    def __init__(self, meta, chunks, b2_creds):
         self.meta = meta
         self.chunks = chunks
-        self.backblaze_info = backblaze_info
+        self.b2_creds = b2_creds
 
     def _delete(self, conn):
         sysmeta = conn['sysmeta']
         try_number = TRY_REQUEST_NUMBER
         while True:
             try:
-                conn['backblaze'].delete(self.backblaze_info['bucket_name'],
+                conn['backblaze'].delete(self.b2_creds['bucket_name'],
                                          sysmeta)
                 break
             except BackblazeException as b2e:
@@ -258,13 +265,13 @@ class BackblazeDeleteHandler(object):
 
     def delete(self):
         for chunk in self.chunks:
-            conn = _connect_put(chunk, self.meta, self.backblaze_info)
+            conn = _connect_put(chunk, self.meta, self.b2_creds)
             self._delete(conn)
 
 
 class BackblazeChunkDownloadHandler(object):
     def __init__(self, meta, chunks, offset, size,
-                 headers=None, backblaze_info=None):
+                 headers=None, b2_creds=None):
         self.failed_chunks = []
         self.chunks = chunks
         headers = headers or {}
@@ -282,7 +289,7 @@ class BackblazeChunkDownloadHandler(object):
         self.begin = offset
         self.end = end
         self.meta = meta
-        self.backblaze_info = backblaze_info
+        self.b2_creds = b2_creds
 
     def get_stream(self):
         source = self._get_chunk_source()
@@ -292,19 +299,19 @@ class BackblazeChunkDownloadHandler(object):
         return stream
 
     def _get_chunk_source(self):
-        return Backblaze(self.backblaze_info['backblaze.account_id'],
-                         self.backblaze_info['backblaze.application_key'],
-                         self.backblaze_info['authorization'])
+        return Backblaze(self.b2_creds['backblaze.account_id'],
+                         self.b2_creds['backblaze.application_key'],
+                         self.b2_creds['authorization'])
 
     def _make_stream(self, source):
         result = None
         data = None
         for chunk in self.chunks:
-            self.meta['name'] = _get_name(chunk)
+            self.meta['name'] = _chunk_id(chunk)
             try_number = TRY_REQUEST_NUMBER
             while True:
                 try:
-                    data = source.download(self.backblaze_info['bucket_name'],
+                    data = source.download(self.b2_creds['bucket_name'],
                                            self.meta, self.headers)
                     break
                 except BackblazeException as b2e:
@@ -320,10 +327,10 @@ class BackblazeChunkDownloadHandler(object):
 
 
 class BackblazeDownloadHandler(object):
-    def __init__(self, sysmeta, meta_chunks, backblaze_info, headers,
+    def __init__(self, sysmeta, meta_chunks, b2_creds, headers,
                  range_start=None, range_end=None):
         self.meta_chunks = meta_chunks
-        self.backblaze_info = backblaze_info
+        self.b2_creds = b2_creds
         self.headers = headers
         self.sysmeta = sysmeta
 
@@ -332,7 +339,7 @@ class BackblazeDownloadHandler(object):
             handler = BackblazeChunkDownloadHandler(self.sysmeta,
                                                     self.meta_chunks[pos],
                                                     0, 0, None,
-                                                    self.backblaze_info)
+                                                    self.b2_creds)
             stream = handler.get_stream()
             if not stream:
                 raise OioException("Error while downloading")

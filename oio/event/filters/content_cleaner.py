@@ -1,5 +1,5 @@
-from eventlet import Timeout, GreenPile
 from urlparse import urlparse
+from eventlet import Timeout, GreenPile
 from oio.common.http import http_connect
 from oio.event.evob import Event
 from oio.event.consumer import EventTypes
@@ -7,7 +7,9 @@ from oio.event.filters.base import Filter
 from oio.common.exceptions import OioException
 from oio.api.backblaze import BackblazeDeleteHandler
 from oio.api.backblaze_http import BackblazeUtils
-from oio.common.storage_method import STORAGE_METHODS
+from oio.api.kinetic import KineticDeleteHandler
+from oio.common.storage_method import STORAGE_METHODS, guess_storage_method
+
 CHUNK_TIMEOUT = 60
 PARALLEL_CHUNKS_DELETE = 3
 NB_TRIES = 3
@@ -15,10 +17,75 @@ NB_TRIES = 3
 
 class ContentReaperFilter(Filter):
 
+    def __init__(self, *args, **kwargs):
+        super(ContentReaperFilter, self).__init__(*args, **kwargs)
+        self.handlers = {
+                "plain": self._handle_rawx,
+                "ec": self._handle_rawx,
+                "kplain": self._handle_kinetic,
+                "kec": self._handle_kinetic,
+                "backblaze": self._handle_b2,
+        }
+
+    def delete_chunk(self, chunk):
+        resp = None
+        p = urlparse(chunk['id'])
+        try:
+            with Timeout(CHUNK_TIMEOUT):
+                conn = http_connect(p.netloc, 'DELETE', p.path)
+                resp = conn.getresponse()
+                resp.chunk = chunk
+        except (Exception, Timeout) as exc:
+            self.logger.warn(
+                'error while deleting chunk %s "%s"',
+                chunk['id'], str(exc.message))
+        return resp
+
+    def _handle_rawx(self, url, chunks, headers, storage_method):
+        pile = GreenPile(PARALLEL_CHUNKS_DELETE)
+        for chunk in chunks:
+            pile.spawn(self.delete_chunk, chunk)
+        resps = [resp for resp in pile if resp]
+        for resp in resps:
+            if resp.status != 204:
+                self.logger.warn(
+                    'failed to delete chunk %s (HTTP %s)',
+                    resp.chunk['id'], resp.status)
+
+    def _handle_b2(self, url, chunks, headers, storage_method):
+        meta = {'container_id': url['id']}
+        chunk_list = []
+        for chunk in chunks:
+            chunk['url'] = chunk['id']
+            chunk_list.append(chunk)
+        key_file = self.conf.get('key_file')
+        b2_creds = BackblazeUtils.get_credentials(
+            storage_method, key_file)
+        try:
+            BackblazeDeleteHandler(meta, chunk_list,
+                                   b2_creds).delete()
+        except OioException as exc:
+            self.logger.warn('delete failed: %s' % str(exc))
+
+    def _handle_kinetic(self, url, chunks, headers, storage_method):
+        meta = {'container_id': url['id']}
+        chunk_list = []
+        for chunk in chunks:
+            chunk['url'] = chunk['id']
+            chunk_list.append(chunk)
+        KineticDeleteHandler(meta, chunks).delete()
+
+    def _load_handler(self, chunk_method):
+        storage_method = STORAGE_METHODS.load(chunk_method)
+        handler = self.handlers.get(storage_method.type)
+        if not handler:
+            raise OioException("No handler found for chunk method [%s]" %
+                               chunk_method)
+        return handler, storage_method
+
     def process(self, env, cb):
         event = Event(env)
         if event.event_type == EventTypes.CONTENT_DELETED:
-            pile = GreenPile(PARALLEL_CHUNKS_DELETE)
             url = event.env.get('url')
             chunks = []
             content_headers = None
@@ -28,52 +95,14 @@ class ContentReaperFilter(Filter):
                 if item.get("type") == 'contents_headers':
                     content_headers = item
             if len(chunks):
-                def delete_chunk(chunk):
-                    resp = None
-                    p = urlparse(chunk['id'])
-                    try:
-                        with Timeout(CHUNK_TIMEOUT):
-                            conn = http_connect(p.netloc, 'DELETE', p.path)
-                            resp = conn.getresponse()
-                            resp.chunk = chunk
-                    except (Exception, Timeout) as e:
-                        self.logger.warn(
-                            'error while deleting chunk %s "%s"',
-                            chunk['id'], str(e.message))
-                    return resp
+                if not content_headers:
+                    chunk_method = guess_storage_method(chunks[0]['id']) + '/'
+                else:
+                    chunk_method = content_headers['chunk-method']
+                handler, storage_method = self._load_handler(chunk_method)
+                handler(url, chunks, content_headers, storage_method)
+                return self.app(env, cb)
 
-                def delete_chunk_backblaze(chunks, url, storage_method):
-                    meta = {}
-                    meta['container_id'] = url['id']
-                    chunk_list = []
-                    for chunk in chunks:
-                        chunk['url'] = chunk['id']
-                        chunk_list.append(chunk)
-                    key_file = self.conf.get('key_file')
-                    backblaze_info = BackblazeUtils.get_credentials(
-                        storage_method, key_file)
-                    try:
-                        BackblazeDeleteHandler(meta, chunk_list,
-                                               backblaze_info).delete()
-                    except OioException as e:
-                        self.logger.warn('delete failed: %s' % str(e))
-
-                chunk_method = content_headers['chunk-method']
-                # don't load storage method other than backblaze
-                if chunk_method.startswith('backblaze'):
-                    storage_method = STORAGE_METHODS.load(chunk_method)
-                    delete_chunk_backblaze(chunks, url, storage_method)
-                    return self.app(env, cb)
-                for chunk in chunks:
-                    pile.spawn(delete_chunk, chunk)
-
-                resps = [resp for resp in pile if resp]
-
-                for resp in resps:
-                    if resp.status != 204:
-                        self.logger.warn(
-                            'failed to delete chunk %s (HTTP %s)',
-                            resp.chunk['id'], resp.status)
         return self.app(env, cb)
 
 

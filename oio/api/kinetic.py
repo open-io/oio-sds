@@ -10,23 +10,32 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+# FIXME: this file is a big mess
+
 import logging
 import hashlib
-from tempfile import TemporaryFile
+import json
 from urlparse import urlparse
-from oio.api import io
-from oio.common.exceptions import SourceReadError, OioException
-from requests import exceptions, Session, Request
 import eventlet
+from requests import exceptions, Session, Request
+from oio.api import io
+from oio.common.exceptions import OioException
+
 logger = logging.getLogger(__name__)
 WORD_LENGTH = 10
 TRY_REQUEST_NUMBER = 3
 
 
-def _get_name(chunk):
+def _chunk_id(chunk):
     raw_url = chunk["url"]
     parsed = urlparse(raw_url)
     return parsed.path.split('/')[-1]
+
+
+def _chunk_netloc(chunk):
+    raw_url = chunk["url"]
+    parsed = urlparse(raw_url)
+    return parsed.netloc
 
 
 class KineticUtilsException(Exception):
@@ -65,7 +74,7 @@ class KineticException(Exception):
         return self._response.headers
 
 
-# FIXME duplicated from backblaze_http.py
+# FIXME: duplicated from backblaze_http.py
 class Requests(object):
     def __init__(self, error_handler=None):
         self.error_handler = error_handler
@@ -124,11 +133,13 @@ def _unpack_kinetic_url(url):
 
 
 class Kinetic(object):
-    def __init__(self, chunkid):
+    def __init__(self, chunkid, data_proxy="127.0.0.1:6002"):
         self.chunkid = chunkid
+        self.data_proxy = data_proxy
 
     def _get_url(self):
-        return 'http://127.0.0.1:6002/kinetic/v1/{0}'.format(self.chunkid)
+        return 'http://{0}/kinetic/v1/{1}'.format(self.data_proxy,
+                                                  self.chunkid)
 
     def get_file_number(self, bucket_name):
         return 0
@@ -136,11 +147,10 @@ class Kinetic(object):
     def get_size(self, bucket_name):
         return 0
 
-    def delete(self, meta, targets):
-        headers = {}
+    def delete(self, headers, *_args, **_kwargs):
         body = {}
         return Requests().get_response_from_request(
-                'DELETE', self._get_url(), headers, js.dumps(body), True)
+                'DELETE', self._get_url(), headers, json.dumps(body), True)
 
     def upload(self, data, meta, targets):
         headers = {}
@@ -152,34 +162,40 @@ class Kinetic(object):
         for k, v in meta.items():
             headers['X-oio-meta-{0}'.format(k)] = v
 
-        #body = Requests().get_response_from_request(
+        # body = Requests().get_response_from_request(
         #        'PUT', self._get_url(), headers, data, False)
         class Reader(object):
             def __init__(self, src):
                 self.src = src
                 self.size = 0
-            def read(self,size=-1):
+
+            def read(self, size=-1):
                 b = self.src.read(size)
-                if b:
-                    self.size = self.size + len(b)
+                self.size += len(b)
                 return b
+
             def next(self):
-                return self.read()
+                block = self.read(io.WRITE_CHUNK_SIZE)
+                if len(block) == 0:
+                    # EOF
+                    raise StopIteration
+                return block
+
             def __iter__(self):
                 return self
 
-        r = Reader(data)
+        reader = Reader(data)
         s = Session()
-        response = None
         headers = dict([k, str(headers[k])] for k in headers)
-        req = Request('PUT', self._get_url(), headers=headers, data=r)
+        req = Request('PUT', self._get_url(), headers=headers, data=reader)
         prepared = req.prepare()
-        response = s.send(prepared)
-        return r.size
+        rep = s.send(prepared)
+        body = rep.json()
+        return reader.size, body['stream']['md5']
 
     def download(self, metadata, headers=None):
         return Requests().get_response_from_request(
-                'GET', self._get_url(), headers, data, True)
+                'GET', self._get_url(), headers)
 
 
 class KineticChunkWriteHandler(object):
@@ -194,11 +210,11 @@ class KineticChunkWriteHandler(object):
 
     def stream(self, source):
         conn = Kinetic(self.chunkid)
-        targets = [ mc['url'] for mc in self.meta_chunk]
-        bytes_transferred = conn.upload(source, self.sysmeta, targets)
-        import logging
-        logging.warn(">>> %s", repr(bytes_transferred))
-        return self.meta_chunk, bytes_transferred, ""
+        targets = [mc['url'] for mc in self.meta_chunk]
+        size, checksum = conn.upload(source, self.sysmeta, targets)
+        self.meta_chunk[0]['size'] = size
+        self.meta_chunk[0]['hash'] = checksum
+        return self.meta_chunk, size, checksum
 
 
 class KineticWriteHandler(io.WriteHandler):
@@ -232,33 +248,38 @@ class KineticDeleteHandler(object):
     def __init__(self, meta, chunks):
         self.meta = meta
         self.chunks = chunks
+        for chunk in self.chunks:
+            if '://' not in chunk['url']:
+                chunk['url'] = "kine://%s" % chunk['url']
 
-    def _delete(self, conn):
-        sysmeta = conn['sysmeta']
+    def _delete(self, conn, headers):
         try_number = TRY_REQUEST_NUMBER
         while True:
             try:
-                conn['backblaze'].delete(self.backblaze_info['bucket_name'],
-                                         sysmeta)
+                conn.delete(headers)
                 break
-            except KineticException as b2e:
+            except Exception as exc:
                 if try_number == 0:
-                    raise OioException('backblaze delete error: %s'
-                                       % str(b2e))
+                    raise OioException('delete error: %s' % exc)
                 else:
                     eventlet.sleep(pow(2, TRY_REQUEST_NUMBER - try_number))
             try_number -= 1
 
     def delete(self):
-        for chunk in self.chunks:
-            conn = Kinetic()
-            self._delete(conn)
+        headers = dict()
+        for pos, chunk in enumerate(self.chunks):
+            headers['X-oio-target-%d' % pos] = _chunk_netloc(chunk)
+        conn = Kinetic(_chunk_id(self.chunks[0]))
+        self._delete(conn, headers)
 
 
 class KineticChunkDownloadHandler(object):
     def __init__(self, meta, chunks, offset, size, headers=None):
         self.failed_chunks = []
         self.chunks = chunks
+        for chunk in self.chunks:
+            if '://' not in chunk['url']:
+                chunk['url'] = "kine://%s" % chunk['url']
         headers = headers or {}
         end = None
         if size > 0 or offset:
@@ -273,6 +294,8 @@ class KineticChunkDownloadHandler(object):
         self.begin = offset
         self.end = end
         self.meta = meta
+        for pos, chunk in enumerate(chunks):
+            self.headers['X-oio-target-%d' % pos] = _chunk_netloc(chunk)
 
     def get_stream(self):
         source = self._get_chunk_source()
@@ -282,23 +305,21 @@ class KineticChunkDownloadHandler(object):
         return stream
 
     def _get_chunk_source(self):
-        return Kinetic()
+        return Kinetic(_chunk_id(self.chunks[0]))
 
     def _make_stream(self, source):
         result = None
         data = None
         for chunk in self.chunks:
-            self.meta['name'] = _get_name(chunk)
+            self.meta['name'] = _chunk_id(chunk)
             try_number = TRY_REQUEST_NUMBER
             while True:
                 try:
-                    data = source.download(self.meta['chunk_id'],
-                                           self.meta, self.headers)
+                    data = source.download(self.meta, self.headers)
                     break
-                except KineticException as b2e:
+                except KineticException as exc:
                     if try_number == 0:
-                        raise OioException('backblaze download error: %s'
-                                           % str(b2e))
+                        raise OioException('download error: %s' % exc)
                     else:
                         eventlet.sleep(pow(2, TRY_REQUEST_NUMBER - try_number))
                 try_number -= 1
