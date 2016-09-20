@@ -30,6 +30,12 @@ def _chunk_id(chunk):
     return parsed.path.split('/')[-1]
 
 
+def _chunk_netloc(chunk):
+    raw_url = chunk["url"]
+    parsed = urlparse(raw_url)
+    return parsed.netloc
+
+
 class KineticUtilsException(Exception):
     def __init__(self, string):
         self._string = string
@@ -125,11 +131,13 @@ def _unpack_kinetic_url(url):
 
 
 class Kinetic(object):
-    def __init__(self, chunkid):
+    def __init__(self, chunkid, data_proxy="127.0.0.1:6002"):
         self.chunkid = chunkid
+        self.data_proxy = data_proxy
 
     def _get_url(self):
-        return 'http://127.0.0.1:6002/kinetic/v1/{0}'.format(self.chunkid)
+        return 'http://{0}/kinetic/v1/{1}'.format(self.data_proxy,
+                                                  self.chunkid)
 
     def get_file_number(self, bucket_name):
         return 0
@@ -185,7 +193,7 @@ class Kinetic(object):
 
     def download(self, metadata, headers=None):
         return Requests().get_response_from_request(
-                'GET', self._get_url(), headers, json=True)
+                'GET', self._get_url(), headers)
 
 
 class KineticChunkWriteHandler(object):
@@ -202,6 +210,7 @@ class KineticChunkWriteHandler(object):
         conn = Kinetic(self.chunkid)
         targets = [mc['url'] for mc in self.meta_chunk]
         bytes_transferred = conn.upload(source, self.sysmeta, targets)
+        self.meta_chunk[0]['size'] = bytes_transferred
         return self.meta_chunk, bytes_transferred, ""
 
 
@@ -260,6 +269,9 @@ class KineticChunkDownloadHandler(object):
     def __init__(self, meta, chunks, offset, size, headers=None):
         self.failed_chunks = []
         self.chunks = chunks
+        for chunk in self.chunks:
+            if '://' not in chunk['url']:
+                chunk['url'] = "kine://%s" % chunk['url']
         headers = headers or {}
         end = None
         if size > 0 or offset:
@@ -274,6 +286,8 @@ class KineticChunkDownloadHandler(object):
         self.begin = offset
         self.end = end
         self.meta = meta
+        for pos, chunk in enumerate(chunks):
+            self.headers['X-oio-target-%d' % pos] = _chunk_netloc(chunk)
 
     def get_stream(self):
         source = self._get_chunk_source()
@@ -293,8 +307,7 @@ class KineticChunkDownloadHandler(object):
             try_number = TRY_REQUEST_NUMBER
             while True:
                 try:
-                    data = source.download(self.meta['chunk_id'],
-                                           self.meta, self.headers)
+                    data = source.download(self.meta, self.headers)
                     break
                 except KineticException as exc:
                     if try_number == 0:
