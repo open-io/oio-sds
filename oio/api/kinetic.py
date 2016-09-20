@@ -10,6 +10,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+# FIXME: this file is a big mess
+
 import logging
 import hashlib
 import json
@@ -145,8 +147,7 @@ class Kinetic(object):
     def get_size(self, bucket_name):
         return 0
 
-    def delete(self, *_args, **_kwargs):
-        headers = {}
+    def delete(self, headers, *_args, **_kwargs):
         body = {}
         return Requests().get_response_from_request(
                 'DELETE', self._get_url(), headers, json.dumps(body), True)
@@ -247,12 +248,15 @@ class KineticDeleteHandler(object):
     def __init__(self, meta, chunks):
         self.meta = meta
         self.chunks = chunks
+        for chunk in self.chunks:
+            if '://' not in chunk['url']:
+                chunk['url'] = "kine://%s" % chunk['url']
 
-    def _delete(self, conn):
+    def _delete(self, conn, headers):
         try_number = TRY_REQUEST_NUMBER
         while True:
             try:
-                conn.delete()
+                conn.delete(headers)
                 break
             except Exception as exc:
                 if try_number == 0:
@@ -262,9 +266,11 @@ class KineticDeleteHandler(object):
             try_number -= 1
 
     def delete(self):
-        for chunk in self.chunks:
-            conn = Kinetic(_chunk_id(chunk))
-            self._delete(conn)
+        headers = dict()
+        for pos, chunk in enumerate(self.chunks):
+            headers['X-oio-target-%d' % pos] = _chunk_netloc(chunk)
+        conn = Kinetic(_chunk_id(self.chunks[0]))
+        self._delete(conn, headers)
 
 
 class KineticChunkDownloadHandler(object):
