@@ -172,8 +172,8 @@ main (int argc, char **argv)
 		g_printerr (" %s addr IP:PORT\n", argv[0]);
 		g_printerr ("Print hex representation of container ID\n");
 		g_printerr (" %s cid  OIOURL\n", argv[0]);
-		g_printerr ("\n");
-		g_printerr (" %s hash [PREFIX]\n", argv[0]);
+		g_printerr ("Generate container names with same hexadecimal prefix\n");
+		g_printerr (" %s hash ACCOUNT [PREFIX]\n", argv[0]);
 		g_printerr ("Ping a service\n");
 		g_printerr (" %s ping IP:PORT [TIMEOUT]\n", argv[0]);
 		g_printerr ("Get free CPU, IO and space statistics\n");

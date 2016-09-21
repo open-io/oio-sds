@@ -17,6 +17,7 @@ License along with this library.
 */
 
 #include <stdlib.h>
+#include <string.h>
 
 #include <glib.h>
 
@@ -26,10 +27,38 @@ License along with this library.
 static const char *ns_name = NULL;
 static const char *account = NULL;
 static struct oio_sds_s *client = NULL;
+static const char *source_file = "/etc/fstab";
 
+const char *weirdos = "!#$&'()*+,/:;=?@[]\r\n\"%-.<>\\^_`{}|~";
 
 static void
-test_create_delete_container(gconstpointer user_data)
+test_create_upload_delete_destroy(struct oio_url_s *url, const gchar *obj)
+{
+	g_assert_nonnull(url);
+	GRID_DEBUG("Testing URL [%s]", oio_url_get(url, OIOURL_WHOLE));
+
+	struct oio_error_s *err = NULL;
+	err = oio_sds_create(client, url);
+	g_assert_no_error((GError*)err);
+
+	struct oio_sds_ul_dst_s dst = {0};
+	dst.url = oio_url_dup(url);
+
+	if (obj)
+		oio_url_set(dst.url, OIOURL_PATH, obj);
+	err = oio_sds_upload_from_file(client, &dst, source_file, 0, -1);
+	g_assert_no_error((GError*)err);
+
+	err = oio_sds_delete(client, dst.url);
+	g_assert_no_error((GError*)err);
+	oio_url_clean(dst.url);
+
+	err = oio_sds_delete_container(client, url);
+	g_assert_no_error((GError*)err);
+}
+
+static void
+test_create_upload_delete_destroy_cname(gconstpointer user_data)
 {
 	const gchar *cname = user_data;
 
@@ -43,27 +72,49 @@ test_create_delete_container(gconstpointer user_data)
 	const gchar *cname_parsed = oio_url_get(url, OIOURL_USER);
 	g_assert_cmpstr(cname_parsed, ==, cname);
 
-	struct oio_error_s *err = NULL;
-	err = oio_sds_create(client, url);
-	g_assert_no_error((GError*)err);
-
-	// TODO(FVE): check container exists
-
-	err = oio_sds_delete_container(client, url);
-	g_assert_no_error((GError*)err);
+	test_create_upload_delete_destroy(url, "object");
 
 	oio_url_clean(url);
 }
 
-
 static void
-_add_creation_test(const char *name, const char *cname)
+_add_cname_test(const char *name, const char *cname)
 {
-	gchar *cname_copy = g_strdup(cname);
 	g_test_add_data_func_full(
 			name,
-			cname_copy,
-			test_create_delete_container,
+			g_strdup(cname),
+			test_create_upload_delete_destroy_cname,
+			g_free);
+}
+
+static void
+test_create_upload_delete_destroy_objname(gconstpointer user_data)
+{
+	const char *obj_name = user_data;
+
+	struct oio_url_s *url = oio_url_empty();
+	g_assert_nonnull(url);
+
+	oio_url_set(url, OIOURL_NS, ns_name);
+	oio_url_set(url, OIOURL_ACCOUNT, account);
+	oio_url_set(url, OIOURL_USER, "container");
+	oio_url_set(url, OIOURL_PATH, obj_name);
+
+	const gchar *obj_name_parsed = oio_url_get(url, OIOURL_PATH);
+	g_assert_cmpstr(obj_name_parsed, ==, obj_name);
+
+	test_create_upload_delete_destroy(url, NULL);
+
+	oio_url_clean(url);
+}
+
+static void
+_add_object_test(const char *name, const char *obj_name)
+{
+	g_test_add_data_func_full(
+			name,
+			g_strdup(obj_name),
+			test_create_upload_delete_destroy_objname,
 			g_free);
 }
 
@@ -95,18 +146,18 @@ main(int argc, char **argv)
 	}
 	GRID_DEBUG("Client to [%s] ready", ns_name);
 
-	_add_creation_test("/create/percent", "%");
-	_add_creation_test("/create/percent_twenty_five", "%25");
-	_add_creation_test("/create/percent_percent", "%%");
+	char test_name[32] = {0}, data[2] = {0};
+	for (const char *cur = weirdos; cur && *cur; cur++) {
+		data[0] = *cur;
+		g_snprintf(test_name, sizeof(test_name),
+				"/cname/%ld", (long)(cur-weirdos));
+		_add_cname_test(test_name, data);
 
-	_add_creation_test("/create/space", " ");
-	_add_creation_test("/create/percent_twenty", "%20");
-
-	_add_creation_test("/create/plus", "+");
-	_add_creation_test("/create/percent_two_b", "%2B");
-
-	_add_creation_test("/create/dollar", "$");
-	_add_creation_test("/create/percent_twenty_four", "%24");
+		memset(test_name, 0, sizeof(test_name));
+		g_snprintf(test_name, sizeof(test_name),
+				"/obj/%ld", (long)(cur-weirdos));
+		_add_object_test(test_name, data);
+	}
 
 	int rc = g_test_run();
 
