@@ -117,6 +117,7 @@ const char * _pref2str(enum preference_e p);
 extern gchar *ns_name;
 extern gboolean flag_cache_enabled;
 extern gboolean flag_local_scores;
+extern gboolean flag_prefer_master;
 
 /* how long the proxy remembers the srv it registered ino the conscience */
 extern gint64 ttl_expire_local_services;
@@ -243,17 +244,19 @@ void client_init (struct client_ctx_s *ctx, struct req_args_s *args,
 
 void client_clean (struct client_ctx_s *ctx);
 
-#define CLIENT_CTX(ctx,args,type,seq) \
+enum preference_e get_slave_preference (void);
+
+#define CLIENT_CTX(ctx,args,type,seq)  \
 	struct client_ctx_s ctx = {0}; \
 	client_init (&ctx, args, type, seq) \
 
 #define CLIENT_CTX_MASTER(ctx,args,type,seq) \
 	CLIENT_CTX(ctx,args,type,seq); \
-	ctx.which = CLIENT_PREFER_MASTER
+	ctx.which = get_slave_preference()
 
 #define CLIENT_CTX_SLAVE(ctx,args,type,seq) \
 	CLIENT_CTX(ctx,args,type,seq); \
-	ctx.which = CLIENT_PREFER_SLAVE
+	ctx.which = get_slave_preference()
 
 GError * _m1_locate_and_action (struct oio_url_s *url, GError * (*hook) ());
 

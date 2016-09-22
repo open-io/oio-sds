@@ -195,6 +195,12 @@ static void _sort_services (struct client_ctx_s *ctx,
 	_debug_services ("POST sort: ", m1uv);
 }
 
+enum preference_e get_slave_preference(void) {
+	if (flag_prefer_master)
+		return CLIENT_PREFER_MASTER;
+	return CLIENT_PREFER_SLAVE;
+}
+
 static gboolean _on_reply (gpointer p, MESSAGE reply) {
 	GByteArray **pbody = p, *b = NULL;
 	EXTRA_ASSERT (pbody != NULL);
