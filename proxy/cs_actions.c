@@ -202,7 +202,7 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 			g_assert_not_reached();
 	}
 
-	if (ttl_expire_local_services > 0) {
+	if (ttl_expire_local_services > 0 && op != REGOP_UNLOCK) {
 		struct service_info_s *v = service_info_dup (si);
 		v->score.timestamp = oio_ext_monotonic_seconds ();
 		REG_WRITE(
