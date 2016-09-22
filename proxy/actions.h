@@ -34,6 +34,7 @@ enum http_rc_e action_cache_set_ttl_high (struct req_args_s *args);
 enum http_rc_e action_cache_set_max_low (struct req_args_s *args);
 enum http_rc_e action_cache_set_max_high (struct req_args_s *args);
 
+enum http_rc_e action_lb_reload (struct req_args_s *args);
 enum http_rc_e action_lb_choose (struct req_args_s *args);
 enum http_rc_e action_lb_poll (struct req_args_s *args);
 
