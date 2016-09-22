@@ -132,6 +132,19 @@ class TestConscienceFunctional(BaseTestCase):
         body = resp.json()
         self.assertIsInstance(body, list)
 
+    def test_service_unlock_no_register(self):
+        self._flush_cs('echo')
+        self._reload()
+        srv = self._srv('echo')
+        srv['score'] = -1
+        resp = self.session.post(self._url_cs('unlock'), json.dumps(srv))
+        self.assertEqual(resp.status_code, 200)
+        resp = self.session.get(self._url_cs('list'), params={"type": "echo"})
+        body = resp.json()
+        self.assertIsInstance(body, list)
+        self.assertListEqual(body, [])
+        self._flush_cs('echo')
+
     def test_not_polled_when_score_is_zero(self):
         self._flush_cs('echo')
         srv = self._srv('echo')
