@@ -1,6 +1,6 @@
 import logging
 
-from tests.utils import random_str, BaseTestCase
+from tests.utils import BaseTestCase
 from tests.utils import CODE_SRVTYPE_NOTMANAGED
 import simplejson as json
 
