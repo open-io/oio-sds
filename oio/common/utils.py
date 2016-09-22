@@ -13,6 +13,7 @@ import codecs
 import eventlet
 
 import eventlet.semaphore
+from datetime import datetime
 from eventlet.green import socket, threading
 from urllib import quote as _quote
 
@@ -323,6 +324,11 @@ class Timestamp(object):
         if not isinstance(other, Timestamp):
             other = Timestamp(other)
         return cmp(self.timestamp, other.timestamp)
+
+    @property
+    def isoformat(self):
+        t = float(self.normal)
+        return datetime.utcfromtimestamp(t).isoformat()
 
 
 def int_value(value, default):

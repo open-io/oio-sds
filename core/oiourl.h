@@ -44,15 +44,37 @@ enum oio_url_field_e
 	OIOURL_CONTENTID, /* read-write */
 };
 
-#define OIOURL_LATEST_VERSION "LAST"
 
 struct oio_url_s;
 
+/**
+ * Builds a URL object from a '/'-separated string.
+ * The parts are parsed in that order:
+ * - namespace name;
+ * - account name;
+ * - reference name (aka container);
+ * - service type (should be empty most of the time);
+ * - content name.
+ *
+ * Each part should be URL encoded.
+ *
+ * A safer alternative to using this function is calling
+ * `oio_url_empty()` followed by `oio_url_set()` for each
+ * part you need to set (does not require URL encoding).
+ */
 struct oio_url_s * oio_url_init(const char *url);
+
+/**
+ * Same as `oio_url_init`, except that the parts
+ * should not be URL encoded (therefore you can't
+ * use '/' inside the parts).
+ */
+struct oio_url_s * oio_url_init_raw(const char *url);
 
 /** Builds an empty URL */
 struct oio_url_s * oio_url_empty(void);
 
+/** Duplicate a URL (deep copy) */
 struct oio_url_s* oio_url_dup(const struct oio_url_s *u);
 
 void oio_url_clean(struct oio_url_s *u);
@@ -61,9 +83,30 @@ void oio_url_cleanv (struct oio_url_s **tab);
 
 void oio_url_pclean(struct oio_url_s **pu);
 
+/**
+ * Sets a part of a URL.
+ * Values do not need to be URL encoded.
+ *
+ * @param u the URL
+ * @param f the identifier of the part you wan't to set
+ * @param v the value for the part (no need to URL encode)
+ * @return the URL
+ *
+ * Note that you cannot set OIOURL_WHOLE (see `oio_url_init`).
+ */
 struct oio_url_s* oio_url_set(struct oio_url_s *u,
 		enum oio_url_field_e f, const char *v);
 
+/**
+ * Gets a part of a URL.
+ *
+ * @param u the URL
+ * @param f the identifier of the part you wan't to get
+ * @return the value of the field (do not free)
+ *
+ * The return value of `oio_url_get(url, OIOURL_WHOLE)`
+ * can safely be used as input of `oio_url_init(char *url)`.
+ */
 const char * oio_url_get(struct oio_url_s *u, enum oio_url_field_e f);
 
 int oio_url_has(const struct oio_url_s *u, enum oio_url_field_e f);

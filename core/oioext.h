@@ -48,7 +48,8 @@ extern "C" {
 
 #define MACRO_COND(C,A,B) ((B) ^ (((A)^(B)) & -BOOL(C)))
 
-#define HC_TEST_INIT(argc,argv) oio_ext_init_test(&argc,&argv)
+#define OIO_TEST_INIT(argc,argv) oio_ext_init_test(&argc,&argv)
+#define HC_TEST_INIT(argc,argv) OIO_TEST_INIT(argc,argv)
 
 void oio_ext_init_test (int *argc, char ***argv);
 

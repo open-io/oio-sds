@@ -154,7 +154,13 @@ class ListContainer(lister.Lister):
 
     def get_parser(self, prog_name):
         parser = super(ListContainer, self).get_parser(prog_name)
-
+        parser.add_argument(
+            '--full',
+            dest='full_listing',
+            default=False,
+            help='Full listing',
+            action="store_true"
+        )
         parser.add_argument(
             '--prefix',
             metavar='<prefix>',
@@ -197,12 +203,31 @@ class ListContainer(lister.Lister):
         if parsed_args.limit:
             kwargs['limit'] = parsed_args.limit
 
-        l, meta = self.app.client_manager.storage.container_list(
-            self.app.client_manager.get_account(),
-            **kwargs
-        )
+        account = self.app.client_manager.get_account()
 
         columns = ('Name', 'Bytes', 'Count')
+
+        if parsed_args.full_listing:
+            def full_list():
+                l, meta = self.app.client_manager.storage.container_list(
+                    account, **kwargs)
+                listing = l
+                for e in l:
+                    yield e
+
+                while listing:
+                    kwargs['marker'] = listing[-1][0]
+                    listing, meta = \
+                        self.app.client_manager.storage.container_list(
+                            account, **kwargs)
+                    if listing:
+                        for e in listing:
+                            yield e
+
+            l = full_list()
+        else:
+            l, meta = self.app.client_manager.storage.container_list(
+                account, **kwargs)
 
         results = ((v[0], v[2], v[1]) for v in l)
         return columns, results

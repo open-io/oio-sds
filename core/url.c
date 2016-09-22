@@ -106,10 +106,13 @@ _check_parsed_url (struct oio_url_s *u)
 }
 
 static int
-_parse_url(struct oio_url_s *url, const char *str)
+_parse_url(struct oio_url_s *url, const char *str, gboolean unescape)
 {
 	inline void _replace (gchar **pp, const char *s) {
-		oio_str_reuse (pp, g_uri_unescape_string (s, NULL));
+		if (unescape)
+			oio_str_reuse(pp, g_uri_unescape_string (s, NULL));
+		else
+			oio_str_reuse(pp, g_strdup(s));
 	}
 
 	struct oio_requri_s ruri = {NULL, NULL, NULL, NULL};
@@ -183,7 +186,19 @@ oio_url_init(const char *url)
 	if (!url)
 		return NULL;
 	struct oio_url_s *result = SLICE_NEW0(struct oio_url_s);
-	if (_parse_url(result, url))
+	if (_parse_url(result, url, TRUE))
+		return result;
+	oio_url_clean(result);
+	return NULL;
+}
+
+struct oio_url_s *
+oio_url_init_raw(const char *url)
+{
+	if (!url)
+		return NULL;
+	struct oio_url_s *result = SLICE_NEW0(struct oio_url_s);
+	if (_parse_url(result, url, FALSE))
 		return result;
 	oio_url_clean(result);
 	return NULL;
