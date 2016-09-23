@@ -1429,7 +1429,7 @@ static enum http_rc_e action_m2_content_beans (struct req_args_s *args,
 retry:
 	GRID_TRACE("Content preparation %s", oio_url_get (args->url, OIOURL_WHOLE));
 	beans = NULL;
-	err = _resolve_meta2 (args, CLIENT_PREFER_SLAVE, _pack, &beans);
+	err = _resolve_meta2 (args, get_slave_preference(), _pack, &beans);
 
 	// Maybe manage autocreation
 	if (err && CODE_IS_NOTFOUND(err->code)) {
@@ -1619,7 +1619,7 @@ static enum http_rc_e action_m2_content_propget (struct req_args_s *args,
 
 	GSList *beans = NULL;
 	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_GET (args->url, PROPGET_FLAGS); }
-	GError *err = _resolve_meta2 (args, CLIENT_PREFER_SLAVE, _pack, &beans);
+	GError *err = _resolve_meta2 (args, get_slave_preference(), _pack, &beans);
 	return _reply_properties (args, err, beans);
 }
 
@@ -1726,7 +1726,7 @@ enum http_rc_e action_content_prepare (struct req_args_s *args) {
 enum http_rc_e action_content_show (struct req_args_s *args) {
 	GSList *beans = NULL;
 	PACKER_VOID(_pack) { return m2v2_remote_pack_GET (args->url, 0); }
-	GError *err = _resolve_meta2 (args, CLIENT_PREFER_SLAVE, _pack, &beans);
+	GError *err = _resolve_meta2 (args, get_slave_preference(), _pack, &beans);
 	return _reply_simplified_beans (args, err, beans, TRUE);
 }
 

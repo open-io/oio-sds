@@ -55,3 +55,6 @@ add_executable(test_sqlx_client_sds test_sqlx_client.c)
 target_link_libraries(test_sqlx_client_sds oiosqlx oiosqlx_direct ${COMMON})
 add_test(NAME sqlx/client/sds COMMAND test_sqlx_client_sds)
 
+add_executable(test_weird_chars test_weird_chars.c)
+target_link_libraries(test_weird_chars oiosds oiocore)
+add_test(NAME core/sds/weird_chars COMMAND test_weird_chars)

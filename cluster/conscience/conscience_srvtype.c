@@ -299,8 +299,8 @@ conscience_srvtype_flush(struct conscience_srvtype_s *srvtype)
 struct conscience_srv_s *
 conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_info_s *si)
 {
-	g_assert_nonnull (srvtype);
-	g_assert_nonnull (si);
+	EXTRA_ASSERT (NULL != srvtype);
+	EXTRA_ASSERT (NULL != si);
 
 	struct conscience_srvid_s srvid;
 	memcpy(&(srvid.addr), &(si->addr), sizeof(addr_info_t));
@@ -309,12 +309,16 @@ conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_
 		service_info_get_tag(si->tags, NAME_TAGNAME_RAWX_FIRST);
 	gboolean really_first = FALSE;
 
-	/*register the service if necessary */
+	/* register the service if necessary, excepted if unlocking */
 	struct conscience_srv_s *p_srv = conscience_srvtype_get_srv(srvtype, &srvid);
 	if (!p_srv) {
-		p_srv = conscience_srvtype_register_srv(srvtype, NULL, &srvid);
-		g_assert_nonnull (p_srv);
-		really_first = tag_first && tag_first->type == STVT_BOOL && tag_first->value.b;
+		if (si->score.value == SCORE_UNLOCK) {
+			return NULL;
+		} else {
+			p_srv = conscience_srvtype_register_srv(srvtype, NULL, &srvid);
+			g_assert_nonnull (p_srv);
+			really_first = tag_first && tag_first->type == STVT_BOOL && tag_first->value.b;
+		}
 	}
 
 	/* refresh the tags: create missing, replace existing
