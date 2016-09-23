@@ -403,6 +403,10 @@ _local_slot__poll (struct oio_lb_slot_s *slot, oio_location_t mask,
 			__FUNCTION__, slot->name, slot->sum_weight, slot->items->len,
 			mask);
 
+	if (slot->items->len == 0) {
+		GRID_TRACE2("%s slot empty", __FUNCTION__);
+		return FALSE;
+	}
 	if (slot->sum_weight == 0) {
 		GRID_TRACE2("%s no service available", __FUNCTION__);
 		return FALSE;

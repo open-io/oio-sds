@@ -270,6 +270,8 @@ GError * KV_read_properties (struct json_object *j, gchar ***out,
  * @see KV_read_properties() */
 GError * KV_read_usersys_properties (struct json_object *j, gchar ***out);
 
+void lb_cache_reload(void);
+
 /* -------------------------------------------------------------------------- */
 
 enum http_rc_e _reply_bytes (struct req_args_s *args, int code, const char * msg, GBytes * bytes);
