@@ -493,7 +493,15 @@ class ObjectStorageAPI(API):
             )
 
     def _account_request(self, method, uri, **kwargs):
-        account_url = self._get_service_url('account')
+        account_url = None
+        try:
+            account_url = self._get_service_url('account')
+        except exc.ClientException as e:
+            if e.status == 481:
+                raise exc.ClientException(
+                        500, status=481,
+                        message="No valid account service found")
+            raise
         resp, resp_body = self._request(method, uri, endpoint=account_url,
                                         **kwargs)
         return resp, resp_body
