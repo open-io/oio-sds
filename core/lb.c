@@ -485,6 +485,9 @@ _local_target__is_satisfied(struct oio_lb_pool_LOCAL_s *lb,
 			GRID_DEBUG ("Slot [%s] not ready", name);
 			continue;
 		}
+		if (_slot_needs_rehash(slot)) {
+			_slot_rehash(slot);
+		}
 		oio_location_t *known = ctx->next_polled;
 		do {
 			guint pos = _search_first_at_location(slot->items,

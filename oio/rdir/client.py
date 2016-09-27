@@ -1,6 +1,6 @@
 from oio.common.client import Client
 from oio.common.exceptions import ClientException, NotFound, VolumeException
-from oio.directory.client import DirectoryClient
+from oio.api.directory import DirectoryAPI
 
 
 RDIR_ACCT = '_RDIR'
@@ -9,7 +9,7 @@ RDIR_ACCT = '_RDIR'
 class RdirClient(Client):
     def __init__(self, conf, **kwargs):
         super(RdirClient, self).__init__(conf, **kwargs)
-        self.directory_client = DirectoryClient(conf, **kwargs)
+        self.directory = DirectoryAPI(self.ns, self.endpoint, **kwargs)
         self._addr_cache = dict()
 
     def _lookup_rdir_host(self, resp):
@@ -22,18 +22,17 @@ class RdirClient(Client):
         return host
 
     def _link_rdir(self, volume_id):
-        self.directory_client.link(acct=RDIR_ACCT, ref=volume_id,
-                                   srv_type='rdir', autocreate=True)
-        return self.directory_client.show(
-                acct=RDIR_ACCT, ref=volume_id, srv_type='rdir')
+        self.directory.link(RDIR_ACCT, volume_id, 'rdir',
+                            autocreate=True)
+        return self.directory.get(RDIR_ACCT, volume_id, service_type='rdir')
 
     def _get_rdir_addr(self, volume_id, create=False, nocache=False):
         if not nocache and volume_id in self._addr_cache:
             return self._addr_cache[volume_id]
         resp = {}
         try:
-            resp = self.directory_client.show(acct=RDIR_ACCT, ref=volume_id,
-                                              srv_type='rdir')
+            resp = self.directory.get(RDIR_ACCT, volume_id,
+                                      service_type='rdir')
         except NotFound:
             if not create:
                 raise VolumeException('No such volume %s' % volume_id)
@@ -71,6 +70,7 @@ class RdirClient(Client):
 
     def chunk_push(self, volume_id, container_id, content_id, chunk_id,
                    **data):
+        """Reference a chunk in the reverse directory"""
         body = {'container_id': container_id,
                 'content_id': content_id,
                 'chunk_id': chunk_id}
@@ -84,6 +84,7 @@ class RdirClient(Client):
                            json=body, headers=headers)
 
     def chunk_delete(self, volume_id, container_id, content_id, chunk_id):
+        """Unreference a chunk from the reverse directory"""
         body = {'container_id': container_id,
                 'content_id': content_id,
                 'chunk_id': chunk_id}
@@ -91,6 +92,7 @@ class RdirClient(Client):
         self._rdir_request(volume_id, 'DELETE', 'rdir/delete', json=body)
 
     def chunk_fetch(self, volume, limit=100, rebuild=False):
+        """Fetch the list of chunks belonging to the specified volume"""
         req_body = {'limit': limit}
         if rebuild:
             req_body['rebuild'] = True

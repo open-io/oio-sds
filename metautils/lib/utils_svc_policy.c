@@ -447,6 +447,24 @@ service_howmany_distance(struct service_update_policies_s *pol,
 	return service_howmany_distance2(pol, htype);
 }
 
+gchar *
+service_update_get_tag_value(struct service_update_policies_s *pol,
+		const gchar *type, gchar *tag_key)
+{
+	struct element_s *el;
+	struct hashstr_s *htype;
+	gchar *tag_val = NULL;
+	HASHSTR_ALLOCA(htype, type);
+	g_mutex_lock(&pol->lock);
+	if ((el = g_tree_lookup(pol->tree_elements, htype))) {
+		if (el->tagname && !g_strcmp0(el->tagname, tag_key)) {
+			tag_val = g_strdup(el->tagvalue);
+		}
+	}
+	g_mutex_unlock(&pol->lock);
+	return tag_val;
+}
+
 gboolean
 service_update_tagfilter2(struct service_update_policies_s *pol,
 		const struct hashstr_s *htype, gchar **pname, gchar **pvalue)

@@ -403,7 +403,7 @@ param_option.meta2.events-buffer-delay=5
 param_option.state=${STATE}
 param_option.worm=${WORM}
 
-param_option.service_update_policy=meta2=KEEP|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|;rdir=KEEP|1|1|user_is_a_service=1
+param_option.service_update_policy=meta2=KEEP|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|;rdir=KEEP|1|1|user_is_a_service=rawx
 
 param_option.meta2_max_versions=${VERSIONING}
 param_option.meta2_keep_deleted_delay=86400
@@ -502,8 +502,8 @@ template_service_pools = """
 [pool:meta2]
 targets=${M2_REPLICAS},meta2
 
-[pool:rdir]
-targets=1,rdir
+#[pool:rdir]
+#targets=1,rawx;1,rdir
 
 [pool:account]
 targets=1,account
@@ -1249,7 +1249,9 @@ def generate(options):
     # rdir
     nb_rdir = getint(options['rdir'].get(SVC_NB), 1)
     for num in range(nb_rdir):
-        env = subenv({'SRVTYPE': 'rdir', 'SRVNUM': num, 'PORT': next_port()})
+        env = subenv({'SRVTYPE': 'rdir',
+                      'SRVNUM': num + 1,
+                      'PORT': next_port()})
         add_service(env)
         with open(gridinit(env), 'a+') as f:
             tpl = Template(template_rdir_gridinit)

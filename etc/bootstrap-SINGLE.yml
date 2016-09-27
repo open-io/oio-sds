@@ -3,3 +3,5 @@ chunk_size: 1048576
 redis: true
 rawx:
   count: 3
+rdir:
+  count: 2
