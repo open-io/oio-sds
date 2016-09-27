@@ -3,6 +3,7 @@ import logging
 from cliff import lister
 from cliff import show
 from cliff import command
+from time import time as now, sleep
 
 from oio.common.utils import load_namespace_conf
 
@@ -140,13 +141,22 @@ class ClusterUnlock(lister.Lister):
 class ClusterUnlockAll(lister.Lister):
     """Unlock all services of the cluster"""
 
-    log = logging.getLogger(__name__ + '.ClusterUnlock')
+    log = logging.getLogger(__name__ + '.ClusterUnlockAll')
 
     def get_parser(self, prog_name):
-        return super(ClusterUnlockAll, self).get_parser(prog_name)
+        parser = super(ClusterUnlockAll, self).get_parser(prog_name)
+        parser.add_argument(
+            '-t', '--type',
+            action='append',
+            metavar='<type>',
+            type=str,
+            help='service type to unlock')
+        return parser
 
-    def _unlock_all(self):
-        types = self.app.client_manager.admin.cluster_list_types()
+    def _unlock_all(self, parsed_args):
+        types = parsed_args.type
+        if not parsed_args.type:
+            types = self.app.client_manager.admin.cluster_list_types()
         for type_ in types:
             all_descr = self.app.client_manager.admin.cluster_list(type_)
             for descr in all_descr:
@@ -157,9 +167,64 @@ class ClusterUnlockAll(lister.Lister):
                 except Exception as exc:
                     yield type_, descr['addr'], str(exc)
 
-    def take_action(self, _parsed_args):
+    def take_action(self, parsed_args):
         columns = ('Type', 'Service', 'Result')
-        return columns, self._unlock_all()
+        return columns, self._unlock_all(parsed_args)
+
+
+class ClusterWait(lister.Lister):
+    """Wait for the services to get a score"""
+
+    log = logging.getLogger(__name__ + '.ClusterWait')
+
+    def get_parser(self, prog_name):
+        parser = super(ClusterWait, self).get_parser(prog_name)
+        parser.add_argument(
+            '-t', '--type',
+            action='append',
+            metavar='<type>',
+            type=str,
+            help='service type to wait for')
+        parser.add_argument(
+            '-d', '--delay',
+            metavar='<delay>',
+            type=str,
+            help='How long to wait for a score')
+        return parser
+
+    def _wait(self, parsed_args):
+
+        types = parsed_args.type
+        if not parsed_args.type:
+            types = self.app.client_manager.admin.cluster_list_types()
+
+        delay = 15.0
+        if parsed_args.delay:
+            delay = float(parsed_args.delay)
+        deadline = now() + delay
+
+        while True:
+            all_descr = []
+            for type_ in types:
+                tmp = self.app.client_manager.admin.cluster_list(type_)
+                for s in tmp:
+                    s['type'] = type_
+                all_descr += tmp
+            ko = len([s['score'] for s in tmp if s['score'] <= 0])
+            if ko <= 0:
+                for descr in all_descr:
+                    yield descr['type'], descr['addr'], descr['score']
+                return
+            else:
+                self.log.debug("Still %d services down", ko)
+                if now() > deadline:
+                    return
+                else:
+                    sleep(1.0)
+
+    def take_action(self, parsed_args):
+        columns = ('Type', 'Service', 'Score')
+        return columns, self._wait(parsed_args)
 
 
 class ClusterLock(ClusterUnlock):
