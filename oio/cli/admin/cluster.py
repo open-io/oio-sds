@@ -218,7 +218,9 @@ class ClusterWait(lister.Lister):
             else:
                 self.log.debug("Still %d services down", ko)
                 if now() > deadline:
-                    return
+                    raise Exception(
+                            "Timeout ({0}s) while waiting ".format(delay) +
+                            "for the services to get a score")
                 else:
                     sleep(1.0)
 
