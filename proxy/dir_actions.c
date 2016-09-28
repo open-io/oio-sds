@@ -399,8 +399,6 @@ action_dir_ref_create (struct req_args_s *args, struct json_object *jargs) {
 		struct json_object *jprops = NULL;
 		if (json_object_object_get_ex(jargs, "properties", &jprops)) {
 			GError *err = KV_decode_object(jprops, &props);
-			if (jprops)
-				json_object_put(jprops);
 			if (err)
 				return _reply_format_error(args, err);
 		}
