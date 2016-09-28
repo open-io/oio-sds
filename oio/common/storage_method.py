@@ -1,5 +1,6 @@
-from oio.common import exceptions as exc
+import sys
 from pyeclib.ec_iface import ECDriver
+from oio.common import exceptions
 
 
 EC_SEGMENT_SIZE = 1048576
@@ -20,11 +21,23 @@ def parse_chunk_method(chunk_method):
         chunk_method, params = chunk_method.split('/', 1)
         params = params.split(',')
         if len(params) >= 1:
-            for p in params:
-                k, v = p.split('=', 1)
-                param_list[k] = v
-
+            for param in params:
+                param = param.lstrip()
+                if '=' in param:
+                    k, v = param.split('=', 1)
+                    param_list[k] = v
+                elif param:
+                    param_list[param] = "1"
     return chunk_method, param_list
+
+
+def guess_storage_method(url):
+    if url.startswith('b2') or url.startswith('backblaze'):
+        return 'backblaze'
+    elif url.startswith('kine'):
+        return 'kplain'
+    else:
+        return 'plain'
 
 
 class StorageMethods(object):
@@ -32,16 +45,19 @@ class StorageMethods(object):
         self.index = methods
         self.cache = {}
 
-    def load(self, chunk_method):
+    def load(self, chunk_method, **kwargs):
         method = self.cache.get(chunk_method)
         if method:
             return method
         try:
             storage_method, params = parse_chunk_method(chunk_method)
             cls = self.index[storage_method]
-        except Exception as e:
-            raise exc.InvalidStorageMethod(str(e))
+        except Exception as exc:
+            raise exceptions.InvalidStorageMethod(str(exc)), \
+                None, sys.exc_info()[2]
+        params.update(kwargs)
         self.cache[chunk_method] = cls.build(params)
+        self.cache[chunk_method].type = storage_method
         return self.cache[chunk_method]
 
 
@@ -50,6 +66,7 @@ class StorageMethod(object):
         self._name = name
         self._ec = ec
         self._backblaze = backblaze
+        self.type = None
 
     @property
     def name(self):
@@ -71,13 +88,13 @@ class ReplicatedStorageMethod(StorageMethod):
         try:
             self._nb_copy = int(nb_copy)
         except (TypeError, ValueError):
-            raise exc.InvalidStorageMethod('Invalid %r nb_copy' %
-                                           nb_copy)
+            raise exceptions.InvalidStorageMethod('Invalid %r nb_copy' %
+                                                  nb_copy)
         self._quorum = (self._nb_copy + 1) // 2
 
     @classmethod
     def build(cls, params):
-        nb_copy = params.pop('nb_copy')
+        nb_copy = params.pop('nb_copy', 1)
         return cls('repli', nb_copy)
 
     @property
@@ -97,14 +114,14 @@ class ECStorageMethod(StorageMethod):
         try:
             self._ec_nb_data = int(ec_nb_data)
         except (TypeError, ValueError):
-            raise exc.InvalidStorageMethod('Invalid %r ec_nb_data' %
-                                           ec_nb_data)
+            raise exceptions.InvalidStorageMethod('Invalid %r ec_nb_data' %
+                                                  ec_nb_data)
 
         try:
             self._ec_nb_parity = int(ec_nb_parity)
         except (TypeError, ValueError):
-            raise exc.InvalidStorageMethod('Invalid %r ec_nb_parity' %
-                                           ec_nb_parity)
+            raise exceptions.InvalidStorageMethod('Invalid %r ec_nb_parity' %
+                                                  ec_nb_parity)
 
         self._ec_segment_size = ec_segment_size
         self._ec_type = ec_type
