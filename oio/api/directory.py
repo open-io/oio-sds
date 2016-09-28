@@ -100,13 +100,18 @@ class DirectoryAPI(API):
             'POST', uri, params=params, headers=headers)
         return resp_body
 
-    def force(self, account, reference, service_type, services, headers=None):
+    def force(self, account, reference, service_type, services, headers=None,
+              autocreate=False):
         """
         Associate the specified services to the reference.
         """
         uri = self._make_uri('reference/force')
         params = self._make_params(account, reference, service_type)
         data = json.dumps(services)
+        if autocreate:
+            if not headers:
+                headers = dict()
+            headers["X-oio-action-mode"] = "autocreate"
         resp, resp_body = self._request(
             'POST', uri, data=data, params=params, headers=headers)
 
