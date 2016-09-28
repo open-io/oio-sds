@@ -146,16 +146,15 @@ class ClusterUnlockAll(lister.Lister):
     def get_parser(self, prog_name):
         parser = super(ClusterUnlockAll, self).get_parser(prog_name)
         parser.add_argument(
-            '-t', '--type',
-            action='append',
-            metavar='<type>',
-            type=str,
-            help='service type to unlock')
+            'types',
+            metavar='<types>',
+            nargs='*',
+            help='Service Type(s) to unlock (or all if unset)')
         return parser
 
     def _unlock_all(self, parsed_args):
-        types = parsed_args.type
-        if not parsed_args.type:
+        types = parsed_args.types
+        if not parsed_args.types:
             types = self.app.client_manager.admin.cluster_list_types()
         for type_ in types:
             all_descr = self.app.client_manager.admin.cluster_list(type_)
@@ -180,27 +179,25 @@ class ClusterWait(lister.Lister):
     def get_parser(self, prog_name):
         parser = super(ClusterWait, self).get_parser(prog_name)
         parser.add_argument(
-            '-t', '--type',
-            action='append',
-            metavar='<type>',
-            type=str,
-            help='service type to wait for')
+            'types',
+            metavar='<types>',
+            nargs='*',
+            help='Service Type(s) to wait for (or all if unset)')
         parser.add_argument(
             '-d', '--delay',
             metavar='<delay>',
-            type=str,
+            type=float,
+            default=15.0,
             help='How long to wait for a score')
         return parser
 
     def _wait(self, parsed_args):
 
-        types = parsed_args.type
-        if not parsed_args.type:
+        types = parsed_args.types
+        if not parsed_args.types:
             types = self.app.client_manager.admin.cluster_list_types()
 
-        delay = 15.0
-        if parsed_args.delay:
-            delay = float(parsed_args.delay)
+        delay = float(parsed_args.delay)
         deadline = now() + delay
 
         while True:
@@ -220,7 +217,8 @@ class ClusterWait(lister.Lister):
                 if now() > deadline:
                     raise Exception(
                             "Timeout ({0}s) while waiting ".format(delay) +
-                            "for the services to get a score")
+                            "for the services to get a score, still " +
+                            "{0} are zeroed".format(ko))
                 else:
                     sleep(1.0)
 
