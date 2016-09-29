@@ -1,6 +1,7 @@
 from oio.api.directory import DirectoryAPI
 from oio.common import exceptions as exc
 from oio.conscience.client import ConscienceClient
+from oio.rdir.client import RdirClient
 from tests.utils import random_str, BaseTestCase
 
 
@@ -262,3 +263,18 @@ class TestDirectoryAPI(BaseTestCase):
         for rawx in rawx_list:
             self.api.unlink('_RDIR_TEST', rawx['addr'], 'rdir')
             self.api.delete('_RDIR_TEST', rawx['addr'])
+
+    def test_rdir_repartition(self):
+        client = RdirClient({'namespace': self.ns})
+        all_rawx = client.assign_all_rawx()
+        by_rdir = dict()
+        total = 0
+        for rawx in all_rawx:
+            count = by_rdir.get(rawx['rdir']['addr'], 0)
+            total += 1
+            by_rdir[rawx['rdir']['addr']] = count + 1
+        avg = total / float(len(by_rdir))
+        print "Ideal number of bases per rdir: ", avg
+        print "Current repartition: ", by_rdir
+        for count in by_rdir.itervalues():
+            self.assertLess(count, avg + 1)

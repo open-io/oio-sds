@@ -197,7 +197,11 @@ class ConscienceAgent(Daemon):
     def init_watchers(self, services):
         watchers = []
         for _name, conf in services.iteritems():
-            watchers.append(ServiceWatcher(self.conf, conf))
+            try:
+                watchers.append(ServiceWatcher(self.conf, conf))
+            except Exception:
+                self.logger.exception("Failed to load configuration from %s",
+                                      conf.get('cfgfile', 'main config file'))
         self.watchers = watchers
 
     def stop_watchers(self):
@@ -217,6 +221,7 @@ class ConscienceAgent(Daemon):
                 name = os.path.basename(cfgfile)
                 name = os.path.splitext(name)[0]
                 self.conf['services'][name] = parse_config(cfgfile)
+                self.conf['services'][name]['cfgfile'] = cfgfile
 
 CHECKERS_MODULES = load_modules('oio.conscience.checker')
 STATS_MODULES = load_modules('oio.conscience.stats')
