@@ -156,6 +156,9 @@ class BlobMover(Daemon):
         if not volume:
             raise exc.ConfigurationException('No volume specified for mover')
         self.volume = volume
+        global SLEEP_TIME
+        if SLEEP_TIME > int(conf.get('report_interval', 3600)):
+            SLEEP_TIME = int(conf.get('report_interval', 3600))
 
     def run(self, *args, **kwargs):
         while True:
