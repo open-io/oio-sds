@@ -10,6 +10,7 @@ import fcntl
 import yaml
 import logging
 from logging.handlers import SysLogHandler
+from random import getrandbits
 
 from datetime import datetime
 from urllib import quote as _quote
@@ -517,6 +518,12 @@ def fix_ranges(ranges, length):
             result.append((start, min(end, length-1)))
 
     return result
+
+
+def request_id():
+    """Build a 128-bit request id string"""
+    return "%04X%028X" % (os.getpid(),
+                          getrandbits(112))
 
 
 class GeneratorReader(object):
