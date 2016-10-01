@@ -40,7 +40,7 @@ while getopts "s:n:l" opt ; do
 done
 
 if [ -z "$NS" ] ; then
-	echo "No namespace configured"
+	echo "No namespace configured - Please use oio-unlock-all.sh -n \$NS"
 	exit 1
 fi
 
