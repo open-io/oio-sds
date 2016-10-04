@@ -29,18 +29,20 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "./conscience_srv.h"
 #include "./conscience_srvtype.h"
 
+
 struct service_tag_s *
 conscience_srv_get_tag(struct conscience_srv_s *service,
-    const gchar * name)
+		const gchar *name)
 {
-	return service ? service_info_get_tag(service->tags,name) : NULL;
+	return service ? service_info_get_tag(service->tags, name) : NULL;
 }
 
 struct service_tag_s *
 conscience_srv_ensure_tag(struct conscience_srv_s *service,
-    const gchar * name)
+		const gchar *name)
 {
-	return service && name ? service_info_ensure_tag(service->tags,name) : NULL;
+	return service && name ?
+			service_info_ensure_tag(service->tags, name) : NULL;
 }
 
 void
@@ -49,10 +51,10 @@ conscience_srv_destroy(struct conscience_srv_s *service)
 	if (!service)
 		return;
 
-	/*free the tags */
+	/* free the tags */
 	if (service->tags) {
 		while (service->tags->len > 0) {
-			struct service_tag_s *tag = g_ptr_array_index(service->tags,0);
+			struct service_tag_s *tag = g_ptr_array_index(service->tags, 0);
 			service_tag_destroy(tag);
 			g_ptr_array_remove_index_fast(service->tags, 0);
 		}
@@ -73,8 +75,8 @@ conscience_srv_destroy(struct conscience_srv_s *service)
 }
 
 score_t*
-conscience_srv_compute_score(struct conscience_srv_s
-    *service, GError ** err)
+conscience_srv_compute_score(struct conscience_srv_s *service,
+		GError **err)
 {
 	gint32 current;
 	struct conscience_s *conscience;
@@ -86,13 +88,15 @@ conscience_srv_compute_score(struct conscience_srv_s
 		struct service_tag_s *pTag;
 
 		if (!f) {
-			DEBUG("[%s/%s/] NULL tag wanted", conscience->ns_info.name, srvtype->type_name);
+			DEBUG("[%s/%s/] NULL tag wanted", conscience->ns_info.name,
+					srvtype->type_name);
 			return NULL;
 		}
 		g_snprintf(str_name,sizeof(str_name),"%s.%s", b, f);
 		pTag = conscience_srv_get_tag(service, str_name);
 		if (!pTag) {
-			DEBUG("[%s/%s/] Undefined tag wanted : %s", conscience->ns_info.name, srvtype->type_name, f);
+			DEBUG("[%s/%s/] Undefined tag wanted: %s",
+					conscience->ns_info.name, srvtype->type_name, f);
 			return NULL;
 		}
 		switch (pTag->type) {
@@ -107,7 +111,8 @@ conscience_srv_compute_score(struct conscience_srv_s
 		case STVT_BUF:
 			return g_strdup(pTag->value.buf);
 		}
-		DEBUG("[%s/%s/] invalid tag value! : %s", conscience->ns_info.name, srvtype->type_name, f);
+		DEBUG("[%s/%s/] invalid tag value: %s",
+				conscience->ns_info.name, srvtype->type_name, f);
 		return NULL;
 	}
 	char *getStat(char *f) {
@@ -129,7 +134,8 @@ conscience_srv_compute_score(struct conscience_srv_s
 					return getTag;
 				return NULL;
 			default:
-				GRID_TRACE2("[%s/%s/] invalid tag domain : [%s]", conscience->ns_info.name, srvtype->type_name, b);
+				GRID_TRACE2("[%s/%s/] invalid tag domain: [%s]",
+						conscience->ns_info.name, srvtype->type_name, b);
 				return NULL;
 		}
 	}
@@ -145,7 +151,8 @@ conscience_srv_compute_score(struct conscience_srv_s
 
 	srvtype = service->srvtype;
 	if (!srvtype || !srvtype->score_expr) {
-		GSETCODE(err, CODE_INTERNAL_ERROR, "Invalid parameter (service type misconfigured)");
+		GSETCODE(err, CODE_INTERNAL_ERROR,
+				"Invalid parameter (service type misconfigured)");
 		return NULL;
 	}
 
@@ -164,19 +171,19 @@ conscience_srv_compute_score(struct conscience_srv_s
 	current = floor(d);
 
 	if (service->score.value>=0) {
-		if (srvtype->score_variation_bound>0) {
+		if (srvtype->score_variation_bound > 0) {
 			gint32 max = service->score.value + srvtype->score_variation_bound;
 			current = MIN(current,max);
 		}
 	}
 
-	service->score.value = CLAMP(current,0,100);
+	service->score.value = CLAMP(current, 0, 100);
 	return &(service->score);
 }
 
 void
 conscience_srv_fill_srvinfo(struct service_info_s *dst,
-    struct conscience_srv_s *src)
+		struct conscience_srv_s *src)
 {
 	if (!dst || !src)
 		return;
@@ -208,3 +215,16 @@ conscience_srv_fill_srvinfo_header(struct service_info_s *dst,
 		g_strlcpy(dst->ns_name, ns_name, sizeof(dst->ns_name)-1);
 }
 
+void
+conscience_srv_clean_udata(struct conscience_srv_s *srv)
+{
+	if (!srv || srv->app_data_type != SAD_PTR)
+		return;
+	if (!srv->app_data.pointer.value)
+		return;
+	if (srv->app_data.pointer.cleaner)
+		srv->app_data.pointer.cleaner(srv->app_data.pointer.value);
+
+	srv->app_data.pointer.value = NULL;
+	srv->app_data.pointer.cleaner = NULL;
+}

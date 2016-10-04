@@ -157,7 +157,8 @@ static gboolean
 service_expiration_notifier(struct conscience_srv_s *srv, gpointer u)
 {
 	(void) u;
-	if (srv) GRID_INFO("Service expired [%s]", srv->description);
+	if (srv) GRID_INFO("Service expired [%s] (score=%d)",
+			srv->description, srv->score.value);
 	return TRUE;
 }
 
@@ -169,21 +170,21 @@ timer_expire_services(gpointer u)
 	struct conscience_s *cs = u;
 
 	/* XXX start of critical section */
-	conscience_lock_srvtypes(cs,'r');
-	list_type_names = conscience_get_srvtype_names(cs,NULL);
+	conscience_lock_srvtypes(cs, 'r');
+	list_type_names = conscience_get_srvtype_names(cs, NULL);
 	conscience_unlock_srvtypes(cs);
 	/* XXX end of critical section */
 
 	if (!list_type_names) {
 		if (error_local) {
-			ERROR("[NS=%s] Failed to collect the service types names : %s",
+			ERROR("[NS=%s] Failed to collect the service types names: %s",
 				conscience_get_nsname(cs), gerror_get_message(error_local));
 			g_error_free(error_local);
 		}
 		return;
 	}
 
-	for (GSList *l=list_type_names; l ;l=g_slist_next(l)) {
+	for (GSList *l = list_type_names; l; l = g_slist_next(l)) {
 		if (!l->data)
 			continue;
 
@@ -198,7 +199,8 @@ timer_expire_services(gpointer u)
 				conscience_get_nsname(cs), str_name);
 			continue;
 		}
-		count = conscience_srvtype_remove_expired( srvtype, service_expiration_notifier, NULL);
+		count = conscience_srvtype_remove_expired(srvtype,
+				service_expiration_notifier, NULL);
 		conscience_release_locked_srvtype(srvtype);
 		/* XXX end of critical section */
 
@@ -206,25 +208,11 @@ timer_expire_services(gpointer u)
 			NOTICE("Expired [%u] [%s] services", count, str_name);
 	}
 
-	g_slist_foreach(list_type_names,g_free1,NULL);
+	g_slist_foreach(list_type_names, g_free1, NULL);
 	g_slist_free(list_type_names);
 }
 
 /* ------------------------------------------------------------------------- */
-
-static void
-_conscience_srv_clean_udata(struct conscience_srv_s *srv)
-{
-	if (!srv || srv->app_data_type != SAD_PTR)
-		return;
-	if (!srv->app_data.pointer.value)
-		return;
-	if (srv->app_data.pointer.cleaner)
-		srv->app_data.pointer.cleaner(srv->app_data.pointer.value);
-
-	srv->app_data.pointer.value = NULL;
-	srv->app_data.pointer.cleaner = NULL;
-}
 
 static GByteArray *
 _conscience_srv_serialize(struct conscience_srv_s *srv)
@@ -279,7 +267,7 @@ static void
 _conscience_srv_prepare_cache(struct conscience_srv_s *srv)
 {
 	GByteArray *gba = _conscience_srv_serialize(srv);
-	_conscience_srv_clean_udata(srv);
+	conscience_srv_clean_udata(srv);
 	srv->app_data_type = SAD_PTR;
 	srv->app_data.pointer.value = gba;
 	srv->app_data.pointer.cleaner = metautils_gba_unref;
@@ -575,6 +563,7 @@ _srvinfo_append(struct srvget_s *sg, struct conscience_srv_s *srv)
 {
 	GByteArray *gba;
 
+	/* Serialize the service including its tags and stats */
 	if (sg->full) {
 		gba = _conscience_srv_serialize_full(srv);
 		if (gba) {
@@ -583,6 +572,8 @@ _srvinfo_append(struct srvget_s *sg, struct conscience_srv_s *srv)
 			return TRUE;
 		}
 	}
+	/* Reuse the serialized version of the service
+	 * that was made at registration time (saves CPU) */
 	else if (srv->app_data_type == SAD_PTR
 		&& NULL != (gba = srv->app_data.pointer.value))
 	{
@@ -591,6 +582,7 @@ _srvinfo_append(struct srvget_s *sg, struct conscience_srv_s *srv)
 			return TRUE;
 		}
 	}
+	/* Serialize the service without its tags and stats */
 	else if (NULL != (gba = _conscience_srv_serialize(srv))) {
 		g_byte_array_append(sg->gba_body, gba->data, gba->len);
 		sg->srv_list_size++;
