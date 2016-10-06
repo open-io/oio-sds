@@ -8,6 +8,7 @@ from oio.common.exceptions import OioException
 from oio.api.backblaze import BackblazeDeleteHandler
 from oio.api.backblaze_http import BackblazeUtils
 from oio.common.storage_method import STORAGE_METHODS, guess_storage_method
+from oio.common.utils import request_id
 
 CHUNK_TIMEOUT = 60
 PARALLEL_CHUNKS_DELETE = 3
@@ -25,12 +26,15 @@ class ContentReaperFilter(Filter):
                 "backblaze": self._handle_b2,
         }
 
-    def delete_chunk(self, chunk):
+    def delete_chunk(self, chunk, cid, reqid):
         resp = None
         parsed = urlparse(chunk['id'])
+        headers = {'X-oio-req-id': reqid,
+                   'X-oio-chunk-meta-container-id': cid}
         try:
             with Timeout(CHUNK_TIMEOUT):
-                conn = http_connect(parsed.netloc, 'DELETE', parsed.path)
+                conn = http_connect(parsed.netloc, 'DELETE', parsed.path,
+                                    headers=headers)
                 resp = conn.getresponse()
                 resp.chunk = chunk
         except (Exception, Timeout) as exc:
@@ -39,10 +43,11 @@ class ContentReaperFilter(Filter):
                 chunk['id'], str(exc.message))
         return resp
 
-    def _handle_rawx(self, url, chunks, headers, storage_method):
+    def _handle_rawx(self, url, chunks, headers, storage_method, reqid):
         pile = GreenPile(PARALLEL_CHUNKS_DELETE)
+        cid = url.get('id')
         for chunk in chunks:
-            pile.spawn(self.delete_chunk, chunk)
+            pile.spawn(self.delete_chunk, chunk, cid, reqid)
         resps = [resp for resp in pile if resp]
         for resp in resps:
             if resp.status != 204:
@@ -50,7 +55,7 @@ class ContentReaperFilter(Filter):
                     'failed to delete chunk %s (HTTP %s)',
                     resp.chunk['id'], resp.status)
 
-    def _handle_b2(self, url, chunks, headers, storage_method):
+    def _handle_b2(self, url, chunks, headers, storage_method, reqid):
         meta = {'container_id': url['id']}
         chunk_list = []
         for chunk in chunks:
@@ -78,19 +83,21 @@ class ContentReaperFilter(Filter):
         if event.event_type == EventTypes.CONTENT_DELETED:
             url = event.env.get('url')
             chunks = []
-            content_headers = None
+            content_headers = list()
+
             for item in event.data:
                 if item.get('type') == 'chunks':
                     chunks.append(item)
                 if item.get("type") == 'contents_headers':
-                    content_headers = item
+                    content_headers.append(item)
             if len(chunks):
+                reqid = request_id()
                 if not content_headers:
                     chunk_method = guess_storage_method(chunks[0]['id']) + '/'
                 else:
-                    chunk_method = content_headers['chunk-method']
+                    chunk_method = content_headers[0]['chunk-method']
                 handler, storage_method = self._load_handler(chunk_method)
-                handler(url, chunks, content_headers, storage_method)
+                handler(url, chunks, content_headers, storage_method, reqid)
                 return self.app(env, cb)
 
         return self.app(env, cb)

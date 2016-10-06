@@ -239,8 +239,12 @@ Options -SymLinksIfOwnerMatch -FollowSymLinks -Includes -Indexes
 template_wsgi_service_host = """
 LoadModule mpm_worker_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mpm_worker.so
 LoadModule authz_core_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_authz_core.so
+LoadModule env_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_env.so
 LoadModule wsgi_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_wsgi.so
 
+<IfModule !mod_logio.c>
+  LoadModule logio_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_logio.so
+</IfModule>
 <IfModule !log_config_module>
   LoadModule log_config_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_log_config.so
 </IfModule>
@@ -256,7 +260,12 @@ DocumentRoot ${RUNDIR}
 User  ${USER}
 Group ${GROUP}
 
-LogFormat "%h %l %t \\"%r\\" %>s %b %D" log/common
+SetEnv INFO_SERVICES OIO,${NS},${SRVTYPE},${SRVNUM}
+SetEnv LOG_TYPE access
+SetEnv LEVEL INF
+SetEnv HOSTNAME oio
+
+LogFormat "%{%b %d %T}t %{HOSTNAME}e %{INFO_SERVICES}e %{pid}P %{tid}P %{LOG_TYPE}e %{LEVEL}e %{Host}i %a:%{remote}p %m %>s %D %O %{${META_HEADER}-container-id}i %{x-oio-req-id}i -" log/common
 ErrorLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-errors.log
 CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-access.log log/common env=!nolog
 LogLevel info
