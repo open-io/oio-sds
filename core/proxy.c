@@ -388,6 +388,40 @@ _proxy_call (CURL *h, const char *method, const char *url,
 	return err;
 }
 
+static GError *
+_get_properties(CURL *h, GString *http_url,
+		GString **props_str)
+{
+	struct http_ctx_s out_ctx = {0};
+	if (props_str && *props_str)
+		out_ctx.body = *props_str;
+	else
+		out_ctx.body = g_string_sized_new(512);
+
+	GError *err = _proxy_call(h, "POST", http_url->str, NULL, &out_ctx);
+
+	if (props_str && !*props_str && !err)
+		*props_str = out_ctx.body;
+	else
+		g_string_free(out_ctx.body, TRUE);
+	return err;
+}
+
+static GError *
+_set_properties(CURL *h, GString *http_url, const char* const *values)
+{
+	GError *err = NULL;
+	GString *json = g_string_new("{\"properties\":");
+	json = _build_json(values, json);
+	g_string_append_c(json, '}');
+	struct http_ctx_s i = {
+		.body = json
+	};
+	err = _proxy_call (h, "POST", http_url->str, &i, NULL);
+	g_string_free(i.body, TRUE);
+	return err;
+}
+
 /* -------------------------------------------------------------------------- */
 
 GError *
@@ -415,61 +449,16 @@ oio_proxy_call_container_delete (CURL *h, struct oio_url_s *u)
 }
 
 GError *
-oio_proxy_call_container_get_properties (CURL *h, struct oio_url_s *u,
+oio_proxy_call_container_get_properties(CURL *h, struct oio_url_s *u,
 		GString **props_str)
 {
-	GString *http_url = _curl_container_url (u, "get_properties");
-	if (!http_url) return BADNS();
+	GString *http_url = _curl_container_url(u, "get_properties");
+	if (!http_url)
+		return BADNS();
 
-	struct http_ctx_s out_ctx = {0};
-	if (props_str && *props_str)
-		out_ctx.body = *props_str;
-	else
-		out_ctx.body = g_string_sized_new(512);
-
-	GError *err = _proxy_call (h, "POST", http_url->str, NULL, &out_ctx);
+	GError *err = _get_properties(h, http_url, props_str);
 
 	g_string_free(http_url, TRUE);
-	if (props_str && !*props_str && !err)
-		*props_str = out_ctx.body;
-	else
-		g_string_free(out_ctx.body, TRUE);
-	return err;
-}
-
-GError *
-oio_proxy_call_content_get_properties (CURL *h, struct oio_url_s *u,
-					 GString **props_str)
-{
-	GString *http_url = _curl_content_url (u, "get_properties");
-	struct http_ctx_s out_ctx = {0};
-	if (props_str && *props_str)
-		out_ctx.body = *props_str;
-	else
-		out_ctx.body = g_string_sized_new(512);
-
-	GError *err = _proxy_call (h, "POST", http_url->str, NULL, &out_ctx);
-
-	g_string_free(http_url, TRUE);
-	if (props_str && !*props_str && !err)
-		*props_str = out_ctx.body;
-	else
-		g_string_free(out_ctx.body, TRUE);
-	return err;
-}
-
-static GError *
-_set_properties(CURL *h, GString *http_url, const char* const *values)
-{
-	GError *err = NULL;
-	GString *json = g_string_new("{\"properties\":");
-	json = _build_json(values, json);
-	g_string_append_c(json, '}');
-	struct http_ctx_s i = {
-		.body = json
-	};
-	err = _proxy_call (h, "POST", http_url->str, &i, NULL);
-	g_string_free(i.body, TRUE);
 	return err;
 }
 
@@ -485,6 +474,19 @@ oio_proxy_call_container_set_properties (CURL *h, struct oio_url_s *u,
 	return err;
 }
 
+GError *
+oio_proxy_call_content_get_properties(CURL *h, struct oio_url_s *u,
+		GString **props_str)
+{
+	GString *http_url = _curl_content_url(u, "get_properties");
+	if (!http_url)
+		return BADNS();
+
+	GError *err = _get_properties(h, http_url, props_str);
+
+	g_string_free(http_url, TRUE);
+	return err;
+}
 
 GError *
 oio_proxy_call_content_set_properties (CURL *h, struct oio_url_s *u,
@@ -733,6 +735,34 @@ oio_proxy_call_reference_link (CURL *h, struct oio_url_s *u,
 	_ptrv_free_content (i.headers);
 	g_strfreev (o.headers);
 	g_string_free(http_url, TRUE);
+	return err;
+}
+
+GError *
+oio_proxy_call_reference_get_properties(CURL *h, struct oio_url_s *u,
+		GString **props_str)
+{
+	GString *http_url = _curl_reference_url(u, "get_properties");
+	if (!http_url)
+		return BADNS();
+
+	GError *err = _get_properties(h, http_url, props_str);
+
+	g_string_free(http_url, TRUE);
+	return err;
+}
+
+GError *
+oio_proxy_call_reference_set_properties(CURL *h, struct oio_url_s *u,
+		const char* const *values)
+{
+	GString *http_url = _curl_reference_url(u, "set_properties");
+	if (!http_url)
+		return BADNS();
+
+	GError *err = _set_properties(h, http_url, values);
+
+	g_string_free (http_url, TRUE);
 	return err;
 }
 
