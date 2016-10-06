@@ -285,7 +285,7 @@ lru_tree_remove_older (struct lru_tree_s *lt, gint64 oldest)
 {
 	EXTRA_ASSERT(lt != NULL);
 	guint removed = 0;
-	while (lt->last && lt->first->atime < oldest) {
+	while (lt->last && lt->last->atime < oldest) {
 		_remove_last (lt);
 		++ removed;
 	}

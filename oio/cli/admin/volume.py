@@ -180,3 +180,29 @@ class UnlockAdminVolume(lister.Lister):
             results.append((volume, True))
         columns = ('Volume', 'Success')
         return columns, results
+
+
+class BootstrapVolume(lister.Lister):
+    """Assign a rdir service to all rawx"""
+
+    log = logging.getLogger(__name__ + '.BootstrapVolume')
+
+    def get_parser(self, prog_name):
+        parser = super(BootstrapVolume, self).get_parser(prog_name)
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        all_rawx = self.app.client_manager.admin.volume.assign_all_rawx()
+
+        results = list()
+        for rawx in all_rawx:
+            rdir = rawx['rdir']
+            results.append((rdir['addr'],
+                            rawx['addr'],
+                            rdir['tags'].get('tag.loc'),
+                            rawx['tags'].get('tag.loc')))
+        results.sort()
+        columns = ('Rdir', 'Rawx', 'Rdir location', 'Rawx location')
+        return columns, results

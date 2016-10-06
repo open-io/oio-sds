@@ -529,7 +529,7 @@ service_info_to_lb_item(const struct service_info_s *si,
 			!(item->location = g_ascii_strtoull(loc_str, NULL, 16))) {
 		item->location = location_from_dotted_string(loc_str);
 	}
-	item->weight = si->score.value;
+	item->weight = CLAMP(si->score.value, 0, 100);
 	gchar *key = service_info_key(si);
 	g_strlcpy(item->id, key, LIMIT_LENGTH_SRVID);
 	g_free(key);

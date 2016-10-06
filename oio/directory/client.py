@@ -4,6 +4,8 @@ from oio.common.utils import json
 
 
 class DirectoryClient(Client):
+    """Deprecated. Use oio.api.directory."""
+
     def __init__(self, conf, **kwargs):
         super(DirectoryClient, self).__init__(conf, **kwargs)
 

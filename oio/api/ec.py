@@ -189,9 +189,8 @@ class ECChunkDownloadHandler(object):
 
     def _get_fragment(self, chunk_iter, storage_method):
         # TODO generate proper headers
-        headers = {}
         reader = io.ChunkReader(chunk_iter, storage_method.ec_fragment_size,
-                                headers, self.connection_timeout,
+                                self.headers, self.connection_timeout,
                                 self.response_timeout, self.read_timeout)
         return (reader, reader.get_iter())
 
@@ -577,7 +576,7 @@ class ECWriter(object):
         return self._conn
 
     @classmethod
-    def connect(cls, chunk, sysmeta):
+    def connect(cls, chunk, sysmeta, reqid=None):
         raw_url = chunk["url"]
         parsed = urlparse(raw_url)
         chunk_path = parsed.path.split('/')[-1]
@@ -591,6 +590,8 @@ class ECWriter(object):
         h[chunk_headers["chunk_id"]] = chunk_path
         h[chunk_headers["content_policy"]] = sysmeta['policy']
         h[chunk_headers["content_version"]] = sysmeta['version']
+        if reqid:
+            h['X-oio-req-id'] = reqid
 
         # in the trailer
         # metachunk_size & metachunk_hash
@@ -665,11 +666,13 @@ class ECWriter(object):
 
 
 class ECChunkWriteHandler(object):
-    def __init__(self, sysmeta, meta_chunk, checksum, storage_method):
+    def __init__(self, sysmeta, meta_chunk, checksum, storage_method,
+                 reqid=None):
         self.sysmeta = sysmeta
         self.meta_chunk = meta_chunk
         self.checksum = checksum
         self.storage_method = storage_method
+        self.reqid = reqid
 
     def stream(self, source, size):
         writers = self._get_writers()
@@ -797,7 +800,7 @@ class ECChunkWriteHandler(object):
     def _get_writer(self, chunk):
         # spawn writer
         try:
-            writer = ECWriter.connect(chunk, self.sysmeta)
+            writer = ECWriter.connect(chunk, self.sysmeta, self.reqid)
             return writer, chunk
         except (Exception, Timeout) as e:
             msg = str(e)
@@ -890,7 +893,8 @@ class ECWriteHandler(io.WriteHandler):
         for meta_chunk in self.chunk_prep():
             handler = ECChunkWriteHandler(self.sysmeta, meta_chunk,
                                           global_checksum,
-                                          self.storage_method)
+                                          self.storage_method,
+                                          self.headers.get('X-oio-req-id'))
             bytes_transferred, checksum, chunks = handler.stream(self.source,
                                                                  max_size)
 

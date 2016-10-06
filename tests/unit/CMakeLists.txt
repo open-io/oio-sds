@@ -25,6 +25,10 @@ add_executable(test_oio_url test_url.c)
 target_link_libraries(test_oio_url ${COMMON})
 add_test(NAME core/url COMMAND test_oio_url)
 
+add_executable(test_core_sysstat test_core_sysstat.c)
+target_link_libraries(test_core_sysstat ${COMMON})
+add_test(NAME core/sysstat COMMAND test_core_sysstat)
+
 add_executable(test_cache_lru test_cache_lru.c)
 target_link_libraries(test_cache_lru oiocache)
 add_test(NAME cache/lru COMMAND test_cache_lru)

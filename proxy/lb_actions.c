@@ -231,3 +231,11 @@ action_lb_poll(struct req_args_s *args)
 		return _reply_notfound_error(args, err);
 	return rest_action(args, _poll);
 }
+
+enum http_rc_e
+action_lb_reload (struct req_args_s *args)
+{
+	lb_cache_reload();
+	return _reply_success_json (args, NULL);
+}
+

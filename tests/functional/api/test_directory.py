@@ -1,5 +1,7 @@
 from oio.api.directory import DirectoryAPI
 from oio.common import exceptions as exc
+from oio.conscience.client import ConscienceClient
+from oio.rdir.client import RdirClient
 from tests.utils import random_str, BaseTestCase
 
 
@@ -236,3 +238,43 @@ class TestDirectoryAPI(BaseTestCase):
         self._delete(name)
         # get on deleted reference
         self.assertRaises(exc.NotFound, self.api.get, self.account, name)
+
+    def test_rdir_linking(self):
+        """
+        Tests that rdir services linked to rawx services
+        are not on the same locations
+        """
+        cs = ConscienceClient({'namespace': self.ns})
+        rawx_list = cs.all_services('rawx')
+        rdir_dict = {x['addr']: x for x in cs.all_services('rdir')}
+        # Link the services
+        for rawx in rawx_list:
+            self.api.link('_RDIR_TEST', rawx['addr'], 'rdir',
+                          autocreate=True)
+        # Do the checks
+        for rawx in rawx_list:
+            linked_rdir = self.api.get(
+                '_RDIR_TEST', rawx['addr'], service_type='rdir')['srv']
+            rdir = rdir_dict[linked_rdir[0]['host']]
+            rawx_loc = rawx['tags'].get('tag.loc')
+            rdir_loc = rdir['tags'].get('tag.loc')
+            self.assertNotEqual(rawx_loc, rdir_loc)
+        # Unlink the services
+        for rawx in rawx_list:
+            self.api.unlink('_RDIR_TEST', rawx['addr'], 'rdir')
+            self.api.delete('_RDIR_TEST', rawx['addr'])
+
+    def test_rdir_repartition(self):
+        client = RdirClient({'namespace': self.ns})
+        all_rawx = client.assign_all_rawx()
+        by_rdir = dict()
+        total = 0
+        for rawx in all_rawx:
+            count = by_rdir.get(rawx['rdir']['addr'], 0)
+            total += 1
+            by_rdir[rawx['rdir']['addr']] = count + 1
+        avg = total / float(len(by_rdir))
+        print "Ideal number of bases per rdir: ", avg
+        print "Current repartition: ", by_rdir
+        for count in by_rdir.itervalues():
+            self.assertLess(count, avg + 1)

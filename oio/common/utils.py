@@ -8,21 +8,25 @@ import sys
 import time
 import fcntl
 import yaml
+import logging
+from logging.handlers import SysLogHandler
+from random import getrandbits
+
+from datetime import datetime
+from urllib import quote as _quote
+
+from optparse import OptionParser
+from ConfigParser import SafeConfigParser
+
+from itertools import islice
 
 import codecs
 import eventlet
 
 import eventlet.semaphore
-from datetime import datetime
 from eventlet.green import socket, threading
-from urllib import quote as _quote
+from oio.common.exceptions import OioException
 
-from optparse import OptionParser
-from ConfigParser import SafeConfigParser
-from itertools import islice
-
-from logging.handlers import SysLogHandler
-import logging
 logging.thread = eventlet.green.thread
 logging.threading = threading
 logging._lock = logging.threading.RLock()
@@ -135,9 +139,18 @@ def drop_privileges(user):
     if os.geteuid() == 0:
         groups = [g.gr_gid for g in grp.getgrall() if user in g.gr_mem]
         os.setgroups(groups)
-    user_entry = pwd.getpwnam(user)
-    os.setgid(user_entry[3])
-    os.setuid(user_entry[2])
+    try:
+        user_entry = pwd.getpwnam(user)
+    except KeyError as exc:
+        raise OioException("User %s does not exist (%s). Are you running "
+                           "your namespace with another user name?" %
+                           (user, exc))
+    try:
+        os.setgid(user_entry[3])
+        os.setuid(user_entry[2])
+    except OSError as exc:
+        raise OioException("Failed to switch uid to %s or gid to %s: %s" %
+                           (user_entry[2], user_entry[3], exc))
     os.environ['HOME'] = user_entry[5]
     try:
         os.setsid()
@@ -505,6 +518,12 @@ def fix_ranges(ranges, length):
             result.append((start, min(end, length-1)))
 
     return result
+
+
+def request_id():
+    """Build a 128-bit request id string"""
+    return "%04X%028X" % (os.getpid(),
+                          getrandbits(112))
 
 
 class GeneratorReader(object):

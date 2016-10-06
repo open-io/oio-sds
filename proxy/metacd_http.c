@@ -439,18 +439,9 @@ _reload_srvtype(const char *type)
 	}
 }
 
-static void
-_task_reload_lb(gpointer p UNUSED)
+void
+lb_cache_reload (void)
 {
-	ADAPTIVE_PERIOD_DECLARE();
-
-	if (ADAPTIVE_PERIOD_SKIP())
-		return;
-
-	CSURL(cs);
-	if (!cs) return;
-
-	ADAPTIVE_PERIOD_ONSUCCESS(lb_downstream_delay);
 	gchar **tt = NULL;
 	NSINFO_READ(
 		tt = g_strdupv_inline(srvtypes);
@@ -463,7 +454,21 @@ _task_reload_lb(gpointer p UNUSED)
 			_reload_srvtype (*t);
 		g_free (tt);
 	}
+}
 
+static void
+_task_reload_lb(gpointer p UNUSED)
+{
+	ADAPTIVE_PERIOD_DECLARE();
+
+	if (ADAPTIVE_PERIOD_SKIP())
+		return;
+
+	CSURL(cs);
+	if (!cs) return;
+
+	ADAPTIVE_PERIOD_ONSUCCESS(lb_downstream_delay);
+	lb_cache_reload();
 	oio_lb_world__debug(lb_world);
 }
 
@@ -801,6 +806,7 @@ configure_request_handlers (void)
 	// New routes
 
 	// Load Balancing
+	SET("/$NS/lb/reload/#POST", action_lb_reload);
 	SET("/$NS/lb/choose/#GET", action_lb_choose);
 	SET("/$NS/lb/poll/#POST", action_lb_poll);
 

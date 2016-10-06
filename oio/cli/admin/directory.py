@@ -1,4 +1,5 @@
 import logging
+import time
 
 from cliff.command import Command
 from oio.directory.meta0 import PrefixMapping
@@ -27,6 +28,16 @@ class DirectoryCmd(Command):
 class DirectoryInit(DirectoryCmd):
     """Initialize the directory"""
 
+    def get_parser(self, prog_name):
+        parser = super(DirectoryInit, self).get_parser(prog_name)
+        parser.add_argument('--no-rdir',
+                            dest='rdir',
+                            action='store_false',
+                            default=True,
+                            help='Do not assign rdir services to rawx services'
+                            )
+        return parser
+
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         mapping = self.get_prefix_mapping(parsed_args)
@@ -35,10 +46,17 @@ class DirectoryInit(DirectoryCmd):
         # 'less_prefixes' strategy to ensure the same number of prefixes
         # per meta1. This is faster than bootstrapping directly with the
         # 'less_prefixes' strategy.
+        self.log.info("Computing meta1 prefix mapping...")
         mapping.bootstrap()
+        self.log.info("Rebalancing...")
         mapping.rebalance()
-        # Now save the mapping.
+        self.log.info("Saving...")
         mapping.force()
+        if parsed_args.rdir:
+            time.sleep(1)
+            self.log.info("Assigning rdir services to rawx services...")
+            self.app.client_manager.admin.volume.assign_all_rawx()
+        self.log.info("Done")
 
 
 class DirectoryList(DirectoryCmd):

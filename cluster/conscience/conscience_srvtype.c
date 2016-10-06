@@ -103,7 +103,7 @@ conscience_srvtype_destroy(struct conscience_srvtype_s *srvtype)
 
 struct conscience_srv_s *
 conscience_srvtype_get_srv(struct conscience_srvtype_s *srvtype,
-    const struct conscience_srvid_s *srvid)
+		const struct conscience_srvid_s *srvid)
 {
 	if (!srvtype || !srvid)
 		return NULL;
@@ -112,7 +112,7 @@ conscience_srvtype_get_srv(struct conscience_srvtype_s *srvtype,
 
 void
 conscience_srvtype_remove_srv(struct conscience_srvtype_s *srvtype,
-    struct conscience_srvid_s *srvid)
+		struct conscience_srvid_s *srvid)
 {
 	struct conscience_srv_s *srv;
 
@@ -133,7 +133,7 @@ conscience_srvtype_remove_srv(struct conscience_srvtype_s *srvtype,
 
 struct conscience_srv_s *
 conscience_srvtype_register_srv(struct conscience_srvtype_s *srvtype,
-    GError ** err, const struct conscience_srvid_s *srvid)
+		GError ** err, const struct conscience_srvid_s *srvid)
 {
 	gsize desc_size;
 	struct conscience_srv_s *service;
@@ -172,28 +172,32 @@ conscience_srvtype_register_srv(struct conscience_srvtype_s *srvtype,
 
 guint
 conscience_srvtype_remove_expired(struct conscience_srvtype_s * srvtype,
-    service_callback_f * callback, gpointer u)
+		service_callback_f *callback, gpointer u)
 {
 	g_assert_nonnull (srvtype);
 
 	guint count = 0U;
 
-	time_t oldest = oio_ext_monotonic_seconds();
-	if (oldest > srvtype->score_expiration)
-		oldest -= srvtype->score_expiration;
-	else
-		oldest = 0;
+	time_t oldest = 0, now = oio_ext_monotonic_seconds();
+	if (now > srvtype->score_expiration)
+		oldest = now - srvtype->score_expiration;
 
 	GHashTableIter iter;
 	gpointer key, value;
 	g_hash_table_iter_init(&iter, srvtype->services_ht);
 	while (g_hash_table_iter_next(&iter, &key, &value)) {
-		struct conscience_srv_s *pService = value;
-		if (!pService->locked && pService->score.timestamp < oldest) {
-			if (pService->score.value > 0) {
+		struct conscience_srv_s *p_srv = value;
+		if (!p_srv->locked && p_srv->score.timestamp < oldest) {
+			if (p_srv->score.value > 0) {
 				if (callback)
-					callback(pService, u);
-				pService->score.value = 0;
+					callback(p_srv, u);
+				p_srv->score.value = 0;
+				p_srv->score.timestamp = now;
+				struct service_tag_s *tag =
+						conscience_srv_ensure_tag(p_srv, NAME_TAGNAME_RAWX_UP);
+				service_tag_set_value_boolean(tag, FALSE);
+				// TODO: we may wanna pre-serialize the service again
+				conscience_srv_clean_udata(p_srv);
 				count++;
 			}
 		}
@@ -204,7 +208,8 @@ conscience_srvtype_remove_expired(struct conscience_srvtype_s * srvtype,
 
 gboolean
 conscience_srvtype_run_all(struct conscience_srvtype_s * srvtype,
-    GError ** error, guint32 flags, service_callback_f * callback, gpointer udata)
+		GError **error, guint32 flags, service_callback_f *callback,
+		gpointer udata)
 {
 	if (!srvtype || !callback) {
 		GSETERROR(error, "Invalid parameter");
@@ -293,7 +298,7 @@ conscience_srvtype_flush(struct conscience_srvtype_s *srvtype)
 	}
 
 	DEBUG("Service type [%s] flushed, [%u] services removed",
-	    srvtype->type_name, counter);
+		srvtype->type_name, counter);
 }
 
 struct conscience_srv_s *

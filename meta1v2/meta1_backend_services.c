@@ -453,22 +453,35 @@ __delete_service(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 
 //------------------------------------------------------------------------------
 
+static gchar *
+key_from_m1srvurl(struct meta1_backend_s *m1, struct meta1_service_url_s *url)
+{
+	return oio_make_service_key(m1->ns_name, url->srvtype, url->host);
+}
+
 // TODO(srvid): do not suppose url is an IP address
 static oio_location_t *
-__locations_from_m1srvurl(struct meta1_service_url_s **urls)
+__locations_from_m1srvurl(struct meta1_backend_s *m1,
+		struct meta1_service_url_s **urls)
 {
 	GArray *out = g_array_new(TRUE, TRUE, sizeof(oio_location_t));
 	struct meta1_service_url_s **cursor = NULL;
 	for (cursor = urls; cursor && *cursor; cursor++) {
 		struct meta1_service_url_s **extracted;
 		extracted = expand_url(*cursor);
-		addr_info_t ai = {{0}};
-		if (!grid_string_to_addrinfo((*extracted)->host, &ai)) {
-			GRID_WARN("Could not parse [%s] to addrinfo", (*extracted)->host);
-		} else {
-			oio_location_t loc = location_from_addr_info(&ai);
+		gchar *key = key_from_m1srvurl(m1, *extracted);
+		/* Search the service in the default pool. We don't know if the
+		 * service is actually discoverable by this pool, but we rely on
+		 * the fact that the call will be forwarded to a lb_world,
+		 * which knows all services. */
+		struct oio_lb_item_s *item = oio_lb__get_item_from_pool(
+				m1->lb, (*extracted)->srvtype, key);
+		if (item) {
+			oio_location_t loc = item->location;
 			g_array_append_val(out, loc);
+			g_free(item);
 		}
+		g_free(key);
 		meta1_service_url_cleanv(extracted);
 		extracted = NULL;
 	}
@@ -484,17 +497,14 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 
 	// ----------------------------------------------------------------------
 	GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
-	oio_location_t *avoid = __locations_from_m1srvurl(used);
+	/* `used` is a list of known services that we must replace, thus avoid. */
+	oio_location_t *avoid = __locations_from_m1srvurl(m1, used);
 	oio_location_t *known = NULL;
 	if (ct->req.k && !strcmp(ct->req.k, NAME_TAGNAME_USER_IS_SERVICE)) {
-		gchar srvurl[64] = {0};
-		g_snprintf(srvurl, sizeof(srvurl), "1||%s|", ct->req.v);
 		struct meta1_service_url_s *inplace[2] = {
-				meta1_unpack_url(srvurl), NULL};
-		/* If ct->req.v is not an addr, known will contain NULL */
-		// FIXME: this should be in `avoid` instead of `known`
-		// but avoids are compared without the location mask
-		known = __locations_from_m1srvurl(inplace);
+				meta1_unpack_url(ct->req.v), NULL};
+		/* If ct->req.v is not parseable, known will contain NULL */
+		known = __locations_from_m1srvurl(m1, inplace);
 		meta1_service_url_clean(inplace[0]);
 	}
 	void _on_id(oio_location_t loc, const char *id)
@@ -597,10 +607,14 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 	 * to containers belonging to other services (e.g. there is a container
 	 * for each rawx in the special "_RDIR" account). It tells the load
 	 * balancer to compare the location of linked service against the
-	 * location of the container owner. */
-	if (ct->req.k && !strcmp(ct->req.k, NAME_TAGNAME_USER_IS_SERVICE)
-			&& (!ct->req.v || oio_str_parse_bool(ct->req.v, FALSE))) {
-		oio_str_replace(&(ct->req.v), oio_url_get(url, OIOURL_USER));
+	 * location of the container owner. The __poll_services() function
+	 * expects a string parseable as a meta1_service_url_s in ct->req.v,
+	 * so we must build one. */
+	if (ct->req.k && !strcmp(ct->req.k, NAME_TAGNAME_USER_IS_SERVICE)) {
+		gchar srvurl[64] = {0};
+		g_snprintf(srvurl, sizeof(srvurl), "1|%s|%s|",
+				ct->req.v, oio_url_get(url, OIOURL_USER));
+		oio_str_replace(&(ct->req.v), srvurl);
 	}
 
 	err = __get_container_all_services(sq3, url, ct->type, &used);
@@ -780,9 +794,9 @@ __relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
 		oio_location_t *known = NULL;
 		oio_location_t *avoids = NULL;
 		if (in->kept)
-			known = __locations_from_m1srvurl(in->kept);
+			known = __locations_from_m1srvurl(in->m1, in->kept);
 		if (in->replaced)
-			avoids = __locations_from_m1srvurl(in->replaced);
+			avoids = __locations_from_m1srvurl(in->m1, in->replaced);
 
 		if (g_strv_length((char**)known) >= max_svc) {
 			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "Too many services kept");

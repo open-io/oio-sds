@@ -403,6 +403,10 @@ _local_slot__poll (struct oio_lb_slot_s *slot, oio_location_t mask,
 			__FUNCTION__, slot->name, slot->sum_weight, slot->items->len,
 			mask);
 
+	if (slot->items->len == 0) {
+		GRID_TRACE2("%s slot empty", __FUNCTION__);
+		return FALSE;
+	}
 	if (slot->sum_weight == 0) {
 		GRID_TRACE2("%s no service available", __FUNCTION__);
 		return FALSE;
@@ -480,6 +484,9 @@ _local_target__is_satisfied(struct oio_lb_pool_LOCAL_s *lb,
 		if (!slot) {
 			GRID_DEBUG ("Slot [%s] not ready", name);
 			continue;
+		}
+		if (_slot_needs_rehash(slot)) {
+			_slot_rehash(slot);
 		}
 		oio_location_t *known = ctx->next_polled;
 		do {
@@ -603,20 +610,36 @@ oio_lb_world__set_pool_option(struct oio_lb_pool_s *self, const char *key,
 		const char *value)
 {
 	EXTRA_ASSERT (self != NULL);
+	gchar *endptr = NULL;
 	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
 	if (!key || !*key)
 		return;
 	if (!strcmp(key, OIO_LB_OPT_MASK)) {
 		if (value[0] == '/') {
-			guint64 mask_bits = g_ascii_strtoull(value+1, NULL, 10u);
-			lb->location_mask = (~(oio_location_t)0) << (64 - mask_bits);
-			GRID_TRACE("pool [%s] mask=%s interpreted as 0x%"OIO_LOC_FORMAT,
-					lb->name, value, lb->location_mask);
+			guint64 mask_bits = g_ascii_strtoull(value+1, &endptr, 10u);
+			if (endptr == value+1) {
+				GRID_WARN("Invalid location mask [%s] for pool [%s], ",
+						value, lb->name);
+			} else {
+				lb->location_mask = (~(oio_location_t)0) << (64 - mask_bits);
+				GRID_TRACE("pool [%s] mask=%s decoded as 0x%"OIO_LOC_FORMAT,
+						lb->name, value, lb->location_mask);
+			}
 		} else {
-			lb->location_mask = g_ascii_strtoull(value, NULL, 0u);
+			guint64 new_mask = g_ascii_strtoull(value, &endptr, 16u);
+			if (new_mask == 0 && endptr == value)
+				GRID_WARN("Invalid location mask [%s] for pool [%s], "
+						"must be 64bit hex", value, lb->name);
+			else
+				lb->location_mask = new_mask;
 		}
 	} else if (!strcmp(key, OIO_LB_OPT_MASK_MAX_SHIFT)) {
-		lb->location_mask_max_shift = (gint)g_ascii_strtoull(value, NULL, 0u);
+		guint64 shift = g_ascii_strtoull(value, &endptr, 10u);
+		if (endptr == value)
+			GRID_WARN("Invalid mask shift [%s] for pool [%s]",
+					value, lb->name);
+		else
+			lb->location_mask_max_shift = (gint)shift;
 	} else if (!strcmp(key, OIO_LB_OPT_NEARBY)) {
 		lb->nearby_mode = oio_str_parse_bool(value, FALSE);
 	} else {

@@ -147,6 +147,11 @@ class BaseTestCase(testtools.TestCase):
         resp = self.session.post(url, '')
         self.assertEqual(resp.status_code / 100, 2)
 
+    def _reload_proxy(self):
+        url = '{0}/v3.0/{1}/lb/reload'.format(self.uri, self.ns)
+        resp = self.session.post(url, '')
+        self.assertEqual(resp.status_code / 100, 2)
+
     def _flush_meta(self):
         for srvtype in ('meta1', 'meta2'):
             for t in self.conf['services'][srvtype]:
@@ -165,6 +170,7 @@ class BaseTestCase(testtools.TestCase):
         self._flush_proxy()
         self._flush_meta()
         self._reload_meta()
+        self._reload_proxy()
 
     def _addr(self, low=7000, high=65535, ip="127.0.0.2"):
         return ip + ':' + str(random.randint(low, high))
