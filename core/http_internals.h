@@ -111,6 +111,12 @@ GError * oio_proxy_call_reference_create (CURL *h, struct oio_url_s *u);
 GError * oio_proxy_call_reference_link (CURL *h, struct oio_url_s *u,
 		const char *srvtype, gboolean autocreate, GString *out);
 
+GError *oio_proxy_call_reference_get_properties(CURL *h, struct oio_url_s *u,
+		GString **props_str);
+
+GError * oio_proxy_call_reference_set_properties(CURL *h, struct oio_url_s *u,
+		const char* const *values);
+
 /* container */
 
 /* Links the meta2 then triggers container creation */
