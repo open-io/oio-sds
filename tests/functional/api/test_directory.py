@@ -277,4 +277,4 @@ class TestDirectoryAPI(BaseTestCase):
         print "Ideal number of bases per rdir: ", avg
         print "Current repartition: ", by_rdir
         for count in by_rdir.itervalues():
-            self.assertLess(count, avg + 1)
+            self.assertLessEqual(count, avg + 1)
