@@ -32,9 +32,29 @@ class ConscienceClient(Client):
         """Get the next service instance from the specified pool"""
         return self.next_instances(pool, size=1)[0]
 
-    def all_services(self, type_):
+    def poll(self, pool, **kwargs):
+        """
+        Get a set of services from a predefined pool.
+        Available options:
+        - avoid: a list of service IDs that must be avoided
+        - known: a list of service IDs that are already known
+        """
+        uri = self._make_uri('lb/poll')
+        params = {'pool': pool}
+        ibody = dict()
+        ibody.update(kwargs)
+        resp, obody = self._request('POST', uri, params=params,
+                                    data=json.dumps(ibody))
+        if resp.status_code == 200:
+            return obody
+        else:
+            raise OioException("Failed to poll %s: %s" % (pool, resp.text))
+
+    def all_services(self, type_, full=False):
         uri = self._make_uri("conscience/list")
         params = {'type': type_}
+        if full:
+            params['full'] = '1'
         resp, body = self._request('GET', uri, params=params)
         if resp.status_code == 200:
             return body

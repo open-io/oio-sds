@@ -350,6 +350,11 @@ class ObjectStorageAPI(API):
                    'content_encoding': content_encoding,
                    'etag': etag}
 
+        if not headers:
+            headers = dict()
+        if 'X-oio-req-id' not in headers:
+            headers['X-oio-req-id'] = utils.request_id()
+
         if src is data:
             return self._object_create(
                 account, container, obj_name, StringIO(data), sysmeta,
@@ -370,6 +375,8 @@ class ObjectStorageAPI(API):
     def object_delete(self, account, container, obj, headers={}):
         uri = self._make_uri('content/delete')
         params = self._make_params(account, container, obj)
+        if 'X-oio-req-id' not in headers:
+            headers['X-oio-req-id'] = utils.request_id()
         resp, resp_body = self._request(
             'POST', uri, params=params, headers=headers)
 
@@ -413,6 +420,10 @@ class ObjectStorageAPI(API):
 
     def object_fetch(self, account, container, obj, ranges=None,
                      headers=None, key_file=None):
+        if not headers:
+            headers = dict()
+        if 'X-oio-req-id' not in headers:
+            headers['X-oio-req-id'] = utils.request_id()
         meta, raw_chunks = self.object_analyze(
             account, container, obj, headers=headers)
         chunk_method = meta['chunk-method']
@@ -498,7 +509,15 @@ class ObjectStorageAPI(API):
             )
 
     def _account_request(self, method, uri, **kwargs):
-        account_url = self._get_service_url('account')
+        account_url = None
+        try:
+            account_url = self._get_service_url('account')
+        except exc.ClientException as e:
+            if e.status == 481:
+                raise exc.ClientException(
+                        500, status=481,
+                        message="No valid account service found")
+            raise
         resp, resp_body = self._request(method, uri, endpoint=account_url,
                                         **kwargs)
         return resp, resp_body
@@ -598,7 +617,8 @@ class ObjectStorageAPI(API):
                 "given etag %s != computed %s" % (etag, content_checksum))
         sysmeta['etag'] = content_checksum
 
-        h = {}
+        h = dict()
+        h.update(headers)
         h[object_headers['size']] = bytes_transferred
         h[object_headers['hash']] = sysmeta['etag']
         h[object_headers['version']] = sysmeta['version']

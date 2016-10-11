@@ -1,16 +1,82 @@
 from oio.common.client import Client
 from oio.common.exceptions import ClientException, NotFound, VolumeException
-from oio.directory.client import DirectoryClient
+from oio.conscience.client import ConscienceClient
+from oio.api.directory import DirectoryAPI
 
 
 RDIR_ACCT = '_RDIR'
 
 
+def _make_id(ns, type_, addr):
+    return "%s|%s|%s" % (ns, type_, addr)
+
+
 class RdirClient(Client):
     def __init__(self, conf, **kwargs):
         super(RdirClient, self).__init__(conf, **kwargs)
-        self.directory_client = DirectoryClient(conf, **kwargs)
+        self.directory = DirectoryAPI(self.ns, self.endpoint, **kwargs)
         self._addr_cache = dict()
+
+    def assign_all_rawx(self):
+        """
+        Find a rdir service for all rawx that don't have one already.
+        """
+        cs = ConscienceClient(self.conf)
+        all_rawx = cs.all_services('rawx')
+        all_rdir = cs.all_services('rdir', True)
+        by_id = {_make_id(self.ns, 'rdir', x['addr']): x
+                 for x in all_rdir}
+        for rawx in all_rawx:
+            try:
+                # Verify that there is no rdir linked
+                resp = self.directory.get(RDIR_ACCT, rawx['addr'],
+                                          service_type='rdir')
+                rawx['rdir'] = by_id[_make_id(self.ns, 'rdir',
+                                              self._lookup_rdir_host(resp))]
+            except (NotFound, ClientException):
+                rdir = self._smart_link_rdir(rawx['addr'], cs, all_rdir)
+                n_bases = by_id[rdir]['tags'].get("stat.opened_db_count", 0)
+                by_id[rdir]['tags']["stat.opened_db_count"] = n_bases + 1
+                rawx['rdir'] = by_id[rdir]
+        return all_rawx
+
+    def _smart_link_rdir(self, volume_id, cs=None, all_rdir=None):
+        """
+        Force the load balancer to avoid services that already host more
+        bases than the average while selecting rdir services.
+        """
+        if not cs:
+            cs = ConscienceClient(self.conf)
+        if not all_rdir:
+            all_rdir = cs.all_services('rdir', True)
+        avail_base_count = [x['tags']['stat.opened_db_count'] for x in all_rdir
+                            if x['score'] > 0]
+        mean = sum(avail_base_count) / float(len(avail_base_count))
+        avoids = [_make_id(self.ns, "rdir", x['addr'])
+                  for x in all_rdir
+                  if x['score'] > 0 and
+                  x['tags']['stat.opened_db_count'] > mean]
+        known = [_make_id(self.ns, "rawx", volume_id)]
+        try:
+            polled = cs.poll('rdir', avoid=avoids, known=known)[0]
+        except ClientException as exc:
+            if exc.status != 481:
+                raise
+            # Retry without `avoids`, hoping the next iteration will rebalance
+            polled = cs.poll('rdir', known=known)[0]
+        forced = {'host': polled['addr'], 'type': 'rdir',
+                  'seq': 1, 'args': "", 'id': polled['id']}
+        self.directory.force(RDIR_ACCT, volume_id, 'rdir',
+                             forced, autocreate=True)
+        return polled['id']
+
+    def _link_rdir(self, volume_id, smart=True):
+        if not smart:
+            self.directory.link(RDIR_ACCT, volume_id, 'rdir',
+                                autocreate=True)
+        else:
+            self._smart_link_rdir(volume_id)
+        return self.directory.get(RDIR_ACCT, volume_id, service_type='rdir')
 
     def _lookup_rdir_host(self, resp):
         host = None
@@ -21,19 +87,13 @@ class RdirClient(Client):
             raise ClientException("No rdir service found")
         return host
 
-    def _link_rdir(self, volume_id):
-        self.directory_client.link(acct=RDIR_ACCT, ref=volume_id,
-                                   srv_type='rdir', autocreate=True)
-        return self.directory_client.show(
-                acct=RDIR_ACCT, ref=volume_id, srv_type='rdir')
-
     def _get_rdir_addr(self, volume_id, create=False, nocache=False):
         if not nocache and volume_id in self._addr_cache:
             return self._addr_cache[volume_id]
         resp = {}
         try:
-            resp = self.directory_client.show(acct=RDIR_ACCT, ref=volume_id,
-                                              srv_type='rdir')
+            resp = self.directory.get(RDIR_ACCT, volume_id,
+                                      service_type='rdir')
         except NotFound:
             if not create:
                 raise VolumeException('No such volume %s' % volume_id)
@@ -71,6 +131,7 @@ class RdirClient(Client):
 
     def chunk_push(self, volume_id, container_id, content_id, chunk_id,
                    **data):
+        """Reference a chunk in the reverse directory"""
         body = {'container_id': container_id,
                 'content_id': content_id,
                 'chunk_id': chunk_id}
@@ -84,6 +145,7 @@ class RdirClient(Client):
                            json=body, headers=headers)
 
     def chunk_delete(self, volume_id, container_id, content_id, chunk_id):
+        """Unreference a chunk from the reverse directory"""
         body = {'container_id': container_id,
                 'content_id': content_id,
                 'chunk_id': chunk_id}
@@ -91,6 +153,7 @@ class RdirClient(Client):
         self._rdir_request(volume_id, 'DELETE', 'rdir/delete', json=body)
 
     def chunk_fetch(self, volume, limit=100, rebuild=False):
+        """Fetch the list of chunks belonging to the specified volume"""
         req_body = {'limit': limit}
         if rebuild:
             req_body['rebuild'] = True

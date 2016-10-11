@@ -134,6 +134,7 @@ class TestConscienceFunctional(BaseTestCase):
 
     def test_service_unlock_no_register(self):
         self._flush_cs('echo')
+        self._reload()
         srv = self._srv('echo')
         srv['score'] = -1
         resp = self.session.post(self._url_cs('unlock'), json.dumps(srv))
@@ -143,3 +144,45 @@ class TestConscienceFunctional(BaseTestCase):
         self.assertIsInstance(body, list)
         self.assertListEqual(body, [])
         self._flush_cs('echo')
+
+    def test_not_polled_when_score_is_zero(self):
+        self._flush_cs('echo')
+        srv = self._srv('echo')
+
+        def check_service_known(body):
+            self.assertIsInstance(body, list)
+            self.assertEqual([srv['addr']], [s['addr'] for s in body])
+
+        # register the service with a positive score
+        srv['score'] = 1
+        resp = self.session.post(self._url_cs("lock"), json.dumps(srv))
+        self.assertEqual(resp.status_code, 200)
+        # Ensure the proxy reloads its LB pool
+        self._reload()
+        # check it appears
+        resp = self.session.get(self._url_cs('list'), params={"type": "echo"})
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        check_service_known(body)
+        # check it is polled
+        resp = self.session.post(
+                self._url_lb('poll'), params={"pool": "echo"})
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        check_service_known(body)
+
+        # register the service locked to 0
+        srv['score'] = 0
+        resp = self.session.post(self._url_cs("lock"), json.dumps(srv))
+        self.assertEqual(resp.status_code, 200)
+        # Ensure the proxy reloads its LB pool
+        self._reload()
+        # check it appears
+        resp = self.session.get(self._url_cs('list'), params={"type": "echo"})
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        check_service_known(body)
+        # the service must not be polled
+        resp = self.session.post(
+                self._url_lb('poll'), params={"pool": "echo"})
+        self.assertError(resp, 500, 481)

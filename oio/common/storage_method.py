@@ -1,3 +1,4 @@
+import sys
 from pyeclib.ec_iface import ECDriver
 from oio.common import exceptions
 
@@ -23,9 +24,12 @@ def parse_chunk_method(chunk_method):
             params = tokens[1].split(',')
         if len(params) >= 1:
             for param in params:
-                k, v = param.split('=', 1)
-                param_dict[k] = v
-
+                param = param.lstrip()
+                if '=' in param:
+                    k, v = param.split('=', 1)
+                    param_dict[k] = v
+                elif param:
+                    param_dict[param] = "1"
     return chunk_method, param_dict
 
 
@@ -51,7 +55,8 @@ class StorageMethods(object):
             storage_method, params = parse_chunk_method(chunk_method)
             cls = self.index[storage_method]
         except Exception as exc:
-            raise exceptions.InvalidStorageMethod(str(exc))
+            raise exceptions.InvalidStorageMethod(str(exc)), \
+                None, sys.exc_info()[2]
         params.update(kwargs)
         self.cache[chunk_method] = cls.build(params)
         self.cache[chunk_method].type = storage_method
@@ -122,7 +127,7 @@ class KineticPlainStorageMethod(StorageMethod):
 
     @classmethod
     def build(cls, params):
-        nb_copy = params.pop('nb_copy')
+        nb_copy = params.pop('nb_copy', 1)
         return cls('repli', nb_copy)
 
     @property

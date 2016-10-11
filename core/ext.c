@@ -414,13 +414,13 @@ static gdouble _compute_io_idle (guint major, guint minor) {
 		FILE *fst = fopen ("/proc/diskstats", "r");
 		while (fst && !feof(fst) && !ferror(fst)) {
 			char line[1024], name[256];
+			guint fmajor = 0, fminor = 0;
+			unsigned long long int
+				rd = 0, rd_merged = 0, rd_sectors = 0, rd_time = 0,
+				wr = 0, wr_merged = 0, wr_sectors = 0, wr_time = 0,
+				total_progress = 0, total_time = 0, total_iotime = 0;
 			if (!fgets (line, 1024, fst))
 				break;
-			guint fmajor, fminor;
-			unsigned long long int
-				rd, rd_merged, rd_sectors, rd_time,
-				wr, wr_merged, wr_sectors, wr_time,
-				total_progress, total_time, total_iotime;
 			int rc = sscanf (line, "%u %u %s %llu %llu %llu %llu %llu"
 					"%llu  %llu %llu %llu %llu %llu",
 					&fmajor, &fminor, name,
@@ -442,7 +442,9 @@ static gdouble _compute_io_idle (guint major, guint minor) {
 	}
 
 	/* collect the up-to-date value */
-	idle = out->idle;
+	if (out) {
+		idle = out->idle;
+	}
 
 	/* purge obsolete and exceeding entries of the cache */
 	GSList *kept = NULL, *trash = NULL;
@@ -482,7 +484,7 @@ static int _get_major_minor (const gchar *path, guint *pmaj, guint *pmin) {
 
 	/* maybe refresh it */
 	if (!out->last_update || (now - out->last_update) > 30 * G_TIME_SPAN_SECOND) {
-		struct stat st;
+		struct stat st = {0};
 		if (0 != stat(out->path, &st)) {
 			out = NULL;
 		} else {
@@ -493,8 +495,10 @@ static int _get_major_minor (const gchar *path, guint *pmaj, guint *pmin) {
 	}
 
 	/* collect the up-to-date value */
-	*pmaj = out->major;
-	*pmin = out->minor;
+	if (out) {
+		*pmaj = out->major;
+		*pmin = out->minor;
+	}
 
 	/* now purge the expired items */
 	GSList *kept = NULL, *trash = NULL;
@@ -514,14 +518,14 @@ static int _get_major_minor (const gchar *path, guint *pmaj, guint *pmin) {
 }
 
 gdouble oio_sys_io_idle (const char *vol) {
-	guint maj, min;
+	guint maj = 0, min = 0;
 	if (_get_major_minor(vol, &maj, &min))
 		return _compute_io_idle(maj, min);
 	return 0.01;
 }
 
 gdouble oio_sys_space_idle (const char *vol) {
-	struct statfs sfs;
+	struct statfs sfs = {0};
 	if (statfs(vol, &sfs) < 0)
 		return 0.0;
 	gdouble free_inodes_d = sfs.f_ffree,

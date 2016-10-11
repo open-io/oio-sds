@@ -31,16 +31,17 @@ class DirectoryAPI(API):
         uri = "%s/%s" % (self.namespace, action)
         return uri
 
-    def _make_params(self, account, ref, srv_type=None):
+    def _make_params(self, account, ref, service_type=None):
         params = {'acct': account,
                   'ref': ref}
-        if srv_type:
-            params.update({'type': srv_type})
+        if service_type:
+            params.update({'type': service_type})
         return params
 
-    def get(self, account, reference, headers=None):
+    def get(self, account, reference, headers=None, service_type=None):
         uri = self._make_uri('reference/show')
-        params = self._make_params(account, reference)
+        params = self._make_params(account, reference,
+                                   service_type=service_type)
         resp, resp_body = self._request(
             'GET', uri, params=params, headers=headers)
         return resp_body
@@ -65,12 +66,17 @@ class DirectoryAPI(API):
         resp, resp_body = self._request(
             'POST', uri, params=params, headers=headers)
 
-    def link(self, account, reference, service_type, headers=None):
+    def link(self, account, reference, service_type, headers=None,
+             autocreate=False):
         """
         Poll and associate a new service to the reference.
         """
         uri = self._make_uri('reference/link')
         params = self._make_params(account, reference, service_type)
+        if autocreate:
+            if not headers:
+                headers = dict()
+            headers["X-oio-action-mode"] = "autocreate"
         resp, resp_body = self._request(
             'POST', uri, params=params, headers=headers)
         return resp_body
@@ -94,13 +100,18 @@ class DirectoryAPI(API):
             'POST', uri, params=params, headers=headers)
         return resp_body
 
-    def force(self, account, reference, service_type, services, headers=None):
+    def force(self, account, reference, service_type, services, headers=None,
+              autocreate=False):
         """
         Associate the specified services to the reference.
         """
         uri = self._make_uri('reference/force')
         params = self._make_params(account, reference, service_type)
         data = json.dumps(services)
+        if autocreate:
+            if not headers:
+                headers = dict()
+            headers["X-oio-action-mode"] = "autocreate"
         resp, resp_body = self._request(
             'POST', uri, data=data, params=params, headers=headers)
 

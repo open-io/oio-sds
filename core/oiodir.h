@@ -29,6 +29,8 @@ struct oio_url_s;
 
 struct oio_directory_s;
 
+typedef void (*on_element_f) (void *ctx, const char *key, const char *value);
+
 struct oio_directory_vtable_s
 {
 	void (*destroy) (struct oio_directory_s *self);
@@ -46,6 +48,14 @@ struct oio_directory_vtable_s
 	GError * (*link) (struct oio_directory_s *self,
 			const struct oio_url_s *url, const char *srvtype, gboolean autocreate,
 			gchar ***out_srv);
+
+	/* the OIOURL_TYPE in <url> will be ignored */
+	GError * (*get_prop)(struct oio_directory_s *self,
+			const struct oio_url_s *url, on_element_f fct, void *ctx);
+
+	/* the OIOURL_TYPE in <url> will be ignored */
+	GError * (*set_prop)(struct oio_directory_s *self,
+			const struct oio_url_s *url, const char * const *values);
 };
 
 struct oio_directory_abstract_s
@@ -66,9 +76,17 @@ GError * oio_directory__link (struct oio_directory_s *d,
 		const struct oio_url_s *url, const char *srvtype, gboolean autocreate,
 		gchar ***out_srv);
 
+/** Get properties attached to a reference (saved in meta1) */
+GError * oio_directory__get_properties(struct oio_directory_s *self,
+		const struct oio_url_s *url, on_element_f fct, void *ctx);
+
+/** Set properties of a reference (saved in meta1) */
+GError * oio_directory__set_properties(struct oio_directory_s *self,
+		const struct oio_url_s *url, const char * const *values);
+
 /* Implementation specifics ------------------------------------------------- */
 
-/* create a directory that perform dorect access to the meta0 and meta1
+/* create a directory that perform direct access to the meta0 and meta1
  * services */
 struct oio_directory_s * oio_directory__create_proxy (const char *ns);
 

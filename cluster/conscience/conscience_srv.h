@@ -70,11 +70,13 @@ struct service_tag_s *conscience_srv_get_tag(struct
 struct service_tag_s *conscience_srv_ensure_tag(struct
     conscience_srv_s *srv, const gchar * name);
 
-void conscience_srv_fill_srvinfo( struct service_info_s *dst,
+void conscience_srv_fill_srvinfo(struct service_info_s *dst,
 		struct conscience_srv_s *src);
 
-void conscience_srv_fill_srvinfo_header( struct service_info_s *dst,
+void conscience_srv_fill_srvinfo_header(struct service_info_s *dst,
 		struct conscience_srv_s *src);
+
+void conscience_srv_clean_udata(struct conscience_srv_s *srv);
 
 static inline void
 service_ring_remove(struct conscience_srv_s *service)

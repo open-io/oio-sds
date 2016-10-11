@@ -242,10 +242,13 @@ class PrefixMapping(object):
                 pfxs = {x for x in random.sample(svc_pfx,
                                                  len(svc_pfx)-ideal_pfx_by_svc)
                         if x not in moved_prefixes}
-                self.decommission(svc, pfxs)
-                for pfx in pfxs:
-                    moved_prefixes.add(pfx)
-                    loops += 1
+                if pfxs:
+                    self.decommission(svc, pfxs)
+                    for pfx in pfxs:
+                        moved_prefixes.add(pfx)
+                        loops += 1
+                else:
+                    loops += 1  # safeguard against infinite loops
         if self.logger:
             self.logger.info("Rebalance moved %d prefixes",
                              len(moved_prefixes))

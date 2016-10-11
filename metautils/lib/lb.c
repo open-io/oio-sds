@@ -159,9 +159,18 @@ oio_lb_pool__from_service_policy(struct oio_lb_world_s *lbw,
 	GString *targets = g_string_sized_new(64);
 	g_string_append_printf(targets, "%s", srvtype);
 
+	gchar *user_is_service = service_update_get_tag_value(
+			pols, srvtype, NAME_TAGNAME_USER_IS_SERVICE);
 	guint howmany = service_howmany_replicas(pols, srvtype);
-	GRID_DEBUG("pool [%s] will target [%s] %u times",
-			srvtype, targets->str, howmany);
+	if (user_is_service) {
+		oio_lb_world__add_pool_target(pool, user_is_service);
+		GRID_INFO("pool [%s] will target [%s] 1 time and [%s] %u times",
+				srvtype, user_is_service, targets->str, howmany);
+		g_free(user_is_service);
+	} else {
+		GRID_INFO("pool [%s] will target [%s] %u times",
+				srvtype, targets->str, howmany);
+	}
 	for (; howmany > 0; howmany--)
 		oio_lb_world__add_pool_target(pool, targets->str);
 
