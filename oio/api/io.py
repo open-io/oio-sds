@@ -19,6 +19,7 @@ from oio.common.exceptions import ConnectionTimeout, ChunkReadTimeout
 from oio.common import exceptions as exc
 from oio.common.http import http_connect, parse_content_type,\
     parse_content_range, ranges_from_http_header, http_header_from_ranges
+from oio.common.utils import GeneratorReader
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +136,7 @@ class ChunkReader(object):
         self.connection_timeout = connection_timeout or CONNECTION_TIMEOUT
         self.response_timeout = response_timeout or CHUNK_TIMEOUT
         self.read_timeout = read_timeout or CHUNK_TIMEOUT
+        self._resp_by_chunk = dict()
 
     def recover(self, nb_bytes):
         """
@@ -200,6 +202,7 @@ class ChunkReader(object):
             return True
         else:
             logger.warn("Invalid GET response from %s", chunk)
+            self._resp_by_chunk[chunk["url"]] = (source.status, source.reason)
         return False
 
     def _get_source(self):
@@ -218,6 +221,21 @@ class ChunkReader(object):
         if source:
             return self._get_iter(chunk, source)
         return None
+
+    def stream(self):
+        # Calling that right now will make `headers` field available
+        # before the caller starts reading the stream
+        parts_iter = self.get_iter()
+        if not parts_iter:
+            raise exc.from_status(*self._resp_by_chunk.popitem()[1])
+
+        def _iter():
+            for part in parts_iter:
+                for data in part['iter']:
+                    yield data
+            raise StopIteration
+
+        return GeneratorReader(_iter())
 
     def fill_ranges(self, start, end, length):
         """
@@ -372,13 +390,24 @@ class ChunkReader(object):
 
     @property
     def headers(self):
-        return self._headers
+        if not self._headers:
+            return dict()
+        return dict(self._headers)
 
     def _create_iter(self, chunk, source):
         parts_iter = self._get_iter(chunk, source)
         for part in parts_iter:
             for d in part['iter']:
                 yield d
+
+    def __iter__(self):
+        parts_iter = self.get_iter()
+        if not parts_iter:
+            raise exc.ChunkException()
+        for part in parts_iter:
+            for data in part['iter']:
+                yield data
+        raise StopIteration
 
 
 def make_iter_from_resp(resp):

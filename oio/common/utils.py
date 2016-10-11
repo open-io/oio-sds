@@ -537,6 +537,10 @@ class GeneratorReader(object):
             return "".join(islice(self.generator, size))
         return "".join(self.generator)
 
+    def close(self):
+        # TODO: maybe we should prevent reads after close
+        pass
+
     def __iter__(self):
         for chunk in self.generator:
             yield chunk

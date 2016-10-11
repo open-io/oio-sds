@@ -200,6 +200,11 @@ class Conflict(ClientException):
 _http_status_map = {404: NotFound, 409: Conflict}
 
 
+def from_status(status, reason="n/a"):
+    cls = _http_status_map.get(status, ClientException)
+    return cls(status, None, reason)
+
+
 def from_response(resp, body=None):
     http_status = resp.status_code
     cls = _http_status_map.get(http_status, ClientException)

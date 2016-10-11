@@ -1,7 +1,8 @@
 from urllib import quote_plus
 from oio.common.http import requests
-from oio.common import exceptions as exc
+from oio.common import exceptions as exc, utils
 from oio.common.constants import chunk_headers, chunk_xattr_keys_optional
+from oio.api.io import ChunkReader
 
 
 READ_BUFFER_SIZE = 65535
@@ -56,13 +57,14 @@ class BlobClient(object):
             raise exc.from_response(resp)
 
     def chunk_get(self, url, **kwargs):
-        resp = self.session.get(url, stream=True)
-        if resp.status_code == 200:
-            meta = extract_headers_meta(resp.headers)
-            stream = resp.iter_content(READ_BUFFER_SIZE)
-            return meta, stream
-        else:
-            raise exc.from_response(resp)
+        req_id = kwargs.get('req_id')
+        if not req_id:
+            req_id = utils.request_id()
+        reader = ChunkReader([{'url': url}], READ_BUFFER_SIZE,
+                             {'X-oio-req-id': req_id})
+        stream = reader.stream()
+        headers = extract_headers_meta(reader.headers)
+        return headers, stream
 
     def chunk_head(self, url, **kwargs):
         resp = self.session.head(url)
@@ -73,10 +75,13 @@ class BlobClient(object):
 
     def chunk_copy(self, from_url, to_url, **kwargs):
         stream = None
+        req_id = kwargs.get('req_id')
+        if not req_id:
+            req_id = utils.request_id()
         try:
-            meta, stream = self.chunk_get(from_url)
+            meta, stream = self.chunk_get(from_url, req_id=req_id)
             meta['chunk_id'] = to_url.split('/')[-1]
-            copy_meta = self.chunk_put(to_url, meta, stream)
+            copy_meta = self.chunk_put(to_url, meta, stream, req_id=req_id)
             return copy_meta
         finally:
             if stream:
