@@ -15,7 +15,7 @@ class ShowAdminVolume(show.ShowOne):
         parser.add_argument(
             'volume',
             metavar='<volume>',
-            help='Volume to show')
+	    help='Volume to show where volume is the IP:PORT of the rawx service')
         return parser
 
     def take_action(self, parsed_args):
@@ -41,7 +41,7 @@ class ClearAdminVolume(lister.Lister):
             'volumes',
             metavar='<volumes>',
             nargs='+',
-            help='Volume(s) to clear',
+	    help='Volume(s) to clear where volume are the IP:PORT of the rawx services',
         )
         return parser
 
@@ -69,7 +69,7 @@ class ShowVolume(show.ShowOne):
         parser.add_argument(
             'volume',
             metavar='<volume>',
-            help='Volume to show',
+	    help='Volume to show where volume is the IP:PORT of the rawx service',
         )
         return parser
 
@@ -93,7 +93,7 @@ class IncidentAdminVolume(lister.Lister):
             'volumes',
             metavar='<volumes>',
             nargs='+',
-            help='Volume(s) to set incident on',
+	    help='Volume(s) to set incident on where volume are the IP:PORT of the rawx services',
         )
         parser.add_argument(
             '--date',
@@ -131,7 +131,7 @@ class LockAdminVolume(lister.Lister):
             'volumes',
             metavar='<volumes>',
             nargs='+',
-            help='Volume(s) to lock')
+	    help='Volume(s) to lock where volume are the IP:PORT of the rawx services')
         parser.add_argument(
             '--key',
             metavar='<key>',
@@ -165,7 +165,7 @@ class UnlockAdminVolume(lister.Lister):
             'volumes',
             metavar='<volumes>',
             nargs='+',
-            help='Volume(s) to unlock')
+	    help='Volume(s) to unlock where volume are the IP:PORT of the rawx services')
         return parser
 
     def take_action(self, parsed_args):
