@@ -70,12 +70,14 @@ class TestBlobAuditorFunctional(BaseTestCase):
 
         chunk_meta = {'content_path': self.content.path,
                       'container_id': self.content.id_container,
-                      'content_chunkmethod': 'plain/nb_copy=3',
-                      'content_policy': 'TESTPOLICY',
-                      'content_id': '0000',
-                      'content_version': 1,
+                      'chunk_method': 'plain/nb_copy=3',
+                      'policy': 'TESTPOLICY',
+                      'id': '0000',
+                      'version': 1,
                       'chunk_id': self.chunk.id_chunk,
-                      'chunk_pos': self.chunk.pos}
+                      'chunk_pos': self.chunk.pos,
+                      'chunk_hash': self.chunk.md5,
+                      }
         self.blob_c.chunk_put(self.chunk_url, chunk_meta, self.data)
 
         self.chunk_path = self.test_dir + '/data/' + self.namespace + \

@@ -27,17 +27,35 @@ from oio.common.constants import chunk_headers
 logger = logging.getLogger(__name__)
 
 
+class FakeChecksum(object):
+    """Acts as a checksum object but does not compute anything"""
+
+    def __init__(self, actual_checksum):
+        self.checksum = actual_checksum
+
+    def hexdigest(self):
+        """Returns the checksum passed as constructor parameter"""
+        return self.checksum
+
+    def update(self, *_args, **_kwargs):
+        pass
+
+
 class ReplicatedChunkWriteHandler(object):
-    def __init__(self, sysmeta, meta_chunk, checksum, storage_method):
+    def __init__(self, sysmeta, meta_chunk, checksum, storage_method,
+                 quorum=None):
         self.sysmeta = sysmeta
         self.meta_chunk = meta_chunk
         self.checksum = checksum
         self.storage_method = storage_method
+        self._quorum = quorum
 
     def _check_quorum(self, conns):
-        return len(conns) >= self.storage_method.quorum
+        if self._quorum is None:
+            return len(conns) >= self.storage_method.quorum
+        return len(conns) >= self._quorum
 
-    def stream(self, source, size):
+    def stream(self, source, size=None):
         bytes_transferred = 0
 
         def _connect_put(chunk):
@@ -47,6 +65,8 @@ class ReplicatedChunkWriteHandler(object):
                 chunk_path = parsed.path.split('/')[-1]
                 h = {}
                 h["transfer-encoding"] = "chunked"
+                # FIXME: remove key incoherencies
+                # TODO: automatize key conversions
                 h[chunk_headers["content_id"]] = self.sysmeta['id']
                 h[chunk_headers["content_version"]] = self.sysmeta['version']
                 h[chunk_headers["content_path"]] = \
@@ -57,6 +77,14 @@ class ReplicatedChunkWriteHandler(object):
                 h[chunk_headers["container_id"]] = self.sysmeta['container_id']
                 h[chunk_headers["chunk_pos"]] = chunk["pos"]
                 h[chunk_headers["chunk_id"]] = chunk_path
+
+                # Used during reconstruction of EC chunks
+                if self.sysmeta['chunk_method'].startswith('ec'):
+                    h[chunk_headers["metachunk_size"]] = \
+                        self.sysmeta["metachunk_size"]
+                    h[chunk_headers["metachunk_hash"]] = \
+                        self.sysmeta["metachunk_hash"]
+
                 with ConnectionTimeout(io.CONNECTION_TIMEOUT):
                     conn = io.http_connect(
                         parsed.netloc, 'PUT', parsed.path, h)
@@ -64,7 +92,7 @@ class ReplicatedChunkWriteHandler(object):
                 return conn, chunk
             except (Exception, Timeout) as e:
                 msg = str(e)
-                logger.error("Failed to connect to %s (%s)", chunk, msg)
+                logger.exception("Failed to connect to %s (%s)", chunk, msg)
                 chunk['error'] = msg
                 return None, chunk
 
@@ -87,10 +115,9 @@ class ReplicatedChunkWriteHandler(object):
             else:
                 current_conns.append(conn)
 
-        quorum = False
         quorum = self._check_quorum(current_conns)
         if not quorum:
-            raise exc.OioException("RAWX write failure")
+            raise exc.OioException("RAWX write failure, quorum not satisfied")
 
         bytes_transferred = 0
         try:
@@ -101,11 +128,14 @@ class ReplicatedChunkWriteHandler(object):
                     pool.spawn(self._send_data, conn)
 
                 while True:
-                    remaining_bytes = size - bytes_transferred
-                    if io.WRITE_CHUNK_SIZE < remaining_bytes:
-                        read_size = io.WRITE_CHUNK_SIZE
+                    if size is not None:
+                        remaining_bytes = size - bytes_transferred
+                        if io.WRITE_CHUNK_SIZE < remaining_bytes:
+                            read_size = io.WRITE_CHUNK_SIZE
+                        else:
+                            read_size = remaining_bytes
                     else:
-                        read_size = remaining_bytes
+                        read_size = io.WRITE_CHUNK_SIZE
                     with SourceReadTimeout(io.CLIENT_TIMEOUT):
                         try:
                             data = source.read(read_size)

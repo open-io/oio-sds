@@ -18,6 +18,7 @@ from oio.common.exceptions import OrphanChunk
 from oio.content.content import Content, Chunk
 from oio.api.ec import ECChunkDownloadHandler, ECWriteHandler, ECRebuildHandler
 from oio.api.object_storage import _sort_chunks, get_meta_ranges
+from oio.common.utils import GeneratorReader
 
 
 class ECContent(Content):
@@ -43,14 +44,28 @@ class ECContent(Content):
         meta['chunk_id'] = new_chunk.id
         meta['chunk_pos'] = current_chunk.pos
         meta['container_id'] = self.container_id
-        meta['content_chunkmethod'] = self.chunk_method
-        meta['content_id'] = self.content_id
+
+        # FIXME: should be 'content_chunkmethod' everywhere
+        # but sadly it isn't
+        meta['chunk_method'] = self.chunk_method
+
+        # FIXME: should be 'content_id' everywhere
+        # but sadly it isn't
+        meta['id'] = self.content_id
+
         meta['content_path'] = self.path
-        meta['content_policy'] = self.stgpol
-        meta['content_version'] = self.version
+
+        # FIXME: should be 'content_policy' everywhere
+        # but sadly it isn't
+        meta['policy'] = self.stgpol
+
+        # FIXME: should be 'content_version' everywhere
+        # but sadly it isn't
+        meta['version'] = self.version
+
         meta['metachunk_hash'] = current_chunk.checksum
         meta['metachunk_size'] = current_chunk.size
-        self.blob_client.chunk_put(spare_url[0], meta, stream)
+        self.blob_client.chunk_put(spare_url[0], meta, GeneratorReader(stream))
         self._update_spare_chunk(current_chunk, spare_url[0])
 
     def fetch(self):

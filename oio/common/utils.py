@@ -527,15 +527,46 @@ def request_id():
 
 
 class GeneratorReader(object):
-    """Make a file-like object from a generator"""
+    """
+    Make a file-like object from a generator.
+    `gen` is the generator to read.
+    `sub_generator` is a boolean telling that the generator
+    yields sequences of bytes instead of bytes.
+    """
 
-    def __init__(self, gen):
-        self.generator = gen
+    def __init__(self, gen, sub_generator=True):
+        self.generator = self._wrap(gen)
+        self._sub_gen = sub_generator
+
+    def _wrap(self, gen):
+        """
+        Wrap the provided generator so it yields bytes
+        instead of sequences of bytes
+        """
+        for part in gen:
+            if part:
+                if self._sub_gen:
+                    try:
+                        for byte in part:
+                            yield byte
+                    except TypeError:
+                        # The yielded elements do not support iteration
+                        # thus we will disable it
+                        self._sub_gen = False
+                        yield part
+                else:
+                    yield part
+            else:
+                raise StopIteration
 
     def read(self, size=None):
         if size is not None:
             return "".join(islice(self.generator, size))
         return "".join(self.generator)
+
+    def close(self):
+        # TODO: maybe we should prevent reads after close
+        pass
 
     def __iter__(self):
         for chunk in self.generator:

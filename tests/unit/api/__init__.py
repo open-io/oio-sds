@@ -53,6 +53,9 @@ class FakeResponse(object):
     def __repr__(self):
         return 'FakeResponse(status=%s)' % self.status
 
+    def reason(self):
+        return str(self.status)
+
 
 def decode_chunked_body(raw_body):
     body = ''
