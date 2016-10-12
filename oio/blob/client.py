@@ -3,6 +3,8 @@ from oio.common.http import requests
 from oio.common import exceptions as exc, utils
 from oio.common.constants import chunk_headers, chunk_xattr_keys_optional
 from oio.api.io import ChunkReader
+from oio.api.replication import ReplicatedChunkWriteHandler, FakeChecksum
+from oio.common.storage_method import STORAGE_METHODS
 
 
 READ_BUFFER_SIZE = 65535
@@ -44,12 +46,19 @@ class BlobClient(object):
         self.session = requests.Session()
 
     def chunk_put(self, url, meta, data, **kwargs):
-        headers = gen_put_headers(meta)
-        resp = self.session.put(url, data=data, headers=headers)
-        if resp.status_code == 201:
-            return extract_headers_meta(resp.headers)
-        else:
-            raise exc.from_response(resp)
+        if not hasattr(data, 'read'):
+            data = utils.GeneratorReader(data)
+        chunk = {'url': url, 'pos': meta['chunk_pos']}
+        # FIXME: ugly
+        chunk_method = meta.get('chunk_method',
+                                meta.get('content_chunkmethod'))
+        storage_method = STORAGE_METHODS.load(chunk_method)
+        checksum = meta['metachunk_hash' if storage_method.ec
+                        else 'chunk_hash']
+        writer = ReplicatedChunkWriteHandler(
+            meta, [chunk], FakeChecksum(checksum),
+            storage_method, quorum=1)
+        writer.stream(data, None)
 
     def chunk_delete(self, url, **kwargs):
         resp = self.session.delete(url)
@@ -62,6 +71,7 @@ class BlobClient(object):
             req_id = utils.request_id()
         reader = ChunkReader([{'url': url}], READ_BUFFER_SIZE,
                              {'X-oio-req-id': req_id})
+        # This must be done now if we want to access headers
         stream = reader.stream()
         headers = extract_headers_meta(reader.headers)
         return headers, stream
@@ -81,6 +91,12 @@ class BlobClient(object):
         try:
             meta, stream = self.chunk_get(from_url, req_id=req_id)
             meta['chunk_id'] = to_url.split('/')[-1]
+            # FIXME: the original keys are the good ones.
+            # ReplicatedChunkWriteHandler should be modified to accept them.
+            meta['id'] = meta['content_id']
+            meta['version'] = meta['content_version']
+            meta['chunk_method'] = meta['content_chunkmethod']
+            meta['policy'] = meta['content_policy']
             copy_meta = self.chunk_put(to_url, meta, stream, req_id=req_id)
             return copy_meta
         finally:
