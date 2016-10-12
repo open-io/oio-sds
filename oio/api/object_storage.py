@@ -136,7 +136,7 @@ def _make_object_metadata(headers):
     for k, v in headers.iteritems():
         k = k.lower()
         if k.startswith(prefix):
-            key = k.replace(prefix, "")
+            key = k.replace(prefix, "").replace('-', '_')
             # TODO temporary workaround
             if key.startswith('x-'):
                 props[key[2:]] = v
@@ -310,8 +310,8 @@ class ObjectStorageAPI(API):
 
     @handle_container_not_found
     def object_create(self, account, container, file_or_path=None, data=None,
-                      etag=None, obj_name=None, content_type=None,
-                      content_encoding=None, metadata=None, policy=None,
+                      etag=None, obj_name=None, mime_type=None,
+                      metadata=None, policy=None,
                       headers=None, key_file=None,
                       **_kwargs):
         """
@@ -344,8 +344,7 @@ class ObjectStorageAPI(API):
                 "No name for the object has been specified"
             )
 
-        sysmeta = {'mime_type': content_type,
-                   'content_encoding': content_encoding,
+        sysmeta = {'mime_type': mime_type,
                    'etag': etag}
 
         if not headers:
@@ -424,7 +423,7 @@ class ObjectStorageAPI(API):
             headers['X-oio-req-id'] = utils.request_id()
         meta, raw_chunks = self.object_analyze(
             account, container, obj, headers=headers)
-        chunk_method = meta['chunk-method']
+        chunk_method = meta['chunk_method']
         storage_method = STORAGE_METHODS.load(chunk_method)
         chunks = _sort_chunks(raw_chunks, storage_method.ec)
         meta['container_id'] = utils.name2cid(account, container).upper()
@@ -581,7 +580,8 @@ class ObjectStorageAPI(API):
         sysmeta['id'] = meta[object_headers['id']]
         sysmeta['version'] = meta[object_headers['version']]
         sysmeta['policy'] = meta[object_headers['policy']]
-        sysmeta['mime_type'] = meta[object_headers['mime_type']]
+        if not sysmeta.get('mime_type'):
+            sysmeta['mime_type'] = meta[object_headers['mime_type']]
         sysmeta['chunk_method'] = meta[object_headers['chunk_method']]
         sysmeta['content_path'] = obj_name
         sysmeta['container_id'] = utils.name2cid(account, container).upper()

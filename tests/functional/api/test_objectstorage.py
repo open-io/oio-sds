@@ -262,3 +262,10 @@ class TestObjectStorageAPI(BaseTestCase):
         self.assertRaises(
             exc.NoSuchContainer, self.api.container_del_properties,
             self.account, name, metadata.keys())
+
+    def test_object_create_mime_type(self):
+        name = random_str(32)
+        self.api.object_create(self.account, name, data="data", obj_name=name,
+                               mime_type='text/custom')
+        meta, _ = self.api.object_analyze(self.account, name, name)
+        self.assertEqual(meta['mime_type'], 'text/custom')

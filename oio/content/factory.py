@@ -39,7 +39,7 @@ class ContentFactory(object):
             raise ContentNotFound("Content %s/%s not found" % (container_id,
                                   content_id))
 
-        chunk_method = meta['chunk-method']
+        chunk_method = meta['chunk_method']
         storage_method = STORAGE_METHODS.load(chunk_method)
 
         cls = ECContent if storage_method.ec else PlainContent
@@ -49,7 +49,7 @@ class ContentFactory(object):
         meta, chunks = self.container_client.content_prepare(
             cid=container_id, path=path, size=size, stgpol=policy)
 
-        chunk_method = meta['chunk-method']
+        chunk_method = meta['chunk_method']
         storage_method = STORAGE_METHODS.load(chunk_method)
 
         cls = ECContent if storage_method.ec else PlainContent
