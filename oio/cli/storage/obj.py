@@ -51,6 +51,12 @@ class CreateObject(lister.Lister):
             metavar='<key_file>',
             help='File containing application keys'
         )
+        parser.add_argument(
+            '--mime-type',
+            metavar='<type>',
+            help='Object MIME type',
+            default=None
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -84,7 +90,8 @@ class CreateObject(lister.Lister):
                     content_length=get_file_size(f),
                     policy=policy,
                     metadata=properties,
-                    key_file=key_file)
+                    key_file=key_file,
+                    mime_type=parsed_args.mime_type)
 
                 results.append((name, data[1], data[2].upper()))
 
@@ -160,7 +167,7 @@ class ShowObject(show.ShowOne):
                 'object': obj,
                 'id': data['id'],
                 'version': data['version'],
-                'mime-type': data['mime-type'],
+                'mime-type': data['mime_type'],
                 'size': data['length'],
                 'hash': data['hash'],
                 'ctime': data['ctime'],
@@ -365,7 +372,7 @@ class ListObject(lister.Lister):
             l = resp['objects']
         if parsed_args.long_listing:
             results = (
-                (obj['name'], obj['size'], obj['hash'], obj['mime-type'],
+                (obj['name'], obj['size'], obj['hash'], obj['mime_type'],
                  Timestamp(obj['ctime']).isoformat)
                 for obj in l)
             columns = ('Name', 'Size', 'Hash', 'Content-Type', 'Last-Modified')

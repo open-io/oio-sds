@@ -9,7 +9,7 @@ def extract_content_headers_meta(headers):
     resp_headers = {}
     for key in headers:
         if key.lower().startswith(CONTENT_HEADER_PREFIX):
-            short_key = key[len(CONTENT_HEADER_PREFIX):]
+            short_key = key[len(CONTENT_HEADER_PREFIX):].replace('-', '_')
             resp_headers[short_key] = unquote_plus(headers[key])
     chunk_size = headers.get('x-oio-ns-chunk-size')
     if chunk_size:

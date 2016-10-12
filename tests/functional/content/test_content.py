@@ -78,14 +78,14 @@ class TestContentFactory(BaseTestCase):
 
     def test_get_ec(self):
         meta = {
-            "chunk-method": "ec/algo=liberasurecode_rs_vand,k=6,m=2",
+            "chunk_method": "ec/algo=liberasurecode_rs_vand,k=6,m=2",
             "ctime": "1450176946",
             "deleted": "False",
             "hash": "E952A419957A6E405BFC53EC65483F73",
-            "hash-method": "md5",
+            "hash_method": "md5",
             "id": "3FA2C4A1ED2605005335A276890EC458",
             "length": "658",
-            "mime-type": "application/octet-stream",
+            "mime_type": "application/octet-stream",
             "name": "tox.ini",
             "policy": self.stgpol_ec,
             "version": "1450176946676289"
@@ -125,14 +125,14 @@ class TestContentFactory(BaseTestCase):
 
     def test_get_plain(self):
         meta = {
-            "chunk-method": "plain/nb_copy=2",
+            "chunk_method": "plain/nb_copy=2",
             "ctime": "1450176946",
             "deleted": "False",
             "hash": "E952A419957A6E405BFC53EC65483F73",
-            "hash-method": "md5",
+            "hash_method": "md5",
             "id": "3FA2C4A1ED2605005335A276890EC458",
             "length": "658",
-            "mime-type": "application/octet-stream",
+            "mime_type": "application/octet-stream",
             "name": "tox.ini",
             "policy": self.stgpol_twocopies,
             "version": "1450176946676289"
@@ -166,14 +166,14 @@ class TestContentFactory(BaseTestCase):
 
     def test_new_ec(self):
         meta = {
-            "chunk-method": "ec/algo=liberasurecode_rs_vand,k=6,m=2",
+            "chunk_method": "ec/algo=liberasurecode_rs_vand,k=6,m=2",
             "ctime": "1450341162",
             "deleted": "False",
             "hash": "",
-            "hash-method": "md5",
+            "hash_method": "md5",
             "id": "F4B1C8DD132705007DE8B43D0709DAA2",
             "length": "1000",
-            "mime-type": "application/octet-stream",
+            "mime_type": "application/octet-stream",
             "name": "titi",
             "policy": self.stgpol_ec,
             "version": "1450341162332663"

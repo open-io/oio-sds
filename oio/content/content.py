@@ -42,8 +42,8 @@ class Content(object):
         self.length = int(self.metadata["length"])
         self.version = self.metadata["version"]
         self.checksum = self.metadata["hash"]
-        self.mime_type = self.metadata["mime-type"]
-        self.chunk_method = self.metadata["chunk-method"]
+        self.mime_type = self.metadata["mime_type"]
+        self.chunk_method = self.metadata["chunk_method"]
 
     def _get_spare_chunk(self, chunks_notin, chunks_broken):
         spare_data = {
