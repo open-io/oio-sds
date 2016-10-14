@@ -219,7 +219,9 @@ _dir_proxy_list (struct oio_directory_s *self,
 			json_object_put (jbody);
 		json_tokener_free (tok);
 	}
-	g_string_free (out, TRUE);
+	if (out) {
+		g_string_free (out, TRUE);
+	}
 
 	return err;
 }
@@ -281,7 +283,9 @@ _dir_proxy_get_prop(struct oio_directory_s *self, const struct oio_url_s *url,
 		}
 	}
 
-	g_string_free(out, TRUE);
+	if (out) {
+		g_string_free(out, TRUE);
+	}
 	curl_easy_cleanup(h);
 	oio_url_pclean(&u);
 	return err;
