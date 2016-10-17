@@ -163,6 +163,7 @@ enum {
 	CODE_NOT_IMPLEMENTED = 501,
 	CODE_PROXY_ERROR = 502, // unknown error when contacting an other service
 	CODE_UNAVAILABLE = 503,
+	CODE_EXCESSIVE_LOAD = 504,
 
 	CODE_PLATFORM_ERROR = 600,
 };

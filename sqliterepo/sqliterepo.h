@@ -127,6 +127,9 @@ struct sqlx_repo_config_s
 	enum sqlx_sync_mode_e sync_repli; /**< Which value for pragma synchronous'
 									   for replicated bases */
 	guint page_size;
+
+	/* Cache maximum number of items */
+	guint max_bases;
 };
 
 /* ------------------------------------------------------------------------- */

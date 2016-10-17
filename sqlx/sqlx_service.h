@@ -115,7 +115,8 @@ struct sqlx_service_s
 	/* This is configured during the "configure" step, and can be overriden
 	   in the _post_config hook. */
 	gint64 open_timeout;
-	guint max_bases;
+	guint max_bases_soft;
+	guint max_bases_hard;
 	guint max_passive;
 	guint max_active;
 	guint max_elections_timers_per_round;
@@ -125,7 +126,10 @@ struct sqlx_service_s
 	// anymore after that.
 	//-------------------------------------------------------------------
 
-	guint cfg_max_bases;
+	guint cfg_max_waiters;
+	guint cfg_max_bases_hard;
+	guint cfg_max_bases_soft;
+
 	guint cfg_max_passive;
 	guint cfg_max_active;
 	guint cfg_max_workers;

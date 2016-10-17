@@ -76,34 +76,93 @@ _round_lock(sqlx_cache_t *cache)
 static void
 test_lock (void)
 {
-	sqlx_cache_t *cache = sqlx_cache_init();
+	sqlx_cache_t *cache = sqlx_cache_init(16);
 	g_assert(cache != NULL);
-	sqlx_cache_set_max_bases (cache, 16);
+	sqlx_cache_set_max_bases (cache, 8);
 	sqlx_cache_set_close_hook(cache, sqlite_close);
-	for (int i=0; i<5 ;++i)
-		_round_lock (cache);
-	sqlx_cache_debug(cache);
-	sqlx_cache_expire(cache, 0, 0);
+	for (int j=g_random_int_range(3,5); j>0 ;j--) {
+		for (int i=g_random_int_range(5,7); i>0 ;i--)
+			_round_lock (cache);
+		sqlx_cache_debug(cache);
+		sqlx_cache_expire(cache, 0, 0);
+	}
 	sqlx_cache_clean(cache);
 }
 
 static void
 _round_init (void)
 {
-	sqlx_cache_t *cache = sqlx_cache_init();
+	sqlx_cache_t *cache = sqlx_cache_init(16);
 	g_assert(cache != NULL);
-	sqlx_cache_set_max_bases (cache, 16);
-	sqlx_cache_set_close_hook(cache, sqlite_close);
-	sqlx_cache_debug(cache);
-	sqlx_cache_expire(cache, 0, 0);
+	for (int j=g_random_int_range(3,5); j>0 ;j--) {
+		sqlx_cache_set_max_bases (cache, 8);
+		sqlx_cache_set_close_hook(cache, sqlite_close);
+		sqlx_cache_debug(cache);
+		sqlx_cache_expire(cache, 0, 0);
+	}
 	sqlx_cache_clean(cache);
 }
 
 static void
 test_init (void)
 {
-	for (int i=0; i<5 ;++i)
+	for (int i=g_random_int_range(3,5); i>0; i--)
 		_round_init ();
+}
+
+static void
+_test_cache_limit (sqlx_cache_t *cache, guint max)
+{
+	gint ids[max];
+
+	// 1 Until the limit, Opens must succeed
+	for (guint i=0; i<max ;++i) {
+		gchar name[16];
+		g_snprintf(name, sizeof(name), "base-%u", i);
+		hashstr_t *hname = hashstr_create(name);
+		GError *err = sqlx_cache_open_and_lock_base (
+				cache, hname, FALSE, ids+i);
+		g_assert_no_error(err);
+		g_assert_cmpint(ids[i], >=, 0);
+		g_free(hname);
+	}
+
+	// 2 Then they must fail, past that limit
+	do {
+		gint id0 = -1;
+		hashstr_t *hn = hashstr_create("X");
+		GError *err = sqlx_cache_open_and_lock_base (cache, hn, FALSE, &id0);
+		g_assert_error (err, GQ(), CODE_UNAVAILABLE);
+		g_clear_error (&err);
+		g_free(hn);
+	} while (0);
+
+	// 3 a bit of cleanup
+	for (guint i=0; i<max ;++i) {
+		GError *err = sqlx_cache_unlock_and_close_base(cache, ids[i], FALSE);
+		g_assert_no_error(err);
+	}
+}
+
+static void
+test_limit (void)
+{
+	guint all_maxes[] = {1, 2, 4, 8, 0};
+	for (guint imax=0; all_maxes[imax] != 0 ;++imax) {
+
+		guint hardmax = all_maxes[imax];
+		sqlx_cache_t *cache = sqlx_cache_init(hardmax);
+		g_assert_nonnull(cache);
+		_test_cache_limit (cache, hardmax);
+		if (hardmax > 1) {
+			guint softmax = hardmax / 2;
+			sqlx_cache_set_max_bases(cache, softmax);
+			_test_cache_limit (cache, softmax);
+		}
+		sqlx_cache_debug(cache);
+		sqlx_cache_expire(cache, 0, 0);
+		sqlx_cache_clean(cache);
+	}
 }
 
 int
@@ -112,6 +171,7 @@ main(int argc, char ** argv)
 	HC_TEST_INIT(argc, argv);
 	g_test_add_func("/sqliterepo/cache/init", test_init);
 	g_test_add_func("/sqliterepo/cache/lock", test_lock);
+	g_test_add_func("/sqliterepo/cache/limit", test_limit);
 	return g_test_run();
 }
 

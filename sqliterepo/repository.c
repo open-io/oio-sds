@@ -273,12 +273,16 @@ sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 	struct stat s;
 	sqlx_repository_t *repo;
 
+	g_assert_nonnull(vol);
+	g_assert_nonnull(cfg);
+	g_assert_nonnull(result);
+
 	(void) sqlite3_initialize();
 
 	if (!sqlite3_threadsafe())
 		return NEWERROR(0, "SQLite not in safe mode");
 
-	if (cfg && cfg->flags & SQLX_REPO_NOCACHE) {
+	if (cfg->flags & SQLX_REPO_NOCACHE) {
 		/* if there are several connections on the same base, we will use a
 		   shared cache that wil prevent us of too many I/O operations. */
 		if (SQLITE_OK != sqlite3_enable_shared_cache(1))
@@ -318,25 +322,19 @@ sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 
 	repo->schemas = g_tree_new_full(metautils_strcmp3, NULL, g_free, g_free);
 
-	repo->flag_autocreate = !cfg ? TRUE : BOOL(cfg->flags & SQLX_REPO_AUTOCREATE);
-	repo->flag_autovacuum = !cfg ? FALSE : BOOL(cfg->flags & SQLX_REPO_VACUUM);
-	repo->flag_delete_on = !cfg ? FALSE : BOOL(cfg->flags & SQLX_REPO_DELETEON);
+	repo->flag_autocreate = BOOL(cfg->flags & SQLX_REPO_AUTOCREATE);
+	repo->flag_autovacuum = BOOL(cfg->flags & SQLX_REPO_VACUUM);
+	repo->flag_delete_on = BOOL(cfg->flags & SQLX_REPO_DELETEON);
 
-	if (!cfg || !(cfg->flags & SQLX_REPO_NOCACHE)) {
-		repo->cache = sqlx_cache_init();
+	if (!(cfg->flags & SQLX_REPO_NOCACHE)) {
+		repo->cache = sqlx_cache_init(cfg->max_bases ? cfg->max_bases : SQLX_MAX_BASES);
 		sqlx_cache_set_close_hook(repo->cache,
 				(sqlx_cache_close_hook)__close_base);
 	}
 
-	if (cfg) {
-		repo->sync_mode_solo = cfg->sync_solo;
-		repo->sync_mode_repli = cfg->sync_repli;
-		repo->page_size = cfg->page_size;
-	} else {
-		repo->sync_mode_solo = SQLX_SYNC_NORMAL;
-		repo->sync_mode_repli = SQLX_SYNC_OFF;
-		repo->page_size = SQLX_DEFAULT_PAGE_SIZE;
-	}
+	repo->sync_mode_solo = cfg->sync_solo;
+	repo->sync_mode_repli = cfg->sync_repli;
+	repo->page_size = cfg->page_size;
 
 	repo->locator = _default_locator;
 	repo->locator_data = NULL;

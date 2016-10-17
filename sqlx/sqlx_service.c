@@ -117,8 +117,15 @@ static struct grid_main_option_s common_options[] =
 			"(milliseconds). -1 means wait forever, 0 return "
 			"immediately." },
 
-	{"MaxBases", OT_UINT, {.u = &SRV.cfg_max_bases},
-		"Limits the number of concurrent open bases (0=automatic)" },
+	{"MaxBaseWaiters", OT_UINT, {.u = &SRV.cfg_max_waiters},
+		"Limits the number of threads waiting on a single base" },
+
+	{"MaxBasesHard", OT_UINT, {.u = &SRV.cfg_max_bases_hard},
+		"Absolute max number of cached bases. Won't ever be increased." },
+	{"MaxBases", OT_UINT, {.u = &SRV.cfg_max_bases_soft},
+		"Limits the number of concurrent open bases (0=automatic), bounded "
+			"to MaxBasesHard naturally"	},
+
 	{"MaxPassive", OT_UINT, {.u = &SRV.cfg_max_passive},
 		"Limits the number of concurrent passive connections (0=automatic)" },
 	{"MaxActive", OT_UINT, {.u = &SRV.cfg_max_active},
@@ -248,12 +255,21 @@ _configure_limits(struct sqlx_service_s *ss)
 	min = total / 100;
 
 	available = total;
-	// max_bases cannot be changed at runtime, so we set it first and
-	// clamp the other limits accordingly.
+
+	/* max_bases cannot be changed at runtime, so we set it first and
+	 * clamp the other limits accordingly.
+	 * For backward compatibility purposes, we configure the SOFT limit
+	 * instead of the hard one, when only "MaxBases" is set, and we deduce
+	 * the HARD limit. This is the limit the users will see in action, but
+	 * with a room for expansion though.
+	 */
 	CONFIGURE_LIMIT(
-			(ss->cfg_max_bases > 0?
-				ss->cfg_max_bases : SQLX_MAX_BASES_PERCENT(total)),
-			ss->max_bases);
+			(ss->cfg_max_bases_soft > 0?
+				ss->cfg_max_bases_soft : SQLX_MAX_BASES_PERCENT(total)),
+			ss->max_bases_soft);
+	ss->max_bases_hard = ss->cfg_max_bases_hard > 0 ?
+				ss->cfg_max_bases_hard : SQLX_MAX_BASES;
+
 	// max_passive > max_active permits answering to clients while
 	// managing internal procedures (elections, replications...).
 	CONFIGURE_LIMIT(
@@ -265,11 +281,12 @@ _configure_limits(struct sqlx_service_s *ss)
 				ss->cfg_max_active : SQLX_MAX_ACTIVE_PERCENT(total)),
 			ss->max_active);
 
-	GRID_INFO("Limits set to ACTIVES[%u] PASSIVES[%u] BASES[%u] "
+	GRID_INFO("Limits set to ACTIVES[%u] PASSIVES[%u] BASES[%u/%u] "
 			"fd=%u/%u page_size=%u",
-			ss->max_active, ss->max_passive, ss->max_bases,
-			ss->max_active + ss->max_passive + ss->max_bases, (guint)limit.rlim_cur,
-			ss->cfg_page_size);
+			ss->max_active, ss->max_passive,
+			ss->max_bases_soft, ss->max_bases_hard,
+			ss->max_active + ss->max_passive + ss->max_bases_soft,
+			(guint)limit.rlim_cur, ss->cfg_page_size);
 
 	return TRUE;
 #undef CONFIGURE_LIMIT
@@ -369,6 +386,8 @@ _configure_backend(struct sqlx_service_s *ss)
 	if (ss->cfg_page_size >= 512)
 		repository_config.page_size = ss->cfg_page_size;
 
+	repository_config.max_bases = ss->max_bases_hard;
+
 	GError *err = sqlx_repository_init(ss->volume, &repository_config,
 			&ss->repository);
 	if (err) {
@@ -377,6 +396,10 @@ _configure_backend(struct sqlx_service_s *ss)
 		g_clear_error(&err);
 		return FALSE;
 	}
+
+	sqlx_repository_configure_maxbases(SRV.repository, SRV.max_bases_soft);
+	sqlx_cache_set_max_waiting(sqlx_repository_get_cache(SRV.repository),
+			SRV.cfg_max_waiters);
 
 	err = sqlx_repository_configure_type(ss->repository,
 			ss->service_config->srvtype, ss->service_config->schema);
@@ -478,7 +501,6 @@ sqlx_service_action(void)
 
 	gridd_client_pool_set_max(SRV.clients_pool, SRV.max_active);
 	network_server_set_maxcnx(SRV.server, SRV.max_passive);
-	sqlx_repository_configure_maxbases(SRV.repository, SRV.max_bases);
 
 	election_manager_set_peering(SRV.election_manager, SRV.peering);
 	if (SRV.sync)
@@ -557,7 +579,9 @@ sqlx_service_set_defaults(void)
 	SRV.max_elections_timers_per_round = SQLX_MAX_TIMER_PER_ROUND;
 	SRV.open_timeout = DEFAULT_CACHE_OPEN_TIMEOUT / G_TIME_SPAN_MILLISECOND;
 
-	SRV.cfg_max_bases = 0;
+	SRV.cfg_max_waiters = SQLX_MAX_WAITING;
+	SRV.cfg_max_bases_soft = 0;
+	SRV.cfg_max_bases_hard = SQLX_MAX_BASES;
 	SRV.cfg_max_passive = 0;
 	SRV.cfg_max_active = 0;
 	SRV.cfg_max_workers = 200;
