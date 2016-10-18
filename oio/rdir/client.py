@@ -152,11 +152,18 @@ class RdirClient(Client):
 
         self._rdir_request(volume_id, 'DELETE', 'rdir/delete', json=body)
 
-    def chunk_fetch(self, volume, limit=100, rebuild=False):
-        """Fetch the list of chunks belonging to the specified volume"""
+    def chunk_fetch(self, volume, limit=100, rebuild=False,
+                    container_id=None):
+        """
+        Fetch the list of chunks belonging to the specified volume.
+        You can set `container_id` to get only chunks belonging to
+        the specified container.
+        """
         req_body = {'limit': limit}
         if rebuild:
             req_body['rebuild'] = True
+        if container_id:
+            req_body['container_id'] = container_id
 
         while True:
             resp, resp_body = self._rdir_request(volume, 'POST', 'rdir/fetch',

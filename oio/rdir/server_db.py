@@ -22,7 +22,7 @@ from oio.common.exceptions import ServerException
 from oio.common.utils import json, get_logger
 
 
-class NoSuchDB(Exception):
+class NoSuchDb(Exception):
     pass
 
 
@@ -34,7 +34,7 @@ def handle_db_not_found(fnc):
         except plyvel.Error as e:
             if 'does not exist' in e.message:
                 msg = "Volume '%s' does not exist." % volume_id
-            raise NoSuchDB(msg)
+            raise NoSuchDb(msg)
     return _wrapped
 
 # FIXME this class is not thread-safe (see _get_db, push, lock) but it
@@ -108,7 +108,7 @@ class RdirBackend(object):
         self._get_db_chunk(volume_id).delete(key.encode('utf8'))
 
     def chunk_fetch(self, volume_id, start_after=None,
-                    limit=None, rebuild=False):
+                    limit=None, rebuild=False, container_id=None):
         result = []
 
         if start_after is not None:
@@ -121,9 +121,15 @@ class RdirBackend(object):
                              " but no incident date set")
             return result
 
-        db_iter = self._get_db_chunk(volume_id).iterator(
-            start=start_after,
-            include_start=False)
+        if container_id is not None:
+            db_iter = self._get_db_chunk(volume_id).iterator(
+                start=start_after,
+                include_start=False,
+                prefix=container_id)
+        else:
+            db_iter = self._get_db_chunk(volume_id).iterator(
+                start=start_after,
+                include_start=False)
         count = 0
         for key, value in db_iter:
             if limit is not None and count >= limit:

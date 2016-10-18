@@ -3,7 +3,7 @@ import shutil
 import unittest
 
 from oio.common.exceptions import ServerException
-from oio.rdir.server_db import NoSuchDB, RdirBackend
+from oio.rdir.server_db import NoSuchDb, RdirBackend
 from tests.utils import random_id
 
 
@@ -29,7 +29,7 @@ class TestRdirBackend(unittest.TestCase):
 
     def test_explicit_create(self):
         newvolume = "mynewvolume"
-        self.assertRaises(NoSuchDB,
+        self.assertRaises(NoSuchDb,
                           self.rdir.chunk_push,
                           newvolume, self.container_0, self.content_0,
                           self.chunk_0, mtime=1234)
