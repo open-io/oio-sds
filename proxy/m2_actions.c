@@ -634,6 +634,9 @@ _load_alias_from_headers(struct req_args_s *args, GSList **pbeans)
 			CONTENTS_HEADERS_set2_chunk_method (header, s);
 	}
 
+	if (!PATH())
+		err = BADREQ("Missing path in query string");
+
 	if (!err) { // Load all the alias fields
 		alias = _bean_create(&descr_struct_ALIASES);
 		beans = g_slist_prepend(beans, alias);

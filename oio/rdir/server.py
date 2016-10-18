@@ -16,13 +16,27 @@
 
 import time
 
+from functools import wraps
+
 from werkzeug.wrappers import Request, Response
 from werkzeug.routing import Map, Rule
 from werkzeug.exceptions import HTTPException, NotFound, BadRequest, \
     InternalServerError
 
-from oio.rdir.server_db import RdirBackend, NoSuchDB
+from oio.rdir.server_db import RdirBackend, NoSuchDb
 from oio.common.utils import json, get_logger
+
+
+def handle_no_such_db(func):
+    @wraps(func)
+    def _wrapped(self, req, *args, **kwargs):
+        try:
+            return func(req, *args, **kwargs)
+        except NoSuchDb:
+            vol = req.args.get('vol')
+            raise NotFound("No such volume: %s" % vol)
+
+    return _wrapped
 
 
 class Rdir(object):
@@ -123,7 +137,7 @@ class Rdir(object):
 
         try:
             self.backend.chunk_push(volume, **data)
-        except NoSuchDB:
+        except NoSuchDb:
             if req.args.get('create'):
                 self.backend.create(volume)
                 self.backend.chunk_push(volume, **data)
@@ -150,6 +164,9 @@ class Rdir(object):
         volume = self._get_volume(req)
         pretty = req.args.get('pretty')
 
+        if req.method != 'POST':
+            raise BadRequest("Expecting POST with JSON object")
+
         decoded = json.loads(req.get_data())
         start_after = decoded.get('start_after')
         limit = decoded.get('limit')
@@ -158,9 +175,11 @@ class Rdir(object):
         rebuild = decoded.get('rebuild', False)
         if not isinstance(rebuild, bool):
             return BadRequest('rebuild must be true or false')
+        container_id = decoded.get('container_id')  # optional
 
         data = self.backend.chunk_fetch(volume, start_after=start_after,
-                                        limit=limit, rebuild=rebuild)
+                                        limit=limit, rebuild=rebuild,
+                                        container_id=container_id)
 
         if pretty:
             body = json.dumps(data, indent=4)
@@ -223,11 +242,15 @@ class Rdir(object):
         adapter = self.url_map.bind_to_environ(req.environ)
         try:
             endpoint, values = adapter.match()
+        except NotFound as exc:
+            return BadRequest('Invalid URL')
+
+        try:
             return getattr(self, 'on_' + endpoint)(req)
-        except NotFound:
-            return BadRequest()
-        except HTTPException as e:
-            return e
+        except NoSuchDb as exc:
+            return NotFound(exc)
+        except HTTPException as exc:
+            return exc
         except Exception:
             self.logger.exception('ERROR Unhandled exception in request')
             return InternalServerError()
