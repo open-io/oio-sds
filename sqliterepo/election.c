@@ -119,7 +119,10 @@ struct election_manager_s
 	struct sqlx_peering_s *peering;
 	struct sqlx_sync_s *sync;
 
-	/* XXX(jfs): used to generate <uid> of election members */
+	/* GTree<hashstr_t*,GCond*> */
+	GTree *conditions;
+
+	/* used to generate <uid> of election members */
 	volatile guint32 next_uid;
 
 	/* do not free or change the fields below */
@@ -152,8 +155,6 @@ struct election_manager_s
 	gboolean exiting;
 
 	req_id_t next_id;
-
-	GCond conds[SQLX_MAX_COND];
 };
 
 struct election_member_s
@@ -162,10 +163,14 @@ struct election_member_s
 	struct election_member_s *next;
 
 	struct election_manager_s *manager;
+
+	/* Weak pointer to the condition, do not free! */
+	GCond *cond;
+
 	struct sqlx_name_mutable_s name;
 	hashstr_t *key;
 
-	/* XXX(jfs): only used cast to a (void*), as context for watcher callbacks.
+	/* only used cast to a (void*), as context for watcher callbacks.
 	   Without such a quirk, the watchers could cause a memory leak due to
 	   Zookeeper's implementation */
 	guint32 uid;
@@ -290,6 +295,16 @@ _thlocal_get_manager (void)
 	return g_private_get (&th_local_key_manager);
 }
 
+static void
+_cond_clean (gpointer p)
+{
+	GCond *cond = p;
+	if (cond) {
+		g_cond_clear (cond);
+		g_free (cond);
+	}
+}
+
 /* -------------------------------------------------------------------------- */
 
 static void
@@ -364,7 +379,7 @@ _manager_locate_by_uid (struct election_manager_s *manager, const guint32 uid)
 	return NULL;
 }
 
-/* XXX Misc helpers --------------------------------------------------------- */
+/* --- Misc helpers --------------------------------------------------------- */
 
 static gboolean
 _is_over (const gint64 last, const gint64 delay)
@@ -490,10 +505,12 @@ election_manager_create(struct replication_config_s *config,
 	manager->config = config;
 
 	g_mutex_init(&manager->lock);
-	manager->members_by_key = g_tree_new_full (hashstr_quick_cmpdata, NULL, NULL, NULL);
 
-	for (guint i=0; i<SQLX_MAX_COND ;i++)
-		g_cond_init(manager->conds + i);
+	manager->members_by_key = g_tree_new_full (hashstr_quick_cmpdata, NULL,
+			NULL, NULL);
+
+	manager->conditions = g_tree_new_full(hashstr_quick_cmpdata, NULL,
+			g_free, _cond_clean);
 
 	*result = manager;
 	return NULL;
@@ -651,8 +668,10 @@ _manager_clean(struct election_manager_s *manager)
 	}
 
 	g_mutex_clear(&manager->lock);
-	for (guint i=0; i<SQLX_MAX_COND; i++)
-		g_cond_clear(manager->conds + i);
+	if (manager->conditions) {
+		g_tree_destroy(manager->conditions);
+		manager->conditions = NULL;
+	}
 	g_free(manager);
 }
 
@@ -676,7 +695,7 @@ _manager_get_mode (const struct election_manager_s *manager)
 	return manager->config->mode;
 }
 
-/* XXX Member handling ----------------------------------------------------- */
+/* --- Member handling ----------------------------------------------------- */
 
 static req_id_t
 manager_next_reqid(struct election_manager_s *m)
@@ -726,8 +745,7 @@ member_unref(struct election_member_s *m)
 static GCond*
 member_get_cond(struct election_member_s *m)
 {
-	register guint h = hashstr_hash(m->key);
-	return MMANAGER(m)->conds + (h % SQLX_MAX_COND);
+	return m->cond;
 }
 
 static GMutex*
@@ -902,6 +920,7 @@ member_destroy(struct election_member_s *member)
 
 	EXTRA_ASSERT (member->refcount == 0);
 
+	member->cond = NULL;
 	oio_str_clean (&member->master_url);
 	g_free0 (member->key);
 	sqlx_name_clean (&member->name);
@@ -943,6 +962,18 @@ _LOCKED_get_member (struct election_manager_s *ma, const hashstr_t *k)
 	return m;
 }
 
+static GCond *
+_manager_get_condition (struct election_manager_s *m, const hashstr_t *k)
+{
+	GCond *cond = g_tree_lookup (m->conditions, k);
+	if (!cond) {
+		cond = g_malloc0 (sizeof(GCond));
+		g_cond_init (cond);
+		g_tree_replace (m->conditions, hashstr_dup(k), cond);
+	}
+	return cond;
+}
+
 static struct election_member_s *
 _LOCKED_init_member(struct election_manager_s *manager,
 		const struct sqlx_name_s *n, gboolean autocreate)
@@ -963,6 +994,7 @@ _LOCKED_init_member(struct election_manager_s *manager,
 		member->name.ns = g_strdup(n->ns);
 		member->myid = member->master_id = -1;
 		member->refcount = 2;
+		member->cond = _manager_get_condition(manager, key);
 
 		_DEQUE_add (member);
 		g_tree_replace(manager->members_by_key, member->key, member);
@@ -1126,7 +1158,7 @@ election_manager_whatabout (struct election_manager_s *m,
 	g_string_free (gs, TRUE);
 }
 
-/* XXX Zookeeper callbacks ----------------------------------------------------
+/* --- Zookeeper callbacks ----------------------------------------------------
    All of them are called from the zookeeper's thread.
    We chose to set the election manager in a thread-local slot because ZK
    contexts for callbackks currently (3.4.6) require that no memory is

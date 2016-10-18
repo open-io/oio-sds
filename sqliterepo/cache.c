@@ -21,7 +21,6 @@ License along with this library.
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <errno.h>
 
 #include <metautils/lib/metautils.h>
 
@@ -32,6 +31,9 @@ License along with this library.
 #define GET(R,I) ((R)->bases + (I))
 
 #define BEACON_RESET(B) do { (B)->first = (B)->last = -1; } while (0)
+
+volatile gboolean oio_sqlx_cache_fail_on_heavy_load = SQLX_HEAVYLOAD_FAIL;
+volatile gboolean oio_sqlx_cache_alert_on_heavy_load = SQLX_HEAVYLOAD_ALERT;
 
 struct beacon_s
 {
@@ -57,8 +59,8 @@ struct sqlx_base_s
 
 	GThread *owner; /*!< The current owner of the database. Changed under the
 					  global lock */
-	GCond *cond;
-	GCond *cond_prio;
+	GCond cond;
+	GCond cond_prio;
 
 	gpointer handle;
 
@@ -74,6 +76,9 @@ struct sqlx_base_s
 	guint32 count_open; /*!< Counts the number of times this base has been
 						  explicitely opened and locked by the user. */
 
+	guint32 count_waiting; /*!< Counts the number of threads waiting for the
+							base to become avaible. */
+
 	gint index; /*!< self reference */
 
 	enum sqlx_base_status_e status; /*!< Changed under the global lock */
@@ -83,20 +88,22 @@ typedef struct sqlx_base_s sqlx_base_t;
 
 struct sqlx_cache_s
 {
-	gboolean used;
-
 	GMutex lock;
 	GTree *bases_by_name;
-	guint bases_count;
 	sqlx_base_t *bases;
-	GCond *cond_array;
-	GCond *cond_prio_array;
-	gsize cond_count;
+	guint bases_max_soft;
+	guint bases_max_hard;
+	guint bases_used;
+
+	/* Maximum number of low-priority threads waiting for the base. */
+	guint32 max_waiting;
 
 	guint32 heat_threshold;
-	gint64 cool_grace_delay; // same precision as oio_ext_monotonic_time()
-	gint64 hot_grace_delay;  // idem
-	gint64 open_timeout;     // idem
+
+	/* @see oio_ext_monotonic_time() */
+	gint64 cool_grace_delay;
+	gint64 hot_grace_delay;
+	gint64 open_timeout;
 
 	/* Doubly linked lists of tables, one by status */
 	struct beacon_s beacon_free;
@@ -114,7 +121,7 @@ gint64 oio_cache_period_cond_wait = G_TIME_SPAN_SECOND;
 static gboolean
 base_id_out(sqlx_cache_t *cache, gint bd)
 {
-	return (bd < 0) || ((guint)bd) >= cache->bases_count;
+	return (bd < 0) || ((guint)bd) >= cache->bases_max_hard;
 }
 
 #ifdef HAVE_EXTRA_DEBUG
@@ -286,6 +293,8 @@ sqlx_base_add_to_list(sqlx_cache_t *cache, sqlx_base_t *base,
 
 	switch (status) {
 		case SQLX_BASE_FREE:
+			EXTRA_ASSERT(cache->bases_used > 0);
+			cache->bases_used --;
 			SQLX_UNSHIFT(cache, base, &(cache->beacon_free), SQLX_BASE_FREE);
 			return;
 		case SQLX_BASE_IDLE:
@@ -321,28 +330,20 @@ sqlx_base_move_to_list(sqlx_cache_t *cache, sqlx_base_t *base,
 			sqlx_status_to_str(status));
 }
 
-static sqlx_base_t*
-sqlx_poll_free_base(sqlx_cache_t *cache)
-{
-	sqlx_base_t *base;
-
-	base = sqlx_get_by_id(cache, cache->beacon_free.first);
-	if (!base) {
-		errno = ENOENT;
-		return NULL;
-	}
-
-	return base;
-}
-
 static GError *
 sqlx_base_reserve(sqlx_cache_t *cache, const hashstr_t *hs,
 		sqlx_base_t **result)
 {
-	sqlx_base_t *base;
+	if (cache->bases_used >= cache->bases_max_soft)
+		return NEWERROR(CODE_UNAVAILABLE, "Max bases reached");
 
-	if (!(base = sqlx_poll_free_base(cache)))
-		return NEWERROR(CODE_INTERNAL_ERROR, "too many bases");
+	*result = NULL;
+	sqlx_base_t *base = sqlx_get_by_id(cache, cache->beacon_free.first);
+	if (!base)
+		return NULL;
+
+	cache->bases_used ++;
+	EXTRA_ASSERT(base->count_open == 0);
 
 	/* base reserved and in PENDING state */
 	g_free0 (base->name);
@@ -356,6 +357,14 @@ sqlx_base_reserve(sqlx_cache_t *cache, const hashstr_t *hs,
 	sqlx_base_debug(__FUNCTION__, base);
 	*result = base;
 	return NULL;
+}
+
+static void
+_signal_base(sqlx_base_t *base)
+{
+	EXTRA_ASSERT(base != NULL);
+	g_cond_signal(&(base->cond_prio));
+	g_cond_signal(&(base->cond));
 }
 
 /**
@@ -384,8 +393,7 @@ _expire_base(sqlx_cache_t *cache, sqlx_base_t *b)
 	/* the base is for the given thread, it is time to REALLY close it.
 	 * But this can take a lot of time. So we can release the pool,
 	 * free the handle and unlock the cache */
-	g_cond_signal(b->cond_prio);
-	g_cond_signal(b->cond);
+	_signal_base(b),
 	g_mutex_unlock(&cache->lock);
 	if (cache->close_hook)
 		cache->close_hook(handle);
@@ -433,8 +441,7 @@ _expire_specific_base(sqlx_cache_t *cache, sqlx_base_t *b, gint64 now,
 	 * (this arrives when someone tries to read it again after
 	 * waiting exactly the grace delay), we must notify him so it can
 	 * retry (and open it in another file descriptor). */
-	g_cond_signal(b->cond_prio);
-	g_cond_signal(b->cond);
+	_signal_base(b);
 
 	return 1;
 }
@@ -455,55 +462,27 @@ sqlx_expire_first_idle_base(sqlx_cache_t *cache, gint64 now)
 	return rc;
 }
 
-static void
-sqlx_cache_reset_bases(sqlx_cache_t *cache, guint max)
-{
-	guint old, i;
-
-	g_mutex_lock(&cache->lock);
-
-	if (cache->used) {
-		GRID_WARN("SQLX base cache cannot be reset: already in use");
-	}
-	else {
-		BEACON_RESET(&(cache->beacon_free));
-		BEACON_RESET(&(cache->beacon_idle));
-		BEACON_RESET(&(cache->beacon_idle_hot));
-		BEACON_RESET(&(cache->beacon_used));
-
-		if (cache->bases)
-			g_free(cache->bases);
-
-		old = cache->bases_count;
-		cache->bases_count = max;
-		cache->bases = g_malloc0(cache->bases_count * sizeof(sqlx_base_t));
-
-		for (i = cache->bases_count - 1; i!=0 ;i--) {
-			sqlx_base_t *base = cache->bases + i;
-			base->index = i;
-			base->link.prev = base->link.next = -1;
-			SQLX_UNSHIFT(cache, base, &(cache->beacon_free), SQLX_BASE_FREE);
-			base->cond = cache->cond_array + (i % cache->cond_count);
-			base->cond_prio = cache->cond_prio_array + (i % cache->cond_count);
-		}
-
-		if (old != cache->bases_count)
-			GRID_INFO("SQLX cache size change from %u to %u", old,
-					cache->bases_count);
-	}
-
-	g_mutex_unlock(&cache->lock);
-}
-
 /* ------------------------------------------------------------------------- */
+
+sqlx_cache_t *
+sqlx_cache_set_max_waiting(sqlx_cache_t *cache, guint32 max_waiting)
+{
+	if (cache) {
+		cache->max_waiting = max_waiting;
+	}
+	return cache;
+}
 
 void
 sqlx_cache_set_max_bases(sqlx_cache_t *cache, guint max)
 {
 	GRID_TRACE2("%s(%p,%u)", __FUNCTION__, cache, max);
 	EXTRA_ASSERT(cache != NULL);
-	EXTRA_ASSERT(max < 65536);
-	sqlx_cache_reset_bases(cache, max);
+	max = CLAMP(max, 1, cache->bases_max_hard);
+	if (max != cache->bases_max_soft) {
+		GRID_INFO("cache max bases set to [%u]", max);
+		cache->bases_max_soft = max;
+	}
 }
 
 void
@@ -521,35 +500,41 @@ sqlx_cache_set_open_timeout(sqlx_cache_t *cache, gint64 timeout)
 }
 
 sqlx_cache_t *
-sqlx_cache_init(void)
+sqlx_cache_init(guint max_bases)
 {
-	guint i;
-	sqlx_cache_t *cache;
-
-	cache = g_malloc0(sizeof(*cache));
+	sqlx_cache_t *cache = g_malloc0(sizeof(*cache));
 	cache->cool_grace_delay = SQLX_GRACE_DELAY_COOL * G_TIME_SPAN_SECOND;
 	cache->hot_grace_delay = SQLX_GRACE_DELAY_HOT * G_TIME_SPAN_SECOND;
+	cache->max_waiting = SQLX_MAX_WAITING;
 	cache->heat_threshold = 1;
-	cache->used = FALSE;
 	g_mutex_init(&cache->lock);
 	cache->bases_by_name = g_tree_new_full(hashstr_quick_cmpdata,
 			NULL, NULL, NULL);
-	cache->bases_count = SQLX_MAX_BASES;
-	cache->cond_count = SQLX_MAX_COND;
-	cache->cond_array = g_malloc0(cache->cond_count * sizeof(GCond));
-	cache->cond_prio_array = g_malloc0(cache->cond_count * sizeof(GCond));
 	cache->open_timeout = 0;
 	BEACON_RESET(&(cache->beacon_free));
 	BEACON_RESET(&(cache->beacon_idle));
 	BEACON_RESET(&(cache->beacon_idle_hot));
 	BEACON_RESET(&(cache->beacon_used));
 
-	for (i = 0; i < cache->cond_count; i++) {
-		g_cond_init(cache->cond_array + i);
-		g_cond_init(cache->cond_prio_array + i);
+	cache->bases_used = 0;
+	cache->bases_max_hard = cache->bases_max_soft = max_bases;
+	cache->bases = g_malloc0(cache->bases_max_hard * sizeof(sqlx_base_t));
+
+	for (guint i=0; i<cache->bases_max_hard ;i++) {
+		sqlx_base_t *base = cache->bases + i;
+		base->index = i;
+		base->link.prev = base->link.next = -1;
+		g_cond_init(&base->cond);
+		g_cond_init(&base->cond_prio);
 	}
 
-	sqlx_cache_reset_bases(cache, cache->bases_count);
+	/* stack all the bases in the FREE list, so that the first bases are
+	 * prefered. */
+	for (guint i=cache->bases_max_hard; i>0 ;i--) {
+		sqlx_base_t *base = cache->bases + i - 1;
+		SQLX_UNSHIFT(cache, base, &(cache->beacon_free), SQLX_BASE_FREE);
+	}
+
 	return cache;
 }
 
@@ -561,7 +546,7 @@ sqlx_cache_clean(sqlx_cache_t *cache)
 		return;
 
 	if (cache->bases) {
-		for (guint bd=0; bd < cache->bases_count ;bd++) {
+		for (guint bd=0; bd < cache->bases_max_hard ;bd++) {
 			sqlx_base_t *base = cache->bases + bd;
 
 			switch (base->status) {
@@ -578,6 +563,8 @@ sqlx_cache_clean(sqlx_cache_t *cache)
 					break;
 			}
 
+			g_cond_clear(&base->cond);
+			g_cond_clear(&base->cond_prio);
 			g_free0 (base->name);
 			base->name = NULL;
 		}
@@ -585,14 +572,6 @@ sqlx_cache_clean(sqlx_cache_t *cache)
 	}
 
 	g_mutex_clear(&cache->lock);
-	if (cache->cond_array) {
-		for (guint i = 0; i < cache->cond_count; i++) {
-			g_cond_clear(cache->cond_array + i);
-			g_cond_clear(cache->cond_prio_array + i);
-		}
-		g_free(cache->cond_array);
-		g_free(cache->cond_prio_array);
-	}
 	if (cache->bases_by_name)
 		g_tree_destroy(cache->bases_by_name);
 
@@ -621,28 +600,27 @@ sqlx_cache_open_and_lock_base(sqlx_cache_t *cache, const hashstr_t *hname,
 	deadline += start;
 
 	g_mutex_lock(&cache->lock);
-	cache->used = TRUE;
 retry:
 
 	bd = sqlx_lookup_id(cache, hname);
 	if (bd < 0) {
 		if (!(err = sqlx_base_reserve(cache, hname, &base))) {
-			bd = base->index;
-			*result = base->index;
-			sqlx_base_debug("OPEN", base);
-		}
-		else {
-			GRID_DEBUG("No base available for [%s] (%d %s)",
-					hashstr_str(hname), err->code, err->message);
-			if (sqlx_expire_first_idle_base(cache, 0) >= 0) {
-				g_clear_error(&err);
-				goto retry;
+			if (base) {
+				bd = base->index;
+				*result = base->index;
+				sqlx_base_debug("OPEN", base);
+			} else {
+				if (sqlx_expire_first_idle_base(cache, 0) >= 0)
+					goto retry;
+				err = NEWERROR(CODE_UNAVAILABLE, "No idle base in cache");
 			}
 		}
+		EXTRA_ASSERT((base != NULL) ^ (err != NULL));
 	}
 	else {
 		base = GET(cache, bd);
-		GCond *wait_cond = urgent? base->cond_prio : base->cond;
+
+		GCond *wait_cond = urgent? &base->cond_prio : &base->cond;
 
 		gint64 now = oio_ext_monotonic_time ();
 
@@ -654,6 +632,7 @@ retry:
 
 			case SQLX_BASE_FREE:
 				EXTRA_ASSERT(base->count_open == 0);
+				EXTRA_ASSERT(base->count_waiting == 0);
 				EXTRA_ASSERT(base->owner == NULL);
 				GRID_ERROR("free base referenced");
 				g_assert_not_reached();
@@ -661,6 +640,7 @@ retry:
 
 			case SQLX_BASE_IDLE:
 			case SQLX_BASE_IDLE_HOT:
+				/* Base unused right now, the current thread get it! */
 				EXTRA_ASSERT(base->count_open == 0);
 				EXTRA_ASSERT(base->owner == NULL);
 				sqlx_base_move_to_list(cache, base, SQLX_BASE_USED);
@@ -675,10 +655,25 @@ retry:
 				if (base->owner != g_thread_self()) {
 					GRID_DEBUG("Base [%s] in use by another thread (%X), waiting...",
 							hashstr_str(hname), oio_log_thread_id(base->owner));
+
+					if (!urgent && cache->max_waiting > 0 &&
+							base->count_waiting >= cache->max_waiting) {
+						if (oio_sqlx_cache_fail_on_heavy_load) {
+							err = NEWERROR(CODE_EXCESSIVE_LOAD, "Load too high");
+							break;
+						} else if (oio_sqlx_cache_alert_on_heavy_load) {
+							GRID_WARN("Load too high on [%s]", hashstr_str(hname));
+						}
+					}
+
+					base->count_waiting ++;
+
 					/* The lock is held by another thread/request.
-					   XXX(jfs): do not use 'now' because it can be a fake clock */
+					   Do not use 'now' because it can be a fake clock */
 					g_cond_wait_until(wait_cond, &cache->lock,
 							g_get_monotonic_time() + oio_cache_period_cond_wait);
+
+					base->count_waiting --;
 					goto retry;
 				}
 				base->owner = g_thread_self();
@@ -689,7 +684,7 @@ retry:
 			case SQLX_BASE_CLOSING:
 				EXTRA_ASSERT(base->owner != NULL);
 				/* Just wait for a notification then retry
-				   XXX(jfs): do not use 'now' because it can be a fake clock */
+				   Do not use 'now' because it can be a fake clock */
 				g_cond_wait_until(wait_cond, &cache->lock,
 						g_get_monotonic_time() + oio_cache_period_cond_wait);
 				goto retry;
@@ -702,8 +697,7 @@ retry:
 			EXTRA_ASSERT(base->owner == g_thread_self());
 			EXTRA_ASSERT(base->count_open > 0);
 		}
-		g_cond_signal(base->cond_prio);
-		g_cond_signal(base->cond);
+		_signal_base(base);
 	}
 	g_mutex_unlock(&cache->lock);
 	return err;
@@ -721,7 +715,6 @@ sqlx_cache_unlock_and_close_base(sqlx_cache_t *cache, gint bd, gboolean force)
 		return NEWERROR(CODE_INTERNAL_ERROR, "invalid base id=%d", bd);
 
 	g_mutex_lock(&cache->lock);
-	cache->used = TRUE;
 
 	sqlx_base_t *base; base = GET(cache,bd);
 	switch (base->status) {
@@ -765,8 +758,7 @@ sqlx_cache_unlock_and_close_base(sqlx_cache_t *cache, gint bd, gboolean force)
 
 	if (base && !err)
 		sqlx_base_debug(__FUNCTION__, base);
-	g_cond_signal(base->cond_prio);
-	g_cond_signal(base->cond);
+	_signal_base(base),
 	g_mutex_unlock(&cache->lock);
 	return err;
 }
@@ -790,8 +782,9 @@ sqlx_cache_debug(sqlx_cache_t *cache)
 			cache->beacon_free.first, cache->beacon_free.last);
 
 	/* Dump all the bases */
-	for (guint bd=0; bd < cache->bases_count ;bd++)
+	for (guint bd=0; bd < cache->bases_max_hard ;bd++) {
 		sqlx_base_debug(__FUNCTION__, GET(cache,bd));
+	}
 
 	/* Now dump all te references in the hashtable */
 	gboolean runner(gpointer k, gpointer v, gpointer u) {
@@ -810,7 +803,6 @@ sqlx_cache_expire_all(sqlx_cache_t *cache)
 	EXTRA_ASSERT(cache != NULL);
 
 	g_mutex_lock(&cache->lock);
-	cache->used = TRUE;
 	for (nb=0; sqlx_expire_first_idle_base(cache, 0) ;nb++) { }
 	g_mutex_unlock(&cache->lock);
 
@@ -826,7 +818,6 @@ sqlx_cache_expire(sqlx_cache_t *cache, guint max, gint64 duration)
 	EXTRA_ASSERT(cache != NULL);
 
 	g_mutex_lock(&cache->lock);
-	cache->used = TRUE;
 
 	for (nb=0; !max || nb < max ; nb++) {
 		gint64 now = oio_ext_monotonic_time ();
@@ -881,7 +872,7 @@ sqlx_cache_count(sqlx_cache_t *cache)
 
 	memset(&count, 0, sizeof(count));
 	if (cache) {
-		count.max = cache->bases_count;
+		count.max = cache->bases_max_hard;
 		count.cold = _count_beacon(cache, &cache->beacon_idle);
 		count.hot = _count_beacon(cache, &cache->beacon_idle_hot);
 		count.used = _count_beacon(cache, &cache->beacon_used);

@@ -57,10 +57,11 @@ _locator (gpointer u, const struct sqlx_name_s *n, GString *file_name)
 static void
 _round_init (void)
 {
+	struct sqlx_repo_config_s cfg = {0};
 	sqlx_repository_t *repo = NULL;
 	GError *err;
 
-	err = sqlx_repository_init("/tmp", NULL, &repo);
+	err = sqlx_repository_init("/tmp", &cfg, &repo);
 	g_assert_no_error (err);
 	for (int i=0; i<5 ;i++)
 		sqlx_repository_set_locator (repo, _locator, NULL);
@@ -83,10 +84,11 @@ test_init (void)
 static void
 _round_open_close (void)
 {
+	struct sqlx_repo_config_s cfg = {0};
 	sqlx_repository_t *repo = NULL;
 	GError *err;
 
-	err = sqlx_repository_init("/tmp", NULL, &repo);
+	err = sqlx_repository_init("/tmp", &cfg, &repo);
 	g_assert_no_error (err);
 	g_assert_true (sqlx_repository_running (repo));
 	err = sqlx_repository_configure_type(repo, type, SCHEMA);

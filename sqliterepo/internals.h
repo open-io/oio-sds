@@ -29,12 +29,23 @@ License along with this library.
 # include <Table.h>
 # include <TableSequence.h>
 
-# ifndef  SQLX_MAX_COND
-#  define SQLX_MAX_COND 1024
+# ifndef  SQLX_MAX_WAITING
+#  define SQLX_MAX_WAITING 16
 # endif
 
+# ifndef  SQLX_HEAVYLOAD_ALERT
+#  define SQLX_HEAVYLOAD_ALERT TRUE
+# endif
+
+# ifndef  SQLX_HEAVYLOAD_FAIL
+#  define SQLX_HEAVYLOAD_FAIL FALSE
+# endif
+
+/**
+ * "Hard" maximum number of bases that can be held by the cache.
+ */
 # ifndef  SQLX_MAX_BASES
-#  define SQLX_MAX_BASES 2048
+#  define SQLX_MAX_BASES 8192
 # endif
 
 # ifndef  SQLX_GRACE_DELAY_COOL
