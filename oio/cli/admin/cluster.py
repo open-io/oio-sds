@@ -100,9 +100,9 @@ class ClusterLocalList(lister.Lister):
             if not srv_types or srv_type in srv_types:
                 results.append((srv_type, addr, volume, location,
                                 slots, up, score))
-            columns = ('Type', 'Id', 'Volume', 'Location',
-                       'Slots', 'Up', 'Score')
-            result_gen = (r for r in results)
+        columns = ('Type', 'Id', 'Volume', 'Location',
+                   'Slots', 'Up', 'Score')
+        result_gen = (r for r in results)
         return columns, result_gen
 
 
