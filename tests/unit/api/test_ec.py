@@ -416,6 +416,8 @@ class TestEC(unittest.TestCase):
 
         part_size = len(ec_chunks[0])
 
+        # TODO tests random ranges
+
         headers = {
             'Content-Length': fragment_size,
             'Content-Type': 'text/plain',
@@ -432,10 +434,14 @@ class TestEC(unittest.TestCase):
             FakeResponse(206, ec_chunks[7][:fragment_size], headers),
         ]
 
+        # TODO tests ranges overlapping multiple fragments
+        range_header = 'bytes=0-%s' % (fragment_size - 1)
+
         def get_response(req):
+            self.assertEqual(req['headers'].get('Range'), range_header)
             return responses.pop(0) if responses else FakeResponse(404)
 
-        headers = {}
+        headers = dict()
         meta_start = 1
         meta_end = 4
 
@@ -455,7 +461,7 @@ class TestEC(unittest.TestCase):
         self.assertEqual(len(parts), 1)
         self.assertEqual(parts[0]['start'], 1)
         self.assertEqual(parts[0]['end'], 4)
-        self.assertEqual(data, '2341')
+        self.assertEqual(data, test_data[meta_start:meta_end+1])
         self.assertEqual(len(conn_record), self.storage_method.ec_nb_data)
 
     def test_read_range_unsatisfiable(self):
