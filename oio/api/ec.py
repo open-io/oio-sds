@@ -187,10 +187,17 @@ class ECChunkDownloadHandler(object):
             'req_fragment_end': fragment_end})
         return range_infos
 
-    def _get_fragment(self, chunk_iter, storage_method):
-        # TODO generate proper headers
+    def _get_fragment(self, chunk_iter, range_infos, storage_method):
+        headers = dict()
+        headers.update(self.headers)
+        if range_infos:
+            # only handle one range
+            range_info = range_infos[0]
+            headers['Range'] = 'bytes=%s-%s' % (
+                    range_info['req_fragment_start'],
+                    range_info['req_fragment_end'])
         reader = io.ChunkReader(chunk_iter, storage_method.ec_fragment_size,
-                                self.headers, self.connection_timeout,
+                                headers, self.connection_timeout,
                                 self.response_timeout, self.read_timeout)
         return (reader, reader.get_iter())
 
@@ -203,7 +210,8 @@ class ECChunkDownloadHandler(object):
             pile = GreenPile(pool)
             # we use eventlet GreenPile to spawn readers
             for _j in range(self.storage_method.ec_nb_data):
-                pile.spawn(self._get_fragment, chunk_iter, self.storage_method)
+                pile.spawn(self._get_fragment, chunk_iter, range_infos,
+                           self.storage_method)
 
             readers = []
             for reader, parts_iter in pile:
