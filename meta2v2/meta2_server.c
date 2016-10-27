@@ -213,10 +213,6 @@ _post_config(struct sqlx_service_s *ss)
 	/* Make deleted bases exit the cache */
 	sqlx_repository_configure_close_callback(ss->repository, meta2_on_close, ss);
 
-	/* Make base replications update the cache */
-	sqlx_repository_configure_change_callback(ss->repository,
-			(sqlx_repo_change_hook)meta2_backend_change_callback, m2);
-
 	/* Register meta2 requests handlers */
 	transport_gridd_dispatcher_add_requests(ss->dispatcher,
 			meta2_gridd_get_v2_requests(), m2);
