@@ -60,13 +60,6 @@ def obj_range_to_meta_chunk_range(obj_start, obj_end, meta_sizes):
     """
     Converts a requested object range into a list of meta_chunk ranges.
 
-    Examples:
-
-    TODO complete examples
-    (20, 150, [50, 50]) = {0: (20, None), 1: (None, None)}
-    (20, 150, [50, 100]) = {0: (20, None), 1: (None, 100)}
-    (150, None, [100, 100]) = {1: (50, None)}
-
     :returns: a tuple list (pos, meta_chunk_start, meta_chunk_end)
 
         * pos is the meta chunk position
@@ -81,24 +74,33 @@ def obj_range_to_meta_chunk_range(obj_start, obj_end, meta_sizes):
     offset = 0
     found_start = False
     found_end = False
+    total_size = 0
+
+    for meta_size in meta_sizes:
+        total_size += meta_size
+    # suffix byte range handling
+    if obj_start is None and obj_end is not None:
+        obj_start = total_size - min(total_size, obj_end)
+        obj_end = total_size - 1
+
     meta_chunk_ranges = {}
     for pos, meta_size in enumerate(meta_sizes):
         if found_start:
-            meta_chunk_start = None
-        elif obj_start is not None and obj_start > offset + meta_size:
+            meta_chunk_start = 0
+        elif obj_start is not None and obj_start >= offset + meta_size:
             offset += meta_size
             continue
-        elif obj_start is not None and obj_start <= offset + meta_size:
+        elif obj_start is not None and obj_start < offset + meta_size:
             meta_chunk_start = obj_start - offset
             found_start = True
         else:
-            meta_chunk_start = None
-        if obj_end is not None and offset + meta_size >= obj_end:
+            meta_chunk_start = 0
+        if obj_end is not None and offset + meta_size > obj_end:
             meta_chunk_end = obj_end - offset
             # found end
             found_end = True
         else:
-            meta_chunk_end = None
+            meta_chunk_end = meta_size - 1
         meta_chunk_ranges[pos] = (meta_chunk_start, meta_chunk_end)
         if found_end:
             break
