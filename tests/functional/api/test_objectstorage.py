@@ -20,9 +20,20 @@ from tests.utils import random_str, BaseTestCase
 
 
 class TestObjectStorageAPI(BaseTestCase):
+
     def setUp(self):
         super(TestObjectStorageAPI, self).setUp()
         self.api = ObjectStorageAPI(self.ns, self.uri)
+        self.created = list()
+
+    def tearDown(self):
+        super(TestObjectStorageAPI, self).tearDown()
+        for ct, name in self.created:
+            try:
+                self.api.object_delete(self.account, ct, name)
+            except Exception:
+                logging.exception("Failed to delete %s/%s/%s//%s",
+                                  self.ns, self.account, ct, name)
 
     def _create(self, name, metadata=None):
         return self.api.container_create(self.account, name, metadata=metadata)
@@ -278,6 +289,7 @@ class TestObjectStorageAPI(BaseTestCase):
         data = random_str(int(size))
         self.api.object_create(self.account, name, obj_name=name,
                                data=data)
+        self.created.append((name, name))
         _, chunks = self.api.object_analyze(self.account, name, name)
         logging.debug("Chunks: %s", chunks)
         return sort_chunks(chunks, False), data
@@ -301,9 +313,11 @@ class TestObjectStorageAPI(BaseTestCase):
     def test_object_fetch_range_end(self):
         """From somewhere to end"""
         name = random_str(16)
-        _, data = self._upload_data(name)
+        chunks, data = self._upload_data(name)
         start = 666
-        fdata = self._fetch_range(name, (start, None))
+        last = max(chunks.keys())
+        end = chunks[last][0]['offset'] + chunks[last][0]['size']
+        fdata = self._fetch_range(name, (start, end))
         self.assertEqual(len(fdata), len(data) - start)
         self.assertEqual(fdata, data[start:])
 

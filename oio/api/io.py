@@ -118,11 +118,14 @@ def discard_bytes(buf_size, start):
 
 class ChunkReader(object):
     """
-    Reads a chunk
+    Reads a chunk.
+
+    If `align` is True, the reader will skip some bytes to align
+    on `buf_size`.
     """
     def __init__(self, chunk_iter, buf_size, headers,
                  connection_timeout=None, response_timeout=None,
-                 read_timeout=None):
+                 read_timeout=None, align=False):
         self.chunk_iter = chunk_iter
         self.source = None
         # TODO deal with provided headers
@@ -133,6 +136,7 @@ class ChunkReader(object):
         # buf size indicates the amount we data we yield
         self.buf_size = buf_size
         self.discard_bytes = 0
+        self.align = align
         self.connection_timeout = connection_timeout or CONNECTION_TIMEOUT
         self.response_timeout = response_timeout or CHUNK_TIMEOUT
         self.read_timeout = read_timeout or CHUNK_TIMEOUT
@@ -244,7 +248,7 @@ class ChunkReader(object):
         if length == 0:
             return
 
-        if self.buf_size:
+        if self.align and self.buf_size:
             # discard bytes
             # so we only yield complete EC segments
             self.discard_bytes = discard_bytes(self.buf_size, start)
@@ -424,8 +428,8 @@ def make_iter_from_resp(resp):
                     resp.getheaders(), resp)])
     content_type, params = parse_content_type(resp.getheader('Content-Type'))
     if content_type != 'multipart/byteranges':
-        start, end, length = parse_content_range(
+        start, end, _ = parse_content_range(
             resp.getheader('Content-Range'))
-        return iter([(start, end, length, resp.getheaders(), resp)])
+        return iter([(start, end, end-start+1, resp.getheaders(), resp)])
     else:
         raise ValueError("Invalid response")

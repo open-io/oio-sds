@@ -279,14 +279,20 @@ class ObjectStorageTest(unittest.TestCase):
         chunks = _sort_chunks(raw_chunks, False)
         sorted_chunks = {
             0: [
-                {"url": "http://1.2.3.4:6000/AAAA", "pos": "0", "size": 32},
-                {"url": "http://1.2.3.4:6000/BBBB", "pos": "0", "size": 32}],
+                {"url": "http://1.2.3.4:6000/AAAA",
+                 "pos": "0", "size": 32, "offset": 0},
+                {"url": "http://1.2.3.4:6000/BBBB",
+                 "pos": "0", "size": 32, "offset": 0}],
             1: [
-                {"url": "http://1.2.3.4:6000/CCCC", "pos": "1", "size": 32},
-                {"url": "http://1.2.3.4:6000/DDDD", "pos": "1", "size": 32}],
+                {"url": "http://1.2.3.4:6000/CCCC",
+                 "pos": "1", "size": 32, "offset": 32},
+                {"url": "http://1.2.3.4:6000/DDDD",
+                 "pos": "1", "size": 32, "offset": 32}],
             2: [
-                {"url": "http://1.2.3.4:6000/EEEE", "pos": "2", "size": 32},
-                {"url": "http://1.2.3.4:6000/FFFF", "pos": "2", "size": 32}
+                {"url": "http://1.2.3.4:6000/EEEE",
+                 "pos": "2", "size": 32, "offset": 64},
+                {"url": "http://1.2.3.4:6000/FFFF",
+                 "pos": "2", "size": 32, "offset": 64}
             ]}
         self.assertEqual(chunks, sorted_chunks)
         raw_chunks = [
@@ -300,16 +306,16 @@ class ObjectStorageTest(unittest.TestCase):
         chunks = _sort_chunks(raw_chunks, True)
         sorted_chunks = {
             0: [{"url": "http://1.2.3.4:6000/AAAA",
-                 "pos": "0.0", "size": 32, "num": 0},
+                 "pos": "0.0", "size": 32, "num": 0, "offset": 0},
                 {"url": "http://1.2.3.4:6000/BBBB",
-                 "pos": "0.1", "size": 32, "num": 1},
+                 "pos": "0.1", "size": 32, "num": 1, "offset": 0},
                 {"url": "http://1.2.3.4:6000/CCCC",
-                 "pos": "0.2", "size": 32, "num": 2}],
+                 "pos": "0.2", "size": 32, "num": 2, "offset": 0}],
             1: [{"url": "http://1.2.3.4:6000/DDDD",
-                 "pos": "1.0", "size": 32, "num": 0},
+                 "pos": "1.0", "size": 32, "num": 0, "offset": 32},
                 {"url": "http://1.2.3.4:6000/EEEE",
-                 "pos": "1.1", "size": 32, "num": 1},
+                 "pos": "1.1", "size": 32, "num": 1, "offset": 32},
                 {"url": "http://1.2.3.4:6000/FFFF",
-                 "pos": "1.2", "size": 32, "num": 2}]
+                 "pos": "1.2", "size": 32, "num": 2, "offset": 32}]
         }
         self.assertEqual(chunks, sorted_chunks)
