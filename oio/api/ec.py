@@ -85,6 +85,8 @@ def obj_range_to_meta_chunk_range(obj_start, obj_end, meta_sizes):
 
     meta_chunk_ranges = {}
     for pos, meta_size in enumerate(meta_sizes):
+        if meta_size <= 0:
+            continue
         if found_start:
             meta_chunk_start = 0
         elif obj_start is not None and obj_start >= offset + meta_size:
@@ -99,7 +101,7 @@ def obj_range_to_meta_chunk_range(obj_start, obj_end, meta_sizes):
             meta_chunk_end = obj_end - offset
             # found end
             found_end = True
-        else:
+        elif meta_size > 0:
             meta_chunk_end = meta_size - 1
         meta_chunk_ranges[pos] = (meta_chunk_start, meta_chunk_end)
         if found_end:
@@ -200,7 +202,8 @@ class ECChunkDownloadHandler(object):
                     range_info['req_fragment_end'])
         reader = io.ChunkReader(chunk_iter, storage_method.ec_fragment_size,
                                 headers, self.connection_timeout,
-                                self.response_timeout, self.read_timeout)
+                                self.response_timeout, self.read_timeout,
+                                align=True)
         return (reader, reader.get_iter())
 
     def get_stream(self):

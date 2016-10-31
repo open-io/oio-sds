@@ -103,6 +103,15 @@ def wrand_choice_index(scores):
 
 
 def _sort_chunks(raw_chunks, ec_security):
+    """
+    Sort a list a chunk objects. Returns a dictionary with metachunk
+    positions as keys, and list of chunk objects as values.
+    `ec_security` tells the sort algorithm that chunk positions are
+    composed (e.g. "0.4").
+
+    In addition to the sort, this function adds an "offset" field
+    to each chunk object.
+    """
     chunks = dict()
     for chunk in raw_chunks:
         raw_position = chunk["pos"].split(".")
@@ -406,6 +415,12 @@ class ObjectStorageAPI(API):
                     meta[k[len(constants.CONTAINER_USER_METADATA_PREFIX):]] = \
                         unquote(v)
             return meta, resp_body
+
+        for obj in resp_body['objects']:
+            mtype = obj.get('mime-type')
+            if mtype:
+                obj['mime_type'] = mtype
+                del obj['mime-type']
 
         return resp_body
 
