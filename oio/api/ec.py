@@ -60,13 +60,6 @@ def obj_range_to_meta_chunk_range(obj_start, obj_end, meta_sizes):
     """
     Converts a requested object range into a list of meta_chunk ranges.
 
-    Examples:
-
-    TODO complete examples
-    (20, 150, [50, 50]) = {0: (20, None), 1: (None, None)}
-    (20, 150, [50, 100]) = {0: (20, None), 1: (None, 100)}
-    (150, None, [100, 100]) = {1: (50, None)}
-
     :returns: a tuple list (pos, meta_chunk_start, meta_chunk_end)
 
         * pos is the meta chunk position
@@ -81,24 +74,35 @@ def obj_range_to_meta_chunk_range(obj_start, obj_end, meta_sizes):
     offset = 0
     found_start = False
     found_end = False
+    total_size = 0
+
+    for meta_size in meta_sizes:
+        total_size += meta_size
+    # suffix byte range handling
+    if obj_start is None and obj_end is not None:
+        obj_start = total_size - min(total_size, obj_end)
+        obj_end = total_size - 1
+
     meta_chunk_ranges = {}
     for pos, meta_size in enumerate(meta_sizes):
+        if meta_size <= 0:
+            continue
         if found_start:
-            meta_chunk_start = None
-        elif obj_start is not None and obj_start > offset + meta_size:
+            meta_chunk_start = 0
+        elif obj_start is not None and obj_start >= offset + meta_size:
             offset += meta_size
             continue
-        elif obj_start is not None and obj_start <= offset + meta_size:
+        elif obj_start is not None and obj_start < offset + meta_size:
             meta_chunk_start = obj_start - offset
             found_start = True
         else:
-            meta_chunk_start = None
-        if obj_end is not None and offset + meta_size >= obj_end:
+            meta_chunk_start = 0
+        if obj_end is not None and offset + meta_size > obj_end:
             meta_chunk_end = obj_end - offset
             # found end
             found_end = True
-        else:
-            meta_chunk_end = None
+        elif meta_size > 0:
+            meta_chunk_end = meta_size - 1
         meta_chunk_ranges[pos] = (meta_chunk_start, meta_chunk_end)
         if found_end:
             break
@@ -187,11 +191,19 @@ class ECChunkDownloadHandler(object):
             'req_fragment_end': fragment_end})
         return range_infos
 
-    def _get_fragment(self, chunk_iter, storage_method):
-        # TODO generate proper headers
+    def _get_fragment(self, chunk_iter, range_infos, storage_method):
+        headers = dict()
+        headers.update(self.headers)
+        if range_infos:
+            # only handle one range
+            range_info = range_infos[0]
+            headers['Range'] = 'bytes=%s-%s' % (
+                    range_info['req_fragment_start'],
+                    range_info['req_fragment_end'])
         reader = io.ChunkReader(chunk_iter, storage_method.ec_fragment_size,
-                                self.headers, self.connection_timeout,
-                                self.response_timeout, self.read_timeout)
+                                headers, self.connection_timeout,
+                                self.response_timeout, self.read_timeout,
+                                align=True)
         return (reader, reader.get_iter())
 
     def get_stream(self):
@@ -203,7 +215,8 @@ class ECChunkDownloadHandler(object):
             pile = GreenPile(pool)
             # we use eventlet GreenPile to spawn readers
             for _j in range(self.storage_method.ec_nb_data):
-                pile.spawn(self._get_fragment, chunk_iter, self.storage_method)
+                pile.spawn(self._get_fragment, chunk_iter, range_infos,
+                           self.storage_method)
 
             readers = []
             for reader, parts_iter in pile:

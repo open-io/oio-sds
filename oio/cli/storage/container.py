@@ -8,7 +8,7 @@ from oio.cli.utils import KeyValueAction
 
 
 class CreateContainer(lister.Lister):
-    """Create container"""
+    """Create an object container"""
 
     log = logging.getLogger(__name__ + '.CreateContainer')
 
@@ -87,7 +87,7 @@ class SetContainer(command.Command):
 
 
 class DeleteContainer(command.Command):
-    """Delete container"""
+    """Delete an object container"""
 
     log = logging.getLogger(__name__ + '.DeleteContainer')
 
@@ -112,7 +112,7 @@ class DeleteContainer(command.Command):
 
 
 class ShowContainer(show.ShowOne):
-    """Show container"""
+    """Display information about an object container"""
 
     log = logging.getLogger(__name__ + '.ShowContainer')
 
@@ -121,7 +121,7 @@ class ShowContainer(show.ShowOne):
         parser.add_argument(
             'container',
             metavar='<container>',
-            help='Container to show'
+            help='Name of the container to display information about'
         )
 
         return parser
@@ -141,14 +141,18 @@ class ShowContainer(show.ShowOne):
                 'base_name': sys['sys.name'],
                 'container': sys['sys.user.name'],
                 'ctime': sys['sys.m2.ctime'],
-                'bytes_usage': sys.get('sys.m2.usage', 0)}
+                'bytes_usage': sys.get('sys.m2.usage', 0),
+                'objects': sys.get('sys.m2.objects', 0),
+                'storage_policy': sys.get('sys.m2.policy.storage',
+                                          "Namespace default"),
+                }
         for k, v in data['properties'].iteritems():
             info['meta.' + k] = v
         return zip(*sorted(info.iteritems()))
 
 
 class ListContainer(lister.Lister):
-    """List container"""
+    """List containers"""
 
     log = logging.getLogger(__name__ + '.ListContainer')
 
@@ -267,7 +271,7 @@ class UnsetContainer(command.Command):
 
 
 class SaveContainer(command.Command):
-    """Save container locally"""
+    """Save all objects of a container locally"""
 
     log = logging.getLogger(__name__ + '.SaveContainer')
 
@@ -301,7 +305,7 @@ class SaveContainer(command.Command):
 
 
 class AnalyzeContainer(show.ShowOne):
-    """Analyze container"""
+    """Locate the services in charge of a container"""
 
     log = logging.getLogger(__name__ + '.AnalyzeContainer')
 

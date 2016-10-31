@@ -1,5 +1,4 @@
 import sys
-from pyeclib.ec_iface import ECDriver
 from oio.common import exceptions
 
 
@@ -125,6 +124,8 @@ class ECStorageMethod(StorageMethod):
 
         self._ec_segment_size = ec_segment_size
         self._ec_type = ec_type
+
+        from pyeclib.ec_iface import ECDriver
         self.driver = ECDriver(k=ec_nb_data, m=ec_nb_parity,
                                ec_type=ec_type_to_pyeclib_type[ec_type])
         self._ec_quorum_size = \

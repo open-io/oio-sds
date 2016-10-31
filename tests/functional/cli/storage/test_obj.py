@@ -24,7 +24,7 @@ HEADERS = ['Name', 'Created']
 OBJ_HEADERS = ['Name', 'Size', 'Hash']
 CONTAINER_LIST_HEADERS = ['Name', 'Bytes', 'Count']
 CONTAINER_FIELDS = ['account', 'base_name', 'bytes_usage', 'container',
-                    'ctime']
+                    'ctime', 'storage_policy', 'objects']
 OBJ_FIELDS = ['account', 'container', 'ctime', 'hash', 'id', 'mime-type',
               'object', 'policy', 'size', 'version']
 

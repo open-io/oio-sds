@@ -12,15 +12,28 @@
 # License along with this library.
 
 
+import logging
 from oio.api.object_storage import ObjectStorageAPI
+from oio.api.object_storage import _sort_chunks as sort_chunks
 from oio.common import exceptions as exc
-from tests.utils import random_str, BaseTestCase
+from tests.utils import random_str, random_data, BaseTestCase
 
 
 class TestObjectStorageAPI(BaseTestCase):
+
     def setUp(self):
         super(TestObjectStorageAPI, self).setUp()
         self.api = ObjectStorageAPI(self.ns, self.uri)
+        self.created = list()
+
+    def tearDown(self):
+        super(TestObjectStorageAPI, self).tearDown()
+        for ct, name in self.created:
+            try:
+                self.api.object_delete(self.account, ct, name)
+            except Exception:
+                logging.exception("Failed to delete %s/%s/%s//%s",
+                                  self.ns, self.account, ct, name)
 
     def _create(self, name, metadata=None):
         return self.api.container_create(self.account, name, metadata=metadata)
@@ -269,3 +282,74 @@ class TestObjectStorageAPI(BaseTestCase):
                                mime_type='text/custom')
         meta, _ = self.api.object_analyze(self.account, name, name)
         self.assertEqual(meta['mime_type'], 'text/custom')
+
+    def _upload_data(self, name):
+        # FIXME: find chunk_size
+        size = int(1048576 * 12)
+        data = random_data(int(size))
+        self.api.object_create(self.account, name, obj_name=name,
+                               data=data)
+        self.created.append((name, name))
+        _, chunks = self.api.object_analyze(self.account, name, name)
+        logging.debug("Chunks: %s", chunks)
+        return sort_chunks(chunks, False), data
+
+    def _fetch_range(self, name, range_):
+        stream = self.api.object_fetch(self.account, name, name, [range_])[1]
+        data = ""
+        for chunk in stream:
+            data += chunk
+        return data
+
+    def test_object_fetch_range_start(self):
+        """From 0 to somewhere"""
+        name = random_str(16)
+        _, data = self._upload_data(name)
+        end = 666
+        fdata = self._fetch_range(name, (0, end))
+        self.assertEqual(len(fdata), end+1)
+        self.assertEqual(fdata, data[0:end+1])
+
+    def test_object_fetch_range_end(self):
+        """From somewhere to end"""
+        name = random_str(16)
+        chunks, data = self._upload_data(name)
+        start = 666
+        last = max(chunks.keys())
+        end = chunks[last][0]['offset'] + chunks[last][0]['size']
+        fdata = self._fetch_range(name, (start, end))
+        self.assertEqual(len(fdata), len(data) - start)
+        self.assertEqual(fdata, data[start:])
+
+    def test_object_fetch_range_metachunk_start(self):
+        """From the start of the second metachunk to somewhere"""
+        name = random_str(16)
+        chunks, data = self._upload_data(name)
+        start = chunks[1][0]['offset']
+        end = start + 666
+        fdata = self._fetch_range(name, (start, end))
+        self.assertEqual(len(fdata), end-start+1)
+        self.assertEqual(fdata, data[start:end+1])
+
+    def test_object_fetch_range_metachunk_end(self):
+        """From somewhere to end of the first metachunk"""
+        name = random_str(16)
+        chunks, data = self._upload_data(name)
+        start = 666
+        end = chunks[0][0]['size'] - 1
+        fdata = self._fetch_range(name, (start, end))
+        self.assertEqual(len(fdata), end-start+1)
+        self.assertEqual(fdata, data[start:end+1])
+
+    def test_object_fetch_range_2_metachunks(self):
+        """
+        From somewhere in the first metachunk
+        to somewhere in the second metachunk
+        """
+        name = random_str(16)
+        chunks, data = self._upload_data(name)
+        start = 666
+        end = start + chunks[0][0]['size'] - 1
+        fdata = self._fetch_range(name, (start, end))
+        self.assertEqual(len(fdata), end-start+1)
+        self.assertEqual(fdata, data[start:end+1])
