@@ -8,6 +8,15 @@ from cliff import show
 
 from oio.cli.utils import KeyValueAction
 from oio.common.utils import Timestamp
+from oio.common.autocontainer import HashedContainerBuilder
+from oio.conscience.client import ConscienceClient
+
+
+def _get_flatns_manager(ns, acct):
+    cfg = {"namespace": str(ns)}
+    client = ConscienceClient(cfg)
+    nsinfo = client.info()
+    return HashedContainerBuilder(bits=nsinfo['flat_bitlength'])
 
 
 class CreateObject(lister.Lister):
@@ -57,6 +66,12 @@ class CreateObject(lister.Lister):
             help='Object MIME type',
             default=None
         )
+        parser.add_argument(
+            '--auto',
+            help='Auto-generate the container\'s name',
+            action="store_true",
+            default=False
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -82,6 +97,11 @@ class CreateObject(lister.Lister):
         for obj in objs:
             with io.open(obj, 'rb') as f:
                 name = names.pop(0) if names else os.path.basename(f.name)
+                if parsed_args.auto:
+                    container = _get_flatns_manager(
+                            self.app.client_manager.namespace,
+                            self.app.client_manager.get_account()
+                    )(name)
                 data = self.app.client_manager.storage.object_create(
                     self.app.client_manager.get_account(),
                     container,
@@ -118,6 +138,12 @@ class DeleteObject(command.Command):
             nargs='+',
             help='Object(s) to delete'
         )
+        parser.add_argument(
+            '--auto',
+            help='Auto-generate the container\'s name',
+            action="store_true",
+            default=False
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -125,6 +151,9 @@ class DeleteObject(command.Command):
         container = parsed_args.container
 
         for obj in parsed_args.objects:
+            if parsed_args.auto:
+                h = HashedContainerBuilder(bits=15)
+                container = h(obj)
             self.app.client_manager.storage.object_delete(
                 self.app.client_manager.get_account(),
                 container,
@@ -149,6 +178,12 @@ class ShowObject(show.ShowOne):
             metavar='<object>',
             help='Object'
         )
+        parser.add_argument(
+            '--auto',
+            help='Auto-generate the container\'s name',
+            action="store_true",
+            default=False
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -158,6 +193,9 @@ class ShowObject(show.ShowOne):
         container = parsed_args.container
         obj = parsed_args.object
 
+        if parsed_args.auto:
+            h = HashedContainerBuilder(bits=15)
+            container = h(obj)
         data = self.app.client_manager.storage.object_show(
             account,
             container,
@@ -204,12 +242,21 @@ class SetObject(command.Command):
             default=False,
             help='Clear previous properties',
             action='store_true')
+        parser.add_argument(
+            '--auto',
+            help='Auto-generate the container\'s name',
+            action="store_true",
+            default=False
+        )
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         container = parsed_args.container
         obj = parsed_args.object
+        if parsed_args.auto:
+            h = HashedContainerBuilder(bits=15)
+            container = h(obj)
         properties = parsed_args.property
         self.app.client_manager.storage.object_set_properties(
             self.app.client_manager.get_account(),
@@ -246,6 +293,12 @@ class SaveObject(command.Command):
             metavar='<key_file>',
             help='file containing the keys'
         )
+        parser.add_argument(
+            '--auto',
+            help='Auto-generate the container\'s name',
+            action="store_true",
+            default=False
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -259,6 +312,9 @@ class SaveObject(command.Command):
         filename = parsed_args.file
         if not filename:
             filename = obj
+        if parsed_args.auto:
+            h = HashedContainerBuilder(bits=15)
+            container = h(obj)
 
         meta, stream = self.app.client_manager.storage.object_fetch(
             self.app.client_manager.get_account(),
@@ -406,6 +462,12 @@ class UnsetObject(command.Command):
             help='Property to remove from object',
             required=True
         )
+        parser.add_argument(
+            '--auto',
+            help='Auto-generate the container\'s name',
+            action="store_true",
+            default=False
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -413,6 +475,9 @@ class UnsetObject(command.Command):
         container = parsed_args.container
         obj = parsed_args.object
         properties = parsed_args.property
+        if parsed_args.auto:
+            h = HashedContainerBuilder(bits=15)
+            container = h(name)
         self.app.client_manager.storage.object_del_properties(
             self.app.client_manager.get_account(),
             container,
@@ -437,6 +502,12 @@ class AnalyzeObject(lister.Lister):
             metavar='<object>',
             help='Object'
         )
+        parser.add_argument(
+            '--auto',
+            help='Auto-generate the container\'s name',
+            action="store_true",
+            default=False
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -445,6 +516,9 @@ class AnalyzeObject(lister.Lister):
         account = self.app.client_manager.get_account()
         container = parsed_args.container
         obj = parsed_args.object
+        if parsed_args.auto:
+            h = HashedContainerBuilder(bits=15)
+            container = h(obj)
 
         data = self.app.client_manager.storage.object_analyze(
             account,
