@@ -431,19 +431,19 @@ namespace_in_compression_mode(namespace_info_t* ns_info)
 gsize
 namespace_get_autocontainer_src_offset(namespace_info_t* ns_info)
 {
-	return namespace_get_size(ns_info, "FLATNS_hash_offset", 0);
+	return namespace_get_size(ns_info, "flat_hash_offset", 0);
 }
 
 gsize
 namespace_get_autocontainer_src_size(namespace_info_t* ns_info)
 {
-	return namespace_get_size(ns_info, "FLATNS_hash_size", 0);
+	return namespace_get_size(ns_info, "flat_hash_size", 0);
 }
 
 gsize
 namespace_get_autocontainer_dst_bits(namespace_info_t* ns_info)
 {
-	return namespace_get_size(ns_info, "FLATNS_hash_bitlength", 17);
+	return namespace_get_size(ns_info, "flat_bitlength", 17);
 }
 
 gint64
