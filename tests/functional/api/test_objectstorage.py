@@ -16,7 +16,7 @@ import logging
 from oio.api.object_storage import ObjectStorageAPI
 from oio.api.object_storage import _sort_chunks as sort_chunks
 from oio.common import exceptions as exc
-from tests.utils import random_str, BaseTestCase
+from tests.utils import random_str, random_data, BaseTestCase
 
 
 class TestObjectStorageAPI(BaseTestCase):
@@ -286,7 +286,7 @@ class TestObjectStorageAPI(BaseTestCase):
     def _upload_data(self, name):
         # FIXME: find chunk_size
         size = int(1048576 * 12)
-        data = random_str(int(size))
+        data = random_data(int(size))
         self.api.object_create(self.account, name, obj_name=name,
                                data=data)
         self.created.append((name, name))
