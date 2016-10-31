@@ -9,9 +9,7 @@ import random
 import string
 from functools import wraps
 
-random_chars = string.ascii_lowercase + string.ascii_uppercase +\
-    string.digits
-
+random_chars = string.ascii_letters + string.digits
 random_chars_id = 'ABCDEF' + string.digits
 
 CODE_NAMESPACE_NOTMANAGED = 418
@@ -29,12 +27,20 @@ def ec(fnc):
     return _wrapped
 
 
-def random_str(n, chars=random_chars):
-    return ''.join(random.choice(chars) for _ in range(n))
+def random_str(size, chars=random_chars):
+    return ''.join(random.choice(chars) for _ in range(size))
 
 
-def random_id(n):
-    return random_str(n, chars=random_chars_id)
+def random_id(size):
+    return random_str(size, chars=random_chars_id)
+
+
+def random_data(size):
+    """Return `size` bytes of random data as a str object"""
+    try:
+        return os.urandom(size)
+    except NotImplementedError:
+        return random_str(size)
 
 
 def trim_srv(srv):
