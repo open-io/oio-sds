@@ -466,8 +466,9 @@ class ObjectStorageAPI(API):
         if clear:
             params.update({'flush': 1})
         uri = self._make_uri('content/set_properties')
+        data = {'properties': properties}
         resp, resp_body = self._request(
-            'POST', uri, data=json.dumps(properties), params=params,
+            'POST', uri, data=json.dumps(data), params=params,
             headers=headers)
 
     @handle_object_not_found
@@ -475,8 +476,9 @@ class ObjectStorageAPI(API):
                               headers=None):
         params = self._make_params(account, container, obj)
         uri = self._make_uri('content/del_properties')
+        data = {'properties': properties}
         resp, resp_body = self._request(
-            'POST', uri, data=json.dumps(properties), params=params,
+            'POST', uri, data=json.dumps(data), params=params,
             headers=headers)
 
     def _make_uri(self, action):

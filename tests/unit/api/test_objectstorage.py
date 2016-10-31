@@ -233,7 +233,8 @@ class ObjectStorageTest(unittest.TestCase):
         api.object_update(
             self.account, self.container, name, meta, headers=self.headers)
 
-        data = json.dumps(meta)
+        data = {'properties': meta}
+        data = json.dumps(data)
         uri = "%s/content/set_properties" % self.uri_base
         params = {'acct': self.account, 'ref': self.container,
                   'path': name}
