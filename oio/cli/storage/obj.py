@@ -12,28 +12,6 @@ from oio.common.autocontainer import HashedContainerBuilder
 from oio.conscience.client import ConscienceClient
 
 
-def _get_flatns_manager(client_manager):
-    cfg = {"namespace": client_manager.namespace}
-    client = ConscienceClient(cfg)
-    nsinfo = client.info()
-    options = nsinfo['options']
-    bitlength, offset, size = None, 0, 0
-    try:
-        bitlength = int(options['flat_bitlength'])
-    except:
-        raise Exception("Namespace not configured for autocontainers")
-    try:
-        if 'flat_hash_offset' in options:
-            offset = int(options['flat_hash_offset'])
-        if 'flat_hash_size' in options:
-            size = int(options['flat_hash_size'])
-    except:
-        raise Exception("Invalid autocontainers configuration: offset/size")
-    return HashedContainerBuilder(offset=offset,
-                                  size=size,
-                                  bits=bitlength)
-
-
 class CreateObject(lister.Lister):
     """Upload object"""
 
