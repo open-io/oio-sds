@@ -4,6 +4,9 @@ import pkg_resources
 from oio.common import exceptions
 from oio.common.http import requests
 from oio.common.utils import load_namespace_conf
+from oio.common.autocontainer import HashedContainerBuilder
+from oio.common.exceptions import ConfigurationException
+from oio.conscience.client import ConscienceClient
 
 
 LOG = logging.getLogger(__name__)
@@ -34,6 +37,7 @@ class ClientManager(object):
         self.session = None
         self.namespace = None
         self.setup_done = False
+        self.info_done = False
         self._admin_mode = False
         root_logger = logging.getLogger('')
         LOG.setLevel(root_logger.getEffectiveLevel())
@@ -54,6 +58,14 @@ class ClientManager(object):
             self.setup_done = True
             self._admin_mode = self._options.get('admin_mode')
 
+    def info(self):
+        self.setup()
+        if self.info_done:
+            return
+        client = ConscienceClient({"namespace": self.namespace})
+        self.info = client.info()
+        self.info_done = True
+
     def get_admin_mode(self):
         self.setup()
         return self._admin_mode
@@ -70,6 +82,28 @@ class ClientManager(object):
             msg = 'Set an account name with --oio-account, OIO_ACCOUNT\n'
             raise exceptions.CommandError('Missing parameter: \n%s' % msg)
         return account_name
+
+    def get_flatns_manager(self):
+        # TODO(jfs): this is also needed in oio-swift, need to factorize in
+        #            oiopy
+        self.info()
+        options = self.info['options']
+        bitlength, offset, size = None, 0, 0
+        try:
+            bitlength = int(options['flat_bitlength'])
+        except:
+            raise ConfigurationException(
+                    "Namespace not configured for autocontainers")
+        try:
+            if 'flat_hash_offset' in options:
+                offset = int(options['flat_hash_offset'])
+            if 'flat_hash_size' in options:
+                size = int(options['flat_hash_size'])
+        except:
+            raise Exception("Invalid autocontainer config: offset/size")
+        return HashedContainerBuilder(offset=offset,
+                                      size=size,
+                                      bits=bitlength)
 
 
 def get_plugin_modules(group):

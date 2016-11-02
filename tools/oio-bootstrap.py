@@ -418,9 +418,9 @@ param_option.meta2_max_versions=${VERSIONING}
 param_option.meta2_keep_deleted_delay=86400
 param_option.compression=on
 param_option.container_max_size=50000000
-param_option.FLATNS_hash_offset=0
-param_option.FLATNS_hash_size=0
-param_option.FLATNS_hash_bitlength=17
+param_option.flat_hash_offset=0
+param_option.flat_hash_size=0
+param_option.flat_bitlength=17
 param_option.storage_policy=${STGPOL}
 
 # Storage policies definitions

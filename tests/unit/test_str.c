@@ -92,10 +92,6 @@ test_bin (void)
 static void
 test_autocontainer (void)
 {
-	struct oio_str_autocontainer_config_s cfg = {
-		.src_size = 0, .src_offset = 0, .dst_bits = 17
-	};
-
 	guint64 nb0 = 0, nb8 = 0;
 	for (unsigned int i0=0; i0<256 ;i0++) {
 		for (unsigned int i1=0; i1<256 ;i1++) {
@@ -103,7 +99,7 @@ test_autocontainer (void)
 				guint8 bin[] = {i0, i1, i2, 0, 0};
 				gchar dst[65];
 
-				const char *s = oio_str_autocontainer_hash (bin, sizeof(bin), dst, &cfg);
+				const char *s = oio_buf_prefix (bin, sizeof(bin), dst, 17);
 				g_assert (s != NULL);
 				gchar last = s[strlen(s)-1];
 				g_assert (last == '0' || last == '8');

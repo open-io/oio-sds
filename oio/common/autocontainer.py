@@ -13,6 +13,7 @@
 
 
 from itertools import takewhile
+from ctypes import CDLL, c_char_p, c_uint, create_string_buffer
 
 
 # Python's int() raises an exception if the string has non-digit
@@ -20,6 +21,39 @@ from itertools import takewhile
 def strtoll(val, base=10):
     """Mimics libc's strtoll function"""
     return int("".join(takewhile(str.isdigit, val)), base)
+
+
+class HashedContainerBuilder(object):
+    """
+    Build a container name from a SHA256 of the content path.
+    Only the first bits will be considered to generte the final prefix.
+    """
+
+    def __init__(self, offset=0, size=None, bits=15, **_kwargs):
+        self.offset = offset
+        self.size = size
+        self.bits = bits
+        self.lib = None
+        self.func = None
+
+    def __str__(self):
+        return '{0}(bits={1},offset={2},size={3})'.format(
+                self.__class__.__name__, self.bits, self.offset, self.size)
+
+    def __call__(self, path):
+        if self.lib is None:
+            self.lib = CDLL('liboiocore.so.0')
+            self.func = self.lib.oio_str_autocontainer
+            self.func.argtypes = [c_char_p, c_uint, c_char_p, c_uint]
+            self.func.restype = c_char_p
+
+        src = path[self.offset:]
+        srclen = len(src)
+        if self.size and self.size < len(src):
+            srclen = self.size
+        tmp = create_string_buffer(65)
+        out = self.func(src, srclen, tmp, self.bits)
+        return str(out)
 
 
 class AutocontainerBuilder(object):
