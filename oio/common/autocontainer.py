@@ -13,7 +13,7 @@
 
 
 from itertools import takewhile
-from ctypes import CDLL, c_char_p, c_uint
+from ctypes import CDLL, c_char_p, c_uint, create_string_buffer
 
 
 # Python's int() raises an exception if the string has non-digit
@@ -51,7 +51,7 @@ class HashedContainerBuilder(object):
         srclen = len(src)
         if self.size and self.size < len(src):
             srclen = self.size
-        tmp = " " * 65
+        tmp = create_string_buffer(65)
         out = self.func(src, srclen, tmp, self.bits)
         return str(out)
 
