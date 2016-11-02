@@ -150,12 +150,13 @@ def _make_object_metadata(headers):
     for k, v in headers.iteritems():
         k = k.lower()
         if k.startswith(prefix):
-            key = k.replace(prefix, "").replace('-', '_')
+            key = k.replace(prefix, "")
             # TODO temporary workaround
+            # This is used by properties set through swift
             if key.startswith('x-'):
                 props[key[2:]] = v
             else:
-                meta[key] = v
+                meta[key.replace('-', '_')] = v
     meta['properties'] = props
     return meta
 
