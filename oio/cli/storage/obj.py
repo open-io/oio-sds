@@ -8,8 +8,6 @@ from cliff import show
 
 from oio.cli.utils import KeyValueAction
 from oio.common.utils import Timestamp
-from oio.common.autocontainer import HashedContainerBuilder
-from oio.conscience.client import ConscienceClient
 
 
 class CreateObject(lister.Lister):
