@@ -5,6 +5,7 @@ from oio.common import exceptions
 from oio.common.http import requests
 from oio.common.utils import load_namespace_conf
 from oio.common.autocontainer import HashedContainerBuilder
+from oio.common.exceptions import ConfigurationException
 from oio.conscience.client import ConscienceClient
 
 
@@ -89,7 +90,8 @@ class ClientManager(object):
         try:
             bitlength = int(options['flat_bitlength'])
         except:
-            raise Exception("Namespace not configured for autocontainers")
+            raise ConfigurationException(
+                    "Namespace not configured for autocontainers")
         try:
             if 'flat_hash_offset' in options:
                 offset = int(options['flat_hash_offset'])
