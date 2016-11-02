@@ -84,6 +84,8 @@ class ClientManager(object):
         return account_name
 
     def get_flatns_manager(self):
+        # TODO(jfs): this is also needed in oio-swift, need to factorize in
+        #            oiopy
         self.info()
         options = self.info['options']
         bitlength, offset, size = None, 0, 0
