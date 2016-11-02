@@ -87,12 +87,18 @@ void oio_str_randomize(gchar *d, const gsize dlen, const char *set);
 /** Fills 'b' with 'blen' random bytes */
 void oio_buf_randomize(guint8 *b, gsize blen);
 
-/** Fills 'dst' with the name of the container deduced from the given 'path'.
- * 'dst' must be at least 65 characters long. */
-const char * oio_str_autocontainer (const char *src, guint size,
+/** Fills 'dst' with the name of the container deduced from the given 'src'
+ * which is 'srclen' bytes long. If 'srclen' is 0, then src is expected to be
+ * NULL-terminated and its strlen() is considered.
+ * 'dst' must be at least '(bits-1)/4 + 2' bytes long, to hold the hexadecimal
+ * form of the 'bits' first bits of the hash of 'src'.
+ * Because a SHA256 checksum is used, the hash will always be 32 bytes longs,
+ * and any hexadecimal prefix won't ever use more than 65 bytes including the
+ * final NULL character. */
+const char * oio_str_autocontainer (const char *src, guint srclen,
 		char *dst, guint bits);
 
-/** Get the hexadecimal form of the 'dst_bits_ first bits of the input
+/** Get the hexadecimal form of the 'bits' first bits of the input
  * 'src' buffer of size 'len'. The 'dst' buffer is used to store the result
  * and a pointer to 'dst' is returned upon success. */
 const char * oio_buf_prefix (const guint8 *src, guint len,
