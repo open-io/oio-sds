@@ -36,6 +36,10 @@ class HashedContainerBuilder(object):
         self.lib = None
         self.func = None
 
+    def __str__(self):
+        return '{0}(bits={1},offset={2},size={3})'.format(
+                self.__class__.__name__, self.bits, self.offset, self.size)
+
     def __call__(self, path):
         if self.lib is None:
             self.lib = CDLL('liboiocore.so.0')

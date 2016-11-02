@@ -12,11 +12,26 @@ from oio.common.autocontainer import HashedContainerBuilder
 from oio.conscience.client import ConscienceClient
 
 
-def _get_flatns_manager(ns, acct):
-    cfg = {"namespace": str(ns)}
+def _get_flatns_manager(client_manager):
+    cfg = {"namespace": client_manager.namespace}
     client = ConscienceClient(cfg)
     nsinfo = client.info()
-    return HashedContainerBuilder(bits=nsinfo['flat_bitlength'])
+    options = nsinfo['options']
+    bitlength, offset, size = None, 0, 0
+    try:
+        bitlength = int(options['flat_bitlength'])
+    except:
+        raise Exception("Namespace not configured for autocontainers")
+    try:
+        if 'flat_hash_offset' in options:
+            offset = int(options['flat_hash_offset'])
+        if 'flat_hash_size' in options:
+            size = int(options['flat_hash_size'])
+    except:
+        raise Exception("Invalid autocontainers configuration: offset/size")
+    return HashedContainerBuilder(offset=offset,
+                                  size=size,
+                                  bits=bitlength)
 
 
 class CreateObject(lister.Lister):
@@ -98,10 +113,8 @@ class CreateObject(lister.Lister):
             with io.open(obj, 'rb') as f:
                 name = names.pop(0) if names else os.path.basename(f.name)
                 if parsed_args.auto:
-                    container = _get_flatns_manager(
-                            self.app.client_manager.namespace,
-                            self.app.client_manager.get_account()
-                    )(name)
+                    manager = self.app.client_manager.get_flatns_manager()
+                    container = manager(name)
                 data = self.app.client_manager.storage.object_create(
                     self.app.client_manager.get_account(),
                     container,
@@ -152,8 +165,8 @@ class DeleteObject(command.Command):
 
         for obj in parsed_args.objects:
             if parsed_args.auto:
-                h = HashedContainerBuilder(bits=15)
-                container = h(obj)
+                manager = self.app.client_manager.get_flatns_manager()
+                container = manager(obj)
             self.app.client_manager.storage.object_delete(
                 self.app.client_manager.get_account(),
                 container,
@@ -194,8 +207,8 @@ class ShowObject(show.ShowOne):
         obj = parsed_args.object
 
         if parsed_args.auto:
-            h = HashedContainerBuilder(bits=15)
-            container = h(obj)
+            manager = self.app.client_manager.get_flatns_manager()
+            container = manager(obj)
         data = self.app.client_manager.storage.object_show(
             account,
             container,
@@ -255,8 +268,8 @@ class SetObject(command.Command):
         container = parsed_args.container
         obj = parsed_args.object
         if parsed_args.auto:
-            h = HashedContainerBuilder(bits=15)
-            container = h(obj)
+            manager = self.app.client_manager.get_flatns_manager()
+            container = manager(obj)
         properties = parsed_args.property
         self.app.client_manager.storage.object_set_properties(
             self.app.client_manager.get_account(),
@@ -313,8 +326,8 @@ class SaveObject(command.Command):
         if not filename:
             filename = obj
         if parsed_args.auto:
-            h = HashedContainerBuilder(bits=15)
-            container = h(obj)
+            manager = self.app.client_manager.get_flatns_manager()
+            container = manager(obj)
 
         meta, stream = self.app.client_manager.storage.object_fetch(
             self.app.client_manager.get_account(),
@@ -476,8 +489,8 @@ class UnsetObject(command.Command):
         obj = parsed_args.object
         properties = parsed_args.property
         if parsed_args.auto:
-            h = HashedContainerBuilder(bits=15)
-            container = h(name)
+            manager = self.app.client_manager.get_flatns_manager()
+            container = manager(obj)
         self.app.client_manager.storage.object_del_properties(
             self.app.client_manager.get_account(),
             container,
@@ -517,8 +530,8 @@ class AnalyzeObject(lister.Lister):
         container = parsed_args.container
         obj = parsed_args.object
         if parsed_args.auto:
-            h = HashedContainerBuilder(bits=15)
-            container = h(obj)
+            manager = self.app.client_manager.get_flatns_manager()
+            container = manager(obj)
 
         data = self.app.client_manager.storage.object_analyze(
             account,
