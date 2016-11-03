@@ -992,10 +992,11 @@ def generate(options):
     meta2_replicas = getint(options.get(M2_REPLICAS), defaults['REPLI_M2'])
     sqlx_replicas = getint(options.get(SQLX_REPLICAS), defaults['REPLI_SQLX'])
 
-    if options.get(M2_VERSIONS):
+    if M2_VERSIONS in options:
         versioning = options[M2_VERSIONS]
-    if options.get(M2_STGPOL):
+    if M2_STGPOL in options:
         stgpol = options[M2_STGPOL]
+
     ns = options.get('ns') or defaults['NS']
     ip = options.get('ip') or defaults['IP']
     backblaze_account_id = options.get('backblaze', {}).get(ACCOUNT_ID)
