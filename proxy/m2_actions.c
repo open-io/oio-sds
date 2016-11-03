@@ -102,7 +102,8 @@ _reply_m2_error (struct req_args_s *args, GError * err)
 {
 	if (!err)
 		return _reply_success_json (args, NULL);
-	if (err->code == CODE_CONTAINER_NOTEMPTY)
+	if (err->code == CODE_CONTAINER_NOTEMPTY ||
+			err->code == CODE_CONTENT_EXISTS)
 		return _reply_conflict_error (args, err);
 	return _reply_common_error (args, err);
 }
