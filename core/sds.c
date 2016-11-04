@@ -1935,12 +1935,13 @@ static GError *
 _notify_list_item (struct oio_sds_list_listener_s *listener,
 		struct json_object *jitem)
 {
-	struct json_object *jn, *jh, *js, *jv;
+	struct json_object *jn, *jh, *jp, *js, *jv;
 	struct oio_ext_json_mapping_s m[] = {
 		{"name", &jn, json_type_string, 1},
 		{"hash", &jh, json_type_string, 1},
 		{"size", &js, json_type_int, 1},
 		{"ver",  &jv, json_type_int, 1},
+		{"properties",  &jp, json_type_object, 0},
 		{NULL, NULL, 0, 0}
 	};
 	GError *err = oio_ext_extract_json (jitem, m);
@@ -1954,8 +1955,23 @@ _notify_list_item (struct oio_sds_list_listener_s *listener,
 	item.hash = json_object_get_string (jh);
 	item.size = json_object_get_int64 (js);
 	item.version = json_object_get_int64 (jv);
+
+	if (jp) {
+		GPtrArray *props = g_ptr_array_new();
+		json_object_object_foreach(jp, key, val) {
+			g_ptr_array_add(props, key);
+			g_ptr_array_add(props, (gpointer)json_object_get_string(val));
+		}
+		g_ptr_array_add(props, NULL);
+		item.properties = (const char * const *)g_ptr_array_free(props, FALSE);
+	} else {
+		item.properties = NULL;
+	}
+
 	if (listener->on_item)
 		listener->on_item (listener->ctx, &item);
+
+	g_free((gpointer)item.properties);
 	return NULL;
 }
 
@@ -2009,8 +2025,7 @@ _single_list (struct oio_sds_list_param_s *param,
 	GString *reply_body = g_string_new ("");
 
 	// Query the proxy
-	GError *err = oio_proxy_call_content_list (h, param->url, reply_body,
-			param->prefix, param->marker, param->end, param->max_items, 0);
+	GError *err = oio_proxy_call_content_list(h, param, reply_body);
 
 	// Unpack the reply
 	if (!err) {
