@@ -326,6 +326,7 @@ _pack_list_params (MESSAGE msg, struct list_params_s *p)
 	if (p->flag_allversion) flags |= M2V2_FLAG_ALLVERSION;
 	if (p->flag_headers) flags |= M2V2_FLAG_HEADERS;
 	if (p->flag_nodeleted) flags |= M2V2_FLAG_NODELETED;
+	if (p->flag_properties) flags |= M2V2_FLAG_ALLPROPS;
 	flags = g_htonl(flags);
 	metautils_message_add_field(msg, NAME_MSGKEY_FLAGS, &flags, sizeof(flags));
 
