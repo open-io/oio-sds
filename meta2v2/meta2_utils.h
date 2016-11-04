@@ -43,8 +43,9 @@ struct list_params_s
 	const char *marker_start;
 	const char *marker_end;
 	guint8 flag_nodeleted :1;
-	guint8 flag_allversion :1;
-	guint8 flag_headers:1;
+	guint8 flag_allversion:1;
+	guint8 flag_headers   :1;
+	guint8 flag_properties:1;
 };
 
 struct dup_alias_params_s
@@ -79,7 +80,7 @@ typedef gboolean (*m2_onprop_cb) (gpointer u, const gchar *k,
 
 /** Get the cumulated size and number of contents in the database. */
 void m2db_get_container_size_and_obj_count(sqlite3 *db, gboolean check_alias,
-    guint64 *size, gint64 *count);
+		guint64 *size, gint64 *count);
 
 gint64 m2db_get_max_versions(struct sqlx_sqlite3_s *sq3, gint64 def);
 
@@ -174,7 +175,7 @@ GError* m2db_force_alias(struct m2db_put_args_s *args, GSList *in,
 GError* m2db_copy_alias(struct m2db_put_args_s *args, const char *source);
 
 GError* m2db_append_to_alias(struct sqlx_sqlite3_s *sq3,
-        struct oio_url_s *url, GSList *beans,
+		struct oio_url_s *url, GSList *beans,
 		m2_onbean_cb cb, gpointer u0);
 
 GError* m2_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,

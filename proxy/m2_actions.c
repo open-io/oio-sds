@@ -178,7 +178,8 @@ _sort_aliases_by_name (struct bean_ALIASES_s *a0, struct bean_ALIASES_s *a1)
 }
 
 static void
-_dump_json_aliases_and_headers (GString *gstr, GSList *aliases, GTree *headers)
+_dump_json_aliases_and_headers(GString *gstr, GSList *aliases,
+		GTree *headers, GTree *props)
 {
 	g_string_append (gstr, "\"objects\":[");
 	gboolean first = TRUE;
@@ -188,6 +189,11 @@ _dump_json_aliases_and_headers (GString *gstr, GSList *aliases, GTree *headers)
 		struct bean_ALIASES_s *a = aliases->data;
 		struct bean_CONTENTS_HEADERS_s *h =
 			g_tree_lookup (headers, ALIASES_get_content(a));
+		gchar *prop_key = g_strdup_printf("%s_%"G_GINT64_FORMAT,
+				ALIASES_get_alias(a)->str,
+				ALIASES_get_version(a));
+		GSList *prop_list = g_tree_lookup(props, prop_key);
+		g_free(prop_key);
 
 		g_string_append(gstr, "{");
 		oio_str_gstring_append_json_pair(gstr, "name", ALIASES_get_alias(a)->str);
@@ -211,7 +217,8 @@ _dump_json_aliases_and_headers (GString *gstr, GSList *aliases, GTree *headers)
 			GByteArray *hh = CONTENTS_HEADERS_get_hash(h);
 
 			if (pol)
-				g_string_append_printf(gstr, "\"policy\":\"%s\",\"hash\":", pol->str);
+				g_string_append_printf(gstr, "\"policy\":\"%s\",\"hash\":",
+						pol->str);
 			else
 				g_string_append_printf(gstr, "\"policy\":null,\"hash\":");
 			if (hh) {
@@ -227,6 +234,23 @@ _dump_json_aliases_and_headers (GString *gstr, GSList *aliases, GTree *headers)
 			g_string_append_printf(gstr, ",\"mime-type\":\"%s\"",
 					CONTENTS_HEADERS_get_mime_type(h)->str);
 		}
+		if (prop_list) {
+			g_string_append(gstr, ",\"properties\":{");
+			gboolean inner_first = TRUE;
+			for (GSList *prop = prop_list;
+					prop && prop->data;
+					prop = prop->next) {
+				struct bean_PROPERTIES_s *bprop = prop->data;
+				COMA(gstr, inner_first);
+				g_string_append_printf(gstr, "\"%s\":\"",
+						PROPERTIES_get_key(bprop)->str);
+				GByteArray *val = PROPERTIES_get_value(bprop);
+				oio_str_gstring_append_json_blob(gstr,
+						(gchar*)val->data, val->len);
+				g_string_append_c(gstr, '"');
+			}
+			g_string_append_c(gstr, '}');
+		}
 		g_string_append_c(gstr, '}');
 	}
 	g_string_append_c (gstr, ']');
@@ -237,17 +261,38 @@ _dump_json_beans (GString *gstr, GSList *beans)
 {
 	GSList *aliases = NULL;
 	GTree *headers = g_tree_new ((GCompareFunc)metautils_gba_cmp);
+	GTree *props = g_tree_new_full((GCompareDataFunc)metautils_strcmp3,
+			NULL, g_free, NULL);
 
-	for (GSList *l=beans; l ;l=l->next) {
-		if (DESCR(l->data) == &descr_struct_ALIASES)
+	for (GSList *l = beans; l; l = l->next) {
+		if (DESCR(l->data) == &descr_struct_ALIASES) {
 			aliases = g_slist_prepend (aliases, l->data);
-		else if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
+		} else if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
 			g_tree_insert (headers, CONTENTS_HEADERS_get_id(l->data), l->data);
+		} else if (DESCR(l->data) == &descr_struct_PROPERTIES) {
+			/* Properties are linked to a specific version of an alias,
+			 * and there is possibly several properties,
+			 * thus we must build composed keys and lists. */
+			gchar *key = g_strdup_printf("%s_%"G_GINT64_FORMAT,
+					PROPERTIES_get_alias(l->data)->str,
+					PROPERTIES_get_version(l->data));
+			GSList *val = g_tree_lookup(props, key);
+			val = g_slist_prepend(val, l->data);
+			g_tree_replace(props, key, val);
 		}
 	}
 
 	aliases = g_slist_sort (aliases, (GCompareFunc)_sort_aliases_by_name);
-	_dump_json_aliases_and_headers (gstr, aliases, headers);
+	_dump_json_aliases_and_headers(gstr, aliases, headers, props);
+
+	gboolean _props_cleaner(gpointer key UNUSED,
+			gpointer val, gpointer data UNUSED)
+	{
+		g_slist_free(val);
+		return FALSE;
+	}
+	g_tree_foreach(props, _props_cleaner, NULL);
+	g_tree_destroy(props);
 
 	g_slist_free (aliases);
 	g_tree_destroy (headers);
@@ -821,7 +866,8 @@ _filter (struct filter_ctx_s *ctx, GSList *l)
 			forget (l);
 			continue;
 		}
-		if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
+		if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS ||
+				DESCR(l->data) == &descr_struct_PROPERTIES) {
 			prepend (l);
 			continue;
 		}
@@ -1233,8 +1279,9 @@ static GError * _list_loop (struct req_args_s *args,
 			out0->truncated = FALSE;
 			stop = TRUE;
 		} else if (out.truncated && !out0->next_marker) {
-			GRID_ERROR("BUG : meta2 must return a ");
-			err = NEWERROR(CODE_PLATFORM_ERROR, "BUG in meta2 : list truncated but no marker returned");
+			GRID_ERROR("BUG: meta2 must return a pagination marker");
+			err = NEWERROR(CODE_PLATFORM_ERROR,
+					"BUG in meta2: list truncated but no marker returned");
 			stop = TRUE;
 		}
 
@@ -1282,6 +1329,8 @@ enum http_rc_e action_container_list (struct req_args_s *args) {
 		list_in.flag_nodeleted = 0;
 	if (OPT("all"))
 		list_in.flag_allversion = ~0;
+	if (OPT("properties"))
+		list_in.flag_properties = ~0;
 	if (!err)
 		err = _max (args, &list_in.maxkeys);
 	if (!err) {

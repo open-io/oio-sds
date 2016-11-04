@@ -280,6 +280,7 @@ _load_list_params (struct list_params_s *lp, struct gridd_filter_ctx_s *ctx)
 		lp->flag_headers = BOOL(flags & M2V2_FLAG_HEADERS);
 		lp->flag_nodeleted = BOOL(flags & M2V2_FLAG_NODELETED);
 		lp->flag_allversion = BOOL(flags & M2V2_FLAG_ALLVERSION);
+		lp->flag_properties = BOOL(flags & M2V2_FLAG_ALLPROPS);
 	}
 
 	lp->prefix = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_PREFIX);

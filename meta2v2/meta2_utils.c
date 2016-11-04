@@ -576,6 +576,28 @@ _list_params_to_sql_clause(struct list_params_s *lp, GString *clause,
 	return (GVariant**) g_ptr_array_free (params, FALSE);
 }
 
+static void
+_load_fk_by_name(struct sqlx_sqlite3_s *sq3, struct bean_ALIASES_s *alias,
+		const gchar *fk_name, m2_onbean_cb cb, gpointer udata)
+{
+	EXTRA_ASSERT(sq3 != NULL);
+	EXTRA_ASSERT(alias != NULL);
+	EXTRA_ASSERT(fk_name != NULL);
+	EXTRA_ASSERT(cb != NULL);
+
+	GPtrArray *t0 = g_ptr_array_new();
+	GError *err = _db_get_FK_by_name_buffered(alias, fk_name, sq3->db, t0);
+	if (err) {
+		GRID_WARN("Failed to load FK '%s' for alias [%s]: (%d) %s", fk_name,
+				ALIASES_get_alias(alias)->str, err->code, err->message);
+		g_clear_error(&err);
+	} else {
+		for (guint i = 0; i < t0->len; i++)
+			cb(udata, t0->pdata[i]);
+	}
+	g_ptr_array_free(t0, TRUE);
+}
+
 GError*
 m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 		GSList *headers, m2_onbean_cb cb, gpointer u)
@@ -642,22 +664,13 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 	}
 
 label_ok:
-	aliases = g_slist_reverse (aliases);
-	for (GSList *l=aliases; l ;l=l->next) {
+	aliases = g_slist_reverse(aliases);
+	for (GSList *l = aliases; l; l = l->next) {
 		struct bean_ALIASES_s *alias = l->data;
-		if (lp.flag_headers) {
-			GPtrArray *t0 = g_ptr_array_new();
-			GError *e = _db_get_FK_by_name_buffered(alias, "image", sq3->db, t0);
-			if (e) {
-				GRID_DEBUG("No header for [%s] : (%d) %s",
-						ALIASES_get_alias(alias)->str,
-						err->code, err->message);
-				g_clear_error (&e);
-			}
-			for (guint i=0; i<t0->len ;i++)
-				cb(u, t0->pdata[i]);
-			g_ptr_array_free (t0, TRUE);
-		}
+		if (lp.flag_headers)
+			_load_fk_by_name(sq3, alias, "image", cb, u);
+		if (lp.flag_properties)
+			_load_fk_by_name(sq3, alias, "properties", cb, u);
 		cb(u, alias);
 		l->data = NULL;
 	}
