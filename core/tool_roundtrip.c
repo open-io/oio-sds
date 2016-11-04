@@ -53,8 +53,13 @@ struct test_data_s
 static int
 _on_item (void *ctx UNUSED, const struct oio_sds_list_item_s *item)
 {
-	GRID_DEBUG ("Listed item %s, size %"G_GSIZE_FORMAT" version %"G_GSIZE_FORMAT"\n",
+	GRID_DEBUG ("Listed item %s, size %"G_GSIZE_FORMAT" version %"G_GSIZE_FORMAT,
 			item->name, item->size, item->version);
+	const char * const * props = item->properties;
+	while (props && *props) {
+		GRID_DEBUG("Listed item %s: %s=%s", item->name, *props, *(props+1));
+		props += 2;
+	}
 	return 0;
 }
 
@@ -269,7 +274,7 @@ _roundtrip_tail (struct file_info_s *fi0, const char * content_id,
 		struct oio_sds_list_param_s list_in = {
 			.url = url,
 			.prefix = NULL, .marker = NULL, .end = NULL, .delimiter = 0,
-			.flag_allversions = 0, .flag_nodeleted = 0,
+			.flag_allversions = 0, .flag_nodeleted = 0, .flag_properties = 1,
 		};
 		struct oio_sds_list_listener_s list_out = {
 			.ctx = NULL,

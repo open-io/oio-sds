@@ -384,6 +384,7 @@ struct oio_sds_list_param_s
 
 	char flag_nodeleted : 1;
 	char flag_allversions : 1;
+	char flag_properties : 1;
 };
 
 struct oio_sds_list_item_s
@@ -392,6 +393,8 @@ struct oio_sds_list_item_s
 	const char *hash;
 	size_t size;
 	size_t version;
+	/** NULL-terminated array of property keys and values */
+	const char * const *properties;
 };
 
 struct oio_sds_list_listener_s
