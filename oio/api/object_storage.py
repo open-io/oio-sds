@@ -395,7 +395,7 @@ class ObjectStorageAPI(API):
     @handle_container_not_found
     def object_list(self, account, container, limit=None, marker=None,
                     delimiter=None, prefix=None, end_marker=None,
-                    include_metadata=False, headers=None):
+                    include_metadata=False, headers=None, properties=False):
         uri = self._make_uri('container/list')
         params = self._make_params(account, container)
         d = {"max": limit,
@@ -404,6 +404,8 @@ class ObjectStorageAPI(API):
              "prefix": prefix,
              "end_marker": end_marker}
         params.update(d)
+        if properties:
+            params['properties'] = True
 
         resp, resp_body = self._request(
             'GET', uri, params=params, headers=headers)
