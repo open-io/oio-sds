@@ -1329,7 +1329,7 @@ enum http_rc_e action_container_list (struct req_args_s *args) {
 		list_in.flag_nodeleted = 0;
 	if (OPT("all"))
 		list_in.flag_allversion = ~0;
-	if (OPT("properties"))
+	if (oio_str_parse_bool(OPT("properties"), FALSE))
 		list_in.flag_properties = ~0;
 	if (!err)
 		err = _max (args, &list_in.maxkeys);
