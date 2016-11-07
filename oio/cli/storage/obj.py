@@ -330,14 +330,14 @@ class ListObject(lister.Lister):
             '--full',
             dest='full_listing',
             default=False,
-            help='Full listing',
+            help='List all objects without paging',
             action="store_true"
         )
         parser.add_argument(
             '--long',
             dest='long_listing',
             default=False,
-            help='Long listing',
+            help='List properties with objects',
             action="store_true"
         )
         parser.add_argument(
@@ -388,6 +388,8 @@ class ListObject(lister.Lister):
             kwargs['delimiter'] = parsed_args.delimiter
         if parsed_args.limit:
             kwargs['limit'] = parsed_args.limit
+        if parsed_args.long_listing:
+            kwargs['properties'] = True
 
         account = self.app.client_manager.get_account()
 
@@ -416,11 +418,27 @@ class ListObject(lister.Lister):
                 account, container, **kwargs)
             l = resp['objects']
         if parsed_args.long_listing:
-            results = (
-                (obj['name'], obj['size'], obj['hash'], obj['mime_type'],
-                 Timestamp(obj['ctime']).isoformat)
-                for obj in l)
-            columns = ('Name', 'Size', 'Hash', 'Content-Type', 'Last-Modified')
+            def _format_props(props):
+                prop_list = ["%s=%s" % (k, v) for k, v
+                             in props.iteritems()]
+                if parsed_args.formatter == 'table':
+                    prop_string = "\n".join(prop_list)
+                elif parsed_args.formatter in ('value', 'csv'):
+                    prop_string = " ".join(prop_list)
+                else:
+                    prop_string = props
+                return prop_string
+
+            def _gen_results(objects):
+                for obj in objects:
+                    result = (obj['name'], obj['size'],
+                              obj['hash'], obj['mime_type'],
+                              Timestamp(obj['ctime']).isoformat,
+                              _format_props(obj.get('properties', {})))
+                    yield result
+            results = _gen_results(l)
+            columns = ('Name', 'Size', 'Hash', 'Content-Type',
+                       'Last-Modified', 'Properties')
         else:
             results = ((obj['name'], obj['size'], obj['hash']) for obj in l)
             columns = ('Name', 'Size', 'Hash')
