@@ -10,18 +10,42 @@ from oio.cli.utils import KeyValueAction
 from oio.common.utils import Timestamp
 
 
-class CreateObject(lister.Lister):
+class ContainerCommandMixin(object):
+    """Command taking a container name as parameter"""
+
+    def patch_parser(self, parser):
+        parser.add_argument(
+            'container',
+            metavar='<container>',
+            help='Name of the container to manipulate'
+        )
+        parser.add_argument(
+            '--auto',
+            help='Auto-generate the container name',
+            action="store_true",
+            default=False
+        )
+
+
+class ObjectCommandMixin(ContainerCommandMixin):
+    """Command taking an object name as parameter"""
+
+    def patch_parser(self, parser):
+        super(ObjectCommandMixin, self).patch_parser(parser)
+        parser.add_argument(
+            'object',
+            metavar='<object>',
+            help='Name of the object to manipulate')
+
+
+class CreateObject(lister.Lister, ContainerCommandMixin):
     """Upload object"""
 
     log = logging.getLogger(__name__ + '.CreateObject')
 
     def get_parser(self, prog_name):
         parser = super(CreateObject, self).get_parser(prog_name)
-        parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Container for new object'
-        )
+        self.patch_parser(parser)
         parser.add_argument(
             'objects',
             metavar='<filename>',
@@ -56,12 +80,6 @@ class CreateObject(lister.Lister):
             metavar='<type>',
             help='Object MIME type',
             default=None
-        )
-        parser.add_argument(
-            '--auto',
-            help='Auto-generate the container\'s name',
-            action="store_true",
-            default=False
         )
         return parser
 
@@ -109,29 +127,19 @@ class CreateObject(lister.Lister):
         return columns, l
 
 
-class DeleteObject(command.Command):
+class DeleteObject(command.Command, ContainerCommandMixin):
     """Delete object from container"""
 
     log = logging.getLogger(__name__ + '.DeleteObject')
 
     def get_parser(self, prog_name):
         parser = super(DeleteObject, self).get_parser(prog_name)
-        parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Delete object(s) from <container>'
-        )
+        self.patch_parser(parser)
         parser.add_argument(
             'objects',
             metavar='<object>',
             nargs='+',
             help='Object(s) to delete'
-        )
-        parser.add_argument(
-            '--auto',
-            help='Auto-generate the container\'s name',
-            action="store_true",
-            default=False
         )
         return parser
 
@@ -150,29 +158,14 @@ class DeleteObject(command.Command):
             )
 
 
-class ShowObject(show.ShowOne):
+class ShowObject(show.ShowOne, ObjectCommandMixin):
     """Show object"""
 
     log = logging.getLogger(__name__ + '.ShowObject')
 
     def get_parser(self, prog_name):
         parser = super(ShowObject, self).get_parser(prog_name)
-        parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Container'
-        )
-        parser.add_argument(
-            'object',
-            metavar='<object>',
-            help='Object'
-        )
-        parser.add_argument(
-            '--auto',
-            help='Auto-generate the container\'s name',
-            action="store_true",
-            default=False
-        )
+        self.patch_parser(parser)
         return parser
 
     def take_action(self, parsed_args):
@@ -204,22 +197,14 @@ class ShowObject(show.ShowOne):
         return zip(*sorted(info.iteritems()))
 
 
-class SetObject(command.Command):
+class SetObject(command.Command, ObjectCommandMixin):
     """Set object properties"""
 
     log = logging.getLogger(__name__ + '.SetObject')
 
     def get_parser(self, prog_name):
         parser = super(SetObject, self).get_parser(prog_name)
-        parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Container'
-        )
-        parser.add_argument(
-            'object',
-            metavar='<object>',
-            help='Object')
+        self.patch_parser(parser)
         parser.add_argument(
             '--property',
             metavar='<key=value>',
@@ -231,12 +216,6 @@ class SetObject(command.Command):
             default=False,
             help='Clear previous properties',
             action='store_true')
-        parser.add_argument(
-            '--auto',
-            help='Auto-generate the container\'s name',
-            action="store_true",
-            default=False
-        )
         return parser
 
     def take_action(self, parsed_args):
@@ -255,38 +234,23 @@ class SetObject(command.Command):
             parsed_args.clear)
 
 
-class SaveObject(command.Command):
+class SaveObject(command.Command, ObjectCommandMixin):
     """Save object locally"""
 
     log = logging.getLogger(__name__ + '.SaveObject')
 
     def get_parser(self, prog_name):
         parser = super(SaveObject, self).get_parser(prog_name)
+        self.patch_parser(parser)
         parser.add_argument(
             '--file',
             metavar='<filename>',
             help='Destination filename (defaults to object name)'
         )
         parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Download <object> from <container>'
-        )
-        parser.add_argument(
-            'object',
-            metavar='<object>',
-            help='Object to save'
-        )
-        parser.add_argument(
             '--key-file',
             metavar='<key_file>',
             help='file containing the keys'
-        )
-        parser.add_argument(
-            '--auto',
-            help='Auto-generate the container\'s name',
-            action="store_true",
-            default=False
         )
         return parser
 
@@ -445,22 +409,14 @@ class ListObject(lister.Lister):
         return (columns, results)
 
 
-class UnsetObject(command.Command):
+class UnsetObject(command.Command, ObjectCommandMixin):
     """Unset object properties"""
 
     log = logging.getLogger(__name__ + '.UnsetObject')
 
     def get_parser(self, prog_name):
         parser = super(UnsetObject, self).get_parser(prog_name)
-        parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Container'
-        )
-        parser.add_argument(
-            'object',
-            metavar='<object>',
-            help='Object to modify')
+        self.patch_parser(parser)
         parser.add_argument(
             '--property',
             metavar='<key>',
@@ -468,12 +424,6 @@ class UnsetObject(command.Command):
             action='append',
             help='Property to remove from object',
             required=True
-        )
-        parser.add_argument(
-            '--auto',
-            help='Auto-generate the container\'s name',
-            action="store_true",
-            default=False
         )
         return parser
 
@@ -492,29 +442,14 @@ class UnsetObject(command.Command):
             properties)
 
 
-class AnalyzeObject(lister.Lister):
+class AnalyzeObject(lister.Lister, ObjectCommandMixin):
     """Analyze object"""
 
     log = logging.getLogger(__name__ + '.AnalyzeObject')
 
     def get_parser(self, prog_name):
         parser = super(AnalyzeObject, self).get_parser(prog_name)
-        parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Container'
-        )
-        parser.add_argument(
-            'object',
-            metavar='<object>',
-            help='Object'
-        )
-        parser.add_argument(
-            '--auto',
-            help='Auto-generate the container\'s name',
-            action="store_true",
-            default=False
-        )
+        self.patch_parser(parser)
         return parser
 
     def take_action(self, parsed_args):
