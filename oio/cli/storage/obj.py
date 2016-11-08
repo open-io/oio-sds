@@ -57,6 +57,12 @@ class CreateObject(lister.Lister):
             help='Object MIME type',
             default=None
         )
+        parser.add_argument(
+            '--auto',
+            help='Auto-generate the container\'s name',
+            action="store_true",
+            default=False
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -82,6 +88,9 @@ class CreateObject(lister.Lister):
         for obj in objs:
             with io.open(obj, 'rb') as f:
                 name = names.pop(0) if names else os.path.basename(f.name)
+                if parsed_args.auto:
+                    manager = self.app.client_manager.get_flatns_manager()
+                    container = manager(name)
                 data = self.app.client_manager.storage.object_create(
                     self.app.client_manager.get_account(),
                     container,
@@ -118,6 +127,12 @@ class DeleteObject(command.Command):
             nargs='+',
             help='Object(s) to delete'
         )
+        parser.add_argument(
+            '--auto',
+            help='Auto-generate the container\'s name',
+            action="store_true",
+            default=False
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -125,6 +140,9 @@ class DeleteObject(command.Command):
         container = parsed_args.container
 
         for obj in parsed_args.objects:
+            if parsed_args.auto:
+                manager = self.app.client_manager.get_flatns_manager()
+                container = manager(obj)
             self.app.client_manager.storage.object_delete(
                 self.app.client_manager.get_account(),
                 container,
@@ -149,6 +167,12 @@ class ShowObject(show.ShowOne):
             metavar='<object>',
             help='Object'
         )
+        parser.add_argument(
+            '--auto',
+            help='Auto-generate the container\'s name',
+            action="store_true",
+            default=False
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -158,6 +182,9 @@ class ShowObject(show.ShowOne):
         container = parsed_args.container
         obj = parsed_args.object
 
+        if parsed_args.auto:
+            manager = self.app.client_manager.get_flatns_manager()
+            container = manager(obj)
         data = self.app.client_manager.storage.object_show(
             account,
             container,
@@ -204,12 +231,21 @@ class SetObject(command.Command):
             default=False,
             help='Clear previous properties',
             action='store_true')
+        parser.add_argument(
+            '--auto',
+            help='Auto-generate the container\'s name',
+            action="store_true",
+            default=False
+        )
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         container = parsed_args.container
         obj = parsed_args.object
+        if parsed_args.auto:
+            manager = self.app.client_manager.get_flatns_manager()
+            container = manager(obj)
         properties = parsed_args.property
         self.app.client_manager.storage.object_set_properties(
             self.app.client_manager.get_account(),
@@ -246,6 +282,12 @@ class SaveObject(command.Command):
             metavar='<key_file>',
             help='file containing the keys'
         )
+        parser.add_argument(
+            '--auto',
+            help='Auto-generate the container\'s name',
+            action="store_true",
+            default=False
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -259,6 +301,9 @@ class SaveObject(command.Command):
         filename = parsed_args.file
         if not filename:
             filename = obj
+        if parsed_args.auto:
+            manager = self.app.client_manager.get_flatns_manager()
+            container = manager(obj)
 
         meta, stream = self.app.client_manager.storage.object_fetch(
             self.app.client_manager.get_account(),
@@ -285,14 +330,14 @@ class ListObject(lister.Lister):
             '--full',
             dest='full_listing',
             default=False,
-            help='Full listing',
+            help='List all objects without paging',
             action="store_true"
         )
         parser.add_argument(
             '--long',
             dest='long_listing',
             default=False,
-            help='Long listing',
+            help='List properties with objects',
             action="store_true"
         )
         parser.add_argument(
@@ -343,6 +388,8 @@ class ListObject(lister.Lister):
             kwargs['delimiter'] = parsed_args.delimiter
         if parsed_args.limit:
             kwargs['limit'] = parsed_args.limit
+        if parsed_args.long_listing:
+            kwargs['properties'] = True
 
         account = self.app.client_manager.get_account()
 
@@ -371,11 +418,27 @@ class ListObject(lister.Lister):
                 account, container, **kwargs)
             l = resp['objects']
         if parsed_args.long_listing:
-            results = (
-                (obj['name'], obj['size'], obj['hash'], obj['mime_type'],
-                 Timestamp(obj['ctime']).isoformat)
-                for obj in l)
-            columns = ('Name', 'Size', 'Hash', 'Content-Type', 'Last-Modified')
+            def _format_props(props):
+                prop_list = ["%s=%s" % (k, v) for k, v
+                             in props.iteritems()]
+                if parsed_args.formatter == 'table':
+                    prop_string = "\n".join(prop_list)
+                elif parsed_args.formatter in ('value', 'csv'):
+                    prop_string = " ".join(prop_list)
+                else:
+                    prop_string = props
+                return prop_string
+
+            def _gen_results(objects):
+                for obj in objects:
+                    result = (obj['name'], obj['size'],
+                              obj['hash'], obj['mime_type'],
+                              Timestamp(obj['ctime']).isoformat,
+                              _format_props(obj.get('properties', {})))
+                    yield result
+            results = _gen_results(l)
+            columns = ('Name', 'Size', 'Hash', 'Content-Type',
+                       'Last-Modified', 'Properties')
         else:
             results = ((obj['name'], obj['size'], obj['hash']) for obj in l)
             columns = ('Name', 'Size', 'Hash')
@@ -406,6 +469,12 @@ class UnsetObject(command.Command):
             help='Property to remove from object',
             required=True
         )
+        parser.add_argument(
+            '--auto',
+            help='Auto-generate the container\'s name',
+            action="store_true",
+            default=False
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -413,6 +482,9 @@ class UnsetObject(command.Command):
         container = parsed_args.container
         obj = parsed_args.object
         properties = parsed_args.property
+        if parsed_args.auto:
+            manager = self.app.client_manager.get_flatns_manager()
+            container = manager(obj)
         self.app.client_manager.storage.object_del_properties(
             self.app.client_manager.get_account(),
             container,
@@ -437,6 +509,12 @@ class AnalyzeObject(lister.Lister):
             metavar='<object>',
             help='Object'
         )
+        parser.add_argument(
+            '--auto',
+            help='Auto-generate the container\'s name',
+            action="store_true",
+            default=False
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -445,6 +523,9 @@ class AnalyzeObject(lister.Lister):
         account = self.app.client_manager.get_account()
         container = parsed_args.container
         obj = parsed_args.object
+        if parsed_args.auto:
+            manager = self.app.client_manager.get_flatns_manager()
+            container = manager(obj)
 
         data = self.app.client_manager.storage.object_analyze(
             account,

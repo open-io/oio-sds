@@ -148,7 +148,7 @@ struct oio_lb_pool_LOCAL_s
 	gchar ** targets;
 
 	oio_location_t location_mask;
-	gint location_mask_max_shift : 16;
+	guint location_mask_max_shift : 16;
 	gboolean nearby_mode : 16;
 };
 
@@ -434,7 +434,7 @@ _local_slot__poll (struct oio_lb_slot_s *slot, oio_location_t mask,
 
 static gboolean
 _local_target__poll (struct oio_lb_pool_LOCAL_s *lb,
-		const char *target, gint mask_shift, struct polling_ctx_s *ctx)
+		const char *target, guint mask_shift, struct polling_ctx_s *ctx)
 {
 	oio_location_t mask = lb->location_mask;
 	if (lb->nearby_mode)
@@ -544,10 +544,10 @@ _local__patch(struct oio_lb_pool_s *self,
 	guint count = 0;
 	for (gchar **ptarget = lb->targets; *ptarget; ++ptarget) {
 		gboolean done = _local_target__is_satisfied(lb, *ptarget, &ctx);
-		gint mask_shift = 0;
+		guint mask_shift = 0u;
 		while (!done && mask_shift <= lb->location_mask_max_shift) {
 			done = _local_target__poll(lb, *ptarget, mask_shift, &ctx);
-			mask_shift += 8;  // Degrade mask by 8 bits (two hex digit)
+			mask_shift += 8u;  // Degrade mask by 8 bits (two hex digit)
 		}
 		if (!done) {
 			/* the strings is '\0' separated, printf won't display it */
@@ -639,7 +639,7 @@ oio_lb_world__set_pool_option(struct oio_lb_pool_s *self, const char *key,
 			GRID_WARN("Invalid mask shift [%s] for pool [%s]",
 					value, lb->name);
 		else
-			lb->location_mask_max_shift = (gint)shift;
+			lb->location_mask_max_shift = shift;
 	} else if (!strcmp(key, OIO_LB_OPT_NEARBY)) {
 		lb->nearby_mode = oio_str_parse_bool(value, FALSE);
 	} else {
@@ -748,7 +748,7 @@ oio_lb_world__create_pool (struct oio_lb_world_s *world, const char *name)
 	lb->world = world;
 	lb->targets = g_malloc0 (4 * sizeof(gchar*));
 	lb->location_mask = ~0xFFFFUL;
-	lb->location_mask_max_shift = 16;
+	lb->location_mask_max_shift = 16u;
 	lb->nearby_mode = FALSE;
 	return (struct oio_lb_pool_s*) lb;
 }

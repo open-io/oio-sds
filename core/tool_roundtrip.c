@@ -53,8 +53,13 @@ struct test_data_s
 static int
 _on_item (void *ctx UNUSED, const struct oio_sds_list_item_s *item)
 {
-	GRID_DEBUG ("Listed item %s, size %"G_GSIZE_FORMAT" version %"G_GSIZE_FORMAT"\n",
+	GRID_DEBUG ("Listed item %s, size %"G_GSIZE_FORMAT" version %"G_GSIZE_FORMAT,
 			item->name, item->size, item->version);
+	const char * const * props = item->properties;
+	while (props && *props) {
+		GRID_DEBUG("Listed item %s: %s=%s", item->name, *props, *(props+1));
+		props += 2;
+	}
 	return 0;
 }
 
@@ -269,7 +274,7 @@ _roundtrip_tail (struct file_info_s *fi0, const char * content_id,
 		struct oio_sds_list_param_s list_in = {
 			.url = url,
 			.prefix = NULL, .marker = NULL, .end = NULL, .delimiter = 0,
-			.flag_allversions = 0, .flag_nodeleted = 0,
+			.flag_allversions = 0, .flag_nodeleted = 0, .flag_properties = 1,
 		};
 		struct oio_sds_list_listener_s list_out = {
 			.ctx = NULL,
@@ -616,10 +621,7 @@ _roundtrip_put_autocontainer (const char * const * properties)
 
 	/* compute the autocontainer with the SHA1, consider only the first 17 bits */
 	char tmp[65];
-	struct oio_str_autocontainer_config_s cfg = {
-		.src_offset = 0, .src_size = 0, .dst_bits = 17,
-	};
-	const char *auto_container = oio_str_autocontainer_hash (fi.h, fi.hs, tmp, &cfg);
+	const char *auto_container = oio_buf_prefix (fi.h, fi.hs, tmp, 17);
 
 	/* build a new URL with the computed container name */
 	struct oio_url_s *url_auto = oio_url_dup (url);

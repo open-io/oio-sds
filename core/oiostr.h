@@ -87,24 +87,27 @@ void oio_str_randomize(gchar *d, const gsize dlen, const char *set);
 /** Fills 'b' with 'blen' random bytes */
 void oio_buf_randomize(guint8 *b, gsize blen);
 
-struct oio_str_autocontainer_config_s {
-	gsize src_offset;
-	gsize src_size;
-	gsize dst_bits;
-};
+/** Fills 'dst' with the name of the container deduced from the given 'src'
+ * which is 'srclen' bytes long. If 'srclen' is 0, then src is expected to be
+ * NULL-terminated and its strlen() is considered.
+ * 'dst' must be at least '(bits-1)/4 + 2' bytes long, to hold the hexadecimal
+ * form of the 'bits' first bits of the hash of 'src'.
+ * Because a SHA256 checksum is used, the hash will always be 32 bytes longs,
+ * and any hexadecimal prefix won't ever use more than 65 bytes including the
+ * final NULL character. */
+const char * oio_str_autocontainer (const char *src, guint srclen,
+		char *dst, guint bits);
 
-/** Fills 'dst' with the name of the container deduced from the given 'path'.
- * 'dst' must be at least 65 characters long. */
-const char * oio_str_autocontainer_name (const char *src, char *dst,
-		const struct oio_str_autocontainer_config_s *cfg);
+/** Get the hexadecimal form of the 'bits' first bits of the input
+ * 'src' buffer of size 'len'. The 'dst' buffer is used to store the result
+ * and a pointer to 'dst' is returned upon success. */
+const char * oio_buf_prefix (const guint8 *src, guint len,
+		char *dst, guint bits);
 
-/** Fills 'dst' with the hexadecimal representation of the first bits
- * of 'src'. */
-const char * oio_str_autocontainer_hash (const guint8 *src, gsize src_len,
-		gchar *dst, const struct oio_str_autocontainer_config_s *cfg);
-
+/** In place transform the input 's' string in its uppercase form */
 void oio_str_upper(register gchar *s);
 
+/** In place transform the input 's' string in its lowercase form */
 void oio_str_lower(register gchar *s);
 
 /* appends to 'base' the JSON acceptable version of 's', i.e. 's' with its

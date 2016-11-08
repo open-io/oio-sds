@@ -104,25 +104,30 @@ meta2_filter_check_ns_is_master(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	(void) reply;
+	TRACE_FILTER();
 	struct meta2_backend_s *backend = meta2_filter_ctx_get_backend(ctx);
-	g_mutex_lock(&backend->nsinfo_lock);
-	const char *state = namespace_get_state(backend->nsinfo);
-	g_mutex_unlock(&backend->nsinfo_lock);
+
 	const char *admin = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_ADMIN_COMMAND);
 	if (oio_str_parse_bool(admin, FALSE)) {
-		if (GRID_DEBUG_ENABLED())
-			GRID_DEBUG("admin mode is on");
+		GRID_DEBUG("admin mode is on");
 		return FILTER_OK;
 	}
 
-	if (g_strcmp0(state, NS_STATE_VALUE_SLAVE) == 0) {
-		if (GRID_DEBUG_ENABLED())
-			GRID_DEBUG("NS is slave, operation failed");
-		meta2_filter_ctx_set_error(ctx, SYSERR("NS slave!"));
-		return FILTER_KO;
+	gboolean master = TRUE;
+
+	g_mutex_lock(&backend->nsinfo_lock);
+	gchar *state = namespace_get_state(backend->nsinfo);
+	g_mutex_unlock(&backend->nsinfo_lock);
+	if (state) {
+		master = (0 != g_strcmp0(state, NS_STATE_VALUE_SLAVE));
+		g_free(state);
 	}
-	TRACE_FILTER();
-	return FILTER_OK;
+
+	if (master)
+		return FILTER_OK;
+	GRID_TRACE("NS is slave, operation failed");
+	meta2_filter_ctx_set_error(ctx, SYSERR("NS slave!"));
+	return FILTER_KO;
 }
 
 int

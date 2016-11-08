@@ -36,10 +36,10 @@ extern "C" {
 
 /* enablers */
 # ifdef HAVE_EXTRA_DEBUG
-#  define GRID_TRACE2_ENABLED() (1)
-#  define      TRACE2_ENABLED() (1)
-#  define GRID_TRACE_ENABLED()  (1)
-#  define      TRACE_ENABLED()  (1)
+#  define GRID_TRACE2_ENABLED() (oio_log_level > GRID_LOGLVL_TRACE2)
+#  define      TRACE2_ENABLED() (oio_log_level > GRID_LOGLVL_TRACE2)
+#  define GRID_TRACE_ENABLED()  (oio_log_level > GRID_LOGLVL_TRACE)
+#  define      TRACE_ENABLED()  (oio_log_level > GRID_LOGLVL_TRACE)
 # else
 #  define GRID_TRACE2_ENABLED() (0)
 #  define      TRACE2_ENABLED() (0)
@@ -61,8 +61,10 @@ extern "C" {
 
 /* new macros */
 # ifdef HAVE_EXTRA_DEBUG
-#  define GRID_TRACE2(FMT,...) g_log(G_LOG_DOMAIN, GRID_LOGLVL_TRACE2, FMT, ##__VA_ARGS__)
-#  define GRID_TRACE(FMT,...)  g_log(G_LOG_DOMAIN, GRID_LOGLVL_TRACE, FMT, ##__VA_ARGS__)
+#  define GRID_TRACE2(FMT, ...) if (oio_log_level > GRID_LOGLVL_TRACE2)\
+		g_log(G_LOG_DOMAIN, GRID_LOGLVL_TRACE2, FMT, ##__VA_ARGS__)
+#  define GRID_TRACE(FMT,...)   if (oio_log_level > GRID_LOGLVL_TRACE)\
+		g_log(G_LOG_DOMAIN, GRID_LOGLVL_TRACE, FMT, ##__VA_ARGS__)
 # else
 #  define GRID_TRACE2(FMT,...)
 #  define GRID_TRACE(FMT,...)

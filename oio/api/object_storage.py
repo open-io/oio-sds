@@ -150,12 +150,13 @@ def _make_object_metadata(headers):
     for k, v in headers.iteritems():
         k = k.lower()
         if k.startswith(prefix):
-            key = k.replace(prefix, "").replace('-', '_')
+            key = k.replace(prefix, "")
             # TODO temporary workaround
+            # This is used by properties set through swift
             if key.startswith('x-'):
                 props[key[2:]] = v
             else:
-                meta[key] = v
+                meta[key.replace('-', '_')] = v
     meta['properties'] = props
     return meta
 
@@ -394,7 +395,7 @@ class ObjectStorageAPI(API):
     @handle_container_not_found
     def object_list(self, account, container, limit=None, marker=None,
                     delimiter=None, prefix=None, end_marker=None,
-                    include_metadata=False, headers=None):
+                    include_metadata=False, headers=None, properties=False):
         uri = self._make_uri('container/list')
         params = self._make_params(account, container)
         d = {"max": limit,
@@ -403,6 +404,8 @@ class ObjectStorageAPI(API):
              "prefix": prefix,
              "end_marker": end_marker}
         params.update(d)
+        if properties:
+            params['properties'] = True
 
         resp, resp_body = self._request(
             'GET', uri, params=params, headers=headers)
@@ -486,8 +489,9 @@ class ObjectStorageAPI(API):
         if clear:
             params.update({'flush': 1})
         uri = self._make_uri('content/set_properties')
+        data = {'properties': properties}
         resp, resp_body = self._request(
-            'POST', uri, data=json.dumps(properties), params=params,
+            'POST', uri, data=json.dumps(data), params=params,
             headers=headers)
 
     @handle_object_not_found
@@ -495,8 +499,9 @@ class ObjectStorageAPI(API):
                               headers=None):
         params = self._make_params(account, container, obj)
         uri = self._make_uri('content/del_properties')
+        data = {'properties': properties}
         resp, resp_body = self._request(
-            'POST', uri, data=json.dumps(properties), params=params,
+            'POST', uri, data=json.dumps(data), params=params,
             headers=headers)
 
     def _make_uri(self, action):

@@ -114,16 +114,16 @@ _task_reload_policies(gpointer p)
 {
 	GError *err = NULL;
 	gchar *cfg = gridcluster_get_service_update_policy (PSRV(p)->nsinfo);
-	if (!cfg)
+	if (!cfg) {
 		err = NEWERROR(EINVAL, "Invalid parameter");
-	else {
+	} else {
 		err = service_update_reconfigure(meta1_backend_get_svcupdate(m1), cfg);
 		g_free(cfg);
 	}
 
-	if (!err)
+	if (!err) {
 		GRID_TRACE("Service update policies reloaded");
-	else {
+	} else {
 		GRID_WARN("Service update policy reload error [%s] : (%d) %s",
 				PSRV(p)->ns_name, err->code, err->message);
 		g_clear_error(&err);

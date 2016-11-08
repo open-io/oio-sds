@@ -21,7 +21,7 @@ License along with this library.
 
 /* Version started to be defined in June, 2016. Version prior to 20160600
  * have no ABI incompatibilities. */
-#define OIO_SDS_VERSION 20161005
+#define OIO_SDS_VERSION 20161108
 
 #ifdef __cplusplus
 extern "C" {
@@ -382,8 +382,9 @@ struct oio_sds_list_param_s
 	/* 0 means no set */
 	char delimiter;
 
-	char flag_nodeleted : 1;
-	char flag_allversions : 1;
+	unsigned char flag_nodeleted : 1;
+	unsigned char flag_allversions : 1;
+	unsigned char flag_properties : 1;
 };
 
 struct oio_sds_list_item_s
@@ -392,6 +393,8 @@ struct oio_sds_list_item_s
 	const char *hash;
 	size_t size;
 	size_t version;
+	/** NULL-terminated array of property keys and values */
+	const char * const *properties;
 };
 
 struct oio_sds_list_listener_s

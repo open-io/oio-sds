@@ -26,13 +26,13 @@ def make_arg_parser():
                         help="Display actions but do nothing")
     parser.add_argument('--rdir-fetch-limit', type=int,
                         help="Maximum of entries returned in "
-                             "each rdir response")
+                             "each rdir response (100)")
     parser.add_argument('--report-interval', type=int,
-                        help="Report interval in seconds")
+                        help="Report interval in seconds (3600)")
     parser.add_argument('--bytes-per-second', type=int,
-                        help="Max bytes per second")
+                        help="Max bytes per second (10000000)")
     parser.add_argument('--chunks-per-second', type=int,
-                        help="Max chunks per second")
+                        help="Max chunks per second (30)")
     parser.add_argument('-q', '--quiet', action='store_true',
                         help="Don't print log on console")
 

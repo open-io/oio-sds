@@ -665,18 +665,24 @@ oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,
 }
 
 GError *
-oio_proxy_call_content_list (CURL *h, struct oio_url_s *u, GString *out,
-		const char *prefix, const char *marker, const char *end,
-		guint max, char delim)
+oio_proxy_call_content_list(CURL *h, struct oio_sds_list_param_s *params,
+		GString *out)
 {
-	GString *http_url = _curl_container_url (u, "list");
+	GString *http_url = _curl_container_url(params->url, "list");
 	if (!http_url) return BADNS();
 
-	if (prefix) _append (http_url, '&', "prefix", prefix);
-	if (marker) _append (http_url, '&', "marker", marker);
-	if (end) _append (http_url, '&', "end", end);
-	if (max) g_string_append_printf (http_url, "&max=%u", max);
-	if (delim) g_string_append_printf (http_url, "&delimiter=%c", delim);
+	if (params->prefix)
+		_append(http_url, '&', "prefix", params->prefix);
+	if (params->marker)
+		_append(http_url, '&', "marker", params->marker);
+	if (params->end)
+		_append(http_url, '&', "end", params->end);
+	if (params->max_items)
+		g_string_append_printf(http_url, "&max=%zu", params->max_items);
+	if (params->delimiter)
+		g_string_append_printf(http_url, "&delimiter=%c", params->delimiter);
+	if (params->flag_properties)
+		g_string_append_printf(http_url, "&properties=1");
 
 	struct http_ctx_s o = { .headers = NULL, .body = out };
 	GError *err = _proxy_call (h, "GET", http_url->str, NULL, &o);

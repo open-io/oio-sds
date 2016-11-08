@@ -418,9 +418,9 @@ param_option.meta2_max_versions=${VERSIONING}
 param_option.meta2_keep_deleted_delay=86400
 param_option.compression=on
 param_option.container_max_size=50000000
-param_option.FLATNS_hash_offset=0
-param_option.FLATNS_hash_size=0
-param_option.FLATNS_hash_bitlength=17
+param_option.flat_hash_offset=0
+param_option.flat_hash_size=0
+param_option.flat_bitlength=17
 param_option.storage_policy=${STGPOL}
 
 # Storage policies definitions
@@ -992,10 +992,11 @@ def generate(options):
     meta2_replicas = getint(options.get(M2_REPLICAS), defaults['REPLI_M2'])
     sqlx_replicas = getint(options.get(SQLX_REPLICAS), defaults['REPLI_SQLX'])
 
-    if options.get(M2_VERSIONS):
+    if M2_VERSIONS in options:
         versioning = options[M2_VERSIONS]
-    if options.get(M2_STGPOL):
+    if M2_STGPOL in options:
         stgpol = options[M2_STGPOL]
+
     ns = options.get('ns') or defaults['NS']
     ip = options.get('ip') or defaults['IP']
     backblaze_account_id = options.get('backblaze', {}).get(ACCOUNT_ID)
