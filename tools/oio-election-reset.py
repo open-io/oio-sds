@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# zk-reset.py, a script resetting a Zookeeper instance for OpenIO SDS.
+# oio-election-reset.py, a CLI tool of OpenIO SDS
 # Copyright (C) 2016 OpenIO, original work as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
