@@ -2,7 +2,7 @@
 
 # zk-bootstrap.py, a script initating a Zookeeper instance for OpenIO SDS.
 # Copyright (C) 2014 Worldine, original work as part of Redcurrant
-# Copyright (C) 2015 OpenIO, modified as part of OpenIO SDS
+# Copyright (C) 2015-2016 OpenIO, modified as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
