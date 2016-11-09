@@ -63,7 +63,7 @@ class ClientManager(object):
         if self.info_done:
             return
         client = ConscienceClient({"namespace": self.namespace})
-        self.info = client.info()
+        self._nsinfo = client.info()
         self.info_done = True
 
     def get_admin_mode(self):
@@ -87,7 +87,7 @@ class ClientManager(object):
         # TODO(jfs): this is also needed in oio-swift, need to factorize in
         #            oiopy
         self.info()
-        options = self.info['options']
+        options = self._nsinfo['options']
         bitlength, offset, size = None, 0, 0
         try:
             bitlength = int(options['flat_bitlength'])
