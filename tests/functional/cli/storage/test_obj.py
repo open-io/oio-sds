@@ -66,10 +66,10 @@ class ObjTest(TestCase):
         obj_name = os.path.basename(obj_file)
         opts = self.get_opts([], 'json')
         output = self.openio('object create ' + self.CONTAINER_NAME +
-                             ' ' + obj_file + opts)
+                             ' ' + obj_file + ' ' + obj_file + ' ' + opts)
         data = json.loads(output)
         self.assert_list_fields(data, OBJ_HEADERS)
-        self.assertThat(len(data), Equals(1))
+        self.assertThat(len(data), Equals(2))
         item = data[0]
         self.assertThat(item['Name'], Equals(obj_name))
         self.assertThat(item['Size'], Equals(len(test_content)))
@@ -79,7 +79,7 @@ class ObjTest(TestCase):
         output = self.openio('object list ' + self.CONTAINER_NAME + opts)
         listing = json.loads(output)
         self.assert_list_fields(listing, OBJ_HEADERS)
-        self.assertThat(len(data), Equals(1))
+        self.assertThat(len(data), Equals(2))
         item = data[0]
         self.assertThat(item['Name'], Equals(obj_name))
         self.assertThat(item['Size'], Equals(len(test_content)))
