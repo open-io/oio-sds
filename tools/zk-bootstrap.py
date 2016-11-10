@@ -93,31 +93,17 @@ def create_tree(zh, nodes, options):
 
 
 def hash_tokens(w):
-    if w == 1:
-        return itertools.product(hexa)
-    elif w == 2:
-        return itertools.product(hexa, hexa)
-    elif w == 3:
-        return itertools.product(hexa, hexa, hexa)
-    else:
+    if w == 0:
         return []
+    return itertools.product(hexa, repeat=w)
 
 
 def hash_tree(d0, w0):
     tokens = [''.join(x) for x in hash_tokens(w0)]
-
-    def depth(d):
-        if d == 1:
-            return itertools.product(tokens)
-        elif d == 2:
-            return itertools.product(tokens, tokens)
-        elif d == 3:
-            return itertools.product(tokens, tokens, tokens)
-        else:
-            return []
-
     for d in range(d0+1):
-        for x in depth(d):
+        if d == 0:
+            continue
+        for x in itertools.product(tokens, repeat=d):
             yield '/'.join(x)
 
 

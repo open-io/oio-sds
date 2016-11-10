@@ -31,26 +31,17 @@ SRVTYPES = {
 }
 
 def hash_tokens (w):
-    if w == 1:
-        return itertools.product(hexa)
-    elif w == 2:
-        return itertools.product(hexa,hexa)
-    elif w == 3:
-        return itertools.product(hexa,hexa,hexa)
-    else:
+    if w == 0:
         return []
+    return itertools.product(hexa, repeat=w)
 
 def hash_tree (d0, w):
     tokens = [''.join(x) for x in hash_tokens(w)]
-    def depth (d):
-        if d == 1:
-            return itertools.product(tokens)
-        elif d == 2:
-            return itertools.product(tokens, tokens)
-        elif d == 3:
-            return itertools.product(tokens, tokens, tokens)
-        else:
+
+    def depth(d):
+        if d == 0:
             return []
+        return itertools.product(tokens, repeat=d)
     for x in depth(d0):
         yield '/'.join(x)
 
