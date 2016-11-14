@@ -33,6 +33,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "./meta1_gridd_dispatcher.h"
 #include "./internals.h"
 
+static void _strfreev (gchar ***pv) {
+	if (pv) {
+		g_strfreev(*pv);
+		*pv = NULL;
+	}
+}
+
 static GByteArray *encode_and_clean(GByteArray* (*e)(gchar**), gchar **pv) {
 	GByteArray *result = (*e)(pv);
 	g_strfreev(pv);
@@ -96,9 +103,10 @@ meta1_dispatch_v2_USERINFO(struct gridd_reply_ctx_s *reply,
 
 	gchar **info = NULL;
 	GError *err = meta1_backend_user_info(m1, url, &info);
-	if (NULL != err)
+	if (NULL != err) {
+		_strfreev(&info);
 		reply->send_error(0, err);
-	else {
+	} else {
 		reply->add_body(encode_and_clean(STRV_encode_gba, info));
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
@@ -119,9 +127,10 @@ meta1_dispatch_v2_SRV_LINK(struct gridd_reply_ctx_s *reply,
 
 	gchar **result = NULL;
 	GError *err = meta1_backend_services_link (m1, url, srvtype, dryrun, autocreate, &result);
-	if (NULL != err)
+	if (NULL != err) {
+		_strfreev(&result);
 		reply->send_error(0, err);
-	else {
+	} else {
 		reply->add_body(encode_and_clean(STRV_encode_gba, result));
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
@@ -143,9 +152,10 @@ meta1_dispatch_v2_SRV_RENEW(struct gridd_reply_ctx_s *reply,
 
 	gchar **result = NULL;
 	GError *err = meta1_backend_services_poll(m1, url, srvtype, ac, dryrun, &result);
-	if (NULL != err)
+	if (NULL != err) {
+		_strfreev(&result);
 		reply->send_error(0, err);
-	else {
+	} else {
 		reply->add_body(encode_and_clean(STRV_encode_gba, result));
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
@@ -249,9 +259,10 @@ meta1_dispatch_v2_SRV_LIST(struct gridd_reply_ctx_s *reply,
 
 	gchar **result = NULL;
 	GError *err = meta1_backend_services_list(m1, url, srvtype, &result);
-	if (NULL != err)
+	if (NULL != err) {
+		_strfreev(&result);
 		reply->send_error(0, err);
-	else {
+	} else {
 		reply->add_body(encode_and_clean(STRV_encode_gba, result));
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
@@ -262,23 +273,24 @@ meta1_dispatch_v2_SRV_LIST(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 meta1_dispatch_v2_SRV_ALLONM1(struct gridd_reply_ctx_s *reply,
-        struct meta1_backend_s *m1, gpointer ignored UNUSED)
+		struct meta1_backend_s *m1, gpointer ignored UNUSED)
 {
 	struct oio_url_s *url = metautils_message_extract_url (reply->request);
-    reply->subject("%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
-    reply->send_reply(CODE_TEMPORARY, "Received");
+	reply->subject("%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
+	reply->send_reply(CODE_TEMPORARY, "Received");
 
 	gchar **result = NULL;
 	GError *err = meta1_backend_services_all(m1, url, &result);
-	if (NULL != err)
-        reply->send_error(0, err);
-    else {
-        reply->add_body(encode_and_clean(STRV_encode_gba, result));
-        reply->send_reply(CODE_FINAL_OK, "OK");
-    }
+	if (NULL != err) {
+		_strfreev(&result);
+		reply->send_error(0, err);
+	} else {
+		reply->add_body(encode_and_clean(STRV_encode_gba, result));
+		reply->send_reply(CODE_FINAL_OK, "OK");
+	}
 
 	oio_url_clean (url);
-    return TRUE;
+	return TRUE;
 }
 
 static gboolean
@@ -298,9 +310,10 @@ meta1_dispatch_v2_PROPGET(struct gridd_reply_ctx_s *reply,
 		gchar **result = NULL;
 		err = meta1_backend_get_container_properties(m1, url, keys, &result);
 		g_strfreev (keys);
-		if (NULL != err)
+		if (NULL != err) {
+			_strfreev(&result);
 			reply->send_error(0, err);
-		else {
+		} else {
 			reply->add_body(encode_and_clean(KV_encode_gba, result));
 			reply->send_reply(CODE_FINAL_OK, "OK");
 		}
@@ -391,6 +404,7 @@ meta1_dispatch_v2_SRVRELINK(struct gridd_reply_ctx_s *reply,
 		gchar **newset = NULL;
 		GError *err = meta1_backend_services_relink (m1, url, kept, replaced, dryrun, &newset);
 		if (NULL != err) {
+			_strfreev(&newset);
 			reply->send_error (0, err);
 		} else {
 			reply->add_body(encode_and_clean(STRV_encode_gba, newset));
