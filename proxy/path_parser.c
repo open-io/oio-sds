@@ -301,7 +301,7 @@ _trie_explore (struct trie_node_s **tab, gchar **needles,
 			GSList *local_matches = _trie_explore ((*tab)->next, needles+1, m);
 			_match_free (m);
 			if (local_matches) {
-				/* XXX(jfs): the order matters! */
+				/* the order matters! */
 				matches = g_slist_concat (matches, local_matches);
 			}
 		}
