@@ -444,6 +444,7 @@ on_end_PIPEFROM (struct evtclient_PIPEFROM_s *mc)
 	GError *err = gridd_client_error(mc->ec.client);
 	mc->hook (err, mc->manager, sqlx_name_mutable_to_const(&mc->name), mc->reqid);
 	if (err) g_error_free(err);
+	sqlx_name_clean(&mc->name);
 }
 
 static void

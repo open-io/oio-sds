@@ -56,6 +56,8 @@ install(PROGRAMS
             zk-bootstrap.py
             zk-reset.py
             oio-election-reset.py
+            oio-election-smudge.py
+            oio-election-dump.py
             ${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-unlock-all.sh
             ${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-flush-all.sh
             ${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-wait-scored.sh
