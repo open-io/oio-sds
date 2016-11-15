@@ -239,7 +239,9 @@ GError *gridd_request_replicated (struct client_ctx_s *ctx,
 			g_strfreev (m1uv);
 			return NEWERROR (CODE_CONTAINER_NOTFOUND, "No service located");
 		}
+		/* We found some locations, let's keep only the URL part */
 		meta1_urlv_shift_addr (m1uv);
+		/* let's prefer the services requested (master, slave, etc) */
 		_sort_services (ctx, election_key, m1uv);
 	}
 
@@ -256,19 +258,16 @@ GError *gridd_request_replicated (struct client_ctx_s *ctx,
 
 		/* TODO ensure the service match the expected TYPE and SEQ */
 
-		/* Send a unitary request now */
+		/* Send a unitary request */
 		GByteArray *body = NULL;
-
+		const char *url = pu[0];
 		struct gridd_client_s *client = NULL;
 
 		if (!ctx->decoder) {
-			client = gridd_client_create (*pu, packed, &body, _on_reply);
+			client = gridd_client_create (url, packed, &body, _on_reply);
 		} else {
-			client = gridd_client_create (*pu, packed, ctx->decoder_data, ctx->decoder);
+			client = gridd_client_create (url, packed, ctx->decoder_data, ctx->decoder);
 		}
-
-		g_ptr_array_add (urlv, g_strdup(*pu));
-
 		if (ctx->which == CLIENT_RUN_ALL)
 			gridd_client_no_redirect (client);
 		gridd_client_start (client);
@@ -276,32 +275,47 @@ GError *gridd_request_replicated (struct client_ctx_s *ctx,
 		if (!(err = gridd_client_loop (client)))
 			err = gridd_client_error (client);
 
-		g_ptr_array_add (bodyv, body);
-
+		/* ensure an output for that request: each array (url, body, error)
+		 * must contain the correspondinng item. */
 		if (err) {
 			g_ptr_array_add (errorv, g_error_copy(err));
+			if (!body)
+				body = g_byte_array_new();
+			else
+				g_byte_array_set_size(body, 0);
 		} else {
 			g_ptr_array_add (errorv, NEWERROR(CODE_FINAL_OK, "OK"));
+			if (!body)
+				body = g_byte_array_new();
 		}
+		g_ptr_array_add (bodyv, body);
+		g_ptr_array_add (urlv, g_strdup(url));
 
 		/* Check for a possible redirection */
 		const char *actual = gridd_client_url (client);
-		if (actual && 0 != strcmp(actual, *pu)) {
+		if (actual && 0 != strcmp(actual, url)) {
 			gchar *k = g_strdup(election_key);
 			gchar *v = g_strdup (actual);
-			GRID_DEBUG("MASTER %s %s", v, k);
+			GRID_TRACE("MASTER %s %s", v, k);
 			MASTER_WRITE(lru_tree_insert (srv_master, k, v));
 		}
 
-		if (err && CODE_IS_NETWORK_ERROR(err->code)) {
-			service_invalidate(*pu);
-			g_clear_error (&err);
-		}
-
 		if (err) {
-			if (ctx->which == CLIENT_RUN_ALL) {
+			if (CODE_IS_NETWORK_ERROR(err->code)) {
+				service_invalidate(url);
+				/* that error is not strong enoough to stop the iteration, we
+				 * just try with another service */
 				g_clear_error (&err);
-				err = NULL;
+				/* But if we expected at least one service to responnd (!ALL),
+				 * and we still encounter that error with the last URL of the
+				 * array (!pu[1]), then this is an overall error that we should return. */
+				const char *next_url = pu[1];
+				if (ctx->which != CLIENT_RUN_ALL && !next_url) {
+					err = BUSY("No service replied");
+					stop = TRUE;
+				}
+			} else if (ctx->which == CLIENT_RUN_ALL) {
+				g_clear_error (&err);
 			} else {
 				stop = TRUE;
 			}
@@ -314,16 +328,22 @@ GError *gridd_request_replicated (struct client_ctx_s *ctx,
 		client = NULL;
 	}
 
+	EXTRA_ASSERT(urlv->len == bodyv->len);
+	EXTRA_ASSERT(urlv->len == errorv->len);
+
 	g_byte_array_unref (packed);
 	g_strfreev (m1uv);
 
+#define FinishArray(Out,Type,Var) do { \
+	g_ptr_array_add (Var, NULL); \
+	Out = (Type **) g_ptr_array_free (Var, FALSE); \
+	Var = NULL; \
+} while (0)
+
 	ctx->count = urlv->len;
-	g_ptr_array_add (urlv, NULL);
-	g_ptr_array_add (bodyv, NULL);
-	g_ptr_array_add (errorv, NULL);
-	ctx->urlv = (gchar**) g_ptr_array_free (urlv, FALSE);
-	ctx->bodyv = (GByteArray**) g_ptr_array_free (bodyv, FALSE);
-	ctx->errorv = (GError**) g_ptr_array_free (errorv, FALSE);
+	FinishArray(ctx->urlv, gchar, urlv);
+	FinishArray(ctx->bodyv, GByteArray, bodyv);
+	FinishArray(ctx->errorv, GError, errorv);
 
 	return err;
 }
