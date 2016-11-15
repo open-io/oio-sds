@@ -147,6 +147,7 @@ def test_ok(lib):
         for s in services:
             s.join()
 
+
 if __name__ == '__main__':
     lib = cdll.LoadLibrary(sys.argv[1] + "/liboiohttp_test.so")
     lib.setup()

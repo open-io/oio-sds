@@ -321,6 +321,7 @@ def test_list(lib):
     test_list_fail(lib)
     test_list_ok(lib)
 
+
 if __name__ == '__main__':
     lib = cdll.LoadLibrary(sys.argv[1] + "/liboiosds_test.so")
     lib.setup()
