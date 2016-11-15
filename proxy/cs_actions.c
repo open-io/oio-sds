@@ -96,7 +96,7 @@ conscience_remote_remove_services(const char *cs, const char *type, GSList *ls)
 static GError *
 _cs_check_tokens (struct req_args_s *args)
 {
-	// XXX All the handler use the NS, this should have been checked earlier.
+	/* Any handler use the NS, this should have been checked earlier. */
 	if (!validate_namespace(NS()))
 		return BADNS();
 

@@ -57,25 +57,28 @@ def namespace_tree (ns, srvtype):
     for x in hash_tree(d, w):
         yield basedir+'/'+x
 
-def list_problematic_nodes (zh, path, options):
+def list_groups(zh, path, options):
     path = path.replace('//', '/')
     try:
         children = list(zookeeper.get_children(zh, path))
         if len(children) <= 0:
             return
-        seen = set()
+        seen = dict()
         for child in children:
             key, num = child.split('-', 1)
-            seen.add(key)
-        for k in seen:
-            yield path, k
+            if key not in seen:
+                seen[key] = []
+            seen[key].append(num)
+        for k, nums in seen.iteritems():
+            nums = sorted(nums)
+            yield path, k, nums[0], nums[-1]
 
     except Exception as e:
         logging.warn("ERROR list %s: %s", path, e)
+        raise
 
-def smudge_election (zh, options, base, key):
+def create_node (zh, options, path):
     try:
-        path = base + '/' + key + '-0000000001'
         zookeeper.create(zh, path, options.VALUE,
                          acl_openbar, zookeeper.EPHEMERAL)
         logging.info("OK create %s", path)
@@ -121,8 +124,10 @@ def main():
     for srvtype in args[2:]:
         for group in namespace_tree(ns, srvtype):
             logging.debug(">DIR %s", group)
-            for mom, key in list_problematic_nodes(zh, group, options):
-                smudge_election(zh, options, mom, key)
+            for mom, key, first, last in list_groups(zh, group, options):
+                tail = str(1+int(last)).rjust(10, '0')
+                path = mom + '/' + key + '-' + tail
+                create_node(zh, options, path)
 
     logging.debug("Please send a signal to remove the ephemeral nodes")
     logging.warn("PAUSED ...")

@@ -166,7 +166,7 @@ action_sqlx_propget (struct req_args_s *args, struct json_object *jargs)
 	GError *err = NULL;
 	(void) jargs;
 
-	// Query the services
+	/* Query the services */
 	const char *type = TYPE();
 	if (!type)
 		return _reply_format_error(args, BADREQ("No service type"));
@@ -184,13 +184,27 @@ action_sqlx_propget (struct req_args_s *args, struct json_object *jargs)
 		return _reply_common_error (args, err);
 	}
 
-	// Decode the output of the services
-	GByteArray *first = ctx.bodyv[0];
+	/* Decode the output of the first service that replied */
 	gchar **pairs = NULL;
-	err = KV_decode_buffer(first->data, first->len, &pairs);
-	EXTRA_ASSERT((err != NULL) ^ (pairs != NULL));
-	if (err)
+	for (guint i=0; i<ctx.count && !err && !pairs ;++i) {
+		GError *e = ctx.errorv[i];
+		GByteArray *gba = ctx.bodyv[i];
+		if (e && e->code != CODE_FINAL_OK)
+			continue;
+		if (gba && gba->data && gba->len)
+			err = KV_decode_buffer(gba->data, gba->len, &pairs);
+	}
+
+	/* avoid a memleak and ensure a result, even if empty */
+	if (err) {
+		/* TODO(jfs): maybe a good place for an assert */
+		if (pairs) g_strfreev(pairs);
 		return _reply_system_error(args, err);
+	}
+	if (!pairs) {
+		pairs = g_malloc0(sizeof(void*));
+		GRID_WARN("BUG the request for properties failed without error");
+	}
 
 	gchar **user = KV_extract_prefixed(pairs, SQLX_ADMIN_PREFIX_USER);
 	gchar **nonuser = KV_extract_not_prefixed(pairs, SQLX_ADMIN_PREFIX_USER);

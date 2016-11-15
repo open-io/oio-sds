@@ -56,8 +56,11 @@ _resolve_meta2 (struct req_args_s *args, enum preference_e how,
 	} else if (out) {
 		EXTRA_ASSERT(ctx.bodyv != NULL);
 		for (guint i=0; i<ctx.count ;++i) {
+			GError *e = ctx.errorv[i];
 			GByteArray *b = ctx.bodyv[i];
-			if (b) {
+			if (e && e->code != CODE_FINAL_OK)
+				continue;
+			if (b && b->data && b->len) {
 				GSList *l = bean_sequence_unmarshall (b->data, b->len);
 				if (l) {
 					*out = metautils_gslist_precat (*out, l);
@@ -959,7 +962,7 @@ action_m2_container_destroy (struct req_args_s *args)
 
 	/* TODO make this const! */
 	struct sqlx_name_s *name = sqlx_name_mutable_to_const(&n);
-	/* XXX manage container subtype */
+	/* TODO FIXME manage container subtype */
 	sqlx_name_fill (&n, args->url, NAME_SRVTYPE_META2, 1);
 
 	/* pre-loads the locations of the container. We will need this at the
@@ -1376,20 +1379,33 @@ enum http_rc_e action_container_show (struct req_args_s *args) {
 		return sqlx_pack_PROPGET (sqlx_name_mutable_to_const(&ctx.name));
 	}
 	err = gridd_request_replicated (&ctx, packer);
-
 	if (err) {
 		client_clean (&ctx);
 		return _reply_m2_error (args, err);
 	}
 
-	gchar **pairs = NULL;
-	GByteArray *first = ctx.bodyv[0];
-	err = KV_decode_buffer(first->data, first->len, &pairs);
-	EXTRA_ASSERT((err != NULL) ^ (pairs != NULL));
+	/* TODO(jfs): the 2 next blocks are duplicated from proxy/sqlx_actions.c */
 
+	/* Decode the output of the first service that replied */
+	gchar **pairs = NULL;
+	for (guint i=0; i<ctx.count && !err && !pairs ;++i) {
+		GError *e = ctx.errorv[i];
+		GByteArray *gba = ctx.bodyv[i];
+		if (e && e->code != CODE_FINAL_OK)
+			continue;
+		if (gba->data && gba->len)
+			err = KV_decode_buffer(gba->data, gba->len, &pairs);
+	}
+
+	/* avoid a memleak and ensure a result, even if empty */
 	if (err) {
-		client_clean (&ctx);
+		/* TODO(jfs): maybe a good place for an assert */
+		if (pairs) g_strfreev(pairs);
 		return _reply_system_error(args, err);
+	}
+	if (!pairs) {
+		pairs = g_malloc0(sizeof(void*));
+		GRID_WARN("BUG the request for properties failed without error");
 	}
 
 	/* In the reply's headers, we store only the "system" properties, i.e. those
