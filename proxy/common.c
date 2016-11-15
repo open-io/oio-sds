@@ -18,6 +18,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "common.h"
 
+gint32 oio_proxy_request_failure_threshold_alone = 0;
+gint32 oio_proxy_request_failure_threshold_first = 100;
+gint32 oio_proxy_request_failure_threshold_middle = 50;
+gint32 oio_proxy_request_failure_threshold_last = 0;
+
 const char *
 _pref2str(enum preference_e p)
 {
@@ -256,28 +261,46 @@ GError *gridd_request_replicated (struct client_ctx_s *ctx,
 	gboolean stop = FALSE;
 	for (gchar **pu=m1uv; *pu && !stop ;++pu) {
 
-		/* TODO ensure the service match the expected TYPE and SEQ */
-
-		/* Send a unitary request */
-		GByteArray *body = NULL;
 		const char *url = pu[0];
+		const char *next_url = pu[1];
 		struct gridd_client_s *client = NULL;
+		GByteArray *body = NULL;
 
+		/* TODO ensure the service match the expected TYPE and SEQ */
 		if (!ctx->decoder) {
 			client = gridd_client_create (url, packed, &body, _on_reply);
 		} else {
 			client = gridd_client_create (url, packed, ctx->decoder_data, ctx->decoder);
 		}
-		if (ctx->which == CLIENT_RUN_ALL)
-			gridd_client_no_redirect (client);
-		gridd_client_start (client);
-		gridd_client_set_timeout (client, ctx->timeout);
-		if (!(err = gridd_client_loop (client)))
-			err = gridd_client_error (client);
 
+#ifdef HAVE_ENBUG
+		gint32 threshold = 0;
+		if (url == m1uv[0] && !next_url)
+			threshold = oio_proxy_request_failure_threshold_alone;
+		else if (url == m1uv[0])
+			threshold = oio_proxy_request_failure_threshold_first;
+		else if (next_url == NULL)
+			threshold = oio_proxy_request_failure_threshold_last;
+		else
+			threshold = oio_proxy_request_failure_threshold_middle;
+		if (threshold >= oio_ext_rand_int_range(1, 100)) {
+			err = NEWERROR(ERRCODE_CONN_REFUSED, "FAKE ERROR");
+		} else {
+#endif /* HAVE_ENBUG */
+			/* Send a unitary request */
+			if (ctx->which == CLIENT_RUN_ALL)
+				gridd_client_no_redirect (client);
+			gridd_client_start (client);
+			gridd_client_set_timeout (client, ctx->timeout);
+			if (!(err = gridd_client_loop (client)))
+				err = gridd_client_error (client);
+#ifdef HAVE_ENBUG
+		}
+#endif
 		/* ensure an output for that request: each array (url, body, error)
 		 * must contain the correspondinng item. */
 		if (err) {
+			GRID_DEBUG("ERROR %s -> (%d) %s", url, err->code, err->message);
 			g_ptr_array_add (errorv, g_error_copy(err));
 			if (!body)
 				body = g_byte_array_new();
@@ -309,7 +332,6 @@ GError *gridd_request_replicated (struct client_ctx_s *ctx,
 				/* But if we expected at least one service to responnd (!ALL),
 				 * and we still encounter that error with the last URL of the
 				 * array (!pu[1]), then this is an overall error that we should return. */
-				const char *next_url = pu[1];
 				if (ctx->which != CLIENT_RUN_ALL && !next_url) {
 					err = BUSY("No service replied");
 					stop = TRUE;
