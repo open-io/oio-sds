@@ -398,7 +398,15 @@ nodev_to_int64v(const struct String_vector *sv, const char *prefix)
 		if (g_str_has_prefix(s, prefix)) {
 			const char *stripe = strrchr(s,'-');
 			if (NULL != stripe) {
-				gint64 i64 = g_ascii_strtoll(stripe+1, NULL, 10);
+				stripe ++;
+				if (10 != strlen(stripe))
+					continue;
+				gchar *end = NULL;
+				gint64 i64 = g_ascii_strtoll(stripe, &end, 10);
+				if (end && *end)
+					continue; // trailing chars
+				if ((i64 == G_MAXINT64 || i64 == G_MININT64) && errno == ERANGE)
+					continue; // {over,under}flow
 				g_array_append_vals(array, &i64, 1);
 			}
 		}
@@ -1182,10 +1190,21 @@ step_AskMaster_completion(int zrc, const char *v, int vlen,
 	if (zrc != ZOK)
 		transition_error(member, EVT_MASTER_KO, zrc);
 	else {
-		if (!master)
+		if (!master || !metautils_url_valid_for_connect(master)) {
 			transition(member, EVT_MASTER_EMPTY, &zrc);
-		else
-			transition(member, EVT_MASTER_OK, master);
+		} else {
+			const char *myurl = member_get_url(member);
+			if (0 == strcmp(master, myurl)) {
+				/* JFS: the master carries our ID (i.e. our URL), if we accept
+				 * it as-is, we will create a loop on ourself. */
+				GRID_WARN("BUG election ghost node left");
+				transition(member, EVT_MASTER_EMPTY, &zrc);
+				/* TODO(jfs): prevent this to reproduce, and ask the removal
+				 * of the ghost node. */
+			} else {
+				transition(member, EVT_MASTER_OK, master);
+			}
+		}
 	}
 	member_unref(member);
 	member_unlock(member);
@@ -2102,10 +2121,12 @@ _member_react (struct election_member_s *member,
 				case EVT_LIST_OK:
 				case EVT_LIST_KO:
 					member_warn("ABNORMAL", member);
-				case EVT_NODE_LEFT:
 				case EVT_MASTER_KO:
 				case EVT_MASTER_EMPTY:
+					/* TODO(jfs): prevent an election storm, and insert a delay
+					 * before the next retry */
 				case EVT_MASTER_CHANGE:
+				case EVT_NODE_LEFT:
 					return become_candidate(member);
 
 				case EVT_EXITING:
