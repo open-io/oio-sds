@@ -73,6 +73,12 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 	add_definitions(-DHAVE_EXTRA_DEBUG=1)
 endif()
 
+option(ENBUG "Introduces intentional bugs" OFF)
+if (ENBUG)
+	MESSAGE(WARNING "ENBUGED MODE : NOT FOR PRODUCTION USE")
+	add_definitions(-DHAVE_ENBUG=1)
+endif()
+
 if (DEFINED STACK_PROTECTOR)
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fstack-protector-all")
 endif()
