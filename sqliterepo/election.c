@@ -354,8 +354,8 @@ _DEQUE_locate_by_uid (struct deque_beacon_s *beacon, const guint32 uid)
 }
 
 /* Locate an item by its UID.
-   Used for long-term watchers, we target first the status usually worn by
-   items when it happens. */
+ * Used for long-term watchers, we target first the status usually worn by
+ * items when it happens. */
 static struct election_member_s *
 _manager_locate_by_uid (struct election_manager_s *manager, const guint32 uid)
 {
@@ -393,13 +393,13 @@ nodev_to_int64v(const struct String_vector *sv, const char *prefix)
 {
 	GArray *array = g_array_new(0, 0, sizeof(gint64));
 
-	for (int32_t i=0; i<sv->count ;i++) {
+	for (int32_t i = 0; i < sv->count; i++) {
 		const char *s = sv->data[i];
 		if (g_str_has_prefix(s, prefix)) {
-			const char *stripe = strrchr(s,'-');
-			if (NULL != stripe) {
+			const char *stripe = strrchr(s, '-');
+			if (stripe != NULL) {
 				stripe ++;
-				if (10 != strlen(stripe))
+				if (strlen(stripe) != 10)
 					continue;
 				gchar *end = NULL;
 				gint64 i64 = g_ascii_strtoll(stripe, &end, 10);
@@ -1167,13 +1167,27 @@ election_manager_whatabout (struct election_manager_s *m,
 }
 
 /* --- Zookeeper callbacks ----------------------------------------------------
-   All of them are called from the zookeeper's thread.
-   We chose to set the election manager in a thread-local slot because ZK
-   contexts for callbackks currently (3.4.6) require that no memory is
-   allocated, especially because of a memory leak on discarded clone watchers.
-   We are forced to pass an integer cast into pointer so that watchers can use
-   them to recover the right election.
-   -------------------------------------------------------------------------- */
+ * All of them are called from the zookeeper's thread.
+ * We chose to set the election manager in a thread-local slot because ZK
+ * contexts for callbackks currently (3.4.6) require that no memory is
+ * allocated, especially because of a memory leak on discarded clone watchers.
+ * We are forced to pass an integer cast into pointer so that watchers can use
+ * them to recover the right election.
+ * -------------------------------------------------------------------------- */
+
+static void
+step_DeleteRogueNode_completion(int zrc, const void *d)
+{
+	gchar *path = (gchar*)d;
+	if (zrc == ZNONODE)
+		GRID_INFO("Rogue ZK node at %s disappeared", path);
+	else if (zrc == ZOK)
+		GRID_INFO("Sucessfully deleted rogue ZK node at %s", path);
+	else
+		GRID_WARN("Failed to delete rogue ZK node at %s: %s",
+				path, zerror(zrc));
+	g_free(path);
+}
 
 static void
 step_AskMaster_completion(int zrc, const char *v, int vlen,
@@ -1194,13 +1208,20 @@ step_AskMaster_completion(int zrc, const char *v, int vlen,
 			transition(member, EVT_MASTER_EMPTY, &zrc);
 		} else {
 			const char *myurl = member_get_url(member);
-			if (0 == strcmp(master, myurl)) {
-				/* JFS: the master carries our ID (i.e. our URL), if we accept
-				 * it as-is, we will create a loop on ourself. */
-				GRID_WARN("BUG election ghost node left");
+			if (strcmp(master, myurl) == 0) {
+				/* JFS: the supposed master carries our ID (i.e. our URL),
+				 * if we accept it as-is, we will create a loop on ourselves.
+				 * We delete it and pretend there is no master. */
+				gchar *path = member_masterpath(member);
+				GRID_WARN("Rogue ZK node at %s, triggering deletion", path);
+				int zrc2 = sqlx_sync_adelete(member->manager->sync, path, -1,
+						step_DeleteRogueNode_completion, path);
+				if (zrc2 != ZOK) {
+					GRID_WARN("Failed! %s", zerror(zrc2));
+					g_free(path);
+				} // else `path` is freed by the callback
+
 				transition(member, EVT_MASTER_EMPTY, &zrc);
-				/* TODO(jfs): prevent this to reproduce, and ask the removal
-				 * of the ghost node. */
 			} else {
 				transition(member, EVT_MASTER_OK, master);
 			}
@@ -1782,7 +1803,7 @@ static void
 become_failed (struct election_member_s *member)
 {
 	/* setting last_USE to now avoids sending USE as soon as arrived in
-	   the set of FAILED elections. */
+	 * the set of FAILED elections. */
 	member->last_USE = oio_ext_monotonic_time ();
 	member_set_status(member, STEP_FAILED);
 }
