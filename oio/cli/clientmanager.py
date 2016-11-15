@@ -132,6 +132,7 @@ def build_plugin_option_parser(parser):
         parser = module.build_option_parser(parser)
     return parser
 
+
 PLUGIN_MODULES = get_plugin_modules(
     'openio.cli.base'
 )

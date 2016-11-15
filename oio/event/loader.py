@@ -30,6 +30,7 @@ class _Handler(_Type):
         else:
             assert 0, 'Protocol %r unknown' % context.protocol
 
+
 HANDLER = _Handler()
 
 
@@ -44,6 +45,7 @@ class _Filter(_Type):
         else:
             assert 0, 'Protocol %r unknown' % context.protocol
 
+
 FILTER = _Filter()
 
 
@@ -57,6 +59,7 @@ class _Pipeline(_Type):
         for filter in filters:
             app = filter(app)
         return app
+
 
 PIPELINE = _Pipeline()
 
@@ -95,6 +98,7 @@ def loadcontext(obj_type, uri, name=None, global_conf=None):
 def _loadegg(obj_type, uri, spec, name, global_conf):
     loader = EggLoader(spec)
     return loader.get_context(obj_type, name, global_conf)
+
 
 _loaders['egg'] = _loadegg
 
