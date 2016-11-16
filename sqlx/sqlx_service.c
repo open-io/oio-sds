@@ -216,7 +216,20 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 	}
 	GRID_DEBUG("Volume configured to [%s]", ss->volume);
 
-	ss->zk_url = gridcluster_get_zookeeper(ss->ns_name);
+	/* Load the default ZK url */
+	ss->zk_url = oio_cfg_get_value(ss->ns_name, OIO_CFG_ZOOKEEPER);
+
+	/* if any, use a specific ZK url for the current service type */
+	do {
+		gchar k[sizeof(OIO_CFG_ZOOKEEPER)+2+LIMIT_LENGTH_SRVTYPE];
+		g_snprintf(k, sizeof(k), "%s.%s", OIO_CFG_ZOOKEEPER, ss->service_config->srvtype);
+		gchar *str = oio_cfg_get_value(ss->ns_name, k);
+		if (str)
+			GRID_NOTICE("ZK [%s] <- [%s] (at %s)", ss->zk_url, str, k);
+		else
+			GRID_DEBUG("ZK [%s] (nothing at %s)", ss->zk_url, k);
+		if (str) oio_str_reuse(&ss->zk_url, str);
+	} while (0);
 
 	return TRUE;
 }

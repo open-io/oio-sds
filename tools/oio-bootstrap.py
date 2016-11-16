@@ -679,7 +679,14 @@ template_local_header = """
 
 template_local_ns = """
 [${NS}]
+${NOZK}# ZK URL, at least used by zk-bootstrap.py
 ${NOZK}zookeeper=${IP}:2181
+${NOZK}# Alternate ZK endpoints for specific services
+${NOZK}zookeeper.meta0=${IP}:2181
+${NOZK}zookeeper.meta1=${IP}:2181
+${NOZK}zookeeper.meta2=${IP}:2181
+${NOZK}zookeeper.sqlx=${IP}:2181
+
 #proxy-local=${RUNDIR}/${NS}-proxy.sock
 proxy=${IP}:${PORT_PROXYD}
 ecd=${IP}:${PORT_ECD}
