@@ -52,26 +52,26 @@ static GError* _open(struct sqlx_sync_s *ss);
 static void _close(struct sqlx_sync_s *ss);
 
 static int _acreate (struct sqlx_sync_s *ss, const char *path, const char *v,
-        int vlen, int flags, string_completion_t completion, const void *data);
+		int vlen, int flags, string_completion_t completion, const void *data);
 
 static int _adelete (struct sqlx_sync_s *ss, const char *path, int version,
-        void_completion_t completion, const void *data);
+		void_completion_t completion, const void *data);
 
 static int _awexists (struct sqlx_sync_s *ss, const char *path,
 		watcher_fn watcher, void* watcherCtx,
 		stat_completion_t completion, const void *data);
 
 static int _awget (struct sqlx_sync_s *ss, const char *path,
-        watcher_fn watcher, void* watcherCtx,
-        data_completion_t completion, const void *data);
+		watcher_fn watcher, void* watcherCtx,
+		data_completion_t completion, const void *data);
 
 static int _awget_children (struct sqlx_sync_s *ss, const char *path,
-        watcher_fn watcher, void* watcherCtx,
-        strings_completion_t completion, const void *data);
+		watcher_fn watcher, void* watcherCtx,
+		strings_completion_t completion, const void *data);
 
 static int _awget_siblings (struct sqlx_sync_s *ss, const char *path,
-        watcher_fn watcher, void* watcherCtx,
-        strings_completion_t completion, const void *data);
+		watcher_fn watcher, void* watcherCtx,
+		strings_completion_t completion, const void *data);
 
 static void _set_exit_hook(struct sqlx_sync_s *ss, void (*on_exit_hook) (void*),
 		void *on_exit_ctx);
@@ -189,37 +189,37 @@ zk_main_watch(zhandle_t *zh, int type, int state, const char *path,
 		return;
 
 	if (state == ZOO_EXPIRED_SESSION_STATE) {
-		GRID_WARN("Zookeeper: (re)connecting to [%s]", ss->zk_url);
-		if (ss->zh)
+		if (ss->zh) {
+			GRID_NOTICE("Zookeeper: disconnecting (expired session)");
 			zookeeper_close(ss->zh);
+		}
 		if (NULL != ss->on_exit)
 			ss->on_exit(ss->on_exit_ctx);
 
 		/* XXX(jfs): forget the previous ID and reconnect */
 		memset (&ss->zk_id, 0, sizeof(ss->zk_id));
+		GRID_NOTICE("Zookeeper: starting connection to [%s]", ss->zk_url);
 		ss->zh = zookeeper_init(ss->zk_url, zk_main_watch,
 				SQLX_SYNC_DEFAULT_ZK_TIMEOUT, &ss->zk_id, ss, 0);
 		if (!ss->zh) {
-			GRID_ERROR("ZooKeeper init failure: (%d) %s",
+			GRID_ERROR("Zookeeper init failure: (%d) %s",
 					errno, strerror(errno));
 			grid_main_set_status (2);
 			grid_main_stop ();
 		}
-	}
-	else if (state == ZOO_AUTH_FAILED_STATE) {
+	} else if (state == ZOO_AUTH_FAILED_STATE) {
 		GRID_WARN("Zookeeper: auth problem to [%s]", ss->zk_url);
-	}
-	else if (state == ZOO_ASSOCIATING_STATE) {
+	} else if (state == ZOO_CONNECTING_STATE) {
+		GRID_NOTICE("Zookeeper: (re)connecting to [%s]", ss->zk_url);
+	} else if (state == ZOO_ASSOCIATING_STATE) {
 		GRID_DEBUG("Zookeeper: associating to [%s]", ss->zk_url);
-	}
-	else if (state == ZOO_CONNECTED_STATE) {
+	} else if (state == ZOO_CONNECTED_STATE) {
 		memcpy(&(ss->zk_id), zoo_client_id(ss->zh), sizeof(clientid_t));
 		GRID_INFO("Zookeeper: connected to [%s] id=%"G_GINT64_FORMAT,
 				ss->zk_url, ss->zk_id.client_id);
-	}
-	else {
-		GRID_INFO("Zookeeper: unmanaged event [%s] id=%"G_GINT64_FORMAT,
-				ss->zk_url, ss->zk_id.client_id);
+	} else {
+		GRID_WARN("Zookeeper: unmanaged event %d [%s] id=%"G_GINT64_FORMAT,
+				state, ss->zk_url, ss->zk_id.client_id);
 	}
 }
 
@@ -262,7 +262,7 @@ _clear(struct sqlx_sync_s *ss)
 
 static int
 _acreate (struct sqlx_sync_s *ss, const char *path, const char *v,
-        int vlen, int flags, string_completion_t completion, const void *data)
+		int vlen, int flags, string_completion_t completion, const void *data)
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
@@ -276,7 +276,7 @@ _acreate (struct sqlx_sync_s *ss, const char *path, const char *v,
 
 static int
 _adelete (struct sqlx_sync_s *ss, const char *path, int version,
-        void_completion_t completion, const void *data)
+		void_completion_t completion, const void *data)
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
@@ -303,8 +303,8 @@ _awexists (struct sqlx_sync_s *ss, const char *path,
 
 static int
 _awget (struct sqlx_sync_s *ss, const char *path,
-        watcher_fn watcher, void* watcherCtx,
-        data_completion_t completion, const void *data)
+		watcher_fn watcher, void* watcherCtx,
+		data_completion_t completion, const void *data)
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
@@ -317,8 +317,8 @@ _awget (struct sqlx_sync_s *ss, const char *path,
 
 static int
 _awget_children (struct sqlx_sync_s *ss, const char *path,
-        watcher_fn watcher, void* watcherCtx,
-        strings_completion_t completion, const void *data)
+		watcher_fn watcher, void* watcherCtx,
+		strings_completion_t completion, const void *data)
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
@@ -332,8 +332,8 @@ _awget_children (struct sqlx_sync_s *ss, const char *path,
 
 static int
 _awget_siblings (struct sqlx_sync_s *ss, const char *path,
-        watcher_fn watcher, void* watcherCtx,
-        strings_completion_t completion, const void *data)
+		watcher_fn watcher, void* watcherCtx,
+		strings_completion_t completion, const void *data)
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
