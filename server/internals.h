@@ -85,7 +85,7 @@ struct network_server_s
 	GQuark gq_counter_cnx_accept;
 	GQuark gq_counter_cnx_close;
 
-	int wakeup[2];
+	int eventfd;
 	int epollfd;
 	volatile gboolean flag_continue;
 	gboolean abort_allowed;
