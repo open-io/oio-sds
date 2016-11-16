@@ -273,6 +273,7 @@ _manage_requests(struct gridd_client_pool_s *pool)
 
 	EXTRA_ASSERT(pool != NULL);
 
+	gint64 start = oio_ext_monotonic_time();
 	while (pool->active_count < pool->active_max) {
 		ec = g_async_queue_try_pop(pool->pending_clients);
 		if (NULL == ec)
@@ -286,16 +287,26 @@ _manage_requests(struct gridd_client_pool_s *pool)
 						gridd_client_fd(ec->client), gridd_client_url(ec->client),
 						err->code, err->message);
 				g_clear_error(&err);
-			}
-			else {
+			} else {
 				GRID_WARN("STARTUP Client fd=%d [%s]: already started",
 						gridd_client_fd(ec->client), gridd_client_url(ec->client));
 				EXTRA_ASSERT(err != NULL);
 			}
 			event_client_free(ec);
-		}
-		else if (!event_client_monitor(pool, ec))
+		} else if (!event_client_monitor(pool, ec)) {
 			event_client_free(ec);
+		}
+	}
+
+	gint64 elapsed = oio_ext_monotonic_time() - start;
+	if (elapsed > 5 * G_TIME_SPAN_SECOND) {
+		GRID_INFO("Client pool request management took %"G_GINT64_FORMAT"s, "
+				"this is a bit too much",
+				elapsed / G_TIME_SPAN_SECOND);
+		gint qlen = g_async_queue_length(pool->pending_clients);
+		if (qlen > pool->active_max)
+			GRID_WARN("Client pool still has %d pending requests, "
+					"are we under an election storm?", qlen);
 	}
 }
 
