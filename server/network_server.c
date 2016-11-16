@@ -32,6 +32,7 @@ License along with this library.
 #include <sys/socket.h>
 #include <sys/resource.h>
 #include <sys/epoll.h>
+#include <sys/eventfd.h>
 #include <sys/un.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
@@ -206,14 +207,12 @@ network_server_stat_getall (struct network_server_s *srv)
 struct network_server_s *
 network_server_init(void)
 {
-	int wakeup[2] = {-1, -1};
-	if (0 > pipe(wakeup)) {
-		GRID_ERROR("PIPE creation failure : (%d) %s", errno, strerror(errno));
+	int efd = -1;
+	if ((efd = eventfd(0, EFD_NONBLOCK)) < 0) {
+		GRID_ERROR("eventfd creation failure: (%d) %s",
+				errno, strerror(errno));
 		return NULL;
 	}
-	shutdown(wakeup[0], SHUT_WR);
-	shutdown(wakeup[1], SHUT_RD);
-	fcntl(wakeup[0], F_SETFL, O_NONBLOCK|fcntl(wakeup[0], F_GETFL));
 
 	guint maxfd = _server_get_maxfd();
 
@@ -230,8 +229,7 @@ network_server_init(void)
 
 	result->cnx_max_sys = maxfd;
 	result->cnx_max = (result->cnx_max_sys * 99) / 100;
-	result->wakeup[0] = wakeup[0];
-	result->wakeup[1] = wakeup[1];
+	result->eventfd = efd;
 	result->epollfd = epoll_create(1024);
 
 	result->atexit_max_open_never_input = SERVER_DEFAULT_CNX_INACTIVE;
@@ -252,8 +250,8 @@ network_server_init(void)
 	g_thread_pool_set_max_unused_threads (SERVER_DEFAULT_THP_MAXUNUSED);
 	g_thread_pool_set_max_idle_time (SERVER_DEFAULT_THP_IDLE);
 
-	GRID_DEBUG("SERVER ready with epollfd[%d] pipe[%d,%d]",
-			result->epollfd, result->wakeup[0], result->wakeup[1]);
+	GRID_DEBUG("SERVER ready with epollfd[%d] eventfd[%d]",
+			result->epollfd, result->eventfd);
 
 	return result;
 }
@@ -297,8 +295,7 @@ network_server_clean(struct network_server_s *srv)
 	if (srv->stats)
 		g_array_free (srv->stats, TRUE);
 
-	metautils_pclose(&(srv->wakeup[0]));
-	metautils_pclose(&(srv->wakeup[1]));
+	metautils_pclose(&(srv->eventfd));
 
 	if (srv->queue_monitor) {
 		g_async_queue_unref(srv->queue_monitor);
@@ -418,10 +415,16 @@ network_server_open_servers(struct network_server_s *srv)
 }
 
 static void
-_drain(int fd)
+_drain_eventfd(int fd)
 {
-	char buff[2048];
-	while (0 < read(fd, buff, sizeof(buff))) {}
+	guint64 event_count = 0u;
+	int rc = metautils_syscall_read(fd, &event_count, 8);
+	if (rc < 0 && errno != EAGAIN) {  // EAGAIN -> counter is 0
+		GRID_WARN("Failed to reset event counter: (%d) %s",
+				errno, strerror(errno));
+	} else if (event_count > 100u) {
+		GRID_INFO("Burst of %"G_GUINT64_FORMAT" events", event_count);
+	}
 }
 
 static const char *
@@ -443,13 +446,13 @@ static void
 ARM_WAKER(struct network_server_s *srv, int how)
 {
 	struct epoll_event ev;
-	ev.data.ptr = srv->wakeup;
+	ev.data.ptr = &(srv->eventfd);
 	ev.events = EPOLLIN|EPOLLET|EPOLLONESHOT;
 
-	if (0 == epoll_ctl(srv->epollfd, how, srv->wakeup[0], &ev))
+	if (0 == epoll_ctl(srv->epollfd, how, srv->eventfd, &ev))
 		return;
 	GRID_DEBUG("WUP epoll_ctl(%d,%d,%s) = (%d) %s", srv->epollfd,
-			srv->wakeup[0], epoll2str(how), errno, strerror(errno));
+			srv->eventfd, epoll2str(how), errno, strerror(errno));
 }
 
 static void
@@ -531,7 +534,7 @@ _manage_events(struct network_server_s *srv)
 	if (erc > 0) {
 		while (erc-- > 0) {
 			pev = allev+erc;
-			if (pev->data.ptr == srv->wakeup)
+			if (pev->data.ptr == &(srv->eventfd))
 				continue;
 			if (MAGIC_ENDPOINT == *((unsigned int*)(pev->data.ptr)))
 				_manage_endpoint_event (srv, pev->data.ptr);
@@ -540,7 +543,7 @@ _manage_events(struct network_server_s *srv)
 		}
 	}
 
-	_drain(srv->wakeup[0]);
+	_drain_eventfd(srv->eventfd);
 	ARM_WAKER(srv, EPOLL_CTL_MOD);
 	struct network_client_s *clt;
 	while (NULL != (clt = g_async_queue_try_pop(srv->queue_monitor))) {
@@ -927,9 +930,11 @@ _cb_worker(struct network_client_s *clt, struct network_server_s *srv)
 	}
 	else {
 		g_async_queue_push(srv->queue_monitor, clt);
-		ssize_t w = write(srv->wakeup[1], "", 1);
-		if (w != 1) {
-			GRID_DEBUG("Server: Event thread notification failed");
+		guint64 evt_count = 1u;
+		ssize_t w = write(srv->eventfd, &evt_count, 8);
+		if (w != 8) {
+			GRID_WARN("event thread notification failed: (%d) %s",
+					errno, strerror(errno));
 		}
 	}
 }
@@ -940,7 +945,7 @@ _server_get_maxfd(void)
 	struct rlimit limit;
 
 	if (0 != getrlimit(RLIMIT_NOFILE, &limit)) {
-		GRID_WARN("getrlimit() error : (%d) %s", errno, strerror(errno));
+		GRID_WARN("getrlimit() error: (%d) %s", errno, strerror(errno));
 		return 512;
 	}
 	else {
