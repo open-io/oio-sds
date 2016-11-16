@@ -168,7 +168,7 @@ timestamp
 
 openio \
 	--oio-ns "$NS" -v directory bootstrap \
-	--replicas $(${PREFIX}-test-config.py -c -t meta1)
+	--replicas $(${PREFIX}-test-config.py -v directory_replicas)
 
 timestamp
 # unlock all services

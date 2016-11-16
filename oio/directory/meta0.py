@@ -3,6 +3,7 @@ import random
 
 from oio.common.utils import json
 from oio.common.client import Client
+from oio.common.exceptions import ConfigurationException
 
 
 class Meta0Client(Client):
@@ -37,15 +38,28 @@ class PrefixMapping(object):
     TOTAL_PREFIXES = 65536
 
     def __init__(self, meta0_client, conscience_client, replicas=3,
-                 logger=None, **kwargs):
+                 digits=None, logger=None, **kwargs):
+        """
+        Parameters:
+        - replicas: strictily positive integer
+        - digits: integer between 2 and 4 (default: 4)
+        """
         self.cs = conscience_client
         self.m0 = meta0_client
-        self.replicas = replicas
         self.svc_by_pfx = dict()
         self.services = dict()
+        self.logger = logger
+        assert(replicas > 0)
+        self.replicas = replicas
+        if digits is None:
+            digits = 4
+        self.digits = int(digits)
+        if (self.digits < 0):
+            raise ConfigurationException("meta_digits must be >= 0")
+        if (self.digits > 4):
+            raise ConfigurationException("meta_digits must be <= 4")
         for svc in self.cs.all_services("meta1"):
             self.services[svc["addr"]] = svc
-        self.logger = logger
 
     def get_loc(self, svc, default=None):
         """
@@ -153,11 +167,23 @@ class PrefixMapping(object):
             return None
         return self._find_services(known, _lookup, len(filtered))
 
+    def assign_services(self, pfx, services):
+        assert(pfx not in self.svc_by_pfx)
+        for svc in services:
+            pfx_set = svc.get("prefixes", set([]))
+            pfx_set.add(pfx)
+            svc["prefixes"] = pfx_set
+        self.svc_by_pfx[pfx] = services
+
     def bootstrap(self, strategy=None):
         """
         Build `TOTAL_PREFIXES` assignations from scratch,
         using `strategy` to find new services.
         """
+
+        def pfx2base(pfx):
+            return str(pfx[:self.digits]).ljust(4, '0')
+
         if not strategy:
             strategy = self.find_services_random
         for pfx_int in xrange(0, self.__class__.TOTAL_PREFIXES):
@@ -166,13 +192,37 @@ class PrefixMapping(object):
                 self.logger.info("%d%%",
                                  pfx_int /
                                  (self.__class__.TOTAL_PREFIXES / 100))
+
             pfx = "%04X" % pfx_int
-            services = strategy()
-            for svc in services:
-                pfx_set = svc.get("prefixes", set([]))
-                pfx_set.add(pfx)
-                svc["prefixes"] = pfx_set
-            self.svc_by_pfx[pfx] = services
+            base = pfx2base(pfx)
+
+            services = None
+            if base in self.svc_by_pfx:
+                assert (base != pfx)
+                services = list(self.svc_by_pfx[base])
+            else:
+                assert (base == pfx)
+                services = strategy()
+            self.assign_services(pfx, services)
+
+    def check(self):
+        """
+        Check the distribution of services respect the prefixes groups
+        """
+
+        if self.digits == 4:
+            return
+
+        for p1 in self.svc_by_pfx.keys():
+            p0 = pfx2base(p1)
+            if p0 == p1:
+                continue
+            s0, s1 = self.svc_by_pfx[p0], self.svc_by_pfx[p1]
+            s0, s1 = sorted(s0), sorted(s1)
+            if s0 != s1:
+                raise Exception(
+                        "Group={0} Prefix={1} have different services" .
+                        format(p0, p1))
 
     def count_pfx_by_svc(self):
         """
@@ -224,12 +274,31 @@ class PrefixMapping(object):
 
     def rebalance(self, max_loops=65536):
         """Reassign prefixes from the services which manage the most"""
+
+        if self.digits == 0:
+            if self.logger:
+                self.logger.info("No equilibration possible when " +
+                        "meta1_digits is set to 0")
+            return
+
+        if self.digits != 4:
+            # TODO implement equilibration when meta1_digits is < 4
+            if self.logger:
+                self.logger.info("Prefixes equilibration temporarily " +
+                        "disabled for installations with meta1_digits " +
+                        "different than 4")
+            return
+
         loops = 0
         moved_prefixes = set()
         ideal_pfx_by_svc = (self.__class__.TOTAL_PREFIXES * self.replicas /
                             len([x for x in self.services.itervalues()
                                  if self.get_score(x) > 0]))
         if self.logger:
+            self.logger.info("META1 Digits = %d", self.digits)
+            self.logger.info("Replicas = %d", self.replicas)
+            self.logger.info("Scored positively = %d", len([x for x in self.services.itervalues()
+                                 if self.get_score(x) > 0]))
             self.logger.info("Ideal number of prefixes per meta1: %d",
                              ideal_pfx_by_svc)
         candidates = self.services.values()

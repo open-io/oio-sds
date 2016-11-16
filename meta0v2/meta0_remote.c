@@ -88,36 +88,6 @@ meta0_remote_cache_reset (const char *m0, gboolean local)
 }
 
 GError*
-meta0_remote_fill(const char *m0, gchar **urls, guint nbreplicas)
-{
-	if (nbreplicas < 1)
-		return NEWERROR(CODE_BAD_REQUEST, "Too few replicas");
-	if (!urls || !*urls)
-		return NEWERROR(CODE_BAD_REQUEST, "Too few URL's");
-	if (nbreplicas > g_strv_length(urls))
-		return NEWERROR(CODE_BAD_REQUEST, "Too many replicas for the URL's set");
-
-	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_FILL);
-	metautils_message_add_field_strint64(request, NAME_MSGKEY_REPLICAS, nbreplicas);
-	metautils_message_add_body_unref(request, STRV_encode_gba(urls));
-	return gridd_client_exec (m0, M0V2_INIT_TIMEOUT,
-			message_marshall_gba_and_clean(request));
-}
-
-GError*
-meta0_remote_fill_v2(const char *m0, guint nbreplicas, gboolean nodist)
-{
-	if (nbreplicas < 1)
-		return NEWERROR(CODE_BAD_REQUEST, "Too few replicas");
-	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_V2_FILL);
-	metautils_message_add_field_strint64(request, NAME_MSGKEY_REPLICAS, nbreplicas);
-	if (nodist)
-		metautils_message_add_field_struint(request, NAME_MSGKEY_NODIST, nodist);
-	return gridd_client_exec (m0, M0V2_INIT_TIMEOUT,
-							  message_marshall_gba_and_clean(request));
-}
-
-GError*
 meta0_remote_force(const char *m0, const gchar *mapping)
 {
 	if (!mapping || !*mapping)
@@ -126,27 +96,6 @@ meta0_remote_force(const char *m0, const gchar *mapping)
 	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_FORCE);
 	metautils_message_set_BODY(request, mapping, strlen(mapping));
 	return _m0_remote_no_return(m0, message_marshall_gba_and_clean(request));
-}
-
-GError*
-meta0_remote_assign(const char *m0, gboolean nocheck)
-{
-	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_ASSIGN);
-	if (nocheck)
-		metautils_message_add_field_str (request, NAME_MSGKEY_NOCHECK, "yes");
-	return _m0_remote_no_return (m0, message_marshall_gba_and_clean(request));
-}
-
-GError*
-meta0_remote_disable_meta1(const char *m0, gchar **urls, gboolean nocheck)
-{
-	if (!urls || !*urls)
-		return NEWERROR(CODE_BAD_REQUEST, "Too few URL's");
-	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_DISABLE_META1);
-	if (nocheck)
-		metautils_message_add_field_str(request, NAME_MSGKEY_NOCHECK, "yes");
-	metautils_message_add_body_unref(request, STRV_encode_gba(urls));
-	return _m0_remote_no_return (m0, message_marshall_gba_and_clean(request));
 }
 
 GError*

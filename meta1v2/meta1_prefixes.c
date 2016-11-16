@@ -47,41 +47,37 @@ struct meta1_prefixes_set_s
 
 /* CACHE operations --------------------------------------------------------- */
 
+#define BITPOS(X) (1<<((X)%8))
+
 static void
 _cache_manage(guint8 *cache, const guint8 *prefix)
 {
-	guint16 slot = meta0_utils_bytes_to_prefix(prefix);
-	cache[ slot / 8 ] |= (0x01 << (slot % 8));
+	register const guint16 slot = *((const guint16*)prefix);
+	cache[ slot / 8 ] |= BITPOS(slot);
 }
 
 static gboolean
-_cache_is_managed(guint8 *cache, const guint8 *prefix)
+_cache_is_managed(const guint8 *cache, const guint8 *prefix)
 {
-	guint16 slot = meta0_utils_bytes_to_prefix(prefix);
-	return cache[ slot / 8 ] & (0x01 << (slot % 8));
+	register const guint16 slot = *((const guint16*)prefix);
+	return BOOL(cache[ slot / 8 ] & BITPOS(slot));
 }
 
 /* NS operations ------------------------------------------------------------ */
 
 static guint8*
-_cache_from_m0l(GSList *l, const struct addr_info_s *ai)
+_cache_from_m0l(const GSList *l, const struct addr_info_s *ai)
 {
-	guint8 *result;
-
-	result = g_malloc0(8192);
+	guint8 *result = g_malloc0(8192);
 
 	for (; l ;l=l->next) {
-		struct meta0_info_s *m0info;
+		const struct meta0_info_s *m0i = l->data;
+		if (unlikely(!m0i)) continue;
 
-		if (!(m0info = l->data))
-			continue;
-
-		if (addr_info_equal(&(m0info->addr), ai)) {
-			guint16 *p, *max;
-			p = (guint16*) m0info->prefixes;
-			max = (guint16*) (m0info->prefixes + m0info->prefixes_size);
-			for (; p<max ;p++)
-				_cache_manage(result, (guint8*)p);
+		if (addr_info_equal(&(m0i->addr), ai)) {
+			const guint8 *max = m0i->prefixes + m0i->prefixes_size;
+			for (guint8 *p = m0i->prefixes; p<max ;p+=2)
+				_cache_manage(result, p);
 		}
 	}
 
@@ -90,47 +86,62 @@ _cache_from_m0l(GSList *l, const struct addr_info_s *ai)
 
 static GError*
 _cache_load_from_m0(struct meta1_prefixes_set_s *m1ps,
-		const gchar *ns_name,
 		const struct addr_info_s *local_addr,
-		struct addr_info_s *m0_addr,
+		const struct addr_info_s *m0_addr,
 		GArray **updated_prefixes,
-		gboolean *meta0_ok)
+		gboolean *meta0_ok,
+		guint digits)
 {
-	GError *err = NULL;
-	GSList *m0info_list = NULL;
-
 	EXTRA_ASSERT(m1ps != NULL);
-	GRID_TRACE2("%s(%p,%s,%p,%p)", __FUNCTION__, m1ps, ns_name, local_addr,
-			m0_addr);
+	GRID_TRACE2("%s(%p,%p,%p)", __FUNCTION__, m1ps, local_addr, m0_addr);
 
-	(void)ns_name;
+	GPtrArray *by_prefix = NULL;
+	GSList *m0info_list = NULL;
+	guint8 *cache = NULL;
+	GError *err = NULL;
 	gchar m0[STRLEN_ADDRINFO];
+
 	grid_addrinfo_to_string (m0_addr, m0, sizeof(m0));
+
 	err = meta0_remote_get_meta1_all(m0, &m0info_list);
 	if (err) {
 		g_prefix_error(&err, "Remote error: ");
-		return err;
+		goto label_exit;
 	}
 	if (!m0info_list) {
 		GRID_DEBUG("META0 has no prefix configured!");
-		return NULL;
+		goto label_exit;
 	}
 
 	*meta0_ok = TRUE;
-	guint8 *cache = _cache_from_m0l(m0info_list, local_addr);
-	GPtrArray *by_prefix = meta0_utils_list_to_array(m0info_list);
+
+	cache = _cache_from_m0l(m0info_list, local_addr);
+	if (!cache) {
+		err = SYSERR("Cache allocation error");
+		goto label_exit;
+	}
+
+	err = meta1_prefixes_check_coalescence_all(cache, digits);
+	if (NULL != err) {
+		g_prefix_error(&err, "Meta0 consistency check: ");
+		goto label_exit;
+	}
+
+	by_prefix = meta0_utils_list_to_array(m0info_list);
 
 	g_mutex_lock(&m1ps->lock);
 	GRID_DEBUG("Got %u prefixes from M0, %u in place",
 			by_prefix->len, m1ps->by_prefix ? m1ps->by_prefix->len : 0);
 
-	if ( m1ps->by_prefix ) {
-		guint prefix;
+	if (m1ps->by_prefix) {
 		*updated_prefixes = g_array_new(FALSE, FALSE, sizeof(guint16));
-		for( prefix=0 ; prefix <65536 ;prefix++) {
-			if ( _cache_is_managed(m1ps->cache,(guint8 *)&prefix) != _cache_is_managed( cache,(guint8 *)&prefix)) {
-				g_array_append_vals(*updated_prefixes, &prefix, 1);
-			}
+		for (guint i=0 ; i<65536 ;i++) {
+			const guint16 prefix = i;
+			const guint8 *bin = (guint8*)&prefix;
+			const gboolean before = _cache_is_managed(m1ps->cache, bin);
+			const gboolean after = _cache_is_managed(cache, bin);
+			if (BOOL(before) != BOOL(after))
+				g_array_append_vals(*updated_prefixes, bin, 1);
 		}
 	}
 
@@ -138,24 +149,21 @@ _cache_load_from_m0(struct meta1_prefixes_set_s *m1ps,
 	SWAP_PTR(m1ps->cache, cache);
 	g_mutex_unlock(&m1ps->lock);
 
+label_exit:
 	if (by_prefix)
 		meta0_utils_array_clean(by_prefix);
 	if (cache)
 		g_free(cache);
-
-	g_slist_foreach(m0info_list, meta0_info_gclean, NULL);
-	g_slist_free(m0info_list);
-	return NULL;
+	g_slist_free_full(m0info_list, (GDestroyNotify)meta0_info_clean);
+	return err;
 }
 
 static GError*
-_cache_load_from_ns(struct meta1_prefixes_set_s *m1ps, const gchar *ns_name,
-		const gchar *local_url, GArray **updated_prefixes, gboolean *meta0_ok)
+_cache_load_from_ns(struct meta1_prefixes_set_s *m1ps, const char *ns_name,
+		const char *local_url, GArray **updated_prefixes, gboolean *meta0_ok,
+		guint digits)
 {
-	struct addr_info_s local_ai;
-	GError *err = NULL;
-	GSList *l, *m0_list = NULL;
-	guint idx = rand();
+	struct addr_info_s local_ai = {0};
 	gboolean done = FALSE;
 
 	EXTRA_ASSERT(m1ps != NULL);
@@ -165,10 +173,11 @@ _cache_load_from_ns(struct meta1_prefixes_set_s *m1ps, const gchar *ns_name,
 		return NULL;
 	}
 
-	memset(&local_ai, 0, sizeof(local_ai));
 	grid_string_to_addrinfo(local_url, &local_ai);
 
 	/* Get the META0 address */
+	GError *err = NULL;
+	GSList *m0_list = NULL;
 	err = conscience_get_services (ns_name, NAME_SRVTYPE_META0, FALSE, &m0_list);
 	if (err != NULL) {
 		g_prefix_error(&err, "META0 locate error : ");
@@ -179,36 +188,21 @@ _cache_load_from_ns(struct meta1_prefixes_set_s *m1ps, const gchar *ns_name,
 		return NEWERROR(0, "No META0 available in the namespace");;
 
 	/* Get the prefixes list */
-	guint max = g_slist_length(m0_list);
-	guint nb_retry = 0;
-	while (nb_retry < max) {
-		struct service_info_s *si;
-
-		l = g_slist_nth(m0_list, idx%max);
-		if (!(si = l->data)) {
-			nb_retry++;
-			idx++;
-			continue;
-		}
-
-		err = _cache_load_from_m0(m1ps, ns_name, &local_ai,
-				&(si->addr), updated_prefixes, meta0_ok);
+	m0_list = metautils_gslist_shuffle (m0_list);
+	for (GSList *m0 = m0_list ; m0 && !err && !done ; m0 = m0->next) {
+		const struct service_info_s *si = m0->data;
+		err = _cache_load_from_m0(m1ps, &local_ai, &(si->addr),
+				updated_prefixes, meta0_ok, digits);
 		if (!err) {
 			done = TRUE;
-			break;
+		} else {
+			GRID_WARN("M0 cache loading error : (%d) %s", err->code, err->message);
+			if (CODE_IS_NETWORK_ERROR(err->code))
+				g_clear_error(&err);
 		}
-
-		GRID_WARN("M0 cache loading error : (%d) %s", err->code, err->message);
-		if (!CODE_IS_NETWORK_ERROR(err->code))
-			break;
-
-		g_clear_error(&err);
-		nb_retry++;
-		idx++;
 	}
 
-	g_slist_foreach(m0_list, service_info_gclean, NULL);
-	g_slist_free(m0_list);
+	g_slist_free_full(m0_list, (GDestroyNotify)service_info_clean);
 	if (!err && !done)
 		err = NEWERROR(0, "No META0 replied");
 	return err;
@@ -244,7 +238,8 @@ meta1_prefixes_clean(struct meta1_prefixes_set_s *m1ps)
 
 GError*
 meta1_prefixes_load(struct meta1_prefixes_set_s *m1ps,
-		const gchar *ns_name, const gchar *local_url, GArray **updated_prefixes, gboolean *meta0_ok)
+		const char *ns_name, const char *local_url,
+		GArray **updated_prefixes, gboolean *meta0_ok, guint digits)
 {
 	GError *err = NULL;
 
@@ -252,7 +247,8 @@ meta1_prefixes_load(struct meta1_prefixes_set_s *m1ps,
 	EXTRA_ASSERT(ns_name != NULL);
 	EXTRA_ASSERT(local_url != NULL);
 
-	err = _cache_load_from_ns(m1ps, ns_name, local_url, updated_prefixes, meta0_ok);
+	err = _cache_load_from_ns(m1ps, ns_name, local_url, updated_prefixes,
+			meta0_ok, digits);
 	if (NULL != err)
 		g_prefix_error(&err, "NS loading error : ");
 	else
@@ -292,9 +288,8 @@ meta1_prefixes_get_all(struct meta1_prefixes_set_s *m1ps)
 struct meta1_prefixes_set_s *
 meta1_prefixes_init(void)
 {
-	struct meta1_prefixes_set_s *m1ps;
-
-	m1ps = g_malloc0(sizeof(struct meta1_prefixes_set_s));
+	struct meta1_prefixes_set_s *m1ps =
+		g_malloc0(sizeof(struct meta1_prefixes_set_s));
 	m1ps->cache = g_malloc0(8192);
 	g_mutex_init(&m1ps->lock);
 	m1ps->by_prefix = NULL;
@@ -305,14 +300,48 @@ gchar **
 meta1_prefixes_get_peers(struct meta1_prefixes_set_s *m1ps,
 		const guint8 *bytes)
 {
-	gchar **a = NULL;
-
 	EXTRA_ASSERT(m1ps != NULL);
-
 	g_mutex_lock(&m1ps->lock);
-	a = meta0_utils_array_get_urlv(m1ps->by_prefix, bytes);
+	gchar **a = meta0_utils_array_get_urlv(m1ps->by_prefix, bytes);
 	g_mutex_unlock(&m1ps->lock);
-
 	return a;
+}
+
+/* @private */
+struct _check_ctx_s {
+	GError *err;
+	const guint8 *cache;
+};
+
+static gboolean
+_on_prefix(gpointer u, const guint8 *grp, const guint8 *pfx)
+{
+	struct _check_ctx_s *ctx = u;
+	if (NULL != ctx->err)
+		return FALSE;
+	gboolean pfx_present = _cache_is_managed(ctx->cache, pfx);
+	gboolean grp_present = _cache_is_managed(ctx->cache, grp);
+	if (pfx_present == grp_present)
+		return TRUE;
+	ctx->err = ERRPTF("Invalid Group=%02X%02X Prefix=%02X%02X",
+			grp[0], grp[1], pfx[0], pfx[1]);
+	return FALSE;
+}
+
+GError *
+meta1_prefixes_check_coalescence (const guint8 *cache, const guint8 *bytes,
+		guint digits)
+{
+	struct _check_ctx_s ctx = {NULL, cache};
+	meta0_utils_foreach_prefix_in_group(bytes, digits, _on_prefix, &ctx);
+	return ctx.err;
+}
+
+GError *
+meta1_prefixes_check_coalescence_all (const guint8 *cache, guint digits)
+{
+	struct _check_ctx_s ctx = {NULL, cache};
+	meta0_utils_foreach_prefix(digits, _on_prefix, &ctx);
+	return ctx.err;
 }
 
