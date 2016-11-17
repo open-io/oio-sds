@@ -320,6 +320,8 @@ extern "C" {
 # define OIO_CFG_SWIFT        "swift"
 # define OIO_CFG_ECD          "ecd"
 
+# define OIO_CFG_UDP_ALLOWED  "udp_allowed"
+
 # define gridcluster_get_eventagent(ns) oio_cfg_get_value((ns), OIO_CFG_ACCOUNTAGENT)
 # define oio_cfg_get_proxy(ns)          oio_cfg_get_value((ns), OIO_CFG_PROXY)
 # define oio_cfg_get_proxylocal(ns)     oio_cfg_get_value((ns), OIO_CFG_PROXYLOCAL)
