@@ -761,24 +761,13 @@ meta2_backend_add_modified_container(struct meta2_backend_s *m2b,
 				sqlx_admin_get_str(sq3, SQLX_ADMIN_BASENAME),
 				_container_state (sq3));
 
-	gchar *account = sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT);
-	gchar *user = sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME);
-	if (!account || !user) {
-		GRID_WARN("Missing "SQLX_ADMIN_ACCOUNT" or "SQLX_ADMIN_USERNAME
-				" in database %s", sq3->path);
-	} else {
-		struct oio_url_s *url = oio_url_empty();
-		oio_url_set(url, OIOURL_NS, m2b->ns_name);
-		oio_url_set(url, OIOURL_ACCOUNT, account);
-		oio_url_set(url, OIOURL_USER, user);
-
-		_meta2_backend_force_prepare_data(m2b,
-				oio_url_get(url, OIOURL_HEXID), sq3);
-
-		oio_url_clean(url);
+	gboolean has_peers = FALSE;
+	GError *err = election_has_peers(sq3->manager,
+			sqlx_name_mutable_to_const(&(sq3->name)), FALSE, &has_peers);
+	if (!err && !has_peers) {
+		meta2_backend_change_callback(sq3, m2b);
 	}
-	g_free(user);
-	g_free(account);
+	g_clear_error(&err);
 }
 
 GError*
@@ -1331,6 +1320,30 @@ _meta2_backend_force_prepare_data(struct meta2_backend_s *m2b,
 	g_rw_lock_writer_lock(&(m2b->prepare_data_lock));
 	_meta2_backend_force_prepare_data_unlocked(m2b, key, NULL, sq3);
 	g_rw_lock_writer_unlock(&(m2b->prepare_data_lock));
+}
+
+void
+meta2_backend_change_callback(struct sqlx_sqlite3_s *sq3,
+		struct meta2_backend_s *m2b)
+{
+	gchar *account = sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT);
+	gchar *user = sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME);
+	if (!account || !user) {
+		GRID_WARN("Missing "SQLX_ADMIN_ACCOUNT" or "SQLX_ADMIN_USERNAME
+				" in database %s", sq3->path);
+	} else {
+		struct oio_url_s *url = oio_url_empty();
+		oio_url_set(url, OIOURL_NS, m2b->ns_name);
+		oio_url_set(url, OIOURL_ACCOUNT, account);
+		oio_url_set(url, OIOURL_USER, user);
+
+		_meta2_backend_force_prepare_data(m2b,
+				oio_url_get(url, OIOURL_HEXID), sq3);
+
+		oio_url_clean(url);
+	}
+	g_free(user);
+	g_free(account);
 }
 
 /**
