@@ -31,6 +31,7 @@ License along with this library.
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/resource.h>
+#include <poll.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
 #include <sys/un.h>
@@ -56,7 +57,7 @@ static gboolean _endpoint_is_INET6 (struct endpoint_s *u);
 static gboolean _endpoint_is_INET4 (struct endpoint_s *u);
 static gboolean _endpoint_is_INET (struct endpoint_s *u);
 
-static GError * _endpoint_open (struct endpoint_s *u);
+static GError * _endpoint_open (struct endpoint_s *u, gboolean udp_allowed);
 static void _endpoint_close (struct endpoint_s *u);
 
 static struct network_client_s* _endpoint_accept_one(
@@ -81,6 +82,9 @@ static void _cb_worker(struct network_client_s *clt,
 		struct network_server_s *srv);
 
 static void _cb_stats(struct server_stat_msg_s *msg,
+		struct network_server_s *srv);
+
+static void _cb_ping(struct network_client_s *clt,
 		struct network_server_s *srv);
 
 /* Returns the number of max file descriptors for this process */
@@ -243,10 +247,14 @@ network_server_init(void)
 	result->gq_counter_cnx_accept = g_quark_from_static_string ("counter cnx.accept");
 	result->gq_counter_cnx_close =  g_quark_from_static_string ("counter cnx.close");
 
-	result->pool_stats =
-		g_thread_pool_new ((GFunc)_cb_stats, result, 1, TRUE, NULL);
-	result->pool_workers = g_thread_pool_new ((GFunc)_cb_worker, result,
+	result->pool_stats = g_thread_pool_new ((GFunc)_cb_stats, result,
+			1, TRUE, NULL);
+	result->pool_tcp = g_thread_pool_new ((GFunc)_cb_worker, result,
 			SERVER_DEFAULT_THP_MAXWORKERS, FALSE, NULL);
+	/* Even if UDP is eventually not allowed, a pool with shared threads
+	 * doesn't consume much resources. */
+	result->pool_udp = g_thread_pool_new ((GFunc)_cb_ping, result,
+			8, FALSE, NULL);
 	g_thread_pool_set_max_unused_threads (SERVER_DEFAULT_THP_MAXUNUSED);
 	g_thread_pool_set_max_idle_time (SERVER_DEFAULT_THP_IDLE);
 
@@ -256,18 +264,33 @@ network_server_init(void)
 	return result;
 }
 
+void network_server_allow_udp(struct network_server_s *srv) {
+	g_assert(srv != NULL);
+
+	for (struct endpoint_s **pe=srv->endpointv; pe && *pe ;++pe) {
+		GRID_ERROR("BUG: Can't call %s when servers are alreaddy open",
+				__FUNCTION__);
+		g_assert((*pe)->fd < 0);
+	}
+	srv->udp_allowed = TRUE;
+}
+
 static void
 _stop_pools (struct network_server_s *srv)
 {
 	g_thread_pool_stop_unused_threads ();
 
+	if (srv->pool_udp) {
+		g_thread_pool_free (srv->pool_udp, FALSE, TRUE);
+		srv->pool_udp = NULL;
+	}
 	if (srv->pool_stats) {
 		g_thread_pool_free (srv->pool_stats, FALSE, TRUE);
 		srv->pool_stats = NULL;
 	}
-	if (srv->pool_workers) {
-		g_thread_pool_free (srv->pool_workers, FALSE, TRUE);
-		srv->pool_workers = NULL;
+	if (srv->pool_tcp) {
+		g_thread_pool_free (srv->pool_tcp, FALSE, TRUE);
+		srv->pool_tcp = NULL;
 	}
 }
 
@@ -278,8 +301,10 @@ network_server_clean(struct network_server_s *srv)
 		return;
 
 	_stop_pools (srv);
-	if (srv->thread_events != NULL)
-		g_error("EventThread not joined!");
+	if (srv->thread_tcp != NULL)
+		g_error("Event thread not joined: %s", "tcp");
+	if (srv->thread_udp != NULL)
+		g_error("Event thread not joined: %s", "udp");
 
 	g_mutex_clear(&srv->lock_stats);
 	g_mutex_clear(&srv->lock_threads);
@@ -326,6 +351,7 @@ _srv_bind_host(struct network_server_s *srv, const gchar *url, gpointer u,
 	struct endpoint_s *e = g_malloc0(sizeof(*e) + 1 + len);
 	e->magic = MAGIC_ENDPOINT;
 	e->fd = -1;
+	e->fd_udp = -1;
 	e->flags = flags;
 	e->factory_udata = u;
 	e->factory_hook = factory;
@@ -393,20 +419,18 @@ network_server_close_servers(struct network_server_s *srv)
 GError *
 network_server_open_servers(struct network_server_s *srv)
 {
-	struct endpoint_s **u;
+	g_assert(srv != NULL);
 
-	EXTRA_ASSERT(srv != NULL);
-
-	for (u=srv->endpointv; u && *u ;u++) {
+	for (struct endpoint_s **u=srv->endpointv; u && *u ;u++) {
 		GError *err;
-		if (NULL != (err = _endpoint_open(*u))) {
+		if (NULL != (err = _endpoint_open(*u, srv->udp_allowed))) {
 			g_prefix_error(&err, "url open error : ");
 			network_server_close_servers(srv);
 			return err;
 		}
 	}
 
-	for (u=srv->endpointv; u && *u ;u++) {
+	for (struct endpoint_s **u=srv->endpointv; u && *u ;u++) {
 		GRID_DEBUG("fd=%d port=%d endpoint=%s ready", (*u)->fd,
 				(*u)->port_real, (*u)->url);
 	}
@@ -506,7 +530,7 @@ _manage_client_event(struct network_server_s *srv,
 
 	if (clt->events & CLT_ERROR)
 		ARM_CLIENT(srv, clt, EPOLL_CTL_DEL);
-	g_thread_pool_push(srv->pool_workers, clt, NULL);
+	g_thread_pool_push(srv->pool_tcp, clt, NULL);
 }
 
 static void
@@ -600,7 +624,7 @@ _thread_cb_events(gpointer d)
 		}
 	}
 
-	/* XXX the server connections are being closed in the main thread that
+	/* the server connections are being closed in the main thread that
 	 * received the exit signal. They will be removed automatically from
 	 * the epoll pool.*/
 
@@ -615,6 +639,134 @@ _thread_cb_events(gpointer d)
 		if (now > next) {
 			_server_shutdown_inactive_connections(srv);
 			next = now + 1 * G_TIME_SPAN_SECOND;
+		}
+	}
+
+	return d;
+}
+
+static gsize _endpoint_count_all (struct endpoint_s **pu) {
+	gsize count = 0;
+	for (; *pu ;++pu) { count ++; }
+	return count;
+}
+
+static gsize _endpoint_count_udp (struct endpoint_s **pu) {
+	gsize count = 0;
+	for (; *pu ;++pu) { if ((*pu)->fd_udp > 0) { count ++; } }
+	return count;
+}
+
+static void
+_endpoint_monitor_udp (struct endpoint_s **pu, struct pollfd *pfd)
+{
+	for (gint i=0; pu[i] ;++i) {
+		pfd[i].fd = pu[i]->fd_udp;
+		pfd[i].events = pu[i]->fd_udp > 0 ? POLLIN : 0;
+		pfd[i].revents = 0;
+	}
+}
+
+static void
+_cb_ping(struct network_client_s *clt, struct network_server_s *srv)
+{
+	EXTRA_ASSERT(clt != NULL);
+	EXTRA_ASSERT(clt->server == srv);
+	int rc = clt->transport.notify_input(clt);
+	if (rc != RC_PROCESSED) {
+		GRID_DEBUG("PING %s -> %s processing error",
+				clt->peer_name, clt->local_name);
+	}
+	_client_clean(srv, clt);
+}
+
+static void
+_manage_ping_event(struct network_server_s *srv, struct endpoint_s *e,
+		struct pollfd *pfd)
+{
+	/* destined for little notifications, there is currently no clue ping
+	 * are bigger than few 100's of bytes. 1k is enough. */
+	guint8 buf[1024];
+
+	/* consume several messages, but not indefinitely to avoid starvations
+	 * with other ping sockets */
+	for (gint i=0; i<8 ;++i) {
+		struct sockaddr_storage ss;
+		socklen_t ss_len = sizeof(ss);
+		ssize_t r = recvfrom(pfd->fd, buf, sizeof(buf), 0,
+				(struct sockaddr*)&ss, &ss_len);
+		if (r <= 0)
+			break;
+
+		/* fake a client, the transport needs it */
+		struct network_client_s *clt = SLICE_NEW0(struct network_client_s);
+		clt->server = srv;
+		clt->fd = -1;
+		clt->events = CLT_READ;
+		clt->time.cnx = oio_ext_monotonic_time ();
+		clt->time.evt_in = clt->time.cnx;
+		grid_sockaddr_to_string((struct sockaddr*)&ss,
+				clt->peer_name, sizeof(clt->peer_name));
+		g_snprintf(clt->local_name, sizeof(clt->local_name), "%s:%d",
+				e->url, e->port_real);
+
+		if (e->factory_hook)
+			e->factory_hook(e->factory_udata, clt);
+
+		/* Insert a slab in the input queue */
+		data_slab_sequence_append(&clt->input,
+				data_slab_make_buffer(g_memdup(buf, r), r));
+
+		/* notify the transport layer, and manage this in another thread */
+		if (NULL != clt->transport.notify_input) {
+			GError *err = NULL;
+
+			if (!g_thread_pool_push(srv->pool_udp, clt, &err)) {
+				GRID_WARN("PING %s -> %s (%"G_GSIZE_FORMAT") discarded: (%d) %s",
+						clt->peer_name, clt->local_name,
+						data_slab_sequence_size(&clt->input),
+						err->code, err->message);
+				_client_clean(srv, clt);
+			} else {
+				GRID_TRACE("PING %s -> %s (%"G_GSIZE_FORMAT") defered",
+						clt->peer_name, clt->local_name,
+						data_slab_sequence_size(&clt->input));
+			}
+		} else {
+			GRID_DEBUG("PING %s -> %s (%"G_GSIZE_FORMAT") discarded: %s",
+					clt->peer_name, clt->local_name,
+					data_slab_sequence_size(&clt->input),
+					"no transport");
+			_client_clean(srv, clt);
+		}
+	}
+}
+
+static gpointer
+_thread_cb_ping(gpointer d)
+{
+	metautils_ignore_signals();
+
+	struct network_server_s *srv = d;
+
+	/* no server open, no need to continue */
+	if (_endpoint_count_udp(srv->endpointv) <= 0)
+		return d;
+
+	const gsize count_structs = _endpoint_count_all(srv->endpointv);
+	struct pollfd pfd[count_structs];
+	_endpoint_monitor_udp(srv->endpointv, pfd);
+
+	while (srv->flag_continue) {
+		int rc = metautils_syscall_poll(pfd, count_structs, 1000);
+		if (rc < 0) {
+			GRID_WARN("PING poll error (%d) %s", errno, strerror(errno));
+		} else if (rc > 0) {
+			for (guint i=0; i<count_structs ;++i) {
+				if (pfd[i].revents & POLLIN)
+					_manage_ping_event(srv, srv->endpointv[i], pfd+i);
+				pfd[i].revents = 0;
+			}
 		}
 	}
 
@@ -645,7 +797,9 @@ network_server_run(struct network_server_s *srv)
 		ARM_ENDPOINT(srv, u, EPOLL_CTL_ADD);
 	ARM_WAKER(srv, EPOLL_CTL_ADD);
 
-	srv->thread_events = g_thread_new("events", _thread_cb_events, srv);
+	if (srv->udp_allowed)
+		srv->thread_udp = g_thread_new("udp", _thread_cb_ping, srv);
+	srv->thread_tcp = g_thread_new("tcp", _thread_cb_events, srv);
 
 	network_server_stat_push2 (srv, FALSE,
 			srv->gq_gauge_cnx_max, srv->cnx_max,
@@ -654,7 +808,7 @@ network_server_run(struct network_server_s *srv)
 	while (srv->flag_continue) {
 		g_usleep(1 * G_TIME_SPAN_SECOND);
 		network_server_stat_push4 (srv, FALSE,
-				srv->gq_gauge_threads, (guint64) g_thread_pool_get_num_threads(srv->pool_workers),
+				srv->gq_gauge_threads, (guint64) g_thread_pool_get_num_threads(srv->pool_tcp),
 				srv->gq_gauge_cnx_current, srv->cnx_clients,
 				srv->gq_counter_cnx_accept, srv->cnx_accept,
 				srv->gq_counter_cnx_close, srv->cnx_close);
@@ -663,10 +817,14 @@ network_server_run(struct network_server_s *srv)
 	network_server_close_servers(srv);
 	GRID_DEBUG("Server %p waiting for its threads", srv);
 
-	/* wait for the first event thread */
-	if (srv->thread_events) {
-		g_thread_join(srv->thread_events);
-		srv->thread_events = NULL;
+	/* wait for the event threads */
+	if (srv->thread_tcp) {
+		g_thread_join(srv->thread_tcp);
+		srv->thread_tcp = NULL;
+	}
+	if (srv->thread_udp) {
+		g_thread_join(srv->thread_udp);
+		srv->thread_udp = NULL;
 	}
 
 	/* XXX(jfs): seems legit but requires exit critical path to be reviewed.
@@ -708,17 +866,18 @@ _endpoint_close (struct endpoint_s *u)
 			(void) unlink (u->url);
 		metautils_pclose(&(u->fd));
 	}
+	if (u->fd_udp >= 0)
+		metautils_pclose(&(u->fd_udp));
 	u->port_real = 0;
 }
 
 static GError *
-_endpoint_open(struct endpoint_s *u)
+_endpoint_open(struct endpoint_s *u, gboolean udp_allowed)
 {
 	EXTRA_ASSERT(u != NULL);
 
-	struct sockaddr_storage ss;
+	struct sockaddr_storage ss = {0};
 	socklen_t ss_len = sizeof(ss);
-	memset(&ss, 0, sizeof(ss));
 
 	/* patch some socket preferences that make sense only for INET sockets */
 	if (_endpoint_is_UNIX(u)) {
@@ -729,16 +888,28 @@ _endpoint_open(struct endpoint_s *u)
 
 	/* Get a socket of the right type */
 	if (_endpoint_is_UNIX(u))
-		u->fd = socket(AF_UNIX, SOCK_STREAM, 0);
-	else if (_endpoint_is_INET6(u))
-		u->fd = socket(AF_INET6, SOCK_STREAM, 0);
-	else
-		u->fd = socket(AF_INET, SOCK_STREAM, 0);
+		u->fd = socket_nonblock(AF_UNIX, SOCK_STREAM, 0);
+	else {
+		if (_endpoint_is_INET6(u)) {
+			u->fd = socket_nonblock(AF_INET6, SOCK_STREAM, 0);
+			if (udp_allowed)
+				u->fd_udp = socket_nonblock(AF_INET6, SOCK_DGRAM, 0);
+		} else {
+			u->fd = socket_nonblock(AF_INET, SOCK_STREAM, 0);
+			if (udp_allowed)
+				u->fd_udp = socket_nonblock(AF_INET, SOCK_DGRAM, 0);
+		}
+		if (udp_allowed && u->fd_udp < 0)
+			return NEWERROR(errno, "socket(udp) = '%s'", strerror(errno));
+	}
 	if (u->fd < 0)
-		return NEWERROR(errno, "socket() = '%s'", strerror(errno));
+		return NEWERROR(errno, "socket(tcp) = '%s'", strerror(errno));
 
-	if (_endpoint_is_INET(u))
+	if (_endpoint_is_INET(u)) {
 		sock_set_reuseaddr (u->fd, TRUE);
+		if (u->fd_udp >= 0)
+			sock_set_reuseaddr (u->fd_udp, TRUE);
+	}
 
 	/* Bind the socket the right way according to its type */
 	if (_endpoint_is_UNIX(u)) {
@@ -759,12 +930,17 @@ _endpoint_open(struct endpoint_s *u)
 		s4->sin_port = htons(u->port_cfg);
 		inet_pton(AF_INET, u->url, &(s4->sin_addr));
 	}
+
 	if (0 > bind(u->fd, (struct sockaddr*)&ss, ss_len)) {
 		int errsave = errno;
 		u->port_real = 0;
 		if (_endpoint_is_UNIX(u))
 			metautils_pclose (&u->fd);
-		return NEWERROR(errsave, "bind(%s) = '%s'", u->url, strerror(errsave));
+		return NEWERROR(errsave, "bind(tcp,%s) = '%s'", u->url, strerror(errsave));
+	}
+	if (u->fd_udp >= 0 && 0 > bind(u->fd_udp, (struct sockaddr*)&ss, ss_len)) {
+		int errsave = errno;
+		return NEWERROR(errsave, "bind(udp,%s) = '%s'", u->url, strerror(errsave));
 	}
 
 	/* for INET sockets, get the port really used */
@@ -777,9 +953,6 @@ _endpoint_open(struct endpoint_s *u)
 		else
 			u->port_real = ntohs(((struct sockaddr_in6*)&ss)->sin6_port);
 	}
-
-	/* And finally set the mandatory fags. */
-	sock_set_non_blocking(u->fd, TRUE);
 
 	if (0 > listen(u->fd, 32768))
 		return NEWERROR(errno, "listen() = '%s'", strerror(errno));
@@ -859,9 +1032,9 @@ void
 network_server_set_max_workers(struct network_server_s *srv, guint max)
 {
 	EXTRA_ASSERT(srv != NULL);
-	if (!grid_main_is_running() || !srv->pool_workers)
+	if (!grid_main_is_running() || !srv->pool_tcp)
 		return;
-	g_thread_pool_set_max_threads (srv->pool_workers, CLAMP(max, 1, G_MAXUINT16), NULL);
+	g_thread_pool_set_max_threads (srv->pool_tcp, CLAMP(max, 1, G_MAXUINT16), NULL);
 }
 
 void
@@ -983,6 +1156,7 @@ _client_add_to_monitored(struct network_server_s *srv,
 	EXTRA_ASSERT(clt->server == srv);
 	EXTRA_ASSERT(clt->prev == NULL);
 	EXTRA_ASSERT(clt->next == NULL);
+	EXTRA_ASSERT(clt->fd >= 0);
 
 	if (NULL != (clt->next = srv->first))
 		clt->next->prev = clt;
@@ -1009,18 +1183,17 @@ _client_ready_for_output(struct network_client_s *clt)
 static void
 _client_clean(struct network_server_s *srv, struct network_client_s *clt)
 {
-	(void) srv;
-
 	/* Notifies the upper layer the client is being exiting. */
 	if (clt->transport.notify_error)
 		clt->transport.notify_error(clt);
 
 	EXTRA_ASSERT(clt->prev == NULL);
 	EXTRA_ASSERT(clt->next == NULL);
-	EXTRA_ASSERT(clt->fd >= 0);
 
-	metautils_pclose(&(clt->fd));
-	_cnx_notify_close(srv);
+	if (clt->fd >= 0) {
+		metautils_pclose(&(clt->fd));
+		_cnx_notify_close(srv);
+	}
 
 	clt->flags = clt->events = 0;
 	memset(&(clt->time), 0, sizeof(clt->time));
@@ -1203,8 +1376,9 @@ network_client_send_slab(struct network_client_s *client, struct data_slab_s *ds
 	client->time.evt_out = oio_ext_monotonic_time ();
 
 	if (!_client_ready_for_output(client)) {
-		register int type = ds->type;
-		GRID_DEBUG("fd=%d Discarding data, output closed", client->fd);
+		const int type = ds->type;
+		GRID_TRACE("fd=%d/%s discarding data, output closed",
+				client->fd, client->peer_name);
 		data_slab_free(ds);
 		return MACRO_COND(type == STYPE_EOF, 0, -1);
 	}
@@ -1254,7 +1428,6 @@ void
 network_client_allow_input(struct network_client_s *clt, gboolean v)
 {
 	EXTRA_ASSERT(clt != NULL);
-	EXTRA_ASSERT(clt->fd >= 0);
 
 	if (!clt || clt->fd < 0)
 		return;
@@ -1269,3 +1442,14 @@ network_client_allow_input(struct network_client_s *clt, gboolean v)
 	}
 }
 
+int
+network_server_first_udp (struct network_server_s *srv)
+{
+	if (!srv || !srv->udp_allowed || !srv->endpointv)
+		return -1;
+	for (struct endpoint_s **pe=srv->endpointv; *pe ;++pe) {
+		if ((*pe)->fd_udp >= 0)
+			return (*pe)->fd_udp;
+	}
+	return -1;
+}

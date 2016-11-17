@@ -110,6 +110,9 @@ extern GQuark gq_time_unexpected;
 
 struct network_server_s * network_server_init(void);
 
+/* must be called PRIOR to network_server_open_servers */
+void network_server_allow_udp(struct network_server_s *srv);
+
 void network_server_set_max_workers(struct network_server_s *srv, guint max);
 
 void network_server_set_maxcnx(struct network_server_s *srv, guint max);
@@ -131,6 +134,8 @@ void network_server_bind_host_throughput(struct network_server_s *srv,
  * @return a valid (but maybe empty) array of string, NULL terminated. Free it
  *         with g_strfreev() */
 gchar** network_server_endpoints (struct network_server_s *srv);
+
+int network_server_first_udp (struct network_server_s *srv);
 
 void network_server_bind_host_lowlatency(struct network_server_s *srv,
 		const gchar *url, gpointer factory_udata,

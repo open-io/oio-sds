@@ -20,15 +20,6 @@ License along with this library.
 #ifndef OIO_SDS__server__slab_h
 # define OIO_SDS__server__slab_h 1
 
-/**
- * @defgroup server_slabs Data slabs
- * @ingroup server
- * @brief
- * @details
- *
- * @{
- */
-
 # include <glib.h>
 # include <string.h>
 # include <sys/types.h>
@@ -153,7 +144,5 @@ data_slab_make_static_string(const gchar *s)
 	gsize l = strlen(s);
 	return data_slab_make_buffer2((guint8*)s, FALSE, 0, l, l);
 }
-
-/** @} */
 
 #endif /*OIO_SDS__server__slab_h*/
