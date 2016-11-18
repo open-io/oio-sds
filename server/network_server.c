@@ -264,11 +264,13 @@ network_server_init(void)
 	return result;
 }
 
-void network_server_allow_udp(struct network_server_s *srv) {
+void
+network_server_allow_udp(struct network_server_s *srv)
+{
 	g_assert(srv != NULL);
 
 	for (struct endpoint_s **pe=srv->endpointv; pe && *pe ;++pe) {
-		GRID_ERROR("BUG: Can't call %s when servers are alreaddy open",
+		GRID_ERROR("BUG: Can't call %s when servers are already open",
 				__FUNCTION__);
 		g_assert((*pe)->fd < 0);
 	}
@@ -645,13 +647,17 @@ _thread_cb_events(gpointer d)
 	return d;
 }
 
-static gsize _endpoint_count_all (struct endpoint_s **pu) {
+static gsize
+_endpoint_count_all (struct endpoint_s **pu)
+{
 	gsize count = 0;
 	for (; *pu ;++pu) { count ++; }
 	return count;
 }
 
-static gsize _endpoint_count_udp (struct endpoint_s **pu) {
+static gsize
+_endpoint_count_udp (struct endpoint_s **pu)
+{
 	gsize count = 0;
 	for (; *pu ;++pu) { if ((*pu)->fd_udp > 0) { count ++; } }
 	return count;
