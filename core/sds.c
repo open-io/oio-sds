@@ -65,8 +65,10 @@ unsigned int oio_sds_version (void) { return OIO_SDS_VERSION; }
 
 /* glibc 2.22 removed binary mode of fmemopen.
  * With this statement, we ask the compiler to link to the old version. */
-#if __GLIBC__ == 2 && __GLIBC_MINOR__ >= 22
+#ifdef OIO_USE_OLD_FMEMOPEN
+# if __GLIBC_PREREQ(2, 22)
 asm (".symver fmemopen, fmemopen@GLIBC_2.2.5");
+# endif
 #endif
 
 char **
