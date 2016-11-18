@@ -558,8 +558,7 @@ sqlx_service_action(void)
 	/* open all the sockets */
 	if (!grid_main_is_running())
 		return;
-	if (udp_allowed)
-		network_server_allow_udp(SRV.server);
+	network_server_allow_udp(SRV.server);
 	grid_daemon_bind_host(SRV.server, SRV.url->str, SRV.dispatcher);
 	err = network_server_open_servers(SRV.server);
 	if (NULL != err)
