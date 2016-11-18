@@ -175,4 +175,6 @@ struct sqlx_peering_s * sqlx_peering_factory__create_direct (
 		struct gridd_client_pool_s *clipool,
 		struct gridd_client_factory_s *clifac);
 
+void sqlx_peering_direct__set_udp (struct sqlx_peering_s *self, int fd);
+
 #endif /*OIO_SDS__sqliterepo__synchro_h*/

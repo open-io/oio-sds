@@ -18,6 +18,8 @@ License along with this library.
 */
 
 #include <errno.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 
 #include <metautils/lib/metautils.h>
 
@@ -383,6 +385,10 @@ struct sqlx_peering_direct_s
 	/* pool'ifies the client sockets to avoid reserving to many file
 	 * descriptors. */
 	struct gridd_client_pool_s *pool;
+
+	/* Some requests may be sent over a UDP channel. We just need a file
+	 * descriptor from the application */
+	int fd_udp;
 };
 
 struct sqlx_peering_s *
@@ -393,7 +399,17 @@ sqlx_peering_factory__create_direct (struct gridd_client_pool_s *pool,
 	self->vtable = &vtable_peering_DIRECT;
 	self->pool = pool;
 	self->factory = factory;
+	self->fd_udp = -1;
 	return (struct sqlx_peering_s*) self;
+}
+
+void
+sqlx_peering_direct__set_udp (struct sqlx_peering_s *self, int fd)
+{
+	if (!self) return;
+	struct sqlx_peering_direct_s *p = (struct sqlx_peering_direct_s*) self;
+	g_assert(p->vtable == &vtable_peering_DIRECT);
+	p->fd_udp = fd;
 }
 
 static void
@@ -401,7 +417,7 @@ _direct_destroy (struct sqlx_peering_s *self)
 {
 	if (!self) return;
 	struct sqlx_peering_direct_s *p = (struct sqlx_peering_direct_s*) self;
-	EXTRA_ASSERT(p->vtable == &vtable_peering_DIRECT);
+	g_assert(p->vtable == &vtable_peering_DIRECT);
 	g_free (p);
 }
 
@@ -417,12 +433,28 @@ _direct_use (struct sqlx_peering_s *self,
 
 	GByteArray *req = sqlx_pack_USE(n);
 
-	struct event_client_s *mc = g_malloc0 (sizeof(struct event_client_s));
-	mc->client = gridd_client_factory_create_client (p->factory);
-	gridd_client_connect_url (mc->client, url);
-	gridd_client_request (mc->client, req, NULL, NULL);
-	gridd_client_set_timeout(mc->client, SQLX_SYNC_TIMEOUT);
-	gridd_client_pool_defer(p->pool, mc);
+	if (p->fd_udp >= 0) {
+		struct sockaddr_storage ss;
+		gsize ss_len = sizeof(ss);
+		struct sockaddr *sa = (struct sockaddr*) &ss;
+		if (grid_string_to_sockaddr(url, sa, &ss_len)) {
+			ssize_t s = sendto(p->fd_udp, req->data, req->len, 0, sa, ss_len);
+			if (s != req->len) {
+				int errsav = errno;
+				GRID_DEBUG("USE(%s,%s.%s) failed: (%d) %s",
+						url, n->base, n->type, errsav, strerror(errsav));
+			} else {
+				GRID_TRACE("USE(%s,%s.%s) sent", url, n->base, n->type);
+			}
+		}
+	} else {
+		struct event_client_s *mc = g_malloc0 (sizeof(struct event_client_s));
+		mc->client = gridd_client_factory_create_client (p->factory);
+		gridd_client_connect_url (mc->client, url);
+		gridd_client_request (mc->client, req, NULL, NULL);
+		gridd_client_set_timeout(mc->client, SQLX_SYNC_TIMEOUT);
+		gridd_client_pool_defer(p->pool, mc);
+	}
 	g_byte_array_unref(req);
 }
 
@@ -572,6 +604,8 @@ _direct_getvers (struct sqlx_peering_s *self,
 	gridd_client_set_timeout(mc->ec.client, SQLX_SYNC_TIMEOUT);
 	gridd_client_pool_defer(p->pool, &mc->ec);
 }
+
+/* -------------------------------------------------------------------------- */
 
 #define PEER_CALL(self,F) VTABLE_CALL(self,struct sqlx_peering_abstract_s*,F)
 

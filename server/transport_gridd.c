@@ -177,7 +177,6 @@ transport_gridd_factory0(struct gridd_request_dispatcher_s *dispatcher,
 {
 	EXTRA_ASSERT(dispatcher != NULL);
 	EXTRA_ASSERT(client != NULL);
-	EXTRA_ASSERT(client->fd >= 0);
 
 	struct transport_client_context_s *transport_context = g_malloc0(sizeof(*transport_context));
 	transport_context->dispatcher = dispatcher;
@@ -435,7 +434,6 @@ transport_gridd_notify_input(struct network_client_s *clt)
 	struct transport_client_context_s *ctx;
 
 	EXTRA_ASSERT(clt != NULL);
-	EXTRA_ASSERT(clt->fd >= 0);
 
 	ctx = clt->transport.client_context;
 	/* read the data */

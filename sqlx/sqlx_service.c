@@ -53,6 +53,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define SQLX_MAX_TIMER_PER_ROUND 100
 #endif
 
+static volatile gboolean udp_allowed = FALSE;
+
 // common_main hooks
 static struct grid_main_option_s * sqlx_service_get_options(void);
 static const char * sqlx_service_usage(void);
@@ -230,6 +232,16 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 			GRID_DEBUG("ZK [%s] (nothing at %s)", ss->zk_url, k);
 		if (str) oio_str_reuse(&ss->zk_url, str);
 	} while (0);
+
+	/* Check if UDP is allowed for servers in the /etc/oio/sds.conf files */
+	gchar *str_udp_allowed = oio_cfg_get_value (ss->ns_name, OIO_CFG_UDP_ALLOWED);
+	if (str_udp_allowed) {
+		udp_allowed = oio_str_parse_bool(str_udp_allowed, FALSE);
+		GRID_NOTICE("UDP %s", udp_allowed ? "allowed" : "forbidden");
+		g_free(str_udp_allowed);
+	} else {
+		GRID_INFO("UDP %s", "disabled by default");
+	}
 
 	return TRUE;
 }
@@ -543,9 +555,10 @@ sqlx_service_action(void)
 			return _action_report_error(err, "Failed to start the QUEUE thread");
 	}
 
-	/* SERVER/GRIDD main run loop */
+	/* open all the sockets */
 	if (!grid_main_is_running())
 		return;
+	network_server_allow_udp(SRV.server);
 	grid_daemon_bind_host(SRV.server, SRV.url->str, SRV.dispatcher);
 	err = network_server_open_servers(SRV.server);
 	if (NULL != err)
@@ -553,6 +566,13 @@ sqlx_service_action(void)
 	if (!grid_main_is_running())
 		return;
 
+	if (udp_allowed) {
+		int fd_udp = network_server_first_udp(SRV.server);
+		GRID_DEBUG("UDP socket fd=%d", fd_udp);
+		sqlx_peering_direct__set_udp(SRV.peering, fd_udp);
+	}
+
+	/* SERVER/GRIDD main run loop */
 	if (NULL != (err = network_server_run(SRV.server)))
 		return _action_report_error(err, "GRIDD run failure");
 }
