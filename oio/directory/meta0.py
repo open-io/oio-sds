@@ -175,14 +175,14 @@ class PrefixMapping(object):
             svc["prefixes"] = pfx_set
         self.svc_by_pfx[pfx] = services
 
+    def pfx2base(self, pfx):
+        return str(pfx[:self.digits]).ljust(4, '0')
+
     def bootstrap(self, strategy=None):
         """
         Build `TOTAL_PREFIXES` assignations from scratch,
         using `strategy` to find new services.
         """
-
-        def pfx2base(pfx):
-            return str(pfx[:self.digits]).ljust(4, '0')
 
         if not strategy:
             strategy = self.find_services_random
@@ -194,7 +194,7 @@ class PrefixMapping(object):
                                  (self.__class__.TOTAL_PREFIXES / 100))
 
             pfx = "%04X" % pfx_int
-            base = pfx2base(pfx)
+            base = self.pfx2base(pfx)
 
             services = None
             if base in self.svc_by_pfx:
@@ -214,7 +214,7 @@ class PrefixMapping(object):
             return
 
         for p1 in self.svc_by_pfx.keys():
-            p0 = pfx2base(p1)
+            p0 = self.pfx2base(p1)
             if p0 == p1:
                 continue
             s0, s1 = self.svc_by_pfx[p0], self.svc_by_pfx[p1]
@@ -278,15 +278,15 @@ class PrefixMapping(object):
         if self.digits == 0:
             if self.logger:
                 self.logger.info("No equilibration possible when " +
-                        "meta1_digits is set to 0")
+                                 "meta1_digits is set to 0")
             return
 
         if self.digits != 4:
             # TODO implement equilibration when meta1_digits is < 4
             if self.logger:
                 self.logger.info("Prefixes equilibration temporarily " +
-                        "disabled for installations with meta1_digits " +
-                        "different than 4")
+                                 "disabled for installations with " +
+                                 "meta1_digits different than 4")
             return
 
         loops = 0
@@ -297,8 +297,10 @@ class PrefixMapping(object):
         if self.logger:
             self.logger.info("META1 Digits = %d", self.digits)
             self.logger.info("Replicas = %d", self.replicas)
-            self.logger.info("Scored positively = %d", len([x for x in self.services.itervalues()
-                                 if self.get_score(x) > 0]))
+            self.logger.info(
+                    "Scored positively = %d",
+                    len([x for x in self.services.itervalues()
+                        if self.get_score(x) > 0]))
             self.logger.info("Ideal number of prefixes per meta1: %d",
                              ideal_pfx_by_svc)
         candidates = self.services.values()
