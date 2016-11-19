@@ -62,14 +62,10 @@ meta1_backend_init(struct meta1_backend_s **out, const char *ns,
 	gchar *str_digits = oio_cfg_get_value(ns, OIO_META1_DIGITS_KEY);
 	if (str_digits) {
 		STRING_STACKIFY(str_digits);
-		gchar *end = NULL;
-		gint64 i64 = g_ascii_strtoll(str_digits, &end, 10);
-		if (0 == i64 && end == str_digits)
+		gint64 i64 = 0;
+		if (!oio_str_is_number(str_digits, &i64))
 			return ERRPTF("Misconfigured '%s' in system configuration: %s",
-					OIO_META1_DIGITS_KEY, "not an integer");
-		if (end && *end)
-			return ERRPTF("Misconfigured '%s' in system configuration: %s",
-					OIO_META1_DIGITS_KEY, "trailing characters");
+					OIO_META1_DIGITS_KEY, "not a valid integer");
 		if (i64 < 0 || i64 > 4)
 			return ERRPTF("Misconfigured '%s' in system configuration: %s",
 					OIO_META1_DIGITS_KEY, "value out of range [0,4]");

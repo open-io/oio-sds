@@ -428,17 +428,19 @@ int oio_str_caseprefixed(const char *str, const char *prefix) {
 	return !*p;
 }
 
-int oio_str_is_number (const char *s) {
+gboolean oio_str_is_number (const char *s, gint64 *pi64) {
 	if (!oio_str_is_set(s))
-		return 0;
+		return FALSE;
 	gchar *end = NULL;
 	errno = 0;
 	gint64 mcs = g_ascii_strtoll(s, &end, 10);
 	if (errno == ERANGE || (mcs == 0 && errno == EINVAL))
-		return 0;
+		return FALSE;
 	if (!end || *end != '\0')
-		return 0;
-	return 1;
+		return FALSE;
+	if (pi64)
+		*pi64 = mcs;
+	return TRUE;
 }
 
 int oio_str_cmp3 (const void *a, const void *b, void *i UNUSED) {

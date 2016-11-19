@@ -653,17 +653,9 @@ _load_alias_from_headers(struct req_args_s *args, GSList **pbeans)
 		if (!s)
 			err = BADREQ("Header: missing content length");
 		else {
-			errno = 0;
-			gchar *end = NULL;
-			gint64 s64 = g_ascii_strtoll(s, &end, 10);
-			if (s64 < 0)
-				err = BADREQ("Header: negative content length");
-			else if (s64 == G_MAXINT64)
-				err = BADREQ("Header: content length overflow");
-			else if (s64 == 0 && end == s)
-				err = BADREQ("Header: invalid content length (parsing failed)");
-			else if (*end != 0)
-				err = BADREQ("Header: invalid content length (trailing characters)");
+			gint64 s64 = 0;
+			if (!oio_str_is_number(s, &s64))
+				err = BADREQ("Header: bad content length");
 			else
 				CONTENTS_HEADERS_set_size (header, s64);
 		}
@@ -696,19 +688,9 @@ _load_alias_from_headers(struct req_args_s *args, GSList **pbeans)
 			gchar *s = g_tree_lookup(args->rq->tree_headers,
 									 PROXYD_HEADER_PREFIX "content-meta-version");
 			if (s) {
-				errno = 0;
-				gchar *end = NULL;
-				gint64 s64 = g_ascii_strtoll(s, &end, 10);
-				if (s64 < 0)
+				gint64 s64 = 0;
+				if (!oio_str_is_number(s, &s64))
 					err = BADREQ("Header: negative content version");
-				else if (s64 == G_MAXINT64)
-					err = BADREQ("Header: content version overflow");
-				else if (s64 == 0 && end == s)
-					err = BADREQ(
-							"Header: invalid content version (parsing failed)");
-				else if (*end != 0)
-					err = BADREQ(
-							"Header: invalid content version (trailing characters)");
 				else
 					ALIASES_set_version(alias, s64);
 			}
@@ -825,23 +807,15 @@ _delimiter (struct req_args_s *args)
 static GError *
 _max (struct req_args_s *args, gint64 *pmax)
 {
-	*pmax = 0;
 	const char *s = OPT("max");
+	*pmax = 0;
 	if (!s)
 		return NULL;
-	if (!*s)
-		return BADREQ("Invalid max number of items: %s", "empty");
 
-	gchar *end = NULL;
-	*pmax = g_ascii_strtoll(s, &end, 10);
-	if (!*pmax && errno == EINVAL)
-		return BADREQ("Invalid max number of items: %s", "not an integer");
+	if (!oio_str_is_number(s, pmax))
+		return BADREQ("Invalid max number of items");
 	if (*pmax <= 0)
 		return BADREQ("Invalid max number of items: %s", "too small");
-	if (*pmax == G_MAXINT64 || *pmax == G_MININT64)
-		return BADREQ("Invalid max number of items: %s", "overflow");
-	if (end && *end)
-		return BADREQ("Invalid max number of items: %s", "trailing characters");
 	return NULL;
 }
 
