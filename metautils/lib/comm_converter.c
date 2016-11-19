@@ -539,7 +539,7 @@ service_info_marshall_1(service_info_t *si, GError **err)
 	}
 
 	if (!service_info_API2ASN(si, &asn))
-		ALERT("Conversion error");
+		GRID_ERROR("Conversion error");
 
 	gba = g_byte_array_sized_new(64);
 	encRet = der_encode(&asn_DEF_ServiceInfo, &asn, metautils_asn1c_write_gba, gba);

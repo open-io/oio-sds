@@ -139,7 +139,6 @@ addr_info_equal(gconstpointer a, gconstpointer b)
 	case TADDR_V6:
 		return 0 == memcmp(&(addrA.addr), &(addrB.addr), sizeof(addrA.addr.v6)) ? TRUE : FALSE;
 	default:
-		FATAL("Invalid address type");
 		return FALSE;
 	}
 }

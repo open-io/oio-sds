@@ -238,8 +238,21 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 		_client_reset_cnx(client);
 		client->sent_bytes = 0;
 
-		if ((++ client->nb_redirects) > 3)
+		++ client->nb_redirects;
+
+		/* Allow 4 redirections (i.e. 5 attemps) */
+		if (client->nb_redirects > 4)
 			return NEWERROR(CODE_TOOMANY_REDIRECT, "Too many redirections");
+
+		/* The first redirection is legit, but subsequent tell us there is
+		 * something happening with the election. Let the services get a
+		 * final status and wait for it a little bit.
+		 * We will wait 200, 400, 800 ms. */
+		if (client->nb_redirects > 1) {
+			guint backoff = client->nb_redirects - 1;
+			gulong delay = (1<<backoff) * 100 * G_TIME_SPAN_MILLISECOND;
+			g_usleep(delay);
+		}
 
 		/* Replace the URL */
 		g_strlcpy(client->url, message, URL_MAXLEN);
