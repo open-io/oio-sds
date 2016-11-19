@@ -294,6 +294,8 @@ dir2macro("SERVER_DEFAULT_CNX_INACTIVE")
 dir2macro("DAEMON_DEFAULT_TIMEOUT_READ")
 dir2macro("DAEMON_DEFAULT_TIMEOUT_ACCEPT")
 
+dir2macro("OIO_USE_OLD_FMEMOPEN")
+
 ###-------------------------------------------------------------------------###
 
 if (NOT DEFINED CMAKE_INSTALL_PREFIX)
