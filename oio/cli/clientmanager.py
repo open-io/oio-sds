@@ -58,7 +58,6 @@ class ClientManager(object):
             self.session = requests.Session()
             self.setup_done = True
             self._admin_mode = self._options.get('admin_mode')
-            # Get the number of meta1 digits from 2 possible sources
             if 'meta1_digits' in sds_conf:
                 self._meta1_digits = int(sds_conf["meta1_digits"])
 

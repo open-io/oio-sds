@@ -42,7 +42,7 @@ class PrefixMapping(object):
         """
         Parameters:
         - replicas: strictily positive integer
-        - digits: integer between 2 and 4 (default: 4)
+        - digits: integer between 0 and 4 (default: 4)
         """
         self.cs = conscience_client
         self.m0 = meta0_client
