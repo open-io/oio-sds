@@ -226,33 +226,33 @@ meta0_utils_unpack_meta1ref(const gchar *s_m1ref,
 
 }
 
+/* The group is represented by the network order 16-bytes prefix,
+ * a.k.a. a simple cast from <guint8*> to <guint16> */
+static void
+_foreach_prefix_run(const guint16 grp_h16, const guint16 end_h16,
+		meta0_on_prefix on_prefix, gpointer u)
+{
+	const guint16 grp_n16 = g_htons(grp_h16);
+
+	for (guint16 idx_h16 = 0 ; idx_h16 != end_h16 ; idx_h16++) {
+		const guint16 pfx_h16 = grp_h16 | idx_h16;
+		const guint16 pfx_n16 = g_htons(pfx_h16);
+		if (!on_prefix(u, (const guint8*)&grp_n16, (const guint8*)&pfx_n16))
+			return;
+	}
+}
+
 static const guint16 masks[] = { 0, 0xF000, 0xFF00, 0xFFF0, 0xFFFF };
 
 void
 meta0_utils_foreach_prefix_in_group(const guint8* bin, guint digits,
 		meta0_on_prefix on_prefix, gpointer u)
 {
-	/* The group is represented by the network order 16-bytes prefix,
-	 * a.k.a. a simple cast from <guint8*> to <guint16> */
-	void _run(const guint16 head_n16, const guint16 hmask) {
-		const guint16 head_h16 = g_ntohs(head_n16);
-
-		const guint16 inv_mask = ~hmask;
-
-		for (guint16 h16=0; ;++h16) {
-			const guint16 tail = h16 & inv_mask;
-
-			const guint16 n = g_htons(head_h16 | tail);
-			if (!on_prefix(u, (guint8*)&head_n16, (guint8*)&n))
-				return;
-			if (tail == inv_mask)
-				return;
-		}
-	}
-
 	g_assert(NULL != bin);
 	g_assert(digits <= 4);
-	return _run(*((const guint16*)bin) & masks[digits], masks[digits]);
+	const guint16 msk_h16 = masks[digits];
+	const guint16 pfx_n16 = *(const guint16*)bin;
+	return _foreach_prefix_run(g_ntohs(pfx_n16) & msk_h16, ~msk_h16, on_prefix, u);
 }
 
 void
@@ -260,13 +260,13 @@ meta0_utils_foreach_prefix(guint digits, meta0_on_prefix on_prefix,
 		gpointer u)
 {
 	g_assert(digits <= 4);
-	const guint16 mask = masks[digits];
-	guint16 hp16 = 0;
+	const guint16 msk_h16 = masks[digits];
+	guint16 pfx_h16 = 0;
 	do {
-		const guint16 np16 = g_htons(hp16);
-		const guint16 hg16 = hp16 & mask;
-		const guint16 ng16 = g_htons(hg16);
-		if (!on_prefix(u, (guint8*)&ng16, (guint8*)&np16))
+		const guint16 grp_h16 = pfx_h16 & msk_h16;
+		const guint16 grp_n16 = g_htons(grp_h16);
+		const guint16 pfx_n16 = g_htons(pfx_h16);
+		if (!on_prefix(u, (guint8*)&grp_n16, (guint8*)&pfx_n16))
 			return;
-	} while (++hp16);
+	} while (++pfx_h16);
 }
