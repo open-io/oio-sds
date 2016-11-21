@@ -40,6 +40,10 @@ struct event_client_s
 	struct gridd_client_s *client;
 	gridd_client_end_f on_end;
 
+	/* when should the command enter the queue? after that, the command result
+	 * will be an error, and there won't even be a connection for it. */
+	gint64 deadline_start;
+
 	/* hidden abstract fields */
 };
 
@@ -85,6 +89,8 @@ struct abstract_client_pool_s
 	((struct abstract_client_pool_s*)p)->vtable->set_max(p,max)
 
 /* Public API -------------------------------------------------------------- */
+
+extern gint32 oio_sqlx_request_failure_threshold;
 
 struct gridd_client_pool_s * gridd_client_pool_create(void);
 

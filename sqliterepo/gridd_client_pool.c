@@ -52,6 +52,10 @@ struct gridd_client_pool_s
 	int closed;
 };
 
+#ifdef HAVE_ENBUG
+gint32 oio_sqlx_request_failure_threshold = 50;
+#endif
+
 static void _destroy (struct gridd_client_pool_s *p);
 
 static guint _get_max (struct gridd_client_pool_s *pool);
@@ -269,7 +273,8 @@ _manage_timeouts(struct gridd_client_pool_s *pool)
 static void
 _manage_requests(struct gridd_client_pool_s *pool)
 {
-	struct event_client_s *ec;
+	struct event_client_s *ec = NULL;
+	guint count_dropped = 0;
 
 	EXTRA_ASSERT(pool != NULL);
 
@@ -277,8 +282,20 @@ _manage_requests(struct gridd_client_pool_s *pool)
 	while (pool->active_count < pool->active_max) {
 		ec = g_async_queue_try_pop(pool->pending_clients);
 		if (NULL == ec)
-			return;
+			break;
 		EXTRA_ASSERT(ec->client != NULL);
+
+#ifdef HAVE_ENBUG
+		if (oio_sqlx_request_failure_threshold >= oio_ext_rand_int_range(1,100))
+			ec->deadline_start = 0;
+#endif
+		if (start > ec->deadline_start) {
+			count_dropped ++;
+			gridd_client_fail(ec->client,
+					NEWERROR(ERRCODE_CONN_TIMEOUT, "Queued for too long"));
+			event_client_free(ec);
+			continue;
+		}
 
 		if (!gridd_client_start(ec->client)) {
 			GError *err = gridd_client_error(ec->client);
@@ -297,6 +314,9 @@ _manage_requests(struct gridd_client_pool_s *pool)
 			event_client_free(ec);
 		}
 	}
+
+	if (count_dropped > 0)
+		GRID_WARN("%u syncing RPC dropped (queued for too long)", count_dropped);
 
 	gint64 elapsed = oio_ext_monotonic_time() - start;
 	if (elapsed > 5 * G_TIME_SPAN_SECOND) {
@@ -382,6 +402,8 @@ _defer(struct gridd_client_pool_s *pool, struct event_client_s *ev)
 		GRID_INFO("Request dropped");
 		event_client_free(ev);
 	} else {
+		gint64 now = oio_ext_monotonic_time();
+		ev->deadline_start = now + 4 * G_TIME_SPAN_SECOND;
 		/* eventfd requires 8-byte integer */
 		guint64 c = 1u;
 		g_async_queue_push(pool->pending_clients, ev);
