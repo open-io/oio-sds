@@ -172,7 +172,7 @@ event_client_monitor(struct gridd_client_pool_s *pool, struct event_client_s *mc
 	return 1;
 }
 
-static void
+void
 event_client_free(struct event_client_s *ec)
 {
 	if (!ec)
@@ -327,7 +327,9 @@ _manage_one_event(struct gridd_client_pool_s *pool, int fd, int evt)
 		event_client_free(ec);
 	}
 	else {
+		/* TODO check here how long it took with that election */
 		gridd_client_react(ec->client);
+
 		if (gridd_client_finished(ec->client))
 			event_client_free(ec);
 		else if (!event_client_monitor(pool, ec))
@@ -379,8 +381,7 @@ _defer(struct gridd_client_pool_s *pool, struct event_client_s *ev)
 	if (pool->closed) {
 		GRID_INFO("Request dropped");
 		event_client_free(ev);
-	}
-	else {
+	} else {
 		/* eventfd requires 8-byte integer */
 		guint64 c = 1u;
 		g_async_queue_push(pool->pending_clients, ev);
