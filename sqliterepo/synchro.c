@@ -431,14 +431,14 @@ _direct_use (struct sqlx_peering_s *self,
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(n != NULL);
 
-	GByteArray *req = sqlx_pack_USE(n);
-
 	if (p->fd_udp >= 0) {
 		struct sockaddr_storage ss;
 		gsize ss_len = sizeof(ss);
 		struct sockaddr *sa = (struct sockaddr*) &ss;
 		if (grid_string_to_sockaddr(url, sa, &ss_len)) {
+			GByteArray *req = sqlx_pack_USE(n);
 			ssize_t s = sendto(p->fd_udp, req->data, req->len, 0, sa, ss_len);
+			g_byte_array_unref(req);
 			if (s != req->len) {
 				int errsav = errno;
 				GRID_DEBUG("USE(%s,%s.%s) failed: (%d) %s",
@@ -450,12 +450,23 @@ _direct_use (struct sqlx_peering_s *self,
 	} else {
 		struct event_client_s *mc = g_malloc0 (sizeof(struct event_client_s));
 		mc->client = gridd_client_factory_create_client (p->factory);
-		gridd_client_connect_url (mc->client, url);
-		gridd_client_request (mc->client, req, NULL, NULL);
 		gridd_client_set_timeout(mc->client, SQLX_SYNC_TIMEOUT);
-		gridd_client_pool_defer(p->pool, mc);
+		GError *err = gridd_client_connect_url (mc->client, url);
+		if (err) {
+			GRID_DEBUG("USE error: (%d) %s", err->code, err->message);
+			event_client_free(mc);
+		} else {
+			GByteArray *req = sqlx_pack_USE(n);
+			err = gridd_client_request (mc->client, req, NULL, NULL);
+			g_byte_array_unref(req);
+			if (err) {
+				GRID_DEBUG("USE error: (%d) %s", err->code, err->message);
+				event_client_free(mc);
+			} else {
+				gridd_client_pool_defer(p->pool, mc);
+			}
+		}
 	}
-	g_byte_array_unref(req);
 }
 
 struct evtclient_PIPEFROM_s
@@ -475,7 +486,8 @@ on_end_PIPEFROM (struct evtclient_PIPEFROM_s *mc)
 	EXTRA_ASSERT(mc->ec.client != NULL);
 	GError *err = gridd_client_error(mc->ec.client);
 	mc->hook (err, mc->manager, sqlx_name_mutable_to_const(&mc->name), mc->reqid);
-	if (err) g_error_free(err);
+	if (err)
+		g_error_free(err);
 	sqlx_name_clean(&mc->name);
 }
 
@@ -494,8 +506,6 @@ _direct_pipefrom (struct sqlx_peering_s *self,
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(n != NULL);
 
-	GByteArray *req = sqlx_pack_PIPEFROM(n, src);
-
 	struct evtclient_PIPEFROM_s *mc =
 		g_malloc0 (sizeof(struct evtclient_PIPEFROM_s));
 	mc->ec.client = gridd_client_factory_create_client (p->factory);
@@ -505,12 +515,23 @@ _direct_pipefrom (struct sqlx_peering_s *self,
 	sqlx_name_dup (&mc->name, n);
 	mc->reqid = reqid;
 
-	gridd_client_connect_url (mc->ec.client, url);
-	gridd_client_request(mc->ec.client, req, NULL, NULL);
 	gridd_client_set_timeout(mc->ec.client, SQLX_RESYNC_TIMEOUT);
-	gridd_client_pool_defer(p->pool, &mc->ec);
 
-	g_byte_array_unref(req);
+	GError *err = gridd_client_connect_url (mc->ec.client, url);
+	if (NULL != err) {
+		gridd_client_fail(mc->ec.client, err);
+		event_client_free(&mc->ec);
+	} else {
+		GByteArray *req = sqlx_pack_PIPEFROM(n, src);
+		err = gridd_client_request(mc->ec.client, req, NULL, NULL);
+		g_byte_array_unref(req);
+		if (NULL != err) {
+			gridd_client_fail(mc->ec.client, err);
+			event_client_free(&mc->ec);
+		} else {
+			gridd_client_pool_defer(p->pool, &mc->ec);
+		}
+	}
 }
 
 struct evtclient_GETVERS_s
@@ -531,13 +552,15 @@ on_end_GETVERS(struct evtclient_GETVERS_s *mc)
 	EXTRA_ASSERT(mc->ec.client != NULL);
 
 	GError *err = gridd_client_error(mc->ec.client);
-	if (err)
-		mc->hook (err, mc->manager, sqlx_name_mutable_to_const(&mc->name), mc->reqid, NULL);
-	else if (!mc->vremote) {
+	if (!err && !mc->vremote)
 		err = SYSERR("BUG: no version replied");
-		mc->hook (err, mc->manager, sqlx_name_mutable_to_const(&mc->name), mc->reqid, NULL);
-	} else {
-		mc->hook (NULL, mc->manager, sqlx_name_mutable_to_const(&mc->name), mc->reqid, mc->vremote);
+
+	if (likely(NULL != mc->hook)) {
+		const struct sqlx_name_s *n = sqlx_name_mutable_to_const(&mc->name);
+		if (err)
+			mc->hook (err, mc->manager, n, mc->reqid, NULL);
+		else
+			mc->hook (NULL, mc->manager, n, mc->reqid, mc->vremote);
 	}
 
 	if (mc->vremote)
@@ -595,14 +618,23 @@ _direct_getvers (struct sqlx_peering_s *self,
 	mc->reqid = reqid;
 	mc->vremote = NULL;
 
-	gridd_client_connect_url (mc->ec.client, url);
-
-	GByteArray *req = sqlx_pack_GETVERS(n);
-	gridd_client_request (mc->ec.client, req, mc, on_reply_GETVERS);
-	g_byte_array_unref(req);
-
 	gridd_client_set_timeout(mc->ec.client, SQLX_SYNC_TIMEOUT);
-	gridd_client_pool_defer(p->pool, &mc->ec);
+
+	GError *err = gridd_client_connect_url (mc->ec.client, url);
+	if (NULL != err) {
+		gridd_client_fail(mc->ec.client, err);
+		event_client_free(&mc->ec);
+	} else {
+		GByteArray *req = sqlx_pack_GETVERS(n);
+		err = gridd_client_request (mc->ec.client, req, mc, on_reply_GETVERS);
+		g_byte_array_unref(req);
+		if (NULL != err) {
+			gridd_client_fail(mc->ec.client, err);
+			event_client_free(&mc->ec);
+		} else {
+			gridd_client_pool_defer(p->pool, &mc->ec);
+		}
+	}
 }
 
 /* -------------------------------------------------------------------------- */

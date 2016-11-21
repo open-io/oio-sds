@@ -27,15 +27,25 @@ struct election_manager_s;
 
 struct event_client_s;
 
+struct gridd_client_pool_s;
+
 typedef void (*gridd_client_end_f) (struct event_client_s*);
 
+/* "abstract" structure destined to be extended by the implementor.
+ * The "client" will react to network events (with a hook passed upon its
+ * creation, and that hook is responsible to callback the upper layer of the
+ * application. */
 struct event_client_s
 {
 	struct gridd_client_s *client;
 	gridd_client_end_f on_end;
-};
 
-struct gridd_client_pool_s;
+	/* when should the command enter the queue? after that, the command result
+	 * will be an error, and there won't even be a connection for it. */
+	gint64 deadline_start;
+
+	/* hidden abstract fields */
+};
 
 struct gridd_client_pool_vtable_s
 {
@@ -80,6 +90,12 @@ struct abstract_client_pool_s
 
 /* Public API -------------------------------------------------------------- */
 
+extern gint32 oio_sqlx_request_failure_threshold;
+
 struct gridd_client_pool_s * gridd_client_pool_create(void);
+
+/* Should not be used on an event that has already been defered. Because this
+ * will be called by the gridd_client_pool. */
+void event_client_free(struct event_client_s *ec);
 
 #endif /*OIO_SDS__metautils__lib__gridd_client_pool_h*/
