@@ -55,28 +55,28 @@ logger_syslog_open (void)
 	g_log_set_default_handler(oio_log_syslog, NULL);
 }
 
+#define ERR(FMT,...) do { \
+	g_snprintf(errbuff, sizeof(errbuff), FMT, ##__VA_ARGS__); \
+	return errbuff; \
+} while (0)
+
 static const char*
 _set_opt(gchar **tokens)
 {
 	static gchar errbuff[1024];
-	struct grid_main_option_s *opt;
-	gint64 i64;
+	gint64 i64 = 0;
 
-	memset(errbuff, 0, sizeof(errbuff));
+	errbuff[0] = '\0';
 
-	if (!tokens || tokens[0] == NULL) {
-		g_snprintf(errbuff, sizeof(errbuff), "Invalid option format, expected 'Key=Value'");
-		return errbuff;
-	}
+	if (!tokens || tokens[0] == NULL)
+		ERR("Invalid option format, expected 'Key=Value'");
 
-	for (opt=user_callbacks->options(); opt && opt->name ;opt++) {
+	for (struct grid_main_option_s *opt=user_callbacks->options();
+		 opt && opt->name;
+		 opt++) {
 		if (0 == g_ascii_strcasecmp(opt->name, tokens[0])) {
-			if (tokens[1] == NULL && opt->type != OT_BOOL) {
-				g_snprintf(errbuff, sizeof(errbuff),
-						"Missing parameter, expected '%s=<Value>'",
-						tokens[0]);
-				return errbuff;
-			}
+			if (tokens[1] == NULL && opt->type != OT_BOOL)
+				ERR("Missing parameter, expected '%s=<Value>'", tokens[0]);
 			switch (opt->type) {
 				case OT_BOOL:
 					if (tokens[1] == NULL) {
@@ -86,21 +86,19 @@ _set_opt(gchar **tokens)
 					*(opt->data.b) = oio_str_parse_bool(tokens[1], *(opt->data.b));
 					return NULL;
 				case OT_INT:
-					i64 = g_ascii_strtoll(tokens[1], NULL, 10);
-					if (i64 < G_MININT || i64 > G_MAXINT) {
-						g_snprintf(errbuff, sizeof(errbuff),
-								"Invalid parameter range");
-						return errbuff;
-					}
+					i64 = 0;
+					if (!oio_str_is_number(tokens[1], &i64))
+						ERR("Invalid integer parameter");
+					if (i64 < G_MININT || i64 > G_MAXINT)
+						ERR("Invalid parameter range");
 					*(opt->data.i) = i64;
 					return NULL;
 				case OT_UINT:
-					i64 = g_ascii_strtoll(tokens[1], NULL, 10);
-					if (i64 < 0 || i64 > G_MAXUINT) {
-						g_snprintf(errbuff, sizeof(errbuff),
-								"Invalid parameter range");
-						return errbuff;
-					}
+					i64 = 0;
+					if (!oio_str_is_number(tokens[1], &i64))
+						ERR("Invalid integer parameter");
+					if (i64 < 0 || i64 > G_MAXUINT)
+						ERR("Invalid parameter range");
 					*(opt->data.u) = i64;
 					return NULL;
 				case OT_INT64:
@@ -124,14 +122,12 @@ _set_opt(gchar **tokens)
 					*(opt->data.lst) = g_slist_prepend(*(opt->data.lst), g_strdup(tokens[1]));
 					return NULL;
 				default:
-					g_snprintf(errbuff, sizeof(errbuff), "Invalid option type [%d], possible corruption", opt->type);
-					return errbuff;
+					ERR("Invalid option type, possible corruption");
 			}
 		}
 	}
 
-	g_snprintf(errbuff, sizeof(errbuff), "Option '%s' not supported", tokens[0]);
-	return errbuff;
+	ERR("Option '%s' not supported", tokens[0]);
 }
 
 static const char*

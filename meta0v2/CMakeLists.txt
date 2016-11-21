@@ -22,8 +22,7 @@ target_link_libraries(meta0utils
 		${GLIB2_LIBRARIES})
 
 
-add_library(meta0v2 SHARED meta0_backend.h meta0_backend.c
-meta0_prefixassign.h meta0_prefixassign.c)
+add_library(meta0v2 SHARED meta0_backend.h meta0_backend.c)
 set_target_properties(meta0v2 PROPERTIES SOVERSION ${ABI_VERSION})
 target_link_libraries(meta0v2
 		meta0utils metautils gridcluster sqliterepo

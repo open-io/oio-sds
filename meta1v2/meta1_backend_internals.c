@@ -35,6 +35,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 int meta1_backend_log_level = 0;
 
+static gboolean
+m1b_check_ns_url (struct meta1_backend_s *m1, struct oio_url_s *url)
+{
+	if (!url || !m1 || !oio_url_has(url, OIOURL_NS))
+		return FALSE;
+	return !strcmp(m1->ns_name, oio_url_get (url, OIOURL_NS));
+}
+
 void
 __exec_cid(sqlite3 *handle, const gchar *sql, const container_id_t cid)
 {
@@ -102,7 +110,7 @@ _open_and_lock(struct meta1_backend_s *m1, struct oio_url_s *url,
 
 	gchar base[5];
 	const guint8 *cid = oio_url_get_id(url);
-	g_snprintf(base, sizeof(base), "%02X%02X", cid[0], cid[1]);
+	meta1_backend_basename(m1, cid, base, sizeof(base));
 
 	if (!meta1_prefixes_is_managed(m1->prefixes, cid))
 		return NEWERROR(CODE_RANGE_NOTFOUND, "prefix [%s] not managed", base);
@@ -113,7 +121,7 @@ _open_and_lock(struct meta1_backend_s *m1, struct oio_url_s *url,
 
 	if (err != NULL) {
 		if (!CODE_IS_REDIRECT(err->code))
-			g_prefix_error(&err, "Open/Lock error: ");  
+			g_prefix_error(&err, "Open/Lock error: ");
 		return err;
 	}
 
@@ -191,7 +199,7 @@ retry:
 
 	/* Run the results */
 	found = FALSE;
- 	gpa = result ? g_ptr_array_new() : NULL;
+	gpa = result ? g_ptr_array_new() : NULL;
 	do { if (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 		found = TRUE;
 		if (!gpa) continue;
@@ -238,21 +246,5 @@ void gpa_str_free(GPtrArray *gpa) {
 		return;
 	g_ptr_array_set_free_func (gpa, g_free);
 	g_ptr_array_free(gpa, TRUE);
-}
-
-gboolean
-m1b_check_ns (struct meta1_backend_s *m1, const char *ns)
-{
-	if (!m1 || !ns)
-		return FALSE;
-	return 0 == strcmp (m1->ns_name, ns);
-}
-
-gboolean
-m1b_check_ns_url (struct meta1_backend_s *m1, struct oio_url_s *url)
-{
-	if (!url)
-		return FALSE;
-	return m1b_check_ns (m1, oio_url_get (url, OIOURL_NS));
 }
 

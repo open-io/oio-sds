@@ -23,35 +23,40 @@ License along with this library.
 #include "./internals.h"
 #include "./meta0_utils.h"
 
-static void
-garray_free(GArray *a)
-{
-	if (!a)
-		return;
-	g_array_free(a, TRUE);
-}
+static void garray_free(void *a) { if (a) g_array_free(a, TRUE); }
 
 /* ------------------------------------------------------------------------- */
 
-guint16
-meta0_utils_bytes_to_prefix(const guint8 *bytes)
-{
+static guint16 meta0_utils_bytes_to_prefix(const guint8 *bytes) {
 	return *((guint16*)bytes);
 }
 
-GTree*
-meta0_utils_array_to_tree(GPtrArray *byprefix)
-{
-	GTree *result = NULL;
-	guint i, max;
+static GArray * _tree_ensure (GTree *tree, const gchar *url) {
+	GArray *prefixes = g_tree_lookup(tree, url);
+	if (!prefixes) {
+		prefixes = g_array_new(FALSE, FALSE, 2);
+		g_tree_replace(tree, g_strdup(url), prefixes);
+	}
+	return prefixes;
+}
 
+void meta0_utils_tree_add_url(GTree *byurl, const guint8 *b, const gchar *url) {
+	GArray *prefixes = _tree_ensure(byurl, url);
+	g_array_append_vals(prefixes, b, 1);
+}
+
+GTree* meta0_utils_tree_create(void) {
+	return g_tree_new_full(metautils_strcmp3, NULL, g_free, garray_free);
+}
+
+GTree* meta0_utils_array_to_tree(const GPtrArray *byprefix) {
 	EXTRA_ASSERT(byprefix != NULL);
-	result = meta0_utils_tree_create();
+	GTree *result = meta0_utils_tree_create();
 
-	for (i=0, max=byprefix->len; i<max ;i++) {
+	for (guint i = 0; i < byprefix->len ;i++) {
 		guint16 prefix = i;
 		gchar **v = byprefix->pdata[i];
-		if (!v)
+		if (unlikely(!v))
 			continue;
 		for (; *v ;v++)
 			meta0_utils_tree_add_url(result, (guint8*)(&prefix), *v);
@@ -60,150 +65,59 @@ meta0_utils_array_to_tree(GPtrArray *byprefix)
 	return result;
 }
 
-gboolean
-meta0_utils_check_url_from_base(gchar **url)
-{
-	gchar *colon;
-
-	if (!url)
-		return FALSE;
-	gchar *end = *url + strlen(*url);
-
-	if (!g_ascii_isdigit(*end)) {
-		/* Find the ':' separator */
-		for (colon = end; colon >= *url && *colon != ':'; colon--);
-		if (colon <= *url || colon >= (end-1) || *colon != ':') {
-			return FALSE;
-		}
-
-		colon++;
-		for (; colon <= end; colon++) {
-			if (!g_ascii_isdigit(*colon)) {
-				*colon = '\0';
-				break;
-			}
-		}
-	}
-
-	return TRUE;
-}
-
-GTree*
-meta0_utils_list_to_tree(GSList *list)
-{
-	GSList *l;
-	GTree *result = NULL;
-
+GTree* meta0_utils_list_to_tree(const GSList *list) {
 	EXTRA_ASSERT(list != NULL);
 
-	result = g_tree_new_full(
-			hashstr_quick_cmpdata, NULL,
-			g_free, (GDestroyNotify)garray_free);
-
-	for (l=list; l ;l=l->next) {
-		struct meta0_info_s *m0i;
-
-		if (!(m0i = l->data))
-			continue;
+	GTree *result = meta0_utils_tree_create();
+	for (const GSList *l=list; l ;l=l->next) {
+		const struct meta0_info_s *m0i = l->data;
+		if (unlikely(!m0i)) continue;
 
 		gchar url[STRLEN_ADDRINFO];
 		grid_addrinfo_to_string(&(m0i->addr), url, sizeof(url));
 
-		gsize len = m0i->prefixes_size;
-		len = len / 2;
-		GArray *pfx = g_array_new(FALSE, FALSE, sizeof(guint16));
-		g_array_append_vals(pfx, m0i->prefixes, len);
-
-		g_tree_replace(result, hashstr_create(url), pfx);
+		GArray *pfx = _tree_ensure(result, url);
+		g_array_append_vals(pfx, m0i->prefixes, m0i->prefixes_size / 2);
 	}
 
 	return result;
 }
 
-void
-meta0_utils_array_add(GPtrArray *gpa, const guint8 *bytes, const gchar *s)
-{
-	guint len;
-	gchar **v0, **v1;
-	guint16 prefix;
-
-	prefix = meta0_utils_bytes_to_prefix(bytes);
-
-	if (!(v0 = gpa->pdata[prefix])) {
-		len = 0;
-		v1 = g_malloc0(sizeof(gchar*) * 2);
-	} else {
-		len = g_strv_length(v0);
-		v1 = g_realloc(v0, sizeof(gchar*) * (len+2));
-	}
-	v1[len] = g_strdup(s);
-	v1[len+1] = NULL;
-	gpa->pdata[prefix] = v1;
+void meta0_utils_array_add(GPtrArray *byprefix,
+						   const guint8 *bytes, const gchar *s) {
+	const guint16 prefix = meta0_utils_bytes_to_prefix(bytes);
+	g_assert(byprefix->len > prefix);
+	if (!byprefix->pdata[prefix])
+		byprefix->pdata[prefix] = g_malloc0(4 * sizeof(gchar*));
+	OIO_STRV_APPEND_COPY(byprefix->pdata[prefix], s);
 }
 
-gboolean
-meta0_utils_array_replace(GPtrArray *gpa, const guint8 *bytes, const gchar *s, const gchar *d)
-{
-	guint i, len;
-	gchar **v0;
-	guint16 prefix;
-
-	prefix = meta0_utils_bytes_to_prefix(bytes);
-
-	if(!(v0 = gpa->pdata[prefix]))
-		return FALSE;
-
-	len = g_strv_length(v0);
-
-	for( i=0; i < len ; i++) {
-		if ( g_ascii_strncasecmp(v0[i],s, strlen(s))== 0 ) {
-			g_free(v0[i]);
-			v0[i]=g_strdup(d);
-			return TRUE;
-		}
-	}
-	return FALSE;
-}
-
-GPtrArray*
-meta0_utils_list_to_array(GSList *list)
-{
-	GSList *l;
-	GPtrArray *result = NULL;
-
+GPtrArray* meta0_utils_list_to_array(GSList *list) {
 	EXTRA_ASSERT(list != NULL);
+	GPtrArray *result = meta0_utils_array_create();
 
-	result = meta0_utils_array_create();
-
-	for (l=list; l ;l=l->next) {
-		guint16 *p, *max;
-		struct meta0_info_s *m0i;
-
-		if (!(m0i = l->data))
-			continue;
+	for (GSList *l=list; l ;l=l->next) {
+		const struct meta0_info_s *m0i = l->data;
+		if (unlikely(!m0i)) continue;
 
 		gchar url[STRLEN_ADDRINFO];
 		grid_addrinfo_to_string(&(m0i->addr), url, sizeof(url));
 
-		p = (guint16*) m0i->prefixes;
-		max = (guint16*) (m0i->prefixes + m0i->prefixes_size);
-		for (; p<max; p++)
-			meta0_utils_array_add(result, (guint8*)p, url);
+		const guint8 *max = m0i->prefixes + m0i->prefixes_size;
+		for (guint8 *p = m0i->prefixes; p<max; p+=2)
+			meta0_utils_array_add(result, p, url);
 	}
 
 	return result;
 }
 
-static gboolean
-_tree2list_traverser(gpointer k, gpointer v, gpointer u)
-{
-	struct meta0_info_s *m0i;
-	hashstr_t *hurl = k;
+static gboolean _tree2list_traverser(gpointer k, gpointer v, gpointer u) {
+	const gchar *url = k;
 	GArray *pfx = v;
 	GSList **pl = u;
 
-	m0i = g_malloc0(sizeof(*m0i));
-	grid_string_to_addrinfo(hashstr_str(hurl), &(m0i->addr));
+	struct meta0_info_s *m0i = g_malloc0(sizeof(*m0i));
+	grid_string_to_addrinfo(url, &(m0i->addr));
 	m0i->prefixes_size = 2 * pfx->len;
 	m0i->prefixes = g_memdup(pfx->data, m0i->prefixes_size);
 	*pl = g_slist_prepend(*pl, m0i);
@@ -211,165 +125,94 @@ _tree2list_traverser(gpointer k, gpointer v, gpointer u)
 	return FALSE;
 }
 
-GSList*
-meta0_utils_tree_to_list(GTree *byurl)
-{
-	GSList *result = NULL;
-
+GSList* meta0_utils_tree_to_list(GTree *byurl) {
 	EXTRA_ASSERT(byurl != NULL);
+	GSList *result = NULL;
 	g_tree_foreach(byurl, _tree2list_traverser, &result);
 	return result;
 }
 
-GSList*
-meta0_utils_array_to_list(GPtrArray *array)
-{
-	GTree *tree;
-	GSList *list;
-
-	EXTRA_ASSERT(array != NULL);
-
-	tree = meta0_utils_array_to_tree(array);
-	list = meta0_utils_tree_to_list(tree);
-	g_tree_destroy(tree);
-	return list;
+gchar ** meta0_utils_array_get_urlv(GPtrArray *byprefix, const guint8 *b) {
+	EXTRA_ASSERT(byprefix != NULL);
+	EXTRA_ASSERT(byprefix->len == CID_PREFIX_COUNT);
+	guint16 prefix = meta0_utils_bytes_to_prefix(b);
+	g_assert(byprefix->len > prefix);
+	return g_strdupv(byprefix->pdata[prefix]);
 }
 
-void
-meta0_utils_array_clean(GPtrArray *array)
-{
-	guint i;
+void meta0_utils_list_clean(GSList *list) {
+	g_slist_free_full(list, (GDestroyNotify)meta0_info_clean);
+}
 
+GPtrArray * meta0_utils_array_create(void) {
+	GPtrArray *array = g_ptr_array_sized_new(CID_PREFIX_COUNT);
+	g_ptr_array_set_size(array, CID_PREFIX_COUNT);
+	memset(array->pdata, 0, sizeof(void*) * array->len);
+	return array;
+}
+
+void meta0_utils_array_clean(GPtrArray *array) {
 	if (!array)
 		return;
-
-	for (i=0; i<array->len ;i++) {
-		gpointer p = array->pdata[i];
-		if (p)
-			g_strfreev((gchar**)p);
+	for (guint i=0; i<array->len ;i++) {
+		gchar **p = array->pdata[i];
+		if (p) g_strfreev(p);
 		array->pdata[i] = NULL;
 	}
 	g_ptr_array_free(array, TRUE);
 }
 
-gchar **
-meta0_utils_array_get_urlv(GPtrArray *array, const guint8 *bytes)
-{
-	gchar **v;
-
-	EXTRA_ASSERT(array != NULL);
-	EXTRA_ASSERT(array->len == CID_PREFIX_COUNT);
-	v = array->pdata[meta0_utils_bytes_to_prefix(bytes)];
-	return v ? g_strdupv(v) : NULL;
-}
-
-void
-meta0_utils_list_clean(GSList *list)
-{
-	g_slist_free_full(list, (GDestroyNotify)meta0_info_clean);
-}
-
-GPtrArray *
-meta0_utils_array_create(void)
-{
-	guint i;
-	GPtrArray *array;
-
-	array = g_ptr_array_sized_new(CID_PREFIX_COUNT);
-	for (i = 0; i < CID_PREFIX_COUNT; i++)
-		g_ptr_array_add(array, NULL);
-	return array;
-}
-
-GPtrArray*
-meta0_utils_array_dup(GPtrArray *in)
-{
-	register guint i, max;
-	gchar **v;
-	GPtrArray *result;
-
-	result = g_ptr_array_sized_new(in->len);
-	for (i = 0, max = in->len; i < max; i++) {
-		if (!(v = in->pdata[i])) {
-			g_ptr_array_add(result, NULL);
-		} else {
-			g_ptr_array_add(result, g_strdupv(v));
-		}
+GPtrArray* meta0_utils_array_dup(const GPtrArray *in) {
+	EXTRA_ASSERT(in != NULL);
+	GPtrArray *result = g_ptr_array_sized_new(in->len);
+	for (guint i = 0; i < in->len; i++) {
+		/* g_strdupv(NULL) returns NULL */
+		g_ptr_array_add(result, g_strdupv(in->pdata[i]));
 	}
+	EXTRA_ASSERT(in->len == result->len);
 	return result;
 }
 
-GTree*
-meta0_utils_tree_create(void)
-{
-	return g_tree_new_full(hashstr_quick_cmpdata, NULL,
-			g_free, (GDestroyNotify)garray_free);
-}
-
-GTree*
-meta0_utils_tree_add_url(GTree *tree, const guint8 *b, const gchar *url)
-{
-	GArray *prefixes;
-	hashstr_t *hu;
-
-	HASHSTR_ALLOCA(hu, url);
-	prefixes = g_tree_lookup(tree, hu);
-	if (!prefixes) {
-		prefixes = g_array_new(FALSE, FALSE, 2);
-		g_tree_replace(tree, hashstr_dup(hu), prefixes);
-	}
-	g_array_append_vals(prefixes, b, 1);
-
-	return tree;
+GSList* meta0_utils_array_to_list(GPtrArray *byprefix) {
+	EXTRA_ASSERT(byprefix != NULL);
+	GTree *byurl = meta0_utils_array_to_tree(byprefix);
+	GSList *list = meta0_utils_tree_to_list(byurl);
+	g_tree_destroy(byurl);
+	return list;
 }
 
 /* ------------------------------------------------------------------------- */
 
-void
-meta0_utils_array_meta1ref_clean(GPtrArray *array)
-{
-	guint i;
-
+void meta0_utils_array_meta1ref_clean(GPtrArray *array) {
 	if (!array)
 		return;
-
-	for (i = 0; i < array->len; i++) {
+	for (guint i = 0; i < array->len; i++) {
 		gpointer p = array->pdata[i];
-		if (p) {
+		if (likely(p != NULL))
 			g_free((gchar*)p);
-		}
 	}
 	g_ptr_array_free(array, TRUE);
 }
 
-GPtrArray*
-meta0_utils_array_meta1ref_dup(GPtrArray *in)
-{
-	register guint i, max;
-	gchar *v;
-	GPtrArray *result;
-
-	result = g_ptr_array_sized_new(in->len);
-	for (i = 0, max = in->len; i < max; i++) {
-		if (!(v = in->pdata[i]))
+GPtrArray* meta0_utils_array_meta1ref_dup(GPtrArray *in) {
+	GPtrArray *result = g_ptr_array_sized_new(in->len);
+	for (guint i = 0; i < in->len; i++) {
+		gchar *v = in->pdata[i];
+		if (unlikely(!v))
 			continue;
 		g_ptr_array_add(result, g_strdup(v));
 	}
 	return result;
 }
 
-gchar *
-meta0_utils_pack_meta1ref(gchar *addr, gchar *ref, gchar *nb)
-{
-	gchar *result = NULL;
-	result = g_strjoin("|", addr, ref, nb, NULL);
-	return result;
+gchar * meta0_utils_pack_meta1ref(gchar *addr, gchar *ref, gchar *nb) {
+	return g_strjoin("|", addr, ref, nb, NULL);
 }
 
 gboolean
-meta0_utils_unpack_meta1ref(const gchar *s_m1ref, gchar **addr, gchar **ref, gchar **nb)
+meta0_utils_unpack_meta1ref(const gchar *s_m1ref,
+		gchar **addr, gchar **ref, gchar **nb)
 {
-	(void) addr; (void) ref; (void) nb;
 	gchar** split_result = g_strsplit(s_m1ref, "|", -1);
 	if (g_strv_length(split_result) != 3)
 		return FALSE;
@@ -383,37 +226,49 @@ meta0_utils_unpack_meta1ref(const gchar *s_m1ref, gchar **addr, gchar **ref, gch
 
 }
 
-/* ------------------------------------------------------------------------- */
-static gboolean
-_is_usable_meta0(addr_info_t *m0addr, GSList *exclude) {
-	GSList *l = NULL;
-	for (l = exclude; l && l->data; l = l->next) {
-		if (addr_info_equal(l->data, m0addr))
-			return FALSE;
-	}
-	return TRUE;
-}
-
-addr_info_t *
-meta0_utils_getMeta0addr(gchar *namespace, GSList **m0_lst, GSList *exclude)
+/* The group is represented by the network order 16-bytes prefix,
+ * a.k.a. a simple cast from <guint8*> to <guint16> */
+static void
+_foreach_pfx(const guint16 grp_h16, const guint16 end_h16,
+		meta0_on_prefix on_prefix, gpointer u)
 {
-	addr_info_t *a = NULL;
-	if (*m0_lst == NULL) {
-		GError *err = conscience_get_services(namespace, NAME_SRVTYPE_META0,
-				FALSE, m0_lst);
-		if (err) {
-			GRID_WARN("Failed to get Meta0 addresses for namespace %s: (%d) %s",
-					namespace, err->code, err->message);
-			g_clear_error(&err);
-			return NULL;
-		}
+	const guint16 grp_n16 = g_htons(grp_h16);
+
+	for (guint16 idx_h16 = 0 ;;) {
+		const guint16 pfx_h16 = grp_h16 | idx_h16;
+		const guint16 pfx_n16 = g_htons(pfx_h16);
+		if (!on_prefix(u, (const guint8*)&grp_n16, (const guint8*)&pfx_n16))
+			return;
+		if (idx_h16++ == end_h16)
+			return;
 	}
-	GSList *m0;
-	for (m0 = *m0_lst; m0 && m0->data; m0 = m0->next) {
-		service_info_t *srv = m0->data;
-		if (_is_usable_meta0(&(srv->addr), exclude))
-			a = &(srv->addr);
-	}
-	return a;
 }
 
+static const guint16 masks_h16[] = { 0, 0xF000, 0xFF00, 0xFFF0, 0xFFFF };
+
+void
+meta0_utils_foreach_prefix_in_group(const guint8* bin, guint digits,
+		meta0_on_prefix on_prefix, gpointer u)
+{
+	g_assert(NULL != bin);
+	g_assert(digits <= 4);
+	const guint16 msk_h16 = masks_h16[digits];
+	const guint16 pfx_n16 = *(const guint16*)bin;
+	return _foreach_pfx(g_ntohs(pfx_n16) & msk_h16, ~msk_h16, on_prefix, u);
+}
+
+void
+meta0_utils_foreach_prefix(guint digits, meta0_on_prefix on_prefix,
+		gpointer u)
+{
+	g_assert(digits <= 4);
+	const guint16 msk_h16 = masks_h16[digits];
+	guint16 pfx_h16 = 0;
+	do {
+		const guint16 grp_h16 = pfx_h16 & msk_h16;
+		const guint16 grp_n16 = g_htons(grp_h16);
+		const guint16 pfx_n16 = g_htons(pfx_h16);
+		if (!on_prefix(u, (guint8*)&grp_n16, (guint8*)&pfx_n16))
+			return;
+	} while (++pfx_h16);
+}

@@ -25,6 +25,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # include <sqlx/sqlx_service.h>
 # include <events/oio_events_queue.h>
 
+#ifndef OIO_META1_DIGITS_KEY
+#define OIO_META1_DIGITS_KEY "meta1_digits"
+#endif
+
+#ifndef OIO_META1_DIGITS_DEFAULT
+#define OIO_META1_DIGITS_DEFAULT 4
+#endif
+
 #define M1_SQLITE_GERROR(db,RC) NEWERROR((RC), "(%s) %s", \
 		sqlite_strerror(RC), (db)?sqlite3_errmsg(db):"unkown error")
 
@@ -38,6 +46,7 @@ struct meta1_backend_s
 	struct meta1_prefixes_set_s *prefixes;
 	struct oio_events_queue_s *notifier;
 
+	guint nb_digits;
 	gchar ns_name[LIMIT_LENGTH_NSNAME];
 };
 
@@ -56,10 +65,6 @@ GError* _open_and_lock(struct meta1_backend_s *m1, struct oio_url_s *url,
 		enum m1v2_open_type_e how, struct sqlx_sqlite3_s **handle);
 
 void gpa_str_free(GPtrArray *gpa);
-
-gboolean m1b_check_ns (struct meta1_backend_s *m1, const char *ns);
-
-gboolean m1b_check_ns_url (struct meta1_backend_s *m1, struct oio_url_s *url);
 
 GError * __set_container_properties(struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url, gchar **props);

@@ -30,6 +30,9 @@ parser.add_option("-f", "--file", action="store", type="string", dest="PATH",
 parser.add_option("-n", "--ns", action="store_true", dest="FETCH_NS",
                   help="Fetch the namespace",
                   default=False)
+parser.add_option("-v", "--value", action="store", dest="VALUE",
+                  help="Fetch the given value",
+                  default=False)
 parser.add_option("-t", "--type", action="append", dest="FETCH_SRVTYPES",
                   help="Fetch a type of service")
 parser.add_option("-1", "--first", action="store_true", dest="FIRST",
@@ -44,6 +47,8 @@ with open(options.PATH, 'r') as f:
     conf = yaml.load(f)
     if options.FETCH_NS:
         print conf['namespace']
+    elif options.VALUE:
+        print conf[options.VALUE]
     elif options.FETCH_SRVTYPES:
         out = []
         for t in options.FETCH_SRVTYPES:

@@ -20,9 +20,11 @@ class DirectoryCmd(Command):
     def get_prefix_mapping(self, parsed_args):
         meta0_client = self.app.client_manager.admin.meta0
         conscience_client = self.app.client_manager.admin.cluster
-        return PrefixMapping(
-            meta0_client, conscience_client, replicas=parsed_args.replicas,
-            logger=self.log)
+        digits = self.app.client_manager.get_meta1_digits()
+        return PrefixMapping(meta0_client, conscience_client,
+                             replicas=parsed_args.replicas,
+                             digits=digits,
+                             logger=self.log)
 
 
 class DirectoryInit(DirectoryCmd):
@@ -48,7 +50,7 @@ class DirectoryInit(DirectoryCmd):
         # 'less_prefixes' strategy.
         self.log.info("Computing meta1 prefix mapping...")
         mapping.bootstrap()
-        self.log.info("Rebalancing...")
+        self.log.info("Equilibrating...")
         mapping.rebalance()
         self.log.info("Saving...")
         mapping.force()

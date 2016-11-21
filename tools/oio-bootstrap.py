@@ -610,7 +610,7 @@ inherit_env=1
 #env.PATH=${PATH}:${HOME}/.local/bin:${CODEDIR}/bin:/bin:/usr/bin:/usr/local/bin
 env.LD_LIBRARY_PATH=${HOME}/.local/@LD_LIBDIR@:${LIBDIR}
 
-#limit.core_size=-1
+limit.core_size=-1
 #limit.max_files=2048
 #limit.stack_size=256
 
@@ -693,8 +693,8 @@ ecd=${IP}:${PORT_ECD}
 event-agent=beanstalk://127.0.0.1:11300
 #event-agent=ipc://${RUNDIR}/event-agent.sock
 conscience=${CS_ALL_PUB}
-
 udp_allowed=${UDP_ALLOWED}
+meta1_digits=${M1_DIGITS}
 """
 
 template_event_agent = """
@@ -895,6 +895,7 @@ ALLOW_REDIS = 'redis'
 OPENSUSE = 'opensuse'
 ZOOKEEPER = 'zookeeper'
 MONITOR_PERIOD = 'monitor_period'
+M1_DIGITS = 'meta1_digits'
 M1_REPLICAS = 'directory_replicas'
 M2_REPLICAS = 'container_replicas'
 M2_VERSIONS = 'container_versions'
@@ -931,6 +932,7 @@ defaults = {
     'REPLI_M2': 1,
     'REPLI_M1': 1,
     'COMPRESSION': "off",
+    M1_DIGITS: 4,
     UDP_ALLOWED: "off"}
 
 # XXX When /usr/sbin/httpd is present we suspect a Redhat/Centos/Fedora
@@ -997,6 +999,7 @@ def generate(options):
     versioning = 1
     stgpol = "SINGLE"
 
+    meta1_digits = getint(options.get(M1_DIGITS), defaults[M1_DIGITS])
     meta1_replicas = getint(options.get(M1_REPLICAS), defaults['REPLI_M1'])
     meta2_replicas = getint(options.get(M2_REPLICAS), defaults['REPLI_M2'])
     sqlx_replicas = getint(options.get(SQLX_REPLICAS), defaults['REPLI_SQLX'])
@@ -1043,6 +1046,7 @@ def generate(options):
                STGPOL=stgpol,
                PORT_PROXYD=port_proxy,
                PORT_ECD=port_ecd,
+               M1_DIGITS=meta1_digits,
                M2_REPLICAS=meta2_replicas,
                M2_DISTANCE=str(1),
                SQLX_REPLICAS=sqlx_replicas,
@@ -1340,6 +1344,7 @@ def generate(options):
     final_conf["proxy"] = final_services['proxy'][0]['addr']
     final_conf[M2_REPLICAS] = meta2_replicas
     final_conf[M1_REPLICAS] = meta1_replicas
+    final_conf[M1_DIGITS] = meta1_digits
     with open('{CFGDIR}/test.yml'.format(**ENV), 'w+') as f:
         f.write(yaml.dump(final_conf))
     return final_conf
@@ -1349,6 +1354,7 @@ def dump_config(conf):
     print 'PROXY=%s' % conf['proxy']
     print 'REPLI_CONTAINER=%s' % conf[M2_REPLICAS]
     print 'REPLI_DIRECTORY=%s' % conf[M1_REPLICAS]
+    print 'M1_DIGITS=%s' % conf[M1_DIGITS]
 
 
 def main():

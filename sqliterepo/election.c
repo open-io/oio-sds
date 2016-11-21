@@ -401,13 +401,9 @@ nodev_to_int64v(const struct String_vector *sv, const char *prefix)
 				stripe ++;
 				if (strlen(stripe) != 10)
 					continue;
-				gchar *end = NULL;
-				gint64 i64 = g_ascii_strtoll(stripe, &end, 10);
-				if (end && *end)
-					continue; // trailing chars
-				if ((i64 == G_MAXINT64 || i64 == G_MININT64) && errno == ERANGE)
-					continue; // {over,under}flow
-				g_array_append_vals(array, &i64, 1);
+				gint64 i64 = 0;
+				if (oio_str_is_number(stripe, &i64))
+					g_array_append_vals(array, &i64, 1);
 			}
 		}
 	}

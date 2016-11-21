@@ -26,18 +26,11 @@ License along with this library.
 
 #define CID_PREFIX_COUNT 65536
 
-/**
- * @addtogroup meta0v2_utils
- * @{
- */
-
-guint16 meta0_utils_bytes_to_prefix(const guint8 *bytes);
-
-GTree* meta0_utils_array_to_tree(GPtrArray *array);
+GTree* meta0_utils_array_to_tree(const GPtrArray *array);
 
 GSList* meta0_utils_tree_to_list(GTree *tree);
 
-GTree* meta0_utils_list_to_tree(GSList *list);
+GTree* meta0_utils_list_to_tree(const GSList *list);
 
 GPtrArray* meta0_utils_list_to_array(GSList *list);
 
@@ -45,7 +38,7 @@ GSList* meta0_utils_array_to_list(GPtrArray *array);
 
 gchar ** meta0_utils_array_get_urlv(GPtrArray *array, const guint8 *bytes);
 
-GPtrArray* meta0_utils_array_dup(GPtrArray *in);
+GPtrArray* meta0_utils_array_dup(const GPtrArray *in);
 
 void meta0_utils_array_clean(GPtrArray *array);
 
@@ -53,12 +46,9 @@ void meta0_utils_list_clean(GSList *list);
 
 void meta0_utils_array_add(GPtrArray *gpa, const guint8 *b, const gchar *s);
 
-gboolean meta0_utils_array_replace(GPtrArray *gpa, const guint8 *b,
-		const gchar *s, const gchar *d);
-
 GPtrArray * meta0_utils_array_create(void);
 
-GTree* meta0_utils_tree_add_url(GTree *tree, const guint8 *b, const gchar *url);
+void meta0_utils_tree_add_url(GTree *tree, const guint8 *b, const gchar *url);
 
 GTree* meta0_utils_tree_create(void);
 
@@ -71,11 +61,16 @@ gchar * meta0_utils_pack_meta1ref(gchar *addr, gchar *ref, gchar *nb);
 gboolean meta0_utils_unpack_meta1ref(const gchar *s_m1ref, gchar **addr,
 		gchar **ref, gchar **nb);
 
-gboolean meta0_utils_check_url_from_base(gchar **url);
+/* @return TRUE to continue */
+typedef gboolean (*meta0_on_prefix)(gpointer u,
+		const guint8 *group, const guint8 *prefix);
 
-addr_info_t * meta0_utils_getMeta0addr(gchar *ns, GSList **m0List,
-		GSList *exclude );
+/* iterate on all the prefixes in a given coalescence group */
+void meta0_utils_foreach_prefix_in_group(const guint8* bin, guint digits,
+		meta0_on_prefix on_prefix, gpointer u);
 
-/** @} */
+/* iterate on all the prefixes */
+void meta0_utils_foreach_prefix(guint digits,
+		meta0_on_prefix on_prefix, gpointer u);
 
 #endif /*OIO_SDS__meta0v2__meta0_utils_h*/
