@@ -379,7 +379,7 @@ _access_log(struct req_ctx_s *r, gint status, gsize out_len, const gchar *tail)
 		g_string_append (gstr, tail);
 	}
 
-	g_log("access", GRID_LOGLVL_INFO, "%s", gstr->str);
+	INCOMING("%s", gstr->str);
 	g_string_free(gstr, TRUE);
 }
 

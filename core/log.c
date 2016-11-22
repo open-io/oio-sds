@@ -29,12 +29,13 @@ License along with this library.
 #include "oiolog.h"
 #include "oioext.h"
 
+int oio_log_outgoing = 0;
+
 int oio_log_level_default = 0x7F;
 
 int oio_log_level = 0x7F;
 
-int oio_log_flags = LOG_FLAG_TRIM_DOMAIN
-		| LOG_FLAG_PURIFY | LOG_FLAG_COLUMNIZE;
+int oio_log_flags = LOG_FLAG_TRIM_DOMAIN | LOG_FLAG_PURIFY;
 
 guint16
 oio_log_thread_id(GThread *thread)
@@ -128,7 +129,16 @@ glvl_to_lvl(GLogLevelFlags lvl)
 static int
 get_facility(const gchar *dom)
 {
-	return (dom && *dom == 'a' && !strcmp(dom, "access")) ? LOG_LOCAL1 : 0;
+	if (!dom)
+		return 0;
+	switch (*dom) {
+		case 'a':
+			return strcmp(dom, "access") ? LOG_LOCAL0 : LOG_LOCAL1;
+		case 'o':
+			return strcmp(dom, "out") ? LOG_LOCAL0 : LOG_LOCAL2;
+		default:
+			return LOG_LOCAL0;
+	}
 }
 
 #define REAL_LEVEL(L)   (guint32)((L) >> G_LOG_LEVEL_USER_SHIFT)
@@ -183,24 +193,30 @@ oio_log_syslog(const gchar *log_domain, GLogLevelFlags log_level,
 
 	g_string_append_printf(gstr, "%d %04X", getpid(), oio_log_current_thread_id());
 
-	if (LOG_LOCAL1 == get_facility(log_domain)) {
-		g_string_append(gstr, " access ");
-		g_string_append(gstr, glvl_to_str(log_level));
-	}
-	else {
-		if (!log_domain || !*log_domain)
-			log_domain = "-";
-		g_string_append(gstr, " log ");
-		g_string_append(gstr, glvl_to_str(log_level));
-		g_string_append_c(gstr, ' ');
-		g_string_append(gstr, log_domain);
+	const int facility = get_facility(log_domain);
+	switch (facility) {
+		case LOG_LOCAL1:
+			g_string_append(gstr, " access ");
+			g_string_append(gstr, glvl_to_str(log_level));
+			break;
+		case LOG_LOCAL2:
+			g_string_append(gstr, " out ");
+			g_string_append(gstr, glvl_to_str(log_level));
+			break;
+		default:
+			g_string_append(gstr, " log ");
+			g_string_append(gstr, glvl_to_str(log_level));
+			g_string_append_c(gstr, ' ');
+			if (!log_domain || !*log_domain)
+				log_domain = "-";
+			g_string_append(gstr, log_domain);
 	}
 
 	g_string_append_c(gstr, ' ');
 
 	_append_message(gstr, message);
 
-	syslog(get_facility(log_domain)|glvl_to_lvl(log_level), "%s", gstr->str);
+	syslog(facility|glvl_to_lvl(log_level), "%s", gstr->str);
 	g_string_free(gstr, TRUE);
 }
 
@@ -208,7 +224,6 @@ static void
 _logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 		const gchar *message, gpointer user_data UNUSED)
 {
-	static guint longest_prefix = 38;
 	GString *gstr = g_string_sized_new(256);
 
 	if (oio_log_flags & LOG_FLAG_PRETTYTIME) {
@@ -228,39 +243,38 @@ _logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 	if (!log_domain || !*log_domain)
 		log_domain = "-";
 
-	if (LOG_LOCAL1 == get_facility(log_domain)) {
-		g_string_append_printf(gstr, "acc %s ", glvl_to_str(log_level));
-	} else {
-		g_string_append_printf(gstr, "log %s ", glvl_to_str(log_level));
-
-		/* print the domain */
-		if (!(oio_log_flags & LOG_FLAG_TRIM_DOMAIN))
-			g_string_append(gstr, log_domain);
-		else {
-			const gchar *p = log_domain;
-			while (p && *p) {
-				g_string_append_c(gstr, *p);
-				p = strchr(p, '.');
-				if (p) {
-					g_string_append_c(gstr, '.');
-					p ++;
+	const int facility = get_facility(log_domain);
+	switch (facility) {
+		case LOG_LOCAL1:
+			g_string_append_len(gstr, "acc ", 4);
+			g_string_append(gstr, glvl_to_str(log_level));
+			break;
+		case LOG_LOCAL2:
+			g_string_append_len(gstr, "out ", 4);
+			g_string_append(gstr, glvl_to_str(log_level));
+			break;
+		default:
+			g_string_append_len(gstr, "log ", 4);
+			g_string_append(gstr, glvl_to_str(log_level));
+			/* print the domain */
+			if (!(oio_log_flags & LOG_FLAG_TRIM_DOMAIN))
+				g_string_append(gstr, log_domain);
+			else {
+				const gchar *p = log_domain;
+				while (p && *p) {
+					g_string_append_c(gstr, *p);
+					p = strchr(p, '.');
+					if (p) {
+						g_string_append_c(gstr, '.');
+						p ++;
+					}
 				}
 			}
-		}
 	}
 
-	/* prefix done, print a separator */
-	if (oio_log_flags & LOG_FLAG_COLUMNIZE) {
-		longest_prefix = MAX(gstr->len+1,longest_prefix);
-		do {
-			g_string_append_c(gstr, ' ');
-		} while (gstr->len < longest_prefix);
-	}
-	else
-		g_string_append_c(gstr, ' ');
-
-	/* now append the message */
+	g_string_append_c(gstr, ' ');
 	_append_message(gstr, message);
+
 	g_string_append_c(gstr, '\n');
 
 	if (oio_log_flags & LOG_FLAG_PURIFY)

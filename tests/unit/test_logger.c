@@ -89,10 +89,6 @@ main_action(void)
 	g_printerr("\n*** PURIFY disabled\n");
 	oio_log_flags &= ~LOG_FLAG_PURIFY;
 	test_round();
-
-	g_printerr("\n*** COLUMNIZE disabled\n");
-	oio_log_flags &= ~LOG_FLAG_COLUMNIZE;
-	test_round();
 }
 
 static struct grid_main_callbacks cb =

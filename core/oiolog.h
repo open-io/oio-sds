@@ -78,6 +78,14 @@ extern "C" {
 # define GRID_WARN(FMT,...)    g_log(G_LOG_DOMAIN, GRID_LOGLVL_WARN, FMT, ##__VA_ARGS__)
 # define GRID_ERROR(FMT,...)   g_log(G_LOG_DOMAIN, GRID_LOGLVL_ERROR, FMT, ##__VA_ARGS__)
 
+# define INCOMING(FMT,...) g_log("access", GRID_LOGLVL_INFO, FMT, ##__VA_ARGS__)
+
+# define OUTGOING(FMT,...) do { \
+	if (oio_log_outgoing) { \
+		g_log("out", GRID_LOGLVL_INFO, FMT, ##__VA_ARGS__); \
+	} \
+} while (0)
+
 /* old macros */
 # ifdef HAVE_EXTRA_DEBUG
 #  define TRACE2(FMT,...) g_log(G_LOG_DOMAIN, GRID_LOGLVL_TRACE2, FMT, ##__VA_ARGS__)
@@ -108,8 +116,9 @@ extern "C" {
 
 #define LOG_FLAG_TRIM_DOMAIN 0x01
 #define LOG_FLAG_PURIFY 0x02
-#define LOG_FLAG_COLUMNIZE 0x04
 #define LOG_FLAG_PRETTYTIME 0x04
+
+extern int oio_log_outgoing;
 
 /** Cruising debug level.
  * Should not be altered by the application after the program has started. */
