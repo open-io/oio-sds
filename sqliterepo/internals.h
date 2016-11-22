@@ -84,6 +84,18 @@ License along with this library.
 #  define SQLX_DELAY_PING_FINAL 15 * G_TIME_SPAN_MINUTE
 # endif
 
+# ifndef  SQLX_DELAY_EXPIRE_FAILED
+#  define SQLX_DELAY_EXPIRE_FAILED 5 * G_TIME_SPAN_MINUTE
+# endif
+
+# ifndef  SQLX_DELAY_EXPIRE_FINAL
+#  define SQLX_DELAY_EXPIRE_FINAL 5 * G_TIME_SPAN_MINUTE
+# endif
+
+# ifndef  SQLX_DELAY_EXPIRE_NONE
+#  define SQLX_DELAY_EXPIRE_NONE 5 * G_TIME_SPAN_MINUTE
+# endif
+
 /* Size of buffer for reading dump file */
 #define SQLX_DUMP_BUFFER_SIZE 32768
 

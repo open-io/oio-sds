@@ -84,7 +84,7 @@ class RdirClient(Client):
             if srv['type'] == 'rdir':
                 host = srv['host']
         if not host:
-            raise ClientException("No rdir service found")
+            raise ClientException("No rdir service found in %s" % resp)
         return host
 
     def _get_rdir_addr(self, volume_id, create=False, nocache=False):
