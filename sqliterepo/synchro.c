@@ -289,7 +289,7 @@ _acreate (struct sqlx_sync_s *ss, const char *path, const char *v,
 	gchar *p = _realpath(ss, path);
 	int rc = zoo_acreate(ss->zh, p, v, vlen, &ZOO_OPEN_ACL_UNSAFE,
 			flags, completion, data);
-	GRID_TRACE2("SYNC create(%p) = %d", p, rc);
+	OUTGOING("ZK_CREATE %s %d", p, rc);
 	g_free(p);
 	return rc;
 }
@@ -302,7 +302,7 @@ _adelete (struct sqlx_sync_s *ss, const char *path, int version,
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
 	gchar *p = _realpath(ss, path);
 	int rc = zoo_adelete(ss->zh, p, version, completion, data);
-	GRID_TRACE2("SYNC delete(%s) = %d", p, rc);
+	OUTGOING("ZK_DEL %s %d", p, rc);
 	g_free(p);
 	return rc;
 }
@@ -316,7 +316,7 @@ _awexists (struct sqlx_sync_s *ss, const char *path,
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
 	gchar *p = _realpath(ss, path);
 	int rc = zoo_awexists(ss->zh, p, watcher, watcherCtx, completion, data);
-	GRID_TRACE2("SYNC exists(%s) = %d", p, rc);
+	GRID_TRACE2("ZK_EXISTS %s %d", p, rc);
 	g_free(p);
 	return rc;
 }
@@ -330,7 +330,7 @@ _awget (struct sqlx_sync_s *ss, const char *path,
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
 	gchar *p = _realpath(ss, path);
 	int rc = zoo_awget(ss->zh, p, watcher, watcherCtx, completion, data);
-	GRID_TRACE2("SYNC get(%s) = %d", p, rc);
+	OUTGOING("ZK_GET %s %d", p, rc);
 	g_free(p);
 	return rc;
 }
@@ -345,7 +345,7 @@ _awget_children (struct sqlx_sync_s *ss, const char *path,
 	gchar *p = _realpath(ss, path);
 	int rc = zoo_awget_children(ss->zh, p, watcher, watcherCtx, completion,
 			data);
-	GRID_TRACE2("SYNC children(%s) = %d", p, rc);
+	OUTGOING("ZK_CHILDREN %s %d", p, rc);
 	g_free(p);
 	return rc;
 }
@@ -359,7 +359,7 @@ _awget_siblings (struct sqlx_sync_s *ss, const char *path,
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
 	gchar *p = _realdirname(ss, path);
 	int rc = zoo_awget_children(ss->zh, p, watcher, watcherCtx, completion, data);
-	GRID_TRACE("SYNC children(%s) = %d", p, rc);
+	OUTGOING("ZK_CHILDREN %s %d", p, rc);
 	g_free(p);
 	return rc;
 }
@@ -462,7 +462,7 @@ _direct_use (struct sqlx_peering_s *self,
 				GRID_DEBUG("USE(%s,%s.%s) failed: (%d) %s",
 						url, n->base, n->type, errsav, strerror(errsav));
 			} else {
-				GRID_TRACE("USE(%s,%s.%s) sent", url, n->base, n->type);
+				OUTGOING("DB_USE udp %s %s.%s", url, n->base, n->type);
 			}
 		}
 	} else {
@@ -482,6 +482,7 @@ _direct_use (struct sqlx_peering_s *self,
 				event_client_free(mc);
 			} else {
 				gridd_client_pool_defer(p->pool, mc);
+				OUTGOING("DB_USE tcp %s %s.%s", url, n->base, n->type);
 			}
 		}
 	}
@@ -548,6 +549,7 @@ _direct_pipefrom (struct sqlx_peering_s *self,
 			event_client_free(&mc->ec);
 		} else {
 			gridd_client_pool_defer(p->pool, &mc->ec);
+			OUTGOING("DB_PIPEFROM tcp %s %s.%s", url, n->base, n->type);
 		}
 	}
 }
@@ -651,6 +653,7 @@ _direct_getvers (struct sqlx_peering_s *self,
 			event_client_free(&mc->ec);
 		} else {
 			gridd_client_pool_defer(p->pool, &mc->ec);
+			OUTGOING("DB_GETVERS tcp %s %s.%s", url, n->base, n->type);
 		}
 	}
 }

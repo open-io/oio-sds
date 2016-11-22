@@ -239,9 +239,16 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 		udp_allowed = oio_str_parse_bool(str_udp_allowed, FALSE);
 		GRID_NOTICE("UDP %s", udp_allowed ? "allowed" : "forbidden");
 		g_free(str_udp_allowed);
-	} else {
-		GRID_INFO("UDP %s", "disabled by default");
 	}
+
+	/* Check if the logging of outgoing requests has been activated */
+	gchar *str_log_out = oio_cfg_get_value(ss->ns_name, OIO_CFG_LOG_OUTGOING);
+	if (str_log_out) {
+		oio_log_outgoing = oio_str_parse_bool(str_log_out, FALSE);
+		g_free(str_log_out);
+	}
+	if (oio_log_outgoing)
+		GRID_NOTICE("Outgoing requests log [ON]");
 
 	return TRUE;
 }
@@ -597,6 +604,7 @@ sqlx_service_configure(int argc, char **argv)
 	return _configure_limits(&SRV)
 	    && _init_configless_structures(&SRV)
 	    && _configure_with_arguments(&SRV, argc, argv)
+		/* NS now known! */
 		&& _configure_synchronism(&SRV)
 	    && _configure_peering(&SRV)
 	    && _configure_replication(&SRV)
