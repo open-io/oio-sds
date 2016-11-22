@@ -239,7 +239,7 @@ network_client_log_access(struct log_item_s *item)
 		g_string_append(gstr, ensure(r->subject));
 	}
 
-	g_log("access", GRID_LOGLVL_INFO, "%s", gstr->str);
+	INCOMING("%s", gstr->str);
 	g_string_free(gstr, TRUE);
 }
 

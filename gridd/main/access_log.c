@@ -123,7 +123,7 @@ reply_context_log_access (struct reply_context_s *ctx, const gchar *fmt, ...)
 
 	g_string_append_printf(gs, " %s", ctx->header.msg ? ctx->header.msg : "OK");
 
-	g_log("access", GRID_LOGLVL_INFO, "%s", gs->str);
+	INCOMING("%s", gs->str);
 	g_string_free(gs, TRUE);
 }
 

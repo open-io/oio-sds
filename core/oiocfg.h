@@ -319,6 +319,7 @@ extern "C" {
 # define OIO_CFG_SWIFT        "swift"
 # define OIO_CFG_ECD          "ecd"
 
+# define OIO_CFG_LOG_OUTGOING  "log_outgoing"
 # define OIO_CFG_UDP_ALLOWED  "udp_allowed"
 # define OIO_CFG_ZK_SHUFFLED  "zk_shuffled"
 

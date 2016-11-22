@@ -694,6 +694,7 @@ event-agent=beanstalk://127.0.0.1:11300
 #event-agent=ipc://${RUNDIR}/event-agent.sock
 conscience=${CS_ALL_PUB}
 
+log_outgoing=yes
 udp_allowed=${UDP_ALLOWED}
 meta1_digits=${M1_DIGITS}
 zk_shuffled=${ZK_SHUFFLED}
