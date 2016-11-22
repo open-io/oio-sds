@@ -350,11 +350,13 @@ _configure_synchronism(struct sqlx_service_s *ss)
 		return TRUE;
 	}
 
-	ss->sync = sqlx_sync_create(ss->zk_url);
+	gboolean shuffle = oio_cfg_get_bool(ss->ns_name, OIO_CFG_ZK_SHUFFLED, TRUE);
+	GRID_INFO("ZK cnx string shuffling [%s]", shuffle ? "ON" : "OFF");
+	ss->sync = sqlx_sync_create(ss->zk_url, shuffle);
 	if (!ss->sync)
 		return FALSE;
 
-	gchar *realprefix = g_strdup_printf("/hc/ns/%s/%s", SRV.ns_name,
+	gchar *realprefix = g_strdup_printf("/hc/ns/%s/%s", ss->ns_name,
 			ss->service_config->zk_prefix);
 	sqlx_sync_set_prefix(ss->sync, realprefix);
 	g_free(realprefix);
@@ -469,7 +471,7 @@ _configure_events_queue (struct sqlx_service_s *ss)
 		return TRUE;
 	}
 
-	gchar *url =  gridcluster_get_eventagent (SRV.ns_name);
+	gchar *url =  oio_cfg_get_eventagent (SRV.ns_name);
 	STRING_STACKIFY (url);
 
 	if (!url) {

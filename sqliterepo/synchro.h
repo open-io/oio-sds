@@ -102,7 +102,7 @@ struct abstract_sqlx_sync_s
 
 /** Initiates a sqlx synchronizer based on ZooKeeper.
  * @param url the Zookeeper connection string */
-struct sqlx_sync_s * sqlx_sync_create(const char *url);
+struct sqlx_sync_s * sqlx_sync_create(const char *url, gboolean shuffle);
 
 void sqlx_sync_set_prefix(struct sqlx_sync_s *ss, const gchar *prefix);
 

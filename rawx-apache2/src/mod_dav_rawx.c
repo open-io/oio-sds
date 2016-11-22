@@ -358,7 +358,7 @@ rawx_hook_child_init(apr_pool_t *pchild, server_rec *s)
 
 	conf->cleanup = _cleanup_child;
 
-	gchar *event_agent_addr = gridcluster_get_eventagent(conf->ns_name);
+	gchar *event_agent_addr = oio_cfg_get_eventagent(conf->ns_name);
 	GError *err = rawx_event_init(event_agent_addr);
 	if (NULL != err) {
 		DAV_ERROR_POOL(pchild, 0, "Failed to initialize event context: (%d) %s",

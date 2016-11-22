@@ -693,8 +693,10 @@ ecd=${IP}:${PORT_ECD}
 event-agent=beanstalk://127.0.0.1:11300
 #event-agent=ipc://${RUNDIR}/event-agent.sock
 conscience=${CS_ALL_PUB}
+
 udp_allowed=${UDP_ALLOWED}
 meta1_digits=${M1_DIGITS}
+zk_shuffled=${ZK_SHUFFLED}
 """
 
 template_event_agent = """
@@ -916,6 +918,7 @@ MASTER_VALUE="master"
 SLAVE_VALUE="slave"
 STANDALONE_VALUE="standalone"
 UDP_ALLOWED="udp_allowed"
+ZK_SHUFFLED="zk_shuffled"
 
 defaults = {
     'NS': 'OPENIO',
@@ -1019,6 +1022,7 @@ def generate(options):
     worm = '1' if is_wormed else '0'
     state = options.get("state", None)
     udp_allowed = str(options.get(UDP_ALLOWED, "off")).lower()
+    zk_shuffled = str(options.get(ZK_SHUFFLED, "off")).lower()
 
     if state not in [MASTER_VALUE, SLAVE_VALUE, STANDALONE_VALUE]:
         state = STANDALONE_VALUE
@@ -1062,7 +1066,8 @@ def generate(options):
                META_HEADER=META_HEADER,
                STATE=state,
                WORM=worm,
-               UDP_ALLOWED=udp_allowed)
+               UDP_ALLOWED=udp_allowed,
+               ZK_SHUFFLED=zk_shuffled)
 
     def merge_env(add):
         env = dict(ENV)
@@ -1343,6 +1348,7 @@ def generate(options):
     final_conf["account"] = 'test_account'
     final_conf["sds_path"] = SDSDIR
     final_conf[UDP_ALLOWED] = udp_allowed
+    final_conf[ZK_SHUFFLED] = zk_shuffled
     final_conf["proxy"] = final_services['proxy'][0]['addr']
     final_conf[M2_REPLICAS] = meta2_replicas
     final_conf[M1_REPLICAS] = meta1_replicas
