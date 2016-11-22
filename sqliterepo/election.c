@@ -191,7 +191,6 @@ struct election_member_s
 	guint16 concurrent_GETVERS;
 	guint16 errors_GETVERS;
 	guint16 pending_GETVERS;
-	guint16 sent_GETVERS;
 
 	guint log_index : 8;
 	enum election_step_e step : 8;
@@ -794,12 +793,11 @@ member_reset_master(struct election_member_s *m)
 static void
 member_reset_pending(struct election_member_s *m)
 {
-	m->sent_GETVERS = 0;
+	m->reqid_GETVERS = 0;
 	m->concurrent_GETVERS = 0;
 	m->errors_GETVERS = 0;
-	m->reqid_GETVERS = 0;
-	m->reqid_PIPEFROM = 0;
 	m->pending_GETVERS = 0;
+	m->reqid_PIPEFROM = 0;
 	m->pending_PIPEFROM = 0;
 }
 
@@ -1769,11 +1767,12 @@ defer_GETVERS(struct election_member_s *member)
 		return;
 	}
 
-	if (member->sent_GETVERS > 0)
-		member_debug(__FUNCTION__ , "GETVERS req lost", member);
+	if (member->pending_GETVERS > 0)
+		member_debug(__FUNCTION__ , "GETVERS lost", member);
 
 	const guint pending = peers ? g_strv_length(peers) : 0;
-	member->sent_GETVERS = pending;
+	member->concurrent_GETVERS = 0;
+	member->errors_GETVERS = 0;
 	member->pending_GETVERS = pending;
 	member->reqid_GETVERS = manager_next_reqid(member->manager);
 

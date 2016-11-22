@@ -680,12 +680,12 @@ template_local_header = """
 template_local_ns = """
 [${NS}]
 ${NOZK}# ZK URL, at least used by zk-bootstrap.py
-${NOZK}zookeeper=${IP}:2181
+${NOZK}zookeeper=${ZK_CNXSTRING}
 ${NOZK}# Alternate ZK endpoints for specific services
-${NOZK}zookeeper.meta0=${IP}:2181
-${NOZK}zookeeper.meta1=${IP}:2181
-${NOZK}zookeeper.meta2=${IP}:2181
-${NOZK}zookeeper.sqlx=${IP}:2181
+${NOZK}zookeeper.meta0=${ZK_CNXSTRING}
+${NOZK}zookeeper.meta1=${ZK_CNXSTRING}
+${NOZK}zookeeper.meta2=${ZK_CNXSTRING}
+${NOZK}zookeeper.sqlx= ${ZK_CNXSTRING}
 
 #proxy-local=${RUNDIR}/${NS}-proxy.sock
 proxy=${IP}:${PORT_PROXYD}
@@ -693,8 +693,10 @@ ecd=${IP}:${PORT_ECD}
 event-agent=beanstalk://127.0.0.1:11300
 #event-agent=ipc://${RUNDIR}/event-agent.sock
 conscience=${CS_ALL_PUB}
+
 udp_allowed=${UDP_ALLOWED}
 meta1_digits=${M1_DIGITS}
+zk_shuffled=${ZK_SHUFFLED}
 """
 
 template_event_agent = """
@@ -916,10 +918,12 @@ MASTER_VALUE="master"
 SLAVE_VALUE="slave"
 STANDALONE_VALUE="standalone"
 UDP_ALLOWED="udp_allowed"
+ZK_SHUFFLED="zk_shuffled"
 
 defaults = {
     'NS': 'OPENIO',
     'IP': '127.0.0.1',
+    'ZK': '127.0.0.1:2181',
     'NB_CS': 1,
     'NB_M0': 1,
     'NB_M1': 1,
@@ -1018,11 +1022,13 @@ def generate(options):
     worm = '1' if is_wormed else '0'
     state = options.get("state", None)
     udp_allowed = str(options.get(UDP_ALLOWED, "off")).lower()
+    zk_shuffled = str(options.get(ZK_SHUFFLED, "off")).lower()
 
     if state not in [MASTER_VALUE, SLAVE_VALUE, STANDALONE_VALUE]:
         state = STANDALONE_VALUE
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(IP=ip,
+               ZK_CNXSTRING=options.get('ZK'),
                NS=ns,
                HOME=HOME,
                EXE_PREFIX=EXE_PREFIX,
@@ -1060,7 +1066,8 @@ def generate(options):
                META_HEADER=META_HEADER,
                STATE=state,
                WORM=worm,
-               UDP_ALLOWED=udp_allowed)
+               UDP_ALLOWED=udp_allowed,
+               ZK_SHUFFLED=zk_shuffled)
 
     def merge_env(add):
         env = dict(ENV)
@@ -1341,6 +1348,7 @@ def generate(options):
     final_conf["account"] = 'test_account'
     final_conf["sds_path"] = SDSDIR
     final_conf[UDP_ALLOWED] = udp_allowed
+    final_conf[ZK_SHUFFLED] = zk_shuffled
     final_conf["proxy"] = final_services['proxy'][0]['addr']
     final_conf[M2_REPLICAS] = meta2_replicas
     final_conf[M1_REPLICAS] = meta1_replicas
@@ -1367,7 +1375,6 @@ def main():
     parser.add_argument("-d", "--dump", action="store_true", default=False,
                         dest='dump_config', help="Dump results")
 
-    options = parser.parse_args()
     opts = {}
     opts[ZOOKEEPER] = False
     opts['conscience'] = {SVC_NB: None}
@@ -1378,6 +1385,7 @@ def main():
     opts['rawx'] = {SVC_NB: None}
     opts['rdir'] = {SVC_NB: None}
 
+    options = parser.parse_args()
     if options.config:
         for path in options.config:
             with open(path, 'r') as f:
@@ -1385,6 +1393,7 @@ def main():
                 if data:
                     opts.update(data)
 
+    opts['ZK'] = os.environ.get('ZK', defaults['ZK'])
     opts['ns'] = options.namespace
     opts['ip'] = options.ip
     final_conf = generate(opts)

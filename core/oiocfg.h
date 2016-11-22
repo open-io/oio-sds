@@ -1,7 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, original work as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -321,14 +320,19 @@ extern "C" {
 # define OIO_CFG_ECD          "ecd"
 
 # define OIO_CFG_UDP_ALLOWED  "udp_allowed"
+# define OIO_CFG_ZK_SHUFFLED  "zk_shuffled"
 
-# define gridcluster_get_eventagent(ns) oio_cfg_get_value((ns), OIO_CFG_ACCOUNTAGENT)
+# define oio_cfg_get_eventagent(ns)     oio_cfg_get_value((ns), OIO_CFG_ACCOUNTAGENT)
 # define oio_cfg_get_proxy(ns)          oio_cfg_get_value((ns), OIO_CFG_PROXY)
 # define oio_cfg_get_proxylocal(ns)     oio_cfg_get_value((ns), OIO_CFG_PROXYLOCAL)
 # define oio_cfg_get_ecd(ns)            oio_cfg_get_value((ns), OIO_CFG_ECD)
 
 /** @return NULL if the NS was not found or the key not defined for the NS */
 gchar* oio_cfg_get_value (const gchar *ns, const gchar *what);
+
+/** Return the parsed boolean of the value at key ns/what. If not set or not
+ * successfully parsed, def is returned. */
+gboolean oio_cfg_get_bool (const char *ns, const char *what, gboolean def);
 
 /** List all the configuration variables locally set.  */
 GHashTable* oio_cfg_parse (void);

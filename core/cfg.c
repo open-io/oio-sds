@@ -165,6 +165,17 @@ oio_cfg_get_value(const gchar *ns, const gchar *what)
 	return value;
 }
 
+gboolean
+oio_cfg_get_bool (const char *ns, const char *what, gboolean def)
+{
+	gchar *v = oio_cfg_get_value(ns, what);
+	if (!v)
+		return def;
+	gboolean rc = oio_str_parse_bool(v, def);
+	g_free(v);
+	return rc;
+}
+
 gchar *
 oio_cfg_get_proxy_conscience (const char *ns)
 {

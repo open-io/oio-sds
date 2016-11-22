@@ -93,12 +93,30 @@ static struct sqlx_sync_vtable_s VTABLE =
 };
 
 struct sqlx_sync_s*
-sqlx_sync_create(const char *url)
+sqlx_sync_create(const char *url, gboolean shuffle)
 {
+	gchar **tokens = g_strsplit(url, ",", -1);
+	if (!tokens) {
+		GRID_ERROR("Invalid ZK connection string");
+		return NULL;
+	}
+	for (gchar **t=tokens; *t ;++t) {
+		if (!oio_str_is_set(*t)) {
+			GRID_ERROR("Invalid ZK connection string: empty tokens");
+			g_strfreev(tokens);
+			return NULL;
+		}
+	}
+
 	struct sqlx_sync_s *ss = g_malloc0(sizeof(struct sqlx_sync_s));
 	ss->vtable = &VTABLE;
-	ss->zk_url = g_strdup(url);
 	ss->zk_prefix = g_strdup("/NOTSET");
+
+	if (shuffle)
+		oio_ext_array_shuffle((void**)tokens, g_strv_length(tokens));
+	ss->zk_url = g_strjoinv(",", tokens);
+	g_strfreev(tokens);
+
 	return ss;
 }
 
