@@ -198,7 +198,13 @@ struct election_member_s
 	unsigned char requested_USE : 1;
 	unsigned char requested_PIPEFROM : 1;
 	unsigned char requested_EXIT : 1;
+
+	unsigned char delayed_NODE_LEFT : 1;
+	unsigned char delayed_MASTER_CHANGE : 1;
+
+	/* PIPEFROM being requested */
 	unsigned char pending_PIPEFROM : 1;
+	/* Monitor already set in Zookeeper */
 	unsigned char pending_watch : 1;
 
 	struct logged_event_s log[EVENTLOG_SIZE];
@@ -1808,6 +1814,9 @@ become_failed (struct election_member_s *member)
 static void
 become_leaver(struct election_member_s *member)
 {
+	member->delayed_NODE_LEFT = 0;
+	member->delayed_MASTER_CHANGE = 0;
+
 	member_reset_master(member);
 	member_reset_pending(member);
 	member_set_status(member, STEP_LEAVING);
@@ -1819,6 +1828,9 @@ become_leaver(struct election_member_s *member)
 static void
 become_candidate(struct election_member_s *member)
 {
+	member->delayed_NODE_LEFT = 0;
+	member->delayed_MASTER_CHANGE = 0;
+
 	member_reset_master(member);
 	member_set_status(member, STEP_CANDOK);
 	if (ZOK != step_ListGroup_start(member))
@@ -1873,20 +1885,29 @@ member_finish_PRELOST(struct election_member_s *member)
 	if (member_has_action(member))
 		return;
 
-	int errors = member->errors_GETVERS;
+	const int errors = member->errors_GETVERS;
+	const int concurrent = member->concurrent_GETVERS;
+	const int node_left = member->delayed_NODE_LEFT;
+	const int master_change = member->delayed_MASTER_CHANGE;
+
 	member->errors_GETVERS = 0;
-	int concurrent = member->concurrent_GETVERS;
 	member->concurrent_GETVERS = 0;
+	member->delayed_NODE_LEFT = 0;
+	member->delayed_MASTER_CHANGE = 0;
+
+	if (node_left)
+		return become_leaver(member);
+	if (master_change)
+		return become_candidate(member);
 
 	// FIXME compare to the sizeof of the quorum
-	if (errors > 1) {
-		become_leaver(member);
-	} else if (concurrent > 1) {
-		member_ask_RESYNC_if_not_pending(member);
-	} else {
-		if (member->master_url)
-			member_set_status(member, STEP_LOST);
-	}
+	if (errors > 1)
+		return become_leaver(member);
+	if (concurrent > 1)
+		return member_ask_RESYNC_if_not_pending(member);
+
+	if (member->master_url)
+		member_set_status(member, STEP_LOST);
 }
 
 static void
@@ -1895,20 +1916,25 @@ member_finish_PRELEAD(struct election_member_s *member)
 	if (member_has_action(member))
 		return;
 
-	int errors = member->errors_GETVERS;
+	const int errors = member->errors_GETVERS;
+	const int concurrent = member->concurrent_GETVERS;
+	const int node_left = member->delayed_NODE_LEFT;
+
 	member->errors_GETVERS = 0;
-	int concurrent = member->concurrent_GETVERS;
 	member->concurrent_GETVERS = 0;
+	member->delayed_NODE_LEFT = 0;
+	member->delayed_MASTER_CHANGE = 0;
+
+	if (node_left)
+		return become_leaver(member);
 
 	// FIXME compare to the sizeof of the quorum
-	if (errors > 1) {
-		become_leaver(member);
-	} else if (concurrent > 1) {
-		// No quorum, so become a LOSER and resync from the master.
-		become_leaver(member);
-	} else {
-		member_set_status(member, STEP_LEADER);
-	}
+	if (errors > 1)
+		return become_leaver(member);
+	if (concurrent > 1)
+		return become_leaver(member);
+
+	return member_set_status(member, STEP_LEADER);
 }
 
 static enum sqlx_action_e
@@ -2123,7 +2149,6 @@ _member_react (struct election_member_s *member,
 			EXTRA_ASSERT(member->myid != -1);
 			EXTRA_ASSERT(member->master_id != -1);
 			EXTRA_ASSERT(member->master_id != member->myid);
-			//EXTRA_ASSERT(member->master_url == NULL);
 			switch (evt) {
 				case EVT_NONE:
 					return;
@@ -2139,13 +2164,19 @@ _member_react (struct election_member_s *member,
 				case EVT_LIST_OK:
 				case EVT_LIST_KO:
 					member_warn("ABNORMAL", member);
+					return;
+
 				case EVT_MASTER_KO:
 				case EVT_MASTER_EMPTY:
-					/* TODO(jfs): prevent an election storm, and insert a delay
-					 * before the next retry */
+					return become_leaver(member);
+
 				case EVT_MASTER_CHANGE:
+					member->delayed_MASTER_CHANGE = 1;
+					return;
+
 				case EVT_NODE_LEFT:
-					return become_candidate(member);
+					member->delayed_NODE_LEFT = 1;
+					return;
 
 				case EVT_EXITING:
 					return become_leaver(member);
@@ -2183,8 +2214,8 @@ _member_react (struct election_member_s *member,
 					return;
 
 				case EVT_RESYNC_DONE:
-					if (!member_has_action(member) && member->master_url)
-						member_set_status(member, STEP_LOST);
+					if (member->master_url)
+						member_finish_PRELOST(member);
 					return;
 			}
 			return;
@@ -2193,6 +2224,7 @@ _member_react (struct election_member_s *member,
 			EXTRA_ASSERT(member->myid != -1);
 			EXTRA_ASSERT(member->master_id == member->myid);
 			EXTRA_ASSERT(member->master_url == NULL);
+			EXTRA_ASSERT(!BOOL(member->delayed_MASTER_CHANGE));
 			switch (evt) {
 				case EVT_NONE:
 					return;
@@ -2201,9 +2233,9 @@ _member_react (struct election_member_s *member,
 					return become_leaver(member);
 				case EVT_DISCONNECTED:
 					return;
+
 				case EVT_CREATE_OK:
 				case EVT_CREATE_KO:
-				case EVT_NODE_LEFT:
 				case EVT_MASTER_OK:
 				case EVT_MASTER_KO:
 				case EVT_LIST_OK:
@@ -2211,9 +2243,15 @@ _member_react (struct election_member_s *member,
 				case EVT_LEAVE_OK:
 				case EVT_LEAVE_KO:
 				case EVT_MASTER_EMPTY:
-				case EVT_MASTER_CHANGE:
 				case EVT_RESYNC_DONE:
-					return become_candidate(member);
+				case EVT_MASTER_CHANGE:
+					/* these operations shoudl not happen while in PRELEAD */
+					member_warn("ABNORMAL", member);
+					return;
+
+				case EVT_NODE_LEFT:
+					member->delayed_NODE_LEFT = 1;
+					return;
 
 				case EVT_GETVERS_OUTDATED:
 					if (member_concerned_by_GETVERS(member, evt_arg))
