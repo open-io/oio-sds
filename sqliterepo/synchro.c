@@ -194,7 +194,7 @@ _zk_init_env (void)
 //------------------------------------------------------------------------------
 
 static void
-zk_main_watch(zhandle_t *zh UNUSED, int type, int state, const char *path,
+zk_main_watch(zhandle_t *zh UNUSED, int type, int state, const char *path UNUSED,
 		void *watcherCtx)
 {
 	metautils_ignore_signals();
