@@ -23,6 +23,14 @@ License along with this library.
 #include <metautils/lib/metautils.h>
 #include <server/network_server.h>
 
+#ifndef OIO_SERVER_UDP_QUEUE_MAXLEN
+#define OIO_SERVER_UDP_QUEUE_MAXLEN 8192
+#endif
+
+#ifndef OIO_SERVER_UDP_QUEUE_MAXAGE
+#define OIO_SERVER_UDP_QUEUE_MAXAGE COMMON_CNX_TIMEOUT
+#endif
+
 enum {
 	NETSERVER_THROUGHPUT = 0x0001,
 	NETSERVER_LATENCY    = 0x0002,
