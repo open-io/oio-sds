@@ -39,6 +39,7 @@ struct endpoint_s
 {
 	unsigned int magic;
 	int fd;
+	int fd_udp;
 	int port_real;
 	int port_cfg;
 	guint32 flags;
@@ -53,9 +54,11 @@ struct network_server_s
 
 	struct network_client_s *first;
 
-	GThread *thread_events;
+	GThread *thread_udp;
+	GThread *thread_tcp;
 	GThreadPool *pool_stats;
-	GThreadPool *pool_workers;
+	GThreadPool *pool_tcp;
+	GThreadPool *pool_udp;
 
 	GAsyncQueue *queue_monitor; /* from the workers to the events_thread */
 
@@ -85,10 +88,11 @@ struct network_server_s
 	GQuark gq_counter_cnx_accept;
 	GQuark gq_counter_cnx_close;
 
-	int wakeup[2];
+	int eventfd;
 	int epollfd;
 	volatile gboolean flag_continue;
 	gboolean abort_allowed;
+	gboolean udp_allowed;
 };
 
 enum

@@ -25,6 +25,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <sqlite3.h>
 
+#include <core/oiocfg.h>
 #include <metautils/lib/metautils.h>
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/election.h>
@@ -33,6 +34,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "./meta1_prefixes.h"
 #include "./meta1_backend.h"
 #include "./meta1_backend_internals.h"
+
+const char * meta1_backend_basename(struct meta1_backend_s *m1,
+		const guint8 *bin, gchar *dst, gsize len)
+{
+	oio_str_bin2hex(bin, 2, dst, len);
+
+	guint nb_digits = MIN(m1->nb_digits, 4);
+	g_assert(m1->nb_digits == nb_digits);
+	for (guint i=nb_digits; i<4 ;i++)
+		dst[i] = '0';
+
+	return dst;
+}
 
 GError *
 meta1_backend_init(struct meta1_backend_s **out, const char *ns,
@@ -44,6 +58,20 @@ meta1_backend_init(struct meta1_backend_s **out, const char *ns,
 	if (!*ns || strlen(ns) >= LIMIT_LENGTH_NSNAME)
 		return BADREQ("Invalid namespace name");
 
+	guint digits = OIO_META1_DIGITS_DEFAULT;
+	gchar *str_digits = oio_cfg_get_value(ns, OIO_META1_DIGITS_KEY);
+	if (str_digits) {
+		STRING_STACKIFY(str_digits);
+		gint64 i64 = 0;
+		if (!oio_str_is_number(str_digits, &i64))
+			return ERRPTF("Misconfigured '%s' in system configuration: %s",
+					OIO_META1_DIGITS_KEY, "not a valid integer");
+		if (i64 < 0 || i64 > 4)
+			return ERRPTF("Misconfigured '%s' in system configuration: %s",
+					OIO_META1_DIGITS_KEY, "value out of range [0,4]");
+		digits = i64;
+	}
+
 	struct meta1_backend_s *m1 = g_malloc0(sizeof(*m1));
 	g_strlcpy (m1->ns_name, ns, sizeof(m1->ns_name));
 	m1->type = NAME_SRVTYPE_META1;
@@ -51,6 +79,8 @@ meta1_backend_init(struct meta1_backend_s **out, const char *ns,
 	m1->repo = repo;
 	m1->prefixes = meta1_prefixes_init();
 	m1->svcupdate = service_update_policies_create();
+	m1->nb_digits = digits;
+
 	*out = m1;
 	return NULL;
 }
@@ -87,39 +117,5 @@ meta1_backend_get_prefixes(struct meta1_backend_s *m1)
 {
 	EXTRA_ASSERT(m1 != NULL);
 	return m1 ? m1->prefixes : NULL;
-}
-
-GError*
-meta1_backend_open_base(struct meta1_backend_s *m1, struct oio_url_s *url,
-		enum m1v2_open_type_e how, struct sqlx_sqlite3_s **sq3)
-{
-	return _open_and_lock(m1, url, how, sq3);
-}
-
-gboolean
-meta1_backend_base_already_created(struct meta1_backend_s *m1, const guint8 *prefix)
-{
-	gchar base[5] = {0,0,0,0,0};
-	GError *err = NULL;
-
-	g_snprintf(base, sizeof(base), "%02X%02X", prefix[0], prefix[1]);
-	struct sqlx_name_s n = {.base=base, .type=NAME_SRVTYPE_META1, .ns=m1->ns_name};
-	err = sqlx_repository_has_base(m1->repo, &n);
-	if (!err)
-		return TRUE;
-	g_clear_error(&err);
-	return FALSE;
-}
-
-gchar *
-meta1_backend_get_ns_name(const struct meta1_backend_s *m1)
-{
-	return g_strdup(m1->ns_name);
-}
-
-const gchar*
-meta1_backend_get_local_addr(struct meta1_backend_s *m1)
-{
-	return sqlx_repository_get_local_addr(m1->repo);
 }
 

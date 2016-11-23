@@ -153,24 +153,14 @@ GError* meta1_backend_get_container_properties(struct meta1_backend_s *m1,
 GError *meta1_backend_services_all(struct meta1_backend_s *m1,
 		struct oio_url_s *url, gchar ***result);
 
-/* Ugly quirk */
-GError* meta1_backend_open_base(struct meta1_backend_s *m1,
-		struct oio_url_s *url, enum m1v2_open_type_e how,
-		struct sqlx_sqlite3_s **sq3);
-
-/* Returns whether the base associated to prefix was already created. */
-gboolean meta1_backend_base_already_created(struct meta1_backend_s *m1,
-		const guint8 *prefix);
-
 typedef void (*m1b_ref_hook) (gpointer p, const gchar *ns, const gchar *ref);
-
-gchar* meta1_backend_get_ns_name(const struct meta1_backend_s *m1);
-
-/* Get the ip:port the current process is listening to. */
-const gchar* meta1_backend_get_local_addr(struct meta1_backend_s *m1);
 
 /* Send a notification (if enabled) with the services linked to a container. */
 GError *meta1_backend_notify_services(struct meta1_backend_s *m1,
 		struct oio_url_s *url);
+
+/* @param bin must be non-NULL and point to a 2-bytes buffer (at least) */
+const char * meta1_backend_basename(struct meta1_backend_s *m1,
+		const guint8 *bin, gchar *dst, gsize len);
 
 #endif /*OIO_SDS__meta1v2__meta1_backend_h*/

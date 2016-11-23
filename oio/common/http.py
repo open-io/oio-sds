@@ -123,6 +123,7 @@ def http_connect(host, method, path, headers=None, query_string=None):
     conn.endheaders()
     return conn
 
+
 _token = r'[^()<>@,;:\"/\[\]?={}\x00-\x20\x7f]+'
 _ext_pattern = re.compile(
     r'(?:\s*;\s*(' + _token + r')\s*(?:=\s*(' + _token +

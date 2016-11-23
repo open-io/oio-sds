@@ -24,6 +24,7 @@ License along with this library.
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/epoll.h>
+#include <sys/eventfd.h>
 #include <sys/resource.h>
 
 #include <metautils/lib/metautils.h>
@@ -41,8 +42,7 @@ struct gridd_client_pool_s
 
 	int fdmon;
 	/* notifications */
-	int fd_in; /*!< consumes the notifications here */
-	int fd_out; /*!< send anything to notify */
+	int efd; /*!< event file descriptor */
 
 	int active_clients_size;
 	int active_max;
@@ -51,6 +51,10 @@ struct gridd_client_pool_s
 	/* if set to any non-zero value, new requests are not started */
 	int closed;
 };
+
+#ifdef HAVE_ENBUG
+gint32 oio_sqlx_request_failure_threshold = 50;
+#endif
 
 static void _destroy (struct gridd_client_pool_s *p);
 
@@ -74,20 +78,18 @@ static struct gridd_client_pool_vtable_s VTABLE =
 struct gridd_client_pool_s *
 gridd_client_pool_create(void)
 {
-	int fdmon, fd[2];
+	int fdmon, efd;
 	struct gridd_client_pool_s *pool;
 
-	if (0 != pipe(fd)) {
-		GRID_WARN("pipe() error: (%d) %s", errno, strerror(errno));
-		metautils_pclose(&(fd[0]));
-		metautils_pclose(&(fd[1]));
+	if ((efd = eventfd(0, EFD_NONBLOCK)) < 0) {
+		GRID_WARN("eventfd() error: (%d) %s", errno, strerror(errno));
+		metautils_pclose(&efd);
 		return NULL;
 	}
 
-	if (0 > (fdmon = epoll_create(64))) {
+	if ((fdmon = epoll_create(64)) < 0) {
 		GRID_WARN("epoll_create error: (%d) %s", errno, strerror(errno));
-		metautils_pclose(&(fd[0]));
-		metautils_pclose(&(fd[1]));
+		metautils_pclose(&efd);
 		return NULL;
 	}
 
@@ -105,21 +107,14 @@ gridd_client_pool_create(void)
 	pool->active_clients = g_malloc0(pool->active_clients_size
 			* sizeof(struct event_client_s*));
 
-	pool->fd_in = fd[0];
-	fd[0] = -1;
-	metautils_syscall_shutdown(pool->fd_in, SHUT_WR);
-	sock_set_non_blocking(pool->fd_in, TRUE);
-
-	pool->fd_out = fd[1];
-	fd[1] = -1;
-	metautils_syscall_shutdown(pool->fd_out, SHUT_RD);
-	sock_set_non_blocking(pool->fd_out, TRUE);
+	pool->efd = efd;
+	efd = -1;
 
 	/* then monitors at least the notifications pipe's output */
 	struct epoll_event ev = {0};
 	ev.events = EPOLLIN;
-	ev.data.fd = pool->fd_in;
-	if (0 > epoll_ctl(pool->fdmon, EPOLL_CTL_ADD, pool->fd_in, &ev)) {
+	ev.data.fd = pool->efd;
+	if (epoll_ctl(pool->fdmon, EPOLL_CTL_ADD, pool->efd, &ev) < 0) {
 		GRID_ERROR("epoll error: (%d) %s", errno, strerror(errno));
 		gridd_client_pool_destroy(pool);
 		return NULL;
@@ -132,10 +127,20 @@ gridd_client_pool_create(void)
 /* ------------------------------------------------------------------------- */
 
 static void
-fd_consume_input(int fd)
+eventfd_consume(int fd)
 {
-	guint8 data[256];
-	(void) metautils_syscall_read(fd, data, sizeof(data));
+	guint64 event_count = 0u;
+	int rc = metautils_syscall_read(fd, &event_count, 8);
+	if (rc < 0 && errno != EAGAIN) {  // EAGAIN -> counter is 0
+		GRID_WARN("Failed to read deferred requests counter: (%d) %s",
+				errno, strerror(errno));
+	} else if (event_count > 100u) {
+		GRID_NOTICE("Possible election storm, %"G_GUINT64_FORMAT
+				" new deferred requests to execute", event_count);
+	} else if (GRID_DEBUG_ENABLED()) {
+		GRID_DEBUG("%"G_GUINT64_FORMAT" new deferred requests to execute",
+				event_count);
+	}
 }
 
 static int
@@ -171,7 +176,7 @@ event_client_monitor(struct gridd_client_pool_s *pool, struct event_client_s *mc
 	return 1;
 }
 
-static void
+void
 event_client_free(struct event_client_s *ec)
 {
 	if (!ec)
@@ -192,10 +197,8 @@ _destroy(struct gridd_client_pool_s *pool)
 
 	pool->closed = ~0;
 
-	if (pool->fd_in >= 0)
-		metautils_pclose(&(pool->fd_in));
-	if (pool->fd_out >= 0)
-		metautils_pclose(&(pool->fd_out));
+	if (pool->efd >= 0)
+		metautils_pclose(&(pool->efd));
 	if (pool->fdmon >= 0)
 		metautils_pclose(&(pool->fdmon));
 
@@ -270,33 +273,60 @@ _manage_timeouts(struct gridd_client_pool_s *pool)
 static void
 _manage_requests(struct gridd_client_pool_s *pool)
 {
-	struct event_client_s *ec;
+	struct event_client_s *ec = NULL;
+	guint count_dropped = 0;
 
 	EXTRA_ASSERT(pool != NULL);
 
+	gint64 start = oio_ext_monotonic_time();
 	while (pool->active_count < pool->active_max) {
 		ec = g_async_queue_try_pop(pool->pending_clients);
 		if (NULL == ec)
-			return;
+			break;
 		EXTRA_ASSERT(ec->client != NULL);
+
+#ifdef HAVE_ENBUG
+		if (oio_sqlx_request_failure_threshold >= oio_ext_rand_int_range(1,100))
+			ec->deadline_start = 0;
+#endif
+		if (start > ec->deadline_start) {
+			count_dropped ++;
+			gridd_client_fail(ec->client,
+					NEWERROR(ERRCODE_CONN_TIMEOUT, "Queued for too long"));
+			event_client_free(ec);
+			continue;
+		}
 
 		if (!gridd_client_start(ec->client)) {
 			GError *err = gridd_client_error(ec->client);
 			if (NULL != err) {
-				GRID_WARN("STARTUP Client fd=%d [%s] : (%d) %s",
+				GRID_WARN("STARTUP Client fd=%d [%s]: (%d) %s",
 						gridd_client_fd(ec->client), gridd_client_url(ec->client),
 						err->code, err->message);
 				g_clear_error(&err);
-			}
-			else {
-				GRID_WARN("STARTUP Client fd=%d [%s] : already started",
+			} else {
+				GRID_WARN("STARTUP Client fd=%d [%s]: already started",
 						gridd_client_fd(ec->client), gridd_client_url(ec->client));
 				EXTRA_ASSERT(err != NULL);
 			}
 			event_client_free(ec);
-		}
-		else if (!event_client_monitor(pool, ec))
+		} else if (!event_client_monitor(pool, ec)) {
 			event_client_free(ec);
+		}
+	}
+
+	if (count_dropped > 0)
+		GRID_WARN("%u syncing RPC dropped (queued for too long)", count_dropped);
+
+	gint64 elapsed = oio_ext_monotonic_time() - start;
+	if (elapsed > 5 * G_TIME_SPAN_SECOND) {
+		GRID_INFO("Client pool request management took %"G_GINT64_FORMAT"s, "
+				"this is a bit too much",
+				elapsed / G_TIME_SPAN_SECOND);
+		gint qlen = g_async_queue_length(pool->pending_clients);
+		if (qlen > pool->active_max)
+			GRID_WARN("Client pool still has %d pending requests, "
+					"are we under an election storm?", qlen);
 	}
 }
 
@@ -317,7 +347,9 @@ _manage_one_event(struct gridd_client_pool_s *pool, int fd, int evt)
 		event_client_free(ec);
 	}
 	else {
+		/* TODO check here how long it took with that election */
 		gridd_client_react(ec->client);
+
 		if (gridd_client_finished(ec->client))
 			event_client_free(ec);
 		else if (!event_client_monitor(pool, ec))
@@ -329,9 +361,9 @@ static void
 _manage_all_events(struct gridd_client_pool_s *pool,
 		struct epoll_event *ev, int maxevt)
 {
-	for (int i=0; i < maxevt ;++i) {
-		if (ev[i].data.fd == pool->fd_in)
-			fd_consume_input(pool->fd_in);
+	for (int i = 0; i < maxevt; ++i) {
+		if (ev[i].data.fd == pool->efd)
+			eventfd_consume(pool->efd);
 		else
 			_manage_one_event(pool, ev[i].data.fd, ev[i].events);
 	}
@@ -364,27 +396,33 @@ _defer(struct gridd_client_pool_s *pool, struct event_client_s *ev)
 	EXTRA_ASSERT(pool->vtable == &VTABLE);
 	EXTRA_ASSERT(ev != NULL);
 	EXTRA_ASSERT(pool->pending_clients != NULL);
-	EXTRA_ASSERT(pool->fd_out >= 0);
+	EXTRA_ASSERT(pool->efd >= 0);
 
 	if (pool->closed) {
 		GRID_INFO("Request dropped");
 		event_client_free(ev);
-	}
-	else {
-		guint8 c = 0;
+	} else {
+		gint64 now = oio_ext_monotonic_time();
+		ev->deadline_start = now + 4 * G_TIME_SPAN_SECOND;
+		/* eventfd requires 8-byte integer */
+		guint64 c = 1u;
 		g_async_queue_push(pool->pending_clients, ev);
-		(void) metautils_syscall_write(pool->fd_out, &c, 1);
+		int rc = metautils_syscall_write(pool->efd, &c, 8);
+		if (unlikely(rc < 0)) {
+			GRID_WARN("Failed to signal new deferred requests: (%d) %s",
+					errno, strerror(errno));
+		}
 	}
 }
 
-/* Bias introduced : 1 for epoll, 2 for the pipe */
+/* Bias introduced: 1 for epoll, 1 for the eventfd */
 
 static guint
 _get_max(struct gridd_client_pool_s *pool)
 {
 	EXTRA_ASSERT(pool != NULL);
 	EXTRA_ASSERT(pool->vtable == &VTABLE);
-	return pool->active_max + 3;
+	return pool->active_max + 2;
 }
 
 static void
@@ -392,7 +430,7 @@ _set_max(struct gridd_client_pool_s *pool, guint max)
 {
 	EXTRA_ASSERT(pool != NULL);
 	EXTRA_ASSERT(pool->vtable == &VTABLE);
-	EXTRA_ASSERT(max > 3);
-	pool->active_max = max - 3;
+	EXTRA_ASSERT(max > 2);
+	pool->active_max = max - 2;
 }
 

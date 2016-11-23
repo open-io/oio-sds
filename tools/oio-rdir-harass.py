@@ -71,6 +71,7 @@ class Harasser(object):
             print "Cleaning..."
             self.harass_del(len(self.sent))
 
+
 if __name__ == '__main__':
     if len(sys.argv) > 3:
         HARASS = Harasser(sys.argv[1], int(sys.argv[2]), int(sys.argv[3]))

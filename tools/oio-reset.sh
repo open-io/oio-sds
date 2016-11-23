@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# @EXE_PREFIX@-reset.sh, a CLI tool of OpenIO
-# Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+# oio-reset.sh, a CLI tool of OpenIO SDS
+# Copyright (C) 2015-2016 OpenIO, original work as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -168,7 +168,7 @@ timestamp
 
 openio \
 	--oio-ns "$NS" -v directory bootstrap \
-	--replicas $(${PREFIX}-test-config.py -c -t meta1)
+	--replicas $(${PREFIX}-test-config.py -v directory_replicas)
 
 timestamp
 # unlock all services

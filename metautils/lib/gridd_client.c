@@ -187,16 +187,17 @@ _client_reset_target(struct gridd_client_s *client)
 }
 
 static void
-_client_reset_error(struct gridd_client_s *client)
+_client_replace_error(struct gridd_client_s *client, GError *e)
 {
 	if (client->error)
 		g_clear_error(&(client->error));
+	client->error = e;
 }
 
 static GError *
 _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 {
-	GError *err;
+	GError *err = NULL;
 	guint status = 0;
 	gchar *message = NULL;
 
@@ -237,8 +238,21 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 		_client_reset_cnx(client);
 		client->sent_bytes = 0;
 
-		if ((++ client->nb_redirects) > 3)
+		++ client->nb_redirects;
+
+		/* Allow 4 redirections (i.e. 5 attemps) */
+		if (client->nb_redirects > 4)
 			return NEWERROR(CODE_TOOMANY_REDIRECT, "Too many redirections");
+
+		/* The first redirection is legit, but subsequent tell us there is
+		 * something happening with the election. Let the services get a
+		 * final status and wait for it a little bit.
+		 * We will wait 200, 400, 800 ms. */
+		if (client->nb_redirects > 1) {
+			guint backoff = client->nb_redirects - 1;
+			gulong delay = (1<<backoff) * 100 * G_TIME_SPAN_MILLISECOND;
+			g_usleep(delay);
+		}
 
 		/* Replace the URL */
 		g_strlcpy(client->url, message, URL_MAXLEN);
@@ -409,12 +423,11 @@ retry:
 		if (client->step == REP_READING_SIZE && client->reply
 				&& client->reply->len >= 4)
 				goto retry;
-	}
-	else {
+	} else {
 		_client_reset_request(client);
 		_client_reset_reply(client);
 		_client_reset_cnx(client);
-		client->error = err;
+		_client_replace_error(client, err);
 		client->step = STATUS_FAILED;
 	}
 }
@@ -492,7 +505,7 @@ _client_free(struct gridd_client_s *client)
 	_client_reset_request(client);
 	_client_reset_cnx(client);
 	_client_reset_target(client);
-	_client_reset_error(client);
+	_client_replace_error(client, NULL);
 	if (client->reply)
 		g_byte_array_free(client->reply, TRUE);
 	client->fd = -1;
@@ -617,7 +630,7 @@ _client_request(struct gridd_client_s *client, GByteArray *req,
 	/* if any, reset the last reply */
 	_client_reset_reply(client);
 	_client_reset_request(client);
-	_client_reset_error(client);
+	_client_replace_error(client, NULL);
 
 	/* Now set the new request components */
 	client->ctx = ctx;
@@ -676,7 +689,7 @@ _client_expire(struct gridd_client_s *client, gint64 now)
 	if (!_client_expired(client, now))
 		return FALSE;
 	_client_reset_cnx(client);
-	client->error = NEWERROR(ERRCODE_READ_TIMEOUT, "Timeout");
+	_client_replace_error(client, NEWERROR(ERRCODE_READ_TIMEOUT, "Timeout"));
 	client->step = STATUS_FAILED;
 	return FALSE;
 }
@@ -723,8 +736,7 @@ _client_start(struct gridd_client_s *client)
 		return FALSE;
 
 	if (!client->url[0]) {
-		_client_reset_error(client);
-		client->error = NEWERROR(EINVAL, "No target");
+		_client_replace_error(client, NEWERROR(EINVAL, "No target"));
 		return FALSE;
 	}
 
@@ -733,7 +745,7 @@ _client_start(struct gridd_client_s *client)
 		return TRUE;
 
 	client->step = STATUS_FAILED;
-	client->error = err;
+	_client_replace_error(client, err);
 	return FALSE;
 }
 
@@ -742,9 +754,7 @@ _client_fail(struct gridd_client_s *client, GError *why)
 {
 	EXTRA_ASSERT(client != NULL);
 	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
-	if (client->error != NULL)
-		g_clear_error(&(client->error));
-	client->error = NEWERROR(why->code, "%s", why->message);
+	_client_replace_error(client, NEWERROR(why->code, "%s", why->message));
 }
 
 static void

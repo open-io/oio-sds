@@ -332,7 +332,7 @@ check_chunk_info_with_trailers(const struct chunk_textinfo_s * const cti)
 	const char *msg = check_chunk_info (cti);
 	if (NULL != msg) return msg;
 
-	if (cti->metachunk_size && !oio_str_is_number(cti->metachunk_size))
+	if (cti->metachunk_size && !oio_str_is_number(cti->metachunk_size, NULL))
 		return "metachunk-size";
 
 	oio_str_upper (cti->metachunk_hash);
@@ -340,7 +340,7 @@ check_chunk_info_with_trailers(const struct chunk_textinfo_s * const cti)
 	if (!_null_or_hexa1(cti->metachunk_hash))
 		return "metachunk-hash";
 
-	if (cti->chunk_size && !oio_str_is_number(cti->chunk_size))
+	if (cti->chunk_size && !oio_str_is_number(cti->chunk_size, NULL))
 		return "chunk-size";
 
 	if (g_str_has_prefix(cti->content_chunk_method, "ec/")

@@ -39,17 +39,28 @@ class ObjTest(TestCase):
             test_content = 'test content'
             f.write(test_content)
             f.flush()
-            self._test_obj(f.name, test_content)
+            self._test_obj(f.name, test_content, self.CONTAINER_NAME)
 
-    def _test_obj(self, obj_file, test_content):
+    def test_auto_container(self):
+        with open('/etc/fstab', 'r') as f:
+            test_content = f.read()
+            self._test_auto_container(test_content)
+
+    def _test_auto_container(self, test_content):
+        self._test_obj('/etc/fstab', test_content, '06EE0', auto='--auto')
+
+    def _test_obj(self, obj_file, test_content, cname, auto=''):
         checksum = md5(test_content).hexdigest().upper()
         opts = self.get_opts([], 'json')
-        output = self.openio('container create ' + self.CONTAINER_NAME + opts)
+        output = self.openio('container create ' + cname + opts)
         data = json.loads(output)
         self.assertThat(len(data), Equals(1))
         self.assert_list_fields(data, HEADERS)
-        self.assertThat(data[0]['Name'], Equals(self.CONTAINER_NAME))
-        self.assertThat(data[0]['Created'], Equals(True))
+        self.assertThat(data[0]['Name'], Equals(cname))
+        # TODO ensure a clean environment before the test, and proper cleanup
+        # after, so that we can check the container is properly created
+        if not auto:
+            self.assertThat(data[0]['Created'], Equals(True))
 
         opts = self.get_opts([], 'json')
         output = self.openio('container list' + opts)
@@ -59,52 +70,52 @@ class ObjTest(TestCase):
         # TODO verify CONTAINER_NAME in list
 
         opts = self.get_opts([], 'json')
-        output = self.openio('container show ' + self.CONTAINER_NAME + opts)
+        output = self.openio('container show ' + cname + opts)
         data = json.loads(output)
         self.assert_show_fields(data, CONTAINER_FIELDS)
 
+        fake_cname = cname
+        if auto:
+            fake_cname = '_'
         obj_name = os.path.basename(obj_file)
         opts = self.get_opts([], 'json')
-        output = self.openio('object create ' + self.CONTAINER_NAME +
-                             ' ' + obj_file + opts)
+        output = self.openio('object create ' + auto + ' ' + fake_cname +
+                             ' ' + obj_file + ' ' + obj_file + ' ' + opts)
         data = json.loads(output)
         self.assert_list_fields(data, OBJ_HEADERS)
-        self.assertThat(len(data), Equals(1))
+        self.assertThat(len(data), Equals(2))
         item = data[0]
         self.assertThat(item['Name'], Equals(obj_name))
         self.assertThat(item['Size'], Equals(len(test_content)))
         self.assertThat(item['Hash'], Equals(checksum))
 
         opts = self.get_opts([], 'json')
-        output = self.openio('object list ' + self.CONTAINER_NAME + opts)
+        output = self.openio('object list ' + cname + opts)
         listing = json.loads(output)
         self.assert_list_fields(listing, OBJ_HEADERS)
-        self.assertThat(len(data), Equals(1))
+        self.assertThat(len(data), Equals(2))
         item = data[0]
         self.assertThat(item['Name'], Equals(obj_name))
         self.assertThat(item['Size'], Equals(len(test_content)))
         self.assertThat(item['Hash'], Equals(checksum))
 
-        output = self.openio('object save ' + self.CONTAINER_NAME +
-                             ' ' + obj_name)
+        output = self.openio('object save ' + cname + ' ' + obj_name)
         self.addCleanup(os.remove, obj_name)
         self.assertOutput('', output)
 
         tmp_file = 'tmp_obj'
-        output = self.openio('object save ' + self.CONTAINER_NAME +
+        output = self.openio('object save ' + cname +
                              ' ' + obj_name + ' --file ' + tmp_file)
         self.addCleanup(os.remove, tmp_file)
         self.assertOutput('', output)
 
         opts = self.get_opts([], 'json')
-        output = self.openio('object show ' + self.CONTAINER_NAME +
-                             ' ' + obj_name + opts)
+        output = self.openio('object show ' + cname + ' ' + obj_name + opts)
         data = json.loads(output)
         self.assert_show_fields(data, OBJ_FIELDS)
         self.assertThat(data['object'], Equals(obj_name))
         self.assertThat(data['size'], Equals(str(len(test_content))))
         self.assertThat(data['hash'], Equals(checksum))
 
-        output = self.openio('object delete ' + self.CONTAINER_NAME +
-                             ' ' + obj_name)
+        output = self.openio('object delete ' + cname + ' ' + obj_name)
         self.assertOutput('', output)

@@ -73,6 +73,12 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 	add_definitions(-DHAVE_EXTRA_DEBUG=1)
 endif()
 
+option(ENBUG "Introduces intentional bugs" OFF)
+if (ENBUG)
+	MESSAGE(WARNING "ENBUGED MODE : NOT FOR PRODUCTION USE")
+	add_definitions(-DHAVE_ENBUG=1)
+endif()
+
 if (DEFINED STACK_PROTECTOR)
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fstack-protector-all")
 endif()
@@ -287,6 +293,21 @@ dir2macro("SERVER_DEFAULT_CNX_LIFETIME")
 dir2macro("SERVER_DEFAULT_CNX_INACTIVE")
 dir2macro("DAEMON_DEFAULT_TIMEOUT_READ")
 dir2macro("DAEMON_DEFAULT_TIMEOUT_ACCEPT")
+
+dir2macro("OIO_USE_OLD_FMEMOPEN")
+
+dir2macro("SQLX_GRACE_DELAY_COOL")
+dir2macro("SQLX_GRACE_DELAY_HOT")
+dir2macro("SQLX_DELAY_MAXWAIT")
+dir2macro("SQLX_DELAY_MAXIDLE")
+dir2macro("SQLX_DELAY_ELECTION_REPLAY")
+dir2macro("SQLX_DELAY_RESTART_FAILED")
+dir2macro("SQLX_DELAY_PING_FAILED")
+dir2macro("SQLX_DELAY_PING_FINAL")
+dir2macro("SQLX_DELAY_PING_PENDING")
+dir2macro("SQLX_DELAY_EXPIRE_FAILED")
+dir2macro("SQLX_DELAY_EXPIRE_FINAL")
+dir2macro("SQLX_DELAY_EXPIRE_PENDING")
 
 ###-------------------------------------------------------------------------###
 

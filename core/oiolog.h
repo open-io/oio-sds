@@ -69,12 +69,22 @@ extern "C" {
 #  define GRID_TRACE2(FMT,...)
 #  define GRID_TRACE(FMT,...)
 # endif
-# define GRID_LOG(LEVEL,FMT,...)   g_log(G_LOG_DOMAIN, LEVEL << G_LOG_LEVEL_USER_SHIFT, FMT, ##__VA_ARGS__)
-# define GRID_DEBUG(FMT,...)   g_log(G_LOG_DOMAIN, GRID_LOGLVL_DEBUG, FMT, ##__VA_ARGS__)
+# define GRID_DEBUG(FMT,...)   do { \
+	if (GRID_DEBUG_ENABLED()) \
+		g_log(G_LOG_DOMAIN, GRID_LOGLVL_DEBUG, FMT, ##__VA_ARGS__); \
+} while (0)
 # define GRID_INFO(FMT,...)    g_log(G_LOG_DOMAIN, GRID_LOGLVL_INFO, FMT, ##__VA_ARGS__)
 # define GRID_NOTICE(FMT,...)  g_log(G_LOG_DOMAIN, GRID_LOGLVL_NOTICE, FMT, ##__VA_ARGS__)
 # define GRID_WARN(FMT,...)    g_log(G_LOG_DOMAIN, GRID_LOGLVL_WARN, FMT, ##__VA_ARGS__)
 # define GRID_ERROR(FMT,...)   g_log(G_LOG_DOMAIN, GRID_LOGLVL_ERROR, FMT, ##__VA_ARGS__)
+
+# define INCOMING(FMT,...) g_log("access", GRID_LOGLVL_INFO, FMT, ##__VA_ARGS__)
+
+# define OUTGOING(FMT,...) do { \
+	if (oio_log_outgoing) { \
+		g_log("out", GRID_LOGLVL_INFO, FMT, ##__VA_ARGS__); \
+	} \
+} while (0)
 
 /* old macros */
 # ifdef HAVE_EXTRA_DEBUG
@@ -89,9 +99,6 @@ extern "C" {
 # define NOTICE(FMT,...)  g_log(G_LOG_DOMAIN, GRID_LOGLVL_NOTICE, FMT, ##__VA_ARGS__)
 # define WARN(FMT,...)    g_log(G_LOG_DOMAIN, GRID_LOGLVL_WARN, FMT, ##__VA_ARGS__)
 # define ERROR(FMT,...)   g_log(G_LOG_DOMAIN, GRID_LOGLVL_ERROR, FMT, ##__VA_ARGS__)
-# define FATAL(FMT,...)   g_log(G_LOG_DOMAIN, GRID_LOGLVL_ERROR, FMT, ##__VA_ARGS__)
-# define CRIT(FMT,...)    g_log(G_LOG_DOMAIN, GRID_LOGLVL_ERROR, FMT, ##__VA_ARGS__)
-# define ALERT(FMT,...)   g_log(G_LOG_DOMAIN, GRID_LOGLVL_ERROR, FMT, ##__VA_ARGS__)
 
 /* domain macros */
 # ifdef HAVE_EXTRA_DEBUG
@@ -106,14 +113,12 @@ extern "C" {
 # define NOTICE_DOMAIN(D,FMT,...)  g_log((D), GRID_LOGLVL_NOTICE, FMT, ##__VA_ARGS__)
 # define WARN_DOMAIN(D,FMT,...)    g_log((D), GRID_LOGLVL_WARN, FMT, ##__VA_ARGS__)
 # define ERROR_DOMAIN(D,FMT,...)   g_log((D), GRID_LOGLVL_ERROR, FMT, ##__VA_ARGS__)
-# define FATAL_DOMAIN(D,FMT,...)   g_log((D), GRID_LOGLVL_ERROR, FMT, ##__VA_ARGS__)
-# define CRIT_DOMAIN(D,FMT,...)    g_log((D), GRID_LOGLVL_ERROR, FMT, ##__VA_ARGS__)
-# define ALERT_DOMAIN(D,FMT,...)   g_log((D), GRID_LOGLVL_ERROR, FMT, ##__VA_ARGS__)
 
 #define LOG_FLAG_TRIM_DOMAIN 0x01
 #define LOG_FLAG_PURIFY 0x02
-#define LOG_FLAG_COLUMNIZE 0x04
 #define LOG_FLAG_PRETTYTIME 0x04
+
+extern int oio_log_outgoing;
 
 /** Cruising debug level.
  * Should not be altered by the application after the program has started. */

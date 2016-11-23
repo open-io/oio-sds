@@ -61,6 +61,7 @@ class BackblazeTest(unittest.TestCase):
         size_after_delete = self.backblaze_test.get_size(self.BUCKET_NAME)
         self.assertTrue(size_after_delete == size)
 
+
 if __name__ == '__main__':
     if len(sys.argv) > 3:
         BackblazeTest.BUCKET_NAME = sys.argv.pop()

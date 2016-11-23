@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-# @EXE_PREFIX@-bootstrap.py, a script initating a local configuration of OpenIO SDS.
-# Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+# oio-test-config.py, a CLI tool of OpenIO
+# Copyright (C) 2015-2016 OpenIO, original work as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -30,6 +30,9 @@ parser.add_option("-f", "--file", action="store", type="string", dest="PATH",
 parser.add_option("-n", "--ns", action="store_true", dest="FETCH_NS",
                   help="Fetch the namespace",
                   default=False)
+parser.add_option("-v", "--value", action="store", dest="VALUE",
+                  help="Fetch the given value",
+                  default=False)
 parser.add_option("-t", "--type", action="append", dest="FETCH_SRVTYPES",
                   help="Fetch a type of service")
 parser.add_option("-1", "--first", action="store_true", dest="FIRST",
@@ -44,6 +47,8 @@ with open(options.PATH, 'r') as f:
     conf = yaml.load(f)
     if options.FETCH_NS:
         print conf['namespace']
+    elif options.VALUE:
+        print conf[options.VALUE]
     elif options.FETCH_SRVTYPES:
         out = []
         for t in options.FETCH_SRVTYPES:
@@ -59,4 +64,3 @@ with open(options.PATH, 'r') as f:
         else:
             for i in out:
                 print i
-

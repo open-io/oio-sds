@@ -223,5 +223,6 @@ class ConscienceAgent(Daemon):
                 self.conf['services'][name] = parse_config(cfgfile)
                 self.conf['services'][name]['cfgfile'] = cfgfile
 
+
 CHECKERS_MODULES = load_modules('oio.conscience.checker')
 STATS_MODULES = load_modules('oio.conscience.stats')

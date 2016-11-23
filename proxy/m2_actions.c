@@ -56,8 +56,11 @@ _resolve_meta2 (struct req_args_s *args, enum preference_e how,
 	} else if (out) {
 		EXTRA_ASSERT(ctx.bodyv != NULL);
 		for (guint i=0; i<ctx.count ;++i) {
+			GError *e = ctx.errorv[i];
 			GByteArray *b = ctx.bodyv[i];
-			if (b) {
+			if (e && e->code != CODE_FINAL_OK)
+				continue;
+			if (b && b->data && b->len) {
 				GSList *l = bean_sequence_unmarshall (b->data, b->len);
 				if (l) {
 					*out = metautils_gslist_precat (*out, l);
@@ -650,17 +653,9 @@ _load_alias_from_headers(struct req_args_s *args, GSList **pbeans)
 		if (!s)
 			err = BADREQ("Header: missing content length");
 		else {
-			errno = 0;
-			gchar *end = NULL;
-			gint64 s64 = g_ascii_strtoll(s, &end, 10);
-			if (s64 < 0)
-				err = BADREQ("Header: negative content length");
-			else if (s64 == G_MAXINT64)
-				err = BADREQ("Header: content length overflow");
-			else if (s64 == 0 && end == s)
-				err = BADREQ("Header: invalid content length (parsing failed)");
-			else if (*end != 0)
-				err = BADREQ("Header: invalid content length (trailing characters)");
+			gint64 s64 = 0;
+			if (!oio_str_is_number(s, &s64))
+				err = BADREQ("Header: bad content length");
 			else
 				CONTENTS_HEADERS_set_size (header, s64);
 		}
@@ -693,19 +688,9 @@ _load_alias_from_headers(struct req_args_s *args, GSList **pbeans)
 			gchar *s = g_tree_lookup(args->rq->tree_headers,
 									 PROXYD_HEADER_PREFIX "content-meta-version");
 			if (s) {
-				errno = 0;
-				gchar *end = NULL;
-				gint64 s64 = g_ascii_strtoll(s, &end, 10);
-				if (s64 < 0)
+				gint64 s64 = 0;
+				if (!oio_str_is_number(s, &s64))
 					err = BADREQ("Header: negative content version");
-				else if (s64 == G_MAXINT64)
-					err = BADREQ("Header: content version overflow");
-				else if (s64 == 0 && end == s)
-					err = BADREQ(
-							"Header: invalid content version (parsing failed)");
-				else if (*end != 0)
-					err = BADREQ(
-							"Header: invalid content version (trailing characters)");
 				else
 					ALIASES_set_version(alias, s64);
 			}
@@ -822,23 +807,15 @@ _delimiter (struct req_args_s *args)
 static GError *
 _max (struct req_args_s *args, gint64 *pmax)
 {
-	*pmax = 0;
 	const char *s = OPT("max");
+	*pmax = 0;
 	if (!s)
 		return NULL;
-	if (!*s)
-		return BADREQ("Invalid max number of items: %s", "empty");
 
-	gchar *end = NULL;
-	*pmax = g_ascii_strtoll(s, &end, 10);
-	if (!*pmax && errno == EINVAL)
-		return BADREQ("Invalid max number of items: %s", "not an integer");
+	if (!oio_str_is_number(s, pmax))
+		return BADREQ("Invalid max number of items");
 	if (*pmax <= 0)
 		return BADREQ("Invalid max number of items: %s", "too small");
-	if (*pmax == G_MAXINT64 || *pmax == G_MININT64)
-		return BADREQ("Invalid max number of items: %s", "overflow");
-	if (end && *end)
-		return BADREQ("Invalid max number of items: %s", "trailing characters");
 	return NULL;
 }
 
@@ -959,7 +936,7 @@ action_m2_container_destroy (struct req_args_s *args)
 
 	/* TODO make this const! */
 	struct sqlx_name_s *name = sqlx_name_mutable_to_const(&n);
-	/* XXX manage container subtype */
+	/* TODO FIXME manage container subtype */
 	sqlx_name_fill (&n, args->url, NAME_SRVTYPE_META2, 1);
 
 	/* pre-loads the locations of the container. We will need this at the
@@ -1376,20 +1353,33 @@ enum http_rc_e action_container_show (struct req_args_s *args) {
 		return sqlx_pack_PROPGET (sqlx_name_mutable_to_const(&ctx.name));
 	}
 	err = gridd_request_replicated (&ctx, packer);
-
 	if (err) {
 		client_clean (&ctx);
 		return _reply_m2_error (args, err);
 	}
 
-	gchar **pairs = NULL;
-	GByteArray *first = ctx.bodyv[0];
-	err = KV_decode_buffer(first->data, first->len, &pairs);
-	EXTRA_ASSERT((err != NULL) ^ (pairs != NULL));
+	/* TODO(jfs): the 2 next blocks are duplicated from proxy/sqlx_actions.c */
 
+	/* Decode the output of the first service that replied */
+	gchar **pairs = NULL;
+	for (guint i=0; i<ctx.count && !err && !pairs ;++i) {
+		GError *e = ctx.errorv[i];
+		GByteArray *gba = ctx.bodyv[i];
+		if (e && e->code != CODE_FINAL_OK)
+			continue;
+		if (gba->data && gba->len)
+			err = KV_decode_buffer(gba->data, gba->len, &pairs);
+	}
+
+	/* avoid a memleak and ensure a result, even if empty */
 	if (err) {
-		client_clean (&ctx);
+		/* TODO(jfs): maybe a good place for an assert */
+		if (pairs) g_strfreev(pairs);
 		return _reply_system_error(args, err);
+	}
+	if (!pairs) {
+		pairs = g_malloc0(sizeof(void*));
+		GRID_WARN("BUG the request for properties failed without error");
 	}
 
 	/* In the reply's headers, we store only the "system" properties, i.e. those

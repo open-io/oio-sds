@@ -2,6 +2,8 @@ import io
 import logging
 import os
 
+from argparse import ArgumentError
+
 from cliff import command
 from cliff import lister
 from cliff import show
@@ -10,41 +12,74 @@ from oio.cli.utils import KeyValueAction
 from oio.common.utils import Timestamp
 
 
-class CreateObject(lister.Lister):
+class ContainerCommandMixin(object):
+    """Command taking a container name as parameter"""
+
+    def patch_parser(self, parser):
+        parser.add_argument(
+            'container',
+            metavar='<container>',
+            nargs='?',
+            help=("Name of the container to interact with.\n" +
+                  "Optional if --auto is specified.")
+        )
+        parser.add_argument(
+            '--auto',
+            help=("Auto-generate the container name according to the " +
+                  "'flat_*' namespace parameters (<container> is ignored)."),
+            action="store_true",
+            default=False
+        )
+
+    def take_action(self, parsed_args):
+        if not parsed_args.container and not parsed_args.auto:
+            raise ArgumentError(parsed_args.container,
+                                "Missing value for container or --auto")
+
+
+class ObjectCommandMixin(ContainerCommandMixin):
+    """Command taking an object name as parameter"""
+
+    def patch_parser(self, parser):
+        super(ObjectCommandMixin, self).patch_parser(parser)
+        parser.add_argument(
+            'object',
+            metavar='<object>',
+            help='Name of the object to manipulate.')
+
+
+class CreateObject(ContainerCommandMixin, lister.Lister):
     """Upload object"""
 
     log = logging.getLogger(__name__ + '.CreateObject')
 
     def get_parser(self, prog_name):
         parser = super(CreateObject, self).get_parser(prog_name)
-        parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Container for new object'
-        )
+        self.patch_parser(parser)
         parser.add_argument(
             'objects',
             metavar='<filename>',
             nargs='+',
-            help='Local filename(s) to upload'
+            help='Local filename(s) to upload.'
         )
         parser.add_argument(
             '--name',
             metavar='<key>',
             default=[],
             action='append',
-            help='Object name to create'
+            help=("Name of the object to create. " +
+                  "If not specified, use the basename of the uploaded file.")
         )
         parser.add_argument(
             '--policy',
             metavar='<policy>',
-            help='Storage Policy'
+            help='Storage policy'
         )
         parser.add_argument(
             '--property',
             metavar='<key=value>',
             action=KeyValueAction,
-            help='Property to add/update to the object(s)'
+            help='Property to add to the object(s)'
         )
         parser.add_argument(
             '--key-file',
@@ -57,16 +92,11 @@ class CreateObject(lister.Lister):
             help='Object MIME type',
             default=None
         )
-        parser.add_argument(
-            '--auto',
-            help='Auto-generate the container\'s name',
-            action="store_true",
-            default=False
-        )
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
+        super(CreateObject, self).take_action(parsed_args)
 
         container = parsed_args.container
         policy = parsed_args.policy
@@ -109,34 +139,25 @@ class CreateObject(lister.Lister):
         return columns, l
 
 
-class DeleteObject(command.Command):
+class DeleteObject(ContainerCommandMixin, command.Command):
     """Delete object from container"""
 
     log = logging.getLogger(__name__ + '.DeleteObject')
 
     def get_parser(self, prog_name):
         parser = super(DeleteObject, self).get_parser(prog_name)
-        parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Delete object(s) from <container>'
-        )
+        self.patch_parser(parser)
         parser.add_argument(
             'objects',
             metavar='<object>',
             nargs='+',
             help='Object(s) to delete'
         )
-        parser.add_argument(
-            '--auto',
-            help='Auto-generate the container\'s name',
-            action="store_true",
-            default=False
-        )
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
+        super(DeleteObject, self).take_action(parsed_args)
         container = parsed_args.container
 
         for obj in parsed_args.objects:
@@ -150,33 +171,19 @@ class DeleteObject(command.Command):
             )
 
 
-class ShowObject(show.ShowOne):
-    """Show object"""
+class ShowObject(ObjectCommandMixin, show.ShowOne):
+    """Show information about an object"""
 
     log = logging.getLogger(__name__ + '.ShowObject')
 
     def get_parser(self, prog_name):
         parser = super(ShowObject, self).get_parser(prog_name)
-        parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Container'
-        )
-        parser.add_argument(
-            'object',
-            metavar='<object>',
-            help='Object'
-        )
-        parser.add_argument(
-            '--auto',
-            help='Auto-generate the container\'s name',
-            action="store_true",
-            default=False
-        )
+        self.patch_parser(parser)
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
+        super(ShowObject, self).take_action(parsed_args)
 
         account = self.app.client_manager.get_account()
         container = parsed_args.container
@@ -204,22 +211,14 @@ class ShowObject(show.ShowOne):
         return zip(*sorted(info.iteritems()))
 
 
-class SetObject(command.Command):
+class SetObject(ObjectCommandMixin, command.Command):
     """Set object properties"""
 
     log = logging.getLogger(__name__ + '.SetObject')
 
     def get_parser(self, prog_name):
         parser = super(SetObject, self).get_parser(prog_name)
-        parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Container'
-        )
-        parser.add_argument(
-            'object',
-            metavar='<object>',
-            help='Object')
+        self.patch_parser(parser)
         parser.add_argument(
             '--property',
             metavar='<key=value>',
@@ -231,16 +230,11 @@ class SetObject(command.Command):
             default=False,
             help='Clear previous properties',
             action='store_true')
-        parser.add_argument(
-            '--auto',
-            help='Auto-generate the container\'s name',
-            action="store_true",
-            default=False
-        )
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
+        super(SetObject, self).take_action(parsed_args)
         container = parsed_args.container
         obj = parsed_args.object
         if parsed_args.auto:
@@ -255,43 +249,29 @@ class SetObject(command.Command):
             parsed_args.clear)
 
 
-class SaveObject(command.Command):
+class SaveObject(ObjectCommandMixin, command.Command):
     """Save object locally"""
 
     log = logging.getLogger(__name__ + '.SaveObject')
 
     def get_parser(self, prog_name):
         parser = super(SaveObject, self).get_parser(prog_name)
+        self.patch_parser(parser)
         parser.add_argument(
             '--file',
             metavar='<filename>',
             help='Destination filename (defaults to object name)'
         )
         parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Download <object> from <container>'
-        )
-        parser.add_argument(
-            'object',
-            metavar='<object>',
-            help='Object to save'
-        )
-        parser.add_argument(
             '--key-file',
             metavar='<key_file>',
-            help='file containing the keys'
-        )
-        parser.add_argument(
-            '--auto',
-            help='Auto-generate the container\'s name',
-            action="store_true",
-            default=False
+            help='File containing application keys'
         )
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
+        super(SaveObject, self).take_action(parsed_args)
 
         container = parsed_args.container
         obj = parsed_args.object
@@ -319,13 +299,14 @@ class SaveObject(command.Command):
                 ofile.write(chunk)
 
 
-class ListObject(lister.Lister):
+class ListObject(ContainerCommandMixin, lister.Lister):
     """List objects in container"""
 
     log = logging.getLogger(__name__ + '.ListObject')
 
     def get_parser(self, prog_name):
         parser = super(ListObject, self).get_parser(prog_name)
+        self.patch_parser(parser)
         parser.add_argument(
             '--full',
             dest='full_listing',
@@ -339,11 +320,6 @@ class ListObject(lister.Lister):
             default=False,
             help='List properties with objects',
             action="store_true"
-        )
-        parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Container to list'
         )
         parser.add_argument(
             '--prefix',
@@ -368,14 +344,74 @@ class ListObject(lister.Lister):
         parser.add_argument(
             '--limit',
             metavar='<limit>',
+            type=int,
             help='Limit the number of objects returned'
         )
         return parser
 
+    def _list_loop(self, account, container, **kwargs):
+        resp = self.app.client_manager.storage.object_list(
+            account, container, **kwargs)
+        listing = resp['objects']
+        for element in listing:
+            yield element
+
+        while listing:
+            if not kwargs.get('delimiter'):
+                marker = listing[-1]['name']
+            else:
+                marker = listing[-1].get('name')
+            kwargs['marker'] = marker
+            listing = self.app.client_manager.storage.object_list(
+                account, container, **kwargs)['objects']
+            if listing:
+                for element in listing:
+                    yield element
+
+    # TODO: make a decorator with this loop pattern
+    def _container_provider(self, account, **kwargs):
+        listing, _ = self.app.client_manager.storage.container_list(
+                account, **kwargs)
+        for element in listing:
+            yield element[0]
+
+        while listing:
+            kwargs['marker'] = listing[-1][0]
+            listing, _ = self.app.client_manager.storage.container_list(
+                account, **kwargs)
+            if listing:
+                for element in listing:
+                    yield element[0]
+
+    def _autocontainer_loop(self, account, marker=None, limit=None, **kwargs):
+        autocontainer = self.app.client_manager.get_flatns_manager()
+        container_marker = autocontainer(marker) if marker else None
+        count = 0
+        # Start to list contents at 'marker' inside the last visited container
+        if container_marker:
+            for element in self._list_loop(account, container_marker,
+                                           marker=marker, **kwargs):
+                count += 1
+                yield element
+                if limit and count >= limit:
+                    return
+        # Start to list contents from the beginning of the next container
+        for container in self._container_provider(account,
+                                                  marker=container_marker):
+            if not autocontainer.verify(container):
+                self.log.debug("Container %s is not an autocontainer",
+                               container)
+                continue
+            self.log.debug("Listing autocontainer %s", container)
+            for element in self._list_loop(account, container, **kwargs):
+                count += 1
+                yield element
+                if limit and count >= limit:
+                    return
+
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
-
-        container = parsed_args.container
+        super(ListObject, self).take_action(parsed_args)
 
         kwargs = {}
         if parsed_args.prefix:
@@ -392,31 +428,17 @@ class ListObject(lister.Lister):
             kwargs['properties'] = True
 
         account = self.app.client_manager.get_account()
-
-        if parsed_args.full_listing:
-            def full_list():
+        if parsed_args.auto:
+            obj_gen = self._autocontainer_loop(account, **kwargs)
+        else:
+            container = parsed_args.container
+            if parsed_args.full_listing:
+                obj_gen = self._list_loop(account, container, **kwargs)
+            else:
                 resp = self.app.client_manager.storage.object_list(
                     account, container, **kwargs)
-                listing = resp['objects']
-                for e in listing:
-                    yield e
+                obj_gen = resp['objects']
 
-                while listing:
-                    if not parsed_args.delimiter:
-                        marker = listing[-1]['name']
-                    else:
-                        marker = listing[-1].get('name')
-                    kwargs['marker'] = marker
-                    listing = self.app.client_manager.storage.object_list(
-                        account, container, **kwargs)['objects']
-                    if listing:
-                        for e in listing:
-                            yield e
-            l = full_list()
-        else:
-            resp = self.app.client_manager.storage.object_list(
-                account, container, **kwargs)
-            l = resp['objects']
         if parsed_args.long_listing:
             def _format_props(props):
                 prop_list = ["%s=%s" % (k, v) for k, v
@@ -436,31 +458,24 @@ class ListObject(lister.Lister):
                               Timestamp(obj['ctime']).isoformat,
                               _format_props(obj.get('properties', {})))
                     yield result
-            results = _gen_results(l)
+            results = _gen_results(obj_gen)
             columns = ('Name', 'Size', 'Hash', 'Content-Type',
                        'Last-Modified', 'Properties')
         else:
-            results = ((obj['name'], obj['size'], obj['hash']) for obj in l)
+            results = ((obj['name'], obj['size'], obj['hash'])
+                       for obj in obj_gen)
             columns = ('Name', 'Size', 'Hash')
         return (columns, results)
 
 
-class UnsetObject(command.Command):
+class UnsetObject(ObjectCommandMixin, command.Command):
     """Unset object properties"""
 
     log = logging.getLogger(__name__ + '.UnsetObject')
 
     def get_parser(self, prog_name):
         parser = super(UnsetObject, self).get_parser(prog_name)
-        parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Container'
-        )
-        parser.add_argument(
-            'object',
-            metavar='<object>',
-            help='Object to modify')
+        self.patch_parser(parser)
         parser.add_argument(
             '--property',
             metavar='<key>',
@@ -469,16 +484,11 @@ class UnsetObject(command.Command):
             help='Property to remove from object',
             required=True
         )
-        parser.add_argument(
-            '--auto',
-            help='Auto-generate the container\'s name',
-            action="store_true",
-            default=False
-        )
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
+        super(UnsetObject, self).take_action(parsed_args)
         container = parsed_args.container
         obj = parsed_args.object
         properties = parsed_args.property
@@ -492,33 +502,19 @@ class UnsetObject(command.Command):
             properties)
 
 
-class AnalyzeObject(lister.Lister):
+class AnalyzeObject(ObjectCommandMixin, lister.Lister):
     """Analyze object"""
 
     log = logging.getLogger(__name__ + '.AnalyzeObject')
 
     def get_parser(self, prog_name):
         parser = super(AnalyzeObject, self).get_parser(prog_name)
-        parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Container'
-        )
-        parser.add_argument(
-            'object',
-            metavar='<object>',
-            help='Object'
-        )
-        parser.add_argument(
-            '--auto',
-            help='Auto-generate the container\'s name',
-            action="store_true",
-            default=False
-        )
+        self.patch_parser(parser)
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
+        super(AnalyzeObject, self).take_action(parsed_args)
 
         account = self.app.client_manager.get_account()
         container = parsed_args.container

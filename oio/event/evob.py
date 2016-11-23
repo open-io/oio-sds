@@ -60,6 +60,7 @@ class StatusMap(object):
     def __getitem__(self, key):
         return partial(EventException, status=key)
 
+
 status_map = StatusMap()
 EventOk = status_map[200]
 EventError = status_map[500]

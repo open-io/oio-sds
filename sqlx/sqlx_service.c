@@ -53,6 +53,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define SQLX_MAX_TIMER_PER_ROUND 100
 #endif
 
+static volatile gboolean udp_allowed = FALSE;
+
 // common_main hooks
 static struct grid_main_option_s * sqlx_service_get_options(void);
 static const char * sqlx_service_usage(void);
@@ -216,7 +218,37 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 	}
 	GRID_DEBUG("Volume configured to [%s]", ss->volume);
 
-	ss->zk_url = gridcluster_get_zookeeper(ss->ns_name);
+	/* Load the default ZK url */
+	ss->zk_url = oio_cfg_get_value(ss->ns_name, OIO_CFG_ZOOKEEPER);
+
+	/* if any, use a specific ZK url for the current service type */
+	do {
+		gchar k[sizeof(OIO_CFG_ZOOKEEPER)+2+LIMIT_LENGTH_SRVTYPE];
+		g_snprintf(k, sizeof(k), "%s.%s", OIO_CFG_ZOOKEEPER, ss->service_config->srvtype);
+		gchar *str = oio_cfg_get_value(ss->ns_name, k);
+		if (str)
+			GRID_NOTICE("ZK [%s] <- [%s] (at %s)", ss->zk_url, str, k);
+		else
+			GRID_DEBUG("ZK [%s] (nothing at %s)", ss->zk_url, k);
+		if (str) oio_str_reuse(&ss->zk_url, str);
+	} while (0);
+
+	/* Check if UDP is allowed for servers in the /etc/oio/sds.conf files */
+	gchar *str_udp_allowed = oio_cfg_get_value (ss->ns_name, OIO_CFG_UDP_ALLOWED);
+	if (str_udp_allowed) {
+		udp_allowed = oio_str_parse_bool(str_udp_allowed, FALSE);
+		GRID_NOTICE("UDP %s", udp_allowed ? "allowed" : "forbidden");
+		g_free(str_udp_allowed);
+	}
+
+	/* Check if the logging of outgoing requests has been activated */
+	gchar *str_log_out = oio_cfg_get_value(ss->ns_name, OIO_CFG_LOG_OUTGOING);
+	if (str_log_out) {
+		oio_log_outgoing = oio_str_parse_bool(str_log_out, FALSE);
+		g_free(str_log_out);
+	}
+	if (oio_log_outgoing)
+		GRID_NOTICE("Outgoing requests log [ON]");
 
 	return TRUE;
 }
@@ -325,11 +357,13 @@ _configure_synchronism(struct sqlx_service_s *ss)
 		return TRUE;
 	}
 
-	ss->sync = sqlx_sync_create(ss->zk_url);
+	gboolean shuffle = oio_cfg_get_bool(ss->ns_name, OIO_CFG_ZK_SHUFFLED, TRUE);
+	GRID_INFO("ZK cnx string shuffling [%s]", shuffle ? "ON" : "OFF");
+	ss->sync = sqlx_sync_create(ss->zk_url, shuffle);
 	if (!ss->sync)
 		return FALSE;
 
-	gchar *realprefix = g_strdup_printf("/hc/ns/%s/%s", SRV.ns_name,
+	gchar *realprefix = g_strdup_printf("/hc/ns/%s/%s", ss->ns_name,
 			ss->service_config->zk_prefix);
 	sqlx_sync_set_prefix(ss->sync, realprefix);
 	g_free(realprefix);
@@ -444,7 +478,7 @@ _configure_events_queue (struct sqlx_service_s *ss)
 		return TRUE;
 	}
 
-	gchar *url =  gridcluster_get_eventagent (SRV.ns_name);
+	gchar *url =  oio_cfg_get_eventagent (SRV.ns_name);
 	STRING_STACKIFY (url);
 
 	if (!url) {
@@ -530,9 +564,10 @@ sqlx_service_action(void)
 			return _action_report_error(err, "Failed to start the QUEUE thread");
 	}
 
-	/* SERVER/GRIDD main run loop */
+	/* open all the sockets */
 	if (!grid_main_is_running())
 		return;
+	network_server_allow_udp(SRV.server);
 	grid_daemon_bind_host(SRV.server, SRV.url->str, SRV.dispatcher);
 	err = network_server_open_servers(SRV.server);
 	if (NULL != err)
@@ -540,6 +575,13 @@ sqlx_service_action(void)
 	if (!grid_main_is_running())
 		return;
 
+	if (udp_allowed) {
+		int fd_udp = network_server_first_udp(SRV.server);
+		GRID_DEBUG("UDP socket fd=%d", fd_udp);
+		sqlx_peering_direct__set_udp(SRV.peering, fd_udp);
+	}
+
+	/* SERVER/GRIDD main run loop */
 	if (NULL != (err = network_server_run(SRV.server)))
 		return _action_report_error(err, "GRIDD run failure");
 }
@@ -562,6 +604,7 @@ sqlx_service_configure(int argc, char **argv)
 	return _configure_limits(&SRV)
 	    && _init_configless_structures(&SRV)
 	    && _configure_with_arguments(&SRV, argc, argv)
+		/* NS now known! */
 		&& _configure_synchronism(&SRV)
 	    && _configure_peering(&SRV)
 	    && _configure_replication(&SRV)

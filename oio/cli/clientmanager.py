@@ -39,6 +39,7 @@ class ClientManager(object):
         self.setup_done = False
         self.info_done = False
         self._admin_mode = False
+        self._meta1_digits = None
         root_logger = logging.getLogger('')
         LOG.setLevel(root_logger.getEffectiveLevel())
 
@@ -57,14 +58,20 @@ class ClientManager(object):
             self.session = requests.Session()
             self.setup_done = True
             self._admin_mode = self._options.get('admin_mode')
+            if 'meta1_digits' in sds_conf:
+                self._meta1_digits = int(sds_conf["meta1_digits"])
 
     def info(self):
         self.setup()
         if self.info_done:
             return
         client = ConscienceClient({"namespace": self.namespace})
-        self.info = client.info()
+        self._nsinfo = client.info()
         self.info_done = True
+
+    def get_meta1_digits(self):
+        self.setup()
+        return self._meta1_digits
 
     def get_admin_mode(self):
         self.setup()
@@ -87,7 +94,7 @@ class ClientManager(object):
         # TODO(jfs): this is also needed in oio-swift, need to factorize in
         #            oiopy
         self.info()
-        options = self.info['options']
+        options = self._nsinfo['options']
         bitlength, offset, size = None, 0, 0
         try:
             bitlength = int(options['flat_bitlength'])
@@ -131,6 +138,7 @@ def build_plugin_option_parser(parser):
     for module in PLUGIN_MODULES:
         parser = module.build_option_parser(parser)
     return parser
+
 
 PLUGIN_MODULES = get_plugin_modules(
     'openio.cli.base'

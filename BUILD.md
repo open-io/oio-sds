@@ -194,6 +194,11 @@ Used by `gcc`
 
 | Macro | Default | Description |
 | ----- | ------- | ----------- |
+| OIO_META1_DIGITS_KEY | "meta1_digits" | Variable name in the /etc/oio/sds.conf to configure the number of digits that name a meta1 base. |
+| OIO_META1_DIGITS_DEFAULT | 4 | Default number of digits to name a meta1 database |
+
+| Macro | Default | Description |
+| ----- | ------- | ----------- |
 | RAWX_HEADER_PREFIX | "X-oio-chunk-meta-" | Prefix applied to proxyd's URL, second version (with accounts) |
 
 | Macro | Default | Description |
@@ -211,3 +216,7 @@ Used by `gcc`
 | COMMON_CNX_TIMEOUT | 2 * G_TIME_SPAN_SECOND | In monotonic clock's precision |
 | COMMON_CLIENT_TIMEOUT | 30.0 | In monotonic clock's precision |
 | COMMON_STAT_TIMEOUT | 5.0 | <double> value telling the default timeout for /stat requests outgoing the proxy, in seconds. |
+
+| Macro | Default | Description |
+| ----- | ------- | ----------- |
+|OIO_USE_OLD_FMEMOPEN|_undefined_|Use the old implementation of glibc's `fmemopen`. Starting from glibc 2.22 the new implementation lacks the binary mode which made things work.|

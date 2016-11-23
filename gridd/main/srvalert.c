@@ -33,7 +33,7 @@ static int
 srv_dumy_alert_handler(void *user_data, const char *id, const char *criticity, const char *msg)
 {
 	(void)user_data;
-	ALERT_DOMAIN((id ? id : "alert"), "%s:%s", criticity, msg);
+	ERROR_DOMAIN((id ? id : "alert"), "%s:%s", criticity, msg);
 	return 1;
 }
 

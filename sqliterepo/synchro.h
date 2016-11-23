@@ -102,7 +102,7 @@ struct abstract_sqlx_sync_s
 
 /** Initiates a sqlx synchronizer based on ZooKeeper.
  * @param url the Zookeeper connection string */
-struct sqlx_sync_s * sqlx_sync_create(const char *url);
+struct sqlx_sync_s * sqlx_sync_create(const char *url, gboolean shuffle);
 
 void sqlx_sync_set_prefix(struct sqlx_sync_s *ss, const gchar *prefix);
 
@@ -174,5 +174,7 @@ void sqlx_peering__pipefrom (struct sqlx_peering_s *self, const char *url,
 struct sqlx_peering_s * sqlx_peering_factory__create_direct (
 		struct gridd_client_pool_s *clipool,
 		struct gridd_client_factory_s *clifac);
+
+void sqlx_peering_direct__set_udp (struct sqlx_peering_s *self, int fd);
 
 #endif /*OIO_SDS__sqliterepo__synchro_h*/

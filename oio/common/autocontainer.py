@@ -26,7 +26,8 @@ def strtoll(val, base=10):
 class HashedContainerBuilder(object):
     """
     Build a container name from a SHA256 of the content path.
-    Only the first bits will be considered to generte the final prefix.
+    Only the first (most significant) bits will be considered to generate
+    the final prefix.
     """
 
     def __init__(self, offset=0, size=None, bits=15, **_kwargs):
@@ -35,6 +36,11 @@ class HashedContainerBuilder(object):
         self.bits = bits
         self.lib = None
         self.func = None
+
+        # Maximum number of bits of the hexadecimal representation
+        bitlength = ((self.bits / 4) + 1) * 4
+        # Maximum value of the hexadecimal representation
+        self.mask = (2 ** bitlength) - (2 ** (bitlength - self.bits))
 
     def __str__(self):
         return '{0}(bits={1},offset={2},size={3})'.format(
@@ -54,6 +60,15 @@ class HashedContainerBuilder(object):
         tmp = create_string_buffer(65)
         out = self.func(src, srclen, tmp, self.bits)
         return str(out)
+
+    def verify(self, name):
+        """Verify that `name` is an autocontainer"""
+        try:
+            integer = int(name, base=16)
+            # Verify there are no bits outside the valid range
+            return (integer & ~self.mask) == 0
+        except ValueError:
+            return False
 
 
 class AutocontainerBuilder(object):
@@ -81,3 +96,11 @@ class AutocontainerBuilder(object):
         flat_path = flat_path.replace("/", "")
         int_part = strtoll(flat_path)
         return self.format % (int_part & self.mask)
+
+    def verify(self, name):
+        """Verify that `name` is an autocontainer"""
+        try:
+            integer = int(name, base=16)
+            return (self.format % integer) == name
+        except ValueError:
+            return False

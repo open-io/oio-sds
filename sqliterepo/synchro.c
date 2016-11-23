@@ -18,6 +18,8 @@ License along with this library.
 */
 
 #include <errno.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 
 #include <metautils/lib/metautils.h>
 
@@ -52,26 +54,26 @@ static GError* _open(struct sqlx_sync_s *ss);
 static void _close(struct sqlx_sync_s *ss);
 
 static int _acreate (struct sqlx_sync_s *ss, const char *path, const char *v,
-        int vlen, int flags, string_completion_t completion, const void *data);
+		int vlen, int flags, string_completion_t completion, const void *data);
 
 static int _adelete (struct sqlx_sync_s *ss, const char *path, int version,
-        void_completion_t completion, const void *data);
+		void_completion_t completion, const void *data);
 
 static int _awexists (struct sqlx_sync_s *ss, const char *path,
 		watcher_fn watcher, void* watcherCtx,
 		stat_completion_t completion, const void *data);
 
 static int _awget (struct sqlx_sync_s *ss, const char *path,
-        watcher_fn watcher, void* watcherCtx,
-        data_completion_t completion, const void *data);
+		watcher_fn watcher, void* watcherCtx,
+		data_completion_t completion, const void *data);
 
 static int _awget_children (struct sqlx_sync_s *ss, const char *path,
-        watcher_fn watcher, void* watcherCtx,
-        strings_completion_t completion, const void *data);
+		watcher_fn watcher, void* watcherCtx,
+		strings_completion_t completion, const void *data);
 
 static int _awget_siblings (struct sqlx_sync_s *ss, const char *path,
-        watcher_fn watcher, void* watcherCtx,
-        strings_completion_t completion, const void *data);
+		watcher_fn watcher, void* watcherCtx,
+		strings_completion_t completion, const void *data);
 
 static void _set_exit_hook(struct sqlx_sync_s *ss, void (*on_exit_hook) (void*),
 		void *on_exit_ctx);
@@ -91,12 +93,30 @@ static struct sqlx_sync_vtable_s VTABLE =
 };
 
 struct sqlx_sync_s*
-sqlx_sync_create(const char *url)
+sqlx_sync_create(const char *url, gboolean shuffle)
 {
+	gchar **tokens = g_strsplit(url, ",", -1);
+	if (!tokens) {
+		GRID_ERROR("Invalid ZK connection string");
+		return NULL;
+	}
+	for (gchar **t=tokens; *t ;++t) {
+		if (!oio_str_is_set(*t)) {
+			GRID_ERROR("Invalid ZK connection string: empty tokens");
+			g_strfreev(tokens);
+			return NULL;
+		}
+	}
+
 	struct sqlx_sync_s *ss = g_malloc0(sizeof(struct sqlx_sync_s));
 	ss->vtable = &VTABLE;
-	ss->zk_url = g_strdup(url);
 	ss->zk_prefix = g_strdup("/NOTSET");
+
+	if (shuffle)
+		oio_ext_array_shuffle((void**)tokens, g_strv_length(tokens));
+	ss->zk_url = g_strjoinv(",", tokens);
+	g_strfreev(tokens);
+
 	return ss;
 }
 
@@ -174,52 +194,52 @@ _zk_init_env (void)
 //------------------------------------------------------------------------------
 
 static void
-zk_main_watch(zhandle_t *zh, int type, int state, const char *path,
+zk_main_watch(zhandle_t *zh UNUSED, int type, int state, const char *path UNUSED,
 		void *watcherCtx)
 {
 	metautils_ignore_signals();
 
-	GRID_DEBUG("%s(%p,%d,%d,%s,%p)", __FUNCTION__,
-			zh, type, state, path, watcherCtx);
-
 	struct sqlx_sync_s *ss = watcherCtx;
 	EXTRA_ASSERT (ss != NULL);
 
-	if (type != ZOO_SESSION_EVENT)
+	if (type != ZOO_SESSION_EVENT) {
+		GRID_TRACE("Zookeeper: non-session event type=%d state=%d path=%s",
+				type, state, path);
 		return;
+	}
 
 	if (state == ZOO_EXPIRED_SESSION_STATE) {
-		GRID_WARN("Zookeeper: (re)connecting to [%s]", ss->zk_url);
-		if (ss->zh)
+		if (ss->zh) {
+			GRID_NOTICE("Zookeeper: disconnecting (expired session)");
 			zookeeper_close(ss->zh);
+		}
 		if (NULL != ss->on_exit)
 			ss->on_exit(ss->on_exit_ctx);
 
 		/* XXX(jfs): forget the previous ID and reconnect */
 		memset (&ss->zk_id, 0, sizeof(ss->zk_id));
+		GRID_NOTICE("Zookeeper: starting connection to [%s]", ss->zk_url);
 		ss->zh = zookeeper_init(ss->zk_url, zk_main_watch,
 				SQLX_SYNC_DEFAULT_ZK_TIMEOUT, &ss->zk_id, ss, 0);
 		if (!ss->zh) {
-			GRID_ERROR("ZooKeeper init failure: (%d) %s",
+			GRID_ERROR("Zookeeper init failure: (%d) %s",
 					errno, strerror(errno));
 			grid_main_set_status (2);
 			grid_main_stop ();
 		}
-	}
-	else if (state == ZOO_AUTH_FAILED_STATE) {
+	} else if (state == ZOO_AUTH_FAILED_STATE) {
 		GRID_WARN("Zookeeper: auth problem to [%s]", ss->zk_url);
-	}
-	else if (state == ZOO_ASSOCIATING_STATE) {
+	} else if (state == ZOO_CONNECTING_STATE) {
+		GRID_NOTICE("Zookeeper: (re)connecting to [%s]", ss->zk_url);
+	} else if (state == ZOO_ASSOCIATING_STATE) {
 		GRID_DEBUG("Zookeeper: associating to [%s]", ss->zk_url);
-	}
-	else if (state == ZOO_CONNECTED_STATE) {
+	} else if (state == ZOO_CONNECTED_STATE) {
 		memcpy(&(ss->zk_id), zoo_client_id(ss->zh), sizeof(clientid_t));
 		GRID_INFO("Zookeeper: connected to [%s] id=%"G_GINT64_FORMAT,
 				ss->zk_url, ss->zk_id.client_id);
-	}
-	else {
-		GRID_INFO("Zookeeper: unmanaged event [%s] id=%"G_GINT64_FORMAT,
-				ss->zk_url, ss->zk_id.client_id);
+	} else {
+		GRID_WARN("Zookeeper: unmanaged event %d [%s] id=%"G_GINT64_FORMAT,
+				state, ss->zk_url, ss->zk_id.client_id);
 	}
 }
 
@@ -262,27 +282,27 @@ _clear(struct sqlx_sync_s *ss)
 
 static int
 _acreate (struct sqlx_sync_s *ss, const char *path, const char *v,
-        int vlen, int flags, string_completion_t completion, const void *data)
+		int vlen, int flags, string_completion_t completion, const void *data)
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
 	gchar *p = _realpath(ss, path);
 	int rc = zoo_acreate(ss->zh, p, v, vlen, &ZOO_OPEN_ACL_UNSAFE,
 			flags, completion, data);
-	GRID_TRACE2("SYNC create(%p) = %d", p, rc);
+	OUTGOING("ZK_CREATE %s %d", p, rc);
 	g_free(p);
 	return rc;
 }
 
 static int
 _adelete (struct sqlx_sync_s *ss, const char *path, int version,
-        void_completion_t completion, const void *data)
+		void_completion_t completion, const void *data)
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
 	gchar *p = _realpath(ss, path);
 	int rc = zoo_adelete(ss->zh, p, version, completion, data);
-	GRID_TRACE2("SYNC delete(%s) = %d", p, rc);
+	OUTGOING("ZK_DEL %s %d", p, rc);
 	g_free(p);
 	return rc;
 }
@@ -296,50 +316,50 @@ _awexists (struct sqlx_sync_s *ss, const char *path,
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
 	gchar *p = _realpath(ss, path);
 	int rc = zoo_awexists(ss->zh, p, watcher, watcherCtx, completion, data);
-	GRID_TRACE2("SYNC exists(%s) = %d", p, rc);
+	GRID_TRACE2("ZK_EXISTS %s %d", p, rc);
 	g_free(p);
 	return rc;
 }
 
 static int
 _awget (struct sqlx_sync_s *ss, const char *path,
-        watcher_fn watcher, void* watcherCtx,
-        data_completion_t completion, const void *data)
+		watcher_fn watcher, void* watcherCtx,
+		data_completion_t completion, const void *data)
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
 	gchar *p = _realpath(ss, path);
 	int rc = zoo_awget(ss->zh, p, watcher, watcherCtx, completion, data);
-	GRID_TRACE2("SYNC get(%s) = %d", p, rc);
+	OUTGOING("ZK_GET %s %d", p, rc);
 	g_free(p);
 	return rc;
 }
 
 static int
 _awget_children (struct sqlx_sync_s *ss, const char *path,
-        watcher_fn watcher, void* watcherCtx,
-        strings_completion_t completion, const void *data)
+		watcher_fn watcher, void* watcherCtx,
+		strings_completion_t completion, const void *data)
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
 	gchar *p = _realpath(ss, path);
 	int rc = zoo_awget_children(ss->zh, p, watcher, watcherCtx, completion,
 			data);
-	GRID_TRACE2("SYNC children(%s) = %d", p, rc);
+	OUTGOING("ZK_CHILDREN %s %d", p, rc);
 	g_free(p);
 	return rc;
 }
 
 static int
 _awget_siblings (struct sqlx_sync_s *ss, const char *path,
-        watcher_fn watcher, void* watcherCtx,
-        strings_completion_t completion, const void *data)
+		watcher_fn watcher, void* watcherCtx,
+		strings_completion_t completion, const void *data)
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
 	gchar *p = _realdirname(ss, path);
 	int rc = zoo_awget_children(ss->zh, p, watcher, watcherCtx, completion, data);
-	GRID_TRACE("SYNC children(%s) = %d", p, rc);
+	OUTGOING("ZK_CHILDREN %s %d", p, rc);
 	g_free(p);
 	return rc;
 }
@@ -383,6 +403,10 @@ struct sqlx_peering_direct_s
 	/* pool'ifies the client sockets to avoid reserving to many file
 	 * descriptors. */
 	struct gridd_client_pool_s *pool;
+
+	/* Some requests may be sent over a UDP channel. We just need a file
+	 * descriptor from the application */
+	int fd_udp;
 };
 
 struct sqlx_peering_s *
@@ -393,7 +417,17 @@ sqlx_peering_factory__create_direct (struct gridd_client_pool_s *pool,
 	self->vtable = &vtable_peering_DIRECT;
 	self->pool = pool;
 	self->factory = factory;
+	self->fd_udp = -1;
 	return (struct sqlx_peering_s*) self;
+}
+
+void
+sqlx_peering_direct__set_udp (struct sqlx_peering_s *self, int fd)
+{
+	if (!self) return;
+	struct sqlx_peering_direct_s *p = (struct sqlx_peering_direct_s*) self;
+	g_assert(p->vtable == &vtable_peering_DIRECT);
+	p->fd_udp = fd;
 }
 
 static void
@@ -401,7 +435,7 @@ _direct_destroy (struct sqlx_peering_s *self)
 {
 	if (!self) return;
 	struct sqlx_peering_direct_s *p = (struct sqlx_peering_direct_s*) self;
-	EXTRA_ASSERT(p->vtable == &vtable_peering_DIRECT);
+	g_assert(p->vtable == &vtable_peering_DIRECT);
 	g_free (p);
 }
 
@@ -415,15 +449,43 @@ _direct_use (struct sqlx_peering_s *self,
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(n != NULL);
 
-	GByteArray *req = sqlx_pack_USE(n);
-
-	struct event_client_s *mc = g_malloc0 (sizeof(struct event_client_s));
-	mc->client = gridd_client_factory_create_client (p->factory);
-	gridd_client_connect_url (mc->client, url);
-	gridd_client_request (mc->client, req, NULL, NULL);
-	gridd_client_set_timeout(mc->client, SQLX_SYNC_TIMEOUT);
-	gridd_client_pool_defer(p->pool, mc);
-	g_byte_array_unref(req);
+	if (p->fd_udp >= 0) {
+		struct sockaddr_storage ss;
+		gsize ss_len = sizeof(ss);
+		struct sockaddr *sa = (struct sockaddr*) &ss;
+		if (grid_string_to_sockaddr(url, sa, &ss_len)) {
+			GByteArray *req = sqlx_pack_USE(n);
+			ssize_t s = sendto(p->fd_udp, req->data, req->len, 0, sa, ss_len);
+			g_byte_array_unref(req);
+			if (s != req->len) {
+				int errsav = errno;
+				GRID_DEBUG("USE(%s,%s.%s) failed: (%d) %s",
+						url, n->base, n->type, errsav, strerror(errsav));
+			} else {
+				OUTGOING("DB_USE udp %s %s.%s", url, n->base, n->type);
+			}
+		}
+	} else {
+		struct event_client_s *mc = g_malloc0 (sizeof(struct event_client_s));
+		mc->client = gridd_client_factory_create_client (p->factory);
+		gridd_client_set_timeout(mc->client, SQLX_SYNC_TIMEOUT);
+		GError *err = gridd_client_connect_url (mc->client, url);
+		if (err) {
+			GRID_DEBUG("USE error: (%d) %s", err->code, err->message);
+			event_client_free(mc);
+		} else {
+			GByteArray *req = sqlx_pack_USE(n);
+			err = gridd_client_request (mc->client, req, NULL, NULL);
+			g_byte_array_unref(req);
+			if (err) {
+				GRID_DEBUG("USE error: (%d) %s", err->code, err->message);
+				event_client_free(mc);
+			} else {
+				gridd_client_pool_defer(p->pool, mc);
+				OUTGOING("DB_USE tcp %s %s.%s", url, n->base, n->type);
+			}
+		}
+	}
 }
 
 struct evtclient_PIPEFROM_s
@@ -443,7 +505,9 @@ on_end_PIPEFROM (struct evtclient_PIPEFROM_s *mc)
 	EXTRA_ASSERT(mc->ec.client != NULL);
 	GError *err = gridd_client_error(mc->ec.client);
 	mc->hook (err, mc->manager, sqlx_name_mutable_to_const(&mc->name), mc->reqid);
-	if (err) g_error_free(err);
+	if (err)
+		g_error_free(err);
+	sqlx_name_clean(&mc->name);
 }
 
 static void
@@ -461,8 +525,6 @@ _direct_pipefrom (struct sqlx_peering_s *self,
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(n != NULL);
 
-	GByteArray *req = sqlx_pack_PIPEFROM(n, src);
-
 	struct evtclient_PIPEFROM_s *mc =
 		g_malloc0 (sizeof(struct evtclient_PIPEFROM_s));
 	mc->ec.client = gridd_client_factory_create_client (p->factory);
@@ -472,12 +534,24 @@ _direct_pipefrom (struct sqlx_peering_s *self,
 	sqlx_name_dup (&mc->name, n);
 	mc->reqid = reqid;
 
-	gridd_client_connect_url (mc->ec.client, url);
-	gridd_client_request(mc->ec.client, req, NULL, NULL);
 	gridd_client_set_timeout(mc->ec.client, SQLX_RESYNC_TIMEOUT);
-	gridd_client_pool_defer(p->pool, &mc->ec);
 
-	g_byte_array_unref(req);
+	GError *err = gridd_client_connect_url (mc->ec.client, url);
+	if (NULL != err) {
+		gridd_client_fail(mc->ec.client, err);
+		event_client_free(&mc->ec);
+	} else {
+		GByteArray *req = sqlx_pack_PIPEFROM(n, src);
+		err = gridd_client_request(mc->ec.client, req, NULL, NULL);
+		g_byte_array_unref(req);
+		if (NULL != err) {
+			gridd_client_fail(mc->ec.client, err);
+			event_client_free(&mc->ec);
+		} else {
+			gridd_client_pool_defer(p->pool, &mc->ec);
+			OUTGOING("DB_PIPEFROM tcp %s %s.%s", url, n->base, n->type);
+		}
+	}
 }
 
 struct evtclient_GETVERS_s
@@ -498,13 +572,15 @@ on_end_GETVERS(struct evtclient_GETVERS_s *mc)
 	EXTRA_ASSERT(mc->ec.client != NULL);
 
 	GError *err = gridd_client_error(mc->ec.client);
-	if (err)
-		mc->hook (err, mc->manager, sqlx_name_mutable_to_const(&mc->name), mc->reqid, NULL);
-	else if (!mc->vremote) {
+	if (!err && !mc->vremote)
 		err = SYSERR("BUG: no version replied");
-		mc->hook (err, mc->manager, sqlx_name_mutable_to_const(&mc->name), mc->reqid, NULL);
-	} else {
-		mc->hook (NULL, mc->manager, sqlx_name_mutable_to_const(&mc->name), mc->reqid, mc->vremote);
+
+	if (likely(NULL != mc->hook)) {
+		const struct sqlx_name_s *n = sqlx_name_mutable_to_const(&mc->name);
+		if (err)
+			mc->hook (err, mc->manager, n, mc->reqid, NULL);
+		else
+			mc->hook (NULL, mc->manager, n, mc->reqid, mc->vremote);
 	}
 
 	if (mc->vremote)
@@ -562,15 +638,27 @@ _direct_getvers (struct sqlx_peering_s *self,
 	mc->reqid = reqid;
 	mc->vremote = NULL;
 
-	gridd_client_connect_url (mc->ec.client, url);
-
-	GByteArray *req = sqlx_pack_GETVERS(n);
-	gridd_client_request (mc->ec.client, req, mc, on_reply_GETVERS);
-	g_byte_array_unref(req);
-
 	gridd_client_set_timeout(mc->ec.client, SQLX_SYNC_TIMEOUT);
-	gridd_client_pool_defer(p->pool, &mc->ec);
+
+	GError *err = gridd_client_connect_url (mc->ec.client, url);
+	if (NULL != err) {
+		gridd_client_fail(mc->ec.client, err);
+		event_client_free(&mc->ec);
+	} else {
+		GByteArray *req = sqlx_pack_GETVERS(n);
+		err = gridd_client_request (mc->ec.client, req, mc, on_reply_GETVERS);
+		g_byte_array_unref(req);
+		if (NULL != err) {
+			gridd_client_fail(mc->ec.client, err);
+			event_client_free(&mc->ec);
+		} else {
+			gridd_client_pool_defer(p->pool, &mc->ec);
+			OUTGOING("DB_GETVERS tcp %s %s.%s", url, n->base, n->type);
+		}
+	}
 }
+
+/* -------------------------------------------------------------------------- */
 
 #define PEER_CALL(self,F) VTABLE_CALL(self,struct sqlx_peering_abstract_s*,F)
 

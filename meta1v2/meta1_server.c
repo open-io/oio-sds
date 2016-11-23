@@ -49,7 +49,7 @@ _reload_prefixes(struct sqlx_service_s *ss, gboolean init)
 	GArray *updated_prefixes=NULL;
 	struct meta1_prefixes_set_s *m1ps = meta1_backend_get_prefixes(m1);
 	GError *err = meta1_prefixes_load(m1ps, ss->ns_name, ss->url->str,
-			&updated_prefixes, &meta0_ok);
+			&updated_prefixes, &meta0_ok, m1->nb_digits);
 	if (err) {
 		g_prefix_error(&err, "Reload error: ");
 		if (updated_prefixes)
@@ -62,21 +62,13 @@ _reload_prefixes(struct sqlx_service_s *ss, gboolean init)
 	if (updated_prefixes && !init) {
 		if (updated_prefixes->len)
 			GRID_INFO("RELOAD prefix, nb updated prefixes %d",updated_prefixes->len);
-		guint i , max;
-		guint16 prefix;
-		gchar name[5];
-		max = updated_prefixes->len;
 
-		for ( i=0; i < max ; i++) {
-			prefix = g_array_index(updated_prefixes,guint16 , i);
-			g_snprintf(name, sizeof(name), "%02X%02X", ((guint8*)&prefix)[0], ((guint8*)&prefix)[1]);
-			if (meta1_prefixes_is_managed(m1ps,(guint8*)&prefix)) {
-				if (err) {
-					GRID_WARN("SQLX error : (%d) %s", err->code, err->message);
-					g_clear_error(&err);
-				}
-			}
-			else { // Lost prefix managed
+		for (guint i = 0; i < updated_prefixes->len ; i++) {
+			const guint16 prefix = g_array_index(updated_prefixes, guint16, i);
+			const guint8* bin = (guint8*)&prefix;
+			if (!meta1_prefixes_is_managed(m1ps, bin)) {
+				gchar name[5];
+				meta1_backend_basename(m1, bin, name, sizeof(name));
 				struct sqlx_name_s n = {.base=name, .type=NAME_SRVTYPE_META1, .ns=ss->ns_name};
 				err = election_exit(ss->election_manager, &n);
 				if (err) {
@@ -167,23 +159,18 @@ static GError *
 _get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
 		gboolean nocache, gchar ***result)
 {
-	container_id_t cid;
-	guchar s[3]= {0,0,0};
-
 	if (!n || !result)
-		return NEWERROR(CODE_INTERNAL_ERROR, "BUG [%s:%s:%d]", __FUNCTION__, __FILE__, __LINE__);
+		return NEWERROR(CODE_INTERNAL_ERROR, "BUG [%s:%s:%d]",
+				__FUNCTION__, __FILE__, __LINE__);
 	if (!g_str_has_prefix(n->type, NAME_SRVTYPE_META1))
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid type name");
 	if (!oio_str_ishexa(n->base,4))
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid base name");
 
-	memset(cid, 0, sizeof(container_id_t));
-	s[0] = n->base[0];
-	s[1] = n->base[1];
-	((guint8*)cid)[0] = g_ascii_strtoull((gchar*)s, NULL, 16);
-	s[0] = n->base[2];
-	s[1] = n->base[3];
-	((guint8*)cid)[1] = g_ascii_strtoull((gchar*)s, NULL, 16);
+	/* normalizes the maybe-shortened base name: 4 xdigits, padded
+	 * with zeroes if necessary. */
+	guint8 cid[2] = {0,0};
+	oio_str_hex2bin(n->base, cid, 2);
 
 	if (nocache) {
 		_reload_prefixes(ss, FALSE);

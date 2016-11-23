@@ -21,6 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+
 #include <json-c/json.h>
 
 #include <metautils/lib/metacomm.h>
@@ -106,68 +107,6 @@ meta0_backend_reload_requested(struct meta0_backend_s *m0)
 
 /* ------------------------------------------------------------------------- */
 
-void
-meta0_backend_migrate(struct meta0_backend_s *m0)
-{
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *handle=NULL;
-	struct sqlx_sqlite3_s *oldhandle=NULL;
-
-	struct sqlx_name_s n;
-	n.base = m0->ns;
-	n.type = NAME_SRVTYPE_META0;
-	n.ns = m0->ns;
-	err = sqlx_repository_open_and_lock(m0->repository, &n, SQLX_OPEN_LOCAL, &handle, NULL);
-	if ( err )
-	{
-		// check if the erreur message is the ENOENT message ; DB doesn't exist
-		if  (  (strstr(err->message, strerror(ENOENT)) != NULL) ) {
-			g_clear_error(&err);
-			err = sqlx_repository_open_and_lock(m0->repository, &n, SQLX_OPEN_LOCAL|SQLX_OPEN_CREATE,&handle, NULL);
-			if( !err ) {
-				// Migration (1.7 -> 1.8) from old meta0 database
-
-				n.base = m0->id;
-				err = sqlx_repository_open_and_lock(m0->repository, &n, SQLX_OPEN_LOCAL, &oldhandle,NULL);
-				if ( ! err ) {
-					GRID_INFO("Start Migrate meta0 database");
-					err = sqlx_repository_backup_base(oldhandle,handle);
-					if ( err ) {
-						GRID_ERROR("Failed to migrate meta0 database : (%d) %s",err->code,err->message);
-					} else {
-						sqlx_repository_unlock_and_close_noerror(oldhandle);
-						// APPLY schema
-						gint rc;
-						char *errmsg = NULL;
-						rc = sqlite3_exec(handle->db, META0_SCHEMA, NULL, NULL, &errmsg);
-						if (rc != SQLITE_OK && rc != SQLITE_DONE)  {
-							GRID_WARN("Failed to apply schema (%d) %s %s",rc,sqlite3_errmsg(handle->db), errmsg);
-						}
-						if(errmsg != NULL)
-							g_free(errmsg);
-
-						// set table version
-						GRID_INFO("Update version in database");
-						sqlx_admin_inc_all_versions(handle, 2);
-					}
-
-				} else {
-					// database 1.7  doesn't existe ; new grid
-					g_clear_error(&err);
-					err = NULL;
-				}
-			} else {
-				GRID_ERROR("Failed to create meta0 database :(%d) %s",err->code,err->message);
-			}
-		}
-	}
-	if ( handle)
-		sqlx_repository_unlock_and_close_noerror(handle);
-
-}
-
-/* ------------------------------------------------------------------------- */
-
 static GError*
 _load_from_base(struct sqlx_sqlite3_s *sq3, GPtrArray **result)
 {
@@ -200,7 +139,6 @@ _load_from_base(struct sqlx_sqlite3_s *sq3, GPtrArray **result)
 				GRID_WARN("Invalid prefix for URL [%s] ROWID %"G_GINT64_FORMAT,
 						url, rowid);
 			else {
-				meta0_utils_check_url_from_base((gchar**)&url);
 				meta0_utils_array_add(array, prefix, (gchar*)url);
 				count ++;
 			}
@@ -304,68 +242,6 @@ _load(struct meta0_backend_s *m0)
 
 	_unlock_and_close(sq3);
 	return err;
-}
-
-static GError*
-_fill_in__transaction (sqlite3 *db, const char * const *urls, guint max, guint shift)
-{
-	gint rc;
-	guint idx;
-	sqlite3_stmt *stmt = NULL;
-	GError *err = NULL;
-
-	sqlite3_prepare_debug(rc, db, "INSERT INTO meta1"
-			" (prefix,addr) VALUES (?,?)", -1, &stmt, NULL);
-	if (rc != SQLITE_OK && rc != SQLITE_DONE)
-		return SQLITE_GERROR(db, rc);
-
-	/* One partition for each url */
-	for (idx = 0; idx < CID_PREFIX_COUNT; idx++) {
-
-		const char * const *purl = urls + ((idx+shift) % max);
-		guint16 index16 = idx;
-
-		sqlite3_reset(stmt);
-		sqlite3_clear_bindings(stmt);
-		sqlite3_bind_blob(stmt, 1, &index16, 2, NULL);
-		sqlite3_bind_text(stmt, 2, *purl, -1, NULL);
-		while (!err) {
-			rc = sqlite3_step(stmt);
-			if (rc == SQLITE_OK || rc == SQLITE_DONE)
-				break;
-			if (rc == SQLITE_BUSY)
-				sleep(1);
-			else
-				err = SQLITE_GERROR(db, rc);
-		}
-	}
-	sqlite3_finalize_debug(rc, stmt);
-
-	return err;
-}
-
-/**
- * Assign prefixes to meta1 in a round-robin fashion.
- */
-static GError*
-_fill_rr(struct sqlx_sqlite3_s *sq3, guint replicas, const char * const *m1urls)
-{
-	const guint max = oio_strv_length(m1urls);
-	EXTRA_ASSERT(max > 0 && max < CID_PREFIX_COUNT);
-
-	struct sqlx_repctx_s *repctx = NULL;
-	GError *err = sqlx_transaction_begin(sq3, &repctx);
-	if (NULL != err)
-		return err;
-
-	while (replicas--) {
-		err = _fill_in__transaction(sq3->db, m1urls, max, replicas);
-		if (err)
-			 break;
-	}
-	if (!err)
-		sqlx_transaction_notify_huge_changes(repctx);
-	return sqlx_transaction_end(repctx, err);
 }
 
 static GError *
@@ -622,24 +498,6 @@ _delete_meta1_ref(sqlite3 *db, gchar *meta1_ref)
 }
 
 /* ------------------------------------------------------------------------- */
-
-GError*
-meta0_backend_fill_rr(struct meta0_backend_s *m0, guint replicas,
-		const char * const *m1urls)
-{
-	EXTRA_ASSERT(m0 != NULL);
-	EXTRA_ASSERT(replicas < 65535);
-	EXTRA_ASSERT(m1urls != 0);
-
-	struct sqlx_sqlite3_s *sq3 = NULL;
-	GError *err = _open_and_lock(m0, M0V2_OPENBASE_MASTERONLY, &sq3);
-	if (!err) {
-		err = _fill_rr(sq3, replicas, m1urls);
-		_unlock_and_close(sq3);
-	}
-
-	return err;
-}
 
 GError*
 meta0_backend_fill_from_json(struct meta0_backend_s *m0,
