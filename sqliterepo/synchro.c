@@ -194,19 +194,19 @@ _zk_init_env (void)
 //------------------------------------------------------------------------------
 
 static void
-zk_main_watch(zhandle_t *zh, int type, int state, const char *path,
+zk_main_watch(zhandle_t *zh UNUSED, int type, int state, const char *path UNUSED,
 		void *watcherCtx)
 {
 	metautils_ignore_signals();
 
-	GRID_DEBUG("%s(%p,%d,%d,%s,%p)", __FUNCTION__,
-			zh, type, state, path, watcherCtx);
-
 	struct sqlx_sync_s *ss = watcherCtx;
 	EXTRA_ASSERT (ss != NULL);
 
-	if (type != ZOO_SESSION_EVENT)
+	if (type != ZOO_SESSION_EVENT) {
+		GRID_TRACE("Zookeeper: non-session event type=%d state=%d path=%s",
+				type, state, path);
 		return;
+	}
 
 	if (state == ZOO_EXPIRED_SESSION_STATE) {
 		if (ss->zh) {
