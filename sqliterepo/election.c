@@ -1619,7 +1619,6 @@ _election_get_status(struct election_manager_s *mgr,
 
 	g_mutex_lock(&mgr->lock);
 	struct election_member_s *m = _LOCKED_init_member(mgr, n, TRUE);
-	transition(m, EVT_NONE, NULL);
 
 	if (!wait_for_final_status(m, deadline)) // TIMEOUT!
 		rc = STEP_FAILED;
