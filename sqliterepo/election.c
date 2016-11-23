@@ -1585,11 +1585,13 @@ wait_for_final_status(struct election_member_s *m, gint64 deadline)
 
 		/* compare internal timers to our fake'able clock */
 		if (now > deadline) {
-			GRID_WARN("TIMEOUT! (wait) [%s.%s]", m->name.base, m->name.type);
+			GRID_WARN("TIMEOUT! (waiting for election status) [%s.%s]",
+					m->name.base, m->name.type);
 			return FALSE;
 		}
 		if (ACTION_FAIL == _member_get_next_action(m)) {
-			GRID_WARN("TIMEOUT! (pending) [%s.%s]", m->name.base, m->name.type);
+			GRID_WARN("TIMEOUT! (election pending for too long) [%s.%s]",
+					m->name.base, m->name.type);
 			return FALSE;
 		}
 
@@ -1656,6 +1658,17 @@ _election_get_status(struct election_manager_s *mgr,
 static gboolean
 defer_USE(struct election_member_s *member)
 {
+	const gint64 now = oio_ext_monotonic_time();
+
+	/* Sometimes, defer_USE() is called after a check for a delay after
+	 * last_USE, sometimes not. When there is already a check, the delay is
+	 * ~ always longer than the following G_TIME_SPAN_SECOND, so this check
+	 * is harmful */
+	if (now - member->last_USE > G_TIME_SPAN_SECOND) {
+		member_trace(__FUNCTION__, "USE avoided (too recent)", member);
+		return TRUE;
+	}
+
 	gchar **peers = NULL;
 	GError *err = member_get_peers(member, FALSE, &peers);
 	if (err != NULL) {
@@ -1666,7 +1679,7 @@ defer_USE(struct election_member_s *member)
 	}
 
 	if (!peers || !*peers) {
-		member_trace(__FUNCTION__, "USE avoided", member);
+		member_trace(__FUNCTION__, "USE avoided (no peers)", member);
 	} else {
 		member->last_USE = oio_ext_monotonic_time();
 		for (gchar **p=peers; p && *p ;p++)
