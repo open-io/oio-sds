@@ -75,6 +75,6 @@ make -C tests/unit test
 
 test_worm -f "${SRCDIR}/etc/bootstrap-WORM.yml"
 test_slave -f "${SRCDIR}/etc/bootstrap-SLAVE.yml"
-func_tests -f "${SRCDIR}/etc/bootstrap-SINGLE.yml"
+func_tests -f "${SRCDIR}/etc/bootstrap-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-smallcache.yml"
 func_tests -f "${SRCDIR}/etc/bootstrap-3COPIES-11RAWX.yml"
 func_tests -f "${SRCDIR}/etc/bootstrap-EC.yml"
