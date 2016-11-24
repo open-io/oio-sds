@@ -278,13 +278,13 @@ _configure_limits(struct sqlx_service_s *ss)
 	}
 
 	// We keep 20 FDs for unexpected cases (sqlite sometimes uses
-	// temporary files, event when we ask for memory journals).
+	// temporary files, even when we ask for memory journals).
 	total = (limit.rlim_cur - 20);
 	// If user sets outstanding values for the first 2 parameters,
 	// there is still 2% available for the 3rd.
 	max = total * 49 / 100;
-	// This is totally arbitrary.
-	min = total / 100;
+	// Hardcoded in sqlx_repository_configure_maxbases()
+	min = 4;
 
 	available = total;
 
