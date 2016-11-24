@@ -1700,15 +1700,22 @@ _result_PIPEFROM (GError *e, struct election_manager_s *manager,
 {
 	hashstr_t *key = sqliterepo_hash_name (n);
 
-	GRID_DEBUG("PIPEFROM result [%s.%s] [%s]: (%d) %s",
-			n->base, n->type, hashstr_str(key),
-			e?e->code:0, e?e->message:"OK");
+	if (!e || CODE_IS_OK(e->code)) {
+		GRID_DEBUG("PIPEFROM ok [%s.%s] [%s]",
+				n->base, n->type, hashstr_str(key));
+	} else {
+		GRID_WARN("PIPEFROM failed [%s.%s] [%s]: (%d) %s",
+				n->base, n->type, hashstr_str(key),
+				e->code, e->message);
+	}
 
 	struct election_member_s *member = manager_get_member (manager, key);
 	g_free (key);
 
 	if (member) {
 		member_lock(member);
+		/* We do the transition even if we undergo an error.
+		 * This means we are not consistent but eventually consistent. */
 		transition(member, EVT_RESYNC_DONE, &reqid);
 		member_unref(member);
 		member_unlock(member);
