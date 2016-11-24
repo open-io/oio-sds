@@ -679,18 +679,24 @@ _cb_ping(struct network_client_s *clt, struct network_server_s *srv)
 	EXTRA_ASSERT(clt != NULL);
 	EXTRA_ASSERT(clt->server == srv);
 
-	const gint64 now = oio_ext_monotonic_time();
-
-	/* COMMON_CNX_TIMEOUT is arbitrary but it avoid managing pings
-	 * that have probably been retried by the emitter. */
-	if (now - clt->time.evt_in > OIO_SERVER_UDP_QUEUE_MAXAGE) {
-		GRID_DEBUG("PING %s -> %s queued for too long",
+	if (!srv->flag_continue) {
+		GRID_TRACE("PING %s -> %s discarded (server stopping)",
 				clt->peer_name, clt->local_name);
 	} else {
-		int rc = clt->transport.notify_input(clt);
-		if (rc != RC_PROCESSED) {
-			GRID_DEBUG("PING %s -> %s processing error",
+
+		const gint64 now = oio_ext_monotonic_time();
+
+		/* COMMON_CNX_TIMEOUT is arbitrary but it avoid managing pings
+		 * that have probably been retried by the emitter. */
+		if (now - clt->time.evt_in > OIO_SERVER_UDP_QUEUE_MAXAGE) {
+			GRID_DEBUG("PING %s -> %s queued for too long",
 					clt->peer_name, clt->local_name);
+		} else {
+			int rc = clt->transport.notify_input(clt);
+			if (rc != RC_PROCESSED) {
+				GRID_DEBUG("PING %s -> %s processing error",
+						clt->peer_name, clt->local_name);
+			}
 		}
 	}
 	_client_clean(srv, clt);
