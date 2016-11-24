@@ -1753,11 +1753,14 @@ _result_GETVERS (GError *enet,
 	EXTRA_ASSERT(name != NULL);
 	EXTRA_ASSERT((enet != NULL) ^ (vremote != NULL));
 
-	if (!enet) {
+	if (enet) {
+		err = g_error_copy(enet);
+	} else {
 		err = manager->config->get_version (manager->config->ctx, name, &vlocal);
 		EXTRA_ASSERT ((err != NULL) ^ (vlocal != NULL));
 	}
-	if (!err && !enet) {
+
+	if (!err) {
 		gint64 worst = 0;
 		err = version_validate_diff(vlocal, vremote, &worst);
 		if (NULL != err) {
