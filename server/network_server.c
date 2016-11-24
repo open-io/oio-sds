@@ -678,10 +678,20 @@ _cb_ping(struct network_client_s *clt, struct network_server_s *srv)
 {
 	EXTRA_ASSERT(clt != NULL);
 	EXTRA_ASSERT(clt->server == srv);
-	int rc = clt->transport.notify_input(clt);
-	if (rc != RC_PROCESSED) {
-		GRID_DEBUG("PING %s -> %s processing error",
+
+	const gint64 now = oio_ext_monotonic_time();
+
+	/* COMMON_CNX_TIMEOUT is arbitrary but it avoid managing pings
+	 * that have probably been retried by the emitter. */
+	if (now - clt->time.evt_in > OIO_SERVER_UDP_QUEUE_MAXAGE) {
+		GRID_DEBUG("PING %s -> %s queued for too long",
 				clt->peer_name, clt->local_name);
+	} else {
+		int rc = clt->transport.notify_input(clt);
+		if (rc != RC_PROCESSED) {
+			GRID_DEBUG("PING %s -> %s processing error",
+					clt->peer_name, clt->local_name);
+		}
 	}
 	_client_clean(srv, clt);
 }
@@ -727,16 +737,25 @@ _manage_ping_event(struct network_server_s *srv, struct endpoint_s *e,
 		if (NULL != clt->transport.notify_input) {
 			GError *err = NULL;
 
-			if (!g_thread_pool_push(srv->pool_udp, clt, &err)) {
-				GRID_WARN("PING %s -> %s (%"G_GSIZE_FORMAT") discarded: (%d) %s",
-						clt->peer_name, clt->local_name,
-						data_slab_sequence_size(&clt->input),
-						err->code, err->message);
-				_client_clean(srv, clt);
-			} else {
-				GRID_TRACE("PING %s -> %s (%"G_GSIZE_FORMAT") defered",
+			/* OIO_SERVER_UDP_QUEUE_MAXLEN is arbitrary, but it is only used to
+			 * avoid a memory leak */
+			const guint unprocessed = g_thread_pool_unprocessed(srv->pool_udp);
+			if (unprocessed > OIO_SERVER_UDP_QUEUE_MAXLEN) {
+				GRID_DEBUG("PING %s -> %s (%"G_GSIZE_FORMAT") dropped",
 						clt->peer_name, clt->local_name,
 						data_slab_sequence_size(&clt->input));
+			} else {
+				if (!g_thread_pool_push(srv->pool_udp, clt, &err)) {
+					GRID_WARN("PING %s -> %s (%"G_GSIZE_FORMAT") discarded: (%d) %s",
+							clt->peer_name, clt->local_name,
+							data_slab_sequence_size(&clt->input),
+							err->code, err->message);
+					_client_clean(srv, clt);
+				} else {
+					GRID_TRACE("PING %s -> %s (%"G_GSIZE_FORMAT") defered",
+							clt->peer_name, clt->local_name,
+							data_slab_sequence_size(&clt->input));
+				}
 			}
 		} else {
 			GRID_DEBUG("PING %s -> %s (%"G_GSIZE_FORMAT") discarded: %s",
