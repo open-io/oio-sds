@@ -93,9 +93,9 @@ _get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
 
 	if (!n || !result)
 		return NEWERROR(CODE_INTERNAL_ERROR, "BUG [%s:%s:%d]", __FUNCTION__, __FILE__, __LINE__);
-	if (g_ascii_strcasecmp(n->type, NAME_SRVTYPE_META0))
+	if (0 != strcmp(n->type, NAME_SRVTYPE_META0))
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid type name");
-	if (g_ascii_strcasecmp(n->base, ss->ns_name))
+	if (0 != strcmp(n->base, ss->ns_name))
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid base name, expected [%s]", ss->ns_name);
 
 	err = list_zk_children_node(m0zkmanager, NULL, &peers);

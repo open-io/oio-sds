@@ -152,6 +152,8 @@ GError * election_has_peers (struct election_manager_s *m,
 GError* election_manager_create (struct replication_config_s *config,
 		struct election_manager_s **result);
 
+void election_manager_dump_delays(struct election_manager_s *manager);
+
 struct election_counts_s election_manager_count (struct election_manager_s *m);
 
 /* Perform the 'timer' action on one item of each status.
@@ -170,5 +172,7 @@ void election_manager_set_sync (struct election_manager_s *manager,
 
 void election_manager_set_peering (struct election_manager_s *m,
 		struct sqlx_peering_s *peering);
+
+struct election_member_s;
 
 #endif /*OIO_SDS__sqliterepo__election_h*/

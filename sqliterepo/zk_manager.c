@@ -54,8 +54,8 @@ get_fullpath(struct zk_manager_s *manager, gchar *subdir, gchar* name)
 	if ( name ) {
 		struct sqlx_name_s n = {"", "", ""};
 		n.base = name;
-		struct hashstr_s *key = sqliterepo_hash_name(&n);
-		oio_str_reuse (&result, g_strdup_printf("%s/%s", result, hashstr_str(key)));
+		gchar *key = sqliterepo_hash_name(&n);
+		oio_str_reuse (&result, g_strdup_printf("%s/%s", result, key));
 		g_free(key);
 	}
 

@@ -137,9 +137,7 @@ if [ -n "$ZK" ] ; then
     opts=
     for srvtype in ${AVOID} ; do opts="${opts} --avoid=${srvtype}" ; done
     if [ $ZKSLOW -ne 0 ] ; then opts="${opts} --slow" ; fi
-    if [ $ZKRESET -ne 0 ] ; then
-        zk-reset.py "$NS" ;
-    fi
+	zk-reset.py "$NS" ;
     zk-bootstrap.py $opts "$NS"
 fi
 

@@ -402,6 +402,7 @@ _configure_replication(struct sqlx_service_s *ss)
 		return FALSE;
 	}
 
+	election_manager_dump_delays(ss->election_manager);
 	return TRUE;
 }
 

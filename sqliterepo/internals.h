@@ -60,12 +60,8 @@ License along with this library.
 #  define SQLX_DELAY_MAXWAIT 5 * G_TIME_SPAN_SECOND
 # endif
 
-# ifndef  SQLX_DELAY_MAXIDLE
-#  define SQLX_DELAY_MAXIDLE 30 * G_TIME_SPAN_SECOND
-# endif
-
-# ifndef  SQLX_DELAY_ELECTION_REPLAY
-#  define SQLX_DELAY_ELECTION_REPLAY 5 * G_TIME_SPAN_SECOND
+# ifndef  SQLX_DELAY_NOWAIT_PENDING
+#  define SQLX_DELAY_NOWAIT_PENDING 15 * G_TIME_SPAN_SECOND
 # endif
 
 # ifndef  SQLX_DELAY_RESTART_FAILED
@@ -76,10 +72,6 @@ License along with this library.
 #  define SQLX_DELAY_PING_FAILED 5 * G_TIME_SPAN_SECOND
 # endif
 
-# ifndef  SQLX_DELAY_PING_PENDING
-#  define SQLX_DELAY_PING_PENDING 2 * G_TIME_SPAN_SECOND
-# endif
-
 # ifndef  SQLX_DELAY_PING_FINAL
 #  define SQLX_DELAY_PING_FINAL 15 * G_TIME_SPAN_MINUTE
 # endif
@@ -88,8 +80,8 @@ License along with this library.
 #  define SQLX_DELAY_EXPIRE_FAILED 5 * G_TIME_SPAN_MINUTE
 # endif
 
-# ifndef  SQLX_DELAY_EXPIRE_FINAL
-#  define SQLX_DELAY_EXPIRE_FINAL 5 * G_TIME_SPAN_MINUTE
+# ifndef  SQLX_DELAY_EXPIRE_SLAVE
+#  define SQLX_DELAY_EXPIRE_SLAVE 5 * G_TIME_SPAN_MINUTE
 # endif
 
 # ifndef  SQLX_DELAY_EXPIRE_NONE

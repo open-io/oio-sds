@@ -35,34 +35,56 @@ static volatile gint64 CLOCK = 0;
 static gint64 _get_monotonic (void) { return CLOCK; }
 static gint64 _get_real (void) { return CLOCK; }
 
+static void
+member_reset_requests(struct election_member_s *m)
+{
+	m->requested_LEAVE = 0;
+	m->requested_USE = 0;
+	m->requested_PIPEFROM = 0;
+	m->requested_LEFT_MASTER = 0;
+	m->requested_LEFT_SELF = 0;
+}
+
+static gboolean
+member_has_request (struct election_member_s *m)
+{
+	return m->requested_LEAVE != 0
+		|| m->requested_USE != 0
+		|| m->requested_PIPEFROM != 0
+		|| m->requested_LEFT_MASTER != 0
+		|| m->requested_LEFT_SELF != 0;
+}
+
 /* -------------------------------------------------------------------------- */
 
 static const char * _get_id (gpointer ctx) { (void) ctx; return "ID0"; }
 
 static GError*
-_get_peers (gpointer ctx, const struct sqlx_name_s *n, gboolean nocache,
-		gchar ***result)
+_get_peers (gpointer ctx UNUSED, const struct sqlx_name_s *n UNUSED,
+		gboolean nocache UNUSED, gchar ***result)
 {
-	(void) ctx, (void) n, (void) nocache;
-	static char *tab[] = { "ID1", NULL };
-	*result = g_strdupv (tab);
+	if (result) {
+		static char *tab[] = { "ID1", "ID0", NULL };
+		*result = g_strdupv (tab);
+	}
 	return NULL;
 }
 
 static GError*
-_get_peers_none (gpointer ctx, const struct sqlx_name_s *n, gboolean nocache,
-		gchar ***result)
+_get_peers_none (gpointer ctx UNUSED, const struct sqlx_name_s *n UNUSED,
+		gboolean nocache UNUSED, gchar ***result)
 {
-	(void) ctx, (void) n, (void) nocache;
-	*result = g_malloc0(sizeof(gchar*));
+	if (result)
+		*result = g_malloc0(sizeof(gchar*));
 	return NULL;
 }
 
 static GError*
-_get_vers (gpointer ctx, const struct sqlx_name_s *n, GTree **result)
+_get_vers (gpointer ctx UNUSED, const struct sqlx_name_s *n UNUSED,
+		GTree **result)
 {
-	(void) ctx, (void) n;
-	*result = version_empty();
+	if (result)
+		*result = version_empty();
 	return NULL;
 }
 
@@ -118,7 +140,6 @@ _peering_getvers (struct sqlx_peering_s *self,
 {
 	(void) self, (void) url, (void) n;
 	(void) manager, (void) reqid, (void) result;
-	GRID_DEBUG (">>> %s (%s)", __FUNCTION__, url);
 }
 
 static void
@@ -133,7 +154,6 @@ _peering_pipefrom (struct sqlx_peering_s *self,
 {
 	(void) self, (void) url, (void) n, (void) src;
 	(void) manager, (void) reqid, (void) result;
-	GRID_DEBUG (">>> %s (%s)", __FUNCTION__, url);
 }
 
 static struct sqlx_peering_s *
@@ -148,24 +168,22 @@ _peering_noop (void)
 
 enum hook_type_e
 {
-	CREATE = 1,
-	DELETE,
-	EXISTS_DONE,
-	GET_DONE,
-	CHILDREN_DONE,
-	SIBLINGS_DONE,
+	CMD_CREATE = 1,
+	CMD_DELETE,
+	CMD_EXIST,
+	CMD_GET,
+	CMD_LIST,
 };
 
 static const char *
 _pending_2str (enum hook_type_e t)
 {
 	switch (t) {
-		ON_ENUM(,CREATE);
-		ON_ENUM(,DELETE);
-		ON_ENUM(,EXISTS_DONE);
-		ON_ENUM(,GET_DONE);
-		ON_ENUM(,CHILDREN_DONE);
-		ON_ENUM(,SIBLINGS_DONE);
+		ON_ENUM(,CMD_CREATE);
+		ON_ENUM(,CMD_DELETE);
+		ON_ENUM(,CMD_EXIST);
+		ON_ENUM(,CMD_GET);
+		ON_ENUM(,CMD_LIST);
 	}
 
 	g_assert_not_reached ();
@@ -220,7 +238,6 @@ struct sqlx_sync_vtable_s vtable_sync_NOOP =
 static void
 _sync_clear (struct sqlx_sync_s *ss)
 {
-	GRID_DEBUG ("%s", __FUNCTION__);
 	EXTRA_ASSERT (ss->vtable == &vtable_sync_NOOP);
 	g_array_free (ss->pending, TRUE);
 	g_free (ss);
@@ -248,8 +265,7 @@ _sync_acreate (struct sqlx_sync_s *ss, const char *path, const char *v,
 	(void) ss;
 	(void) path, (void) v, (void) vlen, (void) flags;
 	(void) completion, (void) data;
-	GRID_DEBUG (".oO %s %s", __FUNCTION__, path);
-	enum hook_type_e val = CREATE;
+	enum hook_type_e val = CMD_CREATE;
 	g_array_append_vals (ss->pending, &val, 1);
 	return ZOK;
 }
@@ -260,8 +276,7 @@ _sync_adelete (struct sqlx_sync_s *ss, const char *path, int version,
 {
 	(void) ss, (void) path, (void) version;
 	(void) completion, (void) data;
-	GRID_DEBUG (".oO %s %s", __FUNCTION__, path);
-	enum hook_type_e val = DELETE;
+	enum hook_type_e val = CMD_DELETE;
 	g_array_append_vals (ss->pending, &val, 1);
 	return ZOK;
 }
@@ -274,9 +289,8 @@ _sync_awexists (struct sqlx_sync_s *ss, const char *path,
 	(void) ss, (void) path;
 	(void) watcher, (void) watcherCtx;
 	(void) completion, (void) data;
-	GRID_DEBUG (".oO %s %s", __FUNCTION__, path);
 	if (completion) {
-		enum hook_type_e val = EXISTS_DONE;
+		enum hook_type_e val = CMD_EXIST;
 		g_array_append_vals (ss->pending, &val, 1);
 	}
 	return ZOK;
@@ -289,9 +303,8 @@ static int _sync_awget (struct sqlx_sync_s *ss, const char *path,
 	(void) ss, (void) path;
 	(void) watcher, (void) watcherCtx;
 	(void) completion, (void) data;
-	GRID_DEBUG (".oO %s %s", __FUNCTION__, path);
 	if (completion) {
-		enum hook_type_e val = GET_DONE;
+		enum hook_type_e val = CMD_GET;
 		g_array_append_vals (ss->pending, &val, 1);
 	}
 	return ZOK;
@@ -305,9 +318,8 @@ _sync_awget_children (struct sqlx_sync_s *ss, const char *path,
 	(void) ss, (void) path;
 	(void) watcher, (void) watcherCtx;
 	(void) completion, (void) data;
-	GRID_DEBUG (".oO %s %s", __FUNCTION__, path);
 	if (completion) {
-		enum hook_type_e val = CHILDREN_DONE;
+		enum hook_type_e val = CMD_LIST;
 		g_array_append_vals (ss->pending, &val, 1);
 	}
 	return ZOK;
@@ -321,9 +333,8 @@ _sync_awget_siblings (struct sqlx_sync_s *ss, const char *path,
 	(void) ss, (void) path;
 	(void) watcher, (void) watcherCtx;
 	(void) completion, (void) data;
-	GRID_DEBUG (".oO %s %s", __FUNCTION__, path);
 	if (completion) {
-		enum hook_type_e val = SIBLINGS_DONE;
+		enum hook_type_e val = CMD_LIST;
 		g_array_append_vals (ss->pending, &val, 1);
 	}
 	return ZOK;
@@ -399,233 +410,13 @@ exit:
 	return rc;
 }
 
-static guint
-_member_refcount (struct election_manager_s *manager, struct sqlx_name_s *n)
-{
-	hashstr_t *_k = sqliterepo_hash_name (n);
-	struct election_member_s *m = manager_get_member (manager, _k);
-	g_free (_k);
-	g_assert_nonnull (m);
-	guint count = m->refcount;
-	member_unref (m);
-	return count - 1;
-}
-
-#define _test_notfound() do \
-{ \
-	hashstr_t *_k = sqliterepo_hash_name (&name); \
-	struct election_member_s *m = manager_get_member (manager, _k); \
-	g_free (_k); \
-	g_assert_null (m); \
-} while (0)
-
-
-#define _test_found(action) do \
-{ \
-	hashstr_t *_k = sqliterepo_hash_name (&name); \
-	struct election_member_s *m = manager_get_member (manager, _k); \
-	g_free (_k); \
-	g_assert_nonnull (m); \
-	action; \
-	member_unref (m);\
-} while (0)
-
-#define _test_unref() _test_found( \
-	member_unref(m); \
-)
-
-#define _test_transition(evt,arg,post) _test_found( \
+#define _test_nochange(evt,arg) do { \
+	enum election_step_e _pre = m->step; \
 	transition (m, evt, arg); \
-	g_assert_cmpint (m->step, ==, post); \
-)
-
-#define _test_nochange(evt,arg) _test_found( \
-	enum election_step_e before_##evt = m->step; \
-	transition (m, evt, arg); \
-	g_assert_cmpint (m->step, ==, before_##evt); \
-)
+	g_assert_cmpint (m->step, ==, _pre); \
+} while (0)
 
 #define _pending(...) g_assert_true (_pending_check(sync->pending, __VA_ARGS__))
-
-#define _refcount() _member_refcount(manager, &name)
-
-#define _trace() do \
-{ \
-	hashstr_t *_k = sqliterepo_hash_name (&name); \
-	struct election_member_s *m = manager_get_member (manager, _k); \
-	g_free (_k); \
-	member_trace (__FUNCTION__, "test", m); \
-	member_unref(m); \
-} while (0)
-
-static void
-test_single (void)
-{
-	struct sqlx_name_s name = {
-		.base = "base", .type = "type", .ns = "NS",
-	};
-	struct replication_config_s config = {
-		_get_id, _get_peers, _get_vers, NULL, ELECTION_MODE_GROUP
-	};
-	struct sqlx_sync_s *sync = NULL;
-	struct sqlx_peering_s *peering = NULL;
-	struct election_manager_s *manager = NULL;
-	GArray *iv = g_array_new (0,0,sizeof(gint64));
-	gint64 i64 = 0;
-	guint u = 0;
-
-	CLOCK_START = CLOCK = oio_ext_rand_int ();
-
-	sync = _sync_factory__noop ();
-	g_assert_nonnull (sync);
-	peering = _peering_noop ();
-	g_assert_nonnull (peering);
-
-	g_assert_no_error (election_manager_create (&config, &manager));
-	g_assert_nonnull (manager);
-	election_manager_set_sync (manager, sync);
-	election_manager_set_peering (manager, peering);
-
-	_test_notfound ();
-
-	g_assert_no_error (_election_init (manager, &name));
-
-	_test_nochange (EVT_LIST_OK, NULL);
-	_pending (0);
-	_test_nochange (EVT_LIST_KO, NULL);
-	_pending (0);
-	_test_nochange (EVT_RESYNC_DONE, &u);
-	_pending (0);
-	_test_nochange (EVT_MASTER_KO, NULL);
-	_pending (0);
-	_test_nochange (EVT_MASTER_EMPTY, NULL);
-	_pending (0);
-	_test_nochange (EVT_MASTER_OK, NULL);
-	_pending (0);
-	_test_nochange (EVT_MASTER_CHANGE, NULL);
-	_pending (0);
-
-	_test_transition (EVT_NONE, NULL, STEP_CANDREQ);
-	_pending (CREATE, 0);
-	_test_nochange (EVT_NONE, NULL);
-	_pending (CREATE, 0);
-	_test_nochange (EVT_MASTER_KO, NULL);
-	_pending (CREATE, 0);
-	_test_nochange (EVT_MASTER_EMPTY, NULL);
-	_pending (CREATE, 0);
-	_test_nochange (EVT_MASTER_OK, NULL);
-	_pending (CREATE, 0);
-	_test_nochange (EVT_MASTER_CHANGE, NULL);
-	_pending (CREATE, 0);
-
-#if 0
-	_test_transition (EVT_DISCONNECTED, NULL, STEP_FAILED);
-	_test_nochange (EVT_DISCONNECTED, NULL);
-	_test_nochange (EVT_NONE, NULL);
-
-	CLOCK += manager->delay_retry_failed + 1;
-
-	_test_transition (EVT_NONE, NULL, STEP_CANDREQ);
-#endif
-
-	g_assert_cmpuint (0, ==, election_manager_play_timers (manager, 0));
-
-	g_array_remove_index_fast (sync->pending, 0);
-	_pending (0);
-	do {
-		hashstr_t *key = sqliterepo_hash_name (&name);
-		gchar *s = g_strdup_printf("XYZ-1");
-		struct election_member_s *m = manager_get_member(manager, key);
-		step_StartElection_completion (ZOK, s, m);
-		member_unref (m);
-		g_free (s);
-		g_free (key);
-	} while (0);
-	_pending (EXISTS_DONE, SIBLINGS_DONE, 0);
-
-	g_array_set_size (iv,0); /* there 2 nodes: 1,2 (MUST be sorted) */
-	i64 = 1; g_array_append_vals (iv, &i64, 1);
-	i64 = 2; g_array_append_vals (iv, &i64, 1);
-	_test_transition (EVT_LIST_OK, iv, STEP_PRELEAD);
-	g_array_remove_index (sync->pending, 1);
-	_pending (EXISTS_DONE, 0);
-	_test_unref();
-	g_assert_cmpuint (_refcount(), ==, 2);
-
-	CLOCK += manager->delay_fail_pending + 1;
-	g_assert_cmpuint (_refcount(), ==, 2);
-	g_assert_cmpuint (1, ==, election_manager_play_timers (manager, 0));
-	g_assert_cmpuint (0, ==, election_manager_play_timers (manager, 0));
-	CLOCK += manager->delay_expire_failed + 1;
-	g_assert_cmpuint (1, ==, election_manager_play_timers (manager, 0));
-
-	_pending (EXISTS_DONE, DELETE, 0);
-	g_assert_cmpuint (_refcount(), ==, 3);
-
-	g_assert_cmpuint (0, ==, election_manager_play_timers (manager, 0));
-
-	election_manager_clean (manager);
-	sqlx_peering__destroy (peering);
-	sqlx_sync_close (sync);
-	sqlx_sync_clear (sync);
-	g_array_free (iv, TRUE);
-}
-
-static void
-test_sets (void)
-{
-	struct replication_config_s config = {
-		_get_id, _get_peers, _get_vers, NULL, ELECTION_MODE_GROUP
-	};
-	struct sqlx_sync_s *sync = NULL;
-	struct sqlx_peering_s *peering = NULL;
-	struct election_manager_s *manager = NULL;
-
-	CLOCK_START = CLOCK = oio_ext_rand_int ();
-
-	sync = _sync_factory__noop ();
-	g_assert_nonnull (sync);
-	peering = _peering_noop ();
-	g_assert_nonnull (peering);
-
-	g_assert_no_error (election_manager_create (&config, &manager));
-	g_assert_nonnull (manager);
-	election_manager_set_sync (manager, sync);
-	election_manager_set_peering (manager, peering);
-
-	/* Init several bases */
-	CLOCK ++;
-#define NB 16
-	for (int i=0; i<NB ;++i) {
-		gchar tmp[128];
-		g_snprintf (tmp, sizeof(tmp), "base-%d", i);
-		struct sqlx_name_s name = { .base = tmp, .type = "type", .ns = "NS", };
-		g_assert_no_error (_election_init (manager, &name));
-
-		hashstr_t *_k = sqliterepo_hash_name (&name);
-		struct election_member_s *m = manager_get_member (manager, _k);
-		g_free (_k);
-
-		member_set_status (m, STEP_PRELEAD);
-		m->last_USE = CLOCK;
-		m->last_atime = CLOCK;
-		m->myid = 1;
-		m->master_id = 1;
-	}
-	g_assert_cmpuint(NB, ==, manager->members_by_state[STEP_PRELEAD].count);
-	CLOCK += manager->delay_fail_pending + 1;
-	g_assert_cmpuint (1, ==, election_manager_play_timers (manager, 1));
-	g_assert_cmpuint(1, ==, manager->members_by_state[STEP_FAILED].count);
-	g_assert_cmpuint(NB-1, ==, manager->members_by_state[STEP_PRELEAD].count);
-	g_assert_cmpuint (2, ==, election_manager_play_timers (manager, 2));
-	g_assert_cmpuint(3, ==, manager->members_by_state[STEP_FAILED].count);
-	g_assert_cmpuint(NB-3, ==, manager->members_by_state[STEP_PRELEAD].count);
-
-	election_manager_clean (manager);
-	sqlx_peering__destroy (peering);
-	sqlx_sync_close (sync);
-	sqlx_sync_clear (sync);
-}
 
 static void
 test_create_bad_config(void)
@@ -707,48 +498,841 @@ test_create_ok(void)
 	}
 }
 
-static void
-test_sequence (void)
-{
-	struct replication_config_s config = {
-		_get_id, _get_peers, _get_vers, NULL, ELECTION_MODE_GROUP
-	};
-	struct sqlx_sync_s *sync = NULL;
-	struct sqlx_peering_s *peering = NULL;
-	struct election_manager_s *manager = NULL;
+#define TEST_HEAD() \
+	struct sqlx_name_s name = { .base = "base", .type = "type", .ns = "NS", }; \
+	struct replication_config_s config = { \
+		_get_id, _get_peers, _get_vers, NULL, ELECTION_MODE_GROUP \
+	}; \
+	struct sqlx_sync_s *sync = NULL; \
+	struct sqlx_peering_s *peering = NULL; \
+	struct election_manager_s *manager = NULL; \
+	CLOCK_START = CLOCK = oio_ext_rand_int (); \
+	sync = _sync_factory__noop (); \
+	g_assert_nonnull (sync); \
+	peering = _peering_noop (); \
+	g_assert_nonnull (peering); \
+	g_assert_no_error (election_manager_create (&config, &manager)); \
+	g_assert_nonnull (manager); \
+	election_manager_set_sync (manager, sync); \
+	election_manager_set_peering (manager, peering); \
+	gchar *_k = sqliterepo_hash_name(&name); \
+	g_assert_nonnull(_k); \
+	STRING_STACKIFY(_k); \
+	struct election_member_s *m = manager_get_member (manager, _k); \
+	g_assert_null(m); \
+	g_assert_no_error (_election_init (manager, &name)); \
+	m = manager_get_member (manager, _k); \
+	g_assert_nonnull(m); \
 
-	CLOCK_START = CLOCK = g_random_int ();
+static void test_STEP_NONE (void) {
+	TEST_HEAD();
 
-	sync = _sync_factory__noop ();
-	g_assert_nonnull (sync);
-	peering = _peering_noop ();
-	g_assert_nonnull (peering);
-
-	g_assert_no_error (election_manager_create (&config, &manager));
-	g_assert_nonnull (manager);
-	election_manager_set_sync (manager, sync);
-	election_manager_set_peering (manager, peering);
-
-	struct sqlx_name_s name = { .base = "base", .type = "type", .ns = "NS", };
-	name.base = "A";
-	g_assert_no_error (_election_init (manager, &name));
-	name.base = "B";
-	g_assert_no_error (_election_init (manager, &name));
-	name.base = "C";
-	g_assert_no_error (_election_init (manager, &name));
-
-	g_printerr ("\n");
-	gboolean _on_election (gpointer k, gpointer v, gpointer i UNUSED) {
-		struct election_member_s *m = v;
-		g_printerr("%s -> %s\n", hashstr_str(k), m->name.base);
-		return FALSE;
+	void RESET() {
+		g_array_set_size(sync->pending, 0);
+		member_set_status(m, STEP_NONE);
+		member_reset(m);
+		member_reset_requests(m);
+		_member_assert_NONE(m);
 	}
-	g_tree_foreach (manager->members_by_key, _on_election, NULL);
 
-	election_manager_clean (manager);
-	sqlx_peering__destroy (peering);
-	sqlx_sync_close (sync);
-	sqlx_sync_clear (sync);
+	/* Test No-Op transitions */
+	static const int ABNORMAL[] = {
+		EVT_DISCONNECTED, EVT_LEAVE_REQ, EVT_LEFT_SELF, EVT_LEFT_MASTER,
+		EVT_GETVERS_OK, EVT_GETVERS_KO,
+		EVT_GETVERS_OLD, EVT_GETVERS_RACE,
+		EVT_MASTER_OK, EVT_MASTER_KO, EVT_MASTER_BAD,
+		EVT_CREATE_OK, EVT_CREATE_KO,
+		EVT_EXISTS_OK, EVT_EXISTS_KO,
+		EVT_LIST_OK, EVT_LIST_KO,
+		EVT_LEAVE_OK, EVT_LEAVE_KO,
+		EVT_SYNC_OK, EVT_SYNC_KO,
+		-1 /* end beacon */
+	};
+	for (const int *pevt=ABNORMAL; *pevt >= 0 ;++pevt) {
+		_test_nochange(*pevt, NULL);
+		_member_assert_NONE(m);
+		_pending(0);
+		g_assert_false(member_has_request(m));
+	}
+
+	/* Legit transitions */
+	RESET();
+	transition(m, EVT_NONE, NULL);
+	_member_assert_CREATING(m);
+	_pending(CMD_CREATE, 0);
+
+	RESET();
+	transition(m, EVT_SYNC_REQ, NULL);
+	_member_assert_CREATING(m);
+	_pending(CMD_CREATE, 0);
+}
+
+static void test_STEP_CREATING(void) {
+	TEST_HEAD();
+
+	void RESET() {
+		g_array_set_size(sync->pending, 0);
+		member_set_status(m, STEP_CREATING);
+		member_reset(m);
+		member_reset_requests(m);
+		m->pending_ZK_CREATE = 1;
+		_member_assert_CREATING(m);
+	}
+
+	/* Test No-Op transitions */
+	static const int ABNORMAL[] = {
+		EVT_NONE, EVT_LEFT_MASTER, EVT_LEFT_SELF,
+		EVT_GETVERS_OK, EVT_GETVERS_KO, EVT_GETVERS_OLD, EVT_GETVERS_RACE,
+		EVT_MASTER_OK, EVT_MASTER_KO, EVT_MASTER_BAD,
+		EVT_EXISTS_OK, EVT_EXISTS_KO,
+		EVT_LIST_OK, EVT_LIST_KO,
+		EVT_LEAVE_OK, EVT_LEAVE_KO,
+		EVT_SYNC_OK, EVT_SYNC_KO,
+		-1 /* end beacon */
+	};
+	for (const int *pevt=ABNORMAL; *pevt >= 0 ;++pevt) {
+		RESET();
+		_test_nochange(*pevt, NULL);
+		_member_assert_CREATING(m);
+		_pending(0);
+		g_assert_false(member_has_request(m));
+	}
+
+	/* interruptions */
+	RESET();
+	transition(m, EVT_DISCONNECTED, NULL);
+	_member_assert_NONE(m);
+	_pending(0);
+
+	RESET();
+	transition(m, EVT_LEAVE_REQ, NULL);
+	_member_assert_CREATING(m);
+	_pending(0);
+	g_assert_cmpint(m->requested_LEAVE, ==, 1);
+
+	/* Legit transitions with no interruption */
+	gint64 id = oio_ext_rand_int();
+
+	RESET();
+	transition(m, EVT_CREATE_OK, &id);
+	_member_assert_WATCHING(m);
+	_pending(CMD_EXIST, 0);
+	g_assert_cmpint(m->myid, ==, id);
+
+	RESET();
+	transition(m, EVT_CREATE_KO, NULL);
+	_member_assert_FAILED(m);
+	_pending(0);
+}
+
+static void test_STEP_WATCHING(void) {
+	TEST_HEAD();
+
+	void RESET() {
+		g_array_set_size(sync->pending, 0);
+		member_set_status(m, STEP_WATCHING);
+		member_reset(m);
+		member_reset_requests(m);
+		m->myid = oio_ext_rand_int();
+		m->pending_ZK_EXISTS = 1;
+		_member_assert_WATCHING(m);
+	}
+
+	/* Test No-Op transitions */
+	static const int ABNORMAL[] = {
+		EVT_NONE, EVT_LEFT_MASTER,
+		EVT_GETVERS_OK, EVT_GETVERS_KO, EVT_GETVERS_OLD, EVT_GETVERS_RACE,
+		EVT_MASTER_OK, EVT_MASTER_KO, EVT_MASTER_BAD,
+		EVT_CREATE_OK, EVT_CREATE_KO,
+		EVT_LIST_OK, EVT_LIST_KO,
+		EVT_LEAVE_OK, EVT_LEAVE_KO,
+		EVT_SYNC_OK, EVT_SYNC_KO,
+		-1 /* end beacon */
+	};
+	for (const int *pevt=ABNORMAL; *pevt >= 0 ;++pevt) {
+		RESET();
+		_test_nochange(*pevt, NULL);
+		_member_assert_WATCHING(m);
+		_pending(0);
+		g_assert_false(member_has_request(m));
+	}
+
+	/* interruptions */
+	RESET();
+	transition(m, EVT_DISCONNECTED, NULL);
+	_member_assert_NONE(m);
+	_pending(0);
+
+	RESET();
+	transition(m, EVT_LEAVE_REQ, NULL);
+	_member_assert_WATCHING(m);
+	_pending(0);
+	g_assert_cmpint(m->requested_LEAVE, ==, 1);
+
+	RESET();
+	transition(m, EVT_LEFT_SELF, NULL);
+	_member_assert_WATCHING(m);
+	_pending(0);
+	g_assert_cmpint(m->requested_LEFT_SELF, ==, 1);
+
+	/* Legit transitions with no interruption */
+	RESET();
+	transition(m, EVT_EXISTS_OK, NULL);
+	_member_assert_LISTING(m);
+	_pending(CMD_LIST, 0);
+
+	RESET();
+	transition(m, EVT_EXISTS_KO, NULL);
+	_member_assert_LEAVING(m);
+	_pending(CMD_DELETE, 0);
+}
+
+static void test_STEP_LISTING(void) {
+	TEST_HEAD();
+
+	void RESET() {
+		g_array_set_size(sync->pending, 0);
+		member_set_status(m, STEP_LISTING);
+		member_reset(m);
+		member_reset_requests(m);
+		m->myid = oio_ext_rand_int();
+		m->pending_ZK_LIST = 1;
+		_member_assert_LISTING(m);
+	}
+
+	/* Test No-Op transitions */
+	static const int ABNORMAL[] = {
+		EVT_NONE, EVT_LEFT_MASTER,
+		EVT_GETVERS_OK, EVT_GETVERS_KO, EVT_GETVERS_OLD, EVT_GETVERS_RACE,
+		EVT_MASTER_OK, EVT_MASTER_KO, EVT_MASTER_BAD,
+		EVT_CREATE_OK, EVT_CREATE_KO,
+		EVT_EXISTS_OK, EVT_EXISTS_KO,
+		EVT_LEAVE_OK, EVT_LEAVE_KO,
+		EVT_SYNC_OK, EVT_SYNC_KO,
+		-1 /* end beacon */
+	};
+	for (const int *pevt=ABNORMAL; *pevt >= 0 ;++pevt) {
+		RESET();
+		_test_nochange(*pevt, NULL);
+		_member_assert_LISTING(m);
+		_pending(0);
+		g_assert_false(member_has_request(m));
+	}
+
+	/* interruptions */
+	RESET();
+	transition(m, EVT_DISCONNECTED, NULL);
+	_member_assert_NONE(m);
+	_pending(0);
+
+	RESET();
+	transition(m, EVT_LEAVE_REQ, NULL);
+	_member_assert_LISTING(m);
+	_pending(0);
+	g_assert_cmpint(m->requested_LEAVE, ==, 1);
+
+	RESET();
+	transition(m, EVT_LEFT_SELF, NULL);
+	_member_assert_LISTING(m);
+	_pending(0);
+	g_assert_cmpint(m->requested_LEFT_SELF, ==, 1);
+
+	/* Legit transitions with no interruption */
+	RESET();
+	transition(m, EVT_LIST_KO, NULL);
+	_member_assert_LEAVING_FAILING(m);
+	_pending(CMD_DELETE, 0);
+
+	gint64 i64;
+
+	RESET();
+	i64 = m->myid; /* -> master */
+	transition(m, EVT_LIST_OK, &i64);
+	g_assert_cmpint(m->myid, ==, m->master_id);
+	_member_assert_CHECKING_SLAVES(m);
+	_pending(0);
+
+	RESET();
+	i64 = m->myid + 1; /* -> slave */
+	transition(m, EVT_LIST_OK, &i64);
+	g_assert_cmpint(m->myid, !=, m->master_id);
+	_member_assert_ASKING(m);
+	_pending(CMD_GET, 0);
+}
+
+static void test_STEP_CHECKING_SLAVES(void) {
+	TEST_HEAD();
+
+	void RESET() {
+		g_array_set_size(sync->pending, 0);
+		member_set_status(m, STEP_CHECKING_SLAVES);
+		member_reset(m);
+		member_reset_requests(m);
+		m->master_id = m->myid = oio_ext_rand_int();
+		m->pending_GETVERS = 3;
+		_member_assert_CHECKING_SLAVES(m);
+	}
+
+	/* Test No-Op transitions */
+	static const int ABNORMAL[] = {
+		EVT_NONE, EVT_LEFT_MASTER,
+		EVT_MASTER_OK, EVT_MASTER_KO, EVT_MASTER_BAD,
+		EVT_CREATE_OK, EVT_CREATE_KO,
+		EVT_EXISTS_OK, EVT_EXISTS_KO,
+		EVT_LEAVE_OK, EVT_LEAVE_KO,
+		EVT_LIST_OK, EVT_LIST_KO,
+		EVT_SYNC_OK, EVT_SYNC_KO,
+		-1 /* end beacon */
+	};
+	for (const int *pevt=ABNORMAL; *pevt >= 0 ;++pevt) {
+		RESET();
+		_test_nochange(*pevt, NULL);
+		_member_assert_CHECKING_SLAVES(m);
+		_pending(0);
+		g_assert_false(member_has_request(m));
+	}
+
+	/* interruptions */
+	RESET();
+	transition(m, EVT_DISCONNECTED, NULL);
+	_member_assert_NONE(m);
+	_pending(0);
+
+	RESET();
+	transition(m, EVT_LEAVE_REQ, NULL);
+	_member_assert_CHECKING_SLAVES(m);
+	_pending(0);
+	g_assert_cmpint(m->requested_LEAVE, ==, 1);
+
+	RESET();
+	transition(m, EVT_LEFT_SELF, NULL);
+	_member_assert_CHECKING_SLAVES(m);
+	_pending(0);
+	g_assert_cmpint(m->requested_LEFT_SELF, ==, 1);
+
+	/* Legit transitions with no interruption:
+	 * 1/ Non-LAST getvers reply */
+	RESET();
+	m->count_GETVERS = 3;
+	m->pending_GETVERS = 2;
+	transition(m, EVT_GETVERS_OK, NULL);
+	_member_assert_CHECKING_SLAVES(m);
+	g_assert_cmpint(m->count_GETVERS, ==, 3);
+	g_assert_cmpint(m->pending_GETVERS, ==, 1);
+	g_assert_cmpint(m->errors_GETVERS, ==, 0);
+	g_assert_cmpint(m->outdated_GETVERS, ==, 0);
+	g_assert_cmpint(m->concurrent_GETVERS, ==, 0);
+	_pending(0);
+
+	RESET();
+	m->count_GETVERS = 3;
+	m->pending_GETVERS = 2;
+	transition(m, EVT_GETVERS_KO, NULL);
+	_member_assert_CHECKING_SLAVES(m);
+	g_assert_cmpint(m->count_GETVERS, ==, 3);
+	g_assert_cmpint(m->pending_GETVERS, ==, 1);
+	g_assert_cmpint(m->errors_GETVERS, ==, 1);
+	g_assert_cmpint(m->outdated_GETVERS, ==, 0);
+	g_assert_cmpint(m->concurrent_GETVERS, ==, 0);
+	_pending(0);
+
+	RESET();
+	m->count_GETVERS = 3;
+	m->pending_GETVERS = 2;
+	transition(m, EVT_GETVERS_OLD, NULL);
+	_member_assert_CHECKING_SLAVES(m);
+	g_assert_cmpint(m->count_GETVERS, ==, 3);
+	g_assert_cmpint(m->pending_GETVERS, ==, 1);
+	g_assert_cmpint(m->errors_GETVERS, ==, 0);
+	g_assert_cmpint(m->outdated_GETVERS, ==, 1);
+	g_assert_cmpint(m->concurrent_GETVERS, ==, 0);
+	_pending(0);
+
+	RESET();
+	m->count_GETVERS = 3;
+	m->pending_GETVERS = 2;
+	transition(m, EVT_GETVERS_RACE, NULL);
+	_member_assert_CHECKING_SLAVES(m);
+	g_assert_cmpint(m->count_GETVERS, ==, 3);
+	g_assert_cmpint(m->pending_GETVERS, ==, 1);
+	g_assert_cmpint(m->errors_GETVERS, ==, 0);
+	g_assert_cmpint(m->outdated_GETVERS, ==, 0);
+	g_assert_cmpint(m->concurrent_GETVERS, ==, 1);
+	_pending(0);
+
+	/* Legit transitions with no interruption:
+	 * 2/ LAST getvers reply, quorum present */
+	RESET();
+	m->count_GETVERS = 3;
+	m->pending_GETVERS = 1;
+	transition(m, EVT_GETVERS_OK, NULL);
+	_member_assert_MASTER(m);
+	g_assert_false(member_has_getvers(m));
+	_pending(0);
+
+	RESET();
+	m->count_GETVERS = 3;
+	m->pending_GETVERS = 1;
+	transition(m, EVT_GETVERS_KO, NULL);
+	_member_assert_MASTER(m);
+	g_assert_false(member_has_getvers(m));
+	_pending(0);
+
+	RESET();
+	m->count_GETVERS = 3;
+	m->pending_GETVERS = 1;
+	transition(m, EVT_GETVERS_OLD, NULL);
+	_member_assert_LEAVING(m);
+	g_assert_false(member_has_getvers(m));
+	_pending(CMD_DELETE, 0);
+
+	RESET();
+	m->count_GETVERS = 3;
+	m->pending_GETVERS = 1;
+	m->outdated_GETVERS = 1 + oio_ext_rand_int(); /* whatever */
+	transition(m, EVT_GETVERS_RACE, NULL);
+	_member_assert_LEAVING(m);
+	g_assert_false(member_has_getvers(m));
+	_pending(CMD_DELETE, 0);
+}
+
+static void test_STEP_MASTER(void) {
+	TEST_HEAD();
+
+	void RESET() {
+		g_array_set_size(sync->pending, 0);
+		member_set_status(m, STEP_MASTER);
+		member_reset(m);
+		member_reset_requests(m);
+		m->master_id = m->myid = oio_ext_rand_int();
+		_member_assert_MASTER(m);
+	}
+
+	/* Test No-Op transitions */
+	static const int ABNORMAL[] = {
+		EVT_NONE, EVT_LEFT_MASTER,
+		EVT_GETVERS_OK, EVT_GETVERS_KO, EVT_GETVERS_OLD, EVT_GETVERS_RACE,
+		EVT_MASTER_OK, EVT_MASTER_KO, EVT_MASTER_BAD,
+		EVT_CREATE_OK, EVT_CREATE_KO,
+		EVT_EXISTS_OK, EVT_EXISTS_KO,
+		EVT_LEAVE_OK, EVT_LEAVE_KO,
+		EVT_LIST_OK, EVT_LIST_KO,
+		EVT_SYNC_OK, EVT_SYNC_KO,
+		-1 /* end beacon */
+	};
+	for (const int *pevt=ABNORMAL; *pevt >= 0 ;++pevt) {
+		RESET();
+		_test_nochange(*pevt, NULL);
+		_member_assert_MASTER(m);
+		_pending(0);
+		g_assert_false(member_has_request(m));
+	}
+
+	/* interruptions */
+	RESET();
+	transition(m, EVT_DISCONNECTED, NULL);
+	_member_assert_NONE(m);
+	_pending(0);
+
+	RESET();
+	transition(m, EVT_LEAVE_REQ, NULL);
+	_member_assert_LEAVING(m);
+	_pending(CMD_DELETE, 0);
+	g_assert_false(member_has_request(m));
+
+	RESET();
+	transition(m, EVT_LEFT_SELF, NULL);
+	_member_assert_CREATING(m);
+	_pending(CMD_CREATE, 0);
+	g_assert_false(member_has_request(m));
+}
+
+static void test_STEP_ASKING(void) {
+	TEST_HEAD();
+
+	void RESET() {
+		g_array_set_size(sync->pending, 0);
+		member_set_status(m, STEP_ASKING);
+		member_reset(m);
+		member_reset_requests(m);
+		m->myid = oio_ext_rand_int();
+		m->master_id = m->myid + 1;
+		m->pending_ZK_GET = 1;
+		_member_assert_ASKING(m);
+	}
+
+	/* Test No-Op transitions */
+	static const int ABNORMAL[] = {
+		EVT_NONE,
+		EVT_GETVERS_OK, EVT_GETVERS_KO, EVT_GETVERS_OLD, EVT_GETVERS_RACE,
+		EVT_CREATE_OK, EVT_CREATE_KO,
+		EVT_EXISTS_OK, EVT_EXISTS_KO,
+		EVT_LEAVE_OK, EVT_LEAVE_KO,
+		EVT_LIST_OK, EVT_LIST_KO,
+		EVT_SYNC_OK, EVT_SYNC_KO,
+		-1 /* end beacon */
+	};
+	for (const int *pevt=ABNORMAL; *pevt >= 0 ;++pevt) {
+		RESET();
+		_test_nochange(*pevt, NULL);
+		_member_assert_ASKING(m);
+		_pending(0);
+		g_assert_false(member_has_request(m));
+	}
+
+	/* interruptions */
+	RESET();
+	transition(m, EVT_DISCONNECTED, NULL);
+	_member_assert_NONE(m);
+	_pending(0);
+
+	RESET();
+	transition(m, EVT_LEAVE_REQ, NULL);
+	_member_assert_ASKING(m);
+	_pending(0);
+	g_assert_cmpint(m->requested_LEAVE, ==, 1);
+
+	RESET();
+	transition(m, EVT_LEFT_SELF, NULL);
+	_member_assert_ASKING(m);
+	_pending(0);
+	g_assert_cmpint(m->requested_LEFT_SELF, ==, 1);
+
+	RESET();
+	transition(m, EVT_LEFT_MASTER, NULL);
+	_member_assert_ASKING(m);
+	_pending(0);
+	g_assert_cmpint(m->requested_LEFT_MASTER, ==, 1);
+
+	/* Legit transitions
+	 * 1/ No past interruption */
+	char *url = "127.0.0.1:6000";
+
+	RESET();
+	transition(m, EVT_MASTER_OK, url);
+	_member_assert_CHECKING_MASTER(m);
+	_pending(0);
+	g_assert_cmpint(m->pending_GETVERS, ==, 2);
+
+	RESET();
+	transition(m, EVT_MASTER_BAD, NULL);
+	_member_assert_LEAVING_FAILING(m);
+	_pending(CMD_DELETE, 0);
+
+	RESET();
+	transition(m, EVT_MASTER_KO, NULL);
+	_member_assert_LEAVING_FAILING(m);
+	_pending(CMD_DELETE, 0);
+
+	/* Legit transitions
+	 * 2/ Pending past interruption */
+
+	RESET();
+	m->requested_LEFT_SELF = 1;
+	transition(m, EVT_MASTER_OK, url);
+	_member_assert_CREATING(m);
+	_pending(CMD_CREATE, 0);
+
+	RESET();
+	m->requested_LEFT_SELF = 1;
+	transition(m, EVT_MASTER_BAD, NULL);
+	_member_assert_LEAVING_FAILING(m);
+	_pending(CMD_DELETE, 0);
+
+	RESET();
+	m->requested_LEFT_MASTER = 1;
+	transition(m, EVT_MASTER_BAD, NULL);
+	_member_assert_LEAVING_FAILING(m);
+	_pending(CMD_DELETE, 0);
+
+	RESET();
+	m->requested_LEAVE = 1;
+	transition(m, EVT_MASTER_BAD, NULL);
+	_member_assert_LEAVING_FAILING(m);
+	_pending(CMD_DELETE, 0);
+
+
+	RESET();
+	m->requested_LEFT_SELF = 1;
+	transition(m, EVT_MASTER_KO, NULL);
+	_member_assert_LEAVING_FAILING(m);
+	_pending(CMD_DELETE, 0);
+
+	RESET();
+	m->requested_LEFT_MASTER = 1;
+	transition(m, EVT_MASTER_KO, NULL);
+	_member_assert_LEAVING_FAILING(m);
+	_pending(CMD_DELETE, 0);
+
+	RESET();
+	m->requested_LEAVE = 1;
+	transition(m, EVT_MASTER_KO, NULL);
+	_member_assert_LEAVING_FAILING(m);
+	_pending(CMD_DELETE, 0);
+}
+
+static void test_STEP_CHECKING_MASTER(void) {
+	TEST_HEAD();
+
+	void RESET() {
+		g_array_set_size(sync->pending, 0);
+		member_set_status(m, STEP_CHECKING_MASTER);
+		member_reset(m);
+		member_set_master_url(m, "ID1");
+		member_reset_requests(m);
+		m->myid = oio_ext_rand_int();
+		m->master_id = m->myid + 1;
+		m->pending_GETVERS = 3;
+		_member_assert_CHECKING_MASTER(m);
+	}
+
+	/* Test No-Op transitions */
+	static const int ABNORMAL[] = {
+		EVT_NONE,
+		EVT_MASTER_OK, EVT_MASTER_KO, EVT_MASTER_BAD,
+		EVT_CREATE_OK, EVT_CREATE_KO,
+		EVT_EXISTS_OK, EVT_EXISTS_KO,
+		EVT_LEAVE_OK, EVT_LEAVE_KO,
+		EVT_LIST_OK, EVT_LIST_KO,
+		EVT_SYNC_OK, EVT_SYNC_KO,
+		-1 /* end beacon */
+	};
+	for (const int *pevt=ABNORMAL; *pevt >= 0 ;++pevt) {
+		RESET();
+		_test_nochange(*pevt, NULL);
+		_member_assert_CHECKING_MASTER(m);
+		_pending(0);
+		g_assert_false(member_has_request(m));
+	}
+
+	/* interruptions */
+	RESET();
+	transition(m, EVT_DISCONNECTED, NULL);
+	_member_assert_NONE(m);
+	_pending(0);
+
+	RESET();
+	transition(m, EVT_LEAVE_REQ, NULL);
+	_member_assert_CHECKING_MASTER(m);
+	_pending(0);
+	g_assert_cmpint(m->requested_LEAVE, ==, 1);
+
+	RESET();
+	transition(m, EVT_LEFT_SELF, NULL);
+	_member_assert_CHECKING_MASTER(m);
+	_pending(0);
+	g_assert_cmpint(m->requested_LEFT_SELF, ==, 1);
+
+	RESET();
+	transition(m, EVT_LEFT_MASTER, NULL);
+	_member_assert_CHECKING_MASTER(m);
+	_pending(0);
+	g_assert_cmpint(m->requested_LEFT_MASTER, ==, 1);
+
+	/* Legit transitions
+	 * 1/ Non-LAST getvers reply */
+	RESET();
+	m->count_GETVERS = 3;
+	m->pending_GETVERS = 2;
+	transition(m, EVT_GETVERS_OK, NULL);
+	_member_assert_CHECKING_MASTER(m);
+	g_assert_cmpint(m->count_GETVERS, ==, 3);
+	g_assert_cmpint(m->pending_GETVERS, ==, 1);
+	g_assert_cmpint(m->errors_GETVERS, ==, 0);
+	g_assert_cmpint(m->outdated_GETVERS, ==, 0);
+	g_assert_cmpint(m->concurrent_GETVERS, ==, 0);
+	_pending(0);
+
+	RESET();
+	m->count_GETVERS = 3;
+	m->pending_GETVERS = 2;
+	transition(m, EVT_GETVERS_KO, NULL);
+	_member_assert_CHECKING_MASTER(m);
+	g_assert_cmpint(m->count_GETVERS, ==, 3);
+	g_assert_cmpint(m->pending_GETVERS, ==, 1);
+	g_assert_cmpint(m->errors_GETVERS, ==, 1);
+	g_assert_cmpint(m->outdated_GETVERS, ==, 0);
+	g_assert_cmpint(m->concurrent_GETVERS, ==, 0);
+	_pending(0);
+
+	RESET();
+	m->count_GETVERS = 3;
+	m->pending_GETVERS = 2;
+	transition(m, EVT_GETVERS_OLD, NULL);
+	_member_assert_CHECKING_MASTER(m);
+	g_assert_cmpint(m->count_GETVERS, ==, 3);
+	g_assert_cmpint(m->pending_GETVERS, ==, 1);
+	g_assert_cmpint(m->errors_GETVERS, ==, 0);
+	g_assert_cmpint(m->outdated_GETVERS, ==, 1);
+	g_assert_cmpint(m->concurrent_GETVERS, ==, 0);
+	_pending(0);
+
+	RESET();
+	m->count_GETVERS = 3;
+	m->pending_GETVERS = 2;
+	transition(m, EVT_GETVERS_RACE, NULL);
+	_member_assert_CHECKING_MASTER(m);
+	g_assert_cmpint(m->count_GETVERS, ==, 3);
+	g_assert_cmpint(m->pending_GETVERS, ==, 1);
+	g_assert_cmpint(m->errors_GETVERS, ==, 0);
+	g_assert_cmpint(m->outdated_GETVERS, ==, 0);
+	g_assert_cmpint(m->concurrent_GETVERS, ==, 1);
+	_pending(0);
+
+	/* Legit transitions with no interruption:
+	 * 2/ LAST getvers reply, quorum present */
+	RESET();
+	m->count_GETVERS = 3;
+	m->pending_GETVERS = 1;
+	transition(m, EVT_GETVERS_OK, NULL);
+	_member_assert_SLAVE(m);
+	g_assert_false(member_has_getvers(m));
+	_pending(0);
+
+	/* only 1/3 request fails, all the others were OK, we have a quorum */
+	RESET();
+	m->count_GETVERS = 3;
+	m->pending_GETVERS = 1;
+	transition(m, EVT_GETVERS_KO, NULL);
+	_member_assert_SLAVE(m);
+	g_assert_false(member_has_getvers(m));
+	_pending(0);
+
+	/* more than half the group failed, we have no quorum */
+	RESET();
+	m->count_GETVERS = 2;
+	m->pending_GETVERS = 1;
+	transition(m, EVT_GETVERS_KO, NULL);
+	_member_assert_LEAVING_FAILING(m);
+	g_assert_false(member_has_getvers(m));
+	_pending(CMD_DELETE, 0);
+
+	RESET();
+	m->count_GETVERS = 3;
+	m->pending_GETVERS = 1;
+	transition(m, EVT_GETVERS_OLD, NULL);
+	_member_assert_SYNCING(m);
+	g_assert_false(member_has_getvers(m));
+	_pending(0);
+
+	RESET();
+	m->count_GETVERS = 3;
+	m->pending_GETVERS = 1;
+	m->outdated_GETVERS = 1 + oio_ext_rand_int(); /* whatever */
+	transition(m, EVT_GETVERS_RACE, NULL);
+	_member_assert_SYNCING(m);
+	g_assert_false(member_has_getvers(m));
+	_pending(0);
+}
+
+static void test_STEP_SLAVE(void) {
+	TEST_HEAD();
+
+	void RESET() {
+		g_array_set_size(sync->pending, 0);
+		member_set_status(m, STEP_SLAVE);
+		member_reset(m);
+		member_set_master_url(m, "ID1");
+		member_reset_requests(m);
+		m->myid = oio_ext_rand_int();
+		m->master_id = m->myid + 1;
+		_member_assert_SLAVE(m);
+	}
+
+	/* Test No-Op transitions */
+	static const int ABNORMAL[] = {
+		EVT_NONE,
+		EVT_GETVERS_OK, EVT_GETVERS_KO, EVT_GETVERS_OLD, EVT_GETVERS_RACE,
+		EVT_MASTER_OK, EVT_MASTER_KO, EVT_MASTER_BAD,
+		EVT_CREATE_OK, EVT_CREATE_KO,
+		EVT_EXISTS_OK, EVT_EXISTS_KO,
+		EVT_LEAVE_OK, EVT_LEAVE_KO,
+		EVT_LIST_OK, EVT_LIST_KO,
+		EVT_SYNC_OK, EVT_SYNC_KO,
+		-1 /* end beacon */
+	};
+	for (const int *pevt=ABNORMAL; *pevt >= 0 ;++pevt) {
+		RESET();
+		_test_nochange(*pevt, NULL);
+		_member_assert_SLAVE(m);
+		_pending(0);
+		g_assert_false(member_has_request(m));
+	}
+
+	/* interruptions */
+	RESET();
+	transition(m, EVT_DISCONNECTED, NULL);
+	_member_assert_NONE(m);
+	_pending(0);
+
+	RESET();
+	transition(m, EVT_LEAVE_REQ, NULL);
+	_member_assert_LEAVING(m);
+	_pending(CMD_DELETE, 0);
+
+	RESET();
+	transition(m, EVT_LEFT_SELF, NULL);
+	_member_assert_CREATING(m);
+	_pending(CMD_CREATE, 0);
+
+	RESET();
+	transition(m, EVT_LEFT_MASTER, NULL);
+	_member_assert_LISTING(m);
+	_pending(CMD_LIST, 0);
+}
+
+static void test_STEP_SYNCING(void) {
+	TEST_HEAD();
+
+	void RESET() {
+		g_array_set_size(sync->pending, 0);
+		member_set_status(m, STEP_SYNCING);
+		member_reset(m);
+		member_reset_requests(m);
+		m->myid = oio_ext_rand_int();
+		m->master_id = m->myid + 1;
+		member_set_master_url(m, "ID1");
+		m->pending_PIPEFROM = 1;
+		_member_assert_SYNCING(m);
+	}
+
+	/* Test No-Op transitions */
+	static const int ABNORMAL[] = {
+		EVT_NONE, EVT_LEAVE_REQ,
+		EVT_GETVERS_OK, EVT_GETVERS_KO, EVT_GETVERS_OLD, EVT_GETVERS_RACE,
+		EVT_MASTER_OK, EVT_MASTER_KO, EVT_MASTER_BAD,
+		EVT_CREATE_OK, EVT_CREATE_KO,
+		EVT_EXISTS_OK, EVT_EXISTS_KO,
+		EVT_LEAVE_OK, EVT_LEAVE_KO,
+		EVT_LIST_OK, EVT_LIST_KO,
+		-1 /* end beacon */
+	};
+	for (const int *pevt=ABNORMAL; *pevt >= 0 ;++pevt) {
+		RESET();
+		_test_nochange(*pevt, NULL);
+		_member_assert_SYNCING(m);
+		_pending(0);
+		guint _flag = m->pending_PIPEFROM;
+		m->pending_PIPEFROM = 0;
+		g_assert_false(member_has_action(m));
+		m->pending_PIPEFROM = BOOL(_flag);
+	}
+
+	/* interruptions */
+	RESET();
+	transition(m, EVT_DISCONNECTED, NULL);
+	_member_assert_NONE(m);
+	_pending(0);
+
+	RESET();
+	transition(m, EVT_LEFT_SELF, NULL);
+	_member_assert_SYNCING(m);
+	_pending(0);
+
+	RESET();
+	transition(m, EVT_LEFT_MASTER, NULL);
+	_member_assert_SYNCING(m);
+	_pending(0);
 }
 
 int
@@ -760,8 +1344,15 @@ main(int argc, char **argv)
 	g_test_add_func("/sqlx/election/create_bad_config", test_create_bad_config);
 	g_test_add_func("/sqlx/election/create_ok", test_create_ok);
 	g_test_add_func("/sqlx/election/election_init", test_election_init);
-	g_test_add_func ("/sqliterepo/election/single", test_single);
-	g_test_add_func ("/sqliterepo/election/sets", test_sets);
-	g_test_add_func ("/sqliterepo/manager/sequence", test_sequence);
+	g_test_add_func("/sqlx/election/step/NONE", test_STEP_NONE);
+	g_test_add_func("/sqlx/election/step/CREATING", test_STEP_CREATING);
+	g_test_add_func("/sqlx/election/step/WATCHING", test_STEP_WATCHING);
+	g_test_add_func("/sqlx/election/step/LISTING", test_STEP_LISTING);
+	g_test_add_func("/sqlx/election/step/CHECKING_SLAVES", test_STEP_CHECKING_SLAVES);
+	g_test_add_func("/sqlx/election/step/MASTER", test_STEP_MASTER);
+	g_test_add_func("/sqlx/election/step/ASKING", test_STEP_ASKING);
+	g_test_add_func("/sqlx/election/step/CHECKING_MASTER", test_STEP_CHECKING_MASTER);
+	g_test_add_func("/sqlx/election/step/SLAVE", test_STEP_SLAVE);
+	g_test_add_func("/sqlx/election/step/SYNCING", test_STEP_SYNCING);
 	return g_test_run();
 }

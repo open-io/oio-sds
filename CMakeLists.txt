@@ -299,15 +299,12 @@ dir2macro("OIO_USE_OLD_FMEMOPEN")
 dir2macro("SQLX_GRACE_DELAY_COOL")
 dir2macro("SQLX_GRACE_DELAY_HOT")
 dir2macro("SQLX_DELAY_MAXWAIT")
-dir2macro("SQLX_DELAY_MAXIDLE")
-dir2macro("SQLX_DELAY_ELECTION_REPLAY")
+dir2macro("SQLX_DELAY_NOWAIT_PENDING")
 dir2macro("SQLX_DELAY_RESTART_FAILED")
 dir2macro("SQLX_DELAY_PING_FAILED")
 dir2macro("SQLX_DELAY_PING_FINAL")
-dir2macro("SQLX_DELAY_PING_PENDING")
 dir2macro("SQLX_DELAY_EXPIRE_FAILED")
-dir2macro("SQLX_DELAY_EXPIRE_FINAL")
-dir2macro("SQLX_DELAY_EXPIRE_PENDING")
+dir2macro("SQLX_DELAY_EXPIRE_SLAVE")
 
 ###-------------------------------------------------------------------------###
 
