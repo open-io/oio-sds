@@ -217,6 +217,27 @@ static void _noop (gpointer p) { (void)p; }
 
 static GPrivate th_local_key_manager = G_PRIVATE_INIT(_noop);
 
+static const char * zoo_state2str(int state) {
+#define ON_STATE(N) do { if (state == ZOO_##N##_STATE) return #N; } while (0)
+	ON_STATE(EXPIRED_SESSION);
+	ON_STATE(AUTH_FAILED);
+	ON_STATE(CONNECTING);
+	ON_STATE(ASSOCIATING);
+	ON_STATE(CONNECTED);
+	return "STATE?";
+}
+
+static const char * zoo_zevt2str(int zevt) {
+#define ON_ZEVT(N) do { if (zevt == ZOO_##N##_EVENT) return #N; } while (0)
+	ON_ZEVT(CREATED);
+	ON_ZEVT(DELETED);
+	ON_ZEVT(CHANGED);
+	ON_ZEVT(CHILD);
+	ON_ZEVT(SESSION);
+	ON_ZEVT(NOTWATCHING);
+	return "EVENT?";
+}
+
 /* ------------------------------------------------------------------------- */
 
 static void member_unref(struct election_member_s *member);
@@ -1318,6 +1339,14 @@ step_WatchNode_completion(int zrc, const struct Stat *s, const void *d)
 	member_trace(__FUNCTION__, "DONE", member);
 	if (zrc == ZNONODE)
 		transition(member, EVT_NODE_LEFT, &zrc);
+	else {
+		if (zrc != ZOK) {
+			transition_error(member, EVT_EXITING, zrc);
+		/* } else {
+			// TODO As soon as CAND_OK is split
+			transition(member, EXISTS_OK, NULL); */
+		}
+	}
 	member_unref(member);
 	member_unlock(member);
 }
@@ -1364,43 +1393,59 @@ _find_member (void *d)
 }
 
 static void
-step_WatchMaster_change(zhandle_t *handle, int type, int state,
-			const char *path, void *d)
+_watcher_change(const int type, const int state,
+		const char *path UNUSED, void *d,
+		const int evt)
 {
 	if (!grid_main_is_running()) {
 		GRID_DEBUG("%s ignored while exiting", __FUNCTION__);
 		return;
 	}
-	(void) handle, (void) type, (void) state, (void) path;
+
+	if (type != ZOO_SESSION_EVENT && type != ZOO_DELETED_EVENT) {
+		GRID_WARN("%s ignoring event %s/%s %s", __FUNCTION__,
+				zoo_zevt2str(type), zoo_state2str(state), path);
+	} else {
+		GRID_DEBUG("%s ignoring event %s/%s %s", __FUNCTION__,
+				zoo_zevt2str(type), zoo_state2str(state), path);
+	}
 
 	struct election_member_s *member = _find_member(d);
 	if (NULL != member) {
-		member_trace(__FUNCTION__, "CHANGE", member);
 		MEMBER_CHECK(member);
-		transition(member, EVT_MASTER_CHANGE, NULL);
+
+		if (type == ZOO_DELETED_EVENT) {
+			transition(member, evt, NULL);
+		} else if (type == ZOO_SESSION_EVENT) {
+			if (state == ZOO_EXPIRED_SESSION_STATE
+					|| state == ZOO_AUTH_FAILED_STATE) {
+				transition(member, EVT_DISCONNECTED, NULL);
+			} else {
+				GRID_DEBUG("Ignored %s event %s: %s.%s",
+						zoo_zevt2str(type), zoo_state2str(state),
+						member->name.base, member->name.type);
+			}
+		} else {
+			g_assert_not_reached();
+		}
+
 		member_unref(member);
 		member_unlock(member);
 	}
 }
 
 static void
-step_WatchNode_change(zhandle_t *handle, int type, int state,
+step_WatchMaster_change(zhandle_t *handle UNUSED, int type, int state,
 		const char *path, void *d)
 {
-	if (!grid_main_is_running()) {
-		GRID_DEBUG("%s ignored while exiting", __FUNCTION__);
-		return;
-	}
-	(void) handle, (void) type, (void) state, (void) path;
+	return _watcher_change(type, state, path, d, EVT_MASTER_CHANGE);
+}
 
-	struct election_member_s *member = _find_member(d);
-	if (NULL != member) {
-		MEMBER_CHECK(member);
-		member_trace(__FUNCTION__, "CHANGE", member);
-		transition(member, EVT_NODE_LEFT, NULL);
-		member_unref(member);
-		member_unlock(member);
-	}
+static void
+step_WatchNode_change(zhandle_t *handle UNUSED, int type, int state,
+		const char *path, void *d)
+{
+	return _watcher_change(type, state, path, d, EVT_NODE_LEFT);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -2471,12 +2516,58 @@ static void
 transition_error(struct election_member_s *member,
 		enum event_type_e evt, enum ZOO_ERRORS zrc)
 {
-	EXTRA_ASSERT(zrc <= ZSYSTEMERROR || zrc <= ZAPIERROR);
-	if (zrc < ZAPIERROR)
-		return transition(member, evt, &zrc);
-	if (zrc < ZSYSTEMERROR)
-		return transition(member, EVT_DISCONNECTED, &zrc);
-	g_assert_not_reached();
+	EXTRA_ASSERT(zrc != ZOK);
+
+	static const enum ZOO_ERRORS reason_DISCONNECT[] = {
+		/* ZSYSTEMERROR */
+		ZRUNTIMEINCONSISTENCY,
+		ZDATAINCONSISTENCY,
+		ZMARSHALLINGERROR,
+		ZUNIMPLEMENTED,
+		ZINVALIDSTATE,
+
+		/* ZAPIERROR */
+		ZSESSIONEXPIRED,
+		ZAUTHFAILED,
+
+		ZOK /* end beacon */
+	};
+
+	static const enum ZOO_ERRORS reason_FAIL[]  = {
+		/* ZSYSTEMERROR */
+		ZCONNECTIONLOSS,
+		ZOPERATIONTIMEOUT,
+		ZBADARGUMENTS,
+
+		/* ZAPIERROR */
+		ZINVALIDCALLBACK,
+		ZINVALIDACL,
+		ZCLOSING,
+		ZNOTHING,
+		ZSESSIONMOVED,
+
+		ZOK /* end beacon */
+	};
+
+	/* Special cases of <ZAPIERROR error that are strong enough to trigger
+	 * an immediate exit. The ZK connection will be reset and previous
+	 * session-ID will be abandonned. It's time for a hard reset of the
+	 * election */
+	for (const enum ZOO_ERRORS *prc = reason_DISCONNECT; *prc != ZOK; ++prc) {
+		if (zrc == *prc)
+			return transition(member, EVT_DISCONNECTED, NULL);
+	}
+
+	/* Several error cases denote the action that was impossible. The event
+	 * to be used depends on the action, and is stored in evt */
+	for (const enum ZOO_ERRORS *prc = reason_FAIL; *prc != ZOK; ++prc) {
+		if (zrc == *prc)
+			return transition(member, evt, NULL);
+	}
+
+	/* here should only remain ZAPIERRORs that have been managed already */
+	g_assert(zrc < ZAPIERROR);
+	return transition(member, evt, NULL);
 }
 
 static GSList *
