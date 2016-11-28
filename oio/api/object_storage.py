@@ -180,6 +180,12 @@ class ObjectStorageAPI(API):
             admin_mode=self.admin_mode
         )
         self.namespace = namespace
+        self.connection_timeout = utils.float_value(
+            kwargs.get("connection_timeout"), None)
+        self.read_timeout = utils.float_value(
+            kwargs.get("read_timeout"), None)
+        self.write_timeout = utils.float_value(
+            kwargs.get("write_timeout"), None)
 
     def account_create(self, account, headers=None):
         uri = '/v1.0/account/create'
@@ -614,16 +620,24 @@ class ObjectStorageAPI(API):
 
         storage_method = STORAGE_METHODS.load(sysmeta['chunk_method'])
         if storage_method.ec:
-            handler = ECWriteHandler(source, sysmeta, chunk_prep,
-                                     storage_method, headers=headers)
+            handler = ECWriteHandler(
+                source, sysmeta, chunk_prep,
+                storage_method, headers=headers,
+                write_timeout=self.write_timeout,
+                read_timeout=self.read_timeout,
+                connection_timeout=self.connection_timeout)
         elif storage_method.backblaze:
             backblaze_info = self._b2_credentials(storage_method, key_file)
             handler = BackblazeWriteHandler(source, sysmeta,
                                             chunk_prep, storage_method,
                                             headers, backblaze_info)
         else:
-            handler = ReplicatedWriteHandler(source, sysmeta, chunk_prep,
-                                             storage_method, headers=headers)
+            handler = ReplicatedWriteHandler(
+                source, sysmeta, chunk_prep,
+                storage_method, headers=headers,
+                write_timeout=self.write_timeout,
+                read_timeout=self.read_timeout,
+                connection_timeout=self.connection_timeout)
 
         final_chunks, bytes_transferred, content_checksum = handler.stream()
 
@@ -660,8 +674,11 @@ class ObjectStorageAPI(API):
                 meta_start, meta_end = meta_range
                 if meta_start is not None and meta_end is not None:
                     headers['Range'] = http_header_from_ranges([meta_range])
-                reader = io.ChunkReader(iter(chunks[pos]), io.READ_CHUNK_SIZE,
-                                        headers)
+                reader = io.ChunkReader(
+                    iter(chunks[pos]), io.READ_CHUNK_SIZE, headers,
+                    connection_timeout=self.connection_timeout,
+                    response_timeout=self.read_timeout,
+                    read_timeout=self.read_timeout)
                 it = reader.get_iter()
                 if not it:
                     raise exc.OioException("Error while downloading")
@@ -678,8 +695,12 @@ class ObjectStorageAPI(API):
         for meta_range_dict in meta_range_list:
             for pos, meta_range in meta_range_dict.iteritems():
                 meta_start, meta_end = meta_range
-                handler = ECChunkDownloadHandler(storage_method, chunks[pos],
-                                                 meta_start, meta_end, headers)
+                handler = ECChunkDownloadHandler(
+                    storage_method, chunks[pos],
+                    meta_start, meta_end, headers,
+                    connection_timeout=self.connection_timeout,
+                    response_timeout=self.read_timeout,
+                    read_timeout=self.read_timeout)
                 stream = handler.get_stream()
                 for part_info in stream:
                     for d in part_info['iter']:

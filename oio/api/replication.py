@@ -43,12 +43,16 @@ class FakeChecksum(object):
 
 class ReplicatedChunkWriteHandler(object):
     def __init__(self, sysmeta, meta_chunk, checksum, storage_method,
-                 quorum=None):
+                 quorum=None, connection_timeout=None, write_timeout=None,
+                 read_timeout=None):
         self.sysmeta = sysmeta
         self.meta_chunk = meta_chunk
         self.checksum = checksum
         self.storage_method = storage_method
         self._quorum = quorum
+        self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
+        self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
+        self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
 
     def _check_quorum(self, conns):
         if self._quorum is None:
@@ -85,7 +89,7 @@ class ReplicatedChunkWriteHandler(object):
                     h[chunk_headers["metachunk_hash"]] = \
                         self.sysmeta["metachunk_hash"]
 
-                with ConnectionTimeout(io.CONNECTION_TIMEOUT):
+                with ConnectionTimeout(self.connection_timeout):
                     conn = io.http_connect(
                         parsed.netloc, 'PUT', parsed.path, h)
                     conn.chunk = chunk
@@ -136,7 +140,7 @@ class ReplicatedChunkWriteHandler(object):
                             read_size = remaining_bytes
                     else:
                         read_size = io.WRITE_CHUNK_SIZE
-                    with SourceReadTimeout(io.CLIENT_TIMEOUT):
+                    with SourceReadTimeout(self.read_timeout):
                         try:
                             data = source.read(read_size)
                         except (ValueError, IOError) as e:
@@ -214,7 +218,7 @@ class ReplicatedChunkWriteHandler(object):
             data = conn.queue.get()
             if not conn.failed:
                 try:
-                    with ChunkWriteTimeout(io.CHUNK_TIMEOUT):
+                    with ChunkWriteTimeout(self.write_timeout):
                         conn.send(data)
                 except (Exception, ChunkWriteTimeout):
                     conn.failed = True
@@ -230,6 +234,11 @@ class ReplicatedChunkWriteHandler(object):
 
 
 class ReplicatedWriteHandler(io.WriteHandler):
+    """
+    Handles writes to a replicated content.
+    For initialization parameters, see oio.api.io.WriteHandler.
+    """
+
     def stream(self):
         global_checksum = hashlib.md5()
         total_bytes_transferred = 0
@@ -238,9 +247,12 @@ class ReplicatedWriteHandler(io.WriteHandler):
         for meta_chunk in self.chunk_prep():
             size = self.sysmeta['chunk_size']
             handler = ReplicatedChunkWriteHandler(
-                self.sysmeta, meta_chunk, global_checksum, self.storage_method)
-            bytes_transferred, checksum, chunks = handler.stream(self.source,
-                                                                 size)
+                self.sysmeta, meta_chunk, global_checksum, self.storage_method,
+                connection_timeout=self.connection_timeout,
+                write_timeout=self.write_timeout,
+                read_timeout=self.read_timeout)
+            bytes_transferred, _checksum, chunks = handler.stream(self.source,
+                                                                  size)
             content_chunks += chunks
             total_bytes_transferred += bytes_transferred
             if bytes_transferred < size:
