@@ -875,10 +875,12 @@ member_set_id(struct election_member_s *m, gint64 id)
 }
 
 static void
-member_set_status(struct election_member_s *m, enum election_step_e s)
+member_set_status2(struct election_member_s *m, enum election_step_e s,
+	   gboolean force_last_status)
 {
 	_DEQUE_remove (m);
-	m->last_status = oio_ext_monotonic_time ();
+	if (s != m->step || force_last_status)
+		m->last_status = oio_ext_monotonic_time();
 	m->step = s;
 	_DEQUE_add (m);
 	if (STATUS_FINAL(s)) {
@@ -887,6 +889,12 @@ member_set_status(struct election_member_s *m, enum election_step_e s)
 	} else if (s == STEP_NONE) {
 		member_signal(m);
 	} /* else ... no need to signal waiting threads unless a final status */
+}
+
+static void
+member_set_status(struct election_member_s *m, enum election_step_e s)
+{
+	return member_set_status2(m, s, TRUE);
 }
 
 static void
@@ -1917,7 +1925,9 @@ become_leaver(struct election_member_s *member)
 
 	member_reset_master(member);
 	member_reset_pending(member);
-	member_set_status(member, STEP_LEAVING);
+	/* Update status time only if we actually change status.
+	 * See STEP_LEAVING case in _member_get_next_action(). */
+	member_set_status2(member, STEP_LEAVING, FALSE);
 	int zrc = step_LeaveElection_start(member);
 	if (zrc != ZOK)
 		become_failed (member);
@@ -1930,7 +1940,7 @@ become_candidate(struct election_member_s *member)
 	member->delayed_MASTER_CHANGE = 0;
 
 	member_reset_master(member);
-	member_set_status(member, STEP_CANDOK);
+	member_set_status2(member, STEP_CANDOK, FALSE);
 	if (ZOK != step_ListGroup_start(member))
 		become_failed (member);
 }
@@ -2048,18 +2058,41 @@ _member_get_next_action (const struct election_member_s *m)
 			return ACTION_NONE;
 
 		case STEP_LEAVING:
+			/* ACTION_LEAVE did not get us out of STEP_LEAVING,
+			 * go to STEP_FAILED. */
 			if (_is_over (m->last_status, M->delay_fail_pending))
 				return ACTION_FAIL;
+			/* Retry the deletion of our own node. We must ensure that
+			 * ACTION_LEAVE does not update last_status or we may never
+			 * reach delay_fail_pending and return ACTION_FAIL. */
 			if (_is_over (m->last_status, M->delay_retry_pending))
-				return ACTION_RETRY;
+				return ACTION_LEAVE;
 			return ACTION_NONE;
 
 		case STEP_CANDREQ:
+			if (_is_over(m->last_status, M->delay_fail_pending))
+				return ACTION_FAIL;
+			/* There are very few chances that STEP_CANDREQ fails to move
+			 * forward. The only way to retry is to restart election. */
+			if (_is_over(m->last_status, M->delay_retry_pending))
+				return ACTION_RESTART;
+			return ACTION_NONE;
+
 		case STEP_CANDOK:
+			if (_is_over(m->last_status, M->delay_fail_pending))
+				return ACTION_FAIL;
+			if (_is_over(m->last_status, M->delay_retry_pending))
+				return ACTION_RETRY;
+			return ACTION_NONE;
+
 		case STEP_PRELOST:
 		case STEP_PRELEAD:
 			if (_is_over (m->last_status, M->delay_fail_pending))
 				return ACTION_FAIL;
+			/* ACTION_RETRY (calling defer_GETVERS()) is useful for both
+			 * STEP_PRELEAD and STEP_PRELOST, but for the latter we may
+			 * need to call step_AskMaster_start() again.
+			 * TODO: split STEP_PRELOST and add STEP_MASTER_KNOWN */
 			if (_is_over (m->last_status, M->delay_retry_pending))
 				return ACTION_RETRY;
 			if (_is_over (m->last_USE, M->delay_ping_pending))
@@ -2165,6 +2198,9 @@ _member_react (struct election_member_s *member,
 					return;
 				case EVT_EXITING:
 					return;
+				case EVT_CREATE_OK:
+					member_warn("ABNORMAL", member);
+					/* FALLTHROUGH */
 				default:
 					GRID_DEBUG("IGNORED");
 					return;
@@ -2481,9 +2517,20 @@ _member_play_timer (struct election_member_s *member,
 		case ACTION_FAIL:
 			return become_failed (member);
 		case ACTION_RETRY:
-			defer_GETVERS (member);
-			member->last_status = oio_ext_monotonic_time ();
-			return;
+			switch(member->step) {
+			case STEP_CANDOK:
+				become_candidate(member);
+				return;
+			case STEP_PRELEAD:
+			case STEP_PRELOST:
+				defer_GETVERS(member);
+				member->last_status = oio_ext_monotonic_time();
+				return;
+			default:
+				member_warn("ACTION_RETRY shouldn't be called from this state",
+						member);
+				EXTRA_ASSERT(FALSE);
+			}
 		case ACTION_RESTART:
 			return restart_election (member);
 		case ACTION_LEAVE:
