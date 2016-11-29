@@ -150,8 +150,8 @@ class EventWorker(Worker):
             env = json.loads(data)
             env['job_id'] = job_id
             return env
-        except Exception as e:
-            self.logger.warn('decoding job "%s"', str(e.message))
+        except Exception as exc:
+            self.logger.warn('decoding job "%s"', str(exc.message))
             return None
 
     def run(self):

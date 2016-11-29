@@ -7,7 +7,6 @@ class Handler(object):
         self.conf = conf
         self.logger = app.logger
         self.rdir = self.app.rdir
-        self.session = self.app.session
 
     def process(self, event):
         return EventOk(event=event)

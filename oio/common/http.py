@@ -9,6 +9,10 @@ from eventlet.green.httplib import HTTPConnection, HTTPResponse, _UNKNOWN, \
 from oio.common.utils import json
 
 requests = patcher.import_patched('requests.__init__')
+requests_adapters = patcher.import_patched('requests.adapters')
+
+CONNECTION_TIMEOUT = 2
+READ_TIMEOUT = 30
 
 
 class CustomHTTPResponse(HTTPResponse):

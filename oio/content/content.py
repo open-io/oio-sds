@@ -1,4 +1,4 @@
-# Copyright (C) 2015 OpenIO, original work as part of
+# Copyright (C) 2015-2016 OpenIO, original work as part of
 # OpenIO Software Defined Storage
 #
 # This library is free software; you can redistribute it and/or
@@ -13,8 +13,6 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
-
-import requests
 
 from oio.common import exceptions as exc
 from oio.common.exceptions import ClientException, OrphanChunk
@@ -35,7 +33,6 @@ class Content(object):
         self.cs_client = ConscienceClient(conf)
         self.blob_client = BlobClient()
         self.container_client = ContainerClient(self.conf)
-        self.session = requests.Session()
         self.content_id = self.metadata["id"]
         self.stgpol = self.metadata["policy"]
         self.path = self.metadata["name"]
