@@ -36,7 +36,8 @@ class TestObjectStorageAPI(BaseTestCase):
                                   self.ns, self.account, ct, name)
 
     def _create(self, name, metadata=None):
-        return self.api.container_create(self.account, name, metadata=metadata)
+        return self.api.container_create(self.account, name,
+                                         properties=metadata)
 
     def _delete(self, name):
         self.api.container_delete(self.account, name)

@@ -23,6 +23,10 @@ def gen_headers():
 
 
 class ContainerClient(Client):
+    """
+    This class is mainly used during tests, you should prefer ObjectStorageAPI.
+    """
+
     def __init_(self, conf, **kwargs):
         super(ContainerClient, self).__init__(conf, **kwargs)
 
