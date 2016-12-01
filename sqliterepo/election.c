@@ -1112,18 +1112,24 @@ election_manager_exit_all(struct election_manager_s *manager, gint64 duration,
 	g_tree_foreach (manager->members_by_key, _run_exit, NULL);
 	g_mutex_unlock(&manager->lock);
 
-	for (guint count; 0 < (count = manager_count_active(manager)) ;) {
-		GRID_INFO("Waiting for %u active elections", count);
-		if (oio_ext_monotonic_time () > pivot) {
-			GRID_WARN("TIMEOUT while waiting for active elections");
-			return;
-		}
-		g_usleep(500 * G_TIME_SPAN_MILLISECOND);
+	guint count = manager_count_active(manager);
+	if (duration <= 0) {
+		GRID_INFO("%u elections still active", count);
+	} else {
+		do {
+			GRID_INFO("Waiting for %u active elections", count);
+			if (oio_ext_monotonic_time() > pivot) {
+				GRID_WARN("TIMEOUT while waiting for active elections");
+				break;
+			}
+			g_usleep(500 * G_TIME_SPAN_MILLISECOND);
+		} while ((count = manager_count_active(manager)) > 0);
+		if (count == 0)
+			GRID_INFO("No more active elections");
 	}
+
 	if (!persist)
 		manager->exiting = FALSE;
-
-	GRID_INFO("No more active elections");
 }
 
 #define GS_APPEND_LEN(gs,str) g_string_append_len(gs, str, sizeof(str)-1);

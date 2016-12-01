@@ -123,7 +123,7 @@ class ObjectStorageTest(unittest.TestCase):
         uri = "%s/container/create" % self.uri_base
         params = {'acct': self.account, 'ref': name}
         self.headers['x-oio-action-mode'] = 'autocreate'
-        data = json.dumps({'properties': {}})
+        data = json.dumps({'properties': {}, 'system': {}})
         api._request.assert_called_once_with(
             'POST', uri, params=params, data=data, headers=self.headers)
 
@@ -175,7 +175,7 @@ class ObjectStorageTest(unittest.TestCase):
         api.container_set_properties(
             self.account, name, meta, headers=self.headers)
 
-        data = json.dumps({'properties': meta})
+        data = json.dumps({'properties': meta, 'system': {}})
         uri = "%s/container/set_properties" % self.uri_base
         params = {'acct': self.account, 'ref': name}
         api._request.assert_called_once_with(
