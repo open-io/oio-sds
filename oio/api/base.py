@@ -21,11 +21,21 @@ _ADAPTER_OPTIONS_KEYS = ["pool_connections", "pool_maxsize", "max_retries"]
 
 class API(object):
     """
-    The base class for all API.
+    The base class for all APIs. Provides facilities to make HTTP requests
+    towards the same endpoint, with a pool of connections.
     """
 
-    def __init__(self, session=None, endpoint=None, **kwargs):
+    def __init__(self, endpoint, session=None, **kwargs):
+        """
+        :param session: an optional session that will be reused
+        :type session: `requests.Session`
+        :param endpoint: base of the URL that will requested
+        :type endpoint: `str`
+        :keyword admin_mode: allow talking to a slave/worm namespace
+        :type admin_mode: `bool`
+        """
         super(API, self).__init__()
+        self.endpoint = endpoint
         if not session:
             session = requests.Session()
             adapter_conf = {k: int(v)
@@ -34,19 +44,30 @@ class API(object):
             adapter = requests_adapters.HTTPAdapter(**adapter_conf)
             session.mount("http://", adapter)
         self.session = session
-        self.endpoint = endpoint
         self.admin_mode = kwargs.get('admin_mode', False)
 
-    def _request(self, method, url, endpoint=None, session=None, **kwargs):
-        if not endpoint:
-            endpoint = self.endpoint
-        url = '/'.join([endpoint.rstrip('/'), url.lstrip('/')])
+    def _direct_request(self, method, url, session=None, **kwargs):
+        """
+        Make an HTTP request.
+
+        :param method: HTTP method to use (e.g. "GET")
+        :type method: `str`
+        :param url: URL to request
+        :type url: `str`
+        :param session: the session to use instead of `self.session`
+        :type session: requests.Session
+        :keyword timeout: optional timeout for the request (in seconds).
+            May be a tuple `(connection_timeout, response_timeout)`.
+        :type timeout: `float`
+        :keyword headers: optional headers to add to the request
+        :type headers: `dict`
+        """
         if not session:
             session = self.session
-        headers = kwargs.get('headers') or {}
-        headers = dict([k, str(headers[k])] for k in headers)
-        value_admin = "1" if self.admin_mode else "0"
-        headers.update({ADMIN_HEADER: value_admin})
+        in_headers = kwargs.get('headers') or dict()
+        headers = {k: str(v) for k, v in in_headers.items()}
+        if self.admin_mode or kwargs.get('admin_mode', False):
+            headers.update({ADMIN_HEADER: "1"})
         kwargs['headers'] = headers
         if "timeout" not in kwargs:
             resp = session.request(
@@ -62,3 +83,26 @@ class API(object):
         if resp.status_code >= 400:
             raise exceptions.from_response(resp, body)
         return resp, body
+
+    def _request(self, method, url, endpoint=None, session=None, **kwargs):
+        """
+        Make a request to an HTTP endpoint.
+
+        :param method: HTTP method to use (e.g. "GET")
+        :type method: `str`
+        :param url: URL to request
+        :type url: `str`
+        :param endpoint: endpoint to use in place of `self.endpoint`
+        :type endpoint: `str`
+        :param session: the session to use instead of `self.session`
+        :type session: `requests.Session`
+        :keyword timeout: optional timeout for the request (in seconds).
+            May be a tuple `(connection_timeout, response_timeout)`.
+        :type timeout: `float`
+        :keyword headers: optional headers to add to the request
+        :type headers: `dict`
+        """
+        if not endpoint:
+            endpoint = self.endpoint
+        url = '/'.join([endpoint.rstrip('/'), url.lstrip('/')])
+        return self._direct_request(method, url, session, **kwargs)

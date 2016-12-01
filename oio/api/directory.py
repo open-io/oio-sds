@@ -14,15 +14,19 @@
 import json
 
 from oio.api.base import API
-from oio.common import exceptions
+from oio.common import exceptions, utils
 
 
 class DirectoryAPI(API):
     """
-    The directory API
+    Medium-level directory API.
     """
 
-    def __init__(self, namespace, endpoint, **kwargs):
+    def __init__(self, namespace, endpoint=None, **kwargs):
+        if not endpoint:
+            endpoint = utils.load_namespace_conf(namespace)['proxy']
+        if not endpoint.startswith('http://'):
+            endpoint = 'http://' + endpoint
         endpoint_v3 = '/'.join([endpoint.rstrip('/'), 'v3.0'])
         super(DirectoryAPI, self).__init__(endpoint=endpoint_v3, **kwargs)
         self.namespace = namespace

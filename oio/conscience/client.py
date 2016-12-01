@@ -3,25 +3,25 @@ from oio.common.exceptions import OioException
 from oio.common.utils import json
 
 
-class ConscienceClient(Client):
-    def __init__(self, conf, **kwargs):
-        super(ConscienceClient, self).__init__(conf, **kwargs)
+class LbClient(Client):
+    """Simple load balancer client"""
 
-    def _make_uri(self, api):
-        uri = 'v3.0/%s/%s' % (self.ns, api)
-        return uri
+    def __init__(self, conf, **kwargs):
+        super(LbClient, self).__init__(
+            conf, request_prefix="/lb", **kwargs)
 
     def next_instances(self, pool, **kwargs):
         """
         Get the next service instances from the specified pool.
-        Available options:
-        - size:   number of services to get
-        - slot:   comma-separated list of slots to poll
+
+        :keyword size: number of services to get
+        :type size: `int`
+        :keyword slot: comma-separated list of slots to poll
+        :type slot: `str`
         """
-        uri = self._make_uri('lb/choose')
         params = {'type': pool}
         params.update(kwargs)
-        resp, body = self._request('GET', uri, params=params)
+        resp, body = self._request('GET', '/choose', params=params)
         if resp.status_code == 200:
             return body
         else:
@@ -35,27 +35,64 @@ class ConscienceClient(Client):
     def poll(self, pool, **kwargs):
         """
         Get a set of services from a predefined pool.
-        Available options:
-        - avoid: a list of service IDs that must be avoided
-        - known: a list of service IDs that are already known
+
+        :keyword avoid: service IDs that must be avoided
+        :type avoid: `list`
+        :keyword known: service IDs that are already known
+        :type known: `list`
         """
-        uri = self._make_uri('lb/poll')
         params = {'pool': pool}
         ibody = dict()
         ibody.update(kwargs)
-        resp, obody = self._request('POST', uri, params=params,
+        resp, obody = self._request('POST', '/poll', params=params,
                                     data=json.dumps(ibody))
         if resp.status_code == 200:
             return obody
         else:
             raise OioException("Failed to poll %s: %s" % (pool, resp.text))
 
+
+class ConscienceClient(Client):
+    """Conscience client. Some calls are actually redirected to LbClient."""
+
+    def __init__(self, conf, **kwargs):
+        super(ConscienceClient, self).__init__(
+            conf, request_prefix="/conscience", **kwargs)
+        lb_kwargs = dict(kwargs)
+        lb_kwargs.pop("session", None)
+        self.lb = LbClient(conf, session=self.session, **lb_kwargs)
+
+    def next_instances(self, pool, **kwargs):
+        """
+        Get the next service instances from the specified pool.
+
+        :keyword size: number of services to get
+        :type size: `int`
+        :keyword slot: comma-separated list of slots to poll
+        :type slot: `str`
+        """
+        return self.lb.next_instance(pool, **kwargs)
+
+    def next_instance(self, pool):
+        """Get the next service instance from the specified pool"""
+        return self.lb.next_instance(pool)
+
+    def poll(self, pool, **kwargs):
+        """
+        Get a set of services from a predefined pool.
+
+        :keyword avoid: service IDs that must be avoided
+        :type avoid: `list`
+        :keyword known: service IDs that are already known
+        :type known: `list`
+        """
+        return self.lb.poll(pool, **kwargs)
+
     def all_services(self, type_, full=False):
-        uri = self._make_uri("conscience/list")
         params = {'type': type_}
         if full:
             params['full'] = '1'
-        resp, body = self._request('GET', uri, params=params)
+        resp, body = self._request('GET', '/list', params=params)
         if resp.status_code == 200:
             return body
         else:
@@ -63,8 +100,7 @@ class ConscienceClient(Client):
                                % (type_, resp.text))
 
     def local_services(self):
-        uri = self._make_uri("local/list")
-        resp, body = self._request('GET', uri)
+        resp, body = self._request('GET', '/list')
         if resp.status_code == 200:
             return body
         else:
@@ -72,9 +108,8 @@ class ConscienceClient(Client):
                                resp.text)
 
     def service_types(self):
-        uri = self._make_uri("conscience/info")
         params = {'what': 'types'}
-        resp, body = self._request('GET', uri, params=params)
+        resp, body = self._request('GET', '/info', params=params)
         if resp.status_code == 200:
             return body
         else:
@@ -82,25 +117,22 @@ class ConscienceClient(Client):
                                resp.text)
 
     def register(self, pool, service_definition):
-        uri = self._make_uri('conscience/register')
         data = json.dumps(service_definition)
-        resp, body = self._request('POST', uri, data=data)
+        resp, body = self._request('POST', '/register', data=data)
 
     def info(self):
-        uri = self._make_uri("conscience/info")
-        resp, body = self._request("GET", uri)
+        resp, body = self._request("GET", '/info')
         return body
 
     def lock_score(self, infos_srv):
-        uri = self._make_uri("conscience/lock")
-        resp, body = self._request('POST', uri, data=json.dumps(infos_srv))
+        resp, body = self._request('POST', '/lock',
+                                   data=json.dumps(infos_srv))
         return body
 
     def unlock_score(self, infos_srv):
-        uri = self._make_uri("conscience/unlock")
-        resp, body = self._request('POST', uri, data=json.dumps(infos_srv))
+        resp, body = self._request('POST', '/unlock',
+                                   data=json.dumps(infos_srv))
 
     def flush(self, srv_type):
-        type_dic = {'type': srv_type}
-        uri = self._make_uri('conscience/flush')
-        resp, body = self._request('POST', uri, params=type_dic)
+        resp, body = self._request('POST', '/flush',
+                                   params={'type': srv_type})

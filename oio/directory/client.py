@@ -7,11 +7,9 @@ class DirectoryClient(Client):
     """Deprecated. Use oio.api.directory."""
 
     def __init__(self, conf, **kwargs):
-        super(DirectoryClient, self).__init__(conf, **kwargs)
-
-    def _make_uri(self, target):
-        uri = 'v3.0/%s/%s' % (self.ns, target)
-        return uri
+        super(DirectoryClient, self).__init__(conf,
+                                              request_prefix="/reference",
+                                              **kwargs)
 
     def _make_params(self, acct=None, ref=None, srv_type=None, cid=None):
         if cid:
@@ -23,79 +21,69 @@ class DirectoryClient(Client):
         return params
 
     def create(self, acct=None, ref=None, cid=None, **kwargs):
-        uri = self._make_uri('reference/create')
         params = self._make_params(acct, ref, cid=cid)
-        resp, body = self._request('POST', uri, params=params)
+        resp, body = self._request('POST', '/create', params=params)
         return body
 
     def has(self, acct=None, ref=None, cid=None, **kwargs):
-        uri = self._make_uri('reference/has')
         params = self._make_params(acct, ref, cid=cid)
         try:
-            resp, body = self._request('GET', uri, params=params)
+            resp, body = self._request('GET', '/has', params=params)
         except exc.NotFound:
             return False
         return True
 
     def show(self, acct=None, ref=None, cid=None, srv_type=None, **kwargs):
-        uri = self._make_uri('reference/show')
         params = self._make_params(acct, ref, cid=cid, srv_type=srv_type)
-        resp, body = self._request('GET', uri, params=params)
+        resp, body = self._request('GET', '/show', params=params)
         return body
 
     def destroy(self, acct=None, ref=None, cid=None, **kwargs):
-        uri = self._make_uri('reference/destroy')
         params = self._make_params(acct, ref, cid=cid)
-        resp, body = self._request('POST', uri, params=params)
+        resp, body = self._request('POST', '/destroy', params=params)
 
     def get_properties(self, acct=None, ref=None, properties=[], cid=None,
                        **kwargs):
-        uri = self._make_uri('reference/get_properties')
         params = self._make_params(acct, ref, cid=cid)
         data = json.dumps(properties)
         resp, body = self._request(
-            'POST', uri, data=data, params=params)
+            'POST', '/get_properties', data=data, params=params)
         return body
 
     def set_properties(self, acct=None, ref=None, properties={}, cid=None,
                        **kwargs):
-        uri = self._make_uri('reference/set_properties')
         params = self._make_params(acct, ref, cid=cid)
         data = json.dumps(properties)
         resp, body = self._request(
-            'POST', uri, data=data, params=params)
+            'POST', '/set_properties', data=data, params=params)
 
     def del_properties(self, acct=None, ref=None, properties=[], cid=None,
                        **kwargs):
-        uri = self._make_uri('reference/del_properties')
         params = self._make_params(acct, ref, cid=cid)
         data = json.dumps(properties)
         resp, body = self._request(
-            'POST', uri, data=data, params=params)
+            'POST', '/del_properties', data=data, params=params)
 
     def link(self, acct=None, ref=None, srv_type=None, cid=None,
              autocreate=False, **kwargs):
-        uri = self._make_uri('reference/link')
         params = self._make_params(acct, ref, srv_type, cid=cid)
         headers = {}
         if autocreate:
             headers["X-oio-action-mode"] = "autocreate"
-        resp, body = self._request('POST', uri, params=params, headers=headers)
+        resp, body = self._request('POST', '/link',
+                                   params=params, headers=headers)
 
     def unlink(self, acct=None, ref=None, srv_type=None, cid=None, **kwargs):
-        uri = self._make_uri('reference/unlink')
         params = self._make_params(acct, ref, srv_type, cid=cid)
-        resp, body = self._request('POST', uri, params=params)
+        resp, body = self._request('POST', '/unlink', params=params)
 
     def renew(self, acct=None, ref=None, srv_type=None, cid=None, **kwargs):
-        uri = self._make_uri('reference/renew')
         params = self._make_params(acct, ref, srv_type, cid=cid)
-        resp, body = self._request('POST', uri, params=params)
+        resp, body = self._request('POST', '/renew', params=params)
 
     def force(self, acct=None, ref=None, srv_type=None, services=None,
               cid=None, **kwargs):
-        uri = self._make_uri('reference/force')
         params = self._make_params(acct, ref, cid=cid)
         data = json.dumps(services)
         resp, body = self._request(
-            'POST', uri, data=data, params=params)
+            'POST', '/force', data=data, params=params)

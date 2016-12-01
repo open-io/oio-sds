@@ -75,9 +75,9 @@ class TestFilters(BaseTestCase):
         try:
             self._new_content(data, path)
             self.assertTrue(None)
-        except ClientException as e:
-            print str(e)
-            self.assertTrue(str(e).find('NS slave!') != -1)
+        except ClientException as exc:
+            print str(exc)
+            self.assertTrue(str(exc).find('NS slave!') != -1)
         with mock.patch('oio.container.client.gen_headers', gen_headers_mock):
             content = self._new_content(data, path)
             content.delete()
@@ -91,8 +91,8 @@ class TestFilters(BaseTestCase):
         try:
             content.delete()
             self.assertTrue(None)
-        except ClientException as e:
-            self.assertTrue(str(e).find('NS wormed!') != -1)
+        except ClientException as exc:
+            self.assertTrue(str(exc).find('NS wormed!') != -1)
         downloaded_data = ''.join(content.fetch())
         self.assertEqual(downloaded_data, data)
         with mock.patch('oio.container.client.gen_headers', gen_headers_mock):

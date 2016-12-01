@@ -12,10 +12,13 @@ def _make_id(ns, type_, addr):
     return "%s|%s|%s" % (ns, type_, addr)
 
 
+# TODO: convert to oio.api.base.API instead of oio.common.client.Client
+# This is especially relevant since this class makes no direct request to the
+# proxy (only through DirectoryAPI).
 class RdirClient(Client):
     def __init__(self, conf, **kwargs):
         super(RdirClient, self).__init__(conf, **kwargs)
-        self.directory = DirectoryAPI(self.ns, self.endpoint, **kwargs)
+        self.directory = DirectoryAPI(self.ns, **kwargs)
         self._addr_cache = dict()
 
     def assign_all_rawx(self):

@@ -6,29 +6,24 @@ from oio.common.client import Client
 from oio.common.exceptions import ConfigurationException
 
 
+# TODO: convert to oio.api.base.API instead of oio.common.client.Client
 class Meta0Client(Client):
     """Meta0 administration client"""
 
     def __init__(self, conf, **kwargs):
-        super(Meta0Client, self).__init__(conf, **kwargs)
-
-    def _make_uri(self, target):
-        """Build a request URI"""
-        uri = 'v3.0/%s/%s' % (self.ns, target)
-        return uri
+        super(Meta0Client, self).__init__(conf, request_prefix="/admin",
+                                          **kwargs)
 
     def force(self, mapping):
         """
         Force the meta0 prefix mapping.
         The mapping may be partial to force only a subset of the prefixes.
         """
-        uri = self._make_uri('admin/meta0_force')
-        self._request('POST', uri, data=mapping)
+        self._request('POST', "/meta0_force", data=mapping)
 
     def list(self):
         """Get the meta0 prefix mapping"""
-        uri = self._make_uri('admin/meta0_list')
-        _, obody = self._request('GET', uri)
+        _, obody = self._request('GET', "/meta0_list")
         return obody
 
 

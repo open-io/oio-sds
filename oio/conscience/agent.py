@@ -44,7 +44,8 @@ class ServiceWatcher(object):
         self.logger = get_logger(self.conf)
         self.session = requests.Session()
         self.cs = ConscienceClient(self.conf, session=self.session)
-        self.client = Client(self.conf, session=self.session)
+        self.client = Client(self.conf, session=self.session,
+                             no_ns_in_url=True)
         self.last_status = False
         self.failed = False
         self.service_definition = {

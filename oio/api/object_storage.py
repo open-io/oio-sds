@@ -235,10 +235,13 @@ class ObjectStorageAPI(API):
         """
         Create a container.
 
+        :type account: str
         :param account: account in which to create the container
+        :type container: str
         :param container: name of the container
+        :type properties: dict
         :param properties: dictionary of properties to set
-        :param headers:
+        :type headers: dict
         :returns: True if the container has been created,
                   False if it already exists
         """
@@ -319,10 +322,15 @@ class ObjectStorageAPI(API):
         Set properties on a container.
 
         :param account: name of the account
+        :type account: `str`
         :param container: name of the container where to set properties
+        :type container: `str`
         :param properties: a dictionary of properties
+        :type properties: `dict`
         :param clear:
-        :param headers:
+        :type clear: `bool`
+        :param headers: extra headers to pass to the proxy
+        :type headers: `dict`
         """
         params = self._make_params(account, container)
 
@@ -553,6 +561,7 @@ class ObjectStorageAPI(API):
                 "could not find account instance url"
             )
 
+    # TODO: create a dedicated Session or wrap AccountClient
     def _account_request(self, method, uri, **kwargs):
         account_url = None
         try:
