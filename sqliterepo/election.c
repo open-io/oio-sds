@@ -2129,7 +2129,7 @@ member_finish_CHECKING_SLAVES(struct election_member_s *member)
 #ifdef HAVE_EXTRA_ASSERT
 
 static void
-_member_assert_NONE(struct election_member_s *member UNUSED)
+_member_assert_NONE(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_NONE);
 	EXTRA_ASSERT(member->myid == -1);
@@ -2139,7 +2139,7 @@ _member_assert_NONE(struct election_member_s *member UNUSED)
 }
 
 static void
-_member_assert_CREATING(struct election_member_s *member UNUSED)
+_member_assert_CREATING(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_CREATING);
 	EXTRA_ASSERT(member->myid == -1);
@@ -2156,7 +2156,7 @@ _member_assert_CREATING(struct election_member_s *member UNUSED)
 }
 
 static void
-_member_assert_WATCHING(struct election_member_s *member UNUSED)
+_member_assert_WATCHING(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_WATCHING);
 	EXTRA_ASSERT(member->myid >= 0);
@@ -2172,7 +2172,7 @@ _member_assert_WATCHING(struct election_member_s *member UNUSED)
 }
 
 static void
-_member_assert_LISTING(struct election_member_s *member UNUSED)
+_member_assert_LISTING(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_LISTING);
 	EXTRA_ASSERT(member->myid >= 0);
@@ -2188,7 +2188,7 @@ _member_assert_LISTING(struct election_member_s *member UNUSED)
 }
 
 static void
-_member_assert_ASKING(struct election_member_s *member UNUSED)
+_member_assert_ASKING(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_ASKING);
 	EXTRA_ASSERT(member->myid >= 0);
@@ -2204,7 +2204,7 @@ _member_assert_ASKING(struct election_member_s *member UNUSED)
 }
 
 static void
-_member_assert_CHECKING_MASTER(struct election_member_s *member UNUSED)
+_member_assert_CHECKING_MASTER(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_CHECKING_MASTER);
 	EXTRA_ASSERT(member->myid >= 0);
@@ -2221,7 +2221,7 @@ _member_assert_CHECKING_MASTER(struct election_member_s *member UNUSED)
 }
 
 static void
-_member_assert_CHECKING_SLAVES(struct election_member_s *member UNUSED)
+_member_assert_CHECKING_SLAVES(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_CHECKING_SLAVES);
 	EXTRA_ASSERT(member->myid >= 0);
@@ -2238,7 +2238,7 @@ _member_assert_CHECKING_SLAVES(struct election_member_s *member UNUSED)
 }
 
 static void
-_member_assert_LEAVING(struct election_member_s *member UNUSED)
+_member_assert_LEAVING(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_LEAVING);
 	EXTRA_ASSERT(member->myid >= 0);
@@ -2254,7 +2254,7 @@ _member_assert_LEAVING(struct election_member_s *member UNUSED)
 }
 
 static inline void
-_member_assert_LEAVING_FAILING(struct election_member_s *member UNUSED)
+_member_assert_LEAVING_FAILING(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_LEAVING_FAILING);
 	EXTRA_ASSERT(member->myid >= 0);
@@ -2270,7 +2270,7 @@ _member_assert_LEAVING_FAILING(struct election_member_s *member UNUSED)
 }
 
 static void
-_member_assert_SYNCING(struct election_member_s *member UNUSED)
+_member_assert_SYNCING(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_SYNCING);
 	EXTRA_ASSERT(member->myid >= 0);
@@ -2286,7 +2286,7 @@ _member_assert_SYNCING(struct election_member_s *member UNUSED)
 }
 
 static void
-_member_assert_SLAVE(struct election_member_s *member UNUSED)
+_member_assert_SLAVE(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_SLAVE);
 	EXTRA_ASSERT(member->myid != -1);
@@ -2297,7 +2297,7 @@ _member_assert_SLAVE(struct election_member_s *member UNUSED)
 }
 
 static void
-_member_assert_MASTER(struct election_member_s *member UNUSED)
+_member_assert_MASTER(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_MASTER);
 	EXTRA_ASSERT(member->myid != -1);
@@ -2307,7 +2307,7 @@ _member_assert_MASTER(struct election_member_s *member UNUSED)
 }
 
 static void
-_member_assert_FAILED(struct election_member_s *member UNUSED)
+_member_assert_FAILED(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_FAILED);
 	EXTRA_ASSERT(member->myid == -1);
