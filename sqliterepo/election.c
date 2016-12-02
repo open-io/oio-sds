@@ -1239,13 +1239,13 @@ static void
 completion_DeleteRogueNode(int zrc, const void *d)
 {
 	gchar *path = (gchar*)d;
-	if (zrc == ZNONODE)
-		GRID_INFO("Rogue ZK node at %s disappeared", path);
-	else if (zrc == ZOK)
-		GRID_INFO("Sucessfully deleted rogue ZK node at %s", path);
-	else
-		GRID_WARN("Failed to delete rogue ZK node at %s: %s",
-				path, zerror(zrc));
+	if (zrc == ZNONODE) {
+		GRID_DEBUG("Rogue disappeared %s", path);
+	} else if (zrc == ZOK) {
+		GRID_DEBUG("Rogue deleted %s", path);
+	} else {
+		GRID_WARN("Rogue deletion error %s: %s", path, zerror(zrc));
+	}
 	g_free(path);
 }
 
@@ -1336,7 +1336,7 @@ completion_ASKING(int zrc, const char *v, int vlen,
 				 * if we accept it as-is, we will create a loop on ourselves.
 				 * We delete it and pretend there is no master. */
 				gchar *path = member_masterpath(member);
-				GRID_WARN("Rogue ZK node at %s, triggering deletion", path);
+				GRID_WARN("Rogue being deleted %s", path);
 				int zrc2 = sqlx_sync_adelete(member->manager->sync, path, -1,
 						completion_DeleteRogueNode, path);
 				if (zrc2 != ZOK) {
