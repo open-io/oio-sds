@@ -371,12 +371,6 @@ static void transition_error(struct election_member_s *member,
 static void transition(struct election_member_s *member,
 		enum event_type_e evt_type, void *evt_arg);
 
-static gboolean defer_USE(struct election_member_s *member);
-
-static void defer_GETVERS(struct election_member_s *member);
-
-static void member_debug(const char *tag, const struct election_member_s *m);
-
 static gboolean wait_for_final_status(struct election_member_s *m,
 		gint64 deadline);
 
@@ -773,6 +767,7 @@ member_warn(const char *tag, const struct election_member_s *m)
 	DUMP(WARN,tag,m);
 }
 
+#ifdef HAVE_EXTRA_ASSERT
 static gboolean
 member_has_getvers (struct election_member_s *m)
 {
@@ -794,6 +789,7 @@ member_has_action(struct election_member_s *m)
 		|| m->pending_ZK_GET
 		|| m->pending_ZK_DELETE;
 }
+#endif
 
 static const char*
 member_get_url(struct election_member_s *m)
@@ -979,12 +975,16 @@ member_log_event(struct election_member_s *member, enum election_step_e pre,
 	plog->post = member->step;
 }
 
+#ifdef HAVE_EXTRA_DEBUG
 static void
 member_log_completion(const char *tag, int zrc, const struct election_member_s *m)
 {
 	GRID_TRACE("%s %d/%s [%s.%s] %s", tag, zrc, zerror(zrc),
 			m->name.base, m->name.type, m->key);
 }
+#else
+#define member_log_completion(...)
+#endif
 
 static gchar *
 member_fullpath(struct election_member_s *member)
@@ -1771,34 +1771,57 @@ _result_GETVERS (GError *enet,
 }
 
 static void
-defer_GETVERS(struct election_member_s *member)
+defer_GETVERS_to_peers(struct election_member_s *m)
 {
-	MEMBER_CHECK(member);
+	MEMBER_CHECK(m);
 
 	gchar **peers = NULL;
-	GError *err = member_get_peers(member, FALSE, &peers);
+	GError *err = member_get_peers(m, FALSE, &peers);
 	if (err != NULL) {
 		GRID_WARN("[%s] Election initiated (%s) but get_peers error: (%d) %s",
-				__FUNCTION__, _step2str(member->step), err->code, err->message);
+				__FUNCTION__, _step2str(m->step), err->code, err->message);
 		g_clear_error(&err);
 		return;
 	}
 
-	if (member->pending_GETVERS > 0)
-		member_debug("lost:GETVERS", member);
+	if (m->pending_GETVERS > 0)
+		member_warn("lost:GETVERS", m);
 
 	const guint pending = peers ? g_strv_length(peers) : 0;
-	member->concurrent_GETVERS = 0;
-	member->errors_GETVERS = 0;
-	member->pending_GETVERS = pending;
+	m->count_GETVERS = m->pending_GETVERS = pending;
+	m->concurrent_GETVERS = 0;
+	m->outdated_GETVERS = 0;
+	m->errors_GETVERS = 0;
 
-	for (gchar **p=peers; p && *p; p++)
-		sqlx_peering__getvers (member->manager->peering, *p,
-				sqlx_name_mutable_to_const(&member->name), member->manager,
+	for (gchar **p=peers; p && *p; p++) {
+		sqlx_peering__getvers (m->manager->peering, *p,
+				sqlx_name_mutable_to_const(&m->name), m->manager,
 				0, _result_GETVERS);
+		member_trace("shed:GETVERS", m);
+	}
 
-	member_trace("shed:GETVERS", member);
 	g_strfreev(peers);
+}
+
+static void
+defer_GETVERS_to_master(struct election_member_s *m)
+{
+	MEMBER_CHECK(m);
+	EXTRA_ASSERT(m->master_url != NULL);
+
+	if (m->pending_GETVERS > 0)
+		member_warn("lost:GETVERS", m);
+
+	m->count_GETVERS = m->pending_GETVERS = 1;
+	m->outdated_GETVERS = 0;
+	m->concurrent_GETVERS = 0;
+	m->errors_GETVERS = 0;
+
+	sqlx_peering__getvers (m->manager->peering, m->master_url,
+			sqlx_name_mutable_to_const(&m->name), m->manager,
+			0, _result_GETVERS);
+
+	member_trace("shed:GETVERS", m);
 }
 
 static void
@@ -1833,10 +1856,10 @@ _result_PIPEFROM (GError *e, struct election_manager_s *manager,
 static void
 member_action_to_NONE(struct election_member_s *member)
 {
-	g_assert(!member_has_action(member));
-	g_assert(member->myid == -1);
-	g_assert(member->master_id == -1);
-	g_assert(member->master_url == NULL);
+	EXTRA_ASSERT(!member_has_action(member));
+	EXTRA_ASSERT(member->myid == -1);
+	EXTRA_ASSERT(member->master_id == -1);
+	EXTRA_ASSERT(member->master_url == NULL);
 	member->generation_id ++;
 	member_set_status(member, STEP_NONE);
 }
@@ -1847,7 +1870,7 @@ member_action_to_NONE(struct election_member_s *member)
 static void
 member_action_to_FAILED(struct election_member_s *member)
 {
-	g_assert(!member_has_action(member));
+	EXTRA_ASSERT(!member_has_action(member));
 
 	/* setting last_USE to now avoids sending USE as soon as arrived in
 	 * the set of FAILED elections. */
@@ -1869,7 +1892,7 @@ static void
 _common_action_to_LEAVE(struct election_member_s *member,
 		enum event_type_e evt)
 {
-	g_assert(!member_has_action(member));
+	EXTRA_ASSERT(!member_has_action(member));
 
 	member->requested_LEAVE = 0;
 	member->requested_LEFT_SELF = 0;
@@ -1917,7 +1940,7 @@ member_leave_on_error(struct election_member_s *member, int zrc)
 static void
 member_action_to_CREATING(struct election_member_s *member)
 {
-	g_assert(!member_has_action(member));
+	EXTRA_ASSERT(!member_has_action(member));
 
 	const char *myurl = member_get_url(member);
 	gchar *path = member_fullpath(member);
@@ -1942,7 +1965,7 @@ member_action_to_CREATING(struct election_member_s *member)
 static void
 member_action_to_WATCHING(struct election_member_s *member)
 {
-	g_assert(!member_has_action(member));
+	EXTRA_ASSERT(!member_has_action(member));
 
 	gchar *path = member_fullpath(member);
 	int zrc = sqlx_sync_awexists(member->manager->sync, path,
@@ -1964,7 +1987,7 @@ member_action_to_WATCHING(struct election_member_s *member)
 static void
 member_action_to_LISTING(struct election_member_s *member)
 {
-	g_assert(!member_has_action(member));
+	EXTRA_ASSERT(!member_has_action(member));
 	EXTRA_ASSERT(member->master_id == -1);
 	EXTRA_ASSERT(member->master_url == NULL);
 
@@ -1987,7 +2010,7 @@ member_action_to_LISTING(struct election_member_s *member)
 static void
 member_action_to_ASKING(struct election_member_s *member)
 {
-	g_assert(!member_has_action(member));
+	EXTRA_ASSERT(!member_has_action(member));
 
 	gchar *path = member_masterpath(member);
 	int zrc = sqlx_sync_awget(member->manager->sync, path,
@@ -2009,7 +2032,7 @@ member_action_to_ASKING(struct election_member_s *member)
 static void
 member_action_to_SYNCING(struct election_member_s *member)
 {
-	g_assert(!member_has_action(member));
+	EXTRA_ASSERT(!member_has_action(member));
 
 	member_ref(member);
 
@@ -2035,7 +2058,7 @@ member_finish_CHECKING_MASTER(struct election_member_s *member)
 {
 	if ((-- member->pending_GETVERS) > 0)
 		return;
-	g_assert(!member_has_action(member));
+	EXTRA_ASSERT(!member_has_action(member));
 
 	const guint16 asked = member->count_GETVERS;
 	const guint16 outdated = member->outdated_GETVERS;
@@ -2077,7 +2100,7 @@ member_finish_CHECKING_SLAVES(struct election_member_s *member)
 {
 	if ((-- member->pending_GETVERS) > 0)
 		return;
-	g_assert(!member_has_action(member));
+	EXTRA_ASSERT(!member_has_action(member));
 
 	const guint16 asked = member->count_GETVERS;
 	const guint16 outdated = member->outdated_GETVERS;
@@ -2110,6 +2133,8 @@ member_finish_CHECKING_SLAVES(struct election_member_s *member)
 
 	return member_set_status(member, STEP_MASTER);
 }
+
+#ifdef HAVE_EXTRA_ASSERT
 
 static void
 _member_assert_NONE(struct election_member_s *member UNUSED)
@@ -2299,6 +2324,22 @@ _member_assert_FAILED(struct election_member_s *member UNUSED)
 	EXTRA_ASSERT(!member_has_action(member));
 }
 
+#else
+#define _member_assert_NONE(...)
+#define _member_assert_CREATING(...)
+#define _member_assert_WATCHING(...)
+#define _member_assert_LISTING(...)
+#define _member_assert_ASKING(...)
+#define _member_assert_CHECKING_MASTER(...)
+#define _member_assert_CHECKING_SLAVES(...)
+#define _member_assert_LEAVING(...)
+#define _member_assert_LEAVING_FAILING(...)
+#define _member_assert_SYNCING(...)
+#define _member_assert_SLAVE(...)
+#define _member_assert_MASTER(...)
+#define _member_assert_FAILED(...)
+#endif
+
 static void
 _member_react_NONE(struct election_member_s *member, enum event_type_e evt)
 {
@@ -2452,12 +2493,12 @@ _member_react_LISTING(struct election_member_s *member, enum event_type_e evt,
 				return member_action_to_CREATING(member);
 			/* nominal flow */
 			if (member->myid == *p_masterid) {
-				/* We are 1st, the probable master */
+				/* We are 1st, the probable future master */
 				member_set_master_id(member, member->myid);
-				defer_GETVERS(member);
+				defer_GETVERS_to_peers(member);
 				return member_set_status(member, STEP_CHECKING_SLAVES);
 			} else {
-				/* We are in the tail, probable slave */
+				/* We are in the tail, probable future slave */
 				member_set_master_id(member, *p_masterid);
 				return member_action_to_ASKING(member);
 			}
@@ -2524,7 +2565,7 @@ _member_react_ASKING(struct election_member_s *member, enum event_type_e evt,
 			}
 			/* nominal flow : let's become CHECKING_MASTER */
 			member_set_master_url(member, url);
-			defer_GETVERS(member);
+			defer_GETVERS_to_master(member);
 			return member_set_status(member, STEP_CHECKING_MASTER);
 
 			/* Abnormal */

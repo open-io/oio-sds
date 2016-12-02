@@ -19,6 +19,10 @@ License along with this library.
 
 #include <glib.h>
 
+#ifndef HAVE_EXTRA_ASSERT
+#define HAVE_EXTRA_ASSERT 1
+#endif
+
 #undef GQ
 #define GQ() g_quark_from_static_string("oio.sqlite")
 
@@ -1012,7 +1016,8 @@ static void test_STEP_ASKING(void) {
 	transition(m, EVT_MASTER_OK, url);
 	_member_assert_CHECKING_MASTER(m);
 	_pending(0);
-	g_assert_cmpint(m->pending_GETVERS, ==, 2);
+	/* only one GETVERS sent to the master */
+	g_assert_cmpint(m->pending_GETVERS, ==, 1);
 
 	RESET();
 	transition(m, EVT_MASTER_BAD, NULL);
