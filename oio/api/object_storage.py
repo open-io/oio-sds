@@ -104,13 +104,15 @@ def wrand_choice_index(scores):
 
 def _sort_chunks(raw_chunks, ec_security):
     """
-    Sort a list a chunk objects. Returns a dictionary with metachunk
-    positions as keys, and list of chunk objects as values.
-    `ec_security` tells the sort algorithm that chunk positions are
-    composed (e.g. "0.4").
+    Sort a list a chunk objects. In addition to the sort,
+    this function adds an "offset" field to each chunk object.
 
-    In addition to the sort, this function adds an "offset" field
-    to each chunk object.
+    :type raw_chunks: iterable of `dict`
+    :param ec_security: tells the sort algorithm that chunk positions are
+        composed (e.g. "0.4").
+    :type ec_security: `bool`
+    :returns: a `dict` with metachunk positions as keys,
+        and `list` of chunk objects as values.
     """
     chunks = dict()
     for chunk in raw_chunks:
@@ -167,6 +169,22 @@ class ObjectStorageAPI(API):
     """
 
     def __init__(self, namespace, endpoint=None, **kwargs):
+        """
+        Initialize the object storage API.
+
+        :param namespace: name of the namespace to interract with
+        :type namespace: `str`
+        :param endpoint: optional URL of a proxy
+        :type endpoint: `str`
+
+        :keyword connection_timeout: connection timeout towards rawx services
+        :type connection_timeout: `float` seconds
+        :keyword read_timeout: timeout for rawx responses and data reads from
+            the caller (when uploading)
+        :type read_timeout: `float` seconds
+        :keyword write_timeout: timeout for rawx write requests
+        :type write_timeout: `float` seconds
+        """
         if not endpoint:
             endpoint = utils.load_namespace_conf(namespace)['proxy']
         if not endpoint.startswith('http://'):
@@ -235,13 +253,14 @@ class ObjectStorageAPI(API):
         """
         Create a container.
 
-        :type account: str
         :param account: account in which to create the container
-        :type container: str
+        :type account: `str`
         :param container: name of the container
-        :type properties: dict
-        :param properties: dictionary of properties to set
-        :type headers: dict
+        :type container: `str`
+        :param properties: properties to set on the container
+        :type properties: `dict`
+        :keyword headers: extra headers to send to the proxy
+        :type headers: `dict`
         :returns: True if the container has been created,
                   False if it already exists
         """
@@ -263,6 +282,16 @@ class ObjectStorageAPI(API):
 
     @handle_container_not_found
     def container_delete(self, account, container, headers=None):
+        """
+        Delete a container.
+
+        :param account: account from which to delete the container
+        :type account: `str`
+        :param container: name of the container
+        :type container: `str`
+        :keyword headers: extra headers to send to the proxy
+        :type headers: `dict`
+        """
         uri = self._make_uri('container/destroy')
         params = self._make_params(account, container)
         try:
@@ -275,6 +304,21 @@ class ObjectStorageAPI(API):
     def container_list(self, account, limit=None, marker=None,
                        end_marker=None, prefix=None, delimiter=None,
                        headers=None):
+        """
+        Get the list of containers of an account.
+
+        :param account: account from which to delete the container
+        :type account: `str`
+        :keyword limit: maximum number of results to return
+        :type limit: `int`
+        :keyword marker: name of the container from where to start the listing
+        :type marker: `str`
+        :keyword end_marker:
+        :keyword prefix:
+        :keyword delimiter:
+        :keyword headers: extra headers to send to the proxy
+        :type headers: `dict`
+        """
         uri = "v1.0/account/containers"
         account_id = utils.quote(account, '')
         params = {"id": account_id, "limit": limit, "marker": marker,
@@ -289,9 +333,22 @@ class ObjectStorageAPI(API):
 
     @handle_container_not_found
     def container_show(self, account, container, headers=None):
+        """
+        Get information about a container, like user and system properties.
+
+        :param account: account in which the container is
+        :type account: `str`
+        :param container: name of the container
+        :type container: `str`
+        :keyword headers: extra headers to send to the proxy
+        :type headers: `dict`
+        :returns: a `dict` with "properties" and "system" entries,
+            containing respectively a `dict` of user properties and
+            a `dict` of system properties.
+        """
         uri = self._make_uri('container/get_properties')
         params = self._make_params(account, container)
-        resp, resp_body = self._request(
+        _resp, resp_body = self._request(
             'POST', uri, params=params, headers=headers)
         return resp_body
 
@@ -538,6 +595,7 @@ class ObjectStorageAPI(API):
             'POST', uri, data=json.dumps(data), params=params,
             headers=headers)
 
+    # TODO: remove this method and fix all calls to use dedicated clients
     def _make_uri(self, action):
         uri = "%s/%s" % (self.namespace, action)
         return uri
