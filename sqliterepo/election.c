@@ -153,7 +153,6 @@ struct election_manager_s
 
 	/* how long we wait after the last USE sent to send a new */
 	gint64 delay_ping_final;
-	gint64 delay_ping_FAILED;
 
 	gboolean exiting;
 };
@@ -498,8 +497,7 @@ election_manager_dump_delays(struct election_manager_s *manager)
 			manager->delay_expire_FAILED / G_TIME_SPAN_MILLISECOND);
 	GRID_INFO("- retry_failed=%ldms",
 			manager->delay_retry_FAILED/ G_TIME_SPAN_MILLISECOND);
-	GRID_INFO("- ping_failed=%ldms, ping_final=%ldms",
-			manager->delay_ping_FAILED / G_TIME_SPAN_MILLISECOND,
+	GRID_INFO("- ping_final=%ldms",
 			manager->delay_ping_final / G_TIME_SPAN_MILLISECOND);
 }
 
@@ -528,7 +526,6 @@ election_manager_create(struct replication_config_s *config,
 	manager->delay_expire_FAILED = SQLX_DELAY_EXPIRE_FAILED;
 	manager->delay_retry_FAILED = SQLX_DELAY_RESTART_FAILED;
 	manager->delay_ping_final = SQLX_DELAY_PING_FINAL;
-	manager->delay_ping_FAILED = SQLX_DELAY_PING_FAILED;
 	manager->config = config;
 
 	g_mutex_init(&manager->lock);
@@ -1891,14 +1888,6 @@ _member_rearm_ping_SLAVE(struct election_member_s *member)
 }
 
 static void
-_member_rearm_ping_FAILED(struct election_member_s *member)
-{
-	member->when_next_ping = _get_next_ping(
-			member->manager->delay_ping_FAILED,
-			member->manager->delay_ping_FAILED / 3);
-}
-
-static void
 member_action_to_NONE(struct election_member_s *member)
 {
 	EXTRA_ASSERT(!member_has_action(member));
@@ -2933,10 +2922,6 @@ _member_react_FAILED(struct election_member_s *member, enum event_type_e evt)
 				return member_action_to_LEAVING(member);
 			if (_is_over(now, member->last_status, M->delay_retry_FAILED))
 				return member_action_to_CREATING(member);
-			if (now > member->when_next_ping) {
-				_member_rearm_ping_FAILED(member);
-				defer_USE(member);
-			}
 			return;
 
 			/* Interruptions */

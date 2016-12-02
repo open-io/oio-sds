@@ -68,10 +68,6 @@ License along with this library.
 #  define SQLX_DELAY_RESTART_FAILED 5 * G_TIME_SPAN_SECOND
 # endif
 
-# ifndef  SQLX_DELAY_PING_FAILED
-#  define SQLX_DELAY_PING_FAILED 5 * G_TIME_SPAN_SECOND
-# endif
-
 # ifndef  SQLX_DELAY_PING_FINAL
 #  define SQLX_DELAY_PING_FINAL 15 * G_TIME_SPAN_MINUTE
 # endif
