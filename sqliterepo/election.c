@@ -2909,7 +2909,7 @@ _member_react (struct election_member_s *member,
 {
 	/* EVT_DISCONNECTED is sent when we lost the link with ZK. All the
 	 * ephemeral nodes will be lost, soon. We can reset an elections FSM
-	 * receiving this event, whatever it's state. */
+	 * receiving this event, whatever its state. */
 	if (evt == EVT_DISCONNECTED) {
 		member_warn("DISCONNECTED", member);
 		member_reset(member);
