@@ -173,9 +173,20 @@ struct election_member_s
 
 	struct sqlx_name_mutable_s name;
 
+	/* Incremented when creating a new ZK node, as a new membership. We use
+	 * the `generation_id` to know if watchers are based on the current or an
+	 * older membership. */
 	guint generation_id;
 
+	/* Since when do we loop between pending states. That value is used by
+	 * client threads to decide wether to wait (or not) for a final state. */
 	gint64 when_unstable;
+
+	/* Used to know when the mechanism is allowed to send a gratuitous ping
+	 * to the peers. Set to a value when entering a state allowed to generate
+	 * such a ping (i.e. a final state) or when a ping is sent. */
+	gint64 when_next_ping;
+
 	gint64 last_status; /* last time the status was changed */
 	gint64 last_USE; /* last time a USE request has been sent */
 	gint64 last_atime; /* last time the app wanted a status */
@@ -437,12 +448,12 @@ _DEQUE_add (struct election_member_s *m)
 /* --- Misc helpers --------------------------------------------------------- */
 
 static gboolean
-_is_over (const gint64 last, const gint64 delay)
+_is_over (const gint64 now, const gint64 last, const gint64 delay)
 {
-	if (!last) return FALSE;
-	const gint64 now = oio_ext_monotonic_time ();
-	return last < OLDEST(now,delay);
+	return last > 0 && last < OLDEST(now,delay);
 }
+
+#define _IS_OVER(L,D) _is_over(oio_ext_monotonic_time(), L, D)
 
 static GArray *
 nodev_to_int64v(const struct String_vector *sv, const char *prefix)
@@ -1845,6 +1856,48 @@ _result_PIPEFROM (GError *e, struct election_manager_s *manager,
 
 /* -------------------------------------------------------------------------- */
 
+static gint64
+_get_next_ping(const gint64 base, const gint64 jitter)
+{
+	EXTRA_ASSERT(base >= 0);
+	EXTRA_ASSERT(jitter >= 0);
+
+	/* Avoid an overflow on the int32, the delay might represent several days
+	 * in microseconds */
+	gint64 max = G_MAXINT32 - 1;
+	if (base + jitter < max)
+		max = base + jitter;
+	gint64 min = (base > jitter) ? base - jitter : 0;
+
+	/* Introduce a +1 bias to avoid the check of base != 0 */
+	return oio_ext_monotonic_time() + oio_ext_rand_int_range(
+			(gint32)(min + 1), (gint32)(max + 1));
+}
+
+static void
+_member_rearm_ping_MASTER(struct election_member_s *member)
+{
+	member->when_next_ping = _get_next_ping(
+			member->manager->delay_ping_final,
+			member->manager->delay_ping_final / 3);
+}
+
+static void
+_member_rearm_ping_SLAVE(struct election_member_s *member)
+{
+	member->when_next_ping = _get_next_ping(
+			member->manager->delay_ping_final,
+			member->manager->delay_ping_final / 3);
+}
+
+static void
+_member_rearm_ping_FAILED(struct election_member_s *member)
+{
+	member->when_next_ping = _get_next_ping(
+			member->manager->delay_ping_FAILED,
+			member->manager->delay_ping_FAILED / 3);
+}
+
 static void
 member_action_to_NONE(struct election_member_s *member)
 {
@@ -1852,7 +1905,6 @@ member_action_to_NONE(struct election_member_s *member)
 	EXTRA_ASSERT(member->myid == -1);
 	EXTRA_ASSERT(member->master_id == -1);
 	EXTRA_ASSERT(member->master_url == NULL);
-	member->generation_id ++;
 	member_set_status(member, STEP_NONE);
 }
 
@@ -2046,6 +2098,20 @@ member_action_to_SYNCING(struct election_member_s *member)
 }
 
 static void
+member_action_to_MASTER(struct election_member_s *member)
+{
+	_member_rearm_ping_MASTER(member);
+	return member_set_status(member, STEP_MASTER);
+}
+
+static void
+member_action_to_SLAVE(struct election_member_s *member)
+{
+	_member_rearm_ping_SLAVE(member);
+	return member_set_status(member, STEP_SLAVE);
+}
+
+static void
 member_finish_CHECKING_MASTER(struct election_member_s *member)
 {
 	if ((-- member->pending_GETVERS) > 0)
@@ -2123,7 +2189,7 @@ member_finish_CHECKING_SLAVES(struct election_member_s *member)
 	if (node_left)
 		return member_action_to_CREATING(member);
 
-	return member_set_status(member, STEP_MASTER);
+	return member_action_to_MASTER(member);
 }
 
 #ifdef HAVE_EXTRA_ASSERT
@@ -2763,7 +2829,7 @@ _member_react_SYNCING(struct election_member_s *member, enum event_type_e evt)
 				return member_action_to_CREATING(member);
 			if (member->requested_LEFT_MASTER)
 				return member_action_to_LISTING(member);
-			return member_set_status(member, STEP_SLAVE);
+			return member_action_to_SLAVE(member);
 
 			/* Abnormal events */
 		default:
@@ -2771,42 +2837,23 @@ _member_react_SYNCING(struct election_member_s *member, enum event_type_e evt)
 	}
 }
 
-static gint64
-_delay_randomize(const gint64 base, const gint64 jitter)
-{
-	/* Avoid an overflow on the int32, the delay might represent several days
-	 * in microseconds */
-	gint64 max = G_MAXINT32 - 1;
-	if (base + jitter < max)
-		max = base + jitter;
-	gint64 min = base - jitter;
-	if (min > max)
-		min = max;
-
-	/* Introduce a +1 bias to avoid the check of base != 0 */
-	return (gint64) oio_ext_rand_int_range(
-			(gint32)(min + 1), (gint32)(max + 1));
-}
-
-static gint64
-_delay_ping_final(const struct election_manager_s *M)
-{
-	return _delay_randomize(M->delay_ping_final, M->delay_ping_final / 5);
-}
-
 static void
 _member_react_SLAVE(struct election_member_s *member, enum event_type_e evt)
 {
+	gint64 now;
 	_member_assert_SLAVE (member);
 	const struct election_manager_s *M = member->manager;
 
 	switch (evt) {
 		/* Possible time-triggered actions */
 		case EVT_NONE:
-			if (_is_over (member->last_atime, M->delay_expire_SLAVE))
+			now = oio_ext_monotonic_time ();
+			if (_is_over(now, member->last_atime, M->delay_expire_SLAVE))
 				return member_action_to_LEAVING(member);
-			if (_is_over (member->last_USE, _delay_ping_final(M)))
+			if (now > member->when_next_ping) {
+				_member_rearm_ping_SLAVE(member);
 				defer_USE(member);
+			}
 			return;
 
 			/* Interruptions */
@@ -2834,16 +2881,20 @@ _member_react_SLAVE(struct election_member_s *member, enum event_type_e evt)
 static void
 _member_react_MASTER(struct election_member_s *member, enum event_type_e evt)
 {
+	gint64 now;
 	_member_assert_MASTER (member);
 	const struct election_manager_s *M = member->manager;
 
 	switch (evt) {
 		/* Possible time-triggered actions */
 		case EVT_NONE:
-			if (_is_over (member->last_atime, M->delay_expire_MASTER))
+			now = oio_ext_monotonic_time();
+			if (_is_over(now, member->last_atime, M->delay_expire_MASTER))
 				return member_action_to_LEAVING(member);
-			if (_is_over (member->last_USE, _delay_ping_final(M)))
+			if (now > member->when_next_ping) {
+				_member_rearm_ping_MASTER(member);
 				defer_USE(member);
+			}
 			return;
 
 			/* Interruptions */
@@ -2870,18 +2921,22 @@ _member_react_MASTER(struct election_member_s *member, enum event_type_e evt)
 static void
 _member_react_FAILED(struct election_member_s *member, enum event_type_e evt)
 {
+	gint64 now;
 	_member_assert_FAILED (member);
 	const struct election_manager_s *M = member->manager;
 
 	switch (evt) {
 		/* Possible time-triggered actions */
 		case EVT_NONE:
-			if (_is_over (member->last_atime, M->delay_expire_FAILED))
+			now = oio_ext_monotonic_time();
+			if (_is_over(now, member->last_atime, M->delay_expire_FAILED))
 				return member_action_to_LEAVING(member);
-			if (_is_over (member->last_status, M->delay_retry_FAILED))
+			if (_is_over(now, member->last_status, M->delay_retry_FAILED))
 				return member_action_to_CREATING(member);
-			if (_is_over (member->last_USE, M->delay_ping_FAILED))
+			if (now > member->when_next_ping) {
+				_member_rearm_ping_FAILED(member);
 				defer_USE(member);
+			}
 			return;
 
 			/* Interruptions */
@@ -2995,10 +3050,7 @@ guint
 election_manager_play_timers (struct election_manager_s *manager, guint max)
 {
 	static const int steps[] = {
-		STEP_NONE,
-		STEP_FAILED, STEP_MASTER, STEP_SLAVE,
-		//STEP_LEAVING,
-		STEP_CHECKING_SLAVES, STEP_CHECKING_MASTER, STEP_LISTING, STEP_CREATING,
+		STEP_NONE, STEP_FAILED, STEP_MASTER, STEP_SLAVE,
 		-1 /* stops the iteration */
 	};
 
@@ -3017,7 +3069,7 @@ election_manager_play_timers (struct election_manager_s *manager, guint max)
 
 			struct election_member_s *m = l->data;
 			if (m->step == STEP_NONE) {
-				if (_is_over(m->last_status, manager->delay_expire_NONE)) {
+				if (_IS_OVER(m->last_status, manager->delay_expire_NONE)) {
 					/* Election in NONE state for longer than acceptable */
 					if (m->refcount == 1) {
 						/* In addition, not referenced by anyone */
