@@ -300,26 +300,18 @@ static const char * _evt2str(enum event_type_e evt) {
 }
 
 static gboolean _zoo_disconnected(int zrc) {
-	static const enum ZOO_ERRORS reason_DISCONNECT[] = {
-		/* ZSYSTEMERROR */
-		ZRUNTIMEINCONSISTENCY,
-		ZDATAINCONSISTENCY,
-		ZMARSHALLINGERROR,
-		ZUNIMPLEMENTED,
-		ZINVALIDSTATE,
-
-		/* ZAPIERROR */
-		ZSESSIONEXPIRED,
-		ZAUTHFAILED,
-
-		ZOK /* end beacon */
-	};
-
-	for (const enum ZOO_ERRORS *prc = reason_DISCONNECT; *prc != ZOK; ++prc) {
-		if (zrc == *prc)
+	switch (zrc) {
+		case ZRUNTIMEINCONSISTENCY:
+		case ZDATAINCONSISTENCY:
+		case ZMARSHALLINGERROR:
+		case ZUNIMPLEMENTED:
+		case ZINVALIDSTATE:
+		case ZSESSIONEXPIRED:
+		case ZAUTHFAILED:
 			return TRUE;
+		default:
+			return FALSE;
 	}
-	return FALSE;
 }
 
 /* ------------------------------------------------------------------------- */
