@@ -870,10 +870,10 @@ member_signal(struct election_member_s *m)
 } while (0)
 
 #define member_set_master_id(m,i64) do { \
-	EXTRA_ASSERT(i64 >= 0); \
-	if (i64 != m->master_id) { \
+	EXTRA_ASSERT((i64) >= 0); \
+	if ((i64) != m->master_id) { \
 		member_set_master_url(m, NULL); \
-		m->master_id = i64; \
+		m->master_id = (i64); \
 	} \
 } while (0)
 
@@ -1315,7 +1315,11 @@ completion_LISTING(int zrc, const struct String_vector *sv,
 		if (i64v->len > 0)
 			first = g_array_index(i64v, gint64, 0);
 		g_array_free(i64v, TRUE);
-		transition(member, EVT_LIST_OK, &first);
+		if (first >= 0) {
+			transition(member, EVT_LIST_OK, &first);
+		} else {
+			transition(member, EVT_LIST_KO, NULL);
+		}
 	}
 	member_unref(member);
 	member_unlock(member);
