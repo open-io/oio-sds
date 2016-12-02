@@ -1909,10 +1909,12 @@ member_action_to_FAILED(struct election_member_s *member)
 {
 	EXTRA_ASSERT(!member_has_action(member));
 
+	member->myid = -1;
+	member_reset_master(member);
+
 	/* setting last_USE to now avoids sending USE as soon as arrived in
 	 * the set of FAILED elections. */
 	member->last_USE = oio_ext_monotonic_time ();
-
 	member_set_status(member, STEP_FAILED);
 }
 
@@ -2129,8 +2131,10 @@ member_finish_CHECKING_MASTER(struct election_member_s *member)
 
 	if (member->requested_LEAVE)
 		return member_action_to_LEAVING(member);
-	if (master_change)
+	if (master_change) {
+		member_reset_master(member);
 		return member_action_to_LISTING(member);
+	}
 
 	const guint16 group_size = asked + 1;
 	if (errors > 0 && (errors >= group_size / 2))
@@ -2140,8 +2144,11 @@ member_finish_CHECKING_MASTER(struct election_member_s *member)
 	if (outdated)
 		return member_action_to_SYNCING(member);
 
-	if (node_left)
+	if (node_left) {
+		member->myid = -1;
+		member_reset_master(member);
 		return member_action_to_CREATING(member);
+	}
 
 	member_set_status(member, STEP_SLAVE);
 }
@@ -2179,8 +2186,11 @@ member_finish_CHECKING_SLAVES(struct election_member_s *member)
 	if (member->requested_LEAVE)
 		return member_action_to_LEAVING(member);
 
-	if (node_left)
+	if (node_left) {
+		member->myid = -1;
+		member_reset_master(member);
 		return member_action_to_CREATING(member);
+	}
 
 	return member_action_to_MASTER(member);
 }
@@ -2497,8 +2507,12 @@ _member_react_WATCHING(struct election_member_s *member, enum event_type_e evt)
 			/* manage past interruptions */
 			if (member->requested_LEAVE)
 				return member_action_to_LEAVING(member);
-			if (member->requested_LEFT_SELF)
+			if (member->requested_LEFT_SELF) {
+				member->myid = -1;
+				member->requested_LEFT_SELF = 0;
+				member->requested_LEFT_MASTER = 0;
 				return member_action_to_CREATING(member);
+			}
 			/* nominal flow */
 			return member_action_to_LISTING(member);
 
@@ -2540,8 +2554,12 @@ _member_react_LISTING(struct election_member_s *member, enum event_type_e evt,
 			/* manage past interruptions */
 			if (member->requested_LEAVE)
 				return member_action_to_LEAVING(member);
-			if (member->requested_LEFT_SELF)
+			if (member->requested_LEFT_SELF) {
+				member->myid = -1;
+				member->requested_LEFT_SELF = 0;
+				member->requested_LEFT_MASTER = 0;
 				return member_action_to_CREATING(member);
+			}
 			/* nominal flow */
 			if (member->myid == *p_masterid) {
 				/* We are 1st, the probable future master */
@@ -2820,8 +2838,10 @@ _member_react_SYNCING(struct election_member_s *member, enum event_type_e evt)
 				return member_action_to_LEAVING(member);
 			if (member->requested_LEFT_SELF)
 				return member_action_to_CREATING(member);
-			if (member->requested_LEFT_MASTER)
+			if (member->requested_LEFT_MASTER) {
+				member_reset_master(member);
 				return member_action_to_LISTING(member);
+			}
 			return member_action_to_SLAVE(member);
 
 			/* Abnormal events */
