@@ -2907,18 +2907,19 @@ _member_react (struct election_member_s *member,
 		enum event_type_e evt,
 		void *evt_arg)
 {
-	if (GRID_TRACE_ENABLED()) {
-		gchar tag[64];
-		g_snprintf(tag, sizeof(tag), "evt:%d/%s", evt, _evt2str(evt));
-		member_trace(tag, member);
-	}
-
 	/* EVT_DISCONNECTED is sent when we lost the link with ZK. All the
 	 * ephemeral nodes will be lost, soon. We can reset an elections FSM
 	 * receiving this event, whatever it's state. */
 	if (evt == EVT_DISCONNECTED) {
+		member_warn("DISCONNECTED", member);
 		member_reset(member);
 		return member_action_to_NONE(member);
+	}
+
+	if (GRID_TRACE_ENABLED()) {
+		gchar tag[64];
+		g_snprintf(tag, sizeof(tag), "evt:%d/%s", evt, _evt2str(evt));
+		member_trace(tag, member);
 	}
 
 	switch (member->step) {
