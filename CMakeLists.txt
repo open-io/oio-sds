@@ -301,9 +301,7 @@ dir2macro("SQLX_GRACE_DELAY_HOT")
 dir2macro("SQLX_DELAY_MAXWAIT")
 dir2macro("SQLX_DELAY_NOWAIT_PENDING")
 dir2macro("SQLX_DELAY_RESTART_FAILED")
-dir2macro("SQLX_DELAY_PING_FAILED")
 dir2macro("SQLX_DELAY_PING_FINAL")
-dir2macro("SQLX_DELAY_EXPIRE_FAILED")
 dir2macro("SQLX_DELAY_EXPIRE_SLAVE")
 
 ###-------------------------------------------------------------------------###

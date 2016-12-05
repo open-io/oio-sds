@@ -147,7 +147,6 @@ struct election_manager_s
 	gint64 delay_expire_NONE;
 	gint64 delay_expire_SLAVE;
 	gint64 delay_expire_MASTER;
-	gint64 delay_expire_FAILED;
 
 	/* how long we wait before restarting a failed election. */
 	gint64 delay_retry_FAILED;
@@ -490,12 +489,10 @@ election_manager_dump_delays(struct election_manager_s *manager)
 	GRID_INFO("- get_status=%ldms but nowait after %ldms",
 			manager->delay_wait / G_TIME_SPAN_MILLISECOND,
 			manager->delay_nowait_pending / G_TIME_SPAN_MILLISECOND);
-	GRID_INFO("- expire_SLAVE=%ldms, expire_MASTER=%ldms",
+	GRID_INFO("- expire_SLAVE=%ldms, expire_MASTER=%ldms, expire_NONE=%ldms",
 			manager->delay_expire_SLAVE / G_TIME_SPAN_MILLISECOND,
-			manager->delay_expire_MASTER / G_TIME_SPAN_MILLISECOND);
-	GRID_INFO("- expire_NONE=%ldms, expire_FAILED=%ldms",
-			manager->delay_expire_NONE / G_TIME_SPAN_MILLISECOND,
-			manager->delay_expire_FAILED / G_TIME_SPAN_MILLISECOND);
+			manager->delay_expire_MASTER / G_TIME_SPAN_MILLISECOND,
+			manager->delay_expire_NONE / G_TIME_SPAN_MILLISECOND);
 	GRID_INFO("- retry_failed=%ldms",
 			manager->delay_retry_FAILED/ G_TIME_SPAN_MILLISECOND);
 	GRID_INFO("- ping_final=%ldms",
@@ -524,7 +521,6 @@ election_manager_create(struct replication_config_s *config,
 	 * will trigger an event on the slaves that will bring it back. */
 	manager->delay_expire_MASTER =
 		(SQLX_DELAY_EXPIRE_SLAVE + SQLX_DELAY_PING_FINAL) / 2;
-	manager->delay_expire_FAILED = SQLX_DELAY_EXPIRE_FAILED;
 	manager->delay_retry_FAILED = SQLX_DELAY_RESTART_FAILED;
 	manager->delay_ping_final = SQLX_DELAY_PING_FINAL;
 	manager->config = config;
@@ -1971,6 +1967,11 @@ static void
 member_action_to_CREATING(struct election_member_s *member)
 {
 	EXTRA_ASSERT(!member_has_action(member));
+	EXTRA_ASSERT(member->myid == -1);
+	EXTRA_ASSERT(member->master_id == -1);
+	EXTRA_ASSERT(member->master_url == NULL);
+
+	member->requested_USE = 0;
 
 	const char *myurl = member_get_url(member);
 	gchar *path = member_fullpath(member);
@@ -2933,10 +2934,11 @@ _member_react_FAILED(struct election_member_s *member, enum event_type_e evt)
 		/* Possible time-triggered actions */
 		case EVT_NONE:
 			now = oio_ext_monotonic_time();
-			if (_is_over(now, member->last_atime, M->delay_expire_FAILED))
-				return member_action_to_LEAVING(member);
-			if (_is_over(now, member->last_status, M->delay_retry_FAILED))
-				return member_action_to_CREATING(member);
+			if (_is_over(now, member->last_status, M->delay_retry_FAILED)) {
+				if (member->requested_USE)
+					return member_action_to_CREATING(member);
+				return member_action_to_NONE(member);
+			}
 			return;
 
 			/* Interruptions */
