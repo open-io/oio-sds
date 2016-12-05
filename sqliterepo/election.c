@@ -46,18 +46,19 @@ enum election_step_e
 	STEP_CREATING,
 	STEP_WATCHING,
 	STEP_LISTING,
-	STEP_LEAVING,
-	STEP_LEAVING_FAILING,
 	STEP_ASKING,
 	STEP_CHECKING_MASTER,
 	STEP_CHECKING_SLAVES,
 	STEP_SYNCING,
 
+	STEP_LEAVING,
+	STEP_LEAVING_FAILING,
+	STEP_FAILED,
+
 	/* final */
 	STEP_SLAVE,
 	STEP_MASTER,
-	STEP_FAILED,
-#define STEP_MAX (STEP_FAILED+1)
+#define STEP_MAX (STEP_MASTER+1)
 };
 
 enum event_type_e
@@ -909,23 +910,13 @@ member_reset(struct election_member_s *m)
 	 * typically to a restart, e.g. to perform a final resync */
 }
 
+/* Returns TRUE if the step is stable, a.k.a not transitional.
+ * This is used to avoid waiting for an election looping between
+ * transitional states. */
 static gboolean
 _state_is_stable(enum election_step_e step)
 {
-	switch (step) {
-		case STEP_CREATING:
-		case STEP_WATCHING:
-		case STEP_LISTING:
-		case STEP_LEAVING:
-		case STEP_LEAVING_FAILING:
-		case STEP_ASKING:
-		case STEP_CHECKING_MASTER:
-		case STEP_CHECKING_SLAVES:
-		case STEP_SYNCING:
-			return FALSE;
-		default:
-			return TRUE;
-	}
+	return STATUS_FINAL(step) || step == STEP_NONE;
 }
 
 #define member_is_stable(m) _state_is_stable(m->step)
@@ -2995,10 +2986,6 @@ _member_react (struct election_member_s *member,
 			return _member_react_WATCHING(member, evt);
 		case STEP_LISTING:
 			return _member_react_LISTING(member, evt, evt_arg);
-		case STEP_LEAVING:
-			return _member_react_LEAVING(member, evt);
-		case STEP_LEAVING_FAILING:
-			return _member_react_LEAVING_FAILING(member, evt);
 		case STEP_ASKING:
 			return _member_react_ASKING(member, evt, evt_arg);
 		case STEP_CHECKING_MASTER: /* PRELOST */
@@ -3007,12 +2994,18 @@ _member_react (struct election_member_s *member,
 			return _member_react_CHECKING_SLAVES(member, evt);
 		case STEP_SYNCING:
 			return _member_react_SYNCING(member, evt);
+
+		case STEP_LEAVING:
+			return _member_react_LEAVING(member, evt);
+		case STEP_LEAVING_FAILING:
+			return _member_react_LEAVING_FAILING(member, evt);
+		case STEP_FAILED:
+			return _member_react_FAILED(member, evt);
+
 		case STEP_SLAVE:
 			return _member_react_SLAVE(member, evt);
 		case STEP_MASTER:
 			return _member_react_MASTER(member, evt);
-		case STEP_FAILED:
-			return _member_react_FAILED(member, evt);
 	}
 
 	g_assert_not_reached();
