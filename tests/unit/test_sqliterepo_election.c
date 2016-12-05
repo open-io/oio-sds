@@ -893,7 +893,7 @@ static void test_STEP_CHECKING_SLAVES(void) {
 	RESET();
 	m->count_GETVERS = 3;
 	m->pending_GETVERS = 1;
-	m->outdated_GETVERS = 1 + oio_ext_rand_int(); /* whatever */
+	m->outdated_GETVERS = 1;
 	transition(m, EVT_GETVERS_RACE, NULL);
 	_member_assert_LEAVING(m);
 	g_assert_false(member_has_getvers(m));
@@ -962,6 +962,7 @@ static void test_STEP_ASKING(void) {
 		m->myid = oio_ext_rand_int();
 		m->master_id = m->myid + 1;
 		m->pending_ZK_GET = 1;
+		m->attempts_GETVERS = 0;
 		_member_assert_ASKING(m);
 	}
 
@@ -1088,6 +1089,7 @@ static void test_STEP_CHECKING_MASTER(void) {
 		m->myid = oio_ext_rand_int();
 		m->master_id = m->myid + 1;
 		m->pending_GETVERS = 3;
+		m->attempts_GETVERS = 2;
 		_member_assert_CHECKING_MASTER(m);
 	}
 
@@ -1185,7 +1187,7 @@ static void test_STEP_CHECKING_MASTER(void) {
 	_pending(0);
 
 	/* Legit transitions with no interruption:
-	 * 2/ LAST getvers reply, quorum present */
+	 * 2/ LAST getvers reply */
 	RESET();
 	m->count_GETVERS = 3;
 	m->pending_GETVERS = 1;
@@ -1194,19 +1196,19 @@ static void test_STEP_CHECKING_MASTER(void) {
 	g_assert_false(member_has_getvers(m));
 	_pending(0);
 
-	/* only 1/3 request fails, all the others were OK, we have a quorum */
 	RESET();
 	m->count_GETVERS = 3;
 	m->pending_GETVERS = 1;
+	m->attempts_GETVERS = 1;
 	transition(m, EVT_GETVERS_KO, NULL);
-	_member_assert_SLAVE(m);
-	g_assert_false(member_has_getvers(m));
+	_member_assert_CHECKING_MASTER(m);
+	g_assert_true(member_has_getvers(m));
 	_pending(0);
 
-	/* more than half the group failed, we have no quorum */
 	RESET();
-	m->count_GETVERS = 2;
+	m->count_GETVERS = 3;
 	m->pending_GETVERS = 1;
+	m->attempts_GETVERS = 0;
 	transition(m, EVT_GETVERS_KO, NULL);
 	_member_assert_LEAVING_FAILING(m);
 	g_assert_false(member_has_getvers(m));
@@ -1215,6 +1217,7 @@ static void test_STEP_CHECKING_MASTER(void) {
 	RESET();
 	m->count_GETVERS = 3;
 	m->pending_GETVERS = 1;
+	m->attempts_GETVERS = 0;
 	transition(m, EVT_GETVERS_OLD, NULL);
 	_member_assert_SYNCING(m);
 	g_assert_false(member_has_getvers(m));
@@ -1223,7 +1226,27 @@ static void test_STEP_CHECKING_MASTER(void) {
 	RESET();
 	m->count_GETVERS = 3;
 	m->pending_GETVERS = 1;
-	m->outdated_GETVERS = 1 + oio_ext_rand_int(); /* whatever */
+	m->attempts_GETVERS = 1;
+	transition(m, EVT_GETVERS_OLD, NULL);
+	_member_assert_SYNCING(m);
+	g_assert_false(member_has_getvers(m));
+	_pending(0);
+
+	RESET();
+	m->count_GETVERS = 3;
+	m->pending_GETVERS = 1;
+	m->outdated_GETVERS = 1; /* whatever */
+	m->attempts_GETVERS = 0;
+	transition(m, EVT_GETVERS_RACE, NULL);
+	_member_assert_SYNCING(m);
+	g_assert_false(member_has_getvers(m));
+	_pending(0);
+
+	RESET();
+	m->count_GETVERS = 3;
+	m->pending_GETVERS = 1;
+	m->outdated_GETVERS = 1; /* whatever */
+	m->attempts_GETVERS = 1;
 	transition(m, EVT_GETVERS_RACE, NULL);
 	_member_assert_SYNCING(m);
 	g_assert_false(member_has_getvers(m));

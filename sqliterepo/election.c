@@ -196,13 +196,18 @@ struct election_member_s
 
 	guint refcount;
 
+	/* How many times a set of GETVERS requests will be retried (in addition
+	 * to the initial trial). */
+	guint16 attempts_GETVERS;
+
 	guint16 pending_GETVERS; /* not finished yet */
 	guint16 count_GETVERS; /* initially sent */
 	guint16 outdated_GETVERS; /* finished, ask RESYNC */
 	guint16 concurrent_GETVERS; /* Finished, shows race condition */
 	guint16 errors_GETVERS; /* Finished, no result */
 
-	guint log_index : 8;
+	guint16 log_index;
+
 	enum election_step_e step : 8;
 
 	/* flags managing unconventional transsitions */
@@ -1665,7 +1670,7 @@ defer_USE(struct election_member_s *member)
 		for (gchar **p=peers; p && *p ;p++)
 			sqlx_peering__use (member->manager->peering, *p,
 					sqlx_name_mutable_to_const(&member->name));
-		member_trace("shed:USE", member);
+		member_trace("sched:USE", member);
 	}
 
 	if (peers) g_strfreev(peers);
@@ -1735,60 +1740,6 @@ _result_GETVERS (GError *enet,
 	if (err) g_clear_error(&err);
 	if (vlocal) g_tree_destroy(vlocal);
 	g_free (key);
-}
-
-static void
-defer_GETVERS_to_peers(struct election_member_s *m)
-{
-	MEMBER_CHECK(m);
-
-	gchar **peers = NULL;
-	GError *err = member_get_peers(m, FALSE, &peers);
-	if (err != NULL) {
-		GRID_WARN("[%s] Election initiated (%s) but get_peers error: (%d) %s",
-				__FUNCTION__, _step2str(m->step), err->code, err->message);
-		g_clear_error(&err);
-		return;
-	}
-
-	if (m->pending_GETVERS > 0)
-		member_warn("lost:GETVERS", m);
-
-	const guint pending = peers ? g_strv_length(peers) : 0;
-	m->count_GETVERS = m->pending_GETVERS = pending;
-	m->concurrent_GETVERS = 0;
-	m->outdated_GETVERS = 0;
-	m->errors_GETVERS = 0;
-
-	for (gchar **p=peers; p && *p; p++) {
-		sqlx_peering__getvers (m->manager->peering, *p,
-				sqlx_name_mutable_to_const(&m->name), m->manager,
-				0, _result_GETVERS);
-		member_trace("shed:GETVERS", m);
-	}
-
-	g_strfreev(peers);
-}
-
-static void
-defer_GETVERS_to_master(struct election_member_s *m)
-{
-	MEMBER_CHECK(m);
-	EXTRA_ASSERT(m->master_url != NULL);
-
-	if (m->pending_GETVERS > 0)
-		member_warn("lost:GETVERS", m);
-
-	m->count_GETVERS = m->pending_GETVERS = 1;
-	m->outdated_GETVERS = 0;
-	m->concurrent_GETVERS = 0;
-	m->errors_GETVERS = 0;
-
-	sqlx_peering__getvers (m->manager->peering, m->master_url,
-			sqlx_name_mutable_to_const(&m->name), m->manager,
-			0, _result_GETVERS);
-
-	member_trace("shed:GETVERS", m);
 }
 
 static void
@@ -1949,6 +1900,12 @@ member_action_to_CREATING(struct election_member_s *member)
 
 	member->requested_USE = 0;
 
+	if (member->manager->exiting)
+		return member_action_to_NONE(member);
+
+	if (!defer_USE(member))
+		return member_action_to_FAILED(member);
+
 	const char *myurl = member_get_url(member);
 	gchar *path = member_fullpath(member);
 	int zrc = sqlx_sync_acreate(member->manager->sync,
@@ -2061,6 +2018,80 @@ member_action_to_SYNCING(struct election_member_s *member)
 }
 
 static void
+member_action_to_CHECKING_MASTER(struct election_member_s *m)
+{
+	EXTRA_ASSERT(!member_has_action(m));
+	EXTRA_ASSERT(!member_has_getvers(m));
+
+	if (m->step != STEP_CHECKING_MASTER)
+		m->attempts_GETVERS = SQLX_RETRIES_GETVERS_DEFAULT;
+
+	if (m->pending_GETVERS > 0)
+		member_warn("lost:GETVERS", m);
+
+	m->count_GETVERS = 1;
+	m->pending_GETVERS = 1;
+	m->outdated_GETVERS = 0;
+	m->concurrent_GETVERS = 0;
+	m->errors_GETVERS = 0;
+
+	sqlx_peering__getvers (m->manager->peering, m->master_url,
+			sqlx_name_mutable_to_const(&m->name), m->manager,
+			0, _result_GETVERS);
+
+	member_trace("sched:GETVERS", m);
+
+	return member_set_status(m, STEP_CHECKING_MASTER);
+}
+
+static void
+member_action_to_CHECKING_SLAVES(struct election_member_s *m)
+{
+	EXTRA_ASSERT(!member_has_action(m));
+	EXTRA_ASSERT(!member_has_getvers(m));
+	EXTRA_ASSERT(m->myid > 0);
+	EXTRA_ASSERT(m->master_id == m->myid);
+	EXTRA_ASSERT(m->master_url == NULL);
+
+	if (m->step != STEP_CHECKING_SLAVES)
+		m->attempts_GETVERS = SQLX_RETRIES_GETVERS_DEFAULT;
+
+	gchar **peers = NULL;
+	GError *err = member_get_peers(m, FALSE, &peers);
+	if (err != NULL) {
+		GRID_WARN("[%s] Election initiated (%s) but get_peers error: (%d) %s",
+				__FUNCTION__, _step2str(m->step), err->code, err->message);
+		g_clear_error(&err);
+		if (peers)
+			g_strfreev(peers);
+		/* Damned, no peers were found. Let's exit and fail. Maybe after a
+		 * short sleep we will be able to re-locate the peers. */
+		return member_action_to_LEAVING_FAILING(m);
+	}
+
+	if (m->pending_GETVERS > 0)
+		member_warn("lost:GETVERS", m);
+
+	const guint pending = peers ? g_strv_length(peers) : 0;
+	m->count_GETVERS = pending;
+	m->pending_GETVERS = pending;
+	m->concurrent_GETVERS = 0;
+	m->outdated_GETVERS = 0;
+	m->errors_GETVERS = 0;
+
+	for (gchar **p=peers; p && *p; p++) {
+		sqlx_peering__getvers (m->manager->peering, *p,
+				sqlx_name_mutable_to_const(&m->name), m->manager,
+				0, _result_GETVERS);
+		member_trace("sched:GETVERS", m);
+	}
+
+	g_strfreev(peers);
+
+	return member_set_status(m, STEP_CHECKING_SLAVES);
+}
+
+static void
 member_action_to_MASTER(struct election_member_s *member)
 {
 	_member_rearm_ping_MASTER(member);
@@ -2077,7 +2108,8 @@ member_action_to_SLAVE(struct election_member_s *member)
 static void
 member_finish_CHECKING_MASTER(struct election_member_s *member)
 {
-	if ((-- member->pending_GETVERS) > 0)
+	EXTRA_ASSERT (member->pending_GETVERS > 0);
+	if ((--member->pending_GETVERS) > 0)
 		return;
 	EXTRA_ASSERT(!member_has_action(member));
 
@@ -2089,10 +2121,7 @@ member_finish_CHECKING_MASTER(struct election_member_s *member)
 	const guint16 node_left = member->requested_LEFT_SELF;
 	const guint16 master_change = member->requested_LEFT_MASTER;
 
-	member->count_GETVERS = 0;
-	member->outdated_GETVERS = 0;
-	member->errors_GETVERS = 0;
-	member->concurrent_GETVERS = 0;
+	member_reset_getvers(member);
 
 	member->requested_LEFT_SELF = 0;
 	member->requested_LEFT_MASTER = 0;
@@ -2104,9 +2133,8 @@ member_finish_CHECKING_MASTER(struct election_member_s *member)
 		return member_action_to_LISTING(member);
 	}
 
-	const guint16 group_size = asked + 1;
-	if (errors > 0 && (errors >= group_size / 2))
-		return member_action_to_LEAVING_FAILING(member);
+	EXTRA_ASSERT(concurrent + outdated + errors <= asked);
+
 	if (concurrent)
 		return member_action_to_SYNCING(member);
 	if (outdated)
@@ -2118,13 +2146,23 @@ member_finish_CHECKING_MASTER(struct election_member_s *member)
 		return member_action_to_CREATING(member);
 	}
 
+	if (errors) {
+		/* Let's retry if the GETVERS simply failed */
+		if (member->attempts_GETVERS <= 0)
+			return member_action_to_LEAVING_FAILING(member);
+		/* We still have spare attempts, let's retry */
+		member->attempts_GETVERS --;
+		return member_action_to_CHECKING_MASTER(member);
+	}
+
 	member_set_status(member, STEP_SLAVE);
 }
 
 static void
 member_finish_CHECKING_SLAVES(struct election_member_s *member)
 {
-	if ((-- member->pending_GETVERS) > 0)
+	EXTRA_ASSERT (member->pending_GETVERS > 0);
+	if ((--member->pending_GETVERS) > 0)
 		return;
 	EXTRA_ASSERT(!member_has_action(member));
 
@@ -2133,31 +2171,43 @@ member_finish_CHECKING_SLAVES(struct election_member_s *member)
 	const guint16 errors = member->errors_GETVERS;
 	const guint16 concurrent = member->concurrent_GETVERS;
 
-	member->count_GETVERS = 0;
-	member->outdated_GETVERS = 0;
-	member->errors_GETVERS = 0;
-	member->concurrent_GETVERS = 0;
+	member_reset_getvers(member);
 
 	const guint8 node_left = member->requested_LEFT_SELF;
 
 	member->requested_LEFT_SELF = 0;
 	member->requested_LEFT_MASTER = 0;
 
-	const guint16 group_size = asked + 1;
-	if (errors > 0 && (errors >= group_size / 2))
-		return member_action_to_LEAVING_FAILING(member);
-	/* FIXME concurrent > 1 ? */
-	if (concurrent)
-		return member_action_to_LEAVING(member);
-	if (outdated)
-		return member_action_to_LEAVING(member);
+	EXTRA_ASSERT(outdated + concurrent + errors <= asked);
+
+	/* Someone requested us to leave the group. No need to check longer,
+	 * we won't ever be MASTER with this. */
 	if (member->requested_LEAVE)
 		return member_action_to_LEAVING(member);
-
+	/* Idme, our ZK node disappeared. Master or not we will need to restart.
+	 * Let's do it right now. */
 	if (node_left) {
 		member->myid = -1;
 		member_reset_master(member);
 		return member_action_to_CREATING(member);
+	}
+
+	/* two error cases immediately tell the current base could not be an
+	 * acceptable master in its current state. Let's leave and let the base
+	 * become SLAVE and then RESYNC. */
+	if (concurrent)
+		return member_action_to_LEAVING(member);
+	if (outdated)
+		return member_action_to_LEAVING(member);
+
+	/* Then check we have at least a quorum of valid answers */
+	const guint16 group_size = asked + 1;
+	if (errors > 0 && (errors >= (group_size + 1) / 2)) {
+		if (member->attempts_GETVERS <= 0)
+			return member_action_to_LEAVING_FAILING(member);
+		/* We still have spare attempts, let's retry */
+		member->attempts_GETVERS --;
+		return member_action_to_CHECKING_SLAVES(member);
 	}
 
 	return member_action_to_MASTER(member);
@@ -2382,8 +2432,6 @@ _member_react_NONE(struct election_member_s *member, enum event_type_e evt)
 			 * as the real start of the "unstable" phasis of the election. */
 			if (member->when_unstable <= 0)
 				member->when_unstable = oio_ext_monotonic_time();
-			if (!defer_USE(member))
-				return member_action_to_FAILED(member);
 			return member_action_to_CREATING(member);
 
 			/* Interruptions */
@@ -2537,8 +2585,7 @@ _member_react_LISTING(struct election_member_s *member, enum event_type_e evt,
 			if (member->myid == *p_masterid) {
 				/* We are 1st, the probable future master */
 				member_set_master_id(member, member->myid);
-				defer_GETVERS_to_peers(member);
-				return member_set_status(member, STEP_CHECKING_SLAVES);
+				return member_action_to_CHECKING_SLAVES(member);
 			} else {
 				/* We are in the tail, probable future slave */
 				member_set_master_id(member, *p_masterid);
@@ -2607,8 +2654,7 @@ _member_react_ASKING(struct election_member_s *member, enum event_type_e evt,
 			}
 			/* nominal flow : let's become CHECKING_MASTER */
 			member_set_master_url(member, url);
-			defer_GETVERS_to_master(member);
-			return member_set_status(member, STEP_CHECKING_MASTER);
+			return member_action_to_CHECKING_MASTER(member);
 
 			/* Abnormal */
 		default:

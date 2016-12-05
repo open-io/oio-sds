@@ -167,7 +167,7 @@ Used by `gcc`
 | SQLX_HEAVYLOAD_FAIL | FALSE | Should the server alert (if not failing) for a heavy duty on a base |
 | SQLX_MAX_WAITING | 16 | How many waiters on a cache slot necessary to consider the duty is heavy |
 | SQLX_MAX_BASES | 8192 | Default max number of bases, if not overriden at runtime. |
-| SQLX_SYNC_DEFAULT_ZK_TIMEOUT | 8765 |  |
+| SQLX_SYNC_DEFAULT_ZK_TIMEOUT | 10000 |  |
 | SQLX_DIR_SCHEMAS | NULL | Default directory used to gather applicative schema of SQLX bases. NULL by default, meaning that no directory is set, so that there is no attempt to load a schema. |
 | SQLX_ADMIN_PREFIX_SYS  | "sys." | Prefix used for keys used in admin table of sqlite bases |
 | SQLX_ADMIN_PREFIX_USER | "user." | Prefix used for keys used in admin table of sqlite bases |
@@ -177,6 +177,15 @@ Used by `gcc`
 | SQLX_ADMIN_BASENAME  | SQLX_ADMIN_PREFIX_SYS "sqlx.name" | Key used in admin table of sqlite bases |
 | SQLX_ADMIN_BASETYPE  | SQLX_ADMIN_PREFIX_SYS "sqlx.type" | Key used in admin table of sqlite bases |
 | SQLX_ADMIN_NAMESPACE | SQLX_ADMIN_PREFIX_SYS "sqlx.ns" | Key used in admin table of sqlite bases |
+| SQLX_RETRIES_GETVERS_DEFAULT | 2 | In number of attempts, to  |
+| SQLX_GRACE_DELAY_COOL | 30L | In seconds |
+| SQLX_GRACE_DELAY_HOT | 300L | In seconds |
+| SQLX_DELAY_MAXWAIT | 5 * G_TIME_SPAN_SECOND |  |
+| SQLX_DELAY_NOWAIT_PENDING | 15 * G_TIME_SPAN_SECOND |  |
+| SQLX_DELAY_EXPIRE_NONE | 5 * G_TIME_SPAN_MINUTE |  |
+| SQLX_DELAY_EXPIRE_SLAVE | 5 * G_TIME_SPAN_MINUTE |  |
+| SQLX_DELAY_PING_FINAL | 15 * G_TIME_SPAN_MINUTE |  |
+| SQLX_DELAY_RESTART_FAILED | 2 * G_TIME_SPAN_SECOND |  |
 
 | Macro | Default | Description |
 | ----- | ------- | ----------- |

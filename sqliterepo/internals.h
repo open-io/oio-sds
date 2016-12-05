@@ -80,6 +80,10 @@ License along with this library.
 #  define SQLX_DELAY_EXPIRE_NONE 5 * G_TIME_SPAN_MINUTE
 # endif
 
+# ifndef  SQLX_RETRIES_GETVERS_DEFAULT
+#  define SQLX_RETRIES_GETVERS_DEFAULT 2
+# endif
+
 /* Size of buffer for reading dump file */
 #define SQLX_DUMP_BUFFER_SIZE 32768
 

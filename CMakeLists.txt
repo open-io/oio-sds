@@ -303,6 +303,7 @@ dir2macro("SQLX_DELAY_NOWAIT_PENDING")
 dir2macro("SQLX_DELAY_RESTART_FAILED")
 dir2macro("SQLX_DELAY_PING_FINAL")
 dir2macro("SQLX_DELAY_EXPIRE_SLAVE")
+dir2macro("SQLX_RETRIES_GETVERS_DEFAULT")
 
 ###-------------------------------------------------------------------------###
 
