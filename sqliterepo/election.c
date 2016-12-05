@@ -906,34 +906,13 @@ member_reset(struct election_member_s *m)
 	 * typically to a restart, e.g. to perform a final resync */
 }
 
-/* Returns TRUE if the step is stable, a.k.a not transitional.
- * This is used to avoid waiting for an election looping between
- * transitional states. */
-static gboolean
-_state_is_stable(enum election_step_e step)
-{
-	return STATUS_FINAL(step) || step == STEP_NONE;
-}
-
-#define member_is_stable(m) _state_is_stable(m->step)
-
 static void
 member_set_status(struct election_member_s *m, const enum election_step_e post)
 {
 	const enum election_step_e pre = m->step;
 
-	if (pre != post) {
+	if (pre != post)
 		m->last_status = oio_ext_monotonic_time();
-		/* If we leave a non-pending state for a pending state, we keep the
-		 * current timestamp, to be able to determine since how long we are
-		 * in pending. We will need this to avoid a user-thread to wait if
-		 * we are already pending for too long. */
-		EXTRA_ASSERT(_state_is_stable(pre) || m->when_unstable != 0);
-		if (_state_is_stable(pre) && !_state_is_stable(post))
-			m->when_unstable = m->last_status;
-		else if (_state_is_stable(post))
-			m->when_unstable = 0;
-	}
 
 	_DEQUE_remove (m);
 	m->step = post;
@@ -1041,6 +1020,7 @@ _LOCKED_init_member(struct election_manager_s *manager,
 		member->generation_id = oio_ext_rand_int();
 		member->manager = manager;
 		member->last_status = oio_ext_monotonic_time ();
+		member->when_unstable = 0;
 		member->key = key;
 		member->name.base = g_strdup(n->base);
 		member->name.type = g_strdup(n->type);
@@ -1568,7 +1548,7 @@ _election_exit(struct election_manager_s *manager, const struct sqlx_name_s *n)
 }
 
 static gboolean
-wait_for_final_status(struct election_member_s *m, gint64 deadline)
+wait_for_final_status(struct election_member_s *m, const gint64 deadline)
 {
 	while (!STATUS_FINAL(m->step)) {
 
@@ -1576,29 +1556,25 @@ wait_for_final_status(struct election_member_s *m, gint64 deadline)
 
 		/* compare internal timers to our fake'able clock */
 		if (now > deadline) {
-			GRID_WARN("TIMEOUT! (waiting for election status) [%s.%s]",
-					m->name.base, m->name.type);
-			return FALSE;
-		}
-		if (m->step == STEP_FAILED) {
-			GRID_WARN("TIMEOUT! (election failed) [%s.%s]",
-					m->name.base, m->name.type);
+			GRID_WARN("TIMEOUT! (waiting for election status) [%s.%s] step=%d/%s",
+					m->name.base, m->name.type, m->step, _step2str(m->step));
 			return FALSE;
 		}
 
 		m->last_atime = now;
 		transition(m, EVT_NONE, NULL);
 
-		if (!member_is_stable(m)) {
-			if (m->when_unstable < OLDEST(now, m->manager->delay_nowait_pending)) {
-				GRID_WARN("TIMEOUT! (election failed) [%s.%s]",
-						m->name.base, m->name.type);
-				return FALSE;
-			}
+		if (m->when_unstable > 0 && m->when_unstable <
+				OLDEST(now, m->manager->delay_nowait_pending)) {
+			GRID_WARN("TIMEOUT! (election pending for too long) [%s.%s] step=%d/%s",
+					m->name.base, m->name.type, m->step, _step2str(m->step));
+			return FALSE;
 		}
 
-		GRID_TRACE("Still waiting for a final status on [%s.%s]",
-				m->name.base, m->name.type);
+		GRID_TRACE("Still waiting for [%s.%s] step=%d/%s"
+				" %"G_GINT64_FORMAT"/%"G_GINT64_FORMAT,
+				m->name.base, m->name.type, m->step, _step2str(m->step),
+				m->when_unstable / G_TIME_SPAN_SECOND, now / G_TIME_SPAN_SECOND);
 
 		/* perform the real WAIT on the real clock. */
 		g_cond_wait_until(member_get_cond(m), member_get_lock(m),
@@ -2402,6 +2378,10 @@ _member_react_NONE(struct election_member_s *member, enum event_type_e evt)
 			member->requested_USE = 0;
 			if (member->manager->exiting)
 				return;
+			/* Right now, we start an election cycle. We consider this point
+			 * as the real start of the "unstable" phasis of the election. */
+			if (member->when_unstable <= 0)
+				member->when_unstable = oio_ext_monotonic_time();
 			if (!defer_USE(member))
 				return member_action_to_FAILED(member);
 			return member_action_to_CREATING(member);
@@ -2416,8 +2396,9 @@ _member_react_NONE(struct election_member_s *member, enum event_type_e evt)
 			member->requested_USE = 1;
 			return;
 		case EVT_LEFT_SELF:
-		case EVT_LEFT_MASTER:
 			return member_warn_abnormal_event(member, evt);
+		case EVT_LEFT_MASTER:
+			return;
 
 			/* Abnormal events */
 		default:
@@ -2849,12 +2830,21 @@ _member_react_SLAVE(struct election_member_s *member, enum event_type_e evt)
 	_member_assert_SLAVE (member);
 	const struct election_manager_s *M = member->manager;
 
+	/* Some transitions make the FSM exit the current final state. Those
+	 * induced by explicit actions (expirations, requests to leave) are
+	 * not considered as lead by the platform entropy. The others are
+	 * considered as a result of the global entropy.
+	 * When not a result of the entropy, we do not alter the unstability
+	 * timestamp to avoid making the client consider this election is
+	 * pending for too long. */
 	switch (evt) {
 		/* Possible time-triggered actions */
 		case EVT_NONE:
 			now = oio_ext_monotonic_time ();
-			if (_is_over(now, member->last_atime, M->delay_expire_SLAVE))
+			if (_is_over(now, member->last_atime, M->delay_expire_SLAVE)) {
+				member->when_unstable = 0;
 				return member_action_to_LEAVING(member);
+			}
 			if (now > member->when_next_ping) {
 				_member_rearm_ping_SLAVE(member);
 				defer_USE(member);
@@ -2863,16 +2853,20 @@ _member_react_SLAVE(struct election_member_s *member, enum event_type_e evt)
 
 			/* Interruptions */
 		case EVT_LEAVE_REQ:
+			member->when_unstable = 0;
 			return member_action_to_LEAVING(member);
 		case EVT_LEFT_SELF:
 			member_warn("LEFT (self)", member);
 			member->myid = -1;
 			member_reset_master(member);
+			member->when_unstable = oio_ext_monotonic_time();
 			return member_action_to_CREATING(member);
 		case EVT_LEFT_MASTER:
 			member_reset_master(member);
+			member->when_unstable = oio_ext_monotonic_time();
 			return member_action_to_LISTING(member);
 		case EVT_SYNC_REQ:
+			member->when_unstable = oio_ext_monotonic_time();
 			return member_action_to_SYNCING(member);
 
 			/* Actions: none should be pending */
@@ -2890,12 +2884,16 @@ _member_react_MASTER(struct election_member_s *member, enum event_type_e evt)
 	_member_assert_MASTER (member);
 	const struct election_manager_s *M = member->manager;
 
+	/* cf. _member_react_SLAVE() about the change conditions of the
+	 * `when_unstable` variable. */
 	switch (evt) {
 		/* Possible time-triggered actions */
 		case EVT_NONE:
 			now = oio_ext_monotonic_time();
-			if (_is_over(now, member->last_atime, M->delay_expire_MASTER))
+			if (_is_over(now, member->last_atime, M->delay_expire_MASTER)) {
+				member->when_unstable = 0;
 				return member_action_to_LEAVING(member);
+			}
 			if (now > member->when_next_ping) {
 				_member_rearm_ping_MASTER(member);
 				defer_USE(member);
@@ -2906,6 +2904,7 @@ _member_react_MASTER(struct election_member_s *member, enum event_type_e evt)
 		case EVT_SYNC_REQ:
 			return;
 		case EVT_LEAVE_REQ:
+			member->when_unstable = 0;
 			return member_action_to_LEAVING(member);
 		case EVT_LEFT_MASTER:
 			return member_warn_abnormal_event(member, evt);
@@ -2913,6 +2912,7 @@ _member_react_MASTER(struct election_member_s *member, enum event_type_e evt)
 			member_warn("LEFT (self)", member);
 			member->myid = -1;
 			member_reset_master(member);
+			member->when_unstable = oio_ext_monotonic_time();
 			return member_action_to_CREATING(member);
 
 			/* Actions: none should be pending! */
