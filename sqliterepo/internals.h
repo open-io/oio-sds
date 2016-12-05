@@ -188,4 +188,12 @@ extern gint64 oio_cache_period_cond_wait;
  * current thread should wait for the condition in the cache of bases. */
 extern gint64 oio_election_period_cond_wait;
 
+#ifdef HAVE_ENBUG
+/* Average percentage of requests to the ZK that will immediately fail. */
+extern gint32 oio_sync_failure_threshold_action;
+
+/* Average percentage of ZK completion hooks will fail. */
+extern gint32 oio_sync_failure_threshold_hook;
+#endif
+
 #endif /*OIO_SDS__sqliterepo__internals_h*/
