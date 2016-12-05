@@ -53,4 +53,8 @@ void meta1_url_shift_addr(char *str);
 /* with in place shifts, make an array of urls from an array of m1url. */
 void meta1_urlv_shift_addr (char **v);
 
+gboolean meta1_url_has_type(const char *str, const char *srvtype);
+
+gchar ** meta1_url_filter_typed(const char * const *src, const char*srvtype);
+
 #endif /*OIO_SDS__metautils__lib__metatype_m1url_h*/

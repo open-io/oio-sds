@@ -156,3 +156,27 @@ meta1_urlv_shift_addr (char **v)
 	if (!v) return;
 	for (; *v; ++v) meta1_url_shift_addr (*v);
 }
+
+gboolean
+meta1_url_has_type(const char *str, const char *srvtype)
+{
+	struct meta1_service_url_s *u = meta1_unpack_url(str);
+	gboolean rc = !strcmp(u->srvtype, srvtype);
+	g_free(u);
+	return rc;
+}
+
+gchar **
+meta1_url_filter_typed(const char * const *src, const char *srvtype)
+{
+	GPtrArray *tmp = g_ptr_array_new();
+	if (src) {
+		for (; *src ;++src) {
+			if (meta1_url_has_type(*src, srvtype))
+				g_ptr_array_add(tmp, g_strdup(*src));
+		}
+	}
+	g_ptr_array_add(tmp, NULL);
+	return (gchar**) g_ptr_array_free(tmp, FALSE);
+}
+

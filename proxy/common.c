@@ -240,6 +240,13 @@ GError *gridd_request_replicated (struct client_ctx_s *ctx,
 		return err;
 	} else {
 		EXTRA_ASSERT(m1uv != NULL);
+		if (*ctx->type == '#') {
+			gchar **tmp = meta1_url_filter_typed (
+					(const char * const *)m1uv, ctx->type+1);
+			if (m1uv)
+				g_strfreev(m1uv);
+			m1uv = tmp;
+		}
 		if (!*m1uv) {
 			g_strfreev (m1uv);
 			return NEWERROR (CODE_CONTAINER_NOTFOUND, "No service located");
