@@ -1366,6 +1366,15 @@ step_WatchNode_completion(int zrc, const struct Stat *s, const void *d)
 }
 
 static void
+member_warn_failed_creation(struct election_member_s *member, int zrc)
+{
+	gchar *p = member_fullpath(member);
+	GRID_WARN("CREATE failed [%s.%s] [%s] : (%d) %s",
+			member->name.base, member->name.type, p, zrc, zerror(zrc));
+	g_free(p);
+}
+
+static void
 step_StartElection_completion(int zrc, const char *path, const void *d)
 {
 	struct election_member_s *member = (struct election_member_s *) d;
@@ -1374,12 +1383,14 @@ step_StartElection_completion(int zrc, const char *path, const void *d)
 	member_trace(__FUNCTION__, "DONE", member);
 	_thlocal_set_manager (member->manager);
 
-	if (zrc != ZOK)
+	if (zrc != ZOK) {
+		member_warn_failed_creation(member, zrc);
 		transition_error(member, EVT_CREATE_KO, zrc);
-	else {
-		if (!path)
-			transition(member, EVT_CREATE_KO, &zrc);
-		else {
+	} else {
+		if (!path) {
+			member_warn_failed_creation(member, zrc);
+			transition(member, EVT_CREATE_KO, NULL);
+		} else {
 			gint64 i64 = g_ascii_strtoll(strrchr(path, '-')+1, NULL, 10);
 			transition(member, EVT_CREATE_OK, &i64);
 		}
@@ -1463,15 +1474,6 @@ step_WatchNode_change(zhandle_t *handle UNUSED, int type, int state,
 }
 
 /* ------------------------------------------------------------------------- */
-
-static void
-member_warn_failed_creation(struct election_member_s *member, int zrc)
-{
-	gchar *p = member_fullpath(member);
-	GRID_WARN("CREATE failed [%s.%s] [%s] : (%d) %s",
-			member->name.base, member->name.type, p, zrc, zerror(zrc));
-	g_free(p);
-}
 
 static int
 step_StartElection_start(struct election_member_s *member)
@@ -2234,8 +2236,6 @@ _member_react (struct election_member_s *member,
 						return become_failed (member);
 					return become_candidate (member);
 				case EVT_CREATE_KO:
-					zrc = *((int*)evt_arg);
-					member_warn_failed_creation(member, zrc);
 					return become_failed(member);
 				default:
 					GRID_DEBUG("IGNORED");
