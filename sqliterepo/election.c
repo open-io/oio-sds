@@ -412,7 +412,7 @@ static gboolean
 _is_over (const gint64 last, const gint64 delay)
 {
 	const gint64 now = oio_ext_monotonic_time ();
-	return (0 != last && last < OLDEST(now,delay));
+	return (0 != delay && 0 != last && last < OLDEST(now,delay));
 }
 
 static GArray *
@@ -551,7 +551,8 @@ election_manager_create(struct replication_config_s *config,
 	manager->delay_expire_final = SQLX_DELAY_EXPIRE_FINAL;
 	/* The leader must expire after the slaves or its leaving
 	 * will trigger an event on the slaves that will bring it back. */
-	manager->delay_expire_final_leader =
+	if (SQLX_DELAY_EXPIRE_FINAL > 0)
+		manager->delay_expire_final_leader =
 			(SQLX_DELAY_EXPIRE_FINAL + SQLX_DELAY_PING_FINAL) / 2;
 	manager->delay_expire_failed = SQLX_DELAY_EXPIRE_FAILED;
 	manager->delay_fail_pending = SQLX_DELAY_MAXIDLE;
@@ -1245,13 +1246,18 @@ static void
 step_DeleteRogueNode_completion(int zrc, const void *d)
 {
 	gchar *path = (gchar*)d;
-	if (zrc == ZNONODE)
-		GRID_INFO("Rogue ZK node at %s disappeared", path);
-	else if (zrc == ZOK)
-		GRID_INFO("Sucessfully deleted rogue ZK node at %s", path);
-	else
+	if (zrc == ZNONODE) {
+		GRID_DEBUG("Rogue ZK node at %s disappeared", path);
+	} else if (zrc == ZOK) {
+		GRID_TRACE("Sucessfully deleted rogue ZK node at %s", path);
+	} else if (zrc == ZSESSIONEXPIRED) {
+		/* the node will expire, don't flood with logs in this case */
+		GRID_DEBUG("Failed to delete rogue ZK node at %s: %s",
+				path, zerror(zrc));
+	} else {
 		GRID_WARN("Failed to delete rogue ZK node at %s: %s",
 				path, zerror(zrc));
+	}
 	g_free(path);
 }
 
