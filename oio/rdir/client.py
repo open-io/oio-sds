@@ -1,5 +1,6 @@
 from oio.common.client import Client
-from oio.common.exceptions import ClientException, NotFound, VolumeException
+from oio.common.exceptions import ClientException, NotFound, \
+        VolumeException, ServiceUnavailable
 from oio.conscience.client import ConscienceClient
 from oio.api.directory import DirectoryAPI
 
@@ -49,8 +50,14 @@ class RdirClient(Client):
             cs = ConscienceClient(self.conf)
         if not all_rdir:
             all_rdir = cs.all_services('rdir', True)
+        if len(all_rdir) <= 0:
+            raise ServiceUnavailable("No rdir service found in %s" % self.ns)
+
         avail_base_count = [x['tags']['stat.opened_db_count'] for x in all_rdir
                             if x['score'] > 0]
+        if len(avail_base_count) <= 0:
+            raise ServiceUnavailable(
+                    "No valid rdir service found in %s" % self.ns)
         mean = sum(avail_base_count) / float(len(avail_base_count))
         avoids = [_make_id(self.ns, "rdir", x['addr'])
                   for x in all_rdir
