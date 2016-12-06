@@ -2113,10 +2113,13 @@ member_finish_CHECKING_MASTER(struct election_member_s *member)
 		return;
 	EXTRA_ASSERT(!member_has_action(member));
 
-	const guint16 asked = member->count_GETVERS;
+	EXTRA_ASSERT(1 == member->count_GETVERS);
+
 	const guint16 outdated = member->outdated_GETVERS;
 	const guint16 errors = member->errors_GETVERS;
 	const guint16 concurrent = member->concurrent_GETVERS;
+
+	EXTRA_ASSERT(concurrent + outdated + errors <= 1);
 
 	const guint16 node_left = member->requested_LEFT_SELF;
 	const guint16 master_change = member->requested_LEFT_MASTER;
@@ -2132,8 +2135,6 @@ member_finish_CHECKING_MASTER(struct election_member_s *member)
 		member_reset_master(member);
 		return member_action_to_LISTING(member);
 	}
-
-	EXTRA_ASSERT(concurrent + outdated + errors <= asked);
 
 	if (concurrent)
 		return member_action_to_SYNCING(member);
