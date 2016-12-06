@@ -168,8 +168,6 @@ struct election_member_s
 	/* Weak pointer to the condition, do not free! */
 	GCond *cond;
 
-	gchar *key;
-
 	struct sqlx_name_mutable_s name;
 
 	/* Since when do we loop between pending states. That value is used by
@@ -228,6 +226,8 @@ struct election_member_s
 
 	unsigned char flag_local_id : 1;
 	unsigned char flag_master_id : 1;
+
+	gchar key[65];
 
 	struct logged_event_s log[EVENTLOG_SIZE];
 };
@@ -1009,7 +1009,6 @@ member_destroy(struct election_member_s *member)
 
 	member->cond = NULL;
 	oio_str_clean (&member->master_url);
-	g_free0 (member->key);
 	sqlx_name_clean (&member->name);
 
 	g_free(member);
@@ -1050,19 +1049,17 @@ _LOCKED_init_member(struct election_manager_s *manager,
 		member->generation_id = oio_ext_rand_int();
 		member->manager = manager;
 		member->last_status = oio_ext_monotonic_time ();
-		member->key = key;
+		strncpy(member->key, key, sizeof(member->key));
 		member->name.base = g_strdup(n->base);
 		member->name.type = g_strdup(n->type);
 		member->name.ns = g_strdup(n->ns);
 		member->refcount = 2;
-		member->cond = _manager_get_condition(manager, key);
+		member->cond = _manager_get_condition(manager, member->key);
 
 		_DEQUE_add (member);
 		g_tree_replace(manager->members_by_key, member->key, member);
-		key = NULL;
-	} else {
-		g_free(key);
 	}
+	g_free(key);
 	return member;
 }
 
