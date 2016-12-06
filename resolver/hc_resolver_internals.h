@@ -24,11 +24,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # include <glib.h>
 
 #ifndef  HC_RESOLVER_DEFAULT_MAX_SERVICES
-# define HC_RESOLVER_DEFAULT_MAX_SERVICES 200000
+# define HC_RESOLVER_DEFAULT_MAX_SERVICES 1048576
 #endif
 
 #ifndef  HC_RESOLVER_DEFAULT_TTL_SERVICES
-# define HC_RESOLVER_DEFAULT_TTL_SERVICES 1 * G_TIME_SPAN_DAY
+# define HC_RESOLVER_DEFAULT_TTL_SERVICES 0
 #endif
 
 // No expiration and no max for content of META0 & Conscience
