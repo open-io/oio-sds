@@ -89,7 +89,7 @@ License along with this library.
 # endif
 
 # ifndef  SQLX_DELAY_EXPIRE_FINAL
-#  define SQLX_DELAY_EXPIRE_FINAL 5 * G_TIME_SPAN_MINUTE
+#  define SQLX_DELAY_EXPIRE_FINAL 0
 # endif
 
 # ifndef  SQLX_DELAY_EXPIRE_NONE
