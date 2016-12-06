@@ -615,13 +615,13 @@ static void test_STEP_CREATING(void) {
 	g_assert_cmpint(m->requested_LEAVE, ==, 1);
 
 	/* Legit transitions with no interruption */
-	gint64 id = oio_ext_rand_int();
+	gint32 id = oio_ext_rand_int_range(G_MININT32, G_MAXINT32);
 
 	RESET();
 	transition(m, EVT_CREATE_OK, &id);
 	_member_assert_WATCHING(m);
 	_pending(CMD_EXIST, 0);
-	g_assert_cmpint(m->myid, ==, id);
+	g_assert_cmpint(m->local_id, ==, id);
 
 	RESET();
 	transition(m, EVT_CREATE_KO, NULL);
@@ -637,7 +637,7 @@ static void test_STEP_WATCHING(void) {
 		member_set_status(m, STEP_WATCHING);
 		member_reset(m);
 		member_reset_requests(m);
-		m->myid = oio_ext_rand_int();
+		member_set_local_id(m, oio_ext_rand_int());
 		m->pending_ZK_EXISTS = 1;
 		_member_assert_WATCHING(m);
 	}
@@ -699,7 +699,7 @@ static void test_STEP_LISTING(void) {
 		member_set_status(m, STEP_LISTING);
 		member_reset(m);
 		member_reset_requests(m);
-		m->myid = oio_ext_rand_int();
+		member_set_local_id(m, oio_ext_rand_int());
 		m->pending_ZK_LIST = 1;
 		_member_assert_LISTING(m);
 	}
@@ -750,16 +750,16 @@ static void test_STEP_LISTING(void) {
 	gint64 i64;
 
 	RESET();
-	i64 = m->myid; /* -> master */
+	i64 = m->local_id; /* -> master */
 	transition(m, EVT_LIST_OK, &i64);
-	g_assert_cmpint(m->myid, ==, m->master_id);
+	g_assert_cmpint(m->local_id, ==, m->master_id);
 	_member_assert_CHECKING_SLAVES(m);
 	_pending(0);
 
 	RESET();
-	i64 = m->myid + 1; /* -> slave */
+	i64 = m->local_id + 1; /* -> slave */
 	transition(m, EVT_LIST_OK, &i64);
-	g_assert_cmpint(m->myid, !=, m->master_id);
+	g_assert_cmpint(m->local_id, !=, m->master_id);
 	_member_assert_ASKING(m);
 	_pending(CMD_GET, 0);
 }
@@ -772,7 +772,8 @@ static void test_STEP_CHECKING_SLAVES(void) {
 		member_set_status(m, STEP_CHECKING_SLAVES);
 		member_reset(m);
 		member_reset_requests(m);
-		m->master_id = m->myid = oio_ext_rand_int();
+		member_set_local_id(m, oio_ext_rand_int());
+		member_set_master_id(m, m->local_id);
 		m->pending_GETVERS = 3;
 		_member_assert_CHECKING_SLAVES(m);
 	}
@@ -908,7 +909,8 @@ static void test_STEP_MASTER(void) {
 		member_set_status(m, STEP_MASTER);
 		member_reset(m);
 		member_reset_requests(m);
-		m->master_id = m->myid = oio_ext_rand_int();
+		member_set_local_id(m, oio_ext_rand_int());
+		member_set_master_id(m, m->local_id);
 		_member_assert_MASTER(m);
 	}
 
@@ -959,8 +961,8 @@ static void test_STEP_ASKING(void) {
 		member_set_status(m, STEP_ASKING);
 		member_reset(m);
 		member_reset_requests(m);
-		m->myid = oio_ext_rand_int();
-		m->master_id = m->myid + 1;
+		member_set_local_id(m, oio_ext_rand_int());
+		member_set_master_id(m, m->local_id + 1);
 		m->pending_ZK_GET = 1;
 		m->attempts_GETVERS = 0;
 		_member_assert_ASKING(m);
@@ -1084,10 +1086,10 @@ static void test_STEP_CHECKING_MASTER(void) {
 		g_array_set_size(sync->pending, 0);
 		member_set_status(m, STEP_CHECKING_MASTER);
 		member_reset(m);
-		member_set_master_url(m, "ID1");
 		member_reset_requests(m);
-		m->myid = oio_ext_rand_int();
-		m->master_id = m->myid + 1;
+		member_set_local_id(m, oio_ext_rand_int());
+		member_set_master_id(m, m->local_id + 1);
+		member_set_master_url(m, "ID1");
 		m->count_GETVERS = 1;
 		m->pending_GETVERS = 1;
 		m->attempts_GETVERS = 2;
@@ -1182,10 +1184,10 @@ static void test_STEP_SLAVE(void) {
 		g_array_set_size(sync->pending, 0);
 		member_set_status(m, STEP_SLAVE);
 		member_reset(m);
-		member_set_master_url(m, "ID1");
 		member_reset_requests(m);
-		m->myid = oio_ext_rand_int();
-		m->master_id = m->myid + 1;
+		member_set_local_id(m, oio_ext_rand_int());
+		member_set_master_id(m, m->local_id + 1);
+		member_set_master_url(m, "ID1");
 		_member_assert_SLAVE(m);
 	}
 
@@ -1239,8 +1241,8 @@ static void test_STEP_SYNCING(void) {
 		member_set_status(m, STEP_SYNCING);
 		member_reset(m);
 		member_reset_requests(m);
-		m->myid = oio_ext_rand_int();
-		m->master_id = m->myid + 1;
+		member_set_local_id(m, oio_ext_rand_int());
+		member_set_master_id(m, m->local_id + 1);
 		member_set_master_url(m, "ID1");
 		m->pending_PIPEFROM = 1;
 		_member_assert_SYNCING(m);
