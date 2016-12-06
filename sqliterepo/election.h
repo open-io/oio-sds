@@ -156,6 +156,13 @@ void election_manager_dump_delays(struct election_manager_s *manager);
 
 struct election_counts_s election_manager_count (struct election_manager_s *m);
 
+/* Make some elections leave their MASTER state if they are inactive since
+ * longer than `inactivity`, as long as there are more than `ratio` MASTER
+ * bases more than SLAVE bases. But do not leave more than `max` elections
+ * at all */
+guint election_manager_balance_masters(struct election_manager_s *M,
+		guint ratio, guint max, gint64 inactivity);
+
 /* Perform the 'timer' action on one item of each status.
    This includes expiring the election, retrying, pinging peers, etc.
    Returns the number of items activated. */

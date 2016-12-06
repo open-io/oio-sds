@@ -3397,3 +3397,34 @@ election_manager_play_timers (struct election_manager_s *manager, guint max)
 
 	return count;
 }
+
+guint
+election_manager_balance_masters(struct election_manager_s *M,
+		guint ratio, guint max)
+{
+	guint count = 0;
+
+	_manager_lock(M);
+
+	const guint bias = 64;
+	const guint nb_master = M->members_by_state[STEP_MASTER].count;
+	const guint nb_slave = M->members_by_state[STEP_SLAVE].count;
+	const guint ideal = nb_slave / ratio;
+
+	if (nb_master > 0 && nb_master > ideal + bias) {
+		max = MIN(max, nb_master);
+		max = MIN(max, ideal);
+		struct election_member_s *current = M->members_by_state[STEP_MASTER].front;
+		while (max-- > 0 && current) {
+			struct election_member_s *next = current->next;
+			/* Tell the first base to leave its MASTER position but to re-join
+			 * immediately after. */
+			current->requested_USE = 1;
+			transition(current, EVT_LEAVE_REQ, NULL);
+			current = next;
+		}
+	}
+	_manager_unlock(M);
+
+	return count;
+}
