@@ -163,7 +163,7 @@ _cache_load_from_ns(struct meta1_prefixes_set_s *m1ps, const char *ns_name,
 		const char *local_url, GArray **updated_prefixes, gboolean *meta0_ok,
 		guint digits)
 {
-	struct addr_info_s local_ai = {0};
+	struct addr_info_s local_ai = {{0}};
 	gboolean done = FALSE;
 
 	EXTRA_ASSERT(m1ps != NULL);

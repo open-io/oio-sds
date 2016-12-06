@@ -109,7 +109,7 @@ action_status(struct req_args_s *args)
 	g_array_free (array, TRUE);
 
 	/* some stats about the internal cache */
-	struct hc_resolver_stats_s s = {0};
+	struct hc_resolver_stats_s s = {{0}};
 	hc_resolver_info(resolver, &s);
 
 	g_string_append_printf(gstr, "gauge cache.dir.count = %"G_GINT64_FORMAT"\n", s.csm0.count);

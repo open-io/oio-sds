@@ -30,7 +30,6 @@ set(CMAKE_C_FLAGS "-g -fPIC -pipe -Wall -Wextra -std=gnu99")
 # as proposed by C99. (we only allocate the first field and let the compiler
 # init the others to zero.
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-missing-field-initializers")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-error=missing-braces")
 
 if (CMAKE_COMPILER_IS_GNUCC)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused")
