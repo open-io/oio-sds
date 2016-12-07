@@ -156,7 +156,10 @@ class ShowContainer(show.ShowOne):
 
         account = self.app.client_manager.get_account()
 
-        data = self.app.client_manager.storage.container_show(
+        # The command is named 'show' but we must call
+        # container_get_properties() because container_show() does
+        # not return system properties (and we need them).
+        data = self.app.client_manager.storage.container_get_properties(
             account,
             parsed_args.container
         )
@@ -239,24 +242,22 @@ class ListContainer(lister.Lister):
 
         if parsed_args.full_listing:
             def full_list():
-                l, meta = self.app.client_manager.storage.container_list(
+                listing = self.app.client_manager.storage.container_list(
                     account, **kwargs)
-                listing = l
-                for e in l:
-                    yield e
+                for element in listing:
+                    yield element
 
                 while listing:
                     kwargs['marker'] = listing[-1][0]
-                    listing, meta = \
-                        self.app.client_manager.storage.container_list(
-                            account, **kwargs)
+                    listing = self.app.client_manager.storage.container_list(
+                        account, **kwargs)
                     if listing:
-                        for e in listing:
-                            yield e
+                        for element in listing:
+                            yield element
 
             l = full_list()
         else:
-            l, meta = self.app.client_manager.storage.container_list(
+            l = self.app.client_manager.storage.container_list(
                 account, **kwargs)
 
         results = ((v[0], v[2], v[1]) for v in l)

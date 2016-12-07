@@ -1,8 +1,8 @@
-from oio.common.client import Client
-from oio.common.exceptions import ClientException, NotFound, \
-        VolumeException, ServiceUnavailable
+from oio.api.base import HttpApi
+from oio.common.exceptions import ClientException, NotFound, VolumeException
+from oio.common.exceptions import ServiceUnavailable
 from oio.conscience.client import ConscienceClient
-from oio.api.directory import DirectoryAPI
+from oio.directory.client import DirectoryClient
 
 
 RDIR_ACCT = '_RDIR'
@@ -12,13 +12,16 @@ def _make_id(ns, type_, addr):
     return "%s|%s|%s" % (ns, type_, addr)
 
 
-# TODO: convert to oio.api.base.API instead of oio.common.client.Client
-# This is especially relevant since this class makes no direct request to the
-# proxy (only through DirectoryAPI).
-class RdirClient(Client):
+class RdirClient(HttpApi):
+    """
+    Client class for rdir services.
+    """
+
     def __init__(self, conf, **kwargs):
-        super(RdirClient, self).__init__(conf, **kwargs)
-        self.directory = DirectoryAPI(self.ns, **kwargs)
+        super(RdirClient, self).__init__(None, **kwargs)
+        self.conf = conf
+        self.ns = self.conf["namespace"]
+        self.directory = DirectoryClient(conf, **kwargs)
         self._addr_cache = dict()
 
     def assign_all_rawx(self):
@@ -33,8 +36,8 @@ class RdirClient(Client):
         for rawx in all_rawx:
             try:
                 # Verify that there is no rdir linked
-                resp = self.directory.get(RDIR_ACCT, rawx['addr'],
-                                          service_type='rdir')
+                resp = self.directory.list(RDIR_ACCT, rawx['addr'],
+                                           service_type='rdir')
                 rawx['rdir'] = by_id[_make_id(self.ns, 'rdir',
                                               self._lookup_rdir_host(resp))]
             except (NotFound, ClientException):
@@ -86,7 +89,7 @@ class RdirClient(Client):
                                 autocreate=True)
         else:
             self._smart_link_rdir(volume_id)
-        return self.directory.get(RDIR_ACCT, volume_id, service_type='rdir')
+        return self.directory.list(RDIR_ACCT, volume_id, service_type='rdir')
 
     def _lookup_rdir_host(self, resp):
         host = None
@@ -102,8 +105,8 @@ class RdirClient(Client):
             return self._addr_cache[volume_id]
         resp = {}
         try:
-            resp = self.directory.get(RDIR_ACCT, volume_id,
-                                      service_type='rdir')
+            resp = self.directory.list(RDIR_ACCT, volume_id,
+                                       service_type='rdir')
         except NotFound:
             if not create:
                 raise VolumeException('No such volume %s' % volume_id)
@@ -122,7 +125,7 @@ class RdirClient(Client):
     def _make_uri(self, action, volume_id, create=False, nocache=False):
         rdir_host = self._get_rdir_addr(volume_id, create=create,
                                         nocache=nocache)
-        uri = 'http://%s/v1/%s' % (rdir_host, action)
+        uri = 'http://%s/v1/rdir/%s' % (rdir_host, action)
         return uri
 
     def _rdir_request(self, volume, method, action, create=False, **kwargs):
@@ -151,7 +154,7 @@ class RdirClient(Client):
 
         headers = {}
 
-        self._rdir_request(volume_id, 'POST', 'rdir/push', create=True,
+        self._rdir_request(volume_id, 'POST', 'push', create=True,
                            json=body, headers=headers)
 
     def chunk_delete(self, volume_id, container_id, content_id, chunk_id):
@@ -160,14 +163,22 @@ class RdirClient(Client):
                 'content_id': content_id,
                 'chunk_id': chunk_id}
 
-        self._rdir_request(volume_id, 'DELETE', 'rdir/delete', json=body)
+        self._rdir_request(volume_id, 'DELETE', 'delete', json=body)
 
     def chunk_fetch(self, volume, limit=100, rebuild=False,
                     container_id=None):
         """
         Fetch the list of chunks belonging to the specified volume.
-        You can set `container_id` to get only chunks belonging to
-        the specified container.
+
+        :param volume: the volume to get chunks from
+        :type volume: `str`
+        :param limit: maximum number of results to return
+        :type limit: `int`
+        :param rebuild:
+        :type rebuild: `bool`
+        :keyword container_id: get only chunks belonging to
+           the specified container
+        :type container_id: `str`
         """
         req_body = {'limit': limit}
         if rebuild:
@@ -176,7 +187,7 @@ class RdirClient(Client):
             req_body['container_id'] = container_id
 
         while True:
-            resp, resp_body = self._rdir_request(volume, 'POST', 'rdir/fetch',
+            resp, resp_body = self._rdir_request(volume, 'POST', 'fetch',
                                                  json=req_body)
             resp.raise_for_status()
             if len(resp_body) == 0:
@@ -188,31 +199,31 @@ class RdirClient(Client):
 
     def admin_incident_set(self, volume, date):
         body = {'date': int(float(date))}
-        self._rdir_request(volume, 'POST', 'rdir/admin/incident', json=body)
+        self._rdir_request(volume, 'POST', 'admin/incident', json=body)
 
     def admin_incident_get(self, volume):
         resp, resp_body = self._rdir_request(volume, 'GET',
-                                             'rdir/admin/incident')
+                                             'admin/incident')
         return resp_body.get('date')
 
     def admin_lock(self, volume, who):
         body = {'who': who}
 
-        self._rdir_request(volume, 'POST', 'rdir/admin/lock', json=body)
+        self._rdir_request(volume, 'POST', 'admin/lock', json=body)
 
     def admin_unlock(self, volume):
-        self._rdir_request(volume, 'POST', 'rdir/admin/unlock')
+        self._rdir_request(volume, 'POST', 'admin/unlock')
 
     def admin_show(self, volume):
-        resp, resp_body = self._rdir_request(volume, 'GET', 'rdir/admin/show')
+        resp, resp_body = self._rdir_request(volume, 'GET', 'admin/show')
         return resp_body
 
     def admin_clear(self, volume, clear_all=False):
         body = {'all': clear_all}
         resp, resp_body = self._rdir_request(
-            volume, 'POST', 'rdir/admin/clear', json=body)
+            volume, 'POST', 'admin/clear', json=body)
         return resp_body
 
     def status(self, volume):
-        resp, resp_body = self._rdir_request(volume, 'GET', 'rdir/status')
+        resp, resp_body = self._rdir_request(volume, 'GET', 'status')
         return resp_body

@@ -14,15 +14,16 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.common.client import Client
+import json
+from oio.api.base import HttpApi
 from oio.common.exceptions import ClientException
 from oio.conscience.client import ConscienceClient
 
 
-class AccountClient(Client):
+class AccountClient(HttpApi):
     def __init__(self, conf, **kwargs):
-        super(AccountClient, self).__init__(conf, **kwargs)
-        self.cs = ConscienceClient(self.conf)
+        super(AccountClient, self).__init__(**kwargs)
+        self.cs = ConscienceClient(conf)
 
     # TODO keep account srv addr in local cache to avoid lookup requests
     def _get_account_addr(self):
@@ -38,25 +39,64 @@ class AccountClient(Client):
         uri = 'http://%s/v1.0/account/%s' % (account_addr, action)
         return uri
 
-    def _account_request(self, account, method, action, params={}):
+    def _account_request(self, account, method, action, params={}, **kwargs):
         uri = self._make_uri(action)
+        # FIXME: account must be urlencoded (utils.quote)
         params['id'] = account
-        resp, body = self._direct_request(method, uri, params=params)
+        resp, body = self._direct_request(method, uri, params=params, **kwargs)
         return resp, body
 
-    def account_create(self, account):
-        self._account_request(account, 'PUT', 'create')
+    def account_create(self, account, **kwargs):
+        """
+        Create an account.
 
-    def account_delete(self, account):
-        self._account_request(account, 'POST', 'delete')
+        :param account: name of the account to create
+        :type account: `str`
+        :returns: `True` if the account has been created
+        """
+        resp, _body = self._account_request(account, 'PUT', 'create', **kwargs)
+        return resp.status_code == 201
 
-    def containers_list(self, account, marker=None, limit=None):
-        params = {}
-        if marker is not None:
-            params['marker'] = marker
-        if limit is not None:
-            params['limit'] = limit
+    def account_delete(self, account, **kwargs):
+        """
+        Delete an account.
+        """
+        self._account_request(account, 'POST', 'delete', **kwargs)
 
-        resp, body = self._account_request(account,
-                                           'GET', 'containers', params)
+    def account_show(self, account, **kwargs):
+        """
+        Get information about an account.
+        """
+        _resp, body = self._account_request(account, 'GET', 'show', **kwargs)
         return body
+
+    # FIXME: document this
+    def account_update(self, account, metadata, to_delete, **kwargs):
+        data = json.dumps({"metadata": metadata, "to_delete": to_delete})
+        self._account_request(account, 'POST', 'update', data=data, **kwargs)
+
+    def container_list(self, account, limit=None, marker=None,
+                       end_marker=None, prefix=None, delimiter=None,
+                       **kwargs):
+        """
+        Get the list of containers of an account.
+
+        :param account: account from which to get the container list
+        :type account: `str`
+        :keyword limit: maximum number of results to return
+        :type limit: `int`
+        :keyword marker: name of the container from where to start the listing
+        :type marker: `str`
+        :keyword end_marker:
+        :keyword prefix:
+        :keyword delimiter:
+        """
+        params = {"id": account,
+                  "limit": limit,
+                  "marker": marker,
+                  "end_marker": end_marker,
+                  "prefix": prefix,
+                  "delimiter": delimiter}
+        _resp, body = self._account_request(account, 'GET', 'containers',
+                                            params=params, **kwargs)
+        return body["listing"]

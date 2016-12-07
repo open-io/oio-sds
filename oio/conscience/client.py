@@ -1,9 +1,9 @@
-from oio.common.client import Client
+from oio.common.client import ProxyClient
 from oio.common.exceptions import OioException
 from oio.common.utils import json
 
 
-class LbClient(Client):
+class LbClient(ProxyClient):
     """Simple load balancer client"""
 
     def __init__(self, conf, **kwargs):
@@ -52,7 +52,7 @@ class LbClient(Client):
             raise OioException("Failed to poll %s: %s" % (pool, resp.text))
 
 
-class ConscienceClient(Client):
+class ConscienceClient(ProxyClient):
     """Conscience client. Some calls are actually redirected to LbClient."""
 
     def __init__(self, conf, **kwargs):

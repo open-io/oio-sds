@@ -19,13 +19,13 @@ from oio.common.constants import ADMIN_HEADER
 _ADAPTER_OPTIONS_KEYS = ["pool_connections", "pool_maxsize", "max_retries"]
 
 
-class API(object):
+class HttpApi(object):
     """
-    The base class for all APIs. Provides facilities to make HTTP requests
+    Provides facilities to make HTTP requests
     towards the same endpoint, with a pool of connections.
     """
 
-    def __init__(self, endpoint, session=None, **kwargs):
+    def __init__(self, endpoint=None, session=None, **kwargs):
         """
         :param session: an optional session that will be reused
         :type session: `requests.Session`
@@ -34,7 +34,7 @@ class API(object):
         :keyword admin_mode: allow talking to a slave/worm namespace
         :type admin_mode: `bool`
         """
-        super(API, self).__init__()
+        super(HttpApi, self).__init__()
         self.endpoint = endpoint
         if not session:
             session = requests.Session()
@@ -103,6 +103,9 @@ class API(object):
         :type headers: `dict`
         """
         if not endpoint:
+            if not self.endpoint:
+                raise ValueError("endpoint not set in function call" +
+                                 " nor in class contructor")
             endpoint = self.endpoint
         url = '/'.join([endpoint.rstrip('/'), url.lstrip('/')])
-        return self._direct_request(method, url, session, **kwargs)
+        return self._direct_request(method, url, session=session, **kwargs)

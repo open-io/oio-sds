@@ -2,12 +2,11 @@
 import random
 
 from oio.common.utils import json
-from oio.common.client import Client
+from oio.common.client import ProxyClient
 from oio.common.exceptions import ConfigurationException
 
 
-# TODO: convert to oio.api.base.API instead of oio.common.client.Client
-class Meta0Client(Client):
+class Meta0Client(ProxyClient):
     """Meta0 administration client"""
 
     def __init__(self, conf, **kwargs):

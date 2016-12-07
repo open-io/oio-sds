@@ -13,11 +13,11 @@
 
 import json
 
-from oio.api.base import API
+from oio.api.base import HttpApi
 from oio.common import exceptions, utils
 
 
-class DirectoryAPI(API):
+class DirectoryAPI(HttpApi):
     """
     Medium-level directory API.
     """

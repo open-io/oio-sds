@@ -44,12 +44,12 @@ class StorageTiererWorker(object):
     def _list_containers(self):
         container = None
         while True:
-            resp = self.account_client.containers_list(
+            listing = self.account_client.container_list(
                 self.account, marker=container,
                 limit=self.container_fetch_limit)
-            if len(resp["listing"]) == 0:
+            if len(listing) == 0:
                 break
-            for container, _, _, _ in resp["listing"]:
+            for container, _, _, _ in listing:
                 yield container
 
     def _list_contents(self):
@@ -57,16 +57,16 @@ class StorageTiererWorker(object):
             marker = None
             while True:
                 try:
-                    resp = self.container_client.container_list(
-                        acct=self.account, ref=container,
+                    _, listing = self.container_client.content_list(
+                        account=self.account, reference=container,
                         limit=self.content_fetch_limit, marker=marker)
                 except NotFound:
                     self.logger.warn("Container %s in account "
                                      "but not found" % container)
                     break
-                if len(resp["objects"]) == 0:
+                if len(listing["objects"]) == 0:
                     break
-                for obj in resp["objects"]:
+                for obj in listing["objects"]:
                     marker = obj["name"]
                     if obj["mtime"] > time.time() - self.outdated_threshold:
                         continue
