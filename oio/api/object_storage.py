@@ -298,12 +298,13 @@ class ObjectStorageApi(object):
         :keyword headers: extra headers to send to the proxy
         :type headers: `dict`
         """
-        return self.account.container_list(account, limit=limit,
+        resp = self.account.container_list(account, limit=limit,
                                            marker=marker,
                                            end_marker=end_marker,
                                            prefix=prefix,
                                            delimiter=delimiter,
                                            headers=headers)
+        return resp["listing"]
 
     @handle_container_not_found
     def container_show(self, account, container, headers=None):
@@ -431,8 +432,10 @@ class ObjectStorageApi(object):
                     key_file=key_file)
 
     @handle_object_not_found
-    def object_delete(self, account, container, obj, headers={}, **kwargs):
+    def object_delete(self, account, container, obj, headers=None, **kwargs):
         # FIXME: this should be in kwargs
+        if not headers:
+            headers = dict()
         if 'X-oio-req-id' not in headers:
             headers['X-oio-req-id'] = utils.request_id()
         return self.container.content_delete(account, container, obj,
@@ -601,6 +604,7 @@ class ObjectStorageApi(object):
         obj_meta, chunk_prep = self._content_preparer(
             account, container, obj_name,
             policy=policy, headers=headers)
+        obj_meta.update(sysmeta)
         obj_meta['content_path'] = obj_name
         obj_meta['container_id'] = utils.name2cid(account, container).upper()
         obj_meta['ns'] = self.namespace
@@ -628,7 +632,7 @@ class ObjectStorageApi(object):
 
         final_chunks, bytes_transferred, content_checksum = handler.stream()
 
-        etag = sysmeta['etag']
+        etag = obj_meta.get('etag')
         if etag and etag.lower() != content_checksum.lower():
             raise exc.EtagMismatch(
                 "given etag %s != computed %s" % (etag, content_checksum))

@@ -44,12 +44,12 @@ class StorageTiererWorker(object):
     def _list_containers(self):
         container = None
         while True:
-            listing = self.account_client.container_list(
+            resp = self.account_client.container_list(
                 self.account, marker=container,
                 limit=self.container_fetch_limit)
-            if len(listing) == 0:
+            if len(resp["listing"]) == 0:
                 break
-            for container, _, _, _ in listing:
+            for container, _, _, _ in resp["listing"]:
                 yield container
 
     def _list_contents(self):

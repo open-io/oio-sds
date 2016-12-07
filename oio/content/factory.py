@@ -33,7 +33,7 @@ class ContentFactory(object):
 
     def get(self, container_id, content_id):
         try:
-            meta, chunks = self.container_client.content_show(
+            meta, chunks = self.container_client.content_locate(
                 cid=container_id, content=content_id)
         except NotFound:
             raise ContentNotFound("Content %s/%s not found" % (container_id,

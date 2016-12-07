@@ -163,7 +163,7 @@ class BlobAuditorWorker(object):
             try:
                 container_id = meta['container_id']
                 content_path = meta['content_path']
-                content_attr, data = self.container_client.content_show(
+                content_attr, data = self.container_client.content_locate(
                     cid=container_id, path=content_path)
 
                 # Check chunk data

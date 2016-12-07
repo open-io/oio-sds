@@ -87,7 +87,7 @@ class TestMeta2Containers(BaseTestCase):
 
     def test_list(self):
         params = self.param_ref(self.ref)
-        self._create(params, 204)
+        self._create(params, 201)
 
         # Fill some contents
         for i, name in gen_names():
@@ -156,7 +156,7 @@ class TestMeta2Containers(BaseTestCase):
         params = self.param_ref(self.ref)
         resp = self.session.post(self.url_container('touch'), params=params)
         self.assertEqual(resp.status_code, 403)
-        self._create(params, 204)
+        self._create(params, 201)
         resp = self.session.post(self.url_container('touch'), params=params)
         self.assertEqual(resp.status_code, 204)
 
@@ -199,7 +199,7 @@ class TestMeta2Containers(BaseTestCase):
         # ok but no such container
         self._raw_insert(params, 404, chunks)
 
-        self._create(params, 204)
+        self._create(params, 201)
         self._raw_insert(params, 204, chunks)
 
 
@@ -295,7 +295,7 @@ class TestMeta2Contents(BaseTestCase):
         resp = self.session.post(self.url_container('create'),
                                  params=params, headers=headers,
                                  data=data)
-        self.assertEqual(resp.status_code, 204)
+        self.assertEqual(resp.status_code, 201)
         resp = self.session.post(self.url_content('copy'),
                                  headers=headers, params=params)
         self.assertError(resp, 403, 420)

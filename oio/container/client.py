@@ -204,12 +204,18 @@ class ContainerClient(ProxyClient):
                      marker=None, end_marker=None, prefix=None,
                      delimiter=None, properties=False,
                      cid=None, **kwargs):
+        """
+        Get the list of contents of a container.
+
+        :returns: a tuple with container metadata `dict` as first element
+            and a `dict` with "object" and "prefixes" as second element
+        """
         params = self._make_params(account, reference, cid=cid)
         p_up = {'max': limit, 'marker': marker, 'end_marker': end_marker,
                 'prefix': prefix, 'delimiter': delimiter,
                 'properties': properties}
         params.update(p_up)
-        resp, body = self._request('GET', '/list', params=params)
+        resp, body = self._request('GET', '/list', params=params, **kwargs)
         return resp.headers, body
 
     def content_create(self, account=None, reference=None, path=None,
@@ -237,24 +243,33 @@ class ContainerClient(ProxyClient):
         return resp, body
 
     def content_delete(self, account=None, reference=None, path=None, cid=None,
-                       **kwargs):
+                       headers=None, **kwargs):
         uri = self._make_uri('content/delete')
         params = self._make_params(account, reference, path, cid=cid)
-        hdrs = gen_headers()
+        if not headers:
+            headers = dict()
         resp, body = self._direct_request('POST', uri,
-                                          params=params, headers=hdrs)
+                                          params=params, headers=headers)
 
     def content_locate(self, account=None, reference=None, path=None, cid=None,
                        content=None, **kwargs):
         """
         Get a description of the content along with the list of its chunks.
+
+        :param cid: container id that can be used in place of `account`
+            and `reference`
+        :type cid: hexadecimal `str`
+        :param content: content id that can be used in place of `path`
+        :type content: hexadecimal `str`
+        :returns: a tuple with content metadata `dict` as first element
+            and chunk `list` as second element
         """
         uri = self._make_uri('content/locate')
         params = self._make_params(account, reference, path, cid=cid,
                                    content=content)
-        resp, body = self._direct_request('GET', uri, params=params)
-        resp_headers = extract_content_headers_meta(resp.headers)
-        return resp_headers, body
+        resp, chunks = self._direct_request('GET', uri, params=params)
+        content_meta = extract_content_headers_meta(resp.headers)
+        return content_meta, chunks
 
     def content_prepare(self, account=None, reference=None, path=None,
                         size=None, cid=None, stgpol=None, **kwargs):
@@ -271,15 +286,14 @@ class ContainerClient(ProxyClient):
         return resp_headers, body
 
     def content_show(self, account=None, reference=None, path=None,
-                     properties=[], cid=None, **kwargs):
+                     properties=None, cid=None, content=None, **kwargs):
         """
         Get a description of the content along with its user properties.
-
-
         """
         uri = self._make_uri('content/get_properties')
-        params = self._make_params(account, reference, path, cid=cid)
-        data = json.dumps(properties)
+        params = self._make_params(account, reference, path,
+                                   cid=cid, content=content)
+        data = json.dumps(properties) if properties else None
         resp, body = self._direct_request(
             'POST', uri, data=data, params=params, **kwargs)
         obj_meta = extract_content_headers_meta(resp.headers)

@@ -23,7 +23,7 @@ from oio.conscience.client import ConscienceClient
 class AccountClient(HttpApi):
     def __init__(self, conf, **kwargs):
         super(AccountClient, self).__init__(**kwargs)
-        self.cs = ConscienceClient(conf)
+        self.cs = ConscienceClient(conf, **kwargs)
 
     # TODO keep account srv addr in local cache to avoid lookup requests
     def _get_account_addr(self):
@@ -99,4 +99,4 @@ class AccountClient(HttpApi):
                   "delimiter": delimiter}
         _resp, body = self._account_request(account, 'GET', 'containers',
                                             params=params, **kwargs)
-        return body["listing"]
+        return body

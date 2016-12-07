@@ -54,8 +54,8 @@ class TestFilters(BaseTestCase):
             self.container_name = 'TestFilter%f' % time.time()
             self.blob_client = BlobClient()
             self.container_client = ContainerClient(self.gridconf)
-            self.container_client.container_create(acct=self.account,
-                                                   ref=self.container_name)
+            self.container_client.container_create(
+                account=self.account, reference=self.container_name)
             self.container_id = cid_from_name(self.account,
                                               self.container_name).upper()
             self.stgpol = "SINGLE"

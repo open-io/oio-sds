@@ -84,7 +84,7 @@ class HttpApi(object):
             raise exceptions.from_response(resp, body)
         return resp, body
 
-    def _request(self, method, url, endpoint=None, session=None, **kwargs):
+    def _request(self, method, url, endpoint=None, **kwargs):
         """
         Make a request to an HTTP endpoint.
 
@@ -108,4 +108,4 @@ class HttpApi(object):
                                  " nor in class contructor")
             endpoint = self.endpoint
         url = '/'.join([endpoint.rstrip('/'), url.lstrip('/')])
-        return self._direct_request(method, url, session=session, **kwargs)
+        return self._direct_request(method, url, **kwargs)
