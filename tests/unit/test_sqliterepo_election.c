@@ -482,6 +482,7 @@ test_single (void)
 	g_assert_nonnull (peering);
 
 	g_assert_no_error (election_manager_create (&config, &manager));
+	manager->synchronous_completions = TRUE;
 	g_assert_nonnull (manager);
 	election_manager_set_sync (manager, sync);
 	election_manager_set_peering (manager, peering);
@@ -589,6 +590,7 @@ test_sets (void)
 	g_assert_nonnull (peering);
 
 	g_assert_no_error (election_manager_create (&config, &manager));
+	manager->synchronous_completions = TRUE;
 	g_assert_nonnull (manager);
 	election_manager_set_sync (manager, sync);
 	election_manager_set_peering (manager, peering);
@@ -675,6 +677,7 @@ test_election_init(void)
 	err = election_manager_create(&cfg, &m);
 	g_assert_no_error(err);
 	g_assert_nonnull (m);
+	m->synchronous_completions = TRUE;
 	election_manager_set_sync (m, sync);
 	election_manager_set_peering (m, peering);
 
@@ -726,6 +729,7 @@ test_sequence (void)
 
 	g_assert_no_error (election_manager_create (&config, &manager));
 	g_assert_nonnull (manager);
+	manager->synchronous_completions = TRUE;
 	election_manager_set_sync (manager, sync);
 	election_manager_set_peering (manager, peering);
 

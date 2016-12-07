@@ -156,6 +156,7 @@ struct election_manager_s
 	gint64 when_lock;
 
 	gboolean exiting;
+	gboolean synchronous_completions;
 
 	req_id_t next_id;
 };
@@ -543,6 +544,8 @@ election_manager_create(struct replication_config_s *config,
 
 	manager->completions =
 		g_thread_pool_new(_completion_router, manager, 2, TRUE, NULL);
+
+	manager->synchronous_completions = FALSE;
 
 	*result = manager;
 	election_manager_dump_delays(manager);
@@ -1323,8 +1326,13 @@ step_AskMaster_completion(int zrc, const char *v, int vlen,
 	if (vlen)
 		memcpy(ctx->master, v, vlen);
 
-	gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
-	g_assert_true(rc);
+	struct election_manager_s *M = ctx->member->manager;
+	if (M->synchronous_completions) {
+		return exec_later_ASKING_hook(ctx);
+	} else {
+		gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
+		g_assert_true(rc);
+	}
 }
 
 /* @private */
@@ -1366,8 +1374,13 @@ step_ListGroup_completion(int zrc, const struct String_vector *sv,
 	ctx->member = (struct election_member_s*) data;
 	ctx->i64v = nodev_to_int64v(sv, hashstr_str(ctx->member->key));
 
-	gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
-	g_assert_true(rc);
+	struct election_manager_s *M = ctx->member->manager;
+	if (M->synchronous_completions) {
+		return exec_later_LISTING_hook(ctx);
+	} else {
+		gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
+		g_assert_true(rc);
+	}
 }
 
 /* @private */
@@ -1407,8 +1420,13 @@ step_LeaveElection_completion(int zrc, const void *d)
 	ctx->zrc = zrc;
 	ctx->member = (struct election_member_s*) d;
 
-	gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
-	g_assert_true(rc);
+	struct election_manager_s *M = ctx->member->manager;
+	if (M->synchronous_completions) {
+		return exec_later_LEAVING_hook(ctx);
+	} else {
+		gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
+		g_assert_true(rc);
+	}
 }
 
 /* @private */
@@ -1447,8 +1465,13 @@ step_WatchNode_completion(int zrc, const struct Stat *s UNUSED, const void *d)
 	ctx->zrc = zrc;
 	ctx->member = (struct election_member_s*) d;
 
-	gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
-	g_assert_true(rc);
+	struct election_manager_s *M = ctx->member->manager;
+	if (M->synchronous_completions) {
+		return exec_later_WATCHING_hook(ctx);
+	} else {
+		gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
+		g_assert_true(rc);
+	}
 }
 
 /* @private */
@@ -1511,10 +1534,14 @@ step_StartElection_completion(int zrc, const char *path, const void *d)
 		ctx->zrc = ZNONODE;
 	}
 
-	_thlocal_set_manager(ctx->member->manager);
-
-	gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
-	g_assert_true(rc);
+	struct election_manager_s *M = ctx->member->manager;
+	_thlocal_set_manager(M);
+	if (M->synchronous_completions) {
+		return exec_later_CREATING_hook(ctx);
+	} else {
+		gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
+		g_assert_true(rc);
+	}
 }
 
 /* @private */
@@ -1619,8 +1646,12 @@ _watcher_change(const int type, const int state,
 	memcpy(ctx->path, slash, len);
 
 	struct election_manager_s *M = _thlocal_get_manager();
-	gboolean rc = g_thread_pool_push(M->completions, ctx, NULL);
-	g_assert_true(rc);
+	if (M->synchronous_completions) {
+		return _deferred_watcher_hook(ctx, M);
+	} else {
+		gboolean rc = g_thread_pool_push(M->completions, ctx, NULL);
+		g_assert_true(rc);
+	}
 }
 
 static void
