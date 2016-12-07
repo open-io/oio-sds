@@ -330,14 +330,26 @@ sqlx_base_move_to_list(sqlx_cache_t *cache, sqlx_base_t *base,
 			sqlx_status_to_str(status));
 }
 
+static gboolean
+_has_idle_unlocked(sqlx_cache_t *cache)
+{
+	return cache->beacon_idle.first != -1 ||
+			cache->beacon_idle_hot.first != -1;
+}
+
 static GError *
 sqlx_base_reserve(sqlx_cache_t *cache, const hashstr_t *hs,
 		sqlx_base_t **result)
 {
-	if (cache->bases_used >= cache->bases_max_soft)
-		return NEWERROR(CODE_UNAVAILABLE, "Max bases reached");
-
 	*result = NULL;
+	if (cache->bases_used >= cache->bases_max_soft) {
+		if (_has_idle_unlocked(cache)) {
+			return NULL;  // No free base but we can recycle an idle one
+		} else {
+			return NEWERROR(CODE_UNAVAILABLE, "Max bases reached");
+		}
+	}
+
 	sqlx_base_t *base = sqlx_get_by_id(cache, cache->beacon_free.first);
 	if (!base)
 		return NULL;
@@ -458,6 +470,10 @@ sqlx_expire_first_idle_base(sqlx_cache_t *cache, gint64 now)
 	if (!rc && 0 <= (bd_idle = cache->beacon_idle_hot.last))
 		rc = _expire_specific_base(cache, GET(cache, bd_idle), now,
 				cache->hot_grace_delay);
+
+	if (rc) {
+		GRID_TRACE("Expired idle base at pos %d", bd_idle);
+	}
 
 	return rc;
 }

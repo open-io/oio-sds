@@ -7,24 +7,41 @@ from cliff import lister
 from oio.cli.utils import KeyValueAction
 
 
-class CreateContainer(lister.Lister):
+class SetPropertyCommandMixin(object):
+    """Command setting quota, storage policy or generic property"""
+
+    def patch_parser(self, parser):
+        parser.add_argument(
+            '--property',
+            metavar='<key=value>',
+            action=KeyValueAction,
+            help='Property to add/update for the container(s)'
+        )
+        parser.add_argument(
+            '--quota',
+            metavar='<bytes>',
+            type=int,
+            help='Set the quota on the container'
+        )
+        parser.add_argument(
+            '--storage-policy', '--stgpol',
+            help='Set the storage policy of the container'
+        )
+
+
+class CreateContainer(SetPropertyCommandMixin, lister.Lister):
     """Create an object container"""
 
     log = logging.getLogger(__name__ + '.CreateContainer')
 
     def get_parser(self, prog_name):
         parser = super(CreateContainer, self).get_parser(prog_name)
+        self.patch_parser(parser)
         parser.add_argument(
             'containers',
             metavar='<container-name>',
             nargs='+',
             help='New container name(s)'
-        )
-        parser.add_argument(
-            '--property',
-            metavar='<key=value>',
-            action=KeyValueAction,
-            help='Property to add/update for the container(s)'
         )
         return parser
 
@@ -32,37 +49,39 @@ class CreateContainer(lister.Lister):
         self.log.debug('take_action(%s)', parsed_args)
 
         properties = parsed_args.property
+        system = dict()
+        if parsed_args.quota is not None:
+            system['sys.m2.quota'] = str(parsed_args.quota)
+        if parsed_args.storage_policy is not None:
+            system['sys.m2.policy.storage'] = parsed_args.storage_policy
+
         results = []
         account = self.app.client_manager.get_account()
         for container in parsed_args.containers:
             success = self.app.client_manager.storage.container_create(
                 account,
                 container,
-                metadata=properties)
+                properties=properties,
+                system=system)
             results.append((container, success))
 
         columns = ('Name', 'Created')
-        l = (r for r in results)
-        return columns, l
+        res_gen = (r for r in results)
+        return columns, res_gen
 
 
-class SetContainer(command.Command):
-    """Set container properties"""
+class SetContainer(SetPropertyCommandMixin, command.Command):
+    """Set container properties, quota or storage policy"""
 
     log = logging.getLogger(__name__ + '.SetContainer')
 
     def get_parser(self, prog_name):
         parser = super(SetContainer, self).get_parser(prog_name)
+        self.patch_parser(parser)
         parser.add_argument(
             'container',
             metavar='<container>',
             help='Container to modify'
-        )
-        parser.add_argument(
-            '--property',
-            metavar='<key=value>',
-            action=KeyValueAction,
-            help='Property to add/update for this container'
         )
         parser.add_argument(
             '--clear',
@@ -77,12 +96,18 @@ class SetContainer(command.Command):
         self.log.debug('take_action(%s)', parsed_args)
 
         properties = parsed_args.property
+        system = dict()
+        if parsed_args.quota is not None:
+            system['sys.m2.quota'] = str(parsed_args.quota)
+        if parsed_args.storage_policy is not None:
+            system['sys.m2.policy.storage'] = parsed_args.storage_policy
 
         self.app.client_manager.storage.container_set_properties(
             self.app.client_manager.get_account(),
             parsed_args.container,
             properties,
-            clear=parsed_args.clear
+            clear=parsed_args.clear,
+            system=system
         )
 
 
@@ -142,6 +167,7 @@ class ShowContainer(show.ShowOne):
                 'container': sys['sys.user.name'],
                 'ctime': sys['sys.m2.ctime'],
                 'bytes_usage': sys.get('sys.m2.usage', 0),
+                'quota': sys.get('sys.m2.quota', "Namespace default"),
                 'objects': sys.get('sys.m2.objects', 0),
                 'storage_policy': sys.get('sys.m2.policy.storage',
                                           "Namespace default"),

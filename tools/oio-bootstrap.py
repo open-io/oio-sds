@@ -652,7 +652,7 @@ group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${IP}:${PORT} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
+command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${IP}:${PORT} ${EXTRA} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
 """
 
 template_gridinit_sqlx = """
@@ -661,7 +661,7 @@ group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O DirectorySchemas=${CFGDIR}/sqlx/schemas -O Endpoint=${IP}:${PORT} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
+command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O DirectorySchemas=${CFGDIR}/sqlx/schemas -O Endpoint=${IP}:${PORT} ${EXTRA} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
 """
 
 template_gridinit_httpd = """
@@ -894,6 +894,7 @@ port = 6000
 NS = 'ns'
 IP = 'ip'
 SVC_NB = 'count'
+SVC_PARAMS = 'params'
 ALLOW_REDIS = 'redis'
 OPENSUSE = 'opensuse'
 ZOOKEEPER = 'zookeeper'
@@ -1157,9 +1158,10 @@ def generate(options):
                 f.write(tpl.safe_substitute(env))
 
     # meta* + sqlx
-    def generate_meta(t, n, tpl):
+    def generate_meta(t, n, tpl, ext_opt=""):
         env = subenv({'SRVTYPE': t, 'SRVNUM': n, 'PORT': next_port(),
-                      'EXE': ENV['EXE_PREFIX'] + '-' + t + '-server'})
+                      'EXE': ENV['EXE_PREFIX'] + '-' + t + '-server',
+                      'EXTRA': ext_opt})
         add_service(env)
         # gridinit config
         tpl = Template(tpl)
@@ -1177,27 +1179,31 @@ def generate(options):
                    defaults['NB_M0'])
     if nb_meta0:
         for i in range(nb_meta0):
-            generate_meta('meta0', i + 1, template_gridinit_meta)
+            generate_meta('meta0', i + 1, template_gridinit_meta,
+                          options['meta0'].get(SVC_PARAMS, ""))
 
     # meta1
     nb_meta1 = max(getint(options['meta1'].get(SVC_NB), defaults['NB_M1']),
                    meta1_replicas)
     if nb_meta1:
         for i in range(nb_meta1):
-            generate_meta('meta1', i + 1, template_gridinit_meta)
+            generate_meta('meta1', i + 1, template_gridinit_meta,
+                          options['meta1'].get(SVC_PARAMS, ""))
 
     # meta2
     nb_meta2 = max(getint(options['meta2'].get(SVC_NB), defaults['NB_M2']),
                    meta2_replicas)
     if nb_meta2:
         for i in range(nb_meta2):
-            generate_meta('meta2', i + 1, template_gridinit_meta)
+            generate_meta('meta2', i + 1, template_gridinit_meta,
+                          options['meta2'].get(SVC_PARAMS, ""))
 
     # sqlx
     nb_sqlx = getint(options['sqlx'].get(SVC_NB), sqlx_replicas)
     if nb_sqlx:
         for i in range(nb_sqlx):
-            generate_meta('sqlx', i + 1, template_gridinit_sqlx)
+            generate_meta('sqlx', i + 1, template_gridinit_sqlx,
+                          options['sqlx'].get(SVC_PARAMS, ""))
 
     # RAWX
     nb_rawx = getint(options['rawx'].get(SVC_NB), defaults['NB_RAWX'])

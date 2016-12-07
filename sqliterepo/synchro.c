@@ -455,9 +455,11 @@ _direct_use (struct sqlx_peering_s *self,
 		struct sockaddr *sa = (struct sockaddr*) &ss;
 		if (grid_string_to_sockaddr(url, sa, &ss_len)) {
 			GByteArray *req = sqlx_pack_USE(n);
-			ssize_t s = sendto(p->fd_udp, req->data, req->len, 0, sa, ss_len);
+			const ssize_t sent =
+				sendto(p->fd_udp, req->data, req->len, 0, sa, ss_len);
+			const ssize_t len = req->len;
 			g_byte_array_unref(req);
-			if (s != req->len) {
+			if (sent != len) {
 				int errsav = errno;
 				GRID_DEBUG("USE(%s,%s.%s) failed: (%d) %s",
 						url, n->base, n->type, errsav, strerror(errsav));

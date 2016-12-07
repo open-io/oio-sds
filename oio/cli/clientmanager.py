@@ -2,7 +2,6 @@ import logging
 import sys
 import pkg_resources
 from oio.common import exceptions
-from oio.common.http import requests
 from oio.common.utils import load_namespace_conf
 from oio.common.autocontainer import HashedContainerBuilder
 from oio.common.exceptions import ConfigurationException
@@ -55,7 +54,6 @@ class ClientManager(object):
                 self._options['proxyd_url'] = proxyd_url
             validate_options(self._options)
             LOG.debug('Using parameters %s' % self._options)
-            self.session = requests.Session()
             self.setup_done = True
             self._admin_mode = self._options.get('admin_mode')
             if 'meta1_digits' in sds_conf:

@@ -29,9 +29,9 @@ READ_CHUNK_SIZE = 65536
 # RAWX connection timeout
 CONNECTION_TIMEOUT = 2
 # chunk operations timeout
-CHUNK_TIMEOUT = 3
+CHUNK_TIMEOUT = 5
 # client read timeout
-CLIENT_TIMEOUT = 3
+CLIENT_TIMEOUT = 5
 
 PUT_QUEUE_DEPTH = 10
 
@@ -45,7 +45,14 @@ def close_source(source):
 
 class WriteHandler(object):
     def __init__(self, source, sysmeta, chunk_preparer,
-                 storage_method, headers):
+                 storage_method, headers,
+                 connection_timeout=None, write_timeout=None,
+                 read_timeout=None):
+        """
+        :param connection_timeout: timeout to establish the connection
+        :param write_timeout: timeout to send a buffer of data
+        :param read_timeout: timeout to read a buffer of data from source
+        """
         self.source = source
         if isinstance(chunk_preparer, dict):
             def _sort_and_yield():
@@ -57,6 +64,9 @@ class WriteHandler(object):
         self.sysmeta = sysmeta
         self.storage_method = storage_method
         self.headers = headers
+        self.connection_timeout = connection_timeout or CONNECTION_TIMEOUT
+        self.write_timeout = write_timeout or CHUNK_TIMEOUT
+        self.read_timeout = read_timeout or CLIENT_TIMEOUT
 
     def stream(self):
         raise NotImplementedError()
@@ -119,13 +129,21 @@ def discard_bytes(buf_size, start):
 class ChunkReader(object):
     """
     Reads a chunk.
-
-    If `align` is True, the reader will skip some bytes to align
-    on `buf_size`.
     """
+
     def __init__(self, chunk_iter, buf_size, headers,
                  connection_timeout=None, response_timeout=None,
                  read_timeout=None, align=False):
+        """
+        :param chunk_iter:
+        :param buf_size: size of the read buffer
+        :param headers:
+        :param connection_timeout: timeout to establish the connection
+        :param response_timeout: timeout to receive the headers
+        :param read_timeout: timeout to read a buffer of data
+        :param align: if True, the reader will skip some bytes to align
+                      on `buf_size`
+        """
         self.chunk_iter = chunk_iter
         self.source = None
         # TODO deal with provided headers
@@ -146,8 +164,8 @@ class ChunkReader(object):
         """
         Recover the request.
 
-        :params nb_bytes: number of bytes already consumed that we need to
-                          discard if we perform a recovery from another source.
+        :param nb_bytes: number of bytes already consumed that we need to
+                         discard if we perform a recovery from another source.
 
         :raises ValueError: if range header is not valid
         :raises UnsatisfiableRange
