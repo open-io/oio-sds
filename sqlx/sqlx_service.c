@@ -652,7 +652,6 @@ sqlx_service_specific_fini(void)
 
 	if (SRV.server) {
 		network_server_close_servers(SRV.server);
-		network_server_stop(SRV.server);
 	}
 
 	if (SRV.thread_reload)
@@ -671,11 +670,16 @@ sqlx_service_specific_fini(void)
 			sqlx_cache_expire(cache, G_MAXUINT, 0);
 	}
 	if (SRV.election_manager)
-		election_manager_exit_all(SRV.election_manager, 0, TRUE);
+		election_manager_exit_all(SRV.election_manager,
+				30 * G_TIME_SPAN_SECOND, TRUE);
 	if (SRV.sync)
 		sqlx_sync_close(SRV.sync);
 	if (SRV.peering)
 		sqlx_peering__destroy(SRV.peering);
+
+	// Stop the server AFTER cleaning all elections
+	if (SRV.server)
+		network_server_stop(SRV.server);
 
 	// Cleanup
 	if (SRV.gtq_admin) {
