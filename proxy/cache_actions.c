@@ -116,10 +116,11 @@ action_forward (struct req_args_s *args)
 
 	if (!g_ascii_strcasecmp (action, "version")) {
 		args->rp->no_access();
-		MESSAGE req = metautils_message_create_named("REQ_VERSION");
-		GByteArray *encoded = message_marshall_gba_and_clean (req);
+		GByteArray *encoded = message_marshall_gba_and_clean (
+				metautils_message_create_named("REQ_VERSION"));
 		gchar *packed = NULL;
-		err = gridd_client_exec_and_concat_string (id, COMMON_CLIENT_TIMEOUT, encoded, &packed);
+		err = gridd_client_exec_and_concat_string (id, COMMON_CLIENT_TIMEOUT,
+				encoded, &packed);
 		if (err) {
 			g_free0 (packed);
 			return _reply_common_error (args, err);
@@ -135,10 +136,31 @@ action_forward (struct req_args_s *args)
 
 	if (!g_ascii_strcasecmp (action, "handlers")) {
 		args->rp->no_access();
-		MESSAGE req = metautils_message_create_named("REQ_HANDLERS");
-		GByteArray *encoded = message_marshall_gba_and_clean (req);
+		GByteArray *encoded = message_marshall_gba_and_clean (
+				metautils_message_create_named("REQ_HANDLERS"));
 		gchar *packed = NULL;
-		err = gridd_client_exec_and_concat_string (id, COMMON_CLIENT_TIMEOUT, encoded, &packed);
+		err = gridd_client_exec_and_concat_string (id, COMMON_CLIENT_TIMEOUT,
+				encoded, &packed);
+		if (err) {
+			g_free0 (packed);
+			return _reply_common_error (args, err);
+		}
+
+		/* TODO(jfs): quite duplicated from _reply_json() but the original
+		   was not suitable. */
+		args->rp->set_status (200, "OK");
+		args->rp->set_body_bytes (g_bytes_new_take((guint8*)packed, strlen(packed)));
+		args->rp->finalize ();
+		return HTTPRC_DONE;
+	}
+
+	if (!g_ascii_strcasecmp (action, "info")) {
+		args->rp->no_access();
+		GByteArray *encoded = message_marshall_gba_and_clean (
+				metautils_message_create_named(NAME_MSGNAME_SQLX_INFO));
+		gchar *packed = NULL;
+		err = gridd_client_exec_and_concat_string(id, COMMON_CLIENT_TIMEOUT,
+				encoded, &packed);
 		if (err) {
 			g_free0 (packed);
 			return _reply_common_error (args, err);
