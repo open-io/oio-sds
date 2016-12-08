@@ -248,6 +248,7 @@ class ContainerClient(ProxyClient):
         params = self._make_params(account, reference, path, cid=cid)
         if not headers:
             headers = dict()
+        headers.update(gen_headers())
         resp, body = self._direct_request('POST', uri,
                                           params=params, headers=headers)
 
