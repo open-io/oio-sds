@@ -742,4 +742,7 @@ class ObjectStorageAPI(ObjectStorageApi):
     """
     :deprecated: transitional wrapper for ObjectStorageApi
     """
-    pass
+
+    def __init__(self, namespace, endpoint=None, **kwargs):
+        super(ObjectStorageAPI, self).__init__(namespace,
+                                               endpoint=endpoint, **kwargs)
