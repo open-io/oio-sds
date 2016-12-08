@@ -215,27 +215,6 @@ static void _noop (gpointer p) { (void)p; }
 
 static GPrivate th_local_key_manager = G_PRIVATE_INIT(_noop);
 
-static const char * zoo_state2str(int state) {
-#define ON_STATE(N) do { if (state == ZOO_##N##_STATE) return #N; } while (0)
-	ON_STATE(EXPIRED_SESSION);
-	ON_STATE(AUTH_FAILED);
-	ON_STATE(CONNECTING);
-	ON_STATE(ASSOCIATING);
-	ON_STATE(CONNECTED);
-	return "STATE?";
-}
-
-static const char * zoo_zevt2str(int zevt) {
-#define ON_ZEVT(N) do { if (zevt == ZOO_##N##_EVENT) return #N; } while (0)
-	ON_ZEVT(CREATED);
-	ON_ZEVT(DELETED);
-	ON_ZEVT(CHANGED);
-	ON_ZEVT(CHILD);
-	ON_ZEVT(SESSION);
-	ON_ZEVT(NOTWATCHING);
-	return "EVENT?";
-}
-
 /* ------------------------------------------------------------------------- */
 
 static void member_unref(struct election_member_s *member);
@@ -1591,40 +1570,32 @@ _deferred_watcher_hook(struct deferred_watcher_context_s *d,
 	EXTRA_ASSERT(M != NULL);
 	EXTRA_ASSERT(DAT_LEFT == d->magic);
 
-	if (!grid_main_is_running()) {
-		GRID_DEBUG("%s ignored while exiting", __FUNCTION__);
-		g_free(d);
-	}
-
-	if (d->type != ZOO_SESSION_EVENT && d->type != ZOO_DELETED_EVENT) {
-		GRID_WARN("%s ignoring event %s/%s %s", __FUNCTION__,
-				zoo_zevt2str(d->type), zoo_state2str(d->state), d->path);
-	} else {
-		GRID_DEBUG("%s ignoring event %s/%s %s", __FUNCTION__,
-				zoo_zevt2str(d->type), zoo_state2str(d->state), d->path);
-	}
-
-	struct election_member_s *member = _find_member(M, d->path);
-	if (NULL != member) {
-		MEMBER_CHECK(member);
-
-		if (d->type == ZOO_DELETED_EVENT) {
-			transition(member, d->evt, NULL);
-		} else if (d->type == ZOO_SESSION_EVENT) {
-			if (d->state == ZOO_EXPIRED_SESSION_STATE
-					|| d->state == ZOO_AUTH_FAILED_STATE) {
-				transition(member, EVT_DISCONNECTED, NULL);
-			} else {
-				GRID_DEBUG("Ignored %s event %s: %s.%s",
-						zoo_zevt2str(d->type), zoo_state2str(d->state),
-						member->name.base, member->name.type);
+	if (d->type == ZOO_SESSION_EVENT) {
+		/* Big disconnection ... let's expire everything ! */
+		GRID_DEBUG("ZK DISCONNECTED, expiring");
+		guint count = 0;
+		_manager_lock(M);
+		for (int i=STEP_CANDREQ; i<STEP_MAX ;++i) {
+			struct deque_beacon_s *b = M->members_by_state + i;
+			while (b->front != NULL) {
+				struct election_member_s *m = b->front;
+				member_reset(m);
+				member_set_status(m, STEP_NONE);
+				count ++;
 			}
-		} else {
-			g_assert_not_reached();
 		}
-
-		member_unref(member);
-		member_unlock(member);
+		_manager_unlock(M);
+		/* All the items are moved in the STEP_NONE list, so subsequent
+		 * calls shouldn't iterate on anything */
+		if (count)
+			GRID_WARN("ZK DISCONNECTED, expired %u", count);
+	} else if (d->type == ZOO_DELETED_EVENT) {
+		struct election_member_s *member = _find_member(M, d->path);
+		if (NULL != member) {
+			transition(member, d->evt, NULL);
+			member_unref(member);
+			member_unlock(member);
+		}
 	}
 
 	g_free(d);
@@ -1634,8 +1605,15 @@ static void
 _watcher_change(const int type, const int state,
 		const char *path, void *d, const int evt)
 {
-	const char *slash = strrchr(path, '/');
-	const size_t len = strlen(slash);
+	if (type != ZOO_SESSION_EVENT && type != ZOO_DELETED_EVENT)
+		return;
+	if (type == ZOO_SESSION_EVENT &&
+			state != ZOO_EXPIRED_SESSION_STATE &&
+			state != ZOO_AUTH_FAILED_STATE)
+		return;
+
+	const char *slash = path ? strrchr(path, '/') : NULL;
+	const size_t len = slash ? strlen(slash) : 0;
 
 	struct deferred_watcher_context_s *ctx = g_malloc0(sizeof(*ctx) + len + 1);
 	ctx->magic = DAT_LEFT;
@@ -1643,7 +1621,8 @@ _watcher_change(const int type, const int state,
 	ctx->state = state;
 	ctx->gen = GPOINTER_TO_UINT(d);
 	ctx->evt = evt;
-	memcpy(ctx->path, slash, len);
+	if (slash && len)
+		memcpy(ctx->path, slash, len);
 
 	struct election_manager_s *M = _thlocal_get_manager();
 	if (M->synchronous_completions) {
