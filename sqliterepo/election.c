@@ -1323,11 +1323,6 @@ step_ListGroup_completion(int zrc, const struct String_vector *sv,
 static void
 step_LeaveElection_completion(int zrc, const void *d)
 {
-	if (!grid_main_is_running()) {
-		GRID_DEBUG("%s ignored while exiting", __FUNCTION__);
-		return;
-	}
-
 	struct election_member_s *member = (struct election_member_s *) d;
 	MEMBER_CHECK(member);
 	member_trace(__FUNCTION__, "DONE", member);
