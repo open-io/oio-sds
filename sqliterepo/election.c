@@ -122,8 +122,7 @@ struct election_manager_s
 	/* GTree<hashstr_t*,GCond*> */
 	GTree *conditions;
 
-	/* used to generate <uid> of election members */
-	volatile guint32 next_uid;
+	GThreadPool *completions;
 
 	/* do not free or change the fields below */
 	const struct replication_config_s *config;
@@ -153,7 +152,11 @@ struct election_manager_s
 	gint64 delay_ping_final;
 	gint64 delay_ping_failed;
 
+	/* When has the lock been acquired */
+	gint64 when_lock;
+
 	gboolean exiting;
+	gboolean synchronous_completions;
 
 	req_id_t next_id;
 };
@@ -170,11 +173,6 @@ struct election_member_s
 
 	struct sqlx_name_mutable_s name;
 	hashstr_t *key;
-
-	/* only used cast to a (void*), as context for watcher callbacks.
-	   Without such a quirk, the watchers could cause a memory leak due to
-	   Zookeeper's implementation */
-	guint32 uid;
 
 	gint64 last_status; /* last time the status was changed */
 	gint64 last_USE; /* last time a USE request has been sent */
@@ -217,27 +215,6 @@ static void _noop (gpointer p) { (void)p; }
 
 static GPrivate th_local_key_manager = G_PRIVATE_INIT(_noop);
 
-static const char * zoo_state2str(int state) {
-#define ON_STATE(N) do { if (state == ZOO_##N##_STATE) return #N; } while (0)
-	ON_STATE(EXPIRED_SESSION);
-	ON_STATE(AUTH_FAILED);
-	ON_STATE(CONNECTING);
-	ON_STATE(ASSOCIATING);
-	ON_STATE(CONNECTED);
-	return "STATE?";
-}
-
-static const char * zoo_zevt2str(int zevt) {
-#define ON_ZEVT(N) do { if (zevt == ZOO_##N##_EVENT) return #N; } while (0)
-	ON_ZEVT(CREATED);
-	ON_ZEVT(DELETED);
-	ON_ZEVT(CHANGED);
-	ON_ZEVT(CHILD);
-	ON_ZEVT(SESSION);
-	ON_ZEVT(NOTWATCHING);
-	return "EVENT?";
-}
-
 /* ------------------------------------------------------------------------- */
 
 static void member_unref(struct election_member_s *member);
@@ -251,7 +228,6 @@ const char * _manager_get_local (const struct election_manager_s *manager);
 
 static GError * _election_get_peers(struct election_manager_s *manager,
 		const struct sqlx_name_s *n, gboolean nocache, gchar ***peers);
-
 
 static GError * _election_trigger_RESYNC(struct election_manager_s *manager,
 		const struct sqlx_name_s *n);
@@ -316,11 +292,7 @@ _thlocal_set_manager (struct election_manager_s *manager)
 	g_private_replace (&th_local_key_manager, manager);
 }
 
-static struct election_manager_s *
-_thlocal_get_manager (void)
-{
-	return g_private_get (&th_local_key_manager);
-}
+#define _thlocal_get_manager() g_private_get (&th_local_key_manager)
 
 static void
 _cond_clean (gpointer p)
@@ -331,6 +303,20 @@ _cond_clean (gpointer p)
 		g_free (cond);
 	}
 }
+
+#define _manager_lock(M) do { \
+	g_mutex_lock(&(M)->lock); \
+	(M)->when_lock = g_get_monotonic_time(); \
+} while (0)
+
+#define _manager_unlock(M) do { \
+	/* JFS: One might check here we did not spent to much time in the current \
+	 * critical section */ \
+	(M)->when_lock = 0; \
+	g_mutex_unlock(&(M)->lock); \
+} while (0)
+
+static void _completion_router(gpointer p, gpointer u);
 
 /* -------------------------------------------------------------------------- */
 
@@ -370,49 +356,13 @@ _DEQUE_add (struct election_member_s *m)
 	++ beacon->count;
 }
 
-static struct election_member_s *
-_DEQUE_locate_by_uid (struct deque_beacon_s *beacon, const guint32 uid)
-{
-	for (struct election_member_s *m=beacon->back; m ; m=m->prev) {
-		if (m->uid == uid)
-			return m;
-	}
-	return NULL;
-}
-
-/* Locate an item by its UID.
- * Used for long-term watchers, we target first the status usually worn by
- * items when it happens. */
-static struct election_member_s *
-_manager_locate_by_uid (struct election_manager_s *manager, const guint32 uid)
-{
-	/* We also known that we have nothing to do with a member with no
-	   election started, so we choose this as iteration stop. */
-	static const int steps[] = {
-		STEP_LEAVING, /* legitimate + short list */
-		STEP_FAILED, /* legitimate + short list */
-		STEP_LEADER, STEP_LOST,
-		STEP_PRELEAD, STEP_PRELOST,
-		STEP_CANDOK, STEP_CANDREQ,
-		STEP_NONE /* must be last */,
-	};
-
-	for (const int *p = steps; *p != STEP_NONE ; ++p) {
-		struct election_member_s *out =
-			_DEQUE_locate_by_uid (manager->members_by_state + *p, uid);
-		if (out)
-			return out;
-	}
-	return NULL;
-}
-
 /* --- Misc helpers --------------------------------------------------------- */
 
 static gboolean
 _is_over (const gint64 last, const gint64 delay)
 {
 	const gint64 now = oio_ext_monotonic_time ();
-	return (0 != last && last < OLDEST(now,delay));
+	return (0 != delay && 0 != last && last < OLDEST(now,delay));
 }
 
 static GArray *
@@ -551,7 +501,8 @@ election_manager_create(struct replication_config_s *config,
 	manager->delay_expire_final = SQLX_DELAY_EXPIRE_FINAL;
 	/* The leader must expire after the slaves or its leaving
 	 * will trigger an event on the slaves that will bring it back. */
-	manager->delay_expire_final_leader =
+	if (SQLX_DELAY_EXPIRE_FINAL > 0)
+		manager->delay_expire_final_leader =
 			(SQLX_DELAY_EXPIRE_FINAL + SQLX_DELAY_PING_FINAL) / 2;
 	manager->delay_expire_failed = SQLX_DELAY_EXPIRE_FAILED;
 	manager->delay_fail_pending = SQLX_DELAY_MAXIDLE;
@@ -564,11 +515,16 @@ election_manager_create(struct replication_config_s *config,
 
 	g_mutex_init(&manager->lock);
 
-	manager->members_by_key = g_tree_new_full (hashstr_quick_cmpdata, NULL,
-			NULL, NULL);
+	manager->members_by_key =
+		g_tree_new_full (hashstr_quick_cmpdata, NULL, NULL, NULL);
 
-	manager->conditions = g_tree_new_full(hashstr_quick_cmpdata, NULL,
-			g_free, _cond_clean);
+	manager->conditions =
+		g_tree_new_full(hashstr_quick_cmpdata, NULL, g_free, _cond_clean);
+
+	manager->completions =
+		g_thread_pool_new(_completion_router, manager, 2, TRUE, NULL);
+
+	manager->synchronous_completions = FALSE;
 
 	*result = manager;
 	election_manager_dump_delays(manager);
@@ -663,9 +619,9 @@ election_manager_count(struct election_manager_s *manager)
 	MANAGER_CHECK(manager);
 	EXTRA_ASSERT (manager->vtable == &VTABLE);
 
-	g_mutex_lock(&manager->lock);
+	_manager_lock(manager);
 	struct election_counts_s count = _NOLOCK_count (manager);
-	g_mutex_unlock(&manager->lock);
+	_manager_unlock(manager);
 	return count;
 }
 
@@ -711,8 +667,16 @@ _manager_clean(struct election_manager_s *manager)
 			count.total, count.master, count.slave, count.pending,
 			count.failed, count.none);
 
-	if (manager->members_by_key)
+	g_mutex_lock(&manager->lock);
+
+	if (manager->completions) {
+		g_thread_pool_free(manager->completions, FALSE, TRUE);
+		manager->completions = NULL;
+	}
+	if (manager->members_by_key) {
 		g_tree_destroy (manager->members_by_key);
+		manager->members_by_key = NULL;
+	}
 
 	/* Ensure all the items are unlinked */
 	for (int i=STEP_NONE; i<STEP_MAX ;++i) {
@@ -726,11 +690,14 @@ _manager_clean(struct election_manager_s *manager)
 		g_assert (beacon->count == 0);
 	}
 
-	g_mutex_clear(&manager->lock);
 	if (manager->conditions) {
 		g_tree_destroy(manager->conditions);
 		manager->conditions = NULL;
 	}
+
+	g_mutex_unlock(&manager->lock);
+	g_mutex_clear(&manager->lock);
+
 	g_free(manager);
 }
 
@@ -816,13 +783,13 @@ member_get_lock(struct election_member_s *m)
 static void
 member_lock(struct election_member_s *m)
 {
-	g_mutex_lock(member_get_lock(m));
+	_manager_lock(m->manager);
 }
 
 static void
 member_unlock(struct election_member_s *m)
 {
-	g_mutex_unlock(member_get_lock(m));
+	_manager_unlock(m->manager);
 }
 
 static void
@@ -1053,7 +1020,6 @@ _LOCKED_init_member(struct election_manager_s *manager,
 	struct election_member_s *member = _LOCKED_get_member (manager, key);
 	if (!member && autocreate) {
 		member = g_malloc0 (sizeof(*member));
-		member->uid = manager->next_id ++;
 		member->manager = manager;
 		member->last_status = oio_ext_monotonic_time ();
 		member->key = hashstr_dup(key);
@@ -1074,9 +1040,9 @@ _LOCKED_init_member(struct election_manager_s *manager,
 static struct election_member_s *
 manager_get_member (struct election_manager_s *m, const hashstr_t *k)
 {
-	g_mutex_lock (&m->lock);
+	_manager_lock(m);
 	struct election_member_s *member = _LOCKED_get_member (m, k);
-	g_mutex_unlock (&m->lock);
+	_manager_unlock(m);
 	return member;
 }
 
@@ -1107,10 +1073,10 @@ election_manager_exit_all(struct election_manager_s *manager, gint64 duration,
 	gint64 pivot = oio_ext_monotonic_time () + duration;
 
 	/* Order the nodes to exit */
-	g_mutex_lock(&manager->lock);
+	_manager_lock(manager);
 	manager->exiting = TRUE;
 	g_tree_foreach (manager->members_by_key, _run_exit, NULL);
-	g_mutex_unlock(&manager->lock);
+	_manager_unlock(manager);
 
 	guint count = manager_count_active(manager);
 	if (duration <= 0) {
@@ -1211,12 +1177,10 @@ election_manager_whatabout (struct election_manager_s *m,
 	EXTRA_ASSERT(d != NULL);
 	EXTRA_ASSERT(ds > 0);
 
+	GString *gs = g_string_sized_new(64);
 	hashstr_t *key = sqliterepo_hash_name(n);
-	g_mutex_lock(&m->lock);
+	_manager_lock(m);
 	struct election_member_s *member = _LOCKED_get_member(m, key);
-	g_free(key);
-
-	GString *gs = g_string_new("");
 	if (member) {
 		member_json (member, gs);
 		member_unref (member);
@@ -1226,10 +1190,11 @@ election_manager_whatabout (struct election_manager_s *m,
 		else
 			g_string_append (gs, "null");
 	}
-	g_mutex_unlock(&m->lock);
+	_manager_unlock (m);
 
 	g_strlcpy (d, gs->str, ds);
 	g_string_free (gs, TRUE);
+	g_free(key);
 }
 
 /* --- Zookeeper callbacks ----------------------------------------------------
@@ -1244,121 +1209,258 @@ election_manager_whatabout (struct election_manager_s *m,
 static void
 step_DeleteRogueNode_completion(int zrc, const void *d)
 {
-	gchar *path = (gchar*)d;
-	if (zrc == ZNONODE)
-		GRID_INFO("Rogue ZK node at %s disappeared", path);
-	else if (zrc == ZOK)
-		GRID_INFO("Sucessfully deleted rogue ZK node at %s", path);
-	else
+	if (!d)
+		return;
+
+	gchar *path = (gchar*) d;
+
+	if (zrc == ZNONODE) {
+		GRID_DEBUG("Rogue ZK node at %s disappeared", path);
+	} else if (zrc == ZOK) {
+		GRID_TRACE("Sucessfully deleted rogue ZK node at %s", path);
+	} else if (zrc == ZSESSIONEXPIRED) {
+		/* the node will expire, don't flood with logs in this case */
+		GRID_DEBUG("Failed to delete rogue ZK node at %s: %s",
+				path, zerror(zrc));
+	} else {
 		GRID_WARN("Failed to delete rogue ZK node at %s: %s",
 				path, zerror(zrc));
+	}
+
 	g_free(path);
 }
 
-static void
-step_AskMaster_completion(int zrc, const char *v, int vlen,
-		const struct Stat *s, const void *d)
+/* @private */
+enum deferred_action_type_e
 {
-	(void) s;
-	struct election_member_s *member = (struct election_member_s *)d;
-	MEMBER_CHECK(member);
-	member_trace(__FUNCTION__, "DONE", member);
+	DAT_ASKING,
+	DAT_LISTING,
+	DAT_LEAVING,
+	DAT_WATCHING,
+	DAT_CREATING,
+	DAT_LEFT,
+};
 
-	gchar *master = (v && vlen && *v) ? g_strndup(v, vlen) : NULL;
-	member_lock(member);
+/* @private */
+struct exec_later_ASKING_context_s
+{
+	enum deferred_action_type_e magic;
+	int zrc;
+	struct election_member_s *member;
+	gchar master[];
+};
 
-	if (zrc != ZOK)
-		transition_error(member, EVT_MASTER_KO, zrc);
+static void
+exec_later_ASKING_hook(struct exec_later_ASKING_context_s *d)
+{
+	EXTRA_ASSERT(d != NULL);
+	EXTRA_ASSERT(DAT_ASKING == d->magic);
+
+	MEMBER_CHECK(d->member);
+	member_trace(__FUNCTION__, "DONE", d->member);
+
+	member_lock(d->member);
+
+	if (d->zrc != ZOK)
+		transition_error(d->member, EVT_MASTER_KO, d->zrc);
 	else {
-		if (!master || !metautils_url_valid_for_connect(master)) {
-			transition(member, EVT_MASTER_EMPTY, &zrc);
+		if (!d->master[0] || !metautils_url_valid_for_connect(d->master)) {
+			transition(d->member, EVT_MASTER_EMPTY, &d->zrc);
 		} else {
-			const char *myurl = member_get_url(member);
-			if (strcmp(master, myurl) == 0) {
+			const char *myurl = member_get_url(d->member);
+			if (strcmp(d->master, myurl) == 0) {
 				/* JFS: the supposed master carries our ID (i.e. our URL),
 				 * if we accept it as-is, we will create a loop on ourselves.
 				 * We delete it and pretend there is no master. */
-				gchar *path = member_masterpath(member);
+				gchar *path = member_masterpath(d->member);
 				GRID_WARN("Rogue ZK node at %s, triggering deletion", path);
-				int zrc2 = sqlx_sync_adelete(member->manager->sync, path, -1,
+				int zrc2 = sqlx_sync_adelete(d->member->manager->sync, path, -1,
 						step_DeleteRogueNode_completion, path);
 				if (zrc2 != ZOK) {
 					GRID_WARN("Failed! %s", zerror(zrc2));
 					g_free(path);
 				} // else `path` is freed by the callback
 
-				transition(member, EVT_MASTER_EMPTY, &zrc);
+				transition(d->member, EVT_MASTER_EMPTY, &d->zrc);
 			} else {
-				transition(member, EVT_MASTER_OK, master);
+				transition(d->member, EVT_MASTER_OK, d->master);
 			}
 		}
 	}
-	member_unref(member);
-	member_unlock(member);
-	g_free0 (master);
+	member_unref(d->member);
+	member_unlock(d->member);
+	g_free0 (d);
+}
+
+static void
+step_AskMaster_completion(int zrc, const char *v, int vlen,
+		const struct Stat *s UNUSED, const void *d)
+{
+	if (vlen > 256)
+		vlen = 0;
+	struct exec_later_ASKING_context_s *ctx = g_malloc0(sizeof(*ctx) + vlen + 1);
+	ctx->magic = DAT_ASKING;
+	ctx->zrc = zrc;
+	ctx->member = (struct election_member_s*) d;
+	if (vlen)
+		memcpy(ctx->master, v, vlen);
+
+	struct election_manager_s *M = ctx->member->manager;
+	if (M->synchronous_completions) {
+		return exec_later_ASKING_hook(ctx);
+	} else {
+		gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
+		g_assert_true(rc);
+	}
+}
+
+/* @private */
+struct exec_later_LISTING_context_s
+{
+	enum deferred_action_type_e magic;
+	int zrc;
+	struct election_member_s *member;
+	GArray *i64v;
+};
+
+static void
+exec_later_LISTING_hook (struct exec_later_LISTING_context_s *d)
+{
+	EXTRA_ASSERT(d != NULL);
+	EXTRA_ASSERT(DAT_LISTING == d->magic);
+	MEMBER_CHECK(d->member);
+	member_trace(__FUNCTION__, "DONE", d->member);
+
+	member_lock(d->member);
+	if (d->zrc != ZOK)
+		transition_error(d->member, EVT_LIST_KO, d->zrc);
+	else
+		transition(d->member, EVT_LIST_OK, d->i64v);
+	member_unref(d->member);
+	member_unlock(d->member);
+
+	g_array_free(d->i64v, TRUE);
+	g_free(d);
 }
 
 static void
 step_ListGroup_completion(int zrc, const struct String_vector *sv,
 		const void *data)
 {
-	struct election_member_s *member = (struct election_member_s *) data;
-	MEMBER_CHECK(member);
-	member_trace(__FUNCTION__, "DONE", member);
+	struct exec_later_LISTING_context_s *ctx = g_malloc0(sizeof(*ctx));
+	ctx->magic = DAT_LISTING;
+	ctx->zrc = zrc;
+	ctx->member = (struct election_member_s*) data;
+	ctx->i64v = nodev_to_int64v(sv, hashstr_str(ctx->member->key));
 
-	member_lock(member);
-
-	if (zrc != ZOK)
-		transition_error(member, EVT_LIST_KO, zrc);
-	else {
-		GArray *i64v = nodev_to_int64v(sv, hashstr_str(member->key));
-		transition(member, EVT_LIST_OK, i64v);
-		g_array_free(i64v, TRUE);
+	struct election_manager_s *M = ctx->member->manager;
+	if (M->synchronous_completions) {
+		return exec_later_LISTING_hook(ctx);
+	} else {
+		gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
+		g_assert_true(rc);
 	}
+}
 
-	member_unref(member);
-	member_unlock(member);
+/* @private */
+struct exec_later_LEAVING_context_s
+{
+	enum deferred_action_type_e magic;
+	int zrc;
+	struct election_member_s *member;
+};
+
+static void
+exec_later_LEAVING_hook(struct exec_later_LEAVING_context_s *d)
+{
+	EXTRA_ASSERT(d != NULL);
+	EXTRA_ASSERT(DAT_LEAVING == d->magic);
+	MEMBER_CHECK(d->member);
+	member_trace(__FUNCTION__, "DONE", d->member);
+
+	member_lock(d->member);
+	if (d->zrc == ZNONODE)
+		transition(d->member, EVT_LEAVE_OK, NULL);
+	else if (d->zrc != ZOK)
+		transition_error(d->member, EVT_LEAVE_KO, d->zrc);
+	else
+		transition(d->member, EVT_LEAVE_OK, NULL);
+	member_unref(d->member);
+	member_unlock(d->member);
+
+	g_free(d);
 }
 
 static void
 step_LeaveElection_completion(int zrc, const void *d)
 {
-	struct election_member_s *member = (struct election_member_s *) d;
-	MEMBER_CHECK(member);
-	member_trace(__FUNCTION__, "DONE", member);
+	struct exec_later_LEAVING_context_s *ctx = g_malloc0(sizeof(*ctx));
+	ctx->magic = DAT_LEAVING;
+	ctx->zrc = zrc;
+	ctx->member = (struct election_member_s*) d;
 
-	member_lock(member);
-	if (zrc == ZNONODE)
-		transition(member, EVT_LEAVE_OK, NULL);
-	else if (zrc != ZOK)
-		transition_error(member, EVT_LEAVE_KO, zrc);
-	else
-		transition(member, EVT_LEAVE_OK, NULL);
-	member_unref(member);
-	member_unlock(member);
+	struct election_manager_s *M = ctx->member->manager;
+	if (M->synchronous_completions) {
+		return exec_later_LEAVING_hook(ctx);
+	} else {
+		gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
+		g_assert_true(rc);
+	}
+}
+
+/* @private */
+struct exec_later_WATCHING_context_s
+{
+	enum deferred_action_type_e magic;
+	int zrc;
+	struct election_member_s *member;
+};
+
+static void
+exec_later_WATCHING_hook(struct exec_later_WATCHING_context_s *d)
+{
+	EXTRA_ASSERT(d != NULL);
+	EXTRA_ASSERT(DAT_WATCHING == d->magic);
+	MEMBER_CHECK(d->member);
+
+	member_lock(d->member);
+	member_trace(__FUNCTION__, "DONE", d->member);
+	if (d->zrc == ZNONODE)
+		transition(d->member, EVT_NODE_LEFT, &d->zrc);
+	else {
+		if (d->zrc != ZOK)
+			transition_error(d->member, EVT_EXITING, d->zrc);
+	}
+	member_unref(d->member);
+	member_unlock(d->member);
+	g_free(d);
 }
 
 static void
-step_WatchNode_completion(int zrc, const struct Stat *s, const void *d)
+step_WatchNode_completion(int zrc, const struct Stat *s UNUSED, const void *d)
 {
-	(void) s;
-	struct election_member_s *member = (struct election_member_s *) d;
-	MEMBER_CHECK(member);
-	member_lock(member);
-	member_trace(__FUNCTION__, "DONE", member);
-	if (zrc == ZNONODE)
-		transition(member, EVT_NODE_LEFT, &zrc);
-	else {
-		if (zrc != ZOK) {
-			transition_error(member, EVT_EXITING, zrc);
-		/* } else {
-			// TODO As soon as CAND_OK is split
-			transition(member, EXISTS_OK, NULL); */
-		}
+	struct exec_later_WATCHING_context_s *ctx = g_malloc0(sizeof(*ctx));
+	ctx->magic = DAT_WATCHING;
+	ctx->zrc = zrc;
+	ctx->member = (struct election_member_s*) d;
+
+	struct election_manager_s *M = ctx->member->manager;
+	if (M->synchronous_completions) {
+		return exec_later_WATCHING_hook(ctx);
+	} else {
+		gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
+		g_assert_true(rc);
 	}
-	member_unref(member);
-	member_unlock(member);
 }
+
+/* @private */
+struct exec_later_CREATING_context_s
+{
+	enum deferred_action_type_e magic;
+	int zrc;
+	struct election_member_s *member;
+	gint64 local_id;
+};
 
 static void
 member_warn_failed_creation(struct election_member_s *member, int zrc)
@@ -1370,87 +1472,164 @@ member_warn_failed_creation(struct election_member_s *member, int zrc)
 }
 
 static void
-step_StartElection_completion(int zrc, const char *path, const void *d)
+exec_later_CREATING_hook(struct exec_later_CREATING_context_s *d)
 {
-	struct election_member_s *member = (struct election_member_s *) d;
-	MEMBER_CHECK(member);
-	member_lock(member);
-	member_trace(__FUNCTION__, "DONE", member);
-	_thlocal_set_manager (member->manager);
+	EXTRA_ASSERT(d != NULL);
+	EXTRA_ASSERT(DAT_CREATING == d->magic);
+	MEMBER_CHECK(d->member);
 
-	if (zrc != ZOK) {
-		member_warn_failed_creation(member, zrc);
-		transition_error(member, EVT_CREATE_KO, zrc);
+	member_lock(d->member);
+	member_trace(__FUNCTION__, "DONE", d->member);
+	_thlocal_set_manager (d->member->manager);
+
+	if (d->zrc != ZOK) {
+		member_warn_failed_creation(d->member, d->zrc);
+		transition_error(d->member, EVT_CREATE_KO, d->zrc);
 	} else {
-		if (!path) {
-			member_warn_failed_creation(member, zrc);
-			transition(member, EVT_CREATE_KO, NULL);
+		if (d->local_id < 0) {
+			member_warn_failed_creation(d->member, d->zrc);
+			transition(d->member, EVT_CREATE_KO, NULL);
 		} else {
-			gint64 i64 = g_ascii_strtoll(strrchr(path, '-')+1, NULL, 10);
-			transition(member, EVT_CREATE_OK, &i64);
+			transition(d->member, EVT_CREATE_OK, &d->local_id);
 		}
 	}
-	member_unref(member);
-	member_unlock(member);
+	member_unref(d->member);
+	member_unlock(d->member);
+
+	g_free(d);
 }
 
-static struct election_member_s *
-_find_member (void *d)
+static void
+step_StartElection_completion(int zrc, const char *path, const void *d)
 {
-	struct election_manager_s *manager = _thlocal_get_manager ();
-	if (!manager)
-		return NULL;
+	struct exec_later_CREATING_context_s *ctx = g_malloc0(sizeof(*ctx));
+	ctx->magic = DAT_CREATING;
+	ctx->member = (struct election_member_s *) d;
+	if (path) {
+		ctx->local_id = g_ascii_strtoll(strrchr(path, '-')+1, NULL, 10);
+		ctx->zrc = zrc;
+	} else {
+		ctx->local_id = -1;
+		ctx->zrc = ZNONODE;
+	}
+
+	struct election_manager_s *M = ctx->member->manager;
+	_thlocal_set_manager(M);
+	if (M->synchronous_completions) {
+		return exec_later_CREATING_hook(ctx);
+	} else {
+		gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
+		g_assert_true(rc);
+	}
+}
+
+/* @private */
+struct deferred_watcher_context_s
+{
+	enum deferred_action_type_e magic;
+	int type;
+	int state;
+	guint gen;
+	enum event_type_e evt;
+	char path[];
+};
+
+static struct election_member_s *
+_find_member (struct election_manager_s *M, const char *path)
+{
+	if (!M) return NULL;
+
+	const char *slash = strrchr(path, '/');
+	if (!slash) return NULL;
+	slash ++;
+
+	const char *stripe = strchr(slash, '-');
+	if (!stripe) return NULL;
+
+	const size_t len = stripe - slash;
+	hashstr_t *hkey = NULL;
+	HASHSTR_ALLOCA_LEN(hkey, slash, len);
 
 	struct election_member_s *member = NULL;
-	g_mutex_lock (&manager->lock);
-	member = _manager_locate_by_uid(manager, GPOINTER_TO_UINT(d));
+	_manager_lock(M);
+	member = _LOCKED_get_member(M, hkey);
 	if (member) {
-		member_ref (member);
 		return member;
+	} else {
+		GRID_WARN("watcher: [%s] no election found", hashstr_str(hkey));
 	}
-	g_mutex_unlock (&manager->lock);
+	_manager_unlock(M);
 	return NULL;
 }
 
 static void
-_watcher_change(const int type, const int state,
-		const char *path UNUSED, void *d,
-		const int evt)
+_deferred_watcher_hook(struct deferred_watcher_context_s *d,
+		struct election_manager_s *M)
 {
-	if (!grid_main_is_running()) {
-		GRID_DEBUG("%s ignored while exiting", __FUNCTION__);
-		return;
-	}
+	EXTRA_ASSERT(d != NULL);
+	EXTRA_ASSERT(M != NULL);
+	EXTRA_ASSERT(DAT_LEFT == d->magic);
 
-	if (type != ZOO_SESSION_EVENT && type != ZOO_DELETED_EVENT) {
-		GRID_WARN("%s ignoring event %s/%s %s", __FUNCTION__,
-				zoo_zevt2str(type), zoo_state2str(state), path);
-	} else {
-		GRID_DEBUG("%s ignoring event %s/%s %s", __FUNCTION__,
-				zoo_zevt2str(type), zoo_state2str(state), path);
-	}
-
-	struct election_member_s *member = _find_member(d);
-	if (NULL != member) {
-		MEMBER_CHECK(member);
-
-		if (type == ZOO_DELETED_EVENT) {
-			transition(member, evt, NULL);
-		} else if (type == ZOO_SESSION_EVENT) {
-			if (state == ZOO_EXPIRED_SESSION_STATE
-					|| state == ZOO_AUTH_FAILED_STATE) {
-				transition(member, EVT_DISCONNECTED, NULL);
-			} else {
-				GRID_DEBUG("Ignored %s event %s: %s.%s",
-						zoo_zevt2str(type), zoo_state2str(state),
-						member->name.base, member->name.type);
+	if (d->type == ZOO_SESSION_EVENT) {
+		/* Big disconnection ... let's expire everything ! */
+		GRID_DEBUG("ZK DISCONNECTED, expiring");
+		guint count = 0;
+		_manager_lock(M);
+		for (int i=STEP_CANDREQ; i<STEP_MAX ;++i) {
+			struct deque_beacon_s *b = M->members_by_state + i;
+			while (b->front != NULL) {
+				struct election_member_s *m = b->front;
+				member_reset(m);
+				member_set_status(m, STEP_NONE);
+				count ++;
 			}
-		} else {
-			g_assert_not_reached();
 		}
+		_manager_unlock(M);
+		/* All the items are moved in the STEP_NONE list, so subsequent
+		 * calls shouldn't iterate on anything */
+		if (count)
+			GRID_WARN("ZK DISCONNECTED, expired %u", count);
+	} else if (d->type == ZOO_DELETED_EVENT) {
+		struct election_member_s *member = _find_member(M, d->path);
+		if (NULL != member) {
+			transition(member, d->evt, NULL);
+			member_unref(member);
+			member_unlock(member);
+		}
+	}
 
-		member_unref(member);
-		member_unlock(member);
+	g_free(d);
+}
+
+static void
+_watcher_change(const int type, const int state,
+		const char *path, void *d, const int evt)
+{
+	if (type != ZOO_SESSION_EVENT && type != ZOO_DELETED_EVENT)
+		return;
+	if (type == ZOO_SESSION_EVENT &&
+			state != ZOO_EXPIRED_SESSION_STATE &&
+			state != ZOO_AUTH_FAILED_STATE)
+		return;
+
+	const char *slash = path ? strrchr(path, '/') : NULL;
+	const size_t len = slash ? strlen(slash) : 0;
+
+	struct deferred_watcher_context_s *ctx = g_malloc0(sizeof(*ctx) + len + 1);
+	ctx->magic = DAT_LEFT;
+	ctx->type = type;
+	ctx->state = state;
+	ctx->gen = GPOINTER_TO_UINT(d);
+	ctx->evt = evt;
+	if (slash && len)
+		memcpy(ctx->path, slash, len);
+
+	struct election_manager_s *M = _thlocal_get_manager();
+	if (M->synchronous_completions) {
+		return _deferred_watcher_hook(ctx, M);
+	} else {
+		gboolean rc = g_thread_pool_push(M->completions, ctx, NULL);
+		g_assert_true(rc);
 	}
 }
 
@@ -1466,6 +1645,26 @@ step_WatchNode_change(zhandle_t *handle UNUSED, int type, int state,
 		const char *path, void *d)
 {
 	return _watcher_change(type, state, path, d, EVT_NODE_LEFT);
+}
+
+static void
+_completion_router(gpointer p, gpointer u)
+{
+	switch (*((enum deferred_action_type_e*)p)) {
+		case DAT_CREATING:
+			return exec_later_CREATING_hook(p);
+		case DAT_ASKING:
+			return exec_later_ASKING_hook(p);
+		case DAT_LISTING:
+			return exec_later_LISTING_hook(p);
+		case DAT_LEAVING:
+			return exec_later_LEAVING_hook(p);
+		case DAT_WATCHING:
+			return exec_later_WATCHING_hook(p);
+		case DAT_LEFT:
+			return _deferred_watcher_hook(p, u);
+	}
+	g_assert_not_reached();
 }
 
 /* ------------------------------------------------------------------------- */
@@ -1494,11 +1693,10 @@ step_AskMaster_start(struct election_member_s *member)
 	gchar *path = NULL;
 
 	member_trace(__FUNCTION__, "ACTION", member);
-	void *d = GUINT_TO_POINTER(member->uid);
 
 	if (NULL != (path = member_masterpath(member))) {
 		zrc = sqlx_sync_awget(member->manager->sync, path,
-				step_WatchMaster_change, d,
+				step_WatchMaster_change, GUINT_TO_POINTER(0),
 				step_AskMaster_completion, member);
 		g_free(path);
 		if (zrc == ZOK)
@@ -1512,11 +1710,10 @@ static int
 step_WatchNode_start(struct election_member_s *member)
 {
 	member_trace(__FUNCTION__, "ACTION", member);
-	void *d = GUINT_TO_POINTER(member->uid);
 
 	gchar *path = member_fullpath(member);
 	int zrc = sqlx_sync_awexists(member->manager->sync, path,
-			step_WatchNode_change, d,
+			step_WatchNode_change, GUINT_TO_POINTER(0),
 			step_WatchNode_completion, member);
 	g_free(path);
 	if (zrc == ZOK)
@@ -1579,7 +1776,7 @@ _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
 		}
 	}
 
-	g_mutex_lock(&m->lock);
+	_manager_lock(m);
 	struct election_member_s *member = _LOCKED_init_member(m, n, op != ELOP_EXIT);
 	switch (op) {
 		case ELOP_NONE:
@@ -1600,7 +1797,7 @@ _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
 	}
 	if (member)
 		member_unref(member);
-	g_mutex_unlock(&m->lock);
+	_manager_unlock(m);
 
 	return NULL;
 }
@@ -1655,8 +1852,10 @@ wait_for_final_status(struct election_member_s *m, gint64 deadline)
 				m->name.base, m->name.type);
 
 		/* perform the real WAIT on the real clock. */
+		m->manager->when_lock = 0;
 		g_cond_wait_until(member_get_cond(m), member_get_lock(m),
 				g_get_monotonic_time() + oio_election_period_cond_wait);
+		m->manager->when_lock = g_get_monotonic_time();
 	}
 
 	m->last_atime = oio_ext_monotonic_time ();
@@ -1675,7 +1874,7 @@ _election_get_status(struct election_manager_s *mgr,
 
 	gint64 deadline = oio_ext_monotonic_time () + mgr->delay_wait;
 
-	g_mutex_lock(&mgr->lock);
+	_manager_lock(mgr);
 	struct election_member_s *m = _LOCKED_init_member(mgr, n, TRUE);
 
 	if (!wait_for_final_status(m, deadline)) // TIMEOUT!
@@ -1691,7 +1890,7 @@ _election_get_status(struct election_manager_s *mgr,
 	member_unref(m);
 	if (rc == STEP_NONE || STATUS_FINAL(rc))
 		member_signal(m);
-	member_unlock(m);
+	_manager_unlock(mgr);
 
 	GRID_TRACE("STEP=%s/%d master=%s", _step2str(rc), rc, url);
 	switch (rc) {
@@ -1740,9 +1939,10 @@ defer_USE(struct election_member_s *member)
 		member_trace(__FUNCTION__, "USE avoided (no peers)", member);
 	} else {
 		member->last_USE = oio_ext_monotonic_time();
-		for (gchar **p=peers; p && *p ;p++)
+		for (gchar **p=peers; p && *p ;p++) {
 			sqlx_peering__use (member->manager->peering, *p,
 					sqlx_name_mutable_to_const(&member->name));
+		}
 		member_trace(__FUNCTION__, "USE scheduled", member);
 	}
 
@@ -2135,14 +2335,16 @@ _member_react (struct election_member_s *member,
 		enum event_type_e evt,
 		void *evt_arg)
 {
-	gchar tag[256];
 	GArray *i64v = NULL;
 	guint reqid;
 	int zrc;
 
 	MEMBER_CHECK(member);
-	g_snprintf(tag, sizeof(tag), "EVENT:%s", _evt2str(evt));
-	member_debug(__FUNCTION__, tag, member);
+	if (GRID_DEBUG_ENABLED()) {
+		gchar tag[256] = "";
+		g_snprintf(tag, sizeof(tag), "EVENT:%s", _evt2str(evt));
+		member_debug(__FUNCTION__, tag, member);
+	}
 
 	switch (evt) {
 
@@ -2640,7 +2842,7 @@ election_manager_play_timers (struct election_manager_s *manager, guint max)
 
 	guint count = 0;
 	char descr[512];
-	g_mutex_lock (&manager->lock);
+	_manager_lock(manager);
 	for (const int *pi=steps; *pi >= 0 && (!max || count < max) ;++pi) {
 		struct deque_beacon_s *beacon = manager->members_by_state + *pi;
 		if (!beacon->front)
@@ -2683,7 +2885,7 @@ election_manager_play_timers (struct election_manager_s *manager, guint max)
 		g_slist_free (l0);
 		l0 = NULL;
 	}
-	g_mutex_unlock (&manager->lock);
+	_manager_unlock(manager);
 
 	return count;
 }

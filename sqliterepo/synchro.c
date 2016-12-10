@@ -193,6 +193,32 @@ _zk_init_env (void)
 
 //------------------------------------------------------------------------------
 
+static void zk_main_watch(zhandle_t *zh UNUSED, int type, int state,
+		const char *path UNUSED, void *watcherCtx);
+
+static void
+_reconnect(struct sqlx_sync_s *ss)
+{
+	if (ss->zh) {
+		GRID_NOTICE("Zookeeper: disconnecting (expired session)");
+		zookeeper_close(ss->zh);
+	}
+	if (NULL != ss->on_exit)
+		ss->on_exit(ss->on_exit_ctx);
+
+	/* XXX(jfs): forget the previous ID and reconnect */
+	memset (&ss->zk_id, 0, sizeof(ss->zk_id));
+	GRID_NOTICE("Zookeeper: starting connection to [%s]", ss->zk_url);
+	ss->zh = zookeeper_init(ss->zk_url, zk_main_watch,
+			SQLX_SYNC_DEFAULT_ZK_TIMEOUT, &ss->zk_id, ss, 0);
+	if (!ss->zh) {
+		GRID_ERROR("Zookeeper init failure: (%d) %s",
+				errno, strerror(errno));
+		grid_main_set_status (2);
+		grid_main_stop ();
+	}
+}
+
 static void
 zk_main_watch(zhandle_t *zh UNUSED, int type, int state, const char *path UNUSED,
 		void *watcherCtx)
@@ -208,27 +234,11 @@ zk_main_watch(zhandle_t *zh UNUSED, int type, int state, const char *path UNUSED
 		return;
 	}
 
-	if (state == ZOO_EXPIRED_SESSION_STATE) {
-		if (ss->zh) {
-			GRID_NOTICE("Zookeeper: disconnecting (expired session)");
-			zookeeper_close(ss->zh);
-		}
-		if (NULL != ss->on_exit)
-			ss->on_exit(ss->on_exit_ctx);
-
-		/* XXX(jfs): forget the previous ID and reconnect */
-		memset (&ss->zk_id, 0, sizeof(ss->zk_id));
-		GRID_NOTICE("Zookeeper: starting connection to [%s]", ss->zk_url);
-		ss->zh = zookeeper_init(ss->zk_url, zk_main_watch,
-				SQLX_SYNC_DEFAULT_ZK_TIMEOUT, &ss->zk_id, ss, 0);
-		if (!ss->zh) {
-			GRID_ERROR("Zookeeper init failure: (%d) %s",
-					errno, strerror(errno));
-			grid_main_set_status (2);
-			grid_main_stop ();
-		}
-	} else if (state == ZOO_AUTH_FAILED_STATE) {
-		GRID_WARN("Zookeeper: auth problem to [%s]", ss->zk_url);
+	if (state == ZOO_EXPIRED_SESSION_STATE || state == ZOO_AUTH_FAILED_STATE) {
+		GRID_WARN("Zookeeper: %s/%s to %s",
+				zoo_zevt2str(type), zoo_state2str(state),
+				ss->zk_url);
+		return _reconnect(ss);
 	} else if (state == ZOO_CONNECTING_STATE) {
 		GRID_NOTICE("Zookeeper: (re)connecting to [%s]", ss->zk_url);
 	} else if (state == ZOO_ASSOCIATING_STATE) {
@@ -238,8 +248,9 @@ zk_main_watch(zhandle_t *zh UNUSED, int type, int state, const char *path UNUSED
 		GRID_INFO("Zookeeper: connected to [%s] id=%"G_GINT64_FORMAT,
 				ss->zk_url, ss->zk_id.client_id);
 	} else {
-		GRID_WARN("Zookeeper: unmanaged event %d [%s] id=%"G_GINT64_FORMAT,
-				state, ss->zk_url, ss->zk_id.client_id);
+		GRID_WARN("Zookeeper: %s unmanaged %s/%s id=%"G_GINT64_FORMAT,
+				ss->zk_url, zoo_zevt2str(type), zoo_state2str(state),
+				ss->zk_id.client_id);
 	}
 }
 
