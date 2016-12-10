@@ -58,7 +58,10 @@ _sqlx_action_noreturn_TAIL (struct req_args_s *args, struct client_ctx_s *ctx,
 			if (ctx->bodyv[i]) {
 				GByteArray *b = ctx->bodyv[i];
 				g_string_append_printf (out, ",\"body\":");
-				g_string_append_len (out, (const char*)(b->data), b->len);
+				if (b && b->data && b->len)
+					g_string_append_len (out, (const char*)(b->data), b->len);
+				else
+					g_string_append_len (out, "\"\"", 2);
 			} else {
 				g_string_append_printf (out, ",\"body\":null");
 			}

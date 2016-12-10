@@ -240,6 +240,13 @@ GError *gridd_request_replicated (struct client_ctx_s *ctx,
 		return err;
 	} else {
 		EXTRA_ASSERT(m1uv != NULL);
+		if (*ctx->type == '#') {
+			gchar **tmp = meta1_url_filter_typed (
+					(const char * const *)m1uv, ctx->type+1);
+			if (m1uv)
+				g_strfreev(m1uv);
+			m1uv = tmp;
+		}
 		if (!*m1uv) {
 			g_strfreev (m1uv);
 			return NEWERROR (CODE_CONTAINER_NOTFOUND, "No service located");
@@ -455,7 +462,8 @@ void client_init (struct client_ctx_s *ctx, struct req_args_s *args,
 	ctx->url = args->url;
 	ctx->type = srvtype;
 	ctx->seq = seq;
-	sqlx_name_fill_type_asis (&ctx->name, args->url, srvtype, ctx->seq);
+	sqlx_name_fill_type_asis (&ctx->name, args->url,
+			*srvtype == '#' ? srvtype+1 : srvtype, ctx->seq);
 	ctx->timeout = COMMON_CLIENT_TIMEOUT;
 	ctx->which = CLIENT_ANY;
 }
