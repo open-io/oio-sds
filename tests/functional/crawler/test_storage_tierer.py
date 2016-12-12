@@ -48,13 +48,13 @@ class TestStorageTierer(BaseTestCase):
         self.container_0_id = cid_from_name(
             self.test_account, self.container_0_name)
         self.container_client.container_create(
-            acct=self.test_account, ref=self.container_0_name)
+            account=self.test_account, reference=self.container_0_name)
 
         self.container_1_name = "container_with_1_content"
         self.container_1_id = cid_from_name(
             self.test_account, self.container_1_name)
         self.container_client.container_create(
-            acct=self.test_account, ref=self.container_1_name)
+            account=self.test_account, reference=self.container_1_name)
         self.container_1_content_0_name = "container_1_content_0"
         self.container_1_content_0 = self._new_content(
             self.container_1_id, self.container_1_content_0_name, "SINGLE")
@@ -63,7 +63,7 @@ class TestStorageTierer(BaseTestCase):
         self.container_2_id = cid_from_name(
             self.test_account, self.container_2_name)
         self.container_client.container_create(
-            acct=self.test_account, ref=self.container_2_name)
+            account=self.test_account, reference=self.container_2_name)
         self.container_2_content_0_name = "container_2_content_0"
         self.container_2_content_0 = self._new_content(
             self.container_2_id, self.container_2_content_0_name, "SINGLE")

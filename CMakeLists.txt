@@ -468,3 +468,5 @@ add_subdirectory(./tests/unit)
 add_subdirectory(./tests/func)
 endif (NOT SDK_ONLY)
 
+add_custom_target(python-openio-docs
+	COMMAND epydoc -v --graph=all --docformat=restructuredtext -o python-openio-docs oio)

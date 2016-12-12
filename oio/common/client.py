@@ -1,51 +1,58 @@
-from oio.common.exceptions import from_response
-from oio.common.http import requests
-from oio.common.http import CONNECTION_TIMEOUT, READ_TIMEOUT
 from oio.common.utils import get_logger
 from oio.common.utils import load_namespace_conf
 from oio.common.utils import validate_service_conf
-from oio.common.utils import int_value
+from oio.api.base import HttpApi
 
 
-class Client(object):
-    def __init__(self, conf, session=None, **kwargs):
-        super(Client, self).__init__()
+class ProxyClient(HttpApi):
+    """
+    Client directed towards oio-proxy, with logging facility
+    """
+
+    def __init__(self, conf, session=None, request_prefix="",
+                 no_ns_in_url=False, endpoint=None, **kwargs):
+        """
+        :param session: an optional session that will be reused
+        :type session: `requests.Session`
+        :param request_prefix: text to insert in between endpoint and
+            requested URL
+        :type request_prefix: `str`
+        :param no_ns_in_url: do not insert namespace name between endpoint
+            and `request_prefix`
+        :type no_ns_in_url: `bool`
+        """
         validate_service_conf(conf)
         self.ns = conf.get('namespace')
-        ns_conf = load_namespace_conf(self.ns)
         self.conf = conf
-        self.ns_conf = ns_conf
         self.logger = get_logger(conf)
-        if not session:
-            session = requests.Session()
-            if "pool_maxsize" in kwargs:
-                pool_maxsize = int_value(kwargs.get("pool_maxsize"), 20)
-                adapter = requests.adapters.HTTPAdapter(
-                    pool_maxsize=pool_maxsize)
-                session.mount("http://", adapter)
-        self.session = session
-        self.endpoint = 'http://%s' % ns_conf.get('proxy')
 
-    def _direct_request(self, method, full_url, **kwargs):
-        headers = kwargs.get('headers') or {}
-        headers = dict([k, str(headers[k])] for k in headers)
-        kwargs['headers'] = headers
-        if "timeout" not in kwargs:
-            resp = self.session.request(
-                method, full_url,
-                timeout=(CONNECTION_TIMEOUT, READ_TIMEOUT),
-                **kwargs)
+        ep_parts = list()
+        if endpoint:
+            self.proxy_netloc = endpoint[7:]  # skip "http://"
+            ep_parts.append(endpoint)
         else:
-            resp = self.session.request(method, full_url, **kwargs)
-        try:
-            body = resp.json()
-        except ValueError:
-            body = resp.content
-        if resp.status_code >= 400:
-            raise from_response(resp, body)
-        return resp, body
+            ns_conf = load_namespace_conf(self.ns)
+            self.proxy_netloc = ns_conf.get('proxy')
+            ep_parts.append("http:/")
+            ep_parts.append(self.proxy_netloc)
 
-    def _request(self, method, url, **kwargs):
-        endpoint = self.endpoint
-        url = '/'.join([endpoint.rstrip('/'), url.lstrip('/')])
-        return self._direct_request(method, url, **kwargs)
+        ep_parts.append("v3.0")
+        if not no_ns_in_url:
+            ep_parts.append(self.ns)
+        if request_prefix:
+            ep_parts.append(request_prefix.lstrip('/'))
+        super(ProxyClient, self).__init__(endpoint='/'.join(ep_parts),
+                                          **kwargs)
+
+    def _direct_request(self, method, url, session=None, headers=None,
+                        **kwargs):
+        if kwargs.get("autocreate"):
+            if not headers:
+                headers = dict()
+            headers["X-oio-action-mode"] = "autocreate"
+            kwargs = kwargs.copy()
+            kwargs.pop("autocreate")
+        return super(ProxyClient, self)._direct_request(method, url,
+                                                        session=session,
+                                                        headers=headers,
+                                                        **kwargs)
