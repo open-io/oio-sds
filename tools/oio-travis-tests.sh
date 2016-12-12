@@ -29,7 +29,7 @@ function dump_syslog {
     gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock status2
 }
 
-trap dump_syslog EXIT
+#trap dump_syslog EXIT
 
 func_tests () {
     echo -e "\n### FUNC tests : $@\n" | logger -t TEST
