@@ -23,6 +23,7 @@ License along with this library.
 #include <sys/stat.h>
 #include <sys/vfs.h>
 #include <sys/types.h>
+#include <errno.h>
 
 #include <glib.h>
 #include <json.h>
@@ -390,6 +391,7 @@ void __attribute__ ((destructor)) _destructor_idle_cache (void) {
 static gdouble _compute_io_idle (guint major, guint minor) {
 	_constructor_idle_cache ();
 
+	gboolean found = FALSE;
 	gdouble idle = 0.01;
 	struct maj_min_idle_s *out = NULL;
 
@@ -406,6 +408,7 @@ static gdouble _compute_io_idle (guint major, guint minor) {
 		out = g_malloc0 (sizeof(struct maj_min_idle_s));
 		out->major = major;
 		out->minor = minor;
+		out->idle = 1.0;
 		io_cache = g_slist_prepend (io_cache, out);
 	}
 
@@ -427,18 +430,27 @@ static gdouble _compute_io_idle (guint major, guint minor) {
 					&rd, &rd_merged, &rd_sectors, &rd_time,
 					&wr, &wr_merged, &wr_sectors, &wr_time,
 					&total_progress, &total_time, &total_iotime);
-			if (rc != 0) {
+			if (rc != 0 && fmajor == major && fminor == minor) {
 				gdouble spent = total_time - out->last_total_time; /* in ms */
 				gdouble elapsed = now - out->last_update; /* in us */
 				elapsed /= G_TIME_SPAN_MILLISECOND; /* in ms */
 				out->idle = 1.0 - (spent / elapsed);
 				out->last_update = now;
 				out->last_total_time = total_time;
+				found = TRUE;
 				break;
 			}
 		}
-		if (fst)
-			fclose (fst);
+		if (fst) {
+			fclose(fst);
+			if (!found)
+				GRID_DEBUG("Device with major=%u minor=%u "
+						"not found in /proc/diskstats",
+						major, minor);
+		} else {
+			GRID_DEBUG("Failed to open /proc/diskstats: %s",
+					strerror(errno));
+		}
 	}
 
 	/* collect the up-to-date value */
