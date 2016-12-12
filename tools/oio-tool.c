@@ -156,6 +156,27 @@ _ping(gchar *dest, gchar *to)
 	}
 }
 
+static int
+_info(const char *dest)
+{
+	GByteArray *out = NULL;
+	GByteArray *encoded = message_marshall_gba_and_clean (
+			metautils_message_create_named(NAME_MSGNAME_SQLX_INFO));
+	gint64 start = oio_ext_monotonic_time();
+	GError *err = gridd_client_exec_and_concat(dest, 10.0, encoded, &out);
+	gint64 end = oio_ext_monotonic_time();
+	if (err) {
+		g_print("KO (%d) %s\n", err->code, err->message);
+		g_clear_error(&err);
+		return 1;
+	} else {
+		g_print("OK %lfs\n", (end - start) / (gdouble)G_TIME_SPAN_SECOND);
+		g_print("%.*s\n", (int)out->len, (gchar*)out->data);
+		return 0;
+	}
+	if (out) g_byte_array_free(out, TRUE);
+}
+
 static void
 _print_loc(const char *dotted_loc)
 {
@@ -199,6 +220,8 @@ main (int argc, char **argv)
 		}
 		_same_hash (argv[2], argc==4 ? argv[3] : "");
 		return 0;
+	} else if (!strcmp("info", argv[1])) {
+		return _info(argv[2]);
 	} else if (!strcmp("ping", argv[1])) {
 		if (argc > 3)
 			return _ping(argv[2], argv[3]);

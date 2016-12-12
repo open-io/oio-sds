@@ -470,6 +470,7 @@ test_election_init(void)
 	err = election_manager_create(&cfg, &m);
 	g_assert_no_error(err);
 	g_assert_nonnull (m);
+	m->synchronous_completions = TRUE;
 	election_manager_set_sync (m, sync);
 	election_manager_set_peering (m, peering);
 

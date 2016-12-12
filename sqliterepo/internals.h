@@ -45,7 +45,7 @@ License along with this library.
  * "Hard" maximum number of bases that can be held by the cache.
  */
 # ifndef  SQLX_MAX_BASES
-#  define SQLX_MAX_BASES 8192
+#  define SQLX_MAX_BASES 32768
 # endif
 
 # ifndef  SQLX_GRACE_DELAY_COOL
@@ -72,8 +72,8 @@ License along with this library.
 #  define SQLX_DELAY_PING_FINAL 15 * G_TIME_SPAN_MINUTE
 # endif
 
-# ifndef  SQLX_DELAY_EXPIRE_SLAVE
-#  define SQLX_DELAY_EXPIRE_SLAVE 5 * G_TIME_SPAN_MINUTE
+# ifndef  SQLX_DELAY_EXPIRE_FINAL
+#  define SQLX_DELAY_EXPIRE_FINAL 0
 # endif
 
 # ifndef  SQLX_DELAY_EXPIRE_NONE
