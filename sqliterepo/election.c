@@ -1296,14 +1296,14 @@ struct exec_later_CREATING_context_s
 };
 
 static void
-exec_later_CREATING_hook(struct exec_later_CREATING_context_s *d)
+deferred_completion_CREATING(struct exec_later_CREATING_context_s *d)
 {
 	EXTRA_ASSERT(d != NULL);
 	EXTRA_ASSERT(DAT_CREATING == d->magic);
 	MEMBER_CHECK(d->member);
 
 	member_lock(d->member);
-	member_log_completion("CREATE", zrc, member);
+	member_log_completion("CREATE", d->zrc, d->member);
 	_thlocal_set_manager (d->member->manager);
 
 	if (d->zrc != ZOK) {
@@ -1333,7 +1333,7 @@ completion_CREATING(int zrc, const char *path, const void *d)
 	struct election_manager_s *M = ctx->member->manager;
 	_thlocal_set_manager(M);
 	if (M->synchronous_completions) {
-		return exec_later_CREATING_hook(ctx);
+		return deferred_completion_CREATING(ctx);
 	} else {
 		gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
 		g_assert_true(rc);
@@ -1349,14 +1349,14 @@ struct exec_later_WATCHING_context_s
 };
 
 static void
-exec_later_WATCHING_hook(struct exec_later_WATCHING_context_s *d)
+deferred_completion_WATCHING(struct exec_later_WATCHING_context_s *d)
 {
 	EXTRA_ASSERT(d != NULL);
 	EXTRA_ASSERT(DAT_WATCHING == d->magic);
 	MEMBER_CHECK(d->member);
-	member_log_completion("WATCH", zrc, member);
 
 	member_lock(d->member);
+	member_log_completion("WATCH", d->zrc, d->member);
 	if (d->zrc == ZNONODE) {
 		transition(d->member, EVT_LEFT_SELF, NULL);
 		transition(d->member, EVT_EXISTS_KO, NULL);
@@ -1383,7 +1383,7 @@ completion_WATCHING(int zrc, const struct Stat *s UNUSED, const void *d)
 
 	struct election_manager_s *M = ctx->member->manager;
 	if (M->synchronous_completions) {
-		return exec_later_WATCHING_hook(ctx);
+		return deferred_completion_WATCHING(ctx);
 	} else {
 		gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
 		g_assert_true(rc);
@@ -1400,15 +1400,15 @@ struct exec_later_ASKING_context_s
 };
 
 static void
-exec_later_ASKING_hook(struct exec_later_ASKING_context_s *d)
+deferred_completion_ASKING(struct exec_later_ASKING_context_s *d)
 {
 	EXTRA_ASSERT(d != NULL);
 	EXTRA_ASSERT(DAT_ASKING == d->magic);
 
 	MEMBER_CHECK(d->member);
-	member_log_completion("ASK", zrc, member);
 
 	member_lock(d->member);
+	member_log_completion("ASK", d->zrc, d->member);
 	if (d->zrc != ZOK)
 		transition_error(d->member, EVT_MASTER_KO, d->zrc);
 	else {
@@ -1455,7 +1455,7 @@ completion_ASKING(int zrc, const char *v, int vlen,
 
 	struct election_manager_s *M = ctx->member->manager;
 	if (M->synchronous_completions) {
-		return exec_later_ASKING_hook(ctx);
+		return deferred_completion_ASKING(ctx);
 	} else {
 		gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
 		g_assert_true(rc);
@@ -1472,14 +1472,14 @@ struct exec_later_LISTING_context_s
 };
 
 static void
-exec_later_LISTING_hook (struct exec_later_LISTING_context_s *d)
+deferred_completion_LISTING (struct exec_later_LISTING_context_s *d)
 {
 	EXTRA_ASSERT(d != NULL);
 	EXTRA_ASSERT(DAT_LISTING == d->magic);
 	MEMBER_CHECK(d->member);
-	member_log_completion("LIST", d->zrc, d->member);
 
 	member_lock(d->member);
+	member_log_completion("LIST", d->zrc, d->member);
 	if (d->zrc != ZOK)
 		transition_error(d->member, EVT_LIST_KO, d->zrc);
 	else
@@ -1514,7 +1514,7 @@ completion_LISTING(int zrc, const struct String_vector *sv, const void *d)
 
 	struct election_manager_s *M = ctx->member->manager;
 	if (M->synchronous_completions) {
-		return exec_later_LISTING_hook(ctx);
+		return deferred_completion_LISTING(ctx);
 	} else {
 		gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
 		g_assert_true(rc);
@@ -1530,14 +1530,14 @@ struct exec_later_LEAVING_context_s
 };
 
 static void
-exec_later_LEAVING_hook(struct exec_later_LEAVING_context_s *d)
+deferred_completion_LEAVING(struct exec_later_LEAVING_context_s *d)
 {
 	EXTRA_ASSERT(d != NULL);
 	EXTRA_ASSERT(DAT_LEAVING == d->magic);
 	MEMBER_CHECK(d->member);
-	member_trace(__FUNCTION__, "DONE", d->member);
 
 	member_lock(d->member);
+	member_log_completion("LEAVE", d->zrc, d->member);
 	if (d->zrc == ZNONODE)
 		transition(d->member, EVT_LEAVE_OK, NULL);
 	else if (d->zrc != ZOK)
@@ -1562,7 +1562,7 @@ completion_LEAVING(int zrc, const void *d)
 
 	struct election_manager_s *M = ctx->member->manager;
 	if (M->synchronous_completions) {
-		return exec_later_LEAVING_hook(ctx);
+		return deferred_completion_LEAVING(ctx);
 	} else {
 		gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
 		g_assert_true(rc);
@@ -1615,7 +1615,7 @@ struct deferred_watcher_context_s
 };
 
 static void
-_deferred_watcher_hook(struct deferred_watcher_context_s *d,
+deferred_watch_COMMON(struct deferred_watcher_context_s *d,
 		struct election_manager_s *M)
 {
 	EXTRA_ASSERT(d != NULL);
@@ -1654,7 +1654,7 @@ _deferred_watcher_hook(struct deferred_watcher_context_s *d,
 }
 
 static void
-_watcher_common(const int type, const int state,
+watch_COMMON(const int type, const int state,
 		const char *path, void *d, const int evt)
 {
 	if (type != ZOO_SESSION_EVENT && type != ZOO_DELETED_EVENT)
@@ -1678,7 +1678,7 @@ _watcher_common(const int type, const int state,
 
 	struct election_manager_s *M = _thlocal_get_manager();
 	if (M->synchronous_completions) {
-		return _deferred_watcher_hook(ctx, M);
+		return deferred_watch_COMMON(ctx, M);
 	} else {
 		gboolean rc = g_thread_pool_push(M->completions, ctx, NULL);
 		g_assert_true(rc);
@@ -1688,13 +1688,13 @@ _watcher_common(const int type, const int state,
 static void
 watch_MASTER(zhandle_t *h UNUSED, int type, int state, const char *path, void *d)
 {
-	return _watcher_common(type, state, path, d, EVT_LEFT_MASTER);
+	return watch_COMMON(type, state, path, d, EVT_LEFT_MASTER);
 }
 
 static void
 watch_SELF(zhandle_t *h UNUSED, int type, int state, const char *path, void *d)
 {
-	return _watcher_common(type, state, path, d, EVT_LEFT_SELF);
+	return watch_COMMON(type, state, path, d, EVT_LEFT_SELF);
 }
 
 static void
@@ -1702,17 +1702,17 @@ _completion_router(gpointer p, gpointer u)
 {
 	switch (*((enum deferred_action_type_e*)p)) {
 		case DAT_CREATING:
-			return exec_later_CREATING_hook(p);
+			return deferred_completion_CREATING(p);
 		case DAT_ASKING:
-			return exec_later_ASKING_hook(p);
+			return deferred_completion_ASKING(p);
 		case DAT_LISTING:
-			return exec_later_LISTING_hook(p);
+			return deferred_completion_LISTING(p);
 		case DAT_LEAVING:
-			return exec_later_LEAVING_hook(p);
+			return deferred_completion_LEAVING(p);
 		case DAT_WATCHING:
-			return exec_later_WATCHING_hook(p);
+			return deferred_completion_WATCHING(p);
 		case DAT_LEFT:
-			return _deferred_watcher_hook(p, u);
+			return deferred_watch_COMMON(p, u);
 	}
 	g_assert_not_reached();
 }
