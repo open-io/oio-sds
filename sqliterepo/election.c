@@ -35,6 +35,7 @@ License along with this library.
 #include "gridd_client_pool.h"
 #include "internals.h"
 
+#define PATH_MAXLEN 128 + LIMIT_LENGTH_NSNAME
 #define EVENTLOG_SIZE 16
 #define STATUS_FINAL(e) ((e) >= STEP_SLAVE)
 
@@ -1000,20 +1001,23 @@ member_log_completion(const char *tag, int zrc, const struct election_member_s *
 #define member_log_completion(...)
 #endif
 
-static gchar *
-member_fullpath(struct election_member_s *member)
+static const char *
+member_fullpath(struct election_member_s *m, gchar *d, gsize dlen)
 {
-	return member_has_local_id(member)
-		? g_strdup_printf("%s-%010"G_GINT32_FORMAT, member->key, member->local_id)
-		: g_strdup_printf("%s-", member->key);
+	if (member_has_local_id(m))
+		g_snprintf(d, dlen, "%s-%010"G_GINT32_FORMAT, m->key, m->local_id);
+	else
+		g_snprintf(d, dlen, "%s-", m->key);
+	return d;
 }
 
-static gchar *
-member_masterpath(struct election_member_s *member)
+static const char *
+member_masterpath(struct election_member_s *m, gchar *d, gsize dlen)
 {
-	return member_has_master_id(member)
-		? g_strdup_printf("%s-%010"G_GINT32_FORMAT, member->key, member->master_id)
-		: NULL;
+	if (!member_has_master_id(m))
+		return NULL;
+	g_snprintf(d, dlen, "%s-%010"G_GINT32_FORMAT, m->key, m->master_id);
+	return d;
 }
 
 static void
@@ -1257,22 +1261,33 @@ election_manager_whatabout (struct election_manager_s *m,
  * them to recover the right election.
  * -------------------------------------------------------------------------- */
 
+#define completion_do_or_defer(M,Ctx) do { \
+	if ((M)->synchronous_completions) { \
+		return _completion_router((Ctx), (M)); \
+	} else { \
+		/* Try to defer, if error, then do immediately */ \
+		GError *_e = NULL; \
+		gboolean rc = g_thread_pool_push((M)->completions, (Ctx), &_e); \
+		if (rc) return; \
+		GRID_WARN("Completion queue error: (%d) %s", _e->code, _e->message); \
+		if (_e) g_error_free(_e); \
+		return _completion_router((Ctx), (M)); \
+	} \
+} while (0)
+
 static void
-completion_DeleteRogueNode(int zrc, const void *d)
+completion_DeleteRogueNode(int zrc, const void *d UNUSED)
 {
-	gchar *path = (gchar*)d;
 	if (zrc == ZNONODE) {
-		GRID_DEBUG("Rogue disappeared %s", path);
+		GRID_TRACE2("Rogue disappeared");
 	} else if (zrc == ZOK) {
-		GRID_TRACE("Rogue deleted %s", path);
+		GRID_TRACE("Rogue deleted");
 	} else if (zrc == ZSESSIONEXPIRED) {
 		/* the node will expire, don't flood with logs in this case */
-		GRID_DEBUG("Rogue deletion error %s: %s", path, zerror(zrc));
+		GRID_DEBUG("Rogue deletion error: %s", zerror(zrc));
 	} else {
-		GRID_WARN("Rogue deletion error %s: %s", path, zerror(zrc));
+		GRID_WARN("Rogue deletion error: %s", zerror(zrc));
 	}
-
-	g_free(path);
 }
 
 /* @private */
@@ -1332,12 +1347,7 @@ completion_CREATING(int zrc, const char *path, const void *d)
 
 	struct election_manager_s *M = ctx->member->manager;
 	_thlocal_set_manager(M);
-	if (M->synchronous_completions) {
-		return deferred_completion_CREATING(ctx);
-	} else {
-		gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
-		g_assert_true(rc);
-	}
+	completion_do_or_defer(M, ctx);
 }
 
 /* @private */
@@ -1382,12 +1392,7 @@ completion_WATCHING(int zrc, const struct Stat *s UNUSED, const void *d)
 	ctx->member = (struct election_member_s*) d;
 
 	struct election_manager_s *M = ctx->member->manager;
-	if (M->synchronous_completions) {
-		return deferred_completion_WATCHING(ctx);
-	} else {
-		gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
-		g_assert_true(rc);
-	}
+	completion_do_or_defer(M, ctx);
 }
 
 /* @private */
@@ -1417,17 +1422,16 @@ deferred_completion_ASKING(struct exec_later_ASKING_context_s *d)
 		} else {
 			const char *myurl = member_get_url(d->member);
 			if (strcmp(d->master, myurl) == 0) {
-				/* JFS: the supposed master carries our ID (i.e. our URL),
+				/* The supposed master carries our ID (i.e. our URL),
 				 * if we accept it as-is, we will create a loop on ourselves.
 				 * We delete it and pretend there is no master. */
-				gchar *path = member_masterpath(d->member);
+				gchar path[PATH_MAXLEN];
+				int zrc2 = sqlx_sync_adelete(d->member->manager->sync,
+						member_masterpath(d->member, path, sizeof(path)), -1,
+						completion_DeleteRogueNode, NULL);
 				GRID_WARN("Rogue being deleted %s", path);
-				int zrc2 = sqlx_sync_adelete(d->member->manager->sync, path, -1,
-						completion_DeleteRogueNode, path);
-				if (zrc2 != ZOK) {
+				if (zrc2 != ZOK)
 					GRID_WARN("Failed! %s", zerror(zrc2));
-					g_free(path);
-				} // else `path` is freed by the callback
 
 				transition(d->member, EVT_MASTER_BAD, NULL);
 			} else {
@@ -1454,12 +1458,7 @@ completion_ASKING(int zrc, const char *v, int vlen,
 		memcpy(ctx->master, v, vlen);
 
 	struct election_manager_s *M = ctx->member->manager;
-	if (M->synchronous_completions) {
-		return deferred_completion_ASKING(ctx);
-	} else {
-		gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
-		g_assert_true(rc);
-	}
+	completion_do_or_defer(M, ctx);
 }
 
 /* @private */
@@ -1513,12 +1512,7 @@ completion_LISTING(int zrc, const struct String_vector *sv, const void *d)
 	ctx->master_id = first;
 
 	struct election_manager_s *M = ctx->member->manager;
-	if (M->synchronous_completions) {
-		return deferred_completion_LISTING(ctx);
-	} else {
-		gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
-		g_assert_true(rc);
-	}
+	completion_do_or_defer(M, ctx);
 }
 
 /* @private */
@@ -1561,12 +1555,7 @@ completion_LEAVING(int zrc, const void *d)
 	ctx->member = (struct election_member_s*) d;
 
 	struct election_manager_s *M = ctx->member->manager;
-	if (M->synchronous_completions) {
-		return deferred_completion_LEAVING(ctx);
-	} else {
-		gboolean rc = g_thread_pool_push(ctx->member->manager->completions, ctx, NULL);
-		g_assert_true(rc);
-	}
+	completion_do_or_defer(M, ctx);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -1677,12 +1666,7 @@ watch_COMMON(const int type, const int state,
 		memcpy(ctx->path, slash, len);
 
 	struct election_manager_s *M = _thlocal_get_manager();
-	if (M->synchronous_completions) {
-		return deferred_watch_COMMON(ctx, M);
-	} else {
-		gboolean rc = g_thread_pool_push(M->completions, ctx, NULL);
-		g_assert_true(rc);
-	}
+	completion_do_or_defer(M, ctx);
 }
 
 static void
@@ -1731,11 +1715,11 @@ static void
 member_warn_failed_action(struct election_member_s *member, int zrc,
 		const char *action)
 {
-	gchar *p = member_fullpath(member);
+	gchar path[PATH_MAXLEN];
 	GRID_WARN("%s failed [%s.%s] [%s] : (%d) %s", action,
 			member->name.base, member->name.type,
-			p, zrc, zerror(zrc));
-	g_free(p);
+			member_fullpath(member, path, sizeof(path)),
+			zrc, zerror(zrc));
 }
 
 /* ------------------------------------------------------------------------- */
@@ -2055,21 +2039,17 @@ _get_next_ping(const gint64 base, const gint64 jitter)
 			(gint32)(min + 1), (gint32)(max + 1));
 }
 
-static void
-_member_rearm_ping_MASTER(struct election_member_s *member)
-{
-	member->when_next_ping = _get_next_ping(
-			member->manager->delay_ping_final,
-			member->manager->delay_ping_final / 3);
-}
+#define _member_rearm_ping_MASTER(m) do { \
+	m->when_next_ping = _get_next_ping( \
+			m->manager->delay_ping_final, \
+			m->manager->delay_ping_final / 3); \
+} while (0)
 
-static void
-_member_rearm_ping_SLAVE(struct election_member_s *member)
-{
-	member->when_next_ping = _get_next_ping(
-			member->manager->delay_ping_final,
-			member->manager->delay_ping_final / 3);
-}
+#define _member_rearm_ping_SLAVE(m) do { \
+	m->when_next_ping = _get_next_ping( \
+			m->manager->delay_ping_final, \
+			m->manager->delay_ping_final / 3); \
+} while (0)
 
 static void
 member_action_to_NONE(struct election_member_s *member)
@@ -2119,11 +2099,10 @@ _common_action_to_LEAVE(struct election_member_s *member,
 	member->requested_LEFT_SELF = 0;
 	member->requested_LEFT_MASTER = 0;
 
-	gchar *path  = member_fullpath(member);
+	gchar path[PATH_MAXLEN];
 	int zrc = sqlx_sync_adelete(member->manager->sync,
-			path, -1,
+			member_fullpath(member, path, sizeof(path)), -1,
 			completion_LEAVING, member);
-	g_free(path);
 
 	if (unlikely(zrc != ZOK))
 		return member_fail_on_error(member, zrc);
@@ -2177,12 +2156,12 @@ member_action_to_CREATING(struct election_member_s *member)
 		return member_action_to_FAILED(member);
 
 	const char *myurl = member_get_url(member);
-	gchar *path = member_fullpath(member);
+	gchar path[PATH_MAXLEN];
 	int zrc = sqlx_sync_acreate(member->manager->sync,
-			path, myurl, strlen(myurl),
+			member_fullpath(member, path, sizeof(path)),
+			myurl, strlen(myurl),
 			ZOO_EPHEMERAL|ZOO_SEQUENCE,
 			completion_CREATING, member);
-	g_free(path);
 
 	if (unlikely(zrc != ZOK)) {
 		member_warn_failed_action(member, zrc, "CREATE");
@@ -2201,11 +2180,11 @@ member_action_to_WATCHING(struct election_member_s *member)
 {
 	EXTRA_ASSERT(!member_has_action(member));
 
-	gchar *path = member_fullpath(member);
-	int zrc = sqlx_sync_awexists(member->manager->sync, path,
+	gchar path[PATH_MAXLEN];
+	int zrc = sqlx_sync_awexists(member->manager->sync,
+			member_fullpath(member, path, sizeof(path)),
 			watch_SELF, GUINT_TO_POINTER(member->generation_id),
 			completion_WATCHING, member);
-	g_free(path);
 
 	if (unlikely(zrc != ZOK)) {
 		member_warn_failed_action(member, zrc, "WATCH");
@@ -2227,10 +2206,10 @@ member_action_to_LISTING(struct election_member_s *member)
 	EXTRA_ASSERT(member->master_id == 0);
 	EXTRA_ASSERT(member->master_url == NULL);
 
-	gchar *path = member_fullpath(member);
+	gchar path[PATH_MAXLEN];
 	int zrc = sqlx_sync_awget_siblings(member->manager->sync,
-			path, NULL, NULL, completion_LISTING, member);
-	g_free(path);
+			member_fullpath(member, path, sizeof(path)),
+			NULL, NULL, completion_LISTING, member);
 
 	if (unlikely(zrc != ZOK)) {
 		member_warn_failed_action(member, zrc, "LIST");
@@ -2252,11 +2231,11 @@ member_action_to_ASKING(struct election_member_s *member)
 	EXTRA_ASSERT(member->local_id != member->master_id);
 	EXTRA_ASSERT(member->master_url == NULL);
 
-	gchar *path = member_masterpath(member);
-	int zrc = sqlx_sync_awget(member->manager->sync, path,
+	gchar path[PATH_MAXLEN];
+	int zrc = sqlx_sync_awget(member->manager->sync,
+			member_masterpath(member, path, sizeof(path)),
 			watch_MASTER, GUINT_TO_POINTER(member->generation_id),
 			completion_ASKING, member);
-	g_free(path);
 
 	if (unlikely(zrc != ZOK)) {
 		member_warn_failed_action(member, zrc, "ASK");
