@@ -43,6 +43,10 @@ class ClusterList(lister.Lister):
             metavar='<srv_type>',
             nargs='*',
             help='Type of services to list')
+        parser.add_argument(
+            '--stats', '--full',
+            action='store_true',
+            help='Display service statistics')
         return parser
 
     def take_action(self, parsed_args):
@@ -53,7 +57,7 @@ class ClusterList(lister.Lister):
                     self.app.client_manager.admin.cluster_list_types()
         for srv_type in parsed_args.srv_types:
             data = self.app.client_manager.admin.cluster_list(
-                srv_type)
+                srv_type, parsed_args.stats)
             for srv in data:
                 tags = srv['tags']
                 location = tags.get('tag.loc', 'n/a')
@@ -62,9 +66,21 @@ class ClusterList(lister.Lister):
                 addr = srv['addr']
                 up = tags.get('tag.up', 'n/a')
                 score = srv['score']
-                results.append((srv_type, addr, volume, location,
-                                slots, up, score))
-        columns = ('Type', 'Id', 'Volume', 'Location', 'Slots', 'Up', 'Score')
+                if parsed_args.stats:
+                    stats = ["%s=%s" % (k, v) for k, v in tags.items()
+                             if k.startswith('stat.')]
+                    values = (srv_type, addr, volume, location,
+                              slots, up, score, " ".join(stats))
+                else:
+                    values = (srv_type, addr, volume, location,
+                              slots, up, score)
+                results.append(values)
+        if parsed_args.stats:
+            columns = ('Type', 'Id', 'Volume', 'Location', 'Slots', 'Up',
+                       'Score', 'Stats')
+        else:
+            columns = ('Type', 'Id', 'Volume', 'Location', 'Slots', 'Up',
+                       'Score')
         result_gen = (r for r in results)
         return columns, result_gen
 

@@ -49,8 +49,8 @@ class AdminClient(object):
     def cluster_list_types(self):
         return self.cluster.service_types()
 
-    def cluster_list(self, srv_type):
-        return self.cluster.all_services(srv_type)
+    def cluster_list(self, srv_type, full=False):
+        return self.cluster.all_services(srv_type, full=full)
 
     def cluster_local_list(self):
         return self.cluster.local_services()
