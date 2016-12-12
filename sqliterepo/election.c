@@ -327,7 +327,6 @@ static gboolean _zoo_disconnected(int zrc) {
 
 /* ------------------------------------------------------------------------- */
 
-static void member_unref(struct election_member_s *member);
 static void member_destroy(struct election_member_s *member);
 
 static void _manager_clean(struct election_manager_s *manager);
@@ -376,11 +375,9 @@ static void transition(struct election_member_s *member,
 static gboolean wait_for_final_status(struct election_member_s *m,
 		gint64 deadline);
 
-static void
-_thlocal_set_manager (struct election_manager_s *manager)
-{
-	g_private_replace (&th_local_key_manager, manager);
-}
+#define _thlocal_set_manager(M) do { \
+	g_private_replace (&th_local_key_manager, (M)); \
+} while (0)
 
 #define _thlocal_get_manager() g_private_get (&th_local_key_manager)
 
@@ -406,11 +403,11 @@ _cond_clean (gpointer p)
 	g_mutex_unlock(&(M)->lock); \
 } while (0)
 
-static void _completion_router(gpointer p, gpointer u);
+static void _completion_router(gpointer p, struct election_manager_s *M);
 
 /* -------------------------------------------------------------------------- */
 
-static void
+static inline void
 _DEQUE_remove (struct election_member_s *m)
 {
 	EXTRA_ASSERT(m != NULL);
@@ -427,7 +424,7 @@ _DEQUE_remove (struct election_member_s *m)
 	-- beacon->count;
 }
 
-static void
+static inline void
 _DEQUE_add (struct election_member_s *m)
 {
 	EXTRA_ASSERT(m != NULL);
@@ -448,7 +445,7 @@ _DEQUE_add (struct election_member_s *m)
 
 /* --- Misc helpers --------------------------------------------------------- */
 
-static gboolean
+static inline gboolean
 _is_over (const gint64 now, const gint64 last, const gint64 delay)
 {
 	return delay > 0 && last > 0 && last < OLDEST(now,delay);
@@ -476,7 +473,7 @@ _extract_id(const char *path, gint32 *pid)
 	return TRUE;
 }
 
-static int gint32_cmp(register gint32 i1, register gint32 i2) { return CMP(i1,i2); }
+static inline int gint32_cmp(register gint32 i1, register gint32 i2) { return CMP(i1,i2); }
 
 static int
 gint32_sort(gconstpointer p1, gconstpointer p2)
@@ -559,7 +556,7 @@ election_manager_create(struct replication_config_s *config,
 		g_tree_new_full(metautils_strcmp3, NULL, g_free, _cond_clean);
 
 	manager->completions =
-		g_thread_pool_new(_completion_router, manager, 2, TRUE, NULL);
+		g_thread_pool_new((GFunc)_completion_router, manager, 2, TRUE, NULL);
 
 	manager->synchronous_completions = FALSE;
 
@@ -851,18 +848,14 @@ member_decache_peers(struct election_member_s *m)
 	if (err) g_clear_error(&err);
 }
 
-static void
-member_ref(struct election_member_s *m)
-{
-	++ m->refcount;
-}
+#define member_ref(m) do { \
+	++ m->refcount; \
+} while (0)
 
-static void
-member_unref(struct election_member_s *m)
-{
-	EXTRA_ASSERT (m->refcount > 0);
-	-- m->refcount;
-}
+#define member_unref(m) do { \
+	EXTRA_ASSERT (m->refcount > 0); \
+	-- m->refcount; \
+} while (0)
 
 static GCond*
 member_get_cond(struct election_member_s *m)
@@ -876,23 +869,17 @@ member_get_lock(struct election_member_s *m)
 	return &(MMANAGER(m)->lock);
 }
 
-static void
-member_lock(struct election_member_s *m)
-{
-	_manager_lock(m->manager);
-}
+#define member_lock(m) do { \
+	_manager_lock(m->manager); \
+} while (0)
 
-static void
-member_unlock(struct election_member_s *m)
-{
-	_manager_unlock(m->manager);
-}
+#define member_unlock(m) do { \
+	_manager_unlock(m->manager); \
+} while (0)
 
-static void
-member_signal(struct election_member_s *m)
-{
-	g_cond_signal(member_get_cond(m));
-}
+#define member_signal(m) do { \
+	g_cond_signal(member_get_cond(m)); \
+} while (0)
 
 #define member_set_master_url(m,u) do { \
 	EXTRA_ASSERT(BOOL(m->flag_master_id)); \
@@ -1682,7 +1669,7 @@ watch_SELF(zhandle_t *h UNUSED, int type, int state, const char *path, void *d)
 }
 
 static void
-_completion_router(gpointer p, gpointer u)
+_completion_router(gpointer p, struct election_manager_s *M)
 {
 	switch (*((enum deferred_action_type_e*)p)) {
 		case DAT_CREATING:
@@ -1696,7 +1683,7 @@ _completion_router(gpointer p, gpointer u)
 		case DAT_WATCHING:
 			return deferred_completion_WATCHING(p);
 		case DAT_LEFT:
-			return deferred_watch_COMMON(p, u);
+			return deferred_watch_COMMON(p, M);
 	}
 	g_assert_not_reached();
 }
@@ -2060,7 +2047,7 @@ member_action_to_NONE(struct election_member_s *member)
 	EXTRA_ASSERT(member->local_id == 0);
 	EXTRA_ASSERT(member->master_id == 0);
 	EXTRA_ASSERT(member->master_url == NULL);
-	member_set_status(member, STEP_NONE);
+	return member_set_status(member, STEP_NONE);
 }
 
 /* Gathers a check on the set of actions currently pending and the change of
@@ -2077,7 +2064,7 @@ member_action_to_FAILED(struct election_member_s *member)
 	/* setting last_USE to now avoids sending USE as soon as arrived in
 	 * the set of FAILED elections. */
 	member->last_USE = oio_ext_monotonic_time ();
-	member_set_status(member, STEP_FAILED);
+	return member_set_status(member, STEP_FAILED);
 }
 
 /* Actual transition */
@@ -2263,13 +2250,14 @@ member_action_to_SYNCING(struct election_member_s *member)
 
 	member->requested_PIPEFROM = 0;
 	member->pending_PIPEFROM = 1;
-	member_set_status(member, STEP_SYNCING);
 
 	sqlx_peering__pipefrom (member->manager->peering, target,
 			sqlx_name_mutable_to_const(&member->name), source,
 			member->manager, 0, _result_PIPEFROM);
 
 	member_debug("sched:PIPEFROM", member);
+
+	return member_set_status(member, STEP_SYNCING);
 }
 
 static void
@@ -2412,7 +2400,7 @@ member_finish_CHECKING_MASTER(struct election_member_s *member)
 		return member_action_to_CHECKING_MASTER(member);
 	}
 
-	member_set_status(member, STEP_SLAVE);
+	return member_set_status(member, STEP_SLAVE);
 }
 
 static void
@@ -3152,7 +3140,7 @@ _member_react_SLAVE(struct election_member_s *member, enum event_type_e evt)
 			}
 			if (now > member->when_next_ping) {
 				_member_rearm_ping_SLAVE(member);
-				defer_USE(member);
+				return (void) defer_USE(member);
 			}
 			return;
 
@@ -3201,7 +3189,7 @@ _member_react_MASTER(struct election_member_s *member, enum event_type_e evt)
 			}
 			if (now > member->when_next_ping) {
 				_member_rearm_ping_MASTER(member);
-				defer_USE(member);
+				return (void) defer_USE(member);
 			}
 			return;
 
