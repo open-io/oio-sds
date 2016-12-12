@@ -1009,9 +1009,34 @@ GError *
 meta1_backend_services_list(struct meta1_backend_s *m1,
 		struct oio_url_s *url, const char *srvtype, gchar ***result)
 {
+	gint retries = 1;
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERSLAVE, &sq3);
-	if (err) return err;
+	GError *err = NULL;
+ retry_reload_prefixes:
+	err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERSLAVE, &sq3);
+	if (err) {
+		if (retries-- > 0 && err->code == CODE_RANGE_NOTFOUND) {
+			// reload prefixes
+			const char *local_addr = sqlx_repository_get_local_addr(m1->repo);
+			const char *ns_name = oio_url_get(url, OIOURL_NS);
+			gboolean meta0_ok = FALSE;
+			GError *error_load = NULL;
+			GArray *updated_prefixes = NULL;
+			meta1_prefixes_load(m1->prefixes, ns_name,
+					    local_addr,
+					    &updated_prefixes, &meta0_ok);
+			if (error_load || !meta0_ok) {
+				g_error_free(error_load);
+				return err;
+			}
+			else
+				g_error_free(err);
+			if (updated_prefixes)
+				g_array_free(updated_prefixes, TRUE);
+			goto retry_reload_prefixes;
+		}
+		return err;
+	}
 
 	struct sqlx_repctx_s *repctx = NULL;
 	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {

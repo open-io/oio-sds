@@ -145,6 +145,10 @@ retry:
 	err = hc_resolve_reference_service(ss->resolver, u, n->type, &peers);
 
 	if (NULL != err) {
+		if (retries-- > 0 && err->code == CODE_RANGE_NOTFOUND) {
+			hc_decache_reference(ss->resolver, u);
+			goto retry;
+		}
 		g_prefix_error(&err, "Peer resolution error: ");
 		oio_url_clean(u);
 		return err;
@@ -202,7 +206,7 @@ _post_config(struct sqlx_service_s *ss)
 		return FALSE;
 	}
 
-	// prepare a meta2 backend
+	/* prepare a meta2 backend */
 	err = meta2_backend_init(&m2, ss->repository, ss->ns_name, ss->lb, ss->resolver);
 	if (NULL != err) {
 		GRID_WARN("META2 backend init failure: (%d) %s", err->code, err->message);
@@ -216,6 +220,11 @@ _post_config(struct sqlx_service_s *ss)
 	/* Make base replications update the cache */
 	sqlx_repository_configure_change_callback(ss->repository,
 			(sqlx_repo_change_hook)meta2_backend_change_callback, m2);
+
+	/* Configure cache */
+	enum hc_resolver_flags_e flags_cache = 0x00;
+	flags_cache |= HC_RESOLVER_DECACHEM0;
+	hc_resolver_configure(ss->resolver, flags_cache);
 
 	/* Register meta2 requests handlers */
 	transport_gridd_dispatcher_add_requests(ss->dispatcher,
