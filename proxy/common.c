@@ -219,16 +219,19 @@ static gboolean _on_reply (gpointer p, MESSAGE reply) {
 	return TRUE;
 }
 
-GError *gridd_request_replicated (struct client_ctx_s *ctx,
-		request_packer_f pack) {
+GError *
+gridd_request_replicated (struct client_ctx_s *ctx, request_packer_f pack)
+{
+	gboolean retry = TRUE;
 	GError *err = NULL;
+	gchar **m1uv = NULL;
 	EXTRA_ASSERT (ctx != NULL);
 
 	gchar *election_key = g_strconcat (ctx->name.base, "/", ctx->name.type, NULL);
 	STRING_STACKIFY(election_key);
 
 	/* Locate the services */
-	gchar **m1uv = NULL;
+label_retry:
 	if (*ctx->type == '#')
 		err = hc_resolve_reference_directory (resolver, ctx->url, &m1uv);
 	else
@@ -236,8 +239,15 @@ GError *gridd_request_replicated (struct client_ctx_s *ctx,
 
 	if (err) {
 		EXTRA_ASSERT(m1uv == NULL);
-		g_prefix_error (&err, "Directory error: ");
-		return err;
+		if (retry && err->code == CODE_RANGE_NOTFOUND) {
+			retry = FALSE;
+			hc_decache_reference_service(resolver, ctx->url, NAME_SRVTYPE_META1);
+			hc_decache_reference(resolver, ctx->url);
+			goto label_retry;
+		} else {
+			g_prefix_error (&err, "Directory error: ");
+			return err;
+		}
 	} else {
 		EXTRA_ASSERT(m1uv != NULL);
 		if (*ctx->type == '#') {
@@ -246,15 +256,15 @@ GError *gridd_request_replicated (struct client_ctx_s *ctx,
 			if (m1uv)
 				g_strfreev(m1uv);
 			m1uv = tmp;
-		}
-		if (!*m1uv) {
+		} else if (!*m1uv) {
 			g_strfreev (m1uv);
 			return NEWERROR (CODE_CONTAINER_NOTFOUND, "No service located");
+		} else {
+			/* We found some locations, let's keep only the URL part */
+			meta1_urlv_shift_addr (m1uv);
+			/* let's prefer the services requested (master, slave, etc) */
+			_sort_services (ctx, election_key, m1uv);
 		}
-		/* We found some locations, let's keep only the URL part */
-		meta1_urlv_shift_addr (m1uv);
-		/* let's prefer the services requested (master, slave, etc) */
-		_sort_services (ctx, election_key, m1uv);
 	}
 
 	/* Perform the sequence of requests. */
