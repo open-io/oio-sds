@@ -1083,6 +1083,14 @@ def generate(options):
             env['env.ORIG_EXE'] = orig_exe
             env['EXE'] = new_exe
             env['env.G_DEBUG'] = "gc-friendly"
+        elif options.get(PROFILE) == "callgrind":
+            orig_exe = env.get('EXE', env['EXE_PREFIX'])
+            new_exe = "valgrind --tool=callgrind --collect-jumps=yes\
+ --collect-systime=yes --trace-children=yes\
+ --callgrind-out-file=/tmp/callgrind.out.%q{ORIG_EXE}.%p " + orig_exe
+            env['env.ORIG_EXE'] = orig_exe
+            env['EXE'] = new_exe
+            del env['env.G_SLICE']
         return env
 
     def subenv(add):
