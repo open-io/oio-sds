@@ -937,10 +937,10 @@ grid_main_configure (int argc, char **argv)
 	srv_known = lru_tree_create((GCompareFunc)g_strcmp0, g_free, NULL, LTO_NOATIME);
 	srv_master = lru_tree_create((GCompareFunc)g_strcmp0, g_free, g_free, LTO_NOATIME);
 
+	enum hc_resolver_flags_e f =
+		flag_cache_enabled ? HC_RESOLVER_DECACHEM0 : HC_RESOLVER_NOCACHE;
+
 	resolver = hc_resolver_create ();
-	enum hc_resolver_flags_e f = 0;
-	if (!flag_cache_enabled)
-		f |= HC_RESOLVER_NOCACHE;
 	hc_resolver_configure (resolver, f);
 	hc_resolver_qualify (resolver, service_is_ok);
 	hc_resolver_notify (resolver, service_invalidate);
