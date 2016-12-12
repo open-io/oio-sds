@@ -8,7 +8,7 @@ from oio.common.daemon import Daemon
 from oio.common.http import requests
 from oio.common.utils import get_logger, float_value, validate_service_conf, \
     int_value, parse_config, true_value
-from oio.common.client import Client
+from oio.common.client import ProxyClient
 from oio.conscience.client import ConscienceClient
 
 
@@ -44,7 +44,9 @@ class ServiceWatcher(object):
         self.logger = get_logger(self.conf)
         self.session = requests.Session()
         self.cs = ConscienceClient(self.conf, session=self.session)
-        self.client = Client(self.conf, session=self.session)
+        # FIXME: explain that
+        self.client = ProxyClient(self.conf, session=self.session,
+                                  no_ns_in_url=True)
         self.last_status = False
         self.failed = False
         self.service_definition = {

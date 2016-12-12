@@ -513,7 +513,7 @@ _get_hash (const char *s, GByteArray **out)
 	*out = NULL;
 	GByteArray *h = metautils_gba_from_hexstring (s);
 	if (!h)
-		return BADREQ("JSON: invalid hash: not hexa");
+		return BADREQ("JSON: invalid hash: not hexa: '%s'", s);
 
 	const gssize len = h->len;
 	if (len != g_checksum_type_get_length(G_CHECKSUM_MD5)
@@ -744,7 +744,7 @@ static GError * _load_content_from_json_object(struct req_args_s *args,
 			 * header. Then if there is no error, complete it with properties */
 			if (!(err = _load_content_from_json_array(args, jchunks, out))) {
 				GSList *beans = _load_properties_from_strv(props);
-				for (GSList *l=beans; l ;l=l->next)
+				for (GSList *l = beans; l; l = l->next)
 					PROPERTIES_set2_alias(l->data, oio_url_get(args->url, OIOURL_PATH));
 				*out = metautils_gslist_precat(*out, beans);
 			}
@@ -1178,7 +1178,13 @@ _m2_container_create (struct req_args_s *args, struct json_object *jbody)
 	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	if (err && err->code == CODE_CONTAINER_EXISTS) {
-		g_clear_error (&err);
+		/* We did not create it, thus we cannot _reply_created() */
+		g_clear_error(&err);
+		return _reply_nocontent(args);
+	}
+	if (!err || err->code == CODE_FINAL_OK) {
+		/* No error means we actually created it. */
+		g_clear_error(&err);
 		return _reply_created(args);
 	}
 	return _reply_m2_error (args, err);

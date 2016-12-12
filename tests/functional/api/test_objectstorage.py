@@ -23,7 +23,7 @@ class TestObjectStorageAPI(BaseTestCase):
 
     def setUp(self):
         super(TestObjectStorageAPI, self).setUp()
-        self.api = ObjectStorageAPI(self.ns, self.uri)
+        self.api = ObjectStorageAPI(self.ns, endpoint=self.uri)
         self.created = list()
 
     def tearDown(self):
@@ -66,7 +66,6 @@ class TestObjectStorageAPI(BaseTestCase):
         # container_show on existing container
         res = self.api.container_show(self.account, name)
         self.assertIsNot(res['properties'], None)
-        self.assertIsNot(res['system'], None)
 
         self._delete(name)
         # container_show on deleted container
@@ -140,6 +139,8 @@ class TestObjectStorageAPI(BaseTestCase):
         # container_get_properties on existing container
         data = self.api.container_get_properties(self.account, name)
         self.assertEqual(data['properties'], {})
+        self.assertIsNot(data['system'], None)
+        self.assertIn("sys.user.name", data['system'])
 
         # container_get_properties
         metadata = {
@@ -281,7 +282,7 @@ class TestObjectStorageAPI(BaseTestCase):
         name = random_str(32)
         self.api.object_create(self.account, name, data="data", obj_name=name,
                                mime_type='text/custom')
-        meta, _ = self.api.object_analyze(self.account, name, name)
+        meta, _ = self.api.object_locate(self.account, name, name)
         self.assertEqual(meta['mime_type'], 'text/custom')
 
     def _upload_data(self, name):
