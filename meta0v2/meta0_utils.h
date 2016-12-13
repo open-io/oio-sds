@@ -40,13 +40,12 @@ gchar ** meta0_utils_array_get_urlv(GPtrArray *array, const guint8 *bytes);
 
 GPtrArray* meta0_utils_array_dup(const GPtrArray *in);
 
-void meta0_utils_array_clean(GPtrArray *array);
-
 void meta0_utils_list_clean(GSList *list);
 
-void meta0_utils_array_add(GPtrArray *gpa, const guint8 *b, const gchar *s);
-
 GPtrArray * meta0_utils_array_create(void);
+void meta0_utils_array_add(GPtrArray *gpa, const guint8 *b, const gchar *s);
+void meta0_utils_array_finalize(GPtrArray *array);
+void meta0_utils_array_clean(GPtrArray *array);
 
 void meta0_utils_tree_add_url(GTree *tree, const guint8 *b, const gchar *url);
 
