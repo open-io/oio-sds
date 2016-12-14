@@ -369,7 +369,8 @@ _NOLOCK_precache_list_of_services (const char *type, GBytes *encoded)
 static GBytes *
 _encode_wanted_services (const char *type, GSList *list)
 {
-	GString *encoded = g_string_new(type);
+	GString *encoded = g_string_sized_new(4096);
+	g_string_append (encoded, type);
 	g_string_append_c (encoded, '\0');
 	g_string_append_c (encoded, '[');
 	for (GSList *l=list; l ;l=l->next) {
