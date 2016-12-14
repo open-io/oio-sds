@@ -26,8 +26,8 @@ License along with this library.
 
 static struct oio_cfg_handle_s *oio_cfg_handle_DEFAULT = NULL;
 
-static gchar *
-_build_key(const gchar *ns, const gchar *what)
+gchar *
+oio_cfg_build_key(const gchar *ns, const gchar *what)
 {
 	gchar *k, *result;
 
@@ -46,7 +46,7 @@ config_load_ns(GHashTable *h, GKeyFile *kf, const gchar *ns)
 	if (keys) {
 		for (pk=keys; *pk ;pk++) {
 			v = g_key_file_get_string(kf, ns, *pk, NULL);
-			g_hash_table_insert(h, _build_key(ns, *pk), v);
+			g_hash_table_insert(h, oio_cfg_build_key(ns, *pk), v);
 		}
 		g_strfreev(keys);
 	}
@@ -119,13 +119,15 @@ oio_cfg_list_ns(void)
 GHashTable*
 oio_cfg_parse(void)
 {
-	GHashTable *ht = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+	GHashTable *ht = g_hash_table_new_full(g_str_hash, g_str_equal,
+			g_free, g_free);
 
 	// Load the system configuration
 	if (g_file_test(OIO_CONFIG_FILE_PATH, G_FILE_TEST_IS_REGULAR))
 		config_load_file(ht, OIO_CONFIG_FILE_PATH);
 
-	if (g_file_test(OIO_CONFIG_DIR_PATH, G_FILE_TEST_IS_DIR|G_FILE_TEST_EXISTS)) {
+	if (g_file_test(OIO_CONFIG_DIR_PATH,
+			G_FILE_TEST_IS_DIR|G_FILE_TEST_EXISTS)) {
 		GDir *gdir = g_dir_open(OIO_CONFIG_DIR_PATH, 0, NULL);
 		if (gdir) {
 			config_load_dir(ht, OIO_CONFIG_DIR_PATH, gdir);
@@ -133,9 +135,10 @@ oio_cfg_parse(void)
 		}
 	}
 
-	// Overwrite with the user configuration (if any) 
+	// Overwrite with the user configuration (if any)
 	if (g_get_home_dir() && OIO_CONFIG_LOCAL_PATH) {
-		gchar *local = g_strdup_printf("%s/%s", g_get_home_dir(), OIO_CONFIG_LOCAL_PATH);
+		gchar *local = g_strdup_printf("%s/%s", g_get_home_dir(),
+				OIO_CONFIG_LOCAL_PATH);
 		config_load_file(ht, local);
 		g_free(local);
 	}
@@ -153,7 +156,7 @@ oio_cfg_get_value(const gchar *ns, const gchar *what)
 		ns = "default";
 
 	GHashTable *ht;
-	gchar *key = _build_key(ns, what);
+	gchar *key = oio_cfg_build_key(ns, what);
 	gchar *value = NULL;
 	if (NULL != (ht = oio_cfg_parse())) {
 		value = g_hash_table_lookup(ht, key);

@@ -359,9 +359,8 @@ _DEQUE_add (struct election_member_s *m)
 /* --- Misc helpers --------------------------------------------------------- */
 
 static gboolean
-_is_over (const gint64 last, const gint64 delay)
+_is_over(const gint64 now, const gint64 last, const gint64 delay)
 {
-	const gint64 now = oio_ext_monotonic_time ();
 	return (0 != delay && 0 != last && last < OLDEST(now,delay));
 }
 
@@ -2252,76 +2251,77 @@ static enum sqlx_action_e
 _member_get_next_action (const struct election_member_s *m)
 {
 	const struct election_manager_s *M = m->manager;
+	const gint64 now = oio_ext_monotonic_time ();
 
 	switch (m->step) {
 
 		case STEP_NONE:
-			if (_is_over(m->last_status, M->delay_expire_none))
+			if (_is_over(now, m->last_status, M->delay_expire_none))
 				return ACTION_EXPIRE;
 			return ACTION_NONE;
 
 		case STEP_LEAVING:
 			/* ACTION_LEAVE did not get us out of STEP_LEAVING,
 			 * go to STEP_FAILED. */
-			if (_is_over (m->last_status, M->delay_fail_pending))
+			if (_is_over(now, m->last_status, M->delay_fail_pending))
 				return ACTION_FAIL;
 			/* Retry the deletion of our own node. We must ensure that
 			 * ACTION_LEAVE does not update last_status or we may never
 			 * reach delay_fail_pending and return ACTION_FAIL. */
-			if (_is_over (m->last_status, M->delay_retry_pending))
+			if (_is_over(now, m->last_status, M->delay_retry_pending))
 				return ACTION_LEAVE;
 			return ACTION_NONE;
 
 		case STEP_CANDREQ:
-			if (_is_over(m->last_status, M->delay_fail_pending))
+			if (_is_over(now, m->last_status, M->delay_fail_pending))
 				return ACTION_FAIL;
 			/* There are very few chances that STEP_CANDREQ fails to move
 			 * forward. The only way to retry is to restart election. */
-			if (_is_over(m->last_status, M->delay_retry_pending))
+			if (_is_over(now, m->last_status, M->delay_retry_pending))
 				return ACTION_RESTART;
 			return ACTION_NONE;
 
 		case STEP_CANDOK:
-			if (_is_over(m->last_status, M->delay_fail_pending))
+			if (_is_over(now, m->last_status, M->delay_fail_pending))
 				return ACTION_FAIL;
-			if (_is_over(m->last_status, M->delay_retry_pending))
+			if (_is_over(now, m->last_status, M->delay_retry_pending))
 				return ACTION_RETRY;
 			return ACTION_NONE;
 
 		case STEP_PRELOST:
 		case STEP_PRELEAD:
-			if (_is_over (m->last_status, M->delay_fail_pending))
+			if (_is_over(now, m->last_status, M->delay_fail_pending))
 				return ACTION_FAIL;
 			/* ACTION_RETRY (calling defer_GETVERS()) is useful for both
 			 * STEP_PRELEAD and STEP_PRELOST, but for the latter we may
 			 * need to call step_AskMaster_start() again.
 			 * TODO: split STEP_PRELOST and add STEP_MASTER_KNOWN */
-			if (_is_over (m->last_status, M->delay_retry_pending))
+			if (_is_over(now, m->last_status, M->delay_retry_pending))
 				return ACTION_RETRY;
-			if (_is_over (m->last_USE, M->delay_ping_pending))
+			if (_is_over(now, m->last_USE, M->delay_ping_pending))
 				return ACTION_PING;
 			return ACTION_NONE;
 
 		case STEP_LEADER:
-			if (_is_over (m->last_atime, M->delay_expire_final_leader))
+			if (_is_over(now, m->last_atime, M->delay_expire_final_leader))
 				return ACTION_LEAVE;
-			if (_is_over (m->last_USE, M->delay_ping_final))
+			if (_is_over(now, m->last_USE, M->delay_ping_final))
 				return ACTION_PING;
 			return ACTION_NONE;
 
 		case STEP_LOST:
-			if (_is_over (m->last_atime, M->delay_expire_final))
+			if (_is_over(now, m->last_atime, M->delay_expire_final))
 				return ACTION_LEAVE;
-			if (_is_over (m->last_USE, M->delay_ping_final))
+			if (_is_over(now, m->last_USE, M->delay_ping_final))
 				return ACTION_PING;
 			return ACTION_NONE;
 
 		case STEP_FAILED:
-			if (_is_over (m->last_atime, M->delay_expire_failed))
+			if (_is_over(now, m->last_atime, M->delay_expire_failed))
 				return ACTION_LEAVE;
-			if (_is_over (m->last_status, M->delay_retry_failed))
+			if (_is_over(now, m->last_status, M->delay_retry_failed))
 				return ACTION_RESTART;
-			if (_is_over (m->last_USE, M->delay_ping_failed))
+			if (_is_over(now, m->last_USE, M->delay_ping_failed))
 				return ACTION_PING;
 			return ACTION_NONE;
 	}
