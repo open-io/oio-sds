@@ -95,6 +95,7 @@ struct gridd_client_vtable_s
 	// as failed.
 	gboolean (*expire) (struct gridd_client_s *c, gint64 now);
 
+	// Gives the ownership of `why` to the gridd_client_s `self`
 	void (*fail) (struct gridd_client_s *c, GError *why);
 };
 
@@ -121,6 +122,8 @@ gboolean gridd_client_finished (struct gridd_client_s *self);
 gboolean gridd_client_start (struct gridd_client_s *self);
 gboolean gridd_client_expire (struct gridd_client_s *self, gint64 now);
 void gridd_client_react (struct gridd_client_s *self);
+
+/* Gives the ownership of `why` to the gridd_client_s `self` */
 void gridd_client_fail (struct gridd_client_s *self, GError *why);
 
 /* Instanciate a client with the default VTABLE */
