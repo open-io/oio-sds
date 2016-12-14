@@ -88,7 +88,7 @@ _get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
 		gboolean nocache, gchar ***result)
 {
 	(void) nocache;
-	GSList *peers;
+	GSList *peers = NULL;
 	GError *err;
 
 	if (!n || !result)
@@ -100,13 +100,15 @@ _get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
 
 	err = list_zk_children_node(m0zkmanager, NULL, &peers);
 	if (err) {
-		g_slist_free_full(peers, g_free);
+		g_slist_free_full(peers, (GDestroyNotify)free_zknode);
 		*result = NULL;
 		g_prefix_error(&err, "ZooKeeper error: ");
 		return err;
 	}
 
-	if (!(*result = strv_filter(ss, peers)))
+	*result = strv_filter(ss, peers);
+	g_slist_free_full(peers, (GDestroyNotify)free_zknode);
+	if (!*result)
 		return NEWERROR(CODE_CONTAINER_NOTFOUND, "Base not managed");
 	return NULL;
 }
