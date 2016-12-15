@@ -326,6 +326,20 @@ class ObjectStorageApi(object):
     @handle_container_not_found
     def container_get_properties(self, account, container, properties=None,
                                  headers=None):
+        """
+        Get information about a container (user and system properties).
+
+        :param account: account in which the container is
+        :type account: `str`
+        :param container: name of the container
+        :type container: `str`
+        :param properties: *ignored*
+        :keyword headers: extra headers to send to the proxy
+        :type headers: `dict`
+        :returns: a `dict` with "properties" and "system" entries,
+            containing respectively a `dict` of user properties and
+            a `dict` of system properties.
+        """
         return self.container.container_get_properties(account, container,
                                                        properties=properties,
                                                        headers=headers)
@@ -377,11 +391,34 @@ class ObjectStorageApi(object):
                       headers=None, key_file=None,
                       **_kwargs):
         """
-        Create an object in `container` of `account` with data taken from
-        either `data` (str or generator) or `file_or_path` (path to a file
+        Create an object in *container* of *account* with data taken from
+        either *data* (`str` or `generator`) or *file_or_path* (path to a file
         or file-like object).
-        The object will be named after `obj_name` if specified, or after
-        the base name of `file_or_path`.
+        The object will be named after *obj_name* if specified, or after
+        the base name of *file_or_path*.
+
+        :param account: name of the account where to create the object
+        :type account: `str`
+        :param container: name of the container where to create the object
+        :type container: `str`
+        :param file_or_path: file-like object or path to a file from which
+            to read object data
+        :type file_or_path: `str` or file-like object
+        :param data: object data (if `file_or_path` is not set)
+        :type data: `str` or `generator`
+        :keyword etag: entity tag of the object
+        :type etag: `str`
+        :keyword obj_name: name of the object to create. If not set, will use
+            the base name of `file_or_path`.
+        :keyword mime_type: MIME type of the object
+        :type mime_type: `str`
+        :keyword properties: a dictionary of properties
+        :type properties: `dict`
+        :keyword policy: name of the storage policy
+        :type policy: `str`
+        :param headers: extra headers to pass to the proxy
+        :type headers: `dict`
+        :keyword key_file:
         """
         if (data, file_or_path) == (None, None):
             raise exc.MissingData()
