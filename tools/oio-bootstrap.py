@@ -80,7 +80,7 @@ hz 10
 aof-rewrite-incremental-fsync yes
 """
 
-template_redis_gridinit = """
+template_gridinit_redis = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 on_die=respawn
@@ -89,7 +89,7 @@ start_at_boot=false
 command=redis-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 """
 
-template_account_gridinit = """
+template_gridinit_account = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 on_die=respawn
@@ -99,7 +99,7 @@ command=${EXE_PREFIX}-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.con
 env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
-template_rdir_gridinit = """
+template_gridinit_rdir = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 on_die=respawn
@@ -109,14 +109,14 @@ command=${EXE_PREFIX}-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.con
 env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
-template_proxy_gridinit = """
+template_gridinit_proxy = """
 [service.${NS}-proxy]
 group=${NS},localhost,proxy,${IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
-#command=${EXE_PREFIX}-proxy -s OIO,${NS},proxy -O Bind=${RUNDIR}/${NS}-proxy.sock ${IP}:${PORT} ${NS}
-command=${EXE_PREFIX}-proxy -O Cache=${PROXY_CACHE} -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
+#command=${EXE} -s OIO,${NS},proxy -O Bind=${RUNDIR}/${NS}-proxy.sock ${IP}:${PORT} ${NS}
+command=${EXE} -O Cache=${PROXY_CACHE} -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
 """
 
 template_rawx_service = """
@@ -637,7 +637,7 @@ command=${EXE_PREFIX}-conscience-agent ${CFGDIR}/conscience-agent.yml
 env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
-template_conscience_gridinit = """
+template_gridinit_conscience = """
 [service.${NS}-conscience-${SRVNUM}]
 group=${NS},localhost,conscience,${IP}:${PORT}
 on_die=respawn
@@ -1088,6 +1088,14 @@ def generate(options):
             env['env.ORIG_EXE'] = orig_exe
             env['EXE'] = new_exe
             env['env.G_DEBUG'] = "gc-friendly"
+        elif options.get(PROFILE) == "callgrind":
+            orig_exe = env.get('EXE', env['EXE_PREFIX'])
+            new_exe = "valgrind --tool=callgrind --collect-jumps=yes\
+ --collect-systime=yes --trace-children=yes\
+ --callgrind-out-file=/tmp/callgrind.out.%q{ORIG_EXE}.%p " + orig_exe
+            env['env.ORIG_EXE'] = orig_exe
+            env['EXE'] = new_exe
+            del env['env.G_SLICE']
         return env
 
     def subenv(add):
@@ -1163,7 +1171,7 @@ def generate(options):
                           'PORT': port, 'PORT_HUB': hub})
             add_service(env)
             with open(gridinit(env), 'a+') as f:
-                tpl = Template(template_conscience_gridinit)
+                tpl = Template(template_gridinit_conscience)
                 f.write(tpl.safe_substitute(env))
             with open(config(env), 'w+') as f:
                 tpl = Template(template_conscience_service)
@@ -1253,7 +1261,7 @@ def generate(options):
     add_service(env)
     if options.get(ALLOW_REDIS):
         with open(gridinit(env), 'a+') as f:
-            tpl = Template(template_redis_gridinit)
+            tpl = Template(template_gridinit_redis)
             f.write(tpl.safe_substitute(env))
         with open(config(env), 'w+') as f:
             tpl = Template(template_redis)
@@ -1263,11 +1271,14 @@ def generate(options):
             f.write(tpl.safe_substitute(env))
 
     # proxy
-    env = subenv({'SRVTYPE': 'proxy', 'SRVNUM': 1, 'PORT': port_proxy})
+    env = subenv({'SRVTYPE': 'proxy', 'SRVNUM': 1, 'PORT': port_proxy,
+                  'EXE': ENV['EXE_PREFIX'] + '-' + 'proxy'})
     add_service(env)
     with open(gridinit(env), 'a+') as f:
-        tpl = Template(template_proxy_gridinit)
+        tpl = Template(template_gridinit_proxy)
         f.write(tpl.safe_substitute(env))
+        for key in (k for k in env.iterkeys() if k.startswith("env.")):
+            f.write("%s=%s\n" % (key, env[key]))
 
     # ecd
     env = subenv({'SRVTYPE': 'ecd', 'SRVNUM': 1, 'PORT': port_ecd})
@@ -1292,7 +1303,7 @@ def generate(options):
     env = subenv({'SRVTYPE': 'account', 'SRVNUM': 1, 'PORT': next(ports)})
     add_service(env)
     with open(gridinit(env), 'a+') as f:
-        tpl = Template(template_account_gridinit)
+        tpl = Template(template_gridinit_account)
         f.write(tpl.safe_substitute(env))
     with open(config(env), 'w+') as f:
         tpl = Template(template_account)
@@ -1309,7 +1320,7 @@ def generate(options):
                       'PORT': next(ports)})
         add_service(env)
         with open(gridinit(env), 'a+') as f:
-            tpl = Template(template_rdir_gridinit)
+            tpl = Template(template_gridinit_rdir)
             f.write(tpl.safe_substitute(env))
         with open(config(env), 'w+') as f:
             tpl = Template(template_rdir)

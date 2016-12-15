@@ -248,6 +248,8 @@ struct oio_cfg_handle_abstract_s
 	struct oio_cfg_handle_vtable_s *vtable;
 };
 
+gchar *oio_cfg_build_key(const gchar *ns, const gchar *what);
+
 /* wraps self->clean() */
 void oio_cfg_handle_clean (struct oio_cfg_handle_s *self);
 
@@ -260,6 +262,9 @@ gchar * oio_cfg_handle_get (struct oio_cfg_handle_s *self,
 
 /* Replaces the default handle to manage configuration by yourself. */
 void oio_cfg_set_handle (struct oio_cfg_handle_s *self);
+
+/* Create a cache handle that does caching. */
+struct oio_cfg_handle_s * oio_cfg_cache_create(gint64 delay);
 
 #ifdef __cplusplus
 }

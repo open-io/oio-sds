@@ -90,8 +90,8 @@ static void transport_gridd_clean_context(struct transport_client_context_s *);
 static gboolean _client_manage_l4v(struct network_client_s *clt, GByteArray *gba);
 
 /* XXX(jfs): ugly quirk, ok, but helpful to keep simple the stats support in
-   the server but allow it to reply "config volume /path/to/docroot" in its
-   stats. */
+ * the server but allow it to reply "config volume /path/to/docroot" in its
+ * stats. */
 const char *oio_server_volume = NULL;
 
 /* -------------------------------------------------------------------------- */
@@ -225,7 +225,8 @@ network_client_log_access(struct log_item_s *item)
 	g_string_append_c(gstr, ' ');
 	g_string_append(gstr, ensure(r->client->peer_name));
 	g_string_append_c(gstr, ' ');
-	g_string_append(gstr, ensure(hashstr_str(r->reqname)));
+	g_string_append_len(gstr, ensure(hashstr_str(r->reqname)),
+			hashstr_len(r->reqname)?:1);
 	g_string_append_printf(gstr, " %d %"G_GINT64_FORMAT" %"G_GSIZE_FORMAT" ",
 			item->code, diff_total, item->out_len);
 	g_string_append(gstr, ensure(r->uid));
@@ -894,17 +895,19 @@ dispatch_STATS(struct gridd_reply_ctx_s *reply,
 		gpointer gdata, gpointer hdata)
 {
 	(void) gdata, (void) hdata;
-	GByteArray *body = g_byte_array_new();
 
 	GArray *array = network_server_stat_getall(reply->client->server);
-	for (guint i=0; i<array->len ;++i) {
-		struct server_stat_s *st = &g_array_index (array, struct server_stat_s, i);
+	// Rough estimate, will be automatically resized if needed
+	GByteArray *body = g_byte_array_sized_new(array->len * 32);
+	for (guint i = 0; i < array->len; ++i) {
+		struct server_stat_s *st = &g_array_index(
+				array, struct server_stat_s, i);
 		gchar tmp[256];
-		gsize len = g_snprintf (tmp, sizeof(tmp), "%s=%"G_GUINT64_FORMAT"\n",
-				g_quark_to_string (st->which), st->value);
-		g_byte_array_append (body, (guint8*)tmp, len);
+		gsize len = g_snprintf(tmp, sizeof(tmp), "%s=%"G_GUINT64_FORMAT"\n",
+				g_quark_to_string(st->which), st->value);
+		g_byte_array_append(body, (guint8*)tmp, len);
 	}
-	g_array_free (array, TRUE);
+	g_array_free(array, TRUE);
 
 	if (oio_server_volume) {
 		g_byte_array_append (body,
