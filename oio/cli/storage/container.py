@@ -352,7 +352,7 @@ class AnalyzeContainer(show.ShowOne):
         account = self.app.client_manager.get_account()
         container = parsed_args.container
 
-        data = self.app.client_manager.storage.container_show(
+        data = self.app.client_manager.storage.container_get_properties(
             account, container)
 
         data_dir = self.app.client_manager.directory.get(
