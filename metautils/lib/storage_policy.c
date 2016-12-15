@@ -311,14 +311,15 @@ data_security_get_int64_param(const struct data_security_s *ds, const char *key,
 static GString *
 _rain_policy_to_chunk_method(const struct data_security_s *datasec)
 {
-	GString *result = g_string_new("ec/");
+	GString *result = g_string_sized_new(64);
 
 	const gint64 k = data_security_get_int64_param(datasec, DS_KEY_K, 6);
 	const gint64 m = data_security_get_int64_param(datasec, DS_KEY_M, 4);
 	const char *algo = data_security_get_param(datasec, DS_KEY_ALGO);
 
 	g_string_append_printf(result,
-			"algo=%s,k=%" G_GINT64_FORMAT",m=%" G_GINT64_FORMAT, algo, k, m);
+			"ec/algo=%s,k=%" G_GINT64_FORMAT",m=%" G_GINT64_FORMAT,
+			algo, k, m);
 
 	return result;
 }
@@ -326,14 +327,15 @@ _rain_policy_to_chunk_method(const struct data_security_s *datasec)
 static GString *
 _backblaze_policy_to_chunk_method(const struct data_security_s *datasec)
 {
-	GString *result = g_string_new("backblaze/");
+	GString *result = g_string_sized_new(128);
 
 	const char *account_id = data_security_get_param(datasec,
 							 DS_KEY_ACCOUNT_ID);
 	const char *bucket_name = data_security_get_param(datasec,
 							DS_KEY_BUCKET_NAME);
 
-	g_string_append_printf(result, "account_id=%s,bucket_name=%s",
+	g_string_append_printf(result,
+			"backblaze/account_id=%s,bucket_name=%s",
 			account_id, bucket_name);
 	return result;
 }
@@ -341,10 +343,14 @@ _backblaze_policy_to_chunk_method(const struct data_security_s *datasec)
 static GString *
 _plain_policy_to_chunk_method(const struct data_security_s *datasec)
 {
-	GString *result = g_string_new("plain/");
+	GString *result = g_string_sized_new(32);
+
 	const gint64 nb_copy = data_security_get_int64_param(datasec, DS_KEY_COPY_COUNT, 1);
+
 	g_string_append_printf(result,
-			"nb_copy=%" G_GINT64_FORMAT"", nb_copy);
+			"plain/nb_copy=%" G_GINT64_FORMAT"",
+			nb_copy);
+
 	return result;
 }
 

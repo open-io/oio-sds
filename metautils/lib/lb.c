@@ -157,7 +157,7 @@ oio_lb_pool__from_service_policy(struct oio_lb_world_s *lbw,
 	** by the service update policy */
 	struct oio_lb_pool_s *pool = oio_lb_world__create_pool(lbw, srvtype);
 	GString *targets = g_string_sized_new(64);
-	g_string_append_printf(targets, "%s", srvtype);
+	g_string_append(targets, srvtype);
 
 	gchar *user_is_service = service_update_get_tag_value(
 			pols, srvtype, NAME_TAGNAME_USER_IS_SERVICE);

@@ -625,9 +625,10 @@ list_conversion (const struct ParameterSequence *vl)
 			Parameter_t* p;
 			if (!(p = vl->list.array[i]))
 				continue;
-			g_hash_table_insert (ht,
-					g_strndup((gchar*)p->name.buf, p->name.size),
-					g_byte_array_append(g_byte_array_new(), p->value.buf, p->value.size));
+			const gsize len = p->value.size;
+			GByteArray *v = g_byte_array_sized_new(len);
+			v = g_byte_array_append(v, p->value.buf, len);
+			g_hash_table_insert (ht, g_strndup((gchar*)p->name.buf, p->name.size), v);
 		}
 	}
 
