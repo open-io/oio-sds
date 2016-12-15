@@ -389,7 +389,7 @@ void oio_str_gstring_append_json_pair (GString *base,
 	oio_str_gstring_append_json_quote(base, k);
 	g_string_append_c (base, ':');
 	if (v == NULL) {
-		g_string_append(base, "null");
+		g_string_append_static(base, "null");
 	} else {
 		oio_str_gstring_append_json_quote(base, v);
 	}
@@ -559,7 +559,7 @@ GError * STRV_decode_buffer (guint8 *buf, gsize len, gchar ***out) {
 void KV_encode_gstr2(GString *out, gchar **kv) {
 	gboolean first = TRUE;
 	if (!kv) {
-		g_string_append(out, "null");
+		g_string_append_static(out, "null");
 		return;
 	}
 	g_string_append_c(out, '{');
@@ -577,7 +577,7 @@ GString *KV_encode_gstr(gchar **kv) {
 		return g_string_new("");
 	if (!*kv)
 		return g_string_new("{}");
-	GString *gs = g_string_new("");
+	GString *gs = g_string_sized_new(128);
 	KV_encode_gstr2(gs, kv);
 	return gs;
 }
