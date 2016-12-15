@@ -60,7 +60,7 @@ conscience_get_namespace (const char *ns, struct namespace_info_s **out)
 	g_assert (out != NULL);
 	*out = NULL;
 
-	GString *body = g_string_new ("");
+	GString *body = g_string_sized_new (2048);
 	CURL *h = _curl_get_handle_proxy ();
 	GError *err = oio_proxy_call_conscience_info (h, ns, body);
 	curl_easy_cleanup (h);

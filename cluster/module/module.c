@@ -512,7 +512,8 @@ hub_publish_service (const struct service_info_s *si)
 {
 	if (!hub_queue)
 		return;
-	GString *encoded = g_string_new ("P");
+	GString *encoded = g_string_sized_new (256);
+	g_string_append_c (encoded, 'P');
 	service_info_encode_json (encoded, si, TRUE);
 	g_async_queue_push (hub_queue, g_string_free (encoded, FALSE));
 }
@@ -522,7 +523,8 @@ hub_remove_service (const struct service_info_s *si)
 {
 	if (!hub_queue)
 		return;
-	GString *encoded = g_string_new ("R");
+	GString *encoded = g_string_sized_new (256);
+	g_string_append_c (encoded, 'R');
 	service_info_encode_json (encoded, si, TRUE);
 	g_async_queue_push (hub_queue, g_string_free (encoded, FALSE));
 }
@@ -532,7 +534,8 @@ hub_flush_srvtype (const char *name)
 {
 	if (!hub_queue)
 		return;
-	GString *encoded = g_string_new ("F");
+	GString *encoded = g_string_sized_new (256);
+	g_string_append_c (encoded, 'F');
 	g_string_append (encoded, name);
 	g_async_queue_push (hub_queue, g_string_free (encoded, FALSE));
 }
