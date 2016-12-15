@@ -1,4 +1,2 @@
 zookeeper: true
 directory_replicas: 3
-meta1:
-  count: 7

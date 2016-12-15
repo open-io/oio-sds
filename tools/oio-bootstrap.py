@@ -115,8 +115,8 @@ group=${NS},localhost,proxy,${IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
-#command=${EXE_PREFIX}-proxy -s OIO,${NS},proxy -O Bind=${RUNDIR}/${NS}-proxy.sock ${IP}:${PORT} ${NS}
-command=${EXE} -O Cache=off -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
+#command=${EXE} -s OIO,${NS},proxy -O Bind=${RUNDIR}/${NS}-proxy.sock ${IP}:${PORT} ${NS}
+command=${EXE} -O Cache=${PROXY_CACHE} -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
 """
 
 template_rawx_service = """
@@ -893,8 +893,10 @@ port = 6000
 # Constants for the configuration of oio-bootstrap
 NS = 'ns'
 IP = 'ip'
+SVC_HOSTS = 'hosts'
 SVC_NB = 'count'
 SVC_PARAMS = 'params'
+PROXY_CACHE = 'proxy_cache'
 ALLOW_REDIS = 'redis'
 OPENSUSE = 'opensuse'
 ZOOKEEPER = 'zookeeper'
@@ -924,7 +926,8 @@ ZK_SHUFFLED="zk_shuffled"
 
 defaults = {
     'NS': 'OPENIO',
-    'IP': '127.0.0.1',
+    SVC_HOSTS: ('127.0.0.1',),
+    PROXY_CACHE: False,
     'ZK': '127.0.0.1:2181',
     'NB_CS': 1,
     'NB_M0': 1,
@@ -980,27 +983,26 @@ def mkdir_noerror(d):
 def type2exe(t):
     return EXE_PREFIX + '-' + str(t) + '-server'
 
-
-def next_port():
-    global port
-    res, port = port, port + 1
-    return res
-
+ports = (x for x in xrange(6000,65536))
 
 def generate(options):
-    def getint(v, default):
-        if v is None:
-            return int(default)
-        return int(v)
 
-    global port
-    port = getint(options.get('port-start'), 6000)
+    def ensure(v, default):
+        if v is None:
+            return default
+        return v
+
+    def getint(v, default):
+        try:
+            return int(ensure(v, default))
+        except:
+            return default
 
     final_conf = {}
     final_services = {}
 
-    port_proxy = next_port()
-    port_ecd = next_port()
+    port_proxy = next(ports)
+    port_ecd = next(ports)
 
     versioning = 1
     stgpol = "SINGLE"
@@ -1015,8 +1017,10 @@ def generate(options):
     if M2_STGPOL in options:
         stgpol = options[M2_STGPOL]
 
+    # `options` already holds the YAML values overriden by the CLI values
+    hosts = options.get(SVC_HOSTS) or defaults[SVC_HOSTS]
+
     ns = options.get('ns') or defaults['NS']
-    ip = options.get('ip') or defaults['IP']
     backblaze_account_id = options.get('backblaze', {}).get(ACCOUNT_ID)
     backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
     backblaze_app_key = options.get('backblaze', {}).get(APPLICATION_KEY)
@@ -1025,12 +1029,13 @@ def generate(options):
     state = options.get("state", None)
     udp_allowed = str(options.get(UDP_ALLOWED, "off")).lower()
     zk_shuffled = str(options.get(ZK_SHUFFLED, "off")).lower()
+    proxy_cache = ensure(options.get(PROXY_CACHE), defaults[PROXY_CACHE])
 
     if state not in [MASTER_VALUE, SLAVE_VALUE, STANDALONE_VALUE]:
         state = STANDALONE_VALUE
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
-    ENV = dict(IP=ip,
-               ZK_CNXSTRING=options.get('ZK'),
+    ENV = dict(ZK_CNXSTRING=options.get('ZK'),
+               PROXY_CACHE=str(proxy_cache).lower(),
                NS=ns,
                HOME=HOME,
                EXE_PREFIX=EXE_PREFIX,
@@ -1118,7 +1123,13 @@ def generate(options):
         if t not in final_services:
             final_services[t] = []
 
-        out = {'num': env['SRVNUM']}
+        num = int(env['SRVNUM'])
+        out = {'num': str(num)}
+        if 'IP' not in env:
+            _h = tuple(hosts)
+            if t in options and isinstance(options[t], dict):
+                _h = ensure(options[t].get(SVC_HOSTS), hosts)
+            env['IP'] = _h[ (num-1) % len(_h) ]
         if 'PORT' in env:
             out['addr'] = '%s:%s' % (env['IP'], env['PORT'])
         if 'VOLUME' in env:
@@ -1146,17 +1157,18 @@ def generate(options):
             f.write(tpl.safe_substitute(ENV))
         # Prepare a list of consciences
         for num in range(nb_conscience):
-            cs.append((num + 1, next_port(), next_port()))
+            h = hosts[num % len(hosts)]
+            cs.append((num + 1, h, next(ports), next(ports)))
         ENV.update({
             'CS_ALL_PUB': ','.join(
-                [str(ip)+':'+str(pub) for _, pub, _ in cs]),
+                [str(host)+':'+str(port) for _, host, port, _ in cs]),
             'CS_ALL_HUB': ','.join(
-                ['tcp://'+str(ip)+':'+str(hub) for _, _, hub in cs]),
+                ['tcp://'+str(host)+':'+str(hub) for _, host, _, hub in cs]),
         })
 
-        for num, pub, hub in cs:
+        for num, host, port, hub in cs:
             env = subenv({'SRVTYPE': 'conscience', 'SRVNUM': num,
-                          'PORT': pub, 'PORT_HUB': hub})
+                          'PORT': port, 'PORT_HUB': hub})
             add_service(env)
             with open(gridinit(env), 'a+') as f:
                 tpl = Template(template_gridinit_conscience)
@@ -1167,7 +1179,7 @@ def generate(options):
 
     # meta* + sqlx
     def generate_meta(t, n, tpl, ext_opt=""):
-        env = subenv({'SRVTYPE': t, 'SRVNUM': n, 'PORT': next_port(),
+        env = subenv({'SRVTYPE': t, 'SRVNUM': n, 'PORT': next(ports),
                       'EXE': ENV['EXE_PREFIX'] + '-' + t + '-server',
                       'EXTRA': ext_opt})
         add_service(env)
@@ -1214,15 +1226,16 @@ def generate(options):
                           options['sqlx'].get(SVC_PARAMS, ""))
 
     # RAWX
-    nb_rawx = getint(options['rawx'].get(SVC_NB), defaults['NB_RAWX'])
-    compression = options['rawx'].get(COMPRESSION, "off")
+    srvtype = 'rawx'
+    nb_rawx = getint(options[srvtype].get(SVC_NB), defaults['NB_RAWX'])
+    compression = options[srvtype].get(COMPRESSION, "off")
     if nb_rawx:
-        for num in range(nb_rawx):
-            env = subenv({'SRVTYPE': 'rawx',
-                          'SRVNUM': num + 1,
-                          'PORT': next_port(),
+        for i in range(nb_rawx):
+            env = subenv({'SRVTYPE': srvtype,
+                          'SRVNUM': i + 1,
+                          'PORT': next(ports),
                           'COMPRESSION': compression,
-                          'EXTRASLOT': ('rawx-even' if num % 2 else 'rawx-odd')
+                          'EXTRASLOT': ('rawx-even' if i % 2 else 'rawx-odd')
                           })
             add_service(env)
             # gridinit
@@ -1243,7 +1256,8 @@ def generate(options):
                 f.write(to_write)
 
     # redis
-    env = subenv({'SRVTYPE': 'redis', 'SRVNUM': 1, 'PORT': 6379})
+    srvtype = 'redis'
+    env = subenv({'SRVTYPE': srvtype, 'SRVNUM': 1, 'PORT': 6379})
     add_service(env)
     if options.get(ALLOW_REDIS):
         with open(gridinit(env), 'a+') as f:
@@ -1286,7 +1300,7 @@ def generate(options):
         f.write(to_write)
 
     # account
-    env = subenv({'SRVTYPE': 'account', 'SRVNUM': 1, 'PORT': next_port()})
+    env = subenv({'SRVTYPE': 'account', 'SRVNUM': 1, 'PORT': next(ports)})
     add_service(env)
     with open(gridinit(env), 'a+') as f:
         tpl = Template(template_gridinit_account)
@@ -1303,7 +1317,7 @@ def generate(options):
     for num in range(nb_rdir):
         env = subenv({'SRVTYPE': 'rdir',
                       'SRVNUM': num + 1,
-                      'PORT': next_port()})
+                      'PORT': next(ports)})
         add_service(env)
         with open(gridinit(env), 'a+') as f:
             tpl = Template(template_gridinit_rdir)
@@ -1344,16 +1358,17 @@ def generate(options):
         f.write(tpl.safe_substitute(ENV))
     # system config
     with open('{OIODIR}/sds.conf'.format(**ENV), 'w+') as f:
+        env = merge_env({'IP':hosts[0]})
         tpl = Template(template_local_header)
-        f.write(tpl.safe_substitute(ENV))
+        f.write(tpl.safe_substitute(env))
         tpl = Template(template_local_ns)
-        f.write(tpl.safe_substitute(ENV))
+        f.write(tpl.safe_substitute(env))
 
     with open('{KEY_FILE}'.format(**ENV), 'w+') as f:
         tpl = Template(template_credentials)
         f.write(tpl.safe_substitute(ENV))
 
-    # ensure volumes
+    # ensure volumes for srvtype in final_services:
     for srvtype in final_services:
         for rec in final_services[srvtype]:
             if 'path' in rec:
@@ -1385,23 +1400,28 @@ def dump_config(conf):
 
 def main():
     parser = argparse.ArgumentParser(description='OpenIO bootstrap tool')
-
-    parser.add_argument("namespace", help="Namespace name")
-    parser.add_argument("ip", help="IP to use")
-    parser.add_argument("-c", "--conf", action="append", dest='config',
+    parser.add_argument("-c", "--conf",
+                        action="append", dest='config',
                         help="Bootstrap configuration file")
-    parser.add_argument("-d", "--dump", action="store_true", default=False,
+    parser.add_argument("-d", "--dump",
+                        action="store_true", default=False,
                         dest='dump_config', help="Dump results")
+    parser.add_argument("namespace",
+                        action='store', type=str, default=None,
+                        help="Namespace name")
+    parser.add_argument("ip",
+                        metavar='<ip>', nargs='*',
+                        help="set of IP to use (repeatable option)")
 
     opts = {}
     opts[ZOOKEEPER] = False
-    opts['conscience'] = {SVC_NB: None}
-    opts['meta0'] = {SVC_NB: None}
-    opts['meta1'] = {SVC_NB: None}
-    opts['meta2'] = {SVC_NB: None}
-    opts['sqlx'] = {SVC_NB: None}
-    opts['rawx'] = {SVC_NB: None}
-    opts['rdir'] = {SVC_NB: None}
+    opts['conscience'] = {SVC_NB: None, SVC_HOSTS: None}
+    opts['meta0'] = {SVC_NB: None, SVC_HOSTS: None}
+    opts['meta1'] = {SVC_NB: None, SVC_HOSTS: None}
+    opts['meta2'] = {SVC_NB: None, SVC_HOSTS: None}
+    opts['sqlx'] = {SVC_NB: None, SVC_HOSTS: None}
+    opts['rawx'] = {SVC_NB: None, SVC_HOSTS: None}
+    opts['rdir'] = {SVC_NB: None, SVC_HOSTS: None}
 
     options = parser.parse_args()
     if options.config:
@@ -1411,9 +1431,13 @@ def main():
                 if data:
                     opts.update(data)
 
+    # Remove empty strings, then apply the default if no value remains
+    options.ip = [str(x) for x in options.ip if x]
+    if len(options.ip) > 0:
+        opts[SVC_HOSTS] = tuple(options.ip)
+
     opts['ZK'] = os.environ.get('ZK', defaults['ZK'])
     opts['ns'] = options.namespace
-    opts['ip'] = options.ip
     final_conf = generate(opts)
     if options.dump_config:
         dump_config(final_conf)
