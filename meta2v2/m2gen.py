@@ -450,7 +450,7 @@ the list."""
                     out.write("void\n"+t.c_name+"_set2_"+f.name+"(struct bean_"+t.c_name+"_s *bean, const guint8 *v, gsize vlen)\n{\n")
                     out.write("\tEXTRA_ASSERT(bean != NULL);\n")
                     out.write("\tEXTRA_ASSERT(v != NULL);\n")
-                    out.write("\tGByteArray *gba = g_byte_array_new();\n")
+                    out.write("\tGByteArray *gba = g_byte_array_sized_new(vlen);\n")
                     out.write("\tg_byte_array_append(gba, v, vlen);\n")
                     out.write("\t"+t.c_name+"_set_"+f.name+"(bean, gba);\n")
                     out.write("\tg_byte_array_free(gba, TRUE);\n")
