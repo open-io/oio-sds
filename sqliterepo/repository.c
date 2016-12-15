@@ -609,7 +609,7 @@ _open_fill_args(struct open_args_s *args, struct sqlx_repository_s *repo,
 	args->name.base = n->base;
 	args->name.ns = n->ns;
 
-	GString *fn = g_string_new("");
+	GString *fn = g_string_sized_new(256);
 	repo->locator(repo->locator_data, n, fn);
 	args->realname = hashstr_create_from_gstring(fn);
 	args->realpath = _compute_path_hash(repo, args->realname, NULL);
@@ -1356,7 +1356,7 @@ sqlx_repository_dump_base_gba(struct sqlx_sqlite3_s *sq3, GByteArray **dump)
 	{
 		GError *_err = NULL;
 		GByteArray **dump2 = arg;
-		GByteArray *_dump = g_byte_array_new();
+		GByteArray *_dump = g_byte_array_sized_new(128 * 1024);
 		_err = _read_file(fd, _dump);
 		if (!_err)
 			*dump2 = _dump;
@@ -1383,7 +1383,7 @@ sqlx_repository_dump_base_chunked(struct sqlx_sqlite3_s *sq3,
 		if (0 > rc)
 			return NEWERROR(errno, "Failed to stat the temporary base");
 		do {
-			GByteArray *gba = g_byte_array_new();
+			GByteArray *gba = g_byte_array_sized_new(128 * 1024);
 			err = _read_file_chunk(fd, chunk_size, gba);
 			if (!err) {
 				bytes_read += gba->len;
