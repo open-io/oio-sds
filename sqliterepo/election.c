@@ -391,9 +391,13 @@ _cond_clean (gpointer p)
 	}
 }
 
+#define _manager_save_locked(M) do { \
+	/* (M)->when_lock = g_get_monotonic_time(); */ \
+} while (0)
+
 #define _manager_lock(M) do { \
 	g_mutex_lock(&(M)->lock); \
-	(M)->when_lock = g_get_monotonic_time(); \
+	_manager_save_locked(M); \
 } while (0)
 
 #define _manager_unlock(M) do { \
@@ -1819,7 +1823,7 @@ wait_for_final_status(struct election_member_s *m, const gint64 deadline)
 		m->manager->when_lock = 0;
 		g_cond_wait_until(member_get_cond(m), member_get_lock(m),
 				g_get_monotonic_time() + oio_election_period_cond_wait);
-		m->manager->when_lock = g_get_monotonic_time();
+		_manager_save_locked(m->manager);
 	}
 
 	m->last_atime = oio_ext_monotonic_time ();
@@ -2410,9 +2414,6 @@ member_finish_CHECKING_SLAVES(struct election_member_s *member)
 	if ((--member->pending_GETVERS) > 0)
 		return;
 	EXTRA_ASSERT(!member_has_action(member));
-
-	const struct election_manager_s *M = m->manager;
-	const gint64 now = oio_ext_monotonic_time ();
 
 	const guint16 asked = member->count_GETVERS;
 	const guint16 outdated = member->outdated_GETVERS;
@@ -3355,6 +3356,7 @@ election_manager_play_timers (struct election_manager_s *manager, guint max)
 	};
 
 	guint count = 0;
+	gint64 now = oio_ext_monotonic_time();
 
 	_manager_lock(manager);
 	for (const int *pi=steps; *pi >= 0 && (!max || count < max) ;++pi) {
@@ -3369,7 +3371,7 @@ election_manager_play_timers (struct election_manager_s *manager, guint max)
 
 			struct election_member_s *m = l->data;
 			if (m->step == STEP_NONE) {
-				if (_IS_OVER(m->last_status, manager->delay_expire_NONE)) {
+				if (_is_over(now, m->last_status, manager->delay_expire_NONE)) {
 					/* Election in NONE state for longer than acceptable */
 					if (m->refcount == 1) {
 						/* In addition, not referenced by anyone */
@@ -3403,7 +3405,7 @@ election_manager_play_timers (struct election_manager_s *manager, guint max)
 
 guint
 election_manager_balance_masters(struct election_manager_s *M,
-		guint ratio, guint max)
+		guint ratio, guint max, gint64 inactivity UNUSED)
 {
 	guint count = 0;
 
