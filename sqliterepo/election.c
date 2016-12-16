@@ -473,7 +473,7 @@ _extract_id(const char *path, gint32 *pid)
 	return TRUE;
 }
 
-static inline int gint32_cmp(register gint32 i1, register gint32 i2) { return CMP(i1,i2); }
+static inline int gint32_cmp(gint32 i1, gint32 i2) { return CMP(i1,i2); }
 
 static int
 gint32_sort(gconstpointer p1, gconstpointer p2)
@@ -2410,6 +2410,9 @@ member_finish_CHECKING_SLAVES(struct election_member_s *member)
 	if ((--member->pending_GETVERS) > 0)
 		return;
 	EXTRA_ASSERT(!member_has_action(member));
+
+	const struct election_manager_s *M = m->manager;
+	const gint64 now = oio_ext_monotonic_time ();
 
 	const guint16 asked = member->count_GETVERS;
 	const guint16 outdated = member->outdated_GETVERS;

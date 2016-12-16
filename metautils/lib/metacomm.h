@@ -115,6 +115,10 @@ GError* metautils_message_extract_flags32(MESSAGE msg, const gchar *n,
 GError* metautils_message_extract_string(MESSAGE msg, const gchar *n, gchar *dst,
 		gsize dst_size);
 
+/** Returns TRUE on success, FALSE otherwise */
+gboolean metautils_message_extract_string_noerror(MESSAGE msg, const gchar *n,
+		gchar *dst, gsize dst_size);
+
 gchar* metautils_message_extract_string_copy(MESSAGE msg, const gchar *n);
 
 GError* metautils_message_extract_strint64(MESSAGE msg, const gchar *n,

@@ -754,7 +754,7 @@ _client_fail(struct gridd_client_s *client, GError *why)
 {
 	EXTRA_ASSERT(client != NULL);
 	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
-	_client_replace_error(client, NEWERROR(why->code, "%s", why->message));
+	_client_replace_error(client, why);
 }
 
 static void

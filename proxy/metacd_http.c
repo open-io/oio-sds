@@ -87,6 +87,8 @@ GRWLock wanted_rwlock = {0};
 gchar **wanted_srvtypes = NULL;
 GBytes **wanted_prepared = NULL;
 
+struct oio_cfg_handle_s *ns_conf = NULL;
+
 // Misc. handlers --------------------------------------------------------------
 
 static enum http_rc_e
@@ -680,7 +682,7 @@ grid_main_get_options (void)
 		{"DirHighMax", OT_UINT, {.u = &dir_high_max},
 			"Directory 'high' (cs+meta0) MAX cached elements"},
 		{"PreferMaster", OT_BOOL, {.b = &flag_prefer_master},
-		        "Prefer to join Master before joining slave directly"},
+			"Prefer to join Master before joining slave directly"},
 		{NULL, 0, {.i = 0}, NULL}
 	};
 
@@ -776,12 +778,18 @@ grid_main_specific_fini (void)
 	g_rw_lock_clear(&wanted_rwlock);
 	g_rw_lock_clear(&master_rwlock);
 
-	if (csurl) g_strfreev (csurl);
+	if (csurl)
+		g_strfreev(csurl);
 	csurl = NULL;
 	csurl_count = 0;
 
 	g_slist_free_full (config_urlv, g_free);
 	config_urlv = NULL;
+
+	if (ns_conf) {
+		oio_cfg_handle_clean(ns_conf);
+		ns_conf = NULL;
+	}
 }
 
 static void
@@ -906,11 +914,14 @@ grid_main_configure (int argc, char **argv)
 	g_rw_lock_init (&wanted_rwlock);
 	g_rw_lock_init (&master_rwlock);
 
-	ns_name = g_strdup (cfg_namespace);
-	g_strlcpy (nsinfo.name, cfg_namespace, sizeof (nsinfo.name));
+	ns_name = g_strdup(cfg_namespace);
+	g_strlcpy(nsinfo.name, cfg_namespace, sizeof(nsinfo.name));
 	nsinfo.chunk_size = 1;
 
-	_task_reload_csurl (NULL);
+	ns_conf = oio_cfg_cache_create(30 * G_TIME_SPAN_SECOND);
+	oio_cfg_set_handle(ns_conf);
+
+	_task_reload_csurl(NULL);
 	if (!csurl || !csurl_count) {
 		GRID_ERROR("No conscience URL configured");
 		return FALSE;

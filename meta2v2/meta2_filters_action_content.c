@@ -400,10 +400,10 @@ meta2_filter_action_del_content_properties(struct gridd_filter_ctx_s *ctx,
 	GError *e = STRV_decode_buffer(buf, len, &namev);
 	if (!e) {
 		e = meta2_backend_del_properties(m2b, url, namev);
-		metautils_pfree(&namev);
+		g_strfreev(namev);
 	}
 
-	if (NULL != e) {
+	if (e) {
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
 	}

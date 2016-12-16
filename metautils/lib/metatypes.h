@@ -34,8 +34,14 @@ License along with this library.
 /** The maximum length of a namespace name */
 #define LIMIT_LENGTH_NSNAME 64
 
+/** The maximum length of an account name */
+#define LIMIT_LENGTH_ACCOUNTNAME 64
+
 /** The maximum length of a content name */
 #define LIMIT_LENGTH_CONTENTPATH 1024
+
+/** The maximum length of the string representation of a content version */
+#define LIMIT_LENGTH_VERSION 24
 
 /** The maximum length of a storage policy name */
 #define LIMIT_LENGTH_STGPOLICY 32
@@ -51,10 +57,10 @@ License along with this library.
 
 #define LIMIT_LENGTH_BASETYPE 32
 
-/** The maximum length of a service type name */
+/** The maximum length of a service id */
 #define LIMIT_LENGTH_SRVID 64
 
-/** The maximum length of a service id */
+/** The maximum length of a service type name */
 #define LIMIT_LENGTH_SRVTYPE 32
 
 /** The maximum length of service options */

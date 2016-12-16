@@ -359,15 +359,16 @@ static struct map_s
 	const char *f;
 	int u;
 	const char *avoid;
+	int max_length;
 } url2msg_map[] = {
-	{NAME_MSGKEY_NAMESPACE,   OIOURL_NS,        NULL},
-	{NAME_MSGKEY_ACCOUNT,     OIOURL_ACCOUNT,   NULL},
-	{NAME_MSGKEY_USER,        OIOURL_USER,      NULL},
-	{NAME_MSGKEY_TYPENAME,    OIOURL_TYPE,      OIOURL_DEFAULT_TYPE},
-	{NAME_MSGKEY_CONTENTPATH, OIOURL_PATH,      NULL},
-	{NAME_MSGKEY_CONTENTID,   OIOURL_CONTENTID, NULL},
-	{NAME_MSGKEY_VERSION,     OIOURL_VERSION,   NULL},
-	{NULL,0,NULL},
+	{NAME_MSGKEY_NAMESPACE,   OIOURL_NS,        NULL, LIMIT_LENGTH_NSNAME},
+	{NAME_MSGKEY_ACCOUNT,     OIOURL_ACCOUNT,   NULL, LIMIT_LENGTH_ACCOUNTNAME},
+	{NAME_MSGKEY_USER,        OIOURL_USER,      NULL, LIMIT_LENGTH_BASENAME},
+	{NAME_MSGKEY_TYPENAME,    OIOURL_TYPE,      OIOURL_DEFAULT_TYPE, LIMIT_LENGTH_SRVTYPE},
+	{NAME_MSGKEY_CONTENTPATH, OIOURL_PATH,      NULL, LIMIT_LENGTH_CONTENTPATH},
+	{NAME_MSGKEY_CONTENTID,   OIOURL_CONTENTID, NULL, STRLEN_CONTAINERID},
+	{NAME_MSGKEY_VERSION,     OIOURL_VERSION,   NULL, LIMIT_LENGTH_VERSION},
+	{NULL, 0, NULL, 0},
 };
 
 void
@@ -409,23 +410,25 @@ metautils_message_add_url_no_type (MESSAGE m, struct oio_url_s *url)
 struct oio_url_s *
 metautils_message_extract_url (MESSAGE m)
 {
+	GError *err = NULL;
 	struct oio_url_s *url = oio_url_empty ();
-	for (struct map_s *p = url2msg_map; p->f ;++p) {
-		// TODO call really often, so make it zero-copy
-		gchar *s = metautils_message_extract_string_copy (m, p->f);
-		if (s) {
-			if (!p->avoid || strcmp(p->avoid, s))
-				oio_url_set (url, p->u, s);
-			g_free0 (s);
+	for (struct map_s *p = url2msg_map; p->f; ++p) {
+		gchar field[p->max_length+1];
+		memset(field, 0, sizeof(field));
+		if (metautils_message_extract_string_noerror(
+				m, p->f, field, sizeof(field))) {
+			if (!p->avoid || strcmp(p->avoid, field)) {
+				oio_url_set(url, p->u, field);
+			}
 		}
 	}
 
 	container_id_t cid;
-	GError *e = metautils_message_extract_cid (m, NAME_MSGKEY_CONTAINERID, &cid);
-	if (e)
-		g_clear_error (&e);
+	err = metautils_message_extract_cid(m, NAME_MSGKEY_CONTAINERID, &cid);
+	if (err)
+		g_clear_error(&err);
 	else
-		oio_url_set_id (url, cid);
+		oio_url_set_id(url, cid);
 
 	return url;
 }
@@ -458,6 +461,20 @@ metautils_message_extract_cid(MESSAGE msg, const gchar *n, container_id_t *cid)
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid container ID at '%s'", n);
 	memcpy(cid, f, sizeof(container_id_t));
 	return NULL;
+}
+
+gboolean
+metautils_message_extract_string_noerror(MESSAGE msg, const gchar *n,
+		gchar *dst, gsize dst_size)
+{
+	gsize fsize = 0;
+	void *f = metautils_message_get_field(msg, n, &fsize);
+	if (!f || !fsize || (gssize)fsize < 0 || fsize >= dst_size)
+		return FALSE;
+	if (fsize)
+		memcpy(dst, f, fsize);
+	memset(dst+fsize, 0, dst_size-fsize);
+	return TRUE;
 }
 
 GError *
@@ -625,6 +642,10 @@ metautils_message_extract_header_encoded(MESSAGE msg, const gchar *n, gboolean m
 GError *
 metautils_message_extract_strint64(MESSAGE msg, const gchar *n, gint64 *i64)
 {
+	/* 20 chars for the number
+	 *  1 char for the sign
+	 *  1 char for the NULL terminator
+	 *  2 chars for padding */
 	gchar *end, dst[24];
 
 	EXTRA_ASSERT (i64 != NULL);
