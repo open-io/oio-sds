@@ -47,6 +47,10 @@ struct sqlx_sync_s
 	guint hash_depth;
 };
 
+gint32 oio_sync_failure_threshold_action = 10;
+gint32 oio_sync_failure_threshold_hook = 10;
+
+
 static void _clear(struct sqlx_sync_s *ss);
 
 static GError* _open(struct sqlx_sync_s *ss);
@@ -297,6 +301,10 @@ _acreate (struct sqlx_sync_s *ss, const char *path, const char *v,
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
+#ifdef HAVE_ENBUG
+	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
+		return ZOPERATIONTIMEOUT;
+#endif
 	gchar *p = _realpath(ss, path);
 	int rc = zoo_acreate(ss->zh, p, v, vlen, &ZOO_OPEN_ACL_UNSAFE,
 			flags, completion, data);
@@ -311,6 +319,10 @@ _adelete (struct sqlx_sync_s *ss, const char *path, int version,
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
+#ifdef HAVE_ENBUG
+	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
+		return ZOPERATIONTIMEOUT;
+#endif
 	gchar *p = _realpath(ss, path);
 	int rc = zoo_adelete(ss->zh, p, version, completion, data);
 	OUTGOING("ZK_DEL %s %d", p, rc);
@@ -325,6 +337,10 @@ _awexists (struct sqlx_sync_s *ss, const char *path,
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
+#ifdef HAVE_ENBUG
+	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
+		return ZOPERATIONTIMEOUT;
+#endif
 	gchar *p = _realpath(ss, path);
 	int rc = zoo_awexists(ss->zh, p, watcher, watcherCtx, completion, data);
 	GRID_TRACE2("ZK_EXISTS %s %d", p, rc);
@@ -339,6 +355,10 @@ _awget (struct sqlx_sync_s *ss, const char *path,
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
+#ifdef HAVE_ENBUG
+	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
+		return ZOPERATIONTIMEOUT;
+#endif
 	gchar *p = _realpath(ss, path);
 	int rc = zoo_awget(ss->zh, p, watcher, watcherCtx, completion, data);
 	OUTGOING("ZK_GET %s %d", p, rc);
@@ -353,6 +373,10 @@ _awget_children (struct sqlx_sync_s *ss, const char *path,
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
+#ifdef HAVE_ENBUG
+	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
+		return ZOPERATIONTIMEOUT;
+#endif
 	gchar *p = _realpath(ss, path);
 	int rc = zoo_awget_children(ss->zh, p, watcher, watcherCtx, completion,
 			data);
@@ -368,6 +392,10 @@ _awget_siblings (struct sqlx_sync_s *ss, const char *path,
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
+#ifdef HAVE_ENBUG
+	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
+		return ZOPERATIONTIMEOUT;
+#endif
 	gchar *p = _realdirname(ss, path);
 	int rc = zoo_awget_children(ss->zh, p, watcher, watcherCtx, completion, data);
 	OUTGOING("ZK_CHILDREN %s %d", p, rc);

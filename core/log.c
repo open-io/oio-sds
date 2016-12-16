@@ -256,6 +256,7 @@ _logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 		default:
 			g_string_append_len(gstr, "log ", 4);
 			g_string_append(gstr, glvl_to_str(log_level));
+			g_string_append_c(gstr, ' ');
 			/* print the domain */
 			if (!(oio_log_flags & LOG_FLAG_TRIM_DOMAIN))
 				g_string_append(gstr, log_domain);

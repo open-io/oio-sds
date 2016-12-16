@@ -22,9 +22,8 @@ License along with this library.
 
 # include <glib/gtypes.h>
 
-struct hashstr_s;
 struct sqlx_name_s;
 
-struct hashstr_s * sqliterepo_hash_name (const struct sqlx_name_s *n);
+gchar * sqliterepo_hash_name (const struct sqlx_name_s *n);
 
 #endif /*OIO_SDS__sqliterepo__hash_h*/
