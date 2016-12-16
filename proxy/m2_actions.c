@@ -317,18 +317,28 @@ _dump_json_prefixes (GString *gstr, GTree *tree_prefixes)
 static void
 _dump_json_properties (GString *gstr, GTree *properties)
 {
-	g_string_append_static (gstr, "\"properties\":{");
-	if (properties) {
-		gboolean first = TRUE;
-		gboolean _func (gpointer k, gpointer v, gpointer i) {
-			(void) i;
-			COMA(gstr,first);
-			oio_str_gstring_append_json_pair (gstr, (const char *)k, (const char *)v);
-			return FALSE;
+	gboolean first = TRUE;
+	gboolean _func (gpointer k, gpointer v, gpointer i) {
+		gboolean want_system = GPOINTER_TO_INT(i);
+		gboolean is_user = g_str_has_prefix((gchar*)k, "user.");
+		if (want_system ^ is_user) {
+			COMA(gstr, first);
+			if (is_user)
+				k += sizeof("user.") - 1;
+			oio_str_gstring_append_json_pair(gstr, (const char *)k, (const char *)v);
 		}
-		g_tree_foreach (properties, _func, NULL);
+		return FALSE;
 	}
-	g_string_append_c (gstr, '}');
+	g_string_append_static(gstr, "\"properties\":{");
+	if (properties) {
+		g_tree_foreach(properties, _func, GINT_TO_POINTER(0));
+	}
+	g_string_append_static(gstr, "},\"system\":{");
+	if (properties) {
+		first = TRUE;
+		g_tree_foreach(properties, _func, GINT_TO_POINTER(1));
+	}
+	g_string_append_c(gstr, '}');
 }
 
 static enum http_rc_e
