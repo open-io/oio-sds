@@ -146,9 +146,9 @@ oio_event__init (GString *gs, const char *type, struct oio_url_s *url)
 	oio_str_gstring_append_json_pair (gs, "event", type);
 	g_string_append_printf (gs, ",\"when\":%"G_GINT64_FORMAT, oio_ext_real_time());
 	if (!url)
-		g_string_append (gs, ",\"url\":null");
+		g_string_append_static (gs, ",\"url\":null");
 	else {
-		g_string_append (gs, ",\"url\":{");
+		g_string_append_static (gs, ",\"url\":{");
 		oio_url_to_json (gs, url);
 		g_string_append_c (gs, '}');
 	}

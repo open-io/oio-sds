@@ -41,7 +41,8 @@ _sqlx_action_noreturn_TAIL (struct req_args_s *args, struct client_ctx_s *ctx,
 		return _reply_common_error (args, err);
 	}
 
-	GString *out = g_string_new ("{");
+	GString *out = g_string_sized_new (256);
+	g_string_append_c(out, '{');
 
 	/* Pack the output */
 	if (ctx->which == CLIENT_RUN_ALL && ctx->count) {
@@ -51,19 +52,19 @@ _sqlx_action_noreturn_TAIL (struct req_args_s *args, struct client_ctx_s *ctx,
 			g_string_append_printf (out, "\"%s\":{", ctx->urlv[i]);
 			if (ctx->errorv[i]) {
 				GError *e = ctx->errorv[i];
-				g_string_append (out, "\"status\":{");
+				g_string_append_static (out, "\"status\":{");
 				_append_status (out, e->code, e->message);
-				g_string_append (out, "}");
+				g_string_append_c (out, '}');
 			}
 			if (ctx->bodyv[i]) {
 				GByteArray *b = ctx->bodyv[i];
-				g_string_append_printf (out, ",\"body\":");
+				g_string_append_static (out, ",\"body\":");
 				if (b && b->data && b->len)
 					g_string_append_len (out, (const char*)(b->data), b->len);
 				else
-					g_string_append_len (out, "\"\"", 2);
+					g_string_append_static (out, "\"\"");
 			} else {
-				g_string_append_printf (out, ",\"body\":null");
+				g_string_append_static (out, ",\"body\":null");
 			}
 			g_string_append_c (out, '}');
 		}
@@ -212,12 +213,12 @@ action_sqlx_propget (struct req_args_s *args, struct json_object *jargs)
 	gchar **user = KV_extract_prefixed(pairs, SQLX_ADMIN_PREFIX_USER);
 	gchar **nonuser = KV_extract_not_prefixed(pairs, SQLX_ADMIN_PREFIX_USER);
 
-	GString *out = g_string_new("");
-	g_string_append(out, "{\"properties\":");
+	GString *out = g_string_sized_new(512);
+	g_string_append_static(out, "{\"properties\":");
 	KV_encode_gstr2(out, user);
-	g_string_append(out, ",\"system\":");
+	g_string_append_static(out, ",\"system\":");
 	KV_encode_gstr2(out, nonuser);
-	g_string_append(out, "}");
+	g_string_append_c(out, '}');
 
 	g_free(user);
 	g_free(nonuser);

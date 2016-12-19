@@ -134,12 +134,6 @@ GByteArray* sqlx_pack_DESTROY(const struct sqlx_name_s *name, gboolean local);
 
 // sqlx-related elements coders ------------------------------------------------
 
-GByteArray* sqlx_encode_Row(struct Row *row, GError **err);
-
-GByteArray* sqlx_encode_RowSet(struct RowSet *rows, GError **err);
-
-GByteArray* sqlx_encode_Table(struct Table *table, GError **err);
-
 GByteArray* sqlx_encode_TableSequence(struct TableSequence *tabseq,
 		GError **err);
 

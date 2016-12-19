@@ -39,7 +39,7 @@ static GString *
 _gstr_assign(GString *base, GString *gstr)
 {
 	if (!base)
-		base = g_string_sized_new(0);
+		base = g_string_sized_new(gstr ? gstr->len : 8);
 	if (base != gstr) {
 		g_string_set_size(base, 0);
 		g_string_append_len(base, gstr->str, gstr->len);
@@ -65,7 +65,7 @@ static GByteArray *
 _gba_assign(GByteArray *base, GByteArray *gba)
 {
 	if (!base)
-		base = g_byte_array_new();
+		base = g_byte_array_sized_new(gba ? gba->len : 8);
 	if (base != gba) {
 		g_byte_array_set_size(base, 0);
 		g_byte_array_append(base, gba->data, gba->len);
@@ -155,13 +155,13 @@ _bean_clause(gpointer bean, GString *gstr, gboolean pk_only)
 	const struct field_descriptor_s *fd;
 
 	if (!gstr)
-		gstr = g_string_sized_new(3 * DESCR(bean)->count_fields);
+		gstr = g_string_sized_new(16 * DESCR(bean)->count_fields);
 
 	for (count=0,fd=DESCR(bean)->fields; fd->name ;fd++) {
 		if (pk_only && !fd->pk)
 			continue;
 		if (count)
-			g_string_append(gstr, " AND ");
+			g_string_append_static(gstr, " AND ");
 		g_string_append(gstr, fd->name);
 		g_string_append_c(gstr, '=');
 		g_string_append_c(gstr, '?');
@@ -223,7 +223,7 @@ _stmt_apply_GV_parameter_simple(sqlite3_stmt *stmt, int pos, GVariant *p)
 			rc = sqlite3_bind_int64(stmt, pos, g_variant_get_uint16(p));
 			EXTRA_ASSERT(rc == SQLITE_OK);
 			return NULL;
-		case 's': 
+		case 's':
 			s = g_variant_get_string(p, &slen);
 			rc = sqlite3_bind_text(stmt, pos, s, slen, NULL);
 			EXTRA_ASSERT(rc == SQLITE_OK);
@@ -422,9 +422,9 @@ _db_get_bean(const struct bean_descriptor_s *descr,
 	if (!clause || !*clause)
 		err = _db_prepare_statement(db, descr->sql_select, descr->sql_select_len, &stmt);
 	else {
-		GString *sql = g_string_new("");
+		GString *sql = g_string_sized_new(128 + descr->sql_select_len);
 		g_string_append_len (sql, descr->sql_select, descr->sql_select_len);
-		g_string_append_len (sql, " WHERE ", sizeof(" WHERE ")-1);
+		g_string_append_static (sql, " WHERE ");
 		g_string_append (sql, clause);
 		err = _db_prepare_statement(db, sql->str, sql->len, &stmt);
 		g_string_free(sql, TRUE);
@@ -466,9 +466,9 @@ _db_count_bean(const struct bean_descriptor_s *descr,
 	if (!clause || !*clause)
 		err = _db_prepare_statement(db, descr->sql_count, descr->sql_count_len, &stmt);
 	else {
-		GString *sql = g_string_new("");
+		GString *sql = g_string_sized_new(128 + descr->sql_count_len);
 		g_string_append_len (sql, descr->sql_count, descr->sql_count_len);
-		g_string_append_len (sql, " WHERE ", sizeof(" WHERE ")-1);
+		g_string_append_static (sql, " WHERE ");
 		g_string_append (sql, clause);
 		err = _db_prepare_statement(db, sql->str, sql->len, &stmt);
 		g_string_free(sql, TRUE);
@@ -500,7 +500,7 @@ _db_count_bean(const struct bean_descriptor_s *descr,
 static GString *
 _bean_query_DELETE(gpointer bean)
 {
-	GString *gstr = g_string_new("");
+	GString *gstr = g_string_sized_new(128 + DESCR(bean)->sql_delete_len);
 	g_string_append_len(gstr, DESCR(bean)->sql_delete, DESCR(bean)->sql_delete_len);
 	return _bean_clause(bean, gstr, TRUE);
 }
@@ -536,7 +536,7 @@ GError*
 _db_delete(const struct bean_descriptor_s *descr, sqlite3 *db,
 		const gchar *clause, GVariant **params)
 {
-	GString *sql = g_string_new("");
+	GString *sql = g_string_sized_new(128 + descr->sql_delete_len);
 	g_string_append_len (sql, descr->sql_delete, descr->sql_delete_len);
 	g_string_append(sql, clause);
 	GError *err = _db_execute(db, sql->str, sql->len, params);
@@ -763,10 +763,10 @@ _db_del_FK(gpointer bean,
 	const struct fk_field_s *fkf;
 
 	/* build the query string */
-	GString *gsql = g_string_new("");
+	GString *gsql = g_string_sized_new(128);
 	for (count=0,fkf=fkf0; fkf->name ;fkf++) {
 		if (count++)
-			g_string_append(gsql, " AND ");
+			g_string_append_static(gsql, " AND ");
 		g_string_append(gsql, fkf->name);
 		g_string_append_c(gsql, '=');
 		g_string_append_c(gsql, '?');
@@ -800,10 +800,10 @@ _db_get_FK(gpointer bean,
 	const struct fk_field_s *fkf;
 
 	/* build the query string */
-	GString *gsql = g_string_new("");
+	GString *gsql = g_string_sized_new(128);
 	for (count=0,fkf=fkf0; fkf->name ;fkf++) {
 		if (count++)
-			g_string_append(gsql, " AND ");
+			g_string_append_static(gsql, " AND ");
 		g_string_append(gsql, fkf->name);
 		g_string_append_c(gsql, '=');
 		g_string_append_c(gsql, '?');
@@ -889,10 +889,10 @@ _db_count_FK(gpointer bean,
 	const struct fk_field_s *fkf;
 
 	/* build the query string */
-	GString *gsql = g_string_new("");
+	GString *gsql = g_string_sized_new(128);
 	for (count=0,fkf=fkf0; fkf->name ;fkf++) {
 		if (count++)
-			g_string_append(gsql, " AND ");
+			g_string_append_static(gsql, " AND ");
 		g_string_append(gsql, fkf->name);
 		g_string_append_c(gsql, '=');
 		g_string_append_c(gsql, '?');
@@ -970,7 +970,7 @@ _bean_debug(GString *gstr, gpointer bean)
 	const struct field_descriptor_s *fd;
 
 	if (!gstr)
-		gstr = g_string_new("");
+		gstr = g_string_sized_new(256);
 
 	g_string_append_printf(gstr, "<%s:%p>(", DESCR(bean)->name, bean);
 
@@ -1004,7 +1004,7 @@ _bean_debug(GString *gstr, gpointer bean)
 				else {
 					g_string_append_printf(gstr, "%s:0x\"", fd->name);
 					metautils_gba_to_hexgstr(gstr, GBA(pf));
-					g_string_append(gstr, "\", ");
+					g_string_append_static(gstr, "\", ");
 				}
 				continue;
 			default:
@@ -1022,7 +1022,7 @@ _bean_debugl2 (const char *tag, GSList *beans)
 {
 	if (!GRID_DEBUG_ENABLED())
 		return;
-	GString *gs = g_string_new("");
+	GString *gs = g_string_sized_new(512);
 	for (; beans ;beans=beans->next) {
 		g_string_set_size (gs, 0);
 		gs = _bean_debug (gs, beans->data);

@@ -389,9 +389,9 @@ _pending_check (const GArray *src, ...)
 
 	if (tmp->len != src->len) {
 		GString *gs = g_string_new("");
-		g_string_append (gs, "expected=");
+		g_string_append_static (gs, "expected=");
 		_pending_debug (gs, tmp);
-		g_string_append (gs, " got=");
+		g_string_append_static (gs, " got=");
 		_pending_debug (gs, src);
 		GRID_WARN("Pending elements %s", gs->str);
 		g_string_free (gs, TRUE);

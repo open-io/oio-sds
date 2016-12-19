@@ -553,9 +553,12 @@ metautils_message_extract_body_gba(MESSAGE msg, GByteArray **result)
 	if (!b)
 		return NEWERROR(CODE_BAD_REQUEST, "No body");
 
-	*result = g_byte_array_new();
-	if (bsize > 0)
+	if (bsize > 0) {
+		*result = g_byte_array_sized_new(bsize);
 		g_byte_array_append(*result, b, bsize);
+	} else {
+		*result = g_byte_array_sized_new(8);
+	}
 	return NULL;
 }
 

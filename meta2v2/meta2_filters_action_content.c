@@ -56,9 +56,9 @@ _notify_beans (struct meta2_backend_s *m2b, struct oio_url_s *url,
 		g_snprintf (tmp, sizeof(tmp), "%s.%s", META2_EVENTS_PREFIX, name);
 
 		GString *gs = oio_event__create (tmp, url);
-		g_string_append (gs, ",\"data\":[");
+		g_string_append_static (gs, ",\"data\":[");
 		meta2_json_dump_all_xbeans (gs, list_of_beans);
-		g_string_append (gs, "]}");
+		g_string_append_static (gs, "]}");
 		oio_events_queue__send (m2b->notifier, g_string_free (gs, FALSE));
 	}
 

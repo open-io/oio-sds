@@ -178,7 +178,7 @@ _pack_registration (const char *ns, const char *srvtype,
 	if (pscore)
 		g_string_append_printf (body, ",\"score\":%d", *pscore);
 	if (kv_tags) {
-		g_string_append (body, ",\"tags\":{");
+		g_string_append_static (body, ",\"tags\":{");
 		for (const char * const *pp = kv_tags; *pp && *(pp+1); pp+=2) {
 			if (pp != kv_tags)
 				g_string_append_c (body, ',');
@@ -186,7 +186,7 @@ _pack_registration (const char *ns, const char *srvtype,
 		}
 		g_string_append_c (body, '}');
 	}
-	g_string_append (body, "}");
+	g_string_append_c (body, '}');
 	return body;
 }
 

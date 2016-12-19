@@ -564,7 +564,7 @@ sqlx_transaction_prepare(struct sqlx_sqlite3_s *sq3,
 		sqlite3_update_hook(sq3->db, (sqlite3_update_hook_f)hook_update, repctx);
 	}
 
-	repctx->errors = g_string_new ("");
+	repctx->errors = g_string_sized_new (128);
 
 	*result = repctx;
 	return NULL;

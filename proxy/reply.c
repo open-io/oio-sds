@@ -22,10 +22,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 void
 _append_status (GString *out, gint code, const char * msg)
 {
-	EXTRA_ASSERT (out != NULL);
-	oio_str_gstring_append_json_pair_int(out, "status", code);
-	g_string_append_c (out, ',');
-	oio_str_gstring_append_json_pair (out, "message", msg);
+	EXTRA_ASSERT(out != NULL);
+	OIO_JSON_append_int(out, "status", code);
+	g_string_append_c(out, ',');
+	OIO_JSON_append_str(out, "message", msg);
 }
 
 GString *

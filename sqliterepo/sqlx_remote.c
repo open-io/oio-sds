@@ -57,7 +57,7 @@ static GByteArray*
 sqlx_encode_ASN1(struct asn_TYPE_descriptor_s *descr, void *s, GError **err)
 {
 	asn_enc_rval_t rv;
-	GByteArray *encoded = g_byte_array_new();
+	GByteArray *encoded = g_byte_array_sized_new(2048);
 	rv = der_encode(descr, s, metautils_asn1c_write_gba, encoded);
 	if (0 >= rv.encoded) {
 		g_byte_array_free(encoded, TRUE);
@@ -70,27 +70,9 @@ sqlx_encode_ASN1(struct asn_TYPE_descriptor_s *descr, void *s, GError **err)
 }
 
 GByteArray*
-sqlx_encode_Table(struct Table *table, GError **err)
-{
-	return sqlx_encode_ASN1(&asn_DEF_Table, table, err);
-}
-
-GByteArray*
 sqlx_encode_TableSequence(struct TableSequence *tabseq, GError **err)
 {
 	return sqlx_encode_ASN1(&asn_DEF_TableSequence, tabseq, err);
-}
-
-GByteArray*
-sqlx_encode_Row(struct Row *row, GError **err)
-{
-	return sqlx_encode_ASN1(&asn_DEF_Row, row, err);
-}
-
-GByteArray*
-sqlx_encode_RowSet(struct RowSet *rows, GError **err)
-{
-	return sqlx_encode_ASN1(&asn_DEF_RowSet, rows, err);
 }
 
 /* ------------------------------------------------------------------------- */

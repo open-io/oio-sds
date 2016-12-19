@@ -443,7 +443,7 @@ transport_gridd_notify_input(struct network_client_s *clt)
 		struct data_slab_s *ds;
 
 		if (!ctx->gba_l4v)
-			ctx->gba_l4v = g_byte_array_new();
+			ctx->gba_l4v = g_byte_array_sized_new(256);
 
 		if (!(ds = data_slab_sequence_shift(&(clt->input))))
 			break;
@@ -831,7 +831,7 @@ dispatch_LISTHANDLERS(struct gridd_reply_ctx_s *reply,
 {
 	(void) gdata, (void) hdata;
 
-	GByteArray *body = g_byte_array_new();
+	GByteArray *body = g_byte_array_sized_new(256);
 	g_tree_foreach(reply->client->transport.client_context->dispatcher->tree_requests,
 			_stats_runner, body);
 	reply->add_body(body);

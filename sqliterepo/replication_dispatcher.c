@@ -63,22 +63,20 @@ License along with this library.
 static gchar *
 _prepare_statement(Table_t *t)
 {
-	gint i;
-	GString *gstr;
-
-	gstr = g_string_new("REPLACE INTO ");
+	GString *gstr = g_string_sized_new(256);
+	g_string_append_static(gstr, "REPLACE INTO ");
 	g_string_append_len(gstr, (char*)t->name.buf, t->name.size);
-	g_string_append(gstr, " (ROWID");
-	for (i=0; i < t->header.list.count; i++) {
+	g_string_append_static(gstr, " (ROWID");
+	for (int i=0; i < t->header.list.count; i++) {
 		RowName_t *r = t->header.list.array[i];
 		g_string_append_c(gstr, ',');
 		g_string_append_len(gstr, (char*)r->name.buf, r->name.size);
 	}
-	g_string_append(gstr, ") VALUES (?");
-	for (i=0; i < t->header.list.count; i++) {
-		g_string_append_len(gstr, ",?", 2);
+	g_string_append_static(gstr, ") VALUES (?");
+	for (int i=0; i < t->header.list.count; i++) {
+		g_string_append_static(gstr, ",?");
 	}
-	g_string_append(gstr, ")");
+	g_string_append_c(gstr, ')');
 
 	return g_string_free(gstr, FALSE);
 }
@@ -2182,7 +2180,7 @@ _info_sqlite(GString *gstr)
 {
 	const char *s;
 
-	g_string_append(gstr, "SQLite options:\n");
+	g_string_append_static(gstr, "SQLite options:\n");
 	for (int i=0; NULL != (s = sqlite3_compileoption_get(i)); ++i) {
 		g_string_append_c(gstr, '\t');
 		g_string_append(gstr, s);
@@ -2200,13 +2198,13 @@ _info_repository(struct sqlx_repository_s *r, GString *gstr)
 		g_string_append(gstr, s);
 	}
 
-	g_string_append(gstr, "sqliterepo options:\n");
+	g_string_append_static(gstr, "sqliterepo options:\n");
 	g_string_append_printf(gstr, "\thash: width=%u depth=%u\n",
 			r->hash_width, r->hash_depth);
 	g_string_append_printf(gstr, "\tbases: %u/%u\n",
 			r->bases_count, r->bases_max);
 
-	g_string_append(gstr, "\tflags: ");
+	g_string_append_static(gstr, "\tflags: ");
 	if (r->flag_autocreate)
 		_append_flag("AUTOCREATE");
 	if (r->flag_autovacuum)
@@ -2223,7 +2221,7 @@ _info_elections(struct sqlx_repository_s *repo, GString *gstr)
 {
 	struct election_counts_s count = election_manager_count(
 			sqlx_repository_get_elections_manager(repo));
-	g_string_append(gstr, "Elections count:\n");
+	g_string_append_static(gstr, "Elections count:\n");
 	g_string_append_printf(gstr, "\ttotal: %u\n", count.total);
 	g_string_append_printf(gstr, "\tnone: %u\n", count.none);
 	g_string_append_printf(gstr, "\tpending: %u\n", count.pending);
@@ -2248,7 +2246,7 @@ _info_replication(struct sqlx_repository_s *repo, GString *gstr)
 		}
 	}
 
-	g_string_append(gstr, "Replication:\n");
+	g_string_append_static(gstr, "Replication:\n");
 	g_string_append_printf(gstr, "\tmode: %s\n",
 			_mode2str(election_manager_get_mode(
 					sqlx_repository_get_elections_manager(repo))));
@@ -2259,7 +2257,7 @@ _info_cache(struct sqlx_repository_s *repo, GString *gstr)
 {
 	struct cache_counts_s count = sqlx_cache_count(
 			sqlx_repository_get_cache(repo));
-	g_string_append(gstr, "Cache count:\n");
+	g_string_append_static(gstr, "Cache count:\n");
 	g_string_append_printf(gstr, "\tmax: %u\n", count.max);
 	g_string_append_printf(gstr, "\thot: %u\n", count.hot);
 	g_string_append_printf(gstr, "\tcold: %u\n", count.cold);

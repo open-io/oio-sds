@@ -122,7 +122,7 @@ gchar*
 version_dump(GTree *t)
 {
 	EXTRA_ASSERT(t != NULL);
-	GString *gstr = g_string_new("");
+	GString *gstr = g_string_sized_new(128);
 	if (t)
 		g_tree_foreach(t, hook_dump, gstr);
 	return g_string_free(gstr, FALSE);
@@ -185,7 +185,7 @@ version_encode(GTree *t)
 	GRID_TRACE2("%s(%p)", __FUNCTION__, t);
 	g_tree_foreach(t, runner, NULL);
 
-	encoded = g_byte_array_new();
+	encoded = g_byte_array_sized_new(128);
 	rv = der_encode(&asn_DEF_BaseVersion, &bv, metautils_asn1c_write_gba, encoded);
 	asn_DEF_BaseVersion.free_struct(&asn_DEF_BaseVersion, &bv, TRUE);
 

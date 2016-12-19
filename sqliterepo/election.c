@@ -1138,51 +1138,51 @@ election_manager_exit_all(struct election_manager_s *manager, gint64 duration,
 		manager->exiting = FALSE;
 }
 
-#define GS_APPEND_LEN(gs,str) g_string_append_len(gs, str, sizeof(str)-1);
-
 static void
 member_json (struct election_member_s *m, GString *gs)
 {
-	g_string_append (gs, "{");
+	g_string_append_c (gs, '{');
 
 	/* description */
-	g_string_append (gs, "\"local\":{");
+	g_string_append_static (gs, "\"local\":{");
 	if (m->flag_local_id)
-		oio_str_gstring_append_json_pair_int (gs, "id", m->local_id);
+		OIO_JSON_append_int (gs, "id", m->local_id);
 	else
-		g_string_append (gs, "id:null");
+		g_string_append_static (gs, "id:null");
 	g_string_append_c (gs, ',');
-	oio_str_gstring_append_json_pair (gs, "url", member_get_url(m));
+	OIO_JSON_append_str (gs, "url", member_get_url(m));
 	g_string_append_c (gs, ',');
-	oio_str_gstring_append_json_pair (gs, "state", _step2str(m->step));
-	g_string_append (gs, "},\"master\":{");
+	OIO_JSON_append_str (gs, "state", _step2str(m->step));
+	g_string_append_static (gs, "},\"master\":{");
 	if (m->flag_master_id)
-		oio_str_gstring_append_json_pair_int (gs, "id", m->master_id);
+		OIO_JSON_append_int (gs, "id", m->master_id);
 	else
 		g_string_append (gs, "id:null");
 	g_string_append_c (gs, ',');
-	oio_str_gstring_append_json_pair (gs, "url", m->master_url);
-	g_string_append (gs, "},\"base\":{");
-	oio_str_gstring_append_json_pair (gs, "name", m->name.base);
+	OIO_JSON_append_str (gs, "url", m->master_url);
+	g_string_append_static (gs, "},\"base\":{");
+	OIO_JSON_append_str (gs, "name", m->name.base);
 	g_string_append_c (gs, ',');
-	oio_str_gstring_append_json_pair (gs, "type", m->name.type);
+	OIO_JSON_append_str (gs, "type", m->name.type);
 	g_string_append_c (gs, ',');
-	oio_str_gstring_append_json_pair (gs, "zk", m->key);
-	g_string_append (gs, "},\"#\":{");
-	oio_str_gstring_append_json_pair_int (gs, "R", m->refcount);
+	OIO_JSON_append_str (gs, "zk", m->key);
+	g_string_append_static (gs, "},\"#\":{");
+	OIO_JSON_append_int (gs, "R", m->refcount);
 	g_string_append_c (gs, ',');
-	oio_str_gstring_append_json_pair_int (gs, "P", m->pending_PIPEFROM);
+	OIO_JSON_append_int (gs, "P", m->pending_PIPEFROM);
 	g_string_append_c (gs, ',');
-	oio_str_gstring_append_json_pair_int (gs, "V", m->pending_GETVERS);
+	OIO_JSON_append_int (gs, "V", m->pending_GETVERS);
 	g_string_append_c (gs, '}');
 
 	/* the peers */
-	GS_APPEND_LEN(gs, ",\"peers\":");
+	g_string_append_static(gs, ",\"peers\":");
 	gchar **peers = NULL;
 	GError *err = member_get_peers(m, FALSE, &peers);
 	if (err != NULL) {
-		g_string_append_printf(gs, "{\"status\":%d", err->code);
-		oio_str_gstring_append_json_pair (gs, "message", err->message);
+		g_string_append_c(gs, '{');
+		OIO_JSON_append_int(gs, "status", err->code);
+		g_string_append_c (gs, ',');
+		OIO_JSON_append_str (gs, "message", err->message);
 		g_string_append_c (gs, '}');
 	} else if (peers) {
 		g_string_append_c (gs, '[');
@@ -1193,11 +1193,11 @@ member_json (struct election_member_s *m, GString *gs)
 		g_strfreev(peers);
 		g_string_append_c (gs, ']');
 	} else {
-		GS_APPEND_LEN(gs, "null");
+		g_string_append_static(gs, "null");
 	}
 
 	/* then the livelog */
-	GS_APPEND_LEN(gs, ",\"log\":[");
+	g_string_append_static(gs, ",\"log\":[");
 	guint idx = m->log_index - 1;
 	for (guint i=0; i<EVENTLOG_SIZE ;i++,idx--) {
 		struct logged_event_s *plog = m->log + (idx % EVENTLOG_SIZE);
@@ -1232,9 +1232,9 @@ election_manager_whatabout (struct election_manager_s *m,
 		member_unref (member);
 	} else {
 		if (election_manager_get_mode(m) == ELECTION_MODE_NONE)
-			g_string_append (gs, "{}");
+			g_string_append_static (gs, "{}");
 		else
-			g_string_append (gs, "null");
+			g_string_append_static (gs, "null");
 	}
 	_manager_unlock (m);
 

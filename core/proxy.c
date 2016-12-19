@@ -39,10 +39,10 @@ _build_json (const char* const *src, GString *json)
 	g_string_append_c(json, '{');
 	for (int i = 0; src [i] && src [i+1] ; i +=2 ) {
 		if (i != 0)
-			g_string_append (json,",");
+			g_string_append_c (json, ',');
 		oio_str_gstring_append_json_pair (json, src [i], src [i+1]);
 	}
-	g_string_append (json, "}");
+	g_string_append_c (json, '}');
 	return json;
 }
 
@@ -79,7 +79,8 @@ _curl_url_prefix (const char *ns, enum _prefix_e which)
 		return NULL;
 	}
 
-	GString *hu = g_string_new("http://");
+	GString *hu = g_string_sized_new(128);
+	g_string_append_static(hu, "http://");
 	g_string_append (hu, s);
 	g_free (s);
 	return hu;
@@ -618,7 +619,7 @@ oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,
 	if (!http_url) return BADNS();
 
 	if (in->content) {
-		g_string_append (http_url, "&id=");
+		g_string_append_static (http_url, "&id=");
 		g_string_append_uri_escaped (http_url, in->content, NULL, TRUE);
 	}
 
@@ -647,9 +648,10 @@ oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,
 	}
 	GString *body = in? in->chunks : NULL;
 	if (in && !in->update && in->properties) {
-		GString *val = g_string_new("{'properties':");
+		GString *val = g_string_sized_new(1024);
+		g_string_append_static(val, "{\"properties\":");
 		val = _build_json(in->properties, val);
-		g_string_append(val, ",'chunks':");
+		g_string_append_static(val, ",\"chunks\":");
 		g_string_append(val, in->chunks->str);
 		g_string_append_c(val, '}');
 		body = val;
