@@ -27,6 +27,8 @@ License along with this library.
  */
 #include <zookeeper.h>
 
+#define PATH_MAXLEN 128 + LIMIT_LENGTH_NSNAME
+
 struct sqlx_sync_s;
 
 struct sqlx_sync_vtable_s

@@ -35,7 +35,6 @@ License along with this library.
 #include "gridd_client_pool.h"
 #include "internals.h"
 
-#define PATH_MAXLEN 128 + LIMIT_LENGTH_NSNAME
 #define EVENTLOG_SIZE 16
 #define STATUS_FINAL(e) ((e) >= STEP_SLAVE)
 
