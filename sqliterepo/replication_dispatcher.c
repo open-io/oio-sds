@@ -1526,7 +1526,6 @@ _handler_DESCR(struct gridd_reply_ctx_s *reply,
 {
 	GError *err = NULL;
 	struct sqlx_name_mutable_s name = {0};
-	gchar descr[1024] = "?";
 
 	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
@@ -1535,9 +1534,12 @@ _handler_DESCR(struct gridd_reply_ctx_s *reply,
 	}
 	SQLXNAME_STACKIFY(name);
 
+	/* Tests made with short base names show JSON lengths around 1780 bytes,
+	 * so 2048 should be enough for most names. */
+	GString *body = g_string_sized_new(2048);
 	election_manager_whatabout(sqlx_repository_get_elections_manager(repo),
-			CONST(&name), descr, sizeof(descr));
-	reply->add_body(metautils_gba_from_string(descr));
+			CONST(&name), body);
+	reply->add_body(g_bytes_unref_to_array(g_string_free_to_bytes(body)));
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }

@@ -172,7 +172,7 @@ void election_manager_exit_all (struct election_manager_s *m,
 		gint64 oldest, gboolean persist);
 
 void election_manager_whatabout (struct election_manager_s *m,
-		const struct sqlx_name_s *n, gchar *d, gsize ds);
+		const struct sqlx_name_s *n, GString *out);
 
 void election_manager_set_sync (struct election_manager_s *manager,
 		struct sqlx_sync_s *sync);
