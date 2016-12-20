@@ -206,18 +206,18 @@ _pack_request (struct sqlx_name_mutable_s *n, struct oio_sqlx_batch_s *batch)
 
 		const gchar *query = (gchar*)(stmt->pdata[0]);
 
-		struct Table *table = calloc(1, sizeof(struct Table));
+		struct Table *table = ASN1C_CALLOC(1, sizeof(struct Table));
 		OCTET_STRING_fromBuf(&(table->name), query, strlen(query));
 		asn_sequence_add (&in_table_sequence.list, table);
 
 		if (stmt->len > 1) {
-			struct Row *row = calloc(1, sizeof(struct Row));
+			struct Row *row = ASN1C_CALLOC(1, sizeof(struct Row));
 			asn_int64_to_INTEGER(&row->rowid, 0);
-			struct RowFieldSequence *rfs = calloc(1, sizeof(struct RowFieldSequence));
+			struct RowFieldSequence *rfs = ASN1C_CALLOC(1, sizeof(struct RowFieldSequence));
 			row->fields = rfs;
 			for (guint fi=1; fi < stmt->len ;++fi) {
 				const char *param = stmt->pdata[fi];
-				struct RowField *rf = calloc(1, sizeof(struct RowField));
+				struct RowField *rf = ASN1C_CALLOC(1, sizeof(struct RowField));
 				/* XXX JFS: index must conform the sqlite3_bind_*() norm,
 				 * where the leftmost parameter has an index of 1 */
 				asn_uint32_to_INTEGER (&rf->pos, fi);

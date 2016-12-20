@@ -728,7 +728,7 @@ _table_set_error(Table_t *table, GError *err,
 {
 	void _reset_integer (INTEGER_t **pi, gint64 v) {
 		ASN_STRUCT_FREE(asn_DEF_INTEGER, *pi);
-		*pi = calloc(1, sizeof(INTEGER_t));
+		*pi = ASN1C_CALLOC(1, sizeof(INTEGER_t));
 		asn_int64_to_INTEGER(*pi, v);
 	}
 
@@ -998,7 +998,7 @@ _execute_next_query(struct sqlx_sqlite3_s *sq3, const gchar *query,
 			for (rc = SQLITE_ROW; rc == SQLITE_ROW ;) {
 				rc = sqlite3_step(stmt);
 				if (rc == SQLITE_ROW) {
-					struct Row *rrow = calloc(1, sizeof(struct Row));
+					struct Row *rrow = ASN1C_CALLOC(1, sizeof(struct Row));
 					load_statement(stmt, rrow, result);
 					asn_sequence_add(&(result->rows.list), rrow);
 				}
@@ -1016,7 +1016,7 @@ _execute_next_query(struct sqlx_sqlite3_s *sq3, const gchar *query,
 		for (rc = SQLITE_ROW; rc == SQLITE_ROW ;) {
 			rc = sqlite3_step(stmt);
 			if (rc == SQLITE_ROW) {
-				struct Row *rrow = calloc(1, sizeof(struct Row));
+				struct Row *rrow = ASN1C_CALLOC(1, sizeof(struct Row));
 				load_statement(stmt, rrow, result);
 				asn_sequence_add(&(result->rows.list), rrow);
 			}
@@ -1122,7 +1122,7 @@ do_query_after_open(struct gridd_reply_ctx_s *reply_ctx,
 		gchar *query;
 
 		req = params->list.array[i32];
-		res = calloc(1, sizeof(struct Table));
+		res = ASN1C_CALLOC(1, sizeof(struct Table));
 		query = _table_to_query(req);
 		replication_ctx = reply_ctx->get_cnx_data("repctx");
 		reply_ctx->forget_cnx_data("repctx");
@@ -2345,7 +2345,7 @@ _handler_QUERY(struct gridd_reply_ctx_s *reply,
 	}
 
 	/* execute the request now */
-	result = calloc(1, sizeof(struct TableSequence));
+	result = ASN1C_CALLOC(1, sizeof(struct TableSequence));
 	err = do_query(reply, repo, CONST(&name), params,
 			result, flags&FLAG_AUTOCREATE);
 

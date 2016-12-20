@@ -58,7 +58,7 @@ MESSAGE
 metautils_message_create(void)
 {
 	const char *id = oio_ext_get_reqid ();
-	MESSAGE result = calloc(1, sizeof(Message_t));
+	MESSAGE result = ASN1C_CALLOC(1, sizeof(Message_t));
 	if (id)
 		metautils_message_set_ID (result, id, strlen(id));
 	return result;
@@ -90,7 +90,7 @@ metautils_message_destroy(MESSAGE m)
 
 	m->content.list.free = _free_Parameter;
 	asn_set_empty(&(m->content.list));
-	free(m);
+	ASN1C_FREE(m);
 }
 
 int
@@ -325,7 +325,7 @@ metautils_message_add_field(MESSAGE m, const char *n, const void *v, gsize vs)
 	EXTRA_ASSERT (n!=NULL);
 	if (!v || !vs)
 		return ;
-	Parameter_t *pMember = calloc(1, sizeof(Parameter_t));
+	Parameter_t *pMember = ASN1C_CALLOC(1, sizeof(Parameter_t));
 	OCTET_STRING_fromBuf(&(pMember->name), n, strlen(n));
 	OCTET_STRING_fromBuf(&(pMember->value), v, vs);
 	asn_set_add(&(m->content.list), pMember);

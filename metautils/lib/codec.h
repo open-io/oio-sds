@@ -58,4 +58,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/der_encoder.h>
 #include <metautils/lib/ber_decoder.h>
 
+/* Give a pretty prefixed name to the ugly unprefixed macros from asn1c */
+#define ASN1C_CALLOC(N,S)  CALLOC(N,S)
+#define ASN1C_MALLOC(S)    MALLOC(S)
+#define ASN1C_FREE(P)      FREEMEM(P)
+#define ASN1C_REALLOC(P,S) REALLOC(P,S)
+
 #endif  /* OIO_SDS_metautils_lib_codec_h */

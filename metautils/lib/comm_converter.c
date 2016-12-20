@@ -115,7 +115,7 @@ abstract_sequence_unmarshall(const struct abstract_sequence_handler_s *h,
 
 				abstract_sequence->list.free = &func_free;
 				asn_set_empty(abstract_sequence);
-				free(abstract_sequence);
+				ASN1C_FREE(abstract_sequence);
 				abstract_sequence = NULL;
 
 				if (api_result) {
@@ -129,7 +129,7 @@ abstract_sequence_unmarshall(const struct abstract_sequence_handler_s *h,
 
 		abstract_sequence->list.free = &func_free;
 		asn_set_empty(abstract_sequence);
-		free(abstract_sequence);
+		ASN1C_FREE(abstract_sequence);
 		abstract_sequence = NULL;
 
 		*list = metautils_gslist_precat(*list, api_result);
@@ -179,9 +179,9 @@ abstract_sequence_marshall(const struct abstract_sequence_handler_s * h, GSList 
 
 		if (error_occured || !d)
 			return;
-		asn1_form = calloc(1, h->asn1_size);
+		asn1_form = ASN1C_CALLOC(1, h->asn1_size);
 		if (!h->map_API_to_ASN1(d, asn1_form)) {
-			free(asn1_form);
+			ASN1C_FREE(asn1_form);
 			GSETERROR(err, "Element of type [%s] serialization failed!", h->type_name);
 			error_occured = TRUE;
 		} else {
@@ -460,14 +460,14 @@ service_info_API2ASN(service_info_t * api, ServiceInfo_t * asn)
 		int i, max;
 
 		/*init the array */
-		asn->tags = calloc(1, sizeof(struct ServiceInfo__tags));
+		asn->tags = ASN1C_CALLOC(1, sizeof(struct ServiceInfo__tags));
 
 		/*fill the array */
 		for (max = api->tags->len, i = 0; i < max; i++) {
 			api_tag = (service_tag_t *) g_ptr_array_index(api->tags, i);
 			if (!api_tag)
 				continue;
-			asn_tag = calloc(1, sizeof(ServiceTag_t));
+			asn_tag = ASN1C_CALLOC(1, sizeof(ServiceTag_t));
 			if (!asn_tag)
 				continue;
 			service_tag_API2ASN(api_tag, asn_tag);
@@ -664,7 +664,7 @@ hashtable_conversion(GHashTable *ht,
 			key_value_pair_t* api_prop;
 			if (!(api_prop = (key_value_pair_t*)p->data))
 				continue;
-			Parameter_t* asn_prop = calloc(1, sizeof(Parameter_t));
+			Parameter_t* asn_prop = ASN1C_CALLOC(1, sizeof(Parameter_t));
 			key_value_pair_API2ASN(api_prop, asn_prop);
 			asn_set_add(&(nsinfo_vlist->list), asn_prop);
 		}

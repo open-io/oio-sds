@@ -137,7 +137,7 @@ load_table_header(sqlite3_stmt *stmt, Table_t *t)
 
 	for (i=0,max=sqlite3_data_count(stmt); i<max ;i++) {
 		const char *cname = sqlite3_column_name(stmt, i);
-		struct RowName *rname = calloc(1, sizeof(*rname));
+		struct RowName *rname = ASN1C_CALLOC(1, sizeof(*rname));
 		asn_uint32_to_INTEGER(&(rname->pos), i);
 		OCTET_STRING_fromBuf(&(rname->name), cname, strlen(cname));
 		asn_sequence_add(&(t->header.list), rname);
@@ -153,10 +153,10 @@ load_statement(sqlite3_stmt *stmt, Row_t *row, Table_t *table)
 		load_table_header(stmt, table);
 
 	if (!row->fields) /* Lazy memory allocation */
-		row->fields = calloc(1, sizeof(struct RowFieldSequence));
+		row->fields = ASN1C_CALLOC(1, sizeof(struct RowFieldSequence));
 
 	for (i=0,max=sqlite3_data_count(stmt); i<max ;i++) {
-		struct RowField *rf = calloc(1, sizeof(*rf));
+		struct RowField *rf = ASN1C_CALLOC(1, sizeof(*rf));
 		asn_uint32_to_INTEGER(&(rf->pos), i);
 		rf->value.present = RowFieldValue_PR_n;
 
@@ -259,7 +259,7 @@ context_pending_to_rowset(sqlite3 *db, struct sqlx_repctx_s *ctx)
 			GRID_TRACE2("%s(%s,%"G_GINT64_FORMAT",%d)", __FUNCTION__,
 					hashstr_str(name), rowid, deleted);
 
-			struct Row *row = calloc(1, sizeof(*row));
+			struct Row *row = ASN1C_CALLOC(1, sizeof(*row));
 			asn_int64_to_INTEGER(&(row->rowid), rowid);
 			if (!deleted)
 				load_table_row(db, name, rowid, row, table);
@@ -270,7 +270,7 @@ context_pending_to_rowset(sqlite3 *db, struct sqlx_repctx_s *ctx)
 
 		GRID_TRACE2("%s(%s,%p)", __FUNCTION__, hashstr_str(name), rows);
 
-		table = calloc(1, sizeof(struct Table));
+		table = ASN1C_CALLOC(1, sizeof(struct Table));
 		OCTET_STRING_fromBuf(&(table->name),
 				hashstr_str(name), hashstr_len(name));
 		g_tree_foreach(rows, _on_row, NULL);

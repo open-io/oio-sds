@@ -171,7 +171,7 @@ version_encode(GTree *t)
 		(void) _u;
 		if (_k && _v && hashstr_len(_k) > 0) {
 			struct object_version_s *v = _v;
-			struct TableVersion *tv = calloc(1, sizeof(*tv));
+			struct TableVersion *tv = ASN1C_CALLOC(1, sizeof(*tv));
 			OCTET_STRING_fromBuf(&(tv->name), hashstr_str(_k), hashstr_len(_k));
 			asn_int64_to_INTEGER(&(tv->version), v->version);
 			asn_int64_to_INTEGER(&(tv->when), v->when);

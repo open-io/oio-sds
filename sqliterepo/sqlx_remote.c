@@ -199,10 +199,10 @@ sqlx_pack_QUERY_single(const struct sqlx_name_s *name, const gchar *query,
 	EXTRA_ASSERT(name != NULL);
 	EXTRA_ASSERT(query != NULL);
 
-	struct Table *t = calloc(1, sizeof(Table_t));
+	struct Table *t = ASN1C_CALLOC(1, sizeof(Table_t));
 	OCTET_STRING_fromBuf(&(t->name), query, strlen(query));
 
-	struct TableSequence *ts = calloc(1, sizeof(TableSequence_t));
+	struct TableSequence *ts = ASN1C_CALLOC(1, sizeof(TableSequence_t));
 	asn_sequence_add(&(ts->list), t);
 
 	GByteArray *req = sqlx_pack_QUERY(name, query, ts, autocreate);
