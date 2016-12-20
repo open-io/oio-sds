@@ -60,7 +60,7 @@ class Runner(object):
             self.manage_workers()
 
             while True:
-                sig = self.sig_queue.pop(0) if len(self.sig_queue) else None
+                sig = self.sig_queue.pop(0) if self.sig_queue else None
                 if sig is None:
                     eventlet.sleep(1)
                     self.manage_workers()
@@ -143,7 +143,7 @@ class Runner(object):
                 raise
 
     def manage_workers(self):
-        if len(self.workers.keys()) < self.num_workers:
+        if len(self.workers) < self.num_workers:
             self.spawn_workers()
 
         workers = self.workers.items()
@@ -176,7 +176,7 @@ class Runner(object):
             self.logger.info("Worker exiting (pid: %s)", worker_pid)
 
     def spawn_workers(self):
-        for i in range(self.num_workers - len(self.workers.keys())):
+        for i in range(self.num_workers - len(self.workers)):
             self.spawn_worker()
             eventlet.sleep(0.1 * random.random())
 
