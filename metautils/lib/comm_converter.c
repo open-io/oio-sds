@@ -1,8 +1,7 @@
-
 /*
 OpenIO SDS metautils
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, modified as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -19,19 +18,7 @@ License along with this library.
 */
 
 #include "metautils.h"
-
-#include "./AddrInfo.h"
-#include "./Meta0Info.h"
-#include "./Meta0InfoSequence.h"
-#include "./NamespaceInfo.h"
-#include "./Parameter.h"
-#include "./ParameterSequence.h"
-#include "./Score.h"
-#include "./ServiceTag.h"
-#include "./ServiceInfo.h"
-#include "./ServiceInfoSequence.h"
-
-#include "./asn_SET_OF.h"
+#include "codec.h"
 
 /* -------------------------------------------------------------------------- */
 

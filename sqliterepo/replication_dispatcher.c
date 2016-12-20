@@ -22,20 +22,9 @@ License along with this library.
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
+#include <metautils/lib/codec.h>
+
 #include <server/transport_gridd.h>
-
-#include <RowFieldValue.h>
-#include <RowField.h>
-#include <RowFieldSequence.h>
-#include <Row.h>
-#include <RowSet.h>
-#include <RowName.h>
-#include <TableHeader.h>
-#include <Table.h>
-#include <TableSequence.h>
-
-#include <asn_codecs.h>
-#include <ber_decoder.h>
 
 #include "sqliterepo.h"
 #include "version.h"

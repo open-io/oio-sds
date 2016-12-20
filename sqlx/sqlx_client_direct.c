@@ -1,6 +1,6 @@
 /*
 OpenIO SDS sqlx
-Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+Copyright (C) 2015 OpenIO, original work as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -21,7 +21,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <glib.h>
 #include <sqlite3.h>
 
-/* from oiocore */
 #include <core/oiocfg.h>
 #include <core/oiolog.h>
 #include <core/oiostr.h>
@@ -29,19 +28,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <core/oiodir.h>
 #include <core/internals.h>
 
-/* from oio-sds/metautils */
-#include <RowFieldSequence.h>
-#include <RowFieldValue.h>
-#include <RowField.h>
-#include <Row.h>
-#include <RowSet.h>
-#include <RowName.h>
-#include <TableHeader.h>
-#include <Table.h>
-#include <TableSequence.h>
-#include <asn_codecs.h>
-
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/codec.h>
 
 #include <sqliterepo/sqlx_remote.h>
 

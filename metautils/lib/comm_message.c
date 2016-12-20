@@ -1,7 +1,7 @@
 /*
 OpenIO SDS metautils
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, modified as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -24,8 +24,7 @@ License along with this library.
 #include <sys/types.h>
 
 #include "metautils.h"
-#include "./Parameter.h"
-#include "./Message.h"
+#include "codec.h"
 
 enum message_param_e { MP_ID, MP_NAME, MP_VERSION, MP_BODY };
 

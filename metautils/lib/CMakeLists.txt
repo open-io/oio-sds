@@ -1,7 +1,7 @@
 add_definitions(-DG_LOG_DOMAIN="oio.utils")
 
 include_directories(BEFORE . ../..
-		${CMAKE_CURRENT_BINARY_DIR}/../..
+		${CMAKE_BINARY_DIR}
 		${CMAKE_CURRENT_BINARY_DIR})
 
 link_directories(
@@ -20,7 +20,12 @@ add_custom_command(
 		BOOLEAN.c BOOLEAN.h
 		INTEGER.c INTEGER.h
 		REAL.c REAL.h
-		asn_application.h asn_codecs.h asn_codecs_prim.c asn_codecs_prim.h asn_internal.h
+
+		asn_application.h
+		asn_codecs.h
+		asn_codecs_prim.c
+		asn_codecs_prim.h
+		asn_internal.h
 
 		AddrInfo.c AddrInfo.h
 		Message.c Message.h
