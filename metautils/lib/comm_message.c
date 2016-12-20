@@ -412,13 +412,12 @@ metautils_message_extract_url (MESSAGE m)
 	GError *err = NULL;
 	struct oio_url_s *url = oio_url_empty ();
 	for (struct map_s *p = url2msg_map; p->f; ++p) {
-		gchar field[p->max_length+1];
+		gchar field[p->max_length];
 		memset(field, 0, sizeof(field));
 		if (metautils_message_extract_string_noerror(
 				m, p->f, field, sizeof(field))) {
-			if (!p->avoid || strcmp(p->avoid, field)) {
+			if (!p->avoid || strcmp(p->avoid, field))
 				oio_url_set(url, p->u, field);
-			}
 		}
 	}
 

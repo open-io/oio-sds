@@ -22,52 +22,53 @@ License along with this library.
 
 # include <glib.h>
 
-/**
- * @defgroup metautils_types Metatypes
- * @ingroup metautils
- * @{
- */
-
-/** The maximum length of a volume name */
+/** One plus the maximum length of a volume name
+ * i.e. a size enough to store the C string */
 #define LIMIT_LENGTH_VOLUMENAME 256
 
-/** The maximum length of a namespace name */
+/** One plus the maximum length of a namespace name
+ * i.e. a size enough to store the C string */
 #define LIMIT_LENGTH_NSNAME 64
 
-/** The maximum length of an account name */
+/** One plus the maximum length of an account name
+ * i.e. a size enough to store the C string */
 #define LIMIT_LENGTH_ACCOUNTNAME 64
 
-/** The maximum length of a content name */
+/** One plus the maximum length of a content name
+ * i.e. a size enough to store the C string */
 #define LIMIT_LENGTH_CONTENTPATH 1024
 
-/** The maximum length of the string representation of a content version */
+/** One plus the maximum length of the string representation of a content version
+ * i.e. a size enough to store the C string */
 #define LIMIT_LENGTH_VERSION 24
 
-/** The maximum length of a storage policy name */
+/** One plus the maximum length of a storage policy name
+ * i.e. a size enough to store the C string */
 #define LIMIT_LENGTH_STGPOLICY 32
 
-/** The maximum length of a service tag name */
+/** One plus the maximum length of a service tag name
+ * i.e. a size enough to store the C string */
 #define LIMIT_LENGTH_TAGNAME 32
 
-#define LIMIT_LENGTH_CHUNKURL 512
-
-#define LIMIT_LENGTH_REQID 128
-
+/** One plus the maximum length of a database name
+ * i.e. a size enough to store the C string */
 #define LIMIT_LENGTH_BASENAME 256
 
-#define LIMIT_LENGTH_BASETYPE 32
-
-/** The maximum length of a service id */
-#define LIMIT_LENGTH_SRVID 64
-
-/** The maximum length of a service type name */
+/** One plus the maximum length of a service type name, with all its subtypes
+ * i.e. a size enough to store the C string */
 #define LIMIT_LENGTH_SRVTYPE 32
 
-/** The maximum length of service options */
-#define LIMIT_LENGTH_SRVARGS 256
+/** One plus the maximum length of a database type, including all its subtypes
+ * i.e. a size enough to store the C string */
+#define LIMIT_LENGTH_BASETYPE 32
 
-/** The maximum length for values of 'admin' table */
-#define LIMIT_LENGTH_ADMIN_VALUE 1024
+/** One plus the maximum length of the textual representation of a service id
+ * i.e. a size enough to store the C string */
+#define LIMIT_LENGTH_SRVID 64
+
+/** One plus the maximum length of a single service option
+ * i.e. a size enough to store the C string */
+#define LIMIT_LENGTH_SRVARGS 256
 
 #define TYPE_TO_STRLEN(T)  ((sizeof(T)*2)+1)
 #define STRLEN_CHUNKID     TYPE_TO_STRLEN(hash_sha256_t)
@@ -234,7 +235,5 @@ typedef struct addr_rule_s
 	gchar* network_mask; /**< IPv4 in decimal dotted notation */
 	gboolean authorize;  /**< Allow (TRUE) or deny (FALSE) */
 } addr_rule_t;
-
-/** @} */
 
 #endif /*OIO_SDS__metautils__lib__metatypes_h*/
