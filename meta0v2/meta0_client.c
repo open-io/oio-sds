@@ -28,7 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "meta0_utils.h"
 
 static addr_info_t addr = {{0}};
-static gchar *namespace = NULL;
+static gchar namespace[LIMIT_LENGTH_NSNAME] = {0};
 static gboolean flag_list = FALSE;
 static gboolean flag_get = FALSE;
 static gboolean flag_reload = FALSE;
@@ -98,7 +98,7 @@ meta0_utils_getMeta0addr(gchar *ns, GSList **m0_lst, GSList *exclude)
 static addr_info_t *
 _getMeta0addr(GSList **m0_lst, GSList *exclude)
 {
-	if (namespace)
+	if (namespace[0])
 		return  meta0_utils_getMeta0addr(namespace, m0_lst, exclude);
 	if (!exclude)
 		return &addr;
@@ -446,9 +446,8 @@ meta0_configure(int argc, char **argv)
 		return FALSE;
 	}
 
-	if (!grid_string_to_addrinfo(argv[0], &addr)) {
-		namespace = strdup(argv[0]);
-	}
+	if (!grid_string_to_addrinfo(argv[0], &addr))
+		g_strlcpy(namespace, argv[0], sizeof(namespace));
 
 	command = argv[1];
 	if (!g_ascii_strcasecmp(command, "get")) {

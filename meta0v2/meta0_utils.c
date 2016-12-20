@@ -233,9 +233,9 @@ meta0_utils_unpack_meta1ref(const gchar *s_m1ref,
 	if (g_strv_length(split_result) != 3)
 		return FALSE;
 
-	*addr = strdup(split_result[0]);
-	*ref = strdup(split_result[1]);
-	*nb = strdup(split_result[2]);
+	*addr = g_strdup(split_result[0]);
+	*ref = g_strdup(split_result[1]);
+	*nb = g_strdup(split_result[2]);
 
 	g_strfreev(split_result);
 	return TRUE;
