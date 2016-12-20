@@ -49,9 +49,9 @@
 [.]        { T; return DOT_TK ; }
 [,]        { T; return COMA_TK ; }
 
-["][^"]*["]               { T; yylval.s=strdup(yytext+1) ; yylval.s[strlen(yylval.s)-1]='\0' ; return VAL_STR_TK; }
+["][^"]*["]               { T; yylval.s=g_strdup(yytext+1) ; yylval.s[strlen(yylval.s)-1]='\0' ; return VAL_STR_TK; }
 
-[A-Za-z][-_0-9A-Za-z]* { T; yylval.s=strdup(yytext) ; return ID_TK; }
+[A-Za-z][-_0-9A-Za-z]* { T; yylval.s=g_strdup(yytext) ; return ID_TK; }
 
 .                         { T; }
 %%

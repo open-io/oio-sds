@@ -35,7 +35,7 @@ expr_clean(struct expr_s *pE)
 	switch (pE->type) {
 	case VAL_STR_ET:
 		if (pE->expr.str)
-			free(pE->expr.str);
+			g_free(pE->expr.str);
 		break;
 	case VAL_NUM_ET:
 		break;
@@ -71,13 +71,13 @@ expr_clean(struct expr_s *pE)
 		break;
 	case ACC_ET:
 		if (pE->expr.acc.base)
-			free(pE->expr.acc.base);
+			g_free(pE->expr.acc.base);
 		if (pE->expr.acc.field)
-			free(pE->expr.acc.field);
+			g_free(pE->expr.acc.field);
 		break;
 	case NB_ET:
 		break;
 	}
 
-	free(pE);
+	g_free(pE);
 }

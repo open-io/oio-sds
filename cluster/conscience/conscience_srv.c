@@ -83,7 +83,7 @@ conscience_srv_compute_score(struct conscience_srv_s *service,
 	struct conscience_srvtype_s *srvtype;
 	gdouble d;
 
-	char *getField(char *b, char *f) {
+	gchar *getField(const char *b, const char *f) {
 		char str_name[128];
 		struct service_tag_s *pTag;
 
@@ -115,13 +115,13 @@ conscience_srv_compute_score(struct conscience_srv_s *service,
 				conscience->ns_info.name, srvtype->type_name, f);
 		return NULL;
 	}
-	char *getStat(char *f) {
+	gchar *getStat(const char *f) {
 		return getField("stat", f);
 	}
-	char *getTag(char *f) {
+	gchar *getTag(const char *f) {
 		return getField("tag", f);
 	}
-	accessor_f *getAcc(char *b) {
+	accessor_f *getAcc(const char *b) {
 		if (!b)
 			return NULL;
 		switch (*b) {

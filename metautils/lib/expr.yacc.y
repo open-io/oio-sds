@@ -82,18 +82,15 @@ expr:
 %%
 
 static struct expr_s* makeNum (double v) {
-	struct expr_s *pRet = NULL;
-	pRet = calloc(1, sizeof(struct expr_s));
-	if (!pRet) return NULL;
+	struct expr_s *pRet = g_malloc0(sizeof(struct expr_s));
 	pRet->expr.num = v;
 	pRet->type = VAL_NUM_ET;
 	return pRet;
 }
 
 static struct expr_s* makeStr (char *s) {
-	struct expr_s *pRet = NULL;
 	if (!s) return NULL;
-	pRet = calloc(1, sizeof(struct expr_s));
+	struct expr_s *pRet = g_malloc0(sizeof(struct expr_s));
 	if (!pRet) return NULL;
 	pRet->expr.str = s;
 	pRet->type = VAL_STR_ET;
@@ -101,20 +98,16 @@ static struct expr_s* makeStr (char *s) {
 }
 
 static struct expr_s* makeUnary (enum expr_type_e e, struct expr_s *pE) {
-	struct expr_s *pRet = NULL;
 	if (!pE) return NULL;
-	pRet = calloc(1, sizeof(struct expr_s));
-	if (!pRet) return NULL;
+	struct expr_s *pRet = g_malloc0(sizeof(struct expr_s));
 	pRet->expr.unary = pE;
 	pRet->type = e;
 	return pRet;
 }
 
 static struct expr_s* makeAccessor (char *pBase, char *pF) {
-	struct expr_s *pRet = NULL;
 	if (!pF || !pBase) return NULL;
-	pRet = calloc(1, sizeof(struct expr_s));
-	if (!pRet) return NULL;
+	struct expr_s *pRet = g_malloc0(sizeof(struct expr_s));
 	pRet->expr.acc.field = pF;
 	pRet->expr.acc.base = pBase;
 	pRet->type = ACC_ET;
@@ -122,12 +115,9 @@ static struct expr_s* makeAccessor (char *pBase, char *pF) {
 }
 
 static struct expr_s* makeBinary (enum expr_type_e e, struct expr_s *p1, struct expr_s *p2) {
-	struct expr_s *pRet = NULL;
 	if (!p1 || !p2)
 		return NULL;
-	pRet = calloc(1, sizeof(struct expr_s));
-	if (!pRet)
-		return NULL;
+	struct expr_s *pRet = g_malloc0(sizeof(struct expr_s));
 	pRet->expr.bin.p1 = p1;
 	pRet->expr.bin.p2 = p2;
 	pRet->type = e;
