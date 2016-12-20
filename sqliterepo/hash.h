@@ -22,9 +22,9 @@ License along with this library.
 
 # include <glib/gtypes.h>
 
-/** One plus the maximum length of a election key,
+/** One plus the maximum length of an election key,
  * i.e. a size enough to store the C string */
-# define HASH_MAXLEN 65
+# define OIO_ELECTION_KEY_LIMIT_LENGTH STRLEN_SHA256
 
 struct sqlx_name_s;
 

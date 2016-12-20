@@ -53,7 +53,7 @@ get_fullpath(struct zk_manager_s *manager, gchar *subdir, gchar* name)
 		result =  g_strdup(manager->zk_dir);
 
 	if ( name ) {
-		gchar key[HASH_MAXLEN];
+		gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
 		struct sqlx_name_s n = {"", "", ""};
 		n.base = name;
 		sqliterepo_hash_name(&n, key, sizeof(key));

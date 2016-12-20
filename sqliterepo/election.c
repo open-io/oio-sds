@@ -240,7 +240,7 @@ struct election_member_s
 	unsigned char flag_local_id : 1;
 	unsigned char flag_master_id : 1;
 
-	gchar key[HASH_MAXLEN];
+	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
 
 	struct logged_event_s log[EVENTLOG_SIZE];
 };
@@ -1053,7 +1053,7 @@ _LOCKED_init_member(struct election_manager_s *manager,
 	MANAGER_CHECK(manager);
 	NAME_CHECK(n);
 
-	gchar key[HASH_MAXLEN];
+	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
 	sqliterepo_hash_name(n, key, sizeof(key));
 	struct election_member_s *member = _LOCKED_get_member (manager, key);
 	if (!member && autocreate) {
@@ -1216,7 +1216,7 @@ election_manager_whatabout (struct election_manager_s *m,
 	EXTRA_ASSERT (m->vtable == &VTABLE);
 	EXTRA_ASSERT(out != NULL);
 
-	gchar key[HASH_MAXLEN];
+	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
 	sqliterepo_hash_name(n, key, sizeof(key));
 
 	_manager_lock(m);
@@ -1942,7 +1942,7 @@ _result_GETVERS (GError *enet,
 		}
 	}
 
-	gchar key[HASH_MAXLEN];
+	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
 	sqliterepo_hash_name(name, key, sizeof(key));
 	struct election_member_s *member = manager_get_member(manager, key);
 	if (!member) {
@@ -1977,7 +1977,7 @@ static void
 _result_PIPEFROM (GError *e, struct election_manager_s *manager,
 		const struct sqlx_name_s *n, guint reqid)
 {
-	gchar key[HASH_MAXLEN];
+	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
 	sqliterepo_hash_name(n, key, sizeof(key));
 
 	if (!e || CODE_IS_OK(e->code)) {
