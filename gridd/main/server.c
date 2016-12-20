@@ -466,40 +466,6 @@ thread_monitoring_periodic_stats (struct server_s *srv)
 
 /* ------------------------------------------------------------------------- */
 
-gint
-get_network_socket (message_handler_f h, char **addr, int *port, GError **error)
-{
-	SERVER s = NULL;
-	ACCEPT_POOL ap = NULL;
-	int id = 0, i = 0;
-	struct sockaddr_storage sock_name;
-	socklen_t sock_len = sizeof(struct sockaddr_storage);
-	char host[48], str_port[6];
-
-	for (s=BEACON_SRV.next; s && s!=&BEACON_SRV ;s=s->next) {
-		ap = s->ap;
-
-		for (i = 0; i < s->nbHandlers; i++) {
-			if (s->handlers[i]->handler == h) {
-				for (id = 0; id < ap->count; id++) {
-					memset(&sock_name, 0, sizeof(struct sockaddr));
-					if (!getsockname(ap->srv[id], (struct sockaddr*)&sock_name, &sock_len) &&
-					   (sock_name.ss_family == PF_INET || sock_name.ss_family == PF_INET6)) {
-						if (format_addr((struct sockaddr*)&sock_name, host, sizeof(host), str_port, sizeof(str_port), error)) {
-							*addr = strdup(host);
-							*port = atoi(str_port);
-							return(1);
-						}
-					}
-				}
-			}
-		}
-	}
-
-	GSETERROR(error, "No notwork socket found for this handler");
-	return(0);
-}
-
 static gint
 manage_message (SERVER srv, GByteArray *gba, struct request_context_s* ctx, GError **err)
 {
