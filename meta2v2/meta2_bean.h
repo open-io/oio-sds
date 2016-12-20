@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, modified as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -28,16 +28,11 @@ struct M2V2Alias;
 struct M2V2Content;
 struct M2V2ContentHeader;
 
-/**
- *
- */
 gpointer bean_ASN2API(const struct M2V2Bean *asn);
 
 gboolean bean_API2ASN(gpointer * api, struct M2V2Bean * asn);
 
 void bean_cleanASN(struct M2V2Bean * asn, gboolean only_content);
-
-/* ------------------------------------ */
 
 GByteArray* bean_sequence_marshall(GSList *beans);
 

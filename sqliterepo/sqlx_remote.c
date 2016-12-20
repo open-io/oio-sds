@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, modified as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -20,18 +20,9 @@ License along with this library.
 #include <stddef.h>
 #include <unistd.h>
 
-#include <metautils/lib/metatypes.h>
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
-
-#include <RowName.h>
-#include <RowField.h>
-#include <Row.h>
-#include <RowSet.h>
-#include <Table.h>
-#include <TableSequence.h>
-#include <asn_codecs.h>
-#include <der_encoder.h>
+#include <metautils/lib/codec.h>
 
 #include "sqliterepo.h"
 #include "sqlx_macros.h"
@@ -208,10 +199,10 @@ sqlx_pack_QUERY_single(const struct sqlx_name_s *name, const gchar *query,
 	EXTRA_ASSERT(name != NULL);
 	EXTRA_ASSERT(query != NULL);
 
-	struct Table *t = calloc(1, sizeof(Table_t));
+	struct Table *t = ASN1C_CALLOC(1, sizeof(Table_t));
 	OCTET_STRING_fromBuf(&(t->name), query, strlen(query));
 
-	struct TableSequence *ts = calloc(1, sizeof(TableSequence_t));
+	struct TableSequence *ts = ASN1C_CALLOC(1, sizeof(TableSequence_t));
 	asn_sequence_add(&(ts->list), t);
 
 	GByteArray *req = sqlx_pack_QUERY(name, query, ts, autocreate);

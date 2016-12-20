@@ -59,65 +59,32 @@ struct reply_context_s {
 	GHashTable *extra_headers;/* (char*) -> (GByteArray*) */
 };
 
-/**
- * @param ctx
- */
 void reply_context_clear (struct reply_context_s *ctx, gboolean all);
 
-/**
- * @param ctx
- * @param code
- * @param msg
- */
 void reply_context_set_message (struct reply_context_s *ctx, gint code, const gchar *msg);
 
-/**
- * @param ctx
- * @param body
- * @param bodySize
- */
 void reply_context_set_body (struct reply_context_s *ctx, void *body, gsize bodySize, guint32 flags);
 
-/**
- * @param ctx
- * @param err
- */
 gint reply_context_reply (struct reply_context_s *ctx, GError **err);
 
-/*k and v parameters are copied!*/
 void reply_context_add_header_in_reply (struct reply_context_s *ctx, const char *k, GByteArray *v);
 
 void reply_context_add_strheader_in_reply (struct reply_context_s *ctx, const char *k, const char *v);
 
-/**/
 void reply_context_log_access (struct reply_context_s *ctx,
 	const gchar *fmt, ...);
 
-/**/
 void request_context_clear(struct request_context_s* ctx);
 
-/**
- * @param ctx
- */
 void request_context_free(struct request_context_s* ctx);
 
-/**
- * @param p1
- * @param p2
- */
 void request_context_gclean(gpointer p1, gpointer p2);
 
-/*!
- * @param fd_peer can be NULL, then getpeeraddr(fd) will be used.
- */
 struct request_context_s* request_context_create(int fd, addr_info_t *fd_peer);
 
-/**/
 void requets_context_gclean(gpointer p1, gpointer p2);
 
 namespace_info_t* gridd_get_namespace_info(GError **error);
-
-gint get_network_socket (message_handler_f h, char **addr, int *port, GError **error);
 
 gchar* gridd_get_ns_name(void);
 

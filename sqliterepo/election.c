@@ -35,7 +35,6 @@ License along with this library.
 #include "gridd_client_pool.h"
 #include "internals.h"
 
-#define PATH_MAXLEN 128 + LIMIT_LENGTH_NSNAME
 #define EVENTLOG_SIZE 16
 #define STATUS_FINAL(e) ((e) >= STEP_SLAVE)
 
@@ -241,7 +240,7 @@ struct election_member_s
 	unsigned char flag_local_id : 1;
 	unsigned char flag_master_id : 1;
 
-	gchar key[65];
+	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
 
 	struct logged_event_s log[EVENTLOG_SIZE];
 };
@@ -1054,7 +1053,8 @@ _LOCKED_init_member(struct election_manager_s *manager,
 	MANAGER_CHECK(manager);
 	NAME_CHECK(n);
 
-	gchar *key = sqliterepo_hash_name(n);
+	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
+	sqliterepo_hash_name(n, key, sizeof(key));
 	struct election_member_s *member = _LOCKED_get_member (manager, key);
 	if (!member && autocreate) {
 		member = g_malloc0 (sizeof(*member));
@@ -1071,7 +1071,6 @@ _LOCKED_init_member(struct election_manager_s *manager,
 		_DEQUE_add (member);
 		g_tree_replace(manager->members_by_key, member->key, member);
 	}
-	g_free(key);
 	return member;
 }
 
@@ -1141,10 +1140,8 @@ election_manager_exit_all(struct election_manager_s *manager, gint64 duration,
 static void
 member_json (struct election_member_s *m, GString *gs)
 {
-	g_string_append_c (gs, '{');
-
 	/* description */
-	g_string_append_static (gs, "\"local\":{");
+	g_string_append_static (gs, "{\"local\":{");
 	if (m->flag_local_id)
 		OIO_JSON_append_int (gs, "id", m->local_id);
 	else
@@ -1175,17 +1172,16 @@ member_json (struct election_member_s *m, GString *gs)
 	g_string_append_c (gs, '}');
 
 	/* the peers */
-	g_string_append_static(gs, ",\"peers\":");
 	gchar **peers = NULL;
 	GError *err = member_get_peers(m, FALSE, &peers);
 	if (err != NULL) {
-		g_string_append_c(gs, '{');
+		g_string_append_static(gs, ",\"peers\":{");
 		OIO_JSON_append_int(gs, "status", err->code);
 		g_string_append_c (gs, ',');
 		OIO_JSON_append_str (gs, "message", err->message);
 		g_string_append_c (gs, '}');
 	} else if (peers) {
-		g_string_append_c (gs, '[');
+		g_string_append_static(gs, ",\"peers\":[");
 		for (gchar **p = peers; *p ;p++) {
 			if (p!=peers) g_string_append_c(gs, ',');
 			oio_str_gstring_append_json_quote(gs, *p);
@@ -1193,7 +1189,7 @@ member_json (struct election_member_s *m, GString *gs)
 		g_strfreev(peers);
 		g_string_append_c (gs, ']');
 	} else {
-		g_string_append_static(gs, "null");
+		g_string_append_static(gs, ",\"peers\":null");
 	}
 
 	/* then the livelog */
@@ -1208,39 +1204,33 @@ member_json (struct election_member_s *m, GString *gs)
 		g_string_append_printf(gs, "\"%s:%s:%s\"", _step2str(plog->pre),
 				_evt2str(plog->event), _step2str(plog->post));
 	}
-	g_string_append_c (gs, ']');
-
-	g_string_append_c (gs, '}');
+	g_string_append_static (gs, "]}");
 }
 
 void
 election_manager_whatabout (struct election_manager_s *m,
-		const struct sqlx_name_s *n, gchar *d, gsize ds)
+		const struct sqlx_name_s *n, GString *out)
 {
 	NAME_CHECK(n);
 	MANAGER_CHECK(m);
 	EXTRA_ASSERT (m->vtable == &VTABLE);
-	EXTRA_ASSERT(d != NULL);
-	EXTRA_ASSERT(ds > 0);
+	EXTRA_ASSERT(out != NULL);
 
-	GString *gs = g_string_sized_new(256);
-	gchar *key = sqliterepo_hash_name(n);
+	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
+	sqliterepo_hash_name(n, key, sizeof(key));
+
 	_manager_lock(m);
 	struct election_member_s *member = _LOCKED_get_member(m, key);
 	if (member) {
-		member_json (member, gs);
+		member_json (member, out);
 		member_unref (member);
 	} else {
 		if (election_manager_get_mode(m) == ELECTION_MODE_NONE)
-			g_string_append_static (gs, "{}");
+			g_string_append_static (out, "{}");
 		else
-			g_string_append_static (gs, "null");
+			g_string_append_static (out, "null");
 	}
 	_manager_unlock (m);
-
-	g_strlcpy (d, gs->str, ds);
-	g_string_free (gs, TRUE);
-	g_free(key);
 }
 
 /* --- Zookeeper callbacks ----------------------------------------------------
@@ -1952,7 +1942,8 @@ _result_GETVERS (GError *enet,
 		}
 	}
 
-	gchar *key = sqliterepo_hash_name(name);
+	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
+	sqliterepo_hash_name(name, key, sizeof(key));
 	struct election_member_s *member = manager_get_member(manager, key);
 	if (!member) {
 		GRID_WARN("GETVERS Election disappeared [%s]", key);
@@ -1980,14 +1971,14 @@ _result_GETVERS (GError *enet,
 
 	if (err) g_clear_error(&err);
 	if (vlocal) g_tree_destroy(vlocal);
-	g_free (key);
 }
 
 static void
 _result_PIPEFROM (GError *e, struct election_manager_s *manager,
 		const struct sqlx_name_s *n, guint reqid)
 {
-	gchar *key = sqliterepo_hash_name(n);
+	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
+	sqliterepo_hash_name(n, key, sizeof(key));
 
 	if (!e || CODE_IS_OK(e->code)) {
 		GRID_DEBUG("PIPEFROM ok [%s.%s] [%s]",
@@ -1998,7 +1989,6 @@ _result_PIPEFROM (GError *e, struct election_manager_s *manager,
 	}
 
 	struct election_member_s *member = manager_get_member (manager, key);
-	g_free (key);
 
 	if (member) {
 		member_lock(member);

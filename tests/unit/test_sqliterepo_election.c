@@ -520,9 +520,8 @@ test_create_ok(void)
 	g_assert_nonnull (manager); \
 	election_manager_set_sync (manager, sync); \
 	election_manager_set_peering (manager, peering); \
-	gchar *_k = sqliterepo_hash_name(&name); \
-	g_assert_nonnull(_k); \
-	STRING_STACKIFY(_k); \
+	gchar _k[OIO_ELECTION_KEY_LIMIT_LENGTH]; \
+	sqliterepo_hash_name(&name, _k, sizeof(_k)); \
 	struct election_member_s *m = manager_get_member (manager, _k); \
 	g_assert_null(m); \
 	g_assert_no_error (_election_init (manager, &name)); \

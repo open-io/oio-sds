@@ -469,12 +469,9 @@ _record_meta1ref(sqlite3 *db, const GPtrArray *new_assign_meta1ref)
 				err = SQLITE_GERROR(db, rc);
 		}
 
-		if (addr)
-			g_free(addr);
-		if (ref)
-			g_free(ref);
-		if (nb)
-			g_free(nb);
+		g_free0(addr);
+		g_free0(ref);
+		g_free0(nb);
 	}
 	sqlite3_finalize_debug(rc, stmt);
 	return err;

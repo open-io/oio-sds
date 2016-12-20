@@ -22,8 +22,12 @@ License along with this library.
 
 # include <glib/gtypes.h>
 
+/** One plus the maximum length of an election key,
+ * i.e. a size enough to store the C string */
+# define OIO_ELECTION_KEY_LIMIT_LENGTH STRLEN_SHA256
+
 struct sqlx_name_s;
 
-gchar * sqliterepo_hash_name (const struct sqlx_name_s *n);
+void sqliterepo_hash_name (const struct sqlx_name_s *n, gchar *d, gsize dlen);
 
 #endif /*OIO_SDS__sqliterepo__hash_h*/

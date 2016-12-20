@@ -22,20 +22,9 @@ License along with this library.
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
+#include <metautils/lib/codec.h>
+
 #include <server/transport_gridd.h>
-
-#include <RowFieldValue.h>
-#include <RowField.h>
-#include <RowFieldSequence.h>
-#include <Row.h>
-#include <RowSet.h>
-#include <RowName.h>
-#include <TableHeader.h>
-#include <Table.h>
-#include <TableSequence.h>
-
-#include <asn_codecs.h>
-#include <ber_decoder.h>
 
 #include "sqliterepo.h"
 #include "version.h"
@@ -739,7 +728,7 @@ _table_set_error(Table_t *table, GError *err,
 {
 	void _reset_integer (INTEGER_t **pi, gint64 v) {
 		ASN_STRUCT_FREE(asn_DEF_INTEGER, *pi);
-		*pi = calloc(1, sizeof(INTEGER_t));
+		*pi = ASN1C_CALLOC(1, sizeof(INTEGER_t));
 		asn_int64_to_INTEGER(*pi, v);
 	}
 
@@ -1009,7 +998,7 @@ _execute_next_query(struct sqlx_sqlite3_s *sq3, const gchar *query,
 			for (rc = SQLITE_ROW; rc == SQLITE_ROW ;) {
 				rc = sqlite3_step(stmt);
 				if (rc == SQLITE_ROW) {
-					struct Row *rrow = calloc(1, sizeof(struct Row));
+					struct Row *rrow = ASN1C_CALLOC(1, sizeof(struct Row));
 					load_statement(stmt, rrow, result);
 					asn_sequence_add(&(result->rows.list), rrow);
 				}
@@ -1027,7 +1016,7 @@ _execute_next_query(struct sqlx_sqlite3_s *sq3, const gchar *query,
 		for (rc = SQLITE_ROW; rc == SQLITE_ROW ;) {
 			rc = sqlite3_step(stmt);
 			if (rc == SQLITE_ROW) {
-				struct Row *rrow = calloc(1, sizeof(struct Row));
+				struct Row *rrow = ASN1C_CALLOC(1, sizeof(struct Row));
 				load_statement(stmt, rrow, result);
 				asn_sequence_add(&(result->rows.list), rrow);
 			}
@@ -1133,7 +1122,7 @@ do_query_after_open(struct gridd_reply_ctx_s *reply_ctx,
 		gchar *query;
 
 		req = params->list.array[i32];
-		res = calloc(1, sizeof(struct Table));
+		res = ASN1C_CALLOC(1, sizeof(struct Table));
 		query = _table_to_query(req);
 		replication_ctx = reply_ctx->get_cnx_data("repctx");
 		reply_ctx->forget_cnx_data("repctx");
@@ -1526,7 +1515,6 @@ _handler_DESCR(struct gridd_reply_ctx_s *reply,
 {
 	GError *err = NULL;
 	struct sqlx_name_mutable_s name = {0};
-	gchar descr[1024] = "?";
 
 	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
@@ -1535,9 +1523,12 @@ _handler_DESCR(struct gridd_reply_ctx_s *reply,
 	}
 	SQLXNAME_STACKIFY(name);
 
+	/* Tests made with short base names show JSON lengths around 1780 bytes,
+	 * so 2048 should be enough for most names. */
+	GString *body = g_string_sized_new(2048);
 	election_manager_whatabout(sqlx_repository_get_elections_manager(repo),
-			CONST(&name), descr, sizeof(descr));
-	reply->add_body(metautils_gba_from_string(descr));
+			CONST(&name), body);
+	reply->add_body(g_bytes_unref_to_array(g_string_free_to_bytes(body)));
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
@@ -2354,7 +2345,7 @@ _handler_QUERY(struct gridd_reply_ctx_s *reply,
 	}
 
 	/* execute the request now */
-	result = calloc(1, sizeof(struct TableSequence));
+	result = ASN1C_CALLOC(1, sizeof(struct TableSequence));
 	err = do_query(reply, repo, CONST(&name), params,
 			result, flags&FLAG_AUTOCREATE);
 
