@@ -19,7 +19,7 @@ Basic object storage example:
     >>> from oio import ObjectStorageApi
     >>> api = ObjectStorageApi(namespace="OPENIO")
     >>> api.object_create("myaccount", "mycontainer", "/etc/magic")
-    ([{u'url': u'http://127.0.0.1:6008/84F8CA8EB24BB871CE9A0D843B43C9E610F398202681B2F46859A97EB8EED524',
+    ([{u'url': u'http://127.0.0.1:6008/DEADBEEFCAFEBABE1EE7',
        u'score': 65,
        u'hash': '8de4989188593b0419d387099c9e9872',
        u'pos': '0',
