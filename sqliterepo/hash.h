@@ -22,8 +22,10 @@ License along with this library.
 
 # include <glib/gtypes.h>
 
+# define HASH_MAXLEN 65
+
 struct sqlx_name_s;
 
-gchar * sqliterepo_hash_name (const struct sqlx_name_s *n);
+void sqliterepo_hash_name (const struct sqlx_name_s *n, gchar *d, gsize dlen);
 
 #endif /*OIO_SDS__sqliterepo__hash_h*/

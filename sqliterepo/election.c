@@ -240,7 +240,7 @@ struct election_member_s
 	unsigned char flag_local_id : 1;
 	unsigned char flag_master_id : 1;
 
-	gchar key[65];
+	gchar key[HASH_MAXLEN];
 
 	struct logged_event_s log[EVENTLOG_SIZE];
 };
@@ -1053,7 +1053,8 @@ _LOCKED_init_member(struct election_manager_s *manager,
 	MANAGER_CHECK(manager);
 	NAME_CHECK(n);
 
-	gchar *key = sqliterepo_hash_name(n);
+	gchar key[HASH_MAXLEN];
+	sqliterepo_hash_name(n, key, sizeof(key));
 	struct election_member_s *member = _LOCKED_get_member (manager, key);
 	if (!member && autocreate) {
 		member = g_malloc0 (sizeof(*member));
@@ -1070,7 +1071,6 @@ _LOCKED_init_member(struct election_manager_s *manager,
 		_DEQUE_add (member);
 		g_tree_replace(manager->members_by_key, member->key, member);
 	}
-	g_free(key);
 	return member;
 }
 
@@ -1216,7 +1216,9 @@ election_manager_whatabout (struct election_manager_s *m,
 	EXTRA_ASSERT (m->vtable == &VTABLE);
 	EXTRA_ASSERT(out != NULL);
 
-	gchar *key = sqliterepo_hash_name(n);
+	gchar key[HASH_MAXLEN];
+	sqliterepo_hash_name(n, key, sizeof(key));
+
 	_manager_lock(m);
 	struct election_member_s *member = _LOCKED_get_member(m, key);
 	if (member) {
@@ -1229,8 +1231,6 @@ election_manager_whatabout (struct election_manager_s *m,
 			g_string_append_static (out, "null");
 	}
 	_manager_unlock (m);
-
-	g_free(key);
 }
 
 /* --- Zookeeper callbacks ----------------------------------------------------
@@ -1942,7 +1942,8 @@ _result_GETVERS (GError *enet,
 		}
 	}
 
-	gchar *key = sqliterepo_hash_name(name);
+	gchar key[HASH_MAXLEN];
+	sqliterepo_hash_name(name, key, sizeof(key));
 	struct election_member_s *member = manager_get_member(manager, key);
 	if (!member) {
 		GRID_WARN("GETVERS Election disappeared [%s]", key);
@@ -1970,14 +1971,14 @@ _result_GETVERS (GError *enet,
 
 	if (err) g_clear_error(&err);
 	if (vlocal) g_tree_destroy(vlocal);
-	g_free (key);
 }
 
 static void
 _result_PIPEFROM (GError *e, struct election_manager_s *manager,
 		const struct sqlx_name_s *n, guint reqid)
 {
-	gchar *key = sqliterepo_hash_name(n);
+	gchar key[HASH_MAXLEN];
+	sqliterepo_hash_name(n, key, sizeof(key));
 
 	if (!e || CODE_IS_OK(e->code)) {
 		GRID_DEBUG("PIPEFROM ok [%s.%s] [%s]",
@@ -1988,7 +1989,6 @@ _result_PIPEFROM (GError *e, struct election_manager_s *manager,
 	}
 
 	struct election_member_s *member = manager_get_member (manager, key);
-	g_free (key);
 
 	if (member) {
 		member_lock(member);
