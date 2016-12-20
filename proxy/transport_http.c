@@ -276,7 +276,7 @@ http_request_create(struct network_client_s *client)
 	req = g_malloc0(sizeof(*req));
 	req->client = client;
 	req->tree_headers = g_tree_new_full(metautils_strcmp3, NULL, g_free, g_free);
-	req->body = g_byte_array_new();
+	req->body = g_byte_array_sized_new(512);
 	return req;
 }
 
@@ -338,9 +338,9 @@ static gboolean
 sender(gpointer k, gpointer v, gpointer u)
 {
 	g_string_append((GString*)u, (gchar*)k);
-	g_string_append((GString*)u, ": ");
+	g_string_append_static((GString*)u, ": ");
 	g_string_append((GString*)u, (gchar*)v);
-	g_string_append((GString*)u, "\r\n");
+	g_string_append_static((GString*)u, "\r\n");
 	return FALSE;
 }
 
@@ -454,11 +454,11 @@ http_manage_request(struct req_ctx_s *r)
 			// Manage the "Connection" header of http/1.1
 			gchar *v = g_tree_lookup(r->request->tree_headers, "connection");
 			if (v && 0 == g_ascii_strcasecmp("Keep-Alive", v)) {
-				g_string_append(buf, "Connection: Keep-Alive\r\n");
+				g_string_append_static(buf, "Connection: Keep-Alive\r\n");
 				r->close_after_request = FALSE;
 			}
 			else {
-				g_string_append(buf, "Connection: Close\r\n");
+				g_string_append_static(buf, "Connection: Close\r\n");
 				r->close_after_request = TRUE;
 			}
 		}
@@ -467,9 +467,13 @@ http_manage_request(struct req_ctx_s *r)
 
 		// Add body-related headers
 		if (body_len) {
-			if (content_type)
-				g_string_append_printf(buf, "Content-Type: %s\r\n", content_type);
-			g_string_append(buf, "Transfer-Encoding: identity\r\n");
+			if (content_type) {
+				g_string_append_static(buf, "Content-Type: ");
+				/* TODO url-encode the header */
+				g_string_append(buf, content_type);
+				g_string_append_static(buf, "\r\n");
+			}
+			g_string_append_static(buf, "Transfer-Encoding: identity\r\n");
 		}
 		g_string_append_printf(buf, "Content-Length: %"G_GSIZE_FORMAT"\r\n", body_len);
 
@@ -477,7 +481,7 @@ http_manage_request(struct req_ctx_s *r)
 		g_tree_foreach(headers, sender, buf);
 
 		// Finalize and send the headers
-		g_string_append(buf, "\r\n");
+		g_string_append_static(buf, "\r\n");
 		network_client_send_slab(r->client, data_slab_make_gstr(buf));
 
 		// Now send the body

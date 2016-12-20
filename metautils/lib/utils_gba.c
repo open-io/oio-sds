@@ -46,9 +46,10 @@ metautils_gba_cmp(const GByteArray *a, const GByteArray *b)
 GByteArray*
 metautils_gba_dup(const GByteArray *gba)
 {
-	GByteArray *gba_copy = g_byte_array_new();
-	if (gba && gba->data && gba->len)
-		g_byte_array_append(gba_copy, gba->data, gba->len);
+	if (!gba || !gba->data || !gba->len)
+		return g_byte_array_new();
+	GByteArray *gba_copy = g_byte_array_sized_new(gba->len);
+	g_byte_array_append(gba_copy, gba->data, gba->len);
 	return gba_copy;
 }
 
@@ -79,14 +80,11 @@ metautils_gba_data_to_string(const GByteArray *gba, gchar *dst,
 GByteArray*
 metautils_gba_from_string(const gchar *str)
 {
-	size_t len;
-	GByteArray *gba;
-
 	if (!str || !*str)
 		return g_byte_array_new();
 
-	len = strlen(str);
-	gba = g_byte_array_sized_new(len + 1);
+	const size_t len = strlen(str);
+	GByteArray *gba = g_byte_array_sized_new(len + 1);
 	g_byte_array_append(gba, (guint8*)str, len+1);
 	g_byte_array_set_size(gba, gba->len - 1);
 	return gba;
@@ -147,13 +145,11 @@ metautils_gba_from_cid(const container_id_t cid)
 GString*
 metautils_gba_to_hexgstr(GString *gstr, GByteArray *gba)
 {
-	guint max, len;
-
 	if (!gstr)
-		gstr = g_string_new("");
+		gstr = g_string_sized_new(2 * gba->len);
 
-	len = gstr->len;
-	max = gba->len * 2;
+	const guint len = gstr->len;
+	const guint max = gba->len * 2;
 	g_string_set_size(gstr, max + len);
 	oio_str_bin2hex (gba->data, gba->len, gstr->str + len, gstr->len - len + 1);
 

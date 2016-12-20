@@ -166,7 +166,7 @@ _client_reset_reply(struct gridd_client_s *client)
 {
 	client->size = 0;
 	if (!client->reply)
-		client->reply = g_byte_array_new();
+		client->reply = g_byte_array_sized_new(256);
 	else if (client->reply->len > 0)
 		g_byte_array_set_size(client->reply, 0);
 }
@@ -329,7 +329,7 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 			client->step = REP_READING_SIZE;
 
 			if (!client->reply)
-				client->reply = g_byte_array_new();
+				client->reply = g_byte_array_sized_new(256);
 
 			if (client->reply->len < 4) {
 				/* Continue reading the size */
@@ -754,7 +754,7 @@ _client_fail(struct gridd_client_s *client, GError *why)
 {
 	EXTRA_ASSERT(client != NULL);
 	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
-	_client_replace_error(client, NEWERROR(why->code, "%s", why->message));
+	_client_replace_error(client, why);
 }
 
 static void

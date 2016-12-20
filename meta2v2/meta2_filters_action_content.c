@@ -56,9 +56,9 @@ _notify_beans (struct meta2_backend_s *m2b, struct oio_url_s *url,
 		g_snprintf (tmp, sizeof(tmp), "%s.%s", META2_EVENTS_PREFIX, name);
 
 		GString *gs = oio_event__create (tmp, url);
-		g_string_append (gs, ",\"data\":[");
+		g_string_append_static (gs, ",\"data\":[");
 		meta2_json_dump_all_xbeans (gs, list_of_beans);
-		g_string_append (gs, "]}");
+		g_string_append_static (gs, "]}");
 		oio_events_queue__send (m2b->notifier, g_string_free (gs, FALSE));
 	}
 
@@ -400,10 +400,10 @@ meta2_filter_action_del_content_properties(struct gridd_filter_ctx_s *ctx,
 	GError *e = STRV_decode_buffer(buf, len, &namev);
 	if (!e) {
 		e = meta2_backend_del_properties(m2b, url, namev);
-		metautils_pfree(&namev);
+		g_strfreev(namev);
 	}
 
-	if (NULL != e) {
+	if (e) {
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
 	}

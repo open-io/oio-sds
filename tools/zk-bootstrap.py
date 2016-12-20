@@ -60,15 +60,8 @@ def batch_create(zh, batch):
             rc, zrc, ignored = args
             if rc != 0:
                 print "zookeeper.acreate() error"
-            else:
-                if zrc == 0:
-                    # print 'create/set('+path+') : OK'
-                    pass
-                elif zrc == zookeeper.NODEEXISTS:
-                    # print 'create/set('+path+') : ALREADY'
-                    pass
-                else:
-                    print 'create/set('+path+') : FAILED'
+            elif zrc != 0 and zrc != zookeeper.NODEEXISTS:
+                print 'create/set('+path+') : FAILED'
             sem.release()
         zookeeper.acreate(zh, path, data, acl_openbar, 0, completion)
     for path, data in batch:
@@ -128,11 +121,15 @@ def main():
     parser = OptionParser()
     parser.add_option(
             '-v', '--verbose',
-            action="store_true", dest="flag_verbose",
+            action="store_true", dest="flag_verbose", default=False,
             help='Triggers debugging traces')
     parser.add_option(
+            '--lazy',
+            action="store_true", dest="LAZY", default=False,
+            help='Quickly check if things seem OK.')
+    parser.add_option(
             '--slow',
-            action="store_true", dest="SLOW",
+            action="store_true", dest="SLOW", default=False,
             help='Send small batches to avoid timeouts on slow hosts.')
     parser.add_option(
             '--avoid',
@@ -166,7 +163,19 @@ def main():
         zookeeper.create(zh, PREFIX, '', acl_openbar, 0)
     except zookeeper.NodeExistsException:
         pass
-    create_tree(zh, namespace_tree(ns, options), options)
+
+    missing = True
+    if options.LAZY:
+        _m = False
+        for t, _, _ in SRVTYPES:
+            try:
+                _, _ = zookeeper.get(zh, PREFIX_NS + '/' + ns + '/el/' + t)
+            except:
+                _m = True
+        missing = _m
+
+    if missing:
+        create_tree(zh, namespace_tree(ns, options), options)
     zookeeper.close(zh)
 
 

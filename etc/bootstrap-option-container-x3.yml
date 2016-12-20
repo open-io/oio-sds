@@ -1,4 +1,2 @@
 zookeeper: true
 container_replicas: 3
-meta2:
-  count: 3

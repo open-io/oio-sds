@@ -47,6 +47,10 @@ struct sqlx_sync_s
 	guint hash_depth;
 };
 
+gint32 oio_sync_failure_threshold_action = 10;
+gint32 oio_sync_failure_threshold_hook = 10;
+
+
 static void _clear(struct sqlx_sync_s *ss);
 
 static GError* _open(struct sqlx_sync_s *ss);
@@ -152,36 +156,44 @@ _set_exit_hook(struct sqlx_sync_s *ss, void (*on_exit_hook) (void*),
 //------------------------------------------------------------------------------
 
 static gchar *
-_realpath(const struct sqlx_sync_s *ss, const gchar *path)
+_realpath(const struct sqlx_sync_s *ss, const char *path,
+		gchar *d, gsize dlen)
 {
 	guint w;
 	switch (ss->hash_depth) {
 		case 0:
-			return g_strdup_printf("%s/%s", ss->zk_prefix, path);
+			g_snprintf(d, dlen, "%s/%s", ss->zk_prefix, path);
+			return d;
 		case 1:
 			w = CLAMP(ss->hash_width, 1, 3);
-			return g_strdup_printf("%s/%.*s/%s", ss->zk_prefix, w, path, path);
+			g_snprintf(d, dlen, "%s/%.*s/%s", ss->zk_prefix, w, path, path);
+			return d;
 		default:
 			w = CLAMP(ss->hash_width, 1, 2);
-			return g_strdup_printf("%s/%.*s/%.*s/%s", ss->zk_prefix,
+			g_snprintf(d, dlen, "%s/%.*s/%.*s/%s", ss->zk_prefix,
 					w, path, w, path + w, path);
+			return d;
 	}
 }
 
 static gchar *
-_realdirname(const struct sqlx_sync_s *ss, const gchar *path)
+_realdirname(const struct sqlx_sync_s *ss, const char *path,
+		gchar *d, gsize dlen)
 {
 	guint w;
 	switch (ss->hash_depth) {
 		case 0:
-			return g_strdup(ss->zk_prefix);
+			g_strlcpy(d, ss->zk_prefix, dlen);
+			return d;
 		case 1:
 			w = CLAMP(ss->hash_width, 1, 3);
-			return g_strdup_printf("%s/%.*s", ss->zk_prefix, w, path);
+			g_snprintf(d, dlen, "%s/%.*s", ss->zk_prefix, w, path);
+			return d;
 		default:
 			w = CLAMP(ss->hash_width, 1, 2);
-			return g_strdup_printf("%s/%.*s/%.*s", ss->zk_prefix,
+			g_snprintf(d, dlen, "%s/%.*s/%.*s", ss->zk_prefix,
 					w, path, w, path + w);
+			return d;
 	}
 }
 
@@ -297,11 +309,15 @@ _acreate (struct sqlx_sync_s *ss, const char *path, const char *v,
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
-	gchar *p = _realpath(ss, path);
-	int rc = zoo_acreate(ss->zh, p, v, vlen, &ZOO_OPEN_ACL_UNSAFE,
+#ifdef HAVE_ENBUG
+	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
+		return ZOPERATIONTIMEOUT;
+#endif
+	gchar p[PATH_MAXLEN];
+	int rc = zoo_acreate(ss->zh, _realpath(ss, path, p, sizeof(p)),
+			v, vlen, &ZOO_OPEN_ACL_UNSAFE,
 			flags, completion, data);
 	OUTGOING("ZK_CREATE %s %d", p, rc);
-	g_free(p);
 	return rc;
 }
 
@@ -311,10 +327,14 @@ _adelete (struct sqlx_sync_s *ss, const char *path, int version,
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
-	gchar *p = _realpath(ss, path);
-	int rc = zoo_adelete(ss->zh, p, version, completion, data);
+#ifdef HAVE_ENBUG
+	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
+		return ZOPERATIONTIMEOUT;
+#endif
+	gchar p[PATH_MAXLEN];
+	int rc = zoo_adelete(ss->zh, _realpath(ss, path, p, sizeof(p)),
+			version, completion, data);
 	OUTGOING("ZK_DEL %s %d", p, rc);
-	g_free(p);
 	return rc;
 }
 
@@ -325,10 +345,14 @@ _awexists (struct sqlx_sync_s *ss, const char *path,
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
-	gchar *p = _realpath(ss, path);
-	int rc = zoo_awexists(ss->zh, p, watcher, watcherCtx, completion, data);
+#ifdef HAVE_ENBUG
+	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
+		return ZOPERATIONTIMEOUT;
+#endif
+	gchar p[PATH_MAXLEN];
+	int rc = zoo_awexists(ss->zh, _realpath(ss, path, p, sizeof(p)),
+			watcher, watcherCtx, completion, data);
 	GRID_TRACE2("ZK_EXISTS %s %d", p, rc);
-	g_free(p);
 	return rc;
 }
 
@@ -339,10 +363,14 @@ _awget (struct sqlx_sync_s *ss, const char *path,
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
-	gchar *p = _realpath(ss, path);
-	int rc = zoo_awget(ss->zh, p, watcher, watcherCtx, completion, data);
+#ifdef HAVE_ENBUG
+	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
+		return ZOPERATIONTIMEOUT;
+#endif
+	gchar p[PATH_MAXLEN];
+	int rc = zoo_awget(ss->zh, _realpath(ss, path, p, sizeof(p)),
+			watcher, watcherCtx, completion, data);
 	OUTGOING("ZK_GET %s %d", p, rc);
-	g_free(p);
 	return rc;
 }
 
@@ -353,11 +381,14 @@ _awget_children (struct sqlx_sync_s *ss, const char *path,
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
-	gchar *p = _realpath(ss, path);
-	int rc = zoo_awget_children(ss->zh, p, watcher, watcherCtx, completion,
-			data);
+#ifdef HAVE_ENBUG
+	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
+		return ZOPERATIONTIMEOUT;
+#endif
+	gchar p[PATH_MAXLEN];
+	int rc = zoo_awget_children(ss->zh, _realpath(ss, path, p, sizeof(p)),
+			watcher, watcherCtx, completion, data);
 	OUTGOING("ZK_CHILDREN %s %d", p, rc);
-	g_free(p);
 	return rc;
 }
 
@@ -368,10 +399,14 @@ _awget_siblings (struct sqlx_sync_s *ss, const char *path,
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
-	gchar *p = _realdirname(ss, path);
-	int rc = zoo_awget_children(ss->zh, p, watcher, watcherCtx, completion, data);
+#ifdef HAVE_ENBUG
+	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
+		return ZOPERATIONTIMEOUT;
+#endif
+	gchar p[PATH_MAXLEN];
+	int rc = zoo_awget_children(ss->zh, _realdirname(ss, path, p, sizeof(p)),
+			watcher, watcherCtx, completion, data);
 	OUTGOING("ZK_CHILDREN %s %d", p, rc);
-	g_free(p);
 	return rc;
 }
 

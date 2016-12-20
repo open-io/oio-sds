@@ -227,9 +227,7 @@ retry:
 		GError *err = socket_get_error(pfd.fd);
 		g_prefix_error(&err, "%s: ", gridd_client_url(client));
 		gridd_client_fail(client, err);
-		g_clear_error(&err);
-	}
-	else if (pfd.revents & (POLLIN|POLLOUT)) {
+	} else if (pfd.revents & (POLLIN|POLLOUT)) {
 		gridd_client_react(client);
 	}
 	return NULL;
@@ -292,10 +290,9 @@ retry:
 			GError *err = socket_get_error(pfd[i].fd);
 			g_prefix_error(&err, "%s: ", gridd_client_url(last));
 			gridd_client_fail(last, err);
-			g_clear_error(&err);
-		}
-		else
+		} else {
 			gridd_client_react(last);
+		}
 	}
 
 	/* Now check for expired clients */
@@ -411,7 +408,7 @@ gridd_client_exec_and_concat (const gchar *to, gdouble seconds, GByteArray *req,
 
 	GByteArray *tmp = NULL;
 	if (out)
-		tmp = g_byte_array_new();
+		tmp = g_byte_array_sized_new(512);
 
 	struct gridd_client_s *client = gridd_client_create(to, req,
 			out ? tmp : NULL, out ? (client_on_reply)_cb_exec_and_concat : NULL);

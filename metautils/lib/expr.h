@@ -30,24 +30,12 @@ License along with this library.
 	}\
 } while (0)
 
-/**
- *
- */
-typedef char *(accessor_f) (char *);
+typedef char *(accessor_f) (const char *);
 
-/**
- *
- */
-typedef accessor_f *(env_f) (char *);
+typedef accessor_f *(env_f) (const char *);
 
-/**
- *
- */
 struct expr_s;
 
-/**
- *
- */
 enum expr_type_e
 {
 	VAL_STR_ET, VAL_NUM_ET,
@@ -68,9 +56,6 @@ enum expr_type_e
 	NB_ET
 };
 
-/**
- *
- */
 union internal_expr_u
 {
 	double num;
@@ -88,30 +73,16 @@ union internal_expr_u
 	} bin;
 };
 
-/**
- *
- */
 struct expr_s
 {
 	enum expr_type_e type;
 	union internal_expr_u expr;
 };
 
-/* ************************************************************************* */
-
-/**
- *
- */
 void expr_clean(struct expr_s *pE);
 
-/**
- *
- */
 int expr_parse(const char *pBuf, struct expr_s **pE);
 
-/**
- *
- */
 int expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv);
 
 #endif /*OIO_SDS__metautils__lib__expr_h*/

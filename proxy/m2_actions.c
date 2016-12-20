@@ -184,7 +184,7 @@ static void
 _dump_json_aliases_and_headers(GString *gstr, GSList *aliases,
 		GTree *headers, GTree *props)
 {
-	g_string_append (gstr, "\"objects\":[");
+	g_string_append_static (gstr, "\"objects\":[");
 	gboolean first = TRUE;
 	for (; aliases ; aliases=aliases->next) {
 		COMA(gstr,first);
@@ -198,21 +198,18 @@ _dump_json_aliases_and_headers(GString *gstr, GSList *aliases,
 		GSList *prop_list = g_tree_lookup(props, prop_key);
 		g_free(prop_key);
 
-		g_string_append(gstr, "{");
-		oio_str_gstring_append_json_pair(gstr, "name", ALIASES_get_alias(a)->str);
-		g_string_append_printf(gstr,
-				",\"ver\":%"G_GINT64_FORMAT
-				",\"ctime\":%"G_GINT64_FORMAT
-				",\"mtime\":%"G_GINT64_FORMAT
-				",\"deleted\":%s"
-				",\"content\":\"",
-				ALIASES_get_version(a),
-				ALIASES_get_ctime(a),
-				ALIASES_get_mtime(a),
-				ALIASES_get_deleted(a) ? "true" : "false");
-
-		metautils_gba_to_hexgstr(gstr, ALIASES_get_content(a));
-		g_string_append_c (gstr, '"');
+		g_string_append_c(gstr, '{');
+		OIO_JSON_append_gstr(gstr, "name", ALIASES_get_alias(a));
+		g_string_append_c(gstr, ',');
+		OIO_JSON_append_int(gstr, "ver", ALIASES_get_version(a));
+		g_string_append_c(gstr, ',');
+		OIO_JSON_append_int(gstr, "ctime", ALIASES_get_ctime(a));
+		g_string_append_c(gstr, ',');
+		OIO_JSON_append_int(gstr, "mtime", ALIASES_get_mtime(a));
+		g_string_append_c(gstr, ',');
+		OIO_JSON_append_bool(gstr, "deleted", ALIASES_get_deleted(a));
+		g_string_append_c(gstr, ',');
+		OIO_JSON_append_gba(gstr, "content", ALIASES_get_content(a));
 
 		if (h) {
 			g_string_append_c (gstr, ',');
@@ -229,7 +226,7 @@ _dump_json_aliases_and_headers(GString *gstr, GSList *aliases,
 				metautils_gba_to_hexgstr(gstr, hh);
 				g_string_append_c (gstr, '"');
 			} else {
-				g_string_append(gstr, "null");
+				g_string_append_static(gstr, "null");
 			}
 
 			g_string_append_printf(gstr, ",\"size\":%"G_GINT64_FORMAT,
@@ -238,7 +235,7 @@ _dump_json_aliases_and_headers(GString *gstr, GSList *aliases,
 					CONTENTS_HEADERS_get_mime_type(h)->str);
 		}
 		if (prop_list) {
-			g_string_append(gstr, ",\"properties\":{");
+			g_string_append_static(gstr, ",\"properties\":{");
 			gboolean inner_first = TRUE;
 			for (GSList *prop = prop_list;
 					prop && prop->data;
@@ -305,7 +302,7 @@ static void
 _dump_json_prefixes (GString *gstr, GTree *tree_prefixes)
 {
 	gchar **prefixes = gtree_string_keys (tree_prefixes);
-	g_string_append (gstr, "\"prefixes\":[");
+	g_string_append_static (gstr, "\"prefixes\":[");
 	if (prefixes) {
 		gboolean first = TRUE;
 		for (gchar **pp=prefixes; *pp ;++pp) {
@@ -320,18 +317,28 @@ _dump_json_prefixes (GString *gstr, GTree *tree_prefixes)
 static void
 _dump_json_properties (GString *gstr, GTree *properties)
 {
-	g_string_append (gstr, "\"properties\":{");
-	if (properties) {
-		gboolean first = TRUE;
-		gboolean _func (gpointer k, gpointer v, gpointer i) {
-			(void) i;
-			COMA(gstr,first);
-			oio_str_gstring_append_json_pair (gstr, (const char *)k, (const char *)v);
-			return FALSE;
+	gboolean first = TRUE;
+	gboolean _func (gpointer k, gpointer v, gpointer i) {
+		gboolean want_system = GPOINTER_TO_INT(i);
+		gboolean is_user = g_str_has_prefix((gchar*)k, "user.");
+		if (want_system ^ is_user) {
+			COMA(gstr, first);
+			if (is_user)
+				k += sizeof("user.") - 1;
+			oio_str_gstring_append_json_pair(gstr, (const char *)k, (const char *)v);
 		}
-		g_tree_foreach (properties, _func, NULL);
+		return FALSE;
 	}
-	g_string_append (gstr, "}");
+	g_string_append_static(gstr, "\"properties\":{");
+	if (properties) {
+		g_tree_foreach(properties, _func, GINT_TO_POINTER(0));
+	}
+	g_string_append_static(gstr, "},\"system\":{");
+	if (properties) {
+		first = TRUE;
+		g_tree_foreach(properties, _func, GINT_TO_POINTER(1));
+	}
+	g_string_append_c(gstr, '}');
 }
 
 static enum http_rc_e
@@ -345,7 +352,8 @@ _reply_list_result (struct req_args_s *args, GError * err,
 	 * in the headers. */
 	_container_new_props_to_headers (args, out->props);
 
-	GString *gstr = g_string_new ("{");
+	GString *gstr = g_string_sized_new (4096);
+	g_string_append_c (gstr, '{');
 	_dump_json_prefixes (gstr, tree_prefixes);
 	g_string_append_c (gstr, ',');
 	_dump_json_properties (gstr, out->props);
@@ -362,7 +370,7 @@ _reply_beans (struct req_args_s *args, GError * err, GSList * beans)
 	if (err)
 		return _reply_m2_error (args, err);
 
-	GString *gstr = g_string_new ("");
+	GString *gstr = g_string_sized_new (2048);
 	_json_dump_all_beans (gstr, beans);
 	_bean_cleanl2 (beans);
 	return _reply_success_json (args, gstr);
@@ -447,7 +455,11 @@ _reply_simplified_beans (struct req_args_s *args, GError *err,
 	struct bean_ALIASES_s *alias = NULL;
 	struct bean_CONTENTS_HEADERS_s *header = NULL;
 	gboolean first = TRUE;
-	GString *gstr = body ? g_string_new ("[") : NULL;
+	GString *gstr = NULL;
+	if (body) {
+		gstr = g_string_sized_new (2048);
+		g_string_append_c (gstr, '[');
+	}
 
 	beans = g_slist_sort(beans, _bean_compare_kind);
 
@@ -457,7 +469,7 @@ _reply_simplified_beans (struct req_args_s *args, GError *err,
 
 		if (&descr_struct_CHUNKS == DESCR(l0->data) && gstr) {
 			if (!first)
-				g_string_append (gstr, ",\n");
+				g_string_append_static (gstr, ",\n");
 			first = FALSE;
 
 			// Serialize the chunk
@@ -466,7 +478,7 @@ _reply_simplified_beans (struct req_args_s *args, GError *err,
 			g_string_append_printf (gstr, "{\"url\":\"%s\"", CHUNKS_get_id (chunk)->str);
 			g_string_append_printf (gstr, ",\"pos\":\"%s\"", CHUNKS_get_position (chunk)->str);
 			g_string_append_printf (gstr, ",\"size\":%"G_GINT64_FORMAT, CHUNKS_get_size (chunk));
-			g_string_append (gstr, ",\"hash\":\"");
+			g_string_append_static (gstr, ",\"hash\":\"");
 			metautils_gba_to_hexgstr (gstr, CHUNKS_get_hash (chunk));
 			g_string_append_printf(gstr, "\",\"score\":%d}", score);
 		}
@@ -513,7 +525,7 @@ _get_hash (const char *s, GByteArray **out)
 	*out = NULL;
 	GByteArray *h = metautils_gba_from_hexstring (s);
 	if (!h)
-		return BADREQ("JSON: invalid hash: not hexa");
+		return BADREQ("JSON: invalid hash: not hexa: '%s'", s);
 
 	const gssize len = h->len;
 	if (len != g_checksum_type_get_length(G_CHECKSUM_MD5)
@@ -744,7 +756,7 @@ static GError * _load_content_from_json_object(struct req_args_s *args,
 			 * header. Then if there is no error, complete it with properties */
 			if (!(err = _load_content_from_json_array(args, jchunks, out))) {
 				GSList *beans = _load_properties_from_strv(props);
-				for (GSList *l=beans; l ;l=l->next)
+				for (GSList *l = beans; l; l = l->next)
 					PROPERTIES_set2_alias(l->data, oio_url_get(args->url, OIOURL_PATH));
 				*out = metautils_gslist_precat(*out, beans);
 			}
@@ -774,7 +786,8 @@ _reply_properties (struct req_args_s *args, GError * err, GSList * beans)
 	}
 
 	gboolean first = TRUE;
-	GString *gs = g_string_new("{\"properties\":{");
+	GString *gs = g_string_sized_new(1024);
+	g_string_append_static(gs, "{\"properties\":{");
 	for (GSList *l=beans; l ;l=l->next) {
 		if (DESCR(l->data) != &descr_struct_PROPERTIES)
 			continue;
@@ -1178,7 +1191,13 @@ _m2_container_create (struct req_args_s *args, struct json_object *jbody)
 	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	if (err && err->code == CODE_CONTAINER_EXISTS) {
-		g_clear_error (&err);
+		/* We did not create it, thus we cannot _reply_created() */
+		g_clear_error(&err);
+		return _reply_nocontent(args);
+	}
+	if (!err || err->code == CODE_FINAL_OK) {
+		/* No error means we actually created it. */
+		g_clear_error(&err);
 		return _reply_created(args);
 	}
 	return _reply_m2_error (args, err);
@@ -1388,15 +1407,15 @@ enum http_rc_e action_container_show (struct req_args_s *args) {
 	_container_old_props_to_headers (args, sys);
 	g_free(sys);
 
-	GString *body = g_string_new("");
+	GString *body = g_string_sized_new(1024);
 
 	/* In the reply's body, we then store only the "user." related properties
 	 * without the implicit prefix. For the sake of uniformity, we store these
 	 * properties under a json sub-object named "properties" */
 	gchar **user = KV_extract_prefixed(pairs, "user.");
-	g_string_append(body, "{\"properties\":");
+	g_string_append_static(body, "{\"properties\":");
 	KV_encode_gstr2(body, user);
-	g_string_append(body, "}");
+	g_string_append_c(body, '}');
 	g_free(user);
 
 	g_strfreev(pairs);

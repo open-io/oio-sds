@@ -273,7 +273,7 @@ oio_error_debug (GQuark gq, int code, const char *fmt, ...)
 	if (strv) {
 		for (int i=1; i<nbframes ;i++) {
 			if (gs->len)
-				g_string_append (gs, ",");
+				g_string_append_c (gs, ',');
 			char *s, *start = strv[i];
 			if (NULL != (s = strchr(start, '(')))
 				start = s+1;
@@ -431,6 +431,16 @@ static gdouble _compute_io_idle (guint major, guint minor) {
 					&wr, &wr_merged, &wr_sectors, &wr_time,
 					&total_progress, &total_time, &total_iotime);
 			if (rc != 0 && fmajor == major && fminor == minor) {
+				/* Since the instant the current value of `now` has been
+				 * evaluated, we spent some time to open file, scan through
+				 * it, etc. This might take longer than you think on an
+				 * overloaded host. So we take the value right after the
+				 * moment we found the line matching our device.
+				 * So that there were no I/O ops counted since then, there
+				 * is little chance of finding more I/O time that actual
+				 * time. */
+				now = oio_ext_monotonic_time ();
+
 				gdouble spent = total_time - out->last_total_time; /* in ms */
 				gdouble elapsed = now - out->last_update; /* in us */
 				elapsed /= G_TIME_SPAN_MILLISECOND; /* in ms */

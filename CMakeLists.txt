@@ -30,7 +30,6 @@ set(CMAKE_C_FLAGS "-g -fPIC -pipe -Wall -Wextra -std=gnu99")
 # as proposed by C99. (we only allocate the first field and let the compiler
 # init the others to zero.
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-missing-field-initializers")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-error=missing-braces")
 
 if (CMAKE_COMPILER_IS_GNUCC)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused")
@@ -299,15 +298,11 @@ dir2macro("OIO_USE_OLD_FMEMOPEN")
 dir2macro("SQLX_GRACE_DELAY_COOL")
 dir2macro("SQLX_GRACE_DELAY_HOT")
 dir2macro("SQLX_DELAY_MAXWAIT")
-dir2macro("SQLX_DELAY_MAXIDLE")
-dir2macro("SQLX_DELAY_ELECTION_REPLAY")
+dir2macro("SQLX_DELAY_NOWAIT_PENDING")
 dir2macro("SQLX_DELAY_RESTART_FAILED")
-dir2macro("SQLX_DELAY_PING_FAILED")
 dir2macro("SQLX_DELAY_PING_FINAL")
-dir2macro("SQLX_DELAY_PING_PENDING")
-dir2macro("SQLX_DELAY_EXPIRE_FAILED")
-dir2macro("SQLX_DELAY_EXPIRE_FINAL")
-dir2macro("SQLX_DELAY_EXPIRE_PENDING")
+dir2macro("SQLX_DELAY_EXPIRE_SLAVE")
+dir2macro("SQLX_RETRIES_GETVERS_DEFAULT")
 
 ###-------------------------------------------------------------------------###
 
@@ -468,3 +463,5 @@ add_subdirectory(./tests/unit)
 add_subdirectory(./tests/func)
 endif (NOT SDK_ONLY)
 
+add_custom_target(python-openio-docs
+	COMMAND epydoc -v --graph=all --docformat=restructuredtext -o python-openio-docs oio)

@@ -46,17 +46,18 @@ static gchar*
 get_fullpath(struct zk_manager_s *manager, gchar *subdir, gchar* name)
 {
 	gchar * result;
+
 	if (subdir)
 		result = g_strdup_printf("%s/%s",manager->zk_dir,subdir);
 	else
 		result =  g_strdup(manager->zk_dir);
 
 	if ( name ) {
+		gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
 		struct sqlx_name_s n = {"", "", ""};
 		n.base = name;
-		struct hashstr_s *key = sqliterepo_hash_name(&n);
-		oio_str_reuse (&result, g_strdup_printf("%s/%s", result, hashstr_str(key)));
-		g_free(key);
+		sqliterepo_hash_name(&n, key, sizeof(key));
+		oio_str_reuse (&result, g_strdup_printf("%s/%s", result, key));
 	}
 
 	return result;
@@ -199,19 +200,12 @@ create_zk_node(struct zk_manager_s *manager, gchar *subdir, gchar *name, gchar *
 	int rc = zoo_create(manager->zh, path, data, strlen(data),
 			&ZOO_OPEN_ACL_UNSAFE, 0, buffer, sizeof(buffer)-1);
 
-	if (rc != ZOK && rc != ZNODEEXISTS) {
-		const char prefix[] = "Failed to create Zk node [%s]: (%d) %s";
-		switch (rc) {
-		case ZCONNECTIONLOSS:
-			return NEWERROR(CODE_NETWORK_ERROR, prefix, name, rc,
-					"no connection to zookeeper");
-		case ZNONODE:
-			return NEWERROR(0, prefix, name, rc, "missing parent node");
-		default:
-			return NEWERROR(0, prefix, name, rc, "");
-		}
-	}
-	return NULL;
+	if (rc == ZOK || rc == ZNODEEXISTS)
+		return NULL;
+
+	return NEWERROR(CODE_NETWORK_ERROR,
+			"Failed to create Zk node [%s]: (%d) %s",
+			path, rc, zerror(rc));
 }
 
 GError *

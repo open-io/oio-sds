@@ -267,7 +267,9 @@ namespace_info_init_json(const gchar *encoded, struct namespace_info_s *ni)
 static void
 _encode_json_properties (GString *out, GHashTable *ht, const gchar *tag)
 {
-	g_string_append_printf(out, "\"%s\":{", tag);
+	g_string_append_c(out, '"');
+	g_string_append(out, tag);
+	g_string_append_static(out, "\":{");
 	if (ht && g_hash_table_size(ht) > 0) {
 		GHashTableIter iter;
 		gpointer k, v;
@@ -278,21 +280,29 @@ _encode_json_properties (GString *out, GHashTable *ht, const gchar *tag)
 			if (!first)
 				g_string_append_c(out, ',');
 			first = FALSE;
-			g_string_append_printf(out, "\"%s\":\"%.*s\"", (gchar*)k,
-					gba->len, (gchar*)(gba->data));
+			oio_str_gstring_append_json_quote(out, (gchar*)k);
+			g_string_append_static(out, ":\"");
+			/* If we do not trust 'by default' what has been configured
+			 * for the namespace, we cannot encode the values as is because
+			 * they often contain a final '\0' that has been added in earlier
+			 * times for more robustness */
+			guint len = gba->len;
+			while (len && !gba->data[len-1]) { len --; }
+			oio_str_gstring_append_json_blob(out, (gchar*)(gba->data), len);
+			g_string_append_c(out, '"');
 		}
 	}
-	g_string_append(out, "}");
+	g_string_append_c(out, '}');
 }
 
 void
 namespace_info_encode_json(GString *out, struct namespace_info_s *ni)
 {
 	g_string_append_c(out, '{');
-	g_string_append_printf(out, "\"ns\":\"%s\",", ni->name);
-	g_string_append_printf(out, "\"chunksize\":%"G_GINT64_FORMAT",",
-			ni->chunk_size);
-
+	OIO_JSON_append_str(out, "ns", ni->name);
+	g_string_append_c(out, ',');
+	OIO_JSON_append_int(out, "chunksize", ni->chunk_size);
+	g_string_append_c(out, ',');
 	_encode_json_properties(out, ni->options, "options");
 	g_string_append_c(out, ',');
 	_encode_json_properties(out, ni->storage_policy, "storage_policy");

@@ -24,20 +24,20 @@ License along with this library.
 #include "hash.h"
 #include "internals.h"
 
-struct hashstr_s *
-sqliterepo_hash_name (const struct sqlx_name_s *n)
+void
+sqliterepo_hash_name (const struct sqlx_name_s *n, gchar *d, gsize dlen)
 {
-	GChecksum *hash = g_checksum_new(G_CHECKSUM_SHA256);
-	g_checksum_update(hash, (guint8*)n->base, strlen(n->base));
-	g_checksum_update(hash, (guint8*)"@", 1);
-	g_checksum_update(hash, (guint8*)n->type, strlen(n->type));
-	const char *hex0 = g_checksum_get_string(hash);
-	const size_t len = 2 * g_checksum_type_get_length (G_CHECKSUM_SHA256);
-	gchar *hex = alloca (1 + len);
-	gchar *p = hex;
-	do { *(p++) = g_ascii_toupper(*hex0); } while (*(hex0++));
-	g_checksum_free(hash);
+	EXTRA_ASSERT(dlen > 0);
+	EXTRA_ASSERT(d != NULL);
 
-	return hashstr_create_len (hex, len);
+	GChecksum *h = g_checksum_new(G_CHECKSUM_SHA256);
+	g_checksum_update(h, (guint8*)n->base, strlen(n->base));
+	g_checksum_update(h, (guint8*)"@", 1);
+	g_checksum_update(h, (guint8*)n->type, strlen(n->type));
+	const char *hex = g_checksum_get_string(h);
+	/* TODO maybe is it possible to make this in one pass */
+	strncpy(d, hex, dlen);
+	oio_str_upper(d);
+	g_checksum_free(h);
+
 }
-

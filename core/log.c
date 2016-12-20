@@ -28,6 +28,7 @@ License along with this library.
 #include "internals.h"
 #include "oiolog.h"
 #include "oioext.h"
+#include "oiostr.h"
 
 int oio_log_outgoing = 0;
 
@@ -189,22 +190,23 @@ oio_log_syslog(const gchar *log_domain, GLogLevelFlags log_level,
 	if (!glvl_allowed(log_level))
 		return;
 
-	GString *gstr = g_string_new("");
+	/* Rough estimation that should be enough in most cases */
+	GString *gstr = g_string_sized_new(512);
 
 	g_string_append_printf(gstr, "%d %04X", getpid(), oio_log_current_thread_id());
 
 	const int facility = get_facility(log_domain);
 	switch (facility) {
 		case LOG_LOCAL1:
-			g_string_append(gstr, " access ");
+			g_string_append_static(gstr, " access ");
 			g_string_append(gstr, glvl_to_str(log_level));
 			break;
 		case LOG_LOCAL2:
-			g_string_append(gstr, " out ");
+			g_string_append_static(gstr, " out ");
 			g_string_append(gstr, glvl_to_str(log_level));
 			break;
 		default:
-			g_string_append(gstr, " log ");
+			g_string_append_static(gstr, " log ");
 			g_string_append(gstr, glvl_to_str(log_level));
 			g_string_append_c(gstr, ' ');
 			if (!log_domain || !*log_domain)
@@ -216,7 +218,7 @@ oio_log_syslog(const gchar *log_domain, GLogLevelFlags log_level,
 
 	_append_message(gstr, message);
 
-	syslog(facility|glvl_to_lvl(log_level), "%s", gstr->str);
+	syslog(facility|glvl_to_lvl(log_level), "%.*s", (int)gstr->len, gstr->str);
 	g_string_free(gstr, TRUE);
 }
 
@@ -224,13 +226,13 @@ static void
 _logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 		const gchar *message, gpointer user_data UNUSED)
 {
-	GString *gstr = g_string_sized_new(256);
+	GString *gstr = g_string_sized_new(512);
 
 	if (oio_log_flags & LOG_FLAG_PRETTYTIME) {
 		GTimeVal tv;
 		g_get_current_time(&tv);
 		gchar * strnow = g_time_val_to_iso8601 (&tv);
-		g_string_append_printf(gstr, "%s", strnow);
+		g_string_append(gstr, strnow);
 		g_free(strnow);
 	} else {
 		g_string_append_printf(gstr, "%"G_GINT64_FORMAT,
@@ -246,16 +248,17 @@ _logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 	const int facility = get_facility(log_domain);
 	switch (facility) {
 		case LOG_LOCAL1:
-			g_string_append_len(gstr, "acc ", 4);
+			g_string_append_static(gstr, "acc ");
 			g_string_append(gstr, glvl_to_str(log_level));
 			break;
 		case LOG_LOCAL2:
-			g_string_append_len(gstr, "out ", 4);
+			g_string_append_static(gstr, "out ");
 			g_string_append(gstr, glvl_to_str(log_level));
 			break;
 		default:
-			g_string_append_len(gstr, "log ", 4);
+			g_string_append_static(gstr, "log ");
 			g_string_append(gstr, glvl_to_str(log_level));
+			g_string_append_c(gstr, ' ');
 			/* print the domain */
 			if (!(oio_log_flags & LOG_FLAG_TRIM_DOMAIN))
 				g_string_append(gstr, log_domain);

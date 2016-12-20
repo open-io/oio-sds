@@ -22,7 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 static GString * _pack_m1url_list (GString *gstr, gchar ** urlv) {
 	if (!gstr)
-		gstr = g_string_new ("");
+		gstr = g_string_sized_new (128);
 	g_string_append_c (gstr, '[');
 	for (gchar ** v = urlv; v && *v; v++) {
 		struct meta1_service_url_s *m1 = meta1_unpack_url (*v);
@@ -328,7 +328,8 @@ action_dir_prop_get (struct req_args_s *args, struct json_object *jargs)
 		keys = NULL;
 	}
 	if (!err) {
-		GString *gs = g_string_new("{\"properties\":");
+		GString *gs = g_string_sized_new(256);
+		g_string_append_static(gs, "{\"properties\":");
 		KV_encode_gstr2(gs, pairs);
 		g_string_append_c(gs, '}');
 		g_strfreev(pairs);
@@ -437,15 +438,16 @@ enum http_rc_e action_ref_show (struct req_args_s *args) {
 	if (!err) {
 		gchar **dirv = NULL;
 		err = hc_resolve_reference_directory (resolver, args->url, &dirv);
-		GString *out = g_string_new ("{");
-		g_string_append (out, "\"dir\":");
+		GString *out = g_string_sized_new (512);
+		g_string_append_c (out, '{');
+		g_string_append_static (out, "\"dir\":");
 		if (dirv)
 			out = _pack_and_freev_m1url_list (out, dirv);
 		else
-			g_string_append (out, "null");
-		g_string_append (out, ",\"srv\":");
+			g_string_append_static (out, "null");
+		g_string_append_static (out, ",\"srv\":");
 		out = _pack_and_freev_m1url_list (out, urlv);
-		g_string_append (out, "}");
+		g_string_append_static (out, "}");
 		return _reply_success_json (args, out);
 	}
 	return _reply_common_error (args, err);

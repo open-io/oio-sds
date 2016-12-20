@@ -13,7 +13,7 @@ link_directories(
 		${CURL_LIBRARY_DIRS}
 		${JSONC_LIBRARY_DIRS})
 
-add_library(oiocore SHARED url.c cfg.c str.c ext.c log.c lb.c)
+add_library(oiocore SHARED url.c cfg.c cfg_cache.c str.c ext.c log.c lb.c)
 target_link_libraries(oiocore
 		${JSONC_LIBRARIES} ${GLIB2_LIBRARIES})
 set_target_properties(oiocore PROPERTIES

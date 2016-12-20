@@ -524,30 +524,30 @@ _list_params_to_sql_clause(struct list_params_s *lp, GString *clause,
 		GSList *headers)
 {
 	void lazy_and () {
-		if (clause->len > 0) g_string_append(clause, " AND");
+		if (clause->len > 0) g_string_append_static(clause, " AND");
 	}
 	GPtrArray *params = g_ptr_array_new ();
 
 	if (lp->marker_start) {
 		lazy_and();
-		g_string_append (clause, " alias > ?");
+		g_string_append_static (clause, " alias > ?");
 		g_ptr_array_add (params, g_variant_new_string (lp->marker_start));
 	} else if (lp->prefix) {
 		lazy_and();
-		g_string_append (clause, " alias >= ?");
+		g_string_append_static (clause, " alias >= ?");
 		g_ptr_array_add (params, g_variant_new_string (lp->prefix));
 	}
 
 	if (lp->marker_end) {
 		lazy_and();
-		g_string_append (clause, " alias < ?");
+		g_string_append_static (clause, " alias < ?");
 		g_ptr_array_add (params, g_variant_new_string (lp->marker_end));
 	}
 
 	if (headers) {
 		lazy_and();
 		if (headers->next) {
-			g_string_append (clause, " content IN (");
+			g_string_append_static (clause, " content IN (");
 			for (GSList *l=headers; l; l=l->next) {
 				if (l != headers)
 					g_string_append_c (clause, ',');
@@ -555,19 +555,19 @@ _list_params_to_sql_clause(struct list_params_s *lp, GString *clause,
 				GByteArray *gba = CONTENTS_HEADERS_get_id (l->data);
 				g_ptr_array_add (params, _gba_to_gvariant (gba));
 			}
-			g_string_append (clause, ")");
+			g_string_append_c (clause, ')');
 		} else {
-			g_string_append (clause, " content = ?");
+			g_string_append_static (clause, " content = ?");
 			GByteArray *gba = CONTENTS_HEADERS_get_id (headers->data);
 			g_ptr_array_add (params, _gba_to_gvariant (gba));
 		}
 	}
 
 	if (clause->len == 0)
-		clause = g_string_append(clause, " 1");
+		clause = g_string_append_static (clause, " 1");
 
 	if (!lp->flag_allversion || lp->maxkeys>0 || lp->marker_start || lp->marker_end)
-		g_string_append(clause, " ORDER BY alias ASC, version ASC");
+		g_string_append_static(clause, " ORDER BY alias ASC, version ASC");
 
 	if (lp->maxkeys > 0)
 		g_string_append_printf(clause, " LIMIT %"G_GINT64_FORMAT, lp->maxkeys);
@@ -622,7 +622,7 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 			lp.maxkeys -= count_aliases;
 
 		// List the next items
-		GString *clause = g_string_new("");
+		GString *clause = g_string_sized_new(128);
 		GVariant **params = _list_params_to_sql_clause (&lp, clause, headers);
 		err = ALIASES_load(sq3->db, clause->str, params, _bean_buffer_cb, tmp);
 		metautils_gvariant_unrefv (params);

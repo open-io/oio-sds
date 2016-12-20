@@ -1,6 +1,6 @@
 /*
 OpenIO SDS sqlx
-Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+Copyright (C) 2015 OpenIO, original work as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -21,7 +21,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <glib.h>
 #include <sqlite3.h>
 
-/* from oiocore */
 #include <core/oiocfg.h>
 #include <core/oiolog.h>
 #include <core/oiostr.h>
@@ -29,19 +28,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <core/oiodir.h>
 #include <core/internals.h>
 
-/* from oio-sds/metautils */
-#include <RowFieldSequence.h>
-#include <RowFieldValue.h>
-#include <RowField.h>
-#include <Row.h>
-#include <RowSet.h>
-#include <RowName.h>
-#include <TableHeader.h>
-#include <Table.h>
-#include <TableSequence.h>
-#include <asn_codecs.h>
-
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/codec.h>
 
 #include <sqliterepo/sqlx_remote.h>
 
@@ -218,18 +206,18 @@ _pack_request (struct sqlx_name_mutable_s *n, struct oio_sqlx_batch_s *batch)
 
 		const gchar *query = (gchar*)(stmt->pdata[0]);
 
-		struct Table *table = calloc(1, sizeof(struct Table));
+		struct Table *table = ASN1C_CALLOC(1, sizeof(struct Table));
 		OCTET_STRING_fromBuf(&(table->name), query, strlen(query));
 		asn_sequence_add (&in_table_sequence.list, table);
 
 		if (stmt->len > 1) {
-			struct Row *row = calloc(1, sizeof(struct Row));
+			struct Row *row = ASN1C_CALLOC(1, sizeof(struct Row));
 			asn_int64_to_INTEGER(&row->rowid, 0);
-			struct RowFieldSequence *rfs = calloc(1, sizeof(struct RowFieldSequence));
+			struct RowFieldSequence *rfs = ASN1C_CALLOC(1, sizeof(struct RowFieldSequence));
 			row->fields = rfs;
 			for (guint fi=1; fi < stmt->len ;++fi) {
 				const char *param = stmt->pdata[fi];
-				struct RowField *rf = calloc(1, sizeof(struct RowField));
+				struct RowField *rf = ASN1C_CALLOC(1, sizeof(struct RowField));
 				/* XXX JFS: index must conform the sqlite3_bind_*() norm,
 				 * where the leftmost parameter has an index of 1 */
 				asn_uint32_to_INTEGER (&rf->pos, fi);

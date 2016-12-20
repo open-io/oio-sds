@@ -135,7 +135,7 @@ _cache_load_from_m0(struct meta1_prefixes_set_s *m1ps,
 
 	if (m1ps->by_prefix) {
 		*updated_prefixes = g_array_new(FALSE, FALSE, sizeof(guint16));
-		for (guint i=0 ; i<65536 ;i++) {
+		for (guint i = 0; i < CID_PREFIX_COUNT; i++) {
 			const guint16 prefix = i;
 			const guint8 *bin = (guint8*)&prefix;
 			const gboolean before = _cache_is_managed(m1ps->cache, bin);
@@ -163,7 +163,7 @@ _cache_load_from_ns(struct meta1_prefixes_set_s *m1ps, const char *ns_name,
 		const char *local_url, GArray **updated_prefixes, gboolean *meta0_ok,
 		guint digits)
 {
-	struct addr_info_s local_ai = {0};
+	struct addr_info_s local_ai = {{0}};
 	gboolean done = FALSE;
 
 	EXTRA_ASSERT(m1ps != NULL);

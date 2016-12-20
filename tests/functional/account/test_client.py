@@ -40,36 +40,36 @@ class TestAccountClient(BaseTestCase):
                     time.sleep(2)
                 else:
                     raise
-        self.container_client.container_create(acct=self.account_id,
-                                               ref="container1")
-        self.container_client.container_create(acct=self.account_id,
-                                               ref="container2")
+        self.container_client.container_create(account=self.account_id,
+                                               reference="container1")
+        self.container_client.container_create(account=self.account_id,
+                                               reference="container2")
         time.sleep(.5)  # ensure container event have been processed
 
-    def test_containers_list(self):
-        resp = self.account_client.containers_list(self.account_id)
+    def test_container_list(self):
+        resp = self.account_client.container_list(self.account_id)
         self.assertEquals(resp["containers"], 2)
         self.assertEqual(resp["listing"], [
             ["container1", 0, 0, 0],
             ["container2", 0, 0, 0]
         ])
 
-        resp = self.account_client.containers_list(self.account_id, limit=1)
+        resp = self.account_client.container_list(self.account_id, limit=1)
         self.assertEquals(resp["containers"], 2)
         self.assertEqual(resp["listing"], [
             ["container1", 0, 0, 0]
         ])
 
-        resp = self.account_client.containers_list(self.account_id,
-                                                   marker="container1",
-                                                   limit=1)
+        resp = self.account_client.container_list(self.account_id,
+                                                  marker="container1",
+                                                  limit=1)
         self.assertEquals(resp["containers"], 2)
         self.assertEqual(resp["listing"], [
             ["container2", 0, 0, 0]
         ])
 
-        resp = self.account_client.containers_list(self.account_id,
-                                                   marker="container2",
-                                                   limit=1)
+        resp = self.account_client.container_list(self.account_id,
+                                                  marker="container2",
+                                                  limit=1)
         self.assertEquals(resp["containers"], 2)
         self.assertEqual(resp["listing"], [])

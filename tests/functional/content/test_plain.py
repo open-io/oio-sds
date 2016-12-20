@@ -48,8 +48,8 @@ class TestPlainContent(BaseTestCase):
         self.container_client = ContainerClient(self.gridconf)
         self.blob_client = BlobClient()
         self.container_name = "TestPlainContent-%f" % time.time()
-        self.container_client.container_create(acct=self.account,
-                                               ref=self.container_name)
+        self.container_client.container_create(account=self.account,
+                                               reference=self.container_name)
         self.container_id = cid_from_name(self.account,
                                           self.container_name).upper()
         self.content = random_str(64)
@@ -64,7 +64,7 @@ class TestPlainContent(BaseTestCase):
 
         content.create(StringIO(data))
 
-        meta, chunks = self.container_client.content_show(
+        meta, chunks = self.container_client.content_locate(
             cid=self.container_id, content=content.content_id)
         self.assertEqual(meta['hash'], md5_data(data))
         self.assertEqual(meta['length'], str(len(data)))

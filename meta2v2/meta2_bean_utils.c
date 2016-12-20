@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, modified as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -20,10 +20,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <string.h>
 
-#include <asn_SEQUENCE_OF.h>
-
 #include <metautils/lib/metautils.h>
-#include <M2V2BeanSequence.h>
+#include <metautils/lib/codec.h>
 
 #include <meta2v2/generic.h>
 #include <meta2v2/meta2_bean.h>

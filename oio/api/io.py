@@ -167,9 +167,9 @@ class ChunkReader(object):
         :param nb_bytes: number of bytes already consumed that we need to
                          discard if we perform a recovery from another source.
 
-        :raises ValueError: if range header is not valid
-        :raises UnsatisfiableRange
-        :raises EmptyByteRange
+        :raises `ValueError`: if range header is not valid
+        :raises `oio.common.exceptions.UnsatisfiableRange`:
+        :raises `oio.common.exceptions.EmptyByteRange`:
         """
         if 'Range' in self.request_headers:
             request_range = ranges_from_http_header(

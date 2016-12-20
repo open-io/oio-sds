@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, modified as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -22,17 +22,7 @@ License along with this library.
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
-
-#include <RowFieldSequence.h>
-#include <RowFieldValue.h>
-#include <RowField.h>
-#include <Row.h>
-#include <RowSet.h>
-#include <RowName.h>
-#include <TableHeader.h>
-#include <Table.h>
-#include <TableSequence.h>
-#include <asn_codecs.h>
+#include <metautils/lib/codec.h>
 
 #include "sqliterepo.h"
 #include "election.h"
@@ -147,7 +137,7 @@ load_table_header(sqlite3_stmt *stmt, Table_t *t)
 
 	for (i=0,max=sqlite3_data_count(stmt); i<max ;i++) {
 		const char *cname = sqlite3_column_name(stmt, i);
-		struct RowName *rname = calloc(1, sizeof(*rname));
+		struct RowName *rname = ASN1C_CALLOC(1, sizeof(*rname));
 		asn_uint32_to_INTEGER(&(rname->pos), i);
 		OCTET_STRING_fromBuf(&(rname->name), cname, strlen(cname));
 		asn_sequence_add(&(t->header.list), rname);
@@ -163,10 +153,10 @@ load_statement(sqlite3_stmt *stmt, Row_t *row, Table_t *table)
 		load_table_header(stmt, table);
 
 	if (!row->fields) /* Lazy memory allocation */
-		row->fields = calloc(1, sizeof(struct RowFieldSequence));
+		row->fields = ASN1C_CALLOC(1, sizeof(struct RowFieldSequence));
 
 	for (i=0,max=sqlite3_data_count(stmt); i<max ;i++) {
-		struct RowField *rf = calloc(1, sizeof(*rf));
+		struct RowField *rf = ASN1C_CALLOC(1, sizeof(*rf));
 		asn_uint32_to_INTEGER(&(rf->pos), i);
 		rf->value.present = RowFieldValue_PR_n;
 
@@ -269,7 +259,7 @@ context_pending_to_rowset(sqlite3 *db, struct sqlx_repctx_s *ctx)
 			GRID_TRACE2("%s(%s,%"G_GINT64_FORMAT",%d)", __FUNCTION__,
 					hashstr_str(name), rowid, deleted);
 
-			struct Row *row = calloc(1, sizeof(*row));
+			struct Row *row = ASN1C_CALLOC(1, sizeof(*row));
 			asn_int64_to_INTEGER(&(row->rowid), rowid);
 			if (!deleted)
 				load_table_row(db, name, rowid, row, table);
@@ -280,7 +270,7 @@ context_pending_to_rowset(sqlite3 *db, struct sqlx_repctx_s *ctx)
 
 		GRID_TRACE2("%s(%s,%p)", __FUNCTION__, hashstr_str(name), rows);
 
-		table = calloc(1, sizeof(struct Table));
+		table = ASN1C_CALLOC(1, sizeof(struct Table));
 		OCTET_STRING_fromBuf(&(table->name),
 				hashstr_str(name), hashstr_len(name));
 		g_tree_foreach(rows, _on_row, NULL);
@@ -564,7 +554,7 @@ sqlx_transaction_prepare(struct sqlx_sqlite3_s *sq3,
 		sqlite3_update_hook(sq3->db, (sqlite3_update_hook_f)hook_update, repctx);
 	}
 
-	repctx->errors = g_string_new ("");
+	repctx->errors = g_string_sized_new (128);
 
 	*result = repctx;
 	return NULL;

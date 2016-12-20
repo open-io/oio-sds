@@ -88,25 +88,27 @@ _get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
 		gboolean nocache, gchar ***result)
 {
 	(void) nocache;
-	GSList *peers;
+	GSList *peers = NULL;
 	GError *err;
 
 	if (!n || !result)
 		return NEWERROR(CODE_INTERNAL_ERROR, "BUG [%s:%s:%d]", __FUNCTION__, __FILE__, __LINE__);
-	if (g_ascii_strcasecmp(n->type, NAME_SRVTYPE_META0))
+	if (0 != strcmp(n->type, NAME_SRVTYPE_META0))
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid type name");
-	if (g_ascii_strcasecmp(n->base, ss->ns_name))
+	if (0 != strcmp(n->base, ss->ns_name))
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid base name, expected [%s]", ss->ns_name);
 
 	err = list_zk_children_node(m0zkmanager, NULL, &peers);
 	if (err) {
-		g_slist_free_full(peers, g_free);
+		g_slist_free_full(peers, (GDestroyNotify)free_zknode);
 		*result = NULL;
 		g_prefix_error(&err, "ZooKeeper error: ");
 		return err;
 	}
 
-	if (!(*result = strv_filter(ss, peers)))
+	*result = strv_filter(ss, peers);
+	g_slist_free_full(peers, (GDestroyNotify)free_zknode);
+	if (!*result)
 		return NEWERROR(CODE_CONTAINER_NOTFOUND, "Base not managed");
 	return NULL;
 }

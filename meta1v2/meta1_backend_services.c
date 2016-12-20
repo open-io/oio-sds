@@ -1009,9 +1009,33 @@ GError *
 meta1_backend_services_list(struct meta1_backend_s *m1,
 		struct oio_url_s *url, const char *srvtype, gchar ***result)
 {
+	gboolean retry = TRUE;
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERSLAVE, &sq3);
-	if (err) return err;
+	GError *err = NULL;
+
+label_retry:
+	err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERSLAVE, &sq3);
+	if (err) {
+		if (retry && err->code == CODE_RANGE_NOTFOUND) {
+			retry = FALSE;
+			// Try to reload the prefixes
+			gboolean meta0_ok = FALSE;
+			GArray *updated_prefixes = NULL;
+			GError *err_load = meta1_prefixes_load(m1->prefixes,
+					oio_url_get(url, OIOURL_NS),
+					sqlx_repository_get_local_addr(m1->repo),
+					&updated_prefixes, &meta0_ok, m1->nb_digits);
+			if (err_load || !meta0_ok) {
+				if (err_load) g_error_free(err_load);
+				return err;
+			}
+			g_error_free(err);
+			if (updated_prefixes)
+				g_array_free(updated_prefixes, TRUE);
+			goto label_retry;
+		}
+		return err;
+	}
 
 	struct sqlx_repctx_s *repctx = NULL;
 	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
@@ -1145,15 +1169,15 @@ __notify_services(struct meta1_backend_s *m1, struct sqlx_sqlite3_s *sq3,
 	if (!err) {
 		struct meta1_service_url_s **services2 = expand_urlv(services);
 		GString *notif = oio_event__create ("account.services", url);
-		g_string_append (notif, ",\"data\":[");
+		g_string_append_static (notif, ",\"data\":[");
 		if (services2) {
 			for (struct meta1_service_url_s **svc = services2; *svc ; svc++) {
 				if (svc != services2) // not at the beginning
-					g_string_append(notif, ",");
+					g_string_append_c(notif, ',');
 				meta1_service_url_encode_json(notif, *svc);
 			}
 		}
-		g_string_append(notif, "]}");
+		g_string_append_static(notif, "]}");
 
 		oio_events_queue__send (m1->notifier, g_string_free(notif, FALSE));
 
