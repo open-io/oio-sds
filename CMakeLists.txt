@@ -382,7 +382,6 @@ option_or_system(CURL curl curl/curl.h)
 option_or_system(JSONC json-c json.h)
 
 if (NOT SDK_ONLY)
-option_or_system(ASN1C asn1cskeletons)
 option_or_system(APACHE2 modules/mod_webdav.so httpd.h)
 option_or_system(ATTR attr attr/xattr.h)
 option_or_system(LZO lzo2 lzo1.h lzo1x.h lzoutil.h)
@@ -413,7 +412,7 @@ print_found("LIBMEMCACHED")
 check_found("CURL" "GLIB2" "JSONC")
 
 if (NOT SDK_ONLY)
-check_found("APR" "APACHE2" "ASN1C" "ATTR" "LZO"
+check_found("APR" "APACHE2" "ATTR" "LZO"
 		"SQLITE3" "ZMQ" "ZK" "PYTHONINTERP")
 
 if (DEFINED APACHE2_MODDIR)
