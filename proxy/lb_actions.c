@@ -55,11 +55,13 @@ static enum http_rc_e
 _lb(struct req_args_s *args, const char *srvtype)
 {
 	enum http_rc_e code;
-	const char *slot, *sz;
 
-	slot = OPT("slot");
-	sz = OPT("size");
-	guint howmany = sz ? atoi(sz) : 1;
+	const char *slot = OPT("slot");
+	const char *sz = OPT("size");
+
+	gint64 howmany = 1;
+	if (sz && !oio_str_is_number(sz, &howmany))
+		return _reply_format_error(args, BADREQ("Invalid size"));
 
 	struct oio_lb_pool_s *pool = oio_lb_world__create_pool(lb_world, srvtype);
 	GString *targets = g_string_sized_new(64);
@@ -72,7 +74,7 @@ _lb(struct req_args_s *args, const char *srvtype)
 		}
 	}
 	g_string_append(targets, srvtype);
-	GRID_DEBUG("Temporary pool [%s] will target [%s] %u times",
+	GRID_DEBUG("Temporary pool [%s] will target [%s] %"G_GINT64_FORMAT" times",
 			srvtype, targets->str, howmany);
 	for (; howmany > 0; howmany--)
 		oio_lb_world__add_pool_target(pool, targets->str);
@@ -130,15 +132,16 @@ _json_ids_to_locations(struct json_object *arr, oio_location_t *prev)
 	if (!arr)
 		return prev;
 	GArray *out = g_array_new(TRUE, TRUE, sizeof(oio_location_t));
-	int len = 0;
 	if (prev) {
+		guint len = 0;
 		while (prev[len] != 0)
 			len++;
 		g_array_append_vals(out, prev, len);
 		g_free(prev);
 	}
-	len = json_object_array_length(arr);
-	for (int i = 0; i < len; i++) {
+
+	const guint max = json_object_array_length(arr);
+	for (guint i = 0; i < max; i++) {
 		const char *id = json_object_get_string(
 				json_object_array_get_idx(arr, i));
 		struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, id);
