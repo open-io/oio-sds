@@ -17,11 +17,7 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-
-#include "metautils.h"
+#include <metautils/lib/metautils.h>
 #include "expr.h"
 
 void

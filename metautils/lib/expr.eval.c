@@ -17,14 +17,10 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-
 #include <math.h>
 
+#include <metautils/lib/metautils.h>
 #include "expr.h"
-#include "metautils.h"
 
 #if 0
 #define FP_EPSILON 0.0000000000001

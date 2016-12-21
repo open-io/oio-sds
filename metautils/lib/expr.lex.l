@@ -1,8 +1,6 @@
 %{
 #define YY_NO_UNPUT
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
+#include <metautils/lib/metautils.h>
 #include "expr.yacc.h"
 
 #include "./expr.h"
