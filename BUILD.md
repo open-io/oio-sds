@@ -44,6 +44,9 @@ In addition, there some additional dependencies at runtime:
 The account service will require an up and running backend:
 * redis
 
+Generating the documentation will require:
+* epydoc: available in your python virtualenv
+
 ## Configuration
 
 The Makefile's generation is performed by [cmake](http://cmake.org). The master
