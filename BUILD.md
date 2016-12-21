@@ -10,7 +10,7 @@ When building only the SDK, OpenIO only depends on:
 * glib2, glib2-devel
 * curl, libcurl, libcurl-devel
 * json-c, json-c-devel
-* [asn1c](https://github.com/open-io/asn1c) : our ASN.1 codec, forked from [Lev Walkin's excellent ASN.1 codec](https://github.com/vlm/asn1c). The purpose of our fork is simply to provide codec for explicitely sized integers (int{8,16,32,64} instead of long int).
+* [asn1c](https://github.com/open-io/asn1c) : Now only necessary at the compile time, this is our ASN.1 codec forked from [Lev Walkin's excellent ASN.1 codec](https://github.com/vlm/asn1c). The purpose of our fork is simply to provide codec for explicitely sized integers (int{8,16,32,64} instead of long int) and GLib-2.0 memory allocations
 
 Building the entire project will require the SDK dependencies, but also:
 * python: Pure python code generator (no dependency), and python modules.

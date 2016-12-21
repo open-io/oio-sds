@@ -4,14 +4,33 @@ include_directories(BEFORE . ../..
 		${CMAKE_BINARY_DIR}
 		${CMAKE_CURRENT_BINARY_DIR})
 
-link_directories(
-		${ASN1C_LIBRARY_DIRS})
+link_directories()
 
 include_directories(AFTER
 		${JSONC_INCLUDE_DIRS})
 
 add_custom_command(
 	OUTPUT
+		constraints.c constraints.h
+		constr_SET_OF.c constr_SET_OF.h
+		constr_SEQUENCE_OF.c constr_SEQUENCE_OF.h
+		constr_SEQUENCE.c constr_SEQUENCE.h
+		constr_TYPE.c constr_TYPE.h
+		constr_CHOICE.c constr_CHOICE.h
+
+		ber_tlv_tag.c ber_tlv_tag.h
+		ber_tlv_length.c ber_tlv_length.h
+		der_encoder.c der_encoder.h
+		ber_decoder.c ber_decoder.h
+		xer_support.c xer_support.h
+		xer_decoder.c xer_decoder.h
+		per_support.c per_support.h
+		per_encoder.c per_encoder.h
+		xer_encoder.c xer_encoder.h
+		per_decoder.c per_decoder.h
+		per_opentype.c
+		converter-sample.c
+
 		NativeEnumerated.c NativeEnumerated.h
 		NativeInteger.c NativeInteger.h
 		OCTET_STRING.c OCTET_STRING.h
@@ -19,13 +38,17 @@ add_custom_command(
 		BIT_STRING.c BIT_STRING.h
 		BOOLEAN.c BOOLEAN.h
 		INTEGER.c INTEGER.h
+		ENUMERATED.c ENUMERATED.h
 		REAL.c REAL.h
+		NULL.c NULL.h
 
-		asn_application.h
+		asn_SEQUENCE_OF.c asn_SEQUENCE_OF.h
+		asn_SET_OF.c asn_SET_OF.h
 		asn_codecs.h
-		asn_codecs_prim.c
-		asn_codecs_prim.h
+		asn_codecs_prim.c asn_codecs_prim.h
 		asn_internal.h
+		asn_system.h
+		asn_application.h
 
 		AddrInfo.c AddrInfo.h
 		Message.c Message.h
@@ -35,14 +58,14 @@ add_custom_command(
 		Parameter.c Parameter.h
 		ParameterSequence.c ParameterSequence.h
 		Score.c Score.h
-		ServiceTag.c ServiceTag.h
 		ServiceInfo.c ServiceInfo.h
 		ServiceInfoSequence.c ServiceInfoSequence.h
+		ServiceTag.c ServiceTag.h
 
-		RowFieldType.c RowFieldType.h
-		RowFieldValue.c RowFieldValue.h
-		RowField.c RowField.h
 		RowFieldSequence.c RowFieldSequence.h
+		RowFieldValue.c RowFieldValue.h
+		RowFieldType.c RowFieldType.h
+		RowField.c RowField.h
 		Row.c Row.h
 		RowSet.c RowSet.h
 		RowName.c RowName.h
@@ -52,9 +75,9 @@ add_custom_command(
 		TableVersion.c TableVersion.h
 		BaseVersion.c BaseVersion.h
 
-		M2V2Alias.c M2V2Alias.h
-		M2V2Bean.c M2V2Bean.h
 		M2V2BeanSequence.c M2V2BeanSequence.h
+		M2V2Bean.c M2V2Bean.h
+		M2V2Alias.c M2V2Alias.h
 		M2V2Chunk.c M2V2Chunk.h
 		M2V2ContentHeader.c M2V2ContentHeader.h
 		M2V2Property.c M2V2Property.h
@@ -122,6 +145,37 @@ add_library(metautils SHARED
 		gridd_client.c gridd_client.h
 		gridd_client_ext.c gridd_client_ext.h
 
+		${CMAKE_CURRENT_BINARY_DIR}/constraints.c
+		${CMAKE_CURRENT_BINARY_DIR}/constraints.h
+		${CMAKE_CURRENT_BINARY_DIR}/constr_SET_OF.c
+		${CMAKE_CURRENT_BINARY_DIR}/constr_SET_OF.h
+		${CMAKE_CURRENT_BINARY_DIR}/constr_SEQUENCE_OF.c
+		${CMAKE_CURRENT_BINARY_DIR}/constr_SEQUENCE_OF.h
+		${CMAKE_CURRENT_BINARY_DIR}/constr_SEQUENCE.c
+		${CMAKE_CURRENT_BINARY_DIR}/constr_SEQUENCE.h
+		${CMAKE_CURRENT_BINARY_DIR}/constr_TYPE.c
+		${CMAKE_CURRENT_BINARY_DIR}/constr_TYPE.h
+		${CMAKE_CURRENT_BINARY_DIR}/constr_CHOICE.c
+		${CMAKE_CURRENT_BINARY_DIR}/constr_CHOICE.h
+
+		${CMAKE_CURRENT_BINARY_DIR}/ber_tlv_tag.c
+		${CMAKE_CURRENT_BINARY_DIR}/ber_tlv_tag.h
+		${CMAKE_CURRENT_BINARY_DIR}/ber_tlv_length.c
+		${CMAKE_CURRENT_BINARY_DIR}/ber_tlv_length.h
+		${CMAKE_CURRENT_BINARY_DIR}/der_encoder.c
+		${CMAKE_CURRENT_BINARY_DIR}/der_encoder.h
+		${CMAKE_CURRENT_BINARY_DIR}/ber_decoder.c
+		${CMAKE_CURRENT_BINARY_DIR}/ber_decoder.h
+		${CMAKE_CURRENT_BINARY_DIR}/xer_support.c
+		${CMAKE_CURRENT_BINARY_DIR}/xer_support.h
+		${CMAKE_CURRENT_BINARY_DIR}/xer_decoder.c
+		${CMAKE_CURRENT_BINARY_DIR}/xer_decoder.h
+		${CMAKE_CURRENT_BINARY_DIR}/per_opentype.c
+		${CMAKE_CURRENT_BINARY_DIR}/per_support.c
+		${CMAKE_CURRENT_BINARY_DIR}/per_support.h
+		${CMAKE_CURRENT_BINARY_DIR}/per_encoder.c
+		${CMAKE_CURRENT_BINARY_DIR}/per_encoder.h
+
 		${CMAKE_CURRENT_BINARY_DIR}/NativeEnumerated.c
 		${CMAKE_CURRENT_BINARY_DIR}/NativeEnumerated.h
 		${CMAKE_CURRENT_BINARY_DIR}/NativeInteger.c
@@ -136,14 +190,23 @@ add_library(metautils SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/BOOLEAN.h
 		${CMAKE_CURRENT_BINARY_DIR}/INTEGER.c
 		${CMAKE_CURRENT_BINARY_DIR}/INTEGER.h
+		${CMAKE_CURRENT_BINARY_DIR}/ENUMERATED.c
+		${CMAKE_CURRENT_BINARY_DIR}/ENUMERATED.h
 		${CMAKE_CURRENT_BINARY_DIR}/REAL.c
 		${CMAKE_CURRENT_BINARY_DIR}/REAL.h
+		${CMAKE_CURRENT_BINARY_DIR}/NULL.c
+		${CMAKE_CURRENT_BINARY_DIR}/NULL.h
 
-		${CMAKE_CURRENT_BINARY_DIR}/asn_application.h
+		${CMAKE_CURRENT_BINARY_DIR}/asn_SEQUENCE_OF.c
+		${CMAKE_CURRENT_BINARY_DIR}/asn_SEQUENCE_OF.h
+		${CMAKE_CURRENT_BINARY_DIR}/asn_SET_OF.c
+		${CMAKE_CURRENT_BINARY_DIR}/asn_SET_OF.h
 		${CMAKE_CURRENT_BINARY_DIR}/asn_codecs.h
 		${CMAKE_CURRENT_BINARY_DIR}/asn_codecs_prim.c
 		${CMAKE_CURRENT_BINARY_DIR}/asn_codecs_prim.h
 		${CMAKE_CURRENT_BINARY_DIR}/asn_internal.h
+		${CMAKE_CURRENT_BINARY_DIR}/asn_application.h
+		${CMAKE_CURRENT_BINARY_DIR}/asn_system.h
 
 		${CMAKE_CURRENT_BINARY_DIR}/AddrInfo.c
 		${CMAKE_CURRENT_BINARY_DIR}/AddrInfo.h
@@ -214,7 +277,6 @@ add_library(metautils SHARED
 target_link_libraries(metautils
 		oiocore
 		${GLIB2_LIBRARIES} ${JSONC_LIBRARIES}
-		${ASN1C_LIBRARIES}
 		-lm)
 
 add_executable(tool_sigfpe tool_sigfpe.c)
