@@ -266,7 +266,7 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 
 	network_server_stat_push4 (rq->client->server, TRUE,
 			gq_count, 1, gq_count_all, 1,
-			gq_time, spent, gq_time_all, spent);
+			gq_time, (guint64)spent, gq_time_all, (guint64)spent);
 
 	path_matching_cleanv (matchings);
 	oio_requri_clear (&ruri);
@@ -404,7 +404,7 @@ _reload_srvtype(const char *type)
 	}
 
 	/* reloads the known services */
-	gulong now = oio_ext_monotonic_seconds ();
+	time_t now = oio_ext_monotonic_seconds ();
 	SRV_WRITE(for (GSList *l=list; l ;l=l->next) {
 		gchar *k = service_info_key (l->data);
 		lru_tree_insert (srv_known, k, (void*)now);
@@ -492,13 +492,12 @@ _task_reload_csurl (gpointer p UNUSED)
 		ADAPTIVE_PERIOD_ONSUCCESS(csurl_refresh_delay);
 		gchar **newcs = g_strsplit(s, ",", -1);
 		if (newcs) {
+			const guint newcs_count = g_strv_length(newcs);
 			g_rw_lock_writer_lock (&csurl_rwlock);
-			do {
-				gchar **tmp = csurl;
-				csurl = newcs;
-				newcs = tmp;
-				csurl_count = g_strv_length (csurl);
-			} while (0);
+			gchar **tmp = csurl;
+			csurl = newcs;
+			newcs = tmp;
+			csurl_count = newcs_count;
 			g_rw_lock_writer_unlock (&csurl_rwlock);
 			g_strfreev (newcs);
 		}

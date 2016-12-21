@@ -100,9 +100,9 @@ _load_stringv (struct json_object *jargs)
 {
 	if (!json_object_is_type (jargs, json_type_array))
 		return NULL;
-	int max = json_object_array_length (jargs);
+	const guint max = json_object_array_length (jargs);
 	GPtrArray *tmp = g_ptr_array_sized_new(max);
-	for (int i=max; i>0 ;i--) {
+	for (guint i=max; i>0 ;i--) {
 		struct json_object *item = json_object_array_get_idx (jargs, i-1);
 		if (!json_object_is_type (item, json_type_string)) {
 			g_ptr_array_set_free_func (tmp, g_free0);
