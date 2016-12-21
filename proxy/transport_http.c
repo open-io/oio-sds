@@ -572,7 +572,7 @@ http_notify_input(struct network_client_s *clt)
 		g_tree_replace(r.request->tree_headers, g_strdup(k), g_strdup(v));
 	}
 	void body_provider(const guint8 *data, gsize data_len) {
-		g_byte_array_append(r.request->body, data, data_len);
+		g_byte_array_append(r.request->body, data, (guint)data_len);
 	}
 
 	r.close_after_request = TRUE;
