@@ -2,6 +2,7 @@ import os
 import sys
 from oio.common.utils import yaml
 from eventlet.green import socket
+from eventlet.queue import Empty, LifoQueue
 from urlparse import urlparse
 from cStringIO import StringIO as BytesIO
 
@@ -413,13 +414,25 @@ class Beanstalk(object):
             }
 
             connection = Connection(**kwargs)
-        self.connection = connection
+        self.conn_queue = LifoQueue()
+        self.conn_queue.put_nowait(connection)
+        self._connection = connection
         self.response_callbacks = self.__class__.RESPONSE_CALLBACKS.copy()
         self.expected_ok = self.__class__.EXPECTED_OK.copy()
         self.expected_err = self.__class__.EXPECTED_ERR.copy()
 
+    def _get_connection(self):
+        try:
+            connection = self.conn_queue.get(block=True, timeout=None)
+        except Empty:
+            raise ConnectionError("No connection available")
+        return connection
+
+    def _release_connection(self, connection):
+        self.conn_queue.put_nowait(connection)
+
     def execute_command(self, *args, **kwargs):
-        connection = self.connection
+        connection = self._get_connection()
         command_name = args[0]
         try:
             connection.send_command(*args, **kwargs)
@@ -427,6 +440,8 @@ class Beanstalk(object):
         except (ConnectionError, TimeoutError):
             connection.disconnect()
             raise
+        finally:
+            self._release_connection(connection)
 
     def parse_response(self, connection, command_name, **kwargs):
         response = connection.read_response()
@@ -449,10 +464,10 @@ class Beanstalk(object):
         return job_id
 
     def use(self, tube):
-        self.connection.use(tube)
+        self._connection.use(tube)
 
     def watch(self, tube):
-        self.connection.watch(tube)
+        self._connection.watch(tube)
 
     def reserve(self, timeout=None):
         if timeout is not None:
@@ -473,5 +488,5 @@ class Beanstalk(object):
         return self.execute_command('stats-tube', tube)
 
     def close(self):
-        if self.connection:
-            self.connection.disconnect()
+        if self._connection:
+            self._connection.disconnect()
