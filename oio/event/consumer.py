@@ -23,6 +23,8 @@ ACCOUNT_SERVICE = 'account'
 DEFAULT_TUBE = 'oio'
 
 BEANSTALK_RECONNECTION = 2.0
+# default release delay (in seconds)
+RELEASE_DELAY = 15
 
 
 def _eventlet_stop(client, server, beanstalk):
@@ -207,12 +209,9 @@ class EventWorker(Worker):
                 try:
                     event = self.safe_decode_job(job_id, data)
                     self.process_event(job_id, event, beanstalk)
-                except ConnectionError:
-                    self.logger.warn(
-                        "beanstalk connection error during processing")
                 except Exception:
-                    beanstalk.bury(job_id)
                     self.logger.exception("handling event %s (bury)", job_id)
+                    beanstalk.bury(job_id)
         except StopServe:
             pass
 
@@ -227,11 +226,10 @@ class EventWorker(Worker):
             if is_success(status):
                 beanstalk.delete(job_id)
             elif is_error(status):
-                self.logger.warn('bury event %r' % event)
-                beanstalk.bury(job_id)
-            else:
-                self.logger.warn('release event %r' % event)
-                beanstalk.release(job_id)
+                self.logger.warn(
+                    'event %s handling failure (release with delay): %s',
+                    event['job_id'], msg)
+                beanstalk.release(job_id, delay=RELEASE_DELAY)
 
         handler(event, cb)
 
@@ -241,12 +239,9 @@ class EventWorker(Worker):
     @property
     def acct_addr(self):
         if not self._acct_addr or self.acct_refresh():
-            try:
-                acct_instance = self.cs.next_instance(ACCOUNT_SERVICE)
-                self._acct_addr = acct_instance.get('addr')
-                self.acct_update = time.time()
-            except Exception:
-                self.logger.warn('Unable to find account instance')
+            acct_instance = self.cs.next_instance(ACCOUNT_SERVICE)
+            self._acct_addr = acct_instance.get('addr')
+            self.acct_update = time.time()
         return self._acct_addr
 
     def acct_refresh(self):

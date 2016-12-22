@@ -1,6 +1,6 @@
 from oio.common.utils import json
-from oio.event.evob import EventError, Event
-from oio.event.beanstalk import Beanstalk, ConnectionError
+from oio.event.evob import Event, EventError
+from oio.event.beanstalk import Beanstalk, BeanstalkError
 from oio.event.filters.base import Filter
 
 
@@ -14,13 +14,11 @@ class NotifyFilter(Filter):
     def process(self, env, cb):
         data = json.dumps(env)
         try:
-            # TODO we could retry the put
             self.beanstalk.put(data)
-        except ConnectionError:
-            self.logger.warn("beanstalk notify failed")
-        except Exception as e:
-            self.logger.warn("failed to notify event: %s" % str(e))
-            return EventError(event=Event(env))(env, cb)
+        except BeanstalkError as e:
+            msg = 'notify failure: %s' % str(e)
+            resp = EventError(event=Event(env), body=msg)
+            return resp(env, cb)
         return self.app(env, cb)
 
 

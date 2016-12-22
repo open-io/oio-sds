@@ -1313,7 +1313,7 @@ def generate(options):
         f.write(tpl.safe_substitute(env))
 
     # rdir
-    nb_rdir = getint(options['rdir'].get(SVC_NB), 1)
+    nb_rdir = getint(options['rdir'].get(SVC_NB), 3)
     for num in range(nb_rdir):
         env = subenv({'SRVTYPE': 'rdir',
                       'SRVNUM': num + 1,
