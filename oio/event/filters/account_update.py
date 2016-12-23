@@ -2,7 +2,7 @@ from eventlet import Timeout
 from urlparse import urlparse
 from urllib import urlencode
 from oio.common.http import http_request
-from oio.event.evob import Event
+from oio.event.evob import Event, EventError
 from oio.event.consumer import EventTypes
 from oio.event.filters.base import Filter
 
@@ -41,8 +41,10 @@ class AccountUpdateFilter(Filter):
                 with Timeout(ACCOUNT_TIMEOUT):
                     resp, body = http_request(p.netloc, 'POST', uri,
                                               query_string=query, body=body)
-            except (Exception, Timeout) as e:
-                self.logger.warn('error updating account "%s"', str(e.message))
+            except Timeout as e:
+                msg = 'account update failure: %s' % str(e)
+                resp = EventError(event=Event(env), body=msg)
+                return resp(env, cb)
         return self.app(env, cb)
 
 
