@@ -733,10 +733,9 @@ class ObjectStorageApi(object):
 
     def _b2_credentials(self, storage_method, key_file):
         try:
-            return BackblazeUtils.get_credentials(storage_method,
-                                                  key_file)
+            return BackblazeUtils.get_credentials(storage_method, key_file)
         except BackblazeUtilsException as err:
-            raise exc.OioException(str(err))
+            raise exc.ConfigurationException(str(err))
 
     def _fetch_stream_backblaze(self, meta, chunks, ranges,
                                 storage_method, key_file):
