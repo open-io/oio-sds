@@ -12,6 +12,7 @@
 
 import logging
 import hashlib
+from os import fstat
 from tempfile import TemporaryFile
 from urlparse import urlparse
 from oio.api import io
@@ -23,6 +24,12 @@ WORD_LENGTH = 10
 TRY_REQUEST_NUMBER = 3
 
 
+def filesize(f):
+    if not hasattr(f, 'fileno'):
+        raise Exception("Backblaze stream only allowed on file sources")
+    return fstat(f.fileno()).st_size
+
+
 def _get_name(chunk):
     raw_url = chunk["url"]
     parsed = urlparse(raw_url)
@@ -30,7 +37,7 @@ def _get_name(chunk):
 
 
 def _connect_put(chunk, sysmeta, backblaze_info):
-    chunk_path = _get_name(chunk)
+    chunk_path = _get_name(chunk[0])
     conn = {}
     conn['chunk'] = chunk
     conn['backblaze'] = Backblaze(backblaze_info['backblaze.account_id'],
@@ -84,18 +91,19 @@ class BackblazeChunkWriteHandler(object):
     def _upload_chunks(self, conn, size, sha1, md5, temp):
         try_number = TRY_REQUEST_NUMBER
         while True:
-            self.meta_chunk['size'] = size
+            self.meta_chunk[0]['size'] = size
             try:
                 conn['backblaze'].upload(self.backblaze_info['bucket_name'],
                                          self.sysmeta, temp, sha1)
                 break
             except BackblazeException as b2e:
                 temp.seek(0)
+                import traceback
+                traceback.print_exc(b2e)
                 if try_number == 0:
                     logger.debug('headers sent: %s'
                                  % str(b2e.headers_send))
-                    raise OioException('backblaze upload error: %s'
-                                       % str(b2e))
+                    raise OioException('backblaze upload error: %s' % str(b2e))
                 else:
                     sleep_time_default = pow(2,
                                              TRY_REQUEST_NUMBER - try_number)
@@ -104,11 +112,11 @@ class BackblazeChunkWriteHandler(object):
                     eventlet.sleep(sleep)
                 try_number -= 1
 
-        self.meta_chunk['hash'] = md5
-        return self.meta_chunk["size"], [self.meta_chunk]
+        self.meta_chunk[0]['hash'] = md5
+        return self.meta_chunk[0]["size"], self.meta_chunk
 
     def _stream_small_chunks(self, source, conn, temp):
-        size, sha1, md5 = _read_to_temp(self.meta_chunk['size'],
+        size, sha1, md5 = _read_to_temp(self.meta_chunk[0]['size'],
                                         source, self.checksum, temp)
         return self._upload_chunks(conn, size, sha1, md5, temp)
 
@@ -195,14 +203,16 @@ class BackblazeChunkWriteHandler(object):
                 else:
                     eventlet.sleep(pow(2, TRY_REQUEST_NUMBER - tries))
         self.meta_chunk['hash'] = md5
-        return bytes_read, [self.meta_chunk]
+        return bytes_read, self.meta_chunk
 
     def stream(self, source):
         conn = _connect_put(self.meta_chunk, self.sysmeta,
                             self.backblaze_info)
         with TemporaryFile() as temp:
-            if ("size" not in self.meta_chunk or self.meta_chunk["size"] >
-                    conn['backblaze'].BACKBLAZE_MAX_CHUNK_SIZE):
+            if "size" not in self.meta_chunk:
+                return self._stream_big_chunks(source, conn, temp)
+            if self.meta_chunk["size"] > \
+                    conn['backblaze'].BACKBLAZE_MAX_CHUNK_SIZE:
                 return self._stream_big_chunks(source, conn, temp)
             return self._stream_small_chunks(source, conn, temp)
 
@@ -216,7 +226,10 @@ class BackblazeWriteHandler(io.WriteHandler):
         self.backblaze_info = backblaze_info
 
     def stream(self):
+        """Only works with files, for the moment, because we need a file size
+           to known when to stop."""
         global_checksum = hashlib.md5()
+        expected_bytes = filesize(self.source)
         total_bytes_transferred = 0
         content_chunks = []
         for meta_chunk in self.chunk_prep():
@@ -226,7 +239,7 @@ class BackblazeWriteHandler(io.WriteHandler):
             bytes_transferred, chunks = handler.stream(self.source)
             content_chunks += chunks
             total_bytes_transferred += bytes_transferred
-            if bytes_transferred == 0:
+            if total_bytes_transferred >= expected_bytes:
                 break
 
         content_checksum = global_checksum.hexdigest()
