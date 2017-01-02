@@ -44,11 +44,15 @@ class BackblazeUtils(object):
     @staticmethod
     def get_credentials(storage_method, application_key_path=None,
                         renew=False):
-        if not (storage_method.bucket_name and
-                storage_method.account_id and application_key_path):
-            message = "%s (bucket_name=%s, account_id=%s)" % \
-                      ('missing backblaze parameters: ',
-                       storage_method.bucket_name, storage_method.account_id)
+        if not storage_method.bucket_name:
+            message = "missing backblaze parameters: %s" % ('bucket_name',)
+            raise BackblazeUtilsException(message)
+        if not storage_method.account_id:
+            message = "missing backblaze parameters: %s" % ('account_id',)
+            raise BackblazeUtilsException(message)
+        if not application_key_path:
+            message = "missing backblaze parameters: %s" % \
+                      ('application_key_path',)
             raise BackblazeUtilsException(message)
         key = '%s.%s' % (storage_method.account_id, storage_method.bucket_name)
         if not renew:
