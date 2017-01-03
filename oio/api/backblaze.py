@@ -12,7 +12,6 @@
 
 import logging
 import hashlib
-from os import fstat
 from tempfile import TemporaryFile
 from urlparse import urlparse
 from oio.api import io
@@ -22,12 +21,6 @@ import eventlet
 logger = logging.getLogger(__name__)
 WORD_LENGTH = 10
 TRY_REQUEST_NUMBER = 3
-
-
-def filesize(f):
-    if not hasattr(f, 'fileno'):
-        raise Exception("Backblaze stream only allowed on file sources")
-    return fstat(f.fileno()).st_size
 
 
 def _get_name(chunk):
@@ -116,8 +109,11 @@ class BackblazeChunkWriteHandler(object):
         return self.meta_chunk[0]["size"], self.meta_chunk
 
     def _stream_small_chunks(self, source, conn, temp):
-        size, sha1, md5 = _read_to_temp(self.meta_chunk[0]['size'],
-                                        source, self.checksum, temp)
+        size, sha1, md5 = _read_to_temp(
+                conn['backblaze'].BACKBLAZE_MAX_CHUNK_SIZE,
+                source, self.checksum, temp)
+        if size <= 0:
+            return 0, []
         return self._upload_chunks(conn, size, sha1, md5, temp)
 
     def _stream_big_chunks(self, source, conn, temp):
@@ -126,6 +122,8 @@ class BackblazeChunkWriteHandler(object):
         res = None
         size, sha1, md5 = _read_to_temp(max_chunk_size, source,
                                         self.checksum, temp)
+        if size <= 0:
+            return 0, []
 
         # obligated to read max_chunk_size + 1 bytes
         # if the size of the file is max_chunk_size
@@ -156,8 +154,8 @@ class BackblazeChunkWriteHandler(object):
         tries = TRY_REQUEST_NUMBER
         while True:
             while True:
-                if bytes_read + max_chunk_size > self.meta_chunk['size']:
-                    to_read = self.meta_chunk['size'] - bytes_read
+                if bytes_read + max_chunk_size > self.meta_chunk[0]['size']:
+                    to_read = self.meta_chunk[0]['size'] - bytes_read
                 else:
                     to_read = max_chunk_size
                 try:
@@ -202,16 +200,16 @@ class BackblazeChunkWriteHandler(object):
                                        % str(b2e))
                 else:
                     eventlet.sleep(pow(2, TRY_REQUEST_NUMBER - tries))
-        self.meta_chunk['hash'] = md5
+        self.meta_chunk[0]['hash'] = md5
         return bytes_read, self.meta_chunk
 
     def stream(self, source):
         conn = _connect_put(self.meta_chunk, self.sysmeta,
                             self.backblaze_info)
         with TemporaryFile() as temp:
-            if "size" not in self.meta_chunk:
+            if "size" not in self.meta_chunk[0]:
                 return self._stream_big_chunks(source, conn, temp)
-            if self.meta_chunk["size"] > \
+            if self.meta_chunk[0]["size"] > \
                     conn['backblaze'].BACKBLAZE_MAX_CHUNK_SIZE:
                 return self._stream_big_chunks(source, conn, temp)
             return self._stream_small_chunks(source, conn, temp)
@@ -229,7 +227,6 @@ class BackblazeWriteHandler(io.WriteHandler):
         """Only works with files, for the moment, because we need a file size
            to known when to stop."""
         global_checksum = hashlib.md5()
-        expected_bytes = filesize(self.source)
         total_bytes_transferred = 0
         content_chunks = []
         for meta_chunk in self.chunk_prep():
@@ -237,10 +234,10 @@ class BackblazeWriteHandler(io.WriteHandler):
                 self.sysmeta, meta_chunk, global_checksum, self.storage_method,
                 self.backblaze_info)
             bytes_transferred, chunks = handler.stream(self.source)
+            if bytes_transferred <= 0:
+                break
             content_chunks += chunks
             total_bytes_transferred += bytes_transferred
-            if total_bytes_transferred >= expected_bytes:
-                break
 
         content_checksum = global_checksum.hexdigest()
 
