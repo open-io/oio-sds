@@ -732,6 +732,7 @@ class ObjectStorageApi(object):
                 stream.close()
 
     def _b2_credentials(self, storage_method, key_file):
+        key_file = key_file or '/etc/oio/sds/b2-appkey.conf'
         try:
             return BackblazeUtils.get_credentials(storage_method, key_file)
         except BackblazeUtilsException as err:
