@@ -111,17 +111,17 @@ class BackblazeChunkWriteHandler(object):
                 conn['backblaze'].BACKBLAZE_MAX_CHUNK_SIZE,
                 source, self.checksum, temp)
         if size <= 0:
-            return 0, []
+            return 0, list()
         return self._upload_chunks(conn, size, sha1, md5, temp)
 
     def _stream_big_chunks(self, source, conn, temp):
         max_chunk_size = conn['backblaze'].BACKBLAZE_MAX_CHUNK_SIZE
-        sha1_array = []
+        sha1_array = list()
         res = None
         size, sha1, md5 = _read_to_temp(max_chunk_size, source,
                                         self.checksum, temp)
         if size <= 0:
-            return 0, []
+            return 0, list()
 
         # obligated to read max_chunk_size + 1 bytes
         # if the size of the file is max_chunk_size
@@ -226,7 +226,7 @@ class BackblazeWriteHandler(io.WriteHandler):
            to known when to stop."""
         global_checksum = hashlib.md5()
         total_bytes_transferred = 0
-        content_chunks = []
+        content_chunks = list()
         for meta_chunk in self.chunk_prep():
             handler = BackblazeChunkWriteHandler(
                 self.sysmeta, meta_chunk, global_checksum, self.storage_method,
@@ -273,7 +273,7 @@ class BackblazeDeleteHandler(object):
 class BackblazeChunkDownloadHandler(object):
     def __init__(self, meta, chunks, offset, size,
                  headers=None, backblaze_info=None):
-        self.failed_chunks = []
+        self.failed_chunks = list()
         self.chunks = chunks
         headers = headers or {}
         end = None
