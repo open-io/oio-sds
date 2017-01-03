@@ -609,7 +609,7 @@ class ObjectStorageApi(object):
                           policy=None, headers=None):
         # TODO: optimize by asking more than one metachunk at a time
         obj_meta, first_body = self.container.content_prepare(
-            account, container, obj_name, 1, policy,
+            account, container, obj_name, size=1, stgpol=policy,
             autocreate=True, headers=headers)
         storage_method = STORAGE_METHODS.load(obj_meta['chunk_method'])
 

@@ -370,14 +370,14 @@ class ListObject(ContainerCommandMixin, lister.Lister):
 
     # TODO: make a decorator with this loop pattern
     def _container_provider(self, account, **kwargs):
-        listing, _ = self.app.client_manager.storage.container_list(
+        listing = self.app.client_manager.storage.container_list(
                 account, **kwargs)
         for element in listing:
             yield element[0]
 
         while listing:
             kwargs['marker'] = listing[-1][0]
-            listing, _ = self.app.client_manager.storage.container_list(
+            listing = self.app.client_manager.storage.container_list(
                 account, **kwargs)
             if listing:
                 for element in listing:
