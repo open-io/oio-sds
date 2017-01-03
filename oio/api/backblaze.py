@@ -30,7 +30,7 @@ def _get_name(chunk):
 
 
 def _connect_put(chunk, sysmeta, backblaze_info):
-    chunk_path = _get_name(chunk)
+    chunk_path = _get_name(chunk[0])
     conn = {}
     conn['chunk'] = chunk
     conn['backblaze'] = Backblaze(backblaze_info['backblaze.account_id'],
@@ -84,7 +84,7 @@ class BackblazeChunkWriteHandler(object):
     def _upload_chunks(self, conn, size, sha1, md5, temp):
         try_number = TRY_REQUEST_NUMBER
         while True:
-            self.meta_chunk['size'] = size
+            self.meta_chunk[0]['size'] = size
             try:
                 conn['backblaze'].upload(self.backblaze_info['bucket_name'],
                                          self.sysmeta, temp, sha1)
@@ -94,8 +94,7 @@ class BackblazeChunkWriteHandler(object):
                 if try_number == 0:
                     logger.debug('headers sent: %s'
                                  % str(b2e.headers_send))
-                    raise OioException('backblaze upload error: %s'
-                                       % str(b2e))
+                    raise OioException('backblaze upload error: %s' % str(b2e))
                 else:
                     sleep_time_default = pow(2,
                                              TRY_REQUEST_NUMBER - try_number)
@@ -104,20 +103,25 @@ class BackblazeChunkWriteHandler(object):
                     eventlet.sleep(sleep)
                 try_number -= 1
 
-        self.meta_chunk['hash'] = md5
-        return self.meta_chunk["size"], [self.meta_chunk]
+        self.meta_chunk[0]['hash'] = md5
+        return self.meta_chunk[0]["size"], self.meta_chunk
 
     def _stream_small_chunks(self, source, conn, temp):
-        size, sha1, md5 = _read_to_temp(self.meta_chunk['size'],
-                                        source, self.checksum, temp)
+        size, sha1, md5 = _read_to_temp(
+                conn['backblaze'].BACKBLAZE_MAX_CHUNK_SIZE,
+                source, self.checksum, temp)
+        if size <= 0:
+            return 0, list()
         return self._upload_chunks(conn, size, sha1, md5, temp)
 
     def _stream_big_chunks(self, source, conn, temp):
         max_chunk_size = conn['backblaze'].BACKBLAZE_MAX_CHUNK_SIZE
-        sha1_array = []
+        sha1_array = list()
         res = None
         size, sha1, md5 = _read_to_temp(max_chunk_size, source,
                                         self.checksum, temp)
+        if size <= 0:
+            return 0, list()
 
         # obligated to read max_chunk_size + 1 bytes
         # if the size of the file is max_chunk_size
@@ -148,8 +152,8 @@ class BackblazeChunkWriteHandler(object):
         tries = TRY_REQUEST_NUMBER
         while True:
             while True:
-                if bytes_read + max_chunk_size > self.meta_chunk['size']:
-                    to_read = self.meta_chunk['size'] - bytes_read
+                if bytes_read + max_chunk_size > self.meta_chunk[0]['size']:
+                    to_read = self.meta_chunk[0]['size'] - bytes_read
                 else:
                     to_read = max_chunk_size
                 try:
@@ -194,15 +198,17 @@ class BackblazeChunkWriteHandler(object):
                                        % str(b2e))
                 else:
                     eventlet.sleep(pow(2, TRY_REQUEST_NUMBER - tries))
-        self.meta_chunk['hash'] = md5
-        return bytes_read, [self.meta_chunk]
+        self.meta_chunk[0]['hash'] = md5
+        return bytes_read, self.meta_chunk
 
     def stream(self, source):
         conn = _connect_put(self.meta_chunk, self.sysmeta,
                             self.backblaze_info)
         with TemporaryFile() as temp:
-            if ("size" not in self.meta_chunk or self.meta_chunk["size"] >
-                    conn['backblaze'].BACKBLAZE_MAX_CHUNK_SIZE):
+            if "size" not in self.meta_chunk[0]:
+                return self._stream_big_chunks(source, conn, temp)
+            if self.meta_chunk[0]["size"] > \
+                    conn['backblaze'].BACKBLAZE_MAX_CHUNK_SIZE:
                 return self._stream_big_chunks(source, conn, temp)
             return self._stream_small_chunks(source, conn, temp)
 
@@ -216,18 +222,20 @@ class BackblazeWriteHandler(io.WriteHandler):
         self.backblaze_info = backblaze_info
 
     def stream(self):
+        """Only works with files, for the moment, because we need a file size
+           to known when to stop."""
         global_checksum = hashlib.md5()
         total_bytes_transferred = 0
-        content_chunks = []
+        content_chunks = list()
         for meta_chunk in self.chunk_prep():
             handler = BackblazeChunkWriteHandler(
                 self.sysmeta, meta_chunk, global_checksum, self.storage_method,
                 self.backblaze_info)
             bytes_transferred, chunks = handler.stream(self.source)
+            if bytes_transferred <= 0:
+                break
             content_chunks += chunks
             total_bytes_transferred += bytes_transferred
-            if bytes_transferred == 0:
-                break
 
         content_checksum = global_checksum.hexdigest()
 
@@ -265,7 +273,7 @@ class BackblazeDeleteHandler(object):
 class BackblazeChunkDownloadHandler(object):
     def __init__(self, meta, chunks, offset, size,
                  headers=None, backblaze_info=None):
-        self.failed_chunks = []
+        self.failed_chunks = list()
         self.chunks = chunks
         headers = headers or {}
         end = None
