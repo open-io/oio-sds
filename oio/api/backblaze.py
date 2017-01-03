@@ -91,8 +91,6 @@ class BackblazeChunkWriteHandler(object):
                 break
             except BackblazeException as b2e:
                 temp.seek(0)
-                import traceback
-                traceback.print_exc(b2e)
                 if try_number == 0:
                     logger.debug('headers sent: %s'
                                  % str(b2e.headers_send))
