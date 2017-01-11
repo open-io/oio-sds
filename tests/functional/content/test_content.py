@@ -64,8 +64,8 @@ class TestContentFactory(BaseTestCase):
         self.container_name = "TestContentFactory%f" % time.time()
         self.blob_client = BlobClient()
         self.container_client = ContainerClient(self.gridconf)
-        self.container_client.container_create(acct=self.account,
-                                               ref=self.container_name)
+        self.container_client.container_create(account=self.account,
+                                               reference=self.container_name)
         self.container_id = cid_from_name(self.account,
                                           self.container_name).upper()
         self.stgpol = "SINGLE"
@@ -108,7 +108,7 @@ class TestContentFactory(BaseTestCase):
                 "pos": "0.3", "size": 512,
                 "hash": "DA9D7F72AEEA5791565724424CE45C16"}
         ]
-        self.content_factory.container_client.content_show = Mock(
+        self.content_factory.container_client.content_locate = Mock(
             return_value=(meta, chunks))
         c = self.content_factory.get("xxx_container_id", "xxx_content_id")
         self.assertEqual(type(c), ECContent)
@@ -147,7 +147,7 @@ class TestContentFactory(BaseTestCase):
                 "pos": "0", "size": 658,
                 "hash": "E952A419957A6E405BFC53EC65483F73"}
         ]
-        self.content_factory.container_client.content_show = Mock(
+        self.content_factory.container_client.content_locate = Mock(
             return_value=(meta, chunks))
         c = self.content_factory.get("xxx_container_id", "xxx_content_id")
         self.assertEqual(type(c), PlainContent)
@@ -376,8 +376,8 @@ class TestContentFactory(BaseTestCase):
         for cname in strange_paths:
             content = self._new_content(self.stgpol, "nobody cares", cname)
             answers[cname] = content
-        listing = self.container_client.container_list(self.account,
-                                                       self.container_name)
+        _, listing = self.container_client.content_list(self.account,
+                                                        self.container_name)
         obj_set = {k["name"].encode("utf8", "ignore")
                    for k in listing["objects"]}
         try:

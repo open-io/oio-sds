@@ -273,7 +273,7 @@ oio_error_debug (GQuark gq, int code, const char *fmt, ...)
 	if (strv) {
 		for (int i=1; i<nbframes ;i++) {
 			if (gs->len)
-				g_string_append (gs, ",");
+				g_string_append_c (gs, ',');
 			char *s, *start = strv[i];
 			if (NULL != (s = strchr(start, '(')))
 				start = s+1;

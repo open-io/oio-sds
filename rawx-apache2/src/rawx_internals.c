@@ -147,7 +147,7 @@ send_chunk_event(const char *type, const dav_resource *resource)
 	_PAIR_AND_COMMA("chunk_position", resource->info->chunk.chunk_position);
 	_PAIR_AND_COMMA("chunk_hash", resource->info->chunk.chunk_hash);
 
-	g_string_append_printf(json, "}");
+	g_string_append_c(json, '}');
 
 	const gint64 pre = oio_ext_monotonic_time ();
 	GError *err = rawx_event_send(type, json);

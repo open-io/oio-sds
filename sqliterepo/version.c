@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, modified as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -25,9 +25,7 @@ License along with this library.
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
-
-#include <Table.h>
-#include <TableSequence.h>
+#include <metautils/lib/codec.h>
 
 #include "sqliterepo.h"
 #include "sqlx_remote.h"
@@ -122,7 +120,7 @@ gchar*
 version_dump(GTree *t)
 {
 	EXTRA_ASSERT(t != NULL);
-	GString *gstr = g_string_new("");
+	GString *gstr = g_string_sized_new(128);
 	if (t)
 		g_tree_foreach(t, hook_dump, gstr);
 	return g_string_free(gstr, FALSE);
@@ -173,7 +171,7 @@ version_encode(GTree *t)
 		(void) _u;
 		if (_k && _v && hashstr_len(_k) > 0) {
 			struct object_version_s *v = _v;
-			struct TableVersion *tv = calloc(1, sizeof(*tv));
+			struct TableVersion *tv = ASN1C_CALLOC(1, sizeof(*tv));
 			OCTET_STRING_fromBuf(&(tv->name), hashstr_str(_k), hashstr_len(_k));
 			asn_int64_to_INTEGER(&(tv->version), v->version);
 			asn_int64_to_INTEGER(&(tv->when), v->when);
@@ -185,7 +183,7 @@ version_encode(GTree *t)
 	GRID_TRACE2("%s(%p)", __FUNCTION__, t);
 	g_tree_foreach(t, runner, NULL);
 
-	encoded = g_byte_array_new();
+	encoded = g_byte_array_sized_new(128);
 	rv = der_encode(&asn_DEF_BaseVersion, &bv, metautils_asn1c_write_gba, encoded);
 	asn_DEF_BaseVersion.free_struct(&asn_DEF_BaseVersion, &bv, TRUE);
 

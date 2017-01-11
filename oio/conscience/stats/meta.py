@@ -6,16 +6,16 @@ class MetaStat(HttpStat):
 
     def configure(self):
         super(MetaStat, self).configure()
-        self.uri = 'v3.0/forward/stats'
+        self.uri = '/forward/stats'
         service_id = '%s:%s' % (self.stat_conf.get('host'),
                                 self.stat_conf.get('port'))
         self.params = {'id': service_id}
 
     def get_stats(self):
         try:
-            resp, body = self.agent.client._request(
+            resp, _body = self.agent.client._request(
                     'POST', self.uri, params=self.params)
             return self._parse_stats_lines(resp.text)
-        except Exception as e:
-            self.logger.debug("get_stats error: %s", e)
+        except Exception as exc:
+            self.logger.debug("get_stats error: %s", exc)
             return {}

@@ -1,9 +1,0 @@
-zookeeper: false
-worm: true
-storage_policy: "THREECOPIES"
-chunk_size: 1048576
-redis: true
-rdir:
-  count: 2
-rawx:
-  count: 3

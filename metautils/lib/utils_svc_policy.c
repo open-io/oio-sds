@@ -172,7 +172,7 @@ service_update_policies_dump(struct service_update_policies_s *pol)
 
 		if (gstr->len > 0)
 			g_string_append_c(gstr, ';');
-		g_string_append(gstr, hashstr_str(k));
+		g_string_append_len(gstr, hashstr_str(k), hashstr_len(k));
 		g_string_append_c(gstr, '=');
 		g_string_append(gstr, service_update_policy_to_string(el->howto_update));
 		g_string_append_printf(gstr, "|%u|%u", el->replicas, el->reqdist);
@@ -180,9 +180,8 @@ service_update_policies_dump(struct service_update_policies_s *pol)
 			g_string_append_printf(gstr, "|%s=%s", el->tagname, el->tagvalue);
 		return FALSE;
 	}
-	GString *out;
 
-	out = g_string_new("");
+	GString *out = g_string_sized_new(128);
 	g_mutex_lock(&pol->lock);
 	g_tree_foreach(pol->tree_elements, _runner, out);
 	g_mutex_unlock(&pol->lock);

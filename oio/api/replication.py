@@ -226,10 +226,11 @@ class ReplicatedChunkWriteHandler(object):
 
     def _get_response(self, conn):
         try:
-            resp = conn.getresponse()
-        except (Exception, Timeout):
+            with ChunkWriteTimeout(self.write_timeout):
+                resp = conn.getresponse()
+        except (Exception, ChunkWriteTimeout) as e:
             resp = None
-            logger.exception("Failed to read response %s", conn.chunk)
+            logger.error("Failed to read response %s: %s", conn.chunk, str(e))
         return (conn, resp)
 
 

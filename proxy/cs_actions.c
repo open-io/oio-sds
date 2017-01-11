@@ -109,13 +109,14 @@ _cs_check_tokens (struct req_args_s *args)
 static GString *
 _cs_pack_and_free_srvinfo_list (GSList * svc)
 {
-	GString *gstr = g_string_new ("[");
+	GString *gstr = g_string_sized_new (2048);
+	g_string_append_c (gstr, '[');
 	for (GSList * l = svc; l; l = l->next) {
 		if (l != svc)
 			g_string_append_c (gstr, ',');
 		service_info_encode_json (gstr, l->data, FALSE);
 	}
-	g_string_append (gstr, "]");
+	g_string_append_c (gstr, ']');
 	g_slist_free_full (svc, (GDestroyNotify) service_info_clean);
 	return gstr;
 }
@@ -216,7 +217,7 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 
 	// TODO follow the DRY principle and factorize this!
 	if (flag_cache_enabled) {
-		GString *gstr = g_string_new ("");
+		GString *gstr = g_string_sized_new (256);
 		service_info_encode_json (gstr, si, TRUE);
 		PUSH_WRITE(lru_tree_insert(push_queue, service_info_key(si), si));
 		return _reply_success_json (args, gstr);
@@ -227,7 +228,7 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 			service_info_clean (si);
 			return _reply_common_error (args, err);
 		} else {
-			GString *gstr = g_string_new ("");
+			GString *gstr = g_string_sized_new (256);
 			service_info_encode_json (gstr, si, TRUE);
 			service_info_clean (si);
 			return _reply_success_json (args, gstr);
@@ -248,7 +249,7 @@ action_conscience_info (struct req_args_s *args)
 		if (NULL != (err = _cs_check_tokens(args)))
 			return _reply_notfound_error (args, err);
 
-		GString *out = g_string_new("");
+		GString *out = g_string_sized_new(128);
 		g_string_append_c(out, '[');
 		NSINFO_READ(if (srvtypes && *srvtypes) {
 			g_string_append_c(out, '"');
@@ -271,7 +272,7 @@ action_conscience_info (struct req_args_s *args)
 	struct namespace_info_s ni = {{0}};
 	NSINFO_READ(namespace_info_copy (&nsinfo, &ni));
 
-	GString *gstr = g_string_new ("");
+	GString *gstr = g_string_sized_new (2048);
 	namespace_info_encode_json (gstr, &ni);
 	namespace_info_clear (&ni);
 	return _reply_success_json (args, gstr);
@@ -288,7 +289,8 @@ action_local_list (struct req_args_s *args)
 	if (NULL != (err = _cs_check_tokens(args)))
 		return _reply_notfound_error(args, err);
 
-	GString *gs = g_string_new ("[");
+	GString *gs = g_string_sized_new (2048);
+	g_string_append_c (gs, '[');
 	gboolean _on_service (gpointer k, gpointer v, gpointer u) {
 		(void) k, (void) u;
 		struct service_info_s *si = v;

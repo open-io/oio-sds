@@ -1,7 +1,7 @@
 /*
 OpenIO SDS metautils
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2016 OpenIO, modified as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -24,8 +24,7 @@ License along with this library.
 #include <sys/types.h>
 
 #include "metautils.h"
-#include "./Parameter.h"
-#include "./Message.h"
+#include "codec.h"
 
 enum message_param_e { MP_ID, MP_NAME, MP_VERSION, MP_BODY };
 
@@ -59,7 +58,7 @@ MESSAGE
 metautils_message_create(void)
 {
 	const char *id = oio_ext_get_reqid ();
-	MESSAGE result = calloc(1, sizeof(Message_t));
+	MESSAGE result = ASN1C_CALLOC(1, sizeof(Message_t));
 	if (id)
 		metautils_message_set_ID (result, id, strlen(id));
 	return result;
@@ -91,7 +90,7 @@ metautils_message_destroy(MESSAGE m)
 
 	m->content.list.free = _free_Parameter;
 	asn_set_empty(&(m->content.list));
-	free(m);
+	ASN1C_FREE(m);
 }
 
 int
@@ -326,7 +325,7 @@ metautils_message_add_field(MESSAGE m, const char *n, const void *v, gsize vs)
 	EXTRA_ASSERT (n!=NULL);
 	if (!v || !vs)
 		return ;
-	Parameter_t *pMember = calloc(1, sizeof(Parameter_t));
+	Parameter_t *pMember = ASN1C_CALLOC(1, sizeof(Parameter_t));
 	OCTET_STRING_fromBuf(&(pMember->name), n, strlen(n));
 	OCTET_STRING_fromBuf(&(pMember->value), v, vs);
 	asn_set_add(&(m->content.list), pMember);
@@ -359,15 +358,16 @@ static struct map_s
 	const char *f;
 	int u;
 	const char *avoid;
+	int max_length;
 } url2msg_map[] = {
-	{NAME_MSGKEY_NAMESPACE,   OIOURL_NS,        NULL},
-	{NAME_MSGKEY_ACCOUNT,     OIOURL_ACCOUNT,   NULL},
-	{NAME_MSGKEY_USER,        OIOURL_USER,      NULL},
-	{NAME_MSGKEY_TYPENAME,    OIOURL_TYPE,      OIOURL_DEFAULT_TYPE},
-	{NAME_MSGKEY_CONTENTPATH, OIOURL_PATH,      NULL},
-	{NAME_MSGKEY_CONTENTID,   OIOURL_CONTENTID, NULL},
-	{NAME_MSGKEY_VERSION,     OIOURL_VERSION,   NULL},
-	{NULL,0,NULL},
+	{NAME_MSGKEY_NAMESPACE,   OIOURL_NS,        NULL, LIMIT_LENGTH_NSNAME},
+	{NAME_MSGKEY_ACCOUNT,     OIOURL_ACCOUNT,   NULL, LIMIT_LENGTH_ACCOUNTNAME},
+	{NAME_MSGKEY_USER,        OIOURL_USER,      NULL, LIMIT_LENGTH_BASENAME},
+	{NAME_MSGKEY_TYPENAME,    OIOURL_TYPE,      OIOURL_DEFAULT_TYPE, LIMIT_LENGTH_SRVTYPE},
+	{NAME_MSGKEY_CONTENTPATH, OIOURL_PATH,      NULL, LIMIT_LENGTH_CONTENTPATH},
+	{NAME_MSGKEY_CONTENTID,   OIOURL_CONTENTID, NULL, STRLEN_CONTAINERID},
+	{NAME_MSGKEY_VERSION,     OIOURL_VERSION,   NULL, LIMIT_LENGTH_VERSION},
+	{NULL, 0, NULL, 0},
 };
 
 void
@@ -409,23 +409,24 @@ metautils_message_add_url_no_type (MESSAGE m, struct oio_url_s *url)
 struct oio_url_s *
 metautils_message_extract_url (MESSAGE m)
 {
+	GError *err = NULL;
 	struct oio_url_s *url = oio_url_empty ();
-	for (struct map_s *p = url2msg_map; p->f ;++p) {
-		// TODO call really often, so make it zero-copy
-		gchar *s = metautils_message_extract_string_copy (m, p->f);
-		if (s) {
-			if (!p->avoid || strcmp(p->avoid, s))
-				oio_url_set (url, p->u, s);
-			g_free0 (s);
+	for (struct map_s *p = url2msg_map; p->f; ++p) {
+		gchar field[p->max_length];
+		memset(field, 0, sizeof(field));
+		if (metautils_message_extract_string_noerror(
+				m, p->f, field, sizeof(field))) {
+			if (!p->avoid || strcmp(p->avoid, field))
+				oio_url_set(url, p->u, field);
 		}
 	}
 
 	container_id_t cid;
-	GError *e = metautils_message_extract_cid (m, NAME_MSGKEY_CONTAINERID, &cid);
-	if (e)
-		g_clear_error (&e);
+	err = metautils_message_extract_cid(m, NAME_MSGKEY_CONTAINERID, &cid);
+	if (err)
+		g_clear_error(&err);
 	else
-		oio_url_set_id (url, cid);
+		oio_url_set_id(url, cid);
 
 	return url;
 }
@@ -458,6 +459,20 @@ metautils_message_extract_cid(MESSAGE msg, const gchar *n, container_id_t *cid)
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid container ID at '%s'", n);
 	memcpy(cid, f, sizeof(container_id_t));
 	return NULL;
+}
+
+gboolean
+metautils_message_extract_string_noerror(MESSAGE msg, const gchar *n,
+		gchar *dst, gsize dst_size)
+{
+	gsize fsize = 0;
+	void *f = metautils_message_get_field(msg, n, &fsize);
+	if (!f || !fsize || (gssize)fsize < 0 || fsize >= dst_size)
+		return FALSE;
+	if (fsize)
+		memcpy(dst, f, fsize);
+	memset(dst+fsize, 0, dst_size-fsize);
+	return TRUE;
 }
 
 GError *
@@ -536,9 +551,12 @@ metautils_message_extract_body_gba(MESSAGE msg, GByteArray **result)
 	if (!b)
 		return NEWERROR(CODE_BAD_REQUEST, "No body");
 
-	*result = g_byte_array_new();
-	if (bsize > 0)
+	if (bsize > 0) {
+		*result = g_byte_array_sized_new(bsize);
 		g_byte_array_append(*result, b, bsize);
+	} else {
+		*result = g_byte_array_sized_new(8);
+	}
 	return NULL;
 }
 
@@ -625,6 +643,10 @@ metautils_message_extract_header_encoded(MESSAGE msg, const gchar *n, gboolean m
 GError *
 metautils_message_extract_strint64(MESSAGE msg, const gchar *n, gint64 *i64)
 {
+	/* 20 chars for the number
+	 *  1 char for the sign
+	 *  1 char for the NULL terminator
+	 *  2 chars for padding */
 	gchar *end, dst[24];
 
 	EXTRA_ASSERT (i64 != NULL);

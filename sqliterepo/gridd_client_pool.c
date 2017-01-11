@@ -53,7 +53,7 @@ struct gridd_client_pool_s
 };
 
 #ifdef HAVE_ENBUG
-gint32 oio_sqlx_request_failure_threshold = 50;
+gint32 oio_sqlx_request_failure_threshold = 10;
 #endif
 
 static void _destroy (struct gridd_client_pool_s *p);

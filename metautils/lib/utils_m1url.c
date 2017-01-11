@@ -118,13 +118,12 @@ void
 meta1_service_url_encode_json (GString *gstr, struct meta1_service_url_s *m1u)
 {
 	if (!m1u) {
-		g_string_append(gstr, "null");
+		g_string_append_static(gstr, "null");
 	} else {
 		g_string_append_printf(gstr, "{\"seq\":%"G_GINT64_FORMAT",", m1u->seq);
 		g_string_append_printf(gstr, "\"type\":\"%.*s\",", (int)sizeof(m1u->srvtype), m1u->srvtype);
 		g_string_append_printf(gstr, "\"host\":\"%.*s\",", (int)sizeof(m1u->host), m1u->host);
-		g_string_append_printf(gstr, "\"args\":\"%.*s\"}",
-				LIMIT_LENGTH_SRVARGS, m1u->args);
+		g_string_append_printf(gstr, "\"args\":\"%.*s\"}", LIMIT_LENGTH_SRVARGS, m1u->args);
 	}
 }
 

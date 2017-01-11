@@ -154,11 +154,14 @@ _load_from_base(struct sqlx_sqlite3_s *sq3, GPtrArray **result)
 	}
 
 	sqlite3_finalize_debug(rc, stmt);
+	meta0_utils_array_finalize(array);
 
 	if (!err) {
 		*result = array;
 		GRID_INFO("Reloaded %u prefixes in %p (%u)",
 				count, array, array->len);
+	} else {
+		meta0_utils_array_clean(array);
 	}
 
 	return err;
@@ -274,6 +277,7 @@ _json_to_meta0_mapping(const char *json_mapping, GPtrArray **result)
 	}
 
 	json_tokener_free(parser);
+	meta0_utils_array_finalize(urls_by_pfx);
 	if (err)
 		meta0_utils_array_clean(urls_by_pfx);
 	else
@@ -465,12 +469,9 @@ _record_meta1ref(sqlite3 *db, const GPtrArray *new_assign_meta1ref)
 				err = SQLITE_GERROR(db, rc);
 		}
 
-		if (addr)
-			g_free(addr);
-		if (ref)
-			g_free(ref);
-		if (nb)
-			g_free(nb);
+		g_free0(addr);
+		g_free0(ref);
+		g_free0(nb);
 	}
 	sqlite3_finalize_debug(rc, stmt);
 	return err;

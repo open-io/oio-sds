@@ -120,7 +120,7 @@ _get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(result != NULL);
 
-	gint retries = 1;
+	gint retry = TRUE;
 	gchar **peers = NULL;
 	GError *err = NULL;
 
@@ -132,7 +132,7 @@ _get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
 		return BADREQ("Invalid type name: '%s'", n->type);
 	}
 
-retry:
+label_retry:
 	if (nocache) {
 		hc_decache_reference_service(ss->resolver, u, n->type);
 		if (!result) {
@@ -145,6 +145,11 @@ retry:
 	err = hc_resolve_reference_service(ss->resolver, u, n->type, &peers);
 
 	if (NULL != err) {
+		if (retry && err->code == CODE_RANGE_NOTFOUND) {
+			hc_decache_reference(ss->resolver, u);
+			retry = FALSE;
+			goto label_retry;
+		}
 		g_prefix_error(&err, "Peer resolution error: ");
 		oio_url_clean(u);
 		return err;
@@ -153,9 +158,10 @@ retry:
 	gchar **out = filter_services_and_clean(ss, peers, seq, n->type);
 
 	if (!out) {
-		if (retries-- > 0) {
+		if (retry) {
 			nocache = TRUE;
-			goto retry;
+			retry = FALSE;
+			goto label_retry;
 		}
 		err = NEWERROR(CODE_CONTAINER_NOTFOUND, "Base not managed");
 	}
@@ -216,6 +222,8 @@ _post_config(struct sqlx_service_s *ss)
 	/* Make base replications update the cache */
 	sqlx_repository_configure_change_callback(ss->repository,
 			(sqlx_repo_change_hook)meta2_backend_change_callback, m2);
+
+	hc_resolver_configure(ss->resolver, HC_RESOLVER_DECACHEM0);
 
 	/* Register meta2 requests handlers */
 	transport_gridd_dispatcher_add_requests(ss->dispatcher,

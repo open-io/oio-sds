@@ -83,31 +83,48 @@ GTree* meta0_utils_list_to_tree(const GSList *list) {
 	return result;
 }
 
-void meta0_utils_array_add(GPtrArray *byprefix,
-						   const guint8 *bytes, const gchar *s) {
+void
+meta0_utils_array_add(GPtrArray *byprefix,
+		const guint8 *bytes, const gchar *s)
+{
 	const guint16 prefix = meta0_utils_bytes_to_prefix(bytes);
 	g_assert(byprefix->len > prefix);
-	if (!byprefix->pdata[prefix])
-		byprefix->pdata[prefix] = g_malloc0(4 * sizeof(gchar*));
-	OIO_STRV_APPEND_COPY(byprefix->pdata[prefix], s);
+	if (!byprefix->pdata[prefix]) {
+		// We will typically set 3 services + NULL
+		byprefix->pdata[prefix] = g_ptr_array_sized_new(4);
+	}
+	g_ptr_array_add(byprefix->pdata[prefix], g_strdup(s));
+}
+
+void
+meta0_utils_array_finalize(GPtrArray *array)
+{
+	for (guint i = 0; i < array->len; i++) {
+		if (array->pdata[i] != NULL) {
+			g_ptr_array_add(array->pdata[i], NULL);
+			array->pdata[i] = g_ptr_array_free(array->pdata[i], FALSE);
+		}
+	}
 }
 
 GPtrArray* meta0_utils_list_to_array(GSList *list) {
 	EXTRA_ASSERT(list != NULL);
 	GPtrArray *result = meta0_utils_array_create();
 
-	for (GSList *l=list; l ;l=l->next) {
+	for (GSList *l = list; l; l = l->next) {
 		const struct meta0_info_s *m0i = l->data;
-		if (unlikely(!m0i)) continue;
+		if (unlikely(!m0i))
+			continue;
 
 		gchar url[STRLEN_ADDRINFO];
 		grid_addrinfo_to_string(&(m0i->addr), url, sizeof(url));
 
 		const guint8 *max = m0i->prefixes + m0i->prefixes_size;
-		for (guint8 *p = m0i->prefixes; p<max; p+=2)
+		for (guint8 *p = m0i->prefixes; p < max; p += 2)
 			meta0_utils_array_add(result, p, url);
 	}
 
+	meta0_utils_array_finalize(result);
 	return result;
 }
 
@@ -147,7 +164,6 @@ void meta0_utils_list_clean(GSList *list) {
 GPtrArray * meta0_utils_array_create(void) {
 	GPtrArray *array = g_ptr_array_sized_new(CID_PREFIX_COUNT);
 	g_ptr_array_set_size(array, CID_PREFIX_COUNT);
-	memset(array->pdata, 0, sizeof(void*) * array->len);
 	return array;
 }
 
@@ -217,9 +233,9 @@ meta0_utils_unpack_meta1ref(const gchar *s_m1ref,
 	if (g_strv_length(split_result) != 3)
 		return FALSE;
 
-	*addr = strdup(split_result[0]);
-	*ref = strdup(split_result[1]);
-	*nb = strdup(split_result[2]);
+	*addr = g_strdup(split_result[0]);
+	*ref = g_strdup(split_result[1]);
+	*nb = g_strdup(split_result[2]);
 
 	g_strfreev(split_result);
 	return TRUE;

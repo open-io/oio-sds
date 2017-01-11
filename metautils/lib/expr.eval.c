@@ -67,7 +67,7 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 
 		switch (pE->type) {
 		case VAL_STR_ET:
-			*ppS = strdup(pE->expr.str);
+			*ppS = g_strdup(pE->expr.str);
 			return EXPR_EVAL_DEF;
 		case VAL_NUM_ET:
 		case UN_NUMSUP_ET:
@@ -134,7 +134,7 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 				if (ret != EXPR_EVAL_DEF)
 					return ret;
 				*pD = strlen(s);
-				free(s);
+				g_free(s);
 				return EXPR_EVAL_DEF;
 			}
 
@@ -197,7 +197,7 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 					*pD = strtod(ppS, &pEnd);
 					if (pEnd == ppS)
 						return EXPR_EVAL_UNDEF;
-					free(ppS);
+					g_free(ppS);
 					return EXPR_EVAL_DEF;
 				}
 				else {
@@ -216,7 +216,7 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 				if (ret != EXPR_EVAL_DEF)
 					return ret;
 				*pD = strlen(s);
-				free(s);
+				g_free(s);
 				return EXPR_EVAL_DEF;
 			}
 
@@ -232,13 +232,13 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 					return ret;
 				ret = __get_str(pE->expr.bin.p2, &s2);
 				if (ret != EXPR_EVAL_DEF) {
-					free(s1);
+					g_free(s1);
 					return ret;
 				}
 				*pD = (strcmp(s1, s2) == 0);
-				free(s1);
+				g_free(s1);
 				if (s2 != s1)
-					free(s2);
+					g_free(s2);
 				return EXPR_EVAL_DEF;
 			}
 

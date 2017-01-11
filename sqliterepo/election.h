@@ -152,7 +152,16 @@ GError * election_has_peers (struct election_manager_s *m,
 GError* election_manager_create (struct replication_config_s *config,
 		struct election_manager_s **result);
 
+void election_manager_dump_delays(struct election_manager_s *manager);
+
 struct election_counts_s election_manager_count (struct election_manager_s *m);
+
+/* Make some elections leave their MASTER state if they are inactive since
+ * longer than `inactivity`, as long as there are more than `ratio` MASTER
+ * bases more than SLAVE bases. But do not leave more than `max` elections
+ * at all */
+guint election_manager_balance_masters(struct election_manager_s *M,
+		guint ratio, guint max, gint64 inactivity);
 
 /* Perform the 'timer' action on one item of each status.
    This includes expiring the election, retrying, pinging peers, etc.
@@ -163,12 +172,14 @@ void election_manager_exit_all (struct election_manager_s *m,
 		gint64 oldest, gboolean persist);
 
 void election_manager_whatabout (struct election_manager_s *m,
-		const struct sqlx_name_s *n, gchar *d, gsize ds);
+		const struct sqlx_name_s *n, GString *out);
 
 void election_manager_set_sync (struct election_manager_s *manager,
 		struct sqlx_sync_s *sync);
 
 void election_manager_set_peering (struct election_manager_s *m,
 		struct sqlx_peering_s *peering);
+
+struct election_member_s;
 
 #endif /*OIO_SDS__sqliterepo__election_h*/

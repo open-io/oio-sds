@@ -117,7 +117,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
                           self.chunk_path)
 
     def test_container_deleted(self):
-        self.container_c.container_destroy(self.account, self.ref)
+        self.container_c.container_delete(self.account, self.ref)
 
         self.assertRaises(exc.OrphanChunk, self.auditor.chunk_audit,
                           self.chunk_path)

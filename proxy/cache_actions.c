@@ -234,7 +234,8 @@ action_cache_status (struct req_args_s *args)
 	struct hc_resolver_stats_s s = {{0}};
 	hc_resolver_info (resolver, &s);
 
-	GString *gstr = g_string_new ("{");
+	GString *gstr = g_string_sized_new (256);
+	g_string_append_c (gstr, '{');
 	g_string_append_printf (gstr, " \"csm0\":{"
 		"\"count\":%" G_GINT64_FORMAT ",\"max\":%u,\"ttl\":%lu},",
 		s.csm0.count, s.csm0.max, s.csm0.ttl);

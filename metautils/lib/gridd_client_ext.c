@@ -408,7 +408,7 @@ gridd_client_exec_and_concat (const gchar *to, gdouble seconds, GByteArray *req,
 
 	GByteArray *tmp = NULL;
 	if (out)
-		tmp = g_byte_array_new();
+		tmp = g_byte_array_sized_new(512);
 
 	struct gridd_client_s *client = gridd_client_create(to, req,
 			out ? tmp : NULL, out ? (client_on_reply)_cb_exec_and_concat : NULL);

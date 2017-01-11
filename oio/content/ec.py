@@ -94,7 +94,7 @@ class ECContent(Content):
         sysmeta['policy'] = self.stgpol
         sysmeta['mime_type'] = self.mime_type
         sysmeta['chunk_method'] = self.chunk_method
-        sysmeta['chunk_size'] = self.metadata['chunk-size']
+        sysmeta['chunk_size'] = self.metadata['chunk_size']
 
         chunks = _sort_chunks(self.chunks.raw(), self.storage_method.ec)
         sysmeta['content_path'] = self.path

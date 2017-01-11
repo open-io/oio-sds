@@ -370,14 +370,14 @@ class ListObject(ContainerCommandMixin, lister.Lister):
 
     # TODO: make a decorator with this loop pattern
     def _container_provider(self, account, **kwargs):
-        listing, _ = self.app.client_manager.storage.container_list(
+        listing = self.app.client_manager.storage.container_list(
                 account, **kwargs)
         for element in listing:
             yield element[0]
 
         while listing:
             kwargs['marker'] = listing[-1][0]
-            listing, _ = self.app.client_manager.storage.container_list(
+            listing = self.app.client_manager.storage.container_list(
                 account, **kwargs)
             if listing:
                 for element in listing:
@@ -502,19 +502,19 @@ class UnsetObject(ObjectCommandMixin, command.Command):
             properties)
 
 
-class AnalyzeObject(ObjectCommandMixin, lister.Lister):
-    """Analyze object"""
+class LocateObject(ObjectCommandMixin, lister.Lister):
+    """Locate the parts of an object"""
 
-    log = logging.getLogger(__name__ + '.AnalyzeObject')
+    log = logging.getLogger(__name__ + '.LocateObject')
 
     def get_parser(self, prog_name):
-        parser = super(AnalyzeObject, self).get_parser(prog_name)
+        parser = super(LocateObject, self).get_parser(prog_name)
         self.patch_parser(parser)
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
-        super(AnalyzeObject, self).take_action(parsed_args)
+        super(LocateObject, self).take_action(parsed_args)
 
         account = self.app.client_manager.get_account()
         container = parsed_args.container

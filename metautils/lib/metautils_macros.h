@@ -20,12 +20,7 @@ License along with this library.
 #ifndef OIO_SDS__metautils__lib__metautils_macros_h
 # define OIO_SDS__metautils__lib__metautils_macros_h 1
 
-/* size [in bytes] asn1c can require on the stack. Use 0 for as many bytes
- * as necessary (with the risk of stack smashing). */
-#define ASN1C_MAX_STACK 0
-
 /* Some well known service types */
-
 # define NAME_SRVTYPE_META0 "meta0"
 # define NAME_SRVTYPE_META1 "meta1"
 # define NAME_SRVTYPE_META2 "meta2"

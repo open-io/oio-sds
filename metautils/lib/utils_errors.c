@@ -28,7 +28,7 @@ g_error_trace(GError ** e, const char *dom, int code,
 	if (!e)
 		return;
 
-	GString *gstr = g_string_new("");
+	GString *gstr = g_string_sized_new(128);
 #ifdef HAVE_EXTRA_DEBUG
 	if (line && func && file)
 		g_string_printf(gstr, "(code=%i) %s,%d ", (code?code:(*e?(*e)->code:0)), func, line);

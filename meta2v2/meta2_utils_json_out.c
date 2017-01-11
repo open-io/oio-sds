@@ -29,58 +29,57 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 static void
 encode_alias (GString *g, gpointer bean)
 {
-	oio_str_gstring_append_json_pair (g, "name", ALIASES_get_alias(bean)->str);
-	g_string_append_printf(g,
-			",\"ver\":%"G_GINT64_FORMAT
-			",\"ctime\":%"G_GINT64_FORMAT
-			",\"mtime\":%"G_GINT64_FORMAT
-			",\"deleted\":%s"
-			",\"header\":\"",
-			ALIASES_get_version(bean),
-			ALIASES_get_ctime(bean),
-			ALIASES_get_mtime(bean),
-			ALIASES_get_deleted(bean) ? "true" : "false");
-	metautils_gba_to_hexgstr(g, ALIASES_get_content(bean));
-	g_string_append_c(g, '"');
+	OIO_JSON_append_gstr (g, "name", ALIASES_get_alias(bean));
+	g_string_append_c(g, ',');
+	OIO_JSON_append_int (g, "ver", ALIASES_get_version(bean));
+	g_string_append_c(g, ',');
+	OIO_JSON_append_int (g, "ctime", ALIASES_get_ctime(bean));
+	g_string_append_c(g, ',');
+	OIO_JSON_append_int (g, "mtime", ALIASES_get_mtime(bean));
+	g_string_append_c(g, ',');
+	OIO_JSON_append_bool(g, "deleted", ALIASES_get_deleted(bean));
+	g_string_append_c(g, ',');
+	OIO_JSON_append_gba(g, "header", ALIASES_get_content(bean));
 }
 
 static void
 encode_header (GString *g, gpointer bean)
 {
-	g_string_append(g, "\"id\":\"");
-	metautils_gba_to_hexgstr(g, CONTENTS_HEADERS_get_id(bean));
-	g_string_append_printf(g, "\",\"hash\":\"");
-	metautils_gba_to_hexgstr(g, CONTENTS_HEADERS_get_hash(bean));
-	g_string_append_printf(g, "\",\"size\":%"G_GINT64_FORMAT,
-			CONTENTS_HEADERS_get_size(bean));
-	g_string_append_printf(g, ",\"policy\":\"%s\"",
-			CONTENTS_HEADERS_get_policy(bean)->str);
-	g_string_append_printf(g, ",\"chunk-method\":\"%s\"",
-			CONTENTS_HEADERS_get_chunk_method(bean)->str);
-	g_string_append_printf(g, ",\"mime-type\":\"%s\"",
-			CONTENTS_HEADERS_get_mime_type(bean)->str);
+	OIO_JSON_append_gba(g, "id", CONTENTS_HEADERS_get_id(bean));
+	g_string_append_c(g, ',');
+	OIO_JSON_append_gba(g, "hash", CONTENTS_HEADERS_get_hash(bean));
+	g_string_append_c(g, ',');
+	OIO_JSON_append_int(g, "size", CONTENTS_HEADERS_get_size(bean));
+	g_string_append_c(g, ',');
+	OIO_JSON_append_gstr(g, "policy", CONTENTS_HEADERS_get_policy(bean));
+	g_string_append_c(g, ',');
+	OIO_JSON_append_gstr(g, "chunk-method", CONTENTS_HEADERS_get_chunk_method(bean));
+	g_string_append_c(g, ',');
+	OIO_JSON_append_gstr(g, "mime-type", CONTENTS_HEADERS_get_mime_type(bean));
 }
 
 static void
 encode_chunk (GString *g, gpointer bean)
 {
-	g_string_append_printf(g, "\"id\":\"%s\",\"pos\":\"%s\",\"hash\":\"",
-			CHUNKS_get_id(bean)->str,
-			CHUNKS_get_position(bean)->str);
-	metautils_gba_to_hexgstr(g, CHUNKS_get_hash(bean));
-	g_string_append_printf(g, "\",\"size\":%"G_GINT64_FORMAT,
-			CHUNKS_get_size(bean));
+	OIO_JSON_append_gstr(g, "id", CHUNKS_get_id(bean));
+	g_string_append_c(g, ',');
+	OIO_JSON_append_gstr(g, "pos", CHUNKS_get_position(bean));
+	g_string_append_c(g, ',');
+	OIO_JSON_append_gba(g, "hash", CHUNKS_get_hash(bean));
+	g_string_append_c(g, ',');
+	OIO_JSON_append_int(g, "size", CHUNKS_get_size(bean));
 }
 
 static void
 encode_property (GString *g, gpointer bean)
 {
-	oio_str_gstring_append_json_pair(g, "alias", PROPERTIES_get_alias(bean)->str);
-	g_string_append_printf(g, ",\"version\":%"G_GINT64_FORMAT",", PROPERTIES_get_version(bean));
-	oio_str_gstring_append_json_pair(g, "key", PROPERTIES_get_key(bean)->str);
-	g_string_append_printf(g, ",\"value\":\"%.*s\"",
-			PROPERTIES_get_value(bean)->len,
-			(gchar*) PROPERTIES_get_value(bean)->data);
+	OIO_JSON_append_gstr(g, "alias", PROPERTIES_get_alias(bean));
+	g_string_append_c(g, ',');
+	OIO_JSON_append_int(g, "version", PROPERTIES_get_version(bean));
+	g_string_append_c(g, ',');
+	OIO_JSON_append_gstr(g, "key", PROPERTIES_get_key(bean));
+	g_string_append_c(g, ',');
+	OIO_JSON_append_gba(g, "value", PROPERTIES_get_value(bean));
 }
 
 static void
@@ -112,9 +111,10 @@ _json_BEAN_only(GString *gstr, GSList *l, gconstpointer selector,
 			g_string_append_c(gstr, ',');
 		first = FALSE;
 		g_string_append_c (gstr, '{');
-		if (extend)
-			g_string_append_printf (gstr, "\"type\":\"%s\",",
-					DESCR(l->data)->name);
+		if (extend) {
+			OIO_JSON_append_str (gstr, "type", DESCR(l->data)->name);
+			g_string_append_c (gstr, ',');
+		}
 		encoder(gstr, l->data);
 		g_string_append_c (gstr, '}');
 	}
@@ -147,12 +147,12 @@ meta2_json_dump_all_xbeans(GString *gstr, GSList *beans)
 void
 meta2_json_dump_all_beans(GString *gstr, GSList *beans)
 {
-	g_string_append(gstr, "\"aliases\":[");
+	g_string_append_static(gstr, "\"aliases\":[");
 	meta2_json_alias_only(gstr, beans, FALSE);
-	g_string_append(gstr, "],\"headers\":[");
+	g_string_append_static(gstr, "],\"headers\":[");
 	meta2_json_headers_only(gstr, beans, FALSE);
-	g_string_append(gstr, "],\"chunks\":[");
+	g_string_append_static(gstr, "],\"chunks\":[");
 	meta2_json_chunks_only(gstr, beans, FALSE);
-	g_string_append(gstr, "]");
+	g_string_append_c(gstr, ']');
 }
 

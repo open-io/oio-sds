@@ -378,7 +378,8 @@ sqlx_admin_load(struct sqlx_sqlite3_s *sq3)
 		EXTRA_ASSERT(stmt != NULL);
 		while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 			const gchar *k = (const gchar*)sqlite3_column_text(stmt, 0);
-			GByteArray *v = g_byte_array_append(g_byte_array_new(),
+			GByteArray *v = g_byte_array_append(
+					g_byte_array_sized_new(sqlite3_column_bytes(stmt, 1)),
 					sqlite3_column_blob(stmt, 1),
 					sqlite3_column_bytes(stmt, 1));
 			g_tree_replace(sq3->admin, g_strdup(k), v);

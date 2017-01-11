@@ -20,14 +20,13 @@ set -e
 
 PREFIX="@EXE_PREFIX@"
 NS=OPENIO
-IP=127.0.0.1
+IP=
 OIO=$HOME/.oio
 SDS=$OIO/sds
 GRIDINIT_SOCK=${SDS}/run/gridinit.sock
 BOOTSTRAP_CONFIG=
 
 ZKSLOW=0
-ZKRESET=0
 verbose=0
 OPENSUSE=`grep -i opensuse /etc/*release || echo -n ''`
 
@@ -43,7 +42,6 @@ while getopts "I:N:f:Z:Cvb" opt; do
 			fi
 		fi ;;
         Z) ZKSLOW=1 ;;
-        C) ZKRESET=1 ;;
         v) ((verbose=verbose+1)) ;;
         \?) exit 1 ;;
     esac
@@ -85,7 +83,6 @@ if [ $verbose != 0 ] ; then
         "-I \"${IP}\"" \
         "-N \"${NS}\"" \
         "-Z \"${ZKSLOW}\"" \
-        "-C \"${ZKRESET}\"" \
         "${BOOTSTRAP_CONFIG}"
 fi
 export G_DEBUG_LEVEL
@@ -134,13 +131,11 @@ gridinit -s OIO,gridinit -d ${SDS}/conf/gridinit.conf
 # Initiate Zookeeper (if necessary)
 ZK=$(${PREFIX}-cluster --local-cfg | grep "$NS/zookeeper" ; exit 0)
 if [ -n "$ZK" ] ; then
-    opts=
+    opts=--lazy
     for srvtype in ${AVOID} ; do opts="${opts} --avoid=${srvtype}" ; done
     if [ $ZKSLOW -ne 0 ] ; then opts="${opts} --slow" ; fi
-    if [ $ZKRESET -ne 0 ] ; then
-        zk-reset.py "$NS" ;
-    fi
-    zk-bootstrap.py $opts "$NS"
+	zk-reset.py "$NS" ;
+    zk-bootstrap.py --lazy $opts "$NS"
 fi
 
 

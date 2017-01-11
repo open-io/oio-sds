@@ -43,8 +43,7 @@ _lb_pack_srvid_tab(const char **ids)
 
 		gchar *straddr = NULL;
 		oio_parse_service_key(*pp, NULL, NULL, &straddr);
-		g_string_append_printf(gstr,
-				"{\"addr\":\"%s\",\"id\":\"%s\"}",
+		g_string_append_printf(gstr, "{\"addr\":\"%s\",\"id\":\"%s\"}",
 				straddr, *pp);
 		g_free(straddr);
 	}
@@ -72,7 +71,7 @@ _lb(struct req_args_s *args, const char *srvtype)
 			g_string_append_printf(targets, "%s-%s"OIO_CSV_SEP, srvtype, slot);
 		}
 	}
-	g_string_append_printf(targets, "%s", srvtype);
+	g_string_append(targets, srvtype);
 	GRID_DEBUG("Temporary pool [%s] will target [%s] %u times",
 			srvtype, targets->str, howmany);
 	for (; howmany > 0; howmany--)

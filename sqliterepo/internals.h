@@ -60,32 +60,16 @@ License along with this library.
 #  define SQLX_DELAY_MAXWAIT 5 * G_TIME_SPAN_SECOND
 # endif
 
-# ifndef  SQLX_DELAY_MAXIDLE
-#  define SQLX_DELAY_MAXIDLE 30 * G_TIME_SPAN_SECOND
-# endif
-
-# ifndef  SQLX_DELAY_ELECTION_REPLAY
-#  define SQLX_DELAY_ELECTION_REPLAY 5 * G_TIME_SPAN_SECOND
+# ifndef  SQLX_DELAY_NOWAIT_PENDING
+#  define SQLX_DELAY_NOWAIT_PENDING 15 * G_TIME_SPAN_SECOND
 # endif
 
 # ifndef  SQLX_DELAY_RESTART_FAILED
-#  define SQLX_DELAY_RESTART_FAILED 5 * G_TIME_SPAN_SECOND
-# endif
-
-# ifndef  SQLX_DELAY_PING_FAILED
-#  define SQLX_DELAY_PING_FAILED 5 * G_TIME_SPAN_SECOND
-# endif
-
-# ifndef  SQLX_DELAY_PING_PENDING
-#  define SQLX_DELAY_PING_PENDING 2 * G_TIME_SPAN_SECOND
+#  define SQLX_DELAY_RESTART_FAILED 2 * G_TIME_SPAN_SECOND
 # endif
 
 # ifndef  SQLX_DELAY_PING_FINAL
 #  define SQLX_DELAY_PING_FINAL 15 * G_TIME_SPAN_MINUTE
-# endif
-
-# ifndef  SQLX_DELAY_EXPIRE_FAILED
-#  define SQLX_DELAY_EXPIRE_FAILED 5 * G_TIME_SPAN_MINUTE
 # endif
 
 # ifndef  SQLX_DELAY_EXPIRE_FINAL
@@ -94,6 +78,10 @@ License along with this library.
 
 # ifndef  SQLX_DELAY_EXPIRE_NONE
 #  define SQLX_DELAY_EXPIRE_NONE 5 * G_TIME_SPAN_MINUTE
+# endif
+
+# ifndef  SQLX_RETRIES_GETVERS_DEFAULT
+#  define SQLX_RETRIES_GETVERS_DEFAULT 2
 # endif
 
 /* Size of buffer for reading dump file */
@@ -203,5 +191,13 @@ extern gint64 oio_cache_period_cond_wait;
 /* In the same precision as oio_ext_monotonic_time(), how many TIMESPAN the
  * current thread should wait for the condition in the cache of bases. */
 extern gint64 oio_election_period_cond_wait;
+
+#ifdef HAVE_ENBUG
+/* Average percentage of requests to the ZK that will immediately fail. */
+extern gint32 oio_sync_failure_threshold_action;
+
+/* Average percentage of ZK completion hooks will fail. */
+extern gint32 oio_sync_failure_threshold_hook;
+#endif
 
 #endif /*OIO_SDS__sqliterepo__internals_h*/

@@ -29,7 +29,7 @@ function dump_syslog {
     gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock status2
 }
 
-trap dump_syslog EXIT
+#trap dump_syslog EXIT
 
 func_tests () {
     echo -e "\n### FUNC tests : $@\n" | logger -t TEST
@@ -73,8 +73,8 @@ echo -e "\n### UNIT tests\n"
 cd $WRKDIR
 make -C tests/unit test
 
-test_worm -f "${SRCDIR}/etc/bootstrap-WORM.yml"
-test_slave -f "${SRCDIR}/etc/bootstrap-SLAVE.yml"
-func_tests -f "${SRCDIR}/etc/bootstrap-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-smallcache.yml"
-func_tests -f "${SRCDIR}/etc/bootstrap-3COPIES-11RAWX.yml"
-func_tests -f "${SRCDIR}/etc/bootstrap-EC.yml"
+test_worm  -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-option-worm.yml"
+test_slave -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-option-slave.yml"
+func_tests -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-option-smallcache.yml"
+func_tests -f "${SRCDIR}/etc/bootstrap-preset-3COPIES-11RAWX.yml"
+func_tests -f "${SRCDIR}/etc/bootstrap-preset-EC.yml"

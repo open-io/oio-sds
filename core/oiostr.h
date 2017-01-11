@@ -40,6 +40,9 @@ extern "C" {
 
 #define OIO_STRV_APPEND_COPY(Tab,S0) do { (Tab) = oio_strv_append((Tab), g_strdup(S0)); } while (0)
 
+#define g_string_append_static(out,Static) \
+	g_string_append_len(out, Static, sizeof(Static)-1) \
+
 /* Count the items in the array */
 size_t oio_strv_length (const char * const *v);
 
@@ -126,8 +129,65 @@ void oio_str_gstring_append_json_blob(GString *base, const char *s, int len);
 void oio_str_gstring_append_json_pair (GString *base,
 		const char *k, const char *v);
 
+/* TODO add a macro version of oio_str_gstring_append_json_pair() taking a
+ * static string as the key, to avoid computing its length for trusted keys,
+ * as for oio_url, ns_info, etc. */
+
 void oio_str_gstring_append_json_pair_int (GString *base,
 		const char *k, gint64 v);
+
+#define OIO_JSON_append_bool(g,k,v) do { \
+	g_string_append_static(g, "\"" k "\":"); \
+	if (v) \
+		g_string_append_static(g, "true"); \
+	else \
+		g_string_append_static(g, "false"); \
+} while (0)
+
+#define OIO_JSON_append_int(g,k,v) do { \
+	g_string_append_static(g, "\"" k "\":"); \
+	g_string_append_printf(g, "%"G_GINT64_FORMAT, (gint64)v); \
+} while (0)
+
+#define OIO_JSON_append_gstr(g,k,v) do { \
+	if (v) { \
+		g_string_append_static(g, "\"" k "\":\""); \
+		oio_str_gstring_append_json_blob(g, v->str, v->len); \
+		g_string_append_c(g, '"'); \
+	} else { \
+		g_string_append_static(g, "\"" k "\":null"); \
+	} \
+} while (0)
+
+#define OIO_JSON_append_blob(g,k,S,L) do { \
+	if (S != NULL) { \
+		g_string_append_static(g, "\"" k "\":\""); \
+		oio_str_gstring_append_json_blob(g, S, L); \
+		g_string_append_c(g, '"'); \
+	} else { \
+		g_string_append_static(g, "\"" k "\":null"); \
+	} \
+} while (0)
+
+#define OIO_JSON_append_str(g,k,S) do { \
+	if (S != NULL) { \
+		g_string_append_static(g, "\"" k "\":"); \
+		oio_str_gstring_append_json_quote(g, S); \
+	} else { \
+		g_string_append_static(g, "\"" k "\":null"); \
+	} \
+} while (0)
+
+#define OIO_JSON_append_gba(g,k,gba) do { \
+	if (gba != NULL) { \
+		g_string_append_static(g, "\"" k "\":\""); \
+		metautils_gba_to_hexgstr(g, gba); \
+		g_string_append_c(g, '"'); \
+	} else { \
+		g_string_append_static(g, "\"" k "\":null"); \
+	} \
+} while (0)
+
 
 static inline int oio_str_is_set (const char *s) { return NULL!=s && 0!=*s; }
 

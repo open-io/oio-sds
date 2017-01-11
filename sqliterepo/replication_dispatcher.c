@@ -22,20 +22,9 @@ License along with this library.
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
+#include <metautils/lib/codec.h>
+
 #include <server/transport_gridd.h>
-
-#include <RowFieldValue.h>
-#include <RowField.h>
-#include <RowFieldSequence.h>
-#include <Row.h>
-#include <RowSet.h>
-#include <RowName.h>
-#include <TableHeader.h>
-#include <Table.h>
-#include <TableSequence.h>
-
-#include <asn_codecs.h>
-#include <ber_decoder.h>
 
 #include "sqliterepo.h"
 #include "version.h"
@@ -63,22 +52,20 @@ License along with this library.
 static gchar *
 _prepare_statement(Table_t *t)
 {
-	gint i;
-	GString *gstr;
-
-	gstr = g_string_new("REPLACE INTO ");
+	GString *gstr = g_string_sized_new(256);
+	g_string_append_static(gstr, "REPLACE INTO ");
 	g_string_append_len(gstr, (char*)t->name.buf, t->name.size);
-	g_string_append(gstr, " (ROWID");
-	for (i=0; i < t->header.list.count; i++) {
+	g_string_append_static(gstr, " (ROWID");
+	for (int i=0; i < t->header.list.count; i++) {
 		RowName_t *r = t->header.list.array[i];
 		g_string_append_c(gstr, ',');
 		g_string_append_len(gstr, (char*)r->name.buf, r->name.size);
 	}
-	g_string_append(gstr, ") VALUES (?");
-	for (i=0; i < t->header.list.count; i++) {
-		g_string_append_len(gstr, ",?", 2);
+	g_string_append_static(gstr, ") VALUES (?");
+	for (int i=0; i < t->header.list.count; i++) {
+		g_string_append_static(gstr, ",?");
 	}
-	g_string_append(gstr, ")");
+	g_string_append_c(gstr, ')');
 
 	return g_string_free(gstr, FALSE);
 }
@@ -741,7 +728,7 @@ _table_set_error(Table_t *table, GError *err,
 {
 	void _reset_integer (INTEGER_t **pi, gint64 v) {
 		ASN_STRUCT_FREE(asn_DEF_INTEGER, *pi);
-		*pi = calloc(1, sizeof(INTEGER_t));
+		*pi = ASN1C_CALLOC(1, sizeof(INTEGER_t));
 		asn_int64_to_INTEGER(*pi, v);
 	}
 
@@ -1011,7 +998,7 @@ _execute_next_query(struct sqlx_sqlite3_s *sq3, const gchar *query,
 			for (rc = SQLITE_ROW; rc == SQLITE_ROW ;) {
 				rc = sqlite3_step(stmt);
 				if (rc == SQLITE_ROW) {
-					struct Row *rrow = calloc(1, sizeof(struct Row));
+					struct Row *rrow = ASN1C_CALLOC(1, sizeof(struct Row));
 					load_statement(stmt, rrow, result);
 					asn_sequence_add(&(result->rows.list), rrow);
 				}
@@ -1029,7 +1016,7 @@ _execute_next_query(struct sqlx_sqlite3_s *sq3, const gchar *query,
 		for (rc = SQLITE_ROW; rc == SQLITE_ROW ;) {
 			rc = sqlite3_step(stmt);
 			if (rc == SQLITE_ROW) {
-				struct Row *rrow = calloc(1, sizeof(struct Row));
+				struct Row *rrow = ASN1C_CALLOC(1, sizeof(struct Row));
 				load_statement(stmt, rrow, result);
 				asn_sequence_add(&(result->rows.list), rrow);
 			}
@@ -1135,7 +1122,7 @@ do_query_after_open(struct gridd_reply_ctx_s *reply_ctx,
 		gchar *query;
 
 		req = params->list.array[i32];
-		res = calloc(1, sizeof(struct Table));
+		res = ASN1C_CALLOC(1, sizeof(struct Table));
 		query = _table_to_query(req);
 		replication_ctx = reply_ctx->get_cnx_data("repctx");
 		reply_ctx->forget_cnx_data("repctx");
@@ -1528,7 +1515,6 @@ _handler_DESCR(struct gridd_reply_ctx_s *reply,
 {
 	GError *err = NULL;
 	struct sqlx_name_mutable_s name = {0};
-	gchar descr[1024] = "?";
 
 	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
@@ -1537,9 +1523,12 @@ _handler_DESCR(struct gridd_reply_ctx_s *reply,
 	}
 	SQLXNAME_STACKIFY(name);
 
+	/* Tests made with short base names show JSON lengths around 1780 bytes,
+	 * so 2048 should be enough for most names. */
+	GString *body = g_string_sized_new(2048);
 	election_manager_whatabout(sqlx_repository_get_elections_manager(repo),
-			CONST(&name), descr, sizeof(descr));
-	reply->add_body(metautils_gba_from_string(descr));
+			CONST(&name), body);
+	reply->add_body(g_bytes_unref_to_array(g_string_free_to_bytes(body)));
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
@@ -2182,7 +2171,7 @@ _info_sqlite(GString *gstr)
 {
 	const char *s;
 
-	g_string_append(gstr, "SQLite options:\n");
+	g_string_append_static(gstr, "SQLite options:\n");
 	for (int i=0; NULL != (s = sqlite3_compileoption_get(i)); ++i) {
 		g_string_append_c(gstr, '\t');
 		g_string_append(gstr, s);
@@ -2200,13 +2189,13 @@ _info_repository(struct sqlx_repository_s *r, GString *gstr)
 		g_string_append(gstr, s);
 	}
 
-	g_string_append(gstr, "sqliterepo options:\n");
+	g_string_append_static(gstr, "sqliterepo options:\n");
 	g_string_append_printf(gstr, "\thash: width=%u depth=%u\n",
 			r->hash_width, r->hash_depth);
 	g_string_append_printf(gstr, "\tbases: %u/%u\n",
 			r->bases_count, r->bases_max);
 
-	g_string_append(gstr, "\tflags: ");
+	g_string_append_static(gstr, "\tflags: ");
 	if (r->flag_autocreate)
 		_append_flag("AUTOCREATE");
 	if (r->flag_autovacuum)
@@ -2223,7 +2212,7 @@ _info_elections(struct sqlx_repository_s *repo, GString *gstr)
 {
 	struct election_counts_s count = election_manager_count(
 			sqlx_repository_get_elections_manager(repo));
-	g_string_append(gstr, "Elections count:\n");
+	g_string_append_static(gstr, "Elections count:\n");
 	g_string_append_printf(gstr, "\ttotal: %u\n", count.total);
 	g_string_append_printf(gstr, "\tnone: %u\n", count.none);
 	g_string_append_printf(gstr, "\tpending: %u\n", count.pending);
@@ -2248,7 +2237,7 @@ _info_replication(struct sqlx_repository_s *repo, GString *gstr)
 		}
 	}
 
-	g_string_append(gstr, "Replication:\n");
+	g_string_append_static(gstr, "Replication:\n");
 	g_string_append_printf(gstr, "\tmode: %s\n",
 			_mode2str(election_manager_get_mode(
 					sqlx_repository_get_elections_manager(repo))));
@@ -2259,7 +2248,7 @@ _info_cache(struct sqlx_repository_s *repo, GString *gstr)
 {
 	struct cache_counts_s count = sqlx_cache_count(
 			sqlx_repository_get_cache(repo));
-	g_string_append(gstr, "Cache count:\n");
+	g_string_append_static(gstr, "Cache count:\n");
 	g_string_append_printf(gstr, "\tmax: %u\n", count.max);
 	g_string_append_printf(gstr, "\thot: %u\n", count.hot);
 	g_string_append_printf(gstr, "\tcold: %u\n", count.cold);
@@ -2356,7 +2345,7 @@ _handler_QUERY(struct gridd_reply_ctx_s *reply,
 	}
 
 	/* execute the request now */
-	result = calloc(1, sizeof(struct TableSequence));
+	result = ASN1C_CALLOC(1, sizeof(struct TableSequence));
 	err = do_query(reply, repo, CONST(&name), params,
 			result, flags&FLAG_AUTOCREATE);
 

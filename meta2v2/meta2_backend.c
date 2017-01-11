@@ -567,7 +567,7 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 			const enum election_status_e s = sq3->election;
 			if (!params->local && m2->notifier && (!s || s == ELECTION_LEADER)) {
 				GString *gs = oio_event__create (META2_EVENTS_PREFIX".container.new", url);
-				g_string_append (gs, ",\"data\":null}");
+				g_string_append_static (gs, ",\"data\":null}");
 				oio_events_queue__send (m2->notifier, g_string_free (gs, FALSE));
 			}
 		}
@@ -609,7 +609,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 			GString *gs = NULL;
 			if (event && m2->notifier) {
 				gs = oio_event__create (META2_EVENTS_PREFIX ".container.deleted", url);
-				g_string_append (gs, ",\"data\":null}");
+				g_string_append_static (gs, ",\"data\":null}");
 			}
 			m2b_destroy(sq3);
 			if (gs) {
@@ -742,12 +742,12 @@ _container_state (struct sqlx_sqlite3_s *sq3)
 		oio_url_set (u, OIOURL_TYPE, sq3->name.type + sizeof(NAME_SRVTYPE_META2));
 
 	GString *gs = oio_event__create (META2_EVENTS_PREFIX ".container.state", u);
-	g_string_append (gs, ",\"data\":{");
+	g_string_append_static (gs, ",\"data\":{");
 	append_const (gs, "policy", sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY));
 	append_int64 (gs, "ctime", m2db_get_ctime(sq3));
 	append_int64 (gs, "bytes-count", m2db_get_size(sq3));
 	append_int64 (gs, "object-count", m2db_get_obj_count(sq3));
-	g_string_append (gs, "}}");
+	g_string_append_static (gs, "}}");
 
 	oio_url_clean (u);
 	return g_string_free(gs, FALSE);

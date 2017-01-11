@@ -223,7 +223,7 @@ _chunks_pack (GString *gs, GSList *chunks)
 {
 	gchar strpos[32];
 
-	g_string_append (gs, "[");
+	g_string_append_c (gs, '[');
 	for (GSList *l=chunks; l ;l=l->next) {
 		struct chunk_s *c = l->data;
 		if (gs->str[gs->len - 1] != '[')
@@ -236,7 +236,7 @@ _chunks_pack (GString *gs, GSList *chunks)
 				"\"hash\":\"%s\"}",
 				c->url, c->size, strpos, c->hexhash);
 	}
-	g_string_append (gs, "]");
+	g_string_append_c (gs, ']');
 }
 
 static GError *
@@ -530,7 +530,7 @@ _show_content (struct oio_sds_s *sds, struct oio_url_s *url, void *cb_data,
 
 	GError *err = NULL;
 	GSList *chunks = NULL;
-	GString *reply_body = g_string_new("");
+	GString *reply_body = g_string_sized_new(2048);
 	gchar **props = NULL;
 
 	/* Get the beans */
@@ -619,19 +619,19 @@ _dl_debug (const char *caller, struct oio_sds_dl_src_s *src,
 {
 	if (!GRID_DEBUG_ENABLED())
 		return;
-	GString *out = g_string_new("");
+	GString *out = g_string_sized_new(128);
 
 	g_string_append_printf (out, "SRC{%s", oio_url_get(src->url, OIOURL_WHOLE));
 	if (src->ranges && src->ranges[0]) {
-		g_string_append (out, ",[");
+		g_string_append_static (out, ",[");
 		for (struct oio_sds_dl_range_s **p=src->ranges; *p ;++p)
 			g_string_append_printf (out,
 					"[%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT"]",
 					(*p)->offset, (*p)->size);
-		g_string_append (out, "]}");
+		g_string_append_static (out, "]}");
 	}
 
-	g_string_append (out, " -> ");
+	g_string_append_static (out, " -> ");
 
 	if (dst->type == OIO_DL_DST_FILE)
 		g_string_append_printf (out, "DST{FILE,%s}", dst->data.file.path);
@@ -1271,8 +1271,8 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 	EXTRA_ASSERT (ul != NULL);
 
 	GError *err = NULL;
-	GString *request_body = g_string_new("");
-	GString *reply_body = g_string_new ("");
+	GString *request_body = g_string_sized_new(128);
+	GString *reply_body = g_string_sized_new (1024);
 
 	/* get the beans from the proxy, for the size announced.
 	 * The reply will only carry the official chunk_size and
@@ -1691,8 +1691,8 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 	for (GList *l=g_list_first(ul->metachunk_done); l ;l=g_list_next(l))
 		size += ((struct metachunk_s*) l->data)->size;
 
-	GString *request_body = g_string_new("");
-	GString *reply_body = g_string_new ("");
+	GString *request_body = g_string_sized_new(2048);
+	GString *reply_body = g_string_sized_new (256);
 	_chunks_pack (request_body, ul->chunks_done);
 
 	gchar hash[STRLEN_CHUNKHASH];
@@ -1740,7 +1740,7 @@ _ul_debug (const char *caller, struct oio_sds_ul_src_s *src,
 {
 	if (!GRID_DEBUG_ENABLED())
 		return;
-	GString *out = g_string_new("");
+	GString *out = g_string_sized_new(128);
 
 	if (src->type == OIO_UL_SRC_HOOK_SEQUENTIAL)
 		g_string_append_printf (out, "SRC{HOOK,%p}", src->data.hook.cb);
@@ -2044,7 +2044,7 @@ _single_list (struct oio_sds_list_param_s *param,
 
 	listener->out_count = 0;
 	listener->out_truncated = FALSE;
-	GString *reply_body = g_string_new ("");
+	GString *reply_body = g_string_sized_new (2048);
 
 	// Query the proxy
 	GError *err = oio_proxy_call_content_list(h, param, reply_body);

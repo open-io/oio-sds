@@ -540,7 +540,8 @@ service_info_to_lb_item(const struct service_info_s *si,
 static void
 _append_one_tag(GString* gstr, struct service_tag_s *tag)
 {
-	g_string_append_printf(gstr, "\"%s\":", tag->name);
+	oio_str_gstring_append_json_quote(gstr, tag->name);
+	g_string_append_c(gstr, ':');
 	switch (tag->type) {
 		case STVT_I64:
 			g_string_append_printf(gstr, "%"G_GINT64_FORMAT, tag->value.i);
@@ -549,14 +550,16 @@ _append_one_tag(GString* gstr, struct service_tag_s *tag)
 			g_string_append_printf(gstr, "%f", tag->value.r);
 			return;
 		case STVT_BOOL:
-			g_string_append(gstr, tag->value.b ? "true" : "false");
+			if (tag->value.b)
+				g_string_append_static(gstr, "true");
+			else
+				g_string_append_static(gstr, "false");
 			return;
 		case STVT_STR:
-			g_string_append_printf(gstr, "\"%s\"", tag->value.s);
+			oio_str_gstring_append_json_quote(gstr, tag->value.s);
 			return;
 		case STVT_BUF:
-			g_string_append_printf(gstr, "\"%.*s\"",
-					(int) sizeof(tag->value.buf), tag->value.buf);
+			oio_str_gstring_append_json_quote(gstr, tag->value.buf);
 			return;
 	}
 }
@@ -582,17 +585,19 @@ service_info_encode_json(GString *gstr, const struct service_info_s *si, gboolea
 		return;
 	gchar straddr[STRLEN_ADDRINFO];
 	grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
+	g_string_append_c(gstr, '{');
+	OIO_JSON_append_str(gstr, "addr", straddr);
+	g_string_append_c(gstr, ',');
+	OIO_JSON_append_int(gstr, "score", si->score.value);
 	if (full) {
-		g_string_append_printf(gstr,
-				"{\"ns\":\"%s\",\"type\":\"%s\",\"addr\":\"%s\",\"score\":%d,\"tags\":{",
-				si->ns_name, si->type, straddr, si->score.value);
-	} else {
-		g_string_append_printf(gstr,
-				"{\"addr\":\"%s\",\"score\":%d,\"tags\":{",
-				straddr, si->score.value);
+		g_string_append_c(gstr, ',');
+		OIO_JSON_append_str(gstr, "ns", si->ns_name);
+		g_string_append_c(gstr, ',');
+		OIO_JSON_append_str(gstr, "type", si->type);
 	}
+	g_string_append_static(gstr, ",\"tags\":{");
 	_append_all_tags(gstr, si->tags);
-	g_string_append(gstr, "}}");
+	g_string_append_static(gstr, "}}");
 }
 
 static struct service_tag_s *
