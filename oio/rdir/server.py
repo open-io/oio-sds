@@ -59,6 +59,7 @@ class Rdir(object):
             Rule('/v1/rdir/admin/incident',
                  endpoint='rdir_admin_incident'),
         ])
+        self.adapter = None
 
     def _get_volume(self, req):
         volume = req.args.get('vol')
@@ -239,9 +240,10 @@ class Rdir(object):
         return Response(json.dumps(resp), mimetype='application/json')
 
     def dispatch_request(self, req):
-        adapter = self.url_map.bind_to_environ(req.environ)
+        if not self.adapter:
+            self.adapter = self.url_map.bind_to_environ(req.environ)
         try:
-            endpoint, values = adapter.match()
+            endpoint, _values = self.adapter.match(req.path, req.method)
         except NotFound as exc:
             return BadRequest('Invalid URL')
 
@@ -261,7 +263,7 @@ class Rdir(object):
         return resp(environ, start_response)
 
     def __call__(self, environ, start_response):
-            return self.wsgi_app(environ, start_response)
+        return self.wsgi_app(environ, start_response)
 
 
 def create_app(conf, **kwargs):
