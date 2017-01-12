@@ -11,8 +11,9 @@ API_NAME = 'admin'
 
 
 class AdminClient(object):
-    def __init__(self, namespace, endpoint=None, session=None):
+    def __init__(self, namespace, session=None, **kwargs):
         self.conf = {'namespace': namespace}
+        self.conf.update(kwargs)
         self._volume = None
         self._event = None
         self._cluster = None
@@ -100,11 +101,9 @@ def make_client(instance):
     :param instance: an instance of ClientManager
     :returns: an instance of AdminClient
     """
-    endpoint = instance.get_endpoint('admin')
     client = AdminClient(
-        session=instance.session,
-        endpoint=endpoint,
-        namespace=instance.namespace)
+        **instance.get_process_configuration()
+    )
     return client
 
 

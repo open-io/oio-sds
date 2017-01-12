@@ -220,16 +220,21 @@ def get_logger(
     log_address = conf.get('log_address', '/dev/log')
     try:
         handler = SysLogHandler(address=log_address, facility=facility)
-    except socket.error as e:
-        if e.errno not in [errno.ENOTSOCK, errno.ENOENT]:
-            raise e
+    except socket.error as exc:
+        if exc.errno not in [errno.ENOTSOCK, errno.ENOENT]:
+            raise exc
         handler = SysLogHandler(facility=facility)
 
     handler.setFormatter(syslog_formatter)
     logger.addHandler(handler)
     get_logger.handler4logger[logger] = handler
 
-    if verbose or hasattr(get_logger, 'console_handler4logger'):
+    logging_level = getattr(logging,
+                            conf.get('log_level', 'INFO').upper(),
+                            logging.INFO)
+    if (verbose or conf.get('is_cli') or
+            hasattr(get_logger, 'console_handler4logger') or
+            logging_level < logging.INFO):
         if not hasattr(get_logger, 'console_handler4logger'):
             get_logger.console_handler4logger = {}
         if logger in get_logger.console_handler4logger:
@@ -240,8 +245,6 @@ def get_logger(
         logger.addHandler(console_handler)
         get_logger.console_handler4logger[logger] = console_handler
 
-    logging_level = getattr(logging, conf.get('log_level', 'INFO').upper(),
-                            logging.INFO)
     logger.setLevel(logging_level)
 
     return logger
