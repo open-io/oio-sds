@@ -24,7 +24,7 @@ class ListReference(lister.Lister):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
-        data = self.app.client_manager.directory.get(
+        data = self.app.client_manager.directory.list(
             self.app.client_manager.get_account(),
             reference=parsed_args.reference
         )
@@ -350,7 +350,7 @@ class AnalyzeReference(show.ShowOne):
         account = self.app.client_manager.get_account()
         reference = parsed_args.reference
 
-        data = self.app.client_manager.directory.get(
+        data = self.app.client_manager.directory.list(
             account, reference)
 
         info = {'account': account,
