@@ -17,7 +17,6 @@ from functools import wraps
 import logging
 import os
 import random
-from urllib import unquote
 from inspect import isgenerator
 
 
@@ -481,21 +480,21 @@ class ObjectStorageApi(object):
     @handle_container_not_found
     def object_list(self, account, container, limit=None, marker=None,
                     delimiter=None, prefix=None, end_marker=None,
-                    include_metadata=False, headers=None, properties=False,
+                    headers=None, properties=False,
                     **kwargs):
-        resp, resp_body = self.container.content_list(
+        """
+        Lists objects inside a container.
+
+        :returns: a dict which contains
+           * 'objects': the list of objects
+           * 'prefixes': common prefixes (only if delimiter and prefix are set)
+           * 'properties': a dict of container properties
+           * 'system': system metadata
+        """
+        _, resp_body = self.container.content_list(
             account, container, limit=limit, marker=marker,
             end_marker=end_marker, prefix=prefix, delimiter=delimiter,
             properties=properties, headers=headers, **kwargs)
-
-        if include_metadata:
-            meta = {}
-            for k, v in resp.headers.iteritems():
-                if k.lower().startswith(
-                        constants.CONTAINER_USER_METADATA_PREFIX):
-                    meta[k[len(constants.CONTAINER_USER_METADATA_PREFIX):]] = \
-                        unquote(v)
-            return meta, resp_body
 
         for obj in resp_body['objects']:
             mtype = obj.get('mime-type')
