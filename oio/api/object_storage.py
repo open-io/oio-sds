@@ -17,7 +17,6 @@ from functools import wraps
 import logging
 import os
 import random
-from urllib import unquote
 from inspect import isgenerator
 
 
@@ -481,21 +480,21 @@ class ObjectStorageApi(object):
     @handle_container_not_found
     def object_list(self, account, container, limit=None, marker=None,
                     delimiter=None, prefix=None, end_marker=None,
-                    include_metadata=False, headers=None, properties=False,
+                    headers=None, properties=False,
                     **kwargs):
-        resp, resp_body = self.container.content_list(
+        """
+        Lists objects inside a container.
+
+        :returns: a dict which contains
+           * 'objects': the list of objects
+           * 'prefixes': common prefixes (only if delimiter and prefix are set)
+           * 'properties': a dict of container properties
+           * 'system': system metadata
+        """
+        _, resp_body = self.container.content_list(
             account, container, limit=limit, marker=marker,
             end_marker=end_marker, prefix=prefix, delimiter=delimiter,
             properties=properties, headers=headers, **kwargs)
-
-        if include_metadata:
-            meta = {}
-            for k, v in resp.headers.iteritems():
-                if k.lower().startswith(
-                        constants.CONTAINER_USER_METADATA_PREFIX):
-                    meta[k[len(constants.CONTAINER_USER_METADATA_PREFIX):]] = \
-                        unquote(v)
-            return meta, resp_body
 
         for obj in resp_body['objects']:
             mtype = obj.get('mime-type')
@@ -609,7 +608,7 @@ class ObjectStorageApi(object):
                           policy=None, headers=None):
         # TODO: optimize by asking more than one metachunk at a time
         obj_meta, first_body = self.container.content_prepare(
-            account, container, obj_name, 1, policy,
+            account, container, obj_name, size=1, stgpol=policy,
             autocreate=True, headers=headers)
         storage_method = STORAGE_METHODS.load(obj_meta['chunk_method'])
 
@@ -732,11 +731,11 @@ class ObjectStorageApi(object):
                 stream.close()
 
     def _b2_credentials(self, storage_method, key_file):
+        key_file = key_file or '/etc/oio/sds/b2-appkey.conf'
         try:
-            return BackblazeUtils.get_credentials(storage_method,
-                                                  key_file)
+            return BackblazeUtils.get_credentials(storage_method, key_file)
         except BackblazeUtilsException as err:
-            raise exc.OioException(str(err))
+            raise exc.ConfigurationException(str(err))
 
     def _fetch_stream_backblaze(self, meta, chunks, ranges,
                                 storage_method, key_file):

@@ -41,6 +41,12 @@ class RdirClient(HttpApi):
                 rawx['rdir'] = by_id[_make_id(self.ns, 'rdir',
                                               self._lookup_rdir_host(resp))]
             except (NotFound, ClientException):
+                if rawx['score'] <= 0:
+                    self.logger.warn("rawx %s has score %s, and thus cannot be"
+                                     " affected a rdir (load balancer "
+                                     "limitation)",
+                                     rawx['addr'], rawx['score'])
+                    continue
                 rdir = self._smart_link_rdir(rawx['addr'], cs, all_rdir)
                 n_bases = by_id[rdir]['tags'].get("stat.opened_db_count", 0)
                 by_id[rdir]['tags']["stat.opened_db_count"] = n_bases + 1

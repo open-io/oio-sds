@@ -883,11 +883,17 @@ _download (struct _download_ctx_s *dl)
 	if (dl->src->ranges && dl->src->ranges[0]) {
 		for (struct oio_sds_dl_range_s **p=dl->src->ranges; *p ;++p) {
 			if ((*p)->offset >= total)
-				return BADREQ("Range not satisfiable");
+				return BADREQ("Range (%zd+%zd)/%zd not satisfiable: %s",
+						(*p)->offset, (*p)->size, total,
+						"offset bigger than content size");
 			if ((*p)->size > total)
-				return BADREQ("Range not satisfiable");
+				return BADREQ("Range (%zd+%zd)/%zd not satisfiable: %s",
+						(*p)->offset, (*p)->size, total,
+						"range size bigger than content size");
 			if ((*p)->offset + (*p)->size > total)
-				return BADREQ("Range not satisfiable");
+				return BADREQ("Range (%zd+%zd)/%zd not satisfiable: %s",
+						(*p)->offset, (*p)->size, total,
+						"end position bigger than content size");
 		}
 	} else {
 		if (dl->dst->data.hook.length == (size_t)-1) {
@@ -1039,9 +1045,18 @@ _download_to_buffer (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 		 * the first 'dst->data.buffer.length' of the content. */
 	}
 
+	/* glibc 2.22 without binary mode adds a null-terminator, thus we must
+	 * ensure the buffer is large enough. Unfortunately this requires
+	 * a data copy operation. */
+#if !defined(OIO_USE_OLD_FMEMOPEN) && __GLIBC_PREREQ(2, 22)
+	void *bigger_buffer = g_malloc0(dst->data.buffer.length + 1);
+	out = fmemopen(bigger_buffer, dst->data.buffer.length + 1, "w");
+#else
 	out = fmemopen(dst->data.buffer.ptr, dst->data.buffer.length, "wb");
+#endif
 	if (!out) {
-		err = (struct oio_error_s*) SYSERR("fmemopen() error: (%d) %s", errno, strerror(errno));
+		err = (struct oio_error_s*) SYSERR("fmemopen() error: (%d) %s",
+				errno, strerror(errno));
 	} else {
 		struct oio_sds_dl_dst_s dst0 = {
 			.out_size = 0,
@@ -1056,6 +1071,11 @@ _download_to_buffer (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 		dst->out_size = dst0.out_size;
 		fclose (out);
 	}
+
+#if !defined(OIO_USE_OLD_FMEMOPEN) && __GLIBC_PREREQ(2, 22)
+	memmove(dst->data.buffer.ptr, bigger_buffer, dst->data.buffer.length);
+	g_free(bigger_buffer);
+#endif
 	return err;
 }
 
@@ -1743,7 +1763,7 @@ _upload_sequential (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 
 	struct oio_sds_ul_s *ul = oio_sds_upload_init (sds, dst);
 	if (!ul)
-		return SYSERR("Resource allocation failure");
+		return BADREQ("Invalid source, destination or content id");
 
 	struct oio_error_s *err = NULL;
 

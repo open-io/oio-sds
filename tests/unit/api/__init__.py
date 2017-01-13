@@ -2,8 +2,8 @@ from io import BytesIO
 from cStringIO import StringIO
 from eventlet import sleep
 from oio.common.http import HeadersDict, requests
-from oio.api.directory import DirectoryAPI
 from oio.api.object_storage import ObjectStorageAPI
+from oio.directory.client import DirectoryClient
 
 CHUNK_SIZE = 1048576
 EMPTY_CHECKSUM = 'd41d8cd98f00b204e9800998ecf8427e'
@@ -22,7 +22,7 @@ class FakeStorageAPI(ObjectStorageAPI):
     pass
 
 
-class FakeDirectoryAPI(DirectoryAPI):
+class FakeDirectoryClient(DirectoryClient):
     pass
 
 

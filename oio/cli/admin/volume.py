@@ -198,7 +198,7 @@ class BootstrapVolume(lister.Lister):
 
         results = list()
         for rawx in all_rawx:
-            rdir = rawx['rdir']
+            rdir = rawx.get('rdir', {"addr": "n/a", "tags": {}})
             results.append((rdir['addr'],
                             rawx['addr'],
                             rdir['tags'].get('tag.loc'),

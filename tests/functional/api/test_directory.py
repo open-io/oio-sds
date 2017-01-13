@@ -1,4 +1,4 @@
-from oio.api.directory import DirectoryAPI
+from oio.directory.client import DirectoryClient
 from oio.common import exceptions as exc
 from oio.conscience.client import ConscienceClient
 from oio.rdir.client import RdirClient
@@ -8,10 +8,10 @@ from tests.utils import random_str, BaseTestCase
 class TestDirectoryAPI(BaseTestCase):
     def setUp(self):
         super(TestDirectoryAPI, self).setUp()
-        self.api = DirectoryAPI(self.ns, self.uri)
+        self.api = DirectoryClient({'namespace': self.ns}, endpoint=self.uri)
 
     def _create(self, name, metadata=None):
-        return self.api.create(self.account, name, metadata=metadata)
+        return self.api.create(self.account, name, properties=metadata)
 
     def _delete(self, name):
         self.api.delete(self.account, name)
@@ -30,20 +30,20 @@ class TestDirectoryAPI(BaseTestCase):
         return self.api.set_properties(
             self.account, name, properties=properties)
 
-    def test_get(self):
+    def test_list(self):
         # get on unknown reference
         name = random_str(32)
-        self.assertRaises(exc.NotFound, self.api.get, self.account, name)
+        self.assertRaises(exc.NotFound, self.api.list, self.account, name)
 
         self._create(name)
         # get on existing reference
-        res = self.api.get(self.account, name)
+        res = self.api.list(self.account, name)
         self.assertIsNot(res['dir'], None)
         self.assertIsNot(res['srv'], None)
 
         self._delete(name)
         # get on deleted reference
-        self.assertRaises(exc.NotFound, self.api.get, self.account, name)
+        self.assertRaises(exc.NotFound, self.api.list, self.account, name)
 
     def test_create(self):
         name = random_str(32)
@@ -86,13 +86,13 @@ class TestDirectoryAPI(BaseTestCase):
         self._delete(name)
 
         # verify deleted
-        self.assertRaises(exc.NotFound, self.api.get, self.account, name)
+        self.assertRaises(exc.NotFound, self.api.list, self.account, name)
 
         # second delete
         self.assertRaises(exc.NotFound, self.api.delete, self.account, name)
 
         # verify deleted
-        self.assertRaises(exc.NotFound, self.api.get, self.account, name)
+        self.assertRaises(exc.NotFound, self.api.list, self.account, name)
 
     def test_get_properties(self):
         name = random_str(32)
@@ -227,17 +227,18 @@ class TestDirectoryAPI(BaseTestCase):
         name = random_str(32)
         echo = 'echo'
         self.assertRaises(
-            exc.NotFound, self.api.list_services, self.account, name, echo)
+            exc.NotFound, self.api.list, self.account, name,
+            service_type=echo)
 
         self._create(name)
         # list_services on existing reference
-        res = self.api.list_services(self.account, name, echo)
+        res = self.api.list(self.account, name, service_type=echo)
         self.assertIsNot(res['dir'], None)
         self.assertIsNot(res['srv'], None)
 
         self._delete(name)
         # get on deleted reference
-        self.assertRaises(exc.NotFound, self.api.get, self.account, name)
+        self.assertRaises(exc.NotFound, self.api.list, self.account, name)
 
     def test_rdir_linking(self):
         """
@@ -253,7 +254,7 @@ class TestDirectoryAPI(BaseTestCase):
                           autocreate=True)
         # Do the checks
         for rawx in rawx_list:
-            linked_rdir = self.api.get(
+            linked_rdir = self.api.list(
                 '_RDIR_TEST', rawx['addr'], service_type='rdir')['srv']
             rdir = rdir_dict[linked_rdir[0]['host']]
             rawx_loc = rawx['tags'].get('tag.loc')

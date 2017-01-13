@@ -132,7 +132,6 @@ LoadModule dav_rawx_module @APACHE2_MODULES_DIRS@/mod_dav_rawx.so
 <IfModule !mod_logio.c>
   LoadModule logio_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_logio.so
 </IfModule>
-
 <IfModule !unixd_module>
   LoadModule unixd_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_unixd.so
 </IfModule>
@@ -242,6 +241,9 @@ LoadModule wsgi_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_wsgi.so
 
 <IfModule !mod_logio.c>
   LoadModule logio_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_logio.so
+</IfModule>
+<IfModule !unixd_module>
+  LoadModule unixd_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_unixd.so
 </IfModule>
 <IfModule !log_config_module>
   LoadModule log_config_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_log_config.so
@@ -1313,7 +1315,7 @@ def generate(options):
         f.write(tpl.safe_substitute(env))
 
     # rdir
-    nb_rdir = getint(options['rdir'].get(SVC_NB), 1)
+    nb_rdir = getint(options['rdir'].get(SVC_NB), 3)
     for num in range(nb_rdir):
         env = subenv({'SRVTYPE': 'rdir',
                       'SRVNUM': num + 1,
