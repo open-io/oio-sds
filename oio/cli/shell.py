@@ -86,7 +86,7 @@ class OpenIOShell(app.App):
             "--admin",
             dest='admin_mode',
             action='store_true',
-            help='passing commands into admin mode')
+            help="Add 'admin mode' flag to all proxy requests")
 
         return clientmanager.build_plugin_option_parser(parser)
 
@@ -107,7 +107,10 @@ class OpenIOShell(app.App):
             'namespace': self.options.ns,
             'account_name': self.options.account_name,
             'proxyd_url': self.options.proxyd_url,
-            'admin_mode': self.options.admin_mode
+            'admin_mode': self.options.admin_mode,
+            'log_level': logging.getLevelName(
+                logging.getLogger('').getEffectiveLevel()),
+            'is_cli': True,
         }
 
         self.print_help_if_requested()

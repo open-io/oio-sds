@@ -25,6 +25,7 @@ class ClientCache(object):
         self._handle = None
 
     def __get__(self, instance, owner):
+        instance.setup()
         if self._handle is None:
             self._handle = self.factory(instance)
         return self._handle
@@ -58,6 +59,11 @@ class ClientManager(object):
             self._admin_mode = self._options.get('admin_mode')
             if 'meta1_digits' in sds_conf:
                 self._meta1_digits = int(sds_conf["meta1_digits"])
+            self._options['log_level'] = \
+                logging.getLevelName(LOG.getEffectiveLevel())
+
+    def get_process_configuration(self):
+        return dict(self._options)
 
     def info(self):
         self.setup()

@@ -855,6 +855,10 @@ static guint
 _search_first_at_location (GArray *tab, const oio_location_t needle,
 		const guint start, const guint end)
 {
+	/* No item, answer "not found" */
+	if (tab->len == 0)
+		return (guint)-1;
+
 	EXTRA_ASSERT (start < tab->len);
 	EXTRA_ASSERT (end < tab->len);
 

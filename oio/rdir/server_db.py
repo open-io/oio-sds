@@ -78,9 +78,10 @@ class RdirBackend(object):
 
     def chunk_push(self, volume_id,
                    container_id, content_id, chunk_id, **data):
-        key = "%s|%s|%s" % (container_id, content_id, chunk_id)
-
-        value = self._get_db_chunk(volume_id).get(key.encode('utf8'))
+        key = ("%s|%s|%s" % (container_id, content_id, chunk_id))\
+                .encode('utf8')
+        chunk_db = self._get_db_chunk(volume_id)
+        value = chunk_db.get(key)
         if value is not None:
             value = json.loads(value)
         else:
@@ -98,13 +99,10 @@ class RdirBackend(object):
                 raise ServerException("mtime is mandatory")
 
         value = json.dumps(value)
-
-        self._get_db_chunk(volume_id).put(key.encode('utf8'),
-                                          value.encode('utf8'))
+        chunk_db.put(key, value.encode('utf8'))
 
     def chunk_delete(self, volume_id, container_id, content_id, chunk_id):
         key = "%s|%s|%s" % (container_id, content_id, chunk_id)
-
         self._get_db_chunk(volume_id).delete(key.encode('utf8'))
 
     def chunk_fetch(self, volume_id, start_after=None,
