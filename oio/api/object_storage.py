@@ -18,7 +18,6 @@ import json
 import logging
 import os
 import random
-from urllib import unquote
 from inspect import isgenerator
 
 
@@ -421,7 +420,17 @@ class ObjectStorageAPI(API):
     @handle_container_not_found
     def object_list(self, account, container, limit=None, marker=None,
                     delimiter=None, prefix=None, end_marker=None,
-                    include_metadata=False, headers=None, properties=False):
+                    headers=None, properties=False,
+                    **kwargs):
+        """
+        Lists objects inside a container.
+
+        :returns: a dict which contains
+           * 'objects': the list of objects
+           * 'prefixes': common prefixes (only if delimiter and prefix are set)
+           * 'properties': a dict of container properties
+           * 'system': system metadata
+        """
         uri = self._make_uri('container/list')
         params = self._make_params(account, container)
         d = {"max": limit,
@@ -433,17 +442,8 @@ class ObjectStorageAPI(API):
         if properties:
             params['properties'] = True
 
-        resp, resp_body = self._request(
+        _, resp_body = self._request(
             'GET', uri, params=params, headers=headers)
-
-        if include_metadata:
-            meta = {}
-            for k, v in resp.headers.iteritems():
-                if k.lower().startswith(
-                        constants.CONTAINER_USER_METADATA_PREFIX):
-                    meta[k[len(constants.CONTAINER_USER_METADATA_PREFIX):]] = \
-                        unquote(v)
-            return meta, resp_body
 
         for obj in resp_body['objects']:
             mtype = obj.get('mime-type')
