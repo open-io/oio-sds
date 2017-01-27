@@ -1331,17 +1331,17 @@ enum http_rc_e action_container_list (struct req_args_s *args) {
 	}
 
 	/* Init the listing options common to all the modes */
-	list_in.flag_headers = ~0;
-	list_in.flag_nodeleted = ~0;
+	list_in.flag_headers = 1;
+	list_in.flag_nodeleted = 1;
 	list_in.prefix = OPT("prefix");
 	list_in.marker_start = OPT("marker");
 	list_in.marker_end = OPT("marker_end");
 	if (OPT("deleted"))
 		list_in.flag_nodeleted = 0;
 	if (OPT("all"))
-		list_in.flag_allversion = ~0;
+		list_in.flag_allversion = 1;
 	if (oio_str_parse_bool(OPT("properties"), FALSE))
-		list_in.flag_properties = ~0;
+		list_in.flag_properties = 1;
 	if (!err)
 		err = _max (args, &list_in.maxkeys);
 	if (!err) {
