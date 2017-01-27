@@ -24,11 +24,10 @@ License along with this library.
 #include <malloc.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
 
-#include "internals.h"
 #include "network_server.h"
 #include "transport_gridd.h"
+#include "internals.h"
 
 struct cnx_data_s
 {
@@ -476,8 +475,6 @@ transport_gridd_notify_input(struct network_client_s *clt)
 
 		gba_read(ctx->gba_l4v, ds, payload_size + 4);
 		data_slab_sequence_unshift(&(clt->input), ds);
-		ds = NULL;
-		/*data_slab_sequence_trace(&(clt->input));*/
 
 		if (ctx->gba_l4v->len >= 4 + payload_size) { /* complete */
 			if (!_client_manage_l4v(clt, ctx->gba_l4v)) {
@@ -694,7 +691,6 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 	/* request data */
 	ctx.client = req_ctx->client;
 	ctx.request = req_ctx->request;
-	ctx.reqname = req_ctx->reqname;
 
 	hdl = g_tree_lookup(req_ctx->disp->tree_requests, req_ctx->reqname);
 	if (!hdl) {

@@ -75,15 +75,11 @@ struct network_server_s
 
 	GMutex lock_threads;
 
-	guint64 active_in;
-	guint64 active_out;
-
 	guint64 cnx_accept;
 	guint64 cnx_close;
 	guint cnx_max_sys;
 	guint cnx_max;
 	volatile guint cnx_clients;
-	guint cnx_backlog;
 
 	gint64 atexit_max_open_never_input; /*< max delay for cnx without any input.*/
 	gint64 atexit_max_idle; /*< max idle time since last input */
