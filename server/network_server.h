@@ -22,14 +22,6 @@ License along with this library.
 
 # include <server/slab.h>
 
-# define timespec_sub(a, b, result) do { \
-	(result)->tv_sec = (a)->tv_sec - (b)->tv_sec, \
-	(result)->tv_nsec = (a)->tv_nsec - (b)->tv_nsec; \
-	if ((result)->tv_nsec < 0) { \
-		--(result)->tv_sec, (result)->tv_nsec += 1000000000; \
-	} \
-} while (0)
-
 struct network_server_s;
 struct grid_stats_holder_s;
 struct network_client_s;
@@ -75,10 +67,16 @@ struct network_transport_s
 	gboolean waiting_for_close;
 };
 
+enum network_client_event_e {
+	CLT_READ=0X01,
+	CLT_WRITE=0X02,
+	CLT_ERROR=0X04
+};
+
 struct network_client_s
 {
 	int fd;
-	enum { CLT_READ=0X01, CLT_WRITE=0X02, CLT_ERROR=0X04 } events;
+	enum network_client_event_e events;
 	struct network_server_s *server;
 
 	int flags;

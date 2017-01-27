@@ -73,9 +73,6 @@ struct gridd_reply_ctx_s
 
 	/* ASN.1 request decoded */
 	struct Message *request;
-
-	/* extracted from the request */
-	const struct hashstr_s *reqname;
 };
 
 /* Describes a request that can be managed by a GRIDD. */

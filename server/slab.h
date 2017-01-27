@@ -24,14 +24,16 @@ License along with this library.
 # include <string.h>
 # include <sys/types.h>
 
+enum data_slab_type_e {
+	STYPE_BUFFER=1,
+	STYPE_BUFFER_STATIC,
+	STYPE_GBYTES,
+	STYPE_EOF
+};
+
 struct data_slab_s
 {
-	enum {
-		STYPE_BUFFER=1,
-		STYPE_BUFFER_STATIC,
-		STYPE_GBYTES,
-		STYPE_EOF
-	} type;
+	enum data_slab_type_e type;
 	union {
 		GBytes *gbytes;
 		struct {
@@ -106,12 +108,6 @@ data_slab_make_buffer2(guint8 *buff, gboolean tobefreed, gsize start,
 		gsize end, gsize alloc);
 
 static inline struct data_slab_s *
-data_slab_make_static_buffer(guint8 *buff, gsize bs)
-{
-	return data_slab_make_buffer2(buff, FALSE, 0, bs, bs);
-}
-
-static inline struct data_slab_s *
 data_slab_make_buffer(guint8 *buff, gsize bs)
 {
 	return data_slab_make_buffer2(buff, TRUE, 0, bs, bs);
@@ -129,13 +125,6 @@ data_slab_make_gba(GByteArray *gba)
 {
 	guint l = gba->len;
 	return data_slab_make_buffer2(g_byte_array_free(gba, FALSE), TRUE, 0, l, l);
-}
-
-static inline struct data_slab_s *
-data_slab_make_string(const gchar *s)
-{
-	gsize l = strlen(s);
-	return data_slab_make_buffer2((guint8*)g_strndup(s, l), TRUE, 0, l, l);
 }
 
 static inline struct data_slab_s *

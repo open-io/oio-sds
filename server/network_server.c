@@ -42,9 +42,6 @@ License along with this library.
 #include <metautils/lib/metautils.h>
 
 #include "internals.h"
-#include "network_server.h"
-#include "resolv.h"
-#include "slab.h"
 
 GQuark gq_count_all = 0;
 GQuark gq_time_all = 0;
@@ -210,7 +207,7 @@ network_server_stat_getall (struct network_server_s *srv)
 struct network_server_s *
 network_server_init(void)
 {
-	int efd = -1;
+	int efd;
 	if ((efd = eventfd(0, EFD_NONBLOCK)) < 0) {
 		GRID_ERROR("eventfd creation failure: (%d) %s",
 				errno, strerror(errno));
@@ -907,7 +904,7 @@ _endpoint_open(struct endpoint_s *u, gboolean udp_allowed)
 	EXTRA_ASSERT(u != NULL);
 
 	struct sockaddr_storage ss = {0};
-	socklen_t ss_len = sizeof(ss);
+	socklen_t ss_len;
 
 	/* patch some socket preferences that make sense only for INET sockets */
 	if (_endpoint_is_UNIX(u)) {
