@@ -244,7 +244,7 @@ struct client_ctx_s {
 };
 
 void client_init (struct client_ctx_s *ctx, struct req_args_s *args,
-	   const char *srvtype, gint seq);
+	   const char *srvtype, gint64 seq);
 
 void client_clean (struct client_ctx_s *ctx);
 

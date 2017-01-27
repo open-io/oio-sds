@@ -27,7 +27,7 @@ gchar *
 proxy_get_csurl (void)
 {
 	g_rw_lock_reader_lock (&csurl_rwlock);
-	const guint i = oio_ext_rand_int_range(0, csurl_count);
+	const gint32 i = oio_ext_rand_int_range(0, csurl_count % G_MAXINT32);
 	gchar *cs = g_strdup(csurl[i]);
 	g_rw_lock_reader_unlock (&csurl_rwlock);
 	return cs;
@@ -465,7 +465,7 @@ GBytes* service_is_wanted (const char *type) {
 }
 
 void client_init (struct client_ctx_s *ctx, struct req_args_s *args,
-		const char *srvtype, gint seq) {
+		const char *srvtype, gint64 seq) {
 	memset(ctx, 0, sizeof(*ctx));
 	ctx->url = args->url;
 	ctx->type = srvtype;
