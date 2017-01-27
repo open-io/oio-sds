@@ -17,9 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <stddef.h>
 #include <string.h>
-#include <sys/stat.h>
 
 #include <metautils/lib/metautils.h>
 #include <server/slab.h>
@@ -659,4 +657,3 @@ http_notify_input(struct network_client_s *clt)
 	oio_str_clean (&r.uid);
 	return clt->transport.waiting_for_close ? RC_NODATA : RC_PROCESSED;
 }
-
