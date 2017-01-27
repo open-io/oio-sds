@@ -210,12 +210,6 @@ struct req_args_s
 	struct http_reply_ctx_s *rp;
 };
 
-struct sub_action_s
-{
-	const char *verb;
-	enum http_rc_e (*handler) (struct req_args_s *, struct json_object *);
-};
-
 typedef enum http_rc_e (*req_handler_f) (struct req_args_s *);
 
 const char * _req_get_option (struct req_args_s *args, const char *name);

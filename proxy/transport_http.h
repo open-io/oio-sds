@@ -28,7 +28,6 @@ struct network_client_s;
 struct http_request_s
 {
 	struct network_client_s *client;
-	void (*notify_body) (struct http_request_s *);
 
 	/* unpacked request line */
 	gchar *cmd;
@@ -60,21 +59,9 @@ enum http_rc_e { HTTPRC_DONE, HTTPRC_ABORT };
 typedef enum http_rc_e (*http_handler_f) (struct http_request_s *request,
 			struct http_reply_ctx_s *reply);
 
-struct http_request_descr_s
-{
-	const gchar *name;
-
-	enum http_rc_e (*handler) (gpointer u,
-		 struct http_request_s *request,
-		 struct http_reply_ctx_s *reply);
-};
-
 /** Associates the given client to the given request handler, into
  * a transport object. */
 void transport_http_factory0 (http_handler_f handler,
 		struct network_client_s *client);
-
-const gchar * http_request_get_header(struct http_request_s *req,
-		const gchar *n);
 
 #endif /*OIO_SDS__proxy__transport_http_h*/
