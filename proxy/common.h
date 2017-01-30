@@ -195,11 +195,6 @@ gboolean service_is_master (const char *obj, const char *master);
 void service_learn_master (const char *obj, const char *master);
 guint service_expire_masters (gint64 oldest);
 
-typedef GByteArray * (request_packer_f) (const struct sqlx_name_s *);
-
-#define PACKER_VOID(N) GByteArray * N (const struct sqlx_name_s *u UNUSED)
-#define PACKER(N)      GByteArray * N (const struct sqlx_name_s *n)
-
 struct req_args_s
 {
 	struct oio_requri_s *req_uri; // parsed URI
@@ -270,7 +265,12 @@ enum proxy_preference_e _prefer_master (void);
 	CLIENT_CTX(ctx,args,type,seq); \
 	ctx.which = _prefer_slave()
 
-GError * _m1_locate_and_action (struct oio_url_s *url, GError * (*hook) ());
+GError * _m1_locate_and_action (struct oio_url_s *url,
+		GError * (*hook) (const char *m1addr));
+
+typedef GByteArray * (request_packer_f) (const struct sqlx_name_s *);
+
+#define PACKER_VOID(N) GByteArray * N (const struct sqlx_name_s *_u UNUSED)
 
 GError * gridd_request_replicated (struct client_ctx_s *, request_packer_f);
 
