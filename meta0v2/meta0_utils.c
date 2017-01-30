@@ -18,10 +18,8 @@ License along with this library.
 */
 
 #include <metautils/lib/metautils.h>
-#include <cluster/lib/gridcluster.h>
 
-#include "./internals.h"
-#include "./meta0_utils.h"
+#include "meta0_utils.h"
 
 static void garray_free(void *a) { if (a) g_array_free(a, TRUE); }
 

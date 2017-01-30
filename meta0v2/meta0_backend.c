@@ -17,20 +17,16 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <stddef.h>
-#include <stdlib.h>
-#include <string.h>
 #include <errno.h>
 
 #include <json-c/json.h>
 
-#include <metautils/lib/metacomm.h>
+#include <metautils/lib/metautils.h>
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/version.h>
 
-#include "./internals.h"
-#include "./meta0_utils.h"
-#include "./meta0_backend.h"
+#include "meta0_utils.h"
+#include "meta0_backend.h"
 
 struct meta0_backend_s
 {
@@ -50,7 +46,7 @@ static void _unlock_and_close(struct sqlx_sqlite3_s *sq3);
 
 /* ------------------------------------------------------------------------- */
 
-static int
+static enum sqlx_open_type_e
 m0_to_sqlx(enum m0v2_open_type_e t)
 {
 	switch (t & 0x03) {
@@ -344,7 +340,7 @@ _open_and_lock(struct meta0_backend_s *m0, enum m0v2_open_type_e how,
 	EXTRA_ASSERT(handle != NULL);
 
 	/* Now open/lock the base in a way suitable for our op */
-	guint flag = m0_to_sqlx(how);
+	enum sqlx_open_type_e flag = m0_to_sqlx(how);
 	struct sqlx_name_s n = {.base=m0->ns, .type=NAME_SRVTYPE_META0, .ns=m0->ns};
 	err = sqlx_repository_open_and_lock(m0->repository, &n, flag, handle, NULL);
 
@@ -372,7 +368,6 @@ static GError *
 _assign_prefixes(sqlite3 *db, const GPtrArray *new_assign_prefixes,
 		gboolean init)
 {
-	GError *err = NULL;
 	gint rc;
 	guint idx;
 	sqlite3_stmt *stmt = NULL;
@@ -381,7 +376,7 @@ _assign_prefixes(sqlite3 *db, const GPtrArray *new_assign_prefixes,
 		sqlite3_prepare_debug(rc, db, "DELETE FROM meta1", -1, &stmt, NULL);
 		if (rc != SQLITE_OK && rc != SQLITE_DONE)
 			return SQLITE_GERROR(db, rc);
-		while (!err) {
+		for (;;) {
 			rc = sqlite3_step(stmt);
 			if (rc == SQLITE_OK || rc == SQLITE_DONE)
 				break;
@@ -401,7 +396,8 @@ _assign_prefixes(sqlite3 *db, const GPtrArray *new_assign_prefixes,
 		return SQLITE_GERROR(db, rc);
 	}
 
-	for (idx = 0; idx < CID_PREFIX_COUNT; idx++) {
+	GError *err = NULL;
+	for (idx = 0; idx < CID_PREFIX_COUNT && !err; idx++) {
 		gchar **url = new_assign_prefixes->pdata[idx];
 		guint16 index16 = idx;
 
@@ -421,12 +417,12 @@ _assign_prefixes(sqlite3 *db, const GPtrArray *new_assign_prefixes,
 					sleep(1);
 				else {
 					err = SQLITE_GERROR(db, rc);
+					break;
 				}
 			}
 		}
 	}
 	sqlite3_finalize_debug(rc, stmt);
-
 	return err;
 }
 

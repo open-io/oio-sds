@@ -82,7 +82,7 @@ static struct grid_main_option_s *
 meta1_get_options(void)
 {
 	static struct grid_main_option_s meta1_options[] = {
-		{NULL, 0, {.i=0}, NULL}
+		{NULL, 0, {.i=NULL}, NULL}
 	};
 	return meta1_options;
 }

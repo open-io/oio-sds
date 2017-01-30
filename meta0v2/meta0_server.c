@@ -17,28 +17,19 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <stdlib.h>
-#include <stddef.h>
-#include <errno.h>
-#include <string.h>
-#include <sys/resource.h>
-
 #include <glib.h>
 
 #include <metautils/lib/metautils.h>
-#include <cluster/lib/gridcluster.h>
 
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/replication_dispatcher.h>
 #include <sqliterepo/zk_manager.h>
 
-#include <server/network_server.h>
 #include <server/transport_gridd.h>
 #include <sqlx/sqlx_service.h>
 
-#include "./internals.h"
-#include "./meta0_backend.h"
-#include "./meta0_gridd_dispatcher.h"
+#include "meta0_backend.h"
+#include "meta0_gridd_dispatcher.h"
 
 static struct zk_manager_s *m0zkmanager = NULL;
 static struct meta0_backend_s *m0 = NULL;
