@@ -17,12 +17,8 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#include <errno.h>
 #include <netdb.h>
 #include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <unistd.h>
 
 #include <metautils/lib/metautils.h>
 

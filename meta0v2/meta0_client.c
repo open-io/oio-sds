@@ -17,10 +17,6 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <stddef.h>
-#include <string.h>
-#include <errno.h>
-
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
 
@@ -420,7 +416,7 @@ meta0_get_options(void)
 	static struct grid_main_option_s meta0_options[] = {
 		{"NoCheck", OT_BOOL, {.b=&flag_nocheck},
 			"Disable checks to relaunch assign"},
-		{NULL, 0, {.i=0}, NULL}
+		{NULL, OT_INT, {.i=NULL}, NULL}
 	};
 	return meta0_options;
 }
