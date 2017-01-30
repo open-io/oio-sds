@@ -902,12 +902,11 @@ retry:
 					   err->code, err->message);
 			autocreate = FALSE; /* autocreate just once */
 			g_clear_error (&err);
-			GError *hook_dir (const gchar *m1) {
-				gchar **urlv = NULL;
-				gchar realtype[64];
+			GError *hook_dir (const char *m1) {
+				gchar **urlv = NULL, realtype[64];
 				_get_meta2_realtype (args, realtype, sizeof(realtype));
-				GError *e = meta1v2_remote_link_service (m1, args->url,
-														 realtype, FALSE, TRUE, &urlv);
+				GError *e = meta1v2_remote_link_service (
+						m1, args->url, realtype, FALSE, TRUE, &urlv);
 				if (!e && urlv && *urlv) {
 					/* Explicitely feeding the meta1 avoids a subsequent
 					   call to meta1 to locate the meta2 */
@@ -927,10 +926,9 @@ retry:
 }
 
 static void
-_re_enable (struct req_args_s *args, struct sqlx_name_s *name)
+_re_enable (struct req_args_s *args)
 {
-	GByteArray* _pack_enable () { return sqlx_pack_ENABLE (name); }
-	GError *e = _resolve_meta2 (args, _prefer_master(), _pack_enable, NULL);
+	GError *e = _resolve_meta2 (args, CLIENT_PREFER_MASTER, sqlx_pack_ENABLE, NULL);
 	if (e) {
 		GRID_INFO("Failed to un-freeze [%s]", oio_url_get(args->url, OIOURL_WHOLE));
 		g_clear_error (&e);
@@ -947,8 +945,6 @@ action_m2_container_destroy (struct req_args_s *args)
 	const gboolean flush = _request_get_flag (args, "flush");
 	const gboolean force = _request_get_flag (args, "force");
 
-	/* TODO make this const! */
-	struct sqlx_name_s *name = sqlx_name_mutable_to_const(&n);
 	/* TODO FIXME manage container subtype */
 	sqlx_name_fill (&n, args->url, NAME_SRVTYPE_META2, 1);
 
@@ -958,10 +954,11 @@ action_m2_container_destroy (struct req_args_s *args)
 
 	/* 1. FREEZE the base to avoid writings during the operation */
 	if (!err) {
-		PACKER_VOID (_pack) { return sqlx_pack_FREEZE (name); }
-		if (NULL != (err = _resolve_meta2 (args, _prefer_master(), _pack, NULL))) {
+		err = _resolve_meta2 (args, CLIENT_PREFER_MASTER,
+							  sqlx_pack_FREEZE, NULL);
+		if (NULL != err) {
 			/* rollback! */
-			_re_enable (args, name);
+			_re_enable (args);
 			goto clean_and_exit;
 		}
 	}
@@ -979,7 +976,7 @@ action_m2_container_destroy (struct req_args_s *args)
 		}
 		if (NULL != err) {
 			/* rollback! */
-			_re_enable (args, name);
+			_re_enable (args);
 			goto clean_and_exit;
 		}
 	}
@@ -990,7 +987,7 @@ action_m2_container_destroy (struct req_args_s *args)
 			return meta1v2_remote_unlink_service (m1, args->url, n.type);
 		}
 		if (NULL != (err = _m1_locate_and_action (args->url, _unlink))) {
-			_re_enable (args, name);
+			_re_enable (args);
 			goto clean_and_exit;
 		}
 	}
@@ -1372,10 +1369,7 @@ enum http_rc_e action_container_show (struct req_args_s *args) {
 
 	CLIENT_CTX(ctx,args,NAME_SRVTYPE_META2,1);
 
-	GByteArray* packer () {
-		return sqlx_pack_PROPGET (sqlx_name_mutable_to_const(&ctx.name));
-	}
-	err = gridd_request_replicated (&ctx, packer);
+	err = gridd_request_replicated (&ctx, sqlx_pack_PROPGET);
 	if (err) {
 		client_clean (&ctx);
 		return _reply_m2_error (args, err);

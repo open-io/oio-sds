@@ -42,7 +42,7 @@ static GString * _pack_and_freev_m1url_list (GString *gstr, gchar ** urlv) {
 }
 
 static GError * _m1_action (struct oio_url_s *url, gchar ** m1v,
-		GError * (*hook) (const char * m1)) {
+		GError * (*hook) (const char * m1addr)) {
 	if (m1v && *m1v) {
 		gboolean _wrap (gconstpointer p) {
 			gchar *m1u = meta1_strurl_get_address ((const char*)p);
@@ -93,7 +93,8 @@ static GError * _m1_action (struct oio_url_s *url, gchar ** m1v,
 	return NEWERROR (CODE_UNAVAILABLE, "No meta1 answered");
 }
 
-GError * _m1_locate_and_action (struct oio_url_s *url, GError * (*hook) ()) {
+GError * _m1_locate_and_action (struct oio_url_s *url,
+		GError * (*hook) (const char * m1addr)) {
 	gchar **m1v = NULL;
 	GError *err = hc_resolve_reference_directory (resolver, url, &m1v);
 	if (NULL != err) {
@@ -231,7 +232,8 @@ action_dir_srv_renew (struct req_args_s *args, struct json_object *jargs)
 
 	gchar **urlv = NULL;
 	GError *hook (const char * m1) {
-		return meta1v2_remote_renew_reference_service (m1, args->url, type, dryrun, autocreate, &urlv);
+		return meta1v2_remote_renew_reference_service (
+				m1, args->url, type, dryrun, autocreate, &urlv);
 	}
 
 	GError *err = _m1_locate_and_action (args->url, hook);
