@@ -183,6 +183,15 @@ typedef struct key_value_pair_s
 	GByteArray *value;	/**< The value */
 } key_value_pair_t;
 
+enum service_tag_value_type_e
+{
+	STVT_I64 = 1,	/**< An int64 */
+	STVT_REAL = 2,	/**< A double */
+	STVT_BOOL = 3,	/**< A boolean */
+	STVT_STR = 4,	/**< A string */
+	STVT_BUF = 5,	/**< A bin buffer */
+};
+
 /**
  * Type to store a service tag
  */
@@ -190,20 +199,8 @@ typedef struct service_tag_s
 {
 	char name[LIMIT_LENGTH_TAGNAME];	/**< The tag name */
 
-	/**
-	 * The list of tag value types
-	 */
-	enum service_tag_value_type_e
-	{
-		STVT_I64 = 1,	/**< An int64 */
-		STVT_REAL = 2,	/**< A double */
-		STVT_BOOL = 3,	/**< A boolean */
-		STVT_STR = 4,	/**< A string */
-		STVT_BUF = 5,	/**< A bin buffer */
-	} type;					/**< The tag type */
-	/**
-	 * Type to store a tag value
-	 */
+	enum service_tag_value_type_e type;
+
 	union
 	{
 		gint64 i;	/**< The int64 representation */

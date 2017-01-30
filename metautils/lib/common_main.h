@@ -32,23 +32,30 @@ License along with this library.
 	oio_ext_set_random_reqid (); \
 } while (0)
 
+enum oio_main_option_type_e {
+	OT_BOOL=1,
+	OT_INT,
+	OT_UINT,
+	OT_INT64,
+	OT_DOUBLE,
+	OT_TIME,
+	OT_STRING,
+	OT_LIST
+};
+
 struct grid_main_option_s
 {
 	const char *name;
-	enum {
-		OT_BOOL=1,
-		OT_INT,
-		OT_UINT,
-		OT_INT64,
-		OT_DOUBLE,
-		OT_TIME,
-		OT_STRING,
-		OT_LIST
-	} type;
+	enum oio_main_option_type_e type;
 	union {
+		/* Never used in facts, some IDE (e.g. CLion) are bad at checking
+		 * initializations of unions, and consider only the first choice. All
+		 * the choices are pointers, so authorizing a <void*> as first choice
+		 * will make the IDE happy, even if unused anywhere. */
+		void *any;
 		gboolean *b;
-		guint *u;
 		gint *i;
+		guint *u;
 		gint64 *i64;
 		gdouble *d;
 		time_t *t;
