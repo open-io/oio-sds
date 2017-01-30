@@ -38,29 +38,6 @@ service_tag_set_value_i64(struct service_tag_s *tag, gint64 i)
 	tag->value.i = i;
 }
 
-gboolean
-service_tag_get_value_i64(struct service_tag_s *tag, gint64* i, GError** error)
-{
-	if (tag == NULL) {
-		GSETERROR(error, "Argument tag is NULL");
-		return FALSE;
-	}
-
-	if (i == NULL) {
-		GSETERROR(error, "Argument i is NULL");
-		return FALSE;
-	}
-
-	if (tag->type != STVT_I64) {
-		GSETERROR(error, "Tag is not of type I64");
-		return FALSE;
-	}
-
-	memcpy(i, &(tag->value.i), sizeof(gint64));
-
-	return TRUE;
-}
-
 void
 service_tag_set_value_float(struct service_tag_s *tag, gdouble r)
 {
@@ -69,29 +46,6 @@ service_tag_set_value_float(struct service_tag_s *tag, gdouble r)
 	clean_tag_value(tag);
 	tag->type = STVT_REAL;
 	tag->value.r = r;
-}
-
-gboolean
-service_tag_get_value_float(struct service_tag_s *tag, gdouble *r, GError** error)
-{
-	if (tag == NULL) {
-		GSETERROR(error, "Argument tag is NULL");
-		return FALSE;
-	}
-
-	if (r == NULL) {
-		GSETERROR(error, "Argument r is NULL");
-		return FALSE;
-	}
-
-	if (tag->type != STVT_REAL) {
-		GSETERROR(error, "Tag is not of type REAL");
-		return FALSE;
-	}
-
-	memcpy(r, &(tag->value.r), sizeof(double));
-
-	return TRUE;
 }
 
 void
@@ -326,31 +280,6 @@ service_info_dup(const struct service_info_s *si)
 	return copy;
 }
 
-gint
-service_info_sort_by_score(gconstpointer a, gconstpointer b)
-{
-	if (!a && b)
-		return 1;
-	if (a && !b)
-		return -1;
-	if (a == b)
-		return 0;
-	const struct service_info_s *si_a = a, *si_b = b;
-	return si_b->score.value - si_a->score.value;
-}
-
-gboolean
-service_info_equal(const struct service_info_s * si1, const struct service_info_s * si2)
-{
-	if (si1 == si2)
-		return TRUE;
-	if (si1 == NULL || si2 == NULL)
-		return FALSE;
-
-	return addr_info_equal(&(si1->addr), &(si2->addr))
-		&& !strcmp(si1->ns_name, si2->ns_name) && !strcmp(si1->type, si2->type);
-}
-
 struct service_tag_s *
 service_info_get_tag(GPtrArray * a, const gchar * name)
 {
@@ -386,36 +315,6 @@ service_info_ensure_tag(GPtrArray * a, const gchar * name)
 	return srvtag;
 }
 
-void
-service_info_remove_tag(GPtrArray * a, const gchar * name)
-{
-	if (!a || !name || a->len <= 0)
-		return;
-
-	const guint max = a->len;
-	for (guint i = 0; i < max; i++) {
-		struct service_tag_s *pSrv = g_ptr_array_index(a, i);
-		if (!pSrv)
-			continue;
-		if (!strcmp(pSrv->name, name)) {
-			service_tag_destroy(pSrv);
-			g_ptr_array_remove_index_fast(a, i);
-			return;
-		}
-	}
-}
-
-void
-service_info_swap(struct service_info_s *si0, struct service_info_s *si1)
-{
-	struct service_info_s tmp;
-	EXTRA_ASSERT(si0 != NULL);
-	EXTRA_ASSERT(si1 != NULL);
-	memcpy(&tmp, si0, sizeof(struct service_info_s));
-	memcpy(si0, si1, sizeof(struct service_info_s));
-	memcpy(si1, &tmp, sizeof(struct service_info_s));
-}
-
 const gchar *
 service_info_get_tag_value(const struct service_info_s *si,
 		const gchar *name, const gchar *def)
@@ -431,18 +330,6 @@ service_info_get_tag_value(const struct service_info_s *si,
 	if (tag->type == STVT_BUF)
 		return tag->value.buf;
 	return def;
-}
-
-const gchar *
-service_info_get_rawx_location(const struct service_info_s *si, const gchar *d)
-{
-	return service_info_get_tag_value(si, NAME_TAGNAME_RAWX_LOC, d);
-}
-
-const gchar *
-service_info_get_rawx_volume(const struct service_info_s *si, const gchar *d)
-{
-	return service_info_get_tag_value(si, NAME_TAGNAME_RAWX_VOL, d);
 }
 
 void
@@ -675,77 +562,4 @@ service_info_load_json(const gchar *encoded, struct service_info_s **out,
 	GError *err = service_info_load_json_object(obj, out, permissive);
 	json_object_put(obj);
 	return err;
-}
-
-gchar*
-get_rawx_location(service_info_t* rawx)
-{
-	const gchar *loc = service_info_get_rawx_location(rawx, NULL);
-	return loc && *loc ? g_strdup(loc) : NULL;
-}
-
-guint
-distance_between_location(const gchar *loc1, const gchar *loc2)
-{
-	/* The arrays of tokens. */
-	gchar **split_loc1, **split_loc2;
-	/* Used to iterate over the arrays of tokens. */
-	gchar **iter_tok1, **iter_tok2;
-	/* The current tokens. */
-	gchar *cur_tok1, *cur_tok2;
-	/* Stores the greatest number of tokens in both location names. */
-	guint num_tok = 0U;
-	/* Number of the current token. */
-	guint cur_iter = 0U;
-	/* TRUE if a different token was found. */
-	gboolean found_diff = FALSE;
-	/* Distance between 2 tokens. */
-	guint token_dist;
-
-	if ((!loc1 || !*loc1) && (!loc2 || !*loc2))
-		return 1U;
-
-	split_loc1 = g_strsplit(loc1, ".", 0);
-	split_loc2 = g_strsplit(loc2, ".", 0);
-
-	iter_tok1 = split_loc1;
-	iter_tok2 = split_loc2;
-
-	cur_tok2 = *iter_tok2;
-
-	while ((cur_tok1 = *iter_tok1++)) {
-		num_tok++;
-		if (cur_tok2 && (cur_tok2 = *iter_tok2++) && !found_diff) {
-			cur_iter++;
-			/* if both tokens are equal, continue */
-			/* else set the found_diff flag to TRUE, keep the value of cur_iter and continue to set num_tok */
-			if (g_strcmp0(cur_tok1, cur_tok2))
-				found_diff = TRUE;
-		}
-	}
-
-	/* if loc2 has more tokens than loc1, increase num_tok to this value */
-	if (cur_tok2) {
-		while (*iter_tok2++)
-			num_tok++;
-	}
-
-	/* Frees the arrays of tokens. */
-	g_strfreev(split_loc1);
-	g_strfreev(split_loc2);
-
-	token_dist = num_tok - cur_iter + 1;
-
-	/* If the token distance is 1 and the last tokens are equal (ie both locations are equal) -> return 0. */
-	/* If the token distance is 1 and the last tokens are different -> return 1. */
-	/* If the token distance is > 1, then return 2^(token_dist). */
-	return token_dist > 1U ? 1U << (token_dist - 1U) : (found_diff ? 1U : 0U);
-}
-
-guint
-distance_between_services(struct service_info_s *s0, struct service_info_s *s1)
-{
-	return distance_between_location(
-			service_info_get_rawx_location(s0, ""),
-			service_info_get_rawx_location(s1, ""));
 }

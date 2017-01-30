@@ -153,8 +153,6 @@ GError* meta1_backend_get_container_properties(struct meta1_backend_s *m1,
 GError *meta1_backend_services_all(struct meta1_backend_s *m1,
 		struct oio_url_s *url, gchar ***result);
 
-typedef void (*m1b_ref_hook) (gpointer p, const gchar *ns, const gchar *ref);
-
 /* Send a notification (if enabled) with the services linked to a container. */
 GError *meta1_backend_notify_services(struct meta1_backend_s *m1,
 		struct oio_url_s *url);

@@ -33,8 +33,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "./meta1_backend.h"
 #include "./meta1_backend_internals.h"
 
-int meta1_backend_log_level = 0;
-
 static gboolean
 m1b_check_ns_url (struct meta1_backend_s *m1, struct oio_url_s *url)
 {
@@ -100,7 +98,7 @@ _open_and_lock(struct meta1_backend_s *m1, struct oio_url_s *url,
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(handle != NULL);
 
-	GRID_TRACE2("%s(%p,%p,%d,%p)", __FUNCTION__, (void*)m1,
+	GRID_TRACE2("%s(%p,%s,%d,%p)", __FUNCTION__, (void*)m1,
 			oio_url_get (url, OIOURL_HEXID), how, (void*)handle);
 
 	if (!oio_url_has (url, OIOURL_HEXID))
