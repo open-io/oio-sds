@@ -50,12 +50,8 @@ gboolean service_tag_get_value_boolean(struct service_tag_s *tag, gboolean *b,
 		GError **error);
 
 void service_tag_set_value_i64(struct service_tag_s *tag, gint64 i);
-gboolean service_tag_get_value_i64(struct service_tag_s *tag, gint64* i,
-		GError** error);
 
 void service_tag_set_value_float(struct service_tag_s *tag, gdouble r);
-gboolean service_tag_get_value_float(struct service_tag_s *tag, gdouble *r,
-		GError** error);
 
 gsize service_tag_to_string(const struct service_tag_s *tag, gchar * dst,
 		gsize dst_size);
@@ -109,11 +105,5 @@ gchar * service_info_key (const struct service_info_s *si);
 /** Fill a preallocated LB item from a service description */
 void service_info_to_lb_item(const struct service_info_s *si,
 		struct oio_lb_item_s *item);
-
-/** Compute the distance between two string representing rawx locations */
-guint distance_between_location(const gchar *loc1, const gchar *loc2);
-
-guint distance_between_services(struct service_info_s *s0,
-		struct service_info_s *s1);
 
 #endif /*OIO_SDS__metautils__lib__metatype_srvinfo_h*/
