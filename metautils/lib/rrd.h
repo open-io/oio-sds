@@ -40,6 +40,10 @@ void grid_single_rrd_push(struct grid_single_rrd_s *gsr,
 		time_t at, guint64 v);
 
 /*! forces an absolute value for the current position */
+void grid_single_rrd_add(struct grid_single_rrd_s *gsr,
+		time_t at, guint64 v);
+
+/*! forces an absolute value for the current position */
 void grid_single_rrd_pushifmax(struct grid_single_rrd_s *gsr,
 		time_t at, guint64 v);
 

@@ -33,7 +33,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqliterepo/zk_manager.h>
 
 #include <server/network_server.h>
-#include <server/stats_holder.h>
 #include <server/transport_gridd.h>
 #include <sqlx/sqlx_service.h>
 

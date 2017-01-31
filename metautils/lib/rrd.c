@@ -1,7 +1,7 @@
 /*
-OpenIO SDS server
+OpenIO SDS metautils
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, modified as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -18,9 +18,6 @@ License along with this library.
 */
 
 #include <metautils/lib/metautils.h>
-
-#include "internals.h"
-#include "stats_holder.h"
 
 enum {
 	/*! If set, when there is no activity, the untouched slots are filled
@@ -109,6 +106,14 @@ grid_single_rrd_push(struct grid_single_rrd_s *gsr, time_t now, guint64 v)
 {
 	_gsr_manage_timeshift(gsr, now);
 	_rrd_set(gsr, v);
+}
+
+void
+grid_single_rrd_add(struct grid_single_rrd_s *gsr, time_t now, guint64 v)
+{
+	_gsr_manage_timeshift(gsr, now);
+	guint64 v0 = _rrd_current(gsr);
+	_rrd_set(gsr, v + v0);
 }
 
 void

@@ -30,7 +30,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <events/oio_events_queue_zmq.h>
 #include <events/oio_events_queue_beanstalkd.h>
 #include <server/network_server.h>
-#include <server/stats_holder.h>
 #include <server/internals.h>
 #include <server/transport_gridd.h>
 #include <sqliterepo/sqlx_macros.h>

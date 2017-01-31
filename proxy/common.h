@@ -35,7 +35,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
 #include <server/network_server.h>
-#include <server/stats_holder.h>
 #include <resolver/hc_resolver.h>
 #include <meta1v2/meta1_remote.h>
 #include <meta2v2/meta2_macros.h>
