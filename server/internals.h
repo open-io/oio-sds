@@ -1,7 +1,7 @@
 /*
 OpenIO SDS server
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, modified as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -28,7 +28,7 @@ License along with this library.
 #endif
 
 #ifndef OIO_SERVER_UDP_QUEUE_MAXAGE
-#define OIO_SERVER_UDP_QUEUE_MAXAGE COMMON_CNX_TIMEOUT
+#define OIO_SERVER_UDP_QUEUE_MAXAGE (2 * G_TIME_SPAN_SECOND)
 #endif
 
 enum {

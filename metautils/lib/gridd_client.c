@@ -1,7 +1,7 @@
 /*
 OpenIO SDS metautils
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, modified as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -96,6 +96,7 @@ static GError* _client_error(struct gridd_client_s *client);
 static gboolean _client_start(struct gridd_client_s *client);
 static GError* _client_set_fd(struct gridd_client_s *client, int fd);
 static void _client_set_timeout(struct gridd_client_s *client, gdouble seconds);
+static void _client_set_timeout_cnx(struct gridd_client_s *client, gdouble sec);
 static void _client_set_keepalive(struct gridd_client_s *client, gboolean on);
 static void _client_react(struct gridd_client_s *client);
 static gboolean _client_expire(struct gridd_client_s *client, gint64 now);
@@ -123,6 +124,7 @@ struct gridd_client_vtable_s VTABLE_CLIENT =
 	_client_set_fd,
 	_client_set_keepalive,
 	_client_set_timeout,
+	_client_set_timeout_cnx,
 	_client_expired,
 	_client_finished,
 	_client_start,
@@ -527,9 +529,17 @@ _client_set_timeout(struct gridd_client_s *client, gdouble seconds)
 	EXTRA_ASSERT(client != NULL);
 	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
 
-	client->delay_connect = COMMON_CNX_TIMEOUT;
 	client->delay_single = seconds * (gdouble) G_TIME_SPAN_SECOND;
 	client->delay_overall = seconds * (gdouble) G_TIME_SPAN_SECOND;
+}
+
+static void
+_client_set_timeout_cnx(struct gridd_client_s *client, gdouble seconds)
+{
+	EXTRA_ASSERT(client != NULL);
+	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
+
+	client->delay_connect = seconds * (gdouble) G_TIME_SPAN_SECOND;
 }
 
 static GError*
@@ -771,11 +781,7 @@ _factory_create_client (struct gridd_client_factory_s *factory)
 	EXTRA_ASSERT(factory != NULL);
 	EXTRA_ASSERT(factory->abstract.vtable == &VTABLE_FACTORY);
 	(void) factory;
-	struct gridd_client_s *client = gridd_client_create_empty();
-	if (!client)
-		return NULL;
-	gridd_client_set_timeout(client, COMMON_CLIENT_TIMEOUT);
-	return client;
+	return gridd_client_create_empty();
 }
 
 /* ------------------------------------------------------------------------- */
@@ -790,8 +796,9 @@ gridd_client_create_empty(void)
 	client->abstract.vtable = &VTABLE_CLIENT;
 	client->fd = -1;
 	client->step = NONE;
-	client->delay_overall = GRIDC_DEFAULT_TIMEOUT_OVERALL * (gdouble)G_TIME_SPAN_SECOND;
-	client->delay_single = GRIDC_DEFAULT_TIMEOUT_STEP * (gdouble)G_TIME_SPAN_SECOND;
+	client->delay_overall = COMMON_CLIENT_TIMEOUT * (gdouble)G_TIME_SPAN_SECOND;
+	client->delay_single = COMMON_CLIENT_TIMEOUT * (gdouble)G_TIME_SPAN_SECOND;
+	client->delay_connect = COMMON_CNX_TIMEOUT * (gdouble)G_TIME_SPAN_SECOND;
 	client->tv_start = client->tv_connect = oio_ext_monotonic_time ();
 
 	return client;
@@ -874,6 +881,12 @@ void
 gridd_client_set_timeout (struct gridd_client_s *self, gdouble seconds)
 {
 	GRIDD_CALL(self,set_timeout)(self,seconds);
+}
+
+void
+gridd_client_set_timeout_cnx (struct gridd_client_s *self, gdouble seconds)
+{
+	GRIDD_CALL(self,set_timeout_cnx)(self,seconds);
 }
 
 gboolean
