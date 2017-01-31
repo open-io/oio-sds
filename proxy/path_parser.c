@@ -227,14 +227,14 @@ static gchar *
 _stat_name (const char *prefix, const char *tail, gchar *d, gsize dlen)
 {
 	if (g_str_has_prefix(tail, P))
-		dlen = g_snprintf (d, dlen, "%s.%s", prefix, tail+sizeof(P)-1);
+		g_snprintf (d, dlen, "%s.%s", prefix, tail+sizeof(P)-1);
 	else if (g_str_has_prefix(tail, PROXYD_PREFIX))
-		dlen = g_snprintf (d, dlen, "%s.%s", prefix, tail+sizeof(PROXYD_PREFIX)-1);
+		g_snprintf (d, dlen, "%s.%s", prefix, tail+sizeof(PROXYD_PREFIX)-1);
 	else
-		dlen = g_snprintf (d, dlen, "%s.%s", prefix, tail);
+		g_snprintf (d, dlen, "%s.%s", prefix, tail);
 
 	/* replace ugly characters by '_' */
-	for (int i=strlen (prefix)+1; d[i] ;++i) {
+	for (size_t i=strlen (prefix)+1; d[i] ;++i) {
 		if (!g_ascii_isalnum (d[i]))
 			d[i]='_';
 	}

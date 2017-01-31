@@ -1731,8 +1731,14 @@ retry:
 			GRID_DEBUG("Resource not found, autocreation");
 			autocreate = FALSE;
 			g_clear_error (&err);
-			if (!(err = _m2_container_create_with_properties (args, NULL)))
+			err = _m2_container_create_with_properties (args, NULL);
+			if (!err)
 				goto retry;
+			if (err->code == CODE_CONTAINER_EXISTS
+					|| err->code == CODE_USER_EXISTS) {
+				g_clear_error(&err);
+				goto retry;
+			}
 		}
 	}
 	return _reply_m2_error (args, err);
