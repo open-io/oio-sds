@@ -15,6 +15,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
+import threading
 import plyvel
 from plyvel import DB
 from functools import wraps
@@ -50,6 +51,7 @@ class RdirBackend(object):
         self.db_path = conf.get('db_path')
         self.dbs = {}
         self.logger = get_logger(conf)
+        self.lock = threading.RLock()
         if not os.path.exists(self.db_path):
             os.makedirs(self.db_path)
 
@@ -63,11 +65,13 @@ class RdirBackend(object):
     @handle_db_not_found
     def _get_db(self, volume_id):
         try:
-            db = self.dbs[volume_id]
+            with self.lock:
+                db = self.dbs[volume_id]
         except KeyError:
             db_path = self._get_db_path(volume_id)
-            self.dbs[volume_id] = DB(db_path, create_if_missing=False)
-            db = self.dbs[volume_id]
+            with self.lock:
+                self.dbs[volume_id] = DB(db_path, create_if_missing=False)
+                db = self.dbs[volume_id]
         return db
 
     def _get_db_chunk(self, volume_id):
@@ -80,6 +84,11 @@ class RdirBackend(object):
                    container_id, content_id, chunk_id, **data):
         key = ("%s|%s|%s" % (container_id, content_id, chunk_id))\
                 .encode('utf8')
+
+        # FIXME(jfs): we explicitely don't acquire the RLock, to benefit
+        # from a maximal parallelism, and because we estimate chunk updates
+        # won't happen (often) and that they can be recovered with a
+        # subsequent upload
         chunk_db = self._get_db_chunk(volume_id)
         value = chunk_db.get(key)
         if value is not None:
@@ -185,24 +194,27 @@ class RdirBackend(object):
         return int(ret)
 
     def admin_clear(self, volume_id, clear_all):
-        db = self._get_db_chunk(volume_id)
-        count = 0
-        for key, value in db:
-            if not clear_all:
-                data = json.loads(value)
-            if clear_all or 'rtime' in data:
-                count += 1
-                db.delete(key)
-        self._get_db_admin(volume_id).delete('incident_date')
+        # FIXME we could benefit a per-DB lock
+        with self.lock:
+            db = self._get_db_chunk(volume_id)
+            count = 0
+            for key, value in db:
+                if not clear_all:
+                    data = json.loads(value)
+                if clear_all or 'rtime' in data:
+                    count += 1
+                    db.delete(key)
+            self._get_db_admin(volume_id).delete('incident_date')
         return count
 
     def admin_lock(self, volume_id, who):
-        ret = self._get_db_admin(volume_id).get('lock')
-        if ret is not None:
-            return ret  # already locked
-
-        self._get_db_admin(volume_id).put('lock', who.encode('utf8'))
-        return None
+        # FIXME we could benefit a per-DB lock
+        with self.lock:
+            ret = self._get_db_admin(volume_id).get('lock')
+            if ret is not None:
+                return ret  # already locked
+            self._get_db_admin(volume_id).put('lock', who.encode('utf8'))
+            return None
 
     def admin_unlock(self, volume_id):
         self._get_db_admin(volume_id).delete('lock')
