@@ -691,7 +691,7 @@ _client_expire(struct gridd_client_s *client, gint64 now)
 	_client_reset_cnx(client);
 	_client_replace_error(client, NEWERROR(ERRCODE_READ_TIMEOUT, "Timeout"));
 	client->step = STATUS_FAILED;
-	return FALSE;
+	return TRUE;
 }
 
 static gboolean
