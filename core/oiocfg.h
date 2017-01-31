@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015-2016 OpenIO, original work as part of OpenIO SDS
+Copyright (C) 2015-2017 OpenIO, original work as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -179,7 +179,7 @@ extern "C" {
 # endif
 
 # ifndef  COMMON_CNX_TIMEOUT
-#  define COMMON_CNX_TIMEOUT (2*G_TIME_SPAN_SECOND)
+#  define COMMON_CNX_TIMEOUT 2.0
 # endif
 
 # ifndef COMMON_CLIENT_TIMEOUT
@@ -192,6 +192,18 @@ extern "C" {
 
 # ifndef SQLX_CLIENT_TIMEOUT
 #  define SQLX_CLIENT_TIMEOUT 30.0
+# endif
+
+/* Timeout when connecting for DB_USE requests
+   in seconds */
+# ifndef SQLX_CNX_TIMEOUT_USE
+#  define SQLX_CNX_TIMEOUT_USE 0.25
+# endif
+
+/* Timeout when connecting for GETVERS requests
+   in seconds */
+# ifndef SQLX_CNX_TIMEOUT_GETVERS
+#  define SQLX_CNX_TIMEOUT_GETVERS 0.5
 # endif
 
 /* Timeout for synchronisation requests (USE, GETVERS)

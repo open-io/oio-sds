@@ -210,10 +210,12 @@ Used by `gcc`
 | M2V2_CLIENT_TIMEOUT | 10.0 | <double> value telling the default timeout for meta2 requests, in seconds. |
 | M2V2_CLIENT_TIMEOUT_HUGE | 10.0 | <double> value telling the default timeout for meta2 requests, in seconds. |
 | SQLX_CLIENT_TIMEOUT | 30.0 | <double> value telling the default timeout for sqlx requests, in seconds. |
+| SQLX_CNX_TIMEOUT_GETVERS | 0.5 | <double> value telling the default timeout for DB_VERS requests, in seconds. |
+| SQLX_CNX_TIMEOUT_USE | 0.25 | <double> value telling the default timeout for DB_USE (tcp) requests, in seconds. |
 | SQLX_SYNC_TIMEOUT | 4.0 | <double> value telling the default timeout for sqlx requests, in seconds. |
 | SQLX_REPLI_TIMEOUT | 10.0 | <double> value telling the default timeout for sqlx requests, in seconds. |
 | SQLX_RESYNC_TIMEOUT | 30.0 | <double> value telling the default timeout for sqlx requests, in seconds. |
-| COMMON_CNX_TIMEOUT | 2 * G_TIME_SPAN_SECOND | In monotonic clock's precision |
+| COMMON_CNX_TIMEOUT | 2.0 | <double> value in seconds |
 | COMMON_CLIENT_TIMEOUT | 30.0 | In monotonic clock's precision |
 | COMMON_STAT_TIMEOUT | 5.0 | <double> value telling the default timeout for /stat requests outgoing the proxy, in seconds. |
 
