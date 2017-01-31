@@ -36,6 +36,10 @@ License along with this library.
 # define EVENT_BUFFER_SIZE 2048
 #endif
 
+#ifdef HAVE_ENBUG
+gint32 oio_client_timeout_threshold = 10;
+#endif
+
 enum client_step_e
 {
 	NONE = 0,
@@ -688,6 +692,15 @@ _client_expired(struct gridd_client_s *client, gint64 now)
 	return FALSE;
 }
 
+static void
+_client_react_timeout(struct gridd_client_s *client)
+{
+	_client_reset_cnx(client);
+	_client_replace_error(client, NEWERROR(client->step == CONNECTING
+			? ERRCODE_CONN_TIMEOUT : ERRCODE_READ_TIMEOUT, "Timeout"));
+	client->step = STATUS_FAILED;
+}
+
 static gboolean
 _client_expire(struct gridd_client_s *client, gint64 now)
 {
@@ -696,11 +709,18 @@ _client_expire(struct gridd_client_s *client, gint64 now)
 
 	if (_client_finished(client))
 		return FALSE;
-	if (!_client_expired(client, now))
+
+	if (!_client_expired(client, now)) {
+#ifdef HAVE_ENBUG
+		if (oio_client_timeout_threshold >= oio_ext_rand_int_range(1,100)) {
+			_client_react_timeout(client);
+			return TRUE;
+		}
+#endif
 		return FALSE;
-	_client_reset_cnx(client);
-	_client_replace_error(client, NEWERROR(ERRCODE_READ_TIMEOUT, "Timeout"));
-	client->step = STATUS_FAILED;
+	}
+
+	_client_react_timeout(client);
 	return TRUE;
 }
 
@@ -910,7 +930,6 @@ gridd_client_start (struct gridd_client_s *self)
 gboolean
 gridd_client_expire (struct gridd_client_s *self, gint64 now)
 {
-
 	GRIDD_CALL(self,expire)(self,now);
 }
 

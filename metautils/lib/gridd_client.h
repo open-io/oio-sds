@@ -154,4 +154,8 @@ struct abstract_client_factory_s
 // gridd_client_create_empty().
 struct gridd_client_factory_s * gridd_client_factory_create(void);
 
+#ifdef HAVE_ENBUG
+extern gint32 oio_client_timeout_threshold;
+#endif
+
 #endif /*OIO_SDS__metautils__lib__gridd_client_h*/
