@@ -3,7 +3,9 @@ bind_addr = 127.0.0.1
 bind_port = 9999
 namespace = NS
 # Currently, only 1 worker is allowed to avoid concurrent access to leveldb database
+worker_class = sync
 workers = 1
+threads = 8
 db_path=/var/lib/oio/sds/vol1/NS/rdir-1
 log_facility = LOG_LOCAL0
 log_level = INFO
