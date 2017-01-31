@@ -35,7 +35,8 @@ extern "C" {
 
 #define ON_ENUM(P,E) case P##E: return #E
 
-#define CODE_IS_NETWORK_ERROR(C) ((C) < CODE_TEMPORARY)
+#define CODE_IS_NETWORK_ERROR(C) ((C) > ERRCODE_PARAM && (C) < CODE_AVOIDED)
+
 #define CODE_IS_OK(C)            (((C) >= CODE_FINAL_OK) && ((C) < CODE_BEACON_REDIRECT))
 #define CODE_IS_TEMP(C)          (((C) >= CODE_TEMPORARY) && ((C) < CODE_FINAL_OK))
 #define CODE_IS_FINAL(C)         ((C) == CODE_FINAL_OK || (!CODE_IS_OK(C) && !CODE_IS_TEMP(C)))
@@ -82,16 +83,19 @@ extern "C" {
 enum {
 	ERRCODE_UNKNOWN_ERROR = 0,
 	ERRCODE_PARAM = 1,
+
 	ERRCODE_CONN_REFUSED = 2,
 	ERRCODE_CONN_RESET = 3,
 	ERRCODE_CONN_CLOSED = 4,
 	ERRCODE_CONN_TIMEOUT = 5,
 	ERRCODE_CONN_NOROUTE = 6,
-	ERRCODE_CONN_NOTCONNECTED = 7,
 	ERRCODE_READ_TIMEOUT = 8,
+
 	CODE_NETWORK_ERROR = 9,
 
-	CODE_TEMPORARY = 100, // XXX beacon, network errors below
+	CODE_AVOIDED = 10, // XXX beacon, network errors below
+
+	CODE_TEMPORARY = 100, // XXX beacon, local errors below
 
 	CODE_FINAL_OK = 200, // XXX beacon, denote the first success code
 	CODE_PART_CONTENT = 201,
