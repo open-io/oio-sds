@@ -523,6 +523,9 @@ sqlx_service_action(void)
 {
 	GError *err = NULL;
 
+	if (oio_cache_avoid_on_error)
+		GRID_NOTICE("Faulty peers avoidance: ENABLED");
+
 	if (!SRV.flag_nolock) {
 		err = volume_service_lock (SRV.volume, SRV.service_config->srvtype,
 				SRV.announce->str, SRV.ns_name);

@@ -223,6 +223,11 @@ _post_config(struct sqlx_service_s *ss)
 			_task_reload_prefixes, NULL, ss);
 
 	m1->notifier = ss->events_queue;
+
+	/* Make the meta1 avoid meta services with known problems */
+	oio_cache_avoid_on_error = oio_cfg_get_bool (
+			ss->ns_name, OIO_CFG_AVOID_BADSRV, FALSE);
+
 	return TRUE;
 }
 

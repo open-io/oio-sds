@@ -919,6 +919,13 @@ grid_main_configure (int argc, char **argv)
 	path_parser = path_parser_init ();
 	configure_request_handlers ();
 
+	/* Make the proxy avoid meta services with known problems */
+	oio_cache_avoid_on_error = oio_cfg_get_bool (
+			ns_name, OIO_CFG_AVOID_BADSRV, FALSE);
+	if (oio_cache_avoid_on_error)
+		GRID_NOTICE("Faulty peers avoidance: ENABLED");
+
+	/* init the networking capability of the processus */
 	server = network_server_init ();
 
 	/* ensure each Route as a pair of count/time stats */
