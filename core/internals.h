@@ -35,7 +35,7 @@ extern "C" {
 
 #define ON_ENUM(P,E) case P##E: return #E
 
-#define CODE_IS_NETWORK_ERROR(C) ((C) > ERRCODE_PARAM && (C) < CODE_AVOIDED)
+#define CODE_IS_NETWORK_ERROR(C) ((C) > ERRCODE_PARAM && (C) <= CODE_NETWORK_ERROR)
 
 #define CODE_IS_OK(C)            (((C) >= CODE_FINAL_OK) && ((C) < CODE_BEACON_REDIRECT))
 #define CODE_IS_TEMP(C)          (((C) >= CODE_TEMPORARY) && ((C) < CODE_FINAL_OK))
@@ -89,11 +89,10 @@ enum {
 	ERRCODE_CONN_CLOSED = 4,
 	ERRCODE_CONN_TIMEOUT = 5,
 	ERRCODE_CONN_NOROUTE = 6,
-	ERRCODE_READ_TIMEOUT = 8,
-
+	ERRCODE_READ_TIMEOUT = 7,
+	CODE_AVOIDED = 8,
 	CODE_NETWORK_ERROR = 9,
 
-	CODE_AVOIDED = 10, // XXX beacon, network errors below
 
 	CODE_TEMPORARY = 100, // XXX beacon, local errors below
 

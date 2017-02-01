@@ -1,7 +1,7 @@
 /*
 OpenIO SDS server
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, modified as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -63,5 +63,8 @@ guint64 grid_single_rrd_get_max(struct grid_single_rrd_s *gsr,
  * 1 and the given <period>. Single run! */
 void grid_single_rrd_get_allmax(struct grid_single_rrd_s *gsr,
 		time_t at, time_t period, guint64 *out);
+
+const char * grid_single_rrd_debug(struct grid_single_rrd_s *gsr,
+		gchar *dst, gsize len);
 
 #endif /*OIO_SDS__server__stats_holder_h*/

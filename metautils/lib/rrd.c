@@ -167,3 +167,19 @@ grid_single_rrd_get_allmax(struct grid_single_rrd_s *gsr,
 	}
 }
 
+const char *
+grid_single_rrd_debug(struct grid_single_rrd_s *gsr, gchar *dst, gsize len)
+{
+	g_assert(gsr != NULL);
+	g_assert(dst != NULL);
+	g_assert(len > 0);
+
+	*dst = 0;
+	for (time_t i=0; i < gsr->period ;i++) {
+		gchar tmp[32];
+		g_snprintf(tmp, sizeof(tmp), ",%"G_GUINT64_FORMAT, _rrd_past(gsr, i));
+		strncat(dst, tmp, len);
+	}
+	return dst;
+}
+
