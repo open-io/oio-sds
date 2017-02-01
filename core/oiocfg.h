@@ -223,6 +223,11 @@ extern "C" {
 #  define SQLX_REPLI_TIMEOUT 10.0
 # endif
 
+/* Timeout for SQLX_REPLICATE TCP connection, in seconds */
+# ifndef SQLX_REPLI_TIMEOUT_CNX
+#  define SQLX_REPLI_TIMEOUT_CNX 1.0
+# endif
+
 /* Timeout for operations that require copying a DB */
 # ifndef SQLX_RESYNC_TIMEOUT
 #  define SQLX_RESYNC_TIMEOUT 30.0
