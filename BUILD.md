@@ -212,7 +212,8 @@ Used by `gcc`
 | SQLX_CLIENT_TIMEOUT | 30.0 | <double> value telling the default timeout for sqlx requests, in seconds. |
 | SQLX_CNX_TIMEOUT_GETVERS | 0.5 | <double> value telling the default timeout for DB_VERS requests, in seconds. |
 | SQLX_CNX_TIMEOUT_USE | 0.25 | <double> value telling the default timeout for DB_USE (tcp) requests, in seconds. |
-| SQLX_SYNC_TIMEOUT | 4.0 | <double> value telling the default timeout for sqlx requests, in seconds. |
+| SQLX_USE_TIMEOUT | 1.0 | <double> value telling the default timeout for sqlx requests, in seconds. |
+| SQLX_GETVERS_TIMEOUT | 2.0 | <double> value telling the default timeout for sqlx requests, in seconds. |
 | SQLX_REPLI_TIMEOUT | 10.0 | <double> value telling the default timeout for sqlx requests, in seconds. |
 | SQLX_RESYNC_TIMEOUT | 30.0 | <double> value telling the default timeout for sqlx requests, in seconds. |
 | COMMON_CNX_TIMEOUT | 2.0 | <double> value in seconds |

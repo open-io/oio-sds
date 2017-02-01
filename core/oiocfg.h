@@ -206,15 +206,26 @@ extern "C" {
 #  define SQLX_CNX_TIMEOUT_GETVERS 0.5
 # endif
 
-/* Timeout for synchronisation requests (USE, GETVERS)
+/* Timeout for synchronisation requests (USE)
    in seconds */
-# ifndef SQLX_SYNC_TIMEOUT
-#  define SQLX_SYNC_TIMEOUT 4.0
+# ifndef SQLX_USE_TIMEOUT
+#  define SQLX_USE_TIMEOUT 1.0
+# endif
+
+/* Timeout for synchronisation requests (USE)
+   in seconds */
+# ifndef SQLX_GETVERS_TIMEOUT
+#  define SQLX_GETVERS_TIMEOUT 2.0
 # endif
 
 /* Timeout for SQLX_REPLICATE requests, in seconds */
 # ifndef SQLX_REPLI_TIMEOUT
 #  define SQLX_REPLI_TIMEOUT 10.0
+# endif
+
+/* Timeout for SQLX_REPLICATE TCP connection, in seconds */
+# ifndef SQLX_REPLI_TIMEOUT_CNX
+#  define SQLX_REPLI_TIMEOUT_CNX 1.0
 # endif
 
 /* Timeout for operations that require copying a DB */

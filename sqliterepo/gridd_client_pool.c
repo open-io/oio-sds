@@ -241,7 +241,7 @@ _manage_timeouts(struct gridd_client_pool_s *pool)
 		return;
 
 	gint64 now = oio_ext_monotonic_time ();
-	if (now - pool->last_timeout_check > G_TIME_SPAN_SECOND)
+	if (now - pool->last_timeout_check < G_TIME_SPAN_SECOND)
 		return;
 	pool->last_timeout_check = now;
 

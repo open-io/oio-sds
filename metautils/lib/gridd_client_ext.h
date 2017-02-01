@@ -74,6 +74,9 @@ void gridd_clients_free(struct gridd_client_s **clients);
 // Calls set_timeout() on each pointed client
 void gridd_clients_set_timeout(struct gridd_client_s **clients, gdouble seconds);
 
+// Calls set_timeout_cnx() on each pointed client
+void gridd_clients_set_timeout_cnx(struct gridd_client_s **clients, gdouble sec);
+
 // Returns FALSE if at least finished() returns FALSE for at least one client
 gboolean gridd_clients_finished(struct gridd_client_s **clients);
 
