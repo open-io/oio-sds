@@ -39,6 +39,7 @@ In addition, there some additional dependencies at runtime:
 * libapache2-mod-wsgi (as named on Ubuntu), the WSGI module pour apache2
 * python-cliff
 * python-pyeclib
+* python-futures
 
 The account service will require an up and running backend:
 * redis
