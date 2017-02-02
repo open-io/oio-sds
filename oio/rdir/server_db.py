@@ -35,7 +35,8 @@ def handle_db_not_found(fnc):
         except plyvel.Error as e:
             if 'does not exist' in e.message:
                 msg = "Volume '%s' does not exist." % volume_id
-            raise NoSuchDb(msg)
+                raise NoSuchDb(msg)
+            raise e
     return _wrapped
 
 # FIXME this class is not thread-safe (see _get_db, push, lock) but it
@@ -51,7 +52,7 @@ class RdirBackend(object):
         self.db_path = conf.get('db_path')
         self.dbs = {}
         self.logger = get_logger(conf)
-        self.lock = threading.RLock()
+        self.dbLock = threading.RLock()
         if not os.path.exists(self.db_path):
             os.makedirs(self.db_path)
 
@@ -64,14 +65,11 @@ class RdirBackend(object):
 
     @handle_db_not_found
     def _get_db(self, volume_id):
-        try:
-            with self.lock:
-                db = self.dbs[volume_id]
-        except KeyError:
-            db_path = self._get_db_path(volume_id)
-            with self.lock:
+        with self.dbLock:
+            if volume_id not in self.dbs:
+                db_path = self._get_db_path(volume_id)
                 self.dbs[volume_id] = DB(db_path, create_if_missing=False)
-                db = self.dbs[volume_id]
+            db = self.dbs[volume_id]
         return db
 
     def _get_db_chunk(self, volume_id):
@@ -90,24 +88,16 @@ class RdirBackend(object):
         # won't happen (often) and that they can be recovered with a
         # subsequent upload
         chunk_db = self._get_db_chunk(volume_id)
-        value = chunk_db.get(key)
-        if value is not None:
-            value = json.loads(value)
-        else:
-            value = dict()
 
-        for k, v in data.iteritems():
-            value[k] = v
-
-        if 'mtime' not in value:  # not consistent
-            if 'rtime' in value:
+        if 'mtime' not in data:  # not consistent
+            if 'rtime' in data:
                 # In functionnal test, we can encounter the case where rebuild
                 # update (rtime) arrives before creation update (first mtime)
-                value['mtime'] = value['rtime']
+                data['mtime'] = data['rtime']
             else:
                 raise ServerException("mtime is mandatory")
 
-        value = json.dumps(value)
+        value = json.dumps(data)
         chunk_db.put(key, value.encode('utf8'))
 
     def chunk_delete(self, volume_id, container_id, content_id, chunk_id):
@@ -195,26 +185,24 @@ class RdirBackend(object):
 
     def admin_clear(self, volume_id, clear_all):
         # FIXME we could benefit a per-DB lock
-        with self.lock:
-            db = self._get_db_chunk(volume_id)
-            count = 0
-            for key, value in db:
-                if not clear_all:
-                    data = json.loads(value)
-                if clear_all or 'rtime' in data:
-                    count += 1
-                    db.delete(key)
-            self._get_db_admin(volume_id).delete('incident_date')
+        db = self._get_db_chunk(volume_id)
+        count = 0
+        for key, value in db:
+            if not clear_all:
+                data = json.loads(value)
+            if clear_all or 'rtime' in data:
+                count += 1
+                db.delete(key)
+        self._get_db_admin(volume_id).delete('incident_date')
         return count
 
     def admin_lock(self, volume_id, who):
         # FIXME we could benefit a per-DB lock
-        with self.lock:
-            ret = self._get_db_admin(volume_id).get('lock')
-            if ret is not None:
-                return ret  # already locked
-            self._get_db_admin(volume_id).put('lock', who.encode('utf8'))
-            return None
+        ret = self._get_db_admin(volume_id).get('lock')
+        if ret is not None:
+            return ret  # already locked
+        self._get_db_admin(volume_id).put('lock', who.encode('utf8'))
+        return None
 
     def admin_unlock(self, volume_id):
         self._get_db_admin(volume_id).delete('lock')

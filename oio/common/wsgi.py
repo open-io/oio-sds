@@ -1,7 +1,7 @@
 from gunicorn.app.base import BaseApplication
 from gunicorn.glogging import Logger
 
-from oio.common.utils import get_logger, read_conf
+from oio.common.utils import get_logger, read_conf, CPU_COUNT
 
 
 class Application(BaseApplication):
@@ -19,13 +19,14 @@ class Application(BaseApplication):
                           self.conf.get('bind_port', '8000'))
         self.cfg.set('bind', bind)
         self.cfg.set('backlog', self.conf.get('backlog', 2048))
-        self.cfg.set('workers', self.conf.get('workers', 2))
+        self.cfg.set('workers', self.conf.get('workers', 1))
+        self.cfg.set('threads', self.conf.get('threads', CPU_COUNT))
         self.cfg.set('worker_class', self.conf.get('worker_class', 'eventlet'))
         self.cfg.set('worker_connections', self.conf.get(
             'worker_connections', 1000))
         self.cfg.set('syslog_prefix', self.conf.get('syslog_prefix', ''))
         self.cfg.set('syslog_addr', self.conf.get('log_address', '/dev/log'))
-        self.cfg.set('accesslog', '-')
+        self.cfg.set('accesslog', None)
         self.cfg.set('access_log_format', self.conf.get('access_log_format',
                                                         self.access_log_fmt))
         if self.logger_class:
