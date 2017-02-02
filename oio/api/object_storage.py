@@ -19,6 +19,7 @@ import logging
 import os
 import random
 from inspect import isgenerator
+from requests.exceptions import ConnectionError
 
 
 from oio.common import exceptions as exc
@@ -546,26 +547,36 @@ class ObjectStorageAPI(API):
         params = {'type': srv_type}
         resp, resp_body = self._request('GET', uri, params=params)
         if resp.status_code == 200:
-            instance_info = resp_body[0]
-            return 'http://%s/' % instance_info['addr']
+            return ['http://%s/' % x['addr'] for x in resp_body]
         else:
             raise exc.ClientException(
                 "could not find account instance url"
             )
 
     def _account_request(self, method, uri, **kwargs):
-        account_url = None
+        all_urls = None
         try:
-            account_url = self._get_service_url('account')
+            all_urls = self._get_service_url('account')
+            # FIXME(jfs): in some test cases, the _get_service_url seems to be
+            # mocked and it returns a single string. There is probably a better
+            # way to do it.
+            if not isinstance(all_urls, list):
+                all_urls = [all_urls]
         except exc.ClientException as e:
             if e.status == 481:
                 raise exc.ClientException(
                         500, status=481,
                         message="No valid account service found")
             raise
-        resp, resp_body = self._request(method, uri, endpoint=account_url,
-                                        **kwargs)
-        return resp, resp_body
+        for url in all_urls:
+            try:
+                resp, resp_body = self._request(method, uri, endpoint=url,
+                                                **kwargs)
+                return resp, resp_body
+            except ConnectionError:
+                continue
+        raise exc.ClientException(503, status=0,
+                                  message="No account service answered")
 
     def _content_prepare(self, account, container, obj_name, size,
                          policy=None, headers=None):
