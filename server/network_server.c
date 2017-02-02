@@ -42,7 +42,6 @@ License along with this library.
 #include <metautils/lib/metautils.h>
 
 #include "internals.h"
-#include "stats_holder.h"
 #include "network_server.h"
 #include "resolv.h"
 #include "slab.h"
