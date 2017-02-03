@@ -18,7 +18,6 @@ import logging
 from urlparse import urlparse
 from eventlet import Queue, Timeout, GreenPile
 from greenlet import GreenletExit
-from oio.common import utils
 from oio.common import exceptions
 from oio.common.exceptions import SourceReadError
 from oio.common.http import HeadersDict, parse_content_range, \

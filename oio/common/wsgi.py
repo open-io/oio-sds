@@ -31,7 +31,7 @@ class Application(BaseApplication):
                                                         self.access_log_fmt))
         if self.logger_class:
             # reactivate after
-            #self.cfg.set('logger_class', self.logger_class)
+            # self.cfg.set('logger_class', self.logger_class)
             pass
 
     def load(self):
