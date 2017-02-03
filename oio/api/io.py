@@ -15,11 +15,11 @@ import itertools
 import logging
 from urlparse import urlparse
 from eventlet import sleep, Timeout
-from oio.common.exceptions import ConnectionTimeout, ChunkReadTimeout
 from oio.common import exceptions as exc
 from oio.common.http import http_connect, parse_content_type,\
     parse_content_range, ranges_from_http_header, http_header_from_ranges
 from oio.common.utils import GeneratorReader
+from oio.common import green
 
 logger = logging.getLogger(__name__)
 
@@ -206,7 +206,7 @@ class ChunkReader(object):
     def _get_request(self, chunk):
         # connect to chunk
         try:
-            with ConnectionTimeout(self.connection_timeout):
+            with green.ConnectionTimeout(self.connection_timeout):
                 raw_url = chunk["url"]
                 parsed = urlparse(raw_url)
                 conn = http_connect(parsed.netloc, 'GET', parsed.path,
@@ -301,11 +301,11 @@ class ChunkReader(object):
                 """
                 while True:
                     try:
-                        with ChunkReadTimeout(CHUNK_TIMEOUT):
+                        with green.ChunkReadTimeout(CHUNK_TIMEOUT):
                             start, end, length, headers, part = next(
                                 parts_iter[0])
                         return (start, end, length, headers, part)
-                    except ChunkReadTimeout:
+                    except green.ChunkReadTimeout:
                         # TODO recover
                         raise StopIteration()
 
@@ -315,11 +315,11 @@ class ChunkReader(object):
                 buf = ''
                 while True:
                     try:
-                        with ChunkReadTimeout(self.read_timeout):
+                        with green.ChunkReadTimeout(self.read_timeout):
                             data = part.read(READ_CHUNK_SIZE)
                             count += 1
                             buf += data
-                    except ChunkReadTimeout:
+                    except green.ChunkReadTimeout:
                         try:
                             self.recover(bytes_consumed)
                         except (exc.UnsatisfiableRange, ValueError):
@@ -399,7 +399,7 @@ class ChunkReader(object):
                 if body_iter:
                     body_iter.close()
 
-        except ChunkReadTimeout:
+        except green.ChunkReadTimeout:
             logger.exception("Failure during chunk read")
             raise
         except GeneratorExit:

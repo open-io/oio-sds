@@ -2,6 +2,7 @@ import unittest
 from mock import patch
 from oio.api.io import ChunkReader, discard_bytes
 from oio.common import exceptions as exc
+from oio.common import green
 
 
 class FakeSource(object):
@@ -13,7 +14,7 @@ class FakeSource(object):
         if self.data:
             d = self.data.pop(0)
             if d is None:
-                raise exc.ChunkReadTimeout()
+                raise green.ChunkReadTimeout()
             else:
                 return d
         else:

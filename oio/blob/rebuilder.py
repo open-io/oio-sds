@@ -18,7 +18,8 @@ import time
 from socket import gethostname
 
 from oio.common import exceptions as exc
-from oio.common.utils import get_logger, int_value, ratelimit, true_value
+from oio.common.utils import get_logger, int_value, true_value
+from oio.common.green import ratelimit
 from oio.common.exceptions import ContentNotFound, OrphanChunk
 from oio.content.factory import ContentFactory
 from oio.rdir.client import RdirClient

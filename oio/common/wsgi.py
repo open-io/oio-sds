@@ -30,7 +30,9 @@ class Application(BaseApplication):
         self.cfg.set('access_log_format', self.conf.get('access_log_format',
                                                         self.access_log_fmt))
         if self.logger_class:
-            self.cfg.set('logger_class', self.logger_class)
+            # reactivate after
+            #self.cfg.set('logger_class', self.logger_class)
+            pass
 
     def load(self):
         return self.application
