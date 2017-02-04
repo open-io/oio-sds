@@ -102,9 +102,8 @@ meta2_filter_action_empty_container(struct gridd_filter_ctx_s *ctx,
 
 int
 meta2_filter_action_has_container(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
+		struct gridd_reply_ctx_s *reply UNUSED)
 {
-	(void) reply;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 

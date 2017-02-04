@@ -457,7 +457,7 @@ static gridd_filter M2V2_FILTERS_touch_container_v1[] =
 	meta2_filter_check_optional_ns_name,
 	meta2_filter_check_backend,
 	meta2_filter_extract_header_flags32,
-	meta2_filter_action_touch_container_v1, /* XXX TODO FIXME NOOP in facts */
+	meta2_filter_action_touch_container_v1,
 	meta2_filter_reply_success,
 	NULL
 };
