@@ -439,25 +439,25 @@ static gridd_filter M2V2_RAW_SUBST_filters[] =
 
 /* ------------------------------------------------------------------------- */
 
-static gridd_filter M2V2_FILTERS_touch_content_v1[] =
+static gridd_filter M2V2_FILTERS_touch_content[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_check_url_cid,
 	meta2_filter_check_optional_ns_name,
 	meta2_filter_check_backend,
-	meta2_filter_action_touch_content_v1, /* XXX TODO FIXME NOOP in facts */
+	meta2_filter_action_touch_content,
 	meta2_filter_reply_success,
 	NULL
 };
 
-static gridd_filter M2V2_FILTERS_touch_container_v1[] =
+static gridd_filter M2V2_FILTERS_touch_container[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_check_url_cid,
 	meta2_filter_check_optional_ns_name,
 	meta2_filter_check_backend,
 	meta2_filter_extract_header_flags32,
-	meta2_filter_action_touch_container_v1,
+	meta2_filter_action_touch_container,
 	meta2_filter_reply_success,
 	NULL
 };
@@ -509,8 +509,8 @@ meta2_gridd_get_v2_requests(void)
 		{NAME_MSGNAME_M2V2_EXITELECTION, (hook) meta2_dispatch_all,  M2V2_EXITELECTION_FILTERS},
 
 		/* AGENT EVENTS */
-		{NAME_MSGNAME_M2V1_TOUCH_CONTAINER, (hook) meta2_dispatch_all, M2V2_FILTERS_touch_container_v1},
-		{NAME_MSGNAME_M2V1_TOUCH_CONTENT,   (hook) meta2_dispatch_all, M2V2_FILTERS_touch_content_v1},
+		{NAME_MSGNAME_M2V1_TOUCH_CONTAINER, (hook) meta2_dispatch_all, M2V2_FILTERS_touch_container},
+		{NAME_MSGNAME_M2V1_TOUCH_CONTENT,   (hook) meta2_dispatch_all, M2V2_FILTERS_touch_content},
 
 		{NULL, NULL, NULL}
 	};
