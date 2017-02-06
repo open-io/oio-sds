@@ -6,8 +6,9 @@ from oio.common.exceptions import ContentNotFound
 from oio.container.client import ContainerClient
 from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
-from oio.common.utils import get_logger, int_value, ratelimit, paths_gen, \
+from oio.common.utils import get_logger, int_value, paths_gen, \
     statfs
+from oio.common.green import ratelimit
 from oio.content.factory import ContentFactory
 
 SLEEP_TIME = 30

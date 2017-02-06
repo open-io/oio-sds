@@ -2,7 +2,8 @@
 
 import eventlet.hubs
 from optparse import OptionParser
-from oio.common.utils import parse_options, get_hub
+from oio.common.utils import parse_options
+from oio.common.green import get_hub
 from oio.event.agent import Runner
 from oio.event.consumer import EventWorker
 

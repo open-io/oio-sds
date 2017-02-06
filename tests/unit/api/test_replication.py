@@ -4,6 +4,7 @@ from cStringIO import StringIO
 from hashlib import md5
 from eventlet import Timeout
 from oio.common import exceptions as exc
+from oio.common import green
 from oio.api.replication import ReplicatedChunkWriteHandler
 from oio.common.storage_method import STORAGE_METHODS
 from tests.unit.api import CHUNK_SIZE, EMPTY_CHECKSUM, empty_stream, \
@@ -412,7 +413,7 @@ class TestReplication(unittest.TestCase):
                     parts.append(part)
                     for d in part['iter']:
                         data += d
-            except exc.ChunkReadTimeout:
+            except green.ChunkReadTimeout:
                 pass
 
         self.assertEqual(len(parts), 1)

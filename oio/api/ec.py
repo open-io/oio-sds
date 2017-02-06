@@ -18,15 +18,14 @@ import logging
 from urlparse import urlparse
 from eventlet import Queue, Timeout, GreenPile
 from greenlet import GreenletExit
-from oio.common import utils
 from oio.common import exceptions
-from oio.common.exceptions import ChunkReadTimeout, ChunkWriteTimeout, \
-    ConnectionTimeout, SourceReadTimeout, SourceReadError
+from oio.common.exceptions import SourceReadError
 from oio.common.http import HeadersDict, parse_content_range, \
     ranges_from_http_header
 from oio.common.utils import fix_ranges
 from oio.api import io
 from oio.common.constants import chunk_headers
+from oio.common import green
 
 
 logger = logging.getLogger(__name__)
@@ -217,7 +216,7 @@ class ECChunkDownloadHandler(object):
         chunk_iter = iter(self.chunks)
 
         # we use eventlet GreenPool to manage readers
-        with utils.ContextPool(self.storage_method.ec_nb_data) as pool:
+        with green.ContextPool(self.storage_method.ec_nb_data) as pool:
             pile = GreenPile(pool)
             # we use eventlet GreenPile to spawn readers
             for _j in range(self.storage_method.ec_nb_data):
@@ -338,7 +337,7 @@ class ECStream(object):
             except GreenletExit:
                 # ignore
                 pass
-            except ChunkReadTimeout:
+            except green.ChunkReadTimeout:
                 logger.error("Timeout on reading")
             except:
                 logger.exception("Exception on reading")
@@ -351,7 +350,7 @@ class ECStream(object):
                 fragment_iterator.close()
 
         # we use eventlet GreenPool to manage the read of fragments
-        with utils.ContextPool(len(fragment_iterators)) as pool:
+        with green.ContextPool(len(fragment_iterators)) as pool:
             # spawn coroutines to read the fragments
             for fragment_iterator, queue in zip(fragment_iterators, queues):
                 pool.spawn(put_in_queue, fragment_iterator, queue)
@@ -620,7 +619,8 @@ class ECWriter(object):
         # metachunk_size & metachunk_hash
         h["Trailer"] = (chunk_headers["metachunk_size"],
                         chunk_headers["metachunk_hash"])
-        with ConnectionTimeout(connection_timeout or io.CONNECTION_TIMEOUT):
+        with green.ConnectionTimeout(
+                connection_timeout or io.CONNECTION_TIMEOUT):
             conn = io.http_connect(
                 parsed.netloc, 'PUT', parsed.path, h)
             conn.chunk = chunk
@@ -641,10 +641,10 @@ class ECWriter(object):
                 # format the chunk
                 to_send = "%x\r\n%s\r\n" % (len(data), data)
                 try:
-                    with ChunkWriteTimeout(self.write_timeout):
+                    with green.ChunkWriteTimeout(self.write_timeout):
                         self.conn.send(to_send)
                         self.bytes_transferred += len(data)
-                except (Exception, ChunkWriteTimeout) as exc:
+                except (Exception, green.ChunkWriteTimeout) as exc:
                     self.failed = True
                     msg = str(exc)
                     logger.warn("Failed to write to %s (%s)", self.chunk, msg)
@@ -761,7 +761,7 @@ class ECChunkWriteHandler(object):
 
         try:
             # we use eventlet GreenPool to manage writers
-            with utils.ContextPool(len(writers)) as pool:
+            with green.ContextPool(len(writers)) as pool:
                 # convenient index to figure out which writer
                 # handles the resulting fragments
                 chunk_index = self._build_index(writers)
@@ -777,7 +777,7 @@ class ECChunkWriteHandler(object):
                         read_size = io.WRITE_CHUNK_SIZE
                     else:
                         read_size = remaining_bytes
-                    with SourceReadTimeout(self.read_timeout):
+                    with green.SourceReadTimeout(self.read_timeout):
                         try:
                             data = source.read(read_size)
                         except (ValueError, IOError) as exc:
@@ -805,7 +805,7 @@ class ECChunkWriteHandler(object):
 
                 return bytes_transferred
 
-        except SourceReadTimeout:
+        except green.SourceReadTimeout:
             logger.warn('Source read timeout')
             raise
         except SourceReadError:
@@ -977,7 +977,7 @@ class ECRebuildHandler(object):
         resp = None
         parsed = urlparse(chunk['url'])
         try:
-            with ConnectionTimeout(self.connection_timeout):
+            with green.ConnectionTimeout(self.connection_timeout):
                 conn = io.http_connect(
                     parsed.netloc, 'GET', parsed.path, headers)
 
