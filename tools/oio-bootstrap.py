@@ -798,7 +798,7 @@ db_path= ${VOLUME}
 # Currently, only 1 worker is allowed to avoid concurrent access to leveldb
 worker_class = sync
 workers = 1
-threads = 8
+threads = 1
 log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log

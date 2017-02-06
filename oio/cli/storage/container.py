@@ -111,6 +111,31 @@ class SetContainer(SetPropertyCommandMixin, command.Command):
         )
 
 
+class TouchContainer(command.Command):
+    """touch an object container, triggers asynchronous treatments on it."""
+
+    log = logging.getLogger(__name__ + '.TouchContainer')
+
+    def get_parser(self, prog_name):
+        parser = super(TouchContainer, self).get_parser(prog_name)
+        parser.add_argument(
+            'containers',
+            metavar='<container>',
+            nargs='+',
+            help='Container(s) to delete'
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        for container in parsed_args.containers:
+            self.app.client_manager.storage.container_touch(
+                self.app.client_manager.get_account(),
+                container
+            )
+
+
 class DeleteContainer(command.Command):
     """Delete an object container"""
 
