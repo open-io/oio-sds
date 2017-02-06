@@ -648,7 +648,7 @@ class ECWriter(object):
                     self.failed = True
                     msg = str(exc)
                     logger.warn("Failed to write to %s (%s)", self.chunk, msg)
-                    self.chunk['error'] = msg
+                    self.chunk['error'] = 'write: ' % msg
 
             self.queue.task_done()
 
@@ -842,7 +842,10 @@ class ECChunkWriteHandler(object):
         except (Exception, Timeout) as exc:
             msg = str(exc)
             logger.error("Failed to connect to %s (%s)", chunk, msg)
-            chunk['error'] = msg
+            if isinstance(exc, Timeout):
+                chunk['error'] = 'connect: Timeout %s' % msg
+            else:
+                chunk['error'] = 'connect: %s' % msg
             return None, chunk
 
     def _get_results(self, writers):
@@ -865,11 +868,12 @@ class ECChunkWriteHandler(object):
                     # TODO check checksum in response
                     success_chunks.append(writer.chunk)
                 else:
-                    writer.failed = True
                     logger.error("Wrong status code from %s (%s)",
                                  writer.chunk, resp.status)
-                    writer.chunk['error'] = 'HTTP %s' % resp.status
+                    writer.chunk['error'] = 'resp: HTTP %s' % resp.status
                     failed_chunks.append(writer.chunk)
+            else:
+                failed_chunks.append(writer.chunk)
 
         for (writer, resp) in pile:
             _handle_resp(writer, resp)
@@ -888,10 +892,11 @@ class ECChunkWriteHandler(object):
             if isinstance(exc, Timeout):
                 logger.warn("Timeout (%s) while writing %s",
                             msg, writer.chunk)
+                writer.chunk['error'] = 'resp: Timeout %s' % msg
             else:
                 logger.warn("Failed to read response for %s (%s)",
                             writer.chunk, msg)
-            writer.chunk['error'] = msg
+                writer.chunk['error'] = 'resp: %s' % msg
         return (writer, resp)
 
     def _build_index(self, writers):

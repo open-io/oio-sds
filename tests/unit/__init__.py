@@ -69,25 +69,36 @@ def set_http_connect(*args, **kwargs):
         oio.api.io.http_connect = old
 
 
+class FakeStatus(object):
+    def __init__(self, status):
+        if isinstance(status, (Exception, Timeout)):
+            raise status
+        if isinstance(status, tuple):
+            self.status = status[-1]
+        else:
+            self.status =  status
+
+    def get_response_status(self):
+        if isinstance(self.status, (Exception, Timeout)):
+            raise self.status
+        return self.status
+
+
 def fake_http_connect(*status_iter, **kwargs):
     class FakeConn(object):
         def __init__(self, status, body='', headers=None, cb_body=None,
                      conn_id=None):
-            if isinstance(status, (Exception, Timeout)):
-                raise status
-            if isinstance(status, tuple):
-                self.expect_status, self.status = status
-            else:
-                self.expect_status, self.status = (None, status)
-
+            if not isinstance(status, FakeStatus):
+                status = FakeStatus(status)
+            self._status = status
             self.body = body
             self.headers = headers or {}
             self.cb_body = cb_body
             self.conn_id = conn_id
+            self.closed = False
 
         def getresponse(self):
-            if isinstance(self.status, (Exception, Timeout)):
-                raise self.status
+            self.status = self._status.get_response_status()
             return self
 
         def getheaders(self):
@@ -110,7 +121,7 @@ def fake_http_connect(*status_iter, **kwargs):
                 self.cb_body(self.conn_id, data)
 
         def close(self):
-            pass
+            self.closed = True
 
     if isinstance(kwargs.get('headers'), (list, tuple)):
         headers_iter = iter(kwargs['headers'])

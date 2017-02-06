@@ -88,7 +88,7 @@ class TestEC(unittest.TestCase):
         for i in range(quorum_size):
             self.assertEqual(chunks[i].get('error'), None)
         for i in xrange(quorum_size, nb):
-            self.assertEqual(chunks[i].get('error'), 'HTTP 500')
+            self.assertEqual(chunks[i].get('error'), 'resp: HTTP 500')
 
         self.assertEqual(bytes_transferred, 0)
         self.assertEqual(checksum, EMPTY_CHECKSUM)
@@ -107,45 +107,56 @@ class TestEC(unittest.TestCase):
             # TODO use specialized Exception
             self.assertRaises(exc.OioException, handler.stream, source, size)
 
-    def test_write_timeout(self):
-        checksum = self.checksum()
-        source = empty_stream()
-        size = CHUNK_SIZE * self.storage_method.ec_nb_data
-        nb = self.storage_method.ec_nb_data + self.storage_method.ec_nb_parity
-        resps = [201] * (nb - 1)
-        resps.append(Timeout(1.0))
-        with set_http_connect(*resps):
-            handler = ECChunkWriteHandler(self.sysmeta, self.meta_chunk(),
-                                          checksum, self.storage_method)
-            bytes_transferred, checksum, chunks = handler.stream(source, size)
+    def test_write_connect_errors(self):
+        test_cases = [
+                {'error': Timeout(1.0), 'msg': 'connect: Timeout 1.0 second'},
+                {'error': Exception('failure'), 'msg': 'connect: failure'},
+        ]
+        for test in test_cases:
+            checksum = self.checksum()
+            source = empty_stream()
+            size = CHUNK_SIZE * self.storage_method.ec_nb_data
+            nb = self.storage_method.ec_nb_data + self.storage_method.ec_nb_parity
+            resps = [201] * (nb - 1)
+            resps.append(test['error'])
+            with set_http_connect(*resps):
+                handler = ECChunkWriteHandler(self.sysmeta, self.meta_chunk(),
+                                              checksum, self.storage_method)
+                bytes_transferred, checksum, chunks = handler.stream(source, size)
 
-        self.assertEqual(len(chunks), nb)
-        for i in range(nb - 1):
-            self.assertEqual(chunks[i].get('error'), None)
-        self.assertEqual(chunks[nb - 1].get('error'), '1.0 second')
+            self.assertEqual(len(chunks), nb)
+            for i in range(nb - 1):
+                self.assertEqual(chunks[i].get('error'), None)
+            self.assertEqual(chunks[nb - 1].get('error'), test['msg'])
 
-        self.assertEqual(bytes_transferred, 0)
-        self.assertEqual(checksum, EMPTY_CHECKSUM)
+            self.assertEqual(bytes_transferred, 0)
+            self.assertEqual(checksum, EMPTY_CHECKSUM)
 
-    def test_write_partial_exception(self):
-        checksum = self.checksum()
-        source = empty_stream()
-        size = CHUNK_SIZE * self.storage_method.ec_nb_data
-        nb = self.storage_method.ec_nb_data + self.storage_method.ec_nb_parity
-        resps = [201] * (nb - 1)
-        resps.append(Exception("failure"))
-        with set_http_connect(*resps):
-            handler = ECChunkWriteHandler(self.sysmeta, self.meta_chunk(),
-                                          checksum, self.storage_method)
-            bytes_transferred, checksum, chunks = handler.stream(source, size)
+    def test_write_response_error(self):
+        test_cases = [
+                {'error': Timeout(1.0), 'msg': 'resp: Timeout 1.0 second'},
+                {'error': Exception('failure'), 'msg': 'resp: failure'},
+        ]
+        for test in test_cases:
+            checksum = self.checksum()
+            source = empty_stream()
+            size = CHUNK_SIZE * self.storage_method.ec_nb_data
+            nb = self.storage_method.ec_nb_data + self.storage_method.ec_nb_parity
+            resps = [201] * (nb - 1)
+            resps.append((100, test['error']))
+            with set_http_connect(*resps):
+                handler = ECChunkWriteHandler(self.sysmeta, self.meta_chunk(),
+                                              checksum, self.storage_method)
+                bytes_transferred, checksum, chunks = handler.stream(source, size)
 
-        self.assertEqual(len(chunks), nb)
-        for i in range(nb - 1):
-            self.assertEqual(chunks[i].get('error'), None)
-        self.assertEqual(chunks[nb - 1].get('error'), 'failure')
+            self.assertEqual(len(chunks), nb)
+            for i in range(nb - 1):
+                self.assertEqual(chunks[i].get('error'), None)
+            self.assertEqual(chunks[nb - 1].get('error'), test['msg'])
 
-        self.assertEqual(bytes_transferred, 0)
-        self.assertEqual(checksum, EMPTY_CHECKSUM)
+            self.assertEqual(bytes_transferred, 0)
+            self.assertEqual(checksum, EMPTY_CHECKSUM)
+
 
     def test_write_error_source(self):
         class TestReader(object):
