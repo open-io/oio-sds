@@ -116,13 +116,15 @@ class TestEC(unittest.TestCase):
             checksum = self.checksum()
             source = empty_stream()
             size = CHUNK_SIZE * self.storage_method.ec_nb_data
-            nb = self.storage_method.ec_nb_data + self.storage_method.ec_nb_parity
+            nb = self.storage_method.ec_nb_data + \
+                self.storage_method.ec_nb_parity
             resps = [201] * (nb - 1)
             resps.append(test['error'])
             with set_http_connect(*resps):
                 handler = ECChunkWriteHandler(self.sysmeta, self.meta_chunk(),
                                               checksum, self.storage_method)
-                bytes_transferred, checksum, chunks = handler.stream(source, size)
+                bytes_transferred, checksum, chunks = handler.stream(
+                    source, size)
 
             self.assertEqual(len(chunks), nb)
             for i in range(nb - 1):
@@ -141,13 +143,15 @@ class TestEC(unittest.TestCase):
             checksum = self.checksum()
             source = empty_stream()
             size = CHUNK_SIZE * self.storage_method.ec_nb_data
-            nb = self.storage_method.ec_nb_data + self.storage_method.ec_nb_parity
+            nb = self.storage_method.ec_nb_data + \
+                self.storage_method.ec_nb_parity
             resps = [201] * (nb - 1)
             resps.append((100, test['error']))
             with set_http_connect(*resps):
                 handler = ECChunkWriteHandler(self.sysmeta, self.meta_chunk(),
                                               checksum, self.storage_method)
-                bytes_transferred, checksum, chunks = handler.stream(source, size)
+                bytes_transferred, checksum, chunks = handler.stream(
+                    source, size)
 
             self.assertEqual(len(chunks), nb)
             for i in range(nb - 1):
@@ -156,7 +160,6 @@ class TestEC(unittest.TestCase):
 
             self.assertEqual(bytes_transferred, 0)
             self.assertEqual(checksum, EMPTY_CHECKSUM)
-
 
     def test_write_error_source(self):
         class TestReader(object):

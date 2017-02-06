@@ -76,7 +76,7 @@ class FakeStatus(object):
         if isinstance(status, tuple):
             self.status = status[-1]
         else:
-            self.status =  status
+            self.status = status
 
     def get_response_status(self):
         if isinstance(self.status, (Exception, Timeout)):
