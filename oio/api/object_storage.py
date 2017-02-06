@@ -259,6 +259,13 @@ class ObjectStorageAPI(API):
             return True
 
     @handle_container_not_found
+    def container_touch(self, account, container, headers=None):
+        uri = self._make_uri('container/touch')
+        params = self._make_params(account, container)
+        resp, resp_body = self._request(
+            'POST', uri, params=params, headers=headers)
+
+    @handle_container_not_found
     def container_delete(self, account, container, headers=None):
         uri = self._make_uri('container/destroy')
         params = self._make_params(account, container)
@@ -408,6 +415,15 @@ class ObjectStorageAPI(API):
                     account, container, obj_name, f, sysmeta,
                     metadata=metadata, policy=policy, headers=headers,
                     key_file=key_file)
+
+    @handle_object_not_found
+    def object_touch(self, account, container, obj, headers={}):
+        uri = self._make_uri('content/touch')
+        params = self._make_params(account, container, obj)
+        if 'X-oio-req-id' not in headers:
+            headers['X-oio-req-id'] = utils.request_id()
+        resp, resp_body = self._request(
+            'POST', uri, params=params, headers=headers)
 
     @handle_object_not_found
     def object_delete(self, account, container, obj, headers={}):
