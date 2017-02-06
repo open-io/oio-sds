@@ -463,20 +463,20 @@ static void
 election_manager_dump_delays(struct election_manager_s *manager)
 {
 	GRID_INFO("Election delays:");
-	GRID_INFO("- get_status=%ldms",
+	GRID_INFO("- get_status=%"G_GINT64_FORMAT"ms",
 			manager->delay_wait / G_TIME_SPAN_MILLISECOND);
-	GRID_INFO("- expire_final=%ldms, expire_final_leader=%ldms",
+	GRID_INFO("- expire_final=%"G_GINT64_FORMAT"ms, expire_final_leader=%"G_GINT64_FORMAT"ms",
 			manager->delay_expire_final / G_TIME_SPAN_MILLISECOND,
 			manager->delay_expire_final_leader / G_TIME_SPAN_MILLISECOND);
-	GRID_INFO("- expire_none=%ldms, expire_failed=%ldms",
+	GRID_INFO("- expire_none=%"G_GINT64_FORMAT"ms, expire_failed=%"G_GINT64_FORMAT"ms",
 			manager->delay_expire_none / G_TIME_SPAN_MILLISECOND,
 			manager->delay_expire_failed / G_TIME_SPAN_MILLISECOND);
-	GRID_INFO("- retry_pending=%ldms, retry_failed=%ldms",
+	GRID_INFO("- retry_pending=%"G_GINT64_FORMAT"ms, retry_failed=%"G_GINT64_FORMAT"ms",
 			manager->delay_retry_pending / G_TIME_SPAN_MILLISECOND,
 			manager->delay_retry_failed/ G_TIME_SPAN_MILLISECOND);
-	GRID_INFO("- fail_pending=%ldms",
+	GRID_INFO("- fail_pending=%"G_GINT64_FORMAT"ms",
 			manager->delay_fail_pending / G_TIME_SPAN_MILLISECOND);
-	GRID_INFO("- ping_pending=%ldms, ping_failed=%ldms, ping_final=%ldms",
+	GRID_INFO("- ping_pending=%"G_GINT64_FORMAT"ms, ping_failed=%"G_GINT64_FORMAT"ms, ping_final=%"G_GINT64_FORMAT"ms",
 			manager->delay_ping_pending / G_TIME_SPAN_MILLISECOND,
 			manager->delay_ping_failed / G_TIME_SPAN_MILLISECOND,
 			manager->delay_ping_final / G_TIME_SPAN_MILLISECOND);
