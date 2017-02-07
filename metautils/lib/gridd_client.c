@@ -343,16 +343,11 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 		return err;
 	}
 
-	/* all other are considered errors */
-	if (status != CODE_REDIRECT)
-		err = NEWERROR(status, "Request error: %s", message);
-	else
-		err = NEWERROR(status, "%s", message);
-
 	if (!client->keepalive)
 		_client_reset_cnx(client);
 	_client_reset_reply(client);
-	return err;
+
+	return NEWERROR(status, "%s", message);
 }
 
 static GError *

@@ -61,7 +61,7 @@ _reply_common_error (struct req_args_s *args, GError *err)
 	return _reply_system_error (args, err);
 }
 
-enum http_rc_e
+static enum http_rc_e
 _reply_bytes (struct req_args_s *args, int code, const gchar * msg,
 		GBytes * bytes)
 {
@@ -89,92 +89,101 @@ _reply_json (struct req_args_s *args, int code, const gchar * msg,
 			gstr ? g_string_free_to_bytes (gstr) : NULL);
 }
 
+static enum http_rc_e
+_reply_json_error(struct req_args_s *args, int code, const char *msg,
+	GString * gstr)
+{
+	if (gstr && gstr->len)
+		args->rp->access_tail("e=%.*s", gstr->len, gstr->str);
+	return _reply_json(args, code, msg, gstr);
+}
+
 enum http_rc_e
 _reply_format_error (struct req_args_s *args, GError * err)
 {
-	return _reply_json (args, HTTP_CODE_BAD_REQUEST,
+	return _reply_json_error (args, HTTP_CODE_BAD_REQUEST,
 			"Bad request", _create_status_error (err));
 }
 
 enum http_rc_e
 _reply_system_error (struct req_args_s *args, GError * err)
 {
-	return _reply_json (args, HTTP_CODE_INTERNAL_ERROR,
+	return _reply_json_error (args, HTTP_CODE_INTERNAL_ERROR,
 			"Internal error", _create_status_error (err));
 }
 
 enum http_rc_e
 _reply_bad_gateway (struct req_args_s *args, GError * err)
 {
-	return _reply_json (args, HTTP_CODE_BAD_GATEWAY,
+	return _reply_json_error (args, HTTP_CODE_BAD_GATEWAY,
 			"Bad Gateway", _create_status_error (err));
 }
 
 enum http_rc_e
 _reply_srv_unavailable (struct req_args_s *args, GError *err)
 {
-	return _reply_json (args, HTTP_CODE_SRV_UNAVAILABLE,
+	return _reply_json_error (args, HTTP_CODE_SRV_UNAVAILABLE,
 			"Service unavailable", _create_status_error (err));
 }
 
 enum http_rc_e
 _reply_gateway_timeout (struct req_args_s *args, GError * err)
 {
-	return _reply_json (args, HTTP_CODE_GATEWAY_TIMEOUT,
+	return _reply_json_error (args, HTTP_CODE_GATEWAY_TIMEOUT,
 			"Gateway timeout", _create_status_error (err));
 }
 
 enum http_rc_e
 _reply_not_implemented (struct req_args_s *args)
 {
-	return _reply_json (args, HTTP_CODE_NOT_IMPLEMENTED,
+	return _reply_json_error (args, HTTP_CODE_NOT_IMPLEMENTED,
 			"Not implemented", _create_status_error (NYI()));
 }
 
 enum http_rc_e
 _reply_notfound_error (struct req_args_s *args, GError * err)
 {
-	return _reply_json (args, HTTP_CODE_NOT_FOUND,
+	return _reply_json_error (args, HTTP_CODE_NOT_FOUND,
 			"Not found", _create_status_error (err));
 }
 
 enum http_rc_e
 _reply_forbidden_error (struct req_args_s *args, GError * err)
 {
-	return _reply_json (args, HTTP_CODE_FORBIDDEN,
+	return _reply_json_error (args, HTTP_CODE_FORBIDDEN,
 			"Forbidden", _create_status_error (err));
 }
 
 enum http_rc_e
 _reply_method_error (struct req_args_s *args)
 {
-	return _reply_json (args, HTTP_CODE_METHOD_NOT_ALLOWED,
+	return _reply_json_error (args, HTTP_CODE_METHOD_NOT_ALLOWED,
 			"Method not allowed", NULL);
 }
 
 enum http_rc_e
 _reply_conflict_error (struct req_args_s *args, GError * err)
 {
-	return _reply_json (args, HTTP_CODE_CONFLICT,
+	return _reply_json_error (args, HTTP_CODE_CONFLICT,
 			"Conflict", _create_status_error (err));
 }
 
 enum http_rc_e
 _reply_nocontent (struct req_args_s *args)
 {
-	return _reply_json (args, HTTP_CODE_NO_CONTENT, "No Content", NULL);
+	return _reply_json_error (args, HTTP_CODE_NO_CONTENT, "No Content", NULL);
 }
 
 enum http_rc_e
 _reply_accepted (struct req_args_s *args)
 {
-	return _reply_json (args, HTTP_CODE_ACCEPTED, "Already Accepted", NULL);
+	return _reply_json_error (args, HTTP_CODE_ACCEPTED, "Already Accepted", NULL);
 }
 
 enum http_rc_e
 _reply_created (struct req_args_s *args)
 {
-	return _reply_json (args, HTTP_CODE_CREATED, "Created", NULL);
+	return _reply_json_error (args, HTTP_CODE_CREATED, "Created", NULL);
 }
 
 enum http_rc_e

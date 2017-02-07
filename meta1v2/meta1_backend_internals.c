@@ -234,7 +234,7 @@ retry:
 			err = __create_user (sq3, url);
 			if (!err) goto retry;
 		}
-		return NEWERROR(CODE_USER_NOTFOUND, "no such container");
+		return NEWERROR(CODE_USER_NOTFOUND, "no such user");
 	}
 	if (gpa)
 		*result = (struct oio_url_s**) metautils_gpa_to_array(gpa, TRUE);

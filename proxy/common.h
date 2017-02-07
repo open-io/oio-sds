@@ -271,7 +271,6 @@ void lb_cache_reload(void);
 
 /* -------------------------------------------------------------------------- */
 
-enum http_rc_e _reply_bytes (struct req_args_s *args, int code, const char * msg, GBytes * bytes);
 enum http_rc_e _reply_json (struct req_args_s *args, int code, const char * msg, GString * gstr);
 
 enum http_rc_e _reply_format_error (struct req_args_s *args, GError *err);
