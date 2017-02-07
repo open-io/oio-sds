@@ -1500,8 +1500,14 @@ retry:
 					err->code, err->message);
 			autocreate = FALSE;
 			g_clear_error (&err);
-			if (!(err = _m2_container_create_with_properties (args, NULL)))
+			err = _m2_container_create_with_properties (args, NULL);
+			if (!err)
 				goto retry;
+			if (err->code == CODE_CONTAINER_EXISTS
+					|| err->code == CODE_USER_EXISTS) {
+				g_clear_error(&err);
+				goto retry;
+			}
 		}
 	}
 
@@ -1576,6 +1582,13 @@ static enum http_rc_e action_m2_content_spare (struct req_args_s *args,
 static enum http_rc_e action_m2_content_touch (struct req_args_s *args,
 		struct json_object *jargs) {
 	(void) jargs;
+
+	if ((!oio_url_has_fq_container(args->url) &&
+		 !oio_url_has(args->url, OIOURL_HEXID)) ||
+			(!oio_url_has(args->url, OIOURL_PATH) &&
+			 !oio_url_has(args->url, OIOURL_CONTENTID)))
+		return _reply_format_error(args, BADREQ("Missing content path or ID"));
+
 	PACKER_VOID(_pack) { return m2v2_remote_pack_TOUCHC (args->url); }
 	GError *err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 	if (err && CODE_IS_NOTFOUND(err->code))

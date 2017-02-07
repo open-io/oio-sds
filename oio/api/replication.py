@@ -17,11 +17,11 @@ from eventlet import Timeout, GreenPile
 from eventlet.queue import Queue
 from urlparse import urlparse
 from oio.common import exceptions as exc
-from oio.common.exceptions import ConnectionTimeout, \
-    ChunkWriteTimeout, SourceReadError, SourceReadTimeout
+from oio.common.exceptions import SourceReadError
 from oio.common import utils
 from oio.api import io
 from oio.common.constants import chunk_headers
+from oio.common import green
 
 
 logger = logging.getLogger(__name__)
@@ -89,7 +89,7 @@ class ReplicatedChunkWriteHandler(object):
                     h[chunk_headers["metachunk_hash"]] = \
                         self.sysmeta["metachunk_hash"]
 
-                with ConnectionTimeout(self.connection_timeout):
+                with green.ConnectionTimeout(self.connection_timeout):
                     conn = io.http_connect(
                         parsed.netloc, 'PUT', parsed.path, h)
                     conn.chunk = chunk
@@ -125,7 +125,7 @@ class ReplicatedChunkWriteHandler(object):
 
         bytes_transferred = 0
         try:
-            with utils.ContextPool(len(meta_chunk)) as pool:
+            with green.ContextPool(len(meta_chunk)) as pool:
                 for conn in current_conns:
                     conn.failed = False
                     conn.queue = Queue(io.PUT_QUEUE_DEPTH)
@@ -140,7 +140,7 @@ class ReplicatedChunkWriteHandler(object):
                             read_size = remaining_bytes
                     else:
                         read_size = io.WRITE_CHUNK_SIZE
-                    with SourceReadTimeout(self.read_timeout):
+                    with green.SourceReadTimeout(self.read_timeout):
                         try:
                             data = source.read(read_size)
                         except (ValueError, IOError) as e:
@@ -166,7 +166,7 @@ class ReplicatedChunkWriteHandler(object):
                     if conn.queue.unfinished_tasks:
                         conn.queue.join()
 
-        except SourceReadTimeout:
+        except green.SourceReadTimeout:
             logger.warn('Source read timeout')
             raise
         except SourceReadError:
@@ -218,17 +218,17 @@ class ReplicatedChunkWriteHandler(object):
             data = conn.queue.get()
             if not conn.failed:
                 try:
-                    with ChunkWriteTimeout(self.write_timeout):
+                    with green.ChunkWriteTimeout(self.write_timeout):
                         conn.send(data)
-                except (Exception, ChunkWriteTimeout):
+                except (Exception, green.ChunkWriteTimeout):
                     conn.failed = True
             conn.queue.task_done()
 
     def _get_response(self, conn):
         try:
-            with ChunkWriteTimeout(self.write_timeout):
+            with green.ChunkWriteTimeout(self.write_timeout):
                 resp = conn.getresponse()
-        except (Exception, ChunkWriteTimeout) as e:
+        except (Exception, green.ChunkWriteTimeout) as e:
             resp = None
             logger.error("Failed to read response %s: %s", conn.chunk, str(e))
         return (conn, resp)

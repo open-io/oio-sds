@@ -1,7 +1,7 @@
 /*
 OpenIO SDS metautils
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, modified as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -22,14 +22,6 @@ License along with this library.
 
 # include <glib.h>
 # include "metautils.h"
-
-# ifndef GRIDC_DEFAULT_TIMEOUT_STEP
-#  define GRIDC_DEFAULT_TIMEOUT_STEP 10.0
-# endif
-
-# ifndef GRIDC_DEFAULT_TIMEOUT_OVERALL
-#  define GRIDC_DEFAULT_TIMEOUT_OVERALL 30.0
-# endif
 
 struct gridd_client_s;
 struct gridd_client_factory_s;
@@ -75,9 +67,12 @@ struct gridd_client_vtable_s
 	// Tells to keep the connection open between requests.
 	void (*set_keepalive) (struct gridd_client_s *c, gboolean on);
 
-	// Force the timeout for each signel request (step), and for each request
-	// and its redirections.
+	// Force global timeout for the operation (all the request, including
+	// the redirections)
 	void (*set_timeout) (struct gridd_client_s *c, gdouble seconds);
+
+	// Force the connection timeout for each unit request
+	void (*set_timeout_cnx) (struct gridd_client_s *c, gdouble seconds);
 
 	// Returns if the client's last change is older than 'now'
 	gboolean (*expired) (struct gridd_client_s *c, gint64 now);
@@ -117,6 +112,7 @@ int gridd_client_fd (struct gridd_client_s *self);
 GError * gridd_client_set_fd(struct gridd_client_s *self, int fd);
 void gridd_client_set_keepalive(struct gridd_client_s *self, gboolean on);
 void gridd_client_set_timeout (struct gridd_client_s *self, gdouble seconds);
+void gridd_client_set_timeout_cnx (struct gridd_client_s *self, gdouble sec);
 gboolean gridd_client_expired(struct gridd_client_s *self, gint64 now);
 gboolean gridd_client_finished (struct gridd_client_s *self);
 gboolean gridd_client_start (struct gridd_client_s *self);
@@ -157,5 +153,13 @@ struct abstract_client_factory_s
 // provide clients with the same VTABLE than those created with
 // gridd_client_create_empty().
 struct gridd_client_factory_s * gridd_client_factory_create(void);
+
+#ifdef HAVE_ENBUG
+extern gint32 oio_client_timeout_threshold;
+#endif
+
+extern guint64 oio_client_max_net_errors;
+extern time_t oio_client_period_net_errors;
+extern gboolean oio_cache_avoid_on_error;
 
 #endif /*OIO_SDS__metautils__lib__gridd_client_h*/

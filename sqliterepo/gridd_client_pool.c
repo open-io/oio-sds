@@ -1,7 +1,7 @@
 /*
 OpenIO SDS metautils
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, modified as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -241,7 +241,7 @@ _manage_timeouts(struct gridd_client_pool_s *pool)
 		return;
 
 	gint64 now = oio_ext_monotonic_time ();
-	if (now - pool->last_timeout_check > G_TIME_SPAN_SECOND)
+	if (now - pool->last_timeout_check < G_TIME_SPAN_SECOND)
 		return;
 	pool->last_timeout_check = now;
 
@@ -292,7 +292,7 @@ _manage_requests(struct gridd_client_pool_s *pool)
 		if (start > ec->deadline_start) {
 			count_dropped ++;
 			gridd_client_fail(ec->client,
-					NEWERROR(ERRCODE_CONN_TIMEOUT, "Queued for too long"));
+					NEWERROR(CODE_AVOIDED, "Queued for too long"));
 			event_client_free(ec);
 			continue;
 		}

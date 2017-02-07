@@ -236,6 +236,11 @@ _post_config(struct sqlx_service_s *ss)
 			(GDestroyNotify)_task_reload_m2_lb, NULL, ss);
 
 	m2->notifier = ss->events_queue;
+
+	/* Make the meta2 avoid meta services with known problems */
+	oio_cache_avoid_on_error = oio_cfg_get_bool (
+			ss->ns_name, OIO_CFG_AVOID_BADSRV, FALSE);
+
 	return TRUE;
 }
 

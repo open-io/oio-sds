@@ -167,7 +167,7 @@ class ContainerClient(ProxyClient):
     def container_touch(self, account=None, reference=None, cid=None,
                         **kwargs):
         params = self._make_params(account, reference, cid=cid)
-        resp, body = self._request('POST', '/touch', params=params)
+        resp, body = self._request('POST', '/touch', params=params, **kwargs)
 
     def container_dedup(self, account=None, reference=None, cid=None,
                         **kwargs):
@@ -330,7 +330,7 @@ class ContainerClient(ProxyClient):
                       **kwargs):
         uri = self._make_uri('content/touch')
         params = self._make_params(account, reference, path)
-        resp, body = self._direct_request('POST', uri, params=params)
+        resp, body = self._direct_request('POST', uri, params=params, **kwargs)
 
     def content_spare(self, account=None, reference=None, path=None, data=None,
                       cid=None, stgpol=None, **kwargs):

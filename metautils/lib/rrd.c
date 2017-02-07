@@ -1,7 +1,7 @@
 /*
-OpenIO SDS server
+OpenIO SDS metautils
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, modified as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -18,9 +18,6 @@ License along with this library.
 */
 
 #include <metautils/lib/metautils.h>
-
-#include "internals.h"
-#include "stats_holder.h"
 
 enum {
 	/*! If set, when there is no activity, the untouched slots are filled
@@ -112,6 +109,14 @@ grid_single_rrd_push(struct grid_single_rrd_s *gsr, time_t now, guint64 v)
 }
 
 void
+grid_single_rrd_add(struct grid_single_rrd_s *gsr, time_t now, guint64 v)
+{
+	_gsr_manage_timeshift(gsr, now);
+	guint64 v0 = _rrd_current(gsr);
+	_rrd_set(gsr, v + v0);
+}
+
+void
 grid_single_rrd_pushifmax(struct grid_single_rrd_s *gsr, time_t now, guint64 v)
 {
 	_gsr_manage_timeshift(gsr, now);
@@ -160,5 +165,21 @@ grid_single_rrd_get_allmax(struct grid_single_rrd_s *gsr,
 		guint64 m = _rrd_past(gsr,i);
 		out[i] = maximum = MAX(maximum,m);
 	}
+}
+
+const char *
+grid_single_rrd_debug(struct grid_single_rrd_s *gsr, gchar *dst, gsize len)
+{
+	g_assert(gsr != NULL);
+	g_assert(dst != NULL);
+	g_assert(len > 0);
+
+	*dst = 0;
+	for (time_t i=0; i < gsr->period ;i++) {
+		gchar tmp[32];
+		g_snprintf(tmp, sizeof(tmp), ",%"G_GUINT64_FORMAT, _rrd_past(gsr, i));
+		strncat(dst, tmp, len);
+	}
+	return dst;
 }
 

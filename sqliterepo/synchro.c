@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, modified as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -516,7 +516,10 @@ _direct_use (struct sqlx_peering_s *self,
 	} else {
 		struct event_client_s *mc = g_malloc0 (sizeof(struct event_client_s));
 		mc->client = gridd_client_factory_create_client (p->factory);
-		gridd_client_set_timeout(mc->client, SQLX_SYNC_TIMEOUT);
+
+		gridd_client_set_timeout(mc->client, SQLX_USE_TIMEOUT);
+		gridd_client_set_timeout_cnx(mc->client, SQLX_CNX_TIMEOUT_USE);
+
 		GError *err = gridd_client_connect_url (mc->client, url);
 		if (err) {
 			GRID_DEBUG("USE error: (%d) %s", err->code, err->message);
@@ -622,7 +625,6 @@ on_end_GETVERS(struct evtclient_GETVERS_s *mc)
 	GError *err = gridd_client_error(mc->ec.client);
 	if (!err && !mc->vremote)
 		err = SYSERR("BUG: no version replied");
-
 	if (likely(NULL != mc->hook)) {
 		const struct sqlx_name_s *n = sqlx_name_mutable_to_const(&mc->name);
 		if (err)
@@ -686,7 +688,8 @@ _direct_getvers (struct sqlx_peering_s *self,
 	mc->reqid = reqid;
 	mc->vremote = NULL;
 
-	gridd_client_set_timeout(mc->ec.client, SQLX_SYNC_TIMEOUT);
+	gridd_client_set_timeout(mc->ec.client, SQLX_GETVERS_TIMEOUT);
+	gridd_client_set_timeout_cnx(mc->ec.client, SQLX_CNX_TIMEOUT_GETVERS);
 
 	GError *err = gridd_client_connect_url (mc->ec.client, url);
 	if (NULL != err) {

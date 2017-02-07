@@ -71,47 +71,6 @@ class TestRdirBackend(unittest.TestCase):
                           self.volume, self.container_0,
                           self.content_0, self.chunk_0)
 
-    def test_chunk_push_update_data(self):
-        # initial push
-        self.rdir.chunk_push(self.volume, self.container_0, self.content_0,
-                             self.chunk_0, rtime=5555, mtime=6666)
-        data = self.rdir.chunk_fetch(self.volume)
-        self.assertEqual(data, [
-            ("%s|%s|%s" %
-                (self.container_0, self.content_0, self.chunk_0),
-                {'mtime': 6666, 'rtime': 5555})
-        ])
-
-        # update mtime and rtime
-        self.rdir.chunk_push(self.volume, self.container_0, self.content_0,
-                             self.chunk_0, mtime=1111, rtime=2222)
-        data = self.rdir.chunk_fetch(self.volume)
-        self.assertEqual(data, [
-            ("%s|%s|%s" %
-                (self.container_0, self.content_0, self.chunk_0),
-                {'mtime': 1111, 'rtime': 2222})
-        ])
-
-        # update only mtime
-        self.rdir.chunk_push(self.volume, self.container_0, self.content_0,
-                             self.chunk_0, mtime=9999)
-        data = self.rdir.chunk_fetch(self.volume)
-        self.assertEqual(data, [
-            ("%s|%s|%s" %
-                (self.container_0, self.content_0, self.chunk_0),
-                {'mtime': 9999, 'rtime': 2222})
-        ])
-
-        # update only rtime
-        self.rdir.chunk_push(self.volume, self.container_0, self.content_0,
-                             self.chunk_0, rtime=7777)
-        data = self.rdir.chunk_fetch(self.volume)
-        self.assertEqual(data, [
-            ("%s|%s|%s" %
-                (self.container_0, self.content_0, self.chunk_0),
-                {'mtime': 9999, 'rtime': 7777})
-        ])
-
     def test_chunk_delete(self):
         self.rdir.chunk_push(self.volume, self.container_0, self.content_0,
                              self.chunk_0, rtime=5555, mtime=6666)

@@ -5,8 +5,9 @@ import os
 from re import sub
 
 import eventlet.hubs
-from oio.common.utils import read_conf, get_hub, drop_privileges, \
+from oio.common.utils import read_conf, drop_privileges, \
     redirect_stdio, get_logger
+from oio.common.green import get_hub
 
 
 class Daemon(object):

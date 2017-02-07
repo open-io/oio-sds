@@ -98,11 +98,11 @@ M2V2_DECLARE_FILTER(meta2_filter_action_set_content_properties);
 M2V2_DECLARE_FILTER(meta2_filter_action_get_content_properties);
 M2V2_DECLARE_FILTER(meta2_filter_action_del_content_properties);
 M2V2_DECLARE_FILTER(meta2_filter_action_generate_beans);
-M2V2_DECLARE_FILTER(meta2_filter_action_touch_content_v1);
+M2V2_DECLARE_FILTER(meta2_filter_action_touch_content);
 
 #define META2TOUCH_FLAGS_UPDATECSIZE     0x00000001
 #define META2TOUCH_FLAGS_RECALCCSIZE     0x00000002
-M2V2_DECLARE_FILTER(meta2_filter_action_touch_container_v1);
+M2V2_DECLARE_FILTER(meta2_filter_action_touch_container);
 M2V2_DECLARE_FILTER(meta2_filter_action_insert_beans);
 M2V2_DECLARE_FILTER(meta2_filter_action_delete_beans);
 M2V2_DECLARE_FILTER(meta2_filter_action_update_beans);

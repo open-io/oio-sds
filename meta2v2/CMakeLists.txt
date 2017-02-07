@@ -79,7 +79,6 @@ add_executable(meta2_server
 		meta2_filters_action_url.c
 		meta2_filters_action_container.c
 		meta2_filters_action_content.c
-		meta2_filters_action_events.c
 		meta2_filter_context.c
 		meta2_server.c)
 bin_prefix(meta2_server -meta2-server)

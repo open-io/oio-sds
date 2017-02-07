@@ -263,6 +263,24 @@ class ObjectStorageApi(object):
                                                autocreate=True,
                                                **kwargs)
 
+    def container_touch(self, account, container, headers=None, **kwargs):
+        """
+        Trigger a notification about the container state.
+
+        :param account: account from which to delete the container
+        :type account: `str`
+        :param container: name of the container
+        :type container: `str`
+        :keyword headers: extra headers to send to the proxy
+        :type headers: `dict`
+        """
+        if not headers:
+            headers = dict()
+        if 'X-oio-req-id' not in headers:
+            headers['X-oio-req-id'] = utils.request_id()
+        self.container.container_touch(account, container, headers=headers,
+                                       **kwargs)
+
     @handle_container_not_found
     def container_delete(self, account, container, headers=None, **kwargs):
         """
@@ -466,6 +484,26 @@ class ObjectStorageApi(object):
                     account, container, obj_name, f, sysmeta,
                     properties=metadata, policy=policy, headers=headers,
                     key_file=key_file)
+
+    def object_touch(self, account, container, obj, headers=None, **kwargs):
+        """
+        Trigger a notification about an object
+        (as if it just had been created).
+
+        :param account: name of the account where to create the object
+        :type account: `str`
+        :param container: name of the container where to create the object
+        :type container: `str`
+        :param obj: name of the object to touch
+        :param headers: extra headers to pass to the proxy
+
+        """
+        if not headers:
+            headers = dict()
+        if 'X-oio-req-id' not in headers:
+            headers['X-oio-req-id'] = utils.request_id()
+        self.container.content_touch(account, container, obj, headers=headers,
+                                     **kwargs)
 
     @handle_object_not_found
     def object_delete(self, account, container, obj, headers=None, **kwargs):

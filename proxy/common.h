@@ -35,7 +35,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
 #include <server/network_server.h>
-#include <server/stats_holder.h>
 #include <resolver/hc_resolver.h>
 #include <meta1v2/meta1_remote.h>
 #include <meta2v2/meta2_macros.h>
@@ -272,7 +271,6 @@ void lb_cache_reload(void);
 
 /* -------------------------------------------------------------------------- */
 
-enum http_rc_e _reply_bytes (struct req_args_s *args, int code, const char * msg, GBytes * bytes);
 enum http_rc_e _reply_json (struct req_args_s *args, int code, const char * msg, GString * gstr);
 
 enum http_rc_e _reply_format_error (struct req_args_s *args, GError *err);

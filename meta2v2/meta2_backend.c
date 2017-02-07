@@ -714,6 +714,8 @@ meta2_backend_get_alias(struct meta2_backend_s *m2b,
 	return err;
 }
 
+/* TODO(jfs): merge the container's state with the m2_prepare_data and keep
+ *            it cached? */
 static gchar *
 _container_state (struct sqlx_sqlite3_s *sq3)
 {
@@ -770,6 +772,20 @@ meta2_backend_add_modified_container(struct meta2_backend_s *m2b,
 		meta2_backend_change_callback(sq3, m2b);
 	}
 	g_clear_error(&err);
+}
+
+GError *
+meta2_backend_notify_container_state(struct meta2_backend_s *m2b,
+		struct oio_url_s *url)
+{
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	/* TODO(jfs): maybe is there a way to keep this in a cache */
+	if (!(err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY, &sq3))) {
+		meta2_backend_add_modified_container(m2b, sq3);
+		m2b_close(sq3);
+	}
+	return err;
 }
 
 GError*

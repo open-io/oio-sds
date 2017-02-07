@@ -1,7 +1,7 @@
 /*
 OpenIO SDS server
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, modified as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -42,7 +42,6 @@ License along with this library.
 #include <metautils/lib/metautils.h>
 
 #include "internals.h"
-#include "stats_holder.h"
 #include "network_server.h"
 #include "resolv.h"
 #include "slab.h"
@@ -686,8 +685,8 @@ _cb_ping(struct network_client_s *clt, struct network_server_s *srv)
 
 		const gint64 now = oio_ext_monotonic_time();
 
-		/* COMMON_CNX_TIMEOUT is arbitrary but it avoid managing pings
-		 * that have probably been retried by the emitter. */
+		/* OIO_SERVER_UDP_QUEUE_MAXAGE is arbitrary but it avoids managing
+		 * pings that have probably been retried by the emitter. */
 		if (now - clt->time.evt_in > OIO_SERVER_UDP_QUEUE_MAXAGE) {
 			GRID_DEBUG("PING %s -> %s queued for too long",
 					clt->peer_name, clt->local_name);

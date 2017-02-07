@@ -301,7 +301,7 @@ label_retry:
 		else
 			threshold = oio_proxy_request_failure_threshold_middle;
 		if (threshold >= oio_ext_rand_int_range(1, 100)) {
-			err = NEWERROR(ERRCODE_CONN_REFUSED, "FAKE ERROR");
+			err = NEWERROR(CODE_AVOIDED, "FAKE ERROR");
 		} else {
 #endif /* HAVE_ENBUG */
 			/* Send a unitary request */

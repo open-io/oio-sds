@@ -303,6 +303,7 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx)
 		gridd_client_create_many(peers, encoded, NULL, NULL);
 	g_byte_array_unref(encoded);
 
+	gridd_clients_set_timeout_cnx(clients, SQLX_REPLI_TIMEOUT_CNX);
 	gridd_clients_set_timeout(clients, SQLX_REPLI_TIMEOUT);
 
 	gridd_clients_start(clients);

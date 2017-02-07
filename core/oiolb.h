@@ -21,7 +21,7 @@ License along with this library.
 # include <stdbool.h>
 # include <glib.h>
 
-#define OIO_LOC_FORMAT "016lX"
+#define OIO_LOC_FORMAT "016" G_GINT64_MODIFIER "X"
 typedef guint64 oio_location_t;
 typedef guint8 oio_weight_t;
 

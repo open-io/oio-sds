@@ -88,6 +88,7 @@ add_library(metautils SHARED
 		metautils_bits.h
 		metautils_macros.h
 
+		rrd.c rrd.h
 		volume_lock.c volume_lock.h
 		lb.c lb.h
 		common_main.c common_main.h

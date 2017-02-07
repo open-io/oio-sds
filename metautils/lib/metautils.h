@@ -61,6 +61,7 @@ License along with this library.
 # include <metautils/lib/common_main.h>
 # include <metautils/lib/volume_lock.h>
 # include <metautils/lib/expr.h>
+# include <metautils/lib/rrd.h>
 # include <metautils/lib/lb.h>
 
 # include <metautils/lib/metacomm.h>
