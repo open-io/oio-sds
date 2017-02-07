@@ -11,8 +11,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from eventlet import Timeout
-
 
 class OioException(Exception):
     pass
@@ -146,29 +144,7 @@ class SourceReadError(OioException):
     pass
 
 
-# Timeouts
-
-class ClientReadTimeout(Timeout):
-    pass
-
-
 class OioTimeout(OioException):
-    pass
-
-
-class ConnectionTimeout(Timeout):
-    pass
-
-
-class SourceReadTimeout(Timeout):
-    pass
-
-
-class ChunkWriteTimeout(Timeout):
-    pass
-
-
-class ChunkReadTimeout(Timeout):
     pass
 
 

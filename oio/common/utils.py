@@ -1,11 +1,11 @@
 import os
+import socket
 import errno
 import glob
 import grp
 import hashlib
 import pwd
 import sys
-import time
 import fcntl
 import yaml
 import logging
@@ -21,15 +21,7 @@ from ConfigParser import SafeConfigParser
 from itertools import islice
 
 import codecs
-import eventlet
-
-import eventlet.semaphore
-from eventlet.green import socket, threading
 from oio.common.exceptions import OioException
-
-logging.thread = eventlet.green.thread
-logging.threading = threading
-logging._lock = logging.threading.RLock()
 
 xattr = None
 try:
@@ -54,10 +46,6 @@ try:
     CPU_COUNT = multiprocessing.cpu_count() or 1
 except (ImportError, NotImplementedError):
     CPU_COUNT = 1
-
-
-def get_hub():
-    return 'poll'
 
 
 class NullLogger(object):
@@ -101,15 +89,6 @@ def name2cid(account, ref):
     for v in [account, '\0', ref]:
         h.update(v)
     return h.hexdigest()
-
-
-class ContextPool(eventlet.GreenPool):
-    def __enter__(self):
-        return self
-
-    def __exit__(self, type, value, traceback):
-        for coroutine in list(self.coroutines_running):
-            coroutine.kill()
 
 
 def env(*vars, **kwargs):
@@ -409,19 +388,6 @@ def load_namespace_conf(namespace):
             print("Missing field '%s' in namespace config" % k)
             sys.exit(1)
     return conf
-
-
-def ratelimit(run_time, max_rate, increment=1, rate_buffer=5):
-    if max_rate <= 0 or increment <= 0:
-        return run_time
-    clock_accuracy = 1000.0
-    now = time.time() * clock_accuracy
-    time_per_request = clock_accuracy * (float(increment) / max_rate)
-    if now - run_time > rate_buffer * clock_accuracy:
-        run_time = now
-    elif run_time - now > time_per_request:
-        eventlet.sleep((run_time - now) / clock_accuracy)
-    return run_time + time_per_request
 
 
 def paths_gen(volume_path):

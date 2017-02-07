@@ -27,7 +27,6 @@ License along with this library.
 #include <metautils/lib/metacomm.h>
 
 #include "internals.h"
-#include "stats_holder.h"
 #include "network_server.h"
 #include "transport_gridd.h"
 

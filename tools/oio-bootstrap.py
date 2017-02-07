@@ -697,6 +697,7 @@ event-agent=beanstalk://127.0.0.1:11300
 conscience=${CS_ALL_PUB}
 
 log_outgoing=yes
+avoid_faulty_services=${AVOID_FAULTY}
 udp_allowed=${UDP_ALLOWED}
 meta1_digits=${M1_DIGITS}
 zk_shuffled=${ZK_SHUFFLED}
@@ -797,7 +798,9 @@ bind_port = ${PORT}
 namespace = ${NS}
 db_path= ${VOLUME}
 # Currently, only 1 worker is allowed to avoid concurrent access to leveldb
+worker_class = sync
 workers = 1
+threads = 1
 log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
@@ -923,6 +926,7 @@ NS_STATE="state"
 MASTER_VALUE="master"
 SLAVE_VALUE="slave"
 STANDALONE_VALUE="standalone"
+AVOID_FAULTY="avoid_faulty_services"
 UDP_ALLOWED="udp_allowed"
 ZK_SHUFFLED="zk_shuffled"
 
@@ -944,6 +948,7 @@ defaults = {
     'REPLI_M1': 1,
     'COMPRESSION': "off",
     M1_DIGITS: 4,
+    AVOID_FAULTY: "off",
     UDP_ALLOWED: "off"}
 
 # XXX When /usr/sbin/httpd is present we suspect a Redhat/Centos/Fedora
@@ -1029,6 +1034,7 @@ def generate(options):
     is_wormed = options.get('worm', False)
     worm = '1' if is_wormed else '0'
     state = options.get("state", None)
+    avoid_faulty_services = str(options.get(AVOID_FAULTY, "off")).lower()
     udp_allowed = str(options.get(UDP_ALLOWED, "off")).lower()
     zk_shuffled = str(options.get(ZK_SHUFFLED, "off")).lower()
     proxy_cache = ensure(options.get(PROXY_CACHE), defaults[PROXY_CACHE])
@@ -1075,6 +1081,7 @@ def generate(options):
                META_HEADER=META_HEADER,
                STATE=state,
                WORM=worm,
+               AVOID_FAULTY=avoid_faulty_services,
                UDP_ALLOWED=udp_allowed,
                ZK_SHUFFLED=zk_shuffled)
 
@@ -1382,6 +1389,7 @@ def generate(options):
     final_conf["storage_policy"] = stgpol
     final_conf["account"] = 'test_account'
     final_conf["sds_path"] = SDSDIR
+    final_conf[AVOID_FAULTY] = avoid_faulty_services
     final_conf[UDP_ALLOWED] = udp_allowed
     final_conf[ZK_SHUFFLED] = zk_shuffled
     final_conf["proxy"] = final_services['proxy'][0]['addr']

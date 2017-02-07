@@ -24,7 +24,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metautils.h>
 #include <server/slab.h>
 #include <server/network_server.h>
-#include <server/stats_holder.h>
 
 #include "transport_http.h"
 

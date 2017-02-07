@@ -24,9 +24,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <glib.h>
 
-#include <events/oio_events_queue.h>
+#include <core/internals.h>
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
+#include <events/oio_events_queue.h>
 #include <server/transport_gridd.h>
 #include <server/gridd_dispatcher_filters.h>
 #include <cluster/lib/gridcluster.h>
@@ -48,7 +49,7 @@ enum content_action_e
 };
 
 static void
-_notify_beans (struct meta2_backend_s *m2b, struct oio_url_s *url,
+_m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		GSList *beans, const char *name)
 {
 	void forward (GSList *list_of_beans) {
@@ -151,9 +152,9 @@ _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 		meta2_filter_ctx_set_error(ctx, e);
 		rc = FILTER_KO;
 	} else {
-		_notify_beans (m2b, url, added, "content.new");
+		_m2b_notify_beans(m2b, url, added, "content.new");
 		if (deleted)
-			_notify_beans (m2b, url, deleted, "content.deleted");
+			_m2b_notify_beans(m2b, url, deleted, "content.deleted");
 		_on_bean_ctx_send_list(obc);
 		rc = FILTER_OK;
 	}
@@ -230,7 +231,7 @@ meta2_filter_action_append_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	_notify_beans (m2b, url, obc->l, "content.append");
+	_m2b_notify_beans(m2b, url, obc->l, "content.append");
 	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
@@ -289,7 +290,7 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	_notify_beans(m2b, url, obc->l, "content.deleted");
+	_m2b_notify_beans(m2b, url, obc->l, "content.deleted");
 	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
@@ -318,9 +319,9 @@ meta2_filter_action_truncate_content(struct gridd_filter_ctx_s *ctx,
 	}
 
 	if (deleted)
-		_notify_beans(m2b, url, deleted, "content.deleted");
+		_m2b_notify_beans(m2b, url, deleted, "content.deleted");
 	if (added)
-		_notify_beans(m2b, url, added, "content.new");
+		_m2b_notify_beans(m2b, url, added, "content.new");
 
 	_bean_cleanl2(added);
 	_bean_cleanl2(deleted);
@@ -343,7 +344,7 @@ meta2_filter_action_set_content_properties(struct gridd_filter_ctx_s *ctx,
 		flags = atoi(fstr);
 
 	if (!oio_url_has(url, OIOURL_PATH))
-		e = NEWERROR(CODE_BAD_REQUEST, "Missing content path");
+		e = BADREQ("Missing content path");
 	else
 		e = meta2_backend_set_properties(m2b, url, BOOL(flags&M2V2_FLAG_FLUSH),
 				beans, _bean_list_cb, &obc->l);
@@ -465,7 +466,7 @@ meta2_filter_action_generate_beans(struct gridd_filter_ctx_s *ctx,
 		} else if (strcmp(spare_type, M2V2_SPARE_BY_STGPOL) == 0) {
 			e = meta2_backend_get_spare_chunks(m2b, url, policy_str, &(obc->l));
 		} else {
-			e = NEWERROR(CODE_BAD_REQUEST, "Unknown type of spare request: %s", spare_type);
+			e = BADREQ("Unknown type of spare request: %s", spare_type);
 		}
 		if (e != NULL) {
 			meta2_filter_ctx_set_error(ctx, e);
@@ -490,3 +491,24 @@ meta2_filter_action_generate_beans(struct gridd_filter_ctx_s *ctx,
 	return FILTER_OK;
 }
 
+int
+meta2_filter_action_touch_content(struct gridd_filter_ctx_s *ctx,
+        struct gridd_reply_ctx_s *reply UNUSED)
+{
+    struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+    struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+
+	GSList *beans = NULL;
+	GError *err = meta2_backend_get_alias(
+			m2b, url, M2V2_FLAG_ALLPROPS|M2V2_FLAG_HEADERS,
+			_bean_list_cb, &beans);
+    if (!err) {
+		_m2b_notify_beans(m2b, url, beans, "content.new");
+		_bean_cleanl2(beans);
+		return FILTER_OK;
+	}
+
+	_bean_cleanl2(beans);
+    meta2_filter_ctx_set_error(ctx, err);
+    return FILTER_KO;
+}

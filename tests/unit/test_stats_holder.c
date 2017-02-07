@@ -18,8 +18,6 @@ License along with this library.
 */
 
 #include "metautils/lib/metautils.h"
-#include "server/stats_holder.h"
-#include <glib.h>
 
 #undef GQ
 #define GQ() g_quark_from_static_string("oio.server")

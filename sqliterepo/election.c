@@ -510,16 +510,19 @@ void
 election_manager_dump_delays(struct election_manager_s *manager)
 {
 	GRID_INFO("Election delays:");
-	GRID_INFO("- get_status=%ldms but nowait after %ldms",
+	GRID_INFO("- get_status=%"G_GINT64_FORMAT"ms "
+			"but nowait after %"G_GINT64_FORMAT"ms",
 			manager->delay_wait / G_TIME_SPAN_MILLISECOND,
 			manager->delay_nowait_pending / G_TIME_SPAN_MILLISECOND);
-	GRID_INFO("- expire_SLAVE=%ldms, expire_MASTER=%ldms, expire_NONE=%ldms",
+	GRID_INFO("- expire_SLAVE=%"G_GINT64_FORMAT"ms, "
+			"expire_MASTER=%"G_GINT64_FORMAT"ms, "
+			"expire_NONE=%"G_GINT64_FORMAT"ms",
 			manager->delay_expire_SLAVE / G_TIME_SPAN_MILLISECOND,
 			manager->delay_expire_MASTER / G_TIME_SPAN_MILLISECOND,
 			manager->delay_expire_NONE / G_TIME_SPAN_MILLISECOND);
-	GRID_INFO("- retry_failed=%ldms",
+	GRID_INFO("- retry_failed=%"G_GINT64_FORMAT"ms",
 			manager->delay_retry_FAILED/ G_TIME_SPAN_MILLISECOND);
-	GRID_INFO("- ping_final=%ldms",
+	GRID_INFO("- ping_final=%"G_GINT64_FORMAT"ms",
 			manager->delay_ping_final / G_TIME_SPAN_MILLISECOND);
 }
 

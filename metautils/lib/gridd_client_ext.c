@@ -140,6 +140,13 @@ gridd_clients_set_timeout(struct gridd_client_s **clients, gdouble seconds)
 		gridd_client_set_timeout(*clients, seconds);
 }
 
+void
+gridd_clients_set_timeout_cnx(struct gridd_client_s **clients, gdouble seconds)
+{
+	for (; *clients ;++clients)
+		gridd_client_set_timeout_cnx(*clients, seconds);
+}
+
 gboolean
 gridd_clients_finished(struct gridd_client_s **clients)
 {

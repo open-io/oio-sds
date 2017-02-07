@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015-2016 OpenIO, original work as part of OpenIO SDS
+Copyright (C) 2015-2017 OpenIO, original work as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -179,7 +179,7 @@ extern "C" {
 # endif
 
 # ifndef  COMMON_CNX_TIMEOUT
-#  define COMMON_CNX_TIMEOUT (2*G_TIME_SPAN_SECOND)
+#  define COMMON_CNX_TIMEOUT 2.0
 # endif
 
 # ifndef COMMON_CLIENT_TIMEOUT
@@ -194,15 +194,38 @@ extern "C" {
 #  define SQLX_CLIENT_TIMEOUT 30.0
 # endif
 
-/* Timeout for synchronisation requests (USE, GETVERS)
+/* Timeout when connecting for DB_USE requests
    in seconds */
-# ifndef SQLX_SYNC_TIMEOUT
-#  define SQLX_SYNC_TIMEOUT 4.0
+# ifndef SQLX_CNX_TIMEOUT_USE
+#  define SQLX_CNX_TIMEOUT_USE 0.25
+# endif
+
+/* Timeout when connecting for GETVERS requests
+   in seconds */
+# ifndef SQLX_CNX_TIMEOUT_GETVERS
+#  define SQLX_CNX_TIMEOUT_GETVERS 0.5
+# endif
+
+/* Timeout for synchronisation requests (USE)
+   in seconds */
+# ifndef SQLX_USE_TIMEOUT
+#  define SQLX_USE_TIMEOUT 1.0
+# endif
+
+/* Timeout for synchronisation requests (USE)
+   in seconds */
+# ifndef SQLX_GETVERS_TIMEOUT
+#  define SQLX_GETVERS_TIMEOUT 2.0
 # endif
 
 /* Timeout for SQLX_REPLICATE requests, in seconds */
 # ifndef SQLX_REPLI_TIMEOUT
 #  define SQLX_REPLI_TIMEOUT 10.0
+# endif
+
+/* Timeout for SQLX_REPLICATE TCP connection, in seconds */
+# ifndef SQLX_REPLI_TIMEOUT_CNX
+#  define SQLX_REPLI_TIMEOUT_CNX 1.0
 # endif
 
 /* Timeout for operations that require copying a DB */
@@ -321,6 +344,7 @@ extern "C" {
 
 # define OIO_CFG_LOG_OUTGOING  "log_outgoing"
 # define OIO_CFG_UDP_ALLOWED  "udp_allowed"
+# define OIO_CFG_AVOID_BADSRV  "avoid_faulty_services"
 # define OIO_CFG_ZK_SHUFFLED  "zk_shuffled"
 
 # define oio_cfg_get_eventagent(ns)     oio_cfg_get_value((ns), OIO_CFG_ACCOUNTAGENT)

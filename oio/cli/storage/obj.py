@@ -139,6 +139,38 @@ class CreateObject(ContainerCommandMixin, lister.Lister):
         return columns, l
 
 
+class TouchObject(ContainerCommandMixin, command.Command):
+    """Touch an object in a container, re-triggers asynchronous treatments"""
+
+    log = logging.getLogger(__name__ + '.TouchObject')
+
+    def get_parser(self, prog_name):
+        parser = super(TouchObject, self).get_parser(prog_name)
+        self.patch_parser(parser)
+        parser.add_argument(
+            'objects',
+            metavar='<object>',
+            nargs='+',
+            help='Object(s) to delete'
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+        super(TouchObject, self).take_action(parsed_args)
+        container = parsed_args.container
+
+        for obj in parsed_args.objects:
+            if parsed_args.auto:
+                manager = self.app.client_manager.get_flatns_manager()
+                container = manager(obj)
+            self.app.client_manager.storage.object_touch(
+                self.app.client_manager.get_account(),
+                container,
+                obj
+            )
+
+
 class DeleteObject(ContainerCommandMixin, command.Command):
     """Delete object from container"""
 

@@ -7,8 +7,7 @@ add_library(server SHARED
 		internals.h
 		slab.c slab.h
 		network_server.c network_server.h
-        transport_gridd.c transport_gridd.h
-		stats_holder.c stats_holder.h)
+        transport_gridd.c transport_gridd.h)
 
 set_target_properties(server PROPERTIES SOVERSION ${ABI_VERSION})
 
