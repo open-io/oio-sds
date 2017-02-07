@@ -960,6 +960,8 @@ class ECWriteHandler(io.WriteHandler):
             content_chunks += chunks
             if bytes_transferred < max_size:
                 break
+            if len(self.source.peek()) == 0:
+                break
 
         # compute the final content checksum
         content_checksum = global_checksum.hexdigest()

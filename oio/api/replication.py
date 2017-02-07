@@ -257,6 +257,8 @@ class ReplicatedWriteHandler(io.WriteHandler):
             total_bytes_transferred += bytes_transferred
             if bytes_transferred < size:
                 break
+            if len(self.source.peek()) == 0:
+                break
 
         content_checksum = global_checksum.hexdigest()
 

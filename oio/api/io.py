@@ -11,6 +11,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from __future__ import absolute_import
+from io import BufferedReader
 import itertools
 import logging
 from urlparse import urlparse
@@ -53,7 +55,7 @@ class WriteHandler(object):
         :param write_timeout: timeout to send a buffer of data
         :param read_timeout: timeout to read a buffer of data from source
         """
-        self.source = source
+        self.source = BufferedReader(source)
         if isinstance(chunk_preparer, dict):
             def _sort_and_yield():
                 for pos in sorted(chunk_preparer.keys()):
