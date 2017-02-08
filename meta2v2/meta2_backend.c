@@ -359,11 +359,10 @@ m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 		return NEWERROR(CODE_CONTAINER_FROZEN, "destruction pending");
 	}
 
-	/* M2V2_OPEN_AUTOCREATE is only used when creating the container.
-	 * If not specified, we expect the container to also be "softly"
-	 * initiated.
-	 * non-LOCAL accesses are made by the functional requests, not by
-	 * the  */
+	/* M2V2_OPEN_AUTOCREATE is only used when creating the container. If not
+	 * specified, we expect the container to also be "softly" initiated.
+	 * Non-LOCAL accesses are made by the functional requests, and by no
+	 * other, excepted by the DESTROY request. */
 	if (!(how & M2V2_OPEN_AUTOCREATE) &&
 			M2V2_OPEN_LOCAL == (how & M2V2_OPEN_REPLIMODE)) {
 		if (!_is_container_initiated(sq3)) {
