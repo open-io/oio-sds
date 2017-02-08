@@ -147,11 +147,13 @@ _ping(gchar *dest, gchar *to)
 	GError *err = gridd_client_exec(dest, timeout, encoded);
 	gint64 end = oio_ext_monotonic_time();
 	if (err) {
-		g_print("KO (%d) %s\n", err->code, err->message);
+		g_print("PING KO (%d) %s\n", err->code, err->message);
 		g_clear_error(&err);
 		return 1;
 	} else {
-		g_print("OK %lfs\n", (end - start) / (gdouble)G_TIME_SPAN_SECOND);
+		gdouble ping_ms = (end - start) / (gdouble)G_TIME_SPAN_MILLISECOND;
+		g_print("PING OK %.3lfms | time=%.3lfms;;;0.0;%.3lf\n",
+				ping_ms, ping_ms, timeout * 1000.0);
 		return 0;
 	}
 }
@@ -184,23 +186,29 @@ _print_loc(const char *dotted_loc)
 	g_print("%s\t%"OIO_LOC_FORMAT"\n", dotted_loc, loc);
 }
 
+static void
+_print_usage(const char *name)
+{
+	g_printerr ("Usage:\n");
+	g_printerr ("\nPrint hex representation of the address\n");
+	g_printerr (" %s addr IP:PORT\n", name);
+	g_printerr ("\nPrint hex representation of container ID\n");
+	g_printerr (" %s cid  OIOURL\n", name);
+	g_printerr ("\nGenerate container names with same hexadecimal prefix\n");
+	g_printerr (" %s hash ACCOUNT [PREFIX]\n", name);
+	g_printerr ("\nPing a service (timeout is 10.0 seconds by default)\n");
+	g_printerr (" %s ping IP:PORT [TIMEOUT]\n", name);
+	g_printerr ("\nGet free CPU, IO and space statistics\n");
+	g_printerr (" %s stat [path]...\n", name);
+	g_printerr ("\nCompute 64b integer location from dotted string\n");
+	g_printerr (" %s location DOTTED_STRING...\n", name);
+}
+
 int
 main (int argc, char **argv)
 {
 	if (argc < 2) {
-		g_printerr ("Usage:\n");
-		g_printerr ("Print hex representation of the address\n");
-		g_printerr (" %s addr IP:PORT\n", argv[0]);
-		g_printerr ("Print hex representation of container ID\n");
-		g_printerr (" %s cid  OIOURL\n", argv[0]);
-		g_printerr ("Generate container names with same hexadecimal prefix\n");
-		g_printerr (" %s hash ACCOUNT [PREFIX]\n", argv[0]);
-		g_printerr ("Ping a service\n");
-		g_printerr (" %s ping IP:PORT [TIMEOUT]\n", argv[0]);
-		g_printerr ("Get free CPU, IO and space statistics\n");
-		g_printerr (" %s stat [path]...\n", argv[0]);
-		g_printerr ("Compute 64b integer location from dotted string\n");
-		g_printerr (" %s location DOTTED_STRING...\n", argv[0]);
+		_print_usage(argv[0]);
 		return 2;
 	}
 	oio_ext_set_random_reqid ();
@@ -233,6 +241,11 @@ main (int argc, char **argv)
 	} else if (!strcmp("location", argv[1])) {
 		for (int i = 2; i < argc; ++i)
 			_print_loc(argv[i]);
+		return 0;
+	} else if (!strcmp("-h", argv[1]) ||
+			!strcmp("help", argv[1]) ||
+			!strcmp("--help", argv[1])) {
+		_print_usage(argv[0]);
 		return 0;
 	}
 
