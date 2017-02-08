@@ -57,7 +57,7 @@ class DirectoryInit(DirectoryCmd):
         if parsed_args.rdir:
             self.log.info("Assigning rdir services to rawx services...")
             time.sleep(5)  # Let meta1 fetch the list of managed bases
-            self.app.client_manager.admin.volume.assign_all_rawx()
+            self.app.client_manager.admin.rdir_lb.assign_all_rawx()
         self.log.info("Done")
 
 
