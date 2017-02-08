@@ -35,7 +35,7 @@ class RdirDispatcher(Client):
                  for x in all_rdir}
 
         if not cs:
-            raise ClientException("The conscience client is not readdy")
+            raise ClientException("The conscience client is not ready")
         if len(all_rdir) <= 0:
             raise ServiceUnavailable("No rdir service found in %s" % self.ns)
 
@@ -136,7 +136,7 @@ class RdirClient(Client):
             body[key] = value
 
         self._rdir_request(volume_id, 'POST', 'rdir/push', create=True,
-                           json=body, headers={})
+                           json=body)
 
     def chunk_delete(self, volume_id, container_id, content_id, chunk_id):
         """Unreference a chunk from the reverse directory"""
