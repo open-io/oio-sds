@@ -884,12 +884,19 @@ _filter (struct filter_ctx_s *ctx, GSList *l)
 }
 
 static GError *
-_m2_container_create_with_properties (struct req_args_s *args, char **props)
+_m2_container_create_with_properties (struct req_args_s *args, char **props,
+		const char *container_stgpol, const char *container_verpol)
 {
 	gboolean autocreate = _request_get_flag (args, "autocreate");
+
+	/* JFS: don't lookup for default verpol and stgpol, we must left they unset
+	 * so that they will follow the default values of the namespace and (later)
+	 * of the account. This is how we do NOW, by letting the meta2 find the best
+	 * value when necessary. */
 	struct m2v2_create_params_s param = {
-			OPT("stgpol"), OPT("verpol"), props, FALSE
+			container_stgpol, container_verpol, props, FALSE
 	};
+
 	GError *err = NULL;
 	PACKER_VOID (_pack) { return m2v2_remote_pack_CREATE (args->url, &param); }
 
@@ -924,6 +931,12 @@ retry:
 	}
 
 	return err;
+}
+
+static GError *
+_m2_container_create_with_defaults (struct req_args_s *args)
+{
+	return _m2_container_create_with_properties(args, NULL, NULL, NULL);
 }
 
 static void
@@ -1186,7 +1199,8 @@ _m2_container_create (struct req_args_s *args, struct json_object *jbody)
 	if (err)
 		return _reply_m2_error(args, err);
 
-	err = _m2_container_create_with_properties(args, properties);
+	err = _m2_container_create_with_properties(
+			args, properties, OPT("stgpol"), OPT("verpol"));
 	g_strfreev (properties);
 
 	if (err && CODE_IS_NOTFOUND(err->code))
@@ -1470,7 +1484,7 @@ enum http_rc_e action_container_raw_delete (struct req_args_s *args) {
 
 /* CONTENT action resource -------------------------------------------------- */
 
-static enum http_rc_e action_m2_content_beans (struct req_args_s *args,
+static enum http_rc_e action_m2_content_prepare (struct req_args_s *args,
 		struct json_object *jargs) {
 	struct json_object *jsize = NULL, *jpol = NULL;
 	json_object_object_get_ex(jargs, "size", &jsize);
@@ -1504,7 +1518,7 @@ retry:
 					err->code, err->message);
 			autocreate = FALSE;
 			g_clear_error (&err);
-			err = _m2_container_create_with_properties (args, NULL);
+			err = _m2_container_create_with_defaults (args);
 			if (!err)
 				goto retry;
 			if (err->code == CODE_CONTAINER_EXISTS
@@ -1747,7 +1761,7 @@ retry:
 			GRID_DEBUG("Resource not found, autocreation");
 			autocreate = FALSE;
 			g_clear_error (&err);
-			err = _m2_container_create_with_properties (args, NULL);
+			err = _m2_container_create_with_defaults (args);
 			if (!err)
 				goto retry;
 			if (err->code == CODE_CONTAINER_EXISTS
@@ -1804,7 +1818,7 @@ enum http_rc_e action_content_truncate(struct req_args_s *args) {
 }
 
 enum http_rc_e action_content_prepare (struct req_args_s *args) {
-	return rest_action (args, action_m2_content_beans);
+	return rest_action (args, action_m2_content_prepare);
 }
 
 enum http_rc_e action_content_show (struct req_args_s *args) {
