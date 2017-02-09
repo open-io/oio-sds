@@ -1,5 +1,6 @@
 
 [handler:storage.content.new]
+pipeline = noop
 
 [handler:storage.content.deleted]
 pipeline = content_cleaner
@@ -19,6 +20,9 @@ pipeline = volume_index
 [handler:storage.chunk.deleted]
 pipeline = volume_index
 
+[handler:account.services]
+pipeline = noop
+
 [filter:content_cleaner]
 use = egg:oio#content_cleaner
 
@@ -27,3 +31,6 @@ use = egg:oio#account_update
 
 [filter:volume_index]
 use = egg:oio#volume_index
+
+[filter:noop]
+use = egg:oio#noop

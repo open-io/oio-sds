@@ -718,9 +718,11 @@ syslog_prefix = OIO,${NS},event-agent
 template_event_agent_handlers = """
 [handler:storage.content.new]
 # pipeline = replication
+pipeline = noop
 
 [handler:storage.content.append]
 # pipeline = replication
+pipeline = noop
 
 [handler:storage.content.deleted]
 # pipeline = content_cleaner replication
@@ -741,6 +743,9 @@ pipeline = volume_index
 [handler:storage.chunk.deleted]
 pipeline = volume_index
 
+[handler:account.services]
+pipeline = noop
+
 [filter:content_cleaner]
 use = egg:oio#content_cleaner
 key_file = ${KEY_FILE}
@@ -756,6 +761,8 @@ use = egg:oio#notify
 tube = oio-repli
 queue_url = beanstalk://127.0.0.1:11300
 
+[filter:noop]
+use = egg:oio#noop
 """
 
 template_conscience_agent = """
