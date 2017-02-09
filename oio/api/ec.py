@@ -648,7 +648,7 @@ class ECWriter(object):
                     self.failed = True
                     msg = str(exc)
                     logger.warn("Failed to write to %s (%s)", self.chunk, msg)
-                    self.chunk['error'] = 'write: ' % msg
+                    self.chunk['error'] = 'write: %s' % msg
 
             self.queue.task_done()
 
