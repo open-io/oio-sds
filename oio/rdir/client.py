@@ -25,6 +25,30 @@ class RdirDispatcher(Client):
         self.directory = DirectoryAPI(self.ns, self.endpoint, **kwargs)
         self.rdir = RdirClient(conf, **kwargs)
 
+    def get_assignation(self):
+        cs = ConscienceClient(self.conf)
+        all_rawx = cs.all_services('rawx')
+        all_rdir = cs.all_services('rdir', True)
+        by_id = {_make_id(self.ns, 'rdir', x['addr']): x
+                 for x in all_rdir}
+
+        for rawx in all_rawx:
+            try:
+                # Verify that there is no rdir linked
+                resp = self.directory.get(RDIR_ACCT, rawx['addr'],
+                                          service_type='rdir')
+                rdir_host = _filter_rdir_host(resp)
+                try:
+                    rawx['rdir'] = by_id[_make_id(self.ns, 'rdir', rdir_host)]
+                except KeyError:
+                    self.logger.warn("rdir %s linked to rawx %s seems down",
+                                     rdir_host, rawx['addr'])
+                    rawx['rdir'] = {"addr": rdir_host, "tags": dict()}
+                    by_id[_make_id(self.ns, 'rdir', rdir_host)] = rawx['rdir']
+            except NotFound:
+                self.logger.info("No rdir linked to %s", rawx['addr'])
+        return all_rawx
+
     def assign_all_rawx(self, max_per_rdir=None):
         """
         Find a rdir service for all rawx that don't have one already.
@@ -36,13 +60,11 @@ class RdirDispatcher(Client):
         cs = ConscienceClient(self.conf)
         all_rawx = cs.all_services('rawx')
         all_rdir = cs.all_services('rdir', True)
-        by_id = {_make_id(self.ns, 'rdir', x['addr']): x
-                 for x in all_rdir}
-
-        if not cs:
-            raise ClientException("The conscience client is not ready")
         if len(all_rdir) <= 0:
             raise ServiceUnavailable("No rdir service found in %s" % self.ns)
+
+        by_id = {_make_id(self.ns, 'rdir', x['addr']): x
+                 for x in all_rdir}
 
         for rawx in all_rawx:
             try:
@@ -81,16 +103,18 @@ class RdirDispatcher(Client):
             raise ServiceUnavailable(
                     "No valid rdir service found in %s" % self.ns)
         if not max_per_rdir:
-            max_per_rdir = max(sum(opened_db) / float(len(opened_db)) - 1, 1)
+            upper_limit = sum(opened_db) / float(len(opened_db))
+        else:
+            upper_limit = max_per_rdir - 1
         avoids = [_make_id(self.ns, "rdir", x['addr'])
                   for x in all_rdir
                   if x['score'] > 0 and
-                  x['tags']['stat.opened_db_count'] >= max_per_rdir]
+                  x['tags']['stat.opened_db_count'] > upper_limit]
         known = [_make_id(self.ns, "rawx", volume_id)]
         try:
             polled = cs.poll('rdir', avoid=avoids, known=known)[0]
         except ClientException as exc:
-            if exc.status != 481:
+            if exc.status != 481 or max_per_rdir:
                 raise
             # Retry without `avoids`, hoping the next iteration will rebalance
             polled = cs.poll('rdir', known=known)[0]

@@ -4,6 +4,8 @@ import time
 from cliff import lister
 from cliff import show
 
+from oio.common.exceptions import ClientException
+
 
 class ShowAdminVolume(show.ShowOne):
     """Show admin volume"""
@@ -183,18 +185,30 @@ class UnlockAdminVolume(lister.Lister):
 
 
 class BootstrapVolume(lister.Lister):
-    """Assign a rdir service to all rawx"""
+    """Assign an rdir service to all rawx"""
 
     log = logging.getLogger(__name__ + '.BootstrapVolume')
 
     def get_parser(self, prog_name):
         parser = super(BootstrapVolume, self).get_parser(prog_name)
+        parser.add_argument(
+            '--max-per-rdir',
+            metavar='<N>',
+            type=int,
+            help="Maximum number of databases per rdir service")
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
-        all_rawx = self.app.client_manager.admin.rdir_lb.assign_all_rawx()
+        try:
+            all_rawx = self.app.client_manager.admin.rdir_lb.assign_all_rawx(
+                    parsed_args.max_per_rdir)
+        except ClientException as exc:
+            if exc.status != 481:
+                raise
+            self.log.warn("Failed to assign all rawx: %s", exc)
+            all_rawx = self.app.client_manager.admin.rdir_lb.get_assignation()
 
         results = list()
         for rawx in all_rawx:
@@ -205,4 +219,50 @@ class BootstrapVolume(lister.Lister):
                             rawx['tags'].get('tag.loc')))
         results.sort()
         columns = ('Rdir', 'Rawx', 'Rdir location', 'Rawx location')
+        return columns, results
+
+
+class DisplayVolumeAssignation(lister.Lister):
+    """Display which rdir service is linked to each rawx service"""
+
+    log = logging.getLogger(__name__ + '.DisplayVolumeAssignation')
+
+    def get_parser(self, prog_name):
+        parser = super(DisplayVolumeAssignation, self).get_parser(prog_name)
+        parser.add_argument(
+            '--aggregated',
+            action="store_true",
+            help="Display an aggregation of the assignation")
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        all_rawx = self.app.client_manager.admin.rdir_lb.get_assignation()
+
+        results = list()
+        if not parsed_args.aggregated:
+            for rawx in all_rawx:
+                rdir = rawx.get('rdir', {"addr": "n/a", "tags": {}})
+                results.append((rdir['addr'],
+                                rawx['addr'],
+                                rdir['tags'].get('tag.loc'),
+                                rawx['tags'].get('tag.loc')))
+            results.sort()
+            columns = ('Rdir', 'Rawx', 'Rdir location', 'Rawx location')
+        else:
+            dummy_rdir = {"addr": "n/a", "tags": {}}
+            rdir_by_addr = dict()
+            for rawx in all_rawx:
+                rdir = rawx.get('rdir', dummy_rdir)
+                rdir_by_addr[rdir["addr"]] = rdir
+                managed_rawx = rdir.get('managed_rawx') or list()
+                managed_rawx.append(rawx['addr'])
+                rdir['managed_rawx'] = managed_rawx
+            for addr, rdir in rdir_by_addr.iteritems():
+                results.append((addr,
+                                len(rdir['managed_rawx']),
+                                ' '.join(rdir['managed_rawx'])))
+            results.sort()
+            columns = ('Rdir', 'Number of bases', 'Bases')
         return columns, results
