@@ -23,16 +23,19 @@ static gpointer
 _worker (gpointer p)
 {
 	EXTRA_ASSERT(running != FALSE);
-	EXTRA_ASSERT(q != NULL);
-	s_err = oio_events_queue__run (q, _running);
+	if (q)
+		s_err = oio_events_queue__run (q, _running);
 	return p;
 }
 
 GError *
 rawx_event_init (const char *addr)
 {
-	if (!addr)
+	if (!addr) {
+		q = NULL;
+		th_queue = NULL;
 		return NULL;
+	}
 
 	GError *err = oio_events_queue_factory__check_config (addr);
 	if (err) {
@@ -60,24 +63,29 @@ void
 rawx_event_destroy (void)
 {
 	running = FALSE;
-	g_thread_join (th_queue);
-	th_queue = NULL;
+	if (th_queue) {
+		g_thread_join (th_queue);
+		th_queue = NULL;
+	}
 	if (s_err)
 		g_clear_error(&s_err);
-	oio_events_queue__destroy (q);
-	q = NULL;
+	if (q) {
+		oio_events_queue__destroy (q);
+		q = NULL;
+	}
 }
 
 GError *
 rawx_event_send (const char *event_type, GString *data_json)
 {
-	EXTRA_ASSERT(q != NULL);
+	if (q != NULL && th_queue != NULL) {
+		GString *json = oio_event__create (event_type, NULL);
+		g_string_append_printf(json, ",\"data\":%.*s}",
+				(int) data_json->len, data_json->str);
+		oio_events_queue__send (q, g_string_free (json, FALSE));
+	}
 
-	GString *json = oio_event__create (event_type, NULL);
-	g_string_append_printf(json, ",\"data\":%.*s}",
-			(int) data_json->len, data_json->str);
 	g_string_free (data_json, TRUE);
-	oio_events_queue__send (q, g_string_free (json, FALSE));
-
 	return NULL;
 }
+
