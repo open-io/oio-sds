@@ -194,7 +194,7 @@ class BootstrapVolume(lister.Lister):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
-        all_rawx = self.app.client_manager.admin.volume.assign_all_rawx()
+        all_rawx = self.app.client_manager.admin.rdir_lb.assign_all_rawx()
 
         results = list()
         for rawx in all_rawx:

@@ -1,7 +1,7 @@
 from oio.api.directory import DirectoryAPI
 from oio.common import exceptions as exc
 from oio.conscience.client import ConscienceClient
-from oio.rdir.client import RdirClient
+from oio.rdir.client import RdirDispatcher
 from tests.utils import random_str, BaseTestCase
 
 
@@ -265,7 +265,7 @@ class TestDirectoryAPI(BaseTestCase):
             self.api.delete('_RDIR_TEST', rawx['addr'])
 
     def test_rdir_repartition(self):
-        client = RdirClient({'namespace': self.ns})
+        client = RdirDispatcher({'namespace': self.ns})
         all_rawx = client.assign_all_rawx()
         by_rdir = dict()
         total = 0

@@ -1,6 +1,6 @@
 import logging
 from oio.common.utils import json
-from oio.rdir.client import RdirClient
+from oio.rdir.client import RdirClient, RdirDispatcher
 from oio.event.client import EventClient
 from oio.conscience.client import ConscienceClient
 from oio.directory.meta0 import Meta0Client
@@ -14,7 +14,8 @@ class AdminClient(object):
     def __init__(self, namespace, session=None, **kwargs):
         self.conf = {'namespace': namespace}
         self.conf.update(kwargs)
-        self._volume = None
+        self._rdir = None
+        self._rdir_lb = None
         self._event = None
         self._cluster = None
         self._meta0 = None
@@ -22,9 +23,15 @@ class AdminClient(object):
 
     @property
     def volume(self):
-        if not self._volume:
-            self._volume = RdirClient(self.conf, session=self.session)
-        return self._volume
+        if not self._rdir:
+            self._rdir = RdirClient(self.conf, session=self.session)
+        return self._rdir
+
+    @property
+    def rdir_lb(self):
+        if not self._rdir_lb:
+            self._rdir_lb = RdirDispatcher(self.conf, session=self.session)
+        return self._rdir_lb
 
     @property
     def event(self):
