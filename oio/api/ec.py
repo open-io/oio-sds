@@ -690,6 +690,9 @@ class ECWriter(object):
         with Timeout(self.write_timeout):
             return self.conn.getresponse()
 
+    def close(self):
+        self.conn.close()
+
 
 # FIXME: the name of this class is misleading
 # since it does not extend io.WriteHandler
@@ -716,15 +719,20 @@ class ECChunkWriteHandler(object):
                 failed_chunks.append(chunk)
             else:
                 current_writers.append(writer)
-        # write the data
-        bytes_transferred = self._stream(source, size, current_writers)
 
-        # get the chunks from writers
-        chunks, quorum = self._get_results(current_writers)
+        try:
+            # write the data
+            bytes_transferred = self._stream(source, size, current_writers)
 
-        if not quorum:
-            logger.error('Quorum not reached during write')
-            raise exceptions.OioException('Write failure')
+            # get the chunks from writers
+            chunks, quorum = self._get_results(current_writers)
+
+            if not quorum:
+                logger.error('Quorum not reached during write')
+                raise exceptions.OioException('Write failure')
+        finally:
+            for writer in current_writers:
+                writer.close()
 
         meta_checksum = self.checksum.hexdigest()
 
@@ -755,6 +763,7 @@ class ECChunkWriteHandler(object):
                     writer.checksum.update(fragment)
                     writer.send(fragment)
                 else:
+                    writer.close()
                     current_writers.remove(writer)
             self._check_quorum(current_writers)
             # TODO handle no quorum
