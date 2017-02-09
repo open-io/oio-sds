@@ -3,7 +3,6 @@ import os
 import csv
 import sys
 import cStringIO
-from itertools import chain
 import argparse
 
 from eventlet.event import Event
@@ -80,9 +79,6 @@ class Checker(object):
         self.error_writer.writerow(error)
 
     def check_chunk(self, target):
-        account = target.account
-        container = target.container
-        obj = target.obj
         chunk = target.chunk
 
         obj_listing = self.check_obj(target)
@@ -90,13 +86,14 @@ class Checker(object):
         if chunk not in obj_listing:
             print('  Chunk %s missing in object listing' % target)
             error = True
-            checksum = None
+            # checksum = None
         else:
-            checksum = obj_listing[chunk]['hash']
+            # TODO check checksum match
+            # checksum = obj_listing[chunk]['hash']
+            pass
 
-        resp = None
         try:
-            resp = self.blob_client.chunk_head(chunk)
+            self.blob_client.chunk_head(chunk)
         except exc.NotFound as e:
             self.chunk_not_found += 1
             error = True
@@ -105,8 +102,6 @@ class Checker(object):
             self.chunk_exceptions += 1
             error = True
             print('  Exception chunk "%s": %s' % (target, str(e)))
-
-        # TODO check checksum match
 
         if error and self.error_file:
             self.write_error(target)
@@ -128,14 +123,16 @@ class Checker(object):
         if obj not in container_listing:
             print('  Object %s missing in container listing' % target)
             error = True
-            checksum = None
+            # checksum = None
         else:
-            checksum = container_listing[obj]['hash']
+            # TODO check checksum match
+            # checksum = container_listing[obj]['hash']
+            pass
 
         results = []
         try:
             _, resp = self.container_client.content_show(
-                    acct=account, ref=container,path=obj)
+                    acct=account, ref=container, path=obj)
         except exc.NotFound as e:
             self.object_not_found += 1
             error = True
@@ -236,7 +233,8 @@ class Checker(object):
         results = []
         while True:
             try:
-                resp = self.account_client.containers_list(account, marker=marker)
+                resp = self.account_client.containers_list(
+                    account, marker=marker)
             except Exception as e:
                 self.account_exceptions += 1
                 error = True
@@ -318,7 +316,7 @@ def main():
                         help='target to check integrity')
     parser.add_argument('-o', '--output', help='output file')
     parser.add_argument('-v', '--verbose',
-                      action='store_true', help='verbose output')
+                        action='store_true', help='verbose output')
 
     args = parser.parse_args()
 
