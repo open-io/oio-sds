@@ -23,29 +23,60 @@ class RdirDispatcher(Client):
     def __init__(self, conf, **kwargs):
         super(RdirDispatcher, self).__init__(conf, **kwargs)
         self.directory = DirectoryAPI(self.ns, self.endpoint, **kwargs)
+        self.rdir = RdirClient(conf, **kwargs)
 
-    def assign_all_rawx(self):
-        """
-        Find a rdir service for all rawx that don't have one already.
-        """
+    def get_assignation(self):
         cs = ConscienceClient(self.conf)
         all_rawx = cs.all_services('rawx')
         all_rdir = cs.all_services('rdir', True)
         by_id = {_make_id(self.ns, 'rdir', x['addr']): x
                  for x in all_rdir}
 
-        if not cs:
-            raise ClientException("The conscience client is not ready")
+        for rawx in all_rawx:
+            try:
+                # Verify that there is no rdir linked
+                resp = self.directory.get(RDIR_ACCT, rawx['addr'],
+                                          service_type='rdir')
+                rdir_host = _filter_rdir_host(resp)
+                try:
+                    rawx['rdir'] = by_id[_make_id(self.ns, 'rdir', rdir_host)]
+                except KeyError:
+                    self.logger.warn("rdir %s linked to rawx %s seems down",
+                                     rdir_host, rawx['addr'])
+                    rawx['rdir'] = {"addr": rdir_host, "tags": dict()}
+                    by_id[_make_id(self.ns, 'rdir', rdir_host)] = rawx['rdir']
+            except NotFound:
+                self.logger.info("No rdir linked to %s", rawx['addr'])
+        return all_rawx
+
+    def assign_all_rawx(self, max_per_rdir=None):
+        """
+        Find a rdir service for all rawx that don't have one already.
+
+        :param max_per_rdir: maximum number or rawx services that an rdir
+                             can be linked to
+        :type max_per_rdir: `int`
+        """
+        cs = ConscienceClient(self.conf)
+        all_rawx = cs.all_services('rawx')
+        all_rdir = cs.all_services('rdir', True)
         if len(all_rdir) <= 0:
             raise ServiceUnavailable("No rdir service found in %s" % self.ns)
+
+        by_id = {_make_id(self.ns, 'rdir', x['addr']): x
+                 for x in all_rdir}
 
         for rawx in all_rawx:
             try:
                 # Verify that there is no rdir linked
                 resp = self.directory.get(RDIR_ACCT, rawx['addr'],
                                           service_type='rdir')
-                rawx['rdir'] = by_id[_make_id(self.ns, 'rdir',
-                                              _filter_rdir_host(resp))]
+                rdir_host = _filter_rdir_host(resp)
+                try:
+                    rawx['rdir'] = by_id[_make_id(self.ns, 'rdir', rdir_host)]
+                except KeyError:
+                    self.logger.warn("rdir %s linked to rawx %s seems down",
+                                     rdir_host, rawx['addr'])
             except (NotFound, ClientException):
                 if rawx['score'] <= 0:
                     self.logger.warn("rawx %s has score %s, and thus cannot be"
@@ -53,32 +84,37 @@ class RdirDispatcher(Client):
                                      "limitation)",
                                      rawx['addr'], rawx['score'])
                     continue
-                rdir = self._smart_link_rdir(rawx['addr'], cs, all_rdir)
+                rdir = self._smart_link_rdir(rawx['addr'], cs, all_rdir,
+                                             max_per_rdir)
                 n_bases = by_id[rdir]['tags'].get("stat.opened_db_count", 0)
                 by_id[rdir]['tags']["stat.opened_db_count"] = n_bases + 1
                 rawx['rdir'] = by_id[rdir]
         return all_rawx
 
-    def _smart_link_rdir(self, volume_id, cs, all_rdir):
+    def _smart_link_rdir(self, volume_id, cs, all_rdir, max_per_rdir=None):
         """
         Force the load balancer to avoid services that already host more
-        bases than the average while selecting rdir services.
+        bases than the average (or more than `max_per_rdir`)
+        while selecting rdir services.
         """
-        avail_base_count = [x['tags']['stat.opened_db_count'] for x in all_rdir
-                            if x['score'] > 0]
-        if len(avail_base_count) <= 0:
+        opened_db = [x['tags']['stat.opened_db_count'] for x in all_rdir
+                     if x['score'] > 0]
+        if len(opened_db) <= 0:
             raise ServiceUnavailable(
                     "No valid rdir service found in %s" % self.ns)
-        mean = sum(avail_base_count) / float(len(avail_base_count))
+        if not max_per_rdir:
+            upper_limit = sum(opened_db) / float(len(opened_db))
+        else:
+            upper_limit = max_per_rdir - 1
         avoids = [_make_id(self.ns, "rdir", x['addr'])
                   for x in all_rdir
                   if x['score'] > 0 and
-                  x['tags']['stat.opened_db_count'] > mean]
+                  x['tags']['stat.opened_db_count'] > upper_limit]
         known = [_make_id(self.ns, "rawx", volume_id)]
         try:
             polled = cs.poll('rdir', avoid=avoids, known=known)[0]
         except ClientException as exc:
-            if exc.status != 481:
+            if exc.status != 481 or max_per_rdir:
                 raise
             # Retry without `avoids`, hoping the next iteration will rebalance
             polled = cs.poll('rdir', known=known)[0]
@@ -86,6 +122,11 @@ class RdirDispatcher(Client):
                   'seq': 1, 'args': "", 'id': polled['id']}
         self.directory.force(RDIR_ACCT, volume_id, 'rdir',
                              forced, autocreate=True)
+        try:
+            self.rdir.create(volume_id)
+        except Exception as exc:
+            self.logger.warn("Failed to create database for %s on %s: %s",
+                             volume_id, polled['addr'], exc)
         return polled['id']
 
 
@@ -124,6 +165,10 @@ class RdirClient(Client):
         uri = self._make_uri(action, volume)
         resp, body = self._direct_request(method, uri, params=params, **kwargs)
         return resp, body
+
+    def create(self, volume_id):
+        """Create the database for `volume_id` on the appropriate rdir"""
+        self._rdir_request(volume_id, 'POST', 'rdir/create')
 
     def chunk_push(self, volume_id, container_id, content_id, chunk_id,
                    **data):

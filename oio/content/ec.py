@@ -1,4 +1,4 @@
-# Copyright (C) 2015 OpenIO, original work as part of
+# Copyright (C) 2015-2017 OpenIO, original work as part of
 # OpenIO Software Defined Storage
 #
 # This library is free software; you can redistribute it and/or
@@ -22,7 +22,7 @@ from oio.common.utils import GeneratorReader
 
 
 class ECContent(Content):
-    def rebuild_chunk(self, chunk_id):
+    def rebuild_chunk(self, chunk_id, allow_same_rawx=False):
         current_chunk = self.chunks.filter(id=chunk_id).one()
 
         if current_chunk is None:
@@ -31,7 +31,10 @@ class ECContent(Content):
         chunks = self.chunks.filter(metapos=current_chunk.metapos)\
             .exclude(id=chunk_id)
 
-        spare_url = self._get_spare_chunk(chunks.all(), [current_chunk])
+        broken_list = list()
+        if not allow_same_rawx:
+            broken_list.append(current_chunk)
+        spare_url = self._get_spare_chunk(chunks.all(), broken_list)
 
         handler = ECRebuildHandler(
             chunks.raw(), current_chunk.subpos, self.storage_method)

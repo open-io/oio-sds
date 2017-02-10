@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2016 OpenIO, original work as part of
+# Copyright (C) 2015-2017 OpenIO, original work as part of
 # OpenIO Software Defined Storage
 #
 # This library is free software; you can redistribute it and/or
@@ -85,7 +85,7 @@ class Content(object):
             version=self.version, chunk_method=self.chunk_method,
             mime_type=self.mime_type, data=self.chunks.raw())
 
-    def rebuild_chunk(self, chunk_id):
+    def rebuild_chunk(self, chunk_id, allow_same_rawx=False):
         raise NotImplementedError()
 
     def create(self, stream):

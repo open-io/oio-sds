@@ -1,4 +1,4 @@
-# Copyright (C) 2015 OpenIO, original work as part of
+# Copyright (C) 2015-2017 OpenIO, original work as part of
 # OpenIO Software Defined Storage
 #
 # This library is free software; you can redistribute it and/or
@@ -74,7 +74,7 @@ class PlainContent(Content):
         self._create_object()
         return final_chunks, bytes_transferred, content_checksum
 
-    def rebuild_chunk(self, chunk_id):
+    def rebuild_chunk(self, chunk_id, allow_same_rawx=False):
         current_chunk = self.chunks.filter(id=chunk_id).one()
         if current_chunk is None:
             raise exc.OrphanChunk("Chunk not found in content")
@@ -84,8 +84,11 @@ class PlainContent(Content):
         if len(duplicate_chunks) == 0:
             raise UnrecoverableContent("No copy of missing chunk")
 
+        broken_list = list()
+        if not allow_same_rawx:
+            broken_list.append(current_chunk)
         spare_urls = self._get_spare_chunk(
-            duplicate_chunks, [current_chunk])
+            duplicate_chunks, broken_list)
 
         uploaded = False
         for src in duplicate_chunks:

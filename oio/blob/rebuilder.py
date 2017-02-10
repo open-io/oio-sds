@@ -1,4 +1,4 @@
-# Copyright (C) 2015 OpenIO, original work as part of
+# Copyright (C) 2015-2017 OpenIO, original work as part of
 # OpenIO Software Defined Storage
 #
 # This library is free software; you can redistribute it and/or
@@ -49,6 +49,8 @@ class BlobRebuilderWorker(object):
             conf.get('bytes_per_second'), 10000000)
         self.rdir_fetch_limit = int_value(
             conf.get('rdir_fetch_limit'), 100)
+        self.allow_same_rawx = true_value(
+            conf.get('allow_same_rawx'))
         self.rdir_client = RdirClient(conf)
         self.content_factory = ContentFactory(conf)
 
@@ -157,7 +159,7 @@ class BlobRebuilderWorker(object):
             raise OrphanChunk("Chunk not found in content")
         chunk_size = chunk.size
 
-        content.rebuild_chunk(chunk_id)
+        content.rebuild_chunk(chunk_id, allow_same_rawx=self.allow_same_rawx)
 
         self.rdir_client.chunk_push(self.volume, container_id, content_id,
                                     chunk_id, rtime=int(time.time()))
