@@ -217,4 +217,5 @@ class TestRdirServer(unittest.TestCase):
         resp = self.app.get('/status')
         self.assertEqual(resp.status_code, 200)
         data = json.loads(resp.data)
-        self.assertEqual(data, {'opened_db_count': 0})
+        # The base remains open after it has been created
+        self.assertEqual(data, {'opened_db_count': 1})
