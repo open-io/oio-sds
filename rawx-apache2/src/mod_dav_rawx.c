@@ -358,7 +358,7 @@ rawx_hook_child_init(apr_pool_t *pchild, server_rec *s)
 
 	conf->cleanup = _cleanup_child;
 
-	if (oio_cfg_get_bool(conf->ns_name, OIO_CFG_RAWX_EVENTS, FALSE)) {
+	if (oio_cfg_get_bool(conf->ns_name, OIO_CFG_RAWX_EVENTS, TRUE)) {
 		gchar *event_agent_addr = oio_cfg_get_eventagent(conf->ns_name);
 		GError *err = rawx_event_init(event_agent_addr);
 		if (NULL != err) {

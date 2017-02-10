@@ -696,9 +696,15 @@ conscience=${CS_ALL_PUB}
 
 log_outgoing=yes
 avoid_faulty_services=${AVOID_FAULTY}
+
+# Allow the sqliterepo election mechanism to use UDP requests
 udp_allowed=${UDP_ALLOWED}
+
 meta1_digits=${M1_DIGITS}
 zk_shuffled=${ZK_SHUFFLED}
+
+# Allow rawx to send chunk events (enabled by default)
+#rawx_events=yes
 """
 
 template_event_agent = """
