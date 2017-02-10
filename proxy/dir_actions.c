@@ -1,7 +1,7 @@
 /*
 OpenIO SDS proxy
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, modified as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -273,12 +273,16 @@ action_dir_srv_relink (struct req_args_s *args, struct json_object *jargs)
 		{NULL, NULL, 0, 0}
 	};
 	err = oio_ext_extract_json (jargs, mapping);
-	if (!err && jkept && json_object_is_type(jkept, json_type_object)) {
-		if (NULL != (err = meta1_service_url_load_json_object (jkept, &m1u_kept)))
+	if (!err && !jkept && !jrepl)
+		err = BADREQ("Missing [kept] and [replaced]");
+	if (!err && jkept) {
+		err = meta1_service_url_load_json_object (jkept, &m1u_kept);
+		if (err)
 			g_prefix_error (&err, "invalid service in [%s]: ", "kept");
 	}
-	if (!err && jrepl && json_object_is_type(jrepl, json_type_object)) {
-		if (NULL != (err = meta1_service_url_load_json_object (jrepl, &m1u_repl)))
+	if (!err && jrepl) {
+		err = meta1_service_url_load_json_object (jrepl, &m1u_repl);
+		if (err)
 			g_prefix_error (&err, "invalid service in [%s]: ", "replaced");
 	}
 
@@ -287,7 +291,8 @@ action_dir_srv_relink (struct req_args_s *args, struct json_object *jargs)
 		GError *hook (const gchar * m1) {
 			if (newset)
 				g_strfreev (newset);
-			return meta1v2_remote_relink_service (m1, args->url, kept, repl, dryrun, &newset);
+			return meta1v2_remote_relink_service (
+					m1, args->url, kept, repl, dryrun, &newset);
 		}
 		kept = meta1_pack_url (m1u_kept);
 		repl = m1u_repl ? meta1_pack_url (m1u_repl) : NULL;
