@@ -133,7 +133,7 @@ expand_urlv(struct meta1_service_url_s **uv)
 }
 
 static struct meta1_service_url_s*
-_ids_to_url(char **ids)
+_ids_to_url(gchar **ids)
 {
 	struct meta1_service_url_s *m1u = g_malloc0 (sizeof(*m1u));
 	meta1_urlv_shift_addr(ids);
@@ -727,6 +727,12 @@ _sorter (struct meta1_service_url_s **p0, struct meta1_service_url_s **p1)
 	return one ? one : -(s0 < s1);
 }
 
+static gboolean
+_idem (struct meta1_service_url_s *u0, struct meta1_service_url_s *u1)
+{
+	return u0->seq == u1->seq && !strcmp(u0->srvtype, u1->srvtype);
+}
+
 /* check if two arrays of urls contains the same items. */
 static gboolean
 __match_urlv (struct meta1_service_url_s **all, struct meta1_service_url_s **kept,
@@ -738,7 +744,7 @@ __match_urlv (struct meta1_service_url_s **all, struct meta1_service_url_s **kep
 	GPtrArray *gpa_inplace = g_ptr_array_new ();
 	GPtrArray *gpa_told = g_ptr_array_new ();
 
-	/* build two array of URL we can safely sort */
+	/* build two arrays of URL we can safely sort */
 	for (; *all ;++all) {
 		if ((*all)->seq == ref->seq)
 			g_ptr_array_add (gpa_inplace, *all);
@@ -770,17 +776,22 @@ static GError *
 __relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
 {
 	GError *err = NULL;
-	GPtrArray *ids = NULL;
 	struct meta1_service_url_s *packed = NULL;
 
 	struct meta1_service_url_s *ref = (in->kept && in->kept[0])
 			? in->kept[0] : in->replaced[0];
 
+	GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
+
 	/* check the services provided are those in place */
 	struct meta1_service_url_s **inplace = NULL;
 	err = __get_container_all_services (in->sq3, in->url, ref->srvtype, &inplace);
-	if (!err && !__match_urlv(inplace, in->kept, in->replaced))
-		err = NEWERROR(CODE_USER_INUSE, "services changed");
+	if (!err) {
+		struct meta1_service_url_s **newset = expand_url (*inplace);
+		if (!__match_urlv(newset, in->kept, in->replaced))
+			err = NEWERROR(CODE_USER_INUSE, "services changed");
+		meta1_service_url_cleanv (newset);
+	}
 	meta1_service_url_cleanv (inplace);
 	inplace = NULL;
 
@@ -801,10 +812,7 @@ __relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
 		if (g_strv_length((char**)known) >= max_svc) {
 			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "Too many services kept");
 		} else {
-			ids = g_ptr_array_new_with_free_func(g_free);
-			void _on_id(oio_location_t loc, const char *id)
-			{
-				(void)loc;
+			void _on_id(oio_location_t loc UNUSED, const char *id) {
 				g_ptr_array_add(ids, g_strdup(id));
 			}
 			if (!oio_lb__patch_with_pool(in->m1->lb, in->ct->baretype,
@@ -1101,30 +1109,41 @@ meta1_backend_services_relink(struct meta1_backend_s *m1,
 	ukept = __parse_and_expand (kept);
 	urepl = __parse_and_expand (replaced);
 
-	/* Sanity checks: we must receive at least one service */
+	/* prefetch the compound type (so it is parsed only once) */
+	if (!oio_url_has(url, OIOURL_TYPE)) {
+		err = BADREQ("Invalid OIOURL: missing service type");
+		goto out;
+	}
+	/* Sanity check: we must receive at least one service */
 	if ((!ukept || !*ukept) && (!urepl || !*urepl)) {
 		err = NEWERROR (CODE_BAD_REQUEST, "Missing URL set");
 		goto out;
 	}
-	/* Sanity check : all the services must have the same <seq,type> */
+
 	struct meta1_service_url_s *ref = ukept && *ukept ? *ukept : *urepl;
+	if (NULL != (err = compound_type_parse(&ct, ref->srvtype)))
+		goto out;
+
+	/* Sanity check : all the services must have the same <seq,type> */
 	for (struct meta1_service_url_s **p = ukept; p && *p ;++p) {
-		if (0 != _sorter(p, &ref)) {
-			err = NEWERROR(CODE_BAD_REQUEST, "Mismatch in URL set (%s)", "kept");
+		if (!_idem(*p, ref)) {
+			err = BADREQ("Mismatch in URL set (%s)", "kept");
 			goto out;
 		}
 	}
 	for (struct meta1_service_url_s **p = urepl; p && *p ;++p) {
-		if (0 != _sorter(p, &ref)) {
-			err = NEWERROR(CODE_BAD_REQUEST, "Mismatch in URL set (%s)", "kept");
+		if (!_idem(*p, ref)) {
+			err = BADREQ("Mismatch in URL set (%s)", "replaced");
 			goto out;
 		}
 	}
-
-	/* prefetch the compound type (so it is parsed only once) */
-	if (NULL != (err = compound_type_parse(&ct, ref->srvtype))) {
-		err = NEWERROR(CODE_BAD_REQUEST, "Invalid service type");
-		goto out;
+	/* Sanity check: all the kept/replaced services must have the type of
+	 * the oio_url */
+	for (struct meta1_service_url_s **p = urepl; p && *p ;++p) {
+		if (0 != strcmp((*p)->srvtype, ct.fulltype)) {
+			err = BADREQ("Service type mismatch (URL vs. kept/replaced)");
+			goto out;
+		}
 	}
 
 	/* Call the backend logic now */
