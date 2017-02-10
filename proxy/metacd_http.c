@@ -853,6 +853,7 @@ configure_request_handlers (void)
 	SET("/$NS/reference/set_properties/#POST", action_ref_prop_set);
 	SET("/$NS/reference/del_properties/#POST", action_ref_prop_del);
 	SET("/$NS/reference/link/#POST", action_ref_link);
+	SET("/$NS/reference/relink/#POST", action_ref_relink);
 	SET("/$NS/reference/unlink/#POST", action_ref_unlink);
 	SET("/$NS/reference/force/#POST", action_ref_force);
 	SET("/$NS/reference/renew/#POST", action_ref_renew);
