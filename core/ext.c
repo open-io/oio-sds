@@ -133,21 +133,20 @@ gsize oio_ext_array_partition (gpointer *array, gsize len,
 
 GError *oio_ext_extract_json (struct json_object *obj,
 		struct oio_ext_json_mapping_s *tab) {
-	EXTRA_ASSERT (obj != NULL);
 	EXTRA_ASSERT (tab != NULL);
 	for (struct oio_ext_json_mapping_s *p=tab; p->out ;p++)
 		*(p->out) = NULL;
-	if (!json_object_is_type(obj, json_type_object))
-		return NEWERROR(400, "Not an object");
+	if (!obj || !json_object_is_type(obj, json_type_object))
+		return BADREQ("Not an object");
 	for (struct oio_ext_json_mapping_s *p=tab; p->out ;p++) {
 		struct json_object *o = NULL;
 		if (!json_object_object_get_ex(obj, p->name, &o) || !o) {
 			if (!p->mandatory)
 				continue;
-			return NEWERROR(400, "Missing field [%s]", p->name);
+			return BADREQ("Missing field [%s]", p->name);
 		}
 		if (!json_object_is_type(o, p->type))
-			return NEWERROR(400, "Invalid type for field [%s]", p->name);
+			return BADREQ("Invalid type for field [%s]", p->name);
 		*(p->out) = o;
 	}
 	return NULL;

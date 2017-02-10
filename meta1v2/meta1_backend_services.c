@@ -720,10 +720,10 @@ __parse_and_expand (const char *packed)
 static gint
 _sorter (struct meta1_service_url_s **p0, struct meta1_service_url_s **p1)
 {
-	gint64 s0 = (*p0)->seq, s1 = (*p1)->seq;
+	const gint64 s0 = (*p0)->seq, s1 = (*p1)->seq;
 	if (s0 == s1)
 		return strcmp ((*p0)->host, (*p1)->host);
-	int one = s0 > s1;
+	const int one = s0 > s1;
 	return one ? one : -(s0 < s1);
 }
 
