@@ -180,7 +180,7 @@ _body_parse_error (GString *b)
 	tok = NULL;
 
 	if (!jbody)
-		return NEWERROR(0, "No error explained");
+		return NEWERROR(0, "unknown error (empty body or invalid json)");
 
 	struct json_object *jcode, *jmsg;
 	struct oio_ext_json_mapping_s map[] = {
@@ -191,7 +191,7 @@ _body_parse_error (GString *b)
 	GError *err =  oio_ext_extract_json(jbody, map);
 	if (!err) {
 		int code = 0;
-		const char *msg = "Unknown error";
+		const char *msg = "Unknown error (unexpected json)";
 		if (jcode) code = json_object_get_int64 (jcode);
 		if (jmsg) msg = json_object_get_string (jmsg);
 		err = NEWERROR(code, "(code=%d) %s", code, msg);
@@ -364,7 +364,7 @@ _proxy_call_notime (CURL *h, const char *method, const char *url,
 		if (2 != (code/100)) {
 			if (out && out->body) {
 				err = _body_parse_error (out->body);
-				g_prefix_error (&err, "Request error (%ld): ", code);
+				g_prefix_error (&err, "Proxy error (%ld): ", code);
 			} else {
 				err = NEWERROR(code, "Request error (%ld)", code);
 			}
