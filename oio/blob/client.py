@@ -47,7 +47,7 @@ class BlobClient(object):
 
     def chunk_put(self, url, meta, data, **kwargs):
         if not hasattr(data, 'read'):
-            data = utils.GeneratorReader(data)
+            data = utils.GeneratorIO(data)
         chunk = {'url': url, 'pos': meta['chunk_pos']}
         # FIXME: ugly
         chunk_method = meta.get('chunk_method',

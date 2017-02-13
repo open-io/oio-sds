@@ -1,4 +1,4 @@
-# Copyright (C) 2016 OpenIO SAS
+# Copyright (C) 2016-2017 OpenIO SAS
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -20,7 +20,7 @@ from eventlet import sleep, Timeout
 from oio.common import exceptions as exc
 from oio.common.http import http_connect, parse_content_type,\
     parse_content_range, ranges_from_http_header, http_header_from_ranges
-from oio.common.utils import GeneratorReader
+from oio.common.utils import GeneratorIO
 from oio.common import green
 
 logger = logging.getLogger(__name__)
@@ -259,7 +259,7 @@ class ChunkReader(object):
                     yield data
             raise StopIteration
 
-        return GeneratorReader(_iter())
+        return GeneratorIO(_iter())
 
     def fill_ranges(self, start, end, length):
         """

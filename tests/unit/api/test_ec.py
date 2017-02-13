@@ -1,6 +1,6 @@
 import unittest
 import random
-from cStringIO import StringIO
+from io import BytesIO
 from collections import defaultdict
 from eventlet import Timeout
 from hashlib import md5
@@ -216,7 +216,7 @@ class TestEC(unittest.TestCase):
         test_data_checksum = self.checksum(test_data).hexdigest()
         nb = self.storage_method.ec_nb_data + self.storage_method.ec_nb_parity
         resps = [201] * nb
-        source = StringIO(test_data)
+        source = BytesIO(test_data)
 
         put_reqs = defaultdict(lambda: {'parts': []})
 

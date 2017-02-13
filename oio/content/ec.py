@@ -18,7 +18,7 @@ from oio.common.exceptions import OrphanChunk
 from oio.content.content import Content, Chunk
 from oio.api.ec import ECChunkDownloadHandler, ECWriteHandler, ECRebuildHandler
 from oio.api.object_storage import _sort_chunks, get_meta_ranges
-from oio.common.utils import GeneratorReader
+from oio.common.utils import GeneratorIO
 
 
 class ECContent(Content):
@@ -68,7 +68,7 @@ class ECContent(Content):
 
         meta['metachunk_hash'] = current_chunk.checksum
         meta['metachunk_size'] = current_chunk.size
-        self.blob_client.chunk_put(spare_url[0], meta, GeneratorReader(stream))
+        self.blob_client.chunk_put(spare_url[0], meta, GeneratorIO(stream))
         self._update_spare_chunk(current_chunk, spare_url[0])
 
     def fetch(self):
