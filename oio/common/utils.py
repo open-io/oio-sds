@@ -11,6 +11,7 @@ import yaml
 import logging
 from logging.handlers import SysLogHandler
 from random import getrandbits
+from io import RawIOBase
 
 from datetime import datetime
 from urllib import quote as _quote
@@ -495,7 +496,7 @@ def request_id():
                           getrandbits(112))
 
 
-class GeneratorReader(object):
+class GeneratorIO(RawIOBase):
     """
     Make a file-like object from a generator.
     `gen` is the generator to read.
@@ -528,14 +529,19 @@ class GeneratorReader(object):
             else:
                 raise StopIteration
 
+    def readable(self):
+        return True
+
     def read(self, size=None):
         if size is not None:
             return "".join(islice(self.generator, size))
         return "".join(self.generator)
 
-    def close(self):
-        # TODO: maybe we should prevent reads after close
-        pass
+    def readinto(self, b):  # pylint: disable=invalid-name
+        read_len = len(b)
+        read_data = self.read(read_len)
+        b[0:len(read_data)] = read_data
+        return len(read_data)
 
     def __iter__(self):
         for chunk in self.generator:

@@ -1,4 +1,4 @@
-# Copyright (C) 2015 OpenIO, original work as part of
+# Copyright (C) 2015-2017 OpenIO, original work as part of
 # OpenIO Software Defined Storage
 #
 # This library is free software; you can redistribute it and/or
@@ -16,7 +16,7 @@
 
 import unittest
 from oio.content.content import Chunk, ChunksHelper
-from oio.content.factory import GeneratorIO
+from oio.common.utils import GeneratorIO
 
 
 class TestChunk(unittest.TestCase):
@@ -269,7 +269,7 @@ class TestChunksHelper(unittest.TestCase):
 
 class TestGeneratorIO(unittest.TestCase):
     def test_read_1_by_1_byte(self):
-        data = ["a", "bc", "", "d"]
+        data = ["a", "bc", "d"]
         gen = GeneratorIO(iter(data))
         self.assertEqual(gen.read(1), "a")
         self.assertEqual(gen.read(1), "b")
@@ -278,7 +278,7 @@ class TestGeneratorIO(unittest.TestCase):
         self.assertEqual(gen.read(1), "")
 
     def test_read_more_than_data_size(self):
-        data = ["a", "bc", "", "d"]
+        data = ["a", "bc", "d"]
         gen = GeneratorIO(iter(data))
         self.assertEqual(gen.read(10), "abcd")
         self.assertEqual(gen.read(10), "")

@@ -1,4 +1,4 @@
-# Copyright (C) 2016 OpenIO SAS
+# Copyright (C) 2016-2017 OpenIO SAS
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -11,6 +11,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from __future__ import absolute_import
+from io import BufferedReader
 import itertools
 import logging
 from urlparse import urlparse
@@ -18,7 +20,7 @@ from eventlet import sleep, Timeout
 from oio.common import exceptions as exc
 from oio.common.http import http_connect, parse_content_type,\
     parse_content_range, ranges_from_http_header, http_header_from_ranges
-from oio.common.utils import GeneratorReader
+from oio.common.utils import GeneratorIO
 from oio.common import green
 
 logger = logging.getLogger(__name__)
@@ -53,7 +55,7 @@ class WriteHandler(object):
         :param write_timeout: timeout to send a buffer of data
         :param read_timeout: timeout to read a buffer of data from source
         """
-        self.source = source
+        self.source = BufferedReader(source)
         if isinstance(chunk_preparer, dict):
             def _sort_and_yield():
                 for pos in sorted(chunk_preparer.keys()):
@@ -257,7 +259,7 @@ class ChunkReader(object):
                     yield data
             raise StopIteration
 
-        return GeneratorReader(_iter())
+        return GeneratorIO(_iter())
 
     def fill_ranges(self, start, end, length):
         """

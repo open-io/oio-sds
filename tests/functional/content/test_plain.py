@@ -14,10 +14,9 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from cStringIO import StringIO
-
 import math
 import time
+from io import BytesIO
 from testtools.matchers import NotEquals
 from testtools.testcase import ExpectedException
 
@@ -62,7 +61,7 @@ class TestPlainContent(BaseTestCase):
         content = self.content_factory.new(self.container_id, self.content,
                                            len(data), stgpol)
 
-        content.create(StringIO(data))
+        content.create(BytesIO(data))
 
         meta, chunks = self.container_client.content_show(
             cid=self.container_id, content=content.content_id)
@@ -127,7 +126,7 @@ class TestPlainContent(BaseTestCase):
         old_content = self.content_factory.new(
             self.container_id, self.content, len(data), stgpol)
 
-        old_content.create(StringIO(data))
+        old_content.create(BytesIO(data))
 
         broken_chunks_info = {}
         for pos, idx in broken_pos_list:

@@ -19,7 +19,7 @@ import time
 
 import math
 import random
-from cStringIO import StringIO
+from io import BytesIO
 
 from oio.blob.client import BlobClient
 from oio.common.utils import cid_from_name
@@ -80,7 +80,7 @@ class TestECContent(BaseTestCase):
         self.assertEqual(type(content), ECContent)
 
         # perform the content creation
-        content.create(StringIO(data))
+        content.create(BytesIO(data))
 
         meta, chunks = self.container_client.content_show(
             cid=self.container_id, content=content.content_id)
@@ -128,7 +128,7 @@ class TestECContent(BaseTestCase):
         self.assertEqual(type(old_content), ECContent)
 
         # perform initial content creation
-        old_content.create(StringIO(data))
+        old_content.create(BytesIO(data))
 
         uploaded_content = self.content_factory.get(self.container_id,
                                                     old_content.content_id)
@@ -197,7 +197,7 @@ class TestECContent(BaseTestCase):
             self.container_id, self.content, len(data), self.stgpol)
         self.assertEqual(type(old_content), ECContent)
 
-        old_content.create(StringIO(data))
+        old_content.create(BytesIO(data))
 
         # break content
         for pos in broken_pos_list:
