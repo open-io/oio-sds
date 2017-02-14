@@ -1,4 +1,4 @@
-# Copyright (C) 2015 OpenIO, original work as part of
+# Copyright (C) 2015-2017 OpenIO, original work as part of
 # OpenIO Software Defined Storage
 #
 # This library is free software; you can redistribute it and/or
@@ -18,11 +18,11 @@ from oio.common.exceptions import OrphanChunk
 from oio.content.content import Content, Chunk
 from oio.api.ec import ECChunkDownloadHandler, ECWriteHandler, ECRebuildHandler
 from oio.api.object_storage import _sort_chunks, get_meta_ranges
-from oio.common.utils import GeneratorReader
+from oio.common.utils import GeneratorIO
 
 
 class ECContent(Content):
-    def rebuild_chunk(self, chunk_id):
+    def rebuild_chunk(self, chunk_id, allow_same_rawx=False):
         current_chunk = self.chunks.filter(id=chunk_id).one()
 
         if current_chunk is None:
@@ -31,7 +31,10 @@ class ECContent(Content):
         chunks = self.chunks.filter(metapos=current_chunk.metapos)\
             .exclude(id=chunk_id)
 
-        spare_url = self._get_spare_chunk(chunks.all(), [current_chunk])
+        broken_list = list()
+        if not allow_same_rawx:
+            broken_list.append(current_chunk)
+        spare_url = self._get_spare_chunk(chunks.all(), broken_list)
 
         handler = ECRebuildHandler(
             chunks.raw(), current_chunk.subpos, self.storage_method)
@@ -65,7 +68,7 @@ class ECContent(Content):
 
         meta['metachunk_hash'] = current_chunk.checksum
         meta['metachunk_size'] = current_chunk.size
-        self.blob_client.chunk_put(spare_url[0], meta, GeneratorReader(stream))
+        self.blob_client.chunk_put(spare_url[0], meta, GeneratorIO(stream))
         self._update_spare_chunk(current_chunk, spare_url[0])
 
     def fetch(self):

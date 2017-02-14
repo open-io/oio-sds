@@ -60,15 +60,15 @@ class RdirBackend(object):
         return "%s/%s" % (self.db_path, volume_id)
 
     def create(self, volume_id):
-        db_path = self._get_db_path(volume_id)
-        DB(db_path, create_if_missing=True)
+        self._get_db(volume_id, create_if_missing=True)
 
     @handle_db_not_found
-    def _get_db(self, volume_id):
+    def _get_db(self, volume_id, create_if_missing=False):
         with self.dbLock:
             if volume_id not in self.dbs:
                 db_path = self._get_db_path(volume_id)
-                self.dbs[volume_id] = DB(db_path, create_if_missing=False)
+                self.dbs[volume_id] = DB(db_path,
+                                         create_if_missing=create_if_missing)
             db = self.dbs[volume_id]
         return db
 

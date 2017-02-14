@@ -1,5 +1,4 @@
 from io import BytesIO
-from cStringIO import StringIO
 from eventlet import sleep
 from oio.common.http import HeadersDict, requests
 from oio.api.object_storage import ObjectStorageAPI
@@ -84,4 +83,4 @@ def decode_chunked_body(raw_body):
 
 
 def empty_stream():
-    return StringIO("")
+    return BytesIO("")

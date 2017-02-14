@@ -254,10 +254,9 @@ class TestRdirBackend(unittest.TestCase):
                          })
 
     def test_status(self):
-        self.assertEqual(self.rdir.status(), {'opened_db_count': 0})
-        self.rdir.chunk_push(self.volume, self.container_0, self.content_0,
-                             self.chunk_0, rtime=5555, mtime=6666)
         self.assertEqual(self.rdir.status(), {'opened_db_count': 1})
+        self.rdir.create("myvolume1")
+        self.assertEqual(self.rdir.status(), {'opened_db_count': 2})
 
     def test_multi_volume(self):
         self.rdir.create("myvolume1")

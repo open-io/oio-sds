@@ -1,4 +1,4 @@
-# Copyright (C) 2015 OpenIO, original work as part of
+# Copyright (C) 2015-2017 OpenIO, original work as part of
 # OpenIO Software Defined Storage
 #
 # This library is free software; you can redistribute it and/or
@@ -14,8 +14,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import StringIO
 import time
+from io import BytesIO
 
 from mock import MagicMock as Mock
 import mock
@@ -76,7 +76,7 @@ class TestStorageTierer(BaseTestCase):
         content = self.content_factory.new(container_id, content_name,
                                            len(data), stgpol)
 
-        content.create(StringIO.StringIO(data))
+        content.create(BytesIO(data))
         return content
 
     def tearDown(self):

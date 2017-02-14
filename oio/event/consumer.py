@@ -108,7 +108,8 @@ evt_types = [
     'storage.content.new', 'storage.content.deleted',
     'storage.container.new', 'storage.container.deleted',
     'storage.container.state', 'storage.chunk.new',
-    'storage.chunk.deleted']
+    'storage.chunk.deleted',
+    'account.services']
 
 
 def _stop(client, server):

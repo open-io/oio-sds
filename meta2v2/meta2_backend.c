@@ -290,6 +290,12 @@ m2_to_sqlx(enum m2v2_open_type_e t)
 	return result;
 }
 
+static gboolean
+_is_container_initiated(struct sqlx_sqlite3_s *sq3)
+{
+	return sqlx_admin_has(sq3, META2_INIT_FLAG);
+}
+
 static void
 m2b_close(struct sqlx_sqlite3_s *sq3)
 {
@@ -341,7 +347,7 @@ m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 
 	sq3->no_peers = how & (M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK);
 
-	// XXX If the container is being deleted, this is sad ...
+	// If the container is being deleted, this is sad ...
 	// This MIGHT happen if a cache is present (and this is the
 	// common case for m2v2), because the deletion will happen
 	// when the base exit the cache.
@@ -349,9 +355,21 @@ m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 	// is closed with an instruction to exit the cache immediately.
 	// TODO FIXME this is maybe a good place for an assert().
 	if (sq3->deleted) {
-		err = NEWERROR(CODE_CONTAINER_FROZEN, "destruction pending");
 		m2b_close(sq3);
-		return err;
+		return NEWERROR(CODE_CONTAINER_FROZEN, "destruction pending");
+	}
+
+	/* M2V2_OPEN_AUTOCREATE is only used when creating the container. If not
+	 * specified, we expect the container to also be "softly" initiated.
+	 * Non-LOCAL accesses are made by the functional requests, and by no
+	 * other, excepted by the DESTROY request. */
+	if (!(how & M2V2_OPEN_AUTOCREATE) &&
+			M2V2_OPEN_LOCAL == (how & M2V2_OPEN_REPLIMODE)) {
+		if (!_is_container_initiated(sq3)) {
+			m2b_close(sq3);
+			return NEWERROR(CODE_CONTAINER_NOTFOUND,
+					"container created but not initiated");
+		}
 	}
 
 	// Complete URL with full VNS and container name
@@ -423,7 +441,10 @@ meta2_backend_has_container(struct meta2_backend_s *m2,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	err = m2b_open(m2, url, M2V2_OPEN_LOCAL, &sq3);
 	if (NULL == err) {
-		if (!sqlx_admin_has(sq3, META2_INIT_FLAG))
+		/* The base is used in LOCAL mode, and with that option the INIT
+		 * flag is not checked. As an exception, we want the check to be
+		 * performed here. */
+		if (!_is_container_initiated(sq3))
 			err = NEWERROR(CODE_CONTAINER_NOTFOUND,
 					"Container created but not initiated");
 		m2b_close(sq3);
@@ -432,7 +453,7 @@ meta2_backend_has_container(struct meta2_backend_s *m2,
 }
 
 static GError *
-_isempty (struct sqlx_sqlite3_s *sq3)
+_check_if_container_empty (struct sqlx_sqlite3_s *sq3)
 {
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
@@ -469,8 +490,8 @@ meta2_backend_container_isempty (struct meta2_backend_s *m2,
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = m2b_open(m2, url, M2V2_OPEN_MASTERSLAVE, &sq3);
-	if (NULL == err) {
-		err = _isempty (sq3);
+	if (!err) {
+		err = _check_if_container_empty (sq3);
 		m2b_close(sq3);
 	}
 	return err;
@@ -498,7 +519,7 @@ meta2_backend_get_max_versions(struct meta2_backend_s *m2b,
 }
 
 static GError *
-_create_container_init_phase(struct sqlx_sqlite3_s *sq3,
+_init_container(struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url, struct m2v2_create_params_s *params)
 {
 	GError *err = NULL;
@@ -552,6 +573,8 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 		open_mode = M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK;
 	else
 		open_mode = M2V2_OPEN_MASTERONLY;
+
+	/* The AUTOCREATE flag disables the INIT check */
 	open_mode |= M2V2_OPEN_AUTOCREATE;
 
 	err = m2b_open(m2, url, open_mode, &sq3);
@@ -559,17 +582,25 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 		if (sqlx_admin_has(sq3, META2_INIT_FLAG))
 			err = NEWERROR(CODE_CONTAINER_EXISTS, "Container already initiated");
 		else {
-			err = _create_container_init_phase(sq3, url, params);
+			err = _init_container(sq3, url, params);
 			if (err) {
 				m2b_destroy(sq3);
 				return err;
 			}
+
+			/* Fire an event to notify the world this container exists */
 			const enum election_status_e s = sq3->election;
 			if (!params->local && m2->notifier && (!s || s == ELECTION_LEADER)) {
 				GString *gs = oio_event__create (META2_EVENTS_PREFIX".container.new", url);
 				g_string_append_static (gs, ",\"data\":null}");
 				oio_events_queue__send (m2->notifier, g_string_free (gs, FALSE));
 			}
+
+			/* Reload any cache maybe already associated with the container.
+			 * It happens that the cache sometimes exists because created during a
+			 * M2_PREP that occured after a GETVERS (the meta1 is filled) but before
+			 * the CREATE. */
+			meta2_backend_change_callback(sq3, m2);
 		}
 		m2b_close(sq3);
 	}
@@ -591,7 +622,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 		EXTRA_ASSERT(sq3 != NULL);
 
 		if (flush && !force)
-			err = _isempty (sq3);
+			err = _check_if_container_empty (sq3);
 
 		if (!err && flush) {
 			err = m2db_flush_container(sq3->db);
@@ -756,7 +787,7 @@ _container_state (struct sqlx_sqlite3_s *sq3)
 }
 
 static void
-meta2_backend_add_modified_container(struct meta2_backend_s *m2b,
+m2b_add_modified_container(struct meta2_backend_s *m2b,
 		struct sqlx_sqlite3_s *sq3)
 {
 	EXTRA_ASSERT(m2b != NULL);
@@ -774,15 +805,15 @@ meta2_backend_add_modified_container(struct meta2_backend_s *m2b,
 	g_clear_error(&err);
 }
 
+/* TODO(jfs): maybe is there a way to keep this in a cache */
 GError *
 meta2_backend_notify_container_state(struct meta2_backend_s *m2b,
 		struct oio_url_s *url)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	/* TODO(jfs): maybe is there a way to keep this in a cache */
 	if (!(err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY, &sq3))) {
-		meta2_backend_add_modified_container(m2b, sq3);
+		m2b_add_modified_container(m2b, sq3);
 		m2b_close(sq3);
 	}
 	return err;
@@ -807,7 +838,7 @@ meta2_backend_refresh_container_size(struct meta2_backend_s *m2b,
 			m2db_set_size(sq3, size);
 			m2db_set_obj_count(sq3, count);
 		}
-		meta2_backend_add_modified_container(m2b, sq3);
+		m2b_add_modified_container(m2b, sq3);
 		m2b_close(sq3);
 	}
 
@@ -835,7 +866,7 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 			err = sqlx_transaction_end(repctx, err);
 		}
 		if (!err)
-			meta2_backend_add_modified_container(m2b, sq3);
+			m2b_add_modified_container(m2b, sq3);
 		m2b_close(sq3);
 	}
 
@@ -869,7 +900,7 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 			if (!err)
-				meta2_backend_add_modified_container(m2b, sq3);
+				m2b_add_modified_container(m2b, sq3);
 		}
 		m2b_close(sq3);
 	}
@@ -929,7 +960,7 @@ meta2_backend_update_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 			if (!err)
-				meta2_backend_add_modified_container(m2b, sq3);
+				m2b_add_modified_container(m2b, sq3);
 		}
 		m2b_close(sq3);
 	}
@@ -959,7 +990,7 @@ meta2_backend_truncate_content(struct meta2_backend_s *m2b,
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 			if (!err)
-				meta2_backend_add_modified_container(m2b, sq3);
+				m2b_add_modified_container(m2b, sq3);
 		}
 		m2b_close(sq3);
 	}
@@ -995,7 +1026,7 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			err = sqlx_transaction_end(repctx, err);
 		}
 		if (!err)
-			meta2_backend_add_modified_container(m2b, sq3);
+			m2b_add_modified_container(m2b, sq3);
 
 		m2b_close(sq3);
 	}
@@ -1173,7 +1204,7 @@ meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 			err = sqlx_transaction_end(repctx, err);
 		}
 		if (!err)
-			meta2_backend_add_modified_container(m2b, sq3);
+			m2b_add_modified_container(m2b, sq3);
 		m2b_close(sq3);
 	}
 
@@ -1374,7 +1405,7 @@ meta2_backend_change_callback(struct sqlx_sqlite3_s *sq3,
  * @param sq3 output database pointer, in case we were forced to open it
  */
 static GError*
-_meta2_backend_get_prepare_data(struct meta2_backend_s *m2b,
+m2b_get_prepare_data(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, struct m2_prepare_data *pdata_out,
 		struct sqlx_sqlite3_s **sq3)
 {
@@ -1432,7 +1463,7 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 
 	/* Get the data needed for the beans preparation.
 	 * This call may return an open database. */
-	_meta2_backend_get_prepare_data(m2b, url, &pdata, &sq3);
+	m2b_get_prepare_data(m2b, url, &pdata, &sq3);
 
 	if (m2b->flag_precheck_on_generate &&
 			VERSIONS_DISABLED(pdata.max_versions)) {

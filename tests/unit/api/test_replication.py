@@ -1,6 +1,6 @@
 import unittest
 from collections import defaultdict
-from cStringIO import StringIO
+from io import BytesIO
 from hashlib import md5
 from eventlet import Timeout
 from oio.common import exceptions as exc
@@ -205,7 +205,7 @@ class TestReplication(unittest.TestCase):
         meta_chunk = self.meta_chunk()
         nb = len(meta_chunk)
         resps = [201] * nb
-        source = StringIO(test_data)
+        source = BytesIO(test_data)
 
         put_reqs = defaultdict(lambda: {'parts': []})
 

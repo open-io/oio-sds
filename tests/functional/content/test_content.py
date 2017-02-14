@@ -15,11 +15,11 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import StringIO
 import hashlib
 
 import os
 import time
+from io import BytesIO
 from mock import MagicMock as Mock
 from testtools.matchers import Contains
 from testtools.matchers import Not
@@ -215,7 +215,7 @@ class TestContentFactory(BaseTestCase):
     def _new_content(self, stgpol, data, path="titi"):
         old_content = self.content_factory.new(self.container_id, path,
                                                len(data), stgpol)
-        old_content.create(StringIO.StringIO(data))
+        old_content.create(BytesIO(data))
         return self.content_factory.get(self.container_id,
                                         old_content.content_id)
 

@@ -16,7 +16,7 @@
 
 from oio.common.exceptions import ContentNotFound
 from oio.common.exceptions import NotFound
-from oio.common.utils import get_logger
+from oio.common.utils import get_logger, GeneratorIO
 from oio.container.client import ContainerClient
 from oio.content.plain import PlainContent
 from oio.content.ec import ECContent
@@ -68,25 +68,3 @@ class ContentFactory(object):
         # the old content is automatically deleted because the new content has
         # the same name (but not the same id)
         return new_content
-
-
-class GeneratorIO(object):
-    def __init__(self, generator):
-        self.generator = generator
-        self.buffer = ""
-
-    def read(self, size):
-        output = ""
-        while size > 0:
-            if len(self.buffer) >= size:
-                output += self.buffer[0:size]
-                self.buffer = self.buffer[size:]
-                break
-            output += self.buffer
-            size -= len(self.buffer)
-            try:
-                self.buffer = self.generator.next()
-            except StopIteration:
-                self.buffer = ""
-                break
-        return output

@@ -1,4 +1,4 @@
-# Copyright (C) 2015 OpenIO SAS
+# Copyright (C) 2015-2017 OpenIO SAS
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
 # License along with this library.
 
 
-from cStringIO import StringIO
+from __future__ import absolute_import
+from io import BytesIO
 from functools import wraps
 import logging
 import os
@@ -453,7 +454,7 @@ class ObjectStorageApi(object):
                     file_name = None
             obj_name = obj_name or file_name
         elif isgenerator(src):
-            file_or_path = utils.GeneratorReader(src)
+            file_or_path = utils.GeneratorIO(src)
             src = file_or_path
         if not obj_name:
             raise exc.MissingName(
@@ -470,7 +471,7 @@ class ObjectStorageApi(object):
 
         if src is data:
             return self._object_create(
-                account, container, obj_name, StringIO(data), sysmeta,
+                account, container, obj_name, BytesIO(data), sysmeta,
                 properties=metadata, policy=policy, headers=headers,
                 key_file=key_file)
         elif hasattr(file_or_path, "read"):

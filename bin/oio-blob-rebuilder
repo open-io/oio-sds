@@ -35,6 +35,8 @@ def make_arg_parser():
                         help="Max chunks per second (30)")
     parser.add_argument('-q', '--quiet', action='store_true',
                         help="Don't print log on console")
+    parser.add_argument('--allow-same-rawx', action='store_true',
+                        help="Allow rebuilding a chunk on the original rawx")
 
     return parser
 
@@ -61,6 +63,7 @@ if __name__ == '__main__':
     if args.chunks_per_second is not None:
         conf['chunks_per_second'] = args.chunks_per_second
     conf['namespace'] = args.namespace
+    conf['allow_same_rawx'] = args.allow_same_rawx
 
     logger = get_logger(conf, None, not args.quiet)
 
