@@ -56,6 +56,7 @@ gchar *ns_name = NULL;
 gboolean flag_cache_enabled = TRUE;
 gboolean flag_local_scores = FALSE;
 gboolean flag_prefer_master = FALSE;
+gboolean flag_force_master = FALSE;
 
 struct oio_lb_world_s *lb_world = NULL;
 struct oio_lb_s *lb = NULL;
@@ -679,8 +680,14 @@ grid_main_get_options (void)
 			"Directory 'high' (cs+meta0) TTL for cache elements"},
 		{"DirHighMax", OT_UINT, {.u = &dir_high_max},
 			"Directory 'high' (cs+meta0) MAX cached elements"},
+
 		{"PreferMaster", OT_BOOL, {.b = &flag_prefer_master},
 		        "Prefer to join Master before joining slave directly"},
+		{"ForceMaster", OT_BOOL, {.b = &flag_force_master},
+		        "Force the service to redirect if not master "
+					"(even on read-only requests). Only effective on meta2 "
+					"requests."},
+
 		{NULL, 0, {.i = 0}, NULL}
 	};
 

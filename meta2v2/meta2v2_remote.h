@@ -43,6 +43,9 @@ License along with this library.
 /* flush the properties */
 #define M2V2_FLAG_FLUSH            0x00000200
 
+/* Ask the meta2 to redirect if not MASTER, even if the request is Read-Only */
+#define M2V2_FLAG_MASTER           0x00000400
+
 /* Request N spare chunks which should not be on provided blacklist */
 #define M2V2_SPARE_BY_BLACKLIST "SPARE_BLACKLIST"
 /* Request N spare chunks according to a storage policy */

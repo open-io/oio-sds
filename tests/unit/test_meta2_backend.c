@@ -793,7 +793,7 @@ test_props_gotchas()
 		GSList *beans;
 		(void) maxver;
 
-		err = meta2_backend_get_properties(m2, u, NULL, NULL);
+		err = meta2_backend_get_properties(m2, u, 0, NULL, NULL);
 		g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
 		g_clear_error(&err);
 
