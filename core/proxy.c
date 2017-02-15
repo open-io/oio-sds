@@ -176,11 +176,18 @@ _body_parse_error (GString *b)
 	EXTRA_ASSERT (b != NULL);
 	struct json_tokener *tok = json_tokener_new ();
 	struct json_object *jbody = json_tokener_parse_ex (tok, b->str, b->len);
+	enum json_tokener_error parsing_error = json_tokener_get_error (tok);
 	json_tokener_free (tok);
 	tok = NULL;
 
+	if (json_tokener_success != parsing_error) {
+		if (jbody) json_object_put(jbody);
+		return NEWERROR(0, "unknown error (invalid json: %s)",
+				json_tokener_error_desc(parsing_error));
+	}
+
 	if (!jbody)
-		return NEWERROR(0, "unknown error (empty body or invalid json)");
+		return NEWERROR(0, "unknown error (empty body or null json)");
 
 	struct json_object *jcode, *jmsg;
 	struct oio_ext_json_mapping_s map[] = {
