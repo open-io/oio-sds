@@ -12,7 +12,6 @@ def make_arg_parser():
     log_parser.add_argument('--log-level', choices=levels,
                             help="Log level")
     log_parser.add_argument('--log-syslog-prefix',
-                            default='OIO,OPENIO,blob-rebuilder',
                             help="Syslog prefix")
     log_parser.add_argument('--log-facility',
                             help="Log facility")
@@ -47,8 +46,6 @@ if __name__ == '__main__':
     conf = {}
     if args.log_level is not None:
         conf['log_level'] = args.log_level
-    if args.log_syslog_prefix is not None:
-        conf['syslog_prefix'] = args.log_syslog_prefix
     if args.log_facility is not None:
         conf['log_facility'] = args.log_facility
     if args.log_address is not None:
@@ -64,6 +61,11 @@ if __name__ == '__main__':
         conf['chunks_per_second'] = args.chunks_per_second
     conf['namespace'] = args.namespace
     conf['allow_same_rawx'] = args.allow_same_rawx
+    if args.log_syslog_prefix is not None:
+        conf['syslog_prefix'] = args.log_syslog_prefix
+    else:
+        conf['syslog_prefix'] = 'OIO,%s,blob-rebuilder,%s' % \
+            (args.namespace, args.volume)
 
     logger = get_logger(conf, None, not args.quiet)
 
