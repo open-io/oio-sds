@@ -74,7 +74,7 @@ _sqlx_action_noreturn_TAIL (struct req_args_s *args, struct client_ctx_s *ctx,
 }
 
 static enum http_rc_e
-_sqlx_action_noreturn (struct req_args_s *args, enum preference_e how,
+_sqlx_action_noreturn (struct req_args_s *args, enum proxy_preference_e how,
 		request_packer_f pack)
 {
 	const char *type = TYPE();
