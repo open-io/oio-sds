@@ -26,7 +26,6 @@ License along with this library.
 #define M2V2_FLAG_NODELETED        0x00000001
 #define M2V2_FLAG_ALLVERSION       0x00000002
 #define M2V2_FLAG_NOPROPS          0x00000004
-#define M2V2_FLAG_NOFORMATCHECK    0x00000008
 #define M2V2_FLAG_ALLPROPS         0x00000010
 
 /* when listing */
@@ -95,10 +94,14 @@ GError* m2v2_remote_execute_DESTROY_many(gchar **targets, struct oio_url_s *url,
 		guint32 flags);
 
 GByteArray* m2v2_remote_pack_CREATE(struct oio_url_s *url, struct m2v2_create_params_s *pols);
+
 GByteArray* m2v2_remote_pack_DESTROY(struct oio_url_s *url, guint32 flags);
 
-GByteArray* m2v2_remote_pack_HAS(struct oio_url_s *url);
-GByteArray* m2v2_remote_pack_ISEMPTY (struct oio_url_s *url);
+/* accepts M2V2_FLAG_MASTER */
+GByteArray* m2v2_remote_pack_HAS(struct oio_url_s *url, guint32 flags);
+
+/* accepts M2V2_FLAG_MASTER */
+GByteArray* m2v2_remote_pack_ISEMPTY (struct oio_url_s *url, guint32 flags);
 
 GByteArray* m2v2_remote_pack_FLUSH(struct oio_url_s *url);
 GByteArray* m2v2_remote_pack_PURGE(struct oio_url_s *url);
@@ -123,18 +126,40 @@ GByteArray* m2v2_remote_pack_DEL(struct oio_url_s *url);
 
 GByteArray* m2v2_remote_pack_TRUNC(struct oio_url_s *url, gint64 size);
 
-GByteArray* m2v2_remote_pack_GET(struct oio_url_s *url, guint32 flags);
-GByteArray* m2v2_remote_pack_LIST(struct oio_url_s *url, struct list_params_s *p);
-GByteArray* m2v2_remote_pack_LIST_BY_CHUNKID(struct oio_url_s *url, struct list_params_s *p, const char *chunk);
-GByteArray* m2v2_remote_pack_LIST_BY_HEADERHASH(struct oio_url_s *url, struct list_params_s *p, GBytes *h);
-GByteArray* m2v2_remote_pack_LIST_BY_HEADERID(struct oio_url_s *url, struct list_params_s *p, GBytes *h);
+/* accepts M2V2_FLAG_MASTER */
+GByteArray* m2v2_remote_pack_GET(
+		struct oio_url_s *url, guint32 flags);
+
+/* accepts M2V2_FLAG_MASTER */
+GByteArray* m2v2_remote_pack_LIST(
+		struct oio_url_s *url, guint32 flags,
+		struct list_params_s *p);
+
+/* accepts M2V2_FLAG_MASTER */
+GByteArray* m2v2_remote_pack_LIST_BY_CHUNKID(
+		struct oio_url_s *url, guint32 flags,
+		struct list_params_s *p, const char *chunk);
+
+/* accepts M2V2_FLAG_MASTER */
+GByteArray* m2v2_remote_pack_LIST_BY_HEADERHASH(
+		struct oio_url_s *url, guint32 flags,
+		struct list_params_s *p, GBytes *h);
+
+/* accepts M2V2_FLAG_MASTER */
+GByteArray* m2v2_remote_pack_LIST_BY_HEADERID(
+		struct oio_url_s *url, guint32 flags,
+		struct list_params_s *p, GBytes *h);
 
 GByteArray* m2v2_remote_pack_RAW_DEL(struct oio_url_s *url, GSList *beans);
 GByteArray* m2v2_remote_pack_RAW_ADD(struct oio_url_s *url, GSList *beans);
 GByteArray* m2v2_remote_pack_RAW_SUBST(struct oio_url_s *url, GSList *new_chunks, GSList *old_chunks);
-
 GByteArray* m2v2_remote_pack_PROP_DEL(struct oio_url_s *url, gchar **names);
-GByteArray* m2v2_remote_pack_PROP_SET(struct oio_url_s *url, guint32 flags, GSList *beans);
+
+GByteArray* m2v2_remote_pack_PROP_SET(
+		struct oio_url_s *url, guint32 flags,
+		GSList *beans);
+
+/* accepts M2V2_FLAG_MASTER */
 GByteArray* m2v2_remote_pack_PROP_GET(struct oio_url_s *url, guint32 flags);
 
 GByteArray* m2v2_remote_pack_EXITELECTION(struct oio_url_s *url);

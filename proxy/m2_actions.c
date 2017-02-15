@@ -960,7 +960,8 @@ action_m2_container_destroy (struct req_args_s *args)
 			PACKER_VOID(_pack) { return m2v2_remote_pack_FLUSH (args->url); }
 			err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 		} else if (!force) {
-			PACKER_VOID(_pack) { return m2v2_remote_pack_ISEMPTY (args->url); }
+			guint32 flags = flag_force_master ? M2V2_FLAG_MASTER : 0;
+			PACKER_VOID(_pack) { return m2v2_remote_pack_ISEMPTY (args->url, flags); }
 			err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 		}
 		if (NULL != err) {
@@ -1317,11 +1318,14 @@ enum http_rc_e action_container_list (struct req_args_s *args) {
 
 	if (!err) {
 		GByteArray* _pack (struct list_params_s *in) {
+			guint32 flags = flag_force_master ? M2V2_FLAG_MASTER : 0;
 			if (chunk_id)
-				return m2v2_remote_pack_LIST_BY_CHUNKID (args->url, in, chunk_id);
+				return m2v2_remote_pack_LIST_BY_CHUNKID (args->url, flags,
+						in, chunk_id);
 			if (content_hash)
-				return m2v2_remote_pack_LIST_BY_HEADERHASH (args->url, in, content_hash);
-			return m2v2_remote_pack_LIST (args->url, in);
+				return m2v2_remote_pack_LIST_BY_HEADERHASH (args->url, flags,
+						in, content_hash);
+			return m2v2_remote_pack_LIST (args->url, flags, in);
 		}
 		err = _list_loop (args, &list_in, &list_out, tree_prefixes, _pack);
 	}
@@ -1666,13 +1670,11 @@ static enum http_rc_e action_m2_content_propdel (struct req_args_s *args,
 	return _reply_m2_error (args, err);
 }
 
-#define PROPGET_FLAGS M2V2_FLAG_ALLPROPS|M2V2_FLAG_NOFORMATCHECK
-
 static enum http_rc_e action_m2_content_propget (struct req_args_s *args,
 		struct json_object *jargs UNUSED) {
 	/* TODO manage the version of the content */
 
-	guint32 flags = PROPGET_FLAGS | (flag_force_master?M2V2_FLAG_MASTER:0);
+	guint32 flags = flag_force_master ? M2V2_FLAG_MASTER : 0;
 
 	GSList *beans = NULL;
 	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_GET (args->url, flags); }
