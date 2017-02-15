@@ -23,19 +23,6 @@ gint32 oio_proxy_request_failure_threshold_first = 100;
 gint32 oio_proxy_request_failure_threshold_middle = 50;
 gint32 oio_proxy_request_failure_threshold_last = 0;
 
-const char *
-_pref2str(enum preference_e p)
-{
-	switch (p) {
-		ON_ENUM(CLIENT_,ANY);
-		ON_ENUM(CLIENT_,RUN_ALL);
-		ON_ENUM(CLIENT_,PREFER_SLAVE);
-		ON_ENUM(CLIENT_,PREFER_MASTER);
-	}
-	g_assert_not_reached ();
-	return "?";
-}
-
 gchar *
 proxy_get_csurl (void)
 {
@@ -168,22 +155,19 @@ _debug_services (const char *tag, gchar **m1uv)
 
 static void _sort_services (struct client_ctx_s *ctx,
 		const char *k, gchar **m1uv) {
-	GRID_TRACE("Sorting for %s", _pref2str(ctx->which));
 	_debug_services ("PRE sort: ", m1uv);
 
 	gsize pivot = g_strv_length (m1uv);
 
-	if (pivot) /* prefer services recently available */
+	/* prefer services recently available */
+	if (pivot > 1)
 		pivot = oio_ext_array_partition ((void**)m1uv, pivot, service_is_ok);
 
-	if (pivot && ctx->which != CLIENT_RUN_ALL) {
-		/* among available services, prefer those expected SLAVE/MASTER */
-		gboolean _master (gconstpointer p) {
-			return service_is_master (k, p);
-		}
-		gboolean _slave (gconstpointer p) {
-			return service_is_slave (k, p);
-		}
+	/* among the available services, prefer those expected SLAVE/MASTER */
+	if (pivot > 1 && (ctx->which == CLIENT_PREFER_MASTER
+		           || ctx->which == CLIENT_PREFER_SLAVE)) {
+		gboolean _master (gconstpointer p) { return service_is_master (k, p); }
+		gboolean _slave (gconstpointer p) { return service_is_slave (k, p); }
 		switch (ctx->which) {
 			case CLIENT_PREFER_SLAVE:
 				pivot = oio_ext_array_partition ((void**)m1uv, pivot, _slave);
@@ -194,16 +178,27 @@ static void _sort_services (struct client_ctx_s *ctx,
 			default:
 				break;
 		}
-		if (pivot)
-			oio_ext_array_shuffle ((void**)m1uv, pivot);
 	}
+
+	/* If multiple available & preferred services, shuffle them */
+	if (pivot > 1)
+		oio_ext_array_shuffle ((void**)m1uv, pivot);
+
 	_debug_services ("POST sort: ", m1uv);
 }
 
-enum preference_e get_slave_preference(void) {
-	if (flag_prefer_master || flag_force_master)
+enum proxy_preference_e _prefer_slave(void) {
+	if (flag_prefer_master_for_read)
 		return CLIENT_PREFER_MASTER;
-	return CLIENT_PREFER_SLAVE;
+	if (flag_prefer_slave_for_read)
+		return CLIENT_PREFER_SLAVE;
+	return CLIENT_PREFER_NONE;
+}
+
+enum proxy_preference_e _prefer_master(void) {
+	if (flag_prefer_master_for_write)
+		return CLIENT_PREFER_MASTER;
+	return CLIENT_PREFER_NONE;
 }
 
 static gboolean _on_reply (gpointer p, MESSAGE reply) {
@@ -322,12 +317,15 @@ GError *gridd_request_replicated (struct client_ctx_s *ctx,
 		g_ptr_array_add (urlv, g_strdup(url));
 
 		/* Check for a possible redirection */
-		const char *actual = gridd_client_url (client);
-		if (actual && 0 != strcmp(actual, url)) {
-			gchar *k = g_strdup(election_key);
-			gchar *v = g_strdup (actual);
-			GRID_TRACE("MASTER %s %s", v, k);
-			MASTER_WRITE(lru_tree_insert (srv_master, k, v));
+		if (flag_prefer_master_for_read || flag_prefer_slave_for_read
+				|| flag_prefer_master_for_write) {
+			const char *actual = gridd_client_url(client);
+			if (actual && 0 != strcmp(actual, url)) {
+				gchar *k = g_strdup(election_key);
+				gchar *v = g_strdup(actual);
+				GRID_TRACE("MASTER %s %s", v, k);
+				MASTER_WRITE(lru_tree_insert(srv_master, k, v));
+			}
 		}
 
 		if (err) {
@@ -465,7 +463,7 @@ void client_init (struct client_ctx_s *ctx, struct req_args_s *args,
 	sqlx_name_fill_type_asis (&ctx->name, args->url,
 			*srvtype == '#' ? srvtype+1 : srvtype, ctx->seq);
 	ctx->timeout = COMMON_CLIENT_TIMEOUT;
-	ctx->which = CLIENT_ANY;
+	ctx->which = CLIENT_PREFER_NONE;
 }
 
 void client_clean (struct client_ctx_s *ctx) {
