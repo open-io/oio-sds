@@ -201,7 +201,7 @@ static void _sort_services (struct client_ctx_s *ctx,
 }
 
 enum preference_e get_slave_preference(void) {
-	if (flag_prefer_master)
+	if (flag_prefer_master || flag_force_master)
 		return CLIENT_PREFER_MASTER;
 	return CLIENT_PREFER_SLAVE;
 }

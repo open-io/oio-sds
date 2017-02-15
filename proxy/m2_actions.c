@@ -1669,12 +1669,13 @@ static enum http_rc_e action_m2_content_propdel (struct req_args_s *args,
 #define PROPGET_FLAGS M2V2_FLAG_ALLPROPS|M2V2_FLAG_NOFORMATCHECK
 
 static enum http_rc_e action_m2_content_propget (struct req_args_s *args,
-		struct json_object *jargs) {
-	(void) jargs;
+		struct json_object *jargs UNUSED) {
 	/* TODO manage the version of the content */
 
+	guint32 flags = PROPGET_FLAGS | (flag_force_master?M2V2_FLAG_MASTER:0);
+
 	GSList *beans = NULL;
-	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_GET (args->url, PROPGET_FLAGS); }
+	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_GET (args->url, flags); }
 	GError *err = _resolve_meta2 (args, get_slave_preference(), _pack, &beans);
 	return _reply_properties (args, err, beans);
 }
@@ -1787,7 +1788,8 @@ enum http_rc_e action_content_prepare (struct req_args_s *args) {
 
 enum http_rc_e action_content_show (struct req_args_s *args) {
 	GSList *beans = NULL;
-	PACKER_VOID(_pack) { return m2v2_remote_pack_GET (args->url, 0); }
+	guint32 flags = flag_force_master ? M2V2_FLAG_MASTER : 0;
+	PACKER_VOID(_pack) { return m2v2_remote_pack_GET (args->url, flags); }
 	GError *err = _resolve_meta2 (args, get_slave_preference(), _pack, &beans);
 	return _reply_simplified_beans (args, err, beans, TRUE);
 }

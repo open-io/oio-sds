@@ -117,6 +117,7 @@ extern gchar *ns_name;
 extern gboolean flag_cache_enabled;
 extern gboolean flag_local_scores;
 extern gboolean flag_prefer_master;
+extern gboolean flag_force_master;
 
 /* how long the proxy remembers the srv it registered ino the conscience */
 extern gint64 ttl_expire_local_services;
