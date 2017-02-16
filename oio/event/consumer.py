@@ -104,14 +104,6 @@ class EventTypes(object):
     CONTENT_DELETED = 'storage.content.deleted'
 
 
-evt_types = [
-    'storage.content.new', 'storage.content.deleted',
-    'storage.container.new', 'storage.container.deleted',
-    'storage.container.state', 'storage.chunk.new',
-    'storage.chunk.deleted',
-    'account.services']
-
-
 def _stop(client, server):
     try:
         client.wait()
@@ -139,7 +131,6 @@ class EventWorker(Worker):
         if 'handlers_conf' not in self.conf:
             raise ValueError("'handlers_conf' path not defined in conf")
         self.handlers = loadhandlers(self.conf.get('handlers_conf'),
-                                     evt_types,
                                      global_conf=self.conf,
                                      app=self)
         super(EventWorker, self).init()
