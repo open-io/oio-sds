@@ -162,7 +162,8 @@ GError* meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 /* Properties -------------------------------------------------------------- */
 
 GError* meta2_backend_get_properties(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0);
+		struct oio_url_s *url, guint32 flags,
+		m2_onbean_cb cb, gpointer u0);
 
 GError* meta2_backend_del_properties(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gchar **propv);

@@ -104,19 +104,32 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 		first = FALSE; \
 } while (0)
 
-enum preference_e {
-	CLIENT_ANY = 0,
+enum proxy_preference_e {
+	CLIENT_PREFER_NONE = 0,
 	CLIENT_RUN_ALL,
 	CLIENT_PREFER_SLAVE,
 	CLIENT_PREFER_MASTER
 };
 
-const char * _pref2str(enum preference_e p);
-
 extern gchar *ns_name;
 extern gboolean flag_cache_enabled;
 extern gboolean flag_local_scores;
-extern gboolean flag_prefer_master;
+
+/* Should the proxy prefer the master it knows, even when a SLAVE is enough
+ * (read-only requests) */
+extern gboolean flag_prefer_master_for_read;
+
+/* Should the proxy prefer the master it knows, when a MASTER is required
+ * (write requests) */
+extern gboolean flag_prefer_master_for_write;
+
+/* Should the proxy prefer the SLAVE it knows, when a SLAVE is enough (read-only
+ * requests) */
+extern gboolean flag_prefer_slave_for_read;
+
+/* Should the proxy tell the service to accept the requests only if the base has
+ * the MASTER status. Currently only managed by the meta2 services. */
+extern gboolean flag_force_master;
 
 /* how long the proxy remembers the srv it registered ino the conscience */
 extern gint64 ttl_expire_local_services;
@@ -226,7 +239,7 @@ struct client_ctx_s {
 	struct oio_url_s *url;
 	const char *type;
 	gint64 seq;
-	enum preference_e which;
+	enum proxy_preference_e which;
 	gdouble timeout;
 
 	/* output */
@@ -241,19 +254,27 @@ void client_init (struct client_ctx_s *ctx, struct req_args_s *args,
 
 void client_clean (struct client_ctx_s *ctx);
 
-enum preference_e get_slave_preference (void);
+/**
+ * Tells which kind of peer to prefer when a SLAVE is enough.
+ * So that we can force the requests to the master, for consistency purposes, or
+ * ignore the advice depending on the options to the oio-proxy.
+ */
+enum proxy_preference_e _prefer_slave(void);
+
+/**
+ * Tells which kind of peer to prefer when a MASTER is to be preferred.
+ * So that we can force the requests to a SLAVE (for testing purposes), ignore
+ * the advice if configured so, or tell the sdk to target the master it knows.
+ */
+enum proxy_preference_e _prefer_master (void);
 
 #define CLIENT_CTX(ctx,args,type,seq)  \
 	struct client_ctx_s ctx = {0}; \
 	client_init (&ctx, args, type, seq) \
 
-#define CLIENT_CTX_MASTER(ctx,args,type,seq) \
-	CLIENT_CTX(ctx,args,type,seq); \
-	ctx.which = get_slave_preference()
-
 #define CLIENT_CTX_SLAVE(ctx,args,type,seq) \
 	CLIENT_CTX(ctx,args,type,seq); \
-	ctx.which = get_slave_preference()
+	ctx.which = _prefer_slave()
 
 GError * _m1_locate_and_action (struct oio_url_s *url, GError * (*hook) ());
 

@@ -722,7 +722,7 @@ _curl_get_handle_blob (void)
 	curl_easy_setopt (h, CURLOPT_FRESH_CONNECT, 1L);
 	curl_easy_setopt (h, CURLOPT_USERAGENT, OIOSDS_http_agent);
 	curl_easy_setopt (h, CURLOPT_NOPROGRESS, 1L);
-	curl_easy_setopt (h, CURLOPT_PROXY, NULL);
+	curl_easy_setopt (h, CURLOPT_PROXY, "");
 	curl_easy_setopt (h, CURLOPT_SOCKOPTDATA, NULL);
 	curl_easy_setopt (h, CURLOPT_SOCKOPTFUNCTION, _curl_set_sockopt_blob);
 	if (GRID_TRACE2_ENABLED()) {
@@ -738,7 +738,7 @@ _curl_get_handle_proxy (void)
 	CURL *h = curl_easy_init ();
 	curl_easy_setopt (h, CURLOPT_USERAGENT, OIOSDS_http_agent);
 	curl_easy_setopt (h, CURLOPT_NOPROGRESS, 1L);
-	curl_easy_setopt (h, CURLOPT_PROXY, NULL);
+	curl_easy_setopt (h, CURLOPT_PROXY, "");
 	curl_easy_setopt (h, CURLOPT_FORBID_REUSE, 0L);
 	curl_easy_setopt (h, CURLOPT_FRESH_CONNECT, 0L);
 	curl_easy_setopt (h, CURLOPT_SOCKOPTDATA, NULL);

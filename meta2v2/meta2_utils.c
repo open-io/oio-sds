@@ -470,8 +470,9 @@ m2db_get_alias1(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 {
 	EXTRA_ASSERT (out != NULL);
 
-	flags &= ~(M2V2_FLAG_HEADERS|M2V2_FLAG_NOFORMATCHECK); // meaningless
-	flags |=  (M2V2_FLAG_NOPROPS|M2V2_FLAG_NORECURSION);   // only alias
+	// get only the alias
+	flags &= ~M2V2_FLAG_HEADERS;
+	flags |=  (M2V2_FLAG_NOPROPS|M2V2_FLAG_NORECURSION);
 
 	GPtrArray *tmp = g_ptr_array_new ();
 	GError *err = m2db_get_alias(sq3, url, flags, _bean_buffer_cb, tmp);

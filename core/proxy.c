@@ -177,11 +177,18 @@ _body_parse_error (GString *b)
 	EXTRA_ASSERT (b != NULL);
 	struct json_tokener *tok = json_tokener_new ();
 	struct json_object *jbody = json_tokener_parse_ex (tok, b->str, b->len);
+	enum json_tokener_error parsing_error = json_tokener_get_error (tok);
 	json_tokener_free (tok);
 	tok = NULL;
 
+	if (json_tokener_success != parsing_error) {
+		if (jbody) json_object_put(jbody);
+		return NEWERROR(0, "unknown error (invalid json: %s)",
+				json_tokener_error_desc(parsing_error));
+	}
+
 	if (!jbody)
-		return NEWERROR(0, "No error explained");
+		return NEWERROR(0, "unknown error (empty body or null json)");
 
 	struct json_object *jcode, *jmsg;
 	struct oio_ext_json_mapping_s map[] = {
@@ -192,7 +199,7 @@ _body_parse_error (GString *b)
 	GError *err =  oio_ext_extract_json(jbody, map);
 	if (!err) {
 		int code = 0;
-		const char *msg = "Unknown error";
+		const char *msg = "Unknown error (unexpected json)";
 		if (jcode) code = json_object_get_int64 (jcode);
 		if (jmsg) msg = json_object_get_string (jmsg);
 		err = NEWERROR(code, "(code=%d) %s", code, msg);
@@ -365,7 +372,7 @@ _proxy_call_notime (CURL *h, const char *method, const char *url,
 		if (2 != (code/100)) {
 			if (out && out->body) {
 				err = _body_parse_error (out->body);
-				g_prefix_error (&err, "Request error (%ld): ", code);
+				g_prefix_error (&err, "Proxy error (%ld): ", code);
 			} else {
 				err = NEWERROR(code, "Request error (%ld)", code);
 			}

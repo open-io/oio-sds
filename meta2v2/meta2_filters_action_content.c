@@ -370,10 +370,15 @@ meta2_filter_action_get_content_properties(struct gridd_filter_ctx_s *ctx,
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
+	guint32 flags = 0;
 
 	TRACE_FILTER();
 
-	e = meta2_backend_get_properties(m2b, url, _bean_list_cb, &obc->l);
+	const char *fstr = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FLAGS);
+	if (NULL != fstr)
+		flags = atoi(fstr);
+
+	e = meta2_backend_get_properties(m2b, url, flags, _bean_list_cb, &obc->l);
 	if (NULL != e) {
 		_on_bean_ctx_clean(obc);
 		meta2_filter_ctx_set_error(ctx, e);
