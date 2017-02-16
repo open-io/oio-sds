@@ -35,9 +35,10 @@ def delete_children(zh, path):
 
 
 def main():
+    usage = "usage: %prog [options] NS"
     from optparse import OptionParser as OptionParser
 
-    parser = OptionParser()
+    parser = OptionParser(usage=usage)
     parser.add_option(
             '-v', '--verbose',
             action="store_true", dest="flag_verbose",
@@ -45,7 +46,7 @@ def main():
     parser.add_option(
             '-a', '--all',
             action="store_true", dest="flag_all",
-            help='Triggers debugging traces')
+            help='Remove all oio-sds nodes (not only meta0)')
     (options, args) = parser.parse_args(sys.argv)
 
     # Logging configuration

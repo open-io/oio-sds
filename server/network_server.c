@@ -1037,7 +1037,8 @@ retry:
 			SLICE_FREE(struct network_client_s, clt);
 			metautils_pclose(&fd);
 			_cnx_notify_close(srv);
-			GRID_WARN("Too many clients!");
+			GRID_WARN("Too many inbound connections! (cnx_max=%u)",
+					srv->cnx_max);
 			return NULL;
 	}
 
