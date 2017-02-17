@@ -45,6 +45,8 @@ struct sqlx_sync_s
 
 	guint hash_width;
 	guint hash_depth;
+
+	struct grid_single_rrd_s *conn_attempts;
 };
 
 static void _clear(struct sqlx_sync_s *ss);
@@ -116,6 +118,9 @@ sqlx_sync_create(const char *url, gboolean shuffle)
 		oio_ext_array_shuffle((void**)tokens, g_strv_length(tokens));
 	ss->zk_url = g_strjoinv(",", tokens);
 	g_strfreev(tokens);
+
+	// FIXME(FVE): hardcoded value
+	ss->conn_attempts = grid_single_rrd_create(oio_ext_monotonic_seconds(), 8);
 
 	return ss;
 }
@@ -200,13 +205,14 @@ static void
 _reconnect(struct sqlx_sync_s *ss)
 {
 	if (ss->zh) {
-		GRID_NOTICE("Zookeeper: disconnecting (expired session)");
+		GRID_NOTICE("Zookeeper: disconnecting "
+				"(expired session or too many soft reconnections)");
 		zookeeper_close(ss->zh);
 	}
-	if (NULL != ss->on_exit)
+	if (ss->on_exit != NULL)
 		ss->on_exit(ss->on_exit_ctx);
 
-	/* XXX(jfs): forget the previous ID and reconnect */
+	/* Forget the previous ID and reconnect */
 	memset (&ss->zk_id, 0, sizeof(ss->zk_id));
 	GRID_NOTICE("Zookeeper: starting connection to [%s]", ss->zk_url);
 	ss->zh = zookeeper_init(ss->zk_url, zk_main_watch,
@@ -234,19 +240,29 @@ zk_main_watch(zhandle_t *zh UNUSED, int type, int state, const char *path UNUSED
 		return;
 	}
 
+	gint64 now = oio_ext_monotonic_seconds();
 	if (state == ZOO_EXPIRED_SESSION_STATE || state == ZOO_AUTH_FAILED_STATE) {
 		GRID_WARN("Zookeeper: %s/%s to %s",
 				zoo_zevt2str(type), zoo_state2str(state),
 				ss->zk_url);
 		return _reconnect(ss);
 	} else if (state == ZOO_CONNECTING_STATE) {
-		GRID_NOTICE("Zookeeper: (re)connecting to [%s]", ss->zk_url);
+		// FIXME(FVE): hardcoded value
+		if (grid_single_rrd_get_delta(ss->conn_attempts, now, 5) > 5) {
+			/* There were many connection attempts recently, sign of an
+			 * underlying zookeeper problem. We will try to wipe everything
+			 * and start from the beginning. */
+			return _reconnect(ss);
+		} else {
+			GRID_NOTICE("Zookeeper: (re)connecting to [%s]", ss->zk_url);
+		}
 	} else if (state == ZOO_ASSOCIATING_STATE) {
 		GRID_DEBUG("Zookeeper: associating to [%s]", ss->zk_url);
 	} else if (state == ZOO_CONNECTED_STATE) {
 		memcpy(&(ss->zk_id), zoo_client_id(ss->zh), sizeof(clientid_t));
 		GRID_INFO("Zookeeper: connected to [%s] id=%"G_GINT64_FORMAT,
 				ss->zk_url, ss->zk_id.client_id);
+		grid_single_rrd_add(ss->conn_attempts, now, 1);
 	} else {
 		GRID_WARN("Zookeeper: %s unmanaged %s/%s id=%"G_GINT64_FORMAT,
 				ss->zk_url, zoo_zevt2str(type), zoo_state2str(state),
@@ -260,7 +276,7 @@ _open(struct sqlx_sync_s *ss)
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
 	if (NULL != ss->zh)
-		return NEWERROR(CODE_INTERNAL_ERROR, "BUG : ZK connection already initiated");
+		return NEWERROR(CODE_INTERNAL_ERROR, "BUG: ZK connection already initiated");
 	ss->zh = zookeeper_init(ss->zk_url, zk_main_watch,
 			SQLX_SYNC_DEFAULT_ZK_TIMEOUT, NULL, ss, 0);
 	if (NULL == ss->zh)
@@ -287,6 +303,7 @@ _clear(struct sqlx_sync_s *ss)
 	_close(ss);
 	oio_str_clean (&ss->zk_prefix);
 	oio_str_clean (&ss->zk_url);
+	grid_single_rrd_destroy(ss->conn_attempts);
 	memset(ss, 0, sizeof(*ss));
 	g_free(ss);
 }
