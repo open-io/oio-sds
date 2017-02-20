@@ -12,7 +12,7 @@
 # License along with this library.
 
 from __future__ import absolute_import
-from io import BufferedReader
+from io import BufferedReader, RawIOBase, IOBase
 import itertools
 import logging
 from urlparse import urlparse
@@ -45,6 +45,30 @@ def close_source(source):
         pass
 
 
+class IOBaseWrapper(RawIOBase):
+    """
+    Wrap any object that has a `read` method into an `io.IOBase`.
+    """
+
+    def __init__(self, wrapped):
+        """
+        :raise AttributeError: if wrapped object has no `read` method
+        """
+        self.__read = getattr(wrapped, "read")
+
+    def readable(self):
+        return True
+
+    def read(self, n=-1):
+        return self.__read(n)
+
+    def readinto(self, b):  # pylint: disable=invalid-name
+        read_len = len(b)
+        read_data = self.read(read_len)
+        b[0:len(read_data)] = read_data
+        return len(read_data)
+
+
 class WriteHandler(object):
     def __init__(self, source, sysmeta, chunk_preparer,
                  storage_method, headers,
@@ -55,7 +79,10 @@ class WriteHandler(object):
         :param write_timeout: timeout to send a buffer of data
         :param read_timeout: timeout to read a buffer of data from source
         """
-        self.source = BufferedReader(source)
+        if isinstance(source, IOBase):
+            self.source = BufferedReader(source)
+        else:
+            self.source = BufferedReader(IOBaseWrapper(source))
         if isinstance(chunk_preparer, dict):
             def _sort_and_yield():
                 for pos in sorted(chunk_preparer.keys()):
