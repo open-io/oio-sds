@@ -208,7 +208,8 @@ class BootstrapVolume(lister.Lister):
             if exc.status != 481:
                 raise
             self.log.warn("Failed to assign all rawx: %s", exc)
-            all_rawx = self.app.client_manager.admin.rdir_lb.get_assignation()
+            all_rawx, _ = \
+                self.app.client_manager.admin.rdir_lb.get_assignation()
 
         results = list()
         for rawx in all_rawx:
@@ -238,7 +239,8 @@ class DisplayVolumeAssignation(lister.Lister):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
-        all_rawx = self.app.client_manager.admin.rdir_lb.get_assignation()
+        all_rawx, all_rdir = \
+            self.app.client_manager.admin.rdir_lb.get_assignation()
 
         results = list()
         if not parsed_args.aggregated:
@@ -259,6 +261,10 @@ class DisplayVolumeAssignation(lister.Lister):
                 managed_rawx = rdir.get('managed_rawx') or list()
                 managed_rawx.append(rawx['addr'])
                 rdir['managed_rawx'] = managed_rawx
+            for rdir in all_rdir:
+                if rdir['addr'] not in rdir_by_addr:
+                    rdir['managed_rawx'] = list()
+                    rdir_by_addr[rdir["addr"]] = rdir
             for addr, rdir in rdir_by_addr.iteritems():
                 results.append((addr,
                                 len(rdir['managed_rawx']),
