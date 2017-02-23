@@ -50,7 +50,7 @@ class RdirDispatcher(object):
                     by_id[_make_id(self.ns, 'rdir', rdir_host)] = rawx['rdir']
             except NotFound:
                 self.logger.info("No rdir linked to %s", rawx['addr'])
-        return all_rawx
+        return all_rawx, all_rdir
 
     def assign_all_rawx(self, max_per_rdir=None):
         """

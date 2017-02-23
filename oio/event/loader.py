@@ -64,12 +64,12 @@ class _Pipeline(_Type):
 PIPELINE = _Pipeline()
 
 
-def loadhandlers(path, names, global_conf=None, **kwargs):
+def loadhandlers(path, global_conf=None, **kwargs):
     loader = ConfigLoader(path)
     handlers = {}
     handlers.update(
-        (name, loadhandler(loader, name, global_conf, **kwargs))
-        for name in names
+        (name[8:], loadhandler(loader, name[8:], global_conf, **kwargs))
+        for name in loader.get_sections(prefix="handler")
     )
     return handlers
 
@@ -222,6 +222,10 @@ class ConfigLoader(object):
                 if section[len(prefix) + 1:].strip() == name:
                     found.append(section)
         return found
+
+    def get_sections(self, prefix=None):
+        return [section for section in self.parser.sections()
+                if not prefix or section.startswith(prefix + ':')]
 
 
 class EggLoader(_Loader):

@@ -377,7 +377,9 @@ class Beanstalk(object):
          'put': ['INSERTED'],
          'use': ['USING'],
          'watch': ['WATCHING'],
-         'stats-tube': ['OK']}
+         'stats-tube': ['OK'],
+         'kick': ['KICKED'],
+         'kick-job': ['KICKED']}
 
     )
     EXPECTED_ERR = dict_merge(
@@ -388,7 +390,9 @@ class Beanstalk(object):
          'stats-tube': ['NOT_FOUND'],
          'use': [],
          'watch': [],
-         'put': ['JOB_TOO_BIG', 'BURIED', 'DRAINING']}
+         'put': ['JOB_TOO_BIG', 'BURIED', 'DRAINING'],
+         'kick': [],
+         'kick-job': ['NOT_FOUND']}
     )
 
     @classmethod
@@ -483,6 +487,27 @@ class Beanstalk(object):
 
     def delete(self, job_id):
         self.execute_command('delete', job_id)
+
+    def kick_job(self, job_id):
+        """
+        Variant of` kick` that operates with a single job.
+
+        :param job_id: the job id to kick
+        :type job_id: `str`
+        """
+        self.execute_command('kick-job', job_id)
+
+    def kick(self, bound=1000):
+        """
+        Move jobs into the ready queue.
+        If there are any buried jobs, it will only kick buried jobs.
+        Otherwise it will kick delayed jobs.
+
+        :param bound: upper bound on the number of jobs to kick
+        :type bound: `int`
+        """
+        kicked = int(self.execute_command('kick', str(bound))[1][0])
+        return kicked
 
     def stats_tube(self, tube):
         return self.execute_command('stats-tube', tube)
