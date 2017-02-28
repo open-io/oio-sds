@@ -135,6 +135,19 @@ GError* meta1_backend_services_set(struct meta1_backend_s *m1,
 		struct oio_url_s *url, const gchar *packedurl,
 		gboolean autocreate, gboolean force);
 
+/* Find replacements for some services linked to a reference.
+ *
+ * @param url URLs of the reference whose services must be replaced
+ * @param kept Packed list of service URLs that must be kept
+ * @param replaced Packed list of service URLs that must be replaced
+ * @param dryrun If true, find replacement services but do not save them
+ *
+ * @note
+ * The elements of `kept` and `replaced` must have the same sequence number.
+ *
+ * @note
+ * The union of `kept` and `replaced` must match exactly the list of services
+ * already known by the meta1 for the same sequence number. */
 GError* meta1_backend_services_relink(struct meta1_backend_s *m1,
 		struct oio_url_s *url, const char *kept, const char *replaced,
 		gboolean dryrun, gchar ***out);

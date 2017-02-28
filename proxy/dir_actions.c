@@ -253,6 +253,32 @@ action_dir_srv_renew (struct req_args_s *args, struct json_object *jargs)
 	return _reply_success_json (args, _pack_and_freev_m1url_list (NULL, urlv));
 }
 
+/**
+ * Find replacements for some services linked to a reference.
+ *
+ * Expects a JSON object like:
+ *
+ *  {
+ *    "kept": {
+ *      "seq": 1,
+ *      "type": "meta2",
+ *      "host": "192.168.56.1:6005,192.168.56.2:6005",
+ *      "args": ""
+ *    },
+ *    "replaced": {
+ *      "seq": 1,
+ *      "type": "meta2",
+ *      "host": "192.168.56.3:6005",
+ *      "args": ""
+ *    }
+ *  }
+ *
+ * "kept" is the description of services that must be kept.
+ * "replaced" is the description of services that must be replaced.
+ * Note that the meta1 expects that the union of "kept" and "replaced"
+ * matches exactly the list of services it knows for the specified
+ * sequence number.
+ */
 static enum http_rc_e
 action_dir_srv_relink (struct req_args_s *args, struct json_object *jargs)
 {
