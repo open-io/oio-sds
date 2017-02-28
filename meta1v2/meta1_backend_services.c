@@ -66,7 +66,7 @@ urlv_get_max_seq(struct meta1_service_url_s **uv)
 {
 	gint seq = G_MININT;
 	if (uv) {
-		for (; *uv ;++uv) {
+		for (; *uv; ++uv) {
 			if (seq < (*uv)->seq)
 				seq = (*uv)->seq;
 		}
@@ -78,7 +78,7 @@ static gchar **
 pack_urlv(struct meta1_service_url_s **uv)
 {
 	GPtrArray *tmp = g_ptr_array_new();
-	for (; uv && *uv ;uv++)
+	for (; uv && *uv; uv++)
 		g_ptr_array_add(tmp, meta1_pack_url(*uv));
 	g_ptr_array_add(tmp, NULL);
 	return (gchar**)g_ptr_array_free(tmp, FALSE);
@@ -96,7 +96,7 @@ expand_url(struct meta1_service_url_s *u)
 	tmp = g_ptr_array_new();
 
 	split = g_strsplit(u->host, ",", -1);
-	for (p=split; p && *p ;p++) {
+	for (p=split; p && *p; p++) {
 		struct meta1_service_url_s *newurl;
 
 		newurl = meta1_url_dup(u);
@@ -118,10 +118,10 @@ expand_urlv(struct meta1_service_url_s **uv)
 
 	tmp = g_ptr_array_new();
 	if (uv) {
-		for (; *uv ;++uv) {
+		for (; *uv; ++uv) {
 			struct meta1_service_url_s **p, **utmp;
 			if (NULL != (utmp = expand_url(*uv))) {
-				for (p=utmp; *p ;++p)
+				for (p=utmp; *p; ++p)
 					g_ptr_array_add(tmp, *p);
 				g_free(utmp);
 			}
@@ -239,7 +239,7 @@ __del_container_services(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	if (!urlv || !*urlv)
 		err = __del_container_all_services(sq3, url, srvtype);
 	else {
-		for (; !err && *urlv ;urlv++,line++) {
+		for (; !err && *urlv; urlv++,line++) {
 			gchar *end = NULL;
 
 			errno = 0;
@@ -733,7 +733,8 @@ _idem (struct meta1_service_url_s *u0, struct meta1_service_url_s *u1)
 	return u0->seq == u1->seq && !strcmp(u0->srvtype, u1->srvtype);
 }
 
-/* check if two arrays of urls contains the same items. */
+/* Check if `all` array contains exactly the same items as the union
+ * of `kept` and `replaced` arrays (order does not matter). */
 static gboolean
 __match_urlv (struct meta1_service_url_s **all, struct meta1_service_url_s **kept,
 		struct meta1_service_url_s **replaced)
@@ -745,7 +746,7 @@ __match_urlv (struct meta1_service_url_s **all, struct meta1_service_url_s **kep
 	GPtrArray *gpa_told = g_ptr_array_new ();
 
 	/* build two arrays of URL we can safely sort */
-	for (; *all ;++all) {
+	for (; *all; ++all) {
 		if ((*all)->seq == ref->seq)
 			g_ptr_array_add (gpa_inplace, *all);
 	}
@@ -761,7 +762,7 @@ __match_urlv (struct meta1_service_url_s **all, struct meta1_service_url_s **kep
 	g_ptr_array_sort (gpa_told, (GCompareFunc)_sorter);
 
 	/* identical sorted arrays have equal items at each position */
-	for (guint i=0; i<gpa_told->len ;++i) {
+	for (guint i=0; i<gpa_told->len; ++i) {
 		if (0 != strcmp(M1U(gpa_told->pdata[i])->host, M1U(gpa_inplace->pdata[i])->host))
 			goto out;
 	}
@@ -1124,14 +1125,14 @@ meta1_backend_services_relink(struct meta1_backend_s *m1,
 	if (NULL != (err = compound_type_parse(&ct, ref->srvtype)))
 		goto out;
 
-	/* Sanity check : all the services must have the same <seq,type> */
-	for (struct meta1_service_url_s **p = ukept; p && *p ;++p) {
+	/* Sanity check: all the services must have the same <seq,type> */
+	for (struct meta1_service_url_s **p = ukept; p && *p; ++p) {
 		if (!_idem(*p, ref)) {
 			err = BADREQ("Mismatch in URL set (%s)", "kept");
 			goto out;
 		}
 	}
-	for (struct meta1_service_url_s **p = urepl; p && *p ;++p) {
+	for (struct meta1_service_url_s **p = urepl; p && *p; ++p) {
 		if (!_idem(*p, ref)) {
 			err = BADREQ("Mismatch in URL set (%s)", "replaced");
 			goto out;
@@ -1139,7 +1140,7 @@ meta1_backend_services_relink(struct meta1_backend_s *m1,
 	}
 	/* Sanity check: all the kept/replaced services must have the type of
 	 * the oio_url */
-	for (struct meta1_service_url_s **p = urepl; p && *p ;++p) {
+	for (struct meta1_service_url_s **p = urepl; p && *p; ++p) {
 		if (0 != strcmp((*p)->srvtype, ct.fulltype)) {
 			err = BADREQ("Service type mismatch (URL vs. kept/replaced)");
 			goto out;
