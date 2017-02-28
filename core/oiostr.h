@@ -195,7 +195,7 @@ int oio_str_prefixed (const char *s, const char *p, const char *sep);
 
 int oio_str_caseprefixed(const char *str, const char *prefix);
 
-/* pi64 is left untouched is the overall return is FALSE */
+/* pi64 is left untouched if the overall return is FALSE */
 gboolean oio_str_is_number (const char *s, gint64 *pi64);
 
 int oio_str_cmp3 (const void *a, const void *b, void *ignored);
