@@ -600,7 +600,7 @@ election_has_peers (struct election_manager_s *m, const struct sqlx_name_s *n,
 		*result = FALSE;
 		return err;
 	}
-	*result = peers != NULL && peers[0] != NULL;
+	*result = peers != NULL && oio_str_is_set(*peers);
 	if (peers)
 		g_strfreev(peers);
 	return NULL;
