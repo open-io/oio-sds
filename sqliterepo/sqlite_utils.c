@@ -196,6 +196,22 @@ sqlx_admin_ensure_versions (struct sqlx_sqlite3_s *sq3)
 	return BOOL(any_added);
 }
 
+gboolean
+sqlx_admin_ensure_peers(struct sqlx_sqlite3_s *sq3, gchar **peers)
+{
+	EXTRA_ASSERT(peers != NULL);
+	gboolean modified = FALSE;
+	gchar *packed_peers = sqlx_admin_get_str(sq3, SQLX_ADMIN_PEERS);
+	if (!oio_str_is_set(packed_peers)) {
+		g_free(packed_peers);  // in case it was allocated but empty
+		packed_peers = g_strjoinv(",", peers);
+		sqlx_admin_set_str(sq3, SQLX_ADMIN_PEERS, packed_peers);
+		modified = TRUE;
+	}
+	g_free(packed_peers);
+	return modified;
+}
+
 void
 sqlx_admin_inc_all_versions(struct sqlx_sqlite3_s *sq3, const int delta)
 {

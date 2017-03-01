@@ -88,9 +88,9 @@ enum sqlx_repo_flag_e
 
 enum sqlx_sync_mode_e
 {
-	SQLX_SYNC_OFF=0,
-	SQLX_SYNC_NORMAL=1,
-	SQLX_SYNC_FULL=2
+	SQLX_SYNC_OFF = 0,
+	SQLX_SYNC_NORMAL = 1,
+	SQLX_SYNC_FULL = 2
 };
 
 enum election_status_e
@@ -119,13 +119,18 @@ struct sqlx_sqlite3_s
 
 struct sqlx_repo_config_s
 {
-	enum sqlx_repo_flag_e flags; /**< several options. */
+	/** several options. */
+	enum sqlx_repo_flag_e flags;
 
-	enum sqlx_sync_mode_e sync_solo; /**< Which value for pragma synchronous'
-									   for not replicated bases */
+	/** Which value for 'pragma synchronous'
+	 * for not replicated bases */
+	enum sqlx_sync_mode_e sync_solo;
 
-	enum sqlx_sync_mode_e sync_repli; /**< Which value for pragma synchronous'
-									   for replicated bases */
+	/** Which value for 'pragma synchronous'
+	 * for replicated bases */
+	enum sqlx_sync_mode_e sync_repli;
+
+	/** Size of sqlite pages */
 	guint page_size;
 
 	/* Cache maximum number of items */
@@ -233,6 +238,14 @@ void sqlx_repository_unlock_and_close_noerror(struct sqlx_sqlite3_s *sq3);
 /** @param flags flags OR'ed close flags (see sqlx_close_flag_e) */
 void sqlx_repository_unlock_and_close_noerror2(struct sqlx_sqlite3_s *sq3,
 		guint32 flags);
+
+/** Get the replication peers from the higher level service */
+GError* sqlx_repository_get_peers(sqlx_repository_t *repo,
+		const struct sqlx_name_s *n, gchar ***result);
+
+/** Get the replication peers from the local database */
+GError* sqlx_repository_get_peers2(sqlx_repository_t *repo,
+		const struct sqlx_name_s *n, gchar ***result);
 
 GError * sqlx_repository_get_version(struct sqlx_sqlite3_s *sq3,
 		GTree **result);
