@@ -35,6 +35,10 @@ License along with this library.
 #define SQLX_ADMIN_PREFIX_USER "user."
 #endif
 
+#ifndef SQLX_ADMIN_PEERS
+#define SQLX_ADMIN_PEERS SQLX_ADMIN_PREFIX_SYS "peers"
+#endif
+
 #ifndef SQLX_ADMIN_INITFLAG
 #define SQLX_ADMIN_INITFLAG SQLX_ADMIN_PREFIX_SYS "sqlx.init"
 #endif
@@ -159,6 +163,11 @@ void sqlx_admin_inc_all_versions(struct sqlx_sqlite3_s *sq3, const int delta);
 
 /* return FALSE if no changed happened */
 gboolean sqlx_admin_ensure_versions (struct sqlx_sqlite3_s *sq3);
+
+/* Check if peers have been saved in the database, save them if needed.
+ * Returns TRUE if peers have just been saved,
+ * FALSE if they were already there */
+gboolean sqlx_admin_ensure_peers(struct sqlx_sqlite3_s *sq3, gchar **peers);
 
 /* Returns the numer of items altered. It doesn't check the <sq3->admin_dirty>
  * flag, and doesn't open/closes a transaction. This is intentional, to let
