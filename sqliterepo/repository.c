@@ -862,6 +862,30 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 			sqlx_alert_dirty_base (*result, "opened with dirty admin");
 		(*result)->election = status;
 	}
+
+	if (!err && args->is_replicated) {
+		gchar **peers = NULL;
+		err = sqlx_repository_get_peers((*result)->repo,
+				sqlx_name_mutable_to_const(&(*result)->name), &peers);
+		if (err) {
+			GRID_WARN("Failed to fetch peers for %s (%d %s), "
+					"the local entry may remain uninitialized",
+					(*result)->path, err->code, err->message);
+			g_clear_error(&err);
+		} else {
+			// The list returned by `get_peers` does not include this service
+			gchar *myid = g_strdup(
+					election_manager_get_local((*result)->manager));
+			peers = oio_strv_append(peers, myid);
+			gboolean modified = sqlx_admin_ensure_peers((*result), peers);
+			if (modified) {
+				sqlx_admin_save_lazy(*result);
+				GRID_DEBUG("Replications peers saved in %s", (*result)->path);
+			}
+			g_strfreev(peers);
+		}
+	}
+
 	return err;
 }
 
@@ -908,7 +932,7 @@ sqlx_repository_unlock_and_close_noerror2(struct sqlx_sqlite3_s *sq3,
 	GRID_TRACE2("%s(%p)", __FUNCTION__, sq3);
 	GError *e = sqlx_repository_unlock_and_close2(sq3, flags);
 	if (e) {
-		GRID_WARN("DB closure error : (%d) %s", e->code, e->message);
+		GRID_WARN("DB closure error: (%d) %s", e->code, e->message);
 		g_error_free(e);
 	}
 }
@@ -1485,6 +1509,37 @@ sqlx_repository_retore_from_master(struct sqlx_sqlite3_s *sq3)
 		? NEWERROR(CODE_INTERNAL_ERROR, "Replication not configured")
 		: election_manager_trigger_RESYNC(sq3->repo->election_manager,
 				sqlx_name_mutable_to_const(&sq3->name));
+}
+
+GError*
+sqlx_repository_get_peers(sqlx_repository_t *repo,
+		const struct sqlx_name_s *n, gchar ***result)
+{
+	return election_get_peers(repo->election_manager, n, FALSE, result);
+}
+
+GError*
+sqlx_repository_get_peers2(sqlx_repository_t *repo,
+		const struct sqlx_name_s *n, gchar ***result)
+{
+	REPO_CHECK(repo);
+	SQLXNAME_CHECK(n);
+	EXTRA_ASSERT(result != NULL);
+
+	GRID_TRACE2("%s(%p,%s,%s)", __FUNCTION__, repo, n->type, n->base);
+	*result = NULL;
+
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	GError *err = sqlx_repository_open_and_lock(repo, n, SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK, &sq3, NULL);
+	if (!err) {
+		gchar *tmp = sqlx_admin_get_str(sq3, SQLX_ADMIN_PEERS);
+		if (tmp) {
+			*result = g_strsplit(tmp, ",", -1);
+			g_free(tmp);
+		}
+		sqlx_repository_unlock_and_close_noerror2(sq3, SQLX_CLOSE_IMMEDIATELY);
+	}
+	return err;
 }
 
 GError *
