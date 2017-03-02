@@ -44,82 +44,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 static GString *dir_schemas = NULL;
 
-static gchar **
-filter_services(struct sqlx_service_s *ss, gchar **s, gint64 seq, const gchar *t)
-{
-	gboolean matched = FALSE;
-	GPtrArray *tmp = g_ptr_array_new();
-	for (; *s ;s++) {
-		struct meta1_service_url_s *u = meta1_unpack_url(*s);
-		if (seq == u->seq && 0 == strcmp(t, u->srvtype)) {
-			if (!g_ascii_strcasecmp(u->host, ss->url->str))
-				matched = TRUE;
-			else
-				g_ptr_array_add(tmp, g_strdup(u->host));
-		}
-		meta1_service_url_clean(u);
-	}
-
-	if (matched) {
-		g_ptr_array_add(tmp, NULL);
-		return (gchar**)g_ptr_array_free(tmp, FALSE);
-	}
-	else {
-		g_ptr_array_add(tmp, NULL);
-		g_strfreev((gchar**)g_ptr_array_free(tmp, FALSE));
-		return NULL;
-	}
-}
-
-static gchar **
-filter_services_and_clean(struct sqlx_service_s *ss,
-		gchar **src, gint64 seq, const char *type)
-{
-	if (!src)
-		return NULL;
-	gchar **result = filter_services(ss, src, seq, type);
-	g_strfreev(src);
-	return result;
-}
-
-static GError *
-_get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
-		gboolean nocache, gchar ***result)
-{
-	EXTRA_ASSERT(ss != NULL);
-	EXTRA_ASSERT(result != NULL);
-	SQLXNAME_CHECK(n);
-
-	gint64 seq = 1;
-	struct oio_url_s *u = oio_url_empty();
-	oio_url_set(u, OIOURL_NS, ss->ns_name);
-	if (!sqlx_name_extract (n, u, NAME_SRVTYPE_SQLX, &seq)) {
-		oio_url_clean(u);
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid base name");
-	}
-
-	if (nocache) {
-		hc_decache_reference_service(ss->resolver, u, n->type);
-		if (!result) {
-			oio_url_pclean (&u);
-			return NULL;
-		}
-	}
-
-	gchar **peers = NULL;
-	GError *err = hc_resolve_reference_service(ss->resolver, u, n->type, &peers);
-	oio_url_pclean(&u);
-
-	if (NULL != err) {
-		g_prefix_error(&err, "Peer resolution error");
-		return err;
-	}
-
-	if (!(*result = filter_services_and_clean(ss, peers, seq, n->type)))
-		return NEWERROR(CODE_CONTAINER_NOTFOUND, "Base not managed");
-	return NULL;
-}
-
 static GError *
 _load_schema_directory (struct sqlx_service_s *ss, const char *dir)
 {
@@ -193,7 +117,7 @@ main(int argc, char ** argv)
 		NAME_SRVTYPE_SQLX, "sqlxv1",
 		"el/"NAME_SRVTYPE_SQLX, 1, 3,
 		SQLX_SCHEMA, 1, 3,
-		_get_peers, _post_config, _set_defaults
+		sqlx_service_resolve_peers, _post_config, _set_defaults
 	};
 	sqlx_service_set_custom_options (custom_options);
 	return sqlite_service_main(argc, argv, &cfg);

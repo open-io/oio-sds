@@ -55,12 +55,11 @@ _register_to_zookeeper(struct sqlx_service_s *ss)
 static gchar **
 strv_filter(struct sqlx_service_s *ss, GSList *l)
 {
+	(void) ss;
 	GPtrArray *tmp = g_ptr_array_new();
-	for (; l!=NULL ;l=l->next) {
+	for (; l != NULL; l = l->next) {
 		struct zk_node_s *zknode = l->data;
 		if (!zknode->content)
-			continue;
-		if (!g_ascii_strcasecmp(ss->url->str, zknode->content))
 			continue;
 		addr_info_t addr;
 		if (!grid_string_to_addrinfo(zknode->content, &addr))

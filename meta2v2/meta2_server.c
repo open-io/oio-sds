@@ -77,107 +77,6 @@ _task_reload_m2_lb(gpointer p)
 	oio_lb_world__debug(PSRV(p)->lb_world);
 }
 
-static gchar **
-filter_services(struct sqlx_service_s *ss,
-		gchar **s, gint64 seq, const gchar *type)
-{
-	gboolean matched = FALSE;
-	GPtrArray *tmp = g_ptr_array_new();
-	(void) seq;
-	for (; *s ;s++) {
-		struct meta1_service_url_s *u = meta1_unpack_url(*s);
-		if (0 == strcmp(type, u->srvtype)) {
-			if (!g_ascii_strcasecmp(u->host, ss->url->str))
-				matched = TRUE;
-			else
-				g_ptr_array_add(tmp, g_strdup(u->host));
-		}
-		meta1_service_url_clean(u);
-	}
-
-	gchar **out = (gchar**)metautils_gpa_to_array (tmp, TRUE);
-	if (matched)
-		return out;
-	g_strfreev (out);
-	return NULL;
-}
-
-static gchar **
-filter_services_and_clean(struct sqlx_service_s *ss,
-		gchar **src, gint64 seq, const gchar *type)
-{
-	if (!src)
-		return NULL;
-	gchar **result = filter_services(ss, src, seq, type);
-	g_strfreev(src);
-	return result;
-}
-
-static GError *
-_get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
-		gboolean nocache, gchar ***result)
-{
-	EXTRA_ASSERT(ss != NULL);
-	EXTRA_ASSERT(result != NULL);
-
-	gint retry = TRUE;
-	gchar **peers = NULL;
-	GError *err = NULL;
-
-	gint64 seq = 1;
-	struct oio_url_s *u = oio_url_empty ();
-	oio_url_set(u, OIOURL_NS, ss->ns_name);
-	if (!sqlx_name_extract (n, u, NAME_SRVTYPE_META2, &seq)) {
-		oio_url_pclean (&u);
-		return BADREQ("Invalid type name: '%s'", n->type);
-	}
-
-label_retry:
-	if (nocache) {
-		hc_decache_reference_service(ss->resolver, u, n->type);
-		if (!result) {
-			oio_url_pclean (&u);
-			return NULL;
-		}
-	}
-
-	peers = NULL;
-	err = hc_resolve_reference_service(ss->resolver, u, n->type, &peers);
-
-	if (NULL != err) {
-		if (retry && err->code == CODE_RANGE_NOTFOUND) {
-			hc_decache_reference(ss->resolver, u);
-			retry = FALSE;
-			goto label_retry;
-		}
-		g_prefix_error(&err, "Peer resolution error: ");
-		oio_url_clean(u);
-		return err;
-	}
-
-	gchar **out = filter_services_and_clean(ss, peers, seq, n->type);
-
-	if (!out) {
-		if (retry) {
-			nocache = TRUE;
-			retry = FALSE;
-			goto label_retry;
-		}
-		err = NEWERROR(CODE_CONTAINER_NOTFOUND, "Base not managed");
-	}
-
-	if (err) {
-		if (out)
-			g_strfreev (out);
-		*result = NULL;
-	} else {
-		*result = out;
-	}
-
-	oio_url_clean(u);
-	return err;
-}
-
 static void
 meta2_on_close(struct sqlx_sqlite3_s *sq3, gboolean deleted, gpointer cb_data)
 {
@@ -251,7 +150,7 @@ main(int argc, char **argv)
 		NAME_SRVTYPE_META2, "m2v2",
 		"el/" NAME_SRVTYPE_META2, 2, 2,
 		schema, 1, 3,
-		_get_peers, _post_config, NULL
+		sqlx_service_resolve_peers, _post_config, NULL
 	};
 
 	int rc = sqlite_service_main (argc, argv, &cfg);

@@ -121,39 +121,6 @@ _task_reload_policies(gpointer p)
 	}
 }
 
-static gchar **
-filter_urls(gchar **src, const gchar *avoid)
-{
-	gboolean matched = FALSE;
-	GPtrArray *tmp = g_ptr_array_new();
-	for (; *src ;++src) {
-		if (!g_ascii_strcasecmp(avoid, *src))
-			matched = TRUE;
-		else
-			g_ptr_array_add(tmp, g_strdup(*src));
-	}
-
-	if (matched) {
-		g_ptr_array_add(tmp, NULL);
-		return (gchar**)g_ptr_array_free(tmp, FALSE);
-	}
-	else {
-		g_ptr_array_add(tmp, NULL);
-		g_strfreev((gchar**)g_ptr_array_free(tmp, FALSE));
-		return NULL;
-	}
-}
-
-static gchar **
-filter_urls_and_clean(gchar **src, const gchar *avoid)
-{
-	if (!src)
-		return NULL;
-	gchar **peers = filter_urls(src, avoid);
-	g_strfreev(src);
-	return peers;
-}
-
 static GError *
 _get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
 		gboolean nocache, gchar ***result)
@@ -173,14 +140,8 @@ _get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
 
 	if (nocache) {
 		_reload_prefixes(ss, FALSE);
-		if (!result)
-			return NULL;
 	}
-
-	gchar **peers = meta1_prefixes_get_peers(
-			meta1_backend_get_prefixes(m1), cid);
-	if (!(*result = filter_urls_and_clean(peers, ss->url->str)))
-		return NEWERROR(CODE_CONTAINER_NOTFOUND, "Base not managed");
+	*result = meta1_prefixes_get_peers(meta1_backend_get_prefixes(m1), cid);
 	return NULL;
 }
 
