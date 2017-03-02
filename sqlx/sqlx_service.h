@@ -171,6 +171,11 @@ void sqlx_service_set_custom_options (struct grid_main_option_s *options);
 GError* sqlx_reload_lb_service_types(struct oio_lb_world_s *lbw,
 		struct oio_lb_s *lb, GSList *list_srvtypes);
 
+/** Use the resolver to find peers.
+ *  Only for services registered in meta1 (e.g. meta2 and sqlx). */
+GError * sqlx_service_resolve_peers(struct sqlx_service_s *ss,
+		const struct sqlx_name_s *n, gboolean nocache, gchar ***result);
+
 // FIXME: this is only used in meta1
 /** Reloads the optional (oio_lb_s*). Exposed to let the
  * server enable it in its post-config hook. This is destined to
