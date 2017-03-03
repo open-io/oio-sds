@@ -75,21 +75,21 @@ void oio_var_list_all(void (*hook) (const char *k, const char *v));
 
 
 #define OIO_VAR_DEFINE_BOOL(Name,Default,Config,Description) \
-	gboolean Name = Default; \
+	gboolean Name __attribute__ ((visibility ("protected"))) = Default; \
 	static void __attribute__ ((constructor)) __declare_gboolean_##Name (void) { \
 		oio_var_register_gboolean(&Name, Default, Config, Description); \
 	}
 
 #define OIO_VAR_DEFINE_CONFIG(Type,Name,Default,Config,Description,Min,Max) \
-	Type Name = Default; \
+	Type Name __attribute__ ((visibility ("protected"))) = Default; \
 	static void __attribute__ ((constructor)) __declare_##Type##_##Name (void) { \
 		oio_var_register_##Type(&Name, Default, Config, Description, Min, Max); \
 	}
 
 #define OIO_VAR_DEFINE_EPOCH(Name,Default,Config,Description,Min,Max) \
-	OIO_VAR_DEFINE_CONFIG(time_t,Name,Default,Config,"No description yet",0,-1)
+	OIO_VAR_DEFINE_CONFIG(time_t,Name,Default,Config,Description,0,-1)
 
 #define OIO_VAR_DEFINE_MONOTONIC_TIME(Name,Default,Config,Description,Min,Max) \
-	OIO_VAR_DEFINE_CONFIG(gint64,Name,Default,Config,"No description yet",0,G_TIME_SPAN_DAY)
+	OIO_VAR_DEFINE_CONFIG(gint64,Name,Default,Config,Description,0,G_TIME_SPAN_DAY)
 
 #endif /* OIO_SDS__core__var_h */
