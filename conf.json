@@ -1,0 +1,426 @@
+{
+	"server": {
+		"code": "server_variables.c",
+		"header": "server_variables.h",
+		"variables": [
+			{ "type": "bool", "name": "_linger_onoff",
+				"key": "socket.linger.enabled",
+				"def": false },
+
+			{ "type": "epoch", "name": "_linger_delay",
+				"key": "socket.linger.delay",
+				"def": "1s", "min": 0, "max": 60 },
+
+			{ "type": "bool", "name": "_sock_quickack",
+				"key": "socket.quickack.enabled",
+				"def": true },
+
+			{ "type": "bool", "name": "_sock_nodelay",
+				"key": "socket.nodelay.enabled",
+				"def": true },
+
+			{ "type": "bool", "name": "oio_cache_avoid_on_error",
+				"key": "gridd.errors.cache.enabled",
+				"def": false },
+
+			{ "type": "int32", "name": "oio_client_timeout_threshold",
+				"def": "10" },
+
+			{ "type": "uint64", "name": "oio_client_max_net_errors",
+				"def": "15", "min": 1, "max": "4Gi" },
+
+			{ "type": "epoch", "name": "oio_client_period_net_errors",
+				"key": "gridd.errors.cache.period",
+				"def": 15, "min": 1, "max": 3600 },
+
+			{ "type": "float", "name": "oio_client_timeout_single",
+				"key": "gridd.timeout.single.common",
+				"def": 30.0, "min": 0.01, "max": 120.0 },
+
+			{ "type": "float", "name": "oio_client_timeout_whole",
+				"key": "gridd.timeout.whole.common",
+				"def": 30.0, "min": 0.01, "max": 120.0 },
+
+			{ "type": "float", "name": "oio_client_timeout_connect",
+				"key": "gridd.timeout.connect.common",
+				"def": 2.0, "min": 0.01, "max": 120.0 },
+
+			{ "type": "monotonic", "name": "events_common_buffer_delay",
+				"key": "events.common.pending.delay",
+				"def": "5s", "min": "1ms", "max": "1h" },
+
+			{ "type": "uint32", "name": "events_common_max_pending",
+				"key": "events.common.pending.max",
+				"def": "1000", "min": 1, "max": "1Mi" },
+
+			{ "type": "uint32", "name": "events_beanstalkd_default_prio",
+				"key": "events.beanstalkd.prio",
+				"def": "1<<31", "min": 0, "max": "1<<31" },
+
+			{ "type": "epoch", "name": "events_beanstalkd_default_delay",
+				"key": "events.beanstalkd.delay",
+				"def": 0, "min": 0, "max": "1d" },
+
+			{ "type": "epoch", "name": "events_beanstalkd_default_ttr",
+				"key": "events.beanstalkd.ttr",
+				"def": 120, "min": 0, "max": 86400 },
+
+			{ "type": "float", "name": "oio_m0_client_timeout_init",
+				"key": "meta0.outgoing.timeout.init.req",
+				"def": 60.0, "min": 0.01, "max": 90.0 },
+
+			{ "type": "float", "name": "oio_m0_client_timeout_common",
+				"key": "meta0.outgoing.timeout.common.req",
+				"def": 10.0, "min": 0.01, "max": 60.0 },
+
+			{ "type": "uint", "name": "meta2_batch_maxlen",
+				"key": "meta2.batch.maxlen",
+				"def": "1k", "min": 1, "max": "100k" },
+
+			{ "type": "epoch", "name": "meta2_reload_lb_period",
+				"key": "meta2.reload.lb.period",
+				"def": "10s", "min": "1s", "max": "1h" },
+
+			{ "type": "epoch", "name": "meta2_reload_nsinfo_period",
+				"key": "meta2.reload.nsinfo.period",
+				"def": "5s", "min": "1s", "max": "1h" },
+
+			{ "type": "bool", "name": "meta2_flag_precheck_on_generate",
+				"key": "meta2.generate.precheck",
+				"def": true},
+
+			{ "type": "epoch", "name": "csurl_refresh_delay",
+				"key": "proxy.period.refresh.csurl",
+				"def": "30s", "min": 0, "max": "1d" },
+
+			{ "type": "epoch", "name": "srvtypes_refresh_delay",
+				"key": "proxy.period.refresh.srvtypes",
+				"def": "30s", "min": "1s", "max": "1d" },
+
+			{ "type": "epoch", "name": "nsinfo_refresh_delay",
+				"key": "proxy.period.reload.nsinfo",
+				"def": "30s", "min": "1s", "max": "1h" },
+
+			{ "type": "epoch", "name": "nsinfo_refresh_m0",
+				"key": "proxy.period.reload.meta0",
+				"def": "30s", "min": "1s", "max": "1d" },
+
+			{ "type": "monotonic", "name": "ttl_expire_local_services",
+				"key": "proxy.period.reload.metervices.dead",
+				"def": "30s", "min": 0, "max": "1d" },
+
+			{ "type": "monotonic", "name": "ttl_down_services",
+				"key": "proxy.ttl.services.down",
+				"def": "5s", "min": 0, "max": "1d" },
+
+			{ "type": "monotonic", "name": "ttl_known_services",
+				"key": "proxy.ttl.services.known",
+				"def": "5d", "min": 0, "max": "7d" },
+
+			{ "type": "monotonic", "name": "ttl_expire_master_services",
+				"key": "proxy.ttl.services.master",
+				"def": "5s", "min": 0, "max": "7d" },
+
+			{ "type": "epoch", "name": "lb_downstream_delay",
+				"key": "proxy.period.cs.downstream",
+				"def": "5s", "min": 0, "max": "1m" },
+
+			{ "type": "epoch", "name": "lb_upstream_delay",
+				"key": "proxy.period.cs.upstream",
+				"def": "1s", "min": "1s", "max": "1m" },
+
+			{ "type": "monotonic", "name": "dir_low_ttl",
+				"key": "proxy.cache.services.ttl",
+				"def": "1h", "min": 0, "max": "7d" },
+
+			{ "type": "uint", "name": "dir_low_max",
+				"key": "proxy.cache.services.max",
+				"def": "1Mi", "min": 0, "max": "4Mi" },
+
+			{ "type": "monotonic", "name": "dir_high_ttl",
+				"key": "proxy.cache.directory.ttl",
+				"def": 0, "min": 0, "max": "7d" },
+
+			{ "type": "uint", "name": "dir_high_max",
+				"key": "proxy.cache.directory.max",
+				"def": "1Mi", "min": 0, "max": "4Mi" },
+
+			{ "type": "bool", "name": "flag_cache_enabled",
+				"key": "proxy.cache.enabled",
+				"def": true },
+
+			{ "type": "bool", "name": "flag_local_scores",
+				"key": "proxy.quirk.local_scores",
+				"def": false },
+
+			{ "type": "bool", "name": "flag_prefer_master_for_write",
+				"key": "proxy.prefer.master_for_write",
+				"def": true },
+
+			{ "type": "bool", "name": "flag_prefer_master_for_read",
+				"key": "proxy.prefer.master_for_read",
+				"def": false },
+
+			{ "type": "bool", "name": "flag_prefer_slave_for_read",
+				"key": "proxy.prefer.slave_for_read",
+				"def": false },
+
+			{ "type": "bool", "name": "flag_force_master",
+				"key": "proxy.force.master",
+				"def": false },
+
+			{ "type": "uint", "name": "proxy_url_path_maxlen",
+				"key": "proxy.url.path.maxlen",
+				"def": 2048, "min": 32, "max": 65536 },
+
+			{ "type": "float", "name": "proxy_timeout_stat",
+				"key": "proxy.outgoing.timeout.stat",
+				"def": 5.0, "min": 0.01, "max": 60.0 },
+
+			{ "type": "float", "name": "proxy_timeout_common",
+				"key": "proxy.outgoing.timeout.common",
+				"def": 30.0, "min": 0.01, "max": 60.0 },
+
+			{ "type": "float", "name": "proxy_timeout_conscience",
+				"key": "proxy.outgoing.timeout.conscience",
+				"def": 2.0, "min": 0.01, "max": 60.0 },
+
+			{ "type": "monotonic", "name": "_cache_m0cs_default_ttl",
+				"key": "resolver.cache.csm0.ttl.default",
+				"def": 0, "min": 0, "max": "4Mi" },
+
+			{ "type": "uint", "name": "_cache_m0cs_default_max",
+				"key": "resolver.cache.csm0.max.default",
+				"def": 0, "min": 0, "max": "4Mi" },
+
+			{ "type": "monotonic", "name": "_cache_srv_default_ttl",
+				"key": "resolver.cache.srv.ttl.default",
+				"def": 0, "min": 0, "max": "4Mi" },
+
+			{ "type": "uint", "name": "_cache_srv_default_max",
+				"key": "resolver.cache.srv.max.default",
+				"def": 0, "min": 0, "max": "1Mi" },
+
+			{ "type": "uint", "name": "server_event_batch_size",
+				"key": "server.batch.events",
+				"def": 128, "min": 1, "max": "4ki" },
+
+			{ "type": "uint", "name": "server_accept_batch_size",
+				"key": "server.batch.accept",
+				"def": 64, "min": 1, "max": "4ki" },
+
+			{ "type": "uint", "name": "server_threadpool_max_unused",
+				"key": "server.pool.max_unused",
+				"def": "1<<32 - 1", "min":0, "max":"1<<32 -1" },
+
+			{ "type": "monotonic", "name": "server_threadpool_max_idle",
+				"key": "server.pool.max_idle",
+				"def": "30s", "min": 1, "max": "1h" },
+
+			{ "type": "uint", "name": "server_threadpool_max_workers",
+				"key": "server.pool.max_workers",
+				"def": "1 << 31", "min": 1, "max": "1 << 31" },
+
+			{ "type": "uint", "name": "server_threadpool_max_udp",
+				"key": "server.pool.max_udp",
+				"def": 8, "min": 1, "max": "1 << 31" },
+
+			{ "type": "monotonic", "name": "server_cnx_ttl_never",
+				"key": "server.cnx.timeout.never",
+				"def": "30s", "min": 0, "max": "1d" },
+
+			{ "type": "monotonic", "name": "server_cnx_ttl_persist",
+				"key": "server.cnx.timeout.persist",
+				"def": "2h", "min": 0, "max": "1d" },
+
+			{ "type": "monotonic", "name": "server_cnx_ttl_idle",
+				"key": "server.cnx.timeout.idle",
+				"def": "5m", "min": 0, "max": "1d" },
+
+			{ "type": "monotonic", "name": "server_udp_queue_ttl",
+				"key": "server.udp_queue.ttl",
+				"def": "2s", "min": "100ms", "max": "1d" },
+
+			{ "type": "uint", "name": "server_udp_queue_maxlen",
+				"key": "server.udp_queue.max",
+				"def": 8192, "min": 0, "max": "1 << 32 - 1" },
+
+			{ "type": "monotonic", "name": "oio_election_period_cond_wait",
+				"key": "sqliterepo.election.wait.quantum",
+				"def": "1s", "min": "1ms", "max": "1h" },
+
+			{ "type": "monotonic", "name": "oio_election_delay_wait",
+				"key": "sqliterepo.election.wait.delay",
+				"def": "5s", "min": "1ms", "max": "1h" },
+
+			{ "type": "monotonic", "name": "oio_election_delay_nowait_pending",
+				"key": "sqliterepo.election.nowait.after",
+				"def": "15s", "min": "1ms", "max": "1h" },
+
+			{ "type": "monotonic", "name": "oio_election_delay_expire_NONE",
+				"key": "sqliterepo.election.delay.expire_none",
+				"def": "5m", "min": "1s", "max": "1d" },
+
+			{ "type": "monotonic", "name": "oio_election_delay_expire_SLAVE",
+				"key": "sqliterepo.election.delay.expire_slave",
+				"def": "15m", "min": "1s", "max": "7d" },
+
+			{ "type": "monotonic", "name": "oio_election_delay_ping_final",
+				"key": "sqliterepo.election.delay.ping_final",
+				"def": "15m", "min": "1ms", "max": "1d" },
+
+			{ "type": "monotonic", "name": "oio_election_delay_expire_MASTER",
+				"key": "sqliterepo.election.delay.expire_master",
+				"def": "25m", "min": "1ms", "max": "7d" },
+
+			{ "type": "monotonic", "name": "oio_election_delay_retry_FAILED",
+				"key": "sqliterepo.election.delay.retry_failed",
+				"def": "2s", "min": "1ms", "max": "7d" },
+
+			{ "type": "uint", "name": "_page_size",
+				"key": "sqliterepo.page_size",
+				"def": 4096, "min": 512, "max": "1024 * 1024" },
+
+			{ "type": "int32", "name": "oio_sqlx_request_failure_threshold",
+				"key": "enbug.sqliterepo.client.failure.threshold",
+				"def": 10, "min": 0, "max": 100 },
+
+			{ "type": "monotonic", "name": "oio_sqlx_timeout_check_period",
+				"key": "enbug.sqliterepo.client.timeout.period",
+				"def": "1s", "min": "1ms", "max": "1d" },
+
+			{ "type": "monotonic", "name": "oio_sqlx_timeout_check_max",
+				"key": "enbug.sqliterepo.client.timeout.alert_if_longer",
+				"def": "5s", "min": "1ms", "max": "1h" },
+
+			{ "type": "uint", "name": "sqliterepo_election_expire_max_per_round",
+				"key": "sqliterepo.election.task.expire_max_per_round",
+				"def": 100, "min": 1, "max": "1 << 31" },
+
+			{ "type": "uint", "name": "disconnection_rrd_window",
+			   "key": "sqliterepo.zk.rrd.window",
+			   "def": 5, "min": 1, "max": 4095 },
+
+			{ "type": "uint", "name": "disconnection_threshold",
+				"key": "sqliterepo.zk.rrd.threshold",
+				"def": 5, "min": 1, "max": "1 << 32 - 1" },
+
+			{ "type": "int32", "name": "oio_sync_failure_threshold_action",
+				"key": "enbug.sqliterepo.synchro.failure",
+				"def": 10, "min": 0, "max": 100 },
+
+			{ "type": "int32", "name": "oio_sync_failure_threshold_hook",
+				"key": "enbug.sqliterepo.synchro.hook",
+				"def": 10, "min": 0, "max": 100 },
+
+			{ "type": "bool", "name": "_cache_fail_on_heavy_load",
+				"key": "sqliterepo.cache.heavyload.fail",
+				"def": false},
+
+			{ "type": "bool", "name": "_cache_alert_on_heavy_load",
+				"key": "sqliterepo.cache.heavyload.alert",
+				"def": true },
+
+			{ "type": "uint32", "name": "_cache_max_waiting",
+				"key": "sqliterepo.cache.waiting.max",
+				"def": 16, "min": 0, "max": "1<<32 - 1" },
+
+			{ "type": "monotonic", "name": "_cache_timeout_open",
+				"key": "sqliterepo.cache.timeout.open",
+				"def": "20s", "min": "1ms", "max": "1d" },
+
+			{ "type": "monotonic", "name": "_cache_period_cond_wait",
+				"key": "sqliterepo.cache.timeout.lock",
+				"def": "1s", "min": "1ms", "max": "1h" },
+
+			{ "type": "uint32", "name": "_heat_threshold",
+				"key": "sqliterepo.heat.threshold",
+				"def": 1, "min": 1, "max": "1 << 32 - 1" },
+
+			{ "type": "monotonic", "name": "_grace_delay_cool",
+				"key": "sqliterepo.cache.ttl.cool",
+				"def": "30s", "min": "1ms", "max": "1d" },
+
+			{ "type": "monotonic", "name": "_grace_delay_hot",
+				"key": "sqliterepo.cache.ttl.hot",
+				"def": "5m", "min": "1ms", "max": "1d" },
+
+			{ "type": "uint", "name": "sqliterepo_release_size",
+				"key": "sqliterepo.release_size",
+				"def": "64Mi", "min": 1, "max": "1<<32 - 1" },
+
+			{ "type": "monotonic", "name": "sqliterepo_zk_timeout",
+				"key": "sqliterepo.timeout.zk",
+				"def": "10s", "min": "1ms", "max": "1h" },
+
+			{ "type": "uint", "name": "sqliterepo_repo_max_bases",
+				"key": "sqliterepo.repo.max_bases",
+				"def": "32ki", "min": "8", "max": "128ki" },
+
+			{ "type": "uint", "name": "sqliterepo_getvers_max_retries",
+				"key": "sqliterepo.repo.getvers_max_retries",
+				"def": 2, "min": 1, "max": "64" },
+
+			{ "type": "float", "name": "oio_election_use_timeout_cnx",
+				"key": "sqliterepo.outgoing.timeout.cnx.use",
+				"def": 0.25, "min": 0.01, "max": 30.0 },
+
+			{ "type": "float", "name": "oio_election_use_timeout_req",
+				"key": "sqliterepo.outgoing.timeout.req.use",
+				"def": 1.0, "min": 0.01, "max": 30.0 },
+
+			{ "type": "float", "name": "oio_election_getvers_timeout_cnx",
+				"key": "sqliterepo.outgoing.timeout.cnx.getvers",
+				"def": 0.5, "min": 0.01, "max": 30.0 },
+
+			{ "type": "float", "name": "oio_election_getvers_timeout_req",
+				"key": "sqliterepo.outgoing.timeout.req.getvers",
+				"def": 2.0, "min": 0.01, "max": 30.0 },
+
+			{ "type": "float", "name": "oio_election_replicate_timeout_cnx",
+				"key": "sqliterepo.outgoing.timeout.cnx.replicate",
+				"def": 1.0, "min": 0.01, "max": 30.0 },
+
+			{ "type": "float", "name": "oio_election_replicate_timeout_req",
+				"key": "sqliterepo.outgoing.timeout.req.replicate",
+				"def": 10.0, "min": 0.01, "max": 30.0 },
+
+			{ "type": "float", "name": "oio_election_resync_timeout_cnx",
+				"key": "sqliterepo.outgoing.timeout.cnx.resync",
+				"def": 1.0, "min": 0.01, "max": 30.0 },
+
+			{ "type": "float", "name": "oio_election_resync_timeout_req",
+				"key": "sqliterepo.outgoing.timeout.req.resync",
+				"def": 30.0, "min": 0.01, "max": 60.0 }
+		]
+	},
+	"client": {
+		"code": "client_variables.c",
+		"header": "client_variables.h",
+		"variables": [
+			{ "type": "bool", "name": "oio_sds_default_autocreate",
+				"key": "core.sds.autocreate",
+				"def": false, "declare": false },
+
+			{ "type": "bool", "name": "oio_sds_no_shuffle",
+				"key": "core.sds.noshuffle",
+				"def": false },
+
+			{ "type": "bool", "name": "oio_dir_no_shuffle",
+				"key": "core.resolver.noshuffle",
+				"def": false },
+
+			{ "type": "monotonic", "name": "_refresh_major_minor",
+				"key": "core.period.refresh.major_minor",
+				"def": "30s", "min": "100ms", "max": "1h" },
+
+			{ "type": "monotonic", "name": "_refresh_io_idle",
+				"key": "core.period.refresh.io_idle",
+				"def": "1s", "min": "100ms", "max": "1h" },
+
+			{ "type": "monotonic", "name": "_refresh_cpu_idle",
+				"key": "core.period.refresh.cpu_idle",
+				"def": "1s", "min": "100ms", "max": "1h" }
+		]
+	}
+}

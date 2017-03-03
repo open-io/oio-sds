@@ -1,7 +1,11 @@
 add_definitions(-DG_LOG_DOMAIN="oio.core")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
-include_directories(BEFORE . ..)
+include_directories(BEFORE
+	${CMAKE_CURRENT_SOURCE_DIR}
+	${CMAKE_SOURCE_DIR}
+	${CMAKE_CURRENT_BINARY_DIR}
+	${CMAKE_BINARY_DIR})
 
 include_directories(AFTER
 		${GLIB2_INCLUDE_DIRS}
@@ -13,7 +17,28 @@ link_directories(
 		${CURL_LIBRARY_DIRS}
 		${JSONC_LIBRARY_DIRS})
 
-add_library(oiocore SHARED url.c cfg.c cfg_cache.c str.c ext.c log.c lb.c)
+add_custom_command(
+	OUTPUT
+		${CMAKE_CURRENT_BINARY_DIR}/client_variables.c
+		${CMAKE_CURRENT_BINARY_DIR}/client_variables.h
+	DEPENDS
+		${CMAKE_SOURCE_DIR}/confgen.py
+		${CMAKE_SOURCE_DIR}/conf.json
+	PRE_BUILD
+	COMMENT
+		"Generating the central configuration"
+	COMMAND
+		${PYTHON_EXECUTABLE}
+	ARGS
+		${CMAKE_SOURCE_DIR}/confgen.py
+		"client"
+		${CMAKE_SOURCE_DIR}/conf.json)
+
+add_library(oiocore SHARED url.c cfg.c cfg_cache.c str.c ext.c log.c lb.c
+	var.c
+	${CMAKE_CURRENT_BINARY_DIR}/client_variables.h
+	${CMAKE_CURRENT_BINARY_DIR}/client_variables.c)
+
 target_link_libraries(oiocore
 		${JSONC_LIBRARIES} ${GLIB2_LIBRARIES})
 set_target_properties(oiocore PROPERTIES
@@ -33,9 +58,6 @@ target_link_libraries(tool_sdk oiosds)
 add_executable(tool_roundtrip tool_roundtrip.c)
 target_link_libraries(tool_roundtrip oiosds)
 
-add_executable(tool_config tool_config.c)
-target_link_libraries(tool_config oiosds)
-
 add_executable(tool_ns tool_ns.c)
 target_link_libraries(tool_ns oiosds ${CURL_LIBRARIES})
 
@@ -46,6 +68,7 @@ install(FILES
 		oiolog.h
 		oiostr.h
 		oiourl.h
+		oiovar.h
 		oiocs.h
 		oiolb.h
 		DESTINATION include/core)
