@@ -21,6 +21,7 @@ License along with this library.
 #include <string.h>
 
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/server_variables.h>
 
 #include "meta0_remote.h"
 #include "internals.h"
@@ -29,7 +30,7 @@ static GError *
 _m0_remote_no_return (const char *m0, GByteArray *req)
 {
 	EXTRA_ASSERT (m0 != NULL);
-	return gridd_client_exec (m0, M0V2_CLIENT_TIMEOUT, req);
+	return gridd_client_exec (m0, oio_m0_client_timeout_common, req);
 }
 
 static GError *
@@ -38,7 +39,7 @@ _m0_remote_m0info (const char *m0, GByteArray *req, GSList **out)
 	EXTRA_ASSERT (m0 != NULL);
 	EXTRA_ASSERT (out != NULL);
 	GSList *result = NULL;
-	GError *e = gridd_client_exec_and_decode (m0, M0V2_CLIENT_TIMEOUT,
+	GError *e = gridd_client_exec_and_decode (m0, oio_m0_client_timeout_common,
 			req, &result, meta0_info_unmarshall);
 	if (!e) {
 		*out = result;
@@ -120,7 +121,8 @@ meta0_remote_get_meta1_info(const char *m0, gchar ***out)
 	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_GET_META1_INFO);
 	GByteArray *packed = message_marshall_gba_and_clean(request);
 	GByteArray *tmp = NULL;
-	GError *err = gridd_client_exec_and_concat(m0, M0V2_CLIENT_TIMEOUT, packed, &tmp);
+	GError *err = gridd_client_exec_and_concat(
+			m0, oio_m0_client_timeout_common, packed, &tmp);
 	g_byte_array_free(packed, TRUE);
 
 	if (err) {

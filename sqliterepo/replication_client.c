@@ -33,7 +33,7 @@ License along with this library.
 #include <glib.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
+#include <metautils/lib/server_variables.h>
 
 #include "sqliterepo.h"
 #include "sqlx_remote.h"
@@ -65,7 +65,9 @@ peer_restore(const gchar *target, struct sqlx_name_s *name,
 	if (!client)
 		return NEWERROR(CODE_INTERNAL_ERROR, "Failed to create client to [%s], bad address?", target);
 
-	gridd_client_set_timeout(client, SQLX_RESYNC_TIMEOUT);
+	gridd_client_set_timeout_cnx(client, oio_election_replicate_timeout_cnx);
+	gridd_client_set_timeout(client, oio_election_replicate_timeout_req);
+
 	gridd_client_start(client);
 	if (!(err = gridd_client_loop(client)))
 		err = gridd_client_error(client);
@@ -87,7 +89,8 @@ peers_restore(gchar **targets, struct sqlx_name_s *name,
 	GByteArray *encoded = _pack_RESTORE(name, dump);
 	struct gridd_client_s **clients = gridd_client_create_many(targets, encoded, NULL, NULL);
 	g_byte_array_unref(encoded);
-	gridd_clients_set_timeout(clients, SQLX_RESYNC_TIMEOUT);
+	gridd_clients_set_timeout_cnx(clients, oio_election_replicate_timeout_cnx);
+	gridd_clients_set_timeout(clients, oio_election_replicate_timeout_req);
 
 	gridd_clients_start(clients);
 	if (!(err = gridd_clients_loop(clients)))

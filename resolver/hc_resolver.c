@@ -21,17 +21,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <unistd.h>
 
+#include <metautils/lib/server_variables.h>
+#include <core/client_variables.h>
 #include <metautils/lib/metautils.h>
+
 #include <cluster/lib/gridcluster.h>
 #include <meta0v2/meta0_remote.h>
 #include <meta1v2/meta1_remote.h>
 #include <resolver/hc_resolver_internals.h>
-
-#include <glib.h>
-
-gdouble rc_resolver_timeout_m0 = -1.0;
-
-gdouble rc_resolver_timeout_m1 = -1.0;
 
 /* Packing */
 static void
@@ -94,13 +91,13 @@ hc_resolver_create(void)
 {
 	struct hc_resolver_s *resolver = g_malloc0(sizeof(struct hc_resolver_s));
 
-	resolver->csm0.max = HC_RESOLVER_DEFAULT_MAX_CSM0;
-	resolver->csm0.ttl = HC_RESOLVER_DEFAULT_TTL_CSM0;
+	resolver->csm0.max = _cache_m0cs_default_max;
+	resolver->csm0.ttl = _cache_m0cs_default_ttl;
 	resolver->csm0.cache = lru_tree_create((GCompareFunc)hashstr_quick_cmp,
 			g_free, g_free, 0);
 
-	resolver->services.max = HC_RESOLVER_DEFAULT_MAX_SERVICES;
-	resolver->services.ttl = HC_RESOLVER_DEFAULT_TTL_SERVICES;
+	resolver->services.max = _cache_srv_default_max;
+	resolver->services.ttl = _cache_srv_default_ttl;
 	resolver->services.cache = lru_tree_create((GCompareFunc)hashstr_quick_cmp,
 			g_free, g_free, 0);
 

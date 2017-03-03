@@ -37,11 +37,19 @@ static int grid_main_rc = 0;
 static volatile gboolean flag_running = FALSE;
 static volatile gboolean flag_daemon = FALSE;
 static volatile gboolean flag_quiet = FALSE;
+static volatile gboolean flag_dump_options = FALSE;
 
 static struct grid_main_callbacks *user_callbacks;
 static volatile gboolean pidfile_written = FALSE;
 static gchar pidfile_path[1024] = {0,0,0};
 static struct stat pidfile_stat;
+
+static gchar errbuff[1024];
+
+#define ERR(FMT,...) do { \
+	g_snprintf(errbuff, sizeof(errbuff), FMT, ##__VA_ARGS__); \
+	return errbuff; \
+} while (0)
 
 /* ------------------------------------------------------------------------- */
 
@@ -55,17 +63,66 @@ logger_syslog_open (void)
 	g_log_set_default_handler(oio_log_syslog, NULL);
 }
 
-#define ERR(FMT,...) do { \
-	g_snprintf(errbuff, sizeof(errbuff), FMT, ##__VA_ARGS__); \
-	return errbuff; \
-} while (0)
-
 static const char*
-_set_opt(gchar **tokens)
+_set_config_option(struct grid_main_option_s *opt, gchar **tokens)
 {
-	static gchar errbuff[1024];
 	gint64 i64 = 0;
 
+	if (tokens[1] == NULL && opt->type != OT_BOOL)
+		ERR("Missing parameter, expected '%s=<Value>'", tokens[0]);
+
+	switch (opt->type) {
+		case OT_BOOL:
+			if (tokens[1] == NULL) {
+				*(opt->data.b) = TRUE;
+				return NULL;
+			}
+			*(opt->data.b) = oio_str_parse_bool(tokens[1], *(opt->data.b));
+			return NULL;
+		case OT_INT:
+			i64 = 0;
+			if (!oio_str_is_number(tokens[1], &i64))
+				ERR("Invalid integer parameter");
+			if (i64 < G_MININT || i64 > G_MAXINT)
+				ERR("Invalid parameter range");
+			*(opt->data.i) = i64;
+			return NULL;
+		case OT_UINT:
+			i64 = 0;
+			if (!oio_str_is_number(tokens[1], &i64))
+				ERR("Invalid integer parameter");
+			if (i64 < 0 || i64 > G_MAXUINT)
+				ERR("Invalid parameter range");
+			*(opt->data.u) = i64;
+			return NULL;
+		case OT_INT64:
+			i64 = g_ascii_strtoll(tokens[1], NULL, 10);
+			*(opt->data.i64) = i64;
+			return NULL;
+		case OT_TIME:
+			i64 = g_ascii_strtoll(tokens[1], NULL, 10);
+			*(opt->data.t) = i64;
+			return NULL;
+		case OT_DOUBLE:
+			*(opt->data.d) = g_ascii_strtod(tokens[1], NULL);
+			return NULL;
+		case OT_STRING:
+			if (!*(opt->data.str))
+				*(opt->data.str) = g_string_new("");
+			g_string_set_size(*(opt->data.str), 0);
+			g_string_append(*(opt->data.str), tokens[1]);
+			return NULL;
+		case OT_LIST:
+			*(opt->data.lst) = g_slist_prepend(*(opt->data.lst), g_strdup(tokens[1]));
+			return NULL;
+		default:
+			ERR("Invalid option type, possible corruption");
+	}
+}
+
+static const char*
+_set_fixed_opt(gchar **tokens)
+{
 	errbuff[0] = '\0';
 
 	if (!tokens || tokens[0] == NULL)
@@ -74,58 +131,12 @@ _set_opt(gchar **tokens)
 	for (struct grid_main_option_s *opt=user_callbacks->options();
 		 opt && opt->name;
 		 opt++) {
-		if (0 == g_ascii_strcasecmp(opt->name, tokens[0])) {
-			if (tokens[1] == NULL && opt->type != OT_BOOL)
-				ERR("Missing parameter, expected '%s=<Value>'", tokens[0]);
-			switch (opt->type) {
-				case OT_BOOL:
-					if (tokens[1] == NULL) {
-						*(opt->data.b) = TRUE;
-						return NULL;
-					}
-					*(opt->data.b) = oio_str_parse_bool(tokens[1], *(opt->data.b));
-					return NULL;
-				case OT_INT:
-					i64 = 0;
-					if (!oio_str_is_number(tokens[1], &i64))
-						ERR("Invalid integer parameter");
-					if (i64 < G_MININT || i64 > G_MAXINT)
-						ERR("Invalid parameter range");
-					*(opt->data.i) = i64;
-					return NULL;
-				case OT_UINT:
-					i64 = 0;
-					if (!oio_str_is_number(tokens[1], &i64))
-						ERR("Invalid integer parameter");
-					if (i64 < 0 || i64 > G_MAXUINT)
-						ERR("Invalid parameter range");
-					*(opt->data.u) = i64;
-					return NULL;
-				case OT_INT64:
-					i64 = g_ascii_strtoll(tokens[1], NULL, 10);
-					*(opt->data.i64) = i64;
-					return NULL;
-				case OT_TIME:
-					i64 = g_ascii_strtoll(tokens[1], NULL, 10);
-					*(opt->data.t) = i64;
-					return NULL;
-				case OT_DOUBLE:
-					*(opt->data.d) = g_ascii_strtod(tokens[1], NULL);
-					return NULL;
-				case OT_STRING:
-					if (!*(opt->data.str))
-						*(opt->data.str) = g_string_new("");
-					g_string_set_size(*(opt->data.str), 0);
-					g_string_append(*(opt->data.str), tokens[1]);
-					return NULL;
-				case OT_LIST:
-					*(opt->data.lst) = g_slist_prepend(*(opt->data.lst), g_strdup(tokens[1]));
-					return NULL;
-				default:
-					ERR("Invalid option type, possible corruption");
-			}
-		}
+		if (0 == g_ascii_strcasecmp(opt->name, tokens[0]))
+			return _set_config_option(opt, tokens);
 	}
+
+	if (oio_var_value_one_with_option(tokens[0], tokens[1]))
+		return NULL;
 
 	ERR("Option '%s' not supported", tokens[0]);
 }
@@ -137,16 +148,16 @@ grid_main_set_option(const gchar *str_opt)
 	const gchar *result;
 
 	tokens = g_strsplit(str_opt, "=", 2);
-	result = _set_opt(tokens);
+	result = _set_fixed_opt(tokens);
 	if (tokens)
 		g_strfreev(tokens);
 	return result;
 }
 
 static void
-_dump_xopts()
+_dump_extra_options(void)
 {
-	gchar name[1024];
+	gchar name[256];
 	struct grid_main_option_s *o;
 
 	if (flag_quiet)
@@ -187,6 +198,20 @@ _dump_xopts()
 }
 
 static void
+_on_option__dump_to_stdout(const char *k, const char *v)
+{
+	g_print("%s=%s\n", k, v);
+}
+
+static void
+_dump_config_options(void)
+{
+	if (flag_quiet)
+		return;
+	oio_var_list_all(_on_option__dump_to_stdout);
+}
+
+static void
 grid_main_usage(void)
 {
 	if (flag_quiet)
@@ -196,6 +221,7 @@ grid_main_usage(void)
 
 	g_printerr("\nOPTIONS:\n");
 	g_printerr("  -h         help, displays this section\n");
+	g_printerr("  -c         instead of starting the server, it dumps the current lve central configurable variables\n");
 	g_printerr("  -d         daemonizes the process (default FALSE)\n");
 	g_printerr("  -q         quiet mode, supress output on stdout stderr \n");
 	g_printerr("  -v         verbose mode, this activates stderr traces (default FALSE)\n");
@@ -206,7 +232,8 @@ grid_main_usage(void)
 	g_printerr("  -O XOPT    set extra options.\n");
 
 	g_printerr("\nXOPT'S with default value:\n");
-	_dump_xopts();
+	_dump_extra_options();
+
 	g_printerr("\nEXTRA_ARGS usage:\n%s\n", user_callbacks->usage());
 }
 
@@ -220,13 +247,14 @@ grid_main_cli_usage(void)
 
 	g_printerr("\nOPTIONS:\n");
 	g_printerr("  -h         help, displays this section\n");
+	g_printerr("  -c         instead of starting the server, it dumps the current lve central configurable variables\n");
 	g_printerr("  -q         quiet mode, supress output on stdout stderr \n");
 	g_printerr("  -v         verbose mode, this activates stderr traces (default FALSE)\n");
 	g_printerr("  -l PATH    activates the log4c emulation and load PATH as a log4c file\n");
 	g_printerr("  -O XOPT    set extra options.\n");
 
 	g_printerr("\nXOPT'S with default value:\n");
-	_dump_xopts();
+	_dump_extra_options();
 
 	g_printerr("\nEXTRA_ARGS usage:\n%s\n", user_callbacks->usage());
 }
@@ -374,7 +402,7 @@ grid_main_init(int argc, char **args)
 	memset(pidfile_path, 0, sizeof(pidfile_path));
 
 	for (;;) {
-		int c = getopt(argc, args, "O:hdvqp:s:");
+		int c = getopt(argc, args, "O:hdvcqp:s:");
 		if (c == -1)
 			break;
 		switch (c) {
@@ -416,6 +444,9 @@ grid_main_init(int argc, char **args)
 					return FALSE;
 				}
 				GRID_DEBUG("Explicitely configured syslog_id=[%s]", syslog_id);
+				break;
+			case 'c':
+				flag_dump_options = TRUE;
 				break;
 			case 'v':
 				if (!flag_quiet) {
@@ -496,24 +527,29 @@ grid_main(int argc, char ** argv, struct grid_main_callbacks * callbacks)
 	}
 	grid_main_install_sighandlers();
 
-	if (flag_daemon || *syslog_id) {
-		stdout = freopen("/dev/null", "w", stdout);
-		stderr = freopen("/dev/null", "w", stderr);
-	}
+	if (flag_dump_options) {
+		_dump_config_options();
+	} else {
 
-	if (flag_daemon) {
-		stdin = freopen("/dev/null", "r", stdin);
-		if (-1 == daemon(1,0)) {
-			GRID_WARN("daemonize error : %s", strerror(errno));
-			grid_main_fini();
-			return 1;
+		if (flag_daemon || *syslog_id) {
+			stdout = freopen("/dev/null", "w", stdout);
+			stderr = freopen("/dev/null", "w", stderr);
 		}
-		grid_main_write_pid_file();
-	}
 
-	grid_main_install_sighandlers();
-	if (flag_running)
-		user_callbacks->action();
+		if (flag_daemon) {
+			stdin = freopen("/dev/null", "r", stdin);
+			if (-1 == daemon(1,0)) {
+				GRID_WARN("daemonize error : %s", strerror(errno));
+				grid_main_fini();
+				return 1;
+			}
+			grid_main_write_pid_file();
+		}
+
+		grid_main_install_sighandlers();
+		if (flag_running)
+			user_callbacks->action();
+	}
 
 	grid_main_fini();
 	return grid_main_rc;
@@ -552,6 +588,9 @@ grid_main_cli_init(int argc, char **args)
 				if (!flag_quiet)
 					oio_log_verbose_default();
 				break;
+			case 'c':
+				flag_dump_options = TRUE;
+				break;
 			case ':':
 				GRID_WARN("Unexpected option at position %d ('%c')", optind, optopt);
 				return FALSE;
@@ -587,7 +626,9 @@ grid_main_cli(int argc, char ** argv, struct grid_main_callbacks * callbacks)
 	}
 	grid_main_install_sighandlers();
 
-	if (flag_running)
+	if (flag_dump_options)
+		_dump_config_options();
+	else if (flag_running)
 		user_callbacks->action();
 
 	metautils_ignore_signals();

@@ -29,6 +29,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <zmq.h>
 
 #include <core/oio_core.h>
+#include <metautils/lib/server_variables.h>
 #include <metautils/lib/metautils_sockets.h>
 #include <metautils/lib/metautils_resolv.h>
 #include <metautils/lib/metautils_syscall.h>
@@ -49,15 +50,12 @@ static void _q_destroy (struct oio_events_queue_s *self);
 static void _q_send (struct oio_events_queue_s *self, gchar *msg);
 static void _q_send_overwritable(struct oio_events_queue_s *self, gchar *key, gchar *msg);
 static gboolean _q_is_stalled (struct oio_events_queue_s *self);
-static void _q_set_max_pending (struct oio_events_queue_s *self, guint v);
-static void _q_set_buffering (struct oio_events_queue_s *self, gint64 v);
 static GError * _q_run (struct oio_events_queue_s *self,
 		gboolean (*running) (gboolean pending));
 
 static struct oio_events_queue_vtable_s vtable_BEANSTALKD =
 {
-	_q_destroy, _q_send, _q_send_overwritable, _q_is_stalled,
-	_q_set_max_pending, _q_set_buffering, _q_run
+	_q_destroy, _q_send, _q_send_overwritable, _q_is_stalled, _q_run
 };
 
 /* Used by tests to intercept the result of the parsing of beanstalkd
@@ -72,7 +70,6 @@ struct _queue_BEANSTALKD_s
 	GAsyncQueue *queue;
 	gchar *endpoint;
 	gchar *tube;
-	guint max_events_in_queue;
 
 	struct oio_events_queue_buffer_s buffer;
 };
@@ -94,35 +91,12 @@ oio_events_queue_factory__create_beanstalkd (const char *endpoint,
 	self->vtable = &vtable_BEANSTALKD;
 	self->queue = g_async_queue_new ();
 	self->tube = g_strdup(OIO_EVT_BEANSTALKD_DEFAULT_TUBE);
-	self->max_events_in_queue = OIO_EVTQ_MAXPENDING;
 	self->endpoint = g_strdup (endpoint);
 
-	oio_events_queue_buffer_init(&(self->buffer), 1 * G_TIME_SPAN_SECOND);
+	oio_events_queue_buffer_init(&self->buffer);
 
 	*out = (struct oio_events_queue_s*) self;
 	return NULL;
-}
-
-static void
-_q_set_buffering(struct oio_events_queue_s *self, gint64 v)
-{
-	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s *)self;
-	if (q->buffer.delay != v) {
-		GRID_INFO("events buffering delay set to %"G_GINT64_FORMAT"s",
-				v / G_TIME_SPAN_SECOND);
-		oio_events_queue_buffer_set_delay(&(q->buffer), v);
-	}
-}
-
-static void
-_q_set_max_pending (struct oio_events_queue_s *self, guint v)
-{
-	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s *)self;
-	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_BEANSTALKD);
-	if (q->max_events_in_queue != v) {
-		GRID_INFO("max events in queue set to [%u]", v);
-		q->max_events_in_queue = v;
-	}
 }
 
 static int
@@ -218,9 +192,9 @@ _put (int fd, gchar *msg, size_t msglen)
 
 	gsize len = g_snprintf (buf, sizeof(buf),
 			"put %u %u %u %"G_GSIZE_FORMAT"\r\n",
-			OIO_EVT_BEANSTALKD_DEFAULT_PRIO,
-			OIO_EVT_BEANSTALKD_DEFAULT_DELAY,
-			OIO_EVT_BEANSTALKD_DEFAULT_TTR,
+			oio_events_beanstalkd_default_prio,
+			(guint) oio_events_beanstalkd_default_delay,
+			(guint) oio_events_beanstalkd_default_ttr,
 			msglen);
 	iov[0].iov_base = buf;
 	iov[0].iov_len = len;
@@ -378,5 +352,5 @@ _q_is_stalled (struct oio_events_queue_s *self)
 	const int l = g_async_queue_length (q->queue);
 	if (l <= 0)
 		return FALSE;
-	return ((guint)l) >= q->max_events_in_queue;
+	return ((guint)l) >= oio_events_common_max_pending;
 }

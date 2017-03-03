@@ -20,14 +20,15 @@ License along with this library.
 #include <strings.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
 
 #include <meta2v2/meta2_macros.h>
 #include <meta2v2/meta2_utils.h>
-#include <meta2v2/meta2v2_remote.h>
 #include <meta2v2/meta2_bean.h>
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
+
+#include "meta2v2_remote.h"
+#include "common.h"
 
 static MESSAGE
 _m2v2_build_request(const char *name, struct oio_url_s *url, GByteArray *body)
@@ -450,7 +451,7 @@ _m2v2_request_ex(const char *url, GByteArray *req, gdouble timeout, GSList **out
 static GError*
 _m2v2_request(const char *url, GByteArray *req, GSList **out)
 {
-	return _m2v2_request_ex(url, req, M2V2_CLIENT_TIMEOUT, out);
+	return _m2v2_request_ex(url, req, proxy_timeout_common, out);
 }
 
 GError*

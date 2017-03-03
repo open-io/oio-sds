@@ -28,16 +28,14 @@ License along with this library.
 
 #include "metautils.h"
 
+#include <metautils/lib/server_variables.h>
+
 #ifndef URL_MAXLEN
 # define URL_MAXLEN STRLEN_ADDRINFO
 #endif
 
 #ifndef EVENT_BUFFER_SIZE
 # define EVENT_BUFFER_SIZE 2048
-#endif
-
-#ifdef HAVE_ENBUG
-gint32 oio_client_timeout_threshold = 10;
 #endif
 
 enum client_step_e
@@ -90,10 +88,6 @@ struct gridd_client_s
 
 /* Cache of network errors ------------------------------------------------- */
 
-guint64 oio_client_max_net_errors = 15;
-time_t oio_client_period_net_errors = 15;
-gboolean oio_cache_avoid_on_error = FALSE;
-
 static GMutex lock_errors;
 static GTree *tree_errors = NULL;
 
@@ -124,14 +118,14 @@ _has_too_many_errors (const char *url)
 	struct grid_single_rrd_s *rrd = g_tree_lookup(tree_errors, url);
 	if (rrd) {
 		const gint64 now = oio_ext_monotonic_seconds();
-		delta = grid_single_rrd_get_delta(rrd, now, oio_client_period_net_errors);
+		delta = grid_single_rrd_get_delta(rrd, now, oio_client_cache_errors_period);
 	}
 	g_mutex_unlock(&lock_errors);
 
-	gboolean rc = (oio_client_max_net_errors <= delta);
+	const gboolean rc = (oio_client_cache_errors_max <= delta);
 	if (rc) {
 		GRID_DEBUG("[%s] seems DOWN (%"G_GUINT64_FORMAT" fails in %lds)",
-				url, delta, oio_client_period_net_errors);
+				url, delta, oio_client_cache_errors_period);
 	}
 	return rc;
 }
@@ -153,7 +147,7 @@ _count_network_error (const char *url, const GError *err)
 	struct grid_single_rrd_s *rrd = g_tree_lookup(tree_errors, url);
 	if (!rrd) {
 		rrd = grid_single_rrd_create(oio_ext_monotonic_seconds(),
-				oio_client_period_net_errors + 1);
+				oio_client_cache_errors_period + 1);
 		g_tree_replace(tree_errors, g_strdup(url), rrd);
 	}
 	const gint64 now = oio_ext_monotonic_seconds();
@@ -786,7 +780,7 @@ _client_expire(struct gridd_client_s *client, gint64 now)
 
 	if (!_client_expired(client, now)) {
 #ifdef HAVE_ENBUG
-		if (oio_client_timeout_threshold >= oio_ext_rand_int_range(1,100)) {
+		if (oio_client_fake_timeout_threshold >= oio_ext_rand_int_range(1,100)) {
 			_client_react_timeout(client);
 			return TRUE;
 		}
@@ -844,7 +838,7 @@ _client_start(struct gridd_client_s *client)
 		return FALSE;
 	}
 
-	if (oio_cache_avoid_on_error && client->avoid_on_error) {
+	if (oio_client_cache_errors && client->avoid_on_error) {
 		if (_has_too_many_errors(client->url)) {
 			_client_replace_error(client, NEWERROR(CODE_AVOIDED,
 						"Request avoided, service probably down"));
@@ -898,11 +892,11 @@ gridd_client_create_empty(void)
 	client->abstract.vtable = &VTABLE_CLIENT;
 	client->fd = -1;
 	client->step = NONE;
-	client->delay_overall = COMMON_CLIENT_TIMEOUT * (gdouble)G_TIME_SPAN_SECOND;
-	client->delay_single = COMMON_CLIENT_TIMEOUT * (gdouble)G_TIME_SPAN_SECOND;
-	client->delay_connect = COMMON_CNX_TIMEOUT * (gdouble)G_TIME_SPAN_SECOND;
+	client->delay_overall = oio_client_timeout_whole * (gdouble)G_TIME_SPAN_SECOND;
+	client->delay_single = oio_client_timeout_single * (gdouble)G_TIME_SPAN_SECOND;
+	client->delay_connect = oio_client_timeout_connect * (gdouble)G_TIME_SPAN_SECOND;
 	client->tv_start = client->tv_connect = oio_ext_monotonic_time ();
-	client->avoid_on_error = BOOL(oio_cache_avoid_on_error);
+	client->avoid_on_error = BOOL(oio_client_cache_errors);
 
 	return client;
 }

@@ -29,18 +29,19 @@ add_executable(metacd_http
     sqlx_actions.c
     reply.c
     path_parser.c
-    transport_http.c)
+    transport_http.c
+	meta2v2_remote.c meta2v2_remote.h)
 
 bin_prefix(metacd_http -proxy)
 
 target_link_libraries(metacd_http
 		metautils server hcresolve gridcluster
-		meta2v2remote meta2v2utils
+		meta2v2utils
 		meta1remote sqlitereporemote
 		meta0remote meta0utils
 		${GLIB2_LIBRARIES} ${JSONC_LIBRARIES} ${CURL_LIBRARIES})
 
-install(TARGETS metacd_http 
+install(TARGETS metacd_http
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin)
 

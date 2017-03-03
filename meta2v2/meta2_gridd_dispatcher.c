@@ -30,7 +30,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <server/gridd_dispatcher_filters.h>
 
 #include <meta2v2/meta2_macros.h>
-#include <meta2v2/meta2v2_remote.h>
 #include <meta2v2/meta2_gridd_dispatcher.h>
 #include <meta2v2/meta2_filters.h>
 #include <meta2v2/meta2_filter_context.h>

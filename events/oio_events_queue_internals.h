@@ -29,8 +29,6 @@ struct oio_events_queue_vtable_s
 	void (*send_overwritable)(struct oio_events_queue_s *self,
 			gchar *key, gchar *msg);
 	gboolean (*is_stalled) (struct oio_events_queue_s *self);
-	void (*set_max_pending) (struct oio_events_queue_s *self, guint v);
-	void (*set_buffering) (struct oio_events_queue_s *self, gint64 v);
 	GError * (*run) (struct oio_events_queue_s *self, gboolean (*) (gboolean));
 };
 

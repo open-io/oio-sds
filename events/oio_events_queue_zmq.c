@@ -24,6 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <zmq.h>
 
 #include <core/oio_core.h>
+#include <metautils/lib/server_variables.h>
 
 #include "oio_events_queue.h"
 #include "oio_events_queue_internals.h"
@@ -50,15 +51,12 @@ static void _q_destroy (struct oio_events_queue_s *self);
 static void _q_send (struct oio_events_queue_s *self, gchar *msg);
 static void _q_send_overwritable(struct oio_events_queue_s *self, gchar *key, gchar *msg);
 static gboolean _q_is_stalled (struct oio_events_queue_s *self);
-static void _q_set_max_pending (struct oio_events_queue_s *self, guint v);
-static void _q_set_buffering(struct oio_events_queue_s *self, gint64 v);
 static GError * _q_run (struct oio_events_queue_s *self,
 		gboolean (*running) (gboolean pending));
 
 static struct oio_events_queue_vtable_s vtable_AGENT =
 {
-	_q_destroy, _q_send, _q_send_overwritable, _q_is_stalled,
-	_q_set_max_pending, _q_set_buffering, _q_run
+	_q_destroy, _q_send, _q_send_overwritable, _q_is_stalled, _q_run
 };
 
 struct _queue_AGENT_s
@@ -77,15 +75,6 @@ struct _queue_AGENT_s
 	/* used to compute the event id */
 	guint16 procid;
 	guint32 counter;
-
-	/* how many events are received each time the queue becomes active.
-	   A low value helps preventing starvation but leads to more contexts
-	   switches. */
-	guint max_recv_per_round;
-
-	/* how many events may be stored in the queue, before the queue reports
-	   a stalled state. */
-	guint max_events_in_queue;
 
 	/* stats on events streams, managed only by the ZMQ2AGENT thead */
 	guint64 counter_received;
@@ -127,32 +116,13 @@ oio_events_queue_factory__create_zmq (const char *zurl,
 	self->vtable = &vtable_AGENT;
 	self->queue = g_async_queue_new ();
 	self->url = g_strdup (zurl);
-	self->max_recv_per_round = 32;
-	self->max_events_in_queue = OIO_EVTQ_MAXPENDING;
 	self->procid = getpid();
-	oio_events_queue_buffer_init(&(self->buffer), 1 * G_TIME_SPAN_SECOND);
+
+	oio_events_queue_buffer_init(&self->buffer);
+
 	*out = (struct oio_events_queue_s *) self;
 	return NULL;
 }
-
-static void
-_q_set_max_pending (struct oio_events_queue_s *self, guint v)
-{
-	struct _queue_AGENT_s *q = (struct _queue_AGENT_s *)self;
-	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_AGENT);
-	if (q->max_events_in_queue != v) {
-		GRID_INFO("max events in queue set to [%u]", v);
-		q->max_events_in_queue = v;
-	}
-}
-
-static void
-_q_set_buffering(struct oio_events_queue_s *self, gint64 v)
-{
-	struct _queue_AGENT_s *q = (struct _queue_AGENT_s *)self;
-	oio_events_queue_buffer_set_delay(&(q->buffer), v);
-}
-
 
 static void
 _q_destroy (struct oio_events_queue_s *self)
@@ -188,7 +158,7 @@ _q_is_stalled (struct oio_events_queue_s *self)
 	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_AGENT);
 	const int l = g_async_queue_length (q->queue);
 	const guint waiting = q->gauge_pending;
-	return (waiting + (guint)(l>0?l:0)) >= q->max_events_in_queue;
+	return (waiting + (guint)(l>0?l:0)) >= oio_events_common_max_pending;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -333,16 +303,13 @@ _zmq2agent_receive_events (struct _zmq2agent_ctx_s *ctx)
 				rc = 0; // make it break
 		}
 		zmq_msg_close (&msg);
-	} while (rc > 0 && i++ < ctx->q->max_recv_per_round);
+	} while (rc > 0 && i++ < oio_events_zmq_max_recv);
 	return !ended;
 }
 
 static void
 _zmq2agent_worker (struct _zmq2agent_ctx_s *ctx)
 {
-	/* XXX(jfs): a dedicated PRNG avoids locking the glib's PRNG for each call
-	   (such global locks are present in the GLib) and opening it with a seed
-	   from the glib's PRNG avoids syscalls to the special file /dev/urandom */
 	gint64 last_debug = oio_ext_monotonic_time ();
 
 	zmq_pollitem_t pi[2] = {

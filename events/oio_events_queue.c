@@ -64,18 +64,6 @@ oio_events_queue__is_stalled (struct oio_events_queue_s *self)
 	EVTQ_CALL(self,is_stalled)(self);
 }
 
-void
-oio_events_queue__set_max_pending (struct oio_events_queue_s *self, guint v)
-{
-	EVTQ_CALL(self,set_max_pending)(self,v);
-}
-
-void
-oio_events_queue__set_buffering(struct oio_events_queue_s *self, gint64 us)
-{
-	EVTQ_CALL(self,set_buffering)(self,us);
-}
-
 GError *
 oio_events_queue__run (struct oio_events_queue_s *self,
 		gboolean (*running) (gboolean pending))

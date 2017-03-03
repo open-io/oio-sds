@@ -28,13 +28,7 @@ License along with this library.
 #include "metautils.h"
 #include "metautils_syscall.h"
 
-#ifndef SOCK_DEFAULT_LINGER_ONOFF
-# define SOCK_DEFAULT_LINGER_ONOFF 1
-#endif
-
-#ifndef SOCK_DEFAULT_LINGER_DELAY
-# define SOCK_DEFAULT_LINGER_DELAY 0
-#endif
+#include <metautils/lib/server_variables.h>
 
 static gint
 errno_to_errcode(int e)
@@ -417,16 +411,16 @@ sock_set_linger(int fd, int onoff, int linger)
 gboolean
 sock_set_linger_default(int fd)
 {
-	return sock_set_linger(fd, SOCK_DEFAULT_LINGER_ONOFF,
-			SOCK_DEFAULT_LINGER_DELAY);
+	return sock_set_linger(fd,
+			oio_socket_linger_onoff, oio_socket_linger_delay);
 }
 
 void
 sock_set_client_default(int fd)
 {
 	sock_set_linger_default(fd);
-	sock_set_nodelay(fd, TRUE);
-	sock_set_tcpquickack(fd, TRUE);
+	sock_set_nodelay(fd, oio_socket_quickack);
+	sock_set_tcpquickack(fd, oio_socket_nodelay);
 }
 
 int
@@ -474,9 +468,7 @@ sock_connect (const char *url, GError **err)
 		}
 	}
 
-	sock_set_linger_default(fd);
-	sock_set_nodelay(fd, TRUE);
-	sock_set_tcpquickack(fd, TRUE);
+	sock_set_client_default(fd);
 	*err = NULL;
 	return fd;
 }

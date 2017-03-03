@@ -1,16 +1,18 @@
 add_definitions(-DG_LOG_DOMAIN="oio.events")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
-include_directories(BEFORE . ..
-		${CMAKE_CURRENT_BINARY_DIR}/..
-		${CMAKE_CURRENT_BINARY_DIR}/../metautils/lib)
+include_directories(BEFORE
+		${CMAKE_SOURCE_DIR}
+		${CMAKE_CURRENT_SOURCE_DIR}
+		${CMAKE_CURRENT_BINARY_DIR}
+		${CMAKE_BINARY_DIR}
+		${CMAKE_BINARY_DIR}/metautils/lib)
 
 include_directories(AFTER
 		${ZMQ_INCLUDE_DIRS})
 
 link_directories(
 		${ZMQ_LIBRARY_DIRS})
-
 
 add_library(oioevents SHARED
 	oio_events_queue.c

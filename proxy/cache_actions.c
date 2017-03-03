@@ -32,7 +32,8 @@ action_forward_stats (struct req_args_s *args)
 	MESSAGE req = metautils_message_create_named("REQ_STATS");
 	GByteArray *encoded = message_marshall_gba_and_clean (req);
 	gchar *packed = NULL;
-	GError *err = gridd_client_exec_and_concat_string (id, COMMON_STAT_TIMEOUT, encoded, &packed);
+	GError *err = gridd_client_exec_and_concat_string (
+			id, proxy_timeout_stat, encoded, &packed);
 	if (err) {
 		g_free0 (packed);
 		if (CODE_IS_NETWORK_ERROR(err->code)) {
@@ -66,21 +67,25 @@ action_forward (struct req_args_s *args)
 
 	GError *err = NULL;
 	if (!g_ascii_strcasecmp (action, "flush")) {
-		err = sqlx_remote_execute_FLUSH (id);
-		if (!err)
-			return _reply_success_json (args, NULL);
-		return _reply_common_error (args, err);
+		GByteArray *encoded = message_marshall_gba_and_clean (
+				metautils_message_create_named (NAME_MSGNAME_SQLX_FLUSH));
+		err = gridd_client_exec (id, proxy_timeout_common, encoded);
+		if (err)
+			return _reply_common_error (args, err);
+		return _reply_success_json (args, NULL);
 	}
 	if (!g_ascii_strcasecmp (action, "reload")) {
-		err = sqlx_remote_execute_RELOAD (id);
-		if (!err)
-			return _reply_success_json (args, NULL);
-		return _reply_common_error (args, err);
+		GByteArray *encoded = message_marshall_gba_and_clean (
+				metautils_message_create_named (NAME_MSGNAME_SQLX_RELOAD));
+		err = gridd_client_exec (id, proxy_timeout_common, encoded);
+		if (err)
+			return _reply_common_error (args, err);
+		return _reply_success_json (args, NULL);
 	}
 	if (!g_ascii_strcasecmp (action, "kill")) {
 		GByteArray *encoded = message_marshall_gba_and_clean (
 				metautils_message_create_named("REQ_KILL"));
-		err = gridd_client_exec (id, COMMON_CLIENT_TIMEOUT, encoded);
+		err = gridd_client_exec (id, proxy_timeout_common, encoded);
 		if (err)
 			return _reply_common_error (args, err);
 		return _reply_success_json (args, NULL);
@@ -89,7 +94,7 @@ action_forward (struct req_args_s *args)
 		args->rp->no_access();
 		GByteArray *encoded = message_marshall_gba_and_clean (
 				metautils_message_create_named("REQ_PING"));
-		err = gridd_client_exec (id, COMMON_CLIENT_TIMEOUT, encoded);
+		err = gridd_client_exec (id, proxy_timeout_common, encoded);
 		if (err)
 			return _reply_common_error (args, err);
 		return _reply_success_json (args, NULL);
@@ -99,7 +104,7 @@ action_forward (struct req_args_s *args)
 		metautils_message_add_field_str(req, "LIBC", "1");
 		metautils_message_add_field_str(req, "THREADS", "1");
 		GByteArray *encoded = message_marshall_gba_and_clean (req);
-		err = gridd_client_exec (id, COMMON_CLIENT_TIMEOUT, encoded);
+		err = gridd_client_exec (id, proxy_timeout_common, encoded);
 		if (err)
 			return _reply_common_error (args, err);
 		return _reply_success_json (args, NULL);
@@ -108,7 +113,7 @@ action_forward (struct req_args_s *args)
 	if (!g_ascii_strcasecmp (action, "lean-sqlx")) {
 		GByteArray *encoded = message_marshall_gba_and_clean (
 				metautils_message_create_named(NAME_MSGNAME_SQLX_LEANIFY));
-		err = gridd_client_exec (id, COMMON_CLIENT_TIMEOUT, encoded);
+		err = gridd_client_exec (id, proxy_timeout_common, encoded);
 		if (err)
 			return _reply_common_error (args, err);
 		return _reply_success_json (args, NULL);
@@ -119,7 +124,7 @@ action_forward (struct req_args_s *args)
 		GByteArray *encoded = message_marshall_gba_and_clean (
 				metautils_message_create_named("REQ_VERSION"));
 		gchar *packed = NULL;
-		err = gridd_client_exec_and_concat_string (id, COMMON_CLIENT_TIMEOUT,
+		err = gridd_client_exec_and_concat_string (id, proxy_timeout_common,
 				encoded, &packed);
 		if (err) {
 			g_free0 (packed);
@@ -139,7 +144,7 @@ action_forward (struct req_args_s *args)
 		GByteArray *encoded = message_marshall_gba_and_clean (
 				metautils_message_create_named("REQ_HANDLERS"));
 		gchar *packed = NULL;
-		err = gridd_client_exec_and_concat_string (id, COMMON_CLIENT_TIMEOUT,
+		err = gridd_client_exec_and_concat_string (id, proxy_timeout_common,
 				encoded, &packed);
 		if (err) {
 			g_free0 (packed);
@@ -159,7 +164,7 @@ action_forward (struct req_args_s *args)
 		GByteArray *encoded = message_marshall_gba_and_clean (
 				metautils_message_create_named(NAME_MSGNAME_SQLX_INFO));
 		gchar *packed = NULL;
-		err = gridd_client_exec_and_concat_string(id, COMMON_CLIENT_TIMEOUT,
+		err = gridd_client_exec_and_concat_string(id, proxy_timeout_common,
 				encoded, &packed);
 		if (err) {
 			g_free0 (packed);

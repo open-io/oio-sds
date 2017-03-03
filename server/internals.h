@@ -81,10 +81,6 @@ struct network_server_s
 	guint cnx_max;
 	volatile guint cnx_clients;
 
-	gint64 atexit_max_open_never_input; /*< max delay for cnx without any input.*/
-	gint64 atexit_max_idle; /*< max idle time since last input */
-	gint64 atexit_max_open_persist; /*< max total time for persistant cnx*/
-
 	GQuark gq_gauge_threads;
 	GQuark gq_gauge_cnx_current;
 	GQuark gq_gauge_cnx_max;

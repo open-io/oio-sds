@@ -98,4 +98,53 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_M2V1_TOUCH_CONTENT   "M2_CTOUCH"
 # define NAME_MSGNAME_M2V1_TOUCH_CONTAINER "M2_BTOUCH"
 
+/* -------------------------------------------------------------------------- */
+
+#define M2V2_FLAG_NODELETED        0x00000001
+#define M2V2_FLAG_ALLVERSION       0x00000002
+#define M2V2_FLAG_NOPROPS          0x00000004
+#define M2V2_FLAG_ALLPROPS         0x00000010
+
+/* when listing */
+#define M2V2_FLAG_HEADERS          0x00000020
+
+/* when getting an alias, do not follow the foreign keys toward
+ * headers, contents and chunks. */
+#define M2V2_FLAG_NORECURSION      0x00000080
+
+/* when getting an alias, ignores the version in the URL and
+ * return the latest alias only. */
+#define M2V2_FLAG_LATEST           0x00000100
+
+/* flush the properties */
+#define M2V2_FLAG_FLUSH            0x00000200
+
+/* Ask the meta2 to redirect if not MASTER, even if the request is Read-Only */
+#define M2V2_FLAG_MASTER           0x00000400
+
+/* Request N spare chunks which should not be on provided blacklist */
+#define M2V2_SPARE_BY_BLACKLIST "SPARE_BLACKLIST"
+/* Request N spare chunks according to a storage policy */
+#define M2V2_SPARE_BY_STGPOL "SPARE_STGPOL"
+
+#define M2V2_MODE_DRYRUN  0x10000000
+
+struct m2v2_create_params_s
+{
+	const char *storage_policy; /**< Will override the (maybe present) stgpol property. */
+	const char *version_policy; /**< idem for the verpol property. */
+	gchar **properties; /**< A NULL-terminated sequence of strings where:
+						  * properties[i*2] is the i-th key and
+						  * properties[(i*2)+1] is the i-th value */
+	gboolean local; /**< Do not try to replicate, do not call get_peers() */
+};
+
+enum m2v2_destroy_flag_e
+{
+	/* send a destruction event */
+	M2V2_DESTROY_EVENT = 0x01,
+	M2V2_DESTROY_FLUSH = 0x02,
+	M2V2_DESTROY_FORCE = 0x04,
+};
+
 #endif /*OIO_SDS__meta2v2__meta2_macros_h*/

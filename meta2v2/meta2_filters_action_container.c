@@ -21,10 +21,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 #include <errno.h>
 
-#include <glib.h>
-
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
+#include <metautils/lib/server_variables.h>
+
 #include <cluster/lib/gridcluster.h>
 #include <sqliterepo/sqlite_utils.h>
 #include <server/transport_gridd.h>
@@ -34,7 +33,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/meta2_filters.h>
 #include <meta2v2/meta2_backend_internals.h>
 #include <meta2v2/meta2_bean.h>
-#include <meta2v2/meta2v2_remote.h>
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
 #include <resolver/hc_resolver.h>
@@ -202,7 +200,7 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	gchar **properties = NULL;
 
 	if (lp->maxkeys <= 0)
-		lp->maxkeys = OIO_M2V2_LISTRESULT_BATCH;
+		lp->maxkeys = meta2_batch_maxlen;
 
 	GRID_DEBUG("LP H:%d A:%d D:%d prefix:%s marker:%s end:%s max:%"G_GINT64_FORMAT,
 			lp->flag_headers, lp->flag_allversion, lp->flag_nodeleted,

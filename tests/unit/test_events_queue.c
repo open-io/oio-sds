@@ -21,6 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <zmq.h>
 
 #include <core/oio_core.h>
+#include <metautils/lib/server_variables.h>
 #include <events/oio_events_queue.h>
 
 static gboolean immediately_done (gboolean p) { (void) p; return FALSE; }
@@ -31,15 +32,16 @@ test_queue_stalled (void)
 	struct oio_events_queue_s *q = NULL;
 	GError *err = oio_events_queue_factory__create ("inproc://X", &q);
 	g_assert_no_error (err);
-	oio_events_queue__set_max_pending (q, 100);
 	g_assert_nonnull (q);
 
+	oio_events_common_max_pending = 100;
+
 	g_assert_false (oio_events_queue__is_stalled (q));
-	for (guint i=0; i<100 ;++i)
+	for (guint i=0; i<oio_events_common_max_pending ;++i)
 		oio_events_queue__send (q, g_strdup ("x"));
 
 	g_assert_true (oio_events_queue__is_stalled (q));
-	for (guint i=0; i<1000 ;++i)
+	for (guint i=0; i<oio_events_common_max_pending ;++i)
 		oio_events_queue__send (q, g_strdup ("x"));
 	g_assert_true (oio_events_queue__is_stalled (q));
 
@@ -57,7 +59,6 @@ test_queue_init (void)
 		struct oio_events_queue_s *q = NULL;
 		GError *err = oio_events_queue_factory__create (url, &q);
 		g_assert_no_error (err);
-		oio_events_queue__set_max_pending (q, 100);
 		g_assert_nonnull (q);
 		l = g_slist_prepend (l, q);
 	}

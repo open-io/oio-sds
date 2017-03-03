@@ -269,7 +269,7 @@ conscience_run_srvtypes(struct conscience_s * conscience, GError ** error, guint
 		srvtype = conscience_get_srvtype(conscience, error, *name, MODE_STRICT);
 		if (!srvtype) {
 			rc = FALSE;
-			GSETCODE(error, 460, "Service type [%s] not managed", *name);
+			GSETCODE(error, CODE_SRVTYPE_NOTMANAGED, "Service type [%s] not managed", *name);
 			goto unlock_and_exit;
 		}
 		g_ptr_array_add(array_srvtypes, srvtype);

@@ -28,6 +28,8 @@ License along with this library.
 #include <sys/resource.h>
 
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/server_variables.h>
+
 #include "gridd_client_pool.h"
 
 #define MAX_ROUND 32
@@ -51,10 +53,6 @@ struct gridd_client_pool_s
 	/* if set to any non-zero value, new requests are not started */
 	int closed;
 };
-
-#ifdef HAVE_ENBUG
-gint32 oio_sqlx_request_failure_threshold = 10;
-#endif
 
 static void _destroy (struct gridd_client_pool_s *p);
 
@@ -241,7 +239,7 @@ _manage_timeouts(struct gridd_client_pool_s *pool)
 		return;
 
 	gint64 now = oio_ext_monotonic_time ();
-	if (now - pool->last_timeout_check < G_TIME_SPAN_SECOND)
+	if (now - pool->last_timeout_check < oio_sqlx_timeout_check_period)
 		return;
 	pool->last_timeout_check = now;
 
@@ -261,7 +259,7 @@ _manage_timeouts(struct gridd_client_pool_s *pool)
 	}
 
 	gint64 elapsed = oio_ext_monotonic_time () - now;
-	if (elapsed > 5 * G_TIME_SPAN_SECOND) {
+	if (elapsed > oio_sqlx_timeout_check_max) {
 		GRID_WARN("Client pool timeout check took %"G_GINT64_FORMAT" ms",
 				elapsed / G_TIME_SPAN_MILLISECOND);
 	} else {

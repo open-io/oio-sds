@@ -31,6 +31,8 @@ License along with this library.
 #include "oio_core.h"
 #include "internals.h"
 
+#include <core/client_variables.h>
+
 #define PREPEND(Result,List) do { \
 	next = (List)->next; \
 	List->next = (Result); \
@@ -40,9 +42,6 @@ License along with this library.
 
 time_hook_f oio_time_monotonic = NULL;
 time_hook_f oio_time_real = NULL;
-volatile int oio_sds_default_autocreate = 0;
-volatile int oio_sds_no_shuffle = 0;
-volatile int oio_dir_no_shuffle = 0;
 
 static GSList*gslist_merge_random (GSList *l1, GSList *l2) {
 	GSList *next, *result = NULL;
@@ -412,7 +411,7 @@ static gdouble _compute_io_idle (guint major, guint minor) {
 	}
 
 	/* check its validity and reload if necessary */
-	if (!out->last_update || (now - out->last_update) > G_TIME_SPAN_SECOND) {
+	if (!out->last_update || (now - out->last_update) > _refresh_io_idle) {
 		FILE *fst = fopen ("/proc/diskstats", "r");
 		while (fst && !feof(fst) && !ferror(fst)) {
 			char line[1024], name[256];
@@ -504,7 +503,7 @@ static int _get_major_minor (const gchar *path, guint *pmaj, guint *pmin) {
 	}
 
 	/* maybe refresh it */
-	if (!out->last_update || (now - out->last_update) > 30 * G_TIME_SPAN_SECOND) {
+	if (!out->last_update || (now - out->last_update) > _refresh_major_minor) {
 		struct stat st = {0};
 		if (0 != stat(out->path, &st)) {
 			out = NULL;
@@ -577,7 +576,7 @@ gdouble oio_sys_cpu_idle (void) {
 
 	g_mutex_lock (&lock);
 	gint64 now = oio_ext_monotonic_time ();
-	if (!last_update || ((now - last_update) > G_TIME_SPAN_SECOND)) {
+	if (!last_update || ((now - last_update) > _refresh_cpu_idle)) {
 		FILE *fst = fopen ("/proc/stat", "r");
 		while (fst && !feof(fst) && !ferror(fst)) {
 			char line[1024];

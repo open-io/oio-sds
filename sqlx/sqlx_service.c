@@ -25,6 +25,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/resource.h>
 
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/server_variables.h>
+
 #include <cluster/lib/gridcluster.h>
 #include <events/oio_events_queue.h>
 #include <events/oio_events_queue_zmq.h>
@@ -48,14 +50,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "sqlx_service.h"
 
-#ifndef SQLX_MAX_TIMER_PER_ROUND
-# define SQLX_MAX_TIMER_PER_ROUND 100
-#endif
-
-#ifndef SQLX_SHUTDOWN_TIMEOUT
-# define SQLX_SHUTDOWN_TIMEOUT (10 * G_TIME_SPAN_SECOND)
-#endif
-
 static volatile gboolean udp_allowed = FALSE;
 
 // common_main hooks
@@ -74,7 +68,6 @@ static void _task_expire_resolver(gpointer p);
 static void _task_react_elections(gpointer p);
 static void _task_reload_nsinfo(gpointer p);
 static void _task_reload_workers(gpointer p);
-static void _task_reconfigure_events(gpointer p);
 
 static gpointer _worker_queue (gpointer p);
 static gpointer _worker_clients (gpointer p);
@@ -117,14 +110,6 @@ static struct grid_main_option_s common_options[] =
 		"SYNC mode to be applied on non-replicated bases after open "
 			"(0=NONE,1=NORMAL,2=FULL)"},
 
-	{"OpenTimeout", OT_INT64, {.i64=&SRV.open_timeout},
-		"Timeout when opening bases in use by another thread "
-			"(milliseconds). -1 means wait forever, 0 return "
-			"immediately." },
-
-	{"MaxBaseWaiters", OT_UINT, {.u = &SRV.cfg_max_waiters},
-		"Limits the number of threads waiting on a single base" },
-
 	{"MaxBasesHard", OT_UINT, {.u = &SRV.cfg_max_bases_hard},
 		"Absolute max number of cached bases. Won't ever be increased." },
 	{"MaxBases", OT_UINT, {.u = &SRV.cfg_max_bases_soft},
@@ -137,9 +122,6 @@ static struct grid_main_option_s common_options[] =
 		"Limits the number of concurrent active connections (0=automatic)" },
 	{"MaxWorkers", OT_UINT, {.u=&SRV.cfg_max_workers},
 		"Limits the number of worker threads" },
-
-	{"PageSize", OT_UINT, {.u=&SRV.cfg_page_size},
-		"Page size of SQLite databases (0=use sqlite default)" },
 
 	{"CacheEnabled", OT_BOOL, {.b = &SRV.flag_cached_bases},
 		"If set, each base will be cached in a way it won't be accessed"
@@ -303,7 +285,7 @@ _configure_limits(struct sqlx_service_s *ss)
 				ss->cfg_max_bases_soft : SQLX_MAX_BASES_PERCENT(total)),
 			ss->max_bases_soft);
 	ss->max_bases_hard = ss->cfg_max_bases_hard > 0 ?
-				ss->cfg_max_bases_hard : SQLX_MAX_BASES;
+				ss->cfg_max_bases_hard : sqliterepo_repo_max_bases;
 
 	// max_passive > max_active permits answering to clients while
 	// managing internal procedures (elections, replications...).
@@ -317,11 +299,11 @@ _configure_limits(struct sqlx_service_s *ss)
 			ss->max_active);
 
 	GRID_INFO("Limits set to ACTIVES[%u] PASSIVES[%u] BASES[%u/%u] "
-			"fd=%u/%u page_size=%u",
+			"fd=%u/%u",
 			ss->max_active, ss->max_passive,
 			ss->max_bases_soft, ss->max_bases_hard,
 			ss->max_active + ss->max_passive + ss->max_bases_soft,
-			(guint)limit.rlim_cur, ss->cfg_page_size);
+			(guint)limit.rlim_cur);
 
 	return TRUE;
 #undef CONFIGURE_LIMIT
@@ -537,7 +519,7 @@ _configure_replication(struct sqlx_service_s *ss)
 		return FALSE;
 	}
 
-	election_manager_dump_delays(ss->election_manager);
+	election_manager_dump_delays();
 	return TRUE;
 }
 
@@ -552,10 +534,6 @@ _configure_backend(struct sqlx_service_s *ss)
 	repository_config.sync_solo = ss->sync_mode_solo;
 	repository_config.sync_repli = ss->sync_mode_repli;
 
-	repository_config.page_size = SQLX_DEFAULT_PAGE_SIZE;
-	if (ss->cfg_page_size >= 512)
-		repository_config.page_size = ss->cfg_page_size;
-
 	repository_config.max_bases = ss->max_bases_hard;
 
 	GError *err = sqlx_repository_init(ss->volume, &repository_config,
@@ -568,8 +546,6 @@ _configure_backend(struct sqlx_service_s *ss)
 	}
 
 	sqlx_repository_configure_maxbases(SRV.repository, SRV.max_bases_soft);
-	sqlx_cache_set_max_waiting(sqlx_repository_get_cache(SRV.repository),
-			SRV.cfg_max_waiters);
 
 	err = sqlx_repository_configure_type(ss->repository,
 			ss->service_config->srvtype, ss->service_config->schema);
@@ -579,9 +555,6 @@ _configure_backend(struct sqlx_service_s *ss)
 		g_clear_error(&err);
 		return FALSE;
 	}
-
-	sqlx_repository_configure_open_timeout (ss->repository,
-			ss->open_timeout * G_TIME_SPAN_MILLISECOND);
 
 	sqlx_repository_configure_hash (ss->repository,
 			ss->service_config->repo_hash_width,
@@ -596,7 +569,6 @@ _configure_tasks(struct sqlx_service_s *ss)
 {
 	grid_task_queue_register(ss->gtq_reload, 5, _task_reload_nsinfo, NULL, ss);
 	grid_task_queue_register(ss->gtq_reload, 5, _task_reload_workers, NULL, ss);
-	grid_task_queue_register(ss->gtq_reload, 5, _task_reconfigure_events, NULL, ss);
 
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_bases, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_resolver, NULL, ss);
@@ -660,7 +632,7 @@ sqlx_service_action(void)
 {
 	GError *err = NULL;
 
-	if (oio_cache_avoid_on_error)
+	if (oio_client_cache_errors)
 		GRID_NOTICE("Faulty peers avoidance: ENABLED");
 
 	if (!SRV.flag_nolock) {
@@ -758,16 +730,11 @@ sqlx_service_configure(int argc, char **argv)
 static void
 sqlx_service_set_defaults(void)
 {
-	SRV.max_elections_timers_per_round = SQLX_MAX_TIMER_PER_ROUND;
-	SRV.open_timeout = DEFAULT_CACHE_OPEN_TIMEOUT / G_TIME_SPAN_MILLISECOND;
-
-	SRV.cfg_max_waiters = SQLX_MAX_WAITING;
 	SRV.cfg_max_bases_soft = 0;
-	SRV.cfg_max_bases_hard = SQLX_MAX_BASES;
+	SRV.cfg_max_bases_hard = sqliterepo_repo_max_bases;
 	SRV.cfg_max_passive = 0;
 	SRV.cfg_max_active = 0;
 	SRV.cfg_max_workers = 200;
-	SRV.cfg_page_size = SQLX_DEFAULT_PAGE_SIZE;
 	SRV.flag_replicable = TRUE;
 	SRV.flag_autocreate = TRUE;
 	SRV.flag_delete_on = TRUE;
@@ -810,7 +777,7 @@ sqlx_service_specific_fini(void)
 	}
 	if (SRV.election_manager)
 		election_manager_exit_all(SRV.election_manager,
-				SQLX_SHUTDOWN_TIMEOUT, TRUE);
+				sqliterepo_server_exit_ttl, TRUE);
 	if (SRV.sync)
 		sqlx_sync_close(SRV.sync);
 	if (SRV.peering)
@@ -1021,7 +988,7 @@ _task_react_elections(gpointer p)
 
 	gint64 t = oio_ext_monotonic_time();
 	guint count = election_manager_play_timers (PSRV(p)->election_manager,
-			PSRV(p)->max_elections_timers_per_round);
+			sqliterepo_election_expire_max_per_round);
 	t = t - oio_ext_monotonic_time();
 
 	if (count || t > (500*G_TIME_SPAN_MILLISECOND)) {
@@ -1063,40 +1030,6 @@ _task_reload_workers(gpointer p)
 			NULL, PSRV(p)->service_config->srvtype, "max_workers",
 			SRV.cfg_max_workers);
 	network_server_set_max_workers(PSRV(p)->server, (guint) max_workers);
-}
-
-static void
-_task_reconfigure_events (gpointer p)
-{
-	if (!grid_main_is_running ())
-		return;
-	if (!p || !PSRV(p)->events_queue)
-		return;
-
-	struct namespace_info_s *ni = PSRV(p)->nsinfo;
-	if (!ni || !ni->options)
-		return;
-
-	gint64 i64 = namespace_info_get_srv_param_i64(ni, NULL,
-			PSRV(p)->service_config->srvtype,
-			OIO_CFG_EVTQ_MAXPENDING,
-			OIO_EVTQ_MAXPENDING);
-	GRID_TRACE("Looking for [%s]: %"G_GINT64_FORMAT,
-			OIO_CFG_EVTQ_MAXPENDING, i64);
-
-	if (i64 >= 0 && i64 < G_MAXUINT) {
-		guint u = (guint) i64;
-		oio_events_queue__set_max_pending (PSRV(p)->events_queue, u);
-	}
-
-	i64 = namespace_info_get_srv_param_i64(ni, NULL,
-			PSRV(p)->service_config->srvtype,
-			OIO_CFG_EVTQ_BUFFER_DELAY,
-			OIO_EVTQ_BUFFER_DELAY);
-	if (i64 >= 0 && i64 < 3600) {
-		oio_events_queue__set_buffering(PSRV(p)->events_queue,
-				i64 * G_TIME_SPAN_SECOND);
-	}
 }
 
 static void

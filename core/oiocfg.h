@@ -77,77 +77,9 @@ extern "C" {
 #  define PROXYD_HEADER_NOEMPTY PROXYD_HEADER_PREFIX "no-empty-list"
 # endif
 
-/* in bytes */
-# ifndef PROXYD_PATH_MAXLEN
-#  define PROXYD_PATH_MAXLEN 2048
-# endif
-
 /* in oio_ext_monotonic_time() precision */
 # ifndef PROXYD_DEFAULT_TTL_SERVICES
 #  define PROXYD_DEFAULT_TTL_SERVICES G_TIME_SPAN_HOUR
-# endif
-
-# ifndef PROXYD_DEFAULT_MAX_SERVICES
-#  define PROXYD_DEFAULT_MAX_SERVICES 200000
-# endif
-
-/* in oio_ext_monotonic_time() precision */
-# ifndef PROXYD_DEFAULT_TTL_CSM0
-#  define PROXYD_DEFAULT_TTL_CSM0 0
-# endif
-
-# ifndef PROXYD_DEFAULT_MAX_CSM0
-#  define PROXYD_DEFAULT_MAX_CSM0 0
-# endif
-
-/* in seconds */
-# ifndef PROXYD_PERIOD_RELOAD_CSURL
-#  define PROXYD_PERIOD_RELOAD_CSURL 30
-# endif
-
-/* in seconds */
-# ifndef PROXYD_PERIOD_RELOAD_SRVTYPES
-#  define PROXYD_PERIOD_RELOAD_SRVTYPES 30
-# endif
-
-/* in seconds */
-# ifndef PROXYD_PERIOD_RELOAD_NSINFO
-#  define PROXYD_PERIOD_RELOAD_NSINFO 30
-# endif
-
-/* in seconds */
-# ifndef PROXYD_PERIOD_RELOAD_M0INFO
-#  define PROXYD_PERIOD_RELOAD_M0INFO 30
-# endif
-
-/* in seconds */
-# ifndef PROXYD_DEFAULT_PERIOD_DOWNSTREAM
-#  define PROXYD_DEFAULT_PERIOD_DOWNSTREAM 2
-# endif
-
-/* in seconds */
-# ifndef PROXYD_DEFAULT_PERIOD_UPSTREAM
-#  define PROXYD_DEFAULT_PERIOD_UPSTREAM 1
-# endif
-
-/* in oio_ext_monotonic_time() precision */
-# ifndef PROXYD_TTL_DEAD_LOCAL_SERVICES
-#  define PROXYD_TTL_DEAD_LOCAL_SERVICES (30*G_TIME_SPAN_SECOND)
-# endif
-
-/* in oio_ext_monotonic_time() precision */
-# ifndef PROXYD_TTL_MASTER_SERVICES
-#  define PROXYD_TTL_MASTER_SERVICES (1*G_TIME_SPAN_HOUR)
-# endif
-
-/* in oio_ext_monotonic_time() precision */
-# ifndef PROXYD_TTL_DOWN_SERVICES
-#  define PROXYD_TTL_DOWN_SERVICES (5*G_TIME_SPAN_SECOND)
-# endif
-
-/* in oio_ext_monotonic_time() precision */
-# ifndef PROXYD_TTL_KNOWN_SERVICES
-#  define PROXYD_TTL_KNOWN_SERVICES (5*G_TIME_SPAN_DAY)
 # endif
 
 # ifndef GCLUSTER_RUN_DIR
@@ -158,10 +90,6 @@ extern "C" {
 #  define GCLUSTER_AGENT_SOCK_PATH GCLUSTER_RUN_DIR "/oio-sds-agent.sock"
 # endif
 
-# ifndef OIO_M2V2_LISTRESULT_BATCH
-#  define OIO_M2V2_LISTRESULT_BATCH 1000
-# endif
-
 # ifndef MALLOC_TRIM_SIZE
 #  define MALLOC_TRIM_SIZE (0)
 # endif
@@ -170,157 +98,13 @@ extern "C" {
 #  define PERIODIC_MALLOC_TRIM_SIZE (0)
 # endif
 
-# ifndef SQLITE_RELEASE_SIZE
-#  define SQLITE_RELEASE_SIZE  (64*1024*1024)
-# endif
-
-# ifndef  COMMON_STAT_TIMEOUT
-#  define COMMON_STAT_TIMEOUT 5.0
-# endif
-
-# ifndef  COMMON_CNX_TIMEOUT
-#  define COMMON_CNX_TIMEOUT 2.0
-# endif
-
-# ifndef COMMON_CLIENT_TIMEOUT
-#  define COMMON_CLIENT_TIMEOUT 30.0
-# endif
-
-#ifndef SQLX_SYNC_DEFAULT_ZK_TIMEOUT
-# define SQLX_SYNC_DEFAULT_ZK_TIMEOUT 10000
-#endif
-
 # ifndef SQLX_CLIENT_TIMEOUT
 #  define SQLX_CLIENT_TIMEOUT 30.0
-# endif
-
-/* Timeout when connecting for DB_USE requests
-   in seconds */
-# ifndef SQLX_CNX_TIMEOUT_USE
-#  define SQLX_CNX_TIMEOUT_USE 0.25
-# endif
-
-/* Timeout when connecting for GETVERS requests
-   in seconds */
-# ifndef SQLX_CNX_TIMEOUT_GETVERS
-#  define SQLX_CNX_TIMEOUT_GETVERS 0.5
-# endif
-
-/* Timeout for synchronisation requests (USE)
-   in seconds */
-# ifndef SQLX_USE_TIMEOUT
-#  define SQLX_USE_TIMEOUT 1.0
-# endif
-
-/* Timeout for synchronisation requests (USE)
-   in seconds */
-# ifndef SQLX_GETVERS_TIMEOUT
-#  define SQLX_GETVERS_TIMEOUT 2.0
-# endif
-
-/* Timeout for SQLX_REPLICATE requests, in seconds */
-# ifndef SQLX_REPLI_TIMEOUT
-#  define SQLX_REPLI_TIMEOUT 10.0
-# endif
-
-/* Timeout for SQLX_REPLICATE TCP connection, in seconds */
-# ifndef SQLX_REPLI_TIMEOUT_CNX
-#  define SQLX_REPLI_TIMEOUT_CNX 1.0
-# endif
-
-/* Timeout for operations that require copying a DB */
-# ifndef SQLX_RESYNC_TIMEOUT
-#  define SQLX_RESYNC_TIMEOUT 30.0
-# endif
-
-# ifndef M2V2_CLIENT_TIMEOUT
-#  define M2V2_CLIENT_TIMEOUT 10.0
-# endif
-
-# ifndef M2V2_CLIENT_TIMEOUT_HUGE
-#  define M2V2_CLIENT_TIMEOUT_HUGE 10.0
-# endif
-
-# ifndef M1V2_CLIENT_TIMEOUT
-#  define M1V2_CLIENT_TIMEOUT 10.0
-# endif
-
-# ifndef M0V2_INIT_TIMEOUT
-#  define M0V2_INIT_TIMEOUT 60.0
-# endif
-
-# ifndef M0V2_CLIENT_TIMEOUT
-#  define M0V2_CLIENT_TIMEOUT 10.0
-# endif
-
-# ifndef CS_CLIENT_TIMEOUT
-#  define CS_CLIENT_TIMEOUT 2.0
 # endif
 
 # ifndef RAWX_HEADER_PREFIX
 #  define RAWX_HEADER_PREFIX "X-oio-chunk-meta-"
 # endif
-
-# ifndef OIO_EVTQ_MAXPENDING
-#  define OIO_EVTQ_MAXPENDING 1000
-# endif
-
-/* Delay between events queue flushes in seconds */
-# ifndef OIO_EVTQ_BUFFER_DELAY
-#  define OIO_EVTQ_BUFFER_DELAY 5
-# endif
-
-# ifndef  OIO_CFG_EVTQ_MAXPENDING
-#  define OIO_CFG_EVTQ_MAXPENDING "events-max-pending"
-# endif
-
-# ifndef  OIO_CFG_EVTQ_BUFFER_DELAY
-#  define OIO_CFG_EVTQ_BUFFER_DELAY "events-buffer-delay"
-# endif
-
-/* Max number of events raised by epoll_wait */
-# ifndef  SERVER_DEFAULT_EPOLL_MAXEV
-#  define SERVER_DEFAULT_EPOLL_MAXEV 128
-# endif
-
-/* Number of acccept() performed each time epoll mentions the server socket
-   has activity */
-# ifndef  SERVER_DEFAULT_ACCEPT_MAX
-#  define SERVER_DEFAULT_ACCEPT_MAX 64
-# endif
-
-/* Max number of threads for the GThreadPool of the workers */
-# ifndef  SERVER_DEFAULT_THP_MAXWORKERS
-#  define SERVER_DEFAULT_THP_MAXWORKERS  -1
-# endif
-
-/* in number of threads */
-# ifndef  SERVER_DEFAULT_THP_MAXUNUSED
-#  define SERVER_DEFAULT_THP_MAXUNUSED  -1
-# endif
-
-/* in millisecond */
-# ifndef  SERVER_DEFAULT_THP_IDLE
-#  define SERVER_DEFAULT_THP_IDLE  30000
-# endif
-
-/* How long (in microseconds) a connection might stay idle between two
- * requests */
-#ifndef  SERVER_DEFAULT_CNX_IDLE
-# define SERVER_DEFAULT_CNX_IDLE  (5 * G_TIME_SPAN_MINUTE)
-#endif
-
-/* How long (in microseconds) a connection might exist since its creation
- * (whatever it is active or not) */
-#ifndef  SERVER_DEFAULT_CNX_LIFETIME
-# define SERVER_DEFAULT_CNX_LIFETIME  (2 * G_TIME_SPAN_HOUR)
-#endif
-
-/* How long (in microseconds) a connection might exist since its creation
- * when it received no request at all */
-#ifndef  SERVER_DEFAULT_CNX_INACTIVE
-# define SERVER_DEFAULT_CNX_INACTIVE  (30 * G_TIME_SPAN_SECOND)
-#endif
 
 # ifndef  OIO_STAT_PREFIX_REQ
 #  define OIO_STAT_PREFIX_REQ "counter req.hits"

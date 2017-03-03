@@ -20,6 +20,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <glib.h>
 
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/server_variables.h>
+
 #include <cluster/lib/gridcluster.h>
 
 #include <sqliterepo/sqlite_utils.h>
@@ -30,7 +32,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
-#include <meta2v2/meta2v2_remote.h>
 #include <meta2v2/meta2_macros.h>
 #include <meta2v2/meta2_utils_lb.h>
 #include <meta2v2/meta2_backend_internals.h>
@@ -195,7 +196,7 @@ meta2_backend_init(struct meta2_backend_s **result,
 	m2->lb = lb;
 	m2->policies = service_update_policies_create();
 	g_mutex_init(&m2->nsinfo_lock);
-	m2->flag_precheck_on_generate = TRUE;
+	m2->flag_precheck_on_generate = meta2_flag_precheck_on_generate;
 	// TODO: use a custom hash function
 	m2->prepare_data_cache = g_hash_table_new_full(g_str_hash, g_str_equal,
 			g_free, g_free);
@@ -339,13 +340,6 @@ m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 	EXTRA_ASSERT(result != NULL);
 	EXTRA_ASSERT(m2 != NULL);
 	EXTRA_ASSERT(m2->repo != NULL);
-
-	/* TODO */
-	gboolean no_peers = FALSE;
-	if (no_peers) {
-		how &= ~M2V2_OPEN_REPLIMODE;
-		how |= M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK;
-	}
 
 	struct sqlx_name_mutable_s n;
 	sqlx_name_fill (&n, url, NAME_SRVTYPE_META2, 1);

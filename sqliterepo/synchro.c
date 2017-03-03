@@ -21,10 +21,11 @@ License along with this library.
 #include <sys/types.h>
 #include <sys/socket.h>
 
-#include <metautils/lib/metautils.h>
-
 #include <zookeeper.h>
 #include <zookeeper_log.h>
+
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/server_variables.h>
 
 #include "version.h"
 #include "synchro.h"
@@ -48,10 +49,6 @@ struct sqlx_sync_s
 
 	struct grid_single_rrd_s *conn_attempts;
 };
-
-gint32 oio_sync_failure_threshold_action = 10;
-gint32 oio_sync_failure_threshold_hook = 10;
-
 
 static void _clear(struct sqlx_sync_s *ss);
 
@@ -123,8 +120,8 @@ sqlx_sync_create(const char *url, gboolean shuffle)
 	ss->zk_url = g_strjoinv(",", tokens);
 	g_strfreev(tokens);
 
-	// FIXME(FVE): hardcoded value
-	ss->conn_attempts = grid_single_rrd_create(oio_ext_monotonic_seconds(), 8);
+	ss->conn_attempts = grid_single_rrd_create(
+			oio_ext_monotonic_seconds(), disconnection_rrd_window + 1);
 
 	return ss;
 }
@@ -228,7 +225,7 @@ _reconnect(struct sqlx_sync_s *ss)
 	memset (&ss->zk_id, 0, sizeof(ss->zk_id));
 	GRID_NOTICE("Zookeeper: starting connection to [%s]", ss->zk_url);
 	ss->zh = zookeeper_init(ss->zk_url, zk_main_watch,
-			SQLX_SYNC_DEFAULT_ZK_TIMEOUT, &ss->zk_id, ss, 0);
+			sqliterepo_zk_timeout / G_TIME_SPAN_MILLISECOND, &ss->zk_id, ss, 0);
 	if (!ss->zh) {
 		GRID_ERROR("Zookeeper init failure: (%d) %s",
 				errno, strerror(errno));
@@ -259,8 +256,9 @@ zk_main_watch(zhandle_t *zh UNUSED, int type, int state, const char *path UNUSED
 				ss->zk_url);
 		return _reconnect(ss);
 	} else if (state == ZOO_CONNECTING_STATE) {
-		// FIXME(FVE): hardcoded value
-		if (grid_single_rrd_get_delta(ss->conn_attempts, now, 5) > 5) {
+		const guint64 delta = grid_single_rrd_get_delta(
+				ss->conn_attempts, now, disconnection_rrd_window);
+		if (delta > disconnection_threshold) {
 			/* There were many connection attempts recently, sign of an
 			 * underlying zookeeper problem. We will try to wipe everything
 			 * and start from the beginning. */
@@ -290,7 +288,7 @@ _open(struct sqlx_sync_s *ss)
 	if (NULL != ss->zh)
 		return NEWERROR(CODE_INTERNAL_ERROR, "BUG: ZK connection already initiated");
 	ss->zh = zookeeper_init(ss->zk_url, zk_main_watch,
-			SQLX_SYNC_DEFAULT_ZK_TIMEOUT, NULL, ss, 0);
+			sqliterepo_zk_timeout / G_TIME_SPAN_MILLISECOND, NULL, ss, 0);
 	if (NULL == ss->zh)
 		return NEWERROR(CODE_INTERNAL_ERROR, "ZK connection failure");
 	return NULL;
@@ -534,8 +532,8 @@ _direct_use (struct sqlx_peering_s *self,
 		struct event_client_s *mc = g_malloc0 (sizeof(struct event_client_s));
 		mc->client = gridd_client_factory_create_client (p->factory);
 
-		gridd_client_set_timeout(mc->client, SQLX_USE_TIMEOUT);
-		gridd_client_set_timeout_cnx(mc->client, SQLX_CNX_TIMEOUT_USE);
+		gridd_client_set_timeout(mc->client, oio_election_use_timeout_req);
+		gridd_client_set_timeout_cnx(mc->client, oio_election_use_timeout_cnx);
 
 		GError *err = gridd_client_connect_url (mc->client, url);
 		if (err) {
@@ -602,7 +600,8 @@ _direct_pipefrom (struct sqlx_peering_s *self,
 	sqlx_name_dup (&mc->name, n);
 	mc->reqid = reqid;
 
-	gridd_client_set_timeout(mc->ec.client, SQLX_RESYNC_TIMEOUT);
+	gridd_client_set_timeout_cnx(mc->ec.client, oio_election_resync_timeout_cnx);
+	gridd_client_set_timeout(mc->ec.client, oio_election_resync_timeout_req);
 
 	GError *err = gridd_client_connect_url (mc->ec.client, url);
 	if (NULL != err) {
@@ -705,8 +704,8 @@ _direct_getvers (struct sqlx_peering_s *self,
 	mc->reqid = reqid;
 	mc->vremote = NULL;
 
-	gridd_client_set_timeout(mc->ec.client, SQLX_GETVERS_TIMEOUT);
-	gridd_client_set_timeout_cnx(mc->ec.client, SQLX_CNX_TIMEOUT_GETVERS);
+	gridd_client_set_timeout(mc->ec.client, oio_election_getvers_timeout_req);
+	gridd_client_set_timeout_cnx(mc->ec.client, oio_election_getvers_timeout_cnx);
 
 	GError *err = gridd_client_connect_url (mc->ec.client, url);
 	if (NULL != err) {

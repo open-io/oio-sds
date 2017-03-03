@@ -472,7 +472,7 @@ void client_init (struct client_ctx_s *ctx, struct req_args_s *args,
 	ctx->seq = seq;
 	sqlx_name_fill_type_asis (&ctx->name, args->url,
 			*srvtype == '#' ? srvtype+1 : srvtype, ctx->seq);
-	ctx->timeout = COMMON_CLIENT_TIMEOUT;
+	ctx->timeout = proxy_timeout_common;
 	ctx->which = CLIENT_PREFER_NONE;
 }
 

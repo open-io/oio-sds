@@ -79,12 +79,6 @@ sqlx_name_mutable_to_const(struct sqlx_name_mutable_s *mut)
 	if ((N).type) STRING_STACKIFY((N).type); \
 } while (0)
 
-GByteArray* sqlx_pack_FLUSH (void);
-GByteArray* sqlx_pack_RELOAD (void);
-
-GError* sqlx_remote_execute_FLUSH (const char *to);
-GError* sqlx_remote_execute_RELOAD (const char *to);
-
 // sqliterepo-related requests coders ------------------------------------------
 
 GByteArray* sqlx_pack_ENABLE (const struct sqlx_name_s *name);

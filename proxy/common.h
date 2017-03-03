@@ -32,19 +32,23 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <json-c/json.h>
 
 #include <core/url_ext.h>
+#include <core/client_variables.h>
+
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/server_variables.h>
+
 #include <cluster/lib/gridcluster.h>
 #include <server/network_server.h>
 #include <resolver/hc_resolver.h>
 #include <meta1v2/meta1_remote.h>
 #include <meta2v2/meta2_macros.h>
-#include <meta2v2/meta2v2_remote.h>
 #include <meta2v2/meta2_utils.h>
 #include <meta2v2/autogen.h>
 #include <meta2v2/generic.h>
 #include <sqliterepo/sqlx_remote.h>
 #include <sqliterepo/sqlite_utils.h>
 
+#include "meta2v2_remote.h"
 #include "path_parser.h"
 #include "transport_http.h"
 
@@ -104,6 +108,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 		first = FALSE; \
 } while (0)
 
+/* ------------------------------------------------------------------------- */
+
 enum proxy_preference_e {
 	CLIENT_PREFER_NONE = 0,
 	CLIENT_RUN_ALL,
@@ -112,38 +118,6 @@ enum proxy_preference_e {
 };
 
 extern gchar *ns_name;
-extern gboolean flag_cache_enabled;
-extern gboolean flag_local_scores;
-
-/* Should the proxy prefer the master it knows, even when a SLAVE is enough
- * (read-only requests) */
-extern gboolean flag_prefer_master_for_read;
-
-/* Should the proxy prefer the master it knows, when a MASTER is required
- * (write requests) */
-extern gboolean flag_prefer_master_for_write;
-
-/* Should the proxy prefer the SLAVE it knows, when a SLAVE is enough (read-only
- * requests) */
-extern gboolean flag_prefer_slave_for_read;
-
-/* Should the proxy tell the service to accept the requests only if the base has
- * the MASTER status. Currently only managed by the meta2 services. */
-extern gboolean flag_force_master;
-
-/* how long the proxy remembers the srv it registered ino the conscience */
-extern gint64 ttl_expire_local_services;
-
-/* how long the proxy remembers dead services */
-extern gint64 ttl_down_services;
-
-/* how long the proxy remembers services from the conscience */
-extern gint64 ttl_known_services;
-
-/* how long the proxy remembers which service is the master for a given
- * election */
-extern gint64 ttl_expire_master_services;
-
 extern struct oio_lb_world_s *lb_world;
 extern struct oio_lb_s *lb;
 extern struct hc_resolver_s *resolver;
@@ -181,15 +155,18 @@ extern struct lru_tree_s *srv_registered; /* registered srv seen within 5s */
 
 extern GRWLock srv_rwlock;
 extern struct lru_tree_s *srv_down; /* "IP:PORT" that had a problem */
+extern struct lru_tree_s *srv_known; /* services seen since 'ever' */
+
 gboolean service_is_ok (gconstpointer p);
 void service_invalidate (gconstpointer n);
-extern struct lru_tree_s *srv_known; /* services seen since 'ever' */
+
 void service_learn (const char *key);
 gboolean service_is_known (const char *key);
 
 /* Set of items requiring an election, associated to the latest known master */
 extern GRWLock master_rwlock;
 extern struct lru_tree_s *srv_master;
+
 gboolean service_is_slave (const char *obj, const char *master);
 gboolean service_is_master (const char *obj, const char *master);
 void service_learn_master (const char *obj, const char *master);

@@ -130,9 +130,6 @@ struct sqlx_repo_config_s
 	 * for replicated bases */
 	enum sqlx_sync_mode_e sync_repli;
 
-	/** Size of sqlite pages */
-	guint page_size;
-
 	/* Cache maximum number of items */
 	guint max_bases;
 };
@@ -199,11 +196,6 @@ void sqlx_repository_configure_maxbases(sqlx_repository_t *repo,
 /** Register a new DB type with its schema.  */
 GError* sqlx_repository_configure_type(sqlx_repository_t *repo,
 		const char *type, const char *schema);
-
-/* Set open timeout for bases currently in use by another thread.
- * Precision uniform with oio_ext_monotonic_time(). */
-void sqlx_repository_configure_open_timeout(sqlx_repository_t *repo,
-		gint64 timeout);
 
 void sqlx_repository_configure_close_callback(sqlx_repository_t *repo,
 		sqlx_repo_close_hook cb, gpointer cb_data);

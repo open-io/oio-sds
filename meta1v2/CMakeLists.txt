@@ -1,7 +1,11 @@
 add_definitions(-DG_LOG_DOMAIN="oio.m1v2")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
-include_directories(BEFORE . ..
+include_directories(BEFORE
+		${CMAKE_CURRENT_SOURCE_DIR}
+		${CMAKE_SOURCE_DIR}
+		${CMAKE_BINARY_DIR}
+		${CMAKE_CURRENT_BINARY_DIR}
 		${JSONC_INCLUDE_DIRS})
 
 link_directories(
@@ -24,7 +28,7 @@ add_library(meta1v2 SHARED
 set_target_properties(meta1v2 PROPERTIES SOVERSION ${ABI_VERSION})
 target_link_libraries(meta1v2
 		metautils gridcluster sqliterepo
-		meta0utils meta2v2remote meta0remote
+		meta0utils meta0remote
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
 add_library(meta1remote SHARED meta1_remote.c meta1_remote.h)
