@@ -52,6 +52,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define SQLX_MAX_TIMER_PER_ROUND 100
 #endif
 
+#ifndef SQLX_SHUTDOWN_TIMEOUT
+# define SQLX_SHUTDOWN_TIMEOUT (10 * G_TIME_SPAN_SECOND)
+#endif
+
 static volatile gboolean udp_allowed = FALSE;
 
 // common_main hooks
@@ -605,16 +609,16 @@ static gboolean
 sqlx_service_configure(int argc, char **argv)
 {
 	return _configure_limits(&SRV)
-	    && _init_configless_structures(&SRV)
-	    && _configure_with_arguments(&SRV, argc, argv)
+		&& _init_configless_structures(&SRV)
+		&& _configure_with_arguments(&SRV, argc, argv)
 		/* NS now known! */
 		&& _configure_synchronism(&SRV)
-	    && _configure_peering(&SRV)
-	    && _configure_replication(&SRV)
-	    && _configure_backend(&SRV)
-	    && _configure_tasks(&SRV)
-	    && _configure_network(&SRV)
-	    && _configure_events_queue(&SRV)
+		&& _configure_peering(&SRV)
+		&& _configure_replication(&SRV)
+		&& _configure_backend(&SRV)
+		&& _configure_tasks(&SRV)
+		&& _configure_network(&SRV)
+		&& _configure_events_queue(&SRV)
 		&& (!SRV.service_config->post_config
 				|| SRV.service_config->post_config(&SRV));
 }
@@ -674,7 +678,7 @@ sqlx_service_specific_fini(void)
 	}
 	if (SRV.election_manager)
 		election_manager_exit_all(SRV.election_manager,
-				30 * G_TIME_SPAN_SECOND, TRUE);
+				SQLX_SHUTDOWN_TIMEOUT, TRUE);
 	if (SRV.sync)
 		sqlx_sync_close(SRV.sync);
 	if (SRV.peering)
@@ -706,10 +710,6 @@ sqlx_service_specific_fini(void)
 		sqlx_repository_clean(SRV.repository);
 		SRV.repository = NULL;
 	}
-	if (SRV.sync) {
-		sqlx_sync_clear(SRV.sync);
-		SRV.sync = NULL;
-	}
 	if (SRV.resolver) {
 		hc_resolver_destroy(SRV.resolver);
 		SRV.resolver = NULL;
@@ -735,6 +735,10 @@ sqlx_service_specific_fini(void)
 	if (SRV.election_manager) {
 		election_manager_clean(SRV.election_manager);
 		SRV.election_manager = NULL;
+	}
+	if (SRV.sync) {
+		sqlx_sync_clear(SRV.sync);
+		SRV.sync = NULL;
 	}
 
 	if (SRV.lb)
