@@ -95,7 +95,8 @@ enum http_rc_e action_admin_meta0_force(struct req_args_s *args) {
 			gchar m0_url[STRLEN_ADDRINFO] = {0};
 			grid_addrinfo_to_string(&(m0->addr), m0_url, sizeof(m0_url));
 
-			err = meta0_remote_force(m0_url, (gchar*) args->rq->body->data);
+			err = meta0_remote_force(m0_url,
+					args->rq->body->data, args->rq->body->len);
 
 			if (!err) {
 				err = meta0_remote_cache_refresh(m0_url);
