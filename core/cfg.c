@@ -117,6 +117,15 @@ oio_cfg_list_ns(void)
 }
 
 GHashTable*
+oio_cfg_parse_file(const char *path)
+{
+	GHashTable *ht = g_hash_table_new_full(g_str_hash, g_str_equal,
+			g_free, g_free);
+	config_load_file(ht, path);
+	return ht;
+}
+
+GHashTable*
 oio_cfg_parse(void)
 {
 	GHashTable *ht = g_hash_table_new_full(g_str_hash, g_str_equal,

@@ -226,7 +226,6 @@ grid_main_usage(void)
 	g_printerr("  -q         quiet mode, supress output on stdout stderr \n");
 	g_printerr("  -v         verbose mode, this activates stderr traces (default FALSE)\n");
 	g_printerr("  -p PATH    pidfile path, no pidfile if unset\n");
-	g_printerr("  -l PATH    activates the log4c emulation and load PATH as a log4c file\n");
 	g_printerr("  -s TOKEN   activates syslog traces (default FALSE)\n"
 			   "             with the given identifier\n");
 	g_printerr("  -O XOPT    set extra options.\n");
@@ -250,7 +249,6 @@ grid_main_cli_usage(void)
 	g_printerr("  -c         instead of starting the server, it dumps the current lve central configurable variables\n");
 	g_printerr("  -q         quiet mode, supress output on stdout stderr \n");
 	g_printerr("  -v         verbose mode, this activates stderr traces (default FALSE)\n");
-	g_printerr("  -l PATH    activates the log4c emulation and load PATH as a log4c file\n");
 	g_printerr("  -O XOPT    set extra options.\n");
 
 	g_printerr("\nXOPT'S with default value:\n");

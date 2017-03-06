@@ -263,6 +263,10 @@ void oio_cfg_set_handle (struct oio_cfg_handle_s *self);
 /* Create a cache handle that does caching. */
 struct oio_cfg_handle_s * oio_cfg_cache_create(gint64 delay);
 
+/* Create a caching configuration that just hold the value found in the file
+ * whose path has been given. */
+struct oio_cfg_handle_s * oio_cfg_cache_create_fragment(const char *path);
+
 #ifdef __cplusplus
 }
 #endif

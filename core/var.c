@@ -100,7 +100,7 @@ _register_record(const struct oio_var_record_s *rec)
 void oio_var_register_##Type( \
 		Type *p, Type def, \
 		const char *n, const char *d, \
-		Type min UNUSED, Type max UNUSED) { \
+		Type min, Type max) { \
 	struct oio_var_record_s rec = {0}; \
 	rec.type = OIO_VARTYPE_##Type; \
 	rec.name = n; \
@@ -108,6 +108,8 @@ void oio_var_register_##Type( \
 	rec.ptr.Field = p; \
 	rec.reg.Field = *(rec.ptr.Field); \
 	rec.def.Field = def; \
+	rec.min.Field = min; \
+	rec.max.Field = max; \
 	_register_record(&rec); \
 }
 
@@ -169,12 +171,6 @@ _record_set(struct oio_var_record_s *rec, union oio_var_default_u v)
 }
 
 static void
-_record_set_to_default(struct oio_var_record_s *rec)
-{
-	return _record_set(rec, rec->def);
-}
-
-static void
 _record_set_to_value(struct oio_var_record_s *rec, const char *value)
 {
 	gint64 i64;
@@ -188,32 +184,32 @@ _record_set_to_value(struct oio_var_record_s *rec, const char *value)
 			break;
 		case OIO_VARTYPE_guint:
 			u64 = g_ascii_strtoull(value, &end, 10);
-			if (!end)
+			if (!end || !*end)
 				v.u = MIN(u64, G_MAXUINT);
 			break;
 		case OIO_VARTYPE_guint32:
 			u64 = g_ascii_strtoull(value, &end, 10);
-			if (!end)
+			if (!end || !*end)
 				v.u32 = MIN(u64, G_MAXUINT32);
 			break;
 		case OIO_VARTYPE_guint64:
 			u64 = g_ascii_strtoull(value, &end, 10);
-			if (!end)
+			if (!end || !*end)
 				v.u64 = u64;
 			break;
 		case OIO_VARTYPE_gint:
 			i64 = g_ascii_strtoll(value, &end, 10);
-			if (!end)
+			if (!end || !*end)
 				v.i = CLAMP(i64, G_MININT, G_MAXINT);
 			break;
 		case OIO_VARTYPE_gint32:
 			i64 = g_ascii_strtoll(value, &end, 10);
-			if (!end)
+			if (!end || !*end)
 				v.i32 = CLAMP(i64, G_MININT32, G_MAXINT32);
 			break;
 		case OIO_VARTYPE_gint64:
 			i64 = g_ascii_strtoll(value, &end, 10);
-			if (!end)
+			if (!end || !*end)
 				v.i64 = i64;
 			break;
 		case OIO_VARTYPE_gdouble:
@@ -221,7 +217,7 @@ _record_set_to_value(struct oio_var_record_s *rec, const char *value)
 			break;
 		case OIO_VARTYPE_time_t:
 			u64 = g_ascii_strtoull(value, &end, 10);
-			if (!end)
+			if (!end || !*end)
 				v.t = u64;
 			break;
 		default:
@@ -241,10 +237,10 @@ oio_var_value_all_with_config(struct oio_cfg_handle_s *cfg, const char *ns)
 			continue;
 		struct oio_var_record_s *rec = l->data;
 		gchar *value = oio_cfg_handle_get(cfg, ns, rec->name);
-		if (!value)
-			_record_set_to_default(rec);
-		else
+		if (value) {
 			_record_set_to_value(rec, value);
+			g_free(value);
+		}
 	}
 	g_mutex_unlock(&var_lock);
 }

@@ -144,8 +144,13 @@ gchar* oio_cfg_get_value (const gchar *ns, const gchar *what);
  * successfully parsed, def is returned. */
 gboolean oio_cfg_get_bool (const char *ns, const char *what, gboolean def);
 
-/** List all the configuration variables locally set.  */
+/** List all the configuration variables locally set. This loads the system
+ * configuration and it overrides that configuration with any variable found
+ * in the local files. */
 GHashTable* oio_cfg_parse (void);
+
+/** List all the connfiguration variables in the given file */
+GHashTable* oio_cfg_parse_file (const char *path);
 
 /** List all the namespaces locally known */
 gchar** oio_cfg_list_ns (void);

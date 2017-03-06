@@ -132,6 +132,18 @@ static struct oio_cfg_handle_vtable_s VTABLE =
 };
 
 struct oio_cfg_handle_s *
+oio_cfg_cache_create_fragment(const char *path)
+{
+	struct oio_cfg_cache_handle_s *cache =
+			g_malloc0(sizeof(struct oio_cfg_cache_handle_s));
+	cache->vtable = &VTABLE;
+	g_rw_lock_init(&cache->lock);
+	cache->delay = 1 * G_TIME_SPAN_DAY;
+	cache->cfg = oio_cfg_parse_file(path);
+	return (struct oio_cfg_handle_s *) cache;
+}
+
+struct oio_cfg_handle_s *
 oio_cfg_cache_create(gint64 delay)
 {
 	struct oio_cfg_cache_handle_s *cache =

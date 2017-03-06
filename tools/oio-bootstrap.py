@@ -116,7 +116,7 @@ on_die=respawn
 enabled=true
 start_at_boot=false
 #command=${EXE} -s OIO,${NS},proxy -O Bind=${RUNDIR}/${NS}-proxy.sock ${IP}:${PORT} ${NS}
-command=${EXE} -O Cache=${PROXY_CACHE} -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
+command=${EXE} -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
 """
 
 template_rawx_service = """
@@ -707,6 +707,8 @@ zk_shuffled=${ZK_SHUFFLED}
 
 # Allow rawx to send chunk events (enabled by default)
 #rawx_events=yes
+
+proxy.cache.enabled=${PROXY_CACHE}
 """
 
 template_event_agent = """

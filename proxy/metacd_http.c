@@ -33,6 +33,8 @@ static GThread *admin_thread = NULL;
 static GThread *upstream_thread = NULL;
 static GThread *downstream_thread = NULL;
 
+static gboolean config_system = TRUE;
+static GSList *config_paths = NULL;
 static GSList *config_urlv = NULL;
 
 gchar *ns_name = NULL;
@@ -675,6 +677,12 @@ grid_main_get_options (void)
 			"An additional URL to bind to (might be used several time).\n"
 			"\t\tAccepts UNIX and INET sockets." },
 
+		{"SysConfig", OT_BOOL, {.b = &config_system},
+			"Load the system configuration and overload the central variables"},
+
+		{"Config", OT_LIST, {.lst = &config_paths},
+			"Load the given file and overload the central variables"},
+
 		{NULL, 0, {.i = 0}, NULL}
 	};
 
@@ -777,6 +785,9 @@ grid_main_specific_fini (void)
 
 	g_slist_free_full (config_urlv, g_free);
 	config_urlv = NULL;
+
+	g_slist_free_full (config_paths, g_free);
+	config_paths = NULL;
 
 	if (ns_conf) {
 		oio_cfg_handle_clean(ns_conf);
@@ -914,6 +925,20 @@ grid_main_configure (int argc, char **argv)
 
 	ns_conf = oio_cfg_cache_create(30 * G_TIME_SPAN_SECOND);
 	oio_cfg_set_handle(ns_conf);
+
+	/* load the system configuration */
+	if (config_system)
+		oio_var_value_all_with_config(ns_conf, ns_name);
+
+	/* override with specific files */
+	for (GSList *l = config_paths; l ; l = l->next) {
+		if (!l->data)
+			continue;
+		struct oio_cfg_handle_s *cfg =
+			oio_cfg_cache_create_fragment(l->data);
+		oio_var_value_all_with_config(cfg, ns_name);
+		oio_cfg_handle_clean(cfg);
+	}
 
 	_task_reload_csurl(NULL);
 	if (!csurl || !csurl_count) {
