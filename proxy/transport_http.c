@@ -597,7 +597,7 @@ http_notify_input(struct network_client_s *clt)
 		}
 
 		guint8 *data = NULL;
-		gsize data_size = (gsize)-1;
+		gsize data_size = G_MAXSIZE;
 
 		if (!data_slab_consume(slab, &data, &data_size)) {
 			data_slab_free(slab);
@@ -609,17 +609,17 @@ http_notify_input(struct network_client_s *clt)
 			continue;
 		}
 
-		oio_str_clean (&r.uid);
+		oio_str_clean(&r.uid);
 
 		struct http_parsing_result_s rc = http_parse(parser, data, data_size);
 
 		if (rc.status == HPRC_SUCCESS) {
 
-			// Important times are now known.$
-			// First, the last chunk of data received
+			// Important times are now known.
+			// First, the last chunk of data received;
 			// Second, the moment the real treatment start ... i.e. now!
 			r.tv_start = clt->time.evt_in;
-			r.tv_parsed = oio_ext_monotonic_time ();
+			r.tv_parsed = oio_ext_monotonic_time();
 
 			GError *err = http_manage_request(&r);
 
@@ -628,7 +628,8 @@ http_notify_input(struct network_client_s *clt)
 			r.request = r.context->request = http_request_create(r.client);
 
 			if (err) {
-				GRID_INFO("Request management error : %d %s", err->code, err->message);
+				GRID_INFO("Request management error: %d %s",
+						err->code, err->message);
 				g_clear_error(&err);
 				network_client_allow_input(clt, FALSE);
 				network_client_close_output(clt, 0);

@@ -13,12 +13,12 @@ class Meta0Client(ProxyClient):
         super(Meta0Client, self).__init__(conf, request_prefix="/admin",
                                           **kwargs)
 
-    def force(self, mapping):
+    def force(self, mapping, **kwargs):
         """
         Force the meta0 prefix mapping.
         The mapping may be partial to force only a subset of the prefixes.
         """
-        self._request('POST', "/meta0_force", data=mapping)
+        self._request('POST', "/meta0_force", data=mapping, **kwargs)
 
     def list(self):
         """Get the meta0 prefix mapping"""
@@ -48,12 +48,15 @@ class PrefixMapping(object):
         if digits is None:
             digits = 4
         self.digits = int(digits)
-        if (self.digits < 0):
+        if self.digits < 0:
             raise ConfigurationException("meta_digits must be >= 0")
-        if (self.digits > 4):
+        if self.digits > 4:
             raise ConfigurationException("meta_digits must be <= 4")
         for svc in self.cs.all_services("meta1"):
             self.services[svc["addr"]] = svc
+
+    def __nonzero__(self):
+        return bool(self.svc_by_pfx)
 
     def get_loc(self, svc, default=None):
         """
@@ -115,9 +118,9 @@ class PrefixMapping(object):
                 svc["prefixes"] = pfx_set
             self.svc_by_pfx[pfx] = services
 
-    def force(self):
+    def force(self, **kwargs):
         """Upload the current mapping to the meta0 services"""
-        self.m0.force(self.to_json().strip())
+        self.m0.force(self.to_json().strip(), **kwargs)
 
     def _find_services(self, known=None, lookup=None, max_lookup=50):
         """Call `lookup` to find `self.replicas` different services"""
@@ -138,9 +141,9 @@ class PrefixMapping(object):
     def find_services_random(self, known=None, **_kwargs):
         """Find `replicas` services, including the ones of `known`"""
         return self._find_services(
-                known,
-                (lambda known2:
-                 self.services[random.choice(self.services.keys())]))
+            known,
+            (lambda known2:
+             self.services[random.choice(self.services.keys())]))
 
     def find_services_less_prefixes(self, known=None, min_score=1, **_kwargs):
         """Find `replicas` services, including the ones of `known`"""
@@ -177,7 +180,7 @@ class PrefixMapping(object):
         Build `TOTAL_PREFIXES` assignations from scratch,
         using `strategy` to find new services.
         """
-
+        self.svc_by_pfx.clear()
         if not strategy:
             strategy = self.find_services_random
         for pfx_int in xrange(0, self.__class__.TOTAL_PREFIXES):
@@ -215,8 +218,8 @@ class PrefixMapping(object):
             s0, s1 = sorted(s0), sorted(s1)
             if s0 != s1:
                 raise Exception(
-                        "Group={0} Prefix={1} have different services" .
-                        format(p0, p1))
+                    "Group={0} Prefix={1} have different services" .
+                    format(p0, p1))
 
     def count_pfx_by_svc(self):
         """
@@ -235,13 +238,16 @@ class PrefixMapping(object):
         grand_total = 0
         for pfx, services in self.svc_by_pfx.iteritems():
             if len(services) < self.replicas:
-                print ("Prefix %s is managed by only %d services (%d required)"
-                       % (pfx, len(services), self.replicas))
-                print [x["addr"] for x in services]
+                if self.logger:
+                    self.logger.error(
+                        "Prefix %s is managed by %d services, %d required",
+                        pfx, len(services), self.replicas)
+                    self.logger.error("%s", [x["addr"] for x in services])
                 error = True
             grand_total += len(services)
-        print ("Grand total: %d (expected: %d)" %
-               (grand_total, self.TOTAL_PREFIXES * self.replicas))
+        if self.logger:
+            self.logger.info("Grand total: %d (expected: %d)",
+                             grand_total, self.TOTAL_PREFIXES * self.replicas)
         return not error
 
     def decommission(self, svc, pfx_to_remove=None, strategy=None):
@@ -276,11 +282,11 @@ class PrefixMapping(object):
             return
 
         if self.digits != 4:
-            # TODO implement equilibration when meta1_digits is < 4
+            # TODO: implement balancing when meta1_digits is < 4
             if self.logger:
-                self.logger.info("Prefixes equilibration temporarily " +
+                self.logger.info("Prefixes balancing temporarily " +
                                  "disabled for installations with " +
-                                 "meta1_digits different than 4")
+                                 "meta1_digits different from 4")
             return
 
         loops = 0
@@ -292,9 +298,9 @@ class PrefixMapping(object):
             self.logger.info("META1 Digits = %d", self.digits)
             self.logger.info("Replicas = %d", self.replicas)
             self.logger.info(
-                    "Scored positively = %d",
-                    len([x for x in self.services.itervalues()
-                        if self.get_score(x) > 0]))
+                "Scored positively = %d",
+                len([x for x in self.services.itervalues()
+                     if self.get_score(x) > 0]))
             self.logger.info("Ideal number of prefixes per meta1: %d",
                              ideal_pfx_by_svc)
         candidates = self.services.values()
@@ -315,5 +321,5 @@ class PrefixMapping(object):
                 else:
                     loops += 1  # safeguard against infinite loops
         if self.logger:
-            self.logger.info("Rebalance moved %d prefixes",
+            self.logger.info("%s prefixes moved",
                              len(moved_prefixes))

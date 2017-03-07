@@ -84,13 +84,13 @@ meta0_remote_cache_reset (const char *m0, gboolean local)
 }
 
 GError*
-meta0_remote_force(const char *m0, const gchar *mapping)
+meta0_remote_force(const char *m0, const guint8 *mapping, gsize mapping_len)
 {
-	if (!mapping || !*mapping)
+	if (!mapping || !mapping_len || !*mapping)
 		return NEWERROR(CODE_BAD_REQUEST, "Empty JSON mapping");
 
 	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_FORCE);
-	metautils_message_set_BODY(request, mapping, strlen(mapping));
+	metautils_message_set_BODY(request, mapping, mapping_len);
 	return _m0_remote_no_return(m0, message_marshall_gba_and_clean(request));
 }
 

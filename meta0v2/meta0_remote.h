@@ -26,7 +26,7 @@ GError * meta0_remote_get_meta1_all(const char *m0, GSList **out);
 GError * meta0_remote_get_meta1_one(const char *m0, const guint8 *prefix, GSList **out);
 GError * meta0_remote_cache_refresh(const char *m0);
 GError * meta0_remote_cache_reset(const char *m0, gboolean local);
-GError * meta0_remote_force(const char *m0, const gchar *mapping);
+GError * meta0_remote_force(const char *m0, const guint8 *mapping, gsize mapping_len);
 GError * meta0_remote_get_meta1_info(const char *m0, gchar ***out);
 GError * meta0_remote_destroy_meta1ref(const char *m0, const char *urls);
 GError * meta0_remote_destroy_meta0zknode(const char *m0, const char *urls);
