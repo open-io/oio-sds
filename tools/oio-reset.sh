@@ -167,7 +167,7 @@ wait_for_srvtype "(meta0|meta1)" $((1 + COUNT))
 timestamp
 
 openio \
-	--oio-ns "$NS" -v directory bootstrap \
+	--oio-ns "$NS" -v directory bootstrap --check \
 	--replicas $(${PREFIX}-test-config.py -v directory_replicas)
 
 timestamp
