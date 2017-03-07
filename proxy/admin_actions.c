@@ -23,41 +23,45 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "actions.h"
 
 static GString* _m0_mapping_from_m1_list(GSList *m1_list) {
-	gboolean first = TRUE;
 	GString *out = g_string_sized_new(65536 * 20);
-	GPtrArray *array = meta0_utils_list_to_array(m1_list);
 
 	g_string_append_c(out, '{');
-	for (guint i = 0; i < array->len; i++) {
-		gchar **v;
-		if ((v = array->pdata[i]) != NULL) {
-			if (!first)
-				g_string_append_c(out, ',');
-			guint16 p = i;
-			gboolean first2 = TRUE;
-			g_string_append_printf(out, "\"%04X\":[", p);
-			for (gchar **m1 = v; m1 && *m1; m1++) {
-				if (!first2)
+	if (m1_list) {
+		gboolean first = TRUE;
+		GPtrArray *array = meta0_utils_list_to_array(m1_list);
+		for (guint i = 0; i < array->len; i++) {
+			gchar **v;
+			if ((v = array->pdata[i]) != NULL) {
+				if (!first)
 					g_string_append_c(out, ',');
-				first2 = FALSE;
-				g_string_append_printf(out, "\"%s\"", *m1);
+				guint16 p = i;
+				gboolean first2 = TRUE;
+				g_string_append_printf(out, "\"%04X\":[", p);
+				for (gchar **m1 = v; m1 && *m1; m1++) {
+					if (!first2)
+						g_string_append_c(out, ',');
+					first2 = FALSE;
+					g_string_append_printf(out, "\"%s\"", *m1);
+				}
+				g_string_append_c(out, ']');
+				first = FALSE;
 			}
-			g_string_append_c(out, ']');
-			first = FALSE;
 		}
+		meta0_utils_array_clean(array);
 	}
 	g_string_append_c(out, '}');
 
-	meta0_utils_array_clean(array);
 	return out;
 }
 
-// TODO: factorize the two following functions
-enum http_rc_e action_admin_meta0_list(struct req_args_s *args) {
+typedef GError*(*meta0_func)(const char *m0_url, gpointer udata);
+
+static GError*
+_action_admin_meta0_common(struct req_args_s *args,
+		meta0_func func, gpointer udata)
+{
 	GError *err = NULL;
 	GSList *m0_lst = NULL;
-	GSList *m1_lst = NULL;
-	GString *json = NULL;
 
 	err = conscience_get_services(NS(), NAME_SRVTYPE_META0, FALSE, &m0_lst);
 	if (!err) {
@@ -67,7 +71,7 @@ enum http_rc_e action_admin_meta0_list(struct req_args_s *args) {
 			gchar m0_url[STRLEN_ADDRINFO] = {0};
 			grid_addrinfo_to_string(&(m0->addr), m0_url, sizeof(m0_url));
 
-			err = meta0_remote_get_meta1_all(m0_url, &m1_lst);
+			err = func(m0_url, udata);
 
 			if (!err || !CODE_IS_NETWORK_ERROR(err->code))
 				break;
@@ -75,7 +79,17 @@ enum http_rc_e action_admin_meta0_list(struct req_args_s *args) {
 		g_slist_free_full(m0_lst, (GDestroyNotify)service_info_clean);
 	}
 
-	if (m1_lst) {
+	return err;
+}
+
+enum http_rc_e
+action_admin_meta0_list(struct req_args_s *args) {
+	GSList *m1_lst = NULL;
+	GString *json = NULL;
+	GError *err = _action_admin_meta0_common(args,
+			(meta0_func)meta0_remote_get_meta1_all, &m1_lst);
+
+	if (!err) {
 		json = _m0_mapping_from_m1_list(m1_lst);
 		meta0_utils_list_clean(m1_lst);
 		return _reply_json(args, HTTP_CODE_OK, "OK", json);
@@ -83,31 +97,21 @@ enum http_rc_e action_admin_meta0_list(struct req_args_s *args) {
 	return _reply_common_error(args, err);
 }
 
-enum http_rc_e action_admin_meta0_force(struct req_args_s *args) {
-	GError *err = NULL;
-	GSList *m0_lst = NULL;
+static GError*
+_wrap_meta0_remote_force(const char *m0_url, GByteArray *udata)
+{
+	GError *err = meta0_remote_force(m0_url, udata->data, udata->len);
+	if (!err)
+		err = meta0_remote_cache_refresh(m0_url);
+	return err;
+}
 
-	err = conscience_get_services(NS(), NAME_SRVTYPE_META0, FALSE, &m0_lst);
-	if (!err) {
-		for (GSList *l = m0_lst; l; l = l->next) {
-			g_clear_error(&err);
-			service_info_t *m0 = l->data;
-			gchar m0_url[STRLEN_ADDRINFO] = {0};
-			grid_addrinfo_to_string(&(m0->addr), m0_url, sizeof(m0_url));
+enum http_rc_e
+action_admin_meta0_force(struct req_args_s *args) {
+	GError *err = _action_admin_meta0_common(args,
+			(meta0_func)_wrap_meta0_remote_force, args->rq->body);
 
-			err = meta0_remote_force(m0_url,
-					args->rq->body->data, args->rq->body->len);
-
-			if (!err) {
-				err = meta0_remote_cache_refresh(m0_url);
-				break;
-			} else if (!CODE_IS_NETWORK_ERROR(err->code)) {
-				break;
-			}
-		}
-		g_slist_free_full(m0_lst, (GDestroyNotify)service_info_clean);
-	}
-	if (err)
-		return _reply_common_error(args, err);
-	return _reply_nocontent(args);
+	if (!err)
+		return _reply_nocontent(args);
+	return _reply_common_error(args, err);
 }
