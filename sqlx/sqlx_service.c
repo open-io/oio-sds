@@ -966,6 +966,26 @@ _task_reconfigure_events (gpointer p)
 	}
 }
 
+static gboolean
+_reload_srvtype(struct oio_lb_world_s *lbw, const char *srvtype)
+{
+	GSList *list_srv = NULL;
+
+	GError *err = conscience_get_services(SRV.ns_name, srvtype, FALSE, &list_srv);
+	if (err) {
+		GRID_WARN("Gridagent/conscience error: Failed to list the services"
+				" of type [%s]: code=%d %s", srvtype, err->code,
+				err->message);
+		g_clear_error(&err);
+		return FALSE;
+	}
+
+	oio_lb_world__feed_service_info_list(lbw, list_srv);
+
+	g_slist_free_full(list_srv, (GDestroyNotify)service_info_clean);
+	return TRUE;
+}
+
 GError*
 sqlx_reload_lb_service_types(struct oio_lb_world_s *lbw, struct oio_lb_s *lb,
 		GSList *list_srvtypes)
@@ -976,36 +996,19 @@ sqlx_reload_lb_service_types(struct oio_lb_world_s *lbw, struct oio_lb_s *lb,
 	service_update_reconfigure(pols, pols_cfg);
 	g_free(pols_cfg);
 
-	gboolean _reload_srvtype(const gchar *ns, const gchar *srvtype) {
-		GSList *list_srv = NULL;
-		err = conscience_get_services(ns, srvtype, FALSE, &list_srv);
-		if (err) {
-			GRID_WARN("Gridagent/conscience error: Failed to list the services"
-					" of type [%s]: code=%d %s", srvtype, err->code,
-					err->message);
-			g_clear_error(&err);
-			return FALSE;
-		}
-
-		oio_lb_world__feed_service_info_list(lbw, list_srv);
-
-		if (!oio_lb__has_pool(lb, srvtype)) {
-			GRID_DEBUG("Automatically creating pool for service type [%s]",
-					srvtype);
-			oio_lb__force_pool(lb,
-					oio_lb_pool__from_service_policy(lbw, srvtype, pols));
-		}
-
-
-		g_slist_free_full(list_srv, (GDestroyNotify)service_info_clean);
-		return TRUE;
-	}
-
 	guint errors = 0;
 	for (GSList *l = list_srvtypes; l; l = l->next) {
 		if (!l->data)
 			continue;
-		if (!_reload_srvtype(SRV.ns_name, l->data))
+
+		const char * srvtype = l->data;
+		if (!oio_lb__has_pool(lb, srvtype)) {
+			GRID_DEBUG("Creating pool for service type [%s]", srvtype);
+			oio_lb__force_pool(lb, oio_lb_pool__from_service_policy(
+						lbw, srvtype, pols));
+		}
+
+		if (!_reload_srvtype(lbw, srvtype))
 			++errors;
 	}
 
@@ -1019,14 +1022,29 @@ _reload_lb_world(struct oio_lb_world_s *lbw, struct oio_lb_s *lb,
 {
 	if (flush)
 		oio_lb_world__flush(lbw);
-	GSList *list_srvtypes = NULL;
-	GError *err = conscience_get_types(SRV.ns_name, &list_srvtypes);
-	if (err)
-		g_prefix_error(&err, "LB pool reload error: ");
-	else
-		err = sqlx_reload_lb_service_types(lbw, lb, list_srvtypes);
-	g_slist_free_full(list_srvtypes, g_free);
 
+	GError *err = NULL;
+	GSList *list_srvtypes = NULL;
+
+	if (SRV.srvtypes[0]) {
+		gchar **types = g_strsplit(SRV.srvtypes, ",", -1);
+		for (gchar **p=types; p && *p ;++p)
+			list_srvtypes = g_slist_prepend(list_srvtypes, *p);
+		g_free(types);  /* internal pointers reused! */
+	} else {
+		err = conscience_get_types(SRV.ns_name, &list_srvtypes);
+		if (err)
+			g_prefix_error(&err, "LB pool reload error: ");
+	}
+
+	if (!err && list_srvtypes) {
+		oio_lb_world__reload_pools(lbw, lb, SRV.nsinfo);
+		err = sqlx_reload_lb_service_types(lbw, lb, list_srvtypes);
+		oio_lb_world__reload_storage_policies(lbw, lb, SRV.nsinfo);
+		oio_lb_world__debug(lbw);
+	}
+
+	g_slist_free_full(list_srvtypes, g_free);
 	return err;
 }
 
@@ -1041,7 +1059,6 @@ sqlx_task_reload_lb (struct sqlx_service_s *ss)
 	if (ADAPTIVE_PERIOD_SKIP())
 		return;
 
-	oio_lb_world__reload_pools(ss->lb_world, ss->lb, SRV.nsinfo);
 	GError *err = _reload_lb_world(ss->lb_world, ss->lb, FALSE);
 	if (err) {
 		GRID_WARN("Failed to reload LB world: %s", err->message);
@@ -1049,7 +1066,6 @@ sqlx_task_reload_lb (struct sqlx_service_s *ss)
 	} else {
 		ADAPTIVE_PERIOD_ONSUCCESS(10);
 	}
-	oio_lb_world__debug(ss->lb_world);
 }
 
 /* Specific requests handlers ----------------------------------------------- */
