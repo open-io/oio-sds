@@ -46,37 +46,6 @@ _task_reconfigure_m2(gpointer p)
 	meta2_backend_configure_nsinfo(m2, PSRV(p)->nsinfo);
 }
 
-static void
-_task_reload_m2_lb(gpointer p)
-{
-	ADAPTIVE_PERIOD_DECLARE();
-	if (!PSRV(p)->nsinfo)
-		return;
-
-	if (ADAPTIVE_PERIOD_SKIP())
-		return;
-
-	oio_lb_world__reload_pools(PSRV(p)->lb_world, PSRV(p)->lb,
-			PSRV(p)->nsinfo);
-
-	/* In meta2, we are only interrested in rawx services */
-	GSList *svctypes = g_slist_prepend(NULL, NAME_SRVTYPE_RAWX);
-	GError *err = sqlx_reload_lb_service_types(PSRV(p)->lb_world, PSRV(p)->lb,
-			svctypes);
-	if (err) {
-		GRID_WARN("Failed to reload "NAME_SRVTYPE_RAWX" services: %s",
-				err->message);
-		g_clear_error(&err);
-	} else {
-		ADAPTIVE_PERIOD_ONSUCCESS(10);
-	}
-	g_slist_free(svctypes);
-
-	oio_lb_world__reload_storage_policies(PSRV(p)->lb_world,
-			PSRV(p)->lb, PSRV(p)->nsinfo);
-	oio_lb_world__debug(PSRV(p)->lb_world);
-}
-
 static gchar **
 filter_services(struct sqlx_service_s *ss,
 		gchar **s, gint64 seq, const gchar *type)
@@ -202,7 +171,10 @@ _post_config(struct sqlx_service_s *ss)
 		return FALSE;
 	}
 
-	// prepare a meta2 backend
+	/* Tell the meta2 is interested only by RAWX services */
+	g_strlcpy(ss->srvtypes, NAME_SRVTYPE_RAWX, sizeof(ss->srvtypes));
+
+	/* prepare a meta2 backend */
 	err = meta2_backend_init(&m2, ss->repository, ss->ns_name, ss->lb, ss->resolver);
 	if (NULL != err) {
 		GRID_WARN("META2 backend init failure: (%d) %s", err->code, err->message);
@@ -222,10 +194,10 @@ _post_config(struct sqlx_service_s *ss)
 			meta2_gridd_get_v2_requests(), m2);
 
 	/* Register few meta2 tasks */
+	grid_task_queue_register(ss->gtq_reload, 1,
+			(GDestroyNotify)sqlx_task_reload_lb, NULL, ss);
 	grid_task_queue_register(ss->gtq_reload, 5,
 			_task_reconfigure_m2, NULL, ss);
-	grid_task_queue_register(ss->gtq_reload, 1,
-			(GDestroyNotify)_task_reload_m2_lb, NULL, ss);
 
 	m2->notifier = ss->events_queue;
 
