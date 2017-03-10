@@ -106,6 +106,9 @@ void oio_lb_world__feed_slot (struct oio_lb_world_s *self, const char *slot,
 struct oio_lb_pool_s * oio_lb_world__create_pool (
 		struct oio_lb_world_s *world, const char *name);
 
+void oio_lb_world__increment_generation(struct oio_lb_world_s *self);
+
+void oio_lb_world__purge_old_generations(struct oio_lb_world_s *self);
 
 /* Set a mask (hexadecimal string, 64b) to compute distance between items */
 #define OIO_LB_OPT_MASK           "mask"

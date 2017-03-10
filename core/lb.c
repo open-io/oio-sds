@@ -27,6 +27,7 @@ License along with this library.
 #include "oiolog.h"
 #include "internals.h"
 
+typedef guint32 generation_t;
 
 // actually not prime but OK
 #define OIO_LB_SHUFFLE_JUMP ((1UL << 31) - 1)
@@ -92,6 +93,7 @@ oio_lb_pool__get_item(struct oio_lb_pool_s *self,
 
 /* -------------------------------------------------------------------------- */
 
+/* A service item, as known by the world. */
 struct _lb_item_s
 {
 	oio_location_t location;
@@ -100,10 +102,15 @@ struct _lb_item_s
 	gchar id[];
 };
 
+/* An indirection to the service item, as known by a slot.
+ * This indirection is necessary to let the slot give its own weight to each
+ * item, independently of the presence of the item in others slots.
+ */
 struct _slot_item_s
 {
-	oio_weight_acc_t acc_weight;
 	struct _lb_item_s *item;
+	oio_weight_acc_t acc_weight;
+	generation_t generation;
 };
 
 /* Set of services matching the same macro "everything-but-the-location"
@@ -120,6 +127,8 @@ struct oio_lb_slot_s
 
 	gchar *name;
 
+	generation_t generation;
+
 	/* Does the slot need to be re-handled to computed accumulated scores.
 	   When set, the slot cannot be used for polling elements. */
 	guint8 flag_dirty_weights : 1;
@@ -131,20 +140,35 @@ struct oio_lb_slot_s
 	guint8 flag_rehash_on_update : 1;
 };
 
-/* All the load-balancing information */
+/* All the load-balancing information:
+ * - all the services in the 'world'
+ * - all the slots that gather services with the same characteristics
+ */
 struct oio_lb_world_s
 {
 	GRWLock lock;
 	GTree *slots;
 	GTree *items;
+	generation_t generation;
 };
 
+/* A pool describes a preset configuration for the polling of several services.
+ * So, a pool is composed of several members:
+ * - the set of targets that must bring a service in the result set
+ * - a pointer to the world to map the targets into LB slots.
+ * - the bitwise mask that tells how close the service are, when the mask is
+ *   applied to their lcoations.
+ */
 struct oio_lb_pool_LOCAL_s
 {
 	struct oio_lb_pool_vtable_s *vtable;
 	gchar *name;
 
+	/* A back-pointer to the world the current 'pool' is valid on */
 	struct oio_lb_world_s *world;
+
+	/* An array with the name of all the targets of the pool, where a target is
+	 * a coma-separated list of 'slot' names (the slots come from the 'world'). */
 	gchar ** targets;
 
 	oio_location_t location_mask;
@@ -691,18 +715,18 @@ oio_lb_local__create_world (void)
 	return self;
 }
 
+static gboolean
+_slot_flush_cb(gpointer k UNUSED, gpointer value, gpointer u UNUSED)
+{
+	_slot_flush((struct oio_lb_slot_s*)value);
+	return FALSE;
+}
+
 void
 oio_lb_world__flush(struct oio_lb_world_s *self)
 {
 	if (!self)
 		return;
-
-	gboolean _slot_flush_cb(gpointer k UNUSED, gpointer value, gpointer u UNUSED)
-	{
-		struct oio_lb_slot_s *slot = value;
-		_slot_flush(slot);
-		return FALSE;
-	}
 
 	g_rw_lock_writer_lock(&self->lock);
 
@@ -891,6 +915,8 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 	if (!slot)
 		return;
 
+	slot->generation = self->generation;
+
 	/* ensure the item is known by the world */
 	struct _lb_item_s *item0 = g_tree_lookup (self->items, item->id);
 	if (!item0) {
@@ -914,7 +940,7 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 			/* Linear search from the beginning */
 			i0 = 0;
 		} else if (slot->items->len) {
-			/* Dichotomic search, faster when items are sorted */
+			/* Binary search, faster when items are sorted */
 			i0 = _search_first_at_location (slot->items, item0->location,
 					0, slot->items->len-1);
 		}
@@ -928,9 +954,12 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 					if (item0->weight <= 0) {
 						g_array_remove_index_fast(slot->items, i);
 						slot->flag_dirty_order = 1;
-					} else if (item0->location != item->location) {
-						item0->location = item->location;
-						slot->flag_dirty_order = 1;
+					} else {
+						SLOT_ITEM(slot,i).generation = self->generation;
+						if (item0->location != item->location) {
+							item0->location = item->location;
+							slot->flag_dirty_order = 1;
+						}
 					}
 				}
 			}
@@ -940,7 +969,7 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 
 	if (!found && item0->weight > 0) {
 		++ item0->refcount;
-		struct _slot_item_s fake = {0, item0};
+		struct _slot_item_s fake = {item0, 0, self->generation};
 		g_array_append_vals (slot->items, &fake, 1);
 		item0 = NULL;
 		found = TRUE;
@@ -986,6 +1015,90 @@ oio_lb_world__debug (struct oio_lb_world_s *self)
 	g_rw_lock_reader_lock(&self->lock);
 	g_tree_foreach (self->slots, (GTraverseFunc)_on_slot, NULL);
 	g_rw_lock_reader_unlock(&self->lock);
+}
+
+void
+oio_lb_world__increment_generation(struct oio_lb_world_s *self)
+{
+	EXTRA_ASSERT(self != NULL);
+	self->generation ++;
+}
+
+static inline guint
+absolute_delta(register const guint32 u0, register const guint32 u1)
+{
+	return MIN((u1-u0),(u0-u1));
+}
+
+static void
+_world_purge_slot_items(struct oio_lb_world_s *self, guint32 age)
+{
+	gboolean _on_slot_purge_inside(gpointer k UNUSED,
+			struct oio_lb_slot_s *slot, struct oio_lb_world_s *world) {
+
+		guint pre = slot->items->len;
+		for (guint i=0; i<slot->items->len ;++i) {
+			struct _slot_item_s *si = &SLOT_ITEM(slot, i);
+			if (absolute_delta(si->generation, world->generation) > age) {
+				EXTRA_ASSERT(si->item->refcount > 0);
+				-- si->item->refcount;
+				g_array_remove_index_fast(slot->items, i);
+				-- i;
+			}
+		}
+
+		if (pre != slot->items->len) {
+			GRID_DEBUG("%u services removed from %s (%u remain)",
+					pre - slot->items->len, slot->name, slot->items->len);
+			slot->flag_dirty_weights = 1;
+			slot->flag_dirty_order = 1;
+		}
+
+		return FALSE;
+	}
+
+	g_rw_lock_writer_lock(&self->lock);
+	g_tree_foreach(
+			self->slots, (GTraverseFunc)_on_slot_purge_inside, self);
+	g_rw_lock_writer_unlock(&self->lock);
+}
+
+static void
+_world_purge_slots(struct oio_lb_world_s *self, guint32 age)
+{
+	GSList *slots = NULL;
+
+	gboolean _on_slot_extract(gpointer k UNUSED, struct oio_lb_slot_s *slot,
+			gpointer i UNUSED) {
+		if (absolute_delta(slot->generation, self->generation) > age)
+			slots = g_slist_prepend(slots, slot);
+		return FALSE;
+	}
+
+	g_rw_lock_writer_lock(&self->lock);
+	g_tree_foreach(self->slots, (GTraverseFunc)_on_slot_extract, &slots);
+	for (GSList *l=slots; l ;l=l->next) {
+		struct oio_lb_slot_s *slot = l->data;
+		_slot_flush(slot);
+		GRID_DEBUG("LB removed slot %s", slot->name);
+		g_tree_remove(self->slots, slot->name);
+	}
+	g_rw_lock_writer_unlock(&self->lock);
+
+	g_slist_free(slots);
+}
+
+void
+oio_lb_world__purge_old_generations(struct oio_lb_world_s *self)
+{
+	EXTRA_ASSERT(self != NULL);
+
+	/* TODO(jfs): make that magic numbers become a variable */
+	_world_purge_slot_items(self, 0);
+	_world_purge_slots(self, 0);
+
+	/* it is currently highly probable a service that disappeared will come
+	 * back soon. So we don't purge the items yet. */
 }
 
 
@@ -1077,3 +1190,4 @@ oio_lb__get_item_from_pool(struct oio_lb_s *lb, const char *name,
 	g_rw_lock_reader_unlock(&lb->lock);
 	return res;
 }
+
