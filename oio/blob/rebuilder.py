@@ -15,6 +15,7 @@
 # License along with this library.
 
 import time
+from datetime import datetime
 from socket import gethostname
 
 from oio.common import exceptions as exc
@@ -97,8 +98,8 @@ class BlobRebuilderWorker(object):
                     'elapsed=%(total).2f '
                     '(rebuilder: %(rebuilder_rate).2f%%)' % {
                         'volume': self.volume,
-                        'start_time': time.strftime(
-                            "%Y-%m-%d_%H:%M:%S", time.localtime(report_time)),
+                        'start_time': datetime.fromtimestamp(
+                            int(report_time)).isoformat(),
                         'passes': self.passes,
                         'errors': self.errors,
                         'c_rate': self.passes / (now - report_time),
