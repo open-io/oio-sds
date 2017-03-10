@@ -82,7 +82,7 @@ static gpointer _worker_clients (gpointer p);
 static const struct gridd_request_descr_s * _get_service_requests (void);
 
 static GError* _reload_lb_world(
-		struct oio_lb_world_s *lbw, struct oio_lb_s *lb, gboolean flush);
+		struct oio_lb_world_s *lbw, struct oio_lb_s *lb);
 
 // Static variables
 static struct sqlx_service_s SRV = {{0}};
@@ -966,86 +966,124 @@ _task_reconfigure_events (gpointer p)
 	}
 }
 
-static gboolean
-_reload_srvtype(struct oio_lb_world_s *lbw, const char *srvtype)
+static void
+_reload_lb_service_types(struct oio_lb_world_s *lbw, struct oio_lb_s *lb,
+		gchar **srvtypes, GPtrArray *tabsrv, GPtrArray *taberr)
 {
-	GSList *list_srv = NULL;
-
-	GError *err = conscience_get_services(SRV.ns_name, srvtype, FALSE, &list_srv);
-	if (err) {
-		GRID_WARN("Gridagent/conscience error: Failed to list the services"
-				" of type [%s]: code=%d %s", srvtype, err->code,
-				err->message);
-		g_clear_error(&err);
-		return FALSE;
-	}
-
-	oio_lb_world__feed_service_info_list(lbw, list_srv);
-
-	g_slist_free_full(list_srv, (GDestroyNotify)service_info_clean);
-	return TRUE;
-}
-
-GError*
-sqlx_reload_lb_service_types(struct oio_lb_world_s *lbw, struct oio_lb_s *lb,
-		GSList *list_srvtypes)
-{
-	GError *err = NULL;
 	struct service_update_policies_s *pols = service_update_policies_create();
 	gchar *pols_cfg = gridcluster_get_service_update_policy(SRV.nsinfo);
 	service_update_reconfigure(pols, pols_cfg);
 	g_free(pols_cfg);
 
-	guint errors = 0;
-	for (GSList *l = list_srvtypes; l; l = l->next) {
-		if (!l->data)
-			continue;
-
-		const char * srvtype = l->data;
+	for (guint i=0; srvtypes[i] ;++i) {
+		const char * srvtype = srvtypes[i];
 		if (!oio_lb__has_pool(lb, srvtype)) {
 			GRID_DEBUG("Creating pool for service type [%s]", srvtype);
-			oio_lb__force_pool(lb, oio_lb_pool__from_service_policy(
-						lbw, srvtype, pols));
+			oio_lb__force_pool(lb,
+					oio_lb_pool__from_service_policy( lbw, srvtype, pols));
 		}
 
-		if (!_reload_srvtype(lbw, srvtype))
-			++errors;
+		if (!taberr->pdata[i])
+			oio_lb_world__feed_service_info_list(lbw, tabsrv->pdata[i]);
 	}
 
 	service_update_policies_destroy(pols);
-	return err;
+}
+
+static void
+_free_list_of_services(gpointer p)
+{
+	if (!p)
+		return;
+	g_slist_free_full((GSList*)p, (GDestroyNotify)service_info_clean);
+}
+
+static void
+_free_error(gpointer p)
+{
+	if (!p)
+		return;
+	g_error_free((GError*)p);
 }
 
 static GError*
-_reload_lb_world(struct oio_lb_world_s *lbw, struct oio_lb_s *lb,
-		gboolean flush)
+_reload_lb_world(struct oio_lb_world_s *lbw, struct oio_lb_s *lb)
 {
-	if (flush)
-		oio_lb_world__flush(lbw);
+	gchar **srvtypes = NULL;
+	GPtrArray *tabsrv = NULL, *taberr = NULL;
+	gboolean any_loading_error = FALSE;
 
-	GError *err = NULL;
-	GSList *list_srvtypes = NULL;
-
-	if (SRV.srvtypes[0]) {
-		gchar **types = g_strsplit(SRV.srvtypes, ",", -1);
-		for (gchar **p=types; p && *p ;++p)
-			list_srvtypes = g_slist_prepend(list_srvtypes, *p);
-		g_free(types);  /* internal pointers reused! */
+	/* Load the list of service types */
+	if (SRV.srvtypes[0] && SRV.srvtypes[0] != '!') {
+		srvtypes = g_strsplit(SRV.srvtypes, ",", -1);
 	} else {
-		err = conscience_get_types(SRV.ns_name, &list_srvtypes);
-		if (err)
+		GSList *list_srvtypes = NULL;
+		GError *err = conscience_get_types(SRV.ns_name, &list_srvtypes);
+		if (err) {
 			g_prefix_error(&err, "LB pool reload error: ");
+			return err;
+		}
+		if (!SRV.srvtypes[0])
+			srvtypes = (gchar**) metautils_list_to_array(list_srvtypes);
+		else {
+			/* the application gives an exclusion list */
+			EXTRA_ASSERT(SRV.srvtypes[0] == '!');
+			srvtypes = g_malloc0(sizeof(void*) *
+					(1 + g_slist_length(list_srvtypes)));
+			guint i = 0;
+			for (GSList *l=list_srvtypes; l ;l=l->next) {
+				const char * srvtype = l->data;
+				if (!g_strstr_len(SRV.srvtypes+1, -1, srvtype)) {
+					/* service type not excluded */
+					srvtypes[i++] = l->data;
+				} else {
+					g_free(l->data);
+				}
+			}
+		}
+		g_slist_free(list_srvtypes);
 	}
 
-	if (!err && list_srvtypes) {
+	EXTRA_ASSERT(srvtypes != NULL);
+	if (!*srvtypes) {
+		g_strfreev(srvtypes);
+		return NULL;
+	}
+
+	/* Now preload all the service of these types */
+	tabsrv = g_ptr_array_new_full(8, _free_list_of_services);
+	taberr = g_ptr_array_new_full(8, _free_error);
+	for (char **pst=srvtypes; *pst ;++pst) {
+		const char * srvtype = *pst;
+		GSList *srv = NULL;
+		GError *e = conscience_get_services(SRV.ns_name, srvtype, FALSE, &srv);
+		if (e) {
+			GRID_WARN("Failed to load the list of [%s] in NS=%s", SRV.ns_name, srvtype);
+			any_loading_error = TRUE;
+		}
+		g_ptr_array_add(tabsrv, srv);
+		g_ptr_array_add(taberr, e);
+	}
+
+	/* Now refresh the service pools. We don't trigger any purge if we
+	 * encountered any error while loading the list of services, because
+	 * the world exposes a global generation number to manage expirations,
+	 * and because without service, we have no way (yet) to find *all* the
+	 * slots concerned by any service of a given type. */
+	if (*srvtypes) {
+		if (!any_loading_error)
+			oio_lb_world__increment_generation(lbw);
 		oio_lb_world__reload_pools(lbw, lb, SRV.nsinfo);
-		err = sqlx_reload_lb_service_types(lbw, lb, list_srvtypes);
+		_reload_lb_service_types(lbw, lb, srvtypes, tabsrv, taberr);
 		oio_lb_world__reload_storage_policies(lbw, lb, SRV.nsinfo);
-		oio_lb_world__debug(lbw);
+		if (!any_loading_error)
+			oio_lb_world__purge_old_generations(lbw);
 	}
 
-	g_slist_free_full(list_srvtypes, g_free);
-	return err;
+	if (taberr) g_ptr_array_free(taberr, TRUE);
+	if (tabsrv) g_ptr_array_free(tabsrv, TRUE);
+	g_strfreev(srvtypes);
+	return NULL;
 }
 
 void
@@ -1055,11 +1093,13 @@ sqlx_task_reload_lb (struct sqlx_service_s *ss)
 	ADAPTIVE_PERIOD_DECLARE();
 
 	if (!grid_main_is_running ())
-		return;
+		return;  /* stopped */
+	if (!SRV.nsinfo || !SRV.nsinfo)
+		return;  /* not ready */
 	if (ADAPTIVE_PERIOD_SKIP())
 		return;
 
-	GError *err = _reload_lb_world(ss->lb_world, ss->lb, FALSE);
+	GError *err = _reload_lb_world(ss->lb_world, ss->lb);
 	if (err) {
 		GRID_WARN("Failed to reload LB world: %s", err->message);
 		g_clear_error(&err);
@@ -1077,7 +1117,9 @@ _dispatch_RELOAD (struct gridd_reply_ctx_s *reply, gpointer pss, gpointer i)
 	struct sqlx_service_s *ss = pss;
 	g_assert (ss != NULL);
 
-	GError *err = _reload_lb_world(ss->lb_world, ss->lb, TRUE);
+	oio_lb_world__flush(ss->lb_world);
+
+	GError *err = _reload_lb_world(ss->lb_world, ss->lb);
 	if (err)
 		reply->send_error (0, err);
 	else

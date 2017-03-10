@@ -288,7 +288,9 @@ GError * KV_read_properties (struct json_object *j, gchar ***out,
  * @see KV_read_properties() */
 GError * KV_read_usersys_properties (struct json_object *j, gchar ***out);
 
-void lb_cache_reload(void);
+/** Trigger a whole reload of the internal LB caches, exactly as it is done
+ * by the periodically scheduled internal task */
+gboolean lb_cache_reload(void);
 
 /* -------------------------------------------------------------------------- */
 
