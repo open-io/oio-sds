@@ -214,11 +214,22 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 
 	si->score.timestamp = oio_ext_real_seconds ();
 
-	// TODO follow the DRY principle and factorize this!
 	if (flag_cache_enabled) {
 		GString *gstr = g_string_new ("");
 		service_info_encode_json (gstr, si, TRUE);
-		PUSH_WRITE(lru_tree_insert(push_queue, service_info_key(si), si));
+		gchar *key = service_info_key(si);
+		PUSH_WRITE(
+			/* if we receive a simple registration and if a special action
+			 * is already pending (lock or unlock), we should not lose the
+			 * special action, so merge the old score (i.e. the action code)
+			 * in the new services description */
+			if (op == REGOP_PUSH) {
+				struct service_info_s *si0 = lru_tree_get(push_queue, key);
+				if (si0 && si0->score.value != SCORE_UNSET)
+					si->score.value = si0->score.value;
+			}
+			lru_tree_insert(push_queue, key, si);
+		);
 		return _reply_success_json (args, gstr);
 	} else {
 		CSURL(cs);
