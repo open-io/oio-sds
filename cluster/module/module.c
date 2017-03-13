@@ -199,7 +199,7 @@ timer_expire_services(gpointer u)
 				conscience_get_nsname(cs), str_name);
 			continue;
 		}
-		count = conscience_srvtype_remove_expired(srvtype,
+		count = conscience_srvtype_zero_expired(srvtype,
 				service_expiration_notifier, NULL);
 		conscience_release_locked_srvtype(srvtype);
 		/* XXX end of critical section */

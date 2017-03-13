@@ -171,7 +171,7 @@ conscience_srvtype_register_srv(struct conscience_srvtype_s *srvtype,
 }
 
 guint
-conscience_srvtype_remove_expired(struct conscience_srvtype_s * srvtype,
+conscience_srvtype_zero_expired(struct conscience_srvtype_s * srvtype,
 		service_callback_f *callback, gpointer u)
 {
 	g_assert_nonnull (srvtype);
@@ -196,7 +196,6 @@ conscience_srvtype_remove_expired(struct conscience_srvtype_s * srvtype,
 				struct service_tag_s *tag =
 						conscience_srv_ensure_tag(p_srv, NAME_TAGNAME_RAWX_UP);
 				service_tag_set_value_boolean(tag, FALSE);
-				// TODO: we may wanna pre-serialize the service again
 				conscience_srv_clean_udata(p_srv);
 				count++;
 			}
