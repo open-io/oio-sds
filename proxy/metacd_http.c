@@ -836,6 +836,7 @@ configure_request_handlers (void)
 	SET("/$NS/conscience/unlock/#POST", action_conscience_unlock);
 
 	// Directory
+	SET("/$NS/container/create_many/#POST", action_container_create_many);
 	SET("/$NS/reference/create/#POST", action_ref_create);
 	SET("/$NS/reference/destroy/#POST", action_ref_destroy);
 	SET("/$NS/reference/show/#GET", action_ref_show);

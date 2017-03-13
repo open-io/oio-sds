@@ -259,6 +259,36 @@ class ObjectStorageAPI(API):
         else:
             return True
 
+    def container_create_many(self, account, containers, properties=None,
+                              headers=None, **kwargs):
+        """
+        Create Many containers
+        :param account: account in which to create the containers
+        :type account: `str`
+        :param containers: names of the containers
+        :type containers: `list`
+        :param properties: properties to set on the containers
+        :type properties: `dict`
+        :keyword headers: extra headers to send to the proxy
+        :type headers: `dict`
+        """
+        params = self._make_params(account)
+        headers = headers or {}
+        headers['x-oio-action-mode'] = 'autocreate'
+        headers.update(kwargs.get('headers') or {})
+        unformatted_data = list()
+        for container in containers:
+            unformatted_data.append({'name': container,
+                                     'properties': properties or {},
+                                     'system': kwargs.get('system', {})})
+        data = json.dumps({"containers": unformatted_data})
+        resp, body = self._request('POST', '/create_many', params=params,
+                                   data=data, headers=headers)
+        results = []
+        for container in json.loads(resp.content)["containers"]:
+            results.append((container["name"], container["status"] == 201))
+        return results
+
     @handle_container_not_found
     def container_touch(self, account, container, headers=None):
         uri = self._make_uri('container/touch')

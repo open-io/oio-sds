@@ -1185,6 +1185,80 @@ _m2_container_create (struct req_args_s *args, struct json_object *jbody)
 	return _reply_m2_error (args, err);
 }
 
+static enum http_rc_e
+_m2_container_create_many (struct req_args_s *args, struct json_object *jbody)
+{
+	guint max_request = OIO_CONTAINER_CREATE_MANY_NB_MAX_REQ;
+	guint nb_err = 0;
+	GString *gresponse = g_string_sized_new(2048);
+	g_string_append(gresponse, "{\"containers\":[");
+	GError *err = NULL;
+	const char *url_user = oio_url_get(args->url, OIOURL_USER);
+	json_object *jarray = NULL;
+	if (!oio_url_get(args->url, OIOURL_ACCOUNT)
+		|| !oio_url_get(args->url, OIOURL_NS))
+		return _reply_format_error(args,
+				BADREQ("Missing account or namespace"));
+	if (!json_object_object_get_ex(jbody, "containers", &jarray)
+		|| !json_object_is_type(jarray, json_type_array))
+		return _reply_format_error(args,
+				BADREQ("Invalid array of containers"));
+	unsigned jarray_len = json_object_array_length(jarray);
+	if (jarray_len > max_request)
+		return _reply_format_error(args,
+			BADREQ("More than %u requested",
+			 max_request));
+	for (unsigned i= 0; i < jarray_len && !err; i++) {
+		struct json_object * jcontainer=NULL;
+		struct json_object * jname = NULL;
+		gchar **properties = NULL;
+		const gchar *name = NULL;
+		jcontainer = json_object_array_get_idx (jarray, i);
+		g_string_append (gresponse, "{\"name\":");
+		if(!json_object_object_get_ex(jcontainer, "name", &jname)){
+			return _reply_format_error(args,
+				BADREQ("No \"name\" field"));
+		}
+		if(!json_object_is_type(jname, json_type_string))
+			return _reply_format_error(args,
+				BADREQ("Bad \"name\" field"));
+		name = json_object_get_string(jname);
+		err = KV_read_usersys_properties(jcontainer, &properties);
+		EXTRA_ASSERT((err != NULL) ^ (properties != NULL));
+		if (err) {
+			_append_status(gresponse, err->code, err->message);
+			nb_err++;
+			g_clear_error(&err);
+		} else {
+			oio_url_set(args->url, OIOURL_USER, name);
+			g_string_append_printf(gresponse, "\"%s\",", name);
+			/* The simple create function has the name of the container
+			 on the url */
+			err = _m2_container_create_with_properties(args, properties);
+			g_strfreev (properties);
+			if (!err) {
+				/* No error means we actually created it. */
+				_append_status(gresponse, 201, "Created");
+			} else {
+				_append_status(gresponse, err->code, err->message);
+				nb_err++;
+				g_clear_error(&err);
+			}
+		}
+		g_string_append_c (gresponse, '}');
+		if (i < jarray_len - 1)
+			g_string_append_c (gresponse, ',');
+	}
+	oio_url_set(args->url, OIOURL_USER, url_user);
+	if (err)
+		g_error_free (err);
+	g_string_append (gresponse, "]}");
+	if( nb_err == jarray_len)
+		return _reply_json(args, 400, "Error on all requests",
+					 gresponse);
+	return _reply_success_json(args, gresponse);
+}
+
 typedef GByteArray* (*list_packer_f) (struct list_params_s *);
 
 static GError * _list_loop (struct req_args_s *args,
@@ -1267,6 +1341,10 @@ static GError * _list_loop (struct req_args_s *args,
 	}
 
 	return err;
+}
+
+enum http_rc_e action_container_create_many (struct req_args_s *args) {
+	return rest_action(args, _m2_container_create_many);
 }
 
 enum http_rc_e action_container_create (struct req_args_s *args) {

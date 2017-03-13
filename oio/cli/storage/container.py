@@ -57,13 +57,21 @@ class CreateContainer(SetPropertyCommandMixin, lister.Lister):
 
         results = []
         account = self.app.client_manager.get_account()
-        for container in parsed_args.containers:
-            success = self.app.client_manager.storage.container_create(
+        if len(parsed_args.containers) > 1:
+            results = self.app.client_manager.storage.container_create_many(
                 account,
-                container,
+                parsed_args.containers,
                 properties=properties,
                 system=system)
-            results.append((container, success))
+            return results
+        else:
+            for container in parsed_args.containers:
+                success = self.app.client_manager.storage.container_create(
+                    account,
+                    container,
+                    properties=properties,
+                    system=system)
+                results.append((container, success))
 
         columns = ('Name', 'Created')
         res_gen = (r for r in results)
