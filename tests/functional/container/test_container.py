@@ -85,6 +85,62 @@ class TestMeta2Containers(BaseTestCase):
         self.assertIsInstance(body['objects'], list)
         self.assertEqual(len(body['objects']), nbobj)
 
+    def test_create_many(self):
+        params = self.param_ref(self.ref)
+        headers = {}
+        headers['x-oio-action-mode'] = 'autocreate'
+        headers['Content-Type'] = 'application/json'
+
+        # Create different uploads
+        data_send = ('{"containers":' +
+                     '[{"name":"test1","properties":{},"system":{}},' +
+                     '{"name":"test2","properties":{},"system":{}}]}')
+        resp = self.session.post(
+            self.url_container('create_many'), params, data_send,
+            headers=headers)
+        self.assertEqual(resp.status_code, 200)
+        data = json.loads(resp.content)["containers"]
+        self.assertEqual(data[0].status, 201)
+        self.assertEqual(data[1].status, 201)
+        self._delete("test1")
+        self._delete("test2")
+
+        # Create same upload
+        data_send = ('{"containers:"' +
+                     '[{"name":"test1","properties":{},"system":{}},' +
+                     '{"name":"test1","properties":{},"system":{}}]}')
+        resp = self.session.post(
+            self.url_container('create_many'), params, data_send,
+            headers=headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(data[0].status, 201)
+        self.assertEqual(data[1].status, 443)
+        self._delete("test1")
+
+        # Empty body should be answered with an error
+        resp = self.session.post(
+            self.url_container('create_many'), params, None,
+            headers=headers)
+        self.assertEqual(resp.status_code, 400)
+
+        # Creating missing name
+        data_send = ('{"containers":' +
+                     '[{"properties":{},"system":{}}' +
+                     ']}')
+        resp = self.session.post(
+            self.url_container('create_many', params, data_send,
+                               headers=headers))
+        self.assertEqual(resp.status_code, 400)
+
+        # Sending a non conform json
+        data_send = ('{"containers":' +
+                     '["name":"test","properties":{},"system":{}}' +
+                     ']}')
+        resp = self.session.post(
+            self.url_container('create_many'), params, data=data_send,
+            headers=headers)
+        self.assertEqual(resp.status_code, 400)
+
     def test_list(self):
         params = self.param_ref(self.ref)
         self._create(params, 204)
