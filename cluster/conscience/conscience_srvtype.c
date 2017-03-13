@@ -217,13 +217,11 @@ conscience_srvtype_run_all(struct conscience_srvtype_s * srvtype,
 	}
 
 	gboolean rc = TRUE;
-	time_t oldest = oio_ext_monotonic_seconds () - srvtype->score_expiration;
 
 	const struct conscience_srv_s *beacon = &(srvtype->services_ring);
 	for (struct conscience_srv_s *srv = beacon->next;
 			rc && srv != NULL && srv != beacon;
 			srv = srv->next) {
-		if (srv->locked || srv->score.timestamp > oldest)
 			rc = callback(srv, udata);
 	}
 
