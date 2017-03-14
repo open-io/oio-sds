@@ -272,7 +272,8 @@ class ObjectStorageAPI(API):
         :keyword headers: extra headers to send to the proxy
         :type headers: `dict`
         """
-        params = self._make_params(account)
+        uri = self._make_uri('container/create_many')
+        params = self._make_params(account, None)
         headers = headers or {}
         headers['x-oio-action-mode'] = 'autocreate'
         headers.update(kwargs.get('headers') or {})
@@ -282,7 +283,7 @@ class ObjectStorageAPI(API):
                                      'properties': properties or {},
                                      'system': kwargs.get('system', {})})
         data = json.dumps({"containers": unformatted_data})
-        resp, body = self._request('POST', '/create_many', params=params,
+        resp, body = self._request('POST', uri, params=params,
                                    data=data, headers=headers)
         results = []
         for container in json.loads(resp.content)["containers"]:

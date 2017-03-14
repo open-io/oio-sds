@@ -63,7 +63,7 @@ class CreateContainer(SetPropertyCommandMixin, lister.Lister):
                 parsed_args.containers,
                 properties=properties,
                 system=system)
-            return results
+
         else:
             for container in parsed_args.containers:
                 success = self.app.client_manager.storage.container_create(
