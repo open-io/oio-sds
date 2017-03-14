@@ -850,6 +850,7 @@ configure_request_handlers (void)
 	// Meta2
 	// Container
 	SET("/$NS/container/create/#POST", action_container_create);
+	SET("/$NS/container/create_many/#POST", action_container_create_many);
 	SET("/$NS/container/destroy/#POST", action_container_destroy);
 	SET("/$NS/container/show/#GET", action_container_show);
 	SET("/$NS/container/list/#GET", action_container_list);

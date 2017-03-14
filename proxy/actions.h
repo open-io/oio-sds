@@ -20,6 +20,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__proxy__actions_h
 # define OIO_SDS__proxy__actions_h 1
 
+#define OIO_CONTAINER_CREATE_MANY_NB_MAX_REQ 100
+
 struct req_args_s;
 
 enum http_rc_e action_forward (struct req_args_s *args);
@@ -60,6 +62,7 @@ enum http_rc_e action_ref_unlink (struct req_args_s *args);
 enum http_rc_e action_ref_force (struct req_args_s *args);
 enum http_rc_e action_ref_renew (struct req_args_s *args);
 
+enum http_rc_e action_container_create_many (struct req_args_s *args);
 enum http_rc_e action_container_create (struct req_args_s *args);
 enum http_rc_e action_container_destroy (struct req_args_s *args);
 enum http_rc_e action_container_show (struct req_args_s *args);
