@@ -164,6 +164,24 @@
  * cmake directive: *OIO__GRIDD_TIMEOUT_WHOLE_COMMON*
  * range: 0.01 -> 120.0
 
+### malloc.trim_size.ondemand
+
+> Sets how many bytes bytes are released when the LEAN request is received by the current 'meta' service.
+
+ * default: **0**
+ * type: guint
+ * cmake directive: *OIO__MALLOC_TRIM_SIZE_ONDEMAND*
+ * range: 0 -> 2147483648
+
+### malloc.trim_size.periodic
+
+> Sets how many bytes bytes are released when the LEAN request is received by the current 'meta' service.
+
+ * default: **0**
+ * type: guint
+ * cmake directive: *OIO__MALLOC_TRIM_SIZE_PERIODIC*
+ * range: 0 -> 2147483648
+
 ### meta0.outgoing.timeout.common.req
 
 > Sets the timeout to the set of (quick) RPC that query a meta0 service
@@ -207,6 +225,15 @@
  * type: gint64
  * cmake directive: *OIO__META2_RELOAD_NSINFO_PERIOD*
  * range: 1 -> 3600
+
+### proxy.bulk.max.create_many
+
+> In a proxy, sets how many containers can be created at once.
+
+ * default: **100**
+ * type: guint
+ * cmake directive: *OIO__PROXY_BULK_MAX_CREATE_MANY*
+ * range: 0 -> 10000
 
 ### proxy.cache.directory.max
 
@@ -863,6 +890,15 @@
  * cmake directive: *OIO__SQLITEREPO_REPO_MAX_BASES*
  * range: 8 -> 131072
 
+### sqliterepo.service.exit_ttl
+
+> .
+
+ * default: **10 * G_TIME_SPAN_SECOND**
+ * type: gint64
+ * cmake directive: *OIO__SQLITEREPO_SERVICE_EXIT_TTL*
+ * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
+
 ### sqliterepo.timeout.zk
 
 > Sets the timeout of the zookeeper handle (in the meaning of the zookeeper client library)
@@ -889,6 +925,15 @@
  * type: guint
  * cmake directive: *OIO__SQLITEREPO_ZK_RRD_WINDOW*
  * range: 1 -> 4095
+
+### sqlx.outgoing.timeout.req
+
+> Sets the timeout for the requests issued to the SQLX services.
+
+ * default: **30.0**
+ * type: gdouble
+ * cmake directive: *OIO__SQLX_OUTGOING_TIMEOUT_REQ*
+ * range: 0.01 -> 60.0
 
 ## Variables only for testing purposes
 

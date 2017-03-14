@@ -94,6 +94,11 @@
 				"descr": "Sets the timeout to the set of (quick) RPC that query a meta0 service",
 				"def": 10.0, "min": 0.01, "max": 60.0 },
 
+			{ "type": "epoch", "name": "oio_sqlx_lb_refresh_period",
+				"key": "sqlx.lb.refresh_period",
+				"descr": "In the current sqlx-based service, tells the period (in seconds) at which the service will refresh its load-balancing information.",
+				"def": "1", "min": 1, "max": "60s" },
+
 			{ "type": "uint", "name": "meta2_batch_maxlen",
 				"key": "meta2.batch.maxlen",
 				"descr": "When listing a container, limits the number of items to that value.",
@@ -128,11 +133,6 @@
 				"key": "proxy.period.reload.nsinfo",
 				"descr": "In the proxy, tells the period between two refreshes of the namespace configuration, from the conscience",
 				"def": "30s", "min": "1s", "max": "1h" },
-
-			{ "type": "epoch", "name": "nsinfo_refresh_m0",
-				"key": "proxy.period.reload.meta0",
-				"descr": "In the proxy, tells the period betweenthe refreshed of the meta0 cache",
-				"def": "30s", "min": "1s", "max": "1d" },
 
 			{ "type": "monotonic", "name": "ttl_expire_local_services",
 				"key": "proxy.ttl.services.local",
@@ -183,6 +183,11 @@
 				"key": "proxy.cache.directory.max",
 				"descr": "In a proxy, sets how many directory entries the resolver may keep",
 				"def": "1Mi", "min": 0, "max": "4Mi" },
+
+			{ "type": "uint", "name": "proxy_bulk_max_create_many",
+				"key": "proxy.bulk.max.create_many",
+				"descr": "In a proxy, sets how many containers can be created at once.",
+				"def": "100", "min": 0, "max": "10k" },
 
 			{ "type": "bool", "name": "flag_cache_enabled",
 				"key": "proxy.cache.enabled",
@@ -497,7 +502,17 @@
 			{ "type": "float", "name": "oio_election_resync_timeout_req",
 				"key": "sqliterepo.outgoing.timeout.req.resync",
 				"descr": "Sets the global timeout of a RESYNC request sent to a 'meta' service. Sent to a SLAVE DB, the RESYNC operation involves a RPC from the SLAVE to the MASTER, then a DB dump on the MASTER and restoration on the SLAVE. Thus that operation might be rather long, due to the possibility of network/disk latency/bandwidth, etc.",
-				"def": 30.0, "min": 0.01, "max": 60.0 }
+				"def": 30.0, "min": 0.01, "max": 60.0 },
+
+			{ "type": "uint", "name": "malloc_trim_size_ondemand",
+				"key": "malloc.trim_size.ondemand",
+				"descr": "Sets how many bytes bytes are released when the LEAN request is received by the current 'meta' service.",
+				"def": 0, "min": 0, "max": "1<<32 - 1" },
+
+			{ "type": "uint", "name": "malloc_trim_size_periodic",
+				"key": "malloc.trim_size.periodic",
+				"descr": "Sets how many bytes bytes are released when the LEAN request is received by the current 'meta' service.",
+				"def": 0, "min": 0, "max": "1<<32 - 1" }
 		]
 	},
 	"client": {
@@ -528,6 +543,11 @@
 				"key": "core.period.refresh.io_idle",
 				"descr": "Sets the minimal amount of time between two refreshes of the known IO-idle counters for the current host. Keep this small.",
 				"def": "1s", "min": "100ms", "max": "1h" },
+
+			{ "type": "float", "name": "oio_sqlx_timeout_req",
+				"key": "sqlx.outgoing.timeout.req",
+				"descr": "Sets the timeout for the requests issued to the SQLX services.",
+				"def": 30.0, "min": 0.01, "max": 60.0 },
 
 			{ "type": "monotonic", "name": "_refresh_cpu_idle",
 				"key": "core.period.refresh.cpu_idle",

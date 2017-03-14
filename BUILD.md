@@ -127,8 +127,6 @@ Used by `gcc`
 
 | Macro | Default | Description |
 | ----- | ------- | ----------- |
-| MALLOC_TRIM_SIZE | 0 |  |
-| PERIODIC_MALLOC_TRIM_SIZE | 0 |  |
 | OIO_STAT_PREFIX_REQ | "counter req.hits" |  |
 | OIO_STAT_PREFIX_TIME | "counter req.time" |  |
 

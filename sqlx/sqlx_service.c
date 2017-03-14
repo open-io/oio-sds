@@ -950,7 +950,7 @@ static void
 _task_malloc_trim(gpointer p)
 {
 	(void) p;
-	malloc_trim (PERIODIC_MALLOC_TRIM_SIZE);
+	malloc_trim (malloc_trim_size_periodic);
 }
 
 static void
@@ -1170,7 +1170,7 @@ sqlx_task_reload_lb (struct sqlx_service_s *ss)
 		GRID_WARN("Failed to reload LB world: %s", err->message);
 		g_clear_error(&err);
 	} else {
-		ADAPTIVE_PERIOD_ONSUCCESS(10);
+		ADAPTIVE_PERIOD_ONSUCCESS(oio_sqlx_lb_refresh_period);
 	}
 }
 

@@ -1218,7 +1218,6 @@ _m2_container_create (struct req_args_s *args, struct json_object *jbody)
 static enum http_rc_e
 _m2_container_create_many(struct req_args_s *args, struct json_object *jbody)
 {
-	guint max_request = OIO_CONTAINER_CREATE_MANY_NB_MAX_REQ;
 	guint nb_err = 0;
 	GError *err = NULL;
 	const char *url_user = oio_url_get(args->url, OIOURL_USER);
@@ -1234,10 +1233,10 @@ _m2_container_create_many(struct req_args_s *args, struct json_object *jbody)
 	GString *gresponse = g_string_sized_new(2048);
 	g_string_append(gresponse, "{\"containers\":[");
 	guint jarray_len = json_object_array_length(jarray);
-	if (jarray_len > max_request)
+	if (jarray_len > proxy_bulk_max_create_many)
 		return _reply_format_error(args,
 			BADREQ("More than %u requested",
-			 max_request));
+				proxy_bulk_max_create_many));
 	for (guint i = 0; i < jarray_len && !err; i++) {
 		struct json_object *jcontainer = NULL;
 		struct json_object *jname = NULL;

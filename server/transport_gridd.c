@@ -24,6 +24,7 @@ License along with this library.
 #include <malloc.h>
 
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/server_variables.h>
 
 #include "network_server.h"
 #include "transport_gridd.h"
@@ -843,7 +844,7 @@ dispatch_LEAN(struct gridd_reply_ctx_s *reply,
 	(void) gdata, (void) hdata;
 
 	if (metautils_message_extract_flag (reply->request, "LIBC", FALSE)) {
-		if (malloc_trim (MALLOC_TRIM_SIZE))
+		if (malloc_trim (malloc_trim_size_ondemand))
 			g_strlcat (buf, " malloc-heap", sizeof(buf));
 	}
 

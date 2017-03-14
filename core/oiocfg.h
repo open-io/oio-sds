@@ -90,18 +90,6 @@ extern "C" {
 #  define GCLUSTER_AGENT_SOCK_PATH GCLUSTER_RUN_DIR "/oio-sds-agent.sock"
 # endif
 
-# ifndef MALLOC_TRIM_SIZE
-#  define MALLOC_TRIM_SIZE (0)
-# endif
-
-# ifndef PERIODIC_MALLOC_TRIM_SIZE
-#  define PERIODIC_MALLOC_TRIM_SIZE (0)
-# endif
-
-# ifndef SQLX_CLIENT_TIMEOUT
-#  define SQLX_CLIENT_TIMEOUT 30.0
-# endif
-
 # ifndef RAWX_HEADER_PREFIX
 #  define RAWX_HEADER_PREFIX "X-oio-chunk-meta-"
 # endif
