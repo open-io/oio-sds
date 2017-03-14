@@ -76,6 +76,11 @@ struct sqlx_service_s
 	gchar volume[1024];
 	gchar ns_name[LIMIT_LENGTH_NSNAME];
 
+	/* if left empty, all the services from the conscience will be reloaded.
+	 * If filled, only the specified service types (coma-separated) will be
+	 * considered */
+	gchar srvtypes[128];
+
 	struct replication_config_s *replication_config;
 	const struct sqlx_service_config_s *service_config;
 
@@ -167,9 +172,6 @@ extern int sqlite_service_main(int argc, char **argv,
 		const struct sqlx_service_config_s *cfg);
 
 void sqlx_service_set_custom_options (struct grid_main_option_s *options);
-
-GError* sqlx_reload_lb_service_types(struct oio_lb_world_s *lbw,
-		struct oio_lb_s *lb, GSList *list_srvtypes);
 
 // FIXME: this is only used in meta1
 /** Reloads the optional (oio_lb_s*). Exposed to let the

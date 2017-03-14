@@ -34,23 +34,13 @@ License along with this library.
 
 #include "metautils.h"
 
-#define SLOT(P) ((struct score_slot_s*)P)
-
-typedef guint32 srv_score_t;
-
-struct score_slot_s
-{
-	guint index;
-	srv_score_t score;
-	guint32 sum;
-};
-
 void
 oio_lb_world__feed_service_info_list(struct oio_lb_world_s *lbw,
 		GSList *services)
 {
-	struct oio_lb_item_s *item = g_alloca(sizeof(struct oio_lb_item_s)
-			+ LIMIT_LENGTH_SRVID);
+	struct oio_lb_item_s *item =
+		g_alloca(sizeof(struct oio_lb_item_s) + LIMIT_LENGTH_SRVID);
+
 	for (GSList *l = services; l; l = l->next) {
 		char slot_name[128] = {0};
 		struct service_info_s *srv = l->data;

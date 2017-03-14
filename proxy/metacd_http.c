@@ -383,23 +383,8 @@ _encode_wanted_services (const char *type, GSList *list)
 }
 
 static void
-_reload_srvtype(const char *type)
+_reload_srvtype(const char *type, GSList *list)
 {
-	CSURL(cs);
-
-	GSList *list = NULL;
-	GError *err = conscience_remote_get_services (cs, type, FALSE, &list);
-	if (err) {
-		GRID_WARN("Services listing error for type[%s]: code=%d %s",
-				type, err->code, err->message);
-		g_clear_error(&err);
-		return;
-	}
-
-	if (GRID_TRACE_ENABLED()) {
-		GRID_TRACE ("SRV loaded %u [%s]", g_slist_length(list), type);
-	}
-
 	/* reloads the known services */
 	gulong now = oio_ext_monotonic_seconds ();
 	SRV_WRITE(for (GSList *l=list; l ;l=l->next) {
@@ -420,43 +405,105 @@ _reload_srvtype(const char *type)
 		g_bytes_unref (encoded);
 	}
 
-	/* reload the LB */
-	if (NULL != list) {
+	/* reload the LB world */
+	if (list)
 		oio_lb_world__feed_service_info_list(lb_world, list);
-
-		if (!oio_lb__has_pool(lb, type)) {
-			struct service_update_policies_s *pols =
-					service_update_policies_create();
-			gchar *pols_cfg = NULL;
-			NSINFO_READ(pols_cfg = gridcluster_get_service_update_policy(&nsinfo));
-			service_update_reconfigure(pols, pols_cfg);
-			g_free(pols_cfg);
-			GRID_DEBUG("Automatically creating pool for service type [%s]",
-					type);
-			oio_lb__force_pool(lb,
-					oio_lb_pool__from_service_policy(lb_world, type, pols));
-			service_update_policies_destroy(pols);
-		}
-
-		g_slist_free_full(list, (GDestroyNotify)service_info_clean);
-	}
 }
 
-void
+static void
+_reload_lb_service_types(
+		struct oio_lb_world_s *lbw, struct oio_lb_s *lb_,
+		struct namespace_info_s *nsi,
+		gchar **tabtypes, GPtrArray *tabsrv, GPtrArray *taberr)
+{
+	struct service_update_policies_s *pols = service_update_policies_create();
+	gchar *pols_cfg = gridcluster_get_service_update_policy(nsi);
+	service_update_reconfigure(pols, pols_cfg);
+	g_free(pols_cfg);
+
+	for (guint i=0; tabtypes[i] ;++i) {
+		const char * srvtype = tabtypes[i];
+		if (!oio_lb__has_pool(lb_, srvtype)) {
+			GRID_DEBUG("Creating pool for service type [%s]", srvtype);
+			oio_lb__force_pool(lb_,
+					oio_lb_pool__from_service_policy(lbw, srvtype, pols));
+		}
+
+		if (!taberr->pdata[i])
+			_reload_srvtype(srvtype, tabsrv->pdata[i]);
+	}
+
+	service_update_policies_destroy(pols);
+}
+
+static void
+_free_list_of_services(gpointer p)
+{
+	if (!p)
+		return;
+	g_slist_free_full((GSList*)p, (GDestroyNotify)service_info_clean);
+}
+
+static void
+_free_error(gpointer p)
+{
+	if (!p)
+		return;
+	g_error_free((GError*)p);
+}
+
+/* If you ever plan to factorize this code with the similar part in
+ * sqlx/sqlx_service.c be carefull that a lot of context is expected on both
+ * sides, and that even the function used to fetch the services cannot be the
+ * same (sqlx talks to the proxy, the proxy talks to the conscience). */
+gboolean
 lb_cache_reload (void)
 {
-	gchar **tt = NULL;
+	struct namespace_info_s *nsi = NULL;
+	gchar **tabtypes = NULL;
+	GPtrArray *tabsrv = NULL, *taberr = NULL;
+	gboolean any_loading_error = FALSE;
+
+	CSURL(cs);
 	NSINFO_READ(
-		tt = g_strdupv_inline(srvtypes);
-		oio_lb_world__reload_pools(lb_world, lb, &nsinfo);
-		oio_lb_world__reload_storage_policies(lb_world, lb, &nsinfo);
+		tabtypes = g_strdupv_inline(srvtypes);
+		nsi = namespace_info_dup(&nsinfo);
 	);
 
-	if (tt) {
-		for (gchar **t=tt; *t ;++t)
-			_reload_srvtype (*t);
-		g_free (tt);
+	if (!tabtypes || !*tabtypes) {
+		GRID_WARN("proxy not ready to reload the LB");
+		any_loading_error = TRUE;
+		goto out;
 	}
+
+	/* preload all the services */
+	tabsrv = g_ptr_array_new_full(8, _free_list_of_services);
+	taberr = g_ptr_array_new_full(8, _free_error);
+	for (char **pt=tabtypes; *pt ;++pt) {
+		GSList *srv = NULL;
+		GError *e = conscience_remote_get_services(cs, *pt, FALSE, &srv);
+		if (e) {
+			GRID_WARN("Failed to load the list of [%s] in NS=%s", *pt, ns_name);
+			any_loading_error = TRUE;
+		}
+		g_ptr_array_add(tabsrv, srv);
+		g_ptr_array_add(taberr, e);
+	}
+
+	/* refresh the load-balancing world */
+	if (!any_loading_error)
+		oio_lb_world__increment_generation(lb_world);
+	oio_lb_world__reload_pools(lb_world, lb, nsi);
+	_reload_lb_service_types(lb_world, lb, nsi, tabtypes, tabsrv, taberr);
+	oio_lb_world__reload_storage_policies(lb_world, lb, nsi);
+	if (!any_loading_error)
+		oio_lb_world__purge_old_generations(lb_world);
+out:
+	if (tabtypes) g_free0 (tabtypes);
+	if (nsi) namespace_info_free(nsi);
+	if (tabsrv) g_ptr_array_free(tabsrv, TRUE);
+	if (taberr) g_ptr_array_free(taberr, TRUE);
+	return !any_loading_error;
 }
 
 static void
@@ -468,11 +515,9 @@ _task_reload_lb(gpointer p UNUSED)
 		return;
 
 	CSURL(cs);
-	if (!cs) return;
-
-	ADAPTIVE_PERIOD_ONSUCCESS(lb_downstream_delay);
-	lb_cache_reload();
-	oio_lb_world__debug(lb_world);
+	if (cs && lb_cache_reload()) {
+		ADAPTIVE_PERIOD_ONSUCCESS(lb_downstream_delay);
+	}
 }
 
 static void
@@ -509,7 +554,7 @@ _task_reload_nsinfo (gpointer p UNUSED)
 
 	CSURL(cs);
 	if (!cs)
-		return;
+		return; /* not ready */
 
 	if (ADAPTIVE_PERIOD_SKIP())
 		return;
@@ -670,8 +715,8 @@ grid_main_get_options (void)
 			"synchronously and no cache is kept on a GET."},
 
 		{"LocalScores", OT_BOOL, {.b = &flag_local_scores},
-			"Enables the updates of the list of local services, so that\n"
-			"their score is displayed. This gives a pretty output but\n"
+			"Enables the updates of the list of local services, so that "
+			"their score is displayed. This gives a pretty output but "
 			"requires CPU spent in critical sections."},
 
 		{"DirLowTtl", OT_UINT, {.u = &dir_low_ttl},
