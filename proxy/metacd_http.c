@@ -837,7 +837,6 @@ configure_request_handlers (void)
 
 	// Directory
 	SET("/$NS/reference/create/#POST", action_ref_create);
-	SET("/$NS/container/create_many/#POST", action_container_create_many);
 	SET("/$NS/reference/destroy/#POST", action_ref_destroy);
 	SET("/$NS/reference/show/#GET", action_ref_show);
 	SET("/$NS/reference/get_properties/#POST", action_ref_prop_get);
@@ -851,6 +850,7 @@ configure_request_handlers (void)
 	// Meta2
 	// Container
 	SET("/$NS/container/create/#POST", action_container_create);
+	SET("/$NS/container/create_many/#POST", action_container_create_many);
 	SET("/$NS/container/destroy/#POST", action_container_destroy);
 	SET("/$NS/container/show/#GET", action_container_show);
 	SET("/$NS/container/list/#GET", action_container_list);
