@@ -60,7 +60,7 @@ struct conscience_srv_s *conscience_srvtype_register_srv(struct
 struct conscience_srv_s * conscience_srvtype_refresh(
 		struct conscience_srvtype_s *srvtype, struct service_info_s *srvinfo);
 
-guint conscience_srvtype_remove_expired(struct conscience_srvtype_s *srvtype,
+guint conscience_srvtype_zero_expired(struct conscience_srvtype_s *srvtype,
 		service_callback_f * callback, gpointer udata);
 
 gboolean conscience_srvtype_run_all(struct conscience_srvtype_s *srvtype,

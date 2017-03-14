@@ -1,6 +1,5 @@
 """Test the load balancer through the proxy"""
 
-import time
 from tests.utils import BaseTestCase
 from tests.utils import CODE_SRVTYPE_NOTMANAGED, CODE_POLICY_NOT_SATISFIABLE
 
@@ -61,7 +60,7 @@ class TestLbChoose(BaseLbTest):
         self._reload()
         self.fill_slots(["fast"], 3, 8000)
         self.fill_slots(["slow"], 3, 7000)
-        time.sleep(2)
+        self._reload()
         resp = self.session.get(self._url_lb('choose'),
                                 params={'type': 'echo',
                                         'slot': 'fast'})
@@ -75,7 +74,7 @@ class TestLbChoose(BaseLbTest):
         self._reload()
         self.fill_slots(["fast"], 3, 8000)
         self.fill_slots(["slow"], 3, 7000)
-        time.sleep(2)
+        self._reload()
         resp = self.session.get(self._url_lb('choose'),
                                 params={'type': 'echo',
                                         'slot': 'fast',
@@ -106,7 +105,7 @@ class TestLbChoose(BaseLbTest):
         # Thanks to Vladimir
         self._reload()
         self.fill_sameport(3)
-        time.sleep(2)
+        self._reload()
         resp = self.session.get(self._url_lb('choose'),
                                 params={'type': 'echo',
                                         'size': 3})

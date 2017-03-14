@@ -1126,7 +1126,7 @@ def generate(options):
         return env
 
     ENV['CHUNK_SIZE'] = getint(options.get(CHUNK_SIZE), 1024*1024)
-    ENV['MONITOR_PERIOD'] = getint(options.get(MONITOR_PERIOD), 5)
+    ENV['MONITOR_PERIOD'] = getint(options.get(MONITOR_PERIOD), 1)
     if options.get(ZOOKEEPER):
         ENV['NOZK'] = ''
     else:

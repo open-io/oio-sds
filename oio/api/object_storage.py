@@ -264,6 +264,7 @@ class ObjectStorageApi(object):
                                                autocreate=True,
                                                **kwargs)
 
+    @handle_container_not_found
     def container_touch(self, account, container, headers=None, **kwargs):
         """
         Trigger a notification about the container state.
@@ -281,6 +282,27 @@ class ObjectStorageApi(object):
             headers['X-oio-req-id'] = utils.request_id()
         self.container.container_touch(account, container, headers=headers,
                                        **kwargs)
+
+    def container_create_many(self, account, containers, properties=None,
+                              headers=None, **kwargs):
+        """
+        Create Many containers
+
+        :param account: account in which to create the containers
+        :type account: `str`
+        :param containers: names of the containers
+        :type containers: `list`
+        :param properties: properties to set on the containers
+        :type properties: `dict`
+        :keyword headers: extra headers to send to the proxy
+        :type headers: `dict`
+        """
+        return self.container.container_create_many(account,
+                                                    containers,
+                                                    properties=properties,
+                                                    headers=headers,
+                                                    autocreate=True,
+                                                    **kwargs)
 
     @handle_container_not_found
     def container_delete(self, account, container, headers=None, **kwargs):

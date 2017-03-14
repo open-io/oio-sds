@@ -76,6 +76,11 @@ struct sqlx_service_s
 	gchar volume[1024];
 	gchar ns_name[LIMIT_LENGTH_NSNAME];
 
+	/* if left empty, all the services from the conscience will be reloaded.
+	 * If filled, only the specified service types (coma-separated) will be
+	 * considered */
+	gchar srvtypes[128];
+
 	struct replication_config_s *replication_config;
 	const struct sqlx_service_config_s *service_config;
 

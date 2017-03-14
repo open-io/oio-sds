@@ -245,6 +245,7 @@ class TestDirectoryAPI(BaseTestCase):
         Tests that rdir services linked to rawx services
         are not on the same locations
         """
+        self._reload()
         cs = ConscienceClient({'namespace': self.ns})
         rawx_list = cs.all_services('rawx')
         rdir_dict = {x['addr']: x for x in cs.all_services('rdir')}

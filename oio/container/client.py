@@ -77,6 +77,38 @@ class ContainerClient(ProxyClient):
             raise exceptions.from_response(resp, body)
         return resp.status_code == 201
 
+    def container_create_many(self, account, containers, properties=None,
+                              **kwargs):
+        """
+        Create several containers.
+
+        :param account: account in which to create the containers
+        :type account: `str`
+        :param containers: names of the containers
+        :type containers: iterable of `str`
+        :param properties: properties to set on the containers
+        :type properties: `dict`
+        :keyword headers: extra headers to send to the proxy
+        :type headers: `dict`
+        """
+        params = self._make_params(account)
+        headers = gen_headers()
+        headers.update(kwargs.get('headers') or {})
+        unformatted_data = list()
+        for container in containers:
+            unformatted_data.append({'name': container,
+                                     'properties': properties or {},
+                                     'system': kwargs.get('system', {})})
+        data = json.dumps({"containers": unformatted_data})
+        resp, body = self._request('POST', '/create_many', params=params,
+                                   data=data, headers=headers)
+        if resp.status_code not in (204, 201):
+            raise exceptions.from_response(resp, body)
+        results = list()
+        for container in json.loads(body)["containers"]:
+            results.append((container["name"], container["status"] == 201))
+        return results
+
     def container_delete(self, account=None, reference=None, cid=None,
                          **kwargs):
         """

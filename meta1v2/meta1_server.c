@@ -155,6 +155,11 @@ _post_config(struct sqlx_service_s *ss)
 		return FALSE;
 	}
 
+	/* tell the meta1 to load everything excepted the services that make
+	 * no sense */
+	g_snprintf(ss->srvtypes, sizeof(ss->srvtypes), "!%s,%s",
+			NAME_SRVTYPE_META1, NAME_SRVTYPE_META0);
+
 	transport_gridd_dispatcher_add_requests(ss->dispatcher,
 			meta1_gridd_get_requests(), m1);
 
