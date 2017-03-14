@@ -82,13 +82,6 @@ class ReplicatedChunkWriteHandler(object):
                 h[chunk_headers["chunk_pos"]] = chunk["pos"]
                 h[chunk_headers["chunk_id"]] = chunk_path
 
-                # Used during reconstruction of EC chunks
-                if self.sysmeta['chunk_method'].startswith('ec'):
-                    h[chunk_headers["metachunk_size"]] = \
-                        self.sysmeta["metachunk_size"]
-                    h[chunk_headers["metachunk_hash"]] = \
-                        self.sysmeta["metachunk_hash"]
-
                 with green.ConnectionTimeout(self.connection_timeout):
                     conn = io.http_connect(
                         parsed.netloc, 'PUT', parsed.path, h)
@@ -156,6 +149,7 @@ class ReplicatedChunkWriteHandler(object):
                             conn.queue.put('%x\r\n%s\r\n' % (len(data),
                                                              data))
                         else:
+                            conn.close()
                             current_conns.remove(conn)
 
                     quorum = self._check_quorum(current_conns)
