@@ -483,20 +483,8 @@ lb_cache_reload (void)
 		GSList *srv = NULL;
 		GError *e = conscience_remote_get_services(cs, *pt, FALSE, &srv);
 		if (e) {
-			GRID_WARN("Failed to load the list of [%s] in NS=%s", ns_name, *pt);
+			GRID_WARN("Failed to load the list of [%s] in NS=%s", *pt, ns_name);
 			any_loading_error = TRUE;
-#if 0
-		} else {
-			GRID_TRACE("%s -> got %u for %s (%d/%s)", __FUNCTION__,
-					g_slist_length(srv), *pt, gerror_get_code(e),
-					gerror_get_message(e));
-			for (GSList *l=srv ;l; l=l->next) {
-				GString *gstr = g_string_sized_new(128);
-				service_info_encode_json(gstr, l->data, TRUE);
-				GRID_INFO("> %s", gstr->str);
-				g_string_free(gstr, TRUE);
-			}
-#endif
 		}
 		g_ptr_array_add(tabsrv, srv);
 		g_ptr_array_add(taberr, e);
