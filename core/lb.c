@@ -157,7 +157,7 @@ struct oio_lb_world_s
  * - the set of targets that must bring a service in the result set
  * - a pointer to the world to map the targets into LB slots.
  * - the bitwise mask that tells how close the service are, when the mask is
- *   applied to their lcoations.
+ *   applied to their locations.
  */
 struct oio_lb_pool_LOCAL_s
 {
