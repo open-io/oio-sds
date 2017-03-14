@@ -250,3 +250,21 @@ action_cache_status (struct req_args_s *args)
 	g_string_append_c (gstr, '}');
 	return _reply_success_json (args, gstr);
 }
+
+enum http_rc_e
+action_config (struct req_args_s *args)
+{
+	struct hc_resolver_stats_s s = {{0}};
+	hc_resolver_info (resolver, &s);
+
+	GString *gstr = g_string_sized_new (8192);
+	void _hook (const char *k, const char *v) {
+		if (gstr->len > 1)
+			g_string_append_c(gstr, ',');
+		oio_str_gstring_append_json_pair(gstr, k, v);
+	}
+	g_string_append_c (gstr, '{');
+	oio_var_list_all(_hook);
+	g_string_append_c (gstr, '}');
+	return _reply_success_json (args, gstr);
+}

@@ -25,6 +25,8 @@ struct req_args_s;
 enum http_rc_e action_forward (struct req_args_s *args);
 enum http_rc_e action_forward_stats (struct req_args_s *args);
 
+enum http_rc_e action_config (struct req_args_s *args);
+
 enum http_rc_e action_cache_status (struct req_args_s *args);
 enum http_rc_e action_cache_flush_local (struct req_args_s *args);
 enum http_rc_e action_cache_flush_high (struct req_args_s *args);
