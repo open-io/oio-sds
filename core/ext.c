@@ -23,6 +23,7 @@ License along with this library.
 #include <sys/stat.h>
 #include <sys/vfs.h>
 #include <sys/types.h>
+#include <sys/sysmacros.h>
 #include <errno.h>
 
 #include <glib.h>
