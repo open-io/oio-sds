@@ -375,6 +375,15 @@ Used by `gcc`
  * cmake directive: *OIO__PROXY_OUTGOING_TIMEOUT_COMMON*
  * range: 0.01 -> 60.0
 
+### proxy.outgoing.timeout.config
+
+> In a proxy, sets the global timeout for 'config' requests issued
+
+ * default: **5.0**
+ * type: gdouble
+ * cmake directive: *OIO__PROXY_OUTGOING_TIMEOUT_CONFIG*
+ * range: 0.01 -> 60.0
+
 ### proxy.outgoing.timeout.conscience
 
 > In a proxy, sets the global timeout for the RPC to the central cosnience service.

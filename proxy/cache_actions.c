@@ -46,12 +46,8 @@ action_forward_stats (struct req_args_s *args)
 
 	for (gchar *s=packed; *s ;++s) { if (*s == '=') *s = ' '; }
 
-	/* TODO(jfs): quite duplicated from _reply_json() but the original
-	   was not suitable. */
-	args->rp->set_status (200, "OK");
-	args->rp->set_body_bytes (g_bytes_new_take((guint8*)packed, strlen(packed)));
-	args->rp->finalize ();
-	return HTTPRC_DONE;
+	return _reply_success_bytes (
+			args, g_bytes_new_take((guint8*)packed, strlen(packed)));
 }
 
 enum http_rc_e
@@ -131,12 +127,8 @@ action_forward (struct req_args_s *args)
 			return _reply_common_error (args, err);
 		}
 
-		/* TODO(jfs): quite duplicated from _reply_json() but the original
-		   was not suitable. */
-		args->rp->set_status (200, "OK");
-		args->rp->set_body_bytes (g_bytes_new_take((guint8*)packed, strlen(packed)));
-		args->rp->finalize ();
-		return HTTPRC_DONE;
+		return _reply_success_bytes (
+				args, g_bytes_new_take((guint8*)packed, strlen(packed)));
 	}
 
 	if (!g_ascii_strcasecmp (action, "handlers")) {
@@ -151,12 +143,8 @@ action_forward (struct req_args_s *args)
 			return _reply_common_error (args, err);
 		}
 
-		/* TODO(jfs): quite duplicated from _reply_json() but the original
-		   was not suitable. */
-		args->rp->set_status (200, "OK");
-		args->rp->set_body_bytes (g_bytes_new_take((guint8*)packed, strlen(packed)));
-		args->rp->finalize ();
-		return HTTPRC_DONE;
+		return _reply_success_bytes (
+				args, g_bytes_new_take((guint8*)packed, strlen(packed)));
 	}
 
 	if (!g_ascii_strcasecmp (action, "info")) {
@@ -171,12 +159,8 @@ action_forward (struct req_args_s *args)
 			return _reply_common_error (args, err);
 		}
 
-		/* TODO(jfs): quite duplicated from _reply_json() but the original
-		   was not suitable. */
-		args->rp->set_status (200, "OK");
-		args->rp->set_body_bytes (g_bytes_new_take((guint8*)packed, strlen(packed)));
-		args->rp->finalize ();
-		return HTTPRC_DONE;
+		return _reply_success_bytes (
+				args, g_bytes_new_take((guint8*)packed, strlen(packed)));
 	}
 
 	return _reply_common_error (args, BADREQ("unexpected action"));
@@ -252,19 +236,83 @@ action_cache_status (struct req_args_s *args)
 }
 
 enum http_rc_e
-action_config (struct req_args_s *args)
+action_get_config (struct req_args_s *args)
 {
-	struct hc_resolver_stats_s s = {{0}};
-	hc_resolver_info (resolver, &s);
+	args->rp->no_access();
+	return _reply_success_json (args, oio_var_list_as_json());
+}
 
-	GString *gstr = g_string_sized_new (8192);
-	void _hook (const char *k, const char *v) {
-		if (gstr->len > 1)
-			g_string_append_c(gstr, ',');
-		oio_str_gstring_append_json_pair(gstr, k, v);
+static enum http_rc_e
+_set_config (struct req_args_s *args, struct json_object *jargs)
+{
+	if (!json_object_is_type(jargs, json_type_object))
+		return _reply_format_error (args, BADREQ("Object argument expected"));
+	if (json_object_object_length(jargs) <= 0)
+		return _reply_format_error (args, BADREQ("Empty object argument"));
+	json_object_object_foreach(jargs, k, jv) {
+		oio_var_value_one_with_option(k, json_object_get_string(jv));
 	}
-	g_string_append_c (gstr, '{');
-	oio_var_list_all(_hook);
-	g_string_append_c (gstr, '}');
-	return _reply_success_json (args, gstr);
+	return _reply_success_json(args, NULL);
+}
+
+enum http_rc_e
+action_set_config (struct req_args_s *args)
+{
+	args->rp->no_access();
+	return rest_action(args, _set_config);
+}
+
+enum http_rc_e
+action_forward_get_config (struct req_args_s *args)
+{
+	args->rp->no_access();
+
+	const char *id = OPT("id");
+	if (!id)
+		return _reply_format_error (args, BADREQ("Missing SRVID"));
+
+	MESSAGE req = metautils_message_create_named("REQ_GETCFG");
+	GByteArray *encoded = message_marshall_gba_and_clean (req);
+	gchar *packed = NULL;
+	GError *err = gridd_client_exec_and_concat_string (
+			id, proxy_timeout_config, encoded, &packed);
+	if (err) {
+		g_free0 (packed);
+		if (CODE_IS_NETWORK_ERROR(err->code)) {
+			if (err->code == ERRCODE_CONN_TIMEOUT || err->code == ERRCODE_READ_TIMEOUT)
+				return _reply_gateway_timeout (args, err);
+			return _reply_srv_unavailable (args, err);
+		}
+		return _reply_common_error (args, err);
+	}
+
+	return _reply_success_bytes (
+			args, g_bytes_new_take((guint8*)packed, strlen(packed)));
+}
+
+enum http_rc_e
+action_forward_set_config (struct req_args_s *args)
+{
+	args->rp->no_access();
+
+	const char *id = OPT("id");
+	if (!id)
+		return _reply_format_error (args, BADREQ("Missing SRVID"));
+	if (!args->rq->body)
+		return _reply_format_error (args, BADREQ("Missing body"));
+
+	MESSAGE req = metautils_message_create_named("REQ_SETCFG");
+	metautils_message_set_BODY(req, args->rq->body->data, args->rq->body->len);
+	GByteArray *encoded = message_marshall_gba_and_clean (req);
+	GError *err = gridd_client_exec(id, proxy_timeout_config, encoded);
+	if (err) {
+		if (CODE_IS_NETWORK_ERROR(err->code)) {
+			if (err->code == ERRCODE_CONN_TIMEOUT || err->code == ERRCODE_READ_TIMEOUT)
+				return _reply_gateway_timeout (args, err);
+			return _reply_srv_unavailable (args, err);
+		}
+		return _reply_common_error (args, err);
+	}
+
+	return _reply_success_json(args, NULL);
 }

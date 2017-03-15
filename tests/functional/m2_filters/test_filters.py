@@ -74,7 +74,6 @@ class TestFilters(BaseTestCase):
         path = 'test_slave'
         try:
             self._new_content(data, path)
-            self.assertTrue(None)
         except ClientException as exc:
             print str(exc)
             self.assertTrue(str(exc).find('NS slave!') != -1)
@@ -90,7 +89,6 @@ class TestFilters(BaseTestCase):
         content = self._new_content(data, path)
         try:
             content.delete()
-            self.assertTrue(None)
         except ClientException as exc:
             self.assertTrue(str(exc).find('NS wormed!') != -1)
         downloaded_data = ''.join(content.fetch())

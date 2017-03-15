@@ -315,3 +315,18 @@ oio_var_list_all(void (*hook) (const char *k, const char *v))
 	g_mutex_unlock(&var_lock);
 }
 
+GString*
+oio_var_list_as_json(void)
+{
+	GString *gstr = g_string_sized_new (4096);
+	void _hook (const char *k, const char *v) {
+		if (gstr->len > 1)
+			g_string_append_c(gstr, ',');
+		oio_str_gstring_append_json_pair(gstr, k, v);
+	}
+	g_string_append_c (gstr, '{');
+	oio_var_list_all(_hook);
+	g_string_append_c (gstr, '}');
+
+	return gstr;
+}

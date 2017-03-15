@@ -69,9 +69,17 @@ void oio_var_value_all_with_config(struct oio_cfg_handle_s *cfg, const char *ns)
 gboolean oio_var_value_one_with_option(const char *name, const char *value);
 
 /**
- *
+ * Iterate over all the registered variables and call the hook for each
+ * of them.
  */
 void oio_var_list_all(void (*hook) (const char *k, const char *v));
+
+/**
+ * Wraps oio_var_list_all() to build a simple JSON object, where each key
+ * is the name of the variable and each corresponding value the textual
+ * representation of the value.
+ */
+GString* oio_var_list_as_json(void);
 
 
 #define OIO_VAR_DEFINE_BOOL(Name,Default,Config,Description) \

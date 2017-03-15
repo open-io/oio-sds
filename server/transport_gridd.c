@@ -884,6 +884,49 @@ dispatch_KILL(struct gridd_reply_ctx_s *reply,
 	return TRUE;
 }
 
+static gboolean
+dispatch_SETCFG(struct gridd_reply_ctx_s *reply,
+		gpointer gdata, gpointer hdata)
+{
+	(void) gdata, (void) hdata;
+
+	gsize length = 0;
+	void *body = metautils_message_get_BODY(reply->request, &length);
+
+	json_object *jbody = NULL;
+	GError *err = JSON_parse_buffer(body, length, &jbody);
+	if (err) {
+		reply->send_error(0, err);
+	} else {
+		if (!json_object_is_type(jbody, json_type_object))
+			reply->send_error(0, BADREQ("Object argument expected"));
+		else if (json_object_object_length(jbody) <= 0)
+			reply->send_error(0, BADREQ("Empty object argument"));
+		else {
+			json_object_object_foreach(jbody, k, jv) {
+				oio_var_value_one_with_option(k, json_object_get_string(jv));
+			}
+			reply->send_reply(CODE_FINAL_OK, "OK");
+		}
+	}
+
+	if (jbody)
+		json_object_put (jbody);
+	return TRUE;
+}
+
+static gboolean
+dispatch_GETCFG(struct gridd_reply_ctx_s *reply,
+		gpointer gdata, gpointer hdata)
+{
+	(void) gdata, (void) hdata;
+
+	GString *gstr = oio_var_list_as_json();
+	reply->add_body(g_bytes_unref_to_array(g_string_free_to_bytes(gstr)));
+	reply->send_reply(CODE_FINAL_OK, "OK");
+	return TRUE;
+}
+
 #define VOLPREFIX "config volume="
 
 static gboolean
@@ -939,6 +982,8 @@ gridd_get_common_requests(void)
 		{"REQ_VERSION",   dispatch_VERSION,       NULL},
 		{"REQ_HANDLERS",  dispatch_LISTHANDLERS,  NULL},
 		{"REQ_KILL",      dispatch_KILL,          NULL},
+		{"REQ_GETCFG",    dispatch_GETCFG,        NULL},
+		{"REQ_SETCFG",    dispatch_SETCFG,        NULL},
 		{NULL, NULL, NULL}
 	};
 

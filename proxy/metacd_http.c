@@ -801,9 +801,15 @@ configure_request_handlers (void)
 #define SET(Url,Cb) path_parser_configure (path_parser, PROXYD_PREFIX Url, Cb)
 
 	SET("/status/#GET", action_status);
-	SET("/config/#GET", action_config);
+	SET("/config/#GET", action_get_config);
+	SET("/config/#POST", action_set_config);
 
+	SET("/forward/config/#POST", action_forward_set_config);
+	SET("/forward/config/#GET", action_forward_get_config);
+
+	SET("/forward/stats/#GET", action_forward_stats);
 	SET("/forward/stats/#POST", action_forward_stats);
+
 	SET("/forward/$ACTION/#POST", action_forward);
 
 	SET("/cache/status/#GET", action_cache_status);
