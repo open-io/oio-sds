@@ -1,0 +1,20 @@
+storage_policy: "THREECOPIES"
+chunk_size: 1048576
+zookeeper: true
+redis: true
+directory_replicas: 3
+container_replicas: 3
+conscience:
+  count: 3
+rawx:
+  count: 3
+rdir:
+  count: 3
+meta0:
+  count: 3
+meta1:
+  count: 3
+meta2:
+  count: 4
+sqlx:
+  count: 3

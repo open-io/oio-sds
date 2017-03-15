@@ -410,7 +410,7 @@ param_option.sqlx.events-max-pending=1000
 param_option.meta1.events-max-pending=100
 param_option.meta2.events-buffer-delay=5
 param_option.state=${STATE}
-param_option.worm=${WORM}
+param_option.worm=${WORMED}
 
 param_option.service_update_policy=meta2=KEEP|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|;rdir=KEEP|1|1|user_is_a_service=rawx
 
@@ -925,7 +925,6 @@ APPLICATION_KEY = 'application_key'
 KEY_FILE='key_file'
 META_HEADER='x-oio-chunk-meta'
 WORMED="worm"
-NS_STATE="state"
 MASTER_VALUE="master"
 SLAVE_VALUE="slave"
 STANDALONE_VALUE="standalone"
@@ -946,7 +945,13 @@ defaults = {
     'REPLI_M2': 1,
     'REPLI_M1': 1,
     'COMPRESSION': "off",
-    M1_DIGITS: 4}
+    MONITOR_PERIOD: 1,
+    CHUNK_SIZE: 1024*1024,
+    M1_DIGITS: 4,
+    WORMED:False,
+    SLAVE_VALUE:False,
+    MASTER_VALUE:False,
+    STANDALONE_VALUE:False}
 
 # XXX When /usr/sbin/httpd is present we suspect a Redhat/Centos/Fedora
 # environment. If not, we consider being in a Ubuntu/Debian environment.
@@ -1028,7 +1033,7 @@ def generate(options):
     backblaze_account_id = options.get('backblaze', {}).get(ACCOUNT_ID)
     backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
     backblaze_app_key = options.get('backblaze', {}).get(APPLICATION_KEY)
-    is_wormed = options.get('worm', False)
+    is_wormed = options.get(WORMED, defaults[WORMED])
     worm = '1' if is_wormed else '0'
     state = options.get("state", None)
 
@@ -1072,9 +1077,7 @@ def generate(options):
                HTTPD_BINARY=HTTPD_BINARY,
                META_HEADER=META_HEADER,
                STATE=state,
-               WORM=worm,
-               UDP_ALLOWED=udp_allowed,
-               ZK_SHUFFLED=zk_shuffled)
+               WORMED=worm)
 
     def merge_env(add):
         env = dict(ENV)
@@ -1103,8 +1106,10 @@ def generate(options):
         env['VOLUME'] = '{DATADIR}/{NS}-{SRVTYPE}-{SRVNUM}'.format(**env)
         return env
 
-    ENV['CHUNK_SIZE'] = getint(options.get(CHUNK_SIZE), 1024*1024)
-    ENV['MONITOR_PERIOD'] = getint(options.get(MONITOR_PERIOD), 1)
+    ENV['CHUNK_SIZE'] = getint(
+            options.get(CHUNK_SIZE), defaults[CHUNK_SIZE])
+    ENV['MONITOR_PERIOD'] = getint(
+            options.get(MONITOR_PERIOD), defaults[MONITOR_PERIOD])
     if options.get(ZOOKEEPER):
         ENV['NOZK'] = ''
     else:
@@ -1363,6 +1368,12 @@ def generate(options):
         f.write(tpl.safe_substitute(env))
         tpl = Template(template_local_ns)
         f.write(tpl.safe_substitute(env))
+        # Now dump the configuration
+        for k, v in options['config'].iteritems():
+            strv = str(v)
+            if isinstance(v,bool):
+                strv = strv.lower()
+            f.write('{0}={1}\n'.format(k, strv))
 
     with open('{KEY_FILE}'.format(**ENV), 'w+') as f:
         tpl = Template(template_credentials)
@@ -1376,7 +1387,6 @@ def generate(options):
 
     final_conf["services"] = final_services
     final_conf["namespace"] = ns
-    final_conf["chunk_size"] = ENV['CHUNK_SIZE']
     final_conf["storage_policy"] = stgpol
     final_conf["account"] = 'test_account'
     final_conf["sds_path"] = SDSDIR
@@ -1384,6 +1394,16 @@ def generate(options):
     final_conf[M2_REPLICAS] = meta2_replicas
     final_conf[M1_REPLICAS] = meta1_replicas
     final_conf[M1_DIGITS] = meta1_digits
+    for k in (WORMED,
+              MASTER_VALUE, SLAVE_VALUE, STANDALONE_VALUE,
+              APPLICATION_KEY, COMPRESSION, BUCKET_NAME,
+              ACCOUNT_ID, CHUNK_SIZE, PORT_START, PROFILE,
+              MONITOR_PERIOD):
+        if k in ENV:
+            final_conf[k] = ENV[k]
+        elif k in defaults:
+            final_conf[k] = defaults[k]
+    final_conf['config'] = options['config']
     with open('{CFGDIR}/test.yml'.format(**ENV), 'w+') as f:
         f.write(yaml.dump(final_conf))
     return final_conf
@@ -1394,6 +1414,20 @@ def dump_config(conf):
     print 'REPLI_CONTAINER=%s' % conf[M2_REPLICAS]
     print 'REPLI_DIRECTORY=%s' % conf[M1_REPLICAS]
     print 'M1_DIGITS=%s' % conf[M1_DIGITS]
+
+
+def merge_config(base, inc):
+    for k, v in inc.iteritems():
+        if isinstance(v,dict):
+            if k not in base:
+                base[k] = v
+            elif isinstance(base[k],dict):
+                base[k] = merge_config(base[k], v)
+            else:
+                raise Exception("What the fuck!? You fucking basterd!")
+        else:
+            base[k] = v
+    return base
 
 
 def main():
@@ -1412,6 +1446,8 @@ def main():
                         help="set of IP to use (repeatable option)")
 
     opts = {}
+    opts['config'] = dict()
+    opts['config']['proxy.cache.enabled'] = False
     opts[ZOOKEEPER] = False
     opts['conscience'] = {SVC_NB: None, SVC_HOSTS: None}
     opts['meta0'] = {SVC_NB: None, SVC_HOSTS: None}
@@ -1427,7 +1463,7 @@ def main():
             with open(path, 'r') as f:
                 data = yaml.load(f)
                 if data:
-                    opts.update(data)
+                    opts = merge_config(opts, data)
 
     # Remove empty strings, then apply the default if no value remains
     options.ip = [str(x) for x in options.ip if x]
