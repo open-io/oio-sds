@@ -26,6 +26,9 @@ License along with this library.
 #include <sys/stat.h>
 #include <sys/vfs.h>
 
+// DO NOT REMOVE! It is required for "major" and "minor" since glibc 2.24.
+#include <sys/sysmacros.h>
+
 #include <core/oio_core.h>
 #include <core/client_variables.h>
 
