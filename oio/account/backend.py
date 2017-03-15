@@ -193,6 +193,11 @@ class AccountBackend(object):
         info['metadata'] = data[2]
         return info
 
+    def list_account(self):
+        conn = self.conn
+        accounts = conn.hkeys('accounts:')
+        return accounts
+
     def update_container(self, account_id, name, mtime, dtime, object_count,
                          bytes_used):
         conn = self.conn
