@@ -98,6 +98,11 @@ static struct grid_main_option_s common_options[] =
 	{"Announce", OT_STRING, {.str = &SRV.announce},
 		"Announce this IP:PORT couple instead of the TCP endpoint"},
 
+	{"SysConfig", OT_BOOL, {.b = &SRV.config_system},
+		"Load the system configuration and overload the central variables"},
+	{"Config", OT_LIST, {.lst = &SRV.config_paths},
+		"Load the given file and overload the central variables"},
+
 	{"Replicate", OT_BOOL, {.b = &SRV.flag_replicable},
 		"DO NOT USE THIS. This might disable the replication"},
 
@@ -176,12 +181,13 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 		GRID_ERROR("Invalid URL to be announced [%s]", ss->announce->str);
 		return FALSE;
 	}
+
+	/* Positional argument: NS */
+
 	if (argc < 2) {
 		GRID_ERROR("Not enough options, see usage.");
 		return FALSE;
 	}
-
-	// Positional arguments
 	gsize s = g_strlcpy(ss->ns_name, argv[0], sizeof(ss->ns_name));
 	if (s >= sizeof(ss->ns_name)) {
 		GRID_WARN("Namespace name too long (given=%"G_GSIZE_FORMAT" max=%u)",
@@ -190,8 +196,7 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 	}
 	GRID_DEBUG("NS configured to [%s]", ss->ns_name);
 
-	ss->lb_world = oio_lb_local__create_world();
-	ss->lb = oio_lb__create();
+	/* Positional argument: VOLUME */
 
 	s = g_strlcpy(ss->volume, argv[1], sizeof(ss->volume));
 	if (s >= sizeof(ss->volume)) {
@@ -201,10 +206,31 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 	}
 	GRID_DEBUG("Volume configured to [%s]", ss->volume);
 
-	/* Load the default ZK url */
+	/* Before loading what remains, first populate the central configuration
+	 * facility. This is a pure side effect but the value might have an impact
+	 * even on the structure creations. */
+
+	/* TODO(jfs): deduplicate this with its copy in proxy/metacd_http.c */
+	struct oio_cfg_handle_s *ns_conf = oio_cfg_cache_create(30 * G_TIME_SPAN_SECOND);
+	oio_cfg_set_handle(ns_conf);
+	if (SRV.config_system)
+		oio_var_value_all_with_config(ns_conf, ss->ns_name);
+	ns_conf = NULL; /* value now global */
+
+	for (GSList *l = SRV.config_paths; l ; l = l->next) {
+		if (!l->data)
+			continue;
+		struct oio_cfg_handle_s *cfg =
+			oio_cfg_cache_create_fragment(l->data);
+		oio_var_value_all_with_config(cfg, ss->ns_name);
+		oio_cfg_handle_clean(cfg);
+	}
+
+	/* Load the ZK url.
+	 * We first look for an URL common to all the services, and we will maybe
+	 * override it with a value specific for the file. */
 	ss->zk_url = oio_cfg_get_value(ss->ns_name, OIO_CFG_ZOOKEEPER);
 
-	/* if any, use a specific ZK url for the current service type */
 	do {
 		gchar k[sizeof(OIO_CFG_ZOOKEEPER)+2+LIMIT_LENGTH_SRVTYPE];
 		g_snprintf(k, sizeof(k), "%s.%s", OIO_CFG_ZOOKEEPER, ss->service_config->srvtype);
@@ -293,7 +319,9 @@ _configure_limits(struct sqlx_service_s *ss)
 static gboolean
 _init_configless_structures(struct sqlx_service_s *ss)
 {
-	if (!(ss->server = network_server_init())
+	if (!(ss->lb_world = oio_lb_local__create_world())
+			|| !(ss->lb = oio_lb__create())
+			|| !(ss->server = network_server_init())
 			|| !(ss->dispatcher = transport_gridd_build_empty_dispatcher())
 			|| !(ss->clients_pool = gridd_client_pool_create())
 			|| !(ss->clients_factory = gridd_client_factory_create())

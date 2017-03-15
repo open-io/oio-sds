@@ -88,6 +88,14 @@ struct sqlx_service_s
 	GString *announce;
 	gchar *zk_url;
 
+	/* Should the service load an additional list of configuration files to
+	 * supersede the values in place in the central configuration facility */
+	GSList *config_paths;
+
+	/* Should the service load the system configuration and feed the central
+	 * configuration facility. */
+	gboolean config_system;
+
 	struct sqlx_repository_s *repository;
 	struct sqlx_sync_s *sync;
 	struct sqlx_peering_s *peering;
