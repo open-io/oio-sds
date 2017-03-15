@@ -26,6 +26,12 @@ class TestAccountServer(BaseTestCase):
         status = json.loads(resp.data)
         self.assertTrue(status['account_count'] > 0)
 
+    def test_account_list(self):
+        resp = self.app.get('/v1.0/account/list')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(self.account_id in resp.data)
+        self.assertFalse('Should_no_exist' in resp.data)
+
     def test_account_info(self):
         resp = self.app.get('/v1.0/account/show',
                             query_string={"id": self.account_id})

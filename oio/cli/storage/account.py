@@ -143,3 +143,43 @@ class UnsetAccount(command.Command):
             account=parsed_args.account,
             properties=parsed_args.property
         )
+
+
+class ListAccount(lister.Lister):
+    """List Account"""
+
+    log = logging.getLogger(__name__ + '.ListAccount')
+
+    def get_parser(self, prog_name):
+        parser = super(ListAccount, self).get_parser(prog_name)
+        parser.add_argument(
+            '--full',
+            dest='full_listing',
+            default=False,
+            help='Full listing',
+            action="store_true"
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        data = self.app.client_manager.storage.account_list()
+        accounts = ((e,) for e in data)
+
+        if parsed_args.full_listing:
+            columns = ('Name', 'bytes', 'containers', 'objects', 'ctime',
+                       'metadata')
+            full_info = []
+            for account in accounts:
+                data = self.app.client_manager.storage.account_show(
+                    account=account
+                )
+                full_info.append((data['id'], data['bytes'],
+                                  data['containers'], data['objects'],
+                                  data['ctime'], data['metadata']))
+
+            return columns, full_info
+
+        column = ('Name',)
+        return column, accounts

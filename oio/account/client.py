@@ -63,6 +63,13 @@ class AccountClient(HttpApi):
         """
         self._account_request(account, 'POST', 'delete', **kwargs)
 
+    def account_list(self, **kwargs):
+        """
+        List accounts.
+        """
+        _resp, body = self._account_request(None, 'GET', 'list', **kwargs)
+        return body
+
     def account_show(self, account, **kwargs):
         """
         Get information about an account.

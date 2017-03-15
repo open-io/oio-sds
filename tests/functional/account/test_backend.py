@@ -60,6 +60,18 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(metadata['a'], '1b')
         self.assert_('b' not in metadata)
 
+    def test_list_account(self):
+        backend = AccountBackend({}, self.conn)
+
+        # Create and check if in list
+        account_id = 'test_list'
+        backend.create_account(account_id)
+        account_list = backend.list_account()
+        self.assertTrue(account_id in account_list)
+
+        # Check the result of a nonexistent account
+        self.assertFalse("Should_not_exist" in account_list)
+
     def test_info_account(self):
         backend = AccountBackend({}, self.conn)
         account_id = 'test'

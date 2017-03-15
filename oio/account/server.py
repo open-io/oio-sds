@@ -34,6 +34,7 @@ class Account(object):
             Rule('/status', endpoint='status'),
             Rule('/v1.0/account/create', endpoint='account_create'),
             Rule('/v1.0/account/delete', endpoint='account_delete'),
+            Rule('/v1.0/account/list', endpoint='account_list'),
             Rule('/v1.0/account/update', endpoint='account_update'),
             Rule('/v1.0/account/show', endpoint='account_show'),
             Rule('/v1.0/account/containers', endpoint='account_containers'),
@@ -58,6 +59,12 @@ class Account(object):
             return Response(id, 201)
         else:
             return Response(status=202)
+
+    def on_account_list(self, req):
+        accounts = self.backend.list_account()
+        if accounts is None:
+            return NotFound('No account found')
+        return Response(json.dumps(accounts), mimetype='text/json')
 
     def on_account_delete(self, req):
         account_id = self._get_account_id(req)

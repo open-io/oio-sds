@@ -228,6 +228,12 @@ class ObjectStorageApi(object):
         """
         return self.account.account_show(account, headers=headers)
 
+    def account_list(self, headers=None):
+        """
+        List accounts
+        """
+        return self.account.account_list(headers=headers)
+
     # FIXME:
     @handle_account_not_found
     def account_update(self, account, metadata, to_delete=None, headers=None):
