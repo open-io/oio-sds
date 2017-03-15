@@ -696,19 +696,8 @@ event-agent=beanstalk://127.0.0.1:11300
 #event-agent=ipc://${RUNDIR}/event-agent.sock
 conscience=${CS_ALL_PUB}
 
-log_outgoing=yes
-avoid_faulty_services=${AVOID_FAULTY}
-
-# Allow the sqliterepo election mechanism to use UDP requests
-udp_allowed=${UDP_ALLOWED}
-
 meta1_digits=${M1_DIGITS}
-zk_shuffled=${ZK_SHUFFLED}
 
-# Allow rawx to send chunk events (enabled by default)
-#rawx_events=yes
-
-proxy.cache.enabled=${PROXY_CACHE}
 """
 
 template_event_agent = """
@@ -916,7 +905,6 @@ IP = 'ip'
 SVC_HOSTS = 'hosts'
 SVC_NB = 'count'
 SVC_PARAMS = 'params'
-PROXY_CACHE = 'proxy_cache'
 ALLOW_REDIS = 'redis'
 OPENSUSE = 'opensuse'
 ZOOKEEPER = 'zookeeper'
@@ -941,14 +929,10 @@ NS_STATE="state"
 MASTER_VALUE="master"
 SLAVE_VALUE="slave"
 STANDALONE_VALUE="standalone"
-AVOID_FAULTY="avoid_faulty_services"
-UDP_ALLOWED="udp_allowed"
-ZK_SHUFFLED="zk_shuffled"
 
 defaults = {
     'NS': 'OPENIO',
     SVC_HOSTS: ('127.0.0.1',),
-    PROXY_CACHE: False,
     'ZK': '127.0.0.1:2181',
     'NB_CS': 1,
     'NB_M0': 1,
@@ -962,9 +946,7 @@ defaults = {
     'REPLI_M2': 1,
     'REPLI_M1': 1,
     'COMPRESSION': "off",
-    M1_DIGITS: 4,
-    AVOID_FAULTY: "off",
-    UDP_ALLOWED: "off"}
+    M1_DIGITS: 4}
 
 # XXX When /usr/sbin/httpd is present we suspect a Redhat/Centos/Fedora
 # environment. If not, we consider being in a Ubuntu/Debian environment.
@@ -1049,16 +1031,11 @@ def generate(options):
     is_wormed = options.get('worm', False)
     worm = '1' if is_wormed else '0'
     state = options.get("state", None)
-    avoid_faulty_services = str(options.get(AVOID_FAULTY, "off")).lower()
-    udp_allowed = str(options.get(UDP_ALLOWED, "off")).lower()
-    zk_shuffled = str(options.get(ZK_SHUFFLED, "off")).lower()
-    proxy_cache = ensure(options.get(PROXY_CACHE), defaults[PROXY_CACHE])
 
     if state not in [MASTER_VALUE, SLAVE_VALUE, STANDALONE_VALUE]:
         state = STANDALONE_VALUE
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(ZK_CNXSTRING=options.get('ZK'),
-               PROXY_CACHE=str(proxy_cache).lower(),
                NS=ns,
                HOME=HOME,
                EXE_PREFIX=EXE_PREFIX,
@@ -1096,7 +1073,6 @@ def generate(options):
                META_HEADER=META_HEADER,
                STATE=state,
                WORM=worm,
-               AVOID_FAULTY=avoid_faulty_services,
                UDP_ALLOWED=udp_allowed,
                ZK_SHUFFLED=zk_shuffled)
 
@@ -1404,9 +1380,6 @@ def generate(options):
     final_conf["storage_policy"] = stgpol
     final_conf["account"] = 'test_account'
     final_conf["sds_path"] = SDSDIR
-    final_conf[AVOID_FAULTY] = avoid_faulty_services
-    final_conf[UDP_ALLOWED] = udp_allowed
-    final_conf[ZK_SHUFFLED] = zk_shuffled
     final_conf["proxy"] = final_services['proxy'][0]['addr']
     final_conf[M2_REPLICAS] = meta2_replicas
     final_conf[M1_REPLICAS] = meta1_replicas

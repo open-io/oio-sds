@@ -32,7 +32,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <mod_dav.h>
 
 #include <core/oio_sds.h>
+#include <core/oiovar.h>
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/server_variables.h>
 #include <cluster/lib/gridcluster.h>
 #include <rawx-lib/src/rawx.h>
 
@@ -358,7 +360,17 @@ rawx_hook_child_init(apr_pool_t *pchild, server_rec *s)
 
 	conf->cleanup = _cleanup_child;
 
-	if (oio_cfg_get_bool(conf->ns_name, OIO_CFG_RAWX_EVENTS, TRUE)) {
+	/* Load the system configuration in the central config system */
+	do {
+		struct oio_cfg_handle_s *ns_conf =
+			oio_cfg_cache_create(30 * G_TIME_SPAN_SECOND);
+		if (ns_conf) {
+			oio_var_value_all_with_config(ns_conf, conf->ns_name);
+			oio_cfg_handle_clean(ns_conf);
+		}
+	} while (0);
+
+	if (oio_rawx_events) {
 		gchar *event_agent_addr = oio_cfg_get_eventagent(conf->ns_name);
 		GError *err = rawx_event_init(event_agent_addr);
 		if (NULL != err) {

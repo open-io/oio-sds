@@ -50,8 +50,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "sqlx_service.h"
 
-static volatile gboolean udp_allowed = FALSE;
-
 // common_main hooks
 static struct grid_main_option_s * sqlx_service_get_options(void);
 static const char * sqlx_service_usage(void);
@@ -218,23 +216,6 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 		if (str) oio_str_reuse(&ss->zk_url, str);
 	} while (0);
 
-	/* Check if UDP is allowed for servers in the /etc/oio/sds.conf files */
-	gchar *str_udp_allowed = oio_cfg_get_value (ss->ns_name, OIO_CFG_UDP_ALLOWED);
-	if (str_udp_allowed) {
-		udp_allowed = oio_str_parse_bool(str_udp_allowed, FALSE);
-		GRID_NOTICE("UDP %s", udp_allowed ? "allowed" : "forbidden");
-		g_free(str_udp_allowed);
-	}
-
-	/* Check if the logging of outgoing requests has been activated */
-	gchar *str_log_out = oio_cfg_get_value(ss->ns_name, OIO_CFG_LOG_OUTGOING);
-	if (str_log_out) {
-		oio_log_outgoing = oio_str_parse_bool(str_log_out, FALSE);
-		g_free(str_log_out);
-	}
-	if (oio_log_outgoing)
-		GRID_NOTICE("Outgoing requests log [ON]");
-
 	return TRUE;
 }
 
@@ -342,9 +323,7 @@ _configure_synchronism(struct sqlx_service_s *ss)
 		return TRUE;
 	}
 
-	gboolean shuffle = oio_cfg_get_bool(ss->ns_name, OIO_CFG_ZK_SHUFFLED, TRUE);
-	GRID_INFO("ZK cnx string shuffling [%s]", shuffle ? "ON" : "OFF");
-	ss->sync = sqlx_sync_create(ss->zk_url, shuffle);
+	ss->sync = sqlx_sync_create(ss->zk_url);
 	if (!ss->sync)
 		return FALSE;
 
@@ -686,7 +665,7 @@ sqlx_service_action(void)
 	if (!grid_main_is_running())
 		return;
 
-	if (udp_allowed) {
+	if (oio_udp_allowed) {
 		int fd_udp = network_server_first_udp(SRV.server);
 		GRID_DEBUG("UDP socket fd=%d", fd_udp);
 		sqlx_peering_direct__set_udp(SRV.peering, fd_udp);

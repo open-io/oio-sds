@@ -524,6 +524,14 @@ Used by `gcc`
  * cmake directive: *OIO__PROXY_URL_PATH_MAXLEN*
  * range: 32 -> 65536
 
+### rawx.events_allowed
+
+> TODO: to be documented
+
+ * default: **TRUE**
+ * type: gboolean
+ * cmake directive: *OIO__RAWX_EVENTS_ALLOWED*
+
 ### resolver.cache.csm0.max.default
 
 > In any service resolver instanciated, sets the maximum number of entries related to meta0 (meta1 addresses) and conscience (meta0 address)
@@ -604,6 +612,14 @@ Used by `gcc`
  * type: gint64
  * cmake directive: *OIO__SERVER_CNX_TIMEOUT_PERSIST*
  * range: 0 -> 1 * G_TIME_SPAN_DAY
+
+### server.log_outgoing
+
+> TODO: to be documented
+
+ * default: **FALSE**
+ * type: gboolean
+ * cmake directive: *OIO__SERVER_LOG_OUTGOING*
 
 ### server.pool.max_idle
 
@@ -1022,6 +1038,14 @@ Used by `gcc`
  * type: gdouble
  * cmake directive: *OIO__SQLX_OUTGOING_TIMEOUT_REQ*
  * range: 0.01 -> 60.0
+
+### udp_allowed
+
+> TODO: to be documented
+
+ * default: **FALSE**
+ * type: gboolean
+ * cmake directive: *OIO__UDP_ALLOWED*
 
 ## Variables only for testing purposes
 
