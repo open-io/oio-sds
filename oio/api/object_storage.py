@@ -758,9 +758,12 @@ class ObjectStorageAPI(API):
                     connection_timeout=self.connection_timeout,
                     response_timeout=self.read_timeout,
                     read_timeout=self.read_timeout)
-                it = reader.get_iter()
-                if not it:
-                    raise exc.OioException("Error while downloading")
+                try:
+                    it = reader.get_iter()
+                except Exception as err:
+                    raise exc.OioException(
+                        "Error while downloading position %d: %s" %
+                        (pos, err))
                 for part in it:
                     for d in part['iter']:
                         total_bytes += len(d)

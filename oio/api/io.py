@@ -233,7 +233,10 @@ class ChunkReader(object):
             self.request_headers['Range'] = 'bytes=%d-' % nb_bytes
 
     def _get_request(self, chunk):
-        # connect to chunk
+        """
+        Connect to a chunk, fetch headers but don't read data.
+        Save the response object in `self.sources` list.
+        """
         try:
             with green.ConnectionTimeout(self.connection_timeout):
                 raw_url = chunk["url"]
@@ -243,20 +246,32 @@ class ChunkReader(object):
             with Timeout(self.response_timeout):
                 source = conn.getresponse()
                 source.conn = conn
-        except (Exception, Timeout):
+        except (Exception, Timeout) as error:
             logger.exception('Connection failed to %s', chunk)
+            # TODO: make a daughter class to wrap __str__
+            if isinstance(error, Timeout):
+                self._resp_by_chunk[chunk["url"]] = (0, "Timeout %s" % error)
+            else:
+                self._resp_by_chunk[chunk["url"]] = (0, str(error))
             return False
+
         if source.status in (200, 206):
             self.status = source.status
             self._headers = source.getheaders()
             self.sources.append((source, chunk))
             return True
         else:
-            logger.warn("Invalid GET response from %s", chunk)
-            self._resp_by_chunk[chunk["url"]] = (source.status, source.reason)
+            logger.warn("Invalid response from %s: %d %s",
+                        chunk, source.status, source.reason)
+            self._resp_by_chunk[chunk["url"]] = (source.status,
+                                                 str(source.reason))
         return False
 
     def _get_source(self):
+        """
+        Iterate on chunks until one answers,
+        and return the response object.
+        """
         for chunk in self.chunk_iter:
             # continue to iterate until we find a valid source
             if self._get_request(chunk):
@@ -271,14 +286,22 @@ class ChunkReader(object):
         source, chunk = self._get_source()
         if source:
             return self._get_iter(chunk, source)
-        return None
+        errors = dict()
+        for url, err in self._resp_by_chunk.items():
+            err_list = errors.get(err) or list()
+            err_list.append(url)
+            errors[err] = err_list
+        if len(errors) == 1:
+            # All errors are of the same type, group them
+            status, chunks = errors.popitem()
+            raise exc.from_status(status[0], "%s %s" % (status[1], chunks))
+        raise exc.ServiceUnavailable("unavailable chunks: %s" %
+                                     self._resp_by_chunk)
 
     def stream(self):
         # Calling that right now will make `headers` field available
         # before the caller starts reading the stream
         parts_iter = self.get_iter()
-        if not parts_iter:
-            raise exc.from_status(*self._resp_by_chunk.popitem()[1])
 
         def _iter():
             for part in parts_iter:
