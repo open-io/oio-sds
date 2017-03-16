@@ -744,6 +744,9 @@ _curl_get_handle_proxy (void)
 {
 	CURL *h = curl_easy_init ();
 	curl_easy_setopt (h, CURLOPT_USERAGENT, OIOSDS_http_agent);
+#if (LIBCURL_VERSION_MAJOR > 7) || ((LIBCURL_VERSION_MAJOR == 7) && (LIBCURL_VERSION_MINOR >= 49))
+	curl_easy_setopt (h, CURLOPT_TCP_FASTOPEN, 1L);
+#endif
 	curl_easy_setopt (h, CURLOPT_NOPROGRESS, 1L);
 	curl_easy_setopt (h, CURLOPT_PROXY, "");
 	curl_easy_setopt (h, CURLOPT_FORBID_REUSE, 0L);
