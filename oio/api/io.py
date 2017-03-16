@@ -20,7 +20,7 @@ from eventlet import sleep, Timeout
 from oio.common import exceptions as exc
 from oio.common.http import http_connect, parse_content_type,\
     parse_content_range, ranges_from_http_header, http_header_from_ranges
-from oio.common.utils import GeneratorIO
+from oio.common.utils import GeneratorIO, group_chunk_errors
 from oio.common import green
 
 logger = logging.getLogger(__name__)
@@ -243,16 +243,12 @@ class ChunkReader(object):
                 parsed = urlparse(raw_url)
                 conn = http_connect(parsed.netloc, 'GET', parsed.path,
                                     self.request_headers)
-            with Timeout(self.response_timeout):
+            with green.OioTimeout(self.response_timeout):
                 source = conn.getresponse()
                 source.conn = conn
         except (Exception, Timeout) as error:
             logger.exception('Connection failed to %s', chunk)
-            # TODO: make a daughter class to wrap __str__
-            if isinstance(error, Timeout):
-                self._resp_by_chunk[chunk["url"]] = (0, "Timeout %s" % error)
-            else:
-                self._resp_by_chunk[chunk["url"]] = (0, str(error))
+            self._resp_by_chunk[chunk["url"]] = (0, str(error))
             return False
 
         if source.status in (200, 206):
@@ -286,11 +282,7 @@ class ChunkReader(object):
         source, chunk = self._get_source()
         if source:
             return self._get_iter(chunk, source)
-        errors = dict()
-        for url, err in self._resp_by_chunk.items():
-            err_list = errors.get(err) or list()
-            err_list.append(url)
-            errors[err] = err_list
+        errors = group_chunk_errors(self._resp_by_chunk.items())
         if len(errors) == 1:
             # All errors are of the same type, group them
             status, chunks = errors.popitem()
