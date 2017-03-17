@@ -15,7 +15,6 @@ link_directories(
 
 
 add_library(sqlxsrv SHARED sqlx_service.c)
-
 set_target_properties(sqlxsrv PROPERTIES SOVERSION ${ABI_VERSION})
 target_link_libraries(sqlxsrv
 		server metautils gridcluster sqliterepo

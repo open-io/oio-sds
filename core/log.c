@@ -30,8 +30,6 @@ License along with this library.
 #include "oioext.h"
 #include "oiostr.h"
 
-int oio_log_outgoing = 0;
-
 int oio_log_level_default = 0x7F;
 
 int oio_log_level = 0x7F;

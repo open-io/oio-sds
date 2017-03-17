@@ -9,6 +9,7 @@ link_directories()
 include_directories(AFTER
 		${JSONC_INCLUDE_DIRS})
 
+
 add_custom_command(
 	OUTPUT
 		constraints.c constraints.h
@@ -30,7 +31,6 @@ add_custom_command(
 		per_decoder.c per_decoder.h
 		per_opentype.c
 		converter-sample.c
-
 		NativeEnumerated.c NativeEnumerated.h
 		NativeInteger.c NativeInteger.h
 		OCTET_STRING.c OCTET_STRING.h
@@ -83,26 +83,49 @@ add_custom_command(
 		M2V2Property.c M2V2Property.h
 
 	PRE_BUILD
-	COMMAND ${ASN1C_EXECUTABLE} ${ASN1C_EXE_OPTS} -fcompound-names -fskeletons-copy ${CMAKE_CURRENT_SOURCE_DIR}/description.asn
-	DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/description.asn
+	COMMAND
+		${ASN1C_EXECUTABLE}
+	ARGS
+		${ASN1C_EXE_OPTS}
+		-fcompound-names
+		-fskeletons-copy
+		${CMAKE_CURRENT_SOURCE_DIR}/description.asn
+	DEPENDS
+		${CMAKE_CURRENT_SOURCE_DIR}/description.asn
 	COMMENT "Generating asn1c types"
-	DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/description.asn
 )
 
 add_custom_command(
 	OUTPUT expr.yacc.c expr.yacc.h
+	DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/expr.yacc.y
 	COMMAND ${BISON_EXECUTABLE}
 	ARGS -d -y -o expr.yacc.c ${CMAKE_CURRENT_SOURCE_DIR}/expr.yacc.y
 )
 
 add_custom_command(
 	OUTPUT expr.lex.c
+	DEPENDS expr.yacc.c expr.yacc.h
 	COMMAND ${FLEX_EXECUTABLE}
 	ARGS -s -oexpr.lex.c ${CMAKE_CURRENT_SOURCE_DIR}/expr.lex.l
-	DEPENDS expr.yacc.c expr.yacc.h
 )
 
-#	ARGS -d -s -oexpr.lex.c ${CMAKE_CURRENT_SOURCE_DIR}/expr.lex.l
+add_custom_command(
+	OUTPUT
+		${CMAKE_CURRENT_BINARY_DIR}/server_variables.c
+		${CMAKE_CURRENT_BINARY_DIR}/server_variables.h
+	DEPENDS
+		${CMAKE_SOURCE_DIR}/confgen.py
+		${CMAKE_SOURCE_DIR}/conf.json
+	PRE_BUILD
+	COMMENT
+		"Generating the central configuration"
+	COMMAND
+		${PYTHON_EXECUTABLE}
+	ARGS
+		${CMAKE_SOURCE_DIR}/confgen.py
+		"server"
+		${CMAKE_SOURCE_DIR}/conf.json)
+
 
 add_library(metautils SHARED
 		metacomm.h
@@ -144,6 +167,9 @@ add_library(metautils SHARED
 
 		gridd_client.c gridd_client.h
 		gridd_client_ext.c gridd_client_ext.h
+
+		${CMAKE_CURRENT_BINARY_DIR}/server_variables.c
+		${CMAKE_CURRENT_BINARY_DIR}/server_variables.h
 
 		${CMAKE_CURRENT_BINARY_DIR}/constraints.c
 		${CMAKE_CURRENT_BINARY_DIR}/constraints.h

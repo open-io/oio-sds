@@ -33,34 +33,11 @@ static GThread *admin_thread = NULL;
 static GThread *upstream_thread = NULL;
 static GThread *downstream_thread = NULL;
 
-guint csurl_refresh_delay = PROXYD_PERIOD_RELOAD_CSURL;
-guint srvtypes_refresh_delay = PROXYD_PERIOD_RELOAD_SRVTYPES;
-guint nsinfo_refresh_delay = PROXYD_PERIOD_RELOAD_NSINFO;
-time_t nsinfo_refresh_m0 = PROXYD_PERIOD_RELOAD_M0INFO;
-
-gint64 ttl_expire_local_services = PROXYD_TTL_DEAD_LOCAL_SERVICES;
-gint64 ttl_down_services = PROXYD_TTL_DOWN_SERVICES;
-gint64 ttl_known_services = PROXYD_TTL_KNOWN_SERVICES;
-gint64 ttl_expire_master_services = PROXYD_TTL_MASTER_SERVICES;
-
-// Configuration
-
+static gboolean config_system = TRUE;
+static GSList *config_paths = NULL;
 static GSList *config_urlv = NULL;
 
-static guint lb_downstream_delay = PROXYD_DEFAULT_PERIOD_DOWNSTREAM;
-static guint lb_upstream_delay = PROXYD_DEFAULT_PERIOD_UPSTREAM;
-static guint dir_low_ttl = PROXYD_DEFAULT_TTL_SERVICES / G_TIME_SPAN_SECOND;
-static guint dir_low_max = PROXYD_DEFAULT_MAX_SERVICES;
-static guint dir_high_ttl = PROXYD_DEFAULT_TTL_CSM0 / G_TIME_SPAN_SECOND;
-static guint dir_high_max = PROXYD_DEFAULT_MAX_CSM0;
-
 gchar *ns_name = NULL;
-gboolean flag_cache_enabled = TRUE;
-gboolean flag_local_scores = FALSE;
-gboolean flag_prefer_master_for_write = TRUE;
-gboolean flag_prefer_master_for_read = FALSE;
-gboolean flag_prefer_slave_for_read = FALSE;
-gboolean flag_force_master = FALSE;
 
 struct oio_lb_world_s *lb_world = NULL;
 struct oio_lb_s *lb = NULL;
@@ -143,7 +120,7 @@ static struct path_matching_s **
 _metacd_match (const gchar *method, const gchar *path)
 {
 	gsize lp = strlen(path), lm = strlen(method);
-	if (lp > PROXYD_PATH_MAXLEN || lm > 64)
+	if (lp > proxy_url_path_maxlen || lm > 64)
 		return g_malloc0(sizeof(struct path_matching_s*));
 
 	gchar *key = g_alloca (lp + 2 + lm + 1);
@@ -700,48 +677,11 @@ grid_main_get_options (void)
 			"An additional URL to bind to (might be used several time).\n"
 			"\t\tAccepts UNIX and INET sockets." },
 
-		{"LbRefresh", OT_INT, {.u = &lb_downstream_delay},
-			"Interval between load-balancer service refreshes (seconds)\n"},
+		{"SysConfig", OT_BOOL, {.b = &config_system},
+			"Load the system configuration and overload the central variables"},
 
-		{"RefreshNamespace", OT_TIME, {.u = &nsinfo_refresh_delay},
-			"Interval between NS configuration's refreshes (seconds)"},
-		{"RefreshConscience", OT_TIME, {.u = &csurl_refresh_delay},
-			"Interval between CS urls refreshes (seconds)"},
-		{"RefreshTypes", OT_TIME, {.u = &srvtypes_refresh_delay},
-			"Interval between service types refreshes (seconds)"},
-
-		{"SrvPush", OT_INT, {.u = &lb_upstream_delay},
-			"Interval between load-balancer service refreshes (seconds)\n"
-			"\t\tMust be >= 1"},
-
-		{"Cache", OT_BOOL, {.b = &flag_cache_enabled},
-			"Disable caching for the conscience: services are pushed\n"
-			"synchronously and no cache is kept on a GET."},
-
-		{"LocalScores", OT_BOOL, {.b = &flag_local_scores},
-			"Enables the updates of the list of local services, so that "
-			"their score is displayed. This gives a pretty output but "
-			"requires CPU spent in critical sections."},
-
-		{"DirLowTtl", OT_UINT, {.u = &dir_low_ttl},
-			"Directory 'low' (meta1) TTL for cache elements"},
-		{"DirLowMax", OT_UINT, {.u = &dir_low_max},
-			"Directory 'low' (meta1) MAX cached elements"},
-		{"DirHighTtl", OT_UINT, {.u = &dir_high_ttl},
-			"Directory 'high' (cs+meta0) TTL for cache elements"},
-		{"DirHighMax", OT_UINT, {.u = &dir_high_max},
-			"Directory 'high' (cs+meta0) MAX cached elements"},
-
-		{"PreferMaster", OT_BOOL, {.b = &flag_prefer_master_for_read},
-		        "Prefer to join the Master, even foor read-only"},
-		{"PreferSlave", OT_BOOL, {.b = &flag_prefer_slave_for_read},
-		        "Prefer to join a Slave, for read-only"},
-		{"PreferMasterForWrites", OT_BOOL, {.b = &flag_prefer_master_for_write},
-		        "Prefer to join a Master, for write operations"},
-		{"ForceMaster", OT_BOOL, {.b = &flag_force_master},
-		        "Force the service to redirect if not master "
-					"(even on read-only requests). Only effective on meta2 "
-					"requests."},
+		{"Config", OT_LIST, {.lst = &config_paths},
+			"Load the given file and overload the central variables"},
 
 		{NULL, 0, {.i = 0}, NULL}
 	};
@@ -846,6 +786,9 @@ grid_main_specific_fini (void)
 	g_slist_free_full (config_urlv, g_free);
 	config_urlv = NULL;
 
+	g_slist_free_full (config_paths, g_free);
+	config_paths = NULL;
+
 	if (ns_conf) {
 		oio_cfg_handle_clean(ns_conf);
 		ns_conf = NULL;
@@ -858,8 +801,15 @@ configure_request_handlers (void)
 #define SET(Url,Cb) path_parser_configure (path_parser, PROXYD_PREFIX Url, Cb)
 
 	SET("/status/#GET", action_status);
+	SET("/config/#GET", action_get_config);
+	SET("/config/#POST", action_set_config);
 
+	SET("/forward/config/#POST", action_forward_set_config);
+	SET("/forward/config/#GET", action_forward_get_config);
+
+	SET("/forward/stats/#GET", action_forward_stats);
 	SET("/forward/stats/#POST", action_forward_stats);
+
 	SET("/forward/$ACTION/#POST", action_forward);
 
 	SET("/cache/status/#GET", action_cache_status);
@@ -983,6 +933,20 @@ grid_main_configure (int argc, char **argv)
 	ns_conf = oio_cfg_cache_create(30 * G_TIME_SPAN_SECOND);
 	oio_cfg_set_handle(ns_conf);
 
+	/* load the system configuration */
+	if (config_system)
+		oio_var_value_all_with_config(ns_conf, ns_name);
+
+	/* override with specific files */
+	for (GSList *l = config_paths; l ; l = l->next) {
+		if (!l->data)
+			continue;
+		struct oio_cfg_handle_s *cfg =
+			oio_cfg_cache_create_fragment(l->data);
+		oio_var_value_all_with_config(cfg, ns_name);
+		oio_cfg_handle_clean(cfg);
+	}
+
 	_task_reload_csurl(NULL);
 	if (!csurl || !csurl_count) {
 		GRID_ERROR("No conscience URL configured");
@@ -991,12 +955,6 @@ grid_main_configure (int argc, char **argv)
 
 	path_parser = path_parser_init ();
 	configure_request_handlers ();
-
-	/* Make the proxy avoid meta services with known problems */
-	oio_cache_avoid_on_error = oio_cfg_get_bool (
-			ns_name, OIO_CFG_AVOID_BADSRV, FALSE);
-	if (oio_cache_avoid_on_error)
-		GRID_NOTICE("Faulty peers avoidance: ENABLED");
 
 	/* init the networking capability of the processus */
 	server = network_server_init ();
@@ -1024,12 +982,13 @@ grid_main_configure (int argc, char **argv)
 	hc_resolver_configure (resolver, f);
 	hc_resolver_qualify (resolver, service_is_ok);
 	hc_resolver_notify (resolver, service_invalidate);
-	hc_resolver_set_ttl_csm0 (resolver, dir_high_ttl * G_TIME_SPAN_SECOND);
+	hc_resolver_set_ttl_csm0 (resolver, dir_high_ttl);
 	hc_resolver_set_max_csm0 (resolver, dir_high_max);
-	hc_resolver_set_ttl_services (resolver, dir_low_ttl * G_TIME_SPAN_SECOND);
+	hc_resolver_set_ttl_services (resolver, dir_low_ttl);
 	hc_resolver_set_max_services (resolver, dir_low_max);
-	GRID_INFO ("RESOLVER limits HIGH[%u/%u] LOW[%u/%u]",
-		dir_high_max, dir_high_ttl, dir_low_max, dir_low_ttl);
+	GRID_INFO ("RESOLVER limits HIGH[%u/%"G_GINT64_FORMAT"]"
+			" LOW[%u/%"G_GINT64_FORMAT"]",
+			dir_high_max, dir_high_ttl, dir_low_max, dir_low_ttl);
 
 	srv_registered = _push_queue_create ();
 
@@ -1047,7 +1006,7 @@ grid_main_configure (int argc, char **argv)
 	// Prepare a queue responsible for the downstream from the conscience
 	downstream_gtq = grid_task_queue_create ("downstream");
 
-	grid_task_queue_register (downstream_gtq, (guint) 1,
+	grid_task_queue_register (downstream_gtq, 1,
 		(GDestroyNotify) _task_reload_lb, NULL, NULL);
 
 	// Now prepare a queue for administrative tasks, such as cache expiration,

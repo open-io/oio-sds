@@ -35,15 +35,6 @@ void oio_events_queue__send_overwritable(struct oio_events_queue_s *self,
  * the queue won't deny events. */
 gboolean oio_events_queue__is_stalled (struct oio_events_queue_s *self);
 
-/* the queue might handle events asynchronously, and this is how to configure
- * the number of events waiting */
-void oio_events_queue__set_max_pending (struct oio_events_queue_s *self,
-		guint max);
-
-/* Set the overwritable events buffering delay */
-void oio_events_queue__set_buffering (struct oio_events_queue_s *self,
-		gint64 us);
-
 GError * oio_events_queue__run (struct oio_events_queue_s *self,
 		gboolean (*running) (gboolean pending));
 

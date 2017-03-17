@@ -1,1 +1,2 @@
-proxy_cache: true
+config:
+  proxy_cache: true

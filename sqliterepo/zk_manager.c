@@ -26,6 +26,7 @@ License along with this library.
 #include <zookeeper.h>
 
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/server_variables.h>
 
 #include "sqliterepo.h"
 #include "hash.h"
@@ -99,7 +100,7 @@ zk_main_watch(zhandle_t *zh, int type, int state, const char *path,
 
 		/* XXX(jfs): forget the previous ID and reconnect */
 		manager->zh = zookeeper_init(manager->zk_url, zk_main_watch,
-				SQLX_SYNC_DEFAULT_ZK_TIMEOUT, NULL, manager, 0);
+				sqliterepo_zk_timeout / G_TIME_SPAN_MILLISECOND, NULL, manager, 0);
 		if (!manager->zh) {
 			GRID_ERROR("ZooKeeper init failure: (%d) %s",
 					errno, strerror(errno));
@@ -141,7 +142,7 @@ zk_srv_manager_create(gchar *namespace, gchar *url, gchar *srvType,
 			"/hc/ns/%s/srv/%s", namespace, srvType);
 
 	manager->zh = zookeeper_init(url, zk_main_watch,
-			SQLX_SYNC_DEFAULT_ZK_TIMEOUT, NULL, manager, 0);
+			sqliterepo_zk_timeout / G_TIME_SPAN_MILLISECOND, NULL, manager, 0);
 	if (!manager->zh)
 		return NEWERROR(errno, "ZooKeeper init failure: %s", strerror(errno));
 

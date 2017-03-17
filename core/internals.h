@@ -190,12 +190,6 @@ enum {
 
 typedef gint64 (*time_hook_f) (void);
 
-/* Must the service addresses be shuffled or not when uploading chunks */
-extern volatile int oio_sds_no_shuffle;
-
-/* Must the service addresses be shuffled or not (out from the directory) */
-extern volatile int oio_dir_no_shuffle;
-
 /* Let/Set it to NULL for the system time.
  * Microsecond precision */
 extern time_hook_f oio_time_monotonic;
@@ -268,6 +262,10 @@ void oio_cfg_set_handle (struct oio_cfg_handle_s *self);
 
 /* Create a cache handle that does caching. */
 struct oio_cfg_handle_s * oio_cfg_cache_create(gint64 delay);
+
+/* Create a caching configuration that just hold the value found in the file
+ * whose path has been given. */
+struct oio_cfg_handle_s * oio_cfg_cache_create_fragment(const char *path);
 
 #ifdef __cplusplus
 }

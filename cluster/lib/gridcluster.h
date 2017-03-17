@@ -26,8 +26,6 @@ License along with this library.
 
 #define NS_ACL_DENY_OPTION "deny"
 
-extern gboolean oio_cluster_allow_proxy;
-
 struct service_info_s;
 void metautils_srvinfo_ensure_tags (struct service_info_s *si);
 
@@ -47,7 +45,7 @@ GError* register_namespace_service (const struct service_info_s *si);
 gboolean namespace_in_worm_mode(namespace_info_t* ns_info);
 
 gchar * namespace_get_state(namespace_info_t* ns_info);
-	
+
 gint64 namespace_container_max_size(namespace_info_t* ns_info);
 
 gint64 namespace_chunk_size(const namespace_info_t* ns_info, const char *ns_name);

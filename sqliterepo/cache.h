@@ -27,9 +27,6 @@ License along with this library.
    with G_TIME_SPAN_* macros. */
 #define DEFAULT_CACHE_OPEN_TIMEOUT (20 * G_TIME_SPAN_SECOND)
 
-extern volatile gboolean oio_sqlx_cache_fail_on_heavy_load;
-extern volatile gboolean oio_sqlx_cache_alert_on_heavy_load;
-
 struct hashstr_s;
 
 typedef void (*sqlx_cache_close_hook)(gpointer);
@@ -46,10 +43,6 @@ void sqlx_cache_set_close_hook(sqlx_cache_t *cache,
 	sqlx_cache_close_hook hook);
 
 void sqlx_cache_set_max_bases(sqlx_cache_t *cache, guint max);
-
-/* Limit the number of low-priority threads waiting for a lock */
-sqlx_cache_t * sqlx_cache_set_max_waiting(sqlx_cache_t *cache,
-		guint32 max_waiting);
 
 /* timeout in the precision of oio_ext_monotonic_time() */
 void sqlx_cache_set_open_timeout(sqlx_cache_t *cache, gint64 timeout);

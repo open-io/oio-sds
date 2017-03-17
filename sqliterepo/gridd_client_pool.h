@@ -90,8 +90,6 @@ struct abstract_client_pool_s
 
 /* Public API -------------------------------------------------------------- */
 
-extern gint32 oio_sqlx_request_failure_threshold;
-
 struct gridd_client_pool_s * gridd_client_pool_create(void);
 
 /* Should not be used on an event that has already been defered. Because this

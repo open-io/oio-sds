@@ -26,14 +26,10 @@ struct oio_events_queue_buffer_s
 	GHashTable *msg_by_key;
 	GMutex msg_by_key_lock;
 	gint64 last_renew;
-	gint64 delay;
 };
 
-void oio_events_queue_buffer_init(struct oio_events_queue_buffer_s *buf,
-		gint64 delay);
+void oio_events_queue_buffer_init(struct oio_events_queue_buffer_s *buf);
 void oio_events_queue_buffer_clean(struct oio_events_queue_buffer_s *buf);
-void oio_events_queue_buffer_set_delay(struct oio_events_queue_buffer_s *buf,
-		gint64 new_delay);
 void oio_events_queue_buffer_put(struct oio_events_queue_buffer_s *buf,
 		gchar *key, gchar *msg);
 void oio_events_queue_buffer_maybe_flush(struct oio_events_queue_buffer_s *buf,

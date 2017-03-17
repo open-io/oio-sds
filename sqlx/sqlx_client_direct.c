@@ -28,6 +28,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <core/oiodir.h>
 #include <core/internals.h>
 
+#include <core/client_variables.h>
+
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/codec.h>
 
@@ -409,9 +411,9 @@ _sds_client_batch (struct oio_sqlx_client_s *self,
 		/* send the request and concat all the replies */
 		GByteArray *out = NULL;
 		GRID_DEBUG("SQLX trying with %s", p);
-		/* XXX JFS: here are memory copies. big result sets can cause OOM.
+		/* TODO(jfs): here are memory copies. big result sets can cause OOM.
 		 * Manage to avoid big resultsets. */
-		err = gridd_client_exec_and_concat (p, SQLX_CLIENT_TIMEOUT, req, &out);
+		err = gridd_client_exec_and_concat (p, oio_sqlx_timeout_req, req, &out);
 		if (err) {
 			if (err->code == CODE_NETWORK_ERROR) {
 				g_clear_error (&err);

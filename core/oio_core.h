@@ -27,4 +27,5 @@ License along with this library.
 # include "core/oiourl.h"
 # include "core/oiocs.h"
 # include "core/oiodir.h"
+# include "core/oiovar.h"
 #endif /*OIO_SDS__core__core_h*/

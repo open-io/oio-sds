@@ -25,6 +25,7 @@ License along with this library.
 #include <sys/socket.h>
 
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/server_variables.h>
 
 #include "sqliterepo.h"
 #include "hash.h"
@@ -130,24 +131,6 @@ struct election_manager_s
 
 	struct deque_beacon_s members_by_state[STEP_MAX];
 
-	/* how long we accept to wait for a status. */
-	gint64 delay_wait;
-
-	/* we DO NOT wait for an election in a transitional state since longer
-	 * than that */
-	gint64 delay_nowait_pending;
-
-	/* how long we wait before expiring a base */
-	gint64 delay_expire_NONE;
-	gint64 delay_expire_SLAVE;
-	gint64 delay_expire_MASTER;
-
-	/* how long we wait before restarting a failed election. */
-	gint64 delay_retry_FAILED;
-
-	/* how long we wait after the last USE sent to send a new */
-	gint64 delay_ping_final;
-
 	/* When has the lock been acquired */
 	gint64 when_lock;
 
@@ -244,8 +227,6 @@ struct election_member_s
 
 	struct logged_event_s log[EVENTLOG_SIZE];
 };
-
-gint64 oio_election_period_cond_wait = G_TIME_SPAN_SECOND;
 
 static void _noop (gpointer p) { (void)p; }
 
@@ -507,23 +488,23 @@ nodev_to_int32v(const struct String_vector *sv, const char *prefix)
 /* Public API --------------------------------------------------------------- */
 
 void
-election_manager_dump_delays(struct election_manager_s *manager)
+election_manager_dump_delays(void)
 {
 	GRID_INFO("Election delays:");
 	GRID_INFO("- get_status=%"G_GINT64_FORMAT"ms "
 			"but nowait after %"G_GINT64_FORMAT"ms",
-			manager->delay_wait / G_TIME_SPAN_MILLISECOND,
-			manager->delay_nowait_pending / G_TIME_SPAN_MILLISECOND);
+			oio_election_delay_wait / G_TIME_SPAN_MILLISECOND,
+			oio_election_delay_nowait_pending / G_TIME_SPAN_MILLISECOND);
 	GRID_INFO("- expire_SLAVE=%"G_GINT64_FORMAT"ms, "
 			"expire_MASTER=%"G_GINT64_FORMAT"ms, "
 			"expire_NONE=%"G_GINT64_FORMAT"ms",
-			manager->delay_expire_SLAVE / G_TIME_SPAN_MILLISECOND,
-			manager->delay_expire_MASTER / G_TIME_SPAN_MILLISECOND,
-			manager->delay_expire_NONE / G_TIME_SPAN_MILLISECOND);
+			oio_election_delay_expire_SLAVE / G_TIME_SPAN_MILLISECOND,
+			oio_election_delay_expire_MASTER / G_TIME_SPAN_MILLISECOND,
+			oio_election_delay_expire_NONE / G_TIME_SPAN_MILLISECOND);
 	GRID_INFO("- retry_failed=%"G_GINT64_FORMAT"ms",
-			manager->delay_retry_FAILED/ G_TIME_SPAN_MILLISECOND);
+			oio_election_delay_retry_FAILED / G_TIME_SPAN_MILLISECOND);
 	GRID_INFO("- ping_final=%"G_GINT64_FORMAT"ms",
-			manager->delay_ping_final / G_TIME_SPAN_MILLISECOND);
+			oio_election_delay_ping_final / G_TIME_SPAN_MILLISECOND);
 }
 
 GError *
@@ -540,17 +521,6 @@ election_manager_create(struct replication_config_s *config,
 
 	struct election_manager_s *manager = g_malloc0(sizeof(*manager));
 	manager->vtable = &VTABLE;
-	manager->delay_wait = SQLX_DELAY_MAXWAIT;
-	manager->delay_nowait_pending = SQLX_DELAY_NOWAIT_PENDING;
-	manager->delay_expire_NONE = SQLX_DELAY_EXPIRE_NONE;
-	manager->delay_expire_SLAVE = SQLX_DELAY_EXPIRE_FINAL;
-	/* The leader must expire after the slaves or its leaving
-	 * will trigger an event on the slaves that will bring it back. */
-	if (SQLX_DELAY_EXPIRE_FINAL > 0)
-		manager->delay_expire_MASTER =
-			(SQLX_DELAY_EXPIRE_FINAL + SQLX_DELAY_PING_FINAL) / 2;
-	manager->delay_retry_FAILED = SQLX_DELAY_RESTART_FAILED;
-	manager->delay_ping_final = SQLX_DELAY_PING_FINAL;
 	manager->config = config;
 
 	g_mutex_init(&manager->lock);
@@ -1801,7 +1771,7 @@ wait_for_final_status(struct election_member_s *m, const gint64 deadline)
 		transition(m, EVT_NONE, NULL);
 
 		if (m->when_unstable > 0 && m->when_unstable <
-				OLDEST(now, m->manager->delay_nowait_pending)) {
+				OLDEST(now, oio_election_delay_nowait_pending)) {
 			GRID_WARN("TIMEOUT! (election pending for too long) [%s.%s] step=%d/%s",
 					m->name.base, m->name.type, m->step, _step2str(m->step));
 			return FALSE;
@@ -1833,7 +1803,7 @@ _election_get_status(struct election_manager_s *mgr,
 	MANAGER_CHECK(mgr);
 	EXTRA_ASSERT(n != NULL);
 
-	gint64 deadline = oio_ext_monotonic_time () + mgr->delay_wait;
+	gint64 deadline = oio_ext_monotonic_time () + oio_election_delay_wait;
 
 	_manager_lock(mgr);
 	struct election_member_s *m = _LOCKED_init_member(mgr, n, TRUE);
@@ -2025,14 +1995,14 @@ _get_next_ping(const gint64 base, const gint64 jitter)
 
 #define _member_rearm_ping_MASTER(m) do { \
 	m->when_next_ping = _get_next_ping( \
-			m->manager->delay_ping_final, \
-			m->manager->delay_ping_final / 3); \
+			oio_election_delay_ping_final, \
+			oio_election_delay_ping_final / 3); \
 } while (0)
 
 #define _member_rearm_ping_SLAVE(m) do { \
 	m->when_next_ping = _get_next_ping( \
-			m->manager->delay_ping_final, \
-			m->manager->delay_ping_final / 3); \
+			oio_election_delay_ping_final, \
+			oio_election_delay_ping_final / 3); \
 } while (0)
 
 static void
@@ -2264,7 +2234,7 @@ member_action_to_CHECKING_MASTER(struct election_member_s *m)
 	EXTRA_ASSERT(!member_has_getvers(m));
 
 	if (m->step != STEP_CHECKING_MASTER)
-		m->attempts_GETVERS = SQLX_RETRIES_GETVERS_DEFAULT;
+		m->attempts_GETVERS = sqliterepo_getvers_max_retries;
 
 	if (m->pending_GETVERS > 0)
 		member_warn("lost:GETVERS", m);
@@ -2295,7 +2265,7 @@ member_action_to_CHECKING_SLAVES(struct election_member_s *m)
 	EXTRA_ASSERT(m->master_url == NULL);
 
 	if (m->step != STEP_CHECKING_SLAVES)
-		m->attempts_GETVERS = SQLX_RETRIES_GETVERS_DEFAULT;
+		m->attempts_GETVERS = sqliterepo_getvers_max_retries;
 
 	gchar **peers = NULL;
 	GError *err = member_get_peers(m, FALSE, &peers);
@@ -3118,7 +3088,6 @@ _member_react_SLAVE(struct election_member_s *member, enum event_type_e evt)
 {
 	gint64 now;
 	_member_assert_SLAVE (member);
-	const struct election_manager_s *M = member->manager;
 
 	/* Some transitions make the FSM exit the current final state. Those
 	 * induced by explicit actions (expirations, requests to leave) are
@@ -3131,7 +3100,7 @@ _member_react_SLAVE(struct election_member_s *member, enum event_type_e evt)
 		/* Possible time-triggered actions */
 		case EVT_NONE:
 			now = oio_ext_monotonic_time ();
-			if (_is_over(now, member->last_atime, M->delay_expire_SLAVE)) {
+			if (_is_over(now, member->last_atime, oio_election_delay_expire_SLAVE)) {
 				member->when_unstable = 0;
 				return member_action_to_LEAVING(member);
 			}
@@ -3172,7 +3141,6 @@ _member_react_MASTER(struct election_member_s *member, enum event_type_e evt)
 {
 	gint64 now;
 	_member_assert_MASTER (member);
-	const struct election_manager_s *M = member->manager;
 
 	/* cf. _member_react_SLAVE() about the change conditions of the
 	 * `when_unstable` variable. */
@@ -3180,7 +3148,7 @@ _member_react_MASTER(struct election_member_s *member, enum event_type_e evt)
 		/* Possible time-triggered actions */
 		case EVT_NONE:
 			now = oio_ext_monotonic_time();
-			if (_is_over(now, member->last_atime, M->delay_expire_MASTER)) {
+			if (_is_over(now, member->last_atime, oio_election_delay_expire_MASTER)) {
 				member->when_unstable = 0;
 				return member_action_to_LEAVING(member);
 			}
@@ -3218,13 +3186,12 @@ _member_react_FAILED(struct election_member_s *member, enum event_type_e evt)
 {
 	gint64 now;
 	_member_assert_FAILED (member);
-	const struct election_manager_s *M = member->manager;
 
 	switch (evt) {
 		/* Possible time-triggered actions */
 		case EVT_NONE:
 			now = oio_ext_monotonic_time();
-			if (_is_over(now, member->last_status, M->delay_retry_FAILED)) {
+			if (_is_over(now, member->last_status, oio_election_delay_retry_FAILED)) {
 				if (member->requested_USE)
 					return member_action_to_CREATING(member);
 				return member_action_to_NONE(member);
@@ -3364,7 +3331,7 @@ election_manager_play_timers (struct election_manager_s *manager, guint max)
 
 			struct election_member_s *m = l->data;
 			if (m->step == STEP_NONE) {
-				if (_is_over(now, m->last_status, manager->delay_expire_NONE)) {
+				if (_is_over(now, m->last_status, oio_election_delay_expire_NONE)) {
 					/* Election in NONE state for longer than acceptable */
 					if (m->refcount == 1) {
 						/* In addition, not referenced by anyone */

@@ -25,11 +25,8 @@ License along with this library.
 struct oio_url_s;
 
 /**
- *
- * @param m1
- * @param url
  * @param properties A NULL-terminated sequence of strings where: [i*2] is the
- * 					 i-th key and [(i*2)+1] is the i-th value
+ *					 i-th key and [(i*2)+1] is the i-th value
  * @return
  */
 GError * meta1v2_remote_create_reference (const char *m1, struct oio_url_s *url,

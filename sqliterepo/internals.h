@@ -29,69 +29,11 @@ License along with this library.
 # include <Table.h>
 # include <TableSequence.h>
 
-# ifndef  SQLX_MAX_WAITING
-#  define SQLX_MAX_WAITING 16
-# endif
-
-# ifndef  SQLX_HEAVYLOAD_ALERT
-#  define SQLX_HEAVYLOAD_ALERT TRUE
-# endif
-
-# ifndef  SQLX_HEAVYLOAD_FAIL
-#  define SQLX_HEAVYLOAD_FAIL FALSE
-# endif
-
-/**
- * "Hard" maximum number of bases that can be held by the cache.
- */
-# ifndef  SQLX_MAX_BASES
-#  define SQLX_MAX_BASES 32768
-# endif
-
-# ifndef  SQLX_GRACE_DELAY_COOL
-#  define SQLX_GRACE_DELAY_COOL 30L
-# endif
-
-# ifndef  SQLX_GRACE_DELAY_HOT
-#  define SQLX_GRACE_DELAY_HOT 300L
-# endif
-
-# ifndef  SQLX_DELAY_MAXWAIT
-#  define SQLX_DELAY_MAXWAIT 5 * G_TIME_SPAN_SECOND
-# endif
-
-# ifndef  SQLX_DELAY_NOWAIT_PENDING
-#  define SQLX_DELAY_NOWAIT_PENDING 15 * G_TIME_SPAN_SECOND
-# endif
-
-# ifndef  SQLX_DELAY_RESTART_FAILED
-#  define SQLX_DELAY_RESTART_FAILED 2 * G_TIME_SPAN_SECOND
-# endif
-
-# ifndef  SQLX_DELAY_PING_FINAL
-#  define SQLX_DELAY_PING_FINAL 15 * G_TIME_SPAN_MINUTE
-# endif
-
-# ifndef  SQLX_DELAY_EXPIRE_FINAL
-#  define SQLX_DELAY_EXPIRE_FINAL 0
-# endif
-
-# ifndef  SQLX_DELAY_EXPIRE_NONE
-#  define SQLX_DELAY_EXPIRE_NONE 5 * G_TIME_SPAN_MINUTE
-# endif
-
-# ifndef  SQLX_RETRIES_GETVERS_DEFAULT
-#  define SQLX_RETRIES_GETVERS_DEFAULT 2
-# endif
-
 /* Size of buffer for reading dump file */
 #define SQLX_DUMP_BUFFER_SIZE 32768
 
 /* Size of chunks sent to client when doing chunked SQLX_DUMP */
 #define SQLX_DUMP_CHUNK_SIZE (8*1024*1024)
-
-/* Page size at database creation (should be multiple of storage block size) */
-#define SQLX_DEFAULT_PAGE_SIZE 4096
 
 #define MEMBER(D)   ((struct election_member_s*)(D))
 #define MMANAGER(D) MEMBER(D)->manager
@@ -161,9 +103,6 @@ struct sqlx_repository_s
 	guint bases_count;
 	guint bases_max;
 
-	/* sqlite page size for new bases */
-	guint page_size;
-
 	enum sqlx_sync_mode_e sync_mode_solo;
 	enum sqlx_sync_mode_e sync_mode_repli;
 
@@ -177,27 +116,5 @@ struct sqlx_repository_s
 void load_statement(sqlite3_stmt *stmt, Row_t *r, Table_t *t);
 
 const gchar * sqlite_op2str(int op);
-
-/* ----------------------------------------------------------------------------
- * Global variables
- * Not to be altered by a regular server. Designed for testing purposes, or for
- * those who know what they are doing.
- * */
-
-/* In the same precision as oio_ext_monotonic_time(), how many TIMESPAN the
- * current thread should wait for the condition in the cache of bases. */
-extern gint64 oio_cache_period_cond_wait;
-
-/* In the same precision as oio_ext_monotonic_time(), how many TIMESPAN the
- * current thread should wait for the condition in the cache of bases. */
-extern gint64 oio_election_period_cond_wait;
-
-#ifdef HAVE_ENBUG
-/* Average percentage of requests to the ZK that will immediately fail. */
-extern gint32 oio_sync_failure_threshold_action;
-
-/* Average percentage of ZK completion hooks will fail. */
-extern gint32 oio_sync_failure_threshold_hook;
-#endif
 
 #endif /*OIO_SDS__sqliterepo__internals_h*/

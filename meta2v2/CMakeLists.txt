@@ -17,19 +17,26 @@ link_directories(
 		${LIBRAIN_LIBRARY_DIRS})
 
 add_custom_command(
-	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/autogen.c ${CMAKE_CURRENT_BINARY_DIR}/autogen.h
-	COMMAND ${PYTHON_EXECUTABLE}
-	ARGS ${CMAKE_CURRENT_SOURCE_DIR}/m2gen.py ${CMAKE_CURRENT_BINARY_DIR}
-	DEPENDS m2gen.py
+	OUTPUT
+		${CMAKE_CURRENT_BINARY_DIR}/autogen.c
+		${CMAKE_CURRENT_BINARY_DIR}/autogen.h
+	DEPENDS
+		${CMAKE_CURRENT_SOURCE_DIR}/m2gen.py
+	COMMAND
+		${PYTHON_EXECUTABLE}
+	ARGS
+		${CMAKE_CURRENT_SOURCE_DIR}/m2gen.py
+		${CMAKE_CURRENT_BINARY_DIR}
 )
 
 add_library(meta2v2utils SHARED
+		${CMAKE_CURRENT_BINARY_DIR}/autogen.c
+		${CMAKE_CURRENT_BINARY_DIR}/autogen.h
+		meta2_macros.h
 		meta2_utils_lb.c
 		meta2_utils_lb.h
 		generic.c
 		generic.h
-		${CMAKE_CURRENT_BINARY_DIR}/autogen.c
-		${CMAKE_CURRENT_BINARY_DIR}/autogen.h
 		meta2_utils.c
 		meta2_utils.h
 		meta2_bean.c
@@ -48,15 +55,6 @@ target_link_libraries(meta2v2utils
 		${LIBRAIN_LIBRARIES}
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES} ${JSONC_LIBRARIES})
 
-add_library(meta2v2remote SHARED
-		meta2_macros.h
-		meta2v2_remote.h
-		meta2v2_remote.c)
-
-target_link_libraries(meta2v2remote
-		meta2v2utils metautils
-		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
-
 add_library(meta2v2 SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/autogen.h generic.h
 		meta2_utils.h
@@ -66,8 +64,8 @@ add_library(meta2v2 SHARED
 
 target_link_libraries(meta2v2
 		metautils sqliterepo
-		meta2v2remote meta1remote meta0remote meta0utils
-		meta2v2utils meta2v2remote
+		meta1remote meta0remote meta0utils
+		meta2v2utils
 		sqlxsrv
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
@@ -87,7 +85,7 @@ target_link_libraries(meta2_server meta2v2
         hcresolve metautils gridcluster server
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
-install(TARGETS meta2v2 meta2v2remote meta2_server meta2v2utils
+install(TARGETS meta2v2 meta2_server meta2v2utils
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin)
 

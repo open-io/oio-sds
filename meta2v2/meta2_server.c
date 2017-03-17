@@ -23,6 +23,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/server_variables.h>
+
 #include <cluster/lib/gridcluster.h>
 #include <server/network_server.h>
 #include <server/transport_gridd.h>
@@ -101,16 +103,12 @@ _post_config(struct sqlx_service_s *ss)
 			meta2_gridd_get_v2_requests(), m2);
 
 	/* Register few meta2 tasks */
+	grid_task_queue_register(ss->gtq_reload, meta2_reload_nsinfo_period,
+			_task_reconfigure_m2, NULL, ss);
 	grid_task_queue_register(ss->gtq_reload, 1,
 			(GDestroyNotify)sqlx_task_reload_lb, NULL, ss);
-	grid_task_queue_register(ss->gtq_reload, 5,
-			_task_reconfigure_m2, NULL, ss);
 
 	m2->notifier = ss->events_queue;
-
-	/* Make the meta2 avoid meta services with known problems */
-	oio_cache_avoid_on_error = oio_cfg_get_bool (
-			ss->ns_name, OIO_CFG_AVOID_BADSRV, FALSE);
 
 	return TRUE;
 }

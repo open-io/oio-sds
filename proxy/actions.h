@@ -20,14 +20,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__proxy__actions_h
 # define OIO_SDS__proxy__actions_h 1
 
-#define OIO_CONTAINER_CREATE_MANY_NB_MAX_REQ 100
-
 struct req_args_s;
 
-enum http_rc_e action_forward (struct req_args_s *args);
-enum http_rc_e action_forward_stats (struct req_args_s *args);
-
 enum http_rc_e action_cache_status (struct req_args_s *args);
+enum http_rc_e action_get_config (struct req_args_s *args);
+enum http_rc_e action_set_config (struct req_args_s *args);
+
+enum http_rc_e action_forward_get_config (struct req_args_s *args);
+enum http_rc_e action_forward_set_config (struct req_args_s *args);
+enum http_rc_e action_forward_stats (struct req_args_s *args);
+enum http_rc_e action_forward (struct req_args_s *args);
+
 enum http_rc_e action_cache_flush_local (struct req_args_s *args);
 enum http_rc_e action_cache_flush_high (struct req_args_s *args);
 enum http_rc_e action_cache_flush_low (struct req_args_s *args);

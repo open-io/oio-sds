@@ -17,6 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include <core/oio_core.h>
+#include <metautils/lib/server_variables.h>
 #include "oio_events_queue_buffer.h"
 
 static GHashTable *
@@ -32,11 +33,9 @@ oio_events_queue_buffer_renew(struct oio_events_queue_buffer_s *buf)
 }
 
 void
-oio_events_queue_buffer_init(struct oio_events_queue_buffer_s *buf,
-		gint64 delay)
+oio_events_queue_buffer_init(struct oio_events_queue_buffer_s *buf)
 {
 	g_mutex_init(&(buf->msg_by_key_lock));
-	buf->delay = delay;
 	oio_events_queue_buffer_renew(buf);
 }
 
@@ -48,17 +47,11 @@ oio_events_queue_buffer_clean(struct oio_events_queue_buffer_s *buf)
 }
 
 void
-oio_events_queue_buffer_set_delay(struct oio_events_queue_buffer_s *buf,
-		gint64 new_delay)
-{
-	buf->delay = new_delay;
-}
-
-void
 oio_events_queue_buffer_maybe_flush(struct oio_events_queue_buffer_s *buf,
 		GHRFunc send, gpointer user_data)
 {
-	if (oio_ext_monotonic_time() > buf->last_renew + buf->delay) {
+	if (oio_ext_monotonic_time() >
+			buf->last_renew + oio_events_common_buffer_delay) {
 		GHashTable *old = oio_events_queue_buffer_renew(buf);
 		g_hash_table_foreach_steal(old, send, user_data);
 		g_hash_table_unref(old);

@@ -18,18 +18,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__sqlx__oio_events_queue_beanstalkd_h
 # define OIO_SDS__sqlx__oio_events_queue_beanstalkd_h 1
 
-# ifndef  OIO_EVT_BEANSTALKD_DEFAULT_PRIO
-#  define OIO_EVT_BEANSTALKD_DEFAULT_PRIO   ((guint)(1<<31))
-# endif
-
-# ifndef  OIO_EVT_BEANSTALKD_DEFAULT_DELAY
-#  define OIO_EVT_BEANSTALKD_DEFAULT_DELAY  0
-# endif
-
-# ifndef  OIO_EVT_BEANSTALKD_DEFAULT_TTR
-#  define OIO_EVT_BEANSTALKD_DEFAULT_TTR    120
-# endif
-
 # ifndef  OIO_EVT_BEANSTALKD_DEFAULT_TUBE
 #  define OIO_EVT_BEANSTALKD_DEFAULT_TUBE  "oio"
 # endif

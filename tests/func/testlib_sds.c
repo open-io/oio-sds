@@ -22,6 +22,7 @@ License along with this library.
 #include <glib.h>
 #include <json.h>
 
+#include <core/client_variables.h>
 #include <core/oiolog.h>
 #include <core/oiourl.h>
 #include <core/oio_sds.h>

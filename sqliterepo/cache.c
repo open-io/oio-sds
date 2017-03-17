@@ -23,6 +23,7 @@ License along with this library.
 #include <unistd.h>
 
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/server_variables.h>
 
 #include "sqliterepo.h"
 #include "cache.h"
@@ -31,9 +32,6 @@ License along with this library.
 #define GET(R,I) ((R)->bases + (I))
 
 #define BEACON_RESET(B) do { (B)->first = (B)->last = -1; } while (0)
-
-volatile gboolean oio_sqlx_cache_fail_on_heavy_load = SQLX_HEAVYLOAD_FAIL;
-volatile gboolean oio_sqlx_cache_alert_on_heavy_load = SQLX_HEAVYLOAD_ALERT;
 
 struct beacon_s
 {
@@ -95,16 +93,6 @@ struct sqlx_cache_s
 	guint bases_max_hard;
 	guint bases_used;
 
-	/* Maximum number of low-priority threads waiting for the base. */
-	guint32 max_waiting;
-
-	guint32 heat_threshold;
-
-	/* @see oio_ext_monotonic_time() */
-	gint64 cool_grace_delay;
-	gint64 hot_grace_delay;
-	gint64 open_timeout;
-
 	/* Doubly linked lists of tables, one by status */
 	struct beacon_s beacon_free;
 	struct beacon_s beacon_idle;
@@ -113,8 +101,6 @@ struct sqlx_cache_s
 
 	sqlx_cache_close_hook close_hook;
 };
-
-gint64 oio_cache_period_cond_wait = G_TIME_SPAN_SECOND;
 
 /* ------------------------------------------------------------------------- */
 
@@ -466,10 +452,10 @@ sqlx_expire_first_idle_base(sqlx_cache_t *cache, gint64 now)
 	/* Poll the next idle base, and respect the increasing order of the 'heat' */
 	if (0 <= (bd_idle = cache->beacon_idle.last))
 		rc = _expire_specific_base(cache, GET(cache, bd_idle), now,
-				cache->cool_grace_delay);
+				_grace_delay_cool);
 	if (!rc && 0 <= (bd_idle = cache->beacon_idle_hot.last))
 		rc = _expire_specific_base(cache, GET(cache, bd_idle), now,
-				cache->hot_grace_delay);
+				_grace_delay_hot);
 
 	if (rc) {
 		GRID_TRACE("Expired idle base at pos %d", bd_idle);
@@ -479,15 +465,6 @@ sqlx_expire_first_idle_base(sqlx_cache_t *cache, gint64 now)
 }
 
 /* ------------------------------------------------------------------------- */
-
-sqlx_cache_t *
-sqlx_cache_set_max_waiting(sqlx_cache_t *cache, guint32 max_waiting)
-{
-	if (cache) {
-		cache->max_waiting = max_waiting;
-	}
-	return cache;
-}
 
 void
 sqlx_cache_set_max_bases(sqlx_cache_t *cache, guint max)
@@ -508,25 +485,13 @@ sqlx_cache_set_close_hook(sqlx_cache_t *cache, sqlx_cache_close_hook hook)
 	cache->close_hook = hook;
 }
 
-void
-sqlx_cache_set_open_timeout(sqlx_cache_t *cache, gint64 timeout)
-{
-	EXTRA_ASSERT(cache != NULL);
-	cache->open_timeout = timeout;
-}
-
 sqlx_cache_t *
 sqlx_cache_init(guint max_bases)
 {
 	sqlx_cache_t *cache = g_malloc0(sizeof(*cache));
-	cache->cool_grace_delay = SQLX_GRACE_DELAY_COOL * G_TIME_SPAN_SECOND;
-	cache->hot_grace_delay = SQLX_GRACE_DELAY_HOT * G_TIME_SPAN_SECOND;
-	cache->max_waiting = SQLX_MAX_WAITING;
-	cache->heat_threshold = 1;
 	g_mutex_init(&cache->lock);
 	cache->bases_by_name = g_tree_new_full(hashstr_quick_cmpdata,
 			NULL, NULL, NULL);
-	cache->open_timeout = 0;
 	BEACON_RESET(&(cache->beacon_free));
 	BEACON_RESET(&(cache->beacon_idle));
 	BEACON_RESET(&(cache->beacon_idle_hot));
@@ -606,14 +571,11 @@ sqlx_cache_open_and_lock_base(sqlx_cache_t *cache, const hashstr_t *hname,
 	EXTRA_ASSERT(hname != NULL);
 	EXTRA_ASSERT(result != NULL);
 
-	gint64 start = oio_ext_monotonic_time();
-	gint64 deadline = DEFAULT_CACHE_OPEN_TIMEOUT;
-	if (cache->open_timeout > 0)
-		deadline = cache->open_timeout;
+	const gint64 start = oio_ext_monotonic_time();
+	const gint64 deadline = start + _cache_timeout_open;
 	GRID_TRACE2("%s(%p,%s,%p) delay = %"G_GINT64_FORMAT, __FUNCTION__,
 			(void*)cache, hname ? hashstr_str(hname) : "NULL",
 			(void*)result, deadline);
-	deadline += start;
 
 	g_mutex_lock(&cache->lock);
 retry:
@@ -672,12 +634,12 @@ retry:
 					GRID_DEBUG("Base [%s] in use by another thread (%X), waiting...",
 							hashstr_str(hname), oio_log_thread_id(base->owner));
 
-					if (!urgent && cache->max_waiting > 0 &&
-							base->count_waiting >= cache->max_waiting) {
-						if (oio_sqlx_cache_fail_on_heavy_load) {
+					if (!urgent && _cache_max_waiting > 0 &&
+							base->count_waiting >= _cache_max_waiting) {
+						if (_cache_fail_on_heavy_load) {
 							err = NEWERROR(CODE_EXCESSIVE_LOAD, "Load too high");
 							break;
-						} else if (oio_sqlx_cache_alert_on_heavy_load) {
+						} else if (_cache_alert_on_heavy_load) {
 							GRID_WARN("Load too high on [%s]", hashstr_str(hname));
 						}
 					}
@@ -687,7 +649,7 @@ retry:
 					/* The lock is held by another thread/request.
 					   Do not use 'now' because it can be a fake clock */
 					g_cond_wait_until(wait_cond, &cache->lock,
-							g_get_monotonic_time() + oio_cache_period_cond_wait);
+							g_get_monotonic_time() + _cache_period_cond_wait);
 
 					base->count_waiting --;
 					goto retry;
@@ -702,7 +664,7 @@ retry:
 				/* Just wait for a notification then retry
 				   Do not use 'now' because it can be a fake clock */
 				g_cond_wait_until(wait_cond, &cache->lock,
-						g_get_monotonic_time() + oio_cache_period_cond_wait);
+						g_get_monotonic_time() + _cache_period_cond_wait);
 				goto retry;
 		}
 	}
@@ -750,14 +712,14 @@ sqlx_cache_unlock_and_close_base(sqlx_cache_t *cache, gint bd, gboolean force)
 
 		case SQLX_BASE_USED:
 			EXTRA_ASSERT(base->count_open > 0);
-			// held by the current thread
-			if (!(-- base->count_open)) { // to be closed
+			/* held by the current thread */
+			if (!(-- base->count_open)) {  /* to be closed */
 				if (force) {
 					_expire_base(cache, base);
 				} else {
 					sqlx_base_debug("CLOSING", base);
 					base->owner = NULL;
-					if (base->heat >= cache->heat_threshold)
+					if (base->heat >= _heat_threshold)
 						sqlx_base_move_to_list(cache, base, SQLX_BASE_IDLE_HOT);
 					else
 						sqlx_base_move_to_list(cache, base, SQLX_BASE_IDLE);
@@ -829,7 +791,7 @@ guint
 sqlx_cache_expire(sqlx_cache_t *cache, guint max, gint64 duration)
 {
 	guint nb = 0;
-	gint64 pivot = oio_ext_monotonic_time () + duration;
+	gint64 deadline = oio_ext_monotonic_time () + duration;
 
 	EXTRA_ASSERT(cache != NULL);
 
@@ -837,7 +799,7 @@ sqlx_cache_expire(sqlx_cache_t *cache, guint max, gint64 duration)
 
 	for (nb=0; !max || nb < max ; nb++) {
 		gint64 now = oio_ext_monotonic_time ();
-		if (now > pivot || !sqlx_expire_first_idle_base(cache, now))
+		if (now > deadline || !sqlx_expire_first_idle_base(cache, now))
 			break;
 	}
 

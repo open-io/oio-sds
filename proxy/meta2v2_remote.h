@@ -23,32 +23,6 @@ License along with this library.
 # include <glib.h>
 # include <meta2v2/autogen.h>
 
-#define M2V2_FLAG_NODELETED        0x00000001
-#define M2V2_FLAG_ALLVERSION       0x00000002
-#define M2V2_FLAG_NOPROPS          0x00000004
-#define M2V2_FLAG_ALLPROPS         0x00000010
-
-/* when listing */
-#define M2V2_FLAG_HEADERS          0x00000020
-
-/* when getting an alias, do not follow the foreign keys toward
- * headers, contents and chunks. */
-#define M2V2_FLAG_NORECURSION      0x00000080
-
-/* when getting an alias, ignores the version in the URL and
- * return the latest alias only. */
-#define M2V2_FLAG_LATEST           0x00000100
-
-/* flush the properties */
-#define M2V2_FLAG_FLUSH            0x00000200
-
-/* Ask the meta2 to redirect if not MASTER, even if the request is Read-Only */
-#define M2V2_FLAG_MASTER           0x00000400
-
-/* Request N spare chunks which should not be on provided blacklist */
-#define M2V2_SPARE_BY_BLACKLIST "SPARE_BLACKLIST"
-/* Request N spare chunks according to a storage policy */
-#define M2V2_SPARE_BY_STGPOL "SPARE_STGPOL"
 
 struct oio_url_s;
 
@@ -64,27 +38,11 @@ struct list_result_s
 
 void m2v2_list_result_init (struct list_result_s *p);
 void m2v2_list_result_clean (struct list_result_s *p);
+
 /* suitable as a request extractor */
 gboolean m2v2_list_result_extract (gpointer ctx, MESSAGE reply);
 
-struct m2v2_create_params_s
-{
-	const char *storage_policy; /**< Will override the (maybe present) stgpol property. */
-	const char *version_policy; /**< idem for the verpol property. */
-	gchar **properties; /**< A NULL-terminated sequence of strings where:
-						  * properties[i*2] is the i-th key and
-						  * properties[(i*2)+1] is the i-th value */
-	gboolean local; /**< Do not try to replicate, do not call get_peers() */
-};
-
-#define M2V2_MODE_DRYRUN  0x10000000
-
-enum m2v2_destroy_flag_e {
-	/* send a destruction event */
-	M2V2_DESTROY_EVENT = 0x01,
-	M2V2_DESTROY_FLUSH = 0x02,
-	M2V2_DESTROY_FORCE = 0x04,
-};
+struct m2v2_create_params_s;
 
 GError* m2v2_remote_execute_DESTROY(const char *target, struct oio_url_s *url,
 		guint32 flags);
@@ -93,7 +51,8 @@ GError* m2v2_remote_execute_DESTROY(const char *target, struct oio_url_s *url,
 GError* m2v2_remote_execute_DESTROY_many(gchar **targets, struct oio_url_s *url,
 		guint32 flags);
 
-GByteArray* m2v2_remote_pack_CREATE(struct oio_url_s *url, struct m2v2_create_params_s *pols);
+GByteArray* m2v2_remote_pack_CREATE(struct oio_url_s *url,
+		struct m2v2_create_params_s *pols);
 
 GByteArray* m2v2_remote_pack_DESTROY(struct oio_url_s *url, guint32 flags);
 

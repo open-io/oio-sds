@@ -31,25 +31,12 @@ License along with this library.
 
 #include "gridcluster.h"
 
-#define MAX_REQ_LENGTH 1024
-#define CONNECT_TIMEOUT 5000
-#define SOCKET_TIMEOUT 5000
-#define BUF (wrkParam+writen)
-#define LEN (sizeof(wrkParam)-writen-1)
-#define MANAGE_ERROR(Req,Resp,Error) do {\
-	if (Resp.data_size > 0 && Resp.data)\
-		GSETERROR(Error, "Error from agent : %.*s", Resp.data_size, (char*)(Resp.data));\
-	else\
-		GSETERROR(Error, "Error from agent : (no response)");\
-} while (0)
 #define NS_WORM_OPT_NAME "worm"
 #define NS_CONTAINER_MAX_SIZE_NAME "container_max_size"
 #define NS_STORAGE_POLICY_NAME "storage_policy"
 #define NS_CHUNK_SIZE_NAME "chunk_size"
 #define NS_STATE_NAME "state"
-#define NS_WORM_OPT_VALUE_ON "on"
 #define NS_COMPRESS_OPT_NAME "compression"
-#define NS_COMPRESS_OPT_VALUE_ON "on"
 
 /* -------------------------------------------------------------------------- */
 

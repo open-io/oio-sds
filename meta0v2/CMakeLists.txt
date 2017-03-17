@@ -1,12 +1,15 @@
 add_definitions(-DG_LOG_DOMAIN="oio.m0v2")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
-include_directories(BEFORE . ..)
+include_directories(BEFORE
+		${CMAKE_CURRENT_SOURCE_DIR}
+		${CMAKE_SOURCE_DIR}
+		${CMAKE_CURRENT_BINARY_DIR}
+		${CMAKE_BINARY_DIR})
 
 link_directories(
 		${ZK_LIBRARY_DIRS}
 		${SQLITE3_LIBRARY_DIRS})
-
 
 add_library(meta0remote SHARED meta0_remote.c meta0_remote.h)
 set_target_properties(meta0remote PROPERTIES SOVERSION ${ABI_VERSION})

@@ -1,0 +1,2 @@
+config:
+  client.errors_cache.enabled: true

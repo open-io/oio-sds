@@ -25,6 +25,7 @@ License along with this library.
 #include <metautils/lib/codec.h>
 
 #include <server/transport_gridd.h>
+#include <metautils/lib/server_variables.h>
 
 #include "sqliterepo.h"
 #include "version.h"
@@ -2285,7 +2286,7 @@ _handler_LEANIFY(struct gridd_reply_ctx_s *reply,
 			NAME_MSGKEY_SIZE, &size);
 	if (err) {
 		g_clear_error (&err);
-		size = SQLITE_RELEASE_SIZE;
+		size = sqliterepo_release_size;
 	}
 	sqlite3_release_memory (size);
 	reply->send_reply(CODE_FINAL_OK, "OK");

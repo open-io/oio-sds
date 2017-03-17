@@ -88,6 +88,14 @@ struct sqlx_service_s
 	GString *announce;
 	gchar *zk_url;
 
+	/* Should the service load an additional list of configuration files to
+	 * supersede the values in place in the central configuration facility */
+	GSList *config_paths;
+
+	/* Should the service load the system configuration and feed the central
+	 * configuration facility. */
+	gboolean config_system;
+
 	struct sqlx_repository_s *repository;
 	struct sqlx_sync_s *sync;
 	struct sqlx_peering_s *peering;
@@ -119,27 +127,22 @@ struct sqlx_service_s
 
 	/* This is configured during the "configure" step, and can be overriden
 	   in the _post_config hook. */
-	gint64 open_timeout;
 	guint max_bases_soft;
 	guint max_bases_hard;
 	guint max_passive;
 	guint max_active;
-	guint max_elections_timers_per_round;
 
 	//-------------------------------------------------------------------
 	// Variables used during the startup time of the server, but not used
 	// anymore after that.
 	//-------------------------------------------------------------------
 
-	guint cfg_max_waiters;
 	guint cfg_max_bases_hard;
 	guint cfg_max_bases_soft;
 
 	guint cfg_max_passive;
 	guint cfg_max_active;
 	guint cfg_max_workers;
-
-	guint cfg_page_size;
 
 	guint sync_mode_repli;
 	guint sync_mode_solo;

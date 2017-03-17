@@ -21,8 +21,8 @@ License along with this library.
 #include <unistd.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
 #include <metautils/lib/codec.h>
+#include <metautils/lib/server_variables.h>
 
 #include "sqliterepo.h"
 #include "election.h"
@@ -52,14 +52,14 @@ struct sqlx_repctx_s
 
 	// if set, there is no replication configured, even if a replicated
 	// transaction context had been initiated.
-	char hollow : 1;
+	guint8 hollow : 1;
 
 	// if set, some changes were not matched by the update hook and a resync
 	// will be necessary. This is the case in the SQLX by "DELETE FROM <table>"
 	// queries.
-	char huge : 1;
+	guint8 huge : 1;
 
-	char any_change : 1;
+	guint8 any_change : 1;
 };
 
 static guint
@@ -303,8 +303,8 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx)
 		gridd_client_create_many(peers, encoded, NULL, NULL);
 	g_byte_array_unref(encoded);
 
-	gridd_clients_set_timeout_cnx(clients, SQLX_REPLI_TIMEOUT_CNX);
-	gridd_clients_set_timeout(clients, SQLX_REPLI_TIMEOUT);
+	gridd_clients_set_timeout_cnx(clients, oio_election_replicate_timeout_cnx);
+	gridd_clients_set_timeout(clients, oio_election_replicate_timeout_req);
 
 	gridd_clients_start(clients);
 	GError *err = gridd_clients_loop(clients);

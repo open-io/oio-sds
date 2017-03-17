@@ -28,7 +28,7 @@ License along with this library.
 #include <sqlite3.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
+#include <metautils/lib/server_variables.h>
 
 #include "sqliterepo.h"
 #include "hash.h"
@@ -39,6 +39,7 @@ License along with this library.
 #include "internals.h"
 #include "restoration.h"
 #include "sqlx_remote.h"
+
 
 #define GSTR_APPEND_SEP(S) do { \
 	if ((S)->str[(S)->len-1]!=G_DIR_SEPARATOR) \
@@ -327,14 +328,14 @@ sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 	repo->flag_delete_on = BOOL(cfg->flags & SQLX_REPO_DELETEON);
 
 	if (!(cfg->flags & SQLX_REPO_NOCACHE)) {
-		repo->cache = sqlx_cache_init(cfg->max_bases ? cfg->max_bases : SQLX_MAX_BASES);
+		repo->cache = sqlx_cache_init(
+				cfg->max_bases ? cfg->max_bases : sqliterepo_repo_max_bases);
 		sqlx_cache_set_close_hook(repo->cache,
 				(sqlx_cache_close_hook)__close_base);
 	}
 
 	repo->sync_mode_solo = cfg->sync_solo;
 	repo->sync_mode_repli = cfg->sync_repli;
-	repo->page_size = cfg->page_size;
 
 	repo->locator = _default_locator;
 	repo->locator_data = NULL;
@@ -432,18 +433,6 @@ sqlx_repository_configure_type(sqlx_repository_t *repo,
 	g_tree_replace (repo->schemas, g_strdup (type), g_strdup (schema));
 	GRID_INFO("Schema configured for type [%s]", type);
 	return NULL;
-}
-
-void
-sqlx_repository_configure_open_timeout(sqlx_repository_t *repo,
-		gint64 timeout)
-{
-	struct sqlx_cache_s *cache = sqlx_repository_get_cache(repo);
-	if (cache) {
-		sqlx_cache_set_open_timeout(cache, timeout);
-	} else {
-		GRID_INFO("Not setting open timeout since there is no cache");
-	}
 }
 
 void
@@ -728,10 +717,10 @@ retry:
 	sqlx_exec(handle, "PRAGMA journal_mode = MEMORY");
 	sqlx_exec(handle, "PRAGMA temp_store = MEMORY");
 	if (!_schema_has(sq3->db)) {
-		if (sq3->repo->page_size >= 512) {
+		if (_page_size >= 512) {
 			gchar line[128] = {0};
 			snprintf(line, sizeof(line),
-					"PRAGMA page_size = %u;", sq3->repo->page_size);
+					"PRAGMA page_size = %u;", _page_size);
 			sqlx_exec(sq3->db, line);
 		}
 		sqlx_exec(sq3->db, "PRAGMA synchronous = OFF;");

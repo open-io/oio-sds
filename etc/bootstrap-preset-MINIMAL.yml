@@ -1,0 +1,15 @@
+storage_policy: "SINGLE"
+chunk_size: 1048576
+redis: true
+meta0:
+  count: 1
+meta1:
+  count: 1
+meta2:
+  count: 1
+sqlx:
+  count: 1
+rawx:
+  count: 1
+rdir:
+  count: 2

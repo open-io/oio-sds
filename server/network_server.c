@@ -40,6 +40,7 @@ License along with this library.
 #include <arpa/inet.h>
 
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/server_variables.h>
 
 #include "internals.h"
 
@@ -232,10 +233,6 @@ network_server_init(void)
 	result->eventfd = efd;
 	result->epollfd = epoll_create(1024);
 
-	result->atexit_max_open_never_input = SERVER_DEFAULT_CNX_INACTIVE;
-	result->atexit_max_idle = SERVER_DEFAULT_CNX_IDLE;
-	result->atexit_max_open_persist = SERVER_DEFAULT_CNX_LIFETIME;
-
 	result->gq_gauge_threads =      g_quark_from_static_string ("gauge thread.active");
 	result->gq_gauge_cnx_current =  g_quark_from_static_string ("gauge cnx.client");
 	result->gq_gauge_cnx_max =      g_quark_from_static_string ("gauge cnx.max");
@@ -244,15 +241,19 @@ network_server_init(void)
 	result->gq_counter_cnx_close =  g_quark_from_static_string ("counter cnx.close");
 
 	result->pool_stats = g_thread_pool_new ((GFunc)_cb_stats, result,
-			1, TRUE, NULL);
+			server_threadpool_max_stat, TRUE, NULL);
+
 	result->pool_tcp = g_thread_pool_new ((GFunc)_cb_worker, result,
-			SERVER_DEFAULT_THP_MAXWORKERS, FALSE, NULL);
+			server_threadpool_max_workers, FALSE, NULL);
+
 	/* Even if UDP is eventually not allowed, a pool with shared threads
 	 * doesn't consume much resources. */
 	result->pool_udp = g_thread_pool_new ((GFunc)_cb_ping, result,
-			8, FALSE, NULL);
-	g_thread_pool_set_max_unused_threads (SERVER_DEFAULT_THP_MAXUNUSED);
-	g_thread_pool_set_max_idle_time (SERVER_DEFAULT_THP_IDLE);
+			server_threadpool_max_udp, FALSE, NULL);
+
+	g_thread_pool_set_max_unused_threads (server_threadpool_max_unused);
+	g_thread_pool_set_max_idle_time (
+			server_threadpool_max_idle / G_TIME_SPAN_MILLISECOND);
 
 	GRID_DEBUG("SERVER ready with epollfd[%d] eventfd[%d]",
 			result->epollfd, result->eventfd);
@@ -534,7 +535,7 @@ _manage_client_event(struct network_server_s *srv,
 static void
 _manage_endpoint_event (struct network_server_s *srv, struct endpoint_s *e)
 {
-	for (guint i=0; i<SERVER_DEFAULT_ACCEPT_MAX ;++i) {
+	for (guint i=0; i<server_accept_batch_size ;++i) {
 		struct network_client_s *clt = _endpoint_accept_one(srv, e);
 		if (!clt) break;
 		if (clt->current_error)
@@ -550,9 +551,9 @@ static void
 _manage_events(struct network_server_s *srv)
 {
 	int erc;
-	struct epoll_event *pev, allev[SERVER_DEFAULT_EPOLL_MAXEV];
+	struct epoll_event *pev, allev[server_event_batch_size];
 
-	erc = epoll_wait(srv->epollfd, allev, SERVER_DEFAULT_EPOLL_MAXEV, 500);
+	erc = epoll_wait(srv->epollfd, allev, server_event_batch_size, 500);
 	if (erc > 0) {
 		while (erc-- > 0) {
 			pev = allev+erc;
@@ -579,9 +580,9 @@ _server_shutdown_inactive_connections(struct network_server_s *srv)
 {
 	guint count = 0;
 	gint64 now = oio_ext_monotonic_time ();
-	gint64 ti = now - srv->atexit_max_idle;
-	gint64 tc = now - srv->atexit_max_open_never_input;
-	gint64 tp = now - srv->atexit_max_open_persist;
+	const gint64 ti = now - server_cnx_ttl_idle;
+	const gint64 tc = now - server_cnx_ttl_never;
+	const gint64 tp = now - server_cnx_ttl_persist;
 
 	struct network_client_s *clt, *n;
 	for (clt=srv->first ; clt ; clt=n) {
@@ -627,9 +628,9 @@ _thread_cb_events(gpointer d)
 	 * the epoll pool.*/
 
 	GRID_DEBUG("Server %p waiting for its connections", srv);
-	srv->atexit_max_open_never_input = 5 * G_TIME_SPAN_SECOND;
-	srv->atexit_max_open_persist = 5 * G_TIME_SPAN_SECOND;
-	srv->atexit_max_idle = 1 * G_TIME_SPAN_SECOND;
+	server_cnx_ttl_never = 5 * G_TIME_SPAN_SECOND;
+	server_cnx_ttl_persist = 5 * G_TIME_SPAN_SECOND;
+	server_cnx_ttl_idle = 1 * G_TIME_SPAN_SECOND;
 
 	for (gint64 next = 0; 0 < srv->cnx_clients ;) {
 		_manage_events(srv);
@@ -684,7 +685,7 @@ _cb_ping(struct network_client_s *clt, struct network_server_s *srv)
 
 		/* OIO_SERVER_UDP_QUEUE_MAXAGE is arbitrary but it avoids managing
 		 * pings that have probably been retried by the emitter. */
-		if (now - clt->time.evt_in > OIO_SERVER_UDP_QUEUE_MAXAGE) {
+		if (now - clt->time.evt_in > server_udp_queue_ttl) {
 			GRID_DEBUG("PING %s -> %s queued for too long",
 					clt->peer_name, clt->local_name);
 		} else {
@@ -742,7 +743,7 @@ _manage_ping_event(struct network_server_s *srv, struct endpoint_s *e,
 			/* OIO_SERVER_UDP_QUEUE_MAXLEN is arbitrary, but it is only used to
 			 * avoid a memory leak */
 			const guint unprocessed = g_thread_pool_unprocessed(srv->pool_udp);
-			if (unprocessed > OIO_SERVER_UDP_QUEUE_MAXLEN) {
+			if (unprocessed > server_udp_queue_maxlen) {
 				GRID_DEBUG("PING %s -> %s (%"G_GSIZE_FORMAT") dropped",
 						clt->peer_name, clt->local_name,
 						data_slab_sequence_size(&clt->input));
@@ -1012,9 +1013,7 @@ retry:
 			sock_set_cork(fd, TRUE);
 			break;
 		case NETSERVER_LATENCY:
-			sock_set_linger_default(fd);
-			sock_set_nodelay(fd, TRUE);
-			sock_set_tcpquickack(fd, TRUE);
+			sock_set_client_default(fd);
 			break;
 		default:
 			break;

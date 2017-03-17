@@ -21,7 +21,7 @@ License along with this library.
 
 /* Version started to be defined in June, 2016. Version prior to 20160600
  * have no ABI incompatibilities. */
-#define OIO_SDS_VERSION 20161108
+#define OIO_SDS_VERSION 20170301
 
 #ifdef __cplusplus
 extern "C" {
@@ -83,11 +83,12 @@ typedef void (*oio_sds_metachunk_reporter_f) (void *cb_data,
 
 /* API-global --------------------------------------------------------------- */
 
-extern volatile int oio_sds_default_autocreate;
-
 /* OpenIO SDK internally relies on GLib-2.0 logging features,
  * so this only sets a callback into GLib's system. The calling app
  * keeps the freedom to change this. */
+
+extern volatile int oio_sds_default_autocreate;
+
 
 /* Configures the GLib-2.0 to send the logging output to the syslog. This
  * function does not call openlog() */
@@ -107,13 +108,6 @@ void oio_log_nothing (void);
  * DEBUG: output the SDK behavior.
  * TRACE: also outputs the licurl behavior. */
 void oio_log_more (void);
-
-/** @return a NULL-terminated array of strings where
- * result[(2*i)]   is the name of the i-th configuration directive
- * result[(2*i)+1] is the value of the i-th configuration directive.
- * The output has to be freed with free().
- */
-char ** oio_sds_get_compile_options (void);
 
 #ifdef OIO_SDS_VERSION
 /* Returns the integer version of the API. Compare the version returned to the
