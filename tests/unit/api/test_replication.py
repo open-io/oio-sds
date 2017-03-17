@@ -349,7 +349,7 @@ class TestReplication(unittest.TestCase):
         headers = {'Range': 'bytes=-%s' % (meta_end)}
         with set_http_requests(get_response) as conn_record:
             reader = io.ChunkReader(iter(meta_chunk), None, headers)
-            self.assertEqual(None, reader.get_iter())
+            self.assertRaises(exc.ClientException, reader.get_iter)
 
             self.assertEqual(len(conn_record), self.storage_method.nb_copy)
 

@@ -546,3 +546,12 @@ class GeneratorIO(RawIOBase):
     def __iter__(self):
         for chunk in self.generator:
             yield chunk
+
+
+def group_chunk_errors(chunk_err_iter):
+    errors = dict()
+    for chunk, err in chunk_err_iter:
+        err_list = errors.get(err) or list()
+        err_list.append(chunk)
+        errors[err] = err_list
+    return errors

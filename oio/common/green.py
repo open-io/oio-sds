@@ -11,23 +11,28 @@ logging.threading = threading
 logging._lock = logging.threading.RLock()
 
 
-class ClientReadTimeout(Timeout):
+class OioTimeout(Timeout):
+    def __str__(self):
+        return "Timeout %s" % super(OioTimeout, self).__str__()
+
+
+class ClientReadTimeout(OioTimeout):
     pass
 
 
-class ConnectionTimeout(Timeout):
+class ConnectionTimeout(OioTimeout):
     pass
 
 
-class SourceReadTimeout(Timeout):
+class SourceReadTimeout(OioTimeout):
     pass
 
 
-class ChunkWriteTimeout(Timeout):
+class ChunkWriteTimeout(OioTimeout):
     pass
 
 
-class ChunkReadTimeout(Timeout):
+class ChunkReadTimeout(OioTimeout):
     pass
 
 
