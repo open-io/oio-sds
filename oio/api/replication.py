@@ -279,6 +279,7 @@ class ReplicatedWriteHandler(io.WriteHandler):
             bytes_transferred, _checksum, chunks = handler.stream(self.source,
                                                                   size)
             content_chunks += chunks
+
             total_bytes_transferred += bytes_transferred
             if bytes_transferred < size:
                 break
