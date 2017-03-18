@@ -167,8 +167,8 @@ class BlobRebuilderWorker(object):
 
         content.rebuild_chunk(chunk_id, allow_same_rawx=self.allow_same_rawx)
 
-        self.rdir_client.chunk_push(self.volume, container_id, content_id,
-                                    chunk_id, rtime=int(time.time()))
+        self.rdir_client.chunk_delete(self.volume, container_id, content_id,
+                                      chunk_id)
 
         self.bytes_processed += chunk_size
         self.total_bytes_processed += chunk_size
