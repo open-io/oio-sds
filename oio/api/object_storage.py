@@ -736,8 +736,9 @@ class ObjectStorageAPI(API):
         h[object_headers['mime_type']] = sysmeta['mime_type']
         h[object_headers['chunk_method']] = sysmeta['chunk_method']
 
+        success_chunks = [x for x in final_chunks if x['hash'] is not None]
         m, body = self._content_create(
-            account, container, obj_name, final_chunks, metadata=metadata,
+            account, container, obj_name, success_chunks, metadata=metadata,
             headers=h)
         return final_chunks, bytes_transferred, content_checksum
 
