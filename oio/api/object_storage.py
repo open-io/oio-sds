@@ -125,6 +125,24 @@ def _sort_chunks(raw_chunks, ec_security):
             chunks[position] = []
             chunks[position].append(chunk)
 
+    # for each position, remove incoherent chunks
+    for pos, local_chunks in chunks.iteritems():
+        if len(local_chunks) < 2:
+            continue
+        byhash = dict()
+        for chunk in local_chunks:
+            h = chunk.get('hash')
+            if h not in byhash:
+                byhash[h] = list()
+            byhash[h].append(chunk)
+        if len(byhash) < 2:
+            continue
+        # sort by length
+        bylength = byhash.values()
+        bylength.sort(lambda x, y: cmp(len(y), len(x)))
+        chunks[pos] = bylength[0]
+
+    # Append the 'offset' attribute
     offset = 0
     for pos in sorted(chunks.keys()):
         clist = chunks[pos]
