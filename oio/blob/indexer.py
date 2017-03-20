@@ -52,12 +52,13 @@ class BlobIndexer(Daemon):
                     'started=%(start_time)s '
                     'passes=%(passes)d '
                     'errors=%(errors)d '
-                    'c_rate=%(c_rate).2f '
+                    'chunks=%(nb_chunks)d %(c_rate).2f/s '
                     'total=%(total).2f ' % {
                         'start_time': datetime.fromtimestamp(
                             int(report_time)).isoformat(),
                         'passes': self.passes,
                         'errors': self.errors,
+                        'nb_chunks': self.total_chunks_processed,
                         'c_rate': self.passes / (now - report_time),
                         'total': (now - start_time)
                     }
@@ -70,18 +71,19 @@ class BlobIndexer(Daemon):
         end_time = time.time()
         elapsed = (end_time - start_time) or 0.000001
         self.logger.info(
-            'started=(%start_time)s '
-            'ended=(%end_time)s '
+            'started=%(start_time)s '
+            'ended=%(end_time)s '
             'elapsed=%(elapsed).02f '
             'errors=%(errors)d '
-            'chunk/s%(chunk_rate).2f ' % {
+            'chunks=%(nb_chunks)d %(c_rate).2f/s ' % {
                 'start_time': datetime.fromtimestamp(
                     int(start_time)).isoformat(),
                 'end_time': datetime.fromtimestamp(
                     int(end_time)).isoformat(),
                 'elapsed': elapsed,
                 'errors': total_errors + self.errors,
-                'chunk_rate': self.total_chunks_processed / elapsed
+                'nb_chunks': self.total_chunks_processed,
+                'c_rate': self.total_chunks_processed / elapsed
             }
         )
         if elapsed < self.interval:
