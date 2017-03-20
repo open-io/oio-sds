@@ -537,7 +537,7 @@ GError *
 http_put_step (struct http_put_s *p)
 {
 	int rc;
-	guint count_dests = 0, count_up = 0, count_waiting_for_data = 0;
+	guint count_up = 0, count_waiting_for_data = 0;
 
 	EXTRA_ASSERT (p != NULL);
 
@@ -551,7 +551,7 @@ http_put_step (struct http_put_s *p)
 		return NULL;
 	}
 
-	count_dests = g_slist_length(p->dests);
+	register guint count_dests = g_slist_length(p->dests);
 	GRID_TRACE("%s STEP on %u destinations", __FUNCTION__, count_dests);
 
 	/* consume the CURL notifications for terminated actions */
@@ -579,7 +579,7 @@ http_put_step (struct http_put_s *p)
 	}
 
 	if (p->state == HTTP_WHOLE_BEGIN) {
-		GRID_TRACE("%s Starting %u uploads", __FUNCTION__, count_dests);
+		GRID_DEBUG("%s Starting %u uploads", __FUNCTION__, count_dests);
 		_start_upload(p);
 		p->state = HTTP_WHOLE_READY;
 	}
