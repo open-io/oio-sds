@@ -159,7 +159,7 @@ class ReplicatedChunkWriteHandler(object):
             chunk["size"] = bytes_transferred
             chunk["hash"] = meta_checksum
 
-        return bytes_transferred, meta_checksum, success_chunks + failed_chunks
+        return bytes_transferred, meta_checksum, success_chunks
 
     def _connect_put(self, chunk):
         """
