@@ -150,7 +150,7 @@ struct chunk_s
 	gsize size;
 	guint32 score;
 	gchar hexhash[STRLEN_CHUNKHASH];
-	guint8 flag_success : 1;
+	guint8 flag_success : 1;  /* only used during an upload */
 	gchar url[1];
 };
 
@@ -277,6 +277,12 @@ _chunks_load (GSList **out, struct json_object *jtab)
 	else
 		g_slist_free_full (chunks, g_free);
 	return err;
+}
+
+static int
+_chunk_method_is_EC(const char *chunk_method)
+{
+	return oio_str_prefixed(chunk_method, STGPOL_DSPREFIX_EC, "/");
 }
 
 static int
@@ -1426,6 +1432,8 @@ _sds_upload_finish (struct oio_sds_ul_s *ul)
 	if (failures >= total) {
 		err = ERRPTF("No upload succeeded");
 	} else {
+		const gboolean is_ec = _chunk_method_is_EC(ul->chunk_method);
+
 		_finish_metachunk_upload(ul);
 
 		/* TODO: in case of EC, we may wanna read response headers */
@@ -1433,7 +1441,7 @@ _sds_upload_finish (struct oio_sds_ul_s *ul)
 		/* store the structure in holders for further commit/abort */
 		for (GSList *l = ul->chunks; l ;l=l->next) {
 			struct chunk_s *chunk = l->data;
-			if (chunk->flag_success) {
+			if (is_ec || chunk->flag_success) {
 				ul->chunks_done = g_slist_prepend (ul->chunks_done, chunk);
 			} else {
 				ul->chunks_failed = g_slist_prepend (ul->chunks_failed, chunk);
