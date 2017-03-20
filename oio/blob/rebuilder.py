@@ -118,10 +118,12 @@ class BlobRebuilderWorker(object):
                 self.bytes_processed = 0
                 self.last_reported = now
             rebuilder_time += (now - loop_time)
-
-        elapsed = (time.time() - start_time) or 0.000001
+        end_time = time.time()
+        elapsed = (end_time - start_time) or 0.000001
         self.logger.info(
             'DONE %(volume)s '
+            'started=%(start_time)s '
+            'ended=%(end_time)s '
             'elapsed=%(elapsed).02f '
             'errors=%(errors)d '
             'chunks=%(nb_chunks)d %(c_rate).2f/s '
@@ -129,6 +131,10 @@ class BlobRebuilderWorker(object):
             'elapsed=%(rebuilder_time).2f '
             '(rebuilder: %(rebuilder_rate).2f%%)' % {
                 'volume': self.volume,
+                'start_time': datetime.fromtimestamp(
+                    int(start_time)).isoformat(),
+                'end_time': datetime.fromtimestamp(
+                    int(end_time)).isoformat(),
                 'elapsed': elapsed,
                 'errors': total_errors + self.errors,
                 'nb_chunks': self.total_chunks_processed,
