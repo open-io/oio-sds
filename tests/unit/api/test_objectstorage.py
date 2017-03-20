@@ -13,6 +13,16 @@ from tests.utils import random_str
 from tests.unit.api import FakeStorageAPI, FakeAPIResponse
 
 
+def chunk(suffix, position):
+    return {"url": "http://1.2.3.4:6000/{0}".format(suffix),
+            "pos": str(position), "size": 32, "hash": "0"*32}
+
+
+def extend(base, inc):
+    base.update(inc)
+    return base
+
+
 class ObjectStorageTest(unittest.TestCase):
     def setUp(self):
         self.api = FakeStorageAPI("NS", "http://1.2.3.4:8000")
@@ -245,9 +255,7 @@ class ObjectStorageTest(unittest.TestCase):
         api = self.api
         name = random_str(32)
         resp_body = [
-            {"url": "http://1.2.3.4:6000/AAAA", "pos": "0", "size": 32},
-            {"url": "http://1.2.3.4:6000/BBBB", "pos": "1", "size": 32},
-            {"url": "http://1.2.3.4:6000/CCCC", "pos": "2", "size": 32}
+            chunk("AAAA", "0"), chunk("BBBB", "1"), chunk("CCCC", "2")
         ]
         api._request = Mock(return_value=(None, resp_body))
 
@@ -270,53 +278,31 @@ class ObjectStorageTest(unittest.TestCase):
 
     def test_sort_chunks(self):
         raw_chunks = [
-            {"url": "http://1.2.3.4:6000/AAAA", "pos": "0", "size": 32},
-            {"url": "http://1.2.3.4:6000/BBBB", "pos": "0", "size": 32},
-            {"url": "http://1.2.3.4:6000/CCCC", "pos": "1", "size": 32},
-            {"url": "http://1.2.3.4:6000/DDDD", "pos": "1", "size": 32},
-            {"url": "http://1.2.3.4:6000/EEEE", "pos": "2", "size": 32},
-            {"url": "http://1.2.3.4:6000/FFFF", "pos": "2", "size": 32},
+            chunk("AAAA", "0"), chunk("BBBB", "0"),
+            chunk("CCCC", "1"), chunk("DDDD", "1"),
+            chunk("EEEE", "2"), chunk("FFFF", "2"),
         ]
         chunks = _sort_chunks(raw_chunks, False)
         sorted_chunks = {
-            0: [
-                {"url": "http://1.2.3.4:6000/AAAA",
-                 "pos": "0", "size": 32, "offset": 0},
-                {"url": "http://1.2.3.4:6000/BBBB",
-                 "pos": "0", "size": 32, "offset": 0}],
-            1: [
-                {"url": "http://1.2.3.4:6000/CCCC",
-                 "pos": "1", "size": 32, "offset": 32},
-                {"url": "http://1.2.3.4:6000/DDDD",
-                 "pos": "1", "size": 32, "offset": 32}],
-            2: [
-                {"url": "http://1.2.3.4:6000/EEEE",
-                 "pos": "2", "size": 32, "offset": 64},
-                {"url": "http://1.2.3.4:6000/FFFF",
-                 "pos": "2", "size": 32, "offset": 64}
-            ]}
+            0: [extend(chunk("AAAA", "0"), {"offset": 0}),
+                extend(chunk("BBBB", "0"), {"offset": 0})],
+            1: [extend(chunk("CCCC", "1"), {"offset": 32}),
+                extend(chunk("DDDD", "1"), {"offset": 32})],
+            2: [extend(chunk("EEEE", "2"), {"offset": 64}),
+                extend(chunk("FFFF", "2"), {"offset": 64})]
+            }
         self.assertEqual(chunks, sorted_chunks)
         raw_chunks = [
-            {"url": "http://1.2.3.4:6000/AAAA", "pos": "0.0", "size": 32},
-            {"url": "http://1.2.3.4:6000/BBBB", "pos": "0.1", "size": 32},
-            {"url": "http://1.2.3.4:6000/CCCC", "pos": "0.2", "size": 32},
-            {"url": "http://1.2.3.4:6000/DDDD", "pos": "1.0", "size": 32},
-            {"url": "http://1.2.3.4:6000/EEEE", "pos": "1.1", "size": 32},
-            {"url": "http://1.2.3.4:6000/FFFF", "pos": "1.2", "size": 32},
+            chunk("AAAA", "0.0"), chunk("BBBB", "0.1"), chunk("CCCC", "0.2"),
+            chunk("DDDD", "1.0"), chunk("EEEE", "1.1"), chunk("FFFF", "1.2"),
         ]
         chunks = _sort_chunks(raw_chunks, True)
         sorted_chunks = {
-            0: [{"url": "http://1.2.3.4:6000/AAAA",
-                 "pos": "0.0", "size": 32, "num": 0, "offset": 0},
-                {"url": "http://1.2.3.4:6000/BBBB",
-                 "pos": "0.1", "size": 32, "num": 1, "offset": 0},
-                {"url": "http://1.2.3.4:6000/CCCC",
-                 "pos": "0.2", "size": 32, "num": 2, "offset": 0}],
-            1: [{"url": "http://1.2.3.4:6000/DDDD",
-                 "pos": "1.0", "size": 32, "num": 0, "offset": 32},
-                {"url": "http://1.2.3.4:6000/EEEE",
-                 "pos": "1.1", "size": 32, "num": 1, "offset": 32},
-                {"url": "http://1.2.3.4:6000/FFFF",
-                 "pos": "1.2", "size": 32, "num": 2, "offset": 32}]
+            0: [extend(chunk("AAAA", "0.0"), {"num": 0, "offset": 0}),
+                extend(chunk("BBBB", "0.1"), {"num": 1, "offset": 0}),
+                extend(chunk("CCCC", "0.2"), {"num": 2, "offset": 0})],
+            1: [extend(chunk("DDDD", "1.0"), {"num": 0, "offset": 32}),
+                extend(chunk("EEEE", "1.1"), {"num": 1, "offset": 32}),
+                extend(chunk("FFFF", "1.2"), {"num": 2, "offset": 32})]
         }
         self.assertEqual(chunks, sorted_chunks)
