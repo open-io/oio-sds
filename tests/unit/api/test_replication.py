@@ -80,13 +80,15 @@ class TestReplication(unittest.TestCase):
                 self.sysmeta, meta_chunk, checksum, self.storage_method)
             bytes_transferred, checksum, chunks = handler.stream(source, size)
 
-            self.assertEqual(len(chunks), len(meta_chunk))
+            self.assertEqual(len(chunks), len(meta_chunk)-1)
 
             for i in range(quorum_size):
                 self.assertEqual(chunks[i].get('error'), None)
 
-            for i in xrange(quorum_size, len(meta_chunk)):
-                self.assertEqual(chunks[i].get('error'), 'HTTP 500')
+            # # JFS: starting at branche 3.x, it has been preferred to save
+            # #      only the chunks that succeeded.
+            # for i in xrange(quorum_size, len(meta_chunk)):
+            #     self.assertEqual(chunks[i].get('error'), 'HTTP 500')
 
             self.assertEqual(bytes_transferred, 0)
             self.assertEqual(checksum, EMPTY_CHECKSUM)
@@ -116,12 +118,15 @@ class TestReplication(unittest.TestCase):
                 self.sysmeta, meta_chunk, checksum, self.storage_method)
             bytes_transferred, checksum, chunks = handler.stream(source, size)
 
-        self.assertEqual(len(chunks), len(meta_chunk))
+        self.assertEqual(len(chunks), len(meta_chunk)-1)
 
         for i in range(len(meta_chunk) - 1):
             self.assertEqual(chunks[i].get('error'), None)
-        self.assertEqual(
-            chunks[len(meta_chunk) - 1].get('error'), '1.0 second')
+
+        # # JFS: starting at branche 3.x, it has been preferred to save only
+        # #      the chunks that succeeded.
+        # self.assertEqual(
+        #     chunks[len(meta_chunk) - 1].get('error'), '1.0 second')
 
         self.assertEqual(bytes_transferred, 0)
         self.assertEqual(checksum, EMPTY_CHECKSUM)
@@ -138,10 +143,12 @@ class TestReplication(unittest.TestCase):
             handler = ReplicatedChunkWriteHandler(
                 self.sysmeta, meta_chunk, checksum, self.storage_method)
             bytes_transferred, checksum, chunks = handler.stream(source, size)
-        self.assertEqual(len(chunks), len(meta_chunk))
+        self.assertEqual(len(chunks), len(meta_chunk)-1)
         for i in range(len(meta_chunk) - 1):
             self.assertEqual(chunks[i].get('error'), None)
-        self.assertEqual(chunks[len(meta_chunk) - 1].get('error'), 'failure')
+        # # JFS: starting at branche 3.x, it has been preferred to save only
+        # #      the chunks that succeeded.
+        # self.assertEqual(chunks[len(meta_chunk) - 1].get('error'), 'failure')
 
         self.assertEqual(bytes_transferred, 0)
         self.assertEqual(checksum, EMPTY_CHECKSUM)
