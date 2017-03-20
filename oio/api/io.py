@@ -98,6 +98,13 @@ class WriteHandler(object):
         self.read_timeout = read_timeout or CLIENT_TIMEOUT
 
     def stream(self):
+        """
+        Uploads a stream of data.
+        :returns: a tuple of 3 which contains:
+           * the list of chunks to be saved in the container
+           * the number of bytes transfered
+           * the actual checksum of the data that went through the stream.
+        """
         raise NotImplementedError()
 
 
