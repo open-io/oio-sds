@@ -170,6 +170,11 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 		return _reply_format_error (args, BADREQ("Service type not specified"));
 	}
 
+	if (!validate_srvtype(si->type)) {
+		service_info_clean (si);
+		return _reply_format_error (args, BADREQ("Service type currently unknown"));
+	}
+
 	if (!si->ns_name[0]) {
 		GRID_TRACE2("%s NS forced to %s", __FUNCTION__, si->ns_name);
 		g_strlcpy (si->ns_name, ns_name, sizeof(si->ns_name));
