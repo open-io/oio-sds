@@ -89,12 +89,12 @@ class BlobRebuilderWorker(object):
 
             if now - self.last_reported >= self.report_interval:
                 self.logger.info(
-                    'status=%(volume)s '
+                    'RUN  %(volume)s '
                     'started=%(start_time)s '
                     'passes=%(passes)d '
                     'errors=%(errors)d '
-                    'chunk/s=%(c_rate).2f '
-                    'byte/s=%(b_rate).2f '
+                    'chunks=%(nb_chunks)d %(c_rate).2f/s '
+                    'bytes=%(nb_bytes)d %(b_rate).2fB/s '
                     'elapsed=%(total).2f '
                     '(rebuilder: %(rebuilder_rate).2f%%)' % {
                         'volume': self.volume,
@@ -102,11 +102,14 @@ class BlobRebuilderWorker(object):
                             int(report_time)).isoformat(),
                         'passes': self.passes,
                         'errors': self.errors,
+                        'nb_chunks': self.total_chunks_processed,
+                        'nb_bytes': self.total_bytes_processed,
                         'c_rate': self.passes / (now - report_time),
                         'b_rate': self.bytes_processed / (now - report_time),
                         'total': (now - start_time),
                         'rebuilder_time': rebuilder_time,
-                        'rebuilder_rate': rebuilder_time / (now - start_time)
+                        'rebuilder_rate':
+                            100.0 * rebuilder_time / float(now - start_time)
                     }
                 )
                 report_time = now
@@ -118,20 +121,22 @@ class BlobRebuilderWorker(object):
 
         elapsed = (time.time() - start_time) or 0.000001
         self.logger.info(
-            'DONE=%(volume)s '
+            'DONE %(volume)s '
             'elapsed=%(elapsed).02f '
             'errors=%(errors)d '
-            'chunk/s=%(chunk_rate).2f '
-            'byte/s=%(bytes_rate).2f '
+            'chunks=%(nb_chunks)d %(c_rate).2f/s '
+            'bytes=%(nb_bytes)d %(b_rate).2fB/s '
             'elapsed=%(rebuilder_time).2f '
             '(rebuilder: %(rebuilder_rate).2f%%)' % {
                 'volume': self.volume,
                 'elapsed': elapsed,
                 'errors': total_errors + self.errors,
-                'chunk_rate': self.total_chunks_processed / elapsed,
-                'bytes_rate': self.total_bytes_processed / elapsed,
+                'nb_chunks': self.total_chunks_processed,
+                'nb_bytes': self.total_bytes_processed,
+                'c_rate': self.total_chunks_processed / elapsed,
+                'b_rate': self.total_bytes_processed / elapsed,
                 'rebuilder_time': rebuilder_time,
-                'rebuilder_rate': rebuilder_time / elapsed
+                'rebuilder_rate': 100.0 * rebuilder_time / float(elapsed)
             }
         )
 
