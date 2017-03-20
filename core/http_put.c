@@ -502,8 +502,13 @@ _manage_curl_events (struct http_put_s *p)
 			if (curl_ret == CURLE_OK)
 				dest->http_code = http_ret;
 
-			GRID_TRACE("DONE [%s] code=%ld strerror=%s",
-					dest->url, http_ret, curl_easy_strerror(curl_ret));
+			if (http_ret / 100 == 2) {
+				GRID_TRACE("DONE [%s] code=%ld strerror=%s",
+						dest->url, http_ret, curl_easy_strerror(curl_ret));
+			} else {
+				GRID_INFO("ERROR [%s] code=%ld strerror=%s",
+						dest->url, http_ret, curl_easy_strerror(curl_ret));
+			}
 
 			CURLMcode rc = curl_multi_remove_handle(p->mhandle, dest->handle);
 			EXTRA_ASSERT(rc == CURLM_OK);
@@ -557,10 +562,12 @@ http_put_step (struct http_put_s *p)
 		struct http_put_dest_s *d = l->data;
 		if (d->state == HTTP_SINGLE_FINISHED)
 			continue;
+		count_up ++;
 		if (!d->buffer && d->state < HTTP_SINGLE_FINISHED)
 			count_waiting_for_data ++;
 	}
-	if (count_waiting_for_data >= count_dests) {
+	EXTRA_ASSERT(count_waiting_for_data <= count_up);
+	if (count_waiting_for_data == count_up) {
 		GBytes *buf = g_queue_pop_head (p->buffer_tail);
 		if (buf) {
 			for (GSList *l=p->dests; l ;l=l->next) {
