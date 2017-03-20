@@ -119,6 +119,21 @@ start_at_boot=false
 command=${EXE_PREFIX}-proxy -O Cache=off -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
 """
 
+template_blob_indexer_service = """
+[blob-indexer]
+namespace = ${NS}
+user = ${USER}
+volume = ${VOLUME}
+interval = 30
+report_interval = 5
+chunks_per_second = 30
+autocreate = true
+log_level = INFO
+log_facility = LOG_LOCAL0
+log_address = /dev/log
+syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
+"""
+
 template_rawx_service = """
 LoadModule mpm_worker_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mpm_worker.so
 LoadModule authz_core_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_authz_core.so
@@ -662,6 +677,15 @@ on_die=respawn
 enabled=true
 start_at_boot=false
 command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O DirectorySchemas=${CFGDIR}/sqlx/schemas -O Endpoint=${IP}:${PORT} ${EXTRA} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
+"""
+
+template_gridinit_indexer = """
+[Service.${NS}-${SRVTYPE}-${SRVNUM}]
+group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+command=${EXE_PREFIX}-blob-indexer ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+enabled=true
+start_at_boot=false
+on_die=respawn
 """
 
 template_gridinit_httpd = """
@@ -1237,7 +1261,7 @@ def generate(options):
                           'EXTRASLOT': ('rawx-even' if num % 2 else 'rawx-odd')
                           })
             add_service(env)
-            # gridinit
+            # gridinit (rawx)
             tpl = Template(template_gridinit_httpd)
             with open(gridinit(env), 'a+') as f:
                 f.write(tpl.safe_substitute(env))
@@ -1253,6 +1277,18 @@ def generate(options):
             to_write = tpl.safe_substitute(env)
             with open(watch(env), 'w+') as f:
                 f.write(to_write)
+
+            env.update({'SRVTYPE': 'indexer'})
+            # indexer
+            tpl = Template(template_blob_indexer_service)
+            to_write = tpl.safe_substitute(env)
+            path = '{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.conf'.format(**env)
+            with open(path, 'w+') as f:
+                f.write(to_write)
+            # gridinit (indexer)
+            tpl = Template(template_gridinit_indexer)
+            with open(gridinit(env), 'a+') as f:
+                f.write(tpl.safe_substitute(env))
 
     # redis
     env = subenv({'SRVTYPE': 'redis', 'SRVNUM': 1, 'PORT': 6379})
