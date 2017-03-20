@@ -108,7 +108,8 @@ class BlobRebuilderWorker(object):
                         'b_rate': self.bytes_processed / (now - report_time),
                         'total': (now - start_time),
                         'rebuilder_time': rebuilder_time,
-                        'rebuilder_rate': 100.0 * rebuilder_time / float(now - start_time)
+                        'rebuilder_rate':
+                            100.0 * rebuilder_time / float(now - start_time)
                     }
                 )
                 report_time = now
