@@ -148,8 +148,9 @@ struct chunk_s
 {
 	struct chunk_position_s position;
 	gsize size;
-	gchar hexhash[STRLEN_CHUNKHASH];
 	guint32 score;
+	gchar hexhash[STRLEN_CHUNKHASH];
+	guint8 flag_success : 1;  /* only used during an upload */
 	gchar url[1];
 };
 
@@ -276,6 +277,12 @@ _chunks_load (GSList **out, struct json_object *jtab)
 	else
 		g_slist_free_full (chunks, g_free);
 	return err;
+}
+
+static int
+_chunk_method_is_EC(const char *chunk_method)
+{
+	return oio_str_prefixed(chunk_method, STGPOL_DSPREFIX_EC, "/");
 }
 
 static int
@@ -1386,6 +1393,31 @@ oio_sds_upload_feed (struct oio_sds_ul_s *ul,
 	return NULL;
 }
 
+static void
+_finish_metachunk_upload(struct oio_sds_ul_s *ul)
+{
+	EXTRA_ASSERT(ul != NULL);
+	EXTRA_ASSERT(ul->mc != NULL);
+
+	ul->mc->size = ul->local_done;
+
+	for (GSList *l=ul->mc->chunks; l ;l=l->next) {
+		struct chunk_s *c = l->data;
+		EXTRA_ASSERT (c->position.meta == ul->mc->meta);
+		c->size = ul->mc->size;
+		c->flag_success = 2 == (http_put_get_http_code(ul->put, c) / 100);
+	}
+
+	if (ul->checksum_chunk) {
+		const char *h = g_checksum_get_string (ul->checksum_chunk);
+		for (GSList *l=ul->mc->chunks; l ;l=l->next) {
+			struct chunk_s *c = l->data;
+			g_strlcpy (c->hexhash, h, sizeof(c->hexhash));
+			oio_str_upper (c->hexhash);
+		}
+	}
+}
+
 static GError *
 _sds_upload_finish (struct oio_sds_ul_s *ul)
 {
@@ -1400,29 +1432,21 @@ _sds_upload_finish (struct oio_sds_ul_s *ul)
 	if (failures >= total) {
 		err = ERRPTF("No upload succeeded");
 	} else {
-		/* patch the chunk sizes and positions */
-		ul->mc->size = ul->local_done;
-		for (GSList *l=ul->mc->chunks; l ;l=l->next) {
-			struct chunk_s *c = l->data;
-			c->size = ul->mc->size;
-			EXTRA_ASSERT (c->position.meta == ul->mc->meta);
-		}
+		const gboolean is_ec = _chunk_method_is_EC(ul->chunk_method);
 
-		if (ul->checksum_chunk) {
-			const char *h = g_checksum_get_string (ul->checksum_chunk);
-			for (GSList *l=ul->mc->chunks; l ;l=l->next) {
-				struct chunk_s *c = l->data;
-				g_strlcpy (c->hexhash, h, sizeof(c->hexhash));
-				oio_str_upper (c->hexhash);
-			}
-		}
+		_finish_metachunk_upload(ul);
+
 		/* TODO: in case of EC, we may wanna read response headers */
 
 		/* store the structure in holders for further commit/abort */
-		ul->chunks_done = g_slist_concat (ul->chunks_done, ul->chunks);
-		GRID_TRACE("%s > chunks +%u -> %u", __FUNCTION__,
-				g_slist_length(ul->chunks),
-				g_slist_length(ul->chunks_done));
+		for (GSList *l = ul->chunks; l ;l=l->next) {
+			struct chunk_s *chunk = l->data;
+			if (is_ec || chunk->flag_success) {
+				ul->chunks_done = g_slist_prepend (ul->chunks_done, chunk);
+			} else {
+				ul->chunks_failed = g_slist_prepend (ul->chunks_failed, chunk);
+			}
+		}
 
 		ul->metachunk_done = g_list_append (ul->metachunk_done, ul->mc);
 		GRID_TRACE("%s > metachunks +1 -> %u (%"G_GSIZE_FORMAT")", __FUNCTION__,
