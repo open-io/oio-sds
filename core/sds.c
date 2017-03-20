@@ -1405,7 +1405,7 @@ _finish_metachunk_upload(struct oio_sds_ul_s *ul)
 		struct chunk_s *c = l->data;
 		EXTRA_ASSERT (c->position.meta == ul->mc->meta);
 		c->size = ul->mc->size;
-		c->flag_success = http_put_get_http_code(ul->put, c);
+		c->flag_success = 2 == (http_put_get_http_code(ul->put, c) / 100);
 	}
 
 	if (ul->checksum_chunk) {
