@@ -31,6 +31,7 @@ class AccountUpdateFilter(Filter):
             if event.event_type == EventTypes.CONTAINER_STATE:
                 body['bytes'] = data.get('bytes-count', 0)
                 body['objects'] = data.get('object-count', 0)
+                body['mtime'] = mtime
             elif event.event_type == EventTypes.CONTAINER_DELETED:
                 body['dtime'] = mtime
             elif event.event_type == EventTypes.CONTAINER_NEW:
