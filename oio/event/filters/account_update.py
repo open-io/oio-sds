@@ -22,7 +22,7 @@ class AccountUpdateFilter(Filter):
 
         if event.event_type in CONTAINER_EVENTS:
             uri = '/v1.0/account/container/update'
-            mtime = event.when
+            mtime = event.when / 1000000.0  # convert to seconds
             data = event.data
             url = event.env.get('url')
             name = url.get('user')
