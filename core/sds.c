@@ -1481,6 +1481,7 @@ _sds_upload_finish (struct oio_sds_ul_s *ul)
 				g_list_length(ul->metachunk_done),
 				ul->mc->size);
 		ul->mc = NULL;
+		g_slist_free(ul->chunks);
 		ul->chunks = NULL;
 	}
 
