@@ -139,15 +139,14 @@ def _sort_chunks(raw_chunks, ec_security):
             continue
         # sort by length
         bylength = byhash.values()
-        bylength.sort(lambda x, y: cmp(len(y), len(x)))
+        bylength.sort(key=len, reverse=True)
         chunks[pos] = bylength[0]
 
     # Append the 'offset' attribute
     offset = 0
     for pos in sorted(chunks.keys()):
         clist = chunks[pos]
-        clist.sort(lambda x, y: cmp(x.get("score", 0), y.get("score", 0)),
-                   reverse=True)
+        clist.sort(key=lambda x: x.get("score", 0), reverse=True)
         for element in clist:
             element['offset'] = offset
         if not ec_security and len(clist) > 1:
