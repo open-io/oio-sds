@@ -1,4 +1,5 @@
 import time
+from datetime import datetime
 from random import random
 
 from oio.blob.utils import check_volume, read_chunk_metadata
@@ -46,17 +47,18 @@ class BlobIndexer(Daemon):
             )
             self.total_chunks_processed += 1
             now = time.time()
-
             if now - self.last_reported >= self.report_interval:
                 self.logger.info(
-                    '%(start_time)s '
-                    '%(passes)d '
-                    '%(errors)d '
-                    '%(c_rate).2f '
-                    '%(total).2f ' % {
-                        'start_time': time.ctime(report_time),
+                    'started=%(start_time)s '
+                    'passes=%(passes)d '
+                    'errors=%(errors)d '
+                    'chunks=%(nb_chunks)d %(c_rate).2f/s '
+                    'total=%(total).2f ' % {
+                        'start_time': datetime.fromtimestamp(
+                            int(report_time)).isoformat(),
                         'passes': self.passes,
                         'errors': self.errors,
+                        'nb_chunks': self.total_chunks_processed,
                         'c_rate': self.passes / (now - report_time),
                         'total': (now - start_time)
                     }
@@ -66,14 +68,22 @@ class BlobIndexer(Daemon):
                 self.passes = 0
                 self.errors = 0
                 self.last_reported = now
-        elapsed = (time.time() - start_time) or 0.000001
+        end_time = time.time()
+        elapsed = (end_time - start_time) or 0.000001
         self.logger.info(
-            '%(elapsed).02f '
-            '%(errors)d '
-            '%(chunk_rate).2f ' % {
+            'started=%(start_time)s '
+            'ended=%(end_time)s '
+            'elapsed=%(elapsed).02f '
+            'errors=%(errors)d '
+            'chunks=%(nb_chunks)d %(c_rate).2f/s ' % {
+                'start_time': datetime.fromtimestamp(
+                    int(start_time)).isoformat(),
+                'end_time': datetime.fromtimestamp(
+                    int(end_time)).isoformat(),
                 'elapsed': elapsed,
                 'errors': total_errors + self.errors,
-                'chunk_rate': self.total_chunks_processed / elapsed
+                'nb_chunks': self.total_chunks_processed,
+                'c_rate': self.total_chunks_processed / elapsed
             }
         )
         if elapsed < self.interval:
