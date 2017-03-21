@@ -119,6 +119,8 @@ gboolean sock_set_nodelay(int fd, gboolean enabled);
 
 gboolean sock_set_cork(int fd, gboolean enabled);
 
+gboolean sock_set_fastopen(int fd);
+
 gboolean sock_set_linger(int fd, int onoff, int linger);
 
 gboolean sock_set_linger_default(int fd);
@@ -130,8 +132,14 @@ void sock_set_client_default(int fd);
  * @return the result of close() or -1 in case of error. */
 int metautils_pclose(int *pfd);
 
-/* Opens anon-blocking TCP socket then connect it to 'url' before returning
+/* Opens a non-blocking TCP socket then connect it to 'url' before returning
  * it. 'err' is optional. */
 int sock_connect (const char *url, GError **err);
+
+/* Opens a non-blocking TCP socket and attempts to benefit the TCP_FASTOPEN
+ * mechanism. The regular sock_connect() is used if that fast-open option is
+ * not supported or if there is no data to be sen. */
+int sock_connect_and_send (const char *url, GError **err,
+		const uint8_t *buf, gsize *len);
 
 #endif /*OIO_SDS__metautils__lib__metautils_sockets_h*/
