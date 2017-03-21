@@ -238,6 +238,11 @@ http_put_dest_destroy(gpointer destination)
 	if (dest->response_headers)
 		g_hash_table_destroy(dest->response_headers);
 
+	if (dest->buffer) {
+		g_bytes_unref(dest->buffer);
+		dest->buffer = NULL;
+	}
+
 	g_free(dest);
 }
 
@@ -572,6 +577,10 @@ http_put_step (struct http_put_s *p)
 		if (buf) {
 			for (GSList *l=p->dests; l ;l=l->next) {
 				struct http_put_dest_s *d = l->data;
+				if (d->buffer) {
+					g_bytes_unref(d->buffer);
+					d->buffer = NULL;
+				}
 				d->buffer = g_bytes_ref (buf);
 			}
 			g_bytes_unref (buf);
