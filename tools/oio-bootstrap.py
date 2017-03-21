@@ -793,6 +793,9 @@ queue_url = beanstalk://127.0.0.1:11300
 
 [filter:noop]
 use = egg:oio#noop
+
+[filter:logger]
+use = egg:oio#logger
 """
 
 template_conscience_agent = """
