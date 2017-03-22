@@ -1886,6 +1886,86 @@ enum http_rc_e action_content_delete (struct req_args_s *args) {
 	return _reply_m2_error (args, err);
 }
 
+static enum http_rc_e
+_m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
+	guint max_requests = OIO_CONTENT_DELETE_MANY_NB_MAX_REQ;
+	GError *err = NULL;
+	gboolean error =FALSE;
+	json_object *jarray = NULL;
+	gchar *url_path = NULL;
+	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url); }
+
+	if (!oio_url_has_fq_container(args->url))
+		return _reply_format_error(args,
+				BADREQ("Missing url argument"));
+
+	if (!json_object_object_get_ex(jbody, "contents", &jarray)
+			|| !json_object_is_type(jarray, json_type_array))
+		return _reply_format_error(args,
+				BADREQ("Invalid array of contents"));
+
+	guint jarray_len = json_object_array_length(jarray);
+	if (jarray_len < 1)
+		return _reply_format_error(args,
+				BADREQ("At least one element is needed"));
+
+	if (jarray_len > max_requests) {
+		GString * gstr = g_string_new("");
+		g_string_append_printf(gstr, "More than %u requests", max_requests);
+		return _reply_json(args, HTTP_CODE_PAYLOAD_TO_LARGE,
+				"Payload Too Large", gstr);
+	}
+	if (oio_url_get(args->url, OIOURL_PATH)) {
+		url_path = g_strdup(oio_url_get(args->url, OIOURL_PATH));
+		STRING_STACKIFY(url_path);
+	}
+
+	GString *gresponse = g_string_sized_new(2048);
+	g_string_append(gresponse, "{\"contents\":[");
+	for (guint i = 0; i < jarray_len; i++) {
+		struct json_object * jname = NULL;
+		struct json_object * jcontent = NULL;
+		const gchar *name = NULL;
+		jcontent = json_object_array_get_idx(jarray, i);
+		g_string_append(gresponse, "{\"name\":");
+
+		if (!json_object_object_get_ex(jcontent, "name", &jname)
+				|| !json_object_is_type(jname, json_type_string)) {
+			g_string_append(gresponse, "null,");
+			_append_status(gresponse, CODE_CONTENT_NOTFOUND,
+				 "Bad \"name\" field");
+			error = TRUE;
+		} else {
+			name = json_object_get_string(jname);
+			oio_url_set(args->url, OIOURL_PATH, name);
+			oio_str_gstring_append_json_quote(gresponse, name);
+			g_string_append_c(gresponse, ',');
+			err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
+			if (err) {
+				_append_status(gresponse, err->code, err->message);
+				g_error_free(err);
+			} else {
+				_append_status(gresponse, HTTP_CODE_NO_CONTENT, "No Content");
+			}
+		}
+
+		g_string_append_c(gresponse, '}');
+		if (i < jarray_len -1)
+			g_string_append_c(gresponse, ',');
+	}
+
+	oio_url_set(args->url, OIOURL_PATH, url_path);
+	g_string_append(gresponse, "]}");
+	if (error)
+		return _reply_format_error(args, BADREQ("Bad Request"));
+
+	return _reply_success_json(args, gresponse);
+}
+
+enum http_rc_e action_content_delete_many (struct req_args_s *args) {
+	return rest_action(args, _m2_content_delete_many);
+}
+
 enum http_rc_e action_content_touch (struct req_args_s *args) {
 	return rest_action (args, action_m2_content_touch);
 }

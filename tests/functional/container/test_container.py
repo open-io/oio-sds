@@ -319,6 +319,7 @@ class TestMeta2Contents(BaseTestCase):
                                  data=json.dumps({'size': 1024}))
         self.assertError(resp, 404, 406)
         resp = self.session.post(self.url_content('prepare'),
+
                                  params=params,
                                  data=json.dumps({'size': 1024}),
                                  headers=headers)
@@ -342,6 +343,138 @@ class TestMeta2Contents(BaseTestCase):
         self.assertError(resp, 400, 400)
 
         # TODO check SPARE requests reaching the meta2 server
+
+    def _create_content(self, name):
+        headers = {'X-oio-action-mode': 'autocreate'}
+        params = self.param_content(self.ref, name)
+        resp = self.session.post(self.url_content('prepare'),
+                                 data=json.dumps({'size': '1024'}),
+                                 params=params,
+                                 headers=headers)
+        self.assertEqual(resp.status_code, 200)
+        chunks = resp.json()
+
+        headers = {'x-oio-action-mode': 'autocreate',
+                   'x-oio-content-meta-length': '1024'}
+        resp = self.session.post(self.url_content('create'),
+                                 params=params,
+                                 headers=headers,
+                                 data=json.dumps(chunks))
+        self.assertEqual(resp.status_code, 204)
+
+    def test_delete_many(self):
+        # Send no account
+        params = self.param_ref(self.ref)
+        params['acct'] = ""
+        resp = self.session.post(self.url_content('delete_many'),
+                                 params=params)
+        self.assertError(resp, 400, 400)
+
+        # Send no container
+        params = self.param_ref("")
+        resp = self.session.post(self.url_content('delete_many'),
+                                 params=params)
+        self.assertError(resp, 400, 400)
+
+        # Send empty body
+        params = self.param_ref(self.ref)
+        resp = self.session.post(self.url_content('delete_many'),
+                                 params=params)
+        self.assertError(resp, 400, 400)
+
+        # Send empty content
+        data = ('{"contents"}')
+        resp = self.session.post(self.url_content('delete_many'),
+                                 params=params, data=data)
+        self.assertError(resp, 400, 400)
+
+        # Send empty array
+        data = ('{"contents":[]}')
+        resp = self.session.post(self.url_content('delete_many'),
+                                 params=params, data=data)
+        self.assertError(resp, 400, 400)
+
+        # Send one existent
+        self._create_content('should_exist')
+        data = ('{"contents":[{"name":"should_exist"}]}')
+        resp = self.session.post(self.url_content('delete_many'),
+                                 params=params, data=data)
+        json_data = resp.json()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(json_data['contents'][0]['status'], 204)
+        self.assertEqual(json_data['contents'][0]['message'], 'No Content')
+
+        # Send one nonexistent
+        data = ('{"contents":[{"name":"should_not_exist"}]}')
+        resp = self.session.post(self.url_content('delete_many'),
+                                 params=params, data=data)
+        json_data = resp.json()
+        self.assertEqual(json_data['contents'][0]['status'], 420)
+        self.assertEqual(json_data['contents'][0]['message'],
+                         'Alias not found')
+        # Send one existent and one nonexistent
+        self._create_content('should_exist')
+        data = ('{"contents":[{"name":"should_exist"},'
+                + '{"name":"should_not_exist"}]}')
+        resp = self.session.post(self.url_content('delete_many'),
+                                 params=params, data=data)
+        json_data = resp.json()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(json_data['contents'][0]['status'], 204)
+        self.assertEqual(json_data['contents'][0]['message'], 'No Content')
+        self.assertEqual(json_data['contents'][1]['status'], 420)
+        self.assertEqual(json_data['contents'][1]['message'],
+                         'Alias not found')
+        # Send 2 nonexistents
+        data = ('{"contents":[{"name":"should_not_exist"},'
+                + '{"name":"should_also_not_exist"}]}')
+        resp = self.session.post(self.url_content('delete_many'),
+                                 params=params, data=data)
+        json_data = resp.json()
+        self.assertEqual(json_data['contents'][0]['status'], 420)
+        self.assertEqual(json_data['contents'][0]['message'],
+                         'Alias not found')
+        self.assertEqual(json_data['contents'][1]['status'], 420)
+        self.assertEqual(json_data['contents'][1]['message'],
+                         'Alias not found')
+        # Send 2 existents
+        self._create_content('should_exist')
+        self._create_content('shold_also_exist')
+        data = ('{"contents":[{"name":"should_exist"},'
+                + '{"name":"should_also_exist"}]}')
+        resp = self.session.post(self.url_content('delete_many'),
+                                 params=params, data=data)
+        json_data = resp.json()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(json_data['contents'][0]['status'], 204)
+        self.assertEqual(json_data['contents'][0]['message'], 'No Content')
+        self.assertEqual(json_data['contents'][0]['status'], 204)
+        self.assertEqual(json_data['contents'][0]['message'],  'No Content')
+
+        strange_paths = [
+            "Annual report.txt",
+            "foo+bar=foobar.txt",
+            "100%_bug_free.c",
+            "forward/slash/allowed",
+            "I\\put\\backslashes\\and$dollar$signs$in$file$names",
+            "Je suis tombé sur la tête, mais ça va bien.",
+            "%s%f%u%d%%",
+            "carriage\rreturn",
+            "line\nfeed",
+            "ta\tbu\tla\ttion",
+            "controlchars",
+        ]
+        contents = []
+        for name in strange_paths:
+            self._create_content(name)
+            contents.append({"name": name})
+        data = json.dumps({"contents": contents})
+        resp = self.session.post(self.url_content('delete_many'),
+                                 params=params, data=data)
+        json_data = resp.json()
+        self.assertEqual(resp.status_code, 200)
+        for r in json_data['contents']:
+            self.assertEqual(r['status'], 204)
 
     def test_copy(self):
         path = random_content()

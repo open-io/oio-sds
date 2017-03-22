@@ -249,7 +249,8 @@ class ObjectStorageTest(unittest.TestCase):
             {"url": "http://1.2.3.4:6000/BBBB", "pos": "1", "size": 32},
             {"url": "http://1.2.3.4:6000/CCCC", "pos": "2", "size": 32}
         ]
-        api._request = Mock(return_value=(None, resp_body))
+        resp = FakeAPIResponse()
+        api._request = Mock(return_value=(resp, resp_body))
 
         api.object_delete(
             self.account, self.container, name, headers=self.headers)

@@ -21,6 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define OIO_SDS__proxy__actions_h 1
 
 #define OIO_CONTAINER_CREATE_MANY_NB_MAX_REQ 100
+#define OIO_CONTENT_DELETE_MANY_NB_MAX_REQ 100
 
 struct req_args_s;
 
@@ -80,6 +81,7 @@ enum http_rc_e action_container_raw_delete (struct req_args_s *args);
 
 enum http_rc_e action_content_put (struct req_args_s *args);
 enum http_rc_e action_content_delete (struct req_args_s *args);
+enum http_rc_e action_content_delete_many (struct req_args_s *args);
 enum http_rc_e action_content_show (struct req_args_s *args);
 enum http_rc_e action_content_prepare (struct req_args_s *args);
 enum http_rc_e action_content_prop_get (struct req_args_s *args);

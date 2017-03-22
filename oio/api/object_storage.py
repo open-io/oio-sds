@@ -22,7 +22,6 @@ import random
 from inspect import isgenerator
 from requests.exceptions import ConnectionError
 
-
 from oio.common import exceptions as exc
 from oio.api import io
 from oio.api.base import API
@@ -465,6 +464,41 @@ class ObjectStorageAPI(API):
             headers['X-oio-req-id'] = utils.request_id()
         resp, resp_body = self._request(
             'POST', uri, params=params, headers=headers)
+        return resp.status_code
+
+    def _slice_object_many_request(self, account, container, objs):
+        results = []
+        if len(objs) == 1:
+            return results
+        first_part = objs[:len(objs) / 2]
+        second_part = objs[len(objs) / 2 + 1:]
+        results += self.object_delete_many(account, container, first_part)
+        results += self.object_delete_many(account, container, second_part)
+        return results
+
+    def object_delete_many(self, account, container, objs, headers={}):
+        uri = self._make_uri('content/delete_many')
+        params = self._make_params(account, container)
+        if 'X-oio-req-id' not in headers:
+            headers['X-oio-req-id'] = utils.request_id()
+        unformatted_data = list()
+        for obj in objs:
+            unformatted_data.append({'name': obj})
+        data = json.dumps({"contents": unformatted_data})
+        resp, body = self._request(
+            'POST', uri, data=data, params=params, headers=headers)
+        results = []
+        # if the service doesn't know delete_many fall back to delete
+        if resp.status_code == 404:
+            for obj in objs:
+                rc = self.object_delete(account, container, obj)
+                results.append((obj, rc == 204))
+        elif resp.status_code == 413:
+            return self._slice_object_delete_many(account, container, objs)
+        else:
+            for obj in resp.json()["contents"]:
+                results.append((obj["name"], obj["status"] == 204))
+        return results
 
     @handle_container_not_found
     def object_list(self, account, container, limit=None, marker=None,
