@@ -873,7 +873,7 @@ _filter (struct filter_ctx_s *ctx, GSList *l)
 static GError *
 _m2_container_create_with_properties (struct req_args_s *args, char **props)
 {
-	gboolean autocreate = _request_get_flag (args, "autocreate");
+	gboolean autocreate = TRUE;
 	struct m2v2_create_params_s param = {
 			OPT("stgpol"), OPT("verpol"), props, FALSE
 	};
