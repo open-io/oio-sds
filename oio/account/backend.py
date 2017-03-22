@@ -218,9 +218,8 @@ class AccountBackend(object):
 
         data = conn.hgetall(AccountBackend.ckey(account_id, name))
 
-        record = {'name': name, 'mtime': mtime, 'dtime': dtime,
+        record = {'name': name, 'mtime': mtime or dtime, 'dtime': dtime,
                   'objects': object_count, 'bytes': bytes_used}
-        deleted = False
         if data:
             data['mtime'] = Timestamp(data['mtime'])
             data['dtime'] = Timestamp(data['dtime'])
@@ -233,17 +232,22 @@ class AccountBackend(object):
             if data['dtime'] > record['dtime']:
                 record['dtime'] = data['dtime']
 
-        if record['dtime'] > record['mtime']:
-            deleted = True
+        deleted = record['dtime'] >= record['mtime']
 
         if not deleted:
             incr_bytes_used = int_value(record.get('bytes'), 0) -\
                 int_value(data.get('bytes'), 0)
             incr_object_count = int_value(record.get('objects'), 0) -\
                 int_value(data.get('objects'), 0)
-        else:
+        elif record.get('mtime') > data.get('mtime'):
             incr_bytes_used = - int_value(data.get('bytes'), 0)
             incr_object_count = - int_value(data.get('objects'), 0)
+        else:
+            # The event has been delayed, the container has already
+            # been deleted, and the object and bytes statistics have
+            # already been reported to the account.
+            incr_bytes_used = 0
+            incr_object_count = 0
 
         record.update({
             'name': name,

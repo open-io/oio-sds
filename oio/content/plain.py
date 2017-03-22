@@ -39,9 +39,11 @@ class PlainContent(Content):
                 meta_start, meta_end = meta_range
                 reader = io.ChunkReader(iter(chunks[pos]), io.READ_CHUNK_SIZE,
                                         headers)
-                it = reader.get_iter()
-                if not it:
-                    raise UnrecoverableContent("Error while downloading")
+                try:
+                    it = reader.get_iter()
+                except Exception as err:
+                    raise UnrecoverableContent("Error while downloading: %s" %
+                                               err)
                 for part in it:
                     for d in part['iter']:
                         yield d

@@ -125,11 +125,28 @@ def _sort_chunks(raw_chunks, ec_security):
             chunks[position] = []
             chunks[position].append(chunk)
 
+    # for each position, remove incoherent chunks
+    for pos, local_chunks in chunks.iteritems():
+        if len(local_chunks) < 2:
+            continue
+        byhash = dict()
+        for chunk in local_chunks:
+            h = chunk.get('hash')
+            if h not in byhash:
+                byhash[h] = list()
+            byhash[h].append(chunk)
+        if len(byhash) < 2:
+            continue
+        # sort by length
+        bylength = byhash.values()
+        bylength.sort(key=len, reverse=True)
+        chunks[pos] = bylength[0]
+
+    # Append the 'offset' attribute
     offset = 0
     for pos in sorted(chunks.keys()):
         clist = chunks[pos]
-        clist.sort(lambda x, y: cmp(x.get("score", 0), y.get("score", 0)),
-                   reverse=True)
+        clist.sort(key=lambda x: x.get("score", 0), reverse=True)
         for element in clist:
             element['offset'] = offset
         if not ec_security and len(clist) > 1:
@@ -769,9 +786,12 @@ class ObjectStorageApi(object):
                     connection_timeout=self.connection_timeout,
                     response_timeout=self.read_timeout,
                     read_timeout=self.read_timeout)
-                it = reader.get_iter()
-                if not it:
-                    raise exc.OioException("Error while downloading")
+                try:
+                    it = reader.get_iter()
+                except Exception as err:
+                    raise exc.OioException(
+                        "Error while downloading position %d: %s" %
+                        (pos, err))
                 for part in it:
                     for d in part['iter']:
                         total_bytes += len(d)

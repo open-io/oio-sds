@@ -207,12 +207,18 @@ struct gridd_client_vtable_s VTABLE_CLIENT =
 	_client_fail
 };
 
+/* Benefit from the maybe-present TCCP_FASTOPEN, and try to send a few bytes
+ * alongside with the initiation sequence.
+ */
 static GError*
 _client_connect(struct gridd_client_s *client)
 {
 	GError *err = NULL;
-	client->fd = sock_connect(client->url, &err);
 
+	gsize sent = client->request ? client->request->len : 0;
+	client->fd = sock_connect_and_send(client->url, &err,
+			sent && client->request ? client->request->data : NULL,
+			&sent);
 	if (client->fd < 0) {
 		EXTRA_ASSERT(err != NULL);
 		g_prefix_error(&err, "Connect error: ");
@@ -221,7 +227,12 @@ _client_connect(struct gridd_client_s *client)
 
 	EXTRA_ASSERT(err == NULL);
 	client->tv_connect = oio_ext_monotonic_time ();
-	client->step = CONNECTING;
+	client->sent_bytes = sent;
+	if (client->sent_bytes >= client->request->len) {
+		client->step = REP_READING_SIZE;
+	} else {
+		client->step = REQ_SENDING;
+	}
 	return NULL;
 }
 
@@ -373,7 +384,7 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 
 		case REQ_SENDING:
 
-			client->step = REQ_SENDING;
+			EXTRA_ASSERT(client->step == REQ_SENDING);
 
 			if (!client->request)
 				return NULL;
@@ -397,7 +408,7 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 
 		case REP_READING_SIZE:
 
-			client->step = REP_READING_SIZE;
+			EXTRA_ASSERT(client->step == REP_READING_SIZE);
 
 			if (!client->reply)
 				client->reply = g_byte_array_sized_new(256);
@@ -421,10 +432,11 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 			EXTRA_ASSERT (client->reply->len == 4);
 			s32 = *((guint32*)(client->reply->data));
 			client->size = g_ntohl(s32);
+			client->step = REP_READING_DATA;
 
 		case REP_READING_DATA:
 
-			client->step = REP_READING_DATA;
+			EXTRA_ASSERT(client->step == REP_READING_DATA);
 			rc = 0;
 
 			EXTRA_ASSERT (client->reply->len <= client->size + 4);

@@ -20,7 +20,7 @@ from eventlet import sleep, Timeout
 from oio.common import exceptions as exc
 from oio.common.http import http_connect, parse_content_type,\
     parse_content_range, ranges_from_http_header, http_header_from_ranges
-from oio.common.utils import GeneratorIO
+from oio.common.utils import GeneratorIO, group_chunk_errors
 from oio.common import green
 
 logger = logging.getLogger(__name__)
@@ -98,6 +98,13 @@ class WriteHandler(object):
         self.read_timeout = read_timeout or CLIENT_TIMEOUT
 
     def stream(self):
+        """
+        Uploads a stream of data.
+        :returns: a tuple of 3 which contains:
+           * the list of chunks to be saved in the container
+           * the number of bytes transfered
+           * the actual checksum of the data that went through the stream.
+        """
         raise NotImplementedError()
 
 
@@ -233,30 +240,41 @@ class ChunkReader(object):
             self.request_headers['Range'] = 'bytes=%d-' % nb_bytes
 
     def _get_request(self, chunk):
-        # connect to chunk
+        """
+        Connect to a chunk, fetch headers but don't read data.
+        Save the response object in `self.sources` list.
+        """
         try:
             with green.ConnectionTimeout(self.connection_timeout):
                 raw_url = chunk["url"]
                 parsed = urlparse(raw_url)
                 conn = http_connect(parsed.netloc, 'GET', parsed.path,
                                     self.request_headers)
-            with Timeout(self.response_timeout):
+            with green.OioTimeout(self.response_timeout):
                 source = conn.getresponse()
                 source.conn = conn
-        except (Exception, Timeout):
+        except (Exception, Timeout) as error:
             logger.exception('Connection failed to %s', chunk)
+            self._resp_by_chunk[chunk["url"]] = (0, str(error))
             return False
+
         if source.status in (200, 206):
             self.status = source.status
             self._headers = source.getheaders()
             self.sources.append((source, chunk))
             return True
         else:
-            logger.warn("Invalid GET response from %s", chunk)
-            self._resp_by_chunk[chunk["url"]] = (source.status, source.reason)
+            logger.warn("Invalid response from %s: %d %s",
+                        chunk, source.status, source.reason)
+            self._resp_by_chunk[chunk["url"]] = (source.status,
+                                                 str(source.reason))
         return False
 
     def _get_source(self):
+        """
+        Iterate on chunks until one answers,
+        and return the response object.
+        """
         for chunk in self.chunk_iter:
             # continue to iterate until we find a valid source
             if self._get_request(chunk):
@@ -271,14 +289,18 @@ class ChunkReader(object):
         source, chunk = self._get_source()
         if source:
             return self._get_iter(chunk, source)
-        return None
+        errors = group_chunk_errors(self._resp_by_chunk.items())
+        if len(errors) == 1:
+            # All errors are of the same type, group them
+            status, chunks = errors.popitem()
+            raise exc.from_status(status[0], "%s %s" % (status[1], chunks))
+        raise exc.ServiceUnavailable("unavailable chunks: %s" %
+                                     self._resp_by_chunk)
 
     def stream(self):
         # Calling that right now will make `headers` field available
         # before the caller starts reading the stream
         parts_iter = self.get_iter()
-        if not parts_iter:
-            raise exc.from_status(*self._resp_by_chunk.popitem()[1])
 
         def _iter():
             for part in parts_iter:

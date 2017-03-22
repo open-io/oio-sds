@@ -971,8 +971,8 @@ _endpoint_open(struct endpoint_s *u, gboolean udp_allowed)
 		return NEWERROR(errsave, "bind(udp,%s) = '%s'", u->url, strerror(errsave));
 	}
 
-	/* for INET sockets, get the port really used */
 	if (_endpoint_is_INET(u)) {
+		/* for INET sockets, get the port really used */
 		memset(&ss, 0, sizeof(ss));
 		ss_len = sizeof(ss);
 		getsockname(u->fd, (struct sockaddr*)&ss, &ss_len);
@@ -980,6 +980,9 @@ _endpoint_open(struct endpoint_s *u, gboolean udp_allowed)
 			u->port_real = ntohs(((struct sockaddr_in*)&ss)->sin_port);
 		else
 			u->port_real = ntohs(((struct sockaddr_in6*)&ss)->sin6_port);
+
+		/* and benefit from the TCP_FASTOPEN support */
+		sock_set_fastopen(u->fd);
 	}
 
 	if (0 > listen(u->fd, 32768))

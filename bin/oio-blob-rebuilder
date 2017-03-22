@@ -18,7 +18,12 @@ def make_arg_parser():
     log_parser.add_argument('--log-address',
                             help="Log address")
 
-    parser = argparse.ArgumentParser(parents=[log_parser])
+    descr = "Rebuild chunks that were on the specified volume. " \
+            "The list is obtained by requesting the associated rdir " \
+            "service. It is necessary to declare an incident " \
+            "(with 'openio volume admin incident') before " \
+            "running this tool."
+    parser = argparse.ArgumentParser(description=descr, parents=[log_parser])
     parser.add_argument('namespace', help="Namespace")
     parser.add_argument('volume', help="The volume id to rebuild")
     parser.add_argument('--dry-run', action='store_true',

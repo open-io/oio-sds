@@ -84,10 +84,6 @@ class ECError(Exception):
     pass
 
 
-class UnsatisfiableRange(Exception):
-    pass
-
-
 class EmptyByteRange(Exception):
     pass
 
@@ -173,7 +169,12 @@ class Conflict(ClientException):
     pass
 
 
-_http_status_map = {404: NotFound, 409: Conflict}
+class UnsatisfiableRange(ClientException):
+    def __init__(self, http_status=416, status=None, message=None):
+        super(UnsatisfiableRange, self).__init__(http_status, status, message)
+
+
+_http_status_map = {404: NotFound, 409: Conflict, 416: UnsatisfiableRange}
 
 
 def from_status(status, reason="n/a"):

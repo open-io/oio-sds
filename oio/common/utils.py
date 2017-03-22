@@ -288,7 +288,12 @@ TIMESTAMP_FORMAT = "%016.05f"
 
 class Timestamp(object):
     def __init__(self, timestamp):
-        self.timestamp = float(timestamp)
+        float_ts = float(timestamp)
+        # More than year 1000000?! We got microseconds.
+        if float_ts > 31494784780800:
+            self.timestamp = float_ts / 1000000.0
+        else:
+            self.timestamp = float_ts
 
     def __repr__(self):
         return self.normal
@@ -546,3 +551,12 @@ class GeneratorIO(RawIOBase):
     def __iter__(self):
         for chunk in self.generator:
             yield chunk
+
+
+def group_chunk_errors(chunk_err_iter):
+    errors = dict()
+    for chunk, err in chunk_err_iter:
+        err_list = errors.get(err) or list()
+        err_list.append(chunk)
+        errors[err] = err_list
+    return errors

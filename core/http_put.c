@@ -238,6 +238,11 @@ http_put_dest_destroy(gpointer destination)
 	if (dest->response_headers)
 		g_hash_table_destroy(dest->response_headers);
 
+	if (dest->buffer) {
+		g_bytes_unref(dest->buffer);
+		dest->buffer = NULL;
+	}
+
 	g_free(dest);
 }
 
@@ -502,8 +507,13 @@ _manage_curl_events (struct http_put_s *p)
 			if (curl_ret == CURLE_OK)
 				dest->http_code = http_ret;
 
-			GRID_TRACE("DONE [%s] code=%ld strerror=%s",
-					dest->url, http_ret, curl_easy_strerror(curl_ret));
+			if (http_ret / 100 == 2) {
+				GRID_TRACE("DONE [%s] code=%ld strerror=%s",
+						dest->url, http_ret, curl_easy_strerror(curl_ret));
+			} else {
+				GRID_INFO("ERROR [%s] code=%ld strerror=%s",
+						dest->url, http_ret, curl_easy_strerror(curl_ret));
+			}
 
 			CURLMcode rc = curl_multi_remove_handle(p->mhandle, dest->handle);
 			EXTRA_ASSERT(rc == CURLM_OK);
@@ -532,7 +542,7 @@ GError *
 http_put_step (struct http_put_s *p)
 {
 	int rc;
-	guint count_dests = 0, count_up = 0, count_waiting_for_data = 0;
+	guint count_up = 0, count_waiting_for_data = 0;
 
 	EXTRA_ASSERT (p != NULL);
 
@@ -546,7 +556,7 @@ http_put_step (struct http_put_s *p)
 		return NULL;
 	}
 
-	count_dests = g_slist_length(p->dests);
+	register guint count_dests = g_slist_length(p->dests);
 	GRID_TRACE("%s STEP on %u destinations", __FUNCTION__, count_dests);
 
 	/* consume the CURL notifications for terminated actions */
@@ -557,14 +567,20 @@ http_put_step (struct http_put_s *p)
 		struct http_put_dest_s *d = l->data;
 		if (d->state == HTTP_SINGLE_FINISHED)
 			continue;
+		count_up ++;
 		if (!d->buffer && d->state < HTTP_SINGLE_FINISHED)
 			count_waiting_for_data ++;
 	}
-	if (count_waiting_for_data >= count_dests) {
+	EXTRA_ASSERT(count_waiting_for_data <= count_up);
+	if (count_waiting_for_data == count_up) {
 		GBytes *buf = g_queue_pop_head (p->buffer_tail);
 		if (buf) {
 			for (GSList *l=p->dests; l ;l=l->next) {
 				struct http_put_dest_s *d = l->data;
+				if (d->buffer) {
+					g_bytes_unref(d->buffer);
+					d->buffer = NULL;
+				}
 				d->buffer = g_bytes_ref (buf);
 			}
 			g_bytes_unref (buf);
@@ -572,7 +588,7 @@ http_put_step (struct http_put_s *p)
 	}
 
 	if (p->state == HTTP_WHOLE_BEGIN) {
-		GRID_TRACE("%s Starting %u uploads", __FUNCTION__, count_dests);
+		GRID_DEBUG("%s Starting %u uploads", __FUNCTION__, count_dests);
 		_start_upload(p);
 		p->state = HTTP_WHOLE_READY;
 	}

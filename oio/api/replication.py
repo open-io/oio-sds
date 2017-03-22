@@ -59,69 +59,32 @@ class ReplicatedChunkWriteHandler(object):
             return len(conns) >= self.storage_method.quorum
         return len(conns) >= self._quorum
 
+    def _quorum_or_fail(self, successes, failures):
+        quorum = self._check_quorum(successes)
+        if not quorum:
+            errors = utils.group_chunk_errors(
+                ((chunk["url"], chunk.get("error", "success"))
+                 for chunk in successes + failures))
+            raise exc.OioException(
+                "RAWX write failure, quorum not reached: %s" % errors)
+
     def stream(self, source, size=None):
         bytes_transferred = 0
-
-        def _connect_put(chunk):
-            raw_url = chunk["url"]
-            parsed = urlparse(raw_url)
-            try:
-                chunk_path = parsed.path.split('/')[-1]
-                h = {}
-                h["transfer-encoding"] = "chunked"
-                # FIXME: remove key incoherencies
-                # TODO: automatize key conversions
-                h[chunk_headers["content_id"]] = self.sysmeta['id']
-                h[chunk_headers["content_version"]] = self.sysmeta['version']
-                h[chunk_headers["content_path"]] = \
-                    utils.quote(self.sysmeta['content_path'])
-                h[chunk_headers["content_chunkmethod"]] = \
-                    self.sysmeta['chunk_method']
-                h[chunk_headers["content_policy"]] = self.sysmeta['policy']
-                h[chunk_headers["container_id"]] = self.sysmeta['container_id']
-                h[chunk_headers["chunk_pos"]] = chunk["pos"]
-                h[chunk_headers["chunk_id"]] = chunk_path
-
-                # Used during reconstruction of EC chunks
-                if self.sysmeta['chunk_method'].startswith('ec'):
-                    h[chunk_headers["metachunk_size"]] = \
-                        self.sysmeta["metachunk_size"]
-                    h[chunk_headers["metachunk_hash"]] = \
-                        self.sysmeta["metachunk_hash"]
-
-                with green.ConnectionTimeout(self.connection_timeout):
-                    conn = io.http_connect(
-                        parsed.netloc, 'PUT', parsed.path, h)
-                    conn.chunk = chunk
-                return conn, chunk
-            except (Exception, Timeout) as e:
-                msg = str(e)
-                logger.exception("Failed to connect to %s (%s)", chunk, msg)
-                chunk['error'] = msg
-                return None, chunk
-
         meta_chunk = self.meta_chunk
-
         pile = GreenPile(len(meta_chunk))
-
         failed_chunks = []
-
         current_conns = []
 
         for chunk in meta_chunk:
-            pile.spawn(_connect_put, chunk)
+            pile.spawn(self._connect_put, chunk)
 
-        results = [d for d in pile]
-
-        for conn, chunk in results:
+        for conn, chunk in [d for d in pile]:
             if not conn:
                 failed_chunks.append(chunk)
             else:
                 current_conns.append(conn)
 
-        quorum = self._check_quorum(current_conns)
-        if not quorum:
-            raise exc.OioException("RAWX write failure, quorum not satisfied")
+        self._quorum_or_fail([co.chunk for co in current_conns], failed_chunks)
 
         bytes_transferred = 0
         try:
@@ -153,14 +116,13 @@ class ReplicatedChunkWriteHandler(object):
                     bytes_transferred += len(data)
                     for conn in current_conns:
                         if not conn.failed:
-                            conn.queue.put('%x\r\n%s\r\n' % (len(data),
-                                                             data))
+                            conn.queue.put('%x\r\n%s\r\n' % (len(data), data))
                         else:
                             current_conns.remove(conn)
+                            failed_chunks.append(conn.chunk)
 
-                    quorum = self._check_quorum(current_conns)
-                    if not quorum:
-                        raise exc.OioException("RAWX write failure")
+                    self._quorum_or_fail([co.chunk for co in current_conns],
+                                         failed_chunks)
 
                 for conn in current_conns:
                     if conn.queue.unfinished_tasks:
@@ -187,51 +149,113 @@ class ReplicatedChunkWriteHandler(object):
                 continue
             pile.spawn(self._get_response, conn)
 
-        def _handle_resp(conn, resp):
-            if resp:
-                if resp.status == 201:
-                    success_chunks.append(conn.chunk)
-                else:
-                    conn.failed = True
-                    conn.chunk['error'] = 'HTTP %s' % resp.status
-                    failed_chunks.append(conn.chunk)
-                    logger.error("Wrong status code from %s (%s)",
-                                 conn.chunk, resp.status)
-            conn.close()
-
         for (conn, resp) in pile:
             if resp:
-                _handle_resp(conn, resp)
-        quorum = self._check_quorum(success_chunks)
-        if not quorum:
-            raise exc.OioException("RAWX write failure")
+                self._handle_resp(conn, resp, success_chunks, failed_chunks)
+        self._quorum_or_fail(success_chunks, failed_chunks)
 
         meta_checksum = self.checksum.hexdigest()
         for chunk in success_chunks:
             chunk["size"] = bytes_transferred
             chunk["hash"] = meta_checksum
 
-        return bytes_transferred, meta_checksum, success_chunks + failed_chunks
+        return bytes_transferred, meta_checksum, success_chunks
+
+    def _connect_put(self, chunk):
+        """
+        Create a connection in order to PUT `chunk`.
+
+        :returns: a tuple with the connection object and `chunk`
+        """
+        raw_url = chunk["url"]
+        parsed = urlparse(raw_url)
+        try:
+            chunk_path = parsed.path.split('/')[-1]
+            h = {}
+            h["transfer-encoding"] = "chunked"
+            # FIXME: remove key incoherencies
+            # TODO: automatize key conversions
+            h[chunk_headers["content_id"]] = self.sysmeta['id']
+            h[chunk_headers["content_version"]] = self.sysmeta['version']
+            h[chunk_headers["content_path"]] = \
+                utils.quote(self.sysmeta['content_path'])
+            h[chunk_headers["content_chunkmethod"]] = \
+                self.sysmeta['chunk_method']
+            h[chunk_headers["content_policy"]] = self.sysmeta['policy']
+            h[chunk_headers["container_id"]] = self.sysmeta['container_id']
+            h[chunk_headers["chunk_pos"]] = chunk["pos"]
+            h[chunk_headers["chunk_id"]] = chunk_path
+
+            # Used during reconstruction of EC chunks
+            if self.sysmeta['chunk_method'].startswith('ec'):
+                h[chunk_headers["metachunk_size"]] = \
+                    self.sysmeta["metachunk_size"]
+                h[chunk_headers["metachunk_hash"]] = \
+                    self.sysmeta["metachunk_hash"]
+
+            with green.ConnectionTimeout(self.connection_timeout):
+                conn = io.http_connect(
+                    parsed.netloc, 'PUT', parsed.path, h)
+                conn.chunk = chunk
+            return conn, chunk
+        except (Exception, Timeout) as err:
+            msg = str(err)
+            logger.exception("Failed to connect to %s (%s)", chunk, msg)
+            chunk['error'] = msg
+            return None, chunk
 
     def _send_data(self, conn):
+        """
+        Send data to an open connection, taking data blocks from `conn.queue`.
+        """
         while True:
             data = conn.queue.get()
             if not conn.failed:
                 try:
                     with green.ChunkWriteTimeout(self.write_timeout):
                         conn.send(data)
-                except (Exception, green.ChunkWriteTimeout):
+                except (Exception, green.ChunkWriteTimeout) as err:
                     conn.failed = True
+                    conn.chunk['error'] = str(err)
             conn.queue.task_done()
 
     def _get_response(self, conn):
+        """
+        Wait for server response.
+
+        :returns: a tuple with `conn` and the reponse object or an exception.
+        """
         try:
             with green.ChunkWriteTimeout(self.write_timeout):
                 resp = conn.getresponse()
-        except (Exception, green.ChunkWriteTimeout) as e:
-            resp = None
-            logger.error("Failed to read response %s: %s", conn.chunk, str(e))
+        except (Exception, Timeout) as err:
+            resp = err
+            logger.exception("Failed to read response from %s", conn.chunk)
         return (conn, resp)
+
+    def _handle_resp(self, conn, resp, successes, failures):
+        """
+        If `resp` is an exception or its status is not 201,
+        declare `conn` as failed and put `conn.chunk` in
+        `failures` list.
+        Otherwise put `conn.chunk` in `successes` list.
+
+        And then close `conn`.
+        """
+        if resp:
+            if isinstance(resp, (Exception, Timeout)):
+                conn.failed = True
+                conn.chunk['error'] = str(resp)
+                failures.append(conn.chunk)
+            elif resp.status != 201:
+                conn.failed = True
+                conn.chunk['error'] = 'HTTP %s' % resp.status
+                failures.append(conn.chunk)
+                logger.error("Wrong status code from %s (%s)",
+                             conn.chunk, resp.status)
+            else:
+                successes.append(conn.chunk)
+        conn.close()
 
 
 class ReplicatedWriteHandler(io.WriteHandler):
@@ -255,6 +279,7 @@ class ReplicatedWriteHandler(io.WriteHandler):
             bytes_transferred, _checksum, chunks = handler.stream(self.source,
                                                                   size)
             content_chunks += chunks
+
             total_bytes_transferred += bytes_transferred
             if bytes_transferred < size:
                 break

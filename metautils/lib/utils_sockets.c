@@ -392,6 +392,20 @@ sock_set_cork(int fd, gboolean enabled)
 }
 
 gboolean
+sock_set_fastopen(int fd)
+{
+	int syndata_backlog = 16;
+	int rc = metautils_syscall_setsockopt(fd, SOL_TCP, TCP_FASTOPEN,
+			&syndata_backlog, sizeof(syndata_backlog));
+	if (!rc)
+		return TRUE;
+
+	GRID_DEBUG("fd=%i set(TCP_FASTOPEN,%d): (%d) %s",
+			fd, syndata_backlog, errno, strerror(errno));
+	return FALSE;
+}
+
+gboolean
 sock_set_linger(int fd, int onoff, int linger)
 {
 	if (VTABLE.set_linger)
@@ -418,6 +432,7 @@ sock_set_linger_default(int fd)
 void
 sock_set_client_default(int fd)
 {
+	sock_set_reuseaddr(fd, TRUE);
 	sock_set_linger_default(fd);
 	sock_set_nodelay(fd, oio_socket_quickack);
 	sock_set_tcpquickack(fd, oio_socket_nodelay);
@@ -441,24 +456,36 @@ metautils_pclose(int *pfd)
 	return rc;
 }
 
-int
-sock_connect (const char *url, GError **err)
+static int
+sock_build_for_url(const char *url, GError **err,
+		struct sockaddr_storage *sas, size_t *sas_len)
 {
-	struct sockaddr_storage sas;
-	gsize sas_len = sizeof(sas);
+	*sas_len = sizeof(*sas);
 
-	if (!grid_string_to_sockaddr (url, (struct sockaddr*) &sas, &sas_len)) {
+	if (!grid_string_to_sockaddr (url, (struct sockaddr*) sas, sas_len)) {
 		g_error_transmit(err, NEWERROR(EINVAL, "invalid URL"));
 		return -1;
 	}
 
-	int fd = socket_nonblock(sas.ss_family, SOCK_STREAM, 0);
+	int fd = socket_nonblock(sas->ss_family, SOCK_STREAM, 0);
 	if (0 > fd) {
 		g_error_transmit(err, NEWERROR(EINVAL, "socket error: (%d) %s", errno, strerror(errno)));
 		return -1;
 	}
 
-	sock_set_reuseaddr(fd, TRUE);
+	sock_set_client_default(fd);
+	*err = NULL;
+	return fd;
+}
+
+int
+sock_connect (const char *url, GError **err)
+{
+	gsize sas_len = 0;
+	struct sockaddr_storage sas;
+	int fd = sock_build_for_url(url, err, &sas, &sas_len);
+	if (fd < 0)
+		return -1;
 
 	if (0 != metautils_syscall_connect (fd, (struct sockaddr*)&sas, sas_len)) {
 		if (errno != EINPROGRESS && errno != 0) {
@@ -471,4 +498,73 @@ sock_connect (const char *url, GError **err)
 	sock_set_client_default(fd);
 	*err = NULL;
 	return fd;
+}
+
+static volatile gboolean _fastopen_supported = TRUE;
+
+int
+sock_connect_and_send (const char *url, GError **err,
+		const uint8_t *buf, gsize *len)
+{
+	gsize sas_len = 0;
+	struct sockaddr_storage sas;
+	int fd = sock_build_for_url(url, err, &sas, &sas_len);
+	if (fd < 0)
+		return -1;
+
+#if defined(MSG_FASTOPEN) && defined(TCP_FASTOPEN)
+
+	if (!buf || !len || !_fastopen_supported)
+		goto label_simple_connect;
+
+#ifdef HAVE_ENBUG
+	if (len > 1)
+		*len = *len / 2;
+#endif
+
+	ssize_t rc;
+retry:
+	rc = sendto(fd, buf, *len, MSG_FASTOPEN, (struct sockaddr*) &sas, sas_len);
+	if (rc < 0) {
+		if (errno == EINTR)
+			goto retry;
+		if (errno == ENOTSUP || errno == ENOTCONN) {
+			/* the TCP_FASTOPEN is not accepted, let's continue with a
+			 * regular connect/send sequence */
+			GRID_WARN("TCP_FASTOPEN not supported, disabling it");
+			_fastopen_supported = FALSE;
+label_simple_connect:
+#endif
+			*len = 0;
+			if (0 != metautils_syscall_connect (fd, (struct sockaddr*)&sas, sas_len)) {
+				if (errno != EINPROGRESS && errno != 0) {
+					g_error_transmit(err,
+							SYSERR("connect error: (%d) %s", errno, strerror(errno)));
+					metautils_pclose (&fd);
+					return -1;
+				}
+			}
+			*err = NULL;
+			return fd;
+#if defined(MSG_FASTOPEN) && defined(TCP_FASTOPEN)
+		} else if (errno == EINPROGRESS) {
+			/* syn-cookie not ready, so the kernel will proceed internally with
+			 * traditional connect() SYN-SYN/ACK-ACK sequence */
+			*len = 0;
+			*err = NULL;
+			return fd;
+		} else {
+			g_error_transmit(err, NEWERROR(CODE_NETWORK_ERROR,
+						"connect error: (%d) %s", errno, strerror(errno)));
+			metautils_pclose (&fd);
+			return -1;
+		}
+	} else {
+		/* syn-cookie ready, the number of bytes packed in the SYN-cookie is
+		 * returned. */
+		*len = rc;
+		*err = NULL;
+		return fd;
+	}
+#endif
 }
