@@ -1,4 +1,20 @@
 # -*- coding: utf-8 -*-
+# Copyright (C) 2015-2017 OpenIO, original work as part of
+# OpenIO Software Defined Storage
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 3.0 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library.
+
 from time import sleep, time
 
 import redis
@@ -109,6 +125,42 @@ class TestAccountBackend(BaseTestCase):
         # delete second container
         sleep(.00001)
         backend.update_container(account_id, 'c2', 0, Timestamp(time()).normal,
+                                 0, 0)
+        info = backend.info_account(account_id)
+        self.assertEqual(info['containers'], 0)
+        self.assertEqual(info['objects'], 0)
+        self.assertEqual(info['bytes'], 0)
+
+    def test_update_after_container_deletion(self):
+        backend = AccountBackend({}, self.conn)
+        account_id = 'test-%06x' % int(time())
+        self.assertEqual(backend.create_account(account_id), account_id)
+
+        # Container create event, sent immediately after creation
+        backend.update_container(account_id, 'c1',
+                                 Timestamp(time()).normal, None,
+                                 None, None)
+
+        # Container update event
+        backend.update_container(account_id, 'c1',
+                                 Timestamp(time()).normal, None,
+                                 3, 30)
+        info = backend.info_account(account_id)
+        self.assertEqual(info['containers'], 1)
+        self.assertEqual(info['objects'], 3)
+        self.assertEqual(info['bytes'], 30)
+
+        # Container is flushed, but the event is deferred
+        flush_timestamp = Timestamp(time()).normal
+
+        # Container delete event, sent immediately after deletion
+        backend.update_container(account_id, 'c1',
+                                 None, Timestamp(time()).normal,
+                                 None, None)
+
+        # Deferred container update event (with lower timestamp)
+        backend.update_container(account_id, 'c1',
+                                 flush_timestamp, None,
                                  0, 0)
         info = backend.info_account(account_id)
         self.assertEqual(info['containers'], 0)
