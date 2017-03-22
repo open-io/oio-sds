@@ -37,6 +37,7 @@ static int _upload (int argc, char **argv, gboolean append, int replace) {
 
 	if (!oio_url_has_fq_path(url)) {
 		g_printerr("Partial URL\n");
+		oio_url_pclean(&url);
 		return 1;
 	}
 
@@ -83,6 +84,7 @@ static int _upload (int argc, char **argv, gboolean append, int replace) {
 	g_assert_no_error(GERROR(err));
 	oio_str_clean (&content_id);
 	oio_sds_pfree (&sds);
+	oio_url_pclean(&url);
 	return 0;
 }
 

@@ -45,7 +45,6 @@ struct oio_sds_s
 	gchar *session_id;
 	gchar *ns;
 	gchar *proxy;
-	gchar *proxy_local;
 	gchar *ecd;  // Erasure Coding Daemon
 	struct {
 		int proxy;
@@ -55,13 +54,21 @@ struct oio_sds_s
 	gboolean admin;
 	gboolean no_shuffle;  // read the highest scored chunk instead of shuffling
 	gchar *auth_token;
-	CURL *h;
+
+	GMutex curl_lock;
+	CURL *curl_handle;
 };
 
 struct oio_error_s;
 struct oio_url_s;
 
 unsigned int oio_sds_version (void) { return OIO_SDS_VERSION; }
+
+#define CURL_DO(Sds,Var,Action) do { \
+	CURL *Var = _get_proxy_handle(Sds); \
+	Action; \
+	_release_proxy_handle(Sds,Var); \
+} while (0)
 
 /* glibc 2.22 removed binary mode of fmemopen.
  * With this statement, we ask the compiler to link to the old version. */
@@ -126,14 +133,34 @@ oio_sds_get_compile_options (void)
 }
 
 static CURL *
-_get_proxy_handle (struct oio_sds_s *sds UNUSED)
+_get_proxy_handle (struct oio_sds_s *sds)
 {
-	CURL *h = _curl_get_handle_proxy ();
-#if (LIBCURL_VERSION_MAJOR > 7) || ((LIBCURL_VERSION_MAJOR == 7) && (LIBCURL_VERSION_MINOR >= 40))
-	if (sds->proxy_local)
-		curl_easy_setopt (h, CURLOPT_UNIX_SOCKET_PATH, sds->proxy_local);
-#endif
-	return h;
+	CURL *out = NULL;
+
+	g_mutex_lock(&sds->curl_lock);
+	if (sds->curl_handle)
+		out = sds->curl_handle;
+	sds->curl_handle = NULL;
+	g_mutex_unlock(&sds->curl_lock);
+
+	if (!out)
+	   out = _curl_get_handle_proxy();
+	return out;
+}
+
+static void
+_release_proxy_handle(struct oio_sds_s *sds, CURL *h)
+{
+	CURL *old = NULL;
+
+	g_mutex_lock(&sds->curl_lock);
+	if (sds->curl_handle)
+		old = sds->curl_handle;
+	sds->curl_handle = h;
+	g_mutex_unlock(&sds->curl_lock);
+
+	if (old)
+		curl_easy_cleanup(old);
 }
 
 /* Chunk parsing helpers (JSON) --------------------------------------------- */
@@ -442,13 +469,13 @@ oio_sds_init (struct oio_sds_s **out, const char *ns)
 	*out = SLICE_NEW0 (struct oio_sds_s);
 	(*out)->session_id = g_strdup(oio_ext_get_reqid());
 	(*out)->ns = g_strdup (ns);
-	(*out)->proxy_local = oio_cfg_get_proxylocal (ns);
 	(*out)->proxy = oio_cfg_get_proxy_containers (ns);
 	(*out)->ecd = oio_cfg_get_ecd(ns);
 	(*out)->sync_after_download = TRUE;
 	(*out)->no_shuffle = oio_sds_no_shuffle;
 	(*out)->admin = FALSE;
-	(*out)->h = _get_proxy_handle (*out);
+	g_mutex_init(&((*out)->curl_lock));
+
 	return NULL;
 }
 
@@ -459,10 +486,10 @@ oio_sds_free (struct oio_sds_s *sds)
 	oio_str_clean (&sds->session_id);
 	oio_str_clean (&sds->ns);
 	oio_str_clean (&sds->proxy);
-	oio_str_clean (&sds->proxy_local);
 	oio_str_clean(&sds->ecd);
-	if (sds->h)
-		curl_easy_cleanup (sds->h);
+	if (sds->curl_handle)
+		curl_easy_cleanup (sds->curl_handle);
+	g_mutex_clear(&(sds->curl_lock));
 	SLICE_FREE (struct oio_sds_s, sds);
 }
 
@@ -517,7 +544,8 @@ oio_sds_configure (struct oio_sds_s *sds, enum oio_sds_config_e what,
 struct oio_error_s*
 oio_sds_create (struct oio_sds_s *sds, struct oio_url_s *url)
 {
-	GError *err = oio_proxy_call_container_create(sds->h, url);
+	GError *err;
+	CURL_DO(sds, H, err = oio_proxy_call_container_create(H, url));
 	return (struct oio_error_s *) err;
 }
 
@@ -541,9 +569,9 @@ _show_content (struct oio_sds_s *sds, struct oio_url_s *url, void *cb_data,
 	gchar **props = NULL;
 
 	/* Get the beans */
-	err = oio_proxy_call_content_show (sds->h, url,
-		   cb_chunks ? reply_body : NULL,
-		   cb_props || cb_info ? &props : NULL);
+	CURL_DO(sds, H, err = oio_proxy_call_content_show(H, url,
+				cb_chunks ? reply_body : NULL,
+				cb_props || cb_info ? &props : NULL));
 
 	/* Parse the beans */
 	if (!err && reply_body->len > 0) {
@@ -1294,8 +1322,8 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 			.header_chunk_method = NULL,
 			.header_mime_type = NULL,
 		};
-		err = oio_proxy_call_content_prepare (ul->sds->h, ul->dst->url,
-				size, ul->dst->autocreate, &out);
+		CURL_DO(ul->sds, H, err = oio_proxy_call_content_prepare(
+					H, ul->dst->url, size, ul->dst->autocreate, &out));
 
 		if (!err && out.header_content && !oio_str_ishexa1 (out.header_content))
 			err = SYSERR("returned content-id not hexadecimal");
@@ -1453,6 +1481,7 @@ _sds_upload_finish (struct oio_sds_ul_s *ul)
 				g_list_length(ul->metachunk_done),
 				ul->mc->size);
 		ul->mc = NULL;
+		g_slist_free(ul->chunks);
 		ul->chunks = NULL;
 	}
 
@@ -1736,10 +1765,10 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 	};
 
 	GRID_TRACE("%s (%p) Saving %s", __FUNCTION__, ul, request_body->str);
-	GError *err = oio_proxy_call_content_create (ul->sds->h, ul->dst->url,
-			&in, reply_body);
+	GError *err;
+	CURL_DO(ul->sds, H, err = oio_proxy_call_content_create (H, ul->dst->url, &in, reply_body));
 	if (ul->chunks_failed)
-		_chunks_remove (ul->sds->h, ul->chunks_failed);
+		CURL_DO(ul->sds, H, _chunks_remove (H, ul->chunks_failed));
 
 	g_string_free (request_body, TRUE);
 	g_string_free (reply_body, TRUE);
@@ -1754,7 +1783,7 @@ oio_sds_upload_abort (struct oio_sds_ul_s *ul)
 	GRID_TRACE("%s (%p)", __FUNCTION__, ul);
 	EXTRA_ASSERT (ul != NULL);
 	if (ul->chunks_failed)
-		_chunks_remove (ul->sds->h, ul->chunks_failed);
+		CURL_DO(ul->sds, H, _chunks_remove (H, ul->chunks_failed));
 	return (struct oio_error_s *) NYI();
 }
 
@@ -2132,7 +2161,8 @@ oio_sds_list (struct oio_sds_s *sds, struct oio_sds_list_param_s *param,
 		p0.max_items = param->max_items
 			? param->max_items - listener->out_count : 0;
 
-		if (NULL != (err = _single_list (&p0, &l0, sds->h))) {
+		CURL_DO(sds, H, err = _single_list (&p0, &l0, H));
+		if (NULL != err) {
 			oio_str_clean (&next);
 			oio_str_clean (&nextnext);
 			break;
@@ -2185,7 +2215,7 @@ oio_sds_get_usage (struct oio_sds_s *sds, struct oio_url_s *url,
 	json_object *root = NULL, *props = NULL, *syst = NULL;
 	json_object *usage = NULL, *quota = NULL, *objects = NULL;
 
-	err = oio_proxy_call_container_get_properties(sds->h, url, &props_str);
+	CURL_DO(sds, H, err = oio_proxy_call_container_get_properties(H, url, &props_str));
 	if (err)
 		goto end;
 	root = json_tokener_parse(props_str->str);
@@ -2240,7 +2270,9 @@ oio_sds_link (struct oio_sds_s *sds, struct oio_url_s *url, const char *content_
 	oio_ext_set_reqid (sds->session_id);
 	oio_ext_set_admin (sds->admin);
 
-	return (struct oio_error_s*) oio_proxy_call_content_link (sds->h, url, content_id);
+	GError *err;
+	CURL_DO(sds, H, err = oio_proxy_call_content_link (H, url, content_id));
+	return (struct oio_error_s*) err;
 }
 
 struct oio_error_s*
@@ -2270,8 +2302,9 @@ oio_sds_truncate (struct oio_sds_s *sds, struct oio_url_s *url, size_t size)
 		return (struct oio_error_s*) BADREQ("Missing argument");
 	oio_ext_set_reqid (sds->session_id);
 
-	return (struct oio_error_s*) oio_proxy_call_content_truncate(
-			sds->h, url, size);
+	GError *err;
+	CURL_DO(sds, H, err = oio_proxy_call_content_truncate(H, url, size));
+	return (struct oio_error_s*) err;
 }
 
 struct oio_error_s*
@@ -2282,7 +2315,9 @@ oio_sds_delete (struct oio_sds_s *sds, struct oio_url_s *url)
 	oio_ext_set_reqid (sds->session_id);
 	oio_ext_set_admin (sds->admin);
 
-	return (struct oio_error_s*) oio_proxy_call_content_delete (sds->h, url);
+	GError *err;
+	CURL_DO(sds,H,err = oio_proxy_call_content_delete (H, url));
+	return (struct oio_error_s*) err;
 }
 
 struct oio_error_s*
@@ -2293,7 +2328,9 @@ oio_sds_delete_container (struct oio_sds_s *sds, struct oio_url_s *url)
 	oio_ext_set_reqid (sds->session_id);
 	oio_ext_set_admin (sds->admin);
 
-	return (struct oio_error_s*) oio_proxy_call_container_delete (sds->h, url);
+	GError *err;
+	CURL_DO(sds,H,err = oio_proxy_call_container_delete (H, url));
+	return (struct oio_error_s*) err;
 }
 
 struct oio_error_s*
@@ -2353,7 +2390,8 @@ oio_sds_has (struct oio_sds_s *sds, struct oio_url_s *url, int *phas)
 		return (struct oio_error_s*) BADREQ("Missing argument");
 	oio_ext_set_reqid (sds->session_id);
 	oio_ext_set_admin (sds->admin);
-	GError *err = oio_proxy_call_content_show (sds->h, url, NULL, NULL);
+	GError *err;
+	CURL_DO(sds, H, err = oio_proxy_call_content_show (H, url, NULL, NULL));
 	*phas = (err == NULL);
 	if (err && (CODE_IS_NOTFOUND(err->code) || err->code == CODE_NOT_FOUND))
 		g_clear_error(&err);
@@ -2373,7 +2411,7 @@ _oio_sds_get_properties(struct oio_sds_s *sds, struct oio_url_s *url,
 	GString *value = NULL;
 	struct oio_error_s *err;
 
-	err = (struct oio_error_s*) call_proxy(sds->h, url, &value);
+	CURL_DO(sds, H, err = (struct oio_error_s*) call_proxy(H, url, &value));
 	if (err)
 		return err;
 
@@ -2409,7 +2447,9 @@ oio_sds_set_container_properties (struct oio_sds_s *sds, struct oio_url_s *url,
 	oio_ext_set_reqid (sds->session_id);
 	oio_ext_set_admin (sds->admin);
 
-	return (struct oio_error_s*) oio_proxy_call_container_set_properties(sds->h, url, values);
+	GError *err;
+	CURL_DO(sds, H, err = oio_proxy_call_container_set_properties(H, url, values));
+	return (struct oio_error_s*) err;
 }
 
 struct oio_error_s*
@@ -2429,5 +2469,7 @@ oio_sds_set_content_properties (struct oio_sds_s *sds, struct oio_url_s *url,
 	oio_ext_set_reqid (sds->session_id);
 	oio_ext_set_admin (sds->admin);
 
-	return (struct oio_error_s*) oio_proxy_call_content_set_properties(sds->h, url, values);
+	GError *err;
+	CURL_DO(sds, H, err = oio_proxy_call_content_set_properties(H, url, values););
+	return (struct oio_error_s*) err;
 }
