@@ -914,6 +914,7 @@ configure_request_handlers (void)
 	SET("/$NS/content/create/#POST", action_content_put);
 	SET("/$NS/content/link/#POST", action_content_link);
 	SET("/$NS/content/delete/#POST", action_content_delete);
+	SET("/$NS/content/delete_many/#POST", action_content_delete_many);
 	SET("/$NS/content/show/#GET", action_content_show);
 	SET("/$NS/content/locate/#GET", action_content_show);
 	SET("/$NS/content/prepare/#POST", action_content_prepare);
