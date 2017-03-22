@@ -873,7 +873,7 @@ _filter (struct filter_ctx_s *ctx, GSList *l)
 static GError *
 _m2_container_create_with_properties (struct req_args_s *args, char **props)
 {
-	gboolean autocreate = _request_get_flag (args, "autocreate");
+	gboolean autocreate = TRUE;
 	struct m2v2_create_params_s param = {
 			OPT("stgpol"), OPT("verpol"), props, FALSE
 	};
@@ -1168,7 +1168,11 @@ static enum http_rc_e
 _m2_container_create (struct req_args_s *args, struct json_object *jbody)
 {
 	gchar **properties = NULL;
-	GError *err = KV_read_usersys_properties(jbody, &properties);
+	GError *err = NULL;
+	if (!jbody || json_object_is_type(jbody, json_type_null))
+		properties = g_malloc0(sizeof(void*));
+	else
+		err = KV_read_usersys_properties(jbody, &properties);
 	EXTRA_ASSERT((err != NULL) ^ (properties != NULL));
 	if (err)
 		return _reply_m2_error(args, err);
