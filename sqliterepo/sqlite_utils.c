@@ -292,7 +292,9 @@ sqlx_admin_get_status(struct sqlx_sqlite3_s *sq3)
 gchar**
 sqlx_admin_get_keys(struct sqlx_sqlite3_s *sq3)
 {
-	gboolean runner(gchar *k, gpointer v UNUSED, GPtrArray *tmp) {
+	gboolean runner(gchar *k, struct _cache_entry_s *v, GPtrArray *tmp) {
+		if (v->flag_deleted)
+			return FALSE;
 		g_ptr_array_add (tmp, g_strdup(k));
 		return FALSE;
 	}
@@ -307,6 +309,8 @@ sqlx_admin_get_keyvalues (struct sqlx_sqlite3_s *sq3)
 {
 	gboolean runner(gchar *k, struct _cache_entry_s *v, GPtrArray *tmp) {
 		g_ptr_array_add (tmp, g_strdup(k));
+		if (v->flag_deleted)
+			return FALSE;
 		if (!v->buffer)
 			g_ptr_array_add (tmp, g_strdup(""));
 		else
