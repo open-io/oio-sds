@@ -37,7 +37,7 @@ static GString* _m0_mapping_from_m1_list(GSList *m1_list) {
 				guint16 p = i;
 				gboolean first2 = TRUE;
 				g_string_append_printf(out, "\"%04X\":[", p);
-				for (gchar **m1 = v; m1 && *m1; m1++) {
+				for (gchar **m1 = v; v && *m1; m1++) {
 					if (!first2)
 						g_string_append_c(out, ',');
 					first2 = FALSE;

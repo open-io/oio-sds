@@ -301,6 +301,7 @@ main(int argc, char **argv)
 				break;
 			case 'h':
 				rc = 0;
+				// FALLTHROUGH
 			case '?':
 			case 0:
 			default:

@@ -363,7 +363,7 @@ gboolean oio_cfg_get_bool (const char *ns, const char *what, gboolean def);
 /** List all the configuration variables locally set.  */
 GHashTable* oio_cfg_parse (void);
 
-/** List all the namespaces locally known */
+/** List all the namespaces locally known. Never returns NULL. */
 gchar** oio_cfg_list_ns (void);
 
 /** get the url of the proxy dedicated to the conscience, with a fallback

@@ -238,7 +238,8 @@ location_from_dotted_string(const char *dotted)
 	unsigned int shift = (g_strv_length(toks) <= 4)? 16 : 8;
 	oio_location_t mask = (1u << shift) - 1u;
 	oio_location_t location = 0;
-	for (gchar **tok = toks; tok && *tok; tok++) {
+	// according to g_strsplit documentation, toks cannot be NULL
+	for (gchar **tok = toks; *tok; tok++) {
 		location = (location << shift) | (_djb2(*tok) & mask);
 	}
 	g_strfreev(toks);
@@ -676,7 +677,7 @@ oio_lb_world__add_pool_targets(struct oio_lb_pool_s *self,
 		const gchar *targets)
 {
 	gchar **toks = g_strsplit(targets, OIO_CSV_SEP2, -1);
-	for (gchar **num_target = toks; num_target && *num_target; num_target++) {
+	for (gchar **num_target = toks; *num_target; num_target++) {
 		/* the string is supposed to start with either:
 		 * - a number and a comma,
 		 * - a parameter key and an equal sign */

@@ -596,7 +596,7 @@ _show_content (struct oio_sds_s *sds, struct oio_url_s *url, void *cb_data,
 	if (!err) {
 
 		/* First, report the user-properties */
-		for (gchar **p = props; p && *p && *(p+1); p += 2) {
+		for (gchar **p = props; props && *p && *(p+1); p += 2) {
 			if (!g_str_has_prefix(*p, "content-meta-"))
 				continue;
 			const char *k = *p + sizeof("content-meta-") - 1;
@@ -683,7 +683,7 @@ _dl_debug (const char *caller, struct oio_sds_dl_src_s *src,
 static GError *
 _download_range_from_chunk (struct _download_ctx_s *dl,
 		const struct oio_sds_dl_range_s *range, const char *c0_url,
-		const char const **headers_opt, size_t *p_nbread)
+		const char * const *headers_opt, size_t *p_nbread)
 {
 	size_t _write_wrapper (char *data, size_t s, size_t n, void *ignored UNUSED) {
 		size_t total = s*n;
@@ -721,8 +721,9 @@ _download_range_from_chunk (struct _download_ctx_s *dl,
 	struct oio_headers_s headers = {NULL,NULL};
 	oio_headers_common (&headers);
 	oio_headers_add (&headers, "Range", str_range);
-	for (; headers_opt && headers_opt[0] && headers_opt[1]; headers_opt += 2)
-		oio_headers_add(&headers, headers_opt[0], headers_opt[1]);
+	if (headers_opt != NULL)
+		for (; headers_opt[0] && headers_opt[1]; headers_opt += 2)
+			oio_headers_add(&headers, headers_opt[0], headers_opt[1]);
 	curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 	curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "GET");
 	curl_easy_setopt (h, CURLOPT_URL, c0_url);
