@@ -138,6 +138,27 @@ _sysstat (gchar **vols)
 }
 
 static int
+_redirect(gchar *dest, gchar *to)
+{
+	gdouble timeout = g_ascii_strtod(to, NULL);
+	GByteArray *encoded = message_marshall_gba_and_clean (
+			metautils_message_create_named("REQ_REDIRECT"));
+	gint64 start = oio_ext_monotonic_time();
+	GError *err = gridd_client_exec(dest, timeout, encoded);
+	gint64 end = oio_ext_monotonic_time();
+	if (!err) {
+		g_print("KO (%u) %s\n", CODE_INTERNAL_ERROR, "Unexpected success");
+		return 1;
+	}
+	if (err->code != CODE_TOOMANY_REDIRECT) {
+		g_print("KO (%u) %s\n", err->code, err->message);
+		return 1;
+	}
+	g_print("OK %lfs\n", (end - start) / (gdouble)G_TIME_SPAN_SECOND);
+	return 0;
+}
+
+static int
 _ping(gchar *dest, gchar *to)
 {
 	gdouble timeout = g_ascii_strtod(to, NULL);
@@ -189,18 +210,21 @@ main (int argc, char **argv)
 {
 	if (argc < 2) {
 		g_printerr ("Usage:\n");
-		g_printerr ("Print hex representation of the address\n");
-		g_printerr (" %s addr IP:PORT\n", argv[0]);
-		g_printerr ("Print hex representation of container ID\n");
-		g_printerr (" %s cid  OIOURL\n", argv[0]);
-		g_printerr ("Generate container names with same hexadecimal prefix\n");
-		g_printerr (" %s hash ACCOUNT [PREFIX]\n", argv[0]);
-		g_printerr ("Ping a service\n");
-		g_printerr (" %s ping IP:PORT [TIMEOUT]\n", argv[0]);
-		g_printerr ("Get free CPU, IO and space statistics\n");
-		g_printerr (" %s stat [path]...\n", argv[0]);
-		g_printerr ("Compute 64b integer location from dotted string\n");
-		g_printerr (" %s location DOTTED_STRING...\n", argv[0]);
+		g_printerr ("\nPrint hex representation of the address\n");
+		g_printerr ("  %s addr IP:PORT\n", argv[0]);
+		g_printerr ("\nPrint hex representation of container ID\n");
+		g_printerr ("  %s cid  OIOURL\n", argv[0]);
+		g_printerr ("\nGenerate container names with same hexadecimal prefix\n");
+		g_printerr ("  %s hash ACCOUNT [PREFIX]\n", argv[0]);
+		g_printerr ("\nPing a service\n");
+		g_printerr ("  %s ping IP:PORT [TIMEOUT]\n", argv[0]);
+		g_printerr ("\nGet free CPU, IO and space statistics\n");
+		g_printerr ("  %s stat [path]...\n", argv[0]);
+		g_printerr ("\nCompute 64b integer location from dotted string\n");
+		g_printerr ("  %s location DOTTED_STRING...\n", argv[0]);
+		g_printerr ("\nCalls a handler that always redirect, and succeeds if the "
+				"client ends up with a\n'Too many redirections' error\n");
+		g_printerr ("  %s redirection IP:PORT\n", argv[0]);
 		return 2;
 	}
 	oio_ext_set_random_reqid ();
@@ -234,6 +258,12 @@ main (int argc, char **argv)
 		for (int i = 2; i < argc; ++i)
 			_print_loc(argv[i]);
 		return 0;
+	} else if (!strcmp("redirect", argv[1])) {
+		if (argc != 3) {
+			g_printerr("Usage: %s redirect IP:PORT\n", argv[0]);
+			return 1;
+		}
+		return _redirect(argv[2], "5.0");
 	}
 
 	return 1;
