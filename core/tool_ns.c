@@ -106,7 +106,7 @@ main (int argc, char **argv)
 	int ok = ~0;
 	if (argc == 2 && !strcmp(argv[1], "-a")) {
 		gchar **tab_ns = oio_cfg_list_ns ();
-		for (gchar **p=tab_ns; p && *p ;++p)
+		for (gchar **p = tab_ns; *p; ++p)
 			ok &= _check_ns_and_print (*p);
 		g_strfreev (tab_ns);
 	} else {

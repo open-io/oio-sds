@@ -50,7 +50,7 @@ struct abstract_sequence_handler_s
 	abstract_converter_f map_API_to_ASN1; /**< conversion from ASN to API */
 	abstract_asn_cleaner_f clean_ASN1;    /**< structure cleaner */
 	abstract_api_cleaner_f clean_API;     /**< structure cleaner */
-	const gchar const *type_name;         /**< Type name used in error messages */
+	const gchar * const type_name;        /**< Type name used in error messages */
 };
 
 #define DEFINE_SEQUENCE_MARSHALLER_GBA(Descr,Name) \

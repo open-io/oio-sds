@@ -693,6 +693,7 @@ retry:
 				GRID_DEBUG("DB creation error on [%s] : (%d) %s",
 						args->realpath, error->code, error->message);
 			} else {
+			// FALLTHROUGH
 		default:
 				_close_handle(&handle);
 				GRID_DEBUG("Open strong error [%s] : (%d) %s",
@@ -1132,7 +1133,7 @@ sqlx_repository_status_base(sqlx_repository_t *repo, const struct sqlx_name_s *n
 				gboolean master_in_peers = FALSE;
 				GError *err2 = election_get_peers(repo->election_manager, n, FALSE, &my_peers);
 				for (gchar **cursor = my_peers;
-						cursor && *cursor && !master_in_peers;
+						my_peers && *cursor && !master_in_peers;
 						cursor++) {
 					master_in_peers |= (0 == g_strcmp0(url, *cursor));
 				}

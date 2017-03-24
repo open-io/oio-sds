@@ -1937,7 +1937,7 @@ defer_USE(struct election_member_s *member)
 		member_trace(__FUNCTION__, "USE avoided (no peers)", member);
 	} else {
 		member->last_USE = oio_ext_monotonic_time();
-		for (gchar **p=peers; p && *p ;p++) {
+		for (gchar **p = peers; peers && *p; p++) {
 			sqlx_peering__use (member->manager->peering, *p,
 					sqlx_name_mutable_to_const(&member->name));
 		}
@@ -2091,7 +2091,7 @@ defer_GETVERS(struct election_member_s *member)
 	member->pending_GETVERS = pending;
 	member->reqid_GETVERS = manager_next_reqid(member->manager);
 
-	for (gchar **p=peers; p && *p; p++)
+	for (gchar **p = peers; peers && *p; p++)
 		sqlx_peering__getvers (member->manager->peering, *p,
 				sqlx_name_mutable_to_const(&member->name), member->manager,
 				member->reqid_GETVERS, _result_GETVERS);
@@ -2731,6 +2731,7 @@ _member_play_timer (struct election_member_s *member,
 				member_warn("ACTION_RETRY shouldn't be called from this state",
 						member);
 				EXTRA_ASSERT(FALSE);
+				return;
 			}
 		case ACTION_RESTART:
 			return restart_election (member);
