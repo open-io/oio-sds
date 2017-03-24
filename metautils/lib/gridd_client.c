@@ -213,6 +213,16 @@ struct gridd_client_vtable_s VTABLE_CLIENT =
 	_client_fail
 };
 
+static void
+_client_reset_reply(struct gridd_client_s *client)
+{
+	client->size = 0;
+	if (!client->reply)
+		client->reply = g_byte_array_new();
+	else if (client->reply->len > 0)
+		g_byte_array_set_size(client->reply, 0);
+}
+
 /* Benefit from the maybe-present TCCP_FASTOPEN, and try to send a few bytes
  * alongside with the initiation sequence.
  */
@@ -220,11 +230,9 @@ static GError*
 _client_connect(struct gridd_client_s *client)
 {
 	GError *err = NULL;
-
 	gsize sent = client->request ? client->request->len : 0;
 	client->fd = sock_connect_and_send(client->url, &err,
-			sent && client->request ? client->request->data : NULL,
-			&sent);
+			sent ? client->request->data : NULL, &sent);
 	if (client->fd < 0) {
 		EXTRA_ASSERT(err != NULL);
 		g_prefix_error(&err, "Connect error: ");
@@ -235,10 +243,12 @@ _client_connect(struct gridd_client_s *client)
 	client->tv_connect = oio_ext_monotonic_time ();
 	client->sent_bytes = sent;
 	if (client->sent_bytes >= client->request->len) {
+		_client_reset_reply(client);
 		client->step = REP_READING_SIZE;
 	} else {
-		client->step = REQ_SENDING;
+		client->step = CONNECTING;
 	}
+
 	return NULL;
 }
 
@@ -252,16 +262,6 @@ _client_reset_request(struct gridd_client_s *client)
 	client->on_reply = NULL;
 	client->sent_bytes = 0;
 	client->nb_redirects = 0;
-}
-
-static void
-_client_reset_reply(struct gridd_client_s *client)
-{
-	client->size = 0;
-	if (!client->reply)
-		client->reply = g_byte_array_new();
-	else if (client->reply->len > 0)
-		g_byte_array_set_size(client->reply, 0);
 }
 
 static void
@@ -308,6 +308,7 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 	}
 
 	if (status == CODE_TEMPORARY) {
+		_client_reset_reply(client);
 		client->step = REP_READING_SIZE;
 		return NULL;
 	}
@@ -317,10 +318,12 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 		if (client->step == STATUS_OK) {
 			if (!client->keepalive)
 				metautils_pclose(&(client->fd));
+		} else {
+			_client_reset_reply(client);
 		}
 		if (client->on_reply) {
 			if (!client->on_reply(client->ctx, reply))
-				return NEWERROR(CODE_INTERNAL_ERROR, "Handler error");
+				return SYSERR("Handler error");
 		}
 		return NULL;
 	}
@@ -384,17 +387,17 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 
 		case CONNECTING:
 			EXTRA_ASSERT(client->fd >= 0);
-			EXTRA_ASSERT(client->request != NULL);
+			_client_reset_reply(client);
+			client->sent_bytes = 0;
 			client->step = REQ_SENDING;
 			return NULL;
 
 		case REQ_SENDING:
 
 			EXTRA_ASSERT(client->step == REQ_SENDING);
-
+			_client_reset_reply(client);
 			if (!client->request)
 				return NULL;
-			_client_reset_reply(client);
 
 			/* Continue to send the request */
 			rc = metautils_syscall_write(client->fd,
@@ -435,7 +438,7 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 				}
 			}
 
-			EXTRA_ASSERT (client->reply->len == 4);
+			EXTRA_ASSERT (client->reply->len >= 4);
 			s32 = *((guint32*)(client->reply->data));
 			client->size = g_ntohl(s32);
 			client->step = REP_READING_DATA;
@@ -465,14 +468,6 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 				if (err) {
 					client->step = STATUS_FAILED;
 					return err;
-				}
-				else {
-					if (client->step != CONNECTING && client->step != STATUS_FAILED
-							&& client->step != STATUS_OK) {
-						client->reply = g_byte_array_set_size(client->reply, 0);
-						client->step = REP_READING_SIZE;
-						client->size = 0;
-					}
 				}
 			}
 			else if (!rc)
