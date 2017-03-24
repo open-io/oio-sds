@@ -648,8 +648,7 @@ sqlx_admin_reload(struct sqlx_sqlite3_s *sq3)
 {
 	if (sq3->admin)
 		g_tree_destroy(sq3->admin);
-	sq3->admin = g_tree_new_full(metautils_strcmp3, NULL,
-			g_free, metautils_gba_unref);
+	sq3->admin = g_tree_new_full(metautils_strcmp3, NULL, g_free, g_free);
 
 	sqlx_admin_load (sq3);
 	sqlx_admin_ensure_versions (sq3);
@@ -721,8 +720,7 @@ retry:
 	sq3->name.ns = g_strdup(args->name.ns);
 	sq3->path = g_strdup(args->realpath);
 	sq3->admin_dirty = 0;
-	sq3->admin = g_tree_new_full(metautils_strcmp3, NULL,
-			g_free, metautils_gba_unref);
+	sq3->admin = g_tree_new_full(metautils_strcmp3, NULL, g_free, g_free);
 
 	sqlx_exec(handle, "PRAGMA foreign_keys = OFF");
 	sqlx_exec(handle, "PRAGMA journal_mode = MEMORY");
