@@ -268,7 +268,7 @@ network_server_allow_udp(struct network_server_s *srv)
 {
 	g_assert(srv != NULL);
 
-	for (struct endpoint_s **pe=srv->endpointv; pe && *pe ;++pe) {
+	for (struct endpoint_s **pe = srv->endpointv; srv->endpointv && *pe; ++pe) {
 		GRID_ERROR("BUG: Can't call %s when servers are already open",
 				__FUNCTION__);
 		g_assert((*pe)->fd < 0);
@@ -399,10 +399,10 @@ network_server_endpoints (struct network_server_s *srv)
 {
 	g_assert_nonnull(srv);
 	GPtrArray *tmp = g_ptr_array_new();
-	for (struct endpoint_s **pe=srv->endpointv; pe && *pe ;++pe) {
+	for (struct endpoint_s **pe = srv->endpointv; srv->endpointv && *pe; ++pe) {
 		if ((*pe)->fd < 0)
 			continue;
-		g_ptr_array_add (tmp,
+		g_ptr_array_add(tmp,
 				g_strdup_printf("%s:%d", (*pe)->url, (*pe)->port_real));
 	}
 	g_ptr_array_add (tmp, NULL);
@@ -422,7 +422,7 @@ network_server_open_servers(struct network_server_s *srv)
 {
 	g_assert(srv != NULL);
 
-	for (struct endpoint_s **u=srv->endpointv; u && *u ;u++) {
+	for (struct endpoint_s **u = srv->endpointv; srv->endpointv && *u; u++) {
 		GError *err;
 		if (NULL != (err = _endpoint_open(*u, srv->udp_allowed))) {
 			g_prefix_error(&err, "url open error : ");
@@ -431,7 +431,7 @@ network_server_open_servers(struct network_server_s *srv)
 		}
 	}
 
-	for (struct endpoint_s **u=srv->endpointv; u && *u ;u++) {
+	for (struct endpoint_s **u = srv->endpointv; srv->endpointv && *u; u++) {
 		GRID_DEBUG("fd=%d port=%d endpoint=%s ready", (*u)->fd,
 				(*u)->port_real, (*u)->url);
 	}
@@ -1388,6 +1388,7 @@ _client_manage_event(struct network_client_s *clt, int events)
 					break;
 				case RC_NODATA:
 					clt->flags |= NETCLIENT_IN_CLOSED;
+					// FALLTHROUGH
 				case RC_NOTREADY:
 					/* no need to loop again */
 					rcI = 0;

@@ -120,7 +120,7 @@ transport_gridd_dispatcher_add_requests(
 	if (!descr)
 		return NEWERROR(EINVAL, "Invalid request descriptor");
 
-	for (d=descr; d && d->name && d->handler ;d++) {
+	for (d = descr; descr && d->name && d->handler; d++) {
 		struct hashstr_s *hname;
 		struct gridd_request_handler_s *handler;
 

@@ -159,7 +159,7 @@ srv_inner_gauges_update (gpointer d)
 	srvstat_set_u64("gauge cnx.client", tmpTotalStats.total);
 }
 
-static gboolean 
+static gboolean
 self_register_in_cluster(GError **err)
 {
 	/* Init the service header */
@@ -169,7 +169,7 @@ self_register_in_cluster(GError **err)
 	g_strlcpy(si->type, service_type, sizeof(si->type));
 	si->tags = g_ptr_array_new();
 
-	if (first) 
+	if (first)
 		service_tag_set_value_boolean(service_info_ensure_tag(si->tags, NAME_TAGNAME_RAWX_FIRST), first);
 
 	/* Copy the service tags */
@@ -238,11 +238,11 @@ static void
 server_notify_alert( struct server_s *srv )
 {
 	register time_t now;
-	
+
 	if (!srv) return;
 
 	now = time(0);
-	
+
 	g_rec_mutex_lock (&(srv->recMutex));
 	srv->alert_cfg.last_sent = now;
 	g_rec_mutex_unlock (&(srv->recMutex));
@@ -252,7 +252,7 @@ static gboolean
 server_alert_possible( struct server_s *srv )
 {
 	register time_t last, now, freq;
-	
+
 	if (!srv)
 		return FALSE;
 
@@ -262,7 +262,7 @@ server_alert_possible( struct server_s *srv )
 	g_rec_mutex_unlock (&(srv->recMutex));
 
 	now = time(0);
-	
+
 	return (last<=0 || now-last>freq);
 }
 
@@ -369,12 +369,12 @@ thread_monitoring_release (struct server_s *srv)
 {
 	gboolean rc = TRUE;
 	gchar *str_dbg = NULL;
-	
+
 	/* XXX start of locked section */
 	g_rec_mutex_lock (&(srv->recMutex));
-	
+
 	srv->mon.used_workers --;
-	
+
 	gint spare_workers = srv->mon.nb_workers - srv->mon.used_workers;
 	gboolean too_few_workers = srv->mon.nb_workers < srv->mon.min_workers;
 	gboolean too_many_workers = srv->mon.nb_workers > srv->mon.max_workers;
@@ -390,7 +390,7 @@ thread_monitoring_release (struct server_s *srv)
 			}
 		}
 	}
-	
+
 	g_rec_mutex_unlock (&(srv->recMutex));
 	/* XXX end of locked section */
 
@@ -408,7 +408,7 @@ thread_monitoring_periodic_debug (struct server_s *srv)
 	struct thread_monitoring_s mon, mon0;
 	gchar str_pool[512];
 	gsize str_pool_size;
-	
+
 	/* XXX locked section */
 	g_rec_mutex_lock (&(srv->recMutex));
 	memcpy(&mon, &(srv->mon), sizeof(struct thread_monitoring_s));
@@ -678,7 +678,7 @@ extract_parameters (GKeyFile *kf, const char *s, const char *p, GError **err)
 	{
 		GSETERROR(err, "cannot get the keys of the section '%s'", s);
 	}
-	for (current_key=all_keys; current_key && *current_key ;current_key++)
+	for (current_key = all_keys; all_keys && *current_key; current_key++)
 	{
 		if (g_str_has_prefix(*current_key, p))
 		{
@@ -719,7 +719,7 @@ prepare_plugins_reload (GKeyFile *cfgFile, GError **err)
 	}
 
 	DEBUG ("Start loading all the plugins found in the configuration");
-	
+
 	/*run the key's list and keep those mathing Plugin~*/
 	groups = g_key_file_get_groups (cfgFile, &nbgroups);
 	if (!groups || nbgroups<=0)
@@ -774,12 +774,12 @@ prepare_plugins_reload (GKeyFile *cfgFile, GError **err)
 				GSETERROR(err, "cannot update %s", fileName);
 				goto errorLabel;
 			}
-			
+
 			if (fileName) {
 				g_free(fileName);
 				fileName=NULL;
 			}
-			
+
 			/*the hash table has not been copied, just its pointers*/
 			params=NULL;
 		}
@@ -796,7 +796,7 @@ errorLabel:
 
 	if (fileName)
 		g_free (fileName);
-	
+
 	if (params)
 		g_hash_table_destroy (params);
 	return 0;
@@ -818,7 +818,7 @@ preload_plugins (GKeyFile *cfgFile, GError **err)
 	}
 
 	DEBUG ("Start loading all the plugins found in the configuration");
-	
+
 	/*run the key's list and keep those mathing Plugin~*/
 	groups = g_key_file_get_groups (cfgFile, &nbgroups);
 	if (!groups || nbgroups<=0)
@@ -876,12 +876,12 @@ preload_plugins (GKeyFile *cfgFile, GError **err)
 				GSETERROR(err, "cannot load %s", fileName);
 				goto errorLabel;
 			}
-			
+
 			if (fileName) {
 				g_free(fileName);
 				fileName=NULL;
 			}
-			
+
 			/*the hash table has not been copied, just its pointers*/
 			params=NULL;
 		}
@@ -898,13 +898,13 @@ errorLabel:
 
 	if (fileName)
 		g_free (fileName);
-	
+
 	if (params)
 		g_hash_table_destroy (params);
 	return 0;
 }
 
-static void 
+static void
 set_srv_addr(const gchar* url)
 {
 	gchar str_addr[STRLEN_ADDRINFO];
@@ -945,7 +945,7 @@ load_servers (GKeyFile *cfgFile, GError **err)
 	}
 
 	DEBUG ("Start loading all the servers found in the configuration");
-	
+
 	/*run the key's list and keep those mathing Plugin~*/
 	groups = g_key_file_get_groups (cfgFile, &nbgroups);
 	if (!groups || nbgroups<=0)
@@ -987,7 +987,7 @@ load_servers (GKeyFile *cfgFile, GError **err)
 				goto errorLabel;
 			}
 
-			/*prepare a new server structure, unshift it in the list*/	
+			/* prepare a new server structure, unshift it in the list */
 			if (!(srv = g_try_malloc0(sizeof(struct server_s))))
 			{
 				GSETERROR(err, "Memory allocation error");
@@ -1038,9 +1038,9 @@ load_servers (GKeyFile *cfgFile, GError **err)
 				goto errorLabel;
 			}
 
-			for (url=srvList; url && *url && *(*url); url++)
+			for (url = srvList; srvList && *url && *(*url); url++)
 			{
-				set_srv_addr(*url);		
+				set_srv_addr(*url);
 				if (!accept_add(srv->ap, *url, err))
 					goto errorLabel;
 			}
@@ -1113,10 +1113,10 @@ errorLabel:
 
 	if (srvList)
 		g_strfreev(srvList);
-		
+
 	if (pluginList)
 		g_strfreev(pluginList);
-		
+
 	return 0;
 }
 
@@ -1200,9 +1200,9 @@ load_service_info (GKeyFile *cfgFile, GError **err)
 		return 1;
 	}
 
-	
+
 	ns_name = g_key_file_get_string (cfgFile, NAME_SERVICE, NAME_NAMESPACE, err);
-	
+
 	service_type = g_key_file_get_string (cfgFile, NAME_SERVICE, NAME_SRV_TYPE, err);
 	/* TODO: service type ok */
 
@@ -1390,8 +1390,8 @@ main_action (void)
 			g_clear_error(&err);
 		}
 		/* Periodic register in cluster */
-		srvtimer_register_regular(service_type, srv_periodic_register, NULL, NULL, PERIOD_REGISTER); 
-	}	
+		srvtimer_register_regular(service_type, srv_periodic_register, NULL, NULL, PERIOD_REGISTER);
+	}
 	if(load_ns_info)
 		srvtimer_register_regular(service_type, srv_periodic_refresh_ns_info, NULL, NULL, PERIOD_REFRESH_NS_INFO);
 	/*Threads started, we start monitoring them*/
@@ -1432,8 +1432,7 @@ main_configure(int argc, char **argv)
 		ERROR("Missing argument\n");
 		return FALSE;
 	}
-	
-	/*loads the configuration*/	
+
 	GError *err = NULL;
 	if (!load_configuration (config_file, &err)) {
 		ERROR("Failed to load the configuration : (%d) %s", err->code, err->message);
@@ -1479,7 +1478,6 @@ main_specific_fini (void)
 			s->handlers = NULL;
 		}
 		g_rec_mutex_clear(&(s->recMutex));
-		
 	}
 
 	DEBUG("Cleaning the servers");
@@ -1541,7 +1539,7 @@ main (int argc, char **argv)
 		g_error("GLib MODULES are not supported on this platform!");
 		return 1;
 	}
-	
+
 	return grid_main(argc, argv, &callbacks);
 }
 

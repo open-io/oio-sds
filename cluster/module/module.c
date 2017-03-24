@@ -1305,7 +1305,7 @@ _module_init_service_conf(struct conscience_s *cs, const gchar *filepath)
 	}
 
 	gchar **groups = g_key_file_get_groups(svc_conf_file, NULL);
-	for (gchar **group = groups; group && *group; group++) {
+	for (gchar **group = groups; groups && *group; group++) {
 		if (g_str_has_prefix(*group, GROUP_PREFIX_POOL)) {
 			err = _load_service_pool_section(cs, svc_conf_file, *group);
 		} else if (g_str_has_prefix(*group, GROUP_PREFIX_TYPE)) {
