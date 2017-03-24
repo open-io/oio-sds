@@ -61,42 +61,6 @@ version_getslen(gboolean init, GTree *t, const guint8 *ks, gsize ks_len)
 	return o;
 }
 
-static gboolean
-hook_extract(gchar *k, GByteArray *v, GTree *version)
-{
-	if (!g_str_has_prefix(k, "version:"))
-		return FALSE;
-
-	gchar *p, buf[v->len+1];
-	memset(buf, 0, v->len + 1);
-	memcpy(buf, v->data, v->len);
-	if (!(p = strchr(buf, ':')))
-		return FALSE;
-
-	*(p++) = '\0';
-	struct object_version_s ov;
-	ov.version = atoi(buf);
-	ov.when = atoi(p);
-	g_tree_insert(version,
-			hashstr_create(k+sizeof("version:")-1),
-			g_memdup(&ov, sizeof(ov)));
-	return FALSE;
-}
-
-GTree*
-version_empty(void)
-{
-	return g_tree_new_full(hashstr_quick_cmpdata, NULL, g_free, g_free);
-}
-
-GTree*
-version_extract_from_admin_tree(GTree *t)
-{
-	GTree *v = version_empty();
-	g_tree_foreach(t, (GTraverseFunc)hook_extract, v);
-	return v;
-}
-
 GTree*
 version_extract_from_admin(struct sqlx_sqlite3_s *sq3)
 {
