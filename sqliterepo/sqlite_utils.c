@@ -183,13 +183,17 @@ sqlx_admin_init_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 v)
 void
 sqlx_admin_inc_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 delta)
 {
-	gchar *s = sqlx_admin_get_str(sq3, k);
-	if (!s) {
-		sqlx_admin_set_i64(sq3, k, delta);
-	} else {
-		sqlx_admin_set_i64(sq3, k, delta + g_ascii_strtoll(s, NULL, 10));
-		g_free(s);
-	}
+	struct _cache_entry_s *v = g_tree_lookup(sq3->admin, k);
+	if (!v)
+		return sqlx_admin_set_i64(sq3, k, delta);
+
+	/* the buffer is large enough for a single gint64, let's have no worry
+	 * about the buffer length */
+	v->len = g_snprintf(v->buffer, _cache_entry_length(v), "%"G_GINT64_FORMAT,
+			delta + (v->flag_deleted ? 0 : g_ascii_strtoll(v->buffer, NULL, 10)));
+
+	v->flag_changed = 1;
+	v->flag_deleted = 0;
 }
 
 static void
