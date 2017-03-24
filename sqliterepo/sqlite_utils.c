@@ -166,8 +166,8 @@ sqlx_admin_get_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 def)
 void
 sqlx_admin_set_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 v)
 {
-	gchar buf[64];
-	g_snprintf(buf, 64, "%"G_GINT64_FORMAT, v);
+	gchar buf[32];
+	g_snprintf(buf, 32, "%"G_GINT64_FORMAT, v);
 	sqlx_admin_set_str(sq3, k, buf);
 }
 
