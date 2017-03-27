@@ -522,7 +522,7 @@ sock_connect_and_send (const char *url, GError **err,
 	const gint64 now = oio_ext_monotonic_time();
 
 	if (!buf || !len || (_fastopen_last_error != 0 &&
-				_fastopen_last_error < OLDEST(now,G_TIME_SPAN_MINUTE)))
+				_fastopen_last_error > OLDEST(now,G_TIME_SPAN_MINUTE)))
 		goto label_simple_connect;
 
 #ifdef HAVE_ENBUG
