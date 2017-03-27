@@ -667,12 +667,11 @@ _manager_clean(struct election_manager_s *manager)
 			count.total, count.master, count.slave, count.pending,
 			count.failed, count.none);
 
-	g_mutex_lock(&manager->lock);
-
 	if (manager->completions) {
 		g_thread_pool_free(manager->completions, FALSE, TRUE);
 		manager->completions = NULL;
 	}
+
 	if (manager->members_by_key) {
 		g_tree_destroy (manager->members_by_key);
 		manager->members_by_key = NULL;
@@ -695,7 +694,6 @@ _manager_clean(struct election_manager_s *manager)
 		manager->conditions = NULL;
 	}
 
-	g_mutex_unlock(&manager->lock);
 	g_mutex_clear(&manager->lock);
 
 	g_free(manager);
