@@ -223,7 +223,7 @@ _client_reset_reply(struct gridd_client_s *client)
 		g_byte_array_set_size(client->reply, 0);
 }
 
-/* Benefit from the maybe-present TCCP_FASTOPEN, and try to send a few bytes
+/* Benefit from the maybe-present TCP_FASTOPEN, and try to send a few bytes
  * alongside with the initiation sequence.
  */
 static GError*
@@ -388,7 +388,8 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 		case CONNECTING:
 			EXTRA_ASSERT(client->fd >= 0);
 			_client_reset_reply(client);
-			client->sent_bytes = 0;
+			/* Do not reset client->sent_bytes, as we may have sent some bytes
+			 * along with the connection packets (thanks to TCP_FASTOPEN). */
 			client->step = REQ_SENDING;
 			return NULL;
 
@@ -414,7 +415,7 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 				return NULL;
 
 			client->step = REP_READING_SIZE;
-
+			// FALLTHROUGH
 		case REP_READING_SIZE:
 
 			EXTRA_ASSERT(client->step == REP_READING_SIZE);
@@ -442,7 +443,7 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 			s32 = *((guint32*)(client->reply->data));
 			client->size = g_ntohl(s32);
 			client->step = REP_READING_DATA;
-
+			// FALLTHROUGH
 		case REP_READING_DATA:
 
 			EXTRA_ASSERT(client->step == REP_READING_DATA);
