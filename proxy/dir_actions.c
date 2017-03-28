@@ -24,7 +24,7 @@ static GString * _pack_m1url_list (GString *gstr, gchar ** urlv) {
 	if (!gstr)
 		gstr = g_string_sized_new (128);
 	g_string_append_c (gstr, '[');
-	for (gchar ** v = urlv; v && *v; v++) {
+	for (gchar ** v = urlv; urlv && *v; v++) {
 		struct meta1_service_url_s *m1 = meta1_unpack_url (*v);
 		meta1_service_url_encode_json (gstr, m1);
 		meta1_service_url_clean (m1);

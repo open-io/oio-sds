@@ -562,6 +562,7 @@ apply_parameters(sqlite3_stmt *stmt, Row_t *row)
 			default:
 			case RowFieldValue_PR_NOTHING:
 				GRID_DEBUG("invalid type to bind, considering NULL");
+				// FALLTHROUGH
 			case RowFieldValue_PR_n:
 				sqlite3_bind_null(stmt, pos);
 				GRID_TRACE2("bind(%d,NULL)", pos);
@@ -1813,7 +1814,7 @@ _handler_PROPDEL(struct gridd_reply_ctx_s *reply,
 			if (!keys )
 				sqlx_admin_del_all_user (sq3);
 			else {
-				for (gchar **pk=keys; pk && *pk ;++pk)
+				for (gchar **pk = keys; keys && *pk; ++pk)
 					sqlx_admin_del (sq3, *pk);
 			}
 		}

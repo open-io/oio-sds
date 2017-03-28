@@ -309,7 +309,7 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx)
 	gridd_clients_start(clients);
 	GError *err = gridd_clients_loop(clients);
 	if (!err) {
-		for (struct gridd_client_s **pc=clients; pc && *pc ;pc++) {
+		for (struct gridd_client_s **pc = clients; clients && *pc; pc++) {
 			GError *e = gridd_client_error(*pc);
 			if (!e)
 				++ count_success;

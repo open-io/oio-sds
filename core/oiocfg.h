@@ -134,7 +134,7 @@ GHashTable* oio_cfg_parse (void);
 /** List all the connfiguration variables in the given file */
 GHashTable* oio_cfg_parse_file (const char *path);
 
-/** List all the namespaces locally known */
+/** List all the namespaces locally known. Never returns NULL. */
 gchar** oio_cfg_list_ns (void);
 
 /** get the url of the proxy dedicated to the conscience, with a fallback

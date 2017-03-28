@@ -874,7 +874,9 @@ static guint
 _count_options (struct grid_main_option_s const * tab)
 {
 	guint count = 0;
-	for (; tab && tab->name ;++tab,++count) {}
+	if (tab)
+		for (; tab->name; ++tab, ++count)
+			;
 	return count;
 }
 

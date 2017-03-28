@@ -56,7 +56,9 @@ _on_item (void *ctx UNUSED, const struct oio_sds_list_item_s *item)
 	GRID_DEBUG ("Listed item %s, size %"G_GSIZE_FORMAT" version %"G_GSIZE_FORMAT,
 			item->name, item->size, item->version);
 	const char * const * props = item->properties;
-	while (props && *props) {
+	if (!props)
+		return 0;
+	while (*props) {
 		GRID_DEBUG("Listed item %s: %s=%s", item->name, *props, *(props+1));
 		props += 2;
 	}

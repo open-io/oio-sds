@@ -138,6 +138,27 @@ _sysstat (gchar **vols)
 }
 
 static int
+_redirect(gchar *dest, gchar *to)
+{
+	gdouble timeout = g_ascii_strtod(to, NULL);
+	GByteArray *encoded = message_marshall_gba_and_clean (
+			metautils_message_create_named("REQ_REDIRECT"));
+	gint64 start = oio_ext_monotonic_time();
+	GError *err = gridd_client_exec(dest, timeout, encoded);
+	gint64 end = oio_ext_monotonic_time();
+	if (!err) {
+		g_print("KO (%u) %s\n", CODE_INTERNAL_ERROR, "Unexpected success");
+		return 1;
+	}
+	if (err->code != CODE_TOOMANY_REDIRECT) {
+		g_print("KO (%u) %s\n", err->code, err->message);
+		return 1;
+	}
+	g_print("OK %lfs\n", (end - start) / (gdouble)G_TIME_SPAN_SECOND);
+	return 0;
+}
+
+static int
 _ping(gchar *dest, gchar *to)
 {
 	gdouble timeout = g_ascii_strtod(to, NULL);
@@ -202,6 +223,9 @@ _print_usage(const char *name)
 	g_printerr (" %s stat [path]...\n", name);
 	g_printerr ("\nCompute 64b integer location from dotted string\n");
 	g_printerr (" %s location DOTTED_STRING...\n", name);
+	g_printerr ("\nCall a handler that always redirects, and succeeds if the "
+			"client ends up with a\n'Too many redirections' error\n");
+	g_printerr ("  %s redirection IP:PORT\n", name);
 }
 
 int
@@ -242,6 +266,12 @@ main (int argc, char **argv)
 		for (int i = 2; i < argc; ++i)
 			_print_loc(argv[i]);
 		return 0;
+	} else if (!strcmp("redirect", argv[1])) {
+		if (argc != 3) {
+			g_printerr("Usage: %s redirect IP:PORT\n", argv[0]);
+			return 1;
+		}
+		return _redirect(argv[2], "5.0");
 	} else if (!strcmp("-h", argv[1]) ||
 			!strcmp("help", argv[1]) ||
 			!strcmp("--help", argv[1])) {

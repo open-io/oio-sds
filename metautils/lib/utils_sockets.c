@@ -500,7 +500,7 @@ sock_connect (const char *url, GError **err)
 	return fd;
 }
 
-static volatile gboolean _fastopen_supported = TRUE;
+static volatile gint64 _fastopen_last_error = 0;
 
 int
 sock_connect_and_send (const char *url, GError **err,
@@ -514,7 +514,10 @@ sock_connect_and_send (const char *url, GError **err,
 
 #if defined(MSG_FASTOPEN) && defined(TCP_FASTOPEN)
 
-	if (!buf || !len || !_fastopen_supported)
+	const gint64 now = oio_ext_monotonic_time();
+
+	if (!buf || !len || (_fastopen_last_error != 0 &&
+				_fastopen_last_error > OLDEST(now,G_TIME_SPAN_MINUTE)))
 		goto label_simple_connect;
 
 #ifdef HAVE_ENBUG
@@ -528,11 +531,10 @@ retry:
 	if (rc < 0) {
 		if (errno == EINTR)
 			goto retry;
-		if (errno == ENOTSUP || errno == ENOTCONN) {
+		if (errno == ENOTSUP || errno == EOPNOTSUPP) {
 			/* the TCP_FASTOPEN is not accepted, let's continue with a
 			 * regular connect/send sequence */
-			GRID_WARN("TCP_FASTOPEN not supported, disabling it");
-			_fastopen_supported = FALSE;
+			_fastopen_last_error = now;
 label_simple_connect:
 #endif
 			*len = 0;

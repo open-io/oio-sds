@@ -116,7 +116,7 @@ m2v2_list_result_extract (gpointer ctx, MESSAGE reply)
 
 	/* Extract properties and merge them into the temporary TreeSet. */
 	gchar **names = metautils_message_get_field_names (reply);
-	for (gchar **n=names ; n && *n ;++n) {
+	for (gchar **n = names; names && *n; ++n) {
 		if (!g_str_has_prefix (*n, NAME_MSGKEY_PREFIX_PROPERTY))
 			continue;
 		g_tree_replace (out->props,

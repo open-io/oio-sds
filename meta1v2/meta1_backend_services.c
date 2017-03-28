@@ -78,8 +78,9 @@ static gchar **
 pack_urlv(struct meta1_service_url_s **uv)
 {
 	GPtrArray *tmp = g_ptr_array_new();
-	for (; uv && *uv; uv++)
-		g_ptr_array_add(tmp, meta1_pack_url(*uv));
+	if (uv)
+		for (; *uv; uv++)
+			g_ptr_array_add(tmp, meta1_pack_url(*uv));
 	g_ptr_array_add(tmp, NULL);
 	return (gchar**)g_ptr_array_free(tmp, FALSE);
 }
@@ -96,7 +97,7 @@ expand_url(struct meta1_service_url_s *u)
 	tmp = g_ptr_array_new();
 
 	split = g_strsplit(u->host, ",", -1);
-	for (p=split; p && *p; p++) {
+	for (p = split; *p; p++) {
 		struct meta1_service_url_s *newurl;
 
 		newurl = meta1_url_dup(u);
@@ -466,7 +467,7 @@ __locations_from_m1srvurl(struct meta1_backend_s *m1,
 {
 	GArray *out = g_array_new(TRUE, TRUE, sizeof(oio_location_t));
 	struct meta1_service_url_s **cursor = NULL;
-	for (cursor = urls; cursor && *cursor; cursor++) {
+	for (cursor = urls; urls && *cursor; cursor++) {
 		struct meta1_service_url_s **extracted;
 		extracted = expand_url(*cursor);
 		gchar *key = key_from_m1srvurl(m1, *extracted);
@@ -1126,13 +1127,13 @@ meta1_backend_services_relink(struct meta1_backend_s *m1,
 		goto out;
 
 	/* Sanity check: all the services must have the same <seq,type> */
-	for (struct meta1_service_url_s **p = ukept; p && *p; ++p) {
+	for (struct meta1_service_url_s **p = ukept; ukept && *p; ++p) {
 		if (!_idem(*p, ref)) {
 			err = BADREQ("Mismatch in URL set (%s)", "kept");
 			goto out;
 		}
 	}
-	for (struct meta1_service_url_s **p = urepl; p && *p; ++p) {
+	for (struct meta1_service_url_s **p = urepl; urepl && *p; ++p) {
 		if (!_idem(*p, ref)) {
 			err = BADREQ("Mismatch in URL set (%s)", "replaced");
 			goto out;

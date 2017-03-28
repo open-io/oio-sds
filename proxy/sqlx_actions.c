@@ -238,7 +238,7 @@ action_sqlx_propdel (struct req_args_s *args, struct json_object *jargs)
 	if (!namev)
 		return _reply_format_error (args, BADREQ("Bad names"));
 
-	for (gchar **p = namev; p && *p; p++)
+	for (gchar **p = namev; namev && *p; p++)
 		oio_str_reuse(p, g_strconcat("user.", *p, NULL));
 
 	GByteArray * _pack(const struct sqlx_name_s *n) {

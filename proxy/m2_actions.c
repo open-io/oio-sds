@@ -887,7 +887,7 @@ static GError *
 _m2_container_create_with_properties (struct req_args_s *args, char **props,
 		const char *container_stgpol, const char *container_verpol)
 {
-	gboolean autocreate = _request_get_flag (args, "autocreate");
+	gboolean autocreate = TRUE;
 
 	/* JFS: don't lookup for default verpol and stgpol, we must left they unset
 	 * so that they will follow the default values of the namespace and (later)
@@ -1191,7 +1191,11 @@ static enum http_rc_e
 _m2_container_create (struct req_args_s *args, struct json_object *jbody)
 {
 	gchar **properties = NULL;
-	GError *err = KV_read_usersys_properties(jbody, &properties);
+	GError *err = NULL;
+	if (!jbody || json_object_is_type(jbody, json_type_null))
+		properties = g_malloc0(sizeof(void*));
+	else
+		err = KV_read_usersys_properties(jbody, &properties);
 	EXTRA_ASSERT((err != NULL) ^ (properties != NULL));
 	if (err)
 		return _reply_m2_error(args, err);

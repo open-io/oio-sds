@@ -637,8 +637,7 @@ sqlx_admin_reload(struct sqlx_sqlite3_s *sq3)
 {
 	if (sq3->admin)
 		g_tree_destroy(sq3->admin);
-	sq3->admin = g_tree_new_full(metautils_strcmp3, NULL,
-			g_free, metautils_gba_unref);
+	sq3->admin = g_tree_new_full(metautils_strcmp3, NULL, g_free, g_free);
 
 	sqlx_admin_load (sq3);
 	sqlx_admin_ensure_versions (sq3);
@@ -683,6 +682,7 @@ retry:
 				GRID_DEBUG("DB creation error on [%s] : (%d) %s",
 						args->realpath, error->code, error->message);
 			} else {
+			// FALLTHROUGH
 		default:
 				_close_handle(&handle);
 				GRID_DEBUG("Open strong error [%s] : (%d) %s",
@@ -710,8 +710,7 @@ retry:
 	sq3->name.ns = g_strdup(args->name.ns);
 	sq3->path = g_strdup(args->realpath);
 	sq3->admin_dirty = 0;
-	sq3->admin = g_tree_new_full(metautils_strcmp3, NULL,
-			g_free, metautils_gba_unref);
+	sq3->admin = g_tree_new_full(metautils_strcmp3, NULL, g_free, g_free);
 
 	sqlx_exec(handle, "PRAGMA foreign_keys = OFF");
 	sqlx_exec(handle, "PRAGMA journal_mode = MEMORY");
@@ -866,8 +865,7 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 			gchar *myid = g_strdup(
 					election_manager_get_local((*result)->manager));
 			peers = oio_strv_append(peers, myid);
-			gboolean modified = sqlx_admin_ensure_peers((*result), peers);
-			if (modified) {
+			if (sqlx_admin_ensure_peers((*result), peers)) {
 				sqlx_admin_save_lazy(*result);
 				GRID_DEBUG("Replications peers saved in %s", (*result)->path);
 			}
@@ -1124,7 +1122,7 @@ sqlx_repository_status_base(sqlx_repository_t *repo, const struct sqlx_name_s *n
 				gboolean master_in_peers = FALSE;
 				GError *err2 = election_get_peers(repo->election_manager, n, FALSE, &my_peers);
 				for (gchar **cursor = my_peers;
-						cursor && *cursor && !master_in_peers;
+						my_peers && *cursor && !master_in_peers;
 						cursor++) {
 					master_in_peers |= (0 == g_strcmp0(url, *cursor));
 				}

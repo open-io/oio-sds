@@ -184,13 +184,16 @@ gsize oio_str_bin2hex(const void *s, size_t sS, char *d, size_t dS) {
 	if (!s || !sS)
 		return 0;
 
-	for (i=j=0; i<sS && j<(dS-1) ;) {
+	#pragma GCC diagnostic push
+	#pragma GCC diagnostic ignored "-Wunsafe-loop-optimizations"
+	for (i = j = 0; i < sS && j < (dS - 1); ) {
 		register const gchar *h = b2h[((guint8*)s)[i++]];
 		d[j++] = h[0];
 		d[j++] = h[1];
 	}
+	#pragma GCC diagnostic pop
 
-	d[(j<dS ? j : dS-1)] = 0;
+	d[(j < dS ? j : dS - 1)] = 0;
 	return j;
 }
 
@@ -235,8 +238,10 @@ void oio_buf_randomize(guint8 *buf, gsize buflen) {
 	switch (mod32) {
 		case 3:
 			buf[ (max32*4) + 2 ] = raw.r8[2];
+			// FALLTHROUGH
 		case 2:
 			buf[ (max32*4) + 1 ] = raw.r8[1];
+			// FALLTHROUGH
 		case 1:
 			buf[ (max32*4) + 0 ] = raw.r8[0];
 	}

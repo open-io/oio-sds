@@ -410,7 +410,7 @@
 			{ "type": "uint", "name": "disconnection_rrd_window",
 			   "key": "sqliterepo.zk.rrd.window",
 				"descr": "Sets the time window to remember the reconnection events, on a ZK connection.",
-			   "def": 5, "min": 1, "max": 4095 },
+			   "def": 30, "min": 1, "max": 4095 },
 
 			{ "type": "uint", "name": "disconnection_threshold",
 				"key": "sqliterepo.zk.rrd.threshold",

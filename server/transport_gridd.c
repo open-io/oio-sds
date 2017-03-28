@@ -25,6 +25,7 @@ License along with this library.
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/server_variables.h>
+#include <core/internals.h>
 
 #include "network_server.h"
 #include "transport_gridd.h"
@@ -120,7 +121,7 @@ transport_gridd_dispatcher_add_requests(
 	if (!descr)
 		return NEWERROR(EINVAL, "Invalid request descriptor");
 
-	for (d=descr; d && d->name && d->handler ;d++) {
+	for (d = descr; descr && d->name && d->handler; d++) {
 		struct hashstr_s *hname;
 		struct gridd_request_handler_s *handler;
 
@@ -927,6 +928,17 @@ dispatch_GETCFG(struct gridd_reply_ctx_s *reply,
 	return TRUE;
 }
 
+static gboolean
+dispatch_REDIRECT(struct gridd_reply_ctx_s *reply,
+		gpointer gdata, gpointer hdata)
+{
+	(void) gdata, (void) hdata;
+	gchar **endpoints = network_server_endpoints(reply->client->server);
+	reply->send_error(0, NEWERROR(CODE_REDIRECT, "%s", endpoints[0]));
+	g_strfreev(endpoints);
+	return TRUE;
+}
+
 #define VOLPREFIX "config volume="
 
 static gboolean
@@ -984,6 +996,7 @@ gridd_get_common_requests(void)
 		{"REQ_KILL",      dispatch_KILL,          NULL},
 		{"REQ_GETCFG",    dispatch_GETCFG,        NULL},
 		{"REQ_SETCFG",    dispatch_SETCFG,        NULL},
+		{"REQ_REDIRECT",  dispatch_REDIRECT,      NULL},
 		{NULL, NULL, NULL}
 	};
 

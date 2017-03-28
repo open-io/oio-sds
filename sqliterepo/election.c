@@ -680,12 +680,11 @@ _manager_clean(struct election_manager_s *manager)
 			count.total, count.master, count.slave, count.pending,
 			count.failed, count.none);
 
-	g_mutex_lock(&manager->lock);
-
 	if (manager->completions) {
 		g_thread_pool_free(manager->completions, FALSE, TRUE);
 		manager->completions = NULL;
 	}
+
 	if (manager->members_by_key) {
 		g_tree_destroy (manager->members_by_key);
 		manager->members_by_key = NULL;
@@ -708,7 +707,6 @@ _manager_clean(struct election_manager_s *manager)
 		manager->conditions = NULL;
 	}
 
-	g_mutex_unlock(&manager->lock);
 	g_mutex_clear(&manager->lock);
 
 	g_free(manager);
@@ -1870,7 +1868,7 @@ defer_USE(struct election_member_s *member)
 		member_trace("avoid:USE", member);
 	} else {
 		member->last_USE = oio_ext_monotonic_time();
-		for (gchar **p=peers; p && *p ;p++) {
+		for (gchar **p = peers; peers && *p; p++) {
 			sqlx_peering__use (member->manager->peering, *p,
 					sqlx_name_mutable_to_const(&member->name));
 			member_trace("sched:USE", member);
