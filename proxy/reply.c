@@ -51,16 +51,6 @@ _create_status_error (GError * e)
 	return gstr;
 }
 
-enum http_rc_e
-_reply_common_error (struct req_args_s *args, GError *err)
-{
-	if (CODE_IS_NOTFOUND(err->code))
-		return _reply_notfound_error (args, err);
-	if (err->code == CODE_BAD_REQUEST)
-		return _reply_format_error (args, err);
-	return _reply_system_error (args, err);
-}
-
 static enum http_rc_e
 _reply_bytes (struct req_args_s *args, int code, const gchar * msg,
 		GBytes * bytes)
@@ -106,13 +96,6 @@ _reply_format_error (struct req_args_s *args, GError * err)
 }
 
 enum http_rc_e
-_reply_system_error (struct req_args_s *args, GError * err)
-{
-	return _reply_json_error (args, HTTP_CODE_INTERNAL_ERROR,
-			"Internal error", _create_status_error (err));
-}
-
-enum http_rc_e
 _reply_bad_gateway (struct req_args_s *args, GError * err)
 {
 	return _reply_json_error (args, HTTP_CODE_BAD_GATEWAY,
@@ -124,6 +107,37 @@ _reply_srv_unavailable (struct req_args_s *args, GError *err)
 {
 	return _reply_json_error (args, HTTP_CODE_SRV_UNAVAILABLE,
 			"Service unavailable", _create_status_error (err));
+}
+
+enum http_rc_e
+_reply_retry (struct req_args_s *args, GError *err)
+{
+	args->rp->add_header("Retry-After", g_strdup("1"));
+	return _reply_srv_unavailable (args, err);
+}
+
+static enum http_rc_e
+_reply_system_error (struct req_args_s *args, GError * err)
+{
+	return _reply_json (args, HTTP_CODE_INTERNAL_ERROR,
+			"Internal error", _create_status_error (err));
+}
+
+enum http_rc_e
+_reply_common_error (struct req_args_s *args, GError *err)
+{
+	if (CODE_IS_NOTFOUND(err->code))
+		return _reply_notfound_error (args, err);
+	switch (err->code) {
+		case CODE_BAD_REQUEST:
+			return _reply_format_error (args, err);
+		case CODE_TOOMANY_REDIRECT:
+		case CODE_UNAVAILABLE:
+		case CODE_EXCESSIVE_LOAD:
+			return _reply_retry(args, err);
+	}
+
+	return _reply_system_error (args, err);
 }
 
 enum http_rc_e
