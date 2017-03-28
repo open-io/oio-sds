@@ -446,6 +446,7 @@ static gdouble _compute_io_idle (guint major, guint minor) {
 				gdouble elapsed = now - out->last_update; /* in us */
 				elapsed /= G_TIME_SPAN_MILLISECOND; /* in ms */
 				out->idle = 1.0 - (spent / elapsed);
+				out->idle = MAX(0.0, out->idle);
 				out->last_update = now;
 				out->last_total_time = total_time;
 				found = TRUE;
@@ -612,7 +613,7 @@ gdouble oio_sys_cpu_idle (void) {
 		if (fst)
 			fclose (fst);
 	}
-	out = ratio_idle;
+	out = MAX(0.0, ratio_idle);
 	g_mutex_unlock (&lock);
 
 	return out;
