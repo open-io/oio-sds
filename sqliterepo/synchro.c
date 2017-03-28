@@ -120,7 +120,7 @@ sqlx_sync_create(const char *url, gboolean shuffle)
 	g_strfreev(tokens);
 
 	// FIXME(FVE): hardcoded value
-	ss->conn_attempts = grid_single_rrd_create(oio_ext_monotonic_seconds(), 8);
+	ss->conn_attempts = grid_single_rrd_create(oio_ext_monotonic_seconds(), 60);
 
 	return ss;
 }
@@ -248,7 +248,7 @@ zk_main_watch(zhandle_t *zh UNUSED, int type, int state, const char *path UNUSED
 		return _reconnect(ss);
 	} else if (state == ZOO_CONNECTING_STATE) {
 		// FIXME(FVE): hardcoded value
-		if (grid_single_rrd_get_delta(ss->conn_attempts, now, 5) > 5) {
+		if (grid_single_rrd_get_delta(ss->conn_attempts, now, 30) > 5) {
 			/* There were many connection attempts recently, sign of an
 			 * underlying zookeeper problem. We will try to wipe everything
 			 * and start from the beginning. */
