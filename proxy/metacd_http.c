@@ -31,6 +31,8 @@ static GThread *admin_thread = NULL;
 static GThread *upstream_thread = NULL;
 static GThread *downstream_thread = NULL;
 
+static guint max_workers = 0;
+
 guint csurl_refresh_delay = PROXYD_PERIOD_RELOAD_CSURL;
 guint srvtypes_refresh_delay = PROXYD_PERIOD_RELOAD_SRVTYPES;
 guint nsinfo_refresh_delay = PROXYD_PERIOD_RELOAD_NSINFO;
@@ -659,6 +661,9 @@ grid_main_action (void)
 		return;
 	}
 
+	if (max_workers != 0)
+		network_server_set_max_workers(server, max_workers);
+
 	grid_task_queue_fire (admin_gtq);
 	grid_task_queue_fire (upstream_gtq);
 	grid_task_queue_fire (downstream_gtq);
@@ -696,8 +701,11 @@ grid_main_get_options (void)
 			"An additional URL to bind to (might be used several time).\n"
 			"\t\tAccepts UNIX and INET sockets." },
 
-		{"LbRefresh", OT_INT, {.u = &lb_downstream_delay},
+		{"LbRefresh", OT_UINT, {.u = &lb_downstream_delay},
 			"Interval between load-balancer service refreshes (seconds)\n"},
+
+		{"MaxWorkers", OT_UINT, {.u = &max_workers},
+			"If set to a non-zero value, it gives the maximum number of threads\n"},
 
 		{"RefreshNamespace", OT_TIME, {.u = &nsinfo_refresh_delay},
 			"Interval between NS configuration's refreshes (seconds)"},
