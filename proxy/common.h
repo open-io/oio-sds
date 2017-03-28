@@ -268,9 +268,9 @@ gboolean lb_cache_reload(void);
 enum http_rc_e _reply_json (struct req_args_s *args, int code, const char * msg, GString * gstr);
 
 enum http_rc_e _reply_format_error (struct req_args_s *args, GError *err);
-enum http_rc_e _reply_system_error (struct req_args_s *args, GError *err);
 enum http_rc_e _reply_bad_gateway (struct req_args_s *args, GError *err);
 enum http_rc_e _reply_srv_unavailable (struct req_args_s *args, GError *err);
+enum http_rc_e _reply_retry (struct req_args_s *args, GError *err);
 enum http_rc_e _reply_gateway_timeout (struct req_args_s *args, GError * err);
 enum http_rc_e _reply_not_implemented (struct req_args_s *args);
 enum http_rc_e _reply_notfound_error (struct req_args_s *args, GError * err);

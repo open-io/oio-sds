@@ -206,7 +206,7 @@ action_sqlx_propget (struct req_args_s *args, struct json_object *jargs)
 	if (err) {
 		/* TODO(jfs): maybe a good place for an assert */
 		if (pairs) g_strfreev(pairs);
-		return _reply_system_error(args, err);
+		return _reply_common_error(args, err);
 	}
 	if (!pairs) {
 		pairs = g_malloc0(sizeof(void*));

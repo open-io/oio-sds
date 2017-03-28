@@ -160,10 +160,7 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 
 	if (err) {
 		g_prefix_error (&err, "JSON error: ");
-		if (err->code == CODE_BAD_REQUEST)
-			return _reply_format_error (args, err);
-		else
-			return _reply_system_error (args, err);
+		return _reply_common_error (args, err);
 	}
 
 	if (!si->type[0] && !service_info_get_tag(si->tags, "tag.id")) {
@@ -261,6 +258,11 @@ action_conscience_info (struct req_args_s *args)
 	GError *err;
 	const char *v = OPT("what");
 
+#ifdef HAVE_ENBUG
+	if (10 >= oio_ext_rand_int_range(1,100))
+		return _reply_retry(args, NEWERROR(CODE_UNAVAILABLE, "FAKE"));
+#endif
+
 	if (v && !strcmp(v, "types")) {
 		if (NULL != (err = _cs_check_tokens(args)))
 			return _reply_notfound_error (args, err);
@@ -333,6 +335,11 @@ action_conscience_list (struct req_args_s *args)
 	if (!type)
 		return _reply_format_error (args, BADREQ("Missing type"));
 
+#ifdef HAVE_ENBUG
+	if (10 >= oio_ext_rand_int_range(1,100))
+		return _reply_retry(args, NEWERROR(CODE_UNAVAILABLE, "FAKE"));
+#endif
+
 	gboolean full = _request_get_flag (args, "full");
 
 	GError *err;
@@ -367,7 +374,7 @@ action_conscience_list (struct req_args_s *args)
 	if (NULL != err) {
 		g_slist_free_full (sl, (GDestroyNotify) service_info_clean);
 		g_prefix_error (&err, "Conscience error: ");
-		return _reply_system_error (args, err);
+		return _reply_common_error (args, err);
 	}
 
 	args->rp->access_tail ("%s=%u", type, g_slist_length(sl));
@@ -381,6 +388,11 @@ action_conscience_flush (struct req_args_s *args)
 	if (NULL != (err = _cs_check_tokens(args)))
 		return _reply_notfound_error (args, err);
 
+#ifdef HAVE_ENBUG
+	if (10 >= oio_ext_rand_int_range(1,100))
+		return _reply_retry(args, NEWERROR(CODE_UNAVAILABLE, "FAKE"));
+#endif
+
 	const char *srvtype = TYPE();
 	if (!srvtype)
 		return _reply_format_error (args, BADREQ("Missing type"));
@@ -390,7 +402,7 @@ action_conscience_flush (struct req_args_s *args)
 
 	if (err) {
 		g_prefix_error (&err, "Conscience error: ");
-		return _reply_system_error (args, err);
+		return _reply_common_error (args, err);
 	}
 	return _reply_success_json (args, _create_status (CODE_FINAL_OK, "OK"));
 }
