@@ -29,7 +29,6 @@ License along with this library.
 
 typedef guint32 generation_t;
 
-// actually not prime but OK
 #define OIO_LB_SHUFFLE_JUMP ((1UL << 31) - 1)
 
 
