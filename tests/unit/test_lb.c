@@ -17,6 +17,7 @@ License along with this library.
 */
 
 #include <stdlib.h>
+#include <math.h>
 #include <glib.h>
 #include <core/oiolb.h>
 #include <metautils/lib/metautils.h>
@@ -200,16 +201,34 @@ _test_uniform_repartition(int services, int slots, int targets)
 	oio_lb_world__debug(world);
 
 	GRID_DEBUG("Repartition with %d targets:", targets);
+	double variance = 0.0;
 	for (int i = 0; i < services; i++) {
 		int slot = i/svc_per_slot;
 		int ideal_count = targets_per_slot[slot] * shots / actual_svc_per_slot[slot];
 		int min_count = ideal_count * 80 / 100;
 		int max_count = ideal_count * 120 / 100;
+		double deviation_percent = counts[i]*100.0f/(float)ideal_count - 100.0f;
 		GRID_DEBUG("service %04d (slot %d) chosen %d times (min/ideal/max/diff: %d/%d/%d/%+2.2f%%)",
 				i, slot, counts[i], min_count, ideal_count, max_count,
-				counts[i]*100.0f/(float)ideal_count - 100.0f);
-		g_assert_cmpint(counts[i], >=, min_count);
-		g_assert_cmpint(counts[i], <=, max_count);
+				deviation_percent);
+		variance += (counts[i] - ideal_count) * (counts[i] - ideal_count);
+	}
+	variance /= services;
+	GRID_DEBUG("Standard deviation: %lf", sqrt(variance));
+	GRID_DEBUG("Checking...");
+	for (int i = 0; i < services; i++) {
+		int slot = i/svc_per_slot;
+		int ideal_count = targets_per_slot[slot] * shots / actual_svc_per_slot[slot];
+		int min_count = ideal_count * 80 / 100;
+		int max_count = ideal_count * 120 / 100;
+		if (counts[i] < min_count || counts[i] > max_count) {
+			GRID_ERROR("service %04d (slot %d) chosen %d times (%+2.2f%%)",
+					i, slot, counts[i],
+					counts[i]*100.0f/(float)ideal_count - 100.0f);
+			GRID_ERROR("re-run with G_DEBUG_LEVEL=D to get details");
+			g_assert_cmpint(counts[i], >=, min_count);
+			g_assert_cmpint(counts[i], <=, max_count);
+		}
 	}
 
 	oio_lb_pool__destroy(pool);
@@ -229,6 +248,121 @@ test_uniform_repartition(gconstpointer raw_test_data)
 	return _test_uniform_repartition(test_data->services,
 			test_data->slots, test_data->targets);
 }
+
+static struct oio_lb_item_s *
+_srv3(const char *loc)
+{
+	size_t len = sizeof(struct oio_lb_item_s) + strlen(loc) + 1;
+	struct oio_lb_item_s *srv = g_malloc0 (len);
+	srv->location = location_from_dotted_string(loc);
+	srv->weight = 80;
+	strcpy(srv->id, loc);
+	GRID_TRACE("Built service id=%s,location=%lu,weight=%d",
+			srv->id, srv->location, srv->weight);
+	return srv;
+}
+
+static struct oio_lb_world_s *
+_world_from_loc_strings(const char **locations)
+{
+	struct oio_lb_world_s *world = oio_lb_local__create_world();
+	oio_lb_world__create_slot(world, "*");
+
+	for (const char **loc = locations; locations && *loc; loc++) {
+		struct oio_lb_item_s *srv = _srv3(*loc);
+		oio_lb_world__feed_slot(world, "*", srv);
+	}
+
+	return world;
+}
+
+static void
+_test_repartition_by_loc_level(const char **locations, int targets)
+{
+	int shots = 10000;
+	int unbalanced = 0;
+	struct oio_lb_world_s *world = _world_from_loc_strings(locations);
+
+	/* create a pool and poll it */
+	GRID_DEBUG("Creating a pool with %d targets", targets);
+	struct oio_lb_pool_s *pool = oio_lb_world__create_pool(world, "pool-test");
+	const char *target = "*";
+	for (int i = 0; i < targets; i++) {
+		oio_lb_world__add_pool_target(pool, target);
+	}
+
+	oio_lb_world__debug(world);
+
+	for (int i = 0; i < shots; i++) {
+		GData *count_by_level_by_host[4];
+		for (int j = 1; j < 4; j++) {
+			g_datalist_init(&count_by_level_by_host[j]);
+		}
+		guint count_rc, count;
+		void _on_item(oio_location_t location, const char *id UNUSED) {
+			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT, id, location);
+			++count;
+			// Count how many times an "area" is selected, for each area level.
+			for (int j = 1; j < 4; j++) {
+				GQuark host_key = ((location >> (j * 16)) + 1) & 0xFFFFFFFF;
+				GData **datalist = &count_by_level_by_host[j];
+				guint32 host_count = GPOINTER_TO_UINT(
+						g_datalist_id_get_data(datalist, host_key));
+				host_count++;
+				g_datalist_id_set_data(datalist,
+						host_key, GUINT_TO_POINTER(host_count));
+			}
+		}
+		count = 0;
+		count_rc = oio_lb_pool__poll(pool, NULL, _on_item);
+		g_assert_cmpuint(count_rc, ==, count);
+		g_assert_cmpuint(count_rc, ==, targets);
+
+		guint32 min[4] = {G_MAXUINT32, G_MAXUINT32, G_MAXUINT32, G_MAXUINT32};
+		guint32 max[4] = {0, 0, 0, 0};
+		for (int j = 1; j < 4; j++) {
+			void _set_min_max(GQuark k UNUSED, gpointer data, gpointer u UNUSED)
+			{
+				guint32 host_count = GPOINTER_TO_UINT(data);
+				if (host_count > max[j])
+					max[j] = host_count;
+				if (host_count < min[j])
+					min[j] = host_count;
+			}
+			GData **datalist = &count_by_level_by_host[j];
+			g_datalist_foreach(datalist, (GDataForeachFunc)_set_min_max, NULL);
+			GRID_DEBUG("For level %d, min=%u, max=%u", j, min[j], max[j]);
+		}
+		for (int j = 1; j < 4; j++) {
+			if (max[j] - min[j] > 1) {
+				GRID_DEBUG("Unbalanced situation at level %d at iteration %d: min=%u, max=%u",
+						j, i, min[j], max[j]);
+				unbalanced++;
+				break;
+			}
+		}
+		for (int j = 1; j < 4; j++)
+			g_datalist_clear(&count_by_level_by_host[j]);
+	}
+	GRID_INFO("%d unbalanced situations on %d shots", unbalanced, shots);
+
+	// FIXME(FVE): there should be NO unbalanced situation
+	g_assert_cmpint(unbalanced, <, shots);
+}
+
+struct level_repartition_test_s {
+	const char **locations;
+	int targets;
+};
+
+static void
+test_uniform_level_repartition(gconstpointer raw_test_data)
+{
+	const struct level_repartition_test_s *test_data = raw_test_data;
+	return _test_repartition_by_loc_level(
+			test_data->locations, test_data->targets);
+}
+
 
 static void
 test_local_feed_twice(void)
@@ -426,7 +560,7 @@ static void
 _add_repartition_test(int services, int slots, int targets)
 {
 	char name[128] = {0};
-	snprintf(name, sizeof(name), "/core/lb/local/poll_%d_%d_%d",
+	snprintf(name, sizeof(name), "/core/lb/global_repartition/%dservices_%dslots_%dtargets",
 			services, slots, targets);
 	struct repartition_test_s *test_data = \
 			g_malloc0(sizeof(struct repartition_test_s));
@@ -435,6 +569,21 @@ _add_repartition_test(int services, int slots, int targets)
 	test_data->targets = targets;
 	g_test_add_data_func_full(name, test_data,
 			test_uniform_repartition, g_free);
+}
+
+static void
+_add_level_repartition_test(const char **locations, const char *config, int targets)
+{
+	char name[128] = {0};
+	snprintf(name, sizeof(name),
+			"/core/lb/level_repartition/%dlocations/%s/%dtargets",
+			g_strv_length((char**)locations), config, targets);
+	struct level_repartition_test_s *test_data = \
+			g_malloc0(sizeof(struct level_repartition_test_s));
+	test_data->locations = locations;
+	test_data->targets = targets;
+	g_test_add_data_func_full(name, test_data,
+			test_uniform_level_repartition, g_free);
 }
 
 int
@@ -467,6 +616,70 @@ main(int argc, char **argv)
 	_add_repartition_test(30, 3, 10);
 	_add_repartition_test(40, 4, 10);
 	_add_repartition_test(36, 18, 18);
+
+	const char *lrt0[13] = {
+			"rack0.srv0", "rack0.srv1", "rack0.srv2", "rack0.srv3",
+			"rack1.srv4", "rack1.srv5", "rack1.srv6", "rack1.srv7",
+			"rack2.srv8", "rack2.srv9", "rack2.srv10", "rack2.srv11",
+			NULL
+	};
+	_add_level_repartition_test(lrt0, "3x4", 4);
+	_add_level_repartition_test(lrt0, "3x4", 5);
+	_add_level_repartition_test(lrt0, "3x4", 6);
+	_add_level_repartition_test(lrt0, "3x4", 7);
+	_add_level_repartition_test(lrt0, "3x4", 8);
+	_add_level_repartition_test(lrt0, "3x4", 9);
+	_add_level_repartition_test(lrt0, "3x4", 10);
+	_add_level_repartition_test(lrt0, "3x4", 11);
+
+	const char *lrt1[13] = {
+			"rack0.srv0", "rack0.srv1", "rack0.srv2",
+			"rack1.srv3", "rack1.srv4", "rack1.srv5",
+			"rack2.srv6", "rack2.srv7", "rack2.srv8",
+			"rack3.srv9", "rack3.srv10", "rack3.srv11",
+			NULL
+	};
+	_add_level_repartition_test(lrt1, "4x3", 5);
+	_add_level_repartition_test(lrt1, "4x3", 6);
+	_add_level_repartition_test(lrt1, "4x3", 7);
+	_add_level_repartition_test(lrt1, "4x3", 8);
+	_add_level_repartition_test(lrt1, "4x3", 9);
+	_add_level_repartition_test(lrt1, "4x3", 10);
+	_add_level_repartition_test(lrt1, "4x3", 11);
+
+	const char *lrt2[13] = {
+			"rack0.srv0", "rack0.srv1",
+			"rack1.srv2", "rack1.srv3",
+			"rack2.srv4", "rack2.srv5",
+			"rack3.srv6", "rack3.srv7",
+			"rack4.srv8", "rack4.srv9",
+			"rack5.srv10", "rack5.srv11",
+			NULL
+	};
+	_add_level_repartition_test(lrt2, "6x2", 7);
+	_add_level_repartition_test(lrt2, "6x2", 8);
+	_add_level_repartition_test(lrt2, "6x2", 9);
+	_add_level_repartition_test(lrt2, "6x2", 10);
+	_add_level_repartition_test(lrt2, "6x2", 11);
+
+	const char *lrt3[13] = {
+			"room0.rack0.srv0", "room0.rack1.srv3",
+			"room0.rack0.srv1", "room0.rack1.srv4",
+			"room0.rack0.srv2", "room0.rack1.srv5",
+
+			"room1.rack2.srv6", "room1.rack3.srv9",
+			"room1.rack2.srv7", "room1.rack3.srv10",
+			"room1.rack2.srv8", "room1.rack3.srv11",
+			NULL
+	};
+	_add_level_repartition_test(lrt3, "2x2x3", 4);
+	_add_level_repartition_test(lrt3, "2x2x3", 5);
+	_add_level_repartition_test(lrt3, "2x2x3", 6);
+	_add_level_repartition_test(lrt3, "2x2x3", 7);
+	_add_level_repartition_test(lrt3, "2x2x3", 8);
+	_add_level_repartition_test(lrt3, "2x2x3", 9);
+	_add_level_repartition_test(lrt3, "2x2x3", 10);
+	_add_level_repartition_test(lrt3, "2x2x3", 11);
 
 	return g_test_run();
 }
