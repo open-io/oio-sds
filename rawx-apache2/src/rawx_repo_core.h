@@ -72,10 +72,10 @@ struct dav_stream
 	FILE *f;
 	gboolean compression;
 	void *buffer;
-	apr_size_t bufsize;
+	apr_size_t buffer_size;
+	apr_size_t buffer_offset;
 	const char *pathname;
 	const char *final_pathname;
-	apr_size_t blocksize;
 	gulong compress_checksum;
 	guint32 compressed_size;
 	char *metadata_compress;
