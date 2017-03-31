@@ -17,6 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include <errno.h>
+#include <malloc.h>
 
 #include <glib.h>
 #include <json-c/json.h>
@@ -33,6 +34,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 static gchar *basedir = NULL;
 static GSList *config_urlv = NULL;
 static struct network_server_s *server = NULL;
+static struct grid_task_queue_s *gtq_admin = NULL;
+static GThread *th_gtq_admin = NULL;
 
 static GCond cond_bases;
 static GMutex lock_bases;
@@ -755,7 +758,7 @@ _db_vol_status(const char *volid, GString *value)
 	}
 	g_string_append_c(value, '}');
 
-	g_tree_unref(tree_containers);
+	g_tree_destroy(tree_containers);
 	return NULL;
 }
 
@@ -1378,6 +1381,11 @@ grid_main_action (void)
 		return;
 	}
 
+	if (!(th_gtq_admin = grid_task_queue_run (gtq_admin, &err))) {
+		_main_error (err);
+		return;
+	}
+
 	if (NULL != (err = network_server_run (server))) {
 		_main_error (err);
 		return;
@@ -1407,6 +1415,16 @@ grid_main_set_defaults (void)
 static void
 grid_main_specific_fini (void)
 {
+	if (th_gtq_admin) {
+		grid_task_queue_stop(gtq_admin);
+		g_thread_join(th_gtq_admin);
+		th_gtq_admin = NULL;
+	}
+	if (gtq_admin) {
+		grid_task_queue_destroy (gtq_admin);
+		gtq_admin = NULL;
+	}
+
 	if (server) {
 		network_server_close_servers (server);
 		network_server_stop (server);
@@ -1414,6 +1432,14 @@ grid_main_specific_fini (void)
 		server = NULL;
 	}
 
+	g_slist_free_full(config_urlv, g_free);
+	config_urlv = NULL;
+
+	g_tree_destroy(tree_bases);
+	tree_bases = NULL;
+
+	g_cond_clear(&cond_bases);
+	g_mutex_clear(&lock_bases);
 	oio_str_clean (&basedir);
 }
 
@@ -1423,6 +1449,13 @@ _config_error(const char *where, GError *err)
 	GRID_ERROR("Configuration error: %s: (%d) %s", where, err->code, err->message);
 	g_clear_error(&err);
 	return FALSE;
+}
+
+static void
+_task_malloc_trim(gpointer p)
+{
+	(void) p;
+	malloc_trim (PERIODIC_MALLOC_TRIM_SIZE);
 }
 
 static gboolean
@@ -1478,6 +1511,7 @@ grid_main_configure (int argc, char **argv)
 	gchar *cfg_main_url = g_strconcat(cfg_ip, ":", cfg_port, NULL);
 	STRING_STACKIFY(cfg_main_url);
 
+	/* Prepare the network side of the application */
 	server = network_server_init ();
 
 	network_server_bind_host (server, cfg_main_url, handler_action,
@@ -1492,6 +1526,9 @@ grid_main_configure (int argc, char **argv)
 	tree_bases = g_tree_new_full(metautils_strcmp3, NULL,
 			g_free, (GDestroyNotify)_base_destroy);
 
+	/* Ask for a periodic release of the memory slices kept by the process */
+	gtq_admin = grid_task_queue_create ("admin");
+	grid_task_queue_register(gtq_admin, 300, _task_malloc_trim, NULL, NULL);
 	return TRUE;
 }
 
