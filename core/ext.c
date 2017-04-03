@@ -134,11 +134,10 @@ gsize oio_ext_array_partition (gpointer *array, gsize len,
 
 GError *oio_ext_extract_json (struct json_object *obj,
 		struct oio_ext_json_mapping_s *tab) {
-	EXTRA_ASSERT (obj != NULL);
 	EXTRA_ASSERT (tab != NULL);
 	for (struct oio_ext_json_mapping_s *p=tab; p->out ;p++)
 		*(p->out) = NULL;
-	if (!json_object_is_type(obj, json_type_object))
+	if (!obj || !json_object_is_type(obj, json_type_object))
 		return NEWERROR(400, "Not an object");
 	for (struct oio_ext_json_mapping_s *p=tab; p->out ;p++) {
 		struct json_object *o = NULL;

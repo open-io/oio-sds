@@ -106,7 +106,6 @@ on_die=respawn
 enabled=true
 start_at_boot=false
 command=${EXE_PREFIX}-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
-env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
 template_proxy_gridinit = """
