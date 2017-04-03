@@ -369,21 +369,23 @@ dav_rawx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 {
 	DAV_XDEBUG_POOL(stream->p, 0, "%s(%s)", __FUNCTION__, stream->pathname);
 
-	guint written = 0;
+	apr_size_t copied = 0;
 	gulong checksum = stream->compress_checksum;
 
-	while (written < bufsize) {
-		memcpy(stream->buffer + stream->bufsize, buf + written, MIN(bufsize - written, stream->blocksize - stream->bufsize));
-		guint tmp = MIN(bufsize - written, stream->blocksize - stream->bufsize);
-		written += tmp;
-		stream->bufsize += tmp;
+	while (copied < bufsize) {
+		apr_size_t to_copy = MIN(bufsize - copied,
+				stream->buffer_size - stream->buffer_offset);
+		memcpy(stream->buffer + stream->buffer_offset, buf + copied, to_copy);
+		copied += to_copy;
+		stream->buffer_offset += to_copy;
 
 		/* If buffer full, compress if needed and write to distant file */
-		if (stream->blocksize - stream->bufsize <=0){
-			gsize nb_write = 0;
+		if (stream->buffer_size - stream->buffer_offset <= 0){
+			size_t written = 0;
 			if (!stream->compression) {
-				nb_write = fwrite(stream->buffer, stream->bufsize, 1, stream->f);
-				if (nb_write != 1) {
+				written = fwrite(stream->buffer, stream->buffer_offset, 1,
+						stream->f);
+				if (written != 1) {
 					/* ### use something besides 500? */
 					return server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
 							HTTP_INTERNAL_SERVER_ERROR, 0,
@@ -392,7 +394,7 @@ dav_rawx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 				}
 			} else {
 				GByteArray *gba = g_byte_array_new();
-				if (stream->comp_ctx.data_compressor(stream->buffer, stream->bufsize, gba,
+				if (stream->comp_ctx.data_compressor(stream->buffer, stream->buffer_offset, gba,
 							&checksum)!=0) {
 					if (gba)
 						g_byte_array_free(gba, TRUE);
@@ -401,8 +403,8 @@ dav_rawx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 							HTTP_INTERNAL_SERVER_ERROR, 0,
 							"An error occurred while compressing data.");
 				}
-				nb_write = fwrite(gba->data, gba->len, 1, stream->f);
-				if (nb_write != 1) {
+				written = fwrite(gba->data, gba->len, 1, stream->f);
+				if (written != 1) {
 					if (gba)
 						g_byte_array_free(gba, TRUE);
 					/* ### use something besides 500? */
@@ -416,8 +418,8 @@ dav_rawx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 					g_byte_array_free(gba, TRUE);
 			}
 
-			stream->buffer = apr_pcalloc(stream->p, stream->blocksize);
-			stream->bufsize = 0;
+			memset(stream->buffer, 0, stream->buffer_size);
+			stream->buffer_offset = 0;
 		}
 	}
 
@@ -487,7 +489,6 @@ dav_rawx_deliver(const dav_resource *resource, ap_filter_t *output)
 	apr_pool_t *pool;
 	apr_bucket_brigade *bb = NULL;
 	apr_status_t status;
-	apr_bucket *bkt = NULL;
 	dav_resource_private *ctx;
 	dav_error *e = NULL;
 
@@ -545,17 +546,19 @@ dav_rawx_deliver(const dav_resource *resource, ap_filter_t *output)
 
 			/* Try to open the file but forbids a creation */
 			status = apr_file_open(&fd, resource_get_pathname(resource),
-					APR_READ|APR_BINARY|APR_BUFFERED, 0, pool);
+					APR_FOPEN_READ|
+					APR_FOPEN_BINARY|
+					APR_FOPEN_BUFFERED|
+					APR_FOPEN_SENDFILE_ENABLED,
+					0, pool);
 			if (APR_SUCCESS != status) {
 				e = server_create_and_stat_error(conf, pool, HTTP_FORBIDDEN,
 						0, "File permissions deny server access.");
 				goto end_deliver;
 			}
 
-			/* FIXME this does not handle large files. but this is test code anyway */
-			bkt = apr_bucket_file_create(fd, 0,
-					(apr_size_t)resource->info->finfo.size,
-					pool, output->c->bucket_alloc);
+			apr_brigade_insert_file(bb, fd, 0,
+					(apr_size_t)resource->info->finfo.size, pool);
 		}
 		else {
 			DAV_DEBUG_RES(resource, 0, "Building a compressed resource bucket");
@@ -564,23 +567,24 @@ dav_rawx_deliver(const dav_resource *resource, ap_filter_t *output)
 			i64 = g_ascii_strtoll(ctx->cp_chunk.uncompressed_size, NULL, 10);
 
 			/* creation of compression specific bucket */
-			bkt = apr_pcalloc(pool, sizeof(struct apr_bucket));
+			apr_bucket *bkt = apr_pcalloc(pool, sizeof(struct apr_bucket));
 			bkt->type = &chunk_bucket_type;
 			bkt->length = i64;
 			bkt->start = 0;
 			bkt->data = ctx;
 			bkt->free = chunk_bucket_free_noop;
 			bkt->list = output->c->bucket_alloc;
+
+			APR_BRIGADE_INSERT_TAIL(bb, bkt);
 		}
 
-		APR_BRIGADE_INSERT_TAIL(bb, bkt);
-
 		/* as soon as the chunk has been sent, end of stream!*/
-		bkt = apr_bucket_eos_create(output->c->bucket_alloc);
-		APR_BRIGADE_INSERT_TAIL(bb, bkt);
+		APR_BRIGADE_INSERT_TAIL(bb,
+				apr_bucket_eos_create(output->c->bucket_alloc));
 
 		if ((status = ap_pass_brigade(output, bb)) != APR_SUCCESS){
-			e = server_create_and_stat_error(conf, pool, HTTP_FORBIDDEN, 0, "Could not write contents to filter.");
+			e = server_create_and_stat_error(conf, pool, HTTP_FORBIDDEN, 0,
+					"Failed to send data to the client (timed out?)");
 			/* close file */
 			if (ctx->cp_chunk.fd) {
 				fclose(ctx->cp_chunk.fd);

@@ -182,6 +182,9 @@ class TestBlobFunctional(BaseTestCase):
     def test_1M(self):
         self._cycle_put(1024*1024, 201)
 
+    def test_fat_chunk(self):
+        self._cycle_put(1024*1024*128, 201)
+
     def test_missing_headers(self):
         self._cycle_put(32, 400,
                         remove_headers=['x-oio-chunk-meta-chunk-pos'])

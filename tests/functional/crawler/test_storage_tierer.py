@@ -24,6 +24,7 @@ from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
 from oio.content.factory import ContentFactory
 from oio.crawler.storage_tierer import StorageTiererWorker
+from oio import ObjectStorageApi
 from tests.functional.content.test_content import random_data
 from tests.utils import BaseTestCase
 
@@ -84,11 +85,15 @@ class TestStorageTierer(BaseTestCase):
 
     def test_iter_container_list(self):
         worker = StorageTiererWorker(self.gridconf, Mock())
+        api = ObjectStorageApi(self.namespace)
+        actual = [x[0] for x in api.container_list(self.test_account)[0]]
+        if len(actual) < 3:
+            print "Slow event propagation!"
+            # account events have not yet propagated
+            time.sleep(3.0)
+            actual = [x[0] for x in api.container_list(self.test_account)[0]]
         gen = worker._list_containers()
-        self.assertEqual(gen.next(), self.container_0_name)
-        self.assertEqual(gen.next(), self.container_1_name)
-        self.assertEqual(gen.next(), self.container_2_name)
-        self.assertRaises(StopIteration, gen.next)
+        self.assertListEqual(list(gen), actual)
 
     def test_iter_content_list_outdated_threshold_0(self):
         self.gridconf["outdated_threshold"] = 0
