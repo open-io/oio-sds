@@ -94,9 +94,14 @@ class TestECContent(BaseTestCase):
         metachunk_nb = int(math.ceil(float(len(data)) / self.chunk_size)) \
             if len(data) != 0 else 1
 
+        offset = 0
         # verify each metachunk
         for metapos in range(metachunk_nb):
             chunks_at_pos = content.chunks.filter(metapos=metapos)
+            if len(chunks_at_pos) < 1:
+                break
+            metachunk_size = chunks_at_pos[0].size
+            metachunk_hash = md5_data(data[offset:offset+metachunk_size])
 
             for chunk in chunks_at_pos:
                 meta, stream = self.blob_client.chunk_get(chunk.url)
@@ -108,6 +113,9 @@ class TestECContent(BaseTestCase):
                 self.assertEqual(meta['chunk_id'], chunk.id)
                 self.assertEqual(meta['chunk_pos'], chunk.pos)
                 self.assertEqual(meta['chunk_hash'], md5_stream(stream))
+                self.assertEqual(metachunk_hash, chunk.checksum)
+
+            offset += metachunk_size
 
     def test_create_0_byte(self):
         self._test_create(0)
@@ -117,6 +125,9 @@ class TestECContent(BaseTestCase):
 
     def test_create(self):
         self._test_create(DAT_LEGIT_SIZE)
+
+    def test_create_6294503_bytes(self):
+        self._test_create(6294503)
 
     def _test_rebuild(self, data_size, broken_pos_list):
         # generate test data
