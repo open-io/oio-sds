@@ -9,11 +9,11 @@ License, or (at your option) any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 GNU Affero General Public License for more details.
 
 You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
+along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include <errno.h>
@@ -53,10 +53,10 @@ static GTree *tree_bases = NULL;
 #define CHUNK_PREFIX "chunk|"
 #define ADMIN_PREFIX "admin|"
 
-#define KEY_LOCK     ADMIN_PREFIX "lock"
+#define KEY_LOCK	 ADMIN_PREFIX "lock"
 #define KEY_INCIDENT ADMIN_PREFIX "incident_date"
 
-#define STRDUPA(Out,Src,Len) do { \
+#define STRDUPA(Out, Src, Len) do { \
 	if (Src) { \
 		(Out) = alloca(1 + (Len)); \
 		strncpy((Out), (Src), 1 + (Len)); \
@@ -68,31 +68,31 @@ static GTree *tree_bases = NULL;
 /* ------------------------------------------------------------------------- */
 
 static enum http_rc_e
-_reply_bytes (struct http_reply_ctx_s *rp,
+_reply_bytes(struct http_reply_ctx_s *rp,
 		int code, const gchar * msg, GBytes * bytes)
 {
-	rp->set_status (code, msg);
+	rp->set_status(code, msg);
 	if (bytes) {
-		if (g_bytes_get_size (bytes) > 0) {
-			rp->set_content_type ("application/json");
-			rp->set_body_bytes (bytes);
+		if (g_bytes_get_size(bytes) > 0) {
+			rp->set_content_type("application/json");
+			rp->set_body_bytes(bytes);
 		} else {
-			g_bytes_unref (bytes);
-			rp->set_body_bytes (NULL);
+			g_bytes_unref(bytes);
+			rp->set_body_bytes(NULL);
 		}
 	} else {
-		rp->set_body_bytes (NULL);
+		rp->set_body_bytes(NULL);
 	}
-	rp->finalize ();
+	rp->finalize();
 	return HTTPRC_DONE;
 }
 
 static enum http_rc_e
-_reply_json (struct http_reply_ctx_s *rp,
+_reply_json(struct http_reply_ctx_s *rp,
 		int code, const gchar * msg, GString * gstr)
 {
-	return _reply_bytes (rp, code, msg,
-			gstr ? g_string_free_to_bytes (gstr) : NULL);
+	return _reply_bytes(rp, code, msg,
+			gstr ? g_string_free_to_bytes(gstr) : NULL);
 }
 
 static enum http_rc_e
@@ -105,87 +105,78 @@ _reply_json_error(struct http_reply_ctx_s *rp,
 }
 
 static void
-_append_status (GString *out, gint code, const char * msg)
+_append_status(GString *out, gint code, const char * msg)
 {
-	EXTRA_ASSERT (out != NULL);
+	EXTRA_ASSERT(out != NULL);
 	oio_str_gstring_append_json_pair_int(out, "status", code);
-	g_string_append_c (out, ',');
-	oio_str_gstring_append_json_pair (out, "message", msg);
+	g_string_append_c(out, ',');
+	oio_str_gstring_append_json_pair(out, "message", msg);
 }
 
 static GString *
-_create_status (gint code, const gchar * msg)
+_create_status(gint code, const gchar * msg)
 {
-	GString *gstr = g_string_sized_new (256);
-	g_string_append_c (gstr, '{');
-	_append_status (gstr, code, msg);
-	g_string_append_c (gstr, '}');
+	GString *gstr = g_string_sized_new(256);
+	g_string_append_c(gstr, '{');
+	_append_status(gstr, code, msg);
+	g_string_append_c(gstr, '}');
 	return gstr;
 }
 
 static GString *
-_create_status_error (GError * e)
+_create_status_error(GError * e)
 {
 	if (!e)
-		return _create_status (CODE_INTERNAL_ERROR, "unknown error");
-	GString *gstr = _create_status (e->code, e->message);
-	g_error_free (e);
+		return _create_status(CODE_INTERNAL_ERROR, "unknown error");
+	GString *gstr = _create_status(e->code, e->message);
+	g_error_free(e);
 	return gstr;
 }
 
-#if 0
 static enum http_rc_e
-_reply_not_implemented (struct http_reply_ctx_s *rp)
+_reply_format_error(struct http_reply_ctx_s *rp, GError * err)
 {
-	return _reply_json_error (rp, HTTP_CODE_NOT_IMPLEMENTED,
-			"Not implemented", _create_status_error (NYI()));
-}
-#endif
-
-static enum http_rc_e
-_reply_format_error (struct http_reply_ctx_s *rp, GError * err)
-{
-	return _reply_json_error (rp, HTTP_CODE_BAD_REQUEST,
-			"Bad request", _create_status_error (err));
+	return _reply_json_error(rp, HTTP_CODE_BAD_REQUEST,
+			"Bad request", _create_status_error(err));
 }
 
 static enum http_rc_e
-_reply_method_error (struct http_reply_ctx_s *rp)
+_reply_method_error(struct http_reply_ctx_s *rp)
 {
-	return _reply_json_error (rp, HTTP_CODE_METHOD_NOT_ALLOWED,
+	return _reply_json_error(rp, HTTP_CODE_METHOD_NOT_ALLOWED,
 			"Method not allowed", NULL);
 }
 
 static enum http_rc_e
-_reply_system_error (struct http_reply_ctx_s *rp, GError *err)
+_reply_system_error(struct http_reply_ctx_s *rp, GError *err)
 {
-	return _reply_json_error (rp, HTTP_CODE_INTERNAL_ERROR,
+	return _reply_json_error(rp, HTTP_CODE_INTERNAL_ERROR,
 			"Backend error", _create_status_error(err));
 }
 
 static enum http_rc_e
-_reply_unavailable (struct http_reply_ctx_s *rp, GError *err)
+_reply_unavailable(struct http_reply_ctx_s *rp, GError *err)
 {
-	return _reply_json_error (rp, HTTP_CODE_SRV_UNAVAILABLE,
+	return _reply_json_error(rp, HTTP_CODE_SRV_UNAVAILABLE,
 			"Backend unavailable", _create_status_error(err));
 }
 
 static enum http_rc_e
-_reply_forbidden (struct http_reply_ctx_s *rp, GError *err)
+_reply_forbidden(struct http_reply_ctx_s *rp, GError *err)
 {
-	return _reply_json_error (rp, HTTP_CODE_FORBIDDEN,
+	return _reply_json_error(rp, HTTP_CODE_FORBIDDEN,
 			"Forbidden", _create_status_error(err));
 }
 
 static enum http_rc_e
-_reply_not_found (struct http_reply_ctx_s *rp, GError *err)
+_reply_not_found(struct http_reply_ctx_s *rp, GError *err)
 {
-	return _reply_json_error (rp, HTTP_CODE_NOT_FOUND,
+	return _reply_json_error(rp, HTTP_CODE_NOT_FOUND,
 			"Not found", _create_status_error(err));
 }
 
 static enum http_rc_e
-_reply_common_error (struct http_reply_ctx_s *rp, GError *err)
+_reply_common_error(struct http_reply_ctx_s *rp, GError *err)
 {
 	EXTRA_ASSERT(err != NULL);
 	if (CODE_IS_NOTFOUND(err->code))
@@ -205,17 +196,17 @@ _reply_common_error (struct http_reply_ctx_s *rp, GError *err)
 }
 
 static enum http_rc_e
-_reply_created (struct http_reply_ctx_s *rp)
+_reply_created(struct http_reply_ctx_s *rp)
 {
-	return _reply_json (rp, HTTP_CODE_CREATED, "Base created", NULL);
+	return _reply_json(rp, HTTP_CODE_CREATED, "Base created", NULL);
 }
 
 static enum http_rc_e
-_reply_ok (struct http_reply_ctx_s *rp, GString *body)
+_reply_ok(struct http_reply_ctx_s *rp, GString *body)
 {
 	if (!body || !body->len)
-		return _reply_json (rp, HTTP_CODE_NO_CONTENT, "OK", body);
-	return _reply_json (rp, HTTP_CODE_OK, "OK", body);
+		return _reply_json(rp, HTTP_CODE_NO_CONTENT, "OK", body);
+	return _reply_json(rp, HTTP_CODE_OK, "OK", body);
 }
 
 static GError *
@@ -356,7 +347,7 @@ _db_open(const char *volid, gboolean autocreate, leveldb_t **pdb)
 	}
 
 	leveldb_options_t *options = leveldb_options_create();
-	leveldb_options_set_create_if_missing(options, autocreate ? 1 : 0);
+	leveldb_options_set_create_if_missing(options, BOOL(autocreate));
 	db = leveldb_open(options, dbname, &errmsg);
 	leveldb_options_destroy(options);
 	g_free(dbname);
@@ -488,7 +479,8 @@ _db_admin_set_incident(const char *volid, gint64 when)
 }
 
 static GError *
-_db_vol_push(const char *volid, gboolean autocreate, GString *key, GString *value)
+_db_vol_push(const char *volid, gboolean autocreate, GString *key,
+		GString *value)
 {
 	struct rdir_base_s *base = NULL;
 	GError *err = _db_get(volid, autocreate, &base);
@@ -557,7 +549,7 @@ _db_vol_fetch(const char *volid, GString *value,
 			leveldb_iter_next(it);
 	}
 
-	for (guint nb=0; leveldb_iter_valid(it) ;leveldb_iter_next(it)) {
+	for (guint nb=0 ; leveldb_iter_valid(it) ; leveldb_iter_next(it)) {
 		size_t keylen = 0, vallen = 0;
 		const char *key = leveldb_iter_key(it, &keylen);
 
@@ -665,8 +657,10 @@ _db_vol_status(const char *volid, GString *value)
 	if (NULL != (err = _db_get(volid, FALSE, &base)))
 		return err;
 
-	GTree *tree_containers = g_tree_new_full(metautils_strcmp3, NULL, g_free, NULL);
-	GTree *tree_rebuilt = g_tree_new_full(metautils_strcmp3, NULL, g_free, NULL);
+	GTree *tree_containers =
+		g_tree_new_full(metautils_strcmp3, NULL, g_free, NULL);
+	GTree *tree_rebuilt =
+		g_tree_new_full(metautils_strcmp3, NULL, g_free, NULL);
 
 	void count_chunk(const char *cid) {
 		gpointer p = g_tree_lookup(tree_containers, cid);
@@ -687,7 +681,6 @@ _db_vol_status(const char *volid, GString *value)
 	leveldb_readoptions_destroy(options);
 	leveldb_iter_seek(it, beacon, sizeof(beacon)-1);
 	for (; leveldb_iter_valid(it); leveldb_iter_next(it)) {
-
 		size_t len = 0;
 		const char *k0 = leveldb_iter_key(it, &len);
 		if (*k0 != 'c' || len < sizeof(CHUNK_PREFIX "?|?|?")-1) {
@@ -698,13 +691,14 @@ _db_vol_status(const char *volid, GString *value)
 		/* Insulate the name of its container */
 		gchar cid[128];
 		g_snprintf(cid, sizeof(cid), "%.*s",
-				(int)(len - sizeof(CHUNK_PREFIX) - 1), k0 + sizeof(CHUNK_PREFIX) - 1);
+				(int)(len - sizeof(CHUNK_PREFIX) - 1),
+				k0 + sizeof(CHUNK_PREFIX) - 1);
 		char *colon = strchr(cid, '|');
 		if (!colon) continue;
 		*colon = 0;
 
 		/* count that chunk */
-		nb_chunks ++;
+		nb_chunks++;
 
 		/* count that chunk, for its container */
 		count_chunk(cid);
@@ -722,7 +716,7 @@ _db_vol_status(const char *volid, GString *value)
 				if (json_object_object_get_ex(jrecord, "rtime", &jrtime)
 						&& json_object_is_type(jrtime, json_type_int)
 						&& json_object_get_int64(jrtime) > incident_date) {
-					nb_rebuilt ++;
+					nb_rebuilt++;
 					count_rebuilt(cid);
 				}
 				json_object_put(jrecord);
@@ -753,7 +747,8 @@ _db_vol_status(const char *volid, GString *value)
 		oio_str_gstring_append_json_quote(value, "rebuild");
 		g_string_append_c(value, ':');
 		g_string_append_c(value, '{');
-		oio_str_gstring_append_json_pair_int(value, "incident_date", incident_date);
+		oio_str_gstring_append_json_pair_int(value,
+				"incident_date", incident_date);
 		g_string_append_c(value, '}');
 	}
 	g_string_append_c(value, '}');
@@ -780,7 +775,7 @@ _db_admin_show(const char *volid, GString *value)
 
 	g_string_append_c(value, '{');
 	leveldb_iter_seek(it, ADMIN_PREFIX, sizeof(ADMIN_PREFIX)-1);
-	for (; leveldb_iter_valid(it) ;leveldb_iter_next(it)) {
+	for (; leveldb_iter_valid(it) ; leveldb_iter_next(it)) {
 		size_t keylen = 0, vallen = 0;
 		const char *key = leveldb_iter_key(it, &keylen);
 
@@ -836,7 +831,7 @@ _db_admin_lock(const char *volid, const char *who)
 	} else if (value && (length != strlen(who) ||
 				0 != memcmp(who, value, length))) {
 		err = NEWERROR(CODE_NOT_ALLOWED, "Already locked by %.*s",
-			   (int)length, value);
+				(int)length, value);
 	}
 	if (value)
 		free(value);
@@ -901,14 +896,14 @@ _db_admin_clear(const char *volid, gboolean all, gint64 *p_nb_removed)
 	leveldb_iterator_t *it = leveldb_create_iterator(base->base, roptions);
 	leveldb_readoptions_destroy(roptions);
 	leveldb_iter_seek(it, CHUNK_PREFIX, sizeof(CHUNK_PREFIX)-1);
-	for (; leveldb_iter_valid(it) ;leveldb_iter_next(it)) {
+	for (; leveldb_iter_valid(it) ; leveldb_iter_next(it)) {
 		size_t keylen = 0;
 		const char *key = leveldb_iter_key(it, &keylen);
 		if (*key != CHUNK_PREFIX[0])
 			break;
 		if (all || incident <= 0) {
 			leveldb_writebatch_delete(batch, key, keylen);
-			nb_removed ++;
+			nb_removed++;
 		} else {
 			size_t vallen = 0;
 			const char *val = leveldb_iter_value(it, &vallen);
@@ -922,7 +917,7 @@ _db_admin_clear(const char *volid, gboolean all, gint64 *p_nb_removed)
 				g_clear_error(&err);
 			} else if (rec.rtime > 0 && rec.rtime > incident) {
 				leveldb_writebatch_delete(batch, key, keylen);
-				nb_removed ++;
+				nb_removed++;
 			}
 		}
 	}
@@ -1243,7 +1238,7 @@ _route_srv_status(struct req_args_s *args)
 /* ------------------------------------------------------------------------- */
 
 static const char *
-_option (struct req_args_s *args, const char *name)
+_option(struct req_args_s *args, const char *name)
 {
 	gsize namelen = strlen(name);
 	gchar *needle = g_alloca(namelen+2);
@@ -1252,7 +1247,7 @@ _option (struct req_args_s *args, const char *name)
 	needle[namelen+1] = 0;
 
 	if (args->ruri.query_tokens != NULL) {
-		for (gchar **p=args->ruri.query_tokens; *p ;++p) {
+		for (gchar **p = args->ruri.query_tokens ; *p ; ++p) {
 			if (g_str_has_prefix(*p, needle))
 				return (*p) + namelen + 1;
 		}
@@ -1328,12 +1323,12 @@ _handler_decode_route(struct req_args_s *args, struct json_object *jbody,
 }
 
 static enum http_rc_e
-handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
+handler_action(struct http_request_s *rq, struct http_reply_ctx_s *rp)
 {
 	enum http_rc_e rc = HTTPRC_ABORT;
 
 	/* Get a request id for the current request */
-	const gchar *reqid = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_REQID);
+	const gchar *reqid = g_tree_lookup(rq->tree_headers, PROXYD_HEADER_REQID);
 	if (reqid)
 		oio_ext_set_reqid(reqid);
 	else
@@ -1343,7 +1338,7 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 	struct req_args_s args = {0};
 	args.rq = rq;
 	args.rp = rp;
-	oio_requri_parse (rq->req_uri, &args.ruri);
+	oio_requri_parse(rq->req_uri, &args.ruri);
 
 	const enum rdir_route_e route = oio_rdir_parse_route(args.ruri.path);
 	if (route == OIO_RDIR_NOT_MATCHED) {
@@ -1359,48 +1354,46 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 		}
 	}
 
-	oio_requri_clear (&args.ruri);
+	oio_requri_clear(&args.ruri);
 	return rc;
 }
 
 static void
-_main_error (GError * err)
+_main_error(GError * err)
 {
-	GRID_ERROR ("Action failure : (%d) %s", err->code, err->message);
-	g_clear_error (&err);
-	grid_main_set_status (1);
+	GRID_ERROR("Action failure: (%d) %s", err->code, err->message);
+	g_clear_error(&err);
+	grid_main_set_status(1);
 }
 
 static void
-grid_main_action (void)
+grid_main_action(void)
 {
 	GError *err = NULL;
 
-	if (NULL != (err = network_server_open_servers (server))) {
-		_main_error (err);
+	if (NULL != (err = network_server_open_servers(server))) {
+		_main_error(err);
 		return;
 	}
 
-	if (!(th_gtq_admin = grid_task_queue_run (gtq_admin, &err))) {
-		_main_error (err);
+	if (!(th_gtq_admin = grid_task_queue_run(gtq_admin, &err))) {
+		_main_error(err);
 		return;
 	}
 
-	if (NULL != (err = network_server_run (server))) {
-		_main_error (err);
+	if (NULL != (err = network_server_run(server))) {
+		_main_error(err);
 		return;
 	}
 }
 
 static struct grid_main_option_s *
-grid_main_get_options (void)
+grid_main_get_options(void)
 {
 	static struct grid_main_option_s options[] = {
-
 		{"Bind", OT_LIST, {.lst = &config_urlv},
 			"An additional URL to bind to (might be used several time).\n"
 			"\t\tAccepts UNIX and INET sockets." },
-
 		{NULL, 0, {.i = 0}, NULL}
 	};
 
@@ -1408,12 +1401,12 @@ grid_main_get_options (void)
 }
 
 static void
-grid_main_set_defaults (void)
+grid_main_set_defaults(void)
 {
 }
 
 static void
-grid_main_specific_fini (void)
+grid_main_specific_fini(void)
 {
 	if (th_gtq_admin) {
 		grid_task_queue_stop(gtq_admin);
@@ -1421,14 +1414,14 @@ grid_main_specific_fini (void)
 		th_gtq_admin = NULL;
 	}
 	if (gtq_admin) {
-		grid_task_queue_destroy (gtq_admin);
+		grid_task_queue_destroy(gtq_admin);
 		gtq_admin = NULL;
 	}
 
 	if (server) {
-		network_server_close_servers (server);
-		network_server_stop (server);
-		network_server_clean (server);
+		network_server_close_servers(server);
+		network_server_stop(server);
+		network_server_clean(server);
 		server = NULL;
 	}
 
@@ -1440,13 +1433,14 @@ grid_main_specific_fini (void)
 
 	g_cond_clear(&cond_bases);
 	g_mutex_clear(&lock_bases);
-	oio_str_clean (&basedir);
+	oio_str_clean(&basedir);
 }
 
 static gboolean
 _config_error(const char *where, GError *err)
 {
-	GRID_ERROR("Configuration error: %s: (%d) %s", where, err->code, err->message);
+	GRID_ERROR("Configuration error: %s: (%d) %s",
+			where, err->code, err->message);
 	g_clear_error(&err);
 	return FALSE;
 }
@@ -1455,14 +1449,16 @@ static void
 _task_malloc_trim(gpointer p)
 {
 	(void) p;
-	malloc_trim (PERIODIC_MALLOC_TRIM_SIZE);
+	malloc_trim(PERIODIC_MALLOC_TRIM_SIZE);
 }
 
+#define CFG(K) g_key_file_get_string(gkf, CFG_GROUP, (K), &err)
+
 static gboolean
-grid_main_configure (int argc, char **argv)
+grid_main_configure(int argc, char **argv)
 {
 	if (argc != 1) {
-		GRID_ERROR ("Invalid parameter, expected PATH_CONFIG");
+		GRID_ERROR("Invalid parameter, expected PATH_CONFIG");
 		return FALSE;
 	}
 
@@ -1479,21 +1475,21 @@ grid_main_configure (int argc, char **argv)
 		return _config_error("File error",
 				NEWERROR(EINVAL, "No [%s] section", CFG_GROUP));
 
-	basedir = g_key_file_get_string(gkf, CFG_GROUP, "db_path", &err);
+	basedir = CFG("db_path");
 	if (!basedir)
 		return _config_error("DB path", err);
 
-	gchar *cfg_ip = g_key_file_get_string(gkf, CFG_GROUP, "bind_addr", &err);
+	gchar *cfg_ip = CFG("bind_addr");
 	STRING_STACKIFY(cfg_ip);
 	if (!cfg_ip)
 		return _config_error("Bind address", err);
 
-	gchar *cfg_port = g_key_file_get_string(gkf, CFG_GROUP, "bind_port", &err);
+	gchar *cfg_port = CFG("bind_port");
 	STRING_STACKIFY(cfg_port);
 	if (!cfg_port)
 		return _config_error("Bind port", err);
 
-	gchar *cfg_syslog = g_key_file_get_string(gkf, CFG_GROUP, "syslog_prefix", &err);
+	gchar *cfg_syslog = CFG("syslog_prefix");
 	STRING_STACKIFY(cfg_syslog);
 
 	g_key_file_free(gkf);
@@ -1512,13 +1508,13 @@ grid_main_configure (int argc, char **argv)
 	STRING_STACKIFY(cfg_main_url);
 
 	/* Prepare the network side of the application */
-	server = network_server_init ();
+	server = network_server_init();
 
-	network_server_bind_host (server, cfg_main_url, handler_action,
+	network_server_bind_host(server, cfg_main_url, handler_action,
 			(network_transport_factory) transport_http_factory0);
 
-	for (GSList *lu=config_urlv; lu ;lu=lu->next)
-		network_server_bind_host (server, lu->data, handler_action,
+	for (GSList *lu=config_urlv ; lu ; lu=lu->next)
+		network_server_bind_host(server, lu->data, handler_action,
 				(network_transport_factory) transport_http_factory0);
 
 	g_cond_init(&cond_bases);
@@ -1527,22 +1523,22 @@ grid_main_configure (int argc, char **argv)
 			g_free, (GDestroyNotify)_base_destroy);
 
 	/* Ask for a periodic release of the memory slices kept by the process */
-	gtq_admin = grid_task_queue_create ("admin");
+	gtq_admin = grid_task_queue_create("admin");
 	grid_task_queue_register(gtq_admin, 300, _task_malloc_trim, NULL, NULL);
 	return TRUE;
 }
 
 static const char *
-grid_main_get_usage (void)
+grid_main_get_usage(void)
 {
 	return "PATH_CONFIG";
 }
 
 static void
-grid_main_specific_stop (void)
+grid_main_specific_stop(void)
 {
 	if (server)
-		network_server_stop (server);
+		network_server_stop(server);
 }
 
 static struct grid_main_callbacks main_callbacks =
@@ -1557,7 +1553,7 @@ static struct grid_main_callbacks main_callbacks =
 };
 
 int
-main (int argc, char **argv)
+main(int argc, char **argv)
 {
-	return grid_main (argc, argv, &main_callbacks);
+	return grid_main(argc, argv, &main_callbacks);
 }
