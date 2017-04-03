@@ -68,8 +68,6 @@ struct exported_api_s
 # define EXPORTED_SYMBOL_NAME_V2 "exported_symbol_v2"
 # define EXPORTED_SYMBOL exported_symbol
 
-#define NS_INFO_FUNC "ns_info_func"
-
 /**
  * Get a copy of the previously registered plugin API.
  * The result has been alocated with g_try_malloc() and must be
