@@ -1,4 +1,3 @@
-import logging
 import time
 import tempfile
 import shutil
@@ -29,17 +28,46 @@ class TestRdirServer(unittest.TestCase):
             f.write("db_path = {0}\n".format(self.db_path))
             f.write("syslog_prefix = OIO,OPENIO,rdir,1\n")
 
-        self.child = subprocess.Popen(['oio-rdir-server', self.cfg_path])
+        self.child = subprocess.Popen(['oio-rdir-server', self.cfg_path],
+                                      close_fds=True)
         self.session = requests.Session()
-        time.sleep(0.5)
+        if not self._wait_for_that_fucking_slow_startup_on_travis():
+            self.child.kill()
+            raise Exception("The RDIR server is too long to start")
 
     def tearDown(self):
         super(TestRdirServer, self).tearDown()
-        if self.child:
-            self.child.kill()
         self.session.close()
+        self._kill_and_watch_it_die()
         shutil.rmtree(self.db_path)
         remove(self.cfg_path)
+
+    def _kill_and_watch_it_die(self):
+        """Massive attack"""
+        for i in range(5):
+            self.child.terminate()
+            time.sleep(i * 0.2)
+            if not self._check_for_server():
+                return True
+        self.child.kill()
+        return True
+
+    def _wait_for_that_fucking_slow_startup_on_travis(self):
+        for i in range(5):
+            if self._check_for_server():
+                return True
+            time.sleep(i * 0.2)
+        return False
+
+    def _check_for_server(self):
+        hexport = "%04X" % int(self.addr[1])
+        with open("/proc/net/tcp", "r") as f:
+            for line in f:
+                tokens = line.strip().split()
+                port = tokens[1][9:13]
+                if port == hexport:
+                    return True
+        return False
 
     def _volume(self):
         return random_id(8)
@@ -83,7 +111,6 @@ class TestRdirServer(unittest.TestCase):
         # the fetch returns an empty array
         resp = self._post("/v1/rdir/fetch", params={'vol': vol})
         self.assertEqual(resp.status_code, 200)
-        logging.debug("%s", resp.json())
         self.assertEqual(resp.json(), [])
 
         # now the push must succeed
