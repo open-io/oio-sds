@@ -71,6 +71,7 @@ class ReplicatedChunkWriteHandler(object):
     def stream(self, source, size=None):
         bytes_transferred = 0
         meta_chunk = self.meta_chunk
+        meta_checksum = hashlib.md5()
         pile = GreenPile(len(meta_chunk))
         failed_chunks = []
         current_conns = []
@@ -113,6 +114,7 @@ class ReplicatedChunkWriteHandler(object):
                                 conn.queue.put('0\r\n\r\n')
                             break
                     self.checksum.update(data)
+                    meta_checksum.update(data)
                     bytes_transferred += len(data)
                     for conn in current_conns:
                         if not conn.failed:
@@ -149,17 +151,18 @@ class ReplicatedChunkWriteHandler(object):
                 continue
             pile.spawn(self._get_response, conn)
 
+        meta_checksum_hex = meta_checksum.hexdigest()
         for (conn, resp) in pile:
             if resp:
-                self._handle_resp(conn, resp, success_chunks, failed_chunks)
+                self._handle_resp(conn, resp, meta_checksum_hex,
+                                  success_chunks, failed_chunks)
         self._quorum_or_fail(success_chunks, failed_chunks)
 
-        meta_checksum = self.checksum.hexdigest()
         for chunk in success_chunks:
             chunk["size"] = bytes_transferred
-            chunk["hash"] = meta_checksum
+            chunk["hash"] = meta_checksum_hex
 
-        return bytes_transferred, meta_checksum, success_chunks
+        return bytes_transferred, meta_checksum_hex, success_chunks
 
     def _connect_put(self, chunk):
         """
@@ -233,7 +236,7 @@ class ReplicatedChunkWriteHandler(object):
             logger.exception("Failed to read response from %s", conn.chunk)
         return (conn, resp)
 
-    def _handle_resp(self, conn, resp, successes, failures):
+    def _handle_resp(self, conn, resp, checksum, successes, failures):
         """
         If `resp` is an exception or its status is not 201,
         declare `conn` as failed and put `conn.chunk` in
@@ -254,7 +257,17 @@ class ReplicatedChunkWriteHandler(object):
                 logger.error("Wrong status code from %s (%s)",
                              conn.chunk, resp.status)
             else:
-                successes.append(conn.chunk)
+                rawx_checksum = resp.getheader(chunk_headers['chunk_hash'])
+                if rawx_checksum and rawx_checksum.lower() != checksum:
+                    conn.failed = True
+                    conn.chunk['error'] = \
+                        "checksum mismatch: %s (local), %s (rawx)" % \
+                        (checksum, rawx_checksum.lower())
+                    failures.append(conn.chunk)
+                    logger.error("%s: %s",
+                                 conn.chunk['url'], conn.chunk['error'])
+                else:
+                    successes.append(conn.chunk)
         conn.close()
 
 
