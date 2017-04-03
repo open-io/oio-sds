@@ -694,12 +694,13 @@ class ECWriter(object):
 # FIXME: the name of this class is misleading
 # since it does not extend io.WriteHandler
 class ECChunkWriteHandler(object):
-    def __init__(self, sysmeta, meta_chunk, checksum, storage_method,
+    def __init__(self, sysmeta, meta_chunk, global_checksum, storage_method,
                  reqid=None, connection_timeout=None, write_timeout=None,
                  read_timeout=None):
         self.sysmeta = sysmeta
         self.meta_chunk = meta_chunk
-        self.checksum = checksum
+        self.global_checksum = global_checksum
+        self.checksum = hashlib.md5()
         self.storage_method = storage_method
         self.reqid = reqid
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
@@ -742,6 +743,7 @@ class ECChunkWriteHandler(object):
 
         def send(data):
             self.checksum.update(data)
+            self.global_checksum.update(data)
             # get the encoded fragments
             fragments = ec_stream.send(data)
             if fragments is None:
@@ -865,8 +867,15 @@ class ECChunkWriteHandler(object):
         def _handle_resp(writer, resp):
             if resp:
                 if resp.status == 201:
-                    # TODO check checksum in response
-                    success_chunks.append(writer.chunk)
+                    checksum = resp.getheader(chunk_headers['chunk_hash'])
+                    if checksum and \
+                            checksum.lower() != writer.checksum.hexdigest():
+                        writer.chunk['error'] = \
+                            "checksum mismatch: %s (local), %s (rawx)" % \
+                            (checksum.lower(), writer.checksum.hexdigest())
+                        failed_chunks.append(writer.chunk)
+                    else:
+                        success_chunks.append(writer.chunk)
                 else:
                     logger.error("Wrong status code from %s (%s)",
                                  writer.chunk, resp.status)
