@@ -57,7 +57,7 @@ gpointer plugin_get_api (const gchar *plugin_name, GError **err)
 	}
 
 	plugin_holder_init();
-	
+
 	if (!(ptr = g_hash_table_lookup (plugins, plugin_name)))
 	{
 		GSETERROR(err, "plugin %s not found", plugin_name);
@@ -80,9 +80,9 @@ gint plugin_holder_keep (GModule *mod, GHashTable *params, GError **err)
 	}
 
 	plugin_holder_init();
-	
+
 	plg = g_malloc0(sizeof(struct plugin_s));
-	
+
 	/* try to load EXPORTED_SYMBOL_V2 if exists */
 	if (!g_module_symbol(mod, EXPORTED_SYMBOL_NAME_V2, (void**)&(plg->syms))) {
 		/* loading old style EXPORTED_SYMBOL */
@@ -101,9 +101,6 @@ gint plugin_holder_keep (GModule *mod, GHashTable *params, GError **err)
 
 	plg->module = mod;
 	plg->params = params;
-	/* ADD gridd_get_namespace_info callback */
-	g_hash_table_insert(plg->params, NS_INFO_FUNC, gridd_get_namespace_info);
-	/* */
 	plg->init_done = FALSE;
 
 	g_hash_table_insert (plugins, plg->syms->name, plg);
@@ -121,8 +118,8 @@ errorLabel:
 			g_hash_table_destroy (plg->params);
 		g_free(plg);
 	}
-	
-	return 0;	
+
+	return 0;
 }
 
 void plugin_holder_close_all (void)
@@ -136,9 +133,9 @@ void plugin_holder_close_all (void)
 		if (err)
 			g_clear_error(&err);
 	}
-	
+
 	plugin_holder_init();
-	
+
 	g_slist_foreach (plugins_list, runner, NULL);
 	DEBUG ("Plugins closed!");
 }
@@ -160,7 +157,7 @@ gint plugin_holder_init_all (GError **err)
 			mayContinue = FALSE;
 		}
 	}
-	
+
 	plugin_holder_init();
 	DEBUG ("Plugins being initiated ...");
 	g_slist_foreach (plugins_list, runner, err);
@@ -181,7 +178,7 @@ gint plugin_holder_update_config (GModule *mod, GHashTable *params, GError **err
 	}
 
 	plugin_holder_init();
-	
+
 	/* try to load EXPORTED_SYMBOL_V2 if exists */
 	if (!g_module_symbol(mod, EXPORTED_SYMBOL_NAME_V2, (gpointer*)&symbol)) {
 		/* loading old style EXPORTED_SYMBOL */
@@ -210,7 +207,7 @@ gint plugin_holder_reload_all (GError **err)
 	gboolean mayContinue=TRUE;
 
 	DEBUG ("About to reload plugins configuration...");
-	
+
 	void runner (gpointer d, gpointer e0)
 	{
 		struct plugin_s *plg = (struct plugin_s*) d;
@@ -223,11 +220,11 @@ gint plugin_holder_reload_all (GError **err)
 			mayContinue = FALSE;
 		}
 	}
-	
+
 	g_slist_foreach (plugins_list, runner, err);
 
 	DEBUG ("configuration reload done!");
-	
+
 	return mayContinue ? 1 : 0;
 }
 

@@ -146,11 +146,5 @@ extern struct server_s BEACON_SRV;
 
 /* NEW WAY INFORMATION */
 extern gboolean old_style;
-extern gchar* service_type;
-extern gboolean rec_service;
-extern gboolean load_ns_info;
-extern namespace_info_t *ns_info;
-extern addr_info_t *serv_addr;
-extern GPtrArray *serv_tags;
 
 #endif /*OIO_SDS__gridd__main__server_internals_h*/
