@@ -172,7 +172,7 @@ gint message_handler_add (const char *name,
 	message_matcher_f m, message_handler_f h, GError **err)
 {
 	struct message_handler_s *mh;
-	
+
 	if (!name || !m || !h)
 	{
 		GSETERROR(err,"Invalid parameter");
@@ -189,20 +189,22 @@ gint message_handler_add (const char *name,
 	BEACON_MSGHANDLER.next = mh;
 
 	DEBUG ("new message handler added : %s", name);
-	
+
 	return 1;
 }
 
 gint message_handler_add_v2 (const char *name,
-	message_matcher_f m, message_handler_v2_f h, const GPtrArray* tags, GError **err)
+		message_matcher_f m, message_handler_v2_f h,
+		const GPtrArray* tags, GError **err)
 {
-	struct message_handler_s *mh;
-	
+	(void) tags;
+
 	if (!name || !m || !h) {
 		GSETERROR(err,"Invalid parameters");
 		return 0;
 	}
 
+	struct message_handler_s *mh;
 	mh = g_malloc0 (sizeof(struct message_handler_s));
 	mh->matcher = m;
 	mh->handler = NULL;
@@ -212,20 +214,6 @@ gint message_handler_add_v2 (const char *name,
 
 	BEACON_MSGHANDLER.next = mh;
 
-	if(!serv_tags)
-		serv_tags = g_ptr_array_new();
-
-	/* if the handlers have stats for our service info, load it */
-	if (tags) {
-		gsize i;
-		for (i=0; i<tags->len; i++) {
-			struct service_tag_s* tag = g_ptr_array_index(tags, i);
-			g_ptr_array_add(serv_tags, service_tag_dup(tag));
-		}
-	}
-
-	DEBUG ("new message handler added : %s", name);
-	
 	return 1;
 }
 
@@ -287,21 +275,3 @@ request_context_create(int fd, addr_info_t *fd_peer)
 
 	return ctx;
 }
-
-gchar*
-gridd_get_ns_name(void)
-{
-	if(!ns_info || !ns_info->name)
-		return NULL;
-	return g_strdup(ns_info->name);
-}
-
-namespace_info_t*
-gridd_get_namespace_info(GError **error)
-{
-	(void) error;
-	if(!ns_info)
-		return NULL;
-	return namespace_info_dup(ns_info);
-}
-
