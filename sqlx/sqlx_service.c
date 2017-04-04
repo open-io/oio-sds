@@ -240,9 +240,17 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 	gchar *str_udp_allowed = oio_cfg_get_value (ss->ns_name, OIO_CFG_UDP_ALLOWED);
 	if (str_udp_allowed) {
 		udp_allowed = oio_str_parse_bool(str_udp_allowed, FALSE);
-		GRID_NOTICE("UDP %s", udp_allowed ? "allowed" : "forbidden");
 		g_free(str_udp_allowed);
 	}
+	GRID_NOTICE("UDP %s", udp_allowed ? "allowed" : "forbidden");
+
+	/* Check if TCP_FASTOPEN is allowed */
+	gchar *str_tcp_fastopen = oio_cfg_get_value (ss->ns_name, OIO_CFG_TFO_ALLOWED);
+	if (str_tcp_fastopen) {
+		oio_allow_tcp_fastopen = oio_str_parse_bool(str_tcp_fastopen, FALSE);
+		g_free(str_tcp_fastopen);
+	}
+	GRID_NOTICE("TCP_FASTOPEN %s", oio_allow_tcp_fastopen ? "allowed" : "forbidden");
 
 	/* Check if the logging of outgoing requests has been activated */
 	gchar *str_log_out = oio_cfg_get_value(ss->ns_name, OIO_CFG_LOG_OUTGOING);

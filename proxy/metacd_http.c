@@ -984,6 +984,14 @@ grid_main_configure (int argc, char **argv)
 	if (oio_cache_avoid_on_error)
 		GRID_NOTICE("Faulty peers avoidance: ENABLED");
 
+	/* Check if TCP_FASTOPEN is allowed */
+	gchar *str_tcp_fastopen = oio_cfg_get_value (ns_name, OIO_CFG_TFO_ALLOWED);
+	if (str_tcp_fastopen) {
+		oio_allow_tcp_fastopen = oio_str_parse_bool(str_tcp_fastopen, FALSE);
+		g_free(str_tcp_fastopen);
+	}
+	GRID_NOTICE("TCP_FASTOPEN %s", oio_allow_tcp_fastopen ? "allowed" : "forbidden");
+
 	/* init the networking capability of the processus */
 	server = network_server_init ();
 
