@@ -345,6 +345,7 @@ extern "C" {
 # define OIO_CFG_RAWX_EVENTS   "rawx_events"
 # define OIO_CFG_LOG_OUTGOING  "log_outgoing"
 # define OIO_CFG_UDP_ALLOWED  "udp_allowed"
+# define OIO_CFG_TFO_ALLOWED  "tcp_fastopen_allowed"
 # define OIO_CFG_AVOID_BADSRV  "avoid_faulty_services"
 # define OIO_CFG_ZK_SHUFFLED  "zk_shuffled"
 

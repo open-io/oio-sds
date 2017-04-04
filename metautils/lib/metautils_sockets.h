@@ -39,6 +39,8 @@ struct metautils_sockets_vtable_s
 	gboolean (*set_linger) (int fd, int onoff, int linger);
 };
 
+extern gboolean oio_allow_tcp_fastopen;
+
 void metautils_set_vtable_sockets(struct metautils_sockets_vtable_s *vtable);
 struct metautils_sockets_vtable_s* metautils_get_vtable_sockets(void);
 
