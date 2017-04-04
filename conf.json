@@ -312,7 +312,7 @@
 				"descr": "In the current server, sets how many threads are allowed to the stats server. Keep this value really small, 1 should be enough for most usages, and consider increasing it if you have clues that the management of internal metrics is the bottleneck.",
 				"def": "1", "min": 1, "max": "1 << 31 - 1" },
 
-			{ "type": "int", "name": "server_threadpool_max_workers",
+			{ "type": "int", "name": "server_threadpool_max_tcp",
 				"key": "server.pool.max_workers",
 				"descr": "In the current server, sets the maximum number of threads for the pool responsible for the TCP connections (threading model is one thread per request being managed, and one request at once per TCP connection)",
 				"def": "-1", "min": -1, "max": "1 << 31 - 1" },

@@ -1016,7 +1016,7 @@ Used by `gcc`
 
 > Sets the time window to remember the reconnection events, on a ZK connection.
 
- * default: **5**
+ * default: **30**
  * type: guint
  * cmake directive: *OIO__SQLITEREPO_ZK_RRD_WINDOW*
  * range: 1 -> 4095
