@@ -535,7 +535,8 @@ sock_connect_and_send (const char *url, GError **err,
 
 	ssize_t rc;
 retry:
-	rc = sendto(fd, buf, *len, MSG_FASTOPEN, (struct sockaddr*) &sas, sas_len);
+	rc = sendto(fd, buf, *len,
+			MSG_FASTOPEN|MSG_NOSIGNAL, (struct sockaddr*) &sas, sas_len);
 	if (rc < 0) {
 		if (errno == EINTR)
 			goto retry;

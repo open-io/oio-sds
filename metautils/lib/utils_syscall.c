@@ -103,6 +103,14 @@ metautils_syscall_write (int fd, const void *buf, size_t count)
 }
 
 ssize_t
+metautils_syscall_send (int fd, const void *buf, size_t count, int flags)
+{
+	if (VTABLE.send)
+		return VTABLE.send(fd, buf, count, flags);
+	return send(fd, buf, count, flags);
+}
+
+ssize_t
 metautils_syscall_read (int fd, void *buf, size_t count)
 {
 	if (VTABLE.read)
