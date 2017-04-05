@@ -122,8 +122,8 @@ message_marshall_gba(MESSAGE m, GError **err)
 		metautils_message_set_ID(m, (guint8*)reqid, strlen(reqid));
 	}
 
-	metautils_message_add_field_strint(m, NAME_MSGKEY_ADMIN_COMMAND,
-			oio_ext_is_admin());
+	if (oio_ext_is_admin())
+		metautils_message_add_field_strint(m, NAME_MSGKEY_ADMIN_COMMAND, 1);
 
 	/*try to encode */
 	guint32 u32 = 0;
