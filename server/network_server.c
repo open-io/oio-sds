@@ -75,7 +75,7 @@ static void _client_remove_from_monitored(struct network_server_s *srv,
 static void _client_add_to_monitored(struct network_server_s *srv,
 		struct network_client_s *clt);
 
-static void _cb_worker(struct network_client_s *clt,
+static void _cb_tcp_worker(struct network_client_s *clt,
 		struct network_server_s *srv);
 
 static void _cb_stats(struct server_stat_msg_s *msg,
@@ -243,7 +243,7 @@ network_server_init(void)
 	result->pool_stats = g_thread_pool_new ((GFunc)_cb_stats, result,
 			server_threadpool_max_stat, FALSE, NULL);
 
-	result->pool_tcp = g_thread_pool_new ((GFunc)_cb_worker, result,
+	result->pool_tcp = g_thread_pool_new ((GFunc)_cb_tcp_worker, result,
 			server_threadpool_max_tcp, FALSE, NULL);
 
 	/* Even if UDP is eventually not allowed, a pool with shared threads
@@ -1111,7 +1111,7 @@ _cb_stats(struct server_stat_msg_s *msg, struct network_server_s *srv)
 }
 
 static void
-_cb_worker(struct network_client_s *clt, struct network_server_s *srv)
+_cb_tcp_worker(struct network_client_s *clt, struct network_server_s *srv)
 {
 	EXTRA_ASSERT(clt != NULL);
 	EXTRA_ASSERT(clt->server == srv);
@@ -1119,6 +1119,19 @@ _cb_worker(struct network_client_s *clt, struct network_server_s *srv)
 	if ((clt->events & CLT_ERROR) || !clt->events) {
 		_client_clean(srv, clt);
 		return;
+	}
+
+	/* The event stayed *really* long in the queue of the thread pool.
+	 * Let's close the connection, and let the client retry it's request. */
+	if (clt->events & CLT_READ) {
+		const gint64 now = oio_ext_monotonic_time();
+		if (clt->time.evt_in < OLDEST(now, G_TIME_SPAN_SECOND)) {
+			GRID_INFO("SLOW fd %d peer %s delay %"G_GINT64_FORMAT"ms",
+					clt->fd, clt->peer_name,
+					(now - clt->time.evt_in) / 1000);
+			_client_clean(srv, clt);
+			return;
+		}
 	}
 
 	_client_manage_event(clt, clt->events);
