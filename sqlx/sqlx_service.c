@@ -881,6 +881,8 @@ sqlx_service_specific_fini(void)
 		g_free (all_options);
 		all_options = NULL;
 	}
+
+	oio_cfg_set_handle(NULL);
 }
 
 static guint
