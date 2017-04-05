@@ -70,8 +70,6 @@ GRWLock wanted_rwlock = {0};
 gchar **wanted_srvtypes = NULL;
 GBytes **wanted_prepared = NULL;
 
-struct oio_cfg_handle_s *ns_conf = NULL;
-
 // Misc. handlers --------------------------------------------------------------
 
 static enum http_rc_e
@@ -790,10 +788,7 @@ grid_main_specific_fini (void)
 	g_slist_free_full (config_paths, g_free);
 	config_paths = NULL;
 
-	if (ns_conf) {
-		oio_cfg_handle_clean(ns_conf);
-		ns_conf = NULL;
-	}
+	oio_cfg_set_handle(NULL);
 }
 
 static void
@@ -931,7 +926,7 @@ grid_main_configure (int argc, char **argv)
 	g_strlcpy(nsinfo.name, cfg_namespace, sizeof(nsinfo.name));
 	nsinfo.chunk_size = 1;
 
-	ns_conf = oio_cfg_cache_create(30 * G_TIME_SPAN_SECOND);
+	struct oio_cfg_handle_s *ns_conf = oio_cfg_cache_create(30 * G_TIME_SPAN_DAY);
 	oio_cfg_set_handle(ns_conf);
 
 	/* load the system configuration */

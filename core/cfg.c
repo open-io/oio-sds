@@ -240,6 +240,8 @@ oio_cfg_handle_get (struct oio_cfg_handle_s *self, const char *ns, const char *k
 void
 oio_cfg_set_handle (struct oio_cfg_handle_s *self)
 {
+	if (oio_cfg_handle_DEFAULT)
+		oio_cfg_handle_clean(oio_cfg_handle_DEFAULT);
 	oio_cfg_handle_DEFAULT = self;
 }
 
