@@ -48,6 +48,8 @@ GQuark gq_count_all = 0;
 GQuark gq_time_all = 0;
 GQuark gq_count_unexpected = 0;
 GQuark gq_time_unexpected = 0;
+GQuark gq_count_overloaded = 0;
+GQuark gq_time_overloaded = 0;
 
 static gboolean _endpoint_is_UNIX (struct endpoint_s *u);
 static gboolean _endpoint_is_INET6 (struct endpoint_s *u);
@@ -136,6 +138,9 @@ _cnx_notify_close(struct network_server_s *srv)
 static void __attribute__ ((constructor))
 _constructor (void)
 {
+	gq_count_overloaded = g_quark_from_static_string (OIO_STAT_PREFIX_REQ ".OVERLOADED");
+	gq_time_overloaded = g_quark_from_static_string (OIO_STAT_PREFIX_TIME ".OVERLOADED");
+
 	gq_count_unexpected = g_quark_from_static_string (OIO_STAT_PREFIX_REQ ".UNEXPECTED");
 	gq_time_unexpected = g_quark_from_static_string (OIO_STAT_PREFIX_TIME ".UNEXPECTED");
 	gq_count_all = g_quark_from_static_string (OIO_STAT_PREFIX_REQ);

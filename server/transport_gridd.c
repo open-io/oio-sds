@@ -418,14 +418,13 @@ _ctx_get_cnx_data(struct transport_client_context_s *ctx, const gchar *key)
 
 /* ------------------------------------------------------------------------- */
 
-static void _client_send_error(struct network_client_s *);
-
 static void
 transport_gridd_notify_error(struct network_client_s *clt)
 {
 	EXTRA_ASSERT(clt != NULL);
-	// @todo TODO write an access log trace
-	_client_send_error(clt);
+	/* No access log must be written here, for an unknown network error.
+	 * This always happens, periodically, for monitoring purposes (TCP hits
+	 * without data, connect() and close() */
 	_ctx_reset_cnx_data(clt->transport.client_context);
 }
 
@@ -537,7 +536,7 @@ _client_reply_fixed(struct req_ctx_s *req_ctx, gint code, const gchar *msg)
 	gsize answer_size = _reply_message(req_ctx->client, reply);
 
 	if ((req_ctx->final_sent = is_code_final(code))) {
-		struct log_item_s item;
+		struct log_item_s item = {0};
 		item.req_ctx = req_ctx;
 		item.code = code;
 		item.msg = msg;
@@ -545,19 +544,6 @@ _client_reply_fixed(struct req_ctx_s *req_ctx, gint code, const gchar *msg)
 		network_client_log_access(&item);
 	}
 	return (gboolean) answer_size;
-}
-
-static void
-_client_send_error(struct network_client_s *clt)
-{
-	GError *err = clt->current_error;
-	if (!err)
-		return;
-	/* TODO FIXME WTF!? */
-	MESSAGE request = metautils_message_create ();
-	MESSAGE reply = metaXServer_reply_simple(request, err->code, err->message);
-	(void) _reply_message(clt, reply);
-	metautils_message_destroy(request);
 }
 
 static gboolean
@@ -676,9 +662,6 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 		return _ctx_get_cnx_data(req_ctx->clt_ctx, key);
 	}
 
-	gboolean rc = FALSE;
-	struct gridd_request_handler_s *hdl;
-
 	/* reply data */
 	ctx.add_header = _add_header;
 	ctx.add_body = _add_body;
@@ -694,14 +677,24 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 	ctx.client = req_ctx->client;
 	ctx.request = req_ctx->request;
 
-	hdl = g_tree_lookup(req_ctx->disp->tree_requests, req_ctx->reqname);
-	if (!hdl) {
-		rc = _client_reply_fixed(req_ctx, CODE_NOT_FOUND, "No handler found");
-		_notify_request(req_ctx, gq_count_unexpected, gq_time_unexpected);
+	/* check the request wasn't queued for too long */
+	gboolean rc = FALSE;
+	const gint64 oldest_acceptable =
+		OLDEST(req_ctx->tv_start, 500 * G_TIME_SPAN_MILLISECOND);
+	if (req_ctx->tv_parsed < oldest_acceptable) {
+		rc = _client_reply_fixed(req_ctx, CODE_EXCESSIVE_LOAD, "retry later");
+		_notify_request(req_ctx, gq_count_overloaded, gq_time_overloaded);
 	} else {
-		EXTRA_ASSERT(hdl->handler != NULL);
-		rc = hdl->handler(&ctx, hdl->gdata, hdl->hdata);
-		_notify_request(req_ctx, hdl->stat_name_req, hdl->stat_name_time);
+		struct gridd_request_handler_s *hdl =
+			g_tree_lookup(req_ctx->disp->tree_requests, req_ctx->reqname);
+		if (!hdl) {
+			rc = _client_reply_fixed(req_ctx, CODE_NOT_FOUND, "No handler found");
+			_notify_request(req_ctx, gq_count_unexpected, gq_time_unexpected);
+		} else {
+			EXTRA_ASSERT(hdl->handler != NULL);
+			rc = hdl->handler(&ctx, hdl->gdata, hdl->hdata);
+			_notify_request(req_ctx, hdl->stat_name_req, hdl->stat_name_time);
+		}
 	}
 
 	if (body) {
@@ -750,9 +743,6 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 	EXTRA_ASSERT(gba != NULL);
 	EXTRA_ASSERT(client != NULL);
 
-	req_ctx.uid = NULL;
-	req_ctx.subject = NULL;
-	req_ctx.final_sent = FALSE;
 	req_ctx.client = client;
 	req_ctx.transport = &(client->transport);
 	req_ctx.clt_ctx = req_ctx.transport->client_context;
@@ -783,6 +773,9 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 	oio_ext_set_reqid(req_ctx.reqid);
 	rc = TRUE;
 
+	/* check the socket is still active */
+
+	/* check the request is well formed */
 	if (!req_ctx.reqname) {
 		_client_reply_fixed(&req_ctx, CODE_BAD_REQUEST, "Invalid/No request name");
 		goto label_exit;
