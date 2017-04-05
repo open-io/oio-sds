@@ -194,7 +194,7 @@ _sds_client_create_db (struct oio_sqlx_client_s *self)
 }
 
 static GByteArray *
-_pack_request (struct sqlx_name_mutable_s *n, struct oio_sqlx_batch_s *batch)
+_pack_request (struct sqlx_name_inline_s *n0, struct oio_sqlx_batch_s *batch)
 {
 	GByteArray *req = NULL;
 	struct TableSequence in_table_sequence = {{0}};
@@ -231,8 +231,8 @@ _pack_request (struct sqlx_name_mutable_s *n, struct oio_sqlx_batch_s *batch)
 		}
 	}
 
-	req = sqlx_pack_QUERY(sqlx_name_mutable_to_const(n),
-			"QUERY", &in_table_sequence, TRUE/*autocreate*/);
+	NAME2CONST(n, *n0);
+	req = sqlx_pack_QUERY(&n, "QUERY", &in_table_sequence, TRUE/*autocreate*/);
 
 	asn_DEF_TableSequence.free_struct(&asn_DEF_TableSequence,
 			&in_table_sequence, TRUE);
@@ -393,10 +393,10 @@ _sds_client_batch (struct oio_sqlx_client_s *self,
 	}
 
 	/* Pack the query parameters */
-	struct sqlx_name_mutable_s name = {0};
-	sqlx_name_fill (&name, c->url, NAME_SRVTYPE_SQLX, atoi(allsrv[0]));
+	struct sqlx_name_inline_s name;
+	sqlx_inline_name_fill (&name, c->url, NAME_SRVTYPE_SQLX, atoi(allsrv[0]));
+
 	GByteArray *req = _pack_request (&name, batch);
-	sqlx_name_clean (&name);
 	GRID_DEBUG("Encoded query: %u bytes", req ? req->len : 0);
 
 	/* Query each service until a reply is acceptable */

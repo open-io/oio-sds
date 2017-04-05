@@ -22,9 +22,17 @@ License along with this library.
 
 #define NAME_CHECK(C) do {\
 	EXTRA_ASSERT((C) != NULL);\
-	EXTRA_ASSERT((C)->base != NULL); \
-	EXTRA_ASSERT((C)->type != NULL); \
-	EXTRA_ASSERT((C)->ns != NULL); \
+	EXTRA_ASSERT(oio_str_is_set((C)->base)); \
+	EXTRA_ASSERT(oio_str_is_set((C)->type)); \
+	EXTRA_ASSERT(oio_str_is_set((C)->ns)); \
+} while (0)
+
+#define NAME2CONST(n, n0) struct sqlx_name_s n = { (n0).ns, (n0).base, (n0).type }
+
+#define NAMEFILL(Name, Src) do { \
+	g_strlcpy((Name).ns, (Src).ns, sizeof((Name).ns)); \
+	g_strlcpy((Name).base, (Src).base, sizeof((Name).base)); \
+	g_strlcpy((Name).type, (Src).type, sizeof((Name).type)); \
 } while (0)
 
 #define SQLXNAME_CHECK(p) do { EXTRA_ASSERT((p) != NULL); NAME_CHECK(p); } while (0)
@@ -38,11 +46,11 @@ struct TableSequence;
 
 // Handy structures avoiding passing too many arguments ------------------------
 
-struct sqlx_name_mutable_s
+struct sqlx_name_inline_s
 {
-	gchar *ns;
-	gchar *base;
-	gchar *type;
+	gchar ns[LIMIT_LENGTH_NSNAME];
+	gchar base[LIMIT_LENGTH_BASENAME];
+	gchar type[LIMIT_LENGTH_BASETYPE];
 };
 
 struct sqlx_name_s
@@ -52,32 +60,15 @@ struct sqlx_name_s
 	const char *type;
 };
 
-void sqlx_name_clean (struct sqlx_name_mutable_s *n);
-void sqlx_name_free  (struct sqlx_name_mutable_s *n);
-
-void sqlx_name_dup   (struct sqlx_name_mutable_s *dst,
-		const struct sqlx_name_s *src);
-
-void sqlx_name_fill  (struct sqlx_name_mutable_s *n, struct oio_url_s *url,
-		const char *srvtype, gint64 seq);
-
-void sqlx_name_fill_type_asis  (struct sqlx_name_mutable_s *n,
+void sqlx_inline_name_fill  (struct sqlx_name_inline_s *n,
 		struct oio_url_s *url, const char *srvtype, gint64 seq);
+
+void sqlx_inline_name_fill_type_asis  (struct sqlx_name_inline_s *n,
+		struct oio_url_s *url, const char *srvtype, gint64 seq);
+
 
 gboolean sqlx_name_extract (const struct sqlx_name_s *n, struct oio_url_s *url,
 		const char *srvtype, gint64 *pseq);
-
-static inline struct sqlx_name_s *
-sqlx_name_mutable_to_const(struct sqlx_name_mutable_s *mut)
-{
-	return (struct sqlx_name_s*)mut;
-}
-
-#define SQLXNAME_STACKIFY(N) do { \
-	if ((N).ns) STRING_STACKIFY((N).ns); \
-	if ((N).base) STRING_STACKIFY((N).base); \
-	if ((N).type) STRING_STACKIFY((N).type); \
-} while (0)
 
 // sqliterepo-related requests coders ------------------------------------------
 

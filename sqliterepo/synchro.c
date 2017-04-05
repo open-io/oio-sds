@@ -544,8 +544,8 @@ struct evtclient_PIPEFROM_s
 
 	sqlx_peering_pipefrom_end_f hook;
 	struct election_manager_s *manager;
-	struct sqlx_name_mutable_s name;
 	guint reqid;
+	struct sqlx_name_inline_s name;
 };
 
 static void
@@ -554,10 +554,10 @@ on_end_PIPEFROM (struct evtclient_PIPEFROM_s *mc)
 	EXTRA_ASSERT(mc != NULL);
 	EXTRA_ASSERT(mc->ec.client != NULL);
 	GError *err = gridd_client_error(mc->ec.client);
-	mc->hook (err, mc->manager, sqlx_name_mutable_to_const(&mc->name), mc->reqid);
+	NAME2CONST(n, mc->name);
+	mc->hook (err, mc->manager, &n, mc->reqid);
 	if (err)
 		g_error_free(err);
-	sqlx_name_clean(&mc->name);
 }
 
 static void
@@ -581,7 +581,7 @@ _direct_pipefrom (struct sqlx_peering_s *self,
 	mc->ec.on_end = (gridd_client_end_f) on_end_PIPEFROM;
 	mc->hook = result;
 	mc->manager = manager;
-	sqlx_name_dup (&mc->name, n);
+	NAMEFILL(mc->name, *n);
 	mc->reqid = reqid;
 
 	gridd_client_set_timeout_cnx(mc->ec.client, oio_election_resync_timeout_cnx);
@@ -610,7 +610,7 @@ struct evtclient_GETVERS_s
 	struct event_client_s ec;
 
 	sqlx_peering_getvers_end_f hook;
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_inline_s name;
 	struct election_manager_s *manager;
 	GTree *vremote;
 	guint reqid;
@@ -626,18 +626,17 @@ on_end_GETVERS(struct evtclient_GETVERS_s *mc)
 	if (!err && !mc->vremote)
 		err = SYSERR("BUG: no version replied");
 	if (likely(NULL != mc->hook)) {
-		const struct sqlx_name_s *n = sqlx_name_mutable_to_const(&mc->name);
+		NAME2CONST(n, mc->name);
 		if (err)
-			mc->hook (err, mc->manager, n, mc->reqid, NULL);
+			mc->hook (err, mc->manager, &n, mc->reqid, NULL);
 		else
-			mc->hook (NULL, mc->manager, n, mc->reqid, mc->vremote);
+			mc->hook (NULL, mc->manager, &n, mc->reqid, mc->vremote);
 	}
 
 	if (mc->vremote)
 		g_tree_destroy (mc->vremote);
 	if (err)
 		g_error_free (err);
-	sqlx_name_clean (&mc->name);
 }
 
 static gboolean
@@ -684,7 +683,7 @@ _direct_getvers (struct sqlx_peering_s *self,
 	mc->ec.on_end = (gridd_client_end_f) on_end_GETVERS;
 	mc->hook = result;
 	mc->manager = manager;
-	sqlx_name_dup (&mc->name, n);
+	NAMEFILL(mc->name, *n);
 	mc->reqid = reqid;
 	mc->vremote = NULL;
 

@@ -268,7 +268,8 @@ label_retry:
 		*errorv = g_ptr_array_new (), /* <GError*> */
 		*bodyv = g_ptr_array_new (); /* <GByteArray*> */
 
-	GByteArray *packed = pack(sqlx_name_mutable_to_const(&ctx->name));
+	NAME2CONST(n,ctx->name);
+	GByteArray *packed = pack(&n);
 
 	gboolean stop = FALSE;
 	for (gchar **pu=m1uv; *pu && !stop ;++pu) {
@@ -470,14 +471,13 @@ void client_init (struct client_ctx_s *ctx, struct req_args_s *args,
 	ctx->url = args->url;
 	ctx->type = srvtype;
 	ctx->seq = seq;
-	sqlx_name_fill_type_asis (&ctx->name, args->url,
+	sqlx_inline_name_fill_type_asis (&ctx->name, args->url,
 			*srvtype == '#' ? srvtype+1 : srvtype, ctx->seq);
 	ctx->timeout = proxy_timeout_common;
 	ctx->which = CLIENT_PREFER_NONE;
 }
 
 void client_clean (struct client_ctx_s *ctx) {
-	sqlx_name_clean(&ctx->name);
 	if (ctx->urlv)
 		g_strfreev (ctx->urlv);
 	if (ctx->errorv) {

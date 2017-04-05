@@ -60,7 +60,7 @@ License along with this library.
 
 #define MEMBER_CHECK(M) do {\
 	EXTRA_ASSERT(MEMBER(M) != NULL);\
-	NAME_CHECK(&(MEMBER(M)->name)); \
+	NAME_CHECK(&(MEMBER(M)->inline_name)); \
 	EXTRA_ASSERT(MEMBER(M)->key != NULL);\
 	MANAGER_CHECK(MMANAGER(M));\
 } while (0)

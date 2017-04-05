@@ -117,17 +117,17 @@ label_end:
 static void
 __delete_base(struct sqlx_sqlite3_s *sq3)
 {
-	if (!sq3->path) {
+	if (!sq3->path_inline[0]) {
 		GRID_WARN("DELETE disabled [%s][%s]", sq3->name.base, sq3->name.type);
 		return;
 	}
 
-	if (!unlink(sq3->path))
+	if (!unlink(sq3->path_inline))
 		GRID_DEBUG("DELETE done [%s][%s] (%s)", sq3->name.base,
-			sq3->name.type, sq3->path);
+			sq3->name.type, sq3->path_inline);
 	else
 		GRID_WARN("DELETE failed [%s][%s] (%s) : (%d) %s",
-				sq3->name.base, sq3->name.type, sq3->path,
+				sq3->name.base, sq3->name.type, sq3->path_inline,
 				errno, strerror(errno));
 	sq3->deleted = 0;
 }
@@ -152,8 +152,8 @@ __close_base(struct sqlx_sqlite3_s *sq3)
 	/* delete the base */
 	if (sq3->deleted) {
 		if (sq3->repo->election_manager) {
-			GError *err = election_exit(sq3->repo->election_manager,
-					sqlx_name_mutable_to_const(&sq3->name));
+			NAME2CONST(n0, sq3->name);
+			GError *err = election_exit(sq3->repo->election_manager, &n0);
 			if (err) {
 				GRID_WARN("Failed to exit election [%s][%s]: (%d) %s",
 						sq3->name.base, sq3->name.type,
@@ -171,11 +171,9 @@ __close_base(struct sqlx_sqlite3_s *sq3)
 		_close_handle(&(sq3->db));
 
 	/* Clean the structure */
-	sqlx_name_clean(&sq3->name);
-	oio_str_clean (&sq3->path);
+	sq3->path_inline[0] = 0;
 	if (sq3->admin)
 		g_tree_destroy(sq3->admin);
-
 	sq3->bd = -1;
 	SLICE_FREE(struct sqlx_sqlite3_s, sq3);
 }
@@ -705,10 +703,8 @@ retry:
 	sq3->bd = -1;
 	sq3->repo = args->repo;
 	sq3->manager = args->repo->election_manager;
-	sq3->name.base = g_strdup(args->name.base);
-	sq3->name.type = g_strdup(args->name.type);
-	sq3->name.ns = g_strdup(args->name.ns);
-	sq3->path = g_strdup(args->realpath);
+	NAMEFILL(sq3->name, args->name);
+	g_strlcpy(sq3->path_inline, args->realpath, sizeof(sq3->path_inline));
 	sq3->admin_dirty = 0;
 	sq3->admin = g_tree_new_full(metautils_strcmp3, NULL, g_free, g_free);
 
@@ -852,13 +848,13 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 	}
 
 	if (!err && args->is_replicated) {
+		NAME2CONST(n, (*result)->name);
 		gchar **peers = NULL;
-		err = sqlx_repository_get_peers((*result)->repo,
-				sqlx_name_mutable_to_const(&(*result)->name), &peers);
+		err = sqlx_repository_get_peers((*result)->repo, &n, &peers);
 		if (err) {
 			GRID_WARN("Failed to fetch peers for %s (%d %s), "
 					"the local entry may remain uninitialized",
-					(*result)->path, err->code, err->message);
+					(*result)->path_inline, err->code, err->message);
 			g_clear_error(&err);
 		} else {
 			// The list returned by `get_peers` does not include this service
@@ -867,7 +863,8 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 			peers = oio_strv_append(peers, myid);
 			if (sqlx_admin_ensure_peers((*result), peers)) {
 				sqlx_admin_save_lazy(*result);
-				GRID_DEBUG("Replications peers saved in %s", (*result)->path);
+				GRID_DEBUG("Replications peers saved in %s",
+						(*result)->path_inline);
 			}
 			g_strfreev(peers);
 		}
@@ -1491,11 +1488,10 @@ GError*
 sqlx_repository_retore_from_master(struct sqlx_sqlite3_s *sq3)
 {
 	EXTRA_ASSERT(sq3 != NULL);
-
+	NAME2CONST(n, sq3->name);
 	return !election_manager_configured(sq3->repo->election_manager)
 		? NEWERROR(CODE_INTERNAL_ERROR, "Replication not configured")
-		: election_manager_trigger_RESYNC(sq3->repo->election_manager,
-				sqlx_name_mutable_to_const(&sq3->name));
+		: election_manager_trigger_RESYNC(sq3->repo->election_manager, &n);
 }
 
 GError*

@@ -34,7 +34,6 @@ struct sqlx_cache_s;
 struct sqlx_repctx_s;
 struct sqlx_sqlite3_s;
 struct sqlx_name_s;
-struct sqlx_name_mutable_s;
 
 typedef struct sqlx_repository_s sqlx_repository_t;
 
@@ -104,17 +103,18 @@ struct sqlx_sqlite3_s
 {
 	struct sqlx_repository_s *repo;
 	struct election_manager_s *manager;
-	struct sqlx_name_mutable_s name;
-	sqlite3 *db;
-	gchar *path;
-
 	GTree *admin; // <gchar*,GByteArray*>
-	gint bd; // ID in cache
-	enum election_status_e election; // set at open(), reset at close()
+	sqlite3 *db;
 
-	gboolean admin_dirty : 8;
-	gboolean deleted : 8;
-	gboolean no_peers : 8; // Prevent get_peers()
+	gint bd; // ID in cache
+	enum election_status_e election : 8; // set at open(), reset at close()
+
+	guint8 admin_dirty : 1;
+	guint8 deleted : 1;
+	guint8 no_peers : 1; // Prevent get_peers()
+
+	struct sqlx_name_inline_s name;
+	gchar path_inline[128 + LIMIT_LENGTH_NSNAME + LIMIT_LENGTH_SRVTYPE];
 };
 
 struct sqlx_repo_config_s
