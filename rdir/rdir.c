@@ -755,6 +755,7 @@ _db_vol_status(const char *volid, GString *value)
 	g_string_append_c(value, '}');
 
 	g_tree_destroy(tree_containers);
+	g_tree_destroy(tree_rebuilt);
 	return NULL;
 }
 
@@ -1079,7 +1080,7 @@ _route_vol_status(struct req_args_s *args, const char *volid)
 	GError *err = _db_vol_status(volid, value);
 	if (!err)
 		return _reply_ok(args->rp, value);
-	g_string_free(value, FALSE);
+	g_string_free(value, TRUE);
 	return _reply_common_error(args->rp, err);
 }
 
