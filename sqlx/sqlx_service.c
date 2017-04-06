@@ -738,6 +738,11 @@ sqlx_service_specific_fini(void)
 		SRV.clients_pool = NULL;
 	}
 
+	if (SRV.clients_factory) {
+		gridd_client_factory_clean(SRV.clients_factory);
+		SRV.clients_factory = NULL;
+	}
+
 	// Must be freed after SRV.clients_pool
 	if (SRV.election_manager) {
 		election_manager_clean(SRV.election_manager);

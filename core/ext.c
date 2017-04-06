@@ -165,16 +165,15 @@ void ** oio_ext_array_concat (void **t0, void **t1) {
 
 /** @private */
 struct oio_ext_local_s {
-	gchar *reqid;
 	GRand *prng;
-	gboolean is_admin;
+	guint8 is_admin;
+	gchar reqid[LIMIT_LENGTH_REQID];
 };
 
 static void _local_free (gpointer p) {
 	struct oio_ext_local_s *l = p;
 	if (!l)
 		return;
-	oio_str_clean (&l->reqid);
 	if (l->prng) {
 		g_rand_free (l->prng);
 		l->prng = NULL;
@@ -219,12 +218,14 @@ GRand *oio_ext_local_prng (void) {
 
 const char *oio_ext_get_reqid (void) {
 	const struct oio_ext_local_s *l = _local_ensure ();
-	return l->reqid;
+	return oio_str_is_set(l->reqid) ? l->reqid : NULL;
 }
 
 void oio_ext_set_reqid (const char *reqid) {
 	struct oio_ext_local_s *l = _local_ensure ();
-	oio_str_replace (&l->reqid, reqid);
+	l->reqid[0] = '\0';
+	if (oio_str_is_set(reqid))
+		g_strlcpy(l->reqid, reqid, sizeof(l->reqid));
 }
 
 void oio_ext_set_random_reqid (void) {
@@ -244,14 +245,14 @@ gboolean
 oio_ext_is_admin (void)
 {
 	const struct oio_ext_local_s *l = _local_ensure ();
-	return l->is_admin;
+	return BOOL(l->is_admin);
 }
 
 void
 oio_ext_set_admin (const gboolean admin)
 {
 	struct oio_ext_local_s *l = _local_ensure ();
-	l->is_admin = admin;
+	l->is_admin = BOOL(admin);
 }
 
 

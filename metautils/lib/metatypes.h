@@ -45,8 +45,6 @@ License along with this library.
 
 #define LIMIT_LENGTH_CHUNKURL 512
 
-#define LIMIT_LENGTH_REQID 128
-
 #define LIMIT_LENGTH_BASENAME 256
 
 #define LIMIT_LENGTH_BASETYPE 32
