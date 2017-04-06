@@ -425,8 +425,11 @@ dav_rawx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 
 	stream->compress_checksum = checksum;
 
-	/* update the hash and the stats */
-	g_checksum_update(stream->md5, buf, bufsize);
+	if (stream->md5) {
+		/* update the hash and the stats */
+		g_checksum_update(stream->md5, buf, bufsize);
+	}
+
 	/* update total_size */
 	stream->total_size += bufsize;
 	return NULL;
