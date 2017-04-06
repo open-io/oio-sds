@@ -12,6 +12,14 @@ if [ $# -eq 2 ] ; then
 fi
 
 function dump_syslog {
+    cmd=tail
+    if ! [ -r /var/log/syslog ] ; then
+        cmd="sudo tail"
+    fi
+    echo
+    $cmd -n 500 /var/log/syslog
+    echo
+    pip list
     echo
     gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock status3
 }

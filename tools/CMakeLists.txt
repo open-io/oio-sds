@@ -55,6 +55,7 @@ install(TARGETS
 install(PROGRAMS
             zk-bootstrap.py
             zk-reset.py
+            oio-wrap.sh
             oio-election-reset.py
             oio-election-smudge.py
             oio-election-dump.py
