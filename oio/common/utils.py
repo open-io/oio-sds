@@ -288,12 +288,10 @@ TIMESTAMP_FORMAT = "%016.05f"
 
 class Timestamp(object):
     def __init__(self, timestamp):
-        float_ts = float(timestamp)
+        self.timestamp = float(timestamp)
         # More than year 1000000?! We got microseconds.
-        if float_ts > 31494784780800:
-            self.timestamp = float_ts / 1000000.0
-        else:
-            self.timestamp = float_ts
+        if self.timestamp > 31494784780800.0:
+            self.timestamp /= 1000000.0
 
     def __repr__(self):
         return self.normal

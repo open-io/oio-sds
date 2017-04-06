@@ -120,7 +120,7 @@ _finalize_chunk_creation(dav_stream *stream)
 static dav_error *
 _write_data_crumble_UNCOMP(dav_stream *stream)
 {
-	if ( 1 != fwrite(stream->buffer, stream->bufsize, 1, stream->f)) {
+	if (fwrite(stream->buffer, stream->buffer_offset, 1, stream->f) != 1) {
 		/* ### use something besides 500? */
 		return server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
 				HTTP_INTERNAL_SERVER_ERROR, 0,
@@ -138,7 +138,8 @@ _write_data_crumble_COMP(dav_stream *stream, gulong *checksum)
 	dav_error *e = NULL;
 	int rc = -1;
 
-	rc = stream->comp_ctx.data_compressor(stream->buffer, stream->bufsize, gba, checksum);
+	rc = stream->comp_ctx.data_compressor(stream->buffer,
+			stream->buffer_offset, gba, checksum);
 	if (0 == rc) {
 		if (1 != fwrite(gba->data, gba->len, 1, stream->f)) {
 			/* ### use something besides 500? */
@@ -556,8 +557,8 @@ rawx_repo_write_last_data_crumble(dav_stream *stream)
 	gulong checksum = 0;
 	checksum = stream->compress_checksum;
 
-	/* If buffer contain data, compress it if needed and write it to distant file */
-	if (0 < stream->bufsize ) {
+	/* If buffer contain data, compress it if needed and write it to file */
+	if (stream->buffer_offset > 0) {
 		if (!stream->compression) {
 			e = _write_data_crumble_UNCOMP(stream);
 		} else {
@@ -758,15 +759,15 @@ retry:
 
 	if (!should_compress ||
 			!namespace_in_compression_mode(conf->rawx_conf->ni)) {
-		ds->blocksize = DEFAULT_BLOCK_SIZE;
-		ds->buffer = apr_pcalloc(p, ds->blocksize);
-		ds->bufsize = 0;
+		ds->buffer_size = DEFAULT_BLOCK_SIZE;
+		ds->buffer = apr_pcalloc(p, ds->buffer_size);
+		ds->buffer_offset = 0;
 	} else {
 		ds->compression = TRUE;
 		if (ctx->forced_cp_bs)
-			ds->blocksize = strtol(ctx->forced_cp_bs, NULL, 10);
+			ds->buffer_size = strtol(ctx->forced_cp_bs, NULL, 10);
 		else
-			ds->blocksize = DEFAULT_BLOCK_SIZE;
+			ds->buffer_size = DEFAULT_BLOCK_SIZE;
 
 		if (!ctx->forced_cp_algo)
 			ctx->forced_cp_algo = DEFAULT_COMPRESSION_ALGO;
@@ -779,8 +780,8 @@ retry:
 		DAV_DEBUG_REQ(resource->info->request, 0 , "%s", metadata_compress);
 		init_compression_ctx(&(ds->comp_ctx), ctx->forced_cp_algo);
 
-		ds->buffer = apr_pcalloc(p, ds->blocksize);
-		ds->bufsize = 0;
+		ds->buffer = apr_pcalloc(p, ds->buffer_size);
+		ds->buffer_offset = 0;
 
 		gulong checksum = 0;
 
@@ -791,7 +792,7 @@ retry:
 		ds->metadata_compress = apr_pstrndup(p, metadata_compress, strlen(metadata_compress));
 
 		/* writting compression header in busy file */
-		guint32 bsize32 = ds->blocksize;
+		guint32 bsize32 = ds->buffer_size;
 		if(0 != ds->comp_ctx.header_writer(ds->f, bsize32, &checksum, &(ds->compressed_size))){
 			return server_create_and_stat_error(resource_get_server_config(resource), p,
 				HTTP_INTERNAL_SERVER_ERROR, 0,

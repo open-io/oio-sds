@@ -50,6 +50,10 @@ License along with this library.
  * i.e. a size enough to store the C string */
 #define LIMIT_LENGTH_TAGNAME 32
 
+/** One plus the maximum length of a content name
+ * i.e. a size enough to store the C string */
+#define LIMIT_LENGTH_CHUNKURL 512
+
 /** One plus the maximum length of a database name
  * i.e. a size enough to store the C string */
 #define LIMIT_LENGTH_BASENAME 256

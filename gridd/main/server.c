@@ -28,15 +28,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 #include <strings.h>
 #include <stdlib.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/time.h>
 #include <unistd.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <netinet/in.h>
 #include <signal.h>
+#include <malloc.h>
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
@@ -76,15 +72,10 @@ guint32 gridd_flags = GRIDD_FLAG_NOLINGER | GRIDD_FLAG_SHUTDOWN
 
 /* NEW WAY INFORMATIONS ----------------------------------------------------- */
 
-gboolean old_style = FALSE;
-gchar* service_type = NULL;
-gboolean rec_service = FALSE;
-gboolean load_ns_info = FALSE;
-namespace_info_t *ns_info = NULL;
-addr_info_t *serv_addr = NULL;
-GPtrArray *serv_tags = NULL;
 gboolean first = TRUE;
 gchar* ns_name = NULL;
+
+static GAsyncQueue *threads_to_be_joined = NULL;
 
 /* -------------------------------------------------------------------------- */
 
@@ -159,75 +150,25 @@ srv_inner_gauges_update (gpointer d)
 	srvstat_set_u64("gauge cnx.client", tmpTotalStats.total);
 }
 
-static gboolean
-self_register_in_cluster(GError **err)
-{
-	/* Init the service header */
-	service_info_t *si = g_malloc0(sizeof(service_info_t));
-	memcpy(&(si->addr), serv_addr, sizeof(addr_info_t));
-	g_strlcpy(si->ns_name, ns_info->name, sizeof(si->ns_name));
-	g_strlcpy(si->type, service_type, sizeof(si->type));
-	si->tags = g_ptr_array_new();
-
-	if (first)
-		service_tag_set_value_boolean(service_info_ensure_tag(si->tags, NAME_TAGNAME_RAWX_FIRST), first);
-
-	/* Copy the service tags */
-	if (!serv_tags)
-		DEBUG("No tag found in gridd to set in service info");
-	else {
-		gsize i;
-		for (i=0; i<serv_tags->len ;i++) {
-			struct service_tag_s *tag = g_ptr_array_index(serv_tags, i);
-			g_ptr_array_add(si->tags, service_tag_dup(tag));
-		}
-	}
-
-	/* Register nw in the conscience */
-	GError *e = register_namespace_service(si);
-	if (NULL != e) {
-		ERROR("Failed to register service in cluster : %s", gerror_get_message(*err));
-		g_clear_error(&e);
-	}
-
-	service_info_clean(si);
-	first = FALSE;
-	return TRUE;
-}
-
 static void
-srv_periodic_register (gpointer d)
+srv_periodic_joiner (gpointer d UNUSED)
 {
-	(void)d;
-	GError *err = NULL;
-	if(!self_register_in_cluster(&err))
-		NOTICE("Failed to register service in cluster : %s", gerror_get_message(err));
-	if(err)
-		g_clear_error(&err);
-}
+	g_assert(threads_to_be_joined != NULL);
 
-static void
-srv_periodic_refresh_ns_info (gpointer d)
-{
-	/* free current ns_info and load newer */
-	namespace_info_t *nsinfo = NULL;
-	namespace_info_t *tmp = NULL;
-	GError *error = NULL;
-
-	(void) d;
-
-	if (!(error = conscience_get_namespace(ns_name, &ns_info))) {
-		NOTICE("Failed to refresh the Namespace info from the gridagent");
-		if(error)
-			g_clear_error(&error);
-		return;
+	guint nb = 0;
+	GThread *th;
+	while (NULL != (th = g_async_queue_try_pop(threads_to_be_joined))) {
+		g_thread_join(th);
+		nb++;
 	}
-	g_rw_lock_writer_lock (&ns_info_lock);
-	tmp = ns_info;
-	ns_info = nsinfo;
-	namespace_info_free(tmp);
-	g_rw_lock_writer_unlock(&ns_info_lock);
-	nsinfo = NULL;
+
+	static gint64 last = 0;
+	gint64 now = oio_ext_monotonic_time();
+
+	if (now > last + G_TIME_SPAN_MINUTE) {
+		last = now;
+		malloc_trim(0);
+	}
 }
 
 static gpointer main_thread (gpointer arg);
@@ -532,7 +473,7 @@ main_thread (gpointer arg)
 
 	/*init variables*/
 	if (!(srv = arg))
-		return NULL;
+		goto exit;
 
 	/*about to block unwanted signals in the worker threads*/
 	metautils_ignore_signals();
@@ -622,10 +563,12 @@ main_thread (gpointer arg)
 		STATS_CNX_DOWN();
 
 		if (!thread_monitoring_release(srv)) /* in excess */
-			return 0;
+			goto exit;
 	}
 
 	thread_monitoring_remove(srv,FALSE);
+exit:
+	g_async_queue_push(threads_to_be_joined, g_thread_self());
 	return 0;
 }
 
@@ -668,106 +611,6 @@ error:
 		g_strfreev(all_keys);
 	return NULL;
 }
-
-#if 0
-static int
-prepare_plugins_reload (GKeyFile *cfgFile, GError **err)
-{
-	GHashTable *params=NULL;
-	gchar **groups=NULL;
-	gsize nbgroups=0, i;
-	gchar *fileName=NULL;
-
-	if (!cfgFile)
-	{
-		GSETERROR(err,"Invalid Parameter");
-		goto errorLabel;
-	}
-
-	DEBUG ("Start loading all the plugins found in the configuration");
-
-	/*run the key's list and keep those mathing Plugin~*/
-	groups = g_key_file_get_groups (cfgFile, &nbgroups);
-	if (!groups || nbgroups<=0)
-	{
-		GSETERROR(err,"Cannot retrieve the list of the configuration groups");
-		goto errorLabel;
-	}
-
-	for (i=0; i<nbgroups ;i++)
-	{
-		gchar *group;
-		group = groups[i];
-
-		if (!group)
-		{
-			GSETERROR (err, "Invalid group name");
-			goto errorLabel;
-		}
-
-		if (0 == fnmatch("Plugin.*", group, 0))
-		{
-			GModule *mod = NULL;
-
-			/*get the filename of the plugin*/
-			if (    !g_key_file_has_key (cfgFile, group, NAME_PATH, err)
-				||	!(fileName = g_key_file_get_string (cfgFile, group, NAME_PATH, err)))
-			{
-				GSETERROR(err, "The group %s must contain the path of the plugin in the key %s", group, NAME_PATH);
-				goto errorLabel;
-			}
-
-			/*get the parameter string*/
-			params = extract_parameters (cfgFile, group, NAME_PARAM"_", err);
-			if (!params)
-			{
-				GSETERROR(err,"Cannot load the parameters hash for the plugin (group %s in the configuration file)", group);
-				goto errorLabel;
-			}
-
-			/*load the path*/
-			mod = g_module_open (fileName, 0);
-			if (!mod)
-			{
-				GSETERROR(err, "Cannot load the plug-in from file %s (%s)", fileName, g_module_error());
-				goto errorLabel;
-			}
-
-			/*load the main exported symbol*/
-			if (plugin_holder_update_config (mod, params, err))
-				DEBUG ("updated %s", fileName);
-			else {
-				GSETERROR(err, "cannot update %s", fileName);
-				goto errorLabel;
-			}
-
-			if (fileName) {
-				g_free(fileName);
-				fileName=NULL;
-			}
-
-			/*the hash table has not been copied, just its pointers*/
-			params=NULL;
-		}
-	}
-
-	g_strfreev(groups);
-
-	return 1;
-
-errorLabel:
-
-	if (groups)
-		g_strfreev (groups);
-
-	if (fileName)
-		g_free (fileName);
-
-	if (params)
-		g_hash_table_destroy (params);
-	return 0;
-}
-#endif
 
 static int
 preload_plugins (GKeyFile *cfgFile, GError **err)
@@ -887,14 +730,6 @@ set_srv_addr(const gchar* url)
 
 	grid_addrinfo_to_string(newaddr, str_addr, sizeof(str_addr));
 	NOTICE("Saving [%s] as main server address", str_addr);
-
-	if (serv_addr != NULL) {
-		grid_addrinfo_to_string(serv_addr, str_addr, sizeof(str_addr));
-		WARN("Disarding anoter server address [%s], this won't be registered in the conscience", str_addr);
-		addr_info_gclean(serv_addr, NULL);
-	}
-
-	serv_addr = newaddr;
 }
 
 static int
@@ -1004,8 +839,7 @@ load_servers (GKeyFile *cfgFile, GError **err)
 				goto errorLabel;
 			}
 
-			for (url = srvList; srvList && *url && *(*url); url++)
-			{
+			for (url = srvList; srvList && *url && *(*url); url++) {
 				set_srv_addr(*url);
 				if (!accept_add(srv->ap, *url, err))
 					goto errorLabel;
@@ -1129,72 +963,6 @@ load_defaults (GKeyFile *cfgFile, GError **err)
 	return 1;
 }
 
-static void
-load_service_tags(GKeyFile *cfgFile, GError **err)
-{
-	gchar **tags, **cur_tag;
-	gchar *tag_name, *tag_value;
-	gsize number_of_tags;
-	struct service_tag_s tag_s;
-
-	if (NULL == serv_tags)
-		serv_tags = g_ptr_array_new();
-
-	if (g_key_file_has_group (cfgFile, NAME_SERVICETAGS)) {
-		tags = g_key_file_get_keys(cfgFile, NAME_SERVICETAGS, &number_of_tags, err);
-		for (cur_tag = tags; *cur_tag; cur_tag++) {
-			tag_name = g_strconcat("tag.", *cur_tag, NULL);
-			tag_value = g_key_file_get_value(cfgFile, NAME_SERVICETAGS, *cur_tag, err);
-			g_strlcpy(tag_s.name, tag_name, sizeof(tag_s.name));
-			service_tag_set_value_string(&tag_s, tag_value);
-			g_ptr_array_add(serv_tags, service_tag_dup(&tag_s));
-			g_free(tag_name);
-		}
-		g_strfreev(tags);
-	}
-}
-
-/**
- * @warning This function will block until gridagent is available
- */
-static int
-load_service_info (GKeyFile *cfgFile, GError **err)
-{
-	if (!g_key_file_has_group (cfgFile, NAME_SERVICE)) {
-		DEBUG("No '%s' group in configuration, Old style service declaration", NAME_SERVICE);
-		old_style = TRUE;
-		return 1;
-	}
-
-
-	ns_name = g_key_file_get_string (cfgFile, NAME_SERVICE, NAME_NAMESPACE, err);
-
-	service_type = g_key_file_get_string (cfgFile, NAME_SERVICE, NAME_SRV_TYPE, err);
-	/* TODO: service type ok */
-
-	rec_service = g_key_file_get_boolean (cfgFile, NAME_SERVICE, NAME_REGISTER, err);
-	if (!rec_service)
-		load_ns_info = g_key_file_get_boolean (cfgFile, NAME_SERVICE, NAME_LOAD_NS_INFO, err);
-	else
-		load_ns_info = TRUE;
-
-	if(load_ns_info) {
-		GError *e = conscience_get_namespace (ns_name, &ns_info);
-		/* We really want these informations, so loop until we get them. */
-		while (e) {
-			g_clear_error(&e);
-			WARN("Failed to get namespace info (Retrying in %d seconds): %s",
-					GET_NS_INFO_RETRY_DELAY, (*err)->message);
-			sleep(GET_NS_INFO_RETRY_DELAY);
-			e = conscience_get_namespace (ns_name, &ns_info);
-		}
-	}
-
-	load_service_tags(cfgFile, err);
-
-	return 1;
-}
-
 static int
 load_configuration (const char *cfg_path, GError **err)
 {
@@ -1214,12 +982,6 @@ load_configuration (const char *cfg_path, GError **err)
 	/*loads the default values*/
 	if (!load_defaults (cfgFile,err)) {
 		GSETERROR(err, "Cannot set the default values from the configuration");
-		goto errorLabel;
-	}
-
-	/* load info about service we are and our namespace */
-	if (!load_service_info(cfgFile,err)) {
-		GSETERROR (err, "Failed to get all informations about the service");
 		goto errorLabel;
 	}
 
@@ -1267,23 +1029,15 @@ server_has_thread(struct server_s *srv)
 static void
 wait_for_workers(void)
 {
-	struct server_s *srv;
-	gboolean rc;
-	gint64 i64;
-
-	do {
-		rc = FALSE;
-		for (srv=BEACON_SRV.next; !rc && srv ;srv=srv->next) {
-			if (0 < (i64 = server_has_thread(srv))) {
-				rc = TRUE;
-				INFO("Waiting for workers : still %"G_GINT64_FORMAT, i64);
-			}
+retry:
+	for (struct server_s *srv=BEACON_SRV.next ; srv ; srv=srv->next) {
+		gint64 i64;
+		if (0 < (i64 = server_has_thread(srv))) {
+			INFO("Waiting for workers : still %"G_GINT64_FORMAT, i64);
+			g_usleep(G_TIME_SPAN_SECOND);
+			goto retry;
 		}
-		if (rc)
-			sleep(1);
-	} while (rc);
-
-	NOTICE("No more workers detected");
+	}
 }
 
 static gboolean
@@ -1348,23 +1102,9 @@ main_action (void)
 		return;
 	}
 
-	/* Register service if needed */
-	if (rec_service) {
-		GError *err = NULL;
-		if (!self_register_in_cluster(&err)) {
-			ERROR("Failed to register service in cluster : (%d) %s", err->code, err->message);
-			g_clear_error(&err);
-		}
-		/* Periodic register in cluster */
-		srvtimer_register_regular(service_type, srv_periodic_register, NULL, NULL, PERIOD_REGISTER);
-	}
-	if(load_ns_info)
-		srvtimer_register_regular(service_type, srv_periodic_refresh_ns_info, NULL, NULL, PERIOD_REFRESH_NS_INFO);
-	/*Threads started, we start monitoring them*/
+	srvtimer_register_regular("joiner", srv_periodic_joiner, NULL, NULL, 1LLU);
 
-	struct server_s *s = NULL;
-
-	for (s=BEACON_SRV.next; s && s!=&BEACON_SRV ;s=s->next) {
+	for (struct server_s *s=BEACON_SRV.next; s && s!=&BEACON_SRV ;s=s->next) {
 		srvtimer_register_regular(s->name, (srvtimer_f)thread_monitoring_periodic_debug, NULL, s, PERIOD_DEBUG);
 		srvtimer_register_regular(s->name, (srvtimer_f)thread_monitoring_periodic_stats, NULL, s, PERIOD_STATS);
 	}
@@ -1405,6 +1145,7 @@ main_configure(int argc, char **argv)
 		return FALSE;
 	}
 
+	threads_to_be_joined = g_async_queue_new();
 	return TRUE;
 }
 
@@ -1412,7 +1153,13 @@ static void
 main_specific_fini (void)
 {
 	may_continue = FALSE;
+
 	wait_for_workers();
+	if (threads_to_be_joined) {
+		srv_periodic_joiner(NULL);  // final call
+		g_async_queue_unref(threads_to_be_joined);
+		threads_to_be_joined = NULL;
+	}
 
 	DEBUG("Closing the servers");
 	for (SERVER srv=BEACON_SRV.next; srv ;srv=srv->next) {
