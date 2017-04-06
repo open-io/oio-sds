@@ -11,8 +11,8 @@ from oio.common.utils import json
 requests = patcher.import_patched('requests.__init__')
 requests_adapters = patcher.import_patched('requests.adapters')
 
-CONNECTION_TIMEOUT = 2
-READ_TIMEOUT = 30
+CONNECTION_TIMEOUT = 2.0
+READ_TIMEOUT = 30.0
 
 
 class CustomHTTPResponse(HTTPResponse):
