@@ -64,6 +64,7 @@ _load_schema_directory (struct sqlx_service_s *ss, const char *dir)
 					filename, content);
 			g_free (content);
 		}
+		g_free0(fullpath);
 	}
 
 	g_dir_close (gdir);

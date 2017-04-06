@@ -29,6 +29,8 @@ extern "C" {
 #  define EXTRA_ASSERT(X)
 # endif
 
+#define LIMIT_LENGTH_REQID 64
+
 #define OLDEST(now,delay) (((now)>(delay)) ? ((now)-(delay)) : 0)
 
 #define UNUSED __attribute__ ((unused))
