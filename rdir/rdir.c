@@ -754,6 +754,7 @@ _db_vol_status(const char *volid, GString *value)
 	g_string_append_c(value, '}');
 
 	g_tree_destroy(tree_containers);
+	g_tree_destroy(tree_rebuilt);
 	return NULL;
 }
 
