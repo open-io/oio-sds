@@ -20,6 +20,10 @@ class Harasser(object):
         self.sent = set()
         self.max_containers = max_containers
         self.max_contents = max_contents
+        self.pushed_count = 0
+        self.pushed_time = 0
+        self.removed_count = 0
+        self.removed_time = 0
 
     def harass_put(self, loops=None):
         if loops is None:
@@ -45,6 +49,8 @@ class Harasser(object):
             self.sent.add((vol_id, container_id, content_id, chunk_id))
             loop -= 1
         end = time.time()
+        self.pushed_count += loops
+        self.pushed_time += end-start
         print "%d pushed in %.3fs, %d req/s" \
             % (loops, end-start, loops/(end-start))
 
@@ -59,6 +65,8 @@ class Harasser(object):
             self.rdir.chunk_delete(*args)
             loop -= 1
         end = time.time()
+        self.removed_count += loops
+        self.removed_time += end-start
         print "%d removed in %.3fs, %d req/s" \
             % (loops, end-start, loops/(end-start))
 
@@ -70,6 +78,15 @@ class Harasser(object):
         except KeyboardInterrupt:
             print "Cleaning..."
             self.harass_del(len(self.sent))
+            print "Stats:"
+            print "Pushed %d in %.3fs, %d req/s" % (self.pushed_count,
+                                                    self.pushed_time,
+                                                    self.pushed_count /
+                                                    self.pushed_time)
+            print "Removed %d in %.3fs, %d req/s" % (self.removed_count,
+                                                     self.removed_time,
+                                                     self.removed_count /
+                                                     self.removed_time)
 
 
 if __name__ == '__main__':
