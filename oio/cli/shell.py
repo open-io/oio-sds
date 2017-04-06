@@ -16,7 +16,7 @@ class OpenIOShell(app.App):
 
     def __init__(self):
         super(OpenIOShell, self).__init__(
-            description=__doc__.strip(),
+            description=__doc__.strip() if __doc__ else None,
             version=oio.__version__,
             command_manager=CommandManager('oiopy.cli'),
             deferred_help=True)
