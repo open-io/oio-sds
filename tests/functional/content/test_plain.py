@@ -102,7 +102,10 @@ class TestPlainContent(BaseTestCase):
                 self.assertEqual(meta['content_id'], meta['content_id'])
                 self.assertEqual(meta['chunk_id'], chunk.id)
                 self.assertEqual(meta['chunk_pos'], str(pos))
+                # Check that chunk data matches chunk hash from xattr
                 self.assertEqual(meta['chunk_hash'], chunk_hash)
+                # Check that chunk data matches chunk hash from database
+                self.assertEqual(chunk.checksum, chunk_hash)
 
     def test_twocopies_create_0_byte(self):
         self._test_create(self.stgpol_twocopies, 0)
@@ -115,6 +118,9 @@ class TestPlainContent(BaseTestCase):
 
     def test_twocopies_create_chunksize_plus_1_bytes(self):
         self._test_create(self.stgpol_twocopies, self.chunk_size + 1)
+
+    def test_twocopies_create_6294503_bytes(self):
+        self._test_create(self.stgpol_twocopies, 6294503)
 
     def test_single_create_0_byte(self):
         self._test_create(self.stgpol, 0)

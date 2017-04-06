@@ -502,6 +502,8 @@ sock_connect (const char *url, GError **err)
 
 static volatile gint64 _fastopen_last_error = 0;
 
+gboolean oio_allow_tcp_fastopen = FALSE;
+
 int
 sock_connect_and_send (const char *url, GError **err,
 		const uint8_t *buf, gsize *len)
@@ -516,8 +518,9 @@ sock_connect_and_send (const char *url, GError **err,
 
 	const gint64 now = oio_ext_monotonic_time();
 
-	if (!buf || !len || (_fastopen_last_error != 0 &&
-				_fastopen_last_error > OLDEST(now,G_TIME_SPAN_MINUTE)))
+	if (!oio_allow_tcp_fastopen || !buf || !len ||
+			(_fastopen_last_error != 0 &&
+			 _fastopen_last_error > OLDEST(now,G_TIME_SPAN_MINUTE)))
 		goto label_simple_connect;
 
 #ifdef HAVE_ENBUG
@@ -527,7 +530,8 @@ sock_connect_and_send (const char *url, GError **err,
 
 	ssize_t rc;
 retry:
-	rc = sendto(fd, buf, *len, MSG_FASTOPEN, (struct sockaddr*) &sas, sas_len);
+	rc = sendto(fd, buf, *len,
+			MSG_FASTOPEN|MSG_NOSIGNAL, (struct sockaddr*) &sas, sas_len);
 	if (rc < 0) {
 		if (errno == EINTR)
 			goto retry;

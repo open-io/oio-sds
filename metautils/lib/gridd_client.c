@@ -395,9 +395,10 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 				return NULL;
 
 			/* Continue to send the request */
-			rc = metautils_syscall_write(client->fd,
+			rc = metautils_syscall_send(client->fd,
 					client->request->data + client->sent_bytes,
-					client->request->len - client->sent_bytes);
+					client->request->len - client->sent_bytes,
+					MSG_NOSIGNAL);
 
 			if (rc < 0)
 				return (errno == EINTR || errno == EAGAIN) ? NULL :

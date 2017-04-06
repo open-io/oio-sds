@@ -242,6 +242,14 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 		if (str) oio_str_reuse(&ss->zk_url, str);
 	} while (0);
 
+	GRID_NOTICE("UDP %s", oio_udp_allowed ? "allowed" : "forbidden");
+
+	/* Check if TCP_FASTOPEN is allowed */
+	GRID_NOTICE("TCP_FASTOPEN %s", oio_socket_fastopen ? "allowed" : "forbidden");
+
+	if (oio_log_outgoing)
+		GRID_NOTICE("Outgoing requests log [ON]");
+
 	return TRUE;
 }
 

@@ -86,7 +86,7 @@ class TestStorageTierer(BaseTestCase):
     def test_iter_container_list(self):
         worker = StorageTiererWorker(self.gridconf, Mock())
         api = ObjectStorageApi(self.namespace)
-        actual = [x[0] for x in api.container_list(self.test_account)[0]]
+        actual = [x[0] for x in api.container_list(self.test_account)]
         if len(actual) < 3:
             print "Slow event propagation!"
             # account events have not yet propagated

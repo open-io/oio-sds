@@ -18,6 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/server_variables.h>
 
 #include "common.h"
 #include "actions.h"
@@ -955,6 +956,13 @@ grid_main_configure (int argc, char **argv)
 
 	path_parser = path_parser_init ();
 	configure_request_handlers ();
+
+	/* Make the proxy avoid meta services with known problems */
+	if (oio_client_cache_errors)
+		GRID_NOTICE("Faulty peers avoidance: ENABLED");
+
+	/* Check if TCP_FASTOPEN is allowed */
+	GRID_NOTICE("TCP_FASTOPEN %s", oio_socket_fastopen ? "allowed" : "forbidden");
 
 	/* init the networking capability of the processus */
 	server = network_server_init ();

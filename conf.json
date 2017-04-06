@@ -36,6 +36,11 @@
 				"def": true,
 				"descr": "Should the socket to meta~ services receive the TCP_NODELAY flag. When TRUE, it disables the Naggle's algorithm." },
 
+			{ "type": "bool", "name": "oio_socket_fastopen",
+				"key": "socket.fastopen.enabled",
+				"def": true,
+				"descr": "Should the socket to meta~ services use TCP_FASTOPEN flag." },
+
 			{ "type": "int32", "name": "oio_client_fake_timeout_threshold",
 				"key": "enbug.client.fake_timeout.threshold",
 				"def": "10",

@@ -272,8 +272,13 @@ _json_to_meta0_mapping(const char *json_mapping, GPtrArray **result)
 		}
 	}
 
+	if (jbody)
+		json_object_put(jbody);
 	json_tokener_free(parser);
-	meta0_utils_array_finalize(urls_by_pfx);
+
+	if (urls_by_pfx)
+		meta0_utils_array_finalize(urls_by_pfx);
+
 	if (err)
 		meta0_utils_array_clean(urls_by_pfx);
 	else
