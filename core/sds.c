@@ -1443,8 +1443,11 @@ _sds_upload_add_headers(struct oio_sds_ul_s *ul, struct http_put_dest_s *dest)
 	http_put_dest_add_header (dest, PROXYD_HEADER_REQID,
 			"%s", oio_ext_get_reqid());
 
-	http_put_dest_add_header (dest, PROXYD_HEADER_ADMIN,
-			"%s", oio_ext_is_admin()?"1":"0");
+	if (oio_ext_is_admin()) {
+		/* TODO(jfs): melt these informatiion with the 'mode' (already
+		 * containing autocreate, etc */
+		http_put_dest_add_header (dest, PROXYD_HEADER_ADMIN, "yes");
+	}
 
 	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "container-id",
 			"%s", oio_url_get (ul->dst->url, OIOURL_HEXID));
