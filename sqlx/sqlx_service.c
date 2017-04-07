@@ -211,7 +211,7 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 	 * even on the structure creations. */
 
 	/* TODO(jfs): deduplicate this with its copy in proxy/metacd_http.c */
-	struct oio_cfg_handle_s *ns_conf = oio_cfg_cache_create(30 * G_TIME_SPAN_SECOND);
+	struct oio_cfg_handle_s *ns_conf = oio_cfg_cache_create();
 	oio_cfg_set_handle(ns_conf);
 	if (SRV.config_system)
 		oio_var_value_all_with_config(ns_conf, ss->ns_name);
