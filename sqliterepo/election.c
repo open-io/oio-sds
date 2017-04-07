@@ -532,7 +532,7 @@ election_manager_create(struct replication_config_s *config,
 		g_tree_new_full(metautils_strcmp3, NULL, g_free, _cond_clean);
 
 	manager->completions =
-		g_thread_pool_new((GFunc)_completion_router, manager, 2, TRUE, NULL);
+		g_thread_pool_new((GFunc)_completion_router, manager, 2, FALSE, NULL);
 
 	manager->synchronous_completions = FALSE;
 

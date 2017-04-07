@@ -241,10 +241,10 @@ network_server_init(void)
 	result->gq_counter_cnx_close =  g_quark_from_static_string ("counter cnx.close");
 
 	result->pool_stats = g_thread_pool_new ((GFunc)_cb_stats, result,
-			server_threadpool_max_stat, TRUE, NULL);
+			server_threadpool_max_stat, FALSE, NULL);
 
 	result->pool_tcp = g_thread_pool_new ((GFunc)_cb_worker, result,
-			server_threadpool_max_workers, FALSE, NULL);
+			server_threadpool_max_tcp, FALSE, NULL);
 
 	/* Even if UDP is eventually not allowed, a pool with shared threads
 	 * doesn't consume much resources. */
