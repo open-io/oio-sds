@@ -40,6 +40,52 @@ class ObjTest(TestCase):
             f.write(test_content)
             f.flush()
             self._test_obj(f.name, test_content, self.CONTAINER_NAME)
+        self._test_many_obj()
+
+    def _test_many_obj(self):
+        cname = self.CONTAINER_NAME
+        opts = self.get_opts([], 'json')
+        obj_name_exists = ''
+        obj_name_also_exists = ''
+        # delete 2 existent
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            f.write('test_exists')
+            f.flush()
+            obj_file_exists = f.name
+            obj_name_exists = os.path.basename(f.name)
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            f.write('test_also_exists')
+            f.flush()
+            obj_file_also_exists = f.name
+            obj_name_also_exists = os.path.basename(f.name)
+        self.openio('object create ' + ' ' + cname +
+                    ' ' + obj_file_exists + ' ' + obj_file_also_exists
+                    + ' ' + opts)
+        output = self.openio('object delete ' + cname + ' ' + obj_name_exists
+                             + ' ' + obj_name_also_exists + opts)
+        data_json = json.loads(output)
+        self.assertEqual(data_json[0]['Deleted'], True)
+        self.assertEqual(data_json[1]['Deleted'], True)
+        # delete 2 nonexistent
+        output = self.openio('object delete ' + cname + ' ' +
+                             'should_not_exists' + ' ' +
+                             'should_also_not_exists' + opts)
+        data_json = json.loads(output)
+        self.assertEqual(data_json[0]['Deleted'], False)
+        self.assertEqual(data_json[1]['Deleted'], False)
+        # delete 1 existent 1 nonexistent
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            f.write('test_exists')
+            f.flush()
+            obj_file_exists = f.name
+            obj_name_exists = os.path.basename(f.name)
+        self.openio('object create ' + ' ' + cname +
+                    ' ' + obj_file_exists + opts)
+        output = self.openio('object delete ' + cname + ' ' + obj_name_exists
+                             + ' should_not_exists' + opts)
+        data_json = json.loads(output)
+        self.assertEqual(data_json[0]['Deleted'], True)
+        self.assertEqual(data_json[1]['Deleted'], False)
 
     def test_auto_container(self):
         with open('/etc/fstab', 'r') as f:
@@ -117,5 +163,5 @@ class ObjTest(TestCase):
         self.assertThat(data['size'], Equals(str(len(test_content))))
         self.assertThat(data['hash'], Equals(checksum))
 
-        output = self.openio('object delete ' + cname + ' ' + obj_name)
-        self.assertOutput('', output)
+        output = self.openio('object delete ' + cname + ' ' + obj_name + opts)
+        self.assertEqual(True, json.loads(output)[0]['Deleted'])
