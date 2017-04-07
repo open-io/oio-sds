@@ -289,23 +289,51 @@ class ObjectStorageAPI(API):
         :keyword headers: extra headers to send to the proxy
         :type headers: `dict`
         """
-        uri = self._make_uri('container/create_many')
-        params = self._make_params(account, None)
-        headers = headers or {}
-        headers['x-oio-action-mode'] = 'autocreate'
-        headers.update(kwargs.get('headers') or {})
-        unformatted_data = list()
-        for container in containers:
-            unformatted_data.append({'name': container,
-                                     'properties': properties or {},
-                                     'system': kwargs.get('system', {})})
-        data = json.dumps({"containers": unformatted_data})
-        resp, body = self._request('POST', uri, params=params,
-                                   data=data, headers=headers)
-        results = []
-        for container in json.loads(resp.content)["containers"]:
-            results.append((container["name"], container["status"] == 201))
-        return results
+        try:
+            uri = self._make_uri('container/create_many')
+            params = self._make_params(account, None)
+            headers = headers or {}
+            headers['x-oio-action-mode'] = 'autocreate'
+            headers.update(kwargs.get('headers') or {})
+            unformatted_data = list()
+            for container in containers:
+                unformatted_data.append({'name': container,
+                                         'properties': properties or {},
+                                         'system': kwargs.get('system', {})})
+            data = json.dumps({"containers": unformatted_data})
+            resp, body = self._request('POST', uri, params=params,
+                                       data=data, headers=headers)
+            results = list()
+            for container in json.loads(resp.content)["containers"]:
+                results.append((container["name"], container["status"] == 201))
+            return results
+        except TooLarge:
+            # Batch too large for the proxy
+            pivot = len(containers) / 2
+            results = list()
+            head = containers[:pivot]
+            tail = containers[pivot:]
+            if head:
+                results += self.container_create_many(
+                        account, head, properties=properties, headers=headers,
+                        **kwargs)
+            if tail:
+                results += self.container_create_many(
+                        account, tail, properties=properties, headers=headers,
+                        **kwargs)
+            return results
+        except NotFound:
+            # Batches not supported by the proxy
+            results = list()
+            for c in containers:
+                try:
+                    rc = self.container_create(
+                            account, container, properties=properties,
+                            headers=headers, **kwargs)
+                    results.append((container, rc))
+                except Exception:
+                    results.append((container, False))
+            return results
 
     @handle_container_not_found
     def container_touch(self, account, container, headers=None):
@@ -484,16 +512,6 @@ class ObjectStorageAPI(API):
             'POST', uri, params=params, headers=headers)
         return resp.status_code
 
-    def _slice_object_delete_many(self, account, container, objs):
-        results = []
-        if len(objs) == 1:
-            return results
-        first_part = objs[:len(objs) / 2]
-        second_part = objs[len(objs) / 2 + 1:]
-        results += self.object_delete_many(account, container, first_part)
-        results += self.object_delete_many(account, container, second_part)
-        return results
-
     def object_delete_many(self, account, container, objs, headers={}):
         uri = self._make_uri('content/delete_many')
         params = self._make_params(account, container)
@@ -517,7 +535,17 @@ class ObjectStorageAPI(API):
                 results.append((obj, rc == 204))
             return results
         except TooLarge:
-            return self._slice_object_delete_many(account, container, objs)
+            pivot = len(objs) / 2
+            results = list()
+            head = objs[:pivot]
+            tail = objs[pivot:]
+            if head:
+                results += self.object_delete_many(
+                        account, container, head, headers=headers)
+            if tail:
+                results += self.object_delete_many(
+                        account, container, tail, headers=headers)
+            return results
         except:
             raise
 
