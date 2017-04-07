@@ -358,7 +358,7 @@ class ChunkReader(object):
                         return (start, end, length, headers, part)
                     except green.ChunkReadTimeout:
                         # TODO recover
-                        raise StopIteration()
+                        raise StopIteration
 
             def iter_from_resp(part):
                 bytes_consumed = 0
@@ -501,4 +501,5 @@ def make_iter_from_resp(resp):
             resp.getheader('Content-Range'))
         return iter([(start, end, end-start+1, resp.getheaders(), resp)])
     else:
-        raise ValueError("Invalid response")
+        raise ValueError("Invalid response with code %d and content-type %s" %
+                         resp.status, content_type)
