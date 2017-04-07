@@ -132,8 +132,6 @@ class TestMeta2Containers(BaseTestCase):
             self.url_container('create_many'), params=params, data=data,
             headers=headers)
         self.assertEqual(resp.status_code, 400)
-        data = json.loads(resp.content)["containers"]
-        self.assertEqual(data[0]["status"], 400)
 
         # Send a non conform json (missing '{')
         data = ('{"containers":' +
@@ -402,7 +400,6 @@ class TestMeta2Contents(BaseTestCase):
         json_data = resp.json()
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(json_data['contents'][0]['status'], 204)
-        self.assertEqual(json_data['contents'][0]['message'], 'No Content')
 
         # Send one nonexistent
         data = ('{"contents":[{"name":"should_not_exist"}]}')
@@ -410,8 +407,6 @@ class TestMeta2Contents(BaseTestCase):
                                  params=params, data=data)
         json_data = resp.json()
         self.assertEqual(json_data['contents'][0]['status'], 420)
-        self.assertEqual(json_data['contents'][0]['message'],
-                         'Alias not found')
         # Send one existent and one nonexistent
         self._create_content('should_exist')
         data = ('{"contents":[{"name":"should_exist"},'
@@ -421,10 +416,7 @@ class TestMeta2Contents(BaseTestCase):
         json_data = resp.json()
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(json_data['contents'][0]['status'], 204)
-        self.assertEqual(json_data['contents'][0]['message'], 'No Content')
         self.assertEqual(json_data['contents'][1]['status'], 420)
-        self.assertEqual(json_data['contents'][1]['message'],
-                         'Alias not found')
         # Send 2 nonexistents
         data = ('{"contents":[{"name":"should_not_exist"},'
                 + '{"name":"should_also_not_exist"}]}')
@@ -432,14 +424,10 @@ class TestMeta2Contents(BaseTestCase):
                                  params=params, data=data)
         json_data = resp.json()
         self.assertEqual(json_data['contents'][0]['status'], 420)
-        self.assertEqual(json_data['contents'][0]['message'],
-                         'Alias not found')
         self.assertEqual(json_data['contents'][1]['status'], 420)
-        self.assertEqual(json_data['contents'][1]['message'],
-                         'Alias not found')
         # Send 2 existents
         self._create_content('should_exist')
-        self._create_content('shold_also_exist')
+        self._create_content('should_also_exist')
         data = ('{"contents":[{"name":"should_exist"},'
                 + '{"name":"should_also_exist"}]}')
         resp = self.session.post(self.url_content('delete_many'),
@@ -447,9 +435,7 @@ class TestMeta2Contents(BaseTestCase):
         json_data = resp.json()
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(json_data['contents'][0]['status'], 204)
-        self.assertEqual(json_data['contents'][0]['message'], 'No Content')
-        self.assertEqual(json_data['contents'][0]['status'], 204)
-        self.assertEqual(json_data['contents'][0]['message'],  'No Content')
+        self.assertEqual(json_data['contents'][1]['status'], 204)
 
         strange_paths = [
             "Annual report.txt",
