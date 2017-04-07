@@ -167,7 +167,6 @@ _test_wrap (const char *strcfg, const char *ns,
 	oio_sds_pfree (&sds);
 	g_assert_null (sds);
 	oio_cfg_set_handle (NULL);
-	oio_cfg_handle_clean (cfg);
 }
 
 static void
