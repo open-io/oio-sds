@@ -926,7 +926,7 @@ grid_main_configure (int argc, char **argv)
 	g_strlcpy(nsinfo.name, cfg_namespace, sizeof(nsinfo.name));
 	nsinfo.chunk_size = 1;
 
-	struct oio_cfg_handle_s *ns_conf = oio_cfg_cache_create(30 * G_TIME_SPAN_DAY);
+	struct oio_cfg_handle_s *ns_conf = oio_cfg_cache_create();
 	oio_cfg_set_handle(ns_conf);
 
 	/* load the system configuration */

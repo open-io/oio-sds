@@ -362,8 +362,7 @@ rawx_hook_child_init(apr_pool_t *pchild, server_rec *s)
 
 	/* Load the system configuration in the central config system */
 	do {
-		struct oio_cfg_handle_s *ns_conf =
-			oio_cfg_cache_create(30 * G_TIME_SPAN_SECOND);
+		struct oio_cfg_handle_s *ns_conf = oio_cfg_cache_create();
 		if (ns_conf) {
 			oio_var_value_all_with_config(ns_conf, conf->ns_name);
 			oio_cfg_handle_clean(ns_conf);

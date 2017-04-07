@@ -29,31 +29,26 @@ struct oio_cfg_cache_handle_s
 	struct oio_cfg_handle_vtable_s *vtable;
 	GHashTable *cfg;
 	GRWLock lock;
-	gint64 last_update;
-	gint64 delay;
 };
 
 static GHashTable*
 _cfg_cache_get_cfg_unlocked(gpointer self)
 {
 	struct oio_cfg_cache_handle_s *cache = self;
-	gint64 now = oio_ext_monotonic_time();
 
-	if (cache->cfg && now < cache->last_update + cache->delay)
+	if (cache->cfg)
 		return cache->cfg;
 
 	g_rw_lock_reader_unlock(&cache->lock);
 	g_rw_lock_writer_lock(&cache->lock);
 	/* Check again in case another thread did the update
 	 * while we were waiting */
-	now = oio_ext_monotonic_time();
-	if (!cache->cfg || now >= cache->last_update + cache->delay) {
+	if (!cache->cfg) {
 		GHashTable *new_cfg = oio_cfg_parse();
 		if (new_cfg) {
 			if (cache->cfg)
 				g_hash_table_destroy(cache->cfg);
 			cache->cfg = new_cfg;
-			cache->last_update = now;
 		} else {
 			// Silent failure
 		}
@@ -72,7 +67,6 @@ _cfg_cache_clean(struct oio_cfg_handle_s *self)
 	if (cache->cfg)
 		g_hash_table_destroy(cache->cfg);
 	cache->cfg = NULL;
-	cache->last_update = 0L;
 	g_rw_lock_writer_unlock(&cache->lock);
 	g_rw_lock_clear(&cache->lock);
 	g_free(cache);
@@ -138,19 +132,17 @@ oio_cfg_cache_create_fragment(const char *path)
 			g_malloc0(sizeof(struct oio_cfg_cache_handle_s));
 	cache->vtable = &VTABLE;
 	g_rw_lock_init(&cache->lock);
-	cache->delay = 1 * G_TIME_SPAN_DAY;
 	cache->cfg = oio_cfg_parse_file(path);
 	return (struct oio_cfg_handle_s *) cache;
 }
 
 struct oio_cfg_handle_s *
-oio_cfg_cache_create(gint64 delay)
+oio_cfg_cache_create(void)
 {
 	struct oio_cfg_cache_handle_s *cache =
 			g_malloc0(sizeof(struct oio_cfg_cache_handle_s));
 	cache->vtable = &VTABLE;
 	g_rw_lock_init(&cache->lock);
-	cache->delay = delay;
 	// cache->cfg will be initialized at first call
 	return (struct oio_cfg_handle_s *) cache;
 }
