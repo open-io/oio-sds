@@ -648,7 +648,7 @@ class ECWriter(object):
                     self.failed = True
                     msg = str(exc)
                     logger.warn("Failed to write to %s (%s)", self.chunk, msg)
-                    self.chunk['error'] = 'write: ' % msg
+                    self.chunk['error'] = 'write: %s' % msg
 
             self.queue.task_done()
 
@@ -724,8 +724,7 @@ class ECChunkWriteHandler(object):
         chunks, quorum = self._get_results(current_writers)
 
         if not quorum:
-            logger.error('Quorum not reached during write')
-            raise exceptions.OioException('Write failure')
+            raise exceptions.OioException('Write failure: quorum not reached')
 
         meta_checksum = self.checksum.hexdigest()
 
@@ -1024,7 +1023,8 @@ class ECRebuildHandler(object):
                 break
         else:
             logger.error('Unable to read enough valid sources to rebuild')
-            raise exceptions.UnrecoverableContent('Unable to rebuild chunk')
+            raise exceptions.UnrecoverableContent(
+                'Not enough valid sources to rebuild')
 
         rebuild_iter = self._make_rebuild_iter(resps[:nb_data])
         return rebuild_iter
