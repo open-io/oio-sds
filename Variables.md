@@ -639,6 +639,15 @@ Used by `gcc`
  * cmake directive: *OIO__SERVER_POOL_MAX_STAT*
  * range: 1 -> 1073741824
 
+### server.pool.max_tcp
+
+> In the current server, sets the maximum number of threads for the pool responsible for the TCP connections (threading model is one thread per request being managed, and one request at once per TCP connection)
+
+ * default: **-1**
+ * type: gint
+ * cmake directive: *OIO__SERVER_POOL_MAX_TCP*
+ * range: -1 -> 1073741824
+
 ### server.pool.max_udp
 
 > In the current server, sets the maximum number of threads for pool responsible for the UDP messages handling. UDP is only used for quick synchronisation messages during MASTER elections
@@ -657,15 +666,6 @@ Used by `gcc`
  * cmake directive: *OIO__SERVER_POOL_MAX_UNUSED*
  * range: 0 -> 1073741824
 
-### server.pool.max_workers
-
-> In the current server, sets the maximum number of threads for the pool responsible for the TCP connections (threading model is one thread per request being managed, and one request at once per TCP connection)
-
- * default: **-1**
- * type: gint
- * cmake directive: *OIO__SERVER_POOL_MAX_WORKERS*
- * range: -1 -> 1073741824
-
 ### server.udp_queue.max
 
 > In the current server, sets the maximumu length of the queue for UDP messages. When that number has been reached and a new message arrives, the message will be dropped.
@@ -683,6 +683,14 @@ Used by `gcc`
  * type: gint64
  * cmake directive: *OIO__SERVER_UDP_QUEUE_TTL*
  * range: 100 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_DAY
+
+### socket.fastopen.enabled
+
+> Should the socket to meta~ services use TCP_FASTOPEN flag.
+
+ * default: **TRUE**
+ * type: gboolean
+ * cmake directive: *OIO__SOCKET_FASTOPEN_ENABLED*
 
 ### socket.linger.delay
 
