@@ -342,11 +342,11 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx)
 		guint groupsize = 1 + g_strv_length(peers);
 		if (election_manager_get_mode(ctx->sq3->manager) == ELECTION_MODE_GROUP) {
 			if (count_success < groupsize)
-				err = SYSERR("Not enough successes, no group");
+				err = NEWERROR(CODE_UNAVAILABLE, "Not enough successes, no group");
 		}
 		else {
 			if (count_success < group_to_quorum(groupsize))
-				err = SYSERR("Not enough successes, no quorum");
+				err = NEWERROR(CODE_UNAVAILABLE, "Not enough successes, no quorum");
 		}
 	}
 
@@ -660,9 +660,9 @@ sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err)
 		/* Apply the changes on the slaves. */
 		rc = sqlx_exec(ctx->sq3->db, "COMMIT");
 		if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-			err = NEWERROR(rc, "(%s) %s%s", sqlite_strerror(rc),
-					sqlite3_errmsg(ctx->sq3->db), ctx->errors->str);
-			g_prefix_error(&err, "COMMIT failed: ");
+			err = NEWERROR(CODE_UNAVAILABLE, "COMMIT failed: (%s) %s%s",
+					sqlite_strerror(rc), sqlite3_errmsg(ctx->sq3->db),
+					ctx->errors->str);
 			// Restore the in-RAM cache
 			sqlx_admin_reload(ctx->sq3);
 		}
