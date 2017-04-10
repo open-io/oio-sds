@@ -1,2 +1,3 @@
+profile: "callgrind"
 config:
-  profile: "callgrind"
+    meta0.outgoing.timeout.common.req: 30s

@@ -17,7 +17,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 set -e
 
-PREFIX="@EXE_PREFIX@"
 LOCAL=
 NS=
 SRVTYPE=
@@ -27,17 +26,15 @@ UNLOCK=
 
 list () {
 	if [ -n "$SRVTYPE" ] ; then
-		${PREFIX}-cluster -r "$NS" | egrep -E -e "|${SRVTYPE}|"
+		openio cluster list --oio-ns "$NS" -f value -c Score $SRVTYPE
 	else
-		${PREFIX}-cluster -r "$NS"
+		openio cluster list --oio-ns "$NS" -f value -c Score
 	fi
 }
 
 maybe_unlock () {
 	if [ -n "$UNLOCK" ] ; then
-		opts="-n $NS"
-		if [ -n "$SRVTYPE" ] ; then opts="$opts -s $SRVTYPE" ; fi
-		openio --oio-ns "$NS" cluster unlockall
+		openio --oio-ns "$NS" cluster unlockall $SRVTYPE
 	fi
 }
 
@@ -60,8 +57,8 @@ fi
 
 count=0
 while true ; do
-	count_scored=$(list | grep -c -v 'score=0' || exit 0)
-	count_down=$(list | grep -c 'score=0' || exit 0)
+	count_scored=$(list | grep -c -v '^0$' || exit 0)
+	count_down=$(list | grep -c '^0$' || exit 0)
 	if [ "$count_scored" -ge "$MINSRV" ] && [ "$count_down" -eq 0 ] ; then
 		exit 0
 	else
