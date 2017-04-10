@@ -679,9 +679,8 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 
 	/* check the request wasn't queued for too long */
 	gboolean rc = FALSE;
-	const gint64 oldest_acceptable =
-		OLDEST(req_ctx->tv_start, 500 * G_TIME_SPAN_MILLISECOND);
-	if (req_ctx->tv_parsed < oldest_acceptable) {
+	const gint64 now = req_ctx->tv_parsed;
+	if (req_ctx->tv_start < OLDEST(now, meta_queue_max_delay)) {
 		rc = _client_reply_fixed(req_ctx, CODE_EXCESSIVE_LOAD, "retry later");
 		_notify_request(req_ctx, gq_count_overloaded, gq_time_overloaded);
 	} else {
@@ -773,7 +772,8 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 	oio_ext_set_reqid(req_ctx.reqid);
 	rc = TRUE;
 
-	/* check the socket is still active */
+	/* TODO check the socket is still active, specially if it seems old (~long
+	 * time spent in the queue). */
 
 	/* check the request is well formed */
 	if (!req_ctx.reqname) {
