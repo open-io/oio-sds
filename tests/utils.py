@@ -1,4 +1,5 @@
 from __future__ import print_function
+import logging
 import sys
 import os
 import json
@@ -201,3 +202,11 @@ class BaseTestCase(testtools.TestCase):
     def assertError(self, resp, code_http, expected_code_oio):
         self.assertEqual(resp.status_code, code_http)
         self.assertIsError(resp.json(), expected_code_oio)
+
+    @classmethod
+    def json_loads(cls, data):
+        try:
+            return json.loads(data)
+        except ValueError:
+            logging.info("Unparseable data: %s", str(data))
+            raise

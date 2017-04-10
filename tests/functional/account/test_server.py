@@ -23,7 +23,7 @@ class TestAccountServer(BaseTestCase):
     def test_status(self):
         resp = self.app.get('/status')
         self.assertEqual(resp.status_code, 200)
-        status = json.loads(resp.data)
+        status = self.json_loads(resp.data)
         self.assertTrue(status['account_count'] > 0)
 
     def test_account_list(self):
@@ -36,7 +36,7 @@ class TestAccountServer(BaseTestCase):
         resp = self.app.get('/v1.0/account/show',
                             query_string={"id": self.account_id})
         self.assertEqual(resp.status_code, 200)
-        data = json.loads(resp.data)
+        data = self.json_loads(resp.data)
 
         for f in ["ctime", "objects", "bytes", "containers", "metadata"]:
             self.assertTrue(f in data)
@@ -64,7 +64,7 @@ class TestAccountServer(BaseTestCase):
         resp = self.app.post('/v1.0/account/containers',
                              query_string=args)
         self.assertEqual(resp.status_code, 200)
-        data = json.loads(resp.data)
+        data = self.json_loads(resp.data)
         for f in ["ctime", "objects", "bytes", "listing", "containers",
                   "metadata"]:
             self.assertTrue(f in data)

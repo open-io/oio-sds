@@ -1,4 +1,4 @@
-# Copyright (C) 2016 OpenIO SAS
+# Copyright (C) 2016-2017 OpenIO SAS
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,7 @@
 # License along with this library.
 
 import json
-from tests.functional import TestCase
+from tests.functional.cli import CliTestCase
 
 
 CLUSTER_FIELDS = ['namespace', 'storage_policy', 'chunksize']
@@ -20,7 +20,7 @@ CLUSTER_LIST_HEADERS = ['Type', 'Id', 'Volume', 'Location', 'Slots', 'Up',
                         'Score']
 
 
-class ClusterTest(TestCase):
+class ClusterTest(CliTestCase):
     """Functional tests for cluster."""
 
     def test_cluster_show(self):
