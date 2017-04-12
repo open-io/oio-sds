@@ -168,6 +168,10 @@ guint election_manager_balance_masters(struct election_manager_s *M,
    Returns the number of items activated. */
 guint election_manager_play_timers (struct election_manager_s *m, guint max);
 
+/* Similar to the MANAGER_CHECK macro, but not stripped in Release mode,
+ * and returns a boolean instead of asserting. */
+gboolean election_manager_is_operational(struct election_manager_s *manager);
+
 void election_manager_exit_all (struct election_manager_s *m,
 		gint64 oldest, gboolean persist);
 

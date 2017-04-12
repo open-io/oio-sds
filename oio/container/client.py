@@ -91,23 +91,49 @@ class ContainerClient(ProxyClient):
         :keyword headers: extra headers to send to the proxy
         :type headers: `dict`
         """
-        params = self._make_params(account)
-        headers = gen_headers()
-        headers.update(kwargs.get('headers') or {})
-        unformatted_data = list()
-        for container in containers:
-            unformatted_data.append({'name': container,
-                                     'properties': properties or {},
-                                     'system': kwargs.get('system', {})})
-        data = json.dumps({"containers": unformatted_data})
-        resp, body = self._request('POST', '/create_many', params=params,
-                                   data=data, headers=headers)
-        if resp.status_code not in (204, 201):
-            raise exceptions.from_response(resp, body)
         results = list()
-        for container in json.loads(body)["containers"]:
-            results.append((container["name"], container["status"] == 201))
-        return results
+        try:
+            params = self._make_params(account)
+            headers = gen_headers()
+            headers.update(kwargs.get('headers') or {})
+            unformatted_data = list()
+            for container in containers:
+                unformatted_data.append({'name': container,
+                                         'properties': properties or {},
+                                         'system': kwargs.get('system', {})})
+            data = json.dumps({"containers": unformatted_data})
+            resp, body = self._request('POST', '/create_many', params=params,
+                                       data=data, headers=headers)
+            if resp.status_code not in (204, 201):
+                raise exceptions.from_response(resp, body)
+            for container in json.loads(body)["containers"]:
+                results.append((container["name"], container["status"] == 201))
+            return results
+        except exceptions.TooLarge:
+            # Batch too large for the proxy
+            pivot = len(containers) / 2
+            head = containers[:pivot]
+            tail = containers[pivot:]
+            if head:
+                results += self.container_create_many(
+                        account, head, properties=properties, headers=headers,
+                        **kwargs)
+            if tail:
+                results += self.container_create_many(
+                        account, tail, properties=properties, headers=headers,
+                        **kwargs)
+            return results
+        except exceptions.NotFound:
+            # Batches not supported by the proxy
+            for container in containers:
+                try:
+                    rc = self.container_create(
+                            account, container, properties=properties,
+                            headers=headers, **kwargs)
+                    results.append((container, rc))
+                except Exception:
+                    results.append((container, False))
+            return results
 
     def container_delete(self, account=None, reference=None, cid=None,
                          **kwargs):
@@ -283,6 +309,47 @@ class ContainerClient(ProxyClient):
         headers.update(gen_headers())
         resp, body = self._direct_request('POST', uri,
                                           params=params, headers=headers)
+        return resp.status_code == 204
+
+    def content_delete_many(self, account=None, reference=None, paths=None,
+                            cid=None, headers=None, **kwargs):
+        uri = self._make_uri('content/delete_many')
+        params = self._make_params(account, reference, cid=cid)
+        if not headers:
+            headers = dict()
+        headers.update(gen_headers())
+        unformatted_data = list()
+        for obj in paths:
+            unformatted_data.append({'name': obj})
+        data = json.dumps({"contents": unformatted_data})
+        results = list()
+        try:
+            resp, _ = self._direct_request(
+                'POST', uri, data=data, params=params, headers=headers)
+            for obj in resp.json()["contents"]:
+                results.append((obj["name"], obj["status"] == 204))
+            return results
+        except exceptions.NotFound:
+            for obj in paths:
+                rc = self.content_delete(account, reference, obj, cid=cid,
+                                         headers=headers, **kwargs)
+                results.append((obj, rc))
+            return results
+        except exceptions.TooLarge:
+            pivot = len(paths) / 2
+            head = paths[:pivot]
+            tail = paths[pivot:]
+            if head:
+                results += self.content_delete_many(
+                        account, reference, head,
+                        cid=cid, headers=headers, **kwargs)
+            if tail:
+                results += self.content_delete_many(
+                        account, reference, tail,
+                        cid=cid, headers=headers, **kwargs)
+            return results
+        except:
+            raise
 
     def content_locate(self, account=None, reference=None, path=None, cid=None,
                        content=None, **kwargs):

@@ -20,7 +20,6 @@ import os
 import random
 from inspect import isgenerator
 
-
 from oio.common import exceptions as exc
 from oio.account.client import AccountClient
 from oio.container.client import ContainerClient
@@ -553,13 +552,21 @@ class ObjectStorageApi(object):
 
     @handle_object_not_found
     def object_delete(self, account, container, obj, headers=None, **kwargs):
-        # FIXME: this should be in kwargs
         if not headers:
             headers = dict()
         if 'X-oio-req-id' not in headers:
             headers['X-oio-req-id'] = utils.request_id()
         return self.container.content_delete(account, container, obj,
                                              headers=headers, **kwargs)
+
+    def object_delete_many(self, account, container, objs, headers=None,
+                           **kwargs):
+        if not headers:
+            headers = dict()
+        if 'X-oio-req-id' not in headers:
+            headers['X-oio-req-id'] = utils.request_id()
+        return self.container.content_delete_many(
+            account, container, objs, headers=headers, **kwargs)
 
     @handle_container_not_found
     def object_list(self, account, container, limit=None, marker=None,

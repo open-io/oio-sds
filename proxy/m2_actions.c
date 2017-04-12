@@ -1214,79 +1214,84 @@ _m2_container_create (struct req_args_s *args, struct json_object *jbody)
 	return _reply_m2_error (args, err);
 }
 
+static void
+_bulk_item_result(GString *gresponse,
+		const guint i, const char *name,
+		const GError *err, gint code_ok)
+{
+	if (i > 0)
+		g_string_append_c(gresponse, ',');
+	g_string_append_c(gresponse, '{');
+	oio_str_gstring_append_json_pair(gresponse, "name", name);
+	g_string_append_c(gresponse, ',');
+	if (err)
+		_append_status(gresponse, err->code, err->message);
+	else
+		_append_status(gresponse, code_ok, "ok");
+	g_string_append_c(gresponse, '}');
+}
+
 static enum http_rc_e
 _m2_container_create_many(struct req_args_s *args, struct json_object *jbody)
 {
-	guint nb_err = 0;
-	GError *err = NULL;
-	const char *url_user = oio_url_get(args->url, OIOURL_USER);
-	json_object *jarray = NULL;
 	if (!oio_url_get(args->url, OIOURL_ACCOUNT)
 			|| !oio_url_get(args->url, OIOURL_NS))
 		return _reply_format_error(args,
 				BADREQ("Missing account or namespace"));
+
+	json_object *jarray = NULL;
 	if (!json_object_object_get_ex(jbody, "containers", &jarray)
 			|| !json_object_is_type(jarray, json_type_array))
 		return _reply_format_error(args,
 				BADREQ("Invalid array of containers"));
+
+	const guint jarray_len = json_object_array_length(jarray);
+	if (jarray_len > proxy_bulk_max_create_many)
+		return _reply_too_large(args, NEWERROR(HTTP_CODE_PAYLOAD_TO_LARGE,
+					"More than %u requested", proxy_bulk_max_create_many));
+
+	/* A final sanity check on the format of the payload */
+	for (guint i = 0; i < jarray_len; i++) {
+		struct json_object * jcontent = json_object_array_get_idx(jarray, i);
+		if (!json_object_is_type(jcontent, json_type_object))
+			return _reply_format_error(args, BADREQ("Invalid content description"));
+		struct json_object * jname = NULL;
+		if (!json_object_object_get_ex(jcontent, "name", &jname)
+				|| !json_object_is_type(jname, json_type_string))
+			return _reply_format_error(args, BADREQ("Invalid payload"));
+	}
+
 	GString *gresponse = g_string_sized_new(2048);
 	g_string_append(gresponse, "{\"containers\":[");
-	guint jarray_len = json_object_array_length(jarray);
-	if (jarray_len > proxy_bulk_max_create_many)
-		return _reply_format_error(args,
-			BADREQ("More than %u requested",
-				proxy_bulk_max_create_many));
-	for (guint i = 0; i < jarray_len && !err; i++) {
-		struct json_object *jcontainer = NULL;
-		struct json_object *jname = NULL;
+	for (unsigned i= 0; i < jarray_len ; i++) {
+		struct json_object * jcontainer = json_object_array_get_idx(jarray, i);
+
+		struct json_object * jname = NULL;
+		json_object_object_get_ex(jcontainer, "name", &jname);
+		const gchar *name = json_object_get_string(jname);
+
 		gchar **properties = NULL;
-		const gchar *name = NULL;
-		jcontainer = json_object_array_get_idx(jarray, i);
-		g_string_append(gresponse, "{\"name\":");
-		if (!json_object_object_get_ex(jcontainer, "name", &jname)
-				|| !json_object_is_type(jname, json_type_string)) {
-			nb_err++;
-			g_string_append(gresponse, "\"(null)\",");
-			_append_status(gresponse, CODE_BAD_REQUEST,
-				"Bad \"name\" field");
-		} else {
-			name = json_object_get_string(jname);
-			err = KV_read_usersys_properties(jcontainer, &properties);
-			EXTRA_ASSERT((err != NULL) ^ (properties != NULL));
-			if (err) {
-				_append_status(gresponse, err->code, err->message);
-				nb_err++;
-				g_clear_error(&err);
-			} else {
-				/* The simple create function takes the name of the container
-				   on the url */
-				oio_url_set(args->url, OIOURL_USER, name);
-				g_string_append_printf(gresponse, "\"%s\",", name);
-				err = _m2_container_create_with_properties(args, properties,
-						OPT("stgpol"), OPT("verpol"));
-				g_strfreev(properties);
-				if (!err) {
-					/* No error means we actually created it. */
-					_append_status(gresponse, HTTP_CODE_CREATED, "Created");
-				} else {
-					_append_status(gresponse, err->code, err->message);
-					if (err->code != CODE_CONTAINER_EXISTS)
-						nb_err++;
-					g_clear_error(&err);
-				}
-			}
+		GError *err = KV_read_usersys_properties(jcontainer, &properties);
+		EXTRA_ASSERT((err != NULL) ^ (properties != NULL));
+
+		if (err) {
+			g_string_free(gresponse, TRUE);
+			enum http_rc_e rc = _reply_format_error(args,
+					BADREQ("Malformed properties at %d: (%d) %s", i,
+						err->code, err->message));
+			g_clear_error(&err);
+			return rc;
 		}
-		g_string_append_c(gresponse, '}');
-		if (i < jarray_len - 1)
-			g_string_append_c(gresponse, ',');
+
+		oio_url_set(args->url, OIOURL_USER, name);
+		err = _m2_container_create_with_properties(args, properties,
+				OPT("stgpol"), OPT("verpol"));
+		g_strfreev(properties);
+		_bulk_item_result(gresponse, i, name, err, HTTP_CODE_CREATED);
+		if (err) g_clear_error(&err);
 	}
-	oio_url_set(args->url, OIOURL_USER, url_user);
-	if (err)
-		g_error_free(err);
 	g_string_append(gresponse, "]}");
-	if (nb_err == jarray_len)
-		return _reply_json(args, CODE_BAD_REQUEST, "Error on all requests",
-				 gresponse);
+
 	return _reply_success_json(args, gresponse);
 }
 
@@ -1906,6 +1911,63 @@ enum http_rc_e action_content_delete (struct req_args_s *args) {
 	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url); }
 	GError *err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
 	return _reply_m2_error (args, err);
+}
+
+static enum http_rc_e
+_m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
+	json_object *jarray = NULL;
+	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url); }
+
+	if (!oio_url_has_fq_container(args->url))
+		return _reply_format_error(args,
+				BADREQ("Missing url argument"));
+
+	if (!json_object_object_get_ex(jbody, "contents", &jarray)
+			|| !json_object_is_type(jarray, json_type_array))
+		return _reply_format_error(args,
+				BADREQ("Invalid array of contents"));
+
+	guint jarray_len = json_object_array_length(jarray);
+	if (jarray_len < 1)
+		return _reply_format_error(args,
+				BADREQ("At least one element is needed"));
+
+	if (jarray_len > proxy_bulk_max_create_many)
+		return _reply_too_large(args, NEWERROR(HTTP_CODE_PAYLOAD_TO_LARGE,
+				"Payload Too Large"));
+
+	/* A final sanity check on the format of the payload */
+	for (guint i = 0; i < jarray_len; i++) {
+		struct json_object * jcontent = json_object_array_get_idx(jarray, i);
+		if (!json_object_is_type(jcontent, json_type_object))
+			return _reply_format_error(args, BADREQ("Invalid content description"));
+		struct json_object * jname = NULL;
+		if (!json_object_object_get_ex(jcontent, "name", &jname)
+				|| !json_object_is_type(jname, json_type_string))
+			return _reply_format_error(args, BADREQ("Invalid content name"));
+	}
+
+	GString *gresponse = g_string_sized_new(2048);
+	g_string_append(gresponse, "{\"contents\":[");
+	for (guint i = 0; i < jarray_len; i++) {
+		struct json_object * jcontent = json_object_array_get_idx(jarray, i);
+
+		struct json_object * jname = NULL;
+		json_object_object_get_ex(jcontent, "name", &jname);
+		const gchar *name = json_object_get_string(jname);
+
+		oio_url_set(args->url, OIOURL_PATH, name);
+		GError *err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
+		_bulk_item_result(gresponse, i, name, err, HTTP_CODE_NO_CONTENT);
+		if (err) g_clear_error(&err);
+	}
+
+	g_string_append(gresponse, "]}");
+	return _reply_success_json(args, gresponse);
+}
+
+enum http_rc_e action_content_delete_many (struct req_args_s *args) {
+	return rest_action(args, _m2_content_delete_many);
 }
 
 enum http_rc_e action_content_touch (struct req_args_s *args) {

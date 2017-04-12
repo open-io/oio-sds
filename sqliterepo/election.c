@@ -1073,6 +1073,16 @@ _run_exit (gpointer k, gpointer v, gpointer i)
 	return FALSE;
 }
 
+gboolean
+election_manager_is_operational(struct election_manager_s *manager)
+{
+	return (manager != NULL &&
+			manager->vtable != NULL &&
+			manager->peering != NULL &&
+			manager->config != NULL &&
+			manager->members_by_key != NULL);
+}
+
 void
 election_manager_exit_all(struct election_manager_s *manager, gint64 duration,
 		gboolean persist)

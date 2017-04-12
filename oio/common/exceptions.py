@@ -169,12 +169,19 @@ class Conflict(ClientException):
     pass
 
 
+class TooLarge(ClientException):
+    pass
+
+
 class UnsatisfiableRange(ClientException):
     def __init__(self, http_status=416, status=None, message=None):
         super(UnsatisfiableRange, self).__init__(http_status, status, message)
 
 
-_http_status_map = {404: NotFound, 409: Conflict, 416: UnsatisfiableRange}
+_http_status_map = {404: NotFound,
+                    409: Conflict,
+                    413: TooLarge,
+                    416: UnsatisfiableRange}
 
 
 def from_status(status, reason="n/a"):
@@ -188,10 +195,10 @@ def from_response(resp, body=None):
     if body:
         message = "n/a"
         status = None
-        if isinstance(body, dict):
+        try:
             message = body.get('message')
             status = body.get('status')
-        else:
+        except:
             message = body
         return cls(http_status, status, message)
     else:

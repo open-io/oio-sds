@@ -207,6 +207,11 @@
 				"descr": "In a proxy, sets how many containers can be created at once.",
 				"def": "100", "min": 0, "max": "10k" },
 
+			{ "type": "uint", "name": "proxy_bulk_max_delete_many",
+				"key": "proxy.bulk.max.delete_many",
+				"descr": "In a proxy, sets how many objects can be deleted at once.",
+				"def": "100", "min": 0, "max": "10k" },
+
 			{ "type": "bool", "name": "flag_cache_enabled",
 				"key": "proxy.cache.enabled",
 				"descr": "In a proxy, sets if any form of caching is allowed",

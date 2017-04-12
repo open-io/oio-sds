@@ -183,6 +183,13 @@ _reply_conflict_error (struct req_args_s *args, GError * err)
 }
 
 enum http_rc_e
+_reply_too_large (struct req_args_s *args, GError * err)
+{
+	return _reply_json_error (args, HTTP_CODE_PAYLOAD_TO_LARGE,
+			"Payload too large", _create_status_error (err));
+}
+
+enum http_rc_e
 _reply_nocontent (struct req_args_s *args)
 {
 	return _reply_json_error (args, HTTP_CODE_NO_CONTENT, "No Content", NULL);

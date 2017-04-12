@@ -171,7 +171,7 @@ class TouchObject(ContainerCommandMixin, command.Command):
             )
 
 
-class DeleteObject(ContainerCommandMixin, command.Command):
+class DeleteObject(ContainerCommandMixin, lister.Lister):
     """Delete object from container"""
 
     log = logging.getLogger(__name__ + '.DeleteObject')
@@ -190,17 +190,51 @@ class DeleteObject(ContainerCommandMixin, command.Command):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         super(DeleteObject, self).take_action(parsed_args)
-        container = parsed_args.container
+        container = ''
+        results = []
+        account = self.app.client_manager.get_account()
 
-        for obj in parsed_args.objects:
+        if len(parsed_args.objects) <= 1:
             if parsed_args.auto:
                 manager = self.app.client_manager.get_flatns_manager()
-                container = manager(obj)
-            self.app.client_manager.storage.object_delete(
-                self.app.client_manager.get_account(),
+                container = manager(parsed_args.objects[0])
+            else:
+                container = parsed_args.container
+
+            deleted = self.app.client_manager.storage.object_delete(
+                account,
                 container,
-                obj
+                parsed_args.objects[0]
             )
+            results.append((parsed_args.objects[0], deleted))
+        else:
+            if parsed_args.auto:
+                objs = {}
+                manager = self.app.client_manager.get_flatns_manager()
+                for obj in parsed_args.objects:
+                    container = manager(obj)
+                    if container not in objs:
+                        objs[container] = []
+                    objs[container].append(obj)
+
+                for key, value in objs:
+                    tmp = self.app.client_manager.storage.object_delete_many(
+                        account,
+                        key,
+                        value
+                    )
+                    results += tmp
+            else:
+                container = parsed_args.container
+                results = self.app.client_manager.storage.object_delete_many(
+                    account,
+                    container,
+                    parsed_args.objects
+                )
+
+        columns = ('Name', 'Deleted')
+        res_gen = (r for r in results)
+        return columns, res_gen
 
 
 class ShowObject(ObjectCommandMixin, show.ShowOne):

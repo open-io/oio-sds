@@ -790,7 +790,7 @@ sqlx_service_specific_fini(void)
 		if (cache)
 			sqlx_cache_expire(cache, G_MAXUINT, 0);
 	}
-	if (SRV.election_manager)
+	if (election_manager_is_operational(SRV.election_manager))
 		election_manager_exit_all(SRV.election_manager,
 				sqliterepo_server_exit_ttl, TRUE);
 	if (SRV.sync)

@@ -569,9 +569,9 @@ def ec_encode(storage_method, n):
     whats_left = ''.join(buf)
     if whats_left:
         last_fragments = storage_method.driver.encode(whats_left)
-        yield last_fragments
     else:
-        yield [''] * n
+        last_fragments = [''] * n
+    yield last_fragments
 
 
 class ECWriter(object):
@@ -648,7 +648,7 @@ class ECWriter(object):
                     self.failed = True
                     msg = str(exc)
                     logger.warn("Failed to write to %s (%s)", self.chunk, msg)
-                    self.chunk['error'] = 'write: ' % msg
+                    self.chunk['error'] = 'write: %s' % msg
 
             self.queue.task_done()
 
@@ -724,8 +724,7 @@ class ECChunkWriteHandler(object):
         chunks, quorum = self._get_results(current_writers)
 
         if not quorum:
-            logger.error('Quorum not reached during write')
-            raise exceptions.OioException('Write failure')
+            raise exceptions.OioException('Write failure: quorum not reached')
 
         meta_checksum = self.checksum.hexdigest()
 
@@ -737,7 +736,7 @@ class ECChunkWriteHandler(object):
         bytes_transferred = 0
 
         # create EC encoding generator
-        ec_stream = ec_encode(self.storage_method, len(writers))
+        ec_stream = ec_encode(self.storage_method, len(self.meta_chunk))
         # init generator
         ec_stream.send(None)
 
@@ -1024,7 +1023,8 @@ class ECRebuildHandler(object):
                 break
         else:
             logger.error('Unable to read enough valid sources to rebuild')
-            raise exceptions.UnrecoverableContent('Unable to rebuild chunk')
+            raise exceptions.UnrecoverableContent(
+                'Not enough valid sources to rebuild')
 
         rebuild_iter = self._make_rebuild_iter(resps[:nb_data])
         return rebuild_iter
