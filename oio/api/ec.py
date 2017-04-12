@@ -569,9 +569,9 @@ def ec_encode(storage_method, n):
     whats_left = ''.join(buf)
     if whats_left:
         last_fragments = storage_method.driver.encode(whats_left)
-        yield last_fragments
     else:
-        yield [''] * n
+        last_fragments = [''] * n
+    yield last_fragments
 
 
 class ECWriter(object):
@@ -736,7 +736,7 @@ class ECChunkWriteHandler(object):
         bytes_transferred = 0
 
         # create EC encoding generator
-        ec_stream = ec_encode(self.storage_method, len(writers))
+        ec_stream = ec_encode(self.storage_method, len(self.meta_chunk))
         # init generator
         ec_stream.send(None)
 
