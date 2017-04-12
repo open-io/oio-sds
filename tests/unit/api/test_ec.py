@@ -2,8 +2,9 @@ import unittest
 import random
 from io import BytesIO
 from collections import defaultdict
-from eventlet import Timeout
 from hashlib import md5
+from copy import deepcopy
+from eventlet import Timeout
 from oio.common.storage_method import STORAGE_METHODS
 from oio.api.ec import ECChunkWriteHandler, ECChunkDownloadHandler, \
     ECRebuildHandler
@@ -42,6 +43,9 @@ class TestEC(unittest.TestCase):
 
     def meta_chunk(self):
         return self._meta_chunk
+
+    def meta_chunk_copy(self):
+        return deepcopy(self._meta_chunk)
 
     def checksum(self, d=''):
         return md5(d)
@@ -119,9 +123,12 @@ class TestEC(unittest.TestCase):
             nb = self.storage_method.ec_nb_data + \
                 self.storage_method.ec_nb_parity
             resps = [201] * (nb - 1)
-            resps.append(test['error'])
+            # Put the error in the middle to mess with chunk indices
+            err_pos = random.randint(0, nb)
+            resps.insert(err_pos, test['error'])
             with set_http_connect(*resps):
-                handler = ECChunkWriteHandler(self.sysmeta, self.meta_chunk(),
+                handler = ECChunkWriteHandler(self.sysmeta,
+                                              self.meta_chunk_copy(),
                                               checksum, self.storage_method)
                 bytes_transferred, checksum, chunks = handler.stream(
                     source, size)
@@ -148,7 +155,8 @@ class TestEC(unittest.TestCase):
             resps = [201] * (nb - 1)
             resps.append((100, test['error']))
             with set_http_connect(*resps):
-                handler = ECChunkWriteHandler(self.sysmeta, self.meta_chunk(),
+                handler = ECChunkWriteHandler(self.sysmeta,
+                                              self.meta_chunk_copy(),
                                               checksum, self.storage_method)
                 bytes_transferred, checksum, chunks = handler.stream(
                     source, size)
