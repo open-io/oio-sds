@@ -48,6 +48,8 @@ GQuark gq_count_all = 0;
 GQuark gq_time_all = 0;
 GQuark gq_count_unexpected = 0;
 GQuark gq_time_unexpected = 0;
+GQuark gq_count_overloaded = 0;
+GQuark gq_time_overloaded = 0;
 
 static gboolean _endpoint_is_UNIX (struct endpoint_s *u);
 static gboolean _endpoint_is_INET6 (struct endpoint_s *u);
@@ -75,7 +77,7 @@ static void _client_remove_from_monitored(struct network_server_s *srv,
 static void _client_add_to_monitored(struct network_server_s *srv,
 		struct network_client_s *clt);
 
-static void _cb_worker(struct network_client_s *clt,
+static void _cb_tcp_worker(struct network_client_s *clt,
 		struct network_server_s *srv);
 
 static void _cb_stats(struct server_stat_msg_s *msg,
@@ -136,6 +138,9 @@ _cnx_notify_close(struct network_server_s *srv)
 static void __attribute__ ((constructor))
 _constructor (void)
 {
+	gq_count_overloaded = g_quark_from_static_string (OIO_STAT_PREFIX_REQ ".OVERLOADED");
+	gq_time_overloaded = g_quark_from_static_string (OIO_STAT_PREFIX_TIME ".OVERLOADED");
+
 	gq_count_unexpected = g_quark_from_static_string (OIO_STAT_PREFIX_REQ ".UNEXPECTED");
 	gq_time_unexpected = g_quark_from_static_string (OIO_STAT_PREFIX_TIME ".UNEXPECTED");
 	gq_count_all = g_quark_from_static_string (OIO_STAT_PREFIX_REQ);
@@ -243,7 +248,7 @@ network_server_init(void)
 	result->pool_stats = g_thread_pool_new ((GFunc)_cb_stats, result,
 			server_threadpool_max_stat, FALSE, NULL);
 
-	result->pool_tcp = g_thread_pool_new ((GFunc)_cb_worker, result,
+	result->pool_tcp = g_thread_pool_new ((GFunc)_cb_tcp_worker, result,
 			server_threadpool_max_tcp, FALSE, NULL);
 
 	/* Even if UDP is eventually not allowed, a pool with shared threads
@@ -1111,7 +1116,7 @@ _cb_stats(struct server_stat_msg_s *msg, struct network_server_s *srv)
 }
 
 static void
-_cb_worker(struct network_client_s *clt, struct network_server_s *srv)
+_cb_tcp_worker(struct network_client_s *clt, struct network_server_s *srv)
 {
 	EXTRA_ASSERT(clt != NULL);
 	EXTRA_ASSERT(clt->server == srv);
@@ -1119,6 +1124,19 @@ _cb_worker(struct network_client_s *clt, struct network_server_s *srv)
 	if ((clt->events & CLT_ERROR) || !clt->events) {
 		_client_clean(srv, clt);
 		return;
+	}
+
+	/* The event stayed *really* long in the queue of the thread pool.
+	 * Let's close the connection, and let the client retry it's request. */
+	if (clt->events & CLT_READ) {
+		const gint64 now = oio_ext_monotonic_time();
+		if (clt->time.evt_in < OLDEST(now, server_queue_max_delay)) {
+			GRID_INFO("SLOW fd %d peer %s delay %"G_GINT64_FORMAT"ms",
+					clt->fd, clt->peer_name,
+					(now - clt->time.evt_in) / G_TIME_SPAN_MILLISECOND);
+			_client_clean(srv, clt);
+			return;
+		}
 	}
 
 	_client_manage_event(clt, clt->events);

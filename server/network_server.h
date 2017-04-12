@@ -105,6 +105,8 @@ extern GQuark gq_count_all;
 extern GQuark gq_time_all;
 extern GQuark gq_count_unexpected;
 extern GQuark gq_time_unexpected;
+extern GQuark gq_count_overloaded;
+extern GQuark gq_time_overloaded;
 
 struct network_server_s * network_server_init(void);
 

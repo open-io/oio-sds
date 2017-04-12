@@ -261,6 +261,15 @@ Used by `gcc`
  * cmake directive: *OIO__MALLOC_TRIM_SIZE_PERIODIC*
  * range: 0 -> 2147483648
 
+### meta.queue.max_delay
+
+> Anti-DDoS counter-mesure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, A '503 Unavailabe' error is replied.
+
+ * default: **500 * G_TIME_SPAN_MILLISECOND**
+ * type: gint64
+ * cmake directive: *OIO__META_QUEUE_MAX_DELAY*
+ * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
+
 ### meta0.outgoing.timeout.common.req
 
 > Sets the timeout to the set of (quick) RPC that query a meta0 service
@@ -665,6 +674,15 @@ Used by `gcc`
  * type: gint
  * cmake directive: *OIO__SERVER_POOL_MAX_UNUSED*
  * range: 0 -> 1073741824
+
+### server.queue.max_delay
+
+> Anti-DDoS counter-mesure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, the connection is immediately closed.
+
+ * default: **1 * G_TIME_SPAN_SECOND**
+ * type: gint64
+ * cmake directive: *OIO__SERVER_QUEUE_MAX_DELAY*
+ * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### server.udp_queue.max
 
