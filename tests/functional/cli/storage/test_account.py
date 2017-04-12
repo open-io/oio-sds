@@ -1,4 +1,4 @@
-# Copyright (C) 2016 OpenIO SAS
+# Copyright (C) 2016-2017 OpenIO SAS
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -11,9 +11,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import json
 import uuid
-from tests.functional import TestCase
+from tests.functional.cli import CliTestCase
 from testtools.matchers import Equals
 
 
@@ -22,7 +21,7 @@ ACCOUNT_FIELDS = ['bytes', 'containers', 'ctime', 'account', 'metadata',
                   'objects']
 
 
-class AccountTest(TestCase):
+class AccountTest(CliTestCase):
     """Functional tests for accounts."""
 
     NAME = uuid.uuid4().hex
@@ -30,7 +29,7 @@ class AccountTest(TestCase):
     def test_account(self):
         opts = self.get_opts([], 'json')
         output = self.openio('account create ' + self.NAME + opts)
-        data = json.loads(output)
+        data = self.json_loads(output)
         self.assertThat(len(data), Equals(1))
         self.assert_list_fields(data, HEADERS)
         item = data[0]
@@ -38,7 +37,7 @@ class AccountTest(TestCase):
         self.assertThat(item['Created'], Equals(True))
         opts = self.get_opts([], 'json')
         output = self.openio('account show ' + self.NAME + opts)
-        data = json.loads(output)
+        data = self.json_loads(output)
         self.assert_show_fields(data, ACCOUNT_FIELDS)
         self.assertThat(data['account'], Equals(self.NAME))
         self.assertThat(data['bytes'], Equals(0))

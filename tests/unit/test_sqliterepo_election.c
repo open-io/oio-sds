@@ -475,13 +475,14 @@ test_election_init(void)
 	election_manager_set_peering (m, peering);
 
 	for (int i=0; i<8 ;++i) {
-		struct sqlx_name_mutable_s n = {.ns="NS", .base=NULL, .type="type"};
-		n.base = g_strdup_printf("base-%"G_GUINT32_FORMAT, oio_ext_rand_int());
-		err = election_init(m, sqlx_name_mutable_to_const(&n));
+		struct sqlx_name_inline_s n0 = {.ns="NS", .base="", .type="type"};
+		g_snprintf(n0.base, sizeof(n0.base),
+				"base-%"G_GUINT32_FORMAT, oio_ext_rand_int());
+		NAME2CONST(n, n0);
+		err = election_init(m, &n);
 		g_assert_no_error(err);
-		err = election_exit(m, sqlx_name_mutable_to_const(&n));
+		err = election_exit(m, &n);
 		g_assert_no_error(err);
-		g_free (n.base);
 	}
 
 	election_manager_clean (m);

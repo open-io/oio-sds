@@ -293,12 +293,10 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx)
 {
 	guint count_errors = 0, count_success = 0;
 
-	dump_request(__FUNCTION__, peers, "SQLX_REPLICATE",
-			sqlx_name_mutable_to_const(&ctx->sq3->name));
+	NAME2CONST(n, ctx->sq3->name);
+	dump_request(__FUNCTION__, peers, "SQLX_REPLICATE", &n);
 
-	GByteArray *encoded = sqlx_pack_REPLICATE(
-			sqlx_name_mutable_to_const(&ctx->sq3->name),
-			&(ctx->sequence));
+	GByteArray *encoded = sqlx_pack_REPLICATE(&n, &(ctx->sequence));
 	struct gridd_client_s **clients =
 		gridd_client_create_many(peers, encoded, NULL, NULL);
 	g_byte_array_unref(encoded);
@@ -359,8 +357,8 @@ _defer_synchronous_RESYNC(struct sqlx_repctx_s *ctx)
 {
 	gchar **peers = NULL;
 
-	GError *err = election_get_peers (ctx->sq3->manager,
-			sqlx_name_mutable_to_const(&ctx->sq3->name), FALSE, &peers);
+	NAME2CONST(n, ctx->sq3->name);
+	GError *err = election_get_peers (ctx->sq3->manager, &n, FALSE, &peers);
 
 	if (err != NULL) {
 		GRID_WARN("Replicated transaction started but peers not found "
@@ -382,8 +380,8 @@ _perform_REPLICATE(struct sqlx_repctx_s *ctx)
 {
 	gchar **peers = NULL;
 
-	GError *err = election_get_peers (ctx->sq3->manager,
-			sqlx_name_mutable_to_const(&ctx->sq3->name), FALSE, &peers);
+	NAME2CONST(n, ctx->sq3->name);
+	GError *err = election_get_peers (ctx->sq3->manager, &n, FALSE, &peers);
 
 	if (err != NULL) {
 		GRID_WARN("Replicated transaction started but peers not found "
@@ -489,7 +487,8 @@ sqlx_synchronous_resync(struct sqlx_repctx_s *ctx, gchar **peers)
 	}
 
 	// Now send it to the SLAVES
-	peers_restore(peers, sqlx_name_mutable_to_const(&ctx->sq3->name), dump);
+	NAME2CONST(n, ctx->sq3->name);
+	peers_restore(peers, &n, dump);
 	GRID_INFO("RESTORED on SLAVES [%s][%s]", ctx->sq3->name.base,
 			ctx->sq3->name.type);
 }
@@ -530,9 +529,9 @@ sqlx_transaction_prepare(struct sqlx_sqlite3_s *sq3,
 
 	if (!sq3->no_peers &&
 			sqlx_repository_replication_configured(sq3->repo)) {
+		NAME2CONST(n, sq3->name);
 		GError *err = election_has_peers(
-				sqlx_repository_get_elections_manager(sq3->repo),
-				sqlx_name_mutable_to_const(&sq3->name), FALSE, &has);
+				sqlx_repository_get_elections_manager(sq3->repo), &n, FALSE, &has);
 		if (err != NULL) {
 			g_prefix_error(&err, "Peer resolution: ");
 			return err;

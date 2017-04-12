@@ -270,76 +270,39 @@ sqlx_pack_PROPSET_tab(const struct sqlx_name_s *name, gboolean flush, gchar **kv
 }
 
 void
-sqlx_name_clean (struct sqlx_name_mutable_s *n)
-{
-	if (!n) return;
-	oio_str_clean(&n->ns);
-	oio_str_clean(&n->base);
-	oio_str_clean(&n->type);
-}
-
-void
-sqlx_name_free (struct sqlx_name_mutable_s *n)
-{
-	sqlx_name_clean(n);
-	g_free0 (n);
-}
-
-void
-sqlx_name_dup (struct sqlx_name_mutable_s *dst, const struct sqlx_name_s *src)
-{
-	EXTRA_ASSERT(dst != NULL && src != NULL);
-	oio_str_replace (&dst->ns, src->ns);
-	oio_str_replace (&dst->base, src->base);
-	oio_str_replace (&dst->type, src->type);
-}
-
-void
-sqlx_name_fill_type_asis  (struct sqlx_name_mutable_s *n, struct oio_url_s *url,
-		const char *srvtype, gint64 seq)
+sqlx_inline_name_fill_type_asis  (struct sqlx_name_inline_s *n,
+		struct oio_url_s *url, const char *srvtype, gint64 seq)
 {
 	EXTRA_ASSERT (n != NULL);
 	EXTRA_ASSERT (url != NULL);
 	EXTRA_ASSERT (srvtype != NULL);
 
-	n->ns = g_strdup(oio_url_get (url, OIOURL_NS));
+	g_strlcpy(n->ns, oio_url_get (url, OIOURL_NS), sizeof(n->ns));
+	g_strlcpy(n->type, srvtype, sizeof(n->type));
 
 	if (!strcmp(srvtype, NAME_SRVTYPE_META0)) {
-		n->base = g_strdup (oio_url_get (url, OIOURL_NS));
+		g_strlcpy(n->base, oio_url_get (url, OIOURL_NS), sizeof(n->base));
 	} else if (!strcmp(srvtype, NAME_SRVTYPE_META1)) {
-		n->base = g_strndup (oio_url_get(url, OIOURL_HEXID), 4);
+		g_strlcpy(n->base, oio_url_get(url, OIOURL_HEXID), 4+1);
 	} else {
-		n->base = g_strdup_printf ("%s.%"G_GINT64_FORMAT,
+		g_snprintf (n->base, sizeof(n->base), "%s.%"G_GINT64_FORMAT,
 				oio_url_get (url, OIOURL_HEXID), seq);
 	}
-
-	n->type = g_strdup (srvtype);
 }
 
 void
-sqlx_name_fill  (struct sqlx_name_mutable_s *n, struct oio_url_s *url,
+sqlx_inline_name_fill (struct sqlx_name_inline_s *n, struct oio_url_s *url,
 		const char *srvtype, gint64 seq)
 {
-	EXTRA_ASSERT (n != NULL);
-	EXTRA_ASSERT (url != NULL);
-	EXTRA_ASSERT (srvtype != NULL);
+	gchar tmp[LIMIT_LENGTH_BASETYPE];
 	const gchar *subtype = oio_url_get (url, OIOURL_TYPE);
 
-	n->ns = g_strdup(oio_url_get (url, OIOURL_NS));
-
-	if (!strcmp(srvtype, NAME_SRVTYPE_META0)) {
-		n->base = g_strdup (oio_url_get (url, OIOURL_NS));
-	} else if (!strcmp(srvtype, NAME_SRVTYPE_META1)) {
-		n->base = g_strndup (oio_url_get(url, OIOURL_HEXID), 4);
-	} else {
-		n->base = g_strdup_printf ("%s.%"G_GINT64_FORMAT,
-				oio_url_get (url, OIOURL_HEXID), seq);
-	}
-
 	if (subtype && 0 != strcmp(subtype, OIOURL_DEFAULT_TYPE))
-		n->type = g_strdup_printf ("%s.%s", srvtype, subtype);
+		g_snprintf(tmp, sizeof(tmp), "%s.%s", srvtype, subtype);
 	else
-		n->type = g_strdup (srvtype);
+		g_strlcpy(tmp, srvtype, sizeof(tmp));
+
+	return sqlx_inline_name_fill_type_asis(n, url, tmp, seq);
 }
 
 gboolean

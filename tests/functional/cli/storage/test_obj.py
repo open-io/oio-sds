@@ -11,12 +11,11 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import json
 import os
 import tempfile
 import uuid
 from hashlib import md5
-from tests.functional import TestCase
+from tests.functional.cli import CliTestCase
 from testtools.matchers import Equals
 
 
@@ -29,7 +28,7 @@ OBJ_FIELDS = ['account', 'container', 'ctime', 'hash', 'id', 'mime-type',
               'object', 'policy', 'size', 'version']
 
 
-class ObjTest(TestCase):
+class ObjTest(CliTestCase):
     """Functional tests for objects."""
 
     CONTAINER_NAME = uuid.uuid4().hex
@@ -53,7 +52,7 @@ class ObjTest(TestCase):
         checksum = md5(test_content).hexdigest().upper()
         opts = self.get_opts([], 'json')
         output = self.openio('container create ' + cname + opts)
-        data = json.loads(output)
+        data = self.json_loads(output)
         self.assertThat(len(data), Equals(1))
         self.assert_list_fields(data, HEADERS)
         self.assertThat(data[0]['Name'], Equals(cname))
@@ -64,14 +63,14 @@ class ObjTest(TestCase):
 
         opts = self.get_opts([], 'json')
         output = self.openio('container list' + opts)
-        listing = json.loads(output)
+        listing = self.json_loads(output)
         self.assert_list_fields(listing, CONTAINER_LIST_HEADERS)
         self.assertTrue(len(listing) >= 1)
         # TODO verify CONTAINER_NAME in list
 
         opts = self.get_opts([], 'json')
         output = self.openio('container show ' + cname + opts)
-        data = json.loads(output)
+        data = self.json_loads(output)
         self.assert_show_fields(data, CONTAINER_FIELDS)
 
         fake_cname = cname
@@ -81,7 +80,7 @@ class ObjTest(TestCase):
         opts = self.get_opts([], 'json')
         output = self.openio('object create ' + auto + ' ' + fake_cname +
                              ' ' + obj_file + ' ' + obj_file + ' ' + opts)
-        data = json.loads(output)
+        data = self.json_loads(output)
         self.assert_list_fields(data, OBJ_HEADERS)
         self.assertThat(len(data), Equals(2))
         item = data[0]
@@ -91,7 +90,7 @@ class ObjTest(TestCase):
 
         opts = self.get_opts([], 'json')
         output = self.openio('object list ' + cname + opts)
-        listing = json.loads(output)
+        listing = self.json_loads(output)
         self.assert_list_fields(listing, OBJ_HEADERS)
         self.assertThat(len(data), Equals(2))
         item = data[0]
@@ -111,7 +110,7 @@ class ObjTest(TestCase):
 
         opts = self.get_opts([], 'json')
         output = self.openio('object show ' + cname + ' ' + obj_name + opts)
-        data = json.loads(output)
+        data = self.json_loads(output)
         self.assert_show_fields(data, OBJ_FIELDS)
         self.assertThat(data['object'], Equals(obj_name))
         self.assertThat(data['size'], Equals(str(len(test_content))))

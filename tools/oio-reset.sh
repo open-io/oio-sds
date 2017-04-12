@@ -154,13 +154,15 @@ gridinit_cmd -S "$GRIDINIT_SOCK" reload >/dev/null
 gridinit_cmd -S "$GRIDINIT_SOCK" start "@${NS}"
 timestamp
 COUNT=$(${PREFIX}-test-config.py -c -t meta2 -t rawx -t sqlx)
-wait_for_srvtype "(sqlx|rawx|meta2)" $((2 + COUNT))
+wait_for_srvtype "sqlx rawx meta2" "$COUNT"
 timestamp
 COUNT=$(${PREFIX}-test-config.py -c -t meta0 -t meta1)
-wait_for_srvtype "(meta0|meta1)" $((1 + COUNT))
+wait_for_srvtype "meta0 meta1" "$COUNT"
 
 timestamp
 
+COUNT=$(${PREFIX}-test-config.py -c -t rdir)
+wait_for_srvtype "rdir" "$COUNT"
 openio \
 	--oio-ns "$NS" -v directory bootstrap --check \
 	--replicas $(${PREFIX}-test-config.py -v directory_replicas)

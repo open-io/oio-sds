@@ -948,13 +948,14 @@ action_m2_container_destroy (struct req_args_s *args)
 {
 	GError *err = NULL;
 	gchar **urlv = NULL;
-	struct sqlx_name_mutable_s n = {NULL,NULL,NULL};
 
 	const gboolean flush = _request_get_flag (args, "flush");
 	const gboolean force = _request_get_flag (args, "force");
 
 	/* TODO FIXME manage container subtype */
-	sqlx_name_fill (&n, args->url, NAME_SRVTYPE_META2, 1);
+	struct sqlx_name_inline_s n0;
+	sqlx_inline_name_fill (&n0, args->url, NAME_SRVTYPE_META2, 1);
+	NAME2CONST(n, n0);
 
 	/* pre-loads the locations of the container. We will need this at the
 	 * destroy step. */
@@ -1019,7 +1020,6 @@ action_m2_container_destroy (struct req_args_s *args)
 clean_and_exit:
 	if (urlv)
 		g_strfreev (urlv);
-	sqlx_name_clean (&n);
 	if (NULL != err)
 		return _reply_m2_error(args, err);
 	return _reply_nocontent (args);

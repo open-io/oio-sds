@@ -59,7 +59,8 @@ meta2_on_close(struct sqlx_sqlite3_s *sq3, gboolean deleted, gpointer cb_data)
 
 	struct oio_url_s *u = oio_url_empty ();
 	oio_url_set (u, OIOURL_NS, PSRV(cb_data)->ns_name);
-	if (!sqlx_name_extract ((struct sqlx_name_s*)&sq3->name, u, NAME_SRVTYPE_META2, &seq)) {
+	NAME2CONST(n, sq3->name);
+	if (!sqlx_name_extract (&n, u, NAME_SRVTYPE_META2, &seq)) {
 		GRID_WARN("Invalid base name [%s]", sq3->name.base);
 		return;
 	}

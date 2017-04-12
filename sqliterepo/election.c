@@ -39,6 +39,8 @@ License along with this library.
 #define EVENTLOG_SIZE 16
 #define STATUS_FINAL(e) ((e) >= STEP_SLAVE)
 
+#define MEMBER_NAME(n, m) NAME2CONST(n, m->inline_name)
+
 typedef guint req_id_t;
 
 enum election_step_e
@@ -158,8 +160,6 @@ struct election_member_s
 	/* Weak pointer to the condition, do not free! */
 	GCond *cond;
 
-	struct sqlx_name_mutable_s name;
-
 	/* Since when do we loop between pending states. That value is used by
 	 * client threads to decide wether to wait (or not) for a final state. */
 	gint64 when_unstable;
@@ -224,6 +224,7 @@ struct election_member_s
 	unsigned char flag_master_id : 1;
 
 	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
+	struct sqlx_name_inline_s inline_name;
 
 	struct logged_event_s log[EVENTLOG_SIZE];
 };
@@ -745,7 +746,7 @@ member_descr(const struct election_member_s *m, gchar *d, gsize ds)
 			(m->master_url ? m->master_url : "-"),
 			m->refcount, m->pending_PIPEFROM,
 			m->pending_GETVERS, m->errors_GETVERS, m->concurrent_GETVERS,
-			m->key, m->name.base, m->name.type);
+			m->key, m->inline_name.base, m->inline_name.type);
 }
 
 #define DUMP(LVL,TAG,M) do { \
@@ -811,8 +812,8 @@ member_get_url(struct election_member_s *m)
 static GError *
 member_get_peers(struct election_member_s *m, gboolean nocache, gchar ***peers)
 {
-	return election_get_peers(MMANAGER(m),
-			sqlx_name_mutable_to_const(&m->name), nocache, peers);
+	MEMBER_NAME(n,m);
+	return election_get_peers(MMANAGER(m), &n, nocache, peers);
 }
 
 static void
@@ -956,7 +957,7 @@ static void
 member_log_completion(const char *tag, int zrc, const struct election_member_s *m)
 {
 	GRID_TRACE("%s %d/%s [%s.%s] %s", tag, zrc, zerror(zrc),
-			m->name.base, m->name.type, m->key);
+			m->inline_name.base, m->inline_name.type, m->key);
 }
 #else
 #define member_log_completion(...)
@@ -991,7 +992,6 @@ member_destroy(struct election_member_s *member)
 
 	member->cond = NULL;
 	oio_str_clean (&member->master_url);
-	sqlx_name_clean (&member->name);
 
 	g_free(member);
 }
@@ -1033,9 +1033,9 @@ _LOCKED_init_member(struct election_manager_s *manager,
 		member->manager = manager;
 		member->last_status = oio_ext_monotonic_time ();
 		strncpy(member->key, key, sizeof(member->key));
-		member->name.base = g_strdup(n->base);
-		member->name.type = g_strdup(n->type);
-		member->name.ns = g_strdup(n->ns);
+		g_strlcpy(member->inline_name.base, n->base, sizeof(member->inline_name.base));
+		g_strlcpy(member->inline_name.type, n->type, sizeof(member->inline_name.type));
+		g_strlcpy(member->inline_name.ns, n->ns, sizeof(member->inline_name.ns));
 		member->refcount = 2;
 		member->cond = _manager_get_condition(manager, member->key);
 
@@ -1129,9 +1129,9 @@ member_json (struct election_member_s *m, GString *gs)
 	g_string_append_c (gs, ',');
 	OIO_JSON_append_str (gs, "url", m->master_url);
 	g_string_append_static (gs, "},\"base\":{");
-	OIO_JSON_append_str (gs, "name", m->name.base);
+	OIO_JSON_append_str (gs, "name", m->inline_name.base);
 	g_string_append_c (gs, ',');
-	OIO_JSON_append_str (gs, "type", m->name.type);
+	OIO_JSON_append_str (gs, "type", m->inline_name.type);
 	g_string_append_c (gs, ',');
 	OIO_JSON_append_str (gs, "zk", m->key);
 	g_string_append_static (gs, "},\"#\":{");
@@ -1669,7 +1669,7 @@ member_warn_failed_action(struct election_member_s *member, int zrc,
 {
 	gchar path[PATH_MAXLEN];
 	GRID_WARN("%s failed [%s.%s] [%s] : (%d) %s", action,
-			member->name.base, member->name.type,
+			member->inline_name.base, member->inline_name.type,
 			member_fullpath(member, path, sizeof(path)),
 			zrc, zerror(zrc));
 }
@@ -1761,7 +1761,7 @@ wait_for_final_status(struct election_member_s *m, const gint64 deadline)
 		/* compare internal timers to our fake'able clock */
 		if (now > deadline) {
 			GRID_WARN("TIMEOUT! (waiting for election status) [%s.%s] step=%d/%s",
-					m->name.base, m->name.type, m->step, _step2str(m->step));
+					m->inline_name.base, m->inline_name.type, m->step, _step2str(m->step));
 			return FALSE;
 		}
 
@@ -1771,13 +1771,13 @@ wait_for_final_status(struct election_member_s *m, const gint64 deadline)
 		if (m->when_unstable > 0 && m->when_unstable <
 				OLDEST(now, oio_election_delay_nowait_pending)) {
 			GRID_WARN("TIMEOUT! (election pending for too long) [%s.%s] step=%d/%s",
-					m->name.base, m->name.type, m->step, _step2str(m->step));
+					m->inline_name.base, m->inline_name.type, m->step, _step2str(m->step));
 			return FALSE;
 		}
 
 		GRID_TRACE("Still waiting for [%s.%s] step=%d/%s"
 				" %"G_GINT64_FORMAT"/%"G_GINT64_FORMAT,
-				m->name.base, m->name.type, m->step, _step2str(m->step),
+				m->inline_name.base, m->inline_name.type, m->step, _step2str(m->step),
 				m->when_unstable / G_TIME_SPAN_SECOND, now / G_TIME_SPAN_SECOND);
 
 		/* perform the real WAIT on the real clock. */
@@ -1869,8 +1869,8 @@ defer_USE(struct election_member_s *member)
 	} else {
 		member->last_USE = oio_ext_monotonic_time();
 		for (gchar **p = peers; peers && *p; p++) {
-			sqlx_peering__use (member->manager->peering, *p,
-					sqlx_name_mutable_to_const(&member->name));
+			MEMBER_NAME(n,member);
+			sqlx_peering__use (member->manager->peering, *p, &n);
 			member_trace("sched:USE", member);
 		}
 	}
@@ -2216,9 +2216,9 @@ member_action_to_SYNCING(struct election_member_s *member)
 	member->requested_PIPEFROM = 0;
 	member->pending_PIPEFROM = 1;
 
+	MEMBER_NAME(n, member);
 	sqlx_peering__pipefrom (member->manager->peering, target,
-			sqlx_name_mutable_to_const(&member->name), source,
-			member->manager, 0, _result_PIPEFROM);
+			&n, source, member->manager, 0, _result_PIPEFROM);
 
 	member_debug("sched:PIPEFROM", member);
 
@@ -2243,9 +2243,9 @@ member_action_to_CHECKING_MASTER(struct election_member_s *m)
 	m->concurrent_GETVERS = 0;
 	m->errors_GETVERS = 0;
 
+	MEMBER_NAME(n, m);
 	sqlx_peering__getvers (m->manager->peering, m->master_url,
-			sqlx_name_mutable_to_const(&m->name), m->manager,
-			0, _result_GETVERS);
+			&n, m->manager, 0, _result_GETVERS);
 
 	member_trace("sched:GETVERS", m);
 
@@ -2288,10 +2288,10 @@ member_action_to_CHECKING_SLAVES(struct election_member_s *m)
 	m->outdated_GETVERS = 0;
 	m->errors_GETVERS = 0;
 
+	MEMBER_NAME(n, m);
 	for (gchar **p=peers; p && *p; p++) {
 		sqlx_peering__getvers (m->manager->peering, *p,
-				sqlx_name_mutable_to_const(&m->name), m->manager,
-				0, _result_GETVERS);
+				&n, m->manager, 0, _result_GETVERS);
 		member_trace("sched:GETVERS", m);
 	}
 

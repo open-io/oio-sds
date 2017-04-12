@@ -201,7 +201,7 @@ struct client_ctx_s {
 	gpointer decoder_data;
 
 	/* input */
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_inline_s name;
 	struct oio_url_s *url;
 	const char *type;
 	gint64 seq;

@@ -341,12 +341,11 @@ m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 	EXTRA_ASSERT(m2 != NULL);
 	EXTRA_ASSERT(m2->repo != NULL);
 
-	struct sqlx_name_mutable_s n;
-	sqlx_name_fill (&n, url, NAME_SRVTYPE_META2, 1);
-	err = sqlx_repository_open_and_lock(m2->repo,
-			sqlx_name_mutable_to_const(&n), m2_to_sqlx(how), &sq3, NULL);
-	sqlx_name_clean (&n);
+	struct sqlx_name_inline_s n0;
+	sqlx_inline_name_fill (&n0, url, NAME_SRVTYPE_META2, 1);
+	NAME2CONST(n,n0);
 
+	err = sqlx_repository_open_and_lock(m2->repo, &n, m2_to_sqlx(how), &sq3, NULL);
 	if (NULL != err) {
 		if (err->code == CODE_CONTAINER_NOTFOUND)
 			err->domain = GQ();
@@ -436,11 +435,11 @@ meta2_backend_has_container(struct meta2_backend_s *m2,
 	EXTRA_ASSERT(url != NULL);
 	GRID_DEBUG("HAS(%s)", oio_url_get(url, OIOURL_WHOLE));
 
-	struct sqlx_name_mutable_s n;
-	sqlx_name_fill (&n, url, NAME_SRVTYPE_META2, 1);
-	err = sqlx_repository_has_base(m2->repo, sqlx_name_mutable_to_const(&n));
-	sqlx_name_clean (&n);
+	struct sqlx_name_inline_s n0;
+	sqlx_inline_name_fill (&n0, url, NAME_SRVTYPE_META2, 1);
+	NAME2CONST(n,n0);
 
+	err = sqlx_repository_has_base(m2->repo, &n);
 	if (NULL != err) {
 		g_prefix_error(&err, "File error: ");
 		return err;
@@ -802,8 +801,8 @@ m2b_add_modified_container(struct meta2_backend_s *m2b,
 				_container_state (sq3));
 
 	gboolean has_peers = FALSE;
-	GError *err = election_has_peers(sq3->manager,
-			sqlx_name_mutable_to_const(&(sq3->name)), FALSE, &has_peers);
+	NAME2CONST(n, sq3->name);
+	GError *err = election_has_peers(sq3->manager, &n, FALSE, &has_peers);
 	if (!err && !has_peers) {
 		meta2_backend_change_callback(sq3, m2b);
 	}
@@ -1383,7 +1382,7 @@ meta2_backend_change_callback(struct sqlx_sqlite3_s *sq3,
 	gchar *user = sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME);
 	if (!account || !user) {
 		GRID_WARN("Missing "SQLX_ADMIN_ACCOUNT" or "SQLX_ADMIN_USERNAME
-				" in database %s", sq3->path);
+				" in database %s", sq3->path_inline);
 	} else {
 		struct oio_url_s *url = oio_url_empty();
 		oio_url_set(url, OIOURL_NS, m2b->ns_name);
