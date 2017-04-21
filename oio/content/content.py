@@ -83,7 +83,7 @@ class Content(object):
             version=self.version, chunk_method=self.chunk_method,
             mime_type=self.mime_type, data=self.chunks.raw())
 
-    def rebuild_chunk(self, chunk_id, allow_same_rawx=False):
+    def rebuild_chunk(self, chunk_id, allow_same_rawx=False, chunk_pos=None):
         raise NotImplementedError()
 
     def create(self, stream):
