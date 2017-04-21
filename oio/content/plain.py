@@ -19,7 +19,7 @@ from oio.api import io
 from oio.api.replication import ReplicatedWriteHandler
 from oio.api.object_storage import _sort_chunks, get_meta_ranges
 from oio.common.storage_method import STORAGE_METHODS
-from oio.content.content import Content
+from oio.content.content import Content, Chunk
 from oio.common import exceptions as exc
 from oio.common.exceptions import UnrecoverableContent
 
@@ -76,15 +76,25 @@ class PlainContent(Content):
         self._create_object()
         return final_chunks, bytes_transferred, content_checksum
 
-    def rebuild_chunk(self, chunk_id, allow_same_rawx=False):
+    def rebuild_chunk(self, chunk_id, allow_same_rawx=False, chunk_pos=None):
         current_chunk = self.chunks.filter(id=chunk_id).one()
-        if current_chunk is None:
+        if current_chunk is None and chunk_pos is None:
             raise exc.OrphanChunk("Chunk not found in content")
+        elif chunk_pos is None:
+            chunk_pos = current_chunk.pos
 
         duplicate_chunks = self.chunks.filter(
-            pos=current_chunk.pos).exclude(id=chunk_id).all()
+            pos=chunk_pos).exclude(id=chunk_id).all()
         if len(duplicate_chunks) == 0:
             raise UnrecoverableContent("No copy of missing chunk")
+
+        if current_chunk is None:
+            chunk = {}
+            chunk['hash'] = duplicate_chunks[0].checksum
+            chunk['size'] = duplicate_chunks[0].size
+            chunk['url'] = ''
+            chunk['pos'] = chunk_pos
+            current_chunk = Chunk(chunk)
 
         broken_list = list()
         if not allow_same_rawx:

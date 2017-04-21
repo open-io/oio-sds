@@ -1453,6 +1453,20 @@ m2b_get_prepare_data(struct meta2_backend_s *m2b,
 	return err;
 }
 
+GError *
+meta2_backend_check_content(struct meta2_backend_s *m2b,
+		GSList *beans, GString *message)
+{
+	GError *err = NULL;
+	struct namespace_info_s *nsinfo = NULL;
+	if (!(nsinfo = meta2_backend_get_nsinfo(m2b)))
+		return NEWERROR(CODE_INTERNAL_ERROR, "NS not ready");
+
+	err = m2db_check_content(beans, nsinfo, message);
+	namespace_info_free(nsinfo);
+	return err;
+}
+
 GError*
 meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gint64 size, const gchar *polname,
