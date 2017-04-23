@@ -635,9 +635,11 @@ rawx_repo_commit_upload(dav_stream *stream)
 	 * values that could be missing */
 	request_overload_chunk_info_from_trailers (stream->r->info->request, &fake);
 	if (!fake.chunk_hash) {
-		gchar *hex = g_ascii_strup (g_checksum_get_string(stream->md5), -1);
-		fake.chunk_hash = apr_pstrdup(stream->p, hex);
-		g_free (hex);
+		if (stream->md5) {
+			gchar *hex = g_ascii_strup (g_checksum_get_string(stream->md5), -1);
+			fake.chunk_hash = apr_pstrdup(stream->p, hex);
+			g_free (hex);
+		}
 	}
 	if (!fake.chunk_size) {
 		fake.chunk_size = apr_psprintf(stream->r->pool, "%d", (int)stream->total_size);
@@ -801,7 +803,10 @@ retry:
 		ds->compress_checksum = checksum;
 	}
 
-	ds->md5 = g_checksum_new (G_CHECKSUM_MD5);
+	/* init only when the storage policy is not EC */
+	if (!ctx->chunk.content_chunk_method ||
+			!oio_str_prefixed(ctx->chunk.content_chunk_method, STGPOL_DSPREFIX_EC, "/"))
+		ds->md5 = g_checksum_new (G_CHECKSUM_MD5);
 
 	*result = ds;
 
