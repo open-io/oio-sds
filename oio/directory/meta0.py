@@ -29,22 +29,22 @@ class Meta0Client(ProxyClient):
 class PrefixMapping(object):
     """Represents the content of the meta0 database"""
 
-    TOTAL_PREFIXES = 65536
-
     def __init__(self, meta0_client, conscience_client, replicas=3,
                  digits=None, logger=None, **kwargs):
         """
-        Parameters:
-        - replicas: strictily positive integer
-        - digits: integer between 0 and 4 (default: 4)
+        :param replicas: number of services to allocate to manage a base
+        :type replicas: strictly positive `int`
+        :param digits: number of digits used to name the database files
+        :type digits: `int` between 0 and 4 (inclusive)
         """
         self.cs = conscience_client
         self.m0 = meta0_client
-        self.svc_by_pfx = dict()
+        self.svc_by_base = dict()
         self.services = dict()
         self.logger = logger
-        assert(replicas > 0)
-        self.replicas = replicas
+        self.replicas = int(replicas)
+        if self.replicas < 1:
+            raise ConfigurationException("replicas must be >= 1")
         if digits is None:
             digits = 4
         self.digits = int(digits)
@@ -52,11 +52,22 @@ class PrefixMapping(object):
             raise ConfigurationException("meta_digits must be >= 0")
         if self.digits > 4:
             raise ConfigurationException("meta_digits must be <= 4")
+        self.reset()
+
+    def reset(self):
+        """
+        Reset the base allocations and reload the services from Conscience.
+        """
+        self.svc_by_base.clear()
         for svc in self.cs.all_services("meta1"):
             self.services[svc["addr"]] = svc
 
     def __nonzero__(self):
-        return bool(self.svc_by_pfx)
+        return bool(self.svc_by_base)
+
+    def num_bases(self):
+        """Get total the number of bases according to `self.digits`"""
+        return 1 << (4 * self.digits)
 
     def get_loc(self, svc, default=None):
         """
@@ -79,11 +90,41 @@ class PrefixMapping(object):
         score = int(svc.get("score", 0))
         return score
 
-    def get_managed_prefixes(self, svc):
-        """Get the list of prefixes managed by the service"""
+    def get_managed_bases(self, svc):
+        """Get the list of bases managed by the service"""
         if isinstance(svc, basestring):
             svc = self.services.get(svc, {"addr": svc})
-        return svc.get("prefixes", set([]))
+        return svc.get("bases", set([]))
+
+    def prefix_to_base(self, pfx):
+        """
+        Get the name of the base the prefix will be saved in.
+        When `self.digits` is 4, the name of the base is `pfx`.
+        """
+        return str(pfx[:self.digits]).ljust(4, '0')
+
+    def prefix_siblings(self, pfx):
+        """
+        Get the list of prefixes that share the same base as `pfx`.
+        """
+        min_base = self.prefix_to_base(pfx)
+        max_base = str(min_base[:self.digits]).ljust(4, 'F')
+        return ["%04X" % base
+                for base in xrange(int(min_base, 16),
+                                   int(max_base, 16) + 1)]
+
+    def _extend(self):
+        """
+        Extend the mapping to all meta1 prefixes,
+        if `self.digits` is less than 4.
+        """
+        if self.digits == 4:
+            return self.svc_by_base
+        extended = dict()
+        for base, services in self.svc_by_base.iteritems():
+            for pfx in self.prefix_siblings(base):
+                extended[pfx] = services
+        return extended
 
     def to_json(self):
         """
@@ -91,7 +132,7 @@ class PrefixMapping(object):
         as input for 'meta0_force' request.
         """
         simplified = dict()
-        for pfx, services in self.svc_by_pfx.iteritems():
+        for pfx, services in self._extend().iteritems():
             simplified[pfx] = [x['addr'] for x in services]
         return json.dumps(simplified)
 
@@ -107,16 +148,18 @@ class PrefixMapping(object):
         else:
             raw_mapping = self.m0.list()
 
+        # pylint: disable=no-member
         for pfx, services_addrs in raw_mapping.iteritems():
             services = list()
+            # FIXME: this is REALLY annoying
+            # self.prefix_to_base() takes the beginning of the prefix,
+            # but here we have to take the end, because meta0 does
+            # some byte swapping.
+            base = pfx[4-self.digits:]
             for svc_addr in services_addrs:
                 svc = self.services.get(svc_addr, {"addr": svc_addr})
                 services.append(svc)
-            for svc in services:
-                pfx_set = svc.get("prefixes", set([]))
-                pfx_set.add(pfx)
-                svc["prefixes"] = pfx_set
-            self.svc_by_pfx[pfx] = services
+            self.assign_services(base, services)
 
     def force(self, **kwargs):
         """Upload the current mapping to the meta0 services"""
@@ -145,15 +188,15 @@ class PrefixMapping(object):
             (lambda known2:
              self.services[random.choice(self.services.keys())]))
 
-    def find_services_less_prefixes(self, known=None, min_score=1, **_kwargs):
+    def find_services_less_bases(self, known=None, min_score=1, **_kwargs):
         """Find `replicas` services, including the ones of `known`"""
         if known is None:
             known = list([])
         filtered = [x for x in self.services.itervalues()
                     if self.get_score(x) >= min_score]
         # Reverse the list so we can quickly pop the service
-        # with less managed prefixes
-        filtered.sort(key=(lambda x: len(self.get_managed_prefixes(x))),
+        # with less managed bases
+        filtered.sort(key=(lambda x: len(self.get_managed_bases(x))),
                       reverse=True)
 
         def _lookup(known2):
@@ -164,43 +207,39 @@ class PrefixMapping(object):
             return None
         return self._find_services(known, _lookup, len(filtered))
 
-    def assign_services(self, pfx, services):
-        assert(pfx not in self.svc_by_pfx)
-        for svc in services:
-            pfx_set = svc.get("prefixes", set([]))
-            pfx_set.add(pfx)
-            svc["prefixes"] = pfx_set
-        self.svc_by_pfx[pfx] = services
+    def assign_services(self, base, services, fail_if_already_set=False):
+        """
+        Assign `services` to manage `base`.
 
-    def pfx2base(self, pfx):
-        return str(pfx[:self.digits]).ljust(4, '0')
+        :param fail_if_already_set: raise ValueError if `base` is already
+                                    managed by some services
+        """
+        if fail_if_already_set and base in self.svc_by_base:
+            raise ValueError("Base %s already managed" % base)
+        for svc in services:
+            base_set = svc.get("bases", set(()))
+            base_set.add(base)
+            svc["bases"] = base_set
+        self.svc_by_base[base] = services
 
     def bootstrap(self, strategy=None):
         """
-        Build `TOTAL_PREFIXES` assignations from scratch,
+        Build `self.num_bases()` assignations from scratch,
         using `strategy` to find new services.
         """
-        self.svc_by_pfx.clear()
+        self.reset()
         if not strategy:
             strategy = self.find_services_random
-        for pfx_int in xrange(0, self.__class__.TOTAL_PREFIXES):
+        for base_int in xrange(0, self.num_bases()):
             if (self.logger and
-                    (pfx_int % (self.__class__.TOTAL_PREFIXES / 10)) == 0):
+                    (base_int % (self.num_bases() / 10)) == 0):
                 self.logger.info("%d%%",
-                                 pfx_int /
-                                 (self.__class__.TOTAL_PREFIXES / 100))
+                                 base_int /
+                                 (self.num_bases() / 100))
 
-            pfx = "%04X" % pfx_int
-            base = self.pfx2base(pfx)
-
-            services = None
-            if base in self.svc_by_pfx:
-                assert (base != pfx)
-                services = list(self.svc_by_pfx[base])
-            else:
-                assert (base == pfx)
-                services = strategy()
-            self.assign_services(pfx, services)
+            base = "%0*X" % (self.digits, base_int)
+            services = strategy()
+            self.assign_services(base, services, fail_if_already_set=True)
 
     def check(self):
         """
@@ -210,11 +249,11 @@ class PrefixMapping(object):
         if self.digits == 4:
             return
 
-        for p1 in self.svc_by_pfx.keys():
-            p0 = self.pfx2base(p1)
+        for p1 in self.svc_by_base.keys():
+            p0 = self.prefix_to_base(p1)
             if p0 == p1:
                 continue
-            s0, s1 = self.svc_by_pfx[p0], self.svc_by_pfx[p1]
+            s0, s1 = self.svc_by_base[p0], self.svc_by_base[p1]
             s0, s1 = sorted(s0), sorted(s1)
             if s0 != s1:
                 raise Exception(
@@ -224,56 +263,69 @@ class PrefixMapping(object):
     def count_pfx_by_svc(self):
         """
         Build a dict with service addresses as keys and
-        the number of managed prefixes as values.
+        the number of managed bases as values.
         """
         pfx_by_svc = dict()
         for svc in self.services.itervalues():
             addr = svc["addr"]
-            pfx_by_svc[addr] = len(self.get_managed_prefixes(svc))
+            pfx_by_svc[addr] = len(self.get_managed_bases(svc))
         return pfx_by_svc
 
     def check_replicas(self):
-        """Check that all prefixes have the right number of replicas"""
+        """Check that all bases have the right number of replicas"""
         error = False
         grand_total = 0
-        for pfx, services in self.svc_by_pfx.iteritems():
+        for base, services in self.svc_by_base.iteritems():
             if len(services) < self.replicas:
                 if self.logger:
                     self.logger.error(
-                        "Prefix %s is managed by %d services, %d required",
-                        pfx, len(services), self.replicas)
+                        "Base %s is managed by %d services, %d required",
+                        base, len(services), self.replicas)
                     self.logger.error("%s", [x["addr"] for x in services])
                 error = True
+            elif len(services) > self.replicas:
+                if self.logger:
+                    self.logger.warn(
+                        "Base %s is managed by %d services, %d expected",
+                        base, len(services), self.replicas)
+                    self.logger.warn("%s", [x["addr"] for x in services])
             grand_total += len(services)
         if self.logger:
             self.logger.info("Grand total: %d (expected: %d)",
-                             grand_total, self.TOTAL_PREFIXES * self.replicas)
+                             grand_total, self.num_bases() * self.replicas)
         return not error
 
-    def decommission(self, svc, pfx_to_remove=None, strategy=None):
+    def decommission(self, svc, bases_to_remove=None, strategy=None):
         """
-        Unassign all prefixes of `pfx_to_remove` from `svc`,
+        Unassign all bases of `bases_to_remove` from `svc`,
         and assign them to other services using `strategy`.
         """
         if isinstance(svc, basestring):
             svc = self.services[svc]
+        saved_score = svc["score"]
         svc["score"] = 0
-        if not pfx_to_remove:
-            pfx_to_remove = list(svc["prefixes"])
+        if not bases_to_remove:
+            bases_to_remove = list(svc["bases"])
         if not strategy:
-            strategy = self.find_services_less_prefixes
-        for pfx in pfx_to_remove:
-            self.svc_by_pfx[pfx].remove(svc)
-            svc["prefixes"].remove(pfx)
-            new_svcs = strategy(self.svc_by_pfx[pfx])
-            for new_svc in new_svcs:
-                pfx_set = new_svc.get("prefixes", set([]))
-                pfx_set.add(pfx)
-                new_svc["prefixes"] = pfx_set
-            self.svc_by_pfx[pfx] = new_svcs
+            strategy = self.find_services_less_bases
+        moved = list()
+        for base in bases_to_remove:
+            try:
+                self.svc_by_base[base].remove(svc)
+            except ValueError:
+                pass
+            try:
+                svc["bases"].remove(base)
+            except KeyError:
+                pass
+            new_svcs = strategy(known=self.svc_by_base[base])
+            self.assign_services(base, new_svcs)
+        moved += bases_to_remove
+        svc["score"] = saved_score
+        return moved
 
     def rebalance(self, max_loops=65536):
-        """Reassign prefixes from the services which manage the most"""
+        """Reassign bases from the services which manage the most"""
 
         if self.digits == 0:
             if self.logger:
@@ -281,19 +333,12 @@ class PrefixMapping(object):
                                  "meta1_digits is set to 0")
             return
 
-        if self.digits != 4:
-            # TODO: implement balancing when meta1_digits is < 4
-            if self.logger:
-                self.logger.info("Prefixes balancing temporarily " +
-                                 "disabled for installations with " +
-                                 "meta1_digits different from 4")
-            return
-
         loops = 0
-        moved_prefixes = set()
-        ideal_pfx_by_svc = (self.__class__.TOTAL_PREFIXES * self.replicas /
-                            len([x for x in self.services.itervalues()
-                                 if self.get_score(x) > 0]))
+        moved_bases = set()
+        ideal_bases_by_svc = (self.num_bases() * self.replicas /
+                              len([x for x in self.services.itervalues()
+                                   if self.get_score(x) > 0]))
+        upper_limit = ideal_bases_by_svc + 1
         if self.logger:
             self.logger.info("META1 Digits = %d", self.digits)
             self.logger.info("Replicas = %d", self.replicas)
@@ -301,25 +346,41 @@ class PrefixMapping(object):
                 "Scored positively = %d",
                 len([x for x in self.services.itervalues()
                      if self.get_score(x) > 0]))
-            self.logger.info("Ideal number of prefixes per meta1: %d",
-                             ideal_pfx_by_svc)
-        candidates = self.services.values()
-        candidates.sort(key=(lambda x: len(self.get_managed_prefixes(x))))
-        while candidates:
-            svc = candidates.pop()  # service with most prefixes
-            svc_pfx = self.get_managed_prefixes(svc)
-            while (len(svc_pfx) > ideal_pfx_by_svc + 1 and
-                   loops < max_loops):
-                pfxs = {x for x in random.sample(svc_pfx,
-                                                 len(svc_pfx)-ideal_pfx_by_svc)
-                        if x not in moved_prefixes}
-                if pfxs:
-                    self.decommission(svc, pfxs)
-                    for pfx in pfxs:
-                        moved_prefixes.add(pfx)
-                        loops += 1
-                else:
-                    loops += 1  # safeguard against infinite loops
+            self.logger.info(
+                "Ideal number of bases per meta1: %d, limit: %d",
+                ideal_bases_by_svc, upper_limit)
+        while loops < max_loops:
+            candidates = self.services.values()
+            candidates.sort(key=(lambda x: len(self.get_managed_bases(x))))
+            already_balanced = 0
+            while candidates:
+                svc = candidates.pop()  # service with most bases
+                svc_bases = self.get_managed_bases(svc)
+                if len(svc_bases) <= upper_limit:
+                    already_balanced += 1
+                    continue
+                if self.logger:
+                    self.logger.info("meta1 %s has %d bases, moving some",
+                                     svc['addr'], len(svc_bases))
+                while (len(svc_bases) > upper_limit and
+                       loops < max_loops):
+                    bases = {base
+                             for base in random.sample(
+                                 svc_bases, len(svc_bases) - upper_limit)
+                             if base not in moved_bases}
+                    if bases:
+                        moved = self.decommission(svc, bases)
+                        for base in moved:
+                            moved_bases.add(base)
+                            loops += 1
+                    else:
+                        loops += 1  # safeguard against infinite loops
+            if already_balanced >= len(self.services):
+                break
         if self.logger:
-            self.logger.info("%s prefixes moved",
-                             len(moved_prefixes))
+            self.logger.info("%s bases moved",
+                             len(moved_bases))
+            for svc in sorted(self.services.values(), key=lambda x: x['addr']):
+                svc_bases = self.get_managed_bases(svc)
+                self.logger.info("meta1 %s has %d bases",
+                                 svc['addr'], len(svc_bases))
