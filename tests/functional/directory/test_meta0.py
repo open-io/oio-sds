@@ -39,8 +39,8 @@ class TestPrefixMapping(BaseTestCase):
         mapping.bootstrap()
         n_pfx_by_svc = mapping.count_pfx_by_svc()
         for count in n_pfx_by_svc.itervalues():
-            self.assertIn(count, range(PrefixMapping.TOTAL_PREFIXES - 5000,
-                                       PrefixMapping.TOTAL_PREFIXES + 5000))
+            self.assertIn(count, range(mapping.num_bases() - 5000,
+                                       mapping.num_bases() + 5000))
 
     def test_bootstrap_20_services(self):
         n = 20
@@ -49,7 +49,7 @@ class TestPrefixMapping(BaseTestCase):
         mapping = self.make_mapping(replicas=replicas)
         mapping.bootstrap()
         n_pfx_by_svc = mapping.count_pfx_by_svc()
-        ideal = PrefixMapping.TOTAL_PREFIXES * replicas / n
+        ideal = mapping.num_bases() * replicas / n
         arange = range(int(ideal * 0.8), int(ideal * 1.2))
         print "Ideal: ", ideal
         for count in n_pfx_by_svc.itervalues():
@@ -63,9 +63,10 @@ class TestPrefixMapping(BaseTestCase):
         mapping = self.make_mapping(replicas=replicas)
         mapping.bootstrap()
         mapping.rebalance()
+        mapping.check()
         self.assertTrue(mapping.check_replicas())
         n_pfx_by_svc = mapping.count_pfx_by_svc()
-        ideal = PrefixMapping.TOTAL_PREFIXES * replicas / n_svc
+        ideal = mapping.num_bases() * replicas / n_svc
         arange = range(int(ideal * 0.95), int(ideal * 1.05))
         print "Ideal: ", ideal
         for count in n_pfx_by_svc.itervalues():
@@ -92,6 +93,9 @@ class TestPrefixMapping(BaseTestCase):
     def test_bootstrap_3_services_2_digits_rebalanced(self):
         return self._test_bootstrap_rebalanced(3, 3, digits=2)
 
+    def test_bootstrap_3_services_1_digit_rebalanced(self):
+        return self._test_bootstrap_rebalanced(3, 3, digits=1)
+
     def test_decommission(self):
         n = 20
         replicas = 3
@@ -101,7 +105,7 @@ class TestPrefixMapping(BaseTestCase):
         mapping.rebalance()
         self.assertTrue(mapping.check_replicas())
         n_pfx_by_svc = mapping.count_pfx_by_svc()
-        ideal = PrefixMapping.TOTAL_PREFIXES * replicas / n
+        ideal = mapping.num_bases() * replicas / n
         arange = range(int(ideal * 0.95), int(ideal * 1.05))
         print "Ideal: ", ideal
         for svc1, count in n_pfx_by_svc.iteritems():
@@ -112,7 +116,7 @@ class TestPrefixMapping(BaseTestCase):
         print "Decommissioning ", svc["addr"]
         mapping.decommission(svc)
         self.assertTrue(mapping.check_replicas())
-        ideal = PrefixMapping.TOTAL_PREFIXES * replicas / (n-1)
+        ideal = mapping.num_bases() * replicas / (n-1)
         arange = range(int(ideal * 0.95), int(ideal * 1.05))
         print "Ideal: ", ideal
         n_pfx_by_svc = mapping.count_pfx_by_svc()
