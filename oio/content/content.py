@@ -18,21 +18,20 @@ from oio.common import exceptions as exc
 from oio.common.exceptions import ClientException, OrphanChunk
 from oio.common.utils import get_logger
 from oio.blob.client import BlobClient
-from oio.conscience.client import ConscienceClient
 from oio.container.client import ContainerClient
 
 
 class Content(object):
-    def __init__(self, conf, container_id, metadata, chunks, storage_method):
+    def __init__(self, conf, container_id, metadata, chunks, storage_method,
+                 container_client=None):
         self.conf = conf
         self.container_id = container_id
         self.metadata = metadata
         self.chunks = ChunksHelper(chunks)
         self.storage_method = storage_method
         self.logger = get_logger(self.conf)
-        self.cs_client = ConscienceClient(conf)
         self.blob_client = BlobClient()
-        self.container_client = ContainerClient(self.conf)
+        self.container_client = container_client or ContainerClient(self.conf)
         self.content_id = self.metadata["id"]
         self.stgpol = self.metadata["policy"]
         self.path = self.metadata["name"]
@@ -78,25 +77,26 @@ class Content(object):
         self.container_client.container_raw_update(
             cid=self.container_id, data=update_data)
 
-    def _create_object(self):
+    def _create_object(self, **kwargs):
         self.container_client.content_create(
             cid=self.container_id, path=self.path, content_id=self.content_id,
             stgpol=self.stgpol, size=self.length, checksum=self.checksum,
             version=self.version, chunk_method=self.chunk_method,
-            mime_type=self.mime_type, data=self.chunks.raw())
+            mime_type=self.mime_type, data=self.chunks.raw(),
+            **kwargs)
 
     def rebuild_chunk(self, chunk_id, allow_same_rawx=False):
         raise NotImplementedError()
 
-    def create(self, stream):
+    def create(self, stream, **kwargs):
         raise NotImplementedError()
 
     def fetch(self):
         raise NotImplementedError()
 
-    def delete(self):
-        self.container_client.content_delete(cid=self.container_id,
-                                             path=self.path)
+    def delete(self, **kwargs):
+        self.container_client.content_delete(
+            cid=self.container_id, path=self.path, **kwargs)
 
     def move_chunk(self, chunk_id):
         current_chunk = self.chunks.filter(id=chunk_id).one()

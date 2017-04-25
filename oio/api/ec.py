@@ -21,7 +21,7 @@ from greenlet import GreenletExit
 from oio.common import exceptions
 from oio.common.exceptions import SourceReadError
 from oio.common.http import HeadersDict, parse_content_range, \
-    ranges_from_http_header
+    ranges_from_http_header, headers_from_object_metadata
 from oio.common.utils import fix_ranges
 from oio.api import io
 from oio.common.constants import chunk_headers
@@ -602,27 +602,21 @@ class ECWriter(object):
         raw_url = chunk["url"]
         parsed = urlparse(raw_url)
         chunk_path = parsed.path.split('/')[-1]
-        h = {}
-        h["transfer-encoding"] = "chunked"
-        h[chunk_headers["content_id"]] = sysmeta['id']
-        h[chunk_headers["content_path"]] = sysmeta['content_path']
-        h[chunk_headers["content_chunkmethod"]] = sysmeta['chunk_method']
-        h[chunk_headers["container_id"]] = sysmeta['container_id']
-        h[chunk_headers["chunk_pos"]] = chunk["pos"]
-        h[chunk_headers["chunk_id"]] = chunk_path
-        h[chunk_headers["content_policy"]] = sysmeta['policy']
-        h[chunk_headers["content_version"]] = sysmeta['version']
+        hdrs = headers_from_object_metadata(sysmeta)
         if reqid:
-            h['X-oio-req-id'] = reqid
+            hdrs['X-oio-req-id'] = reqid
+
+        hdrs[chunk_headers["chunk_pos"]] = chunk["pos"]
+        hdrs[chunk_headers["chunk_id"]] = chunk_path
 
         # in the trailer
         # metachunk_size & metachunk_hash
-        h["Trailer"] = (chunk_headers["metachunk_size"],
-                        chunk_headers["metachunk_hash"])
+        hdrs["Trailer"] = (chunk_headers["metachunk_size"],
+                           chunk_headers["metachunk_hash"])
         with green.ConnectionTimeout(
                 connection_timeout or io.CONNECTION_TIMEOUT):
             conn = io.http_connect(
-                parsed.netloc, 'PUT', parsed.path, h)
+                parsed.netloc, 'PUT', parsed.path, hdrs)
             conn.chunk = chunk
         return cls(chunk, conn, write_timeout=write_timeout)
 

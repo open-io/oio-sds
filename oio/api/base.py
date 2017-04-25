@@ -46,7 +46,8 @@ class HttpApi(object):
         self.session = session
         self.admin_mode = kwargs.get('admin_mode', False)
 
-    def _direct_request(self, method, url, session=None, **kwargs):
+    def _direct_request(self, method, url, session=None, admin_mode=False,
+                        **kwargs):
         """
         Make an HTTP request.
 
@@ -56,6 +57,8 @@ class HttpApi(object):
         :type url: `str`
         :param session: the session to use instead of `self.session`
         :type session: requests.Session
+        :keyword admin_mode: allow operations on slave or worm namespaces
+        :type admin_mode: `bool`
         :keyword timeout: optional timeout for the request (in seconds).
             May be a tuple `(connection_timeout, response_timeout)`.
         :type timeout: `float`
@@ -66,8 +69,8 @@ class HttpApi(object):
             session = self.session
         in_headers = kwargs.get('headers') or dict()
         headers = {k: str(v) for k, v in in_headers.items()}
-        if self.admin_mode or kwargs.get('admin_mode', False):
-            headers.update({ADMIN_HEADER: "1"})
+        if self.admin_mode or admin_mode:
+            headers[ADMIN_HEADER] = "1"
         kwargs['headers'] = headers
         if "timeout" not in kwargs:
             resp = session.request(

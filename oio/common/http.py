@@ -1,12 +1,13 @@
 import logging
 import re
 import socket
-from urllib import quote
+from urllib import quote, quote_plus
 
 from eventlet import patcher
 from eventlet.green.httplib import HTTPConnection, HTTPResponse, _UNKNOWN, \
         CONTINUE, HTTPMessage
 from oio.common.utils import json
+from oio.common.constants import chunk_headers
 
 requests = patcher.import_patched('requests.__init__')
 requests_adapters = patcher.import_patched('requests.adapters')
@@ -202,6 +203,28 @@ def ranges_from_http_header(val):
                 raise ValueError('Invalid byterange value: %s' % val)
         ranges.append((start, end))
     return ranges
+
+
+def headers_from_object_metadata(metadata):
+    """
+    Generate chunk PUT request headers from object metadata.
+    """
+    out = dict()
+    out["transfer-encoding"] = "chunked"
+    # FIXME: remove key incoherencies
+    out[chunk_headers["content_id"]] = metadata['id']
+    out[chunk_headers["content_version"]] = metadata['version']
+    out[chunk_headers["content_path"]] = metadata['content_path']
+    out[chunk_headers["content_chunkmethod"]] = metadata['chunk_method']
+    out[chunk_headers["content_policy"]] = metadata['policy']
+    out[chunk_headers["container_id"]] = metadata['container_id']
+
+    for key in ['metachunk_hash', 'metachunk_size', 'chunk_hash']:
+        val = metadata.get(key)
+        if val is not None:
+            out[chunk_headers[key]] = metadata[key]
+
+    return {k: quote_plus(str(v)) for (k, v) in out.iteritems()}
 
 
 class HeadersDict(dict):

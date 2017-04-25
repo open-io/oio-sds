@@ -18,11 +18,11 @@ from eventlet.queue import Queue
 from urlparse import urlparse
 from oio.common import exceptions as exc
 from oio.common.exceptions import SourceReadError
+from oio.common.http import headers_from_object_metadata
 from oio.common import utils
 from oio.api import io
 from oio.common.constants import chunk_headers
 from oio.common import green
-
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ class FakeChecksum(object):
 class ReplicatedChunkWriteHandler(object):
     def __init__(self, sysmeta, meta_chunk, checksum, storage_method,
                  quorum=None, connection_timeout=None, write_timeout=None,
-                 read_timeout=None):
+                 read_timeout=None, headers=None):
         self.sysmeta = sysmeta
         self.meta_chunk = meta_chunk
         self.checksum = checksum
@@ -53,6 +53,7 @@ class ReplicatedChunkWriteHandler(object):
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
+        self.headers = headers or {}
 
     def _check_quorum(self, conns):
         if self._quorum is None:
@@ -174,31 +175,14 @@ class ReplicatedChunkWriteHandler(object):
         parsed = urlparse(raw_url)
         try:
             chunk_path = parsed.path.split('/')[-1]
-            h = {}
-            h["transfer-encoding"] = "chunked"
-            # FIXME: remove key incoherencies
-            # TODO: automatize key conversions
-            h[chunk_headers["content_id"]] = self.sysmeta['id']
-            h[chunk_headers["content_version"]] = self.sysmeta['version']
-            h[chunk_headers["content_path"]] = \
-                utils.quote(self.sysmeta['content_path'])
-            h[chunk_headers["content_chunkmethod"]] = \
-                self.sysmeta['chunk_method']
-            h[chunk_headers["content_policy"]] = self.sysmeta['policy']
-            h[chunk_headers["container_id"]] = self.sysmeta['container_id']
-            h[chunk_headers["chunk_pos"]] = chunk["pos"]
-            h[chunk_headers["chunk_id"]] = chunk_path
-
-            # Used during reconstruction of EC chunks
-            if self.sysmeta['chunk_method'].startswith('ec'):
-                h[chunk_headers["metachunk_size"]] = \
-                    self.sysmeta["metachunk_size"]
-                h[chunk_headers["metachunk_hash"]] = \
-                    self.sysmeta["metachunk_hash"]
+            hdrs = headers_from_object_metadata(self.sysmeta)
+            hdrs[chunk_headers["chunk_pos"]] = chunk["pos"]
+            hdrs[chunk_headers["chunk_id"]] = chunk_path
+            hdrs.update(self.headers)
 
             with green.ConnectionTimeout(self.connection_timeout):
                 conn = io.http_connect(
-                    parsed.netloc, 'PUT', parsed.path, h)
+                    parsed.netloc, 'PUT', parsed.path, hdrs)
                 conn.chunk = chunk
             return conn, chunk
         except (Exception, Timeout) as err:
@@ -288,7 +272,8 @@ class ReplicatedWriteHandler(io.WriteHandler):
                 self.sysmeta, meta_chunk, global_checksum, self.storage_method,
                 connection_timeout=self.connection_timeout,
                 write_timeout=self.write_timeout,
-                read_timeout=self.read_timeout)
+                read_timeout=self.read_timeout,
+                headers=self.headers)
             bytes_transferred, _checksum, chunks = handler.stream(self.source,
                                                                   size)
             content_chunks += chunks

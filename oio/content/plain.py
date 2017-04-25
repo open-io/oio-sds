@@ -48,7 +48,7 @@ class PlainContent(Content):
                     for d in part['iter']:
                         yield d
 
-    def create(self, stream):
+    def create(self, stream, **kwargs):
         sysmeta = {}
         sysmeta['id'] = self.content_id
         sysmeta['version'] = self.version
@@ -73,7 +73,7 @@ class PlainContent(Content):
         # TODO sanity checks
 
         self.checksum = content_checksum.upper()
-        self._create_object()
+        self._create_object(**kwargs)
         return final_chunks, bytes_transferred, content_checksum
 
     def rebuild_chunk(self, chunk_id, allow_same_rawx=False):

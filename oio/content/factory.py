@@ -26,10 +26,10 @@ from oio.common.storage_method import STORAGE_METHODS
 class ContentFactory(object):
     DEFAULT_DATASEC = "plain", {"nb_copy": "1", "distance": "0"}
 
-    def __init__(self, conf):
+    def __init__(self, conf, **kwargs):
         self.conf = conf
         self.logger = get_logger(conf)
-        self.container_client = ContainerClient(conf)
+        self.container_client = ContainerClient(conf, **kwargs)
 
     def get(self, container_id, content_id):
         try:
@@ -43,7 +43,8 @@ class ContentFactory(object):
         storage_method = STORAGE_METHODS.load(chunk_method)
 
         cls = ECContent if storage_method.ec else PlainContent
-        return cls(self.conf, container_id, meta, chunks, storage_method)
+        return cls(self.conf, container_id, meta, chunks, storage_method,
+                   container_client=self.container_client)
 
     def new(self, container_id, path, size, policy):
         meta, chunks = self.container_client.content_prepare(
