@@ -20,6 +20,7 @@ from optparse import OptionParser
 from ConfigParser import SafeConfigParser
 
 from itertools import islice
+from functools import wraps
 
 import codecs
 from oio.common.exceptions import OioException
@@ -558,3 +559,11 @@ def group_chunk_errors(chunk_err_iter):
         err_list.append(chunk)
         errors[err] = err_list
     return errors
+
+
+def ensure_headers(func):
+    @wraps(func)
+    def ensure_headers_wrapper(*args, **kwargs):
+        kwargs['headers'] = kwargs.get('headers') or dict()
+        return func(*args, **kwargs)
+    return ensure_headers_wrapper

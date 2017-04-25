@@ -496,7 +496,7 @@ _reply_simplified_beans (struct req_args_s *args, GError *err,
 		}
 		else if (&descr_struct_PROPERTIES == DESCR(l0->data)) {
 			struct bean_PROPERTIES_s *prop = l0->data;
-			gchar *k = g_strdup_printf (PROXYD_HEADER_PREFIX "content-meta-x-%s",
+			gchar *k = g_strdup_printf (PROXYD_HEADER_PREFIX "content-meta-%s",
 					PROPERTIES_get_key(prop)->str);
 			GByteArray *v = PROPERTIES_get_value (prop);
 			args->rp->add_header(k, g_strndup ((gchar*)v->data, v->len));

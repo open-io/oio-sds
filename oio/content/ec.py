@@ -90,7 +90,7 @@ class ECContent(Content):
                         yield d
                 stream.close()
 
-    def create(self, stream):
+    def create(self, stream, **kwargs):
         sysmeta = {}
         sysmeta['id'] = self.content_id
         sysmeta['version'] = self.version
@@ -112,5 +112,5 @@ class ECContent(Content):
         # TODO sanity checks
 
         self.checksum = content_checksum
-        self._create_object()
+        self._create_object(**kwargs)
         return final_chunks, bytes_transferred, content_checksum

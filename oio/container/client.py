@@ -1,5 +1,5 @@
 from oio.common.client import ProxyClient
-from oio.common.utils import json
+from oio.common.utils import json, ensure_headers
 from oio.common import exceptions
 from urllib import unquote_plus
 
@@ -7,20 +7,20 @@ CONTENT_HEADER_PREFIX = 'x-oio-content-meta-'
 
 
 def extract_content_headers_meta(headers):
-    resp_headers = {}
+    resp_headers = {'properties': {}}
     for key in headers:
         if key.lower().startswith(CONTENT_HEADER_PREFIX):
-            short_key = key[len(CONTENT_HEADER_PREFIX):].replace('-', '_')
-            resp_headers[short_key] = unquote_plus(headers[key])
+            short_key = key[len(CONTENT_HEADER_PREFIX):]
+            if short_key.startswith("x-"):
+                resp_headers['properties'][short_key] = \
+                    unquote_plus(headers[key])
+            else:
+                short_key = short_key.replace('-', '_')
+                resp_headers[short_key] = unquote_plus(headers[key])
     chunk_size = headers.get('x-oio-ns-chunk-size')
     if chunk_size:
         resp_headers['chunk_size'] = int(chunk_size)
     return resp_headers
-
-
-def gen_headers():
-    hdrs = {'x-oio-action-mode': 'autocreate'}
-    return hdrs
 
 
 class ContainerClient(ProxyClient):
@@ -53,7 +53,7 @@ class ContainerClient(ProxyClient):
         return params
 
     def container_create(self, account, reference,
-                         properties=None, **kwargs):
+                         properties=None, system=None, **kwargs):
         """
         Create a container.
 
@@ -63,18 +63,19 @@ class ContainerClient(ProxyClient):
         :type reference: `str`
         :param properties: properties to set on the container
         :type properties: `dict`
+        :param system: system properties to set on the container
+        :type system: `dict`
         :keyword headers: extra headers to send to the proxy
         :type headers: `dict`
         :returns: True if the container has been created,
                   False if it already exists
         """
         params = self._make_params(account, reference)
-        headers = gen_headers()
-        headers.update(kwargs.get('headers') or {})
         data = json.dumps({'properties': properties or {},
-                           'system': kwargs.get('system', {})})
+                           'system': system or {}})
         resp, body = self._request('POST', '/create', params=params,
-                                   data=data, headers=headers)
+                                   data=data, autocreate=True,
+                                   **kwargs)
         if resp.status_code not in (204, 201):
             raise exceptions.from_response(resp, body)
         return resp.status_code == 201
@@ -96,8 +97,6 @@ class ContainerClient(ProxyClient):
         results = list()
         try:
             params = self._make_params(account)
-            headers = gen_headers()
-            headers.update(kwargs.get('headers') or {})
             unformatted_data = list()
             for container in containers:
                 unformatted_data.append({'name': container,
@@ -105,7 +104,8 @@ class ContainerClient(ProxyClient):
                                          'system': kwargs.get('system', {})})
             data = json.dumps({"containers": unformatted_data})
             resp, body = self._request('POST', '/create_many', params=params,
-                                       data=data, headers=headers)
+                                       data=data, autocreate=True,
+                                       **kwargs)
             if resp.status_code not in (204, 201):
                 raise exceptions.from_response(resp, body)
             for container in json.loads(body)["containers"]:
@@ -118,11 +118,11 @@ class ContainerClient(ProxyClient):
             tail = containers[pivot:]
             if head:
                 results += self.container_create_many(
-                        account, head, properties=properties, headers=headers,
+                        account, head, properties=properties,
                         **kwargs)
             if tail:
                 results += self.container_create_many(
-                        account, tail, properties=properties, headers=headers,
+                        account, tail, properties=properties,
                         **kwargs)
             return results
         except exceptions.NotFound:
@@ -131,7 +131,7 @@ class ContainerClient(ProxyClient):
                 try:
                     rc = self.container_create(
                             account, container, properties=properties,
-                            headers=headers, **kwargs)
+                            **kwargs)
                     results.append((container, rc))
                 except Exception:
                     results.append((container, False))
@@ -278,16 +278,18 @@ class ContainerClient(ProxyClient):
         resp, body = self._request('GET', '/list', params=params, **kwargs)
         return resp.headers, body
 
+    @ensure_headers
     def content_create(self, account=None, reference=None, path=None,
                        size=None, checksum=None, data=None, cid=None,
                        content_id=None, stgpol=None, version=None,
-                       mime_type=None, chunk_method=None, **kwargs):
+                       mime_type=None, chunk_method=None, headers=None,
+                       **kwargs):
         uri = self._make_uri('content/create')
         params = self._make_params(account, reference, path, cid=cid)
         data = json.dumps(data)
-        hdrs = gen_headers()
-        hdrs.update({'x-oio-content-meta-length': str(size),
-                     'x-oio-content-meta-hash': checksum})
+        hdrs = {'x-oio-content-meta-length': str(size),
+                'x-oio-content-meta-hash': checksum}
+        hdrs.update(headers)
         if content_id is not None:
             hdrs['x-oio-content-meta-id'] = content_id
         if stgpol is not None:
@@ -299,28 +301,23 @@ class ContainerClient(ProxyClient):
         if chunk_method is not None:
             hdrs['x-oio-content-meta-chunk-method'] = chunk_method
         resp, body = self._direct_request(
-            'POST', uri, data=data, params=params, headers=hdrs)
+            'POST', uri, data=data, params=params, autocreate=True,
+            headers=hdrs, **kwargs)
         return resp, body
 
     def content_delete(self, account=None, reference=None, path=None, cid=None,
-                       version=None, headers=None, **kwargs):
+                       version=None, **kwargs):
         uri = self._make_uri('content/delete')
         params = self._make_params(account, reference, path, cid=cid,
                                    version=version)
-        if not headers:
-            headers = dict()
-        headers.update(gen_headers())
-        resp, body = self._direct_request('POST', uri,
-                                          params=params, headers=headers)
+        resp, _ = self._direct_request('POST', uri,
+                                       params=params, **kwargs)
         return resp.status_code == 204
 
     def content_delete_many(self, account=None, reference=None, paths=None,
-                            cid=None, headers=None, **kwargs):
+                            cid=None, **kwargs):
         uri = self._make_uri('content/delete_many')
         params = self._make_params(account, reference, cid=cid)
-        if not headers:
-            headers = dict()
-        headers.update(gen_headers())
         unformatted_data = list()
         for obj in paths:
             unformatted_data.append({'name': obj})
@@ -328,14 +325,14 @@ class ContainerClient(ProxyClient):
         results = list()
         try:
             resp, _ = self._direct_request(
-                'POST', uri, data=data, params=params, headers=headers)
+                'POST', uri, data=data, params=params, **kwargs)
             for obj in resp.json()["contents"]:
                 results.append((obj["name"], obj["status"] == 204))
             return results
         except exceptions.NotFound:
             for obj in paths:
                 rc = self.content_delete(account, reference, obj, cid=cid,
-                                         headers=headers, **kwargs)
+                                         **kwargs)
                 results.append((obj, rc))
             return results
         except exceptions.TooLarge:
@@ -345,11 +342,11 @@ class ContainerClient(ProxyClient):
             if head:
                 results += self.content_delete_many(
                         account, reference, head,
-                        cid=cid, headers=headers, **kwargs)
+                        cid=cid, **kwargs)
             if tail:
                 results += self.content_delete_many(
                         account, reference, tail,
-                        cid=cid, headers=headers, **kwargs)
+                        cid=cid, **kwargs)
             return results
         except:
             raise
@@ -376,15 +373,19 @@ class ContainerClient(ProxyClient):
 
     def content_prepare(self, account=None, reference=None, path=None,
                         size=None, cid=None, stgpol=None, **kwargs):
+        """
+        Prepare an upload: get URLs of chunks on available rawx.
+
+        :keyword autocreate: create container if it doesn't exist
+        """
         uri = self._make_uri('content/prepare')
         params = self._make_params(account, reference, path, cid=cid)
         data = {'size': size}
         if stgpol:
             data['policy'] = stgpol
         data = json.dumps(data)
-        hdrs = gen_headers()
         resp, body = self._direct_request(
-            'POST', uri, data=data, params=params, headers=hdrs)
+            'POST', uri, data=data, params=params, **kwargs)
         resp_headers = extract_content_headers_meta(resp.headers)
         return resp_headers, body
 

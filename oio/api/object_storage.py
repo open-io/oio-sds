@@ -33,6 +33,7 @@ from oio.api.backblaze import BackblazeWriteHandler, \
     BackblazeChunkDownloadHandler
 from oio.common import constants
 from oio.common import utils
+from oio.common.utils import ensure_headers
 from oio.common.http import http_header_from_ranges
 from oio.common.storage_method import STORAGE_METHODS
 
@@ -283,10 +284,10 @@ class ObjectStorageApi(object):
         return self.container.container_create(account, container,
                                                properties=properties,
                                                headers=headers,
-                                               autocreate=True,
                                                **kwargs)
 
     @handle_container_not_found
+    @ensure_headers
     def container_touch(self, account, container, headers=None, **kwargs):
         """
         Trigger a notification about the container state.
@@ -298,8 +299,6 @@ class ObjectStorageApi(object):
         :keyword headers: extra headers to send to the proxy
         :type headers: `dict`
         """
-        if not headers:
-            headers = dict()
         if 'X-oio-req-id' not in headers:
             headers['X-oio-req-id'] = utils.request_id()
         self.container.container_touch(account, container, headers=headers,
@@ -447,11 +446,12 @@ class ObjectStorageApi(object):
                 account, container, metadata, clear, headers=headers)
 
     @handle_container_not_found
+    @ensure_headers
     def object_create(self, account, container, file_or_path=None, data=None,
                       etag=None, obj_name=None, mime_type=None,
                       metadata=None, policy=None,
                       headers=None, key_file=None,
-                      **_kwargs):
+                      **kwargs):
         """
         Create an object in *container* of *account* with data taken from
         either *data* (`str` or `generator`) or *file_or_path* (path to a file
@@ -508,8 +508,6 @@ class ObjectStorageApi(object):
         sysmeta = {'mime_type': mime_type,
                    'etag': etag}
 
-        if not headers:
-            headers = dict()
         if 'X-oio-req-id' not in headers:
             headers['X-oio-req-id'] = utils.request_id()
 
@@ -517,19 +515,21 @@ class ObjectStorageApi(object):
             return self._object_create(
                 account, container, obj_name, BytesIO(data), sysmeta,
                 properties=metadata, policy=policy, headers=headers,
-                key_file=key_file)
+                key_file=key_file, **kwargs)
         elif hasattr(file_or_path, "read"):
             return self._object_create(
                 account, container, obj_name, src, sysmeta,
                 properties=metadata,
-                policy=policy, headers=headers, key_file=key_file)
+                policy=policy, headers=headers, key_file=key_file,
+                **kwargs)
         else:
             with open(file_or_path, "rb") as f:
                 return self._object_create(
                     account, container, obj_name, f, sysmeta,
                     properties=metadata, policy=policy, headers=headers,
-                    key_file=key_file)
+                    key_file=key_file, **kwargs)
 
+    @ensure_headers
     def object_touch(self, account, container, obj,
                      version=None, headers=None, **kwargs):
         """
@@ -544,8 +544,6 @@ class ObjectStorageApi(object):
         :param headers: extra headers to pass to the proxy
 
         """
-        if not headers:
-            headers = dict()
         if 'X-oio-req-id' not in headers:
             headers['X-oio-req-id'] = utils.request_id()
         self.container.content_touch(account, container, obj,
@@ -553,20 +551,18 @@ class ObjectStorageApi(object):
                                      **kwargs)
 
     @handle_object_not_found
+    @ensure_headers
     def object_delete(self, account, container, obj,
                       version=None, headers=None, **kwargs):
-        if not headers:
-            headers = dict()
         if 'X-oio-req-id' not in headers:
             headers['X-oio-req-id'] = utils.request_id()
         return self.container.content_delete(account, container, obj,
                                              version=version, headers=headers,
                                              **kwargs)
 
+    @ensure_headers
     def object_delete_many(self, account, container, objs, headers=None,
                            **kwargs):
-        if not headers:
-            headers = dict()
         if 'X-oio-req-id' not in headers:
             headers['X-oio-req-id'] = utils.request_id()
         return self.container.content_delete_many(
@@ -599,12 +595,11 @@ class ObjectStorageApi(object):
 
         return resp_body
 
-    # FIXME:
     @handle_object_not_found
     def object_locate(self, account, container, obj,
-                      version=None, headers=None):
-        obj_meta, body = self.container.content_locate(account, container, obj,
-                                                       version=version)
+                      version=None, **kwargs):
+        obj_meta, body = self.container.content_locate(
+            account, container, obj, version=version, **kwargs)
         return obj_meta, body
 
     def object_analyze(self, *args, **kwargs):
@@ -613,10 +608,9 @@ class ObjectStorageApi(object):
         """
         return self.object_locate(*args, **kwargs)
 
+    @ensure_headers
     def object_fetch(self, account, container, obj, ranges=None,
                      headers=None, key_file=None):
-        if not headers:
-            headers = dict()
         if 'X-oio-req-id' not in headers:
             headers['X-oio-req-id'] = utils.request_id()
         meta, raw_chunks = self.object_locate(
@@ -641,6 +635,8 @@ class ObjectStorageApi(object):
     def object_get_properties(self, account, container, obj, headers=None):
         return self.container.content_get_properties(account, container, obj)
 
+    # FIXME:
+    @handle_object_not_found
     def object_show(self, account, container, obj, version=None, headers=None):
         """
         Get a description of the content along with its user properties.
@@ -704,11 +700,11 @@ class ObjectStorageApi(object):
                                               headers=headers)
 
     def _content_preparer(self, account, container, obj_name,
-                          policy=None, headers=None):
+                          policy=None, headers=None, **kwargs):
         # TODO: optimize by asking more than one metachunk at a time
         obj_meta, first_body = self.container.content_prepare(
             account, container, obj_name, size=1, stgpol=policy,
-            autocreate=True, headers=headers)
+            autocreate=True, headers=headers, **kwargs)
         storage_method = STORAGE_METHODS.load(obj_meta['chunk_method'])
 
         def _fix_mc_pos(chunks, mc_pos):
@@ -727,7 +723,8 @@ class ObjectStorageApi(object):
             while True:
                 mc_pos += 1
                 _, next_body = self._content_prepare(
-                        account, container, obj_name, 1, policy, headers)
+                        account, container, obj_name, 1, policy, headers,
+                        **kwargs)
                 _fix_mc_pos(next_body, mc_pos)
                 yield next_body
 
@@ -735,10 +732,10 @@ class ObjectStorageApi(object):
 
     def _object_create(self, account, container, obj_name, source,
                        sysmeta, properties=None, policy=None, headers=None,
-                       key_file=None):
+                       key_file=None, **kwargs):
         obj_meta, chunk_prep = self._content_preparer(
             account, container, obj_name,
-            policy=policy, headers=headers)
+            policy=policy, headers=headers, **kwargs)
         obj_meta.update(sysmeta)
         obj_meta['content_path'] = obj_name
         obj_meta['container_id'] = utils.name2cid(account, container).upper()

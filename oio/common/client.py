@@ -52,7 +52,5 @@ class ProxyClient(HttpApi):
             headers["X-oio-action-mode"] = "autocreate"
             kwargs = kwargs.copy()
             kwargs.pop("autocreate")
-        return super(ProxyClient, self)._direct_request(method, url,
-                                                        session=session,
-                                                        headers=headers,
-                                                        **kwargs)
+        return super(ProxyClient, self)._direct_request(
+            method, url, session=session, headers=headers, **kwargs)

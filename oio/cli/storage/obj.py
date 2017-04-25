@@ -132,7 +132,6 @@ class CreateObject(ContainerCommandMixin, lister.Lister):
                     container,
                     file_or_path=f,
                     obj_name=name,
-                    content_length=get_file_size(f),
                     policy=policy,
                     metadata=properties,
                     key_file=key_file,
