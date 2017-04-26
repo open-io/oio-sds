@@ -47,7 +47,7 @@ done
 
 #Get account list
 redis_bin=$(which redis-cli)
-ACCOUNT_LIST=$(redis_bin -h $REDIS_HOST -p $REDIS_PORT  keys account:* | sed 's@.*account:\(.*\)@\1@' | tr "\n" " ")
+ACCOUNT_LIST=$(${redis_bin} -h $REDIS_HOST -p $REDIS_PORT  keys account:* | sed 's@.*account:\(.*\)@\1@' | tr "\n" " ")
 
 clear
 

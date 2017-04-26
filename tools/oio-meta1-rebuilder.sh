@@ -55,7 +55,7 @@ done
 
 #Get account list
 redis_bin=$(which redis-cli)
-ACCOUNT_LIST=$(redis_bin -h $REDIS_HOST -p $REDIS_PORT  keys account:* | sed 's@.*account:\(.*\)@\1@' | tr "\n" " ")
+ACCOUNT_LIST=$(${redis_bin} -h $REDIS_HOST -p $REDIS_PORT  keys account:* | sed 's@.*account:\(.*\)@\1@' | tr "\n" " ")
 
 #Launch meta1 repair
 for account in $ACCOUNT_LIST
@@ -65,6 +65,6 @@ do
 	  | cut -c1-3 | sort -u | sed 's/$/0000000000000000000000000000000000000000000000000000000000000/' \
 	  | while read CID ; do
 	      echo "curl -v -X POST \"http://${OIOP_IP}:${OIOP_PORT}/v3.0/${NAMESPACE}/admin/ping?cid=${CID}&type=meta1\""
-              curl -v -X POST"http://${OIOP_IP}:${OIOP_PORT}/v3.0/${NAMESPACE}/admin/ping?cid=${CID}&type=meta1" 
+              curl -v -X POST "http://${OIOP_IP}:${OIOP_PORT}/v3.0/${NAMESPACE}/admin/ping?cid=${CID}&type=meta1" 
 	  done
 done
