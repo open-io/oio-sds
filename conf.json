@@ -354,13 +354,18 @@
 
 			{ "type": "monotonic", "name": "server_queue_max_delay",
 				"key": "server.queue.max_delay",
-				"descr": "Anti-DDoS counter-mesure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, the connection is immediately closed.",
-				"def": "1s", "min": "1ms", "max": "1h" },
+				"descr": "Anti-DDoS counter-mesure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, the connection is immediately closed. Keep this value rather high because the connection closing doesn't involve a reply that will help the client to retry with an exponential back-off.",
+				"def": "5s", "min": "10ms", "max": "1h" },
+
+			{ "type": "monotonic", "name": "server_queue_warn_delay",
+				"key": "server.queue.max_delay",
+				"descr": "In the current server, set the time threshold after which a warning is sent when a file descriptor stays longer than that in the queue of the Thread Pool.",
+				"def": "100ms", "min": "1ms", "max": "1h" },
 
 			{ "type": "monotonic", "name": "meta_queue_max_delay",
 				"key": "meta.queue.max_delay",
 				"descr": "Anti-DDoS counter-mesure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, A '503 Unavailabe' error is replied.",
-				"def": "500ms", "min": "1ms", "max": "1h" },
+				"def": "2s", "min": "10ms", "max": "1h" },
 
 			{ "type": "monotonic", "name": "oio_election_period_cond_wait",
 				"key": "sqliterepo.election.wait.quantum",
