@@ -239,3 +239,11 @@ class ContainerClient(Client):
         resp, body = self._request(
             'POST', uri, data=data, params=params)
         return body
+
+    def raw_update(self, old, new, cid=None, path=None, **kwargs):
+        uri = self._make_uri('container/raw_update')
+        params = self._make_params(cid=cid, content=path)
+        data = {"old": [old], "new": [new]}
+        resp, body = self._request(
+            'POST', uri, data=json.dumps(data), params=params)
+        return body
