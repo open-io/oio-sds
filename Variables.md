@@ -265,10 +265,10 @@ Used by `gcc`
 
 > Anti-DDoS counter-mesure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, A '503 Unavailabe' error is replied.
 
- * default: **500 * G_TIME_SPAN_MILLISECOND**
+ * default: **2 * G_TIME_SPAN_SECOND**
  * type: gint64
  * cmake directive: *OIO__META_QUEUE_MAX_DELAY*
- * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
+ * range: 10 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### meta0.outgoing.timeout.common.req
 
@@ -321,6 +321,15 @@ Used by `gcc`
  * default: **100**
  * type: guint
  * cmake directive: *OIO__PROXY_BULK_MAX_CREATE_MANY*
+ * range: 0 -> 10000
+
+### proxy.bulk.max.delete_many
+
+> In a proxy, sets how many objects can be deleted at once.
+
+ * default: **100**
+ * type: guint
+ * cmake directive: *OIO__PROXY_BULK_MAX_DELETE_MANY*
  * range: 0 -> 10000
 
 ### proxy.cache.directory.max
@@ -677,9 +686,18 @@ Used by `gcc`
 
 ### server.queue.max_delay
 
-> Anti-DDoS counter-mesure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, the connection is immediately closed.
+> Anti-DDoS counter-mesure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, the connection is immediately closed. Keep this value rather high because the connection closing doesn't involve a reply that will help the client to retry with an exponential back-off.
 
- * default: **1 * G_TIME_SPAN_SECOND**
+ * default: **5 * G_TIME_SPAN_SECOND**
+ * type: gint64
+ * cmake directive: *OIO__SERVER_QUEUE_MAX_DELAY*
+ * range: 10 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
+
+### server.queue.max_delay
+
+> In the current server, set the time threshold after which a warning is sent when a file descriptor stays longer than that in the queue of the Thread Pool.
+
+ * default: **100 * G_TIME_SPAN_MILLISECOND**
  * type: gint64
  * cmake directive: *OIO__SERVER_QUEUE_MAX_DELAY*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
