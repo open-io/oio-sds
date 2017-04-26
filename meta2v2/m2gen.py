@@ -2,6 +2,11 @@
 
 index = 0
 
+def bool2int(b):
+    if b:
+        return "1"
+    return "0"
+
 
 def next_seq():
     global index
@@ -321,14 +326,14 @@ the list."""
                 if f.name in list(t.pk):
                     pk = True
                 out.write('\t{ ')
-                out.write(dquoted(f.name)+', ')
-                out.write(str(f.position)+', ')
                 out.write("offsetof(struct fields_"+t.c_name+"_s,"+f.name+"), ")
-                out.write(str(f.mandatory).upper()+', ')
+                out.write(str(f.position)+', ')
                 out.write('FT_'+str(f.type_sql)+', ')
-                out.write(str(pk).upper())
+                out.write(bool2int(pk)+', ')
+                out.write(bool2int(f.mandatory)+', ')
+                out.write(dquoted(f.name))
                 out.write(' },\n')
-            out.write("\t{NULL, 0, 0, FALSE, 0, FALSE}\n};\n")
+            out.write("\t{0, 0, FALSE, 0, FALSE, \"\"}\n};\n")
             out.write("\n")
 
         # define the foreign key fields descriptors
@@ -344,28 +349,25 @@ the list."""
             out.write("static struct fk_descriptor_s descr_fk_"+t.c_name+"[] =\n{\n")
             for fk in t.fk_incoming:
                 out.write('\t{\n')
-                out.write('\t\t'+dquoted(fk.name)+',\n')
-                out.write('\t\t'+dquoted(fk.target_name)+',\n')
                 out.write('\t\t&descr_struct_'+fk.base.name.upper() +',\n')
                 out.write('\t\tdescr_fk_fields_in_'+fk.name.upper()+',\n')
                 out.write('\t\t&descr_struct_'+fk.target.name.upper()+',\n')
                 out.write('\t\tdescr_fk_fields_out_'+fk.name.upper()+',\n')
+                out.write('\t\t'+dquoted(fk.target_name)+',\n')
                 out.write('\t},\n')
             for fk in t.fk_outgoing:
                 out.write('\t{\n')
-                out.write('\t\t'+dquoted(fk.name)+',\n')
-                out.write('\t\t'+dquoted(fk.base_name)+',\n')
                 out.write('\t\t&descr_struct_'+fk.base.name.upper() +',\n')
                 out.write('\t\tdescr_fk_fields_in_'+fk.name.upper()+',\n')
                 out.write('\t\t&descr_struct_'+fk.target.name.upper()+',\n')
                 out.write('\t\tdescr_fk_fields_out_'+fk.name.upper()+',\n')
+                out.write('\t\t'+dquoted(fk.base_name)+',\n')
                 out.write('\t},\n')
-            out.write("\t{NULL,NULL,NULL,NULL,NULL,NULL}\n};\n\n")
+            out.write("\t{NULL, NULL, NULL, NULL, \"\"}\n};\n\n")
 
         for t in self.allbeans.values():
             out.write("const struct bean_descriptor_s descr_struct_"+t.c_name+" =\n{\n")
             out.write("\t"+dquoted(t.name)+",\n")
-            out.write("\t"+dquoted(t.c_name)+",\n")
             out.write("\t"+dquoted(t.sql_name)+",\n")
             out.write("\t"+str(len(t.sql_name))+",\n")
 
@@ -381,17 +383,27 @@ the list."""
             out.write('\t'+dquoted(sql)+',\n')
             out.write('\t'+str(len(sql))+',\n')
 
+            # sql_insert
             t0 = ",".join(t.get_fields_names())
             t1 = ",".join(['?' for f in t.fields])
             sql = "INSERT  INTO "+t.sql_name+"("+t0+") VALUES ("+t1+")"
             out.write('\t'+dquoted(sql)+',\n')
             out.write('\t'+str(len(sql))+',\n')
 
+            # sql_replace
             sql = "REPLACE INTO "+t.sql_name+"("+t0+") VALUES ("+t1+")"
             out.write('\t'+dquoted(sql)+',\n')
             out.write('\t'+str(len(sql))+',\n')
 
-            t0 = ",".join([ f.name+'=?' for f in t.fields if f.name not in t.pk])
+            # sql_update
+            t0 = ",".join([f.name+'=?' for f in t.fields if f.name not in t.pk])
+            t1 = " AND ".join([f.name+'=?' for f in t.fields if f.name in t.pk])
+            sql = "UPDATE "+t.name+" SET "+t0+" WHERE "+t1
+            out.write('\t'+dquoted(sql)+',\n')
+            out.write('\t'+str(len(sql))+',\n')
+
+            # sql_substitue
+            t0 = ",".join([f.name+'=?' for f in t.fields])
             t1 = " AND ".join([f.name+'=?' for f in t.fields if f.name in t.pk])
             sql = "UPDATE "+t.name+" SET "+t0+" WHERE "+t1
             out.write('\t'+dquoted(sql)+',\n')
