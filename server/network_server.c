@@ -1131,11 +1131,16 @@ _cb_tcp_worker(struct network_client_s *clt, struct network_server_s *srv)
 	if (clt->events & CLT_READ) {
 		const gint64 now = oio_ext_monotonic_time();
 		if (clt->time.evt_in < OLDEST(now, server_queue_max_delay)) {
-			GRID_INFO("SLOW fd %d peer %s delay %"G_GINT64_FORMAT"ms",
+			GRID_INFO("STARVING fd %d peer %s delay %"G_GINT64_FORMAT"ms",
 					clt->fd, clt->peer_name,
 					(now - clt->time.evt_in) / G_TIME_SPAN_MILLISECOND);
 			_client_clean(srv, clt);
 			return;
+		}
+		if (clt->time.evt_in < OLDEST(now, server_queue_warn_delay)) {
+			GRID_INFO("CLOGGED fd %d peer %s delay %"G_GINT64_FORMAT"ms",
+					clt->fd, clt->peer_name,
+					(now - clt->time.evt_in) / G_TIME_SPAN_MILLISECOND);
 		}
 	}
 
