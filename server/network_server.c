@@ -83,7 +83,7 @@ static void _cb_tcp_worker(struct network_client_s *clt,
 static void _cb_stats(struct server_stat_msg_s *msg,
 		struct network_server_s *srv);
 
-static void _cb_ping(struct network_client_s *clt,
+static void _manage_udp_task(struct network_client_s *clt,
 		struct network_server_s *srv);
 
 /* Returns the number of max file descriptors for this process */
@@ -253,7 +253,7 @@ network_server_init(void)
 
 	/* Even if UDP is eventually not allowed, a pool with shared threads
 	 * doesn't consume much resources. */
-	result->pool_udp = g_thread_pool_new ((GFunc)_cb_ping, result,
+	result->pool_udp = g_thread_pool_new ((GFunc)_manage_udp_task, result,
 			server_threadpool_max_udp, FALSE, NULL);
 
 	g_thread_pool_set_max_unused_threads (server_threadpool_max_unused);
@@ -676,7 +676,7 @@ _endpoint_monitor_udp (struct endpoint_s **pu, struct pollfd *pfd)
 }
 
 static void
-_cb_ping(struct network_client_s *clt, struct network_server_s *srv)
+_manage_udp_task(struct network_client_s *clt, struct network_server_s *srv)
 {
 	EXTRA_ASSERT(clt != NULL);
 	EXTRA_ASSERT(clt->server == srv);
@@ -705,7 +705,7 @@ _cb_ping(struct network_client_s *clt, struct network_server_s *srv)
 }
 
 static void
-_manage_ping_event(struct network_server_s *srv, struct endpoint_s *e,
+_manage_udp_event(struct network_server_s *srv, struct endpoint_s *e,
 		struct pollfd *pfd)
 {
 	/* destined for little notifications, there is currently no clue ping
@@ -797,7 +797,7 @@ _thread_cb_ping(gpointer d)
 		} else if (rc > 0) {
 			for (guint i=0; i<count_structs ;++i) {
 				if (pfd[i].revents & POLLIN)
-					_manage_ping_event(srv, srv->endpointv[i], pfd+i);
+					_manage_udp_event(srv, srv->endpointv[i], pfd+i);
 				pfd[i].revents = 0;
 			}
 		}
