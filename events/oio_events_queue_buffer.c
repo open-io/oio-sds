@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2016 OpenIO, original work as part of OpenIO Software Defined Storage
+Copyright (C) 2016 OpenIO, original work as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -60,6 +60,8 @@ oio_events_queue_buffer_maybe_flush(struct oio_events_queue_buffer_s *buf,
 {
 	if (oio_ext_monotonic_time() > buf->last_renew + buf->delay) {
 		GHashTable *old = oio_events_queue_buffer_renew(buf);
+		guint event_count = g_hash_table_size(old);
+		GRID_DEBUG("Sending %u buffered events", event_count);
 		g_hash_table_foreach_steal(old, send, user_data);
 		g_hash_table_unref(old);
 	}

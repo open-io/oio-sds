@@ -56,8 +56,13 @@ static GError * _q_run (struct oio_events_queue_s *self,
 
 static struct oio_events_queue_vtable_s vtable_BEANSTALKD =
 {
-	_q_destroy, _q_send, _q_send_overwritable, _q_is_stalled,
-	_q_set_max_pending, _q_set_buffering, _q_run
+	.destroy = _q_destroy,
+	.send = _q_send,
+	.send_overwritable = _q_send_overwritable,
+	.is_stalled = _q_is_stalled,
+	.set_max_pending = _q_set_max_pending,
+	.set_buffering = _q_set_buffering,
+	.run = _q_run
 };
 
 /* Used by tests to intercept the result of the parsing of beanstalkd
@@ -201,13 +206,25 @@ static void
 _maybe_send_overwritable(struct oio_events_queue_s *self)
 {
 	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s *)self;
+	gint64 sent = 0;
 	gboolean __send(gpointer key, gpointer msg, gpointer u UNUSED) {
 		g_free(key);
 		_q_send(self, (gchar*)msg);
+		sent++;
 		return TRUE;
 	}
 
+	gboolean was_full = _q_is_stalled(self);
 	oio_events_queue_buffer_maybe_flush(&(q->buffer), __send, NULL);
+	if (!was_full && _q_is_stalled(self)) {
+		GRID_WARN("%s too big (%" G_GINT64_FORMAT "s) or %s too small (%u): %"
+				G_GINT64_FORMAT" events where just flushed from buffer",
+				OIO_CFG_EVTQ_BUFFER_DELAY,
+				q->buffer.delay / G_TIME_SPAN_SECOND,
+				OIO_CFG_EVTQ_MAXPENDING,
+				q->max_events_in_queue,
+				sent);
+	}
 }
 
 static GError *
