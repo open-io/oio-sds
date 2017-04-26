@@ -681,7 +681,11 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 	gboolean rc = FALSE;
 	const gint64 now = req_ctx->tv_parsed;
 	if (req_ctx->tv_start < OLDEST(now, meta_queue_max_delay)) {
-		rc = _client_reply_fixed(req_ctx, CODE_EXCESSIVE_LOAD, "retry later");
+		gchar msg[128] = "";
+		g_snprintf(msg, sizeof(msg),
+				"Queued for too long (%" G_GINT64_FORMAT "ms)",
+				(now - req_ctx->tv_start) / G_TIME_SPAN_MILLISECOND);
+		rc = _client_reply_fixed(req_ctx, CODE_EXCESSIVE_LOAD, msg);
 		_notify_request(req_ctx, gq_count_overloaded, gq_time_overloaded);
 	} else {
 		struct gridd_request_handler_s *hdl =
