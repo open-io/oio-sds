@@ -1149,20 +1149,7 @@ meta2_backend_update_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			for (GSList *l0=old_chunks, *l1=new_chunks;
 					!err && l0 && l1 ; l0=l0->next,l1=l1->next)
-			{
-				err = _db_delete_bean (sq3->db, l0->data);
-				if (!err)
-					err = _db_save_bean (sq3->db, l1->data);
-				if (!err && DESCR(l0->data) == &descr_struct_CHUNKS) {
-					gchar *stmt = g_strdup_printf(
-							"UPDATE chunks SET id = '%s' WHERE id = '%s'",
-							CHUNKS_get_id(l1->data)->str, CHUNKS_get_id(l0->data)->str);
-					int rc = sqlx_exec(sq3->db, stmt);
-					g_free(stmt);
-					if (!sqlx_code_good(rc))
-						err = SQLITE_GERROR(sq3->db, rc);
-				}
-			}
+				err = _db_substitute_bean(sq3->db, l0->data, l1->data);
 			if (!err)
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
