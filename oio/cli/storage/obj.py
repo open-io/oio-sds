@@ -46,6 +46,12 @@ class ObjectCommandMixin(ContainerCommandMixin):
             'object',
             metavar='<object>',
             help='Name of the object to manipulate.')
+        parser.add_argument(
+            '--object-version',
+            type=int,
+            default=None,
+            metavar='version',
+            help='Version of the object to manipulate.')
 
 
 class CreateObject(ContainerCommandMixin, lister.Lister):
@@ -153,12 +159,21 @@ class TouchObject(ContainerCommandMixin, command.Command):
             nargs='+',
             help='Object(s) to delete'
         )
+        parser.add_argument(
+            '--object-version',
+            type=int,
+            default=None,
+            metavar='version',
+            help='Version of the object to manipulate.')
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         super(TouchObject, self).take_action(parsed_args)
         container = parsed_args.container
+
+        if len(parsed_args.objects) > 1 and parsed_args.object_version:
+            raise Exception("Cannot specify a version for several objects")
 
         for obj in parsed_args.objects:
             if parsed_args.auto:
@@ -167,8 +182,8 @@ class TouchObject(ContainerCommandMixin, command.Command):
             self.app.client_manager.storage.object_touch(
                 self.app.client_manager.get_account(),
                 container,
-                obj
-            )
+                obj,
+                version=parsed_args.object_version)
 
 
 class DeleteObject(ContainerCommandMixin, lister.Lister):
@@ -185,6 +200,12 @@ class DeleteObject(ContainerCommandMixin, lister.Lister):
             nargs='+',
             help='Object(s) to delete'
         )
+        parser.add_argument(
+            '--object-version',
+            type=int,
+            default=None,
+            metavar='version',
+            help='Version of the object to manipulate.')
         return parser
 
     def take_action(self, parsed_args):
@@ -204,10 +225,12 @@ class DeleteObject(ContainerCommandMixin, lister.Lister):
             deleted = self.app.client_manager.storage.object_delete(
                 account,
                 container,
-                parsed_args.objects[0]
-            )
+                parsed_args.objects[0],
+                version=parsed_args.object_version)
             results.append((parsed_args.objects[0], deleted))
         else:
+            if parsed_args.object_version:
+                raise Exception("Cannot specify a version for several objects")
             if parsed_args.auto:
                 objs = {}
                 manager = self.app.client_manager.get_flatns_manager()
@@ -221,16 +244,14 @@ class DeleteObject(ContainerCommandMixin, lister.Lister):
                     tmp = self.app.client_manager.storage.object_delete_many(
                         account,
                         key,
-                        value
-                    )
+                        value)
                     results += tmp
             else:
                 container = parsed_args.container
                 results = self.app.client_manager.storage.object_delete_many(
                     account,
                     container,
-                    parsed_args.objects
-                )
+                    parsed_args.objects)
 
         columns = ('Name', 'Deleted')
         res_gen = (r for r in results)
@@ -261,7 +282,8 @@ class ShowObject(ObjectCommandMixin, show.ShowOne):
         data = self.app.client_manager.storage.object_show(
             account,
             container,
-            obj)
+            obj,
+            version=parsed_args.object_version)
         info = {'account': account,
                 'container': container,
                 'object': obj,
@@ -312,7 +334,8 @@ class SetObject(ObjectCommandMixin, command.Command):
             container,
             obj,
             properties,
-            parsed_args.clear)
+            version=parsed_args.object_version,
+            clear=parsed_args.clear)
 
 
 class SaveObject(ObjectCommandMixin, command.Command):
@@ -565,7 +588,8 @@ class UnsetObject(ObjectCommandMixin, command.Command):
             self.app.client_manager.get_account(),
             container,
             obj,
-            properties)
+            properties,
+            version=parsed_args.object_version)
 
 
 class LocateObject(ObjectCommandMixin, lister.Lister):
@@ -592,7 +616,8 @@ class LocateObject(ObjectCommandMixin, lister.Lister):
         data = self.app.client_manager.storage.object_analyze(
             account,
             container,
-            obj)
+            obj,
+            version=parsed_args.object_version)
 
         def sort_chunk_pos(c1, c2):
             c1_tokens = c1[0].split('.')

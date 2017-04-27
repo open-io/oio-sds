@@ -39,7 +39,7 @@ class ContainerClient(ProxyClient):
         return uri
 
     def _make_params(self, account=None, reference=None, path=None, cid=None,
-                     content=None):
+                     content=None, version=None):
         if cid:
             params = {'cid': cid}
         else:
@@ -48,6 +48,8 @@ class ContainerClient(ProxyClient):
             params.update({'path': path})
         if content:
             params.update({'content': content})
+        if version:
+            params.update({'version': version})
         return params
 
     def container_create(self, account, reference,
@@ -301,9 +303,10 @@ class ContainerClient(ProxyClient):
         return resp, body
 
     def content_delete(self, account=None, reference=None, path=None, cid=None,
-                       headers=None, **kwargs):
+                       version=None, headers=None, **kwargs):
         uri = self._make_uri('content/delete')
-        params = self._make_params(account, reference, path, cid=cid)
+        params = self._make_params(account, reference, path, cid=cid,
+                                   version=version)
         if not headers:
             headers = dict()
         headers.update(gen_headers())
@@ -352,7 +355,7 @@ class ContainerClient(ProxyClient):
             raise
 
     def content_locate(self, account=None, reference=None, path=None, cid=None,
-                       content=None, **kwargs):
+                       content=None, version=None, **kwargs):
         """
         Get a description of the content along with the list of its chunks.
 
@@ -366,7 +369,7 @@ class ContainerClient(ProxyClient):
         """
         uri = self._make_uri('content/locate')
         params = self._make_params(account, reference, path, cid=cid,
-                                   content=content)
+                                   content=content, version=version)
         resp, chunks = self._direct_request('GET', uri, params=params)
         content_meta = extract_content_headers_meta(resp.headers)
         return content_meta, chunks
@@ -386,13 +389,15 @@ class ContainerClient(ProxyClient):
         return resp_headers, body
 
     def content_show(self, account=None, reference=None, path=None,
-                     properties=None, cid=None, content=None, **kwargs):
+                     properties=None, cid=None, content=None, version=None,
+                     **kwargs):
         """
         Get a description of the content along with its user properties.
         """
         uri = self._make_uri('content/get_properties')
         params = self._make_params(account, reference, path,
-                                   cid=cid, content=content)
+                                   cid=cid, content=content,
+                                   version=version)
         data = json.dumps(properties) if properties else None
         resp, body = self._direct_request(
             'POST', uri, data=data, params=params, **kwargs)
@@ -401,34 +406,40 @@ class ContainerClient(ProxyClient):
         return obj_meta
 
     def content_get_properties(self, account=None, reference=None, path=None,
-                               properties=[], cid=None, **kwargs):
+                               properties=[], cid=None, version=None,
+                               **kwargs):
         """
         Get the dictionary of properties set on a content.
         """
         return self.content_show(account, reference, path,
-                                 properties=properties, cid=cid, **kwargs)
+                                 properties=properties, cid=cid,
+                                 version=version, **kwargs)
 
     def content_set_properties(self, account=None, reference=None, path=None,
-                               properties={}, cid=None, **kwargs):
+                               properties={}, cid=None, version=None,
+                               **kwargs):
         uri = self._make_uri('content/set_properties')
-        params = self._make_params(account, reference, path, cid=cid)
+        params = self._make_params(account, reference, path,
+                                   cid=cid, version=version)
         data = json.dumps(properties)
         _resp, body = self._direct_request(
             'POST', uri, data=data, params=params, **kwargs)
 
     def content_del_properties(self, account=None, reference=None, path=None,
-                               properties=[], cid=None, **kwargs):
+                               properties=[], cid=None, version=None,
+                               **kwargs):
         uri = self._make_uri('content/del_properties')
-        params = self._make_params(account, reference, path, cid=cid)
+        params = self._make_params(account, reference, path,
+                                   cid=cid, version=version)
         data = json.dumps(properties)
         _resp, body = self._direct_request(
             'POST', uri, data=data, params=params, **kwargs)
         return body
 
     def content_touch(self, account=None, reference=None, path=None, cid=None,
-                      **kwargs):
+                      version=None, **kwargs):
         uri = self._make_uri('content/touch')
-        params = self._make_params(account, reference, path)
+        params = self._make_params(account, reference, path, version=version)
         resp, body = self._direct_request('POST', uri, params=params, **kwargs)
 
     def content_spare(self, account=None, reference=None, path=None, data=None,
