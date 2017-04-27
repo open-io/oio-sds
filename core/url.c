@@ -383,9 +383,18 @@ _pack_url(struct oio_url_s *u)
 					g_string_append_c (gs, '/');
 					g_string_append_uri_escaped (gs, u->path, NULL, TRUE);
 				}
+				gboolean anyopt = FALSE;
 				if (u->content) {
-					g_string_append_c (gs, '?');
+					g_string_append_c (gs, anyopt ? '&' : '?');
+					g_string_append_len (gs, "id=", 3);
 					g_string_append_uri_escaped (gs, u->content, NULL, TRUE);
+					anyopt = TRUE;
+				}
+				if (u->version) {
+					g_string_append_c (gs, anyopt ? '&' : '?');
+					g_string_append_len (gs, "v=", 2);
+					g_string_append_uri_escaped (gs, u->version, NULL, TRUE);
+					anyopt = TRUE;
 				}
 			}
 		}
