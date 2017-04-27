@@ -347,11 +347,9 @@ m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *u,
 {
 	/* sanity checks */
 	if (!oio_url_has(u, OIOURL_PATH) && !oio_url_has(u, OIOURL_CONTENTID))
-		return NEWERROR(CODE_BAD_REQUEST, "Missing path and content");
+		return BADREQ("Missing path and content");
 
-	GRID_TRACE("GET(%s)", oio_url_get(u, OIOURL_WHOLE));
-
-	/* query, and nevermind the snapshot */
+	/* query */
 	GError *err = NULL;
 	const gchar *sql = NULL;
 	GVariant *params[3] = {NULL, NULL, NULL};
@@ -365,7 +363,9 @@ m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *u,
 		} else {
 			if (oio_url_has(u, OIOURL_VERSION)) {
 				sql = "alias = ? AND version = ? LIMIT 1";
-				params[1] = g_variant_new_int64(atoi(oio_url_get(u, OIOURL_VERSION)));
+				gint64 version =
+					g_ascii_strtoll(oio_url_get(u, OIOURL_VERSION), NULL, 10);
+				params[1] = g_variant_new_int64(version);
 			} else {
 				sql = "alias = ? ORDER BY version DESC LIMIT 1";
 			}
@@ -373,7 +373,7 @@ m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *u,
 	} else {
 
 		do { /* get the content-id in its binary form */
-			/* XXX TODO this code is multiplicated, there is room for factorisation */
+			/* TODO factorize this */
 			const char *h = oio_url_get(u, OIOURL_CONTENTID);
 			gsize hl = strlen(h);
 			guint8 b[hl/2];
@@ -393,7 +393,9 @@ m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *u,
 		} else {
 			if (oio_url_has(u, OIOURL_VERSION)) {
 				sql = "content = ? AND version = ? LIMIT 1";
-				params[1] = g_variant_new_int64(atoi(oio_url_get(u, OIOURL_VERSION)));
+				gint64 version =
+					g_ascii_strtoll(oio_url_get(u, OIOURL_VERSION), NULL, 10);
+				params[1] = g_variant_new_int64(version);
 			} else {
 				sql = "content = ? ORDER BY version DESC LIMIT 1";
 			}
