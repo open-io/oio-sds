@@ -18,25 +18,24 @@ def make_arg_parser():
     log_parser.add_argument('--log-address',
                             help="Log address")
 
-    descr = "Especially for my favorite customer!"
+    descr = "Especially for my favorite customer! " + \
+            "The script runs the chunks on the given rawx volume and " + \
+            "it registers them in their container."
     parser = argparse.ArgumentParser(description=descr, parents=[log_parser])
     parser.add_argument('namespace', help="Namespace")
     parser.add_argument('volume', help="The volume id to rebuild")
-    parser.add_argument('--dry-run', action='store_true',
-                        help="Display actions but do nothing")
-    parser.add_argument('--rdir-fetch-limit', type=int,
-                        help="Maximum of entries returned in "
-                             "each rdir response (100)")
+    parser.add_argument('--first', default=False, action='store_true',
+                        help="Also work on a chunk if it is the first in " + \
+                             "its metachunk")
+    parser.add_argument('--no-lock', action='store_true',
+                        help="Also work on a chunk if it is the first in " + \
+                             "its metachunk")
     parser.add_argument('--report-interval', type=int,
                         help="Report interval in seconds (3600)")
-    parser.add_argument('--bytes-per-second', type=int,
-                        help="Max bytes per second (10000000)")
     parser.add_argument('--chunks-per-second', type=int,
                         help="Max chunks per second (30)")
     parser.add_argument('-q', '--quiet', action='store_true',
                         help="Don't print log on console")
-    parser.add_argument('--allow-same-rawx', action='store_true',
-                        help="Allow rebuilding a chunk on the original rawx")
 
     return parser
 
@@ -51,28 +50,28 @@ if __name__ == '__main__':
         conf['log_facility'] = args.log_facility
     if args.log_address is not None:
         conf['log_address'] = args.log_address
-    conf['dry_run'] = args.dry_run
-    if args.rdir_fetch_limit is not None:
-        conf['rdir_fetch_limit'] = args.rdir_fetch_limit
+
+    conf['first'] = args.first
+
     if args.report_interval is not None:
         conf['report_interval'] = args.report_interval
-    if args.bytes_per_second is not None:
-        conf['bytes_per_second'] = args.bytes_per_second
     if args.chunks_per_second is not None:
         conf['chunks_per_second'] = args.chunks_per_second
     conf['namespace'] = args.namespace
-    conf['allow_same_rawx'] = args.allow_same_rawx
     if args.log_syslog_prefix is not None:
         conf['syslog_prefix'] = args.log_syslog_prefix
     else:
-        conf['syslog_prefix'] = 'OIO,%s,blob-rebuilder,%s' % \
+        conf['syslog_prefix'] = 'OIO,%s,blob-registrator,%s' % \
             (args.namespace, args.volume)
 
     logger = get_logger(conf, None, not args.quiet)
 
     try:
         worker = BlobRegistratorWorker(conf, logger, args.volume)
-        worker.pass_without_lock()
+        if args.no_lock:
+            worker.pass_without_lock()
+        else:
+            worker.pass_with_lock()
     except Exception as e:
         logger.exception('ERROR in registrator: %s' % e)
 
