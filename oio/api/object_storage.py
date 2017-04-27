@@ -530,7 +530,8 @@ class ObjectStorageApi(object):
                     properties=metadata, policy=policy, headers=headers,
                     key_file=key_file)
 
-    def object_touch(self, account, container, obj, headers=None, **kwargs):
+    def object_touch(self, account, container, obj,
+                     version=None, headers=None, **kwargs):
         """
         Trigger a notification about an object
         (as if it just had been created).
@@ -547,17 +548,20 @@ class ObjectStorageApi(object):
             headers = dict()
         if 'X-oio-req-id' not in headers:
             headers['X-oio-req-id'] = utils.request_id()
-        self.container.content_touch(account, container, obj, headers=headers,
+        self.container.content_touch(account, container, obj,
+                                     version=version, headers=headers,
                                      **kwargs)
 
     @handle_object_not_found
-    def object_delete(self, account, container, obj, headers=None, **kwargs):
+    def object_delete(self, account, container, obj,
+                      version=None, headers=None, **kwargs):
         if not headers:
             headers = dict()
         if 'X-oio-req-id' not in headers:
             headers['X-oio-req-id'] = utils.request_id()
         return self.container.content_delete(account, container, obj,
-                                             headers=headers, **kwargs)
+                                             version=version, headers=headers,
+                                             **kwargs)
 
     def object_delete_many(self, account, container, objs, headers=None,
                            **kwargs):
@@ -597,8 +601,10 @@ class ObjectStorageApi(object):
 
     # FIXME:
     @handle_object_not_found
-    def object_locate(self, account, container, obj, headers=None):
-        obj_meta, body = self.container.content_locate(account, container, obj)
+    def object_locate(self, account, container, obj,
+                      version=None, headers=None):
+        obj_meta, body = self.container.content_locate(account, container, obj,
+                                                       version=version)
         return obj_meta, body
 
     def object_analyze(self, *args, **kwargs):
@@ -635,7 +641,7 @@ class ObjectStorageApi(object):
     def object_get_properties(self, account, container, obj, headers=None):
         return self.container.content_get_properties(account, container, obj)
 
-    def object_show(self, account, container, obj, headers=None):
+    def object_show(self, account, container, obj, version=None, headers=None):
         """
         Get a description of the content along with its user properties.
 
@@ -662,10 +668,11 @@ class ObjectStorageApi(object):
              'name': 'Makefile'}
         """
         return self.container.content_show(account, container, obj,
+                                           version=version,
                                            headers=headers)
 
-    def object_update(self, account, container, obj, metadata, clear=False,
-                      headers=None):
+    def object_update(self, account, container, obj, metadata,
+                      version=None, clear=False, headers=None):
         if clear:
             self.object_del_properties(
                 account, container, obj, [], headers=headers)
@@ -675,17 +682,18 @@ class ObjectStorageApi(object):
 
     @handle_object_not_found
     def object_set_properties(self, account, container, obj, properties,
-                              clear=False, headers=None, **kwargs):
+                              version=None, clear=False, headers=None,
+                              **kwargs):
         return self.container.content_set_properties(
             account, container, obj, properties={'properties': properties},
-            headers=headers, **kwargs)
+            version=version, headers=headers, **kwargs)
 
     @handle_object_not_found
     def object_del_properties(self, account, container, obj, properties,
-                              headers=None, **kwargs):
+                              version=None, headers=None, **kwargs):
         return self.container.content_del_properties(
             account, container, obj, properties=properties,
-            headers=headers, **kwargs)
+            version=version, headers=headers, **kwargs)
 
     # FIXME: remove and call self.container.content_prepare() directly
     def _content_prepare(self, account, container, obj_name, size,
