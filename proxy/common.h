@@ -180,6 +180,8 @@ struct req_args_s
 
 	struct http_request_s *rq;
 	struct http_reply_ctx_s *rp;
+
+	gint64 version;
 };
 
 typedef enum http_rc_e (*req_handler_f) (struct req_args_s *);

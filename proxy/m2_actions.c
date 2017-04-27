@@ -1679,11 +1679,11 @@ static enum http_rc_e action_m2_content_touch (struct req_args_s *args,
 		struct json_object *jargs) {
 	(void) jargs;
 
-	if ((!oio_url_has_fq_container(args->url) &&
-		 !oio_url_has(args->url, OIOURL_HEXID)) ||
-			(!oio_url_has(args->url, OIOURL_PATH) &&
-			 !oio_url_has(args->url, OIOURL_CONTENTID)))
-		return _reply_format_error(args, BADREQ("Missing content path or ID"));
+	if (!oio_url_has_fq_container(args->url))
+		return _reply_format_error(args, BADREQ("container unspecified"));
+	if (!oio_url_has(args->url, OIOURL_PATH) &&
+			!oio_url_has(args->url, OIOURL_CONTENTID))
+		return _reply_format_error(args, BADREQ("content unspecified"));
 
 	PACKER_VOID(_pack) { return m2v2_remote_pack_TOUCHC (args->url); }
 	GError *err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
@@ -1694,9 +1694,10 @@ static enum http_rc_e action_m2_content_touch (struct req_args_s *args,
 
 static enum http_rc_e action_m2_content_link (struct req_args_s *args,
 		struct json_object *jargs) {
+	if (!oio_url_has_fq_container(args->url))
+		return _reply_m2_error (args, BADREQ("no container identified"));
 	if (NULL != CONTENT())
 		return _reply_m2_error (args, BADREQ("No content allowed in the URL"));
-
 	if (!jargs || !json_object_is_type (jargs, json_type_object))
 		return _reply_m2_error (args, BADREQ("Expected: json object"));
 
@@ -1725,8 +1726,6 @@ static enum http_rc_e action_m2_content_propset (struct req_args_s *args,
 	if (CONTENT())
 		return _reply_m2_error (args, BADREQ("Content. not allowed in the URL"));
 
-	// TODO manage the version of the content
-	gint64 version = 0;
 	GSList *beans = NULL;
 
 	if (jargs) {
@@ -1739,7 +1738,7 @@ static enum http_rc_e action_m2_content_propset (struct req_args_s *args,
 			PROPERTIES_set2_key (prop, *p);
 			PROPERTIES_set2_value (prop, (guint8*)*(p+1), strlen(*(p+1)));
 			PROPERTIES_set2_alias (prop, oio_url_get (args->url, OIOURL_PATH));
-			PROPERTIES_set_version (prop, version);
+			PROPERTIES_set_version (prop, args->version);
 			beans = g_slist_prepend (beans, prop);
 		}
 		g_strfreev(kv);
@@ -1762,11 +1761,6 @@ static enum http_rc_e action_m2_content_propdel (struct req_args_s *args,
 	if (!json_object_is_type(jargs, json_type_array))
 		return _reply_format_error (args, BADREQ("Array argument expected"));
 
-	// TODO manage the version of the content
-	gint64 version = 0;
-	(void) version;
-
-	// build the payload
 	gchar **namev = NULL;
 	GError *err = STRV_decode_object(jargs, &namev);
 	EXTRA_ASSERT((err != NULL) ^ (namev != NULL));
@@ -1783,9 +1777,7 @@ static enum http_rc_e action_m2_content_propdel (struct req_args_s *args,
 
 static enum http_rc_e action_m2_content_propget (struct req_args_s *args,
 		struct json_object *jargs UNUSED) {
-	/* TODO manage the version of the content */
-
-	guint32 flags = flag_force_master ? M2V2_FLAG_MASTER : 0;
+	const guint32 flags = flag_force_master ? M2V2_FLAG_MASTER : 0;
 
 	GSList *beans = NULL;
 	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_GET (args->url, flags); }
@@ -1798,8 +1790,8 @@ static GError *_m2_json_put (struct req_args_s *args,
 	if (!jbody)
 		return BADREQ("Invalid JSON body");
 
-	gboolean append = _request_get_flag (args, "append");
-	gboolean force = _request_get_flag (args, "force");
+	const gboolean append = _request_get_flag (args, "append");
+	const gboolean force = _request_get_flag (args, "force");
 	GSList *ibeans = NULL, *obeans = NULL;
 	GError *err;
 
@@ -2006,8 +1998,11 @@ enum http_rc_e action_content_copy (struct req_args_s *args) {
 	// Check the namespace and container match between both URLs
 	if (!oio_url_has(target_url, OIOURL_HEXID)
 			|| !oio_url_has(target_url, OIOURL_NS)
-			|| !oio_url_has(target_url, OIOURL_PATH)
-			|| !oio_url_has(args->url, OIOURL_HEXID)
+			|| !oio_url_has(target_url, OIOURL_PATH)) {
+		oio_url_pclean(&target_url);
+		return _reply_format_error(args, BADREQ("Invalid source URL"));
+	}
+	if (!oio_url_has(args->url, OIOURL_HEXID)
 			|| !oio_url_has(args->url, OIOURL_NS)
 			|| strcmp(oio_url_get(target_url, OIOURL_NS), oio_url_get(args->url, OIOURL_NS))
 			|| strcmp(oio_url_get(target_url, OIOURL_HEXID), oio_url_get(args->url, OIOURL_HEXID))) {
