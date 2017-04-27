@@ -235,9 +235,17 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 		rp->subject(oio_url_get(url, OIOURL_HEXID));
 		gq_count = (*matchings)->last->gq_count;
 		gq_time = (*matchings)->last->gq_time;
-		GRID_TRACE("%s %s URL %s", __FUNCTION__, ruri.path, oio_url_get(args.url, OIOURL_WHOLE));
-		req_handler_f handler = (*matchings)->last->u;
-		rc = (*handler) (&args);
+
+		GRID_TRACE("%s %s URL %s", __FUNCTION__,
+				ruri.path, oio_url_get(args.url, OIOURL_WHOLE));
+
+		if (oio_url_has(args.url, OIOURL_VERSION) && !oio_str_is_number(
+					oio_url_get(args.url, OIOURL_VERSION), &args.version))
+			rc = _reply_format_error(&args, BADREQ("Invalid version"));
+		else {
+			req_handler_f handler = (*matchings)->last->u;
+			rc = (*handler) (&args);
+		}
 	}
 
 	gint64 spent = oio_ext_monotonic_time () - rq->client->time.evt_in;
