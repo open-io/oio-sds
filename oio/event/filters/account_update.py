@@ -1,5 +1,4 @@
 from eventlet import Timeout
-from urlparse import urlparse
 from urllib import urlencode
 from oio.common.http import http_request
 from oio.event.evob import Event, EventError
@@ -21,13 +20,10 @@ class AccountUpdateFilter(Filter):
         event = Event(env)
 
         if event.event_type in CONTAINER_EVENTS:
-            uri = '/v1.0/account/container/update'
             mtime = event.when / 1000000.0  # convert to seconds
             data = event.data
             url = event.env.get('url')
-            name = url.get('user')
-            account = url.get('account')
-            body = {'name': name}
+            body = {'name': url.get('user')}
             if event.event_type == EventTypes.CONTAINER_STATE:
                 body['bytes'] = data.get('bytes-count', 0)
                 body['objects'] = data.get('object-count', 0)
@@ -36,14 +32,15 @@ class AccountUpdateFilter(Filter):
                 body['dtime'] = mtime
             elif event.event_type == EventTypes.CONTAINER_NEW:
                 body['mtime'] = mtime
-            query = urlencode({'id': account})
-            p = urlparse('http://' + self.app.app.acct_addr)
+            query = urlencode({'id': url.get('account')})
             try:
                 with Timeout(ACCOUNT_TIMEOUT):
-                    resp, body = http_request(p.netloc, 'POST', uri,
-                                              query_string=query, body=body)
-            except Timeout as e:
-                msg = 'account update failure: %s' % str(e)
+                    # TODO(FVE): fix and use AccountClient
+                    _, _ = http_request(self.app_env['acct_addr'](), 'POST',
+                                        '/v1.0/account/container/update',
+                                        query_string=query, body=body)
+            except Timeout as exc:
+                msg = 'account update failure: %s' % str(exc)
                 resp = EventError(event=Event(env), body=msg)
                 return resp(env, cb)
         return self.app(env, cb)
