@@ -20,10 +20,18 @@ from oio.event.consumer import EventTypes
 from oio.common.storage_method import STORAGE_METHODS
 from oio.content.plain import PlainContent
 from oio.content.ec import ECContent
-from oio.api.object_storage import ObjectStorageAPI
+from oio import ObjectStorageApi
 
 
 class ContentRebuildFilter(Filter):
+
+    def __init__(self, app, conf,  logger=None):
+        super(ContentRebuildFilter, self).__init__(app, conf, logger)
+        self.object_storage_api = ObjectStorageApi(conf.get('namespace'))
+
+    def _get_content(self, container_id, meta, chunks, storage_method):
+        cls = ECContent if storage_method.ec else PlainContent
+        return cls(self.conf, container_id, meta, chunks, storage_method)
 
     def process(self, env, cb):
         event = Event(env)
@@ -33,13 +41,11 @@ class ContentRebuildFilter(Filter):
             container_name = url['user']
             content_name = url['path']
             account = url['account']
-            content_rebuild = ContentRebuild(self.conf)
-            object_storage_api = ObjectStorageAPI(namespace=url['ns'])
             meta = {}
             try:
-                meta, _ = object_storage_api.object_analyze(
-                          container=container_name, obj=content_name,
-                          account=account)
+                meta, _ = self.object_storage_api.object_analyze(
+                                container=container_name, obj=content_name,
+                                account=account)
             except NotFound:
                 raise ContentNotFound("Content %s/%s not found" %
                                       (container_name, content_name))
@@ -51,9 +57,9 @@ class ContentRebuildFilter(Filter):
                 raise MissingData("No missing chunks found")
             chunk_method = meta['chunk_method']
             storage_method = STORAGE_METHODS.load(chunk_method)
-            content = content_rebuild.get_content(url['id'], meta,
-                                                  present_chunks,
-                                                  storage_method)
+            content = self._get_content(url['id'], meta,
+                                        present_chunks,
+                                        storage_method)
             for chunk_pos in missing_chunks:
                     content.rebuild_chunk(None, chunk_pos=chunk_pos)
 
@@ -67,13 +73,3 @@ def filter_factory(global_conf, **local_conf):
     def rebuild_filter(app):
         return ContentRebuildFilter(app, conf)
     return rebuild_filter
-
-
-class ContentRebuild(object):
-
-    def __init__(self, conf):
-        self.conf = conf
-
-    def get_content(self, container_id, meta, chunks, storage_method):
-        cls = ECContent if storage_method.ec else PlainContent
-        return cls(self.conf, container_id, meta, chunks, storage_method)
