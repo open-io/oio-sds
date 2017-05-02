@@ -852,9 +852,8 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
 		struct sqlx_repctx_s *repctx = NULL;
-		const gint64 max_versions = _maxvers(sq3);
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (!(err = m2db_delete_alias(sq3, max_versions, url, cb, u0))) {
+			if (!(err = m2db_delete_alias(sq3, url, cb, u0))) {
 				m2db_increment_version(sq3);
 			}
 			err = sqlx_transaction_end(repctx, err);
@@ -887,7 +886,6 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		memset(&args, 0, sizeof(args));
 		args.sq3 = sq3;
 		args.url = url;
-		args.ns_max_versions = meta2_max_versions;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_put_alias(&args, in, out_deleted, out_added)))
@@ -920,7 +918,6 @@ meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		memset(&args, 0, sizeof(args));
 		args.sq3 = sq3;
 		args.url = url;
-		args.ns_max_versions = meta2_max_versions;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_copy_alias(&args, src)))
@@ -1012,7 +1009,6 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		memset(&args, 0, sizeof(args));
 		args.sq3 = sq3;
 		args.url = url;
-		args.ns_max_versions = meta2_max_versions;
 
 		if (!(err = _transaction_begin(sq3,url, &repctx))) {
 			if (!(err = m2db_force_alias(&args, in, out_deleted, out_added)))
@@ -1476,8 +1472,7 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 	 * This call may return an open database. */
 	m2b_get_prepare_data(m2b, url, &pdata, &sq3);
 
-	if (m2b->flag_precheck_on_generate &&
-			VERSIONS_DISABLED(pdata.max_versions)) {
+	if (m2b->flag_precheck_on_generate) {
 		err = m2b_open_if_needed(m2b, url,
 				_mode_masterslave(0)|M2V2_OPEN_ENABLED, &sq3);
 		if (!err) {

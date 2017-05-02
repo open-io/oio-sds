@@ -366,10 +366,10 @@ _container_wraper(const char *ns, gint64 maxvers, container_test_f cf)
 static void
 _container_wraper_allversions (const char *ns, container_test_f cf)
 {
-	_container_wraper (ns, -1, cf);
-	_container_wraper (ns, 0, cf);
-	_container_wraper (ns, 1, cf);
-	_container_wraper (ns, 2, cf);
+	_container_wraper (ns, -1, cf); /* suspended */
+	_container_wraper (ns, 0, cf); /* unlimited */
+	_container_wraper (ns, 1, cf); /* limited to 1 */
+	_container_wraper (ns, 2, cf); /* limited to 2 */
 }
 
 static void

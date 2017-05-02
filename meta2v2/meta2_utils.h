@@ -26,10 +26,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # include <meta2v2/meta2_utils.h>
 # include <meta2v2/autogen.h>
 
-#define VERSIONS_UNLIMITED(V) ((V) < 0)
-#define VERSIONS_DISABLED(V)  ((V) == 0)
-#define VERSIONS_SUSPENDED(V) ((V) == 1)
-#define VERSIONS_ENABLED(V)   ((V) < 0 || (V) > 1)
+#define VERSIONS_SUSPENDED(V) ((V) < 0)
+#define VERSIONS_DISABLED(V)  (((V) == 1) || VERSIONS_SUSPENDED(V))
+#define VERSIONS_UNLIMITED(V) ((V) == 0)
+#define VERSIONS_ENABLED(V)   (((V) != 1) && ((V) >= 0))
 #define VERSIONS_LIMITED(V)   ((V) > 1)
 
 #define CHUNK_METHOD_DRAINED "drained"
@@ -151,8 +151,8 @@ GError* m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 GError* m2db_drain_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		m2_onbean_cb cb, gpointer u0);
 
-GError* m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0);
+GError* m2db_delete_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
+		m2_onbean_cb cb, gpointer u0);
 
 GError* m2db_link_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		GBytes *id);
@@ -172,7 +172,6 @@ struct m2db_put_args_s
 {
 	struct sqlx_sqlite3_s *sq3;
 	struct oio_url_s *url;
-	gint64 ns_max_versions;
 };
 
 GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *in,

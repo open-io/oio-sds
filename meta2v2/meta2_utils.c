@@ -21,6 +21,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <glib.h>
 
+#include <meta2v2/meta2_variables.h>
+
 #include <core/oiolog.h>
 #include <meta2v2/meta2_backend_internals.h>
 #include <meta2v2/meta2_utils.h>
@@ -41,6 +43,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 static GError*
 _get_container_policy(struct sqlx_sqlite3_s *sq3, struct namespace_info_s *nsinfo,
 		struct storage_policy_s **result);
+
+static gint64
+_maxvers(struct sqlx_sqlite3_s *sq3)
+{
+	return m2db_get_max_versions(sq3, meta2_max_versions);
+}
 
 static gint64
 _m2db_count_alias_versions(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
@@ -891,13 +899,15 @@ m2db_drain_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 }
 
 GError*
-m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0)
+m2db_delete_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
+		m2_onbean_cb cb, gpointer u0)
 {
 	GError *err;
 	struct bean_ALIASES_s *alias = NULL;
 	struct bean_CONTENTS_HEADERS_s *header = NULL;
 	GSList *beans = NULL;
+
+	const gint64 max_versions = _maxvers(sq3);
 
 	void _search_alias_and_size(gpointer ignored, gpointer bean) {
 		(void) ignored;
@@ -907,11 +917,6 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 			header = bean;
 		beans = g_slist_prepend(beans, bean);
 	}
-
-	if (VERSIONS_DISABLED(max_versions) && oio_url_has(url, OIOURL_VERSION)
-			&& 0!=g_ascii_strtoll(oio_url_get(url, OIOURL_VERSION), NULL, 10))
-		return NEWERROR(CODE_BAD_REQUEST,
-				"Versioning not supported and version specified");
 
 	err = m2db_get_alias(sq3, url, M2V2_FLAG_NOPROPS|M2V2_FLAG_HEADERS,
 			_search_alias_and_size, NULL);
@@ -931,7 +936,7 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 			max_versions, ALIASES_get_deleted(alias),
 			oio_url_has(url, OIOURL_VERSION), oio_url_get(url, OIOURL_VERSION));
 
-	if (VERSIONS_DISABLED(max_versions) || VERSIONS_SUSPENDED(max_versions) ||
+	if (VERSIONS_DISABLED(max_versions) ||
 			oio_url_has(url, OIOURL_VERSION) || ALIASES_get_deleted(alias)) {
 
 		GSList *deleted_beans = NULL;
@@ -956,9 +961,8 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		// to manage this by ourselves.
 		if (!err)
 			err = _db_del_FK_by_name (alias, "properties", sq3->db);
-
 	} else {
-		gint64 now = oio_ext_real_time () / G_TIME_SPAN_SECOND;
+		const gint64 now = oio_ext_real_time () / G_TIME_SPAN_SECOND;
 		/* Create a new version marked as deleted */
 		struct bean_ALIASES_s *new_alias = _bean_dup(alias);
 		ALIASES_set_deleted(new_alias, TRUE);
@@ -1510,26 +1514,15 @@ GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 			version ++;
 	}
 
-	gint64 max_versions = m2db_get_max_versions(args->sq3,
-												args->ns_max_versions);
+	gint64 max_versions = _maxvers(args->sq3);
 
 	/* Check the operation respects the rules of versioning for the container */
 	if (latest) {
-		if (VERSIONS_DISABLED(max_versions)) {
-			if (ALIASES_get_deleted(latest) || ALIASES_get_version(latest) > 0) {
-				GRID_DEBUG("Versioning DISABLED but clues of SUSPENDED");
-				goto suspended;
-			} else {
-				err = NEWERROR(CODE_CONTENT_EXISTS, "versioning disabled + content present");
-			}
-		}
-		else if (VERSIONS_SUSPENDED(max_versions)) {
-suspended:
+		if (VERSIONS_SUSPENDED(max_versions)) {
 			// JFS: do not alter the size to manage the alias being removed,
 			// this will be done by the real purge of the latest.
 			purge_latest = TRUE;
-		}
-		else {
+		} else {
 			purge_latest = FALSE;
 		}
 	}
@@ -1608,7 +1601,7 @@ GError* m2db_copy_alias(struct m2db_put_args_s *args, const char *src_path)
 		err = NEWERROR(CODE_CONTENT_NOTFOUND,
 					   "Cannot copy content, source doesn't exist");
 
-	gint64 maxver = m2db_get_max_versions(args->sq3, args->ns_max_versions);
+	gint64 maxver = _maxvers(args->sq3);
 	if (!err) {
 		gint64 now = oio_ext_real_seconds();
 		target = _bean_dup(orig);
@@ -1620,7 +1613,7 @@ GError* m2db_copy_alias(struct m2db_put_args_s *args, const char *src_path)
 	}
 
 	/* source ok but special management for specific versioning modes */
-	if (!err && (VERSIONS_DISABLED(maxver) || VERSIONS_SUSPENDED(maxver))) {
+	if (!err && VERSIONS_SUSPENDED(maxver)) {
 		err = m2db_latest_alias(args->sq3, url_target, &latest);
 		if (err && CODE_IS_NOTFOUND(err->code))
 			g_clear_error(&err);
@@ -1683,8 +1676,6 @@ GError* m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		struct m2db_put_args_s args = {0};
 		args.sq3 = sq3;
 		args.url = url;
-		/* whatever, the content is not present, we won't reach a limit */
-		args.ns_max_versions = -1;
 		return m2db_put_alias(&args, beans, NULL, NULL);
 	}
 
