@@ -57,8 +57,13 @@ static GError * _q_run (struct oio_events_queue_s *self,
 
 static struct oio_events_queue_vtable_s vtable_AGENT =
 {
-	_q_destroy, _q_send, _q_send_overwritable, _q_is_stalled,
-	_q_set_max_pending, _q_set_buffering, _q_run
+	.destroy = _q_destroy,
+	.send = _q_send,
+	.send_overwritable = _q_send_overwritable,
+	.is_stalled = _q_is_stalled,
+	.set_max_pending = _q_set_max_pending,
+	.set_buffering = _q_set_buffering,
+	.run = _q_run
 };
 
 struct _queue_AGENT_s
@@ -408,26 +413,15 @@ _gq2zmq_has_pending (struct _gq2zmq_ctx_s *ctx)
 	return (0 < ctx->q->gauge_pending) || (0 < g_async_queue_length (ctx->queue));
 }
 
-static void
-_maybe_send_overwritable(struct oio_events_queue_s *self)
-{
-	struct _queue_AGENT_s *q = (struct _queue_AGENT_s *)self;
-	gboolean __send(gpointer key, gpointer msg, gpointer udata)
-	{
-		(void) udata;
-		g_free(key);
-		_q_send(self, (gchar*)msg);
-		return TRUE;
-	}
-
-	oio_events_queue_buffer_maybe_flush(&(q->buffer), __send, NULL);
-}
-
 static gpointer
 _gq2zmq_worker (struct _gq2zmq_ctx_s *ctx)
 {
 	while (ctx->running (_gq2zmq_has_pending (ctx))) {
-		_maybe_send_overwritable((struct oio_events_queue_s *)ctx->q);
+		struct _queue_AGENT_s *q = (struct _queue_AGENT_s*) ctx->q;
+		guint max =
+				(q->max_events_in_queue - g_async_queue_length(q->queue)) / 2;
+		oio_events_queue_send_buffered((struct oio_events_queue_s *)ctx->q,
+				&(ctx->q->buffer), max);
 		gchar *tmp =
 			(gchar*) g_async_queue_timeout_pop (ctx->queue, G_TIME_SPAN_SECOND);
 		if (tmp && !_forward_event (ctx->zpush, tmp))

@@ -202,31 +202,6 @@ _send_and_read_reply (int fd, struct iovec *iov, unsigned int iovcount)
 	return NULL;
 }
 
-static void
-_maybe_send_overwritable(struct oio_events_queue_s *self)
-{
-	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s *)self;
-	gint64 sent = 0;
-	gboolean __send(gpointer key, gpointer msg, gpointer u UNUSED) {
-		g_free(key);
-		_q_send(self, (gchar*)msg);
-		sent++;
-		return TRUE;
-	}
-
-	gboolean was_full = _q_is_stalled(self);
-	oio_events_queue_buffer_maybe_flush(&(q->buffer), __send, NULL);
-	if (!was_full && _q_is_stalled(self)) {
-		GRID_WARN("%s too big (%" G_GINT64_FORMAT "s) or %s too small (%u): %"
-				G_GINT64_FORMAT" events where just flushed from buffer",
-				OIO_CFG_EVTQ_BUFFER_DELAY,
-				q->buffer.delay / G_TIME_SPAN_SECOND,
-				OIO_CFG_EVTQ_MAXPENDING,
-				q->max_events_in_queue,
-				sent);
-	}
-}
-
 static GError *
 _put (int fd, gchar *msg, size_t msglen)
 {
@@ -294,7 +269,8 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 	EXTRA_ASSERT (running != NULL);
 
 	while ((*running)(0 < g_async_queue_length(q->queue))) {
-		_maybe_send_overwritable(self);
+		guint max = (q->max_events_in_queue - g_async_queue_length(q->queue)) / 2;
+		oio_events_queue_send_buffered(self, &(q->buffer), max);
 
 		/* find an event, prefering the last that failed */
 		gchar *msg = saved;
