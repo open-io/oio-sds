@@ -78,22 +78,42 @@ class Checker(object):
             error.append(target.chunk)
         self.error_writer.writerow(error)
 
+    def _check_chunk_xattr(self, target, obj_meta, xattr_meta):
+        error = False
+        # Composed position -> erasure coding
+        attr_prefix = 'meta' if '.' in obj_meta['pos'] else ''
+
+        attr_key = attr_prefix + 'chunk_size'
+        if str(obj_meta['size']) != xattr_meta.get(attr_key):
+            print("  Chunk %s '%s' xattr (%s) "
+                  "differs from size in meta2 (%s)" %
+                  (target, attr_key, xattr_meta.get(attr_key),
+                   obj_meta['size']))
+            error = True
+
+        attr_key = attr_prefix + 'chunk_hash'
+        if obj_meta['hash'] != xattr_meta.get(attr_key):
+            print("  Chunk %s '%s' xattr (%s) "
+                  "differs from hash in meta2 (%s)" %
+                  (target, attr_key, xattr_meta.get(attr_key),
+                   obj_meta['hash']))
+            error = True
+        return error
+
     def check_chunk(self, target):
         chunk = target.chunk
 
         obj_listing = self.check_obj(target)
         error = False
         if chunk not in obj_listing:
-            print('  Chunk %s missing in object listing' % target)
+            print('  Chunk %s missing from object listing' % target)
             error = True
-            # checksum = None
+            obj_meta = dict()
         else:
-            # TODO check checksum match
-            # checksum = obj_listing[chunk]['hash']
-            pass
+            obj_meta = obj_listing[chunk]
 
         try:
-            self.blob_client.chunk_head(chunk)
+            xattr_meta = self.blob_client.chunk_head(chunk)
         except exc.NotFound as e:
             self.chunk_not_found += 1
             error = True
@@ -102,6 +122,9 @@ class Checker(object):
             self.chunk_exceptions += 1
             error = True
             print('  Exception chunk "%s": %s' % (target, str(e)))
+        else:
+            if obj_meta:
+                error = self._check_chunk_xattr(target, obj_meta, xattr_meta)
 
         if error and self.error_file:
             self.write_error(target)
@@ -121,7 +144,7 @@ class Checker(object):
         container_listing = self.check_container(target)
         error = False
         if obj not in container_listing:
-            print('  Object %s missing in container listing' % target)
+            print('  Object %s missing from container listing' % target)
             error = True
             # checksum = None
         else:
@@ -176,7 +199,7 @@ class Checker(object):
         error = False
         if container not in account_listing:
             error = True
-            print('  Container %s missing in account listing' % target)
+            print('  Container %s missing from account listing' % target)
 
         marker = None
         results = []
