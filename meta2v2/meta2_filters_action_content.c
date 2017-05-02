@@ -202,15 +202,17 @@ meta2_filter_action_check_content(struct gridd_filter_ctx_s * ctx,
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	const char *copy_source = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_COPY);
-	if (NULL != copy_source) {
+	if (copy_source != NULL)
 		return rc;
-	}
 
+	gboolean is_update = false;
+	const char *update = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_UPDATE);
+	if (update != NULL)
+		is_update=true;
 	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
 	GString *message= g_string_new("");
-	e = meta2_backend_check_content(m2b, beans, message);
-	gchar tmp[256] = "storage.content.broken";
-	GString *gs = oio_event__create(tmp, url);
+	e = meta2_backend_check_content(m2b, beans, message, is_update);
+	GString *gs = oio_event__create("storage.content.broken", url);
 	g_string_append(gs, ",\"data\":{");
 	g_string_append(gs, message->str);
 	g_string_append(gs, "}}");

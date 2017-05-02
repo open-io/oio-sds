@@ -1455,14 +1455,14 @@ m2b_get_prepare_data(struct meta2_backend_s *m2b,
 
 GError *
 meta2_backend_check_content(struct meta2_backend_s *m2b,
-		GSList *beans, GString *message)
+		GSList *beans, GString *message, gboolean update)
 {
 	GError *err = NULL;
 	struct namespace_info_s *nsinfo = NULL;
 	if (!(nsinfo = meta2_backend_get_nsinfo(m2b)))
 		return NEWERROR(CODE_INTERNAL_ERROR, "NS not ready");
 
-	err = m2db_check_content(beans, nsinfo, message);
+	err = m2db_check_content(beans, nsinfo, message, update);
 	namespace_info_free(nsinfo);
 	return err;
 }

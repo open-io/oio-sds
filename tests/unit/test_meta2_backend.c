@@ -109,7 +109,7 @@ _props_generate(struct oio_url_s *url, gint64 v, guint count)
 
 static GSList*
 _create_alias2(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		const gchar *polname, int nb_chunks_pol)
+		const gchar *polname, int chunks_per_metachunks)
 {
 	void _onbean(gpointer u, gpointer bean) {
 		*((GSList**)u) = g_slist_prepend(*((GSList**)u), bean);
@@ -120,10 +120,10 @@ _create_alias2(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	GSList *beans = NULL;
 
 	g_assert(chunks_count > 1);
-	err = meta2_backend_generate_beans(m2b, url,
-			(chunk_size*(chunks_count-1))+1, polname, FALSE, _onbean, &beans);
+	err = meta2_backend_generate_beans(m2b, url, (chunk_size*(chunks_count-1))+1,
+			polname, FALSE, _onbean, &beans);
 	generated = g_slist_length(beans);
-	expected = 1 + 1 + chunks_count * nb_chunks_pol;
+	expected = 1 + 1 + chunks_count * chunks_per_metachunks;
 	GRID_DEBUG("BEANS generated=%u expected=%u", generated, expected);
 	g_assert_no_error(err);
 	g_assert(generated == expected);
@@ -231,27 +231,16 @@ _init_lb(int nb_services)
 static void
 _init_pool_ec_2cpy_3cpy(struct meta2_backend_s *m2)
 {
-	struct oio_lb_pool_s *rawx3 = oio_lb_world__create_pool (lb_world, "rawx3");
-	oio_lb_world__add_pool_target (rawx3, "*");
-	oio_lb_world__add_pool_target (rawx3, "*");
-	oio_lb_world__add_pool_target (rawx3, "*");
+	struct oio_lb_pool_s *rawx3 = oio_lb_world__create_pool(lb_world, "rawx3");
+	oio_lb_world__add_pool_targets(rawx3, "3,*");
 	oio_lb__force_pool(m2->lb, rawx3);
 
-	struct oio_lb_pool_s *rawx2 = oio_lb_world__create_pool (lb_world, "rawx2");
-	oio_lb_world__add_pool_target (rawx2, "*");
-	oio_lb_world__add_pool_target (rawx2, "*");
+	struct oio_lb_pool_s *rawx2 = oio_lb_world__create_pool(lb_world, "rawx2");
+	oio_lb_world__add_pool_targets(rawx2, "2,*");
 	oio_lb__force_pool(m2->lb, rawx2);
 
-	struct oio_lb_pool_s *ec = oio_lb_world__create_pool (lb_world, "EC");
-	oio_lb_world__add_pool_target (ec, "*");
-	oio_lb_world__add_pool_target (ec, "*");
-	oio_lb_world__add_pool_target (ec, "*");
-	oio_lb_world__add_pool_target (ec, "*");
-	oio_lb_world__add_pool_target (ec, "*");
-	oio_lb_world__add_pool_target (ec, "*");
-	oio_lb_world__add_pool_target (ec, "*");
-	oio_lb_world__add_pool_target (ec, "*");
-	oio_lb_world__add_pool_target (ec, "*");
+	struct oio_lb_pool_s *ec = oio_lb_world__create_pool(lb_world, "EC");
+	oio_lb_world__add_pool_targets(ec, "9,*");
 	oio_lb__force_pool(m2->lb, ec);
 }
 static void
@@ -478,21 +467,21 @@ test_content_check_all_beans_correct(void)
 		GError *err;
 		GSList *beans_3cpy = _create_alias2(m2, u, "THREECOPIES", 3);
 		GString *message = g_string_new("");
-		err = meta2_backend_check_content(m2, beans_3cpy, message);
+		err = meta2_backend_check_content(m2, beans_3cpy, message, false);
 		g_string_free(message, TRUE);
 		_bean_cleanl2(beans_3cpy);
 		g_assert_no_error(err);
 
 		GSList *beans_2cpy = _create_alias2(m2, u, "TWOCOPIES", 2);
 		message = g_string_new("");
-		err = meta2_backend_check_content(m2, beans_2cpy, message);
+		err = meta2_backend_check_content(m2, beans_2cpy, message, false);
 		g_string_free(message, TRUE);
 		_bean_cleanl2(beans_2cpy);
 		g_assert_no_error(err);
 
 		message = g_string_new("");
 		GSList *beans_ec = _create_alias2(m2, u, "EC", 3);
-		err = meta2_backend_check_content(m2, beans_ec, message);
+		err = meta2_backend_check_content(m2, beans_ec, message, false);
 		g_string_free(message, TRUE);
 		_bean_cleanl2(beans_ec);
 		g_assert_no_error(err);
@@ -519,7 +508,7 @@ test_content_check_1_missing_bean_plain_irreparable(void)
 		}
 		GRID_DEBUG("TEST nb_beans=%u", g_slist_length(beans));
 		GString *message = g_string_new("");
-		err = meta2_backend_check_content(m2, beans, message);
+		err = meta2_backend_check_content(m2, beans, message, false);
 		g_string_free(message, TRUE);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
 		_bean_cleanl2(beans);
@@ -537,7 +526,7 @@ test_content_check_1_missing_bean_plain_copy_reparable(void)
 		GSList *beans_2cpy = _create_alias2(m2, u, "TWOCOPIES", 2);
 		GString *message_2cpy = g_string_new("");
 		_remove_bean(&beans_2cpy, 1, NULL);
-		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy);
+		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy, false);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		gchar *missing_chunks = g_strrstr(message_2cpy->str, "\"missing_chunks\":[2]");
 		g_assert_nonnull(missing_chunks);
@@ -547,7 +536,7 @@ test_content_check_1_missing_bean_plain_copy_reparable(void)
 		GSList *beans_3cpy = _create_alias2(m2, u, "THREECOPIES", 3);
 		GString *message_3cpy = g_string_new("");
 		_remove_bean(&beans_3cpy, 1, NULL);
-		err = meta2_backend_check_content(m2, beans_3cpy, message_3cpy);
+		err = meta2_backend_check_content(m2, beans_3cpy, message_3cpy, false);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		missing_chunks = g_strrstr(message_3cpy->str, "\"missing_chunks\":[2]");
 		g_assert_nonnull(missing_chunks);
@@ -568,7 +557,7 @@ test_content_check_2_missing_bean_plain_copy_reparable(void)
 		GSList *beans_3cpy = _create_alias2(m2, u, "THREECOPIES", 3);
 		GString *message_3cpy = g_string_new("");
 		_remove_bean(&beans_3cpy, 2, NULL);
-		err = meta2_backend_check_content(m2, beans_3cpy, message_3cpy);
+		err = meta2_backend_check_content(m2, beans_3cpy, message_3cpy, false);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		GRID_DEBUG("%s", message_3cpy->str);
 		gchar *missing_chunks = g_strrstr(message_3cpy->str, "\"missing_chunks\":[2,2]");
@@ -590,7 +579,7 @@ test_content_check_missing_bean_plain_copy_irreparable(void)
 		GSList *beans_2cpy = _create_alias2(m2, u, "TWOCOPIES", 2);
 		GString *message_2cpy = g_string_new("");
 		_remove_bean(&beans_2cpy, 2, NULL);
-		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy);
+		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy, false);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
 		g_string_free(message_2cpy, TRUE);
 		_bean_cleanl2(beans_2cpy);
@@ -598,7 +587,7 @@ test_content_check_missing_bean_plain_copy_irreparable(void)
 		GSList *beans_3cpy = _create_alias2(m2, u, "THREECOPIES", 3);
 		GString *message_3cpy = g_string_new("");
 		_remove_bean(&beans_3cpy, 3, NULL);
-		err = meta2_backend_check_content(m2, beans_3cpy, message_3cpy);
+		err = meta2_backend_check_content(m2, beans_3cpy, message_3cpy, false);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
 		_bean_cleanl2(beans_3cpy);
 		g_string_free(message_3cpy, TRUE);
@@ -616,7 +605,7 @@ test_content_check_missing_first_pos(void)
 		GString *message_nocpy = g_string_new("");
 		GSList *beans_nocpy = _create_alias(m2, u, NULL);
 		_remove_bean(&beans_nocpy, 1, "0");
-		err = meta2_backend_check_content(m2, beans_nocpy, message_nocpy);
+		err = meta2_backend_check_content(m2, beans_nocpy, message_nocpy, false);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
 		_bean_cleanl2(beans_nocpy);
 		g_string_free(message_nocpy, TRUE);
@@ -624,10 +613,10 @@ test_content_check_missing_first_pos(void)
 		GSList *beans_2cpy = _create_alias2(m2, u, "TWOCOPIES", 2);
 		GString *message_2cpy = g_string_new("");
 		_remove_bean(&beans_2cpy, 1, "0");
-		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy);
+		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy, false);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		_remove_bean(&beans_2cpy, 1, "0");
-		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy);
+		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy, false);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
 		_bean_cleanl2(beans_2cpy);
 		g_string_free(message_2cpy, TRUE);
@@ -645,7 +634,7 @@ test_content_check_ec_missing_1_chunk(void)
 		GString *message_ec1 = g_string_new("");
 		GSList *beans_ec1 = _create_alias2(m2, u, "EC", 3);
 		_remove_bean(&beans_ec1, 1, NULL);
-		err = meta2_backend_check_content(m2, beans_ec1, message_ec1);
+		err = meta2_backend_check_content(m2, beans_ec1, message_ec1, false);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		_bean_cleanl2(beans_ec1);
 		g_string_free(message_ec1, TRUE);
@@ -654,7 +643,7 @@ test_content_check_ec_missing_1_chunk(void)
 		GSList *beans_ecm = _create_alias2(m2, u, "EC", 3);
 		int m = 3;
 		_remove_bean(&beans_ecm, m, NULL);
-		err = meta2_backend_check_content(m2, beans_ecm, message_ecm);
+		err = meta2_backend_check_content(m2, beans_ecm, message_ecm, false);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		_bean_cleanl2(beans_ecm);
 		g_string_free(message_ecm, TRUE);
@@ -663,7 +652,7 @@ test_content_check_ec_missing_1_chunk(void)
 		GSList *beans_ecm1 = _create_alias2(m2, u, "EC", 3);
 		int m1 = m + 1;
 		_remove_bean(&beans_ecm1, m1, NULL);
-		err = meta2_backend_check_content(m2, beans_ecm1, message_ecm1);
+		err = meta2_backend_check_content(m2, beans_ecm1, message_ecm1, false);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
 		_bean_cleanl2(beans_ecm1);
 		g_string_free(message_ecm1, TRUE);

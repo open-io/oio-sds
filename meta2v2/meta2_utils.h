@@ -152,7 +152,7 @@ GError* m2db_link_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		GBytes *id);
 
 GError* m2db_check_content(GSList *beans, struct namespace_info_s *nsinfo,
-		GString* message);
+		GString* message, gboolean update);
 
 GError* m2db_update_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		GSList *beans, GSList **out_deleted, GSList **out_added);

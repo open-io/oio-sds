@@ -3,7 +3,7 @@
 pipeline = noop
 
 [handler:storage.content.broken]
-pipeline = content_broken
+pipeline = content_rebuild
 
 [handler:storage.content.deleted]
 pipeline = content_cleaner
@@ -38,5 +38,5 @@ use = egg:oio#volume_index
 [filter:noop]
 use = egg:oio#noop
 
-[filter:content_broken]
-use = egg:oio#content_broken
+[filter:content_rebuild]
+use = egg:oio#content_rebuild
