@@ -74,7 +74,7 @@ _finalize_chunk_creation(dav_stream *stream)
 	int status = 0;
 
 	/* ensure to flush the FILE * buffer in system fd */
-	if(fflush(stream->f)) {
+	if (fflush(stream->f)) {
 		DAV_ERROR_REQ(stream->r->info->request, 0, "fflush error : %s", strerror(errno));
 		e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
 				HTTP_INTERNAL_SERVER_ERROR, 0,
@@ -660,15 +660,14 @@ rawx_repo_commit_upload(dav_stream *stream)
 	/* ok, save now */
 	e = _set_chunk_extended_attributes(stream, &fake);
 	if (e) {
-		DAV_DEBUG_REQ(stream->r->info->request, 0,
+		DAV_ERROR_REQ(stream->r->info->request, 0,
 				"Failed to set chunk extended attributes: %s", e->desc);
 		return e;
 	}
 
 	e = _finalize_chunk_creation(stream);
-
 	if (e) {
-		DAV_DEBUG_REQ(stream->r->info->request, 0,
+		DAV_ERROR_REQ(stream->r->info->request, 0,
 				"Failed to finalize chunk file creation: %s", e->desc);
 		return e;
 	}
@@ -722,19 +721,37 @@ rawx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 	ds->pathname = apr_pstrcat(p, ctx->dirname, "/", ctx->hex_chunkid, ".pending", NULL);
 
 	/* Create busy chunk file */
+	int fd;
 retry:
-	ds->f = fopen(ds->pathname, "w");
-
-	if (!ds->f) {
+	fd = open(ds->pathname, O_CREAT|O_EXCL|O_WRONLY, 0600);
+	if (fd < 0) {
 		if (errno == ENOENT && retryable) {
 			retryable = 0;
 			dav_error *e = rawx_repo_ensure_directory (resource);
-			if (!e) goto retry;
+			if (!e)
+				goto retry;
 			return e;
 		}
-		DAV_DEBUG_REQ(resource->info->request, 0, "open(%s) failed : %s", ds->pathname, strerror(errno));
+		DAV_DEBUG_REQ(resource->info->request, 0, "open(%s) failed : %s",
+				ds->pathname, strerror(errno));
 		return server_create_and_stat_error(resource_get_server_config(resource), p,
-			MAP_IO2HTTP(rv), 0, "An error occurred while opening a resource.");
+				MAP_IO2HTTP(rv), 0, "Chunk creation error");
+	}
+
+	/* Check the final chunks hasn't been created meanwhile */
+	if (0 == access(ds->final_pathname, F_OK)) {
+		(void) unlink(ds->pathname);
+		return server_create_and_stat_error(resource_get_server_config(resource), p,
+				HTTP_FORBIDDEN, 0, "Chunk already present.");
+	}
+
+	/* Wrap it under a FILE */
+	if (!(ds->f = fdopen(fd, "w"))) {
+		DAV_DEBUG_REQ(resource->info->request, 0, "fdopen(%s) failed : %s",
+				ds->pathname, strerror(errno));
+		(void) unlink(ds->pathname);
+		return server_create_and_stat_error(resource_get_server_config(resource), p,
+				HTTP_INTERNAL_SERVER_ERROR, 0, "FILE allocation error");
 	}
 
 	/* Preallocate disk space for the chunk */
@@ -742,9 +759,10 @@ retry:
 	if (ctx->chunk.chunk_size != NULL && conf->fallocate &&
 			(chunk_size = apr_strtoi64(ctx->chunk.chunk_size, NULL, 10)) > 0 &&
 			(rv = posix_fallocate(fileno(ds->f), 0, (off_t)chunk_size)) != 0) {
+		DAV_DEBUG_REQ(resource->info->request, 0, "posix_fallocate(%s) failed : %s",
+				ds->pathname, strerror(errno));
 		dav_error *err = server_create_and_stat_error(conf, p,
-				MAP_IO2HTTP(rv), 0,
-				"An error occurred while reserving storage space.");
+				MAP_IO2HTTP(rv), 0, "Space allocation error");
 		fclose(ds->f);
 		unlink(ds->pathname);
 		return err;
