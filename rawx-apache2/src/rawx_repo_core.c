@@ -577,29 +577,29 @@ rawx_repo_write_last_data_crumble(dav_stream *stream)
 	return e;
 }
 
+static int
+_unlink_and_log(dav_stream *stream, const char *path)
+{
+	if (unlink(path) == 0 || errno == ENOENT || errno == ENOTDIR)
+		return 0;
+	DAV_ERROR_REQ(stream->r->info->request, 0, "ORPHAN %s", path);
+	return 1;
+}
+
 dav_error *
 rawx_repo_rollback_upload(dav_stream *stream)
 {
-	fclose(stream->f);
-	if (remove(stream->pathname) != 0) {
-		/* ### use a better description? */
-		return server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
-				HTTP_INTERNAL_SERVER_ERROR, 0,
-				"There was a problem removing (rolling "
-				"back) the resource "
-				"when it was being closed.");
-	}
+	if (stream->f)
+		fclose(stream->f);
 
-	if (remove(stream->final_pathname) != 0) {
-		/* ### use a better description? */
-		return server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
-				HTTP_INTERNAL_SERVER_ERROR, 0,
-				"There was a problem removing (rolling "
-				"back) the resource "
-				"when it was being closed.");
-	}
+	const int rc_final = _unlink_and_log(stream, stream->final_pathname);
+	const int rc_temp = _unlink_and_log(stream, stream->pathname);
+	if (!rc_temp && !rc_final)
+		return NULL;
 
-	return NULL;
+	return server_create_and_stat_error(
+			resource_get_server_config(stream->r), stream->p,
+			HTTP_INTERNAL_SERVER_ERROR, 0, "Rollback error");
 }
 
 #define DUP(F) do { \
