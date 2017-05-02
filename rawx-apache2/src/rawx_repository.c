@@ -318,6 +318,16 @@ dav_rawx_open_stream(const dav_resource *resource, dav_stream_mode mode, dav_str
 	return NULL;
 }
 
+static void
+_rollback_and_log(dav_stream *stream)
+{
+	dav_error *e = rawx_repo_rollback_upload(stream);
+	if (!e)
+		return;
+	DAV_ERROR_REQ(stream->r->info->request, 0,
+			"Error while rolling back upload: %s", e->desc);
+}
+
 static dav_error *
 dav_rawx_close_stream(dav_stream *stream, int commit)
 {
@@ -336,14 +346,11 @@ dav_rawx_close_stream(dav_stream *stream, int commit)
 		if (e) {
 			DAV_DEBUG_REQ(stream->r->info->request, 0,
 					"Cannot commit, an error occured while writing end of data");
-			dav_error *e_tmp = NULL;
-			e_tmp = rawx_repo_rollback_upload(stream);
-			if (e_tmp) {
-				DAV_ERROR_REQ(stream->r->info->request, 0,
-						"Error while rolling back upload: %s", e_tmp->desc);
-			}
+			_rollback_and_log(stream);
 		} else {
 			e = rawx_repo_commit_upload(stream);
+			if (e)
+				_rollback_and_log(stream);
 		}
 	}
 
