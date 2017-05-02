@@ -178,14 +178,17 @@ lru_tree_insert(struct lru_tree_s *lt, gpointer k, gpointer v)
 		node = _node_create(k, v);
 		RB_INSERT(_tree_s, lt, &(lt->base), node);
 		++ lt->count;
+		_node_deq_push_front(lt, node);
+		node->atime = oio_ext_monotonic_time();
 	}
 	else {
-		_node_deq_extract(lt, node);
 		_node_update(lt, node, k, v);
+		if (!(lt->flags & LTO_NOUTIME)) {
+			_node_deq_extract(lt, node);
+			_node_deq_push_front(lt, node);
+			node->atime = oio_ext_monotonic_time();
+		}
 	}
-
-	_node_deq_push_front(lt, node);
-	node->atime = oio_ext_monotonic_time ();
 }
 
 gpointer
@@ -257,7 +260,7 @@ lru_tree_foreach(struct lru_tree_s *lt, GTraverseFunc h, gpointer hdata)
 	EXTRA_ASSERT(lt != NULL);
 	EXTRA_ASSERT(h != NULL);
 
-	for (struct _node_s *node = lt->first; node ;node=node->next) {
+	for (struct _node_s *node = lt->first; node; node = node->next) {
 		if (h(node->k, node->v, hdata))
 			return;
 	}
@@ -271,7 +274,7 @@ lru_tree_count(struct lru_tree_s *lt)
 }
 
 static void
-_remove_last (struct lru_tree_s *lt)
+_remove_last(struct lru_tree_s *lt)
 {
 	gpointer k = NULL, v = NULL;
 	if (_steal(lt, &k, &v, lt->last)) {
@@ -286,7 +289,7 @@ lru_tree_remove_older (struct lru_tree_s *lt, gint64 oldest)
 	EXTRA_ASSERT(lt != NULL);
 	guint removed = 0;
 	while (lt->last && lt->last->atime < oldest) {
-		_remove_last (lt);
+		_remove_last(lt);
 		++ removed;
 	}
 	return removed;
@@ -298,8 +301,21 @@ lru_tree_remove_exceeding (struct lru_tree_s *lt, guint count)
 	EXTRA_ASSERT(lt != NULL);
 	guint removed = 0;
 	while (lt->last && lt->count > count) {
-		_remove_last (lt);
+		_remove_last(lt);
 		++ removed;
 	}
 	return removed;
+}
+
+void
+lru_tree_foreach_older_steal(struct lru_tree_s *lt,
+		GTraverseFunc func, gpointer hdata, gint64 oldest, guint max)
+{
+	EXTRA_ASSERT(lt != NULL);
+	while (lt->last && lt->last->atime < oldest && max-- > 0) {
+		gpointer key = NULL, val = NULL;
+		if (_steal(lt, &key, &val, lt->last)) {
+			func(key, val, hdata);
+		}
+	}
 }

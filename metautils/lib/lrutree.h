@@ -23,7 +23,14 @@ License along with this library.
 # include <glib.h>
 
 #define LTO_NONE	0x00
-#define LTO_NOATIME 0X01
+
+/** Do not set time on access
+ *  (lru_tree_get()) */
+#define LTO_NOATIME 0x01
+
+/** Do not set time on update
+ *  (lru_tree_insert() and the key was already in the tree) */
+#define LTO_NOUTIME 0x02
 
 struct lru_tree_s;
 
@@ -38,7 +45,7 @@ struct lru_tree_s* lru_tree_create(GCompareFunc compare,
 		GDestroyNotify kfree, GDestroyNotify vfree, guint32 options);
 
 /* Destroys the LRU-Tree and calls the liberation hook for each stored
-   pair. */
+ * pair. */
 void lru_tree_destroy(struct lru_tree_s *lt);
 
 guint lru_tree_remove_older (struct lru_tree_s *lt, gint64 oldest);
@@ -53,6 +60,12 @@ gpointer lru_tree_get(struct lru_tree_s *lt, gconstpointer k);
 gboolean lru_tree_remove(struct lru_tree_s *lt, gconstpointer k);
 
 void lru_tree_foreach(struct lru_tree_s *lt, GTraverseFunc h, gpointer hdata);
+
+/** Remove from the LRU-Tree at most `max` elements older than `oldest`,
+ *  and call `func` on each of them. `func` is responsible for freeing
+ *  both key and value. */
+void lru_tree_foreach_older_steal(struct lru_tree_s *lt,
+		GTraverseFunc func, gpointer hdata, gint64 oldest, guint max);
 
 gint64 lru_tree_count(struct lru_tree_s *lt);
 
