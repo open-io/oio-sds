@@ -693,13 +693,13 @@ Used by `gcc`
  * cmake directive: *OIO__SERVER_QUEUE_MAX_DELAY*
  * range: 10 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
-### server.queue.max_delay
+### server.queue.warn_delay
 
 > In the current server, set the time threshold after which a warning is sent when a file descriptor stays longer than that in the queue of the Thread Pool.
 
  * default: **100 * G_TIME_SPAN_MILLISECOND**
  * type: gint64
- * cmake directive: *OIO__SERVER_QUEUE_MAX_DELAY*
+ * cmake directive: *OIO__SERVER_QUEUE_WARN_DELAY*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### server.udp_queue.max
