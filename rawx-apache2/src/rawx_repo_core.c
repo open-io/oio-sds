@@ -631,17 +631,40 @@ rawx_repo_commit_upload(dav_stream *stream)
 	DUP(compression_metadata);
 	DUP(compression_size);
 
-	/* patch the xattr with explicit values from the trailers, then ensure
-	 * values that could be missing */
+	/* Load the metadata located in the Trailers of the request */
 	request_overload_chunk_info_from_trailers (stream->r->info->request, &fake);
-	if (!fake.chunk_hash) {
-		gchar *hex = g_ascii_strup (g_checksum_get_string(stream->md5), -1);
-		fake.chunk_hash = apr_pstrdup(stream->p, hex);
-		g_free (hex);
+
+	/* Sanitize the chunk hash */
+	if (stream->md5) {
+		const char *hex = g_checksum_get_string(stream->md5);
+		if (!fake.chunk_hash) {
+			/* No checksum provided, let's save the checksum computed */
+			fake.chunk_hash = apr_pstrdup(stream->p, hex);
+			oio_str_upper(fake.chunk_hash);
+			DAV_DEBUG_REQ(stream->r->info->request, 0, "MD5 computed for %s",
+					stream->final_pathname);
+		} else {
+			/* A checksum has been provided, let's check it matches the checksum
+			 * computed over the input */
+			if (0 != strcasecmp(fake.chunk_hash, hex)) {
+				return server_create_and_stat_error(resource_get_server_config(stream->r),
+						stream->p, HTTP_UNPROCESSABLE_ENTITY, 0, apr_pstrcat(stream->p,
+							"MD5 mismatch hdr=", fake.chunk_hash, " body=", hex, NULL));
+			} else {
+				DAV_DEBUG_REQ(stream->r->info->request, 0, "MD5 match for %s",
+						stream->final_pathname);
+			}
+		}
+	} else {
+		DAV_DEBUG_REQ(stream->r->info->request, 0, "No MD5 computed for %s",
+				stream->final_pathname);
 	}
+
+	/* Ensure a (meta)chunk size */
 	if (!fake.chunk_size) {
 		fake.chunk_size = apr_psprintf(stream->r->pool, "%d", (int)stream->total_size);
 	}
+
 	if (stream->compressed_size) {
 		char size[32];
 		apr_snprintf(size, 32, "%d", stream->compressed_size);
