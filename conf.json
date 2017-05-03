@@ -358,7 +358,7 @@
 				"def": "5s", "min": "10ms", "max": "1h" },
 
 			{ "type": "monotonic", "name": "server_queue_warn_delay",
-				"key": "server.queue.max_delay",
+				"key": "server.queue.warn_delay",
 				"descr": "In the current server, set the time threshold after which a warning is sent when a file descriptor stays longer than that in the queue of the Thread Pool.",
 				"def": "100ms", "min": "1ms", "max": "1h" },
 
