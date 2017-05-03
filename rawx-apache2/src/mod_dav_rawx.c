@@ -153,7 +153,6 @@ dav_rawx_cmd_gridconfig_docroot(cmd_parms *cmd, void *config, const char *arg1)
 	dav_rawx_server_conf *conf;
 
 	(void) config;
-	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
 
 	/* Check the directory exists */
 	do {
@@ -228,19 +227,6 @@ dav_rawx_cmd_gridconfig_namespace(cmd_parms *cmd, void *config, const char *arg1
 	return NULL;
 }
 
-static int
-_str_to_boolean(const char *arg)
-{
-	int n_arg = 0;
-	n_arg |= (0 == apr_strnatcasecmp(arg, "on"));
-	n_arg |= (0 == apr_strnatcasecmp(arg, "true"));
-	n_arg |= (0 == apr_strnatcasecmp(arg, "yes"));
-	n_arg |= (0 == apr_strnatcasecmp(arg, "enabled"));
-	n_arg |= (0 == apr_strnatcasecmp(arg, "1"));
-
-	return n_arg;
-}
-
 static const char *
 dav_rawx_cmd_gridconfig_fsync(cmd_parms *cmd, void *config, const char *arg1)
 {
@@ -250,7 +236,7 @@ dav_rawx_cmd_gridconfig_fsync(cmd_parms *cmd, void *config, const char *arg1)
 	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
 
 	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
-	if (_str_to_boolean(arg1))
+	if (oio_str_parse_bool(arg1, FALSE))
 		conf->fsync_on_close |= FSYNC_ON_CHUNK;
 	else
 		conf->fsync_on_close &= ~FSYNC_ON_CHUNK;
@@ -267,7 +253,7 @@ dav_rawx_cmd_gridconfig_fsync_dir(cmd_parms *cmd, void *config, const char *arg1
 	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
 
 	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
-	if (_str_to_boolean(arg1))
+	if (oio_str_parse_bool(arg1, FALSE))
 		conf->fsync_on_close |= FSYNC_ON_CHUNK_DIR;
 	else
 		conf->fsync_on_close &= ~FSYNC_ON_CHUNK_DIR;
@@ -284,7 +270,7 @@ dav_rawx_cmd_gridconfig_fallocate(cmd_parms *cmd, void *config, const char *arg1
 	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
 
 	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
-	conf->fallocate = _str_to_boolean(arg1);
+	conf->fallocate = oio_str_parse_bool(arg1, FALSE);
 
 	return NULL;
 }
