@@ -617,8 +617,9 @@ class ECWriter(object):
 
         # in the trailer
         # metachunk_size & metachunk_hash
-        h["Trailer"] = (chunk_headers["metachunk_size"],
-                        chunk_headers["metachunk_hash"])
+        h["Trailer"] = ', '.join((chunk_headers["metachunk_size"],
+                                  chunk_headers["metachunk_hash"],
+                                  chunk_headers["chunk_hash"]))
         with green.ConnectionTimeout(
                 connection_timeout or io.CONNECTION_TIMEOUT):
             conn = io.http_connect(
@@ -677,6 +678,8 @@ class ECWriter(object):
                             metachunk_size),
             '%s: %s\r\n' % (chunk_headers['metachunk_hash'],
                             metachunk_hash),
+            '%s: %s\r\n' % (chunk_headers['chunk_hash'],
+                            self.checksum.hexdigest()),
             '\r\n'
         ]
         to_send = "".join(parts)
