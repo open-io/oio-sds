@@ -1047,11 +1047,12 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 
 GError*
 meta2_backend_insert_beans(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, GSList *beans)
+		struct oio_url_s *url, GSList *beans, gboolean force)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
+	int error_already = 0;
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -1059,12 +1060,27 @@ meta2_backend_insert_beans(struct meta2_backend_s *m2b,
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			err = _db_save_beans_list (sq3->db, beans);
+			if (force)
+				err = _db_save_beans_list (sq3->db, beans);
+			else
+				err = _db_insert_beans_list (sq3->db, beans);
 			if (!err)
 				m2db_increment_version(sq3);
+			else {
+				/* A constraint error is usually raised by an actual constraint
+				 * violation in the DB (inside the transaction) or also by a
+				 * failure of the commit hook (on the final COMMIT). */
+				error_already |= (err->code == SQLITE_CONSTRAINT);
+			}
 			err = sqlx_transaction_end(repctx, err);
 		}
 		m2b_close(sq3);
+	}
+
+	if (error_already) {
+		EXTRA_ASSERT(err != NULL);
+		g_clear_error(&err);
+		err = NEWERROR(CODE_CONTENT_EXISTS, "Bean already present");
 	}
 
 	return err;
