@@ -24,18 +24,29 @@ def make_arg_parser():
     parser = argparse.ArgumentParser(description=descr, parents=[log_parser])
     parser.add_argument('namespace', help="Namespace")
     parser.add_argument('volume', help="The volume id to rebuild")
+    parser.add_argument('-q', '--quiet', action='store_true',
+                        help="Don't print log on console")
     parser.add_argument('--first', default=False, action='store_true',
                         help="Also work on a chunk if it is the first in " + \
                              "its metachunk")
-    parser.add_argument('--no-lock', action='store_true',
-                        help="Also work on a chunk if it is the first in " + \
-                             "its metachunk")
+    parser.add_argument('--lock', action='store_true',
+                        help="Protect the run with an xattr-lock on the " + \
+                             "volume")
     parser.add_argument('--report-interval', type=int,
                         help="Report interval in seconds (3600)")
-    parser.add_argument('--chunks-per-second', type=int,
-                        help="Max chunks per second (30)")
-    parser.add_argument('-q', '--quiet', action='store_true',
-                        help="Don't print log on console")
+    parser.add_argument('--update', default=False, action='store_true',
+                        help="Should the script update the meta2 with " + \
+                             "the xattr. Mutually exclusive with --insert")
+    parser.add_argument('--insert', default=False, action='store_true',
+                        help="Should the script insert the chunkks in " + \
+                             "the container, without overriding the " + \
+                             "chunks in place. Mutually exclusive with" + \
+                             "--update, with a greater priority.")
+    parser.add_argument('--check', default=False, action='store_true',
+                        help="Default acction when neither --insert nor " + \
+                             "--update are specified (it overrides both)." + \
+                             " Only query the meta2 to check for the " + \
+                             "presence of the chunks in the volume.")
 
     return parser
 
@@ -50,28 +61,33 @@ if __name__ == '__main__':
         conf['log_facility'] = args.log_facility
     if args.log_address is not None:
         conf['log_address'] = args.log_address
-
-    conf['first'] = args.first
-
-    if args.report_interval is not None:
-        conf['report_interval'] = args.report_interval
-    if args.chunks_per_second is not None:
-        conf['chunks_per_second'] = args.chunks_per_second
-    conf['namespace'] = args.namespace
     if args.log_syslog_prefix is not None:
         conf['syslog_prefix'] = args.log_syslog_prefix
     else:
         conf['syslog_prefix'] = 'OIO,%s,blob-registrator,%s' % \
             (args.namespace, args.volume)
 
+    conf['namespace'] = args.namespace
+    conf['first'] = args.first
+
+    if args.insert:
+        conf['action'] = 'insert'
+    elif args.update:
+        conf['action'] = 'update'
+    else:
+        conf['action'] = 'check'
+
+    if args.report_interval is not None:
+        conf['report_interval'] = args.report_interval
+
     logger = get_logger(conf, None, not args.quiet)
 
     try:
         worker = BlobRegistratorWorker(conf, logger, args.volume)
-        if args.no_lock:
-            worker.pass_without_lock()
-        else:
+        if args.lock:
             worker.pass_with_lock()
+        else:
+            worker.pass_without_lock()
     except Exception as e:
         logger.exception('ERROR in registrator: %s' % e)
 
