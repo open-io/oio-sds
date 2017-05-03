@@ -1013,8 +1013,8 @@ dav_rawx_patch_exec(const dav_resource *resource, const apr_xml_elem *elem, int 
 	(void) operation;
 	(void) context;
 	(void) rollback_ctx;
-	/* XXX JFS : TODO dump the xattr handle in the file */
-	return __dav_new_error(resource->info->pool, HTTP_INTERNAL_SERVER_ERROR, 0, "PROPPATCH not yet implemented");
+	return __dav_new_error(resource->info->pool, HTTP_NOT_IMPLEMENTED,
+			0, "PROPPATCH not yet implemented");
 }
 
 static void

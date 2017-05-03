@@ -63,7 +63,8 @@ _set_chunk_extended_attributes(dav_stream *stream, struct chunk_textinfo_s *cti)
 	if (!set_rawx_info_to_fd(fileno(stream->f), &ge, cti))
 		e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
 				HTTP_FORBIDDEN, 0, apr_pstrdup(stream->p, gerror_get_message(ge)));
-	if (ge) g_clear_error (&ge);
+	if (ge)
+		g_clear_error (&ge);
 	return e;
 }
 
