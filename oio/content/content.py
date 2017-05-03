@@ -73,10 +73,8 @@ class Content(object):
                 'size': current_chunk.size,
                 'pos': current_chunk.pos,
                 'content': self.content_id}]
-        update_data = {'old': old, 'new': new}
-
         self.container_client.container_raw_update(
-            cid=self.container_id, data=update_data)
+            old, new, cid=self.container_id)
 
     def _create_object(self):
         self.container_client.content_create(
