@@ -98,6 +98,12 @@ struct shm_stats_s {
 	apr_uint64_t padding[16];
 };
 
+enum rawx_checksum_mode_e {
+	CHECKSUM_ALWAYS = 0, /* by default */
+	CHECKSUM_SMART, /* not for EC/ */
+	CHECKSUM_NEVER,
+};
+
 typedef struct dav_rawx_server_conf_s dav_rawx_server_conf;
 
 struct dav_rawx_server_conf_s {
@@ -110,7 +116,10 @@ struct dav_rawx_server_conf_s {
 	int fsync_on_close;
 	int fallocate;
 	char event_agent_addr[RAWX_EVENT_ADDR_SIZE];
+
 	char compression_algo[64];
+
+	enum rawx_checksum_mode_e checksum_mode;
 
 	/* Statistics involved data */
 	struct {

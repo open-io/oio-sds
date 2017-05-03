@@ -842,7 +842,13 @@ retry:
 		ds->compress_checksum = checksum;
 	}
 
-	ds->md5 = g_checksum_new (G_CHECKSUM_MD5);
+	ds->md5 = NULL;
+	if (conf->checksum_mode == CHECKSUM_ALWAYS) {
+		ds->md5 = g_checksum_new (G_CHECKSUM_MD5);
+	} else if (conf->checksum_mode == CHECKSUM_SMART) {
+	   if (!oio_str_prefixed(ctx->chunk.content_chunk_method, STGPOL_DSPREFIX_EC, "/"))
+		   ds->md5 = g_checksum_new (G_CHECKSUM_MD5);
+	}
 
 	*result = ds;
 
