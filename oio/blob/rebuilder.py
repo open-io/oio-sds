@@ -174,6 +174,8 @@ class BlobRebuilderWorker(object):
     def chunk_rebuild(self, container_id, content_id, chunk_id):
         self.logger.info('Rebuilding (container %s, content %s, chunk %s)',
                          container_id, content_id, chunk_id)
+        if '/' in chunk_id:
+            chunk_id = chunk_id.rsplit('/', 1)[-1]
 
         try:
             content = self.content_factory.get(container_id, content_id)
