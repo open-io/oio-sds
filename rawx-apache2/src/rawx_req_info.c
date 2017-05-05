@@ -87,8 +87,6 @@ __gen_info(const dav_resource *resource, apr_pool_t *pool)
 static const char *
 __gen_stats(const dav_resource *resource, apr_pool_t *pool)
 {
-	DAV_XDEBUG_POOL(pool, 0, "%s()", __FUNCTION__);
-
 	dav_rawx_server_conf *c = resource_get_server_config(resource);
 
 	struct shm_stats_s *stats = apr_shm_baseaddr_get(c->shm.handle);
@@ -128,11 +126,7 @@ __gen_stats(const dav_resource *resource, apr_pool_t *pool)
 static dav_resource*
 __build_req_resource(const request_rec *r, const dav_hooks_repository *hooks, generator_f gen)
 {
-	dav_resource *resource;
-
-	DAV_XDEBUG_REQ(r, 0, "%s(...)", __FUNCTION__);
-
-	resource = apr_pcalloc(r->pool, sizeof(*resource));
+	dav_resource *resource = apr_pcalloc(r->pool, sizeof(*resource));
 	resource->type = DAV_RESOURCE_TYPE_PRIVATE;
 	resource->hooks = hooks;
 	resource->pool = r->pool;
@@ -156,7 +150,6 @@ dav_rawx_stat_get_resource(request_rec *r, const char *root_dir, const char *lab
 	(void) label;
 	(void) use_checked_in;
 
-	DAV_XDEBUG_REQ(r, 0, "%s(...)", __FUNCTION__);
 	*result_resource = NULL;
 
 	if (r->method_number != M_GET)
@@ -176,7 +169,6 @@ dav_rawx_info_get_resource(request_rec *r, const char *root_dir, const char *lab
 	(void) label;
 	(void) use_checked_in;
 
-	DAV_XDEBUG_REQ(r, 0, "%s(...)", __FUNCTION__);
 	*result_resource = NULL;
 
 	if (r->method_number != M_GET)
@@ -191,7 +183,6 @@ dav_rawx_info_get_resource(request_rec *r, const char *root_dir, const char *lab
 static dav_error *
 dav_rawx_get_parent_resource_SPECIAL(const dav_resource *resource, dav_resource **result_parent)
 {
-	DAV_XDEBUG_POOL(resource->info->pool, 0, "%s(...)", __FUNCTION__);
 	*result_parent = __build_req_resource(resource->info->request,
 		resource->hooks, resource->info->generator);
 	return NULL;
@@ -202,15 +193,12 @@ dav_rawx_is_same_resource_SPECIAL(const dav_resource *res1, const dav_resource *
 {
 	(void) res1;
 	(void) res2;
-
-	DAV_XDEBUG_RES(res1, 0, "%s(...)", __FUNCTION__);
 	return (res1->type == res2->type) && (res1->hooks == res2->hooks);
 }
 
 static int
 dav_rawx_is_parent_resource_SPECIAL(const dav_resource *res1, const dav_resource *res2)
 {
-	DAV_XDEBUG_RES(res1, 0, "%s(...)", __FUNCTION__);
 	return dav_rawx_is_same_resource_SPECIAL(res1, res2);
 }
 
@@ -224,7 +212,6 @@ dav_rawx_deliver_SPECIAL(const dav_resource *resource, ap_filter_t *output)
 	apr_bucket_brigade *bb;
 	apr_bucket *bkt;
 
-	DAV_XDEBUG_RES(resource, 0, "%s()", __FUNCTION__);
 	pool = resource->info->request->pool;
 
 	/* Check resource type */
@@ -247,8 +234,6 @@ dav_rawx_deliver_SPECIAL(const dav_resource *resource, ap_filter_t *output)
 	/* Nothing more to reply */
 	bkt = apr_bucket_eos_create(output->c->bucket_alloc);
 	APR_BRIGADE_INSERT_TAIL(bb, bkt);
-
-	DAV_XDEBUG_RES(resource, 0, "%s : ready to deliver", __FUNCTION__);
 
 	if ((status = ap_pass_brigade(output, bb)) != APR_SUCCESS)
 		return server_create_and_stat_error(resource_get_server_config(resource), pool,

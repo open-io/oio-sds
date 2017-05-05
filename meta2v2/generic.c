@@ -85,7 +85,7 @@ _gba_to_gvariant(GByteArray *gba)
 GVariant*
 _gb_to_gvariant(GBytes *gb)
 {
-	gsize max;
+	gsize max = 0;
 	gconstpointer b = g_bytes_get_data(gb, &max);
 	const guint8 *b8 = b;
 
@@ -157,7 +157,7 @@ _bean_clause(gpointer bean, GString *gstr, gboolean pk_only)
 	if (!gstr)
 		gstr = g_string_sized_new(3 * DESCR(bean)->count_fields);
 
-	for (count=0,fd=DESCR(bean)->fields; fd->name ;fd++) {
+	for (count=0,fd=DESCR(bean)->fields; fd->type ;fd++) {
 		if (pk_only && !fd->pk)
 			continue;
 		if (count)
@@ -357,7 +357,7 @@ _row_to_bean(const struct bean_descriptor_s *descr, sqlite3_stmt *stmt)
 
 	res = _bean_create(descr);
 
-	for (fd=descr->fields; fd->name ;fd++) {
+	for (fd=descr->fields; fd->type ;fd++) {
 		col = fd->position;
 #if 0
 		GRID_TRACE2("SQL column[%d,%d/%s,%s] field[%d,%ld,%d/%s,%s]",
@@ -509,11 +509,9 @@ GError*
 _db_delete_bean(sqlite3 *db, gpointer bean)
 {
 	GVariant** _params_delete() {
+		GPtrArray *v = g_ptr_array_sized_new(1 + DESCR(bean)->count_fields);
 		const struct field_descriptor_s *fd;
-		GPtrArray *v;
-
-		v = g_ptr_array_sized_new(DESCR(bean)->count_fields);
-		for (fd=DESCR(bean)->fields; fd->name ;fd++) {
+		for (fd=DESCR(bean)->fields; fd->type ;fd++) {
 			if (!fd->pk)
 				continue;
 			g_ptr_array_add(v, _field_to_gvariant(bean, fd->position));
@@ -549,21 +547,19 @@ _db_delete(const struct bean_descriptor_s *descr, sqlite3 *db,
 static GVariant**
 _bean_params_update (gpointer bean)
 {
-	const struct field_descriptor_s *fd;
-	GPtrArray *v;
-	GVariant *gv;
+	GPtrArray *v = g_ptr_array_sized_new(1 + DESCR(bean)->count_fields);
 
-	v = g_ptr_array_sized_new(1 + DESCR(bean)->count_fields);
-	for (fd=DESCR(bean)->fields; fd->name ;fd++) {
+	const struct field_descriptor_s *fd;
+	for (fd=DESCR(bean)->fields; fd->type ;fd++) {
 		if (!fd->pk) {
-			gv = _field_to_gvariant(bean, fd->position);
+			GVariant *gv = _field_to_gvariant(bean, fd->position);
 			EXTRA_ASSERT(gv != NULL);
 			g_ptr_array_add(v, gv);
 		}
 	}
-	for (fd=DESCR(bean)->fields; fd->name ;fd++) {
+	for (fd=DESCR(bean)->fields; fd->type ;fd++) {
 		if (fd->pk) {
-			gv = _field_to_gvariant(bean, fd->position);
+			GVariant *gv = _field_to_gvariant(bean, fd->position);
 			EXTRA_ASSERT(gv != NULL);
 			g_ptr_array_add(v, gv);
 		}
@@ -576,12 +572,37 @@ _bean_params_update (gpointer bean)
 static GVariant**
 _bean_params_insert_or_replace (gpointer bean)
 {
-	const struct field_descriptor_s *fd;
-	GPtrArray *v;
+	GPtrArray *v = g_ptr_array_sized_new(1 + DESCR(bean)->count_fields);
 
-	v = g_ptr_array_sized_new(1 + DESCR(bean)->count_fields);
-	for (fd=DESCR(bean)->fields; fd->name ;fd++)
-		g_ptr_array_add(v, _field_to_gvariant(bean, fd->position));
+	const struct field_descriptor_s *fd;
+	for (fd=DESCR(bean)->fields; fd->type ;fd++) {
+		GVariant *gv = _field_to_gvariant(bean, fd->position);
+		EXTRA_ASSERT(gv != NULL);
+		g_ptr_array_add(v, gv);
+	}
+
+	g_ptr_array_add(v, NULL);
+	return (GVariant**) g_ptr_array_free(v, FALSE);
+}
+
+static GVariant**
+_bean_params_substitute (gpointer bean0, gpointer bean1)
+{
+	GPtrArray *v = g_ptr_array_sized_new(1 + 2 * DESCR(bean0)->count_fields);
+
+	const struct field_descriptor_s *fd;
+	for (fd=DESCR(bean1)->fields; fd->type ;fd++) {
+		GVariant *gv = _field_to_gvariant(bean1, fd->position);
+		EXTRA_ASSERT(gv != NULL);
+		g_ptr_array_add(v, gv);
+	}
+	for (fd=DESCR(bean0)->fields; fd->type ;fd++) {
+		if (fd->pk) {
+			GVariant *gv = _field_to_gvariant(bean0, fd->position);
+			EXTRA_ASSERT(gv != NULL);
+			g_ptr_array_add(v, gv);
+		}
+	}
 
 	g_ptr_array_add(v, NULL);
 	return (GVariant**) g_ptr_array_free(v, FALSE);
@@ -594,7 +615,8 @@ _db_insert_bean(sqlite3 *db, gpointer bean)
 	EXTRA_ASSERT(bean != NULL);
 
 	GVariant **params = _bean_params_insert_or_replace (bean);
-	GError *err = _db_execute(db, DESCR(bean)->sql_insert, DESCR(bean)->sql_insert_len, params);
+	GError *err = _db_execute(db, DESCR(bean)->sql_insert,
+			DESCR(bean)->sql_insert_len, params);
 	gv_freev(params, FALSE);
 	return err;
 }
@@ -602,9 +624,9 @@ _db_insert_bean(sqlite3 *db, gpointer bean)
 GError *
 _db_insert_beans_list (sqlite3 *db, GSList *list)
 {
-	GError *err = NULL;
-
 	EXTRA_ASSERT(db != NULL);
+
+	GError *err = NULL;
 	for (; !err && list ;list=list->next)
 		err = _db_insert_bean (db, list->data);
 	return err;
@@ -613,31 +635,52 @@ _db_insert_beans_list (sqlite3 *db, GSList *list)
 GError *
 _db_insert_beans_array (sqlite3 *db, GPtrArray *tmp)
 {
-	GError *err = NULL;
-
 	EXTRA_ASSERT(db != NULL);
+	GError *err = NULL;
 	for (guint i=0; !err && i<tmp->len; i++)
 		err = _db_insert_bean (db, tmp->pdata[i]);
 	return err;
 }
 
 GError*
+_db_substitute_bean(sqlite3 *db, gpointer bean0, gpointer bean1)
+{
+	EXTRA_ASSERT(db != NULL);
+	EXTRA_ASSERT(bean0 != NULL);
+	EXTRA_ASSERT(bean1 != NULL);
+	EXTRA_ASSERT(DESCR(bean0) == DESCR(bean1));
+
+	/* an UPDATE query with the form '... SET [all] WHERE [pk]' */
+	GVariant **params = _bean_params_substitute(bean0, bean1);
+	GError *err = _db_execute(db,
+			DESCR(bean0)->sql_substitute, DESCR(bean0)->sql_substitute_len,
+			params);
+	gv_freev(params, FALSE);
+
+	if (!err) {
+		if (0 == sqlite3_changes(db))
+			err = NEWERROR(CODE_CONTENT_NOTFOUND, "bean not found");
+	}
+	return err;
+}
+
+GError*
 _db_save_bean(sqlite3 *db, gpointer bean)
 {
-	/* an UPDATE query has the form '... SET [non-pk] WHERE [pk]' */
-	GError *err;
-	GVariant **params = NULL;
-
 	EXTRA_ASSERT(db != NULL);
 	EXTRA_ASSERT(bean != NULL);
 
+	/* an UPDATE query with the form '... SET [non-pk] WHERE [pk]' */
+	GError *err = NULL;
+	GVariant **params = NULL;
 	if (HDR(bean)->flags & BEAN_FLAG_TRANSIENT) {
 		params = _bean_params_insert_or_replace (bean);
-		err = _db_execute(db, DESCR(bean)->sql_replace, DESCR(bean)->sql_replace_len, params);
-	}
-	else {
+		err = _db_execute(db, DESCR(bean)->sql_replace,
+				DESCR(bean)->sql_replace_len, params);
+	} else {
 		params = _bean_params_update (bean);
-		err = _db_execute(db, DESCR(bean)->sql_update, DESCR(bean)->sql_update_len, params);
+		err = _db_execute(db, DESCR(bean)->sql_update,
+				DESCR(bean)->sql_update_len, params);
 	}
 
 	gv_freev(params, FALSE);
@@ -681,7 +724,7 @@ _bean_clean(gpointer bean)
 		return;
 
 	offset_fields = DESCR(bean)->offset_fields;
-	for (fd=DESCR(bean)->fields; fd->name ;fd++) {
+	for (fd=DESCR(bean)->fields; fd->type ;fd++) {
 		gpointer pf = ((guint8*)bean) + offset_fields + fd->offset;
 		if (!*((gpointer*)pf))
 			continue;
@@ -833,7 +876,7 @@ _db_del_FK_by_name(gpointer bean, const gchar *name, sqlite3 *db)
 	EXTRA_ASSERT(bean != NULL);
 	EXTRA_ASSERT(db != NULL);
 
-	for (fk=DESCR(bean)->fk; fk->name ;fk++) {
+	for (fk=DESCR(bean)->fk; fk->src ;fk++) {
 		if (!strcmp(fk->name, name)) {
 			EXTRA_ASSERT(DESCR(bean) == fk->src || DESCR(bean) == fk->dst);
 			if (DESCR(bean) == fk->src)
@@ -860,7 +903,7 @@ _db_get_FK_by_name(gpointer bean, const gchar *name, sqlite3 *db,
 	EXTRA_ASSERT(db != NULL);
 	EXTRA_ASSERT(cb != NULL);
 
-	for (fk=DESCR(bean)->fk; fk->name ;fk++) {
+	for (fk=DESCR(bean)->fk; fk->src ;fk++) {
 		if (!strcmp(fk->name, name)) {
 			EXTRA_ASSERT(DESCR(bean) == fk->src || DESCR(bean) == fk->dst);
 			if (DESCR(bean) == fk->src)
@@ -923,7 +966,7 @@ _db_count_FK_by_name(gpointer bean, const gchar *name,
 	EXTRA_ASSERT(bean != NULL);
 	EXTRA_ASSERT(pcount != NULL);
 
-	for (fk=DESCR(bean)->fk; fk->name ;fk++) {
+	for (fk=DESCR(bean)->fk; fk->src ;fk++) {
 		if (!strcmp(fk->name, name)) {
 			EXTRA_ASSERT(DESCR(bean) == fk->src || DESCR(bean) == fk->dst);
 			if (DESCR(bean) == fk->src)
@@ -967,14 +1010,13 @@ _bean_list_cb(gpointer plist, gpointer bean)
 GString*
 _bean_debug(GString *gstr, gpointer bean)
 {
-	const struct field_descriptor_s *fd;
-
 	if (!gstr)
 		gstr = g_string_new("");
 
 	g_string_append_printf(gstr, "<%s:%p>(", DESCR(bean)->name, bean);
 
-	for (fd=DESCR(bean)->fields; fd->name ;fd++) {
+	const struct field_descriptor_s *fd;
+	for (fd=DESCR(bean)->fields; fd->type ;fd++) {
 		register gpointer pf = FIELD(bean, fd->position);
 		EXTRA_ASSERT(pf != NULL);
 
@@ -1095,7 +1137,7 @@ _bean_create(const struct bean_descriptor_s *descr)
 	HDR(result)->descr = descr;
 	HDR(result)->flags = BEAN_FLAG_TRANSIENT|BEAN_FLAG_DIRTY;
 
-	for (fd=descr->fields; fd->name ;fd++) {
+	for (fd=descr->fields; fd->type ;fd++) {
 		register gpointer pf = FIELD(result, fd->position);
 		EXTRA_ASSERT(pf != NULL);
 
@@ -1166,7 +1208,7 @@ _bean_create_child(gpointer bean, const gchar *fkname)
 		return res;
 	}
 
-	for (fk=DESCR(bean)->fk; fk->name ;fk++) {
+	for (fk=DESCR(bean)->fk; fk->src ;fk++) {
 		if (!strcmp(fk->name, fkname)) {
 			EXTRA_ASSERT(DESCR(bean) == fk->src || DESCR(bean) == fk->dst);
 			if (DESCR(bean) == fk->src) {
@@ -1223,7 +1265,7 @@ _bean_dup(gpointer bean)
 	const struct field_descriptor_s *fd;
 	EXTRA_ASSERT(bean != NULL);
 	gpointer copy = _bean_create(DESCR(bean));
-	for (fd=DESCR(bean)->fields; fd->name ;fd++) {
+	for (fd=DESCR(bean)->fields; fd->type ;fd++) {
 		if (_bean_has_field(bean, fd->position)) {
 			_bean_set_field_value(copy, fd->position,
 					FIELD(bean, fd->position));

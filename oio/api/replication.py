@@ -111,7 +111,8 @@ class ReplicatedChunkWriteHandler(object):
                             raise SourceReadError(str(e))
                         if len(data) == 0:
                             for conn in current_conns:
-                                conn.queue.put('0\r\n\r\n')
+                                if not conn.failed:
+                                    conn.queue.put('0\r\n\r\n')
                             break
                     self.checksum.update(data)
                     meta_checksum.update(data)

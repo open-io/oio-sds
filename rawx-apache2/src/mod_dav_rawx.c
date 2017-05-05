@@ -85,6 +85,7 @@ dav_rawx_create_server_config(apr_pool_t *p, server_rec *s)
 	conf->hash_width = 3;
 	conf->fsync_on_close = FSYNC_ON_CHUNK_DIR;
 	conf->fallocate = 1;
+	conf->checksum_mode = CHECKSUM_ALWAYS;
 
 	return conf;
 }
@@ -106,6 +107,7 @@ dav_rawx_merge_server_config(apr_pool_t *p, void *base, void *overrides)
 	newconf->hash_width = child->hash_width;
 	newconf->fsync_on_close = child->fsync_on_close;
 	newconf->fallocate = child->fallocate;
+	newconf->checksum_mode = child->checksum_mode;
 	memcpy(newconf->docroot, child->docroot, sizeof(newconf->docroot));
 	memcpy(newconf->ns_name, child->ns_name, sizeof(newconf->ns_name));
 	update_rawx_conf(p, &(newconf->rawx_conf), newconf->ns_name);
@@ -151,7 +153,6 @@ dav_rawx_cmd_gridconfig_docroot(cmd_parms *cmd, void *config, const char *arg1)
 	dav_rawx_server_conf *conf;
 
 	(void) config;
-	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
 
 	/* Check the directory exists */
 	do {
@@ -226,19 +227,6 @@ dav_rawx_cmd_gridconfig_namespace(cmd_parms *cmd, void *config, const char *arg1
 	return NULL;
 }
 
-static int
-_str_to_boolean(const char *arg)
-{
-	int n_arg = 0;
-	n_arg |= (0 == apr_strnatcasecmp(arg, "on"));
-	n_arg |= (0 == apr_strnatcasecmp(arg, "true"));
-	n_arg |= (0 == apr_strnatcasecmp(arg, "yes"));
-	n_arg |= (0 == apr_strnatcasecmp(arg, "enabled"));
-	n_arg |= (0 == apr_strnatcasecmp(arg, "1"));
-
-	return n_arg;
-}
-
 static const char *
 dav_rawx_cmd_gridconfig_fsync(cmd_parms *cmd, void *config, const char *arg1)
 {
@@ -248,7 +236,7 @@ dav_rawx_cmd_gridconfig_fsync(cmd_parms *cmd, void *config, const char *arg1)
 	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
 
 	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
-	if (_str_to_boolean(arg1))
+	if (oio_str_parse_bool(arg1, FALSE))
 		conf->fsync_on_close |= FSYNC_ON_CHUNK;
 	else
 		conf->fsync_on_close &= ~FSYNC_ON_CHUNK;
@@ -265,7 +253,7 @@ dav_rawx_cmd_gridconfig_fsync_dir(cmd_parms *cmd, void *config, const char *arg1
 	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
 
 	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
-	if (_str_to_boolean(arg1))
+	if (oio_str_parse_bool(arg1, FALSE))
 		conf->fsync_on_close |= FSYNC_ON_CHUNK_DIR;
 	else
 		conf->fsync_on_close &= ~FSYNC_ON_CHUNK_DIR;
@@ -282,7 +270,7 @@ dav_rawx_cmd_gridconfig_fallocate(cmd_parms *cmd, void *config, const char *arg1
 	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
 
 	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
-	conf->fallocate = _str_to_boolean(arg1);
+	conf->fallocate = oio_str_parse_bool(arg1, FALSE);
 
 	return NULL;
 }
@@ -320,6 +308,28 @@ dav_rawx_cmd_gridconfig_acl(cmd_parms *cmd, void *config, const char *arg1)
 	conf->enabled_acl |= (0 == apr_strnatcasecmp(arg1,"true"));
 	conf->enabled_acl |= (0 == apr_strnatcasecmp(arg1,"yes"));
 	conf->enabled_acl |= (0 == apr_strnatcasecmp(arg1,"enabled"));
+
+	return NULL;
+}
+
+static const char *
+dav_rawx_cmd_gridconfig_checksum(cmd_parms *cmd, void *config, const char *arg1)
+{
+	dav_rawx_server_conf *conf;
+	(void) config;
+
+	DAV_DEBUG_POOL(cmd->pool, 0, "%s(%s)", __FUNCTION__, arg1);
+
+	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
+	if (!oio_str_is_set(arg1)) {
+		conf->checksum_mode = CHECKSUM_ALWAYS;
+	} else if (0 == apr_strnatcasecmp(arg1, "smart")) {
+		conf->checksum_mode = CHECKSUM_SMART;
+	} else if (oio_str_parse_bool(arg1, TRUE)) {
+		conf->checksum_mode = CHECKSUM_ALWAYS;
+	} else {
+		conf->checksum_mode = CHECKSUM_NEVER;
+	}
 
 	return NULL;
 }
@@ -550,6 +560,7 @@ static const command_rec dav_rawx_cmds[] =
     AP_INIT_TAKE1("grid_fallocate",   dav_rawx_cmd_gridconfig_fallocate,   NULL, RSRC_CONF, "call fallocate when receiving a chunk"),
     AP_INIT_TAKE1("grid_acl",         dav_rawx_cmd_gridconfig_acl,         NULL, RSRC_CONF, "enabled acl"),
     AP_INIT_TAKE1("grid_compression", dav_rawx_cmd_gridconfig_compression, NULL, RSRC_CONF, "enable compression ('zlib' or 'lzo')'"),
+    AP_INIT_TAKE1("grid_checksum",    dav_rawx_cmd_gridconfig_checksum,    NULL, RSRC_CONF, "enable checksuming the body of PUT ('yes', 'no', 'smart')'"),
     AP_INIT_TAKE1(NULL,  NULL,  NULL, RSRC_CONF, NULL)
 };
 

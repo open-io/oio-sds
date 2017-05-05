@@ -18,16 +18,16 @@ import time
 from datetime import datetime
 from socket import gethostname
 
-from oio.common import exceptions as exc
 from oio.common.utils import get_logger, int_value, true_value
 from oio.common.green import ratelimit
-from oio.common.exceptions import ContentNotFound, OrphanChunk
+from oio.common.exceptions import ContentNotFound, NotFound, OrphanChunk
 from oio.content.factory import ContentFactory
 from oio.rdir.client import RdirClient
 
 
 class BlobRebuilderWorker(object):
-    def __init__(self, conf, logger, volume):
+    def __init__(self, conf, logger, volume,
+                 input_file=None, try_chunk_delete=False):
         self.conf = conf
         self.logger = logger or get_logger(conf)
         self.volume = volume
@@ -52,8 +52,25 @@ class BlobRebuilderWorker(object):
             conf.get('rdir_fetch_limit'), 100)
         self.allow_same_rawx = true_value(
             conf.get('allow_same_rawx'))
+        self.input_file = input_file
         self.rdir_client = RdirClient(conf)
         self.content_factory = ContentFactory(conf)
+        self.try_chunk_delete = try_chunk_delete
+
+    def _fetch_chunks_from_file(self):
+        with open(self.input_file, 'r') as ifile:
+            for line in ifile:
+                stripped = line.strip()
+                if stripped and not stripped.startswith('#'):
+                    yield stripped.split('|', 3)[:3] + [None]
+
+    def _fetch_chunks(self):
+        if self.input_file:
+            return self._fetch_chunks_from_file()
+        else:
+            return self.rdir_client.chunk_fetch(self.volume,
+                                                limit=self.rdir_fetch_limit,
+                                                rebuild=True)
 
     def rebuilder_pass_with_lock(self):
         self.rdir_client.admin_lock(self.volume,
@@ -69,10 +86,8 @@ class BlobRebuilderWorker(object):
         total_errors = 0
         rebuilder_time = 0
 
-        chunks = self.rdir_client.chunk_fetch(self.volume,
-                                              limit=self.rdir_fetch_limit,
-                                              rebuild=True)
-        for container_id, content_id, chunk_id, data in chunks:
+        chunks = self._fetch_chunks()
+        for container_id, content_id, chunk_id, _ in chunks:
             loop_time = time.time()
 
             if self.dry_run:
@@ -157,7 +172,7 @@ class BlobRebuilderWorker(object):
             self.chunk_rebuild(container_id, content_id, chunk_id)
         except Exception as e:
             self.errors += 1
-            self.logger.error('ERROR while rebuilding chunk %s|%s|%s) : %s',
+            self.logger.error('ERROR while rebuilding chunk %s|%s|%s): %s',
                               container_id, content_id, chunk_id, e)
 
         self.passes += 1
@@ -165,21 +180,33 @@ class BlobRebuilderWorker(object):
     def chunk_rebuild(self, container_id, content_id, chunk_id):
         self.logger.info('Rebuilding (container %s, content %s, chunk %s)',
                          container_id, content_id, chunk_id)
+        if '/' in chunk_id:
+            chunk_id = chunk_id.rsplit('/', 1)[-1]
 
         try:
             content = self.content_factory.get(container_id, content_id)
         except ContentNotFound:
-            raise exc.OrphanChunk('Content not found')
+            raise OrphanChunk('Content not found')
 
         chunk = content.chunks.filter(id=chunk_id).one()
         if chunk is None:
             raise OrphanChunk("Chunk not found in content")
+        elif self.volume and chunk.host != self.volume:
+            raise ValueError("Chunk does not belong to this volume")
         chunk_size = chunk.size
 
         content.rebuild_chunk(chunk_id, allow_same_rawx=self.allow_same_rawx)
 
-        self.rdir_client.chunk_delete(self.volume, container_id, content_id,
-                                      chunk_id)
+        if self.try_chunk_delete:
+            try:
+                content.blob_client.chunk_delete(chunk.url)
+                self.logger.info("Chunk %s deleted", chunk.url)
+            except NotFound as exc:
+                self.logger.debug("Chunk %s: %s", chunk.url, exc)
+
+        # This call does not raise exception if chunk is not referenced
+        self.rdir_client.chunk_delete(chunk.host, container_id,
+                                      content_id, chunk_id)
 
         self.bytes_processed += chunk_size
         self.total_bytes_processed += chunk_size

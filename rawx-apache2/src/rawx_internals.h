@@ -92,11 +92,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #define DAV_PROPID_FS_executable        1
 
-/* returns an appropriate HTTP status code given an APR status code for a
- * failed I/O operation.  ### use something besides 500? */
-#define MAP_IO2HTTP(e) (APR_STATUS_IS_ENOSPC(e) ? HTTP_INSUFFICIENT_STORAGE : \
-		HTTP_INTERNAL_SERVER_ERROR)
-
 #define SHM_HANDLE_KEY "rawx_shm_master_handle"
 
 dav_rawx_server_conf * resource_get_server_config(const dav_resource *resource);
