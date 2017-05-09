@@ -105,7 +105,7 @@ GError* meta2_backend_delete_beans(struct meta2_backend_s *m2b,
 /** Inserts all the beans listed, as is, regardless of their type. This is REALLY
  * DANGEROUS, do not use this feature. */
 GError* meta2_backend_insert_beans(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, GSList *beans);
+		struct oio_url_s *url, GSList *beans, gboolean force);
 
 /** Updates all the beans listed (old by new), as is, regardless of their type.
  * This is REALLY DANGEROUS, do not use this feature. */

@@ -386,12 +386,12 @@ the list."""
             # sql_insert
             t0 = ",".join(t.get_fields_names())
             t1 = ",".join(['?' for f in t.fields])
-            sql = "INSERT  INTO "+t.sql_name+"("+t0+") VALUES ("+t1+")"
+            sql = "INSERT OR ABORT INTO "+t.sql_name+"("+t0+") VALUES ("+t1+")"
             out.write('\t'+dquoted(sql)+',\n')
             out.write('\t'+str(len(sql))+',\n')
 
             # sql_replace
-            sql = "REPLACE INTO "+t.sql_name+"("+t0+") VALUES ("+t1+")"
+            sql = "INSERT OR REPLACE INTO "+t.sql_name+"("+t0+") VALUES ("+t1+")"
             out.write('\t'+dquoted(sql)+',\n')
             out.write('\t'+str(len(sql))+',\n')
 

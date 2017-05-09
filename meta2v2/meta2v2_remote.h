@@ -151,7 +151,7 @@ GByteArray* m2v2_remote_pack_LIST_BY_HEADERID(
 		struct list_params_s *p, GBytes *h);
 
 GByteArray* m2v2_remote_pack_RAW_DEL(struct oio_url_s *url, GSList *beans);
-GByteArray* m2v2_remote_pack_RAW_ADD(struct oio_url_s *url, GSList *beans);
+GByteArray* m2v2_remote_pack_RAW_ADD(struct oio_url_s *url, GSList *beans, gboolean force);
 GByteArray* m2v2_remote_pack_RAW_SUBST(struct oio_url_s *url, GSList *new_chunks, GSList *old_chunks);
 GByteArray* m2v2_remote_pack_PROP_DEL(struct oio_url_s *url, gchar **names);
 

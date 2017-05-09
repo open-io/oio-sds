@@ -121,21 +121,19 @@ class ContainerClient(Client):
         params = self._make_params(acct, ref, cid=cid)
         resp, body = self._request('POST', uri, params=params)
 
-    def container_raw_insert(self, acct=None, ref=None, data=None, cid=None,
+    def container_raw_insert(self, bean, acct=None, ref=None, cid=None,
                              **kwargs):
         uri = self._make_uri('container/raw_insert')
         params = self._make_params(acct, ref, cid=cid)
-        data = json.dumps(data)
-        resp, body = self._request(
-            'POST', uri, data=data, params=params)
+        data = json.dumps((bean,))
+        resp, body = self._request('POST', uri, data=data, params=params)
 
-    def container_raw_update(self, acct=None, ref=None, data=None, cid=None,
+    def container_raw_update(self, old, new, acct=None, ref=None, cid=None,
                              **kwargs):
         uri = self._make_uri('container/raw_update')
-        params = self._make_params(acct, ref, cid=cid)
-        data = json.dumps(data)
-        resp, body = self._request(
-            'POST', uri, data=data, params=params)
+        params = self._make_params(acct=acct, ref=ref, cid=cid)
+        data = json.dumps({"old": [old], "new": [new]})
+        resp, body = self._request('POST', uri, data=data, params=params)
 
     def container_raw_delete(self, acct=None, ref=None, data=None, cid=None,
                              **kwargs):
@@ -238,12 +236,4 @@ class ContainerClient(Client):
         data = json.dumps(data)
         resp, body = self._request(
             'POST', uri, data=data, params=params)
-        return body
-
-    def raw_update(self, old, new, cid=None, path=None, **kwargs):
-        uri = self._make_uri('container/raw_update')
-        params = self._make_params(cid=cid, content=path)
-        data = {"old": [old], "new": [new]}
-        resp, body = self._request(
-            'POST', uri, data=json.dumps(data), params=params)
         return body

@@ -133,11 +133,9 @@ void _bean_cleanl2(GSList *v);
 
 GError* _db_insert_bean(sqlite3 *db, gpointer bean);
 GError* _db_insert_beans_list(sqlite3 *db, GSList *list);
-GError* _db_insert_beans_array(sqlite3 *db, GPtrArray *array);
 
 GError* _db_save_bean(sqlite3 *db, gpointer bean);
 GError* _db_save_beans_list(sqlite3 *db, GSList *list);
-GError* _db_save_beans_array(sqlite3 *db, GPtrArray *array);
 
 /* substitues bean0 by bean1, with an UPDATE statement that will
  * even overwrite the fields of the PK */

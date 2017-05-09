@@ -625,20 +625,9 @@ GError *
 _db_insert_beans_list (sqlite3 *db, GSList *list)
 {
 	EXTRA_ASSERT(db != NULL);
-
 	GError *err = NULL;
 	for (; !err && list ;list=list->next)
 		err = _db_insert_bean (db, list->data);
-	return err;
-}
-
-GError *
-_db_insert_beans_array (sqlite3 *db, GPtrArray *tmp)
-{
-	EXTRA_ASSERT(db != NULL);
-	GError *err = NULL;
-	for (guint i=0; !err && i<tmp->len; i++)
-		err = _db_insert_bean (db, tmp->pdata[i]);
 	return err;
 }
 
@@ -690,25 +679,10 @@ _db_save_bean(sqlite3 *db, gpointer bean)
 GError*
 _db_save_beans_list(sqlite3 *db, GSList *list)
 {
-	GError *err = NULL;
-
 	EXTRA_ASSERT(db != NULL);
-	for (; !err && list ;list=list->next) {
-		if (list->data)
-			err = _db_save_bean(db, list->data);
-	}
-	return err;
-}
-
-GError*
-_db_save_beans_array(sqlite3 *src, GPtrArray *tmp)
-{
 	GError *err = NULL;
-
-	EXTRA_ASSERT(src != NULL);
-	EXTRA_ASSERT(tmp != NULL);
-	for (guint i=0; !err && i<tmp->len; i++)
-		err = _db_save_bean (src, tmp->pdata[i]);
+	for (; !err && list ;list=list->next)
+		err = _db_save_bean(db, list->data);
 	return err;
 }
 
