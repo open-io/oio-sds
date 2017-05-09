@@ -71,7 +71,7 @@ class IOBaseWrapper(RawIOBase):
 
 class WriteHandler(object):
     def __init__(self, source, sysmeta, chunk_preparer,
-                 storage_method, headers,
+                 storage_method, headers=None,
                  connection_timeout=None, write_timeout=None,
                  read_timeout=None, **_kwargs):
         """
@@ -92,7 +92,7 @@ class WriteHandler(object):
             self.chunk_prep = chunk_preparer
         self.sysmeta = sysmeta
         self.storage_method = storage_method
-        self.headers = headers
+        self.headers = headers or dict()
         self.connection_timeout = connection_timeout or CONNECTION_TIMEOUT
         self.write_timeout = write_timeout or CHUNK_TIMEOUT
         self.read_timeout = read_timeout or CLIENT_TIMEOUT

@@ -33,8 +33,11 @@ class ContainerClient(ProxyClient):
                                               request_prefix="/container",
                                               **kwargs)
 
-    # TODO: use appropriate clients instead of handcrafting URIs
     def _make_uri(self, target):
+        """
+        Build URIs for request that don't use the same prefix as the one
+        set in this class' constructor.
+        """
         uri = 'http://%s/v3.0/%s/%s' % (self.proxy_netloc, self.ns, target)
         return uri
 
@@ -221,44 +224,44 @@ class ContainerClient(ProxyClient):
         params = self._make_params(account, reference, cid=cid)
         data = json.dumps(properties)
         _resp, body = self._request(
-            'POST', '/del_properties', data=data, params=params)
+            'POST', '/del_properties', data=data, params=params, **kwargs)
         return body
 
     def container_touch(self, account=None, reference=None, cid=None,
                         **kwargs):
         params = self._make_params(account, reference, cid=cid)
-        resp, body = self._request('POST', '/touch', params=params, **kwargs)
+        self._request('POST', '/touch', params=params, **kwargs)
 
     def container_dedup(self, account=None, reference=None, cid=None,
                         **kwargs):
         params = self._make_params(account, reference, cid=cid)
-        resp, body = self._request('POST', '/dedup', params=params)
+        self._request('POST', '/dedup', params=params, **kwargs)
 
     def container_purge(self, account=None, reference=None, cid=None,
                         **kwargs):
         params = self._make_params(account, reference, cid=cid)
-        resp, body = self._request('POST', '/purge', params=params)
+        self._request('POST', '/purge', params=params, **kwargs)
 
     def container_raw_insert(self, bean, account=None, reference=None,
                              cid=None, **kwargs):
         params = self._make_params(account, reference, cid=cid)
         data = json.dumps((bean,))
-        resp, body = self._request(
-            'POST', '/raw_insert', data=data, params=params)
+        self._request(
+            'POST', '/raw_insert', data=data, params=params, **kwargs)
 
     def container_raw_update(self, old, new, account=None, reference=None,
                              cid=None, **kwargs):
         params = self._make_params(account, reference, cid=cid)
         data = json.dumps({"old": [old], "new": [new]})
-        resp, body = self._request(
-            'POST', '/raw_update', data=data, params=params)
+        self._request(
+            'POST', '/raw_update', data=data, params=params, **kwargs)
 
     def container_raw_delete(self, account=None, reference=None, data=None,
                              cid=None, **kwargs):
         params = self._make_params(account, reference, cid=cid)
         data = json.dumps(data)
-        resp, body = self._request(
-            'POST', '/raw_delete', data=data, params=params)
+        self._request(
+            'POST', '/raw_delete', data=data, params=params, **kwargs)
 
     def content_list(self, account=None, reference=None, limit=None,
                      marker=None, end_marker=None, prefix=None,
@@ -367,7 +370,8 @@ class ContainerClient(ProxyClient):
         uri = self._make_uri('content/locate')
         params = self._make_params(account, reference, path, cid=cid,
                                    content=content, version=version)
-        resp, chunks = self._direct_request('GET', uri, params=params)
+        resp, chunks = self._direct_request(
+                'GET', uri, params=params, **kwargs)
         content_meta = extract_content_headers_meta(resp.headers)
         return content_meta, chunks
 
@@ -423,7 +427,7 @@ class ContainerClient(ProxyClient):
         params = self._make_params(account, reference, path,
                                    cid=cid, version=version)
         data = json.dumps(properties)
-        _resp, body = self._direct_request(
+        _resp, _body = self._direct_request(
             'POST', uri, data=data, params=params, **kwargs)
 
     def content_del_properties(self, account=None, reference=None, path=None,
@@ -441,7 +445,7 @@ class ContainerClient(ProxyClient):
                       version=None, **kwargs):
         uri = self._make_uri('content/touch')
         params = self._make_params(account, reference, path, version=version)
-        resp, body = self._direct_request('POST', uri, params=params, **kwargs)
+        self._direct_request('POST', uri, params=params, **kwargs)
 
     def content_spare(self, account=None, reference=None, path=None, data=None,
                       cid=None, stgpol=None, **kwargs):
@@ -450,6 +454,6 @@ class ContainerClient(ProxyClient):
         if stgpol:
             params['stgpol'] = stgpol
         data = json.dumps(data)
-        resp, body = self._direct_request(
-            'POST', uri, data=data, params=params)
+        _resp, body = self._direct_request(
+            'POST', uri, data=data, params=params, **kwargs)
         return body

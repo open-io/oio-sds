@@ -48,7 +48,7 @@ class Content(object):
         }
         try:
             spare_resp = self.container_client.content_spare(
-                cid=self.container_id, content=self.content_id,
+                cid=self.container_id, path=self.content_id,
                 data=spare_data, stgpol=self.stgpol)
         except ClientException as e:
             raise exc.SpareChunkException("No spare chunk (%s)" % e.message)

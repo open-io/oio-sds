@@ -292,12 +292,13 @@ class TestObjectStorageAPI(BaseTestCase):
         self.api.object_create(self.account, name, obj_name=name,
                                data=data)
         self.created.append((name, name))
-        _, chunks = self.api.object_analyze(self.account, name, name)
+        _, chunks = self.api.object_locate(self.account, name, name)
         logging.debug("Chunks: %s", chunks)
         return sort_chunks(chunks, False), data
 
     def _fetch_range(self, name, range_):
-        stream = self.api.object_fetch(self.account, name, name, [range_])[1]
+        stream = self.api.object_fetch(
+                self.account, name, name, ranges=[range_])[1]
         data = ""
         for chunk in stream:
             data += chunk

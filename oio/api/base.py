@@ -17,6 +17,9 @@ from oio.common.http import CONNECTION_TIMEOUT, READ_TIMEOUT
 from oio.common.constants import ADMIN_HEADER
 
 _ADAPTER_OPTIONS_KEYS = ["pool_connections", "pool_maxsize", "max_retries"]
+REQUESTS_KWARGS = ('params', 'data', 'headers', 'cookies', 'files',
+                   'auth', 'timeout', 'allow_redirects', 'proxies',
+                   'hooks', 'stream', 'verify', 'cert', 'json')
 
 
 class HttpApi(object):
@@ -61,24 +64,33 @@ class HttpApi(object):
         :type admin_mode: `bool`
         :keyword timeout: optional timeout for the request (in seconds).
             May be a tuple `(connection_timeout, read_timeout)`.
+            This method also accepts `connection_timeout` and `read_timeout`
+            as separate arguments.
         :type timeout: `float`
         :keyword headers: optional headers to add to the request
         :type headers: `dict`
         """
         if not session:
             session = self.session
-        in_headers = kwargs.get('headers') or dict()
-        headers = {k: str(v) for k, v in in_headers.items()}
+
+        # Filter arguments that are not recognized by Requests
+        out_kwargs = {k: v for k, v in kwargs.items()
+                      if k in REQUESTS_KWARGS}
+
+        # Ensure headers are all strings
+        headers = kwargs.get('headers') or dict()
+        out_headers = {k: str(v) for k, v in headers.items()}
         if self.admin_mode or admin_mode:
-            headers[ADMIN_HEADER] = "1"
-        kwargs['headers'] = headers
-        if "timeout" not in kwargs:
-            resp = session.request(
-                method, url,
-                timeout=(CONNECTION_TIMEOUT, READ_TIMEOUT),
-                **kwargs)
-        else:
-            resp = session.request(method, url, **kwargs)
+            out_headers[ADMIN_HEADER] = '1'
+        out_kwargs['headers'] = out_headers
+
+        # Ensure there is a timeout
+        if 'timeout' not in out_kwargs:
+            out_kwargs['timeout'] = (
+                kwargs.get('connection_timeout', CONNECTION_TIMEOUT),
+                kwargs.get('read_timeout', READ_TIMEOUT))
+
+        resp = session.request(method, url, **out_kwargs)
         try:
             body = resp.json()
         except ValueError:

@@ -231,6 +231,14 @@ class ObjectStorageApi(object):
 
     High level API that wraps `AccountClient`, `ContainerClient` and
     `DirectoryClient` classes.
+
+    Every method that takes a `kwargs` argument accepts the at least
+    the following keywords:
+
+        - `headers`: `dict` of extra headers to pass to the proxy
+        - `connection_timeout`: `float`
+        - `read_timeout`: `float`
+        - `write_timeout`: `float`
     """
 
     TIMEOUT_KEYS = ('connection_timeout', 'read_timeout', 'write_timeout')
@@ -272,7 +280,7 @@ class ObjectStorageApi(object):
             if tok not in kwargs:
                 kwargs[tok] = tov
 
-    def account_create(self, account, headers=None):
+    def account_create(self, account, **kwargs):
         """
         Create an account.
 
@@ -280,47 +288,49 @@ class ObjectStorageApi(object):
         :type account: `str`
         :returns: `True` if the account has been created
         """
-        return self.account.account_create(account, headers=headers)
+        return self.account.account_create(account, **kwargs)
 
     @handle_account_not_found
-    def account_delete(self, account, headers=None):
+    def account_delete(self, account, **kwargs):
         """
         Delete an account.
 
         :param account: name of the account to delete
         :type account: `str`
         """
-        self.account.account_delete(account, headers=headers)
+        self.account.account_delete(account, **kwargs)
 
     @handle_account_not_found
-    def account_show(self, account, headers=None):
+    def account_show(self, account, **kwargs):
         """
         Get information about an account.
         """
-        return self.account.account_show(account, headers=headers)
+        return self.account.account_show(account, **kwargs)
 
-    def account_list(self, headers=None):
+    def account_list(self, **kwargs):
         """
-        List accounts
+        List known accounts.
+
+        Notice that account creation is asynchronous, and an autocreated
+        account may appear in the listing only after several seconds.
         """
-        return self.account.account_list(headers=headers)
+        return self.account.account_list(**kwargs)
 
     # FIXME:
     @handle_account_not_found
-    def account_update(self, account, metadata, to_delete=None, headers=None):
-        self.account.account_update(account, metadata, to_delete,
-                                    headers=headers)
+    def account_update(self, account, metadata, to_delete=None, **kwargs):
+        self.account.account_update(account, metadata, to_delete, **kwargs)
 
     @handle_account_not_found
-    def account_set_properties(self, account, properties, headers=None):
-        self.account_update(account, properties, headers=headers)
+    def account_set_properties(self, account, properties, **kwargs):
+        self.account_update(account, properties, **kwargs)
 
     @handle_account_not_found
-    def account_del_properties(self, account, properties, headers=None):
-        self.account_update(account, None, properties, headers=headers)
+    def account_del_properties(self, account, properties, **kwargs):
+        self.account_update(account, None, properties, **kwargs)
 
     def container_create(self, account, container, properties=None,
-                         headers=None, **kwargs):
+                         **kwargs):
         """
         Create a container.
 
@@ -330,20 +340,17 @@ class ObjectStorageApi(object):
         :type container: `str`
         :param properties: properties to set on the container
         :type properties: `dict`
-        :keyword headers: extra headers to send to the proxy
-        :type headers: `dict`
         :returns: True if the container has been created,
                   False if it already exists
         """
         return self.container.container_create(account, container,
                                                properties=properties,
-                                               headers=headers,
                                                **kwargs)
 
     @handle_container_not_found
     @ensure_headers
     @ensure_request_id
-    def container_touch(self, account, container, headers=None, **kwargs):
+    def container_touch(self, account, container, **kwargs):
         """
         Trigger a notification about the container state.
 
@@ -351,14 +358,11 @@ class ObjectStorageApi(object):
         :type account: `str`
         :param container: name of the container
         :type container: `str`
-        :keyword headers: extra headers to send to the proxy
-        :type headers: `dict`
         """
-        self.container.container_touch(account, container, headers=headers,
-                                       **kwargs)
+        self.container.container_touch(account, container, **kwargs)
 
     def container_create_many(self, account, containers, properties=None,
-                              headers=None, **kwargs):
+                              **kwargs):
         """
         Create Many containers
 
@@ -368,18 +372,15 @@ class ObjectStorageApi(object):
         :type containers: `list`
         :param properties: properties to set on the containers
         :type properties: `dict`
-        :keyword headers: extra headers to send to the proxy
-        :type headers: `dict`
         """
         return self.container.container_create_many(account,
                                                     containers,
                                                     properties=properties,
-                                                    headers=headers,
                                                     autocreate=True,
                                                     **kwargs)
 
     @handle_container_not_found
-    def container_delete(self, account, container, headers=None, **kwargs):
+    def container_delete(self, account, container, **kwargs):
         """
         Delete a container.
 
@@ -387,16 +388,13 @@ class ObjectStorageApi(object):
         :type account: `str`
         :param container: name of the container
         :type container: `str`
-        :keyword headers: extra headers to send to the proxy
-        :type headers: `dict`
         """
-        self.container.container_delete(account, container,
-                                        headers=headers, **kwargs)
+        self.container.container_delete(account, container, **kwargs)
 
     @handle_account_not_found
     def container_list(self, account, limit=None, marker=None,
                        end_marker=None, prefix=None, delimiter=None,
-                       headers=None):
+                       **kwargs):
         """
         Get the list of containers of an account.
 
@@ -409,19 +407,17 @@ class ObjectStorageApi(object):
         :keyword end_marker:
         :keyword prefix:
         :keyword delimiter:
-        :keyword headers: extra headers to send to the proxy
-        :type headers: `dict`
         """
         resp = self.account.container_list(account, limit=limit,
                                            marker=marker,
                                            end_marker=end_marker,
                                            prefix=prefix,
                                            delimiter=delimiter,
-                                           headers=headers)
+                                           **kwargs)
         return resp["listing"]
 
     @handle_container_not_found
-    def container_show(self, account, container, headers=None):
+    def container_show(self, account, container, **kwargs):
         """
         Get information about a container (user properties).
 
@@ -429,17 +425,14 @@ class ObjectStorageApi(object):
         :type account: `str`
         :param container: name of the container
         :type container: `str`
-        :keyword headers: extra headers to send to the proxy
-        :type headers: `dict`
         :returns: a `dict` with "properties" containing a `dict`
             of user properties.
         """
-        return self.container.container_show(account, container,
-                                             headers=headers)
+        return self.container.container_show(account, container, **kwargs)
 
     @handle_container_not_found
     def container_get_properties(self, account, container, properties=None,
-                                 headers=None):
+                                 **kwargs):
         """
         Get information about a container (user and system properties).
 
@@ -448,19 +441,17 @@ class ObjectStorageApi(object):
         :param container: name of the container
         :type container: `str`
         :param properties: *ignored*
-        :keyword headers: extra headers to send to the proxy
-        :type headers: `dict`
         :returns: a `dict` with "properties" and "system" entries,
             containing respectively a `dict` of user properties and
             a `dict` of system properties.
         """
         return self.container.container_get_properties(account, container,
                                                        properties=properties,
-                                                       headers=headers)
+                                                       **kwargs)
 
     @handle_container_not_found
     def container_set_properties(self, account, container, properties=None,
-                                 clear=False, headers=None, **kwargs):
+                                 clear=False, **kwargs):
         """
         Set properties on a container.
 
@@ -472,39 +463,34 @@ class ObjectStorageApi(object):
         :type properties: `dict`
         :param clear:
         :type clear: `bool`
-        :param headers: extra headers to pass to the proxy
-        :type headers: `dict`
         :keyword system: dictionary of system properties to set
         """
         return self.container.container_set_properties(
             account, container, properties,
-            clear=clear, headers=headers,
-            **kwargs)
+            clear=clear, **kwargs)
 
     @handle_container_not_found
     def container_del_properties(self, account, container, properties,
-                                 headers=None, **kwargs):
+                                 **kwargs):
         return self.container.container_del_properties(account, container,
                                                        properties,
-                                                       headers=headers,
                                                        **kwargs)
 
     def container_update(self, account, container, metadata, clear=False,
-                         headers=None):
+                         **kwargs):
         if not metadata:
             self.container_del_properties(
-                account, container, [], headers=headers)
+                account, container, [], **kwargs)
         else:
             self.container_set_properties(
-                account, container, metadata, clear, headers=headers)
+                account, container, metadata, clear, **kwargs)
 
     @handle_container_not_found
     @ensure_headers
     @ensure_request_id
     def object_create(self, account, container, file_or_path=None, data=None,
                       etag=None, obj_name=None, mime_type=None,
-                      metadata=None, policy=None,
-                      headers=None, key_file=None,
+                      metadata=None, policy=None, key_file=None,
                       **kwargs):
         """
         Create an object in *container* of *account* with data taken from
@@ -532,8 +518,6 @@ class ObjectStorageApi(object):
         :type properties: `dict`
         :keyword policy: name of the storage policy
         :type policy: `str`
-        :param headers: extra headers to pass to the proxy
-        :type headers: `dict`
         :keyword key_file:
         """
         if (data, file_or_path) == (None, None):
@@ -565,25 +549,24 @@ class ObjectStorageApi(object):
         if src is data:
             return self._object_create(
                 account, container, obj_name, BytesIO(data), sysmeta,
-                properties=metadata, policy=policy, headers=headers,
+                properties=metadata, policy=policy,
                 key_file=key_file, **kwargs)
         elif hasattr(file_or_path, "read"):
             return self._object_create(
                 account, container, obj_name, src, sysmeta,
-                properties=metadata,
-                policy=policy, headers=headers, key_file=key_file,
+                properties=metadata, policy=policy, key_file=key_file,
                 **kwargs)
         else:
             with open(file_or_path, "rb") as f:
                 return self._object_create(
                     account, container, obj_name, f, sysmeta,
-                    properties=metadata, policy=policy, headers=headers,
+                    properties=metadata, policy=policy,
                     key_file=key_file, **kwargs)
 
     @ensure_headers
     @ensure_request_id
     def object_touch(self, account, container, obj,
-                     version=None, headers=None, **kwargs):
+                     version=None, **kwargs):
         """
         Trigger a notification about an object
         (as if it just had been created).
@@ -593,34 +576,28 @@ class ObjectStorageApi(object):
         :param container: name of the container where to create the object
         :type container: `str`
         :param obj: name of the object to touch
-        :param headers: extra headers to pass to the proxy
-
         """
         self.container.content_touch(account, container, obj,
-                                     version=version, headers=headers,
-                                     **kwargs)
+                                     version=version, **kwargs)
 
     @handle_object_not_found
     @ensure_headers
     @ensure_request_id
     def object_delete(self, account, container, obj,
-                      version=None, headers=None, **kwargs):
+                      version=None, **kwargs):
         return self.container.content_delete(account, container, obj,
-                                             version=version, headers=headers,
-                                             **kwargs)
+                                             version=version, **kwargs)
 
     @ensure_headers
     @ensure_request_id
-    def object_delete_many(self, account, container, objs, headers=None,
-                           **kwargs):
+    def object_delete_many(self, account, container, objs, **kwargs):
         return self.container.content_delete_many(
-            account, container, objs, headers=headers, **kwargs)
+            account, container, objs, **kwargs)
 
     @handle_container_not_found
     def object_list(self, account, container, limit=None, marker=None,
                     delimiter=None, prefix=None, end_marker=None,
-                    headers=None, properties=False,
-                    **kwargs):
+                    properties=False, **kwargs):
         """
         Lists objects inside a container.
 
@@ -633,7 +610,7 @@ class ObjectStorageApi(object):
         _, resp_body = self.container.content_list(
             account, container, limit=limit, marker=marker,
             end_marker=end_marker, prefix=prefix, delimiter=delimiter,
-            properties=properties, headers=headers, **kwargs)
+            properties=properties, **kwargs)
 
         for obj in resp_body['objects']:
             mtype = obj.get('mime-type')
@@ -646,9 +623,19 @@ class ObjectStorageApi(object):
     @handle_object_not_found
     def object_locate(self, account, container, obj,
                       version=None, **kwargs):
-        obj_meta, body = self.container.content_locate(
+        """
+        Get a description of the object along with the list of its chunks.
+
+        :param account: name of the account in which the object is stored
+        :param container: name of the container in which the object is stored
+        :param obj: name of the object to query
+        :param version: version of the object to query
+        :returns: a tuple with object metadata `dict` as first element
+            and chunk `list` as second element
+        """
+        obj_meta, chunks = self.container.content_locate(
             account, container, obj, version=version, **kwargs)
-        return obj_meta, body
+        return obj_meta, chunks
 
     def object_analyze(self, *args, **kwargs):
         """
@@ -658,10 +645,10 @@ class ObjectStorageApi(object):
 
     @ensure_headers
     @ensure_request_id
-    def object_fetch(self, account, container, obj, ranges=None,
-                     headers=None, key_file=None, **kwargs):
+    def object_fetch(self, account, container, obj, version=None, ranges=None,
+                     key_file=None, **kwargs):
         meta, raw_chunks = self.object_locate(
-            account, container, obj, headers=headers)
+            account, container, obj, version=version, **kwargs)
         chunk_method = meta['chunk_method']
         storage_method = STORAGE_METHODS.load(chunk_method)
         chunks = _sort_chunks(raw_chunks, storage_method.ec)
@@ -669,24 +656,22 @@ class ObjectStorageApi(object):
         meta['ns'] = self.namespace
         self._patch_timeouts(kwargs)
         if storage_method.ec:
-            stream = fetch_stream_ec(chunks, ranges, storage_method,
-                                     headers=headers, **kwargs)
+            stream = fetch_stream_ec(chunks, ranges, storage_method, **kwargs)
         elif storage_method.backblaze:
             stream = self._fetch_stream_backblaze(meta, chunks, ranges,
                                                   storage_method, key_file,
                                                   **kwargs)
         else:
-            stream = fetch_stream(chunks, ranges, storage_method,
-                                  headers=headers, **kwargs)
+            stream = fetch_stream(chunks, ranges, storage_method, **kwargs)
         return meta, stream
 
     @handle_object_not_found
-    def object_get_properties(self, account, container, obj, headers=None):
-        return self.container.content_get_properties(account, container, obj)
+    def object_get_properties(self, account, container, obj, **kwargs):
+        return self.container.content_get_properties(account, container, obj,
+                                                     **kwargs)
 
-    # FIXME:
     @handle_object_not_found
-    def object_show(self, account, container, obj, version=None, headers=None):
+    def object_show(self, account, container, obj, version=None, **kwargs):
         """
         Get a description of the content along with its user properties.
 
@@ -714,46 +699,37 @@ class ObjectStorageApi(object):
         """
         return self.container.content_show(account, container, obj,
                                            version=version,
-                                           headers=headers)
+                                           **kwargs)
 
     def object_update(self, account, container, obj, metadata,
-                      version=None, clear=False, headers=None):
+                      version=None, clear=False, **kwargs):
         if clear:
             self.object_del_properties(
-                account, container, obj, [], headers=headers)
+                account, container, obj, [], version=version, **kwargs)
         if metadata:
             self.object_set_properties(
-                account, container, obj, metadata, headers=headers)
+                account, container, obj, metadata, version=version, **kwargs)
 
     @handle_object_not_found
     def object_set_properties(self, account, container, obj, properties,
-                              version=None, clear=False, headers=None,
-                              **kwargs):
+                              version=None, **kwargs):
         return self.container.content_set_properties(
             account, container, obj, properties={'properties': properties},
-            version=version, headers=headers, **kwargs)
+            version=version, **kwargs)
 
     @handle_object_not_found
     def object_del_properties(self, account, container, obj, properties,
-                              version=None, headers=None, **kwargs):
+                              version=None, **kwargs):
         return self.container.content_del_properties(
             account, container, obj, properties=properties,
-            version=version, headers=headers, **kwargs)
-
-    # FIXME: remove and call self.container.content_prepare() directly
-    def _content_prepare(self, account, container, obj_name, size,
-                         policy=None, headers=None):
-        return self.container.content_prepare(account, container, obj_name,
-                                              size, stgpol=policy,
-                                              autocreate=True,
-                                              headers=headers)
+            version=version, **kwargs)
 
     def _content_preparer(self, account, container, obj_name,
-                          policy=None, headers=None, **kwargs):
+                          policy=None, **kwargs):
         # TODO: optimize by asking more than one metachunk at a time
         obj_meta, first_body = self.container.content_prepare(
             account, container, obj_name, size=1, stgpol=policy,
-            autocreate=True, headers=headers, **kwargs)
+            autocreate=True, **kwargs)
         storage_method = STORAGE_METHODS.load(obj_meta['chunk_method'])
 
         def _fix_mc_pos(chunks, mc_pos):
@@ -771,21 +747,21 @@ class ObjectStorageApi(object):
             yield first_body
             while True:
                 mc_pos += 1
-                _, next_body = self._content_prepare(
-                        account, container, obj_name, 1, policy, headers,
-                        **kwargs)
+                _, next_body = self.container.content_prepare(
+                        account, container, obj_name, 1, stgpol=policy,
+                        autocreate=True, **kwargs)
                 _fix_mc_pos(next_body, mc_pos)
                 yield next_body
 
         return obj_meta, _metachunk_preparer
 
     def _object_create(self, account, container, obj_name, source,
-                       sysmeta, properties=None, policy=None, headers=None,
+                       sysmeta, properties=None, policy=None,
                        key_file=None, **kwargs):
         self._patch_timeouts(kwargs)
         obj_meta, chunk_prep = self._content_preparer(
             account, container, obj_name,
-            policy=policy, headers=headers, **kwargs)
+            policy=policy, **kwargs)
         obj_meta.update(sysmeta)
         obj_meta['content_path'] = obj_name
         obj_meta['container_id'] = utils.name2cid(account, container).upper()
@@ -794,19 +770,15 @@ class ObjectStorageApi(object):
         storage_method = STORAGE_METHODS.load(obj_meta['chunk_method'])
         if storage_method.ec:
             handler = ECWriteHandler(
-                source, obj_meta, chunk_prep,
-                storage_method, headers=headers,
-                **kwargs)
+                source, obj_meta, chunk_prep, storage_method, **kwargs)
         elif storage_method.backblaze:
             backblaze_info = self._b2_credentials(storage_method, key_file)
-            handler = BackblazeWriteHandler(source, obj_meta,
-                                            chunk_prep, storage_method,
-                                            headers, backblaze_info)
+            handler = BackblazeWriteHandler(
+                source, obj_meta, chunk_prep, storage_method,
+                backblaze_info, **kwargs)
         else:
             handler = ReplicatedWriteHandler(
-                source, obj_meta, chunk_prep,
-                storage_method, headers=headers,
-                **kwargs)
+                source, obj_meta, chunk_prep, storage_method, **kwargs)
 
         final_chunks, bytes_transferred, content_checksum = handler.stream()
 
@@ -824,7 +796,7 @@ class ObjectStorageApi(object):
             content_id=obj_meta['id'], stgpol=obj_meta['policy'],
             version=obj_meta['version'], mime_type=obj_meta['mime_type'],
             chunk_method=obj_meta['chunk_method'],
-            headers=headers)
+            **kwargs)
         return final_chunks, bytes_transferred, content_checksum
 
     def _b2_credentials(self, storage_method, key_file):

@@ -215,10 +215,9 @@ class BackblazeChunkWriteHandler(object):
 
 class BackblazeWriteHandler(io.WriteHandler):
     def __init__(self, source, sysmeta, chunk_prep,
-                 storage_method, headers, backblaze_info):
-        super(BackblazeWriteHandler, self).__init__(source, sysmeta,
-                                                    chunk_prep, storage_method,
-                                                    headers=headers)
+                 storage_method, backblaze_info, **kwargs):
+        super(BackblazeWriteHandler, self).__init__(
+            source, sysmeta, chunk_prep, storage_method, **kwargs)
         self.backblaze_info = backblaze_info
 
     def stream(self):
