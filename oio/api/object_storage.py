@@ -33,7 +33,7 @@ from oio.api.backblaze import BackblazeWriteHandler, \
     BackblazeChunkDownloadHandler
 from oio.common import constants
 from oio.common import utils
-from oio.common.utils import ensure_headers
+from oio.common.utils import ensure_headers, ensure_request_id
 from oio.common.http import http_header_from_ranges
 from oio.common.storage_method import STORAGE_METHODS
 
@@ -179,6 +179,52 @@ def _make_object_metadata(headers):
     return meta
 
 
+@ensure_headers
+def fetch_stream(chunks, ranges, storage_method, headers=None,
+                 **kwargs):
+    ranges = ranges or [(None, None)]
+    meta_range_list = get_meta_ranges(ranges, chunks)
+
+    for meta_range_dict in meta_range_list:
+        for pos, meta_range in meta_range_dict.iteritems():
+            meta_start, meta_end = meta_range
+            if meta_start is not None and meta_end is not None:
+                headers['Range'] = http_header_from_ranges([meta_range])
+            reader = io.ChunkReader(
+                iter(chunks[pos]), io.READ_CHUNK_SIZE, headers=headers,
+                **kwargs)
+            try:
+                it = reader.get_iter()
+            except exc.NotFound as err:
+                raise exc.UnrecoverableContent(
+                    "Cannot download position %d: %s" %
+                    (pos, err))
+            except Exception as err:
+                raise exc.OioException(
+                    "Error while downloading position %d: %s" %
+                    (pos, err))
+            for part in it:
+                for dat in part['iter']:
+                    yield dat
+
+
+@ensure_headers
+def fetch_stream_ec(chunks, ranges, storage_method, **kwargs):
+    ranges = ranges or [(None, None)]
+    meta_range_list = get_meta_ranges(ranges, chunks)
+    for meta_range_dict in meta_range_list:
+        for pos, meta_range in meta_range_dict.iteritems():
+            meta_start, meta_end = meta_range
+            handler = ECChunkDownloadHandler(
+                storage_method, chunks[pos],
+                meta_start, meta_end, **kwargs)
+            stream = handler.get_stream()
+            for part_info in stream:
+                for dat in part_info['iter']:
+                    yield dat
+            stream.close()
+
+
 class ObjectStorageApi(object):
     """
     The Object Storage API.
@@ -186,6 +232,8 @@ class ObjectStorageApi(object):
     High level API that wraps `AccountClient`, `ContainerClient` and
     `DirectoryClient` classes.
     """
+
+    TIMEOUT_KEYS = ('connection_timeout', 'read_timeout', 'write_timeout')
 
     def __init__(self, namespace, **kwargs):
         """
@@ -203,12 +251,9 @@ class ObjectStorageApi(object):
         :type write_timeout: `float` seconds
         """
         self.namespace = namespace
-        self.connection_timeout = utils.float_value(
-            kwargs.get("connection_timeout"), None)
-        self.read_timeout = utils.float_value(
-            kwargs.get("read_timeout"), None)
-        self.write_timeout = utils.float_value(
-            kwargs.get("write_timeout"), None)
+        self.timeouts = {tok: utils.float_value(tov, None)
+                         for tok, tov in kwargs.items()
+                         if tok in self.__class__.TIMEOUT_KEYS}
 
         # FIXME: share session between all the clients
         self.directory = DirectoryClient({"namespace": self.namespace},
@@ -217,6 +262,15 @@ class ObjectStorageApi(object):
                                      **kwargs)
         self.container = ContainerClient({"namespace": self.namespace},
                                          **kwargs)
+
+    def _patch_timeouts(self, kwargs):
+        """
+        Insert timeout settings from this class's constructor into `kwargs`,
+        if they are not already there.
+        """
+        for tok, tov in self.timeouts.items():
+            if tok not in kwargs:
+                kwargs[tok] = tov
 
     def account_create(self, account, headers=None):
         """
@@ -288,6 +342,7 @@ class ObjectStorageApi(object):
 
     @handle_container_not_found
     @ensure_headers
+    @ensure_request_id
     def container_touch(self, account, container, headers=None, **kwargs):
         """
         Trigger a notification about the container state.
@@ -299,8 +354,6 @@ class ObjectStorageApi(object):
         :keyword headers: extra headers to send to the proxy
         :type headers: `dict`
         """
-        if 'X-oio-req-id' not in headers:
-            headers['X-oio-req-id'] = utils.request_id()
         self.container.container_touch(account, container, headers=headers,
                                        **kwargs)
 
@@ -447,6 +500,7 @@ class ObjectStorageApi(object):
 
     @handle_container_not_found
     @ensure_headers
+    @ensure_request_id
     def object_create(self, account, container, file_or_path=None, data=None,
                       etag=None, obj_name=None, mime_type=None,
                       metadata=None, policy=None,
@@ -508,9 +562,6 @@ class ObjectStorageApi(object):
         sysmeta = {'mime_type': mime_type,
                    'etag': etag}
 
-        if 'X-oio-req-id' not in headers:
-            headers['X-oio-req-id'] = utils.request_id()
-
         if src is data:
             return self._object_create(
                 account, container, obj_name, BytesIO(data), sysmeta,
@@ -530,6 +581,7 @@ class ObjectStorageApi(object):
                     key_file=key_file, **kwargs)
 
     @ensure_headers
+    @ensure_request_id
     def object_touch(self, account, container, obj,
                      version=None, headers=None, **kwargs):
         """
@@ -544,27 +596,23 @@ class ObjectStorageApi(object):
         :param headers: extra headers to pass to the proxy
 
         """
-        if 'X-oio-req-id' not in headers:
-            headers['X-oio-req-id'] = utils.request_id()
         self.container.content_touch(account, container, obj,
                                      version=version, headers=headers,
                                      **kwargs)
 
     @handle_object_not_found
     @ensure_headers
+    @ensure_request_id
     def object_delete(self, account, container, obj,
                       version=None, headers=None, **kwargs):
-        if 'X-oio-req-id' not in headers:
-            headers['X-oio-req-id'] = utils.request_id()
         return self.container.content_delete(account, container, obj,
                                              version=version, headers=headers,
                                              **kwargs)
 
     @ensure_headers
+    @ensure_request_id
     def object_delete_many(self, account, container, objs, headers=None,
                            **kwargs):
-        if 'X-oio-req-id' not in headers:
-            headers['X-oio-req-id'] = utils.request_id()
         return self.container.content_delete_many(
             account, container, objs, headers=headers, **kwargs)
 
@@ -609,10 +657,9 @@ class ObjectStorageApi(object):
         return self.object_locate(*args, **kwargs)
 
     @ensure_headers
+    @ensure_request_id
     def object_fetch(self, account, container, obj, ranges=None,
-                     headers=None, key_file=None):
-        if 'X-oio-req-id' not in headers:
-            headers['X-oio-req-id'] = utils.request_id()
+                     headers=None, key_file=None, **kwargs):
         meta, raw_chunks = self.object_locate(
             account, container, obj, headers=headers)
         chunk_method = meta['chunk_method']
@@ -620,15 +667,17 @@ class ObjectStorageApi(object):
         chunks = _sort_chunks(raw_chunks, storage_method.ec)
         meta['container_id'] = utils.name2cid(account, container).upper()
         meta['ns'] = self.namespace
+        self._patch_timeouts(kwargs)
         if storage_method.ec:
-            stream = self._fetch_stream_ec(meta, chunks, ranges,
-                                           storage_method, headers)
+            stream = fetch_stream_ec(chunks, ranges, storage_method,
+                                     headers=headers, **kwargs)
         elif storage_method.backblaze:
             stream = self._fetch_stream_backblaze(meta, chunks, ranges,
-                                                  storage_method, key_file)
+                                                  storage_method, key_file,
+                                                  **kwargs)
         else:
-            stream = self._fetch_stream(meta, chunks, ranges, storage_method,
-                                        headers)
+            stream = fetch_stream(chunks, ranges, storage_method,
+                                  headers=headers, **kwargs)
         return meta, stream
 
     @handle_object_not_found
@@ -733,6 +782,7 @@ class ObjectStorageApi(object):
     def _object_create(self, account, container, obj_name, source,
                        sysmeta, properties=None, policy=None, headers=None,
                        key_file=None, **kwargs):
+        self._patch_timeouts(kwargs)
         obj_meta, chunk_prep = self._content_preparer(
             account, container, obj_name,
             policy=policy, headers=headers, **kwargs)
@@ -746,9 +796,7 @@ class ObjectStorageApi(object):
             handler = ECWriteHandler(
                 source, obj_meta, chunk_prep,
                 storage_method, headers=headers,
-                write_timeout=self.write_timeout,
-                read_timeout=self.read_timeout,
-                connection_timeout=self.connection_timeout)
+                **kwargs)
         elif storage_method.backblaze:
             backblaze_info = self._b2_credentials(storage_method, key_file)
             handler = BackblazeWriteHandler(source, obj_meta,
@@ -758,9 +806,7 @@ class ObjectStorageApi(object):
             handler = ReplicatedWriteHandler(
                 source, obj_meta, chunk_prep,
                 storage_method, headers=headers,
-                write_timeout=self.write_timeout,
-                read_timeout=self.read_timeout,
-                connection_timeout=self.connection_timeout)
+                **kwargs)
 
         final_chunks, bytes_transferred, content_checksum = handler.stream()
 
@@ -781,54 +827,6 @@ class ObjectStorageApi(object):
             headers=headers)
         return final_chunks, bytes_transferred, content_checksum
 
-    def _fetch_stream(self, meta, chunks, ranges, storage_method, headers):
-        total_bytes = 0
-        headers = headers or {}
-        ranges = ranges or [(None, None)]
-
-        meta_range_list = get_meta_ranges(ranges, chunks)
-
-        for meta_range_dict in meta_range_list:
-            for pos, meta_range in meta_range_dict.iteritems():
-                meta_start, meta_end = meta_range
-                if meta_start is not None and meta_end is not None:
-                    headers['Range'] = http_header_from_ranges([meta_range])
-                reader = io.ChunkReader(
-                    iter(chunks[pos]), io.READ_CHUNK_SIZE, headers,
-                    connection_timeout=self.connection_timeout,
-                    response_timeout=self.read_timeout,
-                    read_timeout=self.read_timeout)
-                try:
-                    it = reader.get_iter()
-                except Exception as err:
-                    raise exc.OioException(
-                        "Error while downloading position %d: %s" %
-                        (pos, err))
-                for part in it:
-                    for d in part['iter']:
-                        total_bytes += len(d)
-                        yield d
-
-    def _fetch_stream_ec(self, meta, chunks, ranges, storage_method, headers):
-        ranges = ranges or [(None, None)]
-
-        meta_range_list = get_meta_ranges(ranges, chunks)
-
-        for meta_range_dict in meta_range_list:
-            for pos, meta_range in meta_range_dict.iteritems():
-                meta_start, meta_end = meta_range
-                handler = ECChunkDownloadHandler(
-                    storage_method, chunks[pos],
-                    meta_start, meta_end, headers,
-                    connection_timeout=self.connection_timeout,
-                    response_timeout=self.read_timeout,
-                    read_timeout=self.read_timeout)
-                stream = handler.get_stream()
-                for part_info in stream:
-                    for d in part_info['iter']:
-                        yield d
-                stream.close()
-
     def _b2_credentials(self, storage_method, key_file):
         key_file = key_file or '/etc/oio/sds/b2-appkey.conf'
         try:
@@ -837,7 +835,8 @@ class ObjectStorageApi(object):
             raise exc.ConfigurationException(str(err))
 
     def _fetch_stream_backblaze(self, meta, chunks, ranges,
-                                storage_method, key_file):
+                                storage_method, key_file,
+                                **kwargs):
         backblaze_info = self._b2_credentials(storage_method, key_file)
         total_bytes = 0
         current_offset = 0

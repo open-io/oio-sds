@@ -60,7 +60,7 @@ class HttpApi(object):
         :keyword admin_mode: allow operations on slave or worm namespaces
         :type admin_mode: `bool`
         :keyword timeout: optional timeout for the request (in seconds).
-            May be a tuple `(connection_timeout, response_timeout)`.
+            May be a tuple `(connection_timeout, read_timeout)`.
         :type timeout: `float`
         :keyword headers: optional headers to add to the request
         :type headers: `dict`
@@ -100,7 +100,7 @@ class HttpApi(object):
         :param session: the session to use instead of `self.session`
         :type session: `requests.Session`
         :keyword timeout: optional timeout for the request (in seconds).
-            May be a tuple `(connection_timeout, response_timeout)`.
+            May be a tuple `(connection_timeout, read_timeout)`.
         :type timeout: `float`
         :keyword headers: optional headers to add to the request
         :type headers: `dict`
