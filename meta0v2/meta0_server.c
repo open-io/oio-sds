@@ -133,7 +133,7 @@ _post_config(struct sqlx_service_s *ss)
 		}
 
 		gboolean done = FALSE;
-		while (!done && grid_main_is_running()) {
+		for (guint i=0; i < 10 && !done && grid_main_is_running(); ++i) {
 			done = _register_to_zookeeper(ss);
 			if (!done)
 				g_usleep(1 * G_TIME_SPAN_SECOND);
