@@ -1227,7 +1227,7 @@ def generate(options):
 
     # meta0
     nb_meta0 = max(getint(options['meta0'].get(SVC_NB), defaults['NB_M0']),
-                   defaults['NB_M0'])
+                   meta1_replicas)
     if nb_meta0:
         for i in range(nb_meta0):
             generate_meta('meta0', i + 1, template_gridinit_meta,
