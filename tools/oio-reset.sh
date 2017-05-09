@@ -21,6 +21,7 @@ set -e
 PREFIX="@EXE_PREFIX@"
 NS=OPENIO
 IP=
+PORT=
 OIO=$HOME/.oio
 SDS=$OIO/sds
 GRIDINIT_SOCK=${SDS}/run/gridinit.sock
@@ -30,8 +31,9 @@ ZKSLOW=0
 verbose=0
 OPENSUSE=`grep -i opensuse /etc/*release || echo -n ''`
 
-while getopts "I:N:f:Z:Cvb" opt; do
+while getopts "P:I:N:f:Z:Cvb" opt; do
     case $opt in
+        P) PORT="${OPTARG}" ;;
         I) IP="${OPTARG}" ;;
         N) NS="${OPTARG}" ;;
         f) if [ -n "$OPTARG" ]; then
@@ -81,6 +83,7 @@ if [ $verbose != 0 ] ; then
     G_DEBUG_LEVEL=TRACE
     echo "# $0" \
         "-I \"${IP}\"" \
+        "-P \"${PORT}\"" \
         "-N \"${NS}\"" \
         "-Z \"${ZKSLOW}\"" \
         "${BOOTSTRAP_CONFIG}"
@@ -116,7 +119,9 @@ done
 # Generate a new configuration and start the new gridinit
 
 mkdir -p "$OIO" && cd "$OIO" && (rm -rf sds.conf sds/{conf,data,run,logs})
-${PREFIX}-bootstrap.py "$NS" "$IP" -d ${BOOTSTRAP_CONFIG} > /tmp/oio-bootstrap.$$
+bootstrap_opt=
+if [[ -n "${PORT}" ]] ; then bootstrap_opt="${bootstrap_opt} --port ${PORT}" ; fi
+${PREFIX}-bootstrap.py "$NS" "$IP" $bootstrap_opt -d ${BOOTSTRAP_CONFIG} > /tmp/oio-bootstrap.$$
 
 # Variables
 # PROXY
