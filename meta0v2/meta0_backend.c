@@ -141,8 +141,6 @@ _load_from_base(struct sqlx_sqlite3_s *sq3, GPtrArray **result)
 		}
 		else if (rc == SQLITE_DONE || rc == SQLITE_OK)
 			break;
-		else if (rc == SQLITE_BUSY)
-			sleep(1);
 		else {
 			err = SQLITE_GERROR(sq3->db, rc);
 			break;
@@ -166,28 +164,28 @@ _load_from_base(struct sqlx_sqlite3_s *sq3, GPtrArray **result)
 static GError*
 _load_meta1ref_from_base(struct sqlx_sqlite3_s *sq3, GPtrArray **result)
 {
-        GError *err = NULL;
-        GPtrArray *array;
-        sqlite3_stmt *stmt;
-        int rc;
-        guint count = 0;
+	GError *err = NULL;
+	GPtrArray *array;
+	sqlite3_stmt *stmt;
+	int rc;
+	guint count = 0;
 
 	array = g_ptr_array_new();
 
-        sqlite3_prepare_debug(rc, sq3->db, "SELECT addr,state,prefixes FROM meta1_ref",
-			 -1, &stmt, NULL);
-        if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+	sqlite3_prepare_debug(rc, sq3->db, "SELECT addr,state,prefixes FROM meta1_ref",
+			-1, &stmt, NULL);
+	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
 		if ( rc == SQLITE_ERROR ) {
 			GRID_DEBUG("Missing table meta1ref in DB");
 			*result = array;
 			return NULL;
 		}
-                return SQLITE_GERROR(sq3->db, rc);
+		return SQLITE_GERROR(sq3->db, rc);
 	}
 
 	for (;;) {
-                rc = sqlite3_step(stmt);
-                if (rc == SQLITE_ROW) {
+		rc = sqlite3_step(stmt);
+		if (rc == SQLITE_ROW) {
 			const unsigned char *url,*prefix_nb,*ref;
 			url = sqlite3_column_text(stmt,0);
 			ref = sqlite3_column_text(stmt,1);
@@ -198,24 +196,22 @@ _load_meta1ref_from_base(struct sqlx_sqlite3_s *sq3, GPtrArray **result)
 			count++;
 		}
 		else if (rc == SQLITE_DONE || rc == SQLITE_OK)
-                        break;
-                else if (rc == SQLITE_BUSY)
-                        sleep(1);
-                else {
-                        err = SQLITE_GERROR(sq3->db, rc);
-                        break;
-                }
+			break;
+		else {
+			err = SQLITE_GERROR(sq3->db, rc);
+			break;
+		}
 
 	}
 	sqlite3_finalize_debug(rc, stmt);
 
-        if (!err) {
-                *result = array;
-                GRID_INFO("Reloaded %u meta1 in %p (%u)",
-                                count, array, array->len);
-        }
+	if (!err) {
+		*result = array;
+		GRID_INFO("Reloaded %u meta1 in %p (%u)",
+				count, array, array->len);
+	}
 
-        return err;
+	return err;
 }
 
 static GError*
@@ -385,11 +381,7 @@ _assign_prefixes(sqlite3 *db, const GPtrArray *new_assign_prefixes,
 			rc = sqlite3_step(stmt);
 			if (rc == SQLITE_OK || rc == SQLITE_DONE)
 				break;
-			if (rc == SQLITE_BUSY)
-				sleep(1);
-			else {
-				return SQLITE_GERROR(db,rc);
-			}
+			return SQLITE_GERROR(db,rc);
 		}
 		sqlite3_finalize_debug(rc, stmt);
 	}
@@ -418,8 +410,6 @@ _assign_prefixes(sqlite3 *db, const GPtrArray *new_assign_prefixes,
 				rc = sqlite3_step(stmt);
 				if (rc == SQLITE_OK || rc == SQLITE_DONE)
 					break;
-				if (rc == SQLITE_BUSY)
-					sleep(1);
 				else {
 					err = SQLITE_GERROR(db, rc);
 					break;
@@ -464,8 +454,6 @@ _record_meta1ref(sqlite3 *db, const GPtrArray *new_assign_meta1ref)
 			rc = sqlite3_step(stmt);
 			if (rc == SQLITE_OK || rc == SQLITE_DONE)
 				break;
-			if (rc == SQLITE_BUSY)
-				sleep(1);
 			else
 				err = SQLITE_GERROR(db, rc);
 		}
