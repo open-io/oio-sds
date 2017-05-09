@@ -923,7 +923,6 @@ TMPDIR = '/tmp'
 CODEDIR = '@CMAKE_INSTALL_PREFIX@'
 LIBDIR = CODEDIR + '/@LD_LIBDIR@'
 PATH = HOME+"/.local/bin:@CMAKE_INSTALL_PREFIX@/bin:/usr/sbin"
-port = 6000
 
 # Constants for the configuration of oio-bootstrap
 NS = 'ns'
@@ -1018,9 +1017,9 @@ def mkdir_noerror(d):
 def type2exe(t):
     return EXE_PREFIX + '-' + str(t) + '-server'
 
-ports = (x for x in xrange(6000,65536))
 
 def generate(options):
+    global first_port
 
     def ensure(v, default):
         if v is None:
@@ -1036,6 +1035,7 @@ def generate(options):
     final_conf = {}
     final_services = {}
 
+    ports = (x for x in xrange(options['port'],60000))
     port_proxy = next(ports)
     port_ecd = next(ports)
 
@@ -1476,6 +1476,9 @@ def main():
     parser.add_argument("-d", "--dump",
                         action="store_true", default=False,
                         dest='dump_config', help="Dump results")
+    parser.add_argument("-p", "--port",
+                        type=int, default=6000,
+                        help="Specify the first port of the range")
     parser.add_argument("namespace",
                         action='store', type=str, default=None,
                         help="Namespace name")
@@ -1502,6 +1505,8 @@ def main():
                 data = yaml.load(f)
                 if data:
                     opts = merge_config(opts, data)
+
+    opts['port'] = int(options.port)
 
     # Remove empty strings, then apply the default if no value remains
     options.ip = [str(x) for x in options.ip if x]
