@@ -418,12 +418,14 @@ int
 meta2_filter_action_insert_beans(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	(void) reply;
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
 
-	GError *err = meta2_backend_insert_beans(m2b, url, beans);
+	const gboolean force = metautils_message_extract_flag(
+			reply->request, NAME_MSGKEY_FORCE, FALSE);
+
+	GError *err = meta2_backend_insert_beans(m2b, url, beans, force);
 	if (!err)
 		return FILTER_OK;
 

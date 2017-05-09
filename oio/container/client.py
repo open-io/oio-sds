@@ -239,17 +239,17 @@ class ContainerClient(ProxyClient):
         params = self._make_params(account, reference, cid=cid)
         resp, body = self._request('POST', '/purge', params=params)
 
-    def container_raw_insert(self, account=None, reference=None, data=None,
+    def container_raw_insert(self, bean, account=None, reference=None,
                              cid=None, **kwargs):
         params = self._make_params(account, reference, cid=cid)
-        data = json.dumps(data)
+        data = json.dumps((bean,))
         resp, body = self._request(
             'POST', '/raw_insert', data=data, params=params)
 
-    def container_raw_update(self, account=None, reference=None, data=None,
+    def container_raw_update(self, old, new, account=None, reference=None,
                              cid=None, **kwargs):
         params = self._make_params(account, reference, cid=cid)
-        data = json.dumps(data)
+        data = json.dumps({"old": [old], "new": [new]})
         resp, body = self._request(
             'POST', '/raw_update', data=data, params=params)
 

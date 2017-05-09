@@ -4,6 +4,7 @@ from oio.event.evob import Event, EventOk, EventError
 class Handler(object):
     def __init__(self, app, conf):
         self.app = app
+        self.app_env = app.app_env
         self.conf = conf
         self.logger = app.logger
         self.rdir = self.app.rdir

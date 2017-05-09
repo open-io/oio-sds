@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2016 OpenIO, original work as part of OpenIO Software Defined Storage
+Copyright (C) 2016 OpenIO, original work as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -20,48 +20,46 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/server_variables.h>
 #include "oio_events_queue_buffer.h"
 
-static GHashTable *
-oio_events_queue_buffer_renew(struct oio_events_queue_buffer_s *buf)
-{
-	g_mutex_lock(&(buf->msg_by_key_lock));
-	GHashTable *old = buf->msg_by_key;
-	buf->msg_by_key = g_hash_table_new_full(g_str_hash, g_str_equal,
-			g_free, g_free);
-	buf->last_renew = oio_ext_monotonic_time();
-	g_mutex_unlock(&(buf->msg_by_key_lock));
-	return old;
-}
 
 void
-oio_events_queue_buffer_init(struct oio_events_queue_buffer_s *buf)
+oio_events_queue_buffer_init(struct oio_events_queue_buffer_s *buf,
+		gint64 delay)
 {
 	g_mutex_init(&(buf->msg_by_key_lock));
-	oio_events_queue_buffer_renew(buf);
+	buf->msg_by_key = lru_tree_create((GCompareFunc)g_strcmp0, g_free, g_free,
+			LTO_NOATIME|LTO_NOUTIME);
+	buf->delay = delay;
 }
 
 void
 oio_events_queue_buffer_clean(struct oio_events_queue_buffer_s *buf)
 {
-	g_hash_table_unref(buf->msg_by_key);
+	lru_tree_destroy(buf->msg_by_key);
 	g_mutex_clear(&(buf->msg_by_key_lock));
 }
 
 void
-oio_events_queue_buffer_maybe_flush(struct oio_events_queue_buffer_s *buf,
-		GHRFunc send, gpointer user_data)
+oio_events_queue_buffer_set_delay(struct oio_events_queue_buffer_s *buf,
+		gint64 new_delay)
 {
-	if (oio_ext_monotonic_time() >
-			buf->last_renew + oio_events_common_buffer_delay) {
-		GHashTable *old = oio_events_queue_buffer_renew(buf);
-		g_hash_table_foreach_steal(old, send, user_data);
-		g_hash_table_unref(old);
-	}
+	buf->delay = new_delay;
+}
+
+void
+oio_events_queue_buffer_maybe_flush(struct oio_events_queue_buffer_s *buf,
+		GHRFunc send, gpointer user_data, guint max)
+{
+	gint64 now = oio_ext_monotonic_time();
+	g_mutex_lock(&(buf->msg_by_key_lock));
+	lru_tree_foreach_older_steal(buf->msg_by_key, send, user_data,
+			now - buf->delay, max);
+	g_mutex_unlock(&(buf->msg_by_key_lock));
 }
 
 void oio_events_queue_buffer_put(struct oio_events_queue_buffer_s *buf,
 		gchar *key, gchar *msg)
 {
 	g_mutex_lock(&(buf->msg_by_key_lock));
-	g_hash_table_insert(buf->msg_by_key, key, msg);
+	lru_tree_insert(buf->msg_by_key, key, msg);
 	g_mutex_unlock(&(buf->msg_by_key_lock));
 }

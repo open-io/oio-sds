@@ -43,6 +43,21 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define DEFAULT_BLOCK_SIZE 1048576
 #define DEFAULT_COMPRESSION_ALGO "ZLIB"
 
+static int errno2http(int err) {
+	switch (err) {
+		case ENOSPC:
+			return HTTP_INSUFFICIENT_STORAGE;
+		case ENOENT:
+		case ENOTDIR:
+		case EPERM:
+		case EACCES:
+		case ELOOP:
+			return HTTP_FORBIDDEN;
+		default:
+			return HTTP_INTERNAL_SERVER_ERROR;
+	}
+}
+
 /******************** INTERNALS METHODS **************************/
 
 static void
@@ -63,7 +78,8 @@ _set_chunk_extended_attributes(dav_stream *stream, struct chunk_textinfo_s *cti)
 	if (!set_rawx_info_to_fd(fileno(stream->f), &ge, cti))
 		e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
 				HTTP_FORBIDDEN, 0, apr_pstrdup(stream->p, gerror_get_message(ge)));
-	if (ge) g_clear_error (&ge);
+	if (ge)
+		g_clear_error (&ge);
 	return e;
 }
 
@@ -74,18 +90,20 @@ _finalize_chunk_creation(dav_stream *stream)
 	int status = 0;
 
 	/* ensure to flush the FILE * buffer in system fd */
-	if(fflush(stream->f)) {
+	if (fflush(stream->f)) {
+		const int errsav = errno;
 		DAV_ERROR_REQ(stream->r->info->request, 0, "fflush error : %s", strerror(errno));
-		e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
-				HTTP_INTERNAL_SERVER_ERROR, 0,
+		e = server_create_and_stat_error(
+				resource_get_server_config(stream->r), stream->p, errno2http(errsav), 0,
 				apr_pstrcat(stream->p, "fflush error : ", strerror(errno), NULL));
 	}
 
 	if (stream->fsync_on_close & FSYNC_ON_CHUNK) {
 		if (-1 == fsync(fileno(stream->f))) {
+			const int errsav = errno;
 			DAV_ERROR_REQ(stream->r->info->request, 0, "fsync error : %s", strerror(errno));
-			e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
-					HTTP_INTERNAL_SERVER_ERROR, 0,
+			e = server_create_and_stat_error(
+					resource_get_server_config(stream->r), stream->p, errno2http(errsav), 0,
 					apr_pstrcat(stream->p, "fsync error : ", strerror(errno), NULL));
 		}
 	}
@@ -95,9 +113,11 @@ _finalize_chunk_creation(dav_stream *stream)
 	/* Finish: move pending file to final file */
 	status = rename(stream->pathname, stream->final_pathname);
 	if( 0 != status ) {
-		e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
-				MAP_IO2HTTP(status), 0,
-				apr_pstrcat(stream->p, "rename(",stream->pathname, ", ",stream->final_pathname, ") failure : ", strerror(errno), NULL));
+		e = server_create_and_stat_error(
+				resource_get_server_config(stream->r), stream->p, errno2http(errno), 0,
+				apr_pstrcat(stream->p,
+					"rename(",stream->pathname, ", ",stream->final_pathname,
+					") failure : ", strerror(errno), NULL));
 	} else if (stream->fsync_on_close & FSYNC_ON_CHUNK_DIR) {
 		/* Open directory and call fsync to ensure the rename has been done */
 		int dir = open(stream->r->info->dirname, 0);
@@ -122,10 +142,9 @@ _write_data_crumble_UNCOMP(dav_stream *stream)
 {
 	if (fwrite(stream->buffer, stream->buffer_offset, 1, stream->f) != 1) {
 		/* ### use something besides 500? */
-		return server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
-				HTTP_INTERNAL_SERVER_ERROR, 0,
-				"An error occurred while writing to a "
-				"resource.");
+		return server_create_and_stat_error(
+				resource_get_server_config(stream->r), stream->p, errno2http(errno), 0,
+				"An error occurred while writing to a resource.");
 	}
 
 	return NULL;
@@ -142,18 +161,15 @@ _write_data_crumble_COMP(dav_stream *stream, gulong *checksum)
 			stream->buffer_offset, gba, checksum);
 	if (0 == rc) {
 		if (1 != fwrite(gba->data, gba->len, 1, stream->f)) {
-			/* ### use something besides 500? */
-			e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
-					HTTP_INTERNAL_SERVER_ERROR, 0,
-					"An error occurred while writing to a "
-					"resource.");
+			e = server_create_and_stat_error(
+					resource_get_server_config(stream->r), stream->p, errno2http(errno), 0,
+					"An error occurred while writing to a resource.");
 		} else {
 			stream->compressed_size += gba->len;
 		}
 	} else {
-		/* ### use something besides 500? */
-		e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
-				HTTP_INTERNAL_SERVER_ERROR, 0,
+		e = server_create_and_stat_error(
+				resource_get_server_config(stream->r), stream->p, errno2http(errno), 0,
 				"An error occurred while compressing data.");
 	}
 
@@ -179,8 +195,9 @@ resource_init_decompression(dav_resource *resource, dav_rawx_server_conf *conf)
 			g_hash_table_destroy(comp_opt);
 		if (e)
 			g_clear_error(&e);
-		return server_create_and_stat_error(conf, resource->pool,
-				HTTP_CONFLICT, 0, "Failed to get chunk compression from attr");
+		return server_create_and_stat_error(
+				conf, resource->pool, HTTP_CONFLICT, 0,
+				"Failed to get chunk compression from attr");
 	}
 	c = g_hash_table_lookup(comp_opt, NS_COMPRESSION_OPTION);
 	if (c && !g_ascii_strcasecmp(c, NS_COMPRESSION_ON)) {
@@ -200,8 +217,7 @@ resource_init_decompression(dav_resource *resource, dav_rawx_server_conf *conf)
 		if (resource->info->comp_ctx.chunk_initiator(
 				&(resource->info->cp_chunk), resource->info->fullpath)) {
 			r = server_create_and_stat_error(
-					resource_get_server_config(resource), resource->pool,
-					HTTP_INTERNAL_SERVER_ERROR, 0,
+					resource_get_server_config(resource), resource->pool, HTTP_INTERNAL_SERVER_ERROR, 0,
 					"Failed to init chunk bucket");
 		}
 	}
@@ -498,12 +514,14 @@ rawx_repo_check_request(request_rec *req, const char *root_dir, const char * lab
 		return dav_rawx_chunk_update_get_resource(req, root_dir, label, use_checked_in, result_resource);
 
 	if (g_str_has_prefix(src, "rawx/"))
-		return server_create_and_stat_error(conf, req->pool,
-				HTTP_BAD_REQUEST, 0, "Raw request not yet implemented");
+		return server_create_and_stat_error(
+				conf, req->pool, HTTP_BAD_REQUEST, 0,
+				"Raw request not yet implemented");
 
 	if (!oio_str_ishexa (src, 64))
-		return server_create_and_stat_error(conf, req->pool,
-				HTTP_BAD_REQUEST, 0, "Invalid CHUNK id character");
+		return server_create_and_stat_error(
+				conf, req->pool, HTTP_BAD_REQUEST, 0,
+				"Invalid CHUNK id character");
 
 	ctx->file_extension[0] = 0;
 	g_strlcpy(ctx->hex_chunkid, src, sizeof(ctx->hex_chunkid));
@@ -538,8 +556,9 @@ rawx_repo_configure_hash_dir(request_rec *req, dav_resource_private *ctx)
 	remaining = dst_maxlen - i_dst;
 	needed = 1 + (sizeof(ctx->hex_chunkid) + (conf->hash_width + 1) * conf->hash_depth);
 	if (remaining < needed)
-		return server_create_and_stat_error(request_get_server_config(req), req->pool,
-				HTTP_INTERNAL_SERVER_ERROR, 0, "DocRoot too long or buffer too small");
+		return server_create_and_stat_error(
+				request_get_server_config(req), req->pool, HTTP_INTERNAL_SERVER_ERROR, 0,
+				"DocRoot too long or buffer too small");
 
 	for (i_depth=0; i_depth < conf->hash_depth ;i_depth++) {
 		for (i_width=0; i_width < conf->hash_width ;i_width++)
@@ -569,37 +588,37 @@ rawx_repo_write_last_data_crumble(dav_stream *stream)
 	if (!e && stream->compression) {
 		if (stream->comp_ctx.eof_writer(stream->f, checksum, &(stream->compressed_size))) {
 			/* ### use something besides 500? */
-			e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
-					HTTP_INTERNAL_SERVER_ERROR, 0,
+			e = server_create_and_stat_error(
+					resource_get_server_config(stream->r), stream->p, HTTP_INTERNAL_SERVER_ERROR, 0,
 					"An error occurred while writing end of file ");
 		}
 	}
 	return e;
 }
 
+static int
+_unlink_and_log(dav_stream *stream, const char *path)
+{
+	if (unlink(path) == 0 || errno == ENOENT || errno == ENOTDIR)
+		return 0;
+	DAV_ERROR_REQ(stream->r->info->request, 0, "ORPHAN %s", path);
+	return 1;
+}
+
 dav_error *
 rawx_repo_rollback_upload(dav_stream *stream)
 {
-	fclose(stream->f);
-	if (remove(stream->pathname) != 0) {
-		/* ### use a better description? */
-		return server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
-				HTTP_INTERNAL_SERVER_ERROR, 0,
-				"There was a problem removing (rolling "
-				"back) the resource "
-				"when it was being closed.");
-	}
+	if (stream->f)
+		fclose(stream->f);
 
-	if (remove(stream->final_pathname) != 0) {
-		/* ### use a better description? */
-		return server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
-				HTTP_INTERNAL_SERVER_ERROR, 0,
-				"There was a problem removing (rolling "
-				"back) the resource "
-				"when it was being closed.");
-	}
+	const int rc_final = _unlink_and_log(stream, stream->final_pathname);
+	const int rc_temp = _unlink_and_log(stream, stream->pathname);
+	if (!rc_temp && !rc_final)
+		return NULL;
 
-	return NULL;
+	return server_create_and_stat_error(
+			resource_get_server_config(stream->r), stream->p, HTTP_INTERNAL_SERVER_ERROR, 0,
+			"Rollback error");
 }
 
 #define DUP(F) do { \
@@ -631,17 +650,40 @@ rawx_repo_commit_upload(dav_stream *stream)
 	DUP(compression_metadata);
 	DUP(compression_size);
 
-	/* patch the xattr with explicit values from the trailers, then ensure
-	 * values that could be missing */
+	/* Load the metadata located in the Trailers of the request */
 	request_overload_chunk_info_from_trailers (stream->r->info->request, &fake);
-	if (!fake.chunk_hash) {
-		gchar *hex = g_ascii_strup (g_checksum_get_string(stream->md5), -1);
-		fake.chunk_hash = apr_pstrdup(stream->p, hex);
-		g_free (hex);
+
+	/* Sanitize the chunk hash */
+	if (stream->md5) {
+		const char *hex = g_checksum_get_string(stream->md5);
+		if (!fake.chunk_hash) {
+			/* No checksum provided, let's save the checksum computed */
+			fake.chunk_hash = apr_pstrdup(stream->p, hex);
+			oio_str_upper(fake.chunk_hash);
+			DAV_DEBUG_REQ(stream->r->info->request, 0, "MD5 computed for %s",
+					stream->final_pathname);
+		} else {
+			/* A checksum has been provided, let's check it matches the checksum
+			 * computed over the input */
+			if (0 != strcasecmp(fake.chunk_hash, hex)) {
+				return server_create_and_stat_error(
+						resource_get_server_config(stream->r), stream->p, HTTP_UNPROCESSABLE_ENTITY, 0,
+						apr_pstrcat(stream->p, "MD5 mismatch hdr=", fake.chunk_hash, " body=", hex, NULL));
+			} else {
+				DAV_DEBUG_REQ(stream->r->info->request, 0, "MD5 match for %s",
+						stream->final_pathname);
+			}
+		}
+	} else {
+		DAV_DEBUG_REQ(stream->r->info->request, 0, "No MD5 computed for %s",
+				stream->final_pathname);
 	}
+
+	/* Ensure a (meta)chunk size */
 	if (!fake.chunk_size) {
 		fake.chunk_size = apr_psprintf(stream->r->pool, "%d", (int)stream->total_size);
 	}
+
 	if (stream->compressed_size) {
 		char size[32];
 		apr_snprintf(size, 32, "%d", stream->compressed_size);
@@ -651,8 +693,8 @@ rawx_repo_commit_upload(dav_stream *stream)
 
 	const char *msg = check_chunk_info_with_trailers (&fake);
 	if (msg != NULL) {
-		e = server_create_and_stat_error(resource_get_server_config(stream->r),
-				stream->p, HTTP_FORBIDDEN, 0,
+		e = server_create_and_stat_error(
+				resource_get_server_config(stream->r), stream->p, HTTP_FORBIDDEN, 0,
 				apr_pstrcat(stream->p, "Error with xattr/header ", msg, NULL));
 		return e;
 	}
@@ -660,15 +702,14 @@ rawx_repo_commit_upload(dav_stream *stream)
 	/* ok, save now */
 	e = _set_chunk_extended_attributes(stream, &fake);
 	if (e) {
-		DAV_DEBUG_REQ(stream->r->info->request, 0,
+		DAV_ERROR_REQ(stream->r->info->request, 0,
 				"Failed to set chunk extended attributes: %s", e->desc);
 		return e;
 	}
 
 	e = _finalize_chunk_creation(stream);
-
 	if (e) {
-		DAV_DEBUG_REQ(stream->r->info->request, 0,
+		DAV_ERROR_REQ(stream->r->info->request, 0,
 				"Failed to finalize chunk file creation: %s", e->desc);
 		return e;
 	}
@@ -692,8 +733,9 @@ rawx_repo_ensure_directory(const dav_resource *resource)
 		|APR_FPROT_WREAD|APR_FPROT_WEXECUTE,
 		resource->info->pool);
 	if (status != APR_SUCCESS) {
-		return server_create_and_stat_error(resource_get_server_config(resource), resource->info->pool,
-			MAP_IO2HTTP(status), 0,
+		const int code = APR_STATUS_IS_ENOSPC(status) ? HTTP_INSUFFICIENT_STORAGE : HTTP_INTERNAL_SERVER_ERROR;
+		return server_create_and_stat_error(
+				resource_get_server_config(resource), resource->info->pool, code, 0,
 				apr_pstrcat(resource->info->pool, "mkdir(", ctx->dirname, ") failure : ", strerror(errno), NULL));
 	}
 
@@ -708,7 +750,6 @@ rawx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 	apr_pool_t *p = resource->info->pool;
 	dav_resource_private *ctx = resource->info;
 	dav_rawx_server_conf *conf = resource_get_server_config(resource);
-	apr_status_t rv = 0;
 	char * metadata_compress = NULL;
 	int retryable = 1;
 
@@ -722,29 +763,51 @@ rawx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 	ds->pathname = apr_pstrcat(p, ctx->dirname, "/", ctx->hex_chunkid, ".pending", NULL);
 
 	/* Create busy chunk file */
+	int fd;
 retry:
-	ds->f = fopen(ds->pathname, "w");
-
-	if (!ds->f) {
+	fd = open(ds->pathname, O_CREAT|O_EXCL|O_WRONLY, 0600);
+	if (fd < 0) {
+		const int errsav = errno;
 		if (errno == ENOENT && retryable) {
 			retryable = 0;
 			dav_error *e = rawx_repo_ensure_directory (resource);
-			if (!e) goto retry;
+			if (!e)
+				goto retry;
 			return e;
 		}
-		DAV_DEBUG_REQ(resource->info->request, 0, "open(%s) failed : %s", ds->pathname, strerror(errno));
+		DAV_DEBUG_REQ(resource->info->request, 0, "open(%s) failed : %s",
+				ds->pathname, strerror(errno));
 		return server_create_and_stat_error(resource_get_server_config(resource), p,
-			MAP_IO2HTTP(rv), 0, "An error occurred while opening a resource.");
+				errno2http(errsav), 0, "Chunk creation error");
+	}
+
+	/* Check the final chunks hasn't been created meanwhile */
+	if (0 == access(ds->final_pathname, F_OK)) {
+		(void) unlink(ds->pathname);
+		return server_create_and_stat_error(resource_get_server_config(resource), p,
+				HTTP_FORBIDDEN, 0, "Chunk already present.");
+	}
+
+	/* Wrap it under a FILE */
+	if (!(ds->f = fdopen(fd, "w"))) {
+		DAV_DEBUG_REQ(resource->info->request, 0, "fdopen(%s) failed : %s",
+				ds->pathname, strerror(errno));
+		const int errsav = errno;
+		(void) unlink(ds->pathname);
+		return server_create_and_stat_error(resource_get_server_config(resource), p,
+				errno2http(errsav), 0, "FILE allocation error");
 	}
 
 	/* Preallocate disk space for the chunk */
 	apr_int64_t chunk_size = 0;
 	if (ctx->chunk.chunk_size != NULL && conf->fallocate &&
 			(chunk_size = apr_strtoi64(ctx->chunk.chunk_size, NULL, 10)) > 0 &&
-			(rv = posix_fallocate(fileno(ds->f), 0, (off_t)chunk_size)) != 0) {
+			(0 != posix_fallocate(fileno(ds->f), 0, (off_t)chunk_size))) {
+		const int errsav = errno;
+		DAV_DEBUG_REQ(resource->info->request, 0, "posix_fallocate(%s) failed : %s",
+				ds->pathname, strerror(errno));
 		dav_error *err = server_create_and_stat_error(conf, p,
-				MAP_IO2HTTP(rv), 0,
-				"An error occurred while reserving storage space.");
+				errno2http(errsav), 0, "Space allocation error");
 		fclose(ds->f);
 		unlink(ds->pathname);
 		return err;
@@ -801,7 +864,13 @@ retry:
 		ds->compress_checksum = checksum;
 	}
 
-	ds->md5 = g_checksum_new (G_CHECKSUM_MD5);
+	ds->md5 = NULL;
+	if (conf->checksum_mode == CHECKSUM_ALWAYS) {
+		ds->md5 = g_checksum_new (G_CHECKSUM_MD5);
+	} else if (conf->checksum_mode == CHECKSUM_SMART) {
+	   if (!oio_str_prefixed(ctx->chunk.content_chunk_method, STGPOL_DSPREFIX_EC, "/"))
+		   ds->md5 = g_checksum_new (G_CHECKSUM_MD5);
+	}
 
 	*result = ds;
 

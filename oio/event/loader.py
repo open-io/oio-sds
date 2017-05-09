@@ -56,8 +56,8 @@ class _Pipeline(_Type):
         app = context.handler_context.create(**kwargs)
         filters = [c.create(**kwargs) for c in context.filter_contexts]
         filters.reverse()
-        for filter in filters:
-            app = filter(app)
+        for filter_ in filters:
+            app = filter_(app)
         return app
 
 

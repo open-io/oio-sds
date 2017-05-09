@@ -19,13 +19,14 @@ def make_arg_parser():
                             help="Log address")
 
     descr = "Rebuild chunks that were on the specified volume. " \
-            "The list is obtained by requesting the associated rdir " \
-            "service. It is necessary to declare an incident " \
+            "If no input file is provided, the list of chunks " \
+            "is obtained by requesting the associated rdir service. " \
+            "In that case, it is necessary to declare an incident " \
             "(with 'openio volume admin incident') before " \
             "running this tool."
     parser = argparse.ArgumentParser(description=descr, parents=[log_parser])
     parser.add_argument('namespace', help="Namespace")
-    parser.add_argument('volume', help="The volume id to rebuild")
+    parser.add_argument('volume', help="Id of the volume to rebuild (IP:PORT)")
     parser.add_argument('--dry-run', action='store_true',
                         help="Display actions but do nothing")
     parser.add_argument('--rdir-fetch-limit', type=int,
@@ -41,6 +42,16 @@ def make_arg_parser():
                         help="Don't print log on console")
     parser.add_argument('--allow-same-rawx', action='store_true',
                         help="Allow rebuilding a chunk on the original rawx")
+    dft_help = "Try to delete faulty chunks after they have been rebuilt " \
+               "elsewhere. This option is useful if the chunks you are " \
+               "rebuilding are not actually missing but are corrupted."
+    parser.add_argument('--delete-faulty-chunks', action='store_true',
+                        help=dft_help)
+    ifile_help = "Read chunks from this file instead of rdir. " \
+                 "Each line should be formatted like " \
+                 "'container_id|content_id|short_chunk_id'."
+    parser.add_argument('input_file', nargs='?',
+                        help=ifile_help)
 
     return parser
 
@@ -75,7 +86,9 @@ if __name__ == '__main__':
     logger = get_logger(conf, None, not args.quiet)
 
     try:
-        worker = BlobRebuilderWorker(conf, logger, args.volume)
+        worker = BlobRebuilderWorker(
+            conf, logger, args.volume, input_file=args.input_file,
+            try_chunk_delete=args.delete_faulty_chunks)
         worker.rebuilder_pass_with_lock()
     except Exception as e:
         logger.exception('ERROR in rebuilder: %s' % e)

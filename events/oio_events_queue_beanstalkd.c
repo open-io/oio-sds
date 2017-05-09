@@ -50,12 +50,18 @@ static void _q_destroy (struct oio_events_queue_s *self);
 static void _q_send (struct oio_events_queue_s *self, gchar *msg);
 static void _q_send_overwritable(struct oio_events_queue_s *self, gchar *key, gchar *msg);
 static gboolean _q_is_stalled (struct oio_events_queue_s *self);
+static void _q_set_buffering (struct oio_events_queue_s *self, gint64 v);
 static GError * _q_run (struct oio_events_queue_s *self,
 		gboolean (*running) (gboolean pending));
 
 static struct oio_events_queue_vtable_s vtable_BEANSTALKD =
 {
-	_q_destroy, _q_send, _q_send_overwritable, _q_is_stalled, _q_run
+	.destroy = _q_destroy,
+	.send = _q_send,
+	.send_overwritable = _q_send_overwritable,
+	.is_stalled = _q_is_stalled,
+	.set_buffering = _q_set_buffering,
+	.run = _q_run
 };
 
 /* Used by tests to intercept the result of the parsing of beanstalkd
@@ -93,10 +99,21 @@ oio_events_queue_factory__create_beanstalkd (const char *endpoint,
 	self->tube = g_strdup(OIO_EVT_BEANSTALKD_DEFAULT_TUBE);
 	self->endpoint = g_strdup (endpoint);
 
-	oio_events_queue_buffer_init(&self->buffer);
+	oio_events_queue_buffer_init(&(self->buffer), 1 * G_TIME_SPAN_SECOND);
 
 	*out = (struct oio_events_queue_s*) self;
 	return NULL;
+}
+
+static void
+_q_set_buffering(struct oio_events_queue_s *self, gint64 v)
+{
+	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s *)self;
+	if (q->buffer.delay != v) {
+		GRID_INFO("events buffering delay set to %"G_GINT64_FORMAT"s",
+				v / G_TIME_SPAN_SECOND);
+		oio_events_queue_buffer_set_delay(&(q->buffer), v);
+	}
 }
 
 static int
@@ -171,19 +188,6 @@ _send_and_read_reply (int fd, struct iovec *iov, unsigned int iovcount)
 	return NULL;
 }
 
-static void
-_maybe_send_overwritable(struct oio_events_queue_s *self)
-{
-	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s *)self;
-	gboolean __send(gpointer key, gpointer msg, gpointer u UNUSED) {
-		g_free(key);
-		_q_send(self, (gchar*)msg);
-		return TRUE;
-	}
-
-	oio_events_queue_buffer_maybe_flush(&(q->buffer), __send, NULL);
-}
-
 static GError *
 _put (int fd, gchar *msg, size_t msglen)
 {
@@ -251,7 +255,10 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 	EXTRA_ASSERT (running != NULL);
 
 	while ((*running)(0 < g_async_queue_length(q->queue))) {
-		_maybe_send_overwritable(self);
+		guint max = (oio_events_common_max_pending -
+						g_async_queue_length(q->queue))
+					/ 2;
+		oio_events_queue_send_buffered(self, &(q->buffer), max);
 
 		/* find an event, prefering the last that failed */
 		gchar *msg = saved;

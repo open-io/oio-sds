@@ -60,22 +60,20 @@ class Content(object):
         return url_list
 
     def _update_spare_chunk(self, current_chunk, new_url):
-        old = [{'type': 'chunk',
-                'id': current_chunk.url,
-                'hash': current_chunk.checksum,
-                'size': current_chunk.size,
-                'pos': current_chunk.pos,
-                'content': self.content_id}]
-        new = [{'type': 'chunk',
-                'id': new_url,
-                'hash': current_chunk.checksum,
-                'size': current_chunk.size,
-                'pos': current_chunk.pos,
-                'content': self.content_id}]
-        update_data = {'old': old, 'new': new}
-
+        old = {'type': 'chunk',
+               'id': current_chunk.url,
+               'hash': current_chunk.checksum,
+               'size': current_chunk.size,
+               'pos': current_chunk.pos,
+               'content': self.content_id}
+        new = {'type': 'chunk',
+               'id': new_url,
+               'hash': current_chunk.checksum,
+               'size': current_chunk.size,
+               'pos': current_chunk.pos,
+               'content': self.content_id}
         self.container_client.container_raw_update(
-            cid=self.container_id, data=update_data)
+            old, new, cid=self.container_id)
 
     def _create_object(self, **kwargs):
         self.container_client.content_create(

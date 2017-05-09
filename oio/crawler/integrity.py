@@ -1,3 +1,7 @@
+"""
+Recursively check account, container, content and chunk integrity.
+"""
+
 from __future__ import print_function
 import os
 import csv
@@ -40,12 +44,18 @@ class Target(object):
 
 
 class Checker(object):
-    def __init__(self, namespace, concurrency=50, error_file=None):
+    def __init__(self, namespace, concurrency=50,
+                 error_file=None, rebuild_file=None):
         self.pool = GreenPool(concurrency)
         self.error_file = error_file
         if self.error_file:
             f = open(self.error_file, 'a')
             self.error_writer = csv.writer(f, delimiter=' ')
+
+        self.rebuild_file = rebuild_file
+        if self.rebuild_file:
+            fd = open(self.rebuild_file, 'a')
+            self.rebuild_writer = csv.writer(fd, delimiter='|')
 
         conf = {'namespace': namespace}
         self.account_client = AccountClient(conf)
@@ -78,22 +88,46 @@ class Checker(object):
             error.append(target.chunk)
         self.error_writer.writerow(error)
 
+    def write_rebuilder_input(self, target, obj_meta, ct_meta):
+        cid = ct_meta['properties']['sys.name'].split('.', 1)[0]
+        self.rebuild_writer.writerow((cid, obj_meta['id'], target.chunk))
+
+    def _check_chunk_xattr(self, target, obj_meta, xattr_meta):
+        error = False
+        # Composed position -> erasure coding
+        attr_prefix = 'meta' if '.' in obj_meta['pos'] else ''
+
+        attr_key = attr_prefix + 'chunk_size'
+        if str(obj_meta['size']) != xattr_meta.get(attr_key):
+            print("  Chunk %s '%s' xattr (%s) "
+                  "differs from size in meta2 (%s)" %
+                  (target, attr_key, xattr_meta.get(attr_key),
+                   obj_meta['size']))
+            error = True
+
+        attr_key = attr_prefix + 'chunk_hash'
+        if obj_meta['hash'] != xattr_meta.get(attr_key):
+            print("  Chunk %s '%s' xattr (%s) "
+                  "differs from hash in meta2 (%s)" %
+                  (target, attr_key, xattr_meta.get(attr_key),
+                   obj_meta['hash']))
+            error = True
+        return error
+
     def check_chunk(self, target):
         chunk = target.chunk
 
-        obj_listing = self.check_obj(target)
+        obj_listing, obj_meta = self.check_obj(target)
         error = False
         if chunk not in obj_listing:
-            print('  Chunk %s missing in object listing' % target)
+            print('  Chunk %s missing from object listing' % target)
             error = True
-            # checksum = None
+            db_meta = dict()
         else:
-            # TODO check checksum match
-            # checksum = obj_listing[chunk]['hash']
-            pass
+            db_meta = obj_listing[chunk]
 
         try:
-            self.blob_client.chunk_head(chunk)
+            xattr_meta = self.blob_client.chunk_head(chunk)
         except exc.NotFound as e:
             self.chunk_not_found += 1
             error = True
@@ -102,9 +136,17 @@ class Checker(object):
             self.chunk_exceptions += 1
             error = True
             print('  Exception chunk "%s": %s' % (target, str(e)))
+        else:
+            if db_meta:
+                error = self._check_chunk_xattr(target, db_meta, xattr_meta)
 
-        if error and self.error_file:
-            self.write_error(target)
+        if error:
+            if self.error_file:
+                self.write_error(target)
+            if self.rebuild_file:
+                self.write_rebuilder_input(
+                    target, obj_meta,
+                    self.list_cache[(target.account, target.container)][1])
         self.chunks_checked += 1
 
     def check_obj(self, target, recurse=False):
@@ -118,10 +160,10 @@ class Checker(object):
             return self.list_cache[(account, container, obj)]
         self.running[(account, container, obj)] = Event()
         print('Checking object "%s"' % target)
-        container_listing = self.check_container(target)
+        container_listing, ct_meta = self.check_container(target)
         error = False
         if obj not in container_listing:
-            print('  Object %s missing in container listing' % target)
+            print('  Object %s missing from container listing' % target)
             error = True
             # checksum = None
         else:
@@ -130,9 +172,10 @@ class Checker(object):
             pass
 
         results = []
+        meta = dict()
         try:
-            _, resp = self.container_client.content_show(
-                    acct=account, ref=container, path=obj)
+            meta, results = self.container_client.content_show(
+                acct=account, ref=container, path=obj)
         except exc.NotFound as e:
             self.object_not_found += 1
             error = True
@@ -141,15 +184,13 @@ class Checker(object):
             self.object_exceptions += 1
             error = True
             print(' Exception object "%s": %s' % (target, str(e)))
-        else:
-            results = resp
 
         chunk_listing = dict()
         for chunk in results:
             chunk_listing[chunk['url']] = chunk
 
         self.objects_checked += 1
-        self.list_cache[(account, container, obj)] = chunk_listing
+        self.list_cache[(account, container, obj)] = (chunk_listing, meta)
         self.running[(account, container, obj)].send(True)
         del self.running[(account, container, obj)]
 
@@ -160,7 +201,7 @@ class Checker(object):
                 self.pool.spawn_n(self.check_chunk, t)
         if error and self.error_file:
             self.write_error(target)
-        return chunk_listing
+        return chunk_listing, meta
 
     def check_container(self, target, recurse=False):
         account = target.account
@@ -176,10 +217,11 @@ class Checker(object):
         error = False
         if container not in account_listing:
             error = True
-            print('  Container %s missing in account listing' % target)
+            print('  Container %s missing from account listing' % target)
 
         marker = None
         results = []
+        ct_meta = dict()
         while True:
             try:
                 resp = self.container_client.container_list(
@@ -197,16 +239,18 @@ class Checker(object):
 
             if resp['objects']:
                 marker = resp['objects'][-1]['name']
+                results.extend(resp['objects'])
             else:
+                ct_meta = resp
+                ct_meta.pop('objects')
                 break
-            results.extend(resp['objects'])
 
         container_listing = dict()
         for obj in results:
             container_listing[obj['name']] = obj
 
         self.containers_checked += 1
-        self.list_cache[(account, container)] = container_listing
+        self.list_cache[(account, container)] = container_listing, ct_meta
         self.running[(account, container)].send(True)
         del self.running[(account, container)]
 
@@ -217,7 +261,7 @@ class Checker(object):
                 self.pool.spawn_n(self.check_obj, t, True)
         if error and self.error_file:
             self.write_error(target)
-        return container_listing
+        return container_listing, ct_meta
 
     def check_account(self, target, recurse=False):
         account = target.account
@@ -310,17 +354,24 @@ class Checker(object):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Check integrity")
-    parser.add_argument('namespace', help='namespace name')
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('namespace', help='Namespace name')
+    t_help = "Element whose integrity should be checked. " \
+        "Can be ACCOUNT, ACCOUNT CONTAINER, ACCOUNT CONTAINER CONTENT " \
+        "or ACCOUNT CONTAINER CONTENT CHUNK."
     parser.add_argument('target', metavar='T', nargs='*',
-                        help='target to check integrity')
+                        help=t_help)
     parser.add_argument('-o', '--output', help='output file')
+    parser.add_argument('--output-for-blob-rebuilder',
+                        help="Write chunk errors in a file with a format " +
+                        "suitable as oio-blob-rebuilder input")
     parser.add_argument('-v', '--verbose',
                         action='store_true', help='verbose output')
 
     args = parser.parse_args()
 
-    checker = Checker(args.namespace, error_file=args.output)
+    checker = Checker(args.namespace, error_file=args.output,
+                      rebuild_file=args.output_for_blob_rebuilder)
     if not os.isatty(sys.stdin.fileno()):
         source = sys.stdin
     else:

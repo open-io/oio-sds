@@ -114,6 +114,10 @@ def _stop(client, server):
 
 
 class EventWorker(Worker):
+    def __init__(self, *args, **kwargs):
+        super(EventWorker, self).__init__(*args, **kwargs)
+        self.app_env = dict()
+
     def init(self):
         eventlet.monkey_patch(os=False)
         self.tube = self.conf.get("tube", DEFAULT_TUBE)
@@ -128,6 +132,7 @@ class EventWorker(Worker):
         )
         self.acct_update = true_value(self.conf.get('acct_update', True))
         self.rdir_update = true_value(self.conf.get('rdir_update', True))
+        self.app_env['acct_addr'] = self.acct_addr
         if 'handlers_conf' not in self.conf:
             raise ValueError("'handlers_conf' path not defined in conf")
         self.handlers = loadhandlers(self.conf.get('handlers_conf'),
@@ -228,7 +233,6 @@ class EventWorker(Worker):
     def get_handler(self, event):
         return self.handlers.get(event.get('event'), None)
 
-    @property
     def acct_addr(self):
         if not self._acct_addr or self.acct_refresh():
             acct_instance = self.cs.next_instance(ACCOUNT_SERVICE)

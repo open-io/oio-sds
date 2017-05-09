@@ -54,32 +54,51 @@ struct bean_header_s
 
 struct field_descriptor_s
 {
-	const gchar *name;
-	const guint position;
 	const long offset;
-	const gboolean mandatory;
-	const enum {FT_BOOL, FT_INT, FT_REAL, FT_TEXT, FT_BLOB} type;
-	const gboolean pk;
+	const guint position;
+	const enum {
+		FT_NONE = 0, FT_BOOL, FT_INT, FT_REAL, FT_TEXT, FT_BLOB
+	} type : 8;
+	const guint8 pk;
+	const guint8 mandatory;
+	const char name[32];
 };
 
 struct bean_descriptor_s
 {
-	const gchar *name;
-	const gchar *c_name;
-	const gchar *sql_name;
-	int sql_name_len;
-	const gchar *sql_delete;
-	int sql_delete_len;
-	const gchar *sql_select;
-	int sql_select_len;
-	const gchar *sql_count;
-	int sql_count_len;
-	const gchar *sql_insert;
-	int sql_insert_len;
-	const gchar *sql_replace;
-	int sql_replace_len;
-	const gchar *sql_update;
-	int sql_update_len;
+	const char name[32];
+
+	const char sql_name[32];
+	const size_t sql_name_len;
+
+	/* traditional DELETE */
+	const char *sql_delete;
+	const size_t sql_delete_len;
+
+	/* traditional SELECT, with no clause */
+	const char *sql_select;
+	const size_t sql_select_len;
+
+	/* traditional SELECT count(*), with no clause */
+	const char *sql_count;
+	const size_t sql_count_len;
+
+	/* traditional insert of the bean into its table */
+	const char *sql_insert;
+	const size_t sql_insert_len;
+
+	/* force the bean into the table */
+	const char *sql_replace;
+	const size_t sql_replace_len;
+
+	/* change everything but the PK */
+	const char *sql_update;
+	const size_t sql_update_len;
+
+	/* update every field, even belonging to the PK */
+	const char *sql_substitute;
+	const size_t sql_substitute_len;
+
 	const long offset_fields;
 	const long struct_size;
 	const guint count_fields;
@@ -92,22 +111,19 @@ struct bean_descriptor_s
 struct fk_field_s
 {
 	gint i;
-	const gchar *name;
+	const char *name;
 };
 
 struct fk_descriptor_s
 {
-	/* the name making sense for the  */
-	const gchar *logical_name;
-
-	/* a unique name as registered in the DB */
-	const gchar *name;
-
 	const struct bean_descriptor_s *src;
 	struct fk_field_s *src_fields;
 
 	const struct bean_descriptor_s *dst;
 	struct fk_field_s *dst_fields;
+
+	/* a unique name as registered in the DB */
+	const char name[64];
 };
 
 void _bean_clean(gpointer bean);
@@ -117,11 +133,13 @@ void _bean_cleanl2(GSList *v);
 
 GError* _db_insert_bean(sqlite3 *db, gpointer bean);
 GError* _db_insert_beans_list(sqlite3 *db, GSList *list);
-GError* _db_insert_beans_array(sqlite3 *db, GPtrArray *array);
 
 GError* _db_save_bean(sqlite3 *db, gpointer bean);
 GError* _db_save_beans_list(sqlite3 *db, GSList *list);
-GError* _db_save_beans_array(sqlite3 *db, GPtrArray *array);
+
+/* substitues bean0 by bean1, with an UPDATE statement that will
+ * even overwrite the fields of the PK */
+GError* _db_substitute_bean(sqlite3 *db, gpointer bean0, gpointer bean1);
 
 GError* _db_delete_bean(sqlite3 *db, gpointer bean);
 GError* _db_delete(const struct bean_descriptor_s *descr, sqlite3 *db,

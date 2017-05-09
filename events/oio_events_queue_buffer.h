@@ -20,19 +20,27 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define OIO_SDS__sqlx__oio_events_queue_buffer_h 1
 
 #include <glib.h>
+#include <metautils/lib/metautils.h>
 
 struct oio_events_queue_buffer_s
 {
-	GHashTable *msg_by_key;
+	struct lru_tree_s *msg_by_key;
 	GMutex msg_by_key_lock;
-	gint64 last_renew;
+	gint64 delay;
 };
 
-void oio_events_queue_buffer_init(struct oio_events_queue_buffer_s *buf);
+void oio_events_queue_buffer_init(struct oio_events_queue_buffer_s *buf,
+		gint64 delay);
 void oio_events_queue_buffer_clean(struct oio_events_queue_buffer_s *buf);
+void oio_events_queue_buffer_set_delay(struct oio_events_queue_buffer_s *buf,
+		gint64 new_delay);
 void oio_events_queue_buffer_put(struct oio_events_queue_buffer_s *buf,
 		gchar *key, gchar *msg);
+
+/** Flush at most `max` events older than the configured delay. Each flushed
+ *  event is passed to `send` then removed from the buffer. `send` is
+ *  responsible for cleaning the event, and should not block. */
 void oio_events_queue_buffer_maybe_flush(struct oio_events_queue_buffer_s *buf,
-		GHRFunc send, gpointer user_data);
+		GHRFunc send, gpointer user_data, guint max);
 
 #endif

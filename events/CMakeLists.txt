@@ -17,6 +17,7 @@ link_directories(
 add_library(oioevents SHARED
 	oio_events_queue.c
 	oio_events_queue_buffer.c
+	oio_events_queue_internals.c
 	oio_events_queue_zmq.c
 	oio_events_queue_beanstalkd.c)
 
