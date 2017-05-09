@@ -139,7 +139,7 @@ _post_config(struct sqlx_service_s *ss)
 				g_usleep(1 * G_TIME_SPAN_SECOND);
 		}
 		if (!done) {
-			GRID_INFO("Stopped while registering in Zookeeper");
+			GRID_ERROR("Too many errors while registering in Zookeeper");
 			return FALSE;
 		}
 	}
