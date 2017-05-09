@@ -567,3 +567,13 @@ def ensure_headers(func):
         kwargs['headers'] = kwargs.get('headers') or dict()
         return func(*args, **kwargs)
     return ensure_headers_wrapper
+
+
+def ensure_request_id(func):
+    @wraps(func)
+    def ensure_request_id_wrapper(*args, **kwargs):
+        headers = kwargs['headers']
+        if 'X-oio-req-id' not in headers:
+            headers['X-oio-req-id'] = request_id()
+        return func(*args, **kwargs)
+    return ensure_request_id_wrapper

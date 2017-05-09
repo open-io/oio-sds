@@ -145,11 +145,10 @@ class ECChunkDownloadHandler(object):
     """
 
     def __init__(self, storage_method, chunks, meta_start, meta_end, headers,
-                 connection_timeout=None, response_timeout=None,
-                 read_timeout=None):
+                 connection_timeout=None, read_timeout=None,
+                 **_kwargs):
         """
         :param connection_timeout: timeout to establish the connections
-        :param response_timeout: timeout to receive the headers
         :param read_timeout: timeout to read a buffer of data
         """
         self.storage_method = storage_method
@@ -161,7 +160,6 @@ class ECChunkDownloadHandler(object):
         self.meta_length = self.chunks[0]['size']
         self.headers = headers
         self.connection_timeout = connection_timeout
-        self.response_timeout = response_timeout
         self.read_timeout = read_timeout
 
     def _get_range_infos(self):
@@ -207,7 +205,7 @@ class ECChunkDownloadHandler(object):
                     range_info['req_fragment_end'])
         reader = io.ChunkReader(chunk_iter, storage_method.ec_fragment_size,
                                 headers, self.connection_timeout,
-                                self.response_timeout, self.read_timeout,
+                                self.read_timeout,
                                 align=True)
         return (reader, reader.get_iter())
 
@@ -976,13 +974,12 @@ class ECWriteHandler(io.WriteHandler):
 
 class ECRebuildHandler(object):
     def __init__(self, meta_chunk, missing, storage_method,
-                 connection_timeout=None, response_timeout=None,
-                 read_timeout=None):
+                 connection_timeout=None, read_timeout=None,
+                 **_kwargs):
         self.meta_chunk = meta_chunk
         self.missing = missing
         self.storage_method = storage_method
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
-        self.response_timeout = response_timeout or io.CHUNK_TIMEOUT
         self.read_timeout = read_timeout or io.CHUNK_TIMEOUT
 
     def _get_response(self, chunk, headers):
@@ -993,7 +990,7 @@ class ECRebuildHandler(object):
                 conn = io.http_connect(
                     parsed.netloc, 'GET', parsed.path, headers)
 
-            with Timeout(self.response_timeout):
+            with Timeout(self.read_timeout):
                 resp = conn.getresponse()
             if resp.status != 200:
                 logger.warning('Invalid GET response from %s', chunk)

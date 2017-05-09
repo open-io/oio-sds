@@ -15,9 +15,8 @@
 # License along with this library.
 
 
-from oio.api import io
 from oio.api.replication import ReplicatedWriteHandler
-from oio.api.object_storage import _sort_chunks, get_meta_ranges
+from oio.api.object_storage import _sort_chunks, fetch_stream
 from oio.common.storage_method import STORAGE_METHODS
 from oio.content.content import Content
 from oio.common import exceptions as exc
@@ -28,25 +27,8 @@ class PlainContent(Content):
     def fetch(self):
         storage_method = STORAGE_METHODS.load(self.chunk_method)
         chunks = _sort_chunks(self.chunks.raw(), storage_method.ec)
-        headers = {}
-        stream = self._fetch_stream(chunks, storage_method, headers)
+        stream = fetch_stream(chunks, None, storage_method)
         return stream
-
-    def _fetch_stream(self, chunks, storage_method, headers):
-        meta_range_list = get_meta_ranges([(None, None)], chunks)
-        for meta_range_dict in meta_range_list:
-            for pos, meta_range in meta_range_dict.iteritems():
-                meta_start, meta_end = meta_range
-                reader = io.ChunkReader(iter(chunks[pos]), io.READ_CHUNK_SIZE,
-                                        headers)
-                try:
-                    it = reader.get_iter()
-                except Exception as err:
-                    raise UnrecoverableContent("Error while downloading: %s" %
-                                               err)
-                for part in it:
-                    for d in part['iter']:
-                        yield d
 
     def create(self, stream, **kwargs):
         sysmeta = {}

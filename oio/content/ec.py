@@ -16,8 +16,8 @@
 
 from oio.common.exceptions import OrphanChunk
 from oio.content.content import Content, Chunk
-from oio.api.ec import ECChunkDownloadHandler, ECWriteHandler, ECRebuildHandler
-from oio.api.object_storage import _sort_chunks, get_meta_ranges
+from oio.api.ec import ECWriteHandler, ECRebuildHandler
+from oio.api.object_storage import _sort_chunks, fetch_stream_ec
 from oio.common.utils import GeneratorIO
 
 
@@ -73,22 +73,8 @@ class ECContent(Content):
 
     def fetch(self):
         chunks = _sort_chunks(self.chunks.raw(), self.storage_method.ec)
-        headers = {}
-        stream = self._fetch_stream(chunks, self.storage_method, headers)
+        stream = fetch_stream_ec(chunks, None, self.storage_method)
         return stream
-
-    def _fetch_stream(self, chunks, storage_method, headers):
-        meta_range_list = get_meta_ranges([(None, None)], chunks)
-        for meta_range_dict in meta_range_list:
-            for pos, meta_range in meta_range_dict.iteritems():
-                meta_start, meta_end = meta_range
-                handler = ECChunkDownloadHandler(
-                    storage_method, chunks[pos], meta_start, meta_end, headers)
-                stream = handler = handler.get_stream()
-                for part_info in stream:
-                    for d in part_info['iter']:
-                        yield d
-                stream.close()
 
     def create(self, stream, **kwargs):
         sysmeta = {}

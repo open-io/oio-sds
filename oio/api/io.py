@@ -73,7 +73,7 @@ class WriteHandler(object):
     def __init__(self, source, sysmeta, chunk_preparer,
                  storage_method, headers,
                  connection_timeout=None, write_timeout=None,
-                 read_timeout=None):
+                 read_timeout=None, **_kwargs):
         """
         :param connection_timeout: timeout to establish the connection
         :param write_timeout: timeout to send a buffer of data
@@ -168,14 +168,13 @@ class ChunkReader(object):
     """
 
     def __init__(self, chunk_iter, buf_size, headers,
-                 connection_timeout=None, response_timeout=None,
-                 read_timeout=None, align=False):
+                 connection_timeout=None, read_timeout=None,
+                 align=False, **_kwargs):
         """
         :param chunk_iter:
         :param buf_size: size of the read buffer
         :param headers:
         :param connection_timeout: timeout to establish the connection
-        :param response_timeout: timeout to receive the headers
         :param read_timeout: timeout to read a buffer of data
         :param align: if True, the reader will skip some bytes to align
                       on `buf_size`
@@ -192,7 +191,6 @@ class ChunkReader(object):
         self.discard_bytes = 0
         self.align = align
         self.connection_timeout = connection_timeout or CONNECTION_TIMEOUT
-        self.response_timeout = response_timeout or CHUNK_TIMEOUT
         self.read_timeout = read_timeout or CHUNK_TIMEOUT
         self._resp_by_chunk = dict()
 
@@ -250,7 +248,7 @@ class ChunkReader(object):
                 parsed = urlparse(raw_url)
                 conn = http_connect(parsed.netloc, 'GET', parsed.path,
                                     self.request_headers)
-            with green.OioTimeout(self.response_timeout):
+            with green.OioTimeout(self.read_timeout):
                 source = conn.getresponse()
                 source.conn = conn
         except (Exception, Timeout) as error:
