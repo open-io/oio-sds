@@ -31,6 +31,11 @@ func_tests () {
     export OIO_NS="NS-${RANDOM}" OIO_ACCOUNT="ACCT-$RANDOM" OIO_USER=USER-$RANDOM OIO_PATH=PATH-$RANDOM
     oio-reset.sh -v -v -N $OIO_NS $@
     echo -e "END OF RESET" | logger -t TEST
+
+    # test a content with a strange name, through the CLI and the API
+    /usr/bin/fallocate -l $RANDOM /tmp/blob%
+    openio object create $RANDOM /tmp/blob%
+
     cd $SRCDIR
     tox && tox -e func
     cd $WRKDIR
