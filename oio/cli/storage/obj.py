@@ -140,9 +140,7 @@ class CreateObject(ContainerCommandMixin, lister.Lister):
                 any_error = True
                 break
             except Exception:
-                import traceback
-                print "Failed to upload", obj, "in", container
-                traceback.print_exc()
+                self.log.exception("Failed to upload %s in %s", obj, container)
                 any_error = True
                 results.append((name, 0, None, 'Failed'))
 
@@ -150,7 +148,7 @@ class CreateObject(ContainerCommandMixin, lister.Lister):
         columns = ('Name', 'Size', 'Hash', 'Status')
         if any_error:
             self.produce_output(parsed_args, columns, l)
-            raise Exception("An error occured")
+            raise Exception("Too many errors occured")
         return columns, l
 
 
