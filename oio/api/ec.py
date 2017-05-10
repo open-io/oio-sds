@@ -22,7 +22,7 @@ from oio.common import exceptions
 from oio.common.exceptions import SourceReadError
 from oio.common.http import HeadersDict, parse_content_range, \
     ranges_from_http_header
-from oio.common.utils import fix_ranges
+from oio.common.utils import fix_ranges, quote
 from oio.api import io
 from oio.common.constants import chunk_headers
 from oio.common import green
@@ -605,7 +605,7 @@ class ECWriter(object):
         h = {}
         h["transfer-encoding"] = "chunked"
         h[chunk_headers["content_id"]] = sysmeta['id']
-        h[chunk_headers["content_path"]] = sysmeta['content_path']
+        h[chunk_headers["content_path"]] = quote(sysmeta['content_path'])
         h[chunk_headers["content_chunkmethod"]] = sysmeta['chunk_method']
         h[chunk_headers["container_id"]] = sysmeta['container_id']
         h[chunk_headers["chunk_pos"]] = chunk["pos"]
