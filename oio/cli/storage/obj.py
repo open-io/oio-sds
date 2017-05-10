@@ -113,29 +113,44 @@ class CreateObject(ContainerCommandMixin, lister.Lister):
             f.seek(currpos)
             return total_size
 
+        any_error = False
         properties = parsed_args.property
         results = []
         for obj in objs:
-            with io.open(obj, 'rb') as f:
-                name = names.pop(0) if names else os.path.basename(f.name)
-                if parsed_args.auto:
-                    manager = self.app.client_manager.get_flatns_manager()
-                    container = manager(name)
-                data = self.app.client_manager.storage.object_create(
-                    self.app.client_manager.get_account(),
-                    container,
-                    file_or_path=f,
-                    obj_name=name,
-                    content_length=get_file_size(f),
-                    policy=policy,
-                    metadata=properties,
-                    key_file=key_file,
-                    mime_type=parsed_args.mime_type)
+            try:
+                with io.open(obj, 'rb') as f:
+                    name = names.pop(0) if names else os.path.basename(f.name)
+                    if parsed_args.auto:
+                        manager = self.app.client_manager.get_flatns_manager()
+                        container = manager(name)
+                    data = self.app.client_manager.storage.object_create(
+                        self.app.client_manager.get_account(),
+                        container,
+                        file_or_path=f,
+                        obj_name=name,
+                        content_length=get_file_size(f),
+                        policy=policy,
+                        metadata=properties,
+                        key_file=key_file,
+                        mime_type=parsed_args.mime_type)
 
-                results.append((name, data[1], data[2].upper()))
+                    results.append((name, data[1], data[2].upper(), 'Ok'))
+            except KeyboardInterrupt:
+                results.append((name, 0, None, 'Interrupted'))
+                any_error = True
+                break
+            except Exception:
+                import traceback
+                print "Failed to upload", obj, "in", container
+                traceback.print_exc()
+                any_error = True
+                results.append((name, 0, None, 'Failed'))
 
         l = (obj for obj in results)
-        columns = ('Name', 'Size', 'Hash')
+        columns = ('Name', 'Size', 'Hash', 'Status')
+        if any_error:
+            self.produce_output(parsed_args, columns, l)
+            raise Exception("An error occured")
         return columns, l
 
 
