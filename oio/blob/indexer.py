@@ -20,9 +20,9 @@ class BlobIndexer(Daemon):
         self.volume = volume
         self.passes = 0
         self.errors = 0
+        self.successes = 0
         self.last_reported = 0
         self.chunks_run_time = 0
-        self.total_chunks_processed = 0
         self.interval = int_value(
             conf.get('interval'), 300)
         self.report_interval = int_value(
@@ -33,71 +33,55 @@ class BlobIndexer(Daemon):
         self.namespace, self.volume_id = check_volume(self.volume)
 
     def index_pass(self):
-        start_time = report_time = time.time()
 
-        total_errors = 0
+        def safe_update_index(path):
+            try:
+                self.update_index(path)
+                self.successes += 1
+                self.logger.debug('Updated %s', path)
+            except Exception:
+                self.errors += 1
+                self.logger.exception('ERROR while updating %s', path)
+
+        def report(tag):
+            total = self.errors + self.successes
+            now = time.time()
+            elapsed = (now - start_time) or 0.000001
+            self.logger.info(
+                '%(tag)s=%(current_time)s '
+                'elapsed=%(elapsed).02f '
+                'pass=%(pass)d '
+                'errors=%(errors)d '
+                'chunks=%(nb_chunks)d %(c_rate).2f/s' % {
+                    'tag': tag,
+                    'current_time': datetime.fromtimestamp(
+                        int(now)).isoformat(),
+                    'pass': self.passes,
+                    'errors': self.errors,
+                    'nb_chunks': total,
+                    'c_rate': total / (now - self.last_reported),
+                    'elapsed': elapsed
+                }
+            )
+            self.last_reported = now
+
+        start_time = time.time()
+        self.last_reported = start_time
+        self.errors = 0
+        self.successes = 0
 
         paths = paths_gen(self.volume)
-
+        report('started')
         for path in paths:
-            self.safe_update_index(path)
+            safe_update_index(path)
             self.chunks_run_time = ratelimit(
                 self.chunks_run_time,
                 self.max_chunks_per_second
             )
-            self.total_chunks_processed += 1
             now = time.time()
             if now - self.last_reported >= self.report_interval:
-                self.logger.info(
-                    'started=%(start_time)s '
-                    'passes=%(passes)d '
-                    'errors=%(errors)d '
-                    'chunks=%(nb_chunks)d %(c_rate).2f/s '
-                    'total=%(total).2f ' % {
-                        'start_time': datetime.fromtimestamp(
-                            int(report_time)).isoformat(),
-                        'passes': self.passes,
-                        'errors': self.errors,
-                        'nb_chunks': self.total_chunks_processed,
-                        'c_rate': self.passes / (now - report_time),
-                        'total': (now - start_time)
-                    }
-                )
-                report_time = now
-                total_errors += self.errors
-                self.passes = 0
-                self.errors = 0
-                self.last_reported = now
-        end_time = time.time()
-        elapsed = (end_time - start_time) or 0.000001
-        self.logger.info(
-            'started=%(start_time)s '
-            'ended=%(end_time)s '
-            'elapsed=%(elapsed).02f '
-            'errors=%(errors)d '
-            'chunks=%(nb_chunks)d %(c_rate).2f/s ' % {
-                'start_time': datetime.fromtimestamp(
-                    int(start_time)).isoformat(),
-                'end_time': datetime.fromtimestamp(
-                    int(end_time)).isoformat(),
-                'elapsed': elapsed,
-                'errors': total_errors + self.errors,
-                'nb_chunks': self.total_chunks_processed,
-                'c_rate': self.total_chunks_processed / elapsed
-            }
-        )
-        if elapsed < self.interval:
-            time.sleep(self.interval - elapsed)
-
-    def safe_update_index(self, path):
-        try:
-            self.logger.debug('Updating index: %s', path)
-            self.update_index(path)
-        except Exception:
-            self.errors += 1
-            self.logger.exception('ERROR while updating index for chunk %s',
-                                  path)
-        self.passes += 1
+                report('running')
+        report('ended')
 
     def update_index(self, path):
         with open(path) as f:
@@ -116,7 +100,13 @@ class BlobIndexer(Daemon):
     def run(self, *args, **kwargs):
         time.sleep(random() * self.interval)
         while True:
+            pre = time.time()
             try:
                 self.index_pass()
             except Exception as e:
                 self.logger.exception('ERROR during indexing: %s' % e)
+            else:
+                self.passes += 1
+            elapsed = (time.time() - pre) or 0.000001
+            if elapsed < self.interval:
+                time.sleep(self.interval - elapsed)
