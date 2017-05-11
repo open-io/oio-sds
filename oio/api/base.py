@@ -12,8 +12,8 @@
 # License along with this library.
 
 from oio.common import exceptions
-from oio.common.http import requests, requests_adapters
-from oio.common.http import CONNECTION_TIMEOUT, READ_TIMEOUT
+from oio.common.http import requests, requests_adapters, \
+    CONNECTION_TIMEOUT, READ_TIMEOUT
 from oio.common.constants import ADMIN_HEADER
 
 _ADAPTER_OPTIONS_KEYS = ["pool_connections", "pool_maxsize", "max_retries"]

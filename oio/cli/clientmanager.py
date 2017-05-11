@@ -4,8 +4,6 @@ import pkg_resources
 from oio.common import exceptions
 from oio.common.utils import load_namespace_conf
 from oio.common.autocontainer import HashedContainerBuilder
-from oio.common.exceptions import ConfigurationException
-from oio.conscience.client import ConscienceClient
 
 
 LOG = logging.getLogger(__name__)
@@ -37,9 +35,10 @@ class ClientManager(object):
         self.session = None
         self.namespace = None
         self.setup_done = False
-        self.info_done = False
         self._admin_mode = False
+        self._flatns_manager = None
         self._meta1_digits = None
+        self._nsinfo = None
         root_logger = logging.getLogger('')
         LOG.setLevel(root_logger.getEffectiveLevel())
 
@@ -67,11 +66,11 @@ class ClientManager(object):
 
     def info(self):
         self.setup()
-        if self.info_done:
+        if self._nsinfo:
             return
+        from oio.conscience.client import ConscienceClient
         client = ConscienceClient({"namespace": self.namespace})
         self._nsinfo = client.info()
-        self.info_done = True
 
     def get_meta1_digits(self):
         self.setup()
@@ -95,15 +94,15 @@ class ClientManager(object):
         return account_name
 
     def get_flatns_manager(self):
-        # TODO(jfs): this is also needed in oio-swift, need to factorize in
-        #            oiopy
+        if self._flatns_manager:
+            return self._flatns_manager
         self.info()
         options = self._nsinfo['options']
         bitlength, offset, size = None, 0, 0
         try:
             bitlength = int(options['flat_bitlength'])
         except:
-            raise ConfigurationException(
+            raise exceptions.ConfigurationException(
                     "Namespace not configured for autocontainers")
         try:
             if 'flat_hash_offset' in options:
@@ -112,9 +111,9 @@ class ClientManager(object):
                 size = int(options['flat_hash_size'])
         except:
             raise Exception("Invalid autocontainer config: offset/size")
-        return HashedContainerBuilder(offset=offset,
-                                      size=size,
-                                      bits=bitlength)
+        self._flatns_manager = HashedContainerBuilder(
+            offset=offset, size=size, bits=bitlength)
+        return self._flatns_manager
 
 
 def get_plugin_modules(group):
@@ -144,9 +143,9 @@ def build_plugin_option_parser(parser):
     return parser
 
 
-PLUGIN_MODULES = get_plugin_modules(
+PLUGIN_MODULES.extend(get_plugin_modules(
     'openio.cli.base'
-)
+))
 
 PLUGIN_MODULES.extend(get_plugin_modules(
     'openio.cli.ext'
