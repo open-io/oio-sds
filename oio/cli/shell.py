@@ -3,7 +3,7 @@
 import sys
 import logging
 
-from cliff import app
+import cliff.app
 
 import oio
 from oio.common import utils
@@ -11,7 +11,7 @@ from oio.cli.commandmanager import CommandManager
 from oio.cli import clientmanager
 
 
-class OpenIOShell(app.App):
+class OpenIOShell(cliff.app.App):
     log = logging.getLogger(__name__)
 
     def __init__(self):
@@ -97,9 +97,7 @@ class OpenIOShell(app.App):
             api = module.API_NAME
             cmd_group = 'openio.' + api.replace('-', '_')
             self.command_manager.add_command_group(cmd_group)
-            self.log.debug(
-                '%s API: cmd group %s' % (api, cmd_group)
-            )
+            self.log.debug('%s API: cmd group %s', api, cmd_group)
         self.command_manager.add_command_group('openio.common')
         self.command_manager.add_command_group('openio.ext')
 

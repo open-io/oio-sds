@@ -1,8 +1,9 @@
+"""Container-related commands"""
 import os
 import logging
-from cliff import show
-from cliff import command
-from cliff import lister
+import cliff
+import cliff.lister
+import cliff.show
 
 from oio.cli.utils import KeyValueAction
 
@@ -25,12 +26,24 @@ class SetPropertyCommandMixin(object):
         )
         parser.add_argument(
             '--storage-policy', '--stgpol',
+            metavar='<storage_policy>',
             help='Set the storage policy of the container'
+        )
+        parser.add_argument(
+            '--max-versions', '--versioning',
+            metavar='<n>',
+            type=int,
+            help="""Set the versioning policy of the container.
+ n<0 is unlimited number of versions.
+ n=0 is disabled (cannot overwrite existing object).
+ n=1 is suspended (can overwrite existing object).
+ n>1 is maximum n versions.
+"""
         )
 
 
-class CreateContainer(SetPropertyCommandMixin, lister.Lister):
-    """Create an object container"""
+class CreateContainer(SetPropertyCommandMixin, cliff.lister.Lister):
+    """Create an object container."""
 
     log = logging.getLogger(__name__ + '.CreateContainer')
 
@@ -54,6 +67,8 @@ class CreateContainer(SetPropertyCommandMixin, lister.Lister):
             system['sys.m2.quota'] = str(parsed_args.quota)
         if parsed_args.storage_policy is not None:
             system['sys.m2.policy.storage'] = parsed_args.storage_policy
+        if parsed_args.max_versions is not None:
+            system['sys.m2.policy.version'] = str(parsed_args.max_versions)
 
         results = []
         account = self.app.client_manager.get_account()
@@ -78,8 +93,8 @@ class CreateContainer(SetPropertyCommandMixin, lister.Lister):
         return columns, res_gen
 
 
-class SetContainer(SetPropertyCommandMixin, command.Command):
-    """Set container properties, quota or storage policy"""
+class SetContainer(SetPropertyCommandMixin, cliff.command.Command):
+    """Set container properties, quota, storage policy or versioning."""
 
     log = logging.getLogger(__name__ + '.SetContainer')
 
@@ -109,6 +124,8 @@ class SetContainer(SetPropertyCommandMixin, command.Command):
             system['sys.m2.quota'] = str(parsed_args.quota)
         if parsed_args.storage_policy is not None:
             system['sys.m2.policy.storage'] = parsed_args.storage_policy
+        if parsed_args.max_versions is not None:
+            system['sys.m2.policy.version'] = str(parsed_args.max_versions)
 
         self.app.client_manager.storage.container_set_properties(
             self.app.client_manager.get_account(),
@@ -119,8 +136,8 @@ class SetContainer(SetPropertyCommandMixin, command.Command):
         )
 
 
-class TouchContainer(command.Command):
-    """touch an object container, triggers asynchronous treatments on it."""
+class TouchContainer(cliff.command.Command):
+    """Touch an object container, triggers asynchronous treatments on it."""
 
     log = logging.getLogger(__name__ + '.TouchContainer')
 
@@ -144,8 +161,8 @@ class TouchContainer(command.Command):
             )
 
 
-class DeleteContainer(command.Command):
-    """Delete an object container"""
+class DeleteContainer(cliff.command.Command):
+    """Delete an object container."""
 
     log = logging.getLogger(__name__ + '.DeleteContainer')
 
@@ -169,8 +186,8 @@ class DeleteContainer(command.Command):
             )
 
 
-class ShowContainer(show.ShowOne):
-    """Display information about an object container"""
+class ShowContainer(cliff.show.ShowOne):
+    """Display information about an object container."""
 
     log = logging.getLogger(__name__ + '.ShowContainer')
 
@@ -207,14 +224,16 @@ class ShowContainer(show.ShowOne):
                 'objects': sys.get('sys.m2.objects', 0),
                 'storage_policy': sys.get('sys.m2.policy.storage',
                                           "Namespace default"),
+                'max_versions': sys.get('sys.m2.policy.version',
+                                        "Namespace default"),
                 }
         for k, v in data['properties'].iteritems():
             info['meta.' + k] = v
         return zip(*sorted(info.iteritems()))
 
 
-class ListContainer(lister.Lister):
-    """List containers"""
+class ListContainer(cliff.lister.Lister):
+    """List containers."""
 
     log = logging.getLogger(__name__ + '.ListContainer')
 
@@ -297,8 +316,8 @@ class ListContainer(lister.Lister):
         return columns, results
 
 
-class UnsetContainer(command.Command):
-    """Unset container properties"""
+class UnsetContainer(cliff.command.Command):
+    """Unset container properties."""
 
     log = logging.getLogger(__name__ + '.UnsetContainer')
 
@@ -315,7 +334,24 @@ class UnsetContainer(command.Command):
             action='append',
             default=[],
             help='Property to remove from container',
-            required=True
+        )
+        parser.add_argument(
+            '--storage-policy', '--stgpol',
+            action='store_true',
+            help='Reset the storage policy of the container '
+                 'to the namespace default'
+        )
+        parser.add_argument(
+            '--max-versions', '--versioning',
+            action='store_true',
+            help='Reset the versioning policy of the container '
+                 'to the namespace default'
+        )
+        parser.add_argument(
+            '--quota',
+            action='store_true',
+            help='Reset the quota of the container '
+                 'to the namespace default'
         )
         return parser
 
@@ -323,15 +359,28 @@ class UnsetContainer(command.Command):
         self.log.debug('take_action(%s)', parsed_args)
 
         properties = parsed_args.property
+        system = dict()
+        if parsed_args.storage_policy:
+            system['sys.m2.policy.storage'] = ''
+        if parsed_args.max_versions:
+            system['sys.m2.policy.version'] = ''
+        if parsed_args.quota:
+            system['sys.m2.quota'] = ''
 
-        self.app.client_manager.storage.container_del_properties(
-            self.app.client_manager.get_account(),
-            parsed_args.container,
-            properties)
+        if properties:
+            self.app.client_manager.storage.container_del_properties(
+                self.app.client_manager.get_account(),
+                parsed_args.container,
+                properties)
+        if system:
+            self.app.client_manager.storage.container_set_properties(
+                self.app.client_manager.get_account(),
+                parsed_args.container,
+                system=system)
 
 
-class SaveContainer(command.Command):
-    """Save all objects of a container locally"""
+class SaveContainer(cliff.command.Command):
+    """Save all objects of a container locally."""
 
     log = logging.getLogger(__name__ + '.SaveContainer')
 
@@ -353,7 +402,7 @@ class SaveContainer(command.Command):
 
         for obj in objs['objects']:
             obj_name = obj['name']
-            meta, stream = self.app.client_manager.storage.object_fetch(
+            _, stream = self.app.client_manager.storage.object_fetch(
                 account, container, obj_name)
 
             if not os.path.exists(os.path.dirname(obj_name)):
@@ -364,8 +413,8 @@ class SaveContainer(command.Command):
                     f.write(chunk)
 
 
-class AnalyzeContainer(show.ShowOne):
-    """Locate the services in charge of a container"""
+class AnalyzeContainer(cliff.show.ShowOne):
+    """Locate the services in charge of a container."""
 
     log = logging.getLogger(__name__ + '.AnalyzeContainer')
 

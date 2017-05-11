@@ -21,9 +21,6 @@ import random
 from inspect import isgenerator
 
 from oio.common import exceptions as exc
-from oio.account.client import AccountClient
-from oio.container.client import ContainerClient
-from oio.directory.client import DirectoryClient
 from oio.api import io
 from oio.api.ec import ECWriteHandler, ECChunkDownloadHandler, \
     obj_range_to_meta_chunk_range
@@ -32,8 +29,8 @@ from oio.api.backblaze_http import BackblazeUtilsException, BackblazeUtils
 from oio.api.backblaze import BackblazeWriteHandler, \
     BackblazeChunkDownloadHandler
 from oio.common import constants
-from oio.common import utils
-from oio.common.utils import ensure_headers, ensure_request_id
+from oio.common.utils import ensure_headers, ensure_request_id, float_value, \
+    name2cid, GeneratorIO
 from oio.common.http import http_header_from_ranges
 from oio.common.storage_method import STORAGE_METHODS
 
@@ -259,10 +256,13 @@ class ObjectStorageApi(object):
         :type write_timeout: `float` seconds
         """
         self.namespace = namespace
-        self.timeouts = {tok: utils.float_value(tov, None)
+        self.timeouts = {tok: float_value(tov, None)
                          for tok, tov in kwargs.items()
                          if tok in self.__class__.TIMEOUT_KEYS}
 
+        from oio.account.client import AccountClient
+        from oio.container.client import ContainerClient
+        from oio.directory.client import DirectoryClient
         # FIXME: share session between all the clients
         self.directory = DirectoryClient({"namespace": self.namespace},
                                          **kwargs)
@@ -472,9 +472,18 @@ class ObjectStorageApi(object):
     @handle_container_not_found
     def container_del_properties(self, account, container, properties,
                                  **kwargs):
-        return self.container.container_del_properties(account, container,
-                                                       properties,
-                                                       **kwargs)
+        """
+        Delete properties of a container.
+
+        :param account: name of the account
+        :type account: `str`
+        :param container: name of the container to deal with
+        :type container: `str`
+        :param properties: a list of property keys
+        :type properties: `list`
+        """
+        return self.container.container_del_properties(
+            account, container, properties, **kwargs)
 
     def container_update(self, account, container, metadata, clear=False,
                          **kwargs):
@@ -536,7 +545,7 @@ class ObjectStorageApi(object):
                     file_name = None
             obj_name = obj_name or file_name
         elif isgenerator(src):
-            file_or_path = utils.GeneratorIO(src)
+            file_or_path = GeneratorIO(src)
             src = file_or_path
         if not obj_name:
             raise exc.MissingName(
@@ -652,7 +661,7 @@ class ObjectStorageApi(object):
         chunk_method = meta['chunk_method']
         storage_method = STORAGE_METHODS.load(chunk_method)
         chunks = _sort_chunks(raw_chunks, storage_method.ec)
-        meta['container_id'] = utils.name2cid(account, container).upper()
+        meta['container_id'] = name2cid(account, container).upper()
         meta['ns'] = self.namespace
         self._patch_timeouts(kwargs)
         if storage_method.ec:
@@ -764,7 +773,7 @@ class ObjectStorageApi(object):
             policy=policy, **kwargs)
         obj_meta.update(sysmeta)
         obj_meta['content_path'] = obj_name
-        obj_meta['container_id'] = utils.name2cid(account, container).upper()
+        obj_meta['container_id'] = name2cid(account, container).upper()
         obj_meta['ns'] = self.namespace
 
         storage_method = STORAGE_METHODS.load(obj_meta['chunk_method'])

@@ -1,19 +1,17 @@
-import io
 import logging
 import os
 
-from argparse import ArgumentError
-
-from cliff import command
-from cliff import lister
-from cliff import show
+from cliff import command, lister, show
 
 from oio.cli.utils import KeyValueAction
-from oio.common.utils import Timestamp
 
 
 class ContainerCommandMixin(object):
     """Command taking a container name as parameter"""
+
+    @property
+    def flatns_manager(self):
+        return self.app.client_manager.get_flatns_manager()
 
     def patch_parser(self, parser):
         parser.add_argument(
@@ -33,6 +31,7 @@ class ContainerCommandMixin(object):
 
     def take_action(self, parsed_args):
         if not parsed_args.container and not parsed_args.auto:
+            from argparse import ArgumentError
             raise ArgumentError(parsed_args.container,
                                 "Missing value for container or --auto")
 
@@ -112,6 +111,7 @@ class CreateObject(ContainerCommandMixin, lister.Lister):
         if key_file and key_file[0] != '/':
             key_file = os.getcwd() + '/' + key_file
 
+        import io
         any_error = False
         properties = parsed_args.property
         results = []
@@ -120,8 +120,7 @@ class CreateObject(ContainerCommandMixin, lister.Lister):
                 with io.open(obj, 'rb') as f:
                     name = names.pop(0) if names else os.path.basename(f.name)
                     if parsed_args.auto:
-                        manager = self.app.client_manager.get_flatns_manager()
-                        container = manager(name)
+                        container = self.flatns_manager(name)
                     data = self.app.client_manager.storage.object_create(
                         self.app.client_manager.get_account(),
                         container,
@@ -182,8 +181,7 @@ class TouchObject(ContainerCommandMixin, command.Command):
 
         for obj in parsed_args.objects:
             if parsed_args.auto:
-                manager = self.app.client_manager.get_flatns_manager()
-                container = manager(obj)
+                container = self.flatns_manager(obj)
             self.app.client_manager.storage.object_touch(
                 self.app.client_manager.get_account(),
                 container,
@@ -222,8 +220,7 @@ class DeleteObject(ContainerCommandMixin, lister.Lister):
 
         if len(parsed_args.objects) <= 1:
             if parsed_args.auto:
-                manager = self.app.client_manager.get_flatns_manager()
-                container = manager(parsed_args.objects[0])
+                container = self.flatns_manager(parsed_args.objects[0])
             else:
                 container = parsed_args.container
 
@@ -238,9 +235,8 @@ class DeleteObject(ContainerCommandMixin, lister.Lister):
                 raise Exception("Cannot specify a version for several objects")
             if parsed_args.auto:
                 objs = {}
-                manager = self.app.client_manager.get_flatns_manager()
                 for obj in parsed_args.objects:
-                    container = manager(obj)
+                    container = self.flatns_manager(obj)
                     if container not in objs:
                         objs[container] = []
                     objs[container].append(obj)
@@ -282,8 +278,7 @@ class ShowObject(ObjectCommandMixin, show.ShowOne):
         obj = parsed_args.object
 
         if parsed_args.auto:
-            manager = self.app.client_manager.get_flatns_manager()
-            container = manager(obj)
+            container = self.flatns_manager(obj)
         data = self.app.client_manager.storage.object_show(
             account,
             container,
@@ -331,8 +326,7 @@ class SetObject(ObjectCommandMixin, command.Command):
         container = parsed_args.container
         obj = parsed_args.object
         if parsed_args.auto:
-            manager = self.app.client_manager.get_flatns_manager()
-            container = manager(obj)
+            container = self.flatns_manager(obj)
         properties = parsed_args.property
         self.app.client_manager.storage.object_set_properties(
             self.app.client_manager.get_account(),
@@ -376,8 +370,7 @@ class SaveObject(ObjectCommandMixin, command.Command):
         if not filename:
             filename = obj
         if parsed_args.auto:
-            manager = self.app.client_manager.get_flatns_manager()
-            container = manager(obj)
+            container = self.flatns_manager(obj)
 
         meta, stream = self.app.client_manager.storage.object_fetch(
             self.app.client_manager.get_account(),
@@ -534,6 +527,8 @@ class ListObject(ContainerCommandMixin, lister.Lister):
                 obj_gen = resp['objects']
 
         if parsed_args.long_listing:
+            from oio.common.utils import Timestamp
+
             def _format_props(props):
                 prop_list = ["%s=%s" % (k, v) for k, v
                              in props.iteritems()]
@@ -548,17 +543,18 @@ class ListObject(ContainerCommandMixin, lister.Lister):
             def _gen_results(objects):
                 for obj in objects:
                     result = (obj['name'], obj['size'],
-                              obj['hash'], obj['mime_type'],
+                              obj['hash'], obj['ver'],
+                              obj['mime_type'],
                               Timestamp(obj['ctime']).isoformat,
                               _format_props(obj.get('properties', {})))
                     yield result
             results = _gen_results(obj_gen)
-            columns = ('Name', 'Size', 'Hash', 'Content-Type',
-                       'Last-Modified', 'Properties')
+            columns = ('Name', 'Size', 'Hash', 'Version',
+                       'Content-Type', 'Last-Modified', 'Properties')
         else:
-            results = ((obj['name'], obj['size'], obj['hash'])
+            results = ((obj['name'], obj['size'], obj['hash'], obj['ver'])
                        for obj in obj_gen)
-            columns = ('Name', 'Size', 'Hash')
+            columns = ('Name', 'Size', 'Hash', 'Version')
         return (columns, results)
 
 
@@ -587,8 +583,7 @@ class UnsetObject(ObjectCommandMixin, command.Command):
         obj = parsed_args.object
         properties = parsed_args.property
         if parsed_args.auto:
-            manager = self.app.client_manager.get_flatns_manager()
-            container = manager(obj)
+            container = self.flatns_manager(obj)
         self.app.client_manager.storage.object_del_properties(
             self.app.client_manager.get_account(),
             container,
@@ -615,8 +610,7 @@ class LocateObject(ObjectCommandMixin, lister.Lister):
         container = parsed_args.container
         obj = parsed_args.object
         if parsed_args.auto:
-            manager = self.app.client_manager.get_flatns_manager()
-            container = manager(obj)
+            container = self.flatns_manager(obj)
 
         data = self.app.client_manager.storage.object_analyze(
             account,
