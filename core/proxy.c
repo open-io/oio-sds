@@ -258,6 +258,12 @@ struct http_ctx_s
 	GString *body;
 };
 
+struct http_reply_ctx_s
+{
+	guint retry_after;
+	struct http_ctx_s *out;
+};
+
 static int
 _has_prefix_len (char **pb, size_t *plen, const char *prefix)
 {
@@ -279,46 +285,65 @@ _has_prefix_len (char **pb, size_t *plen, const char *prefix)
 static size_t
 _header_callback(char *b, size_t s, size_t n, void *u)
 {
-	struct http_ctx_s *o = u;
-	size_t total = n*s;
+	struct http_reply_ctx_s *ctx = u;
+	const size_t total = n*s;
 
-	if (!o || !o->headers) /* caller not interested in headers */
-		return total;
-	if (!_has_prefix_len (&b, &total, "x-oio-"))
-		return total;
-	if (total > 8192) /* header too big */
+	EXTRA_ASSERT(ctx != NULL);
+
+	if (total > 2048) /* header too big */
 		return total;
 
-	gchar tmp[total+1];
-	memcpy (tmp, b, total);
-	tmp[total] = '\0';
+	size_t remaining = total;
 
-	char *colon = strchr(tmp, ':');
-	if (colon) {
-		*(colon++) = 0;
-
-		const gsize l = g_strv_length (o->headers);
-		o->headers = g_realloc (o->headers, (l+3) * sizeof(void*));
-		o->headers[l+0] = g_strdup (g_strstrip(tmp));
-		o->headers[l+1] = g_strdup (g_strstrip(colon));
-		o->headers[l+2] = NULL;
+	/* One special header is considered, would the caller app be interested in
+	 * headers or not */
+	if (_has_prefix_len(&b, &remaining, "Retry-After: ")) {
+		/* OSEF the value, let's do our own exponential back-off */
+		ctx->retry_after = 1;
+		return total;
 	}
 
-	return n*s;
+	/* Then only the OpenIO-related headers are considered if the caller app.
+	 * has an interest in them. */
+	if (ctx->out && ctx->out->headers
+			&& _has_prefix_len (&b, &remaining, "x-oio-")) {
+		gchar tmp[remaining+1];
+		memcpy (tmp, b, remaining);
+		tmp[remaining] = '\0';
+
+		char *colon = strchr(tmp, ':');
+		if (colon) {
+			*colon = 0;
+
+			const gsize l = g_strv_length (ctx->out->headers);
+			ctx->out->headers = g_realloc (ctx->out->headers, (l+3) * sizeof(void*));
+			ctx->out->headers[l+0] = g_strdup (g_strstrip(tmp));
+			ctx->out->headers[l+1] = g_strdup (g_strstrip(colon+1));
+			ctx->out->headers[l+2] = NULL;
+		}
+		return total;
+	}
+
+	return total;
 }
 
 static GError *
 _proxy_call_notime (CURL *h, const char *method, const char *url,
-		struct http_ctx_s *in, struct http_ctx_s *out)
+		struct http_ctx_s *in, struct http_ctx_s *out,
+		guint *p_retry_after)
 {
 	EXTRA_ASSERT (h != NULL);
 	EXTRA_ASSERT (method != NULL);
 	EXTRA_ASSERT (url != NULL);
+	EXTRA_ASSERT (p_retry_after != NULL);
 	struct view_GString_s view_input = {.data=NULL, .done=0};
 
 	GError *err = NULL;
 	curl_easy_setopt (h, CURLOPT_URL, url);
 	curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, method);
+
+	struct http_reply_ctx_s ctx = {0};
+	ctx.out = out;
 
 	/* Populate the request headers */
 	struct oio_headers_s headers = {NULL,NULL};
@@ -330,13 +355,8 @@ _proxy_call_notime (CURL *h, const char *method, const char *url,
 	}
 
 	/* Intercept the headers from the response */
-	if (out) {
-		curl_easy_setopt (h, CURLOPT_HEADERDATA, out);
-		curl_easy_setopt (h, CURLOPT_HEADERFUNCTION, _header_callback);
-	} else {
-		curl_easy_setopt (h, CURLOPT_HEADERDATA, NULL);
-		curl_easy_setopt (h, CURLOPT_HEADERFUNCTION, NULL);
-	}
+	curl_easy_setopt (h, CURLOPT_HEADERDATA, &ctx);
+	curl_easy_setopt (h, CURLOPT_HEADERFUNCTION, _header_callback);
 
 	if (in && in->body) {
 		view_input.data = in->body;
@@ -377,7 +397,10 @@ _proxy_call_notime (CURL *h, const char *method, const char *url,
 			}
 		}
 	}
+
 	oio_headers_clear (&headers);
+
+	*p_retry_after = ctx.retry_after;
 	return err;
 }
 
@@ -388,10 +411,43 @@ _proxy_call (CURL *h, const char *method, const char *url,
 	if (!oio_ext_get_reqid ())
 		oio_ext_set_random_reqid();
 
-	gint64 t = g_get_monotonic_time ();
-	GError *err = _proxy_call_notime (h, method, url, in, out);
-	t = g_get_monotonic_time () - t;
-	GRID_TRACE("proxy: %s %s took %"G_GINT64_FORMAT"us", method, url, t);
+	GError *err = NULL;
+	guint retry_after = 0;
+
+	const guint max = 3;
+	for (guint i=0; i<max ;++i) {
+		const gint64 t = g_get_monotonic_time ();
+		err = _proxy_call_notime (h, method, url, in, out, &retry_after);
+		GRID_TRACE("proxy: %s %s took %"G_GINT64_FORMAT"us",
+				method, url, g_get_monotonic_time() - t);
+		(void) t;
+		if (!err) /* success */
+			break;
+#ifdef HAVE_ENBUG
+		if (err->code == 404 && i == 0) /* let's fake a retry */
+			err->code = 503, retry_after = 1;
+#endif
+		if (err->code != HTTP_CODE_SRV_UNAVAILABLE) /* not retryable */
+			break;
+		if (!retry_after)  /* not told to retry */
+			break;
+		/* Let's retry! */
+		if (i+1 != max) {
+			/* cleanup what has been allocated by the previous call */
+			g_clear_error(&err);
+			if (out->headers) {
+				g_strfreev(out->headers);
+				out->headers = g_malloc0(sizeof(void*));
+			}
+			if (out->body) {
+				g_string_set_size(out->body, 0);
+			}
+			/* randomize the sleep-time to avoid resonance effects */
+			const gulong sleep_base = (1 << i) * 200 * G_TIME_SPAN_MILLISECOND;
+			const gulong sleep_jitter = oio_ext_rand_int_range(0, 100 * G_TIME_SPAN_MILLISECOND);
+			g_usleep(sleep_base + sleep_jitter);
+		}
+	}
 	return err;
 }
 
@@ -608,8 +664,7 @@ oio_proxy_call_content_prepare (CURL *h, struct oio_url_s *u,
 	}
 	g_string_free (http_url, TRUE);
 	g_string_free(i.body, TRUE);
-	if (o.headers)
-		g_strfreev (o.headers);
+	g_strfreev (o.headers);
 	return err;
 }
 

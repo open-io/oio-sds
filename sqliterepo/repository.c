@@ -844,7 +844,7 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 					err = NEWERROR(CODE_BADOPFORSLAVE, "not SLAVE");
 				break;
 			case ELECTION_FAILED:
-				err = NEWERROR(CODE_INTERNAL_ERROR, "Election failed [%s][%s]",
+				err = NEWERROR(CODE_UNAVAILABLE, "Election failed [%s][%s]",
 						args->name.base, args->name.type);
 				break;
 		}
@@ -993,7 +993,7 @@ sqlx_repository_open_and_lock(sqlx_repository_t *repo,
 		*result = NULL;
 
 	if (!repo->running)
-		return NEWERROR(CODE_INTERNAL_ERROR, "Repository being closed");
+		return NEWERROR(CODE_UNAVAILABLE, "Repository being closed");
 
 	if (NULL != (err = _open_fill_args(&args, repo, n)))
 		return err;
@@ -1101,7 +1101,7 @@ sqlx_repository_status_base(sqlx_repository_t *repo, const struct sqlx_name_s *n
 	GRID_TRACE2("%s(%p,t=%s,n=%s)", __FUNCTION__, repo, n->type, n->base);
 
 	if (!repo->running)
-		return NEWERROR(CODE_INTERNAL_ERROR, "Repository being shut down");
+		return NEWERROR(CODE_UNAVAILABLE, "Repository being shut down");
 
 	if (NULL != (err = _schema_get(repo, n->type, NULL)))
 		return err;
@@ -1171,7 +1171,7 @@ sqlx_repository_prepare_election(sqlx_repository_t *repo, const struct sqlx_name
 	GRID_TRACE2("%s(%p,t=%s,n=%s)", __FUNCTION__, repo, n->type, n->base);
 
 	if (!repo->running)
-		return NEWERROR(CODE_INTERNAL_ERROR, "Repository being shut down");
+		return NEWERROR(CODE_UNAVAILABLE, "Repository being shut down");
 
 	if (NULL != (err = _schema_get(repo, n->type, NULL)))
 		return err;
@@ -1194,7 +1194,7 @@ sqlx_repository_exit_election(sqlx_repository_t *repo, const struct sqlx_name_s 
 	GRID_TRACE2("%s(%p,t=%s,n=%s)", __FUNCTION__, repo, n->type, n->base);
 
 	if (!repo->running)
-		return NEWERROR(CODE_INTERNAL_ERROR, "Repository being shut down");
+		return NEWERROR(CODE_UNAVAILABLE, "Repository being shut down");
 
 	if (NULL != (err = _schema_get(repo, n->type, NULL)))
 		return err;
@@ -1218,7 +1218,7 @@ sqlx_repository_use_base(sqlx_repository_t *repo, const struct sqlx_name_s *n)
 	GRID_TRACE2("%s(%p,t=%s,n=%s)", __FUNCTION__, repo, n->type, n->base);
 
 	if (!repo->running)
-		return NEWERROR(CODE_INTERNAL_ERROR, "Repository being shut down");
+		return NEWERROR(CODE_UNAVAILABLE, "Repository being shut down");
 
 	if (NULL != (err = _schema_get(repo, n->type, NULL)))
 		return err;
@@ -1545,7 +1545,7 @@ sqlx_repository_get_version(struct sqlx_sqlite3_s *sq3, GTree **result)
 {
 	GRID_TRACE2("%s(%p,%p)", __FUNCTION__, sq3, result);
 	if (!sq3 || !result)
-		return NEWERROR(CODE_INTERNAL_ERROR, "Invalid parameter");
+		return BADREQ("Invalid parameter");
 	*result = version_extract_from_admin(sq3);
 	return NULL;
 }

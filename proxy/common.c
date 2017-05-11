@@ -236,6 +236,9 @@ GError *gridd_request_replicated (struct client_ctx_s *ctx,
 	} else {
 		EXTRA_ASSERT(m1uv != NULL);
 		if (*ctx->type == '#') {
+			/* when looking for a directory service, the resolver always replies
+			 * all the services involved. Let's keep only the services with the
+			 * targeted type */
 			gchar **tmp = meta1_url_filter_typed (
 					(const char * const *)m1uv, ctx->type+1);
 			if (m1uv)
@@ -330,18 +333,35 @@ GError *gridd_request_replicated (struct client_ctx_s *ctx,
 
 		if (err) {
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
+				/* the target service is in bad shape, let's avoid it for
+				 * the subsequent requests. */
 				service_invalidate(url);
-				/* that error is not strong enoough to stop the iteration, we
+
+				/* TODO(jfs): should we let the client retry or occupy a
+				 * thread in the proxy to make all the necessary retries ? */
+
+				/* that error is not strong enough to stop the iteration, we
 				 * just try with another service */
 				g_clear_error (&err);
-				/* But if we expected at least one service to responnd (!ALL),
+
+				/* But if we expected at least one service to respond,
 				 * and we still encounter that error with the last URL of the
 				 * array (!pu[1]), then this is an overall error that we should return. */
 				if (ctx->which != CLIENT_RUN_ALL && !next_url) {
 					err = BUSY("No service replied");
 					stop = TRUE;
 				}
+			} else if (CODE_IS_RETRY(err->code)) {
+				/* the target service is in bad shape, let's avoid it for
+				 * the subsequent requests. And we currently we choose to
+				 * stop the iteration and let the retry be achieved in the
+				 * client SDK. This error is a clue that the other replicas
+				 * will also be overloaded. */
+				service_invalidate(url);
+				stop = TRUE;
 			} else if (ctx->which == CLIENT_RUN_ALL) {
+				/* All the services must be reached, let's just remind the
+				 * error (already done) and continue to the next service */
 				g_clear_error (&err);
 			} else {
 				stop = TRUE;

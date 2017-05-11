@@ -758,13 +758,8 @@ static GError * _load_content_from_json_object(struct req_args_s *args,
 static enum http_rc_e
 _reply_properties (struct req_args_s *args, GError * err, GSList * beans)
 {
-	if (err) {
-		if (err->code == CODE_BAD_REQUEST)
-			return _reply_format_error (args, err);
-		if (CODE_IS_NOTFOUND(err->code))
-			return _reply_notfound_error (args, err);
-		return _reply_system_error (args, err);
-	}
+	if (err)
+		return _reply_common_error (args, err);
 
 	for (GSList *l=beans; l ;l=l->next) {
 		if (DESCR(l->data) == &descr_struct_ALIASES)
@@ -1473,7 +1468,7 @@ enum http_rc_e action_container_show (struct req_args_s *args) {
 	if (err) {
 		/* TODO(jfs): maybe a good place for an assert */
 		if (pairs) g_strfreev(pairs);
-		return _reply_system_error(args, err);
+		return _reply_common_error(args, err);
 	}
 	if (!pairs) {
 		pairs = g_malloc0(sizeof(void*));
