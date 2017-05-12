@@ -89,7 +89,6 @@ class BlobRebuilderWorker(object):
         chunks = self._fetch_chunks()
         for container_id, content_id, chunk_id, _ in chunks:
             loop_time = time.time()
-
             if self.dry_run:
                 self.dryrun_chunk_rebuild(container_id, content_id, chunk_id)
             else:
@@ -180,22 +179,30 @@ class BlobRebuilderWorker(object):
     def chunk_rebuild(self, container_id, content_id, chunk_id):
         self.logger.info('Rebuilding (container %s, content %s, chunk %s)',
                          container_id, content_id, chunk_id)
-        if '/' in chunk_id:
-            chunk_id = chunk_id.rsplit('/', 1)[-1]
-
         try:
             content = self.content_factory.get(container_id, content_id)
         except ContentNotFound:
-            raise OrphanChunk('Content not found')
+            raise OrphanChunk('Content not found: possible orphan chunk')
+        # TODO create a way to get chunk_size
+        chunk_size = 0
+        chunk_pos = None
+        if len(chunk_id) < 32:
+            chunk_pos = chunk_id
+            chunk_id = None
+        else:
+            if '/' in chunk_id:
+                chunk_id = chunk_id.rsplit('/', 1)[-1]
 
-        chunk = content.chunks.filter(id=chunk_id).one()
-        if chunk is None:
-            raise OrphanChunk("Chunk not found in content")
-        elif self.volume and chunk.host != self.volume:
-            raise ValueError("Chunk does not belong to this volume")
-        chunk_size = chunk.size
+            chunk = content.chunks.filter(id=chunk_id).one()
+            if chunk is None:
+                raise OrphanChunk(("Chunk not found in content:"
+                                  "possible orphan chunk"))
+            elif self.volume and chunk.host != self.volume:
+                raise ValueError("Chunk does not belong to this volume")
+            chunk_size = chunk.size
 
-        content.rebuild_chunk(chunk_id, allow_same_rawx=self.allow_same_rawx)
+        content.rebuild_chunk(chunk_id, allow_same_rawx=self.allow_same_rawx,
+                              chunk_pos=chunk_pos)
 
         if self.try_chunk_delete:
             try:
@@ -205,8 +212,9 @@ class BlobRebuilderWorker(object):
                 self.logger.debug("Chunk %s: %s", chunk.url, exc)
 
         # This call does not raise exception if chunk is not referenced
-        self.rdir_client.chunk_delete(chunk.host, container_id,
-                                      content_id, chunk_id)
+        if chunk_pos is None:
+            self.rdir_client.chunk_delete(chunk.host, container_id,
+                                          content_id, chunk_id)
 
         self.bytes_processed += chunk_size
         self.total_bytes_processed += chunk_size

@@ -14,16 +14,22 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
-from oio.common.exceptions import MissingData, UnrecoverableContent
+import json
+import os
+import time
+
+from oio import ObjectStorageApi
+from oio.blob.rebuilder import BlobRebuilderWorker
+from oio.common.exceptions import MissingData
+from oio.common.utils import get_logger
+from oio.container.client import ContainerClient
 from oio.event.filters.content_rebuild import ContentRebuildFilter
 from tests.utils import BaseTestCase, random_str
 from testtools.testcase import ExpectedException
-from oio.container.client import ContainerClient
-import time
-from oio.api.object_storage import ObjectStorageAPI
 
 
 class _App(object):
+    app_env = dict()
 
     def __init__(self, env, cb):
         self.env = env
@@ -45,12 +51,14 @@ class TestContentBrokenFilter(BaseTestCase):
                                                     self.container)
         resp, _ = self.container_client._request('GET', uri, params=params)
         self.container_id = resp.headers['x-oio-container-meta-sys-name'][:-2]
-        self.object_storage_api = ObjectStorageAPI(namespace=self.namespace)
+        self.object_storage_api = ObjectStorageApi(namespace=self.namespace)
         self.stgpol = "SINGLE"
         self.content_rebuild_filter = ContentRebuildFilter(app=_App,
                                                            conf=self.conf)
+        self.rebuild_file = "content_rebuild.txt"
 
-    def _create_event(self, content_name, present_chunks, missing_chunks):
+    def _create_event(self, content_name, present_chunks, missing_chunks,
+                      content_id):
         event = {}
         event["when"] = time.time()
         event["event"] = "storage.content.broken"
@@ -58,7 +66,7 @@ class TestContentBrokenFilter(BaseTestCase):
                          "missing_chunks": missing_chunks}
         event["url"] = {"ns": self.namespace, "account": self.account,
                         "user": self.container, "path": content_name,
-                        "id": self.container_id}
+                        "id": self.container_id, "content": content_id}
         return event
 
     def _is_chunks_created(self, previous, after, pos_created):
@@ -68,12 +76,50 @@ class TestContentBrokenFilter(BaseTestCase):
                 if p["url"] == r["url"]:
                     remain.remove(r)
                     break
+        if len(remain) != len(pos_created):
+            return False
         for r in remain:
             if r["pos"] in pos_created:
                 remain.remove(r)
             else:
                 return False
         return True
+
+    def _rebuild(self):
+        logger = get_logger({}, None, True)
+        conf = {}
+        conf["namespace"] = self.namespace
+        worker = BlobRebuilderWorker(conf, logger, None,
+                                     input_file=self.rebuild_file)
+        worker.rebuilder_pass()
+
+    def _remove_chunks(self, chunks, content_id):
+        uri = self.object_storage_api._make_uri('container/raw_delete')
+        params = self.object_storage_api._make_params(self.account,
+                                                      self.container)
+        for c in chunks:
+            c['id'] = c['url']
+            c['content'] = content_id
+            c['type'] = 'chunk'
+        data = json.dumps(chunks)
+        resp, _ = self.object_storage_api._request('POST', uri, params=params,
+                                                   data=data)
+        self.assertEqual(204, resp.status_code)
+
+    def _check_rebuild(self, content_name, chunks, missing_pos, meta,
+                       chunks_to_remove, chunk_created=True):
+        self._remove_chunks(chunks_to_remove, meta['id'])
+        event = self._create_event(content_name, chunks, missing_pos,
+                                   meta['id'])
+        self.content_rebuild_filter.process(env=event, cb=None)
+        self._rebuild()
+        os.remove(self.rebuild_file)
+        _, after = self.object_storage_api.object_analyze(
+                        container=self.container, obj=content_name,
+                        account=self.account)
+        self.assertIs(chunk_created, self._is_chunks_created(chunks,
+                                                             after,
+                                                             missing_pos))
 
     def test_nothing_missing(self):
         content_name = "test_nothing_missing"
@@ -82,15 +128,16 @@ class TestContentBrokenFilter(BaseTestCase):
                                               data="test",
                                               policy="THREECOPIES",
                                               obj_name=content_name)
-        _, chunks = self.object_storage_api.object_analyze(
+
+        meta, chunks = self.object_storage_api.object_analyze(
                           container=self.container, obj=content_name,
                           account=self.account)
         for c in chunks:
             c.pop('score', None)
-            c['id'] = c.pop('url')
 
         missing_pos = []
-        event = self._create_event(content_name, chunks, missing_pos)
+        event = self._create_event(content_name, chunks, missing_pos,
+                                   meta['id'])
         with ExpectedException(MissingData):
             self.content_rebuild_filter.process(env=event, cb=None)
 
@@ -102,27 +149,20 @@ class TestContentBrokenFilter(BaseTestCase):
                                               policy="THREECOPIES",
                                               obj_name=content_name
                                               )
-        _, chunks = self.object_storage_api.object_analyze(
+        meta, chunks = self.object_storage_api.object_analyze(
                         container=self.container, obj=content_name,
                         account=self.account)
-        previous = list(chunks)
-        chunks.pop(0)
+        chunks_to_remove = []
+        chunks_to_remove.append(chunks.pop(0))
         for c in chunks:
             c.pop('score', None)
-            c['id'] = c.pop('url')
 
         missing_pos = ["0"]
-        event = self._create_event(content_name, chunks, missing_pos)
-        self.content_rebuild_filter.process(env=event, cb=None)
-        _, after = self.object_storage_api.object_analyze(
-                        container=self.container, obj=content_name,
-                        account=self.account)
-        self.assertIs(True, self._is_chunks_created(previous,
-                                                    after,
-                                                    missing_pos))
+        self._check_rebuild(content_name, chunks, missing_pos, meta,
+                            chunks_to_remove)
 
     def test_missing_last_chunk(self):
-        content_name = "test_missing_1_chunk_frim_multiple_chunks_content"
+        content_name = "test_missing_last_chunk"
         data = random_str(1024 * 1024 * 4)
         self.object_storage_api.object_create(account=self.account,
                                               container=self.container,
@@ -130,24 +170,17 @@ class TestContentBrokenFilter(BaseTestCase):
                                               policy="THREECOPIES",
                                               obj_name=content_name
                                               )
-        _, chunks = self.object_storage_api.object_analyze(
+        meta, chunks = self.object_storage_api.object_analyze(
                         container=self.container, obj=content_name,
                         account=self.account)
-        previous = list(chunks)
-        chunks.pop(0)
+        chunks_to_remove = []
+        chunks_to_remove.append(chunks.pop(0))
         for c in chunks:
             c.pop('score', None)
-            c['id'] = c.pop('url')
 
         missing_pos = ["3"]
-        event = self._create_event(content_name, chunks, missing_pos)
-        self.content_rebuild_filter.process(env=event, cb=None)
-        _, after = self.object_storage_api.object_analyze(
-                        container=self.container, obj=content_name,
-                        account=self.account)
-        self.assertIs(True, self._is_chunks_created(previous,
-                                                    after,
-                                                    missing_pos))
+        self._check_rebuild(content_name, chunks, missing_pos, meta,
+                            chunks_to_remove)
 
     def test_missing_2_chunks(self):
         content_name = "test_missing_2_chunks"
@@ -157,25 +190,18 @@ class TestContentBrokenFilter(BaseTestCase):
                                               policy="THREECOPIES",
                                               obj_name=content_name
                                               )
-        _, chunks = self.object_storage_api.object_analyze(
+        meta, chunks = self.object_storage_api.object_analyze(
                         container=self.container, obj=content_name,
                         account=self.account)
-        previous = list(chunks)
-        chunks.pop(0)
-        chunks.pop(0)
+        chunks_to_remove = []
+        for i in range(0, 2):
+            chunks_to_remove.append(chunks.pop(0))
         for c in chunks:
             c.pop('score', None)
-            c['id'] = c.pop('url')
 
         missing_pos = ["0", "0"]
-        event = self._create_event(content_name, chunks, missing_pos)
-        self.content_rebuild_filter.process(env=event, cb=None)
-        _, after = self.object_storage_api.object_analyze(
-                        container=self.container, obj=content_name,
-                        account=self.account)
-        self.assertIs(True, self._is_chunks_created(previous,
-                                                    after,
-                                                    missing_pos))
+        self._check_rebuild(content_name, chunks, missing_pos, meta,
+                            chunks_to_remove)
 
     def test_missing_all_chunks(self):
         content_name = "test_missing_all_chunks"
@@ -185,18 +211,19 @@ class TestContentBrokenFilter(BaseTestCase):
                                               policy="SINGLE",
                                               obj_name=content_name
                                               )
-        _, chunks = self.object_storage_api.object_analyze(
+        meta, chunks = self.object_storage_api.object_analyze(
                         container=self.container, obj=content_name,
                         account=self.account)
-        chunks.pop(0)
+        chunks_to_remove = []
+        chunks_to_remove.append(chunks.pop(0))
         for c in chunks:
             c.pop('score', None)
-            c['id'] = c.pop('url')
 
         missing_pos = ["0"]
-        event = self._create_event(content_name, chunks, missing_pos)
-        with ExpectedException(UnrecoverableContent):
-            self.content_rebuild_filter.process(env=event, cb=None)
+        event = self._create_event(content_name, chunks, missing_pos,
+                                   meta['id'])
+        self.content_rebuild_filter.process(env=event, cb=None)
+        os.remove(self.rebuild_file)
 
     def test_missing_all_chunks_of_a_pos(self):
         content_name = "test_missing_2_chunks"
@@ -206,20 +233,21 @@ class TestContentBrokenFilter(BaseTestCase):
                                               policy="THREECOPIES",
                                               obj_name=content_name
                                               )
-        _, chunks = self.object_storage_api.object_analyze(
+        meta, chunks = self.object_storage_api.object_analyze(
                         container=self.container, obj=content_name,
                         account=self.account)
-        chunks.pop(0)
-        chunks.pop(0)
-        chunks.pop(0)
+        chunks_to_remove = []
+        for i in range(0, 3):
+            chunks_to_remove.append(chunks.pop(0))
+
         for c in chunks:
             c.pop('score', None)
-            c['id'] = c.pop('url')
 
         missing_pos = ["0"]
-        event = self._create_event(content_name, chunks, missing_pos)
-        with ExpectedException(UnrecoverableContent):
-            self.content_rebuild_filter.process(env=event, cb=None)
+        event = self._create_event(content_name, chunks, missing_pos,
+                                   meta['id'])
+        self.content_rebuild_filter.process(env=event, cb=None)
+        os.remove(self.rebuild_file)
 
     def test_missing_multiple_chunks(self):
         content_name = "test_missing_multiple_chunks"
@@ -229,27 +257,20 @@ class TestContentBrokenFilter(BaseTestCase):
                                               data=data,
                                               policy="THREECOPIES",
                                               obj_name=content_name)
-        _, chunks = self.object_storage_api.object_analyze(
+        meta, chunks = self.object_storage_api.object_analyze(
                         container=self.container, obj=content_name,
                         account=self.account)
-        previous = list(chunks)
-        chunks.pop(9)
-        chunks.pop(6)
-        chunks.pop(4)
-        chunks.pop(0)
+        chunks_to_remove = []
+        chunks_to_remove.append(chunks.pop(9))
+        chunks_to_remove.append(chunks.pop(6))
+        chunks_to_remove.append(chunks.pop(4))
+        chunks_to_remove.append(chunks.pop(0))
         for c in chunks:
             c.pop('score', None)
-            c['id'] = c.pop('url')
 
         missing_pos = ["0", "1", "2", "3"]
-        event = self._create_event(content_name, chunks, missing_pos)
-        self.content_rebuild_filter.process(env=event, cb=None)
-        _, after = self.object_storage_api.object_analyze(
-                        container=self.container, obj=content_name,
-                        account=self.account)
-        self.assertIs(True, self._is_chunks_created(previous,
-                                                    after,
-                                                    missing_pos))
+        self._check_rebuild(content_name, chunks, missing_pos, meta,
+                            chunks_to_remove)
 
     def test_missing_1_chunk_ec(self):
         if len(self.conf['services']['rawx']) < 9:
@@ -262,24 +283,17 @@ class TestContentBrokenFilter(BaseTestCase):
                                               policy="EC",
                                               obj_name=content_name
                                               )
-        _, chunks = self.object_storage_api.object_analyze(
+        meta, chunks = self.object_storage_api.object_analyze(
                         container=self.container, obj=content_name,
                         account=self.account)
-        previous = list(chunks)
-        chunks.pop(0)
+        chunks_to_remove = []
+        chunks_to_remove.append(chunks.pop(0))
         for c in chunks:
             c.pop('score', None)
-            c['id'] = c.pop('url')
 
         missing_pos = ["0.1"]
-        event = self._create_event(content_name, chunks, missing_pos)
-        self.content_rebuild_filter.process(env=event, cb=None)
-        _, after = self.object_storage_api.object_analyze(
-                        container=self.container, obj=content_name,
-                        account=self.account)
-        self.assertIs(True, self._is_chunks_created(previous,
-                                                    after,
-                                                    missing_pos))
+        self._check_rebuild(content_name, chunks, missing_pos, meta,
+                            chunks_to_remove)
 
     def test_missing_m_chunk_ec(self):
         if len(self.conf['services']['rawx']) < 9:
@@ -291,28 +305,18 @@ class TestContentBrokenFilter(BaseTestCase):
                                               data="test",
                                               policy="EC",
                                               obj_name=content_name)
-        _, chunks = self.object_storage_api.object_analyze(
+        meta, chunks = self.object_storage_api.object_analyze(
                         container=self.container, obj=content_name,
                         account=self.account)
-        previous = list(chunks)
-        chunks.pop(0)
-        chunks.pop(0)
-        chunks.pop(0)
+        chunks_to_remove = []
+        for i in range(0, 3):
+            chunks_to_remove.append(chunks.pop(0))
         for c in chunks:
             c.pop('score', None)
-            c['id'] = c.pop('url')
 
         missing_pos = ["0.1", "0.2", "0.3"]
-        event = self._create_event(content_name, chunks, missing_pos)
-        self.content_rebuild_filter.process(env=event, cb=None)
-
-        _, after = self.object_storage_api.object_analyze(
-                        container=self.container, obj=content_name,
-                        account=self.account)
-
-        self.assertIs(True, self._is_chunks_created(previous,
-                                                    after,
-                                                    missing_pos))
+        self._check_rebuild(content_name, chunks, missing_pos, meta,
+                            chunks_to_remove)
 
     def test_missing_m_chunk_ec_2(self):
         if len(self.conf['services']['rawx']) < 9:
@@ -324,28 +328,19 @@ class TestContentBrokenFilter(BaseTestCase):
                                               data="test",
                                               policy="EC",
                                               obj_name=content_name)
-        _, chunks = self.object_storage_api.object_analyze(
+        meta, chunks = self.object_storage_api.object_analyze(
                         container=self.container, obj=content_name,
                         account=self.account)
-        previous = list(chunks)
-        chunks.pop(0)
-        chunks.pop(3)
-        chunks.pop(5)
+        chunks_to_remove = []
+        chunks_to_remove.append(chunks.pop(0))
+        chunks_to_remove.append(chunks.pop(3))
+        chunks_to_remove.append(chunks.pop(5))
         for c in chunks:
             c.pop('score', None)
-            c['id'] = c.pop('url')
 
         missing_pos = ["0.1", "0.5", "0.8"]
-        event = self._create_event(content_name, chunks, missing_pos)
-        self.content_rebuild_filter.process(env=event, cb=None)
-
-        _, after = self.object_storage_api.object_analyze(
-                        container=self.container, obj=content_name,
-                        account=self.account)
-
-        self.assertIs(True, self._is_chunks_created(previous,
-                                                    after,
-                                                    missing_pos))
+        self._check_rebuild(content_name, chunks, missing_pos, meta,
+                            chunks_to_remove)
 
     def test_missing_m1_chunk_ec(self):
         if len(self.conf['services']['rawx']) < 9:
@@ -357,18 +352,17 @@ class TestContentBrokenFilter(BaseTestCase):
                                               data="test",
                                               policy="EC",
                                               obj_name=content_name)
-        _, chunks = self.object_storage_api.object_analyze(
+        meta, chunks = self.object_storage_api.object_analyze(
                         container=self.container, obj=content_name,
                         account=self.account)
-        chunks.pop(0)
-        chunks.pop(0)
-        chunks.pop(0)
-        chunks.pop(0)
+        chunks_to_remove = []
+        chunks_to_remove.append(chunks.pop(0))
+        chunks_to_remove.append(chunks.pop(0))
+        chunks_to_remove.append(chunks.pop(0))
+        chunks_to_remove.append(chunks.pop(0))
         for c in chunks:
             c.pop('score', None)
-            c['id'] = c.pop('url')
 
-        event = self._create_event(content_name, chunks, ["0.1", "0.2", "0.3",
-                                                          "0.4"])
-        with ExpectedException(UnrecoverableContent):
-            self.content_rebuild_filter.process(env=event, cb=None)
+        missing_pos = ["0.1", "0.2", "0.3", "0.4"]
+        self._check_rebuild(content_name, chunks, missing_pos, meta,
+                            chunks_to_remove, chunk_created=False)

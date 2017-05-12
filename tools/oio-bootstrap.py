@@ -624,6 +624,7 @@ inherit_env=1
 #env.PATH=${PATH}:${HOME}/.local/bin:${CODEDIR}/bin:/bin:/usr/bin:/usr/local/bin
 env.LD_LIBRARY_PATH=${HOME}/.local/@LD_LIBDIR@:${LIBDIR}
 
+
 limit.core_size=-1
 #limit.max_files=2048
 #limit.stack_size=256
@@ -753,6 +754,9 @@ pipeline = noop
 # pipeline = replication
 pipeline = noop
 
+[handler:storage.content.broken]
+pipeline = content_rebuild
+
 [handler:storage.content.deleted]
 # pipeline = content_cleaner replication
 pipeline = content_cleaner
@@ -778,6 +782,10 @@ pipeline = noop
 [filter:content_cleaner]
 use = egg:oio#content_cleaner
 key_file = ${KEY_FILE}
+
+[filter:content_rebuild]
+use = egg:oio#content_rebuild
+rebuild_file = ${REBUILD_FILE}
 
 [filter:account_update]
 use = egg:oio#account_update
@@ -955,6 +963,7 @@ BUCKET_NAME = 'bucket_name'
 COMPRESSION = 'compression'
 APPLICATION_KEY = 'application_key'
 KEY_FILE='key_file'
+REBUILD_FILE='rebuild_file'
 META_HEADER='x-oio-chunk-meta'
 WORMED="worm"
 NS_STATE="state"
@@ -1074,6 +1083,7 @@ def generate(options):
     if state not in [MASTER_VALUE, SLAVE_VALUE, STANDALONE_VALUE]:
         state = STANDALONE_VALUE
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
+    rebuild_file = options.get(REBUILD_FILE, CFGDIR + '/' + 'rebuild_file.cfg')
     ENV = dict(IP=ip,
                ZK_CNXSTRING=options.get('ZK'),
                NS=ns,
@@ -1109,6 +1119,7 @@ def generate(options):
                BACKBLAZE_BUCKET_NAME=backblaze_bucket_name,
                BACKBLAZE_APPLICATION_KEY=backblaze_app_key,
                KEY_FILE=key_file,
+               REBUILD_FILE=rebuild_file,
                HTTPD_BINARY=HTTPD_BINARY,
                META_HEADER=META_HEADER,
                STATE=state,
@@ -1395,6 +1406,10 @@ def generate(options):
         f.write(tpl.safe_substitute(ENV))
         tpl = Template(template_local_ns)
         f.write(tpl.safe_substitute(ENV))
+
+    with open('{REBUILD_FILE}'.format(**ENV), 'w+') as f:
+        f.write('[content_rebuild]\n')
+        f.write('rebuild_file=content_rebuild.txt')
 
     with open('{KEY_FILE}'.format(**ENV), 'w+') as f:
         tpl = Template(template_credentials)
