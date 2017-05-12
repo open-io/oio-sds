@@ -60,6 +60,17 @@ class Content(object):
 
         return url_list
 
+    def _add_raw_chunk(self, current_chunk, url):
+        data = {'type': 'chunk',
+                'id': url,
+                'hash': current_chunk.checksum,
+                'size': current_chunk.size,
+                'pos': current_chunk.pos,
+                'content': self.content_id}
+
+        self.container_client.container_raw_insert(
+            data, cid=self.container_id)
+
     def _update_spare_chunk(self, current_chunk, new_url):
         old = {'type': 'chunk',
                'id': current_chunk.url,

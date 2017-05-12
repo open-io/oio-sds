@@ -13,56 +13,60 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
-from oio.common.exceptions import ContentNotFound, NotFound, MissingData
-from oio.event.filters.base import Filter
-from oio.event.evob import Event
-from oio.event.consumer import EventTypes
-from oio.common.storage_method import STORAGE_METHODS
-from oio.content.plain import PlainContent
+import csv
+import ConfigParser
+from oio.common.exceptions import MissingData
 from oio.content.ec import ECContent
+from oio.content.plain import PlainContent
+from oio.event.consumer import EventTypes
+from oio.event.evob import Event
+from oio.event.filters.base import Filter
 from oio import ObjectStorageApi
 
 
 class ContentRebuildFilter(Filter):
+    rebuild_file_default_name = "content_rebuild.txt"
 
     def __init__(self, app, conf,  logger=None):
         super(ContentRebuildFilter, self).__init__(app, conf, logger)
         self.object_storage_api = ObjectStorageApi(conf.get('namespace'))
+        config = ConfigParser.ConfigParser()
+        if not self.conf.get('rebuild_file'):
+            self.rebuild_file = self.rebuild_file_default_name
+            self.logger.warn(("Configuration file not present falling "
+                              "back to default name " + self.rebuild_file))
+            return
+        with open(self.conf.get('rebuild_file')) as app_key_f:
+            try:
+                config.readfp(app_key_f)
+                self.rebuild_file = config.get('content_rebuild',
+                                               'rebuild_file')
+            except IOError as exc:
+                self.rebuild_file = self.rebuild_file_default_name
+                self.logger.warn(("Could not open Content_rebuild file falling"
+                                  "back to default name %s (%s)",
+                                  self.rebuild_file, exc))
 
     def _get_content(self, container_id, meta, chunks, storage_method):
         cls = ECContent if storage_method.ec else PlainContent
         return cls(self.conf, container_id, meta, chunks, storage_method)
 
+    def _write_chunks(self, container_id, content_id, chunk_pos):
+        self.rebuild_writer.writerow((container_id, content_id, chunk_pos))
+
     def process(self, env, cb):
         event = Event(env)
-
+        self.fd = open(self.rebuild_file, "a")
+        self.rebuild_writer = csv.writer(self.fd, delimiter='|')
         if event.event_type == EventTypes.CONTENT_BROKEN:
             url = event.env.get('url')
-            container_name = url['user']
-            content_name = url['path']
-            account = url['account']
-            meta = {}
-            try:
-                meta, _ = self.object_storage_api.object_analyze(
-                                container=container_name, obj=content_name,
-                                account=account)
-            except NotFound:
-                raise ContentNotFound("Content %s/%s not found" %
-                                      (container_name, content_name))
-            present_chunks = event.data['present_chunks']
-            for chunk in present_chunks:
-                chunk["url"] = chunk.pop("id")
             missing_chunks = event.data['missing_chunks']
             if len(missing_chunks) == 0:
                 raise MissingData("No missing chunks found")
-            chunk_method = meta['chunk_method']
-            storage_method = STORAGE_METHODS.load(chunk_method)
-            content = self._get_content(url['id'], meta,
-                                        present_chunks,
-                                        storage_method)
-            for chunk_pos in missing_chunks:
-                    content.rebuild_chunk(None, chunk_pos=chunk_pos)
 
+            for chunk_pos in missing_chunks:
+                self._write_chunks(url["id"], url["content"], chunk_pos)
+        self.fd.flush()
         return self.app(env, cb)
 
 

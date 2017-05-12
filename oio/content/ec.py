@@ -76,7 +76,10 @@ class ECContent(Content):
         meta['metachunk_hash'] = current_chunk.checksum
         meta['metachunk_size'] = current_chunk.size
         self.blob_client.chunk_put(spare_url[0], meta, GeneratorIO(stream))
-        self._update_spare_chunk(current_chunk, spare_url[0])
+        if chunk_id is None:
+            self._add_raw_chunk(current_chunk, spare_url[0])
+        else:
+            self._update_spare_chunk(current_chunk, spare_url[0])
 
     def fetch(self):
         chunks = _sort_chunks(self.chunks.raw(), self.storage_method.ec)

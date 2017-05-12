@@ -117,4 +117,7 @@ class PlainContent(Content):
         if not uploaded:
             raise UnrecoverableContent("No copy available of missing chunk")
 
-        self._update_spare_chunk(current_chunk, spare_urls[0])
+        if chunk_id is None:
+            self._add_raw_chunk(current_chunk, spare_urls[0])
+        else:
+            self._update_spare_chunk(current_chunk, spare_urls[0])
