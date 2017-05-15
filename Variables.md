@@ -111,6 +111,15 @@ Used by `gcc`
  * cmake directive: *OIO__CLIENT_ERRORS_CACHE_PERIOD*
  * range: 1 -> 3600
 
+### common.verbosity.reset_delay
+
+> Tells how long the verbosity remains higher before being reset to the default, after a SIGUSR1 has been received.
+
+ * default: **5 * G_TIME_SPAN_MINUTE**
+ * type: gint64
+ * cmake directive: *OIO__COMMON_VERBOSITY_RESET_DELAY*
+ * range: 1 * G_TIME_SPAN_SECOND -> 1 * G_TIME_SPAN_HOUR
+
 ### core.period.refresh.cpu_idle
 
 > Sets the miniimal amount of time between two refreshed of the known CPU-idle counters for the current host. Keep this value small.
@@ -251,24 +260,6 @@ Used by `gcc`
  * cmake directive: *OIO__GRIDD_TIMEOUT_WHOLE_COMMON*
  * range: 0.01 -> 120.0
 
-### malloc.trim_size.ondemand
-
-> Sets how many bytes bytes are released when the LEAN request is received by the current 'meta' service.
-
- * default: **0**
- * type: guint
- * cmake directive: *OIO__MALLOC_TRIM_SIZE_ONDEMAND*
- * range: 0 -> 2147483648
-
-### malloc.trim_size.periodic
-
-> Sets how many bytes bytes are released when the LEAN request is received by the current 'meta' service.
-
- * default: **0**
- * type: guint
- * cmake directive: *OIO__MALLOC_TRIM_SIZE_PERIODIC*
- * range: 0 -> 2147483648
-
 ### meta.queue.max_delay
 
 > Anti-DDoS counter-mesure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, A '503 Unavailabe' error is replied.
@@ -340,24 +331,6 @@ Used by `gcc`
  * cmake directive: *OIO__PROXY_BULK_MAX_DELETE_MANY*
  * range: 0 -> 10000
 
-### proxy.cache.directory.max
-
-> In a proxy, sets how many directory entries the resolver may keep
-
- * default: **1048576**
- * type: guint
- * cmake directive: *OIO__PROXY_CACHE_DIRECTORY_MAX*
- * range: 0 -> 4194304
-
-### proxy.cache.directory.ttl
-
-> In a proxy, sets how long the resolver keeps directory entries
-
- * default: **0**
- * type: gint64
- * cmake directive: *OIO__PROXY_CACHE_DIRECTORY_TTL*
- * range: 0 -> 7 * G_TIME_SPAN_DAY
-
 ### proxy.cache.enabled
 
 > In a proxy, sets if any form of caching is allowed
@@ -365,24 +338,6 @@ Used by `gcc`
  * default: **TRUE**
  * type: gboolean
  * cmake directive: *OIO__PROXY_CACHE_ENABLED*
-
-### proxy.cache.services.max
-
-> In a proxy, sets how many service entries the resolver might keep.
-
- * default: **1048576**
- * type: guint
- * cmake directive: *OIO__PROXY_CACHE_SERVICES_MAX*
- * range: 0 -> 4194304
-
-### proxy.cache.services.ttl
-
-> In a proxy, sets how long the resolver keeps service entries
-
- * default: **1 * G_TIME_SPAN_HOUR**
- * type: gint64
- * cmake directive: *OIO__PROXY_CACHE_SERVICES_TTL*
- * range: 0 -> 7 * G_TIME_SPAN_DAY
 
 ### proxy.dir_shuffle
 
@@ -655,6 +610,15 @@ Used by `gcc`
  * cmake directive: *OIO__SERVER_CNX_TIMEOUT_PERSIST*
  * range: 0 -> 1 * G_TIME_SPAN_DAY
 
+### server.fd_max_passive
+
+> Set to 0 for an automatic detection
+
+ * default: **0**
+ * type: guint
+ * cmake directive: *OIO__SERVER_FD_MAX_PASSIVE*
+ * range: 0 -> 4096
+
 ### server.log_outgoing
 
 > TODO: to be documented
@@ -662,6 +626,24 @@ Used by `gcc`
  * default: **FALSE**
  * type: gboolean
  * cmake directive: *OIO__SERVER_LOG_OUTGOING*
+
+### server.malloc_trim_size.ondemand
+
+> Sets how many bytes bytes are released when the LEAN request is received by the current 'meta' service.
+
+ * default: **0**
+ * type: guint
+ * cmake directive: *OIO__SERVER_MALLOC_TRIM_SIZE_ONDEMAND*
+ * range: 0 -> 2147483648
+
+### server.malloc_trim_size.periodic
+
+> Sets how many bytes bytes are released when the LEAN request is received by the current 'meta' service.
+
+ * default: **0**
+ * type: guint
+ * cmake directive: *OIO__SERVER_MALLOC_TRIM_SIZE_PERIODIC*
+ * range: 0 -> 2147483648
 
 ### server.pool.max_idle
 
@@ -674,30 +656,30 @@ Used by `gcc`
 
 ### server.pool.max_stat
 
-> In the current server, sets how many threads are allowed to the stats server. Keep this value really small, 1 should be enough for most usages, and consider increasing it if you have clues that the management of internal metrics is the bottleneck.
+> In the current server, sets how many threads are allowed to the stats server. Keep this value really small, 1 should be enough for most usages, and consider increasing it if you have clues that the management of internal metrics is the bottleneck. Set to 0 for no limit.
 
  * default: **1**
  * type: gint
  * cmake directive: *OIO__SERVER_POOL_MAX_STAT*
- * range: 1 -> 1073741824
+ * range: 0 -> 1073741824
 
 ### server.pool.max_tcp
 
-> In the current server, sets the maximum number of threads for the pool responsible for the TCP connections (threading model is one thread per request being managed, and one request at once per TCP connection)
+> In the current server, sets the maximum number of threads for the pool responsible for the TCP connections (threading model is one thread per request being managed, and one request at once per TCP connection). Set to 0 for no limit.
 
- * default: **-1**
+ * default: **0**
  * type: gint
  * cmake directive: *OIO__SERVER_POOL_MAX_TCP*
- * range: -1 -> 1073741824
+ * range: 0 -> 1073741824
 
 ### server.pool.max_udp
 
-> In the current server, sets the maximum number of threads for pool responsible for the UDP messages handling. UDP is only used for quick synchronisation messages during MASTER elections
+> In the current server, sets the maximum number of threads for pool responsible for the UDP messages handling. UDP is only used for quick synchronisation messages during MASTER elections. Set ot 0 for no limit.
 
- * default: **8**
+ * default: **4**
  * type: gint
  * cmake directive: *OIO__SERVER_POOL_MAX_UDP*
- * range: 1 -> 1073741824
+ * range: 0 -> 1073741824
 
 ### server.pool.max_unused
 
@@ -784,6 +766,15 @@ Used by `gcc`
  * default: **TRUE**
  * type: gboolean
  * cmake directive: *OIO__SOCKET_QUICKACK_ENABLED*
+
+### sqliterepo.cache.heat_threshold
+
+> Sets the heat value below which a databse is considered hot
+
+ * default: **1**
+ * type: guint32
+ * cmake directive: *OIO__SQLITEREPO_CACHE_HEAT_THRESHOLD*
+ * range: 1 -> 2147483648
 
 ### sqliterepo.cache.heavyload.alert
 
@@ -936,15 +927,6 @@ Used by `gcc`
  * cmake directive: *OIO__SQLITEREPO_ELECTION_WAIT_QUANTUM*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
-### sqliterepo.heat.threshold
-
-> Sets the heat value below which a databse is considered hot
-
- * default: **1**
- * type: guint32
- * cmake directive: *OIO__SQLITEREPO_HEAT_THRESHOLD*
- * range: 1 -> 2147483648
-
 ### sqliterepo.outgoing.timeout.cnx.getvers
 
 > Sets the connection timeout when exchanging versions between databases replicas.
@@ -1035,6 +1017,15 @@ Used by `gcc`
  * cmake directive: *OIO__SQLITEREPO_RELEASE_SIZE*
  * range: 1 -> 2147483648
 
+### sqliterepo.repo.fd_max_active
+
+> Set to 0 for an automatic detection
+
+ * default: **0**
+ * type: guint
+ * cmake directive: *OIO__SQLITEREPO_REPO_FD_MAX_ACTIVE*
+ * range: 0 -> 4096
+
 ### sqliterepo.repo.getvers_max_retries
 
 > Sets how many versions exchanges are allowed during the journey in the election FSM.
@@ -1044,14 +1035,23 @@ Used by `gcc`
  * cmake directive: *OIO__SQLITEREPO_REPO_GETVERS_MAX_RETRIES*
  * range: 1 -> 64
 
-### sqliterepo.repo.max_bases
+### sqliterepo.repo.hard_max
 
 > Sets how many databases can be kept simultaneously open in the current service.
 
  * default: **32768**
  * type: guint
- * cmake directive: *OIO__SQLITEREPO_REPO_MAX_BASES*
+ * cmake directive: *OIO__SQLITEREPO_REPO_HARD_MAX*
  * range: 8 -> 131072
+
+### sqliterepo.repo.soft_max
+
+> Sets how many databases can be kept simultaneously open in the current service.
+
+ * default: **0**
+ * type: guint
+ * cmake directive: *OIO__SQLITEREPO_REPO_SOFT_MAX*
+ * range: 0 -> 131072
 
 ### sqliterepo.service.exit_ttl
 
