@@ -137,136 +137,6 @@
 				"descr": "Should the meta2 check the container state (quota, etc) before generating chunks.",
 				"def": true },
 
-			{ "type": "epoch", "name": "csurl_refresh_delay",
-				"key": "proxy.period.refresh.csurl",
-				"descr": "In the proxy, tells the period between the reloadings of the conscience URL, known from the local configuration",
-				"def": "30s", "min": 0, "max": "1d" },
-
-			{ "type": "epoch", "name": "srvtypes_refresh_delay",
-				"key": "proxy.period.refresh.srvtypes",
-				"descr": "In the proxy, tells the period between two refreshes of the known service types, from the conscience",
-				"def": "30s", "min": "1s", "max": "1d" },
-
-			{ "type": "epoch", "name": "nsinfo_refresh_delay",
-				"key": "proxy.period.reload.nsinfo",
-				"descr": "In the proxy, tells the period between two refreshes of the namespace configuration, from the conscience",
-				"def": "30s", "min": "1s", "max": "1h" },
-
-			{ "type": "monotonic", "name": "ttl_expire_local_services",
-				"key": "proxy.ttl.services.local",
-				"descr": "In the proxy cache, sets the TTL of a local service",
-				"def": "30s", "min": 0, "max": "1d" },
-
-			{ "type": "monotonic", "name": "ttl_down_services",
-				"key": "proxy.ttl.services.down",
-				"descr": "In the proxy cache, sets the TTL of a service known to be down",
-				"def": "5s", "min": 0, "max": "1d" },
-
-			{ "type": "monotonic", "name": "ttl_known_services",
-				"key": "proxy.ttl.services.known",
-				"descr": "In a proxy, sets the TTL of each service already encountered",
-				"def": "5d", "min": 0, "max": "7d" },
-
-			{ "type": "monotonic", "name": "ttl_expire_master_services",
-				"key": "proxy.ttl.services.master",
-				"descr": "In a proxy, sets the TTL on each 'known master' entry. That cache is filled each time a redirection to a MASTER occurs, so that we can immediately direct write operation to the service that owns the MASTER copy.",
-				"def": "5s", "min": 0, "max": "7d" },
-
-			{ "type": "epoch", "name": "lb_downstream_delay",
-				"key": "proxy.period.cs.downstream",
-				"descr": "In a proxy, sets the period between the refreshes of the load-balancing state from the central conscience.",
-				"def": "5s", "min": 0, "max": "1m" },
-
-			{ "type": "epoch", "name": "lb_upstream_delay",
-				"key": "proxy.period.cs.upstream",
-				"descr": "In a proxy, sets the period between two sendings of services states to the conscience.",
-				"def": "1s", "min": "1s", "max": "1m" },
-
-			{ "type": "monotonic", "name": "dir_low_ttl",
-				"key": "proxy.cache.services.ttl",
-				"descr": "In a proxy, sets how long the resolver keeps service entries",
-				"def": "1h", "min": 0, "max": "7d" },
-
-			{ "type": "uint", "name": "dir_low_max",
-				"key": "proxy.cache.services.max",
-				"descr": "In a proxy, sets how many service entries the resolver might keep.",
-				"def": "1Mi", "min": 0, "max": "4Mi" },
-
-			{ "type": "monotonic", "name": "dir_high_ttl",
-				"key": "proxy.cache.directory.ttl",
-				"descr": "In a proxy, sets how long the resolver keeps directory entries",
-				"def": 0, "min": 0, "max": "7d" },
-
-			{ "type": "uint", "name": "dir_high_max",
-				"key": "proxy.cache.directory.max",
-				"descr": "In a proxy, sets how many directory entries the resolver may keep",
-				"def": "1Mi", "min": 0, "max": "4Mi" },
-
-			{ "type": "uint", "name": "proxy_bulk_max_create_many",
-				"key": "proxy.bulk.max.create_many",
-				"descr": "In a proxy, sets how many containers can be created at once.",
-				"def": "100", "min": 0, "max": "10k" },
-
-			{ "type": "uint", "name": "proxy_bulk_max_delete_many",
-				"key": "proxy.bulk.max.delete_many",
-				"descr": "In a proxy, sets how many objects can be deleted at once.",
-				"def": "100", "min": 0, "max": "10k" },
-
-			{ "type": "bool", "name": "flag_cache_enabled",
-				"key": "proxy.cache.enabled",
-				"descr": "In a proxy, sets if any form of caching is allowed",
-				"def": true },
-
-			{ "type": "bool", "name": "flag_local_scores",
-				"key": "proxy.quirk.local_scores",
-				"descr": "In a proxy, tells if the (ugly-as-hell) quirk that sets the score known from the conscience on the corresponding entries in the cache of services 'known to be local'",
-				"def": false },
-
-			{ "type": "bool", "name": "flag_prefer_master_for_write",
-				"key": "proxy.prefer.master_for_write",
-				"descr": "In a proxy, upon a write request, should the proxy prefer services known to host the MASTER copy of the DB ",
-				"def": true },
-
-			{ "type": "bool", "name": "flag_prefer_master_for_read",
-				"key": "proxy.prefer.master_for_read",
-				"descr": "In a proxy, upon a read request, should the proxy prefer a service known to host a MASTER copy of the DB. Supersedes proxy.prefer.slave_for_read",
-				"def": false },
-
-			{ "type": "bool", "name": "flag_prefer_slave_for_read",
-				"key": "proxy.prefer.slave_for_read",
-				"descr": "In a proxy, upon a read request, should the proxy prefer a service known to host a SLAVE copy of the DB.",
-				"def": false },
-
-			{ "type": "bool", "name": "flag_force_master",
-				"key": "proxy.force.master",
-				"descr": "In a proxy, should the process ask the target service (with the help of an option in each RPC) to accept the RPC only if it is MASTER on that DB.",
-				"def": false },
-
-			{ "type": "uint", "name": "proxy_url_path_maxlen",
-				"key": "proxy.url.path.maxlen",
-				"descr": "In a proxy, sets the maximum length for the URL it receives. This options protects stack allocation for that URL.",
-				"def": 2048, "min": 32, "max": 65536 },
-
-			{ "type": "float", "name": "proxy_timeout_config",
-				"key": "proxy.outgoing.timeout.config",
-				"descr": "In a proxy, sets the global timeout for 'config' requests issued",
-				"def": 5.0, "min": 0.01, "max": 60.0 },
-
-			{ "type": "float", "name": "proxy_timeout_stat",
-				"key": "proxy.outgoing.timeout.stat",
-				"descr": "In a proxy, sets the global timeout for 'stat' requests issued (mostly forwarded for the event-agent)",
-				"def": 5.0, "min": 0.01, "max": 60.0 },
-
-			{ "type": "float", "name": "proxy_timeout_conscience",
-				"key": "proxy.outgoing.timeout.conscience",
-				"descr": "In a proxy, sets the global timeout for the RPC to the central cosnience service.",
-				"def": 2.0, "min": 0.01, "max": 60.0 },
-
-			{ "type": "float", "name": "proxy_timeout_common",
-				"key": "proxy.outgoing.timeout.common",
-				"descr": "In a proxy, sets the global timeout for all the other RPC issued (not conscience, not stats-related)",
-				"def": 30.0, "min": 0.01, "max": 60.0 },
-
 			{ "type": "monotonic", "name": "_cache_m0cs_default_ttl",
 				"key": "resolver.cache.csm0.ttl.default",
 				"descr": "In any service resolver instanciated, sets the default TTL on the entries related meta0 (meta1 addresses) and conscience (meta0 address)",
@@ -556,6 +426,141 @@
 				"key": "malloc.trim_size.periodic",
 				"descr": "Sets how many bytes bytes are released when the LEAN request is received by the current 'meta' service.",
 				"def": 0, "min": 0, "max": "1<<32 - 1" }
+		]
+	},
+	"proxy": {
+		"code": "proxy_variables.c",
+		"header": "proxy_variables.h",
+		"variables": [
+			{ "type": "epoch", "name": "csurl_refresh_delay",
+				"key": "proxy.period.refresh.csurl",
+				"descr": "In the proxy, tells the period between the reloadings of the conscience URL, known from the local configuration",
+				"def": "30s", "min": 0, "max": "1d" },
+
+			{ "type": "epoch", "name": "srvtypes_refresh_delay",
+				"key": "proxy.period.refresh.srvtypes",
+				"descr": "In the proxy, tells the period between two refreshes of the known service types, from the conscience",
+				"def": "30s", "min": "1s", "max": "1d" },
+
+			{ "type": "epoch", "name": "nsinfo_refresh_delay",
+				"key": "proxy.period.reload.nsinfo",
+				"descr": "In the proxy, tells the period between two refreshes of the namespace configuration, from the conscience",
+				"def": "30s", "min": "1s", "max": "1h" },
+
+			{ "type": "monotonic", "name": "ttl_expire_local_services",
+				"key": "proxy.ttl.services.local",
+				"descr": "In the proxy cache, sets the TTL of a local service",
+				"def": "30s", "min": 0, "max": "1d" },
+
+			{ "type": "monotonic", "name": "ttl_down_services",
+				"key": "proxy.ttl.services.down",
+				"descr": "In the proxy cache, sets the TTL of a service known to be down",
+				"def": "5s", "min": 0, "max": "1d" },
+
+			{ "type": "monotonic", "name": "ttl_known_services",
+				"key": "proxy.ttl.services.known",
+				"descr": "In a proxy, sets the TTL of each service already encountered",
+				"def": "5d", "min": 0, "max": "7d" },
+
+			{ "type": "monotonic", "name": "ttl_expire_master_services",
+				"key": "proxy.ttl.services.master",
+				"descr": "In a proxy, sets the TTL on each 'known master' entry. That cache is filled each time a redirection to a MASTER occurs, so that we can immediately direct write operation to the service that owns the MASTER copy.",
+				"def": "5s", "min": 0, "max": "7d" },
+
+			{ "type": "epoch", "name": "lb_downstream_delay",
+				"key": "proxy.period.cs.downstream",
+				"descr": "In a proxy, sets the period between the refreshes of the load-balancing state from the central conscience.",
+				"def": "5s", "min": 0, "max": "1m" },
+
+			{ "type": "epoch", "name": "lb_upstream_delay",
+				"key": "proxy.period.cs.upstream",
+				"descr": "In a proxy, sets the period between two sendings of services states to the conscience.",
+				"def": "1s", "min": "1s", "max": "1m" },
+
+			{ "type": "monotonic", "name": "dir_low_ttl",
+				"key": "proxy.cache.services.ttl",
+				"descr": "In a proxy, sets how long the resolver keeps service entries",
+				"def": "1h", "min": 0, "max": "7d" },
+
+			{ "type": "uint", "name": "dir_low_max",
+				"key": "proxy.cache.services.max",
+				"descr": "In a proxy, sets how many service entries the resolver might keep.",
+				"def": "1Mi", "min": 0, "max": "4Mi" },
+
+			{ "type": "monotonic", "name": "dir_high_ttl",
+				"key": "proxy.cache.directory.ttl",
+				"descr": "In a proxy, sets how long the resolver keeps directory entries",
+				"def": 0, "min": 0, "max": "7d" },
+
+			{ "type": "uint", "name": "dir_high_max",
+				"key": "proxy.cache.directory.max",
+				"descr": "In a proxy, sets how many directory entries the resolver may keep",
+				"def": "1Mi", "min": 0, "max": "4Mi" },
+
+			{ "type": "uint", "name": "proxy_bulk_max_create_many",
+				"key": "proxy.bulk.max.create_many",
+				"descr": "In a proxy, sets how many containers can be created at once.",
+				"def": "100", "min": 0, "max": "10k" },
+
+			{ "type": "uint", "name": "proxy_bulk_max_delete_many",
+				"key": "proxy.bulk.max.delete_many",
+				"descr": "In a proxy, sets how many objects can be deleted at once.",
+				"def": "100", "min": 0, "max": "10k" },
+
+			{ "type": "bool", "name": "flag_cache_enabled",
+				"key": "proxy.cache.enabled",
+				"descr": "In a proxy, sets if any form of caching is allowed",
+				"def": true },
+
+			{ "type": "bool", "name": "flag_local_scores",
+				"key": "proxy.quirk.local_scores",
+				"descr": "In a proxy, tells if the (ugly-as-hell) quirk that sets the score known from the conscience on the corresponding entries in the cache of services 'known to be local'",
+				"def": false },
+
+			{ "type": "bool", "name": "flag_prefer_master_for_write",
+				"key": "proxy.prefer.master_for_write",
+				"descr": "In a proxy, upon a write request, should the proxy prefer services known to host the MASTER copy of the DB ",
+				"def": true },
+
+			{ "type": "bool", "name": "flag_prefer_master_for_read",
+				"key": "proxy.prefer.master_for_read",
+				"descr": "In a proxy, upon a read request, should the proxy prefer a service known to host a MASTER copy of the DB. Supersedes proxy.prefer.slave_for_read",
+				"def": false },
+
+			{ "type": "bool", "name": "flag_prefer_slave_for_read",
+				"key": "proxy.prefer.slave_for_read",
+				"descr": "In a proxy, upon a read request, should the proxy prefer a service known to host a SLAVE copy of the DB.",
+				"def": false },
+
+			{ "type": "bool", "name": "flag_force_master",
+				"key": "proxy.force.master",
+				"descr": "In a proxy, should the process ask the target service (with the help of an option in each RPC) to accept the RPC only if it is MASTER on that DB.",
+				"def": false },
+
+			{ "type": "uint", "name": "proxy_url_path_maxlen",
+				"key": "proxy.url.path.maxlen",
+				"descr": "In a proxy, sets the maximum length for the URL it receives. This options protects stack allocation for that URL.",
+				"def": 2048, "min": 32, "max": 65536 },
+
+			{ "type": "float", "name": "proxy_timeout_config",
+				"key": "proxy.outgoing.timeout.config",
+				"descr": "In a proxy, sets the global timeout for 'config' requests issued",
+				"def": 5.0, "min": 0.01, "max": 60.0 },
+
+			{ "type": "float", "name": "proxy_timeout_stat",
+				"key": "proxy.outgoing.timeout.stat",
+				"descr": "In a proxy, sets the global timeout for 'stat' requests issued (mostly forwarded for the event-agent)",
+				"def": 5.0, "min": 0.01, "max": 60.0 },
+
+			{ "type": "float", "name": "proxy_timeout_conscience",
+				"key": "proxy.outgoing.timeout.conscience",
+				"descr": "In a proxy, sets the global timeout for the RPC to the central cosnience service.",
+				"def": 2.0, "min": 0.01, "max": 60.0 },
+
+			{ "type": "float", "name": "proxy_timeout_common",
+				"key": "proxy.outgoing.timeout.common",
+				"descr": "In a proxy, sets the global timeout for all the other RPC issued (not conscience, not stats-related)",
+				"def": 30.0, "min": 0.01, "max": 60.0 }
 		]
 	},
 	"client": {

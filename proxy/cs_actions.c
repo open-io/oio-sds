@@ -17,10 +17,10 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <cluster/module/module.h>
+
 #include "common.h"
 #include "actions.h"
-
-#include <cluster/module/module.h>
 
 GError *
 conscience_remote_get_namespace (const char *cs, namespace_info_t **out)

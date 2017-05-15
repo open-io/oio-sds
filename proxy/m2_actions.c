@@ -19,7 +19,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <errno.h>
 
-#include <metautils/lib/metautils.h>
 #include <meta2v2/meta2_utils_json.h>
 #include <meta2v2/meta2_bean.h>
 #include <meta2v2/autogen.h>

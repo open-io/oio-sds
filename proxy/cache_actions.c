@@ -17,9 +17,10 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <sqliterepo/sqlx_macros.h>
+
 #include "common.h"
 #include "actions.h"
-#include <sqliterepo/sqlx_macros.h>
 
 enum http_rc_e
 action_forward_stats (struct req_args_s *args)

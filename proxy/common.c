@@ -16,6 +16,8 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <proxy/proxy_variables.h>
+
 #include "common.h"
 
 gint32 oio_proxy_request_failure_threshold_alone = 0;
