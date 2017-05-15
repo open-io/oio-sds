@@ -566,7 +566,7 @@ Used by `gcc`
  * default: **0**
  * type: gint64
  * cmake directive: *OIO__RESOLVER_CACHE_CSM0_TTL_DEFAULT*
- * range: 0 -> 4Mi
+ * range: 0 -> G_MAXINT64
 
 ### resolver.cache.srv.max.default
 
@@ -584,7 +584,7 @@ Used by `gcc`
  * default: **0**
  * type: gint64
  * cmake directive: *OIO__RESOLVER_CACHE_SRV_TTL_DEFAULT*
- * range: 0 -> 4Mi
+ * range: 0 -> G_MAXINT64
 
 ### server.batch.accept
 

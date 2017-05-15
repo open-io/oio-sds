@@ -270,7 +270,7 @@
 			{ "type": "monotonic", "name": "_cache_m0cs_default_ttl",
 				"key": "resolver.cache.csm0.ttl.default",
 				"descr": "In any service resolver instanciated, sets the default TTL on the entries related meta0 (meta1 addresses) and conscience (meta0 address)",
-				"def": 0, "min": 0, "max": "4Mi" },
+				"def": 0, "min": 0, "max": "max" },
 
 			{ "type": "uint", "name": "_cache_m0cs_default_max",
 				"key": "resolver.cache.csm0.max.default",
@@ -280,7 +280,7 @@
 			{ "type": "monotonic", "name": "_cache_srv_default_ttl",
 				"key": "resolver.cache.srv.ttl.default",
 				"descr": "In any service resolver instanciated, sets the default TTL on the meta1 entries (data-bound services)",
-				"def": 0, "min": 0, "max": "4Mi" },
+				"def": 0, "min": 0, "max": "max" },
 
 			{ "type": "uint", "name": "_cache_srv_default_max",
 				"key": "resolver.cache.srv.max.default",
