@@ -146,7 +146,7 @@ void oio_str_gstring_append_json_pair_int (GString *base,
 
 #define OIO_JSON_append_int(g,k,v) do { \
 	g_string_append_static(g, "\"" k "\":"); \
-	g_string_append_printf(g, "%"G_GINT64_FORMAT, (gint64)v); \
+	g_string_append_printf(g, "%" G_GINT64_FORMAT, (gint64)v); \
 } while (0)
 
 #define OIO_JSON_append_gstr(g,k,v) do { \
