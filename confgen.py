@@ -19,6 +19,7 @@
 import sys, json
 from itertools import chain
 
+
 def str2epoch(s):
     s = str(s).strip()
     if s.endswith('ms'):
@@ -33,22 +34,11 @@ def str2epoch(s):
         return str(86400 * int(s[:-1]))
     return s
 
-def str2monotonic(s):
-    s = str(s).strip()
-    if s.endswith('ms'):
-        return s[:-2] + ' * G_TIME_SPAN_MILLISECOND'
-    if s.endswith('s'):
-        return s[:-1] + ' * G_TIME_SPAN_SECOND'
-    if s.endswith('m'):
-        return s[:-1] + ' * G_TIME_SPAN_MINUTE'
-    if s.endswith('h'):
-        return s[:-1] + ' * G_TIME_SPAN_HOUR'
-    if s.endswith('d'):
-        return s[:-1] + ' * G_TIME_SPAN_DAY'
-    return s
 
 def str2size(s):
     s = str(s).strip()
+    if s == "max":
+        return 'G_MAXINT64'
     if s.endswith('ki'):
         return int(s[:-2]) * 1024
     if s.endswith('Mi'):
@@ -67,8 +57,27 @@ def str2size(s):
         return int(s[:-1]) * 1000 * 1000 * 1000 * 1000
     return eval(str(s))
 
+
+def str2monotonic(s):
+    s = str(s).strip()
+    if s == "max":
+        return 'G_MAXINT64'
+    if s.endswith('ms'):
+        return s[:-2] + ' * G_TIME_SPAN_MILLISECOND'
+    if s.endswith('s'):
+        return s[:-1] + ' * G_TIME_SPAN_SECOND'
+    if s.endswith('m'):
+        return s[:-1] + ' * G_TIME_SPAN_MINUTE'
+    if s.endswith('h'):
+        return s[:-1] + ' * G_TIME_SPAN_HOUR'
+    if s.endswith('d'):
+        return s[:-1] + ' * G_TIME_SPAN_DAY'
+    return eval(str(s))
+
+
 def name2key(name):
     return name.replace("_", ".")
+
 
 def key2macro(name):
     return "OIO__" + name.replace(".", "_").upper()
@@ -98,14 +107,14 @@ class Variable(object):
     def _gen_declaration(self, out):
         assert(False)
 
+    def _gen_registration(self, out):
+        assert(False)
+
     def _gen_header(self, out):
         out.write("\n#ifndef {0}\n# define {0} ({1})\n#endif\n\n".format(
                 self.macro, self.default))
         if self.declare:
             out.write('extern {0} {1};\n'.format(self.ctype, self.name))
-
-    def _gen_BUILD(self, out):
-        pass
 
 
 class Bool(Variable):
@@ -115,10 +124,11 @@ class Bool(Variable):
         self.default = str(bool(conf.get("def", False))).upper()
 
     def _gen_declaration(self, out):
-        out.write(('OIO_VAR_DEFINE_BOOL(\n\t{0}, {1},\n' +
-                '\t"{2}", "{3}");\n\n').format(
-                    self.name, self.macro,
-                    self.key, self.descr))
+        out.write('gboolean {0} = {1};\n'.format(self.name, self.macro))
+
+    def _gen_registration(self, out):
+        out.write('\toio_var_register_gboolean(&{0}, {1}, "{2}", "{3}");\n'.format(
+            self.name, self.macro, self.key, self.descr))
 
 
 class Number(Variable):
@@ -130,17 +140,20 @@ class Number(Variable):
         self.default = conf.get('def', 0)
 
     def _gen_declaration(self, out):
-        out.write(('OIO_VAR_DEFINE_CONFIG(\n\t{0}, {1}, {2},\n' +
-                '\t"{3}", "{4}",\n\t{5}, {6});\n\n').format(
-                    self.ctype, self.name, self.macro,
-                    self.key, self.descr,
-                    self.vmin, self.vmax))
+        out.write('{2} {0} = {1};\n'.format(
+            self.name, self.macro, self.ctype))
+
+    def _gen_registration(self, out):
+        out.write('\toio_var_register_{4}(&{0}, {1}, "{2}", "{3}", {5}, {6});\n'.format(
+            self.name, self.macro, self.key, self.descr,
+            self.ctype, self.vmin, self.vmax))
 
     def raw(self):
         out = super(Number, self).raw()
         out["vmin"] = self.vmin
         out["vmax"] = self.vmax
         return out
+
 
 class Monotonic(Number):
     def __init__(self, conf):
@@ -150,12 +163,6 @@ class Monotonic(Number):
         self.vmin = str2monotonic(self.vmin)
         self.vmax = str2monotonic(self.vmax)
 
-    def _gen_declaration(self, out):
-        out.write(('OIO_VAR_DEFINE_MONOTONIC_TIME(\n\t{0}, {1},\n' +
-                '\t"{2}", "{3}", {4}, {5});\n\n').format(
-                    self.name, self.macro, self.key, self.descr,
-                    self.vmin, self.vmax))
-
 
 class Epoch(Number):
     def __init__(self, conf):
@@ -164,12 +171,6 @@ class Epoch(Number):
         self.default = str2epoch(self.default)
         self.vmin = str2epoch(self.vmin)
         self.vmax = str2epoch(self.vmax)
-
-    def _gen_declaration(self, out):
-        out.write(('OIO_VAR_DEFINE_EPOCH(\n\t{0}, {1},\n' +
-                '\t"{2}", "{3}",\n\t{4}, {5});\n\n').format(
-                    self.name, self.macro, self.key, self.descr,
-                    self.vmin, self.vmax))
 
 
 class Float(Number):
@@ -248,13 +249,6 @@ def make_variable(cfg):
     return cls(cfg)
 
 
-def gen_code_and_headers(out, allvars):
-    for var in allvars:
-        var._gen_BUILD(out["doc"])
-        var._gen_header(out["hdr"])
-        var._gen_declaration(out["src"])
-
-
 def path2macro(p):
     from os import getcwd
     p = getcwd() + '_' + p
@@ -269,16 +263,25 @@ def start_headers(out, name):
     out.write('\n/* AUTO-GENERATED by confgen.py */\n')
 
 
-def start_code(out, header):
-    out.write('#include "{0}" /* AUTO-GENERATED by confgen.py */\n'.format(header))
-
-
 def end_headers(out, name):
     out.write("\n\n#endif /* {0} */\n".format(path2macro(name)))
 
 
-def end_code(out):
-    out.write("\n/* AUTO-GENERATED by confgen.py */\n\n")
+def start_declarations(out, header):
+    out.write('#include "{0}" /* AUTO-GENERATED by confgen.py */\n'.format(header))
+
+
+def end_declarations(_out):
+    pass
+
+
+def start_registration(out, header):
+    out.write("static void __attribute__ ((constructor))\n")
+    out.write("_declare_gboolean_{0} (void) {{\n".format(path2macro(header)))
+
+
+def end_registration(out):
+    out.write('}\n')
 
 
 def gen_markdown_single_var(out, var):
@@ -358,11 +361,22 @@ with open(path, "r") as fin:
                 "doc": sys.stdout
         }
 
+        variables = get_module_vars(descr)
+
         start_headers(out["hdr"], descr["header"])
-        start_code(out["src"], descr["header"])
-        gen_code_and_headers(out, get_module_vars(descr))
+        for var in variables:
+            var._gen_header(out["hdr"])
         end_headers(out["hdr"], descr["header"])
-        end_code(out["src"])
+
+        start_declarations(out["src"], descr["header"])
+        for var in variables:
+            var._gen_declaration(out["src"])
+        end_declarations(out["src"])
+
+        start_registration(out["src"], descr["header"])
+        for var in variables:
+            var._gen_registration(out["src"])
+        end_registration(out["src"])
 
         out["src"].close()
         out["hdr"].close()
