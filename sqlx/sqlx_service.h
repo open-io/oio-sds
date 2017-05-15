@@ -142,7 +142,6 @@ struct sqlx_service_s
 
 	guint cfg_max_passive;
 	guint cfg_max_active;
-	guint cfg_max_workers;
 
 	guint sync_mode_repli;
 	guint sync_mode_solo;

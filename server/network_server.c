@@ -1065,15 +1065,6 @@ retry:
 /* Server features ---------------------------------------------------------- */
 
 void
-network_server_set_max_workers(struct network_server_s *srv, guint max)
-{
-	EXTRA_ASSERT(srv != NULL);
-	if (!grid_main_is_running() || !srv->pool_tcp)
-		return;
-	g_thread_pool_set_max_threads (srv->pool_tcp, CLAMP(max, 1, G_MAXUINT16), NULL);
-}
-
-void
 network_server_set_maxcnx(struct network_server_s *srv, guint max)
 {
 	EXTRA_ASSERT(srv != NULL);

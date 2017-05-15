@@ -113,8 +113,6 @@ struct network_server_s * network_server_init(void);
 /* must be called PRIOR to network_server_open_servers */
 void network_server_allow_udp(struct network_server_s *srv);
 
-void network_server_set_max_workers(struct network_server_s *srv, guint max);
-
 void network_server_set_maxcnx(struct network_server_s *srv, guint max);
 
 typedef void (*network_transport_factory) (gpointer u,
