@@ -14,12 +14,30 @@ include_directories(AFTER
 link_directories(
 		${ZMQ_LIBRARY_DIRS})
 
+add_custom_command(
+	OUTPUT
+		${CMAKE_CURRENT_BINARY_DIR}/events_variables.c
+		${CMAKE_CURRENT_BINARY_DIR}/events_variables.h
+	DEPENDS
+		${CMAKE_SOURCE_DIR}/confgen.py
+		${CMAKE_SOURCE_DIR}/conf.json
+	PRE_BUILD
+	COMMENT
+		"Generating the central configuration"
+	COMMAND
+		${PYTHON_EXECUTABLE}
+	ARGS
+		${CMAKE_SOURCE_DIR}/confgen.py
+		"events"
+		${CMAKE_SOURCE_DIR}/conf.json)
+
 add_library(oioevents SHARED
 	oio_events_queue.c
 	oio_events_queue_buffer.c
 	oio_events_queue_internals.c
 	oio_events_queue_zmq.c
-	oio_events_queue_beanstalkd.c)
+	oio_events_queue_beanstalkd.c
+	${CMAKE_CURRENT_BINARY_DIR}/events_variables.c)
 
 set_target_properties(oioevents PROPERTIES SOVERSION ${ABI_VERSION})
 target_link_libraries(oioevents metautils ${GLIB2_LIBRARIES} ${ZMQ_LIBRARIES})

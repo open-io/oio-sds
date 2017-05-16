@@ -25,7 +25,9 @@ License along with this library.
 #include <zookeeper_log.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/server_variables.h>
+#include <metautils/lib/common_variables.h>
+#include <sqliterepo/sqliterepo_variables.h>
+#include <sqliterepo/sqliterepo_remote_variables.h>
 
 #include "version.h"
 #include "synchro.h"

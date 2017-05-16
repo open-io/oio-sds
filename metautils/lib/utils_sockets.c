@@ -28,7 +28,7 @@ License along with this library.
 #include "metautils.h"
 #include "metautils_syscall.h"
 
-#include <metautils/lib/server_variables.h>
+#include <metautils/lib/common_variables.h>
 
 static gint
 errno_to_errcode(int e)

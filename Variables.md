@@ -138,13 +138,21 @@ Used by `gcc`
  * cmake directive: *OIO__CORE_PERIOD_REFRESH_MAJOR_MINOR*
  * range: 100 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
-### core.resolver.noshuffle
+### core.resolver.dir_shuffle
 
-> In the current oo-sds client SDK, should the directory service be shuffled before accessed. This helps ensuring
+> TODO: to be documented
 
- * default: **FALSE**
+ * default: **TRUE**
  * type: gboolean
- * cmake directive: *OIO__CORE_RESOLVER_NOSHUFFLE*
+ * cmake directive: *OIO__CORE_RESOLVER_DIR_SHUFFLE*
+
+### core.resolver.srv_shuffle
+
+> TODO: to be documented
+
+ * default: **TRUE**
+ * type: gboolean
+ * cmake directive: *OIO__CORE_RESOLVER_SRV_SHUFFLE*
 
 ### core.sds.autocreate
 
@@ -376,6 +384,14 @@ Used by `gcc`
  * cmake directive: *OIO__PROXY_CACHE_SERVICES_TTL*
  * range: 0 -> 7 * G_TIME_SPAN_DAY
 
+### proxy.dir_shuffle
+
+> Should the proxy shuffle the meta1 addresses before contacting them, thus trying to perform a better fanout of the requests.
+
+ * default: **TRUE**
+ * type: gboolean
+ * cmake directive: *OIO__PROXY_DIR_SHUFFLE*
+
 ### proxy.force.master
 
 > In a proxy, should the process ask the target service (with the help of an option in each RPC) to accept the RPC only if it is MASTER on that DB.
@@ -496,6 +512,14 @@ Used by `gcc`
  * default: **FALSE**
  * type: gboolean
  * cmake directive: *OIO__PROXY_QUIRK_LOCAL_SCORES*
+
+### proxy.srv_shuffle
+
+> Should the proxy shuffle the meta2 addresses before the query, to do a better load-balancing of the requests.
+
+ * default: **TRUE**
+ * type: gboolean
+ * cmake directive: *OIO__PROXY_SRV_SHUFFLE*
 
 ### proxy.ttl.services.down
 

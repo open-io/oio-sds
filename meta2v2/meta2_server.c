@@ -23,7 +23,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/server_variables.h>
+#include <metautils/lib/common_variables.h>
+#include <server/server_variables.h>
 
 #include <cluster/lib/gridcluster.h>
 #include <server/network_server.h>

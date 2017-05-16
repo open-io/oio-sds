@@ -24,7 +24,8 @@ License along with this library.
 #include <malloc.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/server_variables.h>
+#include <metautils/lib/common_variables.h>
+#include <server/server_variables.h>
 #include <core/internals.h>
 
 #include "network_server.h"

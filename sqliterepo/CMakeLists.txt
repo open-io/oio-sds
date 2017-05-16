@@ -16,6 +16,40 @@ link_directories(
 		${ZK_LIBRARY_DIRS}
 		${SQLITE3_LIBRARY_DIRS})
 
+add_custom_command(
+	OUTPUT
+		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_remote_variables.c
+		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_remote_variables.h
+	DEPENDS
+		${CMAKE_SOURCE_DIR}/confgen.py
+		${CMAKE_SOURCE_DIR}/conf.json
+	PRE_BUILD
+	COMMENT
+		"Generating the central configuration (sqliterepo_remote)"
+	COMMAND
+		${PYTHON_EXECUTABLE}
+	ARGS
+		${CMAKE_SOURCE_DIR}/confgen.py
+		"sqliterepo_remote"
+		${CMAKE_SOURCE_DIR}/conf.json)
+
+add_custom_command(
+	OUTPUT
+		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_variables.c
+		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_variables.h
+	DEPENDS
+		${CMAKE_SOURCE_DIR}/confgen.py
+		${CMAKE_SOURCE_DIR}/conf.json
+	PRE_BUILD
+	COMMENT
+		"Generating the central configuration"
+	COMMAND
+		${PYTHON_EXECUTABLE}
+	ARGS
+		${CMAKE_SOURCE_DIR}/confgen.py
+		"sqliterepo"
+		${CMAKE_SOURCE_DIR}/conf.json)
+
 
 add_library(sqliteutils SHARED rc.c sqlite_utils.c)
 
@@ -26,7 +60,9 @@ target_link_libraries(sqliteutils metautils
 add_library(sqlitereporemote SHARED
 		sqlx_remote.c
 		sqlx_remote_ex.c
-		replication_client.c)
+		replication_client.c
+		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_remote_variables.c
+		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_remote_variables.h)
 
 set_target_properties(sqlitereporemote PROPERTIES SOVERSION ${ABI_VERSION})
 target_link_libraries(sqlitereporemote metautils
@@ -44,7 +80,9 @@ add_library(sqliterepo SHARED
 		repository.c
 		restoration.c
 		zk_manager.c
-		upgrade.c)
+		upgrade.c
+		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_variables.c
+		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_variables.h)
 
 set_target_properties(sqliterepo PROPERTIES SOVERSION ${ABI_VERSION})
 target_link_libraries(sqliterepo metautils

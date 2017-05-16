@@ -51,7 +51,7 @@ static GError * _m1_action (struct oio_url_s *url, gchar ** m1v,
 		}
 		gsize len = oio_ext_array_partition ((void**)m1v,
 				g_strv_length (m1v), _wrap);
-		if (len > 0 && !oio_dir_no_shuffle)
+		if (len > 1 && oio_proxy_dir_shuffle)
 			oio_ext_array_shuffle ((void**)m1v, len);
 	}
 

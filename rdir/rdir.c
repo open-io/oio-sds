@@ -26,8 +26,8 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <core/oiostr.h>
 #include <core/url_ext.h>
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/server_variables.h>
 #include <server/network_server.h>
+#include <server/server_variables.h>
 #include <proxy/transport_http.h>
 
 #include "routes.h"

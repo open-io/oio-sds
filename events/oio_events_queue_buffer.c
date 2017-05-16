@@ -17,7 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include <core/oio_core.h>
-#include <metautils/lib/server_variables.h>
+#include <events/events_variables.h>
 #include "oio_events_queue_buffer.h"
 
 

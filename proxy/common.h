@@ -35,11 +35,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <core/client_variables.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/server_variables.h>
+#include <metautils/lib/common_variables.h>
 #include <proxy/proxy_variables.h>
 
 #include <cluster/lib/gridcluster.h>
 #include <server/network_server.h>
+#include <server/server_variables.h>
 #include <resolver/hc_resolver.h>
 #include <meta1v2/meta1_remote.h>
 #include <meta2v2/meta2_macros.h>
