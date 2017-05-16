@@ -61,7 +61,12 @@ union oio_var_default_u {
 };
 
 struct oio_var_record_s {
-	enum oio_var_type_e type;
+	/* which C-type is it ? */
+	enum oio_var_type_e type : 16;
+
+	/* what physical reality is it? */
+	enum oio_var_kind_e kind : 16;
+
 	const char *name;
 	const char *description;
 	/* actual pointer to the variable */
@@ -98,11 +103,12 @@ _register_record(const struct oio_var_record_s *rec)
 
 #define DEFINE_REGISTRATION_FUNC(Type,Field) \
 void oio_var_register_##Type( \
-		Type *p, Type def, \
-		const char *n, const char *d, \
-		Type min, Type max) { \
+		Type *p, \
+		enum oio_var_kind_e kind, const char *n, const char *d, \
+		Type def, Type min, Type max) { \
 	struct oio_var_record_s rec = {0}; \
 	rec.type = OIO_VARTYPE_##Type; \
+	rec.kind = kind; \
 	rec.name = n; \
 	rec.description = d; \
 	rec.ptr.Field = p; \
@@ -114,9 +120,12 @@ void oio_var_register_##Type( \
 }
 
 void
-oio_var_register_gboolean(gboolean *p, gboolean def, const char *n, const char *d)
+oio_var_register_gboolean(gboolean *p,
+		const char *n, const char *d,
+		gboolean def)
 {
 	struct oio_var_record_s rec = {0};
+	rec.kind = OIO_VARKIND_size;
 	rec.type = OIO_VARTYPE_gboolean;
 	rec.name = n;
 	rec.description = d;
@@ -170,10 +179,88 @@ _record_set(struct oio_var_record_s *rec, union oio_var_default_u v)
 	g_assert_not_reached();
 }
 
+#define Kilo 1000LL
+#define Mega 1000LL * Kilo
+#define Giga 1000LL * Mega
+#define Tera 1000LL * Giga
+#define Peta 1000LL * Tera
+
+#define Kibi 1024LL
+#define Mibi 1024LL * Kibi
+#define Gibi 1024LL * Mibi
+#define Tibi 1024LL * Gibi
+#define Pibi 1024LL * Tibi
+
+static gint64
+_size_modifier (const char *unit)
+{
+	static struct _conversion_s {
+		const char unit[4];
+		const gint64 value;
+	} units[] = {
+		{"k", Kilo},
+		{"M", Mega},
+		{"G", Giga},
+		{"T", Tera},
+		{"P", Peta},
+		{"ki", Kibi},
+		{"Mi", Mibi},
+		{"Gi", Gibi},
+		{"Ti", Tibi},
+		{"Pi", Pibi},
+		{"", 0},
+	};
+	if (!oio_str_is_set(unit))
+		return 1;
+	for (struct _conversion_s *pu=units; pu->unit[0] ;++pu) {
+		if (!strcmp(pu->unit, unit))
+			return pu->value;
+	}
+	return 0;
+}
+
+static gint64
+_time_modifier(const char *unit)
+{
+	static struct _conversion_s {
+		const char unit[4];
+		const gint64 value;
+	} units[] = {
+		{"ms", G_TIME_SPAN_MILLISECOND},
+		{"s", G_TIME_SPAN_SECOND},
+		{"h", G_TIME_SPAN_HOUR},
+		{"d", G_TIME_SPAN_DAY},
+		{"w", 7 * G_TIME_SPAN_DAY},
+		{"M", 28 * G_TIME_SPAN_DAY},
+		{"", 0},
+	};
+	if (!oio_str_is_set(unit))
+		return 1;
+	for (struct _conversion_s *pu=units; pu->unit[0] ;++pu) {
+		if (!strcmp(pu->unit, unit))
+			return pu->value;
+	}
+	return 0;
+}
+
+static gint64
+_unit(struct oio_var_record_s *rec, const char *end)
+{
+	switch (rec->kind) {
+		case OIO_VARKIND_time:
+			return _time_modifier(end);
+		case OIO_VARKIND_size:
+			return _size_modifier(end);
+		default:
+			g_assert_not_reached();
+			return 0;
+	}
+}
+
 static void
 _record_set_to_value(struct oio_var_record_s *rec, const char *value)
 {
-	gint64 i64;
+	gint64 i64, unit;
 	guint64 u64;
 	gchar *end = NULL;
 	union oio_var_default_u v = rec->def;
@@ -182,41 +269,60 @@ _record_set_to_value(struct oio_var_record_s *rec, const char *value)
 		case OIO_VARTYPE_gboolean:
 			v.b = oio_str_parse_bool(value, rec->def.b);
 			break;
+
 		case OIO_VARTYPE_guint:
 			u64 = g_ascii_strtoull(value, &end, 10);
-			if (!end || !*end)
+			unit = _unit(rec, end);
+			if (unit > 0) {
+				u64 *= unit;
 				v.u = MIN(u64, G_MAXUINT);
+			}
+
 			break;
 		case OIO_VARTYPE_guint32:
 			u64 = g_ascii_strtoull(value, &end, 10);
-			if (!end || !*end)
+			unit = _unit(rec, end);
+			if (unit > 0) {
+				u64 *= unit;
 				v.u32 = MIN(u64, G_MAXUINT32);
+			}
 			break;
 		case OIO_VARTYPE_guint64:
 			u64 = g_ascii_strtoull(value, &end, 10);
-			if (!end || !*end)
-				v.u64 = u64;
+			unit = _unit(rec, end);
+			if (unit > 0)
+				v.u64 = u64 * unit;
 			break;
+
 		case OIO_VARTYPE_gint:
 			i64 = g_ascii_strtoll(value, &end, 10);
-			if (!end || !*end)
+			unit = _unit(rec, end);
+			if (unit > 0) {
+				i64 *= unit;
 				v.i = CLAMP(i64, G_MININT, G_MAXINT);
+			}
 			break;
 		case OIO_VARTYPE_gint32:
 			i64 = g_ascii_strtoll(value, &end, 10);
-			if (!end || !*end)
+			unit = _unit(rec, end);
+			if (unit > 0) {
+				i64 *= unit;
 				v.i32 = CLAMP(i64, G_MININT32, G_MAXINT32);
+			}
 			break;
 		case OIO_VARTYPE_gint64:
 			i64 = g_ascii_strtoll(value, &end, 10);
-			if (!end || !*end)
-				v.i64 = i64;
+			unit = _unit(rec, end);
+			if (unit > 0)
+				v.i64 = i64 * unit;
 			break;
+
 		case OIO_VARTYPE_gdouble:
 			v.d = g_ascii_strtod(value, NULL);
 			break;
 		case OIO_VARTYPE_time_t:
 			u64 = g_ascii_strtoull(value, &end, 10);
+			unit = _unit(rec, end);
 			if (!end || !*end)
 				v.t = u64;
 			break;

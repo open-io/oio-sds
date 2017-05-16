@@ -88,6 +88,7 @@ class Variable(object):
         self.name = cfg["name"]
         self.key = cfg.get("key", name2key(self.name))
         self.macro = cfg.get("macro", key2macro(self.key))
+        self.kind = None
         self.ctype = None
         self.descr = cfg.get("descr", "")
         if not self.descr:
@@ -120,6 +121,7 @@ class Variable(object):
 class Bool(Variable):
     def __init__(self, conf):
         super(Bool, self).__init__(conf)
+        self.kind = "OIO_VARKIND_size"  # dumb, but just working
         self.ctype = "gboolean"
         self.default = str(bool(conf.get("def", False))).upper()
 
@@ -127,7 +129,7 @@ class Bool(Variable):
         out.write('gboolean {0} = {1};\n'.format(self.name, self.macro))
 
     def _gen_registration(self, out):
-        out.write('\toio_var_register_gboolean(&{0}, {1}, "{2}", "{3}");\n'.format(
+        out.write('\toio_var_register_gboolean(&{0}, "{2}", "{3}", {1});\n'.format(
             self.name, self.macro, self.key, self.descr))
 
 
@@ -144,9 +146,16 @@ class Number(Variable):
             self.name, self.macro, self.ctype))
 
     def _gen_registration(self, out):
-        out.write('\toio_var_register_{4}(&{0}, {1}, "{2}", "{3}", {5}, {6});\n'.format(
-            self.name, self.macro, self.key, self.descr,
-            self.ctype, self.vmin, self.vmax))
+        out.write('\toio_var_register_{ctype}(&{name}, {kind}, "{key}", '
+                '"{descr}", {def}, {min}, {max});\n'.format(**{
+            "name": self.name,
+            "kind": self.kind,
+            "ctype": self.ctype,
+            "key": self.key,
+            "descr": self.descr,
+            "def": self.macro,
+            "min": self.vmin,
+            "max": self.vmax}))
 
     def raw(self):
         out = super(Number, self).raw()
@@ -158,6 +167,7 @@ class Number(Variable):
 class Monotonic(Number):
     def __init__(self, conf):
         super(Monotonic, self).__init__(conf)
+        self.kind = 'OIO_VARKIND_time'
         self.ctype = "gint64"
         self.default = str2monotonic(self.default)
         self.vmin = str2monotonic(self.vmin)
@@ -167,6 +177,7 @@ class Monotonic(Number):
 class Epoch(Number):
     def __init__(self, conf):
         super(Epoch, self).__init__(conf)
+        self.kind = 'OIO_VARKIND_time'
         self.ctype = "gint64"
         self.default = str2epoch(self.default)
         self.vmin = str2epoch(self.vmin)
@@ -177,6 +188,7 @@ class Float(Number):
     def __init__(self, conf):
         super(Float, self).__init__(conf)
         self.ctype = 'gdouble'
+        self.kind = 'OIO_VARKIND_time'
         self.default = float(self.default)
         self.vmin = float(self.vmin)
         self.vmax = float(self.vmax)
@@ -185,6 +197,7 @@ class Float(Number):
 class Size(Number):
     def __init__(self, conf, ctype):
         super(Size, self).__init__(conf)
+        self.kind = 'OIO_VARKIND_size'
         self.ctype = ctype
         self.default = str2size(self.default)
         self.vmin = str2size(self.vmin)

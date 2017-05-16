@@ -22,40 +22,46 @@ License along with this library.
 
 struct oio_cfg_handle_s;
 
-void oio_var_register_gboolean(gboolean *p, gboolean def,
-		const char *n, const char *descr);
+enum oio_var_kind_e {
+	OIO_VARKIND_time,
+	OIO_VARKIND_size,
+};
 
-void oio_var_register_guint(guint *p, guint def,
+void oio_var_register_gboolean(gboolean *p,
 		const char *n, const char *descr,
-		guint min, guint max);
+		gboolean def);
 
-void oio_var_register_guint32(guint32 *p, guint32 def,
-		const char *n, const char *descr,
-		guint32 min, guint32 max);
+void oio_var_register_guint(guint *p,
+		enum oio_var_kind_e kind, const char *n, const char *descr,
+		guint def, guint min, guint max);
 
-void oio_var_register_guint64(guint64 *p, guint64 def,
-		const char *n, const char *descr,
-		guint64 min, guint64 max);
+void oio_var_register_guint32(guint32 *p,
+		enum oio_var_kind_e kind, const char *n, const char *descr,
+		guint32 def, guint32 min, guint32 max);
 
-void oio_var_register_gint(gint *p, gint def,
-		const char *n, const char *descr,
-		gint min, gint max);
+void oio_var_register_guint64(guint64 *p,
+		enum oio_var_kind_e kind, const char *n, const char *descr,
+		guint64 def, guint64 min, guint64 max);
 
-void oio_var_register_gint32(gint32 *p, gint32 def,
-		const char *n, const char *descr,
-		gint32 min, gint32 max);
+void oio_var_register_gint(gint *p,
+		enum oio_var_kind_e kind, const char *n, const char *descr,
+		gint def, gint min, gint max);
 
-void oio_var_register_gint64(gint64 *p, gint64 def,
-		const char *n, const char *descr,
-		gint64 min, gint64 max);
+void oio_var_register_gint32(gint32 *p,
+		enum oio_var_kind_e kind, const char *n, const char *descr,
+		gint32 def, gint32 min, gint32 max);
 
-void oio_var_register_gdouble(gdouble *p, gdouble def,
-		const char *n, const char *descr,
-		gdouble min, gdouble max);
+void oio_var_register_gint64(gint64 *p,
+		enum oio_var_kind_e kind, const char *n, const char *descr,
+		gint64 def, gint64 min, gint64 max);
 
-void oio_var_register_time_t(time_t *p, time_t def,
-		const char *n, const char *descr,
-		time_t min, time_t max);
+void oio_var_register_gdouble(gdouble *p,
+		enum oio_var_kind_e kind, const char *n, const char *descr,
+		gdouble def, gdouble min, gdouble max);
+
+void oio_var_register_time_t(time_t *p,
+		enum oio_var_kind_e kind, const char *n, const char *descr,
+		time_t def, time_t min, time_t max);
 
 /**
  * Try to feed all the registered configuration variables with the content
