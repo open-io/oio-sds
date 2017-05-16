@@ -523,26 +523,6 @@
 				"descr": "In a proxy, sets the period between two sendings of services states to the conscience.",
 				"def": "1s", "min": "1s", "max": "1m" },
 
-			{ "type": "monotonic", "name": "dir_low_ttl",
-				"key": "proxy.cache.services.ttl",
-				"descr": "In a proxy, sets how long the resolver keeps service entries",
-				"def": "1h", "min": 0, "max": "7d" },
-
-			{ "type": "uint", "name": "dir_low_max",
-				"key": "proxy.cache.services.max",
-				"descr": "In a proxy, sets how many service entries the resolver might keep.",
-				"def": "1Mi", "min": 0, "max": "4Mi" },
-
-			{ "type": "monotonic", "name": "dir_high_ttl",
-				"key": "proxy.cache.directory.ttl",
-				"descr": "In a proxy, sets how long the resolver keeps directory entries",
-				"def": 0, "min": 0, "max": "7d" },
-
-			{ "type": "uint", "name": "dir_high_max",
-				"key": "proxy.cache.directory.max",
-				"descr": "In a proxy, sets how many directory entries the resolver may keep",
-				"def": "1Mi", "min": 0, "max": "4Mi" },
-
 			{ "type": "uint", "name": "proxy_bulk_max_create_many",
 				"key": "proxy.bulk.max.create_many",
 				"descr": "In a proxy, sets how many containers can be created at once.",
