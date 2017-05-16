@@ -1,15 +1,22 @@
 add_definitions(-DG_LOG_DOMAIN="oio.tools")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
-include_directories(BEFORE ..)
+include_directories(BEFORE
+	${CMAKE_SOURCE_DIR}
+	${CMAKE_BINARY_DIR})
 
 add_executable(echo-server oio-echo-server.c)
 bin_prefix(echo-server "-echo-server")
 target_link_libraries(echo-server metautils server gridcluster ${GLIB2_LIBRARIES})
 
 add_executable(oio-tool oio-tool.c)
+
 bin_prefix(oio-tool -tool)
-target_link_libraries(oio-tool metautils ${GLIB2_LIBRARIES})
+target_link_libraries(oio-tool
+	oiocore metautils
+	server hcresolve oioevents
+	sqliterepo sqlitereporemote
+	${GLIB2_LIBRARIES})
 
 
 set(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/.timestamp")

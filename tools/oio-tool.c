@@ -200,6 +200,35 @@ _info(const char *dest)
 	if (out) g_byte_array_free(out, TRUE);
 }
 
+static int
+_config(const char *ns, gboolean raw, int nbfiles, char **pfiles)
+{
+	GSList *files = NULL;
+	for (int i=0; i<nbfiles; i++)
+		files = g_slist_append(files, pfiles[i]);
+	const gboolean known = oio_var_value_with_files(ns, TRUE, files);
+	g_slist_free(files);
+
+	if (!known) {
+		g_printerr("Unknown namespace: [%s]\n", ns);
+		return 1;
+	}
+
+	if (raw) {
+		void _on_var(const char *k, const char *v) {
+			g_print("%s=%s\n", k, v);
+		}
+		oio_var_list_all(_on_var);
+	} else {
+		GString *out = oio_var_list_as_json();
+		g_print("%s", out->str);
+		g_string_free(out, TRUE);
+	}
+
+	return 0;
+}
+
+
 static void
 _print_loc(const char *dotted_loc)
 {
@@ -211,6 +240,9 @@ static void
 _print_usage(const char *name)
 {
 	g_printerr ("Usage:\n");
+	g_printerr ("\nDump a view of all the variables known in the central "
+			"configurationn\n");
+	g_printerr (" %s config NS [--raw] PATH...\n", name);
 	g_printerr ("\nPrint hex representation of the address\n");
 	g_printerr (" %s addr IP:PORT\n", name);
 	g_printerr ("\nPrint hex representation of container ID\n");
@@ -237,7 +269,15 @@ main (int argc, char **argv)
 	}
 	oio_ext_set_random_reqid ();
 
-	if (!strcmp("addr", argv[1])) {
+	if (!strcmp("config", argv[1])) {
+		gboolean raw = FALSE;
+		int idx_files = 3;
+		if (argc > idx_files && !strcmp("--raw", argv[idx_files])) {
+			idx_files ++;
+			raw = TRUE;
+		}
+		return _config(argv[2], raw, argc - idx_files, argv + idx_files);
+	} else if (!strcmp("addr", argv[1])) {
 		for (int i=2; i<argc ;++i)
 			_dump_addr (argv[i]);
 		return 0;
