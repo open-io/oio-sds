@@ -23,6 +23,7 @@ License along with this library.
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
 #include <metautils/lib/codec.h>
+#include <sqliterepo/sqliterepo_remote_variables.h>
 
 #include "sqliterepo.h"
 #include "sqlx_macros.h"

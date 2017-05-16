@@ -1,16 +1,83 @@
 {
-	"server": {
-		"code": "server_variables.c",
-		"header": "server_variables.h",
+	"events": {
+		"code": "events_variables.c",
+		"header": "events_variables.h",
 		"variables": [
-			{ "type": "bool", "name": "oio_rawx_events",
-				"key": "rawx.events_allowed",
-				"def": true,
-				"descr": "" },
-			{ "type": "bool", "name": "oio_udp_allowed",
-				"key": "udp_allowed",
-				"def": false,
-				"descr": "" },
+			{ "type": "monotonic", "name": "oio_events_common_buffer_delay",
+				"key": "events.common.pending.delay",
+				"def": "5s", "min": "1ms", "max": "1h",
+				"descr": "Sets the buffering delay of the events emitted by the application" },
+
+			{ "type": "uint32", "name": "oio_events_common_max_pending",
+				"key": "events.common.pending.max",
+				"descr": "Sets the maximum number of pending events, not received yet by the endpoint",
+				"def": "1000", "min": 1, "max": "1Mi" },
+
+			{ "type": "uint", "name": "oio_events_zmq_max_recv",
+				"key": "events.zmq.max_recv",
+				"descr": "Sets the maximum number of ACK managed by the ZMQ notification client",
+				"def": "32", "min": 1, "max": "1<<31 - 1" },
+
+			{ "type": "uint", "name": "oio_events_beanstalkd_default_prio",
+				"key": "events.beanstalkd.prio",
+				"descr": "Sets the priority of each notification sent to the BEANSTALK endpoint",
+				"def": "1 << 32 - 1", "min": 0, "max": "1 << 32 - 1" },
+
+			{ "type": "epoch", "name": "oio_events_beanstalkd_default_delay",
+				"key": "events.beanstalkd.delay",
+				"descr": "Sets the delay on each notification sent to the BEANSTALK endpoint",
+				"def": 0, "min": 0, "max": "1d" },
+
+			{ "type": "epoch", "name": "oio_events_beanstalkd_default_ttr",
+				"key": "events.beanstalkd.ttr",
+				"descr": "Sets the TTR (time to run) allow on the treatment of the notificatio sent to the beanstalkd",
+				"def": 120, "min": 0, "max": 86400 }
+		]
+	},
+	"resolver": {
+		"code": "resolver_variables.c",
+		"header": "resolver_variables.h",
+		"variables": [
+			{ "type": "bool", "name": "oio_resolver_srv_shuffle",
+				"key": "core.resolver.srv_shuffle",
+				"descr": "",
+				"def": true },
+
+			{ "type": "bool", "name": "oio_resolver_dir_shuffle",
+				"key": "core.resolver.dir_shuffle",
+				"descr": "",
+				"def": true },
+
+			{ "type": "monotonic", "name": "_cache_m0cs_default_ttl",
+				"key": "resolver.cache.csm0.ttl.default",
+				"descr": "In any service resolver instanciated, sets the default TTL on the entries related meta0 (meta1 addresses) and conscience (meta0 address)",
+				"def": 0, "min": 0, "max": "max" },
+
+			{ "type": "uint", "name": "_cache_m0cs_default_max",
+				"key": "resolver.cache.csm0.max.default",
+				"descr": "In any service resolver instanciated, sets the maximum number of entries related to meta0 (meta1 addresses) and conscience (meta0 address)",
+				"def": 0, "min": 0, "max": "4Mi" },
+
+			{ "type": "monotonic", "name": "_cache_srv_default_ttl",
+				"key": "resolver.cache.srv.ttl.default",
+				"descr": "In any service resolver instanciated, sets the default TTL on the meta1 entries (data-bound services)",
+				"def": 0, "min": 0, "max": "max" },
+
+			{ "type": "uint", "name": "_cache_srv_default_max",
+				"key": "resolver.cache.srv.max.default",
+				"descr": "In any service resolver instanciated, sets the maximum number of meta1 entries (data-bound services)",
+				"def": 0, "min": 0, "max": "1Mi" }
+		]
+	},
+	"metautils": {
+		"code": "common_variables.c",
+		"header": "common_variables.h",
+		"variables": [
+			{ "type": "float", "name": "oio_m0_client_timeout_common",
+				"key": "meta0.outgoing.timeout.common.req",
+				"descr": "Sets the timeout to the set of (quick) RPC that query a meta0 service",
+				"def": 10.0, "min": 0.01, "max": 60.0 },
+
 			{ "type": "bool", "name": "oio_log_outgoing",
 				"key": "server.log_outgoing",
 				"def": false,
@@ -75,168 +142,58 @@
 			{ "type": "float", "name": "oio_client_timeout_connect",
 				"key": "gridd.timeout.connect.common",
 				"def": 2.0, "min": 0.01, "max": 120.0,
-				"descr": "Sets the connection timeout, involved in any RPC to a 'meta' service." },
+				"descr": "Sets the connection timeout, involved in any RPC to a 'meta' service." }
+		]
+	},
+	"sqliterepo_remote": {
+		"code": "sqliterepo_remote_variables.c",
+		"header": "sqliterepo_remote_variables.h",
+		"variables": [
+			{ "type": "float", "name": "oio_election_use_timeout_cnx",
+				"key": "sqliterepo.outgoing.timeout.cnx.use",
+				"descr": "Sets the connection timeout when ping'ing a peer database. Keep it small. Only used when UDP is disabled.",
+				"def": 0.25, "min": 0.01, "max": 30.0 },
 
-			{ "type": "monotonic", "name": "oio_events_common_buffer_delay",
-				"key": "events.common.pending.delay",
-				"def": "5s", "min": "1ms", "max": "1h",
-				"descr": "Sets the buffering delay of the events emitted by the application" },
+			{ "type": "float", "name": "oio_election_use_timeout_req",
+				"key": "sqliterepo.outgoing.timeout.req.use",
+				"descr": "Sets the global timeout when ping'ing a peer database. Keep it small.",
+				"def": 1.0, "min": 0.01, "max": 30.0 },
 
-			{ "type": "uint32", "name": "oio_events_common_max_pending",
-				"key": "events.common.pending.max",
-				"descr": "Sets the maximum number of pending events, not received yet by the endpoint",
-				"def": "1000", "min": 1, "max": "1Mi" },
+			{ "type": "float", "name": "oio_election_getvers_timeout_cnx",
+				"key": "sqliterepo.outgoing.timeout.cnx.getvers",
+				"descr": "Sets the connection timeout when exchanging versions between databases replicas.",
+				"def": 0.5, "min": 0.01, "max": 30.0 },
 
-			{ "type": "uint", "name": "oio_events_zmq_max_recv",
-				"key": "events.zmq.max_recv",
-				"descr": "Sets the maximum number of ACK managed by the ZMQ notification client",
-				"def": "32", "min": 1, "max": "1<<31 - 1" },
+			{ "type": "float", "name": "oio_election_getvers_timeout_req",
+				"key": "sqliterepo.outgoing.timeout.req.getvers",
+				"descr": "Sets the global timeout when performing a version exchange RPC. Keep it rather small, to let election quickly fail on network troubles. Only used when UDP is disabled.",
+				"def": 2.0, "min": 0.01, "max": 30.0 },
 
-			{ "type": "uint", "name": "oio_events_beanstalkd_default_prio",
-				"key": "events.beanstalkd.prio",
-				"descr": "Sets the priority of each notification sent to the BEANSTALK endpoint",
-				"def": "1 << 32 - 1", "min": 0, "max": "1 << 32 - 1" },
+			{ "type": "float", "name": "oio_election_replicate_timeout_cnx",
+				"key": "sqliterepo.outgoing.timeout.cnx.replicate",
+				"descr": "Sets the connection timeout sending a replication request.",
+				"def": 1.0, "min": 0.01, "max": 30.0 },
 
-			{ "type": "epoch", "name": "oio_events_beanstalkd_default_delay",
-				"key": "events.beanstalkd.delay",
-				"descr": "Sets the delay on each notification sent to the BEANSTALK endpoint",
-				"def": 0, "min": 0, "max": "1d" },
+			{ "type": "float", "name": "oio_election_replicate_timeout_req",
+				"key": "sqliterepo.outgoing.timeout.req.replicate",
+				"descr": "Sets the global timeout when sending a replication RPC, from the current MASTER to a SLAVE",
+				"def": 10.0, "min": 0.01, "max": 30.0 },
 
-			{ "type": "epoch", "name": "oio_events_beanstalkd_default_ttr",
-				"key": "events.beanstalkd.ttr",
-				"descr": "Sets the TTR (time to run) allow on the treatment of the notificatio sent to the beanstalkd",
-				"def": 120, "min": 0, "max": 86400 },
+			{ "type": "float", "name": "oio_election_resync_timeout_cnx",
+				"key": "sqliterepo.outgoing.timeout.cnx.resync",
+				"descr": "Set the connection timeout during RPC to ask for a SLAVE database to be resync on its MASTER",
+				"def": 1.0, "min": 0.01, "max": 30.0 },
 
-			{ "type": "float", "name": "oio_m0_client_timeout_common",
-				"key": "meta0.outgoing.timeout.common.req",
-				"descr": "Sets the timeout to the set of (quick) RPC that query a meta0 service",
-				"def": 10.0, "min": 0.01, "max": 60.0 },
-
-			{ "type": "epoch", "name": "oio_sqlx_lb_refresh_period",
-				"key": "sqlx.lb.refresh_period",
-				"descr": "In the current sqlx-based service, tells the period (in seconds) at which the service will refresh its load-balancing information.",
-				"def": "1", "min": 1, "max": "60s" },
-
-			{ "type": "uint", "name": "meta2_batch_maxlen",
-				"key": "meta2.batch.maxlen",
-				"descr": "When listing a container, limits the number of items to that value.",
-				"def": "1k", "min": 1, "max": "100k" },
-
-			{ "type": "epoch", "name": "meta2_reload_lb_period",
-				"key": "meta2.reload.lb.period",
-				"descr": "Sets the period of the periodical reloading of the Load-balancing state, in the current meta2 service.",
-				"def": "10s", "min": "1s", "max": "1h" },
-
-			{ "type": "epoch", "name": "meta2_reload_nsinfo_period",
-				"key": "meta2.reload.nsinfo.period",
-				"descr": "Sets the period of the periodical reloading of the namespace configuration, in the current meta2 service.",
-				"def": "5s", "min": "1s", "max": "1h" },
-
-			{ "type": "bool", "name": "meta2_flag_precheck_on_generate",
-				"key": "meta2.generate.precheck",
-				"descr": "Should the meta2 check the container state (quota, etc) before generating chunks.",
-				"def": true },
-
-			{ "type": "monotonic", "name": "_cache_m0cs_default_ttl",
-				"key": "resolver.cache.csm0.ttl.default",
-				"descr": "In any service resolver instanciated, sets the default TTL on the entries related meta0 (meta1 addresses) and conscience (meta0 address)",
-				"def": 0, "min": 0, "max": "max" },
-
-			{ "type": "uint", "name": "_cache_m0cs_default_max",
-				"key": "resolver.cache.csm0.max.default",
-				"descr": "In any service resolver instanciated, sets the maximum number of entries related to meta0 (meta1 addresses) and conscience (meta0 address)",
-				"def": 0, "min": 0, "max": "4Mi" },
-
-			{ "type": "monotonic", "name": "_cache_srv_default_ttl",
-				"key": "resolver.cache.srv.ttl.default",
-				"descr": "In any service resolver instanciated, sets the default TTL on the meta1 entries (data-bound services)",
-				"def": 0, "min": 0, "max": "max" },
-
-			{ "type": "uint", "name": "_cache_srv_default_max",
-				"key": "resolver.cache.srv.max.default",
-				"descr": "In any service resolver instanciated, sets the maximum number of meta1 entries (data-bound services)",
-				"def": 0, "min": 0, "max": "1Mi" },
-
-			{ "type": "uint", "name": "server_event_batch_size",
-				"key": "server.batch.events",
-				"descr": "In the network core of a server, how many events do you manage in each call to epoll_wait(). Set to a low value to quickly react on new connections, to an higher value to rather treat established connections. The value is bound to a stack-allocated buffer, keep it rather small.",
-				"def": 128, "min": 1, "max": "4ki" },
-
-			{ "type": "uint", "name": "server_accept_batch_size",
-				"key": "server.batch.accept",
-				"descr": "In the network core, when the server socket wakes the call to epoll_wait(), that value sets the number of subsequent calls to accept(). Setting it to a low value allows to quickly switch to other events (established connection) and can lead to a strvation on the new connections. Setting to a high value might spend too much time in accepting and ease denials of service (with established but idle cnx).",
-				"def": 64, "min": 1, "max": "4ki" },
-
-			{ "type": "monotonic", "name": "sqliterepo_server_exit_ttl",
-				"key": "sqliterepo.service.exit_ttl",
-				"descr": ".",
-				"def": "10s", "min": "1ms", "max": "1h" },
-
-			{ "type": "int", "name": "server_threadpool_max_unused",
-				"key": "server.pool.max_unused",
-				"descr": "In the current server, sets how many threads may remain unused. This value is, in the GLib, common to all the threadpools.",
-				"def": "20", "min":0, "max":"1<<31 -1" },
-
-			{ "type": "monotonic", "name": "server_threadpool_max_idle",
-				"key": "server.pool.max_idle",
-				"descr": "In the current server, sets how long a thread can remain unused before considered as idle (and thus to be stopped)",
-				"def": "30s", "min": 1, "max": "1h" },
-
-			{ "type": "int", "name": "server_threadpool_max_stat",
-				"key": "server.pool.max_stat",
-				"descr": "In the current server, sets how many threads are allowed to the stats server. Keep this value really small, 1 should be enough for most usages, and consider increasing it if you have clues that the management of internal metrics is the bottleneck.",
-				"def": "1", "min": 1, "max": "1 << 31 - 1" },
-
-			{ "type": "int", "name": "server_threadpool_max_tcp",
-				"key": "server.pool.max_tcp",
-				"descr": "In the current server, sets the maximum number of threads for the pool responsible for the TCP connections (threading model is one thread per request being managed, and one request at once per TCP connection)",
-				"def": "-1", "min": -1, "max": "1 << 31 - 1" },
-
-			{ "type": "int", "name": "server_threadpool_max_udp",
-				"key": "server.pool.max_udp",
-				"descr": "In the current server, sets the maximum number of threads for pool responsible for the UDP messages handling. UDP is only used for quick synchronisation messages during MASTER elections",
-				"def": 8, "min": 1, "max": "1 << 31 - 1" },
-
-			{ "type": "monotonic", "name": "server_cnx_ttl_never",
-				"key": "server.cnx.timeout.never",
-				"descr": "In the current server, sets the maximum amount of time an established connection is allowed to live when it has no activity at all.",
-				"def": "30s", "min": 0, "max": "1d" },
-
-			{ "type": "monotonic", "name": "server_cnx_ttl_persist",
-				"key": "server.cnx.timeout.persist",
-				"descr": "In the current server, sets the maximum amount of time a connection is allowed to live, since its creation by the accept() call, wheter it presents activity or not.",
-				"def": "2h", "min": 0, "max": "1d" },
-
-			{ "type": "monotonic", "name": "server_cnx_ttl_idle",
-				"key": "server.cnx.timeout.idle",
-				"descr": "In the current server, sets the maximumu amount of time a connection may live without activity since the last activity (i.e. the last reply sent)",
-				"def": "5m", "min": 0, "max": "1d" },
-
-			{ "type": "monotonic", "name": "server_udp_queue_ttl",
-				"key": "server.udp_queue.ttl",
-				"descr": "In the current server, sets the maximum amount of time a queued UDP frame may remain in the queue. When unqueued, if the message was queued for too long, it will be dropped. The purpose of such a mechanism is to avoid clogging the queue and the whole election/cache mechanisms with old messages, thoses message having already been resent.",
-				"def": "2s", "min": "100ms", "max": "1d" },
-
-			{ "type": "uint", "name": "server_udp_queue_maxlen",
-				"key": "server.udp_queue.max",
-				"descr": "In the current server, sets the maximumu length of the queue for UDP messages. When that number has been reached and a new message arrives, the message will be dropped.",
-				"def": 8192, "min": 0, "max": "1 << 32 - 1" },
-
-			{ "type": "monotonic", "name": "server_queue_max_delay",
-				"key": "server.queue.max_delay",
-				"descr": "Anti-DDoS counter-mesure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, the connection is immediately closed. Keep this value rather high because the connection closing doesn't involve a reply that will help the client to retry with an exponential back-off.",
-				"def": "5s", "min": "10ms", "max": "1h" },
-
-			{ "type": "monotonic", "name": "server_queue_warn_delay",
-				"key": "server.queue.warn_delay",
-				"descr": "In the current server, set the time threshold after which a warning is sent when a file descriptor stays longer than that in the queue of the Thread Pool.",
-				"def": "100ms", "min": "1ms", "max": "1h" },
-
-			{ "type": "monotonic", "name": "meta_queue_max_delay",
-				"key": "meta.queue.max_delay",
-				"descr": "Anti-DDoS counter-mesure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, A '503 Unavailabe' error is replied.",
-				"def": "2s", "min": "10ms", "max": "1h" },
-
+			{ "type": "float", "name": "oio_election_resync_timeout_req",
+				"key": "sqliterepo.outgoing.timeout.req.resync",
+				"descr": "Sets the global timeout of a RESYNC request sent to a 'meta' service. Sent to a SLAVE DB, the RESYNC operation involves a RPC from the SLAVE to the MASTER, then a DB dump on the MASTER and restoration on the SLAVE. Thus that operation might be rather long, due to the possibility of network/disk latency/bandwidth, etc.",
+				"def": 30.0, "min": 0.01, "max": 60.0 }
+		]
+	},
+	"sqliterepo": {
+		"code": "sqliterepo_variables.c",
+		"header": "sqliterepo_variables.h",
+		"variables": [
 			{ "type": "monotonic", "name": "oio_election_period_cond_wait",
 				"key": "sqliterepo.election.wait.quantum",
 				"descr": "In the current sqliterepo repository, while loop-waiting for a final election status to be reached, this value sets the unit amount of time of eacch unit wait on the lock. Keep this value rather small to avoid waitin for too long, but not too small to avoid dumping CPU cycles in active waiting.",
@@ -375,47 +332,126 @@
 			{ "type": "uint", "name": "sqliterepo_getvers_max_retries",
 				"key": "sqliterepo.repo.getvers_max_retries",
 				"descr": "Sets how many versions exchanges are allowed during the journey in the election FSM.",
-				"def": 2, "min": 1, "max": "64" },
+				"def": 2, "min": 1, "max": "64" }
+		]
+	},
+	"server": {
+		"code": "server_variables.c",
+		"header": "server_variables.h",
+		"variables": [
+			{ "type": "bool", "name": "oio_rawx_events",
+				"key": "rawx.events_allowed",
+				"def": true,
+				"descr": "" },
+			{ "type": "bool", "name": "oio_udp_allowed",
+				"key": "udp_allowed",
+				"def": false,
+				"descr": "" },
 
-			{ "type": "float", "name": "oio_election_use_timeout_cnx",
-				"key": "sqliterepo.outgoing.timeout.cnx.use",
-				"descr": "Sets the connection timeout when ping'ing a peer database. Keep it small. Only used when UDP is disabled.",
-				"def": 0.25, "min": 0.01, "max": 30.0 },
+			{ "type": "epoch", "name": "oio_sqlx_lb_refresh_period",
+				"key": "sqlx.lb.refresh_period",
+				"descr": "In the current sqlx-based service, tells the period (in seconds) at which the service will refresh its load-balancing information.",
+				"def": "1", "min": 1, "max": "60s" },
 
-			{ "type": "float", "name": "oio_election_use_timeout_req",
-				"key": "sqliterepo.outgoing.timeout.req.use",
-				"descr": "Sets the global timeout when ping'ing a peer database. Keep it small.",
-				"def": 1.0, "min": 0.01, "max": 30.0 },
+			{ "type": "uint", "name": "meta2_batch_maxlen",
+				"key": "meta2.batch.maxlen",
+				"descr": "When listing a container, limits the number of items to that value.",
+				"def": "1k", "min": 1, "max": "100k" },
 
-			{ "type": "float", "name": "oio_election_getvers_timeout_cnx",
-				"key": "sqliterepo.outgoing.timeout.cnx.getvers",
-				"descr": "Sets the connection timeout when exchanging versions between databases replicas.",
-				"def": 0.5, "min": 0.01, "max": 30.0 },
+			{ "type": "epoch", "name": "meta2_reload_lb_period",
+				"key": "meta2.reload.lb.period",
+				"descr": "Sets the period of the periodical reloading of the Load-balancing state, in the current meta2 service.",
+				"def": "10s", "min": "1s", "max": "1h" },
 
-			{ "type": "float", "name": "oio_election_getvers_timeout_req",
-				"key": "sqliterepo.outgoing.timeout.req.getvers",
-				"descr": "Sets the global timeout when performing a version exchange RPC. Keep it rather small, to let election quickly fail on network troubles. Only used when UDP is disabled.",
-				"def": 2.0, "min": 0.01, "max": 30.0 },
+			{ "type": "epoch", "name": "meta2_reload_nsinfo_period",
+				"key": "meta2.reload.nsinfo.period",
+				"descr": "Sets the period of the periodical reloading of the namespace configuration, in the current meta2 service.",
+				"def": "5s", "min": "1s", "max": "1h" },
 
-			{ "type": "float", "name": "oio_election_replicate_timeout_cnx",
-				"key": "sqliterepo.outgoing.timeout.cnx.replicate",
-				"descr": "Sets the connection timeout sending a replication request.",
-				"def": 1.0, "min": 0.01, "max": 30.0 },
+			{ "type": "bool", "name": "meta2_flag_precheck_on_generate",
+				"key": "meta2.generate.precheck",
+				"descr": "Should the meta2 check the container state (quota, etc) before generating chunks.",
+				"def": true },
 
-			{ "type": "float", "name": "oio_election_replicate_timeout_req",
-				"key": "sqliterepo.outgoing.timeout.req.replicate",
-				"descr": "Sets the global timeout when sending a replication RPC, from the current MASTER to a SLAVE",
-				"def": 10.0, "min": 0.01, "max": 30.0 },
+			{ "type": "uint", "name": "server_event_batch_size",
+				"key": "server.batch.events",
+				"descr": "In the network core of a server, how many events do you manage in each call to epoll_wait(). Set to a low value to quickly react on new connections, to an higher value to rather treat established connections. The value is bound to a stack-allocated buffer, keep it rather small.",
+				"def": 128, "min": 1, "max": "4ki" },
 
-			{ "type": "float", "name": "oio_election_resync_timeout_cnx",
-				"key": "sqliterepo.outgoing.timeout.cnx.resync",
-				"descr": "Set the connection timeout during RPC to ask for a SLAVE database to be resync on its MASTER",
-				"def": 1.0, "min": 0.01, "max": 30.0 },
+			{ "type": "uint", "name": "server_accept_batch_size",
+				"key": "server.batch.accept",
+				"descr": "In the network core, when the server socket wakes the call to epoll_wait(), that value sets the number of subsequent calls to accept(). Setting it to a low value allows to quickly switch to other events (established connection) and can lead to a strvation on the new connections. Setting to a high value might spend too much time in accepting and ease denials of service (with established but idle cnx).",
+				"def": 64, "min": 1, "max": "4ki" },
 
-			{ "type": "float", "name": "oio_election_resync_timeout_req",
-				"key": "sqliterepo.outgoing.timeout.req.resync",
-				"descr": "Sets the global timeout of a RESYNC request sent to a 'meta' service. Sent to a SLAVE DB, the RESYNC operation involves a RPC from the SLAVE to the MASTER, then a DB dump on the MASTER and restoration on the SLAVE. Thus that operation might be rather long, due to the possibility of network/disk latency/bandwidth, etc.",
-				"def": 30.0, "min": 0.01, "max": 60.0 },
+			{ "type": "monotonic", "name": "sqliterepo_server_exit_ttl",
+				"key": "sqliterepo.service.exit_ttl",
+				"descr": ".",
+				"def": "10s", "min": "1ms", "max": "1h" },
+
+			{ "type": "int", "name": "server_threadpool_max_unused",
+				"key": "server.pool.max_unused",
+				"descr": "In the current server, sets how many threads may remain unused. This value is, in the GLib, common to all the threadpools.",
+				"def": "20", "min":0, "max":"1<<31 -1" },
+
+			{ "type": "monotonic", "name": "server_threadpool_max_idle",
+				"key": "server.pool.max_idle",
+				"descr": "In the current server, sets how long a thread can remain unused before considered as idle (and thus to be stopped)",
+				"def": "30s", "min": 1, "max": "1h" },
+
+			{ "type": "int", "name": "server_threadpool_max_stat",
+				"key": "server.pool.max_stat",
+				"descr": "In the current server, sets how many threads are allowed to the stats server. Keep this value really small, 1 should be enough for most usages, and consider increasing it if you have clues that the management of internal metrics is the bottleneck.",
+				"def": "1", "min": 1, "max": "1 << 31 - 1" },
+
+			{ "type": "int", "name": "server_threadpool_max_tcp",
+				"key": "server.pool.max_tcp",
+				"descr": "In the current server, sets the maximum number of threads for the pool responsible for the TCP connections (threading model is one thread per request being managed, and one request at once per TCP connection)",
+				"def": "-1", "min": -1, "max": "1 << 31 - 1" },
+
+			{ "type": "int", "name": "server_threadpool_max_udp",
+				"key": "server.pool.max_udp",
+				"descr": "In the current server, sets the maximum number of threads for pool responsible for the UDP messages handling. UDP is only used for quick synchronisation messages during MASTER elections",
+				"def": 8, "min": 1, "max": "1 << 31 - 1" },
+
+			{ "type": "monotonic", "name": "server_cnx_ttl_never",
+				"key": "server.cnx.timeout.never",
+				"descr": "In the current server, sets the maximum amount of time an established connection is allowed to live when it has no activity at all.",
+				"def": "30s", "min": 0, "max": "1d" },
+
+			{ "type": "monotonic", "name": "server_cnx_ttl_persist",
+				"key": "server.cnx.timeout.persist",
+				"descr": "In the current server, sets the maximum amount of time a connection is allowed to live, since its creation by the accept() call, wheter it presents activity or not.",
+				"def": "2h", "min": 0, "max": "1d" },
+
+			{ "type": "monotonic", "name": "server_cnx_ttl_idle",
+				"key": "server.cnx.timeout.idle",
+				"descr": "In the current server, sets the maximumu amount of time a connection may live without activity since the last activity (i.e. the last reply sent)",
+				"def": "5m", "min": 0, "max": "1d" },
+
+			{ "type": "monotonic", "name": "server_udp_queue_ttl",
+				"key": "server.udp_queue.ttl",
+				"descr": "In the current server, sets the maximum amount of time a queued UDP frame may remain in the queue. When unqueued, if the message was queued for too long, it will be dropped. The purpose of such a mechanism is to avoid clogging the queue and the whole election/cache mechanisms with old messages, thoses message having already been resent.",
+				"def": "2s", "min": "100ms", "max": "1d" },
+
+			{ "type": "uint", "name": "server_udp_queue_maxlen",
+				"key": "server.udp_queue.max",
+				"descr": "In the current server, sets the maximumu length of the queue for UDP messages. When that number has been reached and a new message arrives, the message will be dropped.",
+				"def": 8192, "min": 0, "max": "1 << 32 - 1" },
+
+			{ "type": "monotonic", "name": "server_queue_max_delay",
+				"key": "server.queue.max_delay",
+				"descr": "Anti-DDoS counter-mesure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, the connection is immediately closed. Keep this value rather high because the connection closing doesn't involve a reply that will help the client to retry with an exponential back-off.",
+				"def": "5s", "min": "10ms", "max": "1h" },
+
+			{ "type": "monotonic", "name": "server_queue_warn_delay",
+				"key": "server.queue.warn_delay",
+				"descr": "In the current server, set the time threshold after which a warning is sent when a file descriptor stays longer than that in the queue of the Thread Pool.",
+				"def": "100ms", "min": "1ms", "max": "1h" },
+
+			{ "type": "monotonic", "name": "meta_queue_max_delay",
+				"key": "meta.queue.max_delay",
+				"descr": "Anti-DDoS counter-mesure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, A '503 Unavailabe' error is replied.",
+				"def": "2s", "min": "10ms", "max": "1h" },
 
 			{ "type": "uint", "name": "malloc_trim_size_ondemand",
 				"key": "malloc.trim_size.ondemand",
@@ -432,6 +468,16 @@
 		"code": "proxy_variables.c",
 		"header": "proxy_variables.h",
 		"variables": [
+			{ "type": "bool", "name": "oio_proxy_srv_shuffle",
+				"key": "proxy.srv_shuffle",
+				"descr": "Should the proxy shuffle the meta2 addresses before the query, to do a better load-balancing of the requests.",
+				"def": true },
+
+			{ "type": "bool", "name": "oio_proxy_dir_shuffle",
+				"key": "proxy.dir_shuffle",
+				"descr": "Should the proxy shuffle the meta1 addresses before contacting them, thus trying to perform a better fanout of the requests.",
+				"def": true },
+
 			{ "type": "epoch", "name": "csurl_refresh_delay",
 				"key": "proxy.period.refresh.csurl",
 				"descr": "In the proxy, tells the period between the reloadings of the conscience URL, known from the local configuration",
@@ -575,11 +621,6 @@
 			{ "type": "bool", "name": "oio_sds_no_shuffle",
 				"key": "core.sds.noshuffle",
 				"descr": "In the current oio-sds client SDK, should the rawx services be shuffled before accessed. This helps ensuring a little load-balancing on the client side.",
-				"def": false },
-
-			{ "type": "bool", "name": "oio_dir_no_shuffle",
-				"key": "core.resolver.noshuffle",
-				"descr": "In the current oo-sds client SDK, should the directory service be shuffled before accessed. This helps ensuring",
 				"def": false },
 
 			{ "type": "monotonic", "name": "_refresh_major_minor",

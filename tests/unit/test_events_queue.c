@@ -21,7 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <zmq.h>
 
 #include <core/oio_core.h>
-#include <metautils/lib/server_variables.h>
+#include <events/events_variables.h>
 #include <events/oio_events_queue.h>
 
 static gboolean immediately_done (gboolean p) { (void) p; return FALSE; }

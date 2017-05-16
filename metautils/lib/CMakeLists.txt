@@ -111,8 +111,8 @@ add_custom_command(
 
 add_custom_command(
 	OUTPUT
-		${CMAKE_CURRENT_BINARY_DIR}/server_variables.c
-		${CMAKE_CURRENT_BINARY_DIR}/server_variables.h
+		${CMAKE_CURRENT_BINARY_DIR}/common_variables.c
+		${CMAKE_CURRENT_BINARY_DIR}/common_variables.h
 	DEPENDS
 		${CMAKE_SOURCE_DIR}/confgen.py
 		${CMAKE_SOURCE_DIR}/conf.json
@@ -123,9 +123,8 @@ add_custom_command(
 		${PYTHON_EXECUTABLE}
 	ARGS
 		${CMAKE_SOURCE_DIR}/confgen.py
-		"server"
+		"metautils"
 		${CMAKE_SOURCE_DIR}/conf.json)
-
 
 add_library(metautils SHARED
 		metacomm.h
@@ -168,8 +167,8 @@ add_library(metautils SHARED
 		gridd_client.c gridd_client.h
 		gridd_client_ext.c gridd_client_ext.h
 
-		${CMAKE_CURRENT_BINARY_DIR}/server_variables.c
-		${CMAKE_CURRENT_BINARY_DIR}/server_variables.h
+		${CMAKE_CURRENT_BINARY_DIR}/common_variables.c
+		${CMAKE_CURRENT_BINARY_DIR}/common_variables.h
 
 		${CMAKE_CURRENT_BINARY_DIR}/constraints.c
 		${CMAKE_CURRENT_BINARY_DIR}/constraints.h

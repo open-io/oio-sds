@@ -16,8 +16,6 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <proxy/proxy_variables.h>
-
 #include "common.h"
 
 gint32 oio_proxy_request_failure_threshold_alone = 0;
@@ -183,7 +181,7 @@ static void _sort_services (struct client_ctx_s *ctx,
 	}
 
 	/* If multiple available & preferred services, shuffle them */
-	if (pivot > 1)
+	if (pivot > 1 && oio_proxy_srv_shuffle)
 		oio_ext_array_shuffle ((void**)m1uv, pivot);
 
 	_debug_services ("POST sort: ", m1uv);

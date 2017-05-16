@@ -28,7 +28,7 @@ License along with this library.
 
 #include "metautils.h"
 
-#include <metautils/lib/server_variables.h>
+#include <metautils/lib/common_variables.h>
 
 #ifndef URL_MAXLEN
 # define URL_MAXLEN STRLEN_ADDRINFO

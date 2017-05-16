@@ -25,7 +25,7 @@ License along with this library.
 #include <sys/socket.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/server_variables.h>
+#include <sqliterepo/sqliterepo_variables.h>
 
 #include "sqliterepo.h"
 #include "hash.h"

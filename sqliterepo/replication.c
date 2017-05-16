@@ -22,7 +22,7 @@ License along with this library.
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/codec.h>
-#include <metautils/lib/server_variables.h>
+#include <sqliterepo/sqliterepo_remote_variables.h>
 
 #include "sqliterepo.h"
 #include "election.h"

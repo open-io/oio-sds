@@ -33,7 +33,7 @@ License along with this library.
 #include <glib.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/server_variables.h>
+#include <sqliterepo/sqliterepo_remote_variables.h>
 
 #include "sqliterepo.h"
 #include "sqlx_remote.h"

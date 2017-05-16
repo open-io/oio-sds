@@ -21,7 +21,7 @@ License along with this library.
 #include <string.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/server_variables.h>
+#include <metautils/lib/common_variables.h>
 
 #include "meta0_remote.h"
 #include "internals.h"
