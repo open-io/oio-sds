@@ -22,6 +22,7 @@ License along with this library.
 #include <glib.h>
 
 #include "oio_core.h"
+#include "oiostr.h"
 #include "internals.h"
 
 static struct oio_cfg_handle_s *oio_cfg_handle_DEFAULT = NULL;
@@ -40,12 +41,11 @@ oio_cfg_build_key(const gchar *ns, const gchar *what)
 static void
 config_load_ns(GHashTable *h, GKeyFile *kf, const gchar *ns)
 {
-	gchar **pk, **keys, *v;
-
-	keys = g_key_file_get_keys(kf, ns, 0, NULL);
+	gchar **keys = g_key_file_get_keys(kf, ns, 0, NULL);
 	if (keys) {
-		for (pk=keys; *pk ;pk++) {
-			v = g_key_file_get_string(kf, ns, *pk, NULL);
+		g_hash_table_insert(h, oio_cfg_build_key(ns, "known"), g_strdup("yes"));
+		for (gchar **pk=keys; *pk ;pk++) {
+			gchar *v = g_key_file_get_string(kf, ns, *pk, NULL);
 			g_hash_table_insert(h, oio_cfg_build_key(ns, *pk), v);
 		}
 		g_strfreev(keys);
@@ -106,7 +106,7 @@ oio_cfg_list_ns(void)
 		const gchar *sk = (gchar*)k;
 		if (g_str_has_prefix(sk, "default/"))
 			continue;
-		if (!g_str_has_suffix(sk, "/conscience"))
+		if (!g_str_has_suffix(sk, "/known"))
 			continue;
 		gchar *ns = g_strndup(sk, strrchr(sk,'/')- sk);
 		g_ptr_array_add(tmp, ns);

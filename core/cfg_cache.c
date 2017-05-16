@@ -21,6 +21,7 @@
 
 #include <oioext.h>
 #include <oiocfg.h>
+#include <oiostr.h>
 
 #include "internals.h"
 
@@ -145,4 +146,13 @@ oio_cfg_cache_create(void)
 	g_rw_lock_init(&cache->lock);
 	// cache->cfg will be initialized at first call
 	return (struct oio_cfg_handle_s *) cache;
+}
+
+gboolean
+oio_cfg_handle_has_ns(struct oio_cfg_handle_s *self, const char *ns)
+{
+	gchar *v = oio_cfg_handle_get(self, ns, "known");
+	gboolean rc = oio_str_parse_bool(v, FALSE);
+	if (v) g_free(v);
+	return rc;
 }

@@ -267,6 +267,10 @@ gchar ** oio_cfg_handle_namespaces (struct oio_cfg_handle_s *self);
 gchar * oio_cfg_handle_get (struct oio_cfg_handle_s *self,
 		const char *ns, const char *k);
 
+/* wraps self->get(...) and check for the presence of the given NS
+ * in the config */
+gboolean oio_cfg_handle_has_ns(struct oio_cfg_handle_s *self, const char *ns);
+
 /* Replaces the default handle to manage configuration by yourself. */
 void oio_cfg_set_handle (struct oio_cfg_handle_s *self);
 
