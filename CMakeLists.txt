@@ -53,6 +53,31 @@ if (CMAKE_COMPILER_IS_GNUCC)
 	#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wswitch-enum")
 endif()
 
+OPTION( ENABLE_CODECOVERAGE "Enable code coverage testing support" )
+
+if ( ENABLE_CODECOVERAGE )
+
+    if ( NOT DEFINED CODECOV_OUTPUTFILE )
+        set( CODECOV_OUTPUTFILE cmake_coverage.output )
+    endif ( NOT DEFINED CODECOV_OUTPUTFILE )
+
+    if ( NOT DEFINED CODECOV_HTMLOUTPUTDIR )
+        set( CODECOV_HTMLOUTPUTDIR coverage_results )
+    endif ( NOT DEFINED CODECOV_HTMLOUTPUTDIR )
+
+    if ( CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX )
+        find_program( CODECOV_GCOV gcov )
+        find_program( CODECOV_LCOV lcov )
+        find_program( CODECOV_GENHTML genhtml )
+        add_definitions( -fprofile-arcs -ftest-coverage )
+        link_libraries( gcov )
+        set( CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} --coverage )
+        add_custom_target( coverage_init ALL ${CODECOV_LCOV} --base-directory ${CMAKE_SOURCE_DIR}  --directory ${CMAKE_BINARY_DIR} --output-file ${CODECOV_OUTPUTFILE} --capture --initial )
+        add_custom_target( coverage ${CODECOV_LCOV} --base-directory ${CMAKE_SOURCE_DIR}  --directory ${CMAKE_BINARY_DIR} --no-external --output-file ${CODECOV_OUTPUTFILE} --capture COMMAND genhtml --ignore-errors source -o ${CODECOV_HTMLOUTPUTDIR} ${CODECOV_OUTPUTFILE} )
+    endif ( CMAKE_COMPILER_IS_GNUCXX )
+
+endif (ENABLE_CODECOVERAGE )
+
 set(CMAKE_C_FLAGS_DEBUG          "-O0 -fno-inline")
 set(CMAKE_C_FLAGS_RELEASE        "-O2")
 set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -fno-inline")
