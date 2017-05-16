@@ -69,6 +69,16 @@ void oio_var_value_all_with_config(struct oio_cfg_handle_s *cfg, const char *ns)
 gboolean oio_var_value_one_with_option(const char *name, const char *value);
 
 /**
+ * Feed the central configuration with all the variables found in the given
+ * files, for the given namespace. If `sys` is TRUE then the system files will
+ * be read. Then all the files in `files` will subsequently updated (overwrite)
+ * the central values.
+ *
+ * @return TRUE if the NS was known, FALSE if not configured locally
+ */
+gboolean oio_var_value_with_files(const char *ns, gboolean sys, GSList *files);
+
+/**
  * Iterate over all the registered variables and call the hook for each
  * of them.
  */

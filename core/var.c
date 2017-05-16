@@ -330,3 +330,34 @@ oio_var_list_as_json(void)
 
 	return gstr;
 }
+
+gboolean
+oio_var_value_with_files(const char *ns, gboolean sys, GSList *files)
+{
+	gboolean known = FALSE;
+
+	/* Init with the system config */
+	if (sys) {
+		struct oio_cfg_handle_s *cfg = oio_cfg_cache_create();
+		if (oio_cfg_handle_has_ns(cfg, ns)) {
+			known = TRUE;
+			oio_var_value_all_with_config(cfg, ns);
+		}
+		oio_cfg_handle_clean(cfg);
+	}
+
+	/* override with specific files */
+	for (GSList *l = files; l ; l = l->next) {
+		if (!l->data)
+			continue;
+		struct oio_cfg_handle_s *cfg =
+			oio_cfg_cache_create_fragment(l->data);
+		if (oio_cfg_handle_has_ns(cfg, ns)) {
+			known = TRUE;
+			oio_var_value_all_with_config(cfg, ns);
+		}
+		oio_cfg_handle_clean(cfg);
+	}
+
+	return known;
+}
