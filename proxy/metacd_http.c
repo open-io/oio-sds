@@ -991,13 +991,6 @@ grid_main_configure (int argc, char **argv)
 	hc_resolver_configure (resolver, f);
 	hc_resolver_qualify (resolver, service_is_ok);
 	hc_resolver_notify (resolver, service_invalidate);
-	hc_resolver_set_ttl_csm0 (resolver, dir_high_ttl);
-	hc_resolver_set_max_csm0 (resolver, dir_high_max);
-	hc_resolver_set_ttl_services (resolver, dir_low_ttl);
-	hc_resolver_set_max_services (resolver, dir_low_max);
-	GRID_INFO ("RESOLVER limits HIGH[%u/%"G_GINT64_FORMAT"]"
-			" LOW[%u/%"G_GINT64_FORMAT"]",
-			dir_high_max, dir_high_ttl, dir_low_max, dir_low_ttl);
 
 	srv_registered = _push_queue_create ();
 
