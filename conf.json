@@ -454,12 +454,12 @@
 				"def": "2s", "min": "10ms", "max": "1h" },
 
 			{ "type": "uint", "name": "malloc_trim_size_ondemand",
-				"key": "malloc.trim_size.ondemand",
+				"key": "server.malloc_trim_size.ondemand",
 				"descr": "Sets how many bytes bytes are released when the LEAN request is received by the current 'meta' service.",
 				"def": 0, "min": 0, "max": "1<<32 - 1" },
 
 			{ "type": "uint", "name": "malloc_trim_size_periodic",
-				"key": "malloc.trim_size.periodic",
+				"key": "server.malloc_trim_size.periodic",
 				"descr": "Sets how many bytes bytes are released when the LEAN request is received by the current 'meta' service.",
 				"def": 0, "min": 0, "max": "1<<32 - 1" }
 		]
