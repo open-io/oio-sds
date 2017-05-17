@@ -91,4 +91,9 @@ void oio_var_list_all(void (*hook) (const char *k, const char *v));
  */
 GString* oio_var_list_as_json(void);
 
+/**
+ * Set all the variables to their default value
+ */
+void oio_var_reset_all(void);
+
 #endif /* OIO_SDS__core__var_h */
