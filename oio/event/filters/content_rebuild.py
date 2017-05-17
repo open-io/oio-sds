@@ -13,13 +13,10 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
-import csv
-import ConfigParser
-from oio.common.exceptions import MissingData
-from oio.content.ec import ECContent
-from oio.content.plain import PlainContent
-from oio.event.consumer import EventTypes
-from oio.event.evob import Event
+import json
+
+from oio.event.beanstalk import Beanstalk, BeanstalkError
+from oio.event.evob import Event, EventError
 from oio.event.filters.base import Filter
 from oio import ObjectStorageApi
 
@@ -30,43 +27,19 @@ class ContentRebuildFilter(Filter):
     def __init__(self, app, conf,  logger=None):
         super(ContentRebuildFilter, self).__init__(app, conf, logger)
         self.object_storage_api = ObjectStorageApi(conf.get('namespace'))
-        config = ConfigParser.ConfigParser()
-        if not self.conf.get('rebuild_file'):
-            self.rebuild_file = self.rebuild_file_default_name
-            self.logger.warn(("Configuration file not present falling "
-                              "back to default name " + self.rebuild_file))
-            return
-        with open(self.conf.get('rebuild_file')) as app_key_f:
-            try:
-                config.readfp(app_key_f)
-                self.rebuild_file = config.get('content_rebuild',
-                                               'rebuild_file')
-            except IOError as exc:
-                self.rebuild_file = self.rebuild_file_default_name
-                self.logger.warn(("Could not open Content_rebuild file falling"
-                                  "back to default name %s (%s)",
-                                  self.rebuild_file, exc))
-
-    def _get_content(self, container_id, meta, chunks, storage_method):
-        cls = ECContent if storage_method.ec else PlainContent
-        return cls(self.conf, container_id, meta, chunks, storage_method)
-
-    def _write_chunks(self, container_id, content_id, chunk_pos):
-        self.rebuild_writer.writerow((container_id, content_id, chunk_pos))
+        queue_url = self.conf.get('queue_url', 'tcp://127.0.0.1:11300')
+        self.tube = self.conf.get('tube', 'rebuild')
+        self.beanstalk = Beanstalk.from_url(queue_url)
+        self.beanstalk.use(self.tube)
 
     def process(self, env, cb):
-        event = Event(env)
-        self.fd = open(self.rebuild_file, "a")
-        self.rebuild_writer = csv.writer(self.fd, delimiter='|')
-        if event.event_type == EventTypes.CONTENT_BROKEN:
-            url = event.env.get('url')
-            missing_chunks = event.data['missing_chunks']
-            if len(missing_chunks) == 0:
-                raise MissingData("No missing chunks found")
-
-            for chunk_pos in missing_chunks:
-                self._write_chunks(url["id"], url["content"], chunk_pos)
-        self.fd.flush()
+        data = json.dumps(env)
+        try:
+            self.beanstalk.put(data)
+        except BeanstalkError as e:
+            msg = 'put failure: %s' % str(e)
+            resp = EventError(event=Event(env), body=msg)
+            return resp(env, cb)
         return self.app(env, cb)
 
 

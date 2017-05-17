@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
-
+import json
 import time
 from datetime import datetime
 from socket import gethostname
@@ -22,12 +22,14 @@ from oio.common.utils import get_logger, int_value, true_value
 from oio.common.green import ratelimit
 from oio.common.exceptions import ContentNotFound, NotFound, OrphanChunk
 from oio.content.factory import ContentFactory
+from oio.event.beanstalk import Beanstalk, ConnectionError
 from oio.rdir.client import RdirClient
 
 
 class BlobRebuilderWorker(object):
     def __init__(self, conf, logger, volume,
-                 input_file=None, try_chunk_delete=False):
+                 input_file=None, try_chunk_delete=False,
+                 beanstalkd_addr=None):
         self.conf = conf
         self.logger = logger or get_logger(conf)
         self.volume = volume
@@ -56,6 +58,40 @@ class BlobRebuilderWorker(object):
         self.rdir_client = RdirClient(conf)
         self.content_factory = ContentFactory(conf)
         self.try_chunk_delete = try_chunk_delete
+        self.beanstalkd_addr = beanstalkd_addr
+        self.beanstalkd_tube = conf.get('beanstalkd_tube', 'rebuild')
+
+    def _fetch_chunks_from_event(self, job_id, data):
+        env = json.loads(data)
+        for chunk_pos in env['data']['missing_chunks']:
+            yield [env['url']['id'], env['url']['content'], chunk_pos, None]
+
+    def _handle_beanstalk_event(self, conn_error):
+        try:
+            job_id, data = self.beanstalk.reserve()
+            if conn_error:
+                self.logger.warn("beanstalk reconnected")
+                conn_error = False
+        except ConnectionError:
+            if not conn_error:
+                self.logger.warn("beanstalk connection error")
+                conn_error = True
+        try:
+            for chunk in self._fetch_chunks_from_event(job_id, data):
+                yield chunk
+            self.beanstalk.delete(job_id)
+        except Exception:
+            self.logger.exception("handling event %s (bury)", job_id)
+            self.beanstalk.bury(job_id)
+
+    def _fetch_chunks_from_beanstalk(self):
+        self.beanstalk = Beanstalk.from_url(self.beanstalkd_addr)
+        self.beanstalk.use(self.beanstalkd_tube)
+        self.beanstalk.watch(self.beanstalkd_tube)
+        conn_error = False
+        while 1:
+            for chunk in self._handle_beanstalk_event(conn_error):
+                yield chunk
 
     def _fetch_chunks_from_file(self):
         with open(self.input_file, 'r') as ifile:
@@ -67,6 +103,8 @@ class BlobRebuilderWorker(object):
     def _fetch_chunks(self):
         if self.input_file:
             return self._fetch_chunks_from_file()
+        elif self.beanstalkd_addr:
+            return self._fetch_chunks_from_beanstalk()
         else:
             return self.rdir_client.chunk_fetch(self.volume,
                                                 limit=self.rdir_fetch_limit,
@@ -183,12 +221,14 @@ class BlobRebuilderWorker(object):
             content = self.content_factory.get(container_id, content_id)
         except ContentNotFound:
             raise OrphanChunk('Content not found: possible orphan chunk')
-        # TODO create a way to get chunk_size
+
         chunk_size = 0
         chunk_pos = None
         if len(chunk_id) < 32:
             chunk_pos = chunk_id
             chunk_id = None
+            metapos = int(chunk_pos.split('.', 1)[0])
+            chunk_size = content.chunks.filter(metapos=metapos).all()[0].size
         else:
             if '/' in chunk_id:
                 chunk_id = chunk_id.rsplit('/', 1)[-1]
