@@ -452,10 +452,10 @@ sqlx_expire_first_idle_base(sqlx_cache_t *cache, gint64 now)
 	/* Poll the next idle base, and respect the increasing order of the 'heat' */
 	if (0 <= (bd_idle = cache->beacon_idle.last))
 		rc = _expire_specific_base(cache, GET(cache, bd_idle), now,
-				_grace_delay_cool);
+				_cache_grace_delay_cool);
 	if (!rc && 0 <= (bd_idle = cache->beacon_idle_hot.last))
 		rc = _expire_specific_base(cache, GET(cache, bd_idle), now,
-				_grace_delay_hot);
+				_cache_grace_delay_hot);
 
 	if (rc) {
 		GRID_TRACE("Expired idle base at pos %d", bd_idle);
@@ -467,15 +467,16 @@ sqlx_expire_first_idle_base(sqlx_cache_t *cache, gint64 now)
 /* ------------------------------------------------------------------------- */
 
 void
-sqlx_cache_set_max_bases(sqlx_cache_t *cache, guint max)
+sqlx_cache_reconfigure(sqlx_cache_t *cache)
 {
-	GRID_TRACE2("%s(%p,%u)", __FUNCTION__, cache, max);
-	EXTRA_ASSERT(cache != NULL);
-	max = CLAMP(max, 1, cache->bases_max_hard);
-	if (max != cache->bases_max_soft) {
-		GRID_INFO("cache max bases set to [%u]", max);
-		cache->bases_max_soft = max;
-	}
+	if (!cache)
+		return;
+
+	if (sqliterepo_repo_max_bases_soft > 0)
+		cache->bases_max_soft =
+			CLAMP(sqliterepo_repo_max_bases_soft, 1, cache->bases_max_hard);
+	else
+		cache->bases_max_soft = cache->bases_max_hard;
 }
 
 void
@@ -486,7 +487,7 @@ sqlx_cache_set_close_hook(sqlx_cache_t *cache, sqlx_cache_close_hook hook)
 }
 
 sqlx_cache_t *
-sqlx_cache_init(guint max_bases)
+sqlx_cache_init(void)
 {
 	sqlx_cache_t *cache = g_malloc0(sizeof(*cache));
 	g_mutex_init(&cache->lock);
@@ -498,7 +499,8 @@ sqlx_cache_init(guint max_bases)
 	BEACON_RESET(&(cache->beacon_used));
 
 	cache->bases_used = 0;
-	cache->bases_max_hard = cache->bases_max_soft = max_bases;
+	cache->bases_max_hard = sqliterepo_repo_max_bases_hard;
+	cache->bases_max_soft = cache->bases_max_hard;
 	cache->bases = g_malloc0(cache->bases_max_hard * sizeof(sqlx_base_t));
 
 	for (guint i=0; i<cache->bases_max_hard ;i++) {
@@ -719,7 +721,7 @@ sqlx_cache_unlock_and_close_base(sqlx_cache_t *cache, gint bd, gboolean force)
 				} else {
 					sqlx_base_debug("CLOSING", base);
 					base->owner = NULL;
-					if (base->heat >= _heat_threshold)
+					if (base->heat >= _cache_heat_threshold)
 						sqlx_base_move_to_list(cache, base, SQLX_BASE_IDLE_HOT);
 					else
 						sqlx_base_move_to_list(cache, base, SQLX_BASE_IDLE);

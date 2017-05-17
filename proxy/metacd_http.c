@@ -624,6 +624,28 @@ _task_push (gpointer p UNUSED)
 	lru_tree_destroy(lru);
 }
 
+static void
+_patch_configuration_fd(void)
+{
+	if (server_fd_max_passive <= 0) {
+		const guint maxfd = metautils_syscall_count_maxfd();
+
+		/* The purpose of the oio-proxy is ... to proxy connections to the
+		 * backend. It seems a good idea to reserve several connections for the
+		 * background tasks and the internals, then to reserve 2 FD for each
+		 * cnx. */
+		server_fd_max_passive = (maxfd -20) / 2;
+	}
+
+}
+
+static void
+_patch_and_apply_configuration(void)
+{
+	_patch_configuration_fd();
+	network_server_reconfigure(server);
+}
+
 // MAIN callbacks --------------------------------------------------------------
 
 static void
@@ -932,41 +954,32 @@ grid_main_configure (int argc, char **argv)
 	g_strlcpy(nsinfo.name, cfg_namespace, sizeof(nsinfo.name));
 	nsinfo.chunk_size = 1;
 
+	/* Load the central configuration facility, it will tell us our
+	 * NS is locally known. */
+	if (!oio_var_value_with_files(ns_name, config_system, config_paths)) {
+		GRID_ERROR("NS [%s] unknown in the configuration", ns_name);
+		return FALSE;
+	}
+
+	/* Ensure we will cache the system config */
 	struct oio_cfg_handle_s *ns_conf = oio_cfg_cache_create();
 	oio_cfg_set_handle(ns_conf);
 
-	/* load the system configuration */
-	if (config_system)
-		oio_var_value_all_with_config(ns_conf, ns_name);
-
-	/* override with specific files */
-	for (GSList *l = config_paths; l ; l = l->next) {
-		if (!l->data)
-			continue;
-		struct oio_cfg_handle_s *cfg =
-			oio_cfg_cache_create_fragment(l->data);
-		oio_var_value_all_with_config(cfg, ns_name);
-		oio_cfg_handle_clean(cfg);
-	}
-
+	/* To work properly, the PROXY needs to known the URL of the conscience */
 	_task_reload_csurl(NULL);
 	if (!csurl || !csurl_count) {
 		GRID_ERROR("No conscience URL configured");
 		return FALSE;
 	}
 
+	_patch_and_apply_configuration();
+
+	/* init the networking capability of the processus. The server will use
+	 * the actual value of `server_fd_max_passive` that we (maybe) patched
+	 * earlier. */
+	server = network_server_init ();
 	path_parser = path_parser_init ();
 	configure_request_handlers ();
-
-	/* Make the proxy avoid meta services with known problems */
-	if (oio_client_cache_errors)
-		GRID_NOTICE("Faulty peers avoidance: ENABLED");
-
-	/* Check if TCP_FASTOPEN is allowed */
-	GRID_NOTICE("TCP_FASTOPEN %s", oio_socket_fastopen ? "allowed" : "forbidden");
-
-	/* init the networking capability of the processus */
-	server = network_server_init ();
 
 	/* ensure each Route as a pair of count/time stats */
 	void _runner (const struct trie_node_s *n) {
@@ -1039,6 +1052,10 @@ grid_main_configure (int argc, char **argv)
 	for (GSList *lu=config_urlv; lu ;lu=lu->next)
 		network_server_bind_host (server, lu->data, handler_action,
 				(network_transport_factory) transport_http_factory0);
+
+	/* Quick abstract of the meaningful options */
+	GRID_NOTICE("Faulty peers avoidance: %s", oio_client_cache_errors ? "ON" : "OFF");
+	GRID_NOTICE("TCP_FASTOPEN %s", oio_socket_fastopen ? "ON" : "OFF");
 
 	return TRUE;
 }

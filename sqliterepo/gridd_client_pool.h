@@ -51,21 +51,13 @@ struct gridd_client_pool_vtable_s
 {
 	void (*destroy) (struct gridd_client_pool_s *p);
 
-	/** Return the maximum of client file descriptors allowed to the pool.
-	 * This is not mandatorily the exact number of clients, since the pool
-	 * itself might require descriptors for its own work. */
-	guint (*get_max) (struct gridd_client_pool_s *pool);
-
-	/** Sets the maximum number of file descriptors allowed to run this pool
-	 * The pool is reponsible to limit the number of outgoing clients and
-	 * reserve some slots. */
-	void (*set_max) (struct gridd_client_pool_s *pool, guint max);
-
 	void (*defer) (struct gridd_client_pool_s *p, struct event_client_s *ev);
 
 	/** Destined to be called continuously, it shouldn't block more than 'sec'
 	 * seconds between each run of the polling loop. */
 	GError* (*round) (struct gridd_client_pool_s *p, time_t sec);
+
+	void (*reconfigure) (struct gridd_client_pool_s *p);
 };
 
 struct abstract_client_pool_s
@@ -82,11 +74,8 @@ struct abstract_client_pool_s
 #define gridd_client_pool_round(p,sec) \
 	((struct abstract_client_pool_s*)p)->vtable->round(p,sec)
 
-#define gridd_client_pool_get_max(p) \
-	((struct abstract_client_pool_s*)p)->vtable->get_max(p)
-
-#define gridd_client_pool_set_max(p,max) \
-	((struct abstract_client_pool_s*)p)->vtable->set_max(p,max)
+#define gridd_client_pool_reconfigure(p) \
+	((struct abstract_client_pool_s*)p)->vtable->reconfigure(p)
 
 /* Public API -------------------------------------------------------------- */
 

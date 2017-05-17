@@ -20,6 +20,7 @@ License along with this library.
 #ifndef OIO_SDS__metautils__lib__metautils_syscall_h
 # define OIO_SDS__metautils__lib__metautils_syscall_h 1
 
+# include <glib.h>
 # include <sys/types.h>
 
 struct pollfd;
@@ -66,5 +67,6 @@ ssize_t metautils_syscall_read (int , void *, size_t);
 int metautils_syscall_poll (struct pollfd *, int, int);
 int metautils_syscall_getsockopt (int, int, int, void *, socklen_t *);
 int metautils_syscall_setsockopt (int, int, int, const void *, socklen_t);
+guint metautils_syscall_count_maxfd (void);
 
 #endif /*OIO_SDS__metautils__lib__metautils_syscall_h*/

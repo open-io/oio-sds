@@ -22,11 +22,6 @@ License along with this library.
 
 # include <metautils/lib/metautils.h>
 
-/* Default timeout when trying to open a base currently in use by another
-   thread. The precision is uniform with oio_ext_monotonic_time(), manage it
-   with G_TIME_SPAN_* macros. */
-#define DEFAULT_CACHE_OPEN_TIMEOUT (20 * G_TIME_SPAN_SECOND)
-
 struct hashstr_s;
 
 typedef void (*sqlx_cache_close_hook)(gpointer);
@@ -37,12 +32,14 @@ gpointer sqlx_cache_get_handle(sqlx_cache_t *cache, gint bd);
 
 void sqlx_cache_set_handle(sqlx_cache_t *cache, gint bd, gpointer handle);
 
-sqlx_cache_t * sqlx_cache_init(guint max_bases);
+sqlx_cache_t * sqlx_cache_init(void);
 
 void sqlx_cache_set_close_hook(sqlx_cache_t *cache,
 	sqlx_cache_close_hook hook);
 
-void sqlx_cache_set_max_bases(sqlx_cache_t *cache, guint max);
+/* Re-set the working variables with the up-to-date values from the central
+ * configuration facility */
+void sqlx_cache_reconfigure(sqlx_cache_t *cache);
 
 /* timeout in the precision of oio_ext_monotonic_time() */
 void sqlx_cache_set_open_timeout(sqlx_cache_t *cache, gint64 timeout);

@@ -26,6 +26,7 @@ License along with this library.
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/cache.h>
 #include <sqliterepo/internals.h>
+#include <sqliterepo/sqliterepo_variables.h>
 
 #undef GQ
 #define GQ() g_quark_from_static_string("oio.sqlite")
@@ -76,9 +77,8 @@ _round_lock(sqlx_cache_t *cache)
 static void
 test_lock (void)
 {
-	sqlx_cache_t *cache = sqlx_cache_init(16);
+	sqlx_cache_t *cache = sqlx_cache_init();
 	g_assert(cache != NULL);
-	sqlx_cache_set_max_bases (cache, 8);
 	sqlx_cache_set_close_hook(cache, sqlite_close);
 	for (int j=g_random_int_range(3,5); j>0 ;j--) {
 		for (int i=g_random_int_range(5,7); i>0 ;i--)
@@ -92,10 +92,9 @@ test_lock (void)
 static void
 _round_init (void)
 {
-	sqlx_cache_t *cache = sqlx_cache_init(16);
+	sqlx_cache_t *cache = sqlx_cache_init();
 	g_assert(cache != NULL);
 	for (int j=g_random_int_range(3,5); j>0 ;j--) {
-		sqlx_cache_set_max_bases (cache, 8);
 		sqlx_cache_set_close_hook(cache, sqlite_close);
 		sqlx_cache_debug(cache);
 		sqlx_cache_expire(cache, 0, 0);
@@ -150,18 +149,22 @@ test_limit (void)
 	guint all_maxes[] = {1, 2, 4, 8, 0};
 	for (guint imax=0; all_maxes[imax] != 0 ;++imax) {
 
-		guint hardmax = all_maxes[imax];
-		sqlx_cache_t *cache = sqlx_cache_init(hardmax);
+		sqliterepo_repo_max_bases_hard = all_maxes[imax];
+		sqliterepo_repo_max_bases_soft = all_maxes[imax];
+		sqlx_cache_t *cache = sqlx_cache_init();
 		g_assert_nonnull(cache);
-		_test_cache_limit (cache, hardmax);
-		if (hardmax > 1) {
-			guint softmax = hardmax / 2;
-			sqlx_cache_set_max_bases(cache, softmax);
-			_test_cache_limit (cache, softmax);
+		_test_cache_limit (cache, sqliterepo_repo_max_bases_hard);
+		if (sqliterepo_repo_max_bases_hard > 1) {
+			sqliterepo_repo_max_bases_soft = sqliterepo_repo_max_bases_hard / 2;
+			sqlx_cache_reconfigure(cache);
+			_test_cache_limit (cache, sqliterepo_repo_max_bases_soft);
 		}
 		sqlx_cache_debug(cache);
 		sqlx_cache_expire(cache, 0, 0);
 		sqlx_cache_clean(cache);
+
+		// restore a value that is high-enough
+		sqliterepo_repo_max_bases_hard = 8192;
 	}
 }
 

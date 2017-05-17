@@ -32,7 +32,10 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "routes.h"
 
+static gchar *ns_name = NULL;
 static gchar *basedir = NULL;
+static gboolean config_system = TRUE;
+static GSList *config_paths = NULL;
 static GSList *config_urlv = NULL;
 static struct network_server_s *server = NULL;
 static struct grid_task_queue_s *gtq_admin = NULL;
@@ -1396,6 +1399,13 @@ grid_main_get_options(void)
 		{"Bind", OT_LIST, {.lst = &config_urlv},
 			"An additional URL to bind to (might be used several time).\n"
 			"\t\tAccepts UNIX and INET sockets." },
+
+		{"SysConfig", OT_BOOL, {.b = &config_system},
+			"Load the system configuration and overload the central variables"},
+
+		{"Config", OT_LIST, {.lst = &config_paths},
+			"Load the given file and overload the central variables"},
+
 		{NULL, 0, {.i = 0}, NULL}
 	};
 
@@ -1456,6 +1466,19 @@ _task_malloc_trim(gpointer p)
 
 #define CFG(K) g_key_file_get_string(gkf, CFG_GROUP, (K), &err)
 
+static void
+_patch_and_apply_configuration(void)
+{
+	if (server_fd_max_passive <= 0) {
+		/* Rdir must be fast, write mostly in memory. Rather than specifying a
+		 * huge and variable number of connections, we arbitrarily prefer
+		 * keeping it small */
+		server_fd_max_passive = 32;
+	}
+
+	network_server_reconfigure(server);
+}
+
 static gboolean
 grid_main_configure(int argc, char **argv)
 {
@@ -1470,32 +1493,54 @@ grid_main_configure(int argc, char **argv)
 	GKeyFile *gkf = g_key_file_new();
 	EXTRA_ASSERT(gkf != NULL);
 
-	if (!g_key_file_load_from_file(gkf, cfg_path, G_KEY_FILE_NONE, &err))
+	if (!g_key_file_load_from_file(gkf, cfg_path, G_KEY_FILE_NONE, &err)) {
+		g_key_file_free(gkf);
 		return _config_error("File error", err);
+	}
 
-	if (!g_key_file_has_group(gkf, CFG_GROUP))
-		return _config_error("File error",
-				NEWERROR(EINVAL, "No [%s] section", CFG_GROUP));
+	if (!g_key_file_has_group(gkf, CFG_GROUP)) {
+		g_key_file_free(gkf);
+		return _config_error("File error", SYSERR("No [%s] section", CFG_GROUP));
+	}
+
+	ns_name = CFG("namespace");
+	if (!ns_name) {
+		g_key_file_free(gkf);
+		return _config_error("NS name", err);
+	}
 
 	basedir = CFG("db_path");
-	if (!basedir)
+	if (!basedir) {
+		g_key_file_free(gkf);
 		return _config_error("DB path", err);
+	}
 
 	gchar *cfg_ip = CFG("bind_addr");
 	STRING_STACKIFY(cfg_ip);
-	if (!cfg_ip)
+	if (!cfg_ip) {
+		g_key_file_free(gkf);
 		return _config_error("Bind address", err);
+	}
 
 	gchar *cfg_port = CFG("bind_port");
 	STRING_STACKIFY(cfg_port);
-	if (!cfg_port)
+	if (!cfg_port) {
+		g_key_file_free(gkf);
 		return _config_error("Bind port", err);
+	}
 
 	gchar *cfg_syslog = CFG("syslog_prefix");
 	STRING_STACKIFY(cfg_syslog);
 
 	g_key_file_free(gkf);
 	gkf = NULL;
+
+	/* Load the central configuration facility, it will tell us our
+	 * NS is locally known. */
+	if (!oio_var_value_with_files(ns_name, config_system, config_paths)) {
+		GRID_ERROR("NS [%s] unknown in the configuration", ns_name);
+		return FALSE;
+	}
 
 	/* supersedes the default logging */
 	if (cfg_syslog) {
@@ -1506,11 +1551,13 @@ grid_main_configure(int argc, char **argv)
 		logger_syslog_open();
 	}
 
-	gchar *cfg_main_url = g_strconcat(cfg_ip, ":", cfg_port, NULL);
-	STRING_STACKIFY(cfg_main_url);
+	_patch_and_apply_configuration();
 
 	/* Prepare the network side of the application */
 	server = network_server_init();
+
+	gchar *cfg_main_url = g_strconcat(cfg_ip, ":", cfg_port, NULL);
+	STRING_STACKIFY(cfg_main_url);
 
 	network_server_bind_host(server, cfg_main_url, handler_action,
 			(network_transport_factory) transport_http_factory0);

@@ -2194,8 +2194,6 @@ _info_repository(struct sqlx_repository_s *r, GString *gstr)
 	g_string_append_static(gstr, "sqliterepo options:\n");
 	g_string_append_printf(gstr, "\thash: width=%u depth=%u\n",
 			r->hash_width, r->hash_depth);
-	g_string_append_printf(gstr, "\tbases: %u/%u\n",
-			r->bases_count, r->bases_max);
 
 	g_string_append_static(gstr, "\tflags: ");
 	if (r->flag_autocreate)

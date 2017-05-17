@@ -99,10 +99,6 @@ struct sqlx_repository_s
 	guint hash_width;
 	guint hash_depth;
 
-	/* Limits for the base's holder */
-	guint bases_count;
-	guint bases_max;
-
 	enum sqlx_sync_mode_e sync_mode_solo;
 	enum sqlx_sync_mode_e sync_mode_repli;
 

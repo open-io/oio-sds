@@ -326,8 +326,7 @@ sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 	repo->flag_delete_on = BOOL(cfg->flags & SQLX_REPO_DELETEON);
 
 	if (!(cfg->flags & SQLX_REPO_NOCACHE)) {
-		repo->cache = sqlx_cache_init(
-				cfg->max_bases ? cfg->max_bases : sqliterepo_repo_max_bases);
+		repo->cache = sqlx_cache_init();
 		sqlx_cache_set_close_hook(repo->cache,
 				(sqlx_cache_close_hook)__close_base);
 	}
@@ -397,22 +396,6 @@ sqlx_repository_configure_hash(sqlx_repository_t *repo, guint w, guint d)
 	repo->hash_width = w;
 	GRID_DEBUG("Repository path hash configured: depth=%u width=%u",
 			repo->hash_depth, repo->hash_width);
-}
-
-void
-sqlx_repository_configure_maxbases(sqlx_repository_t *repo, guint max)
-{
-	EXTRA_ASSERT(repo != NULL);
-	EXTRA_ASSERT(repo->running);
-	EXTRA_ASSERT(repo->bases_count == 0);
-
-	GRID_TRACE2("%s(%p,%u)", __FUNCTION__, repo, max);
-	EXTRA_ASSERT(max >= 4);
-
-	if (repo->cache)
-		sqlx_cache_set_max_bases(repo->cache, max);
-	repo->bases_count = 0;
-	repo->bases_max = max;
 }
 
 GError*

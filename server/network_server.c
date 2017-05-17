@@ -87,9 +87,6 @@ static void _cb_stats(struct server_stat_msg_s *msg,
 static void _manage_udp_task(struct network_client_s *clt,
 		struct network_server_s *srv);
 
-/* Returns the number of max file descriptors for this process */
-static guint _server_get_maxfd(void);
-
 static void
 _client_sock_name(int fd, gchar *dst, gsize dst_size)
 {
@@ -211,6 +208,45 @@ network_server_stat_getall (struct network_server_s *srv)
 	return out;
 }
 
+void
+network_server_reconfigure(struct network_server_s *srv)
+{
+	if (!srv)
+		return;
+
+	/* Reconfigure the server */
+	guint emax = server_fd_max_passive;
+	if (!emax) {
+		emax = metautils_syscall_count_maxfd();
+		if (emax <= 10) {
+			GRID_WARN("Not enough max file descriptors (%u)", srv->cnx_max);
+			emax = 0;
+		} else {
+			emax -= 10;
+		}
+	}
+	if (emax > 0)
+		srv->cnx_max = emax;
+
+	/* Reconfigure the thread pools */
+	g_thread_pool_set_max_unused_threads(server_threadpool_max_unused);
+	g_thread_pool_set_max_idle_time(
+			server_threadpool_max_idle / G_TIME_SPAN_MILLISECOND);
+
+	gint _map(const guint i) {
+		return (i<=0 || i>G_MAXINT) ? -1 : (gint)i;
+	}
+
+	g_thread_pool_set_max_threads(
+			srv->pool_stats, _map(server_threadpool_max_stat), NULL);
+
+	g_thread_pool_set_max_threads(
+			srv->pool_tcp, _map(server_threadpool_max_tcp), NULL);
+
+	g_thread_pool_set_max_threads(
+			srv->pool_udp, _map(server_threadpool_max_udp), NULL);
+}
+
 struct network_server_s *
 network_server_init(void)
 {
@@ -221,45 +257,31 @@ network_server_init(void)
 		return NULL;
 	}
 
-	guint maxfd = _server_get_maxfd();
-
 	struct network_server_s *result = g_malloc0(sizeof(struct network_server_s));
 	result->flag_continue = ~0;
-
+	result->cnx_max = metautils_syscall_count_maxfd();
 	g_mutex_init(&result->lock_stats);
 	result->stats = g_array_new (FALSE, TRUE, sizeof(struct server_stat_s));
-
 	result->queue_monitor = g_async_queue_new();
-
 	result->endpointv = g_malloc0(sizeof(struct endpoint_s*));
 	g_mutex_init(&result->lock_threads);
-
-	result->cnx_max_sys = maxfd;
-	result->cnx_max = (result->cnx_max_sys * 99) / 100;
 	result->eventfd = efd;
 	result->epollfd = epoll_create(1024);
-
 	result->gq_gauge_threads =      g_quark_from_static_string ("gauge thread.active");
 	result->gq_gauge_cnx_current =  g_quark_from_static_string ("gauge cnx.client");
-	result->gq_gauge_cnx_max =      g_quark_from_static_string ("gauge cnx.max");
-	result->gq_gauge_cnx_maxsys =   g_quark_from_static_string ("gauge cnx.max_sys");
 	result->gq_counter_cnx_accept = g_quark_from_static_string ("counter cnx.accept");
 	result->gq_counter_cnx_close =  g_quark_from_static_string ("counter cnx.close");
 
-	result->pool_stats = g_thread_pool_new ((GFunc)_cb_stats, result,
-			server_threadpool_max_stat, FALSE, NULL);
+	/* no limit at the creation ... */
+	result->pool_stats = g_thread_pool_new(
+			(GFunc)_cb_stats, result, 0, FALSE, NULL);
+	result->pool_tcp = g_thread_pool_new(
+			(GFunc)_cb_tcp_worker, result, 0, FALSE, NULL);
+	result->pool_udp = g_thread_pool_new(
+			(GFunc)_manage_udp_task, result, 0, FALSE, NULL);
 
-	result->pool_tcp = g_thread_pool_new ((GFunc)_cb_tcp_worker, result,
-			server_threadpool_max_tcp, FALSE, NULL);
-
-	/* Even if UDP is eventually not allowed, a pool with shared threads
-	 * doesn't consume much resources. */
-	result->pool_udp = g_thread_pool_new ((GFunc)_manage_udp_task, result,
-			server_threadpool_max_udp, FALSE, NULL);
-
-	g_thread_pool_set_max_unused_threads (server_threadpool_max_unused);
-	g_thread_pool_set_max_idle_time (
-			server_threadpool_max_idle / G_TIME_SPAN_MILLISECOND);
+	/* ... and then supersedes the limits now */
+	network_server_reconfigure(result);
 
 	GRID_DEBUG("SERVER ready with epollfd[%d] eventfd[%d]",
 			result->epollfd, result->eventfd);
@@ -835,10 +857,6 @@ network_server_run(struct network_server_s *srv)
 		srv->thread_udp = g_thread_new("udp", _thread_cb_ping, srv);
 	srv->thread_tcp = g_thread_new("tcp", _thread_cb_events, srv);
 
-	network_server_stat_push2 (srv, FALSE,
-			srv->gq_gauge_cnx_max, srv->cnx_max,
-			srv->gq_gauge_cnx_maxsys, srv->cnx_max_sys);
-
 	while (srv->flag_continue) {
 		g_usleep(1 * G_TIME_SPAN_SECOND);
 		network_server_stat_push4 (srv, FALSE,
@@ -1042,7 +1060,7 @@ retry:
 			SLICE_FREE(struct network_client_s, clt);
 			metautils_pclose(&fd);
 			_cnx_notify_close(srv);
-			GRID_WARN("Too many inbound connections! (cnx_max=%u)",
+			GRID_WARN("Too many inbound connections! (max=%u)",
 					srv->cnx_max);
 			return NULL;
 	}
@@ -1064,22 +1082,6 @@ retry:
 }
 
 /* Server features ---------------------------------------------------------- */
-
-void
-network_server_set_maxcnx(struct network_server_s *srv, guint max)
-{
-	EXTRA_ASSERT(srv != NULL);
-
-	guint emax = CLAMP(max, 2, srv->cnx_max_sys);
-
-	if (emax != max)
-		GRID_WARN("MAXCNX [%u] clamped to [%u]", max, emax);
-
-	if (srv->cnx_max != emax) {
-		GRID_INFO("MAXCNX [%u] changed to [%u]", srv->cnx_max, emax);
-		srv->cnx_max = emax;
-	}
-}
 
 static void
 _cb_stats(struct server_stat_msg_s *msg, struct network_server_s *srv)
@@ -1155,21 +1157,6 @@ _cb_tcp_worker(struct network_client_s *clt, struct network_server_s *srv)
 			GRID_WARN("event thread notification failed: (%d) %s",
 					errno, strerror(errno));
 		}
-	}
-}
-
-static guint
-_server_get_maxfd(void)
-{
-	struct rlimit limit;
-
-	if (0 != getrlimit(RLIMIT_NOFILE, &limit)) {
-		GRID_WARN("getrlimit() error: (%d) %s", errno, strerror(errno));
-		return 512;
-	}
-	else {
-		guint u = limit.rlim_cur;
-		return u;
 	}
 }
 

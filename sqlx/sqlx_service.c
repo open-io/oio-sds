@@ -114,17 +114,6 @@ static struct grid_main_option_s common_options[] =
 		"SYNC mode to be applied on non-replicated bases after open "
 			"(0=NONE,1=NORMAL,2=FULL)"},
 
-	{"MaxBasesHard", OT_UINT, {.u = &SRV.cfg_max_bases_hard},
-		"Absolute max number of cached bases. Won't ever be increased." },
-	{"MaxBases", OT_UINT, {.u = &SRV.cfg_max_bases_soft},
-		"Limits the number of concurrent open bases (0=automatic), bounded "
-			"to MaxBasesHard naturally"	},
-
-	{"MaxPassive", OT_UINT, {.u = &SRV.cfg_max_passive},
-		"Limits the number of concurrent passive connections (0=automatic)" },
-	{"MaxActive", OT_UINT, {.u = &SRV.cfg_max_active},
-		"Limits the number of concurrent active connections (0=automatic)" },
-
 	{"CacheEnabled", OT_BOOL, {.b = &SRV.flag_cached_bases},
 		"If set, each base will be cached in a way it won't be accessed"
 			" by several requests in the same time."},
@@ -207,23 +196,15 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 
 	/* Before loading what remains, first populate the central configuration
 	 * facility. This is a pure side effect but the value might have an impact
-	 * even on the structure creations. */
+	 * even on the subsequent structure creations. */
+	if (!oio_var_value_with_files(SRV.ns_name, SRV.config_system, SRV.config_paths)) {
+		GRID_ERROR("Unknown NS [%s]", SRV.ns_name);
+		return FALSE;
+	}
 
-	/* TODO(jfs): deduplicate this with its copy in proxy/metacd_http.c */
+	/* Ensure we cache the NS configuration */
 	struct oio_cfg_handle_s *ns_conf = oio_cfg_cache_create();
 	oio_cfg_set_handle(ns_conf);
-	if (SRV.config_system)
-		oio_var_value_all_with_config(ns_conf, ss->ns_name);
-	ns_conf = NULL; /* value now global */
-
-	for (GSList *l = SRV.config_paths; l ; l = l->next) {
-		if (!l->data)
-			continue;
-		struct oio_cfg_handle_s *cfg =
-			oio_cfg_cache_create_fragment(l->data);
-		oio_var_value_all_with_config(cfg, ss->ns_name);
-		oio_cfg_handle_clean(cfg);
-	}
 
 	/* Load the ZK url.
 	 * We first look for an URL common to all the services, and we will maybe
@@ -241,86 +222,104 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 		if (str) oio_str_reuse(&ss->zk_url, str);
 	} while (0);
 
-	GRID_NOTICE("UDP %s", oio_udp_allowed ? "allowed" : "forbidden");
-
-	/* Check if TCP_FASTOPEN is allowed */
-	GRID_NOTICE("TCP_FASTOPEN %s", oio_socket_fastopen ? "allowed" : "forbidden");
-
-	if (oio_log_outgoing)
-		GRID_NOTICE("Outgoing requests log [ON]");
-
+#define BSTR(B) (BOOL(B) ? "on" : "off")
+	GRID_NOTICE("TFO[%d] UDP[%d] OUT[%d]",
+			oio_socket_fastopen, oio_udp_allowed, oio_log_outgoing);
 	return TRUE;
 }
 
-static gboolean
-_configure_limits(struct sqlx_service_s *ss)
+static void
+_patch_configuration_fd(void)
 {
-	guint newval = 0, max = 0, total = 0, available = 0, min = 0;
-	struct rlimit limit = {0, 0};
-#define CONFIGURE_LIMIT(cfg,real) do { \
-	max = MIN(max, available); \
-	newval = (cfg > 0 && cfg < max) ? cfg : max; \
-	newval = newval > min? newval : min; \
-	real = newval; \
-	available -= real; \
-} while (0)
+	const guint maxfd = metautils_syscall_count_maxfd();
 
-	if (0 != getrlimit(RLIMIT_NOFILE, &limit)) {
-		GRID_ERROR("Max file descriptor unknown: getrlimit error "
-				"(errno=%d) %s", errno, strerror(errno));
-		return FALSE;
+	// We keep some FDs for unexpected cases (sqlite sometimes uses
+	// temporary files, even when we ask for memory journals) and for
+	// internal mechanics (notifications, epoll, etc).
+	const guint total = maxfd - 32;
+
+	const guint reserved = sqliterepo_repo_max_bases_soft
+		+ server_fd_max_passive + sqliterepo_fd_max_active;
+
+	// The operator already reserved to many connections, and we cannot
+	// promise these numbers. we hope he/she is aware of his/her job.
+	if (reserved >= total) {
+		GRID_NOTICE("Too many descriptors have been reserved (%u), "
+				"please reconfigure the service or extend the system limit "
+				"(currently set to %u).", reserved, maxfd);
+		if (!sqliterepo_repo_max_bases_soft) {
+		   sqliterepo_repo_max_bases_soft = MIN(1024, sqliterepo_repo_max_bases_hard);
+		   GRID_WARN("maximum # of bases not set, arbitrarily set to %u",
+				   sqliterepo_repo_max_bases_soft);
+		}
+		if (!server_fd_max_passive) {
+		   server_fd_max_passive = 64;
+		   GRID_WARN("maximum # of incoming cnx not set, arbitrarily set to %u",
+				   server_fd_max_passive);
+		}
+		if (!sqliterepo_fd_max_active) {
+			sqliterepo_fd_max_active = 64;
+		   GRID_WARN("maximum # of outgoing cnx not set, arbitrarily set to %u",
+				   sqliterepo_fd_max_active);
+		}
+	} else {
+		guint available = total - reserved;
+		guint *to_be_set[4] = {NULL, NULL, NULL, NULL};
+		guint limits[3] = {G_MAXUINT, G_MAXUINT, G_MAXUINT};
+		do {
+			guint i=0;
+			if (sqliterepo_repo_max_bases_soft <= 0) {
+				to_be_set[i] = &sqliterepo_repo_max_bases_soft;
+				limits[i] = CLAMP(limits[i],
+						((100 * total) / 30), sqliterepo_repo_max_bases_hard);
+				i++;
+			}
+			if (!sqliterepo_fd_max_active) {
+				to_be_set[i] = &sqliterepo_fd_max_active;
+				limits[i] = (100 * total) / 30;
+				i++;
+			}
+			if (!server_fd_max_passive) {
+				to_be_set[i] = &server_fd_max_passive;
+				limits[i] = (100 * total) / 40;
+				i++;
+			}
+		} while (0);
+
+		// Fan out all the available FD on each slot that dod not reach its max
+		while (available > 0) {
+			gboolean any = FALSE;
+			for (guint i=0; to_be_set[i] && available > 0 ;i++) {
+				if (*to_be_set[i] < limits[i]) {
+					(*to_be_set[i]) ++;
+					available --;
+					any = TRUE;
+				}
+			}
+			if (!any)
+				break;
+		}
 	}
-	if (limit.rlim_cur < 64) {
-		GRID_ERROR("Not enough file descriptors allowed [%lu], "
-				"minimum 64 required", (unsigned long) limit.rlim_cur);
-		return FALSE;
-	}
 
-	// We keep 20 FDs for unexpected cases (sqlite sometimes uses
-	// temporary files, even when we ask for memory journals).
-	total = (limit.rlim_cur - 20);
-	// If user sets outstanding values for the first 2 parameters,
-	// there is still 2% available for the 3rd.
-	max = total * 49 / 100;
-	// Hardcoded in sqlx_repository_configure_maxbases()
-	min = 4;
+	GRID_INFO("FD limits set to ACTIVES[%u] PASSIVES[%u] BASES[%u/%u] SYS[%u]",
+			sqliterepo_fd_max_active, server_fd_max_passive,
+			sqliterepo_repo_max_bases_soft, sqliterepo_repo_max_bases_hard,
+			maxfd);
+}
 
-	available = total;
+static gboolean
+_patch_and_apply_configuration(void)
+{
+	_patch_configuration_fd();
 
-	/* max_bases cannot be changed at runtime, so we set it first and
-	 * clamp the other limits accordingly.
-	 * For backward compatibility purposes, we configure the SOFT limit
-	 * instead of the hard one, when only "MaxBases" is set, and we deduce
-	 * the HARD limit. This is the limit the users will see in action, but
-	 * with a room for expansion though.
-	 */
-	CONFIGURE_LIMIT(
-			(ss->cfg_max_bases_soft > 0?
-				ss->cfg_max_bases_soft : SQLX_MAX_BASES_PERCENT(total)),
-			ss->max_bases_soft);
-	ss->max_bases_hard = ss->cfg_max_bases_hard > 0 ?
-				ss->cfg_max_bases_hard : sqliterepo_repo_max_bases;
-
-	// max_passive > max_active permits answering to clients while
-	// managing internal procedures (elections, replications...).
-	CONFIGURE_LIMIT(
-			(ss->cfg_max_passive > 0?
-				ss->cfg_max_passive : SQLX_MAX_PASSIVE_PERCENT(total)),
-			ss->max_passive);
-	CONFIGURE_LIMIT(
-			(ss->cfg_max_active > 0?
-				ss->cfg_max_active : SQLX_MAX_ACTIVE_PERCENT(total)),
-			ss->max_active);
-
-	GRID_INFO("Limits set to ACTIVES[%u] PASSIVES[%u] BASES[%u/%u] "
-			"fd=%u/%u",
-			ss->max_active, ss->max_passive,
-			ss->max_bases_soft, ss->max_bases_hard,
-			ss->max_active + ss->max_passive + ss->max_bases_soft,
-			(guint)limit.rlim_cur);
+	if (SRV.server)
+		network_server_reconfigure(SRV.server);
+	if (SRV.repository)
+		sqlx_cache_reconfigure(sqlx_repository_get_cache(SRV.repository));
+	if (SRV.clients_pool)
+		gridd_client_pool_reconfigure(SRV.clients_pool);
 
 	return TRUE;
-#undef CONFIGURE_LIMIT
 }
 
 static gboolean
@@ -548,8 +547,6 @@ _configure_backend(struct sqlx_service_s *ss)
 	repository_config.sync_solo = ss->sync_mode_solo;
 	repository_config.sync_repli = ss->sync_mode_repli;
 
-	repository_config.max_bases = ss->max_bases_hard;
-
 	GError *err = sqlx_repository_init(ss->volume, &repository_config,
 			&ss->repository);
 	if (err) {
@@ -558,8 +555,6 @@ _configure_backend(struct sqlx_service_s *ss)
 		g_clear_error(&err);
 		return FALSE;
 	}
-
-	sqlx_repository_configure_maxbases(SRV.repository, SRV.max_bases_soft);
 
 	err = sqlx_repository_configure_type(ss->repository,
 			ss->service_config->srvtype, ss->service_config->schema);
@@ -657,9 +652,6 @@ sqlx_service_action(void)
 
 	oio_server_volume = SRV.volume;
 
-	gridd_client_pool_set_max(SRV.clients_pool, SRV.max_active);
-	network_server_set_maxcnx(SRV.server, SRV.max_passive);
-
 	election_manager_set_peering(SRV.election_manager, SRV.peering);
 	if (SRV.sync)
 		election_manager_set_sync(SRV.election_manager, SRV.sync);
@@ -725,10 +717,10 @@ sqlx_service_specific_stop(void)
 static gboolean
 sqlx_service_configure(int argc, char **argv)
 {
-	return _configure_limits(&SRV)
-		&& _init_configless_structures(&SRV)
+	return _init_configless_structures(&SRV)
 		&& _configure_with_arguments(&SRV, argc, argv)
 		/* NS now known! */
+		&& _patch_and_apply_configuration()
 		&& _configure_synchronism(&SRV)
 		&& _configure_peering(&SRV)
 		&& _configure_replication(&SRV)
@@ -743,10 +735,7 @@ sqlx_service_configure(int argc, char **argv)
 static void
 sqlx_service_set_defaults(void)
 {
-	SRV.cfg_max_bases_soft = 0;
-	SRV.cfg_max_bases_hard = sqliterepo_repo_max_bases;
-	SRV.cfg_max_passive = 0;
-	SRV.cfg_max_active = 0;
+	SRV.config_system = TRUE;
 	SRV.flag_replicable = TRUE;
 	SRV.flag_autocreate = TRUE;
 	SRV.flag_delete_on = TRUE;

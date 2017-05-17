@@ -3,6 +3,11 @@
 		"code": "events_variables.c",
 		"header": "events_variables.h",
 		"variables": [
+			{ "type": "bool", "name": "oio_rawx_events",
+				"key": "rawx.events_allowed",
+				"def": true,
+				"descr": "" },
+
 			{ "type": "monotonic", "name": "oio_events_common_buffer_delay",
 				"key": "events.common.pending.delay",
 				"def": "5s", "min": "1ms", "max": "1h",
@@ -299,17 +304,17 @@
 				"descr": "Sets how long we (unit)wait on the lock around the databases. Keep it small.",
 				"def": "1s", "min": "1ms", "max": "1h" },
 
-			{ "type": "uint32", "name": "_heat_threshold",
-				"key": "sqliterepo.heat.threshold",
+			{ "type": "uint32", "name": "_cache_heat_threshold",
+				"key": "sqliterepo.cache.heat_threshold",
 				"descr": "Sets the heat value below which a databse is considered hot",
 				"def": 1, "min": 1, "max": "1 << 32 - 1" },
 
-			{ "type": "monotonic", "name": "_grace_delay_cool",
+			{ "type": "monotonic", "name": "_cache_grace_delay_cool",
 				"key": "sqliterepo.cache.ttl.cool",
 				"descr": "Sets the period after the return to the IDLE/COLD state, during which the recycling is forbidden",
 				"def": "0", "min": "0", "max": "1h" },
 
-			{ "type": "monotonic", "name": "_grace_delay_hot",
+			{ "type": "monotonic", "name": "_cache_grace_delay_hot",
 				"key": "sqliterepo.cache.ttl.hot",
 				"descr": "Sets the period after the return to the IDLE/HOT state, during which the recycling is forbidden",
 				"def": "0", "min": "0", "max": "1h" },
@@ -324,25 +329,36 @@
 				"descr": "Sets the timeout of the zookeeper handle (in the meaning of the zookeeper client library)",
 				"def": "10s", "min": "1ms", "max": "1h" },
 
-			{ "type": "uint", "name": "sqliterepo_repo_max_bases",
-				"key": "sqliterepo.repo.max_bases",
+			{ "type": "uint", "name": "sqliterepo_repo_max_bases_hard",
+				"key": "sqliterepo.repo.hard_max",
 				"descr": "Sets how many databases can be kept simultaneously open in the current service.",
 				"def": "32ki", "min": "8", "max": "128ki" },
+
+			{ "type": "uint", "name": "sqliterepo_repo_max_bases_soft",
+				"key": "sqliterepo.repo.soft_max",
+				"descr": "Sets how many databases can be kept simultaneously open in the current service.",
+				"def": "0", "min": "0", "max": "128ki" },
 
 			{ "type": "uint", "name": "sqliterepo_getvers_max_retries",
 				"key": "sqliterepo.repo.getvers_max_retries",
 				"descr": "Sets how many versions exchanges are allowed during the journey in the election FSM.",
-				"def": 2, "min": 1, "max": "64" }
+				"def": 2, "min": 1, "max": "64" },
+
+			{ "type": "uint", "name": "sqliterepo_fd_max_active",
+				"key": "sqliterepo.repo.fd_max_active",
+				"descr": "Set to 0 for an automatic detection",
+				"def": 0, "min": 0, "max": "4ki" }
 		]
 	},
 	"server": {
 		"code": "server_variables.c",
 		"header": "server_variables.h",
 		"variables": [
-			{ "type": "bool", "name": "oio_rawx_events",
-				"key": "rawx.events_allowed",
-				"def": true,
-				"descr": "" },
+			{ "type": "uint", "name": "server_fd_max_passive",
+				"key": "server.fd_max_passive",
+				"descr": "Set to 0 for an automatic detection",
+				"def": 0, "min": 0, "max": "4ki" },
+
 			{ "type": "bool", "name": "oio_udp_allowed",
 				"key": "udp_allowed",
 				"def": false,
@@ -400,18 +416,18 @@
 
 			{ "type": "int", "name": "server_threadpool_max_stat",
 				"key": "server.pool.max_stat",
-				"descr": "In the current server, sets how many threads are allowed to the stats server. Keep this value really small, 1 should be enough for most usages, and consider increasing it if you have clues that the management of internal metrics is the bottleneck.",
-				"def": "1", "min": 1, "max": "1 << 31 - 1" },
+				"descr": "In the current server, sets how many threads are allowed to the stats server. Keep this value really small, 1 should be enough for most usages, and consider increasing it if you have clues that the management of internal metrics is the bottleneck. Set to 0 for no limit.",
+				"def": "1", "min": 0, "max": "1 << 31 - 1" },
 
 			{ "type": "int", "name": "server_threadpool_max_tcp",
 				"key": "server.pool.max_tcp",
-				"descr": "In the current server, sets the maximum number of threads for the pool responsible for the TCP connections (threading model is one thread per request being managed, and one request at once per TCP connection)",
-				"def": "-1", "min": -1, "max": "1 << 31 - 1" },
+				"descr": "In the current server, sets the maximum number of threads for the pool responsible for the TCP connections (threading model is one thread per request being managed, and one request at once per TCP connection). Set to 0 for no limit.",
+				"def": "0", "min": 0, "max": "1 << 31 - 1" },
 
 			{ "type": "int", "name": "server_threadpool_max_udp",
 				"key": "server.pool.max_udp",
-				"descr": "In the current server, sets the maximum number of threads for pool responsible for the UDP messages handling. UDP is only used for quick synchronisation messages during MASTER elections",
-				"def": 8, "min": 1, "max": "1 << 31 - 1" },
+				"descr": "In the current server, sets the maximum number of threads for pool responsible for the UDP messages handling. UDP is only used for quick synchronisation messages during MASTER elections. Set ot 0 for no limit.",
+				"def": 4, "min": 0, "max": "1 << 31 - 1" },
 
 			{ "type": "monotonic", "name": "server_cnx_ttl_never",
 				"key": "server.cnx.timeout.never",

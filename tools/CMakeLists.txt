@@ -7,7 +7,7 @@ include_directories(BEFORE
 
 add_executable(echo-server oio-echo-server.c)
 bin_prefix(echo-server "-echo-server")
-target_link_libraries(echo-server metautils server gridcluster ${GLIB2_LIBRARIES})
+target_link_libraries(echo-server metautils server ${GLIB2_LIBRARIES})
 
 add_executable(oio-tool oio-tool.c)
 
