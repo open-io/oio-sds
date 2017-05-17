@@ -240,16 +240,14 @@ class ListContainer(cliff.lister.Lister):
     def get_parser(self, prog_name):
         parser = super(ListContainer, self).get_parser(prog_name)
         parser.add_argument(
-            '--full',
-            dest='full_listing',
-            default=False,
-            help='Full listing',
-            action="store_true"
-        )
-        parser.add_argument(
             '--prefix',
             metavar='<prefix>',
             help='Filter list using <prefix>'
+        )
+        parser.add_argument(
+            '--delimiter',
+            metavar='<delimiter>',
+            help='Delimiter'
         )
         parser.add_argument(
             '--marker',
@@ -262,14 +260,16 @@ class ListContainer(cliff.lister.Lister):
             help='End marker for paging'
         )
         parser.add_argument(
-            '--delimiter',
-            metavar='<delimiter>',
-            help='Delimiter'
-        )
-        parser.add_argument(
             '--limit',
             metavar='<limit>',
-            help='Limit of results to return'
+            help='Limit the number of containers returned'
+        )
+        parser.add_argument(
+            '--no-paging', '--full',
+            dest='full_listing',
+            default=False,
+            help='List all containers without paging',
+            action="store_true"
         )
         return parser
 
@@ -413,13 +413,13 @@ class SaveContainer(cliff.command.Command):
                     f.write(chunk)
 
 
-class AnalyzeContainer(cliff.show.ShowOne):
+class LocateContainer(cliff.show.ShowOne):
     """Locate the services in charge of a container."""
 
-    log = logging.getLogger(__name__ + '.AnalyzeContainer')
+    log = logging.getLogger(__name__ + '.LocateContainer')
 
     def get_parser(self, prog_name):
-        parser = super(AnalyzeContainer, self).get_parser(prog_name)
+        parser = super(LocateContainer, self).get_parser(prog_name)
         parser.add_argument(
             'container',
             metavar='<container>',

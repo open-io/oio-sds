@@ -8,7 +8,7 @@ from oio.cli.utils import KeyValueAction
 
 
 class ListReference(lister.Lister):
-    """List reference"""
+    """List services linked to a reference"""
 
     log = logging.getLogger(__name__ + '.ListReference')
 
@@ -35,7 +35,7 @@ class ListReference(lister.Lister):
 
 
 class ShowReference(show.ShowOne):
-    """Show reference"""
+    """Show reference properties"""
 
     log = logging.getLogger(__name__ + '.ShowReference')
 
@@ -331,17 +331,17 @@ class UnsetReference(command.Command):
             parsed_args.property)
 
 
-class AnalyzeReference(show.ShowOne):
-    """Analyze reference"""
+class LocateReference(show.ShowOne):
+    """Locate the services in charge of a reference"""
 
-    log = logging.getLogger(__name__ + '.AnalyzeReference')
+    log = logging.getLogger(__name__ + '.LocateReference')
 
     def get_parser(self, prog_name):
-        parser = super(AnalyzeReference, self).get_parser(prog_name)
+        parser = super(LocateReference, self).get_parser(prog_name)
         parser.add_argument(
             'reference',
             metavar='<reference>',
-            help='Reference to analyze')
+            help='Reference to locate')
         return parser
 
     def take_action(self, parsed_args):
