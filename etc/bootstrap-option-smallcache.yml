@@ -1,4 +1,3 @@
-meta1:
-    params: "-O MaxBases=4"
-meta2:
-    params: "-O MaxBases=4"
+config:
+  sqliterepo.repo.hard_max: 16
+  sqliterepo.repo.soft_max: 4
