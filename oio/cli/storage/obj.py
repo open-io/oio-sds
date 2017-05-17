@@ -395,20 +395,6 @@ class ListObject(ContainerCommandMixin, lister.Lister):
         parser = super(ListObject, self).get_parser(prog_name)
         self.patch_parser(parser)
         parser.add_argument(
-            '--full',
-            dest='full_listing',
-            default=False,
-            help='List all objects without paging',
-            action="store_true"
-        )
-        parser.add_argument(
-            '--long',
-            dest='long_listing',
-            default=False,
-            help='List properties with objects',
-            action="store_true"
-        )
-        parser.add_argument(
             '--prefix',
             metavar='<prefix>',
             help='Filter list using <prefix>'
@@ -433,6 +419,27 @@ class ListObject(ContainerCommandMixin, lister.Lister):
             metavar='<limit>',
             type=int,
             help='Limit the number of objects returned'
+        )
+        parser.add_argument(
+            '--no-paging', '--full',
+            dest='full_listing',
+            default=False,
+            help='List all objects without paging',
+            action="store_true"
+        )
+        parser.add_argument(
+            '--properties', '--long',
+            dest='long_listing',
+            default=False,
+            help='List properties with objects',
+            action="store_true"
+        )
+        parser.add_argument(
+            '--versions', '--all-versions',
+            dest='versions',
+            default=False,
+            help='List all objects versions (not only the last one)',
+            action="store_true"
         )
         return parser
 
@@ -513,6 +520,8 @@ class ListObject(ContainerCommandMixin, lister.Lister):
             kwargs['limit'] = parsed_args.limit
         if parsed_args.long_listing:
             kwargs['properties'] = True
+        if parsed_args.versions:
+            kwargs['versions'] = True
 
         account = self.app.client_manager.get_account()
         if parsed_args.auto:

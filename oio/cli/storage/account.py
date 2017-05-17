@@ -110,7 +110,7 @@ class SetAccount(command.Command):
 
         self.app.client_manager.storage.account_set_properties(
             account=parsed_args.account,
-            metadata=parsed_args.property
+            properties=parsed_args.property
         )
 
 
@@ -145,18 +145,18 @@ class UnsetAccount(command.Command):
         )
 
 
-class ListAccount(lister.Lister):
-    """List Account"""
+class ListAccounts(lister.Lister):
+    """List accounts of the namespace"""
 
     log = logging.getLogger(__name__ + '.ListAccount')
 
     def get_parser(self, prog_name):
-        parser = super(ListAccount, self).get_parser(prog_name)
+        parser = super(ListAccounts, self).get_parser(prog_name)
         parser.add_argument(
-            '--full',
-            dest='full_listing',
+            '--stats', '--long',
+            dest='long_listing',
             default=False,
-            help='Full listing',
+            help='Display account statistics',
             action="store_true"
         )
         return parser
@@ -167,7 +167,7 @@ class ListAccount(lister.Lister):
         data = self.app.client_manager.storage.account_list()
         accounts = ((e,) for e in data)
 
-        if parsed_args.full_listing:
+        if parsed_args.long_listing:
             columns = ('Name', 'bytes', 'containers', 'objects', 'ctime',
                        'metadata')
             full_info = []
