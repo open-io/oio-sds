@@ -322,6 +322,15 @@ _patch_and_apply_configuration(void)
 	return TRUE;
 }
 
+static void
+_reconfigure_on_SIGHUP(void)
+{
+	GRID_NOTICE("SIGHUP! Reconfiguring...");
+	oio_var_reset_all();
+	oio_var_value_with_files(SRV.ns_name, SRV.config_system, SRV.config_paths);
+	_patch_and_apply_configuration();
+}
+
 static gboolean
 _init_configless_structures(struct sqlx_service_s *ss)
 {
@@ -698,7 +707,7 @@ sqlx_service_action(void)
 	}
 
 	/* SERVER/GRIDD main run loop */
-	if (NULL != (err = network_server_run(SRV.server, NULL)))
+	if (NULL != (err = network_server_run(SRV.server, _reconfigure_on_SIGHUP)))
 		return _action_report_error(err, "GRIDD run failure");
 }
 
