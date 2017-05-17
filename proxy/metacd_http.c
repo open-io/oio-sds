@@ -688,7 +688,7 @@ grid_main_action (void)
 		return;
 	}
 
-	if (NULL != (err = network_server_run (server))) {
+	if (NULL != (err = network_server_run (server, NULL))) {
 		_main_error (err);
 		return;
 	}

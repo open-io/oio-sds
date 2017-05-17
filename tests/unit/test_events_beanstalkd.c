@@ -128,7 +128,8 @@ retry:
 	/* Run it in a separate thread */
 	gpointer _server (gpointer p) {
 		GRID_TRACE("beanstalkd: thread starting");
-		g_assert_no_error (network_server_run ((struct network_server_s *)p));
+		GError *err = network_server_run ((struct network_server_s *)p, NULL);
+		g_assert_no_error (err);
 		return NULL;
 	}
 	GThread *th = g_thread_new("server", _server, srv);

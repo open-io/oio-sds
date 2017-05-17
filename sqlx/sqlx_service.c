@@ -698,7 +698,7 @@ sqlx_service_action(void)
 	}
 
 	/* SERVER/GRIDD main run loop */
-	if (NULL != (err = network_server_run(SRV.server)))
+	if (NULL != (err = network_server_run(SRV.server, NULL)))
 		return _action_report_error(err, "GRIDD run failure");
 }
 

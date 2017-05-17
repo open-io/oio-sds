@@ -85,7 +85,7 @@ _echo_action (void)
 		return;
 	}
 
-    if (NULL != (err = network_server_run (server))) {
+    if (NULL != (err = network_server_run (server, NULL))) {
         GRID_ERROR ("Server opening error: %d %s", err->code, err->message);
 		grid_main_set_status (1);
 		return;
