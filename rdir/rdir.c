@@ -1372,6 +1372,28 @@ _main_error(GError * err)
 }
 
 static void
+_patch_and_apply_configuration(void)
+{
+	if (server_fd_max_passive <= 0) {
+		/* Rdir must be fast, write mostly in memory. Rather than specifying a
+		 * huge and variable number of connections, we arbitrarily prefer
+		 * keeping it small */
+		server_fd_max_passive = 32;
+	}
+
+	network_server_reconfigure(server);
+}
+
+static void
+_reconfigure_on_SIGHUP(void)
+{
+	GRID_NOTICE("SIGHUP! Reconfiguring...");
+	oio_var_reset_all();
+	oio_var_value_with_files(ns_name, config_system, config_paths);
+	_patch_and_apply_configuration();
+}
+
+static void
 grid_main_action(void)
 {
 	GError *err = NULL;
@@ -1386,7 +1408,7 @@ grid_main_action(void)
 		return;
 	}
 
-	if (NULL != (err = network_server_run(server, NULL))) {
+	if (NULL != (err = network_server_run(server, _reconfigure_on_SIGHUP))) {
 		_main_error(err);
 		return;
 	}
@@ -1465,19 +1487,6 @@ _task_malloc_trim(gpointer p)
 }
 
 #define CFG(K) g_key_file_get_string(gkf, CFG_GROUP, (K), &err)
-
-static void
-_patch_and_apply_configuration(void)
-{
-	if (server_fd_max_passive <= 0) {
-		/* Rdir must be fast, write mostly in memory. Rather than specifying a
-		 * huge and variable number of connections, we arbitrarily prefer
-		 * keeping it small */
-		server_fd_max_passive = 32;
-	}
-
-	network_server_reconfigure(server);
-}
 
 static gboolean
 grid_main_configure(int argc, char **argv)
