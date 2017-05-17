@@ -15,17 +15,13 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 import json
-import os
 import time
-
+import subprocess
 from oio import ObjectStorageApi
-from oio.blob.rebuilder import BlobRebuilderWorker
-from oio.common.exceptions import MissingData
-from oio.common.utils import get_logger
 from oio.container.client import ContainerClient
 from oio.event.filters.content_rebuild import ContentRebuildFilter
 from tests.utils import BaseTestCase, random_str
-from testtools.testcase import ExpectedException
+from oio.event.beanstalk import Beanstalk
 
 
 class _App(object):
@@ -37,6 +33,7 @@ class _App(object):
 
 
 class TestContentBrokenFilter(BaseTestCase):
+
     def setUp(self):
         super(TestContentBrokenFilter, self).setUp()
         self.namespace = self.conf['namespace']
@@ -55,7 +52,10 @@ class TestContentBrokenFilter(BaseTestCase):
         self.stgpol = "SINGLE"
         self.content_rebuild_filter = ContentRebuildFilter(app=_App,
                                                            conf=self.conf)
-        self.rebuild_file = "content_rebuild.txt"
+        queue_url = self.conf.get('queue_url', 'tcp://127.0.0.1:11300')
+        self.tube = self.conf.get('tube', 'rebuild')
+        self.beanstalk = Beanstalk.from_url(queue_url)
+        self.beanstalk.use(self.tube)
 
     def _create_event(self, content_name, present_chunks, missing_chunks,
                       content_id):
@@ -85,18 +85,19 @@ class TestContentBrokenFilter(BaseTestCase):
                 return False
         return True
 
-    def _rebuild(self):
-        logger = get_logger({}, None, True)
-        conf = {}
-        conf["namespace"] = self.namespace
-        worker = BlobRebuilderWorker(conf, logger, None,
-                                     input_file=self.rebuild_file)
-        worker.rebuilder_pass()
+    def _rebuild(self, event, job_id=0):
+        self.blob_rebuilder = subprocess.Popen(
+                    ['oio-blob-rebuilder', self.namespace,
+                     '--beanstalkd=127.0.0.1:11300'])
+        time.sleep(3)
+        self.blob_rebuilder.kill()
 
     def _remove_chunks(self, chunks, content_id):
         uri = self.object_storage_api._make_uri('container/raw_delete')
         params = self.object_storage_api._make_params(self.account,
                                                       self.container)
+        if not chunks:
+            return
         for c in chunks:
             c['id'] = c['url']
             c['content'] = content_id
@@ -112,8 +113,7 @@ class TestContentBrokenFilter(BaseTestCase):
         event = self._create_event(content_name, chunks, missing_pos,
                                    meta['id'])
         self.content_rebuild_filter.process(env=event, cb=None)
-        self._rebuild()
-        os.remove(self.rebuild_file)
+        self._rebuild(event)
         _, after = self.object_storage_api.object_analyze(
                         container=self.container, obj=content_name,
                         account=self.account)
@@ -132,14 +132,13 @@ class TestContentBrokenFilter(BaseTestCase):
         meta, chunks = self.object_storage_api.object_analyze(
                           container=self.container, obj=content_name,
                           account=self.account)
+        chunks_to_remove = []
         for c in chunks:
             c.pop('score', None)
 
         missing_pos = []
-        event = self._create_event(content_name, chunks, missing_pos,
-                                   meta['id'])
-        with ExpectedException(MissingData):
-            self.content_rebuild_filter.process(env=event, cb=None)
+        self._check_rebuild(content_name, chunks, missing_pos, meta,
+                            chunks_to_remove, chunk_created=True)
 
     def test_missing_1_chunk(self):
         content_name = "test_missing_1_chunk"
@@ -220,10 +219,8 @@ class TestContentBrokenFilter(BaseTestCase):
             c.pop('score', None)
 
         missing_pos = ["0"]
-        event = self._create_event(content_name, chunks, missing_pos,
-                                   meta['id'])
-        self.content_rebuild_filter.process(env=event, cb=None)
-        os.remove(self.rebuild_file)
+        self._check_rebuild(content_name, chunks, missing_pos, meta,
+                            chunks_to_remove, chunk_created=False)
 
     def test_missing_all_chunks_of_a_pos(self):
         content_name = "test_missing_2_chunks"
@@ -244,10 +241,8 @@ class TestContentBrokenFilter(BaseTestCase):
             c.pop('score', None)
 
         missing_pos = ["0"]
-        event = self._create_event(content_name, chunks, missing_pos,
-                                   meta['id'])
-        self.content_rebuild_filter.process(env=event, cb=None)
-        os.remove(self.rebuild_file)
+        self._check_rebuild(content_name, chunks, missing_pos, meta,
+                            chunks_to_remove, chunk_created=False)
 
     def test_missing_multiple_chunks(self):
         content_name = "test_missing_multiple_chunks"
