@@ -31,8 +31,9 @@ License along with this library.
 #include "common_main.h"
 
 char syslog_id[64] = "";
-static volatile gint64 main_log_level_update = 0;
+volatile gboolean main_signal_SIGHUP;
 
+static volatile gint64 main_log_level_update = 0;
 static int syslog_opened = 0;
 static int grid_main_rc = 0;
 static volatile gboolean flag_running = FALSE;
@@ -297,6 +298,13 @@ grid_main_sighandler_stop(int s)
 }
 
 static void
+grid_main_sighandler_HUP(int s)
+{
+	main_signal_SIGHUP = TRUE;
+	signal(s, grid_main_sighandler_HUP);
+}
+
+static void
 grid_main_sighandler_USR1(int s)
 {
 	oio_log_verbose();
@@ -328,7 +336,8 @@ grid_main_sighandler_ALRM(int s)
 static void
 grid_main_install_sighandlers(void)
 {
-	signal(SIGHUP,  grid_main_sighandler_stop);
+	signal(SIGHUP,  grid_main_sighandler_HUP);
+
 	signal(SIGINT,  grid_main_sighandler_stop);
 	signal(SIGQUIT, grid_main_sighandler_stop);
 	signal(SIGTERM, grid_main_sighandler_stop);
