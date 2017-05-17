@@ -67,6 +67,9 @@ struct grid_main_option_s
 
 extern char syslog_id[64];
 
+/** Has the SIGHUP been raised */
+extern volatile gboolean main_signal_SIGHUP;
+
 /**
  * Returns an array of extra options managed by the current process.
  *
