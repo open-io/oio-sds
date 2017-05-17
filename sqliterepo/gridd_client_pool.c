@@ -25,7 +25,6 @@ License along with this library.
 #include <sys/socket.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
-#include <sys/resource.h>
 
 #include <metautils/lib/metautils.h>
 #include <sqliterepo/sqliterepo_variables.h>
@@ -47,9 +46,9 @@ struct gridd_client_pool_s
 	/* notifications */
 	int efd; /*!< event file descriptor */
 
-	int active_clients_size;
-	int active_max;
-	int active_count;
+	guint active_clients_size;
+	guint active_clients_max;
+	guint active_count;
 
 	/* if set to any non-zero value, new requests are not started */
 	int closed;
@@ -57,21 +56,18 @@ struct gridd_client_pool_s
 
 static void _destroy (struct gridd_client_pool_s *p);
 
-static guint _get_max (struct gridd_client_pool_s *pool);
-
-static void _set_max (struct gridd_client_pool_s *pool, guint max);
-
 static void _defer (struct gridd_client_pool_s *p, struct event_client_s *ev);
 
 static GError* _round (struct gridd_client_pool_s *p, time_t sec);
 
+static void _reconfigure (struct gridd_client_pool_s *p);
+
 static struct gridd_client_pool_vtable_s VTABLE =
 {
 	_destroy,
-	_get_max,
-	_set_max,
 	_defer,
-	_round
+	_round,
+	_reconfigure
 };
 
 struct gridd_client_pool_s *
@@ -92,17 +88,14 @@ gridd_client_pool_create(void)
 		return NULL;
 	}
 
-	/* TODO(jfs): factorize this in metautils */
-	struct rlimit limit = {0};
-	if (0 != getrlimit(RLIMIT_NOFILE, &limit))
-		limit.rlim_cur = limit.rlim_max = 32768;
+	const guint maxfd = metautils_syscall_count_maxfd();
 
 	pool = g_malloc0(sizeof(*pool));
 	pool->pending_clients = g_async_queue_new();
 
 	pool->fdmon = fdmon;
-	pool->active_max = limit.rlim_cur;
-	pool->active_clients_size = limit.rlim_cur;
+	pool->active_clients_size = maxfd;
+	pool->active_clients_max = maxfd;
 	pool->active_clients = g_malloc0(pool->active_clients_size
 			* sizeof(struct event_client_s*));
 
@@ -120,6 +113,8 @@ gridd_client_pool_create(void)
 	}
 
 	pool->vtable = &VTABLE;
+
+	_reconfigure(pool);
 	return pool;
 }
 
@@ -210,7 +205,7 @@ _destroy(struct gridd_client_pool_s *pool)
 	}
 
 	if (pool->active_clients) {
-		for (int i=0; i<pool->active_clients_size ;i++) {
+		for (guint i=0; i<pool->active_clients_size ;i++) {
 			struct event_client_s *ec = pool->active_clients[i];
 			pool->active_clients[i] = NULL;
 			if (ec)
@@ -244,13 +239,13 @@ _manage_timeouts(struct gridd_client_pool_s *pool)
 		return;
 	pool->last_timeout_check = now;
 
-	for (int i=0; i<pool->active_clients_size ;i++) {
+	for (guint i=0; i<pool->active_clients_size ;i++) {
 		struct event_client_s *ec;
 		if (!(ec = pool->active_clients[i]))
 			continue;
 
 		EXTRA_ASSERT(ec->client != NULL);
-		EXTRA_ASSERT(i == gridd_client_fd(ec->client));
+		EXTRA_ASSERT((int)i == gridd_client_fd(ec->client));
 
 		if (gridd_client_expire (ec->client, now)) {
 			GRID_INFO("EXPIRED Client fd=%d [%s]", i, gridd_client_url(ec->client));
@@ -278,7 +273,7 @@ _manage_requests(struct gridd_client_pool_s *pool)
 	EXTRA_ASSERT(pool != NULL);
 
 	gint64 start = oio_ext_monotonic_time();
-	while (pool->active_count < pool->active_max) {
+	while (pool->active_count < pool->active_clients_max) {
 		ec = g_async_queue_try_pop(pool->pending_clients);
 		if (NULL == ec)
 			break;
@@ -323,7 +318,7 @@ _manage_requests(struct gridd_client_pool_s *pool)
 				"this is a bit too much",
 				elapsed / G_TIME_SPAN_SECOND);
 		gint qlen = g_async_queue_length(pool->pending_clients);
-		if (qlen > pool->active_max)
+		if (qlen > (gint)pool->active_clients_max)
 			GRID_WARN("Client pool still has %d pending requests, "
 					"are we under an election storm?", qlen);
 	}
@@ -368,12 +363,26 @@ _manage_all_events(struct gridd_client_pool_s *pool,
 	}
 }
 
+static void
+_reconfigure(struct gridd_client_pool_s *pool)
+{
+	EXTRA_ASSERT(pool != NULL);
+	EXTRA_ASSERT(pool->vtable == &VTABLE);
+	if (sqliterepo_fd_max_active <= 0) {
+		pool->active_clients_max = pool->active_clients_size;
+	} else {
+		pool->active_clients_max =
+			CLAMP(sqliterepo_fd_max_active, 1, pool->active_clients_size);
+	}
+}
+
 static GError *
 _round(struct gridd_client_pool_s *pool, time_t sec)
 {
 	EXTRA_ASSERT(pool != NULL);
 	EXTRA_ASSERT(pool->vtable == &VTABLE);
 	EXTRA_ASSERT(pool->fdmon >= 0);
+	g_assert(sqliterepo_fd_max_active > 0);
 
 	struct epoll_event ev[MAX_ROUND];
 	int rc = epoll_wait(pool->fdmon, ev, MAX_ROUND, sec * 1000L);
@@ -412,24 +421,5 @@ _defer(struct gridd_client_pool_s *pool, struct event_client_s *ev)
 					errno, strerror(errno));
 		}
 	}
-}
-
-/* Bias introduced: 1 for epoll, 1 for the eventfd */
-
-static guint
-_get_max(struct gridd_client_pool_s *pool)
-{
-	EXTRA_ASSERT(pool != NULL);
-	EXTRA_ASSERT(pool->vtable == &VTABLE);
-	return pool->active_max + 2;
-}
-
-static void
-_set_max(struct gridd_client_pool_s *pool, guint max)
-{
-	EXTRA_ASSERT(pool != NULL);
-	EXTRA_ASSERT(pool->vtable == &VTABLE);
-	EXTRA_ASSERT(max > 2);
-	pool->active_max = max - 2;
 }
 

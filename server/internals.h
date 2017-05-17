@@ -77,14 +77,11 @@ struct network_server_s
 
 	guint64 cnx_accept;
 	guint64 cnx_close;
-	guint cnx_max_sys;
-	guint cnx_max;
+	volatile guint cnx_max;
 	volatile guint cnx_clients;
 
 	GQuark gq_gauge_threads;
 	GQuark gq_gauge_cnx_current;
-	GQuark gq_gauge_cnx_max;
-	GQuark gq_gauge_cnx_maxsys;
 	GQuark gq_counter_cnx_accept;
 	GQuark gq_counter_cnx_close;
 

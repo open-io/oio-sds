@@ -7,6 +7,7 @@
 #include <core/oio_core.h>
 #include <metautils/lib/metautils.h>
 #include <server/network_server.h>
+#include <server/server_variables.h>
 #include <events/oio_events_queue.h>
 #include <events/oio_events_queue_beanstalkd.h>
 
@@ -223,5 +224,6 @@ main(int argc, char **argv)
 {
 	HC_TEST_INIT(argc, argv);
 	g_test_add_func("/event/beanstalkd/nominal", test_nominal);
+	server_fd_max_passive = metautils_syscall_count_maxfd();
 	return g_test_run();
 }

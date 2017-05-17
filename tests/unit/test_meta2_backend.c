@@ -241,7 +241,6 @@ _repo_wrapper(const gchar *ns, gint64 maxvers, repo_test_f fr)
 	cfg.flags = SQLX_REPO_DELETEON;
 	cfg.sync_solo = SQLX_SYNC_OFF;
 	cfg.sync_repli = SQLX_SYNC_OFF;
-	cfg.max_bases = 64; /* no need for many slots */
 	err = sqlx_repository_init(repodir, &cfg, &repository);
 	g_assert_no_error(err);
 
@@ -283,7 +282,6 @@ _repo_failure(const gchar *ns)
 	g_assert_nonnull(resolver);
 
 	cfg.flags = SQLX_REPO_DELETEON;
-	cfg.max_bases = 64;
 	err = sqlx_repository_init(repodir, &cfg, &repository);
 	g_assert_no_error(err);
 	err = meta2_backend_init(&backend, repository, ns, lb, resolver);

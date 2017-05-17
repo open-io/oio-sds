@@ -94,8 +94,8 @@ struct network_client_s
 	struct network_transport_s transport;
 	GError *current_error;
 
-	struct network_client_s *prev; /*!< XXX DO NOT USE */
-	struct network_client_s *next; /*!< XXX DO NOT USE */
+	struct network_client_s *prev; /*!< DO NOT USE */
+	struct network_client_s *next; /*!< DO NOT USE */
 
 	gchar local_name[128];
 	gchar peer_name[128];
@@ -110,10 +110,12 @@ extern GQuark gq_time_overloaded;
 
 struct network_server_s * network_server_init(void);
 
+/* Re-set the limits of the server with the values stored in the central
+ * configuration facility */
+void network_server_reconfigure(struct network_server_s *srv);
+
 /* must be called PRIOR to network_server_open_servers */
 void network_server_allow_udp(struct network_server_s *srv);
-
-void network_server_set_maxcnx(struct network_server_s *srv, guint max);
 
 typedef void (*network_transport_factory) (gpointer u,
 		struct network_client_s *clt);

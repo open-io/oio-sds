@@ -129,9 +129,6 @@ struct sqlx_repo_config_s
 	/** Which value for 'pragma synchronous'
 	 * for replicated bases */
 	enum sqlx_sync_mode_e sync_repli;
-
-	/* Cache maximum number of items */
-	guint max_bases;
 };
 
 /* ------------------------------------------------------------------------- */
@@ -187,11 +184,6 @@ void sqlx_repository_set_elections(sqlx_repository_t *repo,
 /** Tells how to perform the directory-based hash on the base's name. */
 void sqlx_repository_configure_hash(sqlx_repository_t *repo,
 		guint width, guint depth);
-
-/** Calling this function on a repository that already managed a base has no
- * effect. */
-void sqlx_repository_configure_maxbases(sqlx_repository_t *repo,
-		guint max);
 
 /** Register a new DB type with its schema.  */
 GError* sqlx_repository_configure_type(sqlx_repository_t *repo,

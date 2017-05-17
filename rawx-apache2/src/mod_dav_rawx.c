@@ -34,7 +34,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <core/oio_sds.h>
 #include <core/oiovar.h>
 #include <metautils/lib/metautils.h>
-#include <server/server_variables.h>
+#include <events/events_variables.h>
 #include <cluster/lib/gridcluster.h>
 #include <rawx-lib/src/rawx.h>
 

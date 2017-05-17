@@ -17,11 +17,12 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-# include <unistd.h>
-# include <string.h>
-# include <fcntl.h>
-# include <poll.h>
-# include <sys/socket.h>
+#include <unistd.h>
+#include <string.h>
+#include <fcntl.h>
+#include <poll.h>
+#include <sys/socket.h>
+#include <sys/resource.h>
 
 #include "metautils_syscall.h"
 
@@ -158,3 +159,11 @@ metautils_syscall_setsockopt (int fd, int lvl, int opt, const void *v, socklen_t
 	return setsockopt(fd, lvl, opt, v, vl);
 }
 
+guint
+metautils_syscall_count_maxfd (void)
+{
+	struct rlimit limit = {0, 0};
+	if (0 == getrlimit(RLIMIT_NOFILE, &limit))
+		return MAX(1024,limit.rlim_cur);
+	return 1024;
+}

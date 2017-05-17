@@ -27,33 +27,14 @@ License along with this program.
 
 #include <metautils/lib/metautils.h>
 #include <server/network_server.h>
-#include <cluster/lib/gridcluster.h>
+#include <server/server_variables.h>
 
 static struct network_server_s *server = NULL;
 static GSList *urls = NULL;
 static GString *announce = NULL;
-static gchar *nsname = NULL;
+static gchar *ns_name = NULL;
 static struct grid_task_queue_s *gtq_admin = NULL;
 static GThread *th_admin = NULL;
-
-static void
-_task_register (gpointer p)
-{
-    (void) p;
-    struct service_info_s *si = g_malloc0 (sizeof (*si));
-    g_strlcpy (si->ns_name, nsname, sizeof (si->ns_name));
-    g_strlcpy (si->type, "echo", sizeof (si->type));
-    const char *id = announce ? announce->str : urls->data;
-    grid_string_to_addrinfo (id, &si->addr);
-    GError *err = register_namespace_service (si);
-
-    service_info_clean (si);
-    if (err) {
-        GRID_WARN ("Failed to register [%s]: (%d) %s", id, err->code,
-            err->message);
-        g_clear_error (&err);
-    }
-}
 
 static int
 _notify_input (struct network_client_s *clt)
@@ -82,6 +63,12 @@ _factory (gpointer factory_udata, struct network_client_s *clt)
 static void
 _echo_action (void)
 {
+	if (!(server = network_server_init ())) {
+		GRID_ERROR("Server instanciation error");
+		grid_main_set_status(1);
+		return;
+	}
+
     GError *err = NULL;
 
     if (NULL != (err = network_server_open_servers (server))) {
@@ -121,33 +108,35 @@ static void
 _echo_set_defaults (void)
 {
     urls = NULL;
-    nsname = NULL;
+    ns_name = NULL;
     announce = NULL;
     gtq_admin = grid_task_queue_create ("admin");
-    server = network_server_init ();
+    server = NULL;
 }
 
 static void
 _echo_specific_fini (void)
 {
-	// stop phase
+	/* stop phase */
 	if (gtq_admin)
 		grid_task_queue_stop (gtq_admin);
 	if (server) {
 		network_server_stop (server);
         network_server_close_servers (server);
 	}
-	// clean phase
+
+	/* clean phase */
     if (server)
         network_server_clean (server);
     g_slist_free_full (urls, g_free);
-    g_free0 (nsname);
+    g_free0 (ns_name);
     grid_task_queue_destroy (gtq_admin);
 }
 
 static gboolean
 _echo_configure (int argc, char **argv)
 {
+	/* Sanitize and parse the configuration */
 	if (!urls) {
         GRID_ERROR ("No URL configured");
         return FALSE;
@@ -156,13 +145,22 @@ _echo_configure (int argc, char **argv)
         GRID_ERROR ("Missing mandatory parameter");
         return FALSE;
     }
-    nsname = g_strdup (argv[0]);
+    ns_name = g_strdup (argv[0]);
     for (GSList * l = urls; l; l = l->next) {
         GRID_NOTICE ("Binding to [%s]", (gchar *) l->data);
         network_server_bind_host (server, l->data, NULL, _factory);
     }
 
-    grid_task_queue_register (gtq_admin, 1, _task_register, NULL, NULL);
+	/* Load the central config facility */
+	if (!oio_var_value_with_files(ns_name, TRUE, NULL)) {
+		GRID_ERROR("Unknown NS [%s]", ns_name);
+		return FALSE;
+	}
+
+	/* Ensure all the auto-determined variables */
+	if (server_fd_max_passive <= 0)
+		server_fd_max_passive = metautils_syscall_count_maxfd() - 32;
+
     return TRUE;
 }
 

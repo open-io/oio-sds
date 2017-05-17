@@ -22,10 +22,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define PSRV(P) ((struct sqlx_service_s*)(P))
 
-#define SQLX_MAX_BASES_PERCENT(max)   (max * 30) / 100
-#define SQLX_MAX_PASSIVE_PERCENT(max) (max * 40) / 100
-#define SQLX_MAX_ACTIVE_PERCENT(max)  (max * 30) / 100
-
 struct election_manager_s;
 struct gridd_client_factory_s;
 struct gridd_client_pool_s;
@@ -125,23 +121,10 @@ struct sqlx_service_s
 	struct gridd_client_pool_s *clients_pool;
 	GThread *thread_client;
 
-	/* This is configured during the "configure" step, and can be overriden
-	   in the _post_config hook. */
-	guint max_bases_soft;
-	guint max_bases_hard;
-	guint max_passive;
-	guint max_active;
-
 	//-------------------------------------------------------------------
 	// Variables used during the startup time of the server, but not used
 	// anymore after that.
 	//-------------------------------------------------------------------
-
-	guint cfg_max_bases_hard;
-	guint cfg_max_bases_soft;
-
-	guint cfg_max_passive;
-	guint cfg_max_active;
 
 	guint sync_mode_repli;
 	guint sync_mode_solo;
