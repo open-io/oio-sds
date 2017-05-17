@@ -234,7 +234,7 @@ class TestRdirServer2(TestRdirServer):
             f.write("[rdir-server]\n")
             f.write("bind_addr = {0}\n".format(self.host))
             f.write("bind_port = {0}\n".format(self.port))
-            f.write("namespace = OSEF\n")
+            f.write("namespace = {0}\n".format(self.ns))
             f.write("db_path = {0}\n".format(self.db_path))
             f.write("syslog_prefix = OIO,OPENIO,rdir,1\n")
 
