@@ -242,14 +242,16 @@ def test_list_ok(lib):
 
         (("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
          (200, {}, json.dumps({
-                "objects": [{"name": x, "hash": "0000", "size": 0, "ver": 1}
+                "objects": [{"name": x, "hash": "0000",
+                             "size": 0, "version": 1}
                             for x in names],
                 "prefixes": [],
                               }))),
 
         (("/v3.0/NS/container/list?acct=ACCT&ref=JFS&prefix=pla", {}, ""),
          (200, {}, json.dumps({
-                "objects": [{"name": x, "hash": "0000", "size": 0, "ver": 1}
+                "objects": [{"name": x, "hash": "0000",
+                             "size": 0, "version": 1}
                             for x in names if x.startswith("pla")],
                 "prefixes": [],
                               }))),
@@ -258,7 +260,7 @@ def test_list_ok(lib):
          (200, {"X-Oio-list-truncated": False, "X-Oio-list-next": "plep", },
             json.dumps({
                 "objects": [{"name": "plep", "hash": "0000",
-                             "size": 0, "ver": 1}],
+                             "size": 0, "version": 1}],
                 "prefixes": [],
                        }))),
 
@@ -266,8 +268,8 @@ def test_list_ok(lib):
          (200, {"X-Oio-list-truncated": True, "X-Oio-list-next": "plep", },
             json.dumps({
                 "objects": [
-                    {"name": "plap", "hash": "0000", "size": 0, "ver": 1},
-                    {"name": "plep", "hash": "0000", "size": 0, "ver": 1},
+                    {"name": "plap", "hash": "0000", "size": 0, "version": 1},
+                    {"name": "plep", "hash": "0000", "size": 0, "version": 1},
                 ],
                 "prefixes": [],
                        }))),
@@ -276,8 +278,8 @@ def test_list_ok(lib):
          (200, {"X-Oio-list-truncated": True, "X-Oio-list-next": "plep", },
             json.dumps({
                 "objects": [
-                    {"name": "plap", "hash": "0000", "size": 0, "ver": 1},
-                    {"name": "plep", "hash": "0000", "size": 0, "ver": 1},
+                    {"name": "plap", "hash": "0000", "size": 0, "version": 1},
+                    {"name": "plep", "hash": "0000", "size": 0, "version": 1},
                 ],
                 "prefixes": [],
                        }))),
@@ -287,7 +289,7 @@ def test_list_ok(lib):
          (200, {"X-Oio-list-truncated": False, "X-Oio-list-next": "plep", },
             json.dumps({
                 "objects": [{"name": "plep", "hash": "0000",
-                             "size": 0, "ver": 1}],
+                             "size": 0, "version": 1}],
                 "prefixes": [],
                        }))),
     ]

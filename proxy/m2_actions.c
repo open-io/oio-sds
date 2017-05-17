@@ -201,7 +201,7 @@ _dump_json_aliases_and_headers(GString *gstr, GSList *aliases,
 		g_string_append_c(gstr, '{');
 		OIO_JSON_append_gstr(gstr, "name", ALIASES_get_alias(a));
 		g_string_append_c(gstr, ',');
-		OIO_JSON_append_int(gstr, "ver", ALIASES_get_version(a));
+		OIO_JSON_append_int(gstr, "version", ALIASES_get_version(a));
 		g_string_append_c(gstr, ',');
 		OIO_JSON_append_int(gstr, "ctime", ALIASES_get_ctime(a));
 		g_string_append_c(gstr, ',');

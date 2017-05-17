@@ -266,7 +266,7 @@ class ContainerClient(ProxyClient):
     def content_list(self, account=None, reference=None, limit=None,
                      marker=None, end_marker=None, prefix=None,
                      delimiter=None, properties=False,
-                     cid=None, **kwargs):
+                     cid=None, versions=False, **kwargs):
         """
         Get the list of contents of a container.
 
@@ -278,6 +278,9 @@ class ContainerClient(ProxyClient):
                 'prefix': prefix, 'delimiter': delimiter,
                 'properties': properties}
         params.update(p_up)
+        # As of 4.0.0.a3, to make it false, the 'all' parameter must be absent
+        if versions:
+            params['all'] = '1'
         resp, body = self._request('GET', '/list', params=params, **kwargs)
         return resp.headers, body
 

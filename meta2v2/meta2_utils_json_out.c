@@ -31,7 +31,7 @@ encode_alias (GString *g, gpointer bean)
 {
 	OIO_JSON_append_gstr (g, "name", ALIASES_get_alias(bean));
 	g_string_append_c(g, ',');
-	OIO_JSON_append_int (g, "ver", ALIASES_get_version(bean));
+	OIO_JSON_append_int(g, "version", ALIASES_get_version(bean));
 	g_string_append_c(g, ',');
 	OIO_JSON_append_int (g, "ctime", ALIASES_get_ctime(bean));
 	g_string_append_c(g, ',');
