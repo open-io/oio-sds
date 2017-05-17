@@ -78,6 +78,11 @@
 		"code": "common_variables.c",
 		"header": "common_variables.h",
 		"variables": [
+			{ "type": "monotonic", "name": "main_log_level_reset_delay",
+				"key": "common.verbosity.reset_delay",
+				"def": "5m", "min": "1s", "max": "1h",
+				"descr": "Tells how long the verbosity remains higher before being reset to the default, after a SIGUSR1 has been received." },
+
 			{ "type": "float", "name": "oio_m0_client_timeout_common",
 				"key": "meta0.outgoing.timeout.common.req",
 				"descr": "Sets the timeout to the set of (quick) RPC that query a meta0 service",

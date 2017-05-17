@@ -65,9 +65,6 @@ struct grid_main_option_s
 	const char *descr;
 };
 
-/** Number of seconds since Epoch when the debug level has been updated. */
-extern gint64 main_log_level_update;
-
 extern char syslog_id[64];
 
 /**
