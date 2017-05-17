@@ -25,14 +25,15 @@ License along with this library.
 #include <errno.h>
 #include <sys/stat.h>
 
+#include <metautils/lib/common_variables.h>
+
 #include "metautils.h"
 #include "common_main.h"
 
 char syslog_id[64] = "";
+static volatile gint64 main_log_level_update = 0;
+
 static int syslog_opened = 0;
-gint64 main_log_level_update = 0;
-
-
 static int grid_main_rc = 0;
 static volatile gboolean flag_running = FALSE;
 static volatile gboolean flag_daemon = FALSE;
@@ -299,7 +300,7 @@ static void
 grid_main_sighandler_USR1(int s)
 {
 	oio_log_verbose();
-	main_log_level_update = oio_ext_monotonic_time () / G_TIME_SPAN_SECOND;
+	main_log_level_update = oio_ext_monotonic_time ();
 	alarm(900);
 	signal(s, grid_main_sighandler_USR1);
 }
@@ -307,17 +308,18 @@ grid_main_sighandler_USR1(int s)
 static void
 grid_main_sighandler_USR2(int s)
 {
-	signal(s, grid_main_sighandler_USR2);
 	oio_log_reset_level();
 	main_log_level_update = 0;
+	signal(s, grid_main_sighandler_USR2);
 }
 
 static void
 grid_main_sighandler_ALRM(int s)
 {
-	gint64 now = oio_ext_monotonic_time () / G_TIME_SPAN_SECOND;
+	gint64 now = oio_ext_monotonic_time();
 	signal(s, grid_main_sighandler_ALRM);
-	if (!main_log_level_update || main_log_level_update + 299 < now) {
+	if (!main_log_level_update ||
+			now > (main_log_level_update + main_log_level_reset_delay)) {
 		oio_log_reset_level();
 		main_log_level_update = 0;
 	}
@@ -449,7 +451,7 @@ grid_main_init(int argc, char **args)
 			case 'v':
 				if (!flag_quiet) {
 					oio_log_verbose_default();
-					main_log_level_update = oio_ext_monotonic_time () / G_TIME_SPAN_SECOND;
+					main_log_level_update = oio_ext_monotonic_time ();
 				}
 				break;
 			case ':':
