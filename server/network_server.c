@@ -830,7 +830,7 @@ _thread_cb_ping(gpointer d)
 }
 
 GError *
-network_server_run(struct network_server_s *srv)
+network_server_run(struct network_server_s *srv, void (*on_reload)(void))
 {
 	struct endpoint_s **pu, *u;
 	GError *err = NULL;
@@ -864,6 +864,11 @@ network_server_run(struct network_server_s *srv)
 				srv->gq_gauge_cnx_current, srv->cnx_clients,
 				srv->gq_counter_cnx_accept, srv->cnx_accept,
 				srv->gq_counter_cnx_close, srv->cnx_close);
+		if (main_signal_SIGHUP) {
+			main_signal_SIGHUP = FALSE;
+			if (on_reload)
+				(*on_reload)();
+		}
 	}
 
 	network_server_close_servers(srv);

@@ -145,7 +145,8 @@ void network_server_close_servers(struct network_server_s *srv);
 
 GError * network_server_open_servers(struct network_server_s *srv);
 
-GError * network_server_run(struct network_server_s *srv);
+GError * network_server_run(struct network_server_s *srv,
+		void (*on_reload)(void));
 
 void network_server_stop(struct network_server_s *srv);
 
