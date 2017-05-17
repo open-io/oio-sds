@@ -1966,7 +1966,7 @@ _notify_list_item (struct oio_sds_list_listener_s *listener,
 		{"name", &jn, json_type_string, 1},
 		{"hash", &jh, json_type_string, 1},
 		{"size", &js, json_type_int, 1},
-		{"ver",  &jv, json_type_int, 1},
+		{"version",  &jv, json_type_int, 1},
 		{"properties",  &jp, json_type_object, 0},
 		{NULL, NULL, 0, 0}
 	};

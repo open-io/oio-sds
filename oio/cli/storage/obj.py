@@ -543,7 +543,7 @@ class ListObject(ContainerCommandMixin, lister.Lister):
             def _gen_results(objects):
                 for obj in objects:
                     result = (obj['name'], obj['size'],
-                              obj['hash'], obj['ver'],
+                              obj['hash'], obj['version'],
                               obj['mime_type'],
                               Timestamp(obj['ctime']).isoformat,
                               _format_props(obj.get('properties', {})))
@@ -552,7 +552,7 @@ class ListObject(ContainerCommandMixin, lister.Lister):
             columns = ('Name', 'Size', 'Hash', 'Version',
                        'Content-Type', 'Last-Modified', 'Properties')
         else:
-            results = ((obj['name'], obj['size'], obj['hash'], obj['ver'])
+            results = ((obj['name'], obj['size'], obj['hash'], obj['version'])
                        for obj in obj_gen)
             columns = ('Name', 'Size', 'Hash', 'Version')
         return (columns, results)

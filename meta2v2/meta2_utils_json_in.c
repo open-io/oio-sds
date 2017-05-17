@@ -39,7 +39,7 @@ m2v2_json_load_single_alias (struct json_object *j, gpointer *pbean)
 	struct json_object *jname, *jversion, *jctime, *jmtime, *jheader, *jdel;
 	struct oio_ext_json_mapping_s m[] = {
 		{"name",    &jname,    json_type_string,  1},
-		{"ver",     &jversion, json_type_int,     1},
+		{"version", &jversion, json_type_int,     1},
 		{"header",  &jheader,  json_type_string,  1},
 		{"ctime",   &jctime,   json_type_int,     0},
 		{"mtime",   &jmtime,   json_type_int,     0},
