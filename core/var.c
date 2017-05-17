@@ -361,3 +361,16 @@ oio_var_value_with_files(const char *ns, gboolean sys, GSList *files)
 
 	return known;
 }
+
+void
+oio_var_reset_all(void)
+{
+	g_mutex_lock(&var_lock);
+	for (GSList *l=var_records; l ;l=l->next) {
+		if (!l->data)
+			continue;
+		struct oio_var_record_s *rec = l->data;
+		_record_set(rec, rec->def);
+	}
+	g_mutex_unlock(&var_lock);
+}
