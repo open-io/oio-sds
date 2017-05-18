@@ -38,14 +38,16 @@ target_link_libraries(oiosds_test oiosds)
 set_target_properties(oiosds_test PROPERTIES
 		SOVERSION ${ABI_VERSION})
 add_test(NAME core/sds
-		COMMAND /usr/bin/env python ${CMAKE_CURRENT_SOURCE_DIR}/test_oiosds.py ${CMAKE_CURRENT_BINARY_DIR})
+		COMMAND /usr/bin/env ${PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/test_oiosds.py ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(core/sds PROPERTIES ENVIRONMENT CTEST_OUTPUT_ON_FAILURE=1)
 
 add_library(oiohttp_test SHARED testlib_http.c)
 target_link_libraries(oiohttp_test oiosds)
 set_target_properties(oiohttp_test PROPERTIES
 		SOVERSION ${ABI_VERSION})
 add_test(NAME core/http
-		COMMAND /usr/bin/env python ${CMAKE_CURRENT_SOURCE_DIR}/test_oiohttp.py ${CMAKE_CURRENT_BINARY_DIR})
+		COMMAND /usr/bin/env ${PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/test_oiohttp.py ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(core/http PROPERTIES ENVIRONMENT CTEST_OUTPUT_ON_FAILURE=1)
 
 add_executable(test_oio_cs test_cs.c)
 target_link_libraries(test_oio_cs oiosds)

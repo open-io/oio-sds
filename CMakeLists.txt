@@ -25,6 +25,7 @@ if (NOT ABI_VERSION)
 endif()
 
 set(CMAKE_C_FLAGS "-g -fPIC -pipe -Wall -Wextra -std=gnu99")
+set(PYTHON python)
 
 # necessary to benefit from zero'ed static allocation of structures
 # as proposed by C99. (we only allocate the first field and let the compiler
@@ -65,6 +66,9 @@ if ( ENABLE_CODECOVERAGE )
         set( CODECOV_HTMLOUTPUTDIR coverage_results )
     endif ( NOT DEFINED CODECOV_HTMLOUTPUTDIR )
 
+    set(PYTHON_COVERAGE_FILE ${CMAKE_BINARY_DIR}/.python_coverage)
+    set(PYTHON coverage run -p --source=${CMAKE_SOURCE_DIR})
+
     if ( CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX )
         find_program( CODECOV_GCOV gcov )
         find_program( CODECOV_LCOV lcov )
@@ -72,10 +76,14 @@ if ( ENABLE_CODECOVERAGE )
         add_definitions( -fprofile-arcs -ftest-coverage )
         link_libraries( gcov )
         set( CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} --coverage )
-        add_custom_target( coverage_init ${CODECOV_LCOV} --base-directory ${CMAKE_SOURCE_DIR}  --directory ${CMAKE_BINARY_DIR} --output-file ${CODECOV_OUTPUTFILE} --capture --initial )
-        add_custom_target( coverage ${CODECOV_LCOV} --base-directory ${CMAKE_SOURCE_DIR}  --directory ${CMAKE_BINARY_DIR} --no-external --output-file ${CODECOV_OUTPUTFILE} --capture COMMAND genhtml --ignore-errors source -o ${CODECOV_HTMLOUTPUTDIR} ${CODECOV_OUTPUTFILE} )
-    endif ( CMAKE_COMPILER_IS_GNUCXX )
-
+        add_custom_target( coverage_init
+                           ${CODECOV_LCOV} --base-directory ${CMAKE_SOURCE_DIR}  --directory ${CMAKE_BINARY_DIR} --output-file ${CODECOV_OUTPUTFILE} --capture --initial
+                           COMMAND coverage erase)
+        add_custom_target( coverage ${CODECOV_LCOV} --base-directory ${CMAKE_SOURCE_DIR}  --directory ${CMAKE_BINARY_DIR} --no-external --output-file ${CODECOV_OUTPUTFILE} --capture
+                           COMMAND genhtml --ignore-errors source -o ${CODECOV_HTMLOUTPUTDIR} ${CODECOV_OUTPUTFILE}
+                           COMMAND coverage combine
+                           COMMAND coverage html)
+    endif ( CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX )
 endif (ENABLE_CODECOVERAGE )
 
 set(CMAKE_C_FLAGS_DEBUG          "-O0 -fno-inline")
