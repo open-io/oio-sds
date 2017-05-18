@@ -66,6 +66,4 @@ GByteArray* version_encode(GTree *t);
 
 GTree* version_decode(guint8 *raw, gsize rawsize);
 
-GTree* version_dup(GTree *version);
-
 #endif /*OIO_SDS__sqliterepo__version_h*/
