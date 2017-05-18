@@ -1499,11 +1499,11 @@ sqlx_repository_get_peers2(sqlx_repository_t *repo,
 	GError *err = sqlx_repository_open_and_lock(repo, n, SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK, &sq3, NULL);
 	if (!err) {
 		gchar *tmp = sqlx_admin_get_str(sq3, SQLX_ADMIN_PEERS);
+		sqlx_repository_unlock_and_close_noerror2(sq3, SQLX_CLOSE_IMMEDIATELY);
 		if (tmp) {
 			*result = g_strsplit(tmp, ",", -1);
 			g_free(tmp);
 		}
-		sqlx_repository_unlock_and_close_noerror2(sq3, SQLX_CLOSE_IMMEDIATELY);
 	}
 	return err;
 }
