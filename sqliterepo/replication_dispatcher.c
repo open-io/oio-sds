@@ -1226,7 +1226,6 @@ do_destroy(struct gridd_reply_ctx_s *reply, struct sqlx_repository_s *repo,
 		struct sqlx_name_s *name, gboolean local)
 {
 	GError *err = NULL;
-	gchar **peers = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 
 	GRID_DEBUG("Opening for destruction [%s][%s] (%s)",
@@ -1237,13 +1236,15 @@ do_destroy(struct gridd_reply_ctx_s *reply, struct sqlx_repository_s *repo,
 		return err;
 
 	if (!local) {
+		gchar **peers = NULL;
 		err = election_get_peers(sq3->manager, name, FALSE, &peers);
-		if (err)
+		if (err) {
+			EXTRA_ASSERT(peers == NULL);
 			goto end_label;
-		if (NULL != peers) {
+		} else {
+			EXTRA_ASSERT(peers != NULL);
 			err = sqlx_remote_execute_DESTROY_many(peers, NULL, name);
 			g_strfreev(peers);
-			peers = NULL;
 		}
 	}
 

@@ -94,9 +94,10 @@ _get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
 
 	*result = strv_filter(ss, peers);
 	g_slist_free_full(peers, (GDestroyNotify)free_zknode);
-	if (unlikely(*result == NULL))
-		return NEWERROR(CODE_CONTAINER_NOTFOUND, "Base not managed");
-	return NULL;
+	if (likely(*result != NULL))
+		return NULL;
+
+	return NEWERROR(CODE_CONTAINER_NOTFOUND, "Base not managed");
 }
 
 static void

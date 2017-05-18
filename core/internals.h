@@ -29,6 +29,14 @@ extern "C" {
 #  define EXTRA_ASSERT(X)
 # endif
 
+# ifdef __GNUC__
+#  define likely(x)       __builtin_expect((x),1)
+#  define unlikely(x)     __builtin_expect((x),0)
+# else
+#  define likely(x)       (x)
+#  define unlikely(x)     (x)
+# endif
+
 #define LIMIT_LENGTH_REQID 64
 
 #define OLDEST(now,delay) (((now)>(delay)) ? ((now)-(delay)) : 0)

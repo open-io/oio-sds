@@ -838,8 +838,10 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 			GRID_WARN("Failed to fetch peers for %s (%d %s), "
 					"the local entry may remain uninitialized",
 					(*result)->path_inline, err->code, err->message);
+			EXTRA_ASSERT(peers == NULL);
 			g_clear_error(&err);
 		} else {
+			EXTRA_ASSERT(peers != NULL);
 			// The list returned by `get_peers` does not include this service
 			gchar *myid = g_strdup(
 					election_manager_get_local((*result)->manager));
@@ -1097,24 +1099,6 @@ sqlx_repository_status_base(sqlx_repository_t *repo, const struct sqlx_name_s *n
 	status = election_get_status(repo->election_manager, n, &url);
 	switch (status) {
 		case ELECTION_LOST:
-			if (GRID_DEBUG_ENABLED()) {
-				gchar **my_peers = NULL;
-				gboolean master_in_peers = FALSE;
-				GError *err2 = election_get_peers(repo->election_manager, n, FALSE, &my_peers);
-				for (gchar **cursor = my_peers;
-						my_peers && *cursor && !master_in_peers;
-						cursor++) {
-					master_in_peers |= (0 == g_strcmp0(url, *cursor));
-				}
-				if (!master_in_peers) {
-					gchar *tmp = g_strjoinv(", ", my_peers);
-					GRID_DEBUG("Redirecting to a bad service (%s not in [%s])",
-							url, tmp);
-					g_free(tmp);
-				}
-				g_strfreev(my_peers);
-				g_clear_error(&err2);
-			}
 			err = NEWERROR(CODE_REDIRECT, "%s", url);
 			break;
 		case ELECTION_LEADER:
@@ -1492,17 +1476,18 @@ sqlx_repository_get_peers2(sqlx_repository_t *repo,
 	SQLXNAME_CHECK(n);
 	EXTRA_ASSERT(result != NULL);
 
-	GRID_TRACE2("%s(%p,%s,%s)", __FUNCTION__, repo, n->type, n->base);
-	*result = NULL;
-
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = sqlx_repository_open_and_lock(repo, n, SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK, &sq3, NULL);
-	if (!err) {
+	if (err) {
+		*result = NULL;
+	} else {
 		gchar *tmp = sqlx_admin_get_str(sq3, SQLX_ADMIN_PEERS);
 		sqlx_repository_unlock_and_close_noerror2(sq3, SQLX_CLOSE_IMMEDIATELY);
 		if (tmp) {
 			*result = g_strsplit(tmp, ",", -1);
 			g_free(tmp);
+		} else {
+			*result = g_malloc0(sizeof(gchar*));
 		}
 	}
 	return err;
