@@ -4,6 +4,12 @@ export COLUMNS=512 LANG=
 export G_DEBUG=fatal_warnings
 export G_SLICE=always-malloc
 
+export PYTHON=python
+
+if [ "${PYTHON_COVERAGE:-}" == "1" ]; then
+    PYTHON="coverage run -p --omit=/home/travis/oio/lib/python2.7/*"
+fi
+
 SRCDIR=$PWD
 WRKDIR=$PWD
 if [ $# -eq 2 ] ; then
@@ -34,10 +40,10 @@ func_tests () {
 
     # test a content with a strange name, through the CLI and the API
     /usr/bin/fallocate -l $RANDOM /tmp/blob%
-    openio object create $RANDOM /tmp/blob%
+    ${PYTHON} $(which openio) object create $RANDOM /tmp/blob%
 
     cd $SRCDIR
-    tox && tox -e func
+    tox -e coverage && tox -e func,coverage
     cd $WRKDIR
     make -C tests/func test
     ./core/tool_roundtrip /etc/passwd
@@ -50,9 +56,9 @@ test_worm () {
     echo -e "END OF RESET" | logger -t TEST
     cd $SRCDIR
     export WORM=1
-    tox
+    tox -e coverage
     echo "test_filters: begin WORM test"
-    nosetests tests.functional.m2_filters.test_filters
+    ${PYTHON} $(which nosetests) tests.functional.m2_filters.test_filters
     unset WORM
 }
 
@@ -65,7 +71,7 @@ test_slave () {
     export SLAVE=1
     tox
     echo "test_filters: begin SLAVE test"
-    nosetests tests.functional.m2_filters.test_filters
+    ${PYTHON} $(which nosetests) tests.functional.m2_filters.test_filters
     unset SLAVE
 }
 
