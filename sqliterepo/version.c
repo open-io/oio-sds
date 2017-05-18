@@ -102,22 +102,6 @@ version_debug(const gchar *tag, GTree *versions)
 	g_free(s);
 }
 
-static gboolean
-hook_increment(gpointer k, gpointer v, gpointer u)
-{
-	(void) k; (void) u;
-	OV(v)->version ++;
-	OV(v)->when = oio_ext_real_time() / G_TIME_SPAN_SECOND;
-	return FALSE;
-}
-
-void
-version_increment_all(GTree *t)
-{
-	if (t)
-		g_tree_foreach(t, hook_increment, NULL);
-}
-
 #include <TableVersion.h>
 #include <BaseVersion.h>
 #include <asn_codecs.h>
