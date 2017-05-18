@@ -24,14 +24,6 @@ License along with this library.
 
 /* A place for all the macros playing with integer bits */
 
-# ifdef __GNUC__
-#  define likely(x)       __builtin_expect(BOOL(x),1)
-#  define unlikely(x)     __builtin_expect(BOOL(x),0)
-# else
-#  define likely(x)       (x)
-#  define unlikely(x)     (x)
-# endif
-
 struct hash_len_s
 {
 	guint32 h;

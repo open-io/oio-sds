@@ -142,9 +142,10 @@ _get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
 		_reload_prefixes(ss, FALSE);
 
 	*result = meta1_prefixes_get_peers(meta1_backend_get_prefixes(m1), cid);
-	if (unlikely(*result == NULL))
-		return NEWERROR(CODE_CONTAINER_NOTFOUND, "Base not managed");
-	return NULL;
+	if (likely(*result != NULL))
+		return NULL;
+
+	return NEWERROR(CODE_CONTAINER_NOTFOUND, "Base not managed");
 }
 
 static gboolean

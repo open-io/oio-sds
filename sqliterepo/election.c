@@ -565,29 +565,34 @@ GError *
 election_has_peers (struct election_manager_s *m, const struct sqlx_name_s *n,
 		gboolean nocache, gboolean *result)
 {
+	EXTRA_ASSERT(result != NULL);
 	gchar **peers = NULL;
 	GError *err = election_get_peers (m, n, nocache, &peers);
 	if (err != NULL) {
+		EXTRA_ASSERT(peers == NULL);
 		*result = FALSE;
 		return err;
-	}
-	*result = peers != NULL && oio_str_is_set(*peers);
-	if (peers)
+	} else {
+		EXTRA_ASSERT(peers != NULL);
+		*result = oio_str_is_set(*peers);
 		g_strfreev(peers);
-	return NULL;
+		return NULL;
+	}
 }
 
 GError *
 election_get_peers (struct election_manager_s *m, const struct sqlx_name_s *n,
 		gboolean nocache, gchar ***peers)
 {
+	EXTRA_ASSERT(peers != NULL);
 	if (!m) {
-		if (peers)
-			*peers = g_malloc0(sizeof(void*));
+		*peers = g_malloc0(sizeof(void*));
 		return NULL;
+	} else {
+		*peers = NULL;
+		return ((struct abstract_election_manager_s*)m)->vtable->
+			election_get_peers(m,n,nocache,peers);
 	}
-	return ((struct abstract_election_manager_s*)m)->vtable->election_get_peers
-		(m,n,nocache,peers);
 }
 
 const char *
@@ -644,29 +649,25 @@ _election_get_peers(struct election_manager_s *manager,
 		const struct sqlx_name_s *n, gboolean nocache, gchar ***result)
 {
 	SQLXNAME_CHECK(n);
+	EXTRA_ASSERT(result != NULL);
 
 	if (!manager || !manager->config || !manager->config->get_peers) {
-		if (result)
-			*result = NULL;
+		*result = g_malloc0(sizeof(void*));
 		return NULL;
-	}
-
-	gchar **peers = NULL;
-	GError *err = manager->config->get_peers(manager->config->ctx, n, nocache, &peers);
-	if (!err) {
-		if (result)
+	} else {
+		gchar **peers = NULL;
+		GError *err = manager->config->get_peers(manager->config->ctx, n, nocache, &peers);
+		if (!err) {
+			EXTRA_ASSERT(peers != NULL);
 			*result = peers;
-		else
-			g_strfreev (peers);
-		return NULL;
+			return NULL;
+		} else {
+			EXTRA_ASSERT(peers == NULL);
+			*result = NULL;
+			g_prefix_error(&err, "get_peers(%s,%s): ", n->base, n->type);
+			return err;
+		}
 	}
-	if (peers) {
-		g_strfreev (peers);
-		peers = NULL;
-	}
-
-	g_prefix_error(&err, "get_peers(%s,%s): ", n->base, n->type);
-	return err;
 }
 
 static void
@@ -819,7 +820,9 @@ member_get_peers(struct election_member_s *m, gboolean nocache, gchar ***peers)
 static void
 member_decache_peers(struct election_member_s *m)
 {
-	GError *err = member_get_peers(m, TRUE, NULL);
+	gchar **peers = NULL;
+	GError *err = member_get_peers(m, TRUE, &peers);
+	oio_str_cleanv(&peers);
 	if (err) g_clear_error(&err);
 }
 
@@ -1870,23 +1873,24 @@ defer_USE(struct election_member_s *member)
 	if (err != NULL) {
 		GRID_WARN("[%s] Election initiated (%s) but get_peers error: (%d) %s",
 				__FUNCTION__, _step2str(member->step), err->code, err->message);
+		EXTRA_ASSERT(peers == NULL);
 		g_clear_error(&err);
 		return FALSE;
-	}
-
-	if (!peers || !*peers) {
-		member_trace("avoid:USE", member);
 	} else {
-		member->last_USE = oio_ext_monotonic_time();
-		for (gchar **p = peers; peers && *p; p++) {
-			MEMBER_NAME(n,member);
-			sqlx_peering__use (member->manager->peering, *p, &n);
-			member_trace("sched:USE", member);
+		EXTRA_ASSERT(peers != NULL);
+		if (!oio_str_is_set(*peers)) {
+			member_trace("avoid:USE", member);
+		} else {
+			member->last_USE = oio_ext_monotonic_time();
+			for (gchar **p = peers; peers && *p; p++) {
+				MEMBER_NAME(n,member);
+				sqlx_peering__use (member->manager->peering, *p, &n);
+				member_trace("sched:USE", member);
+			}
 		}
+		oio_str_cleanv(&peers);
+		return TRUE;
 	}
-
-	if (peers) g_strfreev(peers);
-	return TRUE;
 }
 
 static void
@@ -2280,13 +2284,14 @@ member_action_to_CHECKING_SLAVES(struct election_member_s *m)
 	if (err != NULL) {
 		GRID_WARN("[%s] Election initiated (%s) but get_peers error: (%d) %s",
 				__FUNCTION__, _step2str(m->step), err->code, err->message);
+		EXTRA_ASSERT(peers == NULL);
 		g_clear_error(&err);
-		if (peers)
-			g_strfreev(peers);
 		/* Damned, no peers were found. Let's exit and fail. Maybe after a
 		 * short sleep we will be able to re-locate the peers. */
 		return member_action_to_LEAVING_FAILING(m);
 	}
+
+	EXTRA_ASSERT(peers != NULL);
 
 	if (m->pending_GETVERS > 0)
 		member_warn("lost:GETVERS", m);
@@ -2299,7 +2304,7 @@ member_action_to_CHECKING_SLAVES(struct election_member_s *m)
 	m->errors_GETVERS = 0;
 
 	MEMBER_NAME(n, m);
-	for (gchar **p=peers; p && *p; p++) {
+	for (gchar **p=peers; peers && *p; p++) {
 		sqlx_peering__getvers (m->manager->peering, *p,
 				&n, m->manager, 0, _result_GETVERS);
 		member_trace("sched:GETVERS", m);

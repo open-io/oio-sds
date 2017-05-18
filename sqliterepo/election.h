@@ -47,12 +47,12 @@ struct replication_config_s
 	/** Locate the replication peers of the base identified by <n,t>. An error
 	 * means the base cannot be replicated or managed. A base not managed
 	 *  locally must return an error. A base locally managed but not replicated
-	 *  must return NULL and fill result with a NULL pointer or an empty array.
+	 *  must return NULL and fill result with an empty array.
 	 *
 	 * @param ctx the pointer registered in the configuration
 	 * @param n the logical name of the base (not the physical path)
 	 * @param result a placeholder for the array of peers.
-	 * @return NULL if 'result'
+	 * @return NULL if 'result' is set, and not-NULL if 'result' is not set
 	 */
 	GError* (*get_peers) (gpointer ctx, const struct sqlx_name_s *n,
 			gboolean nocache, gchar ***result);

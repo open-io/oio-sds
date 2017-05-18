@@ -576,7 +576,7 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 			return err;
 	}
 
-	if (params->local) // NOREFCHECK: do not call get_peers()
+	if (params->local)
 		open_mode = M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK;
 	else
 		open_mode = M2V2_OPEN_MASTERONLY;

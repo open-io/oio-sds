@@ -688,3 +688,13 @@ gchar ** KV_extract_not_prefixed (gchar **kv, const char *prefix) {
 	g_ptr_array_add(tmp, NULL);
 	return (gchar**) g_ptr_array_free(tmp, FALSE);
 }
+
+void oio_str_cleanv(gchar ***p) {
+	if (unlikely(p == NULL))
+		return;
+	if (*p) {
+		g_strfreev(*p);
+		*p = NULL;
+	}
+}
+

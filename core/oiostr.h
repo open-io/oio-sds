@@ -61,6 +61,9 @@ gchar ** oio_strv_append(gchar **dst, gchar *s);
 /** frees *s and set it to NULL */
 void oio_str_clean(gchar **s);
 
+/** g_strfreev *p and set it to NULL */
+void oio_str_cleanv(gchar ***p);
+
 /** frees *dst and set it to src */
 void oio_str_replace(gchar **dst, const char *src);
 

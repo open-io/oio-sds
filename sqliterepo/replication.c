@@ -355,22 +355,22 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx)
 static void
 _defer_synchronous_RESYNC(struct sqlx_repctx_s *ctx)
 {
-	gchar **peers = NULL;
-
 	NAME2CONST(n, ctx->sq3->name);
+
+	gchar **peers = NULL;
 	GError *err = election_get_peers (ctx->sq3->manager, &n, FALSE, &peers);
+	EXTRA_ASSERT((err != NULL) ^ (peers != NULL));
 
 	if (err != NULL) {
 		GRID_WARN("Replicated transaction started but peers not found "
 				"[%s][%s]: (%d) %s", ctx->sq3->name.base, ctx->sq3->name.type,
 				err->code, err->message);
 		g_clear_error(&err);
-		return;
-	}
-
-	if (peers) {
-		for (gchar **p=peers; *p ;++p)
+	} else if (peers) {
+		for (gchar **p=peers; *p ;++p) {
 			g_ptr_array_add(ctx->resync_todo, *p);
+			*p = NULL;
+		}
 		g_free(peers);
 	}
 }
@@ -378,29 +378,32 @@ _defer_synchronous_RESYNC(struct sqlx_repctx_s *ctx)
 static int
 _perform_REPLICATE(struct sqlx_repctx_s *ctx)
 {
-	gchar **peers = NULL;
-
 	NAME2CONST(n, ctx->sq3->name);
+
+	gchar **peers = NULL;
 	GError *err = election_get_peers (ctx->sq3->manager, &n, FALSE, &peers);
+	EXTRA_ASSERT((err != NULL) ^ (peers != NULL));
 
 	if (err != NULL) {
-		GRID_WARN("Replicated transaction started but peers not found "
-				"[%s][%s]: (%d) %s", ctx->sq3->name.base,
-				ctx->sq3->name.type, err->code, err->message);
+		GRID_WARN("Replicated transaction started but peers not found [%s.%s]"
+				": (%d) %s", ctx->sq3->name.base, ctx->sq3->name.type,
+				err->code, err->message);
 		g_clear_error(&err);
 		return 1;
 	}
 
-	if (!peers) {
-		GRID_DEBUG("No peer located, no replication to do");
-		return 0;
+	if (!peers || !oio_str_is_set(*peers)) {
+		GRID_WARN("Replication triggered but no peer found for [%s.%s]",
+				 ctx->sq3->name.base, ctx->sq3->name.type);
+		oio_str_cleanv(&peers);
+		return 1;
 	}
 
 	err = _replicate_on_peers(peers, ctx);
 	g_strfreev(peers);
 	context_flush_rowsets(ctx);
 
-	if (!err)
+	if (likely(err == NULL))
 		return 0;
 
 	GRID_WARN("%s(%p) FAILED: (%d) %s", __FUNCTION__, ctx, err->code,

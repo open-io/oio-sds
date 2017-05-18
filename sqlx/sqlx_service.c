@@ -420,17 +420,6 @@ filter_services(struct sqlx_service_s *ss, gchar **s, const gchar *type)
 	return NULL;
 }
 
-static gchar **
-filter_services_and_clean(struct sqlx_service_s *ss,
-		gchar **src, const gchar *type)
-{
-	if (!src)
-		return NULL;
-	gchar **result = filter_services(ss, src, type);
-	g_strfreev(src);
-	return result;
-}
-
 GError *
 sqlx_service_resolve_peers(struct sqlx_service_s *ss,
 		const struct sqlx_name_s *n, gboolean nocache, gchar ***result)
@@ -438,35 +427,41 @@ sqlx_service_resolve_peers(struct sqlx_service_s *ss,
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(result != NULL);
 
-	gint retry = TRUE;
 	GError *err = NULL;
-
 	gint64 seq = 1;
+	gint retry = 1;
+
+	*result = NULL;
+
 	struct oio_url_s *u = oio_url_empty ();
 	oio_url_set(u, OIOURL_NS, ss->ns_name);
+
 	if (!sqlx_name_extract(n, u, ss->service_config->srvtype, &seq)) {
-		oio_url_pclean (&u);
-		return BADREQ("Invalid type name: '%s'", n->type);
-	}
-
+		err = BADREQ("Invalid type name: '%s'", n->type);
+	} else {
 label_retry:
-	if (nocache) {
-		hc_decache_reference_service(ss->resolver, u, n->type);
-	}
+		if (nocache)
+			hc_decache_reference_service(ss->resolver, u, n->type);
 
-	err = hc_resolve_reference_service(ss->resolver, u, n->type, result);
-
-	if (err) {
-		if (retry && err->code == CODE_RANGE_NOTFOUND) {
-			// We may have asked the wrong meta1
-			hc_decache_reference(ss->resolver, u);
-			retry = FALSE;
-			goto label_retry;
+		gchar **peers = NULL;
+		err = hc_resolve_reference_service(ss->resolver, u, n->type, &peers);
+		if (err == NULL) {
+			EXTRA_ASSERT(peers != NULL);
+			*result = peers;
+			peers = NULL;
+		} else {
+			EXTRA_ASSERT(peers == NULL);
+			if (retry > 0 && err->code == CODE_RANGE_NOTFOUND) {
+				// We may have asked the wrong meta1
+				hc_decache_reference(ss->resolver, u);
+				retry --;
+				goto label_retry;
+			}
+			g_prefix_error(&err, "Peer resolution error: ");
 		}
-		g_prefix_error(&err, "Peer resolution error: ");
 	}
 
-	oio_url_clean(u);
+	oio_url_pclean (&u);
 	return err;
 }
 
@@ -481,6 +476,8 @@ _get_peers_wrapper(struct sqlx_service_s *ss, const struct sqlx_name_s *name,
 	gchar **peers = NULL;
 	GError *err = NULL;
 
+	*result = NULL;
+
 	// Try to read peers from the database
 	if (!nocache) {
 		err = sqlx_repository_get_peers2(ss->repository, name, &peers);
@@ -488,36 +485,42 @@ _get_peers_wrapper(struct sqlx_service_s *ss, const struct sqlx_name_s *name,
 			GRID_INFO("Failed to get_peers() from local database: (%d) %s",
 					err->code, err->message);
 			g_clear_error(&err);
+			EXTRA_ASSERT(peers == NULL);
 		}
 	}
 
 label_retry:
 	// Try to read peers from the upper-level service
-	if (!peers) {
+	if (!peers || !oio_str_is_set(*peers)) {
+		oio_str_cleanv(&peers);
 		err = ss->service_config->get_peers(ss, name, nocache, &peers);
 	}
 
 	if (!err) {
-		*result = filter_services_and_clean(ss, peers, name->type);
+		EXTRA_ASSERT(peers != NULL);
+		*result = filter_services(ss, peers, name->type);
+		oio_str_cleanv(&peers);
 		if (!*result) {
 			// If cache was enabled, we can retry without cache
 			if (!nocache) {
 				nocache = TRUE;
-				// freed by filter_services_and_clean() but still not NULL
-				peers = NULL;
 				goto label_retry;
 			} else {
 				err = NEWERROR(CODE_CONTAINER_NOTFOUND, "Base not managed");
 			}
 		}
-	} else if (err->code == CODE_RANGE_NOTFOUND && !nocache) {
-		// We may have asked the wrong upper-level service
-		// TODO: call hc_decache_reference(ss->resolver, url);
-		// and remove the retry loop from meta2
-		nocache = TRUE;
-		goto label_retry;
+	} else {
+		EXTRA_ASSERT(peers == NULL);
+		if (err->code == CODE_RANGE_NOTFOUND && !nocache) {
+			// We may have asked the wrong upper-level service
+			// TODO: call hc_decache_reference(ss->resolver, url);
+			// and remove the retry loop from meta2
+			nocache = TRUE;
+			goto label_retry;
+		}
 	}
 
+	EXTRA_ASSERT((err != NULL) ^ (*result != NULL));
 	return err;
 }
 
