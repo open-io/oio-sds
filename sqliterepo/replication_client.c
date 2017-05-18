@@ -160,18 +160,3 @@ peer_dump(const gchar *target, struct sqlx_name_s *name, gboolean chunked,
 
 	return err;
 }
-
-GError *
-peer_dump_gba(const gchar *target, struct sqlx_name_s *name, GByteArray **result)
-{
-	GError *peer_dump_gba_cb(GByteArray *chunk, gint64 remaining, gpointer arg)
-	{
-		(void) remaining;
-		(void) arg;
-		*result = chunk;
-		return NULL;
-	}
-
-	return peer_dump(target, name, FALSE, peer_dump_gba_cb, NULL);
-}
-

@@ -24,17 +24,6 @@ License along with this library.
 #include <sqliterepo/sqlx_remote.h>
 
 /**
- * Destroy an SQLX database.
- *
- * @param target One of the services managing the database.
- * @param sid Unused
- * @param name The name of the database
- * @param local TRUE to destroy only the database local to the service
- */
-GError* sqlx_remote_execute_DESTROY(const gchar *target, GByteArray *sid,
-		struct sqlx_name_s *name, gboolean local);
-
-/**
  * Locally destroy an SQLX database on several services.
  *
  * @param targets An array of services managing the database.
