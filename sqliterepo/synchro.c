@@ -38,9 +38,6 @@ struct sqlx_sync_s
 {
 	struct sqlx_sync_vtable_s *vtable;
 
-	void (*on_exit) (void *ctx);
-	void *on_exit_ctx;
-
 	gchar *zk_prefix;
 	gchar *zk_url;
 	zhandle_t *zh;
@@ -80,9 +77,6 @@ static int _awget_siblings (struct sqlx_sync_s *ss, const char *path,
 		watcher_fn watcher, void* watcherCtx,
 		strings_completion_t completion, const void *data);
 
-static void _set_exit_hook(struct sqlx_sync_s *ss, void (*on_exit_hook) (void*),
-		void *on_exit_ctx);
-
 static struct sqlx_sync_vtable_s VTABLE =
 {
 	_clear,
@@ -94,7 +88,6 @@ static struct sqlx_sync_vtable_s VTABLE =
 	_awget,
 	_awget_children,
 	_awget_siblings,
-	_set_exit_hook
 };
 
 struct sqlx_sync_s*
@@ -129,16 +122,6 @@ sqlx_sync_set_hash(struct sqlx_sync_s *ss, guint w, guint d)
 	ss->hash_width = CLAMP(w,1,3);
 	ss->hash_depth = MIN(d,2);
 	GRID_DEBUG("SYNC hash set to [%ux%u]", w, d);
-}
-
-static void
-_set_exit_hook(struct sqlx_sync_s *ss, void (*on_exit_hook) (void*),
-		void *on_exit_ctx)
-{
-	EXTRA_ASSERT(ss != NULL);
-	EXTRA_ASSERT(ss->vtable == &VTABLE);
-	ss->on_exit = on_exit_hook;
-	ss->on_exit_ctx = on_exit_ctx;
 }
 
 //------------------------------------------------------------------------------
@@ -204,8 +187,6 @@ _reconnect(struct sqlx_sync_s *ss)
 				"(expired session or too many soft reconnections)");
 		zookeeper_close(ss->zh);
 	}
-	if (ss->on_exit != NULL)
-		ss->on_exit(ss->on_exit_ctx);
 
 	/* Forget the previous ID and reconnect */
 	memset (&ss->zk_id, 0, sizeof(ss->zk_id));

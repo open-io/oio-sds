@@ -228,15 +228,11 @@ static int _sync_awget_siblings (struct sqlx_sync_s *ss, const char *path,
 		watcher_fn watcher, void* watcherCtx,
 		strings_completion_t completion, const void *data);
 
-static void _sync_set_exit_hook (struct sqlx_sync_s *ss,
-		void (*on_exit) (void*), void *on_exit_ctx);
-
 struct sqlx_sync_vtable_s vtable_sync_NOOP =
 {
 	_sync_clear, _sync_open, _sync_close,
 	_sync_acreate, _sync_adelete, _sync_awexists,
 	_sync_awget, _sync_awget_children, _sync_awget_siblings,
-	_sync_set_exit_hook
 };
 
 static void
@@ -342,13 +338,6 @@ _sync_awget_siblings (struct sqlx_sync_s *ss, const char *path,
 		g_array_append_vals (ss->pending, &val, 1);
 	}
 	return ZOK;
-}
-
-static void
-_sync_set_exit_hook (struct sqlx_sync_s *ss,
-		void (*on_exit) (void*), void *on_exit_ctx)
-{
-	(void) ss, (void) on_exit, (void) on_exit_ctx;
 }
 
 static struct sqlx_sync_s *
