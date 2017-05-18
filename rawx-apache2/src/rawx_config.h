@@ -32,6 +32,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <mod_dav.h>
 
 #include <rawx-lib/src/rawx.h>
+#include <rawx-lib/src/acl.h>
 
 #include "rawx_event.h"
 

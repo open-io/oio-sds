@@ -30,6 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metautils.h>
 
 #include "rawx.h"
+#include "acl.h"
 
 static volatile ssize_t longest_xattr = 1024;
 static volatile ssize_t longest_xattr_list = 2048;
