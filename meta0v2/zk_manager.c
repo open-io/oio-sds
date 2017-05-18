@@ -27,12 +27,12 @@ License along with this library.
 
 #include <metautils/lib/metautils.h>
 #include <sqliterepo/sqliterepo_variables.h>
+#include <sqliterepo/sqliterepo.h>
+#include <sqliterepo/synchro.h>
+#include <sqliterepo/hash.h>
+#include <sqliterepo/internals.h>
 
-#include "sqliterepo.h"
-#include "hash.h"
 #include "zk_manager.h"
-#include "internals.h"
-#include "synchro.h"
 
 struct zk_manager_s
 {

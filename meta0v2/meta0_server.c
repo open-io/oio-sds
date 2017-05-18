@@ -23,13 +23,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/replication_dispatcher.h>
-#include <sqliterepo/zk_manager.h>
 
 #include <server/transport_gridd.h>
 #include <sqlx/sqlx_service.h>
 
 #include "meta0_backend.h"
 #include "meta0_gridd_dispatcher.h"
+#include "zk_manager.h"
 
 static struct zk_manager_s *m0zkmanager = NULL;
 static struct meta0_backend_s *m0 = NULL;

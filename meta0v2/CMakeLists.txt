@@ -4,8 +4,12 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 include_directories(BEFORE
 		${CMAKE_CURRENT_SOURCE_DIR}
 		${CMAKE_SOURCE_DIR}
-		${CMAKE_CURRENT_BINARY_DIR}
-		${CMAKE_BINARY_DIR})
+		${CMAKE_BINARY_DIR}
+		${CMAKE_BINARY_DIR}/metautils/lib
+		${CMAKE_CURRENT_BINARY_DIR})
+
+include_directories(AFTER
+		${ZK_INCLUDE_DIRS})
 
 link_directories(
 		${ZK_LIBRARY_DIRS}
@@ -50,7 +54,9 @@ target_link_libraries(meta0_init gridcluster
 
 
 add_executable(meta0_server
-		meta0_gridd_dispatcher.c meta0_server.c)
+		zk_manager.c
+		meta0_gridd_dispatcher.c
+		meta0_server.c)
 bin_prefix(meta0_server -meta0-server)
 target_link_libraries(meta0_server
 		meta0v2 meta0utils
