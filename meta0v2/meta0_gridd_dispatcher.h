@@ -20,39 +20,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__meta0v2__meta0_gridd_dispatcher_h
 # define OIO_SDS__meta0v2__meta0_gridd_dispatcher_h 1
 
-#include <sqliterepo/zk_manager.h>
-/**
- * @addtogroup meta0v2_gridd 
- * @{
- */
-
-struct gridd_request_descr_s;
+#include <meta0v2/zk_manager.h>
+#include <server/transport_gridd.h>
 
 struct meta0_disp_s;
 
-/**
- * The easiest way to retrieve the set of exported function out of
- * the META0 backend.
- *
- * All these functions take a meta0_disp_s as first argument.
- *
- * @return
- */
 const struct gridd_request_descr_s* meta0_gridd_get_requests(void);
 
-/**
- * @param m0disp
- */
 void meta0_gridd_free_dispatcher(struct meta0_disp_s *m0disp);
 
-/**
- * @param m0
- * @return
- */
 struct meta0_disp_s* meta0_gridd_get_dispatcher(struct meta0_backend_s *m0, struct zk_manager_s *m0zkmanager, gchar *ns_name);
 
 void meta0_gridd_requested_reload(struct meta0_disp_s *m0disp);
-
-/** @} */
 
 #endif /*OIO_SDS__meta0v2__meta0_gridd_dispatcher_h*/

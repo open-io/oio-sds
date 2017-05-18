@@ -79,7 +79,6 @@ add_library(sqliterepo SHARED
 		replication_dispatcher.c
 		repository.c
 		restoration.c
-		zk_manager.c
 		upgrade.c
 		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_variables.c
 		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_variables.h)
