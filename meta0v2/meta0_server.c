@@ -74,20 +74,17 @@ strv_filter(struct sqlx_service_s *ss, GSList *l)
 
 static GError *
 _get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
-		gboolean nocache, gchar ***result)
+		gboolean nocache UNUSED, gchar ***result)
 {
-	(void) nocache;
-	GSList *peers = NULL;
-	GError *err;
-
 	if (!n || !result)
-		return NEWERROR(CODE_INTERNAL_ERROR, "BUG [%s:%s:%d]", __FUNCTION__, __FILE__, __LINE__);
+		return SYSERR("BUG [%s:%s:%d]", __FUNCTION__, __FILE__, __LINE__);
 	if (0 != strcmp(n->type, NAME_SRVTYPE_META0))
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid type name");
+		return BADREQ("Invalid type name");
 	if (0 != strcmp(n->base, ss->ns_name))
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid base name, expected [%s]", ss->ns_name);
+		return BADREQ("Invalid base name, expected [%s]", ss->ns_name);
 
-	err = list_zk_children_node(m0zkmanager, NULL, &peers);
+	GSList *peers = NULL;
+	GError *err = list_zk_children_node(m0zkmanager, NULL, &peers);
 	if (err) {
 		g_slist_free_full(peers, (GDestroyNotify)free_zknode);
 		*result = NULL;
@@ -97,7 +94,7 @@ _get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
 
 	*result = strv_filter(ss, peers);
 	g_slist_free_full(peers, (GDestroyNotify)free_zknode);
-	if (!*result)
+	if (unlikely(*result == NULL))
 		return NEWERROR(CODE_CONTAINER_NOTFOUND, "Base not managed");
 	return NULL;
 }
