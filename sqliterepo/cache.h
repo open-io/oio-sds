@@ -41,9 +41,6 @@ void sqlx_cache_set_close_hook(sqlx_cache_t *cache,
  * configuration facility */
 void sqlx_cache_reconfigure(sqlx_cache_t *cache);
 
-/* timeout in the precision of oio_ext_monotonic_time() */
-void sqlx_cache_set_open_timeout(sqlx_cache_t *cache, gint64 timeout);
-
 void sqlx_cache_clean(sqlx_cache_t *cache);
 
 void sqlx_cache_debug(sqlx_cache_t *cache);
