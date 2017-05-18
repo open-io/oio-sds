@@ -185,18 +185,6 @@ network_server_stat_push4 (struct network_server_s *srv, gboolean increment,
 	g_thread_pool_push (srv->pool_stats, m, NULL);
 }
 
-guint64
-network_server_stat_getone (struct network_server_s *srv, GQuark which)
-{
-	EXTRA_ASSERT (srv != NULL);
-	guint64 *p, value = 0;
-	g_mutex_lock (&srv->lock_stats);
-	if (NULL != (p = _stat_locate (srv, which)))
-		value = *p;
-	g_mutex_unlock (&srv->lock_stats);
-	return value;
-}
-
 GArray*
 network_server_stat_getall (struct network_server_s *srv)
 {
@@ -411,13 +399,6 @@ network_server_bind_host_lowlatency(struct network_server_s *srv,
 		const gchar *url, gpointer u, network_transport_factory factory)
 {
 	_srv_bind_host(srv, url, u, factory, NETSERVER_LATENCY);
-}
-
-void
-network_server_bind_host_throughput(struct network_server_s *srv, const gchar *url, gpointer u,
-		network_transport_factory factory)
-{
-	_srv_bind_host(srv, url, u, factory, NETSERVER_THROUGHPUT);
 }
 
 gchar**
