@@ -60,11 +60,6 @@ struct sqlx_sync_vtable_s
 	int (*awget_siblings) (struct sqlx_sync_s *ss, const char *path,
 			watcher_fn watcher, void* watcherCtx,
 			strings_completion_t completion, const void *data);
-
-	/** Sets the exit callback. It only works with a sqlx synchronizer out of
-	 * sqlx_sync_create() */
-	void (*set_exit_hook) (struct sqlx_sync_s *ss,
-			void (*on_exit) (void*), void *on_exit_ctx);
 };
 
 struct abstract_sqlx_sync_s
@@ -98,9 +93,6 @@ struct abstract_sqlx_sync_s
 
 #define sqlx_sync_awget_siblings(ss, path, watch, watchctx, completion, d) \
 	((struct abstract_sqlx_sync_s*)(ss))->vtable->awget_siblings(ss, path, watch, watchctx, completion, d)
-
-#define sqlx_sync_set_exit_hook(ss,hook,data) \
-	((struct abstract_sqlx_sync_s*)(ss))->vtable->set_exit_hook(ss, hook, data)
 
 /** Initiates a sqlx synchronizer based on ZooKeeper.
  * @param url the Zookeeper connection string */
