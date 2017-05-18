@@ -116,6 +116,16 @@ grid_single_rrd_add(struct grid_single_rrd_s *gsr, time_t now, guint64 v)
 	_rrd_set(gsr, v + v0);
 }
 
+guint64
+grid_single_rrd_get_delta(struct grid_single_rrd_s *gsr,
+		time_t now, time_t period)
+{
+	EXTRA_ASSERT(period <= gsr->period);
+	_gsr_manage_timeshift(gsr, now);
+	return _rrd_current(gsr) - _rrd_past(gsr, period);
+}
+
+#if 0
 void
 grid_single_rrd_pushifmax(struct grid_single_rrd_s *gsr, time_t now, guint64 v)
 {
@@ -129,15 +139,6 @@ grid_single_rrd_get(struct grid_single_rrd_s *gsr, time_t now)
 {
 	_gsr_manage_timeshift(gsr, now);
 	return _rrd_current(gsr);
-}
-
-guint64
-grid_single_rrd_get_delta(struct grid_single_rrd_s *gsr,
-		time_t now, time_t period)
-{
-	EXTRA_ASSERT(period <= gsr->period);
-	_gsr_manage_timeshift(gsr, now);
-	return _rrd_current(gsr) - _rrd_past(gsr, period);
 }
 
 guint64
@@ -182,4 +183,4 @@ grid_single_rrd_debug(struct grid_single_rrd_s *gsr, gchar *dst, gsize len)
 	}
 	return dst;
 }
-
+#endif
