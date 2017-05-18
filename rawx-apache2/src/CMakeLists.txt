@@ -23,22 +23,17 @@ link_directories(
 
 add_library(mod_dav_rawx MODULE
 		mod_dav_rawx.c
-		mod_dav_rawx.h
 		rawx_bucket.c
-		rawx_bucket.h
 		rawx_config.h
 		rawx_config_stats.c
 		rawx_config_utils.c
 		rawx_internals.c
-		rawx_internals.h
 		rawx_properties.c
-		rawx_repo_core.h
 		rawx_repo_core.c
 		rawx_repository.c
 		rawx_req_info.c
 		rawx_chunk_update.c
-		rawx_event.c
-		rawx_event.h)
+		rawx_event.c)
 
 set_target_properties(mod_dav_rawx PROPERTIES PREFIX "" SUFFIX .so)
 
