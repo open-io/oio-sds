@@ -700,6 +700,10 @@ start_at_boot=false
 on_die=respawn
 """
 
+template_gridinit_asan = """
+env.LD_PRELOAD=/usr/lib/gcc/x86_64-linux-gnu/7/libasan.so
+"""
+
 template_local_header = """
 [default]
 """
@@ -951,6 +955,7 @@ TMPDIR = '/tmp'
 CODEDIR = '@CMAKE_INSTALL_PREFIX@'
 LIBDIR = CODEDIR + '/@LD_LIBDIR@'
 PATH = HOME+"/.local/bin:@CMAKE_INSTALL_PREFIX@/bin:/usr/sbin"
+ASAN = "@ASAN@"
 
 # Constants for the configuration of oio-bootstrap
 NS = 'ns'
@@ -1287,7 +1292,8 @@ def generate(options):
                           })
             add_service(env)
             # gridinit (rawx)
-            tpl = Template(template_gridinit_httpd)
+            asan = template_gridinit_asan if ASAN else ""
+            tpl = Template(template_gridinit_httpd + asan)
             with open(gridinit(env), 'a+') as f:
                 f.write(tpl.safe_substitute(env))
             # service
@@ -1439,7 +1445,8 @@ def generate(options):
 
     # gridinit header
     with open(gridinit(ENV), 'a+') as f:
-        tpl = Template(template_gridinit_ns)
+        asan = template_gridinit_asan if ASAN else ""
+        tpl = Template(template_gridinit_ns + asan)
         f.write(tpl.safe_substitute(ENV))
     # system config
     with open('{OIODIR}/sds.conf'.format(**ENV), 'w+') as f:

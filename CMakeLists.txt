@@ -8,6 +8,7 @@ option(FORBID_SLICE "Forbid playing with GLib2's slice allocators" OFF)
 option(ALLOW_BACKTRACE "Attempt to compute backtraces when errors occur" OFF)
 option(FORBID_DEPRECATED "Avoid the deprecated symbols of the GLib2" OFF)
 option(ENABLE_CODECOVERAGE "Enable code coverage testing support" OFF)
+option(ASAN "Compile with ASAN" OFF)
 
 include(CheckIncludeFile)
 include(CheckLibraryExists)
@@ -122,12 +123,19 @@ endif()
 
 MESSAGE("OPTIONS:"
 	" ENBUG=${ENBUG}"
+    " ASAN=${ASAN}"
 	" SOCKET_OPTIMIZED=${SOCKET_OPTIMIZED}"
 	" FORBID_SLICE=${FORBID_SLICE}"
 	" STACK_PROTECTOR=${STACK_PROTECTOR}"
 	" FORBID_DEPRECATED=${FORBID_DEPRECATED}"
 	" ALLOW_BACKTRACE=${ALLOW_BACKTRACE}"
 	" ENABLE_CODECOVERAGE=${ENABLE_CODECOVERAGE}")
+
+if (ASAN)
+    MESSAGE(WARNING "ASAN MODE : NOT FOR PRODUCTION USE")
+    # use ASAN as static, still requires LD_PRELOAD for Apache
+    set(CMAKE_C_FLAGS "-static-libasan ${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+endif()
 
 if (ENBUG)
 	MESSAGE(WARNING "ENBUGED MODE : NOT FOR PRODUCTION USE")

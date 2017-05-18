@@ -34,15 +34,32 @@ add_custom_command(
 		"client"
 		${CMAKE_SOURCE_DIR}/conf.json)
 
+add_library(asan STATIC IMPORTED)
+set_property(TARGET asan PROPERTY IMPORTED_LOCATION /usr/lib/gcc/x86_64-linux-gnu/7/libasan.a)
+
 add_library(oiocore SHARED url.c cfg.c str.c ext.c log.c lb.c var.c
 	${CMAKE_CURRENT_BINARY_DIR}/client_variables.h
 	${CMAKE_CURRENT_BINARY_DIR}/client_variables.c)
 
 target_link_libraries(oiocore
 		${JSONC_LIBRARIES} ${GLIB2_LIBRARIES})
+
 set_target_properties(oiocore PROPERTIES
 		PUBLIC_HEADER "oio_core.h"
 		SOVERSION ${ABI_VERSION})
+
+if (ASAN)
+    add_library(oiocore-asan SHARED url.c cfg.c str.c ext.c log.c lb.c var.c
+        ${CMAKE_CURRENT_BINARY_DIR}/client_variables.h
+        ${CMAKE_CURRENT_BINARY_DIR}/client_variables.c)
+
+    target_link_libraries(oiocore-asan
+            ${JSONC_LIBRARIES} ${GLIB2_LIBRARIES} asan)
+
+    set_target_properties(oiocore-asan PROPERTIES
+            PUBLIC_HEADER "oio_core.h"
+            SOVERSION ${ABI_VERSION})
+endif()
 
 add_library(oiosds SHARED
 	http_put.c
@@ -50,6 +67,7 @@ add_library(oiosds SHARED
 	headers.c
 	proxy.c
 	sds.c dir.c cs.c)
+
 target_link_libraries(oiosds oiocore
 		${GLIB2_LIBRARIES} ${CURL_LIBRARIES} ${JSONC_LIBRARIES})
 set_target_properties(oiosds PROPERTIES

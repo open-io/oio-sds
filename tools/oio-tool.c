@@ -189,6 +189,7 @@ _info(const char *dest)
 		return 0;
 	}
 	if (out) g_byte_array_free(out, TRUE);
+    return 0;
 }
 
 static int

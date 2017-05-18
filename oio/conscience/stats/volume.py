@@ -48,6 +48,8 @@ class VolumeStat(BaseStat):
 
     def get_stats(self):
         if not self.__class__.oio_sys_space_idle:
+            self._load_lib("liboiocore-asan.so.0")
+        if not self.__class__.oio_sys_space_idle:
             self._load_lib()
         if not self.__class__.oio_sys_space_idle:
             return {}

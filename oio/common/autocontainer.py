@@ -63,7 +63,11 @@ class HashedContainerBuilder(ContainerBuilder):
 
     def __call__(self, path):
         if self.lib is None:
-            self.lib = CDLL('liboiocore.so.0')
+            # Try of load debug liboiocore first
+            try:
+                self.lib = CDLL('liboiocore-asan.so.0')
+            except OSError:
+                self.lib = CDLL('liboiocore.so.0')
             self.func = self.lib.oio_str_autocontainer
             self.func.argtypes = [c_char_p, c_uint, c_char_p, c_uint]
             self.func.restype = c_char_p
