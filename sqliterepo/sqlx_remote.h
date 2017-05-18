@@ -93,7 +93,6 @@ GByteArray* sqlx_pack_USE(const struct sqlx_name_s *name);
 GByteArray* sqlx_pack_DESCR(const struct sqlx_name_s *name);
 GByteArray* sqlx_pack_STATUS(const struct sqlx_name_s *name);
 GByteArray* sqlx_pack_GETVERS(const struct sqlx_name_s *name);
-GByteArray* sqlx_pack_ISMASTER(const struct sqlx_name_s *name);
 
 GByteArray* sqlx_pack_PIPEFROM(const struct sqlx_name_s *name, const gchar *source);
 GByteArray* sqlx_pack_PIPETO(const struct sqlx_name_s *name, const gchar *target);
@@ -112,9 +111,6 @@ GByteArray* sqlx_pack_INFO(void);
 GByteArray* sqlx_pack_QUERY(const struct sqlx_name_s *name,
 		const gchar *query, struct TableSequence *params, gboolean autocreate);
 
-GByteArray* sqlx_pack_QUERY_single(const struct sqlx_name_s *name,
-		const gchar *query, gboolean autocreate);
-
 GByteArray* sqlx_pack_DESTROY(const struct sqlx_name_s *name, gboolean local);
 
 // sqlx-related elements coders ------------------------------------------------
@@ -129,9 +125,6 @@ void peers_restore(gchar **targets, struct sqlx_name_s *name,
 
 GError * peer_restore(const gchar *target, struct sqlx_name_s *name,
 		GByteArray *dump);
-
-GError * peer_dump_gba(const gchar *target, struct sqlx_name_s *name,
-		GByteArray **result);
 
 typedef GError* (*peer_dump_cb)(GByteArray *part, gint64 remaining, gpointer arg);
 

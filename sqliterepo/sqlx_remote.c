@@ -119,13 +119,6 @@ sqlx_pack_EXITELECTION(const struct sqlx_name_s *name)
 }
 
 GByteArray*
-sqlx_pack_ISMASTER(const struct sqlx_name_s *name)
-{
-	MESSAGE req = make_request(NAME_MSGNAME_SQLX_ISMASTER, name);
-	return message_marshall_gba_and_clean(req);
-}
-
-GByteArray*
 sqlx_pack_PIPEFROM(const struct sqlx_name_s *name, const gchar *source)
 {
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PIPEFROM, name);
@@ -191,24 +184,6 @@ sqlx_pack_QUERY(const struct sqlx_name_s *name, const gchar *query,
 		metautils_message_add_body_unref (req, sqlx_encode_TableSequence(
 					params, NULL));
 	return message_marshall_gba_and_clean(req);
-}
-
-GByteArray*
-sqlx_pack_QUERY_single(const struct sqlx_name_s *name, const gchar *query,
-		gboolean autocreate)
-{
-	EXTRA_ASSERT(name != NULL);
-	EXTRA_ASSERT(query != NULL);
-
-	struct Table *t = ASN1C_CALLOC(1, sizeof(Table_t));
-	OCTET_STRING_fromBuf(&(t->name), query, strlen(query));
-
-	struct TableSequence *ts = ASN1C_CALLOC(1, sizeof(TableSequence_t));
-	asn_sequence_add(&(ts->list), t);
-
-	GByteArray *req = sqlx_pack_QUERY(name, query, ts, autocreate);
-	asn_DEF_TableSequence.free_struct(&asn_DEF_TableSequence, ts, FALSE);
-	return req;
 }
 
 GByteArray *

@@ -27,26 +27,6 @@ License along with this library.
 #include <sqliterepo/sqlx_remote_ex.h>
 
 GError*
-sqlx_remote_execute_DESTROY(const gchar *target, GByteArray *sid,
-		struct sqlx_name_s *name, gboolean local)
-{
-	(void) sid;
-	GError *err = NULL;
-	GByteArray *req = sqlx_pack_DESTROY(name, local);
-
-	struct gridd_client_s *client = gridd_client_create(target, req, NULL, NULL);
-	g_byte_array_unref(req);
-
-	gridd_client_start(client);
-	if (!(err = gridd_client_loop(client))) {
-		err = gridd_client_error(client);
-	}
-
-	gridd_client_free(client);
-	return err;
-}
-
-GError*
 sqlx_remote_execute_DESTROY_many(gchar **targets, GByteArray *sid,
 		struct sqlx_name_s *name)
 {
