@@ -108,14 +108,6 @@ transport_gridd_dispatcher_add_requests(
  * configured. */
 struct gridd_request_dispatcher_s * transport_gridd_build_empty_dispatcher(void);
 
-/* Build an optimized gridd_request dispatcher, based on a set of
- * request handler descriptions.
- * Services that want to work on top of a gridd service just have to
- * provide an array of gridd_request_handler_s. */
-struct gridd_request_dispatcher_s * transport_gridd_build_dispatcher(
-		const struct gridd_request_descr_s *descriptions,
-		gpointer u);
-
 /* Cleans a GRIDD request dispatcher and all the internal structures
  * associated to requests.
  * Obviously, please do not call this when still using the dispatcher.

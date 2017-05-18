@@ -160,18 +160,6 @@ transport_gridd_build_empty_dispatcher(void)
 	return dispatcher;
 }
 
-struct gridd_request_dispatcher_s *
-transport_gridd_build_dispatcher( const struct gridd_request_descr_s *descr,
-		gpointer context)
-{
-	struct gridd_request_dispatcher_s *dispatcher;
-
-	dispatcher = transport_gridd_build_empty_dispatcher();
-	if (descr)
-		(void) transport_gridd_dispatcher_add_requests(dispatcher, descr, context);
-	return dispatcher;
-}
-
 void
 transport_gridd_factory0(struct gridd_request_dispatcher_s *dispatcher,
 		struct network_client_s *client)

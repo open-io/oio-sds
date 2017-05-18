@@ -124,10 +124,6 @@ void network_server_bind_host(struct network_server_s *srv,
 		const gchar *url, gpointer factory_udata,
 		network_transport_factory factory);
 
-void network_server_bind_host_throughput(struct network_server_s *srv,
-		const gchar *url, gpointer factory_udata,
-		network_transport_factory factory);
-
 /* returns a NULL-terminated array of strings, containing the actual IP:PORT
  * the server has been bond to, in the order they have been declared.
  * @param srv MUST be a valid server
@@ -158,9 +154,6 @@ void network_server_stat_push2 (struct network_server_s *srv, gboolean inc,
 void network_server_stat_push4 (struct network_server_s *srv, gboolean inc,
 		GQuark k1, guint64 v1, GQuark k2, guint64 v2,
 		GQuark k3, guint64 v3, GQuark k4, guint64 v4);
-
-/* Synchronosly get the current value of the stat named <which> */
-guint64 network_server_stat_getone (struct network_server_s *srv, GQuark which);
 
 GArray* network_server_stat_getall (struct network_server_s *srv);
 
