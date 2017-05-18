@@ -126,22 +126,24 @@ _get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
 		gboolean nocache, gchar ***result)
 {
 	if (!n || !result)
-		return NEWERROR(CODE_INTERNAL_ERROR, "BUG [%s:%s:%d]",
-				__FUNCTION__, __FILE__, __LINE__);
+		return SYSERR("BUG [%s:%s:%d]", __FUNCTION__, __FILE__, __LINE__);
+
 	if (!g_str_has_prefix(n->type, NAME_SRVTYPE_META1))
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid type name");
+		return BADREQ("Invalid type name");
 	if (!oio_str_ishexa(n->base,4))
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid base name");
+		return BADREQ("Invalid base name");
 
 	/* normalizes the maybe-shortened base name: 4 xdigits, padded
 	 * with zeroes if necessary. */
 	guint8 cid[2] = {0,0};
 	oio_str_hex2bin(n->base, cid, 2);
 
-	if (nocache) {
+	if (nocache)
 		_reload_prefixes(ss, FALSE);
-	}
+
 	*result = meta1_prefixes_get_peers(meta1_backend_get_prefixes(m1), cid);
+	if (unlikely(*result == NULL))
+		return NEWERROR(CODE_CONTAINER_NOTFOUND, "Base not managed");
 	return NULL;
 }
 
