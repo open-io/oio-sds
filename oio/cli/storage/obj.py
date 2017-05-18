@@ -553,15 +553,18 @@ class ListObject(ContainerCommandMixin, lister.Lister):
                 for obj in objects:
                     result = (obj['name'], obj['size'],
                               obj['hash'], obj['version'],
-                              obj['mime_type'],
+                              obj['deleted'], obj['mime_type'],
                               Timestamp(obj['ctime']).isoformat,
                               _format_props(obj.get('properties', {})))
                     yield result
             results = _gen_results(obj_gen)
-            columns = ('Name', 'Size', 'Hash', 'Version',
+            columns = ('Name', 'Size', 'Hash', 'Version', 'Deleted',
                        'Content-Type', 'Last-Modified', 'Properties')
         else:
-            results = ((obj['name'], obj['size'], obj['hash'], obj['version'])
+            results = ((obj['name'],
+                        obj['size'] if not obj['deleted'] else 'deleted',
+                        obj['hash'],
+                        obj['version'])
                        for obj in obj_gen)
             columns = ('Name', 'Size', 'Hash', 'Version')
         return (columns, results)
