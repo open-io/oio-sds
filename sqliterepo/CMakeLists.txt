@@ -1,4 +1,4 @@
-add_definitions(-DG_LOG_DOMAIN="oio.sqlite")
+add_definitions(-DG_LOG_DOMAIN="oio.sqlite" -DTHREADED)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
 include_directories(BEFORE . ..
