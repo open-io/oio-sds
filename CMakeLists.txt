@@ -72,7 +72,7 @@ if ( ENABLE_CODECOVERAGE )
         add_definitions( -fprofile-arcs -ftest-coverage )
         link_libraries( gcov )
         set( CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} --coverage )
-        add_custom_target( coverage_init ALL ${CODECOV_LCOV} --base-directory ${CMAKE_SOURCE_DIR}  --directory ${CMAKE_BINARY_DIR} --output-file ${CODECOV_OUTPUTFILE} --capture --initial )
+        add_custom_target( coverage_init ${CODECOV_LCOV} --base-directory ${CMAKE_SOURCE_DIR}  --directory ${CMAKE_BINARY_DIR} --output-file ${CODECOV_OUTPUTFILE} --capture --initial )
         add_custom_target( coverage ${CODECOV_LCOV} --base-directory ${CMAKE_SOURCE_DIR}  --directory ${CMAKE_BINARY_DIR} --no-external --output-file ${CODECOV_OUTPUTFILE} --capture COMMAND genhtml --ignore-errors source -o ${CODECOV_HTMLOUTPUTDIR} ${CODECOV_OUTPUTFILE} )
     endif ( CMAKE_COMPILER_IS_GNUCXX )
 
