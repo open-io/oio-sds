@@ -11,6 +11,7 @@ install:
   - pip install --upgrade pip setuptools virtualenv tox
   - pip install --upgrade -r all-requirements.txt
   - pip install --upgrade -r test-requirements.txt
+  - pip install --upgrade zkpython
 script:
   - set -e
   - mkdir /tmp/oio
