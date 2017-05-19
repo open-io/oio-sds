@@ -77,7 +77,7 @@ gboolean oio_var_value_one_with_option(const char *name, const char *value);
 /**
  * Feed the central configuration with all the variables found in the given
  * files, for the given namespace. If `sys` is TRUE then the system files will
- * be read. Then all the files in `files` will subsequently updated (overwrite)
+ * be read. Then all the files in `files` will subsequently update (overwrite)
  * the central values.
  *
  * @return TRUE if the NS was known, FALSE if not configured locally
