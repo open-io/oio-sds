@@ -974,7 +974,7 @@ grid_main_configure (int argc, char **argv)
 	struct oio_cfg_handle_s *ns_conf = oio_cfg_cache_create();
 	oio_cfg_set_handle(ns_conf);
 
-	/* To work properly, the PROXY needs to known the URL of the conscience */
+	/* To work properly, the PROXY needs to know the URL of the conscience */
 	_task_reload_csurl(NULL);
 	if (!csurl || !csurl_count) {
 		GRID_ERROR("No conscience URL configured");
