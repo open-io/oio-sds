@@ -496,6 +496,8 @@ label_retry:
 			// If cache was enabled, we can retry without cache
 			if (!nocache) {
 				nocache = TRUE;
+				// freed by filter_services_and_clean() but still not NULL
+				peers = NULL;
 				goto label_retry;
 			} else {
 				err = NEWERROR(CODE_CONTAINER_NOTFOUND, "Base not managed");
