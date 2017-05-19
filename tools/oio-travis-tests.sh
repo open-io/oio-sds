@@ -73,6 +73,7 @@ echo -e "\n### UNIT tests\n"
 cd $WRKDIR
 make -C tests/unit test
 
+func_tests -f "${SRCDIR}/etc/bootstrap-preset-smallrepli.yml"
 test_worm  -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-option-worm.yml"
 test_slave -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-option-slave.yml"
 func_tests -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-option-smallcache.yml"
