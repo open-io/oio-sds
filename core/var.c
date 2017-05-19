@@ -186,10 +186,10 @@ _record_set(struct oio_var_record_s *rec, union oio_var_default_u v)
 #define Peta 1000LL * Tera
 
 #define Kibi 1024LL
-#define Mibi 1024LL * Kibi
-#define Gibi 1024LL * Mibi
-#define Tibi 1024LL * Gibi
-#define Pibi 1024LL * Tibi
+#define Mebi 1024LL * Kibi
+#define Gibi 1024LL * Mebi
+#define Tebi 1024LL * Gibi
+#define Pebi 1024LL * Tebi
 
 static gint64
 _size_modifier (const char *unit)
@@ -204,10 +204,10 @@ _size_modifier (const char *unit)
 		{"T", Tera},
 		{"P", Peta},
 		{"ki", Kibi},
-		{"Mi", Mibi},
+		{"Mi", Mebi},
 		{"Gi", Gibi},
-		{"Ti", Tibi},
-		{"Pi", Pibi},
+		{"Ti", Tebi},
+		{"Pi", Pebi},
 		{"", 0},
 	};
 	if (!oio_str_is_set(unit))
