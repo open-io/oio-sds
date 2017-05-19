@@ -73,9 +73,15 @@ echo -e "\n### UNIT tests\n"
 cd $WRKDIR
 make -C tests/unit test
 
-func_tests -f "${SRCDIR}/etc/bootstrap-preset-smallrepli.yml"
-test_worm  -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-option-worm.yml"
-test_slave -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-option-slave.yml"
-func_tests -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-option-smallcache.yml"
-func_tests -f "${SRCDIR}/etc/bootstrap-preset-3COPIES-11RAWX.yml"
-func_tests -f "${SRCDIR}/etc/bootstrap-preset-EC.yml"
+run_folded () {
+	echo "travis_fold:start:$@"
+	$@
+	echo "travis_fold:end:$@"
+}
+
+run_folded func_tests -f "${SRCDIR}/etc/bootstrap-preset-smallrepli.yml"
+run_folded test_worm  -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-option-worm.yml"
+run_folded test_slave -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-option-slave.yml"
+run_folded func_tests -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-option-smallcache.yml"
+run_folded func_tests -f "${SRCDIR}/etc/bootstrap-preset-3COPIES-11RAWX.yml"
+run_folded func_tests -f "${SRCDIR}/etc/bootstrap-preset-EC.yml"
