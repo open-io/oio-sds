@@ -317,7 +317,7 @@ _resolve_m1_through_many_m0(struct hc_resolver_s *r, const char * const *urlv,
 			}
 			len = oio_ext_array_partition ((void**)urlv, len, _wrap);
 		}
-		if (len > 0 && oio_resolver_dir_shuffle)
+		if (len > 1 && oio_resolver_dir_shuffle)
 			oio_ext_array_shuffle ((void**)urlv, len);
 	}
 
@@ -388,7 +388,7 @@ _resolve_service_through_many_meta1(struct hc_resolver_s *r,
 			}
 			len = oio_ext_array_partition ((void**)urlv, len, _wrap);
 		}
-		if (len > 0 && !oio_resolver_dir_shuffle)
+		if (len > 1 && oio_resolver_dir_shuffle)
 			oio_ext_array_shuffle ((void**)urlv, len);
 	}
 
@@ -501,7 +501,7 @@ hc_resolve_reference_service(struct hc_resolver_s *r, struct oio_url_s *url,
 	err = _resolve_reference_service(r, hk, url, srvtype, result);
 	g_free(hk);
 
-	if (result && *result && oio_resolver_srv_shuffle)
+	if (*result && oio_resolver_srv_shuffle)
 		oio_ext_array_shuffle ((void**)*result, g_strv_length(*result));
 	return err;
 }
