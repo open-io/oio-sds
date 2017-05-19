@@ -6,6 +6,7 @@ install:
   - sudo apt-add-repository "deb http://mirror.openio.io/pub/repo/openio/sds/15.12/ trusty/"
   - sudo apt-get update -qq
   - sudo apt-get install -y --force-yes libglib2.0-dev libzookeeper-mt-dev libzmq3-dev libcurl4-gnutls-dev libapreq2-dev libsqlite3-dev libattr1-dev libevent-dev apache2 apache2-dev libapache2-mod-wsgi liblzo2-dev openio-gridinit openio-asn1c libjson-c-dev flex bison curl libleveldb1 libleveldb-dev libattr1-dev python-all-dev python-virtualenv beanstalkd liberasurecode-dev
+  - sudo apt-get install -y --force-yes zookeeper zookeeper-bin zookeeperd
   - virtualenv $HOME/oio && source $HOME/oio/bin/activate
   - pip install --upgrade pip setuptools virtualenv tox
   - pip install --upgrade -r all-requirements.txt
