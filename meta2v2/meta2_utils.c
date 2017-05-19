@@ -669,12 +669,14 @@ label_ok:
 	aliases = g_slist_reverse(aliases);
 	for (GSList *l = aliases; l; l = l->next) {
 		struct bean_ALIASES_s *alias = l->data;
-		if (lp.flag_headers)
-			_load_fk_by_name(sq3, alias, "image", cb, u);
-		if (lp.flag_properties)
-			_load_fk_by_name(sq3, alias, "properties", cb, u);
-		cb(u, alias);
-		l->data = NULL;
+		if (!lp.flag_nodeleted || !ALIASES_get_deleted(alias) || lp.flag_allversion){
+			if (lp.flag_headers)
+				_load_fk_by_name(sq3, alias, "image", cb, u);
+			if (lp.flag_properties)
+				_load_fk_by_name(sq3, alias, "properties", cb, u);
+			cb(u, alias);
+			l->data = NULL;
+		}
 	}
 
 label_error:
