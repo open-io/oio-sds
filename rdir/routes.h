@@ -26,6 +26,7 @@ extern "C" {
 enum rdir_route_e {
     OIO_RDIR_NOT_MATCHED = 0 /* Returned upon error */,
     OIO_ROUTE_STATUS,
+    OIO_ROUTE_CONFIG,
     OIO_RDIR_STATUS,
     OIO_RDIR_ADMIN_SHOW,
     OIO_RDIR_ADMIN_UNLOCK,

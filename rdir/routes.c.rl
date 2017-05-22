@@ -33,6 +33,7 @@ access parser.;
 action Final { parser.ok = 1; }
 
 srv_status = "/status" %{ result = OIO_ROUTE_STATUS; };
+srv_config = "/config" %{ result = OIO_ROUTE_CONFIG; };
 adm_status = "/v1/status" %{ result = OIO_RDIR_STATUS; };
 adm_show = "/v1/rdir/admin/show" %{ result = OIO_RDIR_ADMIN_SHOW; };
 adm_lock = "/v1/rdir/admin/lock" %{ result = OIO_RDIR_ADMIN_LOCK; };
@@ -44,7 +45,7 @@ vol_push = "/v1/rdir/push" %{ result = OIO_RDIR_VOL_PUSH; };
 vol_delete = "/v1/rdir/delete" %{ result = OIO_RDIR_VOL_DELETE; };
 vol_fetch = "/v1/rdir/fetch" %{ result = OIO_RDIR_VOL_FETCH; };
 vol_status = "/v1/rdir/status" %{ result = OIO_RDIR_VOL_STATUS; };
-srv_route = srv_status;
+srv_route = srv_status | srv_config;
 adm_route = adm_status | adm_show | adm_lock | adm_unlock | adm_incident | adm_clear;
 vol_route = vol_status | vol_fetch | vol_delete | vol_push | vol_create;
 any_route = vol_route | adm_route | srv_route;
