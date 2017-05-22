@@ -4,7 +4,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 include_directories(BEFORE
 		${CMAKE_SOURCE_DIR}
 		${CMAKE_CURRENT_BINARY_DIR}
-		${CMAKE_CURRENT_BINARY_DIR}/..
+		${CMAKE_BINARY_DIR}
 		${CMAKE_CURRENT_BINARY_DIR}/../metautils/lib)
 
 include_directories(AFTER
@@ -19,9 +19,27 @@ link_directories(
 # `ragel -C -o routes.c routes.c.rl`
 # Do we really need another dependency at compile-time? Maybe.
 
+add_custom_command(
+	OUTPUT
+		${CMAKE_CURRENT_BINARY_DIR}/rdir_variables.c
+		${CMAKE_CURRENT_BINARY_DIR}/rdir_variables.h
+	DEPENDS
+		${CMAKE_SOURCE_DIR}/confgen.py
+		${CMAKE_SOURCE_DIR}/conf.json
+	PRE_BUILD
+	COMMENT
+		"Generating the central configuration"
+	COMMAND
+		${PYTHON_EXECUTABLE}
+	ARGS
+		${CMAKE_SOURCE_DIR}/confgen.py
+		"rdir"
+		${CMAKE_SOURCE_DIR}/conf.json)
+
 add_executable(rdir
 		rdir.c
 		routes.c routes.h
+		rdir_variables.c rdir_variables.h
 		../proxy/transport_http.c)
 
 bin_prefix(rdir -rdir-server)
