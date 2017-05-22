@@ -1241,6 +1241,12 @@ _route_srv_status(struct req_args_s *args)
 	return _reply_ok(args->rp, gstr);
 }
 
+static enum http_rc_e
+_route_srv_config(struct req_args_s *args)
+{
+	return _reply_ok (args->rp, oio_var_list_as_json());
+}
+
 /* ------------------------------------------------------------------------- */
 
 static const char *
@@ -1270,6 +1276,11 @@ _handler_decode_route(struct req_args_s *args, struct json_object *jbody,
 			args->rp->no_access();
 			CHECK_METHOD("GET");
 			return _route_srv_status(args);
+
+		case OIO_ROUTE_CONFIG:
+			args->rp->no_access();
+			CHECK_METHOD("GET");
+			return _route_srv_config(args);
 
 		case OIO_RDIR_STATUS:
 			args->rp->no_access();
