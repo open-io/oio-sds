@@ -606,12 +606,14 @@ class ObjectStorageApi(object):
     @handle_container_not_found
     def object_list(self, account, container, limit=None, marker=None,
                     delimiter=None, prefix=None, end_marker=None,
-                    properties=False, versions=False, **kwargs):
+                    properties=False, versions=False, deleted=False,
+                    **kwargs):
         """
         Lists objects inside a container.
 
         :param properties: if True, list object properties along with objects
         :param versions: if True, list all versions of objects
+        :param deleted: if True, list also the deleted objects
 
         :returns: a dict which contains
            * 'objects': the list of objects
@@ -622,7 +624,8 @@ class ObjectStorageApi(object):
         _, resp_body = self.container.content_list(
             account, container, limit=limit, marker=marker,
             end_marker=end_marker, prefix=prefix, delimiter=delimiter,
-            properties=properties, versions=versions, **kwargs)
+            properties=properties, versions=versions, deleted=deleted,
+            **kwargs)
 
         for obj in resp_body['objects']:
             mtype = obj.get('mime-type')
