@@ -355,6 +355,16 @@
 				"def": 0, "min": 0, "max": "4ki" }
 		]
 	},
+	"rdir": {
+		"code": "rdir_variables.c",
+		"header": "rdir_variables.h",
+		"variables": [
+			{ "type": "uint", "name": "rdir_fd_reserve",
+				"key": "rdir.fd_reserve",
+				"descr": "Only effective when `server.fd_max_passive` is set to 0 (autodetection). When deducing the maximum number of incoming connections, the rdir reserves that amount of file descritors to reach the database shards, and allocates what remains to the network.",
+				"def": 128, "min": 64, "max": "1024" }
+		]
+	},
 	"server": {
 		"code": "server_variables.c",
 		"header": "server_variables.h",

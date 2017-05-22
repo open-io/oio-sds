@@ -28,6 +28,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metautils.h>
 #include <server/network_server.h>
 #include <server/server_variables.h>
+#include <rdir/rdir_variables.h>
 #include <proxy/transport_http.h>
 
 #include "routes.h"
@@ -1375,10 +1376,20 @@ static void
 _patch_and_apply_configuration(void)
 {
 	if (server_fd_max_passive <= 0) {
-		/* Rdir must be fast, write mostly in memory. Rather than specifying a
-		 * huge and variable number of connections, we arbitrarily prefer
-		 * keeping it small */
-		server_fd_max_passive = 32;
+		const guint maxfd = metautils_syscall_count_maxfd();
+		guint reserved = rdir_fd_reserve;
+
+		if (reserved > maxfd) {
+			GRID_WARN("Too many FD reserved for the backend, check `ulimit -n`"
+					" and `rdir.fd_reserve`. Reserving only %u instead of %u",
+					maxfd / 2, reserved);
+			reserved = maxfd / 2;
+		}
+
+		/* Even on small platforms, rdir is called by a lot of concurrent
+		 * clients. The event-agent currently use a lot of worker processes
+		 * that all manage several coroutines and a pool of connections. */
+		server_fd_max_passive = maxfd - reserved;
 	}
 
 	network_server_reconfigure(server);
