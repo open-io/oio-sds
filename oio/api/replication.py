@@ -117,7 +117,8 @@ class ReplicatedChunkWriteHandler(object):
                     self.checksum.update(data)
                     meta_checksum.update(data)
                     bytes_transferred += len(data)
-                    for conn in current_conns:
+                    # copy current_conns to be able to remove a failed conn
+                    for conn in current_conns[:]:
                         if not conn.failed:
                             conn.queue.put('%x\r\n%s\r\n' % (len(data), data))
                         else:
