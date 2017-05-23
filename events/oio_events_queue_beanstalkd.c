@@ -243,6 +243,21 @@ _poll_out (int fd)
 	return NULL;
 }
 
+static void
+_flush_buffered(struct oio_events_queue_s *self, struct _queue_BEANSTALKD_s *q)
+{
+	gint avail =
+		oio_events_common_max_pending - g_async_queue_length(q->queue);
+	if (avail < (gint) oio_events_common_max_pending / 100) {
+		GRID_WARN("Pending events queue is reaching maximum: %d/%d",
+				g_async_queue_length(q->queue),
+				oio_events_common_max_pending);
+	}
+	/* This is not an else clause, we want to send the buffered events
+	 * (even if we do it slowly). */
+	oio_events_queue_send_buffered(self, &(q->buffer), MAX(1, avail / 2));
+}
+
 static GError *
 _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 {
@@ -250,15 +265,17 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 	gchar *saved = NULL;
 	int fd = -1;
 	int try_count = 0;
+	gint64 last_flush = 0;
 
 	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_BEANSTALKD);
 	EXTRA_ASSERT (running != NULL);
 
 	while ((*running)(0 < g_async_queue_length(q->queue))) {
-		guint max = (oio_events_common_max_pending -
-						g_async_queue_length(q->queue))
-					/ 2;
-		oio_events_queue_send_buffered(self, &(q->buffer), max);
+		gint64 now = oio_ext_monotonic_time();
+		if (now - last_flush > q->buffer.delay / 10) {
+			_flush_buffered(self, q);
+			last_flush = now;
+		}
 
 		/* find an event, prefering the last that failed */
 		gchar *msg = saved;

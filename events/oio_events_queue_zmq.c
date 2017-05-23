@@ -403,13 +403,18 @@ _gq2zmq_has_pending (struct _gq2zmq_ctx_s *ctx)
 static gpointer
 _gq2zmq_worker (struct _gq2zmq_ctx_s *ctx)
 {
+	gint64 last_flush = 0;
 	while (ctx->running (_gq2zmq_has_pending (ctx))) {
 		struct _queue_AGENT_s *q = (struct _queue_AGENT_s*) ctx->q;
-		guint max = (oio_events_common_max_pending -
-						g_async_queue_length(q->queue))
-					/ 2;
-		oio_events_queue_send_buffered((struct oio_events_queue_s *)ctx->q,
-				&(ctx->q->buffer), max);
+		gint64 now = oio_ext_monotonic_time();
+		if (now - last_flush > ctx->q->buffer.delay / 10) {
+			gint max = (oio_events_common_max_pending -
+							g_async_queue_length(q->queue))
+						/ 2;
+			oio_events_queue_send_buffered((struct oio_events_queue_s *)ctx->q,
+					&(ctx->q->buffer), MAX(1, max));
+			last_flush = now;
+		}
 		gchar *tmp =
 			(gchar*) g_async_queue_timeout_pop (ctx->queue, G_TIME_SPAN_SECOND);
 		if (tmp && !_forward_event (ctx->zpush, tmp))
