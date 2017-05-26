@@ -16,10 +16,6 @@ class OioTimeout(Timeout):
         return "Timeout %s" % super(OioTimeout, self).__str__()
 
 
-class ClientReadTimeout(OioTimeout):
-    pass
-
-
 class ConnectionTimeout(OioTimeout):
     pass
 
