@@ -184,8 +184,8 @@ class TestReplication(unittest.TestCase):
         with set_http_connect(*resps):
             handler = ReplicatedChunkWriteHandler(
                 self.sysmeta, meta_chunk, checksum, self.storage_method)
-            self.assertRaises(Timeout, handler.stream, source,
-                              size)
+            self.assertRaises(
+                exc.OioTimeout, handler.stream, source, size)
 
     def test_write_exception_source(self):
         class TestReader(object):

@@ -807,9 +807,9 @@ class ECChunkWriteHandler(object):
         except SourceReadError:
             logger.warn('Source read error')
             raise
-        except Timeout:
+        except Timeout as to:
             logger.exception('Timeout writing data')
-            raise
+            raise exceptions.OioTimeout(to)
         except Exception:
             logger.exception('Exception writing data')
             raise
