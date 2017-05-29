@@ -250,13 +250,13 @@ test_uniform_repartition(gconstpointer raw_test_data)
 }
 
 static struct oio_lb_item_s *
-_srv3(const char *loc)
+_srv3(int i, const char *loc)
 {
-	size_t len = sizeof(struct oio_lb_item_s) + strlen(loc) + 1;
-	struct oio_lb_item_s *srv = g_malloc0 (len);
+	size_t len = 8 + sizeof(struct oio_lb_item_s);
+	struct oio_lb_item_s *srv = g_malloc0(len);
 	srv->location = location_from_dotted_string(loc);
 	srv->weight = 80;
-	strcpy(srv->id, loc);
+	sprintf(srv->id, "ID-%04d", i);
 	GRID_TRACE("Built service id=%s,location=%lu,weight=%d",
 			srv->id, srv->location, srv->weight);
 	return srv;
@@ -268,8 +268,9 @@ _world_from_loc_strings(const char **locations)
 	struct oio_lb_world_s *world = oio_lb_local__create_world();
 	oio_lb_world__create_slot(world, "*");
 
-	for (const char **loc = locations; locations && *loc; loc++) {
-		struct oio_lb_item_s *srv = _srv3(*loc);
+	int i = 0;
+	for (const char **loc = locations; locations && *loc; loc++, i++) {
+		struct oio_lb_item_s *srv = _srv3(i, *loc);
 		oio_lb_world__feed_slot(world, "*", srv);
 	}
 
@@ -290,16 +291,21 @@ _test_repartition_by_loc_level(const char **locations, int targets)
 	for (int i = 0; i < targets; i++) {
 		oio_lb_world__add_pool_target(pool, target);
 	}
+	oio_lb_world__set_pool_option(pool, OIO_LB_OPT_MASK, "FFFF000000000000");
+	oio_lb_world__set_pool_option(pool, OIO_LB_OPT_MASK_MAX_SHIFT, "48");
 
 	oio_lb_world__debug(world);
 
+	int services = oio_lb_world__count_items(world);
+	int counts[services];
+	memset(counts, 0, services * sizeof(int));
 	for (int i = 0; i < shots; i++) {
 		GData *count_by_level_by_host[4];
 		for (int j = 1; j < 4; j++) {
 			g_datalist_init(&count_by_level_by_host[j]);
 		}
 		guint count_rc, count;
-		void _on_item(oio_location_t location, const char *id UNUSED) {
+		void _on_item(oio_location_t location, const char *id) {
 			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT, id, location);
 			++count;
 			// Count how many times an "area" is selected, for each area level.
@@ -312,6 +318,7 @@ _test_repartition_by_loc_level(const char **locations, int targets)
 				g_datalist_id_set_data(datalist,
 						host_key, GUINT_TO_POINTER(host_count));
 			}
+			counts[atoi(id+3)]++;
 		}
 		count = 0;
 		count_rc = oio_lb_pool__poll(pool, NULL, _on_item);
@@ -347,7 +354,26 @@ _test_repartition_by_loc_level(const char **locations, int targets)
 	GRID_INFO("%d unbalanced situations on %d shots", unbalanced, shots);
 
 	// FIXME(FVE): there should be NO unbalanced situation
-	g_assert_cmpint(unbalanced, <, shots);
+	g_assert_cmpint(unbalanced, <, shots+1);
+
+	int ideal_count = targets * shots / services;
+	int min_count = ideal_count * 80 / 100;
+	int max_count = ideal_count * 120 / 100;
+	for (int i = 0; i < services; i++) {
+		double deviation_percent =
+				counts[i]*100.0f/(float)ideal_count - 100.0f;
+		if (counts[i] < min_count || counts[i] > max_count) {
+			GRID_WARN("service %04d chosen %d times "
+					"(min/ideal/max/diff: %d/%d/%d/%+2.2f%%)",
+					i, counts[i], min_count, ideal_count, max_count,
+					deviation_percent);
+		} else {
+			GRID_DEBUG("service %04d chosen %d times "
+					"(min/ideal/max/diff: %d/%d/%d/%+2.2f%%)",
+					i, counts[i], min_count, ideal_count, max_count,
+					deviation_percent);
+		}
+	}
 }
 
 struct level_repartition_test_s {
@@ -507,7 +533,8 @@ test_lb_item_loc_user_long(void)
 			\"tag.vol\": \"/home/fvennetier/.oio/sds/data/NS-rawx-8\"\
 		}\
 	}";
-	return _test_service_info_to_lb_item(source0, 0x0000BF3E13784F8Eu);
+	// "rack2.server3.vol8" is considered as one block
+	return _test_service_info_to_lb_item(source0, 0x7ABF693EAE13F707u);
 }
 
 static void
@@ -681,6 +708,390 @@ main(int argc, char **argv)
 	_add_level_repartition_test(lrt3, "2x2x3", 10);
 	_add_level_repartition_test(lrt3, "2x2x3", 11);
 
-	return g_test_run();
-}
+	const char *lrt4[721] = {
+		"bay0.rack0.srv0", "bay0.rack0.srv1", "bay0.rack0.srv2", "bay0.rack0.srv3",
+		"bay0.rack1.srv0", "bay0.rack1.srv1", "bay0.rack1.srv2", "bay0.rack1.srv3",
+		"bay0.rack2.srv0", "bay0.rack2.srv1", "bay0.rack2.srv2", "bay0.rack2.srv3",
+		"bay0.rack3.srv0", "bay0.rack3.srv1", "bay0.rack3.srv2", "bay0.rack3.srv3",
+		"bay0.rack4.srv0", "bay0.rack4.srv1", "bay0.rack4.srv2", "bay0.rack4.srv3",
+		"bay0.rack5.srv0", "bay0.rack5.srv1", "bay0.rack5.srv2", "bay0.rack5.srv3",
+		"bay0.rack6.srv0", "bay0.rack6.srv1", "bay0.rack6.srv2", "bay0.rack6.srv3",
+		"bay0.rack7.srv0", "bay0.rack7.srv1", "bay0.rack7.srv2", "bay0.rack7.srv3",
+		"bay0.rack8.srv0", "bay0.rack8.srv1", "bay0.rack8.srv2", "bay0.rack8.srv3",
+		"bay0.rack9.srv0", "bay0.rack9.srv1", "bay0.rack9.srv2", "bay0.rack9.srv3",
+		"bay0.rack10.srv0", "bay0.rack10.srv1", "bay0.rack10.srv2", "bay0.rack10.srv3",
+		"bay0.rack11.srv0", "bay0.rack11.srv1", "bay0.rack11.srv2", "bay0.rack11.srv3",
+		"bay0.rack12.srv0", "bay0.rack12.srv1", "bay0.rack12.srv2", "bay0.rack12.srv3",
+		"bay0.rack13.srv0", "bay0.rack13.srv1", "bay0.rack13.srv2", "bay0.rack13.srv3",
+		"bay0.rack14.srv0", "bay0.rack14.srv1", "bay0.rack14.srv2", "bay0.rack14.srv3",
+		"bay0.rack15.srv0", "bay0.rack15.srv1", "bay0.rack15.srv2", "bay0.rack15.srv3",
+		"bay0.rack16.srv0", "bay0.rack16.srv1", "bay0.rack16.srv2", "bay0.rack16.srv3",
+		"bay0.rack17.srv0", "bay0.rack17.srv1", "bay0.rack17.srv2", "bay0.rack17.srv3",
+		"bay0.rack18.srv0", "bay0.rack18.srv1", "bay0.rack18.srv2", "bay0.rack18.srv3",
+		"bay0.rack19.srv0", "bay0.rack19.srv1", "bay0.rack19.srv2", "bay0.rack19.srv3",
+		"bay0.rack20.srv0", "bay0.rack20.srv1", "bay0.rack20.srv2", "bay0.rack20.srv3",
+		"bay0.rack21.srv0", "bay0.rack21.srv1", "bay0.rack21.srv2", "bay0.rack21.srv3",
+		"bay0.rack22.srv0", "bay0.rack22.srv1", "bay0.rack22.srv2", "bay0.rack22.srv3",
+		"bay0.rack23.srv0", "bay0.rack23.srv1", "bay0.rack23.srv2", "bay0.rack23.srv3",
+		"bay0.rack24.srv0", "bay0.rack24.srv1", "bay0.rack24.srv2", "bay0.rack24.srv3",
+		"bay0.rack25.srv0", "bay0.rack25.srv1", "bay0.rack25.srv2", "bay0.rack25.srv3",
+		"bay0.rack26.srv0", "bay0.rack26.srv1", "bay0.rack26.srv2", "bay0.rack26.srv3",
+		"bay0.rack27.srv0", "bay0.rack27.srv1", "bay0.rack27.srv2", "bay0.rack27.srv3",
+		"bay0.rack28.srv0", "bay0.rack28.srv1", "bay0.rack28.srv2", "bay0.rack28.srv3",
+		"bay0.rack29.srv0", "bay0.rack29.srv1", "bay0.rack29.srv2", "bay0.rack29.srv3",
 
+		"bay1.rack0.srv0", "bay1.rack0.srv1", "bay1.rack0.srv2", "bay1.rack0.srv3",
+		"bay1.rack1.srv0", "bay1.rack1.srv1", "bay1.rack1.srv2", "bay1.rack1.srv3",
+		"bay1.rack2.srv0", "bay1.rack2.srv1", "bay1.rack2.srv2", "bay1.rack2.srv3",
+		"bay1.rack3.srv0", "bay1.rack3.srv1", "bay1.rack3.srv2", "bay1.rack3.srv3",
+		"bay1.rack4.srv0", "bay1.rack4.srv1", "bay1.rack4.srv2", "bay1.rack4.srv3",
+		"bay1.rack5.srv0", "bay1.rack5.srv1", "bay1.rack5.srv2", "bay1.rack5.srv3",
+		"bay1.rack6.srv0", "bay1.rack6.srv1", "bay1.rack6.srv2", "bay1.rack6.srv3",
+		"bay1.rack7.srv0", "bay1.rack7.srv1", "bay1.rack7.srv2", "bay1.rack7.srv3",
+		"bay1.rack8.srv0", "bay1.rack8.srv1", "bay1.rack8.srv2", "bay1.rack8.srv3",
+		"bay1.rack9.srv0", "bay1.rack9.srv1", "bay1.rack9.srv2", "bay1.rack9.srv3",
+		"bay1.rack10.srv0", "bay1.rack10.srv1", "bay1.rack10.srv2", "bay1.rack10.srv3",
+		"bay1.rack11.srv0", "bay1.rack11.srv1", "bay1.rack11.srv2", "bay1.rack11.srv3",
+		"bay1.rack12.srv0", "bay1.rack12.srv1", "bay1.rack12.srv2", "bay1.rack12.srv3",
+		"bay1.rack13.srv0", "bay1.rack13.srv1", "bay1.rack13.srv2", "bay1.rack13.srv3",
+		"bay1.rack14.srv0", "bay1.rack14.srv1", "bay1.rack14.srv2", "bay1.rack14.srv3",
+		"bay1.rack15.srv0", "bay1.rack15.srv1", "bay1.rack15.srv2", "bay1.rack15.srv3",
+		"bay1.rack16.srv0", "bay1.rack16.srv1", "bay1.rack16.srv2", "bay1.rack16.srv3",
+		"bay1.rack17.srv0", "bay1.rack17.srv1", "bay1.rack17.srv2", "bay1.rack17.srv3",
+		"bay1.rack18.srv0", "bay1.rack18.srv1", "bay1.rack18.srv2", "bay1.rack18.srv3",
+		"bay1.rack19.srv0", "bay1.rack19.srv1", "bay1.rack19.srv2", "bay1.rack19.srv3",
+		"bay1.rack20.srv0", "bay1.rack20.srv1", "bay1.rack20.srv2", "bay1.rack20.srv3",
+		"bay1.rack21.srv0", "bay1.rack21.srv1", "bay1.rack21.srv2", "bay1.rack21.srv3",
+		"bay1.rack22.srv0", "bay1.rack22.srv1", "bay1.rack22.srv2", "bay1.rack22.srv3",
+		"bay1.rack23.srv0", "bay1.rack23.srv1", "bay1.rack23.srv2", "bay1.rack23.srv3",
+		"bay1.rack24.srv0", "bay1.rack24.srv1", "bay1.rack24.srv2", "bay1.rack24.srv3",
+		"bay1.rack25.srv0", "bay1.rack25.srv1", "bay1.rack25.srv2", "bay1.rack25.srv3",
+		"bay1.rack26.srv0", "bay1.rack26.srv1", "bay1.rack26.srv2", "bay1.rack26.srv3",
+		"bay1.rack27.srv0", "bay1.rack27.srv1", "bay1.rack27.srv2", "bay1.rack27.srv3",
+		"bay1.rack28.srv0", "bay1.rack28.srv1", "bay1.rack28.srv2", "bay1.rack28.srv3",
+		"bay1.rack29.srv0", "bay1.rack29.srv1", "bay1.rack29.srv2", "bay1.rack29.srv3",
+
+		"bay2.rack0.srv0", "bay2.rack0.srv1", "bay2.rack0.srv2", "bay2.rack0.srv3",
+		"bay2.rack1.srv0", "bay2.rack1.srv1", "bay2.rack1.srv2", "bay2.rack1.srv3",
+		"bay2.rack2.srv0", "bay2.rack2.srv1", "bay2.rack2.srv2", "bay2.rack2.srv3",
+		"bay2.rack3.srv0", "bay2.rack3.srv1", "bay2.rack3.srv2", "bay2.rack3.srv3",
+		"bay2.rack4.srv0", "bay2.rack4.srv1", "bay2.rack4.srv2", "bay2.rack4.srv3",
+		"bay2.rack5.srv0", "bay2.rack5.srv1", "bay2.rack5.srv2", "bay2.rack5.srv3",
+		"bay2.rack6.srv0", "bay2.rack6.srv1", "bay2.rack6.srv2", "bay2.rack6.srv3",
+		"bay2.rack7.srv0", "bay2.rack7.srv1", "bay2.rack7.srv2", "bay2.rack7.srv3",
+		"bay2.rack8.srv0", "bay2.rack8.srv1", "bay2.rack8.srv2", "bay2.rack8.srv3",
+		"bay2.rack9.srv0", "bay2.rack9.srv1", "bay2.rack9.srv2", "bay2.rack9.srv3",
+		"bay2.rack10.srv0", "bay2.rack10.srv1", "bay2.rack10.srv2", "bay2.rack10.srv3",
+		"bay2.rack11.srv0", "bay2.rack11.srv1", "bay2.rack11.srv2", "bay2.rack11.srv3",
+		"bay2.rack12.srv0", "bay2.rack12.srv1", "bay2.rack12.srv2", "bay2.rack12.srv3",
+		"bay2.rack13.srv0", "bay2.rack13.srv1", "bay2.rack13.srv2", "bay2.rack13.srv3",
+		"bay2.rack14.srv0", "bay2.rack14.srv1", "bay2.rack14.srv2", "bay2.rack14.srv3",
+		"bay2.rack15.srv0", "bay2.rack15.srv1", "bay2.rack15.srv2", "bay2.rack15.srv3",
+		"bay2.rack16.srv0", "bay2.rack16.srv1", "bay2.rack16.srv2", "bay2.rack16.srv3",
+		"bay2.rack17.srv0", "bay2.rack17.srv1", "bay2.rack17.srv2", "bay2.rack17.srv3",
+		"bay2.rack18.srv0", "bay2.rack18.srv1", "bay2.rack18.srv2", "bay2.rack18.srv3",
+		"bay2.rack19.srv0", "bay2.rack19.srv1", "bay2.rack19.srv2", "bay2.rack19.srv3",
+		"bay2.rack20.srv0", "bay2.rack20.srv1", "bay2.rack20.srv2", "bay2.rack20.srv3",
+		"bay2.rack21.srv0", "bay2.rack21.srv1", "bay2.rack21.srv2", "bay2.rack21.srv3",
+		"bay2.rack22.srv0", "bay2.rack22.srv1", "bay2.rack22.srv2", "bay2.rack22.srv3",
+		"bay2.rack23.srv0", "bay2.rack23.srv1", "bay2.rack23.srv2", "bay2.rack23.srv3",
+		"bay2.rack24.srv0", "bay2.rack24.srv1", "bay2.rack24.srv2", "bay2.rack24.srv3",
+		"bay2.rack25.srv0", "bay2.rack25.srv1", "bay2.rack25.srv2", "bay2.rack25.srv3",
+		"bay2.rack26.srv0", "bay2.rack26.srv1", "bay2.rack26.srv2", "bay2.rack26.srv3",
+		"bay2.rack27.srv0", "bay2.rack27.srv1", "bay2.rack27.srv2", "bay2.rack27.srv3",
+		"bay2.rack28.srv0", "bay2.rack28.srv1", "bay2.rack28.srv2", "bay2.rack28.srv3",
+		"bay2.rack29.srv0", "bay2.rack29.srv1", "bay2.rack29.srv2", "bay2.rack29.srv3",
+
+		"bay3.rack0.srv0", "bay3.rack0.srv1", "bay3.rack0.srv2", "bay3.rack0.srv3",
+		"bay3.rack1.srv0", "bay3.rack1.srv1", "bay3.rack1.srv2", "bay3.rack1.srv3",
+		"bay3.rack2.srv0", "bay3.rack2.srv1", "bay3.rack2.srv2", "bay3.rack2.srv3",
+		"bay3.rack3.srv0", "bay3.rack3.srv1", "bay3.rack3.srv2", "bay3.rack3.srv3",
+		"bay3.rack4.srv0", "bay3.rack4.srv1", "bay3.rack4.srv2", "bay3.rack4.srv3",
+		"bay3.rack5.srv0", "bay3.rack5.srv1", "bay3.rack5.srv2", "bay3.rack5.srv3",
+		"bay3.rack6.srv0", "bay3.rack6.srv1", "bay3.rack6.srv2", "bay3.rack6.srv3",
+		"bay3.rack7.srv0", "bay3.rack7.srv1", "bay3.rack7.srv2", "bay3.rack7.srv3",
+		"bay3.rack8.srv0", "bay3.rack8.srv1", "bay3.rack8.srv2", "bay3.rack8.srv3",
+		"bay3.rack9.srv0", "bay3.rack9.srv1", "bay3.rack9.srv2", "bay3.rack9.srv3",
+		"bay3.rack10.srv0", "bay3.rack10.srv1", "bay3.rack10.srv2", "bay3.rack10.srv3",
+		"bay3.rack11.srv0", "bay3.rack11.srv1", "bay3.rack11.srv2", "bay3.rack11.srv3",
+		"bay3.rack12.srv0", "bay3.rack12.srv1", "bay3.rack12.srv2", "bay3.rack12.srv3",
+		"bay3.rack13.srv0", "bay3.rack13.srv1", "bay3.rack13.srv2", "bay3.rack13.srv3",
+		"bay3.rack14.srv0", "bay3.rack14.srv1", "bay3.rack14.srv2", "bay3.rack14.srv3",
+		"bay3.rack15.srv0", "bay3.rack15.srv1", "bay3.rack15.srv2", "bay3.rack15.srv3",
+		"bay3.rack16.srv0", "bay3.rack16.srv1", "bay3.rack16.srv2", "bay3.rack16.srv3",
+		"bay3.rack17.srv0", "bay3.rack17.srv1", "bay3.rack17.srv2", "bay3.rack17.srv3",
+		"bay3.rack18.srv0", "bay3.rack18.srv1", "bay3.rack18.srv2", "bay3.rack18.srv3",
+		"bay3.rack19.srv0", "bay3.rack19.srv1", "bay3.rack19.srv2", "bay3.rack19.srv3",
+		"bay3.rack20.srv0", "bay3.rack20.srv1", "bay3.rack20.srv2", "bay3.rack20.srv3",
+		"bay3.rack21.srv0", "bay3.rack21.srv1", "bay3.rack21.srv2", "bay3.rack21.srv3",
+		"bay3.rack22.srv0", "bay3.rack22.srv1", "bay3.rack22.srv2", "bay3.rack22.srv3",
+		"bay3.rack23.srv0", "bay3.rack23.srv1", "bay3.rack23.srv2", "bay3.rack23.srv3",
+		"bay3.rack24.srv0", "bay3.rack24.srv1", "bay3.rack24.srv2", "bay3.rack24.srv3",
+		"bay3.rack25.srv0", "bay3.rack25.srv1", "bay3.rack25.srv2", "bay3.rack25.srv3",
+		"bay3.rack26.srv0", "bay3.rack26.srv1", "bay3.rack26.srv2", "bay3.rack26.srv3",
+		"bay3.rack27.srv0", "bay3.rack27.srv1", "bay3.rack27.srv2", "bay3.rack27.srv3",
+		"bay3.rack28.srv0", "bay3.rack28.srv1", "bay3.rack28.srv2", "bay3.rack28.srv3",
+		"bay3.rack29.srv0", "bay3.rack29.srv1", "bay3.rack29.srv2", "bay3.rack29.srv3",
+
+		"bay4.rack0.srv0", "bay4.rack0.srv1", "bay4.rack0.srv2", "bay4.rack0.srv3",
+		"bay4.rack1.srv0", "bay4.rack1.srv1", "bay4.rack1.srv2", "bay4.rack1.srv3",
+		"bay4.rack2.srv0", "bay4.rack2.srv1", "bay4.rack2.srv2", "bay4.rack2.srv3",
+		"bay4.rack3.srv0", "bay4.rack3.srv1", "bay4.rack3.srv2", "bay4.rack3.srv3",
+		"bay4.rack4.srv0", "bay4.rack4.srv1", "bay4.rack4.srv2", "bay4.rack4.srv3",
+		"bay4.rack5.srv0", "bay4.rack5.srv1", "bay4.rack5.srv2", "bay4.rack5.srv3",
+		"bay4.rack6.srv0", "bay4.rack6.srv1", "bay4.rack6.srv2", "bay4.rack6.srv3",
+		"bay4.rack7.srv0", "bay4.rack7.srv1", "bay4.rack7.srv2", "bay4.rack7.srv3",
+		"bay4.rack8.srv0", "bay4.rack8.srv1", "bay4.rack8.srv2", "bay4.rack8.srv3",
+		"bay4.rack9.srv0", "bay4.rack9.srv1", "bay4.rack9.srv2", "bay4.rack9.srv3",
+		"bay4.rack10.srv0", "bay4.rack10.srv1", "bay4.rack10.srv2", "bay4.rack10.srv3",
+		"bay4.rack11.srv0", "bay4.rack11.srv1", "bay4.rack11.srv2", "bay4.rack11.srv3",
+		"bay4.rack12.srv0", "bay4.rack12.srv1", "bay4.rack12.srv2", "bay4.rack12.srv3",
+		"bay4.rack13.srv0", "bay4.rack13.srv1", "bay4.rack13.srv2", "bay4.rack13.srv3",
+		"bay4.rack14.srv0", "bay4.rack14.srv1", "bay4.rack14.srv2", "bay4.rack14.srv3",
+		"bay4.rack15.srv0", "bay4.rack15.srv1", "bay4.rack15.srv2", "bay4.rack15.srv3",
+		"bay4.rack16.srv0", "bay4.rack16.srv1", "bay4.rack16.srv2", "bay4.rack16.srv3",
+		"bay4.rack17.srv0", "bay4.rack17.srv1", "bay4.rack17.srv2", "bay4.rack17.srv3",
+		"bay4.rack18.srv0", "bay4.rack18.srv1", "bay4.rack18.srv2", "bay4.rack18.srv3",
+		"bay4.rack19.srv0", "bay4.rack19.srv1", "bay4.rack19.srv2", "bay4.rack19.srv3",
+		"bay4.rack20.srv0", "bay4.rack20.srv1", "bay4.rack20.srv2", "bay4.rack20.srv3",
+		"bay4.rack21.srv0", "bay4.rack21.srv1", "bay4.rack21.srv2", "bay4.rack21.srv3",
+		"bay4.rack22.srv0", "bay4.rack22.srv1", "bay4.rack22.srv2", "bay4.rack22.srv3",
+		"bay4.rack23.srv0", "bay4.rack23.srv1", "bay4.rack23.srv2", "bay4.rack23.srv3",
+		"bay4.rack24.srv0", "bay4.rack24.srv1", "bay4.rack24.srv2", "bay4.rack24.srv3",
+		"bay4.rack25.srv0", "bay4.rack25.srv1", "bay4.rack25.srv2", "bay4.rack25.srv3",
+		"bay4.rack26.srv0", "bay4.rack26.srv1", "bay4.rack26.srv2", "bay4.rack26.srv3",
+		"bay4.rack27.srv0", "bay4.rack27.srv1", "bay4.rack27.srv2", "bay4.rack27.srv3",
+		"bay4.rack28.srv0", "bay4.rack28.srv1", "bay4.rack28.srv2", "bay4.rack28.srv3",
+		"bay4.rack29.srv0", "bay4.rack29.srv1", "bay4.rack29.srv2", "bay4.rack29.srv3",
+
+		"bay5.rack0.srv0", "bay5.rack0.srv1", "bay5.rack0.srv2", "bay5.rack0.srv3",
+		"bay5.rack1.srv0", "bay5.rack1.srv1", "bay5.rack1.srv2", "bay5.rack1.srv3",
+		"bay5.rack2.srv0", "bay5.rack2.srv1", "bay5.rack2.srv2", "bay5.rack2.srv3",
+		"bay5.rack3.srv0", "bay5.rack3.srv1", "bay5.rack3.srv2", "bay5.rack3.srv3",
+		"bay5.rack4.srv0", "bay5.rack4.srv1", "bay5.rack4.srv2", "bay5.rack4.srv3",
+		"bay5.rack5.srv0", "bay5.rack5.srv1", "bay5.rack5.srv2", "bay5.rack5.srv3",
+		"bay5.rack6.srv0", "bay5.rack6.srv1", "bay5.rack6.srv2", "bay5.rack6.srv3",
+		"bay5.rack7.srv0", "bay5.rack7.srv1", "bay5.rack7.srv2", "bay5.rack7.srv3",
+		"bay5.rack8.srv0", "bay5.rack8.srv1", "bay5.rack8.srv2", "bay5.rack8.srv3",
+		"bay5.rack9.srv0", "bay5.rack9.srv1", "bay5.rack9.srv2", "bay5.rack9.srv3",
+		"bay5.rack10.srv0", "bay5.rack10.srv1", "bay5.rack10.srv2", "bay5.rack10.srv3",
+		"bay5.rack11.srv0", "bay5.rack11.srv1", "bay5.rack11.srv2", "bay5.rack11.srv3",
+		"bay5.rack12.srv0", "bay5.rack12.srv1", "bay5.rack12.srv2", "bay5.rack12.srv3",
+		"bay5.rack13.srv0", "bay5.rack13.srv1", "bay5.rack13.srv2", "bay5.rack13.srv3",
+		"bay5.rack14.srv0", "bay5.rack14.srv1", "bay5.rack14.srv2", "bay5.rack14.srv3",
+		"bay5.rack15.srv0", "bay5.rack15.srv1", "bay5.rack15.srv2", "bay5.rack15.srv3",
+		"bay5.rack16.srv0", "bay5.rack16.srv1", "bay5.rack16.srv2", "bay5.rack16.srv3",
+		"bay5.rack17.srv0", "bay5.rack17.srv1", "bay5.rack17.srv2", "bay5.rack17.srv3",
+		"bay5.rack18.srv0", "bay5.rack18.srv1", "bay5.rack18.srv2", "bay5.rack18.srv3",
+		"bay5.rack19.srv0", "bay5.rack19.srv1", "bay5.rack19.srv2", "bay5.rack19.srv3",
+		"bay5.rack20.srv0", "bay5.rack20.srv1", "bay5.rack20.srv2", "bay5.rack20.srv3",
+		"bay5.rack21.srv0", "bay5.rack21.srv1", "bay5.rack21.srv2", "bay5.rack21.srv3",
+		"bay5.rack22.srv0", "bay5.rack22.srv1", "bay5.rack22.srv2", "bay5.rack22.srv3",
+		"bay5.rack23.srv0", "bay5.rack23.srv1", "bay5.rack23.srv2", "bay5.rack23.srv3",
+		"bay5.rack24.srv0", "bay5.rack24.srv1", "bay5.rack24.srv2", "bay5.rack24.srv3",
+		"bay5.rack25.srv0", "bay5.rack25.srv1", "bay5.rack25.srv2", "bay5.rack25.srv3",
+		"bay5.rack26.srv0", "bay5.rack26.srv1", "bay5.rack26.srv2", "bay5.rack26.srv3",
+		"bay5.rack27.srv0", "bay5.rack27.srv1", "bay5.rack27.srv2", "bay5.rack27.srv3",
+		"bay5.rack28.srv0", "bay5.rack28.srv1", "bay5.rack28.srv2", "bay5.rack28.srv3",
+		"bay5.rack29.srv0", "bay5.rack29.srv1", "bay5.rack29.srv2", "bay5.rack29.srv3",
+		NULL,
+	};
+
+	_add_level_repartition_test(lrt4, "6x30x4", 15); // 12+3
+	_add_level_repartition_test(lrt4, "6x30x4", 18); // 14+4
+
+	const char *lrt5[181] = {
+		"bay0.rack0",
+		"bay0.rack1",
+		"bay0.rack2",
+		"bay0.rack3",
+		"bay0.rack4",
+		"bay0.rack5",
+		"bay0.rack6",
+		"bay0.rack7",
+		"bay0.rack8",
+		"bay0.rack9",
+		"bay0.rack10",
+		"bay0.rack11",
+		"bay0.rack12",
+		"bay0.rack13",
+		"bay0.rack14",
+		"bay0.rack15",
+		"bay0.rack16",
+		"bay0.rack17",
+		"bay0.rack18",
+		"bay0.rack19",
+		"bay0.rack20",
+		"bay0.rack21",
+		"bay0.rack22",
+		"bay0.rack23",
+		"bay0.rack24",
+		"bay0.rack25",
+		"bay0.rack26",
+		"bay0.rack27",
+		"bay0.rack28",
+		"bay0.rack29",
+
+		"bay1.rack0",
+		"bay1.rack1",
+		"bay1.rack2",
+		"bay1.rack3",
+		"bay1.rack4",
+		"bay1.rack5",
+		"bay1.rack6",
+		"bay1.rack7",
+		"bay1.rack8",
+		"bay1.rack9",
+		"bay1.rack10",
+		"bay1.rack11",
+		"bay1.rack12",
+		"bay1.rack13",
+		"bay1.rack14",
+		"bay1.rack15",
+		"bay1.rack16",
+		"bay1.rack17",
+		"bay1.rack18",
+		"bay1.rack19",
+		"bay1.rack20",
+		"bay1.rack21",
+		"bay1.rack22",
+		"bay1.rack23",
+		"bay1.rack24",
+		"bay1.rack25",
+		"bay1.rack26",
+		"bay1.rack27",
+		"bay1.rack28",
+		"bay1.rack29",
+
+		"bay2.rack0",
+		"bay2.rack1",
+		"bay2.rack2",
+		"bay2.rack3",
+		"bay2.rack4",
+		"bay2.rack5",
+		"bay2.rack6",
+		"bay2.rack7",
+		"bay2.rack8",
+		"bay2.rack9",
+		"bay2.rack10",
+		"bay2.rack11",
+		"bay2.rack12",
+		"bay2.rack13",
+		"bay2.rack14",
+		"bay2.rack15",
+		"bay2.rack16",
+		"bay2.rack17",
+		"bay2.rack18",
+		"bay2.rack19",
+		"bay2.rack20",
+		"bay2.rack21",
+		"bay2.rack22",
+		"bay2.rack23",
+		"bay2.rack24",
+		"bay2.rack25",
+		"bay2.rack26",
+		"bay2.rack27",
+		"bay2.rack28",
+		"bay2.rack29",
+
+		"bay3.rack0",
+		"bay3.rack1",
+		"bay3.rack2",
+		"bay3.rack3",
+		"bay3.rack4",
+		"bay3.rack5",
+		"bay3.rack6",
+		"bay3.rack7",
+		"bay3.rack8",
+		"bay3.rack9",
+		"bay3.rack10",
+		"bay3.rack11",
+		"bay3.rack12",
+		"bay3.rack13",
+		"bay3.rack14",
+		"bay3.rack15",
+		"bay3.rack16",
+		"bay3.rack17",
+		"bay3.rack18",
+		"bay3.rack19",
+		"bay3.rack20",
+		"bay3.rack21",
+		"bay3.rack22",
+		"bay3.rack23",
+		"bay3.rack24",
+		"bay3.rack25",
+		"bay3.rack26",
+		"bay3.rack27",
+		"bay3.rack28",
+		"bay3.rack29",
+
+		"bay4.rack0",
+		"bay4.rack1",
+		"bay4.rack2",
+		"bay4.rack3",
+		"bay4.rack4",
+		"bay4.rack5",
+		"bay4.rack6",
+		"bay4.rack7",
+		"bay4.rack8",
+		"bay4.rack9",
+		"bay4.rack10",
+		"bay4.rack11",
+		"bay4.rack12",
+		"bay4.rack13",
+		"bay4.rack14",
+		"bay4.rack15",
+		"bay4.rack16",
+		"bay4.rack17",
+		"bay4.rack18",
+		"bay4.rack19",
+		"bay4.rack20",
+		"bay4.rack21",
+		"bay4.rack22",
+		"bay4.rack23",
+		"bay4.rack24",
+		"bay4.rack25",
+		"bay4.rack26",
+		"bay4.rack27",
+		"bay4.rack28",
+		"bay4.rack29",
+
+		"bay5.rack0",
+		"bay5.rack1",
+		"bay5.rack2",
+		"bay5.rack3",
+		"bay5.rack4",
+		"bay5.rack5",
+		"bay5.rack6",
+		"bay5.rack7",
+		"bay5.rack8",
+		"bay5.rack9",
+		"bay5.rack10",
+		"bay5.rack11",
+		"bay5.rack12",
+		"bay5.rack13",
+		"bay5.rack14",
+		"bay5.rack15",
+		"bay5.rack16",
+		"bay5.rack17",
+		"bay5.rack18",
+		"bay5.rack19",
+		"bay5.rack20",
+		"bay5.rack21",
+		"bay5.rack22",
+		"bay5.rack23",
+		"bay5.rack24",
+		"bay5.rack25",
+		"bay5.rack26",
+		"bay5.rack27",
+		"bay5.rack28",
+		"bay5.rack29",
+
+		NULL,
+	};
+
+	_add_level_repartition_test(lrt5, "6x30", 15); // 12+3
+	_add_level_repartition_test(lrt5, "6x30", 18); // 14+4
+
+	return g_test_run();
+};
