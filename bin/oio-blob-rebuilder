@@ -50,7 +50,7 @@ def make_arg_parser():
     ifile_help = "Read chunks from this file instead of rdir. " \
                  "Each line should be formatted like " \
                  "'container_id|content_id|short_chunk_id'."
-    parser.add_argument('--input_file', nargs='?',
+    parser.add_argument('--input-file', nargs='?',
                         help=ifile_help)
     parser.add_argument('--beanstalkd',
                         help='address of the service beanstalkd')
