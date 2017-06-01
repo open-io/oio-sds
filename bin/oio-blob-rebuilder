@@ -26,7 +26,7 @@ def make_arg_parser():
             "running this tool."
     parser = argparse.ArgumentParser(description=descr, parents=[log_parser])
     parser.add_argument('namespace', help="Namespace")
-    parser.add_argument('volume', help="Id of the volume to rebuild (IP:PORT)")
+    parser.add_argument('--volume', help="Id of the volume to rebuild (IP:PORT)")
     parser.add_argument('--dry-run', action='store_true',
                         help="Display actions but do nothing")
     parser.add_argument('--rdir-fetch-limit', type=int,
@@ -50,8 +50,12 @@ def make_arg_parser():
     ifile_help = "Read chunks from this file instead of rdir. " \
                  "Each line should be formatted like " \
                  "'container_id|content_id|short_chunk_id'."
-    parser.add_argument('input_file', nargs='?',
+    parser.add_argument('--input-file', nargs='?',
                         help=ifile_help)
+    parser.add_argument('--beanstalkd',
+                        help='address of the service beanstalkd')
+    parser.add_argument('--beanstalkd-tube',
+                        help='the tube to use for the beanstalkd service')
 
     return parser
 
@@ -60,6 +64,8 @@ if __name__ == '__main__':
     args = make_arg_parser().parse_args()
 
     conf = {}
+    if args.beanstalkd_tube is not None:
+        conf['beanstalkd_tube'] = args.beanstalkd_tube
     if args.log_level is not None:
         conf['log_level'] = args.log_level
     if args.log_facility is not None:
@@ -88,7 +94,11 @@ if __name__ == '__main__':
     try:
         worker = BlobRebuilderWorker(
             conf, logger, args.volume, input_file=args.input_file,
-            try_chunk_delete=args.delete_faulty_chunks)
-        worker.rebuilder_pass_with_lock()
+            try_chunk_delete=args.delete_faulty_chunks,
+            beanstalkd_addr=args.beanstalkd)
+        if args.volume:
+            worker.rebuilder_pass_with_lock()
+        else:
+            worker.rebuilder_pass()
     except Exception as e:
         logger.exception('ERROR in rebuilder: %s' % e)

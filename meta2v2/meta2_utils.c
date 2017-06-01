@@ -28,6 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/meta2_dedup_utils.h>
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
+#include <meta2v2/meta2_utils_json.h>
 
 #define RANDOM_UID(uid,uid_size) \
 	struct { guint64 now; guint32 r; guint16 pid; guint16 th; } uid; \
@@ -2000,6 +2001,243 @@ m2_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
 		default:
 			return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy type");
 	}
+}
+
+enum _content_broken_state_e
+{
+	NONE,
+	REPARABLE,
+	IRREPARABLE
+};
+
+struct _check_content_s
+{
+	gint64 size;
+	gint last_pos;
+	GString *present_chunks;
+	GString *missing_pos;
+	guint nb_copy;
+	gint k;
+	gint m;
+	enum _content_broken_state_e ecb;
+	gboolean partial;
+};
+
+static void
+_prepare_message(struct _check_content_s *content, GString *message)
+{
+	g_string_append(message, "\"present_chunks\":[");
+	g_string_append(message, content->present_chunks->str);
+	g_string_append(message, "], \"missing_chunks\":[");
+	g_string_append(message, content->missing_pos->str);
+	g_string_append_c(message, ']');
+	g_string_free(content->missing_pos, TRUE);
+	g_string_free(content->present_chunks, TRUE);
+}
+
+static gboolean
+_check_metachunk_number(GSList *beans, struct _check_content_s *ec)
+{
+
+	gint last_pos = 0;
+	gint i = 0;
+	meta2_json_chunks_only(ec->present_chunks, beans, FALSE);
+
+	for (GSList *l = beans; l; l = l->next) {
+		i++;
+		gpointer bean = l->data;
+		if (DESCR(bean) != &descr_struct_CHUNKS) {
+			ec->ecb = IRREPARABLE;
+			return TRUE;
+		}
+
+		GString *gs = CHUNKS_get_position(bean);
+		char *subpos = g_strrstr(gs->str, ".");
+		if (subpos != NULL) {
+			subpos++;
+		} else {
+			ec->ecb = IRREPARABLE;
+			return TRUE;
+		}
+
+		gint64 p = g_ascii_strtoll(subpos, NULL, 10);
+		for (; last_pos < p - 1; last_pos++) {
+			oio_str_gstring_append_json_string(ec->missing_pos,
+					CHUNKS_get_position(bean)->str);
+		}
+
+		last_pos++;
+		ec->size += CHUNKS_get_size(bean);
+	}
+
+	if (i < ec->k || i > ec->k + ec->m) {
+		ec->ecb = IRREPARABLE;
+		return TRUE;
+	} else if (i >= ec->k && i < ec->k + ec->m) {
+		ec->ecb = REPARABLE;
+	}
+
+	return FALSE;
+}
+
+static gboolean
+_foreach_check_plain_content(gpointer key, gpointer value, gpointer data)
+{
+	struct _check_content_s *content = data;
+	if (content->last_pos != GPOINTER_TO_INT(key) - 1 && content->last_pos != -1
+			&& !content->partial) {
+		content->ecb = IRREPARABLE;
+		return TRUE;
+	}
+
+	content->last_pos = GPOINTER_TO_INT(key);
+	guint nb_chunks = 0;
+	meta2_json_chunks_only (content->present_chunks, value, FALSE);
+	for (GSList *l = value; l; l = l->next) {
+		content->size += CHUNKS_get_size(l->data);
+		nb_chunks++;
+	}
+
+	if (content->nb_copy > nb_chunks) {
+		for (guint i = nb_chunks; i < content->nb_copy; i++) {
+			if (content->missing_pos->len)
+				g_string_append(content->missing_pos, ",");
+			oio_str_gstring_append_json_string(content->missing_pos,
+					CHUNKS_get_position(((GSList *)value)->data)->str);
+		}
+		content->ecb = REPARABLE;
+	}
+
+	return FALSE;
+}
+
+static gboolean
+_foreach_check_ec_content(gpointer key, gpointer value, gpointer data)
+{
+	struct _check_content_s *content = data;
+	if (content->last_pos != GPOINTER_TO_INT(key) - 1 && content->last_pos != -1
+		&& !content->partial) {
+		content->ecb = IRREPARABLE;
+		return TRUE;
+	}
+
+	content->last_pos = GPOINTER_TO_INT(key);
+	return _check_metachunk_number(value, content);
+}
+
+static enum _content_broken_state_e
+_check_plain_content(struct _sorted_content_s *content,
+		const struct data_security_s *dsec, GString *message, gboolean partial)
+{
+	gint nb_copy = data_security_get_int64_param(dsec, DS_KEY_COPY_COUNT, 1);
+	if (!content->header)
+		return IRREPARABLE;
+
+	gint64 size =  CONTENTS_HEADERS_get_size(content->header);
+	struct _check_content_s cp = {
+		.size = 0,
+		.last_pos = -1,
+		.missing_pos = g_string_new(""),
+		.present_chunks = g_string_new(""),
+		.nb_copy = nb_copy,
+		.partial = partial,
+	};
+
+	g_tree_foreach(content->metachunks, _foreach_check_plain_content, &cp);
+	_prepare_message(&cp, message);
+	/*If the size of all the chunks is inferior to the size indicate in the header
+	 *it means that some missing chunks could not be detected and so irreparable */
+	if (cp.size < size * nb_copy && cp.ecb == NONE && !cp.partial)
+		cp.ecb = IRREPARABLE;
+
+	return cp.ecb;
+}
+
+static enum _content_broken_state_e
+_check_ec_content(struct _sorted_content_s *content,
+		struct storage_policy_s *pol, GString *message, gboolean partial)
+{
+	if (!content->header)
+		return IRREPARABLE;
+
+	gint size = CONTENTS_HEADERS_get_size(content->header);
+	struct _check_content_s cec = {
+		.size = 0,
+		.last_pos = -1,
+		.present_chunks = g_string_new(""),
+		.missing_pos = g_string_new(""),
+		.k = _policy_parameter(pol, DS_KEY_K, 6),
+		.m = _policy_parameter(pol, DS_KEY_M, 3),
+		.partial = partial,
+	};
+
+	g_tree_foreach(content->metachunks, _foreach_check_ec_content, &cec);
+	_prepare_message(&cec, message);
+	/* Check if the size is at least superior to the minimum necessary to
+	 * size needed by the storage policy*/
+	if (cec.size < size * (cec.k + cec.m) / cec.k && cec.ecb == NONE
+			&& !cec.partial)
+		return IRREPARABLE;
+
+	return cec.ecb;
+}
+
+GError *m2db_check_content(GSList *beans, struct namespace_info_s *nsinfo,
+		GString *message, gboolean partial)
+{
+	GError *err = NULL;
+	struct _sorted_content_s sorted_content = {
+		.header = NULL,
+		.aliases = NULL,
+		.properties = NULL,
+		.metachunks = g_tree_new(_tree_compare_int),
+	};
+
+	struct storage_policy_s *pol = NULL;
+	GString *polname = NULL;
+	for (GSList *l = beans; l; l = l->next) {
+		gpointer bean = l->data;
+		_sort_content_cb(&sorted_content, bean);
+		if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
+			polname = CONTENTS_HEADERS_get_policy(bean);
+		}
+	}
+
+	if (polname && polname->str && polname->len)
+		pol = storage_policy_init(nsinfo, polname->str);
+
+	enum _content_broken_state_e  cbroken = NONE;
+	const struct data_security_s *dsec = storage_policy_get_data_security(pol);
+	switch (data_security_get_type(dsec)) {
+		case STGPOL_DS_BACKBLAZE:
+		case STGPOL_DS_PLAIN:
+			cbroken = _check_plain_content(&sorted_content, dsec, message, partial);
+			break;
+		case STGPOL_DS_EC:
+			cbroken = _check_ec_content(&sorted_content, pol, message, partial);
+			break;
+		default:
+			err = NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy type");
+	}
+
+	switch (cbroken) {
+		case NONE:
+			break;
+		case REPARABLE:
+			err = NEWERROR(CODE_CONTENT_UNCOMPLETE, "Content broken but reparable");
+			break;
+		case IRREPARABLE:
+			err = NEWERROR(CODE_CONTENT_CORRUPTED, "Content broken and irreparable");
+			break;
+	}
+
+	g_slist_free(sorted_content.aliases);
+	g_slist_free(sorted_content.properties);
+	g_tree_destroy(sorted_content.metachunks);
+	if(pol)
+		storage_policy_clean(pol);
+
+	return err;
 }
 
 /* Storage Policy ----------------------------------------------------------- */

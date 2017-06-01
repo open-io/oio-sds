@@ -176,6 +176,7 @@ class ContainerClient(ProxyClient):
         :type headers: `dict`
         :returns: a `dict` with "properties" containing a `dict` of
             user properties.
+        :deprecated: use `container_get_properties` instead
         """
         params = self._make_params(account, reference, cid=cid)
         _resp, body = self._request('GET', '/show', params=params, **kwargs)

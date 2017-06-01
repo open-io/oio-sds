@@ -22,14 +22,21 @@ from oio.common.utils import GeneratorIO
 
 
 class ECContent(Content):
-    def rebuild_chunk(self, chunk_id, allow_same_rawx=False):
+    def rebuild_chunk(self, chunk_id, allow_same_rawx=False, chunk_pos=None):
         current_chunk = self.chunks.filter(id=chunk_id).one()
 
-        if current_chunk is None:
+        if current_chunk is None and chunk_pos is None:
             raise OrphanChunk("Chunk not found in content")
+        elif current_chunk is None:
+            chunk = {"pos": chunk_pos, "url": ""}
+            current_chunk = Chunk(chunk)
 
         chunks = self.chunks.filter(metapos=current_chunk.metapos)\
             .exclude(id=chunk_id)
+
+        if chunk_id is None:
+            current_chunk.size = chunks[0].size
+            current_chunk.checksum = chunks[0].checksum
 
         broken_list = list()
         if not allow_same_rawx:
@@ -69,7 +76,10 @@ class ECContent(Content):
         meta['metachunk_hash'] = current_chunk.checksum
         meta['metachunk_size'] = current_chunk.size
         self.blob_client.chunk_put(spare_url[0], meta, GeneratorIO(stream))
-        self._update_spare_chunk(current_chunk, spare_url[0])
+        if chunk_id is None:
+            self._add_raw_chunk(current_chunk, spare_url[0])
+        else:
+            self._update_spare_chunk(current_chunk, spare_url[0])
 
     def fetch(self):
         chunks = _sort_chunks(self.chunks.raw(), self.storage_method.ec)

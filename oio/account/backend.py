@@ -260,22 +260,26 @@ class AccountBackend(object):
                 record[r] = 0
 
         ct = {name: 0}
-        pipeline = conn.pipeline(True)
-        pipeline.hmset(AccountBackend.ckey(account_id, name), record)
-        if deleted:
-            pipeline.expire(AccountBackend.ckey(account_id, name), EXPIRE_TIME)
-            pipeline.zrem('containers:%s' % account_id, name)
-        else:
-            pipeline.persist(AccountBackend.ckey(account_id, name))
-            pipeline.zadd('containers:%s' % account_id, **ct)
-        if incr_object_count:
-            pipeline.hincrby('account:%s' % account_id, 'objects',
-                             incr_object_count)
-        if incr_bytes_used:
-            pipeline.hincrby('account:%s' % account_id, 'bytes',
-                             incr_bytes_used)
-        pipeline.execute()
-        release_lock(conn, AccountBackend.ckey(account_id, name), lock)
+        try:
+            pipeline = conn.pipeline(True)
+            pipeline.hmset(AccountBackend.ckey(account_id, name), record)
+            if deleted:
+                pipeline.expire(AccountBackend.ckey(account_id, name),
+                                EXPIRE_TIME)
+                pipeline.zrem('containers:%s' % account_id, name)
+            else:
+                pipeline.persist(AccountBackend.ckey(account_id, name))
+                pipeline.zadd('containers:%s' % account_id, **ct)
+            if incr_object_count:
+                pipeline.hincrby('account:%s' % account_id, 'objects',
+                                 incr_object_count)
+            if incr_bytes_used:
+                pipeline.hincrby('account:%s' % account_id, 'bytes',
+                                 incr_bytes_used)
+            pipeline.execute()
+        finally:
+            release_lock(conn, AccountBackend.ckey(account_id, name), lock)
+
         return name
 
     def _raw_listing(self, account_id, limit, marker, end_marker, delimiter,

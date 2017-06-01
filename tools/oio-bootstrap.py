@@ -626,6 +626,7 @@ inherit_env=1
 #env.PATH=${PATH}:${HOME}/.local/bin:${CODEDIR}/bin:/bin:/usr/bin:/usr/local/bin
 env.LD_LIBRARY_PATH=${HOME}/.local/@LD_LIBDIR@:${LIBDIR}
 
+
 limit.core_size=-1
 #limit.max_files=2048
 #limit.stack_size=256
@@ -746,6 +747,9 @@ pipeline = noop
 # pipeline = replication
 pipeline = noop
 
+[handler:storage.content.broken]
+pipeline = content_rebuild
+
 [handler:storage.content.deleted]
 # pipeline = content_cleaner replication
 pipeline = content_cleaner
@@ -771,6 +775,11 @@ pipeline = noop
 [filter:content_cleaner]
 use = egg:oio#content_cleaner
 key_file = ${KEY_FILE}
+
+[filter:content_rebuild]
+use = egg:oio#content_rebuild
+tube = oio-rebuild
+queue_url = beanstalk://127.0.0.1:11300
 
 [filter:account_update]
 use = egg:oio#account_update

@@ -274,6 +274,7 @@ static gridd_filter M2V2_PUT_FILTERS[] =
 	meta2_filter_check_ns_is_master,
 	meta2_filter_check_events_not_stalled,
 	meta2_filter_extract_body_beans,
+	meta2_filter_action_check_content,
 	meta2_filter_action_put_content,
 	NULL
 };
