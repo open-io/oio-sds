@@ -18,6 +18,7 @@ License along with this library.
 
 #ifndef OIO_SDS__core__oiolb_h
 # define OIO_SDS__core__oiolb_h 1
+# include <stdint.h>
 # include <stdbool.h>
 # include <glib.h>
 
@@ -65,6 +66,11 @@ struct oio_lb_item_s *oio_lb_pool__get_item(struct oio_lb_pool_s *self,
 /* Take djb2 hash of each part of the '.'-separated string,
  * keep the 16 (or 8) LSB of each hash to build a 64 integer. */
 oio_location_t location_from_dotted_string(const char *dotted);
+
+/* Make a 32bit identifier from a 64bit location.
+ * Level is the number of blocks of 16 least significant bits
+ * to discard. */
+uint32_t key_from_loc_level(oio_location_t location, int level);
 
 /* -------------------------------------------------------------------------- */
 

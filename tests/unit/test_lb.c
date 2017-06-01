@@ -310,7 +310,7 @@ _test_repartition_by_loc_level(const char **locations, int targets)
 			++count;
 			// Count how many times an "area" is selected, for each area level.
 			for (int j = 1; j < 4; j++) {
-				GQuark host_key = ((location >> (j * 16)) + 1) & 0xFFFFFFFF;
+				GQuark host_key = key_from_loc_level(location, j);
 				GData **datalist = &count_by_level_by_host[j];
 				guint32 host_count = GPOINTER_TO_UINT(
 						g_datalist_id_get_data(datalist, host_key));
@@ -354,7 +354,7 @@ _test_repartition_by_loc_level(const char **locations, int targets)
 	GRID_INFO("%d unbalanced situations on %d shots", unbalanced, shots);
 
 	// FIXME(FVE): there should be NO unbalanced situation
-	g_assert_cmpint(unbalanced, <, shots+1);
+	g_assert_cmpint(unbalanced, <, shots);
 
 	int ideal_count = targets * shots / services;
 	int min_count = ideal_count * 80 / 100;
