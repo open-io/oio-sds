@@ -30,6 +30,7 @@ License along with this library.
 typedef guint32 generation_t;
 
 #define OIO_LB_SHUFFLE_JUMP ((1UL << 31) - 1)
+#define OIO_LB_MASK_ALL (oio_location_t)~0lu
 
 
 typedef guint16 oio_refcount_t;
@@ -124,6 +125,10 @@ struct oio_lb_slot_s
 	   of services at the same location is rather small.*/
 	GArray *items;
 
+	/* Total number of items per location, for each level.
+	 * We do not use level 0 at the moment. */
+	GData *items_by_loc[4];
+
 	gchar *name;
 
 	generation_t generation;
@@ -175,6 +180,17 @@ struct oio_lb_pool_LOCAL_s
 	gboolean nearby_mode : 16;
 };
 
+struct polling_ctx_s
+{
+	void (*on_id) (oio_location_t location, const char *id);
+	const oio_location_t * avoids;
+	const oio_location_t * polled;
+	oio_location_t *next_polled;
+	gint n_targets;
+
+	GData *counters[4];
+};
+
 static void _local__destroy (struct oio_lb_pool_s *self);
 
 static guint _local__poll (struct oio_lb_pool_s *self,
@@ -221,7 +237,7 @@ static guint _search_first_at_location(GArray *tab, const oio_location_t needle,
 		const guint start, const guint end);
 
 /* Take djb2 hash of each part of the '.'-separated string,
- * keep the 16 (or 8) LSB of each hash to build a 64 integer. */
+ * keep the 16 LSB of each hash to build a 64b integer. */
 oio_location_t
 location_from_dotted_string(const char *dotted)
 {
@@ -233,16 +249,28 @@ location_from_dotted_string(const char *dotted)
 			hash = ((hash << 5) + hash) + c;
 		return hash;
 	}
-	gchar **toks = g_strsplit(dotted, ".", 8);
-	unsigned int shift = (g_strv_length(toks) <= 4)? 16 : 8;
-	oio_location_t mask = (1u << shift) - 1u;
+	gchar **toks = g_strsplit(dotted, ".", 4);
 	oio_location_t location = 0;
+	int ntoks = 0;
 	// according to g_strsplit documentation, toks cannot be NULL
-	for (gchar **tok = toks; *tok; tok++) {
-		location = (location << shift) | (_djb2(*tok) & mask);
+	for (gchar **tok = toks; *tok; tok++, ntoks++) {
+		location = (location << 16) | (_djb2(*tok) & 0xFFFF);
+	}
+	while (ntoks < 4) {
+	    location <<= 16;
+	    ntoks++;
 	}
 	g_strfreev(toks);
 	return location;
+}
+
+uint32_t
+key_from_loc_level(oio_location_t loc, int level)
+{
+	uint32_t key = ((loc >> (level * 16)) + 1) & 0xFFFFFFFF;
+	if (level < 2)
+	    key += (loc >> 32) * OIO_LB_SHUFFLE_JUMP;
+	return key;
 }
 
 static int
@@ -254,7 +282,7 @@ _compare_stored_items_by_location (const void *k0, const void *k)
 }
 
 static gboolean
-_item_is_too_close (const oio_location_t * avoids,
+_item_is_too_close(const oio_location_t * avoids,
 		const oio_location_t item, const oio_location_t mask)
 {
 	if (!avoids)
@@ -277,6 +305,31 @@ _item_is_too_far (const oio_location_t *known,
 	for (const oio_location_t *pp=known; *pp; ++pp) {
 		if (loc != (mask & *pp))
 			return TRUE;
+	}
+	return FALSE;
+}
+
+static gboolean
+_item_is_too_popular(struct polling_ctx_s *ctx, const oio_location_t item,
+		struct oio_lb_slot_s *slot)
+{
+	for (int level = 1; level <= 3; level++) {
+		GQuark key = key_from_loc_level(item, level);
+		// How many different locations there is under this level
+		guint32 n_leafs = GPOINTER_TO_UINT(
+				g_datalist_id_get_data(&(slot->items_by_loc[level]), key));
+		// How often the location has been chosen
+		guint32 popularity = GPOINTER_TO_UINT(
+				g_datalist_id_get_data(ctx->counters + level, key));
+		// Maximum number of elements with this location that we can take
+		guint32 max = 1 + (ctx->n_targets - 1) / (slot->items->len / n_leafs);
+
+		GRID_TRACE("At level %d, %08X has popularity: %u, leafs: %u, max: %u",
+				level, key, popularity, n_leafs, max);
+		if (popularity >= max) {
+			// TODO: return the level to optimize the next jump
+			return TRUE;
+		}
 	}
 	return FALSE;
 }
@@ -312,6 +365,9 @@ _slot_destroy (struct oio_lb_slot_s *slot)
 		g_array_free (slot->items, TRUE);
 		slot->items = NULL;
 	}
+	for (int level = 1; level < 4; level++) {
+		g_datalist_clear(&(slot->items_by_loc[level]));
+	}
 	oio_str_clean (&slot->name);
 	g_free (slot);
 }
@@ -332,12 +388,48 @@ _slot_needs_rehash (const struct oio_lb_slot_s * const slot)
 }
 
 static void
+_level_datalist_incr_loc(GData **counters, oio_location_t loc)
+{
+	for (int level = 1; level < 4; level++) {
+		GData **counter = counters + level;
+		GQuark key = key_from_loc_level(loc, level);
+		guint32 count = GPOINTER_TO_UINT(
+				g_datalist_id_get_data(counter, key));
+		count++;
+		g_datalist_id_set_data(counter, key, GUINT_TO_POINTER(count));
+	}
+}
+
+static void
 _slot_rehash (struct oio_lb_slot_s *slot)
 {
 	if (slot->flag_dirty_order) {
 		slot->flag_dirty_order = 0;
 		slot->flag_dirty_weights = 1;
-		g_array_sort (slot->items, _compare_stored_items_by_location);
+		g_array_sort(slot->items, _compare_stored_items_by_location);
+
+		for (int level = 1; level < 4; level++) {
+			g_datalist_clear(&(slot->items_by_loc[level]));
+			// No need to call g_datalist_init()
+		}
+		for (guint i = 0; i < slot->items->len; i++) {
+			struct _slot_item_s *si = &SLOT_ITEM(slot, i);
+			_level_datalist_incr_loc(slot->items_by_loc, si->item->location);
+		}
+
+# ifdef HAVE_EXTRA_DEBUG
+		if (unlikely(GRID_TRACE_ENABLED())) {
+			void _display(GQuark k, gpointer data, gpointer u) {
+				guint level = GPOINTER_TO_UINT(u);
+				oio_location_t loc = (GPOINTER_TO_UINT(k) - 1);
+				GRID_TRACE("%0*lX prefix has %u services",
+						4 * (4 - level), loc, GPOINTER_TO_UINT(data));
+			}
+			g_datalist_foreach(&slot->items_by_loc[3], _display, GUINT_TO_POINTER(3));
+			g_datalist_foreach(&slot->items_by_loc[2], _display, GUINT_TO_POINTER(2));
+			g_datalist_foreach(&slot->items_by_loc[1], _display, GUINT_TO_POINTER(1));
+		}
+#endif
 	}
 
 	if (slot->flag_dirty_weights) {
@@ -375,14 +467,6 @@ _search_closest_weight (GArray *tab, const guint32 needle,
 	return _search_closest_weight (tab, needle, i_pivot+1, end);
 }
 
-struct polling_ctx_s
-{
-	void (*on_id) (oio_location_t location, const char *id);
-	const oio_location_t * avoids;
-	const oio_location_t * polled;
-	oio_location_t *next_polled;
-};
-
 static gboolean
 _accept_item (struct oio_lb_slot_s *slot, oio_location_t mask,
 		gboolean reversed, struct polling_ctx_s *ctx, guint i)
@@ -390,24 +474,29 @@ _accept_item (struct oio_lb_slot_s *slot, oio_location_t mask,
 	const struct _lb_item_s *item = _slot_get (slot, i);
 	const oio_location_t loc = item->location;
 	// Check the item is not in "avoids" list
-	if (_item_is_too_close(ctx->avoids, loc, (oio_location_t)-1))
+	if (_item_is_too_close(ctx->avoids, loc, OIO_LB_MASK_ALL))
 		return FALSE;
 	if (reversed) {
 		// Check the item is not too far from alread polled items
 		if (_item_is_too_far(ctx->polled, loc, mask))
 			return FALSE;
 		// Check item has not been already polled
-		if (_item_is_too_close(ctx->polled, loc, (oio_location_t)-1))
+		if (_item_is_too_close(ctx->polled, loc, OIO_LB_MASK_ALL))
 			return FALSE;
 	} else {
 		// Check the item is not too close to alread polled items
 		if (_item_is_too_close(ctx->polled, loc, mask))
 			return FALSE;
+		if (_item_is_too_popular(ctx, loc, slot))
+			return FALSE;
 	}
-	GRID_TRACE("Accepting item %s (0x%016lX) from slot %s",
+	GRID_TRACE("Accepting item %s (0x%"OIO_LOC_FORMAT") from slot %s",
 			item->id, loc, slot->name);
 	ctx->on_id((oio_location_t)loc, item->id);
 	*(ctx->next_polled) = loc;
+
+	_level_datalist_incr_loc(ctx->counters, loc);
+
 	return TRUE;
 }
 
@@ -423,7 +512,8 @@ _local_slot__poll (struct oio_lb_slot_s *slot, oio_location_t mask,
 	if (_slot_needs_rehash (slot))
 		_slot_rehash (slot);
 
-	GRID_TRACE2("%s slot=%s sum=%"G_GUINT32_FORMAT" items=%d mask=%016lX",
+	GRID_TRACE2(
+			"%s slot=%s sum=%"G_GUINT32_FORMAT" items=%d mask=%"OIO_LOC_FORMAT,
 			__FUNCTION__, slot->name, slot->sum_weight, slot->items->len,
 			mask);
 
@@ -471,8 +561,10 @@ _local_target__poll (struct oio_lb_pool_LOCAL_s *lb,
 	gboolean res = FALSE;
 
 	g_rw_lock_reader_lock(&lb->world->lock);
-	/* each target is a sequence of '\0'-separated strings, terminated with
-	 * an empty string. Each string is the name of a slot */
+	/* Each target is a sequence of '\0'-separated strings, terminated with
+	 * an empty string. Each string is the name of a slot.
+	 * In most case we should not loop and consider only the first slot.
+	 * The other slots are fallbacks. */
 	for (const char *name = target; *name && !res; name += 1+strlen(name)) {
 		struct oio_lb_slot_s *slot = oio_lb_world__get_slot_unlocked(
 				lb->world, name);
@@ -563,7 +655,12 @@ _local__patch(struct oio_lb_pool_s *self,
 		.avoids = avoids,
 		.polled = (const oio_location_t *) polled,
 		.next_polled = polled,
+		.n_targets = count_targets,
 	};
+
+	for (int level = 1; level < 4; level++) {
+		g_datalist_init(&ctx.counters[level]);
+	}
 
 	guint count = 0;
 	for (gchar **ptarget = lb->targets; *ptarget; ++ptarget) {
@@ -571,7 +668,7 @@ _local__patch(struct oio_lb_pool_s *self,
 		guint mask_shift = 0u;
 		while (!done && mask_shift <= lb->location_mask_max_shift) {
 			done = _local_target__poll(lb, *ptarget, mask_shift, &ctx);
-			mask_shift += 8u;  // Degrade mask by 8 bits (two hex digit)
+			mask_shift += 16u;  // Degrade mask by 16 bits (four hex digit)
 		}
 		if (!done) {
 			/* the strings is '\0' separated, printf won't display it */
@@ -585,6 +682,22 @@ _local__patch(struct oio_lb_pool_s *self,
 		}
 		++ctx.next_polled;
 		++count;
+	}
+
+	if (unlikely(GRID_DEBUG_ENABLED())) {
+		void _display(GQuark k, gpointer data, gpointer u) {
+			guint level = GPOINTER_TO_UINT(u);
+			oio_location_t loc = (GPOINTER_TO_UINT(k) - 1);
+			GRID_DEBUG("%0*lX selected %u times",
+					4 * (4 - level), loc, GPOINTER_TO_UINT(data));
+		}
+		g_datalist_foreach(&ctx.counters[3], _display, GUINT_TO_POINTER(3));
+		g_datalist_foreach(&ctx.counters[2], _display, GUINT_TO_POINTER(2));
+		g_datalist_foreach(&ctx.counters[1], _display, GUINT_TO_POINTER(1));
+	}
+
+	for (int level = 1; level < 4; level++) {
+		g_datalist_clear(&ctx.counters[level]);
 	}
 	return count;
 }
@@ -776,8 +889,8 @@ oio_lb_world__create_pool (struct oio_lb_world_s *world, const char *name)
 	lb->name = g_strdup (name);
 	lb->world = world;
 	lb->targets = g_malloc0 (4 * sizeof(gchar*));
-	lb->location_mask = ~0xFFFFUL;
-	lb->location_mask_max_shift = 16u;
+	lb->location_mask = 0xFFFF000000000000UL;
+	lb->location_mask_max_shift = 48u;
 	lb->nearby_mode = FALSE;
 	return (struct oio_lb_pool_s*) lb;
 }
@@ -793,6 +906,9 @@ _world_create_slot (struct oio_lb_world_s *self, const char *name)
 		slot = g_malloc0(sizeof(*slot));
 		slot->name = g_strdup(name);
 		slot->items = g_array_new(FALSE, TRUE, sizeof(struct _slot_item_s));
+		for (int level = 1; level < 4; level++) {
+			g_datalist_init(&(slot->items_by_loc[level]));
+		}
 		g_rw_lock_writer_lock(&self->lock);
 		g_tree_replace(self->slots, g_strdup(name), slot);
 		g_rw_lock_writer_unlock(&self->lock);
