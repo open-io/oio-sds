@@ -1284,6 +1284,7 @@ _handler_decode_route(struct req_args_s *args, struct json_object *jbody,
 
 		case OIO_RDIR_STATUS:
 			args->rp->no_access();
+			// FALLTHROUGH
 		case OIO_RDIR_ADMIN_SHOW:
 			CHECK_METHOD("GET");
 			return _route_admin_show(args, OPT("vol"));

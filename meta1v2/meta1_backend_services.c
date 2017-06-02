@@ -1141,7 +1141,7 @@ meta1_backend_services_relink(struct meta1_backend_s *m1,
 	}
 	/* Sanity check: all the kept/replaced services must have the type of
 	 * the oio_url */
-	for (struct meta1_service_url_s **p = urepl; p && *p; ++p) {
+	for (struct meta1_service_url_s **p = urepl; urepl && *p; ++p) {
 		if (0 != strcmp((*p)->srvtype, ct.fulltype)) {
 			err = BADREQ("Service type mismatch (URL vs. kept/replaced)");
 			goto out;
