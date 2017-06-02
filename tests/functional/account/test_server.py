@@ -1,9 +1,11 @@
+from time import time
 import simplejson as json
 
 from werkzeug.test import Client
 from werkzeug.wrappers import BaseResponse
 from oio.account.server import create_app
 from tests.utils import BaseTestCase
+from oio.common.utils import Timestamp
 
 
 class TestAccountServer(BaseTestCase):
@@ -53,7 +55,8 @@ class TestAccountServer(BaseTestCase):
         self.assertEqual(resp.status_code, 204)
 
     def test_account_container_update(self):
-        data = {'name': 'foo', 'mtime': 0, 'objects': 0, 'bytes': 0}
+        data = {'name': 'foo', 'mtime': Timestamp(time()).normal,
+                'objects': 0, 'bytes': 0}
         data = json.dumps(data)
         resp = self.app.post('/v1.0/account/container/update',
                              data=data, query_string={'id': self.account_id})

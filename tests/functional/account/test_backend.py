@@ -21,6 +21,8 @@ import redis
 from oio.account.backend import AccountBackend
 from oio.common.utils import Timestamp
 from tests.utils import BaseTestCase
+from werkzeug.exceptions import Conflict
+from testtools.testcase import ExpectedException
 
 
 class TestAccountBackend(BaseTestCase):
@@ -165,6 +167,7 @@ class TestAccountBackend(BaseTestCase):
         # Container is flushed, but the event is deferred
         flush_timestamp = Timestamp(time()).normal
 
+        sleep(.00001)
         # Container delete event, sent immediately after deletion
         backend.update_container(account_id, 'c1',
                                  None, Timestamp(time()).normal,
@@ -202,14 +205,16 @@ class TestAccountBackend(BaseTestCase):
             self.conn.ttl('container:%s:%s' % (account_id, name)) >= 1)
 
         # same event
-        backend.update_container(account_id, name, mtime, dtime, 0, 0)
+        with ExpectedException(Conflict):
+            backend.update_container(account_id, name, mtime, dtime, 0, 0)
         res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)
         self.assertTrue(
             self.conn.ttl('container:%s:%s' % (account_id, name)) >= 1)
 
         # old event
-        backend.update_container(account_id, name, old_mtime, 0, 0, 0)
+        with ExpectedException(Conflict):
+            backend.update_container(account_id, name, old_mtime, 0, 0, 0)
         res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)
         self.assertTrue(
@@ -242,7 +247,8 @@ class TestAccountBackend(BaseTestCase):
             self.conn.ttl('container:%s:%s' % (account_id, name)) >= 1)
 
         # ensure it has been removed
-        backend.update_container(account_id, name, 0, dtime, 0, 0)
+        with ExpectedException(Conflict):
+            backend.update_container(account_id, name, 0, dtime, 0, 0)
         res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)
         self.assertTrue(
@@ -265,7 +271,8 @@ class TestAccountBackend(BaseTestCase):
                                         (account_id, name), 'mtime'), mtime)
 
         # same event
-        backend.update_container(account_id, name, mtime, 0, 0, 0)
+        with ExpectedException(Conflict):
+            backend.update_container(account_id, name, mtime, 0, 0, 0)
 
         res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
         self.assertEqual(res[0], name)
@@ -286,7 +293,8 @@ class TestAccountBackend(BaseTestCase):
 
         # Old event
         old_mtime = Timestamp(time() - 1).normal
-        backend.update_container(account_id, name, old_mtime, 0, 0, 0)
+        with ExpectedException(Conflict):
+            backend.update_container(account_id, name, old_mtime, 0, 0, 0)
 
         res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
         self.assertEqual(res[0], name)
@@ -296,7 +304,8 @@ class TestAccountBackend(BaseTestCase):
 
         # Old delete event
         dtime = Timestamp(time() - 1).normal
-        backend.update_container(account_id, name, 0, dtime, 0, 0)
+        with ExpectedException(Conflict):
+            backend.update_container(account_id, name, 0, dtime, 0, 0)
         res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
         self.assertEqual(res[0], name)
         self.assertEqual(self.conn.hget('container:%s:%s' %

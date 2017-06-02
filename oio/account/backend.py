@@ -4,6 +4,8 @@ import math
 
 import redis
 import redis.sentinel
+from werkzeug.exceptions import NotFound, Conflict
+from oio.common.exceptions import NoSuchAccount
 from oio.common.utils import Timestamp
 from oio.common.utils import int_value
 from oio.common.utils import true_value
@@ -59,6 +61,88 @@ def release_lock(conn, lockname, identifier):
 
 
 class AccountBackend(object):
+    lua_update_container = """
+               -- With lua float we are losing precision for this reason
+               -- we keep the number as a string
+               local is_sup = function(a,b)
+                 if string.len(a) < string.len(b) then
+                   return false;
+                 end;
+                 return a > b;
+               end;
+
+               local account_id = redis.call('HGET', KEYS[4], 'id');
+               if not account_id and ARGV[6] then
+                 redis.call('HSET', 'accounts:', KEYS[1], 1)
+                 redis.call('HMSET', KEYS[4], 'id', KEYS[1],
+                            'bytes', 0, 'objects', 0, 'ctime', ARGV[7])
+               elseif not account_id then
+                 return redis.error_reply('no_account')
+               end;
+
+               local objects = redis.call('HGET', KEYS[2], 'objects');
+               local name = ARGV[1];
+               local mtime = redis.call('HGET', KEYS[2], 'mtime');
+               local dtime = redis.call('HGET', KEYS[2], 'dtime');
+               local bytes = redis.call('HGET', KEYS[2], 'bytes');
+
+               -- When the keys do not exist redis return false and not nil
+               if objects == false then
+                 objects = 0
+               end
+               if dtime == false then
+                 dtime = '0'
+               end
+               if mtime == false then
+                 mtime = '0'
+               end
+               if bytes == false then
+                 bytes = 0
+               end
+
+               local old_mtime = mtime;
+               local inc_objects;
+               local inc_bytes;
+
+               if not is_sup(ARGV[3],dtime) and
+                  not is_sup(ARGV[2],mtime) then
+                 return redis.error_reply('no_update_needed');
+               end;
+
+               if is_sup(ARGV[2],mtime) then
+                 mtime = ARGV[2];
+               end;
+
+               if is_sup(ARGV[3],dtime) then
+                 dtime = ARGV[3];
+               end;
+               if is_sup(dtime,mtime) then
+                 inc_objects = -objects;
+                 inc_bytes = -bytes;
+                 redis.call('HMSET', KEYS[2], 'bytes', 0, 'objects', 0);
+                 redis.call('EXPIRE', KEYS[2], tonumber(ARGV[8]));
+                 redis.call('ZREM', KEYS[3], name);
+               elseif is_sup(mtime,old_mtime) then
+                 redis.call('PERSIST', KEYS[2]);
+                 inc_objects = tonumber(ARGV[4]) - objects
+                 inc_bytes = tonumber(ARGV[5]) - bytes
+                 redis.call('HMSET', KEYS[2], 'bytes', tonumber(ARGV[5]),
+                            'objects', tonumber(ARGV[4]));
+                 redis.call('ZADD', KEYS[3], '0', name);
+               else
+                 return redis.error_reply('no_update_needed');
+               end;
+
+               redis.call('HMSET', KEYS[2], 'mtime', mtime,
+                          'dtime', dtime, 'name', name)
+               if inc_objects ~= 0 then
+                 redis.call('HINCRBY', KEYS[4], 'objects', inc_objects);
+               end;
+               if inc_bytes ~= 0 then
+                 redis.call('HINCRBY', KEYS[4], 'bytes', inc_bytes);
+               end;
+               """
+
     def __init__(self, conf, connection=None):
         self.conf = conf
         self._conn = connection
@@ -72,6 +156,8 @@ class AccountBackend(object):
             self._sentinel = redis.sentinel.Sentinel(
                     [(h, int(p)) for h, p, in (hp.split(':', 2)
                      for hp in self._sentinel_hosts.split(','))])
+        self.script_update_container = self.conn.register_script(
+            self.lua_update_container)
 
     @property
     def conn(self):
@@ -202,83 +288,31 @@ class AccountBackend(object):
                          bytes_used):
         conn = self.conn
         if not account_id or not name:
-            return None
-        _account_id = conn.hget('account:%s' % account_id, 'id')
+            raise NotFound("Missing account or container")
 
-        if not _account_id:
-            if self.autocreate:
-                self.create_account(account_id)
-            else:
-                return None
+        if mtime is None:
+            mtime = '0'
+        if dtime is None:
+            dtime = '0'
+        if object_count is None:
+            object_count = 0
+        if bytes_used is None:
+            bytes_used = 0
 
-        lock = acquire_lock_with_timeout(
-                conn, AccountBackend.ckey(account_id, name), 1)
-        if not lock:
-            return None
-
-        data = conn.hgetall(AccountBackend.ckey(account_id, name))
-
-        record = {'name': name, 'mtime': mtime or dtime, 'dtime': dtime,
-                  'objects': object_count, 'bytes': bytes_used}
-        if data:
-            data['mtime'] = Timestamp(data['mtime'])
-            data['dtime'] = Timestamp(data['dtime'])
-
-            for r in ['name', 'mtime', 'dtime', 'objects', 'bytes']:
-                if record[r] is None and data[r] is not None:
-                    record[r] = data[r]
-            if data['mtime'] > record['mtime']:
-                record['mtime'] = data['mtime']
-            if data['dtime'] > record['dtime']:
-                record['dtime'] = data['dtime']
-
-        deleted = record['dtime'] >= record['mtime']
-
-        if not deleted:
-            incr_bytes_used = int_value(record.get('bytes'), 0) -\
-                int_value(data.get('bytes'), 0)
-            incr_object_count = int_value(record.get('objects'), 0) -\
-                int_value(data.get('objects'), 0)
-        elif record.get('mtime') > data.get('mtime'):
-            incr_bytes_used = - int_value(data.get('bytes'), 0)
-            incr_object_count = - int_value(data.get('objects'), 0)
-        else:
-            # The event has been delayed, the container has already
-            # been deleted, and the object and bytes statistics have
-            # already been reported to the account.
-            incr_bytes_used = 0
-            incr_object_count = 0
-
-        record.update({
-            'name': name,
-            'account_uid': account_id
-        })
-
-        # replace None values
-        for r in ['bytes', 'objects', 'mtime', 'dtime']:
-            if record[r] is None:
-                record[r] = 0
-
-        ct = {name: 0}
+        keys = [account_id, AccountBackend.ckey(account_id, name),
+                ("containers:%s" % (account_id)),
+                ("account:%s" % (account_id))]
+        args = [name, mtime, dtime, object_count, bytes_used,
+                self.autocreate, Timestamp(time()).normal, EXPIRE_TIME]
         try:
-            pipeline = conn.pipeline(True)
-            pipeline.hmset(AccountBackend.ckey(account_id, name), record)
-            if deleted:
-                pipeline.expire(AccountBackend.ckey(account_id, name),
-                                EXPIRE_TIME)
-                pipeline.zrem('containers:%s' % account_id, name)
+            self.script_update_container(keys=keys, args=args, client=conn)
+        except redis.exceptions.ResponseError as e:
+            if str(e) == "no_account":
+                raise NotFound(account_id)
+            elif str(e) == "no_update_needed":
+                raise Conflict("No updated needed")
             else:
-                pipeline.persist(AccountBackend.ckey(account_id, name))
-                pipeline.zadd('containers:%s' % account_id, **ct)
-            if incr_object_count:
-                pipeline.hincrby('account:%s' % account_id, 'objects',
-                                 incr_object_count)
-            if incr_bytes_used:
-                pipeline.hincrby('account:%s' % account_id, 'bytes',
-                                 incr_bytes_used)
-            pipeline.execute()
-        finally:
-            release_lock(conn, AccountBackend.ckey(account_id, name), lock)
+                raise e
 
         return name
 
