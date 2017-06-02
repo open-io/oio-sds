@@ -1056,7 +1056,7 @@ _bean_randomize(gpointer bean, gboolean avoid_pk)
 	EXTRA_ASSERT(bean != NULL);
 	HDR(bean)->flags = BEAN_FLAG_DIRTY | (avoid_pk?0:BEAN_FLAG_TRANSIENT);
 
-	for (fd=DESCR(bean)->fields; fd->name ;fd++) {
+	for (fd = DESCR(bean)->fields; fd->type != FT_NONE; fd++) {
 		register gpointer pf = FIELD(bean, fd->position);
 		EXTRA_ASSERT(pf != NULL);
 
