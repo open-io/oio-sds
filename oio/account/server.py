@@ -123,6 +123,7 @@ class Account(object):
         dtime = d.get('dtime')
         object_count = d.get('objects')
         bytes_used = d.get('bytes')
+        # Exceptions are catched by dispatch_request
         info = self.backend.update_container(
             account_id, name, mtime, dtime, object_count, bytes_used)
         result = json.dumps(info)
@@ -133,8 +134,6 @@ class Account(object):
         try:
             endpoint, values = adapter.match()
             return getattr(self, 'on_' + endpoint)(req)
-        except NotFound:
-            return BadRequest()
         except HTTPException as e:
             return e
         except Exception:
