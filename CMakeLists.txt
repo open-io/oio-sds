@@ -65,7 +65,8 @@ if ( ENABLE_CODECOVERAGE )
     if ( NOT DEFINED CODECOV_HTMLOUTPUTDIR )
         set( CODECOV_HTMLOUTPUTDIR coverage_results )
     endif ( NOT DEFINED CODECOV_HTMLOUTPUTDIR )
-    set(CODECOV_PATTERN_TO_IGNORE)
+
+	set(CODECOV_PATTERN_TO_IGNORE "${CMAKE_BINARY_DIR}/metautils/asn1c/*")
 
     set(PYTHON_COVERAGE_FILE ${CMAKE_BINARY_DIR}/.python_coverage)
     set(PYTHON coverage run -p --source=${CMAKE_SOURCE_DIR})
@@ -77,14 +78,18 @@ if ( ENABLE_CODECOVERAGE )
         add_definitions( -fprofile-arcs -ftest-coverage )
         link_libraries( gcov )
         set( CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} --coverage )
+
         add_custom_target( coverage_init
                            ${CODECOV_LCOV} --base-directory ${CMAKE_SOURCE_DIR}  --directory ${CMAKE_BINARY_DIR} --output-file ${CODECOV_OUTPUTFILE} --capture --initial
                            COMMAND coverage erase)
-        add_custom_target( coverage ${CODECOV_LCOV} --base-directory ${CMAKE_SOURCE_DIR}  --directory ${CMAKE_BINARY_DIR} --no-external --output-file ${CODECOV_OUTPUTFILE} --capture
-                           COMMAND ${CODECOV_LCOV} --remove ${CODECOV_OUTPUTFILE} ${CODECOV_PATTERN_TO_IGNORE} --output ${CODECOV_OUTPUTFILE}
-                           COMMAND genhtml --ignore-errors source -o ${CODECOV_HTMLOUTPUTDIR} ${CODECOV_OUTPUTFILE}
+
+        add_custom_target( coverage
+						   ${CODECOV_LCOV} --base-directory ${CMAKE_SOURCE_DIR}  --directory ${CMAKE_BINARY_DIR} --no-external --output-file ${CODECOV_OUTPUTFILE} --capture
+                           COMMAND ${CODECOV_LCOV} --output ${CODECOV_OUTPUTFILE} --remove ${CODECOV_OUTPUTFILE} ${CODECOV_PATTERN_TO_IGNORE}
+						   COMMAND genhtml --ignore-errors source -o ${CODECOV_HTMLOUTPUTDIR} ${CODECOV_OUTPUTFILE}
                            COMMAND coverage combine
                            COMMAND coverage html)
+
     endif ( CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX )
 endif (ENABLE_CODECOVERAGE )
 

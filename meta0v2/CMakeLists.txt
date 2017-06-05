@@ -6,6 +6,7 @@ include_directories(BEFORE
 		${CMAKE_SOURCE_DIR}
 		${CMAKE_BINARY_DIR}
 		${CMAKE_BINARY_DIR}/metautils/lib
+		${CMAKE_BINARY_DIR}/metautils/asn1c
 		${CMAKE_CURRENT_BINARY_DIR})
 
 include_directories(AFTER

@@ -3,7 +3,8 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
 include_directories(BEFORE . ..
 		${CMAKE_CURRENT_BINARY_DIR}/..
-		${CMAKE_CURRENT_BINARY_DIR}/../metautils/lib)
+		${CMAKE_BINARY_DIR}/metautils/asn1c
+		${CMAKE_BINARY_DIR}/metautils/lib)
 
 include_directories(AFTER
 		${ZK_INCLUDE_DIRS}

@@ -22,41 +22,36 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  * as necessary (with the risk of stack smashing). */
 #define ASN1C_MAX_STACK 0
 
-#include <metautils/lib/asn_codecs.h>
-#include <metautils/lib/asn_SET_OF.h>
-#include <metautils/lib/asn_SEQUENCE_OF.h>
-
-#include <metautils/lib/RowFieldValue.h>
-#include <metautils/lib/RowField.h>
-#include <metautils/lib/RowFieldSequence.h>
-#include <metautils/lib/Row.h>
-#include <metautils/lib/RowSet.h>
-#include <metautils/lib/RowName.h>
-#include <metautils/lib/TableHeader.h>
-#include <metautils/lib/Table.h>
-#include <metautils/lib/TableSequence.h>
-
-#include <metautils/lib/M2V2Bean.h>
-#include <metautils/lib/M2V2BeanSequence.h>
-#include <metautils/lib/M2V2Alias.h>
-#include <metautils/lib/M2V2ContentHeader.h>
-#include <metautils/lib/M2V2Property.h>
-
-#include <metautils/lib/AddrInfo.h>
-#include <metautils/lib/Meta0Info.h>
-#include <metautils/lib/Meta0InfoSequence.h>
-#include <metautils/lib/NamespaceInfo.h>
-#include <metautils/lib/Score.h>
-#include <metautils/lib/ServiceTag.h>
-#include <metautils/lib/ServiceInfo.h>
-#include <metautils/lib/ServiceInfoSequence.h>
-
-#include <metautils/lib/Parameter.h>
-#include <metautils/lib/ParameterSequence.h>
-#include <metautils/lib/Message.h>
-
-#include <metautils/lib/der_encoder.h>
-#include <metautils/lib/ber_decoder.h>
+#include <metautils/asn1c/asn_codecs.h>
+#include <metautils/asn1c/asn_SET_OF.h>
+#include <metautils/asn1c/asn_SEQUENCE_OF.h>
+#include <metautils/asn1c/RowFieldValue.h>
+#include <metautils/asn1c/RowField.h>
+#include <metautils/asn1c/RowFieldSequence.h>
+#include <metautils/asn1c/Row.h>
+#include <metautils/asn1c/RowSet.h>
+#include <metautils/asn1c/RowName.h>
+#include <metautils/asn1c/TableHeader.h>
+#include <metautils/asn1c/Table.h>
+#include <metautils/asn1c/TableSequence.h>
+#include <metautils/asn1c/M2V2Bean.h>
+#include <metautils/asn1c/M2V2BeanSequence.h>
+#include <metautils/asn1c/M2V2Alias.h>
+#include <metautils/asn1c/M2V2ContentHeader.h>
+#include <metautils/asn1c/M2V2Property.h>
+#include <metautils/asn1c/AddrInfo.h>
+#include <metautils/asn1c/Meta0Info.h>
+#include <metautils/asn1c/Meta0InfoSequence.h>
+#include <metautils/asn1c/NamespaceInfo.h>
+#include <metautils/asn1c/Score.h>
+#include <metautils/asn1c/ServiceTag.h>
+#include <metautils/asn1c/ServiceInfo.h>
+#include <metautils/asn1c/ServiceInfoSequence.h>
+#include <metautils/asn1c/Parameter.h>
+#include <metautils/asn1c/ParameterSequence.h>
+#include <metautils/asn1c/Message.h>
+#include <metautils/asn1c/der_encoder.h>
+#include <metautils/asn1c/ber_decoder.h>
 
 /* Give a pretty prefixed name to the ugly unprefixed macros from asn1c */
 #define ASN1C_CALLOC(N,S)  CALLOC(N,S)
