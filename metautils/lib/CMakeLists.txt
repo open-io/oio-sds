@@ -2,6 +2,7 @@ add_definitions(-DG_LOG_DOMAIN="oio.utils")
 
 include_directories(BEFORE . ../..
 		${CMAKE_BINARY_DIR}
+		${CMAKE_BINARY_DIR}/metautils/asn1c
 		${CMAKE_CURRENT_BINARY_DIR})
 
 link_directories()
@@ -12,79 +13,138 @@ include_directories(AFTER
 
 add_custom_command(
 	OUTPUT
-		constraints.c constraints.h
-		constr_SET_OF.c constr_SET_OF.h
-		constr_SEQUENCE_OF.c constr_SEQUENCE_OF.h
-		constr_SEQUENCE.c constr_SEQUENCE.h
-		constr_TYPE.c constr_TYPE.h
-		constr_CHOICE.c constr_CHOICE.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constraints.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constraints.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constr_SET_OF.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constr_SET_OF.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constr_SEQUENCE_OF.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constr_SEQUENCE_OF.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constr_SEQUENCE.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constr_SEQUENCE.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constr_TYPE.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constr_TYPE.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constr_CHOICE.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constr_CHOICE.h
 
-		ber_tlv_tag.c ber_tlv_tag.h
-		ber_tlv_length.c ber_tlv_length.h
-		der_encoder.c der_encoder.h
-		ber_decoder.c ber_decoder.h
-		xer_support.c xer_support.h
-		xer_decoder.c xer_decoder.h
-		per_support.c per_support.h
-		per_encoder.c per_encoder.h
-		xer_encoder.c xer_encoder.h
-		per_decoder.c per_decoder.h
-		per_opentype.c
-		converter-sample.c
-		NativeEnumerated.c NativeEnumerated.h
-		NativeInteger.c NativeInteger.h
-		OCTET_STRING.c OCTET_STRING.h
-		PrintableString.c PrintableString.h
-		BIT_STRING.c BIT_STRING.h
-		BOOLEAN.c BOOLEAN.h
-		INTEGER.c INTEGER.h
-		ENUMERATED.c ENUMERATED.h
-		REAL.c REAL.h
-		NULL.c NULL.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ber_tlv_tag.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ber_tlv_tag.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ber_tlv_length.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ber_tlv_length.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/der_encoder.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/der_encoder.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ber_decoder.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ber_decoder.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/xer_support.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/xer_support.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/xer_decoder.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/xer_decoder.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/per_support.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/per_support.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/per_encoder.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/per_encoder.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/xer_encoder.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/xer_encoder.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/per_decoder.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/per_decoder.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/per_opentype.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/per_opentype.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/converter-sample.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/NativeEnumerated.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/NativeEnumerated.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/NativeInteger.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/NativeInteger.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/OCTET_STRING.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/OCTET_STRING.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/PrintableString.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/PrintableString.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/BIT_STRING.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/BIT_STRING.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/BOOLEAN.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/BOOLEAN.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/INTEGER.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/INTEGER.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ENUMERATED.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ENUMERATED.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/REAL.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/REAL.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/NULL.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/NULL.h
 
-		asn_SEQUENCE_OF.c asn_SEQUENCE_OF.h
-		asn_SET_OF.c asn_SET_OF.h
-		asn_codecs.h
-		asn_codecs_prim.c asn_codecs_prim.h
-		asn_internal.h
-		asn_system.h
-		asn_application.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/asn_SEQUENCE_OF.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/asn_SEQUENCE_OF.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/asn_SET_OF.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/asn_SET_OF.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/asn_codecs.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/asn_codecs_prim.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/asn_codecs_prim.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/asn_internal.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/asn_system.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/asn_application.h
 
-		AddrInfo.c AddrInfo.h
-		Message.c Message.h
-		Meta0Info.c Meta0Info.h
-		Meta0InfoSequence.c Meta0InfoSequence.h
-		NamespaceInfo.c NamespaceInfo.h
-		Parameter.c Parameter.h
-		ParameterSequence.c ParameterSequence.h
-		Score.c Score.h
-		ServiceInfo.c ServiceInfo.h
-		ServiceInfoSequence.c ServiceInfoSequence.h
-		ServiceTag.c ServiceTag.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/AddrInfo.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/AddrInfo.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Message.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Message.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Meta0Info.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Meta0Info.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Meta0InfoSequence.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Meta0InfoSequence.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/NamespaceInfo.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/NamespaceInfo.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Parameter.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Parameter.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ParameterSequence.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ParameterSequence.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Score.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Score.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ServiceInfo.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ServiceInfo.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ServiceInfoSequence.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ServiceInfoSequence.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ServiceTag.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ServiceTag.h
 
-		RowFieldSequence.c RowFieldSequence.h
-		RowFieldValue.c RowFieldValue.h
-		RowFieldType.c RowFieldType.h
-		RowField.c RowField.h
-		Row.c Row.h
-		RowSet.c RowSet.h
-		RowName.c RowName.h
-		TableHeader.c TableHeader.h
-		Table.c Table.h
-		TableSequence.c TableSequence.h
-		TableVersion.c TableVersion.h
-		BaseVersion.c BaseVersion.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowFieldSequence.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowFieldSequence.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowFieldValue.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowFieldValue.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowFieldType.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowFieldType.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowField.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowField.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Row.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Row.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowSet.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowSet.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowName.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowName.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/TableHeader.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/TableHeader.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Table.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Table.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/TableSequence.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/TableSequence.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/TableVersion.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/TableVersion.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/BaseVersion.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/BaseVersion.h
 
-		M2V2BeanSequence.c M2V2BeanSequence.h
-		M2V2Bean.c M2V2Bean.h
-		M2V2Alias.c M2V2Alias.h
-		M2V2Chunk.c M2V2Chunk.h
-		M2V2ContentHeader.c M2V2ContentHeader.h
-		M2V2Property.c M2V2Property.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2BeanSequence.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2BeanSequence.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Bean.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Bean.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Alias.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Alias.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Chunk.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Chunk.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2ContentHeader.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2ContentHeader.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Property.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Property.h
 
 	PRE_BUILD
 	COMMAND
-		${ASN1C_EXECUTABLE}
+	mkdir -p ${CMAKE_BINARY_DIR}/metautils/asn1c && cd ${CMAKE_BINARY_DIR}/metautils/asn1c && ${ASN1C_EXECUTABLE}
 	ARGS
 		${ASN1C_EXE_OPTS}
 		-fcompound-names
@@ -169,129 +229,130 @@ add_library(metautils SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/common_variables.c
 		${CMAKE_CURRENT_BINARY_DIR}/common_variables.h
 
-		${CMAKE_CURRENT_BINARY_DIR}/constraints.c
-		${CMAKE_CURRENT_BINARY_DIR}/constraints.h
-		${CMAKE_CURRENT_BINARY_DIR}/constr_SET_OF.c
-		${CMAKE_CURRENT_BINARY_DIR}/constr_SET_OF.h
-		${CMAKE_CURRENT_BINARY_DIR}/constr_SEQUENCE_OF.c
-		${CMAKE_CURRENT_BINARY_DIR}/constr_SEQUENCE_OF.h
-		${CMAKE_CURRENT_BINARY_DIR}/constr_SEQUENCE.c
-		${CMAKE_CURRENT_BINARY_DIR}/constr_SEQUENCE.h
-		${CMAKE_CURRENT_BINARY_DIR}/constr_TYPE.c
-		${CMAKE_CURRENT_BINARY_DIR}/constr_TYPE.h
-		${CMAKE_CURRENT_BINARY_DIR}/constr_CHOICE.c
-		${CMAKE_CURRENT_BINARY_DIR}/constr_CHOICE.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constraints.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constraints.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constr_SET_OF.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constr_SET_OF.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constr_SEQUENCE_OF.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constr_SEQUENCE_OF.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constr_SEQUENCE.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constr_SEQUENCE.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constr_TYPE.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constr_TYPE.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constr_CHOICE.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/constr_CHOICE.h
 
-		${CMAKE_CURRENT_BINARY_DIR}/ber_tlv_tag.c
-		${CMAKE_CURRENT_BINARY_DIR}/ber_tlv_tag.h
-		${CMAKE_CURRENT_BINARY_DIR}/ber_tlv_length.c
-		${CMAKE_CURRENT_BINARY_DIR}/ber_tlv_length.h
-		${CMAKE_CURRENT_BINARY_DIR}/der_encoder.c
-		${CMAKE_CURRENT_BINARY_DIR}/der_encoder.h
-		${CMAKE_CURRENT_BINARY_DIR}/ber_decoder.c
-		${CMAKE_CURRENT_BINARY_DIR}/ber_decoder.h
-		${CMAKE_CURRENT_BINARY_DIR}/xer_support.c
-		${CMAKE_CURRENT_BINARY_DIR}/xer_support.h
-		${CMAKE_CURRENT_BINARY_DIR}/xer_decoder.c
-		${CMAKE_CURRENT_BINARY_DIR}/xer_decoder.h
-		${CMAKE_CURRENT_BINARY_DIR}/per_opentype.c
-		${CMAKE_CURRENT_BINARY_DIR}/per_support.c
-		${CMAKE_CURRENT_BINARY_DIR}/per_support.h
-		${CMAKE_CURRENT_BINARY_DIR}/per_encoder.c
-		${CMAKE_CURRENT_BINARY_DIR}/per_encoder.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ber_tlv_tag.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ber_tlv_tag.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ber_tlv_length.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ber_tlv_length.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/der_encoder.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/der_encoder.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ber_decoder.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ber_decoder.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/xer_support.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/xer_support.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/xer_decoder.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/xer_decoder.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/per_opentype.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/per_opentype.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/per_support.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/per_support.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/per_encoder.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/per_encoder.h
 
-		${CMAKE_CURRENT_BINARY_DIR}/NativeEnumerated.c
-		${CMAKE_CURRENT_BINARY_DIR}/NativeEnumerated.h
-		${CMAKE_CURRENT_BINARY_DIR}/NativeInteger.c
-		${CMAKE_CURRENT_BINARY_DIR}/NativeInteger.h
-		${CMAKE_CURRENT_BINARY_DIR}/OCTET_STRING.c
-		${CMAKE_CURRENT_BINARY_DIR}/OCTET_STRING.h
-		${CMAKE_CURRENT_BINARY_DIR}/PrintableString.c
-		${CMAKE_CURRENT_BINARY_DIR}/PrintableString.h
-		${CMAKE_CURRENT_BINARY_DIR}/BIT_STRING.c
-		${CMAKE_CURRENT_BINARY_DIR}/BIT_STRING.h
-		${CMAKE_CURRENT_BINARY_DIR}/BOOLEAN.c
-		${CMAKE_CURRENT_BINARY_DIR}/BOOLEAN.h
-		${CMAKE_CURRENT_BINARY_DIR}/INTEGER.c
-		${CMAKE_CURRENT_BINARY_DIR}/INTEGER.h
-		${CMAKE_CURRENT_BINARY_DIR}/ENUMERATED.c
-		${CMAKE_CURRENT_BINARY_DIR}/ENUMERATED.h
-		${CMAKE_CURRENT_BINARY_DIR}/REAL.c
-		${CMAKE_CURRENT_BINARY_DIR}/REAL.h
-		${CMAKE_CURRENT_BINARY_DIR}/NULL.c
-		${CMAKE_CURRENT_BINARY_DIR}/NULL.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/NativeEnumerated.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/NativeEnumerated.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/NativeInteger.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/NativeInteger.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/OCTET_STRING.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/OCTET_STRING.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/PrintableString.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/PrintableString.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/BIT_STRING.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/BIT_STRING.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/BOOLEAN.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/BOOLEAN.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/INTEGER.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/INTEGER.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ENUMERATED.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ENUMERATED.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/REAL.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/REAL.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/NULL.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/NULL.h
 
-		${CMAKE_CURRENT_BINARY_DIR}/asn_SEQUENCE_OF.c
-		${CMAKE_CURRENT_BINARY_DIR}/asn_SEQUENCE_OF.h
-		${CMAKE_CURRENT_BINARY_DIR}/asn_SET_OF.c
-		${CMAKE_CURRENT_BINARY_DIR}/asn_SET_OF.h
-		${CMAKE_CURRENT_BINARY_DIR}/asn_codecs.h
-		${CMAKE_CURRENT_BINARY_DIR}/asn_codecs_prim.c
-		${CMAKE_CURRENT_BINARY_DIR}/asn_codecs_prim.h
-		${CMAKE_CURRENT_BINARY_DIR}/asn_internal.h
-		${CMAKE_CURRENT_BINARY_DIR}/asn_application.h
-		${CMAKE_CURRENT_BINARY_DIR}/asn_system.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/asn_SEQUENCE_OF.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/asn_SEQUENCE_OF.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/asn_SET_OF.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/asn_SET_OF.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/asn_codecs.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/asn_codecs_prim.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/asn_codecs_prim.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/asn_internal.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/asn_application.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/asn_system.h
 
-		${CMAKE_CURRENT_BINARY_DIR}/AddrInfo.c
-		${CMAKE_CURRENT_BINARY_DIR}/AddrInfo.h
-		${CMAKE_CURRENT_BINARY_DIR}/Message.c
-		${CMAKE_CURRENT_BINARY_DIR}/Message.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta0Info.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta0Info.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta0InfoSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta0InfoSequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/NamespaceInfo.c
-		${CMAKE_CURRENT_BINARY_DIR}/NamespaceInfo.h
-		${CMAKE_CURRENT_BINARY_DIR}/Parameter.c
-		${CMAKE_CURRENT_BINARY_DIR}/Parameter.h
-		${CMAKE_CURRENT_BINARY_DIR}/ParameterSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/ParameterSequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/Score.c
-		${CMAKE_CURRENT_BINARY_DIR}/Score.h
-		${CMAKE_CURRENT_BINARY_DIR}/ServiceInfo.c
-		${CMAKE_CURRENT_BINARY_DIR}/ServiceInfo.h
-		${CMAKE_CURRENT_BINARY_DIR}/ServiceInfoSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/ServiceInfoSequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/ServiceTag.c
-		${CMAKE_CURRENT_BINARY_DIR}/ServiceTag.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/AddrInfo.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/AddrInfo.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Message.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Message.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Meta0Info.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Meta0Info.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Meta0InfoSequence.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Meta0InfoSequence.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/NamespaceInfo.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/NamespaceInfo.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Parameter.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Parameter.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ParameterSequence.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ParameterSequence.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Score.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Score.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ServiceInfo.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ServiceInfo.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ServiceInfoSequence.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ServiceInfoSequence.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ServiceTag.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/ServiceTag.h
 
-		${CMAKE_CURRENT_BINARY_DIR}/RowFieldSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/RowFieldSequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/RowFieldValue.c
-		${CMAKE_CURRENT_BINARY_DIR}/RowFieldValue.h
-		${CMAKE_CURRENT_BINARY_DIR}/RowFieldType.c
-		${CMAKE_CURRENT_BINARY_DIR}/RowFieldType.h
-		${CMAKE_CURRENT_BINARY_DIR}/RowField.c
-		${CMAKE_CURRENT_BINARY_DIR}/RowField.h
-		${CMAKE_CURRENT_BINARY_DIR}/Row.c
-		${CMAKE_CURRENT_BINARY_DIR}/Row.h
-		${CMAKE_CURRENT_BINARY_DIR}/RowSet.c
-		${CMAKE_CURRENT_BINARY_DIR}/RowSet.h
-		${CMAKE_CURRENT_BINARY_DIR}/RowName.c
-		${CMAKE_CURRENT_BINARY_DIR}/RowName.h
-		${CMAKE_CURRENT_BINARY_DIR}/TableHeader.c
-		${CMAKE_CURRENT_BINARY_DIR}/TableHeader.h
-		${CMAKE_CURRENT_BINARY_DIR}/Table.c
-		${CMAKE_CURRENT_BINARY_DIR}/Table.h
-		${CMAKE_CURRENT_BINARY_DIR}/TableSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/TableSequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/TableVersion.c
-		${CMAKE_CURRENT_BINARY_DIR}/TableVersion.h
-		${CMAKE_CURRENT_BINARY_DIR}/BaseVersion.c
-		${CMAKE_CURRENT_BINARY_DIR}/BaseVersion.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowFieldSequence.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowFieldSequence.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowFieldValue.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowFieldValue.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowFieldType.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowFieldType.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowField.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowField.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Row.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Row.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowSet.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowSet.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowName.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/RowName.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/TableHeader.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/TableHeader.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Table.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/Table.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/TableSequence.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/TableSequence.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/TableVersion.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/TableVersion.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/BaseVersion.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/BaseVersion.h
 
-		${CMAKE_CURRENT_BINARY_DIR}/M2V2BeanSequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/M2V2BeanSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/M2V2Bean.h
-		${CMAKE_CURRENT_BINARY_DIR}/M2V2Bean.c
-		${CMAKE_CURRENT_BINARY_DIR}/M2V2Alias.h
-		${CMAKE_CURRENT_BINARY_DIR}/M2V2Alias.c
-		${CMAKE_CURRENT_BINARY_DIR}/M2V2Chunk.h
-		${CMAKE_CURRENT_BINARY_DIR}/M2V2Chunk.c
-		${CMAKE_CURRENT_BINARY_DIR}/M2V2ContentHeader.h
-		${CMAKE_CURRENT_BINARY_DIR}/M2V2ContentHeader.c
-		${CMAKE_CURRENT_BINARY_DIR}/M2V2Property.h
-		${CMAKE_CURRENT_BINARY_DIR}/M2V2Property.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2BeanSequence.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2BeanSequence.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Bean.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Bean.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Alias.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Alias.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Chunk.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Chunk.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2ContentHeader.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2ContentHeader.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Property.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Property.c
 
 		comm_message.c
 		comm_converter.c
