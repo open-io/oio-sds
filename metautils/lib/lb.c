@@ -184,5 +184,11 @@ oio_lb_pool__from_storage_policy(struct oio_lb_world_s *lbw,
 	for (; howmany > 0; howmany--)
 		oio_lb_world__add_pool_target(pool, NAME_SRVTYPE_RAWX);
 
+	/* Set minimum distance requirement */
+	gchar min_dist[16] = {0};
+	g_snprintf(min_dist, sizeof(min_dist), "%"G_GINT64_FORMAT,
+			storage_policy_get_distance(stgpol));
+	oio_lb_world__set_pool_option(pool, OIO_LB_OPT_MIN_DIST, min_dist);
+
 	return pool;
 }

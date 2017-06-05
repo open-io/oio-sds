@@ -30,8 +30,6 @@ License along with this library.
 typedef guint32 generation_t;
 
 #define OIO_LB_SHUFFLE_JUMP ((1UL << 31) - 1)
-#define OIO_LB_MASK_ALL (oio_location_t)~0lu
-
 
 typedef guint16 oio_refcount_t;
 
@@ -160,8 +158,7 @@ struct oio_lb_world_s
  * So, a pool is composed of several members:
  * - the set of targets that must bring a service in the result set
  * - a pointer to the world to map the targets into LB slots.
- * - the bitwise mask that tells how close the service are, when the mask is
- *   applied to their locations.
+ * - operations to apply on locations to check how close the services are
  */
 struct oio_lb_pool_LOCAL_s
 {
@@ -175,8 +172,16 @@ struct oio_lb_pool_LOCAL_s
 	 * a coma-separated list of 'slot' names (the slots come from the 'world'). */
 	gchar ** targets;
 
-	oio_location_t location_mask;
-	guint location_mask_max_shift : 16;
+	/* How many bits to right shift locations before comparing them.
+	 * Locations are 64 bits, if you shift them 48 bits, you end-up
+	 * comparing the 16 most significant bits. */
+	gint16 initial_shift;
+
+	/* Minimum number of bits to right shift. Usually 0, to eventually
+	 * compare all bits of the location integer. */
+	gint16 min_shift;
+
+	/* If true, look for items close to each other. */
 	gboolean nearby_mode : 16;
 };
 
@@ -256,10 +261,6 @@ location_from_dotted_string(const char *dotted)
 	for (gchar **tok = toks; *tok; tok++, ntoks++) {
 		location = (location << 16) | (_djb2(*tok) & 0xFFFF);
 	}
-	while (ntoks < 4) {
-	    location <<= 16;
-	    ntoks++;
-	}
 	g_strfreev(toks);
 	return location;
 }
@@ -269,7 +270,7 @@ key_from_loc_level(oio_location_t loc, int level)
 {
 	uint32_t key = ((loc >> (level * 16)) + 1) & 0xFFFFFFFF;
 	if (level < 2)
-	    key += (loc >> 32) * OIO_LB_SHUFFLE_JUMP;
+		key += (loc >> 32) * OIO_LB_SHUFFLE_JUMP;
 	return key;
 }
 
@@ -283,27 +284,27 @@ _compare_stored_items_by_location (const void *k0, const void *k)
 
 static gboolean
 _item_is_too_close(const oio_location_t * avoids,
-		const oio_location_t item, const oio_location_t mask)
+		const oio_location_t item, const gint bit_shift)
 {
 	if (!avoids)
 		return FALSE;
-	const oio_location_t loc = mask & item;
+	const oio_location_t loc = item >> bit_shift;
 	for (const oio_location_t *pp=avoids; *pp; ++pp) {
-		if (loc == (mask & *pp))
+		if (loc == (*pp >> bit_shift))
 			return TRUE;
 	}
 	return FALSE;
 }
 
 static gboolean
-_item_is_too_far (const oio_location_t *known,
-		const oio_location_t item, const oio_location_t mask)
+_item_is_too_far(const oio_location_t *known,
+		const oio_location_t item, const gint bit_shift)
 {
 	if (!known)
 		return FALSE;
-	const oio_location_t loc = mask & item;
+	const oio_location_t loc = item >> bit_shift;
 	for (const oio_location_t *pp=known; *pp; ++pp) {
-		if (loc != (mask & *pp))
+		if (loc != (*pp >> bit_shift))
 			return TRUE;
 	}
 	return FALSE;
@@ -468,24 +469,24 @@ _search_closest_weight (GArray *tab, const guint32 needle,
 }
 
 static gboolean
-_accept_item (struct oio_lb_slot_s *slot, oio_location_t mask,
+_accept_item(struct oio_lb_slot_s *slot, const gint bit_shift,
 		gboolean reversed, struct polling_ctx_s *ctx, guint i)
 {
 	const struct _lb_item_s *item = _slot_get (slot, i);
 	const oio_location_t loc = item->location;
 	// Check the item is not in "avoids" list
-	if (_item_is_too_close(ctx->avoids, loc, OIO_LB_MASK_ALL))
+	if (_item_is_too_close(ctx->avoids, loc, 0))
 		return FALSE;
 	if (reversed) {
-		// Check the item is not too far from alread polled items
-		if (_item_is_too_far(ctx->polled, loc, mask))
+		// Check the item is not too far from already polled items
+		if (_item_is_too_far(ctx->polled, loc, bit_shift))
 			return FALSE;
 		// Check item has not been already polled
-		if (_item_is_too_close(ctx->polled, loc, OIO_LB_MASK_ALL))
+		if (_item_is_too_close(ctx->polled, loc, 0))
 			return FALSE;
 	} else {
-		// Check the item is not too close to alread polled items
-		if (_item_is_too_close(ctx->polled, loc, mask))
+		// Check the item is not too close to already polled items
+		if (_item_is_too_close(ctx->polled, loc, bit_shift))
 			return FALSE;
 		if (_item_is_too_popular(ctx, loc, slot))
 			return FALSE;
@@ -506,16 +507,16 @@ _accept_item (struct oio_lb_slot_s *slot, oio_location_t mask,
  * The purpose of the shuffled lookup is to jump to an item with
  * a distant location. */
 static gboolean
-_local_slot__poll (struct oio_lb_slot_s *slot, oio_location_t mask,
+_local_slot__poll(struct oio_lb_slot_s *slot, const gint bit_shift,
 		gboolean reversed, struct polling_ctx_s *ctx)
 {
 	if (_slot_needs_rehash (slot))
 		_slot_rehash (slot);
 
 	GRID_TRACE2(
-			"%s slot=%s sum=%"G_GUINT32_FORMAT" items=%d mask=%"OIO_LOC_FORMAT,
+			"%s slot=%s sum=%"G_GUINT32_FORMAT" items=%d shift=%d",
 			__FUNCTION__, slot->name, slot->sum_weight, slot->items->len,
-			mask);
+			bit_shift);
 
 	if (slot->items->len == 0) {
 		GRID_TRACE2("%s slot empty", __FUNCTION__);
@@ -537,7 +538,7 @@ _local_slot__poll (struct oio_lb_slot_s *slot, oio_location_t mask,
 
 	guint iter = 0;
 	while (iter++ < slot->items->len) {
-		if (_accept_item(slot, mask, reversed, ctx, i))
+		if (_accept_item(slot, bit_shift, reversed, ctx, i))
 			return TRUE;
 		i = (i + OIO_LB_SHUFFLE_JUMP) % slot->items->len;
 	}
@@ -547,17 +548,11 @@ _local_slot__poll (struct oio_lb_slot_s *slot, oio_location_t mask,
 }
 
 static gboolean
-_local_target__poll (struct oio_lb_pool_LOCAL_s *lb,
-		const char *target, guint mask_shift, struct polling_ctx_s *ctx)
+_local_target__poll(struct oio_lb_pool_LOCAL_s *lb,
+		const char *target, gint bit_shift, struct polling_ctx_s *ctx)
 {
-	oio_location_t mask = lb->location_mask;
-	if (lb->nearby_mode)
-		mask <<= mask_shift;  // Decrease number of differentiating bits
-	else
-		mask >>= mask_shift;  // Increase number of differentiating bits
-
-	GRID_TRACE2("%s pool=%s mask=%"OIO_LOC_FORMAT" target=%s",
-			__FUNCTION__, lb->name, mask, target);
+	GRID_TRACE2("%s pool=%s shift=%d target=%s",
+			__FUNCTION__, lb->name, bit_shift, target);
 	gboolean res = FALSE;
 
 	g_rw_lock_reader_lock(&lb->world->lock);
@@ -570,7 +565,7 @@ _local_target__poll (struct oio_lb_pool_LOCAL_s *lb,
 				lb->world, name);
 		if (!slot)
 			GRID_DEBUG ("Slot [%s] not ready", name);
-		else if (_local_slot__poll (slot, mask, lb->nearby_mode, ctx))
+		else if (_local_slot__poll(slot, bit_shift, lb->nearby_mode, ctx))
 			res = TRUE;
 	}
 	g_rw_lock_reader_unlock(&lb->world->lock);
@@ -665,10 +660,24 @@ _local__patch(struct oio_lb_pool_s *self,
 	guint count = 0;
 	for (gchar **ptarget = lb->targets; *ptarget; ++ptarget) {
 		gboolean done = _local_target__is_satisfied(lb, *ptarget, &ctx);
-		guint mask_shift = 0u;
-		while (!done && mask_shift <= lb->location_mask_max_shift) {
-			done = _local_target__poll(lb, *ptarget, mask_shift, &ctx);
-			mask_shift += 16u;  // Degrade mask by 16 bits (four hex digit)
+		/* In normal mode (resp. nearby mode), bit shifts start high
+		 * (resp. low), because we want services with different
+		 * (resp. equal) most significant bits. Then we reduce (resp. increase)
+		 * the shifting so we compare more (resp. less) bits of the locations,
+		 * and thus have more chances to find differences (resp. similarities)
+		 * between service locations. */
+		if (lb->nearby_mode) {
+			for (gint bit_shift = lb->min_shift;
+					!done && bit_shift <= lb->initial_shift;
+					bit_shift += 16) {
+				done = _local_target__poll(lb, *ptarget, bit_shift, &ctx);
+			}
+		} else {
+			for (gint bit_shift = lb->initial_shift;
+					!done && bit_shift >= lb->min_shift;
+					bit_shift -= 16) {
+				done = _local_target__poll(lb, *ptarget, bit_shift, &ctx);
+			}
 		}
 		if (!done) {
 			/* the strings is '\0' separated, printf won't display it */
@@ -756,32 +765,32 @@ oio_lb_world__set_pool_option(struct oio_lb_pool_s *self, const char *key,
 	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
 	if (!key || !*key)
 		return;
-	if (!strcmp(key, OIO_LB_OPT_MASK)) {
-		if (value[0] == '/') {
-			guint64 mask_bits = g_ascii_strtoull(value+1, &endptr, 10u);
-			if (endptr == value+1) {
-				GRID_WARN("Invalid location mask [%s] for pool [%s], ",
-						value, lb->name);
-			} else {
-				lb->location_mask = (~(oio_location_t)0) << (64 - mask_bits);
-				GRID_TRACE("pool [%s] mask=%s decoded as 0x%"OIO_LOC_FORMAT,
-						lb->name, value, lb->location_mask);
-			}
+	if (!strcmp(key, OIO_LB_OPT_MIN_DIST)) {
+		/* Configuration is expressed as "levels" of 16 bits, from 1 to 4.
+		 * min_shift is expressed as bits, from 0 to 48. */
+		guint64 min = g_ascii_strtoull(value, &endptr, 10u);
+		if (endptr == value) {
+			GRID_WARN("Invalid %s [%s] for pool [%s]",
+					OIO_LB_OPT_MIN_DIST, value, lb->name);
+		} else if (min < 1 || min > 4) {
+			GRID_WARN("%s [%s] for pool [%s] out of range [1, 4]",
+					OIO_LB_OPT_MIN_DIST, value, lb->name);
 		} else {
-			guint64 new_mask = g_ascii_strtoull(value, &endptr, 16u);
-			if (new_mask == 0 && endptr == value)
-				GRID_WARN("Invalid location mask [%s] for pool [%s], "
-						"must be 64bit hex", value, lb->name);
-			else
-				lb->location_mask = new_mask;
+			lb->min_shift = 16 * (min - 1);
 		}
-	} else if (!strcmp(key, OIO_LB_OPT_MASK_MAX_SHIFT)) {
-		guint64 shift = g_ascii_strtoull(value, &endptr, 10u);
-		if (endptr == value)
-			GRID_WARN("Invalid mask shift [%s] for pool [%s]",
-					value, lb->name);
-		else
-			lb->location_mask_max_shift = shift;
+	} else if (!strcmp(key, OIO_LB_OPT_MAX_DIST)) {
+		/* Configuration is expressed as "levels" of 16 bits, from 1 to 4.
+		 * initial_shift is expressed as bits, from 0 to 48. */
+		guint64 max = g_ascii_strtoull(value, &endptr, 10u);
+		if (endptr == value) {
+			GRID_WARN("Invalid %s [%s] for pool [%s]",
+					OIO_LB_OPT_MAX_DIST, value, lb->name);
+		} else if (max < 1 || max > 4) {
+			GRID_WARN("%s [%s] for pool [%s] out of range [1, 4]",
+					OIO_LB_OPT_MAX_DIST, value, lb->name);
+		} else {
+			lb->initial_shift = 16 * (max - 1);
+		}
 	} else if (!strcmp(key, OIO_LB_OPT_NEARBY)) {
 		lb->nearby_mode = oio_str_parse_bool(value, FALSE);
 	} else {
@@ -889,8 +898,10 @@ oio_lb_world__create_pool (struct oio_lb_world_s *world, const char *name)
 	lb->name = g_strdup (name);
 	lb->world = world;
 	lb->targets = g_malloc0 (4 * sizeof(gchar*));
-	lb->location_mask = 0xFFFF000000000000UL;
-	lb->location_mask_max_shift = 48u;
+	// Safe default value: compare only the 16 most significant bits
+	lb->initial_shift = 48;
+	// Safe default value: compare all bits
+	lb->min_shift = 0;
 	lb->nearby_mode = FALSE;
 	return (struct oio_lb_pool_s*) lb;
 }
@@ -1112,10 +1123,10 @@ oio_lb_world__feed_slot (struct oio_lb_world_s *self, const char *name,
 }
 
 static void
-_slot_debug (struct oio_lb_slot_s *slot, const char *name)
+_slot_debug (struct oio_lb_slot_s *slot)
 {
 	GRID_DEBUG("slot=%s num=%u sum=%"G_GUINT32_FORMAT" flags=%d content:",
-			name, slot->items->len, slot->sum_weight,
+			slot->name, slot->items->len, slot->sum_weight,
 			slot->flag_dirty_weights | slot->flag_dirty_order<<1 |
 			slot->flag_rehash_on_update<<2);
 	for (guint i = 0; i < slot->items->len; ++i) {
@@ -1129,8 +1140,9 @@ void
 oio_lb_world__debug (struct oio_lb_world_s *self)
 {
 	EXTRA_ASSERT (self != NULL);
-	gboolean _on_slot (gchar *name, struct oio_lb_slot_s *slot, void *i UNUSED) {
-		_slot_debug (slot, name);
+	gboolean _on_slot (gchar *name UNUSED, struct oio_lb_slot_s *slot,
+			void *i UNUSED) {
+		_slot_debug (slot);
 		return FALSE;
 	}
 	g_rw_lock_reader_lock(&self->lock);
