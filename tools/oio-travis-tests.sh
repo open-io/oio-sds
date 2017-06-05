@@ -17,26 +17,28 @@ if [ $# -eq 2 ] ; then
     WRKDIR="$2"
 fi
 
+run_folded () {
+	TAG=$0 ; shift
+	echo "travis_fold:start:$TAG"
+	time $@
+	echo "travis_fold:end:$TAG"
+}
+
 function dump_syslog {
     cmd=tail
     if ! [ -r /var/log/syslog ] ; then
         cmd="sudo tail"
     fi
-    echo
     $cmd -n 500 /var/log/syslog
-    echo
     pip list
-    echo
     gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock status3
 }
 
 #trap dump_syslog EXIT
 
 func_tests () {
-    echo -e "\n### FUNC tests : $@\n" | logger -t TEST
     export OIO_NS="NS-${RANDOM}" OIO_ACCOUNT="ACCT-$RANDOM" OIO_USER=USER-$RANDOM OIO_PATH=PATH-$RANDOM
-    oio-reset.sh -v -v -N $OIO_NS $@
-    echo -e "END OF RESET" | logger -t TEST
+    oio-reset.sh -N $OIO_NS $@
 
     # test a content with a strange name, through the CLI and the API
     /usr/bin/fallocate -l $RANDOM /tmp/blob%
@@ -52,12 +54,10 @@ func_tests () {
 test_worm () {
     export OIO_NS="NS-${RANDOM}" OIO_ACCOUNT="ACCT-$RANDOM" OIO_USER=USER-$\
        RANDOM OIO_PATH=PATH-$RANDOM
-    oio-reset.sh -v -v -N $OIO_NS $@
-    echo -e "END OF RESET" | logger -t TEST
+    oio-reset.sh -N $OIO_NS $@
     cd $SRCDIR
     export WORM=1
     tox -e coverage
-    echo "test_filters: begin WORM test"
     ${PYTHON} $(which nosetests) tests.functional.m2_filters.test_filters
     unset WORM
 }
@@ -65,29 +65,42 @@ test_worm () {
 test_slave () {
     export OIO_NS="NS-${RANDOM}" OIO_ACCOUNT="ACCT-$RANDOM" OIO_USER=USER-$\
        RANDOM OIO_PATH=PATH-$RANDOM
-    oio-reset.sh -v -v -N $OIO_NS $@
-    echo -e "END OF RESET" | logger -t TEST
+    oio-reset.sh -N $OIO_NS $@
     cd $SRCDIR
     export SLAVE=1
     tox
-    echo "test_filters: begin SLAVE test"
     ${PYTHON} $(which nosetests) tests.functional.m2_filters.test_filters
     unset SLAVE
 }
 
-echo -e "\n### UNIT tests\n"
 cd $WRKDIR
-make -C tests/unit test
 
-run_folded () {
-	echo "travis_fold:start:$@"
-	$@
-	echo "travis_fold:end:$@"
+is_running_test_suite () {
+	[ -n "$COVERAGE" ] || [ -z "$TEST_SUITE" ] || [ "$TEST_SUITE" == "$1" ]
 }
 
-run_folded func_tests -f "${SRCDIR}/etc/bootstrap-preset-smallrepli.yml"
-run_folded test_worm  -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-option-worm.yml"
-run_folded test_slave -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-option-slave.yml"
-run_folded func_tests -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-option-smallcache.yml"
-run_folded func_tests -f "${SRCDIR}/etc/bootstrap-preset-3COPIES-11RAWX.yml"
-run_folded func_tests -f "${SRCDIR}/etc/bootstrap-preset-EC.yml"
+if is_running_test_suite "unit" ; then
+	make -C tests/unit test
+fi
+
+if is_running_test_suite "repli" ; then
+	func_tests -f "${SRCDIR}/etc/bootstrap-preset-smallrepli.yml"
+fi
+
+if is_running_test_suite "worm" ; then
+	test_worm  -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-option-worm.yml"
+fi
+
+if is_running_test_suite "slave" ; then
+	test_slave -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-option-slave.yml"
+fi
+
+if is_running_test_suite "single" ; then
+	func_tests -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-option-smallcache.yml"
+	func_tests -f "${SRCDIR}/etc/bootstrap-preset-3COPIES-11RAWX.yml"
+fi
+
+if is_running_test_suite "ec" ; then
+	func_tests -f "${SRCDIR}/etc/bootstrap-preset-EC.yml"
+fi
+

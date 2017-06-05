@@ -68,13 +68,9 @@ timeout () {
 
 wait_for_srvtype () {
     echo "Waiting for the $2 $1 to get a score"
-    $PREFIX-wait-scored.sh -u -N "$2" -n "$NS" -s "$1" -t 15
+    $PREFIX-wait-scored.sh -u -N "$2" -n "$NS" -s "$1" -t 15 >/dev/null
 }
 
-timestamp () {
-    echo
-    date '+%Y-%m-%d %H:%M:%S.%N'
-}
 
 #-------------------------------------------------------------------------------
 
@@ -96,7 +92,7 @@ if [ $verbose -ge 1 ] ; then set -x ; fi
 pgrep -u "$UID" --full gridinit | while read pidof_gridinit ; do
     # First try a clean stop of gridinit's children
     if [ -e "$GRIDINIT_SOCK" ] ; then
-        if ! gridinit_cmd -S "$GRIDINIT_SOCK" stop ; then
+        if ! gridinit_cmd -S "$GRIDINIT_SOCK" stop >/dev/null ; then
             echo "Failed to send 'stop' to gridinit"
         fi
     fi
@@ -123,9 +119,6 @@ bootstrap_opt=
 if [[ -n "${PORT}" ]] ; then bootstrap_opt="${bootstrap_opt} --port ${PORT}" ; fi
 ${PREFIX}-bootstrap.py "$NS" "$IP" $bootstrap_opt -d ${BOOTSTRAP_CONFIG} > /tmp/oio-bootstrap.$$
 
-# Variables
-# PROXY
-# REPLI_DIRECTORY
 
 . /tmp/oio-bootstrap.$$
 rm -f /tmp/oio-bootstrap.$$
@@ -154,33 +147,31 @@ while ! [ -e "$GRIDINIT_SOCK" ] ; do
 done
 pidof_gridinit=$(pgrep -u "$UID" --full gridinit)
 
-timestamp
+
+echo -e "\n### Start gridinit and wait for the services to register"
 gridinit_cmd -S "$GRIDINIT_SOCK" reload >/dev/null
-gridinit_cmd -S "$GRIDINIT_SOCK" start "@${NS}"
-timestamp
+gridinit_cmd -S "$GRIDINIT_SOCK" start "@${NS}" >/dev/null
+
 COUNT=$(${PREFIX}-test-config.py -c -t meta2 -t rawx -t sqlx)
 wait_for_srvtype "sqlx rawx meta2" "$COUNT"
-timestamp
 COUNT=$(${PREFIX}-test-config.py -c -t meta0 -t meta1)
 wait_for_srvtype "meta0 meta1" "$COUNT"
-
-timestamp
-
 COUNT=$(${PREFIX}-test-config.py -c -t rdir)
 wait_for_srvtype "rdir" "$COUNT"
+
+
+echo -e "\n### Init the meta0/meta1 directory"
 openio \
 	--oio-ns "$NS" -v directory bootstrap --check \
 	--replicas $(${PREFIX}-test-config.py -v directory_replicas)
 
-timestamp
-# unlock all services
-openio --oio-ns "$NS" cluster unlockall
-$PREFIX-wait-scored.sh -n "$NS" -t 60
-$PREFIX-flush-all.sh -n "$NS"
 
-timestamp
+echo -e "\n### Wait for the services to have a score"
+openio -q --oio-ns "$NS" cluster unlockall
+$PREFIX-wait-scored.sh -n "$NS" -t 60 >/dev/null
+$PREFIX-flush-all.sh -n "$NS" >/dev/null
+
 find $SDS -type d | xargs chmod a+rx
 gridinit_cmd -S "$GRIDINIT_SOCK" status2
 $PREFIX-cluster -r "$NS"
 
-timestamp

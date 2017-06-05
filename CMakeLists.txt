@@ -66,7 +66,9 @@ if ( ENABLE_CODECOVERAGE )
         set( CODECOV_HTMLOUTPUTDIR coverage_results )
     endif ( NOT DEFINED CODECOV_HTMLOUTPUTDIR )
 
-	set(CODECOV_PATTERN_TO_IGNORE "${CMAKE_BINARY_DIR}/metautils/asn1c/*")
+	set(CODECOV_PATTERN_TO_IGNORE
+		"'${CMAKE_BINARY_DIR}/metautils/asn1c/*.*'"
+		"'metautils/asn1c/*.*'")
 
     set(PYTHON_COVERAGE_FILE ${CMAKE_BINARY_DIR}/.python_coverage)
     set(PYTHON coverage run -p --source=${CMAKE_SOURCE_DIR})
