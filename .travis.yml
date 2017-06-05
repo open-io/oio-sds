@@ -26,6 +26,7 @@ script:
   - echo "travis_fold:start:COVERAGE_Debug"
   - make coverage
   - gcovr -r . | cut -c1-63
+  - echo "travis_fold:end:COVERAGE_Debug"
   - coverage report
   - echo "travis_fold:start:BUILD_Release"
   - make clean
