@@ -12,24 +12,22 @@ install:
   - pip install --upgrade -r all-requirements.txt
   - pip install --upgrade -r test-requirements.txt
   - pip install --upgrade zkpython
+env:
+  - TEST_SUITE=build-release
+  - TEST_SUITE=unit
+  - TEST_SUITE=single
+  - TEST_SUITE=worm
+  - TEST_SUITE=slave
+  - TEST_SUITE=repli
+  - TEST_SUITE=ec
 script:
-  - echo "travis_fold:start:BUILD_Debug"
-  - mkdir /tmp/oio
-  - source $HOME/oio/bin/activate
-  - cmake -DCMAKE_INSTALL_PREFIX="/tmp/oio" -DLD_LIBDIR="lib" -DCMAKE_BUILD_TYPE="Debug" -DSTACK_PROTECTOR=1 -DZK_LIBDIR="/usr/lib" -DZK_INCDIR="/usr/include/zookeeper" -DLIBRAIN_LIBDIR="/usr/lib" -DLIBRAIN_INCDIR="/usr/include" -DAPACHE2_LIBDIR="/usr/lib/apache2" -DAPACHE2_INCDIR="/usr/include/apache2" -DAPACHE2_MODDIR=/tmp/oio/lib/apache2/module -DENABLE_CODECOVERAGE=true .
-  - make all install
-  - make coverage_init
+  - export CMAKE_OPTS='-DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib -DZK_LIBDIR=/usr/lib -DZK_INCDIR=/usr/include/zookeeper -DAPACHE2_LIBDIR=/usr/lib/apache2 -DAPACHE2_INCDIR=/usr/include/apache2 -DAPACHE2_MODDIR=/tmp/oio/lib/apache2/module'
+  - if [ -n "$COVERAGE" ] ; then export PYTHON_COVERAGE=1 ; fi
+  - mkdir /tmp/oio && source $HOME/oio/bin/activate
+  - if [ "$TEST_SUITE" == 'build-release' ] ; then cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Release" . && make all && make clean ; fi
+  - cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Debug" . && make all install
+  - export G_DEBUG_LEVEL=D PATH="$PATH:/tmp/oio/bin" LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/tmp/oio/lib"
+  - if [ -n "$COVERAGE" ] ; then make coverage_init ; fi
   - python setup.py install
-  - echo "travis_fold:end:BUILD_Debug"
-  - export G_DEBUG_LEVEL=D PATH="$PATH:/tmp/oio/bin" LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/tmp/oio/lib" PYTHON_COVERAGE=1
-  - ./tools/oio-travis-tests.sh
-  - echo "travis_fold:start:COVERAGE_Debug"
-  - make coverage
-  - gcovr -r . | cut -c1-63
-  - echo "travis_fold:end:COVERAGE_Debug"
-  - coverage report
-  - echo "travis_fold:start:BUILD_Release"
-  - make clean
-  - cmake -DCMAKE_INSTALL_PREFIX="/tmp/oio" -DLD_LIBDIR="lib" -DCMAKE_BUILD_TYPE="Release" -DZK_LIBDIR="/usr/lib" -DZK_INCDIR="/usr/include/zookeeper" -DAPACHE2_LIBDIR="/usr/lib/apache2" -DAPACHE2_INCDIR="/usr/include/apache2" -DAPACHE2_MODDIR=/tmp/oio/lib/apache2/module .
-  - make all
-  - echo "travis_fold:end:BUILD_Release"
+  - pwd && env && ./tools/oio-travis-tests.sh
+  - if [ -n "$COVERAGE" ] ; then make coverage && gcovr -r . | cut -c1-63 && coverage report ; fi
