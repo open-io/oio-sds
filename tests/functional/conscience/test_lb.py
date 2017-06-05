@@ -109,7 +109,9 @@ class TestLbChoose(BaseLbTest):
         resp = self.session.get(self._url_lb('choose'),
                                 params={'type': 'echo',
                                         'size': 3})
-        self.assertEqual(resp.status_code, 200)
+        if resp.status_code != 200:
+            print resp.json()
+            self.assertEqual(resp.status_code, 200)
         parsed = resp.json()
         self.assertIsInstance(parsed, list)
         self.assertEqual(3, len(parsed))

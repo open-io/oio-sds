@@ -187,7 +187,7 @@ class BaseTestCase(testtools.TestCase):
         outd = {'ns': self.ns,
                 'type': str(srvtype),
                 'addr': self._addr(low=lowport, high=highport, ip=ip),
-                'score': random.randint(0, 100),
+                'score': random.randint(1, 100),
                 'tags': {'stat.cpu': 1, 'tag.vol': 'test', 'tag.up': True}}
         if extra_tags:
             outd["tags"].update(extra_tags)
