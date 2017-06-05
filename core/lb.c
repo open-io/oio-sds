@@ -575,8 +575,13 @@ _local__patch(struct oio_lb_pool_s *self,
 		}
 		if (!done) {
 			/* the strings is '\0' separated, printf won't display it */
-			GRID_WARN("No service polled from target [%s]", *ptarget);
-			return 0;
+			GRID_WARN("No service polled from target [%s], "
+					"%u/%d services polled so far, "
+					"%u services in slot",
+					*ptarget, count, count_targets,
+					oio_lb_world__count_slot_items(lb->world, *ptarget));
+			count = 0;
+			break;
 		}
 		++ctx.next_polled;
 		++count;
