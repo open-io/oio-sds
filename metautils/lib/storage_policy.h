@@ -69,6 +69,9 @@ const char * storage_policy_get_name(const struct storage_policy_s *sp);
  * (nb_copy for plain, k+m for EC). */
 gint64 storage_policy_get_nb_chunks(const struct storage_policy_s *sp);
 
+/** Get the minimum distance between chunks required by the storage policy. */
+gint64 storage_policy_get_distance(const struct storage_policy_s *sp);
+
 const struct data_security_s *storage_policy_get_data_security(
 		const struct storage_policy_s *sp);
 

@@ -116,14 +116,14 @@ void oio_lb_world__increment_generation(struct oio_lb_world_s *self);
 
 void oio_lb_world__purge_old_generations(struct oio_lb_world_s *self);
 
-/* Set a mask (hexadecimal string, 64b) to compute distance between items */
-#define OIO_LB_OPT_MASK           "mask"
-/* Set maximum number of bits to add to the mask to degrade it */
-#define OIO_LB_OPT_MASK_MAX_SHIFT "mask_max_shift"
+/* Maximum distance between services */
+#define OIO_LB_OPT_MAX_DIST       "max_dist"
+/* Absolute minimum distance between services */
+#define OIO_LB_OPT_MIN_DIST       "min_dist"
 /* Look for services close to each other (boolean string) */
 #define OIO_LB_OPT_NEARBY         "nearby_mode"
 
-/* Set a pool option. */
+/* Set a pool option. See option names above. */
 void oio_lb_world__set_pool_option(struct oio_lb_pool_s *self, const char *key,
 		const char *value);
 

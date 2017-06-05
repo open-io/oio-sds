@@ -180,6 +180,8 @@ _test_uniform_repartition(int services, int slots, int targets)
 		oio_lb_world__add_pool_target(pool, target);
 	}
 	g_assert_cmpuint(oio_lb_world__count_slots(world), ==, slots+1);
+	/* Optimization for our test cases */
+	oio_lb_world__set_pool_option(pool, OIO_LB_OPT_MAX_DIST, "3");
 
 	int counts[services];
 	memset(counts, 0, services * sizeof(int));
@@ -291,8 +293,8 @@ _test_repartition_by_loc_level(const char **locations, int targets)
 	for (int i = 0; i < targets; i++) {
 		oio_lb_world__add_pool_target(pool, target);
 	}
-	oio_lb_world__set_pool_option(pool, OIO_LB_OPT_MASK, "FFFF000000000000");
-	oio_lb_world__set_pool_option(pool, OIO_LB_OPT_MASK_MAX_SHIFT, "48");
+	// Optimization for our test cases
+	oio_lb_world__set_pool_option(pool, OIO_LB_OPT_MAX_DIST, "3");
 
 	oio_lb_world__debug(world);
 

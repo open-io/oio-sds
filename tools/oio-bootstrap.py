@@ -500,7 +500,7 @@ template_service_pools = """
 # Service pools declarations
 # ----------------------------
 #
-# Pool are automatically created if not defined in configuration,
+# Pools are automatically created if not defined in configuration,
 # according to storage policy or service update policy rules.
 #
 # "targets" is a ';'-separated list.
@@ -514,13 +514,18 @@ template_service_pools = """
 # "nearby_mode" is a boolean telling to find services close to each other.
 #
 #### power user options, don't modify it unless you know what you are doing
-# "mask" is a 64 bits hexadecimal mask used to check service distance.
-# It defaults to FFFFFFFFFFFF0000. It can also be specified as "/48".
 #
-# "mask_max_shift" is the maximum number of bits to shift the mask
-# to degrade it when distance requirement are not satisfiable.
-# It defaults to 16.
+# "min_dist" is the absolute minimum distance between services returned
+# by the pool. It defaults to 1, which is the minimum. If you set it too
+# high, there is a risk the pool fails to find a service set matching
+# all the criteria.
 #
+# "max_dist" is the distance between services that the pool will try to
+# ensure. This option defaults to 4, which is the maximum. If you know
+# that all the services are close together, you can reduce this number
+# to accelerate the research.
+#
+
 
 [pool:meta2]
 targets=${M2_REPLICAS},meta2
@@ -553,13 +558,11 @@ targets=1,rawx-europe,rawx;1,rawx-usa,rawx;1,rawx-asia,rawx
 
 [pool:rawx3nearby]
 targets=3,rawx
-mask=/62
 nearby_mode=true
 
 [pool:rawx3faraway]
 targets=3,rawx
-mask=FFFFFFFF00000000
-mask_max_shift=24
+min_dist=2
 
 """
 
