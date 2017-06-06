@@ -72,17 +72,10 @@ gsize namespace_get_autocontainer_dst_bits(namespace_info_t* ns_info);
  * is performed by a servce of type srvtype for each namespace and VNS. */
 gchar* gridcluster_get_service_update_policy(struct namespace_info_s *nsinfo);
 
-gint64 gridcluster_get_container_max_versions(struct namespace_info_s *nsinfo);
-
-/* Get the delay before actually removing contents marked as deleted. */
-gint64 gridcluster_get_keep_deleted_delay(struct namespace_info_s *nsinfo);
-
 gchar* gridcluster_get_nsinfo_strvalue(struct namespace_info_s *nsinfo,
 		const gchar *key, const gchar *def);
 
 gint64 gridcluster_get_nsinfo_int64(struct namespace_info_s *nsinfo,
 		const gchar* key, gint64 def);
-
-gchar* gridcluster_get_conscience(const char *ns);
 
 #endif /*OIO_SDS__cluster__lib__gridcluster_h*/
