@@ -384,6 +384,16 @@
 				"descr": "In the current sqlx-based service, tells the period (in seconds) at which the service will refresh its load-balancing information.",
 				"def": "1", "min": 1, "max": "60s" },
 
+			{ "type": "int64", "name": "meta2_max_versions",
+				"key": "meta2.max_versions",
+				"descr": "How many versions for .",
+				"def": 0, "min": 0, "max": "max" },
+
+			{ "type": "epoch", "name": "meta2_retention_period",
+				"key": "meta2.retention_period",
+				"descr": "How long should deleted content be kept.",
+				"def": "7d", "min": "1s", "max": "30d" },
+
 			{ "type": "uint", "name": "meta2_batch_maxlen",
 				"key": "meta2.batch.maxlen",
 				"descr": "When listing a container, limits the number of items to that value.",

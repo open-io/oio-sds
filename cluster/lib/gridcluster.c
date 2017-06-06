@@ -433,19 +433,6 @@ namespace_get_autocontainer_dst_bits(namespace_info_t* ns_info)
 	return namespace_get_size(ns_info, "flat_bitlength", 17);
 }
 
-gint64
-gridcluster_get_container_max_versions(struct namespace_info_s *nsinfo)
-{
-	/* For backward compatibility, versioning is disabled by default */
-	return gridcluster_get_nsinfo_int64(nsinfo, "meta2_max_versions", 0);
-}
-
-gint64
-gridcluster_get_keep_deleted_delay(struct namespace_info_s *nsinfo)
-{
-	return gridcluster_get_nsinfo_int64(nsinfo, "meta2_keep_deleted_delay", -1);
-}
-
 gchar *
 gridcluster_get_service_update_policy (struct namespace_info_s *nsinfo)
 {

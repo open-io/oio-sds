@@ -96,30 +96,6 @@ _quota(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
 	return m2db_get_quota(sq3, quota);
 }
 
-static gint64
-m2b_max_versions(struct meta2_backend_s *m2b)
-{
-	gint64 max_versions = -1;
-
-	g_mutex_lock (&m2b->nsinfo_lock);
-	max_versions = gridcluster_get_container_max_versions(m2b->nsinfo);
-	g_mutex_unlock (&m2b->nsinfo_lock);
-
-	return max_versions;
-}
-
-static gint64
-m2b_keep_deleted_delay(struct meta2_backend_s *m2b)
-{
-	gint64 delay = -1;
-
-	g_mutex_lock (&m2b->nsinfo_lock);
-	delay = gridcluster_get_keep_deleted_delay(m2b->nsinfo);
-	g_mutex_unlock (&m2b->nsinfo_lock);
-
-	return delay;
-}
-
 static gchar*
 m2b_storage_policy(struct meta2_backend_s *m2b)
 {
@@ -131,15 +107,15 @@ m2b_storage_policy(struct meta2_backend_s *m2b)
 }
 
 static gint64
-_maxvers(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
+_maxvers(struct sqlx_sqlite3_s *sq3)
 {
-	return m2db_get_max_versions(sq3, m2b_max_versions(m2b));
+	return m2db_get_max_versions(sq3, meta2_max_versions);
 }
 
 static gint64
-_retention_delay(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
+_retention_delay(struct sqlx_sqlite3_s *sq3)
 {
-	return m2db_get_keep_deleted_delay(sq3, m2b_keep_deleted_delay(m2b));
+	return m2db_get_keep_deleted_delay(sq3, meta2_retention_period);
 }
 
 static gchar*
@@ -518,7 +494,7 @@ meta2_backend_get_max_versions(struct meta2_backend_s *m2b,
 
 	err = m2b_open(m2b, url, _mode_readonly(0), &sq3);
 	if (!err) {
-		*result = _maxvers(sq3, m2b);
+		*result = _maxvers(sq3);
 		m2b_close(sq3);
 	}
 
@@ -675,8 +651,7 @@ meta2_backend_flush_container(struct meta2_backend_s *m2, struct oio_url_s *url)
 		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 			if (!(err = m2db_flush_container(sq3->db)))
-				err = m2db_purge(sq3, _maxvers(sq3, m2),
-						_retention_delay(sq3, m2));
+				err = m2db_purge(sq3, _maxvers(sq3), _retention_delay(sq3));
 			err = sqlx_transaction_end(repctx, err);
 		}
 		m2b_close(sq3);
@@ -696,7 +671,7 @@ meta2_backend_purge_container(struct meta2_backend_s *m2, struct oio_url_s *url)
 	if (!err) {
 		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
-			err = m2db_purge(sq3, _maxvers(sq3, m2), _retention_delay(sq3, m2));
+			err = m2db_purge(sq3, _maxvers(sq3), _retention_delay(sq3));
 			err = sqlx_transaction_end(repctx, err);
 		}
 		m2b_close(sq3);
@@ -863,7 +838,7 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
 		struct sqlx_repctx_s *repctx = NULL;
-		const gint64 max_versions = _maxvers(sq3, m2b);
+		const gint64 max_versions = _maxvers(sq3);
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_delete_alias(sq3, max_versions, url, cb, u0))) {
 				m2db_increment_version(sq3);
@@ -898,7 +873,7 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		memset(&args, 0, sizeof(args));
 		args.sq3 = sq3;
 		args.url = url;
-		args.ns_max_versions = m2b_max_versions(m2b);
+		args.ns_max_versions = meta2_max_versions;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_put_alias(&args, in, out_deleted, out_added)))
@@ -931,7 +906,7 @@ meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		memset(&args, 0, sizeof(args));
 		args.sq3 = sq3;
 		args.url = url;
-		args.ns_max_versions = m2b_max_versions(m2b);
+		args.ns_max_versions = meta2_max_versions;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_copy_alias(&args, src)))
@@ -1023,7 +998,7 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		memset(&args, 0, sizeof(args));
 		args.sq3 = sq3;
 		args.url = url;
-		args.ns_max_versions = m2b_max_versions(m2b);
+		args.ns_max_versions = meta2_max_versions;
 
 		if (!(err = _transaction_begin(sq3,url, &repctx))) {
 			if (!(err = m2db_force_alias(&args, in, out_deleted, out_added)))
@@ -1354,7 +1329,7 @@ _meta2_backend_force_prepare_data_unlocked(struct meta2_backend_s *m2b,
 		g_hash_table_insert(m2b->prepare_data_cache, g_strdup(key), pdata);
 	}
 
-	pdata->max_versions = _maxvers(sq3, m2b);
+	pdata->max_versions = _maxvers(sq3);
 	pdata->quota = _quota(sq3, m2b);
 	pdata->size = m2db_get_size(sq3);
 	gchar *stgpol = _stgpol(sq3, m2b);
