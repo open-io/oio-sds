@@ -31,8 +31,6 @@ License along with this library.
 
 #include "gridcluster.h"
 
-#define NS_WORM_OPT_NAME "worm"
-#define NS_CONTAINER_MAX_SIZE_NAME "container_max_size"
 #define NS_STORAGE_POLICY_NAME "storage_policy"
 #define NS_CHUNK_SIZE_NAME "chunk_size"
 #define NS_STATE_NAME "state"
@@ -275,25 +273,11 @@ gridcluster_get_nsinfo_int64(struct namespace_info_s *nsinfo,
 	return namespace_info_get_srv_param_i64(nsinfo, NULL, NULL, key, def);
 }
 
-gboolean
-namespace_in_worm_mode(namespace_info_t* ns_info)
-{
-	GByteArray *val = namespace_param_gba(ns_info, NULL, NS_WORM_OPT_NAME);
-	return _gba_to_bool(val, FALSE);
-}
-
 gchar *
 namespace_get_state(namespace_info_t* ns_info)
 {
 	return gridcluster_get_nsinfo_strvalue(ns_info, NS_STATE_NAME,
 			NS_STATE_VALUE_STANDALONE);
-}
-
-gint64
-namespace_container_max_size(namespace_info_t* ns_info)
-{
-	GByteArray *val = namespace_param_gba(ns_info, NULL, NS_CONTAINER_MAX_SIZE_NAME);
-	return _gba_to_int64(val, -1);
 }
 
 gint64

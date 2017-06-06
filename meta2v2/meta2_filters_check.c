@@ -26,6 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
 #include <metautils/lib/metautils_strings.h>
+#include <metautils/lib/common_variables.h>
 #include <server/transport_gridd.h>
 #include <server/gridd_dispatcher_filters.h>
 #include <events/oio_events_queue.h>
@@ -134,17 +135,14 @@ meta2_filter_check_ns_not_wormed(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	(void) reply;
-	struct meta2_backend_s *backend = meta2_filter_ctx_get_backend(ctx);
-	g_mutex_lock(&backend->nsinfo_lock);
-	const gboolean wormed = namespace_in_worm_mode(backend->nsinfo);
-	g_mutex_unlock(&backend->nsinfo_lock);
+
 	const char *admin = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_ADMIN_COMMAND);
 	if (oio_str_parse_bool(admin, FALSE)) {
 		if (GRID_DEBUG_ENABLED())
 			GRID_DEBUG("admin mode is on");
 		return FILTER_OK;
 	}
-	if (wormed) {
+	if (oio_ns_mode_worm) {
 		if (GRID_DEBUG_ENABLED())
 			GRID_DEBUG("NS wormed!");
 		meta2_filter_ctx_set_error(ctx, SYSERR("NS wormed!"));
