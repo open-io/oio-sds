@@ -2672,7 +2672,10 @@ _member_react_NONE(struct election_member_s *member, enum event_type_e evt)
 			member->requested_USE = 1;
 			return;
 		case EVT_LEFT_SELF:
-			return member_warn_abnormal_event(member, evt);
+			/* when the node is removed, it will raise the watcher on the
+			 * node. So this event is not abnormal. */
+			/* TODO insert a new state in the FSM to wait for this event. */
+			return;
 		case EVT_LEFT_MASTER:
 			return;
 
