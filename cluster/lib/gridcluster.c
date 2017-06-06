@@ -275,12 +275,6 @@ gridcluster_get_nsinfo_int64(struct namespace_info_s *nsinfo,
 	return namespace_info_get_srv_param_i64(nsinfo, NULL, NULL, key, def);
 }
 
-static gsize
-namespace_get_size(namespace_info_t *ns_info, const gchar *name, gsize def)
-{
-	return (gsize) gridcluster_get_nsinfo_int64(ns_info, name, def);
-}
-
 gboolean
 namespace_in_worm_mode(namespace_info_t* ns_info)
 {
@@ -413,24 +407,6 @@ namespace_in_compression_mode(namespace_info_t* ns_info)
 	GByteArray *val = namespace_param_gba(ns_info, NULL, NS_COMPRESS_OPT_NAME);
 	gboolean res = _gba_to_bool(val, FALSE);
 	return res;
-}
-
-gsize
-namespace_get_autocontainer_src_offset(namespace_info_t* ns_info)
-{
-	return namespace_get_size(ns_info, "flat_hash_offset", 0);
-}
-
-gsize
-namespace_get_autocontainer_src_size(namespace_info_t* ns_info)
-{
-	return namespace_get_size(ns_info, "flat_hash_size", 0);
-}
-
-gsize
-namespace_get_autocontainer_dst_bits(namespace_info_t* ns_info)
-{
-	return namespace_get_size(ns_info, "flat_bitlength", 17);
 }
 
 gchar *
