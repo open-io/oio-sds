@@ -13,21 +13,20 @@ install:
   - pip install --upgrade -r test-requirements.txt
   - pip install --upgrade zkpython
 env:
-  - TEST_SUITE=build-release
-  - TEST_SUITE=unit
-  - TEST_SUITE=single
-  - TEST_SUITE=worm
-  - TEST_SUITE=slave
+  - TEST_SUITE=build,unit,small-cache
+  - TEST_SUITE=worm,slave
+  - TEST_SUITE=3copies
   - TEST_SUITE=repli
   - TEST_SUITE=ec
 script:
+  - set -e
+  - mkdir /tmp/oio && source $HOME/oio/bin/activate
   - export CMAKE_OPTS='-DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib -DZK_LIBDIR=/usr/lib -DZK_INCDIR=/usr/include/zookeeper -DAPACHE2_LIBDIR=/usr/lib/apache2 -DAPACHE2_INCDIR=/usr/include/apache2 -DAPACHE2_MODDIR=/tmp/oio/lib/apache2/module'
   - if [ -n "$COVERAGE" ] ; then export PYTHON_COVERAGE=1 ; fi
-  - mkdir /tmp/oio && source $HOME/oio/bin/activate
-  - if [ "$TEST_SUITE" == 'build-release' ] ; then cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Release" . && make all && make clean ; fi
+  - if [ "build" == "${TEST_SUITE/*build*/build}" ] ; then cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Release" . && make all && make clean ; fi
   - cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Debug" . && make all install
+  - python setup.py install
   - export G_DEBUG_LEVEL=D PATH="$PATH:/tmp/oio/bin" LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/tmp/oio/lib"
   - if [ -n "$COVERAGE" ] ; then make coverage_init ; fi
-  - python setup.py install
   - pwd && env && ./tools/oio-travis-tests.sh
   - if [ -n "$COVERAGE" ] ; then make coverage && gcovr -r . | cut -c1-63 && coverage report ; fi

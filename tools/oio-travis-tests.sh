@@ -1,5 +1,6 @@
 set -e
-export COLUMNS=512 LANG=
+set -x
+export COLUMNS=512 LANG= LANGUAGE=
 
 export G_DEBUG=fatal_warnings
 export G_SLICE=always-malloc
@@ -17,13 +18,6 @@ if [ $# -eq 2 ] ; then
     WRKDIR="$2"
 fi
 
-run_folded () {
-	TAG=$0 ; shift
-	echo "travis_fold:start:$TAG"
-	time $@
-	echo "travis_fold:end:$TAG"
-}
-
 function dump_syslog {
     cmd=tail
     if ! [ -r /var/log/syslog ] ; then
@@ -36,71 +30,94 @@ function dump_syslog {
 
 #trap dump_syslog EXIT
 
+has_coverage () { [ -n "$COVERAGE" ] ; }
+
+is_running_test_suite () {
+    has_coverage || [ -z "$TEST_SUITE" ] || [ "${TEST_SUITE/*$1*/$1}" == "$1" ]
+}
+
+randomize_env () {
+    export OIO_NS="NS-${RANDOM}" OIO_ACCOUNT="ACCT-$RANDOM" \
+        OIO_USER=USER-$RANDOM OIO_PATH=PATH-$RANDOM
+}
+
 func_tests () {
-    export OIO_NS="NS-${RANDOM}" OIO_ACCOUNT="ACCT-$RANDOM" OIO_USER=USER-$RANDOM OIO_PATH=PATH-$RANDOM
+	randomize_env
     oio-reset.sh -N $OIO_NS $@
 
     # test a content with a strange name, through the CLI and the API
     /usr/bin/fallocate -l $RANDOM /tmp/blob%
     ${PYTHON} $(which openio) object create $RANDOM /tmp/blob%
 
+	# Run the whole suite of functional tests (Python)
     cd $SRCDIR
-    tox -e coverage && tox -e func,coverage
+    if has_coverage ; then
+		tox -e coverage && tox -e cover,func
+	else
+		tox -e func
+    fi
+
+	# Run the whole suite of functional tests (C)
     cd $WRKDIR
     make -C tests/func test
+
+	# Run the test-suite of the C API
     ./core/tool_roundtrip /etc/passwd
 }
 
-test_worm () {
-    export OIO_NS="NS-${RANDOM}" OIO_ACCOUNT="ACCT-$RANDOM" OIO_USER=USER-$\
-       RANDOM OIO_PATH=PATH-$RANDOM
+
+test_meta2_filters () {
+	randomize_env
     oio-reset.sh -N $OIO_NS $@
+
     cd $SRCDIR
-    export WORM=1
-    tox -e coverage
+    if has_coverage ; then
+		tox -e coverage
+    fi
     ${PYTHON} $(which nosetests) tests.functional.m2_filters.test_filters
-    unset WORM
 }
 
-test_slave () {
-    export OIO_NS="NS-${RANDOM}" OIO_ACCOUNT="ACCT-$RANDOM" OIO_USER=USER-$\
-       RANDOM OIO_PATH=PATH-$RANDOM
-    oio-reset.sh -N $OIO_NS $@
-    cd $SRCDIR
-    export SLAVE=1
-    tox
-    ${PYTHON} $(which nosetests) tests.functional.m2_filters.test_filters
-    unset SLAVE
-}
-
-cd $WRKDIR
-
-is_running_test_suite () {
-	[ -n "$COVERAGE" ] || [ -z "$TEST_SUITE" ] || [ "$TEST_SUITE" == "$1" ]
-}
 
 if is_running_test_suite "unit" ; then
-	make -C tests/unit test
+	echo -e "\n### UNIT tests"
+	cd $SRCDIR && tox -e pep8 && tox -e py27
+	cd $WRKDIR && make -C tests/unit test
 fi
 
 if is_running_test_suite "repli" ; then
-	func_tests -f "${SRCDIR}/etc/bootstrap-preset-smallrepli.yml"
+	echo -e "\n### Replication tests"
+    func_tests -f "${SRCDIR}/etc/bootstrap-preset-smallrepli.yml"
 fi
 
 if is_running_test_suite "worm" ; then
-	test_worm  -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-option-worm.yml"
+	echo -e "\n### WORM tests"
+    export WORM=1
+    test_meta2_filters -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-worm.yml"
+	unset WORM
 fi
 
 if is_running_test_suite "slave" ; then
-	test_slave -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-option-slave.yml"
+	echo -e "\n### SLAVE tests"
+    export SLAVE=1
+    test_meta2_filters -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-slave.yml"
+	unset SLAVE
 fi
 
-if is_running_test_suite "single" ; then
-	func_tests -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" -f "${SRCDIR}/etc/bootstrap-option-smallcache.yml"
-	func_tests -f "${SRCDIR}/etc/bootstrap-preset-3COPIES-11RAWX.yml"
+if is_running_test_suite "small-cache" ; then
+	echo -e "\n### Small Cache tests"
+    func_tests -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-smallcache.yml"
+fi
+
+if is_running_test_suite "3copies" ; then
+	echo -e "\n### 3copies tests"
+    func_tests -f "${SRCDIR}/etc/bootstrap-preset-3COPIES-11RAWX.yml"
 fi
 
 if is_running_test_suite "ec" ; then
-	func_tests -f "${SRCDIR}/etc/bootstrap-preset-EC.yml"
+	echo -e "\n### EC tests"
+    func_tests -f "${SRCDIR}/etc/bootstrap-preset-EC.yml"
 fi
 
