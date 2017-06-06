@@ -84,18 +84,6 @@ _mode_readonly(guint32 flags)
 	return M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN|_mode_masterslave(flags);
 }
 
-static gint64
-_quota(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
-{
-	gint64 quota = 0;
-
-	g_mutex_lock (&m2b->nsinfo_lock);
-	quota = namespace_container_max_size(m2b->nsinfo);
-	g_mutex_unlock (&m2b->nsinfo_lock);
-
-	return m2db_get_quota(sq3, quota);
-}
-
 static gchar*
 m2b_storage_policy(struct meta2_backend_s *m2b)
 {
@@ -1330,7 +1318,7 @@ _meta2_backend_force_prepare_data_unlocked(struct meta2_backend_s *m2b,
 	}
 
 	pdata->max_versions = _maxvers(sq3);
-	pdata->quota = _quota(sq3, m2b);
+	pdata->quota = m2db_get_quota(sq3, meta2_container_max_size);
 	pdata->size = m2db_get_size(sq3);
 	gchar *stgpol = _stgpol(sq3, m2b);
 	g_strlcpy(pdata->storage_policy, stgpol, LIMIT_LENGTH_STGPOLICY);

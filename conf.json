@@ -78,6 +78,11 @@
 		"code": "common_variables.c",
 		"header": "common_variables.h",
 		"variables": [
+			{ "type": "bool", "name": "oio_ns_mode_worm",
+				"key": "oio.ns.worm",
+				"def": false,
+				"descr": "Is the NS in a WORM (for Write Once, Read Many --but never delete)." },
+
 			{ "type": "monotonic", "name": "main_log_level_reset_delay",
 				"key": "common.verbosity.reset_delay",
 				"def": "5m", "min": "1s", "max": "1h",
@@ -387,6 +392,11 @@
 			{ "type": "int64", "name": "meta2_max_versions",
 				"key": "meta2.max_versions",
 				"descr": "How many versions for .",
+				"def": 0, "min": 0, "max": "max" },
+
+			{ "type": "int64", "name": "meta2_container_max_size",
+				"key": "meta2.container.max_size",
+				"descr": "How many bytes may be stored in each container.",
 				"def": 0, "min": 0, "max": "max" },
 
 			{ "type": "epoch", "name": "meta2_retention_period",
