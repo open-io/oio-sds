@@ -436,12 +436,14 @@ _proxy_call (CURL *h, const char *method, const char *url,
 		if (i+1 != max) {
 			/* cleanup what has been allocated by the previous call */
 			g_clear_error(&err);
-			if (out->headers) {
-				g_strfreev(out->headers);
-				out->headers = g_malloc0(sizeof(void*));
-			}
-			if (out->body) {
-				g_string_set_size(out->body, 0);
+			if (out) {
+				if (out->headers) {
+					g_strfreev(out->headers);
+					out->headers = g_malloc0(sizeof(void*));
+				}
+				if (out->body) {
+					g_string_set_size(out->body, 0);
+				}
 			}
 			/* randomize the sleep-time to avoid resonance effects */
 			const gulong sleep_base = (1 << i) * 200 * G_TIME_SPAN_MILLISECOND;
