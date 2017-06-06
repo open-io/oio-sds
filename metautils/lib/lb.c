@@ -51,7 +51,7 @@ oio_lb_world__feed_service_info_list(struct oio_lb_world_s *lbw,
 				NAME_TAGNAME_SLOTS, NULL);
 		if (slot_list_str) {
 			gchar **tokens = g_strsplit(slot_list_str, OIO_CSV_SEP, -1);
-			for (gchar **token = tokens; token && *token; token++) {
+			for (gchar **token = tokens; tokens && *token; token++) {
 				/* Ensure the slot name is prefixed by the type of service */
 				if (!g_str_has_prefix(*token, srv->type))
 					g_snprintf(slot_name, sizeof(slot_name), "%s-%s",

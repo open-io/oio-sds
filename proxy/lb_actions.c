@@ -65,6 +65,10 @@ _lb(struct req_args_s *args, const char *srvtype)
 
 	struct oio_lb_pool_s *pool = oio_lb_world__create_pool(lb_world, srvtype);
 	GString *targets = g_string_sized_new(64);
+	if (howmany > 1) {
+		g_string_append(targets, sz);
+		g_string_append_c(targets, OIO_CSV_SEP_C);
+	}
 	if (slot) {
 		if (g_str_has_prefix(slot, srvtype)) {
 			g_string_append(targets, slot);
@@ -74,10 +78,8 @@ _lb(struct req_args_s *args, const char *srvtype)
 		}
 	}
 	g_string_append(targets, srvtype);
-	GRID_DEBUG("Temporary pool [%s] will target [%s] %"G_GINT64_FORMAT" times",
-			srvtype, targets->str, howmany);
-	for (; howmany > 0; howmany--)
-		oio_lb_world__add_pool_target(pool, targets->str);
+	GRID_DEBUG("Temporary pool [%s] will target [%s]", srvtype, targets->str);
+	oio_lb_world__add_pool_targets(pool, targets->str);
 	g_string_free(targets, TRUE);
 
 	GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
