@@ -172,14 +172,12 @@ struct oio_lb_pool_LOCAL_s
 	 * a coma-separated list of 'slot' names (the slots come from the 'world'). */
 	gchar ** targets;
 
-	/* How many bits to right shift locations before comparing them.
-	 * Locations are 64 bits, if you shift them 48 bits, you end-up
-	 * comparing the 16 most significant bits. */
-	gint16 initial_shift;
+	/* Distance between services that the pool will try to ensure. */
+	guint16 initial_dist;
 
-	/* Minimum number of bits to right shift. Usually 0, to eventually
-	 * compare all bits of the location integer. */
-	gint16 min_shift;
+	/* Absolute minimum distance between services returned by the pool.
+	 * Cannot be 0. */
+	guint16 min_dist;
 
 	/* If true, look for items close to each other. */
 	gboolean nearby_mode : 16;
@@ -284,7 +282,7 @@ _compare_stored_items_by_location (const void *k0, const void *k)
 
 static gboolean
 _item_is_too_close(const oio_location_t * avoids,
-		const oio_location_t item, const gint bit_shift)
+		const oio_location_t item, const guint16 bit_shift)
 {
 	if (!avoids)
 		return FALSE;
@@ -298,7 +296,7 @@ _item_is_too_close(const oio_location_t * avoids,
 
 static gboolean
 _item_is_too_far(const oio_location_t *known,
-		const oio_location_t item, const gint bit_shift)
+		const oio_location_t item, const guint16 bit_shift)
 {
 	if (!known)
 		return FALSE;
@@ -469,7 +467,7 @@ _search_closest_weight (GArray *tab, const guint32 needle,
 }
 
 static gboolean
-_accept_item(struct oio_lb_slot_s *slot, const gint bit_shift,
+_accept_item(struct oio_lb_slot_s *slot, const guint16 bit_shift,
 		gboolean reversed, struct polling_ctx_s *ctx, guint i)
 {
 	const struct _lb_item_s *item = _slot_get (slot, i);
@@ -507,14 +505,15 @@ _accept_item(struct oio_lb_slot_s *slot, const gint bit_shift,
  * The purpose of the shuffled lookup is to jump to an item with
  * a distant location. */
 static gboolean
-_local_slot__poll(struct oio_lb_slot_s *slot, const gint bit_shift,
+_local_slot__poll(struct oio_lb_slot_s *slot, const guint16 bit_shift,
 		gboolean reversed, struct polling_ctx_s *ctx)
 {
 	if (_slot_needs_rehash (slot))
 		_slot_rehash (slot);
 
 	GRID_TRACE2(
-			"%s slot=%s sum=%"G_GUINT32_FORMAT" items=%d shift=%d",
+			"%s slot=%s sum=%"G_GUINT32_FORMAT
+			" items=%d shift=%"G_GUINT16_FORMAT,
 			__FUNCTION__, slot->name, slot->sum_weight, slot->items->len,
 			bit_shift);
 
@@ -549,7 +548,7 @@ _local_slot__poll(struct oio_lb_slot_s *slot, const gint bit_shift,
 
 static gboolean
 _local_target__poll(struct oio_lb_pool_LOCAL_s *lb,
-		const char *target, gint bit_shift, struct polling_ctx_s *ctx)
+		const char *target, guint16 bit_shift, struct polling_ctx_s *ctx)
 {
 	GRID_TRACE2("%s pool=%s shift=%d target=%s",
 			__FUNCTION__, lb->name, bit_shift, target);
@@ -629,6 +628,7 @@ _local__patch(struct oio_lb_pool_s *self,
 	EXTRA_ASSERT(lb->vtable == &vtable_LOCAL);
 	EXTRA_ASSERT(lb->world != NULL);
 	EXTRA_ASSERT(lb->targets != NULL);
+	EXTRA_ASSERT(lb->min_dist >= 1);
 
 	/* Count the expected targets to build a temp storage for
 	 * polled locations */
@@ -667,16 +667,18 @@ _local__patch(struct oio_lb_pool_s *self,
 		 * and thus have more chances to find differences (resp. similarities)
 		 * between service locations. */
 		if (lb->nearby_mode) {
-			for (gint bit_shift = lb->min_shift;
-					!done && bit_shift <= lb->initial_shift;
-					bit_shift += 16) {
-				done = _local_target__poll(lb, *ptarget, bit_shift, &ctx);
+			for (guint16 cur_dist = lb->min_dist;
+					!done && cur_dist <= lb->initial_dist;
+					cur_dist++) {
+				done = _local_target__poll(lb, *ptarget,
+						(cur_dist - 1) * 16u, &ctx);
 			}
 		} else {
-			for (gint bit_shift = lb->initial_shift;
-					!done && bit_shift >= lb->min_shift;
-					bit_shift -= 16) {
-				done = _local_target__poll(lb, *ptarget, bit_shift, &ctx);
+			for (guint16 cur_dist = lb->initial_dist;
+					!done && cur_dist >= lb->min_dist;
+					cur_dist--) {
+				done = _local_target__poll(lb, *ptarget,
+						(cur_dist - 1) * 16u, &ctx);
 			}
 		}
 		if (!done) {
@@ -776,7 +778,7 @@ oio_lb_world__set_pool_option(struct oio_lb_pool_s *self, const char *key,
 			GRID_WARN("%s [%s] for pool [%s] out of range [1, 4]",
 					OIO_LB_OPT_MIN_DIST, value, lb->name);
 		} else {
-			lb->min_shift = 16 * (min - 1);
+			lb->min_dist = min;
 		}
 	} else if (!strcmp(key, OIO_LB_OPT_MAX_DIST)) {
 		/* Configuration is expressed as "levels" of 16 bits, from 1 to 4.
@@ -789,7 +791,7 @@ oio_lb_world__set_pool_option(struct oio_lb_pool_s *self, const char *key,
 			GRID_WARN("%s [%s] for pool [%s] out of range [1, 4]",
 					OIO_LB_OPT_MAX_DIST, value, lb->name);
 		} else {
-			lb->initial_shift = 16 * (max - 1);
+			lb->initial_dist = max;
 		}
 	} else if (!strcmp(key, OIO_LB_OPT_NEARBY)) {
 		lb->nearby_mode = oio_str_parse_bool(value, FALSE);
@@ -898,10 +900,8 @@ oio_lb_world__create_pool (struct oio_lb_world_s *world, const char *name)
 	lb->name = g_strdup (name);
 	lb->world = world;
 	lb->targets = g_malloc0 (4 * sizeof(gchar*));
-	// Safe default value: compare only the 16 most significant bits
-	lb->initial_shift = 48;
-	// Safe default value: compare all bits
-	lb->min_shift = 0;
+	lb->initial_dist = 4;
+	lb->min_dist = 1;
 	lb->nearby_mode = FALSE;
 	return (struct oio_lb_pool_s*) lb;
 }
