@@ -3,9 +3,14 @@
 		"code": "meta2_variables.c",
 		"header": "meta2_variables.h",
 		"variables": [
+			{ "type": "int64", "name": "meta2_default_chunk_size",
+				"key": "meta2.default_chunk_size",
+				"descr": "Default chunk size for the given namespace.",
+				"def": "100Mi", "min": 1, "max": "max" },
+
 			{ "type": "int64", "name": "meta2_max_versions",
 				"key": "meta2.max_versions",
-				"descr": "How many versions for .",
+				"descr": "How many versions for a single alias.",
 				"def": 0, "min": 0, "max": "max" },
 
 			{ "type": "int64", "name": "meta2_container_max_size",
