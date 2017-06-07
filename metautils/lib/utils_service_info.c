@@ -407,7 +407,7 @@ service_info_to_lb_item(const struct service_info_s *si,
 	g_assert_nonnull(item);
 	/* Take location from:
 	 * - tag.loc as a hexadecimal number or
-	 * - tag.log as a hash dot-separated string or
+	 * - tag.log as a dot-separated string or
 	 * - IP address and port */
 	const gchar *loc_str = service_info_get_tag_value(si, "tag.loc", NULL);
 	if (!loc_str) {

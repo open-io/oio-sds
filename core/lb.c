@@ -30,6 +30,8 @@ License along with this library.
 typedef guint32 generation_t;
 
 #define OIO_LB_SHUFFLE_JUMP ((1UL << 31) - 1)
+#define OIO_LB_LOC_LEVELS 4
+#define OIO_LB_BITS_PER_LOC_LEVEL (sizeof(oio_location_t)*8/OIO_LB_LOC_LEVELS)
 
 typedef guint16 oio_refcount_t;
 
@@ -119,24 +121,24 @@ struct oio_lb_slot_s
 	oio_weight_acc_t sum_weight;
 
 	/* Array of inline <struct _slot_item_s> sorted by location. No real
-	   need to complexify by a secondary sort by ID, especially if the number
-	   of services at the same location is rather small.*/
+	 * need to complexify by a secondary sort by ID, especially if the number
+	 * of services at the same location is rather small.*/
 	GArray *items;
 
 	/* Total number of items per location, for each level.
 	 * We do not use level 0 at the moment. */
-	GData *items_by_loc[4];
+	GData *items_by_loc[OIO_LB_LOC_LEVELS];
 
 	gchar *name;
 
 	generation_t generation;
 
 	/* Does the slot need to be re-handled to computed accumulated scores.
-	   When set, the slot cannot be used for polling elements. */
+	 * When set, the slot cannot be used for polling elements. */
 	guint8 flag_dirty_weights : 1;
 
 	/* Does the slot need to be re-sorted by location.
-	   When set, the slot cannot be used to be searched by location */
+	 * When set, the slot cannot be used to be searched by location */
 	guint8 flag_dirty_order : 1;
 
 	guint8 flag_rehash_on_update : 1;
@@ -145,6 +147,8 @@ struct oio_lb_slot_s
 /* All the load-balancing information:
  * - all the services in the 'world'
  * - all the slots that gather services with the same characteristics
+ * - generation of the services in the 'world' (incr by 1 at each reload)
+ * - absolute maximum distance between services in the 'world'
  */
 struct oio_lb_world_s
 {
@@ -152,6 +156,7 @@ struct oio_lb_world_s
 	GTree *slots;
 	GTree *items;
 	generation_t generation;
+	guint16 abs_max_dist;
 };
 
 /* A pool describes a preset configuration for the polling of several services.
@@ -191,7 +196,7 @@ struct polling_ctx_s
 	oio_location_t *next_polled;
 	gint n_targets;
 
-	GData *counters[4];
+	GData *counters[OIO_LB_LOC_LEVELS];
 };
 
 static void _local__destroy (struct oio_lb_pool_s *self);
@@ -252,7 +257,7 @@ location_from_dotted_string(const char *dotted)
 			hash = ((hash << 5) + hash) + c;
 		return hash;
 	}
-	gchar **toks = g_strsplit(dotted, ".", 4);
+	gchar **toks = g_strsplit(dotted, ".", OIO_LB_LOC_LEVELS);
 	oio_location_t location = 0;
 	int ntoks = 0;
 	// according to g_strsplit documentation, toks cannot be NULL
@@ -364,7 +369,7 @@ _slot_destroy (struct oio_lb_slot_s *slot)
 		g_array_free (slot->items, TRUE);
 		slot->items = NULL;
 	}
-	for (int level = 1; level < 4; level++) {
+	for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
 		g_datalist_clear(&(slot->items_by_loc[level]));
 	}
 	oio_str_clean (&slot->name);
@@ -389,7 +394,7 @@ _slot_needs_rehash (const struct oio_lb_slot_s * const slot)
 static void
 _level_datalist_incr_loc(GData **counters, oio_location_t loc)
 {
-	for (int level = 1; level < 4; level++) {
+	for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
 		GData **counter = counters + level;
 		GQuark key = key_from_loc_level(loc, level);
 		guint32 count = GPOINTER_TO_UINT(
@@ -407,7 +412,7 @@ _slot_rehash (struct oio_lb_slot_s *slot)
 		slot->flag_dirty_weights = 1;
 		g_array_sort(slot->items, _compare_stored_items_by_location);
 
-		for (int level = 1; level < 4; level++) {
+		for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
 			g_datalist_clear(&(slot->items_by_loc[level]));
 			// No need to call g_datalist_init()
 		}
@@ -422,11 +427,12 @@ _slot_rehash (struct oio_lb_slot_s *slot)
 				guint level = GPOINTER_TO_UINT(u);
 				oio_location_t loc = (GPOINTER_TO_UINT(k) - 1);
 				GRID_TRACE("%0*lX prefix has %u services",
-						4 * (4 - level), loc, GPOINTER_TO_UINT(data));
+						4 * (OIO_LB_LOC_LEVELS - level),
+						loc, GPOINTER_TO_UINT(data));
 			}
-			g_datalist_foreach(&slot->items_by_loc[3], _display, GUINT_TO_POINTER(3));
-			g_datalist_foreach(&slot->items_by_loc[2], _display, GUINT_TO_POINTER(2));
-			g_datalist_foreach(&slot->items_by_loc[1], _display, GUINT_TO_POINTER(1));
+			for (int i = 1; i < OIO_LB_LOC_LEVELS; i++)
+				g_datalist_foreach(
+						&slot->items_by_loc[i], _display, GUINT_TO_POINTER(i));
 		}
 #endif
 	}
@@ -618,6 +624,12 @@ _local_target__is_satisfied(struct oio_lb_pool_LOCAL_s *lb,
 	return FALSE;
 }
 
+static inline guint16
+_dist_to_bit_shift(guint16 dist)
+{
+	return (dist - 1) * 16u;
+}
+
 static guint
 _local__patch(struct oio_lb_pool_s *self,
 		const oio_location_t *avoids, const oio_location_t *known,
@@ -653,33 +665,28 @@ _local__patch(struct oio_lb_pool_s *self,
 		.n_targets = count_targets,
 	};
 
-	for (int level = 1; level < 4; level++) {
+	for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
 		g_datalist_init(&ctx.counters[level]);
 	}
 
+	/* In normal mode (resp. nearby mode), bit shifts start high
+	 * (resp. low), because we want services with different
+	 * (resp. equal) most significant bits. Then we reduce (resp. increase)
+	 * the shifting so we compare more (resp. less) bits of the locations,
+	 * and thus have more chances to find differences (resp. similarities)
+	 * between service locations. */
+	guint16 max_dist = MIN(lb->world->abs_max_dist, lb->initial_dist);
 	guint count = 0;
 	for (gchar **ptarget = lb->targets; *ptarget; ++ptarget) {
 		gboolean done = _local_target__is_satisfied(lb, *ptarget, &ctx);
-		/* In normal mode (resp. nearby mode), bit shifts start high
-		 * (resp. low), because we want services with different
-		 * (resp. equal) most significant bits. Then we reduce (resp. increase)
-		 * the shifting so we compare more (resp. less) bits of the locations,
-		 * and thus have more chances to find differences (resp. similarities)
-		 * between service locations. */
 		if (lb->nearby_mode) {
-			for (guint16 cur_dist = lb->min_dist;
-					!done && cur_dist <= lb->initial_dist;
-					cur_dist++) {
+			for (guint16 dist = lb->min_dist; !done && dist <= max_dist; dist++)
 				done = _local_target__poll(lb, *ptarget,
-						(cur_dist - 1) * 16u, &ctx);
-			}
+						_dist_to_bit_shift(dist), &ctx);
 		} else {
-			for (guint16 cur_dist = lb->initial_dist;
-					!done && cur_dist >= lb->min_dist;
-					cur_dist--) {
+			for (guint16 dist = max_dist; !done && dist >= lb->min_dist; dist--)
 				done = _local_target__poll(lb, *ptarget,
-						(cur_dist - 1) * 16u, &ctx);
-			}
+						_dist_to_bit_shift(dist), &ctx);
 		}
 		if (!done) {
 			/* the strings is '\0' separated, printf won't display it */
@@ -696,18 +703,20 @@ _local__patch(struct oio_lb_pool_s *self,
 	}
 
 	if (unlikely(GRID_DEBUG_ENABLED())) {
+		// FIXME: there is similar code in _slot_rehash()
 		void _display(GQuark k, gpointer data, gpointer u) {
 			guint level = GPOINTER_TO_UINT(u);
 			oio_location_t loc = (GPOINTER_TO_UINT(k) - 1);
 			GRID_DEBUG("%0*lX selected %u times",
-					4 * (4 - level), loc, GPOINTER_TO_UINT(data));
+					4 * (OIO_LB_LOC_LEVELS - level),
+					loc, GPOINTER_TO_UINT(data));
 		}
-		g_datalist_foreach(&ctx.counters[3], _display, GUINT_TO_POINTER(3));
-		g_datalist_foreach(&ctx.counters[2], _display, GUINT_TO_POINTER(2));
-		g_datalist_foreach(&ctx.counters[1], _display, GUINT_TO_POINTER(1));
+		for (int level = 1; level < OIO_LB_LOC_LEVELS; level++)
+			g_datalist_foreach(&ctx.counters[level],
+					_display, GUINT_TO_POINTER(level));
 	}
 
-	for (int level = 1; level < 4; level++) {
+	for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
 		g_datalist_clear(&ctx.counters[level]);
 	}
 	return count;
@@ -768,28 +777,26 @@ oio_lb_world__set_pool_option(struct oio_lb_pool_s *self, const char *key,
 	if (!key || !*key)
 		return;
 	if (!strcmp(key, OIO_LB_OPT_MIN_DIST)) {
-		/* Configuration is expressed as "levels" of 16 bits, from 1 to 4.
-		 * min_shift is expressed as bits, from 0 to 48. */
 		guint64 min = g_ascii_strtoull(value, &endptr, 10u);
 		if (endptr == value) {
 			GRID_WARN("Invalid %s [%s] for pool [%s]",
 					OIO_LB_OPT_MIN_DIST, value, lb->name);
-		} else if (min < 1 || min > 4) {
-			GRID_WARN("%s [%s] for pool [%s] out of range [1, 4]",
-					OIO_LB_OPT_MIN_DIST, value, lb->name);
+		} else if (min < 1 || min > OIO_LB_LOC_LEVELS) {
+			GRID_WARN("%s [%s] for pool [%s] out of range [1, %d]",
+					OIO_LB_OPT_MIN_DIST, value, lb->name,
+					OIO_LB_LOC_LEVELS);
 		} else {
 			lb->min_dist = min;
 		}
 	} else if (!strcmp(key, OIO_LB_OPT_MAX_DIST)) {
-		/* Configuration is expressed as "levels" of 16 bits, from 1 to 4.
-		 * initial_shift is expressed as bits, from 0 to 48. */
 		guint64 max = g_ascii_strtoull(value, &endptr, 10u);
 		if (endptr == value) {
 			GRID_WARN("Invalid %s [%s] for pool [%s]",
 					OIO_LB_OPT_MAX_DIST, value, lb->name);
-		} else if (max < 1 || max > 4) {
-			GRID_WARN("%s [%s] for pool [%s] out of range [1, 4]",
-					OIO_LB_OPT_MAX_DIST, value, lb->name);
+		} else if (max < 1 || max > OIO_LB_LOC_LEVELS) {
+			GRID_WARN("%s [%s] for pool [%s] out of range [1, %d]",
+					OIO_LB_OPT_MAX_DIST, value, lb->name,
+					OIO_LB_LOC_LEVELS);
 		} else {
 			lb->initial_dist = max;
 		}
@@ -841,6 +848,14 @@ oio_lb_local__create_world (void)
 			g_free, (GDestroyNotify) _slot_destroy);
 	self->items = g_tree_new_full (oio_str_cmp3, NULL,
 			g_free, g_free);
+
+	/* See at the end of oio_lb_world__feed_slot_unlocked()
+	 * for an explanation. */
+# ifndef __GNUC__
+	self->abs_max_dist = OIO_LB_LOC_LEVELS;
+# else
+	/* Keep it 0, we will increase it when adding items. */
+# endif
 	return self;
 }
 
@@ -900,7 +915,7 @@ oio_lb_world__create_pool (struct oio_lb_world_s *world, const char *name)
 	lb->name = g_strdup (name);
 	lb->world = world;
 	lb->targets = g_malloc0 (4 * sizeof(gchar*));
-	lb->initial_dist = 4;
+	lb->initial_dist = OIO_LB_LOC_LEVELS;
 	lb->min_dist = 1;
 	lb->nearby_mode = FALSE;
 	return (struct oio_lb_pool_s*) lb;
@@ -917,7 +932,7 @@ _world_create_slot (struct oio_lb_world_s *self, const char *name)
 		slot = g_malloc0(sizeof(*slot));
 		slot->name = g_strdup(name);
 		slot->items = g_array_new(FALSE, TRUE, sizeof(struct _slot_item_s));
-		for (int level = 1; level < 4; level++) {
+		for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
 			g_datalist_init(&(slot->items_by_loc[level]));
 		}
 		g_rw_lock_writer_lock(&self->lock);
@@ -1111,6 +1126,21 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 
 	if (slot->flag_rehash_on_update && _slot_needs_rehash (slot))
 		_slot_rehash (slot);
+
+	/* This is an optimization to speedup the locations comparisons.
+	 * It needs __builtin_clzll which is a GCC builtin. */
+# ifdef __GNUC__
+	EXTRA_ASSERT(item->location != 0);
+	// Actual number of bits used by the location.
+	int n_bits = sizeof(oio_location_t) * 8 - __builtin_clzll(item->location);
+	// Maximum distance between items with this number of bits.
+	guint16 max_dist = 1 + n_bits / OIO_LB_BITS_PER_LOC_LEVEL;
+	if (self->abs_max_dist < max_dist) {
+		self->abs_max_dist = max_dist;
+		GRID_DEBUG("Absolute max_dist set to %u", max_dist);
+	}
+# endif
+
 }
 
 void
@@ -1323,4 +1353,3 @@ oio_lb__get_item_from_pool(struct oio_lb_s *lb, const char *name,
 	g_rw_lock_reader_unlock(&lb->lock);
 	return res;
 }
-
