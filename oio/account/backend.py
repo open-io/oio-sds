@@ -5,7 +5,6 @@ import math
 import redis
 import redis.sentinel
 from werkzeug.exceptions import NotFound, Conflict
-from oio.common.exceptions import NoSuchAccount
 from oio.common.utils import Timestamp
 from oio.common.utils import int_value
 from oio.common.utils import true_value
