@@ -56,7 +56,6 @@ namespace_info_copy(namespace_info_t* src, namespace_info_t* dst)
 		if (old) g_hash_table_unref(old);\
 	}
 
-	NSI_COPY_TABLE_REF(src->options, dst->options);
 	NSI_COPY_TABLE_REF(src->storage_policy, dst->storage_policy);
 	NSI_COPY_TABLE_REF(src->data_security, dst->data_security);
 	NSI_COPY_TABLE_REF(src->service_pools, dst->service_pools);
@@ -71,7 +70,6 @@ namespace_info_dup(namespace_info_t* src)
 	memcpy(dst->name, src->name, sizeof(src->name));
 	dst->chunk_size = src->chunk_size;
 
-	dst->options = _copy_hash(src->options);
 	dst->storage_policy = _copy_hash(src->storage_policy);
 	dst->data_security = _copy_hash(src->data_security);
 	dst->service_pools = _copy_hash(src->service_pools);
@@ -83,8 +81,6 @@ namespace_info_clear(namespace_info_t* ns_info)
 {
 	if (ns_info == NULL)
 		return;
-	if (ns_info->options != NULL)
-		g_hash_table_unref(ns_info->options);
 	if (ns_info->storage_policy != NULL)
 		g_hash_table_unref(ns_info->storage_policy);
 	if (ns_info->data_security != NULL)
@@ -102,7 +98,6 @@ namespace_info_init(namespace_info_t *ni)
 		return;
 	ni->chunk_size = 0;
 	memset(ni->name, 0, sizeof(ni->name));
-	ni->options = _copy_hash(NULL);
 	ni->storage_policy = _copy_hash(NULL);
 	ni->data_security = _copy_hash(NULL);
 	ni->service_pools = _copy_hash(NULL);
@@ -138,57 +133,6 @@ namespace_info_get_data_security(namespace_info_t *ni, const gchar *data_sec_key
 	}
 
 	return NULL;
-}
-
-GByteArray *
-namespace_info_get_srv_param_gba(const namespace_info_t *ni,
-		const gchar *ns_name, const gchar *srv_type, const gchar *param_name)
-{
-	(void) ns_name;  // not used anymore
-
-	gchar key[128] = {0};
-	GByteArray *res = NULL;
-
-	if (!ni || !ni->options)
-		return NULL;
-
-	if (srv_type != NULL) {
-		// Prefix the param name with the service type
-		g_snprintf(key, sizeof(key), "%s.%s", srv_type, param_name);
-		res = g_hash_table_lookup(ni->options, key);
-	}
-
-	if (!res) {
-		// Try with unprefixed param name
-		res = g_hash_table_lookup(ni->options, param_name);
-	}
-
-	return res;
-}
-
-gint64
-namespace_info_get_srv_param_i64(const namespace_info_t *ni,
-		const gchar *ns_name, const gchar *srv_type,
-		const gchar *param_name, gint64 def)
-{
-	gint64 res;
-	gchar *end = NULL;
-	GByteArray *value;
-
-	if (!ni || !ni->options)
-		return def;
-
-	value = namespace_info_get_srv_param_gba(ni, ns_name, srv_type, param_name);
-	if (!value)
-		return def;
-
-	gchar *v = g_strndup((gchar*)value->data, value->len);
-	res = g_ascii_strtoll(v, &end, 10);
-	if (end == v) // Conversion failed
-		res = def;
-	g_free(v);
-
-	return res;
 }
 
 //------------------------------------------------------------------------------
@@ -229,8 +173,7 @@ namespace_info_init_json_object(struct json_object *obj,
 	g_strlcpy(ni->name, json_object_get_string(ns), sizeof(ni->name));
 	ni->chunk_size = json_object_get_int64(sz);
 
-	if (NULL != (err = _load_hash(obj, "options", ni->options))
-			|| NULL != (err = _load_hash(obj, "storage_policy", ni->storage_policy))
+	if (NULL != (err = _load_hash(obj, "storage_policy", ni->storage_policy))
 			|| NULL != (err = _load_hash(obj, "data_security", ni->data_security))
 			|| NULL != (err = _load_hash(obj, "service_pools", ni->service_pools)))
 		return err;
@@ -302,8 +245,6 @@ namespace_info_encode_json(GString *out, struct namespace_info_s *ni)
 	OIO_JSON_append_str(out, "ns", ni->name);
 	g_string_append_c(out, ',');
 	OIO_JSON_append_int(out, "chunksize", ni->chunk_size);
-	g_string_append_c(out, ',');
-	_encode_json_properties(out, ni->options, "options");
 	g_string_append_c(out, ',');
 	_encode_json_properties(out, ni->storage_policy, "storage_policy");
 	g_string_append_c(out, ',');

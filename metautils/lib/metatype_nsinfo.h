@@ -22,19 +22,6 @@ License along with this library.
 
 struct namespace_info_s;
 
-/* Get a parameter from the namespace info "options" hash table.
- * This intelligently looks for VNS overridden parameters.
- * If a service type is provided by the type-specific parameter
- * cannot be found, the generic parameter is tried. */
-GByteArray *namespace_info_get_srv_param_gba(const namespace_info_t *ni,
-		const gchar *ns_name, const gchar *srv_type, const gchar *param_name);
-
-/* Same as namespace_info_get_srv_param_gba but converts the result
- * to int64. */
-gint64 namespace_info_get_srv_param_i64(const namespace_info_t *ni,
-		const gchar *ns_name, const gchar *srv_type, const gchar *param_name,
-		gint64 def);
-
 /* Copy a namespace_info into another namespace_info
  * The option hashtable is not copied. The old table's reference
  * count is decremented (then the table will e destroyed if it falls

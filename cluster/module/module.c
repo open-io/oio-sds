@@ -1530,13 +1530,6 @@ error:
 	return -1;
 }
 
-static void
-_debug_print_hash(gpointer k, gpointer v, gpointer udata)
-{
-	(void)udata;
-	NOTICE("options k = [%s] | v = [%s]", (gchar*)k,(gchar*) ((GByteArray*)v)->data);
-}
-
 static gint
 plugin_reload(GHashTable * params, GError ** err)
 {
@@ -1565,12 +1558,6 @@ plugin_reload(GHashTable * params, GError ** err)
 		g_prefix_error(err, "[NS=%s] storage conf init failed", conscience->ns_info.name);
 		goto error;
 	}
-
-	NOTICE("[NS=%s] options reloaded", conscience->ns_info.name);
-
-	g_hash_table_foreach(conscience->ns_info.options, _debug_print_hash, NULL);
-
-	NOTICE("[NS=%s] virtual namespaces reloaded", conscience->ns_info.name);
 
 	g_rec_mutex_unlock(&conscience_nsinfo_mutex);
 
