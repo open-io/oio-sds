@@ -413,8 +413,8 @@ path=${LIBDIR}/grid/msg_fallback.so
 [Plugin.conscience]
 path=${LIBDIR}/grid/msg_conscience.so
 param_namespace=${NS}
-param_chunk_size=${CHUNK_SIZE}
 
+# Multi-conscience
 param_hub.me=tcp://${IP}:${PORT_HUB}
 param_hub.group=${CS_ALL_HUB}
 
@@ -424,13 +424,6 @@ param_storage_conf=${CFGDIR}/${NS}-policies.conf
 # Service scoring and pools definitions
 param_service_conf=${CFGDIR}/${NS}-service-{pool,type}*.conf
 
-# For an easy transition, it is still possible to define
-# service score expression, variation, timeout and lock here.
-#
-#param_service.meta0.lock_at_first_register=false
-#param_service.meta0.score_timeout=3600
-#param_service.meta0.score_variation_bound=5
-#param_service.meta0.score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
 """
 
 template_conscience_policies = """
