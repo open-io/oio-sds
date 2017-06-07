@@ -3,11 +3,6 @@
 		"code": "meta2_variables.c",
 		"header": "meta2_variables.h",
 		"variables": [
-			{ "type": "int64", "name": "meta2_default_chunk_size",
-				"key": "meta2.default_chunk_size",
-				"descr": "Default chunk size for the given namespace.",
-				"def": "100Mi", "min": 1, "max": "max" },
-
 			{ "type": "int64", "name": "meta2_max_versions",
 				"key": "meta2.max_versions",
 				"descr": "How many versions for a single alias.",
@@ -128,6 +123,11 @@
 		"code": "common_variables.c",
 		"header": "common_variables.h",
 		"variables": [
+			{ "type": "int64", "name": "oio_ns_chunk_size",
+				"key": "meta2.default_chunk_size",
+				"descr": "Default chunk size for the given namespace.",
+				"def": "100Mi", "min": 1, "max": "max" },
+
 			{ "type": "string", "name": "oio_ns_service_update_policy",
 				"key": "oio.ns.service_update_policy",
 				"limit": 1024,

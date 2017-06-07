@@ -1433,15 +1433,6 @@ plugin_init(GHashTable * params, GError ** err)
 	}
 	NOTICE("[NS=%s] Configuring a new conscience", ns_name);
 
-	/*CHUNK SIZE */
-	if (!(str = g_hash_table_lookup(params, KEY_CHUNK_SIZE))) {
-		GSETERROR(err, "[NS=%s] Missing key '%s' (chunk size in bytes)",
-				ns_name, KEY_CHUNK_SIZE);
-		goto error;
-	}
-	conscience->ns_info.chunk_size = g_ascii_strtoll(str, NULL, 10);
-	NOTICE("[NS=%s] Chunk size set to %"G_GINT64_FORMAT, ns_name, conscience->ns_info.chunk_size);
-
 	/* Serialization optimizations */
 	str = g_hash_table_lookup(params, KEY_SERIALIZE_SRVINFO_TAGS);
 	if (NULL != str)
@@ -1533,45 +1524,20 @@ error:
 static gint
 plugin_reload(GHashTable * params, GError ** err)
 {
-	(void) err;
-	gchar *str = NULL;
-	gchar **tmp = NULL;
-
-	INFO("Reloading conscience configuration");
-	/* CHUNK SIZE */
-	if (!(str = g_hash_table_lookup(params, KEY_CHUNK_SIZE))) {
-		GSETERROR(err, "[NS=%s] Missing key '%s' (chunk size in bytes)",
-				conscience->ns_info.name, KEY_CHUNK_SIZE);
-		goto error;
-	}
-	conscience->ns_info.chunk_size = g_ascii_strtoll(str, NULL, 10);
-	NOTICE("[NS=%s] Chunk size set to %"G_GINT64_FORMAT, conscience->ns_info.name, conscience->ns_info.chunk_size);
-
 	g_rec_mutex_lock(&conscience_nsinfo_mutex);
 
-	/* storage conf reload */
 	g_hash_table_destroy(conscience->ns_info.storage_policy);
 	g_hash_table_destroy(conscience->ns_info.data_security);
 	*err = module_init_storage_conf(conscience,
 			g_hash_table_lookup(params, KEY_STG_CONF));
-	if( NULL != *err ) {
-		g_prefix_error(err, "[NS=%s] storage conf init failed", conscience->ns_info.name);
-		goto error;
+	if (NULL != *err) {
+		g_prefix_error(err, "[NS=%s] storage conf init failed: ",
+				conscience->ns_info.name);
 	}
 
 	g_rec_mutex_unlock(&conscience_nsinfo_mutex);
 
-	if(tmp)
-		g_strfreev(tmp);
-
-	return 1;
-
-error:
-	if(tmp)
-		g_strfreev(tmp);
-
-	return -1;
-
+	return (*err == NULL) ? 1 : -1;
 }
 
 static gint

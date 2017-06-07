@@ -27,7 +27,6 @@ _init_ns (struct namespace_info_s *ni)
 	gchar *s = g_strdup_printf(
 			"{"
 				"\"ns\":\"%s\","
-				"\"chunksize\":%i,"
 				"\"storage_policy\":{"
 					"\"rain32\":\"5RAWX:RAIN32\","
 					"\"dupli3\":\"3RAWX:DUPLI3\","
@@ -49,7 +48,7 @@ _init_ns (struct namespace_info_s *ni)
 					"\"3RAWX3ZONES\":\"1,rawx-USA,rawx;1,rawx-EUROPE,rawx;1,rawx-ASIA,rawx\","
 					"\"2RAWX2ZONES\":\"1,rawx-USA,rawx-EUROPE;1,rawx-ASIA\""
 				"},"
-			"}", "NS", 1024);
+			"}", "NS");
 
 	memset(ni, 0, sizeof(struct namespace_info_s));
 	namespace_info_reset(ni);

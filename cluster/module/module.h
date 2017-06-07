@@ -42,9 +42,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define STG_CONF_STR_MAX_LENGTH			50
 
 # define KEY_NAMESPACE "namespace"
-# define KEY_CHUNK_SIZE "chunk_size"
 # define KEY_ALERT_LIMIT "alert_frequency_limit"
-# define KEY_META0 "meta0"
 # define KEY_SCORE_TIMEOUT "score_timeout"
 # define KEY_SCORE_EXPR "score_expr"
 # define KEY_STG_CONF "storage_conf"
