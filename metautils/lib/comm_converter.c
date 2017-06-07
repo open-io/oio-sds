@@ -633,7 +633,6 @@ namespace_info_ASN2API(const NamespaceInfo_t *asn, namespace_info_t *api)
 
 	asn_INTEGER_to_int64(&(asn->chunkSize), &(api->chunk_size));
 
-	api->options = list_conversion(&(asn->options));
 	api->storage_policy = list_conversion(&(asn->storagePolicy));
 	api->data_security = list_conversion(&(asn->dataSecurity));
 	api->service_pools = list_conversion(&(asn->servicePools));
@@ -686,10 +685,6 @@ namespace_info_API2ASN(const namespace_info_t * api, NamespaceInfo_t * asn)
 	OCTET_STRING_fromBuf(&(asn->name), api->name, strlen(api->name));
 	asn_int64_to_INTEGER(&(asn->chunkSize), api->chunk_size);
 
-	if (!hashtable_conversion(api->options, &(asn->options),
-							  key_value_pairs_convert_from_map))
-		return FALSE;
-
 	if (!hashtable_conversion(api->storage_policy, &(asn->storagePolicy),
 							  key_value_pairs_convert_from_map))
 		return FALSE;
@@ -710,7 +705,6 @@ namespace_info_cleanASN(NamespaceInfo_t * asn, gboolean only_content)
 {
 	if (!asn)
 		return;
-	asn->options.list.free = free_Parameter;
 	asn->storagePolicy.list.free = free_Parameter;
 	asn->dataSecurity.list.free = free_Parameter;
 	if (only_content)
