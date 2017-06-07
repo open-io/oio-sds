@@ -63,6 +63,7 @@ test_service_pool(void)
 	struct namespace_info_s ni;
 	_init_ns(&ni);
 	g_assert_cmpuint(g_hash_table_size(ni.service_pools), ==, 5);
+	namespace_info_clear(&ni);
 }
 
 #if 0
