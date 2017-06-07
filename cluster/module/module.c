@@ -32,6 +32,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <glib.h>
 
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/common_variables.h>
 
 #include <gridd/main/plugin.h>
 #include <gridd/main/message_handler.h>
@@ -1597,7 +1598,7 @@ plugin_init(GHashTable * params, GError ** err)
 
 	/* storage conf initialization */
 	*err = module_init_storage_conf(conscience,
-			namespace_storage_policy(&conscience->ns_info, ns_name),
+			oio_var_get_string(oio_ns_storage_policy),
 			g_hash_table_lookup(params, KEY_STG_CONF));
 	if( NULL != *err ) {
 		g_prefix_error(err, "[NS=%s] storage conf init failed", ns_name);
@@ -1692,7 +1693,8 @@ plugin_reload(GHashTable * params, GError ** err)
 	/* storage conf reload */
 	g_hash_table_destroy(conscience->ns_info.storage_policy);
 	g_hash_table_destroy(conscience->ns_info.data_security);
-	*err = module_init_storage_conf(conscience, namespace_storage_policy(&conscience->ns_info, conscience->ns_info.name),
+	*err = module_init_storage_conf(conscience,
+			oio_var_get_string(oio_ns_storage_policy),
 			g_hash_table_lookup(params, KEY_STG_CONF));
 	if( NULL != *err ) {
 		g_prefix_error(err, "[NS=%s] storage conf init failed", conscience->ns_info.name);

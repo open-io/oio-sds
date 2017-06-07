@@ -73,48 +73,6 @@ print_formated_namespace(namespace_info_t * ns)
 	print_formatted_hashtable(ns->storage_policy, "Storage Policy");
 	print_formatted_hashtable(ns->data_security, "Data Security");
 	print_formatted_hashtable(ns->service_pools, "Service Pool");
-
-	GError *err = NULL;
-	GSList *types = NULL;
-	if (NULL != (err = conscience_get_types (ns->name, &types)))
-		g_clear_error (&err);
-
-	/* dump the directory load-balancing configuration */
-	gchar *cfg = gridcluster_get_service_update_policy(ns);
-	if (!cfg) {
-		g_printerr("Invalid NSINFO\n");
-	} else {
-		struct service_update_policies_s *pol = service_update_policies_create();
-		err = service_update_reconfigure(pol, cfg);
-		g_free(cfg); cfg=NULL;
-
-		if (err) {
-			g_printerr("Invalid namespace configuration : (%d) %s\n",
-					err->code, err->message);
-			service_update_policies_destroy(pol);
-			g_clear_error(&err);
-			return;
-		} else {
-			char *tmp = NULL;
-			tmp = service_update_policies_dump(pol);
-			g_print("%20s : %s\n", "LB(srv)", tmp);
-			g_free(tmp);
-
-			for (GSList *l=types; l ;l=l->next) {
-				const char *srvtype = l->data;
-				guint count = service_howmany_replicas(pol, srvtype);
-				guint dist = service_howmany_distance(pol, srvtype);
-				g_print("%20s : %s -> %s|%u|%u\n", "", srvtype,
-						service_update_policy_to_string(
-							service_howto_update (pol, srvtype)),
-						count ? count : 1, dist ? dist : 1);
-			}
-		}
-		service_update_policies_destroy(pol);
-	}
-
-	g_slist_free_full (types, g_free);
-	g_print("\n");
 }
 
 static void

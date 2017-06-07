@@ -85,16 +85,6 @@ _mode_readonly(guint32 flags)
 	return M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN|_mode_masterslave(flags);
 }
 
-static gchar*
-m2b_storage_policy(struct meta2_backend_s *m2b)
-{
-	gchar *stgpol = NULL;
-	g_mutex_lock (&m2b->nsinfo_lock);
-	stgpol = namespace_storage_policy(m2b->nsinfo, NULL);
-	g_mutex_unlock (&m2b->nsinfo_lock);
-	return stgpol;
-}
-
 static gint64
 _maxvers(struct sqlx_sqlite3_s *sq3)
 {
@@ -108,10 +98,10 @@ _retention_delay(struct sqlx_sqlite3_s *sq3)
 }
 
 static gchar*
-_stgpol(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
+_stgpol(struct sqlx_sqlite3_s *sq3)
 {
 	gchar *stgpol = sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY);
-	return stgpol? stgpol : m2b_storage_policy(m2b);
+	return stgpol ?: oio_var_get_string(oio_ns_storage_policy);
 }
 
 /* Backend ------------------------------------------------------------------ */
@@ -1321,7 +1311,7 @@ _meta2_backend_force_prepare_data_unlocked(struct meta2_backend_s *m2b,
 	pdata->max_versions = _maxvers(sq3);
 	pdata->quota = m2db_get_quota(sq3, meta2_container_max_size);
 	pdata->size = m2db_get_size(sq3);
-	gchar *stgpol = _stgpol(sq3, m2b);
+	gchar *stgpol = _stgpol(sq3);
 	g_strlcpy(pdata->storage_policy, stgpol, LIMIT_LENGTH_STGPOLICY);
 	g_free(stgpol);
 
@@ -1480,14 +1470,13 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 				err = m2db_get_storage_policy(sq3, url, nsinfo, append,
 						&policy);
 			if (err || !policy) {
-				gchar *def = namespace_storage_policy(nsinfo,
-						oio_url_get(url, OIOURL_NS));
-				if (NULL != def) {
+				gchar *def = oio_var_get_string(oio_ns_storage_policy);
+				if (oio_str_is_set(def)) {
 					if (!(policy = storage_policy_init(nsinfo, def)))
 						err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
 								"Invalid policy [%s]", def);
-					g_free(def);
 				}
+				g_free0(def);
 			}
 		} else {
 			if (!polname)
@@ -1542,13 +1531,13 @@ _load_storage_policy(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			/* check pol from container / ns */
 			err = m2db_get_storage_policy(sq3, url, nsinfo, FALSE, pol);
 			if (err || !*pol) {
-				gchar *def = namespace_storage_policy(nsinfo, oio_url_get(url, OIOURL_NS));
-				if (NULL != def) {
+				gchar *def = oio_var_get_string(oio_ns_storage_policy);
+				if (oio_str_is_set(def)) {
 					if (!(*pol = storage_policy_init(nsinfo, def)))
 						err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
 								"Invalid policy [%s]", def);
-					g_free(def);
 				}
+				g_free0(def);
 			}
 		}
 		m2b_close(sq3);

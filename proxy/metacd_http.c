@@ -399,11 +399,10 @@ _reload_srvtype(const char *type, GSList *list)
 static void
 _reload_lb_service_types(
 		struct oio_lb_world_s *lbw, struct oio_lb_s *lb_,
-		struct namespace_info_s *nsi,
 		gchar **tabtypes, GPtrArray *tabsrv, GPtrArray *taberr)
 {
 	struct service_update_policies_s *pols = service_update_policies_create();
-	gchar *pols_cfg = gridcluster_get_service_update_policy(nsi);
+	gchar *pols_cfg = oio_var_get_string(oio_ns_service_update_policy);
 	service_update_reconfigure(pols, pols_cfg);
 	g_free(pols_cfg);
 
@@ -480,7 +479,7 @@ lb_cache_reload (void)
 	if (!any_loading_error)
 		oio_lb_world__increment_generation(lb_world);
 	oio_lb_world__reload_pools(lb_world, lb, nsi);
-	_reload_lb_service_types(lb_world, lb, nsi, tabtypes, tabsrv, taberr);
+	_reload_lb_service_types(lb_world, lb, tabtypes, tabsrv, taberr);
 	oio_lb_world__reload_storage_policies(lb_world, lb, nsi);
 	if (!any_loading_error)
 		oio_lb_world__purge_old_generations(lb_world);

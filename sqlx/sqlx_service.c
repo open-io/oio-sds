@@ -1047,7 +1047,7 @@ _reload_lb_service_types(struct oio_lb_world_s *lbw, struct oio_lb_s *lb,
 		gchar **srvtypes, GPtrArray *tabsrv, GPtrArray *taberr)
 {
 	struct service_update_policies_s *pols = service_update_policies_create();
-	gchar *pols_cfg = gridcluster_get_service_update_policy(SRV.nsinfo);
+	gchar *pols_cfg = oio_var_get_string(oio_ns_service_update_policy);
 	service_update_reconfigure(pols, pols_cfg);
 	g_free(pols_cfg);
 
