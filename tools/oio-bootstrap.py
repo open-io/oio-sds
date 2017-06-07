@@ -418,24 +418,8 @@ param_chunk_size=${CHUNK_SIZE}
 param_hub.me=tcp://${IP}:${PORT_HUB}
 param_hub.group=${CS_ALL_HUB}
 
-param_option.events-max-pending=10000
-param_option.meta2.events-max-pending=1000
-param_option.sqlx.events-max-pending=1000
-param_option.meta1.events-max-pending=100
-param_option.meta2.events-buffer-delay=5
-param_option.state=${STATE}
-param_option.worm=${WORMED}
-
-param_option.service_update_policy=meta2=KEEP|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|;rdir=KEEP|1|1|user_is_a_service=rawx
-
-param_option.meta2_max_versions=${VERSIONING}
-param_option.meta2_keep_deleted_delay=86400
-param_option.compression=on
-param_option.container_max_size=50000000
-param_option.flat_hash_offset=0
-param_option.flat_hash_size=0
-param_option.flat_bitlength=17
 param_option.storage_policy=${STGPOL}
+param_option.service_update_policy=meta2=KEEP|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|;rdir=KEEP|1|1|user_is_a_service=rawx
 
 # Storage policies definitions
 param_storage_conf=${CFGDIR}/${NS}-policies.conf

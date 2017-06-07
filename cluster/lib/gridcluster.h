@@ -42,8 +42,6 @@ GError* register_namespace_service (const struct service_info_s *si);
 
 /* -------------------------------------------------------------------------- */
 
-gint64 namespace_chunk_size(const namespace_info_t* ns_info, const char *ns_name);
-
 gchar* namespace_storage_policy(const namespace_info_t* ns_info, const char *ns_name);
 
 gboolean namespace_is_storage_policy_valid(const namespace_info_t* ns_info, const gchar *storage_policy);

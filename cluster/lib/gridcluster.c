@@ -218,17 +218,6 @@ metautils_srvinfo_ensure_tags (struct service_info_s *si)
 
 /* -------------------------------------------------------------------------- */
 
-static gint64
-_gba_to_int64(GByteArray *gba, gboolean def)
-{
-	if (!gba)
-		return def;
-	gchar *str = g_alloca(gba->len + 1);
-	memset(str, 0, gba->len + 1);
-	memcpy(str, gba->data, gba->len);
-	return g_ascii_strtoll(str, NULL, 10);
-}
-
 static GByteArray *
 namespace_param_gba(const namespace_info_t* ns_info, const gchar *ns_name,
 		const gchar *param_name)
@@ -250,14 +239,6 @@ gridcluster_get_nsinfo_strvalue(struct namespace_info_s *nsinfo,
 		return g_strdup(def);
 
 	return g_strndup((gchar*)value->data, value->len);
-}
-
-gint64
-namespace_chunk_size(const namespace_info_t* ns_info, const char *ns_name)
-{
-	GByteArray *val = namespace_param_gba(ns_info, ns_name,
-			NS_CHUNK_SIZE_NAME);
-	return _gba_to_int64(val, ns_info->chunk_size);
 }
 
 gchar *
