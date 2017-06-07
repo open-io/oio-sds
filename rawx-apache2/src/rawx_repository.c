@@ -150,19 +150,6 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 
 	dav_rawx_server_conf *conf = request_get_server_config(r);
 
-	/* Check if client allowed to work with us */
-	if (conf->enabled_acl) {
-#if MODULE_MAGIC_COOKIE == 0x41503234UL /* "AP24" */
-		if (!authorized_personal_only(r->connection->client_ip, conf->rawx_conf->acl))
-#else
-		if (!authorized_personal_only(r->connection->remote_ip, conf->rawx_conf->acl))
-#endif
-		{
-			return server_create_and_stat_error(conf, r->pool,
-					HTTP_UNAUTHORIZED, 0, "Permission Denied (APO)");
-		}
-	}
-
 	/* Create private resource context descriptor */
 	dav_resource_private ctx = {0};
 	ctx.pool = r->pool;
@@ -237,7 +224,6 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 		if (resource->exists)
 			return server_create_and_stat_error(request_get_server_config(r), r->pool,
 				HTTP_CONFLICT, 0, "Resource busy or already exists");
-		request_parse_query(r, resource);
 	}
 
 	*result_resource = resource;
@@ -483,9 +469,9 @@ dav_rawx_set_headers(request_rec *r, const dav_resource *resource)
 
 	/* compute metadata_compress if compressed content */
 	if (resource->info->compression) {
-		char *buf = apr_pstrcat(r->pool, "compression=on;compression_algorithm=", resource->info->compress_algo,
-				";compression_blocksize=", apr_psprintf(r->pool, "%d", resource->info->cp_chunk.block_size), ";", NULL);
-		apr_table_setn(r->headers_out, apr_pstrdup(r->pool, "metadatacompress"), buf);
+		apr_table_setn(r->headers_out,
+				apr_pstrdup(r->pool, "compression"),
+				apr_pstrdup(r->pool, "on"));
 	}
 
 	return NULL;

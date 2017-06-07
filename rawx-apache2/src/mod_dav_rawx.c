@@ -34,7 +34,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <core/oio_sds.h>
 #include <core/oiovar.h>
 #include <metautils/lib/metautils.h>
-#include <cluster/lib/gridcluster.h>
 #include <rawx-lib/src/rawx.h>
 #include <rawx-apache2/src/rawx_variables.h>
 
@@ -56,9 +55,6 @@ _cleanup_master(dav_rawx_server_conf *conf)
 	server_master_stat_fini(conf, conf->pool);
 }
 
-/**
- * Invoked whatever the context
- */
 static apr_status_t
 _cleanup_to_register(void *udata)
 {
@@ -73,14 +69,9 @@ _cleanup_to_register(void *udata)
 static unsigned int i = 0;
 
 static void *
-dav_rawx_create_server_config(apr_pool_t *p, server_rec *s)
+dav_rawx_create_server_config(apr_pool_t *p, server_rec *s UNUSED)
 {
-	dav_rawx_server_conf *conf = NULL;
-
-	(void) s;
-	DAV_XDEBUG_POOL(p, 0, "%s()", __FUNCTION__);
-
-	conf = apr_pcalloc(p, sizeof(dav_rawx_server_conf));
+	dav_rawx_server_conf *conf = apr_pcalloc(p, sizeof(dav_rawx_server_conf));
 	conf->pool = p;
 	conf->cleanup = NULL;
 	conf->hash_depth = 1;
@@ -88,23 +79,15 @@ dav_rawx_create_server_config(apr_pool_t *p, server_rec *s)
 	conf->fsync_on_close = FSYNC_ON_CHUNK_DIR;
 	conf->fallocate = 1;
 	conf->checksum_mode = CHECKSUM_ALWAYS;
-
 	return conf;
 }
 
 static void *
-dav_rawx_merge_server_config(apr_pool_t *p, void *base, void *overrides)
+dav_rawx_merge_server_config(apr_pool_t *p, void *base UNUSED, void *overrides)
 {
-	dav_rawx_server_conf *child;
-	dav_rawx_server_conf *newconf;
-
-	DAV_XDEBUG_POOL(p, 0, "%s()", __FUNCTION__);
-	(void) base;
-	child = overrides;
-
-	newconf = apr_pcalloc(p, sizeof(*newconf));
+	dav_rawx_server_conf *child = overrides;
+	dav_rawx_server_conf *newconf = apr_pcalloc(p, sizeof(*newconf));
 	newconf->pool = p;
-	newconf->enabled_acl = child->enabled_acl;
 	newconf->enabled_compression = child->enabled_compression;
 	newconf->cleanup = NULL;
 	newconf->hash_depth = child->hash_depth;
@@ -114,84 +97,50 @@ dav_rawx_merge_server_config(apr_pool_t *p, void *base, void *overrides)
 	newconf->checksum_mode = child->checksum_mode;
 	memcpy(newconf->docroot, child->docroot, sizeof(newconf->docroot));
 	memcpy(newconf->ns_name, child->ns_name, sizeof(newconf->ns_name));
-
-	DAV_DEBUG_POOL(p, 0, "Configuration merged!");
 	return newconf;
 }
 
 static const char *
-dav_rawx_cmd_gridconfig_hash_width(cmd_parms *cmd, void *config, const char *arg1)
+dav_rawx_cmd_gridconfig_hash_width(cmd_parms *cmd, void *config UNUSED, const char *arg1)
 {
-	dav_rawx_server_conf *conf;
-
-	(void) config;
-	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
-
-	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
+	dav_rawx_server_conf *conf =
+		ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
 	conf->hash_width = atoi(arg1);
-
-	DAV_DEBUG_POOL(cmd->pool, 0, "hash_width=[%d]", conf->hash_width);
 	return NULL;
 }
 
 static const char *
-dav_rawx_cmd_gridconfig_hash_depth(cmd_parms *cmd, void *config, const char *arg1)
+dav_rawx_cmd_gridconfig_hash_depth(cmd_parms *cmd, void *config UNUSED, const char *arg1)
 {
-	dav_rawx_server_conf *conf;
-
-	(void) config;
-	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
-
-	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
+	dav_rawx_server_conf *conf =
+		ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
 	conf->hash_depth = atoi(arg1);
-
-	DAV_DEBUG_POOL(cmd->pool, 0, "hash_depth=[%d]", conf->hash_depth);
 	return NULL;
 }
 
 static const char *
-dav_rawx_cmd_gridconfig_docroot(cmd_parms *cmd, void *config, const char *arg1)
+dav_rawx_cmd_gridconfig_docroot(cmd_parms *cmd, void *config UNUSED, const char *arg1)
 {
-	apr_finfo_t finfo;
-	dav_rawx_server_conf *conf;
-
-	(void) config;
-
 	/* Check the directory exists */
-	do {
-		apr_status_t status = apr_stat(&(finfo), arg1, APR_FINFO_NORM, cmd->pool);
-		if (status != APR_SUCCESS) {
-			DAV_DEBUG_POOL(cmd->temp_pool, 0,
-					"Invalid docroot for GridStorage chunks: %s", arg1);
-			return apr_pstrcat(cmd->temp_pool,
-					"Invalid docroot for GridStorage chunks: ", arg1, NULL);
-		}
-		if (finfo.filetype != APR_DIR) {
-			DAV_DEBUG_POOL(cmd->temp_pool, 0,
-					"Docroot for GridStorage chunks must be a directory: %s", arg1);
-			return apr_pstrcat(cmd->temp_pool,
-					"Docroot for GridStorage chunks must be a directory: ", arg1, NULL);
-		}
-	} while (0);
-
-	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
-	memset(conf->docroot, 0x00, sizeof(conf->docroot));
-	apr_cpystrn(conf->docroot, arg1, sizeof(conf->docroot)-1);
-
-	DAV_DEBUG_POOL(cmd->pool, 0, "DOCROOT=[%s]", conf->docroot);
-
-	return NULL;
-}
-
-static apr_status_t
-_cleanup (void *p)
-{
-	rawx_conf_t *conf = p;
-	if (NULL != conf->ni) {
-		namespace_info_free (conf->ni);
-		conf->ni = NULL;
+	apr_finfo_t finfo;
+	apr_status_t status = apr_stat(&(finfo), arg1, APR_FINFO_NORM, cmd->pool);
+	if (status != APR_SUCCESS) {
+		DAV_DEBUG_POOL(cmd->temp_pool, 0,
+				"Invalid docroot for GridStorage chunks: %s", arg1);
+		return apr_pstrcat(cmd->temp_pool,
+				"Invalid docroot for GridStorage chunks: ", arg1, NULL);
 	}
-	return APR_SUCCESS;
+	if (finfo.filetype != APR_DIR) {
+		DAV_DEBUG_POOL(cmd->temp_pool, 0,
+				"Docroot for GridStorage chunks must be a directory: %s", arg1);
+		return apr_pstrcat(cmd->temp_pool,
+				"Docroot for GridStorage chunks must be a directory: ", arg1, NULL);
+	}
+
+	dav_rawx_server_conf *conf =
+		ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
+	strncpy(conf->docroot, arg1, sizeof(conf->docroot));
+	return NULL;
 }
 
 static const char *
@@ -199,41 +148,15 @@ dav_rawx_cmd_gridconfig_namespace(cmd_parms *cmd, void *config UNUSED, const cha
 {
 	dav_rawx_server_conf *conf =
 		ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
-
 	strncpy(conf->ns_name, arg1, sizeof(conf->ns_name));
-	DAV_DEBUG_POOL(cmd->pool, 0, "NS=[%s]", conf->ns_name);
-
-	/* Prepare COMPRESSION / ACL CONF when we get ns name */
-	namespace_info_t* ns_info;
-	GError *local_error = conscience_get_namespace(conf->ns_name, &ns_info);
-	if (!ns_info) {
-		DAV_DEBUG_POOL(cmd->temp_pool, 0,
-				"Failed to get namespace info from ns [%s]", conf->ns_name);
-		return apr_pstrcat(cmd->temp_pool, "Failed to get namespace info from ns: ",
-				conf->ns_name, NULL);
-	}
-
-	conf->rawx_conf = apr_palloc(cmd->pool, sizeof(rawx_conf_t));
-	apr_pool_cleanup_register (cmd->pool, conf->rawx_conf, _cleanup, _cleanup);
-
-	conf->rawx_conf->ni = ns_info;
-	conf->rawx_conf->acl = _get_acl(cmd->pool, ns_info);
-	conf->rawx_conf->last_update = oio_ext_monotonic_seconds();
-
-	if(local_error)
-		g_clear_error(&local_error);
 	return NULL;
 }
 
 static const char *
-dav_rawx_cmd_gridconfig_fsync(cmd_parms *cmd, void *config, const char *arg1)
+dav_rawx_cmd_gridconfig_fsync(cmd_parms *cmd, void *config UNUSED, const char *arg1)
 {
-	dav_rawx_server_conf *conf;
-	(void) config;
-
-	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
-
-	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
+	dav_rawx_server_conf *conf =
+		ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
 	if (oio_str_parse_bool(arg1, FALSE))
 		conf->fsync_on_close |= FSYNC_ON_CHUNK;
 	else
@@ -268,21 +191,15 @@ dav_rawx_cmd_gridconfig_dirrun(cmd_parms *cmd, void *config UNUSED, const char *
 {
 	dav_rawx_server_conf *conf =
 		ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
-
 	apr_snprintf(conf->shm.path, sizeof(conf->shm.path),
 		"%s/httpd-shm.%d", arg1, getpid());
-
-	DAV_DEBUG_POOL(cmd->pool, 0, "mutex_key=[%s]", conf->shm.path);
-	DAV_DEBUG_POOL(cmd->pool, 0, "shm_key=[%s]", conf->shm.path);
 	return NULL;
 }
 
 static const char *
-dav_rawx_cmd_gridconfig_acl(cmd_parms *cmd, void *config UNUSED, const char *arg1)
+dav_rawx_cmd_gridconfig_acl(cmd_parms *cmd, void *config UNUSED, const char *arg1 UNUSED)
 {
-	dav_rawx_server_conf *conf =
-		ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
-	conf->enabled_acl = oio_str_parse_bool(arg1, FALSE);
+	DAV_ERROR_POOL(cmd->pool, 0, "IGNORED OPTION: %s", "grid_acl");
 	return NULL;
 }
 
@@ -309,14 +226,7 @@ dav_rawx_cmd_gridconfig_compression(cmd_parms *cmd, void *config UNUSED, const c
 {
 	dav_rawx_server_conf *conf =
 		ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
-	/* A string not recognized as TRUE is an explicit FALSE */
-	if (!arg1 || !oio_str_parse_bool(arg1, TRUE)) {
-		conf->enabled_compression = FALSE;
-		conf->compression_algo[0] = '\0';
-	} else {
-		conf->enabled_compression = TRUE;
-		strncpy(conf->compression_algo, arg1, sizeof(conf->compression_algo));
-	}
+	conf->enabled_compression = oio_str_parse_bool(arg1, FALSE);
 	return NULL;
 }
 
@@ -423,7 +333,7 @@ _create_shm_if_needed(char *shm_path, server_rec *server, apr_pool_t *plog)
 }
 
 static int
-rawx_hook_post_config(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp,
+rawx_hook_post_config(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp UNUSED,
 		server_rec *server)
 {
 	apr_status_t status;
@@ -432,9 +342,6 @@ rawx_hook_post_config(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp,
 	dav_rawx_server_conf *conf;
 	GError *gerr;
 	int volume_validated = 0;
-
-	(void) ptemp;
-	DAV_XDEBUG_POOL(plog, 0, "%s(%lx)", __FUNCTION__, (long)server);
 
 	if (__rawx_is_first_call(server)) {
 		DAV_DEBUG_POOL(plog, 0, "First call detected");
@@ -535,8 +442,8 @@ static const command_rec dav_rawx_cmds[] =
     AP_INIT_TAKE1("grid_fsync",       dav_rawx_cmd_gridconfig_fsync,       NULL, RSRC_CONF, "do fsync on file close"),
     AP_INIT_TAKE1("grid_fsync_dir",   dav_rawx_cmd_gridconfig_fsync_dir,   NULL, RSRC_CONF, "do fsync on chunk direcory after renaming .pending"),
     AP_INIT_TAKE1("grid_fallocate",   dav_rawx_cmd_gridconfig_fallocate,   NULL, RSRC_CONF, "call fallocate when receiving a chunk"),
-    AP_INIT_TAKE1("grid_acl",         dav_rawx_cmd_gridconfig_acl,         NULL, RSRC_CONF, "enabled acl"),
-    AP_INIT_TAKE1("grid_compression", dav_rawx_cmd_gridconfig_compression, NULL, RSRC_CONF, "enable compression ('zlib' or 'lzo')'"),
+    AP_INIT_TAKE1("grid_acl",         dav_rawx_cmd_gridconfig_acl,         NULL, RSRC_CONF, "enable acl (ignored)"),
+    AP_INIT_TAKE1("grid_compression", dav_rawx_cmd_gridconfig_compression, NULL, RSRC_CONF, "enable compression ('yes', 'no')'"),
     AP_INIT_TAKE1("grid_checksum",    dav_rawx_cmd_gridconfig_checksum,    NULL, RSRC_CONF, "enable checksuming the body of PUT ('yes', 'no', 'smart')'"),
     AP_INIT_TAKE1(NULL,  NULL,  NULL, RSRC_CONF, NULL)
 };

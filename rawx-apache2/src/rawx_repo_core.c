@@ -425,44 +425,6 @@ resource_stat_chunk(dav_resource *resource, int flags)
 }
 
 void
-request_parse_query(request_rec *r, dav_resource *resource)
-{
-	if (!r->parsed_uri.query)
-		return;
-
-	char *query = NULL;
-	query = apr_pstrdup(r->pool, r->parsed_uri.query);
-
-	/* Expected comp=true&algo=XXXX&bs=XXXX */
-	char *k = NULL;
-	char *v = NULL;
-	char *last = NULL;
-
-	k = apr_strtok(query, "=&", &last);
-	v = apr_strtok(NULL, "=&", &last);
-
-	if (!k || !v)
-		goto end;
-
-	do {
-		if (!apr_strnatcasecmp(k, "comp"))
-			resource->info->forced_cp = apr_pstrdup(r->pool, v);
-		if (!apr_strnatcasecmp(k, "algo"))
-			resource->info->forced_cp_algo = apr_pstrdup(r->pool, v);
-		if (!apr_strnatcasecmp(k, "bs"))
-			resource->info->forced_cp_bs = apr_pstrdup(r->pool, v);
-	} while ((k = apr_strtok(NULL, "=&", &last)) &&
-			(v = apr_strtok(NULL, "=&", &last)));
-
-end:
-	DAV_DEBUG_REQ(r, 0, "forced_cp=%s, forced_cp_algo=%s, forced_cp_bs=%s",
-			resource->info->forced_cp, resource->info->forced_cp_algo,
-			resource->info->forced_cp_bs);
-	if (!resource->info->forced_cp)
-		resource->info->forced_cp = apr_pstrdup(r->pool, "false");
-}
-
-void
 request_fill_headers(request_rec *r, struct chunk_textinfo_s *c)
 {
 	__set_header(r, "container-id",  c->container_id);
@@ -750,10 +712,7 @@ rawx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 	apr_pool_t *p = resource->info->pool;
 	dav_resource_private *ctx = resource->info;
 	dav_rawx_server_conf *conf = resource_get_server_config(resource);
-	char * metadata_compress = NULL;
 	int retryable = 1;
-
-	int should_compress = 0;
 
 	dav_stream *ds = apr_pcalloc(p, sizeof(*ds));
 	ds->fsync_on_close = conf->fsync_on_close;
@@ -813,56 +772,17 @@ retry:
 		return err;
 	}
 
-	if (conf->compression_algo && *conf->compression_algo) {
-		should_compress = TRUE;
-		ctx->forced_cp_algo = apr_pstrdup(p, conf->compression_algo);
-	} else if (ctx->forced_cp) {
-		should_compress = !g_ascii_strncasecmp(ctx->forced_cp, "true", 4);
+	/* Trigger the compression of the chunk */
+	if (conf->enabled_compression) {
+		DAV_ERROR_REQ(resource->info->request, 0, "compression ignored on [%s]",
+				ds->pathname);
 	}
+	ds->compression = FALSE;
+	ds->buffer_size = DEFAULT_BLOCK_SIZE;
+	ds->buffer = apr_pcalloc(p, ds->buffer_size);
+	ds->buffer_offset = 0;
 
-	if (!should_compress || !conf->enabled_compression) {
-		ds->buffer_size = DEFAULT_BLOCK_SIZE;
-		ds->buffer = apr_pcalloc(p, ds->buffer_size);
-		ds->buffer_offset = 0;
-	} else {
-		ds->compression = TRUE;
-		if (ctx->forced_cp_bs)
-			ds->buffer_size = strtol(ctx->forced_cp_bs, NULL, 10);
-		else
-			ds->buffer_size = DEFAULT_BLOCK_SIZE;
-
-		if (!ctx->forced_cp_algo)
-			ctx->forced_cp_algo = DEFAULT_COMPRESSION_ALGO;
-
-		metadata_compress = apr_pstrcat(p,
-				NS_COMPRESSION_OPTION, "=", NS_COMPRESSION_ON, ";",
-				NS_COMPRESS_ALGO_OPTION,"=", ctx->forced_cp_algo, ";",
-				NS_COMPRESS_BLOCKSIZE_OPTION, "=", ctx->forced_cp_bs, NULL);
-
-		DAV_DEBUG_REQ(resource->info->request, 0 , "%s", metadata_compress);
-		init_compression_ctx(&(ds->comp_ctx), ctx->forced_cp_algo);
-
-		ds->buffer = apr_pcalloc(p, ds->buffer_size);
-		ds->buffer_offset = 0;
-
-		gulong checksum = 0;
-
-		if(!(ds->comp_ctx.checksum_initiator)(&checksum)){
-			WARN("Failed to init compression checksum");
-		}
-
-		ds->metadata_compress = apr_pstrndup(p, metadata_compress, strlen(metadata_compress));
-
-		/* writting compression header in busy file */
-		guint32 bsize32 = ds->buffer_size;
-		if(0 != ds->comp_ctx.header_writer(ds->f, bsize32, &checksum, &(ds->compressed_size))){
-			return server_create_and_stat_error(resource_get_server_config(resource), p,
-				HTTP_INTERNAL_SERVER_ERROR, 0,
-				apr_pstrcat(p, "Failed to write compression headers", NULL));
-		}
-		ds->compress_checksum = checksum;
-	}
-
+	/* Trigger the checksum on the chunk */
 	ds->md5 = NULL;
 	if (conf->checksum_mode == CHECKSUM_ALWAYS) {
 		ds->md5 = g_checksum_new (G_CHECKSUM_MD5);
