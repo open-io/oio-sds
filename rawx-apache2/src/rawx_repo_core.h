@@ -42,10 +42,6 @@ struct dav_resource_private
 	apr_pool_t *pool;
 	request_rec *request;
 
-	char *forced_cp;
-	char *forced_cp_algo;
-	char *forced_cp_bs;
-
 	struct storage_policy_s *sp;
 
 	const char *fullpath;
@@ -70,16 +66,17 @@ struct dav_stream
 	apr_pool_t *p;
 	int fsync_on_close;
 	FILE *f;
-	gboolean compression;
 	void *buffer;
 	apr_size_t buffer_size;
 	apr_size_t buffer_offset;
 	const char *pathname;
 	const char *final_pathname;
+
 	gulong compress_checksum;
 	guint32 compressed_size;
 	char *metadata_compress;
 	struct compression_ctx_s comp_ctx;
+	gboolean compression;
 
 	GChecksum *md5;
 	apr_size_t total_size;

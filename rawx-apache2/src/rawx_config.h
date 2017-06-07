@@ -32,7 +32,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <mod_dav.h>
 
 #include <rawx-lib/src/rawx.h>
-#include <rawx-lib/src/acl.h>
 
 #include "rawx_event.h"
 
@@ -116,12 +115,9 @@ struct dav_rawx_server_conf_s {
 	unsigned int hash_width;
 	unsigned int fsync_on_close;
 	unsigned int fallocate;
-	unsigned int enabled_acl;
 	unsigned int enabled_compression;
 
 	char event_agent_addr[RAWX_EVENT_ADDR_SIZE];
-
-	char compression_algo[64];
 
 	enum rawx_checksum_mode_e checksum_mode;
 
@@ -132,8 +128,6 @@ struct dav_rawx_server_conf_s {
 	} shm;
 
 	void (*cleanup)(dav_rawx_server_conf *conf);
-
-	rawx_conf_t* rawx_conf;
 };
 
 apr_status_t server_init_master_stat(dav_rawx_server_conf *conf, apr_pool_t *pool, apr_pool_t *plog);
@@ -157,13 +151,5 @@ dav_error *server_create_and_stat_error(dav_rawx_server_conf *conf, apr_pool_t *
 apr_uint64_t server_get_reqperseq(dav_rawx_server_conf *conf);
 
 apr_uint64_t server_get_reqavgtime(dav_rawx_server_conf *conf);
-
-char * _get_compression_algorithm(apr_pool_t *p, namespace_info_t *ns_info);
-
-apr_int64_t _get_compression_block_size(apr_pool_t *p, namespace_info_t *ns_info);
-
-GSList * _get_acl(apr_pool_t *p, namespace_info_t *ns_info);
-
-gboolean update_rawx_conf(apr_pool_t* p, rawx_conf_t **rawx_conf, const gchar* ns_name);
 
 #endif /*OIO_SDS__rawx_apache2__src__rawx_config_h*/

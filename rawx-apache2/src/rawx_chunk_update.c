@@ -230,14 +230,14 @@ _load_in_place_chunk_info(const dav_resource *r, const char *path, struct chunk_
 	str_replace_by_pooled_str(p, &(chunk->chunk_position));
 	str_replace_by_pooled_str(p, &(chunk->chunk_hash));
 
-	if(!get_compression_info_in_attr(path, &ge, comp_opt)){
+	if (!get_compression_info_in_attr(path, &ge, comp_opt)){
 		if(NULL != ge) {
 			e = server_create_and_stat_error(conf, p, HTTP_CONFLICT,
 				0, apr_pstrcat(p, "Failed to get chunk compression attributes: ", ge->message, NULL));
 			g_clear_error(&ge);
 		} else {
 			e = server_create_and_stat_error(conf, p, HTTP_CONFLICT,
-			                                0, "Failed to get chunk compression attributes: No error specified");
+					0, "Failed to get chunk compression attributes: No error specified");
 		}
 		return e;
 	}

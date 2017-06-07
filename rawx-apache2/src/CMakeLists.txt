@@ -10,7 +10,6 @@ include_directories(AFTER
 		${ATTR_INCLUDE_DIRS}
 		${APACHE2_INCLUDE_DIRS}
 		${APR_INCLUDE_DIRS}
-		${LZO_INCLUDE_DIRS}
 		${ZLIB_INCLUDE_DIRS}
 		${ZMQ_INCLUDE_DIRS})
 
@@ -18,7 +17,6 @@ link_directories(
 		${ATTR_LIBRARY_DIRS}
 		${APACHE2_LIBRARY_DIRS}
 		${APR_LIBRARY_DIRS}
-		${LZO_LIBRARY_DIRS}
 		${ZLIB_LIBRARY_DIRS})
 
 add_custom_command(
@@ -43,7 +41,6 @@ add_library(mod_dav_rawx MODULE
 		rawx_bucket.c
 		rawx_config.h
 		rawx_config_stats.c
-		rawx_config_utils.c
 		rawx_internals.c
 		rawx_properties.c
 		rawx_repo_core.c
@@ -59,7 +56,7 @@ set_target_properties(mod_dav_rawx PROPERTIES PREFIX "" SUFFIX .so)
 target_link_libraries(mod_dav_rawx
 		metautils rawx oioevents
 		${APR_LIBRARIES} ${GLIB2_LIBRARIES}
-		${ZLIB_LIBRARIES} ${LZO_LIBRARIES}
+		${ZLIB_LIBRARIES}
 		${ZMQ_LIBRARIES})
 
 install(TARGETS mod_dav_rawx
