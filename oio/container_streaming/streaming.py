@@ -65,7 +65,7 @@ class ContainerStreaming(object):
         map_objs = []
         start_block = 0
         for obj in sorted(objs['objects']):
-            # FIXME should also backup deleted object ?
+            # FIXME should we backup deleted object ?
             if obj['deleted']:
                 continue
             _, entry_blocks, size = self.generate_oio_tarinfo_entry(container, obj['name'])
@@ -76,6 +76,7 @@ class ContainerStreaming(object):
                 'start_block': start_block,
             }
             start_block += entry['block']
+            entry['end_block'] = start_block - 1
             map_objs.append(entry)
         return map_objs
 
@@ -116,7 +117,6 @@ class ContainerStreaming(object):
                 mem.write(NUL * (BLOCKSIZE - remainder))
                 blocks.remove(nb_blocks)
 
-        assert len(blocks) == 0, "Blocks was not all consumed"
         assert mem.tell() > 0, "No data written"
         mem.seek(0)
         return mem.read()
@@ -183,21 +183,26 @@ class ContainerStreaming(object):
             response.status_code = 416
             return response
 
-        block_to_read = block_start
+        # block_to_read = block_start
         blocks_to_read = list(xrange(block_start, block_end))
 
         response.status_code = 206
         response.headers['Content-Length'] = end - start + 1
         response.headers['Content-Range'] = 'bytes %d-%d/%d' % (start, end, length)
 
-        # FIXME: rework this part to allow several parts to be downloaded
-        for val in reversed(results):
-            if block_to_read < val['start_block']:
+        # FIXME: we should avoid linear search !
+        for val in results:
+            if blocks_to_read[0] > val['end_block']:
                 continue
-            block_to_read -= val['start_block']
-            # response.data += create_tar_file_stream(val['name'], [block_to_read])
-            response.data += self.create_tar_oio_stream(container, val['name'], [block_to_read])
-            break
+            # FIXME: should be done in same loop
+            blocks = [x for x in blocks_to_read if x <= val['end_block']]
+            # remove selected from globals list
+            blocks_to_read = [x for x in blocks_to_read if x not in blocks]
+            # shift selected blocks to object
+            blocks = [x - val['start_block'] for x in blocks]
+            response.data += self.create_tar_oio_stream(container, val['name'], blocks)
+            if len(blocks_to_read) == 0:
+                break
         return response
 
     def dispatch_request(self, req):
