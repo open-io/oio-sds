@@ -16,6 +16,7 @@ target_link_libraries(oio-tool
 	oiocore metautils
 	server hcresolve oioevents
 	sqliterepo sqlitereporemote
+	meta2v2utils
 	${GLIB2_LIBRARIES})
 
 
