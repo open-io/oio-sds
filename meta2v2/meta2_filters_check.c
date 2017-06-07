@@ -105,7 +105,6 @@ meta2_filter_check_ns_is_master(struct gridd_filter_ctx_s *ctx,
 {
 	(void) reply;
 	TRACE_FILTER();
-	struct meta2_backend_s *backend = meta2_filter_ctx_get_backend(ctx);
 
 	const char *admin = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_ADMIN_COMMAND);
 	if (oio_str_parse_bool(admin, FALSE)) {
@@ -113,17 +112,7 @@ meta2_filter_check_ns_is_master(struct gridd_filter_ctx_s *ctx,
 		return FILTER_OK;
 	}
 
-	gboolean master = TRUE;
-
-	g_mutex_lock(&backend->nsinfo_lock);
-	gchar *state = namespace_get_state(backend->nsinfo);
-	g_mutex_unlock(&backend->nsinfo_lock);
-	if (state) {
-		master = (0 != g_strcmp0(state, NS_STATE_VALUE_SLAVE));
-		g_free(state);
-	}
-
-	if (master)
+	if (oio_ns_master)
 		return FILTER_OK;
 	GRID_TRACE("NS is slave, operation failed");
 	meta2_filter_ctx_set_error(ctx, SYSERR("NS slave!"));

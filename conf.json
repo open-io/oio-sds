@@ -1,4 +1,44 @@
 {
+	"meta2": {
+		"code": "meta2_variables.c",
+		"header": "meta2_variables.h",
+		"variables": [
+			{ "type": "int64", "name": "meta2_max_versions",
+				"key": "meta2.max_versions",
+				"descr": "How many versions for .",
+				"def": 0, "min": 0, "max": "max" },
+
+			{ "type": "int64", "name": "meta2_container_max_size",
+				"key": "meta2.container.max_size",
+				"descr": "How many bytes may be stored in each container.",
+				"def": 0, "min": 0, "max": "max" },
+
+			{ "type": "epoch", "name": "meta2_retention_period",
+				"key": "meta2.retention_period",
+				"descr": "How long should deleted content be kept.",
+				"def": "7d", "min": "1s", "max": "30d" },
+
+			{ "type": "uint", "name": "meta2_batch_maxlen",
+				"key": "meta2.batch.maxlen",
+				"descr": "When listing a container, limits the number of items to that value.",
+				"def": "1k", "min": 1, "max": "100k" },
+
+			{ "type": "epoch", "name": "meta2_reload_lb_period",
+				"key": "meta2.reload.lb.period",
+				"descr": "Sets the period of the periodical reloading of the Load-balancing state, in the current meta2 service.",
+				"def": "10s", "min": "1s", "max": "1h" },
+
+			{ "type": "epoch", "name": "meta2_reload_nsinfo_period",
+				"key": "meta2.reload.nsinfo.period",
+				"descr": "Sets the period of the periodical reloading of the namespace configuration, in the current meta2 service.",
+				"def": "5s", "min": "1s", "max": "1h" },
+
+			{ "type": "bool", "name": "meta2_flag_precheck_on_generate",
+				"key": "meta2.generate.precheck",
+				"descr": "Should the meta2 check the container state (quota, etc) before generating chunks.",
+				"def": true }
+		]
+	},
 	"rawx": {
 		"code": "rawx_variables.c",
 		"header": "rawx_variables.h",
@@ -83,6 +123,10 @@
 		"code": "common_variables.c",
 		"header": "common_variables.h",
 		"variables": [
+			{ "type": "bool", "name": "oio_ns_master",
+				"key": "oio.ns.master",
+				"def": true,
+				"descr": "" },
 			{ "type": "bool", "name": "oio_ns_mode_worm",
 				"key": "oio.ns.worm",
 				"def": false,
@@ -393,41 +437,6 @@
 				"key": "sqlx.lb.refresh_period",
 				"descr": "In the current sqlx-based service, tells the period (in seconds) at which the service will refresh its load-balancing information.",
 				"def": "1", "min": 1, "max": "60s" },
-
-			{ "type": "int64", "name": "meta2_max_versions",
-				"key": "meta2.max_versions",
-				"descr": "How many versions for .",
-				"def": 0, "min": 0, "max": "max" },
-
-			{ "type": "int64", "name": "meta2_container_max_size",
-				"key": "meta2.container.max_size",
-				"descr": "How many bytes may be stored in each container.",
-				"def": 0, "min": 0, "max": "max" },
-
-			{ "type": "epoch", "name": "meta2_retention_period",
-				"key": "meta2.retention_period",
-				"descr": "How long should deleted content be kept.",
-				"def": "7d", "min": "1s", "max": "30d" },
-
-			{ "type": "uint", "name": "meta2_batch_maxlen",
-				"key": "meta2.batch.maxlen",
-				"descr": "When listing a container, limits the number of items to that value.",
-				"def": "1k", "min": 1, "max": "100k" },
-
-			{ "type": "epoch", "name": "meta2_reload_lb_period",
-				"key": "meta2.reload.lb.period",
-				"descr": "Sets the period of the periodical reloading of the Load-balancing state, in the current meta2 service.",
-				"def": "10s", "min": "1s", "max": "1h" },
-
-			{ "type": "epoch", "name": "meta2_reload_nsinfo_period",
-				"key": "meta2.reload.nsinfo.period",
-				"descr": "Sets the period of the periodical reloading of the namespace configuration, in the current meta2 service.",
-				"def": "5s", "min": "1s", "max": "1h" },
-
-			{ "type": "bool", "name": "meta2_flag_precheck_on_generate",
-				"key": "meta2.generate.precheck",
-				"descr": "Should the meta2 check the container state (quota, etc) before generating chunks.",
-				"def": true },
 
 			{ "type": "uint", "name": "server_event_batch_size",
 				"key": "server.batch.events",

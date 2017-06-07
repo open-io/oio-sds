@@ -22,8 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <errno.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/common_variables.h>
-#include <server/server_variables.h>
+#include <meta2v2/meta2_variables.h>
 
 #include <cluster/lib/gridcluster.h>
 #include <sqliterepo/sqlite_utils.h>
