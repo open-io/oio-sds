@@ -26,6 +26,7 @@ License along with this library.
 #include <curl/curl.h>
 
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/common_variables.h>
 #include <cluster/module/module.h>
 #include <core/http_internals.h>
 
@@ -218,51 +219,17 @@ metautils_srvinfo_ensure_tags (struct service_info_s *si)
 
 /* -------------------------------------------------------------------------- */
 
-static GByteArray *
-namespace_param_gba(const namespace_info_t* ns_info, const gchar *ns_name,
-		const gchar *param_name)
-{
-	return namespace_info_get_srv_param_gba(ns_info, ns_name, NULL, param_name);
-}
-
-gchar*
-gridcluster_get_nsinfo_strvalue(struct namespace_info_s *nsinfo,
-		const gchar *key, const gchar *def)
-{
-	GByteArray *value;
-
-	if (!nsinfo || !nsinfo->options)
-		return g_strdup(def);
-
-	value = g_hash_table_lookup(nsinfo->options, key);
-	if (!value)
-		return g_strdup(def);
-
-	return g_strndup((gchar*)value->data, value->len);
-}
-
-gchar *
-namespace_storage_policy(const namespace_info_t* ns_info, const char *ns_name)
-{
-	GByteArray *gba = namespace_param_gba(ns_info, ns_name,
-			NS_STORAGE_POLICY_NAME);
-	return !gba ? NULL : g_strndup((gchar*)gba->data, gba->len);
-}
-
 gchar*
 namespace_storage_policy_value(const namespace_info_t *ns_info, const gchar *wanted_policy)
 {
-	const gchar *policy_to_lookup = wanted_policy ?
-			wanted_policy : namespace_storage_policy(ns_info, ns_info->name);
+	gchar *policy_to_lookup = wanted_policy
+		?  g_strdup(wanted_policy) : oio_var_get_string(oio_ns_storage_policy);
+	STRING_STACKIFY(policy_to_lookup);
 
 	if (!ns_info || ns_info->storage_policy)
 		return NULL;
 
 	GByteArray *gba = g_hash_table_lookup(ns_info->storage_policy, policy_to_lookup);
-
-	if (!wanted_policy)
-		g_free((gpointer)policy_to_lookup);
-
 	return !gba ? NULL : g_strndup((gchar*)gba->data, gba->len);
 }
 
@@ -336,13 +303,3 @@ namespace_is_storage_policy_valid(const namespace_info_t* ns_info, const gchar *
 	return TRUE;
 }
 
-gchar *
-gridcluster_get_service_update_policy (struct namespace_info_s *nsinfo)
-{
-	const gchar *def = "meta2=KEEP|1|1|;sqlx=KEEP|1|1|";
-
-	if (!nsinfo || !nsinfo->options)
-		return g_strdup(def);
-
-	return gridcluster_get_nsinfo_strvalue (nsinfo, "service_update_policy", def);
-}

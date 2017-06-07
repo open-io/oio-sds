@@ -24,6 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/resource.h>
 
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/common_variables.h>
 #include <cluster/lib/gridcluster.h>
 #include <server/network_server.h>
 #include <server/transport_gridd.h>
@@ -104,7 +105,7 @@ static void
 _task_reload_policies(gpointer p)
 {
 	GError *err = NULL;
-	gchar *cfg = gridcluster_get_service_update_policy (PSRV(p)->nsinfo);
+	gchar *cfg = oio_var_get_string(oio_ns_service_update_policy);
 	if (!cfg) {
 		err = NEWERROR(EINVAL, "Invalid parameter");
 	} else {

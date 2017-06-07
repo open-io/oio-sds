@@ -42,19 +42,10 @@ GError* register_namespace_service (const struct service_info_s *si);
 
 /* -------------------------------------------------------------------------- */
 
-gchar* namespace_storage_policy(const namespace_info_t* ns_info, const char *ns_name);
-
 gboolean namespace_is_storage_policy_valid(const namespace_info_t* ns_info, const gchar *storage_policy);
 
 gchar* namespace_data_security_value(const namespace_info_t *ns_info, const gchar *wanted_policy);
 
 gchar* namespace_storage_policy_value(const namespace_info_t *ns_info, const gchar *wanted_policy);
-
-/* Returns the services update's configuration when the Load-Balancing
- * is performed by a servce of type srvtype for each namespace and VNS. */
-gchar* gridcluster_get_service_update_policy(struct namespace_info_s *nsinfo);
-
-gchar* gridcluster_get_nsinfo_strvalue(struct namespace_info_s *nsinfo,
-		const gchar *key, const gchar *def);
 
 #endif /*OIO_SDS__cluster__lib__gridcluster_h*/

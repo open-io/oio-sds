@@ -418,9 +418,6 @@ param_chunk_size=${CHUNK_SIZE}
 param_hub.me=tcp://${IP}:${PORT_HUB}
 param_hub.group=${CS_ALL_HUB}
 
-param_option.storage_policy=${STGPOL}
-param_option.service_update_policy=meta2=KEEP|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|;rdir=KEEP|1|1|user_is_a_service=rawx
-
 # Storage policies definitions
 param_storage_conf=${CFGDIR}/${NS}-policies.conf
 

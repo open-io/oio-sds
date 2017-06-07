@@ -128,10 +128,23 @@
 		"code": "common_variables.c",
 		"header": "common_variables.h",
 		"variables": [
+			{ "type": "string", "name": "oio_ns_service_update_policy",
+				"key": "oio.ns.service_update_policy",
+				"limit": 1024,
+				"def": "meta2=KEEP|3|1;sqlx=KEEP|1|1|;rdir=KEEP|1|1|",
+				"descr": "" },
+
+			{ "type": "string", "name": "oio_ns_storage_policy",
+				"key": "oio.ns.storage_policy",
+				"limit": 128,
+				"def": "SINGLE",
+				"descr": "" },
+
 			{ "type": "bool", "name": "oio_ns_master",
 				"key": "oio.ns.master",
 				"def": true,
 				"descr": "" },
+
 			{ "type": "bool", "name": "oio_ns_mode_worm",
 				"key": "oio.ns.worm",
 				"def": false,
