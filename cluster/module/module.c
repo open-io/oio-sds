@@ -1069,63 +1069,6 @@ module_configure_srvpool(struct conscience_s *cs, GError ** err,
 	}
 }
 
-static GHashTable*
-module_init_valuelist(GHashTable * params, GError ** err, GRegex *value_regex)
-{
-	GHashTable *valuelist= NULL;
-	GHashTableIter params_iterator;
-
-	if (value_regex == NULL) {
-		GSETERROR(err, "Invalid regex for parameters parsing.");
-	}
-	else {
-		valuelist = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
-		if (valuelist == NULL) {
-			GSETERROR(err, "Memory allocation failure");
-		}
-		else {
-			gpointer k = NULL, v = NULL;
-			GMatchInfo *match_info = NULL;
-
-			g_hash_table_iter_init(&params_iterator, params);
-
-			while (g_hash_table_iter_next(&params_iterator, &k, &v)) {
-
-				if (!g_regex_match(value_regex, (gchar *) k, G_REGEX_MATCH_NOTEMPTY, &match_info))
-					TRACE("Parameter skipped : [%s] (does not match %s)", (gchar *) k, g_regex_get_pattern(value_regex));
-				else if (g_match_info_get_match_count(match_info) != 2)
-					WARN("Ignored parameter (invalid key) : %s", (gchar *) k);
-				else {
-					gchar* str_opt = g_match_info_fetch(match_info, 1);
-					if (str_opt != NULL)
-						g_hash_table_insert(valuelist, str_opt, g_byte_array_append(g_byte_array_new(), v, strlen(v)+1));
-				}
-
-				if (match_info != NULL) {
-					g_match_info_free(match_info);
-					match_info = NULL;
-				}
-			}
-		}
-	}
-
-	return valuelist;
-}
-
-#define DEFINE_MODULE_INIT(STRUCT_NAME, KEYWORD) \
-static gboolean \
-module_init_##STRUCT_NAME(struct conscience_s *cs, GHashTable * params, GError ** err) \
-{ \
-	GRegex *param_regex = g_regex_new(#KEYWORD "\\.(.+)", G_REGEX_CASELESS, G_REGEX_MATCH_NOTEMPTY, NULL); \
-	GHashTable *valuelist = module_init_valuelist(params, err, param_regex); \
-	g_regex_unref(param_regex); \
-	cs->ns_info.STRUCT_NAME = valuelist; \
-	return valuelist != NULL; \
-}
-
-/* module_init_options */
-DEFINE_MODULE_INIT(options, option);
-
 static GError *
 fill_hashtable_with_group(GHashTable *ht, GKeyFile *conf_file, const gchar *group_name)
 {
@@ -1161,7 +1104,7 @@ fill_hashtable_with_group(GHashTable *ht, GKeyFile *conf_file, const gchar *grou
 }
 
 static GError *
-module_init_storage_conf(struct conscience_s *cs, const gchar *stg_pol_in_option, const gchar *filepath)
+module_init_storage_conf(struct conscience_s *cs, const gchar *filepath)
 {
 	GKeyFile *stg_conf_file = g_key_file_new();
 	GError *e = NULL;
@@ -1177,17 +1120,12 @@ module_init_storage_conf(struct conscience_s *cs, const gchar *stg_pol_in_option
 	}
 
 	if (!filepath || !g_key_file_load_from_file (stg_conf_file, filepath, G_KEY_FILE_NONE, &e)) {
-		if (NULL != stg_pol_in_option) {
-			GSETERROR(&e, "Cannot parse storage configuration from file [%s]", filepath);
-		} else {
-			INFO("[NS=%s] storage conf init failed -> ignored as no storage_policy was found as an option",
-					cs->ns_info.name);
-		}
+		GSETERROR(&e, "Cannot parse storage configuration from file [%s]", filepath);
 		g_key_file_free(stg_conf_file);
 		return e;
 	}
 
-	// XXX POLICIES
+	// POLICIES
 	cs->ns_info.storage_policy = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
 	e = fill_hashtable_with_group(cs->ns_info.storage_policy, stg_conf_file, NAME_GROUPNAME_STORAGE_POLICY);
 	if (NULL != e) {
@@ -1198,17 +1136,7 @@ module_init_storage_conf(struct conscience_s *cs, const gchar *stg_pol_in_option
 	g_hash_table_foreach(cs->ns_info.storage_policy,
 			(GHFunc)_check_for_keyword, (gchar*[2]){STORAGE_POLICY_NONE, "storage policy"});
 
-	/* If the storage policy set by param_option.storage_policy is not present in the storage conf file, set an error. */
-	if (stg_pol_in_option && 0 != g_ascii_strcasecmp(stg_pol_in_option,STORAGE_POLICY_NONE)) {
-		if (!g_hash_table_lookup(cs->ns_info.storage_policy, stg_pol_in_option)) {
-			GSETERROR(&e, "[NS=%s] storage conf init failed: the policy [%s] wanted as an option is not defined in [%s]",
-					cs->ns_info.name, stg_pol_in_option, filepath);
-			g_key_file_free(stg_conf_file);
-			return e;
-		}
-	}
-
-	// XXX SECURITY
+	// SECURITY
 	cs->ns_info.data_security = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
 	e = fill_hashtable_with_group(cs->ns_info.data_security, stg_conf_file, NAME_GROUPNAME_DATA_SECURITY);
 	if( NULL != e) {
@@ -1357,60 +1285,6 @@ module_init_service_conf_glob(struct conscience_s *cs, const gchar *pattern)
 
 	globfree(&globbuf);
 	return err;
-}
-
-static gboolean
-module_init_srvtype_from_cfg(struct conscience_s *cs, GHashTable * params, GError ** err)
-{
-	gpointer k = NULL, v = NULL;
-	GHashTableIter params_iterator;
-	GRegex *service_param_regex = NULL;
-	GMatchInfo *match_info = NULL;
-
-	service_param_regex = g_regex_new("service\\.([^.]+)\\.(.+)",
-			G_REGEX_CASELESS, G_REGEX_MATCH_NOTEMPTY, NULL);
-	if (!service_param_regex) {
-		GSETERROR(err, "Invalid regex for parameters parsing. "
-				"Contact the development team, or Jethro Gibbs (NCIS).");
-		return FALSE;
-	}
-
-	g_hash_table_iter_init(&params_iterator, params);
-	while (g_hash_table_iter_next(&params_iterator, &k, &v)) {
-
-		if (match_info) {
-			g_match_info_free(match_info);
-			match_info = NULL;
-		}
-		if (!g_regex_match(service_param_regex, (gchar *) k,
-				G_REGEX_MATCH_NOTEMPTY, &match_info))
-			TRACE("Parameter skipped: [%s] (does not match %s)", (gchar *) k,
-					g_regex_get_pattern(service_param_regex));
-		else if (g_match_info_get_match_count(match_info) != 3)
-			WARN("Ignored parameter (invalid key): %s", (gchar *) k);
-		else {
-			gboolean rc_local;
-			gchar *type_str, *what;
-
-			type_str = g_match_info_fetch(match_info, 1);
-			what = g_match_info_fetch(match_info, 2);
-			rc_local = module_configure_srvtype(cs, err, type_str, what, v);
-			if (type_str)
-				g_free(type_str);
-			if (what)
-				g_free(what);
-			if (!rc_local)
-				break;
-		}
-	}
-
-	if (match_info) {
-		g_match_info_free(match_info);
-		match_info = NULL;
-	}
-
-	g_regex_unref(service_param_regex);
-	return TRUE;
 }
 
 struct srvtype_init_s
@@ -1590,31 +1464,17 @@ plugin_init(GHashTable * params, GError ** err)
 		NOTICE("[NS=%s] Overall alert_frequency_limit set to [%ld] seconds", ns_name, time_default_alert_frequency);
 	}
 
-	/* OPTIONS initialization */
-	if (!module_init_options(conscience, params, err)) {
-		GSETERROR(err, "[NS=%s] options init failed", ns_name);
-		goto error;
-	}
-
 	/* storage conf initialization */
 	*err = module_init_storage_conf(conscience,
-			oio_var_get_string(oio_ns_storage_policy),
 			g_hash_table_lookup(params, KEY_STG_CONF));
 	if( NULL != *err ) {
 		g_prefix_error(err, "[NS=%s] storage conf init failed", ns_name);
 		goto error;
 	}
 
-	/*SERVICES initiation*/
+	/* SERVICES initiation */
 	if (!module_init_known_service_types(conscience, params, err)) {
 		GSETERROR(err, "[NS=%s] known service types init failed", ns_name);
-		goto error;
-	}
-
-	/* TODO: remove this!*/
-	/* service conf initialization (old style) */
-	if (!module_init_srvtype_from_cfg(conscience, params, err)) {
-		GSETERROR(err, "Configuration error");
 		goto error;
 	}
 
@@ -1646,6 +1506,21 @@ plugin_init(GHashTable * params, GError ** err)
 		goto error;
 	}
 
+	/* TODO(jfs): remove this in further releases */
+	/* Print a warning in an old-style option is met */
+	do {
+		GHashTableIter it = {0};
+		gpointer k, v;
+		gboolean option_old = FALSE, service_old = FALSE;
+		g_hash_table_iter_init(&it, params);
+		while (g_hash_table_iter_next(&it, &k, &v)) {
+			option_old |= g_str_has_prefix((gchar*)k, "option.");
+			service_old |= g_str_has_prefix((gchar*)k, "service.");
+		}
+		if (option_old) GRID_WARN("OLD STYLE OPTIONS detected [param_option.*]");
+		if (service_old) GRID_WARN("OLD STYLE OPTIONS detected [param_service.*]");
+	} while (0);
+
 	return 1;
 error:
 	GRID_ERROR("Conscience loading failed: %s",
@@ -1670,7 +1545,7 @@ plugin_reload(GHashTable * params, GError ** err)
 	gchar **tmp = NULL;
 
 	INFO("Reloading conscience configuration");
-	/*CHUNK SIZE */
+	/* CHUNK SIZE */
 	if (!(str = g_hash_table_lookup(params, KEY_CHUNK_SIZE))) {
 		GSETERROR(err, "[NS=%s] Missing key '%s' (chunk size in bytes)",
 				conscience->ns_info.name, KEY_CHUNK_SIZE);
@@ -1681,20 +1556,10 @@ plugin_reload(GHashTable * params, GError ** err)
 
 	g_rec_mutex_lock(&conscience_nsinfo_mutex);
 
-	/* OPTIONS reload */
-	/* flush old ns_info_options table */
-	g_hash_table_destroy(conscience->ns_info.options);
-
-	if (!module_init_options(conscience, params, err)) {
-		GSETERROR(err, "[NS=%s] options init failed", conscience->ns_info.name);
-		goto error;
-	}
-
 	/* storage conf reload */
 	g_hash_table_destroy(conscience->ns_info.storage_policy);
 	g_hash_table_destroy(conscience->ns_info.data_security);
 	*err = module_init_storage_conf(conscience,
-			oio_var_get_string(oio_ns_storage_policy),
 			g_hash_table_lookup(params, KEY_STG_CONF));
 	if( NULL != *err ) {
 		g_prefix_error(err, "[NS=%s] storage conf init failed", conscience->ns_info.name);
