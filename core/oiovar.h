@@ -27,6 +27,10 @@ enum oio_var_kind_e {
 	OIO_VARKIND_size,
 };
 
+void oio_var_register_string(gchar *p,
+		const char *n, const char *descr,
+		const gchar *def, gsize limit);
+
 void oio_var_register_gboolean(gboolean *p,
 		const char *n, const char *descr,
 		gboolean def);
@@ -101,5 +105,7 @@ GString* oio_var_list_as_json(void);
  * Set all the variables to their default value
  */
 void oio_var_reset_all(void);
+
+gchar* oio_var_get_string(const char *v);
 
 #endif /* OIO_SDS__core__var_h */
