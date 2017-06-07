@@ -10,8 +10,8 @@ class BaseLbTest(BaseTestCase):
         for num in range(count):
             srvin = self._srv('echo',
                               extra_tags={"tag.slots": ','.join(slots)},
-                              lowport=lowport,
-                              highport=lowport+100)
+                              lowport=lowport+num,
+                              highport=lowport+num)
             self._lock_srv(srvin)
 
     def fill_sameport(self, count=1):
