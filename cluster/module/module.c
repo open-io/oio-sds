@@ -1507,9 +1507,15 @@ plugin_init(GHashTable * params, GError ** err)
 		while (g_hash_table_iter_next(&it, &k, &v)) {
 			option_old |= g_str_has_prefix((gchar*)k, "option.");
 			service_old |= g_str_has_prefix((gchar*)k, "service.");
+			if (!strcasecmp((gchar*)k, "chunk_size"))
+				GRID_WARN("OLD STYLE OPTION [chunk_size]");
+			if (!strcasecmp((gchar*)k, "meta0"))
+				GRID_WARN("OLD STYLE OPTION [meta0]");
 		}
-		if (option_old) GRID_WARN("OLD STYLE OPTIONS detected [param_option.*]");
-		if (service_old) GRID_WARN("OLD STYLE OPTIONS detected [param_service.*]");
+		if (option_old)
+			GRID_WARN("OLD STYLE OPTIONS detected [param_option.*]");
+		if (service_old)
+			GRID_WARN("OLD STYLE OPTIONS detected [param_service.*]");
 	} while (0);
 
 	return 1;
