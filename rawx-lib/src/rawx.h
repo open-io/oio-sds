@@ -59,21 +59,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define RAWX_CONF_TIMEOUT 10LLU
 #define NS_COMPRESSION_ON "on"
 
-struct rawx_conf_s
-{
-	namespace_info_t *ni;
-	GSList* acl;
-	gint64 last_update;
-};
-
-typedef struct rawx_conf_s rawx_conf_t;
-
-/* Clean a rawx config, but do not free the structure.  */
-void rawx_conf_clean(rawx_conf_t *c);
-
-/* Clean a rawx config, and free the structure.  */
-void rawx_conf_gclean(rawx_conf_t *c);
-
 typedef struct chunk_textinfo_s
 {
 	gchar *container_id;

@@ -29,8 +29,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <zlib.h>
 #include <zconf.h>
-#include <lzoutil.h>
-#include <lzo1x.h>
 
 #define SUCCESS_CODE 0
 
@@ -86,22 +84,6 @@ int zlib_compressed_chunk_init(struct compressed_chunk_s *chunk, const gchar *pa
 gboolean zlib_compressed_chunk_check_integrity(struct compressed_chunk_s *chunk);
 
 gboolean zlib_init_compress_checksum(gulong *checksum);
-
-// LZO FUNCTIONS //
-
-int lzo_write_compress_header(FILE *fd, lzo_uint32 blocksize, gulong *checksum, lzo_uint32 *compressed_size);
-
-int lzo_write_compress_eof(FILE *fd, gulong checksum, lzo_uint32 *compressed_size);
-
-int lzo_compress_chunk_part(const void *buf, gsize bufsize, GByteArray *result, gulong* checksum);
-
-int lzo_compressed_chunk_get_data(struct compressed_chunk_s *chunk, gsize offset, guint8 *buf, gsize buf_len, GError **error);
-
-int lzo_compressed_chunk_init(struct compressed_chunk_s *chunk, const gchar *path);
-
-gboolean lzo_compressed_chunk_check_integrity(struct compressed_chunk_s *chunk);
-
-gboolean lzo_init_compress_checksum(gulong* checksum);
 
 /***********************************************************************/
 

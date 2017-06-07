@@ -30,7 +30,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metautils.h>
 
 #include "rawx.h"
-#include "acl.h"
 
 static volatile ssize_t longest_xattr = 1024;
 static volatile ssize_t longest_xattr_list = 2048;
@@ -262,39 +261,6 @@ get_compression_info_in_attr(const char *p, GError ** error, GHashTable *table)
 	}
 
 	return TRUE;
-}
-
-/* -------------------------------------------------------------------------- */
-
-static void
-_rawx_acl_clean(gpointer data, gpointer udata)
-{
-	(void) udata;
-	addr_rule_g_free(data);
-}
-
-void
-rawx_conf_gclean(rawx_conf_t* c)
-{
-	rawx_conf_clean(c);
-	g_free(c);
-}
-
-void
-rawx_conf_clean(rawx_conf_t* c)
-{
-	if(!c)
-		return;
-
-	if(c->ni) {
-		namespace_info_free(c->ni);
-		c->ni = NULL;
-	}
-	if(c->acl) {
-		g_slist_foreach(c->acl, _rawx_acl_clean, NULL);
-		g_slist_free(c->acl);
-		c->acl = NULL;
-	}
 }
 
 void

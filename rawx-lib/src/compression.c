@@ -41,35 +41,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 gboolean
 init_compression_ctx(struct compression_ctx_s* comp_ctx, const gchar* algo_name)
 {
-	gboolean status = FALSE;
-	// Define compression algorithm functions in comp_ctx
-	if(g_ascii_strcasecmp(algo_name,"LZO") == 0) {
-		DEBUG("Algo LZO used");
-		comp_ctx->chunk_initiator = lzo_compressed_chunk_init;
-		comp_ctx->checksum_initiator = lzo_init_compress_checksum;
-		comp_ctx->header_writer = (write_header_f) lzo_write_compress_header;
-		comp_ctx->data_compressor = lzo_compress_chunk_part;
-		comp_ctx->data_uncompressor = lzo_compressed_chunk_get_data;
-		comp_ctx->eof_writer = (write_eof_f) lzo_write_compress_eof;
-		comp_ctx->integrity_checker = lzo_compressed_chunk_check_integrity;
-		status = TRUE;
-		goto end;
-	}
-	if(g_ascii_strcasecmp(algo_name,"ZLIB") == 0) {
-		DEBUG("Algo ZLIB used");
-		comp_ctx->chunk_initiator = zlib_compressed_chunk_init;
-		comp_ctx->checksum_initiator = zlib_init_compress_checksum;
-		comp_ctx->header_writer = zlib_write_compress_header;
-		comp_ctx->data_compressor = zlib_compress_chunk_part;
-		comp_ctx->data_uncompressor = zlib_compressed_chunk_get_data;
-		comp_ctx->eof_writer = zlib_write_compress_eof;
-		comp_ctx->integrity_checker = zlib_compressed_chunk_check_integrity;
-		status = TRUE;
-		goto end;
-	}
+	if (0 != g_ascii_strcasecmp(algo_name,"ZLIB"))
+		return FALSE;
 
-end:
-	return status;
+	comp_ctx->chunk_initiator = zlib_compressed_chunk_init;
+	comp_ctx->checksum_initiator = zlib_init_compress_checksum;
+	comp_ctx->header_writer = zlib_write_compress_header;
+	comp_ctx->data_compressor = zlib_compress_chunk_part;
+	comp_ctx->data_uncompressor = zlib_compressed_chunk_get_data;
+	comp_ctx->eof_writer = zlib_write_compress_eof;
+	comp_ctx->integrity_checker = zlib_compressed_chunk_check_integrity;
+	return TRUE;
 }
 
 static gboolean
