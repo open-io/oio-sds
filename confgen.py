@@ -118,6 +118,51 @@ class Variable(object):
             out.write('extern {0} {1};\n'.format(self.ctype, self.name))
 
 
+class String(Variable):
+    def __init__(self, cfg):
+        self.name = cfg["name"]
+        self.limit = int(cfg["limit"])
+        self.key = cfg.get("key", name2key(self.name))
+        self.macro = cfg.get("macro", key2macro(self.key))
+        self.ctype = 'string'
+        self.descr = cfg.get("descr", "")
+        if not self.descr:
+            self.descr = "TODO: to be documented"
+        self.default = cfg.get("def")
+        self.declare = bool(cfg.get("declare", True))
+
+    def raw(self):
+        out = dict()
+        out["key"] = self.key
+        out["descr"] = self.descr
+        out["macro"] = self.macro
+        out["ctype"] = self.ctype
+        out["limit"] = self.limit
+        out["default"] = self.default
+        return out;
+
+    def _gen_declaration(self, out):
+        out.write("gchar {0} [{1}] = {2};\n".format(
+            self.name, self.limit, self.macro))
+
+    def _gen_registration(self, out):
+        out.write('\n\toio_var_register_string('
+                '\n\t\t{name}, "{key}",'
+                '\n\t\t"{descr}",'
+                '\n\t\t{def}, {limit});\n'.format(**{
+            "name": self.name,
+            "key": self.key,
+            "descr": self.descr,
+            "def": self.macro,
+            "limit": self.limit}))
+
+    def _gen_header(self, out):
+        out.write("\n#ifndef {0}\n# define {0} \"{1}\"\n#endif\n\n".format(
+                self.macro, self.default))
+        if self.declare:
+            out.write('extern gchar {0}[{1}];\n'.format(self.name, self.limit))
+
+
 class Bool(Variable):
     def __init__(self, conf):
         super(Bool, self).__init__(conf)
@@ -129,7 +174,10 @@ class Bool(Variable):
         out.write('gboolean {0} = {1};\n'.format(self.name, self.macro))
 
     def _gen_registration(self, out):
-        out.write('\toio_var_register_gboolean(&{0}, "{2}", "{3}", {1});\n'.format(
+        out.write('\n\toio_var_register_gboolean('
+                '\n\t\t&{0}, "{2}",'
+                '\n\t\t"{3}",'
+                '\n\t\t{1});\n'.format(
             self.name, self.macro, self.key, self.descr))
 
 
@@ -146,8 +194,10 @@ class Number(Variable):
             self.name, self.macro, self.ctype))
 
     def _gen_registration(self, out):
-        out.write('\toio_var_register_{ctype}(&{name}, {kind}, "{key}", '
-                '"{descr}", {def}, {min}, {max});\n'.format(**{
+        out.write('\n\toio_var_register_{ctype}('
+                '\n\t\t&{name}, {kind}, "{key}",'
+                '\n\t\t"{descr}",'
+                '\n\t\t{def}, {min}, {max});\n'.format(**{
             "name": self.name,
             "kind": self.kind,
             "ctype": self.ctype,
@@ -254,6 +304,7 @@ _classes = {
     "float": Float,
     "real": Float,
     "double": Float,
+    "string": String,
 }
 
 

@@ -34,6 +34,7 @@ enum oio_var_type_e {
 	OIO_VARTYPE_gint64,
 	OIO_VARTYPE_gdouble,
 	OIO_VARTYPE_time_t,
+	OIO_VARTYPE_string,
 };
 
 union oio_var_pointer_u {
@@ -46,6 +47,8 @@ union oio_var_pointer_u {
 	gint64 *i64;
 	gdouble *d;
 	time_t *t;
+
+	gchar *str;
 };
 
 union oio_var_default_u {
@@ -58,6 +61,8 @@ union oio_var_default_u {
 	gint64 i64;
 	gdouble d;
 	time_t t;
+
+	gchar *str;
 };
 
 struct oio_var_record_s {
@@ -75,8 +80,7 @@ struct oio_var_record_s {
 	union oio_var_default_u def;
 	union oio_var_default_u min;
 	union oio_var_default_u max;
-	/* value at the registration */
-	union oio_var_default_u reg;
+	const char *defstr;
 };
 
 static volatile guint var_init = 0;
@@ -112,8 +116,7 @@ void oio_var_register_##Type( \
 	rec.name = n; \
 	rec.description = d; \
 	rec.ptr.Field = p; \
-	rec.reg.Field = *(rec.ptr.Field); \
-	rec.def.Field = def; \
+	*(rec.ptr.Field) = rec.def.Field = def; \
 	rec.min.Field = min; \
 	rec.max.Field = max; \
 	_register_record(&rec); \
@@ -130,8 +133,25 @@ oio_var_register_gboolean(gboolean *p,
 	rec.name = n;
 	rec.description = d;
 	rec.ptr.b = p;
-	rec.reg.b = *(rec.ptr.b);
-	rec.def.b = def;
+	*(rec.ptr.b) = rec.def.b = def;
+	_register_record(&rec);
+}
+
+void
+oio_var_register_string(gchar *p,
+		const char *n, const char *descr,
+		const gchar *def, gsize limit)
+{
+	struct oio_var_record_s rec = {0};
+	rec.kind = OIO_VARKIND_size;
+	rec.type = OIO_VARTYPE_string;
+	rec.name = n;
+	rec.description = descr;
+	rec.ptr.str = p;
+	rec.min.u = limit;
+	rec.max.u = limit;
+	rec.defstr = def;
+	strncpy(rec.ptr.str, rec.defstr, rec.max.u);
 	_register_record(&rec);
 }
 
@@ -174,6 +194,9 @@ _record_set(struct oio_var_record_s *rec, union oio_var_default_u v)
 			return;
 		case OIO_VARTYPE_time_t:
 			*(rec->ptr.t) = CLAMP(v.t, rec->min.t, rec->max.t);
+			return;
+		case OIO_VARTYPE_string:
+			strncpy(rec->ptr.str, v.str, rec->max.u);
 			return;
 	}
 	g_assert_not_reached();
@@ -320,14 +343,17 @@ _record_set_to_value(struct oio_var_record_s *rec, const char *value)
 		case OIO_VARTYPE_gdouble:
 			v.d = g_ascii_strtod(value, NULL);
 			break;
+
 		case OIO_VARTYPE_time_t:
 			u64 = g_ascii_strtoull(value, &end, 10);
 			unit = _unit(rec, end);
 			if (!end || !*end)
 				v.t = u64;
 			break;
-		default:
-			g_assert_not_reached();
+
+		case OIO_VARTYPE_string:
+			v.str = g_alloca(rec->max.u);
+			g_snprintf(v.str, rec->max.u, "%s", value);
 			break;
 	}
 
@@ -415,6 +441,9 @@ oio_var_list_all(void (*hook) (const char *k, const char *v))
 				i64 = *(rec->ptr.t);
 				g_snprintf(tmp, sizeof(tmp), "%"G_GINT64_FORMAT, i64);
 				break;
+			case OIO_VARTYPE_string:
+				g_snprintf(tmp, sizeof(tmp), "%s", rec->ptr.str);
+				break;
 		}
 		(*hook)(rec->name, tmp);
 	}
@@ -480,3 +509,13 @@ oio_var_reset_all(void)
 	}
 	g_mutex_unlock(&var_lock);
 }
+
+gchar*
+oio_var_get_string(const char *v)
+{
+	g_mutex_lock(&var_lock);
+	gchar *rc = g_strdup(v);
+	g_mutex_unlock(&var_lock);
+	return rc;
+}
+
