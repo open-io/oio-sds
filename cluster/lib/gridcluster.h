@@ -54,10 +54,6 @@ gchar* namespace_data_security_value(const namespace_info_t *ns_info, const gcha
 
 gchar* namespace_storage_policy_value(const namespace_info_t *ns_info, const gchar *wanted_policy);
 
-/* Extract mode compression state from namespace_info
- * @return TRUE if namespace is in mode compression, FALSE otherwise */
-gboolean namespace_in_compression_mode(namespace_info_t* ns_info);
-
 /* Returns the services update's configuration when the Load-Balancing
  * is performed by a servce of type srvtype for each namespace and VNS. */
 gchar* gridcluster_get_service_update_policy(struct namespace_info_s *nsinfo);

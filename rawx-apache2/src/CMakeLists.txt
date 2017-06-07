@@ -21,6 +21,23 @@ link_directories(
 		${LZO_LIBRARY_DIRS}
 		${ZLIB_LIBRARY_DIRS})
 
+add_custom_command(
+	OUTPUT
+		${CMAKE_CURRENT_BINARY_DIR}/rawx_variables.c
+		${CMAKE_CURRENT_BINARY_DIR}/rawx_variables.h
+	DEPENDS
+		${CMAKE_SOURCE_DIR}/confgen.py
+		${CMAKE_SOURCE_DIR}/conf.json
+	PRE_BUILD
+	COMMENT
+		"Generating the central configuration"
+	COMMAND
+		${PYTHON_EXECUTABLE}
+	ARGS
+		${CMAKE_SOURCE_DIR}/confgen.py
+		"rawx"
+		${CMAKE_SOURCE_DIR}/conf.json)
+
 add_library(mod_dav_rawx MODULE
 		mod_dav_rawx.c
 		rawx_bucket.c
@@ -33,7 +50,9 @@ add_library(mod_dav_rawx MODULE
 		rawx_repository.c
 		rawx_req_info.c
 		rawx_chunk_update.c
-		rawx_event.c)
+		rawx_event.c
+		${CMAKE_CURRENT_BINARY_DIR}/rawx_variables.c
+		${CMAKE_CURRENT_BINARY_DIR}/rawx_variables.h)
 
 set_target_properties(mod_dav_rawx PROPERTIES PREFIX "" SUFFIX .so)
 

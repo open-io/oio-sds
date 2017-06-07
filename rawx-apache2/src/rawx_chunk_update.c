@@ -160,8 +160,8 @@ __build_chunk_full_path(const dav_resource *resource, char **full_path)
 
 	p[0] = '/';
 
-	for (int i = 0; i < conf->hash_depth ; i++) {
-		for (int j = 0; j < conf->hash_width ; j++)
+	for (unsigned int i = 0; i < conf->hash_depth ; i++) {
+		for (unsigned int j = 0; j < conf->hash_width ; j++)
 			p[i_p++] = r->uri[i_uri++];
 		p[i_p++] = '/';
 	}

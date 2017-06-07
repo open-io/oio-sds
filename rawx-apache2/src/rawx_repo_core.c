@@ -533,7 +533,7 @@ rawx_repo_check_request(request_rec *req, const char *root_dir, const char * lab
 dav_error *
 rawx_repo_configure_hash_dir(request_rec *req, dav_resource_private *ctx)
 {
-	int i_width, i_depth, i_src, i_dst;
+	unsigned int i_width, i_depth, i_src, i_dst;
 	int dst_maxlen;
 	const char *src;
 	char *dst;
@@ -820,8 +820,7 @@ retry:
 		should_compress = !g_ascii_strncasecmp(ctx->forced_cp, "true", 4);
 	}
 
-	if (!should_compress ||
-			!namespace_in_compression_mode(conf->rawx_conf->ni)) {
+	if (!should_compress || !conf->enabled_compression) {
 		ds->buffer_size = DEFAULT_BLOCK_SIZE;
 		ds->buffer = apr_pcalloc(p, ds->buffer_size);
 		ds->buffer_offset = 0;

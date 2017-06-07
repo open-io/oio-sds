@@ -34,9 +34,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <core/oio_sds.h>
 #include <core/oiovar.h>
 #include <metautils/lib/metautils.h>
-#include <events/events_variables.h>
 #include <cluster/lib/gridcluster.h>
 #include <rawx-lib/src/rawx.h>
+#include <rawx-apache2/src/rawx_variables.h>
 
 #include "mod_dav_rawx.h"
 #include "rawx_internals.h"
@@ -104,6 +104,8 @@ dav_rawx_merge_server_config(apr_pool_t *p, void *base, void *overrides)
 
 	newconf = apr_pcalloc(p, sizeof(*newconf));
 	newconf->pool = p;
+	newconf->enabled_acl = child->enabled_acl;
+	newconf->enabled_compression = child->enabled_compression;
 	newconf->cleanup = NULL;
 	newconf->hash_depth = child->hash_depth;
 	newconf->hash_width = child->hash_width;
@@ -112,7 +114,6 @@ dav_rawx_merge_server_config(apr_pool_t *p, void *base, void *overrides)
 	newconf->checksum_mode = child->checksum_mode;
 	memcpy(newconf->docroot, child->docroot, sizeof(newconf->docroot));
 	memcpy(newconf->ns_name, child->ns_name, sizeof(newconf->ns_name));
-	update_rawx_conf(p, &(newconf->rawx_conf), newconf->ns_name);
 
 	DAV_DEBUG_POOL(p, 0, "Configuration merged!");
 	return newconf;
@@ -194,17 +195,12 @@ _cleanup (void *p)
 }
 
 static const char *
-dav_rawx_cmd_gridconfig_namespace(cmd_parms *cmd, void *config, const char *arg1)
+dav_rawx_cmd_gridconfig_namespace(cmd_parms *cmd, void *config UNUSED, const char *arg1)
 {
-	dav_rawx_server_conf *conf;
-	(void) config;
+	dav_rawx_server_conf *conf =
+		ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
 
-	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
-
-	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
-	memset(conf->ns_name, 0x00, sizeof(conf->ns_name));
-	apr_cpystrn(conf->ns_name, arg1, sizeof(conf->ns_name)-1);
-
+	strncpy(conf->ns_name, arg1, sizeof(conf->ns_name));
 	DAV_DEBUG_POOL(cmd->pool, 0, "NS=[%s]", conf->ns_name);
 
 	/* Prepare COMPRESSION / ACL CONF when we get ns name */
@@ -247,82 +243,54 @@ dav_rawx_cmd_gridconfig_fsync(cmd_parms *cmd, void *config, const char *arg1)
 }
 
 static const char *
-dav_rawx_cmd_gridconfig_fsync_dir(cmd_parms *cmd, void *config, const char *arg1)
+dav_rawx_cmd_gridconfig_fsync_dir(cmd_parms *cmd, void *config UNUSED, const char *arg1)
 {
-	dav_rawx_server_conf *conf;
-	(void) config;
-
-	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
-
-	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
+	dav_rawx_server_conf *conf =
+		ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
 	if (oio_str_parse_bool(arg1, FALSE))
 		conf->fsync_on_close |= FSYNC_ON_CHUNK_DIR;
 	else
 		conf->fsync_on_close &= ~FSYNC_ON_CHUNK_DIR;
-
 	return NULL;
 }
 
 static const char *
-dav_rawx_cmd_gridconfig_fallocate(cmd_parms *cmd, void *config, const char *arg1)
+dav_rawx_cmd_gridconfig_fallocate(cmd_parms *cmd, void *config UNUSED, const char *arg1)
 {
-	dav_rawx_server_conf *conf;
-	(void) config;
-
-	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
-
-	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
+	dav_rawx_server_conf *conf =
+		ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
 	conf->fallocate = oio_str_parse_bool(arg1, FALSE);
-
 	return NULL;
 }
 
 static const char *
-dav_rawx_cmd_gridconfig_dirrun(cmd_parms *cmd, void *config, const char *arg1)
+dav_rawx_cmd_gridconfig_dirrun(cmd_parms *cmd, void *config UNUSED, const char *arg1)
 {
-	dav_rawx_server_conf *conf;
-	(void) config;
-
-	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
-
-	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
+	dav_rawx_server_conf *conf =
+		ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
 
 	apr_snprintf(conf->shm.path, sizeof(conf->shm.path),
 		"%s/httpd-shm.%d", arg1, getpid());
 
 	DAV_DEBUG_POOL(cmd->pool, 0, "mutex_key=[%s]", conf->shm.path);
 	DAV_DEBUG_POOL(cmd->pool, 0, "shm_key=[%s]", conf->shm.path);
-
 	return NULL;
 }
 
 static const char *
-dav_rawx_cmd_gridconfig_acl(cmd_parms *cmd, void *config, const char *arg1)
+dav_rawx_cmd_gridconfig_acl(cmd_parms *cmd, void *config UNUSED, const char *arg1)
 {
-	dav_rawx_server_conf *conf;
-	(void) config;
-
-	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
-
-	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
-	conf->enabled_acl = 0;
-	conf->enabled_acl |= (0 == apr_strnatcasecmp(arg1,"on"));
-	conf->enabled_acl |= (0 == apr_strnatcasecmp(arg1,"true"));
-	conf->enabled_acl |= (0 == apr_strnatcasecmp(arg1,"yes"));
-	conf->enabled_acl |= (0 == apr_strnatcasecmp(arg1,"enabled"));
-
+	dav_rawx_server_conf *conf =
+		ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
+	conf->enabled_acl = oio_str_parse_bool(arg1, FALSE);
 	return NULL;
 }
 
 static const char *
-dav_rawx_cmd_gridconfig_checksum(cmd_parms *cmd, void *config, const char *arg1)
+dav_rawx_cmd_gridconfig_checksum(cmd_parms *cmd, void *config UNUSED, const char *arg1)
 {
-	dav_rawx_server_conf *conf;
-	(void) config;
-
-	DAV_DEBUG_POOL(cmd->pool, 0, "%s(%s)", __FUNCTION__, arg1);
-
-	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
+	dav_rawx_server_conf *conf =
+		ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
 	if (!oio_str_is_set(arg1)) {
 		conf->checksum_mode = CHECKSUM_ALWAYS;
 	} else if (0 == apr_strnatcasecmp(arg1, "smart")) {
@@ -337,20 +305,18 @@ dav_rawx_cmd_gridconfig_checksum(cmd_parms *cmd, void *config, const char *arg1)
 }
 
 static const char *
-dav_rawx_cmd_gridconfig_compression(cmd_parms *cmd, void *config, const char *arg1)
+dav_rawx_cmd_gridconfig_compression(cmd_parms *cmd, void *config UNUSED, const char *arg1)
 {
-	dav_rawx_server_conf *conf;
-	(void) config;
-
-	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
-
-	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
-	if (apr_strnatcasecmp(arg1, "off") &&
-			apr_strnatcasecmp(arg1, "disabled") &&
-			apr_strnatcasecmp(arg1, "false") &&
-			apr_strnatcasecmp(arg1, "0"))
+	dav_rawx_server_conf *conf =
+		ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
+	/* A string not recognized as TRUE is an explicit FALSE */
+	if (!arg1 || !oio_str_parse_bool(arg1, TRUE)) {
+		conf->enabled_compression = FALSE;
+		conf->compression_algo[0] = '\0';
+	} else {
+		conf->enabled_compression = TRUE;
 		strncpy(conf->compression_algo, arg1, sizeof(conf->compression_algo));
-
+	}
 	return NULL;
 }
 
