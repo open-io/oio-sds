@@ -47,7 +47,6 @@ namespace_info_copy(namespace_info_t* src, namespace_info_t* dst)
 	EXTRA_ASSERT(dst != NULL);
 
 	memcpy(dst->name, src->name, sizeof(src->name));
-	dst->chunk_size = src->chunk_size;
 
 #define NSI_COPY_TABLE_REF(SRC, DST) \
 	if ((SRC) != NULL) {\
@@ -68,7 +67,6 @@ namespace_info_dup(namespace_info_t* src)
 {
 	namespace_info_t *dst = g_malloc0(sizeof(namespace_info_t));
 	memcpy(dst->name, src->name, sizeof(src->name));
-	dst->chunk_size = src->chunk_size;
 
 	dst->storage_policy = _copy_hash(src->storage_policy);
 	dst->data_security = _copy_hash(src->data_security);
@@ -96,7 +94,6 @@ namespace_info_init(namespace_info_t *ni)
 {
 	if (!ni)
 		return;
-	ni->chunk_size = 0;
 	memset(ni->name, 0, sizeof(ni->name));
 	ni->storage_policy = _copy_hash(NULL);
 	ni->data_security = _copy_hash(NULL);
@@ -161,17 +158,15 @@ namespace_info_init_json_object(struct json_object *obj,
 {
 	EXTRA_ASSERT(ni != NULL);
 
-	struct json_object *ns=NULL, *sz=NULL;
+	struct json_object *ns=NULL;
 	struct oio_ext_json_mapping_s mapping[] = {
 		{"ns",        &ns, json_type_string, 1},
-		{"chunksize", &sz, json_type_int,    1},
 		{NULL, NULL, 0, 0}
 	};
 	GError *err = oio_ext_extract_json (obj, mapping);
 	if (err) return err;
 
 	g_strlcpy(ni->name, json_object_get_string(ns), sizeof(ni->name));
-	ni->chunk_size = json_object_get_int64(sz);
 
 	if (NULL != (err = _load_hash(obj, "storage_policy", ni->storage_policy))
 			|| NULL != (err = _load_hash(obj, "data_security", ni->data_security))
@@ -243,8 +238,6 @@ namespace_info_encode_json(GString *out, struct namespace_info_s *ni)
 {
 	g_string_append_c(out, '{');
 	OIO_JSON_append_str(out, "ns", ni->name);
-	g_string_append_c(out, ',');
-	OIO_JSON_append_int(out, "chunksize", ni->chunk_size);
 	g_string_append_c(out, ',');
 	_encode_json_properties(out, ni->storage_policy, "storage_policy");
 	g_string_append_c(out, ',');

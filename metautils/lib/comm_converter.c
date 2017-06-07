@@ -631,8 +631,6 @@ namespace_info_ASN2API(const NamespaceInfo_t *asn, namespace_info_t *api)
 	memset(api, 0, sizeof(*api));
 	memcpy(api->name, asn->name.buf, MIN((int)sizeof(api->name), asn->name.size));
 
-	asn_INTEGER_to_int64(&(asn->chunkSize), &(api->chunk_size));
-
 	api->storage_policy = list_conversion(&(asn->storagePolicy));
 	api->data_security = list_conversion(&(asn->dataSecurity));
 	api->service_pools = list_conversion(&(asn->servicePools));
@@ -683,7 +681,6 @@ namespace_info_API2ASN(const namespace_info_t * api, NamespaceInfo_t * asn)
 	EXTRA_ASSERT (asn != NULL);
 
 	OCTET_STRING_fromBuf(&(asn->name), api->name, strlen(api->name));
-	asn_int64_to_INTEGER(&(asn->chunkSize), api->chunk_size);
 
 	if (!hashtable_conversion(api->storage_policy, &(asn->storagePolicy),
 							  key_value_pairs_convert_from_map))

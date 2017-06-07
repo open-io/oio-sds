@@ -67,7 +67,6 @@ print_formated_namespace(namespace_info_t * ns)
 	g_print("NAMESPACE INFORMATION\n");
 	g_print("\n");
 	g_print("%20s : %s\n", "Name", ns->name);
-	g_print("%20s : %"G_GINT64_FORMAT" bytes\n", "Chunk size", ns->chunk_size);
 
 	print_formatted_hashtable(ns->storage_policy, "Storage Policy");
 	print_formatted_hashtable(ns->data_security, "Data Security");

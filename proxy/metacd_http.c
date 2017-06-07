@@ -54,7 +54,6 @@ struct lru_tree_s *srv_registered = NULL;
 GRWLock nsinfo_rwlock = {0};
 struct namespace_info_s nsinfo = {{0}};
 gchar **srvtypes = NULL;
-gint64 ns_chunk_size = 10*1024*1024;
 
 GRWLock master_rwlock = {0};
 struct lru_tree_s *srv_master = NULL;
@@ -551,8 +550,7 @@ _task_reload_nsinfo (gpointer p UNUSED)
 		g_clear_error (&err);
 	} else {
 		ADAPTIVE_PERIOD_ONSUCCESS(nsinfo_refresh_delay);
-		NSINFO_WRITE(namespace_info_copy (ni, &nsinfo);
-					 ns_chunk_size = nsinfo.chunk_size);
+		NSINFO_WRITE(namespace_info_copy (ni, &nsinfo));
 		namespace_info_free (ni);
 	}
 }
@@ -960,7 +958,6 @@ grid_main_configure (int argc, char **argv)
 
 	ns_name = g_strdup(cfg_namespace);
 	g_strlcpy(nsinfo.name, cfg_namespace, sizeof(nsinfo.name));
-	nsinfo.chunk_size = 1;
 
 	/* Load the central configuration facility, it will tell us our
 	 * NS is locally known. */

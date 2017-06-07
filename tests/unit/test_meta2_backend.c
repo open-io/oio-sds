@@ -168,7 +168,6 @@ _init_nsinfo(const gchar *ns, gint64 maxvers)
 
 	nsinfo = g_malloc0 (sizeof(*nsinfo));
 	namespace_info_init (nsinfo);
-	nsinfo->chunk_size = chunk_size;
 	g_strlcpy (nsinfo->name, ns, sizeof(nsinfo->name));
 
 	g_snprintf (str, sizeof(str), "%"G_GINT64_FORMAT, maxvers);

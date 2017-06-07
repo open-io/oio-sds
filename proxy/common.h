@@ -128,7 +128,6 @@ extern struct hc_resolver_s *resolver;
 extern GRWLock nsinfo_rwlock;
 extern gchar **srvtypes;
 extern struct namespace_info_s nsinfo;
-extern gint64 ns_chunk_size;
 gboolean validate_namespace (const char * ns);
 gboolean validate_srvtype (const char * n);
 

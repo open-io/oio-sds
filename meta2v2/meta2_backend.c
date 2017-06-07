@@ -1499,8 +1499,7 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 
 	/* Let's continue to generate the beans, no need for an open container for the moment */
 	if (!err) {
-		err = m2_generate_beans(url, size,
-				meta2_default_chunk_size,
+		err = m2_generate_beans(url, size, oio_ns_chunk_size,
 				policy, m2b->lb, cb, cb_data);
 	}
 

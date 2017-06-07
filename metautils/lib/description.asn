@@ -30,7 +30,6 @@ BEGIN
 
 	NamespaceInfo ::= SEQUENCE {
 		name           [0] PrintableString,
-		chunkSize      [2] INTEGER,
 		storagePolicy  [4] ParameterSequence,
 		dataSecurity   [5] ParameterSequence,
 		servicePools   [8] ParameterSequence
