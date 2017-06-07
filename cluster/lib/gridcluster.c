@@ -253,20 +253,6 @@ gridcluster_get_nsinfo_strvalue(struct namespace_info_s *nsinfo,
 }
 
 gint64
-gridcluster_get_nsinfo_int64(struct namespace_info_s *nsinfo,
-		const gchar* key, gint64 def)
-{
-	return namespace_info_get_srv_param_i64(nsinfo, NULL, NULL, key, def);
-}
-
-gchar *
-namespace_get_state(namespace_info_t* ns_info)
-{
-	return gridcluster_get_nsinfo_strvalue(ns_info, NS_STATE_NAME,
-			NS_STATE_VALUE_STANDALONE);
-}
-
-gint64
 namespace_chunk_size(const namespace_info_t* ns_info, const char *ns_name)
 {
 	GByteArray *val = namespace_param_gba(ns_info, ns_name,

@@ -23,9 +23,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/common_variables.h>
-#include <server/server_variables.h>
-
 #include <cluster/lib/gridcluster.h>
 #include <server/network_server.h>
 #include <server/transport_gridd.h>
@@ -33,6 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/replication_dispatcher.h>
 #include <sqliterepo/upgrade.h>
+#include <meta2v2/meta2_variables.h>
 #include <meta2v2/meta2_gridd_dispatcher.h>
 #include <meta2v2/meta2_backend.h>
 #include <meta2v2/meta2_backend_internals.h>

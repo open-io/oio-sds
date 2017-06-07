@@ -19,6 +19,23 @@ link_directories(
 
 add_custom_command(
 	OUTPUT
+		${CMAKE_CURRENT_BINARY_DIR}/meta2_variables.c
+		${CMAKE_CURRENT_BINARY_DIR}/meta2_variables.h
+	DEPENDS
+		${CMAKE_SOURCE_DIR}/confgen.py
+		${CMAKE_SOURCE_DIR}/conf.json
+	PRE_BUILD
+	COMMENT
+		"Generating the central configuration"
+	COMMAND
+		${PYTHON_EXECUTABLE}
+	ARGS
+		${CMAKE_SOURCE_DIR}/confgen.py
+		"meta2"
+		${CMAKE_SOURCE_DIR}/conf.json)
+
+add_custom_command(
+	OUTPUT
 		${CMAKE_CURRENT_BINARY_DIR}/autogen.c
 		${CMAKE_CURRENT_BINARY_DIR}/autogen.h
 	DEPENDS
@@ -33,6 +50,8 @@ add_custom_command(
 add_library(meta2v2utils SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/autogen.c
 		${CMAKE_CURRENT_BINARY_DIR}/autogen.h
+		${CMAKE_CURRENT_BINARY_DIR}/meta2_variables.c
+		${CMAKE_CURRENT_BINARY_DIR}/meta2_variables.h
 		meta2_macros.h
 		meta2_utils_lb.c
 		meta2_utils_lb.h

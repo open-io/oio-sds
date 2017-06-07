@@ -42,8 +42,6 @@ GError* register_namespace_service (const struct service_info_s *si);
 
 /* -------------------------------------------------------------------------- */
 
-gchar * namespace_get_state(namespace_info_t* ns_info);
-
 gint64 namespace_chunk_size(const namespace_info_t* ns_info, const char *ns_name);
 
 gchar* namespace_storage_policy(const namespace_info_t* ns_info, const char *ns_name);
@@ -60,8 +58,5 @@ gchar* gridcluster_get_service_update_policy(struct namespace_info_s *nsinfo);
 
 gchar* gridcluster_get_nsinfo_strvalue(struct namespace_info_s *nsinfo,
 		const gchar *key, const gchar *def);
-
-gint64 gridcluster_get_nsinfo_int64(struct namespace_info_s *nsinfo,
-		const gchar* key, gint64 def);
 
 #endif /*OIO_SDS__cluster__lib__gridcluster_h*/
