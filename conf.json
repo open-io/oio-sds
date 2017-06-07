@@ -1,13 +1,18 @@
 {
-	"events": {
-		"code": "events_variables.c",
-		"header": "events_variables.h",
+	"rawx": {
+		"code": "rawx_variables.c",
+		"header": "rawx_variables.h",
 		"variables": [
 			{ "type": "bool", "name": "oio_rawx_events",
 				"key": "rawx.events_allowed",
 				"def": true,
-				"descr": "" },
-
+				"descr": "" }
+		]
+	},
+	"events": {
+		"code": "events_variables.c",
+		"header": "events_variables.h",
+		"variables": [
 			{ "type": "monotonic", "name": "oio_events_common_buffer_delay",
 				"key": "events.common.pending.delay",
 				"def": "5s", "min": "1ms", "max": "1h",

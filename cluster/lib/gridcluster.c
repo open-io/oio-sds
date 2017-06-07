@@ -34,7 +34,6 @@ License along with this library.
 #define NS_STORAGE_POLICY_NAME "storage_policy"
 #define NS_CHUNK_SIZE_NAME "chunk_size"
 #define NS_STATE_NAME "state"
-#define NS_COMPRESS_OPT_NAME "compression"
 
 /* -------------------------------------------------------------------------- */
 
@@ -230,19 +229,6 @@ _gba_to_int64(GByteArray *gba, gboolean def)
 	return g_ascii_strtoll(str, NULL, 10);
 }
 
-static gboolean
-_gba_to_bool(GByteArray *gba, gboolean def)
-{
-	if (!gba || !gba->data || !gba->len)
-		return def;
-	if (!gba->data[ gba->len - 1 ])
-		return oio_str_parse_bool((gchar*)gba->data, def);
-	gchar *str = g_alloca(gba->len + 1);
-	memset(str, 0, gba->len + 1);
-	memcpy(str, gba->data, gba->len);
-	return oio_str_parse_bool(str, def);
-}
-
 static GByteArray *
 namespace_param_gba(const namespace_info_t* ns_info, const gchar *ns_name,
 		const gchar *param_name)
@@ -381,16 +367,6 @@ namespace_is_storage_policy_valid(const namespace_info_t* ns_info, const gchar *
 	if (!g_hash_table_lookup(ns_info->storage_policy, storage_policy))
 		return FALSE;
 	return TRUE;
-}
-
-gboolean
-namespace_in_compression_mode(namespace_info_t* ns_info)
-{
-	if (!ns_info || !ns_info->options)
-		return FALSE;
-	GByteArray *val = namespace_param_gba(ns_info, NULL, NS_COMPRESS_OPT_NAME);
-	gboolean res = _gba_to_bool(val, FALSE);
-	return res;
 }
 
 gchar *

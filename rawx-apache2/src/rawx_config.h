@@ -112,10 +112,13 @@ struct dav_rawx_server_conf_s {
 	apr_pool_t *pool;
 	char docroot[1024];
 	char ns_name[LIMIT_LENGTH_NSNAME];
-	int hash_depth;
-	int hash_width;
-	int fsync_on_close;
-	int fallocate;
+	unsigned int hash_depth;
+	unsigned int hash_width;
+	unsigned int fsync_on_close;
+	unsigned int fallocate;
+	unsigned int enabled_acl;
+	unsigned int enabled_compression;
+
 	char event_agent_addr[RAWX_EVENT_ADDR_SIZE];
 
 	char compression_algo[64];
@@ -130,7 +133,6 @@ struct dav_rawx_server_conf_s {
 
 	void (*cleanup)(dav_rawx_server_conf *conf);
 
-	int enabled_acl;
 	rawx_conf_t* rawx_conf;
 };
 
