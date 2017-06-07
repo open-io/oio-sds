@@ -231,7 +231,7 @@ class PrefixMapping(object):
         if not strategy:
             strategy = self.find_services_random
         for base_int in xrange(0, self.num_bases()):
-            if (self.logger and
+            if (self.logger and self.num_bases() > 100 and
                     (base_int % (self.num_bases() / 10)) == 0):
                 self.logger.info("%d%%",
                                  base_int /
