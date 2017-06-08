@@ -120,6 +120,14 @@ Used by `gcc`
  * cmake directive: *OIO_COMMON_VERBOSITY_RESET_DELAY*
  * range: 1 * G_TIME_SPAN_SECOND -> 1 * G_TIME_SPAN_HOUR
 
+### core.http.user_agent
+
+> HTTP User-Agent to be used between any C client and the proxy
+
+ * default: ****
+ * type: string
+ * cmake directive: *OIO_CORE_HTTP_USER_AGENT*
+
 ### core.period.refresh.cpu_idle
 
 > Sets the miniimal amount of time between two refreshed of the known CPU-idle counters for the current host. Keep this value small.
