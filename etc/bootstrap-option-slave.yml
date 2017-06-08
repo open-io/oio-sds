@@ -1,2 +1,2 @@
 config:
-  oio.ns.master: false
+  ns.master: false

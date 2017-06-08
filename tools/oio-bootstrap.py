@@ -1396,7 +1396,7 @@ def generate(options):
     final_conf["account"] = 'test_account'
     final_conf["sds_path"] = SDSDIR
     # TODO(jfs): remove this line only required by some tests cases
-    final_conf["chunk_size"] = options['config']['oio.ns.chunk_size']
+    final_conf["chunk_size"] = options['config']['ns.chunk_size']
     final_conf["proxy"] = final_services['proxy'][0]['addr']
     final_conf[M2_REPLICAS] = meta2_replicas
     final_conf[M1_REPLICAS] = meta1_replicas
@@ -1456,7 +1456,7 @@ def main():
     opts = {}
     opts['config'] = dict()
     opts['config']['proxy.cache.enabled'] = False
-    opts['config']['oio.ns.chunk_size'] = 1024 * 1024
+    opts['config']['ns.chunk_size'] = 1024 * 1024
     opts[ZOOKEEPER] = False
     opts['conscience'] = {SVC_NB: None, SVC_HOSTS: None}
     opts['meta0'] = {SVC_NB: None, SVC_HOSTS: None}

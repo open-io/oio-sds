@@ -124,34 +124,34 @@
 		"header": "common_variables.h",
 		"variables": [
 			{ "type": "uint", "name": "oio_ns_flat_bits",
-				"key": "oio.ns.flat_bits",
+				"key": "ns.flat_bits",
 				"descr": "Default number of bits with flat-NS computation.",
 				"def": 17, "min": 0, "max": 64 },
 
 			{ "type": "int64", "name": "oio_ns_chunk_size",
-				"key": "oio.ns.chunk_size",
+				"key": "ns.chunk_size",
 				"descr": "Default chunk size for the given namespace.",
 				"def": "100Mi", "min": 1, "max": "max" },
 
 			{ "type": "string", "name": "oio_ns_service_update_policy",
-				"key": "oio.ns.service_update_policy",
+				"key": "ns.service_update_policy",
 				"limit": 1024,
 				"def": "meta2=KEEP|3|1;sqlx=KEEP|1|1|;rdir=KEEP|1|1|user_is_a_service=rawx",
 				"descr": "" },
 
 			{ "type": "string", "name": "oio_ns_storage_policy",
-				"key": "oio.ns.storage_policy",
+				"key": "ns.storage_policy",
 				"limit": 128,
 				"def": "NONE",
 				"descr": "" },
 
 			{ "type": "bool", "name": "oio_ns_master",
-				"key": "oio.ns.master",
+				"key": "ns.master",
 				"def": true,
 				"descr": "" },
 
 			{ "type": "bool", "name": "oio_ns_mode_worm",
-				"key": "oio.ns.worm",
+				"key": "ns.worm",
 				"def": false,
 				"descr": "Is the NS in a WORM (for Write Once, Read Many --but never delete)." },
 
