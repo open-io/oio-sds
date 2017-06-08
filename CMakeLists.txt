@@ -1,6 +1,14 @@
 cmake_minimum_required(VERSION 2.8)
 project (OIOSDS C)
 
+option(ENBUG "Introduces intentional bugs" OFF)
+option(STACK_PROTECTOR "Instrument the code to detect stack smashings" OFF)
+option(SOCKET_OPTIMIZED "Use Linux specific functions to save syscalls" ON)
+option(FORBID_SLICE "Forbid playing with GLib2's slice allocators" OFF)
+option(ALLOW_BACKTRACE "Attempt to compute backtraces when errors occur" OFF)
+option(FORBID_DEPRECATED "Avoid the deprecated symbols of the GLib2" OFF)
+option(ENABLE_CODECOVERAGE "Enable code coverage testing support" OFF)
+
 include(CheckIncludeFile)
 include(CheckLibraryExists)
 include(CheckTypeSize)
@@ -54,8 +62,6 @@ if (CMAKE_COMPILER_IS_GNUCC)
 	#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wswitch-enum")
 endif()
 
-OPTION( ENABLE_CODECOVERAGE "Enable code coverage testing support" )
-
 if ( ENABLE_CODECOVERAGE )
 
     if ( NOT DEFINED CODECOV_OUTPUTFILE )
@@ -65,6 +71,7 @@ if ( ENABLE_CODECOVERAGE )
     if ( NOT DEFINED CODECOV_HTMLOUTPUTDIR )
         set( CODECOV_HTMLOUTPUTDIR coverage_results )
     endif ( NOT DEFINED CODECOV_HTMLOUTPUTDIR )
+
 
 	set(CODECOV_PATTERN_TO_IGNORE
 		"'${CMAKE_BINARY_DIR}/metautils/asn1c/*.*'"
@@ -108,67 +115,54 @@ add_definitions(-D_FILE_OFFSET_BITS=64)
 add_definitions(-DHAVE_SOCKLEN_T)
 add_definitions(-DOIOSDS_PROJECT_VERSION="${OIOSDS_PROJECT_VERSION}")
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-	MESSAGE("DEBUG symbols enabled")
 	add_definitions(-DG_ERRORCHECK_MUTEXES)
 	add_definitions(-DHAVE_EXTRA_ASSERT=1)
 	add_definitions(-DHAVE_EXTRA_DEBUG=1)
 endif()
 
-option(ENBUG "Introduces intentional bugs" OFF)
+MESSAGE("OPTIONS:"
+	" ENBUG=${ENBUG}"
+	" SOCKET_OPTIMIZED=${SOCKET_OPTIMIZED}"
+	" FORBID_SLICE=${FORBID_SLICE}"
+	" STACK_PROTECTOR=${STACK_PROTECTOR}"
+	" FORBID_DEPRECATED=${FORBID_DEPRECATED}"
+	" ALLOW_BACKTRACE=${ALLOW_BACKTRACE}"
+	" ENABLE_CODECOVERAGE=${ENABLE_CODECOVERAGE}")
+
 if (ENBUG)
 	MESSAGE(WARNING "ENBUGED MODE : NOT FOR PRODUCTION USE")
 	add_definitions(-DHAVE_ENBUG=1)
 endif()
 
-if (DEFINED STACK_PROTECTOR)
+if (STACK_PROTECTOR)
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fstack-protector-all")
 endif()
+
 if (SOCKET_OPTIMIZED)
 	add_definitions(-D_GNU_SOURCE)
 	add_definitions(-DHAVE_SOCKET3)
 	add_definitions(-DHAVE_ACCEPT4)
 endif()
+
 if (FORBID_SLICE)
 	add_definitions(-DHAVE_NO_SLICE)
 endif()
+
 if (ALLOW_BACKTRACE)
 	add_definitions(-DHAVE_BACKTRACE)
 endif()
-if (SOCKET_LINGER_ONOFF)
-	add_definitions(-DSOCK_DEFAULT_LINGER_ONOFF=${SOCKET_LINGER_ONOFF})
-endif ()
-if (SOCKET_LINGER_DELAY)
-	add_definitions(-DSOCK_DEFAULT_LINGER_DELAY=${SOCKET_LINGER_DELAY})
-endif ()
+
+
 if (FORBID_DEPRECATED)
 	add_definitions(-DG_DISABLE_DEPRECATED=1)
 endif ()
 
-MESSAGE("FORBID_SLICE ${FORBID_SLICE}")
-MESSAGE("STACK_PROTECTOR ${STACK_PROTECTOR}")
-MESSAGE("FORBID_DEPRECATED ${FORBID_DEPRECATED}")
-MESSAGE("SOCKET_OPTIMIZED ${SOCKET_OPTIMIZED}")
-MESSAGE("SOCKET_LINGER_ONOFF ${SOCKET_LINGER_ONOFF}")
-MESSAGE("SOCKET_LINGER_DELAY ${SOCKET_LINGER_DELAY}")
-
 ###-------------------------------------------------------------------------###
-
-macro (dir2macro2 N D)
-	if (${N})
-		add_definitions(-D${N}=${${N}})
-		MESSAGE("CFLAGS: ${N} = ${${N}}")
-	else ()
-		add_definitions(-D${N}=${D})
-		MESSAGE("CFLAGS: ${N} = ${D} (default)")
-	endif ()
-endmacro ()
 
 macro (dir2macro N)
 	if (${N})
 		add_definitions(-D${N}=${${N}})
 		MESSAGE("CFLAGS: ${N} = ${${N}}")
-	else ()
-		MESSAGE("CFLAGS: ${N} left to default")
 	endif ()
 endmacro ()
 
