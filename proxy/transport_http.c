@@ -445,7 +445,6 @@ http_manage_request(struct req_ctx_s *r)
 
 		// Set the status line
 		g_string_append_printf(buf, "%s %d %s\r\n", r->request->version, code, msg);
-		g_string_append_printf(buf, "Server: oio-proxy/%s\r\n", OIOSDS_PROJECT_VERSION);
 
 		if (0 == g_ascii_strcasecmp("HTTP/1.1", r->request->version)) {
 			// Manage the "Connection" header of http/1.1
@@ -470,7 +469,6 @@ http_manage_request(struct req_ctx_s *r)
 				g_string_append(buf, content_type);
 				g_string_append_static(buf, "\r\n");
 			}
-			g_string_append_static(buf, "Transfer-Encoding: identity\r\n");
 		}
 		g_string_append_printf(buf, "Content-Length: %"G_GSIZE_FORMAT"\r\n", body_len);
 
