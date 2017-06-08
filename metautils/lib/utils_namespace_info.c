@@ -20,6 +20,7 @@ License along with this library.
 #include <errno.h>
 
 #include "metautils.h"
+#include <metautils/lib/common_variables.h>
 
 #include <json.h>
 
@@ -238,6 +239,21 @@ namespace_info_encode_json(GString *out, struct namespace_info_s *ni)
 {
 	g_string_append_c(out, '{');
 	OIO_JSON_append_str(out, "ns", ni->name);
+
+	/* for a smooth transition, also send the centralized values */
+	g_string_append_c(out, ',');
+	oio_str_gstring_append_json_pair_int(out, "chunksize", oio_ns_chunk_size);
+	g_string_append(out, ",\"options\":{");
+	oio_str_gstring_append_json_pair_int(out,
+			"flat_bitlength", oio_ns_flat_bits);
+	g_string_append_c(out, ',');
+	oio_str_gstring_append_json_pair(out,
+			"storage_policy", oio_ns_storage_policy);
+	g_string_append_c(out, ',');
+	oio_str_gstring_append_json_pair(out,
+			"service_update_policy", oio_ns_service_update_policy);
+	g_string_append_c(out, '}');
+
 	g_string_append_c(out, ',');
 	_encode_json_properties(out, ni->storage_policy, "storage_policy");
 	g_string_append_c(out, ',');
