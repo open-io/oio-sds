@@ -286,8 +286,8 @@ class TestObjectStorageAPI(BaseTestCase):
         self.assertEqual(meta['mime_type'], 'text/custom')
 
     def _upload_data(self, name):
-        # FIXME: find chunk_size
-        size = int(1048576 * 12)
+        chunksize = int(self.conf["chunk_size"])
+        size = int(chunksize * 12)
         data = random_data(int(size))
         self.api.object_create(self.account, name, obj_name=name,
                                data=data)
