@@ -80,7 +80,7 @@ def name2key(name):
 
 
 def key2macro(name):
-    return "OIO__" + name.replace(".", "_").upper()
+    return "OIO_" + name.replace(".", "_").upper()
 
 
 class Variable(object):
@@ -358,7 +358,7 @@ def gen_markdown_single_var(out, var):
  * type: {ctype}
  * cmake directive: *{macro}*
 """.format(**var.raw()))
-    if not isinstance(var, Bool):
+    if isinstance(var, Number):
         out.write(" * range: {vmin} -> {vmax}\n".format(**var.raw()))
 
 def gen_markdown(out, allvars):

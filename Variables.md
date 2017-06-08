@@ -91,7 +91,7 @@ Used by `gcc`
 
  * default: **FALSE**
  * type: gboolean
- * cmake directive: *OIO__CLIENT_ERRORS_CACHE_ENABLED*
+ * cmake directive: *OIO_CLIENT_ERRORS_CACHE_ENABLED*
 
 ### client.errors_cache.max
 
@@ -99,7 +99,7 @@ Used by `gcc`
 
  * default: **15**
  * type: guint64
- * cmake directive: *OIO__CLIENT_ERRORS_CACHE_MAX*
+ * cmake directive: *OIO_CLIENT_ERRORS_CACHE_MAX*
  * range: 1 -> 4294967296
 
 ### client.errors_cache.period
@@ -108,7 +108,7 @@ Used by `gcc`
 
  * default: **15**
  * type: gint64
- * cmake directive: *OIO__CLIENT_ERRORS_CACHE_PERIOD*
+ * cmake directive: *OIO_CLIENT_ERRORS_CACHE_PERIOD*
  * range: 1 -> 3600
 
 ### common.verbosity.reset_delay
@@ -117,7 +117,7 @@ Used by `gcc`
 
  * default: **5 * G_TIME_SPAN_MINUTE**
  * type: gint64
- * cmake directive: *OIO__COMMON_VERBOSITY_RESET_DELAY*
+ * cmake directive: *OIO_COMMON_VERBOSITY_RESET_DELAY*
  * range: 1 * G_TIME_SPAN_SECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### core.period.refresh.cpu_idle
@@ -126,7 +126,7 @@ Used by `gcc`
 
  * default: **1 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO__CORE_PERIOD_REFRESH_CPU_IDLE*
+ * cmake directive: *OIO_CORE_PERIOD_REFRESH_CPU_IDLE*
  * range: 100 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### core.period.refresh.io_idle
@@ -135,7 +135,7 @@ Used by `gcc`
 
  * default: **1 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO__CORE_PERIOD_REFRESH_IO_IDLE*
+ * cmake directive: *OIO_CORE_PERIOD_REFRESH_IO_IDLE*
  * range: 100 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### core.period.refresh.major_minor
@@ -144,7 +144,7 @@ Used by `gcc`
 
  * default: **30 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO__CORE_PERIOD_REFRESH_MAJOR_MINOR*
+ * cmake directive: *OIO_CORE_PERIOD_REFRESH_MAJOR_MINOR*
  * range: 100 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### core.resolver.dir_shuffle
@@ -153,7 +153,7 @@ Used by `gcc`
 
  * default: **TRUE**
  * type: gboolean
- * cmake directive: *OIO__CORE_RESOLVER_DIR_SHUFFLE*
+ * cmake directive: *OIO_CORE_RESOLVER_DIR_SHUFFLE*
 
 ### core.resolver.srv_shuffle
 
@@ -161,7 +161,7 @@ Used by `gcc`
 
  * default: **TRUE**
  * type: gboolean
- * cmake directive: *OIO__CORE_RESOLVER_SRV_SHUFFLE*
+ * cmake directive: *OIO_CORE_RESOLVER_SRV_SHUFFLE*
 
 ### core.sds.autocreate
 
@@ -169,7 +169,7 @@ Used by `gcc`
 
  * default: **FALSE**
  * type: gboolean
- * cmake directive: *OIO__CORE_SDS_AUTOCREATE*
+ * cmake directive: *OIO_CORE_SDS_AUTOCREATE*
 
 ### core.sds.noshuffle
 
@@ -177,7 +177,7 @@ Used by `gcc`
 
  * default: **FALSE**
  * type: gboolean
- * cmake directive: *OIO__CORE_SDS_NOSHUFFLE*
+ * cmake directive: *OIO_CORE_SDS_NOSHUFFLE*
 
 ### events.beanstalkd.delay
 
@@ -185,7 +185,7 @@ Used by `gcc`
 
  * default: **0**
  * type: gint64
- * cmake directive: *OIO__EVENTS_BEANSTALKD_DELAY*
+ * cmake directive: *OIO_EVENTS_BEANSTALKD_DELAY*
  * range: 0 -> 86400
 
 ### events.beanstalkd.prio
@@ -194,7 +194,7 @@ Used by `gcc`
 
  * default: **2147483648**
  * type: guint
- * cmake directive: *OIO__EVENTS_BEANSTALKD_PRIO*
+ * cmake directive: *OIO_EVENTS_BEANSTALKD_PRIO*
  * range: 0 -> 2147483648
 
 ### events.beanstalkd.ttr
@@ -203,7 +203,7 @@ Used by `gcc`
 
  * default: **120**
  * type: gint64
- * cmake directive: *OIO__EVENTS_BEANSTALKD_TTR*
+ * cmake directive: *OIO_EVENTS_BEANSTALKD_TTR*
  * range: 0 -> 86400
 
 ### events.common.pending.delay
@@ -212,7 +212,7 @@ Used by `gcc`
 
  * default: **5 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO__EVENTS_COMMON_PENDING_DELAY*
+ * cmake directive: *OIO_EVENTS_COMMON_PENDING_DELAY*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### events.common.pending.max
@@ -221,7 +221,7 @@ Used by `gcc`
 
  * default: **1000**
  * type: guint32
- * cmake directive: *OIO__EVENTS_COMMON_PENDING_MAX*
+ * cmake directive: *OIO_EVENTS_COMMON_PENDING_MAX*
  * range: 1 -> 1048576
 
 ### events.zmq.max_recv
@@ -230,7 +230,7 @@ Used by `gcc`
 
  * default: **32**
  * type: guint
- * cmake directive: *OIO__EVENTS_ZMQ_MAX_RECV*
+ * cmake directive: *OIO_EVENTS_ZMQ_MAX_RECV*
  * range: 1 -> 1073741824
 
 ### gridd.timeout.connect.common
@@ -239,7 +239,7 @@ Used by `gcc`
 
  * default: **2.0**
  * type: gdouble
- * cmake directive: *OIO__GRIDD_TIMEOUT_CONNECT_COMMON*
+ * cmake directive: *OIO_GRIDD_TIMEOUT_CONNECT_COMMON*
  * range: 0.01 -> 120.0
 
 ### gridd.timeout.single.common
@@ -248,7 +248,7 @@ Used by `gcc`
 
  * default: **30.0**
  * type: gdouble
- * cmake directive: *OIO__GRIDD_TIMEOUT_SINGLE_COMMON*
+ * cmake directive: *OIO_GRIDD_TIMEOUT_SINGLE_COMMON*
  * range: 0.01 -> 120.0
 
 ### gridd.timeout.whole.common
@@ -257,7 +257,7 @@ Used by `gcc`
 
  * default: **30.0**
  * type: gdouble
- * cmake directive: *OIO__GRIDD_TIMEOUT_WHOLE_COMMON*
+ * cmake directive: *OIO_GRIDD_TIMEOUT_WHOLE_COMMON*
  * range: 0.01 -> 120.0
 
 ### meta.queue.max_delay
@@ -266,7 +266,7 @@ Used by `gcc`
 
  * default: **2 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO__META_QUEUE_MAX_DELAY*
+ * cmake directive: *OIO_META_QUEUE_MAX_DELAY*
  * range: 10 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### meta0.outgoing.timeout.common.req
@@ -275,7 +275,7 @@ Used by `gcc`
 
  * default: **10.0**
  * type: gdouble
- * cmake directive: *OIO__META0_OUTGOING_TIMEOUT_COMMON_REQ*
+ * cmake directive: *OIO_META0_OUTGOING_TIMEOUT_COMMON_REQ*
  * range: 0.01 -> 60.0
 
 ### meta2.batch.maxlen
@@ -284,8 +284,17 @@ Used by `gcc`
 
  * default: **1000**
  * type: guint
- * cmake directive: *OIO__META2_BATCH_MAXLEN*
+ * cmake directive: *OIO_META2_BATCH_MAXLEN*
  * range: 1 -> 100000
+
+### meta2.container.max_size
+
+> How many bytes may be stored in each container.
+
+ * default: **0**
+ * type: gint64
+ * cmake directive: *OIO_META2_CONTAINER_MAX_SIZE*
+ * range: 0 -> G_MAXINT64
 
 ### meta2.generate.precheck
 
@@ -293,7 +302,16 @@ Used by `gcc`
 
  * default: **TRUE**
  * type: gboolean
- * cmake directive: *OIO__META2_GENERATE_PRECHECK*
+ * cmake directive: *OIO_META2_GENERATE_PRECHECK*
+
+### meta2.max_versions
+
+> How many versions for a single alias.
+
+ * default: **1**
+ * type: gint64
+ * cmake directive: *OIO_META2_MAX_VERSIONS*
+ * range: -1 -> G_MAXINT64
 
 ### meta2.reload.lb.period
 
@@ -301,7 +319,7 @@ Used by `gcc`
 
  * default: **10**
  * type: gint64
- * cmake directive: *OIO__META2_RELOAD_LB_PERIOD*
+ * cmake directive: *OIO_META2_RELOAD_LB_PERIOD*
  * range: 1 -> 3600
 
 ### meta2.reload.nsinfo.period
@@ -310,8 +328,67 @@ Used by `gcc`
 
  * default: **5**
  * type: gint64
- * cmake directive: *OIO__META2_RELOAD_NSINFO_PERIOD*
+ * cmake directive: *OIO_META2_RELOAD_NSINFO_PERIOD*
  * range: 1 -> 3600
+
+### meta2.retention_period
+
+> How long should deleted content be kept.
+
+ * default: **604800**
+ * type: gint64
+ * cmake directive: *OIO_META2_RETENTION_PERIOD*
+ * range: 1 -> 2592000
+
+### ns.chunk_size
+
+> Default chunk size for the given namespace.
+
+ * default: **104857600**
+ * type: gint64
+ * cmake directive: *OIO_NS_CHUNK_SIZE*
+ * range: 1 -> G_MAXINT64
+
+### ns.flat_bits
+
+> Default number of bits with flat-NS computation.
+
+ * default: **17**
+ * type: guint
+ * cmake directive: *OIO_NS_FLAT_BITS*
+ * range: 0 -> 64
+
+### ns.master
+
+> TODO: to be documented
+
+ * default: **TRUE**
+ * type: gboolean
+ * cmake directive: *OIO_NS_MASTER*
+
+### ns.service_update_policy
+
+> TODO: to be documented
+
+ * default: **meta2=KEEP|3|1;sqlx=KEEP|1|1|;rdir=KEEP|1|1|user_is_a_service=rawx**
+ * type: string
+ * cmake directive: *OIO_NS_SERVICE_UPDATE_POLICY*
+
+### ns.storage_policy
+
+> TODO: to be documented
+
+ * default: **NONE**
+ * type: string
+ * cmake directive: *OIO_NS_STORAGE_POLICY*
+
+### ns.worm
+
+> Is the NS in a WORM (for Write Once, Read Many --but never delete).
+
+ * default: **FALSE**
+ * type: gboolean
+ * cmake directive: *OIO_NS_WORM*
 
 ### proxy.bulk.max.create_many
 
@@ -319,7 +396,7 @@ Used by `gcc`
 
  * default: **100**
  * type: guint
- * cmake directive: *OIO__PROXY_BULK_MAX_CREATE_MANY*
+ * cmake directive: *OIO_PROXY_BULK_MAX_CREATE_MANY*
  * range: 0 -> 10000
 
 ### proxy.bulk.max.delete_many
@@ -328,7 +405,7 @@ Used by `gcc`
 
  * default: **100**
  * type: guint
- * cmake directive: *OIO__PROXY_BULK_MAX_DELETE_MANY*
+ * cmake directive: *OIO_PROXY_BULK_MAX_DELETE_MANY*
  * range: 0 -> 10000
 
 ### proxy.cache.enabled
@@ -337,7 +414,7 @@ Used by `gcc`
 
  * default: **TRUE**
  * type: gboolean
- * cmake directive: *OIO__PROXY_CACHE_ENABLED*
+ * cmake directive: *OIO_PROXY_CACHE_ENABLED*
 
 ### proxy.dir_shuffle
 
@@ -345,7 +422,7 @@ Used by `gcc`
 
  * default: **TRUE**
  * type: gboolean
- * cmake directive: *OIO__PROXY_DIR_SHUFFLE*
+ * cmake directive: *OIO_PROXY_DIR_SHUFFLE*
 
 ### proxy.force.master
 
@@ -353,7 +430,7 @@ Used by `gcc`
 
  * default: **FALSE**
  * type: gboolean
- * cmake directive: *OIO__PROXY_FORCE_MASTER*
+ * cmake directive: *OIO_PROXY_FORCE_MASTER*
 
 ### proxy.outgoing.timeout.common
 
@@ -361,7 +438,7 @@ Used by `gcc`
 
  * default: **30.0**
  * type: gdouble
- * cmake directive: *OIO__PROXY_OUTGOING_TIMEOUT_COMMON*
+ * cmake directive: *OIO_PROXY_OUTGOING_TIMEOUT_COMMON*
  * range: 0.01 -> 60.0
 
 ### proxy.outgoing.timeout.config
@@ -370,7 +447,7 @@ Used by `gcc`
 
  * default: **5.0**
  * type: gdouble
- * cmake directive: *OIO__PROXY_OUTGOING_TIMEOUT_CONFIG*
+ * cmake directive: *OIO_PROXY_OUTGOING_TIMEOUT_CONFIG*
  * range: 0.01 -> 60.0
 
 ### proxy.outgoing.timeout.conscience
@@ -379,7 +456,7 @@ Used by `gcc`
 
  * default: **2.0**
  * type: gdouble
- * cmake directive: *OIO__PROXY_OUTGOING_TIMEOUT_CONSCIENCE*
+ * cmake directive: *OIO_PROXY_OUTGOING_TIMEOUT_CONSCIENCE*
  * range: 0.01 -> 60.0
 
 ### proxy.outgoing.timeout.stat
@@ -388,7 +465,7 @@ Used by `gcc`
 
  * default: **5.0**
  * type: gdouble
- * cmake directive: *OIO__PROXY_OUTGOING_TIMEOUT_STAT*
+ * cmake directive: *OIO_PROXY_OUTGOING_TIMEOUT_STAT*
  * range: 0.01 -> 60.0
 
 ### proxy.period.cs.downstream
@@ -397,7 +474,7 @@ Used by `gcc`
 
  * default: **5**
  * type: gint64
- * cmake directive: *OIO__PROXY_PERIOD_CS_DOWNSTREAM*
+ * cmake directive: *OIO_PROXY_PERIOD_CS_DOWNSTREAM*
  * range: 0 -> 60
 
 ### proxy.period.cs.upstream
@@ -406,7 +483,7 @@ Used by `gcc`
 
  * default: **1**
  * type: gint64
- * cmake directive: *OIO__PROXY_PERIOD_CS_UPSTREAM*
+ * cmake directive: *OIO_PROXY_PERIOD_CS_UPSTREAM*
  * range: 1 -> 60
 
 ### proxy.period.refresh.csurl
@@ -415,7 +492,7 @@ Used by `gcc`
 
  * default: **30**
  * type: gint64
- * cmake directive: *OIO__PROXY_PERIOD_REFRESH_CSURL*
+ * cmake directive: *OIO_PROXY_PERIOD_REFRESH_CSURL*
  * range: 0 -> 86400
 
 ### proxy.period.refresh.srvtypes
@@ -424,7 +501,7 @@ Used by `gcc`
 
  * default: **30**
  * type: gint64
- * cmake directive: *OIO__PROXY_PERIOD_REFRESH_SRVTYPES*
+ * cmake directive: *OIO_PROXY_PERIOD_REFRESH_SRVTYPES*
  * range: 1 -> 86400
 
 ### proxy.period.reload.nsinfo
@@ -433,7 +510,7 @@ Used by `gcc`
 
  * default: **30**
  * type: gint64
- * cmake directive: *OIO__PROXY_PERIOD_RELOAD_NSINFO*
+ * cmake directive: *OIO_PROXY_PERIOD_RELOAD_NSINFO*
  * range: 1 -> 3600
 
 ### proxy.prefer.master_for_read
@@ -442,7 +519,7 @@ Used by `gcc`
 
  * default: **FALSE**
  * type: gboolean
- * cmake directive: *OIO__PROXY_PREFER_MASTER_FOR_READ*
+ * cmake directive: *OIO_PROXY_PREFER_MASTER_FOR_READ*
 
 ### proxy.prefer.master_for_write
 
@@ -450,7 +527,7 @@ Used by `gcc`
 
  * default: **TRUE**
  * type: gboolean
- * cmake directive: *OIO__PROXY_PREFER_MASTER_FOR_WRITE*
+ * cmake directive: *OIO_PROXY_PREFER_MASTER_FOR_WRITE*
 
 ### proxy.prefer.slave_for_read
 
@@ -458,7 +535,7 @@ Used by `gcc`
 
  * default: **FALSE**
  * type: gboolean
- * cmake directive: *OIO__PROXY_PREFER_SLAVE_FOR_READ*
+ * cmake directive: *OIO_PROXY_PREFER_SLAVE_FOR_READ*
 
 ### proxy.quirk.local_scores
 
@@ -466,7 +543,7 @@ Used by `gcc`
 
  * default: **FALSE**
  * type: gboolean
- * cmake directive: *OIO__PROXY_QUIRK_LOCAL_SCORES*
+ * cmake directive: *OIO_PROXY_QUIRK_LOCAL_SCORES*
 
 ### proxy.srv_shuffle
 
@@ -474,7 +551,7 @@ Used by `gcc`
 
  * default: **TRUE**
  * type: gboolean
- * cmake directive: *OIO__PROXY_SRV_SHUFFLE*
+ * cmake directive: *OIO_PROXY_SRV_SHUFFLE*
 
 ### proxy.ttl.services.down
 
@@ -482,7 +559,7 @@ Used by `gcc`
 
  * default: **5 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO__PROXY_TTL_SERVICES_DOWN*
+ * cmake directive: *OIO_PROXY_TTL_SERVICES_DOWN*
  * range: 0 -> 1 * G_TIME_SPAN_DAY
 
 ### proxy.ttl.services.known
@@ -491,7 +568,7 @@ Used by `gcc`
 
  * default: **5 * G_TIME_SPAN_DAY**
  * type: gint64
- * cmake directive: *OIO__PROXY_TTL_SERVICES_KNOWN*
+ * cmake directive: *OIO_PROXY_TTL_SERVICES_KNOWN*
  * range: 0 -> 7 * G_TIME_SPAN_DAY
 
 ### proxy.ttl.services.local
@@ -500,7 +577,7 @@ Used by `gcc`
 
  * default: **30 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO__PROXY_TTL_SERVICES_LOCAL*
+ * cmake directive: *OIO_PROXY_TTL_SERVICES_LOCAL*
  * range: 0 -> 1 * G_TIME_SPAN_DAY
 
 ### proxy.ttl.services.master
@@ -509,7 +586,7 @@ Used by `gcc`
 
  * default: **5 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO__PROXY_TTL_SERVICES_MASTER*
+ * cmake directive: *OIO_PROXY_TTL_SERVICES_MASTER*
  * range: 0 -> 7 * G_TIME_SPAN_DAY
 
 ### proxy.url.path.maxlen
@@ -518,7 +595,7 @@ Used by `gcc`
 
  * default: **2048**
  * type: guint
- * cmake directive: *OIO__PROXY_URL_PATH_MAXLEN*
+ * cmake directive: *OIO_PROXY_URL_PATH_MAXLEN*
  * range: 32 -> 65536
 
 ### rawx.events_allowed
@@ -527,7 +604,16 @@ Used by `gcc`
 
  * default: **TRUE**
  * type: gboolean
- * cmake directive: *OIO__RAWX_EVENTS_ALLOWED*
+ * cmake directive: *OIO_RAWX_EVENTS_ALLOWED*
+
+### rdir.fd_reserve
+
+> Only effective when `server.fd_max_passive` is set to 0 (autodetection). When deducing the maximum number of incoming connections, the rdir reserves that amount of file descritors to reach the database shards, and allocates what remains to the network.
+
+ * default: **128**
+ * type: guint
+ * cmake directive: *OIO_RDIR_FD_RESERVE*
+ * range: 64 -> 1024
 
 ### resolver.cache.csm0.max.default
 
@@ -535,7 +621,7 @@ Used by `gcc`
 
  * default: **0**
  * type: guint
- * cmake directive: *OIO__RESOLVER_CACHE_CSM0_MAX_DEFAULT*
+ * cmake directive: *OIO_RESOLVER_CACHE_CSM0_MAX_DEFAULT*
  * range: 0 -> 4194304
 
 ### resolver.cache.csm0.ttl.default
@@ -544,7 +630,7 @@ Used by `gcc`
 
  * default: **0**
  * type: gint64
- * cmake directive: *OIO__RESOLVER_CACHE_CSM0_TTL_DEFAULT*
+ * cmake directive: *OIO_RESOLVER_CACHE_CSM0_TTL_DEFAULT*
  * range: 0 -> G_MAXINT64
 
 ### resolver.cache.srv.max.default
@@ -553,7 +639,7 @@ Used by `gcc`
 
  * default: **0**
  * type: guint
- * cmake directive: *OIO__RESOLVER_CACHE_SRV_MAX_DEFAULT*
+ * cmake directive: *OIO_RESOLVER_CACHE_SRV_MAX_DEFAULT*
  * range: 0 -> 1048576
 
 ### resolver.cache.srv.ttl.default
@@ -562,7 +648,7 @@ Used by `gcc`
 
  * default: **0**
  * type: gint64
- * cmake directive: *OIO__RESOLVER_CACHE_SRV_TTL_DEFAULT*
+ * cmake directive: *OIO_RESOLVER_CACHE_SRV_TTL_DEFAULT*
  * range: 0 -> G_MAXINT64
 
 ### server.batch.accept
@@ -571,7 +657,7 @@ Used by `gcc`
 
  * default: **64**
  * type: guint
- * cmake directive: *OIO__SERVER_BATCH_ACCEPT*
+ * cmake directive: *OIO_SERVER_BATCH_ACCEPT*
  * range: 1 -> 4096
 
 ### server.batch.events
@@ -580,7 +666,7 @@ Used by `gcc`
 
  * default: **128**
  * type: guint
- * cmake directive: *OIO__SERVER_BATCH_EVENTS*
+ * cmake directive: *OIO_SERVER_BATCH_EVENTS*
  * range: 1 -> 4096
 
 ### server.cnx.timeout.idle
@@ -589,7 +675,7 @@ Used by `gcc`
 
  * default: **5 * G_TIME_SPAN_MINUTE**
  * type: gint64
- * cmake directive: *OIO__SERVER_CNX_TIMEOUT_IDLE*
+ * cmake directive: *OIO_SERVER_CNX_TIMEOUT_IDLE*
  * range: 0 -> 1 * G_TIME_SPAN_DAY
 
 ### server.cnx.timeout.never
@@ -598,7 +684,7 @@ Used by `gcc`
 
  * default: **30 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO__SERVER_CNX_TIMEOUT_NEVER*
+ * cmake directive: *OIO_SERVER_CNX_TIMEOUT_NEVER*
  * range: 0 -> 1 * G_TIME_SPAN_DAY
 
 ### server.cnx.timeout.persist
@@ -607,7 +693,7 @@ Used by `gcc`
 
  * default: **2 * G_TIME_SPAN_HOUR**
  * type: gint64
- * cmake directive: *OIO__SERVER_CNX_TIMEOUT_PERSIST*
+ * cmake directive: *OIO_SERVER_CNX_TIMEOUT_PERSIST*
  * range: 0 -> 1 * G_TIME_SPAN_DAY
 
 ### server.fd_max_passive
@@ -616,7 +702,7 @@ Used by `gcc`
 
  * default: **0**
  * type: guint
- * cmake directive: *OIO__SERVER_FD_MAX_PASSIVE*
+ * cmake directive: *OIO_SERVER_FD_MAX_PASSIVE*
  * range: 0 -> 4096
 
 ### server.log_outgoing
@@ -625,7 +711,7 @@ Used by `gcc`
 
  * default: **FALSE**
  * type: gboolean
- * cmake directive: *OIO__SERVER_LOG_OUTGOING*
+ * cmake directive: *OIO_SERVER_LOG_OUTGOING*
 
 ### server.malloc_trim_size.ondemand
 
@@ -633,7 +719,7 @@ Used by `gcc`
 
  * default: **0**
  * type: guint
- * cmake directive: *OIO__SERVER_MALLOC_TRIM_SIZE_ONDEMAND*
+ * cmake directive: *OIO_SERVER_MALLOC_TRIM_SIZE_ONDEMAND*
  * range: 0 -> 2147483648
 
 ### server.malloc_trim_size.periodic
@@ -642,7 +728,7 @@ Used by `gcc`
 
  * default: **0**
  * type: guint
- * cmake directive: *OIO__SERVER_MALLOC_TRIM_SIZE_PERIODIC*
+ * cmake directive: *OIO_SERVER_MALLOC_TRIM_SIZE_PERIODIC*
  * range: 0 -> 2147483648
 
 ### server.pool.max_idle
@@ -651,7 +737,7 @@ Used by `gcc`
 
  * default: **30 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO__SERVER_POOL_MAX_IDLE*
+ * cmake directive: *OIO_SERVER_POOL_MAX_IDLE*
  * range: 1 -> 1 * G_TIME_SPAN_HOUR
 
 ### server.pool.max_stat
@@ -660,7 +746,7 @@ Used by `gcc`
 
  * default: **1**
  * type: gint
- * cmake directive: *OIO__SERVER_POOL_MAX_STAT*
+ * cmake directive: *OIO_SERVER_POOL_MAX_STAT*
  * range: 0 -> 1073741824
 
 ### server.pool.max_tcp
@@ -669,7 +755,7 @@ Used by `gcc`
 
  * default: **0**
  * type: gint
- * cmake directive: *OIO__SERVER_POOL_MAX_TCP*
+ * cmake directive: *OIO_SERVER_POOL_MAX_TCP*
  * range: 0 -> 1073741824
 
 ### server.pool.max_udp
@@ -678,7 +764,7 @@ Used by `gcc`
 
  * default: **4**
  * type: gint
- * cmake directive: *OIO__SERVER_POOL_MAX_UDP*
+ * cmake directive: *OIO_SERVER_POOL_MAX_UDP*
  * range: 0 -> 1073741824
 
 ### server.pool.max_unused
@@ -687,7 +773,7 @@ Used by `gcc`
 
  * default: **20**
  * type: gint
- * cmake directive: *OIO__SERVER_POOL_MAX_UNUSED*
+ * cmake directive: *OIO_SERVER_POOL_MAX_UNUSED*
  * range: 0 -> 1073741824
 
 ### server.queue.max_delay
@@ -696,7 +782,7 @@ Used by `gcc`
 
  * default: **5 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO__SERVER_QUEUE_MAX_DELAY*
+ * cmake directive: *OIO_SERVER_QUEUE_MAX_DELAY*
  * range: 10 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### server.queue.warn_delay
@@ -705,7 +791,7 @@ Used by `gcc`
 
  * default: **100 * G_TIME_SPAN_MILLISECOND**
  * type: gint64
- * cmake directive: *OIO__SERVER_QUEUE_WARN_DELAY*
+ * cmake directive: *OIO_SERVER_QUEUE_WARN_DELAY*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### server.udp_queue.max
@@ -714,7 +800,7 @@ Used by `gcc`
 
  * default: **8192**
  * type: guint
- * cmake directive: *OIO__SERVER_UDP_QUEUE_MAX*
+ * cmake directive: *OIO_SERVER_UDP_QUEUE_MAX*
  * range: 0 -> 2147483648
 
 ### server.udp_queue.ttl
@@ -723,7 +809,7 @@ Used by `gcc`
 
  * default: **2 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO__SERVER_UDP_QUEUE_TTL*
+ * cmake directive: *OIO_SERVER_UDP_QUEUE_TTL*
  * range: 100 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_DAY
 
 ### socket.fastopen.enabled
@@ -732,7 +818,7 @@ Used by `gcc`
 
  * default: **TRUE**
  * type: gboolean
- * cmake directive: *OIO__SOCKET_FASTOPEN_ENABLED*
+ * cmake directive: *OIO_SOCKET_FASTOPEN_ENABLED*
 
 ### socket.linger.delay
 
@@ -740,7 +826,7 @@ Used by `gcc`
 
  * default: **1**
  * type: gint64
- * cmake directive: *OIO__SOCKET_LINGER_DELAY*
+ * cmake directive: *OIO_SOCKET_LINGER_DELAY*
  * range: 0 -> 60
 
 ### socket.linger.enabled
@@ -749,7 +835,7 @@ Used by `gcc`
 
  * default: **FALSE**
  * type: gboolean
- * cmake directive: *OIO__SOCKET_LINGER_ENABLED*
+ * cmake directive: *OIO_SOCKET_LINGER_ENABLED*
 
 ### socket.nodelay.enabled
 
@@ -757,7 +843,7 @@ Used by `gcc`
 
  * default: **TRUE**
  * type: gboolean
- * cmake directive: *OIO__SOCKET_NODELAY_ENABLED*
+ * cmake directive: *OIO_SOCKET_NODELAY_ENABLED*
 
 ### socket.quickack.enabled
 
@@ -765,7 +851,7 @@ Used by `gcc`
 
  * default: **TRUE**
  * type: gboolean
- * cmake directive: *OIO__SOCKET_QUICKACK_ENABLED*
+ * cmake directive: *OIO_SOCKET_QUICKACK_ENABLED*
 
 ### sqliterepo.cache.heat_threshold
 
@@ -773,7 +859,7 @@ Used by `gcc`
 
  * default: **1**
  * type: guint32
- * cmake directive: *OIO__SQLITEREPO_CACHE_HEAT_THRESHOLD*
+ * cmake directive: *OIO_SQLITEREPO_CACHE_HEAT_THRESHOLD*
  * range: 1 -> 2147483648
 
 ### sqliterepo.cache.heavyload.alert
@@ -782,7 +868,7 @@ Used by `gcc`
 
  * default: **TRUE**
  * type: gboolean
- * cmake directive: *OIO__SQLITEREPO_CACHE_HEAVYLOAD_ALERT*
+ * cmake directive: *OIO_SQLITEREPO_CACHE_HEAVYLOAD_ALERT*
 
 ### sqliterepo.cache.heavyload.fail
 
@@ -790,7 +876,7 @@ Used by `gcc`
 
  * default: **FALSE**
  * type: gboolean
- * cmake directive: *OIO__SQLITEREPO_CACHE_HEAVYLOAD_FAIL*
+ * cmake directive: *OIO_SQLITEREPO_CACHE_HEAVYLOAD_FAIL*
 
 ### sqliterepo.cache.timeout.lock
 
@@ -798,7 +884,7 @@ Used by `gcc`
 
  * default: **1 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO__SQLITEREPO_CACHE_TIMEOUT_LOCK*
+ * cmake directive: *OIO_SQLITEREPO_CACHE_TIMEOUT_LOCK*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### sqliterepo.cache.timeout.open
@@ -807,7 +893,7 @@ Used by `gcc`
 
  * default: **20 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO__SQLITEREPO_CACHE_TIMEOUT_OPEN*
+ * cmake directive: *OIO_SQLITEREPO_CACHE_TIMEOUT_OPEN*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_DAY
 
 ### sqliterepo.cache.ttl.cool
@@ -816,7 +902,7 @@ Used by `gcc`
 
  * default: **0**
  * type: gint64
- * cmake directive: *OIO__SQLITEREPO_CACHE_TTL_COOL*
+ * cmake directive: *OIO_SQLITEREPO_CACHE_TTL_COOL*
  * range: 0 -> 1 * G_TIME_SPAN_HOUR
 
 ### sqliterepo.cache.ttl.hot
@@ -825,7 +911,7 @@ Used by `gcc`
 
  * default: **0**
  * type: gint64
- * cmake directive: *OIO__SQLITEREPO_CACHE_TTL_HOT*
+ * cmake directive: *OIO_SQLITEREPO_CACHE_TTL_HOT*
  * range: 0 -> 1 * G_TIME_SPAN_HOUR
 
 ### sqliterepo.cache.waiting.max
@@ -834,7 +920,7 @@ Used by `gcc`
 
  * default: **16**
  * type: guint32
- * cmake directive: *OIO__SQLITEREPO_CACHE_WAITING_MAX*
+ * cmake directive: *OIO_SQLITEREPO_CACHE_WAITING_MAX*
  * range: 0 -> 2147483648
 
 ### sqliterepo.client.timeout.alert_if_longer
@@ -843,7 +929,7 @@ Used by `gcc`
 
  * default: **5 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO__SQLITEREPO_CLIENT_TIMEOUT_ALERT_IF_LONGER*
+ * cmake directive: *OIO_SQLITEREPO_CLIENT_TIMEOUT_ALERT_IF_LONGER*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### sqliterepo.election.delay.expire_master
@@ -852,7 +938,7 @@ Used by `gcc`
 
  * default: **25 * G_TIME_SPAN_MINUTE**
  * type: gint64
- * cmake directive: *OIO__SQLITEREPO_ELECTION_DELAY_EXPIRE_MASTER*
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_DELAY_EXPIRE_MASTER*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 7 * G_TIME_SPAN_DAY
 
 ### sqliterepo.election.delay.expire_none
@@ -861,7 +947,7 @@ Used by `gcc`
 
  * default: **5 * G_TIME_SPAN_MINUTE**
  * type: gint64
- * cmake directive: *OIO__SQLITEREPO_ELECTION_DELAY_EXPIRE_NONE*
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_DELAY_EXPIRE_NONE*
  * range: 1 * G_TIME_SPAN_SECOND -> 1 * G_TIME_SPAN_DAY
 
 ### sqliterepo.election.delay.expire_slave
@@ -870,7 +956,7 @@ Used by `gcc`
 
  * default: **15 * G_TIME_SPAN_MINUTE**
  * type: gint64
- * cmake directive: *OIO__SQLITEREPO_ELECTION_DELAY_EXPIRE_SLAVE*
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_DELAY_EXPIRE_SLAVE*
  * range: 1 * G_TIME_SPAN_SECOND -> 7 * G_TIME_SPAN_DAY
 
 ### sqliterepo.election.delay.ping_final
@@ -879,7 +965,7 @@ Used by `gcc`
 
  * default: **15 * G_TIME_SPAN_MINUTE**
  * type: gint64
- * cmake directive: *OIO__SQLITEREPO_ELECTION_DELAY_PING_FINAL*
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_DELAY_PING_FINAL*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_DAY
 
 ### sqliterepo.election.delay.retry_failed
@@ -888,7 +974,7 @@ Used by `gcc`
 
  * default: **2 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO__SQLITEREPO_ELECTION_DELAY_RETRY_FAILED*
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_DELAY_RETRY_FAILED*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 7 * G_TIME_SPAN_DAY
 
 ### sqliterepo.election.nowait.after
@@ -897,7 +983,7 @@ Used by `gcc`
 
  * default: **15 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO__SQLITEREPO_ELECTION_NOWAIT_AFTER*
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_NOWAIT_AFTER*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### sqliterepo.election.task.expire_max_per_round
@@ -906,7 +992,7 @@ Used by `gcc`
 
  * default: **100**
  * type: guint
- * cmake directive: *OIO__SQLITEREPO_ELECTION_TASK_EXPIRE_MAX_PER_ROUND*
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_TASK_EXPIRE_MAX_PER_ROUND*
  * range: 1 -> 2147483648
 
 ### sqliterepo.election.wait.delay
@@ -915,7 +1001,7 @@ Used by `gcc`
 
  * default: **5 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO__SQLITEREPO_ELECTION_WAIT_DELAY*
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_WAIT_DELAY*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### sqliterepo.election.wait.quantum
@@ -924,7 +1010,7 @@ Used by `gcc`
 
  * default: **1 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO__SQLITEREPO_ELECTION_WAIT_QUANTUM*
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_WAIT_QUANTUM*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### sqliterepo.outgoing.timeout.cnx.getvers
@@ -933,7 +1019,7 @@ Used by `gcc`
 
  * default: **0.5**
  * type: gdouble
- * cmake directive: *OIO__SQLITEREPO_OUTGOING_TIMEOUT_CNX_GETVERS*
+ * cmake directive: *OIO_SQLITEREPO_OUTGOING_TIMEOUT_CNX_GETVERS*
  * range: 0.01 -> 30.0
 
 ### sqliterepo.outgoing.timeout.cnx.replicate
@@ -942,7 +1028,7 @@ Used by `gcc`
 
  * default: **1.0**
  * type: gdouble
- * cmake directive: *OIO__SQLITEREPO_OUTGOING_TIMEOUT_CNX_REPLICATE*
+ * cmake directive: *OIO_SQLITEREPO_OUTGOING_TIMEOUT_CNX_REPLICATE*
  * range: 0.01 -> 30.0
 
 ### sqliterepo.outgoing.timeout.cnx.resync
@@ -951,7 +1037,7 @@ Used by `gcc`
 
  * default: **1.0**
  * type: gdouble
- * cmake directive: *OIO__SQLITEREPO_OUTGOING_TIMEOUT_CNX_RESYNC*
+ * cmake directive: *OIO_SQLITEREPO_OUTGOING_TIMEOUT_CNX_RESYNC*
  * range: 0.01 -> 30.0
 
 ### sqliterepo.outgoing.timeout.cnx.use
@@ -960,7 +1046,7 @@ Used by `gcc`
 
  * default: **0.25**
  * type: gdouble
- * cmake directive: *OIO__SQLITEREPO_OUTGOING_TIMEOUT_CNX_USE*
+ * cmake directive: *OIO_SQLITEREPO_OUTGOING_TIMEOUT_CNX_USE*
  * range: 0.01 -> 30.0
 
 ### sqliterepo.outgoing.timeout.req.getvers
@@ -969,7 +1055,7 @@ Used by `gcc`
 
  * default: **2.0**
  * type: gdouble
- * cmake directive: *OIO__SQLITEREPO_OUTGOING_TIMEOUT_REQ_GETVERS*
+ * cmake directive: *OIO_SQLITEREPO_OUTGOING_TIMEOUT_REQ_GETVERS*
  * range: 0.01 -> 30.0
 
 ### sqliterepo.outgoing.timeout.req.replicate
@@ -978,7 +1064,7 @@ Used by `gcc`
 
  * default: **10.0**
  * type: gdouble
- * cmake directive: *OIO__SQLITEREPO_OUTGOING_TIMEOUT_REQ_REPLICATE*
+ * cmake directive: *OIO_SQLITEREPO_OUTGOING_TIMEOUT_REQ_REPLICATE*
  * range: 0.01 -> 30.0
 
 ### sqliterepo.outgoing.timeout.req.resync
@@ -987,7 +1073,7 @@ Used by `gcc`
 
  * default: **30.0**
  * type: gdouble
- * cmake directive: *OIO__SQLITEREPO_OUTGOING_TIMEOUT_REQ_RESYNC*
+ * cmake directive: *OIO_SQLITEREPO_OUTGOING_TIMEOUT_REQ_RESYNC*
  * range: 0.01 -> 60.0
 
 ### sqliterepo.outgoing.timeout.req.use
@@ -996,7 +1082,7 @@ Used by `gcc`
 
  * default: **1.0**
  * type: gdouble
- * cmake directive: *OIO__SQLITEREPO_OUTGOING_TIMEOUT_REQ_USE*
+ * cmake directive: *OIO_SQLITEREPO_OUTGOING_TIMEOUT_REQ_USE*
  * range: 0.01 -> 30.0
 
 ### sqliterepo.page_size
@@ -1005,7 +1091,7 @@ Used by `gcc`
 
  * default: **4096**
  * type: guint
- * cmake directive: *OIO__SQLITEREPO_PAGE_SIZE*
+ * cmake directive: *OIO_SQLITEREPO_PAGE_SIZE*
  * range: 512 -> 1048576
 
 ### sqliterepo.release_size
@@ -1014,7 +1100,7 @@ Used by `gcc`
 
  * default: **67108864**
  * type: guint
- * cmake directive: *OIO__SQLITEREPO_RELEASE_SIZE*
+ * cmake directive: *OIO_SQLITEREPO_RELEASE_SIZE*
  * range: 1 -> 2147483648
 
 ### sqliterepo.repo.fd_max_active
@@ -1023,7 +1109,7 @@ Used by `gcc`
 
  * default: **0**
  * type: guint
- * cmake directive: *OIO__SQLITEREPO_REPO_FD_MAX_ACTIVE*
+ * cmake directive: *OIO_SQLITEREPO_REPO_FD_MAX_ACTIVE*
  * range: 0 -> 4096
 
 ### sqliterepo.repo.getvers_max_retries
@@ -1032,7 +1118,7 @@ Used by `gcc`
 
  * default: **2**
  * type: guint
- * cmake directive: *OIO__SQLITEREPO_REPO_GETVERS_MAX_RETRIES*
+ * cmake directive: *OIO_SQLITEREPO_REPO_GETVERS_MAX_RETRIES*
  * range: 1 -> 64
 
 ### sqliterepo.repo.hard_max
@@ -1041,7 +1127,7 @@ Used by `gcc`
 
  * default: **32768**
  * type: guint
- * cmake directive: *OIO__SQLITEREPO_REPO_HARD_MAX*
+ * cmake directive: *OIO_SQLITEREPO_REPO_HARD_MAX*
  * range: 8 -> 131072
 
 ### sqliterepo.repo.soft_max
@@ -1050,7 +1136,7 @@ Used by `gcc`
 
  * default: **0**
  * type: guint
- * cmake directive: *OIO__SQLITEREPO_REPO_SOFT_MAX*
+ * cmake directive: *OIO_SQLITEREPO_REPO_SOFT_MAX*
  * range: 0 -> 131072
 
 ### sqliterepo.service.exit_ttl
@@ -1059,7 +1145,7 @@ Used by `gcc`
 
  * default: **10 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO__SQLITEREPO_SERVICE_EXIT_TTL*
+ * cmake directive: *OIO_SQLITEREPO_SERVICE_EXIT_TTL*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### sqliterepo.timeout.zk
@@ -1068,7 +1154,7 @@ Used by `gcc`
 
  * default: **10 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO__SQLITEREPO_TIMEOUT_ZK*
+ * cmake directive: *OIO_SQLITEREPO_TIMEOUT_ZK*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### sqliterepo.zk.rrd.threshold
@@ -1077,7 +1163,7 @@ Used by `gcc`
 
  * default: **5**
  * type: guint
- * cmake directive: *OIO__SQLITEREPO_ZK_RRD_THRESHOLD*
+ * cmake directive: *OIO_SQLITEREPO_ZK_RRD_THRESHOLD*
  * range: 1 -> 2147483648
 
 ### sqliterepo.zk.rrd.window
@@ -1086,7 +1172,7 @@ Used by `gcc`
 
  * default: **30**
  * type: guint
- * cmake directive: *OIO__SQLITEREPO_ZK_RRD_WINDOW*
+ * cmake directive: *OIO_SQLITEREPO_ZK_RRD_WINDOW*
  * range: 1 -> 4095
 
 ### sqlx.lb.refresh_period
@@ -1095,7 +1181,7 @@ Used by `gcc`
 
  * default: **1**
  * type: gint64
- * cmake directive: *OIO__SQLX_LB_REFRESH_PERIOD*
+ * cmake directive: *OIO_SQLX_LB_REFRESH_PERIOD*
  * range: 1 -> 60
 
 ### sqlx.outgoing.timeout.req
@@ -1104,7 +1190,7 @@ Used by `gcc`
 
  * default: **30.0**
  * type: gdouble
- * cmake directive: *OIO__SQLX_OUTGOING_TIMEOUT_REQ*
+ * cmake directive: *OIO_SQLX_OUTGOING_TIMEOUT_REQ*
  * range: 0.01 -> 60.0
 
 ### udp_allowed
@@ -1113,7 +1199,7 @@ Used by `gcc`
 
  * default: **FALSE**
  * type: gboolean
- * cmake directive: *OIO__UDP_ALLOWED*
+ * cmake directive: *OIO_UDP_ALLOWED*
 
 ## Variables only for testing purposes
 
@@ -1127,7 +1213,7 @@ the cmake command line.
 
  * default: **10**
  * type: gint32
- * cmake directive: *OIO__ENBUG_CLIENT_FAKE_TIMEOUT_THRESHOLD*
+ * cmake directive: *OIO_ENBUG_CLIENT_FAKE_TIMEOUT_THRESHOLD*
  * range: 0 -> 0
 
 ### enbug.sqliterepo.client.failure.threshold
@@ -1136,7 +1222,7 @@ the cmake command line.
 
  * default: **10**
  * type: gint32
- * cmake directive: *OIO__ENBUG_SQLITEREPO_CLIENT_FAILURE_THRESHOLD*
+ * cmake directive: *OIO_ENBUG_SQLITEREPO_CLIENT_FAILURE_THRESHOLD*
  * range: 0 -> 100
 
 ### enbug.sqliterepo.client.timeout.period
@@ -1145,7 +1231,7 @@ the cmake command line.
 
  * default: **1 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO__ENBUG_SQLITEREPO_CLIENT_TIMEOUT_PERIOD*
+ * cmake directive: *OIO_ENBUG_SQLITEREPO_CLIENT_TIMEOUT_PERIOD*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_DAY
 
 ### enbug.sqliterepo.synchro.failure
@@ -1154,5 +1240,5 @@ the cmake command line.
 
  * default: **10**
  * type: gint32
- * cmake directive: *OIO__ENBUG_SQLITEREPO_SYNCHRO_FAILURE*
+ * cmake directive: *OIO_ENBUG_SQLITEREPO_SYNCHRO_FAILURE*
  * range: 0 -> 100
