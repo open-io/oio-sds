@@ -34,6 +34,8 @@ License along with this library.
 #include <curl/curl.h>
 #include <curl/multi.h>
 
+#include <core/client_variables.h>
+
 #include "internals.h"
 #include "oioext.h"
 #include "oiolog.h"
@@ -737,7 +739,7 @@ _curl_get_handle_blob (void)
 	curl_easy_setopt (h, CURLOPT_FORBID_REUSE, 1L);
 	curl_easy_setopt (h, CURLOPT_NOSIGNAL, 1L);
 	curl_easy_setopt (h, CURLOPT_FRESH_CONNECT, 1L);
-	curl_easy_setopt (h, CURLOPT_USERAGENT, OIOSDS_http_agent);
+	curl_easy_setopt (h, CURLOPT_USERAGENT, oio_core_http_user_agent);
 	curl_easy_setopt (h, CURLOPT_NOPROGRESS, 1L);
 	curl_easy_setopt (h, CURLOPT_PROXY, "");
 	curl_easy_setopt (h, CURLOPT_SOCKOPTDATA, NULL);
@@ -753,7 +755,7 @@ CURL *
 _curl_get_handle_proxy (void)
 {
 	CURL *h = curl_easy_init ();
-	curl_easy_setopt (h, CURLOPT_USERAGENT, OIOSDS_http_agent);
+	curl_easy_setopt (h, CURLOPT_USERAGENT, oio_core_http_user_agent);
 	curl_easy_setopt (h, CURLOPT_NOSIGNAL, 1L);
 	curl_easy_setopt (h, CURLOPT_TCP_NODELAY, 1L);
 	curl_easy_setopt (h, CURLOPT_NOPROGRESS, 1L);

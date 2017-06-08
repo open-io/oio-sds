@@ -709,7 +709,13 @@
 			{ "type": "monotonic", "name": "_refresh_cpu_idle",
 				"key": "core.period.refresh.cpu_idle",
 				"descr": "Sets the miniimal amount of time between two refreshed of the known CPU-idle counters for the current host. Keep this value small.",
-				"def": "1s", "min": "100ms", "max": "1h" }
+				"def": "1s", "min": "100ms", "max": "1h" },
+
+			{ "type": "string", "name": "oio_core_http_user_agent",
+				"key": "core.http.user_agent",
+				"limit": 64,
+				"def": "",
+				"descr": "HTTP User-Agent to be used between any C client and the proxy" }
 		]
 	}
 }

@@ -22,10 +22,6 @@ License along with this library.
 extern "C" {
 #endif
 
-# ifndef  OIOSDS_http_agent
-#  define OIOSDS_http_agent "OpenIO-SDS/SDK-2.0"
-# endif
-
 # ifdef M2V2_ADMIN_SIZE
 #  define OIO_SDS_CONTAINER_USAGE M2V2_ADMIN_SIZE
 # else
