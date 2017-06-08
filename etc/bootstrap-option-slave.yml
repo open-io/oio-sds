@@ -1,1 +1,2 @@
-state: "slave"
+config:
+  oio.ns.master: false

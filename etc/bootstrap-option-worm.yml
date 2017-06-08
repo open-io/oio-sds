@@ -1,1 +1,2 @@
-worm: true
+config:
+  oio.ns.worm: true

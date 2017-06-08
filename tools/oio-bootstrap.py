@@ -934,10 +934,6 @@ COMPRESSION = 'compression'
 APPLICATION_KEY = 'application_key'
 KEY_FILE='key_file'
 META_HEADER='x-oio-chunk-meta'
-WORMED="worm"
-MASTER_VALUE="master"
-SLAVE_VALUE="slave"
-STANDALONE_VALUE="standalone"
 
 defaults = {
     'NS': 'OPENIO',
@@ -956,11 +952,7 @@ defaults = {
     'REPLI_M1': 1,
     'COMPRESSION': "off",
     MONITOR_PERIOD: 1,
-    M1_DIGITS: 4,
-    WORMED:False,
-    SLAVE_VALUE:False,
-    MASTER_VALUE:False,
-    STANDALONE_VALUE:False}
+    M1_DIGITS: 4}
 
 # XXX When /usr/sbin/httpd is present we suspect a Redhat/Centos/Fedora
 # environment. If not, we consider being in a Ubuntu/Debian environment.
@@ -1043,12 +1035,7 @@ def generate(options):
     backblaze_account_id = options.get('backblaze', {}).get(ACCOUNT_ID)
     backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
     backblaze_app_key = options.get('backblaze', {}).get(APPLICATION_KEY)
-    is_wormed = options.get(WORMED, defaults[WORMED])
-    worm = '1' if is_wormed else '0'
-    state = options.get("state", None)
 
-    if state not in [MASTER_VALUE, SLAVE_VALUE, STANDALONE_VALUE]:
-        state = STANDALONE_VALUE
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(ZK_CNXSTRING=options.get('ZK'),
                NS=ns,
@@ -1085,9 +1072,7 @@ def generate(options):
                BACKBLAZE_APPLICATION_KEY=backblaze_app_key,
                KEY_FILE=key_file,
                HTTPD_BINARY=HTTPD_BINARY,
-               META_HEADER=META_HEADER,
-               STATE=state,
-               WORMED=worm)
+               META_HEADER=META_HEADER)
 
     def merge_env(add):
         env = dict(ENV)
@@ -1410,14 +1395,13 @@ def generate(options):
     final_conf["storage_policy"] = stgpol
     final_conf["account"] = 'test_account'
     final_conf["sds_path"] = SDSDIR
+    # TODO(jfs): remove this line only required by some tests cases
     final_conf["chunk_size"] = options['config']['oio.ns.chunk_size']
     final_conf["proxy"] = final_services['proxy'][0]['addr']
     final_conf[M2_REPLICAS] = meta2_replicas
     final_conf[M1_REPLICAS] = meta1_replicas
     final_conf[M1_DIGITS] = meta1_digits
-    for k in (WORMED,
-              MASTER_VALUE, SLAVE_VALUE, STANDALONE_VALUE,
-              APPLICATION_KEY, COMPRESSION, BUCKET_NAME,
+    for k in (APPLICATION_KEY, COMPRESSION, BUCKET_NAME,
               ACCOUNT_ID, PORT_START, PROFILE,
               MONITOR_PERIOD):
         if k in ENV:
