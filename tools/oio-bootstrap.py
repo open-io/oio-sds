@@ -928,7 +928,6 @@ M2_STGPOL = 'storage_policy'
 SQLX_REPLICAS = 'sqlx_replicas'
 PROFILE = 'profile'
 PORT_START = 'port_start'
-CHUNK_SIZE = 'chunk_size'
 ACCOUNT_ID = 'account_id'
 BUCKET_NAME = 'bucket_name'
 COMPRESSION = 'compression'
@@ -957,7 +956,6 @@ defaults = {
     'REPLI_M1': 1,
     'COMPRESSION': "off",
     MONITOR_PERIOD: 1,
-    CHUNK_SIZE: 1024*1024,
     M1_DIGITS: 4,
     WORMED:False,
     SLAVE_VALUE:False,
@@ -1118,8 +1116,6 @@ def generate(options):
         env['VOLUME'] = '{DATADIR}/{NS}-{SRVTYPE}-{SRVNUM}'.format(**env)
         return env
 
-    ENV['CHUNK_SIZE'] = getint(
-            options.get(CHUNK_SIZE), defaults[CHUNK_SIZE])
     ENV['MONITOR_PERIOD'] = getint(
             options.get(MONITOR_PERIOD), defaults[MONITOR_PERIOD])
     if options.get(ZOOKEEPER):
@@ -1414,6 +1410,7 @@ def generate(options):
     final_conf["storage_policy"] = stgpol
     final_conf["account"] = 'test_account'
     final_conf["sds_path"] = SDSDIR
+    final_conf["chunk_size"] = options['config']['oio.ns.chunk_size']
     final_conf["proxy"] = final_services['proxy'][0]['addr']
     final_conf[M2_REPLICAS] = meta2_replicas
     final_conf[M1_REPLICAS] = meta1_replicas
@@ -1421,7 +1418,7 @@ def generate(options):
     for k in (WORMED,
               MASTER_VALUE, SLAVE_VALUE, STANDALONE_VALUE,
               APPLICATION_KEY, COMPRESSION, BUCKET_NAME,
-              ACCOUNT_ID, CHUNK_SIZE, PORT_START, PROFILE,
+              ACCOUNT_ID, PORT_START, PROFILE,
               MONITOR_PERIOD):
         if k in ENV:
             final_conf[k] = ENV[k]
@@ -1475,6 +1472,7 @@ def main():
     opts = {}
     opts['config'] = dict()
     opts['config']['proxy.cache.enabled'] = False
+    opts['config']['oio.ns.chunk_size'] = 1024 * 1024
     opts[ZOOKEEPER] = False
     opts['conscience'] = {SVC_NB: None, SVC_HOSTS: None}
     opts['meta0'] = {SVC_NB: None, SVC_HOSTS: None}

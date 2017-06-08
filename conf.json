@@ -129,7 +129,7 @@
 				"def": 17, "min": 0, "max": 64 },
 
 			{ "type": "int64", "name": "oio_ns_chunk_size",
-				"key": "meta2.default_chunk_size",
+				"key": "oio.ns.chunk_size",
 				"descr": "Default chunk size for the given namespace.",
 				"def": "100Mi", "min": 1, "max": "max" },
 
