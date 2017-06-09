@@ -1,5 +1,4 @@
 import logging
-
 from cliff import command
 from cliff import show
 from cliff import lister
@@ -168,18 +167,18 @@ class ListAccounts(lister.Lister):
         accounts = ((e,) for e in data)
 
         if parsed_args.long_listing:
+
+            def _get_info_accounts(accounts):
+                for account in accounts:
+                    data = self.app.client_manager.storage.account_show(
+                        account=account
+                    )
+                    yield (data['id'], data['bytes'], data['containers'],
+                           data['objects'], data['ctime'], data['metadata'])
+
             columns = ('Name', 'bytes', 'containers', 'objects', 'ctime',
                        'metadata')
-            full_info = []
-            for account in accounts:
-                data = self.app.client_manager.storage.account_show(
-                    account=account
-                )
-                full_info.append((data['id'], data['bytes'],
-                                  data['containers'], data['objects'],
-                                  data['ctime'], data['metadata']))
-
-            return columns, full_info
+            return columns, _get_info_accounts(accounts)
 
         column = ('Name',)
         return column, accounts
