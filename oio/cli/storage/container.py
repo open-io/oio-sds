@@ -237,6 +237,10 @@ class ListContainer(cliff.lister.Lister):
 
     log = logging.getLogger(__name__ + '.ListContainer')
 
+    @property
+    def formatter_default(self):
+        return "value"
+
     def get_parser(self, prog_name):
         parser = super(ListContainer, self).get_parser(prog_name)
         parser.add_argument(
