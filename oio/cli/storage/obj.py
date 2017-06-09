@@ -391,6 +391,10 @@ class ListObject(ContainerCommandMixin, lister.Lister):
 
     log = logging.getLogger(__name__ + '.ListObject')
 
+    @property
+    def formatter_default(self):
+        return "value"
+
     def get_parser(self, prog_name):
         parser = super(ListObject, self).get_parser(prog_name)
         self.patch_parser(parser)
