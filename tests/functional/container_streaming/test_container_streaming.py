@@ -33,7 +33,7 @@ class TestContainerDownload(BaseTestCase):
         self.conn = ObjectStorageApi(self.ns)
         self._streaming = 'http://' + self.get_service_url('admin')[2] + '/'
         self._cnt = random_container()
-        self._uri = self._streaming + self._cnt
+        self._uri = self._streaming + 'v1.0/dump?acct=' + self.account + '&ref=' + self._cnt
         self._data = {}
         self.conn.container_create(self.account, self._cnt)
         self.raw = ""
@@ -107,7 +107,7 @@ class TestContainerDownload(BaseTestCase):
         ranges = ((-512, 511), (512, 0), (1, 3), (98888, 99999))
         for start, end in ranges:
             ret = requests.get(self._uri, headers={'Range': 'bytes=%d-%d' % (start, end)})
-            self.assertEqual(ret.status_code, 416, "for range %d-%d" % (start, end))
+            self.assertEqual(ret.status_code, 416, "Invalid error code for range %d-%d" % (start, end))
 
         ret = requests.get(self._uri, headers={'Range': 'bytes=0-511, 512-1023'})
         self.assertEqual(ret.status_code, 416)

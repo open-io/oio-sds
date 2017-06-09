@@ -1,0 +1,31 @@
+LoadModule mpm_worker_module /usr/lib/apache2/modules/mod_mpm_worker.so
+LoadModule authz_core_module /usr/lib/apache2/modules/mod_authz_core.so
+LoadModule wsgi_module /usr/lib/apache2/modules/mod_wsgi.so
+
+<IfModule !log_config_module>
+  LoadModule log_config_module /usr/lib/apache2/modules/mod_log_config.so
+</IfModule>
+
+# admin
+Listen 127.0.0.1:5001
+ServerName localhost
+PidFile /var/run/oio/sds/OPENIO-admin-1.pid
+
+User openio
+Group openio
+WSGIDaemonProcess ecd-1 processes=2 threads=1 user=openio group=openio
+WSGIProcessGroup ecd-1
+WSGIApplicationGroup ecd-1
+WSGIScriptAlias / /etc/oio/sds/OPENIO/conf/admin.wsgi
+WSGISocketPrefix /var/run/oio/sds/run
+WSGIChunkedRequest On
+LimitRequestFields 200
+
+LogFormat "%h %l %t \"%r\" %>s %b %D" log/common
+ErrorLog /var/log/oio/sds/OPENIO/logs/admin.log
+LogLevel debug
+CustomLog /var/log/oio/sds/OPENIO/sds/logs/admin.log log/common
+
+<VirtualHost 127.0.0.1:5001>
+# Leave Empty
+</VirtualHost>

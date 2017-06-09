@@ -470,6 +470,11 @@ template_credentials = """
 ${BACKBLAZE_ACCOUNT_ID}.${BACKBLAZE_BUCKET_NAME}.application_key=${BACKBLAZE_APPLICATION_KEY}
 """
 
+template_admin = """
+[admin]
+NS = ${NS}
+"""
+
 template_service_pools = """
 # Service pools declarations
 # ----------------------------
@@ -703,6 +708,8 @@ event-agent=beanstalk://127.0.0.1:11300
 conscience=${CS_ALL_PUB}
 
 meta1_digits=${M1_DIGITS}
+
+admin=${IP}:${PORT_ADMIN}
 
 """
 
@@ -1019,6 +1026,7 @@ def generate(options):
     ports = (x for x in xrange(options['port'],60000))
     port_proxy = next(ports)
     port_ecd = next(ports)
+    port_admin = next(ports)
 
     versioning = 1
     stgpol = "SINGLE"
@@ -1066,6 +1074,7 @@ def generate(options):
                VERSIONING=versioning,
                PORT_PROXYD=port_proxy,
                PORT_ECD=port_ecd,
+               PORT_ADMIN=port_admin,
                M1_DIGITS=meta1_digits,
                M1_REPLICAS=meta1_replicas,
                M2_REPLICAS=meta2_replicas,
@@ -1317,6 +1326,25 @@ def generate(options):
     with open(wsgi(env), 'w+') as f:
         f.write(to_write)
 
+    # container_streaming
+    env = subenv({'SRVTYPE': 'admin', 'SRVNUM': 1, 'PORT': port_admin})
+    add_service(env)
+    tpl = Template(template_gridinit_httpd)
+    with open(gridinit(env), 'a+') as f:
+        f.write(tpl.safe_substitute(env))
+    # service
+    tpl = Template(template_wsgi_service_host)
+    to_write = tpl.safe_substitute(env)
+    if options.get(OPENSUSE, False):
+        to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
+    with open(config(env), 'w+') as f:
+        f.write(to_write)
+    # service desc
+    tpl = Template(template_wsgi_service_descr)
+    to_write = tpl.safe_substitute(env, SRVTYPE='container_streaming')
+    with open(wsgi(env), 'w+') as f:
+        f.write(to_write)
+
     # account
     env = subenv({'SRVTYPE': 'account', 'SRVNUM': 1, 'PORT': next(ports)})
     add_service(env)
@@ -1390,6 +1418,8 @@ def generate(options):
 
     with open('{KEY_FILE}'.format(**ENV), 'w+') as f:
         tpl = Template(template_credentials)
+        f.write(tpl.safe_substitute(ENV))
+        tpl = Template(template_admin)
         f.write(tpl.safe_substitute(ENV))
 
     # ensure volumes for srvtype in final_services:

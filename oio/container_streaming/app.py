@@ -2,14 +2,15 @@
 
 from __future__ import print_function
 
+import ConfigParser
 from io import BytesIO
 import math
 import re
 from tarfile import TarInfo, REGTYPE, NUL, PAX_FORMAT, BLOCKSIZE
-import os
-import xattr
 
 from werkzeug.wrappers import Request, Response
+from werkzeug.routing import Map, Rule
+from werkzeug.exceptions import HTTPException, BadRequest, InternalServerError
 
 from oio import ObjectStorageApi
 from oio.common import exceptions as exc
@@ -24,17 +25,26 @@ EXP = re.compile(r"^bytes=(\d+)-(\d+)$")
 
 # FIXME move parameters somewhere (URL, Header, ... ?)
 NS = "OPENIO"
-ACCOUNT = "AUTH_demo"
-PROXY_URL = "http://127.0.0.1:6000"
 
 class ContainerStreaming(object):
     def __init__(self, conf):
+        self.ns = NS
         self.conf = conf
-        self.conn = ObjectStorageApi(NS)
 
-    def generate_oio_tarinfo_entry(self, container, name):
+        if "key_file" in conf:
+            config = ConfigParser.ConfigParser()
+            with open(conf['key_file']) as fp:
+                config.readfp(fp)
+                self.ns = config.get("admin", "NS")
+
+        self.conn = ObjectStorageApi(self.ns)
+        self.url_map = Map([
+            Rule('/v1.0/dump', endpoint='dump'),
+        ])
+
+    def generate_oio_tarinfo_entry(self, account, container, name):
         """ return tuple (buf, number of blocks, filesize) """
-        entry = self.conn.object_get_properties(ACCOUNT, container, name)
+        entry = self.conn.object_get_properties(account, container, name)
 
         tarinfo = TarInfo()
         tarinfo.name = entry['name']
@@ -61,18 +71,19 @@ class ContainerStreaming(object):
         assert remainder == 0, "Invalid size of generated TarInfo"
         return buf, blocks, tarinfo.size
 
-    def generate_oio_map(self, container):
-        if len(container) == 0:
+    def generate_oio_map(self, account, container):
+        if not container:
             raise exc.NoSuchContainer()
 
-        objs = self.conn.object_list(ACCOUNT, container)
+        objs = self.conn.object_list(account, container)
         map_objs = []
         start_block = 0
         for obj in sorted(objs['objects']):
             # FIXME should we backup deleted object ?
             if obj['deleted']:
                 continue
-            _, entry_blocks, size = self.generate_oio_tarinfo_entry(container, obj['name'])
+            _, entry_blocks, size = self.generate_oio_tarinfo_entry(
+                account, container, obj['name'])
             entry = {
                 'name': obj['name'],
                 'size': size,
@@ -84,19 +95,20 @@ class ContainerStreaming(object):
             map_objs.append(entry)
         return map_objs
 
-    def create_tar_oio_stream(self, container, name, blocks):
+    def create_tar_oio_stream(self, account, container, name, blocks):
         mem = BytesIO()
 
         # FIXME, we could add number of blocks reserved for the header in generate_oio_map to avoid
         # doing useless network call if not needed
-        buf, entry_blocks, size = self.generate_oio_tarinfo_entry(container, name)
+        buf, entry_blocks, size = self.generate_oio_tarinfo_entry(
+            account, container, name)
 
         for bl in xrange(entry_blocks):
             if bl in blocks:
                 mem.write(buf[bl * BLOCKSIZE : bl * BLOCKSIZE + BLOCKSIZE])
                 blocks.remove(bl)
 
-        if len(blocks) == 0:
+        if not blocks:
             mem.seek(0)
             return mem.read()
 
@@ -109,13 +121,17 @@ class ContainerStreaming(object):
         # FIXME: we should optimize to read in one operation all needed blocks
         for b in blocks[:]:
             if b < nb_blocks:
-                _, data = self.conn.object_fetch(ACCOUNT, container, name, ranges=[(b*BLOCKSIZE, b*BLOCKSIZE + BLOCKSIZE -1)])
+                _, data = self.conn.object_fetch(
+                    account, container, name,
+                    ranges=[(b*BLOCKSIZE, b*BLOCKSIZE + BLOCKSIZE -1)])
                 mem.write("".join(data))
                 blocks.remove(b)
 
         if remainder > 0 and nb_blocks in blocks:
             if nb_blocks in blocks:
-                _, data = self.conn.object_fetch(ACCOUNT, container, name, ranges=[(nb_blocks*BLOCKSIZE, nb_blocks*BLOCKSIZE + remainder - 1)])
+                _, data = self.conn.object_fetch(
+                    account, container, name,
+                    ranges=[(nb_blocks*BLOCKSIZE, nb_blocks*BLOCKSIZE + remainder - 1)])
                 mem.write("".join(data))
                 # add padding
                 mem.write(NUL * (BLOCKSIZE - remainder))
@@ -133,15 +149,13 @@ class ContainerStreaming(object):
     def __call__(self, environ, start_response):
         return self.wsgi_app(environ, start_response)
 
-    def _do_head(self, req):
-        container = req.path.strip('/')
-
+    def _do_head(self, req, account, container):
         try:
-            results = self.generate_oio_map(container)
-        except exc.NoSuchContainer as ex:
+            results = self.generate_oio_map(account, container)
+        except exc.NoSuchContainer:
             return Response(status=404)
 
-        if len(results) == 0:
+        if not results:
             return Response(status=204)
 
         hdrs = {
@@ -152,15 +166,13 @@ class ContainerStreaming(object):
         }
         return Response(headers=hdrs, status=200)
 
-    def _do_get(self, req):
-        container = req.path.strip('/')
-
+    def _do_get(self, req, account, container):
         try:
-            results = self.generate_oio_map(container)
-        except exc.NoSuchContainer as ex:
+            results = self.generate_oio_map(account, container)
+        except exc.NoSuchContainer:
             return Response(status=404)
 
-        if len(results) == 0:
+        if not results:
             return Response(status=204)
 
         response = Response()
@@ -174,17 +186,18 @@ class ContainerStreaming(object):
             response.headers['Content-Length'] = length
 
             for val in results:
-                response.data += self.create_tar_oio_stream(container, val['name'], range(val['block']))
+                response.data += self.create_tar_oio_stream(
+                    account, container, val['name'], range(val['block']))
             return response
 
         # accept only single part range
         val = req.headers['Range']
-        m = EXP.match(val)
-        if m is None:
+        match = EXP.match(val)
+        if match is None:
             response.status_code = 416
             return response
-        start = int(m.group(1))
-        end = int(m.group(2))
+        start = int(match.group(1))
+        end = int(match.group(2))
         if start >= end:
             response.status_code = 416
             return response
@@ -218,20 +231,40 @@ class ContainerStreaming(object):
             blocks_to_read = [x for x in blocks_to_read if x not in blocks]
             # shift selected blocks to object
             blocks = [x - val['start_block'] for x in blocks]
-            response.data += self.create_tar_oio_stream(container, val['name'], blocks)
-            if len(blocks_to_read) == 0:
+            response.data += self.create_tar_oio_stream(
+                account, container, val['name'], blocks)
+            if not blocks_to_read:
                 break
         return response
 
-    def dispatch_request(self, req):
+    def on_dump(self, req):
+        # extract account and container
+        account = req.args.get('acct')
+        container = req.args.get('ref')
+
+        if not account:
+            raise BadRequest('Missing Account name')
+        if not container:
+            raise BadRequest('Missing Container name')
+
         if req.method == 'HEAD':
-            return self._do_head(req)
-            # Response(headers={'Content-Length': 333})
+            return self._do_head(req, account, container)
 
         if req.method == 'GET':
-            return self._do_get(req)
+            return self._do_get(req, account, container)
 
         return Response("Not supported", 405)
+
+    def dispatch_request(self, req):
+        adapter = self.url_map.bind_to_environ(req.environ)
+        try:
+            endpoint, _ = adapter.match()
+            return getattr(self, 'on_' + endpoint)(req)
+        except HTTPException as e:
+            return e
+        except Exception:
+            # TODO self.logger.exception('ERROR Unhandled exception in request')
+            return InternalServerError()
 
 def create_app(conf=None):
     conf = {} if conf is None else conf
@@ -239,7 +272,6 @@ def create_app(conf=None):
     return app
 
 if __name__ == "__main__":
-    #run_server(port=8081)
     from werkzeug.serving import run_simple
     run_simple('127.0.0.1', 5001, create_app(),
                use_debugger=True, use_reloader=True)
