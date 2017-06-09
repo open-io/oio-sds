@@ -19,7 +19,7 @@ import time
 import subprocess
 from oio import ObjectStorageApi
 from oio.container.client import ContainerClient
-from oio.event.filters.content_rebuild import ContentRebuildFilter
+from oio.event.filters.notify import NotifyFilter
 from tests.utils import BaseTestCase, random_str
 from oio.event.beanstalk import Beanstalk
 
@@ -47,8 +47,7 @@ class TestContentRebuildFilter(BaseTestCase):
         self.container_id = syst['sys.name'].split('.', 1)[0]
         self.object_storage_api = ObjectStorageApi(namespace=self.namespace)
         self.stgpol = "SINGLE"
-        self.content_rebuild_filter = ContentRebuildFilter(app=_App,
-                                                           conf=self.conf)
+        self.notify_filter = NotifyFilter(app=_App, conf=self.conf)
         queue_url = self.conf.get('queue_url', 'tcp://127.0.0.1:11300')
         self.tube = self.conf.get('tube', 'rebuild')
         self.beanstalk = Beanstalk.from_url(queue_url)
@@ -104,7 +103,7 @@ class TestContentRebuildFilter(BaseTestCase):
         self._remove_chunks(chunks_to_remove, meta['id'])
         event = self._create_event(content_name, chunks, missing_pos,
                                    meta['id'])
-        self.content_rebuild_filter.process(env=event, cb=None)
+        self.notify_filter.process(env=event, cb=None)
         self._rebuild(event)
         _, after = self.object_storage_api.object_locate(
                         container=self.container, obj=content_name,

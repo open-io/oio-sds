@@ -780,8 +780,8 @@ use = egg:oio#content_cleaner
 key_file = ${KEY_FILE}
 
 [filter:content_rebuild]
-use = egg:oio#content_rebuild
-tube = oio-rebuild
+use = egg:oio#notify
+tube = rebuild
 queue_url = beanstalk://127.0.0.1:11300
 
 [filter:account_update]
