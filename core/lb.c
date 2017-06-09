@@ -1,6 +1,6 @@
 /*
 OpenIO SDS load-balancing
-Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -39,14 +39,14 @@ struct oio_lb_pool_vtable_s
 {
 	void (*destroy) (struct oio_lb_pool_s *self);
 
-	guint (*poll) (struct oio_lb_pool_s *self,
+	GError* (*poll) (struct oio_lb_pool_s *self,
 			const oio_location_t * avoids,
-			oio_lb_on_id_f on_id);
+			oio_lb_on_id_f on_id, gboolean *flawed);
 
-	guint (*patch) (struct oio_lb_pool_s *self,
+	GError* (*patch) (struct oio_lb_pool_s *self,
 			const oio_location_t * avoids,
 			const oio_location_t * known,
-			oio_lb_on_id_f on_id);
+			oio_lb_on_id_f on_id, gboolean *flawed);
 
 	struct oio_lb_item_s* (*get_item) (struct oio_lb_pool_s *self,
 			const char *id);
@@ -66,22 +66,21 @@ oio_lb_pool__destroy (struct oio_lb_pool_s *self)
 	CFG_CALL(self,destroy)(self);
 }
 
-guint
+GError*
 oio_lb_pool__poll (struct oio_lb_pool_s *self,
 		const oio_location_t * avoids,
-		oio_lb_on_id_f on_id)
+		oio_lb_on_id_f on_id, gboolean *flawed)
 {
-	CFG_CALL(self,poll)(self, avoids, on_id);
+	CFG_CALL(self,poll)(self, avoids, on_id, flawed);
 }
 
-// FIXME: return a GError*
-guint
+GError*
 oio_lb_pool__patch(struct oio_lb_pool_s *self,
 		const oio_location_t * avoids,
 		const oio_location_t * known,
-		oio_lb_on_id_f on_id)
+		oio_lb_on_id_f on_id, gboolean *flawed)
 {
-	CFG_CALL(self, patch)(self, avoids, known, on_id);
+	CFG_CALL(self, patch)(self, avoids, known, on_id, flawed);
 }
 
 struct oio_lb_item_s *
@@ -180,6 +179,10 @@ struct oio_lb_pool_LOCAL_s
 	/* Distance between services that the pool will try to ensure. */
 	guint16 initial_dist;
 
+	/* Distance between services that, when reached, will make the
+	 * poll functions set the 'flawed' parameter to true. */
+	guint16 warn_dist;
+
 	/* Absolute minimum distance between services returned by the pool.
 	 * Cannot be 0. */
 	guint16 min_dist;
@@ -197,25 +200,29 @@ struct polling_ctx_s
 	gint n_targets;
 
 	GData *counters[OIO_LB_LOC_LEVELS];
+	gboolean fallback_used;
 };
 
 static void _local__destroy (struct oio_lb_pool_s *self);
 
-static guint _local__poll (struct oio_lb_pool_s *self,
+static GError *_local__poll (struct oio_lb_pool_s *self,
 		const oio_location_t * avoids,
-		oio_lb_on_id_f on_id);
+		oio_lb_on_id_f on_id, gboolean *flawed);
 
-static guint _local__patch(struct oio_lb_pool_s *self,
+static GError *_local__patch(struct oio_lb_pool_s *self,
 		const oio_location_t * avoids,
 		const oio_location_t * known,
-		oio_lb_on_id_f on_id);
+		oio_lb_on_id_f on_id, gboolean *flawed);
 
 static struct oio_lb_item_s *_local__get_item(struct oio_lb_pool_s *self,
 		const char *id);
 
 static struct oio_lb_pool_vtable_s vtable_LOCAL =
 {
-	_local__destroy, _local__poll, _local__patch, _local__get_item
+	.destroy = _local__destroy,
+	.poll = _local__poll,
+	.patch = _local__patch,
+	.get_item = _local__get_item
 };
 
 static struct _lb_item_s *
@@ -262,7 +269,7 @@ location_from_dotted_string(const char *dotted)
 	int ntoks = 0;
 	// according to g_strsplit documentation, toks cannot be NULL
 	for (gchar **tok = toks; *tok; tok++, ntoks++) {
-		location = (location << 16) | (_djb2(*tok) & 0xFFFF);
+		location = (location << OIO_LB_BITS_PER_LOC_LEVEL) | (_djb2(*tok) & 0xFFFF);
 	}
 	g_strfreev(toks);
 	return location;
@@ -271,9 +278,10 @@ location_from_dotted_string(const char *dotted)
 uint32_t
 key_from_loc_level(oio_location_t loc, int level)
 {
-	uint32_t key = ((loc >> (level * 16)) + 1) & 0xFFFFFFFF;
+	uint32_t key =
+			((loc >> (level * OIO_LB_BITS_PER_LOC_LEVEL)) + 1) & 0xFFFFFFFF;
 	if (level < 2)
-		key += (loc >> 32) * OIO_LB_SHUFFLE_JUMP;
+		key += (loc >> (2 * OIO_LB_BITS_PER_LOC_LEVEL)) * OIO_LB_SHUFFLE_JUMP;
 	return key;
 }
 
@@ -559,30 +567,37 @@ _local_target__poll(struct oio_lb_pool_LOCAL_s *lb,
 	GRID_TRACE2("%s pool=%s shift=%d target=%s",
 			__FUNCTION__, lb->name, bit_shift, target);
 	gboolean res = FALSE;
+	gboolean fallback = FALSE;
 
 	g_rw_lock_reader_lock(&lb->world->lock);
 	/* Each target is a sequence of '\0'-separated strings, terminated with
 	 * an empty string. Each string is the name of a slot.
 	 * In most case we should not loop and consider only the first slot.
 	 * The other slots are fallbacks. */
-	for (const char *name = target; *name && !res; name += 1+strlen(name)) {
+	for (const char *name = target; *name; name += 1+strlen(name)) {
 		struct oio_lb_slot_s *slot = oio_lb_world__get_slot_unlocked(
 				lb->world, name);
-		if (!slot)
+		if (!slot) {
 			GRID_DEBUG ("Slot [%s] not ready", name);
-		else if (_local_slot__poll(slot, bit_shift, lb->nearby_mode, ctx))
+		} else if (_local_slot__poll(slot, bit_shift, lb->nearby_mode, ctx)) {
 			res = TRUE;
+			break;
+		}
+		fallback = TRUE;
 	}
 	g_rw_lock_reader_unlock(&lb->world->lock);
+	if (res && fallback)
+		ctx->fallback_used = TRUE;
 	return res;
 }
 
-static guint
+static GError*
 _local__poll (struct oio_lb_pool_s *self,
 		const oio_location_t * avoids,
-		void (*on_id) (oio_location_t location, const char *id))
+		void (*on_id) (oio_location_t location, const char *id),
+		gboolean *flawed)
 {
-	return _local__patch(self, avoids, NULL, on_id);
+	return _local__patch(self, avoids, NULL, on_id, flawed);
 }
 
 static gboolean
@@ -625,15 +640,16 @@ _local_target__is_satisfied(struct oio_lb_pool_LOCAL_s *lb,
 }
 
 static inline guint16
-_dist_to_bit_shift(guint16 dist)
+_dist_to_bit_shift(guint16 dist, gboolean nearby_mode)
 {
-	return (dist - 1) * 16u;
+	return (dist - (!nearby_mode)) * OIO_LB_BITS_PER_LOC_LEVEL;
 }
 
-static guint
+static GError*
 _local__patch(struct oio_lb_pool_s *self,
 		const oio_location_t *avoids, const oio_location_t *known,
-		void (*on_id) (oio_location_t location, const char *id))
+		void (*on_id) (oio_location_t location, const char *id),
+		gboolean *flawed)
 {
 	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
 	EXTRA_ASSERT(lb != NULL);
@@ -676,26 +692,29 @@ _local__patch(struct oio_lb_pool_s *self,
 	 * and thus have more chances to find differences (resp. similarities)
 	 * between service locations. */
 	guint16 max_dist = MIN(lb->world->abs_max_dist, lb->initial_dist);
+	guint16 start_dist = lb->nearby_mode? lb->min_dist : max_dist;
+	guint16 end_dist = (lb->nearby_mode? max_dist + 1 : lb->min_dist - 1);
+	guint16 reached_dist = start_dist;
+	gint16 incr = lb->nearby_mode? 1 : -1;
 	guint count = 0;
+	GError *err = NULL;
 	for (gchar **ptarget = lb->targets; *ptarget; ++ptarget) {
 		gboolean done = _local_target__is_satisfied(lb, *ptarget, &ctx);
-		if (lb->nearby_mode) {
-			for (guint16 dist = lb->min_dist; !done && dist <= max_dist; dist++)
-				done = _local_target__poll(lb, *ptarget,
-						_dist_to_bit_shift(dist), &ctx);
-		} else {
-			for (guint16 dist = max_dist; !done && dist >= lb->min_dist; dist--)
-				done = _local_target__poll(lb, *ptarget,
-						_dist_to_bit_shift(dist), &ctx);
+		guint16 dist;
+		for (dist = start_dist; !done && dist != end_dist; dist += incr) {
+			done = _local_target__poll(lb, *ptarget,
+					_dist_to_bit_shift(dist, lb->nearby_mode), &ctx);
 		}
+		dist -= incr;
+		if ((lb->nearby_mode && dist > reached_dist) ||
+				(!lb->nearby_mode && dist < reached_dist))
+			reached_dist = dist;
 		if (!done) {
-			/* the strings is '\0' separated, printf won't display it */
-			GRID_WARN("No service polled from target [%s], "
-					"%u/%d services polled so far, "
-					"%u services in slot",
+			/* the strings are '\0' separated, printf won't display them */
+			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "no service polled "
+					"from [%s], %u/%d services polled, %u services in slot",
 					*ptarget, count, count_targets,
 					oio_lb_world__count_slot_items(lb->world, *ptarget));
-			count = 0;
 			break;
 		}
 		++ctx.next_polled;
@@ -719,7 +738,20 @@ _local__patch(struct oio_lb_pool_s *self,
 	for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
 		g_datalist_clear(&ctx.counters[level]);
 	}
-	return count;
+	if (err != NULL) {
+		GRID_WARN("%s", err->message);
+		return err;
+	}
+	if (flawed) {
+		GRID_DEBUG(
+				"nearby_mode=%d, reached_dist=%u, warn_dist=%u, fallbacks=%d",
+				lb->nearby_mode, reached_dist, lb->warn_dist,
+				ctx.fallback_used);
+		*flawed = (lb->nearby_mode && reached_dist >= lb->warn_dist) ||
+				(!lb->nearby_mode && reached_dist <= lb->warn_dist) ||
+				ctx.fallback_used;
+	}
+	return NULL;
 }
 
 struct oio_lb_item_s *
@@ -799,6 +831,18 @@ oio_lb_world__set_pool_option(struct oio_lb_pool_s *self, const char *key,
 					OIO_LB_LOC_LEVELS);
 		} else {
 			lb->initial_dist = max;
+		}
+	} else if (!strcmp(key, OIO_LB_OPT_WARN_DIST)) {
+		guint64 warn = g_ascii_strtoull(value, &endptr, 10u);
+		if (endptr == value) {
+			GRID_WARN("Invalid %s [%s] for pool [%s]",
+					OIO_LB_OPT_WARN_DIST, value, lb->name);
+		} else if (warn > OIO_LB_LOC_LEVELS + 1) {
+			GRID_WARN("%s [%s] for pool [%s] out of range [0, %d]",
+					OIO_LB_OPT_WARN_DIST, value, lb->name,
+					OIO_LB_LOC_LEVELS + 1);
+		} else {
+			lb->warn_dist = warn;
 		}
 	} else if (!strcmp(key, OIO_LB_OPT_NEARBY)) {
 		lb->nearby_mode = oio_str_parse_bool(value, FALSE);
@@ -1311,31 +1355,36 @@ oio_lb__has_pool(struct oio_lb_s *lb, const char *name)
 	return res;
 }
 
-guint
+GError*
 oio_lb__poll_pool(struct oio_lb_s *lb, const char *name,
-		const oio_location_t * avoids, oio_lb_on_id_f on_id)
+		const oio_location_t * avoids, oio_lb_on_id_f on_id,
+		gboolean *flawed)
 {
 	EXTRA_ASSERT(name != NULL);
-	guint res = 0;
+	GError *res = NULL;
 	g_rw_lock_reader_lock(&lb->lock);
 	struct oio_lb_pool_s *pool = g_hash_table_lookup(lb->pools, name);
 	if (pool)
-		res = oio_lb_pool__poll(pool, avoids, on_id);
+		res = oio_lb_pool__poll(pool, avoids, on_id, flawed);
+	else
+		res = BADREQ("pool [%s] not found", name);
 	g_rw_lock_reader_unlock(&lb->lock);
 	return res;
 }
 
-guint
+GError*
 oio_lb__patch_with_pool(struct oio_lb_s *lb, const char *name,
 		const oio_location_t *avoids, const oio_location_t *known,
-		oio_lb_on_id_f on_id)
+		oio_lb_on_id_f on_id, gboolean *flawed)
 {
 	EXTRA_ASSERT(name != NULL);
-	guint res = 0;
+	GError *res = NULL;
 	g_rw_lock_reader_lock(&lb->lock);
 	struct oio_lb_pool_s *pool = g_hash_table_lookup(lb->pools, name);
 	if (pool)
-		res = oio_lb_pool__patch(pool, avoids, known, on_id);
+		res = oio_lb_pool__patch(pool, avoids, known, on_id, flawed);
+	else
+		res = BADREQ("pool [%s] not found", name);
 	g_rw_lock_reader_unlock(&lb->lock);
 	return res;
 }

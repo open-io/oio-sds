@@ -1,6 +1,6 @@
 /*
 OpenIO SDS load-balancing
-Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -47,16 +47,17 @@ void oio_lb_pool__destroy (struct oio_lb_pool_s *self);
 /* Returns IDs from <self> that are not in <avoids> (supposed to be
  * small). <on_id> will be called once for each ID polled. One ID won't be
  * returned more than once. The number of IDs returned is the number of
- * targets of the pool. */
-guint oio_lb_pool__poll (struct oio_lb_pool_s *self,
+ * targets of the pool. <flawed> is a boolean that will be true if
+ * some of the criteria of the pool could not be satisfied. */
+GError *oio_lb_pool__poll(struct oio_lb_pool_s *self,
 		const oio_location_t *avoids,
-		oio_lb_on_id_f on_id);
+		oio_lb_on_id_f on_id, gboolean *flawed);
 
 /* Like oio_lb_pool__poll(), but provide an array of known locations. */
-guint oio_lb_pool__patch(struct oio_lb_pool_s *self,
+GError *oio_lb_pool__patch(struct oio_lb_pool_s *self,
 		const oio_location_t *avoids,
 		const oio_location_t *known,
-		oio_lb_on_id_f on_id);
+		oio_lb_on_id_f on_id, gboolean *flawed);
 
 /* Get an item from its ID. Returns NULL if the ID is isn't known.
  * The result must be freed with g_free(). */
@@ -120,6 +121,8 @@ void oio_lb_world__purge_old_generations(struct oio_lb_world_s *self);
 #define OIO_LB_OPT_MAX_DIST       "max_dist"
 /* Absolute minimum distance between services */
 #define OIO_LB_OPT_MIN_DIST       "min_dist"
+/* Distance between services at which the LB will emit a warning */
+#define OIO_LB_OPT_WARN_DIST      "warn_dist"
 /* Look for services close to each other (boolean string) */
 #define OIO_LB_OPT_NEARBY         "nearby_mode"
 
@@ -157,13 +160,13 @@ void oio_lb__force_pool(struct oio_lb_s *lb, struct oio_lb_pool_s*);
 void oio_lb__delete_pool(struct oio_lb_s *lb, const char *name);
 
 /** Calls oio_lb_pool__poll() on the pool `name`. Thread-safe. */
-guint oio_lb__poll_pool(struct oio_lb_s *lb, const char *name,
-		const oio_location_t * avoids, oio_lb_on_id_f on_id);
+GError *oio_lb__poll_pool(struct oio_lb_s *lb, const char *name,
+		const oio_location_t * avoids, oio_lb_on_id_f on_id, gboolean *flawed);
 
 /** Calls oio_lb_pool__patch() on the pool `name`. Thread-safe. */
-guint oio_lb__patch_with_pool(struct oio_lb_s *lb, const char *name,
+GError *oio_lb__patch_with_pool(struct oio_lb_s *lb, const char *name,
 		const oio_location_t *avoids, const oio_location_t *known,
-		oio_lb_on_id_f on_id);
+		oio_lb_on_id_f on_id, gboolean *flawed);
 
 /** Get an item from a pool. Returns NULL if ID isn't known.
  *  The result must be freed with g_free(). */

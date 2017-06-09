@@ -1,7 +1,7 @@
 /*
 OpenIO SDS proxy
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -87,14 +87,18 @@ _lb(struct req_args_s *args, const char *srvtype)
 		(void)loc;
 		g_ptr_array_add(ids, g_strdup(id));
 	}
-	if (!oio_lb_pool__poll(pool, NULL, _on_id)) {
-		code = _reply_common_error(args,
-				NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
-					"found only %u services matching the criteria",
-					ids->len));
+	gboolean flawed = FALSE;
+	GError *err = oio_lb_pool__poll(pool, NULL, _on_id, &flawed);
+	if (err) {
+		g_prefix_error(&err,
+				"found only %u services matching the criteria: ", ids->len);
+		code = _reply_common_error(args, err);
 	} else {
 		g_ptr_array_add(ids, NULL);
 		GString *gstr = _lb_pack_srvid_tab((const char**)ids->pdata);
+		if (flawed)
+			args->rp->add_header(
+					PROXYD_HEADER_PREFIX "lb-flawed", g_strdup("1"));
 		code = _reply_success_json(args, gstr);
 	}
 
@@ -203,14 +207,18 @@ _poll(struct req_args_s *args, struct json_object *body)
 		(void)loc;
 		g_ptr_array_add(ids, g_strdup(id));
 	}
-	if (!oio_lb__patch_with_pool(lb, pool, avoid, known, _on_id)) {
-		code = _reply_common_error(args,
-				NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
-					"found only %u services matching the criteria",
-					ids->len));
+	gboolean flawed = FALSE;
+	err = oio_lb__patch_with_pool(lb, pool, avoid, known, _on_id, &flawed);
+	if (err) {
+		g_prefix_error(&err,
+				"found only %u services matching the criteria: ", ids->len);
+		code = _reply_common_error(args, err);
 	} else {
 		g_ptr_array_add(ids, NULL);
 		GString *gstr = _lb_pack_srvid_tab((const char**)ids->pdata);
+		if (flawed)
+			args->rp->add_header(
+					PROXYD_HEADER_PREFIX "lb-flawed", g_strdup("1"));
 		code = _reply_json(args, CODE_FINAL_OK, "OK", gstr);
 	}
 

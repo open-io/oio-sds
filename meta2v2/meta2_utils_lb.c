@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -101,12 +101,12 @@ get_spare_chunks(struct oio_lb_s *lb, const char *pool,
 		meta1_url_shift_addr(shifted);
 		g_ptr_array_add(ids, shifted);
 	}
-	if (!oio_lb__poll_pool(lb, pool, NULL, _on_id)) {
-		err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
-				"found only %u services matching the criteria (pool=%s)",
+	err = oio_lb__poll_pool(lb, pool, NULL, _on_id, NULL);
+	if (err) {
+		g_prefix_error(&err,
+				"found only %u services matching the criteria (pool=%s): ",
 				ids->len, pool);
-	}
-	if (!err) {
+	} else {
 		for (int i = 0; i < (int)ids->len; i++) {
 			*result = g_slist_prepend(*result,
 					_gen_chunk_bean(g_ptr_array_index(ids, i)));
@@ -167,9 +167,10 @@ get_conditioned_spare_chunks(struct oio_lb_s *lb, const char *pool,
 		meta1_url_shift_addr(shifted);
 		g_ptr_array_add(ids, shifted);
 	}
-	if (!oio_lb__patch_with_pool(lb, pool, avoid, known, _on_id)) {
-		err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
-				"found only %u services matching the criteria",
+	err = oio_lb__patch_with_pool(lb, pool, avoid, known, _on_id, NULL);
+	if (err) {
+		g_prefix_error(&err,
+				"found only %u services matching the criteria: ",
 				ids->len);
 	}
 	if (!err) {

@@ -1937,12 +1937,12 @@ _m2_generate_chunks(struct gen_ctx_s *ctx,
 			g_ptr_array_add(ids, shifted);
 		}
 		const char *pool = storage_policy_get_service_pool(ctx->pol);
-		if (!oio_lb__poll_pool(ctx->lb, pool, NULL, _on_id)) {
-			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "at position %u: "
+		// FIXME(FVE): set last argument
+		if ((err = oio_lb__poll_pool(ctx->lb, pool, NULL, _on_id, NULL))) {
+			g_prefix_error(&err, "at position %u: "
 					"found only %u services matching the criteria (pool=%s)",
 					pos, ids->len, pool);
-		}
-		if (!err) {
+		} else {
 			if (is_stgpol_backblaze(ctx->pol)) {
 				// Shortcut for backblaze
 				_gen_chunk(ctx, NULL, ctx->chunk_size, pos, -1);
@@ -1997,7 +1997,7 @@ m2_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
 			return _m2_generate_chunks(&ctx, chunk_size, 0);
 		case STGPOL_DS_EC:
 			k = _policy_parameter(pol, DS_KEY_K, 6);
-			return _m2_generate_chunks(&ctx, k*chunk_size, -1);
+			return _m2_generate_chunks(&ctx, k*chunk_size, TRUE);
 		default:
 			return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy type");
 	}

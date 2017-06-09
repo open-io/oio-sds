@@ -63,16 +63,15 @@ test_local_poll (void)
 
 	/* now poll some pools */
 	for (int i = 0; i < 4096; i++) {
-		guint count_rc, count;
+		guint count = 0;
 		void _on_item (oio_location_t location, const char *id) {
 			(void) location, (void) id;
 			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT, id, location);
 			++ count;
 		}
-		count = 0;
-		count_rc = oio_lb_pool__poll (pool, NULL, _on_item);
-		g_assert_cmpuint (count_rc, ==, count);
-		g_assert_cmpuint (count_rc, ==, 2);
+		GError *err = oio_lb_pool__poll(pool, NULL, _on_item, NULL);
+		g_assert_no_error(err);
+		g_assert_cmpuint(count, ==, 2);
 	}
 
 	oio_lb_world__debug (world);
@@ -107,16 +106,15 @@ test_local_poll_same_low_bits(void)
 
 	/* now poll some pools */
 	for (int i = 0; i < 4096; i++) {
-		guint count_rc, count;
+		guint count = 0;
 		void _on_item (oio_location_t location, const char *id) {
 			(void) location, (void) id;
 			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT, id, location);
 			++ count;
 		}
-		count = 0;
-		count_rc = oio_lb_pool__poll(pool, NULL, _on_item);
-		g_assert_cmpuint(count_rc, ==, count);
-		g_assert_cmpuint(count_rc, ==, 3);
+		GError *err = oio_lb_pool__poll(pool, NULL, _on_item, NULL);
+		g_assert_no_error(err);
+		g_assert_cmpuint(count, ==, 3);
 	}
 
 	oio_lb_world__debug(world);
@@ -185,17 +183,16 @@ _test_uniform_repartition(int services, int slots, int targets)
 	memset(counts, 0, services * sizeof(int));
 	/* now poll some pools */
 	for (int i = 0; i < shots; i++) {
-		guint count_rc, count;
+		guint count = 0;
 		void _on_item(oio_location_t location, const char *id) {
 			(void) location, (void) id;
 			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT, id, location);
 			++count;
 			counts[atoi(id+3)]++;
 		}
-		count = 0;
-		count_rc = oio_lb_pool__poll(pool, NULL, _on_item);
-		g_assert_cmpuint(count_rc, ==, count);
-		g_assert_cmpuint(count_rc, ==, targets);
+		GError *err = oio_lb_pool__poll(pool, NULL, _on_item, NULL);
+		g_assert_no_error(err);
+		g_assert_cmpuint(count, ==, targets);
 	}
 
 	oio_lb_world__debug(world);
@@ -302,7 +299,7 @@ _test_repartition_by_loc_level(const char **locations, int targets)
 		for (int j = 1; j < 4; j++) {
 			g_datalist_init(&count_by_level_by_host[j]);
 		}
-		guint count_rc, count;
+		guint count = 0;
 		void _on_item(oio_location_t location, const char *id) {
 			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT, id, location);
 			++count;
@@ -318,10 +315,9 @@ _test_repartition_by_loc_level(const char **locations, int targets)
 			}
 			counts[atoi(id+3)]++;
 		}
-		count = 0;
-		count_rc = oio_lb_pool__poll(pool, NULL, _on_item);
-		g_assert_cmpuint(count_rc, ==, count);
-		g_assert_cmpuint(count_rc, ==, targets);
+		GError *err = oio_lb_pool__poll(pool, NULL, _on_item, NULL);
+		g_assert_no_error(err);
+		g_assert_cmpuint(count, ==, targets);
 
 		guint32 min[4] = {G_MAXUINT32, G_MAXUINT32, G_MAXUINT32, G_MAXUINT32};
 		guint32 max[4] = {0, 0, 0, 0};
