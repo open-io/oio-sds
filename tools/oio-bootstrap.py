@@ -307,7 +307,7 @@ template_meta_watch = """
 host: ${IP}
 port: ${PORT}
 type: ${SRVTYPE}
-location: abcd.hem.oio.vol${SRVNUM}
+location: localhost.vol${SRVNUM}
 slots:
     - ${SRVTYPE}
 checks:
@@ -336,7 +336,7 @@ template_rawx_watch = """
 host: ${IP}
 port: ${PORT}
 type: rawx
-location: abcd.hem.oio.vol${SRVNUM}
+location: localhost.vol${SRVNUM}
 checks:
     - {type: http, uri: /info}
 slots:
@@ -352,7 +352,7 @@ template_rdir_watch = """
 host: ${IP}
 port: ${PORT}
 type: rdir
-location: abcd.hem.oio.vol${SRVNUM}
+location: localhost.vol${SRVNUM}
 checks:
     - {type: tcp}
 slots:
@@ -367,7 +367,7 @@ template_redis_watch = """
 host: ${IP}
 port: ${PORT}
 type: redis
-location: hem.oio.db${SRVNUM}
+location: localhost.db${SRVNUM}
 checks:
     - {type: tcp}
 slots:
@@ -487,8 +487,6 @@ template_service_pools = """
 #
 # "nearby_mode" is a boolean telling to find services close to each other.
 #
-#### power user options, don't modify it unless you know what you are doing
-#
 # "min_dist" is the absolute minimum distance between services returned
 # by the pool. It defaults to 1, which is the minimum. If you set it too
 # high, there is a risk the pool fails to find a service set matching
@@ -498,6 +496,9 @@ template_service_pools = """
 # ensure. This option defaults to 4, which is the maximum. If you know
 # that all the services are close together, you can reduce this number
 # to accelerate the research.
+#
+# "warn_dist" is the distance between services at which the pool will emit
+# a warning, for further improvement.
 #
 
 
@@ -533,10 +534,12 @@ targets=1,rawx-europe,rawx;1,rawx-usa,rawx;1,rawx-asia,rawx
 [pool:rawx3nearby]
 targets=3,rawx
 nearby_mode=true
+warn_dist=2
 
 [pool:rawx3faraway]
 targets=3,rawx
 min_dist=2
+warn_dist=2
 
 """
 
