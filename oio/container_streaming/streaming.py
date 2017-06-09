@@ -12,6 +12,7 @@ import xattr
 from werkzeug.wrappers import Request, Response
 
 from oio import ObjectStorageApi
+from oio.common import exceptions as exc
 
 EXP = re.compile(r"^bytes=(\d+)-(\d+)$")
 
@@ -61,6 +62,9 @@ class ContainerStreaming(object):
         return buf, blocks, tarinfo.size
 
     def generate_oio_map(self, container):
+        if len(container) == 0:
+            raise exc.NoSuchContainer()
+
         objs = self.conn.object_list(ACCOUNT, container)
         map_objs = []
         start_block = 0
@@ -132,7 +136,14 @@ class ContainerStreaming(object):
     def _do_head(self, req):
         container = req.path.strip('/')
 
-        results = self.generate_oio_map(container)
+        try:
+            results = self.generate_oio_map(container)
+        except exc.NoSuchContainer as ex:
+            return Response(status=404)
+
+        if len(results) == 0:
+            return Response(status=204)
+
         hdrs = {
             'X-Blocks': sum([i['block'] for i in results]),
             'Content-Length': sum([i['block'] for i in results]) * BLOCKSIZE,
@@ -144,12 +155,19 @@ class ContainerStreaming(object):
     def _do_get(self, req):
         container = req.path.strip('/')
 
-        results = self.generate_oio_map(container)
-        blocks = sum([i['block'] for i in results])
-        length = blocks * BLOCKSIZE
+        try:
+            results = self.generate_oio_map(container)
+        except exc.NoSuchContainer as ex:
+            return Response(status=404)
+
+        if len(results) == 0:
+            return Response(status=204)
+
         response = Response()
         response.headers['Accept-Ranges'] = 'bytes'
         response.headers['Content-Type'] = 'application/tar'
+        blocks = sum([i['block'] for i in results])
+        length = blocks * BLOCKSIZE
 
         if 'Range' not in req.headers:
             response.status_code = 200
