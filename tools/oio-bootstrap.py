@@ -307,7 +307,7 @@ template_meta_watch = """
 host: ${IP}
 port: ${PORT}
 type: ${SRVTYPE}
-location: localhost.vol${SRVNUM}
+location: ${LOC}
 slots:
     - ${SRVTYPE}
 checks:
@@ -336,7 +336,7 @@ template_rawx_watch = """
 host: ${IP}
 port: ${PORT}
 type: rawx
-location: localhost.vol${SRVNUM}
+location: ${LOC}
 checks:
     - {type: http, uri: /info}
 slots:
@@ -352,7 +352,7 @@ template_rdir_watch = """
 host: ${IP}
 port: ${PORT}
 type: rdir
-location: localhost.vol${SRVNUM}
+location: ${LOC}
 checks:
     - {type: tcp}
 slots:
@@ -501,6 +501,8 @@ template_service_pools = """
 # a warning, for further improvement.
 #
 
+[pool:meta1]
+targets=${M1_REPLICAS},meta1
 
 [pool:meta2]
 targets=${M2_REPLICAS},meta2
@@ -1065,6 +1067,7 @@ def generate(options):
                PORT_PROXYD=port_proxy,
                PORT_ECD=port_ecd,
                M1_DIGITS=meta1_digits,
+               M1_REPLICAS=meta1_replicas,
                M2_REPLICAS=meta2_replicas,
                M2_DISTANCE=str(1),
                SQLX_REPLICAS=sqlx_replicas,
@@ -1130,7 +1133,9 @@ def generate(options):
             _h = tuple(hosts)
             if t in options and isinstance(options[t], dict):
                 _h = ensure(options[t].get(SVC_HOSTS), hosts)
-            env['IP'] = _h[ (num-1) % len(_h) ]
+            env['IP'] = _h[(num-1) % len(_h)]
+        if 'LOC' not in env:
+            env['LOC'] = "srv%s.vol%d" % (env['IP'].rsplit('.', 1)[-1], num)
         if 'PORT' in env:
             out['addr'] = '%s:%s' % (env['IP'], env['PORT'])
         if 'VOLUME' in env:
