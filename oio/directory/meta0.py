@@ -30,7 +30,7 @@ class PrefixMapping(object):
     """Represents the content of the meta0 database"""
 
     def __init__(self, meta0_client, conscience_client, replicas=3,
-                 digits=None, logger=None, **kwargs):
+                 digits=None, logger=None, min_dist=1, **kwargs):
         """
         :param replicas: number of services to allocate to manage a base
         :type replicas: strictly positive `int`
@@ -52,6 +52,7 @@ class PrefixMapping(object):
             raise ConfigurationException("meta_digits must be >= 0")
         if self.digits > 4:
             raise ConfigurationException("meta_digits must be <= 4")
+        self.min_dist = min_dist
         self.reset()
 
     def reset(self):
@@ -82,6 +83,23 @@ class PrefixMapping(object):
         if not loc or loc == "addr":
             loc = svc["addr"].rsplit(":", 1)[0]
         return loc
+
+    @staticmethod
+    def dist_between(loc1, loc2):
+        loc1_parts = loc1.split('.', 3)
+        loc2_parts = loc2.split('.', 3)
+        max_dist = max(len(loc1_parts), len(loc2_parts))
+        in_common = 0
+        loc1_part = loc1_parts.pop(0)
+        loc2_part = loc2_parts.pop(0)
+        try:
+            while loc1_part == loc2_part:
+                in_common += 1
+                loc1_part = loc1_parts.pop(0)
+                loc2_part = loc2_parts.pop(0)
+        except IndexError:
+            pass
+        return max_dist - in_common
 
     def get_score(self, svc):
         """Get the score of a service, or 0 if it is unknown"""
@@ -166,19 +184,28 @@ class PrefixMapping(object):
         self.m0.force(self.to_json().strip(), **kwargs)
 
     def _find_services(self, known=None, lookup=None, max_lookup=50):
-        """Call `lookup` to find `self.replicas` different services"""
-        services = known if known else list([])
+        """
+        Call `lookup` to find `self.replicas` different services.
+
+        :param known: an iterable of already know services
+        :param lookup: a function that returns an iterable of services
+        """
+        services = known if known else list()
         known_locations = {self.get_loc(svc) for svc in services}
         iterations = 0
         while len(services) < self.replicas and iterations < max_lookup:
             iterations += 1
-            svc = lookup(services)
-            if not svc:
+            svcs = lookup(services)
+            if not svcs:
                 break
-            loc = self.get_loc(svc)
-            if loc not in known_locations:
-                known_locations.add(loc)
-                services.append(svc)
+            for svc in svcs:
+                loc = self.get_loc(svc)
+                if all(self.dist_between(loc, loc1) >= self.min_dist
+                       for loc1 in known_locations):
+                    known_locations.add(loc)
+                    services.append(svc)
+                if len(services) >= self.replicas:
+                    break
         return services
 
     def find_services_random(self, known=None, **_kwargs):
@@ -186,7 +213,7 @@ class PrefixMapping(object):
         return self._find_services(
             known,
             (lambda known2:
-             self.services[random.choice(self.services.keys())]))
+             (self.services[random.choice(self.services.keys())], )))
 
     def find_services_less_bases(self, known=None, min_score=1, **_kwargs):
         """Find `replicas` services, including the ones of `known`"""
@@ -203,9 +230,19 @@ class PrefixMapping(object):
             while filtered:
                 svc = filtered.pop()
                 if svc not in known2:
-                    return svc
+                    return (svc,)
             return None
         return self._find_services(known, _lookup, len(filtered))
+
+    def find_services_m1_pool(self, known=None, **_kwargs):
+        """
+        Find `replicas` services, including the ones of `known`,
+        by calling the proxy's load balancer.
+        """
+        def _lookup(known2):
+            res = self.cs.poll("meta1", known=known2)
+            return (self.services.get(svc['addr']) for svc in res)
+        return self._find_services(known, _lookup)
 
     def assign_services(self, base, services, fail_if_already_set=False):
         """
