@@ -159,16 +159,12 @@ _json_ids_to_locations(struct json_object *arr, oio_location_t *prev)
 	return (oio_location_t*) g_array_free(out, FALSE);
 }
 
-static enum http_rc_e
-_poll(struct req_args_s *args, struct json_object *body)
+static GError*
+_decode_lb_body(struct json_object *body,
+		oio_location_t **avoid, oio_location_t **known)
 {
-	GError *err = NULL;
-	enum http_rc_e code;
-	const gchar *policy = OPT("policy");
-	const gchar *pool = OPT("pool");
-
 	if (body && !json_object_is_type(body, json_type_object))
-		return _reply_format_error(args, BADREQ("Expected: json object"));
+		return BADREQ("Expected: json object");
 
 	struct json_object *javoid = NULL, *javoid_locs = NULL;
 	struct json_object *jknown = NULL, *jknown_locs = NULL;
@@ -179,7 +175,27 @@ _poll(struct req_args_s *args, struct json_object *body)
 		{"known_locations", &jknown_locs,  json_type_array, 0},
 		{NULL, NULL, 0, 0}
 	};
+	GError *err = NULL;
 	if (body && (err = oio_ext_extract_json(body, mapping)))
+		return err;
+	*avoid = _json_to_locations(javoid_locs);
+	*known = _json_to_locations(jknown_locs);
+	*avoid = _json_ids_to_locations(javoid, *avoid);
+	*known = _json_ids_to_locations(jknown, *known);
+	return NULL;
+}
+
+static enum http_rc_e
+_poll(struct req_args_s *args, struct json_object *body)
+{
+	GError *err = NULL;
+	enum http_rc_e code;
+	const gchar *policy = OPT("policy");
+	const gchar *pool = OPT("pool");
+	oio_location_t *avoid = NULL, *known = NULL;
+
+	err = _decode_lb_body(body, &avoid, &known);
+	if (err)
 		return _reply_common_error(args, err);
 
 	if (pool) {
@@ -196,11 +212,6 @@ _poll(struct req_args_s *args, struct json_object *body)
 		pool = g_strdup(storage_policy_get_service_pool(sp));
 		storage_policy_clean(sp);
 	}
-
-	oio_location_t *avoid = _json_to_locations(javoid_locs);
-	oio_location_t *known = _json_to_locations(jknown_locs);
-	avoid = _json_ids_to_locations(javoid, avoid);
-	known = _json_ids_to_locations(jknown, known);
 
 	GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
 	void _on_id(oio_location_t loc, const char *id) {
