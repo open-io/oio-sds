@@ -4,6 +4,11 @@ from __future__ import print_function
 
 import ConfigParser
 from io import BytesIO
+try:
+    import simplejson as json
+except ImportError:
+    import json  # noqa
+
 import math
 import re
 from tarfile import TarInfo, REGTYPE, NUL, PAX_FORMAT, BLOCKSIZE
@@ -11,6 +16,8 @@ from tarfile import TarInfo, REGTYPE, NUL, PAX_FORMAT, BLOCKSIZE
 from werkzeug.wrappers import Request, Response
 from werkzeug.routing import Map, Rule
 from werkzeug.exceptions import HTTPException, BadRequest, InternalServerError
+
+import redis
 
 from oio import ObjectStorageApi
 from oio.common import exceptions as exc
@@ -27,6 +34,8 @@ EXP = re.compile(r"^bytes=(\d+)-(\d+)$")
 NS = "OPENIO"
 
 class ContainerStreaming(object):
+    CACHE = 3600 * 24 # Redis keys will expires after one day
+
     def __init__(self, conf):
         self.ns = NS
         self.conf = conf
@@ -41,6 +50,7 @@ class ContainerStreaming(object):
         self.url_map = Map([
             Rule('/v1.0/dump', endpoint='dump'),
         ])
+        self.redis = redis.StrictRedis(host="127.0.0.1", port=6379)
 
     def generate_oio_tarinfo_entry(self, account, container, name):
         """ return tuple (buf, number of blocks, filesize) """
@@ -75,6 +85,12 @@ class ContainerStreaming(object):
         if not container:
             raise exc.NoSuchContainer()
 
+        # TODO hash_map should contains if deleted or version flags are set
+        hash_map = "container_streaming:{0}/{1}".format(account, container)
+        cache = self.redis.get(hash_map)
+        if cache:
+            return json.loads(cache)
+
         objs = self.conn.object_list(account, container)
         map_objs = []
         start_block = 0
@@ -93,6 +109,8 @@ class ContainerStreaming(object):
             start_block += entry['block']
             entry['end_block'] = start_block - 1
             map_objs.append(entry)
+
+        self.redis.set(hash_map, json.dumps(map_objs), ex=self.CACHE)
         return map_objs
 
     def create_tar_oio_stream(self, account, container, name, blocks):
@@ -214,7 +232,6 @@ class ContainerStreaming(object):
             response.status_code = 416
             return response
 
-        # block_to_read = block_start
         blocks_to_read = list(xrange(block_start, block_end))
 
         response.status_code = 206
