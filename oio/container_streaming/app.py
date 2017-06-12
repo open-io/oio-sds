@@ -3,7 +3,6 @@
 from __future__ import print_function
 
 import ConfigParser
-from io import BytesIO
 try:
     import simplejson as json
 except ImportError:
@@ -15,8 +14,9 @@ from tarfile import TarInfo, REGTYPE, NUL, PAX_FORMAT, BLOCKSIZE
 
 from werkzeug.wrappers import Request, Response
 from werkzeug.routing import Map, Rule
-from werkzeug.exceptions import HTTPException, BadRequest, InternalServerError
-
+from werkzeug.exceptions import HTTPException, BadRequest, InternalServerError, \
+                                RequestedRangeNotSatisfiable
+from werkzeug.wsgi import wrap_file
 import redis
 
 from oio import ObjectStorageApi
@@ -33,8 +33,133 @@ EXP = re.compile(r"^bytes=(\d+)-(\d+)$")
 # FIXME move parameters somewhere (URL, Header, ... ?)
 NS = "OPENIO"
 
+def generate_oio_tarinfo_entry(conn, account, container, name):
+    """ return tuple (buf, number of blocks, filesize) """
+    entry = conn.object_get_properties(account, container, name)
+
+    tarinfo = TarInfo()
+    tarinfo.name = entry['name']
+    tarinfo.mode = 0o700 # ?
+    tarinfo.uid = 0
+    tarinfo.gid = 0
+    tarinfo.size = int(entry['length'])
+    tarinfo.mtime = entry['ctime'] # should be mtime
+    tarinfo.type = REGTYPE
+    tarinfo.linkname = ""
+
+    # XATTR
+    # do we have to store basic properties like policy, mime_type, hash, ... ?
+    properties = entry['properties']
+    for key, val in properties.items():
+        assert isinstance(val, basestring), "Invalid type detected for %s:%s:%s" % (
+            container, name, key)
+        tarinfo.pax_headers["SCHILY.xattr.user." + key] = val
+
+    # PAX_FORMAT should be used only if xattr was found
+    buf = tarinfo.tobuf(format=PAX_FORMAT)
+    blocks, remainder = divmod(len(buf), BLOCKSIZE)
+
+    assert remainder == 0, "Invalid size of generated TarInfo"
+    return buf, blocks, tarinfo.size
+
+
+class TarStreaming(object):
+    def __init__(self, conn, account, container, blocks, oio_map):
+        assert blocks, "No blocks provided"
+        self.acct = account
+        self.container = container
+        self.blocks = blocks
+        self.oio_map = oio_map
+        self.conn = conn
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+        data = self.read()
+        if data == "":
+            raise StopIteration
+        return data
+
+    def create_tar_oio_stream(self, entry, blocks):
+        mem = ""
+        name = entry['name']
+
+        if set(blocks).intersection(range(entry['hdr_block'])):
+            buf, entry_blocks, _ = generate_oio_tarinfo_entry(
+                self.conn, self.acct, self.container, entry['name'])
+
+            for bl in xrange(entry_blocks):
+                if bl in blocks:
+                    mem += buf[bl * BLOCKSIZE : bl * BLOCKSIZE + BLOCKSIZE]
+                    blocks.remove(bl)
+
+        if not blocks:
+            return mem
+
+        # for sanity, shift blocks
+        blocks = [v-entry['hdr_block'] for v in blocks]
+
+        # compute needed padding data
+        nb_blocks, remainder = divmod(entry['size'], BLOCKSIZE)
+
+        start = blocks[0] * BLOCKSIZE
+        last = False
+        if remainder > 0 and nb_blocks in blocks:
+            last = True
+            end = entry['size'] - 1
+        else:
+            end = blocks[-1] * BLOCKSIZE + BLOCKSIZE - 1
+
+        _, data = self.conn.object_fetch(self.acct, self.container, name,
+                                         ranges=[(start, end)])
+        mem += "".join(data)
+
+        if last:
+            mem += NUL * (BLOCKSIZE - remainder)
+
+        assert mem != "", "No data written"
+        assert divmod(len(mem), BLOCKSIZE)[1] == 0, "Data written don't match blocksize"
+        return mem
+
+    def read(self, size=-1):
+        # streaming file by file
+        # Is there API to stream data from OIO SDK (to avoid copy ?)
+        data = ""
+
+        size = divmod(size, 512)[0]
+
+        if not self.blocks:
+            return data
+
+        for val in self.oio_map[:]:
+            if self.blocks[0] > val['end_block']:
+                self.oio_map.remove(val)
+                continue
+
+            if size > 0 and val['end_block'] - self.blocks[0] > size:
+                end_block = self.blocks[0] + size
+            else:
+                end_block = val['end_block']
+
+            # FIXME: should be done in same loop
+            blocks = [x for x in self.blocks if x <= end_block]
+            # remove selected from globals list
+            self.blocks = [x for x in self.blocks if x not in blocks]
+            # shift selected blocks to object
+            blocks = [x - val['start_block'] for x in blocks]
+            data = self.create_tar_oio_stream(val, blocks)
+            if end_block == val['end_block']:
+                self.oio_map.remove(val)
+            break
+        return data
+
+    def close(self):
+        pass
+
 class ContainerStreaming(object):
     CACHE = 3600 * 24 # Redis keys will expires after one day
+    STREAMING = 52428800 # 50 MB
 
     def __init__(self, conf):
         self.ns = NS
@@ -51,35 +176,6 @@ class ContainerStreaming(object):
             Rule('/v1.0/dump', endpoint='dump'),
         ])
         self.redis = redis.StrictRedis(host="127.0.0.1", port=6379)
-
-    def generate_oio_tarinfo_entry(self, account, container, name):
-        """ return tuple (buf, number of blocks, filesize) """
-        entry = self.conn.object_get_properties(account, container, name)
-
-        tarinfo = TarInfo()
-        tarinfo.name = entry['name']
-        tarinfo.mode = 0o700 # ?
-        tarinfo.uid = 0
-        tarinfo.gid = 0
-        tarinfo.size = int(entry['length'])
-        tarinfo.mtime = entry['ctime'] # should be mtime
-        tarinfo.type = REGTYPE
-        tarinfo.linkname = ""
-
-        # XATTR
-        # do we have to store basic properties like policy, mime_type, hash, ... ?
-        properties = entry['properties']
-        for key, val in properties.items():
-            assert isinstance(val, basestring), "Invalid type detected for %s:%s:%s" % (
-                container, name, key)
-            tarinfo.pax_headers["SCHILY.xattr.user." + key] = val
-
-        # PAX_FORMAT should be used only if xattr was found
-        buf = tarinfo.tobuf(format=PAX_FORMAT)
-        blocks, remainder = divmod(len(buf), BLOCKSIZE)
-
-        assert remainder == 0, "Invalid size of generated TarInfo"
-        return buf, blocks, tarinfo.size
 
     def generate_oio_map(self, account, container):
         if not container:
@@ -98,11 +194,12 @@ class ContainerStreaming(object):
             # FIXME should we backup deleted object ?
             if obj['deleted']:
                 continue
-            _, entry_blocks, size = self.generate_oio_tarinfo_entry(
-                account, container, obj['name'])
+            _, entry_blocks, size = generate_oio_tarinfo_entry(
+                self.conn, account, container, obj['name'])
             entry = {
                 'name': obj['name'],
                 'size': size,
+                'hdr_block': entry_blocks,
                 'block': entry_blocks + int(math.ceil(size / float(BLOCKSIZE))),
                 'start_block': start_block,
             }
@@ -113,52 +210,6 @@ class ContainerStreaming(object):
         self.redis.set(hash_map, json.dumps(map_objs), ex=self.CACHE)
         return map_objs
 
-    def create_tar_oio_stream(self, account, container, name, blocks):
-        mem = BytesIO()
-
-        # FIXME, we could add number of blocks reserved for the header in generate_oio_map to avoid
-        # doing useless network call if not needed
-        buf, entry_blocks, size = self.generate_oio_tarinfo_entry(
-            account, container, name)
-
-        for bl in xrange(entry_blocks):
-            if bl in blocks:
-                mem.write(buf[bl * BLOCKSIZE : bl * BLOCKSIZE + BLOCKSIZE])
-                blocks.remove(bl)
-
-        if not blocks:
-            mem.seek(0)
-            return mem.read()
-
-        # for sanity, shift blocks
-        blocks = [v-entry_blocks for v in blocks]
-
-        # compute needed padding data
-        nb_blocks, remainder = divmod(size, BLOCKSIZE)
-
-        # FIXME: we should optimize to read in one operation all needed blocks
-        for b in blocks[:]:
-            if b < nb_blocks:
-                _, data = self.conn.object_fetch(
-                    account, container, name,
-                    ranges=[(b*BLOCKSIZE, b*BLOCKSIZE + BLOCKSIZE -1)])
-                mem.write("".join(data))
-                blocks.remove(b)
-
-        if remainder > 0 and nb_blocks in blocks:
-            if nb_blocks in blocks:
-                _, data = self.conn.object_fetch(
-                    account, container, name,
-                    ranges=[(nb_blocks*BLOCKSIZE, nb_blocks*BLOCKSIZE + remainder - 1)])
-                mem.write("".join(data))
-                # add padding
-                mem.write(NUL * (BLOCKSIZE - remainder))
-                blocks.remove(nb_blocks)
-
-        assert mem.tell() > 0, "No data written"
-        mem.seek(0)
-        return mem.read()
-
     def wsgi_app(self, environ, start_response):
         request = Request(environ)
         response = self.dispatch_request(request)
@@ -167,7 +218,7 @@ class ContainerStreaming(object):
     def __call__(self, environ, start_response):
         return self.wsgi_app(environ, start_response)
 
-    def _do_head(self, req, account, container):
+    def _do_head(self, _, account, container):
         try:
             results = self.generate_oio_map(account, container)
         except exc.NoSuchContainer:
@@ -184,6 +235,29 @@ class ContainerStreaming(object):
         }
         return Response(headers=hdrs, status=200)
 
+    @classmethod
+    def _extract_range(cls, req, blocks):
+        # accept only single part range
+        val = req.headers['Range']
+        match = EXP.match(val)
+        if match is None:
+            raise RequestedRangeNotSatisfiable()
+        start = int(match.group(1))
+        end = int(match.group(2))
+        if start >= end:
+            raise RequestedRangeNotSatisfiable()
+
+        def check_range(value):
+            block, remainder = divmod(value, BLOCKSIZE)
+            if remainder or block < 0 or block > blocks:
+                raise RequestedRangeNotSatisfiable()
+            return block
+
+        block_start = check_range(start)
+        block_end = check_range(end + 1) # Check Range RFC
+
+        return start, end, block_start, block_end
+
     def _do_get(self, req, account, container):
         try:
             results = self.generate_oio_map(account, container)
@@ -193,66 +267,30 @@ class ContainerStreaming(object):
         if not results:
             return Response(status=204)
 
-        response = Response()
-        response.headers['Accept-Ranges'] = 'bytes'
-        response.headers['Content-Type'] = 'application/tar'
         blocks = sum([i['block'] for i in results])
         length = blocks * BLOCKSIZE
 
         if 'Range' not in req.headers:
-            response.status_code = 200
-            response.headers['Content-Length'] = length
+            tar = TarStreaming(self.conn, account, container, range(blocks), results)
+            return Response(wrap_file(req.environ, tar, buffer_size=self.STREAMING),
+                            headers={
+                                'Accept-Ranges': 'bytes',
+                                'Content-Type': 'application/tar',
+                                'Content-Length': length,
+                            }, status=200)
 
-            for val in results:
-                response.data += self.create_tar_oio_stream(
-                    account, container, val['name'], range(val['block']))
-            return response
 
-        # accept only single part range
-        val = req.headers['Range']
-        match = EXP.match(val)
-        if match is None:
-            response.status_code = 416
-            return response
-        start = int(match.group(1))
-        end = int(match.group(2))
-        if start >= end:
-            response.status_code = 416
-            return response
+        start, end, block_start, block_end = self._extract_range(req, blocks)
+        blocks_to_read = range(block_start, block_end)
 
-        def check_range(value):
-            block, remainder = divmod(value, BLOCKSIZE)
-            if remainder or block < 0 or block > blocks:
-                return -1
-            return block
-
-        block_start = check_range(start)
-        block_end = check_range(end + 1) # Check Range RFC
-        if block_start < 0 or block_end < 0:
-            response.status_code = 416
-            return response
-
-        blocks_to_read = list(xrange(block_start, block_end))
-
-        response.status_code = 206
-        response.headers['Content-Length'] = end - start + 1
-        response.headers['Content-Range'] = 'bytes %d-%d/%d' % (start, end, length)
-
-        # FIXME: we should avoid linear search !
-        for val in results:
-            if blocks_to_read[0] > val['end_block']:
-                continue
-            # FIXME: should be done in same loop
-            blocks = [x for x in blocks_to_read if x <= val['end_block']]
-            # remove selected from globals list
-            blocks_to_read = [x for x in blocks_to_read if x not in blocks]
-            # shift selected blocks to object
-            blocks = [x - val['start_block'] for x in blocks]
-            response.data += self.create_tar_oio_stream(
-                account, container, val['name'], blocks)
-            if not blocks_to_read:
-                break
-        return response
+        tar = TarStreaming(self.conn, account, container, blocks_to_read, results)
+        return Response(wrap_file(req.environ, tar, buffer_size=self.STREAMING),
+                        headers={
+                            'Accept-Ranges': 'bytes',
+                            'Content-Type': 'application/tar',
+                            'Content-Range': 'bytes %d-%d/%d' % (start, end, length),
+                            'Content-Length': end - start + 1,
+                        }, status=206)
 
     def on_dump(self, req):
         # extract account and container
@@ -279,7 +317,7 @@ class ContainerStreaming(object):
             return getattr(self, 'on_' + endpoint)(req)
         except HTTPException as e:
             return e
-        except Exception:
+        except Exception: # pylint: disable=broad-except
             # TODO self.logger.exception('ERROR Unhandled exception in request')
             return InternalServerError()
 
@@ -290,5 +328,5 @@ def create_app(conf=None):
 
 if __name__ == "__main__":
     from werkzeug.serving import run_simple
-    run_simple('127.0.0.1', 5001, create_app(),
+    run_simple('127.0.0.1', 6002, create_app(),
                use_debugger=True, use_reloader=True)
