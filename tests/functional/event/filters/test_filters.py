@@ -47,6 +47,8 @@ class TestContentRebuildFilter(BaseTestCase):
         self.container_id = syst['sys.name'].split('.', 1)[0]
         self.object_storage_api = ObjectStorageApi(namespace=self.namespace)
         self.stgpol = "SINGLE"
+        self.conf['tube'] = 'rebuild'
+        self.conf['queue_url'] = 'beanstalk://127.0.0.1:11300'
         self.notify_filter = NotifyFilter(app=_App, conf=self.conf)
         queue_url = self.conf.get('queue_url', 'tcp://127.0.0.1:11300')
         self.tube = self.conf.get('tube', 'rebuild')
