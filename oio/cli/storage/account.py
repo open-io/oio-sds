@@ -155,7 +155,8 @@ class ListAccounts(lister.Lister):
             '--stats', '--long',
             dest='long_listing',
             default=False,
-            help='Display account statistics',
+            help=("Display account statistics "
+                  "(slow,  we recommend 'csv' or 'value' output formats)"),
             action="store_true"
         )
         return parser
@@ -163,12 +164,10 @@ class ListAccounts(lister.Lister):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
-        data = self.app.client_manager.storage.account_list()
-        accounts = ((e,) for e in data)
+        account_list = self.app.client_manager.storage.account_list()
 
         if parsed_args.long_listing:
-
-            def _get_info_accounts(accounts):
+            def _get_account_stats(accounts):
                 for account in accounts:
                     data = self.app.client_manager.storage.account_show(
                         account=account
@@ -178,7 +177,7 @@ class ListAccounts(lister.Lister):
 
             columns = ('Name', 'bytes', 'containers', 'objects', 'ctime',
                        'metadata')
-            return columns, _get_info_accounts(accounts)
+            return columns, _get_account_stats(account_list)
 
         column = ('Name',)
-        return column, accounts
+        return column, ((e,) for e in account_list)
