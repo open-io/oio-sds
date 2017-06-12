@@ -15,6 +15,8 @@ class DirectoryCmd(Command):
         parser.add_argument('--replicas', metavar='<N>', dest='replicas',
                             type=int, default=3,
                             help='Set the number of replicas (3 by default)')
+        parser.add_argument('--min-dist', type=int, default=1,
+                            help="Minimum distance between replicas")
         return parser
 
     def get_prefix_mapping(self, parsed_args):
@@ -24,6 +26,7 @@ class DirectoryCmd(Command):
         return PrefixMapping(meta0_client, conscience_client,
                              replicas=parsed_args.replicas,
                              digits=digits,
+                             min_dist=parsed_args.min_dist,
                              logger=self.log)
 
 
