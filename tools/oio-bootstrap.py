@@ -1032,6 +1032,7 @@ def generate(options):
         versioning = options[M2_VERSIONS]
     if M2_STGPOL in options:
         stgpol = options[M2_STGPOL]
+    options['config']['ns.storage_policy'] = stgpol
 
     # `options` already holds the YAML values overriden by the CLI values
     hosts = options.get(SVC_HOSTS) or defaults[SVC_HOSTS]
@@ -1063,7 +1064,6 @@ def generate(options):
                USER=str(pwd.getpwuid(os.getuid()).pw_name),
                GROUP=str(grp.getgrgid(os.getgid()).gr_name),
                VERSIONING=versioning,
-               STGPOL=stgpol,
                PORT_PROXYD=port_proxy,
                PORT_ECD=port_ecd,
                M1_DIGITS=meta1_digits,
@@ -1431,10 +1431,10 @@ def dump_config(conf):
 
 def merge_config(base, inc):
     for k, v in inc.iteritems():
-        if isinstance(v,dict):
+        if isinstance(v, dict):
             if k not in base:
                 base[k] = v
-            elif isinstance(base[k],dict):
+            elif isinstance(base[k], dict):
                 base[k] = merge_config(base[k], v)
             else:
                 raise Exception("What the fuck!? You fucking basterd!")
