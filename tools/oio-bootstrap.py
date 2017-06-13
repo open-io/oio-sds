@@ -470,11 +470,6 @@ template_credentials = """
 ${BACKBLAZE_ACCOUNT_ID}.${BACKBLAZE_BUCKET_NAME}.application_key=${BACKBLAZE_APPLICATION_KEY}
 """
 
-template_admin = """
-[admin]
-NS = ${NS}
-"""
-
 template_service_pools = """
 # Service pools declarations
 # ----------------------------
@@ -680,7 +675,7 @@ on_die=respawn
 template_gridinit_httpd = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-command=${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+command=${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.httpd.conf
 enabled=true
 start_at_boot=false
 on_die=respawn
@@ -835,6 +830,18 @@ log_address = /dev/log
 syslog_prefix = OIO,${NS},rdir,${SRVNUM}
 """
 
+template_admin = """
+[admin-server]
+bind_addr = ${IP}
+bind_port = ${PORT}
+namespace = ${NS}
+log_facility = LOG_LOCAL0
+log_level = INFO
+log_address = /dev/log
+syslog_prefix = OIO,${NS},admin,${SRVNUM}
+redis_host = ${IP}
+"""
+
 sqlx_schema_dovecot = """
 CREATE TABLE IF NOT EXISTS box (
    name TEXT NOT NULL PRIMARY KEY,
@@ -981,6 +988,8 @@ if not os.path.exists('/usr/sbin/httpd'):
 def config(env):
     return '{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.conf'.format(**env)
 
+def httpd_config(env):
+    return '{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.httpd.conf'.format(**env)
 
 def watch(env):
     return '{WATCHDIR}/{NS}-{SRVTYPE}-{SRVNUM}.yml'.format(**env)
@@ -1262,7 +1271,7 @@ def generate(options):
             to_write = tpl.safe_substitute(env)
             if options.get(OPENSUSE, None):
                 to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
-            with open(config(env), 'w+') as f:
+            with open(httpd_config(env), 'w+') as f:
                 f.write(to_write)
             # watcher
             tpl = Template(template_rawx_watch)
@@ -1318,7 +1327,7 @@ def generate(options):
     to_write = tpl.safe_substitute(env)
     if options.get(OPENSUSE, False):
         to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
-    with open(config(env), 'w+') as f:
+    with open(httpd_config(env), 'w+') as f:
         f.write(to_write)
     # service desc
     tpl = Template(template_wsgi_service_descr)
@@ -1337,12 +1346,18 @@ def generate(options):
     to_write = tpl.safe_substitute(env)
     if options.get(OPENSUSE, False):
         to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
-    with open(config(env), 'w+') as f:
+    with open(httpd_config(env), 'w+') as f:
         f.write(to_write)
     # service desc
     tpl = Template(template_wsgi_service_descr)
-    to_write = tpl.safe_substitute(env, SRVTYPE='container_streaming')
+    to_write = tpl.safe_substitute(env, SRVTYPE='container_streaming',
+                                        KEY_FILE=config(env))
     with open(wsgi(env), 'w+') as f:
+        f.write(to_write)
+    # service configuration
+    tpl = Template(template_admin)
+    to_write = tpl.safe_substitute(env)
+    with open(config(env), 'w+') as f:
         f.write(to_write)
 
     # account
@@ -1418,8 +1433,6 @@ def generate(options):
 
     with open('{KEY_FILE}'.format(**ENV), 'w+') as f:
         tpl = Template(template_credentials)
-        f.write(tpl.safe_substitute(ENV))
-        tpl = Template(template_admin)
         f.write(tpl.safe_substitute(ENV))
 
     # ensure volumes for srvtype in final_services:
