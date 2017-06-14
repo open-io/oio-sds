@@ -21,6 +21,8 @@ CHUNK_METADATA_PREFIX = "x-oio-chunk-meta-"
 CONTAINER_USER_METADATA_PREFIX = CONTAINER_METADATA_PREFIX + 'user-'
 
 
+OIO_VERSION = '4.0'
+
 container_headers = {
     "size": "%ssys-m2-usage" % CONTAINER_METADATA_PREFIX,
     "ns": "%ssys-ns" % CONTAINER_METADATA_PREFIX
@@ -50,7 +52,9 @@ chunk_headers = {
     "content_path": "%scontent-path" % CHUNK_METADATA_PREFIX,
     "content_version": "%scontent-version" % CHUNK_METADATA_PREFIX,
     "metachunk_size": "%smetachunk-size" % CHUNK_METADATA_PREFIX,
-    "metachunk_hash": "%smetachunk-hash" % CHUNK_METADATA_PREFIX
+    "metachunk_hash": "%smetachunk-hash" % CHUNK_METADATA_PREFIX,
+    "full_path": "%sfull-path" % CHUNK_METADATA_PREFIX,
+    "oio_version": "%soio-version" % CHUNK_METADATA_PREFIX,
 }
 
 chunk_xattr_keys = {
@@ -66,6 +70,7 @@ chunk_xattr_keys = {
     'content_version': 'grid.content.version',
     'metachunk_hash': 'grid.metachunk.hash',
     'metachunk_size': 'grid.metachunk.size',
+    'oio_version': 'grid.oio.version'
 }
 
 chunk_xattr_keys_optional = {
@@ -73,7 +78,9 @@ chunk_xattr_keys_optional = {
         'chunk_hash': True,
         'chunk_size': True,
         'metachunk_size': True,
-        'metachunk_hash': True}
+        'metachunk_hash': True,
+        'oio_version': True,
+        'full_path': True}
 
 
 volume_xattr_keys = {

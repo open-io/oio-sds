@@ -34,7 +34,7 @@ from oio.common.utils import ensure_headers, ensure_request_id, float_value, \
     name2cid, GeneratorIO
 from oio.common.http import http_header_from_ranges
 from oio.common.storage_method import STORAGE_METHODS
-
+from oio.common.constants import OIO_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -238,7 +238,6 @@ class ObjectStorageApi(object):
         - `read_timeout`: `float`
         - `write_timeout`: `float`
     """
-
     TIMEOUT_KEYS = ('connection_timeout', 'read_timeout', 'write_timeout')
 
     def __init__(self, namespace, **kwargs):
@@ -802,6 +801,9 @@ class ObjectStorageApi(object):
         obj_meta['content_path'] = obj_name
         obj_meta['container_id'] = name2cid(account, container).upper()
         obj_meta['ns'] = self.namespace
+        obj_meta['full_path'] = ["%s/%s/%s" % (account, container, obj_name)]
+        obj_meta['oio_version'] = (obj_meta.get('oio_version')
+                                   or OIO_VERSION)
 
         storage_method = STORAGE_METHODS.load(obj_meta['chunk_method'])
         if storage_method.ec:

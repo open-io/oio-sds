@@ -25,6 +25,8 @@ sys_headers = {
     'content_version': '%scontent-version' % SYS_PREFIX,
     'content_policy': '%scontent-storage-policy' % SYS_PREFIX,
     'container_id': '%scontainer-id' % SYS_PREFIX,
+    'oio_version': '%soio-version' % SYS_PREFIX,
+    'full_path': '%sfull-path' % SYS_PREFIX
 }
 
 
@@ -42,6 +44,9 @@ def load_sysmeta(request):
         sysmeta['content_chunksnb'] = h.get(sys_headers['content_chunksnb'],
                                             "1")
         sysmeta['container_id'] = h[sys_headers['container_id']]
+        sysmeta['full_path'] = h[sys_headers['full_path']]
+        sysmeta['oio_version'] = h[sys_headers['oio_version']]
+
         return sysmeta
     except KeyError:
         print h

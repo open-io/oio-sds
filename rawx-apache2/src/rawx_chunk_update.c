@@ -230,6 +230,10 @@ _load_in_place_chunk_info(const dav_resource *r, const char *path, struct chunk_
 	str_replace_by_pooled_str(p, &(chunk->chunk_position));
 	str_replace_by_pooled_str(p, &(chunk->chunk_hash));
 
+	str_replace_by_pooled_str(p, &(chunk->oio_version));
+	str_replace_by_pooled_str(p, &(chunk->oio_full_path));
+
+
 	if (!get_compression_info_in_attr(path, &ge, comp_opt)){
 		if(NULL != ge) {
 			e = server_create_and_stat_error(conf, p, HTTP_CONFLICT,

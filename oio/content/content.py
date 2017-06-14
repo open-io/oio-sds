@@ -22,8 +22,9 @@ from oio.container.client import ContainerClient
 
 
 class Content(object):
+
     def __init__(self, conf, container_id, metadata, chunks, storage_method,
-                 container_client=None):
+                 account, container_name, container_client=None):
         self.conf = conf
         self.container_id = container_id
         self.metadata = metadata
@@ -40,6 +41,8 @@ class Content(object):
         self.checksum = self.metadata["hash"]
         self.mime_type = self.metadata["mime_type"]
         self.chunk_method = self.metadata["chunk_method"]
+        self.account = account
+        self.container_name = container_name
 
     def _get_spare_chunk(self, chunks_notin, chunks_broken):
         spare_data = {

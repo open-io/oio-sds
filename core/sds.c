@@ -1450,6 +1450,16 @@ _sds_upload_add_headers(struct oio_sds_ul_s *ul, struct http_put_dest_s *dest)
 			"%s", escaped);
 	g_free (escaped);
 
+	gchar *full_path = g_strconcat(oio_url_get(ul->dst->url, OIOURL_ACCOUNT),
+				"/", oio_url_get(ul->dst->url, OIOURL_USER),
+				"/", oio_url_get(ul->dst->url, OIOURL_PATH), NULL);
+	escaped = g_uri_escape_string(full_path, NULL, TRUE);
+	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "full-path", "%s", escaped);
+	g_free(full_path);
+	g_free(escaped);
+
+	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "oio-version", "%s", oio_sds_client_version);
+
 	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-version",
 			"%" G_GINT64_FORMAT, ul->version);
 	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-id",
