@@ -2181,6 +2181,15 @@ _check_ec_content(struct _sorted_content_s *content,
 	return cec.ecb;
 }
 
+static gboolean
+_foreach_free_list(gpointer key, gpointer value, gpointer data){
+	(void) data;
+	(void) key;
+	if (value)
+		g_slist_free((GSList *)value);
+	return FALSE;
+}
+
 GError *m2db_check_content(GSList *beans, struct namespace_info_s *nsinfo,
 		GString *message, gboolean partial)
 {
@@ -2230,8 +2239,12 @@ GError *m2db_check_content(GSList *beans, struct namespace_info_s *nsinfo,
 			break;
 	}
 
-	g_slist_free(sorted_content.aliases);
-	g_slist_free(sorted_content.properties);
+	if (sorted_content.aliases)
+		g_slist_free(sorted_content.aliases);
+	if (sorted_content.properties)
+		g_slist_free(sorted_content.properties);
+	
+	g_tree_foreach(sorted_content.metachunks, _foreach_free_list, NULL);
 	g_tree_destroy(sorted_content.metachunks);
 	if(pol)
 		storage_policy_clean(pol);
