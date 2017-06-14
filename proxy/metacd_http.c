@@ -856,6 +856,7 @@ configure_request_handlers (void)
 	SET("/$NS/lb/reload/#POST", action_lb_reload);
 	SET("/$NS/lb/choose/#GET", action_lb_choose);
 	SET("/$NS/lb/poll/#POST", action_lb_poll);
+	SET("/$NS/lb/create_pool/#POST", action_lb_create_pool);
 
 	// Local services
 	SET ("/$NS/local/list/#GET", action_local_list);

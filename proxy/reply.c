@@ -135,6 +135,9 @@ _reply_common_error (struct req_args_s *args, GError *err)
 		case CODE_UNAVAILABLE:
 		case CODE_EXCESSIVE_LOAD:
 			return _reply_retry(args, err);
+		case CODE_CONTAINER_EXISTS:
+		case CODE_CONTENT_EXISTS:
+			return _reply_conflict_error(args, err);
 	}
 
 	return _reply_system_error (args, err);
