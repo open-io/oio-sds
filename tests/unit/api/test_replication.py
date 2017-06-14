@@ -11,6 +11,7 @@ from tests.unit.api import CHUNK_SIZE, EMPTY_CHECKSUM, empty_stream, \
     decode_chunked_body, FakeResponse
 from oio.api import io
 from tests.unit import set_http_connect, set_http_requests
+from oio.common.constants import OIO_VERSION
 
 
 class TestReplication(unittest.TestCase):
@@ -27,6 +28,8 @@ class TestReplication(unittest.TestCase):
             'container_id': self.cid,
             'policy': 'REPLI3',
             'content_path': 'test',
+            'full_path': ['account/container/test'],
+            'oio_version': OIO_VERSION,
         }
 
         self._meta_chunk = [

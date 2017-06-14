@@ -9,6 +9,7 @@ from oio.container.client import ContainerClient
 from oio.blob.client import BlobClient
 from oio.common.constants import chunk_xattr_keys
 from tests.utils import BaseTestCase, random_str, random_id
+from oio.common.constants import OIO_VERSION
 
 
 class TestContent(object):
@@ -77,6 +78,9 @@ class TestBlobAuditorFunctional(BaseTestCase):
                       'chunk_id': self.chunk.id_chunk,
                       'chunk_pos': self.chunk.pos,
                       'chunk_hash': self.chunk.md5,
+                      'full_path': ['%s/%s/%s' % (self.account, self.ref,
+                                                  self.content.path)],
+                      'oio_version': OIO_VERSION
                       }
         self.blob_c.chunk_put(self.chunk_url, chunk_meta, self.data)
 

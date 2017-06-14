@@ -70,6 +70,29 @@ retry:
 		goto error_set_attr; \
 }
 
+static gboolean
+_set_list_xattr(int fd, gchar* name, gchar* keys)
+{
+	if (!keys)
+		return FALSE;
+	gchar **fields = g_strsplit(keys, ",", -1);
+	if (!fields)
+		return FALSE;
+	for(gchar **f = fields; f && *f; ++f) {
+		gchar *escaped_name = g_strconcat(name, ":", *f, NULL);
+		gchar *unescaped_name = g_uri_unescape_string(escaped_name, NULL);
+		g_free(escaped_name);
+		if (fsetxattr(fd, unescaped_name, "", 0, 0) == -1) {
+			g_free(unescaped_name);
+			g_strfreev(fields);
+			return FALSE;
+		}
+		g_free(unescaped_name);
+	}
+	g_strfreev(fields);
+	return TRUE;
+}
+
 gboolean
 set_rawx_info_to_fd (int fd, GError **error, struct chunk_textinfo_s *cti)
 {
@@ -108,6 +131,11 @@ set_rawx_info_to_fd (int fd, GError **error, struct chunk_textinfo_s *cti)
 
 	SET(ATTR_NAME_CHUNK_METADATA_COMPRESS, cti->compression_metadata);
 	SET(ATTR_NAME_CHUNK_COMPRESSED_SIZE,   cti->compression_size);
+
+	SET(ATTR_NAME_OIO_VERSION, cti->oio_version);
+
+	 if(cti->oio_full_path && !_set_list_xattr(fd, ATTR_OIO_DOMAIN, cti->oio_full_path))
+		 goto error_set_attr;
 
 	return TRUE;
 
@@ -168,6 +196,57 @@ _get (int fd, const char *k, gchar **pv)
 
 #define GET(K,R) _get(fd, ATTR_DOMAIN "." K, &(R))
 
+static GString*
+_search_user_oio(gchar* prefix, gchar * xattrlist, ssize_t size, gchar *name)
+{
+	GString* list_user = g_string_new("");
+	gchar* elem = NULL;
+	gint prefix_size = strlen(prefix) + 1;
+	for (gint i = 0; i < size; i+= strlen(&xattrlist[i]) + 1) {
+		elem = g_strrstr(&xattrlist[i], prefix);
+		if (elem) {
+			if (name)
+				elem = g_strrstr(&xattrlist[i], name);
+			if(elem) {
+				if (list_user->len)
+					list_user = g_string_append_c(list_user, ',');
+				gchar *s = g_uri_escape_string (&xattrlist[i + prefix_size], NULL, FALSE);
+				list_user = g_string_append(list_user, s);
+				g_free(s);
+			}
+			elem = NULL;
+		}
+	}
+	return list_user;
+}
+
+static gboolean
+_get_fullpath_from_fd(int fd, gchar* name, gchar **list_path, gchar *needle)
+{
+	ssize_t s = longest_xattr_list;
+	gchar *buf = g_malloc0(s);
+	ssize_t rc;
+retry:
+	rc = flistxattr(fd, buf, longest_xattr_list);
+	if (rc < 0) {
+		if (errno == ERANGE) {
+			s = s*2;
+			longest_xattr_list = 1 + MAX(longest_xattr_list, s);
+			buf = g_realloc(buf, s);
+			memset(buf, 0, s);
+			goto retry;
+		} else {
+			g_free(buf);
+			return FALSE;
+		}
+	}
+	GString *full_path = _search_user_oio(name, buf, rc, needle);
+	*list_path = full_path->str;
+	g_free(buf);
+	g_string_free(full_path, FALSE);
+	return TRUE;
+}
+
 gboolean
 get_rawx_info_from_fd (int fd, GError **error, struct chunk_textinfo_s *cti)
 {
@@ -180,7 +259,7 @@ get_rawx_info_from_fd (int fd, GError **error, struct chunk_textinfo_s *cti)
 		gchar *v = NULL;
 		if (!GET(ATTR_NAME_CONTENT_CONTAINER, v)) {
 			if (errno == ENOTSUP) {
-				GSETCODE(error, errno, "xatr not supported");
+				GSETCODE(error, errno, "xattr not supported");
 				return FALSE;
 			}
 		} else {
@@ -192,10 +271,13 @@ get_rawx_info_from_fd (int fd, GError **error, struct chunk_textinfo_s *cti)
 	if (!GET(ATTR_NAME_CONTENT_CONTAINER, cti->container_id)) {
 		/* just one check to detect unsupported xattr */
 		if (errno == ENOTSUP) {
-			GSETCODE(error, errno, "xatr not supported");
+			GSETCODE(error, errno, "xattr not supported");
 			return FALSE;
 		}
 	}
+
+	_get_fullpath_from_fd(fd, ATTR_OIO_DOMAIN, &(cti->oio_full_path),
+			cti->content_path);
 
 	GET(ATTR_NAME_CONTENT_ID,      cti->content_id);
 	GET(ATTR_NAME_CONTENT_PATH,    cti->content_path);
@@ -217,6 +299,8 @@ get_rawx_info_from_fd (int fd, GError **error, struct chunk_textinfo_s *cti)
 
 	GET(ATTR_NAME_CHUNK_METADATA_COMPRESS, cti->compression_metadata);
 	GET(ATTR_NAME_CHUNK_COMPRESSED_SIZE,   cti->compression_size);
+
+	GET(ATTR_NAME_OIO_VERSION, cti->oio_version);
 
 	return TRUE;
 }
@@ -290,4 +374,8 @@ chunk_textinfo_free_content(struct chunk_textinfo_s *cti)
 
 	oio_str_clean (&cti->compression_metadata);
 	oio_str_clean (&cti->compression_size);
+
+	oio_str_clean (&cti->oio_version);
+
+	oio_str_clean (&cti->oio_full_path);
 }

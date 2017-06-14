@@ -88,7 +88,10 @@ class TestContentFactory(BaseTestCase):
             "mime_type": "application/octet-stream",
             "name": "tox.ini",
             "policy": self.stgpol_ec,
-            "version": "1450176946676289"
+            "version": "1450176946676289",
+            "full_path": ["%s/%s/%s" % (self.account, self.container_name,
+                                        "tox.ini")],
+            "oio_version": "4.0",
         }
         chunks = [
             {
@@ -110,7 +113,9 @@ class TestContentFactory(BaseTestCase):
         ]
         self.content_factory.container_client.content_locate = Mock(
             return_value=(meta, chunks))
-        c = self.content_factory.get("xxx_container_id", "xxx_content_id")
+        c = self.content_factory.get("xxx_container_id", "xxx_content_id",
+                                     account=self.account,
+                                     container_name=self.container_name)
         self.assertEqual(type(c), ECContent)
         self.assertEqual(c.content_id, "3FA2C4A1ED2605005335A276890EC458")
         self.assertEqual(c.length, 658)
@@ -135,7 +140,10 @@ class TestContentFactory(BaseTestCase):
             "mime_type": "application/octet-stream",
             "name": "tox.ini",
             "policy": self.stgpol_twocopies,
-            "version": "1450176946676289"
+            "version": "1450176946676289",
+            "full_path": ["%s/%s/%s" % (self.account, self.container_name,
+                                        "tox.ini")],
+            "oio_version": "4.0",
         }
         chunks = [
             {
@@ -149,7 +157,9 @@ class TestContentFactory(BaseTestCase):
         ]
         self.content_factory.container_client.content_locate = Mock(
             return_value=(meta, chunks))
-        c = self.content_factory.get("xxx_container_id", "xxx_content_id")
+        c = self.content_factory.get("xxx_container_id", "xxx_content_id",
+                                     account=self.account,
+                                     container_name=self.container_name)
         self.assertEqual(type(c), PlainContent)
         self.assertEqual(c.content_id, "3FA2C4A1ED2605005335A276890EC458")
         self.assertEqual(c.length, 658)
@@ -176,7 +186,10 @@ class TestContentFactory(BaseTestCase):
             "mime_type": "application/octet-stream",
             "name": "titi",
             "policy": self.stgpol_ec,
-            "version": "1450341162332663"
+            "version": "1450341162332663",
+            "full_path": ["%s/%s/%s" % (self.account, self.container_name,
+                                        "titi")],
+            "oio_version": "4.0",
         }
         chunks = [
             {
@@ -199,7 +212,9 @@ class TestContentFactory(BaseTestCase):
         self.content_factory.container_client.content_prepare = Mock(
             return_value=(meta, chunks))
         c = self.content_factory.new("xxx_container_id", "titi",
-                                     1000, self.stgpol_ec)
+                                     1000, self.stgpol_ec,
+                                     account=self.account,
+                                     c_name=self.container_name)
         self.assertEqual(type(c), ECContent)
         self.assertEqual(c.content_id, "F4B1C8DD132705007DE8B43D0709DAA2")
         self.assertEqual(c.length, 1000)
@@ -367,6 +382,7 @@ class TestContentFactory(BaseTestCase):
                 "I\\put\\backslashes\\and$dollar$signs$in$file$names",
                 "Je suis tombé sur la tête, mais ça va bien.",
                 "%s%f%u%d%%",
+                "{1},{0},{3}",
                 "carriage\rreturn",
                 "line\nfeed",
                 "ta\tbu\tla\ttion",

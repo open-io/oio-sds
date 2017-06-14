@@ -218,13 +218,17 @@ def headers_from_object_metadata(metadata):
     out[chunk_headers["content_chunkmethod"]] = metadata['chunk_method']
     out[chunk_headers["content_policy"]] = metadata['policy']
     out[chunk_headers["container_id"]] = metadata['container_id']
+    out[chunk_headers["oio_version"]] = metadata["oio_version"]
 
     for key in ['metachunk_hash', 'metachunk_size', 'chunk_hash']:
         val = metadata.get(key)
         if val is not None:
             out[chunk_headers[key]] = metadata[key]
 
-    return {k: quote_plus(str(v)) for (k, v) in out.iteritems()}
+    header = {k: quote_plus(str(v)) for (k, v) in out.iteritems()}
+    header[chunk_headers["full_path"]] = ','.join([quote_plus(x) for x
+                                                  in metadata['full_path']])
+    return header
 
 
 class HeadersDict(dict):

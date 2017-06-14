@@ -106,6 +106,10 @@ class TestPlainContent(BaseTestCase):
                 self.assertEqual(meta['chunk_hash'], chunk_hash)
                 # Check that chunk data matches chunk hash from database
                 self.assertEqual(chunk.checksum, chunk_hash)
+                self.assertEqual(meta['full_path'], ['%s/%s/%s' %
+                                 (self.account, self.container_name,
+                                  self.content)])
+                self.assertEqual(meta['oio_version'], '4.0')
 
     def test_twocopies_create_0_byte(self):
         self._test_create(self.stgpol_twocopies, 0)

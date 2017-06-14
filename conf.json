@@ -725,7 +725,13 @@
 				"key": "core.http.user_agent",
 				"limit": 64,
 				"def": "",
-				"descr": "HTTP User-Agent to be used between any C client and the proxy" }
+				"descr": "HTTP User-Agent to be used between any C client and the proxy" },
+
+			{ "type": "string", "name": "oio_sds_client_version",
+				"key": "core.sds.version",
+				"limit": 64,
+				"def": "4.0",
+				"descr": "The version of the sds. It's used to know the expected metadata of a chunk" }
 		]
 	}
 }

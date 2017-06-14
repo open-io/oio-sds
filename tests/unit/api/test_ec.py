@@ -13,6 +13,7 @@ from oio.common.constants import chunk_headers
 from tests.unit.api import empty_stream, decode_chunked_body, \
     FakeResponse, CHUNK_SIZE, EMPTY_CHECKSUM
 from tests.unit import set_http_connect, set_http_requests
+from oio.common.constants import OIO_VERSION
 
 
 class TestEC(unittest.TestCase):
@@ -29,6 +30,8 @@ class TestEC(unittest.TestCase):
             'container_id': self.cid,
             'policy': 'EC',
             'content_path': 'test',
+            'full_path': ['account/container/test'],
+            'oio_version': OIO_VERSION
         }
         self._meta_chunk = [
                 {'url': 'http://127.0.0.1:7000/0', 'pos': '0.0', 'num': 0},

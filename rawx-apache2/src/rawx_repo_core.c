@@ -244,6 +244,16 @@ _load_field(apr_pool_t *pool, apr_table_t *table, const char *name, char **dst)
 	return 1;
 }
 
+static int
+_load_fields(apr_pool_t *pool, apr_table_t *table, const char *name, char ** dst)
+{
+	const char *value = apr_table_get(table, name);
+	if (!value)
+		return 0;
+	*dst = apr_pstrdup (pool, value);
+	return 1;
+}
+
 #define REPLACE_FIELD(S) str_replace_by_pooled_str(pool, &(cti->S))
 
 #define LAZY_LOAD_FIELD(Where,Name) do { \
@@ -279,6 +289,10 @@ chunk_info_fields__glib2apr (apr_pool_t *pool, struct chunk_textinfo_s *cti)
 	REPLACE_FIELD(chunk_size);
 	REPLACE_FIELD(chunk_position);
 	REPLACE_FIELD(chunk_hash);
+
+	REPLACE_FIELD(oio_version);
+
+	REPLACE_FIELD(oio_full_path);
 }
 
 void
@@ -316,6 +330,11 @@ request_load_chunk_info_from_headers(request_rec *request,
 	LAZY_LOAD_FIELD(chunk_size,             "chunk-size");
 	LAZY_LOAD_FIELD(chunk_position,         "chunk-pos");
 	LAZY_LOAD_FIELD(chunk_hash,             "chunk-hash");
+	LAZY_LOAD_FIELD(oio_version,            "oio-version");
+
+	if (!cti->oio_full_path) {
+		_load_fields(pool, src, RAWX_HEADER_PREFIX  "full-path", &(cti->oio_full_path));
+	}
 }
 
 const char *
@@ -451,6 +470,11 @@ request_fill_headers(request_rec *r, struct chunk_textinfo_s *c)
 	__set_header(r, "chunk-size", c->chunk_size);
 	__set_header(r, "chunk-hash", c->chunk_hash);
 	__set_header(r, "chunk-pos",  c->chunk_position);
+
+	__set_header(r, "oio-version", c->oio_version);
+
+	__set_header(r, "full-path", c->oio_full_path);
+
 }
 
 /*************************************************************************/
@@ -609,8 +633,10 @@ rawx_repo_commit_upload(dav_stream *stream)
 	DUP(chunk_size);
 	DUP(chunk_hash);
 	DUP(chunk_position);
+	DUP(oio_version);
 	DUP(compression_metadata);
 	DUP(compression_size);
+	DUP(oio_full_path);
 
 	/* Load the metadata located in the Trailers of the request */
 	request_overload_chunk_info_from_trailers (stream->r->info->request, &fake);

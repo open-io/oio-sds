@@ -4,7 +4,9 @@ import os
 import os.path
 from hashlib import md5
 from urlparse import urlparse
+from urllib import quote_plus
 from oio.common.http import http_connect
+from oio.common.constants import OIO_VERSION
 
 from tests.utils import BaseTestCase
 
@@ -37,6 +39,10 @@ class TestBlobFunctional(BaseTestCase):
             'x-oio-chunk-meta-chunk-size': len(data),
             'x-oio-chunk-meta-chunk-hash': md5(data).hexdigest().upper(),
             'x-oio-chunk-meta-chunk-pos': 0,
+            'x-oio-chunk-meta-full-path': quote_plus(('test/test/test' +
+                                                      ',test1/test1/test1'),
+                                                     ","),
+            'x-oio-chunk-meta-oio-version': OIO_VERSION
         }
 
     def _rawx_url(self, chunkid):

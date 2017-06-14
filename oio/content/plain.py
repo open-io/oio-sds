@@ -21,6 +21,7 @@ from oio.common.storage_method import STORAGE_METHODS
 from oio.content.content import Content, Chunk
 from oio.common import exceptions as exc
 from oio.common.exceptions import UnrecoverableContent
+from oio.common.constants import OIO_VERSION
 
 
 class PlainContent(Content):
@@ -38,7 +39,10 @@ class PlainContent(Content):
         sysmeta['mime_type'] = self.mime_type
         sysmeta['chunk_method'] = self.chunk_method
         sysmeta['chunk_size'] = self.metadata['chunk_size']
-
+        sysmeta['full_path'] = ['{0}/{1}/{2}'.format(self.account,
+                                                     self.container_name,
+                                                     self.path)]
+        sysmeta['oio_version'] = OIO_VERSION
         storage_method = STORAGE_METHODS.load(self.chunk_method)
 
         chunks = _sort_chunks(self.chunks.raw(), storage_method.ec)

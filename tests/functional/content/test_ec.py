@@ -113,6 +113,10 @@ class TestECContent(BaseTestCase):
                 self.assertEqual(meta['chunk_id'], chunk.id)
                 self.assertEqual(meta['chunk_pos'], chunk.pos)
                 self.assertEqual(meta['chunk_hash'], md5_stream(stream))
+                self.assertEqual(meta['full_path'], ['%s/%s/%s' %
+                                 (self.account, self.container_name,
+                                  self.content)])
+                self.assertEqual(meta['oio_version'], '4.0')
                 self.assertEqual(metachunk_hash, chunk.checksum)
 
             offset += metachunk_size

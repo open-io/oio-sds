@@ -25,6 +25,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define ATTR_NAME_MAX_LENGTH 64
 
 # define ATTR_DOMAIN "user.grid"
+# define ATTR_OIO_DOMAIN "user.oio"
 
 # define ATTR_NAME_CONTENT_CONTAINER "content.container"
 
@@ -48,6 +49,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # define ATTR_NAME_CHUNK_METADATA_COMPRESS "compression.metadata"
 # define ATTR_NAME_CHUNK_COMPRESSED_SIZE   "compression.size"
+
+# define ATTR_NAME_OIO_VERSION "oio.version"
+
+# define ATTR_NAME_OIO_USER_PATH "oio.user"
+
 
 #define NS_RAWX_BUFSIZE_OPTION "rawx_bufsize"
 
@@ -83,6 +89,10 @@ typedef struct chunk_textinfo_s
 
 	gchar *compression_metadata;
 	gchar *compression_size;
+
+	gchar *oio_version;
+
+	gchar *oio_full_path;
 
 } chunk_textinfo_t;
 

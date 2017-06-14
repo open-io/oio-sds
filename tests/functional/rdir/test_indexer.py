@@ -8,6 +8,7 @@ from oio.blob.utils import chunk_xattr_keys
 from oio.common.exceptions import FaultyChunk
 from oio.rdir.client import RdirClient
 from tests.utils import BaseTestCase, random_id
+from oio.common.constants import OIO_VERSION
 
 
 class TestIndexerCrawler(BaseTestCase):
@@ -60,6 +61,8 @@ class TestIndexerCrawler(BaseTestCase):
             'plain/nb_copy=3')
         xattr.setxattr(
             chunk_path, 'user.' + chunk_xattr_keys['content_version'], '0')
+        xattr.setxattr(
+            chunk_path, 'user.' + chunk_xattr_keys['oio_version'], OIO_VERSION)
 
         return chunk_path, container_id, content_id, chunk_id
 

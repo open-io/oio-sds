@@ -147,6 +147,10 @@ send_chunk_event(const char *type, const dav_resource *resource)
 	_PAIR_AND_COMMA("chunk_position", resource->info->chunk.chunk_position);
 	_PAIR_AND_COMMA("chunk_hash", resource->info->chunk.chunk_hash);
 
+	_PAIR_AND_COMMA("oio_version", resource->info->chunk.oio_version);
+
+	_PAIR_AND_COMMA("full_path", resource->info->chunk.oio_full_path);
+
 	g_string_append_c(json, '}');
 
 	const gint64 pre = oio_ext_monotonic_time ();
