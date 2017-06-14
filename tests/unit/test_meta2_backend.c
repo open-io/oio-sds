@@ -512,8 +512,9 @@ test_content_check_1_missing_bean_plain_irreparable(void)
 		GRID_DEBUG("TEST nb_beans=%u", g_slist_length(beans));
 		GString *message = g_string_new("");
 		err = meta2_backend_check_content(m2, beans, message, false);
-		g_string_free(message, TRUE);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
+		g_error_free(err);
+		g_string_free(message, TRUE);
 		_bean_cleanl2(beans);
 	}
 	_container_wraper_allversions("NS", test);
@@ -531,6 +532,7 @@ test_content_check_1_missing_bean_plain_copy_reparable(void)
 		_remove_bean(&beans_2cpy, 1, NULL);
 		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy, false);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
+		g_error_free(err);
 		gchar *missing_chunks = g_strrstr(message_2cpy->str, "\"missing_chunks\":[2]");
 		g_assert_nonnull(missing_chunks);
 		_bean_cleanl2(beans_2cpy);
@@ -541,6 +543,7 @@ test_content_check_1_missing_bean_plain_copy_reparable(void)
 		_remove_bean(&beans_3cpy, 1, NULL);
 		err = meta2_backend_check_content(m2, beans_3cpy, message_3cpy, false);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
+		g_error_free(err);
 		missing_chunks = g_strrstr(message_3cpy->str, "\"missing_chunks\":[2]");
 		g_assert_nonnull(missing_chunks);
 		_bean_cleanl2(beans_3cpy);
@@ -562,7 +565,7 @@ test_content_check_2_missing_bean_plain_copy_reparable(void)
 		_remove_bean(&beans_3cpy, 2, NULL);
 		err = meta2_backend_check_content(m2, beans_3cpy, message_3cpy, false);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
-		GRID_DEBUG("%s", message_3cpy->str);
+		g_error_free(err);
 		gchar *missing_chunks = g_strrstr(message_3cpy->str, "\"missing_chunks\":[2,2]");
 		g_assert_nonnull(missing_chunks);
 		g_slist_free_full(beans_3cpy, _bean_clean);
@@ -584,6 +587,7 @@ test_content_check_missing_bean_plain_copy_irreparable(void)
 		_remove_bean(&beans_2cpy, 2, NULL);
 		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy, false);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
+		g_error_free(err);
 		g_string_free(message_2cpy, TRUE);
 		_bean_cleanl2(beans_2cpy);
 
@@ -592,6 +596,7 @@ test_content_check_missing_bean_plain_copy_irreparable(void)
 		_remove_bean(&beans_3cpy, 3, NULL);
 		err = meta2_backend_check_content(m2, beans_3cpy, message_3cpy, false);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
+		g_error_free(err);
 		_bean_cleanl2(beans_3cpy);
 		g_string_free(message_3cpy, TRUE);
 	}
@@ -610,6 +615,7 @@ test_content_check_missing_first_pos(void)
 		_remove_bean(&beans_nocpy, 1, "0");
 		err = meta2_backend_check_content(m2, beans_nocpy, message_nocpy, false);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
+		g_error_free(err);
 		_bean_cleanl2(beans_nocpy);
 		g_string_free(message_nocpy, TRUE);
 
@@ -618,9 +624,11 @@ test_content_check_missing_first_pos(void)
 		_remove_bean(&beans_2cpy, 1, "0");
 		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy, false);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
+		g_error_free(err);
 		_remove_bean(&beans_2cpy, 1, "0");
 		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy, false);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
+		g_error_free(err);
 		_bean_cleanl2(beans_2cpy);
 		g_string_free(message_2cpy, TRUE);
 	}
@@ -639,6 +647,7 @@ test_content_check_ec_missing_1_chunk(void)
 		_remove_bean(&beans_ec1, 1, NULL);
 		err = meta2_backend_check_content(m2, beans_ec1, message_ec1, false);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
+		g_error_free(err);
 		_bean_cleanl2(beans_ec1);
 		g_string_free(message_ec1, TRUE);
 
@@ -648,6 +657,7 @@ test_content_check_ec_missing_1_chunk(void)
 		_remove_bean(&beans_ecm, m, NULL);
 		err = meta2_backend_check_content(m2, beans_ecm, message_ecm, false);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
+		g_error_free(err);
 		_bean_cleanl2(beans_ecm);
 		g_string_free(message_ecm, TRUE);
 
@@ -657,6 +667,7 @@ test_content_check_ec_missing_1_chunk(void)
 		_remove_bean(&beans_ecm1, m1, NULL);
 		err = meta2_backend_check_content(m2, beans_ecm1, message_ecm1, false);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
+		g_error_free(err);
 		_bean_cleanl2(beans_ecm1);
 		g_string_free(message_ecm1, TRUE);
 	}
