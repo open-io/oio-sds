@@ -262,3 +262,59 @@ action_lb_reload (struct req_args_s *args)
 	return _reply_success_json (args, NULL);
 }
 
+static enum http_rc_e
+_create_pool(struct req_args_s *args, struct json_object *body)
+{
+	if (!body || !json_object_is_type(body, json_type_object))
+		return _reply_common_error(args, BADREQ("Expected: json object"));
+
+	const gchar *name = OPT("name");
+
+	struct json_object *jtargets = NULL, *jopts = NULL;
+	struct oio_ext_json_mapping_s mapping[] = {
+		{"targets", &jtargets, json_type_string, 1},
+		{"options", &jopts,    json_type_object, 0},
+		{NULL, NULL, 0, 0}
+	};
+	GError *err = NULL;
+	if (body && (err = oio_ext_extract_json(body, mapping))) {
+		return _reply_format_error(args, err);
+	}
+
+	struct oio_lb_pool_s *pool = oio_lb_world__create_pool(lb_world, name);
+	oio_lb_world__add_pool_targets(pool, json_object_get_string(jtargets));
+
+	if (jopts) {
+		json_object_object_foreach(jopts, key, val) {
+			if (json_object_is_type(val, json_type_array) ||
+					json_object_is_type(val, json_type_object)) {
+				oio_lb_pool__destroy(pool);
+				err = BADREQ("Bad value for option %s: "
+						"should be a string, integer or boolean", key);
+				return _reply_format_error(args, err);
+			}
+			oio_lb_world__set_pool_option(pool, key,
+					json_object_get_string(val));
+		}
+	}
+
+	oio_lb__force_pool(lb, pool);
+
+	return _reply_created(args);
+}
+
+enum http_rc_e
+action_lb_create_pool(struct req_args_s *args)
+{
+	GError *err = NULL;
+	if (!validate_namespace(NS()))
+		err = NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Invalid NS");
+	else if	(!OPT("name"))
+		err = BADREQ("Missing name parameter");
+	else if (oio_lb__has_pool(lb, OPT("name")))
+		err = NEWERROR(CODE_CONTENT_EXISTS, "A pool named [%s] already exists",
+				OPT("name"));
+	if (err)
+		return _reply_common_error(args, err);
+	return rest_action(args, _create_pool);
+}
