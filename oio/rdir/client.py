@@ -1,6 +1,6 @@
 from oio.api.base import HttpApi
 from oio.common.exceptions import ClientException, NotFound, VolumeException
-from oio.common.exceptions import ServiceUnavailable
+from oio.common.exceptions import ServiceUnavailable, ServerException
 from oio.common.utils import get_logger
 from oio.conscience.client import ConscienceClient
 from oio.directory.client import DirectoryClient
@@ -27,11 +27,17 @@ class RdirDispatcher(object):
         self.logger = get_logger(conf)
         self.directory = DirectoryClient(conf, **kwargs)
         self.rdir = RdirClient(conf, **kwargs)
+        self._cs = None
+
+    @property
+    def cs(self):
+        if not self._cs:
+            self._cs = ConscienceClient(self.conf)
+        return self._cs
 
     def get_assignation(self):
-        cs = ConscienceClient(self.conf)
-        all_rawx = cs.all_services('rawx')
-        all_rdir = cs.all_services('rdir', True)
+        all_rawx = self.cs.all_services('rawx')
+        all_rdir = self.cs.all_services('rdir', True)
         by_id = {_make_id(self.ns, 'rdir', x['addr']): x
                  for x in all_rdir}
 
@@ -60,9 +66,8 @@ class RdirDispatcher(object):
                              can be linked to
         :type max_per_rdir: `int`
         """
-        cs = ConscienceClient(self.conf)
-        all_rawx = cs.all_services('rawx')
-        all_rdir = cs.all_services('rdir', True)
+        all_rawx = self.cs.all_services('rawx')
+        all_rdir = self.cs.all_services('rdir', True)
         if len(all_rdir) <= 0:
             raise ServiceUnavailable("No rdir service found in %s" % self.ns)
 
@@ -87,14 +92,14 @@ class RdirDispatcher(object):
                                      "limitation)",
                                      rawx['addr'], rawx['score'])
                     continue
-                rdir = self._smart_link_rdir(rawx['addr'], cs, all_rdir,
+                rdir = self._smart_link_rdir(rawx['addr'], all_rdir,
                                              max_per_rdir)
                 n_bases = by_id[rdir]['tags'].get("stat.opened_db_count", 0)
                 by_id[rdir]['tags']["stat.opened_db_count"] = n_bases + 1
                 rawx['rdir'] = by_id[rdir]
         return all_rawx
 
-    def _smart_link_rdir(self, volume_id, cs, all_rdir, max_per_rdir=None):
+    def _smart_link_rdir(self, volume_id, all_rdir, max_per_rdir=None):
         """
         Force the load balancer to avoid services that already host more
         bases than the average (or more than `max_per_rdir`)
@@ -115,12 +120,12 @@ class RdirDispatcher(object):
                   x['tags']['stat.opened_db_count'] > upper_limit]
         known = [_make_id(self.ns, "rawx", volume_id)]
         try:
-            polled = cs.poll('rdir', avoid=avoids, known=known)[0]
+            polled = self._poll_rdir(avoid=avoids, known=known)
         except ClientException as exc:
             if exc.status != 481 or max_per_rdir:
                 raise
             # Retry without `avoids`, hoping the next iteration will rebalance
-            polled = cs.poll('rdir', known=known)[0]
+            polled = self._poll_rdir(known=known)
         forced = {'host': polled['addr'], 'type': 'rdir',
                   'seq': 1, 'args': "", 'id': polled['id']}
         self.directory.force(RDIR_ACCT, volume_id, 'rdir',
@@ -131,6 +136,21 @@ class RdirDispatcher(object):
             self.logger.warn("Failed to create database for %s on %s: %s",
                              volume_id, polled['addr'], exc)
         return polled['id']
+
+    def _poll_rdir(self, avoid=None, known=None):
+        """Call the special rdir service pool (created if missing)"""
+        try:
+            svcs = self.cs.poll('__rawx_rdir', avoid=avoid, known=known)
+        except ClientException as exc:
+            if exc.status != 400:
+                raise
+            self.cs.lb.create_pool('__rawx_rdir', ((1, 'rawx'), (1, 'rdir')))
+            svcs = self.cs.poll('__rawx_rdir', avoid=avoid, known=known)
+        for svc in svcs:
+            # FIXME: we should include the service type in a dedicated field
+            if 'rdir' in svc['id']:
+                return svc
+        raise ServerException("LB returned incoherent result: %s" % svcs)
 
 
 class RdirClient(HttpApi):
