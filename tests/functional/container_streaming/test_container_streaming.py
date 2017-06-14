@@ -3,6 +3,8 @@ import random
 import tarfile
 from io import BytesIO
 import itertools
+import json
+import string
 
 import requests
 from oio import ObjectStorageApi
@@ -22,6 +24,12 @@ def gen_names():
         for c1 in "01234567":
             i, index = index, index + 1
             yield i, '{0}/{1}/plop'.format(c0, c1)
+
+def gen_metadata():
+    rand_str = lambda n: ''.join([random.choice(string.ascii_letters) for i in xrange(n)])
+    name = rand_str(20)
+    value = rand_str(100)
+    return (name, value)
 
 
 # class TestContainerDownload(TestCase):
@@ -44,11 +52,17 @@ class TestContainerDownload(BaseTestCase):
         self.conn.container_delete(self.account, self._cnt)
         super(TestContainerDownload, self).tearDown()
 
-    def _create_data(self):
+    def _create_data(self, metadata=None):
         for idx, name in itertools.islice(gen_names(), 5):
             data = gen_data(513 * idx)
-            self._data[name] = data
+            entry = {'data': data, 'meta': None}
             self.conn.object_create(self.account, self._cnt, obj_name=name, data=data)
+            if metadata:
+                key, val = metadata()
+                entry['meta'] = {key: val}
+                self.conn.object_update(self.account, self._cnt, name, entry['meta'])
+            self._data[name] = entry
+
 
     def test_missing_container(self):
         ret = requests.get(self._streaming + random_container("ms-"))
@@ -81,11 +95,19 @@ class TestContainerDownload(BaseTestCase):
             self.assertIn(entry, info)
 
             tmp = tar.extractfile(entry)
-            self.assertEqual(self._data[entry], tmp.read())
+            self.assertEqual(self._data[entry]['data'], tmp.read())
 
             info.remove(entry)
 
         self.assertEqual(len(info), 0)
+
+    def test_check_head(self):
+        self._create_data()
+
+        get = requests.get(self._uri)
+        head = requests.head(self._uri)
+
+        self.assertEqual(get.headers['content-length'], head.headers['content-length'])
 
     def test_download_per_range(self):
         self._create_data()
@@ -111,3 +133,45 @@ class TestContainerDownload(BaseTestCase):
 
         ret = requests.get(self._uri, headers={'Range': 'bytes=0-511, 512-1023'})
         self.assertEqual(ret.status_code, 416)
+
+    def test_file_metadata(self):
+        self._create_data(metadata=gen_metadata)
+
+        ret = requests.get(self._uri)
+        self.assertGreater(len(ret.content), 0)
+        self.assertEqual(ret.status_code, 200)
+        self.raw = ret.content
+
+        raw = BytesIO(ret.content)
+        tar = tarfile.open(fileobj=raw)
+        info = self._data.keys()
+        for entry in tar.getnames():
+            self.assertIn(entry, info)
+
+            tmp = tar.extractfile(entry)
+            self.assertEqual(self._data[entry]['data'], tmp.read())
+
+            headers = tar.getmember(entry).pax_headers
+            for key, val in self._data[entry]['meta'].items():
+                key = "SCHILY.xattr.user." + key
+                self.assertIn(key, headers)
+                self.assertEqual(val, headers[key])
+
+            info.remove(entry)
+
+        self.assertEqual(len(info), 0)
+
+    def test_container_metadata(self):
+        key, val = gen_metadata()
+        ret = self.conn.container_update(self.account, self._cnt, {key: val})
+        ret = self.conn.container_show(self.account, self._cnt)
+        ret = requests.get(self._uri)
+        self.assertEqual(ret.status_code, 200)
+
+        raw = BytesIO(ret.content)
+        tar = tarfile.open(fileobj=raw)
+        self.assertIn(".container_properties", tar.getnames())
+
+        data = json.load(tar.extractfile(".container_properties"))
+        self.assertIn(key, data)
+        self.assertEqual(val, data[key])
