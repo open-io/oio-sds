@@ -25,6 +25,7 @@ import math
 import re
 import os
 from tarfile import TarInfo, REGTYPE, NUL, PAX_FORMAT, BLOCKSIZE
+import time
 
 from werkzeug.wrappers import Request, Response
 from werkzeug.routing import Map, Rule
@@ -46,6 +47,7 @@ EXP = re.compile(r"^bytes=(\d+)-(\d+)$")
 # PAX/POSIX TAR: http://pubs.opengroup.org/onlinepubs/9699919799/utilities/pax.html
 
 NS = os.getenv("OIO_NS")
+CONTAINER_PROPERTIES = ".container_properties"
 
 def generate_oio_tarinfo_entry(conn, account, container, name, log):
     """ return tuple (buf, number of blocks, filesize) """
@@ -80,6 +82,22 @@ def generate_oio_tarinfo_entry(conn, account, container, name, log):
                   account, container, name)
     return buf, blocks, tarinfo.size
 
+def generate_oio_tarinfo_fake_entry(name, size, log):
+    tarinfo = TarInfo()
+    tarinfo.name = name
+    tarinfo.mode = 0o700 # ?
+    tarinfo.uid = 0
+    tarinfo.gid = 0
+    tarinfo.size = size
+    tarinfo.mtime = int(time.time())
+    tarinfo.type = REGTYPE
+    tarinfo.linkname = ""
+
+    buf = tarinfo.tobuf(format=PAX_FORMAT)
+    blocks, remainder = divmod(len(buf), BLOCKSIZE)
+
+    return buf, blocks, size
+
 
 class TarStreaming(object):
     def __init__(self, conn, account, container, blocks, oio_map, logger):
@@ -101,6 +119,7 @@ class TarStreaming(object):
             raise StopIteration
         return data
 
+    # FIXME: create_tar_oio_stream and create_tar_oio_properties should be merged
     def create_tar_oio_stream(self, entry, blocks):
         mem = ""
         name = entry['name']
@@ -144,6 +163,55 @@ class TarStreaming(object):
             self.logger.error("data written does not match blocksize")
         return mem
 
+    def create_tar_oio_properties(self, entry, blocks):
+        meta = self.conn.container_show(self.acct, self.container)
+        if not meta['properties']:
+            self.logger.error("container properties are empty")
+        data = json.dumps(meta['properties'])
+        size = len(data)
+        mem = ""
+
+        if size != entry['size']:
+            self.logger.error("container properties has been updated")
+
+        if set(blocks).intersection(range(entry['hdr_block'])):
+            buf, entry_blocks, _ = generate_oio_tarinfo_fake_entry(
+                CONTAINER_PROPERTIES, size, self.logger)
+
+            for bl in xrange(entry_blocks):
+                if bl in blocks:
+                    mem += buf[bl * BLOCKSIZE : bl * BLOCKSIZE + BLOCKSIZE]
+                    blocks.remove(bl)
+
+        if not blocks:
+            return mem
+
+        # for sanity, shift blocks
+        blocks = [v-entry['hdr_block'] for v in blocks]
+
+        # compute needed padding data
+        nb_blocks, remainder = divmod(entry['size'], BLOCKSIZE)
+
+        start = blocks[0] * BLOCKSIZE
+        last = False
+        if remainder > 0 and nb_blocks in blocks:
+            last = True
+            end = entry['size']
+        else:
+            end = blocks[-1] * BLOCKSIZE + BLOCKSIZE
+
+        mem += data[start:end]
+
+        if last:
+            mem += NUL * (BLOCKSIZE - remainder)
+
+        if not mem:
+            self.logger.error("no data extracted")
+        if divmod(len(mem), BLOCKSIZE)[1]:
+            self.logger.error("data written does not match blocksize")
+        return mem
+
+
     def read(self, size=-1):
         # streaming file by file
         # Is there API to stream data from OIO SDK (to avoid copy ?)
@@ -173,7 +241,11 @@ class TarStreaming(object):
             self.blocks = [x for x in self.blocks if x not in blocks]
             # shift selected blocks to object
             blocks = [x - val['start_block'] for x in blocks]
-            data = self.create_tar_oio_stream(val, blocks)
+
+            if val['name'] == CONTAINER_PROPERTIES:
+                data = self.create_tar_oio_properties(val, blocks)
+            else:
+                data = self.create_tar_oio_stream(val, blocks)
             if end_block == val['end_block']:
                 self.oio_map.remove(val)
             break
@@ -213,9 +285,27 @@ class ContainerStreaming(object):
             self.logger.debug("using cache")
             return json.loads(cache)
 
-        objs = self.conn.object_list(account, container)
         map_objs = []
         start_block = 0
+
+        meta = self.conn.container_show(account, container)
+        if meta['properties']:
+            # create special file to save properties of container
+            size = len(json.dumps(meta['properties']))
+            _, entry_blocks, size = generate_oio_tarinfo_fake_entry(
+                CONTAINER_PROPERTIES, size, self.logger)
+            entry = {
+                'name': CONTAINER_PROPERTIES,
+                'size': size,
+                'hdr_block': entry_blocks,
+                'block': entry_blocks + int(math.ceil(size / float(BLOCKSIZE))),
+                'start_block': start_block,
+            }
+            start_block += entry['block']
+            entry['end_block'] = start_block - 1
+            map_objs.append(entry)
+
+        objs = self.conn.object_list(account, container)
         for obj in sorted(objs['objects']):
             # FIXME should we backup deleted object ?
             if obj['deleted']:
@@ -232,6 +322,7 @@ class ContainerStreaming(object):
             start_block += entry['block']
             entry['end_block'] = start_block - 1
             map_objs.append(entry)
+
 
         self.logger.debug("add entry to cache")
         self.redis.set(hash_map, json.dumps(map_objs), ex=self.CACHE)
