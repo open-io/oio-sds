@@ -1984,12 +1984,14 @@ enum http_rc_e action_content_prop_del (struct req_args_s *args) {
 
 enum http_rc_e action_content_copy (struct req_args_s *args) {
 	const gchar *target = g_tree_lookup (args->rq->tree_headers, "destination");
+	const gchar *_err = NULL;
+
 	if (!target)
 		return _reply_format_error(args, BADREQ("Missing target header"));
 
 	struct oio_url_s *target_url = oio_url_init(target);
-	if (!target_url)
-		return _reply_format_error(args, BADREQ("Invalid URL in target header"));
+	if (!target_url || !oio_url_check(target_url, NULL, &_err))
+		return _reply_format_error(args, BADREQ("Invalid %s in target header", _err));
 
 	// Check the namespace and container match between both URLs
 	if (!oio_url_has(target_url, OIOURL_HEXID)
