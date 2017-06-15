@@ -221,6 +221,7 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 		rp->finalize ();
 		rc = HTTPRC_DONE;
 	} else {
+		const char *err;
 		struct req_args_s args = {0};
 		args.req_uri = &ruri;
 		args.matchings = matchings;
@@ -235,10 +236,9 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 		GRID_TRACE("%s %s URL %s", __FUNCTION__,
 				ruri.path, oio_url_get(args.url, OIOURL_WHOLE));
 
-		if (oio_url_has(args.url, OIOURL_VERSION) && !oio_str_is_number(
-					oio_url_get(args.url, OIOURL_VERSION), &args.version))
-			rc = _reply_format_error(&args, BADREQ("Invalid version"));
-		else {
+		if (!oio_url_check(url, ns_name, &err)) {
+			rc = _reply_format_error(&args, BADREQ("Invalid parameter %s", err));
+		} else {
 			req_handler_f handler = (*matchings)->last->u;
 			rc = (*handler) (&args);
 		}
