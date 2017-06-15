@@ -149,6 +149,10 @@ class ListAccounts(lister.Lister):
 
     log = logging.getLogger(__name__ + '.ListAccount')
 
+    @property
+    def formatter_default(self):
+        return "value"
+
     def get_parser(self, prog_name):
         parser = super(ListAccounts, self).get_parser(prog_name)
         parser.add_argument(
