@@ -258,7 +258,10 @@ oio_ext_set_admin (const gboolean admin)
 /* -------------------------------------------------------------------------- */
 
 # ifdef HAVE_BACKTRACE
-#warn "Backtrace enabled"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic warning "-Wcpp"
+#warning "Backtrace enabled"
+#pragma GCC diagnostic pop
 #include <execinfo.h>
 #define STACK_MAX 8
 
