@@ -5,7 +5,7 @@ import cliff
 import cliff.lister
 import cliff.show
 
-from oio.cli.utils import KeyValueAction
+from oio.cli.utils import KeyValueAction, ValueFormatStoreTrueAction
 
 
 class SetPropertyCommandMixin(object):
@@ -237,10 +237,6 @@ class ListContainer(cliff.lister.Lister):
 
     log = logging.getLogger(__name__ + '.ListContainer')
 
-    @property
-    def formatter_default(self):
-        return "value"
-
     def get_parser(self, prog_name):
         parser = super(ListContainer, self).get_parser(prog_name)
         parser.add_argument(
@@ -272,8 +268,9 @@ class ListContainer(cliff.lister.Lister):
             '--no-paging', '--full',
             dest='full_listing',
             default=False,
-            help='List all containers without paging',
-            action="store_true"
+            help=("List all containers without paging "
+                  "(and set output format to 'value')"),
+            action=ValueFormatStoreTrueAction
         )
         return parser
 

@@ -2,7 +2,7 @@ import logging
 from cliff import command
 from cliff import show
 from cliff import lister
-from oio.cli.utils import KeyValueAction
+from oio.cli.utils import KeyValueAction, ValueFormatStoreTrueAction
 
 
 class ShowAccount(show.ShowOne):
@@ -149,10 +149,6 @@ class ListAccounts(lister.Lister):
 
     log = logging.getLogger(__name__ + '.ListAccount')
 
-    @property
-    def formatter_default(self):
-        return "value"
-
     def get_parser(self, prog_name):
         parser = super(ListAccounts, self).get_parser(prog_name)
         parser.add_argument(
@@ -160,8 +156,8 @@ class ListAccounts(lister.Lister):
             dest='long_listing',
             default=False,
             help=("Display account statistics "
-                  "(slow,  we recommend 'csv' or 'value' output formats)"),
-            action="store_true"
+                  "(and set output format to 'value')"),
+            action=ValueFormatStoreTrueAction
         )
         return parser
 

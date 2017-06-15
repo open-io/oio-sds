@@ -3,7 +3,7 @@ import os
 
 from cliff import command, lister, show
 
-from oio.cli.utils import KeyValueAction
+from oio.cli.utils import KeyValueAction, ValueFormatStoreTrueAction
 
 
 class ContainerCommandMixin(object):
@@ -391,10 +391,6 @@ class ListObject(ContainerCommandMixin, lister.Lister):
 
     log = logging.getLogger(__name__ + '.ListObject')
 
-    @property
-    def formatter_default(self):
-        return "value"
-
     def get_parser(self, prog_name):
         parser = super(ListObject, self).get_parser(prog_name)
         self.patch_parser(parser)
@@ -428,8 +424,9 @@ class ListObject(ContainerCommandMixin, lister.Lister):
             '--no-paging', '--full',
             dest='full_listing',
             default=False,
-            help='List all objects without paging',
-            action="store_true"
+            help=("List all objects without paging "
+                  "(and set output format to 'value')"),
+            action=ValueFormatStoreTrueAction,
         )
         parser.add_argument(
             '--properties', '--long',
