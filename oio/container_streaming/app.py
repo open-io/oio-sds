@@ -211,7 +211,6 @@ class TarStreaming(object):
             self.logger.error("data written does not match blocksize")
         return mem
 
-
     def read(self, size=-1):
         # streaming file by file
         # Is there API to stream data from OIO SDK (to avoid copy ?)
