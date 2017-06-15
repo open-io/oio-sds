@@ -44,8 +44,10 @@ test_create_upload_delete_destroy(struct oio_url_s *url, const gchar *obj)
 	struct oio_sds_ul_dst_s dst = {0};
 	dst.url = oio_url_dup(url);
 
-	if (obj)
+	if (obj) {
 		oio_url_set(dst.url, OIOURL_PATH, obj);
+		g_assert_true(oio_url_check(dst.url, NULL, NULL));
+    }
 	err = oio_sds_upload_from_file(client, &dst, source_file, 0, -1);
 	g_assert_no_error((GError*)err);
 
@@ -99,6 +101,7 @@ test_create_upload_delete_destroy_objname(gconstpointer user_data)
 	oio_url_set(url, OIOURL_ACCOUNT, account);
 	oio_url_set(url, OIOURL_USER, "container");
 	oio_url_set(url, OIOURL_PATH, obj_name);
+	g_assert_true(oio_url_check(url, ns_name, NULL));
 
 	const gchar *obj_name_parsed = oio_url_get(url, OIOURL_PATH);
 	g_assert_cmpstr(obj_name_parsed, ==, obj_name);

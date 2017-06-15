@@ -506,3 +506,29 @@ oio_url_to_json (GString *out, struct oio_url_s *u)
 	}
 }
 
+gboolean
+oio_url_check(const struct oio_url_s *u, const char *namespace, const gchar **err )
+{
+#define _ERR(v)  \
+    if (err) { \
+        *err = v; \
+    }
+
+    _ERR(NULL);
+    if (namespace && u->ns && strcmp(namespace, u->ns)) {
+        _ERR("namespace");
+        return 0;
+    }
+    if (u->version && !oio_str_is_number(u->version, NULL)) {
+        _ERR("version");
+        return 0;
+    }
+
+    if (u->path && !g_utf8_validate(u->path, -1, NULL)) {
+        _ERR("path");
+        return 0;
+    }
+    return 1;
+
+#undef _ERR
+}

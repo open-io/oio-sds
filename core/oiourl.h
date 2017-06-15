@@ -128,6 +128,15 @@ int oio_url_has_fq_path (const struct oio_url_s *u);
 /** Returns wether all the mandatory components for a container are present */
 int oio_url_has_fq_container (const struct oio_url_s *u);
 
+/** Validate contains of oio_url
+ *
+ * @param u the URL
+ * @param n the namespace (optional)
+ * @param e will contains faulty field
+ * @return true if valid
+*/
+gboolean oio_url_check(const struct oio_url_s *u, const char *n, const gchar **e);
+
 #ifdef __cplusplus
 }
 #endif
