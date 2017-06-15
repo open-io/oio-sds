@@ -127,12 +127,14 @@ test_configure_valid (void)
 		if (th->url) {
 			url = oio_url_init(th->url);
 			g_assert_nonnull (url);
+			g_assert_true(oio_url_check(url, th->ns, NULL));
 			_test_url (idx++, url, th);
 			oio_url_pclean (&url);
 		}
 
 		url = _init_url (th);
 		g_assert_nonnull (url);
+		g_assert_true(oio_url_check(url, th->ns, NULL));
 		_test_url (idx++, url, th);
 		oio_url_pclean (&url);
 	}
@@ -141,8 +143,34 @@ test_configure_valid (void)
 static void
 test_configure_invalid(void)
 {
+	struct oio_url_s *url;
+	const gchar *err;
 	g_assert_null (oio_url_init(""));
 	g_assert_null (oio_url_init("/"));
+
+	url = oio_url_init("badNS/ACCT/MB//thisisparta");
+	g_assert_false(oio_url_check(url, "NS", &err));
+	g_assert_cmpstr(err, ==, "namespace");
+	oio_url_pclean (&url);
+
+	url = oio_url_init("NS/ACCT/MB//thisisparta");
+	g_assert_true(oio_url_check(url, "NS", &err));
+	oio_url_set(url, OIOURL_VERSION, "aabbcc");
+	g_assert_false(oio_url_check(url, "NS", &err));
+	g_assert_cmpstr(err, ==, "version");
+	oio_url_pclean (&url);
+
+	url = oio_url_init("NS/ACCT/MB//\x33\x44\x55\x66\x77\x88");
+	g_assert_false(oio_url_check(url, "NS", &err));
+	g_assert_cmpstr(err, ==, "path");
+	oio_url_pclean (&url);
+
+	url = oio_url_init("NS/ACCT/MB//PATH");
+	g_assert_true(oio_url_check(url, "NS", &err));
+	oio_url_set(url, OIOURL_PATH, "\x33\x44\x55\x66\x77\x88");
+	g_assert_false(oio_url_check(url, "NS", &err));
+	g_assert_cmpstr(err, ==, "path");
+	oio_url_pclean (&url);
 }
 
 /* Plays a set of duplication/free roundtrips. */
