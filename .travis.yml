@@ -23,10 +23,13 @@ script:
   - mkdir /tmp/oio && source $HOME/oio/bin/activate
   - export CMAKE_OPTS='-DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib -DZK_LIBDIR=/usr/lib -DZK_INCDIR=/usr/include/zookeeper -DAPACHE2_LIBDIR=/usr/lib/apache2 -DAPACHE2_INCDIR=/usr/include/apache2 -DAPACHE2_MODDIR=/tmp/oio/lib/apache2/module'
   - if [ "build" == "${TEST_SUITE/*build*/build}" ] ; then cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Release" . && make all && make clean ; fi
-  - if [ -n "$COVERAGE" ] ; then export PYTHON_COVERAGE=1 CMAKE_OPTS="${CMAKE_OPTS} -DENABLE_CODECOVERAGE=on"; fi
+  - export PYTHON_COVERAGE=1 CMAKE_OPTS="${CMAKE_OPTS} -DENABLE_CODECOVERAGE=on"
   - cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Debug" . && make all install
   - python setup.py install
   - export G_DEBUG_LEVEL=D PATH="$PATH:/tmp/oio/bin" LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/tmp/oio/lib"
-  - if [ -n "$COVERAGE" ] ; then make coverage_init ; fi
+  - make coverage_init
   - pwd && env && ./tools/oio-travis-tests.sh
-  - if [ -n "$COVERAGE" ] ; then make coverage && gcovr -r . | cut -c1-63 && coverage report ; fi
+  - make coverage
+after_success:
+  - bash <(curl -s https://codecov.io/bash) -v -f cmake_coverage.output
+  - codecov

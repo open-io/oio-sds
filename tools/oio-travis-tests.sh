@@ -67,6 +67,8 @@ func_tests () {
 	# Run the test-suite of the C API
     ./core/tool_roundtrip $SOURCE
     rm -f $SOURCE
+
+    gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
 }
 
 
@@ -79,6 +81,8 @@ test_meta2_filters () {
 		tox -e coverage
     fi
     ${PYTHON} $(which nosetests) tests.functional.m2_filters.test_filters
+
+    gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
 }
 
 
