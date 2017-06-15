@@ -50,9 +50,8 @@ static GByteArray *encode_and_clean(GByteArray* (*e)(gchar**), gchar **pv) {
 
 static gboolean
 meta1_dispatch_v2_USERCREATE(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored UNUSED)
+		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
 
 	gsize length = 0;
@@ -72,15 +71,13 @@ meta1_dispatch_v2_USERCREATE(struct gridd_reply_ctx_s *reply,
 	else
 		reply->send_reply(CODE_FINAL_OK, "Created");
 
-	oio_url_clean (url);
 	return TRUE;
 }
 
 static gboolean
 meta1_dispatch_v2_USERDESTROY(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored UNUSED)
+		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	gboolean force = metautils_message_extract_flag(reply->request, NAME_MSGKEY_FORCE, FALSE);
 	reply->subject("%s|%s|%d", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), force);
 
@@ -90,15 +87,13 @@ meta1_dispatch_v2_USERDESTROY(struct gridd_reply_ctx_s *reply,
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");
 
-	oio_url_clean (url);
 	return TRUE;
 }
 
 static gboolean
 meta1_dispatch_v2_USERINFO(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored UNUSED)
+		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
 
 	gchar **info = NULL;
@@ -111,15 +106,13 @@ meta1_dispatch_v2_USERINFO(struct gridd_reply_ctx_s *reply,
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
-	oio_url_clean (url);
 	return TRUE;
 }
 
 static gboolean
 meta1_dispatch_v2_SRV_LINK(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored UNUSED)
+		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	gchar *srvtype = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
 	gboolean dryrun = metautils_message_extract_flag(reply->request, NAME_MSGKEY_DRYRUN, FALSE);
 	gboolean autocreate = metautils_message_extract_flag(reply->request, NAME_MSGKEY_AUTOCREATE, FALSE);
@@ -135,16 +128,14 @@ meta1_dispatch_v2_SRV_LINK(struct gridd_reply_ctx_s *reply,
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
-	oio_url_clean(url);
 	g_free0 (srvtype);
 	return TRUE;
 }
 
 static gboolean
 meta1_dispatch_v2_SRV_RENEW(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored UNUSED)
+		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	gboolean ac = metautils_message_extract_flag(reply->request, NAME_MSGKEY_AUTOCREATE, FALSE);
 	gboolean dryrun = metautils_message_extract_flag(reply->request, NAME_MSGKEY_DRYRUN, FALSE);
 	gchar *srvtype = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
@@ -160,16 +151,14 @@ meta1_dispatch_v2_SRV_RENEW(struct gridd_reply_ctx_s *reply,
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
-	oio_url_clean(url);
 	g_free0 (srvtype);
 	return TRUE;
 }
 
 static gboolean
 meta1_dispatch_v2_SRV_FORCE(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored UNUSED)
+		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	gboolean ac = metautils_message_extract_flag (reply->request, NAME_MSGKEY_AUTOCREATE, FALSE);
 	gboolean force = metautils_message_extract_flag (reply->request, NAME_MSGKEY_FORCE, FALSE);
 	reply->subject("%s|%s|?", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
@@ -188,15 +177,13 @@ meta1_dispatch_v2_SRV_FORCE(struct gridd_reply_ctx_s *reply,
 			reply->send_reply(200, "OK");
 	}
 
-	oio_url_clean (url);
 	return TRUE;
 }
 
 static gboolean
 meta1_dispatch_v2_SRV_CONFIG(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored UNUSED)
+		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
 
 	gchar *m1url = NULL;
@@ -212,16 +199,14 @@ meta1_dispatch_v2_SRV_CONFIG(struct gridd_reply_ctx_s *reply,
 			reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
-	oio_url_clean (url);
 	return TRUE;
 }
 
 static gboolean
 meta1_dispatch_v2_SRV_UNLINK(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored UNUSED)
+		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
 	gchar *srvtype = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
-	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), srvtype);
 
 	if (!srvtype)
@@ -243,16 +228,14 @@ meta1_dispatch_v2_SRV_UNLINK(struct gridd_reply_ctx_s *reply,
 		}
 	}
 
-	oio_url_clean (url);
 	g_free0 (srvtype);
 	return TRUE;
 }
 
 static gboolean
 meta1_dispatch_v2_SRV_LIST(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored UNUSED)
+		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	gchar *srvtype = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
 	reply->subject("%s|%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), srvtype);
 	STRING_STACKIFY(srvtype);
@@ -267,15 +250,13 @@ meta1_dispatch_v2_SRV_LIST(struct gridd_reply_ctx_s *reply,
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
-	oio_url_clean (url);
 	return TRUE;
 }
 
 static gboolean
 meta1_dispatch_v2_SRV_ALLONM1(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored UNUSED)
+		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
 	reply->send_reply(CODE_TEMPORARY, "Received");
 
@@ -289,15 +270,13 @@ meta1_dispatch_v2_SRV_ALLONM1(struct gridd_reply_ctx_s *reply,
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
-	oio_url_clean (url);
 	return TRUE;
 }
 
 static gboolean
 meta1_dispatch_v2_PROPGET(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored UNUSED)
+		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
 
 	gsize length = 0;
@@ -319,15 +298,13 @@ meta1_dispatch_v2_PROPGET(struct gridd_reply_ctx_s *reply,
 		}
 	}
 
-	oio_url_clean (url);
 	return TRUE;
 }
 
 static gboolean
 meta1_dispatch_v2_PROPSET(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored UNUSED)
+		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	gboolean flush = metautils_message_extract_flag(reply->request, NAME_MSGKEY_FLUSH, FALSE);
 	reply->subject("%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
 
@@ -346,15 +323,13 @@ meta1_dispatch_v2_PROPSET(struct gridd_reply_ctx_s *reply,
 			reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
-	oio_url_clean (url);
 	return TRUE;
 }
 
 static gboolean
 meta1_dispatch_v2_PROPDEL(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored UNUSED)
+		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
 
 	gchar **keys = NULL;
@@ -373,7 +348,6 @@ meta1_dispatch_v2_PROPDEL(struct gridd_reply_ctx_s *reply,
 		g_strfreev (keys);
 	}
 
-	oio_url_clean (url);
 	return TRUE;
 }
 
@@ -390,9 +364,8 @@ meta1_dispatch_v2_GET_PREFIX(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 meta1_dispatch_v2_SRVRELINK(struct gridd_reply_ctx_s *reply,
-	struct meta1_backend_s *m1, gpointer ignored UNUSED)
+	struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	gchar *kept = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_OLD);
 	gchar *replaced = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_NOTIN);
 	gboolean dryrun = metautils_message_extract_flag (reply->request, NAME_MSGKEY_DRYRUN, FALSE);
@@ -412,7 +385,6 @@ meta1_dispatch_v2_SRVRELINK(struct gridd_reply_ctx_s *reply,
 		}
 	}
 
-	oio_url_pclean (&url);
 	g_free0 (kept);
 	g_free0 (replaced);
 	return TRUE;
@@ -422,30 +394,53 @@ meta1_dispatch_v2_SRVRELINK(struct gridd_reply_ctx_s *reply,
 
 typedef gboolean (*hook) (struct gridd_reply_ctx_s *, gpointer, gpointer);
 
+
+typedef gboolean (*action) (struct gridd_reply_ctx_s *, struct meta1_backend_s *, struct oio_url_s *u);
+
+
+static gboolean meta1_dispatch_all(struct gridd_reply_ctx_s *reply,
+                                   struct meta1_backend_s *m1, gpointer callback)
+{
+	struct oio_url_s *url = metautils_message_extract_url(reply->request);
+
+	const gchar *_err;
+	if (!oio_url_check(url, NULL, &_err)) {
+		reply->send_error(0, BADREQ("Invalid %s", _err));
+		oio_url_pclean(&url);
+		return TRUE;
+	}
+
+    action ptr = callback;
+    gboolean ret = (*ptr)(reply, m1, url);
+    oio_url_pclean(&url);
+
+    return ret;
+}
+
 const struct gridd_request_descr_s *
 meta1_gridd_get_requests(void)
 {
 	static struct gridd_request_descr_s descriptions[] = {
 
-		{NAME_MSGNAME_M1V2_USERINFO,    (hook) meta1_dispatch_v2_USERINFO,    NULL},
-		{NAME_MSGNAME_M1V2_USERCREATE,  (hook) meta1_dispatch_v2_USERCREATE,  NULL},
-		{NAME_MSGNAME_M1V2_USERDESTROY, (hook) meta1_dispatch_v2_USERDESTROY, NULL},
+		{NAME_MSGNAME_M1V2_USERINFO,    (hook) meta1_dispatch_all, meta1_dispatch_v2_USERINFO},
+		{NAME_MSGNAME_M1V2_USERCREATE,  (hook) meta1_dispatch_all, meta1_dispatch_v2_USERCREATE},
+		{NAME_MSGNAME_M1V2_USERDESTROY, (hook) meta1_dispatch_all, meta1_dispatch_v2_USERDESTROY},
 
-		{NAME_MSGNAME_M1V2_SRVLIST,     (hook) meta1_dispatch_v2_SRV_LIST,    NULL},
-		{NAME_MSGNAME_M1V2_SRVLINK,     (hook) meta1_dispatch_v2_SRV_LINK,    NULL},
-		{NAME_MSGNAME_M1V2_SRVUNLINK,   (hook) meta1_dispatch_v2_SRV_UNLINK,  NULL},
-		{NAME_MSGNAME_M1V2_SRVFORCE,    (hook) meta1_dispatch_v2_SRV_FORCE,   NULL},
-		{NAME_MSGNAME_M1V2_SRVRENEW,    (hook) meta1_dispatch_v2_SRV_RENEW,   NULL},
-		{NAME_MSGNAME_M1V2_SRVCONFIG,   (hook) meta1_dispatch_v2_SRV_CONFIG,  NULL},
+		{NAME_MSGNAME_M1V2_SRVLIST,     (hook) meta1_dispatch_all, meta1_dispatch_v2_SRV_LIST},
+		{NAME_MSGNAME_M1V2_SRVLINK,     (hook) meta1_dispatch_all, meta1_dispatch_v2_SRV_LINK},
+		{NAME_MSGNAME_M1V2_SRVUNLINK,   (hook) meta1_dispatch_all, meta1_dispatch_v2_SRV_UNLINK},
+		{NAME_MSGNAME_M1V2_SRVFORCE,    (hook) meta1_dispatch_all, meta1_dispatch_v2_SRV_FORCE},
+		{NAME_MSGNAME_M1V2_SRVRENEW,    (hook) meta1_dispatch_all, meta1_dispatch_v2_SRV_RENEW},
+		{NAME_MSGNAME_M1V2_SRVCONFIG,   (hook) meta1_dispatch_all, meta1_dispatch_v2_SRV_CONFIG},
 
-		{NAME_MSGNAME_M1V2_PROPGET,     (hook) meta1_dispatch_v2_PROPGET, NULL},
-		{NAME_MSGNAME_M1V2_PROPSET,     (hook) meta1_dispatch_v2_PROPSET, NULL},
-		{NAME_MSGNAME_M1V2_PROPDEL,     (hook) meta1_dispatch_v2_PROPDEL, NULL},
+		{NAME_MSGNAME_M1V2_PROPGET,     (hook) meta1_dispatch_all, meta1_dispatch_v2_PROPGET},
+		{NAME_MSGNAME_M1V2_PROPSET,     (hook) meta1_dispatch_all, meta1_dispatch_v2_PROPSET},
+		{NAME_MSGNAME_M1V2_PROPDEL,     (hook) meta1_dispatch_all, meta1_dispatch_v2_PROPDEL},
 
-		{NAME_MSGNAME_M1V2_SRVALLONM1,  (hook) meta1_dispatch_v2_SRV_ALLONM1, NULL},
-		{NAME_MSGNAME_M1V2_GETPREFIX,	(hook) meta1_dispatch_v2_GET_PREFIX,  NULL},
+		{NAME_MSGNAME_M1V2_SRVALLONM1,  (hook) meta1_dispatch_all, meta1_dispatch_v2_SRV_ALLONM1},
+		{NAME_MSGNAME_M1V2_GETPREFIX,	(hook) meta1_dispatch_all, meta1_dispatch_v2_GET_PREFIX},
 
-		{NAME_MSGNAME_M1V2_SRVRELINK,   (hook) meta1_dispatch_v2_SRVRELINK, NULL},
+		{NAME_MSGNAME_M1V2_SRVRELINK,   (hook) meta1_dispatch_all, meta1_dispatch_v2_SRVRELINK},
 
 		{NULL, NULL, NULL}
 	};
