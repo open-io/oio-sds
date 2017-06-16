@@ -61,8 +61,12 @@ func_tests () {
     cd $WRKDIR
     make -C tests/func test
 
+    # Create a file just bigger than chunk size
+    SOURCE=$(mktemp)
+    dd if=/dev/urandom of=$SOURCE bs=128K count=9
 	# Run the test-suite of the C API
-    ./core/tool_roundtrip /etc/passwd
+    ./core/tool_roundtrip $SOURCE
+    rm -f $SOURCE
 }
 
 

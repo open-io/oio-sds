@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -131,7 +131,7 @@ struct chunk_s
 struct metachunk_s
 {
 	guint meta;
-	/* size of the original content's segment */
+	/* size of original content's segment */
 	gsize size;
 	/* offset in the original segment */
 	gsize offset;
@@ -163,7 +163,7 @@ _metachunk_cleanv (struct metachunk_s **tab)
 {
 	if (!tab)
 		return;
-	for (struct metachunk_s **p=tab; *p ;++p)
+	for (struct metachunk_s **p = tab; *p; ++p)
 		_metachunk_clean (*p);
 	g_free (tab);
 }
@@ -199,7 +199,7 @@ _chunks_pack (GString *gs, GSList *chunks)
 	gchar strpos[32];
 
 	g_string_append_c (gs, '[');
-	for (GSList *l=chunks; l ;l=l->next) {
+	for (GSList *l = chunks; l; l = l->next) {
 		struct chunk_s *c = l->data;
 		if (gs->str[gs->len - 1] != '[')
 			g_string_append_c (gs, ',');
@@ -220,7 +220,7 @@ _chunks_load (GSList **out, struct json_object *jtab)
 	GSList *chunks = NULL;
 	GError *err = NULL;
 
-	for (int i=json_object_array_length(jtab); i>0 && !err ;i--) {
+	for (int i = json_object_array_length(jtab); i > 0 && !err; i--) {
 		struct json_object *jurl = NULL, *jpos = NULL, *jsize = NULL,
 				*jhash = NULL, *jscore = NULL;
 		struct oio_ext_json_mapping_s m[] = {
@@ -272,7 +272,7 @@ _get_meta_bound (GSList *lchunks)
 	if (!lchunks)
 		return 0;
 	guint highest_meta = 0;
-	for (GSList *l=lchunks; l ;l=l->next) {
+	for (GSList *l = lchunks; l; l = l->next) {
 		struct chunk_s *c = l->data;
 		highest_meta = MAX(highest_meta, c->position.meta);
 	}
@@ -293,11 +293,11 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result,
 
 	/* build the metachunk */
 	struct metachunk_s **out = g_malloc0 ((meta_bound+1) * sizeof(void*));
-	for (guint i=0; i<meta_bound ;++i) {
+	for (guint i = 0; i < meta_bound; ++i) {
 		out[i] = g_malloc0 (sizeof(struct metachunk_s));
 		out[i]->meta = i;
 	}
-	for (GSList *l=lchunks; l ;l=l->next) {
+	for (GSList *l = lchunks; l; l = l->next) {
 		struct chunk_s *c = l->data;
 		guint i = c->position.meta;
 		struct metachunk_s *mc = out[i];
@@ -307,7 +307,7 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result,
 	/* check the sequence of metachunks has no gap. In addition we
 	 * apply a shuffling of the chunks to avoid preferring always the
 	 * same 'first' chunk returned by the proxy. */
-	for (guint i=0; i<meta_bound ;++i) {
+	for (guint i = 0; i < meta_bound; ++i) {
 		struct metachunk_s *mc = out[i];
 		if (!mc->chunks) {
 			_metachunk_cleanv (out);
@@ -320,7 +320,7 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result,
 	}
 
 	/* Compute each metachunk's size */
-	for (guint i=0; i<meta_bound ;++i) {
+	for (guint i = 0; i < meta_bound; ++i) {
 		/* Even with EC, the value of the 'chunk_size' attribute stored with each
 		 * chunk is the size of the metachunk. */
 		out[i]->size = ((struct chunk_s*)(out[i]->chunks->data))->size;
@@ -328,7 +328,7 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result,
 
 	/* Compute each metachunk's offset in the main content */
 	gsize offset = 0;
-	for (guint i=0; i<meta_bound ;++i) {
+	for (guint i = 0; i < meta_bound; ++i) {
 		out[i]->offset = offset;
 		offset += out[i]->size;
 	}
@@ -566,7 +566,7 @@ _show_content (struct oio_sds_s *sds, struct oio_url_s *url, void *cb_data,
 
 		/* Eventually the chunks */
 		if (cb_chunks) {
-			for (GSList *l=chunks; l ;l=l->next)
+			for (GSList *l = chunks; l; l = l->next)
 				cb_chunks(cb_data, l->data);
 			g_slist_free (chunks);
 		} else {
@@ -606,7 +606,7 @@ _dl_debug (const char *caller, struct oio_sds_dl_src_s *src,
 	g_string_append_printf (out, "SRC{%s", oio_url_get(src->url, OIOURL_WHOLE));
 	if (src->ranges && src->ranges[0]) {
 		g_string_append_static (out, ",[");
-		for (struct oio_sds_dl_range_s **p=src->ranges; *p ;++p)
+		for (struct oio_sds_dl_range_s **p = src->ranges; *p; ++p)
 			g_string_append_printf (out,
 					"[%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT"]",
 					(*p)->offset, (*p)->size);
@@ -821,7 +821,7 @@ _download_range (struct _download_ctx_s *dl, struct oio_sds_dl_range_s *range)
 
 	struct oio_sds_dl_range_s r0 = *range;
 
-	for (struct metachunk_s **p=dl->metachunks; *p ;++p) {
+	for (struct metachunk_s **p = dl->metachunks; *p; ++p) {
 		if ((r0.offset >= (*p)->offset)
 				&& (r0.offset < (*p)->offset + (*p)->size)) {
 			struct oio_sds_dl_range_s r1;
@@ -857,14 +857,14 @@ _download (struct _download_ctx_s *dl)
 	/* Compute the total number of bytes in the content. We will need it for
 	 * subsequent checks. */
 	size_t total = 0;
-	for (struct metachunk_s **p=dl->metachunks; *p ;++p)
+	for (struct metachunk_s **p = dl->metachunks; *p; ++p)
 		total += (*p)->size;
 	GRID_TRACE2("computed size = %"G_GSIZE_FORMAT, total);
 
 	/* validate the ranges do not point out of the content, or ensure at least
 	 * a range is set. */
 	if (dl->src->ranges && dl->src->ranges[0]) {
-		for (struct oio_sds_dl_range_s **p=dl->src->ranges; *p ;++p) {
+		for (struct oio_sds_dl_range_s **p = dl->src->ranges; *p; ++p) {
 			if ((*p)->offset >= total)
 				return BADREQ("Range (%zd+%zd)/%zd not satisfiable: %s",
 						(*p)->offset, (*p)->size, total,
@@ -889,7 +889,7 @@ _download (struct _download_ctx_s *dl)
 
 	/* Ok, let's download each range sequentially */
 	GError *err = NULL;
-	for (struct oio_sds_dl_range_s **p=dl->src->ranges; *p ;++p) {
+	for (struct oio_sds_dl_range_s **p = dl->src->ranges; *p; ++p) {
 		if (NULL != (err = _download_range (dl, *p)))
 			break;
 	}
@@ -1016,7 +1016,7 @@ _download_to_buffer (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 	if (src->ranges != NULL && src->ranges[0] != NULL) {
 		/* Validate all the range can fit into the buffer */
 		size_t total = 0;
-		for (struct oio_sds_dl_range_s **p=src->ranges; *p ;++p)
+		for (struct oio_sds_dl_range_s **p = src->ranges; *p; ++p)
 			total += (*p)->size;
 		if (total > dst->data.buffer.length)
 			return (struct oio_error_s*) BADREQ(
@@ -1128,7 +1128,6 @@ struct oio_sds_ul_s
 
 	/* current upload */
 	struct metachunk_s *mc;
-	GSList *chunks;
 	struct http_put_s *put;
 	GSList *http_dests;
 	size_t local_done;
@@ -1140,7 +1139,6 @@ _assert_no_upload (struct oio_sds_ul_s *ul)
 {
 	g_assert (NULL != ul);
 	g_assert (NULL == ul->mc);
-	g_assert (NULL == ul->chunks);
 	g_assert (NULL == ul->put);
 	g_assert (NULL == ul->http_dests);
 	g_assert (NULL == ul->checksum_chunk);
@@ -1155,8 +1153,6 @@ _sds_upload_reset (struct oio_sds_ul_s *ul)
 	ul->checksum_chunk = NULL;
 	_metachunk_clean (ul->mc);
 	ul->mc = NULL;
-	g_slist_free (ul->chunks);
-	ul->chunks = NULL;
 	http_put_destroy (ul->put);
 	ul->put = NULL;
 	g_slist_free (ul->http_dests);
@@ -1302,6 +1298,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 
 	EXTRA_ASSERT(!ul->hexid || oio_str_ishexa1(ul->hexid));
 
+	GSList *_chunks = NULL;
 	/* Parse the output, as a JSON array of objects with fields
 	 * depicting chunks */
 	if (!err) {
@@ -1310,7 +1307,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 				reply_body->str, reply_body->len);
 		if (!json_object_is_type(jbody, json_type_array))
 			err = SYSERR("Invalid JSON from the OIO proxy");
-		else if (NULL != (err = _chunks_load (&ul->chunks, jbody)))
+		else if ((err = _chunks_load(&_chunks, jbody)))
 			g_prefix_error (&err, "Parsing: ");
 		json_object_put (jbody);
 		json_tokener_free (tok);
@@ -1330,7 +1327,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 	/* Organize the set of chunks into metachunks. */
 	if (!err) {
 		struct metachunk_s **out = NULL;
-		if ((err = _organize_chunks (ul->chunks, &out, ul->sds->no_shuffle)))
+		if ((err = _organize_chunks(_chunks, &out, ul->sds->no_shuffle)))
 			g_prefix_error (&err, "Logic: ");
 		else
 			for (struct metachunk_s **p = out; *p; ++p)
@@ -1338,6 +1335,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 		if (out)
 			g_free(out);
 	}
+	g_slist_free(_chunks);
 
 	/* some values can be guessed if the proxy didn't reply */
 	if (!err) {
@@ -1377,7 +1375,7 @@ _finish_metachunk_upload(struct oio_sds_ul_s *ul)
 
 	ul->mc->size = ul->local_done;
 
-	for (GSList *l=ul->mc->chunks; l ;l=l->next) {
+	for (GSList *l = ul->mc->chunks; l; l = l->next) {
 		struct chunk_s *c = l->data;
 		EXTRA_ASSERT (c->position.meta == ul->mc->meta);
 		c->size = ul->mc->size;
@@ -1386,7 +1384,7 @@ _finish_metachunk_upload(struct oio_sds_ul_s *ul)
 
 	if (ul->checksum_chunk) {
 		const char *h = g_checksum_get_string (ul->checksum_chunk);
-		for (GSList *l=ul->mc->chunks; l ;l=l->next) {
+		for (GSList *l = ul->mc->chunks; l; l = l->next) {
 			struct chunk_s *c = l->data;
 			g_strlcpy (c->hexhash, h, sizeof(c->hexhash));
 			oio_str_upper (c->hexhash);
@@ -1415,7 +1413,7 @@ _sds_upload_finish (struct oio_sds_ul_s *ul)
 		/* TODO: in case of EC, we may wanna read response headers */
 
 		/* store the structure in holders for further commit/abort */
-		for (GSList *l = ul->chunks; l ;l=l->next) {
+		for (GSList *l = ul->mc->chunks; l; l = l->next) {
 			struct chunk_s *chunk = l->data;
 			if (is_ec || chunk->flag_success) {
 				ul->chunks_done = g_slist_prepend (ul->chunks_done, chunk);
@@ -1429,8 +1427,6 @@ _sds_upload_finish (struct oio_sds_ul_s *ul)
 				g_list_length(ul->metachunk_done),
 				ul->mc->size);
 		ul->mc = NULL;
-		g_slist_free(ul->chunks);
-		ul->chunks = NULL;
 	}
 
 	_sds_upload_reset (ul);
@@ -1508,7 +1504,7 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 	}
 
 	/* then patch each chunk with the same meta-position */
-	for (GSList *l=ul->mc->chunks; l ;l=l->next) {
+	for (GSList *l = ul->mc->chunks; l; l = l->next) {
 		struct chunk_s *c = l->data;
 		c->position.meta = ul->mc->meta;
 	}
@@ -1535,7 +1531,7 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 				"%u", ul->mc->meta);
 		ul->http_dests = g_slist_append (ul->http_dests, dest);
 	} else {
-		for (GSList *l=ul->mc->chunks; l ;l=l->next) {
+		for (GSList *l = ul->mc->chunks; l; l = l->next) {
 			struct chunk_s *c = l->data;
 			struct http_put_dest_s *dest = http_put_add_dest (ul->put, c->url, c);
 
@@ -1692,7 +1688,7 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 		return (struct oio_error_s *) SYSERR("RAWX upload not completed");
 
 	gint64 size = ul->dst->offset;
-	for (GList *l=g_list_first(ul->metachunk_done); l ;l=g_list_next(l))
+	for (GList *l = g_list_first(ul->metachunk_done); l; l = g_list_next(l))
 		size += ((struct metachunk_s*) l->data)->size;
 
 	GString *request_body = g_string_sized_new(2048);
@@ -2024,7 +2020,7 @@ _notify_list_result (struct oio_sds_list_listener_s *listener,
 	const int count_objects = json_object_array_length(jobjects);
 	if (count_objects >= 0)
 		*pcount = (size_t) count_objects;
-	for (int i=count_objects; i>0 && !err ;i--) {
+	for (int i = count_objects; i > 0 && !err; i--) {
 		struct json_object *it = json_object_array_get_idx (jobjects, i-1);
 		err = _notify_list_item (listener, it);
 	}
@@ -2315,7 +2311,7 @@ oio_sds_show_content (struct oio_sds_s *sds, struct oio_url_s *url,
 	if (!err) {
 		GTree *positions_seen = g_tree_new_full(oio_str_cmp3, NULL, g_free, NULL);
 		chunks = g_slist_sort (chunks, (GCompareFunc)_compare_chunks);
-		for (GSList *l=chunks; l ;l=l->next) {
+		for (GSList *l = chunks; l; l = l->next) {
 			const struct chunk_s *chunk = l->data;
 			gchar *position = g_strdup_printf("%u", chunk->position.meta);
 			if (g_tree_lookup(positions_seen, position)) {
