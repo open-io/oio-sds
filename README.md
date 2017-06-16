@@ -2,6 +2,8 @@
 
 OpenIO SDS is a software solution for object storage, targeting very large-scale unstructured data volumes.
 
+[![Build Status](https://travis-ci.org/open-io/oio-sds.svg?branch=3.x)](https://travis-ci.org/open-io/oio-sds)
+
 ## Install
 
 Either you go from scratch (the source) or you download the packages for your Linux distribution, install, and run!
