@@ -184,7 +184,7 @@ struct chunk_s
 struct metachunk_s
 {
 	guint meta;
-	/* size of the original content's segment */
+	/* size of original content's segment */
 	gsize size;
 	/* offset in the original segment */
 	gsize offset;
@@ -1181,7 +1181,6 @@ struct oio_sds_ul_s
 
 	/* current upload */
 	struct metachunk_s *mc;
-	GSList *chunks;
 	struct http_put_s *put;
 	GSList *http_dests;
 	size_t local_done;
@@ -1193,7 +1192,6 @@ _assert_no_upload (struct oio_sds_ul_s *ul)
 {
 	g_assert (NULL != ul);
 	g_assert (NULL == ul->mc);
-	g_assert (NULL == ul->chunks);
 	g_assert (NULL == ul->put);
 	g_assert (NULL == ul->http_dests);
 	g_assert (NULL == ul->checksum_chunk);
@@ -1208,8 +1206,6 @@ _sds_upload_reset (struct oio_sds_ul_s *ul)
 	ul->checksum_chunk = NULL;
 	_metachunk_clean (ul->mc);
 	ul->mc = NULL;
-	g_slist_free (ul->chunks);
-	ul->chunks = NULL;
 	http_put_destroy (ul->put);
 	ul->put = NULL;
 	g_slist_free (ul->http_dests);
@@ -1355,6 +1351,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 
 	EXTRA_ASSERT(!ul->hexid || oio_str_ishexa1(ul->hexid));
 
+	GSList *_chunks = NULL;
 	/* Parse the output, as a JSON array of objects with fields
 	 * depicting chunks */
 	if (!err) {
@@ -1363,7 +1360,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 				reply_body->str, reply_body->len);
 		if (!json_object_is_type(jbody, json_type_array))
 			err = SYSERR("Invalid JSON from the OIO proxy");
-		else if (NULL != (err = _chunks_load (&ul->chunks, jbody)))
+		else if ((err = _chunks_load(&_chunks, jbody)))
 			g_prefix_error (&err, "Parsing: ");
 		json_object_put (jbody);
 		json_tokener_free (tok);
@@ -1383,7 +1380,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 	/* Organize the set of chunks into metachunks. */
 	if (!err) {
 		struct metachunk_s **out = NULL;
-		if ((err = _organize_chunks (ul->chunks, &out, ul->sds->no_shuffle)))
+		if ((err = _organize_chunks(_chunks, &out, ul->sds->no_shuffle)))
 			g_prefix_error (&err, "Logic: ");
 		else
 			for (struct metachunk_s **p = out; *p; ++p)
@@ -1391,6 +1388,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 		if (out)
 			g_free(out);
 	}
+	g_slist_free(_chunks);
 
 	/* some values can be guessed if the proxy didn't reply */
 	if (!err) {
@@ -1468,7 +1466,7 @@ _sds_upload_finish (struct oio_sds_ul_s *ul)
 		/* TODO: in case of EC, we may wanna read response headers */
 
 		/* store the structure in holders for further commit/abort */
-		for (GSList *l = ul->chunks; l; l = l->next) {
+		for (GSList *l = ul->mc->chunks; l; l = l->next) {
 			struct chunk_s *chunk = l->data;
 			if (is_ec || chunk->flag_success) {
 				ul->chunks_done = g_slist_prepend (ul->chunks_done, chunk);
@@ -1482,8 +1480,6 @@ _sds_upload_finish (struct oio_sds_ul_s *ul)
 				g_list_length(ul->metachunk_done),
 				ul->mc->size);
 		ul->mc = NULL;
-		g_slist_free(ul->chunks);
-		ul->chunks = NULL;
 	}
 
 	_sds_upload_reset (ul);

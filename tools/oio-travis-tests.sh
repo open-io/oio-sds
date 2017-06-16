@@ -35,7 +35,11 @@ func_tests () {
     tox && tox -e func
     cd $WRKDIR
     make -C tests/func test
-    ./core/tool_roundtrip /etc/passwd
+    # Create a file just bigger than chunk size
+    SOURCE=$(mktemp)
+    dd if=/dev/urandom of=$SOURCE bs=128K count=9
+    ./core/tool_roundtrip $SOURCE
+    rm -f $SOURCE
 }
 
 test_worm () {
