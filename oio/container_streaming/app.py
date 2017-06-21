@@ -24,13 +24,13 @@ except ImportError:
 import math
 import re
 import os
-from tarfile import TarInfo, REGTYPE, NUL, PAX_FORMAT, BLOCKSIZE
+from tarfile import TarInfo, REGTYPE, NUL, PAX_FORMAT, BLOCKSIZE, XHDTYPE, REGTYPE
 import time
 
 from werkzeug.wrappers import Request, Response
 from werkzeug.routing import Map, Rule
 from werkzeug.exceptions import HTTPException, BadRequest, InternalServerError, \
-                                RequestedRangeNotSatisfiable
+                                RequestedRangeNotSatisfiable, Conflict
 from werkzeug.wsgi import wrap_file
 import redis
 
@@ -48,6 +48,7 @@ EXP = re.compile(r"^bytes=(\d+)-(\d+)$")
 
 NS = os.getenv("OIO_NS")
 CONTAINER_PROPERTIES = ".container_properties"
+SCHILY = "SCHILY.xattr.user."
 
 def generate_oio_tarinfo_entry(conn, account, container, name, log):
     """ return tuple (buf, number of blocks, filesize) """
@@ -69,7 +70,7 @@ def generate_oio_tarinfo_entry(conn, account, container, name, log):
     for key, val in properties.items():
         assert isinstance(val, basestring), "Invalid type detected for %s:%s:%s" % (
             container, name, key)
-        tarinfo.pax_headers["SCHILY.xattr.user." + key] = val
+        tarinfo.pax_headers[SCHILY + key] = val
 
     # PAX_FORMAT should be used only if xattr was found
     buf = tarinfo.tobuf(format=PAX_FORMAT)
@@ -267,6 +268,7 @@ class ContainerStreaming(object):
         self.conn = ObjectStorageApi(self.conf.get("namespace", NS))
         self.url_map = Map([
             Rule('/v1.0/dump', endpoint='dump'),
+            Rule('/v1.0/restore', endpoint='restore'),
         ])
         redis_host = self.conf.get('redis_host', '127.0.0.1')
         redis_port = int(self.conf.get('redis_port', '6379'))
@@ -431,6 +433,85 @@ class ContainerStreaming(object):
 
         return Response("Not supported", 405)
 
+    def _do_put(self, req, account, container):
+        size = int(req.headers['content-length'])
+        data = ""
+
+
+        self.conn.container_create(account, container)
+
+        # very basic version: read all then write on SDS
+        while not req.stream.is_exhausted:
+            block = req.stream.read()
+            data += block
+
+        assert size == len(data)
+
+        offset = 0
+        hdrs = {}
+        while offset < size:
+            buf = data[offset : offset + BLOCKSIZE]
+            inf = TarInfo.frombuf(buf)
+            offset += BLOCKSIZE
+            blocks = int(math.ceil(inf.size / float(BLOCKSIZE)))
+
+            if inf.type not in (XHDTYPE, REGTYPE):
+                raise BadRequest('unsupported TAR attribute')
+
+            if inf.type == XHDTYPE:
+                buf = data[offset : offset + blocks * BLOCKSIZE]
+                while buf:
+                    length = buf.split(' ', 2)[0]
+                    self.logger.error("=> %s", length)
+                    if length[0] == '\x00':
+                        break
+                    key, value = buf[len(length) + 1:int(length) - 1].split('=', 2)
+                    assert key not in hdrs
+                    if key.startswith(SCHILY):
+                        key = key[len(SCHILY):]
+                    hdrs[key] = value
+                    buf = buf[int(length):]
+                self.logger.warn(buf)
+                self.logger.warn('extracted ' + str(hdrs))
+            elif inf.type == REGTYPE:
+                if inf.name == CONTAINER_PROPERTIES:
+                    assert not hdrs, "invalid sequence in TAR"
+                    hdrs = json.loads(data[offset : offset + inf.size])
+                    self.conn.container_update(account, container, hdrs)
+                else:
+                    self.conn.object_create(account, container, obj_name=inf.name,
+                                            data=data[offset : offset + inf.size])
+                    if hdrs:
+                        self.logger.warn('update headers with ' + str(hdrs))
+                        self.conn.object_update(account, container, inf.name,
+                                                metadata=hdrs)
+                hdrs = {}
+            offset += blocks * BLOCKSIZE
+                
+        return Response(status=200)
+
+    def on_restore(self, req):
+        account = req.args.get('acct')
+        container = req.args.get('ref')
+
+        if not account:
+            raise BadRequest('Missing Account name')
+        if not container:
+            raise BadRequest('Missing Container name')
+
+        if req.method != 'PUT':
+            return Response("Not supported", 405)
+
+        try:
+            self.conn.container_show(account, container)
+            raise Conflict('Container already exists')
+        except exc.NoSuchContainer:
+            pass
+        except:
+            raise BadRequest('Fail to verify container')
+
+        return self._do_put(req, account, container)
+
     def dispatch_request(self, req):
         adapter = self.url_map.bind_to_environ(req.environ)
         try:
@@ -440,7 +521,8 @@ class ContainerStreaming(object):
             return e
         except Exception: # pylint: disable=broad-except
             self.logger.exception('ERROR Unhandled exception in request')
-            return InternalServerError()
+            raise
+            #return InternalServerError('Invaid stuff')
 
 def create_app(conf=None):
     app = ContainerStreaming(conf)
