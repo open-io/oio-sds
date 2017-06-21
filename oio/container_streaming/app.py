@@ -24,7 +24,7 @@ except ImportError:
 import math
 import re
 import os
-from tarfile import TarInfo, REGTYPE, NUL, PAX_FORMAT, BLOCKSIZE, XHDTYPE, REGTYPE
+from tarfile import TarInfo, REGTYPE, NUL, PAX_FORMAT, BLOCKSIZE, XHDTYPE
 import time
 
 from werkzeug.wrappers import Request, Response
@@ -52,6 +52,7 @@ SCHILY = "SCHILY.xattr.user."
 
 def generate_oio_tarinfo_entry(conn, account, container, name, log):
     """ return tuple (buf, number of blocks, filesize) """
+    slo = None
     entry = conn.object_get_properties(account, container, name)
 
     tarinfo = TarInfo()
@@ -64,12 +65,22 @@ def generate_oio_tarinfo_entry(conn, account, container, name, log):
     tarinfo.type = REGTYPE
     tarinfo.linkname = ""
 
+    properties = entry['properties']
+    # x-static-large-object
+    if properties.get('x-static-large-object', False):
+        log.debug("SLO object detected")
+        tarinfo.size = int(properties.get('x-object-sysmeta-slo-size'))
+        _, slo = conn.object_fetch(account, container, name)
+        slo = json.loads("".join(slo))
+
+
     # XATTR
     # do we have to store basic properties like policy, mime_type, hash, ... ?
-    properties = entry['properties']
     for key, val in properties.items():
         assert isinstance(val, basestring), "Invalid type detected for %s:%s:%s" % (
             container, name, key)
+        if slo and key in ['x-static-large-object', 'x-object-sysmeta-slo-size', 'x-object-sysmeta-slo-etag']:
+            continue
         tarinfo.pax_headers[SCHILY + key] = val
 
     # PAX_FORMAT should be used only if xattr was found
@@ -81,7 +92,7 @@ def generate_oio_tarinfo_entry(conn, account, container, name, log):
     if remainder:
         log.error('invalid tar entry generated for %s/%s:%s',
                   account, container, name)
-    return buf, blocks, tarinfo.size
+    return buf, blocks, tarinfo.size, slo
 
 def generate_oio_tarinfo_fake_entry(name, size, log):
     tarinfo = TarInfo()
@@ -126,7 +137,7 @@ class TarStreaming(object):
         name = entry['name']
 
         if set(blocks).intersection(range(entry['hdr_block'])):
-            buf, entry_blocks, _ = generate_oio_tarinfo_entry(
+            buf, entry_blocks, _, _ = generate_oio_tarinfo_entry(
                 self.conn, self.acct, self.container, entry['name'], self.logger)
 
             for bl in xrange(entry_blocks):
@@ -151,9 +162,30 @@ class TarStreaming(object):
         else:
             end = blocks[-1] * BLOCKSIZE + BLOCKSIZE - 1
 
-        _, data = self.conn.object_fetch(self.acct, self.container, name,
-                                         ranges=[(start, end)])
-        mem += "".join(data)
+        self.logger.warn(entry)
+        if entry['slo']:
+            # we have now to compute which block(s) we need to read
+            slo_start = 0
+            for part in entry['slo']:
+                if start > part['bytes']:
+                    start -= part['bytes']
+                    end -= part['bytes']
+                    continue
+                slo_end = min(end, part['bytes'])
+                slo_start = start
+
+                cnt, path = part['name'].strip('/').split('/', 1)
+                _, data = self.conn.object_fetch(self.acct, cnt, path, ranges=[(slo_start, slo_end)])
+                mem += "".join(data)
+
+                start = max(0, start - part['bytes'])
+                end -= part['bytes']
+                if end <= 0:
+                    break
+        else:
+            _, data = self.conn.object_fetch(self.acct, self.container, name,
+                                             ranges=[(start, end)])
+            mem += "".join(data)
 
         if last:
             mem += NUL * (BLOCKSIZE - remainder)
@@ -229,18 +261,18 @@ class TarStreaming(object):
                 continue
 
             if size > 0 and val['end_block'] - self.blocks[0] > size:
-                self.logger.debug("streaming chunk of %s", val['name'])
                 end_block = self.blocks[0] + size
             else:
-                self.logger.debug("streaming %s", val['name'])
                 end_block = val['end_block']
 
             # FIXME: should be done in same loop
             blocks = [x for x in self.blocks if x <= end_block]
             # remove selected from globals list
-            self.blocks = [x for x in self.blocks if x not in blocks]
+            _c = set(blocks)
+            self.blocks = [x for x in self.blocks if x not in _c]
             # shift selected blocks to object
-            blocks = [x - val['start_block'] for x in blocks]
+            _s = val['start_block']
+            blocks = [x - _s for x in blocks]
 
             if val['name'] == CONTAINER_PROPERTIES:
                 data = self.create_tar_oio_properties(val, blocks)
@@ -311,7 +343,7 @@ class ContainerStreaming(object):
             # FIXME should we backup deleted object ?
             if obj['deleted']:
                 continue
-            _, entry_blocks, size = generate_oio_tarinfo_entry(
+            _, entry_blocks, size, slo = generate_oio_tarinfo_entry(
                 self.conn, account, container, obj['name'], self.logger)
             entry = {
                 'name': obj['name'],
@@ -319,6 +351,7 @@ class ContainerStreaming(object):
                 'hdr_block': entry_blocks,
                 'block': entry_blocks + int(math.ceil(size / float(BLOCKSIZE))),
                 'start_block': start_block,
+                'slo': slo
             }
             start_block += entry['block']
             entry['end_block'] = start_block - 1
@@ -394,6 +427,7 @@ class ContainerStreaming(object):
         length = blocks * BLOCKSIZE
 
         if 'Range' not in req.headers:
+            # TODO: instead expanding blocks to a full list, use first_block - last_block
             tar = TarStreaming(self.conn, account, container, range(blocks), results, self.logger)
             return Response(wrap_file(req.environ, tar, buffer_size=self.STREAMING),
                             headers={
@@ -402,7 +436,7 @@ class ContainerStreaming(object):
                                 'Content-Length': length,
                             }, status=200)
 
-
+        # TODO: instead expanding blocks to a full list, use first_block - last_block
         start, end, block_start, block_end = self._extract_range(req, blocks)
         blocks_to_read = range(block_start, block_end)
 
@@ -437,7 +471,6 @@ class ContainerStreaming(object):
         size = int(req.headers['content-length'])
         data = ""
 
-
         self.conn.container_create(account, container)
 
         # very basic version: read all then write on SDS
@@ -461,18 +494,15 @@ class ContainerStreaming(object):
             if inf.type == XHDTYPE:
                 buf = data[offset : offset + blocks * BLOCKSIZE]
                 while buf:
-                    length = buf.split(' ', 2)[0]
-                    self.logger.error("=> %s", length)
+                    length = buf.split(' ', 1)[0]
                     if length[0] == '\x00':
                         break
-                    key, value = buf[len(length) + 1:int(length) - 1].split('=', 2)
+                    key, value = buf[len(length) + 1:int(length) - 1].split('=', 1)
                     assert key not in hdrs
                     if key.startswith(SCHILY):
                         key = key[len(SCHILY):]
                     hdrs[key] = value
                     buf = buf[int(length):]
-                self.logger.warn(buf)
-                self.logger.warn('extracted ' + str(hdrs))
             elif inf.type == REGTYPE:
                 if inf.name == CONTAINER_PROPERTIES:
                     assert not hdrs, "invalid sequence in TAR"
@@ -482,12 +512,10 @@ class ContainerStreaming(object):
                     self.conn.object_create(account, container, obj_name=inf.name,
                                             data=data[offset : offset + inf.size])
                     if hdrs:
-                        self.logger.warn('update headers with ' + str(hdrs))
                         self.conn.object_update(account, container, inf.name,
                                                 metadata=hdrs)
                 hdrs = {}
             offset += blocks * BLOCKSIZE
-                
         return Response(status=200)
 
     def on_restore(self, req):
@@ -521,8 +549,7 @@ class ContainerStreaming(object):
             return e
         except Exception: # pylint: disable=broad-except
             self.logger.exception('ERROR Unhandled exception in request')
-            raise
-            #return InternalServerError('Invaid stuff')
+            return InternalServerError('Invaid stuff')
 
 def create_app(conf=None):
     app = ContainerStreaming(conf)

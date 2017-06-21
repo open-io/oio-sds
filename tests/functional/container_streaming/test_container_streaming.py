@@ -1,4 +1,5 @@
 # coding: utf-8
+from hashlib import md5
 import random
 import tarfile
 from io import BytesIO
@@ -10,6 +11,7 @@ import unittest
 import requests
 from oio import ObjectStorageApi
 from tests.utils import BaseTestCase
+from nose.plugins.attrib import attr
 
 
 def random_container(pfx=""):
@@ -41,7 +43,7 @@ CHARSET = [
     ]
 
 def rand_byte(n):
-    return ''.join([chr(random.randint(32, 255)) for i in xrange(n)])
+    return ''.join([chr(random.randint(32, 255)) for _ in xrange(n)])
 
 def rand_str(n):
     return ''.join([random.choice(string.ascii_letters) for i in xrange(n)])
@@ -86,12 +88,18 @@ class TestContainerDownload(BaseTestCase):
         super(TestContainerDownload, self).setUp()
         # FIXME: should we use direct API from BaseTestCase or still container.client ?
         self.conn = ObjectStorageApi(self.ns)
-        self._streaming = 'http://' + self.get_service_url('admin')[2] + '/'
+        self._streaming = 'http://' + self.get_service_url('admin')[2]
         self._cnt = random_container()
-        self._uri = self._streaming + 'v1.0/dump?acct=' + self.account + '&ref=' + self._cnt
+        self._uri = self._streaming + '/v1.0/dump?acct=' + self.account + '&ref=' + self._cnt
         self._data = {}
         self.conn.container_create(self.account, self._cnt)
         self.raw = ""
+        self._slo = []
+
+    def make_uri(self, action, account=None, container=None):
+        account = account or self.account
+        container = container or self._cnt
+        return '%s/v1.0/%s?acct=%s&ref=%s' % (self._streaming, action, account, container)
 
     def tearDown(self):
         for name in self._data:
@@ -100,15 +108,50 @@ class TestContainerDownload(BaseTestCase):
         super(TestContainerDownload, self).tearDown()
 
     def _create_data(self, name=gen_names, metadata=None):
-        for idx, name in itertools.islice(name(), 5):
+        for idx, _name in itertools.islice(name(), 5):
             data = gen_data(513 * idx)
             entry = {'data': data, 'meta': None}
-            self.conn.object_create(self.account, self._cnt, obj_name=name, data=data)
+            self.conn.object_create(self.account, self._cnt, obj_name=_name, data=data)
             if metadata:
                 key, val = metadata()
                 entry['meta'] = {key: val}
-                self.conn.object_update(self.account, self._cnt, name, entry['meta'])
-            self._data[name] = entry
+                self.conn.object_update(self.account, self._cnt, _name, entry['meta'])
+            self._data[_name] = entry
+
+    def _create_s3_slo(self, name=gen_names, metadata=None):
+        # create a fake S3 bucket with a SLO object
+        chunksize = 10000
+        parts = 5
+        res = []
+        full_data = ""
+        self.conn.container_create(self.account, self._cnt + '+segments')
+        _name = "toto"
+        etag = rand_str(50)
+        part_number = 1
+        for size in [chunksize] * parts + [444]:
+            data = gen_data(size)
+            res.append({
+                'bytes': size,
+                'content_type': 'application/octect-stream',
+                'hash': md5(data).hexdigest().upper(),
+                'last_modified': '2017-06-21T12:42:47.000000',
+                'name': '/%s+segments/%s/%s/%d' % (self._cnt, _name, etag, part_number)
+            })
+            self.conn.object_create(self.account, "%s+segments" % self._cnt,
+                                    obj_name='%s/%s/%d' % (_name, etag, part_number),
+                                    data=data)
+            full_data += data
+            part_number += 1
+
+        self._data[_name] = {'data': full_data, 'meta': {
+            'x-static-large-object': 'true',
+            'x-object-sysmeta-slo-etag': etag,
+            'x-object-sysmeta-slo-size': str(len(full_data))
+        }}
+        self._slo.append(_name)
+        data = json.dumps(res)
+        self.conn.object_create(self.account, self._cnt, obj_name=_name, data=data)
+        self.conn.object_update(self.account, self._cnt, _name, self._data[_name]['meta'])
 
     def _simple_download(self, name=gen_names, metadata=None):
         self._create_data(name, metadata)
@@ -140,14 +183,14 @@ class TestContainerDownload(BaseTestCase):
                 self.assertEqual(val.decode('utf-8'), headers[key])
 
     def test_missing_container(self):
-        ret = requests.get(self._streaming + random_container("ms-"))
+        ret = requests.get(self._streaming + '/' + random_container("ms-"))
         self.assertEqual(ret.status_code, 404)
 
     def test_invalid_url(self):
         ret = requests.get(self._streaming)
         self.assertEqual(ret.status_code, 404)
 
-        ret = requests.head(self._streaming + random_container('inv')
+        ret = requests.head(self._streaming + '/' + random_container('inv')
                             + '/' + random_container('inv'))
         self.assertEqual(ret.status_code, 404)
 
@@ -215,9 +258,62 @@ class TestContainerDownload(BaseTestCase):
 
     @unittest.skip("wip")
     def test_byte_metadata(self):
-        self._simple_download(metadata=gen_byte_metadata)
+        tar = self._simple_download(metadata=gen_byte_metadata)
         self._check_metadata(tar)
 
     def test_charset_metadata(self):
         tar = self._simple_download(metadata=gen_charset_metadata)
         self._check_metadata(tar)
+
+    @attr('s3')
+    def test_s3_simple_download(self):
+        self._create_s3_slo()
+        ret = requests.get(self._uri)
+        self.assertGreater(len(ret.content), 0)
+        self.assertEqual(ret.status_code, 200)
+        self.raw = ret.content
+
+        raw = BytesIO(ret.content)
+        tar = tarfile.open(fileobj=raw)
+        info = self._data.keys()
+        for entry in tar.getnames():
+            self.assertIn(entry, info)
+
+            tmp = tar.extractfile(entry)
+            self.assertEqual(self._data[entry]['data'], tmp.read())
+            info.remove(entry)
+
+        self.assertEqual(len(info), 0)
+        return tar
+
+    @attr('s3')
+    def test_s3_range_download(self):
+        self._create_s3_slo()
+        org = requests.get(self._uri)
+
+        data = []
+        for idx in xrange(0, int(org.headers['content-length']), 512):
+            ret = requests.get(self._uri, headers={'Range': 'bytes=%d-%d' % (idx, idx+511)})
+            data.append(ret.content)
+
+        data = "".join(data)
+        self.assertGreater(len(data), 0)
+        self.assertEqual(org.content, data)
+
+    @attr('s3')
+    def test_s3_check_slo_metadata_download(self):
+        self._create_s3_slo()
+
+        org = requests.get(self.make_uri('dump'))
+        self.assertEqual(org.status_code, 200)
+
+        cnt = rand_str(20)
+        res = requests.put(self.make_uri('restore', container=cnt), data=org.content)
+        self.assertEqual(org.status_code, 200)
+
+        res = self.conn.object_get_properties(self.account, cnt, self._slo[0])
+        props = res['properties']
+        self.assertNotIn('x-static-large-object', props)
+        self.assertNotIn('x-object-sysmeta-slo-size', props)
+        self.assertNotIn('x-object-sysmeta-slo-etag', props)
+
