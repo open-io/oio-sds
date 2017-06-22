@@ -481,6 +481,39 @@ class ChunkReader(object):
         raise StopIteration
 
 
+class MetachunkWriter(object):
+    """Base class for metachunk writers"""
+
+    def __init__(self, storage_method=None, quorum=None, **_kwargs):
+        self.storage_method = storage_method
+        self._quorum = quorum
+
+    @property
+    def quorum(self):
+        """Minimum number of chunks required to validate an upload"""
+        if self._quorum is None:
+            return self.storage_method.quorum
+        return self._quorum
+
+    def quorum_or_fail(self, successes, failures):
+        """
+        Compare the number of uploads against the quorum.
+
+        :param successes: a list of chunk objects whose upload succeded
+        :type successes: `list` or `tuple`
+        :param failures: a list of chunk objects whose upload failed
+        :type failures: `list` or `tuple`
+        :raises `exc.OioException`: if quorum has not been reached
+        """
+        if len(successes) < self.quorum:
+            errors = group_chunk_errors(
+                ((chunk["url"], chunk.get("error", "success"))
+                 for chunk in successes + failures))
+            raise exc.OioException(
+                "RAWX write failure, quorum not reached (%d/%d): %s" %
+                (len(successes), self.quorum, errors))
+
+
 def make_iter_from_resp(resp):
     """
     Makes a part iterator from a HTTP response

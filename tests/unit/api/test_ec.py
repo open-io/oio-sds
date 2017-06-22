@@ -6,7 +6,7 @@ from hashlib import md5
 from copy import deepcopy
 from eventlet import Timeout
 from oio.common.storage_method import STORAGE_METHODS
-from oio.api.ec import ECChunkWriteHandler, ECChunkDownloadHandler, \
+from oio.api.ec import EcMetachunkWriter, ECChunkDownloadHandler, \
     ECRebuildHandler
 from oio.common import exceptions as exc
 from oio.common.constants import chunk_headers
@@ -57,8 +57,8 @@ class TestEC(unittest.TestCase):
         nb = self.storage_method.ec_nb_data + self.storage_method.ec_nb_parity
         resps = [201] * nb
         with set_http_connect(*resps):
-            handler = ECChunkWriteHandler(self.sysmeta, self.meta_chunk(),
-                                          checksum, self.storage_method)
+            handler = EcMetachunkWriter(self.sysmeta, self.meta_chunk(),
+                                        checksum, self.storage_method)
             bytes_transferred, checksum, chunks = handler.stream(source, size)
         self.assertEqual(len(chunks), nb)
         self.assertEqual(bytes_transferred, 0)
@@ -71,8 +71,8 @@ class TestEC(unittest.TestCase):
         nb = self.storage_method.ec_nb_data + self.storage_method.ec_nb_parity
         resps = [500] * nb
         with set_http_connect(*resps):
-            handler = ECChunkWriteHandler(self.sysmeta, self.meta_chunk(),
-                                          checksum, self.storage_method)
+            handler = EcMetachunkWriter(self.sysmeta, self.meta_chunk(),
+                                        checksum, self.storage_method)
             self.assertRaises(exc.OioException, handler.stream, source, size)
 
     def test_write_quorum_success(self):
@@ -84,8 +84,8 @@ class TestEC(unittest.TestCase):
         resps = [201] * quorum_size
         resps += [500] * (nb - quorum_size)
         with set_http_connect(*resps):
-            handler = ECChunkWriteHandler(self.sysmeta, self.meta_chunk(),
-                                          checksum, self.storage_method)
+            handler = EcMetachunkWriter(self.sysmeta, self.meta_chunk(),
+                                        checksum, self.storage_method)
             bytes_transferred, checksum, chunks = handler.stream(source, size)
         self.assertEqual(len(chunks), nb)
 
@@ -106,8 +106,8 @@ class TestEC(unittest.TestCase):
         resps = [500] * quorum_size
         resps += [201] * (nb - quorum_size)
         with set_http_connect(*resps):
-            handler = ECChunkWriteHandler(self.sysmeta, self.meta_chunk(),
-                                          checksum, self.storage_method)
+            handler = EcMetachunkWriter(self.sysmeta, self.meta_chunk(),
+                                        checksum, self.storage_method)
             # TODO use specialized Exception
             self.assertRaises(exc.OioException, handler.stream, source, size)
 
@@ -127,9 +127,9 @@ class TestEC(unittest.TestCase):
             err_pos = random.randint(0, nb)
             resps.insert(err_pos, test['error'])
             with set_http_connect(*resps):
-                handler = ECChunkWriteHandler(self.sysmeta,
-                                              self.meta_chunk_copy(),
-                                              checksum, self.storage_method)
+                handler = EcMetachunkWriter(self.sysmeta,
+                                            self.meta_chunk_copy(),
+                                            checksum, self.storage_method)
                 bytes_transferred, checksum, chunks = handler.stream(
                     source, size)
 
@@ -155,9 +155,9 @@ class TestEC(unittest.TestCase):
             resps = [201] * (nb - 1)
             resps.append((100, test['error']))
             with set_http_connect(*resps):
-                handler = ECChunkWriteHandler(self.sysmeta,
-                                              self.meta_chunk_copy(),
-                                              checksum, self.storage_method)
+                handler = EcMetachunkWriter(self.sysmeta,
+                                            self.meta_chunk_copy(),
+                                            checksum, self.storage_method)
                 bytes_transferred, checksum, chunks = handler.stream(
                     source, size)
 
@@ -180,8 +180,8 @@ class TestEC(unittest.TestCase):
         nb = self.storage_method.ec_nb_data + self.storage_method.ec_nb_parity
         resps = [201] * nb
         with set_http_connect(*resps):
-            handler = ECChunkWriteHandler(self.sysmeta, self.meta_chunk(),
-                                          checksum, self.storage_method)
+            handler = EcMetachunkWriter(self.sysmeta, self.meta_chunk(),
+                                        checksum, self.storage_method)
             self.assertRaises(exc.SourceReadError, handler.stream, source,
                               size)
 
@@ -195,8 +195,8 @@ class TestEC(unittest.TestCase):
         nb = self.storage_method.ec_nb_data + self.storage_method.ec_nb_parity
         resps = [201] * nb
         with set_http_connect(*resps):
-            handler = ECChunkWriteHandler(self.sysmeta, self.meta_chunk(),
-                                          checksum, self.storage_method)
+            handler = EcMetachunkWriter(self.sysmeta, self.meta_chunk(),
+                                        checksum, self.storage_method)
             self.assertRaises(
                 exc.OioTimeout, handler.stream, source, size)
 
@@ -210,8 +210,8 @@ class TestEC(unittest.TestCase):
         nb = self.storage_method.ec_nb_data + self.storage_method.ec_nb_parity
         resps = [201] * nb
         with set_http_connect(*resps):
-            handler = ECChunkWriteHandler(self.sysmeta, self.meta_chunk(),
-                                          checksum, self.storage_method)
+            handler = EcMetachunkWriter(self.sysmeta, self.meta_chunk(),
+                                        checksum, self.storage_method)
             # TODO specialize exception
             self.assertRaises(Exception, handler.stream, source,
                               size)
@@ -234,8 +234,8 @@ class TestEC(unittest.TestCase):
         # TODO test headers
 
         with set_http_connect(*resps, cb_body=cb_body):
-            handler = ECChunkWriteHandler(self.sysmeta, self.meta_chunk(),
-                                          checksum, self.storage_method)
+            handler = EcMetachunkWriter(self.sysmeta, self.meta_chunk(),
+                                        checksum, self.storage_method)
             bytes_transferred, checksum, chunks = handler.stream(source, size)
 
         self.assertEqual(len(test_data), bytes_transferred)

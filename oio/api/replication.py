@@ -19,7 +19,6 @@ from urlparse import urlparse
 from oio.common import exceptions as exc
 from oio.common.exceptions import SourceReadError
 from oio.common.http import headers_from_object_metadata
-from oio.common import utils
 from oio.api import io
 from oio.common.constants import chunk_headers
 from oio.common import green
@@ -41,33 +40,19 @@ class FakeChecksum(object):
         pass
 
 
-class ReplicatedChunkWriteHandler(object):
+class ReplicatedMetachunkWriter(io.MetachunkWriter):
     def __init__(self, sysmeta, meta_chunk, checksum, storage_method,
                  quorum=None, connection_timeout=None, write_timeout=None,
                  read_timeout=None, headers=None):
+        super(ReplicatedMetachunkWriter, self).__init__(
+            storage_method=storage_method, quorum=quorum)
         self.sysmeta = sysmeta
         self.meta_chunk = meta_chunk
         self.checksum = checksum
-        self.storage_method = storage_method
-        self._quorum = quorum
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
         self.headers = headers or {}
-
-    def _check_quorum(self, conns):
-        if self._quorum is None:
-            return len(conns) >= self.storage_method.quorum
-        return len(conns) >= self._quorum
-
-    def _quorum_or_fail(self, successes, failures):
-        quorum = self._check_quorum(successes)
-        if not quorum:
-            errors = utils.group_chunk_errors(
-                ((chunk["url"], chunk.get("error", "success"))
-                 for chunk in successes + failures))
-            raise exc.OioException(
-                "RAWX write failure, quorum not reached: %s" % errors)
 
     def stream(self, source, size=None):
         bytes_transferred = 0
@@ -86,7 +71,7 @@ class ReplicatedChunkWriteHandler(object):
             else:
                 current_conns.append(conn)
 
-        self._quorum_or_fail([co.chunk for co in current_conns], failed_chunks)
+        self.quorum_or_fail([co.chunk for co in current_conns], failed_chunks)
 
         bytes_transferred = 0
         try:
@@ -126,8 +111,8 @@ class ReplicatedChunkWriteHandler(object):
                             current_conns.remove(conn)
                             failed_chunks.append(conn.chunk)
 
-                    self._quorum_or_fail([co.chunk for co in current_conns],
-                                         failed_chunks)
+                    self.quorum_or_fail([co.chunk for co in current_conns],
+                                        failed_chunks)
 
                 for conn in current_conns:
                     if conn.queue.unfinished_tasks:
@@ -159,7 +144,7 @@ class ReplicatedChunkWriteHandler(object):
             if resp:
                 self._handle_resp(conn, resp, meta_checksum_hex,
                                   success_chunks, failed_chunks)
-        self._quorum_or_fail(success_chunks, failed_chunks)
+        self.quorum_or_fail(success_chunks, failed_chunks)
 
         for chunk in success_chunks:
             chunk["size"] = bytes_transferred
@@ -270,7 +255,7 @@ class ReplicatedWriteHandler(io.WriteHandler):
 
         for meta_chunk in self.chunk_prep():
             size = self.sysmeta['chunk_size']
-            handler = ReplicatedChunkWriteHandler(
+            handler = ReplicatedMetachunkWriter(
                 self.sysmeta, meta_chunk, global_checksum, self.storage_method,
                 connection_timeout=self.connection_timeout,
                 write_timeout=self.write_timeout,

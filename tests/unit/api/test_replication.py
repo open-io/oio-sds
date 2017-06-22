@@ -5,7 +5,7 @@ from hashlib import md5
 from eventlet import Timeout
 from oio.common import exceptions as exc
 from oio.common import green
-from oio.api.replication import ReplicatedChunkWriteHandler
+from oio.api.replication import ReplicatedMetachunkWriter
 from oio.common.storage_method import STORAGE_METHODS
 from tests.unit.api import CHUNK_SIZE, EMPTY_CHECKSUM, empty_stream, \
     decode_chunked_body, FakeResponse
@@ -48,7 +48,7 @@ class TestReplication(unittest.TestCase):
         size = CHUNK_SIZE
         resps = [201] * len(meta_chunk)
         with set_http_connect(*resps):
-            handler = ReplicatedChunkWriteHandler(
+            handler = ReplicatedMetachunkWriter(
                 self.sysmeta, meta_chunk, checksum, self.storage_method)
             bytes_transferred, checksum, chunks = handler.stream(
                 source, size)
@@ -63,7 +63,7 @@ class TestReplication(unittest.TestCase):
         size = CHUNK_SIZE
         resps = [500] * len(meta_chunk)
         with set_http_connect(*resps):
-            handler = ReplicatedChunkWriteHandler(
+            handler = ReplicatedMetachunkWriter(
                 self.sysmeta, meta_chunk, checksum, self.storage_method)
             self.assertRaises(exc.OioException, handler.stream, source, size)
 
@@ -76,7 +76,7 @@ class TestReplication(unittest.TestCase):
         resps = [201] * quorum_size
         resps += [500] * (len(meta_chunk) - quorum_size)
         with set_http_connect(*resps):
-            handler = ReplicatedChunkWriteHandler(
+            handler = ReplicatedMetachunkWriter(
                 self.sysmeta, meta_chunk, checksum, self.storage_method)
             bytes_transferred, checksum, chunks = handler.stream(source, size)
 
@@ -102,7 +102,7 @@ class TestReplication(unittest.TestCase):
         resps = [500] * quorum_size
         resps += [201] * (len(meta_chunk) - quorum_size)
         with set_http_connect(*resps):
-            handler = ReplicatedChunkWriteHandler(
+            handler = ReplicatedMetachunkWriter(
                 self.sysmeta, meta_chunk, checksum, self.storage_method)
             self.assertRaises(exc.OioException, handler.stream, source, size)
 
@@ -114,7 +114,7 @@ class TestReplication(unittest.TestCase):
         resps = [201] * (len(meta_chunk) - 1)
         resps.append(Timeout(1.0))
         with set_http_connect(*resps):
-            handler = ReplicatedChunkWriteHandler(
+            handler = ReplicatedMetachunkWriter(
                 self.sysmeta, meta_chunk, checksum, self.storage_method)
             bytes_transferred, checksum, chunks = handler.stream(source, size)
 
@@ -140,7 +140,7 @@ class TestReplication(unittest.TestCase):
         resps = [201] * (len(meta_chunk) - 1)
         resps.append(Exception("failure"))
         with set_http_connect(*resps):
-            handler = ReplicatedChunkWriteHandler(
+            handler = ReplicatedMetachunkWriter(
                 self.sysmeta, meta_chunk, checksum, self.storage_method)
             bytes_transferred, checksum, chunks = handler.stream(source, size)
         self.assertEqual(len(chunks), len(meta_chunk)-1)
@@ -165,7 +165,7 @@ class TestReplication(unittest.TestCase):
         nb = len(meta_chunk)
         resps = [201] * nb
         with set_http_connect(*resps):
-            handler = ReplicatedChunkWriteHandler(
+            handler = ReplicatedMetachunkWriter(
                 self.sysmeta, meta_chunk, checksum, self.storage_method)
             self.assertRaises(exc.SourceReadError, handler.stream, source,
                               size)
@@ -182,7 +182,7 @@ class TestReplication(unittest.TestCase):
         nb = len(meta_chunk)
         resps = [201] * nb
         with set_http_connect(*resps):
-            handler = ReplicatedChunkWriteHandler(
+            handler = ReplicatedMetachunkWriter(
                 self.sysmeta, meta_chunk, checksum, self.storage_method)
             self.assertRaises(
                 exc.OioTimeout, handler.stream, source, size)
@@ -199,7 +199,7 @@ class TestReplication(unittest.TestCase):
         nb = len(meta_chunk)
         resps = [201] * nb
         with set_http_connect(*resps):
-            handler = ReplicatedChunkWriteHandler(
+            handler = ReplicatedMetachunkWriter(
                 self.sysmeta, meta_chunk, checksum, self.storage_method)
             # TODO specialize exception
             self.assertRaises(Exception, handler.stream, source,
@@ -220,7 +220,7 @@ class TestReplication(unittest.TestCase):
             put_reqs[conn_id]['parts'].append(part)
 
         with set_http_connect(*resps, cb_body=cb_body):
-            handler = ReplicatedChunkWriteHandler(
+            handler = ReplicatedMetachunkWriter(
                 self.sysmeta, meta_chunk, checksum, self.storage_method)
             bytes_transferred, checksum, chunks = handler.stream(source, size)
 
