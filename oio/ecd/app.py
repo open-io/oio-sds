@@ -1,7 +1,7 @@
 from hashlib import md5
 from oio.common.storage_method import STORAGE_METHODS
-from oio.api.ec import ECChunkWriteHandler, ECChunkDownloadHandler
-from oio.api.replication import ReplicatedChunkWriteHandler
+from oio.api.ec import EcMetachunkWriter, ECChunkDownloadHandler
+from oio.api.replication import ReplicatedMetachunkWriter
 from oio.api.backblaze import BackblazeChunkWriteHandler, \
     BackblazeChunkDownloadHandler
 from oio.api.backblaze_http import BackblazeUtils, BackblazeUtilsException
@@ -82,8 +82,8 @@ class ECD(object):
     def write_ec_meta_chunk(self, source, size, storage_method, sysmeta,
                             meta_chunk):
         meta_checksum = md5()
-        handler = ECChunkWriteHandler(sysmeta, meta_chunk, meta_checksum,
-                                      storage_method)
+        handler = EcMetachunkWriter(sysmeta, meta_chunk, meta_checksum,
+                                    storage_method)
         bytes_transferred, checksum, chunks = handler.stream(source, size)
         return Response("OK")
 
@@ -108,8 +108,9 @@ class ECD(object):
     def write_repli_meta_chunk(self, source, size, storage_method, sysmeta,
                                meta_chunk):
         meta_checksum = md5()
-        handler = ReplicatedChunkWriteHandler(sysmeta, meta_chunk,
-                                              meta_checksum)
+        handler = ReplicatedMetachunkWriter(
+                sysmeta, meta_chunk, meta_checksum,
+                storage_method=storage_method)
         bytes_transferred, checksum, chunks = handler.stream(source, size)
         return Response("OK")
 

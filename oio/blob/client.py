@@ -3,7 +3,7 @@ from oio.common.http import requests
 from oio.common import exceptions as exc, utils
 from oio.common.constants import chunk_headers, chunk_xattr_keys_optional
 from oio.api.io import ChunkReader
-from oio.api.replication import ReplicatedChunkWriteHandler, FakeChecksum
+from oio.api.replication import ReplicatedMetachunkWriter, FakeChecksum
 from oio.common.storage_method import STORAGE_METHODS
 
 
@@ -36,7 +36,7 @@ class BlobClient(object):
         storage_method = STORAGE_METHODS.load(chunk_method)
         checksum = meta['metachunk_hash' if storage_method.ec
                         else 'chunk_hash']
-        writer = ReplicatedChunkWriteHandler(
+        writer = ReplicatedMetachunkWriter(
             meta, [chunk], FakeChecksum(checksum),
             storage_method, quorum=1)
         writer.stream(data, None)
@@ -73,7 +73,7 @@ class BlobClient(object):
             meta, stream = self.chunk_get(from_url, req_id=req_id)
             meta['chunk_id'] = to_url.split('/')[-1]
             # FIXME: the original keys are the good ones.
-            # ReplicatedChunkWriteHandler should be modified to accept them.
+            # ReplicatedMetachunkWriter should be modified to accept them.
             meta['id'] = meta['content_id']
             meta['version'] = meta['content_version']
             meta['chunk_method'] = meta['content_chunkmethod']

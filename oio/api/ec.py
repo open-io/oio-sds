@@ -572,7 +572,7 @@ def ec_encode(storage_method, n):
     yield last_fragments
 
 
-class ECWriter(object):
+class EcChunkWriter(object):
     """
     Writes an EC chunk
     """
@@ -686,17 +686,15 @@ class ECWriter(object):
             return self.conn.getresponse()
 
 
-# FIXME: the name of this class is misleading
-# since it does not extend io.WriteHandler
-class ECChunkWriteHandler(object):
+class EcMetachunkWriter(io.MetachunkWriter):
     def __init__(self, sysmeta, meta_chunk, global_checksum, storage_method,
                  reqid=None, connection_timeout=None, write_timeout=None,
                  read_timeout=None):
+        super(EcMetachunkWriter, self).__init__(storage_method=storage_method)
         self.sysmeta = sysmeta
         self.meta_chunk = meta_chunk
         self.global_checksum = global_checksum
         self.checksum = hashlib.md5()
-        self.storage_method = storage_method
         self.reqid = reqid
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
@@ -716,10 +714,7 @@ class ECChunkWriteHandler(object):
         bytes_transferred = self._stream(source, size, current_writers)
 
         # get the chunks from writers
-        chunks, quorum = self._get_results(current_writers)
-
-        if not quorum:
-            raise exceptions.OioException('Write failure: quorum not reached')
+        chunks = self._get_results(current_writers)
 
         meta_checksum = self.checksum.hexdigest()
 
@@ -745,6 +740,7 @@ class ECChunkWriteHandler(object):
                 return
 
             current_writers = list(writers)
+            failed_chunks = list()
             for writer in current_writers:
                 fragment = fragments[chunk_index[writer]]
                 if not writer.failed:
@@ -752,8 +748,9 @@ class ECChunkWriteHandler(object):
                     writer.send(fragment)
                 else:
                     current_writers.remove(writer)
-            self._check_quorum(current_writers)
-            # TODO handle no quorum
+                    failed_chunks.append(writer.chunk)
+            self.quorum_or_fail([w.chunk for w in current_writers],
+                                failed_chunks)
 
         try:
             # we use eventlet GreenPool to manage writers
@@ -830,7 +827,7 @@ class ECChunkWriteHandler(object):
     def _get_writer(self, chunk):
         """Spawn a writer for the chunk and connect it"""
         try:
-            writer = ECWriter.connect(
+            writer = EcChunkWriter.connect(
                 chunk, self.sysmeta, self.reqid,
                 connection_timeout=self.connection_timeout,
                 write_timeout=self.write_timeout)
@@ -881,9 +878,9 @@ class ECChunkWriteHandler(object):
         for (writer, resp) in pile:
             _handle_resp(writer, resp)
 
-        quorum = self._check_quorum(success_chunks)
+        self.quorum_or_fail(success_chunks, failed_chunks)
 
-        return success_chunks + failed_chunks, quorum
+        return success_chunks + failed_chunks
 
     def _get_response(self, writer):
         # spawned in a coroutine to read the HTTP response
@@ -907,9 +904,6 @@ class ECChunkWriteHandler(object):
         for w in writers:
             chunk_index[w] = w.chunk['num']
         return chunk_index
-
-    def _check_quorum(self, writers):
-        return len(writers) >= self.storage_method.quorum
 
 
 class ECWriteHandler(io.WriteHandler):
@@ -942,7 +936,7 @@ class ECWriteHandler(io.WriteHandler):
         # iterate through the meta chunks
         bytes_transferred = -1
         for meta_chunk in self.chunk_prep():
-            handler = ECChunkWriteHandler(
+            handler = EcMetachunkWriter(
                 self.sysmeta, meta_chunk,
                 global_checksum, self.storage_method,
                 reqid=self.headers.get('X-oio-req-id'),
