@@ -1940,7 +1940,7 @@ _m2_generate_chunks(struct gen_ctx_s *ctx,
 		// FIXME(FVE): set last argument
 		if ((err = oio_lb__poll_pool(ctx->lb, pool, NULL, _on_id, NULL))) {
 			g_prefix_error(&err, "at position %u: "
-					"found only %u services matching the criteria (pool=%s)",
+					"found only %u services matching the criteria (pool=%s): ",
 					pos, ids->len, pool);
 		} else {
 			if (is_stgpol_backblaze(ctx->pol)) {
