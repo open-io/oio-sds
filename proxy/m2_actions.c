@@ -935,10 +935,11 @@ _m2_container_create_with_defaults (struct req_args_s *args)
 static void
 _re_enable (struct req_args_s *args)
 {
-	GError *e = _resolve_meta2 (args, CLIENT_PREFER_MASTER, sqlx_pack_ENABLE, NULL);
+	GError *e = _resolve_meta2(args, CLIENT_PREFER_MASTER, sqlx_pack_ENABLE, NULL);
 	if (e) {
-		GRID_INFO("Failed to un-freeze [%s]", oio_url_get(args->url, OIOURL_WHOLE));
-		g_clear_error (&e);
+		GRID_INFO("Failed to un-freeze [%s]: (%d) %s",
+				oio_url_get(args->url, OIOURL_WHOLE), e->code, e->message);
+		g_clear_error(&e);
 	}
 }
 
