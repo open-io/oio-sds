@@ -30,7 +30,7 @@ import time
 from werkzeug.wrappers import Request, Response
 from werkzeug.routing import Map, Rule
 from werkzeug.exceptions import HTTPException, BadRequest, InternalServerError, \
-                                RequestedRangeNotSatisfiable, Conflict
+                                RequestedRangeNotSatisfiable, Conflict, UnprocessableEntity
 from werkzeug.wsgi import wrap_file
 import redis
 
@@ -472,27 +472,31 @@ class ContainerStreaming(object):
         data = ""
 
         self.conn.container_create(account, container)
+        r = { 'consumed': 0, 'buf': '' }
+        def read(size):
+            while len(r['buf']) < size and not req.stream.is_exhausted:
+                t = req.stream.read(size - len(r['buf']))
+                r['consumed'] += len(t)
+                r['buf'] += t
+            data =  r['buf'][:size]
+            r['buf'] = r['buf'][size:]
 
-        # very basic version: read all then write on SDS
-        while not req.stream.is_exhausted:
-            block = req.stream.read()
-            data += block
+            if len(data) != size:
+                raise UnprocessableEntity()
+            return data
 
-        assert size == len(data)
 
-        offset = 0
         hdrs = {}
-        while offset < size:
-            buf = data[offset : offset + BLOCKSIZE]
+        while r['consumed'] < size:
+            buf = read(BLOCKSIZE)
             inf = TarInfo.frombuf(buf)
-            offset += BLOCKSIZE
             blocks = int(math.ceil(inf.size / float(BLOCKSIZE)))
 
             if inf.type not in (XHDTYPE, REGTYPE):
                 raise BadRequest('unsupported TAR attribute')
 
             if inf.type == XHDTYPE:
-                buf = data[offset : offset + blocks * BLOCKSIZE]
+                buf = read(blocks * BLOCKSIZE)
                 while buf:
                     length = buf.split(' ', 1)[0]
                     if length[0] == '\x00':
@@ -506,16 +510,19 @@ class ContainerStreaming(object):
             elif inf.type == REGTYPE:
                 if inf.name == CONTAINER_PROPERTIES:
                     assert not hdrs, "invalid sequence in TAR"
-                    hdrs = json.loads(data[offset : offset + inf.size])
+                    hdrs = json.loads(read(inf.size))
                     self.conn.container_update(account, container, hdrs)
+                    if inf.size % BLOCKSIZE:
+                        read(BLOCKSIZE - inf.size % BLOCKSIZE)
                 else:
                     self.conn.object_create(account, container, obj_name=inf.name,
-                                            data=data[offset : offset + inf.size])
+                                            data=read(inf.size))
+                    if inf.size % BLOCKSIZE:
+                        read(BLOCKSIZE - inf.size % BLOCKSIZE)
                     if hdrs:
                         self.conn.object_update(account, container, inf.name,
                                                 metadata=hdrs)
                 hdrs = {}
-            offset += blocks * BLOCKSIZE
         return Response(status=200)
 
     def on_restore(self, req):
@@ -549,7 +556,7 @@ class ContainerStreaming(object):
             return e
         except Exception: # pylint: disable=broad-except
             self.logger.exception('ERROR Unhandled exception in request')
-            return InternalServerError('Invaid stuff')
+            return InternalServerError('Unmanaged error')
 
 def create_app(conf=None):
     app = ContainerStreaming(conf)
