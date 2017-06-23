@@ -29,8 +29,9 @@ import time
 
 from werkzeug.wrappers import Request, Response
 from werkzeug.routing import Map, Rule
-from werkzeug.exceptions import HTTPException, BadRequest, InternalServerError, \
-                                RequestedRangeNotSatisfiable, Conflict, UnprocessableEntity
+from werkzeug.exceptions import HTTPException, BadRequest, \
+                                RequestedRangeNotSatisfiable, Conflict, \
+                                UnprocessableEntity, InternalServerError
 from werkzeug.wsgi import wrap_file
 import redis
 
@@ -41,77 +42,98 @@ from oio.common.utils import get_logger, read_conf
 
 EXP = re.compile(r"^bytes=(\d+)-(\d+)$")
 
+# links:
 # https://www.gnu.org/software/tar/manual/html_node/Standard.html
 # https://www.cyberciti.biz/faq/linux-tar-rsync-preserving-acls-selinux-contexts/
 # https://developer.mozilla.org/en-US/docs/Web/HTTP/Range_requests
-# PAX/POSIX TAR: http://pubs.opengroup.org/onlinepubs/9699919799/utilities/pax.html
+# http://pubs.opengroup.org/onlinepubs/9699919799/utilities/pax.html
 
 NS = os.getenv("OIO_NS")
 CONTAINER_PROPERTIES = ".container_properties"
 SCHILY = "SCHILY.xattr.user."
-
-def generate_oio_tarinfo_entry(conn, account, container, name, log):
-    """ return tuple (buf, number of blocks, filesize) """
-    slo = None
-    entry = conn.object_get_properties(account, container, name)
-
-    tarinfo = TarInfo()
-    tarinfo.name = entry['name']
-    tarinfo.mode = 0o700 # ?
-    tarinfo.uid = 0
-    tarinfo.gid = 0
-    tarinfo.size = int(entry['length'])
-    tarinfo.mtime = entry['ctime'] # should be mtime
-    tarinfo.type = REGTYPE
-    tarinfo.linkname = ""
-
-    properties = entry['properties']
-    # x-static-large-object
-    if properties.get('x-static-large-object', False):
-        log.debug("SLO object detected")
-        tarinfo.size = int(properties.get('x-object-sysmeta-slo-size'))
-        _, slo = conn.object_fetch(account, container, name)
-        slo = json.loads("".join(slo))
+SLO = 'x-static-large-object'
+SLO_SIZE = 'x-object-sysmeta-slo-size'
+SLO_ETAG = 'x-object-sysmeta-slo-etag'
+SLO_HEADERS = (SLO, SLO_SIZE, SLO_ETAG)
 
 
-    # XATTR
-    # do we have to store basic properties like policy, mime_type, hash, ... ?
-    for key, val in properties.items():
-        assert isinstance(val, basestring), "Invalid type detected for %s:%s:%s" % (
-            container, name, key)
-        if slo and key in ['x-static-large-object', 'x-object-sysmeta-slo-size', 'x-object-sysmeta-slo-etag']:
-            continue
-        tarinfo.pax_headers[SCHILY + key] = val
+class OIOTarEntry(object):
+    def __init__(self, conn, account, container, name, meta=None):
+        self._slo = None
+        self._buf = None
+        self.acct = account
+        self.ref = container
+        self.name = name
+        self._filesize = 0
+        self.compute(conn, meta)
 
-    # PAX_FORMAT should be used only if xattr was found
-    buf = tarinfo.tobuf(format=PAX_FORMAT)
-    blocks, remainder = divmod(len(buf), BLOCKSIZE)
+    def compute(self, conn, meta=None):
+        tarinfo = TarInfo()
+        tarinfo.name = self.name
+        tarinfo.mod = 0o700
+        tarinfo.uid = 0
+        tarinfo.gid = 0
+        tarinfo.type = REGTYPE
+        tarinfo.linkname = ""
 
-    log.debug('generate tar entry for %s/%s:%s', account, container, name)
+        if self.name == CONTAINER_PROPERTIES:
+            meta = meta or conn.container_show(self.acct, self.ref)
+            tarinfo.mtime = int(time.time())
+            tarinfo.size = len(json.dumps(meta['properties']))
+            tarinfo.mtime = int(time.time())
+            self._filesize = tarinfo.size
+            self._buf = tarinfo.tobuf(format=PAX_FORMAT)
+            return
 
-    if remainder:
-        log.error('invalid tar entry generated for %s/%s:%s',
-                  account, container, name)
-    return buf, blocks, tarinfo.size, slo
+        entry = conn.object_get_properties(self.acct, self.ref, self.name)
 
-def generate_oio_tarinfo_fake_entry(name, size, log):
-    tarinfo = TarInfo()
-    tarinfo.name = name
-    tarinfo.mode = 0o700 # ?
-    tarinfo.uid = 0
-    tarinfo.gid = 0
-    tarinfo.size = size
-    tarinfo.mtime = int(time.time())
-    tarinfo.type = REGTYPE
-    tarinfo.linkname = ""
+        properties = entry['properties']
 
-    buf = tarinfo.tobuf(format=PAX_FORMAT)
-    blocks, remainder = divmod(len(buf), BLOCKSIZE)
+        # x-static-large-object
+        if properties.get(SLO, False):
+            tarinfo.size = int(properties.get(SLO_SIZE))
+            _, slo = conn.object_fetch(self.acct, self.ref, self.name)
+            self._slo = json.loads("".join(slo))
+        else:
+            tarinfo.size = int(entry['length'])
+        self._filesize = tarinfo.size
 
-    return buf, blocks, size
+        # XATTR
+        # do we have to store basic properties like policy, ... ?
+        for key, val in properties.items():
+            assert isinstance(val, basestring), \
+                "Invalid type for %s:%s:%s" % (self.acct, self.name, key)
+            if self.slo and key in SLO_HEADERS:
+                continue
+            tarinfo.pax_headers[SCHILY + key] = val
+        # PAX_FORMAT should be used only if xattr was found
+        self._buf = tarinfo.tobuf(format=PAX_FORMAT)
+
+    @property
+    def filesize(self):
+        return self._filesize
+
+    @property
+    def slo(self):
+        return self._slo
+
+    @property
+    def header_blocks(self):
+        assert len(self._buf) > 0
+        return len(self._buf) / BLOCKSIZE
+
+    @property
+    def data_blocks(self):
+        return int(math.ceil(self.filesize/float(BLOCKSIZE)))
+
+    @property
+    def buf(self):
+        return self._buf
 
 
 class TarStreaming(object):
+    """ Expose a File Object API to be used with wrap_file """
+
     def __init__(self, conn, account, container, blocks, oio_map, logger):
         self.acct = account
         self.container = container
@@ -120,7 +142,8 @@ class TarStreaming(object):
         self.conn = conn
         self.logger = logger
         if not blocks:
-            self.logger.warn('not blocks provided for %s %s', account, container)
+            self.logger.warn('no blocks provided for %s %s', account,
+                             container)
 
     def __iter__(self):
         return self
@@ -131,18 +154,18 @@ class TarStreaming(object):
             raise StopIteration
         return data
 
-    # FIXME: create_tar_oio_stream and create_tar_oio_properties should be merged
+    # FIXME: create_tar_oio_XXX functions should be merged
     def create_tar_oio_stream(self, entry, blocks):
+        """Extract data from entry from object"""
         mem = ""
         name = entry['name']
 
         if set(blocks).intersection(range(entry['hdr_block'])):
-            buf, entry_blocks, _, _ = generate_oio_tarinfo_entry(
-                self.conn, self.acct, self.container, entry['name'], self.logger)
+            tar = OIOTarEntry(self.conn, self.acct, self.container, name)
 
-            for bl in xrange(entry_blocks):
+            for bl in xrange(entry['hdr_block']):
                 if bl in blocks:
-                    mem += buf[bl * BLOCKSIZE : bl * BLOCKSIZE + BLOCKSIZE]
+                    mem += tar.buf[bl * BLOCKSIZE:bl * BLOCKSIZE + BLOCKSIZE]
                     blocks.remove(bl)
 
         if not blocks:
@@ -162,7 +185,6 @@ class TarStreaming(object):
         else:
             end = blocks[-1] * BLOCKSIZE + BLOCKSIZE - 1
 
-        self.logger.warn(entry)
         if entry['slo']:
             # we have now to compute which block(s) we need to read
             slo_start = 0
@@ -175,7 +197,8 @@ class TarStreaming(object):
                 slo_start = start
 
                 cnt, path = part['name'].strip('/').split('/', 1)
-                _, data = self.conn.object_fetch(self.acct, cnt, path, ranges=[(slo_start, slo_end)])
+                _, data = self.conn.object_fetch(self.acct, cnt, path,
+                                                 ranges=[(slo_start, slo_end)])
                 mem += "".join(data)
 
                 start = max(0, start - part['bytes'])
@@ -197,6 +220,9 @@ class TarStreaming(object):
         return mem
 
     def create_tar_oio_properties(self, entry, blocks):
+        """
+        Extract data from fake object that contains properties of container
+        """
         meta = self.conn.container_show(self.acct, self.container)
         if not meta['properties']:
             self.logger.error("container properties are empty")
@@ -208,12 +234,14 @@ class TarStreaming(object):
             self.logger.error("container properties has been updated")
 
         if set(blocks).intersection(range(entry['hdr_block'])):
-            buf, entry_blocks, _ = generate_oio_tarinfo_fake_entry(
-                CONTAINER_PROPERTIES, size, self.logger)
+            tar = OIOTarEntry(self.conn, self.acct, self.container,
+                              CONTAINER_PROPERTIES, meta=meta)
+            # buf, entry_blocks, _, _ = generate_oio_tarinfo_fake_entry(
+            #    CONTAINER_PROPERTIES, size, self.logger)
 
-            for bl in xrange(entry_blocks):
+            for bl in xrange(entry['hdr_block']):
                 if bl in blocks:
-                    mem += buf[bl * BLOCKSIZE : bl * BLOCKSIZE + BLOCKSIZE]
+                    mem += tar.buf[bl * BLOCKSIZE:bl * BLOCKSIZE + BLOCKSIZE]
                     blocks.remove(bl)
 
         if not blocks:
@@ -245,7 +273,11 @@ class TarStreaming(object):
         return mem
 
     def read(self, size=-1):
-        # streaming file by file
+        """
+        Stream TAR content
+        each call will send object by object, or by chunk of `size`
+        if object is too large
+        """
         # Is there API to stream data from OIO SDK (to avoid copy ?)
         data = ""
 
@@ -287,13 +319,16 @@ class TarStreaming(object):
         if self.blocks:
             self.logger.info("data not all consumed")
 
+
 class ContainerStreaming(object):
-    CACHE = 3600 * 24 # Redis keys will expires after one day
-    STREAMING = 52428800 # 50 MB
+    """WSGI Application to dump or restore a container"""
+    CACHE = 3600 * 24  # Redis keys will expires after one day
+    STREAMING = 52428800  # 50 MB
 
     def __init__(self, conf):
         if conf:
-            self.conf = read_conf(conf['key_file'], section_name="admin-server")
+            self.conf = read_conf(conf['key_file'],
+                                  section_name="admin-server")
         else:
             self.conf = {}
 
@@ -308,6 +343,11 @@ class ContainerStreaming(object):
         self.logger = get_logger(self.conf, name="ContainerStreaming")
 
     def generate_oio_map(self, account, container):
+        """
+        Generate a static manifest of a container.
+        It will help to find quickly which part of object app have to serve
+        Manifest is cached into Redis with CACHE delay
+        """
         if not container:
             raise exc.NoSuchContainer()
 
@@ -324,14 +364,13 @@ class ContainerStreaming(object):
         meta = self.conn.container_show(account, container)
         if meta['properties']:
             # create special file to save properties of container
-            size = len(json.dumps(meta['properties']))
-            _, entry_blocks, size = generate_oio_tarinfo_fake_entry(
-                CONTAINER_PROPERTIES, size, self.logger)
+            tar = OIOTarEntry(self.conn, account, container,
+                              CONTAINER_PROPERTIES, meta=meta)
             entry = {
                 'name': CONTAINER_PROPERTIES,
-                'size': size,
-                'hdr_block': entry_blocks,
-                'block': entry_blocks + int(math.ceil(size / float(BLOCKSIZE))),
+                'size': tar.filesize,
+                'hdr_block': tar.header_blocks,
+                'block': tar.header_blocks + tar.data_blocks,
                 'start_block': start_block,
             }
             start_block += entry['block']
@@ -343,20 +382,18 @@ class ContainerStreaming(object):
             # FIXME should we backup deleted object ?
             if obj['deleted']:
                 continue
-            _, entry_blocks, size, slo = generate_oio_tarinfo_entry(
-                self.conn, account, container, obj['name'], self.logger)
+            tar = OIOTarEntry(self.conn, account, container, obj['name'])
             entry = {
                 'name': obj['name'],
-                'size': size,
-                'hdr_block': entry_blocks,
-                'block': entry_blocks + int(math.ceil(size / float(BLOCKSIZE))),
+                'size': tar.filesize,
+                'hdr_block': tar.header_blocks,
+                'block': tar.header_blocks + tar.data_blocks,
                 'start_block': start_block,
-                'slo': slo
+                'slo': tar.slo
             }
             start_block += entry['block']
             entry['end_block'] = start_block - 1
             map_objs.append(entry)
-
 
         self.logger.debug("add entry to cache")
         self.redis.set(hash_map, json.dumps(map_objs), ex=self.CACHE)
@@ -371,6 +408,10 @@ class ContainerStreaming(object):
         return self.wsgi_app(environ, start_response)
 
     def _do_head(self, _, account, container):
+        """
+        Manage HEAD method and response number of block
+        Note: Range header is unmanaged
+        """
         try:
             results = self.generate_oio_map(account, container)
         except exc.NoSuchContainer:
@@ -391,6 +432,7 @@ class ContainerStreaming(object):
 
     @classmethod
     def _extract_range(cls, req, blocks):
+        """Convert byte range into block an performs validity check"""
         # accept only single part range
         val = req.headers['Range']
         match = EXP.match(val)
@@ -408,11 +450,12 @@ class ContainerStreaming(object):
             return block
 
         block_start = check_range(start)
-        block_end = check_range(end + 1) # Check Range RFC
+        block_end = check_range(end + 1)  # Check Range RFC
 
         return start, end, block_start, block_end
 
     def _do_get(self, req, account, container):
+        """Manage GET method to dump a container"""
         try:
             results = self.generate_oio_map(account, container)
         except exc.NoSuchContainer:
@@ -427,29 +470,37 @@ class ContainerStreaming(object):
         length = blocks * BLOCKSIZE
 
         if 'Range' not in req.headers:
-            # TODO: instead expanding blocks to a full list, use first_block - last_block
-            tar = TarStreaming(self.conn, account, container, range(blocks), results, self.logger)
-            return Response(wrap_file(req.environ, tar, buffer_size=self.STREAMING),
+            # TODO: instead expanding blocks to a full list,
+            # use [first_block - last_block]
+            tar = TarStreaming(self.conn, account, container, range(blocks),
+                               results, self.logger)
+            return Response(wrap_file(req.environ, tar,
+                                      buffer_size=self.STREAMING),
                             headers={
                                 'Accept-Ranges': 'bytes',
                                 'Content-Type': 'application/tar',
                                 'Content-Length': length,
                             }, status=200)
 
-        # TODO: instead expanding blocks to a full list, use first_block - last_block
+        # TODO: instead expanding blocks to a full list,
+        # use [first_block - last_block]
         start, end, block_start, block_end = self._extract_range(req, blocks)
         blocks_to_read = range(block_start, block_end)
 
-        tar = TarStreaming(self.conn, account, container, blocks_to_read, results, self.logger)
-        return Response(wrap_file(req.environ, tar, buffer_size=self.STREAMING),
+        tar = TarStreaming(self.conn, account, container, blocks_to_read,
+                           results, self.logger)
+        return Response(wrap_file(req.environ, tar,
+                                  buffer_size=self.STREAMING),
                         headers={
                             'Accept-Ranges': 'bytes',
                             'Content-Type': 'application/tar',
-                            'Content-Range': 'bytes %d-%d/%d' % (start, end, length),
+                            'Content-Range': 'bytes %d-%d/%d' %
+                                             (start, end, length),
                             'Content-Length': end - start + 1,
                         }, status=206)
 
     def on_dump(self, req):
+        """Entry point for dump rule"""
         # extract account and container
         account = req.args.get('acct')
         container = req.args.get('ref')
@@ -468,23 +519,23 @@ class ContainerStreaming(object):
         return Response("Not supported", 405)
 
     def _do_put(self, req, account, container):
+        """Manage PUT method for restoring a container"""
         size = int(req.headers['content-length'])
-        data = ""
 
         self.conn.container_create(account, container)
-        r = { 'consumed': 0, 'buf': '' }
+        r = {'consumed': 0, 'buf': ''}
+
         def read(size):
             while len(r['buf']) < size and not req.stream.is_exhausted:
                 t = req.stream.read(size - len(r['buf']))
                 r['consumed'] += len(t)
                 r['buf'] += t
-            data =  r['buf'][:size]
+            data = r['buf'][:size]
             r['buf'] = r['buf'][size:]
 
             if len(data) != size:
                 raise UnprocessableEntity()
             return data
-
 
         hdrs = {}
         while r['consumed'] < size:
@@ -501,7 +552,8 @@ class ContainerStreaming(object):
                     length = buf.split(' ', 1)[0]
                     if length[0] == '\x00':
                         break
-                    key, value = buf[len(length) + 1:int(length) - 1].split('=', 1)
+                    buf = buf[len(length) + 1:int(length) - 1]
+                    key, value = buf.split('=', 1)
                     assert key not in hdrs
                     if key.startswith(SCHILY):
                         key = key[len(SCHILY):]
@@ -515,7 +567,8 @@ class ContainerStreaming(object):
                     if inf.size % BLOCKSIZE:
                         read(BLOCKSIZE - inf.size % BLOCKSIZE)
                 else:
-                    self.conn.object_create(account, container, obj_name=inf.name,
+                    self.conn.object_create(account, container,
+                                            obj_name=inf.name,
                                             data=read(inf.size))
                     if inf.size % BLOCKSIZE:
                         read(BLOCKSIZE - inf.size % BLOCKSIZE)
@@ -526,6 +579,7 @@ class ContainerStreaming(object):
         return Response(status=200)
 
     def on_restore(self, req):
+        """Entry point for restore rule"""
         account = req.args.get('acct')
         container = req.args.get('ref')
 
@@ -548,19 +602,22 @@ class ContainerStreaming(object):
         return self._do_put(req, account, container)
 
     def dispatch_request(self, req):
+        """Dispatch request point"""
         adapter = self.url_map.bind_to_environ(req.environ)
         try:
             endpoint, _ = adapter.match()
             return getattr(self, 'on_' + endpoint)(req)
         except HTTPException as e:
             return e
-        except Exception: # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except
             self.logger.exception('ERROR Unhandled exception in request')
             return InternalServerError('Unmanaged error')
+
 
 def create_app(conf=None):
     app = ContainerStreaming(conf)
     return app
+
 
 if __name__ == "__main__":
     from werkzeug.serving import run_simple
