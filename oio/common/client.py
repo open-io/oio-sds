@@ -52,11 +52,5 @@ class ProxyClient(HttpApi):
             headers["X-oio-action-mode"] = "autocreate"
             kwargs = kwargs.copy()
             kwargs.pop("autocreate")
-        if kwargs.get("append"):
-            if not headers:
-                headers = dict()
-            headers["X-oio-action-mode"] = "append"
-            kwargs = kwargs.copy()
-            kwargs.pop("append")
         return super(ProxyClient, self)._direct_request(
             method, url, session=session, headers=headers, **kwargs)
