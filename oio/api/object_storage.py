@@ -500,11 +500,11 @@ class ObjectStorageApi(object):
     def object_create(self, account, container, file_or_path=None, data=None,
                       etag=None, obj_name=None, mime_type=None,
                       metadata=None, policy=None, key_file=None,
-                      **kwargs):
+                      append=False, **kwargs):
         """
-        Create an object in *container* of *account* with data taken from
-        either *data* (`str` or `generator`) or *file_or_path* (path to a file
-        or file-like object).
+        Create an object or append data to object in *container* of *account*
+        with data taken from either *data* (`str` or `generator`) or
+        *file_or_path* (path to a file or file-like object).
         The object will be named after *obj_name* if specified, or after
         the base name of *file_or_path*.
 
@@ -528,6 +528,9 @@ class ObjectStorageApi(object):
         :keyword policy: name of the storage policy
         :type policy: `str`
         :keyword key_file:
+        :param append: if set, data will be append to existing object (or
+        object will be created if unset)
+        :type append: boolean
         """
         if (data, file_or_path) == (None, None):
             raise exc.MissingData()
@@ -559,18 +562,18 @@ class ObjectStorageApi(object):
             return self._object_create(
                 account, container, obj_name, BytesIO(data), sysmeta,
                 properties=metadata, policy=policy,
-                key_file=key_file, **kwargs)
+                key_file=key_file, append=append, **kwargs)
         elif hasattr(file_or_path, "read"):
             return self._object_create(
                 account, container, obj_name, src, sysmeta,
                 properties=metadata, policy=policy, key_file=key_file,
-                **kwargs)
+                append=append, **kwargs)
         else:
             with open(file_or_path, "rb") as f:
                 return self._object_create(
                     account, container, obj_name, f, sysmeta,
                     properties=metadata, policy=policy,
-                    key_file=key_file, **kwargs)
+                    key_file=key_file, append=append, **kwargs)
 
     @ensure_headers
     @ensure_request_id
@@ -746,9 +749,12 @@ class ObjectStorageApi(object):
     def _content_preparer(self, account, container, obj_name,
                           policy=None, **kwargs):
         # TODO: optimize by asking more than one metachunk at a time
+        if not kwargs.get('append', False):
+            kwargs['autocreate'] = True
+
         obj_meta, first_body = self.container.content_prepare(
             account, container, obj_name, size=1, stgpol=policy,
-            autocreate=True, **kwargs)
+            **kwargs)
         storage_method = STORAGE_METHODS.load(obj_meta['chunk_method'])
 
         def _fix_mc_pos(chunks, mc_pos):
@@ -768,7 +774,7 @@ class ObjectStorageApi(object):
                 mc_pos += 1
                 _, next_body = self.container.content_prepare(
                         account, container, obj_name, 1, stgpol=policy,
-                        autocreate=True, **kwargs)
+                        **kwargs)
                 _fix_mc_pos(next_body, mc_pos)
                 yield next_body
 

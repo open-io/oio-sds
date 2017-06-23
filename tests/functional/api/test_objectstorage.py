@@ -356,3 +356,33 @@ class TestObjectStorageAPI(BaseTestCase):
         fdata = self._fetch_range(name, (start, end))
         self.assertEqual(len(fdata), end-start+1)
         self.assertEqual(fdata, data[start:end+1])
+
+    def test_object_create_then_append(self):
+        """Create an object then append data"""
+        name = random_str(16)
+        self.api.object_create(self.account, name, data="1"*128, obj_name=name)
+        self.api.object_create(self.account, name, data="2"*128, obj_name=name,
+                               append=True)
+        _, data = self.api.object_fetch(self.account, name, name)
+        data = "".join(data)
+        self.assertEqual(len(data), 256)
+        self.assertEqual(data, "1"*128 + "2" *128)
+
+    def test_object_create_from_append(self):
+        """Create an object with append operation"""
+        name = random_str(16)
+        self.api.container_create(self.account, name)
+        self.api.object_create(self.account, name, data="1"*128, obj_name=name,
+                               append=True)
+        _, data = self.api.object_fetch(self.account, name, name)
+        data = "".join(data)
+        self.assertEqual(len(data), 128)
+        self.assertEqual(data, "1"*128)
+
+    def test_container_object_create_from_append(self):
+        """Try to create container and object with append operatio"""
+        name = random_str(16)
+        self.assertRaises(
+            exc.NoSuchContainer,
+            self.api.object_create, self.account, name, data="1"*128,
+                                    obj_name=name, append=True)
