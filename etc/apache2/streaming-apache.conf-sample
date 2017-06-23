@@ -13,9 +13,8 @@ PidFile /var/run/oio/sds/OPENIO-admin-1.pid
 
 User openio
 Group openio
-WSGIDaemonProcess ecd-1 processes=2 threads=1 user=openio group=openio
-WSGIProcessGroup ecd-1
-WSGIApplicationGroup ecd-1
+WSGIDaemonProcess admin-1 processes=2 threads=1 user=openio group=openio
+WSGIApplicationGroup admin-1
 WSGIScriptAlias / /etc/oio/sds/OPENIO/conf/admin.wsgi
 WSGISocketPrefix /var/run/oio/sds/run
 WSGIChunkedRequest On

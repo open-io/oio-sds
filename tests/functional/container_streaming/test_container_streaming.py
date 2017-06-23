@@ -42,14 +42,18 @@ CHARSET = [
     "yishą́ągo",
     ]
 
+
 def rand_byte(n):
     return ''.join([chr(random.randint(32, 255)) for _ in xrange(n)])
+
 
 def rand_str(n):
     return ''.join([random.choice(string.ascii_letters) for i in xrange(n)])
 
+
 def rand_charset(_):
     return random.choice(CHARSET)
+
 
 def gen_charset_names():
     index = 0
@@ -58,6 +62,7 @@ def gen_charset_names():
             i, index = index, index + 1
             yield i, '{0}/{1}/plop'.format(c0, random.choice(CHARSET))
 
+
 def gen_byte_names():
     index = 0
     for c0 in "01234567":
@@ -65,15 +70,18 @@ def gen_byte_names():
             i, index = index, index + 1
             yield i, '{0}/{1}/plop'.format(c0, rand_byte(10))
 
+
 def gen_metadata():
     name = rand_str(20)
     value = rand_str(100)
     return (name, value)
 
+
 def gen_byte_metadata():
     name = rand_str(20)
     value = rand_byte(100)
     return (name, value)
+
 
 def gen_charset_metadata():
     name = random.choice(CHARSET)
@@ -86,11 +94,12 @@ class TestContainerDownload(BaseTestCase):
 
     def setUp(self):
         super(TestContainerDownload, self).setUp()
-        # FIXME: should we use direct API from BaseTestCase or still container.client ?
+        # FIXME: should we use direct API from BaseTestCase
+        #        or still container.client ?
         self.conn = ObjectStorageApi(self.ns)
         self._streaming = 'http://' + self.get_service_url('admin')[2]
         self._cnt = random_container()
-        self._uri = self._streaming + '/v1.0/dump?acct=' + self.account + '&ref=' + self._cnt
+        self._uri = self.make_uri('dump')
         self._data = {}
         self.conn.container_create(self.account, self._cnt)
         self.raw = ""
@@ -99,7 +108,8 @@ class TestContainerDownload(BaseTestCase):
     def make_uri(self, action, account=None, container=None):
         account = account or self.account
         container = container or self._cnt
-        return '%s/v1.0/%s?acct=%s&ref=%s' % (self._streaming, action, account, container)
+        return '%s/v1.0/%s?acct=%s&ref=%s' % (self._streaming, action,
+                                              account, container)
 
     def tearDown(self):
         for name in self._data:
@@ -111,11 +121,13 @@ class TestContainerDownload(BaseTestCase):
         for idx, _name in itertools.islice(name(), 5):
             data = gen_data(513 * idx)
             entry = {'data': data, 'meta': None}
-            self.conn.object_create(self.account, self._cnt, obj_name=_name, data=data)
+            self.conn.object_create(self.account, self._cnt, obj_name=_name,
+                                    data=data)
             if metadata:
                 key, val = metadata()
                 entry['meta'] = {key: val}
-                self.conn.object_update(self.account, self._cnt, _name, entry['meta'])
+                self.conn.object_update(self.account, self._cnt, _name,
+                                        entry['meta'])
             self._data[_name] = entry
 
     def _create_s3_slo(self, name=gen_names, metadata=None):
@@ -135,10 +147,12 @@ class TestContainerDownload(BaseTestCase):
                 'content_type': 'application/octect-stream',
                 'hash': md5(data).hexdigest().upper(),
                 'last_modified': '2017-06-21T12:42:47.000000',
-                'name': '/%s+segments/%s/%s/%d' % (self._cnt, _name, etag, part_number)
+                'name': '/%s+segments/%s/%s/%d' % (self._cnt, _name, etag,
+                                                   part_number)
             })
             self.conn.object_create(self.account, "%s+segments" % self._cnt,
-                                    obj_name='%s/%s/%d' % (_name, etag, part_number),
+                                    obj_name='%s/%s/%d' % (_name, etag,
+                                                           part_number),
                                     data=data)
             full_data += data
             part_number += 1
@@ -150,8 +164,10 @@ class TestContainerDownload(BaseTestCase):
         }}
         self._slo.append(_name)
         data = json.dumps(res)
-        self.conn.object_create(self.account, self._cnt, obj_name=_name, data=data)
-        self.conn.object_update(self.account, self._cnt, _name, self._data[_name]['meta'])
+        self.conn.object_create(self.account, self._cnt, obj_name=_name,
+                                data=data)
+        self.conn.object_update(self.account, self._cnt, _name,
+                                self._data[_name]['meta'])
 
     def _simple_download(self, name=gen_names, metadata=None):
         self._create_data(name, metadata)
@@ -207,7 +223,8 @@ class TestContainerDownload(BaseTestCase):
         get = requests.get(self._uri)
         head = requests.head(self._uri)
 
-        self.assertEqual(get.headers['content-length'], head.headers['content-length'])
+        self.assertEqual(get.headers['content-length'],
+                         head.headers['content-length'])
 
     def test_download_per_range(self):
         self._create_data()
@@ -216,7 +233,8 @@ class TestContainerDownload(BaseTestCase):
 
         data = []
         for idx in xrange(0, int(org.headers['content-length']), 512):
-            ret = requests.get(self._uri, headers={'Range': 'bytes=%d-%d' % (idx, idx+511)})
+            ret = requests.get(self._uri, headers={'Range': 'bytes=%d-%d' %
+                                                            (idx, idx+511)})
             data.append(ret.content)
 
         data = "".join(data)
@@ -228,10 +246,14 @@ class TestContainerDownload(BaseTestCase):
 
         ranges = ((-512, 511), (512, 0), (1, 3), (98888, 99999))
         for start, end in ranges:
-            ret = requests.get(self._uri, headers={'Range': 'bytes=%d-%d' % (start, end)})
-            self.assertEqual(ret.status_code, 416, "Invalid error code for range %d-%d" % (start, end))
+            ret = requests.get(self._uri, headers={'Range': 'bytes=%d-%d' %
+                                                            (start, end)})
+            self.assertEqual(ret.status_code, 416,
+                             "Invalid error code for range %d-%d" %
+                             (start, end))
 
-        ret = requests.get(self._uri, headers={'Range': 'bytes=0-511, 512-1023'})
+        ret = requests.get(self._uri,
+                           headers={'Range': 'bytes=0-511, 512-1023'})
         self.assertEqual(ret.status_code, 416)
 
     def test_file_metadata(self):
@@ -293,7 +315,8 @@ class TestContainerDownload(BaseTestCase):
 
         data = []
         for idx in xrange(0, int(org.headers['content-length']), 512):
-            ret = requests.get(self._uri, headers={'Range': 'bytes=%d-%d' % (idx, idx+511)})
+            ret = requests.get(self._uri, headers={'Range': 'bytes=%d-%d' %
+                                                            (idx, idx+511)})
             data.append(ret.content)
 
         data = "".join(data)
@@ -308,7 +331,8 @@ class TestContainerDownload(BaseTestCase):
         self.assertEqual(org.status_code, 200)
 
         cnt = rand_str(20)
-        res = requests.put(self.make_uri('restore', container=cnt), data=org.content)
+        res = requests.put(self.make_uri('restore', container=cnt),
+                           data=org.content)
         self.assertEqual(org.status_code, 200)
 
         res = self.conn.object_get_properties(self.account, cnt, self._slo[0])
@@ -316,4 +340,3 @@ class TestContainerDownload(BaseTestCase):
         self.assertNotIn('x-static-large-object', props)
         self.assertNotIn('x-object-sysmeta-slo-size', props)
         self.assertNotIn('x-object-sysmeta-slo-etag', props)
-
