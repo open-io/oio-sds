@@ -13,7 +13,7 @@
 
 
 import logging
-from oio.api.object_storage import ObjectStorageAPI
+from oio.api.object_storage import ObjectStorageApi
 from oio.api.object_storage import _sort_chunks as sort_chunks
 from oio.common import exceptions as exc
 from tests.utils import random_str, random_data, BaseTestCase
@@ -23,7 +23,7 @@ class TestObjectStorageAPI(BaseTestCase):
 
     def setUp(self):
         super(TestObjectStorageAPI, self).setUp()
-        self.api = ObjectStorageAPI(self.ns, endpoint=self.uri)
+        self.api = ObjectStorageApi(self.ns, endpoint=self.uri)
         self.created = list()
 
     def tearDown(self):
@@ -361,12 +361,13 @@ class TestObjectStorageAPI(BaseTestCase):
         """Create an object then append data"""
         name = random_str(16)
         self.api.object_create(self.account, name, data="1"*128, obj_name=name)
-        self.api.object_create(self.account, name, data="2"*128, obj_name=name,
-                               append=True)
+        _, size, _ = self.api.object_create(
+            self.account, name, data="2"*128, obj_name=name, append=True)
+        self.assertEqual(size, 128)
         _, data = self.api.object_fetch(self.account, name, name)
         data = "".join(data)
         self.assertEqual(len(data), 256)
-        self.assertEqual(data, "1"*128 + "2" *128)
+        self.assertEqual(data, "1" * 128 + "2" * 128)
 
     def test_object_create_from_append(self):
         """Create an object with append operation"""
@@ -380,9 +381,11 @@ class TestObjectStorageAPI(BaseTestCase):
         self.assertEqual(data, "1"*128)
 
     def test_container_object_create_from_append(self):
-        """Try to create container and object with append operatio"""
+        """Try to create container and object with append operation"""
         name = random_str(16)
-        self.assertRaises(
-            exc.NoSuchContainer,
-            self.api.object_create, self.account, name, data="1"*128,
-                                    obj_name=name, append=True)
+        _chunks, size, checksum = self.api.object_create(
+            self.account, name, data="1"*128, obj_name=name, append=True)
+        self.assertEqual(size, 128)
+
+        meta = self.api.object_get_properties(self.account, name, name)
+        self.assertEqual(meta.get('hash', "").lower(), checksum.lower())

@@ -292,9 +292,36 @@ class ContainerClient(ProxyClient):
                        size=None, checksum=None, data=None, cid=None,
                        content_id=None, stgpol=None, version=None,
                        mime_type=None, chunk_method=None, headers=None,
-                       **kwargs):
+                       append=False, **kwargs):
+        """
+        Create a new object. This method does not upload any data, it just
+        registers object metadata in the database.
+
+        :param size: size of the object
+        :type size: `int`
+        :param checksum: checksum of the object (may be None when appending)
+        :type checksum: hexadecimal `str`
+        :param data: metadata of the object (list of chunks and
+        dict of properties)
+        :type data: `dict`
+        :param cid: container id that can be used in place of `account`
+            and `reference`
+        :type cid: hexadecimal `str`
+        :param content_id: the ID to set on the object, or the ID of the
+        existing object when appending
+        :param stgpol: name of the storage policy for the object
+        :param version: version of the object
+        :type version: `int`
+        :param mime_type: MIME type to set on the object
+        :param chunk_method:
+        :param headers: extra headers to send to the proxy
+        :param append: append to an existing object instead of creating it
+        :type append: `bool`
+        """
         uri = self._make_uri('content/create')
         params = self._make_params(account, reference, path, cid=cid)
+        if append:
+            params['append'] = '1'
         data = json.dumps(data)
         hdrs = {'x-oio-content-meta-length': str(size),
                 'x-oio-content-meta-hash': checksum}
@@ -304,13 +331,13 @@ class ContainerClient(ProxyClient):
         if stgpol is not None:
             hdrs['x-oio-content-meta-policy'] = stgpol
         if version is not None:
-            hdrs['x-oio-content-meta-version'] = version
+            hdrs['x-oio-content-meta-version'] = str(version)
         if mime_type is not None:
             hdrs['x-oio-content-meta-mime-type'] = mime_type
         if chunk_method is not None:
             hdrs['x-oio-content-meta-chunk-method'] = chunk_method
         resp, body = self._direct_request(
-            'POST', uri, data=data, params=params,
+            'POST', uri, data=data, params=params, autocreate=True,
             headers=hdrs, **kwargs)
         return resp, body
 

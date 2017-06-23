@@ -530,7 +530,9 @@ class ObjectStorageApi(object):
         :keyword key_file:
         :param append: if set, data will be append to existing object (or
         object will be created if unset)
-        :type append: boolean
+        :type append: `bool`
+
+        :returns: `list` of chunks, size and hash of the what has been uploaded
         """
         if (data, file_or_path) == (None, None):
             raise exc.MissingData()
@@ -749,12 +751,9 @@ class ObjectStorageApi(object):
     def _content_preparer(self, account, container, obj_name,
                           policy=None, **kwargs):
         # TODO: optimize by asking more than one metachunk at a time
-        if not kwargs.get('append', False):
-            kwargs['autocreate'] = True
-
         obj_meta, first_body = self.container.content_prepare(
             account, container, obj_name, size=1, stgpol=policy,
-            **kwargs)
+            autocreate=True, **kwargs)
         storage_method = STORAGE_METHODS.load(obj_meta['chunk_method'])
 
         def _fix_mc_pos(chunks, mc_pos):
@@ -774,7 +773,7 @@ class ObjectStorageApi(object):
                 mc_pos += 1
                 _, next_body = self.container.content_prepare(
                         account, container, obj_name, 1, stgpol=policy,
-                        **kwargs)
+                        autocreate=True, **kwargs)
                 _fix_mc_pos(next_body, mc_pos)
                 yield next_body
 
