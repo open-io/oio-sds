@@ -30,10 +30,8 @@ function dump_syslog {
 
 #trap dump_syslog EXIT
 
-has_coverage () { [ -n "$COVERAGE" ] ; }
-
 is_running_test_suite () {
-    has_coverage || [ -z "$TEST_SUITE" ] || [ "${TEST_SUITE/*$1*/$1}" == "$1" ]
+    [ -z "$TEST_SUITE" ] || [ "${TEST_SUITE/*$1*/$1}" == "$1" ]
 }
 
 randomize_env () {
@@ -113,11 +111,7 @@ func_tests () {
 
 	# Run the whole suite of functional tests (Python)
     cd $SRCDIR
-    if has_coverage ; then
-		tox -e coverage && tox -e cover,func
-	else
-		tox -e func
-    fi
+    tox -e func,coverage
 
 	# Run the whole suite of functional tests (C)
     cd $WRKDIR
@@ -134,6 +128,7 @@ func_tests () {
 	test_oio_tool
 
     gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
+    sleep 0.5
 }
 
 test_meta2_filters () {
@@ -141,12 +136,11 @@ test_meta2_filters () {
     oio-reset.sh -N $OIO_NS $@
 
     cd $SRCDIR
-    if has_coverage ; then
-		tox -e coverage
-    fi
+    tox -e coverage
     ${PYTHON} $(which nosetests) tests.functional.m2_filters.test_filters
 
     gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
+    sleep 0.5
 }
 
 

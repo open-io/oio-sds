@@ -303,6 +303,24 @@ from oio.${SRVTYPE}.app import create_app
 application = create_app(conf)
 """
 
+template_wsgi_service_coverage_start = """
+import atexit
+import os
+import coverage
+
+cov = coverage.coverage(data_file='@CMAKE_BINARY_DIR@/.coverage.wsgi',
+                        data_suffix=True, concurrency="thread")
+cov.start()
+"""
+
+template_wsgi_service_coverage_stop = """
+def save_coverage():
+    cov.stop()
+    cov.save()
+
+atexit.register(save_coverage)
+"""
+
 template_meta_watch = """
 host: ${IP}
 port: ${PORT}
@@ -953,6 +971,7 @@ COMPRESSION = 'compression'
 APPLICATION_KEY = 'application_key'
 KEY_FILE='key_file'
 META_HEADER='x-oio-chunk-meta'
+COVERAGE=os.getenv('PYTHON_COVERAGE')
 
 defaults = {
     'NS': 'OPENIO',
@@ -1487,6 +1506,11 @@ def merge_config(base, inc):
 
 
 def main():
+    if COVERAGE:
+        global template_wsgi_service_descr
+        template_wsgi_service_descr = "".join([template_wsgi_service_coverage_start,
+                                               template_wsgi_service_descr,
+                                               template_wsgi_service_coverage_stop])
     parser = argparse.ArgumentParser(description='OpenIO bootstrap tool')
     parser.add_argument("-c", "--conf",
                         action="append", dest='config',
