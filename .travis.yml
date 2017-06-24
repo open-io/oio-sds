@@ -31,5 +31,5 @@ script:
   - pwd && env && ./tools/oio-travis-tests.sh
   - make coverage
 after_success:
-  - bash <(curl -s https://codecov.io/bash) -v -f cmake_coverage.output
+  - bash <(curl -s https://codecov.io/bash) -f cmake_coverage.output
   - codecov
