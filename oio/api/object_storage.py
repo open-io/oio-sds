@@ -18,6 +18,7 @@ from functools import wraps
 import logging
 import os
 import random
+import warnings
 from inspect import isgenerator
 
 from oio.common import exceptions as exc
@@ -316,18 +317,19 @@ class ObjectStorageApi(object):
         """
         return self.account.account_list(**kwargs)
 
-    # FIXME:
     @handle_account_not_found
     def account_update(self, account, metadata, to_delete=None, **kwargs):
+        warnings.warn("You'd better use account_set_properties()",
+                      DeprecationWarning)
         self.account.account_update(account, metadata, to_delete, **kwargs)
 
     @handle_account_not_found
     def account_set_properties(self, account, properties, **kwargs):
-        self.account_update(account, properties, **kwargs)
+        self.account.account_update(account, properties, **kwargs)
 
     @handle_account_not_found
     def account_del_properties(self, account, properties, **kwargs):
-        self.account_update(account, None, properties, **kwargs)
+        self.account.account_update(account, None, properties, **kwargs)
 
     def container_create(self, account, container, properties=None,
                          **kwargs):
@@ -487,6 +489,8 @@ class ObjectStorageApi(object):
 
     def container_update(self, account, container, metadata, clear=False,
                          **kwargs):
+        warnings.warn("You'd better use container_set_properties()",
+                      DeprecationWarning)
         if not metadata:
             self.container_del_properties(
                 account, container, [], **kwargs)
@@ -665,6 +669,8 @@ class ObjectStorageApi(object):
         """
         :deprecated: use `object_locate`
         """
+        warnings.warn("You'd better use object_locate()",
+                      DeprecationWarning)
         return self.object_locate(*args, **kwargs)
 
     @ensure_headers
@@ -727,6 +733,8 @@ class ObjectStorageApi(object):
 
     def object_update(self, account, container, obj, metadata,
                       version=None, clear=False, **kwargs):
+        warnings.warn("You'd better use object_set_properties()",
+                      DeprecationWarning)
         if clear:
             self.object_del_properties(
                 account, container, obj, [], version=version, **kwargs)
@@ -876,3 +884,7 @@ class ObjectStorageAPI(ObjectStorageApi):
     def __init__(self, namespace, endpoint=None, **kwargs):
         super(ObjectStorageAPI, self).__init__(namespace,
                                                endpoint=endpoint, **kwargs)
+        warnings.simplefilter('once')
+        warnings.warn(
+            "oio.api.ObjectStorageAPI is deprecated, use oio.ObjectStorageApi",
+            DeprecationWarning)
