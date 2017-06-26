@@ -1,6 +1,4 @@
-from time import time, sleep
-import uuid
-import math
+from time import time
 
 import redis
 import redis.sentinel
@@ -8,6 +6,7 @@ from werkzeug.exceptions import NotFound, Conflict
 from oio.common.utils import Timestamp
 from oio.common.utils import int_value
 from oio.common.utils import true_value
+from oio.common.redis_conn import RedisConn
 
 
 EXPIRE_TIME = 60  # seconds
@@ -19,47 +18,7 @@ container_fields = ['ns', 'account', 'type', 'objects', 'bytes', 'ctime',
                     'mtime', 'name']
 
 
-def acquire_lock_with_timeout(conn, lockname, acquire_timeout=10,
-                              lock_timeout=10):
-    identifier = str(uuid.uuid4())
-    lockname = 'lock:' + lockname
-    lock_timeout = int(math.ceil(lock_timeout))
-    end = time() + acquire_timeout
-
-    while time() < end:
-        if conn.setnx(lockname, identifier):
-            conn.expire(lockname, lock_timeout)
-            return identifier
-        elif not conn.ttl(lockname):
-            conn.expire(lockname, lock_timeout)
-
-        sleep(.001)
-    return False
-
-
-def release_lock(conn, lockname, identifier):
-    pipe = conn.pipeline(True)
-    lockname = 'lock:' + lockname
-
-    while True:
-        try:
-            pipe.watch(lockname)
-            if pipe.get(lockname) == identifier:
-                pipe.multi()
-                pipe.delete(lockname)
-                pipe.execute()
-                return True
-
-            pipe.unwatch()
-            break
-
-        except redis.exceptions.WatchError:
-            pass
-
-    return False
-
-
-class AccountBackend(object):
+class AccountBackend(RedisConn):
     lua_update_container = """
                -- With lua float we are losing precision for this reason
                -- we keep the number as a string
@@ -144,29 +103,10 @@ class AccountBackend(object):
 
     def __init__(self, conf, connection=None):
         self.conf = conf
-        self._conn = connection
-        self._sentinel = None
-        self._sentinel_hosts = conf.get('sentinel_hosts', None)
-        self._sentinel_name = conf.get('sentinel_master_name', 'oio')
         self.autocreate = true_value(conf.get('autocreate', 'true'))
-
-        # Do not use Sentinel if a connection object is provided
-        if self._sentinel_hosts and not self._conn:
-            self._sentinel = redis.sentinel.Sentinel(
-                    [(h, int(p)) for h, p, in (hp.split(':', 2)
-                     for hp in self._sentinel_hosts.split(','))])
-        self.script_update_container = self.conn.register_script(
+        super(AccountBackend, self).__init__(conf, connection)
+        self.script_update_container = self.register_script(
             self.lua_update_container)
-
-    @property
-    def conn(self):
-        if self._sentinel:
-            return self._sentinel.master_for(self._sentinel_name)
-        if not self._conn:
-            redis_host = self.conf.get('redis_host', '127.0.0.1')
-            redis_port = int(self.conf.get('redis_port', '6379'))
-            self._conn = redis.StrictRedis(host=redis_host, port=redis_port)
-        return self._conn
 
     @staticmethod
     def ckey(account, name):
@@ -180,7 +120,7 @@ class AccountBackend(object):
         if conn.hget('accounts:', account_id):
             return None
 
-        lock = acquire_lock_with_timeout(conn, 'account:%s' % account_id, 1)
+        lock = self.acquire_lock_with_timeout('account:%s' % account_id, 1)
         if not lock:
             return None
 
@@ -193,7 +133,7 @@ class AccountBackend(object):
             'ctime': Timestamp(time()).normal
         })
         pipeline.execute()
-        release_lock(conn, 'account:%s' % account_id, lock)
+        self.release_lock('account:%s' % account_id, lock)
         return account_id
 
     def delete_account(self, account_id):
@@ -205,7 +145,7 @@ class AccountBackend(object):
         if not account_id:
             return None
 
-        lock = acquire_lock_with_timeout(conn, 'account:%s' % account_id, 1)
+        lock = self.acquire_lock_with_timeout('account:%s' % account_id, 1)
         if not lock:
             return None
 
@@ -220,7 +160,7 @@ class AccountBackend(object):
         pipeline.delete('account:%s' % account_id)
         pipeline.hdel('accounts:', account_id)
         pipeline.execute()
-        release_lock(conn, 'account:%s' % account_id, lock)
+        self.release_lock('account:%s' % account_id, lock)
         return True
 
     def get_account_metadata(self, account_id):
