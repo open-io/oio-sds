@@ -1335,8 +1335,8 @@ def generate(options):
     with open(wsgi(env), 'w+') as f:
         f.write(to_write)
 
-    # container_streaming
-    env = subenv({'SRVTYPE': 'admin', 'SRVNUM': 1, 'PORT': port_admin})
+    # container
+    env = subenv({'SRVTYPE': 'container', 'SRVNUM': 1, 'PORT': port_admin})
     add_service(env)
     tpl = Template(template_gridinit_httpd)
     with open(gridinit(env), 'a+') as f:
@@ -1350,7 +1350,7 @@ def generate(options):
         f.write(to_write)
     # service desc
     tpl = Template(template_wsgi_service_descr)
-    to_write = tpl.safe_substitute(env, SRVTYPE='container_streaming',
+    to_write = tpl.safe_substitute(env, SRVTYPE='container',
                                         KEY_FILE=config(env))
     with open(wsgi(env), 'w+') as f:
         f.write(to_write)

@@ -97,7 +97,7 @@ class TestContainerDownload(BaseTestCase):
         # FIXME: should we use direct API from BaseTestCase
         #        or still container.client ?
         self.conn = ObjectStorageApi(self.ns)
-        self._streaming = 'http://' + self.get_service_url('admin')[2]
+        self._streaming = 'http://' + self.get_service_url('container')[2]
         self._cnt = random_container()
         self._uri = self.make_uri('dump')
         self._data = {}
