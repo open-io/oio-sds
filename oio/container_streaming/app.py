@@ -33,11 +33,11 @@ from werkzeug.exceptions import HTTPException, BadRequest, \
                                 RequestedRangeNotSatisfiable, Conflict, \
                                 UnprocessableEntity, InternalServerError
 from werkzeug.wsgi import wrap_file
-import redis
 
 from oio import ObjectStorageApi
 from oio.common import exceptions as exc
 from oio.common.utils import get_logger, read_conf
+from oio.common.redis_conn import RedisConn
 
 
 EXP = re.compile(r"^bytes=(\d+)-(\d+)$")
@@ -57,7 +57,7 @@ SLO_ETAG = 'x-object-sysmeta-slo-etag'
 SLO_HEADERS = (SLO, SLO_SIZE, SLO_ETAG)
 
 
-class OIOTarEntry(object):
+class OioTarEntry(object):
     def __init__(self, conn, account, container, name, meta=None):
         self._slo = None
         self._buf = None
@@ -77,7 +77,7 @@ class OIOTarEntry(object):
         tarinfo.linkname = ""
 
         if self.name == CONTAINER_PROPERTIES:
-            meta = meta or conn.container_show(self.acct, self.ref)
+            meta = meta or conn.container_get_properties(self.acct, self.ref)
             tarinfo.mtime = int(time.time())
             tarinfo.size = len(json.dumps(meta['properties']))
             tarinfo.mtime = int(time.time())
@@ -119,7 +119,7 @@ class OIOTarEntry(object):
 
     @property
     def header_blocks(self):
-        assert len(self._buf) > 0
+        assert self._buf
         return len(self._buf) / BLOCKSIZE
 
     @property
@@ -131,7 +131,7 @@ class OIOTarEntry(object):
         return self._buf
 
 
-class TarStreaming(object):
+class ContainerTarFile(object):
     """ Expose a File Object API to be used with wrap_file """
 
     def __init__(self, conn, account, container, blocks, oio_map, logger):
@@ -161,7 +161,7 @@ class TarStreaming(object):
         name = entry['name']
 
         if set(blocks).intersection(range(entry['hdr_block'])):
-            tar = OIOTarEntry(self.conn, self.acct, self.container, name)
+            tar = OioTarEntry(self.conn, self.acct, self.container, name)
 
             for bl in xrange(entry['hdr_block']):
                 if bl in blocks:
@@ -223,7 +223,7 @@ class TarStreaming(object):
         """
         Extract data from fake object that contains properties of container
         """
-        meta = self.conn.container_show(self.acct, self.container)
+        meta = self.conn.container_get_properties(self.acct, self.container)
         if not meta['properties']:
             self.logger.error("container properties are empty")
         data = json.dumps(meta['properties'])
@@ -234,7 +234,7 @@ class TarStreaming(object):
             self.logger.error("container properties has been updated")
 
         if set(blocks).intersection(range(entry['hdr_block'])):
-            tar = OIOTarEntry(self.conn, self.acct, self.container,
+            tar = OioTarEntry(self.conn, self.acct, self.container,
                               CONTAINER_PROPERTIES, meta=meta)
             # buf, entry_blocks, _, _ = generate_oio_tarinfo_fake_entry(
             #    CONTAINER_PROPERTIES, size, self.logger)
@@ -320,7 +320,7 @@ class TarStreaming(object):
             self.logger.info("data not all consumed")
 
 
-class ContainerStreaming(object):
+class ContainerStreaming(RedisConn):
     """WSGI Application to dump or restore a container"""
     CACHE = 3600 * 24  # Redis keys will expires after one day
     STREAMING = 52428800  # 50 MB
@@ -332,15 +332,13 @@ class ContainerStreaming(object):
         else:
             self.conf = {}
 
-        self.conn = ObjectStorageApi(self.conf.get("namespace", NS))
+        self.proxy = ObjectStorageApi(self.conf.get("namespace", NS))
         self.url_map = Map([
             Rule('/v1.0/dump', endpoint='dump'),
             Rule('/v1.0/restore', endpoint='restore'),
         ])
-        redis_host = self.conf.get('redis_host', '127.0.0.1')
-        redis_port = int(self.conf.get('redis_port', '6379'))
-        self.redis = redis.StrictRedis(host=redis_host, port=redis_port)
         self.logger = get_logger(self.conf, name="ContainerStreaming")
+        super(ContainerStreaming, self).__init__(self.conf)
 
     def generate_oio_map(self, account, container):
         """
@@ -353,7 +351,7 @@ class ContainerStreaming(object):
 
         # TODO hash_map should contains if deleted or version flags are set
         hash_map = "container_streaming:{0}/{1}".format(account, container)
-        cache = self.redis.get(hash_map)
+        cache = self.conn.get(hash_map)
         if cache:
             self.logger.debug("using cache")
             return json.loads(cache)
@@ -361,10 +359,10 @@ class ContainerStreaming(object):
         map_objs = []
         start_block = 0
 
-        meta = self.conn.container_show(account, container)
+        meta = self.proxy.container_get_properties(account, container)
         if meta['properties']:
             # create special file to save properties of container
-            tar = OIOTarEntry(self.conn, account, container,
+            tar = OioTarEntry(self.proxy, account, container,
                               CONTAINER_PROPERTIES, meta=meta)
             entry = {
                 'name': CONTAINER_PROPERTIES,
@@ -377,12 +375,12 @@ class ContainerStreaming(object):
             entry['end_block'] = start_block - 1
             map_objs.append(entry)
 
-        objs = self.conn.object_list(account, container)
+        objs = self.proxy.object_list(account, container)
         for obj in sorted(objs['objects']):
             # FIXME should we backup deleted object ?
             if obj['deleted']:
                 continue
-            tar = OIOTarEntry(self.conn, account, container, obj['name'])
+            tar = OioTarEntry(self.proxy, account, container, obj['name'])
             entry = {
                 'name': obj['name'],
                 'size': tar.filesize,
@@ -396,7 +394,7 @@ class ContainerStreaming(object):
             map_objs.append(entry)
 
         self.logger.debug("add entry to cache")
-        self.redis.set(hash_map, json.dumps(map_objs), ex=self.CACHE)
+        self.conn.set(hash_map, json.dumps(map_objs), ex=self.CACHE)
         return map_objs
 
     def wsgi_app(self, environ, start_response):
@@ -472,8 +470,8 @@ class ContainerStreaming(object):
         if 'Range' not in req.headers:
             # TODO: instead expanding blocks to a full list,
             # use [first_block - last_block]
-            tar = TarStreaming(self.conn, account, container, range(blocks),
-                               results, self.logger)
+            tar = ContainerTarFile(self.proxy, account, container,
+                                   range(blocks), results, self.logger)
             return Response(wrap_file(req.environ, tar,
                                       buffer_size=self.STREAMING),
                             headers={
@@ -487,8 +485,8 @@ class ContainerStreaming(object):
         start, end, block_start, block_end = self._extract_range(req, blocks)
         blocks_to_read = range(block_start, block_end)
 
-        tar = TarStreaming(self.conn, account, container, blocks_to_read,
-                           results, self.logger)
+        tar = ContainerTarFile(self.proxy, account, container, blocks_to_read,
+                               results, self.logger)
         return Response(wrap_file(req.environ, tar,
                                   buffer_size=self.STREAMING),
                         headers={
@@ -522,7 +520,7 @@ class ContainerStreaming(object):
         """Manage PUT method for restoring a container"""
         size = int(req.headers['content-length'])
 
-        self.conn.container_create(account, container)
+        self.proxy.container_create(account, container)
         r = {'consumed': 0, 'buf': ''}
 
         def read(size):
@@ -563,18 +561,20 @@ class ContainerStreaming(object):
                 if inf.name == CONTAINER_PROPERTIES:
                     assert not hdrs, "invalid sequence in TAR"
                     hdrs = json.loads(read(inf.size))
-                    self.conn.container_update(account, container, hdrs)
+                    self.proxy.container_set_properties(account, container,
+                                                        hdrs)
                     if inf.size % BLOCKSIZE:
                         read(BLOCKSIZE - inf.size % BLOCKSIZE)
                 else:
-                    self.conn.object_create(account, container,
-                                            obj_name=inf.name,
-                                            data=read(inf.size))
+                    self.proxy.object_create(account, container,
+                                             obj_name=inf.name,
+                                             data=read(inf.size))
                     if inf.size % BLOCKSIZE:
                         read(BLOCKSIZE - inf.size % BLOCKSIZE)
                     if hdrs:
-                        self.conn.object_update(account, container, inf.name,
-                                                metadata=hdrs)
+                        self.proxy.object_set_properties(account, container,
+                                                         inf.name,
+                                                         metadata=hdrs)
                 hdrs = {}
         return Response(status=200)
 
@@ -592,7 +592,7 @@ class ContainerStreaming(object):
             return Response("Not supported", 405)
 
         try:
-            self.conn.container_show(account, container)
+            self.proxy.container_get_properties(account, container)
             raise Conflict('Container already exists')
         except exc.NoSuchContainer:
             pass
