@@ -652,6 +652,7 @@ main(int argc, char **argv)
 	_add_level_repartition_test(lrt0, "3x4", 9);
 	_add_level_repartition_test(lrt0, "3x4", 10);
 	_add_level_repartition_test(lrt0, "3x4", 11);
+	_add_level_repartition_test(lrt0, "3x4", 12);
 
 	const char *lrt1[13] = {
 			"rack0.srv0", "rack0.srv1", "rack0.srv2",
@@ -1086,6 +1087,14 @@ main(int argc, char **argv)
 
 	_add_level_repartition_test(lrt5, "6x30", 15); // 12+3
 	_add_level_repartition_test(lrt5, "6x30", 18); // 14+4
+
+	const char *lrt6[16] = {
+			"rack0.srv0", "rack0.srv1", "rack0.srv2", "rack0.srv3", "rack0.srv4",
+			"rack1.srv4", "rack1.srv5", "rack1.srv6", "rack1.srv7", "rack1.srv5",
+			"rack2.srv8", "rack2.srv9", "rack2.srv10", "rack2.srv11", "rack2.srv12",
+			NULL
+	};
+	_add_level_repartition_test(lrt6, "3x5", 12); // 7+5
 
 	return g_test_run();
 };
