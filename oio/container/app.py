@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from __future__ import print_function
 try:
     import simplejson as json
 except ImportError:
@@ -306,7 +307,9 @@ class ContainerTarFile(object):
             _s = val['start_block']
             blocks = [x - _s for x in blocks]
 
-            if val['name'] == CONTAINER_PROPERTIES:
+            if 'name' not in val:
+                data = NUL * len(blocks) * BLOCKSIZE
+            elif val['name'] == CONTAINER_PROPERTIES:
                 data = self.create_tar_oio_properties(val, blocks)
             else:
                 data = self.create_tar_oio_stream(val, blocks)
@@ -324,6 +327,7 @@ class ContainerStreaming(RedisConn):
     """WSGI Application to dump or restore a container"""
     CACHE = 3600 * 24  # Redis keys will expires after one day
     STREAMING = 52428800  # 50 MB
+    CHUNK = 2048  # 1 MB (nb of blocks to server, used to avoid split headers)
 
     def __init__(self, conf):
         if conf:
@@ -376,11 +380,24 @@ class ContainerStreaming(RedisConn):
             map_objs.append(entry)
 
         objs = self.proxy.object_list(account, container)
-        for obj in sorted(objs['objects']):
+        for obj in sorted(objs['objects'], key=lambda x: x['name']):
             # FIXME should we backup deleted object ?
             if obj['deleted']:
                 continue
             tar = OioTarEntry(self.proxy, account, container, obj['name'])
+            if (start_block / self.CHUNK) != \
+                    ((start_block + tar.header_blocks) / self.CHUNK):
+                # header on boundary, we have to add empty block
+                padding = self.CHUNK - divmod(start_block, self.CHUNK)[1]
+                map_objs.append({
+                    'block': padding,
+                    'size': padding * BLOCKSIZE,
+                    'start_block': start_block,
+                    'slo': False,
+                    'hdr_block': padding,
+                    'end_block': start_block + padding - 1
+                })
+                start_block += padding
             entry = {
                 'name': obj['name'],
                 'size': tar.filesize,
@@ -424,7 +441,8 @@ class ContainerStreaming(RedisConn):
             'X-Blocks': sum([i['block'] for i in results]),
             'Content-Length': sum([i['block'] for i in results]) * BLOCKSIZE,
             'Accept-Ranges': 'bytes',
-            'Content-Type': 'application/tar'
+            'Content-Type': 'application/tar',
+            'X-Manifest-Container': json.dumps(results),
         }
         return Response(headers=hdrs, status=200)
 
@@ -443,7 +461,7 @@ class ContainerStreaming(RedisConn):
 
         def check_range(value):
             block, remainder = divmod(value, BLOCKSIZE)
-            if remainder or block < 0 or block > blocks:
+            if remainder or block < 0 or (blocks and block > blocks):
                 raise RequestedRangeNotSatisfiable()
             return block
 
@@ -478,6 +496,7 @@ class ContainerStreaming(RedisConn):
                                 'Accept-Ranges': 'bytes',
                                 'Content-Type': 'application/tar',
                                 'Content-Length': length,
+                                'X-Manifest-Container': json.dumps(results),
                             }, status=200)
 
         # TODO: instead expanding blocks to a full list,
@@ -495,6 +514,7 @@ class ContainerStreaming(RedisConn):
                             'Content-Range': 'bytes %d-%d/%d' %
                                              (start, end, length),
                             'Content-Length': end - start + 1,
+                            'X-Manifest-Container': json.dumps(results),
                         }, status=206)
 
     def on_dump(self, req):
@@ -519,6 +539,38 @@ class ContainerStreaming(RedisConn):
     def _do_put(self, req, account, container):
         """Manage PUT method for restoring a container"""
         size = int(req.headers['content-length'])
+        start_block, end_block = (None, None)
+        append = False
+        mode = "full"
+
+        if req.headers.get('range'):
+            _, _, start_block, end_block = self._extract_range(req,
+                                                               blocks=None)
+            append = True
+            mode = "range"
+
+            manifest = req.headers.get('x-manifest-container')
+            if not manifest:
+                import pdb
+                pdb.set_trace()
+                raise UnprocessableEntity("Missing X-Manifest-Container")
+            manifest = json.loads(manifest)
+            for entry in manifest:
+                if start_block > entry['end_block']:
+                    continue
+                if start_block == entry['start_block']:
+                    append = False
+                    break
+                if start_block >= entry['start_block'] + entry['hdr_block']:
+                    append = True
+                    inf = TarInfo()
+                    inf.name = entry['name']
+                    offset = (start_block - entry['start_block']
+                                          - entry['hdr_block'])
+                    inf.size = entry['size'] - offset * BLOCKSIZE
+                    inf.size = min(inf.size, size)
+                    break
+                raise UnprocessableEntity('Header is broken')
 
         self.proxy.container_create(account, container)
         r = {'consumed': 0, 'buf': ''}
@@ -532,14 +584,19 @@ class ContainerStreaming(RedisConn):
             r['buf'] = r['buf'][size:]
 
             if len(data) != size:
-                raise UnprocessableEntity()
+                raise UnprocessableEntity("No enough data")
             return data
 
         hdrs = {}
         while r['consumed'] < size:
-            buf = read(BLOCKSIZE)
-            inf = TarInfo.frombuf(buf)
-            blocks = int(math.ceil(inf.size / float(BLOCKSIZE)))
+            if not append:
+                buf = read(BLOCKSIZE)
+                if buf == NUL * BLOCKSIZE:
+                    continue
+                inf = TarInfo.frombuf(buf)
+                blocks = int(math.ceil(inf.size / float(BLOCKSIZE)))
+                if mode == "range":
+                    inf.size = min(size - r['consumed'], inf.size)
 
             if inf.type not in (XHDTYPE, REGTYPE):
                 raise BadRequest('unsupported TAR attribute')
@@ -550,13 +607,14 @@ class ContainerStreaming(RedisConn):
                     length = buf.split(' ', 1)[0]
                     if length[0] == '\x00':
                         break
-                    buf = buf[len(length) + 1:int(length) - 1]
-                    key, value = buf.split('=', 1)
+                    tmp = buf[len(length) + 1:int(length) - 1]
+                    key, value = tmp.split('=', 1)
                     assert key not in hdrs
                     if key.startswith(SCHILY):
                         key = key[len(SCHILY):]
                     hdrs[key] = value
                     buf = buf[int(length):]
+
             elif inf.type == REGTYPE:
                 if inf.name == CONTAINER_PROPERTIES:
                     assert not hdrs, "invalid sequence in TAR"
@@ -568,13 +626,15 @@ class ContainerStreaming(RedisConn):
                 else:
                     self.proxy.object_create(account, container,
                                              obj_name=inf.name,
+                                             append=append,
                                              data=read(inf.size))
                     if inf.size % BLOCKSIZE:
                         read(BLOCKSIZE - inf.size % BLOCKSIZE)
                     if hdrs:
                         self.proxy.object_set_properties(account, container,
                                                          inf.name,
-                                                         metadata=hdrs)
+                                                         properties=hdrs)
+                    append = False
                 hdrs = {}
         return Response(status=200)
 
@@ -593,7 +653,9 @@ class ContainerStreaming(RedisConn):
 
         try:
             self.proxy.container_get_properties(account, container)
-            raise Conflict('Container already exists')
+            if not req.headers.get('range'):
+                # TODO: we should check that range start at 0 or not
+                raise Conflict('Container already exists')
         except exc.NoSuchContainer:
             pass
         except:
