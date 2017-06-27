@@ -557,7 +557,6 @@ _configure_backend(struct sqlx_service_s *ss)
 	repository_config.flags = 0;
 	repository_config.flags |= ss->flag_delete_on ? SQLX_REPO_DELETEON : 0;
 	repository_config.flags |= ss->flag_cached_bases ? 0 : SQLX_REPO_NOCACHE;
-	repository_config.flags |= ss->flag_autocreate ? SQLX_REPO_AUTOCREATE : 0;
 	repository_config.sync_solo = ss->sync_mode_solo;
 	repository_config.sync_repli = ss->sync_mode_repli;
 
@@ -751,7 +750,6 @@ sqlx_service_set_defaults(void)
 {
 	SRV.config_system = TRUE;
 	SRV.flag_replicable = TRUE;
-	SRV.flag_autocreate = TRUE;
 	SRV.flag_delete_on = TRUE;
 	SRV.flag_cached_bases = TRUE;
 
