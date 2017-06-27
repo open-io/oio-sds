@@ -135,9 +135,6 @@ struct sqlx_service_s
 	// Are DB deletions allowed ?
 	gboolean flag_delete_on;
 
-	// Are DB autocreations enabled?
-	gboolean flag_autocreate;
-
 	// Turn to TRUE to avoid locking the repository volume
 	gboolean flag_nolock;
 

@@ -82,7 +82,6 @@ enum sqlx_repo_flag_e
 	SQLX_REPO_NOCACHE      = 0x01,
 	SQLX_REPO_VACUUM       = 0x02,
 	SQLX_REPO_DELETEON     = 0x04,
-	SQLX_REPO_AUTOCREATE   = 0x10,
 };
 
 enum sqlx_sync_mode_e

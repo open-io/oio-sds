@@ -321,7 +321,6 @@ sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 
 	repo->schemas = g_tree_new_full(metautils_strcmp3, NULL, g_free, g_free);
 
-	repo->flag_autocreate = BOOL(cfg->flags & SQLX_REPO_AUTOCREATE);
 	repo->flag_autovacuum = BOOL(cfg->flags & SQLX_REPO_VACUUM);
 	repo->flag_delete_on = BOOL(cfg->flags & SQLX_REPO_DELETEON);
 
@@ -641,7 +640,7 @@ retry:
 	flags |= SQLITE_OPEN_NOMUTEX;
 	flags |= SQLITE_OPEN_PRIVATECACHE;
 	flags |= SQLITE_OPEN_READWRITE;
-	if (args->create || args->repo->flag_autocreate)
+	if (args->create)
 		flags |= SQLITE_OPEN_CREATE;
 	handle = NULL;
 
@@ -654,7 +653,7 @@ retry:
 		case SQLITE_CANTOPEN:
 			GRID_DEBUG("Open soft error [%s] : (%d) %s", args->realpath,
 					rc, sqlite_strerror(rc));
-			if (attempts-- && (args->create || args->repo->flag_autocreate)) {
+			if (attempts-- && args->create) {
 				_close_handle(&handle);
 				if (!(error = __create_directory(args->realpath))) {
 					GRID_TRACE("Directory created, retrying open [%s]", args->realpath);
@@ -1039,7 +1038,7 @@ sqlx_repository_has_base2(sqlx_repository_t *repo, const struct sqlx_name_s *n,
 	REPO_CHECK(repo);
 	SQLXNAME_CHECK(n);
 
-	struct open_args_s args;
+	struct open_args_s args = {0};
 
 	if (bddname != NULL)
 		*bddname = NULL;

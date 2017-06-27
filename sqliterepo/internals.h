@@ -102,7 +102,6 @@ struct sqlx_repository_s
 	enum sqlx_sync_mode_e sync_mode_solo;
 	enum sqlx_sync_mode_e sync_mode_repli;
 
-	gboolean flag_autocreate : 1;
 	gboolean flag_autovacuum : 1;
 	gboolean flag_delete_on : 1;
 
