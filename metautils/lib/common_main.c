@@ -31,7 +31,10 @@ License along with this library.
 #include "common_main.h"
 
 char syslog_id[64] = "";
+char udp_target[STRLEN_ADDRINFO] = "";
 volatile gboolean main_signal_SIGHUP;
+
+static int oio_log_udp_fd = -1;
 
 static volatile gint64 main_log_level_update = 0;
 static int syslog_opened = 0;
@@ -55,6 +58,66 @@ static gchar errbuff[1024];
 
 /* ------------------------------------------------------------------------- */
 
+static void
+_logger_syslog_udp(const gchar *log_domain, GLogLevelFlags log_level,
+		const gchar *message, gpointer user_data UNUSED)
+{
+	const int facility = oio_log_domain2facility(log_domain);
+	const int severity = oio_log_lvl2severity(log_level);
+
+	GString *gstr = g_string_sized_new(512);
+
+	/* pack the priority and the version */
+	g_string_append_printf(gstr, "<%u>1 ", (facility + severity));
+
+	/* pack the date */
+	GTimeVal tv = {0};
+	g_get_current_time(&tv);
+	gchar * strnow = g_time_val_to_iso8601(&tv);
+	g_string_append(gstr, strnow);
+	g_free(strnow);
+
+	/* pack the hostname */
+	static gchar hostname[128] = "";
+	if (!*hostname)
+		gethostname(hostname, sizeof(hostname));
+	g_string_append_printf(gstr, " %s", hostname);
+
+	/* pack the application ID */
+	if (!*syslog_id) {
+		syslog_id[1] = 0;
+		syslog_id[0] = '-';
+	}
+	g_string_append_printf(gstr, " %s %d", syslog_id, getpid());
+
+	if (!log_domain || !*log_domain)
+		log_domain = "-";
+
+	/* append the unstructured payload */
+	switch (facility) {
+		case LOG_LOCAL1:
+			g_string_append_static(gstr, " - - acc ");
+			g_string_append(gstr, oio_log_lvl2str(log_level));
+			break;
+		case LOG_LOCAL2:
+			g_string_append_static(gstr, " - - out ");
+			g_string_append(gstr, oio_log_lvl2str(log_level));
+			break;
+		default:
+			g_string_append_static(gstr, " - - log ");
+			g_string_append(gstr, oio_log_lvl2str(log_level));
+			g_string_append_c(gstr, ' ');
+			g_string_append(gstr, log_domain);
+	}
+
+	g_string_append_c(gstr, ' ');
+	g_string_append(gstr, message);
+
+	send(oio_log_udp_fd, gstr->str, gstr->len, MSG_DONTWAIT);
+
+	g_string_free(gstr, TRUE);
+}
+
 void
 logger_syslog_open (void)
 {
@@ -63,6 +126,27 @@ logger_syslog_open (void)
 	syslog_opened = 1;
 	openlog(syslog_id, LOG_NDELAY, LOG_LOCAL0);
 	g_log_set_default_handler(oio_log_syslog, NULL);
+}
+
+void
+logger_udp_open (const char *target)
+{
+	struct sockaddr_storage ss = {0};
+	gsize sslen = sizeof(ss);
+	if (!grid_string_to_sockaddr(target, &ss, &sslen)) {
+		GRID_WARN("Invalid IP:PORT to forward the log to: %s", target);
+	} else {
+		int fd = socket_nonblock(AF_INET, SOCK_DGRAM, 0);
+		if (fd < 0) {
+			GRID_WARN("Failed to allocate a new UDP socket");
+		} else {
+			metautils_syscall_connect(fd, (struct sockaddr*)&ss, sslen);
+			if (oio_log_udp_fd >= 0)
+				metautils_pclose(&oio_log_udp_fd);
+			oio_log_udp_fd = fd;
+			g_log_set_default_handler(_logger_syslog_udp, NULL);
+		}
+	}
 }
 
 static const char*
@@ -227,6 +311,7 @@ grid_main_usage(void)
 	g_printerr("  -q         quiet mode, supress output on stdout stderr \n");
 	g_printerr("  -v         verbose mode, this activates stderr traces (default FALSE)\n");
 	g_printerr("  -p PATH    pidfile path, no pidfile if unset\n");
+	g_printerr("  -u ADDR    In conjunction with -s, target an explicit UDP syslog collector\n");
 	g_printerr("  -s TOKEN   activates syslog traces (default FALSE)\n"
 			   "             with the given identifier\n");
 	g_printerr("  -O XOPT    set extra options.\n");
@@ -410,7 +495,7 @@ grid_main_init(int argc, char **args)
 	memset(pidfile_path, 0, sizeof(pidfile_path));
 
 	for (;;) {
-		int c = getopt(argc, args, "O:hdvcqp:s:");
+		int c = getopt(argc, args, "O:hdvcqp:s:u:");
 		if (c == -1)
 			break;
 		switch (c) {
@@ -433,7 +518,7 @@ grid_main_init(int argc, char **args)
 				break;
 			case 'p':
 				memset(pidfile_path, 0, sizeof(pidfile_path));
-				if (sizeof(pidfile_path) <= g_strlcpy(pidfile_path, optarg, sizeof(pidfile_path)-1)) {
+				if (sizeof(pidfile_path) <= g_strlcpy(pidfile_path, optarg, sizeof(pidfile_path))) {
 					GRID_WARN("Invalid '-p' argument: too long");
 					grid_main_usage();
 					return FALSE;
@@ -444,9 +529,18 @@ grid_main_init(int argc, char **args)
 				oio_log_quiet();
 				flag_quiet = TRUE;
 				break;
+			case 'u':
+				memset(udp_target, 0, sizeof(udp_target));
+				if (sizeof(udp_target) <= g_strlcpy(udp_target, optarg, sizeof(udp_target))) {
+					GRID_WARN("Invalid '-u' argument: too long");
+					grid_main_usage();
+					return FALSE;
+				}
+				GRID_DEBUG("Explicitely configured udp_target=[%s]", udp_target);
+				break;
 			case 's':
 				memset(syslog_id, 0, sizeof(syslog_id));
-				if (sizeof(syslog_id) <= g_strlcpy(syslog_id, optarg, sizeof(syslog_id)-1)) {
+				if (sizeof(syslog_id) <= g_strlcpy(syslog_id, optarg, sizeof(syslog_id))) {
 					GRID_WARN("Invalid '-s' argument: too long");
 					grid_main_usage();
 					return FALSE;
@@ -472,8 +566,13 @@ grid_main_init(int argc, char **args)
 	}
 
 	if (*syslog_id) {
-		GRID_DEBUG("Opening syslog with id [%s]", syslog_id);
-		logger_syslog_open();
+		if (*udp_target) {
+			GRID_DEBUG("Opening syslog with id [%s] to [%d]", syslog_id, udp_target);
+			logger_udp_open(udp_target);
+		} else {
+			GRID_DEBUG("Opening syslog with id [%s] to /dev/log", syslog_id);
+			logger_syslog_open();
+		}
 	}
 
 	flag_running = TRUE;
