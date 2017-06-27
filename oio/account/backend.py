@@ -245,13 +245,14 @@ class AccountBackend(RedisConn):
                 self.autocreate, Timestamp(time()).normal, EXPIRE_TIME]
         try:
             self.script_update_container(keys=keys, args=args, client=conn)
-        except redis.exceptions.ResponseError as e:
-            if str(e) == "no_account":
+        except redis.exceptions.ResponseError as exc:
+            if str(exc) == "no_account":
                 raise NotFound(account_id)
-            elif str(e) == "no_update_needed":
-                raise Conflict("No updated needed")
+            elif str(exc) == "no_update_needed":
+                raise Conflict("No update needed, "
+                               "event older than last container update")
             else:
-                raise e
+                raise
 
         return name
 

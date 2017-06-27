@@ -1,4 +1,4 @@
-# Copyright (C) 2015 OpenIO, original work as part of
+# Copyright (C) 2015-2017 OpenIO, original work as part of
 # OpenIO Software Defined Storage
 #
 # This library is free software; you can redistribute it and/or
@@ -15,18 +15,37 @@
 # License along with this library.
 
 import json
+import time
 from oio.api.base import HttpApi
+from oio.common.utils import get_logger, quote
 from oio.common.exceptions import ClientException
 from oio.conscience.client import ConscienceClient
 
 
 class AccountClient(HttpApi):
-    def __init__(self, conf, **kwargs):
-        super(AccountClient, self).__init__(**kwargs)
-        self.cs = ConscienceClient(conf, **kwargs)
+    """Simple client API for the account service."""
 
-    # TODO keep account srv addr in local cache to avoid lookup requests
+    def __init__(self, conf, endpoint=None, proxy_endpoint=None,
+                 refresh_delay=60.0, **kwargs):
+        """
+        Initialize a client for the account service.
+
+        :param conf: dictionary with at least the namespace name
+        :type conf: `dict`
+        :param endpoint: URL of an account service
+        :param proxy_endpoint: URL of the proxy
+        :param refresh_interval: time between refreshes of the
+        account service endpoint (if not provided at instanciation)
+        :type refresh_interval: `float` seconds
+        """
+        super(AccountClient, self).__init__(endpoint=endpoint, **kwargs)
+        self.logger = get_logger(conf)
+        self.cs = ConscienceClient(conf, endpoint=proxy_endpoint, **kwargs)
+        self._refresh_delay = refresh_delay if not self.endpoint else -1.0
+        self._last_refresh = 0.0
+
     def _get_account_addr(self):
+        """Fetch IP and port of an account service from Conscience."""
         try:
             acct_instance = self.cs.next_instance('account')
             acct_addr = acct_instance.get('addr')
@@ -34,16 +53,29 @@ class AccountClient(HttpApi):
             raise ClientException("No Account service found")
         return acct_addr
 
-    def _make_uri(self, action):
-        account_addr = self._get_account_addr()
-        uri = 'http://%s/v1.0/account/%s' % (account_addr, action)
-        return uri
+    def _maybe_refresh_endpoint(self):
+        """Refresh account service endpoint if delay has been reached."""
+        if self._refresh_delay >= 0.0 or not self.endpoint:
+            now = time.time()
+            if now - self._last_refresh > self._refresh_delay:
+                self._last_refresh = now
+                try:
+                    addr = self._get_account_addr()
+                    self.endpoint = '/'. join(
+                        ("http:/", addr, "v1.0/account"))
+                except ClientException:
+                    if not self.endpoint:
+                        # Cannot use the previous one
+                        raise
+                    self.logger.exception("Failed to refresh account endpoint")
 
-    def _account_request(self, account, method, action, params={}, **kwargs):
-        uri = self._make_uri(action)
-        # FIXME: account must be urlencoded (utils.quote)
-        params['id'] = account
-        resp, body = self._direct_request(method, uri, params=params, **kwargs)
+    def account_request(self, account, method, action, params=None, **kwargs):
+        """Make a request to the account service."""
+        self._maybe_refresh_endpoint()
+        if not params:
+            params = dict()
+        params['id'] = quote(account)
+        resp, body = self._request(method, action, params=params, **kwargs)
         return resp, body
 
     def account_create(self, account, **kwargs):
@@ -54,33 +86,36 @@ class AccountClient(HttpApi):
         :type account: `str`
         :returns: `True` if the account has been created
         """
-        resp, _body = self._account_request(account, 'PUT', 'create', **kwargs)
+        resp, _body = self.account_request(account, 'PUT', 'create', **kwargs)
         return resp.status_code == 201
 
     def account_delete(self, account, **kwargs):
         """
         Delete an account.
+
+        :param account: name of the account to delete
+        :type account: `str`
         """
-        self._account_request(account, 'POST', 'delete', **kwargs)
+        self.account_request(account, 'POST', 'delete', **kwargs)
 
     def account_list(self, **kwargs):
         """
         List accounts.
         """
-        _resp, body = self._account_request(None, 'GET', 'list', **kwargs)
+        _resp, body = self.account_request(None, 'GET', 'list', **kwargs)
         return body
 
     def account_show(self, account, **kwargs):
         """
         Get information about an account.
         """
-        _resp, body = self._account_request(account, 'GET', 'show', **kwargs)
+        _resp, body = self.account_request(account, 'GET', 'show', **kwargs)
         return body
 
     # FIXME: document this
     def account_update(self, account, metadata, to_delete, **kwargs):
         data = json.dumps({"metadata": metadata, "to_delete": to_delete})
-        self._account_request(account, 'POST', 'update', data=data, **kwargs)
+        self.account_request(account, 'POST', 'update', data=data, **kwargs)
 
     def container_list(self, account, limit=None, marker=None,
                        end_marker=None, prefix=None, delimiter=None,
@@ -104,6 +139,23 @@ class AccountClient(HttpApi):
                   "end_marker": end_marker,
                   "prefix": prefix,
                   "delimiter": delimiter}
-        _resp, body = self._account_request(account, 'GET', 'containers',
-                                            params=params, **kwargs)
+        _resp, body = self.account_request(account, 'GET', 'containers',
+                                           params=params, **kwargs)
+        return body
+
+    def container_update(self, account, container, metadata=None, **kwargs):
+        """
+        Update account with container-related metadata.
+
+        :param account: name of the account to update
+        :type account: `str`
+        :param container: name of the container whose metadata has changed
+        :type container: `str`
+        :param metadata: container metadata ("bytes", "objects",
+        "mtime", "dtime")
+        :type metadata: `dict`
+        """
+        metadata['name'] = container
+        _resp, body = self.account_request(account, 'POST', 'container/update',
+                                           data=json.dumps(metadata))
         return body

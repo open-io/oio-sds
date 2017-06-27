@@ -267,10 +267,14 @@ class ObjectStorageApi(object):
         # FIXME: share session between all the clients
         self.directory = DirectoryClient({"namespace": self.namespace},
                                          **kwargs)
-        self.account = AccountClient({"namespace": self.namespace},
-                                     **kwargs)
         self.container = ContainerClient({"namespace": self.namespace},
                                          **kwargs)
+
+        # In AccountClient, "endpoint" is the account service, not the proxy
+        acct_kwargs = kwargs.copy()
+        acct_kwargs["proxy_endpoint"] = acct_kwargs.pop("endpoint", None)
+        self.account = AccountClient({"namespace": self.namespace},
+                                     **acct_kwargs)
 
     def _patch_timeouts(self, kwargs):
         """
@@ -734,7 +738,7 @@ class ObjectStorageApi(object):
     def object_update(self, account, container, obj, metadata,
                       version=None, clear=False, **kwargs):
         warnings.warn("You'd better use object_set_properties()",
-                      DeprecationWarning)
+                      DeprecationWarning, stacklevel=2)
         if clear:
             self.object_del_properties(
                 account, container, obj, [], version=version, **kwargs)
@@ -887,4 +891,4 @@ class ObjectStorageAPI(ObjectStorageApi):
         warnings.simplefilter('once')
         warnings.warn(
             "oio.api.ObjectStorageAPI is deprecated, use oio.ObjectStorageApi",
-            DeprecationWarning)
+            DeprecationWarning, stacklevel=2)

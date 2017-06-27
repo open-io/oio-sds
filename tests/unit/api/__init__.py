@@ -1,7 +1,7 @@
 from io import BytesIO
 from eventlet import sleep
 from oio.common.http import HeadersDict, requests
-from oio.api.object_storage import ObjectStorageAPI
+from oio.api.object_storage import ObjectStorageApi
 from oio.directory.client import DirectoryClient
 
 CHUNK_SIZE = 1048576
@@ -17,7 +17,7 @@ class FakeAPIResponse(requests.Response):
     pass
 
 
-class FakeStorageAPI(ObjectStorageAPI):
+class FakeStorageAPI(ObjectStorageApi):
     pass
 
 
