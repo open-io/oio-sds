@@ -124,10 +124,12 @@ class TestContainerDownload(BaseTestCase):
             self.conn.object_create(self.account, self._cnt, obj_name=_name,
                                     data=data)
             if metadata:
-                key, val = metadata()
-                entry['meta'] = {key: val}
-                self.conn.object_update(self.account, self._cnt, _name,
-                                        entry['meta'])
+                entry['meta'] = {}
+                for _ in xrange(10):
+                    key, val = metadata()
+                    entry['meta'][key] = val
+                    self.conn.object_update(self.account, self._cnt, _name,
+                                            entry['meta'])
             self._data[_name] = entry
 
     def _create_s3_slo(self, name=gen_names, metadata=None):
@@ -193,10 +195,14 @@ class TestContainerDownload(BaseTestCase):
     def _check_metadata(self, tar):
         for entry in tar.getnames():
             headers = tar.getmember(entry).pax_headers
+            keys = headers.keys()[:]
+            print(keys)
             for key, val in self._data[entry]['meta'].items():
                 key = u"SCHILY.xattr.user." + key.decode('utf-8')
                 self.assertIn(key, headers)
                 self.assertEqual(val.decode('utf-8'), headers[key])
+                keys.remove(key)
+            self.assertEqual(keys, [])
 
     def test_missing_container(self):
         ret = requests.get(self._streaming + '/' + random_container("ms-"))
@@ -340,3 +346,18 @@ class TestContainerDownload(BaseTestCase):
         self.assertNotIn('x-static-large-object', props)
         self.assertNotIn('x-object-sysmeta-slo-size', props)
         self.assertNotIn('x-object-sysmeta-slo-etag', props)
+
+    def test_simple_restore(self):
+        self._create_data(metadata=gen_metadata)
+        org = requests.get(self.make_uri('dump'))
+        cnt = rand_str(20)
+        res = requests.put(self.make_uri('restore', container=cnt),
+                           data=org.content)
+        self.assertEqual(res.status_code, 200)
+        ret = self.conn.object_list(account=self.account, container=cnt)
+        for obj in ret['objects']:
+            name = obj['name']
+            self.assertIn(name, self._data)
+            self.assertEqual(obj['size'], len(self._data[name]['data']))
+            meta = self.conn.object_get_properties(self.account, cnt, name)
+            self.assertEqual(meta['properties'], self._data[name]['meta'])
