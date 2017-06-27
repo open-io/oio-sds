@@ -21,6 +21,7 @@ License along with this library.
 # define OIO_SDS__metautils__lib__common_main_h 1
 
 #include "metautils_macros.h"
+#include "metatypes.h"
 #include <glib.h>
 
 #define HC_PROC_INIT(argv,LVL) do { \
@@ -68,6 +69,7 @@ struct grid_main_option_s
 };
 
 extern char syslog_id[64];
+extern char udp_target[STRLEN_ADDRINFO];
 
 /** Has the SIGHUP been raised */
 extern volatile gboolean main_signal_SIGHUP;
@@ -93,6 +95,8 @@ struct grid_main_callbacks
 
 /** Uses sigprocmask to block a lot of signals */
 void metautils_ignore_signals(void);
+
+void logger_udp_open (const char *target);
 
 /* Activate syslog logging */
 void logger_syslog_open (void);

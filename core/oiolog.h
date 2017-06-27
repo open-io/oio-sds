@@ -77,8 +77,6 @@ extern "C" {
 	} \
 } while (0)
 
-#define LOG_FLAG_TRIM_DOMAIN 0x01
-#define LOG_FLAG_PURIFY 0x02
 #define LOG_FLAG_PRETTYTIME 0x04
 
 /** Cruising debug level.
@@ -134,6 +132,12 @@ typedef void (*oio_log_handler_f) (enum oio_log_level_e lvl, const char *fmt, ..
 	__attribute__ ((format (printf, 2, 3)));
 
 void oio_log_set_handler (oio_log_handler_f handler);
+
+const gchar* oio_log_lvl2str(GLogLevelFlags lvl);
+
+int oio_log_lvl2severity(GLogLevelFlags lvl);
+
+int oio_log_domain2facility(const char *dom);
 
 #ifdef __cplusplus
 }

@@ -81,14 +81,6 @@ main_action(void)
 	g_printerr("\n*** All flags enabled\n");
 	oio_log_flags = ~0;
 	test_round();
-
-	g_printerr("\n*** TRIM_DOMAIN disabled\n");
-	oio_log_flags &= ~LOG_FLAG_TRIM_DOMAIN;
-	test_round();
-
-	g_printerr("\n*** PURIFY disabled\n");
-	oio_log_flags &= ~LOG_FLAG_PURIFY;
-	test_round();
 }
 
 static struct grid_main_callbacks cb =
