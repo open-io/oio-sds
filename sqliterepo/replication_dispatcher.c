@@ -1350,7 +1350,7 @@ _handler_GETVERS(struct gridd_reply_ctx_s *reply,
 	}
 
 	err = sqlx_repository_open_and_lock(repo, &n0,
-			SQLX_OPEN_LOCAL|SQLX_OPEN_URGENT, &sq3, NULL);
+			SQLX_OPEN_CREATE|SQLX_OPEN_LOCAL|SQLX_OPEN_URGENT, &sq3, NULL);
 	if (NULL != err) {
 		g_prefix_error(&err, "Open/lock: ");
 		reply->send_error(0, err);
@@ -1751,7 +1751,7 @@ _handler_RESYNC(struct gridd_reply_ctx_s *reply,
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	err = sqlx_repository_open_and_lock(repo, &n0,
-			SQLX_OPEN_SLAVEONLY, &sq3, NULL);
+			SQLX_OPEN_CREATE|SQLX_OPEN_SLAVEONLY, &sq3, NULL);
 	if (NULL != err) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -2197,8 +2197,6 @@ _info_repository(struct sqlx_repository_s *r, GString *gstr)
 			r->hash_width, r->hash_depth);
 
 	g_string_append_static(gstr, "\tflags: ");
-	if (r->flag_autocreate)
-		_append_flag("AUTOCREATE");
 	if (r->flag_autovacuum)
 		_append_flag("AUTOVACUUM");
 	if (r->flag_delete_on)
