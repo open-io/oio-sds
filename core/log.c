@@ -32,7 +32,7 @@ int oio_log_level_default = 0x7F;
 
 int oio_log_level = 0x7F;
 
-int oio_log_flags = LOG_FLAG_TRIM_DOMAIN | LOG_FLAG_PURIFY;
+int oio_log_flags = 0;
 
 guint16
 oio_log_thread_id(GThread *thread)
@@ -52,8 +52,8 @@ oio_log_current_thread_id(void)
 	return oio_log_thread_id(g_thread_self());
 }
 
-static const gchar*
-glvl_to_str(GLogLevelFlags lvl)
+const gchar*
+oio_log_lvl2str(GLogLevelFlags lvl)
 {
 	switch (lvl & G_LOG_LEVEL_MASK) {
 		case G_LOG_LEVEL_ERROR:
@@ -89,8 +89,8 @@ glvl_to_str(GLogLevelFlags lvl)
 	}
 }
 
-static int
-glvl_to_lvl(GLogLevelFlags lvl)
+int
+oio_log_lvl2severity(GLogLevelFlags lvl)
 {
 	switch (lvl & G_LOG_LEVEL_MASK) {
 		case G_LOG_LEVEL_ERROR:
@@ -123,8 +123,8 @@ glvl_to_lvl(GLogLevelFlags lvl)
 	}
 }
 
-static int
-get_facility(const gchar *dom)
+int
+oio_log_domain2facility(const char *dom)
 {
 	if (!dom)
 		return 0;
@@ -164,18 +164,6 @@ _purify(register gchar *s)
 	*(s-1) = '\n';
 }
 
-static void
-_append_message(GString *gstr, const gchar *msg)
-{
-	if (!msg)
-		return;
-
-	// skip leading blanks
-	for (; *msg && g_ascii_isspace(*msg) ;msg++) {}
-
-	g_string_append(gstr, msg);
-}
-
 void oio_log_noop(const gchar *d UNUSED, GLogLevelFlags l UNUSED,
 		const gchar *m UNUSED, gpointer u UNUSED) { }
 
@@ -191,19 +179,19 @@ oio_log_syslog(const gchar *log_domain, GLogLevelFlags log_level,
 
 	g_string_append_printf(gstr, "%d %04X", getpid(), oio_log_current_thread_id());
 
-	const int facility = get_facility(log_domain);
+	const int facility = oio_log_domain2facility(log_domain);
 	switch (facility) {
 		case LOG_LOCAL1:
 			g_string_append_static(gstr, " access ");
-			g_string_append(gstr, glvl_to_str(log_level));
+			g_string_append(gstr, oio_log_lvl2str(log_level));
 			break;
 		case LOG_LOCAL2:
 			g_string_append_static(gstr, " out ");
-			g_string_append(gstr, glvl_to_str(log_level));
+			g_string_append(gstr, oio_log_lvl2str(log_level));
 			break;
 		default:
 			g_string_append_static(gstr, " log ");
-			g_string_append(gstr, glvl_to_str(log_level));
+			g_string_append(gstr, oio_log_lvl2str(log_level));
 			g_string_append_c(gstr, ' ');
 			if (!log_domain || !*log_domain)
 				log_domain = "-";
@@ -211,10 +199,10 @@ oio_log_syslog(const gchar *log_domain, GLogLevelFlags log_level,
 	}
 
 	g_string_append_c(gstr, ' ');
+	g_string_append(gstr, message);
 
-	_append_message(gstr, message);
-
-	syslog(facility|glvl_to_lvl(log_level), "%.*s", (int)gstr->len, gstr->str);
+	const int severity = oio_log_lvl2severity(log_level);
+	syslog(facility|severity, "%.*s", (int)gstr->len, gstr->str);
 	g_string_free(gstr, TRUE);
 }
 
@@ -241,43 +229,29 @@ _logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 	if (!log_domain || !*log_domain)
 		log_domain = "-";
 
-	const int facility = get_facility(log_domain);
+	const int facility = oio_log_domain2facility(log_domain);
 	switch (facility) {
 		case LOG_LOCAL1:
 			g_string_append_static(gstr, "acc ");
-			g_string_append(gstr, glvl_to_str(log_level));
+			g_string_append(gstr, oio_log_lvl2str(log_level));
 			break;
 		case LOG_LOCAL2:
 			g_string_append_static(gstr, "out ");
-			g_string_append(gstr, glvl_to_str(log_level));
+			g_string_append(gstr, oio_log_lvl2str(log_level));
 			break;
 		default:
 			g_string_append_static(gstr, "log ");
-			g_string_append(gstr, glvl_to_str(log_level));
+			g_string_append(gstr, oio_log_lvl2str(log_level));
 			g_string_append_c(gstr, ' ');
-			/* print the domain */
-			if (!(oio_log_flags & LOG_FLAG_TRIM_DOMAIN))
-				g_string_append(gstr, log_domain);
-			else {
-				const gchar *p = log_domain;
-				while (p && *p) {
-					g_string_append_c(gstr, *p);
-					p = strchr(p, '.');
-					if (p) {
-						g_string_append_c(gstr, '.');
-						p ++;
-					}
-				}
-			}
+			g_string_append(gstr, log_domain);
 	}
 
 	g_string_append_c(gstr, ' ');
-	_append_message(gstr, message);
+	g_string_append(gstr, message);
 
 	g_string_append_c(gstr, '\n');
 
-	if (oio_log_flags & LOG_FLAG_PURIFY)
-		_purify(gstr->str);
+	_purify(gstr->str);
 
 	/* send the buffer */
 	fwrite(gstr->str, gstr->len, 1, stderr);
@@ -372,7 +346,7 @@ _handler_wrapper(const gchar *d UNUSED, GLogLevelFlags l,
 		return;
 
 	oio_log_handler_f handler = u;
-	switch (glvl_to_lvl(l)) {
+	switch (oio_log_lvl2severity(l)) {
 		case LOG_ERR:
 			return handler(OIO_LOG_ERROR, "%s", m);
 		case LOG_WARNING:
