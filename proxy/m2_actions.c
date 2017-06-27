@@ -966,7 +966,7 @@ action_m2_container_destroy (struct req_args_s *args)
 	if (!err) {
 		err = _resolve_meta2 (args, CLIENT_PREFER_MASTER,
 							  sqlx_pack_FREEZE, NULL);
-		if (NULL != err) {
+		if (NULL != err && CODE_IS_NETWORK_ERROR(err->code)) {
 			/* rollback! There are chances the request made a timeout
 			 * but was actually managed by the server. */
 			_re_enable (args);
@@ -995,6 +995,8 @@ action_m2_container_destroy (struct req_args_s *args)
 		err = _m1_locate_and_action (args->url, _unlink);
 		hc_decache_reference_service (resolver, args->url, n.type);
 		if (NULL != err) {
+			/* Rolling back will be hard if there is any chance the UNLINK has
+			 * been managed by the server, despite a time-out that occured. */
 			_re_enable (args);
 			goto clean_and_exit;
 		}
