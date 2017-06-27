@@ -2026,6 +2026,7 @@ member_action_to_NONE(struct election_member_s *member)
 	EXTRA_ASSERT(member->local_id == 0);
 	EXTRA_ASSERT(member->master_id == 0);
 	EXTRA_ASSERT(member->master_url == NULL);
+	member->when_unstable = 0;
 	return member_set_status(member, STEP_NONE);
 }
 
@@ -2064,6 +2065,11 @@ _common_action_to_LEAVE(struct election_member_s *member,
 	member->requested_LEAVE = 0;
 	member->requested_LEFT_SELF = 0;
 	member->requested_LEFT_MASTER = 0;
+
+	/* Many origins are possible, are to manage those that are stable states,
+	 * let's just check the marker before updating it. */
+	if (member->when_unstable <= 0)
+		member->when_unstable = oio_ext_monotonic_time();
 
 	gchar path[PATH_MAXLEN];
 	int zrc = sqlx_sync_adelete(member->manager->sync,
@@ -2114,6 +2120,10 @@ member_action_to_CREATING(struct election_member_s *member)
 	EXTRA_ASSERT(member->master_url == NULL);
 
 	member->requested_USE = 0;
+
+	/* The only origin of the transition is NONE, then we leave a
+	 * stable state, let's note it. */
+	member->when_unstable = oio_ext_monotonic_time();
 
 	if (member->manager->exiting)
 		return member_action_to_NONE(member);
@@ -2230,6 +2240,10 @@ member_action_to_SYNCING(struct election_member_s *member)
 	member->requested_PIPEFROM = 0;
 	member->pending_PIPEFROM = 1;
 
+	/* The only origin of the transition is SLAVE, note the entrance in an
+	 * unstable state */
+	member->when_unstable = oio_ext_monotonic_time();
+
 	MEMBER_NAME(n, member);
 	sqlx_peering__pipefrom (member->manager->peering, target,
 			&n, source, member->manager, 0, _result_PIPEFROM);
@@ -2319,6 +2333,7 @@ static void
 member_action_to_MASTER(struct election_member_s *member)
 {
 	_member_rearm_ping_MASTER(member);
+	member->when_unstable = 0;
 	return member_set_status(member, STEP_MASTER);
 }
 
@@ -2326,6 +2341,7 @@ static void
 member_action_to_SLAVE(struct election_member_s *member)
 {
 	_member_rearm_ping_SLAVE(member);
+	member->when_unstable = 0;
 	return member_set_status(member, STEP_SLAVE);
 }
 
@@ -2658,8 +2674,6 @@ _member_react_NONE(struct election_member_s *member, enum event_type_e evt)
 				return;
 			/* Right now, we start an election cycle. We consider this point
 			 * as the real start of the "unstable" phasis of the election. */
-			if (member->when_unstable <= 0)
-				member->when_unstable = oio_ext_monotonic_time();
 			return member_action_to_CREATING(member);
 
 			/* Interruptions */
@@ -3117,7 +3131,6 @@ _member_react_SLAVE(struct election_member_s *member, enum event_type_e evt)
 		case EVT_NONE:
 			now = oio_ext_monotonic_time ();
 			if (_is_over(now, member->last_atime, oio_election_delay_expire_SLAVE)) {
-				member->when_unstable = 0;
 				return member_action_to_LEAVING(member);
 			}
 			if (now > member->when_next_ping) {
@@ -3128,20 +3141,16 @@ _member_react_SLAVE(struct election_member_s *member, enum event_type_e evt)
 
 			/* Interruptions */
 		case EVT_LEAVE_REQ:
-			member->when_unstable = 0;
 			return member_action_to_LEAVING(member);
 		case EVT_LEFT_SELF:
 			member_warn("LEFT (self)", member);
 			member_reset_local(member);
 			member_reset_master(member);
-			member->when_unstable = oio_ext_monotonic_time();
 			return member_action_to_CREATING(member);
 		case EVT_LEFT_MASTER:
 			member_reset_master(member);
-			member->when_unstable = oio_ext_monotonic_time();
 			return member_action_to_LISTING(member);
 		case EVT_SYNC_REQ:
-			member->when_unstable = oio_ext_monotonic_time();
 			return member_action_to_SYNCING(member);
 
 			/* Actions: none should be pending */
@@ -3158,14 +3167,11 @@ _member_react_MASTER(struct election_member_s *member, enum event_type_e evt)
 	gint64 now;
 	_member_assert_MASTER (member);
 
-	/* cf. _member_react_SLAVE() about the change conditions of the
-	 * `when_unstable` variable. */
 	switch (evt) {
 		/* Possible time-triggered actions */
 		case EVT_NONE:
 			now = oio_ext_monotonic_time();
 			if (_is_over(now, member->last_atime, oio_election_delay_expire_MASTER)) {
-				member->when_unstable = 0;
 				return member_action_to_LEAVING(member);
 			}
 			if (now > member->when_next_ping) {
@@ -3178,7 +3184,6 @@ _member_react_MASTER(struct election_member_s *member, enum event_type_e evt)
 		case EVT_SYNC_REQ:
 			return;
 		case EVT_LEAVE_REQ:
-			member->when_unstable = 0;
 			return member_action_to_LEAVING(member);
 		case EVT_LEFT_MASTER:
 			return member_warn_abnormal_event(member, evt);
@@ -3186,7 +3191,6 @@ _member_react_MASTER(struct election_member_s *member, enum event_type_e evt)
 			member_warn("LEFT (self)", member);
 			member_reset_local(member);
 			member_reset_master(member);
-			member->when_unstable = oio_ext_monotonic_time();
 			return member_action_to_CREATING(member);
 
 			/* Actions: none should be pending! */
