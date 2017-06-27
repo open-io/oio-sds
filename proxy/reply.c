@@ -134,6 +134,7 @@ _reply_common_error (struct req_args_s *args, GError *err)
 		case CODE_TOOMANY_REDIRECT:
 		case CODE_UNAVAILABLE:
 		case CODE_EXCESSIVE_LOAD:
+		case CODE_CONTAINER_FROZEN:
 			return _reply_retry(args, err);
 		case CODE_CONTAINER_EXISTS:
 		case CODE_CONTENT_EXISTS:
