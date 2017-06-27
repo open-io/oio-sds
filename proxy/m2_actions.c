@@ -949,7 +949,6 @@ action_m2_container_destroy (struct req_args_s *args)
 	GError *err = NULL;
 	gchar **urlv = NULL;
 
-	const gboolean flush = _request_get_flag (args, "flush");
 	const gboolean force = _request_get_flag (args, "force");
 
 	/* TODO FIXME manage container subtype */
@@ -957,16 +956,19 @@ action_m2_container_destroy (struct req_args_s *args)
 	sqlx_inline_name_fill (&n0, args->url, NAME_SRVTYPE_META2, 1);
 	NAME2CONST(n, n0);
 
-	/* pre-loads the locations of the container. We will need this at the
+	/* 0. Pre-loads the locations of the container. We will need this at the
 	 * destroy step. */
 	err = hc_resolve_reference_service (resolver, args->url, n.type, &urlv);
+	if (!err && (!urlv || !*urlv))
+		err = NEWERROR(CODE_CONTAINER_NOTFOUND, "No service located");
 
 	/* 1. FREEZE the base to avoid writings during the operation */
 	if (!err) {
 		err = _resolve_meta2 (args, CLIENT_PREFER_MASTER,
 							  sqlx_pack_FREEZE, NULL);
 		if (NULL != err) {
-			/* rollback! */
+			/* rollback! There are chances the request made a timeout
+			 * but was actually managed by the server. */
 			_re_enable (args);
 			goto clean_and_exit;
 		}
@@ -974,15 +976,10 @@ action_m2_container_destroy (struct req_args_s *args)
 
 	/* 2. FLUSH the base on the MASTER, so events are generated for all the
 	   contents removed. */
-	if (!err) {
-		if (flush) {
-			PACKER_VOID(_pack) { return m2v2_remote_pack_FLUSH (args->url); }
-			err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
-		} else if (!force) {
-			guint32 flags = flag_force_master ? M2V2_FLAG_MASTER : 0;
-			PACKER_VOID(_pack) { return m2v2_remote_pack_ISEMPTY (args->url, flags); }
-			err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
-		}
+	if (!err && !force) {
+		guint32 flags = flag_force_master ? M2V2_FLAG_MASTER : 0;
+		PACKER_VOID(_pack) { return m2v2_remote_pack_ISEMPTY (args->url, flags); }
+		err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
 		if (NULL != err) {
 			/* rollback! */
 			_re_enable (args);
@@ -995,25 +992,23 @@ action_m2_container_destroy (struct req_args_s *args)
 		GError * _unlink (const char * m1) {
 			return meta1v2_remote_unlink_service (m1, args->url, n.type);
 		}
-		if (NULL != (err = _m1_locate_and_action (args->url, _unlink))) {
+		err = _m1_locate_and_action (args->url, _unlink);
+		hc_decache_reference_service (resolver, args->url, n.type);
+		if (NULL != err) {
 			_re_enable (args);
 			goto clean_and_exit;
 		}
 	}
 
-	hc_decache_reference_service (resolver, args->url, n.type);
-
 	/* 4. DESTROY each local base */
 	if (!err && urlv && *urlv) {
 		const guint32 flag_force = (force) ? M2V2_DESTROY_FORCE : 0;
-		const guint32 flag_flush = (flush) ? M2V2_DESTROY_FLUSH : 0;
 
 		meta1_urlv_shift_addr(urlv);
 		err = m2v2_remote_execute_DESTROY (urlv[0], args->url,
-				M2V2_DESTROY_EVENT|flag_force|flag_flush);
+				M2V2_DESTROY_EVENT|flag_force);
 		if (!err && urlv[1]) {
-			err = m2v2_remote_execute_DESTROY_many(urlv+1, args->url,
-					flag_force|flag_flush);
+			err = m2v2_remote_execute_DESTROY_many(urlv+1, args->url, flag_force);
 		}
 	}
 
