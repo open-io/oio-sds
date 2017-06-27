@@ -51,16 +51,16 @@ m0_to_sqlx(enum m0v2_open_type_e t)
 {
 	switch (t & 0x03) {
 		case M0V2_OPENBASE_LOCAL:
-			return SQLX_OPEN_LOCAL;
+			return SQLX_OPEN_CREATE|SQLX_OPEN_LOCAL;
 		case M0V2_OPENBASE_MASTERONLY:
-			return SQLX_OPEN_MASTERONLY;
+			return SQLX_OPEN_CREATE|SQLX_OPEN_MASTERONLY;
 		case M0V2_OPENBASE_MASTERSLAVE:
-			return SQLX_OPEN_MASTERSLAVE;
+			return SQLX_OPEN_CREATE|SQLX_OPEN_MASTERSLAVE;
 		case M0V2_OPENBASE_SLAVEONLY:
-			return SQLX_OPEN_SLAVEONLY;
+			return SQLX_OPEN_CREATE|SQLX_OPEN_SLAVEONLY;
 	}
 	g_assert_not_reached();
-	return SQLX_OPEN_LOCAL;
+	return SQLX_OPEN_CREATE|SQLX_OPEN_LOCAL;
 }
 
 struct meta0_backend_s *
