@@ -1,6 +1,21 @@
+# Copyright (C) 2016-2017 OpenIO, as part of OpenIO Software Defined Storage
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 3.0 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library.
+
 from eventlet import Timeout
-from urllib import urlencode
-from oio.common.http import http_request
+from oio.common.exceptions import ClientException
+from oio.account.client import AccountClient
 from oio.event.evob import Event, EventError
 from oio.event.consumer import EventTypes
 from oio.event.filters.base import Filter
@@ -16,6 +31,10 @@ CONTAINER_EVENTS = [
 
 class AccountUpdateFilter(Filter):
 
+    def __init__(self, app, conf, **kwargs):
+        super(AccountUpdateFilter, self).__init__(app, conf, **kwargs)
+        self.account = AccountClient(conf)
+
     def process(self, env, cb):
         event = Event(env)
 
@@ -23,7 +42,7 @@ class AccountUpdateFilter(Filter):
             mtime = event.when / 1000000.0  # convert to seconds
             data = event.data
             url = event.env.get('url')
-            body = {'name': url.get('user')}
+            body = dict()
             if event.event_type == EventTypes.CONTAINER_STATE:
                 body['bytes'] = data.get('bytes-count', 0)
                 body['objects'] = data.get('object-count', 0)
@@ -32,17 +51,25 @@ class AccountUpdateFilter(Filter):
                 body['dtime'] = mtime
             elif event.event_type == EventTypes.CONTAINER_NEW:
                 body['mtime'] = mtime
-            query = urlencode({'id': url.get('account')})
             try:
                 with Timeout(ACCOUNT_TIMEOUT):
-                    # TODO(FVE): fix and use AccountClient
-                    _, _ = http_request(self.app_env['acct_addr'](), 'POST',
-                                        '/v1.0/account/container/update',
-                                        query_string=query, body=body)
+                    self.account.container_update(
+                        url.get('account'), url.get('user'), body)
             except Timeout as exc:
                 msg = 'account update failure: %s' % str(exc)
                 resp = EventError(event=Event(env), body=msg)
                 return resp(env, cb)
+            except ClientException as exc:
+                if (exc.http_status == 409 and
+                        "No update needed" in exc.message):
+                    self.logger.info("Discarding event %s (%s): %s",
+                                     event.job_id,
+                                     event.event_type,
+                                     exc.message)
+                else:
+                    msg = 'account update failure: %s' % str(exc)
+                    resp = EventError(event=Event(env), body=msg)
+                    return resp(env, cb)
         return self.app(env, cb)
 
 

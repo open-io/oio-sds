@@ -239,7 +239,7 @@ class ObjectStorageTest(unittest.TestCase):
             exceptions.FileNotFound, api.object_create, self.account,
             self.container, name)
 
-    def test_object_update(self):
+    def test_object_set_properties(self):
         api = self.api
 
         name = random_str(32)
@@ -248,7 +248,7 @@ class ObjectStorageTest(unittest.TestCase):
         meta = {key: value}
         resp = FakeAPIResponse()
         api.container._direct_request = Mock(return_value=(resp, None))
-        api.object_update(
+        api.object_set_properties(
             self.account, self.container, name, meta, headers=self.headers)
 
         data = {'properties': meta}
