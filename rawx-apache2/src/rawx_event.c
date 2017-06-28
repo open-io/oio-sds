@@ -4,8 +4,7 @@
 #include <glib.h>
 
 #include <events/oio_events_queue.h>
-#include <mod_dav.h>
-#include "mod_dav_rawx.h"
+#include <core/internals.h>
 #include "rawx_event.h"
 
 struct oio_events_queue_s *q = NULL;
