@@ -1196,20 +1196,18 @@ _check_init_flag(struct sqlx_sqlite3_s *sq3, gboolean autocreate)
 static GError *
 do_query(struct gridd_reply_ctx_s *reply_ctx, sqlx_repository_t *repo,
 		struct sqlx_name_s *name,
-		TableSequence_t *params, TableSequence_t *result,
-		gboolean autocreate)
+		TableSequence_t *params, TableSequence_t *result)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 
-	GRID_DEBUG("Opening and querying [%s][%s]%s", name->base, name->type,
-			autocreate? " (autocreate)" : "");
+	GRID_DEBUG("Opening and querying [%s][%s]", name->base, name->type);
 
-	err = _checked_open(reply_ctx, repo, name, SQLX_OPEN_MASTERSLAVE, &sq3);
+	err = _checked_open(reply_ctx, repo, name, SQLX_OPEN_CREATE|SQLX_OPEN_MASTERSLAVE, &sq3);
 	if (err != NULL)
 		return err;
 
-	err = _check_init_flag(sq3, autocreate);
+	err = _check_init_flag(sq3, TRUE);
 	if (!err)
 		err = do_query_after_open(reply_ctx, sq3, params, result);
 
@@ -2345,8 +2343,7 @@ _handler_QUERY(struct gridd_reply_ctx_s *reply,
 
 	/* execute the request now */
 	result = ASN1C_CALLOC(1, sizeof(struct TableSequence));
-	err = do_query(reply, repo, &n0, params,
-			result, flags&FLAG_AUTOCREATE);
+	err = do_query(reply, repo, &n0, params, result);
 
 	if (params)
 		asn_DEF_TableSequence.free_struct(&asn_DEF_TableSequence, params, FALSE);
