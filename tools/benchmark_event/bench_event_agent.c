@@ -55,7 +55,7 @@ grid_main_get_options (void)
 static const char *
 grid_main_get_usage (void)
 {
-	return "CHUNK_NEW/CHUNK_DELETE";
+	return "CHUNK_NEW/CHUNK_DELETE/CONTAINER_NEW/CONTAINER_STATE";
 }
 
 static void
