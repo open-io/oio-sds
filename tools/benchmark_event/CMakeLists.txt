@@ -9,8 +9,8 @@ add_executable(
 	bench_event_agent.c
     ../../proxy/path_parser.c ../../proxy/path_parser.h
     ../../proxy/transport_http.c ../../proxy/transport_http.h
-    ../../rawx-apache2/src/rawx_event.c ../../rawx-apache2/src/rawx_event.h
     fake_service.c fake_service.h
+    manage_events_queue.c manage_events_queue.h
     send_events.c fake_service.h
 )
 
