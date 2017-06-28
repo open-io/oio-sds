@@ -1260,7 +1260,6 @@ end_label:
 
 /* ------------------------------------------------------------------------- */
 
-#define FLAG_AUTOCREATE 0x01
 #define FLAG_LOCAL      0x02
 #define FLAG_NOCHECK    0x08
 #define FLAG_CHUNKED    0x10
@@ -1275,9 +1274,9 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
 		ns[LIMIT_LENGTH_NSNAME],
 		base[LIMIT_LENGTH_BASENAME],
 		type[LIMIT_LENGTH_BASETYPE];
-	gboolean flush, nocheck, local, autocreate, chunked;
+	gboolean flush, nocheck, local, chunked;
 
-	flush = local = autocreate = nocheck = chunked = FALSE;
+	flush = local = nocheck = chunked = FALSE;
 
 	err = metautils_message_extract_string(ctx->request,
 			NAME_MSGKEY_NAMESPACE, ns, sizeof(ns));
@@ -1294,8 +1293,6 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
 
 	local = metautils_message_extract_flag(ctx->request,
 			NAME_MSGKEY_LOCAL, FALSE);
-	autocreate = metautils_message_extract_flag(ctx->request,
-			NAME_MSGKEY_AUTOCREATE, FALSE);
 	nocheck = metautils_message_extract_flag(ctx->request,
 			NAME_MSGKEY_NOCHECK, FALSE);
 	chunked = metautils_message_extract_flag(ctx->request,
@@ -1312,7 +1309,6 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
 
 	if (pflags) {
 		*pflags = 0;
-		*pflags |= (autocreate ? FLAG_AUTOCREATE : 0);
 		*pflags |= (local ? FLAG_LOCAL : 0);
 		*pflags |= (nocheck ? FLAG_NOCHECK : 0);
 		*pflags |= (chunked ? FLAG_CHUNKED : 0);
