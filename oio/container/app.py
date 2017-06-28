@@ -25,7 +25,8 @@ except ImportError:
 import math
 import re
 import os
-from tarfile import TarInfo, REGTYPE, NUL, PAX_FORMAT, BLOCKSIZE, XHDTYPE
+from tarfile import TarInfo, REGTYPE, NUL, PAX_FORMAT, BLOCKSIZE, XHDTYPE, \
+                    DIRTYPE, AREGTYPE
 import time
 
 from werkzeug.wrappers import Request, Response
@@ -618,8 +619,8 @@ class ContainerStreaming(RedisConn):
                 if mode == "range":
                     inf.size = min(size - r['consumed'], inf.size)
 
-            if inf.type not in (XHDTYPE, REGTYPE):
-                raise BadRequest('unsupported TAR attribute')
+            if inf.type not in (XHDTYPE, REGTYPE, AREGTYPE, DIRTYPE):
+                raise BadRequest('unsupported TAR attribute %s' % inf.type)
 
             if inf.type == XHDTYPE:
                 buf = read(blocks * BLOCKSIZE)
@@ -635,7 +636,7 @@ class ContainerStreaming(RedisConn):
                     hdrs[key] = value
                     buf = buf[int(length):]
 
-            elif inf.type == REGTYPE:
+            elif inf.type in (REGTYPE, AREGTYPE):
                 if inf.name == CONTAINER_PROPERTIES:
                     assert not hdrs, "invalid sequence in TAR"
                     hdrs = json.loads(read(inf.size))
