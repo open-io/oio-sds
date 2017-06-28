@@ -15,10 +15,11 @@
 # License along with this library.
 
 import json
+import sys
 import time
 from oio.api.base import HttpApi
 from oio.common.utils import get_logger, quote
-from oio.common.exceptions import ClientException
+from oio.common.exceptions import ClientException, OioNetworkException
 from oio.conscience.client import ConscienceClient
 
 
@@ -26,7 +27,7 @@ class AccountClient(HttpApi):
     """Simple client API for the account service."""
 
     def __init__(self, conf, endpoint=None, proxy_endpoint=None,
-                 refresh_delay=60.0, **kwargs):
+                 refresh_delay=3600.0, **kwargs):
         """
         Initialize a client for the account service.
 
@@ -35,7 +36,7 @@ class AccountClient(HttpApi):
         :param endpoint: URL of an account service
         :param proxy_endpoint: URL of the proxy
         :param refresh_interval: time between refreshes of the
-        account service endpoint (if not provided at instanciation)
+        account service endpoint (if not provided at instantiation)
         :type refresh_interval: `float` seconds
         """
         super(AccountClient, self).__init__(endpoint=endpoint, **kwargs)
@@ -53,16 +54,21 @@ class AccountClient(HttpApi):
             raise ClientException("No Account service found")
         return acct_addr
 
+    def _refresh_endpoint(self, now=None):
+        """Refresh account service endpoint."""
+        addr = self._get_account_addr()
+        self.endpoint = '/'. join(("http:/", addr, "v1.0/account"))
+        if not now:
+            now = time.time()
+        self._last_refresh = now
+
     def _maybe_refresh_endpoint(self):
         """Refresh account service endpoint if delay has been reached."""
         if self._refresh_delay >= 0.0 or not self.endpoint:
             now = time.time()
             if now - self._last_refresh > self._refresh_delay:
-                self._last_refresh = now
                 try:
-                    addr = self._get_account_addr()
-                    self.endpoint = '/'. join(
-                        ("http:/", addr, "v1.0/account"))
+                    self._refresh_endpoint(now)
                 except ClientException:
                     if not self.endpoint:
                         # Cannot use the previous one
@@ -74,8 +80,20 @@ class AccountClient(HttpApi):
         self._maybe_refresh_endpoint()
         if not params:
             params = dict()
-        params['id'] = quote(account)
-        resp, body = self._request(method, action, params=params, **kwargs)
+        if account:
+            params['id'] = quote(account)
+        try:
+            resp, body = self._request(method, action, params=params, **kwargs)
+        except OioNetworkException as exc:
+            exc_info = sys.exc_info()
+            if self._refresh_delay >= 0.0:
+                self.logger.info(
+                    "Refreshing account endpoint after error %s", exc)
+                try:
+                    self._refresh_endpoint()
+                except Exception as exc:
+                    self.logger.warn("%s", exc)
+            raise exc_info[0], exc_info[1], exc_info[2]
         return resp, body
 
     def account_create(self, account, **kwargs):

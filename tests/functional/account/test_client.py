@@ -16,8 +16,10 @@
 
 import time
 
+from mock import MagicMock as Mock
+
 from oio.account.client import AccountClient
-from oio.common.exceptions import ClientException
+from oio.common.exceptions import ClientException, OioNetworkException
 from oio.container.client import ContainerClient
 from tests.utils import BaseTestCase
 
@@ -73,3 +75,14 @@ class TestAccountClient(BaseTestCase):
                                                   limit=1)
         self.assertEquals(resp["containers"], 2)
         self.assertEqual(resp["listing"], [])
+
+    # TODO: move this test somewhere under tests/unit/
+    def test_account_service_refresh(self):
+        self.account_client.endpoint = "126.0.0.1:6666"
+        self.account_client._last_refresh = time.time()
+        self.account_client._get_account_addr = Mock(
+            return_value="126.0.0.1:6667")
+        self.assertRaises(OioNetworkException,
+                          self.account_client.account_list)
+        self.account_client._get_account_addr.assert_called_once()
+        self.assertIn("126.0.0.1:6667", self.account_client.endpoint)
