@@ -11,6 +11,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import sys
 from oio.common import exceptions
 from oio.common.http import requests, requests_adapters, \
     CONNECTION_TIMEOUT, READ_TIMEOUT
@@ -69,6 +70,11 @@ class HttpApi(object):
         :type timeout: `float`
         :keyword headers: optional headers to add to the request
         :type headers: `dict`
+
+        :raise oio.common.exceptions.OioTimeout: in case of read, write
+        or connection timeout
+        :raise oio.common.exceptions.OioNetworkException: in case of
+        connection error
         """
         if not session:
             session = self.session
@@ -90,11 +96,16 @@ class HttpApi(object):
                 kwargs.get('connection_timeout', CONNECTION_TIMEOUT),
                 kwargs.get('read_timeout', READ_TIMEOUT))
 
-        resp = session.request(method, url, **out_kwargs)
         try:
-            body = resp.json()
-        except ValueError:
-            body = resp.content
+            resp = session.request(method, url, **out_kwargs)
+            try:
+                body = resp.json()
+            except ValueError:
+                body = resp.content
+        except requests.Timeout as exc:
+            raise exceptions.OioTimeout(exc), None, sys.exc_info()[2]
+        except IOError as exc:
+            raise exceptions.OioNetworkException(exc), None, sys.exc_info()[2]
         if resp.status_code >= 400:
             raise exceptions.from_response(resp, body)
         return resp, body
@@ -116,6 +127,11 @@ class HttpApi(object):
         :type timeout: `float`
         :keyword headers: optional headers to add to the request
         :type headers: `dict`
+
+        :raise oio.common.exceptions.OioTimeout: in case of read, write
+        or connection timeout
+        :raise oio.common.exceptions.OioNetworkException: in case of
+        connection error
         """
         if not endpoint:
             if not self.endpoint:

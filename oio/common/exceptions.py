@@ -140,7 +140,12 @@ class SourceReadError(OioException):
     pass
 
 
-class OioTimeout(OioException):
+class OioNetworkException(OioException):
+    """Network related exception (connection, timeout...)."""
+    pass
+
+
+class OioTimeout(OioNetworkException):
     pass
 
 
