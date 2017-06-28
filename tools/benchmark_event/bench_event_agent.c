@@ -8,8 +8,9 @@
 static void grid_main_specific_stop (void);
 
 // send_events.c
-extern gint n_events_per_exp;
-extern gint n_experiences;
+extern gint n_events_per_round;
+extern gint rounds;
+extern gint increment;
 
 GThread *fake_service_thread = NULL;
 
@@ -34,12 +35,16 @@ grid_main_get_options (void)
 {
     static struct grid_main_option_s cli_options[] = {
 		{
-			"NExp", OT_UINT, {.i = &n_experiences},
-			"Number of experiences"
+			"Rounds", OT_UINT, {.i = &rounds},
+			"Number of rounds for a test"
 		},
 		{
-			"NEventsPerExp", OT_UINT, {.i = &n_events_per_exp},
-			"Number of events per n_experience"
+			"NEventsPerRound", OT_UINT, {.i = &n_events_per_round},
+			"Number of events per round for the beginning"
+		},
+		{
+			"Increment", OT_UINT, {.i = &increment},
+			"Increment of the number of events between tests"
 		},
 		{NULL, 0, {.i=0}, NULL}
 	};

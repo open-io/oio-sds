@@ -22,8 +22,9 @@ enum event_type_e {
 
 extern gboolean fake_service_ready;
 
-gint n_events_per_exp = 10;
-gint n_experiences = 1;
+gint n_events_per_round = 10;
+gint rounds = 1;
+gint increment = 10;
 
 gint64 reception_time = 0;
 gint n_errors = 0;
@@ -142,7 +143,7 @@ send_events()
 	
 	reception_time = g_get_monotonic_time();
 	
-	for (gint i = 0; i < n_events_per_exp; i++) {
+	for (gint i = 0; i < n_events_per_round; i++) {
 		if (!grid_main_is_running()) {
 			return;
 		}
@@ -165,8 +166,9 @@ send_events()
 void
 send_events_defaults(void)
 {
-	n_events_per_exp = 10;
-	n_experiences = 1;
+	n_events_per_round = 10;
+	rounds = 1;
+	increment = 10;
 }
 
 gboolean
@@ -211,7 +213,7 @@ send_events_run(void)
 		total_errors = 0;
 		total_speed = 0.0;
 		
-		for (gint i = 0; i < n_experiences; i++) {
+		for (gint i = 0; i < rounds; i++) {
 			if (!grid_main_is_running()) {
 				return;
 			}
@@ -222,9 +224,9 @@ send_events_run(void)
 			total_speed += speed;
 		}
 		
-		printf("Events: %d, Errors: %d, Events/sec: %f\n", n_events_per_exp, total_errors, total_speed / n_experiences);
+		printf("Events: %d, Errors: %d, Events/sec: %f\n", n_events_per_round, total_errors, total_speed / rounds);
 		
-		n_events_per_exp += 10;
+		n_events_per_round += increment;
 	}
 }
 
