@@ -56,6 +56,7 @@ SLO = 'x-static-large-object'
 SLO_SIZE = 'x-object-sysmeta-slo-size'
 SLO_ETAG = 'x-object-sysmeta-slo-etag'
 SLO_HEADERS = (SLO, SLO_SIZE, SLO_ETAG)
+HDR_MANIFEST = 'x-oio-container-manifest'
 
 
 class OioTarEntry(object):
@@ -442,7 +443,7 @@ class ContainerStreaming(RedisConn):
             'Content-Length': sum([i['block'] for i in results]) * BLOCKSIZE,
             'Accept-Ranges': 'bytes',
             'Content-Type': 'application/tar',
-            'X-Manifest-Container': json.dumps(results),
+            HDR_MANIFEST: json.dumps(results),
         }
         return Response(headers=hdrs, status=200)
 
@@ -496,7 +497,7 @@ class ContainerStreaming(RedisConn):
                                 'Accept-Ranges': 'bytes',
                                 'Content-Type': 'application/tar',
                                 'Content-Length': length,
-                                'X-Manifest-Container': json.dumps(results),
+                                HDR_MANIFEST: json.dumps(results),
                             }, status=200)
 
         # TODO: instead expanding blocks to a full list,
@@ -514,7 +515,7 @@ class ContainerStreaming(RedisConn):
                             'Content-Range': 'bytes %d-%d/%d' %
                                              (start, end, length),
                             'Content-Length': end - start + 1,
-                            'X-Manifest-Container': json.dumps(results),
+                            HDR_MANIFEST: json.dumps(results),
                         }, status=206)
 
     def on_dump(self, req):
@@ -549,13 +550,32 @@ class ContainerStreaming(RedisConn):
             append = True
             mode = "range"
 
-            manifest = req.headers.get('x-manifest-container')
-            if not manifest:
-                import pdb
-                pdb.set_trace()
-                raise UnprocessableEntity("Missing X-Manifest-Container")
-            manifest = json.loads(manifest)
-            for entry in manifest:
+            cur_state = self.conn.get("restore:%s:%s" % (account,
+                                                         container))
+            if start_block == 0:
+                if cur_state:
+                    raise UnprocessableEntity(
+                        "A restoration has been already started")
+                manifest = req.headers.get(HDR_MANIFEST)
+                if not manifest:
+                    raise UnprocessableEntity("Missing %s" % HDR_MANIFEST)
+                cur_state = {
+                    'start': -1,
+                    'end': -1,
+                    'manifest': json.loads(manifest)}
+                cur_state['last_block'] = max(
+                    [x['end_block'] for x in cur_state['manifest']]) + 1
+            else:
+                if not cur_state:
+                    raise UnprocessableEntity("First segment is not available")
+                cur_state = json.loads(cur_state)
+
+                if start_block != cur_state['end']:
+                    raise UnprocessableEntity(
+                        "Segment was already written "
+                        "or an error has occured previously")
+
+            for entry in cur_state['manifest']:
                 if start_block > entry['end_block']:
                     continue
                 if start_block == entry['start_block']:
@@ -636,7 +656,16 @@ class ContainerStreaming(RedisConn):
                                                          properties=hdrs)
                     append = False
                 hdrs = {}
-        return Response(status=200)
+        if mode == 'full' or end_block == cur_state['last_block']:
+            code = 201
+            self.conn.delete("restore:%s:%s" % (account, container))
+        else:
+            code = 206
+            cur_state['start'] = start_block
+            cur_state['end'] = end_block
+            self.conn.set("restore:%s:%s" % (account, container),
+                          json.dumps(cur_state), ex=self.CACHE)
+        return Response(status=code)
 
     def on_restore(self, req):
         """Entry point for restore rule"""
