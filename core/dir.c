@@ -72,6 +72,21 @@ oio_directory__set_properties(struct oio_directory_s *self,
 	DIR_CALL(self, set_prop)(self, url, values);
 }
 
+GError *
+oio_directory__force (struct oio_directory_s *self,
+		const struct oio_url_s *url, const char *srvtype,
+		const char* const *values)
+{
+	DIR_CALL(self, force)(self, url, srvtype, values);
+}
+
+GError *
+oio_directory__unlink (struct oio_directory_s *self,
+		const struct oio_url_s *url, const char *srvtype)
+{
+	DIR_CALL(self, unlink)(self, url, srvtype);
+}
+
 /* -------------------------------------------------------------------------- */
 
 struct oio_directory_PROXY_s {
@@ -98,6 +113,13 @@ static GError * _dir_proxy_get_prop(struct oio_directory_s *self,
 static GError * _dir_proxy_set_prop(struct oio_directory_s *self,
 		const struct oio_url_s *url, const char * const *values);
 
+static GError * _dir_proxy_force (struct oio_directory_s *self,
+			const struct oio_url_s *url, const char *srvtype,
+			const char* const *values);
+
+static GError * _dir_proxy_unlink (struct oio_directory_s *self,
+			const struct oio_url_s *url, const char *srvtype);
+
 static struct oio_directory_vtable_s vtable_PROXY =
 {
 	_dir_proxy_destroy,
@@ -106,6 +128,8 @@ static struct oio_directory_vtable_s vtable_PROXY =
 	_dir_proxy_link,
 	_dir_proxy_get_prop,
 	_dir_proxy_set_prop,
+	_dir_proxy_force,
+	_dir_proxy_unlink,
 };
 
 struct oio_directory_s *
@@ -303,5 +327,39 @@ _dir_proxy_set_prop(struct oio_directory_s *self, const struct oio_url_s *url,
 
 	curl_easy_cleanup(h);
 	oio_url_pclean(&u);
+	return err;
+}
+
+static GError *
+_dir_proxy_force (struct oio_directory_s *self,	const struct oio_url_s *url,
+		const char *srvtype, const char* const *values)
+{
+	_DIR_FUNC_INIT
+
+	GError *err = NULL;
+	struct oio_url_s *u = oio_url_dup (url);
+	CURL *h = _curl_get_handle_proxy ();
+	err = oio_proxy_call_reference_force (h, u, srvtype, values);
+
+	curl_easy_cleanup (h);
+	oio_url_pclean (&u);
+
+	return err;
+}
+
+static GError *
+_dir_proxy_unlink (struct oio_directory_s *self,	const struct oio_url_s *url,
+		const char *srvtype)
+{
+	_DIR_FUNC_INIT
+
+	GError *err = NULL;
+	struct oio_url_s *u = oio_url_dup (url);
+	CURL *h = _curl_get_handle_proxy ();
+	err = oio_proxy_call_reference_unlink (h, u, srvtype);
+
+	curl_easy_cleanup (h);
+	oio_url_pclean (&u);
+
 	return err;
 }

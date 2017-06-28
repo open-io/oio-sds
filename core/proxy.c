@@ -840,6 +840,45 @@ oio_proxy_call_reference_set_properties(CURL *h, struct oio_url_s *u,
 	return err;
 }
 
+GError *
+oio_proxy_call_reference_force (CURL *h, struct oio_url_s *u,
+		const char *t, const char* const *values)
+{
+	GString *http_url = _curl_reference_url (u, "force");
+	if (!http_url) return BADNS();
+
+	if (t) _append(http_url, '&', "type", t);
+	
+	gchar *hdrin[] = { PROXYD_HEADER_MODE, "autocreate", NULL };
+
+	GString *json = _build_json(values, NULL);
+	g_string_overwrite(json, json->len - 1, ",\"seq\":1}");
+	
+	struct http_ctx_s i = { .headers = hdrin, .body = json };
+	GError *err = _proxy_call (h, "POST", http_url->str, &i, NULL);
+
+	g_string_free(http_url, TRUE);
+	g_string_free(json, TRUE);
+	
+	return err;
+}
+
+GError *
+oio_proxy_call_reference_unlink (CURL *h, struct oio_url_s *u,
+		const char *t)
+{
+	GString *http_url = _curl_reference_url (u, "unlink");
+	if (!http_url) return BADNS();
+
+	if (t) _append(http_url, '&', "type", t);
+
+	GError *err = _proxy_call (h, "POST", http_url->str, NULL, NULL);
+
+	g_string_free(http_url, TRUE);
+
+	return err;
+}
+
 /* -------------------------------------------------------------------------- */
 
 GError *
