@@ -353,7 +353,7 @@ class TestContainerDownload(BaseTestCase):
         cnt = rand_str(20)
         res = requests.put(self.make_uri('restore', container=cnt),
                            data=org.content)
-        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.status_code, 201)
         ret = self.conn.object_list(account=self.account, container=cnt)
         for obj in ret['objects']:
             name = obj['name']
