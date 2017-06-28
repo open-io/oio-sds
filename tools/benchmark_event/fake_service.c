@@ -13,7 +13,7 @@
 #define METHOD_MAXLEN 64
 
 // send_events.c
-extern gint n_events_per_exp;
+extern gint n_events_per_round;
 extern gint n_errors;
 extern gint64 reception_time;
 extern gdouble speed;
@@ -206,14 +206,14 @@ handler_action (struct http_request_s *request, struct http_reply_ctx_s *reply)
 // Route action
 
 static enum http_rc_e
-action_chunk_new (struct req_args_s *args)
+action_global (struct req_args_s *args)
 {
 	g_atomic_int_inc(&n_received_events);
 	
-	if ((n_received_events + n_errors) == n_events_per_exp && g_mutex_trylock(&mutex)) {
+	if ((n_received_events + n_errors) == n_events_per_round && g_mutex_trylock(&mutex)) {
 		reception_time = g_get_monotonic_time() - reception_time;
 		
-		if ((n_received_events + n_errors) == n_events_per_exp) {
+		if ((n_received_events + n_errors) == n_events_per_round) {
 			speed = n_received_events / (reception_time / 1000000.0) ;
 			n_received_events = 0;
 			
@@ -227,11 +227,15 @@ action_chunk_new (struct req_args_s *args)
 }
 
 static enum http_rc_e
+action_chunk_new (struct req_args_s *args)
+{
+	return action_global(args);
+}
+
+static enum http_rc_e
 action_chunk_delete (struct req_args_s *args)
 {
-	fprintf(stderr, "chunk delete");
-	
-	return _reply_ok(args->rp, NULL);
+	return action_global(args);
 }
 
 static void
