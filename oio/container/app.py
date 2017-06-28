@@ -109,6 +109,7 @@ class OioTarEntry(object):
             if self.slo and key in SLO_HEADERS:
                 continue
             tarinfo.pax_headers[SCHILY + key] = val
+        tarinfo.pax_headers['mime_type'] = entry['mime_type']
         # PAX_FORMAT should be used only if xattr was found
         self._buf = tarinfo.tobuf(format=PAX_FORMAT)
 
@@ -645,10 +646,16 @@ class ContainerStreaming(RedisConn):
                     if inf.size % BLOCKSIZE:
                         read(BLOCKSIZE - inf.size % BLOCKSIZE)
                 else:
+                    kwargs = {}
+                    if not append and hdrs and 'mime_type' in hdrs:
+                        kwargs['mime_type'] = hdrs['mime_type']
+                        del hdrs['mime_type']
+
                     self.proxy.object_create(account, container,
                                              obj_name=inf.name,
                                              append=append,
-                                             data=read(inf.size))
+                                             data=read(inf.size),
+                                             **kwargs)
                     if inf.size % BLOCKSIZE:
                         read(BLOCKSIZE - inf.size % BLOCKSIZE)
                     if hdrs:

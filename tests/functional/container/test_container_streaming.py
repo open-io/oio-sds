@@ -42,6 +42,14 @@ CHARSET = [
     "yishą́ągo",
     ]
 
+MIMETYPE = [
+    "application/x-bzip",
+    "image/png",
+    "audio/vorbis",
+    "video/3gpp2",
+    "multipart/signed"
+    ]
+
 
 def rand_byte(n):
     return ''.join([chr(random.randint(32, 255)) for _ in xrange(n)])
@@ -120,9 +128,10 @@ class TestContainerDownload(BaseTestCase):
     def _create_data(self, name=gen_names, metadata=None):
         for idx, _name in itertools.islice(name(), 5):
             data = gen_data(513 * idx)
-            entry = {'data': data, 'meta': None}
+            mime = random.choice(MIMETYPE)
+            entry = {'data': data, 'meta': None, 'mime': mime}
             self.conn.object_create(self.account, self._cnt, obj_name=_name,
-                                    data=data)
+                                    data=data, mime_type=mime)
             if metadata:
                 entry['meta'] = {}
                 for _ in xrange(10):
@@ -202,6 +211,10 @@ class TestContainerDownload(BaseTestCase):
                 self.assertIn(key, headers)
                 self.assertEqual(val.decode('utf-8'), headers[key])
                 keys.remove(key)
+            #
+            self.assertEqual(self._data[entry]['mime'], headers['mime_type'])
+            keys.remove('mime_type')
+            #
             self.assertEqual(keys, [])
 
     def test_missing_container(self):
