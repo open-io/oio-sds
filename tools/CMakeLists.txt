@@ -5,12 +5,20 @@ include_directories(BEFORE
 	${CMAKE_SOURCE_DIR}
 	${CMAKE_BINARY_DIR})
 
+include_directories(AFTER
+	${ZK_INCLUDE_DIRS})
+
 add_executable(echo-server oio-echo-server.c)
 bin_prefix(echo-server "-echo-server")
 target_link_libraries(echo-server metautils server ${GLIB2_LIBRARIES})
 
-add_executable(oio-tool oio-tool.c)
+add_executable(oio-zk-harass oio-zk-harass.c)
+bin_prefix(oio-zk-harass -zk-harass)
+target_link_libraries(oio-zk-harass
+	metautils sqliterepo
+	${ZK_LIBRARIES} ${GLIB2_LIBRARIES})
 
+add_executable(oio-tool oio-tool.c)
 bin_prefix(oio-tool -tool)
 target_link_libraries(oio-tool
 	oiocore metautils
