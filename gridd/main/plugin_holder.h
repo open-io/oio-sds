@@ -24,10 +24,6 @@ void plugin_holder_close_all (void);
 
 gint plugin_holder_init_all (GError **err);
 
-gint plugin_holder_reload_all (GError **err);
-
 gint plugin_holder_keep (GModule *mod, GHashTable *params, GError **err);
-
-gint plugin_holder_update_config (GModule *mod, GHashTable *params, GError **err);
 
 #endif /*OIO_SDS__gridd__main__plugin_holder_h*/
