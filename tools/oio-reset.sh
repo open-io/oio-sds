@@ -117,7 +117,7 @@ done
 mkdir -p "$OIO" && cd "$OIO" && (rm -rf sds.conf sds/{conf,data,run,logs})
 bootstrap_opt=
 if [[ -n "${PORT}" ]] ; then bootstrap_opt="${bootstrap_opt} --port ${PORT}" ; fi
-${PREFIX}-bootstrap.py "$NS" "$IP" $bootstrap_opt -d ${BOOTSTRAP_CONFIG} > /tmp/oio-bootstrap.$$
+${PREFIX}-bootstrap.py $bootstrap_opt -d ${BOOTSTRAP_CONFIG} "$NS" "$IP" > /tmp/oio-bootstrap.$$
 
 
 . /tmp/oio-bootstrap.$$
