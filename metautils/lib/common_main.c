@@ -223,7 +223,7 @@ grid_main_usage(void)
 
 	g_printerr("\nOPTIONS:\n");
 	g_printerr("  -h         help, displays this section\n");
-	g_printerr("  -c         instead of starting the server, it dumps the current lve central configurable variables\n");
+	g_printerr("  -c         dump the current live central configurable variables (requires all positional arguments)\n");
 	g_printerr("  -d         daemonizes the process (default FALSE)\n");
 	g_printerr("  -q         quiet mode, supress output on stdout stderr \n");
 	g_printerr("  -v         verbose mode, this activates stderr traces (default FALSE)\n");
@@ -248,7 +248,7 @@ grid_main_cli_usage(void)
 
 	g_printerr("\nOPTIONS:\n");
 	g_printerr("  -h         help, displays this section\n");
-	g_printerr("  -c         instead of starting the server, it dumps the current lve central configurable variables\n");
+	g_printerr("  -c         dump the current live central configurable variables (requires all positional arguments)\n");
 	g_printerr("  -q         quiet mode, supress output on stdout stderr \n");
 	g_printerr("  -v         verbose mode, this activates stderr traces (default FALSE)\n");
 	g_printerr("  -O XOPT    set extra options.\n");
@@ -379,7 +379,7 @@ grid_main_delete_pid_file(void)
 		return;
 	}
 	if (-1 == stat(pidfile_path, &current_pidfile_stat)) {
-		GRID_WARN("Unable to remove pidfile at [%s] : %s", pidfile_path, strerror(errno));
+		GRID_WARN("Unable to remove pidfile at [%s]: %s", pidfile_path, strerror(errno));
 		return;
 	}
 	if (current_pidfile_stat.st_ino != pidfile_stat.st_ino) {
@@ -388,7 +388,7 @@ grid_main_delete_pid_file(void)
 	}
 
 	if (-1 == metautils_syscall_unlink(pidfile_path))
-		GRID_WARN("Failed to unlink [%s] : %s", pidfile_path, strerror(errno));
+		GRID_WARN("Failed to unlink [%s]: %s", pidfile_path, strerror(errno));
 	else {
 		GRID_INFO("Deleted [%s]", pidfile_path);
 		pidfile_written = FALSE;
@@ -419,7 +419,7 @@ grid_main_init(int argc, char **args)
 				do {
 					const char *errmsg = grid_main_set_option(optarg);
 					if (errmsg) {
-						GRID_WARN("Invalid option : %s", errmsg);
+						GRID_WARN("Invalid option: %s", errmsg);
 						grid_main_usage();
 						return FALSE;
 					}
@@ -435,7 +435,7 @@ grid_main_init(int argc, char **args)
 			case 'p':
 				memset(pidfile_path, 0, sizeof(pidfile_path));
 				if (sizeof(pidfile_path) <= g_strlcpy(pidfile_path, optarg, sizeof(pidfile_path)-1)) {
-					GRID_WARN("Invalid '-p' argument : too long");
+					GRID_WARN("Invalid '-p' argument: too long");
 					grid_main_usage();
 					return FALSE;
 				}
@@ -448,7 +448,7 @@ grid_main_init(int argc, char **args)
 			case 's':
 				memset(syslog_id, 0, sizeof(syslog_id));
 				if (sizeof(syslog_id) <= g_strlcpy(syslog_id, optarg, sizeof(syslog_id)-1)) {
-					GRID_WARN("Invalid '-s' argument : too long");
+					GRID_WARN("Invalid '-s' argument: too long");
 					grid_main_usage();
 					return FALSE;
 				}
@@ -548,7 +548,7 @@ grid_main(int argc, char ** argv, struct grid_main_callbacks * callbacks)
 		if (flag_daemon) {
 			stdin = freopen("/dev/null", "r", stdin);
 			if (-1 == daemon(1,0)) {
-				GRID_WARN("daemonize error : %s", strerror(errno));
+				GRID_WARN("daemonize error: %s", strerror(errno));
 				grid_main_fini();
 				return 1;
 			}
@@ -579,7 +579,7 @@ grid_main_cli_init(int argc, char **args)
 				do {
 					const char *errmsg = grid_main_set_option(optarg);
 					if (errmsg) {
-						GRID_WARN("Invalid option : %s", errmsg);
+						GRID_WARN("Invalid option: %s", errmsg);
 						grid_main_cli_usage();
 						return FALSE;
 					}
@@ -652,11 +652,11 @@ metautils_ignore_signals(void)
 
 	sigfillset(&new_set);
 	if (0 != sigprocmask(SIG_BLOCK, &new_set, NULL))
-		g_message("LIBC Some signals could not be blocked : %s", strerror(errno));
+		g_message("LIBC Some signals could not be blocked: %s", strerror(errno));
 
 	sigfillset(&new_set);
 	if (0 != pthread_sigmask(SIG_BLOCK, &new_set, NULL))
-		g_message("PTHREAD Some signals could not be blocked : %s", strerror(errno));
+		g_message("PTHREAD Some signals could not be blocked: %s", strerror(errno));
 }
 
 void
