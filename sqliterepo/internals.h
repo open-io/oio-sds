@@ -52,8 +52,7 @@ License along with this library.
 #define MANAGER_CHECK(M) do {\
 	EXTRA_ASSERT((M) != NULL);\
 	EXTRA_ASSERT((M)->vtable); \
-	if ((M)->sync_nb > 0) \
-		EXTRA_ASSERT((M)->sync_tab != NULL && (M)->sync_tab[0] != NULL); \
+	EXTRA_ASSERT(((M)->sync_nb <= 0) || ((M)->sync_tab != NULL && (M)->sync_tab[0] != NULL)); \
 	EXTRA_ASSERT((M)->peering); \
 	EXTRA_ASSERT((M)->members_by_key != NULL);\
 	CONFIG_CHECK((M)->config); \
