@@ -39,6 +39,16 @@ struct sqlx_sync_s;
 struct sqlx_peering_s;
 struct sqlx_name_s;
 
+enum election_mode_e
+{
+	/* No replication */
+	ELECTION_MODE_NONE = 0,
+	/* A master is found when a qualified majority of member is present */
+	ELECTION_MODE_QUORUM,
+	/* A master is found when the whole group agree */
+	ELECTION_MODE_GROUP
+};
+
 struct replication_config_s
 {
 	/** Tells the unique ID of the local service. */
@@ -63,13 +73,7 @@ struct replication_config_s
 
 	gpointer ctx; /**< An arbitrary pointer reused in every hook. */
 
-	enum election_mode_e {
-		ELECTION_MODE_NONE = 0, /**< No replication */
-		ELECTION_MODE_QUORUM,   /**< A master is found when a qualified majority
-								 * of member is present */
-		ELECTION_MODE_GROUP     /**< A master is found when the whole group
-								 * agree */
-	} mode; /**< Is replication activated */
+	enum election_mode_e mode; /**< Is replication activated */
 };
 
 struct election_manager_vtable_s
@@ -178,7 +182,7 @@ void election_manager_exit_all (struct election_manager_s *m,
 void election_manager_whatabout (struct election_manager_s *m,
 		const struct sqlx_name_s *n, GString *out);
 
-void election_manager_set_sync (struct election_manager_s *manager,
+void election_manager_add_sync(struct election_manager_s *manager,
 		struct sqlx_sync_s *sync);
 
 void election_manager_set_peering (struct election_manager_s *m,

@@ -21,8 +21,6 @@ License along with this library.
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
-#include <unistd.h>
-#include <sys/socket.h>
 
 #include <metautils/lib/metautils.h>
 #include <sqliterepo/sqliterepo_variables.h>
@@ -31,7 +29,6 @@ License along with this library.
 #include "hash.h"
 #include "election.h"
 #include "version.h"
-#include "sqlx_remote.h"
 #include "synchro.h"
 #include "gridd_client_pool.h"
 #include "internals.h"
@@ -116,7 +113,9 @@ struct election_manager_s
 	struct election_manager_vtable_s *vtable;
 
 	struct sqlx_peering_s *peering;
-	struct sqlx_sync_s *sync;
+
+	struct sqlx_sync_s **sync_tab;
+	guint sync_nb;
 
 	/* do not free or change the fields below */
 	const struct replication_config_s *config;
@@ -543,13 +542,23 @@ election_manager_create(struct replication_config_s *config,
 }
 
 void
-election_manager_set_sync (struct election_manager_s *manager,
+election_manager_add_sync(struct election_manager_s *M,
 		struct sqlx_sync_s *sync)
 {
-	EXTRA_ASSERT(manager != NULL);
+	EXTRA_ASSERT(M != NULL);
 	EXTRA_ASSERT(sync != NULL);
-	EXTRA_ASSERT(manager->vtable == &VTABLE);
-	manager->sync = sync;
+	EXTRA_ASSERT(M->vtable == &VTABLE);
+
+	if (M->sync_tab != NULL) {
+		EXTRA_ASSERT(M->sync_nb > 0);
+		M->sync_tab = g_realloc(M->sync_tab, (1 + M->sync_nb) * sizeof(void *));
+	} else {
+		M->sync_tab = g_malloc(sizeof(void *));
+		M->sync_nb = 0;
+	}
+
+	M->sync_tab[M->sync_nb] = sync;
+	M->sync_nb++;
 }
 
 void
@@ -1034,7 +1043,18 @@ _LOCKED_init_member(struct election_manager_s *manager,
 	if (!member && autocreate) {
 		member = g_malloc0 (sizeof(*member));
 		member->generation_id = oio_ext_rand_int();
-		member->sync = manager->sync;
+
+		if (manager->sync_nb <= 0)
+			member->sync = NULL;
+		else if (manager->sync_nb == 1)
+			member->sync = manager->sync_tab[0];
+		else {
+			const gsize len = strlen(key);
+			guint16 id = 0;
+			oio_str_hex2bin(key + len - 4, (guint8 *) &id, 4);
+			member->sync = manager->sync_tab[id % manager->sync_nb];
+		}
+
 		member->manager = manager;
 		member->last_status = oio_ext_monotonic_time ();
 		strncpy(member->key, key, sizeof(member->key));
