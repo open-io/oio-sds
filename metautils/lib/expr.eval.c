@@ -167,17 +167,17 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 				if (!pUnary)
 					return EXPR_EVAL_ERROR;
 				if (pUnary->type == VAL_NUM_ET) {
-					TRACE("num arg is type VAL_NUM_ET");
+					GRID_TRACE("num arg is type VAL_NUM_ET");
 					*pD = pUnary->expr.num;
 				}
 				else if (pUnary->type == VAL_STR_ET) {
-					TRACE("num arg is type VAL_STR_ET");
+					GRID_TRACE("num arg is type VAL_STR_ET");
 					*pD = strtod(pUnary->expr.str, &pEnd);
 					if (pEnd == pUnary->expr.str)
 						return EXPR_EVAL_UNDEF;
 				}
 				else if (pUnary->type == ACC_ET) {
-					TRACE("num arg is type ACC_ET");
+					GRID_TRACE("num arg is type ACC_ET");
 					accessor_f *acc = NULL;
 
 					if (!pUnary->expr.acc.base)
@@ -197,7 +197,7 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 					return EXPR_EVAL_DEF;
 				}
 				else {
-					TRACE("num arg is type expr");
+					GRID_TRACE("num arg is type expr");
 					return __main_eval(pUnary, pD);
 				}
 
@@ -377,7 +377,7 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 				double d1 = 0, d2 = 0;
 
 				EVAL_BINNUM(d1, d2, pE);
-				TRACE("root with args [%f]/[%f]", d1, d2);
+				GRID_TRACE("root with args [%f]/[%f]", d1, d2);
 				FPcmp(ret, d1, 0);
 				if (ret == 0)
 					return EXPR_EVAL_UNDEF;
@@ -387,7 +387,7 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 					return EXPR_EVAL_DEF;
 				}
 				*pD = pow(d2, 1 / d1);
-				TRACE("root with args [%f]/[%f] return result [%f]", d1, d2, *pD);
+				GRID_TRACE("root with args [%f]/[%f] return result [%f]", d1, d2, *pD);
 				return EXPR_EVAL_DEF;
 			}
 		case NB_ET:
