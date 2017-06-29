@@ -206,7 +206,7 @@ meta0_init_list(void)
 		err = meta0_remote_get_meta1_all(url, &list);
 		if (err != NULL) {
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
-				if (DEBUG_ENABLED()) {
+				if (GRID_DEBUG_ENABLED()) {
 					GRID_DEBUG("Failed to reach meta0 [%s] : error (%d) : %s",
 							url, err->code, err->message);
 				}
