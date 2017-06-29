@@ -460,7 +460,7 @@ test_election_init(void)
 	g_assert_no_error(err);
 	g_assert_nonnull (m);
 	m->synchronous_completions = TRUE;
-	election_manager_set_sync (m, sync);
+	election_manager_add_sync(m, sync);
 	election_manager_set_peering (m, peering);
 
 	for (int i=0; i<8 ;++i) {
@@ -508,7 +508,7 @@ test_create_ok(void)
 	g_assert_nonnull (peering); \
 	g_assert_no_error (election_manager_create (&config, &manager)); \
 	g_assert_nonnull (manager); \
-	election_manager_set_sync (manager, sync); \
+	election_manager_add_sync (manager, sync); \
 	election_manager_set_peering (manager, peering); \
 	gchar _k[OIO_ELECTION_KEY_LIMIT_LENGTH]; \
 	sqliterepo_hash_name(&name, _k, sizeof(_k)); \

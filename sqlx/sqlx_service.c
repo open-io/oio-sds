@@ -120,7 +120,7 @@ static struct grid_main_option_s common_options[] =
 	{"DeleteEnabled", OT_BOOL, {.b = &SRV.flag_delete_on},
 		"If not set, prevents deleting database files from disk"},
 
-	{NULL, 0, {.i=0}, NULL}
+	{NULL, 0, {.any=0}, NULL}
 };
 
 // repository hooks ------------------------------------------------------------
@@ -248,19 +248,19 @@ _patch_configuration_fd(void)
 				"please reconfigure the service or extend the system limit "
 				"(currently set to %u).", reserved, maxfd);
 		if (!sqliterepo_repo_max_bases_soft) {
-		   sqliterepo_repo_max_bases_soft = MIN(1024, sqliterepo_repo_max_bases_hard);
-		   GRID_WARN("maximum # of bases not set, arbitrarily set to %u",
-				   sqliterepo_repo_max_bases_soft);
+			sqliterepo_repo_max_bases_soft = MIN(1024, sqliterepo_repo_max_bases_hard);
+			GRID_WARN("maximum # of bases not set, arbitrarily set to %u",
+								sqliterepo_repo_max_bases_soft);
 		}
 		if (!server_fd_max_passive) {
-		   server_fd_max_passive = 64;
-		   GRID_WARN("maximum # of incoming cnx not set, arbitrarily set to %u",
-				   server_fd_max_passive);
+			server_fd_max_passive = 64;
+			GRID_WARN("maximum # of incoming cnx not set, arbitrarily set to %u",
+								server_fd_max_passive);
 		}
 		if (!sqliterepo_fd_max_active) {
 			sqliterepo_fd_max_active = 64;
-		   GRID_WARN("maximum # of outgoing cnx not set, arbitrarily set to %u",
-				   sqliterepo_fd_max_active);
+			GRID_WARN("maximum # of outgoing cnx not set, arbitrarily set to %u",
+								sqliterepo_fd_max_active);
 		}
 	} else {
 		guint available = total - reserved;
@@ -607,7 +607,7 @@ _configure_events_queue (struct sqlx_service_s *ss)
 		return TRUE;
 	}
 
-	gchar *url =  oio_cfg_get_eventagent (SRV.ns_name);
+	gchar *url = oio_cfg_get_eventagent (SRV.ns_name);
 	STRING_STACKIFY (url);
 
 	if (!url) {
@@ -666,8 +666,9 @@ sqlx_service_action(void)
 	oio_server_volume = SRV.volume;
 
 	election_manager_set_peering(SRV.election_manager, SRV.peering);
-	if (SRV.sync)
-		election_manager_set_sync(SRV.election_manager, SRV.sync);
+	if (SRV.sync) {
+		election_manager_add_sync(SRV.election_manager, SRV.sync);
+	}
 	sqlx_repository_set_elections(SRV.repository, SRV.election_manager);
 
 	grid_task_queue_fire(SRV.gtq_reload);
