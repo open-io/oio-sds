@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -16,13 +16,13 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
+#include <core/oiocfg.h>
+
 #include <string.h>
-#include <stdlib.h>
 
-#include <glib.h>
+#include <core/oiolog.h>
+#include <core/oiostr.h>
 
-#include "oio_core.h"
-#include "oiostr.h"
 #include "internals.h"
 
 static struct oio_cfg_handle_s *oio_cfg_handle_DEFAULT = NULL;
@@ -245,3 +245,135 @@ oio_cfg_set_handle (struct oio_cfg_handle_s *self)
 	oio_cfg_handle_DEFAULT = self;
 }
 
+/* -------------------------------------------------------------------------- */
+
+struct oio_cfg_cache_handle_s
+{
+	struct oio_cfg_handle_vtable_s *vtable;
+	GHashTable *cfg;
+	GRWLock lock;
+};
+
+static GHashTable*
+_cfg_cache_get_cfg_unlocked(gpointer self)
+{
+	struct oio_cfg_cache_handle_s *cache = self;
+
+	if (cache->cfg)
+		return cache->cfg;
+
+	g_rw_lock_reader_unlock(&cache->lock);
+	g_rw_lock_writer_lock(&cache->lock);
+	/* Check again in case another thread did the update
+	 * while we were waiting */
+	if (!cache->cfg) {
+		GHashTable *new_cfg = oio_cfg_parse();
+		if (new_cfg) {
+			if (cache->cfg)
+				g_hash_table_destroy(cache->cfg);
+			cache->cfg = new_cfg;
+		} else {
+			// Silent failure
+		}
+	}
+	g_rw_lock_writer_unlock(&cache->lock);
+	g_rw_lock_reader_lock(&cache->lock);
+
+	return cache->cfg;
+}
+
+static void
+_cfg_cache_clean(struct oio_cfg_handle_s *self)
+{
+	struct oio_cfg_cache_handle_s *cache = (gpointer)self;
+	g_rw_lock_writer_lock(&cache->lock);
+	if (cache->cfg)
+		g_hash_table_destroy(cache->cfg);
+	cache->cfg = NULL;
+	g_rw_lock_writer_unlock(&cache->lock);
+	g_rw_lock_clear(&cache->lock);
+	g_free(cache);
+}
+
+static gchar **
+_cfg_cache_namespaces(struct oio_cfg_handle_s *self)
+{
+	struct oio_cfg_cache_handle_s *cache = (gpointer)self;
+	GHashTableIter iter;
+	gpointer k, v;
+	GPtrArray *tmp = g_ptr_array_sized_new(4);
+
+	g_rw_lock_reader_lock(&cache->lock);
+	GHashTable *ht = _cfg_cache_get_cfg_unlocked(self);
+	g_hash_table_iter_init(&iter, ht);
+	while (g_hash_table_iter_next(&iter, &k, &v)) {
+		const gchar *sk = (gchar*)k;
+		if (g_str_has_prefix(sk, "default/"))
+			continue;
+		if (!g_str_has_suffix(sk, "/conscience"))
+			continue;
+		gchar *ns = g_strndup(sk, strrchr(sk, '/') - sk);
+		g_ptr_array_add(tmp, ns);
+	}
+	g_rw_lock_reader_unlock(&cache->lock);
+
+	g_ptr_array_add(tmp, NULL);
+	return (gchar**) g_ptr_array_free(tmp, FALSE);
+}
+
+static gchar*
+_cfg_cache_get(struct oio_cfg_handle_s *self, const char *ns, const char *what)
+{
+	struct oio_cfg_cache_handle_s *cache = (gpointer)self;
+
+	if (!ns || !strcasecmp(ns, "default"))
+		ns = "default";
+
+	gchar *key = oio_cfg_build_key(ns, what);
+	gchar *value = NULL;
+
+	g_rw_lock_reader_lock(&cache->lock);
+	GHashTable *ht = _cfg_cache_get_cfg_unlocked(self);
+	value = g_strdup(g_hash_table_lookup(ht, key));
+	g_rw_lock_reader_unlock(&cache->lock);
+
+	g_free(key);
+	return value;
+}
+
+static struct oio_cfg_handle_vtable_s VTABLE = {
+		.clean = _cfg_cache_clean,
+		.namespaces = _cfg_cache_namespaces,
+		.get = _cfg_cache_get,
+};
+
+struct oio_cfg_handle_s *
+oio_cfg_cache_create_fragment(const char *path)
+{
+	struct oio_cfg_cache_handle_s *cache =
+			g_malloc0(sizeof(struct oio_cfg_cache_handle_s));
+	cache->vtable = &VTABLE;
+	g_rw_lock_init(&cache->lock);
+	cache->cfg = oio_cfg_parse_file(path);
+	return (struct oio_cfg_handle_s *) cache;
+}
+
+struct oio_cfg_handle_s *
+oio_cfg_cache_create(void)
+{
+	struct oio_cfg_cache_handle_s *cache =
+			g_malloc0(sizeof(struct oio_cfg_cache_handle_s));
+	cache->vtable = &VTABLE;
+	g_rw_lock_init(&cache->lock);
+	// cache->cfg will be initialized at first call
+	return (struct oio_cfg_handle_s *) cache;
+}
+
+gboolean
+oio_cfg_handle_has_ns(struct oio_cfg_handle_s *self, const char *ns)
+{
+	gchar *v = oio_cfg_handle_get(self, ns, "known");
+	gboolean rc = oio_str_parse_bool(v, FALSE);
+	if (v) g_free(v);
+	return rc;
+}

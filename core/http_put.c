@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2014 Worldline, original work as part of Redcurrant
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -17,29 +17,27 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
+#include <core/http_put.h>
+
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <poll.h>
-
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 
-#include <glib.h>
 #include <glib/gstdio.h>
-
 #include <curl/curl.h>
 #include <curl/multi.h>
 
 #include <core/client_variables.h>
+#include <core/oioext.h>
+#include <core/oiolog.h>
 
 #include "internals.h"
-#include "oioext.h"
-#include "oiolog.h"
-#include "http_put.h"
 #include "http_internals.h"
 
 enum http_single_put_e

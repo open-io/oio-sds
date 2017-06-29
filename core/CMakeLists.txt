@@ -34,8 +34,7 @@ add_custom_command(
 		"client"
 		${CMAKE_SOURCE_DIR}/conf.json)
 
-add_library(oiocore SHARED url.c cfg.c cfg_cache.c str.c ext.c log.c lb.c
-	var.c
+add_library(oiocore SHARED url.c cfg.c str.c ext.c log.c lb.c var.c
 	${CMAKE_CURRENT_BINARY_DIR}/client_variables.h
 	${CMAKE_CURRENT_BINARY_DIR}/client_variables.c)
 
@@ -57,9 +56,6 @@ target_link_libraries(tool_sdk oiosds)
 
 add_executable(tool_roundtrip tool_roundtrip.c)
 target_link_libraries(tool_roundtrip oiosds)
-
-add_executable(tool_ns tool_ns.c)
-target_link_libraries(tool_ns oiosds ${CURL_LIBRARIES})
 
 install(FILES
 		oiocfg.h
