@@ -95,7 +95,7 @@ gint plugin_holder_keep (GModule *mod, GHashTable *params, GError **err)
 	if (NULL != g_hash_table_lookup(plugins, plg->syms->name))
 	{
 		g_free (plg);
-		DEBUG("Module %s already referenced", plg->syms->name);
+		GRID_DEBUG("Module %s already referenced", plg->syms->name);
 		return 1;
 	}
 
@@ -106,7 +106,7 @@ gint plugin_holder_keep (GModule *mod, GHashTable *params, GError **err)
 	g_hash_table_insert (plugins, plg->syms->name, plg);
 	plugins_list = g_slist_append (plugins_list, plg);
 
-	DEBUG("Module %s referenced", plg->syms->name);
+	GRID_DEBUG("Module %s referenced", plg->syms->name);
 
 	return 1;
 
@@ -129,7 +129,7 @@ void plugin_holder_close_all (void)
 		(void) u;
 		GError *err = NULL;
 		if (!plg->syms->close(&err))
-			ERROR("cannot close the plugin %s : (%d) %s", plg->syms->name, err->code, err->message);
+			GRID_ERROR("cannot close the plugin %s : (%d) %s", plg->syms->name, err->code, err->message);
 		if (err)
 			g_clear_error(&err);
 	}
@@ -137,7 +137,7 @@ void plugin_holder_close_all (void)
 	plugin_holder_init();
 
 	g_slist_foreach (plugins_list, runner, NULL);
-	DEBUG ("Plugins closed!");
+	GRID_DEBUG ("Plugins closed!");
 }
 
 gint plugin_holder_init_all (GError **err)
@@ -151,7 +151,7 @@ gint plugin_holder_init_all (GError **err)
 		if (plg->init_done)
 			return;
 		plg->init_done = TRUE;
-		DEBUG ("initializing %s", plg->syms->name);
+		GRID_DEBUG ("initializing %s", plg->syms->name);
 		if (!plg->syms->init (plg->params, e0)) {
 			GSETERROR(e0, "Failed to init plugin %s", plg->syms->name);
 			mayContinue = FALSE;
@@ -159,9 +159,9 @@ gint plugin_holder_init_all (GError **err)
 	}
 
 	plugin_holder_init();
-	DEBUG ("Plugins being initiated ...");
+	GRID_DEBUG ("Plugins being initiated ...");
 	g_slist_foreach (plugins_list, runner, err);
-	DEBUG ("Plugins initiated!");
+	GRID_DEBUG ("Plugins initiated!");
 	return mayContinue ? 1 : 0;
 }
 
@@ -197,7 +197,7 @@ gint plugin_holder_update_config (GModule *mod, GHashTable *params, GError **err
 
 	plg->params = params;
 
-	NOTICE("Module %s params table updated", plg->syms->name);
+	GRID_NOTICE("Module %s params table updated", plg->syms->name);
 
 	return 1;
 }
@@ -206,14 +206,14 @@ gint plugin_holder_reload_all (GError **err)
 {
 	gboolean mayContinue=TRUE;
 
-	DEBUG ("About to reload plugins configuration...");
+	GRID_DEBUG ("About to reload plugins configuration...");
 
 	void runner (gpointer d, gpointer e0)
 	{
 		struct plugin_s *plg = (struct plugin_s*) d;
 		if (!mayContinue)
 			return;
-		DEBUG ("reloading %s", plg->syms->name);
+		GRID_DEBUG ("reloading %s", plg->syms->name);
 		if (plg->syms->configure && !plg->syms->configure (plg->params, e0))
 		{
 			GSETERROR(e0, "Failed to reload plugin %s config", plg->syms->name);
@@ -223,7 +223,7 @@ gint plugin_holder_reload_all (GError **err)
 
 	g_slist_foreach (plugins_list, runner, err);
 
-	DEBUG ("configuration reload done!");
+	GRID_DEBUG ("configuration reload done!");
 
 	return mayContinue ? 1 : 0;
 }
