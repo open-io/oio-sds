@@ -341,8 +341,8 @@ class ContainerStreaming(RedisConn):
 
         self.proxy = ObjectStorageApi(self.conf.get("namespace", NS))
         self.url_map = Map([
-            Rule('/v1.0/dump', endpoint='dump'),
-            Rule('/v1.0/restore', endpoint='restore'),
+            Rule('/v1.0/container/dump', endpoint='dump'),
+            Rule('/v1.0/container/restore', endpoint='restore'),
         ])
         self.logger = get_logger(self.conf, name="ContainerStreaming")
         super(ContainerStreaming, self).__init__(self.conf)
