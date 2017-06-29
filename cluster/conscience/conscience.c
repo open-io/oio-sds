@@ -77,11 +77,7 @@ conscience_get_locked_srvtype(struct conscience_s *conscience, GError ** error,
 void
 conscience_release_locked_srvtype(struct conscience_srvtype_s *srvtype)
 {
-	if (!srvtype) {
-		ERROR("Invalid parameter");
-		return;
-	}
-
+	EXTRA_ASSERT(srvtype != NULL);
 	_unlock_rw(&(srvtype->rw_lock));
 	_unlock_rw(&(srvtype->conscience->rwlock_srv));
 }
@@ -183,7 +179,7 @@ conscience_get_srvtype(struct conscience_s *conscience, GError ** error, const c
 		return srvtype;
 
 	if (mode == MODE_AUTOCREATE) {
-		NOTICE("[NS=%s][SRVTYPE=%s] Autocreation wanted!", conscience_get_nsname(conscience), type);
+		GRID_NOTICE("[NS=%s][SRVTYPE=%s] Autocreation wanted!", conscience_get_nsname(conscience), type);
 		srvtype = conscience_srvtype_create(conscience, type);
 		if (!srvtype) {
 			GSETERROR(error, "ServiceType allocation failure");
