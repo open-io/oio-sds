@@ -156,27 +156,29 @@ def main():
     ns = args[1]
     cnxstr = load_namespace_conf(ns)['zookeeper']
     zookeeper.set_debug_level(zookeeper.LOG_LEVEL_INFO)
-    zh = zookeeper.init(cnxstr)
+    for shard in cnxstr.split(";"):
+        logging.info("ZK=%s", shard)
+        zh = zookeeper.init(shard)
 
-    # synchronous creation of the root
-    try:
-        zookeeper.create(zh, PREFIX, '', acl_openbar, 0)
-    except zookeeper.NodeExistsException:
-        pass
+        # synchronous creation of the root
+        try:
+            zookeeper.create(zh, PREFIX, '', acl_openbar, 0)
+        except zookeeper.NodeExistsException:
+            pass
 
-    missing = True
-    if options.LAZY:
-        _m = False
-        for t, _, _ in SRVTYPES:
-            try:
-                _, _ = zookeeper.get(zh, PREFIX_NS + '/' + ns + '/el/' + t)
-            except:
-                _m = True
-        missing = _m
+        missing = True
+        if options.LAZY:
+            _m = False
+            for t, _, _ in SRVTYPES:
+                try:
+                    _, _ = zookeeper.get(zh, PREFIX_NS + '/' + ns + '/el/' + t)
+                except:
+                    _m = True
+            missing = _m
 
-    if missing:
-        create_tree(zh, namespace_tree(ns, options), options)
-    zookeeper.close(zh)
+        if missing:
+            create_tree(zh, namespace_tree(ns, options), options)
+        zookeeper.close(zh)
 
 
 if __name__ == '__main__':

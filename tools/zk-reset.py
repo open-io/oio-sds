@@ -66,16 +66,18 @@ def main():
 
     ns = args[1]
     cnxstr = load_namespace_conf(ns)['zookeeper']
-
     zookeeper.set_debug_level(zookeeper.LOG_LEVEL_INFO)
-    zh = zookeeper.init(cnxstr)
-    if options.flag_all:
-        logging.warn("FLUSHING all the oio-sds entries in the ZK server")
-        delete_children(zh, "/hc")
-    else:
-        logging.info("Cleaning only the meta0 registrations in ZK server")
-        delete_children(zh, "/hc/ns/"+ns+"/srv/meta0")
-    zookeeper.close(zh)
+
+    for shard in cnxstr.split(";"):
+        logging.info("ZK=%s", shard)
+        zh = zookeeper.init(shard)
+        if options.flag_all:
+            logging.warn("FLUSHING all the oio-sds entries in the ZK server")
+            delete_children(zh, "/hc")
+        else:
+            logging.info("Cleaning only the meta0 registrations in ZK server")
+            delete_children(zh, "/hc/ns/"+ns+"/srv/meta0")
+        zookeeper.close(zh)
 
 
 if __name__ == '__main__':
