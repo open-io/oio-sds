@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2014 Worldline, original work as part of Redcurrant
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -17,18 +17,16 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#include <errno.h>
+#include <core/oiolog.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <syslog.h>
 
-#include <glib.h>
+#include <core/oiostr.h>
 
 #include "internals.h"
-#include "oiolog.h"
-#include "oioext.h"
-#include "oiostr.h"
 
 int oio_log_level_default = 0x7F;
 

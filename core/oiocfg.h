@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015-2017 OpenIO, original work as part of OpenIO SDS
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -151,6 +151,48 @@ gchar * oio_cfg_get_proxy_containers (const char *ns);
 
 /** get the url of the swift gateway */
 gchar * oio_cfg_get_swift(const char *ns);
+
+/* -------------------------------------------------------------------------- */
+
+struct oio_cfg_handle_s;
+
+struct oio_cfg_handle_vtable_s
+{
+	void (*clean) (struct oio_cfg_handle_s *self);
+	gchar** (*namespaces) (struct oio_cfg_handle_s *self);
+	gchar* (*get) (struct oio_cfg_handle_s *self, const char *ns, const char *k);
+};
+
+struct oio_cfg_handle_abstract_s
+{
+	struct oio_cfg_handle_vtable_s *vtable;
+};
+
+gchar *oio_cfg_build_key(const gchar *ns, const gchar *what);
+
+/* wraps self->clean() */
+void oio_cfg_handle_clean (struct oio_cfg_handle_s *self);
+
+/* wraps self->namespaces() */
+gchar ** oio_cfg_handle_namespaces (struct oio_cfg_handle_s *self);
+
+/* wraps self->get(ns, k) */
+gchar * oio_cfg_handle_get (struct oio_cfg_handle_s *self,
+		const char *ns, const char *k);
+
+/* wraps self->get(...) and check for the presence of the given NS
+ * in the config */
+gboolean oio_cfg_handle_has_ns(struct oio_cfg_handle_s *self, const char *ns);
+
+/* Replaces the default handle to manage configuration by yourself. */
+void oio_cfg_set_handle (struct oio_cfg_handle_s *self);
+
+/* Create a cache handle that does caching. */
+struct oio_cfg_handle_s * oio_cfg_cache_create(void);
+
+/* Create a caching configuration that just hold the value found in the file
+ * whose path has been given. */
+struct oio_cfg_handle_s * oio_cfg_cache_create_fragment(const char *path);
 
 #ifdef __cplusplus
 }

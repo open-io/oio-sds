@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -16,14 +16,13 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#include <glib.h>
-#include <curl/curl.h>
-
-#include "oio_core.h"
-#include "internals.h"
 #include "http_internals.h"
 
-volatile enum oio_header_case_e oio_header_case = OIO_HDRCASE_NONE;
+#include <core/oio_core.h>
+
+#include "internals.h"
+
+enum oio_header_case_e oio_header_case = OIO_HDRCASE_NONE;
 
 void
 oio_headers_common (struct oio_headers_s *h)
@@ -86,12 +85,3 @@ oio_headers_add (struct oio_headers_s *h, const char *k, const char *v)
 	h->gheaders = g_slist_prepend (h->gheaders, s);
 	h->headers = curl_slist_append (h->headers, h->gheaders->data);
 }
-
-void
-oio_headers_add_int64 (struct oio_headers_s *h, const char *k, gint64 i64)
-{
-	gchar v[24];
-	g_snprintf (v, sizeof(v), "%"G_GINT64_FORMAT, i64);
-	oio_headers_add (h, k, v);
-}
-

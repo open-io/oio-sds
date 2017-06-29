@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -22,8 +22,7 @@ License along with this library.
 extern "C" {
 #endif
 
-struct oio_cs_client_s;
-struct oio_cs_registration_s;
+#include <core/oiocs.h>
 
 struct oio_cs_client_vtable_s
 {

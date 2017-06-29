@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2014 Worldline, original work as part of Redcurrant
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -20,6 +20,7 @@ License along with this library.
 #ifndef OIO_SDS__core__oiourl_h
 # define OIO_SDS__core__oiourl_h 1
 
+#include <glib.h>
 #include <sys/types.h>
 
 #ifdef __cplusplus

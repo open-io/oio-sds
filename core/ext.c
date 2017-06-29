@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -16,23 +16,20 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
+#include <core/oioext.h>
+
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
 #include <stdio.h>
+#include <errno.h>
 #include <sys/stat.h>
 #include <sys/vfs.h>
-#include <sys/types.h>
-#include <sys/sysmacros.h>
-#include <errno.h>
 
-#include <glib.h>
-#include <json.h>
-
-#include "oio_core.h"
-#include "internals.h"
-
+#include <core/oio_core.h>
 #include <core/client_variables.h>
+
+#include "internals.h"
 
 #define PREPEND(Result,List) do { \
 	next = (List)->next; \
@@ -44,7 +41,7 @@ License along with this library.
 time_hook_f oio_time_monotonic = NULL;
 time_hook_f oio_time_real = NULL;
 
-static GSList*gslist_merge_random (GSList *l1, GSList *l2) {
+static GSList* gslist_merge_random (GSList *l1, GSList *l2) {
 	GSList *next, *result = NULL;
 	GRand *r = oio_ext_local_prng ();
 	while (l1 || l2) {
@@ -53,8 +50,7 @@ static GSList*gslist_merge_random (GSList *l1, GSList *l2) {
 				PREPEND(result,l1);
 			else
 				PREPEND(result,l2);
-		}
-		else {
+		} else {
 			if (l1)
 				PREPEND(result,l1);
 			else

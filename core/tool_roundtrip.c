@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -22,10 +22,12 @@ License along with this library.
 #include <glib.h>
 #include <glib/gstdio.h>
 
+#include <core/oio_sds.h>
+#include <core/oioext.h>
+#include <core/oiolog.h>
+#include <core/oiostr.h>
+
 #include "internals.h"
-#include "oio_core.h"
-#include "oio_sds.h"
-#include "oioext.h"
 
 #define NOERROR(E) g_assert_no_error((GError*)(E))
 
