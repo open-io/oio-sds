@@ -347,8 +347,6 @@ thread_monitoring_periodic_debug (struct server_s *srv)
 {
 	gchar *str_dbg = NULL;
 	struct thread_monitoring_s mon, mon0;
-	gchar str_pool[512];
-	gsize str_pool_size;
 
 	/* XXX locked section */
 	g_rec_mutex_lock (&(srv->recMutex));
@@ -373,18 +371,14 @@ thread_monitoring_periodic_debug (struct server_s *srv)
 	if (too_many_workers) {
 		GRID_WARN ("%s ALL THREADS are currently used!", srv->name);
 		if (server_alert_possible(srv)) {
-			str_pool_size = accept_pool_to_string(srv->ap, str_pool, sizeof(str_pool));
-			SRV_SEND_ERROR(ALERTID_SRV_THREADS,"Server [%s] on [%.*s] currently uses all its threads",
-				srv->name, str_pool_size, str_pool);
+			SRV_SEND_ERROR(ALERTID_SRV_THREADS,"Server [%s] currently uses all its threads", srv->name);
 			server_notify_alert(srv);
 		}
 	}
 	else if (max_reached) {
 		GRID_WARN ("%s ALL THREADS have been used!", srv->name);
 		if (server_alert_possible(srv)) {
-			str_pool_size = accept_pool_to_string(srv->ap, str_pool, sizeof(str_pool));
-			SRV_SEND_WARNING(ALERTID_SRV_THREADS,"Server [%s] on [%.*s] used all its threads",
-				srv->name, str_pool_size, str_pool);
+			SRV_SEND_WARNING(ALERTID_SRV_THREADS,"Server [%s] used all its threads", srv->name);
 			server_notify_alert(srv);
 		}
 	}
@@ -1163,14 +1157,8 @@ main_specific_fini (void)
 
 	GRID_DEBUG("Closing the servers");
 	for (SERVER srv=BEACON_SRV.next; srv ;srv=srv->next) {
-		if (srv->ap) {
-			GError *error = NULL;
-			int nb = accept_close_servers( srv->ap, &error);
-			if (nb>0)
-				GRID_ERROR("%d server sockets could not be stopped : %s", nb, error?error->message:"?");
-			if (error)
-				g_clear_error( &error);
-		}
+		if (srv->ap)
+			accept_close_servers(srv->ap);
 	}
 
 	GRID_DEBUG("Stopping the servers");

@@ -33,32 +33,6 @@ static GRWLock rw_lock;
 
 static GHashTable *ht_stats = NULL;
 
-GVariant*
-srvstat_get_gvariant(const gchar *name)
-{
-	GVariant *gv;
-
-	if (!name) {
-		GRID_WARN("Invalid parameter (name=%p)", name);
-		return NULL;
-	}
-
-	if (!ht_stats)
-		srvstat_init();
-
-	g_rw_lock_writer_lock (&rw_lock);
-	gv = g_hash_table_lookup(ht_stats, name);
-	if (gv)
-		gv = g_variant_ref(gv);
-	g_rw_lock_writer_unlock (&rw_lock);
-
-	if (!gv) {
-		return NULL;
-	}
-
-	return gv;
-}
-
 gboolean
 srvstat_set_gvariant(const gchar *name, GVariant *gv)
 {
@@ -88,84 +62,11 @@ _set_gvariant(const gchar *name, GVariant *gv)
 	return TRUE;
 }
 
-gboolean
-srvstat_set_double(const gchar *name, gdouble value)
-{
-	return _set_gvariant(name, g_variant_new_double(value));
-}
-
-gboolean
-srvstat_get_double(const gchar *name, gdouble *value)
-{
-	GVariant *gv;
-
-	if (!name || !value) {
-		GRID_WARN("Invalid parameter (name=%p value=%p)", name, value);
-		return FALSE;
-	}
-
-	if (!(gv = srvstat_get_gvariant(name)))
-		return FALSE;
-
-	if (IS(gv,G_VARIANT_TYPE_DOUBLE)) {
-		*value = g_variant_get_double(gv);
-		g_variant_unref(gv);
-		return TRUE;
-	}
-	else if (IS(gv,G_VARIANT_TYPE_INT64)) {
-		gint64 d = g_variant_get_double(gv);
-		g_variant_unref(gv);
-		*value = d;
-		return TRUE;
-	}
-	else if (IS(gv,G_VARIANT_TYPE_UINT64)) {
-		guint64 d = g_variant_get_double(gv);
-		g_variant_unref(gv);
-		*value = d;
-		return TRUE;
-	}
-	else if (IS(gv,G_VARIANT_TYPE_BOOLEAN)) {
-		gboolean d = g_variant_get_double(gv);
-		g_variant_unref(gv);
-		*value = d;
-		return TRUE;
-	}
-
-	g_variant_unref(gv);
-	return FALSE;
-}
-
-/* Kept for backward compatibility */
-gboolean
-srvstat_set (const gchar *name, gdouble value)
-{
-	return srvstat_set_double(name, value);
-}
-
-/* Kept for backward compatibility */
-gboolean
-srvstat_get (const gchar *name, gdouble *value)
-{
-	return srvstat_get_double(name, value);
-}
 
 gboolean
 srvstat_set_u64(const gchar *name, guint64 value)
 {
 	return _set_gvariant(name, g_variant_new_uint64(value));
-}
-
-/* ------------------------------------------------------------------------- */
-
-void
-srvstat_del (const gchar *name)
-{
-	if (!ht_stats)
-		srvstat_init();
-
-	g_rw_lock_writer_lock (&rw_lock);
-	g_hash_table_remove (ht_stats, name);
-	g_rw_lock_writer_unlock (&rw_lock);
 }
 
 static void
@@ -201,23 +102,6 @@ srvstat_fini (void)
 	}
 	g_rw_lock_writer_unlock (&rw_lock);
 	GRID_INFO("statistics freed");
-}
-
-void srvstat_flush (void)
-{
-	gboolean func_yes (gpointer k, gpointer v, gpointer u) {
-		(void)k; (void)v; (void)u;
-		return TRUE;
-	}
-	GRID_DEBUG("about to flush the statistics");
-	if (!ht_stats)
-		srvstat_init();
-	else {
-		g_rw_lock_writer_lock (&rw_lock);
-		g_hash_table_foreach_remove (ht_stats, func_yes, NULL);
-		g_rw_lock_writer_unlock (&rw_lock);
-	}
-	GRID_INFO("statistics flushed");
 }
 
 void
