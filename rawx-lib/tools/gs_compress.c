@@ -104,7 +104,7 @@ parse_opt(int argc, char **args)
 	}
 
 	if(!algo) {
-		DEBUG("No compression algorithm in args, using ZLIB (default)");
+		GRID_DEBUG("No compression algorithm in args, using ZLIB (default)");
 		algo = g_strdup("ZLIB");
 	}
 
