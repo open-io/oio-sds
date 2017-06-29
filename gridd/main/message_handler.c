@@ -82,7 +82,7 @@ reply_context_set_message (struct reply_context_s *ctx, gint code, const gchar *
 	REPLYCTX_CLEANHEADER(ctx);
 	ctx->header.code = code;
 	ctx->header.msg = msg ? g_strdup(msg) : NULL;
-	TRACE("couple message/code set to (%i %s)", ctx->header.code, ctx->header.msg);
+	GRID_TRACE("couple message/code set to (%i %s)", ctx->header.code, ctx->header.msg);
 }
 
 void
@@ -95,7 +95,7 @@ reply_context_set_body (struct reply_context_s *ctx, void *body, gsize bodySize,
 		ctx->body.copy = (flags & REPLYCTX_DESTROY_ON_CLEAN) | (flags & REPLYCTX_COPY);
 		ctx->body.size = bodySize;
 		ctx->body.buffer = flags & REPLYCTX_COPY ? g_memdup(body, bodySize) : body;
-		TRACE("content set to (%p size=%"G_GSIZE_FORMAT")", ctx->body.buffer, ctx->body.size);
+		GRID_TRACE("content set to (%p size=%"G_GSIZE_FORMAT")", ctx->body.buffer, ctx->body.size);
 	}
 }
 
@@ -187,9 +187,6 @@ gint message_handler_add (const char *name,
 	mh->handler_v2 = NULL;
 
 	BEACON_MSGHANDLER.next = mh;
-
-	DEBUG ("new message handler added : %s", name);
-
 	return 1;
 }
 

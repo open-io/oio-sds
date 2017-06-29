@@ -129,11 +129,11 @@ gridd_set_flag(enum gridd_flag_e flag, int onoff)
 		gridd_flags = gridd_flags & ~flag;
 
 	if (old_flags != gridd_flags) {
-		NOTICE("GRIDD flags changed (%08X) : [%08X] -> [%08X]",
+		GRID_NOTICE("GRIDD flags changed (%08X) : [%08X] -> [%08X]",
 				flag, old_flags, gridd_flags);
 	}
 	else {
-		DEBUG("GRIDD flags unchanged (%08X) : [%08X]", flag, gridd_flags);
+		GRID_DEBUG("GRIDD flags unchanged (%08X) : [%08X]", flag, gridd_flags);
 	}
 }
 
@@ -250,7 +250,7 @@ thread_start(struct server_s *srv)
 	if (NULL != (th = g_thread_try_new("main", main_thread, srv, &gErr)))
 		return TRUE;
 
-	ERROR("Cannot start a worker thread : %s", gErr?gErr->message:"?");
+	GRID_ERROR("Cannot start a worker thread : %s", gErr?gErr->message:"?");
 	if (gErr)
 		g_error_free(gErr);
 
@@ -293,7 +293,7 @@ thread_monitoring_reserve (struct server_s *srv)
 
 	/* Deferred actions */
 	if (str_dbg) {
-		TRACE_DOMAIN(DOMAIN_THREADS, "%s TOO FEW", str_dbg);
+		GRID_TRACE("%s TOO FEW", str_dbg);
 		g_free(str_dbg);
 	}
 	if (defer_creation) {
@@ -336,7 +336,7 @@ thread_monitoring_release (struct server_s *srv)
 	/* XXX end of locked section */
 
 	if (str_dbg) {
-		TRACE_DOMAIN(DOMAIN_THREADS, "%s TOO MANY", str_dbg);
+		GRID_TRACE("%s TOO MANY", str_dbg);
 		g_free(str_dbg);
 	}
 	return rc;
@@ -363,7 +363,7 @@ thread_monitoring_periodic_debug (struct server_s *srv)
 	gboolean max_reached = (mon.max_reached != mon0.max_reached);
 
 	/*and then print all*/
-	DEBUG_DOMAIN (DOMAIN_THREADS, "%s wake=%"G_GUINT64_FORMAT" variation=+%"G_GUINT64_FORMAT"-%"G_GUINT64_FORMAT,
+	GRID_DEBUG ("%s wake=%"G_GUINT64_FORMAT" variation=+%"G_GUINT64_FORMAT"-%"G_GUINT64_FORMAT,
 			str_dbg,
 			(mon.wake - mon0.wake),
 			(mon.creation - mon0.creation),
@@ -371,7 +371,7 @@ thread_monitoring_periodic_debug (struct server_s *srv)
 	g_free(str_dbg);
 
 	if (too_many_workers) {
-		WARN_DOMAIN (DOMAIN_THREADS, "%s ALL THREADS are currently used!", srv->name);
+		GRID_WARN ("%s ALL THREADS are currently used!", srv->name);
 		if (server_alert_possible(srv)) {
 			str_pool_size = accept_pool_to_string(srv->ap, str_pool, sizeof(str_pool));
 			SRV_SEND_ERROR(ALERTID_SRV_THREADS,"Server [%s] on [%.*s] currently uses all its threads",
@@ -380,7 +380,7 @@ thread_monitoring_periodic_debug (struct server_s *srv)
 		}
 	}
 	else if (max_reached) {
-		WARN_DOMAIN (DOMAIN_THREADS, "%s ALL THREADS have been used!", srv->name);
+		GRID_WARN ("%s ALL THREADS have been used!", srv->name);
 		if (server_alert_possible(srv)) {
 			str_pool_size = accept_pool_to_string(srv->ap, str_pool, sizeof(str_pool));
 			SRV_SEND_WARNING(ALERTID_SRV_THREADS,"Server [%s] on [%.*s] used all its threads",
@@ -489,7 +489,7 @@ main_thread (gpointer arg)
 		/*accept a new connection*/
 		if (0 > (clt = accept_do(srv->ap, &clt_addr, &gErr))) {
 			if (gErr) {
-				ERROR("Cannot accept a new connection : %s", gErr->message);
+				GRID_ERROR("Cannot accept a new connection : %s", gErr->message);
 				g_clear_error(&gErr);
 			}
 			continue;
@@ -504,7 +504,7 @@ main_thread (gpointer arg)
 
 		memset(str_addr_src, 0, sizeof(str_addr_src));
 		grid_addrinfo_to_string(ctx->remote_addr, str_addr_src, sizeof(str_addr_src));
-		TRACE ("Connection NEW fd=%d [%s]", clt, str_addr_src);
+		GRID_TRACE ("Connection NEW fd=%d [%s]", clt, str_addr_src);
 
 		while (may_continue) {
 
@@ -542,21 +542,21 @@ main_thread (gpointer arg)
 			switch (gErr->code) {
 				case ERRCODE_CONN_RESET:
 				case ERRCODE_CONN_CLOSED:
-					TRACE ("Connection CLOSED/RESET fd=%i [%s]", clt, str_addr_src);
+					GRID_TRACE ("Connection CLOSED/RESET fd=%i [%s]", clt, str_addr_src);
 					break;
 				case ERRCODE_CONN_TIMEOUT:
-					DEBUG ("Connection TIMEOUT fd=%i [%s]", clt, str_addr_src);
+					GRID_DEBUG ("Connection TIMEOUT fd=%i [%s]", clt, str_addr_src);
 					break;
 				default:
-					DEBUG ("Connection ERROR fd=%i [%s]", clt, str_addr_src);
+					GRID_DEBUG ("Connection GRID_ERROR fd=%i [%s]", clt, str_addr_src);
 					if (gErr->message)
-						DEBUG ("cause:\n\t%s", gErr->message);
+						GRID_DEBUG ("cause:\n\t%s", gErr->message);
 					break;
 			}
 			g_clear_error (&gErr);
 		}
 
-		TRACE ("Connection CLOSING fd=%i [%s]", clt, str_addr_src);
+		GRID_TRACE ("Connection CLOSING fd=%i [%s]", clt, str_addr_src);
 		if (gridd_flags & GRIDD_FLAG_SHUTDOWN)
 			shutdown (clt, SHUT_RDWR);
 		metautils_pclose (&clt);
@@ -626,7 +626,7 @@ preload_plugins (GKeyFile *cfgFile, GError **err)
 		goto errorLabel;
 	}
 
-	DEBUG ("Start loading all the plugins found in the configuration");
+	GRID_DEBUG ("Start loading all the plugins found in the configuration");
 
 	/*run the key's list and keep those mathing Plugin~*/
 	groups = g_key_file_get_groups (cfgFile, &nbgroups);
@@ -678,7 +678,7 @@ preload_plugins (GKeyFile *cfgFile, GError **err)
 			/*load the main exported symbol*/
 			if (plugin_holder_keep(mod, params, err))
 			{
-				DEBUG ("loaded %s", fileName);
+				GRID_DEBUG ("loaded %s", fileName);
 			}
 			else
 			{
@@ -724,12 +724,12 @@ set_srv_addr(const gchar* url)
 
 	newaddr = g_malloc0(sizeof(addr_info_t));
 	if (!grid_string_to_addrinfo(url, newaddr))
-		ERROR("Failed to init the server address to [%s] : %s", url, gerror_get_message(local_error));
+		GRID_ERROR("Failed to init the server address to [%s] : %s", url, gerror_get_message(local_error));
 	if (local_error)
 		g_clear_error(&local_error);
 
 	grid_addrinfo_to_string(newaddr, str_addr, sizeof(str_addr));
-	NOTICE("Saving [%s] as main server address", str_addr);
+	GRID_NOTICE("Saving [%s] as main server address", str_addr);
 }
 
 static int
@@ -745,7 +745,7 @@ load_servers (GKeyFile *cfgFile, GError **err)
 		goto errorLabel;
 	}
 
-	DEBUG ("Start loading all the servers found in the configuration");
+	GRID_DEBUG ("Start loading all the servers found in the configuration");
 
 	/*run the key's list and keep those mathing Plugin~*/
 	groups = g_key_file_get_groups (cfgFile, &nbgroups);
@@ -871,7 +871,7 @@ load_servers (GKeyFile *cfgFile, GError **err)
 					if (0 == strcmp (h->name, pluginList [nbPlugins-1]))
 					{
 						BEACON_SRV.next->handlers[nbPlugins-1] = h;
-						DEBUG ("The message handler '%s' has been prepended to the server '%s'", pluginList [nbPlugins-1], BEACON_SRV.next->name);
+						GRID_DEBUG ("The message handler '%s' has been prepended to the server '%s'", pluginList [nbPlugins-1], BEACON_SRV.next->name);
 						break;
 					}
 				}
@@ -884,7 +884,7 @@ load_servers (GKeyFile *cfgFile, GError **err)
 			}
 
 			/*debug the server structure*/
-			DEBUG ("New server created SRV=%s POOL=%p WORKER={min:%d max:%d min_spare:%d max_spare:%d} TO_CNX=%i TO_OP=%i",
+			GRID_DEBUG ("New server created SRV=%s POOL=%p WORKER={min:%d max:%d min_spare:%d max_spare:%d} TO_CNX=%i TO_OP=%i",
 				srv->name, (void*)srv->ap,
 				srv->mon.min_workers, srv->mon.max_workers,
 				srv->mon.min_spare_workers, srv->mon.max_spare_workers,
@@ -968,7 +968,7 @@ load_configuration (const char *cfg_path, GError **err)
 {
 	GKeyFile *cfgFile = NULL;
 
-	INFO("Logging facility configured!");
+	GRID_INFO("Logging facility configured!");
 
 	/*Parse the configuration*/
 	cfgFile = g_key_file_new ();
@@ -997,7 +997,7 @@ load_configuration (const char *cfg_path, GError **err)
 		goto errorLabel;
 	}
 
-	INFO ("Plug-in's loaded!");
+	GRID_INFO ("Plug-in's loaded!");
 
 	/*then load the servers from the configuration file*/
 	if (!load_servers (cfgFile, err)) {
@@ -1005,7 +1005,7 @@ load_configuration (const char *cfg_path, GError **err)
 		goto errorLabel;
 	}
 
-	INFO ("Server threads loaded!");
+	GRID_INFO ("Server threads loaded!");
 
 	g_key_file_free (cfgFile);
 	return 1;
@@ -1033,7 +1033,7 @@ retry:
 	for (struct server_s *srv=BEACON_SRV.next ; srv ; srv=srv->next) {
 		gint64 i64;
 		if (0 < (i64 = server_has_thread(srv))) {
-			INFO("Waiting for workers : still %"G_GINT64_FORMAT, i64);
+			GRID_INFO("Waiting for workers : still %"G_GINT64_FORMAT, i64);
 			g_usleep(G_TIME_SPAN_SECOND);
 			goto retry;
 		}
@@ -1062,7 +1062,7 @@ start_server_threads(struct server_s *srv)
 		if (thread_start(srv)) {
 			nb++;
 		} else {
-			ERROR("Cannot start a worker thread for %s", srv->name);
+			GRID_ERROR("Cannot start a worker thread for %s", srv->name);
 			thread_monitoring_remove(srv, FALSE);
 		}
 	}
@@ -1078,9 +1078,9 @@ start_threads (void)
 
 	for (srv=BEACON_SRV.next ; srv ; srv=srv->next) {
 		if (start_server_threads(srv))
-			NOTICE("Some threads started for %s",srv->name);
+			GRID_NOTICE("Some threads started for %s",srv->name);
 		else {
-			ERROR("No threads started for %s",srv->name);
+			GRID_ERROR("No threads started for %s",srv->name);
 			all_done = FALSE;
 		}
 	}
@@ -1097,7 +1097,7 @@ main_action (void)
 
 	/*start the threads*/
 	if (!start_threads()) {
-		ERROR("Cannot start threads for all the servers");
+		GRID_ERROR("Cannot start threads for all the servers");
 		grid_main_stop();
 		return;
 	}
@@ -1135,13 +1135,13 @@ main_configure(int argc, char **argv)
 	if (argc > 0) {
 		config_file = g_strdup(argv[0]);
 	} else {
-		ERROR("Missing argument\n");
+		GRID_ERROR("Missing argument\n");
 		return FALSE;
 	}
 
 	GError *err = NULL;
 	if (!load_configuration (config_file, &err)) {
-		ERROR("Failed to load the configuration : (%d) %s", err->code, err->message);
+		GRID_ERROR("Failed to load the configuration : (%d) %s", err->code, err->message);
 		return FALSE;
 	}
 
@@ -1161,19 +1161,19 @@ main_specific_fini (void)
 		threads_to_be_joined = NULL;
 	}
 
-	DEBUG("Closing the servers");
+	GRID_DEBUG("Closing the servers");
 	for (SERVER srv=BEACON_SRV.next; srv ;srv=srv->next) {
 		if (srv->ap) {
 			GError *error = NULL;
 			int nb = accept_close_servers( srv->ap, &error);
 			if (nb>0)
-				ERROR("%d server sockets could not be stopped : %s", nb, error?error->message:"?");
+				GRID_ERROR("%d server sockets could not be stopped : %s", nb, error?error->message:"?");
 			if (error)
 				g_clear_error( &error);
 		}
 	}
 
-	DEBUG("Stopping the servers");
+	GRID_DEBUG("Stopping the servers");
 	for (SERVER srv=BEACON_SRV.next; srv ;srv=srv->next) {
 		if (srv->ap) {
 			g_free(srv->ap);
@@ -1183,9 +1183,9 @@ main_specific_fini (void)
 
 	plugin_holder_close_all();
 
-	DEBUG("Unlinking the servers");
+	GRID_DEBUG("Unlinking the servers");
 	for (struct server_s *s=BEACON_SRV.next; s ;s=s->next) {
-		DEBUG("Stopping %p", s);
+		GRID_DEBUG("Stopping %p", s);
 		if (s->handlers) {
 			g_free(s->handlers);
 			s->handlers = NULL;
@@ -1193,19 +1193,19 @@ main_specific_fini (void)
 		g_rec_mutex_clear(&(s->recMutex));
 	}
 
-	DEBUG("Cleaning the servers");
+	GRID_DEBUG("Cleaning the servers");
 	for (struct server_s *s=BEACON_SRV.next; s ;) {
 		struct server_s *sTmp;
-		DEBUG("Cleaning %p", s);
+		GRID_DEBUG("Cleaning %p", s);
 		sTmp = s->next;
 		g_free(s);
 		s = sTmp;
 	}
 
-	DEBUG("Cleaning the message handlers");
+	GRID_DEBUG("Cleaning the message handlers");
 	for (struct message_handler_s *m=BEACON_MSGHANDLER.next; m ;) {
 		struct message_handler_s *mTmp;
-		DEBUG("Cleaning %p", m);
+		GRID_DEBUG("Cleaning %p", m);
 		mTmp = m->next;
 		g_free(m);
 		m = mTmp;

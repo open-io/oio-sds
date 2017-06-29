@@ -50,7 +50,7 @@ srvtimer_register_regular(const char *name, srvtimer_f fire, srvtimer_f close_cb
 	st = g_try_malloc0(sizeof(struct srvtimer_s));
 
 	if (!name) {
-		WARN("'name' parameter cannot be NULL");
+		GRID_WARN("'name' parameter cannot be NULL");
 		return FALSE;
 	}
 
@@ -71,7 +71,7 @@ srvtimer_register_regular(const char *name, srvtimer_f fire, srvtimer_f close_cb
 void
 srvtimer_init(void)
 {
-	INFO("timers initialization done");
+	GRID_INFO("timers initialization done");
 	memset(&rw_lock, 0, sizeof(rw_lock));
 	g_rw_lock_init(&rw_lock);
 }
@@ -79,13 +79,13 @@ srvtimer_init(void)
 void
 srvtimer_fini(void)
 {
-	DEBUG("about to free the timers");
+	GRID_DEBUG("about to free the timers");
 
 	void func_free(gpointer d, gpointer u)
 	{
 		(void) u;
 		if (d) {
-			TRACE("freeing timer '%s'", ((struct srvtimer_s *) d)->name);
+			GRID_TRACE("freeing timer '%s'", ((struct srvtimer_s *) d)->name);
 			g_free(d);
 		}
 	}
@@ -96,7 +96,7 @@ srvtimer_fini(void)
 	timers_regular = NULL;
 	g_rw_lock_writer_unlock(&rw_lock);
 
-	INFO("timers freed");
+	GRID_INFO("timers freed");
 }
 
 void
