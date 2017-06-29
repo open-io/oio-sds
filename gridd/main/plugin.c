@@ -45,43 +45,14 @@ static void plugin_holder_init (void)
 
 /* ------------------------------------------------------------------------- */
 
-gpointer plugin_get_api (const gchar *plugin_name, GError **err)
-{
-	gpointer ptr;
-	struct plugin_s *plg;
-
-	if (!plugin_name)
-	{
-		GSETERROR(err,"Invalid parameter");
-		return NULL;
-	}
-
-	plugin_holder_init();
-
-	if (!(ptr = g_hash_table_lookup (plugins, plugin_name)))
-	{
-		GSETERROR(err, "plugin %s not found", plugin_name);
-		return NULL;
-	}
-
-	plg = (struct plugin_s*) ptr;
-
-	return plg->syms->get_api(err);
-}
-
 gint plugin_holder_keep (GModule *mod, GHashTable *params, GError **err)
 {
-	struct plugin_s *plg=NULL;
-
-	if (!mod || !params)
-	{
-		GSETERROR(err, "Invalid parameter");
-		return 0;
-	}
+	EXTRA_ASSERT(mod != NULL);
+	EXTRA_ASSERT(params != NULL);
 
 	plugin_holder_init();
 
-	plg = g_malloc0(sizeof(struct plugin_s));
+	struct plugin_s *plg= g_malloc0(sizeof(struct plugin_s));
 
 	/* try to load EXPORTED_SYMBOL_V2 if exists */
 	if (!g_module_symbol(mod, EXPORTED_SYMBOL_NAME_V2, (void**)&(plg->syms))) {
@@ -92,10 +63,8 @@ gint plugin_holder_keep (GModule *mod, GHashTable *params, GError **err)
 		}
 	}
 
-	if (NULL != g_hash_table_lookup(plugins, plg->syms->name))
-	{
+	if (NULL != g_hash_table_lookup(plugins, plg->syms->name)) {
 		g_free (plg);
-		GRID_DEBUG("Module %s already referenced", plg->syms->name);
 		return 1;
 	}
 
@@ -105,8 +74,6 @@ gint plugin_holder_keep (GModule *mod, GHashTable *params, GError **err)
 
 	g_hash_table_insert (plugins, plg->syms->name, plg);
 	plugins_list = g_slist_append (plugins_list, plg);
-
-	GRID_DEBUG("Module %s referenced", plg->syms->name);
 
 	return 1;
 
@@ -146,9 +113,7 @@ gint plugin_holder_init_all (GError **err)
 
 	void runner (gpointer d, gpointer e0) {
 		struct plugin_s *plg = (struct plugin_s*) d;
-		if (!mayContinue)
-			return;
-		if (plg->init_done)
+		if (!mayContinue || plg->init_done)
 			return;
 		plg->init_done = TRUE;
 		GRID_DEBUG ("initializing %s", plg->syms->name);
@@ -164,67 +129,3 @@ gint plugin_holder_init_all (GError **err)
 	GRID_DEBUG ("Plugins initiated!");
 	return mayContinue ? 1 : 0;
 }
-
-gint plugin_holder_update_config (GModule *mod, GHashTable *params, GError **err)
-{
-	struct plugin_s *plg=NULL;
-
-	struct exported_api_s *symbol = NULL;
-
-	if (!mod || !params)
-	{
-		GSETERROR(err, "Invalid parameter");
-		return 0;
-	}
-
-	plugin_holder_init();
-
-	/* try to load EXPORTED_SYMBOL_V2 if exists */
-	if (!g_module_symbol(mod, EXPORTED_SYMBOL_NAME_V2, (gpointer*)&symbol)) {
-		/* loading old style EXPORTED_SYMBOL */
-		if (!g_module_symbol(mod, EXPORTED_SYMBOL_NAME, (gpointer*)&symbol)) {
-			GSETERROR(err, "Cannot get the exported structure (%s) from the plug-in %p (%s)",
-				EXPORTED_SYMBOL_NAME, (void*)mod, g_module_error());
-			return 0;
-		}
-	}
-
-	if ((plg = g_hash_table_lookup(plugins, symbol->name)) == NULL)
-	{
-		GSETERROR(err, "Module %s not found in plugin list.", symbol->name);
-		return 0;
-	}
-
-	plg->params = params;
-
-	GRID_NOTICE("Module %s params table updated", plg->syms->name);
-
-	return 1;
-}
-
-gint plugin_holder_reload_all (GError **err)
-{
-	gboolean mayContinue=TRUE;
-
-	GRID_DEBUG ("About to reload plugins configuration...");
-
-	void runner (gpointer d, gpointer e0)
-	{
-		struct plugin_s *plg = (struct plugin_s*) d;
-		if (!mayContinue)
-			return;
-		GRID_DEBUG ("reloading %s", plg->syms->name);
-		if (plg->syms->configure && !plg->syms->configure (plg->params, e0))
-		{
-			GSETERROR(e0, "Failed to reload plugin %s config", plg->syms->name);
-			mayContinue = FALSE;
-		}
-	}
-
-	g_slist_foreach (plugins_list, runner, err);
-
-	GRID_DEBUG ("configuration reload done!");
-
-	return mayContinue ? 1 : 0;
-}
-

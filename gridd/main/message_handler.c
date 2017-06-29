@@ -100,36 +100,6 @@ reply_context_set_body (struct reply_context_s *ctx, void *body, gsize bodySize,
 }
 
 static void
-reply_context_add_bufheader_in_reply(struct reply_context_s *ctx, const char *k, const guint8 *v, gsize vlen)
-{
-	char *newK=NULL;
-	GByteArray *newV=NULL;
-	if (!ctx || !k || !v || !vlen)
-		return;
-	if (!ctx->extra_headers)
-		ctx->extra_headers = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_clean);
-	newK = g_strdup(k);
-	newV = g_byte_array_append(g_byte_array_new(), v, vlen);
-	g_hash_table_insert( ctx->extra_headers, newK, newV);
-}
-
-void
-reply_context_add_strheader_in_reply(struct reply_context_s *ctx, const char *k, const gchar *v)
-{
-	if (!ctx || !k || !v)
-		return;
-	reply_context_add_bufheader_in_reply(ctx, k, (guint8*)v, strlen(v));
-}
-
-void
-reply_context_add_header_in_reply(struct reply_context_s *ctx, const char *k, GByteArray *v)
-{
-	if (!ctx || !k || !v)
-		return;
-	reply_context_add_bufheader_in_reply(ctx, k, v->data, v->len);
-}
-
-static void
 reply_ctx_header_adder (gpointer k, gpointer v, gpointer u)
 {
 	MESSAGE answer = u;
@@ -190,30 +160,6 @@ gint message_handler_add (const char *name,
 	return 1;
 }
 
-gint message_handler_add_v2 (const char *name,
-		message_matcher_f m, message_handler_v2_f h,
-		const GPtrArray* tags, GError **err)
-{
-	(void) tags;
-
-	if (!name || !m || !h) {
-		GSETERROR(err,"Invalid parameters");
-		return 0;
-	}
-
-	struct message_handler_s *mh;
-	mh = g_malloc0 (sizeof(struct message_handler_s));
-	mh->matcher = m;
-	mh->handler = NULL;
-	strncpy (mh->name, name, SIZE_MSGHANDLERNAME-1);
-	mh->next = BEACON_MSGHANDLER.next;
-	mh->handler_v2 = h;
-
-	BEACON_MSGHANDLER.next = mh;
-
-	return 1;
-}
-
 void
 request_context_clear(struct request_context_s* request_info)
 {
@@ -233,14 +179,6 @@ request_context_free(struct request_context_s* request_info)
 		return;
 	request_context_clear(request_info);
 	g_free(request_info);
-}
-
-void
-request_context_gclean(gpointer p1, gpointer p2)
-{
-	(void) p2;
-	if (p1)
-		request_context_free((struct request_context_s*)p1);
 }
 
 struct request_context_s*

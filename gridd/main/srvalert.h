@@ -39,9 +39,7 @@ int srv_send_falert(const char *id, const char *criticity, const char *fmt, ...)
 
 int srv_send_valert(const char *id, const char *criticity, const char *fmt, va_list args);
 
-#define SRV_SEND_INFO(ID,FMT,...) srv_send_falert(ID,"INFO",FMT,__VA_ARGS__)
 #define SRV_SEND_WARNING(ID,FMT,...) srv_send_falert(ID,"WARNING",FMT,__VA_ARGS__)
 #define SRV_SEND_ERROR(ID,FMT,...) srv_send_falert(ID,"ERROR",FMT,__VA_ARGS__)
-#define SRV_SEND_CRITICAL(ID,FMT,...) srv_send_falert(ID,"CRITICAL",FMT,__VA_ARGS__)
 
 #endif /*OIO_SDS__gridd__main__srvalert_h*/

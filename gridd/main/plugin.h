@@ -66,18 +66,5 @@ struct exported_api_s
  */
 # define EXPORTED_SYMBOL_NAME "exported_symbol"
 # define EXPORTED_SYMBOL_NAME_V2 "exported_symbol_v2"
-# define EXPORTED_SYMBOL exported_symbol
-
-/**
- * Get a copy of the previously registered plugin API.
- * The result has been alocated with g_try_malloc() and must be
- * freed with g_free();
- */
-gpointer plugin_get_api (const gchar *plugin_name, GError **err);
-
-/**
- * Register a new plugin in the core.
- */
-gint plugin_add_api (struct exported_api_s *api, GError **err);
 
 #endif /*OIO_SDS__gridd__main__plugin_h*/
