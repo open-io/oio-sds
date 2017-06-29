@@ -359,6 +359,47 @@ _configure_peering (struct sqlx_service_s *ss)
 }
 
 static gboolean
+_configure_zk_shard(struct sqlx_service_s *ss,
+		const char *realprefix, const char *zk_url)
+{
+	struct sqlx_sync_s *ssync = sqlx_sync_create(zk_url);
+	if (!ssync)
+		return FALSE;
+
+	g_ptr_array_add(ss->sync_tab, ssync);
+
+	sqlx_sync_set_prefix(ssync, realprefix);
+
+	sqlx_sync_set_hash(ssync,
+										 ss->service_config->zk_hash_width,
+										 ss->service_config->zk_hash_depth);
+
+	GError *err = sqlx_sync_open(ssync);
+	if (err != NULL) {
+		GRID_WARN("SYNC init error [%s]: (%d) %s",
+							zk_url, err->code, err->message);
+		g_clear_error(&err);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+static gboolean
+_configure_zk_shard_muxed(struct sqlx_service_s *ss,
+		guint mux_factor, const char *realprefix, const char *zk_url)
+{
+	if (mux_factor <= 0)
+		return FALSE;
+
+	for (guint i=0; i<mux_factor ;++i) {
+		if (!_configure_zk_shard(ss, realprefix, zk_url))
+			return FALSE;
+	}
+	return TRUE;
+}
+
+static gboolean
 _configure_synchronism(struct sqlx_service_s *ss)
 {
 	if (!ss->zk_url) {
@@ -366,26 +407,14 @@ _configure_synchronism(struct sqlx_service_s *ss)
 		return TRUE;
 	}
 
-	ss->sync = sqlx_sync_create(ss->zk_url);
-	if (!ss->sync)
-		return FALSE;
+	ss->sync_tab = g_ptr_array_new();
 
 	gchar *realprefix = g_strdup_printf("/hc/ns/%s/%s", ss->ns_name,
 			ss->service_config->zk_prefix);
-	sqlx_sync_set_prefix(ss->sync, realprefix);
-	g_free(realprefix);
+	STRING_STACKIFY(realprefix);
 
-	sqlx_sync_set_hash(ss->sync, ss->service_config->zk_hash_width,
-			ss->service_config->zk_hash_depth);
-
-	GError *err = sqlx_sync_open(ss->sync);
-	if (err != NULL) {
-		GRID_WARN("SYNC init error: (%d) %s", err->code, err->message);
-		g_clear_error(&err);
-		return FALSE;
-	}
-
-	return TRUE;
+	return _configure_zk_shard_muxed(ss, sqliterepo_zk_mux_factor,
+																	 realprefix, ss->zk_url);
 }
 
 static gchar **
@@ -666,8 +695,9 @@ sqlx_service_action(void)
 	oio_server_volume = SRV.volume;
 
 	election_manager_set_peering(SRV.election_manager, SRV.peering);
-	if (SRV.sync) {
-		election_manager_add_sync(SRV.election_manager, SRV.sync);
+	if (SRV.sync_tab && SRV.sync_tab->len > 0) {
+		for (guint i=0; i<SRV.sync_tab->len ;++i)
+			election_manager_add_sync(SRV.election_manager, SRV.sync_tab->pdata[i]);
 	}
 	sqlx_repository_set_elections(SRV.repository, SRV.election_manager);
 
@@ -792,8 +822,10 @@ sqlx_service_specific_fini(void)
 	if (election_manager_is_operational(SRV.election_manager))
 		election_manager_exit_all(SRV.election_manager,
 				sqliterepo_server_exit_ttl, TRUE);
-	if (SRV.sync)
-		sqlx_sync_close(SRV.sync);
+	if (SRV.sync_tab) {
+		for (guint i=0; i<SRV.sync_tab->len ;++i)
+			sqlx_sync_close(SRV.sync_tab->pdata[i]);
+	}
 	if (SRV.peering)
 		sqlx_peering__destroy(SRV.peering);
 
@@ -854,9 +886,11 @@ sqlx_service_specific_fini(void)
 		election_manager_clean(SRV.election_manager);
 		SRV.election_manager = NULL;
 	}
-	if (SRV.sync) {
-		sqlx_sync_clear(SRV.sync);
-		SRV.sync = NULL;
+	if (SRV.sync_tab) {
+		for (guint i=0; i<SRV.sync_tab->len ;++i)
+			sqlx_sync_clear(SRV.sync_tab->pdata[i]);
+		g_ptr_array_free(SRV.sync_tab, TRUE);
+		SRV.sync_tab = NULL;
 	}
 
 	if (SRV.lb)
