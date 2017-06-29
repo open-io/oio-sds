@@ -22,8 +22,6 @@ gboolean fake_service_ready = FALSE;
 
 static struct path_parser_s *path_parser = NULL;
 static struct network_server_s *server = NULL;
-static struct oio_directory_s *dir = NULL;
-static struct oio_url_s *url = NULL;
 
 GMutex mutex;
 
@@ -273,28 +271,6 @@ fake_service_configure (void)
 	network_server_bind_host (server, FAKE_SERVICE_ADDRESS, handler_action,
 			(network_transport_factory) transport_http_factory0);
 	
-	dir = oio_directory__create_proxy(NAME_SPACE);
-	g_assert_nonnull (dir);
-	
-	url = oio_url_init(NAME_SPACE "/" NAME_ACCOUNT_RDIR "/" RAWX_ADDRESS "/" NAME_SRVTYPE_RDIR "/toto");
-	
-	const char * const values[10] = {
-		"host", FAKE_SERVICE_ADDRESS,
-		"args", "",
-		"type", NAME_SRVTYPE_RDIR,
-		"id", NAME_SPACE "|" NAME_SRVTYPE_RDIR "|" FAKE_SERVICE_ADDRESS,
-		NULL
-	};
-	
-	GError *err = oio_directory__force(dir, url, NAME_SRVTYPE_RDIR, values);
-	if (err) {
-		GRID_INFO("Failed to call 'reference/force': (%d) %s", err->code,
-		          err->message);
-		g_clear_error(&err);
-		
-		return FALSE;
-	}
-	
 	g_mutex_init(&mutex);
 
     return TRUE;
@@ -307,7 +283,7 @@ fake_service_run (void)
 
 	err = network_server_open_servers(server);
     if (err) {
-        GRID_ERROR ("Server opening error: %d %s", err->code, err->message);
+        GRID_ERROR("Server opening error: %d %s", err->code, err->message);
 		g_clear_error(&err);
 		
 		return FALSE;
@@ -317,7 +293,7 @@ fake_service_run (void)
 	
 	err = network_server_run(server, NULL);
     if (err) {
-        GRID_ERROR ("Server opening error: %d %s", err->code, err->message);
+        GRID_ERROR("Server opening error: %d %s", err->code, err->message);
 		g_clear_error(&err);
 		
 		return FALSE;
@@ -341,21 +317,6 @@ fake_service_fini (void)
 		network_server_stop(server);
 		network_server_clean(server);
 		server = NULL;
-	}
-	
-	if (url) {
-		GError *err = oio_directory__unlink(dir, url, NAME_SRVTYPE_RDIR);
-		if (err) {
-			GRID_INFO("Failed to call 'reference/unlink': (%d) %s", err->code,
-					err->message);
-			g_clear_error(&err);
-		}
-		oio_url_clean(url);
-	}
-	
-	if (dir) {
-		oio_directory__destroy(dir);
-		dir = NULL;
 	}
 	
 	g_mutex_clear(&mutex);

@@ -8,20 +8,12 @@
 #include "send_events.h"
 
 #define STORAGE_CHUNK_NEW "storage.chunk.new"
-#define STORAGE_CHUNK_DELETE "storage.chunk.deleted"
+#define STORAGE_CHUNK_DELETED "storage.chunk.deleted"
 #define STORAGE_CONTAINER_NEW "storage.container.new"
 #define STORAGE_CONTAINER_STATE "storage.container.state"
 #define STORAGE_CONTENT_DELETED "storage.content.deleted"
 
 #define CONTENT_VERSION "1498665033873808"
-
-enum event_type_e {
-	CHUNK_NEW,
-	CHUNK_DELETE,
-	CONTAINER_NEW,
-	CONTAINER_STATE,
-	CONTENT_DELETED
-};
 
 #define _PAIR_AND_COMMA(KEY,VAL) if (VAL) { \
 	g_string_append_c(data_json, ','); \
@@ -51,7 +43,7 @@ gdouble speed = 0.0;
 static gint total_errors = 0;
 static gdouble total_speed = 0.0;
 
-static enum event_type_e event_type = CHUNK_NEW;
+enum event_type_e event_type = CHUNK_NEW;
 static const char *type = STORAGE_CHUNK_NEW;
 
 static gboolean
@@ -61,7 +53,7 @@ init_send_event()
 	GError *err = manage_events_queue_init(event_agent_addr);
 	g_free(event_agent_addr);
 	if (err) {
-		GRID_INFO("Failed to initialize event context: (%d) %s", err->code,
+		GRID_ERROR("Failed to initialize event context: (%d) %s", err->code,
 		          err->message);
 		g_clear_error(&err);
 
@@ -98,7 +90,7 @@ send_event()
 	struct oio_url_s *url = NULL;
 	GString *data_json = NULL;
 
-	if (event_type == CHUNK_NEW || event_type == CHUNK_DELETE) {
+	if (event_type == CHUNK_NEW || event_type == CHUNK_DELETED) {
 		data_json = g_string_sized_new(512);
 
 		g_string_append_c(data_json, '{');
@@ -133,7 +125,7 @@ send_event()
 		// _PAIR_AND_COMMA("metachunk_size", resource->info->chunk.metachunk_size);
 		// _PAIR_AND_COMMA("metachunk_hash", resource->info->chunk.metachunk_hash);
 
-		if (event_type == CHUNK_DELETE) {
+		if (event_type == CHUNK_DELETED) {
 			GString *chunk_hash = _random_hex(128);
 			_PAIR_AND_COMMA("chunk_hash", chunk_hash->str);
 			g_string_free(chunk_hash, TRUE);
@@ -247,11 +239,13 @@ send_event()
 
 	GError *err = manage_events_queue_send(type, url, data_json);
 	if (err) {
-		GRID_INFO("Event KO %s: (%d) %s\n", type, err->code, err->message);
+		GRID_ERROR("Event KO %s: (%d) %s\n", type, err->code, err->message);
 		g_clear_error(&err);
 
 		n_errors++;
 	}
+	
+	oio_url_clean(url);
 }
 
 static void
@@ -294,26 +288,21 @@ send_events_defaults(void)
 }
 
 gboolean
-send_events_configure(int argc, char **argv)
+send_events_configure(char *event_type_str)
 {
-	if (argc < 1) {
-		g_printerr("Invalid arguments number\n");
-		return FALSE;
-	}
-
-	if (g_strcmp0(argv[0], "CHUNK_NEW") == 0) {
+	if (g_strcmp0(event_type_str, "CHUNK_NEW") == 0) {
 		event_type = CHUNK_NEW;
 		type = STORAGE_CHUNK_NEW;
-	} else if (g_strcmp0(argv[0], "CHUNK_DELETE") == 0) {
-		event_type = CHUNK_DELETE;
-		type = STORAGE_CHUNK_DELETE;
-	} else if (g_strcmp0(argv[0], "CONTAINER_NEW") == 0) {
+	} else if (g_strcmp0(event_type_str, "CHUNK_DELETED") == 0) {
+		event_type = CHUNK_DELETED;
+		type = STORAGE_CHUNK_DELETED;
+	} else if (g_strcmp0(event_type_str, "CONTAINER_NEW") == 0) {
 		event_type = CONTAINER_NEW;
 		type = STORAGE_CONTAINER_NEW;
-	} else if (g_strcmp0(argv[0], "CONTAINER_STATE") == 0) {
+	} else if (g_strcmp0(event_type_str, "CONTAINER_STATE") == 0) {
 		event_type = CONTAINER_STATE;
 		type = STORAGE_CONTAINER_STATE;
-	} else if (g_strcmp0(argv[0], "CONTENT_DELETED") == 0) {
+	} else if (g_strcmp0(event_type_str, "CONTENT_DELETED") == 0) {
 		event_type = CONTENT_DELETED;
 		type = STORAGE_CONTENT_DELETED;
 	} else {
@@ -359,7 +348,8 @@ send_events_run(void)
 			return;
 		}
 		
-		printf("Events: %d, Errors: %d, Events/sec: %f\n", n_events_per_round, total_errors, total_speed / rounds);
+		printf("Events: %d, Errors: %d, Events/sec: %f\n", n_events_per_round,
+			   total_errors, total_speed / rounds);
 		
 		n_events_per_round += increment;
 	}

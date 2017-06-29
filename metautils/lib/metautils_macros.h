@@ -21,12 +21,13 @@ License along with this library.
 # define OIO_SDS__metautils__lib__metautils_macros_h 1
 
 /* Some well known service types */
-# define NAME_SRVTYPE_META0 "meta0"
-# define NAME_SRVTYPE_META1 "meta1"
-# define NAME_SRVTYPE_META2 "meta2"
-# define NAME_SRVTYPE_RAWX  "rawx"
-# define NAME_SRVTYPE_SQLX  "sqlx"
-# define NAME_SRVTYPE_RDIR  "rdir"
+# define NAME_SRVTYPE_META0   "meta0"
+# define NAME_SRVTYPE_META1   "meta1"
+# define NAME_SRVTYPE_META2   "meta2"
+# define NAME_SRVTYPE_RAWX    "rawx"
+# define NAME_SRVTYPE_SQLX    "sqlx"
+# define NAME_SRVTYPE_RDIR    "rdir"
+# define NAME_SRVTYPE_ACCOUNT "account"
 
 # define NAME_ACCOUNT_RDIR  "_RDIR"
 

@@ -5,7 +5,7 @@
 
 void send_events_defaults(void);
 
-gboolean send_events_configure(int argc, char **argv);
+gboolean send_events_configure(char *event_type_str);
 
 void send_events_run(void);
 
