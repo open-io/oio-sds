@@ -90,18 +90,47 @@ static struct sqlx_sync_vtable_s VTABLE =
 	_awget_siblings,
 };
 
+static gchar *
+_sanitize_and_shuffle_zk_url(const char *url)
+{
+	if (!oio_str_is_set(url)) {
+		GRID_ERROR("Invalid ZK connection string: %s", "not set");
+		return NULL;
+	}
+
+	gchar **tokens = g_strsplit(url, ",", -1);
+	if (!tokens) {
+		GRID_ERROR("Invalid ZK connection string: %s", "not coma-separated");
+		return NULL;
+	}
+	for (gchar **t=tokens; *t ;++t) {
+		if (!oio_str_is_set(*t)) {
+			GRID_ERROR("Invalid ZK connection string: %s", "empty tokens");
+			g_strfreev(tokens);
+			return NULL;
+		}
+	}
+	if (sqliterepo_zk_shuffle)
+		oio_ext_array_shuffle((void**)tokens, g_strv_length(tokens));
+
+	gchar *shuffled = g_strjoinv(",", tokens);
+	g_strfreev(tokens);
+	return shuffled;
+}
+
 struct sqlx_sync_s*
 sqlx_sync_create(const char *url)
 {
+	gchar *shuffled = _sanitize_and_shuffle_zk_url(url);
+	if (!shuffled)
+		return NULL;
+
 	struct sqlx_sync_s *ss = g_malloc0(sizeof(struct sqlx_sync_s));
 	ss->vtable = &VTABLE;
-	ss->zk_prefix = g_strdup("/NOTSET");
-
-	ss->zk_url = g_strdup(url);
-
+	ss->zk_prefix = NULL;
+	ss->zk_url = shuffled;
 	ss->conn_attempts = grid_single_rrd_create(
 			oio_ext_monotonic_seconds(), disconnection_rrd_window + 1);
-
 	return ss;
 }
 
@@ -130,6 +159,8 @@ static gchar *
 _realpath(const struct sqlx_sync_s *ss, const char *path,
 		gchar *d, gsize dlen)
 {
+	EXTRA_ASSERT(ss->zk_prefix != NULL);
+
 	guint w;
 	switch (ss->hash_depth) {
 		case 0:
@@ -151,6 +182,8 @@ static gchar *
 _realdirname(const struct sqlx_sync_s *ss, const char *path,
 		gchar *d, gsize dlen)
 {
+	EXTRA_ASSERT(ss->zk_prefix != NULL);
+
 	guint w;
 	switch (ss->hash_depth) {
 		case 0:

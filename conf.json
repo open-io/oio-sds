@@ -281,6 +281,11 @@
 		"code": "sqliterepo_variables.c",
 		"header": "sqliterepo_variables.h",
 		"variables": [
+			{ "type": "bool", "name": "sqliterepo_zk_shuffle",
+				"key": "sqliterepo.zk.shuffle",
+				"descr": "Should the synchronism mechanism shuffle the set of URL in the ZK connection string? Set to yes as an attempt to a better balancing of the connections to the nodes of the ZK cluster.",
+				"def": true},
+
 			{ "type": "monotonic", "name": "oio_election_period_cond_wait",
 				"key": "sqliterepo.election.wait.quantum",
 				"descr": "In the current sqliterepo repository, while loop-waiting for a final election status to be reached, this value sets the unit amount of time of eacch unit wait on the lock. Keep this value rather small to avoid waitin for too long, but not too small to avoid dumping CPU cycles in active waiting.",
@@ -407,7 +412,7 @@
 				"def": "64Mi", "min": 1, "max": "1<<32 - 1" },
 
 			{ "type": "monotonic", "name": "sqliterepo_zk_timeout",
-				"key": "sqliterepo.timeout.zk",
+				"key": "sqliterepo.zk.timeout",
 				"descr": "Sets the timeout of the zookeeper handle (in the meaning of the zookeeper client library)",
 				"def": "10s", "min": "1ms", "max": "1h" },
 
