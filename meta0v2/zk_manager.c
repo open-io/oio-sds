@@ -141,8 +141,11 @@ zk_srv_manager_create(gchar *namespace, gchar *url, gchar *srvType,
 	g_snprintf(manager->zk_dir, sizeof(manager->zk_dir),
 			"/hc/ns/%s/srv/%s", namespace, srvType);
 
-	manager->zh = zookeeper_init(url, zk_main_watch,
+	gchar **tokens = g_strsplit(url, ";", -1);
+	manager->zh = zookeeper_init(tokens[0], zk_main_watch,
 			sqliterepo_zk_timeout / G_TIME_SPAN_MILLISECOND, NULL, manager, 0);
+	g_strfreev(tokens);
+
 	if (!manager->zh)
 		return NEWERROR(errno, "ZooKeeper init failure: %s", strerror(errno));
 
