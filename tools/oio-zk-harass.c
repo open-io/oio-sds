@@ -43,7 +43,7 @@ struct item_s {
 static struct item_s **paths = NULL;
 
 static void
-_listed(int zrc, const struct String_vector *sv, const void *data)
+_listed(int zrc, const struct String_vector *sv UNUSED, const void *data)
 {
 	guint idx = GPOINTER_TO_UINT(data);
 	struct item_s *item = paths[idx];
