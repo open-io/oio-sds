@@ -138,6 +138,9 @@ void oio_str_gstring_append_json_pair (GString *base,
 void oio_str_gstring_append_json_pair_int (GString *base,
 		const char *k, gint64 v);
 
+void oio_str_gstring_append_json_pair_boolean (GString *base,
+		const char *k, gboolean v);
+
 #define OIO_JSON_append_bool(g,k,v) do { \
 	g_string_append_static(g, "\"" k "\":"); \
 	if (v) \

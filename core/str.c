@@ -405,6 +405,17 @@ void oio_str_gstring_append_json_pair_int (GString *base,
 	g_string_append_printf(base, "%"G_GINT64_FORMAT, v);
 }
 
+void oio_str_gstring_append_json_pair_boolean (GString *base,
+		const char *k, gboolean v) {
+	oio_str_gstring_append_json_quote(base, k);
+	g_string_append_c (base, ':');
+	if (v) {
+		g_string_append_static(base, "True");
+	} else {
+		g_string_append_static(base, "False");
+	}
+}
+
 size_t oio_constptrv_length (const void * const *v) {
 	size_t count = 0;
 	if (v) while (*(v++)) { ++count; }
