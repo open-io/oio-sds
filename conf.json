@@ -281,6 +281,11 @@
 		"code": "sqliterepo_variables.c",
 		"header": "sqliterepo_variables.h",
 		"variables": [
+			{ "type": "uint", "name": "sqliterepo_zk_mux_factor",
+				"key": "sqliterepo.zk.mux_factor",
+				"descr": "For testing purposes. The value simulates ZK sharding on different connection to the same cluster.",
+				"def": 1, "min": 1, "max": 64},
+
 			{ "type": "bool", "name": "sqliterepo_zk_shuffle",
 				"key": "sqliterepo.zk.shuffle",
 				"descr": "Should the synchronism mechanism shuffle the set of URL in the ZK connection string? Set to yes as an attempt to a better balancing of the connections to the nodes of the ZK cluster.",
