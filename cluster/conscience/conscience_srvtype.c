@@ -56,17 +56,10 @@ conscience_srvtype_create(struct conscience_s *conscience, const char *type)
 
 	conscience_srvtype_init(srvtype);
 
-	/*allocate the hashtables */
 	srvtype->services_ht = g_hash_table_new_full(hash_service_id,
 			equal_service_id, NULL, NULL);
 	srvtype->config_ht = g_hash_table_new_full(g_str_hash,
 			g_str_equal, g_free, destroy_gba);
-	if (!srvtype->config_ht || !srvtype->services_ht) {
-		ERROR("HT allocation failure");
-		conscience_srvtype_destroy(srvtype);
-		abort();
-		return NULL;
-	}
 
 	if (type)
 		g_strlcpy(srvtype->type_name, type, sizeof(srvtype->type_name));
@@ -233,11 +226,7 @@ conscience_srvtype_run_all(struct conscience_srvtype_s * srvtype,
 void
 conscience_srvtype_init(struct conscience_srvtype_s *srvtype)
 {
-	if (!srvtype) {
-		WARN("Invalid parameter");
-		return;
-	}
-
+	EXTRA_ASSERT(srvtype != NULL);
 	conscience_srvtype_set_type_expression(srvtype, NULL, "100");
 	srvtype->alert_frequency_limit = 30;
 	srvtype->score_expiration = 300;
@@ -294,7 +283,7 @@ conscience_srvtype_flush(struct conscience_srvtype_s *srvtype)
 		counter++;
 	}
 
-	DEBUG("Service type [%s] flushed, [%u] services removed",
+	GRID_DEBUG("Service type [%s] flushed, [%u] services removed",
 		srvtype->type_name, counter);
 }
 
@@ -326,7 +315,7 @@ conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_
 	/* refresh the tags: create missing, replace existing
 	 * (but the tags are not flushed before) */
 	if (si->tags) {
-		TRACE("Refreshing tags for srv [%.*s]",
+		GRID_TRACE("Refreshing tags for srv [%.*s]",
 				(int)(LIMIT_LENGTH_SRVDESCR), p_srv->description);
 		const guint max = si->tags->len;
 		for (guint i = 0; i < max; i++) {

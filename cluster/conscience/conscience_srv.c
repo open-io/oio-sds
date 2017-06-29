@@ -88,14 +88,14 @@ conscience_srv_compute_score(struct conscience_srv_s *service,
 		struct service_tag_s *pTag;
 
 		if (!f) {
-			DEBUG("[%s/%s/] NULL tag wanted", conscience->ns_info.name,
+			GRID_DEBUG("[%s/%s/] NULL tag wanted", conscience->ns_info.name,
 					srvtype->type_name);
 			return NULL;
 		}
 		g_snprintf(str_name,sizeof(str_name),"%s.%s", b, f);
 		pTag = conscience_srv_get_tag(service, str_name);
 		if (!pTag) {
-			DEBUG("[%s/%s/] Undefined tag wanted: %s",
+			GRID_DEBUG("[%s/%s/] Undefined tag wanted: %s",
 					conscience->ns_info.name, srvtype->type_name, f);
 			return NULL;
 		}
@@ -111,7 +111,7 @@ conscience_srv_compute_score(struct conscience_srv_s *service,
 		case STVT_BUF:
 			return g_strdup(pTag->value.buf);
 		}
-		DEBUG("[%s/%s/] invalid tag value: %s",
+		GRID_DEBUG("[%s/%s/] invalid tag value: %s",
 				conscience->ns_info.name, srvtype->type_name, f);
 		return NULL;
 	}
