@@ -69,7 +69,7 @@ zlib_write_compress_header(FILE *fd, guint32 blocksize, gulong *checksum, guint3
 	written = fwrite(headers->data, headers->len, 1, fd);
 
 	if (written != 1) {
-		DEBUG("Failed to write compression headers");
+		GRID_DEBUG("Failed to write compression headers");
 		goto end;
 	}
 
@@ -102,7 +102,7 @@ zlib_write_compress_eof(FILE *fd, gulong checksum, guint32 *compressed_size)
 	written = fwrite(eof->data, eof->len, 1, fd);
 
 	if (written != 1) {
-		WARN("Failed to write checksum and EOF marker");
+		GRID_WARN("Failed to write checksum and EOF marker");
 		goto end;
 	}
 
@@ -128,7 +128,7 @@ zlib_compress_chunk_part(const void *buf, gsize bufsize, GByteArray *result, gul
 
 	/* Sanity check */
 	if(!result) {
-		ERROR("Invalid parameter : %p", result);
+		GRID_ERROR("Invalid parameter : %p", result);
 		return 1;
 	}
 
@@ -145,7 +145,7 @@ zlib_compress_chunk_part(const void *buf, gsize bufsize, GByteArray *result, gul
 	r = compress(out, &out_max, buf, bufsize_ulong);
 	if (r != Z_OK){
 		/* this should NEVER happen */
-		ERROR("internal error - compression failed");
+		GRID_ERROR("internal error - compression failed");
 		r = 2;
 		goto err;
 	}
@@ -199,7 +199,7 @@ _zlib_fill_decompressed_buffer(struct compressed_chunk_s * chunk, gsize to_skip)
 		nb_read = fread(&out_len, sizeof(out_len), 1, chunk->fd);
 
 		if (nb_read != 1) {
-			DEBUG("Failed to read block uncompressed size: %s",
+			GRID_DEBUG("Failed to read block uncompressed size: %s",
 					feof(chunk->fd)? "EOF" : strerror(errno));
 			return feof(chunk->fd)? 0 : -1;
 		}
@@ -216,7 +216,7 @@ _zlib_fill_decompressed_buffer(struct compressed_chunk_s * chunk, gsize to_skip)
 		nb_read = fread(&in_len, sizeof(in_len), 1, chunk->fd);
 
 		if (nb_read != 1) {
-			DEBUG("Failed to read block compressed size: %s",
+			GRID_DEBUG("Failed to read block compressed size: %s",
 					feof(chunk->fd)? "EOF" : strerror(errno));
 			return feof(chunk->fd)? 0 : -1;
 		}
@@ -231,7 +231,7 @@ _zlib_fill_decompressed_buffer(struct compressed_chunk_s * chunk, gsize to_skip)
 			total_skipped += out_len;
 			if(fseek(chunk->fd, in_len, SEEK_CUR)) {
 				/* fseek issue */
-				DEBUG("Failed to skip block: %s", strerror(errno));
+				GRID_DEBUG("Failed to skip block: %s", strerror(errno));
 				return feof(chunk->fd)? 0 : -1;
 			}
 		}
@@ -240,13 +240,13 @@ _zlib_fill_decompressed_buffer(struct compressed_chunk_s * chunk, gsize to_skip)
 	/* Consider the "to_skip" bytes already read */
 	chunk->read += to_skip;
 
-	DEBUG("_fill_decompressed_buffer: current block compressed size (read from file): %lu", in_len);
-	DEBUG("_fill_decompressed_buffer: block_size = %u", (uint)chunk->block_size);
+	GRID_DEBUG("_fill_decompressed_buffer: current block compressed size (read from file): %lu", in_len);
+	GRID_DEBUG("_fill_decompressed_buffer: block_size = %u", (uint)chunk->block_size);
 
 	/* sanity check of the size values */
 	if (in_len > chunk->block_size || chunk->data_len > chunk->block_size ||
 			in_len == 0 || in_len > chunk->data_len){
-		DEBUG("_fill_decompressed_buffer: block size error - data corrupted\n");
+		GRID_DEBUG("_fill_decompressed_buffer: block size error - data corrupted\n");
 		r = -1;
 		goto err;
 	}
@@ -260,7 +260,7 @@ _zlib_fill_decompressed_buffer(struct compressed_chunk_s * chunk, gsize to_skip)
 		nb_read = fread(chunk->buf, chunk->buf_len, 1, chunk->fd);
 
 		if (nb_read != 1) {
-			DEBUG("Could not read block: %s", strerror(errno));
+			GRID_DEBUG("Could not read block: %s", strerror(errno));
 			r = -1;
 			goto err;
 		}
@@ -273,7 +273,7 @@ _zlib_fill_decompressed_buffer(struct compressed_chunk_s * chunk, gsize to_skip)
 		chunk->buf_len = chunk->data_len;
 		chunk->buf = g_malloc0(chunk->buf_len);
 
-		TRACE("_fill_uncompressed_buffer: before decompress"
+		GRID_TRACE("_fill_uncompressed_buffer: before decompress"
 				" (input=%u max_out=%u expected=%u)",
 				(uint)in_len, (uint)chunk->buf_len, (uint)chunk->data_len);
 
@@ -283,7 +283,7 @@ _zlib_fill_decompressed_buffer(struct compressed_chunk_s * chunk, gsize to_skip)
 		nb_read = fread(in, in_len, 1, chunk->fd);
 		if (nb_read != 1) {
 			g_free(in);
-			DEBUG("Failed to read compressed block");
+			GRID_DEBUG("Failed to read compressed block");
 			r = -1;
 			goto err;
 		}
@@ -294,7 +294,7 @@ _zlib_fill_decompressed_buffer(struct compressed_chunk_s * chunk, gsize to_skip)
 		g_free(in);
 
 		if (r != Z_OK) {
-			DEBUG("zlib uncompress returned %d", r);
+			GRID_DEBUG("zlib uncompress returned %d", r);
 			r = -1;
 			goto err;
 		}
@@ -325,15 +325,15 @@ zlib_compressed_chunk_check_integrity(struct compressed_chunk_s *chunk)
 	nb_read  = fread(eof_info, len, 1, chunk->fd);
 	
 	if (nb_read != 1) {
-		ERROR("Failed to read %"G_GSIZE_FORMAT" bytes from chunk", len);
+		GRID_ERROR("Failed to read %"G_GSIZE_FORMAT" bytes from chunk", len);
 		goto end;
 	}
 
-	DEBUG("chunk->checksum : %lu\n", chunk->checksum);
+	GRID_DEBUG("chunk->checksum : %lu\n", chunk->checksum);
 	
 	c = *((gulong*)(eof_info + sizeof(guint32)));	
 
-	DEBUG("c (get from file): %lu\n", c);
+	GRID_DEBUG("c (get from file): %lu\n", c);
 	/* eof_info + sizeof(guint32) */
 	if(memcmp(&c, &(chunk->checksum), sizeof(gulong)) != 0)
 		goto end;
@@ -366,23 +366,23 @@ zlib_compressed_chunk_get_data(struct compressed_chunk_s *chunk, gsize offset, g
 
 		rf = _zlib_fill_decompressed_buffer(chunk, to_skip);	
 		if (rf < 0) {
-			TRACE("An error occured while filling buffer");
+			GRID_TRACE("An error occured while filling buffer");
 			return -1;
 		}
 
-		DEBUG("Entering compressed_chunk_get_data, buffer refilled, max=%u buf_offset=%u data_len=%u",
+		GRID_DEBUG("Entering compressed_chunk_get_data, buffer refilled, max=%u buf_offset=%u data_len=%u",
 				(uint)buf_len, (uint)chunk->buf_offset, (uint)chunk->data_len);
 	}
 	else {
-		DEBUG("Entering compressed_chunk_get_data, reusing data, max=%u buf_offset=%u data_len=%u",
+		GRID_DEBUG("Entering compressed_chunk_get_data, reusing data, max=%u buf_offset=%u data_len=%u",
 				(uint)buf_len, (uint)chunk->buf_offset, (uint)chunk->data_len);
 	}
 
 	if (!chunk->data_len) {
-		WARN("Premature end of archive");
+		GRID_WARN("Premature end of archive");
 		return 0;
 	} else if (!chunk->buf) {
-		DEBUG("Buffer is null, this must never happen");
+		GRID_DEBUG("Buffer is null, this must never happen");
 		return -1;
 	}
 
@@ -394,7 +394,7 @@ zlib_compressed_chunk_get_data(struct compressed_chunk_s *chunk, gsize offset, g
 		chunk->buf_offset += max_to_read;
 	}
 
-	DEBUG("Exiting compressed_chunk_get_data, max=%u read=%u buf_offset=%u data_len=%u",
+	GRID_DEBUG("Exiting compressed_chunk_get_data, max=%u read=%u buf_offset=%u data_len=%u",
 			(uint)buf_len, (uint)max_to_read, (uint)chunk->buf_offset, (uint)chunk->data_len);
 	return max_to_read;
 }
@@ -415,13 +415,13 @@ zlib_compressed_chunk_init(struct compressed_chunk_s *chunk, const gchar *path)
 	
 	/* Get chunk uncompressed size in his attr */
 	if (!get_rawx_info_from_file(path, &error, &cti)){
-		DEBUG("Failed to get chunk info in attr : %s", error->message);
+		GRID_DEBUG("Failed to get chunk info in attr : %s", error->message);
 		g_clear_error(&error);
 		return 1;
 	}
 
 	ck.uncompressed_size = g_strdup(cti.chunk_size);
-	DEBUG("size get in attr = %s", ck.uncompressed_size); 
+	GRID_DEBUG("size get in attr = %s", ck.uncompressed_size); 
 
 	/* Read magic header & flags */
 	/* place block at top of buffer */
@@ -432,19 +432,19 @@ zlib_compressed_chunk_init(struct compressed_chunk_s *chunk, const gchar *path)
 	ck.fd = fopen(path, "r");
 
 	if (!ck.fd) {
-		DEBUG("Failed to open chunk file");
+		GRID_DEBUG("Failed to open chunk file");
 		r = 1;
 		goto err;
 	}
 	
-	TRACE("compressed_chunk_init: compressed chunk open");
+	GRID_TRACE("compressed_chunk_init: compressed chunk open");
 
 	/* compile for read all header info in one call */
 	nb_read = 0;
 
 	nb_read = fread(headers, sizeof(headers), 1, ck.fd);
 	if (nb_read != 1) {
-		DEBUG("Failed to read compressed chunk headers");
+		GRID_DEBUG("Failed to read compressed chunk headers");
 		r = 2;
 		goto err;
 	}
@@ -464,11 +464,11 @@ zlib_compressed_chunk_init(struct compressed_chunk_s *chunk, const gchar *path)
         	goto err;
     	}
 
-	TRACE("ck.block_size : %d", ck.block_size);
+	GRID_TRACE("ck.block_size : %d", ck.block_size);
 
 	ck.checksum = adler32(0,NULL,0);
 	memcpy(chunk, &ck, sizeof(ck));
-	TRACE("chunk->uncompressed_size = %s", chunk->uncompressed_size);
+	GRID_TRACE("chunk->uncompressed_size = %s", chunk->uncompressed_size);
 
 	r=0;
 
@@ -482,7 +482,7 @@ err:
 gboolean
 zlib_init_compress_checksum(gulong* checksum)
 {
-	TRACE("Init checksum in zlib context");
+	GRID_TRACE("Init checksum in zlib context");
 	*checksum = adler32(0,NULL,0);
 	return TRUE;
 }

@@ -431,7 +431,6 @@ static dav_error *
 dav_rawx_seek_stream(dav_stream *stream, apr_off_t abs_pos)
 {
 	DAV_XDEBUG_POOL(stream->p, 0, "%s(%s)", __FUNCTION__, stream->pathname);
-	TRACE("Seek stream: START please contact CDR if you get this TRACE");
 
 	if (fseek(stream->f, abs_pos, SEEK_SET) != 0) {
 		/* ### should check whether apr_file_seek set abs_pos was set to the
