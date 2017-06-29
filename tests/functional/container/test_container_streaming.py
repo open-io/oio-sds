@@ -10,6 +10,7 @@ import unittest
 
 import requests
 from oio import ObjectStorageApi
+from oio.container.app import CONTAINER_PROPERTIES, CONTAINER_MANIFEST
 from tests.utils import BaseTestCase
 from nose.plugins.attrib import attr
 
@@ -121,9 +122,11 @@ class TestContainerDownload(BaseTestCase):
                                                         container)
 
     def tearDown(self):
+        """
         for name in self._data:
             self.conn.object_delete(self.account, self._cnt, name)
         self.conn.container_delete(self.account, self._cnt)
+        """
         super(TestContainerDownload, self).tearDown()
 
     def _create_data(self, name=gen_names, metadata=None):
@@ -189,24 +192,32 @@ class TestContainerDownload(BaseTestCase):
         self.assertEqual(ret.status_code, 200)
         self.raw = ret.content
 
+        open("_.tar", "w").write(self.raw)
+
         raw = BytesIO(ret.content)
-        tar = tarfile.open(fileobj=raw)
+        tar = tarfile.open(fileobj=raw, ignore_zeros=True)
         info = self._data.keys()
         for entry in tar.getnames():
+            if entry == CONTAINER_MANIFEST:
+                # skip special entry
+                continue
+
             self.assertIn(entry, info)
 
             tmp = tar.extractfile(entry)
             self.assertEqual(self._data[entry]['data'], tmp.read())
             info.remove(entry)
 
-        self.assertEqual(len(info), 0)
+        self.assertEqual(info, [])
         return tar
 
     def _check_metadata(self, tar):
         for entry in tar.getnames():
+            if entry == CONTAINER_MANIFEST:
+                # skip special entry
+                continue
             headers = tar.getmember(entry).pax_headers
             keys = headers.keys()[:]
-            print(keys)
             for key, val in self._data[entry]['meta'].items():
                 key = u"SCHILY.xattr.user." + key.decode('utf-8')
                 self.assertIn(key, headers)
@@ -259,7 +270,7 @@ class TestContainerDownload(BaseTestCase):
 
         data = "".join(data)
         self.assertGreater(len(data), 0)
-        self.assertEqual(org.content, data)
+        self.assertEqual(md5(data).hexdigest(), md5(org.content).hexdigest())
 
     def test_invalid_range(self):
         self._create_data()
@@ -288,10 +299,10 @@ class TestContainerDownload(BaseTestCase):
         self.assertEqual(ret.status_code, 200)
 
         raw = BytesIO(ret.content)
-        tar = tarfile.open(fileobj=raw)
-        self.assertIn(".container_properties", tar.getnames())
+        tar = tarfile.open(fileobj=raw, ignore_zeros=True)
+        self.assertIn(CONTAINER_PROPERTIES, tar.getnames())
 
-        data = json.load(tar.extractfile(".container_properties"))
+        data = json.load(tar.extractfile(CONTAINER_PROPERTIES))
         self.assertIn(key, data)
         self.assertEqual(val, data[key])
 
@@ -316,9 +327,12 @@ class TestContainerDownload(BaseTestCase):
         self.raw = ret.content
 
         raw = BytesIO(ret.content)
-        tar = tarfile.open(fileobj=raw)
+        tar = tarfile.open(fileobj=raw, ignore_zeros=True)
         info = self._data.keys()
         for entry in tar.getnames():
+            if entry == CONTAINER_MANIFEST:
+                # skip special entry
+                continue
             self.assertIn(entry, info)
 
             tmp = tar.extractfile(entry)
@@ -341,7 +355,7 @@ class TestContainerDownload(BaseTestCase):
 
         data = "".join(data)
         self.assertGreater(len(data), 0)
-        self.assertEqual(org.content, data)
+        self.assertEqual(md5(data).hexdigest(), md5(org.content).hexdigest())
 
     @attr('s3')
     def test_s3_check_slo_metadata_download(self):
