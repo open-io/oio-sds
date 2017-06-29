@@ -101,7 +101,6 @@ struct sqlx_service_s
 	struct hc_resolver_s *resolver;
 	struct oio_lb_s *lb;
 	struct oio_lb_world_s *lb_world;
-	GHashTable *lb_pools;
 
 	struct oio_events_queue_s *events_queue;
 	GThread *thread_queue;
