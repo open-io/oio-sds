@@ -1579,24 +1579,12 @@ deferred_watch_COMMON(struct deferred_watcher_context_s *d,
 	EXTRA_ASSERT(DAT_LEFT == d->magic);
 
 	if (d->type == ZOO_SESSION_EVENT) {
-		/* Big disconnection ... let's expire everything ! */
-		GRID_DEBUG("ZK DISCONNECTED, expiring");
-		guint count = 0;
-		_manager_lock(M);
-		for (int i=STEP_CREATING; i<STEP_MAX ;++i) {
-			struct deque_beacon_s *b = M->members_by_state + i;
-			while (b->front != NULL) {
-				struct election_member_s *m = b->front;
-				member_reset(m);
-				member_set_status(m, STEP_NONE);
-				count ++;
-			}
-		}
-		_manager_unlock(M);
-		/* All the items are moved in the STEP_NONE list, so subsequent
-		 * calls shouldn't iterate on anything */
-		if (count)
-			GRID_WARN("ZK DISCONNECTED, expired %u", count);
+		struct election_member_s *member = _find_member(M, d->path, d->gen);
+		member_reset(member);
+		member_set_status(member, STEP_NONE);
+		/* We cannot run all the election and reset everything, because we
+		 * introduced a sharding of the elections across several ZK clusters
+		 * and the coblem concerns only one cluster */
 	} else if (d->type == ZOO_DELETED_EVENT) {
 		struct election_member_s *member = _find_member(M, d->path, d->gen);
 		if (NULL != member) {
