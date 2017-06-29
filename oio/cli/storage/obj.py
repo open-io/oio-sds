@@ -418,7 +418,8 @@ class ListObject(ContainerCommandMixin, lister.Lister):
             '--limit',
             metavar='<limit>',
             type=int,
-            help='Limit the number of objects returned'
+            default=1000,
+            help='Limit the number of objects returned (1000 by default)'
         )
         parser.add_argument(
             '--no-paging', '--full',
