@@ -11,12 +11,16 @@
 #define STORAGE_CHUNK_DELETE "storage.chunk.deleted"
 #define STORAGE_CONTAINER_NEW "storage.container.new"
 #define STORAGE_CONTAINER_STATE "storage.container.state"
+#define STORAGE_CONTENT_DELETED "storage.content.deleted"
+
+#define CONTENT_VERSION "1498665033873808"
 
 enum event_type_e {
 	CHUNK_NEW,
 	CHUNK_DELETE,
 	CONTAINER_NEW,
-	CONTAINER_STATE
+	CONTAINER_STATE,
+	CONTENT_DELETED
 };
 
 #define _PAIR_AND_COMMA(KEY,VAL) if (VAL) { \
@@ -27,6 +31,11 @@ enum event_type_e {
 #define _PAIR_AND_COMMA_INT(KEY,VAL) if (VAL) { \
 	g_string_append_c(data_json, ','); \
 	oio_str_gstring_append_json_pair_int(data_json, KEY, VAL); \
+}
+
+#define _PAIR_AND_COMMA_BOOLEAN(KEY,VAL) if (VAL) { \
+	g_string_append_c(data_json, ','); \
+	oio_str_gstring_append_json_pair_boolean(data_json, KEY, VAL); \
 }
 
 extern gboolean fake_service_ready;
@@ -106,9 +115,7 @@ send_event()
 
 		_PAIR_AND_COMMA("content_path", "test.txt");
 
-		GString *content_version = _random_hex(64);
-		_PAIR_AND_COMMA("content_version",content_version->str);
-		g_string_free(content_version, TRUE);
+		_PAIR_AND_COMMA("content_version", CONTENT_VERSION);
 
 		_PAIR_AND_COMMA("content_storage_policy", "THREECOPIES");
 
@@ -156,7 +163,7 @@ send_event()
 
 			g_string_append_c(data_json, '{');
 			
-			g_string_append(data_json, "\"policy\":null");
+			_PAIR_AND_COMMA("policy", NULL);
 			
 			_PAIR_AND_COMMA_INT("bytes-count", 111);
 			
@@ -166,6 +173,76 @@ send_event()
 			
 			g_string_append_c(data_json, '}');
 		}
+	} else if (event_type == CONTENT_DELETED) {
+		url = oio_url_empty();
+		
+		oio_url_set(url, OIOURL_ACCOUNT, "account");
+		
+		oio_url_set(url, OIOURL_NS, NAME_SPACE);
+		
+		oio_url_set(url, OIOURL_USER, "container");
+		
+		oio_url_set(url, OIOURL_PATH, "test.txt");
+		
+		size_t id_size = oio_url_get_id_size(url);
+		guint8 id[id_size];
+		oio_buf_randomize(id, id_size);
+		oio_url_set_id(url, id);
+		
+		data_json = g_string_sized_new(512);
+
+		g_string_append_static(data_json, "[{");
+		
+		GString *hash = _random_hex(128);
+		oio_str_gstring_append_json_pair(data_json, "hash", hash->str);
+		
+		_PAIR_AND_COMMA_INT("size", 111);
+		
+		_PAIR_AND_COMMA("type", "chunks");
+		
+		_PAIR_AND_COMMA("id", "http://" FAKE_SERVICE_ADDRESS "/rawx");
+		
+		_PAIR_AND_COMMA("pos", "0");
+		
+		g_string_append_static(data_json, "},{");
+		
+		oio_str_gstring_append_json_pair(data_json, "hash", hash->str);
+		g_string_free(hash, TRUE);
+		
+		_PAIR_AND_COMMA("mime-type", OIO_DEFAULT_MIMETYPE);
+		
+		_PAIR_AND_COMMA("chunk-method", "plain/nb_copy=3");
+		
+		_PAIR_AND_COMMA("policy", "THREECOPIES");
+		
+		_PAIR_AND_COMMA("type", "contents_headers");
+		
+		GString *data_id = _random_hex(128);
+		_PAIR_AND_COMMA("id", data_id->str);
+		g_string_free(data_id, TRUE);
+		
+		_PAIR_AND_COMMA_INT("size", 111);
+		
+		g_string_append_static(data_json, "},{");
+		
+		oio_str_gstring_append_json_pair(data_json, "name", "test.txt");
+		
+		_PAIR_AND_COMMA_BOOLEAN("deleted", FALSE);
+		
+		GString *header = _random_hex(128);
+		_PAIR_AND_COMMA("header", header->str);
+		g_string_free(header, TRUE);
+		
+		_PAIR_AND_COMMA_INT("version", g_ascii_strtoll(CONTENT_VERSION, NULL, 10));
+		
+		gint64 ctime = oio_ext_real_time();
+		_PAIR_AND_COMMA_INT("mtime", ctime);
+		
+		_PAIR_AND_COMMA("type", "aliases");
+		
+		_PAIR_AND_COMMA_INT("ctime", ctime);
+		
+		g_string_append_static(data_json, "}]");
 	}
 
 	GError *err = manage_events_queue_send(type, url, data_json);
@@ -236,6 +313,9 @@ send_events_configure(int argc, char **argv)
 	} else if (g_strcmp0(argv[0], "CONTAINER_STATE") == 0) {
 		event_type = CONTAINER_STATE;
 		type = STORAGE_CONTAINER_STATE;
+	} else if (g_strcmp0(argv[0], "CONTENT_DELETED") == 0) {
+		event_type = CONTENT_DELETED;
+		type = STORAGE_CONTENT_DELETED;
 	} else {
 		return FALSE;
 	}
