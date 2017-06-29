@@ -116,8 +116,9 @@ class TestContainerDownload(BaseTestCase):
     def make_uri(self, action, account=None, container=None):
         account = account or self.account
         container = container or self._cnt
-        return '%s/v1.0/%s?acct=%s&ref=%s' % (self._streaming, action,
-                                              account, container)
+        return '%s/v1.0/container/%s?acct=%s&ref=%s' % (self._streaming,
+                                                        action, account,
+                                                        container)
 
     def tearDown(self):
         for name in self._data:
