@@ -204,10 +204,10 @@ meta2_filter_action_check_content(struct gridd_filter_ctx_s * ctx,
 	if (copy_source != NULL)
 		return rc;
 
-	gboolean is_update = false;
+	gboolean is_update = FALSE;
 	const char *update = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_UPDATE);
 	if (update != NULL)
-		is_update=true;
+		is_update=TRUE;
 
 	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
 	GString *message= g_string_new("");
