@@ -43,25 +43,27 @@ enum oio_main_option_type_e {
 	OT_LIST
 };
 
+union oio_main_option_value_u {
+	/* Never used in facts, some IDE (e.g. CLion) are bad at checking
+	 * initializations of unions, and consider only the first choice. All
+	 * the choices are pointers, so authorizing a <void*> as first choice
+	 * will make the IDE happy, even if unused anywhere. */
+	void *any;
+	gboolean *b;
+	gint *i;
+	guint *u;
+	gint64 *i64;
+	gdouble *d;
+	time_t *t;
+	GString **str;
+	GSList **lst;
+};
+
 struct grid_main_option_s
 {
 	const char *name;
 	enum oio_main_option_type_e type;
-	union {
-		/* Never used in facts, some IDE (e.g. CLion) are bad at checking
-		 * initializations of unions, and consider only the first choice. All
-		 * the choices are pointers, so authorizing a <void*> as first choice
-		 * will make the IDE happy, even if unused anywhere. */
-		void *any;
-		gboolean *b;
-		gint *i;
-		guint *u;
-		gint64 *i64;
-		gdouble *d;
-		time_t *t;
-		GString **str;
-		GSList **lst;
-	} data;
+	union oio_main_option_value_u data;
 	const char *descr;
 };
 
