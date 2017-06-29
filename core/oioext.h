@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -23,7 +23,8 @@ License along with this library.
 extern "C" {
 #endif
 
-# include <glib.h>
+#include <glib.h>
+#include <json-c/json.h>
 
 # ifdef HAVE_NO_SLICE
 #  define SLICE_NEW0(T)    g_try_new0(T,1)
@@ -67,9 +68,6 @@ void ** oio_ext_array_concat (void **t0, void **t1);
  * then the items with a FALSE predicate */
 gsize oio_ext_array_partition (gpointer *array, gsize len,
 		gboolean (*predicate)(gconstpointer));
-
-/** Forward declaration from the json-c. It helps us avoiding an incude. */
-struct json_object;
 
 struct oio_ext_json_mapping_s {
 	const char *name;

@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -19,6 +19,9 @@ License along with this library.
 #ifndef OIO_SDS__sdk__oio_sds_h
 #define OIO_SDS__sdk__oio_sds_h 1
 
+#include <stdlib.h>
+#include <core/oiourl.h>
+
 /* Version started to be defined in June, 2016. Version prior to 20160600
  * have no ABI incompatibilities. */
 #define OIO_SDS_VERSION 20170301
@@ -29,7 +32,6 @@ extern "C" {
 
 struct oio_sds_s;
 struct oio_error_s;
-struct oio_url_s;
 
 enum oio_sds_config_e
 {

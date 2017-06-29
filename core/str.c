@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -16,15 +16,13 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
+#include <core/oiostr.h>
+
 #include <string.h>
 #include <errno.h>
 
-#include <glib.h>
+#include <oioext.h>
 
-#include "oioext.h"
-#include "oiostr.h"
-#include "oiourl.h"
-#include "oiolog.h"
 #include "internals.h"
 
 static guint8 masks[] = {

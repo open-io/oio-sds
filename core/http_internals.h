@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -18,6 +18,11 @@ License along with this library.
 
 #ifndef OIO_SDS__sdk__http_internals_h
 # define OIO_SDS__sdk__http_internals_h 1
+
+#include <glib.h>
+#include <curl/curl.h>
+#include <core/oiourl.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -60,9 +65,6 @@ void oio_headers_clear (struct oio_headers_s *h);
 
 void oio_headers_add (struct oio_headers_s *h,
 		const char *k, const char *v);
-
-void oio_headers_add_int64 (struct oio_headers_s *h,
-		const char *k, gint64 i64);
 
 /* --------------------------------------------------------------------------
  * PROXY

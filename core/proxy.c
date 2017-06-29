@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015-2016 OpenIO, work as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -16,19 +16,21 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
+#include <core/http_internals.h>
+
 #include <string.h>
 
-#include <glib.h>
-#include <json.h>
+#include <json-c/json.h>
 #include <curl/curl.h>
 
-#include "oio_core.h"
-#include "oio_sds.h"
-#include "http_internals.h"
-#include "http_put.h"
-#include "internals.h"
+#include <core/oio_sds.h>
+#include <core/oiostr.h>
+#include <core/oiocfg.h>
+#include <core/oiolog.h>
+#include <core/oioext.h>
 
-/* -------------------------------------------------------------------------- */
+#include "internals.h"
+#include "core/http_put.h"
 
 
 static GString *
