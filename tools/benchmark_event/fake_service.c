@@ -238,6 +238,18 @@ action_chunk_delete (struct req_args_s *args)
 	return action_global(args);
 }
 
+static enum http_rc_e
+action_account (struct req_args_s *args)
+{
+	return action_global(args);
+}
+
+static enum http_rc_e
+action_rawx (struct req_args_s *args)
+{
+	return action_global(args);
+}
+
 static void
 configure_request_handlers (void)
 {
@@ -245,6 +257,8 @@ configure_request_handlers (void)
 
 	SET("v1/rdir/push/#POST", action_chunk_new);
 	SET("v1/rdir/delete/#DELETE", action_chunk_delete);
+	SET("v1.0/account/container/update/#POST", action_account);
+	SET("rawx/#DELETE", action_rawx);
 }
 
 // Main functions
@@ -256,7 +270,7 @@ fake_service_configure (void)
 	path_parser = path_parser_init();
 	configure_request_handlers();
 	
-	network_server_bind_host (server, RDIR_ADDRESS, handler_action,
+	network_server_bind_host (server, FAKE_SERVICE_ADDRESS, handler_action,
 			(network_transport_factory) transport_http_factory0);
 	
 	dir = oio_directory__create_proxy(NAME_SPACE);
@@ -265,10 +279,10 @@ fake_service_configure (void)
 	url = oio_url_init(NAME_SPACE "/" NAME_ACCOUNT_RDIR "/" RAWX_ADDRESS "/" NAME_SRVTYPE_RDIR "/toto");
 	
 	const char * const values[10] = {
-		"host", RDIR_ADDRESS,
+		"host", FAKE_SERVICE_ADDRESS,
 		"args", "",
 		"type", NAME_SRVTYPE_RDIR,
-		"id", NAME_SPACE "|" NAME_SRVTYPE_RDIR "|" RDIR_ADDRESS,
+		"id", NAME_SPACE "|" NAME_SRVTYPE_RDIR "|" FAKE_SERVICE_ADDRESS,
 		NULL
 	};
 	
