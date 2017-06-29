@@ -156,6 +156,7 @@ struct election_member_s
 	struct election_member_s *next;
 
 	struct election_manager_s *manager;
+	struct sqlx_sync_s *sync;
 
 	/* Weak pointer to the condition, do not free! */
 	GCond *cond;
@@ -1033,6 +1034,7 @@ _LOCKED_init_member(struct election_manager_s *manager,
 	if (!member && autocreate) {
 		member = g_malloc0 (sizeof(*member));
 		member->generation_id = oio_ext_rand_int();
+		member->sync = manager->sync;
 		member->manager = manager;
 		member->last_status = oio_ext_monotonic_time ();
 		strncpy(member->key, key, sizeof(member->key));
@@ -1391,7 +1393,7 @@ deferred_completion_ASKING(struct exec_later_ASKING_context_s *d)
 				 * if we accept it as-is, we will create a loop on ourselves.
 				 * We delete it and pretend there is no master. */
 				gchar path[PATH_MAXLEN];
-				int zrc2 = sqlx_sync_adelete(d->member->manager->sync,
+				int zrc2 = sqlx_sync_adelete(d->member->sync,
 						member_masterpath(d->member, path, sizeof(path)), -1,
 						completion_DeleteRogueNode, NULL);
 				GRID_WARN("Rogue being deleted %s", path);
@@ -2072,7 +2074,7 @@ _common_action_to_LEAVE(struct election_member_s *member,
 		member->when_unstable = oio_ext_monotonic_time();
 
 	gchar path[PATH_MAXLEN];
-	int zrc = sqlx_sync_adelete(member->manager->sync,
+	int zrc = sqlx_sync_adelete(member->sync,
 			member_fullpath(member, path, sizeof(path)), -1,
 			completion_LEAVING, member);
 
@@ -2133,7 +2135,7 @@ member_action_to_CREATING(struct election_member_s *member)
 
 	const char *myurl = member_get_url(member);
 	gchar path[PATH_MAXLEN];
-	int zrc = sqlx_sync_acreate(member->manager->sync,
+	int zrc = sqlx_sync_acreate(member->sync,
 			member_fullpath(member, path, sizeof(path)),
 			myurl, strlen(myurl),
 			ZOO_EPHEMERAL|ZOO_SEQUENCE,
@@ -2157,7 +2159,7 @@ member_action_to_WATCHING(struct election_member_s *member)
 	EXTRA_ASSERT(!member_has_action(member));
 
 	gchar path[PATH_MAXLEN];
-	int zrc = sqlx_sync_awexists(member->manager->sync,
+	int zrc = sqlx_sync_awexists(member->sync,
 			member_fullpath(member, path, sizeof(path)),
 			watch_SELF, GUINT_TO_POINTER(member->generation_id),
 			completion_WATCHING, member);
@@ -2183,7 +2185,7 @@ member_action_to_LISTING(struct election_member_s *member)
 	EXTRA_ASSERT(member->master_url == NULL);
 
 	gchar path[PATH_MAXLEN];
-	int zrc = sqlx_sync_awget_siblings(member->manager->sync,
+	int zrc = sqlx_sync_awget_siblings(member->sync,
 			member_fullpath(member, path, sizeof(path)),
 			NULL, NULL, completion_LISTING, member);
 
@@ -2208,7 +2210,7 @@ member_action_to_ASKING(struct election_member_s *member)
 	EXTRA_ASSERT(member->master_url == NULL);
 
 	gchar path[PATH_MAXLEN];
-	int zrc = sqlx_sync_awget(member->manager->sync,
+	int zrc = sqlx_sync_awget(member->sync,
 			member_masterpath(member, path, sizeof(path)),
 			watch_MASTER, GUINT_TO_POINTER(member->generation_id),
 			completion_ASKING, member);
