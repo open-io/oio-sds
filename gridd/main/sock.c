@@ -213,15 +213,15 @@ parse_option_mode( struct working_parameter_s *pParam, char *pV )
 	errno=0;
 	u64 = g_ascii_strtoull( pV, &pVEnd, 8);
 	if (errno!=0) {
-		WARN("Invalid mode found for UNIX socket [%s] : %s", pParam->path.ptr, strerror(errno));
+		GRID_WARN("Invalid mode found for UNIX socket [%s] : %s", pParam->path.ptr, strerror(errno));
 	} else if (!u64 && pVEnd==pV) {
-		WARN("Invalid mode found for UNIX socket [%s] : not an integer", pParam->path.ptr);
+		GRID_WARN("Invalid mode found for UNIX socket [%s] : not an integer", pParam->path.ptr);
 	} else if (u64>max) {
-		WARN("Invalid mode found for UNIX socket [%s] : out of range", pParam->path.ptr);
+		GRID_WARN("Invalid mode found for UNIX socket [%s] : out of range", pParam->path.ptr);
 	} else {
 		pParam->mode = u64;
 		pParam->mode |= S_IRUSR|S_IWUSR;
-		NOTICE("UNIX socket [%s] will have permissions [%o]", pParam->path.ptr, pParam->mode);
+		GRID_NOTICE("UNIX socket [%s] will have permissions [%o]", pParam->path.ptr, pParam->mode);
 	}
 }
 
@@ -231,18 +231,18 @@ parse_one_option( struct working_parameter_s *pParam, char *pStr, int len )
 	char *pEq;
 	pEq = g_strstr_len( pStr, len, "=" );
 	if (!pEq) {
-		ERROR("Invalid UNIX socket argument format. Must be key=value");
+		GRID_ERROR("Invalid UNIX socket argument format. Must be key=value");
 		return;
 	} else {
 		char *pK, *pV;
 		pV = pEq+1;
 		pK = pStr;
 		*pEq = '\0';
-		DEBUG("UNIX socket option found: k=[%s] v=[%s]", pK, pV);
+		GRID_DEBUG("UNIX socket option found: k=[%s] v=[%s]", pK, pV);
 		if (0==g_ascii_strcasecmp(pK,"mode")) {
 			parse_option_mode( pParam, pV );
 		} else {
-			ERROR("Unrecongnized UNIX socket option [%s] with value [%s]", pK, pV);
+			GRID_ERROR("Unrecongnized UNIX socket option [%s] with value [%s]", pK, pV);
 		}
 	}
 }
@@ -256,7 +256,7 @@ parse_socket_options( struct working_parameter_s *pParam )
 	pStart = g_strstr_len( pParam->buf, pParam->buf_len, "?" );
 	if (!pStart) {
 		if (g_strstr_len( pParam->buf, pParam->buf_len, "&" )) {
-			WARN("It is unusual to have '?' in a path, without a '&', check UNIX socket paths");
+			GRID_WARN("It is unusual to have '?' in a path, without a '&', check UNIX socket paths");
 		}
 		return;
 	}
@@ -267,11 +267,11 @@ parse_socket_options( struct working_parameter_s *pParam )
 		pEnd = g_strstr_len( pStart, strlen(pStart), "&" );
 		if (pEnd) {
 			*pEnd='\0';
-			DEBUG("Found argument pair [%s]", pStart);
+			GRID_DEBUG("Found argument pair [%s]", pStart);
 			parse_one_option( pParam, pStart, pEnd-pStart );
 			pStart = pEnd+1;
 		} else {
-			DEBUG("Found argument pair [%s]", pStart);
+			GRID_DEBUG("Found argument pair [%s]", pStart);
 			parse_one_option( pParam, pStart, strlen(pStart) );
 			break;
 		}
@@ -339,7 +339,7 @@ check_socket_is_absent( struct working_parameter_s *pParam, GError **err )
 				GSETERROR(err,"Cannot remove the socket at [%s] : %s", pParam->path.ptr, strerror(errno));
 				return -1;
 			} /*else the socket has been unlinked, we retry to connect*/
-			NOTICE("Socket %s unlinked", pParam->path.ptr);
+			GRID_NOTICE("Socket %s unlinked", pParam->path.ptr);
 
 		}
 	}
@@ -409,12 +409,12 @@ accept_add_local (ACCEPT_POOL ap, const gchar *l, GError **err)
 	/*change socket rights*/
 	if (0 != chmod(wrkParam.path.ptr,wrkParam.mode)) {
 		int errsav = errno;
-		ERROR("Failed to set mode [%o] on UNIX socket [%s] : %s", wrkParam.mode, wrkParam.path.ptr, strerror(errsav));
+		GRID_ERROR("Failed to set mode [%o] on UNIX socket [%s] : %s", wrkParam.mode, wrkParam.path.ptr, strerror(errsav));
 		SRV_SEND_WARNING("server","UNIX socket might be not accessible : failed to set mode [%o] on UNIX socket [%s] (%s)",
 			wrkParam.mode, wrkParam.path.ptr, strerror(errsav));
 	}
 	
-	INFO("socket srv=%d %s now monitored", srv, _get_family_name(FAMILY(&sun)));
+	GRID_INFO("socket srv=%d %s now monitored", srv, _get_family_name(FAMILY(&sun)));
 
 	return 1;
 errorLabel:
@@ -619,7 +619,7 @@ remove_unix_socket( int fd )
 	memset( &ss, 0x00, sizeof(ss));
 
 	if (0 != getsockname(fd, (struct sockaddr*)&ss, &ss_size)) {
-		ERROR("getsockname error : %s", strerror(errno));
+		GRID_ERROR("getsockname error : %s", strerror(errno));
 	} else if (ss.ss_family == PF_LOCAL) {
 		struct stat sock_stats;
 		char *path = ((struct sockaddr_un*) &ss)->sun_path;
@@ -628,20 +628,20 @@ remove_unix_socket( int fd )
 		memset(&sock_stats, 0x00, sizeof(sock_stats));
 		if (0 != stat(path, &sock_stats)) {
 			/*socket not found, this is not really a problem*/
-			NOTICE("Listen socket (%s) not found : %s", path, strerror(errno));
+			GRID_NOTICE("Listen socket (%s) not found : %s", path, strerror(errno));
 			return;
 		} else {
 			if (!S_ISSOCK(sock_stats.st_mode)) {
-				ERROR("Listen socket (%s) is not a socket, not removed", path);
+				GRID_ERROR("Listen socket (%s) is not a socket, not removed", path);
 				return;
 			}
 		}
 
 		/*remove ... now!*/
 		if (0 != unlink(path)) {
-			ERROR("Listen socket (%s) cannot be removed : %s", path, strerror(errno));
+			GRID_ERROR("Listen socket (%s) cannot be removed : %s", path, strerror(errno));
 		} else {
-			NOTICE("Socket %s removed", path);
+			GRID_NOTICE("Socket %s removed", path);
 		}
 	}
 }

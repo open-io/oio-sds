@@ -39,11 +39,9 @@ srvstat_get_gvariant(const gchar *name)
 	GVariant *gv;
 
 	if (!name) {
-		WARN("Invalid parameter (name=%p)", name);
+		GRID_WARN("Invalid parameter (name=%p)", name);
 		return NULL;
 	}
-
-	TRACE2("Looking for stat named [%s]", name);
 
 	if (!ht_stats)
 		srvstat_init();
@@ -55,15 +53,9 @@ srvstat_get_gvariant(const gchar *name)
 	g_rw_lock_writer_unlock (&rw_lock);
 
 	if (!gv) {
-		TRACE2("Found <%s,NULL>", name);
 		return NULL;
 	}
 
-	if (TRACE2_ENABLED()) {
-		gchar *s = g_variant_print(gv, TRUE);
-		TRACE2("Found <%s,%s>", name, s);
-		g_free(s);
-	}
 	return gv;
 }
 
@@ -71,7 +63,7 @@ gboolean
 srvstat_set_gvariant(const gchar *name, GVariant *gv)
 {
 	if (!name || !gv) {
-		WARN("Invalid parameter (name=%p gv=%p)", name, gv);
+		GRID_WARN("Invalid parameter (name=%p gv=%p)", name, gv);
 		return FALSE;
 	}
 
@@ -108,11 +100,9 @@ srvstat_get_double(const gchar *name, gdouble *value)
 	GVariant *gv;
 
 	if (!name || !value) {
-		WARN("Invalid parameter (name=%p value=%p)", name, value);
+		GRID_WARN("Invalid parameter (name=%p value=%p)", name, value);
 		return FALSE;
 	}
-
-	TRACE2("Getting double stat named [%s]", name);
 
 	if (!(gv = srvstat_get_gvariant(name)))
 		return FALSE;
@@ -203,14 +193,14 @@ srvstat_init (void)
 void
 srvstat_fini (void)
 {
-	DEBUG("about to free the statistics");
+	GRID_DEBUG("about to free the statistics");
 	g_rw_lock_writer_lock (&rw_lock);
 	if (ht_stats) {
 		g_hash_table_destroy (ht_stats);
 		ht_stats = NULL;
 	}
 	g_rw_lock_writer_unlock (&rw_lock);
-	INFO("statistics freed");
+	GRID_INFO("statistics freed");
 }
 
 void srvstat_flush (void)
@@ -219,7 +209,7 @@ void srvstat_flush (void)
 		(void)k; (void)v; (void)u;
 		return TRUE;
 	}
-	DEBUG("about to flush the statistics");
+	GRID_DEBUG("about to flush the statistics");
 	if (!ht_stats)
 		srvstat_init();
 	else {
@@ -227,7 +217,7 @@ void srvstat_flush (void)
 		g_hash_table_foreach_remove (ht_stats, func_yes, NULL);
 		g_rw_lock_writer_unlock (&rw_lock);
 	}
-	INFO("statistics flushed");
+	GRID_INFO("statistics flushed");
 }
 
 void
@@ -236,10 +226,8 @@ srvstat_foreach_gvariant(const gchar *pattern, srvstat_iterator_gvariant_f cb, v
 	GHashTableIter iter;
 	gpointer k, v;
 
-	TRACE2("Running all stats with pattern [%s]", pattern);
-
 	if (!pattern || !*pattern) {
-		WARN("invalid parameter");
+		GRID_WARN("invalid parameter");
 		return ;
 	}
 	
