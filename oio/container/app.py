@@ -22,12 +22,12 @@ try:
 except ImportError:
     import json  # noqa
 
+from collections import OrderedDict
 import math
 import re
 import os
 from tarfile import TarInfo, REGTYPE, NUL, PAX_FORMAT, BLOCKSIZE, XHDTYPE, \
                     DIRTYPE, AREGTYPE
-import time
 
 from werkzeug.wrappers import Request, Response
 from werkzeug.routing import Map, Rule
@@ -52,25 +52,25 @@ EXP = re.compile(r"^bytes=(\d+)-(\d+)$")
 
 NS = os.getenv("OIO_NS")
 CONTAINER_PROPERTIES = ".container_properties"
+CONTAINER_MANIFEST = ".container_manifest"
 SCHILY = "SCHILY.xattr.user."
 SLO = 'x-static-large-object'
 SLO_SIZE = 'x-object-sysmeta-slo-size'
 SLO_ETAG = 'x-object-sysmeta-slo-etag'
 SLO_HEADERS = (SLO, SLO_SIZE, SLO_ETAG)
-HDR_MANIFEST = 'x-oio-container-manifest'
 
 
 class OioTarEntry(object):
-    def __init__(self, conn, account, container, name, meta=None):
+    def __init__(self, conn, account, container, name, data=None):
         self._slo = None
         self._buf = None
         self.acct = account
         self.ref = container
         self.name = name
         self._filesize = 0
-        self.compute(conn, meta)
+        self.compute(conn, data)
 
-    def compute(self, conn, meta=None):
+    def compute(self, conn, data=None):
         tarinfo = TarInfo()
         tarinfo.name = self.name
         tarinfo.mod = 0o700
@@ -80,10 +80,13 @@ class OioTarEntry(object):
         tarinfo.linkname = ""
 
         if self.name == CONTAINER_PROPERTIES:
-            meta = meta or conn.container_get_properties(self.acct, self.ref)
-            tarinfo.mtime = int(time.time())
-            tarinfo.size = len(json.dumps(meta['properties']))
-            tarinfo.mtime = int(time.time())
+            meta = data or conn.container_get_properties(self.acct, self.ref)
+            tarinfo.size = len(json.dumps(meta['properties'], sort_keys=True))
+            self._filesize = tarinfo.size
+            self._buf = tarinfo.tobuf(format=PAX_FORMAT)
+            return
+        elif self.name == CONTAINER_MANIFEST:
+            tarinfo.size = len(json.dumps(data, sort_keys=True))
             self._filesize = tarinfo.size
             self._buf = tarinfo.tobuf(format=PAX_FORMAT)
             return
@@ -96,7 +99,7 @@ class OioTarEntry(object):
         if properties.get(SLO, False):
             tarinfo.size = int(properties.get(SLO_SIZE))
             _, slo = conn.object_fetch(self.acct, self.ref, self.name)
-            self._slo = json.loads("".join(slo))
+            self._slo = json.loads("".join(slo), object_pairs_hook=OrderedDict)
         else:
             tarinfo.size = int(entry['length'])
         self._filesize = tarinfo.size
@@ -110,7 +113,6 @@ class OioTarEntry(object):
                 continue
             tarinfo.pax_headers[SCHILY + key] = val
         tarinfo.pax_headers['mime_type'] = entry['mime_type']
-        # PAX_FORMAT should be used only if xattr was found
         self._buf = tarinfo.tobuf(format=PAX_FORMAT)
 
     @property
@@ -143,6 +145,7 @@ class ContainerTarFile(object):
         self.container = container
         self.blocks = blocks
         self.oio_map = oio_map
+        self.manifest = oio_map[:]
         self.conn = conn
         self.logger = logger
         if not blocks:
@@ -223,14 +226,24 @@ class ContainerTarFile(object):
             self.logger.error("data written does not match blocksize")
         return mem
 
-    def create_tar_oio_properties(self, entry, blocks):
+    def create_tar_oio_properties(self, entry, blocks, name):
         """
-        Extract data from fake object that contains properties of container
+        Extract data from fake object for :name:
+            CONTAINER_PROPERTIES: contains properties of container
+            CONTAINER_MANIFEST: map of object in Tar
         """
-        meta = self.conn.container_get_properties(self.acct, self.container)
-        if not meta['properties']:
-            self.logger.error("container properties are empty")
-        data = json.dumps(meta['properties'])
+        nb_blocks_to_serve = len(blocks) * BLOCKSIZE
+        if name == CONTAINER_PROPERTIES:
+            meta = self.conn.container_get_properties(self.acct,
+                                                      self.container)
+            if not meta['properties']:
+                self.logger.error("container properties are empty")
+            struct = meta
+            data = json.dumps(meta['properties'], sort_keys=True)
+        elif name == CONTAINER_MANIFEST:
+            struct = self.manifest
+            data = json.dumps(self.manifest, sort_keys=True)
+
         size = len(data)
         mem = ""
 
@@ -239,9 +252,7 @@ class ContainerTarFile(object):
 
         if set(blocks).intersection(range(entry['hdr_block'])):
             tar = OioTarEntry(self.conn, self.acct, self.container,
-                              CONTAINER_PROPERTIES, meta=meta)
-            # buf, entry_blocks, _, _ = generate_oio_tarinfo_fake_entry(
-            #    CONTAINER_PROPERTIES, size, self.logger)
+                              name, data=struct)
 
             for bl in xrange(entry['hdr_block']):
                 if bl in blocks:
@@ -274,6 +285,10 @@ class ContainerTarFile(object):
             self.logger.error("no data extracted")
         if divmod(len(mem), BLOCKSIZE)[1]:
             self.logger.error("data written does not match blocksize")
+
+        # add padding if needed
+        if len(mem) != nb_blocks_to_serve:
+            mem += NUL * (nb_blocks_to_serve - len(mem))
         return mem
 
     def read(self, size=-1):
@@ -312,8 +327,8 @@ class ContainerTarFile(object):
 
             if 'name' not in val:
                 data = NUL * len(blocks) * BLOCKSIZE
-            elif val['name'] == CONTAINER_PROPERTIES:
-                data = self.create_tar_oio_properties(val, blocks)
+            elif val['name'] in (CONTAINER_PROPERTIES, CONTAINER_MANIFEST):
+                data = self.create_tar_oio_properties(val, blocks, val['name'])
             else:
                 data = self.create_tar_oio_stream(val, blocks)
             if end_block == val['end_block']:
@@ -361,7 +376,7 @@ class ContainerStreaming(RedisConn):
         cache = self.conn.get(hash_map)
         if cache:
             self.logger.debug("using cache")
-            return json.loads(cache)
+            return json.loads(cache, object_pairs_hook=OrderedDict)
 
         map_objs = []
         start_block = 0
@@ -370,7 +385,7 @@ class ContainerStreaming(RedisConn):
         if meta['properties']:
             # create special file to save properties of container
             tar = OioTarEntry(self.proxy, account, container,
-                              CONTAINER_PROPERTIES, meta=meta)
+                              CONTAINER_PROPERTIES, data=meta)
             entry = {
                 'name': CONTAINER_PROPERTIES,
                 'size': tar.filesize,
@@ -396,7 +411,7 @@ class ContainerStreaming(RedisConn):
                     'block': padding,
                     'size': padding * BLOCKSIZE,
                     'start_block': start_block,
-                    'slo': False,
+                    'slo': None,
                     'hdr_block': padding,
                     'end_block': start_block + padding - 1
                 })
@@ -413,8 +428,47 @@ class ContainerStreaming(RedisConn):
             entry['end_block'] = start_block - 1
             map_objs.append(entry)
 
+        if not map_objs:
+            return map_objs
+
+        entry = {
+            'name': CONTAINER_MANIFEST,
+            'size': 0,
+            'hdr_block': 1,  # a simple PAX header consume only 1 block
+            'block': 0,
+            'start_block': 0,
+            'slo': None,
+        }
+        map_objs.insert(0, entry)
+
+        entry['size'] = len(json.dumps(map_objs, sort_keys=True))
+        # ensure that we reserved enough blocks after recomputing offset
+        entry['block'] = 1 + int(math.ceil(entry['size'] / float(BLOCKSIZE))) * 2
+
+        tar = OioTarEntry(self.proxy, account, container, CONTAINER_MANIFEST,
+                          data=map_objs)
+
+        assert tar.header_blocks == 1, "Incorrect size for hdr_blocks"
+        assert tar.data_blocks <= entry['block']
+
+        # fix start_block and end_block
+        start = 0
+        for _entry in map_objs:
+            _entry['start_block'] = start
+            start += _entry['block']
+            _entry['end_block'] = start - 1
+
+        tar2 = OioTarEntry(self.proxy, account, container, CONTAINER_MANIFEST,
+                           data=map_objs)
+        entry['size'] = tar2.filesize
+
+        assert tar2.header_blocks == tar.header_blocks
+        assert tar2.data_blocks <= entry['block'], \
+            "got %d instead of %d" % (tar2.data_blocks, tar.data_blocks)
+
         self.logger.debug("add entry to cache")
-        self.conn.set(hash_map, json.dumps(map_objs), ex=self.CACHE)
+        self.conn.set(hash_map, json.dumps(map_objs, sort_keys=True),
+                      ex=self.CACHE)
         return map_objs
 
     def wsgi_app(self, environ, start_response):
@@ -445,7 +499,6 @@ class ContainerStreaming(RedisConn):
             'Content-Length': sum([i['block'] for i in results]) * BLOCKSIZE,
             'Accept-Ranges': 'bytes',
             'Content-Type': 'application/tar',
-            HDR_MANIFEST: json.dumps(results),
         }
         return Response(headers=hdrs, status=200)
 
@@ -499,7 +552,6 @@ class ContainerStreaming(RedisConn):
                                 'Accept-Ranges': 'bytes',
                                 'Content-Type': 'application/tar',
                                 'Content-Length': length,
-                                HDR_MANIFEST: json.dumps(results),
                             }, status=200)
 
         # TODO: instead expanding blocks to a full list,
@@ -517,7 +569,6 @@ class ContainerStreaming(RedisConn):
                             'Content-Range': 'bytes %d-%d/%d' %
                                              (start, end, length),
                             'Content-Length': end - start + 1,
-                            HDR_MANIFEST: json.dumps(results),
                         }, status=206)
 
     def on_dump(self, req):
@@ -549,7 +600,6 @@ class ContainerStreaming(RedisConn):
         if req.headers.get('range'):
             _, _, start_block, end_block = self._extract_range(req,
                                                                blocks=None)
-            append = True
             mode = "range"
 
             cur_state = self.conn.get("restore:%s:%s" % (account,
@@ -558,41 +608,39 @@ class ContainerStreaming(RedisConn):
                 if cur_state:
                     raise UnprocessableEntity(
                         "A restoration has been already started")
-                manifest = req.headers.get(HDR_MANIFEST)
-                if not manifest:
-                    raise UnprocessableEntity("Missing %s" % HDR_MANIFEST)
                 cur_state = {
                     'start': -1,
                     'end': -1,
-                    'manifest': json.loads(manifest)}
-                cur_state['last_block'] = max(
-                    [x['end_block'] for x in cur_state['manifest']]) + 1
+                    'manifest': None}
             else:
                 if not cur_state:
-                    raise UnprocessableEntity("First segment is not available")
-                cur_state = json.loads(cur_state)
+                    raise UnprocessableEntity("First segment "
+                                              "is not available")
+                cur_state = json.loads(cur_state,
+                                       object_pairs_hook=OrderedDict)
 
                 if start_block != cur_state['end']:
                     raise UnprocessableEntity(
                         "Segment was already written "
                         "or an error has occured previously")
 
-            for entry in cur_state['manifest']:
-                if start_block > entry['end_block']:
-                    continue
-                if start_block == entry['start_block']:
-                    append = False
-                    break
-                if start_block >= entry['start_block'] + entry['hdr_block']:
-                    append = True
-                    inf = TarInfo()
-                    inf.name = entry['name']
-                    offset = (start_block - entry['start_block']
-                                          - entry['hdr_block'])
-                    inf.size = entry['size'] - offset * BLOCKSIZE
-                    inf.size = min(inf.size, size)
-                    break
-                raise UnprocessableEntity('Header is broken')
+                for entry in cur_state['manifest']:
+                    if start_block > entry['end_block']:
+                        continue
+                    if start_block == entry['start_block']:
+                        append = False
+                        break
+                    if start_block >= entry['start_block'] \
+                            + entry['hdr_block']:
+                        append = True
+                        inf = TarInfo()
+                        inf.name = entry['name']
+                        offset = (start_block - entry['start_block']
+                                  - entry['hdr_block'])
+                        inf.size = entry['size'] - offset * BLOCKSIZE
+                        inf.size = min(inf.size, size)
+                        break
+                    raise UnprocessableEntity('Header is broken')
 
         self.proxy.container_create(account, container)
         r = {'consumed': 0, 'buf': ''}
@@ -616,7 +664,6 @@ class ContainerStreaming(RedisConn):
                 if buf == NUL * BLOCKSIZE:
                     continue
                 inf = TarInfo.frombuf(buf)
-                blocks = int(math.ceil(inf.size / float(BLOCKSIZE)))
                 if mode == "range":
                     inf.size = min(size - r['consumed'], inf.size)
 
@@ -624,27 +671,37 @@ class ContainerStreaming(RedisConn):
                 raise BadRequest('unsupported TAR attribute %s' % inf.type)
 
             if inf.type == XHDTYPE:
-                buf = read(blocks * BLOCKSIZE)
+                buf = read(inf.size)
                 while buf:
                     length = buf.split(' ', 1)[0]
                     if length[0] == '\x00':
                         break
                     tmp = buf[len(length) + 1:int(length) - 1]
                     key, value = tmp.split('=', 1)
-                    assert key not in hdrs
                     if key.startswith(SCHILY):
                         key = key[len(SCHILY):]
+                    assert key not in hdrs, (
+                        "%s already found in %s (object: %s)" %
+                        (key, hdrs, inf.name))
                     hdrs[key] = value
                     buf = buf[int(length):]
 
             elif inf.type in (REGTYPE, AREGTYPE):
                 if inf.name == CONTAINER_PROPERTIES:
                     assert not hdrs, "invalid sequence in TAR"
-                    hdrs = json.loads(read(inf.size))
+                    hdrs = json.loads(read(inf.size),
+                                      object_pairs_hook=OrderedDict)
                     self.proxy.container_set_properties(account, container,
                                                         hdrs)
-                    if inf.size % BLOCKSIZE:
-                        read(BLOCKSIZE - inf.size % BLOCKSIZE)
+                elif inf.name == CONTAINER_MANIFEST:
+                    assert not hdrs, "invalid sequence in TAR"
+                    manifest = json.loads(read(inf.size),
+                                          object_pairs_hook=OrderedDict)
+                    if mode == "range":
+                        cur_state['manifest'] = manifest
+                        cur_state['last_block'] = max(
+                            [x['end_block'] for x in manifest]) + 1
+
                 else:
                     kwargs = {}
                     if not append and hdrs and 'mime_type' in hdrs:
@@ -656,14 +713,16 @@ class ContainerStreaming(RedisConn):
                                              append=append,
                                              data=read(inf.size),
                                              **kwargs)
-                    if inf.size % BLOCKSIZE:
-                        read(BLOCKSIZE - inf.size % BLOCKSIZE)
                     if hdrs:
                         self.proxy.object_set_properties(account, container,
                                                          inf.name,
                                                          properties=hdrs)
                     append = False
                 hdrs = {}
+
+            if inf.size % BLOCKSIZE:
+                read(BLOCKSIZE - inf.size % BLOCKSIZE)
+
         if mode == 'full' or end_block == cur_state['last_block']:
             code = 201
             self.conn.delete("restore:%s:%s" % (account, container))
@@ -672,7 +731,8 @@ class ContainerStreaming(RedisConn):
             cur_state['start'] = start_block
             cur_state['end'] = end_block
             self.conn.set("restore:%s:%s" % (account, container),
-                          json.dumps(cur_state), ex=self.CACHE)
+                          json.dumps(cur_state, sort_keys=True),
+                          ex=self.CACHE)
         return Response(status=code)
 
     def on_restore(self, req):
@@ -691,7 +751,6 @@ class ContainerStreaming(RedisConn):
         try:
             self.proxy.container_get_properties(account, container)
             if not req.headers.get('range'):
-                # TODO: we should check that range start at 0 or not
                 raise Conflict('Container already exists')
         except exc.NoSuchContainer:
             pass
@@ -709,6 +768,7 @@ class ContainerStreaming(RedisConn):
         except HTTPException as e:
             return e
         except Exception:  # pylint: disable=broad-except
+            raise
             self.logger.exception('ERROR Unhandled exception in request')
             return InternalServerError('Unmanaged error')
 
