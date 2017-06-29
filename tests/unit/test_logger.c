@@ -63,13 +63,13 @@ main_specific_fini(void)
 static void
 test_round(void)
 {
-	TRACE2("TRACE2\tno domain");
-	TRACE_DOMAIN("dom0", "TRACE\ttab");
-	DEBUG_DOMAIN("dom0.debug", "DEBUG\ttab");
-	INFO_DOMAIN("domain1.info", "INFO\ttab");
-	NOTICE_DOMAIN(G_LOG_DOMAIN, "NOTICE\ttab default domain");
-	WARN_DOMAIN("dom0", "WARN\ttab");
-	ERROR_DOMAIN("dom0.0", "ERROR\ttab");
+	GRID_TRACE2("TRACE2\tno domain");
+	GRID_TRACE("TRACE\ttab");
+	GRID_DEBUG("DEBUG\ttab");
+	GRID_INFO("INFO\ttab");
+	GRID_NOTICE("NOTICE\ttab default domain");
+	GRID_WARN("WARN\ttab");
+	GRID_ERROR("ERROR\ttab");
 }
 
 static void
