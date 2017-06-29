@@ -400,6 +400,24 @@ _configure_zk_shard_muxed(struct sqlx_service_s *ss,
 }
 
 static gboolean
+_configure_multi_zk(struct sqlx_service_s *ss,
+		guint mux_factor, const char *realprefix, const char *zk_url)
+{
+	if (mux_factor <= 0)
+		return FALSE;
+
+	gchar **shards = g_strsplit(zk_url, ";", -1);
+	STRINGV_STACKIFY(shards);
+	for (gchar **shard=shards; shards && *shard ;++shard) {
+		if (!oio_str_is_set(*shard))
+			continue;
+		if (!_configure_zk_shard_muxed(ss, mux_factor, realprefix, *shard))
+			return FALSE;
+	}
+	return TRUE;
+}
+
+static gboolean
 _configure_synchronism(struct sqlx_service_s *ss)
 {
 	if (!ss->zk_url) {
@@ -413,7 +431,7 @@ _configure_synchronism(struct sqlx_service_s *ss)
 			ss->service_config->zk_prefix);
 	STRING_STACKIFY(realprefix);
 
-	return _configure_zk_shard_muxed(ss, sqliterepo_zk_mux_factor,
+	return _configure_multi_zk(ss, sqliterepo_zk_mux_factor,
 																	 realprefix, ss->zk_url);
 }
 
