@@ -92,8 +92,9 @@ struct sqlx_service_s
 	 * configuration facility. */
 	gboolean config_system;
 
+	GPtrArray *sync_tab;
+
 	struct sqlx_repository_s *repository;
-	struct sqlx_sync_s *sync;
 	struct sqlx_peering_s *peering;
 	struct election_manager_s *election_manager;
 	struct network_server_s *server;
