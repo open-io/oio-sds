@@ -28,8 +28,8 @@ trigger_sigfpe(void)
 	static gulong zero = 0LU;
 	int local = 0;
 
-	WARN("COIN!");
-	WARN("%lu", ((gulong)(&local)) % zero);
+	GRID_WARN("COIN!");
+	GRID_WARN("%lu", ((gulong)(&local)) % zero);
 }
 
 static gpointer
@@ -43,7 +43,7 @@ _worker(gpointer data)
 			trigger_sigfpe();
 		sleep(1);
 	}
-	NOTICE("Exiting");
+	GRID_NOTICE("Exiting");
 	return data;
 }
 
@@ -56,25 +56,25 @@ main_action(void)
 		GError *err = NULL;
 		GThread *th = g_thread_try_new("worker", _worker, (gpointer)i, &err);
 		if (NULL != err) {
-			WARN("Thread creation failure : (%s:%d) %s",
+			GRID_WARN("Thread creation failure : (%s:%d) %s",
 					g_quark_to_string(err->domain), err->code, err->message);
 			g_clear_error(&err);
 		}
 		if (NULL != th) {
 			threads = g_slist_prepend(threads, th);
-			NOTICE("Thread started : %p", th);
+			GRID_NOTICE("Thread started : %p", th);
 		}
 	}
 
-	NOTICE("All threads started!");
+	GRID_NOTICE("All threads started!");
 
 	for (GSList *l=threads; l ;l=l->next) {
 		GThread *th;
 		if (NULL == (th = l->data))
 			continue;
-		INFO("Joining thread : %p", th);
+		GRID_INFO("Joining thread : %p", th);
 		g_thread_join(th);
-		NOTICE("Thread joined : %p", th);
+		GRID_NOTICE("Thread joined : %p", th);
 	}
 
 	g_slist_free(threads);
