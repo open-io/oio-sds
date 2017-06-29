@@ -1156,14 +1156,14 @@ Used by `gcc`
  * cmake directive: *OIO_SQLITEREPO_SERVICE_EXIT_TTL*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
-### sqliterepo.timeout.zk
+### sqliterepo.zk.mux_factor
 
-> Sets the timeout of the zookeeper handle (in the meaning of the zookeeper client library)
+> For testing purposes. The value simulates ZK sharding on different connection to the same cluster.
 
- * default: **10 * G_TIME_SPAN_SECOND**
- * type: gint64
- * cmake directive: *OIO_SQLITEREPO_TIMEOUT_ZK*
- * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
+ * default: **1**
+ * type: guint
+ * cmake directive: *OIO_SQLITEREPO_ZK_MUX_FACTOR*
+ * range: 1 -> 64
 
 ### sqliterepo.zk.rrd.threshold
 
@@ -1182,6 +1182,23 @@ Used by `gcc`
  * type: guint
  * cmake directive: *OIO_SQLITEREPO_ZK_RRD_WINDOW*
  * range: 1 -> 4095
+
+### sqliterepo.zk.shuffle
+
+> Should the synchronism mechanism shuffle the set of URL in the ZK connection string? Set to yes as an attempt to a better balancing of the connections to the nodes of the ZK cluster.
+
+ * default: **TRUE**
+ * type: gboolean
+ * cmake directive: *OIO_SQLITEREPO_ZK_SHUFFLE*
+
+### sqliterepo.zk.timeout
+
+> Sets the timeout of the zookeeper handle (in the meaning of the zookeeper client library)
+
+ * default: **10 * G_TIME_SPAN_SECOND**
+ * type: gint64
+ * cmake directive: *OIO_SQLITEREPO_ZK_TIMEOUT*
+ * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### sqlx.lb.refresh_period
 
