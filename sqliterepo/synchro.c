@@ -34,6 +34,27 @@ License along with this library.
 #include "sqlx_remote.h"
 #include "gridd_client_pool.h"
 
+static const char * zoo_state2str(int state) {
+#define ON_STATE(N) do { if (state == ZOO_##N##_STATE) return #N; } while (0)
+	ON_STATE(EXPIRED_SESSION);
+	ON_STATE(AUTH_FAILED);
+	ON_STATE(CONNECTING);
+	ON_STATE(ASSOCIATING);
+	ON_STATE(CONNECTED);
+	return "STATE?";
+}
+
+static const char * zoo_zevt2str(int zevt) {
+#define ON_ZEVT(N) do { if (zevt == ZOO_##N##_EVENT) return #N; } while (0)
+	ON_ZEVT(CREATED);
+	ON_ZEVT(DELETED);
+	ON_ZEVT(CHANGED);
+	ON_ZEVT(CHILD);
+	ON_ZEVT(SESSION);
+	ON_ZEVT(NOTWATCHING);
+	return "EVENT?";
+}
+
 struct sqlx_sync_s
 {
 	struct sqlx_sync_vtable_s *vtable;
