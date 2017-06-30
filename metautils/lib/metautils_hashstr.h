@@ -22,7 +22,7 @@ License along with this library.
 
 # include <string.h>
 # include <glib.h>
-# include <metautils/lib/metautils_bits.h>
+# include <core/internals.h>
 
 typedef struct hashstr_s
 {

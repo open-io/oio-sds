@@ -21,7 +21,6 @@ License along with this library.
 
 #include <core/oiostr.h>
 
-#include "metautils_bits.h"
 #include "metautils_macros.h"
 #include "metautils_errors.h"
 #include "metautils_strings.h"
