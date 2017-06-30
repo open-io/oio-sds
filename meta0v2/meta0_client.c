@@ -29,33 +29,8 @@ static gboolean flag_list = FALSE;
 static gboolean flag_get = FALSE;
 static gboolean flag_reload = FALSE;
 static gboolean flag_reset = FALSE;
-static gboolean flag_getmeta1info = FALSE;
 static gboolean flag_nocheck = FALSE;
-static gboolean flag_destroy_meta1ref = FALSE;
-static gboolean flag_destroy_zk_node = FALSE;
 static guint8 prefix[2] = {0,0};
-static gchar **urls = NULL;
-
-static gboolean
-url_check(const gchar *u)
-{
-	addr_info_t a = {{0}};
-	return grid_string_to_addrinfo(u, &a);
-}
-
-static gboolean
-urlv_check(gchar **urlv)
-{
-	if (!urlv)
-		return FALSE;
-	for (gchar **u = urlv; *u ;u++) {
-		if (!url_check(*u)) {
-			GRID_WARN("Bad address [%s]", *u);
-			return FALSE;
-		}
-	}
-	return TRUE;
-}
 
 static gboolean
 _is_usable_meta0(addr_info_t *m0addr, GSList *exclude)
@@ -265,117 +240,6 @@ exit:
 }
 
 static void
-meta0_init_get_meta1_info(void)
-{
-	GError *err = NULL;
-	GSList *exclude = NULL;
-	GSList *m0_lst = NULL;
-	addr_info_t *m0addr;
-
-	GRID_INFO("GET all META1 information");
-
-	m0addr = _getMeta0addr(&m0_lst,exclude);
-	while (m0addr) {
-		gchar url[STRLEN_ADDRINFO];
-		grid_addrinfo_to_string(m0addr, url , sizeof(url));
-		gchar **result = NULL;
-		err = meta0_remote_get_meta1_info(url, &result);
-
-		if (err != NULL) {
-			GRID_WARN("META0 request error (%d) : %s", err->code, err->message);
-			if (CODE_IS_NETWORK_ERROR(err->code)) {
-				exclude = g_slist_prepend(exclude, m0addr);
-				m0addr = _getMeta0addr(&m0_lst, exclude);
-			} else {
-				m0addr = NULL;
-			}
-			g_clear_error(&err);
-		} else {
-			if (result != NULL) {
-				for (gchar **u = result; *u ;u++)
-					g_print("%s\n",*u);
-				g_free(result);
-			} else {
-				GRID_INFO("No meta1 referenced");
-			}
-			goto exit;
-		}
-	}
-
-	grid_main_set_status(1);
-exit:
-	g_slist_free_full(m0_lst, (GDestroyNotify)service_info_clean);
-}
-
-static void
-meta0_init_destroy_meta1ref(void)
-{
-	GError *err = NULL;
-	GSList *exclude = NULL;
-	GSList *m0_lst = NULL;
-	addr_info_t *m0addr;
-
-	GRID_INFO("Destroy META1 reference");
-
-	m0addr = _getMeta0addr(&m0_lst,exclude);
-	while (m0addr) {
-		gchar url[STRLEN_ADDRINFO];
-		grid_addrinfo_to_string(m0addr, url , sizeof(url));
-		err = meta0_remote_destroy_meta1ref(url, *urls);
-		if (err != NULL) {
-			GRID_WARN("META0 request error (%d) : %s", err->code, err->message);
-			if (CODE_IS_NETWORK_ERROR(err->code)) {
-				exclude = g_slist_prepend(exclude,m0addr);
-				m0addr = _getMeta0addr(&m0_lst,exclude);
-			} else {
-				m0addr = NULL;
-			}
-			g_clear_error(&err);
-		} else {
-			GRID_INFO("META1 reference removed!");
-			goto exit;
-		}
-	}
-
-	grid_main_set_status(1);
-exit:
-	g_slist_free_full(m0_lst, (GDestroyNotify)service_info_clean);
-}
-
-static void
-meta0_init_destroy_zk_node(void)
-{
-	GError *err = NULL;
-	GSList *exclude = NULL;
-	GSList *m0_lst = NULL;
-	addr_info_t *m0addr;
-
-	GRID_INFO("REMOVE META0 Zookeeper node");
-
-	m0addr = _getMeta0addr(&m0_lst,exclude);
-	while (m0addr) {
-		gchar url[STRLEN_ADDRINFO];
-		grid_addrinfo_to_string(m0addr, url , sizeof(url));
-		err = meta0_remote_destroy_meta0zknode(url, *urls);
-		if (err != NULL) {
-			GRID_WARN("META0 request error (%d) : %s", err->code, err->message);
-			if (CODE_IS_NETWORK_ERROR(err->code)) {
-				exclude = g_slist_prepend(exclude,m0addr);
-				m0addr = _getMeta0addr(&m0_lst,exclude);
-			} else {
-				m0addr = NULL;
-			}
-			g_clear_error(&err);
-		} else {
-			GRID_INFO("META0 Zookeeper node removed!");
-			return;
-		}
-	}
-
-	grid_main_set_status(1);
-}
-
-static void
 meta0_action(void)
 {
 	if (flag_list) {
@@ -389,15 +253,6 @@ meta0_action(void)
 	}
 	else if (flag_reset) {
 		meta0_init_reset();
-	}
-	else if (flag_getmeta1info) {
-		meta0_init_get_meta1_info();
-	}
-	else if (flag_destroy_meta1ref) {
-		meta0_init_destroy_meta1ref();
-	}
-	else if (flag_destroy_zk_node) {
-		meta0_init_destroy_zk_node();
 	}
 	else {
 		GRID_INFO("No action specified");
@@ -474,40 +329,6 @@ meta0_configure(int argc, char **argv)
 		if (argc > 2)
 			GRID_DEBUG("Exceeding list arguments ignored.");
 		flag_list = TRUE;
-		return TRUE;
-	}
-	if (!g_ascii_strcasecmp(command, "get_meta1_info")) {
-		if (argc > 2)
-			GRID_DEBUG("Exceeding list arguments ignored.");
-		flag_getmeta1info = TRUE;
-		return TRUE;
-	}
-
-	if (!g_ascii_strcasecmp(command, "destroy_meta1ref")) {
-		if (argc != 3) {
-			GRID_WARN("Missing META1 address");
-			return FALSE;
-		}
-		if (!urlv_check(argv+2)) {
-			GRID_WARN("Invalid META1 address");
-			return FALSE;
-		}
-		urls = g_strdupv(argv+2);
-		flag_destroy_meta1ref = TRUE;
-		return TRUE;
-	}
-
-	if (!g_ascii_strcasecmp(command, "destroy_zknode")) {
-		if (argc != 3) {
-			GRID_WARN("Missing META1 address");
-			return FALSE;
-		}
-		if (!urlv_check(argv+2)) {
-			GRID_WARN("Invalid META1 address");
-			return FALSE;
-		}
-		urls = g_strdupv(argv+2);
-		flag_destroy_zk_node = TRUE;
 		return TRUE;
 	}
 
