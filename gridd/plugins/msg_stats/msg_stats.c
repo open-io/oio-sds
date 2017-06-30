@@ -19,11 +19,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define MODULE_NAME "stats"
 
-#include <string.h>
 #include <sys/time.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
 
 #include <gridd/main/plugin.h>
 #include <gridd/main/message_handler.h>
@@ -35,14 +33,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define JUMPERR(C,M) do { code=(C) ; msg=(M); goto errorLabel; } while (0);
 
 static gint
-plugin_matcher (MESSAGE m, void *param, GError **err)
+plugin_matcher (MESSAGE m, void *param UNUSED, GError **err UNUSED)
 {
-	(void)param, (void)err;
 	gsize len = 0;
 	void *n = metautils_message_get_NAME(m, &len);
-	if (!n || len != sizeof("REQ_STATS")-1)
-		return 0;
-	return 0 == memcmp(n, "REQ_STATS", sizeof("REQ_STATS")-1);
+	return n && len == 9 && !memcmp(n, "REQ_STATS", 9);
 }
 
 static gint
@@ -53,8 +48,7 @@ handler_get_stats(struct request_context_s *req_ctx, GError **err)
 
 	GString *gs = g_string_new ("");
 
-	void msg_append_field(gpointer u, const gchar *name, GVariant *gv) {
-		(void) u;
+	void msg_append_field(gpointer u UNUSED, const gchar *name, GVariant *gv) {
 		if (!gv) return;
 		gchar *v = g_variant_print(gv, FALSE);
 		g_string_append_printf (gs, "%s=%s\n", name, v);
@@ -72,9 +66,8 @@ handler_get_stats(struct request_context_s *req_ctx, GError **err)
 }
 
 static gint
-plugin_handler (MESSAGE m, gint fd, void *param, GError **err)
+plugin_handler (MESSAGE m, gint fd, void *param UNUSED, GError **err)
 {
-	(void) param;
 	struct request_context_s ctx = {0};
 	gettimeofday(&(ctx.tv_start), NULL);
 	ctx.fd = fd;
@@ -84,23 +77,13 @@ plugin_handler (MESSAGE m, gint fd, void *param, GError **err)
 
 /* ------------------------------------------------------------------------- */
 
-static gint plugin_init (GHashTable *params, GError **err)
+static gint plugin_init (GHashTable *params UNUSED, GError **err UNUSED)
 {
-	if (!params) {
-		GSETERROR(err,"invalid parameter");
-		return 0;
-	}
-	
-	message_handler_add ("stats", plugin_matcher, plugin_handler, err);
-
+	message_handler_add ("stats", plugin_matcher, plugin_handler);
 	return 1;
 }
 
-static gint plugin_close (GError **err)
-{
-	(void) err;
-	return 1;
-}
+static gint plugin_close (GError **err UNUSED) { return 1; }
 
 struct exported_api_s exported_symbol = 
 {

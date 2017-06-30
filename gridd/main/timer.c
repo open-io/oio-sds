@@ -43,17 +43,11 @@ struct srvtimer_s
 
 /* ------------------------------------------------------------------------- */
 
-gboolean
+void
 srvtimer_register_regular(const char *name, srvtimer_f fire, srvtimer_f close_cb, gpointer udata, guint64 freq)
 {
-	struct srvtimer_s *st;
-	st = g_try_malloc0(sizeof(struct srvtimer_s));
-
-	if (!name) {
-		GRID_WARN("'name' parameter cannot be NULL");
-		return FALSE;
-	}
-
+	EXTRA_ASSERT(name != NULL);
+	struct srvtimer_s *st = g_malloc0(sizeof(struct srvtimer_s));
 	st->fire = fire;
 	st->close = close_cb;
 	st->u = udata;
@@ -64,8 +58,6 @@ srvtimer_register_regular(const char *name, srvtimer_f fire, srvtimer_f close_cb
 	g_rw_lock_writer_lock(&rw_lock);
 	timers_regular = g_slist_prepend(timers_regular, st);
 	g_rw_lock_writer_unlock(&rw_lock);
-
-	return TRUE;
 }
 
 void

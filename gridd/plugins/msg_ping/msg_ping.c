@@ -19,50 +19,44 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define MODULE_NAME "ping"
 
-#include <string.h>
 #include <sys/time.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
 
 #include <gridd/main/plugin.h>
 #include <gridd/main/message_handler.h>
 
 static gint
-plugin_matcher(MESSAGE m, void *param, GError ** err)
+_match_PING(MESSAGE m, void *param UNUSED, GError ** err UNUSED)
 {
-	(void)param, (void)err;
 	gsize len = 0;
 	void *n = metautils_message_get_NAME(m, &len);
-	if (!n || len != 8)
-		return 0;
-	return 0 == memcmp(n, "REQ_PING", 8);
+	GRID_WARN("%.*s", (gint)len, (gchar*)n);
+	return n && len == 8 && !memcmp(n, "REQ_PING", 8);
 }
 
 static gint
-plugin_handler(MESSAGE m, gint fd, void *param, GError ** err)
+_handle_PING(MESSAGE m, gint fd, void *param UNUSED, GError ** err UNUSED)
 {
 	struct request_context_s req_ctx = {0};
 	struct reply_context_s ctx = {0};
 
-	(void) param, (void) err;
 	gettimeofday(&(req_ctx.tv_start), NULL);
 	req_ctx.fd = fd;
 	req_ctx.request = m;
 	ctx.req_ctx = &req_ctx;
 
 	reply_context_set_message(&ctx, 200, "OK");
-	reply_context_log_access(&ctx, NULL);
 	reply_context_reply(&ctx, err);
 	reply_context_clear(&ctx, TRUE);
 	return 1;
 }
 
 static gint
-plugin_init(GHashTable * params, GError ** err)
+plugin_init(GHashTable * params UNUSED, GError ** err UNUSED)
 {
-	(void)params;
-	return message_handler_add("ping", plugin_matcher, plugin_handler, err);
+	message_handler_add("ping", _match_PING, _handle_PING);
+	return 1;
 }
 
 static gint
