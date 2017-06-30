@@ -1174,9 +1174,9 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 	/* This is an optimization to speedup the locations comparisons.
 	 * It needs __builtin_clzll which is a GCC builtin. */
 # ifdef __GNUC__
-	EXTRA_ASSERT(item->location != 0);
 	// Actual number of bits used by the location.
-	int n_bits = sizeof(oio_location_t) * 8 - __builtin_clzll(item->location);
+	const int n_bits = sizeof(oio_location_t) * 8 -
+		(item->location ? __builtin_clzll(item->location) : 0);
 	// Maximum distance between items with this number of bits.
 	guint16 max_dist = 1 + n_bits / OIO_LB_BITS_PER_LOC_LEVEL;
 	if (self->abs_max_dist < max_dist) {
@@ -1184,7 +1184,6 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 		GRID_DEBUG("Absolute max_dist set to %u", max_dist);
 	}
 # endif
-
 }
 
 void
