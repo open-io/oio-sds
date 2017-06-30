@@ -11,6 +11,7 @@
 #define STORAGE_CHUNK_DELETED "storage.chunk.deleted"
 #define STORAGE_CONTAINER_NEW "storage.container.new"
 #define STORAGE_CONTAINER_STATE "storage.container.state"
+#define STORAGE_CONTAINER_DELETED "storage.container.deleted"
 #define STORAGE_CONTENT_DELETED "storage.content.deleted"
 
 #define CONTENT_VERSION "1498665033873808"
@@ -134,7 +135,8 @@ send_event()
 		}
 		
 		g_string_append_c(data_json, '}');
-	} else if (event_type == CONTAINER_NEW || event_type == CONTAINER_STATE) {
+	} else if (event_type == CONTAINER_NEW || event_type == CONTAINER_STATE
+			|| event_type == CONTAINER_DELETED) {
 		url = oio_url_empty();
 		
 		oio_url_set(url, OIOURL_ACCOUNT, "account");
@@ -150,7 +152,7 @@ send_event()
 			guint8 id[id_size];
 			oio_buf_randomize(id, id_size);
 			oio_url_set_id(url, id);
-		} else {
+		} else if (event_type == CONTAINER_STATE) {
 			data_json = g_string_sized_new(512);
 
 			g_string_append_c(data_json, '{');
@@ -164,6 +166,11 @@ send_event()
 			_PAIR_AND_COMMA_INT("ctime", oio_ext_real_time());
 			
 			g_string_append_c(data_json, '}');
+		} else {
+			size_t id_size = oio_url_get_id_size(url);
+			guint8 id[id_size];
+			oio_buf_randomize(id, id_size);
+			oio_url_set_id(url, id);
 		}
 	} else if (event_type == CONTENT_DELETED) {
 		url = oio_url_empty();
@@ -302,6 +309,9 @@ send_events_configure(char *event_type_str)
 	} else if (g_strcmp0(event_type_str, "CONTAINER_STATE") == 0) {
 		event_type = CONTAINER_STATE;
 		type = STORAGE_CONTAINER_STATE;
+	} else if (g_strcmp0(event_type_str, "CONTAINER_DELETED") == 0) {
+		event_type = CONTAINER_DELETED;
+		type = STORAGE_CONTAINER_DELETED;
 	} else if (g_strcmp0(event_type_str, "CONTENT_DELETED") == 0) {
 		event_type = CONTENT_DELETED;
 		type = STORAGE_CONTENT_DELETED;

@@ -167,7 +167,9 @@ grid_main_get_options (void)
 static const char *
 grid_main_get_usage (void)
 {
-	return "CHUNK_NEW/CHUNK_DELETED/CONTAINER_NEW/CONTAINER_STATE/CONTENT_DELETED";
+	return "CHUNK_NEW/CHUNK_DELETED"
+			"/CONTAINER_NEW/CONTAINER_STATE/CONTAINER_DELETED"
+			"/CONTENT_DELETED";
 }
 
 static void
@@ -199,7 +201,8 @@ grid_main_action (void)
 	}
 	
 	// Lock the account service and add fake account
-	if (event_type == CONTAINER_NEW || event_type == CONTAINER_STATE) {
+	if (event_type == CONTAINER_NEW || event_type == CONTAINER_STATE 
+			|| event_type == CONTAINER_DELETED) {
 		cs = oio_cs_client__create_proxied(NAME_SPACE);
 		
 		account_service = get_account_service();
