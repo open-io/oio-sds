@@ -529,8 +529,10 @@ _get_peers_wrapper(struct sqlx_service_s *ss, const struct sqlx_name_s *name,
 	if (!nocache) {
 		err = sqlx_repository_get_peers2(ss->repository, name, &peers);
 		if (err) {
-			GRID_INFO("Failed to get_peers() from local database: (%d) %s",
-					err->code, err->message);
+			if (err->code != CODE_CONTAINER_NOTFOUND) {
+				GRID_INFO("Failed to get_peers() from local database: (%d) %s",
+						err->code, err->message);
+			}
 			g_clear_error(&err);
 			EXTRA_ASSERT(peers == NULL);
 		}
