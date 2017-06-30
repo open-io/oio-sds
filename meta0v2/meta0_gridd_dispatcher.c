@@ -105,29 +105,6 @@ static GByteArray* _get_encoded(struct meta0_disp_s *m0disp) {
 	return encoded;
 }
 
-static GByteArray* _encode_meta1ref(struct meta0_disp_s *m0disp) {
-	GError *err = NULL;
-	GByteArray *encoded = NULL;
-
-	g_mutex_lock(&m0disp->lock);
-	GPtrArray *array = NULL;
-	err = meta0_backend_get_all_meta1_ref(m0disp->m0, &array);
-	if (!err) {
-		if (array->len <= 0 || !array->pdata[array->len - 1])
-			g_ptr_array_add(array, NULL);
-		encoded = STRV_encode_gba((gchar**)array->pdata);
-	}
-	g_mutex_unlock(&m0disp->lock);
-
-	meta0_utils_array_meta1ref_clean(array);
-
-	if (err) {
-		GRID_WARN("META0 reload failed : (%d) %s", err->code, err->message);
-		g_clear_error(&err);
-	}
-	return encoded;
-}
-
 static void _reload(struct meta0_disp_s *m0disp) {
 	GError *err = NULL;
 	GPtrArray *array = NULL;
@@ -219,61 +196,6 @@ meta0_dispatch_v1_RESET(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-meta0_dispatch_v2_META1_INFO(struct gridd_reply_ctx_s *reply,
-		struct meta0_disp_s *m0disp, gpointer ignored UNUSED)
-{
-	reply->add_body(_encode_meta1ref(m0disp));
-	reply->send_reply(CODE_FINAL_OK, "OK");
-	return TRUE;
-}
-
-static gboolean
-meta0_dispatch_v2_DESTROY_META1REF(struct gridd_reply_ctx_s *reply,
-		struct meta0_disp_s *m0disp, gpointer ignored UNUSED)
-{
-	gchar meta1url[STRLEN_ADDRINFO];
-	GError *err = metautils_message_extract_string(reply->request,
-			NAME_MSGKEY_METAURL, meta1url, sizeof(meta1url));
-	if (err != NULL) {
-		reply->send_error(CODE_BAD_REQUEST, err);
-		return TRUE;
-	}
-
-	err = meta0_backend_destroy_meta1_ref(m0disp->m0, meta1url);
-	if (NULL != err) {
-		g_prefix_error(&err, "destroy meta1_ref error:");
-		reply->send_error(0, err);
-		return TRUE;
-	}
-
-	_reload(m0disp);
-	reply->send_reply(CODE_FINAL_OK, "OK");
-	return TRUE;
-}
-
-static gboolean
-meta0_dispatch_v2_DESTROY_ZKNODE(struct gridd_reply_ctx_s *reply,
-		struct meta0_disp_s *m0disp, gpointer ignored UNUSED)
-{
-	gchar meta0url[STRLEN_ADDRINFO];
-	GError *err = metautils_message_extract_string(reply->request,
-			NAME_MSGKEY_METAURL, meta0url, sizeof(meta0url));
-	if (err != NULL) {
-		reply->send_error(CODE_BAD_REQUEST, err);
-		return TRUE;
-	}
-
-	if ( NULL != (err = delete_zk_node(m0disp->m0zkmanager,NULL,meta0url))) {
-		g_prefix_error(&err, "Failed to destroy meta0 in zookeeper :");
-		reply->send_error(0, err);
-		return TRUE;
-	}
-
-	reply->send_reply(CODE_FINAL_OK, "OK");
-	return TRUE;
-}
-
-static gboolean
 meta0_dispatch_v1_FORCE(struct gridd_reply_ctx_s *reply,
 		struct meta0_disp_s *m0disp, gpointer ignored UNUSED)
 {
@@ -311,9 +233,6 @@ const struct gridd_request_descr_s *meta0_gridd_get_requests(void) {
 		{NAME_MSGNAME_M0_RELOAD,              (hook) meta0_dispatch_v1_RELOAD,  NULL},
 		{NAME_MSGNAME_M0_RESET,               (hook) meta0_dispatch_v1_RESET,   NULL},
 		{NAME_MSGNAME_M0_FORCE,               (hook) meta0_dispatch_v1_FORCE,   NULL},
-		{NAME_MSGNAME_M0_GET_META1_INFO,      (hook) meta0_dispatch_v2_META1_INFO, NULL},
-		{NAME_MSGNAME_M0_DESTROY_META1REF,    (hook) meta0_dispatch_v2_DESTROY_META1REF, NULL},
-		{NAME_MSGNAME_M0_DESTROY_META0ZKNODE, (hook) meta0_dispatch_v2_DESTROY_ZKNODE, NULL},
 		{NULL, NULL, NULL}
 	};
 
