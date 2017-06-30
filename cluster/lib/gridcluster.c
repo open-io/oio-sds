@@ -203,25 +203,24 @@ register_namespace_service(const struct service_info_s *si)
 void
 metautils_srvinfo_ensure_tags (struct service_info_s *si)
 {
-	if (!si->tags)
-		return ;
+	if (!si || !si->tags)
+		return;
 
 	if (!service_info_get_tag (si->tags, "stat.cpu"))
 		service_tag_set_value_float(service_info_ensure_tag (
 					si->tags, "stat.cpu"), 100.0 * oio_sys_cpu_idle ());
 
-	gchar vol[512];
+	gchar vol[512] = "";
 	struct service_tag_s *tag = service_info_get_tag (si->tags, "tag.vol");
-	if (tag) {
-		if (service_tag_get_value_string (tag, vol, sizeof(vol), NULL)) {
-			if (!service_info_get_tag(si->tags, "stat.io"))
-				service_tag_set_value_float (service_info_ensure_tag(
-							si->tags, "stat.io"), 100.0 * oio_sys_io_idle (vol));
-			if (!service_info_get_tag(si->tags, "stat.space"))
-				service_tag_set_value_float (service_info_ensure_tag (
-							si->tags, "stat.space"), 100.0 * oio_sys_space_idle (vol));
-		}
-	}
+	if (!tag || !service_tag_get_value_string (tag, vol, sizeof(vol), NULL))
+		return;
+
+	if (!service_info_get_tag(si->tags, "stat.io"))
+		service_tag_set_value_float (service_info_ensure_tag(
+					si->tags, "stat.io"), 100.0 * oio_sys_io_idle (vol));
+	if (!service_info_get_tag(si->tags, "stat.space"))
+		service_tag_set_value_float (service_info_ensure_tag (
+					si->tags, "stat.space"), 100.0 * oio_sys_space_idle (vol));
 }
 
 /* -------------------------------------------------------------------------- */
