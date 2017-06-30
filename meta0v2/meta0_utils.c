@@ -179,21 +179,6 @@ GSList* meta0_utils_array_to_list(GPtrArray *byprefix) {
 
 /* ------------------------------------------------------------------------- */
 
-void meta0_utils_array_meta1ref_clean(GPtrArray *array) {
-	if (!array)
-		return;
-	for (guint i = 0; i < array->len; i++) {
-		gpointer p = array->pdata[i];
-		if (likely(p != NULL))
-			g_free((gchar*)p);
-	}
-	g_ptr_array_free(array, TRUE);
-}
-
-gchar * meta0_utils_pack_meta1ref(gchar *addr, gchar *ref, gchar *nb) {
-	return g_strjoin("|", addr, ref, nb, NULL);
-}
-
 /* The group is represented by the network order 16-bytes prefix,
  * a.k.a. a simple cast from <guint8*> to <guint16> */
 static void

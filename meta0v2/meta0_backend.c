@@ -34,7 +34,6 @@ struct meta0_backend_s
 	gchar *ns;
 	GRWLock rwlock;
 	GPtrArray *array_by_prefix;
-	GPtrArray *array_meta1_ref;
 	struct sqlx_repository_s *repository;
 	gboolean reload_requested;
 };
@@ -72,7 +71,6 @@ meta0_backend_init(const gchar *ns, const gchar *id,
 	m0->id = g_strdup(id);
 	m0->ns = g_strdup(ns);
 	m0->array_by_prefix = NULL;
-	m0->array_meta1_ref = NULL;
 	m0->repository = repo;
 	m0->reload_requested = FALSE;
 
@@ -88,8 +86,6 @@ meta0_backend_clean(struct meta0_backend_s *m0)
 	oio_str_clean (&m0->id);
 	if (m0->array_by_prefix)
 		meta0_utils_array_clean(m0->array_by_prefix);
-	if (m0->array_meta1_ref)
-		meta0_utils_array_meta1ref_clean(m0->array_meta1_ref);
 	g_rw_lock_clear (&m0->rwlock);
 	g_free(m0);
 }
@@ -162,59 +158,6 @@ _load_from_base(struct sqlx_sqlite3_s *sq3, GPtrArray **result)
 }
 
 static GError*
-_load_meta1ref_from_base(struct sqlx_sqlite3_s *sq3, GPtrArray **result)
-{
-	GError *err = NULL;
-	GPtrArray *array;
-	sqlite3_stmt *stmt;
-	int rc;
-	guint count = 0;
-
-	array = g_ptr_array_new();
-
-	sqlite3_prepare_debug(rc, sq3->db, "SELECT addr,state,prefixes FROM meta1_ref",
-			-1, &stmt, NULL);
-	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-		if ( rc == SQLITE_ERROR ) {
-			GRID_DEBUG("Missing table meta1ref in DB");
-			*result = array;
-			return NULL;
-		}
-		return SQLITE_GERROR(sq3->db, rc);
-	}
-
-	for (;;) {
-		rc = sqlite3_step(stmt);
-		if (rc == SQLITE_ROW) {
-			const unsigned char *url,*prefix_nb,*ref;
-			url = sqlite3_column_text(stmt,0);
-			ref = sqlite3_column_text(stmt,1);
-			prefix_nb = sqlite3_column_text(stmt,2);
-
-			GRID_INFO("url %s, ref %s,prefix_nb %s ",url,ref,prefix_nb);
-			g_ptr_array_add(array,meta0_utils_pack_meta1ref((gchar *)url,(gchar *)ref,(gchar *)prefix_nb));
-			count++;
-		}
-		else if (rc == SQLITE_DONE || rc == SQLITE_OK)
-			break;
-		else {
-			err = SQLITE_GERROR(sq3->db, rc);
-			break;
-		}
-
-	}
-	sqlite3_finalize_debug(rc, stmt);
-
-	if (!err) {
-		*result = array;
-		GRID_INFO("Reloaded %u meta1 in %p (%u)",
-				count, array, array->len);
-	}
-
-	return err;
-}
-
-static GError*
 _load(struct meta0_backend_s *m0)
 {
 	GError *err = NULL;
@@ -230,10 +173,6 @@ _load(struct meta0_backend_s *m0)
 	err = _load_from_base(sq3, &(m0->array_by_prefix));
 	if (err != NULL)
 		g_prefix_error(&err, "Query error: ");
-
-	err = _load_meta1ref_from_base(sq3, &(m0->array_meta1_ref));
-	if (err != NULL)
-                g_prefix_error(&err, "Query error: ");
 
 	_unlock_and_close(sq3);
 	return err;
@@ -311,14 +250,10 @@ _reload(struct meta0_backend_s *m0, gboolean lazy)
 
 	g_rw_lock_writer_lock(&(m0->rwlock));
 
-	if (!lazy || m0->reload_requested || !m0->array_by_prefix || !m0->array_meta1_ref) {
+	if (!lazy || m0->reload_requested || !m0->array_by_prefix) {
 		if (m0->array_by_prefix) {
 			meta0_utils_array_clean(m0->array_by_prefix);
 			m0->array_by_prefix = NULL;
-		}
-		if (m0->array_meta1_ref) {
-			meta0_utils_array_meta1ref_clean(m0->array_meta1_ref);
-			m0->array_meta1_ref = NULL;
 		}
 
 		err = _load(m0);
@@ -545,4 +480,3 @@ meta0_backend_get_one(struct meta0_backend_s *m0, const guint8 *prefix,
 
 	return *u ? NULL : NEWERROR(EINVAL, "META0 partially missing");
 }
-
