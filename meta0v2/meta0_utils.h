@@ -26,8 +26,6 @@ License along with this library.
 
 #define CID_PREFIX_COUNT 65536
 
-GTree* meta0_utils_array_to_tree(const GPtrArray *array);
-
 GSList* meta0_utils_tree_to_list(GTree *tree);
 
 GPtrArray* meta0_utils_list_to_array(GSList *list);
