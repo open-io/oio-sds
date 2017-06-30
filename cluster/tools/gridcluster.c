@@ -31,17 +31,16 @@ static void
 usage(void)
 {
 	g_printerr("Usage: oio-cluster [OPTION]... <NAMESPACE>...\n\n");
-	g_printerr("  %-20s\t%s\n", "--clear-services SERVICE    ", "Clear all local RAWX reference in cluster.");
-	g_printerr("  %-20s\t%s\n", "--full,                     ", "Show full services.");
-	g_printerr("  %-20s\t%s\n", "--lb-config,                ", "Prints to stdout the namespace LB configuration ");
+	g_printerr("  %-20s\t%s\n", "--verbose,                -v", "Increases the verbosity");
+	g_printerr("  %-20s\t%s\n", "--help,                   -h", "Display the current help section");
+	g_printerr("  %-20s\t%s\n", "--full,                   -f", "Show full services.");
+	g_printerr("  %-20s\t%s\n", "--raw,                    -r", "Output in parsable mode.");
 	g_printerr("  %-20s\t%s\n", "--local-cfg,              -A", "Prints to stdout the namespaces configuration values locally configured");
 	g_printerr("  %-20s\t%s\n", "--local-ns,               -L", "Prints to stdout the namespaces locally configured");
-	g_printerr("  %-20s\t%s\n", "--local-srv               -l", "List local services monitored on this server.");
-	g_printerr("  %-20s\t%s\n", "--raw,                    -r", "Output in parsable mode.");
 	g_printerr("  %-20s\t%s\n", "--service <service desc>, -S", "Select service described by desc.");
 	g_printerr("  %-20s\t%s\n", "--set-score <[0..100]>      ", "Set and lock score for the service specified by -S.");
 	g_printerr("  %-20s\t%s\n", "--unlock-score              ", "Unlock score for the service specified by -S.");
-	g_printerr("  %-20s\t%s\n", "--verbose,                -v", "Increases the verbosity");
+	g_printerr("  %-20s\t%s\n", "--clear-services SRVTYPE    ", "Clear all services of the given type from the conscience.");
 }
 
 static void
@@ -191,16 +190,13 @@ main(int argc, char **argv)
 		/* long options only */
 		{"set-score",      1, 0, 4},
 		{"unlock-score",   0, 0, 5},
-		{"full",           0, 0, 7},
+		{"full",           0, 0, 'f'},
 
 		/* both long and short */
-		{"config",         0, 0, 'c'},
 		{"clear-services", 1, 0, 'C'},
 		{"service",        1, 0, 'S'},
 		{"local-cfg",      0, 0, 'A'},
 		{"local-ns",       0, 0, 'L'},
-		{"local-srv",      0, 0, 'l'},
-		{"show",           0, 0, 's'},
 		{"raw",            0, 0, 'r'},
 		{"help",           0, 0, 'h'},
 		{"verbose",        0, 0, 'v'},
@@ -213,7 +209,7 @@ main(int argc, char **argv)
 	memset(cid_str, 0x00, sizeof(cid_str));
 	enable_debug();
 
-	while ((c = getopt_long(argc, argv, "ALsvlrC:S:h", long_options, &option_index)) > -1) {
+	while ((c = getopt_long(argc, argv, "ALvrC:S:h", long_options, &option_index)) > -1) {
 
 		switch (c) {
 			case 'A':
@@ -238,9 +234,6 @@ main(int argc, char **argv)
 				has_set_score = TRUE;
 				has_unlock_score = TRUE;
 				break;
-			case 7:
-				has_flag_full = TRUE;
-				break;
 			case 'S':
 				has_service = TRUE;
 				if (!optarg) {
@@ -249,15 +242,19 @@ main(int argc, char **argv)
 				}
 				g_strlcpy(service_desc, optarg, sizeof(service_desc));
 				break;
+			case 'f':
+				has_flag_full = TRUE;
+				break;
+			case 'h':
+				rc = 0;
+				usage();
+				goto exit_label;
 			case 'r':
 				has_raw = TRUE;
 				break;
 			case 'v':
 				oio_log_verbose();
 				break;
-			case 'h':
-				rc = 0;
-				// FALLTHROUGH
 			case '?':
 			case 0:
 			default:
