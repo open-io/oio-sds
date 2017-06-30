@@ -24,7 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 typedef void (*srvtimer_f) (gpointer udata);
 
-gboolean srvtimer_register_regular (const char *name, srvtimer_f fire,
+void srvtimer_register_regular (const char *name, srvtimer_f fire,
 	srvtimer_f close, gpointer udata, guint64 freq);
 
 void srvtimer_init (void);

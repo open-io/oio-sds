@@ -35,7 +35,7 @@ typedef gint (*message_matcher_f) (MESSAGE m, void *param, GError **err);
 typedef gint (*message_handler_f) (MESSAGE m, gint cnx, void *param, GError **err);
 typedef gint (*message_handler_v2_f) (struct request_context_s *ctx, GError **err);
 
-gint message_handler_add (const char *name, message_matcher_f m, message_handler_f h, GError **err);
+void message_handler_add (const char *name, message_matcher_f m, message_handler_f h);
 
 #define GO_ON 2
 #define DONE 1

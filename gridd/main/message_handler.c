@@ -138,18 +138,14 @@ reply_context_reply (struct reply_context_s *ctx, GError **err)
 	return 1;
 }
 
-gint message_handler_add (const char *name,
-	message_matcher_f m, message_handler_f h, GError **err)
+void message_handler_add (const char *name,
+	message_matcher_f m, message_handler_f h)
 {
-	struct message_handler_s *mh;
+	EXTRA_ASSERT(oio_str_is_set(name));
+	EXTRA_ASSERT(m != NULL);
+	EXTRA_ASSERT(h != NULL);
 
-	if (!name || !m || !h)
-	{
-		GSETERROR(err,"Invalid parameter");
-		return 0;
-	}
-
-	mh = g_malloc0 (sizeof(struct message_handler_s));
+	struct message_handler_s *mh = g_malloc0 (sizeof(struct message_handler_s));
 	mh->matcher = m;
 	mh->handler = h;
 	strncpy (mh->name, name, SIZE_MSGHANDLERNAME-1);
@@ -157,7 +153,6 @@ gint message_handler_add (const char *name,
 	mh->handler_v2 = NULL;
 
 	BEACON_MSGHANDLER.next = mh;
-	return 1;
 }
 
 void
