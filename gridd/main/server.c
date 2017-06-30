@@ -561,8 +561,6 @@ preload_plugins (GKeyFile *cfgFile, GError **err)
 
 	EXTRA_ASSERT(cfgFile != NULL);
 
-	GRID_DEBUG ("Start loading all the plugins found in the configuration");
-
 	/*run the key's list and keep those mathing Plugin~*/
 	groups = g_key_file_get_groups (cfgFile, &nbgroups);
 	if (!groups || nbgroups<=0)
@@ -661,13 +659,7 @@ load_servers (GKeyFile *cfgFile, GError **err)
 	gchar **groups=NULL;
 	gsize nbgroups=0, i;
 
-	if (!cfgFile)
-	{
-		GSETERROR(err,"Invalid Parameter");
-		goto errorLabel;
-	}
-
-	GRID_DEBUG ("Start loading all the servers found in the configuration");
+	EXTRA_ASSERT(cfgFile != NULL);
 
 	/*run the key's list and keep those mathing Plugin~*/
 	groups = g_key_file_get_groups (cfgFile, &nbgroups);
@@ -682,11 +674,7 @@ load_servers (GKeyFile *cfgFile, GError **err)
 		gchar *group;
 		group = groups[i];
 
-		if (!group)
-		{
-			GSETERROR (err, "Invalid group name");
-			return 0;
-		}
+		if (!group) continue;
 
 		if (0 == fnmatch("Server.*", group, 0))
 		{
