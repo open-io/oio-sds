@@ -1075,9 +1075,6 @@ module_configure_srvpool(struct conscience_s *cs, GError ** err,
 static GError *
 fill_hashtable_with_group(GHashTable *ht, GKeyFile *conf_file, const gchar *group_name)
 {
-	gchar **keys = NULL;
-	gchar *v = NULL;
-	gsize size;
 	GError *e = NULL;
 
 	if (!g_key_file_has_group (conf_file, group_name)) {
@@ -1085,25 +1082,22 @@ fill_hashtable_with_group(GHashTable *ht, GKeyFile *conf_file, const gchar *grou
 		return e;
 	}
 
-	keys = g_key_file_get_keys (conf_file, group_name, &size, &e);
-	if ( NULL != keys) {
-		for (uint i = 0; i < g_strv_length(keys); i++) {
-			v = g_key_file_get_value (conf_file, group_name, keys[i], &e);
-			if (!v) {
-				GSETERROR (&e, "Cannot get the value for [%s][%s]", group_name, keys[i]);
-				break;
-			}
-			if (NULL != g_hash_table_lookup(ht, keys[i])) {
-				GRID_WARN("Duplicate key [%s][%s], new value [%s]", group_name, keys[i], v);
-			}
-			g_hash_table_insert (ht, g_strdup(keys[i]), metautils_gba_from_string(v));
-			g_free(v);
-		}
-		g_strfreev(keys);
+	gsize size = 0;
+	gchar **keys = g_key_file_get_keys (conf_file, group_name, &size, &e);
+	if (!keys) {
+		GSETCODE(&e, CODE_INTERNAL_ERROR, "Cannot get all keys of group '%s'", group_name);
 		return e;
 	}
-	GSETCODE(&e, CODE_INTERNAL_ERROR, "Cannot get all keys of group '%s'", group_name);
-	return e;
+
+	for (guint i = 0; i < g_strv_length(keys); i++) {
+		gchar *v = g_key_file_get_value (conf_file, group_name, keys[i], NULL);
+		if (NULL != g_hash_table_lookup(ht, keys[i]))
+			GRID_WARN("Duplicate key [%s][%s], new value [%s]", group_name, keys[i], v);
+		g_hash_table_insert (ht, g_strdup(keys[i]), metautils_gba_from_string(v));
+		g_free(v);
+	}
+	g_strfreev(keys);
+	return NULL;
 }
 
 static GError *
@@ -1296,8 +1290,8 @@ struct srvtype_init_s
 	const gchar *expr;
 };
 
-static gboolean
-module_init_known_service_types(struct conscience_s *cs, GHashTable * params, GError ** err)
+static void
+module_init_known_service_types(struct conscience_s *cs, GHashTable * params UNUSED)
 {
 	static struct srvtype_init_s types_to_init[] = {
 		{NAME_SRVTYPE_META0,EXPR_DEFAULT_META0},
@@ -1307,30 +1301,13 @@ module_init_known_service_types(struct conscience_s *cs, GHashTable * params, GE
 		{0,0}
 	};
 
-	struct conscience_srvtype_s *config;
-	struct srvtype_init_s *type;
-
-	(void)params;
-	for (type=types_to_init; type->name && type->expr ; type++) {
-		config = conscience_get_srvtype(cs, err, type->name, MODE_AUTOCREATE);
-		if (!config) {
-			GSETERROR(err, "[NS=%s][SRVTYPE=%s] Failed to init the service type", cs->ns_info.name, type->name);
-			return FALSE;
-		}
-
+	for (struct srvtype_init_s *type=types_to_init; type->name && type->expr ; type++) {
+		struct conscience_srvtype_s *config = conscience_get_srvtype(cs, NULL, type->name, MODE_AUTOCREATE);
 		conscience_srvtype_init(config);
-		if (!conscience_srvtype_set_type_expression(config, err, type->expr)) {
-			GSETERROR(err, "[NS=%s][SRVTYPE=%s] Failed to set expr=[%s]", cs->ns_info.name,
-				type->name, type->expr);
-			conscience_srvtype_destroy(config);
-			return FALSE;
-		}
-
 		config->alert_frequency_limit = time_default_alert_frequency;
-		GRID_NOTICE("[NS=%s][SRVTYPE=%s] service type init done", cs->ns_info.name, type->name);
+		gboolean rc = conscience_srvtype_set_type_expression(config, NULL, type->expr);
+		g_assert_true(rc);
 	}
-
-	return TRUE;
 }
 
 static gboolean
@@ -1425,15 +1402,11 @@ plugin_init(GHashTable * params, GError ** err)
 	g_rec_mutex_init(&counters_mutex);
 	g_rec_mutex_init(&conscience_nsinfo_mutex);
 
-	/*NAMEPSACE name */
 	if (!(ns_name = g_hash_table_lookup(params, KEY_NAMESPACE))) {
 		GSETERROR(err, "The configuration must contain a '%s' key with the namespace name", KEY_NAMESPACE);
 		return -1;
 	}
-	if (!(conscience = conscience_create_named(ns_name, err))) {
-		GSETERROR(err, "Conscience allocation failure");
-		return -1;
-	}
+	conscience = conscience_create_named(ns_name, err);
 	GRID_NOTICE("[NS=%s] Configuring a new conscience", ns_name);
 
 	/* Serialization optimizations */
@@ -1450,13 +1423,10 @@ plugin_init(GHashTable * params, GError ** err)
 			(flag_serialize_srvinfo_stats ? "ENABLED" : "DISABLED"));
 
 	/*Overall alerting maximum per-service frequency*/
-	if (!(str = g_hash_table_lookup(params, KEY_ALERT_LIMIT)))
-		GRID_NOTICE("[NS=%s] No overall alert_frequency_limit set, default kept to [%ld] seconds",
-			ns_name, time_default_alert_frequency);
-	else {
+	str = g_hash_table_lookup(params, KEY_ALERT_LIMIT);
+	if (NULL != str)
 		time_default_alert_frequency = g_ascii_strtoll(str,NULL,10);
-		GRID_NOTICE("[NS=%s] Overall alert_frequency_limit set to [%ld] seconds", ns_name, time_default_alert_frequency);
-	}
+	GRID_NOTICE("[NS=%s] Overall alert_frequency_limit set to [%ld] seconds", ns_name, time_default_alert_frequency);
 
 	/* storage conf initialization */
 	*err = module_init_storage_conf(conscience,
@@ -1467,10 +1437,7 @@ plugin_init(GHashTable * params, GError ** err)
 	}
 
 	/* SERVICES initiation */
-	if (!module_init_known_service_types(conscience, params, err)) {
-		GSETERROR(err, "[NS=%s] known service types init failed", ns_name);
-		goto error;
-	}
+	module_init_known_service_types(conscience, params);
 
 	/* service conf initialization (new style) */
 	*err = module_init_service_conf_glob(conscience,
@@ -1487,18 +1454,9 @@ plugin_init(GHashTable * params, GError ** err)
 	}
 
 	/* Plugin/server stuff */
-	if (!srvtimer_register_regular("conscience.expire", timer_expire_services, NULL, conscience, 5LL)) {
-		GSETERROR(err, "Failed to register the conscience's dump callback");
-		goto error;
-	}
-	if (!srvtimer_register_regular("conscience.stats", save_counters, NULL, NULL, 5LL)) {
-		GSETERROR(err, "Failed to register the server's statistics callback");
-		goto error;
-	}
-	if (!message_handler_add("conscience", plugin_matcher, plugin_handler, err)) {
-		GSETERROR(err, "Failed to add a new server message handler");
-		goto error;
-	}
+	srvtimer_register_regular("conscience.expire", timer_expire_services, NULL, conscience, 5LL);
+	srvtimer_register_regular("conscience.stats", save_counters, NULL, NULL, 5LL);
+	message_handler_add("conscience", plugin_matcher, plugin_handler);
 
 	/* TODO(jfs): remove this in further releases */
 	/* Print a warning in an old-style option is met */
