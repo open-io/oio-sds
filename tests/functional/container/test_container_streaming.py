@@ -122,16 +122,14 @@ class TestContainerDownload(BaseTestCase):
                                                         container)
 
     def tearDown(self):
-        """
         for name in self._data:
             self.conn.object_delete(self.account, self._cnt, name)
         self.conn.container_delete(self.account, self._cnt)
-        """
         super(TestContainerDownload, self).tearDown()
 
-    def _create_data(self, name=gen_names, metadata=None):
+    def _create_data(self, name=gen_names, metadata=None, size=513):
         for idx, _name in itertools.islice(name(), 5):
-            data = gen_data(513 * idx)
+            data = gen_data(size * idx)
             mime = random.choice(MIMETYPE)
             entry = {'data': data, 'meta': None, 'mime': mime}
             self.conn.object_create(self.account, self._cnt, obj_name=_name,
@@ -389,3 +387,45 @@ class TestContainerDownload(BaseTestCase):
             self.assertEqual(obj['size'], len(self._data[name]['data']))
             meta = self.conn.object_get_properties(self.account, cnt, name)
             self.assertEqual(meta['properties'], self._data[name]['meta'])
+
+    @attr('restore')
+    def test_multipart_restore(self):
+        self._create_data(metadata=gen_metadata, size=1025*1024)
+        org = requests.get(self.make_uri('dump'))
+        cnt = rand_str(20)
+        size = 1014 * 1024
+        parts = [org.content[x:x+size] for x in xrange(0, len(org.content),
+                                                       size)]
+        uri = self.make_uri('restore', container=cnt)
+        start = 0
+        for part in parts:
+            hdrs = {'Range': 'bytes=%d-%d' % (start, start + len(part) - 1)}
+            res = requests.put(uri, data=part, headers=hdrs)
+            start += len(part)
+            self.assertIn(res.status_code, [201, 206])
+
+    @attr('restore')
+    def test_multipart_invalid_restore(self):
+        self._create_data(metadata=gen_metadata, size=1025*1024)
+        org = requests.get(self.make_uri('dump'))
+        cnt = rand_str(20)
+        uri = self.make_uri('restore', container=cnt)
+        size = 1014 * 1024
+        parts = [org.content[x:x+size] for x in xrange(0, len(org.content),
+                                                       size)]
+        start = 0
+
+        for part in parts:
+            hdrs = {'Range': 'bytes=%d-%d' % (start, start + len(part) - 1)}
+            res = requests.put(uri, data=part, headers=hdrs)
+            self.assertIn(res.status_code, [201, 206])
+            res = requests.put(uri, data=part, headers=hdrs)
+            self.assertEqual(res.status_code, 422)
+            start += len(part)
+
+        cnt = rand_str(20)
+        uri = self.make_uri('restore', container=cnt)
+
+        hdrs = {'Range': 'bytes=%d-%d' % (size, size + len(parts[1]) - 1)}
+        res = requests.put(uri, data=part, headers=hdrs)
+        self.assertEqual(res.status_code, 422)
