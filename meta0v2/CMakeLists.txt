@@ -43,17 +43,6 @@ target_link_libraries(meta0_client gridcluster
 		meta0remote meta0utils metautils server)
 
 
-add_executable(meta0_init meta0_init.c)
-bin_prefix(meta0_init -meta0-init)
-target_link_libraries(meta0_init gridcluster
-		meta0remote meta0utils metautils server)
-
-
-#add_executable(meta0_backend_test meta0_backend_test.c)
-#target_link_libraries(meta0_backend_test
-#		meta0v2 metautils server sqliterepo)
-
-
 add_executable(meta0_server
 		zk_manager.c
 		meta0_gridd_dispatcher.c
@@ -65,7 +54,7 @@ target_link_libraries(meta0_server
 		sqlxsrv
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
-install(TARGETS meta0utils meta0remote meta0v2 meta0_server meta0_client meta0_init
+install(TARGETS meta0utils meta0remote meta0v2 meta0_server meta0_client
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin)
 
