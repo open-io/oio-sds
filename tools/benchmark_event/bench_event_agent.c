@@ -1,7 +1,7 @@
 #include <glib.h>
+#include <stdlib.h>
 
 #include <metautils/lib/metautils.h>
-#include <cluster/lib/gridcluster.h>
 
 #include "bench_conf.h"
 #include "fake_service.h"
@@ -17,7 +17,8 @@ extern enum event_type_e event_type;
 
 static struct oio_directory_s *dir = NULL;
 static struct oio_url_s *url = NULL;
-static service_info_t *account_service_info = NULL;
+static struct oio_cs_client_s *cs = NULL;
+static struct oio_cs_registration_s *account_service = NULL;
 GThread *fake_service_thread = NULL;
 
 static gboolean
@@ -51,24 +52,77 @@ link_rawx_fake_service (void)
 	return TRUE;
 }
 
-static service_info_t *
-get_account_service_info(void)
+static void
+free_service(struct oio_cs_registration_s *service) {
+	g_free((void *) service->id);
+	g_free((void *) service->url);
+	
+	if (service->kv_tags) for (guint i=0; (service->kv_tags + i) && service->kv_tags[i]; i++) {
+		g_free((void *) service->kv_tags[i]);
+	}
+	g_free((void *) service->kv_tags);
+	
+	g_free(service);
+}
+
+static struct oio_cs_registration_s *
+get_account_service(void)
 {
 	GSList *services = NULL;
-	
-	GError *err = conscience_get_services(NAME_SPACE, NAME_SRVTYPE_ACCOUNT, FALSE, &services);
+	void _on_reg (const struct oio_cs_registration_s *reg, int score) {
+		(void) score;
+		
+		struct oio_cs_registration_s *reg_cpy = g_malloc0(sizeof(struct oio_cs_registration_s));
+		
+		reg_cpy->id = g_strdup(reg->id);
+		reg_cpy->url = g_strdup(reg->url);
+		
+		GPtrArray *tmp = g_ptr_array_new ();
+		if (reg->kv_tags) for (guint i=0; (reg->kv_tags + i) && reg->kv_tags[i]; i++) {
+			g_ptr_array_add (tmp, g_strdup(reg->kv_tags[i]));
+		}
+		g_ptr_array_add (tmp, NULL);
+		reg_cpy->kv_tags = (const char * const *) g_ptr_array_free (tmp, FALSE);
+		
+		services = g_slist_prepend (services, reg_cpy);
+	}
+	GError *err = oio_cs_client__list_services (cs, NAME_SRVTYPE_ACCOUNT, FALSE, _on_reg);
 	if (err) {
-		GRID_ERROR("Failed to load the list of [" NAME_SRVTYPE_ACCOUNT "] in NS=" NAME_SPACE);
+		GRID_ERROR("Failed to load the account service: (%d) %s", err->code,
+		          err->message);
 		g_clear_error(&err);
 		
 		return NULL;
 	}
 	
-	service_info_t * service_info = services->data;
-	
+	struct oio_cs_registration_s * account_reg = services->data;
 	g_slist_free(services);
 	
-	return service_info;
+	return account_reg;
+}
+
+static gboolean
+add_fake_account(void)
+{
+	const char * const kv[6] = {
+		"tag.up", "True",
+		"tag.slots", NAME_SRVTYPE_ACCOUNT
+	};
+	struct oio_cs_registration_s reg = {
+		.id = FAKE_SERVICE_ADDRESS,
+		.url = FAKE_SERVICE_ADDRESS,
+		.kv_tags = kv
+	};
+	
+	GError *err = oio_cs_client__lock_service(cs, NAME_SRVTYPE_ACCOUNT, &reg, SCORE_MAX);
+	if (err) {
+		GRID_ERROR("Failed to load the lock service: %d %s", err->code, err->message);
+		g_clear_error(&err);
+		
+		return FALSE;
+	}
+	
+	return TRUE;
 }
 
 static gpointer
@@ -144,15 +198,39 @@ grid_main_action (void)
 		}
 	}
 	
-	// Lock the account service
+	// Lock the account service and add fake account
 	if (event_type == CONTAINER_NEW || event_type == CONTAINER_STATE) {
-		account_service_info = get_account_service_info();
-		if (!account_service_info) {
+		cs = oio_cs_client__create_proxied(NAME_SPACE);
+		
+		account_service = get_account_service();
+		if (!account_service) {
 			grid_main_set_status(EXIT_FAILURE);
 			return;
 		}
-		account_service_info->score.value = SCORE_DOWN;
-		conscience_push_service(NAME_SPACE, account_service_info);
+		
+		GError *err = oio_cs_client__lock_service(cs, NAME_SRVTYPE_ACCOUNT, account_service, SCORE_DOWN);
+		if (err) {
+			GRID_ERROR("Failed to lock service: %d %s", err->code, err->message);
+			g_clear_error(&err);
+			
+			grid_main_set_status(EXIT_FAILURE);
+			return;
+		}
+		
+		if (!add_fake_account()) {
+			grid_main_set_status(EXIT_FAILURE);
+			return;
+		}
+		
+		// Restart event-agent
+		system("killall oio-event-agent");
+		for (gint i = 0; i < 10; i++) {
+			if (!grid_main_is_running()) {
+				return;
+			}
+			
+			g_usleep(G_TIME_SPAN_SECOND);
+		}
 	}
 	
 	// Launch the fake service
@@ -203,10 +281,31 @@ grid_main_specific_fini (void)
 		dir = NULL;
 	}
 	
-	if (account_service_info) {
-		account_service_info->score.value = SCORE_UNLOCK;
-		conscience_push_service(NAME_SPACE, account_service_info);
-		service_info_clean(account_service_info);
+	if (account_service) {
+		GError *err = oio_cs_client__unlock_service(cs, NAME_SRVTYPE_ACCOUNT, account_service);
+		if (err) {
+			GRID_ERROR("Failed to unlock service: %d %s", err->code, err->message);
+			g_clear_error(&err);
+			
+			grid_main_set_status(EXIT_FAILURE);
+		}
+		
+		err = oio_cs_client__flush_services(cs, NAME_SRVTYPE_ACCOUNT);
+		if (err) {
+			GRID_ERROR("Failed to flush services: %d %s", err->code, err->message);
+			g_clear_error(&err);
+			
+			grid_main_set_status(EXIT_FAILURE);
+		}
+		
+		// Restart event-agent
+		system("killall oio-event-agent");
+		
+		free_service(account_service);
+	}
+	
+	if (cs) {
+		oio_cs_client__destroy(cs);
 	}
 }
 
