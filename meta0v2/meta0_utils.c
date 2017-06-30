@@ -47,7 +47,7 @@ GTree* meta0_utils_tree_create(void) {
 	return g_tree_new_full(metautils_strcmp3, NULL, g_free, garray_free);
 }
 
-GTree* meta0_utils_array_to_tree(const GPtrArray *byprefix) {
+static GTree* meta0_utils_array_to_tree(const GPtrArray *byprefix) {
 	EXTRA_ASSERT(byprefix != NULL);
 	GTree *result = meta0_utils_tree_create();
 
