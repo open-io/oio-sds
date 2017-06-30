@@ -141,7 +141,7 @@ zk_srv_manager_create(gchar *namespace, gchar *url, gchar *srvType,
 	g_snprintf(manager->zk_dir, sizeof(manager->zk_dir),
 			"/hc/ns/%s/srv/%s", namespace, srvType);
 
-	gchar **tokens = g_strsplit(url, ";", -1);
+	gchar **tokens = g_strsplit(url, OIO_CSV_SEP2, -1);
 	manager->zh = zookeeper_init(tokens[0], zk_main_watch,
 			sqliterepo_zk_timeout / G_TIME_SPAN_MILLISECOND, NULL, manager, 0);
 	g_strfreev(tokens);
