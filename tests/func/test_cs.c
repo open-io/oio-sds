@@ -170,5 +170,6 @@ main(int argc, char **argv)
 	g_test_add_func("/cs/proxy/list", test_proxied_list);
 	g_test_add_func("/cs/proxy/types", test_proxied_types);
 	g_test_add_func("/cs/proxy/deregister", test_proxied_deregister);
+
 	return g_test_run();
 }
