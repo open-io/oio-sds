@@ -1604,7 +1604,7 @@ deferred_watch_COMMON(struct deferred_watcher_context_s *d,
 		member_set_status(member, STEP_NONE);
 		/* We cannot run all the election and reset everything, because we
 		 * introduced a sharding of the elections across several ZK clusters
-		 * and the coblem concerns only one cluster */
+		 * and the problem concerns only one cluster */
 	} else if (d->type == ZOO_DELETED_EVENT) {
 		struct election_member_s *member = _find_member(M, d->path, d->gen);
 		if (NULL != member) {
