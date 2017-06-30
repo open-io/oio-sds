@@ -53,6 +53,10 @@ add_executable(test_oio_cs test_cs.c)
 target_link_libraries(test_oio_cs oiosds)
 add_test(NAME core/cs COMMAND test_oio_cs)
 
+add_executable(test_oio_cluster test_cluster.c)
+target_link_libraries(test_oio_cluster oiocore gridcluster)
+add_test(NAME cluster/lib COMMAND test_oio_cluster)
+
 add_executable(test_oio_dir test_dir.c)
 target_link_libraries(test_oio_dir oiosds)
 add_test(NAME core/dir COMMAND test_oio_dir)
