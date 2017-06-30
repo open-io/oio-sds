@@ -49,10 +49,6 @@ void meta0_utils_tree_add_url(GTree *tree, const guint8 *b, const gchar *url);
 
 GTree* meta0_utils_tree_create(void);
 
-void meta0_utils_array_meta1ref_clean(GPtrArray *array);
-
-gchar * meta0_utils_pack_meta1ref(gchar *addr, gchar *ref, gchar *nb);
-
 /* @return TRUE to continue */
 typedef gboolean (*meta0_on_prefix)(gpointer u,
 		const guint8 *group, const guint8 *prefix);
