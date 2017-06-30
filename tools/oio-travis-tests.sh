@@ -41,9 +41,71 @@ randomize_env () {
         OIO_USER=USER-$RANDOM OIO_PATH=PATH-$RANDOM
 }
 
+test_oio_cluster () {
+	oio-cluster -h >/dev/null
+	oio-cluster --unlock-score -S "$OIO_NS|echo|127.0.0.2:80" >/dev/null
+	oio-cluster --set-score=0 -S "$OIO_NS|echo|127.0.0.2:80" >/dev/null
+	oio-cluster --unlock-score -S "$OIO_NS|echo|127.0.0.2:80" >/dev/null
+	oio-cluster --clear-services echo $OIO_NS >/dev/null
+	if oio-cluster --clear-services NotFoundXxX $OIO_NS >/dev/null ; then exit 1 ; fi
+	oio-cluster --local-cfg >/dev/null
+	oio-cluster --local-ns >/dev/null
+}
+
+test_oio_tool () {
+	oio-tool -h >/dev/null
+	oio-tool config "$OIO_NS" >/dev/null
+	if oio-tool >/dev/null ; then exit 1 ; fi
+	oio-tool stat / /tmp /usr | head -n 1
+	oio-tool location A.B.C.D
+	for url in $(oio-test-config.py -t conscience) ; do
+		oio-tool ping "$url" >/dev/null
+		if oio-tool info "$url" >/dev/null ; then exit 1 ; fi
+		if oio-tool redirect "$url" >/dev/null ; then exit 1 ; fi
+	done
+	for url in $(oio-test-config.py -t meta2 -t meta0 -t meta1) ; do
+		oio-tool ping "$url" >/dev/null
+		oio-tool info "$url" >/dev/null
+		oio-tool redirect "$url" >/dev/null
+	done
+	if oio-tool ping 127.0.0.1:2 >/dev/null ; then exit 1 ; fi
+	if [ 1 -ne $(oio-tool addr a 127.0.0.1:1234 | wc -l) ] ; then exit 1 ; fi
+	if [ 1 -ne $(oio-tool cid OPENIO/ACCT/JFS | wc -l) ] ; then exit 1 ; fi
+	oio-tool hash XXX | head -n 2 >/dev/null
+}
+
+test_proxy_forward () {
+	proxy=$(oio-test-config.py -t proxy -1)
+
+	curl -X GET "http://$proxy/v3.0/status" >/dev/null
+	curl -X GET "http://$proxy/v3.0/cache/status" >/dev/null
+	curl -X GET "http://$proxy/v3.0/config" >/dev/null
+	curl -X POST "http://$proxy/v3.0/cache/flush/local" >/dev/null
+	curl -X POST "http://$proxy/v3.0/cache/flush/high" >/dev/null
+	curl -X POST "http://$proxy/v3.0/cache/flush/low" >/dev/null
+	curl -X POST -d '{"socket.nodelay.enabled":"on"}' \
+		"http://$proxy/v3.0/config" >/dev/null
+
+	for url in $(oio-test-config.py -t meta2 -t meta0 -t meta1) ; do
+		curl -X GET "http://$proxy/v3.0/forward/config&id=$url" >/dev/null
+		curl -X POST -d '{"socket.nodelay.enabled":"on"}' \
+			"http://$proxy/v3.0/forward/config&id=$url" >/dev/null
+		curl -X POST "http://$proxy/v3.0/forward/flush&id=$url" >/dev/null
+		curl -X POST "http://$proxy/v3.0/forward/reload&id=$url" >/dev/null
+		curl -X POST "http://$proxy/v3.0/forward/ping&id=$url" >/dev/null
+		curl -X POST "http://$proxy/v3.0/forward/lean-glib&id=$url" >/dev/null
+		curl -X POST "http://$proxy/v3.0/forward/lean-sqlx&id=$url" >/dev/null
+		curl -X POST "http://$proxy/v3.0/forward/version&id=$url" >/dev/null
+		curl -X POST "http://$proxy/v3.0/forward/handlers&id=$url" >/dev/null
+		curl -X POST "http://$proxy/v3.0/forward/info&id=$url" >/dev/null
+	done
+}
+
 func_tests () {
 	randomize_env
     oio-reset.sh -N $OIO_NS $@
+
+	test_proxy_forward
 
     # test a content with a strange name, through the CLI and the API
     /usr/bin/fallocate -l $RANDOM /tmp/blob%
@@ -68,9 +130,11 @@ func_tests () {
     ./core/tool_roundtrip $SOURCE
     rm -f $SOURCE
 
+	test_oio_cluster
+	test_oio_tool
+
     gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
 }
-
 
 test_meta2_filters () {
 	randomize_env
