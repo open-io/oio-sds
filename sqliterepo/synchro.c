@@ -98,7 +98,7 @@ _sanitize_and_shuffle_zk_url(const char *url)
 		return NULL;
 	}
 
-	gchar **tokens = g_strsplit(url, ",", -1);
+	gchar **tokens = g_strsplit(url, OIO_CSV_SEP, -1);
 	if (!tokens) {
 		GRID_ERROR("Invalid ZK connection string: %s", "not coma-separated");
 		return NULL;
@@ -113,7 +113,7 @@ _sanitize_and_shuffle_zk_url(const char *url)
 	if (sqliterepo_zk_shuffle)
 		oio_ext_array_shuffle((void**)tokens, g_strv_length(tokens));
 
-	gchar *shuffled = g_strjoinv(",", tokens);
+	gchar *shuffled = g_strjoinv(OIO_CSV_SEP, tokens);
 	g_strfreev(tokens);
 	return shuffled;
 }

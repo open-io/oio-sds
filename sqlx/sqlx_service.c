@@ -406,7 +406,7 @@ _configure_multi_zk(struct sqlx_service_s *ss,
 	if (mux_factor <= 0)
 		return FALSE;
 
-	gchar **shards = g_strsplit(zk_url, ";", -1);
+	gchar **shards = g_strsplit(zk_url, OIO_CSV_SEP2, -1);
 	STRINGV_STACKIFY(shards);
 	for (gchar **shard=shards; shards && *shard ;++shard) {
 		if (!oio_str_is_set(*shard))
