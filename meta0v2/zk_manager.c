@@ -21,7 +21,6 @@ License along with this library.
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
-#include <unistd.h>
 
 #include <zookeeper.h>
 
@@ -30,7 +29,6 @@ License along with this library.
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/synchro.h>
 #include <sqliterepo/hash.h>
-#include <sqliterepo/internals.h>
 
 #include "zk_manager.h"
 

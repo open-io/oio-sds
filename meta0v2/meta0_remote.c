@@ -17,9 +17,6 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#include <netdb.h>
-#include <string.h>
-
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/common_variables.h>
 
