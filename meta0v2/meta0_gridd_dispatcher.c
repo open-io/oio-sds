@@ -27,7 +27,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 struct meta0_disp_s {
 	struct meta0_backend_s *m0;
-	struct zk_manager_s *m0zkmanager;
 	gchar *ns_name;
 	GByteArray *encoded;
 	GMutex lock;
@@ -245,11 +244,10 @@ void meta0_gridd_requested_reload(struct meta0_disp_s *m0disp) {
 }
 
 struct meta0_disp_s* meta0_gridd_get_dispatcher(struct meta0_backend_s *m0,
-		struct zk_manager_s *m0zkmanager, gchar* ns_name) {
+		const char* ns_name) {
 	struct meta0_disp_s *result = g_malloc0(sizeof(*result));
 	result->ns_name = g_strdup(ns_name);
 	result->m0 = m0;
-	result->m0zkmanager = m0zkmanager;
 	g_mutex_init(&result->lock);
 
 	meta0_gridd_requested_reload(result);

@@ -20,7 +20,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__meta0v2__meta0_gridd_dispatcher_h
 # define OIO_SDS__meta0v2__meta0_gridd_dispatcher_h 1
 
-#include <meta0v2/zk_manager.h>
 #include <server/transport_gridd.h>
 
 struct meta0_disp_s;
@@ -29,7 +28,7 @@ const struct gridd_request_descr_s* meta0_gridd_get_requests(void);
 
 void meta0_gridd_free_dispatcher(struct meta0_disp_s *m0disp);
 
-struct meta0_disp_s* meta0_gridd_get_dispatcher(struct meta0_backend_s *m0, struct zk_manager_s *m0zkmanager, gchar *ns_name);
+struct meta0_disp_s* meta0_gridd_get_dispatcher(struct meta0_backend_s *m0, const char *ns_name);
 
 void meta0_gridd_requested_reload(struct meta0_disp_s *m0disp);
 

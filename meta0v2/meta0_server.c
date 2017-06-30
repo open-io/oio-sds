@@ -142,7 +142,7 @@ _post_config(struct sqlx_service_s *ss)
 		}
 	}
 
-	m0disp = meta0_gridd_get_dispatcher(m0, m0zkmanager, ss->ns_name);
+	m0disp = meta0_gridd_get_dispatcher(m0, ss->ns_name);
 
 	transport_gridd_dispatcher_add_requests(ss->dispatcher,
 			meta0_gridd_get_requests(), m0disp);
