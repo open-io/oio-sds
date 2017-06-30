@@ -226,6 +226,13 @@ enum oio_header_case_e
 
 enum oio_header_case_e oio_header_case;
 
+/* http://www.cse.yorku.ca/~oz/hash.html */
+guint32 djb_hash_buf(const guint8 * b, register gsize bs);
+guint32 djb_hash_str0(const gchar *str);
+
+struct hash_len_s { guint32 h; guint32 l; };
+struct hash_len_s djb_hash_str(const gchar * b);
+
 /* -------------------------------------------------------------------------- */
 
 # ifndef GQ
