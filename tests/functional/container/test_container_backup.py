@@ -10,7 +10,7 @@ import unittest
 
 import requests
 from oio import ObjectStorageApi
-from oio.container.app import CONTAINER_PROPERTIES, CONTAINER_MANIFEST
+from oio.container.backup import CONTAINER_PROPERTIES, CONTAINER_MANIFEST
 from tests.utils import BaseTestCase
 from nose.plugins.attrib import attr
 
