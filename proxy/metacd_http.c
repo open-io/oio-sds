@@ -436,6 +436,28 @@ _free_error(gpointer p)
 	g_error_free((GError*)p);
 }
 
+static GSList *
+_filter_good_services(GSList *src, GSList **out_garbage)
+{
+	GSList *good = NULL, *bad = NULL;
+
+	while (src) {
+		GSList *next = src->next;
+		struct service_info_s *si = src->data;
+		if (metautils_addr_valid_for_connect(&si->addr)) {
+			src->next = good;
+			good = src;
+		} else {
+			src->next = bad;
+			bad = src;
+		}
+		src = next;
+	}
+
+	*out_garbage = bad;
+	return good;
+}
+
 /* If you ever plan to factorize this code with the similar part in
  * sqlx/sqlx_service.c be carefull that a lot of context is expected on both
  * sides, and that even the function used to fetch the services cannot be the
@@ -470,6 +492,11 @@ lb_cache_reload (void)
 			GRID_WARN("Failed to load the list of [%s] in NS=%s", *pt, ns_name);
 			any_loading_error = TRUE;
 		}
+
+		GSList *bad = NULL;
+		srv = _filter_good_services(srv, &bad);
+		g_slist_free_full(bad, (GDestroyNotify)service_info_clean);
+
 		g_ptr_array_add(tabsrv, srv);
 		g_ptr_array_add(taberr, e);
 	}
