@@ -130,6 +130,9 @@ conscience_push_service (const char *ns, struct service_info_s *si)
 	g_assert (ns != NULL);
 	g_assert (si != NULL);
 
+	if (!*ns || !si->type[0] || !metautils_addr_valid_for_connect(&si->addr))
+		return BADREQ("Invalid service ns, type or address");
+
 	struct oio_cs_client_s *cs = oio_cs_client__create_proxied (ns);
 
 	/* convert the <service_info_t> into a <struct oio_cs_registration_s> */
@@ -170,6 +173,8 @@ conscience_remove_services(const char *ns, const char *type)
 {
 	g_assert (ns != NULL);
 	g_assert (type != NULL);
+	if (!*ns || !*type)
+		return BADREQ("Invalid type or NS");
 
 	struct oio_cs_client_s *cs = oio_cs_client__create_proxied (ns);
 	GError *err = oio_cs_client__flush_services (cs, type);
@@ -182,6 +187,8 @@ conscience_remove_services(const char *ns, const char *type)
 GError *
 register_namespace_service(const struct service_info_s *si)
 {
+	g_assert(si != NULL);
+
 	struct service_info_s *si_copy = service_info_dup(si);
 	si_copy->score.value = SCORE_UNSET;
 	si_copy->score.timestamp = oio_ext_real_time () / G_TIME_SPAN_SECOND;

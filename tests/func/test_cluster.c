@@ -23,7 +23,7 @@ License along with this library.
 #include <cluster/lib/gridcluster.h>
 
 #undef GQ
-#define GQ() g_quark_from_static_string("oio.core")
+#define GQ() g_quark_from_static_string("oio.cluster.lib")
 
 const char *ns = NULL;
 const char *srvtype = NULL;
