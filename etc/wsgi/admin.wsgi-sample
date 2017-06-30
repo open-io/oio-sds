@@ -1,2 +1,2 @@
-from oio.container_streaming.app import create_app
+from oio.container.backup import create_app
 application = create_app()
