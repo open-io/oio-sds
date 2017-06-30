@@ -47,6 +47,7 @@ _handle_PING(MESSAGE m, gint fd, void *param UNUSED, GError ** err UNUSED)
 	ctx.req_ctx = &req_ctx;
 
 	reply_context_set_message(&ctx, 200, "OK");
+	reply_context_log_access(&ctx, NULL);
 	reply_context_reply(&ctx, err);
 	reply_context_clear(&ctx, TRUE);
 	return 1;
