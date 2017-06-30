@@ -102,27 +102,6 @@ void sqlx_sync_set_prefix(struct sqlx_sync_s *ss, const gchar *prefix);
 
 void sqlx_sync_set_hash(struct sqlx_sync_s *ss, guint witdth, guint depth);
 
-static inline const char * zoo_state2str(int state) {
-#define ON_STATE(N) do { if (state == ZOO_##N##_STATE) return #N; } while (0)
-	ON_STATE(EXPIRED_SESSION);
-	ON_STATE(AUTH_FAILED);
-	ON_STATE(CONNECTING);
-	ON_STATE(ASSOCIATING);
-	ON_STATE(CONNECTED);
-	return "STATE?";
-}
-
-static inline const char * zoo_zevt2str(int zevt) {
-#define ON_ZEVT(N) do { if (zevt == ZOO_##N##_EVENT) return #N; } while (0)
-	ON_ZEVT(CREATED);
-	ON_ZEVT(DELETED);
-	ON_ZEVT(CHANGED);
-	ON_ZEVT(CHILD);
-	ON_ZEVT(SESSION);
-	ON_ZEVT(NOTWATCHING);
-	return "EVENT?";
-}
-
 /* -------------------------------------------------------------------------- */
 
 struct sqlx_name_s;
