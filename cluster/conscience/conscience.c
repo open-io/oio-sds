@@ -44,12 +44,8 @@ struct conscience_srvtype_s *
 conscience_get_locked_srvtype(struct conscience_s *conscience, GError ** error,
     const gchar * type, enum mode_e mode, char lock_mode)
 {
+	EXTRA_ASSERT(conscience != NULL);
 	struct conscience_srvtype_s *srvtype;
-
-	if (!conscience) {
-		GSETERROR(error, "Invalid parameter");
-		return NULL;
-	}
 
 	/* lock the conscience service-types storage. If an auto-creation is wanted,
 	 * and the service type does not exist, we force a lock with writer rights
@@ -77,11 +73,7 @@ conscience_get_locked_srvtype(struct conscience_s *conscience, GError ** error,
 void
 conscience_release_locked_srvtype(struct conscience_srvtype_s *srvtype)
 {
-	if (!srvtype) {
-		ERROR("Invalid parameter");
-		return;
-	}
-
+	EXTRA_ASSERT(srvtype != NULL);
 	_unlock_rw(&(srvtype->rw_lock));
 	_unlock_rw(&(srvtype->conscience->rwlock_srv));
 }
@@ -103,9 +95,7 @@ conscience_unlock_srvtypes(struct conscience_s *conscience)
 struct conscience_s *
 conscience_create(void)
 {
-	struct conscience_s *conscience;
-
-	conscience = g_malloc0(sizeof(struct conscience_s));
+	struct conscience_s *conscience = g_malloc0(sizeof(struct conscience_s));
 	namespace_info_init (&conscience->ns_info);
 
 	g_static_rw_lock_init(&(conscience->rwlock_srv));
@@ -129,19 +119,8 @@ conscience_create(void)
 struct conscience_s*
 conscience_create_named(const gchar *ns, GError **error)
 {
-	struct conscience_s *conscience;
-
-	if (!ns || !*ns) {
-		GSETERROR(error,"NULL/empty namespace name (%p)", ns);
-		return NULL;
-	}
-
-	conscience = conscience_create();
-	if (!conscience) {
-		GSETERROR(error,"Memory allocation failure");
-		return NULL;
-	}
-
+	EXTRA_ASSERT(oio_str_is_set(ns));
+	struct conscience_s *conscience = conscience_create();
 	g_strlcpy (conscience->ns_info.name, ns, sizeof(conscience->ns_info.name));
 	return conscience;
 }
@@ -183,7 +162,7 @@ conscience_get_srvtype(struct conscience_s *conscience, GError ** error, const c
 		return srvtype;
 
 	if (mode == MODE_AUTOCREATE) {
-		NOTICE("[NS=%s][SRVTYPE=%s] Autocreation wanted!", conscience_get_nsname(conscience), type);
+		GRID_NOTICE("[NS=%s][SRVTYPE=%s] Autocreation wanted!", conscience_get_nsname(conscience), type);
 		srvtype = conscience_srvtype_create(conscience, type);
 		if (!srvtype) {
 			GSETERROR(error, "ServiceType allocation failure");
@@ -202,38 +181,29 @@ conscience_get_srvtype(struct conscience_s *conscience, GError ** error, const c
 struct conscience_srvtype_s *
 conscience_get_default_srvtype(struct conscience_s *conscience)
 {
-	if (!conscience)
-		return NULL;
+	EXTRA_ASSERT(conscience != NULL);
 	return conscience->default_srvtype;
 }
 
 const gchar *
 conscience_get_nsname(struct conscience_s *conscience)
 {
-	if (!conscience)
-		return "";
+	EXTRA_ASSERT(conscience != NULL);
 	return conscience->ns_info.name;
 }
 
 GSList *
 conscience_get_srvtype_names(struct conscience_s * conscience, GError ** error)
 {
+	EXTRA_ASSERT(conscience != NULL);
+
 	GHashTableIter iterator;
 	gpointer k, v;
-	GSList *names;
-
-	if (!conscience) {
-		GSETERROR(error, "Invalid conscience parameter");
-		return NULL;
-	}
-	names = NULL;
+	GSList *names = NULL;
 	g_hash_table_iter_init(&iterator, conscience->srvtypes);
 	while (g_hash_table_iter_next(&iterator, &k, &v)) {
-		struct conscience_srvtype_s *srvtype;
-		gchar *str;
-
-		srvtype = v;
-		str = g_strndup(srvtype->type_name, sizeof(srvtype->type_name));
+		struct conscience_srvtype_s *srvtype = v;
+		gchar *str = g_strndup(srvtype->type_name, sizeof(srvtype->type_name));
 		names = g_slist_prepend(names, str);
 	}
 	return names;
@@ -243,27 +213,20 @@ gboolean
 conscience_run_srvtypes(struct conscience_s * conscience, GError ** error, guint32 flags,
     gchar ** names_array, service_callback_f * callback, gpointer udata)
 {
-	gboolean rc;
-	register guint i, max;
+	EXTRA_ASSERT(conscience != NULL);
+	EXTRA_ASSERT(names_array != NULL);
+	EXTRA_ASSERT(callback != NULL);
+
+	gboolean rc = TRUE;
 	register guint32 real_flags;
-	gchar **name;
-	GPtrArray *array_srvtypes;
-
-	if (!conscience || !names_array || !callback) {
-		GSETERROR(error, "Invalid parameter (conscience=%p names_array=%p callback=%p)",
-		    conscience, names_array, callback);
-		return FALSE;
-	}
-
-	array_srvtypes = g_ptr_array_sized_new(8);
-	rc = TRUE;
+	GPtrArray *array_srvtypes = g_ptr_array_sized_new(8);
 
 	/* XXX start of critical version */
 	if (flags & SRVTYPE_FLAG_LOCK_ENABLE)
 		conscience_lock_srvtypes(conscience, 'r');
 
 	/*We do not run any service type if we are not sure that all exist */
-	for (name = names_array; *name; name++) {
+	for (gchar **name = names_array; *name; name++) {
 		struct conscience_srvtype_s *srvtype;
 
 		srvtype = conscience_get_srvtype(conscience, error, *name, MODE_STRICT);
@@ -278,7 +241,7 @@ conscience_run_srvtypes(struct conscience_s * conscience, GError ** error, guint
 	/*we remove the additional call, we just want one call at the end */
 	real_flags = flags & ~SRVTYPE_FLAG_ADDITIONAL_CALL;
 
-	for (i = 0, max = array_srvtypes->len; rc && i < max; i++) {
+	for (guint i = 0, max = array_srvtypes->len; rc && i < max; i++) {
 		struct conscience_srvtype_s *srvtype;
 
 		srvtype = g_ptr_array_index(array_srvtypes, i);

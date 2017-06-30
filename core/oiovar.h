@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015-2017 OpenIO, original work as part of OpenIO SDS
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -17,10 +17,9 @@ License along with this library.
 */
 
 #ifndef OIO_SDS__core__var_h
-# define OIO_SDS__core__var_h 1
+#define OIO_SDS__core__var_h 1
 #include <glib.h>
-
-struct oio_cfg_handle_s;
+#include <core/oiocfg.h>
 
 enum oio_var_kind_e {
 	OIO_VARKIND_time,

@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -16,17 +16,16 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
+#include <core/oiocs.h>
+
 #include <string.h>
-#include <glib.h>
+
 #include <json.h>
 #include <curl/curl.h>
 
 #include <metautils/lib/metautils_macros.h>
-
-#include "oioext.h"
-#include "oiostr.h"
-#include "oioext.h"
-#include "oiocs.h"
+#include <core/oiostr.h>
+#include <core/oioext.h>
 
 #include "internals.h"
 #include "cs_internals.h"
@@ -97,7 +96,7 @@ oio_cs_client__flush_services (struct oio_cs_client_s *self,
 GError *
 oio_cs_client__list_services (struct oio_cs_client_s *self,
 		const char *in_type, gboolean full,
-		void (*on_reg) (const struct oio_cs_registration_s *reg, int score))
+		void (*on_reg) (const struct oio_cs_registration_s *, int))
 {
 	if (!in_type || !*in_type)
 		return BADREQ("Missing srvtype");
@@ -106,7 +105,7 @@ oio_cs_client__list_services (struct oio_cs_client_s *self,
 
 GError *
 oio_cs_client__list_types (struct oio_cs_client_s *self,
-		void (*on_type) (const char *srvtype))
+		void (*on_type) (const char *))
 {
 	CS_CALL(self,list_types)(self,on_type);
 }
@@ -364,7 +363,7 @@ _cs_PROXY__unlock_service (struct oio_cs_client_s *self,
 GError *
 _cs_PROXY__list_services (struct oio_cs_client_s *self,
 		const char *in_type, gboolean full,
-		void (*on_reg) (const struct oio_cs_registration_s *reg, int score))
+		void (*on_reg) (const struct oio_cs_registration_s *, int))
 {
 	EXTRA_ASSERT (self != NULL);
 	struct oio_cs_client_PROXY_s *cs = (struct oio_cs_client_PROXY_s*) self;
@@ -412,7 +411,7 @@ _cs_PROXY__list_services (struct oio_cs_client_s *self,
 
 GError *
 _cs_PROXY__list_types (struct oio_cs_client_s *self,
-		void (*on_type) (const char *srvtype))
+		void (*on_type) (const char *))
 {
 	EXTRA_ASSERT (self != NULL);
 	struct oio_cs_client_PROXY_s *cs = (struct oio_cs_client_PROXY_s*) self;

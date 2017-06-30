@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2014 Worldline, original work as part of Redcurrant
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -37,14 +37,10 @@ extern "C" {
 /* enablers */
 # ifdef HAVE_EXTRA_DEBUG
 #  define GRID_TRACE2_ENABLED() (oio_log_level > GRID_LOGLVL_TRACE2)
-#  define      TRACE2_ENABLED() (oio_log_level > GRID_LOGLVL_TRACE2)
 #  define GRID_TRACE_ENABLED()  (oio_log_level > GRID_LOGLVL_TRACE)
-#  define      TRACE_ENABLED()  (oio_log_level > GRID_LOGLVL_TRACE)
 # else
 #  define GRID_TRACE2_ENABLED() (0)
-#  define      TRACE2_ENABLED() (0)
 #  define GRID_TRACE_ENABLED()  (0)
-#  define      TRACE_ENABLED()  (0)
 # endif
 
 # define GRID_DEBUG_ENABLED()  (oio_log_level > GRID_LOGLVL_DEBUG)
@@ -52,12 +48,6 @@ extern "C" {
 # define GRID_NOTICE_ENABLED() (oio_log_level > GRID_LOGLVL_NOTICE)
 # define GRID_WARN_ENABLED()   (oio_log_level > GRID_LOGLVL_WARN)
 # define GRID_ERROR_ENABLED()  (oio_log_level > 0)
-
-# define DEBUG_ENABLED()       GRID_DEBUG_ENABLED()
-# define INFO_ENABLED()        GRID_INFO_ENABLED()
-# define NOTICE_ENABLED()      GRID_NOTICE_ENABLED()
-# define WARN_ENABLED()        GRID_WARN_ENABLED()
-# define ERROR_ENABLED()       GRID_ERROR_ENABLED()
 
 /* new macros */
 # ifdef HAVE_EXTRA_DEBUG
@@ -86,34 +76,6 @@ extern "C" {
 		g_log("out", GRID_LOGLVL_INFO, FMT, ##__VA_ARGS__); \
 	} \
 } while (0)
-
-/* old macros */
-# ifdef HAVE_EXTRA_DEBUG
-#  define TRACE2(FMT,...) g_log(G_LOG_DOMAIN, GRID_LOGLVL_TRACE2, FMT, ##__VA_ARGS__)
-#  define TRACE(FMT,...)  g_log(G_LOG_DOMAIN, GRID_LOGLVL_TRACE, FMT, ##__VA_ARGS__)
-# else
-#  define TRACE2(FMT,...)
-#  define TRACE(FMT,...)
-# endif
-# define DEBUG(FMT,...)   g_log(G_LOG_DOMAIN, GRID_LOGLVL_DEBUG, FMT, ##__VA_ARGS__)
-# define INFO(FMT,...)    g_log(G_LOG_DOMAIN, GRID_LOGLVL_INFO, FMT, ##__VA_ARGS__)
-# define NOTICE(FMT,...)  g_log(G_LOG_DOMAIN, GRID_LOGLVL_NOTICE, FMT, ##__VA_ARGS__)
-# define WARN(FMT,...)    g_log(G_LOG_DOMAIN, GRID_LOGLVL_WARN, FMT, ##__VA_ARGS__)
-# define ERROR(FMT,...)   g_log(G_LOG_DOMAIN, GRID_LOGLVL_ERROR, FMT, ##__VA_ARGS__)
-
-/* domain macros */
-# ifdef HAVE_EXTRA_DEBUG
-#  define TRACE2_DOMAIN(D,FMT,...) g_log((D), GRID_LOGLVL_TRACE2, FMT, ##__VA_ARGS__)
-#  define TRACE_DOMAIN(D,FMT,...)  g_log((D), GRID_LOGLVL_TRACE, FMT, ##__VA_ARGS__)
-# else
-#  define TRACE2_DOMAIN(D,FMT,...)
-#  define TRACE_DOMAIN(D,FMT,...)
-# endif
-# define DEBUG_DOMAIN(D,FMT,...)   g_log((D), GRID_LOGLVL_DEBUG, FMT, ##__VA_ARGS__)
-# define INFO_DOMAIN(D,FMT,...)    g_log((D), GRID_LOGLVL_INFO, FMT, ##__VA_ARGS__)
-# define NOTICE_DOMAIN(D,FMT,...)  g_log((D), GRID_LOGLVL_NOTICE, FMT, ##__VA_ARGS__)
-# define WARN_DOMAIN(D,FMT,...)    g_log((D), GRID_LOGLVL_WARN, FMT, ##__VA_ARGS__)
-# define ERROR_DOMAIN(D,FMT,...)   g_log((D), GRID_LOGLVL_ERROR, FMT, ##__VA_ARGS__)
 
 #define LOG_FLAG_TRIM_DOMAIN 0x01
 #define LOG_FLAG_PURIFY 0x02

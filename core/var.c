@@ -16,13 +16,11 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
+#include <core/oiovar.h>
+
 #include <string.h>
 
-#include <core/oiovar.h>
-#include <core/oiolog.h>
 #include <core/oiostr.h>
-#include <core/oiocfg.h>
-#include <core/internals.h>
 
 enum oio_var_type_e {
 	OIO_VARTYPE_gboolean,

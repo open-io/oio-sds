@@ -35,8 +35,7 @@ typedef gint (*message_matcher_f) (MESSAGE m, void *param, GError **err);
 typedef gint (*message_handler_f) (MESSAGE m, gint cnx, void *param, GError **err);
 typedef gint (*message_handler_v2_f) (struct request_context_s *ctx, GError **err);
 
-gint message_handler_add (const char *name, message_matcher_f m, message_handler_f h, GError **err);
-gint message_handler_add_v2 (const char *name, message_matcher_f m, message_handler_v2_f h, const GPtrArray *tags, GError **err);
+void message_handler_add (const char *name, message_matcher_f m, message_handler_f h);
 
 #define GO_ON 2
 #define DONE 1
@@ -67,10 +66,6 @@ void reply_context_set_body (struct reply_context_s *ctx, void *body, gsize body
 
 gint reply_context_reply (struct reply_context_s *ctx, GError **err);
 
-void reply_context_add_header_in_reply (struct reply_context_s *ctx, const char *k, GByteArray *v);
-
-void reply_context_add_strheader_in_reply (struct reply_context_s *ctx, const char *k, const char *v);
-
 void reply_context_log_access (struct reply_context_s *ctx,
 	const gchar *fmt, ...);
 
@@ -78,14 +73,6 @@ void request_context_clear(struct request_context_s* ctx);
 
 void request_context_free(struct request_context_s* ctx);
 
-void request_context_gclean(gpointer p1, gpointer p2);
-
 struct request_context_s* request_context_create(int fd, addr_info_t *fd_peer);
-
-void requets_context_gclean(gpointer p1, gpointer p2);
-
-namespace_info_t* gridd_get_namespace_info(GError **error);
-
-gchar* gridd_get_ns_name(void);
 
 #endif /*OIO_SDS__gridd__main__message_handler_h*/

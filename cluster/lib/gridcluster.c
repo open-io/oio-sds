@@ -240,7 +240,7 @@ _get_token(const gchar *colon_separated_tokens, const guint token_rank)
 	gchar *token_wanted = NULL;
 
 	if (g_strv_length(tokens) < token_rank) {
-		ERROR("Cannot split string [%s] into %i ':'-separated tokens.", colon_separated_tokens, token_rank);
+		GRID_ERROR("Cannot split string [%s] into %i ':'-separated tokens.", colon_separated_tokens, token_rank);
 		goto end;
 	}
 
@@ -259,7 +259,7 @@ _get_data_security_id(const gchar *storage_policy_value)
 	gchar *data_sec_id = _get_token(storage_policy_value, 1);
 
 	if (!data_sec_id) {
-		WARN("Storage policy configuration seems to be wrong: [%s]"
+		GRID_WARN("Storage policy configuration seems to be wrong: [%s]"
 				" Correct pattern is STG_CLASS:DATA_SEC:DATA_THREAT",
 				storage_policy_value ? storage_policy_value : "NULL");
 	}
@@ -280,7 +280,7 @@ namespace_data_security_value(const namespace_info_t *ns_info, const gchar *want
 	}
 
 	if (!data_sec_val) {
-		WARN("Cannot find data security with id [%s] (namespace [%s], wanted policy [%s])",
+		GRID_WARN("Cannot find data security with id [%s] (namespace [%s], wanted policy [%s])",
 				data_sec_id, ns_info->name, wanted_policy);
 	}
 

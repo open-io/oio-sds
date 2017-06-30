@@ -33,7 +33,7 @@ static int
 srv_dumy_alert_handler(void *user_data, const char *id, const char *criticity, const char *msg)
 {
 	(void)user_data;
-	ERROR_DOMAIN((id ? id : "alert"), "%s:%s", criticity, msg);
+	GRID_ERROR((id ? id : "alert"), "%s:%s", criticity, msg);
 	return 1;
 }
 
@@ -49,7 +49,7 @@ srv_set_alert_handler(srv_alert_handler h, gpointer user_data)
 
 	alert_handler = h;
 	alert_handler_user_data = user_data;
-	NOTICE("Alert handler replaced : handler[%p] user_data[%p]", h, user_data);
+	GRID_NOTICE("Alert handler replaced : handler[%p] user_data[%p]", h, user_data);
 	return previous_user_data;
 }
 
@@ -59,7 +59,7 @@ srv_send_alert(const char *id, const char *criticity, const char *msg)
 	static volatile int warning_sent = 0;
 
 	if (!criticity || !id || !msg) {
-		WARN("Invalid parameter");
+		GRID_WARN("Invalid parameter");
 		return 0;
 	}
 
@@ -68,7 +68,7 @@ srv_send_alert(const char *id, const char *criticity, const char *msg)
 	}
 
 	if (!warning_sent) {
-		WARN("No server alert handler registered");
+		GRID_WARN("No server alert handler registered");
 		warning_sent = 1;
 	}
 
@@ -81,7 +81,7 @@ srv_send_valert(const char *id, const char *criticity, const char *fmt, va_list 
 	char formatted_msg[8192];
 
 	if (!fmt) {
-		WARN("Invalid parameter");
+		GRID_WARN("Invalid parameter");
 		return 0;
 	}
 	memset(formatted_msg, 0x00, sizeof(formatted_msg));

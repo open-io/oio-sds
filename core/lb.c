@@ -16,15 +16,16 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
+#include <core/oiolb.h>
+
 #include <string.h>
 
-#include <glib.h>
-#include <json.h>
+#include <json-c/json.h>
 
-#include "oiolb.h"
-#include "oiostr.h"
-#include "oioext.h"
-#include "oiolog.h"
+#include <core/oiostr.h>
+#include <core/oioext.h>
+#include <core/oiolog.h>
+
 #include "internals.h"
 
 typedef guint32 generation_t;
@@ -251,25 +252,39 @@ oio_lb_world__get_slot_unlocked(struct oio_lb_world_s *world, const char *name)
 static guint _search_first_at_location(GArray *tab, const oio_location_t needle,
 		const guint start, const guint end);
 
+guint32 djb_hash_str0(const gchar *str) {
+	guint32 hash = 5381;
+	guint32 c = 0;
+	while ((c = *str++))
+		hash = ((hash << 5) + hash) + c;
+	return hash;
+}
+
+struct hash_len_s djb_hash_str(const gchar * b) {
+	struct hash_len_s hl = {.h = 5381,.l = 0 };
+	for (; b[hl.l]; ++hl.l)
+		hl.h = ((hl.h << 5) + hl.h) ^ (guint32) (b[hl.l]);
+	return hl;
+}
+
+guint32 djb_hash_buf(const guint8 * b, register gsize bs) {
+	register guint32 h = 5381;
+	for (register gsize i = 0; i < bs; ++i)
+		h = ((h << 5) + h) ^ (guint32) (b[i]);
+	return h;
+}
+
 /* Take djb2 hash of each part of the '.'-separated string,
  * keep the 16 LSB of each hash to build a 64b integer. */
 oio_location_t
 location_from_dotted_string(const char *dotted)
 {
-	// http://www.cse.yorku.ca/~oz/hash.html
-	guint32 _djb2(const gchar *str) {
-		guint32 hash = 5381;
-		guint32 c = 0;
-		while ((c = *str++))
-			hash = ((hash << 5) + hash) + c;
-		return hash;
-	}
 	gchar **toks = g_strsplit(dotted, ".", OIO_LB_LOC_LEVELS);
 	oio_location_t location = 0;
 	int ntoks = 0;
 	// according to g_strsplit documentation, toks cannot be NULL
 	for (gchar **tok = toks; *tok; tok++, ntoks++) {
-		location = (location << OIO_LB_BITS_PER_LOC_LEVEL) | (_djb2(*tok) & 0xFFFF);
+		location = (location << OIO_LB_BITS_PER_LOC_LEVEL) | (djb_hash_str0(*tok) & 0xFFFF);
 	}
 	g_strfreev(toks);
 	return location;
@@ -594,7 +609,7 @@ _local_target__poll(struct oio_lb_pool_LOCAL_s *lb,
 static GError*
 _local__poll (struct oio_lb_pool_s *self,
 		const oio_location_t * avoids,
-		void (*on_id) (oio_location_t location, const char *id),
+		void (*on_id) (oio_location_t, const char *),
 		gboolean *flawed)
 {
 	return _local__patch(self, avoids, NULL, on_id, flawed);

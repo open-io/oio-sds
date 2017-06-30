@@ -63,7 +63,7 @@ check_uncompressed_chunk(const gchar* path, GError** error)
 
 	/* Check chunk not already compresssed */
 	if (get_compression_info_in_attr(path, error, compress_opt)) {
-		DEBUG("Compression info found");
+		GRID_DEBUG("Compression info found");
 		gchar *compression = NULL;
 		compression = g_hash_table_lookup(compress_opt, NS_COMPRESSION_OPTION);
 		if (compression && g_ascii_strcasecmp(compression, NS_COMPRESSION_ON) == 0) {
@@ -185,7 +185,7 @@ end:
 static gboolean
 set_compress_attr(gchar* tmp_path, const gchar* algo, gint64 blocksize, GError ** error)
 {
-	DEBUG("Going to add compression attributes\n");
+	GRID_DEBUG("Going to add compression attributes\n");
 	gboolean status = FALSE;
 	gchar* metadata_compress = NULL;
 	gchar bs_str[sizeof(gint64)+1];
@@ -196,7 +196,7 @@ set_compress_attr(gchar* tmp_path, const gchar* algo, gint64 blocksize, GError *
 			NS_COMPRESS_ALGO_OPTION,"=", algo, ";",
 			NS_COMPRESS_BLOCKSIZE_OPTION, "=", bs_str, NULL);
 
-	DEBUG("Compression metadata to add : [%s]\n",metadata_compress);
+	GRID_DEBUG("Compression metadata to add : [%s]\n",metadata_compress);
 
 	if (!set_compression_info_in_attr(tmp_path, error, metadata_compress)) {
 		goto err;
@@ -282,7 +282,7 @@ compress_chunk(const gchar* path, const gchar* algo, const gint64 blocksize, gbo
 			GSETERROR(error, "Failed to copy extended attributes to destination file\n");
 		goto end;
 	}
-	DEBUG("Extended attributes copied from src to dst\n");
+	GRID_DEBUG("Extended attributes copied from src to dst\n");
 
 	if(!set_compress_attr(tmp_path, algo, blocksize, &local_error)) {
 		if(local_error) {
@@ -292,7 +292,7 @@ compress_chunk(const gchar* path, const gchar* algo, const gint64 blocksize, gbo
 		goto end;
 	}
 
-	DEBUG("Compression extended attributes successfully added\n");
+	GRID_DEBUG("Compression extended attributes successfully added\n");
 
 	src = fopen(path, "r");
 	dst = fopen(tmp_path, "w");
@@ -363,7 +363,7 @@ compress_chunk(const gchar* path, const gchar* algo, const gint64 blocksize, gbo
 
 	}
 
-	DEBUG("Chunk compressed");
+	GRID_DEBUG("Chunk compressed");
 
 	if(comp_ctx->eof_writer(dst, checksum, &compressed_size) != 0) {
 		GSETERROR(error, "Failed to write compressed file EOF marker and checksum\n");
@@ -375,19 +375,19 @@ compress_chunk(const gchar* path, const gchar* algo, const gint64 blocksize, gbo
 		goto end;
 	}
 
-	DEBUG("Compression footers successfully wrote");
+	GRID_DEBUG("Compression footers successfully wrote");
 
 	status = 1;
 
 end:
 	if(src) {
 		if(fclose(src) != 0)
-			WARN("Failed to fclose source file");
+			GRID_WARN("Failed to fclose source file");
 		src = NULL;
 	}
 	if(dst) {
 		if(fclose(dst) != 0)
-			WARN("Failed to fclose destination file");
+			GRID_WARN("Failed to fclose destination file");
 		dst = NULL;
 	}
 
@@ -395,17 +395,17 @@ end:
 		/* TODO: stat old file, rename, paste stat*/
 		if(preserve) {
 			/* Need to set old file info in new file */
-			TRACE("Renaming and setting good informations to new file...");
+			GRID_TRACE("Renaming and setting good informations to new file...");
 			struct stat stat_buf = {0};
 			if(stat(path, &stat_buf) == -1) {
 				GSETERROR (error, "Failed to stat old file, cannot keep old file information, abort\n");
 				/* remove tmp file */
-				DEBUG("Removing failed file");
+				GRID_DEBUG("Removing failed file");
 				if(remove(tmp_path) != 0)
-					WARN("Failed to remove tmp file [%s]", tmp_path);
+					GRID_WARN("Failed to remove tmp file [%s]", tmp_path);
 				status = 0;
 			} else {
-				TRACE("Updating Access / Modify / Change informations");
+				GRID_TRACE("Updating Access / Modify / Change informations");
 				struct utimbuf ut = {0};
 				ut.actime = stat_buf.st_atime;
 				ut.modtime = stat_buf.st_mtime;
@@ -424,24 +424,24 @@ end:
 					}
 				} else {
 					/* remove tmp file */
-					DEBUG("Removing failed file");
+					GRID_DEBUG("Removing failed file");
 					if(remove(tmp_path) != 0)
-						WARN("Failed to remove tmp file [%s]", tmp_path);
+						GRID_WARN("Failed to remove tmp file [%s]", tmp_path);
 				}
 			}
 		} else {
-			TRACE("Renaming pending file...");
+			GRID_TRACE("Renaming pending file...");
 			if(rename(tmp_path, path) != 0) {
 				GSETERROR(error, "Failed to rename tmp file");
 				status = 0;
 			}
-			TRACE("Renaming done");
+			GRID_TRACE("Renaming done");
 		}
 	} else {
 		/* remove tmp file */
-		DEBUG("Removing failed file");
+		GRID_DEBUG("Removing failed file");
 		if(remove(tmp_path) != 0)
-			WARN("Failed to remove tmp file [%s]", tmp_path);
+			GRID_WARN("Failed to remove tmp file [%s]", tmp_path);
 	}
 
 	if(buf)
@@ -462,7 +462,7 @@ uncompress_chunk2(const gchar* path, gboolean preserve, gboolean keep_pending,
 {
 	GError *local_error = NULL;
 	int status = 0;
-	TRACE("Uncompressing [%s]", path);
+	GRID_TRACE("Uncompressing [%s]", path);
 	gchar *tmp_path = NULL;
 	gulong tmp_len;
 	gint64 total_read;
@@ -476,14 +476,14 @@ uncompress_chunk2(const gchar* path, gboolean preserve, gboolean keep_pending,
 
 	/* Check chunk exists */
 
-	DEBUG("Checking chunk exists");
+	GRID_DEBUG("Checking chunk exists");
 
 	struct stat buf = {0};
 	if(stat(path, &buf) == -1) {
 		GSETERROR (error, "stat() failed, chunk not found\n");
 		goto end;
 	}
-	DEBUG("File [%s] found", path);
+	GRID_DEBUG("File [%s] found", path);
 
 	compress_opt = g_hash_table_new_full( g_str_hash, g_str_equal, g_free, g_free);
 
@@ -510,16 +510,16 @@ uncompress_chunk2(const gchar* path, gboolean preserve, gboolean keep_pending,
 		goto end;
 	}
 
-	DEBUG("Chunk check done");
+	GRID_DEBUG("Chunk check done");
 
 	tmp_len = strlen(path) +sizeof(".pending");
 	tmp_path = g_malloc0(tmp_len);
 	g_snprintf(tmp_path, tmp_len, "%s.pending", path);
 
-	DEBUG("Checking chunk not busy");
+	GRID_DEBUG("Checking chunk not busy");
 
 	if(stat(tmp_path, &buf) != -1) {
-		DEBUG("Stats failed");
+		GRID_DEBUG("Stats failed");
 		GSETERROR (error, "stat() success on pending file, cannot process : busy chunk\n");
 		goto end;
 	}
@@ -540,28 +540,28 @@ uncompress_chunk2(const gchar* path, gboolean preserve, gboolean keep_pending,
 		goto end;
 	}
 
-	TRACE("xattr copied from src to dst");
+	GRID_TRACE("xattr copied from src to dst");
 
 	dst = fopen(tmp_path, "w");
 
-	TRACE("Destination file opened");
+	GRID_TRACE("Destination file opened");
 
 	gint64 chunk_size;
 	chunk_size = g_ascii_strtoll(cp_chunk->uncompressed_size, NULL, 10);
 
 	total_read = 0;
 
-	DEBUG("Starting, total_read = %"G_GINT64_FORMAT", chunk_size = %"G_GINT64_FORMAT, total_read, chunk_size);
+	GRID_DEBUG("Starting, total_read = %"G_GINT64_FORMAT", chunk_size = %"G_GINT64_FORMAT, total_read, chunk_size);
 
 	while(total_read < chunk_size) {
 		bufsize = MIN(DECOMPRESSION_MAX_BUFSIZE, (chunk_size - total_read));
 		data = g_malloc0(bufsize);
-		DEBUG("New buffer allocated sized %"G_GINT64_FORMAT" bytes", bufsize);
+		GRID_DEBUG("New buffer allocated sized %"G_GINT64_FORMAT" bytes", bufsize);
 		nb_read = 0;
 		current_read = 0;
 		while(nb_read < bufsize) {
 			current_read = comp_ctx->data_uncompressor(cp_chunk, 0, data + nb_read, bufsize - nb_read, &local_error);
-			DEBUG("Currently read %"G_GINT64_FORMAT" bytes", current_read);
+			GRID_DEBUG("Currently read %"G_GINT64_FORMAT" bytes", current_read);
 			if(current_read < 0) {
 				if(local_error) {
 					GSETERROR(error, "An error occured while decompressing chunk : %s", local_error->message);
@@ -571,12 +571,12 @@ uncompress_chunk2(const gchar* path, gboolean preserve, gboolean keep_pending,
 				goto end;
 			} else if (current_read == 0) {
 				/* Premature end of file, will still write to pending */
-				WARN("Read 0 bytes, original chunk may have been truncated");
+				GRID_WARN("Read 0 bytes, original chunk may have been truncated");
 				break;
 			}
 			nb_read += current_read;
 		}
-		TRACE("buffer filled");
+		GRID_TRACE("buffer filled");
 		errno = 0;
 		/* write buf to dst file */
 		if(nb_read > 0 && fwrite(data, nb_read, 1, dst) != 1) {
@@ -604,14 +604,14 @@ uncompress_chunk2(const gchar* path, gboolean preserve, gboolean keep_pending,
 end:
 	if(dst) {
 		if(fclose(dst) != 0)
-			WARN("Failed to fclose destination file");
+			GRID_WARN("Failed to fclose destination file");
 		dst = NULL;
 	}
 
 	if(status == 1) {
 		if(preserve) {
 			/* Need to set old file info in new file */
-			TRACE("Updating Access / Modify / Change informations");
+			GRID_TRACE("Updating Access / Modify / Change informations");
 			struct utimbuf ut = {0};
 			ut.actime = buf.st_atime;
 			ut.modtime = buf.st_mtime;
@@ -629,27 +629,27 @@ end:
 					status = 0;
 				}
 			} else if (keep_pending) {
-				INFO("Temporary file kept: %s", tmp_path);
+				GRID_INFO("Temporary file kept: %s", tmp_path);
 			} else {
 				/* remove tmp file */
-				DEBUG("Removing failed file");
+				GRID_DEBUG("Removing failed file");
 				if(remove(tmp_path) != 0)
-					WARN("Failed to remove tmp file [%s]", tmp_path);
+					GRID_WARN("Failed to remove tmp file [%s]", tmp_path);
 			}
 		} else {
-			DEBUG("Renaming pending file\n");
+			GRID_DEBUG("Renaming pending file\n");
 			if(rename(tmp_path, path) != 0) {
 				GSETERROR(error, "Failed to rename tmp file");
 				status = 0;
 			}
 		}
 	} else if (keep_pending) {
-		INFO("Temporary file kept: %s", tmp_path);
+		GRID_INFO("Temporary file kept: %s", tmp_path);
 	} else {
 		/* remove tmp file */
-		DEBUG("Removing pending file\n");
+		GRID_DEBUG("Removing pending file\n");
 		if(remove(tmp_path) != 0)
-			WARN("Failed to remove tmp file [%s]", tmp_path);
+			GRID_WARN("Failed to remove tmp file [%s]", tmp_path);
 	}
 
 	if(compress_opt)

@@ -190,7 +190,6 @@ add_library(metautils SHARED
 		metacomm.h
 		metatypes.h
 		metautils.h
-		metautils_bits.h
 		metautils_macros.h
 
 		rrd.c rrd.h

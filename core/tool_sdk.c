@@ -1,11 +1,30 @@
+/*
+OpenIO SDS core library
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #include <string.h>
 #include <stdlib.h>
 #include <glib.h>
-#include "oio_sds.h"
-#include "oioext.h"
-#include "oiourl.h"
-#include "oiostr.h"
-#include "oiolog.h"
+
+#include <core/oio_sds.h>
+#include <core/oioext.h>
+#include <core/oiostr.h>
+#include <core/oiolog.h>
+
 #include "internals.h"
 
 #define GERROR(E) ((GError*)(E))

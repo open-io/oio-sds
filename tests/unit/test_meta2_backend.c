@@ -470,21 +470,21 @@ test_content_check_all_beans_correct(void)
 		GError *err;
 		GSList *beans_3cpy = _create_alias2(m2, u, "THREECOPIES", 3);
 		GString *message = g_string_new("");
-		err = meta2_backend_check_content(m2, beans_3cpy, message, false);
+		err = meta2_backend_check_content(m2, beans_3cpy, message, FALSE);
 		g_string_free(message, TRUE);
 		_bean_cleanl2(beans_3cpy);
 		g_assert_no_error(err);
 
 		GSList *beans_2cpy = _create_alias2(m2, u, "TWOCOPIES", 2);
 		message = g_string_new("");
-		err = meta2_backend_check_content(m2, beans_2cpy, message, false);
+		err = meta2_backend_check_content(m2, beans_2cpy, message, FALSE);
 		g_string_free(message, TRUE);
 		_bean_cleanl2(beans_2cpy);
 		g_assert_no_error(err);
 
 		message = g_string_new("");
 		GSList *beans_ec = _create_alias2(m2, u, "EC", 3);
-		err = meta2_backend_check_content(m2, beans_ec, message, false);
+		err = meta2_backend_check_content(m2, beans_ec, message, FALSE);
 		g_string_free(message, TRUE);
 		_bean_cleanl2(beans_ec);
 		g_assert_no_error(err);
@@ -511,7 +511,7 @@ test_content_check_1_missing_bean_plain_irreparable(void)
 		}
 		GRID_DEBUG("TEST nb_beans=%u", g_slist_length(beans));
 		GString *message = g_string_new("");
-		err = meta2_backend_check_content(m2, beans, message, false);
+		err = meta2_backend_check_content(m2, beans, message, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
 		g_error_free(err);
 		g_string_free(message, TRUE);
@@ -530,7 +530,7 @@ test_content_check_1_missing_bean_plain_copy_reparable(void)
 		GSList *beans_2cpy = _create_alias2(m2, u, "TWOCOPIES", 2);
 		GString *message_2cpy = g_string_new("");
 		_remove_bean(&beans_2cpy, 1, NULL);
-		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy, false);
+		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
 		gchar *missing_chunks = g_strrstr(message_2cpy->str, "\"missing_chunks\":[2]");
@@ -541,7 +541,7 @@ test_content_check_1_missing_bean_plain_copy_reparable(void)
 		GSList *beans_3cpy = _create_alias2(m2, u, "THREECOPIES", 3);
 		GString *message_3cpy = g_string_new("");
 		_remove_bean(&beans_3cpy, 1, NULL);
-		err = meta2_backend_check_content(m2, beans_3cpy, message_3cpy, false);
+		err = meta2_backend_check_content(m2, beans_3cpy, message_3cpy, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
 		missing_chunks = g_strrstr(message_3cpy->str, "\"missing_chunks\":[2]");
@@ -563,7 +563,7 @@ test_content_check_2_missing_bean_plain_copy_reparable(void)
 		GSList *beans_3cpy = _create_alias2(m2, u, "THREECOPIES", 3);
 		GString *message_3cpy = g_string_new("");
 		_remove_bean(&beans_3cpy, 2, NULL);
-		err = meta2_backend_check_content(m2, beans_3cpy, message_3cpy, false);
+		err = meta2_backend_check_content(m2, beans_3cpy, message_3cpy, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
 		gchar *missing_chunks = g_strrstr(message_3cpy->str, "\"missing_chunks\":[2,2]");
@@ -585,7 +585,7 @@ test_content_check_missing_bean_plain_copy_irreparable(void)
 		GSList *beans_2cpy = _create_alias2(m2, u, "TWOCOPIES", 2);
 		GString *message_2cpy = g_string_new("");
 		_remove_bean(&beans_2cpy, 2, NULL);
-		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy, false);
+		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
 		g_error_free(err);
 		g_string_free(message_2cpy, TRUE);
@@ -594,7 +594,7 @@ test_content_check_missing_bean_plain_copy_irreparable(void)
 		GSList *beans_3cpy = _create_alias2(m2, u, "THREECOPIES", 3);
 		GString *message_3cpy = g_string_new("");
 		_remove_bean(&beans_3cpy, 3, NULL);
-		err = meta2_backend_check_content(m2, beans_3cpy, message_3cpy, false);
+		err = meta2_backend_check_content(m2, beans_3cpy, message_3cpy, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
 		g_error_free(err);
 		_bean_cleanl2(beans_3cpy);
@@ -613,7 +613,7 @@ test_content_check_missing_first_pos(void)
 		GString *message_nocpy = g_string_new("");
 		GSList *beans_nocpy = _create_alias(m2, u, NULL);
 		_remove_bean(&beans_nocpy, 1, "0");
-		err = meta2_backend_check_content(m2, beans_nocpy, message_nocpy, false);
+		err = meta2_backend_check_content(m2, beans_nocpy, message_nocpy, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
 		g_error_free(err);
 		_bean_cleanl2(beans_nocpy);
@@ -622,11 +622,11 @@ test_content_check_missing_first_pos(void)
 		GSList *beans_2cpy = _create_alias2(m2, u, "TWOCOPIES", 2);
 		GString *message_2cpy = g_string_new("");
 		_remove_bean(&beans_2cpy, 1, "0");
-		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy, false);
+		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
 		_remove_bean(&beans_2cpy, 1, "0");
-		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy, false);
+		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
 		g_error_free(err);
 		_bean_cleanl2(beans_2cpy);
@@ -645,7 +645,7 @@ test_content_check_ec_missing_1_chunk(void)
 		GString *message_ec1 = g_string_new("");
 		GSList *beans_ec1 = _create_alias2(m2, u, "EC", 3);
 		_remove_bean(&beans_ec1, 1, NULL);
-		err = meta2_backend_check_content(m2, beans_ec1, message_ec1, false);
+		err = meta2_backend_check_content(m2, beans_ec1, message_ec1, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
 		_bean_cleanl2(beans_ec1);
@@ -655,7 +655,7 @@ test_content_check_ec_missing_1_chunk(void)
 		GSList *beans_ecm = _create_alias2(m2, u, "EC", 3);
 		int m = 3;
 		_remove_bean(&beans_ecm, m, NULL);
-		err = meta2_backend_check_content(m2, beans_ecm, message_ecm, false);
+		err = meta2_backend_check_content(m2, beans_ecm, message_ecm, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
 		_bean_cleanl2(beans_ecm);
@@ -665,7 +665,7 @@ test_content_check_ec_missing_1_chunk(void)
 		GSList *beans_ecm1 = _create_alias2(m2, u, "EC", 3);
 		int m1 = m + 1;
 		_remove_bean(&beans_ecm1, m1, NULL);
-		err = meta2_backend_check_content(m2, beans_ecm1, message_ecm1, false);
+		err = meta2_backend_check_content(m2, beans_ecm1, message_ecm1, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
 		g_error_free(err);
 		_bean_cleanl2(beans_ecm1);

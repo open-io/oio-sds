@@ -29,13 +29,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 static void
 _log_addr(GString *gs, int fd)
 {
-	struct sockaddr_storage ss;
-	socklen_t ss_len;
+	struct sockaddr_storage ss = {0};
+	socklen_t ss_len = sizeof(ss);
 	char buf_addr[STRLEN_ADDRINFO];
 	char buf_port[8];
-
-	memset(&ss, 0, sizeof(ss));
-	ss_len = sizeof(ss);
 
 	if (0 != getsockname(fd, (struct sockaddr*)&ss, &ss_len))
 		g_string_append_c(gs, '?');

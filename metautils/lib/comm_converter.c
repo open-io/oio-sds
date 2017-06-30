@@ -649,7 +649,7 @@ hashtable_conversion(GHashTable *ht,
 	GError *error = NULL;
 	GSList* result = conv_func(ht, TRUE, &error);
 	if (result == NULL && error != NULL) {
-		ERROR("Failed to convert map to key_value_pairs in namespace_info API to ASN conversion : %s",
+		GRID_ERROR("Failed to convert map to key_value_pairs in namespace_info API to ASN conversion : %s",
 				gerror_get_message(error));
 		g_clear_error(&error);
 		return FALSE;

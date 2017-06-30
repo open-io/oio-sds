@@ -178,7 +178,7 @@ timer_expire_services(gpointer u)
 
 	if (!list_type_names) {
 		if (error_local) {
-			ERROR("[NS=%s] Failed to collect the service types names: %s",
+			GRID_ERROR("[NS=%s] Failed to collect the service types names: %s",
 				conscience_get_nsname(cs), gerror_get_message(error_local));
 			g_error_free(error_local);
 		}
@@ -196,7 +196,7 @@ timer_expire_services(gpointer u)
 		struct conscience_srvtype_s *srvtype =
 			conscience_get_locked_srvtype(cs, NULL, str_name, MODE_STRICT, 'r');
 		if (!srvtype) {
-			WARN("[NS=%s][SRVTYPE=%s] srvtype disappeared very quickly",
+			GRID_WARN("[NS=%s][SRVTYPE=%s] srvtype disappeared very quickly",
 				conscience_get_nsname(cs), str_name);
 			continue;
 		}
@@ -206,7 +206,7 @@ timer_expire_services(gpointer u)
 		/* XXX end of critical section */
 
 		if (count)
-			NOTICE("Expired [%u] [%s] services", count, str_name);
+			GRID_NOTICE("Expired [%u] [%s] services", count, str_name);
 	}
 
 	g_slist_foreach(list_type_names, g_free1, NULL);
@@ -254,7 +254,7 @@ _conscience_srv_serialize(struct conscience_srv_s *srv)
 
 	/* encode it and append to the pending body */
 	if (!(gba = service_info_marshall_1(si, &err))) {
-		WARN("service_info serialization error : %s", gerror_get_message(err));
+		GRID_WARN("service_info serialization error : %s", gerror_get_message(err));
 		g_clear_error(&err);
 	}
 
@@ -326,7 +326,7 @@ push_service(struct conscience_s *cs, struct service_info_s *si)
 	struct conscience_srvtype_s *srvtype =
 		conscience_get_locked_srvtype(cs, NULL, si->type, MODE_STRICT, 'w');
 	if (!srvtype) {
-		ERROR("Service type [%s/%s] not found", conscience_get_nsname(cs), si->type);
+		GRID_ERROR("Service type [%s/%s] not found", conscience_get_nsname(cs), si->type);
 	} else {
 		struct conscience_srv_s *srv = conscience_srvtype_refresh(srvtype, si);
 		if (srv) {
@@ -356,7 +356,7 @@ rm_service(struct conscience_s *cs, struct service_info_s *si)
 	struct conscience_srvid_s srvid;
 	struct conscience_srvtype_s *srvtype;
 
-	if (INFO_ENABLED()) {
+	if (GRID_INFO_ENABLED()) {
 		str_desc_len = g_snprintf(str_desc, sizeof(str_desc), "%s/%s/", conscience_get_nsname(cs), si->type);
 		grid_addrinfo_to_string(&(si->addr), str_desc + str_desc_len, sizeof(str_desc) - str_desc_len);
 		memcpy(&(srvid.addr), &(si->addr), sizeof(addr_info_t));
@@ -366,14 +366,14 @@ rm_service(struct conscience_s *cs, struct service_info_s *si)
 	/* XXX start of critical section */
 	srvtype = conscience_get_locked_srvtype(cs, &error_local, si->type, MODE_STRICT, 'w');
 	if (!srvtype) {
-		ERROR("Service type [%s] not found : %s", str_desc, gerror_get_message(error_local));
+		GRID_ERROR("Service type [%s] not found : %s", str_desc, gerror_get_message(error_local));
 		if (error_local)
 			g_error_free(error_local);
 	}
 	else {
 		conscience_srvtype_remove_srv(srvtype, &srvid);
 		conscience_release_locked_srvtype(srvtype);
-		INFO("Service [%s] removed", str_desc);
+		GRID_INFO("Service [%s] removed", str_desc);
 	}
 	/* XXX end of critical section */
 }
@@ -554,7 +554,7 @@ _conscience_srv_serialize_full(struct conscience_srv_s *srv)
 	conscience_srv_fill_srvinfo(si, srv);
 
 	if (!(gba = service_info_marshall_1(si, &err))) {
-		WARN("service_info serialization error : %s", gerror_get_message(err));
+		GRID_WARN("service_info serialization error : %s", gerror_get_message(err));
 		g_clear_error(&err);
 	}
 
@@ -706,7 +706,7 @@ handler_get_service(struct request_context_s *req_ctx)
 	}
 
 	if (!rc) {
-		ERROR("An error occured: %s", gerror_get_message(reply_ctx.warning));
+		GRID_ERROR("An error occured: %s", gerror_get_message(reply_ctx.warning));
 		_reply_ctx_set_error(&(reply_ctx));
 		reply_context_reply(&(reply_ctx),NULL);
 	}
@@ -756,7 +756,7 @@ handler_push_service(struct request_context_s *req_ctx)
 	reply_context_clear(&ctx, TRUE);
 	return 1;
 errorLabel:
-	ERROR("An error occured : %s", gerror_get_message(ctx.warning));
+	GRID_ERROR("An error occured : %s", gerror_get_message(ctx.warning));
 	_reply_ctx_set_error(&ctx);
 	reply_context_reply(&ctx, NULL);
 	reply_context_log_access(&ctx, NULL);
@@ -866,7 +866,7 @@ handler_rm_service(struct request_context_s *req_ctx)
 			goto errorLabel;
 		}
 
-		NOTICE("[NS=%s] [%d] services to be removed", conscience_get_nsname(conscience), g_slist_length(list_srvinfo));
+		GRID_NOTICE("[NS=%s] [%d] services to be removed", conscience_get_nsname(conscience), g_slist_length(list_srvinfo));
 
 		/*Now push each service and reply the success */
 		for (GSList *l = list_srvinfo; l; l = g_slist_next(l)) {
@@ -897,7 +897,7 @@ handler_rm_service(struct request_context_s *req_ctx)
 	return 1;
 
 errorLabel:
-	ERROR("Failed to remove the service : %s", gerror_get_message(ctx.warning));
+	GRID_ERROR("Failed to remove the service : %s", gerror_get_message(ctx.warning));
 	_reply_ctx_set_error(&ctx);
 	reply_context_reply(&ctx, NULL);
 	reply_context_log_access(&ctx, NULL);
@@ -991,21 +991,21 @@ module_configure_srvtype(struct conscience_s *cs, GError ** err,
 	/*adjust the parameter */
 	if (0 == g_ascii_strcasecmp(what, KEY_SCORE_TIMEOUT)) {
 		srvtype->score_expiration = g_ascii_strtoll(value, NULL, 10);
-		INFO("[NS=%s][SRVTYPE=%s] score expiration set to [%ld] seconds",
+		GRID_INFO("[NS=%s][SRVTYPE=%s] score expiration set to [%ld] seconds",
 				cs->ns_info.name, srvtype->type_name,
 				srvtype->score_expiration);
 		return TRUE;
 	}
 	else if (0 == g_ascii_strcasecmp(what, KEY_SCORE_VARBOUND)) {
 		srvtype->score_variation_bound = g_ascii_strtoll(value, NULL, 10);
-		INFO("[NS=%s][SRVTYPE=%s] score variation bound set to [%d]",
+		GRID_INFO("[NS=%s][SRVTYPE=%s] score variation bound set to [%d]",
 				cs->ns_info.name, srvtype->type_name,
 				srvtype->score_variation_bound);
 		return TRUE;
 	}
 	else if (0 == g_ascii_strcasecmp(what, KEY_SCORE_EXPR)) {
 		if (conscience_srvtype_set_type_expression(srvtype, err, value)) {
-			INFO("[NS=%s][SRVTYPE=%s] score expression set to [%s]",
+			GRID_INFO("[NS=%s][SRVTYPE=%s] score expression set to [%s]",
 					cs->ns_info.name, srvtype->type_name, value);
 			return TRUE;
 		}
@@ -1013,18 +1013,18 @@ module_configure_srvtype(struct conscience_s *cs, GError ** err,
 	}
 	else if (0 == g_ascii_strcasecmp(what, KEY_SCORE_LOCK)) {
 		srvtype->lock_at_first_register = oio_str_parse_bool(value, TRUE);
-		INFO("[NS=%s][SRVTYPE=%s] lock at first register: %s",
+		GRID_INFO("[NS=%s][SRVTYPE=%s] lock at first register: %s",
 				cs->ns_info.name, srvtype->type_name,
 				srvtype->lock_at_first_register? "yes":"no");
 		return TRUE;
 	}
 	else if (0 == g_ascii_strcasecmp(what, KEY_ALERT_LIMIT)) {
 		srvtype->alert_frequency_limit = g_ascii_strtoll(value, NULL, 10);
-		INFO("[NS=%s][SRVTYPE=%s] Alert limit set to %ld", cs->ns_info.name,
+		GRID_INFO("[NS=%s][SRVTYPE=%s] Alert limit set to %ld", cs->ns_info.name,
 				srvtype->type_name, srvtype->alert_frequency_limit);
 	}
 
-	WARN("[NS=%s][SRVTYPE=%s] parameter not recognized [%s] (ignored!)",
+	GRID_WARN("[NS=%s][SRVTYPE=%s] parameter not recognized [%s] (ignored!)",
 			cs->ns_info.name, srvtype->type_name, what);
 	return TRUE;
 }
@@ -1072,9 +1072,6 @@ module_configure_srvpool(struct conscience_s *cs, GError ** err,
 static GError *
 fill_hashtable_with_group(GHashTable *ht, GKeyFile *conf_file, const gchar *group_name)
 {
-	gchar **keys = NULL;
-	gchar *v = NULL;
-	gsize size;
 	GError *e = NULL;
 
 	if (!g_key_file_has_group (conf_file, group_name)) {
@@ -1082,25 +1079,22 @@ fill_hashtable_with_group(GHashTable *ht, GKeyFile *conf_file, const gchar *grou
 		return e;
 	}
 
-	keys = g_key_file_get_keys (conf_file, group_name, &size, &e);
-	if ( NULL != keys) {
-		for (uint i = 0; i < g_strv_length(keys); i++) {
-			v = g_key_file_get_value (conf_file, group_name, keys[i], &e);
-			if (!v) {
-				GSETERROR (&e, "Cannot get the value for [%s][%s]", group_name, keys[i]);
-				break;
-			}
-			if (NULL != g_hash_table_lookup(ht, keys[i])) {
-				WARN("Duplicate key [%s][%s], new value [%s]", group_name, keys[i], v);
-			}
-			g_hash_table_insert (ht, g_strdup(keys[i]), metautils_gba_from_string(v));
-			g_free(v);
-		}
-		g_strfreev(keys);
+	gsize size = 0;
+	gchar **keys = g_key_file_get_keys (conf_file, group_name, &size, &e);
+	if (!keys) {
+		GSETCODE(&e, CODE_INTERNAL_ERROR, "Cannot get all keys of group '%s'", group_name);
 		return e;
 	}
-	GSETCODE(&e, CODE_INTERNAL_ERROR, "Cannot get all keys of group '%s'", group_name);
-	return e;
+
+	for (guint i = 0; i < g_strv_length(keys); i++) {
+		gchar *v = g_key_file_get_value (conf_file, group_name, keys[i], NULL);
+		if (NULL != g_hash_table_lookup(ht, keys[i]))
+			GRID_WARN("Duplicate key [%s][%s], new value [%s]", group_name, keys[i], v);
+		g_hash_table_insert (ht, g_strdup(keys[i]), metautils_gba_from_string(v));
+		g_free(v);
+	}
+	g_strfreev(keys);
+	return NULL;
 }
 
 static GError *
@@ -1111,10 +1105,10 @@ module_init_storage_conf(struct conscience_s *cs, const gchar *filepath)
 
 	// Case-insensitive comparison (reason for not using g_hash_table_lookup)
 	void _check_for_keyword(gchar *key, gpointer value, gchar **what) {
-		NOTICE("%s %s", what[1], key);
+		GRID_NOTICE("%s %s", what[1], key);
 		(void) value;
 		if (!g_ascii_strcasecmp(what[0], key)) {
-			WARN("Redefining '%s' %s, this may not be taken into account",
+			GRID_WARN("Redefining '%s' %s, this may not be taken into account",
 					key, what[1]);
 		}
 	}
@@ -1140,13 +1134,13 @@ module_init_storage_conf(struct conscience_s *cs, const gchar *filepath)
 	cs->ns_info.data_security = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
 	e = fill_hashtable_with_group(cs->ns_info.data_security, stg_conf_file, NAME_GROUPNAME_DATA_SECURITY);
 	if( NULL != e) {
-		WARN("Data security rules not correctly loaded from file [%s] : %s", filepath, e->message);
+		GRID_WARN("Data security rules not correctly loaded from file [%s] : %s", filepath, e->message);
 		return e;
 	}
 	g_hash_table_foreach(cs->ns_info.data_security, (GHFunc)_check_for_keyword,
 			(gchar*[2]){DATA_SECURITY_NONE, "data security"});
 
-	INFO("[NS=%s] storage conf loaded successfully from file [%s]",
+	GRID_INFO("[NS=%s] storage conf loaded successfully from file [%s]",
 			cs->ns_info.name, filepath);
 	g_key_file_free(stg_conf_file);
 	return NULL;
@@ -1293,8 +1287,8 @@ struct srvtype_init_s
 	const gchar *expr;
 };
 
-static gboolean
-module_init_known_service_types(struct conscience_s *cs, GHashTable * params, GError ** err)
+static void
+module_init_known_service_types(struct conscience_s *cs, GHashTable * params UNUSED)
 {
 	static struct srvtype_init_s types_to_init[] = {
 		{NAME_SRVTYPE_META0,EXPR_DEFAULT_META0},
@@ -1304,30 +1298,13 @@ module_init_known_service_types(struct conscience_s *cs, GHashTable * params, GE
 		{0,0}
 	};
 
-	struct conscience_srvtype_s *config;
-	struct srvtype_init_s *type;
-
-	(void)params;
-	for (type=types_to_init; type->name && type->expr ; type++) {
-		config = conscience_get_srvtype(cs, err, type->name, MODE_AUTOCREATE);
-		if (!config) {
-			GSETERROR(err, "[NS=%s][SRVTYPE=%s] Failed to init the service type", cs->ns_info.name, type->name);
-			return FALSE;
-		}
-
+	for (struct srvtype_init_s *type=types_to_init; type->name && type->expr ; type++) {
+		struct conscience_srvtype_s *config = conscience_get_srvtype(cs, NULL, type->name, MODE_AUTOCREATE);
 		conscience_srvtype_init(config);
-		if (!conscience_srvtype_set_type_expression(config, err, type->expr)) {
-			GSETERROR(err, "[NS=%s][SRVTYPE=%s] Failed to set expr=[%s]", cs->ns_info.name,
-				type->name, type->expr);
-			conscience_srvtype_destroy(config);
-			return FALSE;
-		}
-
 		config->alert_frequency_limit = time_default_alert_frequency;
-		NOTICE("[NS=%s][SRVTYPE=%s] service type init done", cs->ns_info.name, type->name);
+		gboolean rc = conscience_srvtype_set_type_expression(config, NULL, type->expr);
+		g_assert_true(rc);
 	}
-
-	return TRUE;
 }
 
 static gboolean
@@ -1422,38 +1399,31 @@ plugin_init(GHashTable * params, GError ** err)
 	g_rec_mutex_init(&counters_mutex);
 	g_rec_mutex_init(&conscience_nsinfo_mutex);
 
-	/*NAMEPSACE name */
 	if (!(ns_name = g_hash_table_lookup(params, KEY_NAMESPACE))) {
 		GSETERROR(err, "The configuration must contain a '%s' key with the namespace name", KEY_NAMESPACE);
 		return -1;
 	}
-	if (!(conscience = conscience_create_named(ns_name, err))) {
-		GSETERROR(err, "Conscience allocation failure");
-		return -1;
-	}
-	NOTICE("[NS=%s] Configuring a new conscience", ns_name);
+	conscience = conscience_create_named(ns_name, err);
+	GRID_NOTICE("[NS=%s] Configuring a new conscience", ns_name);
 
 	/* Serialization optimizations */
 	str = g_hash_table_lookup(params, KEY_SERIALIZE_SRVINFO_TAGS);
 	if (NULL != str)
 		flag_serialize_srvinfo_tags = oio_str_parse_bool(str, DEF_SERIALIZE_SRVINFO_TAGS);
-	NOTICE("[NS=%s] Tags in serialized service_info  [%s]", ns_name,
+	GRID_NOTICE("[NS=%s] Tags in serialized service_info  [%s]", ns_name,
 			(flag_serialize_srvinfo_tags ? "ENABLED" : "DISABLED"));
 
 	str = g_hash_table_lookup(params, KEY_SERIALIZE_SRVINFO_STATS);
 	if (NULL != str)
 		flag_serialize_srvinfo_stats = oio_str_parse_bool(str, DEF_SERIALIZE_SRVINFO_STATS);
-	NOTICE("[NS=%s] Stats in serialized service_info  [%s]", ns_name,
+	GRID_NOTICE("[NS=%s] Stats in serialized service_info  [%s]", ns_name,
 			(flag_serialize_srvinfo_stats ? "ENABLED" : "DISABLED"));
 
 	/*Overall alerting maximum per-service frequency*/
-	if (!(str = g_hash_table_lookup(params, KEY_ALERT_LIMIT)))
-		NOTICE("[NS=%s] No overall alert_frequency_limit set, default kept to [%ld] seconds",
-			ns_name, time_default_alert_frequency);
-	else {
+	str = g_hash_table_lookup(params, KEY_ALERT_LIMIT);
+	if (NULL != str)
 		time_default_alert_frequency = g_ascii_strtoll(str,NULL,10);
-		NOTICE("[NS=%s] Overall alert_frequency_limit set to [%ld] seconds", ns_name, time_default_alert_frequency);
-	}
+	GRID_NOTICE("[NS=%s] Overall alert_frequency_limit set to [%ld] seconds", ns_name, time_default_alert_frequency);
 
 	/* storage conf initialization */
 	*err = module_init_storage_conf(conscience,
@@ -1464,10 +1434,7 @@ plugin_init(GHashTable * params, GError ** err)
 	}
 
 	/* SERVICES initiation */
-	if (!module_init_known_service_types(conscience, params, err)) {
-		GSETERROR(err, "[NS=%s] known service types init failed", ns_name);
-		goto error;
-	}
+	module_init_known_service_types(conscience, params);
 
 	/* service conf initialization (new style) */
 	*err = module_init_service_conf_glob(conscience,
@@ -1484,18 +1451,9 @@ plugin_init(GHashTable * params, GError ** err)
 	}
 
 	/* Plugin/server stuff */
-	if (!srvtimer_register_regular("conscience.expire", timer_expire_services, NULL, conscience, 5LL)) {
-		GSETERROR(err, "Failed to register the conscience's dump callback");
-		goto error;
-	}
-	if (!srvtimer_register_regular("conscience.stats", save_counters, NULL, NULL, 5LL)) {
-		GSETERROR(err, "Failed to register the server's statistics callback");
-		goto error;
-	}
-	if (!message_handler_add("conscience", plugin_matcher, plugin_handler, err)) {
-		GSETERROR(err, "Failed to add a new server message handler");
-		goto error;
-	}
+	srvtimer_register_regular("conscience.expire", timer_expire_services, NULL, conscience, 5LL);
+	srvtimer_register_regular("conscience.stats", save_counters, NULL, NULL, 5LL);
+	message_handler_add("conscience", plugin_matcher, plugin_handler);
 
 	/* TODO(jfs): remove this in further releases */
 	/* Print a warning in an old-style option is met */

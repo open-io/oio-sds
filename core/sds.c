@@ -16,30 +16,26 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#include <stdlib.h>
+#include <core/oio_sds.h>
+
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 
-#include <glib.h>
 #include <json.h>
 #include <curl/curl.h>
 #include <curl/curlver.h>
 
-#include "oio_core.h"
-#include "oio_sds.h"
-#include "oiostr.h"
+#include <core/client_variables.h>
+#include <core/oiostr.h>
+#include <metautils/lib/metautils.h>
 
 #include "http_put.h"
 #include "http_internals.h"
 #include "internals.h"
 
-#include <core/client_variables.h>
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/storage_policy.h>
 
 struct oio_sds_s
 {

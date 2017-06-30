@@ -19,31 +19,25 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define MODULE_NAME "fallback"
 
-#include <string.h>
 #include <sys/time.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
 
 #include <gridd/main/plugin.h>
 #include <gridd/main/message_handler.h>
 
 static gint
-plugin_matcher(MESSAGE m, void *param, GError ** err)
+plugin_matcher(MESSAGE m UNUSED, void *param UNUSED, GError ** err UNUSED)
 {
-	(void)m;
-	(void)param;
-	(void)err;
 	return 1;
 }
 
 static gint
-plugin_handler(MESSAGE m, gint fd, void *param, GError ** err)
+plugin_handler(MESSAGE m UNUSED, gint fd, void *param UNUSED, GError ** err UNUSED)
 {
 	struct request_context_s req_ctx = {0};
 	struct reply_context_s ctx = {0};
 
-	(void) param, (void) err;
 	gettimeofday(&(req_ctx.tv_start), NULL);
 	req_ctx.fd = fd;
 	req_ctx.request = m;
@@ -57,18 +51,13 @@ plugin_handler(MESSAGE m, gint fd, void *param, GError ** err)
 }
 
 static gint
-plugin_init(GHashTable * params, GError ** err)
+plugin_init(GHashTable * params UNUSED, GError ** err UNUSED)
 {
-	(void)params;
-	return message_handler_add("fallback", plugin_matcher, plugin_handler, err);
-}
-
-static gint
-plugin_close(GError ** err)
-{
-	(void)err;
+	message_handler_add("fallback", plugin_matcher, plugin_handler);
 	return 1;
 }
+
+static gint plugin_close(GError ** err UNUSED) { return 1; }
 
 struct exported_api_s exported_symbol = {
 	MODULE_NAME,

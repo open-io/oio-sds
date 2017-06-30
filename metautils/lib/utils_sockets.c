@@ -159,7 +159,7 @@ sock_to_write(int fd, gint ms, void *buf, gsize bufSize, GError ** err)
 				return (-1);
 			}
 			else {
-				TRACE("poll interrupted (%s)", strerror(errno));
+				GRID_TRACE("poll interrupted (%s)", strerror(errno));
 				continue;
 			}
 		}

@@ -18,8 +18,6 @@ License along with this library.
 
 #ifndef OIO_SDS__core__oiolb_h
 # define OIO_SDS__core__oiolb_h 1
-# include <stdint.h>
-# include <stdbool.h>
 # include <glib.h>
 
 #define OIO_LOC_FORMAT "016" G_GINT64_MODIFIER "X"
@@ -71,7 +69,7 @@ oio_location_t location_from_dotted_string(const char *dotted);
 /* Make a 32bit identifier from a 64bit location.
  * Level is the number of blocks of 16 least significant bits
  * to discard. */
-uint32_t key_from_loc_level(oio_location_t location, int level);
+guint32 key_from_loc_level(oio_location_t location, int level);
 
 /* -------------------------------------------------------------------------- */
 
