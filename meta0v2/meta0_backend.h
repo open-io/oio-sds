@@ -76,14 +76,4 @@ GError* meta0_backend_get_all(struct meta0_backend_s *m0,
 GError* meta0_backend_get_one(struct meta0_backend_s *m0,
 		const guint8 *prefix, gchar ***urls);
 
-GError* meta0_backend_assign(struct meta0_backend_s *m0,
-		const GPtrArray *new_assign_prefixes,
-		const GPtrArray *new_assign_meta1ref,
-		const gboolean init);
-
-GError* meta0_backend_get_all_meta1_ref(struct meta0_backend_s *m0,
-		GPtrArray **result);
-
-GError* meta0_backend_destroy_meta1_ref(struct meta0_backend_s *m0, gchar *meta1);
-
 #endif /*OIO_SDS__meta0v2__meta0_backend_h*/
