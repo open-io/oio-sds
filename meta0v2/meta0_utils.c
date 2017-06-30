@@ -63,24 +63,6 @@ GTree* meta0_utils_array_to_tree(const GPtrArray *byprefix) {
 	return result;
 }
 
-GTree* meta0_utils_list_to_tree(const GSList *list) {
-	EXTRA_ASSERT(list != NULL);
-
-	GTree *result = meta0_utils_tree_create();
-	for (const GSList *l=list; l ;l=l->next) {
-		const struct meta0_info_s *m0i = l->data;
-		if (unlikely(!m0i)) continue;
-
-		gchar url[STRLEN_ADDRINFO];
-		grid_addrinfo_to_string(&(m0i->addr), url, sizeof(url));
-
-		GArray *pfx = _tree_ensure(result, url);
-		g_array_append_vals(pfx, m0i->prefixes, m0i->prefixes_size / 2);
-	}
-
-	return result;
-}
-
 void
 meta0_utils_array_add(GPtrArray *byprefix,
 		const guint8 *bytes, const gchar *s)
@@ -208,36 +190,8 @@ void meta0_utils_array_meta1ref_clean(GPtrArray *array) {
 	g_ptr_array_free(array, TRUE);
 }
 
-GPtrArray* meta0_utils_array_meta1ref_dup(GPtrArray *in) {
-	GPtrArray *result = g_ptr_array_sized_new(in->len);
-	for (guint i = 0; i < in->len; i++) {
-		gchar *v = in->pdata[i];
-		if (unlikely(!v))
-			continue;
-		g_ptr_array_add(result, g_strdup(v));
-	}
-	return result;
-}
-
 gchar * meta0_utils_pack_meta1ref(gchar *addr, gchar *ref, gchar *nb) {
 	return g_strjoin("|", addr, ref, nb, NULL);
-}
-
-gboolean
-meta0_utils_unpack_meta1ref(const gchar *s_m1ref,
-		gchar **addr, gchar **ref, gchar **nb)
-{
-	gchar** split_result = g_strsplit(s_m1ref, "|", -1);
-	if (g_strv_length(split_result) != 3)
-		return FALSE;
-
-	*addr = g_strdup(split_result[0]);
-	*ref = g_strdup(split_result[1]);
-	*nb = g_strdup(split_result[2]);
-
-	g_strfreev(split_result);
-	return TRUE;
-
 }
 
 /* The group is represented by the network order 16-bytes prefix,

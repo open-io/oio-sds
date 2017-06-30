@@ -30,8 +30,6 @@ GTree* meta0_utils_array_to_tree(const GPtrArray *array);
 
 GSList* meta0_utils_tree_to_list(GTree *tree);
 
-GTree* meta0_utils_list_to_tree(const GSList *list);
-
 GPtrArray* meta0_utils_list_to_array(GSList *list);
 
 GSList* meta0_utils_array_to_list(GPtrArray *array);
@@ -53,12 +51,7 @@ GTree* meta0_utils_tree_create(void);
 
 void meta0_utils_array_meta1ref_clean(GPtrArray *array);
 
-GPtrArray* meta0_utils_array_meta1ref_dup(GPtrArray *in);
-
 gchar * meta0_utils_pack_meta1ref(gchar *addr, gchar *ref, gchar *nb);
-
-gboolean meta0_utils_unpack_meta1ref(const gchar *s_m1ref, gchar **addr,
-		gchar **ref, gchar **nb);
 
 /* @return TRUE to continue */
 typedef gboolean (*meta0_on_prefix)(gpointer u,
