@@ -743,9 +743,12 @@ handler_push_service(struct request_context_s *req_ctx)
 	/*Now push each service and reply the success */
 	guint count = 0;
 	for (GSList *l = list_srvinfo; l; l = g_slist_next(l)) {
-		if (!l->data) continue;
-		push_service (conscience, l->data);
-		hub_publish_service (l->data);
+		struct service_info_s *si = l->data;
+		if (!si || !metautils_addr_valid_for_connect(&si->addr)
+				|| !oio_str_is_set(si->type))
+			continue;
+		push_service (conscience, si);
+		hub_publish_service (si);
 		++ count;
 	}
 	GRID_DEBUG("Pushed %u items", count);
