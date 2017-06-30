@@ -216,16 +216,10 @@ server_alert_possible( struct server_s *srv )
 		srv->mon.min_spare_workers, srv->mon.max_spare_workers)
 
 static void
-thread_monitoring_add (struct server_s *srv, gboolean locked)
+thread_monitoring_add (struct server_s *srv)
 {
-	if (!locked)
-		g_rec_mutex_lock (&(srv->recMutex));
-
 	srv->mon.creation ++;
 	srv->mon.nb_workers ++;
-
-	if (!locked)
-		g_rec_mutex_unlock (&(srv->recMutex));
 }
 
 static void
@@ -282,7 +276,7 @@ thread_monitoring_reserve (struct server_s *srv)
 
 	if (too_few_workers || too_few_spare_workers) {
 		if (!too_many_spare_workers && !too_many_workers) {
-			thread_monitoring_add(srv, TRUE);
+			thread_monitoring_add(srv);
 			defer_creation = TRUE;
 			str_dbg = threads_debug(srv);
 		}
@@ -309,7 +303,6 @@ static gboolean
 thread_monitoring_release (struct server_s *srv)
 {
 	gboolean rc = TRUE;
-	gchar *str_dbg = NULL;
 
 	/* XXX start of locked section */
 	g_rec_mutex_lock (&(srv->recMutex));
@@ -325,7 +318,6 @@ thread_monitoring_release (struct server_s *srv)
 	if ((srv->mon.nb_workers>1)) {
 		if (too_many_workers || too_many_spare_workers) {
 			if (!too_few_spare_workers && !too_few_workers) {
-				str_dbg = threads_debug(srv);
 				thread_monitoring_remove (srv, TRUE);
 				rc = FALSE;
 			}
@@ -335,17 +327,12 @@ thread_monitoring_release (struct server_s *srv)
 	g_rec_mutex_unlock (&(srv->recMutex));
 	/* XXX end of locked section */
 
-	if (str_dbg) {
-		GRID_TRACE("%s TOO MANY", str_dbg);
-		g_free(str_dbg);
-	}
 	return rc;
 }
 
 static void
 thread_monitoring_periodic_debug (struct server_s *srv)
 {
-	gchar *str_dbg = NULL;
 	struct thread_monitoring_s mon, mon0;
 
 	/* XXX locked section */
@@ -353,20 +340,11 @@ thread_monitoring_periodic_debug (struct server_s *srv)
 	memcpy(&mon, &(srv->mon), sizeof(struct thread_monitoring_s));
 	memcpy(&mon0, &(srv->mon0), sizeof(struct thread_monitoring_s));
 	memcpy(&(srv->mon0), &(srv->mon), sizeof(struct thread_monitoring_s));
-	str_dbg = threads_debug(srv);
 	g_rec_mutex_unlock (&(srv->recMutex));
 	/* XXX end of locked section */
 
 	gboolean too_many_workers = (mon.used_workers >= mon.max_workers);
 	gboolean max_reached = (mon.max_reached != mon0.max_reached);
-
-	/*and then print all*/
-	GRID_DEBUG ("%s wake=%"G_GUINT64_FORMAT" variation=+%"G_GUINT64_FORMAT"-%"G_GUINT64_FORMAT,
-			str_dbg,
-			(mon.wake - mon0.wake),
-			(mon.creation - mon0.creation),
-			(mon.destruction - mon0.destruction));
-	g_free(str_dbg);
 
 	if (too_many_workers) {
 		GRID_WARN ("%s ALL THREADS are currently used!", srv->name);
@@ -532,23 +510,8 @@ main_thread (gpointer arg)
 
 		request_context_free(ctx);
 
-		if (gErr) {
-			switch (gErr->code) {
-				case ERRCODE_CONN_RESET:
-				case ERRCODE_CONN_CLOSED:
-					GRID_TRACE ("Connection CLOSED/RESET fd=%i [%s]", clt, str_addr_src);
-					break;
-				case ERRCODE_CONN_TIMEOUT:
-					GRID_DEBUG ("Connection TIMEOUT fd=%i [%s]", clt, str_addr_src);
-					break;
-				default:
-					GRID_DEBUG ("Connection GRID_ERROR fd=%i [%s]", clt, str_addr_src);
-					if (gErr->message)
-						GRID_DEBUG ("cause:\n\t%s", gErr->message);
-					break;
-			}
+		if (gErr)
 			g_clear_error (&gErr);
-		}
 
 		GRID_TRACE ("Connection CLOSING fd=%i [%s]", clt, str_addr_src);
 		if (gridd_flags & GRIDD_FLAG_SHUTDOWN)
@@ -567,43 +530,25 @@ exit:
 }
 
 static GHashTable*
-extract_parameters (GKeyFile *kf, const char *s, const char *p, GError **err)
+extract_parameters (GKeyFile *kf, const char *s, const char *p)
 {
-	gchar **all_keys=NULL, **current_key=NULL;
+	const size_t pref_len = p ? strlen(p) : 0;
+
+	GHashTable *ht= g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+
 	gsize size=0;
-	GHashTable *ht=NULL;
-	size_t pref_len = p? strlen(p) : 0;
-
-	ht = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-
-	all_keys = g_key_file_get_keys (kf, s, &size, err);
-	if (!all_keys)
-	{
-		GSETERROR(err, "cannot get the keys of the section '%s'", s);
-	}
-	for (current_key = all_keys; all_keys && *current_key; current_key++)
-	{
-		if (g_str_has_prefix(*current_key, p))
-		{
-			gchar *value = NULL;
-			value = g_key_file_get_value (kf, s, *current_key, err);
-			if (!value)
-			{
-				GSETERROR (err, "Cannot get the value");
-				goto error;
-			}
-			g_hash_table_insert(ht, g_strdup(*current_key + pref_len), value);
+	gchar **all_keys = g_key_file_get_keys (kf, s, &size, NULL);
+	for (gchar **current_key = all_keys; all_keys && *current_key; current_key++) {
+		if (g_str_has_prefix(*current_key, p)) {
+			gchar *value = g_key_file_get_value (kf, s, *current_key, NULL);
+			if (value)
+				g_hash_table_insert(ht, g_strdup(*current_key + pref_len), value);
 		}
 	}
 
-	g_strfreev(all_keys);
-	return ht;
-error:
-	if (ht)
-		g_hash_table_destroy(ht);
 	if (all_keys)
 		g_strfreev(all_keys);
-	return NULL;
+	return ht;
 }
 
 static int
@@ -614,11 +559,7 @@ preload_plugins (GKeyFile *cfgFile, GError **err)
 	gsize nbgroups=0, i;
 	gchar *fileName=NULL;
 
-	if (!cfgFile)
-	{
-		GSETERROR(err,"Invalid Parameter");
-		goto errorLabel;
-	}
+	EXTRA_ASSERT(cfgFile != NULL);
 
 	GRID_DEBUG ("Start loading all the plugins found in the configuration");
 
@@ -643,8 +584,6 @@ preload_plugins (GKeyFile *cfgFile, GError **err)
 
 		if (0 == fnmatch("Plugin.*", group, 0))
 		{
-			GModule *mod = NULL;
-
 			/*get the filename of the plugin*/
 			if (    !g_key_file_has_key (cfgFile, group, NAME_PATH, err)
 				||	!(fileName = g_key_file_get_string (cfgFile, group, NAME_PATH, err)))
@@ -654,28 +593,17 @@ preload_plugins (GKeyFile *cfgFile, GError **err)
 			}
 
 			/*get the parameter string*/
-			params = extract_parameters (cfgFile, group, NAME_PARAM"_", err);
-			if (!params)
-			{
-				GSETERROR(err,"Cannot load the parameters hash for the plugin (group %s in the configuration file)", group);
-				goto errorLabel;
-			}
+			params = extract_parameters (cfgFile, group, NAME_PARAM "_");
 
 			/*load the path*/
-			mod = g_module_open (fileName, 0);
-			if (!mod)
-			{
+			GModule *mod = g_module_open (fileName, 0);
+			if (!mod) {
 				GSETERROR(err, "Cannot load the plug-in from file %s (%s)", fileName, g_module_error());
 				goto errorLabel;
 			}
 
 			/*load the main exported symbol*/
-			if (plugin_holder_keep(mod, params, err))
-			{
-				GRID_DEBUG ("loaded %s", fileName);
-			}
-			else
-			{
+			if (!plugin_holder_keep(mod, params, err)) {
 				GSETERROR(err, "cannot load %s", fileName);
 				goto errorLabel;
 			}
@@ -1046,7 +974,7 @@ start_server_threads(struct server_s *srv)
 	g_rec_mutex_lock (&(srv->recMutex));
 	max = MAX(srv->mon.min_workers,srv->mon.min_spare_workers);
 	for (i=0; i<max ;i++)
-		thread_monitoring_add(srv, TRUE);
+		thread_monitoring_add(srv);
 	g_rec_mutex_unlock (&(srv->recMutex));
 	/* XXX end of locked section */
 
