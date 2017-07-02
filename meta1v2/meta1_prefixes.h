@@ -32,6 +32,9 @@ GError* meta1_prefixes_load(struct meta1_prefixes_set_s *m1ps,
 
 void meta1_prefixes_clean(struct meta1_prefixes_set_s *m1ps);
 
+/* For testing purposes */
+void meta1_prefixes_manage_all(struct meta1_prefixes_set_s *m1ps);
+
 gboolean meta1_prefixes_is_managed(struct meta1_prefixes_set_s *m1ps,
 		const guint8 *bytes);
 

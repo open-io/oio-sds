@@ -77,6 +77,10 @@ add_executable(test_meta2_backend test_meta2_backend.c)
 target_link_libraries(test_meta2_backend meta2v2 ${COMMON})
 add_test(NAME meta2/backend COMMAND test_meta2_backend)
 
+add_executable(test_meta1_backend test_meta1_backend.c)
+target_link_libraries(test_meta1_backend meta1v2 oioevents ${COMMON})
+add_test(NAME meta1/backend COMMAND test_meta1_backend)
+
 add_executable(test_stats_holder test_stats_holder.c)
 target_link_libraries(test_stats_holder server ${COMMON})
 add_test(NAME server/stats COMMAND test_stats_holder)

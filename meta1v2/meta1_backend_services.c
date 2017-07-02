@@ -956,6 +956,8 @@ meta1_backend_services_link (struct meta1_backend_s *m1,
 		gboolean dryrun, gboolean autocreate,
 		gchar ***result)
 {
+	if (!result) return SYSERR("BUG: invalid output array");
+
 	GError *err = __check_backend_events (m1);
 	if (err) return err;
 
@@ -988,6 +990,8 @@ meta1_backend_services_poll(struct meta1_backend_s *m1,
 		gboolean dryrun, gboolean autocreate,
 		gchar ***result)
 {
+	if (!result) return SYSERR("BUG: invalid output array");
+
 	GError *err = __check_backend_events (m1);
 	if (err) return err;
 
@@ -1021,6 +1025,8 @@ GError *
 meta1_backend_services_list(struct meta1_backend_s *m1,
 		struct oio_url_s *url, const char *srvtype, gchar ***result)
 {
+	if (!result) return SYSERR("BUG: invalid output array");
+
 	gboolean retry = TRUE;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = NULL;
