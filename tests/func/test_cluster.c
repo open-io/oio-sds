@@ -1,11 +1,6 @@
 /*
-<<<<<<< HEAD
-OpenIO SDS conscience client
-Copyright (C) 2017 OpenIO, as part of OpenIO Software Defined Storage
-=======
 OpenIO SDS conscience client (old)
-Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
->>>>>>> test/func: Add tests for libgridcluster
+Copyright (C) 2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
