@@ -124,3 +124,4 @@ class TestIndexerCrawler(BaseTestCase):
         indexer = BlobIndexer(self.conf)
 
         self.assertRaises(FaultyChunk, indexer.update_index, chunk_path)
+        os.remove(chunk_path)
