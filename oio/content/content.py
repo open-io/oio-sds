@@ -19,6 +19,8 @@ from oio.common.exceptions import ClientException, OrphanChunk
 from oio.common.utils import get_logger
 from oio.blob.client import BlobClient
 from oio.container.client import ContainerClient
+from urllib import quote_plus
+from oio.common.constants import OIO_VERSION
 
 
 class Content(object):
@@ -43,6 +45,14 @@ class Content(object):
         self.chunk_method = self.metadata["chunk_method"]
         self.account = account
         self.container_name = container_name
+        if 'full_path' in self.metadata:
+            self.full_path = metadata['full_path']
+        else:
+            self.full_path = ['{0}/{1}/{2}/{3}'.
+                              format(quote_plus(self.account),
+                                     quote_plus(self.container_name),
+                                     quote_plus(self.path),
+                                     self.version)]
 
     def _get_spare_chunk(self, chunks_notin, chunks_broken):
         spare_data = {
@@ -96,6 +106,20 @@ class Content(object):
             version=self.version, chunk_method=self.chunk_method,
             mime_type=self.mime_type, data=self.chunks.raw(),
             **kwargs)
+
+    def _generate_sysmeta(self):
+        sysmeta = {}
+        sysmeta['id'] = self.content_id
+        sysmeta['version'] = self.version
+        sysmeta['policy'] = self.stgpol
+        sysmeta['mime_type'] = self.mime_type
+        sysmeta['chunk_method'] = self.chunk_method
+        sysmeta['chunk_size'] = self.metadata['chunk_size']
+        sysmeta['oio_version'] = OIO_VERSION
+        sysmeta['full_path'] = self.full_path
+        sysmeta['content_path'] = self.path
+        sysmeta['container_id'] = self.container_id
+        return sysmeta
 
     def rebuild_chunk(self, chunk_id, allow_same_rawx=False, chunk_pos=None):
         raise NotImplementedError()

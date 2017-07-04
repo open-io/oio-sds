@@ -245,7 +245,7 @@ _load_field(apr_pool_t *pool, apr_table_t *table, const char *name, char **dst)
 }
 
 static int
-_load_fields(apr_pool_t *pool, apr_table_t *table, const char *name, char ** dst)
+_load_raw_field(apr_pool_t *pool, apr_table_t *table, const char *name, char ** dst)
 {
 	const char *value = apr_table_get(table, name);
 	if (!value)
@@ -333,7 +333,7 @@ request_load_chunk_info_from_headers(request_rec *request,
 	LAZY_LOAD_FIELD(oio_version,            "oio-version");
 
 	if (!cti->oio_full_path) {
-		_load_fields(pool, src, RAWX_HEADER_PREFIX  "full-path", &(cti->oio_full_path));
+		_load_raw_field(pool, src, RAWX_HEADER_PREFIX  "full-path", &(cti->oio_full_path));
 	}
 }
 

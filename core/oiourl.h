@@ -43,6 +43,8 @@ enum oio_url_field_e
 
 	OIOURL_HEXID,     /* read-write */
 	OIOURL_CONTENTID, /* read-write */
+
+	OIOURL_FULLPATH
 };
 
 

@@ -5,7 +5,6 @@ from oio.common.constants import chunk_headers, chunk_xattr_keys_optional
 from oio.api.io import ChunkReader
 from oio.api.replication import ReplicatedMetachunkWriter, FakeChecksum
 from oio.common.storage_method import STORAGE_METHODS
-from urllib import unquote_plus
 
 READ_BUFFER_SIZE = 65535
 
@@ -19,8 +18,7 @@ def extract_headers_meta(headers):
             if k not in chunk_xattr_keys_optional:
                 raise e
     if meta['full_path']:
-        meta['full_path'] = [unquote_plus(x)
-                             for x in meta['full_path'].split(',')]
+        meta['full_path'] = meta['full_path'].split(',')
 
     return meta
 

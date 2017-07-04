@@ -80,7 +80,7 @@ class TestStorageTierer(BaseTestCase):
         data = random_data(10)
         content = self.content_factory.new(container_id, content_name,
                                            len(data), stgpol, account=account,
-                                           c_name=reference)
+                                           container_name=reference)
 
         content.create(BytesIO(data))
         return content

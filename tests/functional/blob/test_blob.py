@@ -1,3 +1,19 @@
+# -*- coding: utf-8 -*-
+# Copyright (C) 2015-2017 OpenIO, original work as part of
+# OpenIO Software Defined Storage
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 3.0 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library.
 import string
 import random
 import os
@@ -39,9 +55,8 @@ class TestBlobFunctional(BaseTestCase):
             'x-oio-chunk-meta-chunk-size': len(data),
             'x-oio-chunk-meta-chunk-hash': md5(data).hexdigest().upper(),
             'x-oio-chunk-meta-chunk-pos': 0,
-            'x-oio-chunk-meta-full-path': quote_plus(('test/test/test' +
-                                                      ',test1/test1/test1'),
-                                                     ","),
+            'x-oio-chunk-meta-full-path': ('test/test/test' +
+                                           ',test1/test1/test1'),
             'x-oio-chunk-meta-oio-version': OIO_VERSION
         }
 
@@ -92,7 +107,7 @@ class TestBlobFunctional(BaseTestCase):
         conn.close()
         return resp, body
 
-    def _cycle_put(self, length, expected, remove_headers=None):
+    def _cycle_put(self, length, expected, remove_headers=None, path=None):
         chunkid = self.chunkid()
         chunkdata = random_buffer(string.printable, length)
         chunkurl = self._rawx_url(chunkid)
@@ -102,6 +117,9 @@ class TestBlobFunctional(BaseTestCase):
             for h in remove_headers:
                 del headers[h]
 
+        if path:
+            headers['x-oio-chunk-meta-full-path'] = self._generate_fullpath(
+                path, path, path, 'x-oio-chunk-meta-content-version')
         # we do not really care about the actual value
         metachunk_size = 9 * length
         # TODO take random legit value
@@ -253,3 +271,28 @@ class TestBlobFunctional(BaseTestCase):
     def test_bad_chunkid(self):
         self._check_bad_headers(
             32, bad_headers={'x-oio-chunk-meta-chunk-id': '00'*32})
+
+    def _generate_fullpath(self, account, container_name, path, version):
+        return '{0}/{1}/{2}/{3}'.format(quote_plus(account),
+                                        quote_plus(container_name),
+                                        quote_plus(path),
+                                        version)
+
+    def test_strange_path(self):
+        strange_paths = [
+                "Annual report.txt",
+                "foo+bar=foobar.txt",
+                "100%_bug_free.c",
+                "forward/slash/allowed",
+                "I\\put\\backslashes\\and$dollar$signs$in$file$names",
+                "Je suis tombé sur la tête, mais ça va bien.",
+                "%s%f%u%d%%",
+                "{1},{0},{3}",
+                "carriage\rreturn",
+                "line\nfeed",
+                "ta\tbu\tla\ttion",
+                "controlchars",
+                "//azeaze\\//azeaz\\//azea"
+                ]
+        for path in strange_paths:
+            self._cycle_put(1, 201, path=path)

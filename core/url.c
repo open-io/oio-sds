@@ -39,6 +39,7 @@ struct oio_url_s
 
 	/* secondary */
 	gchar *whole;
+	gchar *fullpath;
 	guint8 id[32];
 	gchar hexid[65];
 	guint8 flags;
@@ -305,6 +306,9 @@ oio_url_set(struct oio_url_s *u, enum oio_url_field_e f, const char *v)
 		case OIOURL_WHOLE:
 			return NULL;
 
+		case OIOURL_FULLPATH:
+			return NULL;
+
 		case OIOURL_HEXID:
 			u->hexid[0] = 0;
 			if (!oio_str_ishexa(v,64) || !oio_str_hex2bin(v, u->id, 32))
@@ -344,6 +348,8 @@ oio_url_has(const struct oio_url_s *u, enum oio_url_field_e f)
 		case OIOURL_VERSION:
 			return oio_str_is_set(u->version);
 		case OIOURL_WHOLE:
+			return TRUE;
+		case OIOURL_FULLPATH:
 			return TRUE;
 		case OIOURL_HEXID:
 			return (u->ns && u->hexid[0]) || (u->ns && u->user);
@@ -405,6 +411,28 @@ _pack_url(struct oio_url_s *u)
 	return gs;
 }
 
+static GString *
+_pack_fullpath(struct oio_url_s *u)
+{
+	GString *gs = g_string_new("");
+	if (u->account) {
+		g_string_append_uri_escaped(gs, u->account, NULL, TRUE);
+		if (u->user) {
+			g_string_append_c(gs, '/');
+			g_string_append_uri_escaped(gs, u->user, NULL, TRUE);
+			if (u->path) {
+				g_string_append_c(gs, '/');
+				g_string_append_uri_escaped(gs, u->path, NULL, TRUE);
+				if (u->version) {
+					g_string_append_c(gs, '/');
+					g_string_append_uri_escaped(gs, u->version, NULL, TRUE);
+				}
+			}
+		}
+	}
+	return gs;
+}
+
 const char*
 oio_url_get(struct oio_url_s *u, enum oio_url_field_e f)
 {
@@ -442,6 +470,11 @@ oio_url_get(struct oio_url_s *u, enum oio_url_field_e f)
 
 		case OIOURL_CONTENTID:
 			return u->content;
+
+		case OIOURL_FULLPATH:
+			if (!u->fullpath)
+				u->fullpath = g_string_free(_pack_fullpath(u), FALSE);
+			return u->fullpath;
 	}
 
 	g_assert_not_reached();

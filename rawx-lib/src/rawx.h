@@ -25,7 +25,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define ATTR_NAME_MAX_LENGTH 64
 
 # define ATTR_DOMAIN "user.grid"
-# define ATTR_OIO_DOMAIN "user.oio"
+# define ATTR_DOMAIN_OIO "user.oio"
 
 # define ATTR_NAME_CONTENT_CONTAINER "content.container"
 

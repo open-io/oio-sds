@@ -207,8 +207,7 @@ def headers_from_object_metadata(metadata):
             out[chunk_headers[key]] = metadata[key]
 
     header = {k: quote_plus(str(v)) for (k, v) in out.iteritems()}
-    header[chunk_headers["full_path"]] = ','.join([quote_plus(x) for x
-                                                  in metadata['full_path']])
+    header[chunk_headers["full_path"]] = ','.join(metadata['full_path'])
     return header
 
 

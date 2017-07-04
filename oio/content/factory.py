@@ -56,22 +56,22 @@ class ContentFactory(object):
                    container_client=self.container_client)
 
     def new(self, container_id, path, size, policy, account=None,
-            c_name=None):
+            container_name=None):
         meta, chunks = self.container_client.content_prepare(
             cid=container_id, path=path, size=size, stgpol=policy)
 
         chunk_method = meta['chunk_method']
         storage_method = STORAGE_METHODS.load(chunk_method)
-        if not account or not c_name:
+        if not account or not container_name:
             container_info = self.container_client.container_get_properties(
                 cid=container_id)['system']
             if not account:
                 account = container_info['sys.account']
-            if not c_name:
-                c_name = container_info['sys.user.name']
+            if not container_name:
+                container_name = container_info['sys.user.name']
         cls = ECContent if storage_method.ec else PlainContent
         return cls(self.conf, container_id, meta, chunks, storage_method,
-                   account, c_name)
+                   account, container_name)
 
     def change_policy(self, container_id, content_id, new_policy):
         old_content = self.get(container_id, content_id)
