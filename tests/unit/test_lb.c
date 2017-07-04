@@ -347,7 +347,7 @@ _test_repartition_by_loc_level(const char **locations, int targets)
 	}
 	GRID_INFO("%d unbalanced situations on %d shots", unbalanced, shots);
 
-	// FIXME(FVE): there should be NO unbalanced situation
+	// FIXME(FVE): add a boolean, some configuration are voluntarily unbalanced
 	g_assert_cmpint(unbalanced, <, shots);
 
 	int ideal_count = targets * shots / services;
@@ -1088,6 +1088,7 @@ main(int argc, char **argv)
 	_add_level_repartition_test(lrt5, "6x30", 15); // 12+3
 	_add_level_repartition_test(lrt5, "6x30", 18); // 14+4
 
+	// Balanced platform: 3 racks, 5 host in each
 	const char *lrt6[16] = {
 			"rack0.srv0", "rack0.srv1", "rack0.srv2", "rack0.srv3", "rack0.srv4",
 			"rack1.srv4", "rack1.srv5", "rack1.srv6", "rack1.srv7", "rack1.srv5",
@@ -1095,6 +1096,23 @@ main(int argc, char **argv)
 			NULL
 	};
 	_add_level_repartition_test(lrt6, "3x5", 12); // 7+5
+
+	/* Unbalanced platform: 3 hosts in each rack except the last one. */
+	const char *lrt7[26] = {
+			"rack0.srv0", "rack0.srv1", "rack0.srv2",
+			"rack1.srv0", "rack1.srv1", "rack1.srv2",
+			"rack2.srv0", "rack2.srv1", "rack2.srv2",
+			"rack3.srv0", "rack3.srv1", "rack3.srv2",
+			"rack4.srv0", "rack4.srv1", "rack4.srv2",
+			"rack5.srv0", "rack5.srv1", "rack5.srv2",
+			"rack6.srv0", "rack6.srv1", "rack6.srv2",
+			"rack7.srv0", "rack7.srv1", "rack7.srv2",
+			"rack8.srv0",
+			NULL,
+	};
+	_add_level_repartition_test(lrt7, "8x3+1x1", 15); // 12+3
+	_add_level_repartition_test(lrt7, "8x3+1x1", 16); // 12+4
+	_add_level_repartition_test(lrt7, "8x3+1x1", 18); // 14+4
 
 	return g_test_run();
 };
