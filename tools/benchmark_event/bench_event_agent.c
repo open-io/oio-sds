@@ -147,6 +147,22 @@ _fake_service_run(gpointer p)
 	return NULL;
 }
 
+static gboolean
+kill_event_agent(void)
+{
+	GError *err = NULL;
+
+	gboolean success = g_spawn_command_line_sync(
+			"/usr/bin/killall oio-event-agent", NULL, NULL, NULL, &err);
+	if (err) {
+		GRID_ERROR("Command line failure': (%d) %s", err->code,
+				   err->message);
+		g_clear_error(&err);
+	}
+
+	return success;
+}
+
 // Main callbacks
 
 static struct grid_main_option_s *
@@ -234,7 +250,10 @@ grid_main_action (void)
 		}
 
 		// Restart event-agent
-		system("killall oio-event-agent");
+		if (!kill_event_agent()) {
+			grid_main_set_status(EXIT_FAILURE);
+			return;
+		}
 		for (gint i = 0; i < 10; i++) {
 			if (!grid_main_is_running()) {
 				return;
@@ -312,7 +331,7 @@ grid_main_specific_fini (void)
 		}
 
 		// Restart event-agent
-		system("killall oio-event-agent");
+		kill_event_agent();
 
 		free_service(account_service);
 	}
