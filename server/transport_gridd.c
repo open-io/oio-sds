@@ -616,12 +616,6 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 		_send_reply(e->code, e->message);
 		g_clear_error(&e);
 	}
-	void _uid(const gchar *fmt, ...) {
-		va_list args;
-		va_start(args, fmt);
-		oio_str_reuse(&req_ctx->uid, g_strdup_vprintf(fmt, args));
-		va_end(args);
-	}
 	void _register_cnx_data(const gchar *key, gpointer data,
 			GDestroyNotify cleanup) {
 		EXTRA_ASSERT(key != NULL);
@@ -641,7 +635,6 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 	ctx.add_body = _add_body;
 	ctx.send_reply = _send_reply;
 	ctx.send_error = _send_error;
-	ctx.uid = _uid;
 	ctx.subject = _subject;
 	ctx.register_cnx_data = _register_cnx_data;
 	ctx.forget_cnx_data = _forget_cnx_data;

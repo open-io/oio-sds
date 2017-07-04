@@ -51,8 +51,6 @@ struct gridd_reply_ctx_s
 
 	void (*subject) (const gchar *fmt, ...);
 
-	void (*uid) (const gchar *fmt, ...);
-
 	void (*register_cnx_data) (const gchar *key, gpointer data,
 			GDestroyNotify cleanup);
 
