@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2015 OpenIO, original work as part of
+# Copyright (C) 2015-2017 OpenIO, original work as part of
 # OpenIO Software Defined Storage
 #
 # This library is free software; you can redistribute it and/or
@@ -34,6 +34,7 @@ from oio.content.factory import ContentFactory
 from oio.content.plain import PlainContent
 from oio.content.ec import ECContent
 from tests.utils import BaseTestCase, ec
+from urllib import quote_plus
 
 
 def md5_stream(stream):
@@ -76,6 +77,12 @@ class TestContentFactory(BaseTestCase):
     def tearDown(self):
         super(TestContentFactory, self).tearDown()
 
+    def _generate_fullpath(self, account, container_name, path, version):
+        return ['{0}/{1}/{2}/{3}'.format(quote_plus(account),
+                                         quote_plus(container_name),
+                                         quote_plus(path),
+                                         version)]
+
     def test_get_ec(self):
         meta = {
             "chunk_method": "ec/algo=liberasurecode_rs_vand,k=6,m=2",
@@ -89,8 +96,6 @@ class TestContentFactory(BaseTestCase):
             "name": "tox.ini",
             "policy": self.stgpol_ec,
             "version": "1450176946676289",
-            "full_path": ["%s/%s/%s" % (self.account, self.container_name,
-                                        "tox.ini")],
             "oio_version": "4.0",
         }
         chunks = [
@@ -120,6 +125,11 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(c.content_id, "3FA2C4A1ED2605005335A276890EC458")
         self.assertEqual(c.length, 658)
         self.assertEqual(c.path, "tox.ini")
+        self.assertEqual(c.full_path,
+                         self._generate_fullpath(self.account,
+                                                 self.container_name,
+                                                 "tox.ini",
+                                                 meta['version']))
         self.assertEqual(c.version, "1450176946676289")
         # TODO test storage method
         self.assertEqual(len(c.chunks), 4)
@@ -141,8 +151,6 @@ class TestContentFactory(BaseTestCase):
             "name": "tox.ini",
             "policy": self.stgpol_twocopies,
             "version": "1450176946676289",
-            "full_path": ["%s/%s/%s" % (self.account, self.container_name,
-                                        "tox.ini")],
             "oio_version": "4.0",
         }
         chunks = [
@@ -165,6 +173,11 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(c.length, 658)
         self.assertEqual(c.path, "tox.ini")
         self.assertEqual(c.version, "1450176946676289")
+        self.assertEqual(c.full_path,
+                         self._generate_fullpath(self.account,
+                                                 self.container_name,
+                                                 "tox.ini",
+                                                 meta['version']))
         # TODO test storage_method
         self.assertEqual(len(c.chunks), 2)
         self.assertEqual(c.chunks[0].raw(), chunks[0])
@@ -187,8 +200,6 @@ class TestContentFactory(BaseTestCase):
             "name": "titi",
             "policy": self.stgpol_ec,
             "version": "1450341162332663",
-            "full_path": ["%s/%s/%s" % (self.account, self.container_name,
-                                        "titi")],
             "oio_version": "4.0",
         }
         chunks = [
@@ -214,7 +225,7 @@ class TestContentFactory(BaseTestCase):
         c = self.content_factory.new("xxx_container_id", "titi",
                                      1000, self.stgpol_ec,
                                      account=self.account,
-                                     c_name=self.container_name)
+                                     container_name=self.container_name)
         self.assertEqual(type(c), ECContent)
         self.assertEqual(c.content_id, "F4B1C8DD132705007DE8B43D0709DAA2")
         self.assertEqual(c.length, 1000)
@@ -227,9 +238,12 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(c.chunks[2].raw(), chunks[1])
         self.assertEqual(c.chunks[3].raw(), chunks[0])
 
-    def _new_content(self, stgpol, data, path="titi"):
+    def _new_content(self, stgpol, data, path="titi", account=None,
+                     container_name=None):
         old_content = self.content_factory.new(self.container_id, path,
-                                               len(data), stgpol)
+                                               len(data), stgpol,
+                                               account=account,
+                                               container_name=container_name)
         old_content.create(BytesIO(data))
         return self.content_factory.get(self.container_id,
                                         old_content.content_id)
@@ -387,11 +401,13 @@ class TestContentFactory(BaseTestCase):
                 "line\nfeed",
                 "ta\tbu\tla\ttion",
                 "controlchars",
+                "//azeaze\\//azeaz\\//azea"
                 ]
         answers = dict()
         for cname in strange_paths:
             content = self._new_content(self.stgpol, "nobody cares", cname)
             answers[cname] = content
+
         _, listing = self.container_client.content_list(self.account,
                                                         self.container_name)
         obj_set = {k["name"].encode("utf8", "ignore")
@@ -400,9 +416,15 @@ class TestContentFactory(BaseTestCase):
             # Ensure the saved path is the one we gave the object
             for cname in answers:
                 self.assertEqual(cname, answers[cname].path)
+                full_path = self._generate_fullpath(self.account,
+                                                    self.container_name,
+                                                    cname,
+                                                    answers[cname].version)
+                self.assertEqual(answers[cname].full_path, full_path)
             # Ensure all objects appear in listing
             for cname in strange_paths:
                 self.assertIn(cname, obj_set)
+
         finally:
             # Cleanup
             for cname in answers:

@@ -35,6 +35,7 @@ from oio.common.utils import ensure_headers, ensure_request_id, float_value, \
 from oio.common.http import http_header_from_ranges
 from oio.common.storage_method import STORAGE_METHODS
 from oio.common.constants import OIO_VERSION
+from urllib import quote_plus
 
 logger = logging.getLogger(__name__)
 
@@ -790,6 +791,12 @@ class ObjectStorageApi(object):
 
         return obj_meta, _metachunk_preparer
 
+    def _generate_fullpath(self, account, container_name, path, version):
+        return '{0}/{1}/{2}/{3}'.format(quote_plus(account),
+                                        quote_plus(container_name),
+                                        quote_plus(path),
+                                        version)
+
     def _object_create(self, account, container, obj_name, source,
                        sysmeta, properties=None, policy=None,
                        key_file=None, **kwargs):
@@ -801,7 +808,9 @@ class ObjectStorageApi(object):
         obj_meta['content_path'] = obj_name
         obj_meta['container_id'] = name2cid(account, container).upper()
         obj_meta['ns'] = self.namespace
-        obj_meta['full_path'] = ["%s/%s/%s" % (account, container, obj_name)]
+        obj_meta['full_path'] = self._generate_fullpath(account, container,
+                                                        obj_name,
+                                                        obj_meta['version'])
         obj_meta['oio_version'] = (obj_meta.get('oio_version')
                                    or OIO_VERSION)
 

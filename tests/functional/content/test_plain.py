@@ -29,6 +29,7 @@ from oio.content.factory import ContentFactory
 from tests.functional.content.test_content import random_data, md5_data, \
     md5_stream
 from tests.utils import BaseTestCase, random_str
+from urllib import quote_plus
 
 
 class TestPlainContent(BaseTestCase):
@@ -55,6 +56,12 @@ class TestPlainContent(BaseTestCase):
         self.stgpol = "SINGLE"
         self.stgpol_twocopies = "TWOCOPIES"
         self.stgpol_threecopies = "THREECOPIES"
+
+    def _generate_fullpath(self, account, container_name, path, version):
+        return ['{0}/{1}/{2}/{3}'.format(quote_plus(account),
+                                         quote_plus(container_name),
+                                         quote_plus(path),
+                                         version)]
 
     def _test_create(self, stgpol, data_size):
         data = random_data(data_size)
@@ -106,9 +113,11 @@ class TestPlainContent(BaseTestCase):
                 self.assertEqual(meta['chunk_hash'], chunk_hash)
                 # Check that chunk data matches chunk hash from database
                 self.assertEqual(chunk.checksum, chunk_hash)
-                self.assertEqual(meta['full_path'], ['%s/%s/%s' %
-                                 (self.account, self.container_name,
-                                  self.content)])
+                full_path = self._generate_fullpath(self.account,
+                                                    self.container_name,
+                                                    self.content,
+                                                    meta['content_version'])
+                self.assertEqual(meta['full_path'], full_path)
                 self.assertEqual(meta['oio_version'], '4.0')
 
     def test_twocopies_create_0_byte(self):

@@ -71,23 +71,21 @@ retry:
 }
 
 static gboolean
-_set_list_xattr(int fd, gchar* name, gchar* keys)
+_set_xattr_list(int fd, gchar* name, gchar* keys)
 {
 	if (!keys)
 		return FALSE;
 	gchar **fields = g_strsplit(keys, ",", -1);
 	if (!fields)
 		return FALSE;
-	for(gchar **f = fields; f && *f; ++f) {
+	for(gchar **f = fields; *f; ++f) {
 		gchar *escaped_name = g_strconcat(name, ":", *f, NULL);
-		gchar *unescaped_name = g_uri_unescape_string(escaped_name, NULL);
-		g_free(escaped_name);
-		if (fsetxattr(fd, unescaped_name, "", 0, 0) == -1) {
-			g_free(unescaped_name);
+		if (fsetxattr(fd, escaped_name, "", 0, 0) == -1) {
+			g_free(escaped_name);
 			g_strfreev(fields);
 			return FALSE;
 		}
-		g_free(unescaped_name);
+		g_free(escaped_name);
 	}
 	g_strfreev(fields);
 	return TRUE;
@@ -134,8 +132,9 @@ set_rawx_info_to_fd (int fd, GError **error, struct chunk_textinfo_s *cti)
 
 	SET(ATTR_NAME_OIO_VERSION, cti->oio_version);
 
-	 if(cti->oio_full_path && !_set_list_xattr(fd, ATTR_OIO_DOMAIN, cti->oio_full_path))
-		 goto error_set_attr;
+	if (cti->oio_full_path && !_set_xattr_list(fd, ATTR_DOMAIN_OIO,
+			cti->oio_full_path))
+		goto error_set_attr;
 
 	return TRUE;
 
@@ -196,32 +195,38 @@ _get (int fd, const char *k, gchar **pv)
 
 #define GET(K,R) _get(fd, ATTR_DOMAIN "." K, &(R))
 
+
+/**
+ * Fullpaths are in the form 'oio:account/container/path/version'
+ * So we have to check the prefix:'oio:'.
+ * Sometimes we need to only have the fullpath of a specific path
+ * So we have to check /path
+ */
 static GString*
-_search_user_oio(gchar* prefix, gchar * xattrlist, ssize_t size, gchar *name)
+_get_fullpaths_from_listxattr(gchar * xattrlist, ssize_t size, gchar *path)
 {
-	GString* list_user = g_string_new("");
+	GString* user_list = g_string_new("");
 	gchar* elem = NULL;
-	gint prefix_size = strlen(prefix) + 1;
+	gchar* enclosed_path = g_strconcat("/", path, "/", NULL);
 	for (gint i = 0; i < size; i+= strlen(&xattrlist[i]) + 1) {
-		elem = g_strrstr(&xattrlist[i], prefix);
+		elem = strstr(&xattrlist[i], ATTR_DOMAIN_OIO);
 		if (elem) {
-			if (name)
-				elem = g_strrstr(&xattrlist[i], name);
-			if(elem) {
-				if (list_user->len)
-					list_user = g_string_append_c(list_user, ',');
-				gchar *s = g_uri_escape_string (&xattrlist[i + prefix_size], NULL, FALSE);
-				list_user = g_string_append(list_user, s);
-				g_free(s);
+			if (path)
+				elem = g_strrstr(&xattrlist[i], enclosed_path );
+			if(!path || elem) {
+				if (user_list->len)
+					user_list = g_string_append_c(user_list, ',');
+				user_list = g_string_append(user_list,
+						&xattrlist[i + strlen(ATTR_DOMAIN_OIO) + 1]);
 			}
 			elem = NULL;
 		}
 	}
-	return list_user;
+	return user_list;
 }
 
 static gboolean
-_get_fullpath_from_fd(int fd, gchar* name, gchar **list_path, gchar *needle)
+_get_fullpaths_from_fd(int fd, gchar **list_path, gchar *path)
 {
 	ssize_t s = longest_xattr_list;
 	gchar *buf = g_malloc0(s);
@@ -240,7 +245,7 @@ retry:
 			return FALSE;
 		}
 	}
-	GString *full_path = _search_user_oio(name, buf, rc, needle);
+	GString *full_path = _get_fullpaths_from_listxattr(buf, rc, path);
 	*list_path = full_path->str;
 	g_free(buf);
 	g_string_free(full_path, FALSE);
@@ -276,7 +281,7 @@ get_rawx_info_from_fd (int fd, GError **error, struct chunk_textinfo_s *cti)
 		}
 	}
 
-	_get_fullpath_from_fd(fd, ATTR_OIO_DOMAIN, &(cti->oio_full_path),
+	_get_fullpaths_from_fd(fd, &(cti->oio_full_path),
 			cti->content_path);
 
 	GET(ATTR_NAME_CONTENT_ID,      cti->content_id);

@@ -32,6 +32,7 @@ from oio.content.ec import ECContent
 from tests.functional.content.test_content import md5_stream, random_data, \
             md5_data
 from tests.utils import BaseTestCase, random_str
+from urllib import quote_plus
 
 
 DAT_LEGIT_SIZE = 1024
@@ -65,6 +66,12 @@ class TestECContent(BaseTestCase):
 
     def tearDown(self):
         super(TestECContent, self).tearDown()
+
+    def _generate_fullpath(self, account, container_name, path, version):
+        return ['{0}/{1}/{2}/{3}'.format(quote_plus(account),
+                                         quote_plus(container_name),
+                                         quote_plus(path),
+                                         version)]
 
     def random_chunks(self, nb):
         l = random.sample(xrange(self.k + self.m), nb)
@@ -113,9 +120,11 @@ class TestECContent(BaseTestCase):
                 self.assertEqual(meta['chunk_id'], chunk.id)
                 self.assertEqual(meta['chunk_pos'], chunk.pos)
                 self.assertEqual(meta['chunk_hash'], md5_stream(stream))
-                self.assertEqual(meta['full_path'], ['%s/%s/%s' %
-                                 (self.account, self.container_name,
-                                  self.content)])
+                full_path = self._generate_fullpath(self.account,
+                                                    self.container_name,
+                                                    self.content,
+                                                    meta['content_version'])
+                self.assertEqual(meta['full_path'], full_path)
                 self.assertEqual(meta['oio_version'], '4.0')
                 self.assertEqual(metachunk_hash, chunk.checksum)
 

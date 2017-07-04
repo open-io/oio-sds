@@ -76,8 +76,7 @@ class ECContent(Content):
 
         meta['metachunk_hash'] = current_chunk.checksum
         meta['metachunk_size'] = current_chunk.size
-        meta['full_path'] = ['%s/%s/%s' % (self.account,
-                                           self.container_name, self.path)]
+        meta['full_path'] = self.full_path
         meta['oio_version'] = OIO_VERSION
         self.blob_client.chunk_put(spare_url[0], meta, GeneratorIO(stream))
         if chunk_id is None:
@@ -91,19 +90,8 @@ class ECContent(Content):
         return stream
 
     def create(self, stream, **kwargs):
-        sysmeta = {}
-        sysmeta['id'] = self.content_id
-        sysmeta['version'] = self.version
-        sysmeta['policy'] = self.stgpol
-        sysmeta['mime_type'] = self.mime_type
-        sysmeta['chunk_method'] = self.chunk_method
-        sysmeta['chunk_size'] = self.metadata['chunk_size']
-        sysmeta['oio_version'] = OIO_VERSION
-        sysmeta['full_path'] = ['%s/%s/%s' % (self.account,
-                                              self.container_name, self.path)]
+        sysmeta = self._generate_sysmeta()
         chunks = _sort_chunks(self.chunks.raw(), self.storage_method.ec)
-        sysmeta['content_path'] = self.path
-        sysmeta['container_id'] = self.container_id
 
         headers = {}
         handler = ECWriteHandler(
