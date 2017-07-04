@@ -746,35 +746,22 @@ _manage_udp_event(struct network_server_s *srv, struct endpoint_s *e,
 				data_slab_make_buffer(g_memdup(buf, r), r));
 
 		/* notify the transport layer, and manage this in another thread */
-		if (NULL != clt->transport.notify_input) {
-			GError *err = NULL;
+		EXTRA_ASSERT(NULL != clt->transport.notify_input);
 
-			/* OIO_SERVER_UDP_QUEUE_MAXLEN is arbitrary, but it is only used to
-			 * avoid a memory leak */
-			const guint unprocessed = g_thread_pool_unprocessed(srv->pool_udp);
-			if (unprocessed > server_udp_queue_maxlen) {
-				GRID_DEBUG("PING %s -> %s (%"G_GSIZE_FORMAT") dropped",
-						clt->peer_name, clt->local_name,
-						data_slab_sequence_size(&clt->input));
-			} else {
-				if (!g_thread_pool_push(srv->pool_udp, clt, &err)) {
-					GRID_WARN("PING %s -> %s (%"G_GSIZE_FORMAT") discarded: (%d) %s",
-							clt->peer_name, clt->local_name,
-							data_slab_sequence_size(&clt->input),
-							err->code, err->message);
-					_client_clean(srv, clt);
-				} else {
-					GRID_TRACE("PING %s -> %s (%"G_GSIZE_FORMAT") defered",
-							clt->peer_name, clt->local_name,
-							data_slab_sequence_size(&clt->input));
-				}
-			}
+		/* `server_udp_queue_maxlen` is arbitrary, but it is only used to
+		 * avoid a memory leak */
+		const guint unprocessed = g_thread_pool_unprocessed(srv->pool_udp);
+		if (unprocessed > server_udp_queue_maxlen) {
+			GRID_DEBUG("UDP dropped %s -> %s", clt->peer_name, clt->local_name);
 		} else {
-			GRID_DEBUG("PING %s -> %s (%"G_GSIZE_FORMAT") discarded: %s",
-					clt->peer_name, clt->local_name,
-					data_slab_sequence_size(&clt->input),
-					"no transport");
-			_client_clean(srv, clt);
+			GError *err = NULL;
+			if (!g_thread_pool_push(srv->pool_udp, clt, &err)) {
+				GRID_WARN("UDP discarded %s -> %s: (%d) %s",
+						clt->peer_name, clt->local_name,
+						err->code, err->message);
+				g_clear_error(&err);
+				_client_clean(srv, clt);
+			}
 		}
 	}
 }
