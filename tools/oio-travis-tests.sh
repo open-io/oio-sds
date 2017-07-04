@@ -156,22 +156,29 @@ fi
 
 if is_running_test_suite "repli" ; then
 	echo -e "\n### Replication tests"
-    func_tests -f "${SRCDIR}/etc/bootstrap-preset-smallrepli.yml"
-fi
+    func_tests -f "${SRCDIR}/etc/bootstrap-preset-smallrepli.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-udp.yml"
+	fi
 
 if is_running_test_suite "worm" ; then
 	echo -e "\n### WORM tests"
     export WORM=1
-    test_meta2_filters -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
-		-f "${SRCDIR}/etc/bootstrap-option-worm.yml"
+	for nb in 0 1 2 3 ; do
+		test_meta2_filters -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
+			-f "${SRCDIR}/etc/bootstrap-option-worm.yml" \
+			-f "${SRCDIR}/etc/bootstrap-meta1-${nb}digits.yml"
+	done
 	unset WORM
 fi
 
 if is_running_test_suite "slave" ; then
 	echo -e "\n### SLAVE tests"
     export SLAVE=1
-    test_meta2_filters -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
-		-f "${SRCDIR}/etc/bootstrap-option-slave.yml"
+	for nb in 0 1 2 3 ; do
+		test_meta2_filters -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
+			-f "${SRCDIR}/etc/bootstrap-option-slave.yml" \
+			-f "${SRCDIR}/etc/bootstrap-meta1-${nb}digits.yml"
+	done
 	unset SLAVE
 fi
 
