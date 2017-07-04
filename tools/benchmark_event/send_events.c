@@ -157,7 +157,7 @@ send_event()
 
 			g_string_append_c(data_json, '{');
 			
-			_PAIR_AND_COMMA("policy", NULL);
+			oio_str_gstring_append_json_pair(data_json, "policy", NULL);
 			
 			_PAIR_AND_COMMA_INT("bytes-count", 111);
 			
