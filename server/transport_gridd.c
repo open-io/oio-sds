@@ -555,26 +555,19 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 	}
 	void _add_header(const gchar *n, GByteArray *v) {
 		EXTRA_ASSERT(!req_ctx->final_sent);
-		if (v) {
-			if (!n)
-				metautils_gba_unref(v);
-			else {
-				if (!headers)
-					headers = g_hash_table_new_full(g_str_hash, g_str_equal,
-							g_free, metautils_gba_unref);
-				g_hash_table_insert(headers, g_strdup(n), v);
-			}
-		}
+		EXTRA_ASSERT(n != NULL);
+		EXTRA_ASSERT(v != NULL);
+		if (!headers)
+			headers = g_hash_table_new_full(g_str_hash, g_str_equal,
+					g_free, metautils_gba_unref);
+		g_hash_table_insert(headers, g_strdup(n), v);
 	}
 	void _no_access (void) {
 		req_ctx->access_disabled = TRUE;
 	}
 	void _add_body(GByteArray *b) {
 		EXTRA_ASSERT(!req_ctx->final_sent);
-		if (body) {
-			metautils_gba_unref(body);
-			body = NULL;
-		}
+		EXTRA_ASSERT(body == NULL);
 		body = b;
 	}
 	void _send_reply(gint code, gchar *msg) {
@@ -590,11 +583,8 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 			GHashTableIter iter;
 			gpointer n, v;
 			g_hash_table_iter_init(&iter, headers);
-			while (g_hash_table_iter_next(&iter, &n, &v)) {
-				if (!n || !v)
-					continue;
+			while (g_hash_table_iter_next(&iter, &n, &v))
 				metautils_message_add_field(answer, (gchar*)n, ((GByteArray*)v)->data, ((GByteArray*)v)->len);
-			}
 		}
 
 		/* encode and send */
@@ -611,25 +601,20 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 	}
 	void _send_error(gint code, GError *e) {
 		EXTRA_ASSERT(!req_ctx->final_sent);
-		if (!e) {
-			_subject ("e=(0) NULL");
-			_send_reply(code, "OK");
-		}
-		else {
-			_add_body(NULL);
-			if (e->code == CODE_REDIRECT)
-				_subject ("e=(%d) redirect to %s", e->code, e->message);
-			else
-				_subject ("e=(%d) %s", e->code, e->message);
-			if (code)
-				e->code = code;
-			if (CODE_IS_NETWORK_ERROR(e->code))
-				e->code = CODE_PROXY_ERROR;
-			else if (CODE_IS_OK(e->code) || CODE_IS_TEMP(e->code))
-				e->code = CODE_INTERNAL_ERROR;
-			_send_reply(e->code, e->message);
-			g_clear_error(&e);
-		}
+		EXTRA_ASSERT(e != NULL);
+		EXTRA_ASSERT(body == NULL);
+		if (e->code == CODE_REDIRECT)
+			_subject ("e=(%d) redirect to %s", e->code, e->message);
+		else
+			_subject ("e=(%d) %s", e->code, e->message);
+		if (code)
+			e->code = code;
+		if (CODE_IS_NETWORK_ERROR(e->code))
+			e->code = CODE_PROXY_ERROR;
+		else if (CODE_IS_OK(e->code) || CODE_IS_TEMP(e->code))
+			e->code = CODE_INTERNAL_ERROR;
+		_send_reply(e->code, e->message);
+		g_clear_error(&e);
 	}
 	void _uid(const gchar *fmt, ...) {
 		va_list args;
