@@ -1247,22 +1247,17 @@ _client_manage_input(struct network_client_s *client)
 	guint total, size;
 
 	int _notify(void) {
-		if (!client->transport.notify_input)
-			return RC_PROCESSED;
 		if (!data_slab_sequence_has_data(&(client->input))) {
 			/* drain the data */
 			data_slab_sequence_clean_data(&(client->input));
 			return RC_PROCESSED;
 		}
-		GRID_TRACE2("fd=%d passing %u/%"G_GSIZE_FORMAT" to transport %p",
-				client->fd, total,
-				data_slab_sequence_size(&(client->input)),
-				client->transport.notify_input);
 		return client->transport.notify_input(client);
 	}
 
 	EXTRA_ASSERT(client != NULL);
 	EXTRA_ASSERT(client->fd >= 0);
+	EXTRA_ASSERT(client->transport.notify_input != NULL);
 
 	for (size=SLAB_STARTSIZE, total=0; total < ROUND_MAXSIZE ;) {
 
