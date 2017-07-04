@@ -25,20 +25,6 @@ License along with this library.
 #include "slab.h"
 #include "internals.h"
 
-static inline const gchar *
-data_slab_type2str(struct data_slab_s *ds)
-{
-	EXTRA_ASSERT(ds != NULL);
-	switch (ds->type) {
-		ON_ENUM(STYPE_,BUFFER);
-		ON_ENUM(STYPE_,BUFFER_STATIC);
-		ON_ENUM(STYPE_,GBYTES);
-		ON_ENUM(STYPE,_EOF);
-	}
-	g_assert_not_reached ();
-	return "???";
-}
-
 gsize
 data_slab_size(struct data_slab_s *ds)
 {
@@ -293,69 +279,6 @@ data_slab_sequence_unshift(struct data_slab_sequence_s *dss,
 			dss->first = ds;
 		}
 	}
-}
-
-void
-data_slab_trace(const gchar *tag, struct data_slab_s *ds)
-{
-	if (!GRID_TRACE_ENABLED())
-		return;
-
-	(void) tag;
-	GString *gstr = g_string_sized_new(256);
-	switch (ds->type) {
-		case STYPE_BUFFER:
-		case STYPE_BUFFER_STATIC:
-			g_string_append_printf(gstr, "| buffer=%p alloc=%u start=%u end=%u size(%"G_GSIZE_FORMAT")",
-				ds->data.buffer.buff,
-				ds->data.buffer.alloc,
-				ds->data.buffer.start,
-				ds->data.buffer.end,
-				data_slab_size(ds));
-			break;
-		case STYPE_GBYTES:
-			g_string_append_printf (gstr, "| gbytes=%p size=%"G_GSIZE_FORMAT,
-					ds->data.gbytes, g_bytes_get_size(ds->data.gbytes));
-			break;
-		case STYPE_EOF:
-			break;
-	}
-
-	GRID_TRACE("%s %p type=%s%s", tag, ds, data_slab_type2str(ds), gstr->str);
-	g_string_free(gstr, TRUE);
-}
-
-void
-data_slab_sequence_trace(struct data_slab_sequence_s *dss)
-{
-	struct data_slab_s *s;
-
-	if (!GRID_TRACE_ENABLED())
-		return;
-
-	GRID_TRACE(" DSS %p -> %p", dss->first, dss->last);
-	for (s = dss->first; s ;) {
-		data_slab_trace("SLAB", s);
-		if (s == dss->last)
-			break;
-		s = s->next;
-	}
-}
-
-gsize
-data_slab_sequence_size(struct data_slab_sequence_s *dss)
-{
-	gsize total = 0;
-	struct data_slab_s *s;
-
-	for (s = dss->first; s ;) {
-		total += data_slab_size(s);
-		if (s == dss->last)
-			break;
-		s = s->next;
-	}
-
-	return total;
 }
 
 //------------------------------------------------------------------------------

@@ -68,8 +68,6 @@ gboolean data_slab_send(struct data_slab_s *ds, int fd);
 gboolean data_slab_consume(struct data_slab_s *ds, guint8 **p_data,
 		gsize *p_size);
 
-void data_slab_trace(const gchar *tag, struct data_slab_s *ds);
-
 gsize data_slab_size(struct data_slab_s *ds);
 
 /* Slab-sequence features --------------------------------------------------- */
@@ -90,10 +88,6 @@ struct data_slab_s* data_slab_sequence_shift(
 
 void data_slab_sequence_unshift(struct data_slab_sequence_s *dss,
 		struct data_slab_s *ds);
-
-void data_slab_sequence_trace(struct data_slab_sequence_s *dss);
-
-gsize data_slab_sequence_size(struct data_slab_sequence_s *dss);
 
 /* Slab constructors -------------------------------------------------------- */
 
