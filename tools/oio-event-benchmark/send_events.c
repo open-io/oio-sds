@@ -3,7 +3,7 @@
 
 #include <metautils/lib/metautils.h>
 
-#include "bench_conf.h"
+#include "conf_benchmark.h"
 #include "manage_events_queue.h"
 #include "send_events.h"
 
@@ -50,12 +50,12 @@ static const char *type = STORAGE_CHUNK_NEW;
 static gboolean
 init_send_event()
 {
-	gchar *event_agent_addr = oio_cfg_get_eventagent(NAME_SPACE);
+	gchar *event_agent_addr = oio_cfg_get_eventagent(NAMESPACE);
 	GError *err = manage_events_queue_init(event_agent_addr);
 	g_free(event_agent_addr);
 	if (err) {
 		GRID_ERROR("Failed to initialize event context: (%d) %s", err->code,
-				   err->message);
+				err->message);
 		g_clear_error(&err);
 
 		return FALSE;
@@ -75,7 +75,7 @@ _random_hex(guint32 n_bits)
 	guint8 buff[n_bytes];
 	oio_buf_randomize(buff, n_bytes);
 
-	guint32 l_str = (n_bits / 4);
+	guint32 l_str = n_bits / 4;
 	if (n_bits % 4 != 0) {
 		l_str++;
 	}
@@ -135,7 +135,7 @@ send_event()
 
 		oio_url_set(url, OIOURL_ACCOUNT, "account");
 
-		oio_url_set(url, OIOURL_NS, NAME_SPACE);
+		oio_url_set(url, OIOURL_NS, NAMESPACE);
 
 		oio_url_set(url, OIOURL_USER, "container");
 
@@ -171,7 +171,7 @@ send_event()
 
 		oio_url_set(url, OIOURL_ACCOUNT, "account");
 
-		oio_url_set(url, OIOURL_NS, NAME_SPACE);
+		oio_url_set(url, OIOURL_NS, NAMESPACE);
 
 		oio_url_set(url, OIOURL_USER, "container");
 
@@ -353,7 +353,7 @@ send_events_run(void)
 		}
 
 		printf("Events: %d, Errors: %d, Events/sec: %f\n", events_per_round,
-			   total_errors, total_speed / rounds);
+				total_errors, total_speed / rounds);
 
 		events_per_round += increment;
 	}

@@ -841,21 +841,27 @@ oio_proxy_call_reference_set_properties(CURL *h, struct oio_url_s *u,
 }
 
 GError *
-oio_proxy_call_reference_force (CURL *h, struct oio_url_s *u,
-		const char *t, const char* const *values)
+oio_proxy_call_reference_force(CURL *h, struct oio_url_s *u,
+		const char *t, const char* const *values, gint64 seq)
 {
-	GString *http_url = _curl_reference_url (u, "force");
-	if (!http_url) return BADNS();
+	GString *http_url = _curl_reference_url(u, "force");
+	if (!http_url) {
+		return BADNS();
+	}
 
-	if (t) _append(http_url, '&', "type", t);
-	
+	if (t) {
+		_append(http_url, '&', "type", t);
+	}
+
 	gchar *hdrin[] = { PROXYD_HEADER_MODE, "autocreate", NULL };
 
 	GString *json = _build_json(values, NULL);
-	g_string_overwrite(json, json->len - 1, ",\"seq\":1}");
-	
+	g_string_overwrite(json, json->len - 1, ",");
+	oio_str_gstring_append_json_pair_int(json, "seq", seq);
+	g_string_append_printf(json, "}");
+
 	struct http_ctx_s i = { .headers = hdrin, .body = json };
-	GError *err = _proxy_call (h, "POST", http_url->str, &i, NULL);
+	GError *err = _proxy_call(h, "POST", http_url->str, &i, NULL);
 
 	g_string_free(http_url, TRUE);
 	g_string_free(json, TRUE);
@@ -864,15 +870,19 @@ oio_proxy_call_reference_force (CURL *h, struct oio_url_s *u,
 }
 
 GError *
-oio_proxy_call_reference_unlink (CURL *h, struct oio_url_s *u,
+oio_proxy_call_reference_unlink(CURL *h, struct oio_url_s *u,
 		const char *t)
 {
-	GString *http_url = _curl_reference_url (u, "unlink");
-	if (!http_url) return BADNS();
+	GString *http_url = _curl_reference_url(u, "unlink");
+	if (!http_url) {
+		return BADNS();
+	}
 
-	if (t) _append(http_url, '&', "type", t);
+	if (t) {
+		_append(http_url, '&', "type", t);
+	}
 
-	GError *err = _proxy_call (h, "POST", http_url->str, NULL, NULL);
+	GError *err = _proxy_call(h, "POST", http_url->str, NULL, NULL);
 
 	g_string_free(http_url, TRUE);
 

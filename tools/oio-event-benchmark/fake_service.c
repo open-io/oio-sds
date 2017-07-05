@@ -6,7 +6,7 @@
 #include <core/url_ext.h>
 #include <metautils/lib/metautils.h>
 
-#include "bench_conf.h"
+#include "conf_benchmark.h"
 #include "fake_service.h"
 
 #define PATH_MAXLEN 64
@@ -23,7 +23,7 @@ gboolean fake_service_ready = FALSE;
 static struct path_parser_s *path_parser = NULL;
 static struct network_server_s *server = NULL;
 
-GMutex mutex;
+static GMutex mutex;
 
 static gint received_events = 0;
 
@@ -113,13 +113,13 @@ _reply_not_found(struct http_reply_ctx_s *rp, GError *err)
 // Match route
 
 static struct path_matching_s **
-_fake_service_match (const gchar *method, const gchar *path)
+_fake_service_match(const gchar *method, const gchar *path)
 {
 	gsize lp = strlen(path), lm = strlen(method);
 	if (lp > PATH_MAXLEN || lm > METHOD_MAXLEN)
 		return g_malloc0(sizeof(struct path_matching_s*));
 
-	gchar *key = g_alloca (lp + 2 + lm + 1);
+	gchar *key = g_alloca(lp + 2 + lm + 1);
 	gchar *pk = key;
 
 	// Copy and purify the path
@@ -143,13 +143,13 @@ _fake_service_match (const gchar *method, const gchar *path)
 	}
 	*pk = '\0';
 
-	gchar **tokens = g_strsplit (key, "/", -1);
+	gchar **tokens = g_strsplit(key, "/", -1);
 	for (gchar **p=tokens; *p ;++p) {
 		gchar *unescaped = g_uri_unescape_string(*p,NULL);
 		oio_str_reuse(p, unescaped);
 	}
-	struct path_matching_s **result = path_parser_match (path_parser, tokens);
-	g_strfreev (tokens);
+	struct path_matching_s **result = path_parser_match(path_parser, tokens);
+	g_strfreev(tokens);
 	
 	return result;
 }
@@ -166,11 +166,11 @@ struct req_args_s
 typedef enum http_rc_e (*req_handler_f) (struct req_args_s *);
 
 static enum http_rc_e
-handler_action (struct http_request_s *request, struct http_reply_ctx_s *reply)
+handler_action(struct http_request_s *request, struct http_reply_ctx_s *reply)
 {
 	// Get a request id for the current request
-	const gchar *reqid = g_tree_lookup (request->tree_headers,
-										PROXYD_HEADER_REQID);
+	const gchar *reqid = g_tree_lookup(request->tree_headers,
+			PROXYD_HEADER_REQID);
 	if (reqid)
 		oio_ext_set_reqid(reqid);
 	else
@@ -178,10 +178,10 @@ handler_action (struct http_request_s *request, struct http_reply_ctx_s *reply)
 
 	// Then parse the request to find a handler
 	struct oio_requri_s ruri = {NULL, NULL, NULL, NULL};
-	oio_requri_parse (request->req_uri, &ruri);
+	oio_requri_parse(request->req_uri, &ruri);
 
-	struct path_matching_s **matchings = _fake_service_match (request->cmd,
-															  ruri.path);
+	struct path_matching_s **matchings = _fake_service_match(request->cmd,
+			ruri.path);
 
 	enum http_rc_e rc;
 	if (!*matchings) {
@@ -196,9 +196,9 @@ handler_action (struct http_request_s *request, struct http_reply_ctx_s *reply)
 		rc = (*handler) (&args);
 	}
 
-	path_matching_cleanv (matchings);
-	oio_requri_clear (&ruri);
-	oio_ext_set_reqid (NULL);
+	path_matching_cleanv(matchings);
+	oio_requri_clear(&ruri);
+	oio_ext_set_reqid(NULL);
 	
 	return rc;
 }
@@ -206,7 +206,7 @@ handler_action (struct http_request_s *request, struct http_reply_ctx_s *reply)
 // Route action
 
 static enum http_rc_e
-action_global (struct req_args_s *args)
+action_global(struct req_args_s *args)
 {
 	g_atomic_int_inc(&received_events);
 
@@ -228,33 +228,33 @@ action_global (struct req_args_s *args)
 }
 
 static enum http_rc_e
-action_chunk_new (struct req_args_s *args)
+action_chunk_new(struct req_args_s *args)
 {
 	return action_global(args);
 }
 
 static enum http_rc_e
-action_chunk_delete (struct req_args_s *args)
+action_chunk_delete(struct req_args_s *args)
 {
 	return action_global(args);
 }
 
 static enum http_rc_e
-action_account (struct req_args_s *args)
+action_account(struct req_args_s *args)
 {
 	return action_global(args);
 }
 
 static enum http_rc_e
-action_rawx (struct req_args_s *args)
+action_rawx(struct req_args_s *args)
 {
 	return action_global(args);
 }
 
 static void
-configure_request_handlers (void)
+configure_request_handlers(void)
 {
-#define SET(Url,Callback) path_parser_configure (path_parser, Url, Callback)
+#define SET(Url,Callback) path_parser_configure(path_parser, Url, Callback)
 
 	SET("v1/rdir/push/#POST", action_chunk_new);
 	SET("v1/rdir/delete/#DELETE", action_chunk_delete);
@@ -265,14 +265,14 @@ configure_request_handlers (void)
 // Main functions
 
 gboolean
-fake_service_configure (void)
+fake_service_configure(void)
 {
 	server = network_server_init();
 	path_parser = path_parser_init();
 	configure_request_handlers();
 
 	network_server_bind_host(server, FAKE_SERVICE_ADDRESS, handler_action,
-							 (network_transport_factory) transport_http_factory0);
+			(network_transport_factory) transport_http_factory0);
 
 	g_mutex_init(&mutex);
 
@@ -280,7 +280,7 @@ fake_service_configure (void)
 }
 
 gboolean
-fake_service_run (void)
+fake_service_run(void)
 {
 	GError *err = NULL;
 
@@ -306,15 +306,15 @@ fake_service_run (void)
 }
 
 void
-fake_service_stop (void)
+fake_service_stop(void)
 {
 	if (server) {
-		network_server_stop (server);
+		network_server_stop(server);
 	}
 }
 
 void
-fake_service_fini (void)
+fake_service_fini(void)
 {
 	if (server) {
 		network_server_close_servers(server);

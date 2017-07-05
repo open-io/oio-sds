@@ -24,7 +24,7 @@ void manage_events_queue_destroy(void);
  *
  * @return NULL if OK, or a GError describing the problem
  */
-GError* manage_events_queue_send (const char *event_type, struct oio_url_s *url,
-								  GString *data_json);
+GError* manage_events_queue_send(const char *event_type, struct oio_url_s *url,
+		GString *data_json);
 
 #endif /*OIO_SDS__tools__benchmark_event__manage_events_queue_h*/
