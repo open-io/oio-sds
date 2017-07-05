@@ -60,7 +60,7 @@ struct oio_directory_vtable_s
 	/* the OIOURL_TYPE in <url> will be ignored */
 	GError * (*force) (struct oio_directory_s *self,
 			const struct oio_url_s *url, const char *srvtype,
-			const char * const *values);
+			const char * const *values, gint64 seq);
 
 	/* the OIOURL_TYPE in <url> will be ignored */
 	GError * (*unlink) (struct oio_directory_s *self,
@@ -93,11 +93,11 @@ GError * oio_directory__get_properties(struct oio_directory_s *self,
 GError * oio_directory__set_properties(struct oio_directory_s *self,
 		const struct oio_url_s *url, const char * const *values);
 
-GError * oio_directory__force (struct oio_directory_s *d,
+GError * oio_directory__force(struct oio_directory_s *d,
 		const struct oio_url_s *url, const char *srvtype,
-		const char * const *values);
+		const char * const *values, gint64 seq);
 
-GError * oio_directory__unlink (struct oio_directory_s *d,
+GError * oio_directory__unlink(struct oio_directory_s *d,
 		const struct oio_url_s *url, const char *srvtype);
 
 /* Implementation specifics ------------------------------------------------- */

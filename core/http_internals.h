@@ -115,10 +115,10 @@ GError *oio_proxy_call_reference_get_properties(CURL *h, struct oio_url_s *u,
 GError * oio_proxy_call_reference_set_properties(CURL *h, struct oio_url_s *u,
 		const char* const *values);
 
-GError * oio_proxy_call_reference_force (CURL *h, struct oio_url_s *u,
-		const char *t, const char* const *values);
+GError * oio_proxy_call_reference_force(CURL *h, struct oio_url_s *u,
+		const char *t, const char* const *values, gint64 seq);
 
-GError * oio_proxy_call_reference_unlink (CURL *h, struct oio_url_s *u,
+GError * oio_proxy_call_reference_unlink(CURL *h, struct oio_url_s *u,
 		const char *t);
 
 /* container */

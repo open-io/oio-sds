@@ -3,11 +3,11 @@
 
 #include <metautils/lib/metautils.h>
 
-#include "bench_conf.h"
+#include "conf_benchmark.h"
 #include "fake_service.h"
 #include "send_events.h"
 
-static void grid_main_specific_stop (void);
+static void grid_main_specific_stop(void);
 
 // send_events.c
 extern gint events_per_round;
@@ -16,34 +16,39 @@ extern gint increment;
 extern enum event_type_e event_type;
 
 static struct oio_directory_s *dir = NULL;
-static struct oio_url_s *url = NULL;
+static struct oio_url_s *rdir_rawx_url = NULL;
 static struct oio_cs_client_s *cs = NULL;
 static struct oio_cs_registration_s *account_service = NULL;
 GThread *fake_service_thread = NULL;
 
 static gboolean
-link_rawx_fake_service (void)
+link_rawx_fake_service(void)
 {
-	dir = oio_directory__create_proxy(NAME_SPACE);
+	dir = oio_directory__create_proxy(NAMESPACE);
 	if (!dir) {
 		return FALSE;
 	}
 	g_assert_nonnull(dir);
 
-	url = oio_url_init(NAME_SPACE "/" NAME_ACCOUNT_RDIR "/" RAWX_ADDRESS "/" NAME_SRVTYPE_RDIR "/toto");
+	rdir_rawx_url = oio_url_empty();
+	oio_url_set(rdir_rawx_url, OIOURL_NS, NAMESPACE);
+	oio_url_set(rdir_rawx_url, OIOURL_ACCOUNT, NAME_ACCOUNT_RDIR);
+	oio_url_set(rdir_rawx_url, OIOURL_USER, RAWX_ADDRESS);
+	oio_url_set(rdir_rawx_url, OIOURL_TYPE, NAME_SRVTYPE_RDIR);
 
-	const char * const values[10] = {
+	const char * const values[] = {
 		"host", FAKE_SERVICE_ADDRESS,
 		"args", "",
 		"type", NAME_SRVTYPE_RDIR,
-		"id", NAME_SPACE "|" NAME_SRVTYPE_RDIR "|" FAKE_SERVICE_ADDRESS,
+		"id", NAMESPACE "|" NAME_SRVTYPE_RDIR "|" FAKE_SERVICE_ADDRESS,
 		NULL
 	};
 
-	GError *err = oio_directory__force(dir, url, NAME_SRVTYPE_RDIR, values);
+	GError *err = oio_directory__force(dir, rdir_rawx_url, NAME_SRVTYPE_RDIR,
+			values, 1);
 	if (err) {
 		GRID_ERROR("Failed to call 'reference/force': (%d) %s", err->code,
-				   err->message);
+				err->message);
 		g_clear_error(&err);
 
 		return FALSE;
@@ -56,14 +61,7 @@ static void
 free_service(struct oio_cs_registration_s *service) {
 	g_free((void *) service->id);
 	g_free((void *) service->url);
-
-	if (service->kv_tags) {
-		for (guint i=0; (service->kv_tags + i) && service->kv_tags[i]; i++) {
-			g_free((void *) service->kv_tags[i]);
-		}
-	}
-	g_free((void *) service->kv_tags);
-
+	g_strfreev((char **) service->kv_tags);
 	g_free(service);
 }
 
@@ -71,30 +69,27 @@ static struct oio_cs_registration_s *
 get_account_service(void)
 {
 	GSList *services = NULL;
-	void _on_reg (const struct oio_cs_registration_s *reg, int score) {
+	void _on_reg(const struct oio_cs_registration_s *reg, int score) {
 		(void) score;
 
-		struct oio_cs_registration_s *reg_cpy = g_malloc0(sizeof(struct oio_cs_registration_s));
+		struct oio_cs_registration_s *reg_cpy =
+				g_malloc0(sizeof(struct oio_cs_registration_s));
 
 		reg_cpy->id = g_strdup(reg->id);
 		reg_cpy->url = g_strdup(reg->url);
 
-		GPtrArray *tmp = g_ptr_array_new ();
 		if (reg->kv_tags) {
-			for (guint i=0; (reg->kv_tags + i) && reg->kv_tags[i]; i++) {
-				g_ptr_array_add (tmp, g_strdup(reg->kv_tags[i]));
-			}
+			reg_cpy->kv_tags = (const char * const *)
+					g_strdupv((char **) reg->kv_tags);
 		}
-		g_ptr_array_add (tmp, NULL);
-		reg_cpy->kv_tags = (const char * const *) g_ptr_array_free (tmp, FALSE);
 
-		services = g_slist_prepend (services, reg_cpy);
+		services = g_slist_prepend(services, reg_cpy);
 	}
-	GError *err = oio_cs_client__list_services (cs, NAME_SRVTYPE_ACCOUNT, FALSE,
-												_on_reg);
+	GError *err = oio_cs_client__list_services(cs, NAME_SRVTYPE_ACCOUNT, FALSE,
+			_on_reg);
 	if (err) {
-		GRID_ERROR("Failed to load the account service: (%d) %s", err->code,
-				   err->message);
+		GRID_ERROR("Failed to list account services: (%d) %s", err->code,
+				err->message);
 		g_clear_error(&err);
 
 		return NULL;
@@ -120,10 +115,10 @@ add_fake_account(void)
 	};
 
 	GError *err = oio_cs_client__lock_service(cs, NAME_SRVTYPE_ACCOUNT, &reg,
-											  SCORE_MAX);
+			SCORE_MAX);
 	if (err) {
-		GRID_ERROR("Failed to load the lock service: %d %s", err->code,
-				   err->message);
+		GRID_ERROR("Failed to lock service: %d %s", err->code,
+				err->message);
 		g_clear_error(&err);
 
 		return FALSE;
@@ -156,7 +151,7 @@ kill_event_agent(void)
 			"/usr/bin/killall oio-event-agent", NULL, NULL, NULL, &err);
 	if (err) {
 		GRID_ERROR("Command line failure': (%d) %s", err->code,
-				   err->message);
+				err->message);
 		g_clear_error(&err);
 	}
 
@@ -166,7 +161,7 @@ kill_event_agent(void)
 // Main callbacks
 
 static struct grid_main_option_s *
-grid_main_get_options (void)
+grid_main_get_options(void)
 {
 	static struct grid_main_option_s cli_options[] = {
 		{
@@ -188,21 +183,21 @@ grid_main_get_options (void)
 }
 
 static const char *
-grid_main_get_usage (void)
+grid_main_get_usage(void)
 {
-	return "CHUNK_NEW/CHUNK_DELETED"
-			"/CONTAINER_NEW/CONTAINER_STATE/CONTAINER_DELETED"
-			"/CONTENT_DELETED";
+	return "CHUNK_NEW|CHUNK_DELETED"
+			"|CONTAINER_NEW|CONTAINER_STATE|CONTAINER_DELETED"
+			"|CONTENT_DELETED";
 }
 
 static void
-grid_main_set_defaults (void)
+grid_main_set_defaults(void)
 {
 	send_events_defaults();
 }
 
 static gboolean
-grid_main_configure (int argc, char **argv)
+grid_main_configure(int argc, char **argv)
 {
 	if (argc < 1) {
 		g_printerr("Invalid arguments number\n");
@@ -213,7 +208,7 @@ grid_main_configure (int argc, char **argv)
 }
 
 static void
-grid_main_action (void)
+grid_main_action(void)
 {
 	// Link the rawx address with the fake service address
 	if (event_type == CHUNK_NEW || event_type == CHUNK_DELETED) {
@@ -226,7 +221,7 @@ grid_main_action (void)
 	// Lock the account service and add fake account
 	if (event_type == CONTAINER_NEW || event_type == CONTAINER_STATE
 			|| event_type == CONTAINER_DELETED) {
-		cs = oio_cs_client__create_proxied(NAME_SPACE);
+		cs = oio_cs_client__create_proxied(NAMESPACE);
 
 		account_service = get_account_service();
 		if (!account_service) {
@@ -235,9 +230,9 @@ grid_main_action (void)
 		}
 
 		GError *err = oio_cs_client__lock_service(cs, NAME_SRVTYPE_ACCOUNT,
-												  account_service, SCORE_DOWN);
+				account_service, SCORE_DOWN);
 		if (err) {
-			GRID_ERROR("Failed to lock service: %d %s", err->code, err->message);
+			GRID_ERROR("Failed to lock account service: %d %s", err->code, err->message);
 			g_clear_error(&err);
 
 			grid_main_set_status(EXIT_FAILURE);
@@ -266,10 +261,10 @@ grid_main_action (void)
 	// Launch the fake service
 	GError *err;
 	fake_service_thread = g_thread_try_new("fake_service", _fake_service_run,
-										   NULL, &err);
+			NULL, &err);
 	if (fake_service_thread == NULL) {
 		GRID_ERROR("Failed to start the fake_service thread: (%d) %s",
-				   err->code, err->message);
+				err->code, err->message);
 		grid_main_set_status(EXIT_FAILURE);
 		return;
 	}
@@ -285,25 +280,25 @@ grid_main_action (void)
 }
 
 static void
-grid_main_specific_stop (void)
+grid_main_specific_stop(void)
 {
 	fake_service_stop();
 }
 
 static void
-grid_main_specific_fini (void)
+grid_main_specific_fini(void)
 {
 	send_events_fini();
 	fake_service_fini();
 
-	if (url) {
-		GError *err = oio_directory__unlink(dir, url, NAME_SRVTYPE_RDIR);
+	if (rdir_rawx_url) {
+		GError *err = oio_directory__unlink(dir, rdir_rawx_url, NAME_SRVTYPE_RDIR);
 		if (err) {
 			GRID_ERROR("Failed to call 'reference/unlink': (%d) %s", err->code,
-					   err->message);
+					err->message);
 			g_clear_error(&err);
 		}
-		oio_url_clean(url);
+		oio_url_clean(rdir_rawx_url);
 	}
 
 	if (dir) {
@@ -315,7 +310,7 @@ grid_main_specific_fini (void)
 		GError *err = oio_cs_client__unlock_service(cs, NAME_SRVTYPE_ACCOUNT, account_service);
 		if (err) {
 			GRID_ERROR("Failed to unlock service: %d %s", err->code,
-					   err->message);
+					err->message);
 			g_clear_error(&err);
 
 			grid_main_set_status(EXIT_FAILURE);
@@ -324,7 +319,7 @@ grid_main_specific_fini (void)
 		err = oio_cs_client__flush_services(cs, NAME_SRVTYPE_ACCOUNT);
 		if (err) {
 			GRID_ERROR("Failed to flush services: %d %s", err->code,
-					   err->message);
+					err->message);
 			g_clear_error(&err);
 
 			grid_main_set_status(EXIT_FAILURE);
@@ -352,7 +347,7 @@ struct grid_main_callbacks main_callbacks = {
 };
 
 int
-main (int argc, char **argv)
+main(int argc, char **argv)
 {
-	return grid_main (argc, argv, &main_callbacks);
+	return grid_main(argc, argv, &main_callbacks);
 }
