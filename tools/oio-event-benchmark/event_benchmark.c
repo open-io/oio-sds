@@ -18,7 +18,7 @@ extern enum event_type_e event_type;
 static struct oio_directory_s *dir = NULL;
 static struct oio_url_s *rdir_rawx_url = NULL;
 static struct oio_cs_client_s *cs = NULL;
-static struct oio_cs_registration_s *account_service = NULL;
+static GSList *account_services = NULL;
 GThread *fake_service_thread = NULL;
 
 static gboolean
@@ -65,8 +65,8 @@ free_service(struct oio_cs_registration_s *service) {
 	g_free(service);
 }
 
-static struct oio_cs_registration_s *
-get_account_service(void)
+static GSList *
+get_account_services(void)
 {
 	GSList *services = NULL;
 	void _on_reg(const struct oio_cs_registration_s *reg, int score) {
@@ -95,10 +95,7 @@ get_account_service(void)
 		return NULL;
 	}
 
-	struct oio_cs_registration_s * account_reg = services->data;
-	g_slist_free(services);
-
-	return account_reg;
+	return services;
 }
 
 static gboolean
@@ -223,20 +220,24 @@ grid_main_action(void)
 			|| event_type == CONTAINER_DELETED) {
 		cs = oio_cs_client__create_proxied(NAMESPACE);
 
-		account_service = get_account_service();
-		if (!account_service) {
+		account_services = get_account_services();
+		if (!account_services) {
 			grid_main_set_status(EXIT_FAILURE);
 			return;
 		}
+		GError *err;
+		for (GSList *account = account_services; account && account->data;
+					account = account->next) {
+			err = oio_cs_client__lock_service(cs, NAME_SRVTYPE_ACCOUNT,
+					account->data, SCORE_DOWN);
+			if (err) {
+				GRID_ERROR("Failed to lock account service: %d %s",
+						err->code, err->message);
+				g_clear_error(&err);
 
-		GError *err = oio_cs_client__lock_service(cs, NAME_SRVTYPE_ACCOUNT,
-				account_service, SCORE_DOWN);
-		if (err) {
-			GRID_ERROR("Failed to lock account service: %d %s", err->code, err->message);
-			g_clear_error(&err);
-
-			grid_main_set_status(EXIT_FAILURE);
-			return;
+				grid_main_set_status(EXIT_FAILURE);
+				return;
+			}
 		}
 
 		if (!add_fake_account()) {
@@ -306,14 +307,21 @@ grid_main_specific_fini(void)
 		dir = NULL;
 	}
 
-	if (account_service) {
-		GError *err = oio_cs_client__unlock_service(cs, NAME_SRVTYPE_ACCOUNT, account_service);
-		if (err) {
-			GRID_ERROR("Failed to unlock service: %d %s", err->code,
-					err->message);
-			g_clear_error(&err);
+	if (account_services) {
+		GError *err;
 
-			grid_main_set_status(EXIT_FAILURE);
+		// Unlock account services
+		for (GSList *account = account_services; account && account->data;
+					account = account->next) {
+			err = oio_cs_client__unlock_service(cs,
+					NAME_SRVTYPE_ACCOUNT, account->data);
+			if (err) {
+				GRID_ERROR("Failed to unlock account service: %d %s",
+						err->code, err->message);
+				g_clear_error(&err);
+
+				grid_main_set_status(EXIT_FAILURE);
+			}
 		}
 
 		err = oio_cs_client__flush_services(cs, NAME_SRVTYPE_ACCOUNT);
@@ -328,7 +336,7 @@ grid_main_specific_fini(void)
 		// Restart event-agent
 		kill_event_agent();
 
-		free_service(account_service);
+		g_slist_free_full(account_services, (GDestroyNotify) free_service);
 	}
 
 	if (cs) {
