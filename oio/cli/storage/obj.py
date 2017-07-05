@@ -1,8 +1,7 @@
 import logging
 import os
-
+from oio.common.http import requests
 from cliff import command, lister, show
-
 from oio.cli.utils import KeyValueAction, ValueFormatStoreTrueAction
 
 
@@ -615,6 +614,13 @@ class LocateObject(ObjectCommandMixin, lister.Lister):
     def get_parser(self, prog_name):
         parser = super(LocateObject, self).get_parser(prog_name)
         self.patch_parser(parser)
+        parser.add_argument(
+            '--chunk-info',
+            action='store_true',
+            default=False,
+            help='Display chunk size and hash as they are on persistent \
+            storage. It sends request per chunk so it is likely to be slow.'
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -642,6 +648,35 @@ class LocateObject(ObjectCommandMixin, lister.Lister):
                 return c1_pos - c2_pos
             return cmp(c1[0], c2[0])
 
-        chunks = ((c['pos'], c['url'], c['size'], c['hash']) for c in data[1])
-        columns = ('Pos', 'Id', 'Size', 'Hash')
+        def get_chunks_info(chunks):
+            session = requests.Session()
+            chunk_hash = ""
+            chunk_size = ""
+            for c in chunks:
+                resp = session.request('HEAD', c['url'])
+                if resp.status_code != 200:
+                    chunk_size = "%d %s" % (
+                        resp.status_code, resp.reason)
+                    chunk_hash = "%d %s" % (
+                        resp.status_code, resp.reason)
+                else:
+                    chunk_size = resp.headers.get(
+                        'X-oio-chunk-meta-chunk-size',
+                        'Missing chunk size header')
+                    chunk_hash = resp.headers.get(
+                        'X-oio-chunk-meta-chunk-hash',
+                        'Missing chunk hash header')
+                yield (c['pos'], c['url'], c['size'], c['hash'], chunk_size,
+                       chunk_hash)
+        columns = ()
+        chunks = []
+        if parsed_args.chunk_info:
+            columns = ('Pos', 'Id', 'Metachunk size', 'Metachunk hash',
+                       'Chunk size', 'Chunk hash')
+            chunks = get_chunks_info(data[1])
+        else:
+            columns = ('Pos', 'Id', 'Metachunk size', 'Metachunk hash')
+            chunks = ((c['pos'], c['url'], c['size'],
+                       c['hash']) for c in data[1])
+
         return columns, sorted(chunks, cmp=sort_chunk_pos)
