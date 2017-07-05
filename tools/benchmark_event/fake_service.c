@@ -13,8 +13,8 @@
 #define METHOD_MAXLEN 64
 
 // send_events.c
-extern gint n_events_per_round;
-extern gint n_errors;
+extern gint events_per_round;
+extern gint errors;
 extern gint64 reception_time;
 extern gdouble speed;
 
@@ -25,7 +25,7 @@ static struct network_server_s *server = NULL;
 
 GMutex mutex;
 
-static gint n_received_events = 0;
+static gint received_events = 0;
 
 // Reply
 
@@ -169,7 +169,8 @@ static enum http_rc_e
 handler_action (struct http_request_s *request, struct http_reply_ctx_s *reply)
 {
 	// Get a request id for the current request
-	const gchar *reqid = g_tree_lookup (request->tree_headers, PROXYD_HEADER_REQID);
+	const gchar *reqid = g_tree_lookup (request->tree_headers,
+										PROXYD_HEADER_REQID);
 	if (reqid)
 		oio_ext_set_reqid(reqid);
 	else
@@ -179,8 +180,9 @@ handler_action (struct http_request_s *request, struct http_reply_ctx_s *reply)
 	struct oio_requri_s ruri = {NULL, NULL, NULL, NULL};
 	oio_requri_parse (request->req_uri, &ruri);
 
-	struct path_matching_s **matchings = _fake_service_match (request->cmd, ruri.path);
-	
+	struct path_matching_s **matchings = _fake_service_match (request->cmd,
+															  ruri.path);
+
 	enum http_rc_e rc;
 	if (!*matchings) {
 		rc = _reply_not_found(reply, BADREQ("Route not managed"));
@@ -206,15 +208,16 @@ handler_action (struct http_request_s *request, struct http_reply_ctx_s *reply)
 static enum http_rc_e
 action_global (struct req_args_s *args)
 {
-	g_atomic_int_inc(&n_received_events);
-	
-	if ((n_received_events + n_errors) == n_events_per_round && g_mutex_trylock(&mutex)) {
+	g_atomic_int_inc(&received_events);
+
+	if ((received_events + errors) == events_per_round
+			&& g_mutex_trylock(&mutex)) {
 		reception_time = g_get_monotonic_time() - reception_time;
-		
-		if ((n_received_events + n_errors) == n_events_per_round) {
-			speed = n_received_events / (reception_time / 1000000.0) ;
-			n_received_events = 0;
-			
+
+		if ((received_events + errors) == events_per_round) {
+			speed = received_events / (reception_time / 1000000.0) ;
+			received_events = 0;
+
 			fake_service_ready = TRUE;
 		}
 		
@@ -267,23 +270,23 @@ fake_service_configure (void)
 	server = network_server_init();
 	path_parser = path_parser_init();
 	configure_request_handlers();
-	
-	network_server_bind_host (server, FAKE_SERVICE_ADDRESS, handler_action,
-			(network_transport_factory) transport_http_factory0);
-	
+
+	network_server_bind_host(server, FAKE_SERVICE_ADDRESS, handler_action,
+							 (network_transport_factory) transport_http_factory0);
+
 	g_mutex_init(&mutex);
 
-    return TRUE;
+	return TRUE;
 }
 
 gboolean
 fake_service_run (void)
 {
-    GError *err = NULL;
+	GError *err = NULL;
 
 	err = network_server_open_servers(server);
-    if (err) {
-        GRID_ERROR("Server opening error: %d %s", err->code, err->message);
+	if (err) {
+		GRID_ERROR("Server opening error: %d %s", err->code, err->message);
 		g_clear_error(&err);
 		
 		return FALSE;
@@ -292,8 +295,8 @@ fake_service_run (void)
 	fake_service_ready = TRUE;
 	
 	err = network_server_run(server, NULL);
-    if (err) {
-        GRID_ERROR("Server opening error: %d %s", err->code, err->message);
+	if (err) {
+		GRID_ERROR("Server opening error: %d %s", err->code, err->message);
 		g_clear_error(&err);
 		
 		return FALSE;
@@ -305,14 +308,15 @@ fake_service_run (void)
 void
 fake_service_stop (void)
 {
-    if (server)
-        network_server_stop (server);
+	if (server) {
+		network_server_stop (server);
+	}
 }
 
 void
 fake_service_fini (void)
 {
-    if (server) {
+	if (server) {
 		network_server_close_servers(server);
 		network_server_stop(server);
 		network_server_clean(server);

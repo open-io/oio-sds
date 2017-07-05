@@ -859,7 +859,7 @@ oio_proxy_call_reference_force (CURL *h, struct oio_url_s *u,
 
 	g_string_free(http_url, TRUE);
 	g_string_free(json, TRUE);
-	
+
 	return err;
 }
 

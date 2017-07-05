@@ -33,12 +33,12 @@
 
 extern gboolean fake_service_ready;
 
-gint n_events_per_round = 10;
+gint events_per_round = 10;
 gint rounds = 1;
 gint increment = 10;
 
 gint64 reception_time = 0;
-gint n_errors = 0;
+gint errors = 0;
 gdouble speed = 0.0;
 
 static gint total_errors = 0;
@@ -55,7 +55,7 @@ init_send_event()
 	g_free(event_agent_addr);
 	if (err) {
 		GRID_ERROR("Failed to initialize event context: (%d) %s", err->code,
-		          err->message);
+				   err->message);
 		g_clear_error(&err);
 
 		return FALSE;
@@ -95,7 +95,7 @@ send_event()
 		data_json = g_string_sized_new(512);
 
 		g_string_append_c(data_json, '{');
-	
+
 		oio_str_gstring_append_json_pair(data_json, "volume_id", RAWX_ADDRESS);
 
 		GString *container_id = _random_hex(256);
@@ -120,12 +120,6 @@ send_event()
 
 		_PAIR_AND_COMMA("chunk_position", "0");
 
-		// _PAIR_AND_COMMA("content_size", resource->info->chunk.content_size);
-		// _PAIR_AND_COMMA("content_nbchunks", resource->info->chunk.content_chunk_nb);
-		// _PAIR_AND_COMMA("content_mime_type", resource->info->chunk.content_mime_type);
-		// _PAIR_AND_COMMA("metachunk_size", resource->info->chunk.metachunk_size);
-		// _PAIR_AND_COMMA("metachunk_hash", resource->info->chunk.metachunk_hash);
-
 		if (event_type == CHUNK_DELETED) {
 			GString *chunk_hash = _random_hex(128);
 			_PAIR_AND_COMMA("chunk_hash", chunk_hash->str);
@@ -133,21 +127,21 @@ send_event()
 
 			_PAIR_AND_COMMA("chunk_size", "111");
 		}
-		
+
 		g_string_append_c(data_json, '}');
 	} else if (event_type == CONTAINER_NEW || event_type == CONTAINER_STATE
 			|| event_type == CONTAINER_DELETED) {
 		url = oio_url_empty();
-		
+
 		oio_url_set(url, OIOURL_ACCOUNT, "account");
-		
+
 		oio_url_set(url, OIOURL_NS, NAME_SPACE);
-		
+
 		oio_url_set(url, OIOURL_USER, "container");
-		
+
 		if (event_type == CONTAINER_NEW) {
 			oio_url_set(url, OIOURL_PATH, "test.txt");
-			
+
 			size_t id_size = oio_url_get_id_size(url);
 			guint8 id[id_size];
 			oio_buf_randomize(id, id_size);
@@ -156,15 +150,15 @@ send_event()
 			data_json = g_string_sized_new(512);
 
 			g_string_append_c(data_json, '{');
-			
+
 			oio_str_gstring_append_json_pair(data_json, "policy", NULL);
-			
+
 			_PAIR_AND_COMMA_INT("bytes-count", 111);
-			
+
 			_PAIR_AND_COMMA_INT("object-count", 1);
-			
+
 			_PAIR_AND_COMMA_INT("ctime", oio_ext_real_time());
-			
+
 			g_string_append_c(data_json, '}');
 		} else {
 			size_t id_size = oio_url_get_id_size(url);
@@ -174,73 +168,73 @@ send_event()
 		}
 	} else if (event_type == CONTENT_DELETED) {
 		url = oio_url_empty();
-		
+
 		oio_url_set(url, OIOURL_ACCOUNT, "account");
-		
+
 		oio_url_set(url, OIOURL_NS, NAME_SPACE);
-		
+
 		oio_url_set(url, OIOURL_USER, "container");
-		
+
 		oio_url_set(url, OIOURL_PATH, "test.txt");
-		
+
 		size_t id_size = oio_url_get_id_size(url);
 		guint8 id[id_size];
 		oio_buf_randomize(id, id_size);
 		oio_url_set_id(url, id);
-		
+
 		data_json = g_string_sized_new(512);
 
 		g_string_append_static(data_json, "[{");
-		
+
 		GString *hash = _random_hex(128);
 		oio_str_gstring_append_json_pair(data_json, "hash", hash->str);
-		
+
 		_PAIR_AND_COMMA_INT("size", 111);
-		
+
 		_PAIR_AND_COMMA("type", "chunks");
-		
+
 		_PAIR_AND_COMMA("id", "http://" FAKE_SERVICE_ADDRESS "/rawx");
-		
+
 		_PAIR_AND_COMMA("pos", "0");
-		
+
 		g_string_append_static(data_json, "},{");
-		
+
 		oio_str_gstring_append_json_pair(data_json, "hash", hash->str);
 		g_string_free(hash, TRUE);
-		
+
 		_PAIR_AND_COMMA("mime-type", OIO_DEFAULT_MIMETYPE);
-		
+
 		_PAIR_AND_COMMA("chunk-method", "plain/nb_copy=3");
-		
+
 		_PAIR_AND_COMMA("policy", "THREECOPIES");
-		
+
 		_PAIR_AND_COMMA("type", "contents_headers");
-		
+
 		GString *data_id = _random_hex(128);
 		_PAIR_AND_COMMA("id", data_id->str);
 		g_string_free(data_id, TRUE);
-		
+
 		_PAIR_AND_COMMA_INT("size", 111);
-		
+
 		g_string_append_static(data_json, "},{");
-		
+
 		oio_str_gstring_append_json_pair(data_json, "name", "test.txt");
-		
+
 		_PAIR_AND_COMMA_BOOLEAN("deleted", FALSE);
-		
+
 		GString *header = _random_hex(128);
 		_PAIR_AND_COMMA("header", header->str);
 		g_string_free(header, TRUE);
-		
+
 		_PAIR_AND_COMMA_INT("version", g_ascii_strtoll(CONTENT_VERSION, NULL, 10));
-		
+
 		gint64 ctime = oio_ext_real_time();
 		_PAIR_AND_COMMA_INT("mtime", ctime);
-		
+
 		_PAIR_AND_COMMA("type", "aliases");
-		
+
 		_PAIR_AND_COMMA_INT("ctime", ctime);
-		
+
 		g_string_append_static(data_json, "}]");
 	}
 
@@ -249,38 +243,38 @@ send_event()
 		GRID_ERROR("Event KO %s: (%d) %s\n", type, err->code, err->message);
 		g_clear_error(&err);
 
-		n_errors++;
+		errors++;
 	}
-	
+
 	oio_url_clean(url);
 }
 
 static void
 send_events()
 {
-	n_errors = 0;
+	errors = 0;
 	fake_service_ready = FALSE;
-	
+
 	// Wait the stabilization of the fake_service
 	g_usleep(G_TIME_SPAN_SECOND);
-	
+
 	reception_time = g_get_monotonic_time();
-	
-	for (gint i = 0; i < n_events_per_round; i++) {
+
+	for (gint i = 0; i < events_per_round; i++) {
 		if (!grid_main_is_running()) {
 			return;
 		}
-		
+
 		send_event();
 	}
-	
+
 	// Wait the reception of events
 	while (!fake_service_ready) {
 		if (!grid_main_is_running()) {
 			return;
 		}
-		
-        g_usleep(G_TIME_SPAN_SECOND);
+
+		g_usleep(G_TIME_SPAN_SECOND);
 	}
 }
 
@@ -289,7 +283,7 @@ send_events()
 void
 send_events_defaults(void)
 {
-	n_events_per_round = 10;
+	events_per_round = 10;
 	rounds = 1;
 	increment = 10;
 }
@@ -329,39 +323,39 @@ send_events_run(void)
 		grid_main_set_status(2);
 		return;
 	}
-	
+
 	// Wait the start of the fake_service
 	while (!fake_service_ready) {
 		if (!grid_main_is_running()) {
 			return;
 		}
-		
-        g_usleep(G_TIME_SPAN_SECOND);
+
+		g_usleep(G_TIME_SPAN_SECOND);
 	}
-	
+
 	while (TRUE) {
 		total_errors = 0;
 		total_speed = 0.0;
-		
+
 		for (gint i = 0; i < rounds; i++) {
 			if (!grid_main_is_running()) {
 				return;
 			}
-			
+
 			send_events();
-			
-			total_errors += n_errors;
+
+			total_errors += errors;
 			total_speed += speed;
 		}
-		
+
 		if (!grid_main_is_running()) {
 			return;
 		}
-		
-		printf("Events: %d, Errors: %d, Events/sec: %f\n", n_events_per_round,
+
+		printf("Events: %d, Errors: %d, Events/sec: %f\n", events_per_round,
 			   total_errors, total_speed / rounds);
-		
-		n_events_per_round += increment;
+
+		events_per_round += increment;
 	}
 }
 
