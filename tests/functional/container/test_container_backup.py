@@ -264,6 +264,7 @@ class TestContainerDownload(BaseTestCase):
         for idx in xrange(0, int(org.headers['content-length']), 512):
             ret = requests.get(self._uri, headers={'Range': 'bytes=%d-%d' %
                                                             (idx, idx+511)})
+            self.assertIn(ret.status_code, [200, 206])
             data.append(ret.content)
 
         data = "".join(data)
@@ -349,6 +350,7 @@ class TestContainerDownload(BaseTestCase):
         for idx in xrange(0, int(org.headers['content-length']), 512):
             ret = requests.get(self._uri, headers={'Range': 'bytes=%d-%d' %
                                                             (idx, idx+511)})
+            self.assertIn(ret.status_code, [200, 206])
             data.append(ret.content)
 
         data = "".join(data)

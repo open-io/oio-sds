@@ -199,6 +199,7 @@ MaxSpareServers 40
 <IfModule worker.c>
 StartServers 2
 MaxClients 40
+MaxRequestWorkers 100
 MinSpareThreads 2
 MaxSpareThreads 40
 ThreadsPerChild 20
