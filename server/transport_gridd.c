@@ -667,13 +667,9 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 		}
 	}
 
-	if (body) {
-		metautils_gba_unref(body);
-		body = NULL;
-	}
-	if (headers) {
+	EXTRA_ASSERT(body == NULL);
+	if (headers)
 		g_hash_table_destroy(headers);
-	}
 	return rc;
 }
 
