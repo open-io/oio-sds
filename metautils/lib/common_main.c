@@ -1,7 +1,7 @@
 /*
 OpenIO SDS metautils
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -130,10 +130,9 @@ _set_fixed_opt(gchar **tokens)
 	if (!tokens || tokens[0] == NULL)
 		ERR("Invalid option format, expected 'Key=Value'");
 
-	for (struct grid_main_option_s *opt=user_callbacks->options();
-		 opt && opt->name;
-		 opt++) {
-		if (0 == g_ascii_strcasecmp(opt->name, tokens[0]))
+	struct grid_main_option_s *opts = user_callbacks->options();
+	for (struct grid_main_option_s *opt = opts; opts && opt->name; opt++) {
+		if (!g_ascii_strcasecmp(opt->name, tokens[0]))
 			return _set_config_option(opt, tokens);
 	}
 
@@ -160,12 +159,12 @@ static void
 _dump_extra_options(void)
 {
 	gchar name[256];
-	struct grid_main_option_s *o;
 
 	if (flag_quiet)
 		return;
 
-	for (o=user_callbacks->options(); o && o->name ;o++) {
+	struct grid_main_option_s *opts = user_callbacks->options();
+	for (struct grid_main_option_s *o = opts; opts && o->name; o++) {
 		switch (o->type) {
 			case OT_BOOL:
 				g_snprintf(name, sizeof(name), "%s=%s", o->name, (*(o->data.b)?"on":"off"));

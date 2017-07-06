@@ -1,7 +1,7 @@
 /*
 OpenIO SDS metautils
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015,2017 OpenIO, as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -84,8 +84,9 @@ metautils_array_to_list(void **orig)
 {
 	GSList *result = NULL;
 
-	while (orig && *orig)
-		result = g_slist_prepend(result, *(orig++));
+	if (orig)
+		while (*orig)
+			result = g_slist_prepend(result, *(orig++));
 
 	return g_slist_reverse(result);
 }
