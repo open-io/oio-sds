@@ -19,7 +19,6 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__tools__benchmark_event__conf_benchmark_h
 #define OIO_SDS__tools__benchmark_event__conf_benchmark_h
 
-#define NAMESPACE "OPENIO"
 #define RAWX_ADDRESS "127.0.0.1:4444"
 #define FAKE_SERVICE_ADDRESS "127.0.0.1:4445"
 
