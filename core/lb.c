@@ -129,6 +129,9 @@ struct oio_lb_slot_s
 	 * We do not use level 0 at the moment. */
 	GData *items_by_loc[OIO_LB_LOC_LEVELS];
 
+	/* Total number of different locations for each level. */
+	guint locs_by_level[OIO_LB_LOC_LEVELS];
+
 	gchar *name;
 
 	generation_t generation;
@@ -198,10 +201,24 @@ struct polling_ctx_s
 	const oio_location_t * avoids;
 	const oio_location_t * polled;
 	oio_location_t *next_polled;
-	gint n_targets;
+	guint n_targets;
 
+	/* Count how often each location has been chosen. */
 	GData *counters[OIO_LB_LOC_LEVELS];
-	gboolean fallback_used;
+
+	/* Did we use a fallback slot while polling? */
+	gboolean fallback_used : 8;
+
+	/* Shall we check the distance requirements? This will be disabled
+	 * automagically if we detect a case where it is not possible to
+	 * strictly meet the requirements. */
+	gboolean check_distance : 8;
+
+	/* Shall we check the "popularity" of locations when picking
+	 * a new item? This is useful to ensure a good balancing on
+	 * platforms where there is less locations than targets
+	 * (for the specified distance). */
+	gboolean check_popularity : 8;
 };
 
 static void _local__destroy (struct oio_lb_pool_s *self);
@@ -252,7 +269,9 @@ oio_lb_world__get_slot_unlocked(struct oio_lb_world_s *world, const char *name)
 static guint _search_first_at_location(GArray *tab, const oio_location_t needle,
 		const guint start, const guint end);
 
-guint32 djb_hash_str0(const gchar *str) {
+guint32
+djb_hash_str0(const gchar *str)
+{
 	guint32 hash = 5381;
 	guint32 c = 0;
 	while ((c = *str++))
@@ -260,18 +279,35 @@ guint32 djb_hash_str0(const gchar *str) {
 	return hash;
 }
 
-struct hash_len_s djb_hash_str(const gchar * b) {
+struct hash_len_s
+djb_hash_str(const gchar * b)
+{
 	struct hash_len_s hl = {.h = 5381,.l = 0 };
 	for (; b[hl.l]; ++hl.l)
 		hl.h = ((hl.h << 5) + hl.h) ^ (guint32) (b[hl.l]);
 	return hl;
 }
 
-guint32 djb_hash_buf(const guint8 * b, register gsize bs) {
+guint32
+djb_hash_buf(const guint8 * b, register gsize bs)
+{
 	register guint32 h = 5381;
 	for (register gsize i = 0; i < bs; ++i)
 		h = ((h << 5) + h) ^ (guint32) (b[i]);
 	return h;
+}
+
+/** Gets the number of elements in a GData. */
+static guint
+oio_ext_gdatalist_length(GData **datalist)
+{
+	guint counter = 0;
+	void _datalist_count(GQuark key_id UNUSED,
+			gpointer data UNUSED, gpointer udata UNUSED) {
+		counter++;
+	}
+	g_datalist_foreach(datalist, _datalist_count, NULL);
+	return counter;
 }
 
 /* Take djb2 hash of each part of the '.'-separated string,
@@ -284,7 +320,8 @@ location_from_dotted_string(const char *dotted)
 	int ntoks = 0;
 	// according to g_strsplit documentation, toks cannot be NULL
 	for (gchar **tok = toks; *tok; tok++, ntoks++) {
-		location = (location << OIO_LB_BITS_PER_LOC_LEVEL) | (djb_hash_str0(*tok) & 0xFFFF);
+		location = (location << OIO_LB_BITS_PER_LOC_LEVEL) |
+				(djb_hash_str0(*tok) & 0xFFFF);
 	}
 	g_strfreev(toks);
 	return location;
@@ -443,6 +480,10 @@ _slot_rehash (struct oio_lb_slot_s *slot)
 			struct _slot_item_s *si = &SLOT_ITEM(slot, i);
 			_level_datalist_incr_loc(slot->items_by_loc, si->item->location);
 		}
+		for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
+			slot->locs_by_level[level] =
+					oio_ext_gdatalist_length(&(slot->items_by_loc[level]));
+		}
 
 # ifdef HAVE_EXTRA_DEBUG
 		if (unlikely(GRID_TRACE_ENABLED())) {
@@ -513,9 +554,11 @@ _accept_item(struct oio_lb_slot_s *slot, const guint16 bit_shift,
 			return FALSE;
 	} else {
 		// Check the item is not too close to already polled items
-		if (_item_is_too_close(ctx->polled, loc, bit_shift))
+		if (_item_is_too_close(ctx->polled, loc,
+				ctx->check_distance? bit_shift : 0))
 			return FALSE;
-		if (_item_is_too_popular(ctx, loc, slot))
+		// Check the item has not been chosen too much already
+		if (ctx->check_popularity && _item_is_too_popular(ctx, loc, slot))
 			return FALSE;
 	}
 	GRID_TRACE("Accepting item %s (0x%"OIO_LOC_FORMAT") from slot %s",
@@ -553,6 +596,23 @@ _local_slot__poll(struct oio_lb_slot_s *slot, const guint16 bit_shift,
 	if (slot->sum_weight == 0) {
 		GRID_TRACE2("%s no service available", __FUNCTION__);
 		return FALSE;
+	}
+
+	/* If we need to pick more items than the number of different locations,
+	 * we can disable the distance checks, and rely only on the "popularity"
+	 * mechanism.
+	 * XXX: here we compare the overall number of targets to the number
+	 * of different locations IN THE CURRENT SLOT. We bet that in most
+	 * pools there will be only one targetted slot. */
+	if (!reversed && ctx->check_distance &&
+			bit_shift >= OIO_LB_BITS_PER_LOC_LEVEL) {
+		guint16 level = bit_shift / OIO_LB_BITS_PER_LOC_LEVEL;
+		if (ctx->n_targets > slot->locs_by_level[level]) {
+			GRID_TRACE("%u targets and %u locations at level %u: "
+					"disabling distance check",
+					ctx->n_targets, slot->locs_by_level[level], level);
+			ctx->check_distance = FALSE;
+		}
 	}
 
 	/* get the closest */
@@ -675,14 +735,14 @@ _local__patch(struct oio_lb_pool_s *self,
 
 	/* Count the expected targets to build a temp storage for
 	 * polled locations */
-	int count_targets = 0;
+	guint count_targets = 0;
 	for (gchar **ptarget = lb->targets; *ptarget; ++ptarget)
 		count_targets++;
 
 	/* Copy the array of known locations because we don't know
 	 * if its allocated length is big enough */
 	oio_location_t polled[count_targets+1];
-	int i = 0;
+	guint i = 0;
 	for (; known && known[i]; i++)
 		polled[i] = known[i];
 	for (; i < count_targets; i++)
@@ -694,6 +754,8 @@ _local__patch(struct oio_lb_pool_s *self,
 		.polled = (const oio_location_t *) polled,
 		.next_polled = polled,
 		.n_targets = count_targets,
+		.check_distance = TRUE,
+		.check_popularity = TRUE,
 	};
 
 	for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
@@ -1191,9 +1253,9 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 # ifdef __GNUC__
 	// Actual number of bits used by the location.
 	const int n_bits = sizeof(oio_location_t) * 8 -
-		(item->location ? __builtin_clzll(item->location) : 0);
+			__builtin_clzll(item->location? : 1u);
 	// Maximum distance between items with this number of bits.
-	guint16 max_dist = 1 + n_bits / OIO_LB_BITS_PER_LOC_LEVEL;
+	guint16 max_dist = 1 + (n_bits - 1) / OIO_LB_BITS_PER_LOC_LEVEL;
 	if (self->abs_max_dist < max_dist) {
 		self->abs_max_dist = max_dist;
 		GRID_DEBUG("Absolute max_dist set to %u", max_dist);

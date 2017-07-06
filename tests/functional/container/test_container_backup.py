@@ -6,6 +6,7 @@ from io import BytesIO
 import itertools
 import json
 import string
+from tempfile import TemporaryFile
 import unittest
 
 import requests
@@ -190,7 +191,8 @@ class TestContainerDownload(BaseTestCase):
         self.assertEqual(ret.status_code, 200)
         self.raw = ret.content
 
-        open("_.tar", "w").write(self.raw)
+        with TemporaryFile() as tmpfile:
+            tmpfile.write(self.raw)
 
         raw = BytesIO(ret.content)
         tar = tarfile.open(fileobj=raw, ignore_zeros=True)
