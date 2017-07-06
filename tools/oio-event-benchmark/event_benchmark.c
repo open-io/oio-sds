@@ -38,32 +38,36 @@ static struct oio_url_s *rdir_rawx_url = NULL;
 static struct oio_cs_client_s *cs = NULL;
 static GSList *account_services = NULL;
 GThread *fake_service_thread = NULL;
+gchar namespace[LIMIT_LENGTH_NSNAME];
 
 static gboolean
 link_rawx_fake_service(void)
 {
-	dir = oio_directory__create_proxy(NAMESPACE);
+	dir = oio_directory__create_proxy(namespace);
 	if (!dir) {
 		return FALSE;
 	}
 	g_assert_nonnull(dir);
 
 	rdir_rawx_url = oio_url_empty();
-	oio_url_set(rdir_rawx_url, OIOURL_NS, NAMESPACE);
+	oio_url_set(rdir_rawx_url, OIOURL_NS, namespace);
 	oio_url_set(rdir_rawx_url, OIOURL_ACCOUNT, NAME_ACCOUNT_RDIR);
 	oio_url_set(rdir_rawx_url, OIOURL_USER, RAWX_ADDRESS);
 	oio_url_set(rdir_rawx_url, OIOURL_TYPE, NAME_SRVTYPE_RDIR);
 
+	char *id = g_strdup_printf("%s|" NAME_SRVTYPE_RDIR "|" FAKE_SERVICE_ADDRESS,
+			namespace);
 	const char * const values[] = {
 		"host", FAKE_SERVICE_ADDRESS,
 		"args", "",
 		"type", NAME_SRVTYPE_RDIR,
-		"id", NAMESPACE "|" NAME_SRVTYPE_RDIR "|" FAKE_SERVICE_ADDRESS,
+		"id", id,
 		NULL
 	};
 
 	GError *err = oio_directory__force(dir, rdir_rawx_url, NAME_SRVTYPE_RDIR,
 			values, 1);
+	free(id);
 	if (err) {
 		GRID_ERROR("Failed to call 'reference/force': (%d) %s", err->code,
 				err->message);
@@ -200,7 +204,7 @@ grid_main_get_options(void)
 static const char *
 grid_main_get_usage(void)
 {
-	return "CHUNK_NEW|CHUNK_DELETED"
+	return "NS CHUNK_NEW|CHUNK_DELETED"
 			"|CONTAINER_NEW|CONTAINER_STATE|CONTAINER_DELETED"
 			"|CONTENT_DELETED";
 }
@@ -214,12 +218,20 @@ grid_main_set_defaults(void)
 static gboolean
 grid_main_configure(int argc, char **argv)
 {
-	if (argc < 1) {
+	if (argc < 2) {
 		g_printerr("Invalid arguments number\n");
 		return FALSE;
 	}
 
-	return fake_service_configure() && send_events_configure(argv[0]);
+	gsize s = g_strlcpy(namespace, argv[0], LIMIT_LENGTH_NSNAME);
+	if (s >= LIMIT_LENGTH_NSNAME) {
+		GRID_ERROR("Namespace name too long (given=%"G_GSIZE_FORMAT" max=%u)",
+				s, LIMIT_LENGTH_NSNAME);
+		return FALSE;
+	}
+	GRID_DEBUG("NS configured to [%s]", namespace);
+
+	return fake_service_configure() && send_events_configure(argv[1]);
 }
 
 static void
@@ -236,7 +248,7 @@ grid_main_action(void)
 	// Lock the account service and add fake account
 	if (event_type == CONTAINER_NEW || event_type == CONTAINER_STATE
 			|| event_type == CONTAINER_DELETED) {
-		cs = oio_cs_client__create_proxied(NAMESPACE);
+		cs = oio_cs_client__create_proxied(namespace);
 
 		account_services = get_account_services();
 		if (!account_services) {

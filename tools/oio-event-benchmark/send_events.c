@@ -50,6 +50,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 }
 
 extern gboolean fake_service_ready;
+extern gchar namespace[LIMIT_LENGTH_NSNAME];
 
 gint events_per_round = 10;
 gint rounds = 1;
@@ -68,7 +69,7 @@ static const char *type = STORAGE_CHUNK_NEW;
 static gboolean
 init_send_event()
 {
-	gchar *event_agent_addr = oio_cfg_get_eventagent(NAMESPACE);
+	gchar *event_agent_addr = oio_cfg_get_eventagent(namespace);
 	GError *err = manage_events_queue_init(event_agent_addr);
 	g_free(event_agent_addr);
 	if (err) {
@@ -153,7 +154,7 @@ send_event()
 
 		oio_url_set(url, OIOURL_ACCOUNT, "account");
 
-		oio_url_set(url, OIOURL_NS, NAMESPACE);
+		oio_url_set(url, OIOURL_NS, namespace);
 
 		oio_url_set(url, OIOURL_USER, "container");
 
@@ -189,7 +190,7 @@ send_event()
 
 		oio_url_set(url, OIOURL_ACCOUNT, "account");
 
-		oio_url_set(url, OIOURL_NS, NAMESPACE);
+		oio_url_set(url, OIOURL_NS, namespace);
 
 		oio_url_set(url, OIOURL_USER, "container");
 
