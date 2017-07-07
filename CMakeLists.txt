@@ -448,7 +448,7 @@ add_subdirectory(./rdir)
 add_subdirectory(./tools)
 add_subdirectory(./tests/unit)
 add_subdirectory(./tests/func)
-add_subdirectory(./tools/oio-event-benchmark)
+add_subdirectory(./tools/event-benchmark)
 endif (NOT SDK_ONLY)
 
 add_custom_target(python-openio-docs

@@ -21,17 +21,15 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include <metautils/lib/metautils.h>
 
-#include "conf_benchmark.h"
+#include "event_benchmark.h"
 #include "fake_service.h"
-#include "send_events.h"
+#include "event_sender.h"
 
 static void grid_main_specific_stop(void);
 
 // send_events.c
-extern gint events_per_round;
-extern gint rounds;
-extern gint increment;
 extern enum event_type_e event_type;
+extern gint64 max_waiting;
 
 static struct oio_directory_s *dir = NULL;
 static struct oio_url_s *rdir_rawx_url = NULL;
@@ -184,16 +182,8 @@ grid_main_get_options(void)
 {
 	static struct grid_main_option_s cli_options[] = {
 		{
-			"Rounds", OT_UINT, {.i = &rounds},
-			"Number of rounds for a test"
-		},
-		{
-			"EventsPerRound", OT_UINT, {.i = &events_per_round},
-			"Number of events per round for the beginning"
-		},
-		{
-			"Increment", OT_UINT, {.i = &increment},
-			"Increment of the number of events between tests"
+			"MaxWaiting", OT_INT64, {.i64 = &max_waiting},
+			"Maximum waiting to receive a event (microseconds)"
 		},
 		{NULL, 0, {.i=0}, NULL}
 	};
@@ -212,7 +202,7 @@ grid_main_get_usage(void)
 static void
 grid_main_set_defaults(void)
 {
-	send_events_defaults();
+	max_waiting = 10000000;
 }
 
 static gboolean
@@ -231,12 +221,14 @@ grid_main_configure(int argc, char **argv)
 	}
 	GRID_DEBUG("NS configured to [%s]", namespace);
 
-	return fake_service_configure() && send_events_configure(argv[1]);
+	return fake_service_configure() && event_sender_configure(argv[1]);
 }
 
 static void
 grid_main_action(void)
 {
+	printf("Configuration...\n");
+
 	// Link the rawx address with the fake service address
 	if (event_type == CHUNK_NEW || event_type == CHUNK_DELETED) {
 		if (!link_rawx_fake_service()) {
@@ -289,7 +281,7 @@ grid_main_action(void)
 		}
 	}
 
-	// Launch the fake service
+	printf("Starting the fake service...\n");
 	GError *err;
 	fake_service_thread = g_thread_try_new("fake_service", _fake_service_run,
 			NULL, &err);
@@ -300,26 +292,30 @@ grid_main_action(void)
 		return;
 	}
 
-	g_usleep(G_TIME_SPAN_SECOND);
-
 	// Send the events
-	send_events_run();
-
-	fake_service_stop();
-
-	g_thread_join(fake_service_thread);
+	if (!event_sender_run()) {
+		grid_main_set_status(EXIT_FAILURE);
+		return;
+	}
 }
 
 static void
 grid_main_specific_stop(void)
 {
-	fake_service_stop();
 }
 
 static void
 grid_main_specific_fini(void)
 {
-	send_events_fini();
+	printf("Stoping the fake service...\n");
+
+	g_usleep(G_TIME_SPAN_SECOND);
+	fake_service_stop();
+	g_thread_join(fake_service_thread);
+
+	printf("Cleaning...\n");
+
+	event_sender_fini();
 	fake_service_fini();
 
 	if (rdir_rawx_url) {

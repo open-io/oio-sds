@@ -18,9 +18,10 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include <glib.h>
 
+#include <metautils/lib/metautils.h>
 #include <events/oio_events_queue.h>
 #include <core/internals.h>
-#include "manage_events_queue.h"
+#include "event_worker.h"
 
 struct oio_events_queue_s *q = NULL;
 static GThread *th_queue = NULL;
@@ -43,7 +44,7 @@ _worker(gpointer p)
 }
 
 GError *
-manage_events_queue_init(const char *addr)
+event_worker_init(const char *addr)
 {
 	if (!addr) {
 		q = NULL;
@@ -74,7 +75,7 @@ manage_events_queue_init(const char *addr)
 }
 
 void
-manage_events_queue_destroy(void)
+event_worker_destroy(void)
 {
 	running = FALSE;
 	if (th_queue) {
@@ -90,7 +91,7 @@ manage_events_queue_destroy(void)
 }
 
 GError *
-manage_events_queue_send(const char *event_type, struct oio_url_s *url,
+event_worker_send(const char *event_type, struct oio_url_s *url,
 		GString *data_json)
 {
 	if (q != NULL && th_queue != NULL) {
@@ -104,6 +105,10 @@ manage_events_queue_send(const char *event_type, struct oio_url_s *url,
 		}
 
 		oio_events_queue__send(q, g_string_free(json, FALSE));
+	}
+
+	if (url) {
+		oio_url_clean(url);
 	}
 
 	if (data_json) {

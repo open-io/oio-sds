@@ -16,17 +16,19 @@ You should have received a copy of the GNU Affero General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef OIO_SDS__tools__benchmark_event__send_events_h
-#define OIO_SDS__tools__benchmark_event__send_events_h
+#ifndef OIO_SDS__tools__benchmark_event__fake_service_h
+#define OIO_SDS__tools__benchmark_event__fake_service_h
 
 #include <glib.h>
 
-void send_events_defaults(void);
+gboolean fake_service_configure(void);
 
-gboolean send_events_configure(char *event_type_str);
+gboolean fake_service_run(void);
 
-void send_events_run(void);
+void fake_service_stop(void);
 
-void send_events_fini(void);
+void fake_service_too_long(void);
 
-#endif /* OIO_SDS__tools__benchmark_event__send_events_h */
+void fake_service_fini(void);
+
+#endif /* OIO_SDS__tools__benchmark_event__fake_service_h */

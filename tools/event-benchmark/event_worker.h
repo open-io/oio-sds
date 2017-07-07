@@ -16,8 +16,8 @@ You should have received a copy of the GNU Affero General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef OIO_SDS__tools__benchmark_event__manage_events_queue_h
-# define OIO_SDS__tools__benchmark_event__manage_events_queue_h
+#ifndef OIO_SDS__tools__benchmark_event__event_worker_h
+# define OIO_SDS__tools__benchmark_event__event_worker_h
 
 /**
  * Initialize event mechanism
@@ -26,23 +26,24 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * @return 0 if KO, !=0 if OK
  */
-GError* manage_events_queue_init(const char *addr);
+GError* event_worker_init(const char *addr);
 
 
 /**
  * Destroy event mechanism
  */
-void manage_events_queue_destroy(void);
+void event_worker_destroy(void);
 
 /**
  * Send event to event agent. This function adds "when" token automatically.
  *
  * @event_type name of the event
+ * @url url event in json (this function will free it)
  * @data_json data event in json (this function will free it)
  *
  * @return NULL if OK, or a GError describing the problem
  */
-GError* manage_events_queue_send(const char *event_type, struct oio_url_s *url,
+GError* event_worker_send(const char *event_type, struct oio_url_s *url,
 		GString *data_json);
 
-#endif /*OIO_SDS__tools__benchmark_event__manage_events_queue_h*/
+#endif /* OIO_SDS__tools__benchmark_event__event_worker_h */

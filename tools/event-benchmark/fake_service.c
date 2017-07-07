@@ -24,14 +24,14 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <core/url_ext.h>
 #include <metautils/lib/metautils.h>
 
-#include "conf_benchmark.h"
+#include "event_benchmark.h"
 #include "fake_service.h"
 
 #define PATH_MAXLEN 64
 #define METHOD_MAXLEN 64
 
 // send_events.c
-extern gint events_per_round;
+extern gint sent_events;
 extern gint errors;
 extern gint64 reception_time;
 extern gdouble speed;
@@ -168,7 +168,7 @@ _fake_service_match(const gchar *method, const gchar *path)
 	}
 	struct path_matching_s **result = path_parser_match(path_parser, tokens);
 	g_strfreev(tokens);
-	
+
 	return result;
 }
 
@@ -209,7 +209,7 @@ handler_action(struct http_request_s *request, struct http_reply_ctx_s *reply)
 		args.ruri = &ruri;
 		args.rq = request;
 		args.rp = reply;
-		
+
 		req_handler_f handler = (*matchings)->last->u;
 		rc = (*handler) (&args);
 	}
@@ -217,7 +217,7 @@ handler_action(struct http_request_s *request, struct http_reply_ctx_s *reply)
 	path_matching_cleanv(matchings);
 	oio_requri_clear(&ruri);
 	oio_ext_set_reqid(NULL);
-	
+
 	return rc;
 }
 
@@ -228,20 +228,24 @@ action_global(struct req_args_s *args)
 {
 	g_atomic_int_inc(&received_events);
 
-	if ((received_events + errors) == events_per_round
+	if ((received_events + errors) == sent_events
 			&& g_mutex_trylock(&mutex)) {
 		reception_time = g_get_monotonic_time() - reception_time;
 
-		if ((received_events + errors) == events_per_round) {
-			speed = received_events / (reception_time / 1000000.0) ;
-			received_events = 0;
+		if ((received_events + errors) == sent_events) {
+			gdouble reception_time_sec = reception_time / 1000000.0;
+			speed = received_events / reception_time_sec;
 
+			printf("%d events sent (errors: %d) in %f seconds, %f events/sec\n",
+					sent_events, errors, reception_time_sec, speed);
+
+			received_events = 0;
 			fake_service_ready = TRUE;
 		}
-		
+
 		g_mutex_unlock(&mutex);
 	}
-	
+
 	return _reply_ok(args->rp, NULL);
 }
 
@@ -306,21 +310,34 @@ fake_service_run(void)
 	if (err) {
 		GRID_ERROR("Server opening error: %d %s", err->code, err->message);
 		g_clear_error(&err);
-		
+
 		return FALSE;
 	}
 
 	fake_service_ready = TRUE;
-	
+
 	err = network_server_run(server, NULL);
 	if (err) {
 		GRID_ERROR("Server opening error: %d %s", err->code, err->message);
 		g_clear_error(&err);
-		
+
 		return FALSE;
 	}
-	
+
 	return TRUE;
+}
+
+void
+fake_service_too_long(void)
+{
+	if (g_mutex_trylock(&mutex)) {
+		printf("Too long... %d events didn't receive\n", sent_events - received_events);
+
+		received_events = 0;
+		fake_service_ready = TRUE;
+
+		g_mutex_unlock(&mutex);
+	}
 }
 
 void
@@ -340,6 +357,6 @@ fake_service_fini(void)
 		network_server_clean(server);
 		server = NULL;
 	}
-	
+
 	g_mutex_clear(&mutex);
 }
