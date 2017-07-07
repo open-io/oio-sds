@@ -1452,7 +1452,7 @@ _sds_upload_add_headers(struct oio_sds_ul_s *ul, struct http_put_dest_s *dest)
 
 	const gchar *full_path = oio_url_get(ul->dst->url, OIOURL_FULLPATH);
 	if (!oio_url_has(ul->dst->url, OIOURL_VERSION))
-		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "full-path", "%s%"
+		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "full-path", "%s/%"
 				G_GINT64_FORMAT, full_path, ul->version);
 	else
 		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "full-path", "%s",
