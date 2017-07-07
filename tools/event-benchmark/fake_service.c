@@ -331,7 +331,7 @@ void
 fake_service_too_long(void)
 {
 	if (g_mutex_trylock(&mutex)) {
-		printf("Too long... %d events didn't receive\n", sent_events - received_events);
+		printf("Too long... %d events weren't received\n", sent_events - received_events);
 
 		received_events = 0;
 		fake_service_ready = TRUE;

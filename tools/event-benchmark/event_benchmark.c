@@ -227,19 +227,17 @@ grid_main_configure(int argc, char **argv)
 static void
 grid_main_action(void)
 {
-	printf("Configuration...\n");
-
-	// Link the rawx address with the fake service address
 	if (event_type == CHUNK_NEW || event_type == CHUNK_DELETED) {
+		printf("Linking fake rawx address with the fake service address...\n");
 		if (!link_rawx_fake_service()) {
 			grid_main_set_status(EXIT_FAILURE);
 			return;
 		}
 	}
 
-	// Lock the account service and add fake account
 	if (event_type == CONTAINER_NEW || event_type == CONTAINER_STATE
 			|| event_type == CONTAINER_DELETED) {
+		printf("Locking the account services...\n");
 		cs = oio_cs_client__create_proxied(namespace);
 
 		account_services = get_account_services();
@@ -262,12 +260,13 @@ grid_main_action(void)
 			}
 		}
 
+		printf("Adding a fake account...\n");
 		if (!add_fake_account()) {
 			grid_main_set_status(EXIT_FAILURE);
 			return;
 		}
 
-		// Restart event-agent
+		printf("Restarting oio-event-agent (10 seconds)...\n");
 		if (!kill_event_agent()) {
 			grid_main_set_status(EXIT_FAILURE);
 			return;
@@ -307,7 +306,7 @@ grid_main_specific_stop(void)
 static void
 grid_main_specific_fini(void)
 {
-	printf("Stoping the fake service...\n");
+	printf("Stopping the fake service...\n");
 
 	g_usleep(G_TIME_SPAN_SECOND);
 	fake_service_stop();
