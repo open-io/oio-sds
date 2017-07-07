@@ -16,17 +16,19 @@ You should have received a copy of the GNU Affero General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef OIO_SDS__tools__benchmark_event__fake_service_h
-#define OIO_SDS__tools__benchmark_event__fake_service_h
+#ifndef OIO_SDS__tools__benchmark_event__event_benchmark_h
+#define OIO_SDS__tools__benchmark_event__event_benchmark_h
 
-#include <glib.h>
+#define RAWX_ADDRESS "127.0.0.1:4444"
+#define FAKE_SERVICE_ADDRESS "127.0.0.1:4445"
 
-gboolean fake_service_configure(void);
+enum event_type_e {
+	CHUNK_NEW,
+	CHUNK_DELETED,
+	CONTAINER_NEW,
+	CONTAINER_STATE,
+	CONTAINER_DELETED,
+	CONTENT_DELETED,
+};
 
-gboolean fake_service_run(void);
-
-void fake_service_stop(void);
-
-void fake_service_fini(void);
-
-#endif /* OIO_SDS__tools__benchmark_event__fake_service_h */
+#endif /* OIO_SDS__tools__benchmark_event__event_benchmark_h */
