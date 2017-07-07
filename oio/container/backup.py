@@ -146,16 +146,16 @@ class ContainerTarFile(object):
     """ Expose a File Object API to be used with wrap_file """
 
     def __init__(self, storage_api, account, container,
-                 blocks, oio_map, logger):
+                 ranges, oio_map, logger):
         self.acct = account
         self.container = container
-        self.blocks = blocks
+        self.ranges = ranges
         self.oio_map = oio_map
         self.manifest = oio_map[:]
         self.storage = storage_api
         self.logger = logger
-        if not blocks:
-            self.logger.warn('no blocks provided for %s %s', account,
+        if len(ranges) != 2:
+            self.logger.warn('no valid ranges provided for %s %s', account,
                              container)
 
     def __iter__(self):
@@ -168,35 +168,35 @@ class ContainerTarFile(object):
         return data
 
     # FIXME: create_tar_oio_XXX functions should be merged
-    def create_tar_oio_stream(self, entry, blocks):
+    def create_tar_oio_stream(self, entry, ranges):
         """Extract data from entry from object"""
         mem = ""
         name = entry['name']
 
-        if set(blocks).intersection(range(entry['hdr_blocks'])):
+        if ranges[0] < entry['hdr_blocks']:
             tar = OioTarEntry(self.storage, self.acct, self.container, name)
 
             for bl in xrange(entry['hdr_blocks']):
-                if bl in blocks:
+                if bl >= ranges[0] and bl <= ranges[1]:
                     mem += tar.buf[bl * BLOCKSIZE:bl * BLOCKSIZE + BLOCKSIZE]
-                    blocks.remove(bl)
+            ranges[0] = entry['hdr_blocks']
 
-        if not blocks:
+        if ranges[0] > ranges[1]:
             return mem
 
-        # for sanity, shift blocks
-        blocks = [v - entry['hdr_blocks'] for v in blocks]
+        # for sanity, shift ranges
+        ranges = [v - entry['hdr_blocks'] for v in ranges]
 
         # compute needed padding data
         nb_blocks, remainder = divmod(entry['size'], BLOCKSIZE)
 
-        start = blocks[0] * BLOCKSIZE
+        start = ranges[0] * BLOCKSIZE
         last = False
-        if remainder > 0 and nb_blocks in blocks:
+        if remainder > 0 and nb_blocks == ranges[1]:
             last = True
             end = entry['size'] - 1
         else:
-            end = blocks[-1] * BLOCKSIZE + BLOCKSIZE - 1
+            end = ranges[1] * BLOCKSIZE + BLOCKSIZE - 1
 
         if entry['slo']:
             # we have now to compute which block(s) we need to read
@@ -232,13 +232,13 @@ class ContainerTarFile(object):
             self.logger.error("data written does not match blocksize")
         return mem
 
-    def create_tar_oio_properties(self, entry, blocks, name):
+    def create_tar_oio_properties(self, entry, ranges, name):
         """
         Extract data from fake object for :name:
             CONTAINER_PROPERTIES: contains properties of container
             CONTAINER_MANIFEST: map of object in Tar
         """
-        nb_blocks_to_serve = len(blocks) * BLOCKSIZE
+        nb_blocks_to_serve = (ranges[1] - ranges[0] + 1) * BLOCKSIZE
         if name == CONTAINER_PROPERTIES:
             meta = self.storage.container_get_properties(self.acct,
                                                          self.container)
@@ -256,31 +256,31 @@ class ContainerTarFile(object):
         if size != entry['size']:
             self.logger.error("container properties has been updated")
 
-        if set(blocks).intersection(range(entry['hdr_blocks'])):
+        if ranges[0] < entry['hdr_blocks']:
             tar = OioTarEntry(self.storage, self.acct, self.container,
                               name, data=struct)
 
             for bl in xrange(entry['hdr_blocks']):
-                if bl in blocks:
+                if bl >= ranges[0] and bl <= ranges[1]:
                     mem += tar.buf[bl * BLOCKSIZE:bl * BLOCKSIZE + BLOCKSIZE]
-                    blocks.remove(bl)
+            ranges[0] = entry['hdr_blocks']
 
-        if not blocks:
+        if ranges[0] > ranges[1]:
             return mem
 
         # for sanity, shift blocks
-        blocks = [v-entry['hdr_blocks'] for v in blocks]
+        ranges = [v-entry['hdr_blocks'] for v in ranges]
 
         # compute needed padding data
         nb_blocks, remainder = divmod(entry['size'], BLOCKSIZE)
 
-        start = blocks[0] * BLOCKSIZE
+        start = ranges[0] * BLOCKSIZE
         last = False
-        if remainder > 0 and nb_blocks in blocks:
+        if remainder > 0 and nb_blocks == ranges[1]:
             last = True
             end = entry['size']
         else:
-            end = blocks[-1] * BLOCKSIZE + BLOCKSIZE
+            end = ranges[1] * BLOCKSIZE + BLOCKSIZE
 
         mem += data[start:end]
 
@@ -308,42 +308,42 @@ class ContainerTarFile(object):
 
         size = divmod(size, 512)[0]
 
-        if not self.blocks:
+        if self.ranges[0] > self.ranges[1]:
             self.logger.debug("EOF reached")
             return data
 
         for val in self.oio_map[:]:
-            if self.blocks[0] > val['end_block']:
+            if self.ranges[0] > val['end_block']:
                 self.oio_map.remove(val)
                 continue
 
-            if size > 0 and val['end_block'] - self.blocks[0] > size:
-                end_block = self.blocks[0] + size
+            if size > 0 and val['end_block'] - self.ranges[0] > size:
+                end_block = self.ranges[0] + size
             else:
                 end_block = val['end_block']
 
-            # FIXME: should be done in same loop
-            blocks = [x for x in self.blocks if x <= end_block]
-            # remove selected from globals list
-            _c = set(blocks)
-            self.blocks = [x for x in self.blocks if x not in _c]
-            # shift selected blocks to object
+            assert self.ranges[0] >= val['start_block']
+            assert self.ranges[0] <= self.ranges[1], \
+                "Got start %d / end %d" % (self.ranges[0], self.ranges[1])
+
             _s = val['start_block']
-            blocks = [x - _s for x in blocks]
+            # map ranges to object range
+            ranges = [self.ranges[0] - _s, end_block - _s]
+            self.ranges[0] = end_block + 1
 
             if 'name' not in val:
-                data = NUL * len(blocks) * BLOCKSIZE
+                data = NUL * (ranges[1] - ranges[0] + 1) * BLOCKSIZE
             elif val['name'] in (CONTAINER_PROPERTIES, CONTAINER_MANIFEST):
-                data = self.create_tar_oio_properties(val, blocks, val['name'])
+                data = self.create_tar_oio_properties(val, ranges, val['name'])
             else:
-                data = self.create_tar_oio_stream(val, blocks)
+                data = self.create_tar_oio_stream(val, ranges)
             if end_block == val['end_block']:
                 self.oio_map.remove(val)
             break
         return data
 
     def close(self):
-        if self.blocks:
+        if self.ranges[0] <= self.ranges[1]:
             self.logger.info("data not all consumed")
 
 
@@ -562,10 +562,8 @@ class ContainerBackup(RedisConn, WerkzeugApp):
         length = blocks * BLOCKSIZE
 
         if 'Range' not in req.headers:
-            # TODO: instead expanding blocks to a full list,
-            # use [first_block - last_block]
             tar = ContainerTarFile(self.proxy, account, container,
-                                   range(blocks), results, self.logger)
+                                   [0, blocks-1], results, self.logger)
             return Response(wrap_file(req.environ, tar,
                                       buffer_size=self.STREAMING),
                             headers={
@@ -574,12 +572,10 @@ class ContainerBackup(RedisConn, WerkzeugApp):
                                 'Content-Length': length,
                             }, status=200)
 
-        # TODO: instead expanding blocks to a full list,
-        # use [first_block - last_block]
         start, end, block_start, block_end = self._extract_range(req, blocks)
-        blocks_to_read = range(block_start, block_end)
 
-        tar = ContainerTarFile(self.proxy, account, container, blocks_to_read,
+        tar = ContainerTarFile(self.proxy, account, container,
+                               [block_start, block_end - 1],
                                results, self.logger)
         return Response(wrap_file(req.environ, tar,
                                   buffer_size=self.STREAMING),
