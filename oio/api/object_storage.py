@@ -792,10 +792,10 @@ class ObjectStorageApi(object):
         return obj_meta, _metachunk_preparer
 
     def _generate_fullpath(self, account, container_name, path, version):
-        return '{0}/{1}/{2}/{3}'.format(quote_plus(account),
-                                        quote_plus(container_name),
-                                        quote_plus(path),
-                                        version)
+        return ['{0}/{1}/{2}/{3}'.format(quote_plus(account),
+                                         quote_plus(container_name),
+                                         quote_plus(path),
+                                         version)]
 
     def _object_create(self, account, container, obj_name, source,
                        sysmeta, properties=None, policy=None,
