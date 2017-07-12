@@ -33,13 +33,15 @@ from werkzeug.wrappers import Request, Response
 from werkzeug.routing import Map, Rule
 from werkzeug.exceptions import HTTPException, BadRequest, \
                                 RequestedRangeNotSatisfiable, Conflict, \
-                                UnprocessableEntity, InternalServerError
+                                UnprocessableEntity, InternalServerError, \
+                                ServiceUnavailable
 from werkzeug.wsgi import wrap_file
 
 from oio import ObjectStorageApi
 from oio.common import exceptions as exc
 from oio.common.utils import get_logger, read_conf
 from oio.common.redis_conn import RedisConn
+from redis import ConnectionError
 
 
 RANGE_RE = re.compile(r"^bytes=(\d+)-(\d+)$")
@@ -343,6 +345,15 @@ class ContainerTarFile(object):
         if self.blocks:
             self.logger.info("data not all consumed")
 
+def redis_cnx(f):
+    def wrapper(*args):
+        try:
+            return f(*args)
+        except ConnectionError:
+            args[0].logger.error("Redis is not available")
+            raise ServiceUnavailable()
+    return wrapper
+
 
 class ContainerBackup(RedisConn):
     """WSGI Application to dump or restore a container."""
@@ -373,6 +384,7 @@ class ContainerBackup(RedisConn):
         """Redis connection object"""
         return self.conn
 
+    @redis_cnx
     def generate_manifest(self, account, container):
         """
         Generate a static manifest of a container.
@@ -603,6 +615,7 @@ class ContainerBackup(RedisConn):
 
         return Response("Not supported", 405)
 
+    @redis_cnx
     def _do_put(self, req, account, container):
         """Manage PUT method for restoring a container"""
         size = int(req.headers['content-length'])
