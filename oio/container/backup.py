@@ -345,6 +345,7 @@ class ContainerTarFile(object):
         if self.blocks:
             self.logger.info("data not all consumed")
 
+
 def redis_cnx(f):
     def wrapper(*args):
         try:
