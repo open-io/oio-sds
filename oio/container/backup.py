@@ -29,19 +29,20 @@ import os
 from tarfile import TarInfo, REGTYPE, NUL, PAX_FORMAT, BLOCKSIZE, XHDTYPE, \
                     DIRTYPE, AREGTYPE
 
-from werkzeug.wrappers import Request, Response
+from redis import ConnectionError
+from werkzeug.wrappers import Response
 from werkzeug.routing import Map, Rule
-from werkzeug.exceptions import HTTPException, BadRequest, \
+from werkzeug.exceptions import BadRequest, \
                                 RequestedRangeNotSatisfiable, Conflict, \
-                                UnprocessableEntity, InternalServerError, \
+                                UnprocessableEntity, \
                                 ServiceUnavailable
 from werkzeug.wsgi import wrap_file
 
 from oio import ObjectStorageApi
 from oio.common import exceptions as exc
 from oio.common.utils import get_logger, read_conf
+from oio.common.wsgi import WerkzeugApp
 from oio.common.redis_conn import RedisConn
-from redis import ConnectionError
 
 
 RANGE_RE = re.compile(r"^bytes=(\d+)-(\d+)$")
@@ -356,7 +357,7 @@ def redis_cnx(f):
     return wrapper
 
 
-class ContainerBackup(RedisConn):
+class ContainerBackup(RedisConn, WerkzeugApp):
     """WSGI Application to dump or restore a container."""
 
     CACHE = 3600 * 24  # Redis keys will expire after one day
@@ -379,6 +380,7 @@ class ContainerBackup(RedisConn):
         ])
         self.logger = get_logger(self.conf, name="ContainerBackup")
         super(ContainerBackup, self).__init__(self.conf)
+        WerkzeugApp.__init__(self, self.url_map, self.logger)
 
     @property
     def redis(self):
@@ -496,14 +498,6 @@ class ContainerBackup(RedisConn):
         self.redis.set(hash_map, json.dumps(map_objs, sort_keys=True),
                        ex=self.CACHE)
         return map_objs
-
-    def wsgi_app(self, environ, start_response):
-        request = Request(environ)
-        response = self.dispatch_request(request)
-        return response(environ, start_response)
-
-    def __call__(self, environ, start_response):
-        return self.wsgi_app(environ, start_response)
 
     def _do_head(self, _, account, container):
         """
@@ -785,15 +779,3 @@ class ContainerBackup(RedisConn):
             raise BadRequest('Fail to verify container')
 
         return self._do_put(req, account, container)
-
-    def dispatch_request(self, req):
-        """Dispatch request point"""
-        adapter = self.url_map.bind_to_environ(req.environ)
-        try:
-            endpoint, _ = adapter.match()
-            return getattr(self, 'on_' + endpoint)(req)
-        except HTTPException as exc:
-            return exc
-        except Exception:  # pylint: disable=broad-except
-            self.logger.exception('ERROR Unhandled exception in request')
-            return InternalServerError('Unmanaged error')

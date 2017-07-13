@@ -1,4 +1,24 @@
+# Copyright (C) 2016-2017 OpenIO, as part of OpenIO Software Defined Storage
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 from hashlib import md5
+
+from werkzeug.exceptions import BadRequest
+from werkzeug.routing import Map, Rule
+from werkzeug.wrappers import Response
+
 from oio.common.storage_method import STORAGE_METHODS
 from oio.api.ec import EcMetachunkWriter, ECChunkDownloadHandler
 from oio.api.replication import ReplicatedMetachunkWriter
@@ -7,7 +27,7 @@ from oio.api.backblaze import BackblazeChunkWriteHandler, \
 from oio.api.backblaze_http import BackblazeUtils, BackblazeUtilsException
 from oio.api.io import ChunkReader
 from oio.common.exceptions import OioException
-from werkzeug.wrappers import Request, Response
+from oio.common.wsgi import WerkzeugApp
 
 SYS_PREFIX = 'x-oio-chunk-meta-'
 
@@ -28,24 +48,35 @@ sys_headers = {
 }
 
 
-def load_sysmeta(request):
-    h = request.headers
+def safe_get_header(request, key, default=None):
+    """
+    Get a header from request, raise BadRequest if missing
+    and there is no default.
+    """
+    # Do not trap: if key is missing, it's not a bad request,
+    # it's a programming error.
+    pkey = sys_headers[key]
     try:
-        sysmeta = {}
-        sysmeta['id'] = h[sys_headers['content_id']]
-        sysmeta['version'] = h[sys_headers['content_version']]
-        sysmeta['content_path'] = h[sys_headers['content_path']]
-        sysmeta['content_length'] = h.get(sys_headers['content_length'], "0")
-        sysmeta['chunk_method'] = h[sys_headers['content_chunkmethod']]
-        sysmeta['mime_type'] = h[sys_headers['content_mime_type']]
-        sysmeta['policy'] = h[sys_headers['content_policy']]
-        sysmeta['content_chunksnb'] = h.get(sys_headers['content_chunksnb'],
-                                            "1")
-        sysmeta['container_id'] = h[sys_headers['container_id']]
-        return sysmeta
+        return request.headers[pkey]
     except KeyError:
-        print h
-        raise
+        if default:
+            return default
+        raise BadRequest("Missing header '%s'" % pkey)
+
+
+def load_sysmeta(request):
+    sysmeta = dict()
+    sysmeta['id'] = safe_get_header(request, 'content_id')
+    sysmeta['version'] = safe_get_header(request, 'content_version')
+    sysmeta['content_path'] = safe_get_header(request, 'content_path')
+    sysmeta['content_length'] = safe_get_header(request, 'content_length', "0")
+    sysmeta['chunk_method'] = safe_get_header(request, 'content_chunkmethod')
+    sysmeta['mime_type'] = safe_get_header(request, 'content_mime_type')
+    sysmeta['policy'] = safe_get_header(request, 'content_policy')
+    sysmeta['content_chunksnb'] = safe_get_header(request,
+                                                  'content_chunksnb', "1")
+    sysmeta['container_id'] = safe_get_header(request, 'container_id')
+    return sysmeta
 
 
 def load_meta_chunk(request, nb_chunks, pos=None):
@@ -75,9 +106,13 @@ def part_backblaze_to_bytes_iter(stream):
             yield fd
 
 
-class ECD(object):
+class ECD(WerkzeugApp):
     def __init__(self, conf):
         self.conf = conf
+        self.url_map = Map([
+            Rule('/', endpoint='metachunk'),
+        ])
+        super(ECD, self).__init__(self.url_map)
 
     def write_ec_meta_chunk(self, source, size, storage_method, sysmeta,
                             meta_chunk):
@@ -130,7 +165,7 @@ class ECD(object):
 
     def read_backblaze_meta_chunk(self, req, storage_method, meta_chunk,
                                   meta_start=None, meta_end=None):
-        container_id = req.headers[sys_headers['container_id']]
+        container_id = safe_get_header(req, 'container_id')
         sysmeta = {'container_id': container_id}
         key_file = self.conf.get('key_file')
         try:
@@ -156,84 +191,81 @@ class ECD(object):
         stream = handler.get_stream()
         return Response(stream, 200)
 
-    def dispatch_request(self, req):
-        if req.method == 'PUT':
-            source = req.input_stream
-            size = req.content_length
-            sysmeta = load_sysmeta(req)
-            storage_method = STORAGE_METHODS.load(sysmeta['chunk_method'])
+    def _on_metachunk_PUT(self, req):
+        source = req.input_stream
+        size = req.content_length
+        sysmeta = load_sysmeta(req)
+        storage_method = STORAGE_METHODS.load(sysmeta['chunk_method'])
 
-            if storage_method.ec:
-                if not size:
-                    # FIXME: get chunk size from proxy
-                    size = (storage_method.ec_nb_data * 10 *
-                            storage_method.ec_segment_size)
-                nb_chunks = (storage_method.ec_nb_data +
-                             storage_method.ec_nb_parity)
-                pos = req.headers[sys_headers['chunk_pos']]
-                meta_chunk = load_meta_chunk(req, nb_chunks, pos)
-                return self.write_ec_meta_chunk(source, size, storage_method,
-                                                sysmeta, meta_chunk)
+        if storage_method.ec:
+            if not size:
+                # FIXME: get chunk size from proxy
+                size = (storage_method.ec_nb_data * 10 *
+                        storage_method.ec_segment_size)
+            nb_chunks = (storage_method.ec_nb_data +
+                         storage_method.ec_nb_parity)
+            pos = safe_get_header(req, 'chunk_pos')
+            meta_chunk = load_meta_chunk(req, nb_chunks, pos)
+            return self.write_ec_meta_chunk(source, size, storage_method,
+                                            sysmeta, meta_chunk)
 
-            elif storage_method.backblaze:
-                nb_chunks = int(sysmeta['content_chunksnb'])
-                meta_chunk = load_meta_chunk(req, nb_chunks)
-                return self.write_backblaze_meta_chunk(source, size,
-                                                       storage_method, sysmeta,
-                                                       meta_chunk)
-            else:
-                # FIXME: check and fix size
-                nb_chunks = int(sysmeta['content_chunksnb'])
-                meta_chunk = load_meta_chunk(req, nb_chunks)
-                return self.write_repli_meta_chunk(source, size,
+        elif storage_method.backblaze:
+            nb_chunks = int(sysmeta['content_chunksnb'])
+            meta_chunk = load_meta_chunk(req, nb_chunks)
+            return self.write_backblaze_meta_chunk(source, size,
                                                    storage_method, sysmeta,
                                                    meta_chunk)
+        else:
+            # FIXME: check and fix size
+            nb_chunks = int(sysmeta['content_chunksnb'])
+            meta_chunk = load_meta_chunk(req, nb_chunks)
+            return self.write_repli_meta_chunk(source, size,
+                                               storage_method, sysmeta,
+                                               meta_chunk)
 
-        elif req.method == 'GET':
-            chunk_method = req.headers[sys_headers['content_chunkmethod']]
-            storage_method = STORAGE_METHODS.load(chunk_method)
+    def _on_metachunk_GET(self, req):
+        chunk_method = safe_get_header(req, 'content_chunkmethod')
+        storage_method = STORAGE_METHODS.load(chunk_method)
+        if req.range and req.range.ranges:
+            # Werkzeug give us non-inclusive ranges, but we use inclusive
+            start = req.range.ranges[0][0]
+            if req.range.ranges[0][1] is not None:
+                end = req.range.ranges[0][1] - 1
+            else:
+                end = None
+            my_range = (start, end)
+        else:
+            my_range = (None, None)
+
+        if storage_method.ec:
+            nb_chunks = storage_method.ec_nb_data + \
+                storage_method.ec_nb_parity
+            meta_chunk = load_meta_chunk(req, nb_chunks)
+            meta_chunk[0]['size'] = \
+                int(safe_get_header(req, 'chunk_size'))
+            return self.read_ec_meta_chunk(storage_method, meta_chunk,
+                                           my_range[0], my_range[1])
+        elif storage_method.backblaze:
+            meta_chunk = load_meta_chunk(req, 1)
+            return self.read_backblaze_meta_chunk(req, storage_method,
+                                                  meta_chunk,
+                                                  my_range[0], my_range[1])
+        else:
+            nb_chunks = int(safe_get_header(req, 'content_chunksnb'))
+            meta_chunk = load_meta_chunk(req, nb_chunks)
+            headers = dict()
             if req.range and req.range.ranges:
-                # Werkzeug give us non-inclusive ranges, but we use inclusive
-                start = req.range.ranges[0][0]
-                if req.range.ranges[0][1] is not None:
-                    end = req.range.ranges[0][1] - 1
-                else:
-                    end = None
-                my_range = (start, end)
-            else:
-                my_range = (None, None)
+                headers['Range'] = req.range.to_header()
+            return self.read_meta_chunk(storage_method, meta_chunk,
+                                        headers)
 
-            if storage_method.ec:
-                nb_chunks = storage_method.ec_nb_data + \
-                    storage_method.ec_nb_parity
-                meta_chunk = load_meta_chunk(req, nb_chunks)
-                meta_chunk[0]['size'] = \
-                    int(req.headers[sys_headers['chunk_size']])
-                return self.read_ec_meta_chunk(storage_method, meta_chunk,
-                                               my_range[0], my_range[1])
-            elif storage_method.backblaze:
-                meta_chunk = load_meta_chunk(req, 1)
-                return self.read_backblaze_meta_chunk(req, storage_method,
-                                                      meta_chunk,
-                                                      my_range[0], my_range[1])
-            else:
-                nb_chunks = int(req.headers[sys_headers['content_chunksnb']])
-                meta_chunk = load_meta_chunk(req, nb_chunks)
-                headers = dict()
-                if req.range and req.range.ranges:
-                    headers['Range'] = req.range.to_header()
-                return self.read_meta_chunk(storage_method, meta_chunk,
-                                            headers)
+    def on_metachunk(self, req):
+        if req.method == 'PUT':
+            return self._on_metachunk_PUT(req)
+        elif req.method == 'GET':
+            return self._on_metachunk_GET(req)
         else:
             return Response(status=403)
-
-    def wsgi_app(self, environ, start_response):
-        request = Request(environ)
-        response = self.dispatch_request(request)
-        return response(environ, start_response)
-
-    def __call__(self, environ, start_response):
-        return self.wsgi_app(environ, start_response)
 
 
 def create_app(conf={}):
