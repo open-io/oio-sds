@@ -111,7 +111,8 @@ func_tests () {
 
 	# Run the whole suite of functional tests (Python)
     cd $SRCDIR
-    tox -e func,coverage
+    tox -e coverage
+    tox -e func
 
 	# Run the whole suite of functional tests (C)
     cd $WRKDIR
@@ -146,8 +147,11 @@ test_meta2_filters () {
 
 if is_running_test_suite "unit" ; then
 	echo -e "\n### UNIT tests"
-	cd $SRCDIR && tox -e pep8 && tox -e py27
-	cd $WRKDIR && make -C tests/unit test
+	cd $SRCDIR
+	tox -e pep8
+	tox -e py27
+	cd $WRKDIR
+	make -C tests/unit test
 fi
 
 if is_running_test_suite "repli" ; then
