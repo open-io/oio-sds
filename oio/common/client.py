@@ -9,11 +9,11 @@ class ProxyClient(HttpApi):
     Client directed towards oio-proxy, with logging facility
     """
 
-    def __init__(self, conf, session=None, request_prefix="",
+    def __init__(self, conf, pool_manager=None, request_prefix="",
                  no_ns_in_url=False, endpoint=None, **kwargs):
         """
-        :param session: an optional session that will be reused
-        :type session: `requests.Session`
+        :param pool_manager: an optional pool manager that will be reused
+        :type pool_manager: `urllib3.PoolManager`
         :param request_prefix: text to insert in between endpoint and
             requested URL
         :type request_prefix: `str`
@@ -44,7 +44,7 @@ class ProxyClient(HttpApi):
         super(ProxyClient, self).__init__(endpoint='/'.join(ep_parts),
                                           **kwargs)
 
-    def _direct_request(self, method, url, session=None, headers=None,
+    def _direct_request(self, method, url, headers=None,
                         **kwargs):
         if kwargs.get("autocreate"):
             if not headers:
@@ -53,4 +53,4 @@ class ProxyClient(HttpApi):
             kwargs = kwargs.copy()
             kwargs.pop("autocreate")
         return super(ProxyClient, self)._direct_request(
-            method, url, session=session, headers=headers, **kwargs)
+            method, url, headers=headers, **kwargs)

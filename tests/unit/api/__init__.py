@@ -1,6 +1,6 @@
 from io import BytesIO
 from eventlet import sleep
-from oio.common.http import HeadersDict, requests
+from oio.common.http import HeadersDict, urllib3
 from oio.api.object_storage import ObjectStorageApi
 from oio.directory.client import DirectoryClient
 
@@ -13,7 +13,7 @@ class FakeAPI(object):
         pass
 
 
-class FakeAPIResponse(requests.Response):
+class FakeAPIResponse(urllib3.HTTPResponse):
     pass
 
 

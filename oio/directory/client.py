@@ -41,9 +41,9 @@ class DirectoryClient(ProxyClient):
         data = json.dumps({'properties': properties})
         resp, body = self._request('POST', '/create', params=params,
                                    data=data, **kwargs)
-        if resp.status_code not in (201, 202):
+        if resp.status not in (201, 202):
             raise exceptions.from_response(resp, body)
-        return resp.status_code == 201
+        return resp.status == 201
 
     def has(self, account=None, reference=None, cid=None, **kwargs):
         params = self._make_params(account, reference, cid=cid)

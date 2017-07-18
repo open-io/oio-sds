@@ -195,7 +195,10 @@ def from_status(status, reason="n/a"):
 
 
 def from_response(resp, body=None):
-    http_status = resp.status_code
+    try:
+        http_status = resp.status
+    except AttributeError:
+        http_status = resp.status_code
     cls = _http_status_map.get(http_status, ClientException)
     if body:
         message = "n/a"

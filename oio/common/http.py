@@ -10,6 +10,7 @@ from oio.common.constants import chunk_headers
 
 requests = patcher.import_patched('requests.__init__')
 requests_adapters = patcher.import_patched('requests.adapters')
+urllib3 = patcher.import_patched('urllib3.__init__')
 
 CONNECTION_TIMEOUT = 2.0
 READ_TIMEOUT = 30.0

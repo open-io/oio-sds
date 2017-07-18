@@ -79,9 +79,9 @@ class ContainerClient(ProxyClient):
         resp, body = self._request('POST', '/create', params=params,
                                    data=data, autocreate=True,
                                    **kwargs)
-        if resp.status_code not in (204, 201):
+        if resp.status not in (204, 201):
             raise exceptions.from_response(resp, body)
-        return resp.status_code == 201
+        return resp.status == 201
 
     def container_create_many(self, account, containers, properties=None,
                               **kwargs):
@@ -109,7 +109,7 @@ class ContainerClient(ProxyClient):
             resp, body = self._request('POST', '/create_many', params=params,
                                        data=data, autocreate=True,
                                        **kwargs)
-            if resp.status_code not in (204, 201):
+            if resp.status not in (204, 201):
                 raise exceptions.from_response(resp, body)
             for container in json.loads(body)["containers"]:
                 results.append((container["name"], container["status"] == 201))
@@ -348,7 +348,7 @@ class ContainerClient(ProxyClient):
                                    version=version)
         resp, _ = self._direct_request('POST', uri,
                                        params=params, **kwargs)
-        return resp.status_code == 204
+        return resp.status == 204
 
     def content_delete_many(self, account=None, reference=None, paths=None,
                             cid=None, **kwargs):
@@ -360,9 +360,9 @@ class ContainerClient(ProxyClient):
         data = json.dumps({"contents": unformatted_data})
         results = list()
         try:
-            resp, _ = self._direct_request(
+            _, resp_body = self._direct_request(
                 'POST', uri, data=data, params=params, **kwargs)
-            for obj in resp.json()["contents"]:
+            for obj in resp_body["contents"]:
                 results.append((obj["name"], obj["status"] == 204))
             return results
         except exceptions.NotFound:

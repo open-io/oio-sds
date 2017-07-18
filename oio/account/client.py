@@ -105,7 +105,7 @@ class AccountClient(HttpApi):
         :returns: `True` if the account has been created
         """
         resp, _body = self.account_request(account, 'PUT', 'create', **kwargs)
-        return resp.status_code == 201
+        return resp.status == 201
 
     def account_delete(self, account, **kwargs):
         """

@@ -75,7 +75,7 @@ class DirectoryInit(DirectoryCmd):
 
         if checked:
             self.log.info("Saving...")
-            mapping.force(timeout=(5.0, 30.0))
+            mapping.force(connection_timeout=5.0, read_timeout=30.0)
 
         if parsed_args.rdir:
             self.log.info("Assigning rdir services to rawx services...")

@@ -10,7 +10,6 @@ from eventlet import Timeout, greenthread
 from oio.conscience.client import ConscienceClient
 from oio.rdir.client import RdirClient
 from oio.event.beanstalk import Beanstalk, ConnectionError
-from oio.common.http import requests
 from oio.common.utils import true_value, drop_privileges, \
         json, int_value
 from oio.event.evob import is_success, is_error
@@ -122,7 +121,6 @@ class EventWorker(Worker):
     def init(self):
         eventlet.monkey_patch(os=False)
         self.tube = self.conf.get("tube", DEFAULT_TUBE)
-        self.session = requests.Session()
         self.cs = ConscienceClient(self.conf)
         self.rdir = RdirClient(self.conf)
         self._acct_addr = None
