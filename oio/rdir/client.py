@@ -242,7 +242,6 @@ class RdirClient(HttpApi):
         while True:
             resp, resp_body = self._rdir_request(volume, 'POST', 'fetch',
                                                  json=req_body)
-            resp.raise_for_status()
             if len(resp_body) == 0:
                 break
             for (key, value) in resp_body:

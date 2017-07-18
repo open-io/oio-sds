@@ -5,11 +5,12 @@ import pkg_resources
 from eventlet import GreenPool, sleep
 
 from oio.common.daemon import Daemon
-from oio.common.http import requests
+from oio.api.base import get_pool_manager
 from oio.common.utils import get_logger, float_value, validate_service_conf, \
     int_value, parse_config, true_value
 from oio.common.client import ProxyClient
 from oio.conscience.client import ConscienceClient
+from oio.common.exceptions import OioException
 
 
 def load_modules(group_name):
@@ -42,10 +43,10 @@ class ServiceWatcher(object):
                 self._load_item_config('deregister_on_exit', False))
 
         self.logger = get_logger(self.conf)
-        self.session = requests.Session()
-        self.cs = ConscienceClient(self.conf, session=self.session)
+        self.pool_manager = get_pool_manager()
+        self.cs = ConscienceClient(self.conf, pool_manager=self.pool_manager)
         # FIXME: explain that
-        self.client = ProxyClient(self.conf, session=self.session,
+        self.client = ProxyClient(self.conf, pool_manager=self.pool_manager,
                                   no_ns_in_url=True)
         self.last_status = False
         self.failed = False
@@ -111,7 +112,7 @@ class ServiceWatcher(object):
         self.service_definition['tags']['tag.up'] = self.last_status
         try:
             self.cs.register(self.service['type'], self.service_definition)
-        except requests.RequestException as rqe:
+        except OioException as rqe:
             self.logger.warn("Failed to register service %s: %s",
                              self.service_definition["addr"], rqe)
 

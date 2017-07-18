@@ -1,7 +1,7 @@
 from oio.event.evob import Event
 from oio.event.consumer import EventTypes
 from oio.event.filters.base import Filter
-from requests.exceptions import ConnectionError
+from urllib3.exceptions import ConnectionError
 
 
 CHUNK_EVENTS = [EventTypes.CHUNK_DELETED, EventTypes.CHUNK_NEW]

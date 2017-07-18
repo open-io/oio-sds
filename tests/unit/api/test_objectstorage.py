@@ -128,7 +128,7 @@ class ObjectStorageTest(unittest.TestCase):
     def test_container_create(self):
         api = self.api
         resp = FakeAPIResponse()
-        resp.status_code = 201
+        resp.status = 201
         api.container._direct_request = Mock(return_value=(resp, None))
 
         name = random_str(32)
@@ -146,7 +146,7 @@ class ObjectStorageTest(unittest.TestCase):
     def test_container_create_exist(self):
         api = self.api
         resp = FakeAPIResponse()
-        resp.status_code = 204
+        resp.status = 204
         api.container._direct_request = Mock(return_value=(resp, None))
 
         name = random_str(32)

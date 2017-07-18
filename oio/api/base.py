@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2016 OpenIO SAS
+# Copyright (C) 2015-2017 OpenIO SAS
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -12,15 +12,37 @@
 # License along with this library.
 
 import sys
+
+from oio.common.utils import json as jsonlib
+from oio.common.http import urllib3
+from urllib3.exceptions import MaxRetryError, TimeoutError, ConnectionError, \
+    ProxyError, HTTPError
+from urllib import urlencode
 from oio.common import exceptions
-from oio.common.http import requests, requests_adapters, \
-    CONNECTION_TIMEOUT, READ_TIMEOUT
+from oio.common.http import CONNECTION_TIMEOUT, READ_TIMEOUT
 from oio.common.constants import ADMIN_HEADER
 
-_ADAPTER_OPTIONS_KEYS = ["pool_connections", "pool_maxsize", "max_retries"]
-REQUESTS_KWARGS = ('params', 'data', 'headers', 'cookies', 'files',
-                   'auth', 'timeout', 'allow_redirects', 'proxies',
-                   'hooks', 'stream', 'verify', 'cert', 'json')
+DEFAULT_POOLSIZE = 10
+DEFAULT_RETRIES = 0
+
+_POOL_MANAGER_OPTIONS_KEYS = ["pool_connections", "pool_maxsize",
+                              "max_retries"]
+
+URLLIB3_REQUESTS_KWARGS = ('fields', 'headers', 'body', 'retries', 'redirect',
+                           'assert_same_host', 'timeout', 'pool_timeout',
+                           'release_conn', 'chunked')
+
+
+def get_pool_manager(pool_connections=DEFAULT_POOLSIZE,
+                     pool_maxsize=DEFAULT_POOLSIZE,
+                     max_retries=DEFAULT_RETRIES):
+    if max_retries == DEFAULT_RETRIES:
+        max_retries = urllib3.Retry(0, read=False)
+    else:
+        max_retries = urllib3.Retry.from_int(max_retries)
+    return urllib3.PoolManager(num_pools=pool_connections,
+                               maxsize=pool_maxsize, retries=max_retries,
+                               block=False)
 
 
 class HttpApi(object):
@@ -29,10 +51,10 @@ class HttpApi(object):
     towards the same endpoint, with a pool of connections.
     """
 
-    def __init__(self, endpoint=None, session=None, **kwargs):
+    def __init__(self, endpoint=None, pool_manager=None, **kwargs):
         """
-        :param session: an optional session that will be reused
-        :type session: `requests.Session`
+        :param pool_manager: an optional pool manager that will be reused
+        :type pool_manager: `urllib3.PoolManager`
         :param endpoint: base of the URL that will requested
         :type endpoint: `str`
         :keyword admin_mode: allow talking to a slave/worm namespace
@@ -40,18 +62,18 @@ class HttpApi(object):
         """
         super(HttpApi, self).__init__()
         self.endpoint = endpoint
-        if not session:
-            session = requests.Session()
-            adapter_conf = {k: int(v)
-                            for k, v in kwargs.iteritems()
-                            if k in _ADAPTER_OPTIONS_KEYS}
-            adapter = requests_adapters.HTTPAdapter(**adapter_conf)
-            session.mount("http://", adapter)
-        self.session = session
+
+        if not pool_manager:
+            pool_manager_conf = {k: int(v)
+                                 for k, v in kwargs.iteritems()
+                                 if k in _POOL_MANAGER_OPTIONS_KEYS}
+            pool_manager = get_pool_manager(**pool_manager_conf)
+        self.pool_manager = pool_manager
+
         self.admin_mode = kwargs.get('admin_mode', False)
 
-    def _direct_request(self, method, url, session=None, admin_mode=False,
-                        **kwargs):
+    def _direct_request(self, method, url, headers=None, data=None, json=None,
+                        params=None, admin_mode=False, **kwargs):
         """
         Make an HTTP request.
 
@@ -59,15 +81,14 @@ class HttpApi(object):
         :type method: `str`
         :param url: URL to request
         :type url: `str`
-        :param session: the session to use instead of `self.session`
-        :type session: requests.Session
         :keyword admin_mode: allow operations on slave or worm namespaces
         :type admin_mode: `bool`
         :keyword timeout: optional timeout for the request (in seconds).
-            May be a tuple `(connection_timeout, read_timeout)`.
+            May be a `urllib3.Timeout(connect=connection_timeout,
+            read=read_timeout)`.
             This method also accepts `connection_timeout` and `read_timeout`
             as separate arguments.
-        :type timeout: `float`
+        :type timeout: `float` or `urllib3.Timeout`
         :keyword headers: optional headers to add to the request
         :type headers: `dict`
 
@@ -76,37 +97,59 @@ class HttpApi(object):
         :raise oio.common.exceptions.OioNetworkException: in case of
         connection error
         """
-        if not session:
-            session = self.session
-
         # Filter arguments that are not recognized by Requests
         out_kwargs = {k: v for k, v in kwargs.items()
-                      if k in REQUESTS_KWARGS}
+                      if k in URLLIB3_REQUESTS_KWARGS}
 
         # Ensure headers are all strings
-        headers = kwargs.get('headers') or dict()
-        out_headers = {k: str(v) for k, v in headers.items()}
+        if headers:
+            out_headers = {k: str(v) for k, v in headers.items()}
+        else:
+            out_headers = dict()
         if self.admin_mode or admin_mode:
             out_headers[ADMIN_HEADER] = '1'
-        out_kwargs['headers'] = out_headers
 
         # Ensure there is a timeout
         if 'timeout' not in out_kwargs:
-            out_kwargs['timeout'] = (
-                kwargs.get('connection_timeout', CONNECTION_TIMEOUT),
-                kwargs.get('read_timeout', READ_TIMEOUT))
+            out_kwargs['timeout'] = urllib3.Timeout(
+                connect=kwargs.get('connection_timeout', CONNECTION_TIMEOUT),
+                read=kwargs.get('read_timeout', READ_TIMEOUT))
+
+        # Convert json and add Content-Type
+        if json:
+            out_headers["Content-Type"] = "application/json"
+            data = jsonlib.dumps(json)
+
+        out_kwargs['headers'] = out_headers
+        out_kwargs['body'] = data
+
+        # Add query string
+        if params:
+            out_param = []
+            for k, v in params.items():
+                if v is not None:
+                    if isinstance(v, unicode):
+                        v = unicode(v).encode('utf-8')
+                    out_param.append((k, v))
+            encoded_args = urlencode(out_param)
+            url += '?' + encoded_args
 
         try:
-            resp = session.request(method, url, **out_kwargs)
+            resp = self.pool_manager.request(method, url, **out_kwargs)
+            body = resp.data
             try:
-                body = resp.json()
+                body = jsonlib.loads(body)
             except ValueError:
-                body = resp.content
-        except requests.Timeout as exc:
-            raise exceptions.OioTimeout(exc), None, sys.exc_info()[2]
-        except IOError as exc:
+                pass
+        except (ConnectionError, ProxyError) as exc:
             raise exceptions.OioNetworkException(exc), None, sys.exc_info()[2]
-        if resp.status_code >= 400:
+        except MaxRetryError as exc:
+            if isinstance(exc.reason, TimeoutError):
+                raise exceptions.OioTimeout(exc), None, sys.exc_info()[2]
+            raise exceptions.OioException(exc), None, sys.exc_info()[2]
+        except HTTPError as exc:
+            raise exceptions.OioException(exc), None, sys.exc_info()[2]
+        if resp.status >= 400:
             raise exceptions.from_response(resp, body)
         return resp, body
 
@@ -120,11 +163,12 @@ class HttpApi(object):
         :type url: `str`
         :param endpoint: endpoint to use in place of `self.endpoint`
         :type endpoint: `str`
-        :param session: the session to use instead of `self.session`
-        :type session: `requests.Session`
         :keyword timeout: optional timeout for the request (in seconds).
-            May be a tuple `(connection_timeout, read_timeout)`.
-        :type timeout: `float`
+            May be a `urllib3.Timeout(connect=connection_timeout,
+            read=read_timeout)`.
+            This method also accepts `connection_timeout` and `read_timeout`
+            as separate arguments.
+        :type timeout: `float` or `urllib3.Timeout`
         :keyword headers: optional headers to add to the request
         :type headers: `dict`
 

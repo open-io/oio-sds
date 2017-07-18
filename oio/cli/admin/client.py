@@ -11,7 +11,7 @@ API_NAME = 'admin'
 
 
 class AdminClient(object):
-    def __init__(self, namespace, session=None, **kwargs):
+    def __init__(self, namespace, pool_manager=None, **kwargs):
         self.conf = {'namespace': namespace}
         self.conf.update(kwargs)
         self._rdir = None
@@ -19,18 +19,19 @@ class AdminClient(object):
         self._event = None
         self._cluster = None
         self._meta0 = None
-        self.session = session
+        self.pool_manager = pool_manager
 
     @property
     def volume(self):
         if not self._rdir:
-            self._rdir = RdirClient(self.conf, session=self.session)
+            self._rdir = RdirClient(self.conf, pool_manager=self.pool_manager)
         return self._rdir
 
     @property
     def rdir_lb(self):
         if not self._rdir_lb:
-            self._rdir_lb = RdirDispatcher(self.conf, session=self.session)
+            self._rdir_lb = RdirDispatcher(self.conf,
+                                           pool_manager=self.pool_manager)
         return self._rdir_lb
 
     @property
@@ -42,13 +43,15 @@ class AdminClient(object):
     @property
     def cluster(self):
         if not self._cluster:
-            self._cluster = ConscienceClient(self.conf, session=self.session)
+            self._cluster = ConscienceClient(self.conf,
+                                             pool_manager=self.pool_manager)
         return self._cluster
 
     @property
     def meta0(self):
         if not self._meta0:
-            self._meta0 = Meta0Client(self.conf, session=self.session)
+            self._meta0 = Meta0Client(self.conf,
+                                      pool_manager=self.pool_manager)
         return self._meta0
 
     def event_stats(self, tube=None):

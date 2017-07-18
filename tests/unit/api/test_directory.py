@@ -31,7 +31,7 @@ class DirectoryTest(unittest.TestCase):
     def test_create(self):
         api = self.api
         resp = FakeAPIResponse()
-        resp.status_code = 201
+        resp.status = 201
         api._direct_request = Mock(return_value=(resp, None))
         api.create(self.account, self.name)
         uri = "%s/reference/create" % self.uri_base
@@ -44,7 +44,7 @@ class DirectoryTest(unittest.TestCase):
     def test_create_already_exists(self):
         api = self.api
         resp = FakeAPIResponse()
-        resp.status_code = 202
+        resp.status = 202
         api._direct_request = Mock(return_value=(resp, None))
         api.create(self.account, self.name)
         uri = "%s/reference/create" % self.uri_base
@@ -57,7 +57,7 @@ class DirectoryTest(unittest.TestCase):
     def test_create_metadata(self):
         api = self.api
         resp = FakeAPIResponse()
-        resp.status_code = 201
+        resp.status = 201
         api._direct_request = Mock(return_value=(resp, None))
 
         metadata = {}

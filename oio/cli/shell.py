@@ -43,6 +43,13 @@ class OpenIOShell(cliff.app.App):
         else:
             requests_log.setLevel(logging.ERROR)
 
+        urllib3_log = logging.getLogger('urllib3')
+
+        if self.options.debug:
+            urllib3_log.setLevel(logging.DEBUG)
+        else:
+            urllib3_log.setLevel(logging.WARNING)
+
         cliff_log = logging.getLogger('cliff')
         cliff_log.setLevel(logging.ERROR)
 

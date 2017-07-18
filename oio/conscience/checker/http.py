@@ -18,7 +18,7 @@ class HttpChecker(BaseChecker):
         self.name = '%s|http|%s|%s|%s' % \
             (self.srv_type, self.host, self.port, self.path)
         self.netloc = '%s:%s' % (self.host, self.port)
-        self.session = self.agent.session
+        self.pool_manager = self.agent.pool_manager
 
     def check(self):
         success = False

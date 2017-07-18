@@ -22,7 +22,7 @@ class LbClient(ProxyClient):
         params = {'type': pool}
         params.update(kwargs)
         resp, body = self._request('GET', '/choose', params=params)
-        if resp.status_code == 200:
+        if resp.status == 200:
             return body
         else:
             raise OioException(
@@ -46,7 +46,7 @@ class LbClient(ProxyClient):
         ibody.update(kwargs)
         resp, obody = self._request('POST', '/poll', params=params,
                                     data=json.dumps(ibody))
-        if resp.status_code == 200:
+        if resp.status == 200:
             return obody
         else:
             raise OioException("Failed to poll %s: %s" % (pool, resp.text))
@@ -76,8 +76,8 @@ class ConscienceClient(ProxyClient):
         super(ConscienceClient, self).__init__(
             conf, request_prefix="/conscience", **kwargs)
         lb_kwargs = dict(kwargs)
-        lb_kwargs.pop("session", None)
-        self.lb = LbClient(conf, session=self.session, **lb_kwargs)
+        lb_kwargs.pop("pool_manager", None)
+        self.lb = LbClient(conf, pool_manager=self.pool_manager, **lb_kwargs)
 
     def next_instances(self, pool, **kwargs):
         """
@@ -110,7 +110,7 @@ class ConscienceClient(ProxyClient):
         if full:
             params['full'] = '1'
         resp, body = self._request('GET', '/list', params=params)
-        if resp.status_code == 200:
+        if resp.status == 200:
             return body
         else:
             raise OioException("failed to get list of %s services: %s"
@@ -118,7 +118,7 @@ class ConscienceClient(ProxyClient):
 
     def local_services(self):
         resp, body = self._request('GET', '/list')
-        if resp.status_code == 200:
+        if resp.status == 200:
             return body
         else:
             raise OioException("failed to get list of local services: %s" %
@@ -127,7 +127,7 @@ class ConscienceClient(ProxyClient):
     def service_types(self):
         params = {'what': 'types'}
         resp, body = self._request('GET', '/info', params=params)
-        if resp.status_code == 200:
+        if resp.status == 200:
             return body
         else:
             raise OioException("ERROR while getting services types: %s" %
