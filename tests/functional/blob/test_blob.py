@@ -151,6 +151,10 @@ class TestBlobFunctional(BaseTestCase):
         resp, body = self._http_request(chunkurl, 'GET', '', {})
         self.assertEqual(resp.status, 200)
         self.assertEqual(body, chunkdata)
+        fp = set(headers.pop('x-oio-chunk-meta-full-path').split(','))
+        fp2 = set(resp.getheader('x-oio-chunk-meta-full-path').split(','))
+        self.assertSetEqual(fp2, fp)
+
         headers['x-oio-chunk-meta-metachunk-size'] = metachunk_size
         headers['x-oio-chunk-meta-metachunk-hash'] = metachunk_hash.upper()
         for k, v in headers.items():
