@@ -1,4 +1,4 @@
-# Copyright (C) 2015 OpenIO, original work as part of
+# Copyright (C) 2015-2017 OpenIO, original work as part of
 # OpenIO Software Defined Storage
 #
 # This program is free software: you can redistribute it and/or modify
@@ -15,16 +15,16 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from werkzeug.wrappers import Request, Response
+from werkzeug.wrappers import Response
 from werkzeug.routing import Map, Rule
-from werkzeug.exceptions import HTTPException, NotFound, BadRequest, \
-    Conflict, InternalServerError
+from werkzeug.exceptions import NotFound, BadRequest, Conflict
 
 from oio.account.backend import AccountBackend
 from oio.common.utils import json, get_logger
+from oio.common.wsgi import WerkzeugApp
 
 
-class Account(object):
+class Account(WerkzeugApp):
     def __init__(self, conf, backend, logger=None):
         self.conf = conf
         self.backend = backend
@@ -41,6 +41,7 @@ class Account(object):
             Rule('/v1.0/account/container/update',
                  endpoint='account_container_update')
         ])
+        super(Account, self).__init__(self.url_map, self.logger)
 
     def _get_account_id(self, req):
         account_id = req.args.get('id')
@@ -128,25 +129,6 @@ class Account(object):
             account_id, name, mtime, dtime, object_count, bytes_used)
         result = json.dumps(info)
         return Response(result)
-
-    def dispatch_request(self, req):
-        adapter = self.url_map.bind_to_environ(req.environ)
-        try:
-            endpoint, values = adapter.match()
-            return getattr(self, 'on_' + endpoint)(req)
-        except HTTPException as e:
-            return e
-        except Exception:
-            self.logger.exception('ERROR Unhandled exception in request')
-            return InternalServerError()
-
-    def wsgi_app(self, environ, start_response):
-        req = Request(environ)
-        resp = self.dispatch_request(req)
-        return resp(environ, start_response)
-
-    def __call__(self, environ, start_response):
-        return self.wsgi_app(environ, start_response)
 
 
 def create_app(conf, **kwargs):
