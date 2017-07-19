@@ -430,6 +430,8 @@ struct oio_error_s* oio_sds_get_usage (struct oio_sds_s *sds,
 
 /* Misc. -------------------------------------------------------------------- */
 
+struct oio_error_s* oio_sds_drain(struct oio_sds_s *sds, struct  oio_url_s *u);
+
 /* works with fully qualified urls (content) */
 struct oio_error_s* oio_sds_delete (struct oio_sds_s *sds, struct oio_url_s *u);
 

@@ -80,6 +80,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_M2V2_BEANS           "M2_PREP"
 # define NAME_MSGNAME_M2V2_APPEND          "M2_APPEND"
 # define NAME_MSGNAME_M2V2_GET             "M2_GET"
+# define NAME_MSGNAME_M2V2_DRAIN           "M2_DRAIN"
 # define NAME_MSGNAME_M2V2_DEL             "M2_DEL"
 # define NAME_MSGNAME_M2V2_TRUNC           "M2_TRUNC"
 # define NAME_MSGNAME_M2V2_LIST            "M2_LST"

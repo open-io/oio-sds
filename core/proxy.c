@@ -587,10 +587,22 @@ oio_proxy_call_content_show (CURL *h, struct oio_url_s *u, GString *out,
 }
 
 GError *
+oio_proxy_call_content_drain(CURL *h, struct oio_url_s *u)
+{
+	GString *http_url = _curl_content_url(u, "drain");
+	if (!http_url) return BADNS();
+
+	GError *err = _proxy_call(h, "POST", http_url->str, NULL, NULL);
+	g_string_free(http_url, TRUE);
+	return err;
+}
+
+GError *
 oio_proxy_call_content_delete (CURL *h, struct oio_url_s *u)
 {
 	GString *http_url = _curl_content_url (u, "delete");
-	if (!http_url) return BADNS();
+	if (!http_url)
+		return BADNS();
 
 	GError *err = _proxy_call (h, "POST", http_url->str, NULL, NULL);
 	g_string_free (http_url, TRUE);

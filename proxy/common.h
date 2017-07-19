@@ -280,6 +280,7 @@ enum http_rc_e _reply_notfound_error (struct req_args_s *args, GError * err);
 enum http_rc_e _reply_forbidden_error (struct req_args_s *args, GError * err);
 enum http_rc_e _reply_method_error (struct req_args_s *args);
 enum http_rc_e _reply_conflict_error (struct req_args_s *args, GError * err);
+enum http_rc_e _reply_gone_error(struct req_args_s *args, GError *err);
 enum http_rc_e _reply_too_large (struct req_args_s *args, GError * err);
 enum http_rc_e _reply_nocontent (struct req_args_s *args);
 enum http_rc_e _reply_accepted (struct req_args_s *args);

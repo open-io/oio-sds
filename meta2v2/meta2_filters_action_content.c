@@ -296,12 +296,43 @@ meta2_filter_action_get_content(struct gridd_filter_ctx_s *ctx,
 		goto cleanup;
 	}
 
+	for (GSList *l = obc->l; l; l = l->next) {
+		if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS &&
+				!strcmp(CONTENTS_HEADERS_get_chunk_method(l->data)->str,
+						CHUNK_METHOD_DRAINED)) {
+			meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_CONTENT_DRAINED,
+					"The content is drained"));
+			goto cleanup;
+		}
+	}
+
 	_on_bean_ctx_send_list(obc);
 	rc = FILTER_OK;
 
 cleanup:
 	_on_bean_ctx_clean(obc);
 	return rc;
+}
+
+int
+meta2_filter_action_drain_content(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
+
+	e = meta2_backend_drain_content(m2b, url, _bean_list_cb, &obc->l);
+	if (e != NULL) {
+		_on_bean_ctx_clean(obc);
+		return FILTER_KO;
+	}
+
+	_m2b_notify_beans(m2b, url, obc->l, "content.deleted");
+	_on_bean_ctx_send_list(obc);
+	_on_bean_ctx_clean(obc);
+	return FILTER_OK;
 }
 
 int

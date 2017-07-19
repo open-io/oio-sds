@@ -107,6 +107,8 @@ _reply_m2_error (struct req_args_s *args, GError * err)
 	if (err->code == CODE_CONTAINER_NOTEMPTY ||
 			err->code == CODE_CONTENT_EXISTS)
 		return _reply_conflict_error (args, err);
+	if (err->code == CODE_CONTENT_DRAINED)
+		return _reply_gone_error(args, err);
 	return _reply_common_error (args, err);
 }
 
@@ -1978,6 +1980,12 @@ enum http_rc_e action_content_prop_set (struct req_args_s *args) {
 
 enum http_rc_e action_content_prop_del (struct req_args_s *args) {
 	return rest_action (args, action_m2_content_propdel);
+}
+
+enum http_rc_e action_content_drain(struct req_args_s *args) {
+	PACKER_VOID(_pack) {return m2v2_remote_pack_DRAIN(args->url);}
+	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL);
+	return _reply_m2_error(args, err);
 }
 
 enum http_rc_e action_content_copy (struct req_args_s *args) {

@@ -341,6 +341,14 @@ class ContainerClient(ProxyClient):
             headers=hdrs, **kwargs)
         return resp, body
 
+    def content_drain(self, account=None, reference=None, path=None, cid=None,
+                      version=None, **kwargs):
+        uri = self._make_uri('content/drain')
+        params = self._make_params(account, reference, path, cid=cid,
+                                   version=version)
+        resp, _ = self._direct_request('POST', uri, params=params, **kwargs)
+        return resp.status_code == 204
+
     def content_delete(self, account=None, reference=None, path=None, cid=None,
                        version=None, **kwargs):
         uri = self._make_uri('content/delete')

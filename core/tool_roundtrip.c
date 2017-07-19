@@ -385,7 +385,11 @@ _roundtrip_tail (struct file_info_s *fi0, const char * content_id,
 		NOERROR(err);
 	}
 
-	/* Remove the roginal content from the container */
+	/* Drain the content */
+	err = oio_sds_drain(client, url);
+	NOERROR(err);
+
+	/* Remove the original content from the container */
 	err = oio_sds_delete (client, url);
 	NOERROR(err);
 

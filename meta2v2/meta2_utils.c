@@ -873,6 +873,23 @@ _real_delete(struct sqlx_sqlite3_s *sq3, GSList *beans, GSList **deleted_beans)
 	return NULL;
 }
 
+GError *
+m2db_drain_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
+		m2_onbean_cb cb, gpointer u0)
+{
+	GError *err = NULL;
+	err = m2db_get_alias(sq3, url, M2V2_FLAG_NOPROPS|M2V2_FLAG_HEADERS, cb, u0);
+	for (GSList *l = *(GSList **)u0; l; l = l->next)
+		if (DESCR(l->data) == &descr_struct_CHUNKS)
+			_db_delete_bean(sq3->db, l->data);
+		else if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
+			CONTENTS_HEADERS_set2_chunk_method(l->data, CHUNK_METHOD_DRAINED);
+			_db_save_bean(sq3->db, l->data);
+
+		}
+	return err;
+}
+
 GError*
 m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0)
@@ -998,6 +1015,12 @@ m2db_truncate_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 			_sort_content_cb, &content)))
 		goto cleanup;
 	EXTRA_ASSERT(content.properties == NULL);
+
+	if (!strcmp(CONTENTS_HEADERS_get_chunk_method(content.header)->str,
+			CHUNK_METHOD_DRAINED)){
+		err = NEWERROR(CODE_CONTENT_DRAINED, "The content is drained");
+		goto cleanup;
+	}
 
 	if (truncate_size > CONTENTS_HEADERS_get_size(content.header)) {
 		err = BADREQ("truncate operation cannot grow contents");
@@ -1368,6 +1391,12 @@ GError* m2db_update_content(struct sqlx_sqlite3_s *sq3,
 	if (err)
 		goto cleanup;
 
+	if (!strcmp(CONTENTS_HEADERS_get_chunk_method(header)->str,
+			CHUNK_METHOD_DRAINED)){
+		err = NEWERROR(CODE_CONTENT_DRAINED, "The content is drained");
+		goto cleanup;
+	}
+
 	/* Update size (in header) and mtime (in alias and header) */
 	const gint64 now = oio_ext_real_time() / G_TIME_SPAN_SECOND;
 	struct bean_CONTENTS_HEADERS_s *new_header = _bean_dup(header);
@@ -1677,6 +1706,11 @@ GError* m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		gpointer bean = tmp->pdata[i];
 		if (&descr_struct_CONTENTS_HEADERS == DESCR(bean)) {
 			header = bean;
+			if(!strcmp(CONTENTS_HEADERS_get_chunk_method(bean)->str,
+						CHUNK_METHOD_DRAINED)) {
+				err= NEWERROR(CODE_CONTENT_DRAINED, "The content is drained");
+				goto out;
+			}
 			GByteArray *gba = CONTENTS_HEADERS_get_id (header);
 			if (gba) {
 				if (content_id)
