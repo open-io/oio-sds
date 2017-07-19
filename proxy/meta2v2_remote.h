@@ -81,6 +81,8 @@ GByteArray* m2v2_remote_pack_LINK(struct oio_url_s *url);
 
 GByteArray* m2v2_remote_pack_COPY(struct oio_url_s *url, const char *src);
 
+GByteArray* m2v2_remote_pack_DRAIN(struct oio_url_s *url);
+
 GByteArray* m2v2_remote_pack_DEL(struct oio_url_s *url);
 
 GByteArray* m2v2_remote_pack_TRUNC(struct oio_url_s *url, gint64 size);

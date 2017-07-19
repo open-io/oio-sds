@@ -602,6 +602,20 @@ class ObjectStorageApi(object):
         self.container.content_touch(account, container, obj,
                                      version=version, **kwargs)
 
+    def object_drain(self, account, container, obj,
+                     version=None, **kwargs):
+        """
+        Remove all the chunks of a content, but keep all the metadata.
+
+        :param account: name of the account where the object is present
+        :type account: `str`
+        :param container: name of the container where the object is present
+        :type container: `str`
+        :param obj: name of the object to drain
+        """
+        self.container.content_drain(account, container, obj,
+                                     version=version, **kwargs)
+
     @handle_object_not_found
     @ensure_headers
     @ensure_request_id

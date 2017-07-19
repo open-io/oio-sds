@@ -140,6 +140,8 @@ GError * oio_proxy_call_container_set_properties (CURL *h,
 GError * oio_proxy_call_content_show (CURL *h, struct oio_url_s *u,
 		GString *out, gchar ***hout);
 
+GError * oio_proxy_call_content_drain(CURL *h, struct oio_url_s *u);
+
 GError * oio_proxy_call_content_delete (CURL *h, struct oio_url_s *u);
 
 GError * oio_proxy_call_content_link (CURL *h, struct oio_url_s *u,

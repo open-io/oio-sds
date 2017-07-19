@@ -281,6 +281,12 @@ m2v2_remote_pack_COPY(struct oio_url_s *url, const char *src)
 }
 
 GByteArray*
+m2v2_remote_pack_DRAIN(struct oio_url_s *url)
+{
+	return _m2v2_pack_request(NAME_MSGNAME_M2V2_DRAIN, url, NULL);
+}
+
+GByteArray*
 m2v2_remote_pack_DEL(struct oio_url_s *url)
 {
 	return _m2v2_pack_request_with_flags(NAME_MSGNAME_M2V2_DEL, url, NULL, 0);

@@ -92,6 +92,7 @@ M2V2_DECLARE_FILTER(meta2_filter_action_put_content);
 M2V2_DECLARE_FILTER(meta2_filter_action_append_content);
 M2V2_DECLARE_FILTER(meta2_filter_action_check_content);
 M2V2_DECLARE_FILTER(meta2_filter_action_get_content);
+M2V2_DECLARE_FILTER(meta2_filter_action_drain_content);
 M2V2_DECLARE_FILTER(meta2_filter_action_delete_content);
 M2V2_DECLARE_FILTER(meta2_filter_action_truncate_content);
 M2V2_DECLARE_FILTER(meta2_filter_action_link);

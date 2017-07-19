@@ -32,6 +32,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define VERSIONS_ENABLED(V)   ((V) < 0 || (V) > 1)
 #define VERSIONS_LIMITED(V)   ((V) > 1)
 
+#define CHUNK_METHOD_DRAINED "drained"
+
 struct storage_policy_s;
 struct oio_url_s;
 struct sqlx_sqlite3_s;
@@ -144,6 +146,9 @@ GError* m2db_del_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 
 GError* m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		gboolean flush, GSList *beans, m2_onbean_cb cb, gpointer u0);
+
+GError* m2db_drain_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
+		m2_onbean_cb cb, gpointer u0);
 
 GError* m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0);

@@ -606,6 +606,35 @@ class UnsetObject(ObjectCommandMixin, command.Command):
             version=parsed_args.object_version)
 
 
+class DrainObject(ContainerCommandMixin, command.Command):
+    """ Drain the chunks """
+
+    log = logging.getLogger(__name__ + '.DrainObject')
+
+    def get_parser(self, prog_name):
+        parser = super(DrainObject, self).get_parser(prog_name)
+        self.patch_parser(parser)
+        parser.add_argument(
+            'objects',
+            metavar='<filename>',
+            nargs='+',
+            help='Local filename(s) to upload.'
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+        super(DrainObject, self).take_action(parsed_args)
+        account = self.app.client_manager.get_account()
+        container = parsed_args.container
+
+        for obj in parsed_args.objects:
+            self.app.client_manager.storage.object_drain(
+                account,
+                container,
+                obj)
+
+
 class LocateObject(ObjectCommandMixin, lister.Lister):
     """Locate the parts of an object"""
 

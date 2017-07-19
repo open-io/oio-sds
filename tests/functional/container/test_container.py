@@ -606,3 +606,95 @@ class TestMeta2Contents(BaseTestCase):
 
         resp = self.session.post(self.url_content('delete'), params=params)
         self.assertError(resp, 404, 420)
+
+    def test_drain_content(self):
+        path = random_content()
+        params = self.param_content(self.ref, path)
+
+        self._create_content(path)
+        # Drain Content
+        resp = self.session.post(self.url_content('drain'), params=params)
+        self.assertEqual(resp.status_code, 204)
+        # TruncateShouldFail
+        trunc_param = {"size": 0}
+        trunc_param.update(params)
+        resp = self.session.post(self.url_content('truncate'),
+                                 params=trunc_param)
+        self.assertError(resp, 410, 427)
+        # AppendShouldFail
+        headers = {'X-oio-action-mode': 'autocreate'}
+        resp = self.session.post(self.url_content('prepare'),
+                                 data=json.dumps({'size': '1024'}),
+                                 params=params,
+                                 headers=headers)
+        self.assertEqual(resp.status_code, 200)
+        chunks = resp.json()
+        append_param = {"append": 1}
+        append_param.update(params)
+        headers = {'x-oio-action-mode': 'autocreate',
+                   'x-oio-content-meta-length': '1024'}
+        resp = self.session.post(self.url_content('create'),
+                                 params=append_param,
+                                 headers=headers,
+                                 data=json.dumps(chunks))
+        self.assertError(resp, 410, 427)
+        # ShowShouldFail
+        resp = self.session.get(self.url_content('show'), params=params)
+        self.assertError(resp, 410, 427)
+        # LocateShouldFail
+        resp = self.session.get(self.url_content('locate'), params=params)
+        self.assertError(resp, 410, 427)
+
+        # UpdateShouldFail
+        headers = {'X-oio-action-mode': 'autocreate'}
+        resp = self.session.post(self.url_content('prepare'),
+                                 data=json.dumps({'size': '1024'}),
+                                 params=params,
+                                 headers=headers)
+        self.assertEqual(resp.status_code, 200)
+        chunks = resp.json()
+
+        headers = {'x-oio-action-mode': 'autocreate',
+                   'x-oio-content-meta-length': '1024'}
+        resp = self.session.post(self.url_content('update'),
+                                 params=params,
+                                 headers=headers,
+                                 data=json.dumps(chunks))
+        self.assertError(resp, 410, 427)
+
+        # CopyShouldWork
+        to = '{0}/{1}/{2}//{3}-COPY'.format(self.ns, self.account,
+                                            self.ref, path)
+        headers = {'Destination': to}
+        resp = self.session.post(self.url_content('copy'),
+                                 headers=headers, params=params)
+        self.assertEqual(resp.status_code, 204)
+        # DeleteShouldWork
+        resp = self.session.post(self.url_content('delete'), params=params)
+        self.assertEqual(resp.status_code, 204)
+        # CreateShouldWork
+        self._create_content(path)
+        self.assertEqual(resp.status_code, 204)
+        resp = self.session.post(self.url_content('drain'), params=params)
+        self.assertEqual(resp.status_code, 204)
+        self._create_content(path)
+        resp = self.session.post(self.url_content('drain'), params=params)
+        self.assertEqual(resp.status_code, 204)
+        # TouchShouldWork
+        resp = self.session.post(self.url_content('touch'), params=params)
+        self.assertEqual(resp.status_code, 204)
+        # SetpoupShouldWork
+        resp = self.session.post(self.url_content('set_properties'),
+                                 params=params,
+                                 data=json.dumps({'properties':
+                                                  {"color": "blue"}}))
+        self.assertEqual(resp.status_code, 204)
+        # getpropShouldWork
+        resp = self.session.post(self.url_content('get_properties'),
+                                 params=params)
+        self.assertEqual(resp.status_code, 200)
+        # delpropShouldWork
+        resp = self.session.post(self.url_content('del_properties'),
+                                 params=params,
+                                 data=json.dumps(['color']))
+        self.assertEqual(resp.status_code, 204)

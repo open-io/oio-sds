@@ -2262,6 +2262,18 @@ oio_sds_truncate (struct oio_sds_s *sds, struct oio_url_s *url, size_t size)
 }
 
 struct oio_error_s*
+oio_sds_drain(struct oio_sds_s *sds, struct oio_url_s *url)
+{
+	if (!sds || !url)
+		return (struct oio_error_s*) BADREQ("Missing argument");
+	oio_ext_set_reqid(sds->session_id);
+
+	GError *err;
+	CURL_DO(sds, H, err = oio_proxy_call_content_drain(H, url));
+	return (struct oio_error_s*) err;
+}
+
+struct oio_error_s*
 oio_sds_delete (struct oio_sds_s *sds, struct oio_url_s *url)
 {
 	if (!sds || !url)
