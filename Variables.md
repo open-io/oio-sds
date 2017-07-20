@@ -352,7 +352,7 @@ Used by `gcc`
 
 > Default chunk size for the given namespace.
 
- * default: **104857600**
+ * default: **10485760**
  * type: gint64
  * cmake directive: *OIO_NS_CHUNK_SIZE*
  * range: 1 -> G_MAXINT64
