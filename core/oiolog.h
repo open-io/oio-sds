@@ -77,8 +77,6 @@ extern "C" {
 	} \
 } while (0)
 
-#define LOG_FLAG_PRETTYTIME 0x04
-
 /** Cruising debug level.
  * Should not be altered by the application after the program has started. */
 extern int oio_log_level_default;
@@ -87,7 +85,10 @@ extern int oio_log_level_default;
  * May be altered by the application, signals, etc. */
 extern int oio_log_level;
 
-/** Should the logging system try to reduce the prefix of each line */
+/**
+ * @deprecated
+ * @todo TODO(jfs) Remove in next releases (requires the ABI increment)
+ */
 extern int oio_log_flags;
 
 void oio_log_lazy_init (void);

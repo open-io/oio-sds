@@ -126,8 +126,6 @@ main(int argc, char **argv)
 {
 	OIO_TEST_INIT(argc, argv);
 
-	oio_log_flags |= LOG_FLAG_PRETTYTIME;
-
 	ns_name = g_getenv("OIO_NS");
 	account = g_getenv("OIO_ACCOUNT");
 
