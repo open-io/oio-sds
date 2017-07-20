@@ -680,7 +680,6 @@ int
 main(int argc, char **argv)
 {
 	HC_TEST_INIT(argc,argv);
-	oio_log_flags |= LOG_FLAG_PRETTYTIME;
 
 	oio_sds_default_autocreate = 1;
 

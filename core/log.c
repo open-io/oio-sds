@@ -212,19 +212,8 @@ _logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 {
 	GString *gstr = g_string_sized_new(512);
 
-	if (oio_log_flags & LOG_FLAG_PRETTYTIME) {
-		GTimeVal tv;
-		g_get_current_time(&tv);
-		gchar * strnow = g_time_val_to_iso8601 (&tv);
-		g_string_append(gstr, strnow);
-		g_free(strnow);
-	} else {
-		g_string_append_printf(gstr, "%"G_GINT64_FORMAT,
-				g_get_monotonic_time () / G_TIME_SPAN_MILLISECOND);
-	}
-
-	g_string_append_printf(gstr, " %d %04X ",
-			getpid(), oio_log_current_thread_id());
+	g_string_append_printf(gstr, "%" G_GINT64_FORMAT " %d %04X ",
+			g_get_monotonic_time(), getpid(), oio_log_current_thread_id());
 
 	if (!log_domain || !*log_domain)
 		log_domain = "-";
