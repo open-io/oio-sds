@@ -51,6 +51,9 @@ set_target_properties(oiosds PROPERTIES
 		PUBLIC_HEADER "oio_sds.h"
 		SOVERSION ${ABI_VERSION})
 
+add_executable(tool_sdk_noconf tool_sdk_noconf.c)
+target_link_libraries(tool_sdk_noconf oiosds)
+
 add_executable(tool_sdk tool_sdk.c)
 target_link_libraries(tool_sdk oiosds)
 
