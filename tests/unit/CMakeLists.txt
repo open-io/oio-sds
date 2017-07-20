@@ -45,10 +45,6 @@ add_executable(test_svc_policy test_svc_policy.c)
 target_link_libraries(test_svc_policy ${COMMON})
 add_test(NAME metautils/svc_policy COMMAND test_svc_policy)
 
-add_executable(test_logger test_logger.c)
-target_link_libraries(test_logger ${COMMON})
-add_test(NAME metautils/logger COMMAND test_logger)
-
 add_executable(test_addr test_addr.c)
 target_link_libraries(test_addr ${COMMON})
 add_test(NAME metautils/addr COMMAND test_addr)
