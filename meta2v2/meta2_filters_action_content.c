@@ -329,7 +329,7 @@ meta2_filter_action_drain_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	_m2b_notify_beans(m2b, url, obc->l, "content.deleted");
+	_m2b_notify_beans(m2b, url, obc->l, "content.drained");
 	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;

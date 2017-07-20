@@ -757,6 +757,10 @@ pipeline = content_rebuild
 # pipeline = content_cleaner replication
 pipeline = content_cleaner
 
+[handler:storage.content.drained]
+# pipeline = content_cleaner replication
+pipeline = content_cleaner
+
 [handler:storage.container.new]
 pipeline = account_update
 
