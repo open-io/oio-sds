@@ -639,6 +639,9 @@ class TestMeta2Contents(BaseTestCase):
                                  data=json.dumps(chunks))
         self.assertError(resp, 410, 427)
         # ShowShouldFail
+        # Currently the proxy execute the same action for 'show' and 'locate'.
+        # Since this give the location of the chunks it should failed for a
+        # drained content.
         resp = self.session.get(self.url_content('show'), params=params)
         self.assertError(resp, 410, 427)
         # LocateShouldFail
@@ -683,7 +686,10 @@ class TestMeta2Contents(BaseTestCase):
         # TouchShouldWork
         resp = self.session.post(self.url_content('touch'), params=params)
         self.assertEqual(resp.status_code, 204)
-        # SetpoupShouldWork
+        # SetpropShouldWork
+        # If a drain is done on a snapshot we will no bet able to set a
+        # propertie because the container would be frozen, but if a drain is
+        # done on a content of a none frozen container it should work
         resp = self.session.post(self.url_content('set_properties'),
                                  params=params,
                                  data=json.dumps({'properties':

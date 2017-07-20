@@ -616,9 +616,9 @@ class DrainObject(ContainerCommandMixin, command.Command):
         self.patch_parser(parser)
         parser.add_argument(
             'objects',
-            metavar='<filename>',
+            metavar='<object>',
             nargs='+',
-            help='Local filename(s) to upload.'
+            help='Object(s) to drain'
         )
         return parser
 

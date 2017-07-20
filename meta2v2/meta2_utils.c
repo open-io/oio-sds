@@ -879,14 +879,14 @@ m2db_drain_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 {
 	GError *err = NULL;
 	err = m2db_get_alias(sq3, url, M2V2_FLAG_NOPROPS|M2V2_FLAG_HEADERS, cb, u0);
-	for (GSList *l = *(GSList **)u0; l; l = l->next)
-		if (DESCR(l->data) == &descr_struct_CHUNKS)
+	for (GSList *l = *(GSList **)u0; l; l = l->next) {
+		if (DESCR(l->data) == &descr_struct_CHUNKS) {
 			_db_delete_bean(sq3->db, l->data);
-		else if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
+		} else if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
 			CONTENTS_HEADERS_set2_chunk_method(l->data, CHUNK_METHOD_DRAINED);
 			_db_save_bean(sq3->db, l->data);
-
 		}
+	}
 	return err;
 }
 
