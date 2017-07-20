@@ -1,6 +1,6 @@
 import logging
 import os
-from oio.common.http import requests
+from oio.api.base import get_pool_manager
 from cliff import command, lister, show
 from oio.cli.utils import KeyValueAction, ValueFormatStoreTrueAction
 
@@ -678,16 +678,14 @@ class LocateObject(ObjectCommandMixin, lister.Lister):
             return cmp(c1[0], c2[0])
 
         def get_chunks_info(chunks):
-            session = requests.Session()
+            pool_manager = get_pool_manager()
             chunk_hash = ""
             chunk_size = ""
             for c in chunks:
-                resp = session.request('HEAD', c['url'])
-                if resp.status_code != 200:
-                    chunk_size = "%d %s" % (
-                        resp.status_code, resp.reason)
-                    chunk_hash = "%d %s" % (
-                        resp.status_code, resp.reason)
+                resp = pool_manager.request('HEAD', c['url'])
+                if resp.status != 200:
+                    chunk_size = "%d %s" % (resp.status, resp.reason)
+                    chunk_hash = "%d %s" % (resp.status, resp.reason)
                 else:
                     chunk_size = resp.headers.get(
                         'X-oio-chunk-meta-chunk-size',
