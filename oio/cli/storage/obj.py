@@ -1,8 +1,7 @@
-import logging
 import os
-from oio.common.http import requests
+
+from logging import getLogger
 from cliff import command, lister, show
-from oio.cli.utils import KeyValueAction, ValueFormatStoreTrueAction
 
 
 class ContainerCommandMixin(object):
@@ -55,9 +54,11 @@ class ObjectCommandMixin(ContainerCommandMixin):
 class CreateObject(ContainerCommandMixin, lister.Lister):
     """Upload object"""
 
-    log = logging.getLogger(__name__ + '.CreateObject')
+    log = getLogger(__name__ + '.CreateObject')
 
     def get_parser(self, prog_name):
+        from oio.cli.utils import KeyValueAction
+
         parser = super(CreateObject, self).get_parser(prog_name)
         self.patch_parser(parser)
         parser.add_argument(
@@ -151,7 +152,7 @@ class CreateObject(ContainerCommandMixin, lister.Lister):
 class TouchObject(ContainerCommandMixin, command.Command):
     """Touch an object in a container, re-triggers asynchronous treatments"""
 
-    log = logging.getLogger(__name__ + '.TouchObject')
+    log = getLogger(__name__ + '.TouchObject')
 
     def get_parser(self, prog_name):
         parser = super(TouchObject, self).get_parser(prog_name)
@@ -191,7 +192,7 @@ class TouchObject(ContainerCommandMixin, command.Command):
 class DeleteObject(ContainerCommandMixin, lister.Lister):
     """Delete object from container"""
 
-    log = logging.getLogger(__name__ + '.DeleteObject')
+    log = getLogger(__name__ + '.DeleteObject')
 
     def get_parser(self, prog_name):
         parser = super(DeleteObject, self).get_parser(prog_name)
@@ -261,7 +262,7 @@ class DeleteObject(ContainerCommandMixin, lister.Lister):
 class ShowObject(ObjectCommandMixin, show.ShowOne):
     """Show information about an object"""
 
-    log = logging.getLogger(__name__ + '.ShowObject')
+    log = getLogger(__name__ + '.ShowObject')
 
     def get_parser(self, prog_name):
         parser = super(ShowObject, self).get_parser(prog_name)
@@ -301,9 +302,11 @@ class ShowObject(ObjectCommandMixin, show.ShowOne):
 class SetObject(ObjectCommandMixin, command.Command):
     """Set object properties"""
 
-    log = logging.getLogger(__name__ + '.SetObject')
+    log = getLogger(__name__ + '.SetObject')
 
     def get_parser(self, prog_name):
+        from oio.cli.utils import KeyValueAction
+
         parser = super(SetObject, self).get_parser(prog_name)
         self.patch_parser(parser)
         parser.add_argument(
@@ -339,7 +342,7 @@ class SetObject(ObjectCommandMixin, command.Command):
 class SaveObject(ObjectCommandMixin, command.Command):
     """Save object locally"""
 
-    log = logging.getLogger(__name__ + '.SaveObject')
+    log = getLogger(__name__ + '.SaveObject')
 
     def get_parser(self, prog_name):
         parser = super(SaveObject, self).get_parser(prog_name)
@@ -388,9 +391,11 @@ class SaveObject(ObjectCommandMixin, command.Command):
 class ListObject(ContainerCommandMixin, lister.Lister):
     """List objects in container"""
 
-    log = logging.getLogger(__name__ + '.ListObject')
+    log = getLogger(__name__ + '.ListObject')
 
     def get_parser(self, prog_name):
+        from oio.cli.utils import ValueFormatStoreTrueAction
+
         parser = super(ListObject, self).get_parser(prog_name)
         self.patch_parser(parser)
         parser.add_argument(
@@ -575,7 +580,7 @@ class ListObject(ContainerCommandMixin, lister.Lister):
 class UnsetObject(ObjectCommandMixin, command.Command):
     """Unset object properties"""
 
-    log = logging.getLogger(__name__ + '.UnsetObject')
+    log = getLogger(__name__ + '.UnsetObject')
 
     def get_parser(self, prog_name):
         parser = super(UnsetObject, self).get_parser(prog_name)
@@ -609,7 +614,7 @@ class UnsetObject(ObjectCommandMixin, command.Command):
 class DrainObject(ContainerCommandMixin, command.Command):
     """ Drain the chunks """
 
-    log = logging.getLogger(__name__ + '.DrainObject')
+    log = getLogger(__name__ + '.DrainObject')
 
     def get_parser(self, prog_name):
         parser = super(DrainObject, self).get_parser(prog_name)
@@ -638,7 +643,7 @@ class DrainObject(ContainerCommandMixin, command.Command):
 class LocateObject(ObjectCommandMixin, lister.Lister):
     """Locate the parts of an object"""
 
-    log = logging.getLogger(__name__ + '.LocateObject')
+    log = getLogger(__name__ + '.LocateObject')
 
     def get_parser(self, prog_name):
         parser = super(LocateObject, self).get_parser(prog_name)
@@ -678,6 +683,8 @@ class LocateObject(ObjectCommandMixin, lister.Lister):
             return cmp(c1[0], c2[0])
 
         def get_chunks_info(chunks):
+            from oio.common.http import requests
+
             session = requests.Session()
             chunk_hash = ""
             chunk_size = ""

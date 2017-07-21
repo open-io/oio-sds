@@ -1,16 +1,11 @@
-import logging
-
-from cliff import command
-from cliff import lister
-from cliff import show
-
-from oio.cli.utils import KeyValueAction
+from logging import getLogger
+from cliff import command, lister, show
 
 
 class ListReference(lister.Lister):
     """List services linked to a reference"""
 
-    log = logging.getLogger(__name__ + '.ListReference')
+    log = getLogger(__name__ + '.ListReference')
 
     def get_parser(self, prog_name):
         parser = super(ListReference, self).get_parser(prog_name)
@@ -37,7 +32,7 @@ class ListReference(lister.Lister):
 class ShowReference(show.ShowOne):
     """Show reference properties"""
 
-    log = logging.getLogger(__name__ + '.ShowReference')
+    log = getLogger(__name__ + '.ShowReference')
 
     def get_parser(self, prog_name):
         parser = super(ShowReference, self).get_parser(prog_name)
@@ -66,7 +61,7 @@ class ShowReference(show.ShowOne):
 class CreateReference(lister.Lister):
     """Create reference"""
 
-    log = logging.getLogger(__name__ + '.CreateReference')
+    log = getLogger(__name__ + '.CreateReference')
 
     def get_parser(self, prog_name):
         parser = super(CreateReference, self).get_parser(prog_name)
@@ -96,7 +91,7 @@ class CreateReference(lister.Lister):
 class DeleteReference(command.Command):
     """Delete reference"""
 
-    log = logging.getLogger(__name__ + '.DeleteReference')
+    log = getLogger(__name__ + '.DeleteReference')
 
     def get_parser(self, prog_name):
         parser = super(DeleteReference, self).get_parser(prog_name)
@@ -121,7 +116,7 @@ class DeleteReference(command.Command):
 class LinkReference(command.Command):
     """Link services to reference"""
 
-    log = logging.getLogger(__name__ + '.LinkReference')
+    log = getLogger(__name__ + '.LinkReference')
 
     def get_parser(self, prog_name):
         parser = super(LinkReference, self).get_parser(prog_name)
@@ -153,7 +148,7 @@ class LinkReference(command.Command):
 class UnlinkReference(command.Command):
     """Unlink services from reference"""
 
-    log = logging.getLogger(__name__ + '.UnlinkReference')
+    log = getLogger(__name__ + '.UnlinkReference')
 
     def get_parser(self, prog_name):
         parser = super(UnlinkReference, self).get_parser(prog_name)
@@ -185,7 +180,7 @@ class UnlinkReference(command.Command):
 class PollReference(command.Command):
     """Poll services for reference"""
 
-    log = logging.getLogger(__name__ + '.PollReference')
+    log = getLogger(__name__ + '.PollReference')
 
     def get_parser(self, prog_name):
         parser = super(PollReference, self).get_parser(prog_name)
@@ -215,7 +210,7 @@ class PollReference(command.Command):
 class ForceReference(command.Command):
     """Force link a service to reference"""
 
-    log = logging.getLogger(__name__ + '.ForceReference')
+    log = getLogger(__name__ + '.ForceReference')
 
     def get_parser(self, prog_name):
         parser = super(ForceReference, self).get_parser(prog_name)
@@ -269,9 +264,11 @@ class ForceReference(command.Command):
 class SetReference(command.Command):
     """Set reference properties"""
 
-    log = logging.getLogger(__name__ + '.SetReference')
+    log = getLogger(__name__ + '.SetReference')
 
     def get_parser(self, prog_name):
+        from oio.cli.utils import KeyValueAction
+
         parser = super(SetReference, self).get_parser(prog_name)
         parser.add_argument(
             'reference',
@@ -304,7 +301,7 @@ class SetReference(command.Command):
 class UnsetReference(command.Command):
     """Unset reference properties"""
 
-    log = logging.getLogger(__name__ + '.UnsetReference')
+    log = getLogger(__name__ + '.UnsetReference')
 
     def get_parser(self, prog_name):
         parser = super(UnsetReference, self).get_parser(prog_name)
@@ -334,7 +331,7 @@ class UnsetReference(command.Command):
 class LocateReference(show.ShowOne):
     """Locate the services in charge of a reference"""
 
-    log = logging.getLogger(__name__ + '.LocateReference')
+    log = getLogger(__name__ + '.LocateReference')
 
     def get_parser(self, prog_name):
         parser = super(LocateReference, self).get_parser(prog_name)

@@ -2,22 +2,21 @@
 
 import sys
 import logging
+from cliff.app import App
 
-import cliff.app
-
-import oio
-from oio.common import utils
+from oio import __version__ as oio_version
+from oio.common.utils import env
 from oio.cli.commandmanager import CommandManager
 from oio.cli import clientmanager
 
 
-class OpenIOShell(cliff.app.App):
+class OpenIOShell(App):
     log = logging.getLogger(__name__)
 
     def __init__(self):
         super(OpenIOShell, self).__init__(
             description=__doc__.strip() if __doc__ else None,
-            version=oio.__version__,
+            version=oio_version,
             command_manager=CommandManager('oiopy.cli'),
             deferred_help=True)
         self.api_version = {}
@@ -72,21 +71,21 @@ class OpenIOShell(cliff.app.App):
             '--oio-ns',
             metavar='<namespace>',
             dest='ns',
-            default=utils.env('OIO_NS'),
+            default=env('OIO_NS'),
             help='Namespace name (Env: OIO_NS)',
         )
         parser.add_argument(
             '--oio-account',
             metavar='<account>',
             dest='account_name',
-            default=utils.env('OIO_ACCOUNT'),
+            default=env('OIO_ACCOUNT'),
             help='Account name (Env: OIO_ACCOUNT)'
         )
         parser.add_argument(
             '--oio-proxyd-url',
             metavar='<proxyd url>',
             dest='proxyd_url',
-            default=utils.env('OIO_PROXYD_URL'),
+            default=env('OIO_PROXYD_URL'),
             help='Proxyd URL (Env: OIO_PROXYD_URL)'
         )
         parser.add_argument(

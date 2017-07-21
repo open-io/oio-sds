@@ -17,7 +17,7 @@
 
 import time
 import subprocess
-from oio import ObjectStorageApi
+from oio.api.object_storage import ObjectStorageApi
 from oio.container.client import ContainerClient
 from oio.event.filters.notify import NotifyFilter
 from tests.utils import BaseTestCase, random_str
