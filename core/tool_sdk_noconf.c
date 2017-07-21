@@ -30,13 +30,11 @@ static void _preconfigure(const char *ns, const char *proxy) {
 	assert(ns != NULL);
 	assert(proxy != NULL);
 
-	const char *base = g_getenv("TMPDIR") ?: "/tmp";
-
 	GString *cfg = g_string_new("");
 	g_string_printf(cfg, "[%s]\nproxy=%s\n", ns, proxy);
 
 	GString *path = g_string_new("");
-	g_string_printf(path, "%s/plop-XXXXXX", base);
+	g_string_printf(path, "%s/plop-XXXXXX", g_get_tmp_dir());
 
 	int fd = g_mkstemp_full(path->str, O_RDWR, 0600);
 	assert(fd >= 0);
