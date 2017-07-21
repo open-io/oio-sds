@@ -131,6 +131,7 @@ func_tests () {
 	# Must be final, it removes the system config
 	rm "/$HOME/.oio/sds.conf"
 	export OIO_PROXY=$(oio-test-config.py -t proxy -1)
+	export OIO_ECD=$(oio-test-config.py -t ecd -1)
 	./core/tool_sdk_noconf
 
     gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
