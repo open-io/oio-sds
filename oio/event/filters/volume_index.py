@@ -1,7 +1,7 @@
 from oio.event.evob import Event
 from oio.event.consumer import EventTypes
 from oio.event.filters.base import Filter
-from urllib3.exceptions import ConnectionError
+from oio.common.exceptions import OioNetworkException
 
 
 CHUNK_EVENTS = [EventTypes.CHUNK_DELETED, EventTypes.CHUNK_NEW]
@@ -18,7 +18,7 @@ class VolumeIndexFilter(Filter):
             try:
                 return self.app.rdir.chunk_delete(
                         volume_id, container_id, content_id, chunk_id)
-            except ConnectionError:
+            except OioNetworkException:
                 # TODO(jfs): detect the case of a connection timeout
                 if i >= self.__class__._attempts_delete - 1:
                     raise
@@ -33,7 +33,7 @@ class VolumeIndexFilter(Filter):
             try:
                 return self.app.rdir.chunk_push(
                         volume_id, container_id, content_id, chunk_id, **args)
-            except ConnectionError:
+            except OioNetworkException:
                 # TODO(jfs): detect the case of a connection timeout
                 if i >= self.__class__._attempts_push - 1:
                     raise
