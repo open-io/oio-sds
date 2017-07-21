@@ -1,6 +1,7 @@
 cliff>=2.0.0,<2.1.0
-eventlet>=0.15.2
-requests>=2.6.0
+# This can be simplified when https://github.com/eventlet/eventlet/issues/401 is fixed
+eventlet!=0.18.3,!=0.20.1,<0.21.0,>=0.18.2
+requests<2.13.0
 werkzeug>=0.9.1
 redis>=2.10.3
 gunicorn>=19.4.5
