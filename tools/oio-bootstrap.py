@@ -197,12 +197,13 @@ MaxSpareServers 40
 </IfModule>
 
 <IfModule worker.c>
-StartServers 2
-MaxClients 40
-MaxRequestWorkers 100
-MinSpareThreads 2
-MaxSpareThreads 40
-ThreadsPerChild 20
+StartServers 1
+ServerLimit 1
+MaxClients 10
+MinSpareThreads 1
+MaxSpareThreads 5
+ThreadsPerChild 10
+MaxRequestWorkers 10
 MaxRequestsPerChild 0
 </IfModule>
 
@@ -630,7 +631,7 @@ env.LD_LIBRARY_PATH=${HOME}/.local/@LD_LIBDIR@:${LIBDIR}
 
 limit.core_size=-1
 #limit.max_files=2048
-#limit.stack_size=256
+limit.stack_size=256
 
 #include=${CFGDIR}/*-gridinit.conf
 
