@@ -131,7 +131,7 @@
 			{ "type": "int64", "name": "oio_ns_chunk_size",
 				"key": "ns.chunk_size",
 				"descr": "Default chunk size for the given namespace.",
-				"def": "100Mi", "min": 1, "max": "max" },
+				"def": "10Mi", "min": 1, "max": "max" },
 
 			{ "type": "string", "name": "oio_ns_service_update_policy",
 				"key": "ns.service_update_policy",
