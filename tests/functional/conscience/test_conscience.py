@@ -53,7 +53,7 @@ class TestConscienceFunctional(BaseTestCase):
             del s[d]
             logging.debug("Trying without [%s]", d)
             resp = self.session.post(self._url_cs('register'), json.dumps(s))
-            self.assertEqual(resp.status_code, 200)
+            self.assertIn(resp.status_code, (200, 204))
 
     def test_service_pool_delete(self):
         self._flush_cs('echo')
@@ -70,15 +70,12 @@ class TestConscienceFunctional(BaseTestCase):
     def test_service_pool_actions_lock(self):
         srv = self._srv('echo')
         resp = self.session.post(self._url_cs('lock'), json.dumps(srv))
-        self.assertEqual(resp.status_code, 200)
-        srvout = resp.json()
-        self.assertIsInstance(srvout, dict)
-        self.assertDictEqual(srvout, srv)
+        self.assertIn(resp.status_code, (200, 204))
 
     def test_service_pool_actions_lock_and_reput(self):
         srv = self._srv('echo')
         resp = self.session.post(self._url_cs('lock'), json.dumps(srv))
-        self.assertEqual(resp.status_code, 200)
+        self.assertIn(resp.status_code, (200, 204))
         resp = self.session.get(self._url_cs('list'), params={"type": "echo"})
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
@@ -105,7 +102,7 @@ class TestConscienceFunctional(BaseTestCase):
     def test_service_pool_actions_lock_and_relock(self):
         srv = self._srv('echo')
         resp = self.session.post(self._url_cs("lock"), json.dumps(srv))
-        self.assertEqual(resp.status_code, 200)
+        self.assertIn(resp.status_code, (200, 204))
         resp = self.session.get(self._url_cs('list'), params={"type": "echo"})
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
@@ -114,7 +111,7 @@ class TestConscienceFunctional(BaseTestCase):
 
         srv['score'] = 0
         resp = self.session.post(self._url_cs('lock'), json.dumps(srv))
-        self.assertEqual(resp.status_code, 200)
+        self.assertIn(resp.status_code, (200, 204))
         resp = self.session.get(self._url_cs('list'), params={"type": "echo"})
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
@@ -124,9 +121,9 @@ class TestConscienceFunctional(BaseTestCase):
     def test_services_pool_actions_unlock(self):
         srv = self._srv('echo')
         resp = self.session.post(self._url_cs("lock"), json.dumps(srv))
-        self.assertEqual(resp.status_code, 200)
+        self.assertIn(resp.status_code, (200, 204))
         resp = self.session.post(self._url_cs("unlock"), json.dumps(srv))
-        self.assertEqual(resp.status_code, 200)
+        self.assertIn(resp.status_code, (200, 204))
         resp = self.session.get(self._url_cs('list'), params={"type": "echo"})
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
@@ -138,7 +135,7 @@ class TestConscienceFunctional(BaseTestCase):
         srv = self._srv('echo')
         srv['score'] = -1
         resp = self.session.post(self._url_cs('unlock'), json.dumps(srv))
-        self.assertEqual(resp.status_code, 200)
+        self.assertIn(resp.status_code, (200, 204))
         resp = self.session.get(self._url_cs('list'), params={"type": "echo"})
         body = resp.json()
         self.assertIsInstance(body, list)
@@ -156,7 +153,7 @@ class TestConscienceFunctional(BaseTestCase):
         # register the service with a positive score
         srv['score'] = 1
         resp = self.session.post(self._url_cs("lock"), json.dumps(srv))
-        self.assertEqual(resp.status_code, 200)
+        self.assertIn(resp.status_code, (200, 204))
         # Ensure the proxy reloads its LB pool
         self._reload()
         # check it appears
@@ -174,7 +171,7 @@ class TestConscienceFunctional(BaseTestCase):
         # register the service locked to 0
         srv['score'] = 0
         resp = self.session.post(self._url_cs("lock"), json.dumps(srv))
-        self.assertEqual(resp.status_code, 200)
+        self.assertIn(resp.status_code, (200, 204))
         # Ensure the proxy reloads its LB pool
         self._reload()
         # check it appears
