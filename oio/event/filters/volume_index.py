@@ -1,7 +1,7 @@
-from oio.event.evob import Event
+from oio.event.evob import Event, EventError
 from oio.event.consumer import EventTypes
 from oio.event.filters.base import Filter
-from oio.common.exceptions import OioNetworkException
+from oio.common.exceptions import OioNetworkException, OioException
 
 
 CHUNK_EVENTS = [EventTypes.CHUNK_DELETED, EventTypes.CHUNK_NEW]
@@ -47,15 +47,20 @@ class VolumeIndexFilter(Filter):
             container_id = data.get('container_id')
             content_id = data.get('content_id')
             chunk_id = data.get('chunk_id')
-            if event.event_type == EventTypes.CHUNK_DELETED:
-                self._chunk_delete(
-                    volume_id, container_id, content_id, chunk_id)
-            else:
-                args = {
-                    'mtime': event.when / 1000000,  # seconds
-                }
-                self._chunk_push(
-                    volume_id, container_id, content_id, chunk_id, args)
+            try:
+                if event.event_type == EventTypes.CHUNK_DELETED:
+                    self._chunk_delete(
+                        volume_id, container_id, content_id, chunk_id)
+                else:
+                    args = {
+                        'mtime': event.when / 1000000,  # seconds
+                    }
+                    self._chunk_push(
+                        volume_id, container_id, content_id, chunk_id, args)
+            except OioException as exc:
+                resp = EventError(event=event,
+                                  body="rdir update error: %s" % exc)
+                return resp(env, cb)
         return self.app(env, cb)
 
 
