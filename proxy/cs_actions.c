@@ -127,27 +127,94 @@ enum reg_op_e {
 	REGOP_UNLOCK,
 };
 
-#ifdef HAVE_EXTRA_DEBUG
-static const char*
-_regop_2str (const enum reg_op_e op)
+static GError *
+_registration_batch (enum reg_op_e op, GSList *services)
 {
-	switch (op) {
-		ON_ENUM(REGOP_,PUSH);
-		ON_ENUM(REGOP_,LOCK);
-		ON_ENUM(REGOP_,UNLOCK);
+	const gint64 now = oio_ext_real_seconds();
+
+	/* Sanity checks and patch of each score */
+	for (GSList *l=services; l ;l=l->next) {
+		struct service_info_s *si = l->data;
+
+		if (!metautils_addr_valid_for_connect(&si->addr))
+			return BADREQ("Invalid service address");
+		if (!si->type[0] && !service_info_get_tag(si->tags, "tag.id"))
+			return BADREQ("Service type not specified");
+		if (!validate_srvtype(si->type))
+			return BADREQ("Service type currently unknown");
+
+		si->score.timestamp = now;
+		switch (op) {
+			case REGOP_PUSH:
+				si->score.value = SCORE_UNSET;
+				continue;
+			case REGOP_LOCK:
+				si->score.value = CLAMP(si->score.value, SCORE_DOWN, SCORE_MAX);
+				continue;
+			case REGOP_UNLOCK:
+				si->score.value = SCORE_UNLOCK;
+				continue;
+		}
 	}
-	g_assert_not_reached ();
-	return "?";
+
+	/* Patch the various caches where services are identified by the
+	 * "service ID" key: the cache of known services, ad the cache of local
+	 * services (if configured).  */
+	for (GSList *l=services; l ;l=l->next) {
+		struct service_info_s *si = l->data;
+		gchar *k = service_info_key (si);
+
+		if (!service_is_known (k)) {
+			service_learn (k);
+			service_tag_set_value_boolean (service_info_ensure_tag (
+						si->tags, NAME_TAGNAME_RAWX_FIRST), TRUE);
+		}
+
+		if (ttl_expire_local_services > 0 && op != REGOP_UNLOCK) {
+			struct service_info_s *v = service_info_dup (si);
+			v->score.timestamp = oio_ext_monotonic_seconds ();
+			REG_WRITE(
+					const struct service_info_s *si0 = lru_tree_get(srv_registered, k);
+					if (si0) v->score.value = si0->score.value;
+					lru_tree_insert (srv_registered, g_strdup(k), v);
+					);
+		}
+
+		g_free(k);
+	}
+
+/* if we receive a simple registration and if a special action
+ * is already pending (lock or unlock), we should not lose the
+ * special action, so merge the old score (i.e. the action code)
+ * in the new services description */
+#define ENQUEUE_SERVICE() { \
+	if (op == REGOP_PUSH) { \
+		struct service_info_s *si0 = lru_tree_get(push_queue, key); \
+		if (si0 && si0->score.value != SCORE_UNSET) \
+			si->score.value = si0->score.value; \
+	} \
+	lru_tree_insert(push_queue, key, si); \
 }
-#endif
+	if (flag_cache_enabled) {
+		GString *gstr = g_string_sized_new (256);
+		for (GSList *l=services; l ;l=l->next) {
+			struct service_info_s *si = l->data;
+			g_string_set_size(gstr, 0);
+			service_info_encode_json (gstr, si, TRUE);
+			gchar *key = service_info_key(si);
+			PUSH_WRITE(ENQUEUE_SERVICE());
+		}
+		return NULL;
+	} else {
+		CSURL(cs);
+		return conscience_remote_push_services (cs, services);
+	}
+}
 
 static enum http_rc_e
 _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *jsrv)
 {
 	GError *err;
-
-	if (!jsrv || !json_object_is_type (jsrv, json_type_object))
-		return _reply_common_error (args, BADREQ("Expected: json object"));
 
 	if (!push_queue)
 		return _reply_bad_gateway(args, SYSERR("Service upstream disabled"));
@@ -155,103 +222,33 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 	if (NULL != (err = _cs_check_tokens(args)))
 		return _reply_notfound_error (args, err);
 
-	struct service_info_s *si = NULL;
-	err = service_info_load_json_object (jsrv, &si, TRUE);
-
-	if (err) {
-		g_prefix_error (&err, "JSON error: ");
-		return _reply_common_error (args, err);
-	}
-
-	if (!metautils_addr_valid_for_connect(&si->addr)) {
-		service_info_clean (si);
-		return _reply_common_error (args, BADREQ("Invalid service address"));
-	}
-
-	if (!si->type[0] && !service_info_get_tag(si->tags, "tag.id")) {
-		service_info_clean (si);
-		return _reply_format_error (args, BADREQ("Service type not specified"));
-	}
-
-	if (!validate_srvtype(si->type)) {
-		service_info_clean (si);
-		return _reply_format_error (args, BADREQ("Service type currently unknown"));
-	}
-
-	if (!si->ns_name[0]) {
-		GRID_TRACE2("%s NS forced to %s", __FUNCTION__, si->ns_name);
-		g_strlcpy (si->ns_name, ns_name, sizeof(si->ns_name));
-	} else if (!validate_namespace (si->ns_name)) {
-		service_info_clean (si);
-		return _reply_format_error (args, BADNS());
-	}
-
-	gchar *k = service_info_key (si);
-	STRING_STACKIFY(k);
-	GRID_TRACE2("%s op=%s score=%d key=[%s]", __FUNCTION__,
-			_regop_2str(op), si->score.value, k);
-
-	switch (op) {
-		case REGOP_PUSH:
-			si->score.value = SCORE_UNSET;
-			if (!service_is_known (k)) {
-				service_learn (k);
-				service_tag_set_value_boolean (service_info_ensure_tag (
-							si->tags, NAME_TAGNAME_RAWX_FIRST), TRUE);
-			}
-			break;
-		case REGOP_LOCK:
-			si->score.value = CLAMP(si->score.value, SCORE_DOWN, SCORE_MAX);
-			break;
-		case REGOP_UNLOCK:
-			si->score.value = SCORE_UNLOCK;
-			break;
-		default:
-			g_assert_not_reached();
-	}
-
-	if (ttl_expire_local_services > 0 && op != REGOP_UNLOCK) {
-		struct service_info_s *v = service_info_dup (si);
-		v->score.timestamp = oio_ext_monotonic_seconds ();
-		REG_WRITE(
-			const struct service_info_s *si0 = lru_tree_get(srv_registered, k);
-			if (si0) v->score.value = si0->score.value;
-			lru_tree_insert (srv_registered, g_strdup(k), v);
-		);
-	}
-
-	si->score.timestamp = oio_ext_real_seconds ();
-
-	if (flag_cache_enabled) {
-		GString *gstr = g_string_sized_new (256);
-		service_info_encode_json (gstr, si, TRUE);
-		gchar *key = service_info_key(si);
-		PUSH_WRITE(
-			/* if we receive a simple registration and if a special action
-			 * is already pending (lock or unlock), we should not lose the
-			 * special action, so merge the old score (i.e. the action code)
-			 * in the new services description */
-			if (op == REGOP_PUSH) {
-				struct service_info_s *si0 = lru_tree_get(push_queue, key);
-				if (si0 && si0->score.value != SCORE_UNSET)
-					si->score.value = si0->score.value;
-			}
-			lru_tree_insert(push_queue, key, si);
-		);
-		return _reply_success_json (args, gstr);
-	} else {
-		CSURL(cs);
-		GSList l = {.data = si, .next = NULL};
-		if (NULL != (err = conscience_remote_push_services (cs, &l))) {
-			service_info_clean (si);
-			return _reply_common_error (args, err);
-		} else {
-			GString *gstr = g_string_sized_new (256);
-			service_info_encode_json (gstr, si, TRUE);
-			service_info_clean (si);
-			return _reply_success_json (args, gstr);
+	/* Manage a single service as well as a list of services */
+	GSList *services = NULL;
+	if (json_object_is_type (jsrv, json_type_array)) {
+		const gint max = json_object_array_length(jsrv);
+		for (gint i=0; i<max ;++i) {
+			struct json_object *jitem = json_object_array_get_idx(jsrv, i);
+			struct service_info_s *si = NULL;
+			err = service_info_load_json_object (jitem, &si, TRUE);
+			if (err) break;
+			services = g_slist_prepend(services, si);
 		}
+	} else if (json_object_is_type (jsrv, json_type_object)) {
+		struct service_info_s *si = NULL;
+		if (!(err = service_info_load_json_object (jsrv, &si, TRUE)))
+			services = g_slist_prepend(services, si);
+	} else {
+		err = BADREQ("Expected: json object");
 	}
+
+	/* Register the whole batch */
+	if (!err)
+		err = _registration_batch(op, services);
+	g_slist_free_full(services, (GDestroyNotify)service_info_clean);
+
+	if (!err)
+		return _reply_success_json (args, NULL);
+	return _reply_common_error (args, err);
 }
 
 /* -------------------------------------------------------------------------- */
