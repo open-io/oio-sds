@@ -176,10 +176,12 @@ class ClusterUnlockAll(lister.Lister):
             all_descr = self.app.client_manager.admin.cluster_list(type_)
             for descr in all_descr:
                 descr['type'] = type_
-                try:
-                    self.app.client_manager.admin.cluster_unlock_score(descr)
+            try:
+                self.app.client_manager.admin.cluster_unlock_score(all_descr)
+                for descr in all_descr:
                     yield type_, descr['addr'], "unlocked"
-                except Exception as exc:
+            except Exception as exc:
+                for descr in all_descr:
                     yield type_, descr['addr'], str(exc)
 
     def take_action(self, parsed_args):
