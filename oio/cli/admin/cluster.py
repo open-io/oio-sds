@@ -274,11 +274,10 @@ class ClusterLock(ClusterUnlock):
         return parser
 
     def _lock_one(self, type_, addr, score):
-        service_info = {'type': type_, 'addr': addr, 'score': score}
+        si = {'type': type_, 'addr': addr, 'score': score}
         try:
-            svc = self.app.client_manager.admin.cluster_lock_score(
-                    service_info)
-            yield type_, addr, "locked to %d" % int(svc.get("score", score))
+            self.app.client_manager.admin.cluster_lock_score(si)
+            yield type_, addr, "locked to %d" % int(score)
         except Exception as exc:
             yield type_, addr, str(exc)
 
