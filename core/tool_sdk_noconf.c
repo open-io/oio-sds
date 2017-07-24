@@ -26,12 +26,21 @@ License along with this library.
 #include <core/oiostr.h>
 #include <core/oio_sds.h>
 
-static void _preconfigure(const char *ns, const char *proxy) {
+/**
+ * One configuration entry is always mandatory for any client: the URL of the
+ * oio-proxy (that manages only metadata). Currently (and this is subject to
+ * change soon), the client sometimes needs a side daemon that simplifies the
+ * management of erasure-coded data.
+ */
+static void _preconfigure(const char *ns, const char *proxy, const char *ecd) {
 	assert(ns != NULL);
 	assert(proxy != NULL);
 
 	GString *cfg = g_string_new("");
-	g_string_printf(cfg, "[%s]\nproxy=%s\n", ns, proxy);
+	g_string_printf(cfg, "[%s]\n", ns);
+	g_string_append_printf(cfg, "proxy=%s\n", proxy);
+	if (ecd)
+		g_string_append_printf(cfg, "ecd=%s\n", ecd);
 
 	GString *path = g_string_new("");
 	g_string_printf(path, "%s/plop-XXXXXX", g_get_tmp_dir());
@@ -102,13 +111,13 @@ static struct oio_url_s * _load_url_from_env (void) {
 
 int main(int argc, char **argv) {
 	(void) argc, (void) argv;
-	const char *url_proxy = g_getenv("OIO_PROXY");
 	struct oio_url_s *url = _load_url_from_env();
 
 	struct oio_error_s *err;
 	struct oio_sds_s *sds = NULL;
 
-	_preconfigure(oio_url_get(url, OIOURL_NS), url_proxy);
+	_preconfigure(oio_url_get(url, OIOURL_NS),
+			g_getenv("OIO_PROXY"), g_getenv("OIO_ECD"));
 
 	err = oio_sds_init (&sds, oio_url_get(url, OIOURL_NS));
 	assert(err == NULL);
