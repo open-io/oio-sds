@@ -165,6 +165,7 @@ _clean_url (struct oio_url_s *u)
 	oio_str_clean(&u->version);
 	oio_str_clean(&u->content);
 	oio_str_clean(&u->whole);
+	oio_str_clean(&u->fullpath);
 	u->hexid[0] = '\0';
 	u->flags = 0;
 }
@@ -263,6 +264,7 @@ oio_url_dup(const struct oio_url_s *u)
 	STRDUP(result, u, whole);
 	STRDUP(result, u, version);
 	STRDUP(result, u, content);
+	STRDUP(result, u, fullpath);
 	return result;
 }
 
