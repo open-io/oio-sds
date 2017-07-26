@@ -303,6 +303,7 @@ _dir_proxy_get_prop(struct oio_directory_s *self, const struct oio_url_s *url,
 				fct(ctx, key, json_object_get_string(val));
 			}
 		}
+		json_object_put(json);
 	}
 
 	if (out) {
