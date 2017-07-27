@@ -1,6 +1,6 @@
 import logging
 import os
-from oio.api.base import get_pool_manager
+from oio.common.http import get_pool_manager
 from cliff import command, lister, show
 from oio.cli.utils import KeyValueAction, ValueFormatStoreTrueAction
 
