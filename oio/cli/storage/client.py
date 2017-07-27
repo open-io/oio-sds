@@ -1,12 +1,13 @@
-import logging
-from oio.api.object_storage import ObjectStorageApi
+from logging import getLogger
 
-LOG = logging.getLogger(__name__)
+LOG = getLogger(__name__)
 
 API_NAME = 'storage'
 
 
 def make_client(instance):
+    from oio.api.object_storage import ObjectStorageApi
+
     admin_mode = instance.get_admin_mode()
     endpoint = instance.get_endpoint('storage')
     client = ObjectStorageApi(

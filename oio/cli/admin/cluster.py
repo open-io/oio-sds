@@ -1,17 +1,11 @@
-import logging
-
-from cliff import lister
-from cliff import show
-from cliff import command
-from time import time as now, sleep
-
-from oio.common.utils import load_namespace_conf
+from logging import getLogger
+from cliff import lister, show, command
 
 
 class ClusterShow(show.ShowOne):
     """Show information of all services in the cluster"""
 
-    log = logging.getLogger(__name__ + '.ClusterShow')
+    log = getLogger(__name__ + '.ClusterShow')
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
@@ -34,7 +28,7 @@ class ClusterShow(show.ShowOne):
 class ClusterList(lister.Lister):
     """List services of the namespace"""
 
-    log = logging.getLogger(__name__ + '.ClusterList')
+    log = getLogger(__name__ + '.ClusterList')
 
     def get_parser(self, prog_name):
         parser = super(ClusterList, self).get_parser(prog_name)
@@ -88,7 +82,7 @@ class ClusterList(lister.Lister):
 class ClusterLocalList(lister.Lister):
     """List local services"""
 
-    log = logging.getLogger(__name__ + '.ClusterLocalList')
+    log = getLogger(__name__ + '.ClusterLocalList')
 
     def get_parser(self, prog_name):
         parser = super(ClusterLocalList, self).get_parser(prog_name)
@@ -125,7 +119,7 @@ class ClusterLocalList(lister.Lister):
 class ClusterUnlock(lister.Lister):
     """Unlock score"""
 
-    log = logging.getLogger(__name__ + '.ClusterUnlock')
+    log = getLogger(__name__ + '.ClusterUnlock')
 
     def get_parser(self, prog_name):
         parser = super(ClusterUnlock, self).get_parser(prog_name)
@@ -157,7 +151,7 @@ class ClusterUnlock(lister.Lister):
 class ClusterUnlockAll(lister.Lister):
     """Unlock all services of the cluster"""
 
-    log = logging.getLogger(__name__ + '.ClusterUnlockAll')
+    log = getLogger(__name__ + '.ClusterUnlockAll')
 
     def get_parser(self, prog_name):
         parser = super(ClusterUnlockAll, self).get_parser(prog_name)
@@ -190,7 +184,7 @@ class ClusterUnlockAll(lister.Lister):
 class ClusterWait(lister.Lister):
     """Wait for the services to get a score"""
 
-    log = logging.getLogger(__name__ + '.ClusterWait')
+    log = getLogger(__name__ + '.ClusterWait')
 
     def get_parser(self, prog_name):
         parser = super(ClusterWait, self).get_parser(prog_name)
@@ -208,6 +202,7 @@ class ClusterWait(lister.Lister):
         return parser
 
     def _wait(self, parsed_args):
+        from time import time as now, sleep
 
         types = parsed_args.types
         if not parsed_args.types:
@@ -246,7 +241,7 @@ class ClusterWait(lister.Lister):
 class ClusterLock(ClusterUnlock):
     """Lock score"""
 
-    log = logging.getLogger(__name__ + '.ClusterLock')
+    log = getLogger(__name__ + '.ClusterLock')
 
     def get_parser(self, prog_name):
         parser = super(ClusterLock, self).get_parser(prog_name)
@@ -279,7 +274,7 @@ class ClusterLock(ClusterUnlock):
 class ClusterFlush(command.Command):
     """Flush all services of the cluster"""
 
-    log = logging.getLogger(__name__ + '.ClusterFlush')
+    log = getLogger(__name__ + '.ClusterFlush')
 
     def get_parser(self, prog_name):
         parser = super(ClusterFlush, self).get_parser(prog_name)
@@ -303,13 +298,14 @@ class ClusterFlush(command.Command):
 class LocalNSConf(show.ShowOne):
     """show namespace configuration values locally configured"""
 
-    log = logging.getLogger(__name__ + '.LocalNSConf')
+    log = getLogger(__name__ + '.LocalNSConf')
 
     def get_parser(self, prog_name):
         parser = super(LocalNSConf, self).get_parser(prog_name)
         return parser
 
     def take_action(self, parsed_args):
+        from oio.common.utils import load_namespace_conf
 
         self.log.debug('take_action(%s)', parsed_args)
         namespace = self.app.client_manager.admin.conf['namespace']

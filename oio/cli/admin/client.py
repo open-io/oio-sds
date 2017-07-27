@@ -1,12 +1,3 @@
-import logging
-from oio.common.utils import json
-from oio.rdir.client import RdirClient, RdirDispatcher
-from oio.event.client import EventClient
-from oio.conscience.client import ConscienceClient
-from oio.directory.meta0 import Meta0Client
-
-LOG = logging.getLogger(__name__)
-
 API_NAME = 'admin'
 
 
@@ -24,12 +15,14 @@ class AdminClient(object):
     @property
     def volume(self):
         if not self._rdir:
+            from oio.rdir.client import RdirClient
             self._rdir = RdirClient(self.conf, pool_manager=self.pool_manager)
         return self._rdir
 
     @property
     def rdir_lb(self):
         if not self._rdir_lb:
+            from oio.rdir.client import RdirDispatcher
             self._rdir_lb = RdirDispatcher(self.conf,
                                            pool_manager=self.pool_manager)
         return self._rdir_lb
@@ -37,12 +30,14 @@ class AdminClient(object):
     @property
     def event(self):
         if not self._event:
+            from oio.event.client import EventClient
             self._event = EventClient(self.conf)
         return self._event
 
     @property
     def cluster(self):
         if not self._cluster:
+            from oio.conscience.client import ConscienceClient
             self._cluster = ConscienceClient(self.conf,
                                              pool_manager=self.pool_manager)
         return self._cluster
@@ -50,6 +45,7 @@ class AdminClient(object):
     @property
     def meta0(self):
         if not self._meta0:
+            from oio.directory.meta0 import Meta0Client
             self._meta0 = Meta0Client(self.conf,
                                       pool_manager=self.pool_manager)
         return self._meta0
@@ -85,6 +81,8 @@ class AdminClient(object):
         return self.volume.admin_clear(volume)
 
     def volume_show(self, volume):
+        from oio.common.utils import json
+
         info = self.volume.status(volume)
         data = {}
         containers = info.get('container')

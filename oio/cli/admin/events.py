@@ -1,12 +1,11 @@
-import logging
-
+from logging import getLogger
 from cliff import show
 
 
 class StatsEvents(show.ShowOne):
     """Stats events"""
 
-    log = logging.getLogger(__name__ + '.StatsEvents')
+    log = getLogger(__name__ + '.StatsEvents')
 
     def get_parser(self, prog_name):
         parser = super(StatsEvents, self).get_parser(prog_name)
@@ -29,7 +28,7 @@ class EventsExhume(show.ShowOne):
     Exhume (replay) events that have been buried.
     """
 
-    log = logging.getLogger(__name__ + '.EventsExhume')
+    log = getLogger(__name__ + '.EventsExhume')
 
     def get_parser(self, prog_name):
         parser = super(EventsExhume, self).get_parser(prog_name)

@@ -1,14 +1,11 @@
-import logging
-from cliff import command
-from cliff import show
-from cliff import lister
-from oio.cli.utils import KeyValueAction, ValueFormatStoreTrueAction
+from logging import getLogger
+from cliff import command, show, lister
 
 
 class ShowAccount(show.ShowOne):
     """Show account"""
 
-    log = logging.getLogger(__name__ + '.ShowAccount')
+    log = getLogger(__name__ + '.ShowAccount')
 
     def get_parser(self, prog_name):
         parser = super(ShowAccount, self).get_parser(prog_name)
@@ -33,7 +30,7 @@ class ShowAccount(show.ShowOne):
 class DeleteAccount(command.Command):
     """Delete account"""
 
-    log = logging.getLogger(__name__ + '.DeleteAccount')
+    log = getLogger(__name__ + '.DeleteAccount')
 
     def get_parser(self, prog_name):
         parser = super(DeleteAccount, self).get_parser(prog_name)
@@ -57,7 +54,7 @@ class DeleteAccount(command.Command):
 class CreateAccount(lister.Lister):
     """Create account"""
 
-    log = logging.getLogger(__name__ + '.CreateAccount')
+    log = getLogger(__name__ + '.CreateAccount')
 
     def get_parser(self, prog_name):
         parser = super(CreateAccount, self).get_parser(prog_name)
@@ -86,9 +83,11 @@ class CreateAccount(lister.Lister):
 class SetAccount(command.Command):
     """Set account properties"""
 
-    log = logging.getLogger(__name__ + '.SetAccount')
+    log = getLogger(__name__ + '.SetAccount')
 
     def get_parser(self, prog_name):
+        from oio.cli.utils import KeyValueAction
+
         parser = super(SetAccount, self).get_parser(prog_name)
         parser.add_argument(
             'account',
@@ -116,7 +115,7 @@ class SetAccount(command.Command):
 class UnsetAccount(command.Command):
     """Unset account properties"""
 
-    log = logging.getLogger(__name__ + '.UnsetAccount')
+    log = getLogger(__name__ + '.UnsetAccount')
 
     def get_parser(self, prog_name):
         parser = super(UnsetAccount, self).get_parser(prog_name)
@@ -147,9 +146,11 @@ class UnsetAccount(command.Command):
 class ListAccounts(lister.Lister):
     """List accounts of the namespace"""
 
-    log = logging.getLogger(__name__ + '.ListAccount')
+    log = getLogger(__name__ + '.ListAccount')
 
     def get_parser(self, prog_name):
+        from oio.cli.utils import ValueFormatStoreTrueAction
+
         parser = super(ListAccounts, self).get_parser(prog_name)
         parser.add_argument(
             '--stats', '--long',

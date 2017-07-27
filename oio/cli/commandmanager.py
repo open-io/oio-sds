@@ -1,4 +1,4 @@
-import pkg_resources
+from pkg_resources import iter_entry_points
 from cliff import commandmanager
 
 
@@ -21,7 +21,7 @@ class CommandManager(commandmanager.CommandManager):
     def get_command_names(self, group=None):
         group_list = []
         if group is not None:
-            for entry_point in pkg_resources.iter_entry_points(group):
+            for entry_point in iter_entry_points(group):
                 cmd_name = (
                     entry_point.name.replace('_', ' ')
                     if self.convert_underscores
