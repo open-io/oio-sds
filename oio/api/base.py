@@ -14,7 +14,7 @@
 import sys
 
 from oio.common.utils import json as jsonlib
-from oio.common.http import urllib3
+from oio.common.http import urllib3, get_pool_manager
 from urllib3.exceptions import MaxRetryError, TimeoutError, HTTPError, \
     NewConnectionError, ProtocolError, ProxyError, ClosedPoolError
 from urllib import urlencode
@@ -22,27 +22,12 @@ from oio.common import exceptions
 from oio.common.http import CONNECTION_TIMEOUT, READ_TIMEOUT
 from oio.common.constants import ADMIN_HEADER
 
-DEFAULT_POOLSIZE = 10
-DEFAULT_RETRIES = 0
-
 _POOL_MANAGER_OPTIONS_KEYS = ["pool_connections", "pool_maxsize",
                               "max_retries"]
 
 URLLIB3_REQUESTS_KWARGS = ('fields', 'headers', 'body', 'retries', 'redirect',
                            'assert_same_host', 'timeout', 'pool_timeout',
                            'release_conn', 'chunked')
-
-
-def get_pool_manager(pool_connections=DEFAULT_POOLSIZE,
-                     pool_maxsize=DEFAULT_POOLSIZE,
-                     max_retries=DEFAULT_RETRIES):
-    if max_retries == DEFAULT_RETRIES:
-        max_retries = urllib3.Retry(0, read=False)
-    else:
-        max_retries = urllib3.Retry.from_int(max_retries)
-    return urllib3.PoolManager(num_pools=pool_connections,
-                               maxsize=pool_maxsize, retries=max_retries,
-                               block=False)
 
 
 class HttpApi(object):
@@ -96,6 +81,9 @@ class HttpApi(object):
         or connection timeout
         :raise oio.common.exceptions.OioNetworkException: in case of
         connection error
+        :raise oio.common.exceptions.OioException: in other case of HTTP error
+        :raise oio.common.exceptions.ClientException: in case of HTTP status
+        code >= 400
         """
         # Filter arguments that are not recognized by Requests
         out_kwargs = {k: v for k, v in kwargs.items()
@@ -181,6 +169,9 @@ class HttpApi(object):
         or connection timeout
         :raise oio.common.exceptions.OioNetworkException: in case of
         connection error
+        :raise oio.common.exceptions.OioException: in other case of HTTP error
+        :raise oio.common.exceptions.ClientException: in case of HTTP status
+        code >= 400
         """
         if not endpoint:
             if not self.endpoint:
