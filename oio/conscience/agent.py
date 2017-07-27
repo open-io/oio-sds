@@ -5,7 +5,7 @@ import pkg_resources
 from eventlet import GreenPool, sleep
 
 from oio.common.daemon import Daemon
-from oio.api.base import get_pool_manager
+from oio.common.http import get_pool_manager
 from oio.common.utils import get_logger, float_value, validate_service_conf, \
     int_value, parse_config, true_value
 from oio.common.client import ProxyClient
