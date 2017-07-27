@@ -24,7 +24,7 @@ from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
 from oio.content.factory import ContentFactory
 from oio.crawler.storage_tierer import StorageTiererWorker
-from oio import ObjectStorageApi
+from oio.api.object_storage import ObjectStorageApi
 from tests.functional.content.test_content import random_data
 from tests.utils import BaseTestCase
 

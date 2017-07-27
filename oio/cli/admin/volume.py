@@ -1,16 +1,11 @@
-import logging
-import time
-
-from cliff import lister
-from cliff import show
-
-from oio.common.exceptions import ClientException
+from logging import getLogger
+from cliff import lister, show
 
 
 class ShowAdminVolume(show.ShowOne):
     """Show admin volume"""
 
-    log = logging.getLogger(__name__ + '.ShowAdminVolume')
+    log = getLogger(__name__ + '.ShowAdminVolume')
 
     def get_parser(self, prog_name):
         parser = super(ShowAdminVolume, self).get_parser(prog_name)
@@ -35,7 +30,7 @@ class ShowAdminVolume(show.ShowOne):
 class ClearAdminVolume(lister.Lister):
     """Clear admin volume"""
 
-    log = logging.getLogger(__name__ + '.ClearAdminVolume')
+    log = getLogger(__name__ + '.ClearAdminVolume')
 
     def get_parser(self, prog_name):
         parser = super(ClearAdminVolume, self).get_parser(prog_name)
@@ -64,7 +59,7 @@ class ClearAdminVolume(lister.Lister):
 class ShowVolume(show.ShowOne):
     """Show volume"""
 
-    log = logging.getLogger(__name__ + '.ShowVolume')
+    log = getLogger(__name__ + '.ShowVolume')
 
     def get_parser(self, prog_name):
         parser = super(ShowVolume, self).get_parser(prog_name)
@@ -87,7 +82,7 @@ class ShowVolume(show.ShowOne):
 class IncidentAdminVolume(lister.Lister):
     """Set incident on Volume"""
 
-    log = logging.getLogger(__name__ + '.IncidentAdminVolume')
+    log = getLogger(__name__ + '.IncidentAdminVolume')
 
     def get_parser(self, prog_name):
         parser = super(IncidentAdminVolume, self).get_parser(prog_name)
@@ -107,6 +102,8 @@ class IncidentAdminVolume(lister.Lister):
         return parser
 
     def take_action(self, parsed_args):
+        from time import time
+
         self.log.debug('take_action(%s)', parsed_args)
 
         volumes = parsed_args.volumes
@@ -114,7 +111,7 @@ class IncidentAdminVolume(lister.Lister):
 
         results = list()
         for volume in volumes:
-            date = dates.pop(0) if dates else int(time.time())
+            date = dates.pop(0) if dates else int(time())
             self.app.client_manager.admin.volume_admin_incident(
                     volume, date)
             results.append((volume, date))
@@ -125,7 +122,7 @@ class IncidentAdminVolume(lister.Lister):
 class LockAdminVolume(lister.Lister):
     """Lock Volume"""
 
-    log = logging.getLogger(__name__ + '.LockAdminVolume')
+    log = getLogger(__name__ + '.LockAdminVolume')
 
     def get_parser(self, prog_name):
         parser = super(LockAdminVolume, self).get_parser(prog_name)
@@ -159,7 +156,7 @@ class LockAdminVolume(lister.Lister):
 class UnlockAdminVolume(lister.Lister):
     """Unlock Volume"""
 
-    log = logging.getLogger(__name__ + '.UnlockAdminVolume')
+    log = getLogger(__name__ + '.UnlockAdminVolume')
 
     def get_parser(self, prog_name):
         parser = super(UnlockAdminVolume, self).get_parser(prog_name)
@@ -187,7 +184,7 @@ class UnlockAdminVolume(lister.Lister):
 class BootstrapVolume(lister.Lister):
     """Assign an rdir service to all rawx"""
 
-    log = logging.getLogger(__name__ + '.BootstrapVolume')
+    log = getLogger(__name__ + '.BootstrapVolume')
 
     def get_parser(self, prog_name):
         parser = super(BootstrapVolume, self).get_parser(prog_name)
@@ -199,6 +196,8 @@ class BootstrapVolume(lister.Lister):
         return parser
 
     def take_action(self, parsed_args):
+        from oio.common.exceptions import ClientException
+
         self.log.debug('take_action(%s)', parsed_args)
 
         try:
@@ -226,7 +225,7 @@ class BootstrapVolume(lister.Lister):
 class DisplayVolumeAssignation(lister.Lister):
     """Display which rdir service is linked to each rawx service"""
 
-    log = logging.getLogger(__name__ + '.DisplayVolumeAssignation')
+    log = getLogger(__name__ + '.DisplayVolumeAssignation')
 
     def get_parser(self, prog_name):
         parser = super(DisplayVolumeAssignation, self).get_parser(prog_name)

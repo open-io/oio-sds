@@ -37,7 +37,7 @@ from werkzeug.exceptions import BadRequest, RequestedRangeNotSatisfiable, \
 
 from werkzeug.wsgi import wrap_file, LimitedStream
 
-from oio import ObjectStorageApi
+from oio.api.object_storage import ObjectStorageApi
 from oio.common import exceptions as exc
 from oio.common.utils import get_logger, read_conf
 from oio.common.wsgi import WerkzeugApp

@@ -1,14 +1,11 @@
-import logging
-import time
-
+from logging import getLogger
 from cliff.command import Command
-from oio.directory.meta0 import PrefixMapping
 
 
 class DirectoryCmd(Command):
     """Base class for directory subcommands"""
 
-    log = logging.getLogger(__name__ + '.Directory')
+    log = getLogger(__name__ + '.Directory')
 
     def get_parser(self, prog_name):
         parser = super(DirectoryCmd, self).get_parser(prog_name)
@@ -20,6 +17,8 @@ class DirectoryCmd(Command):
         return parser
 
     def get_prefix_mapping(self, parsed_args):
+        from oio.directory.meta0 import PrefixMapping
+
         meta0_client = self.app.client_manager.admin.meta0
         conscience_client = self.app.client_manager.admin.cluster
         digits = self.app.client_manager.get_meta1_digits()
@@ -78,8 +77,10 @@ class DirectoryInit(DirectoryCmd):
             mapping.force(connection_timeout=5.0, read_timeout=30.0)
 
         if parsed_args.rdir:
+            from time import sleep
+
             self.log.info("Assigning rdir services to rawx services...")
-            time.sleep(5)  # Let meta1 fetch the list of managed bases
+            sleep(5)  # Let meta1 fetch the list of managed bases
             self.app.client_manager.admin.rdir_lb.assign_all_rawx()
 
         if checked:

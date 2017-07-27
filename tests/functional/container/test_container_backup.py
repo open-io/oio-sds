@@ -10,7 +10,7 @@ from tempfile import TemporaryFile
 import unittest
 
 import requests
-from oio import ObjectStorageApi
+from oio.api.object_storage import ObjectStorageApi
 from oio.container.backup import CONTAINER_PROPERTIES, CONTAINER_MANIFEST
 from tests.utils import BaseTestCase
 from nose.plugins.attrib import attr

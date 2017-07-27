@@ -1,17 +1,15 @@
 """Container-related commands"""
-import os
-import logging
-import cliff
-import cliff.lister
-import cliff.show
 
-from oio.cli.utils import KeyValueAction, ValueFormatStoreTrueAction
+from logging import getLogger
+from cliff import command, show, lister
 
 
 class SetPropertyCommandMixin(object):
     """Command setting quota, storage policy or generic property"""
 
     def patch_parser(self, parser):
+        from oio.cli.utils import KeyValueAction
+
         parser.add_argument(
             '--property',
             metavar='<key=value>',
@@ -42,10 +40,10 @@ class SetPropertyCommandMixin(object):
         )
 
 
-class CreateContainer(SetPropertyCommandMixin, cliff.lister.Lister):
+class CreateContainer(SetPropertyCommandMixin, lister.Lister):
     """Create an object container."""
 
-    log = logging.getLogger(__name__ + '.CreateContainer')
+    log = getLogger(__name__ + '.CreateContainer')
 
     def get_parser(self, prog_name):
         parser = super(CreateContainer, self).get_parser(prog_name)
@@ -93,10 +91,10 @@ class CreateContainer(SetPropertyCommandMixin, cliff.lister.Lister):
         return columns, res_gen
 
 
-class SetContainer(SetPropertyCommandMixin, cliff.command.Command):
+class SetContainer(SetPropertyCommandMixin, command.Command):
     """Set container properties, quota, storage policy or versioning."""
 
-    log = logging.getLogger(__name__ + '.SetContainer')
+    log = getLogger(__name__ + '.SetContainer')
 
     def get_parser(self, prog_name):
         parser = super(SetContainer, self).get_parser(prog_name)
@@ -136,10 +134,10 @@ class SetContainer(SetPropertyCommandMixin, cliff.command.Command):
         )
 
 
-class TouchContainer(cliff.command.Command):
+class TouchContainer(command.Command):
     """Touch an object container, triggers asynchronous treatments on it."""
 
-    log = logging.getLogger(__name__ + '.TouchContainer')
+    log = getLogger(__name__ + '.TouchContainer')
 
     def get_parser(self, prog_name):
         parser = super(TouchContainer, self).get_parser(prog_name)
@@ -161,10 +159,10 @@ class TouchContainer(cliff.command.Command):
             )
 
 
-class DeleteContainer(cliff.command.Command):
+class DeleteContainer(command.Command):
     """Delete an object container."""
 
-    log = logging.getLogger(__name__ + '.DeleteContainer')
+    log = getLogger(__name__ + '.DeleteContainer')
 
     def get_parser(self, prog_name):
         parser = super(DeleteContainer, self).get_parser(prog_name)
@@ -186,10 +184,10 @@ class DeleteContainer(cliff.command.Command):
             )
 
 
-class ShowContainer(cliff.show.ShowOne):
+class ShowContainer(show.ShowOne):
     """Display information about an object container."""
 
-    log = logging.getLogger(__name__ + '.ShowContainer')
+    log = getLogger(__name__ + '.ShowContainer')
 
     def get_parser(self, prog_name):
         parser = super(ShowContainer, self).get_parser(prog_name)
@@ -232,12 +230,14 @@ class ShowContainer(cliff.show.ShowOne):
         return zip(*sorted(info.iteritems()))
 
 
-class ListContainer(cliff.lister.Lister):
+class ListContainer(lister.Lister):
     """List containers."""
 
-    log = logging.getLogger(__name__ + '.ListContainer')
+    log = getLogger(__name__ + '.ListContainer')
 
     def get_parser(self, prog_name):
+        from oio.cli.utils import ValueFormatStoreTrueAction
+
         parser = super(ListContainer, self).get_parser(prog_name)
         parser.add_argument(
             '--prefix',
@@ -317,10 +317,10 @@ class ListContainer(cliff.lister.Lister):
         return columns, results
 
 
-class UnsetContainer(cliff.command.Command):
+class UnsetContainer(command.Command):
     """Unset container properties."""
 
-    log = logging.getLogger(__name__ + '.UnsetContainer')
+    log = getLogger(__name__ + '.UnsetContainer')
 
     def get_parser(self, prog_name):
         parser = super(UnsetContainer, self).get_parser(prog_name)
@@ -380,10 +380,10 @@ class UnsetContainer(cliff.command.Command):
                 system=system)
 
 
-class SaveContainer(cliff.command.Command):
+class SaveContainer(command.Command):
     """Save all objects of a container locally."""
 
-    log = logging.getLogger(__name__ + '.SaveContainer')
+    log = getLogger(__name__ + '.SaveContainer')
 
     def get_parser(self, prog_name):
         parser = super(SaveContainer, self).get_parser(prog_name)
@@ -394,6 +394,8 @@ class SaveContainer(cliff.command.Command):
         return parser
 
     def take_action(self, parsed_args):
+        import os
+
         self.log.debug('take_action(%s)', parsed_args)
 
         account = self.app.client_manager.get_account()
@@ -414,10 +416,10 @@ class SaveContainer(cliff.command.Command):
                     f.write(chunk)
 
 
-class LocateContainer(cliff.show.ShowOne):
+class LocateContainer(show.ShowOne):
     """Locate the services in charge of a container."""
 
-    log = logging.getLogger(__name__ + '.LocateContainer')
+    log = getLogger(__name__ + '.LocateContainer')
 
     def get_parser(self, prog_name):
         parser = super(LocateContainer, self).get_parser(prog_name)
