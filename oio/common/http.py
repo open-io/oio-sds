@@ -15,6 +15,9 @@ urllib3 = patcher.import_patched('urllib3.__init__')
 CONNECTION_TIMEOUT = 2.0
 READ_TIMEOUT = 30.0
 
+DEFAULT_POOLSIZE = 10
+DEFAULT_RETRIES = 0
+
 
 class CustomHTTPResponse(HTTPResponse):
     def __init__(self, sock, debuglevel=0, strict=0,
@@ -236,3 +239,25 @@ class HeadersDict(dict):
 
     def pop(self, k, default=None):
         return dict.pop(self, k.title(), default)
+
+
+def get_pool_manager(pool_connections=DEFAULT_POOLSIZE,
+                     pool_maxsize=DEFAULT_POOLSIZE,
+                     max_retries=DEFAULT_RETRIES):
+    """
+    Get `urllib3.PoolManager` to manage pools of connections
+
+    :param pool_connections: number of connection pools
+    :type pool_connections: `int`
+    :param pool_maxsize: number of connections per connection pool
+    :type pool_maxsize: `int`
+    :param max_retries: number of retries per request
+    :type max_retries: `int`
+    """
+    if max_retries == DEFAULT_RETRIES:
+        max_retries = urllib3.Retry(0, read=False)
+    else:
+        max_retries = urllib3.Retry.from_int(max_retries)
+    return urllib3.PoolManager(num_pools=pool_connections,
+                               maxsize=pool_maxsize, retries=max_retries,
+                               block=False)

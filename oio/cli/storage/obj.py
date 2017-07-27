@@ -1,8 +1,7 @@
 import os
-
 from logging import getLogger
+from oio.common.http import get_pool_manager
 from cliff import command, lister, show
-from oio.api.base import get_pool_manager
 
 
 class ContainerCommandMixin(object):
