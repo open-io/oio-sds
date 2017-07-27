@@ -1,7 +1,6 @@
 import os
-
 from logging import getLogger
-from oio.api.base import get_pool_manager
+from oio.common.http import get_pool_manager
 from cliff import command, lister, show
 
 
