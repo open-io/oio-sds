@@ -288,14 +288,15 @@ class ContainerTarFile(object):
         if last:
             mem += NUL * (BLOCKSIZE - remainder)
 
+        # add padding if needed
+        if len(mem) != nb_blocks_to_serve:
+            mem += NUL * (nb_blocks_to_serve - len(mem))
+
         if not mem:
             self.logger.error("no data extracted")
         if divmod(len(mem), BLOCKSIZE)[1]:
             self.logger.error("data written does not match blocksize")
 
-        # add padding if needed
-        if len(mem) != nb_blocks_to_serve:
-            mem += NUL * (nb_blocks_to_serve - len(mem))
         return mem
 
     def read(self, size=-1):
@@ -319,9 +320,10 @@ class ContainerTarFile(object):
                 continue
 
             if size > 0 and val['end_block'] - self.range_[0] > size:
+                # TODO (mbonfils) add a unit test
                 end_block = self.range_[0] + size
             else:
-                end_block = val['end_block']
+                end_block = min(self.range_[1], val['end_block'])
 
             assert self.range_[0] >= val['start_block']
             assert self.range_[0] <= self.range_[1], \
