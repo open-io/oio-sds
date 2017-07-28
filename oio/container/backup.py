@@ -35,7 +35,7 @@ from werkzeug.routing import Map, Rule
 from werkzeug.exceptions import BadRequest, RequestedRangeNotSatisfiable, \
     Conflict, UnprocessableEntity, ServiceUnavailable
 
-from werkzeug.wsgi import wrap_file, LimitedStream
+from werkzeug.wsgi import wrap_file
 
 from oio import ObjectStorageApi
 from oio.common import exceptions as exc
@@ -139,6 +139,25 @@ class OioTarEntry(object):
     @property
     def buf(self):
         return self._buf
+
+
+class LimitedStream(object):
+    """Wrap a stream to read no more than size bytes from input stream"""
+
+    def __init__(self, fd, size):
+        self.fd = fd
+        self.max_size = size
+        self.pos = 0
+
+    def read(self, block=-1):
+        if self.pos >= self.max_size:
+            return ""
+        if block < 0:
+            block = 1024 * 1024 * 10
+        block = min(block, self.max_size - self.pos)
+        data = self.fd.read(block)
+        self.pos += len(data)
+        return data
 
 
 class ContainerTarFile(object):
