@@ -82,7 +82,7 @@ def obj_range_to_meta_chunk_range(obj_start, obj_end, meta_sizes):
         obj_start = total_size - min(total_size, obj_end)
         obj_end = total_size - 1
 
-    meta_chunk_ranges = {}
+    meta_chunk_ranges = collections.OrderedDict()
     for pos, meta_size in enumerate(meta_sizes):
         if meta_size <= 0:
             continue
