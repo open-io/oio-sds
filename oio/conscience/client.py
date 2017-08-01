@@ -117,7 +117,8 @@ class ConscienceClient(ProxyClient):
                                % (type_, resp.text))
 
     def local_services(self):
-        resp, body = self._request('GET', '/list')
+        url = self.endpoint.replace('conscience', 'local/list')
+        resp, body = self._direct_request('GET', url)
         if resp.status == 200:
             return body
         else:

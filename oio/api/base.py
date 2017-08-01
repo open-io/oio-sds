@@ -15,8 +15,8 @@ import sys
 
 from oio.common.utils import json as jsonlib
 from oio.common.http import urllib3
-from urllib3.exceptions import MaxRetryError, TimeoutError, ConnectionError, \
-    ProxyError, HTTPError
+from urllib3.exceptions import MaxRetryError, TimeoutError, HTTPError, \
+    NewConnectionError, ProtocolError, ProxyError, ClosedPoolError
 from urllib import urlencode
 from oio.common import exceptions
 from oio.common.http import CONNECTION_TIMEOUT, READ_TIMEOUT
@@ -141,12 +141,17 @@ class HttpApi(object):
                 body = jsonlib.loads(body)
             except ValueError:
                 pass
-        except (ConnectionError, ProxyError) as exc:
-            raise exceptions.OioNetworkException(exc), None, sys.exc_info()[2]
         except MaxRetryError as exc:
+            if isinstance(exc.reason, NewConnectionError):
+                raise exceptions.OioNetworkException(exc), None, \
+                        sys.exc_info()[2]
             if isinstance(exc.reason, TimeoutError):
                 raise exceptions.OioTimeout(exc), None, sys.exc_info()[2]
-            raise exceptions.OioException(exc), None, sys.exc_info()[2]
+            raise exceptions.OioNetworkException(exc), None, sys.exc_info()[2]
+        except (ProtocolError, ProxyError, ClosedPoolError) as exc:
+            raise exceptions.OioNetworkException(exc), None, sys.exc_info()[2]
+        except TimeoutError as exc:
+            raise exceptions.OioTimeout(exc), None, sys.exc_info()[2]
         except HTTPError as exc:
             raise exceptions.OioException(exc), None, sys.exc_info()[2]
         if resp.status >= 400:

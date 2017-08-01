@@ -213,7 +213,7 @@ _checksum_file (const char *path, struct file_info_s *fi)
 	NOERROR(err); \
 } while (0)
 
-#define CHECK_PRESENT(ckient,url) do { \
+#define CHECK_PRESENT(client,url) do { \
 	int has = 0; \
 	err = oio_sds_has (client, url, &has); \
 	if (!err && !has) \

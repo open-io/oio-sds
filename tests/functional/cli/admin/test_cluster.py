@@ -35,7 +35,14 @@ class ClusterTest(CliTestCase):
         output = self.openio('cluster list rawx' + opts)
         data = json.loads(output)
         self.assert_list_fields(data, CLUSTER_LIST_HEADERS)
-        self.assertTrue(len(data) >= 1)
+        self.assertGreaterEqual(len(data), 1)
+
+    def test_cluster_local_list(self):
+        opts = self.get_opts([], 'json')
+        output = self.openio('cluster local list rawx' + opts)
+        data = json.loads(output)
+        self.assert_list_fields(data, CLUSTER_LIST_HEADERS)
+        self.assertGreaterEqual(len(data), 1)
 
     def test_cluster_unlock(self):
         opts = self.get_opts([], 'json')

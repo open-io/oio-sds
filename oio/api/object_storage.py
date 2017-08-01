@@ -329,7 +329,7 @@ class ObjectStorageApi(object):
 
     @handle_account_not_found
     def account_set_properties(self, account, properties, **kwargs):
-        self.account.account_update(account, properties, **kwargs)
+        self.account.account_update(account, properties, None, **kwargs)
 
     @handle_account_not_found
     def account_del_properties(self, account, properties, **kwargs):
