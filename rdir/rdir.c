@@ -520,7 +520,7 @@ _db_vol_fetch(const char *volid, GString *value,
 	if (NULL != (err = _db_admin_get_incident(volid, &incident_date)))
 		return err;
 
-	if (rebuild && incident_date > 0) {
+	if (rebuild && incident_date <= 0) {
 		GRID_INFO("Fetching the chunks in order to rebuild, but "
 				"no incident date set");
 		return NULL;

@@ -35,7 +35,7 @@ from werkzeug.routing import Map, Rule
 from werkzeug.exceptions import BadRequest, RequestedRangeNotSatisfiable, \
     Conflict, UnprocessableEntity, ServiceUnavailable
 
-from werkzeug.wsgi import wrap_file, LimitedStream
+from werkzeug.wsgi import wrap_file
 
 from oio import ObjectStorageApi
 from oio.common import exceptions as exc
@@ -139,6 +139,25 @@ class OioTarEntry(object):
     @property
     def buf(self):
         return self._buf
+
+
+class LimitedStream(object):
+    """Wrap a stream to read no more than size bytes from input stream"""
+
+    def __init__(self, fd, size):
+        self.fd = fd
+        self.max_size = size
+        self.pos = 0
+
+    def read(self, block=-1):
+        if self.pos >= self.max_size:
+            return ""
+        if block < 0:
+            block = 1024 * 1024 * 10
+        block = min(block, self.max_size - self.pos)
+        data = self.fd.read(block)
+        self.pos += len(data)
+        return data
 
 
 class ContainerTarFile(object):
@@ -288,14 +307,15 @@ class ContainerTarFile(object):
         if last:
             mem += NUL * (BLOCKSIZE - remainder)
 
+        # add padding if needed
+        if len(mem) != nb_blocks_to_serve:
+            mem += NUL * (nb_blocks_to_serve - len(mem))
+
         if not mem:
             self.logger.error("no data extracted")
         if divmod(len(mem), BLOCKSIZE)[1]:
             self.logger.error("data written does not match blocksize")
 
-        # add padding if needed
-        if len(mem) != nb_blocks_to_serve:
-            mem += NUL * (nb_blocks_to_serve - len(mem))
         return mem
 
     def read(self, size=-1):
@@ -319,9 +339,10 @@ class ContainerTarFile(object):
                 continue
 
             if size > 0 and val['end_block'] - self.range_[0] > size:
+                # TODO (mbonfils) add a unit test
                 end_block = self.range_[0] + size
             else:
-                end_block = val['end_block']
+                end_block = min(self.range_[1], val['end_block'])
 
             assert self.range_[0] >= val['start_block']
             assert self.range_[0] <= self.range_[1], \

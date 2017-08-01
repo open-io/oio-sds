@@ -154,6 +154,17 @@ class ClusterUnlock(lister.Lister):
                 self._unlock_one(parsed_args.srv_type, parsed_args.srv_addr))
 
 
+def _batches_boundaries(srclen, size):
+    for start in range(0, srclen, size):
+        end = min(srclen, start + size)
+        yield start, end
+
+
+def _bounded_batches(src, size):
+    for start, end in _batches_boundaries(len(src), size):
+        yield src[start:end]
+
+
 class ClusterUnlockAll(lister.Lister):
     """Unlock all services of the cluster"""
 
@@ -176,11 +187,14 @@ class ClusterUnlockAll(lister.Lister):
             all_descr = self.app.client_manager.admin.cluster_list(type_)
             for descr in all_descr:
                 descr['type'] = type_
+            for batch in _bounded_batches(all_descr, 4096):
                 try:
-                    self.app.client_manager.admin.cluster_unlock_score(descr)
-                    yield type_, descr['addr'], "unlocked"
+                    self.app.client_manager.admin.cluster_unlock_score(batch)
+                    for descr in batch:
+                        yield type_, descr['addr'], "unlocked"
                 except Exception as exc:
-                    yield type_, descr['addr'], str(exc)
+                    for descr in batch:
+                        yield type_, descr['addr'], str(exc)
 
     def take_action(self, parsed_args):
         columns = ('Type', 'Service', 'Result')
@@ -260,11 +274,10 @@ class ClusterLock(ClusterUnlock):
         return parser
 
     def _lock_one(self, type_, addr, score):
-        service_info = {'type': type_, 'addr': addr, 'score': score}
+        si = {'type': type_, 'addr': addr, 'score': score}
         try:
-            svc = self.app.client_manager.admin.cluster_lock_score(
-                    service_info)
-            yield type_, addr, "locked to %d" % int(svc.get("score", score))
+            self.app.client_manager.admin.cluster_lock_score(si)
+            yield type_, addr, "locked to %d" % int(score)
         except Exception as exc:
             yield type_, addr, str(exc)
 
