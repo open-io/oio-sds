@@ -139,15 +139,15 @@ class BaseTestCase(testtools.TestCase):
 
     def _register_srv(self, srv):
         resp = self.session.post(self._url_cs("register"), json.dumps(srv))
-        self.assertEqual(resp.status_code, 200)
+        self.assertIn(resp.status_code, (200, 204))
 
     def _lock_srv(self, srv):
         resp = self.session.post(self._url_cs("lock"), json.dumps(srv))
-        self.assertEqual(resp.status_code, 200)
+        self.assertIn(resp.status_code, (200, 204))
 
     def _unlock_srv(self, srv):
         resp = self.session.post(self._url_cs("unlock"), json.dumps(srv))
-        self.assertEqual(resp.status_code, 200)
+        self.assertIn(resp.status_code, (200, 204))
 
     def _flush_proxy(self):
         url = self.uri + '/v3.0/cache/flush/local'
