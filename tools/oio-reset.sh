@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# oio-reset.sh, a CLI tool of OpenIO SDS
-# Copyright (C) 2015-2016 OpenIO, original work as part of OpenIO SDS
+# oio-reset.sh
+# Copyright (C) 2015-2017 OpenIO, original work as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -15,8 +15,8 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-set -e
 
+set -e
 
 PREFIX="@EXE_PREFIX@"
 NS=OPENIO

@@ -1,6 +1,6 @@
 /*
 OpenIO SDS rdir
-Copyright (C) 2017 OpenIO, original work as part of OpenIO SDS
+Copyright (C) 2017 OpenIO, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as

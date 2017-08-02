@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2016-2017 OpenIO, original work as part of
+# Copyright (C) 2016-2017 OpenIO, as part of
 # OpenIO Software Defined Storage
 #
 # This library is free software; you can redistribute it and/or

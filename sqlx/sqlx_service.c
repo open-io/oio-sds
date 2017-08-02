@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqlx
-Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015-2016 OpenIO, as part of OpenIO Software Defined Storage
+Copyright (C) 2014 Worldline, as part of Redcurrant
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
