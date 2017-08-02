@@ -170,6 +170,11 @@ test_meta2_filters () {
 }
 
 
+if is_running_test_suite "copyright" ; then
+	echo -e "\n### Checking the presence of Copyright mentions"
+	${SRCDIR}/tools/oio-check-copyright.sh ${SRCDIR}
+fi
+
 if is_running_test_suite "unit" ; then
 	echo -e "\n### UNIT tests"
 	cd $SRCDIR
