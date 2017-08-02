@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2016 OpenIO, original work as part of
+# Copyright (C) 2015-2017 OpenIO, as part of
 # OpenIO Software Defined Storage
 #
 # This library is free software; you can redistribute it and/or

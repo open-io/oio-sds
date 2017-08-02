@@ -69,10 +69,6 @@ add_executable(test_gba test_gba.c)
 target_link_libraries(test_gba ${COMMON})
 add_test(NAME metautils/gba COMMAND test_gba)
 
-add_executable(test_error test_error.c)
-target_link_libraries(test_error ${COMMON})
-add_test(NAME metautils/err COMMAND test_error)
-
 add_executable(test_meta2_backend test_meta2_backend.c)
 target_link_libraries(test_meta2_backend meta2v2 ${COMMON})
 add_test(NAME meta2/backend COMMAND test_meta2_backend)

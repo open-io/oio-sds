@@ -1,6 +1,6 @@
 /*
 OpenIO SDS sqlx
-Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -16,12 +16,9 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <string.h>
-
 #include <glib.h>
 #include <sqlite3.h>
 
-#include <core/oiocfg.h>
 #include <core/oiolog.h>
 #include <core/oiostr.h>
 #include <core/oiourl.h>

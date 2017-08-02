@@ -1,7 +1,7 @@
 /*
 OpenIO SDS cluster
-Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2014 Worldline, as part of Redcurrant
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -21,10 +21,6 @@ License along with this library.
 # define OIO_SDS__cluster__lib__gridcluster_h 1
 
 #include <metautils/lib/metatypes.h>
-
-#define NS_ACL_ALLOW_OPTION "allow"
-
-#define NS_ACL_DENY_OPTION "deny"
 
 struct service_info_s;
 void metautils_srvinfo_ensure_tags (struct service_info_s *si);
