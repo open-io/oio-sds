@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # oio-election-dump.py
-# Copyright (C) 2016-2017 OpenIO, as part of OpenIO SDS
+# Copyright (C) 2016-2017 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
