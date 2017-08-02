@@ -64,7 +64,6 @@ install(TARGETS oio-tool DESTINATION bin)
 install(PROGRAMS
             zk-bootstrap.py
             zk-reset.py
-            oio-wrap.sh
             oio-election-reset.py
             oio-election-smudge.py
             oio-election-stat.py
