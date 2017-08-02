@@ -1,5 +1,5 @@
 /*
-OpenIO SDS meta1v2
+OpenIO SDS unit tests
 Copyright (C) 2017 OpenIO, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify

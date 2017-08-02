@@ -1,7 +1,7 @@
 /*
 OpenIO SDS cluster
-Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2014 Worldline, as part of Redcurrant
+Copyright (C) 2015-2017 OpenIO, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -31,12 +31,6 @@ License along with this library.
 #include <core/http_internals.h>
 
 #include "gridcluster.h"
-
-#define NS_STORAGE_POLICY_NAME "storage_policy"
-#define NS_CHUNK_SIZE_NAME "chunk_size"
-#define NS_STATE_NAME "state"
-
-/* -------------------------------------------------------------------------- */
 
 GError *
 conscience_get_namespace (const char *ns, struct namespace_info_s **out)

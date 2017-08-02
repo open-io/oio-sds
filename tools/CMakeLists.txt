@@ -8,10 +8,6 @@ include_directories(BEFORE
 include_directories(AFTER
 	${ZK_INCLUDE_DIRS})
 
-add_executable(echo-server oio-echo-server.c)
-bin_prefix(echo-server "-echo-server")
-target_link_libraries(echo-server metautils server ${GLIB2_LIBRARIES})
-
 add_executable(oio-zk-harass oio-zk-harass.c)
 bin_prefix(oio-zk-harass -zk-harass)
 target_link_libraries(oio-zk-harass
@@ -63,10 +59,7 @@ install(FILES
         DESTINATION ${PKGCONFIG_DIRECTORY}
         PERMISSIONS OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 
-install(TARGETS
-            echo-server
-            oio-tool
-        DESTINATION bin)
+install(TARGETS oio-tool DESTINATION bin)
 
 install(PROGRAMS
             zk-bootstrap.py

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright (C) 2017 OpenIO, original work as part of
+# Copyright (C) 2017 OpenIO, as part of
 # OpenIO Software Defined Storage
 #
 # This library is free software; you can redistribute it and/or

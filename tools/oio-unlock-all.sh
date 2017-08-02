@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# @EXE_PREFIX@-unlock-all, a CLI tool of OpenIO
-# Copyright (C) 2016 OpenIO, original work as part of OpenIO Software Defined Storage
+# oio-unlock-all.sh
+# Copyright (C) 2016 OpenIO, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as

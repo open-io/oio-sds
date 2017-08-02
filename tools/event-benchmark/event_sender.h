@@ -1,6 +1,6 @@
 /*
 OpenIO SDS oio-event-benchmark
-Copyright (C) 2017 OpenIO, as part of OpenIO Software Defined Storage
+Copyright (C) 2017 OpenIO, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
