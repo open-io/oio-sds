@@ -120,6 +120,7 @@
 		]
 	},
 	"metautils": {
+		"license": "lgpl",
 		"code": "common_variables.c",
 		"header": "common_variables.h",
 		"variables": [
@@ -233,6 +234,7 @@
 		]
 	},
 	"sqliterepo_remote": {
+		"license": "lgpl",
 		"code": "sqliterepo_remote_variables.c",
 		"header": "sqliterepo_remote_variables.h",
 		"variables": [
@@ -278,6 +280,7 @@
 		]
 	},
 	"sqliterepo": {
+		"license": "lgpl",
 		"code": "sqliterepo_variables.c",
 		"header": "sqliterepo_variables.h",
 		"variables": [
@@ -453,6 +456,7 @@
 		]
 	},
 	"server": {
+		"license": "lgpl",
 		"code": "server_variables.c",
 		"header": "server_variables.h",
 		"variables": [
@@ -688,6 +692,7 @@
 		]
 	},
 	"client": {
+		"license": "lgpl",
 		"code": "client_variables.c",
 		"header": "client_variables.h",
 		"variables": [
