@@ -226,15 +226,10 @@ meta2_filter_extract_header_flags32(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	gchar strflags[16];
-	GError *e = NULL;
 	guint32 flags = 0;
 
 	TRACE_FILTER();
-	e = metautils_message_extract_flags32(reply->request, NAME_MSGKEY_FLAGS, FALSE, &flags);
-	if (NULL != e) {
-		meta2_filter_ctx_set_error(ctx, e);
-		return FILTER_KO;
-	}
+	metautils_message_extract_flags32(reply->request, NAME_MSGKEY_FLAGS, &flags);
 
 	g_snprintf(strflags, sizeof(strflags), "%"G_GUINT32_FORMAT, flags);
 	meta2_filter_ctx_add_param(ctx, NAME_MSGKEY_FLAGS, strflags);
