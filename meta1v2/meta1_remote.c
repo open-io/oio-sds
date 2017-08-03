@@ -82,16 +82,13 @@ meta1v2_remote_delete_reference (const char *to, struct oio_url_s *url,
 
 GError *
 meta1v2_remote_link_service(const char *to, struct oio_url_s *url,
-		const char *srvtype, gboolean dryrun, gboolean ac,
-		gchar ***result)
+		const char *srvtype, gboolean ac, gchar ***result)
 {
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(srvtype != NULL);
 	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVLINK);
 	metautils_message_add_url_no_type (req, url);
 	metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, srvtype);
-	if (dryrun)
-		metautils_message_add_field_str (req, NAME_MSGKEY_DRYRUN, "1");
 	if (ac)
 		metautils_message_add_field_str (req, NAME_MSGKEY_AUTOCREATE, "1");
 	return STRV_request(to, message_marshall_gba_and_clean(req), result);
@@ -139,7 +136,7 @@ meta1v2_remote_unlink_one_service(const char *to, struct oio_url_s *url,
 
 GError *
 meta1v2_remote_renew_reference_service(const char *to, struct oio_url_s *url,
-		const char *srvtype, gboolean dryrun, gboolean autocreate,
+		const char *srvtype, const char *last, gboolean autocreate,
 		gchar ***result)
 {
 	EXTRA_ASSERT(url != NULL);
@@ -147,8 +144,8 @@ meta1v2_remote_renew_reference_service(const char *to, struct oio_url_s *url,
 	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVRENEW);
 	metautils_message_add_url_no_type (req, url);
 	metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, srvtype);
-	if (dryrun)
-		metautils_message_add_field_str (req, NAME_MSGKEY_DRYRUN, "1");
+	if (oio_str_is_set(last))
+		metautils_message_add_field_str(req, NAME_MSGKEY_LAST, last);
 	if (autocreate)
 		metautils_message_add_field_str (req, NAME_MSGKEY_AUTOCREATE, "1");
 	return STRV_request(to, message_marshall_gba_and_clean(req), result);

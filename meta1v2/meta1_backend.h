@@ -64,8 +64,14 @@ enum m1v2_open_type_e
 
 enum m1v2_getsrv_e
 {
+	/* whatever the status of eacch service, poll a new set */
 	M1V2_GETSRV_RENEW  = 0x00,
+
+	/* Keep the serviices if they are still up. If not, apply the
+	 * service update policy. */
 	M1V2_GETSRV_REUSE  = 0x01,
+
+	/* poll, but do not save anything */
 	M1V2_GETSRV_DRYRUN = 0x02,
 };
 
@@ -114,16 +120,19 @@ GError* meta1_backend_services_list(struct meta1_backend_s *m1,
 		struct oio_url_s *url, const gchar *srvtype, gchar ***result);
 
 GError* meta1_backend_services_link (struct meta1_backend_s *m1,
-		struct oio_url_s *url, const gchar *srvtype,
-		gboolean dryrun, gboolean autocreate,
+		struct oio_url_s *url, const gchar *srvtype, const char *last,
+		gboolean autocreate,
 		gchar ***result);
 
 GError* meta1_backend_services_unlink(struct meta1_backend_s *m1,
 		struct oio_url_s *url, const gchar *srvtype, gchar **urlv);
 
-GError* meta1_backend_services_poll (struct meta1_backend_s *m1,
+/* @param last A come-separated sequence of numbers in decimal representation.
+ *             The sequence represents the 'sequence number' of the services
+ *             know by the client to be linked to the user. */
+GError* meta1_backend_services_renew (struct meta1_backend_s *m1,
 		struct oio_url_s *url, const gchar *srvtype,
-		gboolean dryrun, gboolean autocreate,
+		const char *last, gboolean autocreate,
 		gchar ***result);
 
 /* @param packedurl formatted as 'SEQ|TYPE|IP:PORT|ARGS' */

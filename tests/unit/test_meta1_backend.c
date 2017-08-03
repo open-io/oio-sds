@@ -258,12 +258,12 @@ test_services_cycle_nolast(void)
 		/* Subsequent LINK do noto alter the sequence returned */
 		for (guint i=0; i<MAXITER ;++i) {
 			err = meta1_backend_services_link(
-					m1, url, NAME_SRVTYPE_META2, FALSE, FALSE, NULL);
+					m1, url, NAME_SRVTYPE_META2, NULL, FALSE, NULL);
 			g_assert_error(err, GQ(), CODE_INTERNAL_ERROR);
 			g_clear_error(&err);
 
 			err = meta1_backend_services_link(
-					m1, url, NAME_SRVTYPE_META2, FALSE, FALSE, &out);
+					m1, url, NAME_SRVTYPE_META2, NULL, FALSE, &out);
 			g_assert_no_error(err);
 			CHECK_ARRAY_LEN(1, out);
 
@@ -271,28 +271,51 @@ test_services_cycle_nolast(void)
 		}
 
 		/* Renew the services with no 'last' known */
-		err = meta1_backend_services_poll(
-				m1, url, NAME_SRVTYPE_META2, FALSE, FALSE, NULL);
+		err = meta1_backend_services_renew(
+				m1, url, NAME_SRVTYPE_META2, NULL, FALSE, NULL);
 		g_assert_error(err, GQ(), CODE_INTERNAL_ERROR);
 		g_clear_error(&err);
 
-		err = meta1_backend_services_poll(
-				m1, url, NAME_SRVTYPE_META2, FALSE, FALSE, &out);
+		err = meta1_backend_services_renew(
+				m1, url, NAME_SRVTYPE_META2, NULL, FALSE, &out);
 		g_assert_no_error(err);
-		CHECK_ARRAY_LEN(1, out);
-		g_assert_cmpuint(1, ==, _count_services(m1, url, NAME_SRVTYPE_META2));
+		CHECK_ARRAY_LEN(2, out);
 
-		err = meta1_backend_services_poll(m1, url, NAME_SRVTYPE_META2,
-				FALSE, FALSE, &out);
-		g_assert_no_error(err);
-		CHECK_ARRAY_LEN(1, out);
-		g_assert_cmpuint(1, ==, _count_services(m1, url, NAME_SRVTYPE_META2));
+		g_assert_cmpuint(2, ==, _count_services(m1, url, NAME_SRVTYPE_META2));
 
-		err = meta1_backend_services_poll(m1, url, NAME_SRVTYPE_META2,
-				FALSE, FALSE, &out);
+		/* Renew the services with the 'last' actually wrong ("1" passed
+		 * instead of "2,1" */
+		err = meta1_backend_services_renew(m1, url, NAME_SRVTYPE_META2,
+				"1", FALSE, &out);
+		g_assert_error(err, GQ(), CODE_SHARD_CHANGE);
+		g_clear_error(&err);
+
+		g_assert_cmpuint(2, ==, _count_services(m1, url, NAME_SRVTYPE_META2));
+
+		/* Renew the services with the 'last' actually wrong ("1,2" passed
+		 * instead of "2,1" */
+		err = meta1_backend_services_renew(m1, url, NAME_SRVTYPE_META2,
+				"1,2", FALSE, &out);
+		g_assert_error(err, GQ(), CODE_SHARD_CHANGE);
+		g_clear_error(&err);
+
+		g_assert_cmpuint(2, ==, _count_services(m1, url, NAME_SRVTYPE_META2));
+
+		/* Renew the services with the 'last' actually OK... */
+		err = meta1_backend_services_renew(m1, url, NAME_SRVTYPE_META2,
+				"2,1", FALSE, &out);
 		g_assert_no_error(err);
-		CHECK_ARRAY_LEN(1, out);
-		g_assert_cmpuint(1, ==, _count_services(m1, url, NAME_SRVTYPE_META2));
+		CHECK_ARRAY_LEN(3, out);
+
+		g_assert_cmpuint(3, ==, _count_services(m1, url, NAME_SRVTYPE_META2));
+
+		/* ... and let's retry */
+		err = meta1_backend_services_renew(m1, url, NAME_SRVTYPE_META2,
+				"3,2,1", FALSE, &out);
+		g_assert_no_error(err);
+		CHECK_ARRAY_LEN(4, out);
+
+		g_assert_cmpuint(4, ==, _count_services(m1, url, NAME_SRVTYPE_META2));
 
 		/* try (and fail) to delete an user with services */
 		for (guint i=0; i<MAXITER ;++i) {
