@@ -362,6 +362,7 @@ class ContainerTarFile(object):
             if end_block == val['end_block']:
                 self.oio_map.remove(val)
             break
+
         return data
 
     def close(self):
@@ -632,6 +633,19 @@ class ContainerBackup(RedisConn, WerkzeugApp):
         return Response("Not supported", 405)
 
     @redis_cnx
+    def _do_put_head(self, req, account, container):
+        results = self.redis.get("restore:%s:%s" % (account,
+                                                    container))
+        if not results:
+            return UnprocessableEntity("No restoration in progress")
+        results = json.loads(results)
+        blocks = sum(i['blocks'] for i in results['manifest'])
+        return Response(headers={
+            'X-TarSize': blocks * BLOCKSIZE,
+            'X-ConsumedSize': results['end'] * BLOCKSIZE,
+        }, status=200)
+
+    @redis_cnx
     def _do_put(self, req, account, container):
         """Manage PUT method for restoring a container"""
         size = int(req.headers['content-length'])
@@ -789,16 +803,21 @@ class ContainerBackup(RedisConn, WerkzeugApp):
         if not container:
             raise BadRequest('Missing Container name')
 
-        if req.method != 'PUT':
+        if req.method not in ('PUT', 'HEAD'):
             return Response("Not supported", 405)
 
         try:
             self.proxy.container_get_properties(account, container)
-            if not req.headers.get('range'):
+            if not req.headers.get('range') and req.method == 'PUT':
                 raise Conflict('Container already exists')
         except exc.NoSuchContainer:
             pass
+        except Conflict:
+            raise
         except:
             raise BadRequest('Fail to verify container')
+
+        if req.method == 'HEAD':
+            return self._do_put_head(req, account, container)
 
         return self._do_put(req, account, container)
