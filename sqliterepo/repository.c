@@ -74,7 +74,7 @@ _compute_path_hash(sqlx_repository_t *repo, const hashstr_t *hn, const gchar *t)
 	n = hashstr_str(hn);
 	nlen = hashstr_len(hn);
 
-	/* XXX TODO FIXME JFS: this shortcut help plugging test code. the test
+	/* This shortcut help plugging test code. the test
 	 * program is then free to define a <sqlx_file_locator_f> that generates
 	 * an absolute path, or a special name (for sqlite3, e.g. ":memory:").
 	 * This is UGLY, I admit it without any torture. Changing it would (e.g.)
@@ -572,6 +572,11 @@ _open_fill_args(struct open_args_s *args, struct sqlx_repository_s *repo,
 	EXTRA_ASSERT(repo != NULL);
 	EXTRA_ASSERT(repo->locator != NULL);
 	SQLXNAME_CHECK(n);
+
+	/* A shard number should always have a strictly-positive sequence
+	 * number. And this is enforced since the sharding of containers,
+	 * to detect more (unacceptable) errors at runtime. */
+	EXTRA_ASSERT(!g_str_has_suffix(n->base, ".0"));
 
 	args->repo = repo;
 	args->name.type = n->type;
