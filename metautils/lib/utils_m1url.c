@@ -179,3 +179,37 @@ meta1_url_filter_typed(const char * const *src, const char *srvtype)
 	return (gchar**) g_ptr_array_free(tmp, FALSE);
 }
 
+gchar*
+meta1_url_manifest(struct meta1_service_url_s **m1uv)
+{
+	if (!m1uv || !*m1uv)
+		return g_malloc0(sizeof(void*));
+
+	GString *gstr = g_string_new("");
+	for (struct meta1_service_url_s **pu = m1uv; *pu ;++pu) {
+		if (gstr->len > 0)
+			g_string_append_c(gstr, ',');
+		g_string_append_printf(gstr, "%"G_GINT64_FORMAT, (*pu)->seq);
+	}
+	return g_string_free(gstr, FALSE);
+}
+
+static int
+_cmp(const void *p0, const void *p1)
+{
+	const struct meta1_service_url_s * const * pu0 = p0;
+	const struct meta1_service_url_s * const * pu1 = p1;
+
+	const int cmp = strcmp((*pu0)->srvtype, (*pu1)->srvtype);
+	if (cmp) return cmp;
+	const gint64 seq = (*pu1)->seq - (*pu0)->seq;
+	return (0 < seq) - (seq < 0);
+}
+
+void
+meta1_url_sort(struct meta1_service_url_s **m1uv)
+{
+	const gsize len = g_strv_length((gchar**)m1uv);
+	qsort(m1uv, len, sizeof(void*), _cmp);
+}
+
