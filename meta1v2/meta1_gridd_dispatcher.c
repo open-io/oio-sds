@@ -113,13 +113,17 @@ static gboolean
 meta1_dispatch_v2_SRV_LINK(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	gchar *srvtype = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
-	gboolean dryrun = metautils_message_extract_flag(reply->request, NAME_MSGKEY_DRYRUN, FALSE);
-	gboolean autocreate = metautils_message_extract_flag(reply->request, NAME_MSGKEY_AUTOCREATE, FALSE);
-	reply->subject("%s|%s|%s|%d", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), srvtype, dryrun);
+	gchar srvtype[LIMIT_LENGTH_SRVTYPE] = "";
+	gchar last[1024] = "";
+
+	const gboolean ac = metautils_message_extract_flag(reply->request, NAME_MSGKEY_AUTOCREATE, FALSE);
+	metautils_message_extract_string_noerror(reply->request, NAME_MSGKEY_TYPENAME, srvtype, sizeof(srvtype));
+	metautils_message_extract_string_noerror(reply->request, NAME_MSGKEY_LAST, last, sizeof(last));
+
+	reply->subject("%s|%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), srvtype);
 
 	gchar **result = NULL;
-	GError *err = meta1_backend_services_link (m1, url, srvtype, dryrun, autocreate, &result);
+	GError *err = meta1_backend_services_link(m1, url, srvtype, last, ac, &result);
 	if (NULL != err) {
 		_strfreev(&result);
 		reply->send_error(0, err);
@@ -128,7 +132,6 @@ meta1_dispatch_v2_SRV_LINK(struct gridd_reply_ctx_s *reply,
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
-	g_free0 (srvtype);
 	return TRUE;
 }
 
@@ -136,13 +139,17 @@ static gboolean
 meta1_dispatch_v2_SRV_RENEW(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	gboolean ac = metautils_message_extract_flag(reply->request, NAME_MSGKEY_AUTOCREATE, FALSE);
-	gboolean dryrun = metautils_message_extract_flag(reply->request, NAME_MSGKEY_DRYRUN, FALSE);
-	gchar *srvtype = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
-	reply->subject("%s|%s|%s|%d", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), srvtype, dryrun);
+	gchar srvtype[LIMIT_LENGTH_SRVTYPE] = "";
+	gchar last[1024] = "";
+
+	const gboolean ac = metautils_message_extract_flag(reply->request, NAME_MSGKEY_AUTOCREATE, FALSE);
+	metautils_message_extract_string_noerror(reply->request, NAME_MSGKEY_TYPENAME, srvtype, sizeof(srvtype));
+	metautils_message_extract_string_noerror(reply->request, NAME_MSGKEY_LAST, last, sizeof(last));
+
+	reply->subject("%s|%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), srvtype);
 
 	gchar **result = NULL;
-	GError *err = meta1_backend_services_poll(m1, url, srvtype, ac, dryrun, &result);
+	GError *err = meta1_backend_services_renew(m1, url, srvtype, last, ac, &result);
 	if (NULL != err) {
 		_strfreev(&result);
 		reply->send_error(0, err);
@@ -151,7 +158,6 @@ meta1_dispatch_v2_SRV_RENEW(struct gridd_reply_ctx_s *reply,
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
-	g_free0 (srvtype);
 	return TRUE;
 }
 
@@ -206,10 +212,14 @@ static gboolean
 meta1_dispatch_v2_SRV_UNLINK(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	gchar *srvtype = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
+	gchar srvtype[LIMIT_LENGTH_SRVTYPE] = "";
+
+	metautils_message_extract_string_noerror (reply->request,
+			NAME_MSGKEY_TYPENAME, srvtype, sizeof(srvtype));
+
 	reply->subject("%s|%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), srvtype);
 
-	if (!srvtype)
+	if (!*srvtype)
 		reply->send_error(CODE_BAD_REQUEST, NEWERROR(CODE_BAD_REQUEST, "Missing srvtype"));
 	else {
 		gsize length = 0;
@@ -228,7 +238,6 @@ meta1_dispatch_v2_SRV_UNLINK(struct gridd_reply_ctx_s *reply,
 		}
 	}
 
-	g_free0 (srvtype);
 	return TRUE;
 }
 
@@ -236,9 +245,11 @@ static gboolean
 meta1_dispatch_v2_SRV_LIST(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	gchar *srvtype = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
+	gchar srvtype[LIMIT_LENGTH_SRVTYPE] = "";
+
+	metautils_message_extract_string_noerror(reply->request,
+			NAME_MSGKEY_TYPENAME, srvtype, sizeof(srvtype));
 	reply->subject("%s|%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), srvtype);
-	STRING_STACKIFY(srvtype);
 
 	gchar **result = NULL;
 	GError *err = meta1_backend_services_list(m1, url, srvtype, &result);

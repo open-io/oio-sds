@@ -240,7 +240,9 @@ retry:
 	return NULL;
 }
 
-void gpa_str_free(GPtrArray *gpa) {
+void
+gpa_str_free(GPtrArray *gpa)
+{
 	if (!gpa)
 		return;
 	g_ptr_array_set_free_func (gpa, g_free);

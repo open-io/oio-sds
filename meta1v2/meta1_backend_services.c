@@ -347,6 +347,8 @@ __get_all_services(struct sqlx_sqlite3_s *sq3,
 	return NULL;
 }
 
+#define PREFIX "SELECT seq,srvtype,url,args FROM services "
+
 static GError *
 __get_container_all_services(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		const char *srvtype, struct meta1_service_url_s ***result)
@@ -357,9 +359,9 @@ __get_container_all_services(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	int rc;
 
 	/* Prepare the statement */
-	if (srvtype && *srvtype) {
+	if (oio_str_is_set(srvtype)) {
 		sqlite3_prepare_debug(rc, sq3->db,
-				"SELECT seq,srvtype,url,args FROM services WHERE cid = ? AND srvtype = ?", -1, &stmt, NULL);
+				PREFIX "WHERE cid = ? AND srvtype = ?", -1, &stmt, NULL);
 		if (rc != SQLITE_OK)
 			return M1_SQLITE_GERROR(sq3->db, rc);
 		(void) sqlite3_bind_blob(stmt, 1, oio_url_get_id(url), oio_url_get_id_size(url), NULL);
@@ -367,7 +369,7 @@ __get_container_all_services(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	}
 	else {
 		sqlite3_prepare_debug(rc, sq3->db,
-				"SELECT seq,srvtype,url,args FROM services WHERE cid = ?", -1, &stmt, NULL);
+				PREFIX "WHERE cid = ?", -1, &stmt, NULL);
 		if (rc != SQLITE_OK)
 			return M1_SQLITE_GERROR(sq3->db, rc);
 		(void) sqlite3_bind_blob(stmt, 1, oio_url_get_id(url), oio_url_get_id_size(url), NULL);
@@ -376,14 +378,13 @@ __get_container_all_services(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	/* Run the result */
 	gpa = g_ptr_array_new();
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
-			struct meta1_service_url_s *u;
-
-			u = g_malloc0(sizeof(struct meta1_service_url_s) + 1 + sqlite3_column_bytes(stmt, 3));
-			u->seq = sqlite3_column_int(stmt, 0);
-			g_strlcpy(u->srvtype, (gchar*)sqlite3_column_text(stmt, 1), sizeof(u->srvtype));
-			g_strlcpy(u->host, (gchar*)sqlite3_column_text(stmt, 2), sizeof(u->host)-1);
-			memcpy(u->args, (gchar*)sqlite3_column_text(stmt, 3), sqlite3_column_bytes(stmt, 3));
-			g_ptr_array_add(gpa, u);
+		const gsize arglen = sqlite3_column_bytes(stmt, 3);
+		struct meta1_service_url_s *u = g_malloc0(sizeof(struct meta1_service_url_s) + 1 + arglen);
+		u->seq = sqlite3_column_int(stmt, 0);
+		g_strlcpy(u->srvtype, (gchar*)sqlite3_column_text(stmt, 1), sizeof(u->srvtype));
+		g_strlcpy(u->host, (gchar*)sqlite3_column_text(stmt, 2), sizeof(u->host)-1);
+		memcpy(u->args, (gchar*)sqlite3_column_text(stmt, 3), arglen);
+		g_ptr_array_add(gpa, u);
 	}
 
 	if (rc != SQLITE_DONE && rc != SQLITE_OK)
@@ -397,6 +398,7 @@ __get_container_all_services(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 
 	g_ptr_array_add(gpa, NULL);
 	*result = (struct meta1_service_url_s**) g_ptr_array_free(gpa, FALSE);
+	meta1_url_sort(*result);
 	return NULL;
 }
 
@@ -535,74 +537,66 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 	return m1u;
 }
 
-static struct meta1_service_url_s **
-__get_services_up(struct meta1_backend_s *m1, struct meta1_service_url_s **src)
+static gboolean
+_is_service_up(struct meta1_backend_s *m1, struct meta1_service_url_s *url)
 {
-	if (!src || !*src)
-		return NULL;
-
-	GError *err = NULL;
-	GPtrArray *gpa = g_ptr_array_new();
-	for (; *src; src++) {
-		gboolean one_is_up = FALSE;
-		struct meta1_service_url_s **pe, **extracted;
-
-		// This converts a compound (comma-separated) URL into an array
-		// of unitary URLs. Each unitary URL is checked as is.
-		extracted = expand_url(*src);
-		for (pe = extracted; !one_is_up && *pe; pe++) {
-			struct compound_type_s ct;
-			if ((err = compound_type_parse(&ct, (*pe)->srvtype))) {
-				GRID_WARN("Failed to parse service type: %s", err->message);
-				g_clear_error(&err);
-				continue;
-			}
-			char key[128];
-			g_snprintf(key, sizeof(key), "%s|%s|%s",
-					m1->ns_name, ct.baretype, (*pe)->host);
-			struct oio_lb_item_s *item = oio_lb__get_item_from_pool(m1->lb,
-					ct.baretype, key);
-			one_is_up = item? item->weight > 0 : FALSE;
-			g_free(item);
-			compound_type_clean(&ct);
-		}
-		if (one_is_up) {
-			for (pe = extracted; *pe; pe++)
-				g_ptr_array_add(gpa, meta1_url_dup(*pe));
-		}
-
-		meta1_service_url_cleanv(extracted);
-		extracted = NULL;
+	struct compound_type_s ct = {0};
+	GError *err = compound_type_parse(&ct, url->srvtype);
+	if (err) {
+		g_clear_error(&err);
+		return FALSE;
 	}
 
-	if (gpa->len <= 0) {
-		g_ptr_array_free(gpa, TRUE);
-		return NULL;
+	char key[128];
+	g_snprintf(key, sizeof(key), "%s|%s|%s", m1->ns_name, ct.baretype, url->host);
+	struct oio_lb_item_s *item = oio_lb__get_item_from_pool(m1->lb, ct.baretype, key);
+
+	const gboolean is_up = item ? (item->weight > 0) : FALSE;
+	g_free(item);
+	compound_type_clean(&ct);
+	return is_up;
+}
+
+static gboolean
+_is_any_service_up(struct meta1_backend_s *m1, struct meta1_service_url_s **src)
+{
+	EXTRA_ASSERT(m1 != NULL);
+	EXTRA_ASSERT(src != NULL && *src != NULL);
+
+	gboolean one_is_up = FALSE;
+
+	for (; src && *src && !one_is_up ; src++) {
+		struct meta1_service_url_s **extracted;
+		if (NULL != (extracted = expand_url(*src))) {
+			struct meta1_service_url_s **pe;
+			for (pe = extracted; extracted && *pe && !one_is_up; pe++)
+				one_is_up |= _is_service_up(m1, *pe);
+			meta1_service_url_cleanv(extracted);
+		}
 	}
 
-	g_ptr_array_add(gpa, NULL);
-	return (struct meta1_service_url_s**) g_ptr_array_free(gpa, FALSE);
+	return one_is_up;
 }
 
 static GError *
 __get_container_service2(struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url, struct compound_type_s *ct,
-		struct meta1_backend_s *m1, enum m1v2_getsrv_e mode,
+		struct meta1_backend_s *m1, const char *last, enum m1v2_getsrv_e mode,
 		gchar ***result, gboolean *renewed)
 {
 	GError *err = NULL;
 	struct meta1_service_url_s **used = NULL;
-	enum service_update_policy_e policy;
-	guint replicas;
 
 	struct service_update_policies_s *pol;
 	if (!(pol = meta1_backend_get_svcupdate(m1)))
 		return NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "Bad NS/Policy pair");
-	policy = service_howto_update(pol, ct->baretype);
-	replicas = service_howmany_replicas(pol, ct->baretype);
+
+	enum service_update_policy_e policy = service_howto_update(pol, ct->baretype);
+	guint replicas = service_howmany_replicas(pol, ct->baretype);
 	replicas = (replicas > 0 ? replicas : 1);
-	// Patches the constraint on the service type (if not set in the request)
-	// by the constraint set in the NS-wide storage policy.
+
+	/* Patches the constraint on the service type (if not set in the request)
+	 * by the constraint set in the NS-wide storage policy. */
 	compound_type_update_arg(ct, pol, FALSE);
 
 	/* This special "tag" is used for services types that are to be linked
@@ -629,45 +623,61 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 		used = NULL;
 	}
 
-	if (used && (mode != M1V2_GETSRV_RENEW)) {
-		/* Only keep the services UP, if not forced to renew */
-		struct meta1_service_url_s **up = __get_services_up(m1, used);
-		if (up && *up) {
-			*result = pack_urlv(up);
-			meta1_service_url_cleanv(up);
+	if (used) {
+		/* Check the client knows the services currently in place */
+		if (oio_str_is_set(last)) {
+			gchar *descr = meta1_url_manifest(used);
+			if (0 != strcmp(last, descr))
+				err = NEWERROR(CODE_SHARD_CHANGE,
+						"Manifest mismatch db[%s] req[%s]",
+						descr, last);
+			g_free0(descr);
+			if (err) {
+				meta1_service_url_cleanv(used);
+				return err;
+			}
+		}
+
+		/* Now there are conditions where there is no chance we need to
+		 * renew the service, so just answer them */
+		if (mode == M1V2_GETSRV_REUSE &&
+				(policy == SVCUPD_KEEP || _is_any_service_up(m1, used))) {
+			*result = pack_urlv(used);
 			meta1_service_url_cleanv(used);
 			return NULL;
 		}
-		meta1_service_url_cleanv(up);
-	}
-
-	if (used && (mode == M1V2_GETSRV_REUSE || policy == SVCUPD_KEEP)) {
-		/* Services used but unavailable, but we are told to reuse */
-		*result = pack_urlv(used);
-		meta1_service_url_cleanv(used);
-		return err;
+	} else {
+		/* No service currently in use, so we should not see accept a request
+		 * that mentions the client knowns any service */
+		if (oio_str_is_set(last)) {
+			meta1_service_url_cleanv(used);
+			return NEWERROR(CODE_SHARD_CHANGE,
+					"Manifest mismatch db[] req[%s]", last);
+		}
 	}
 
 	/* No service available, poll a new one */
-	struct meta1_service_url_s *m1_url = NULL;
 	gint seq = urlv_get_max_seq(used);
 	seq = (seq<0 ? 1 : seq+1);
 
+	struct meta1_service_url_s *m1_url = NULL;
 	if (NULL != (m1_url = __poll_services(m1, replicas, ct, seq, used, &err))) {
-		if (mode != M1V2_GETSRV_DRYRUN) {
-			if (NULL == err) {
-				if (policy == SVCUPD_REPLACE)
-					err = __delete_service(sq3, url, ct->type);
-				if (NULL == err)
-					err = __save_service(sq3, url, m1_url, TRUE);
-			}
+		if (!err && mode != M1V2_GETSRV_DRYRUN) {
+			if (policy == SVCUPD_REPLACE)
+				err = __delete_service(sq3, url, ct->type);
+			if (NULL == err)
+				err = __save_service(sq3, url, m1_url, TRUE);
+			if (!err && renewed)
+				*renewed = TRUE;
 		}
 
 		if (!err && result) {
 			struct meta1_service_url_s **unpacked = expand_url(m1_url);
-			*result = pack_urlv(unpacked);
+			struct meta1_service_url_s **tmp =
+				(struct meta1_service_url_s**) oio_ext_array_concat((void**) unpacked, (void**) used);
+			*result = pack_urlv(tmp);
+			g_free(tmp);
 			meta1_service_url_cleanv(unpacked);
-			if (renewed) *renewed = TRUE;
 		}
 		g_free(m1_url);
 	}
@@ -679,7 +689,7 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 static GError *
 __get_container_service(struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url, const char *srvtype,
-		struct meta1_backend_s *m1, enum m1v2_getsrv_e mode,
+		struct meta1_backend_s *m1, const char *last, enum m1v2_getsrv_e mode,
 		gchar ***result, gboolean *renewed)
 {
 	GError *err = NULL;
@@ -687,7 +697,7 @@ __get_container_service(struct sqlx_sqlite3_s *sq3,
 
 	if (NULL != (err = compound_type_parse(&ct, srvtype)))
 		return err;
-	err = __get_container_service2(sq3, url, &ct, m1, mode, result, renewed);
+	err = __get_container_service2(sq3, url, &ct, m1, last, mode, result, renewed);
 	compound_type_clean(&ct);
 	return err;
 }
@@ -953,10 +963,12 @@ meta1_backend_services_all(struct meta1_backend_s *m1,
 GError *
 meta1_backend_services_link (struct meta1_backend_s *m1,
 		struct oio_url_s *url, const char *srvtype,
-		gboolean dryrun, gboolean autocreate,
+		const char *last,
+		gboolean autocreate,
 		gchar ***result)
 {
-	if (!result) return SYSERR("BUG: invalid output array");
+	if (!result)
+		return SYSERR("Missing output variable");
 
 	GError *err = __check_backend_events (m1);
 	if (err) return err;
@@ -969,8 +981,7 @@ meta1_backend_services_link (struct meta1_backend_s *m1,
 	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 		gboolean renewed = FALSE;
 		if (!(err = __info_user(sq3, url, autocreate, NULL))) {
-			enum m1v2_getsrv_e mode = dryrun ? M1V2_GETSRV_DRYRUN : M1V2_GETSRV_REUSE;
-			err = __get_container_service(sq3, url, srvtype, m1, mode, result, &renewed);
+			err = __get_container_service(sq3, url, srvtype, m1, last, M1V2_GETSRV_REUSE, result, &renewed);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");
 		}
@@ -985,18 +996,18 @@ meta1_backend_services_link (struct meta1_backend_s *m1,
 }
 
 GError*
-meta1_backend_services_poll(struct meta1_backend_s *m1,
+meta1_backend_services_renew(struct meta1_backend_s *m1,
 		struct oio_url_s *url, const char *srvtype,
-		gboolean dryrun, gboolean autocreate,
+		const char *last, gboolean autocreate,
 		gchar ***result)
 {
-	if (!result) return SYSERR("BUG: invalid output array");
+	if (!srvtype)
+		return SYSERR("Missing service type");
+	if (!result)
+		return SYSERR("Missing output variable");
 
 	GError *err = __check_backend_events (m1);
 	if (err) return err;
-
-	EXTRA_ASSERT(srvtype != NULL);
-	EXTRA_ASSERT(result != NULL);
 
 	gboolean renewed = FALSE;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1006,8 +1017,8 @@ meta1_backend_services_poll(struct meta1_backend_s *m1,
 	struct sqlx_repctx_s *repctx = NULL;
 	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 		if (!(err = __info_user(sq3, url, autocreate, NULL))) {
-			enum m1v2_getsrv_e mode = dryrun ? M1V2_GETSRV_DRYRUN : M1V2_GETSRV_RENEW;
-			err = __get_container_service(sq3, url, srvtype, m1, mode, result, &renewed);
+			err = __get_container_service(sq3, url,
+					srvtype, m1, last, M1V2_GETSRV_RENEW, result, &renewed);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");
 		}
@@ -1025,7 +1036,11 @@ GError *
 meta1_backend_services_list(struct meta1_backend_s *m1,
 		struct oio_url_s *url, const char *srvtype, gchar ***result)
 {
-	if (!result) return SYSERR("BUG: invalid output array");
+	EXTRA_ASSERT(m1 != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	if (!result)
+		return SYSERR("BUG No service type");
 
 	gboolean retry = TRUE;
 	struct sqlx_sqlite3_s *sq3 = NULL;

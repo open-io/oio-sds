@@ -154,12 +154,10 @@ action_dir_srv_link (struct req_args_s *args, struct json_object *jargs)
 	if (!type)
 		return _reply_format_error (args, BADREQ("No service type provided"));
 	gboolean autocreate = _request_get_flag (args, "autocreate");
-	gboolean dryrun = _request_get_flag (args, "dryrun");
 
 	gchar **urlv = NULL;
 	GError *hook (const char * m1) {
-		return meta1v2_remote_link_service (m1, args->url, type, dryrun,
-				autocreate, &urlv);
+		return meta1v2_remote_link_service (m1, args->url, type, autocreate, &urlv);
 	}
 
 	GError *err = _m1_locate_and_action (args->url, hook);
@@ -228,12 +226,11 @@ action_dir_srv_renew (struct req_args_s *args, struct json_object *jargs)
 	if (!type)
 		return _reply_format_error (args, BADREQ("No service type provided"));
 	gboolean autocreate = _request_get_flag (args, "autocreate");
-	gboolean dryrun = _request_get_flag (args, "dryrun");
 
 	gchar **urlv = NULL;
 	GError *hook (const char * m1) {
 		return meta1v2_remote_renew_reference_service (
-				m1, args->url, type, dryrun, autocreate, &urlv);
+				m1, args->url, type, NULL, autocreate, &urlv);
 	}
 
 	GError *err = _m1_locate_and_action (args->url, hook);
