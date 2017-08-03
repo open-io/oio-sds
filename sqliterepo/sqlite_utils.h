@@ -151,6 +151,9 @@ gboolean sqlx_admin_init_str(struct sqlx_sqlite3_s *sq3, const gchar *k, const g
 
 void sqlx_admin_inc_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 delta);
 
+void sqlx_admin_set_bool(struct sqlx_sqlite3_s *sq3, const gchar *k, const gboolean v);
+gboolean sqlx_admin_get_bool(struct sqlx_sqlite3_s *sq3, const gchar *k, const gboolean def);
+
 gint64 sqlx_admin_get_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 def);
 gchar* sqlx_admin_get_str(struct sqlx_sqlite3_s *sq3, const gchar *k);
 gchar** sqlx_admin_get_keys(struct sqlx_sqlite3_s *sq3);
