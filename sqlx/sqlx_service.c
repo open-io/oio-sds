@@ -436,8 +436,12 @@ _configure_synchronism(struct sqlx_service_s *ss)
 }
 
 static gchar **
-filter_services(struct sqlx_service_s *ss, gchar **s, const gchar *type)
+filter_services(struct sqlx_service_s *ss, gchar **s, const struct sqlx_name_s *name)
 {
+	gint64 seq = 0;
+	gchar *pend = strrchr(name->base, '.');
+	if (pend) g_ascii_strtoll(pend+1, NULL, 10);
+
 	gboolean matched = FALSE;
 	GPtrArray *tmp = g_ptr_array_new();
 	for (; *s ;s++) {
@@ -445,8 +449,8 @@ filter_services(struct sqlx_service_s *ss, gchar **s, const gchar *type)
 		gboolean srvtype_matched;
 		gchar *host;
 		if (u) {
-			srvtype_matched = !strcmp(type, u->srvtype);
 			host = u->host;
+			srvtype_matched = (seq == u->seq) && !strcmp(name->type, u->srvtype);
 		} else {
 			srvtype_matched = TRUE;
 			host = *s;
@@ -547,7 +551,7 @@ label_retry:
 
 	if (!err) {
 		EXTRA_ASSERT(peers != NULL);
-		*result = filter_services(ss, peers, name->type);
+		*result = filter_services(ss, peers, name);
 		oio_str_cleanv(&peers);
 		if (!*result) {
 			// If cache was enabled, we can retry without cache
@@ -1187,7 +1191,7 @@ _reload_lb_world(struct oio_lb_world_s *lbw, struct oio_lb_s *lb)
 		GSList *srv = NULL;
 		GError *e = conscience_get_services(SRV.ns_name, srvtype, FALSE, &srv);
 		if (e) {
-			GRID_WARN("Failed to load the list of [%s] in NS=%s", SRV.ns_name, srvtype);
+			GRID_WARN("Failed to load the list of [%s] in NS=%s", srvtype, SRV.ns_name);
 			any_loading_error = TRUE;
 		}
 		g_ptr_array_add(tabsrv, srv);
