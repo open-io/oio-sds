@@ -382,7 +382,7 @@ def redis_cnx(f):
 class ContainerBackup(RedisConn, WerkzeugApp):
     """WSGI Application to dump or restore a container."""
 
-    CACHE = 3600 * 24  # Redis keys will expire after one day
+    REDIS_TIMEOUT = 3600 * 24  # Redis keys will expire after one day
     STREAMING = 52428800  # 50 MB
 
     # Number of blocks to serve to avoid splitting headers (1MiB)
@@ -401,6 +401,9 @@ class ContainerBackup(RedisConn, WerkzeugApp):
             Rule('/v1.0/container/restore', endpoint='restore'),
         ])
         self.logger = get_logger(self.conf, name="ContainerBackup")
+        self.REDIS_TIMEOUT = self.conf.get("redis_cache_timeout",
+                                           self.REDIS_TIMEOUT)
+
         super(ContainerBackup, self).__init__(self.conf)
         WerkzeugApp.__init__(self, self.url_map, self.logger)
 
@@ -414,7 +417,7 @@ class ContainerBackup(RedisConn, WerkzeugApp):
         """
         Generate a static manifest of a container.
         It will help to find quickly which part of object app have to serve
-        Manifest is cached into Redis with CACHE delay
+        Manifest is cached into Redis with REDIS_TIMEOUT delay
         """
         if not container:
             raise exc.NoSuchContainer()
@@ -518,7 +521,7 @@ class ContainerBackup(RedisConn, WerkzeugApp):
 
         self.logger.debug("add entry to cache")
         self.redis.set(hash_map, json.dumps(map_objs, sort_keys=True),
-                       ex=self.CACHE)
+                       ex=self.REDIS_TIMEOUT)
         return map_objs
 
     def _do_head(self, _, account, container):
@@ -773,7 +776,7 @@ class ContainerBackup(RedisConn, WerkzeugApp):
             cur_state['end'] = end_block
             self.redis.set("restore:%s:%s" % (account, container),
                            json.dumps(cur_state, sort_keys=True),
-                           ex=self.CACHE)
+                           ex=self.REDIS_TIMEOUT)
         return Response(status=code)
 
     def on_restore(self, req):
