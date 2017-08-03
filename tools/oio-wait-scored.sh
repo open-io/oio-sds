@@ -23,6 +23,7 @@ SRVTYPE=
 MAXWAIT=0
 MINSRV=1
 UNLOCK=
+VERBOSE=0
 
 list () {
 	if [ -n "$SRVTYPE" ] ; then
@@ -38,17 +39,20 @@ maybe_unlock () {
 	fi
 }
 
-while getopts "N:s:t:n:lu" opt ; do
+while getopts "N:s:t:n:luv" opt ; do
 	case $opt in
 		t) MAXWAIT="${OPTARG}" ;;
 		s) SRVTYPE="${OPTARG}" ;;
 		n) NS="${OPTARG}" ;;
 		l) LOCAL=1 ;;
 		u) UNLOCK=1 ;;
+		v) VERBOSE=1 ;;
 		N) MINSRV="${OPTARG}" ;;
 		\?) exit 1 ;;
 	esac
 done
+
+if [[ $VERBOSE -ge 1 ]] ; then set -x ; fi
 
 if [ -z "$NS" ] ; then
 	echo "No namespace configured"
