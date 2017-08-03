@@ -471,26 +471,16 @@ metautils_message_extract_string_noerror(MESSAGE msg, const gchar *n,
 		return FALSE;
 	if (fsize)
 		memcpy(dst, f, fsize);
-	memset(dst+fsize, 0, dst_size-fsize);
+	dst[fsize] = '\0';
 	return TRUE;
 }
 
 GError *
-metautils_message_extract_string(MESSAGE msg, const gchar *n, gchar *dst,
-		gsize dst_size)
+metautils_message_extract_string(MESSAGE msg, const gchar *n,
+		gchar *dst, gsize dst_size)
 {
-	gsize fsize = 0;
-	void *f = metautils_message_get_field(msg, n, &fsize);
-	if (!f)
-		return NEWERROR(CODE_BAD_REQUEST, "missing '%s'", n);
-	if (!fsize)
-		return NEWERROR(CODE_BAD_REQUEST, "empty '%s'", n);
-	if ((gssize)fsize < 0 || fsize >= dst_size)
-		return NEWERROR(CODE_BAD_REQUEST, "too long '%s' (%"G_GSIZE_FORMAT")", n, fsize);
-
-	if (fsize)
-		memcpy(dst, f, fsize);
-	memset(dst+fsize, 0, dst_size-fsize);
+	if (!metautils_message_extract_string_noerror(msg, n, dst, dst_size))
+		return BADREQ("Missing/Bad field %s", n);
 	return NULL;
 }
 
@@ -518,26 +508,17 @@ metautils_message_extract_flag(MESSAGE msg, const gchar *n, gboolean def)
 	return _flag;
 }
 
-GError*
-metautils_message_extract_flags32(MESSAGE msg, const gchar *n,
-		gboolean mandatory, guint32 *flags)
+void
+metautils_message_extract_flags32(MESSAGE msg, const gchar *n, guint32 *flags)
 {
 	EXTRA_ASSERT(flags != NULL);
 	*flags = 0;
 
 	gsize fsize = 0;
 	void *f = metautils_message_get_field(msg, n, &fsize);
-	if (!f || !fsize) {
-		if (mandatory)
-			return NEWERROR(CODE_BAD_REQUEST, "Missing field '%s'", n);
-		return NULL;
-	}
-
-	if (fsize != 4)
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid 32bit flag set");
-
+	if (!f || fsize != 4)
+		return;
 	*flags = g_ntohl(*((guint32*)f));
-	return NULL;
 }
 
 GError *
@@ -643,36 +624,14 @@ metautils_message_extract_header_encoded(MESSAGE msg, const gchar *n, gboolean m
 GError *
 metautils_message_extract_strint64(MESSAGE msg, const gchar *n, gint64 *i64)
 {
-	/* 20 chars for the number
-	 *  1 char for the sign
-	 *  1 char for the NULL terminator
-	 *  2 chars for padding */
-	gchar *end, dst[24];
-
-	EXTRA_ASSERT (i64 != NULL);
+	gchar dst[24] = "";
 	*i64 = 0;
 
-	memset(dst, 0, sizeof(dst));
-	GError *err = metautils_message_extract_string(msg, n, dst, sizeof(dst));
-	if (err != NULL) {
-		g_prefix_error(&err, "field: ");
-		return err;
-	}
-
-	end = NULL;
-	*i64 = g_ascii_strtoll(dst, &end, 10);
-
-	switch (*i64) {
-		case G_MININT64:
-		case G_MAXINT64:
-			return (errno == ERANGE)
-				? NEWERROR(CODE_BAD_REQUEST, "Invalid number") : NULL;
-		case 0:
-			return (end == dst)
-				? NEWERROR(CODE_BAD_REQUEST, "Invalid number") : NULL;
-		default:
-			return NULL;
-	}
+	if (!metautils_message_extract_string_noerror(msg, n, dst, sizeof(dst)))
+		return BADREQ("Missing field %s", n);
+	if (!oio_str_is_number(dst, i64))
+		return BADREQ("Invalid number for %s", n);
+	return NULL;
 }
 
 GError*
@@ -682,9 +641,9 @@ metautils_message_extract_struint(MESSAGE msg, const gchar *n, guint *u)
 	*u = 0;
 	gint64 i64 = 0;
 	GError *err = metautils_message_extract_strint64(msg, n, &i64);
-	if (err) { g_prefix_error(&err, "struint: "); return err; }
-	if (i64<0) return NEWERROR(CODE_BAD_REQUEST, "[%s] is negative", n);
-	if (i64 > G_MAXUINT) return NEWERROR(CODE_BAD_REQUEST, "[%s] is too big", n);
+	if (err) return err;
+	if (i64<0) return BADREQ("[%s] is negative", n);
+	if (i64 > G_MAXUINT) return BADREQ("[%s] is too big", n);
 	*u = i64;
 	return NULL;
 }
@@ -694,14 +653,14 @@ metautils_message_extract_boolean(MESSAGE msg, const gchar *n,
 		gboolean mandatory, gboolean *v)
 {
 	gchar tmp[16];
-	GError *err = metautils_message_extract_string(msg, n, tmp, sizeof(tmp));
-	if (err) {
-		if (!mandatory)
-			g_clear_error(&err);
-		return err;
+	if (!metautils_message_extract_string_noerror(msg, n, tmp, sizeof(tmp))) {
+		if (mandatory)
+			return BADREQ("Missing field %s", n);
+		return NULL;
+	} else {
+		if (v)
+			*v = oio_str_parse_bool (tmp, *v);
+		return NULL;
 	}
-	if (v)
-		*v = oio_str_parse_bool (tmp, *v);
-	return NULL;
 }
 
