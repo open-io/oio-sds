@@ -39,7 +39,7 @@ GError * meta1v2_remote_list_reference_services(const char *m1,
 		struct oio_url_s *url, const char *srvtype, gchar ***out);
 
 GError * meta1v2_remote_link_service(const char *m1, struct oio_url_s *url,
-		const char *srvtype, gboolean dryrun, gboolean ac, gchar ***out);
+		const char *srvtype, gboolean ac, gchar ***out);
 
 GError * meta1v2_remote_unlink_service(const char *m1, struct oio_url_s *url,
 		const char *srvtype);
@@ -48,7 +48,7 @@ GError * meta1v2_remote_unlink_one_service(const char *m1, struct oio_url_s *url
 		const char *srvtype, gint64 seqid);
 
 GError * meta1v2_remote_renew_reference_service(const char *m1, struct oio_url_s *url,
-		const char *srvtype, gboolean dryrun, gboolean ac, gchar ***out);
+		const char *srvtype, const char *last, gboolean ac, gchar ***out);
 
 GError * meta1v2_remote_force_reference_service(const char *m1, struct oio_url_s *url,
 		const char *m1url, gboolean ac, gboolean force);
