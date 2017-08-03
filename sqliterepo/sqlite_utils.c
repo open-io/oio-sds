@@ -154,6 +154,21 @@ sqlx_admin_get_str(struct sqlx_sqlite3_s *sq3, const gchar *k)
 	return g_strndup(v->buffer, v->len);
 }
 
+gboolean
+sqlx_admin_get_bool(struct sqlx_sqlite3_s *sq3, const gchar *k, const gboolean def)
+{
+	struct _cache_entry_s *v = g_tree_lookup(sq3->admin, k);
+	if (!v || v->flag_deleted)
+		return def;
+	return oio_str_parse_bool(v->buffer, def);
+}
+
+void
+sqlx_admin_set_bool(struct sqlx_sqlite3_s *sq3, const gchar *k, const gboolean v)
+{
+	sqlx_admin_set_str(sq3, k, v ? "yes" : "no");
+}
+
 gint64
 sqlx_admin_get_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 def)
 {
