@@ -909,7 +909,7 @@ retry:
 				gchar **urlv = NULL, realtype[64];
 				_get_meta2_realtype (args, realtype, sizeof(realtype));
 				GError *e = meta1v2_remote_link_service (
-						m1, args->url, realtype, FALSE, TRUE, &urlv);
+						m1, args->url, realtype, TRUE, &urlv);
 				if (!e && urlv && *urlv) {
 					/* Explicitely feeding the meta1 avoids a subsequent
 					   call to meta1 to locate the meta2 */

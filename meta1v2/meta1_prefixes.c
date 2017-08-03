@@ -63,6 +63,8 @@ _cache_is_managed(const guint8 *cache, const guint8 *prefix)
 	return BOOL(cache[ slot / 8 ] & BITPOS(slot));
 }
 
+/* NS operations ------------------------------------------------------------ */
+
 void
 meta1_prefixes_manage_all(struct meta1_prefixes_set_s *m1ps)
 {
@@ -74,9 +76,6 @@ meta1_prefixes_manage_all(struct meta1_prefixes_set_s *m1ps)
 	}
 	g_mutex_unlock(&m1ps->lock);
 }
-
-
-/* NS operations ------------------------------------------------------------ */
 
 static guint8*
 _cache_from_m0l(const GSList *l, const struct addr_info_s *ai)

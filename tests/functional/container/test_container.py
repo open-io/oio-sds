@@ -4,7 +4,7 @@ import logging
 import random
 import simplejson as json
 import struct
-from tests.utils import BaseTestCase
+from tests.utils import BaseTestCase, random_id
 
 
 def random_content():
@@ -42,7 +42,8 @@ class TestMeta2Containers(BaseTestCase):
 
     def setUp(self):
         super(TestMeta2Containers, self).setUp()
-        self.ref = 'Ça ne marchera jamais !'
+        self.account = random_id(16)
+        self.ref = random_id(16) + '-' + 'Ça ne marchera jamais !'
 
     def tearDown(self):
         super(TestMeta2Containers, self).tearDown()
@@ -279,7 +280,7 @@ class TestMeta2Containers(BaseTestCase):
 class TestMeta2Contents(BaseTestCase):
     def setUp(self):
         super(TestMeta2Contents, self).setUp()
-        self.ref = 'plop-0'
+        self.ref = random_id(16)
         self._reload()
 
     def tearDown(self):
