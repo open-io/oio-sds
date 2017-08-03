@@ -25,12 +25,9 @@ License along with this library.
 # include <metautils/lib/metautils.h>
 # include <sqliterepo/sqlite_utils.h>
 # include <sqliterepo/sqlx_remote.h>
+# include <sqliterepo/election.h>
+# include <sqliterepo/cache.h>
 
-struct hashstr_s;
-struct replication_config_s;
-struct election_manager_s;
-
-struct sqlx_cache_s;
 struct sqlx_repctx_s;
 struct sqlx_sqlite3_s;
 struct sqlx_name_s;
