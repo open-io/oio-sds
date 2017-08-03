@@ -1412,7 +1412,7 @@ network_client_close_output(struct network_client_s *clt, int now)
 		return;
 
 	if (!(clt->flags & NETCLIENT_OUT_CLOSED)) {
-		GRID_DEBUG("fd=%d Closing output", clt->fd);
+		GRID_TRACE("fd=%d Closing output", clt->fd);
 		if (!now) {
 			if (!(clt->flags & NETCLIENT_OUT_CLOSE_PENDING)) {
 				network_client_send_slab(clt, data_slab_make_eof());
