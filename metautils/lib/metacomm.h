@@ -109,11 +109,11 @@ GError* metautils_message_extract_cid(MESSAGE msg, const gchar *n,
 
 gboolean metautils_message_extract_flag(MESSAGE m, const gchar *n, gboolean d);
 
-GError* metautils_message_extract_flags32(MESSAGE msg, const gchar *n,
-		gboolean mandatory, guint32 *flags);
+void metautils_message_extract_flags32(MESSAGE msg, const gchar *n,
+		guint32 *flags);
 
-GError* metautils_message_extract_string(MESSAGE msg, const gchar *n, gchar *dst,
-		gsize dst_size);
+GError* metautils_message_extract_string(MESSAGE msg, const gchar *n,
+		gchar *dst, gsize dst_size);
 
 /** Returns TRUE on success, FALSE otherwise */
 gboolean metautils_message_extract_string_noerror(MESSAGE msg, const gchar *n,
