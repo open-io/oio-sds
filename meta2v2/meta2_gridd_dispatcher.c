@@ -62,9 +62,6 @@ meta2_dispatch_all(struct gridd_reply_ctx_s *reply,
 					meta2_filter_reply_fail(ctx, reply);
 					loop = 0;
 					break;
-				case FILTER_DONE:
-					loop = 0;
-					break;
 				default:
 					meta2_filter_reply_fail(ctx, reply);
 					loop = 0;
