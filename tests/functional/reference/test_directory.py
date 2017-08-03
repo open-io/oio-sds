@@ -97,6 +97,9 @@ class TestDirectoryFunctional(BaseTestCase):
         # Renew while not linked
         resp = self.session.post(self._url_ref('renew'), params=params)
         self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertIsInstance(body, list)
+        self.assertEqual(len(body), 1)
 
         resp = self.session.get(self._url_ref('show'), params=params)
         self.assertEqual(resp.status_code, 200)
@@ -115,12 +118,15 @@ class TestDirectoryFunctional(BaseTestCase):
 
         resp = self.session.post(self._url_ref('renew'), params=params)
         self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertIsInstance(body, list)
+        self.assertEqual(len(body), 2)
 
         resp = self.session.get(self._url_ref('show'), params=params)
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
         self.assertIsInstance(body, dict)
-        self.assertEqual(len(body['srv']), 1)
+        self.assertEqual(len(body['srv']), 2)
         self.assertEqual(body['srv'][0]['host'], srv1['addr'])
 
         # Force without header while linked
