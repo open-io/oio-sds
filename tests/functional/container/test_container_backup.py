@@ -421,9 +421,19 @@ class TestContainerDownload(BaseTestCase):
             hdrs = {'Range': 'bytes=%d-%d' % (start, start + len(part) - 1)}
             res = requests.put(uri, data=part, headers=hdrs)
             self.assertIn(res.status_code, [201, 206])
-            res = requests.put(uri, data=part, headers=hdrs)
-            self.assertEqual(res.status_code, 422)
             start += len(part)
+
+            # only unfinished restoration expose X-ConsumedSize
+            if res.status_code == 206:
+                res = requests.head(uri)
+                self.assertEqual(int(res.headers['X-ConsumedSize']), start)
+
+            inv = requests.put(uri, data=part, headers=hdrs)
+            self.assertEqual(inv.status_code, 422)
+
+            if res.status_code == 206:
+                res = requests.head(uri)
+                self.assertEqual(int(res.headers['X-ConsumedSize']), start)
 
         cnt = rand_str(20)
         uri = self.make_uri('restore', container=cnt)
