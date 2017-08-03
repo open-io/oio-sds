@@ -21,6 +21,10 @@ add_executable(test_lb test_lb.c)
 target_link_libraries(test_lb metautils ${COMMON})
 add_test(NAME core/lb COMMAND test_lb)
 
+add_executable(test_asn1_message test_asn1_message.c)
+target_link_libraries(test_asn1_message ${COMMON})
+add_test(NAME core/asn1_message COMMAND test_asn1_message)
+
 add_executable(test_oio_ext test_ext.c)
 target_link_libraries(test_oio_ext ${COMMON})
 add_test(NAME core/ext COMMAND test_oio_ext)
