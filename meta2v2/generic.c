@@ -939,6 +939,12 @@ _bean_list_cb(gpointer plist, gpointer bean)
 	*((GSList**)plist) = g_slist_prepend (*((GSList**)plist), bean);
 }
 
+void
+_bean_ignore(gpointer u UNUSED, gpointer b)
+{
+	_bean_clean(b);
+}
+
 /* -------------------------------------------------------------------------- */
 
 GString*

@@ -186,6 +186,8 @@ void _bean_buffer_cb(gpointer gpa, gpointer bean);
  * sets <plist> with the new list.  */
 void _bean_list_cb(gpointer plist, gpointer bean);
 
+void _bean_ignore(gpointer ignored, gpointer b);
+
 #define _bean_has_field(bean,pos) (HDR(bean)->fields & (1<<(pos)))
 #define _bean_set_field(bean,pos) (HDR(bean)->fields |= (1<<(pos)))
 #define _bean_del_field(bean,pos) (HDR(bean)->fields &= ~(1<<(pos)))
