@@ -438,7 +438,8 @@ _configure_synchronism(struct sqlx_service_s *ss)
 static gchar **
 filter_services(struct sqlx_service_s *ss, gchar **s, const struct sqlx_name_s *name)
 {
-	gint64 seq = 0;
+	gint64 seq = 1;  /* TODO(jfs): Replace ASAP by an invalid default value,
+						to ensure an error occurs when the parsing fails */
 	gchar *pend = strrchr(name->base, '.');
 	if (pend) g_ascii_strtoll(pend+1, NULL, 10);
 
@@ -489,6 +490,8 @@ sqlx_service_resolve_peers(struct sqlx_service_s *ss,
 
 	if (!sqlx_name_extract(n, u, ss->service_config->srvtype, &seq)) {
 		err = BADREQ("Invalid type name: '%s'", n->type);
+	} else if (seq < 1) {
+		err = BADREQ("Invalid sequence number: %" G_GINT64_FORMAT, seq);
 	} else {
 label_retry:
 		if (nocache)
