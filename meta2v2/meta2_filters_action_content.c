@@ -325,6 +325,7 @@ meta2_filter_action_drain_content(struct gridd_filter_ctx_s *ctx,
 
 	e = meta2_backend_drain_content(m2b, url, _bean_list_cb, &obc->l);
 	if (e != NULL) {
+		meta2_filter_ctx_set_error(ctx, e);
 		_on_bean_ctx_clean(obc);
 		return FILTER_KO;
 	}
