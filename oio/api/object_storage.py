@@ -384,7 +384,6 @@ class ObjectStorageApi(object):
         return self.container.container_create_many(account,
                                                     containers,
                                                     properties=properties,
-                                                    autocreate=True,
                                                     **kwargs)
 
     @handle_container_not_found
