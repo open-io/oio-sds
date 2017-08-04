@@ -109,9 +109,9 @@ class ContainerClient(ProxyClient):
             resp, body = self._request('POST', '/create_many', params=params,
                                        data=data, autocreate=True,
                                        **kwargs)
-            if resp.status not in (204, 201):
+            if resp.status not in (204, 200):
                 raise exceptions.from_response(resp, body)
-            for container in json.loads(body)["containers"]:
+            for container in body["containers"]:
                 results.append((container["name"], container["status"] == 201))
             return results
         except exceptions.TooLarge:
