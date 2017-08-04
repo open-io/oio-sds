@@ -276,6 +276,10 @@ the list."""
             u = t.name.upper()
             out.write("\n/* Getters and Setters for "+u+" */\n\n")
             for f in t.fields:
+                if '*' in f.type_c:
+                    out.write("const "+f.type_c+" "+u+"_get_"+f.name+"_const(const struct bean_"+u+"_s *bean);\n")
+                else:
+                    out.write(f.type_c+" "+u+"_get_"+f.name+"_const(const struct bean_"+u+"_s *bean);\n")
                 out.write(f.type_c+" "+u+"_get_"+f.name+"(struct bean_"+u+"_s *bean);\n")
                 out.write("void "+u+"_set_"+f.name+"(struct bean_"+u+"_s *bean, "+f.type_c+" v);\n")
                 if isinstance(f, Text):
@@ -492,6 +496,14 @@ the list."""
                     out.write("\t\t_bean_del_field(bean, "+str(f.position)+");\n")
                     out.write("\t}\n")
                     out.write("}\n\n")
+                if '*' in f.type_c:
+                    out.write("const "+f.type_c+"\n"+t.c_name+"_get_"+f.name+"_const(const struct bean_"+t.c_name+"_s *bean)\n{\n")
+                else:
+                    out.write(f.type_c+"\n"+t.c_name+"_get_"+f.name+"_const(const struct bean_"+t.c_name+"_s *bean)\n{\n")
+                out.write("\tEXTRA_ASSERT(bean != NULL);\n")
+                out.write("\tEXTRA_ASSERT(DESCR(bean) == &descr_struct_"+t.c_name+");\n")
+                out.write("\treturn *(("+f.type_c+"*)(FIELD(bean,"+str(f.position)+")));\n")
+                out.write("}\n\n")
                 out.write(f.type_c+"\n"+t.c_name+"_get_"+f.name+"(struct bean_"+t.c_name+"_s *bean)\n{\n")
                 out.write("\tEXTRA_ASSERT(bean != NULL);\n")
                 out.write("\tEXTRA_ASSERT(DESCR(bean) == &descr_struct_"+t.c_name+");\n")
