@@ -27,6 +27,10 @@ def random_content():
     return 'content-{0}'.format(random.randint(0, 65536))
 
 
+def random_container():
+    return 'container-{0}'.format(random.randint(0, 65536))
+
+
 def merge(s0, s1):
     out = dict()
     out.update(s0)
@@ -100,6 +104,26 @@ class TestMeta2Containers(BaseTestCase):
         self.assertIn('objects', body)
         self.assertIsInstance(body['objects'], list)
         self.assertEqual(len(body['objects']), nbobj)
+
+    def test_mass_delete(self):
+        containers = []
+        for i in range(50):
+            container = random_container()
+            param = self.param_ref(container)
+            self._create(param, 201)
+            self._delete(param)
+            containers.append(container)
+
+        args = {'id': self.account, 'prefix': 'container-'}
+        resp = self.session.post(('http://' +
+                                  self.conf['services']['account'][0]['addr'] +
+                                  '/v1.0/account/containers'),
+                                 params=args)
+        self.assertEqual(resp.status_code, 200)
+        data = self.json_loads(resp.content)
+
+        for l in data["listing"]:
+            self.assertNotIn(l[0], containers)
 
     def test_create_many(self):
         params = self.param_ref(self.ref)

@@ -247,8 +247,12 @@ class AccountBackend(RedisConn):
 
         if mtime is None:
             mtime = '0'
+        else:
+            mtime = Timestamp(float(mtime)).normal
         if dtime is None:
             dtime = '0'
+        else:
+            dtime = Timestamp(float(dtime)).normal
         if object_count is None:
             object_count = 0
         if bytes_used is None:
