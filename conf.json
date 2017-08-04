@@ -36,12 +36,7 @@
 			{ "type": "epoch", "name": "meta2_reload_nsinfo_period",
 				"key": "meta2.reload.nsinfo.period",
 				"descr": "Sets the period of the periodical reloading of the namespace configuration, in the current meta2 service.",
-				"def": "5s", "min": "1s", "max": "1h" },
-
-			{ "type": "bool", "name": "meta2_flag_precheck_on_generate",
-				"key": "meta2.generate.precheck",
-				"descr": "Should the meta2 check the container state (quota, etc) before generating chunks.",
-				"def": true }
+				"def": "5s", "min": "1s", "max": "1h" }
 		]
 	},
 	"rawx": {

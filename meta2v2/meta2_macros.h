@@ -40,6 +40,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define M2V2_ADMIN_SIZE M2V2_ADMIN_PREFIX_SYS "usage"
 # endif
 
+# ifndef M2V2_ADMIN_FULL
+# define M2V2_ADMIN_FULL M2V2_ADMIN_PREFIX_SYS "full"
+# endif
+
 # ifndef M2V2_ADMIN_OBJ_COUNT
 # define M2V2_ADMIN_OBJ_COUNT M2V2_ADMIN_PREFIX_SYS "objects"
 # endif
@@ -116,9 +120,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  * return the latest alias only. */
 #define M2V2_FLAG_LATEST           0x00000100
 
-/* flush the properties */
-#define M2V2_FLAG_FLUSH            0x00000200
-
 /* Ask the meta2 to redirect if not MASTER, even if the request is Read-Only */
 #define M2V2_FLAG_MASTER           0x00000400
 
@@ -134,20 +135,32 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 struct m2v2_create_params_s
 {
-	const char *storage_policy; /**< Will override the (maybe present) stgpol property. */
-	const char *version_policy; /**< idem for the verpol property. */
-	gchar **properties; /**< A NULL-terminated sequence of strings where:
-						  * properties[i*2] is the i-th key and
-						  * properties[(i*2)+1] is the i-th value */
-	gboolean local; /**< Do not try to replicate, do not call get_peers() */
+	/* Will override the (maybe present) stgpol property. */
+	const char *storage_policy;
+
+	/* idem for the verpol property. */
+	const char *version_policy;
+
+	/* A NULL-terminated sequence of strings where:
+	 * - properties[i*2] is the i-th key and
+	 * - properties[(i*2)+1] is the i-th value */
+	gchar **properties;
 };
 
-enum m2v2_destroy_flag_e
+struct m2v2_destroy_params_s
 {
-	/* send a destruction event */
-	M2V2_DESTROY_EVENT = 0x01,
-	M2V2_DESTROY_FLUSH = 0x02,
-	M2V2_DESTROY_FORCE = 0x04,
+	guint8 flag_event;
+	guint8 flag_flush;
+	guint8 flag_force;
+};
+
+struct m2op_target_s
+{
+	struct oio_url_s *url;
+	gint64 seq;
+	guint8 flag_local;
+	guint8 flag_master_only;
+	guint8 flag_last_base;
 };
 
 #endif /*OIO_SDS__meta2v2__meta2_macros_h*/

@@ -45,26 +45,21 @@ gboolean m2v2_list_result_extract (gpointer ctx, MESSAGE reply);
 struct m2v2_create_params_s;
 
 /* deadline known from thread-local */
-GError* m2v2_remote_execute_DESTROY(
-		const char *target,
-		struct oio_url_s *url,
-		guint32 flags);
+GError* m2v2_remote_execute_DESTROY(const char *target, struct oio_url_s *url,
+		const struct m2v2_destroy_params_s *params);
 
 /* deadline known from thread-local
  * Locally destroy a container on several services. */
-GError* m2v2_remote_execute_DESTROY_many(
-		gchar **targets,
-		struct oio_url_s *url,
-		guint32 flags);
+GError* m2v2_remote_execute_DESTROY_many(gchar **targets, struct oio_url_s *url,
+		const struct m2v2_destroy_params_s *params);
 
 GByteArray* m2v2_remote_pack_CREATE(
 		struct oio_url_s *url,
 		struct m2v2_create_params_s *pols,
 		gint64 deadline);
 
-GByteArray* m2v2_remote_pack_DESTROY(
-		struct oio_url_s *url,
-		guint32 flags,
+GByteArray* m2v2_remote_pack_DESTROY(struct oio_url_s *url,
+		const struct m2v2_destroy_params_s *params,
 		gint64 deadline);
 
 /* accepts M2V2_FLAG_MASTER */
@@ -156,14 +151,12 @@ GByteArray* m2v2_remote_pack_GET(
 /* accepts M2V2_FLAG_MASTER */
 GByteArray* m2v2_remote_pack_LIST(
 		struct oio_url_s *url,
-		guint32 flags,
 		struct list_params_s *p,
 		gint64 deadline);
 
 /* accepts M2V2_FLAG_MASTER */
 GByteArray* m2v2_remote_pack_LIST_BY_CHUNKID(
 		struct oio_url_s *url,
-		guint32 flags,
 		struct list_params_s *p,
 		const char *chunk,
 		gint64 deadline);
@@ -171,7 +164,6 @@ GByteArray* m2v2_remote_pack_LIST_BY_CHUNKID(
 /* accepts M2V2_FLAG_MASTER */
 GByteArray* m2v2_remote_pack_LIST_BY_HEADERHASH(
 		struct oio_url_s *url,
-		guint32 flags,
 		struct list_params_s *p,
 		GBytes *h,
 		gint64 deadline);
@@ -179,7 +171,6 @@ GByteArray* m2v2_remote_pack_LIST_BY_HEADERHASH(
 /* accepts M2V2_FLAG_MASTER */
 GByteArray* m2v2_remote_pack_LIST_BY_HEADERID(
 		struct oio_url_s *url,
-		guint32 flags,
 		struct list_params_s *p,
 		GBytes *h,
 		gint64 deadline);
@@ -209,8 +200,8 @@ GByteArray* m2v2_remote_pack_PROP_DEL(
 
 GByteArray* m2v2_remote_pack_PROP_SET(
 		struct oio_url_s *url,
-		guint32 flags,
 		GSList *beans,
+		gboolean flush,
 		gint64 deadline);
 
 /* accepts M2V2_FLAG_MASTER */

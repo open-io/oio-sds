@@ -46,9 +46,6 @@ struct meta2_backend_s
 	struct hc_resolver_s *resolver;
 	struct oio_events_queue_s *notifier;
 
-	// Trigger pre-check on alias upon a BEANS generation request
-	gboolean flag_precheck_on_generate;
-
 	gchar ns_name[LIMIT_LENGTH_NSNAME];
 
 	// Cache for admin values useful for M2_PREPARE requests

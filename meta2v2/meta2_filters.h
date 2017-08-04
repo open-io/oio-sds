@@ -20,62 +20,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__meta2v2__meta2_filters_h
 # define OIO_SDS__meta2v2__meta2_filters_h 1
 
-#if 0
-#define TRACE_FILTER() GRID_TRACE("FILTER %s:%d %s", __FILE__, __LINE__, __FUNCTION__)
-#else
-#define TRACE_FILTER()
-#endif
-
-struct gridd_filter_ctx_s;
-struct gridd_reply_ctx_s;
-
-struct on_bean_ctx_s
-{
-	GSList *l;
-	gboolean first;
-	struct gridd_reply_ctx_s *reply;
-	struct gridd_filter_ctx_s *ctx;
-};
-
-struct on_bean_ctx_s *_on_bean_ctx_init(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-void _on_bean_ctx_send_list(struct on_bean_ctx_s *obc);
-
-void _on_bean_ctx_clean(struct on_bean_ctx_s *obc);
-
-/* -------------------------------------------------------------------------- */
-
 #define M2V2_DECLARE_FILTER(F) int F (struct gridd_filter_ctx_s *, struct gridd_reply_ctx_s *)
 
-M2V2_DECLARE_FILTER(meta2_filter_check_url_cid);
-M2V2_DECLARE_FILTER(meta2_filter_check_ns_name);
-M2V2_DECLARE_FILTER(meta2_filter_check_optional_ns_name);
-M2V2_DECLARE_FILTER(meta2_filter_check_backend);
-M2V2_DECLARE_FILTER(meta2_filter_check_ns_is_master);
-M2V2_DECLARE_FILTER(meta2_filter_check_ns_not_wormed);
-M2V2_DECLARE_FILTER(meta2_filter_check_events_not_stalled);
+struct gridd_filter_ctx_s
+{
+	struct meta2_backend_s *backend;
+	struct m2op_target_s base;
+	gboolean flag_admin;
+};
 
-M2V2_DECLARE_FILTER(meta2_filter_extract_header_url);
-M2V2_DECLARE_FILTER(meta2_filter_extract_header_copy);
-M2V2_DECLARE_FILTER(meta2_filter_extract_header_chunk_beans);
-M2V2_DECLARE_FILTER(meta2_filter_extract_header_storage_policy);
-M2V2_DECLARE_FILTER(meta2_filter_extract_header_version_policy);
-M2V2_DECLARE_FILTER(meta2_filter_extract_header_spare);
-M2V2_DECLARE_FILTER(meta2_filter_extract_body_beans);
-M2V2_DECLARE_FILTER(meta2_filter_extract_body_strings);
-M2V2_DECLARE_FILTER(meta2_filter_extract_header_localflag);
-M2V2_DECLARE_FILTER(meta2_filter_extract_header_flags32);
-M2V2_DECLARE_FILTER(meta2_filter_extract_header_append);
-M2V2_DECLARE_FILTER(meta2_filter_extract_header_string_size);
-M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_overwrite);
-M2V2_DECLARE_FILTER(meta2_filter_extract_list_params);
-M2V2_DECLARE_FILTER(meta2_filter_extract_admin);
+int _reply_no_body(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply, GError *err);
 
-M2V2_DECLARE_FILTER(meta2_filter_fill_subject);
-M2V2_DECLARE_FILTER(meta2_filter_reply_success);
-M2V2_DECLARE_FILTER(meta2_filter_reply_fail);
-M2V2_DECLARE_FILTER(meta2_filter_reply_not_implemented);
+int _reply_beans_and_clean(struct gridd_reply_ctx_s *reply, GSList *beans);
 
 M2V2_DECLARE_FILTER(meta2_filter_action_create_container);
 M2V2_DECLARE_FILTER(meta2_filter_action_empty_container);

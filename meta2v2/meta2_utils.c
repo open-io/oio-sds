@@ -247,6 +247,18 @@ m2db_set_size(struct sqlx_sqlite3_s *sq3, gint64 size)
 	sqlx_admin_set_i64(sq3, M2V2_ADMIN_SIZE, size);
 }
 
+gboolean
+m2db_is_full(struct sqlx_sqlite3_s *sq3)
+{
+	return sqlx_admin_get_bool(sq3, M2V2_ADMIN_FULL, FALSE);
+}
+
+void
+m2db_set_full(struct sqlx_sqlite3_s *sq3, gboolean v)
+{
+	sqlx_admin_set_bool(sq3, M2V2_ADMIN_FULL, v);
+}
+
 gint64
 m2db_get_quota(struct sqlx_sqlite3_s *sq3, gint64 def)
 {
@@ -569,7 +581,7 @@ _list_params_to_sql_clause(struct list_params_s *lp, GString *clause,
 	if (clause->len == 0)
 		clause = g_string_append_static (clause, " 1");
 
-	if (!lp->flag_allversion || lp->maxkeys>0 || lp->marker_start || lp->marker_end)
+	if (!lp->flags.allversion || lp->maxkeys>0 || lp->marker_start || lp->marker_end)
 		g_string_append_static(clause, " ORDER BY alias ASC, version ASC");
 
 	if (lp->maxkeys > 0)
@@ -647,7 +659,7 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 
 			g_ptr_array_remove_index_fast (tmp, i-1);
 
-			if (!aliases || lp.flag_allversion) {
+			if (!aliases || lp.flags.allversion) {
 				aliases = g_slist_prepend(aliases, alias);
 				++ count_aliases;
 			} else {
@@ -670,10 +682,10 @@ label_ok:
 	aliases = g_slist_reverse(aliases);
 	for (GSList *l = aliases; l; l = l->next) {
 		struct bean_ALIASES_s *alias = l->data;
-		if (!lp.flag_nodeleted || !ALIASES_get_deleted(alias) || lp.flag_allversion){
-			if (lp.flag_headers)
+		if (!lp.flags.nodeleted || !ALIASES_get_deleted(alias) || lp.flags.allversion){
+			if (lp.flags.headers)
 				_load_fk_by_name(sq3, alias, "image", cb, u);
-			if (lp.flag_properties)
+			if (lp.flags.properties)
 				_load_fk_by_name(sq3, alias, "properties", cb, u);
 			cb(u, alias);
 			l->data = NULL;
@@ -708,6 +720,8 @@ GError*
 m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		gboolean flush, GSList *beans, m2_onbean_cb cb, gpointer u0)
 {
+	EXTRA_ASSERT(cb != NULL);
+
 	struct bean_ALIASES_s *alias = NULL;
 	GError *err = m2db_get_alias1(sq3, url, M2V2_FLAG_NOPROPS
 			|M2V2_FLAG_NORECURSION, &alias);
@@ -739,7 +753,7 @@ m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 			err = _db_delete_bean (sq3->db, prop);
 		} else {
 			err = _db_save_bean (sq3->db, prop);
-			if (!err && cb)
+			if (!err)
 				cb(u0, _bean_dup(prop));
 		}
 	}
@@ -894,6 +908,8 @@ GError*
 m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0)
 {
+	EXTRA_ASSERT(cb != NULL);
+
 	GError *err;
 	struct bean_ALIASES_s *alias = NULL;
 	struct bean_CONTENTS_HEADERS_s *header = NULL;
@@ -936,20 +952,17 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 
 		GSList *deleted_beans = NULL;
 		err = _real_delete(sq3, beans, &deleted_beans);
-		if (cb) {
-			gboolean header_encountered = FALSE;
-			/* Client asked to remove no-more referenced beans,
-			 * we tell him which */
-			for (GSList *bean = deleted_beans; bean; bean = bean->next) {
-				if (bean->data == header)
-					header_encountered = TRUE;
-				cb(u0, _bean_dup(bean->data));
-			}
-			/* Header hasn't been deleted but contains useful information */
-			if (!header_encountered)
-				cb(u0, _bean_dup(header));
+		/* deleted_beans contains direct pointers to the original beans,
+		 * we must transmit copies of the beans */
+
+		gboolean header_encountered = FALSE;
+		for (GSList *bean = deleted_beans; bean; bean = bean->next) {
+			if (bean->data == header)
+				header_encountered = TRUE;
+			cb(u0, _bean_dup(bean->data));
 		}
-		// deleted_beans contains direct pointers to the original beans
+		if (!header_encountered)
+			cb(u0, _bean_dup(header));
 		g_slist_free(deleted_beans);
 
 		// sqliterepo might disable foreign keys management, so that we have
@@ -966,10 +979,7 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		ALIASES_set_ctime(new_alias, now);
 		ALIASES_set_mtime(new_alias, now);
 		err = _db_save_bean(sq3->db, new_alias);
-		if (cb)
-			cb(u0, new_alias);
-		else
-			_bean_clean(new_alias);
+		cb(u0, new_alias);
 		new_alias = NULL;
 	}
 
@@ -1654,6 +1664,8 @@ GError* m2db_copy_alias(struct m2db_put_args_s *args, const char *src_path)
 GError* m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		GSList *beans, m2_onbean_cb cb, gpointer u0)
 {
+	EXTRA_ASSERT(cb != NULL);
+
 	GError *err = NULL;
 	GSList *newchunks = NULL;
 
@@ -1755,13 +1767,11 @@ GError* m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 
 	/* Now insert each chunk bean */
 	if (!(err = _db_insert_beans_list (sq3->db, newchunks))) {
-		if (cb) {
-			for (GSList *l = newchunks; l; l = l->next) {
-				cb (u0, l->data);
-				l->data = NULL;  // prevent double free
-			}
-			cb(u0, _bean_dup(header));
+		for (GSList *l = newchunks; l; l = l->next) {
+			cb (u0, l->data);
+			l->data = NULL;  // prevent double free
 		}
+		cb(u0, _bean_dup(header));
 	}
 	if (!err)
 		m2db_set_size(sq3, m2db_get_size(sq3) + added_size);

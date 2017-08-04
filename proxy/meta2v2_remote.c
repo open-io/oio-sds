@@ -41,6 +41,7 @@ _m2v2_build_request(const char *name, struct oio_url_s *url, GByteArray *body,
 	metautils_message_add_url (msg, url);
 	if (body)
 		metautils_message_add_body_unref (msg, body);
+	metautils_message_add_field_str (msg, NAME_MSGKEY_SEQNUM, "1");
 	return msg;
 }
 
@@ -143,14 +144,15 @@ GByteArray* m2v2_remote_pack_CREATE(
 }
 
 GByteArray*
-m2v2_remote_pack_DESTROY(struct oio_url_s *url, guint32 flags, gint64 dl)
+m2v2_remote_pack_DESTROY(struct oio_url_s *url,
+		const struct m2v2_destroy_params_s *params, gint64 dl)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_DESTROY, url, NULL, dl);
-	if (flags & M2V2_DESTROY_FORCE)
+	if (params->flag_force)
 		metautils_message_add_field_str(msg, NAME_MSGKEY_FORCE, "1");
-	if (flags & M2V2_DESTROY_FLUSH)
+	if (params->flag_flush)
 		metautils_message_add_field_str(msg, NAME_MSGKEY_FLUSH, "1");
-	if (flags & M2V2_DESTROY_EVENT)
+	if (params->flag_event)
 		metautils_message_add_field_str(msg, NAME_MSGKEY_EVENT, "1");
 
 	return message_marshall_gba_and_clean(msg);
@@ -334,15 +336,21 @@ m2v2_remote_pack_GET(struct oio_url_s *url, guint32 flags, gint64 dl)
 }
 
 static void
-_pack_list_params (MESSAGE msg, struct list_params_s *p, guint32 flags)
+_pack_list_flags (MESSAGE msg, struct list_flags_s p)
 {
-	if (p->flag_allversion) flags |= M2V2_FLAG_ALLVERSION;
-	if (p->flag_headers) flags |= M2V2_FLAG_HEADERS;
-	if (p->flag_nodeleted) flags |= M2V2_FLAG_NODELETED;
-	if (p->flag_properties) flags |= M2V2_FLAG_ALLPROPS;
+	guint32 flags = 0;
+	if (p.allversion) flags |= M2V2_FLAG_ALLVERSION;
+	if (p.headers) flags |= M2V2_FLAG_HEADERS;
+	if (p.nodeleted) flags |= M2V2_FLAG_NODELETED;
+	if (p.properties) flags |= M2V2_FLAG_ALLPROPS;
 	flags = g_htonl(flags);
 	metautils_message_add_field(msg, NAME_MSGKEY_FLAGS, &flags, sizeof(flags));
+}
 
+static void
+_pack_list_params (MESSAGE msg, struct list_params_s *p)
+{
+	_pack_list_flags(msg, p->flags);
 	metautils_message_add_field_str(msg, NAME_MSGKEY_PREFIX, p->prefix);
 	metautils_message_add_field_str(msg, NAME_MSGKEY_MARKER, p->marker_start);
 	metautils_message_add_field_str(msg, NAME_MSGKEY_MARKER_END, p->marker_end);
@@ -351,41 +359,41 @@ _pack_list_params (MESSAGE msg, struct list_params_s *p, guint32 flags)
 }
 
 GByteArray*
-m2v2_remote_pack_LIST(struct oio_url_s *url, guint32 flags,
+m2v2_remote_pack_LIST(struct oio_url_s *url,
 		struct list_params_s *p, gint64 dl)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_LIST, url, NULL, dl);
-	_pack_list_params (msg, p, flags);
+	_pack_list_params (msg, p);
 	return message_marshall_gba_and_clean(msg);
 }
 
 GByteArray*
-m2v2_remote_pack_LIST_BY_CHUNKID(struct oio_url_s *url, guint32 flags,
+m2v2_remote_pack_LIST_BY_CHUNKID(struct oio_url_s *url,
 		struct list_params_s *p, const char *chunk, gint64 dl)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_LCHUNK, url, NULL, dl);
-	_pack_list_params (msg, p, flags);
+	_pack_list_params (msg, p);
 	metautils_message_add_field_str (msg, NAME_MSGKEY_KEY, chunk);
 	return message_marshall_gba_and_clean(msg);
 }
 
 GByteArray*
-m2v2_remote_pack_LIST_BY_HEADERHASH(struct oio_url_s *url, guint32 flags,
+m2v2_remote_pack_LIST_BY_HEADERHASH(struct oio_url_s *url,
 		struct list_params_s *p, GBytes *h, gint64 dl)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_LHHASH, url, NULL, dl);
-	_pack_list_params (msg, p, flags);
+	_pack_list_params (msg, p);
 	metautils_message_add_field (msg, NAME_MSGKEY_KEY,
 			g_bytes_get_data(h,NULL), g_bytes_get_size(h));
 	return message_marshall_gba_and_clean(msg);
 }
 
 GByteArray*
-m2v2_remote_pack_LIST_BY_HEADERID(struct oio_url_s *url, guint32 flags,
+m2v2_remote_pack_LIST_BY_HEADERID(struct oio_url_s *url,
 		struct list_params_s *p, GBytes *h, gint64 dl)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_LHID, url, NULL, dl);
-	_pack_list_params (msg, p, flags);
+	_pack_list_params (msg, p);
 	metautils_message_add_field (msg, NAME_MSGKEY_KEY,
 			g_bytes_get_data(h,NULL), g_bytes_get_size(h));
 	return message_marshall_gba_and_clean(msg);
@@ -400,11 +408,14 @@ m2v2_remote_pack_PROP_DEL(struct oio_url_s *url, gchar **names, gint64 dl)
 }
 
 GByteArray*
-m2v2_remote_pack_PROP_SET(struct oio_url_s *url, guint32 flags,
-		GSList *beans, gint64 dl)
+m2v2_remote_pack_PROP_SET(struct oio_url_s *url,
+		GSList *beans, gboolean flush, gint64 dl)
 {
-	GByteArray *body = bean_sequence_marshall(beans);
-	return _m2v2_pack_request_with_flags(NAME_MSGNAME_M2V2_PROP_SET, url, body, flags, dl);
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_PROP_SET, url,
+			bean_sequence_marshall(beans), dl);
+	if (flush)
+		metautils_message_add_field_str(msg, NAME_MSGKEY_FLUSH, "1");
+	return message_marshall_gba_and_clean(msg);
 }
 
 GByteArray*
@@ -441,21 +452,22 @@ m2v2_remote_pack_LINK(struct oio_url_s *url, gint64 dl)
 
 GError*
 m2v2_remote_execute_DESTROY(const char *target, struct oio_url_s *url,
-		guint32 flags)
+		const struct m2v2_destroy_params_s *params)
 {
 	return gridd_client_exec(target,
 			oio_clamp_timeout(proxy_timeout_common, oio_ext_get_deadline()),
-			m2v2_remote_pack_DESTROY(url, flags, oio_ext_get_deadline()));
+			m2v2_remote_pack_DESTROY(url, params, oio_ext_get_deadline()));
 }
 
 GError*
-m2v2_remote_execute_DESTROY_many(gchar **targets, struct oio_url_s *url, guint32 flags)
+m2v2_remote_execute_DESTROY_many(gchar **targets, struct oio_url_s *url,
+	   const struct m2v2_destroy_params_s *params)
 {
 	if (!targets)
 		return NEWERROR(CODE_INTERNAL_ERROR, "invalid target array (NULL)");
 
 	// TODO: factorize with sqlx_remote_execute_DESTROY_many
-	GByteArray *req = m2v2_remote_pack_DESTROY(url, flags, oio_ext_get_deadline());
+	GByteArray *req = m2v2_remote_pack_DESTROY(url, params, oio_ext_get_deadline());
 	struct gridd_client_s **clients = gridd_client_create_many(targets, req, NULL, NULL);
 	metautils_gba_unref(req);
 	req = NULL;

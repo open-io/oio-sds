@@ -91,12 +91,8 @@ target_link_libraries(meta2v2
 
 add_executable(meta2_server
 		meta2_gridd_dispatcher.c
-		meta2_filters_extract.c
-		meta2_filters_check.c
-		meta2_filters_misc.c
 		meta2_filters_action_container.c
 		meta2_filters_action_content.c
-		meta2_filter_context.c
 		meta2_server.c)
 bin_prefix(meta2_server -meta2-server)
 

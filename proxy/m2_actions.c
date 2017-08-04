@@ -903,7 +903,7 @@ _m2_container_create_with_properties (struct req_args_s *args, char **props,
 	 * of the account. This is how we do NOW, by letting the meta2 find the best
 	 * value when necessary. */
 	struct m2v2_create_params_s param = {
-			container_stgpol, container_verpol, props, FALSE
+			container_stgpol, container_verpol, props
 	};
 
 	GError *err = NULL;
@@ -1023,14 +1023,15 @@ action_m2_container_destroy (struct req_args_s *args)
 
 	/* 4. DESTROY each local base */
 	if (!err && urlv && *urlv) {
-		const guint32 flag_force = (force) ? M2V2_DESTROY_FORCE : 0;
+		struct m2v2_destroy_params_s params = {0};
+		params.flag_force = force;
 
 		meta1_urlv_shift_addr(urlv);
-		err = m2v2_remote_execute_DESTROY (urlv[0], args->url,
-				M2V2_DESTROY_EVENT|flag_force);
+		params.flag_event = TRUE;
+		err = m2v2_remote_execute_DESTROY (urlv[0], args->url, &params);
 		if (!err && urlv[1]) {
-			err = m2v2_remote_execute_DESTROY_many(
-					urlv+1, args->url, flag_force);
+			params.flag_event = FALSE;
+			err = m2v2_remote_execute_DESTROY_many(urlv+1, args->url, &params);
 		}
 	}
 
@@ -1539,17 +1540,17 @@ enum http_rc_e action_container_list (struct req_args_s *args) {
 	}
 
 	/* Init the listing options common to all the modes */
-	list_in.flag_headers = 1;
-	list_in.flag_nodeleted = 1;
+	list_in.flags.headers = 1;
+	list_in.flags.nodeleted = 1;
 	list_in.prefix = OPT("prefix");
 	list_in.marker_start = OPT("marker");
 	list_in.marker_end = OPT("marker_end");
 	if (OPT("deleted"))
-		list_in.flag_nodeleted = 0;
+		list_in.flags.nodeleted = 0;
 	if (OPT("all"))
-		list_in.flag_allversion = 1;
+		list_in.flags.allversion = 1;
 	if (oio_str_parse_bool(OPT("properties"), FALSE))
-		list_in.flag_properties = 1;
+		list_in.flags.properties = 1;
 	if (!err)
 		err = _max (args, &list_in.maxkeys);
 	if (!err) {
@@ -1559,14 +1560,11 @@ enum http_rc_e action_container_list (struct req_args_s *args) {
 
 	if (!err) {
 		GByteArray* _pack (struct list_params_s *in) {
-			guint32 flags = flag_force_master ? M2V2_FLAG_MASTER : 0;
 			if (chunk_id)
-				return m2v2_remote_pack_LIST_BY_CHUNKID (args->url, flags,
-						in, chunk_id, DL());
+				return m2v2_remote_pack_LIST_BY_CHUNKID(args->url, in, chunk_id, DL());
 			if (content_hash)
-				return m2v2_remote_pack_LIST_BY_HEADERHASH (args->url, flags,
-						in, content_hash, DL());
-			return m2v2_remote_pack_LIST (args->url, flags, in, DL());
+				return m2v2_remote_pack_LIST_BY_HEADERHASH(args->url, in, content_hash, DL());
+			return m2v2_remote_pack_LIST(args->url, in, DL());
 		}
 		err = _list_loop (args, &list_in, &list_out, tree_prefixes, _pack);
 	}
@@ -1865,11 +1863,11 @@ static enum http_rc_e action_m2_content_propset (struct req_args_s *args,
 		g_strfreev(kv);
 	}
 
-	guint32 flags = 0;
-	if (OPT("flush"))
-		flags |= M2V2_FLAG_FLUSH;
+	const gboolean flush = NULL != OPT("flush");
 
-	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_SET (args->url, flags, beans, DL()); }
+	PACKER_VOID(_pack) {
+		return m2v2_remote_pack_PROP_SET(args->url, beans, flush, DL());
+	}
 	GError *err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
 	_bean_cleanl2 (beans);
 	if (err && CODE_IS_NOTFOUND(err->code))

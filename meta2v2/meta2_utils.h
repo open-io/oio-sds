@@ -38,17 +38,21 @@ struct storage_policy_s;
 struct oio_url_s;
 struct sqlx_sqlite3_s;
 
+struct list_flags_s
+{
+	guint8 nodeleted;
+	guint8 allversion;
+	guint8 headers;
+	guint8 properties;
+};
+
 struct list_params_s
 {
 	gint64 maxkeys;
+	struct list_flags_s flags;
 	const char *prefix;
 	const char *marker_start;
 	const char *marker_end;
-	guint8 flag_nodeleted :1;
-	guint8 flag_allversion:1;
-	guint8 flag_headers   :1;
-	guint8 flag_properties:1;
-	guint8 flag_local     :1;
 };
 
 struct dup_alias_params_s
@@ -56,8 +60,8 @@ struct dup_alias_params_s
 	struct sqlx_sqlite3_s *sq3;
 	gint64 c_version;
 	gint64 src_c_version;
-	gboolean overwrite_latest;
-	gboolean set_deleted;
+	guint8 overwrite_latest;
+	guint8 set_deleted;
 	GSList *errors;
 };
 
@@ -102,6 +106,10 @@ void m2db_set_keep_deleted_delay(struct sqlx_sqlite3_s *sq3, gint64 delay);
 gint64 m2db_get_quota(struct sqlx_sqlite3_s *sq3, gint64 def);
 
 gint64 m2db_get_size(struct sqlx_sqlite3_s *sq3);
+
+gboolean m2db_is_full(struct sqlx_sqlite3_s *sq3);
+
+void m2db_set_full(struct sqlx_sqlite3_s *sq3, gboolean v);
 
 void m2db_set_size(struct sqlx_sqlite3_s *sq3, gint64 size);
 
