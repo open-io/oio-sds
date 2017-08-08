@@ -38,8 +38,12 @@ class Account(WerkzeugApp):
             Rule('/v1.0/account/update', endpoint='account_update'),
             Rule('/v1.0/account/show', endpoint='account_show'),
             Rule('/v1.0/account/containers', endpoint='account_containers'),
+            Rule('/v1.0/account/refresh', endpoint='account_refresh'),
+            Rule('/v1.0/account/flush', endpoint='account_flush'),
             Rule('/v1.0/account/container/update',
-                 endpoint='account_container_update')
+                 endpoint='account_container_update'),
+            Rule('/v1.0/account/container/reset',
+                 endpoint='account_container_reset')
         ])
         super(Account, self).__init__(self.url_map, self.logger)
 
@@ -129,6 +133,30 @@ class Account(WerkzeugApp):
             account_id, name, mtime, dtime, object_count, bytes_used)
         result = json.dumps(info)
         return Response(result)
+
+    def on_account_container_reset(self, req):
+        account_id = self._get_account_id(req)
+        data = json.loads(req.get_data())
+        name = data.get('name')
+        mtime = data.get('mtime')
+        dtime = None
+        object_count = 0
+        bytes_used = 0
+        # Exceptions are catched by dispatch_request
+        self.backend.update_container(
+            account_id, name, mtime, dtime, object_count, bytes_used,
+            autocreate_container=False)
+        return Response(status=204)
+
+    def on_account_refresh(self, req):
+        account_id = self._get_account_id(req)
+        self.backend.refresh_account(account_id)
+        return Response(status=204)
+
+    def on_account_flush(self, req):
+        account_id = self._get_account_id(req)
+        self.backend.flush_account(account_id)
+        return Response(status=204)
 
 
 def create_app(conf, **kwargs):
