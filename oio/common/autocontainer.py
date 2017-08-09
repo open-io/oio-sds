@@ -1,4 +1,4 @@
-# Copyright (C) 2016 OpenIO SAS
+# Copyright (C) 2016-2017 OpenIO SAS
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-
+import re
 from itertools import takewhile
 from ctypes import CDLL, c_char_p, c_uint, create_string_buffer
 
@@ -23,7 +23,20 @@ def strtoll(val, base=10):
     return int("".join(takewhile(str.isdigit, val)), base)
 
 
-class HashedContainerBuilder(object):
+class ContainerBuilder(object):
+    """Base class for container name builders."""
+    def __init__(self, **_kwargs):
+        pass
+
+    def __call__(self, path):
+        return str(path)
+
+    def verify(self, name):
+        """Verify that `name` is an autocontainer"""
+        return isinstance(name, basestring)
+
+
+class HashedContainerBuilder(ContainerBuilder):
     """
     Build a container name from a SHA256 of the content path.
     Only the first (most significant) bits will be considered to generate
@@ -71,7 +84,7 @@ class HashedContainerBuilder(object):
             return False
 
 
-class AutocontainerBuilder(object):
+class AutocontainerBuilder(ContainerBuilder):
     """
     Build a container name from the integer conversion
     of a user provided path and a clever mask.
@@ -104,3 +117,39 @@ class AutocontainerBuilder(object):
             return (self.format % integer) == name
         except ValueError:
             return False
+
+
+class RegexContainerBuilder(object):
+    """
+    Build a container name from a regular expression applied on a user
+    provided path. Use a concatenation of all matching groups as the
+    container name if no custom builder provided.
+
+    :param patterns: regular expressions with at least one capture group
+    :type patterns: `str` or iterable of `str`
+    """
+
+    def __init__(self, patterns, builder=ContainerBuilder, **kwargs):
+        if isinstance(patterns, basestring):
+            patterns = (patterns, )
+        if not patterns:
+            raise ValueError("You must provide at least one pattern")
+        self.patterns = list()
+        for pattern in patterns:
+            if not isinstance(pattern, re._pattern_type):
+                pattern = re.compile(pattern)
+                if pattern.groups < 1:
+                    raise ValueError(
+                        "Expression %s does not contain any capture group")
+            self.patterns.append(pattern)
+        self.builder = builder(**kwargs)
+
+    def __call__(self, path):
+        for pattern in self.patterns:
+            match = pattern.search(path)
+            if match:
+                return self.builder(''.join(match.groups()))
+        raise ValueError("'%s' does not match any configured patterns" % path)
+
+    def verify(self, name):
+        return self.builder.verify(name)
