@@ -316,3 +316,10 @@ class ObjectStorageTest(unittest.TestCase):
                 extend(chunk("FFFF", "1.2"), {"num": 2, "offset": 32})]
         }
         self.assertEqual(chunks, sorted_chunks)
+
+    def test_container_refresh_conflict(self):
+        self.api.account.container_reset = Mock(
+            side_effect=exceptions.Conflict("No update needed"))
+        self.assertRaises(
+            exceptions.Conflict, self.api.container_refresh, self.account,
+            self.container)
