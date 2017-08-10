@@ -17,6 +17,8 @@
 
 from logging import getLogger
 from cliff import command, show, lister
+from time import time
+from oio.common.utils import Timestamp
 
 
 class SetPropertyCommandMixin(object):
@@ -511,3 +513,49 @@ class RefreshContainer(command.Command):
             account=account,
             container=parsed_args.container
         )
+
+
+class SnapshotContainer(lister.Lister):
+    """ Create a snapshot of a container.
+
+    Create a different database containing all the informations of the contents
+    in the database but with different chunks that are copy of the target
+    chunks at the time of the snapshot"""
+
+    log = getLogger(__name__ + '.SnapshotContainer')
+
+    def get_parser(self, prog_name):
+        parser = super(SnapshotContainer, self).get_parser(prog_name)
+        parser.add_argument(
+            'container',
+            metavar='<container>',
+            help='Container to snapshot'
+        )
+        parser.add_argument(
+            '--snapshot-account',
+            metavar='<snapshot_account>',
+            help=('The account where the snapshot should be created. '
+                  'By default the same of the target.')
+        )
+        parser.add_argument(
+            '--snapshot-container',
+            metavar='<snapshot_container>',
+            help=('The name of the snapshot. '
+                  'By default the "current_name-Timestamp"')
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        account = self.app.client_manager.get_account()
+        container = parsed_args.container
+        snapshot_account = parsed_args.snapshot_account or account
+        snapshot_container = (parsed_args.snapshot_container or
+                              (container + "-" + Timestamp(time()).normal))
+
+        self.app.client_manager.storage.container_snapshot(account, container,
+                                                           snapshot_account,
+                                                           snapshot_container)
+        lines = [(snapshot_account, snapshot_container, "OK")]
+        return ('Account', 'Container', 'Status'), lines

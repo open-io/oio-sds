@@ -119,6 +119,16 @@ sqlx_pack_EXITELECTION(const struct sqlx_name_s *name)
 }
 
 GByteArray*
+sqlx_pack_SNAPSHOT(const struct sqlx_name_s *name, const gchar *source,
+		const gchar *cid)
+{
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_SNAPSHOT, name);
+	metautils_message_add_field_str(req, NAME_MSGKEY_SRC, source);
+	metautils_message_add_field_str(req, NAME_MSGKEY_CONTAINERID, cid);
+	return message_marshall_gba_and_clean(req);
+}
+
+GByteArray*
 sqlx_pack_PIPEFROM(const struct sqlx_name_s *name, const gchar *source)
 {
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PIPEFROM, name);

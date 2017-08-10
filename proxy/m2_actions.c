@@ -1186,6 +1186,101 @@ action_m2_container_propdel (struct req_args_s *args, struct json_object *jargs)
 }
 
 static enum http_rc_e
+_m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
+{
+	GError *err = NULL;
+	gchar **urlv = NULL;
+	gchar **urlv_snapshot = NULL;
+	char type[64] = {};
+	_get_meta2_realtype(args, type, sizeof(type));
+	const char *target_account, *target_container;
+	char target_cid[65] = {};
+	target_account = oio_url_get(args->url, OIOURL_ACCOUNT);
+	target_container = oio_url_get(args->url, OIOURL_USER);
+	strncpy(target_cid, oio_url_get(args->url, OIOURL_HEXID),
+			sizeof(target_cid)-1);
+	err = hc_resolve_reference_service(resolver, args->url, NAME_SRVTYPE_META2,
+			&urlv);
+	if (!err && (!urlv || !*urlv)) {
+		err = NEWERROR(CODE_CONTAINER_NOTFOUND, "No service located");
+	}
+	if (err)
+		goto cleanup;
+
+	struct json_object *jaccount = NULL;
+	struct json_object *jcontainer = NULL;
+	struct oio_ext_json_mapping_s m[] = {
+		{"account", &jaccount, json_type_string, 1},
+		{"container", &jcontainer, json_type_string, 1},
+		{NULL, NULL, 0, 0}
+	};
+
+	err = oio_ext_extract_json(jargs, m);
+	if (err)
+		goto cleanup;
+
+	const gchar *account = json_object_get_string(jaccount);
+	const gchar *container = json_object_get_string(jcontainer);
+	if(!strcmp(account, target_account) && !strcmp(container, target_container)) {
+		err = BADREQ("the snapshot should have a different account or reference");
+		goto cleanup;
+	}
+
+	oio_url_set(args->url, OIOURL_ACCOUNT, account);
+	oio_url_set(args->url, OIOURL_USER, container);
+	guint8 id[32] = {};
+	gchar hexid[65] = {};
+	oio_str_hash_name(id, NULL, account, container);
+	oio_str_bin2hex(id, sizeof(id),hexid, sizeof(hexid));
+	oio_url_set(args->url, OIOURL_HEXID, hexid);
+	err = hc_resolve_reference_service (resolver, args->url,
+			NAME_SRVTYPE_META2, &urlv_snapshot);
+	if (!err) {
+		err = BADREQ("Container already exists");
+		goto cleanup;
+	}else {
+		g_error_free(err);
+		err = NULL;
+	}
+
+	GError *hook_dir (const char *m1) {
+		GError *e = meta1v2_remote_link_service (
+				m1, args->url, type, FALSE, TRUE, &urlv_snapshot);
+		if (!e && urlv_snapshot && *urlv_snapshot) {
+			e = meta1v2_remote_force_reference_service(
+				m1, args->url, urlv_snapshot[0], FALSE, TRUE);
+		}
+		if (urlv_snapshot) {
+			g_strfreev (urlv_snapshot);
+			urlv_snapshot = NULL;
+		}
+		return e;
+	}
+
+	err = _m1_locate_and_action(args->url, hook_dir);
+	if (err)
+		goto cleanup;
+
+	meta1_urlv_shift_addr(urlv);
+	CLIENT_CTX(ctx, args, type, 1);
+	GByteArray * _pack(const struct sqlx_name_s *n) {
+		return sqlx_pack_SNAPSHOT(n, urlv[0], target_cid);
+	}
+
+	err = _resolve_meta2(args, CLIENT_PREFER_MASTER, _pack, NULL);
+	if(err)
+		goto cleanup;
+
+cleanup:
+
+	if(urlv_snapshot)
+		g_strfreev(urlv_snapshot);
+	if (urlv)
+		g_strfreev(urlv);
+	return _reply_m2_error(args, err);
+}
+
+static enum http_rc_e
 _m2_container_create (struct req_args_s *args, struct json_object *jbody)
 {
 	gchar **properties = NULL;
@@ -1380,6 +1475,10 @@ static GError * _list_loop (struct req_args_s *args,
 	}
 
 	return err;
+}
+
+enum http_rc_e action_container_snapshot(struct req_args_s *args) {
+	return rest_action(args, _m2_container_snapshot);
 }
 
 enum http_rc_e action_container_create_many (struct req_args_s *args) {

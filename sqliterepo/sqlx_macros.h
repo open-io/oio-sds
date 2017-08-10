@@ -39,6 +39,7 @@ License along with this library.
 #define NAME_MSGNAME_SQLX_REPLICATE          "DB_REPLI"
 #define NAME_MSGNAME_SQLX_PIPETO             "DB_PIPETO"
 #define NAME_MSGNAME_SQLX_PIPEFROM           "DB_PIPEFROM"
+#define NAME_MSGNAME_SQLX_SNAPSHOT           "DB_SNAPSHOT"
 #define NAME_MSGNAME_SQLX_DUMP               "DB_DUMP"
 #define NAME_MSGNAME_SQLX_RESTORE            "DB_RESTORE"
 #define NAME_MSGNAME_SQLX_RESYNC             "DB_RESYNC"

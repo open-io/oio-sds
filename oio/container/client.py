@@ -206,6 +206,70 @@ class ContainerClient(ProxyClient):
         _resp, body = self._request('GET', '/show', params=params, **kwargs)
         return body
 
+    def container_snapshot(self, account=None, reference=None,
+                           snapshot_account=None, snapshot_reference=None,
+                           cid=None, **kwargs):
+        """
+        Create a snapshot of a the container.
+
+        This function duplicate only the database. It doesn't duplicate the
+        chunks of the contents.
+
+        :param account: account in which the container is
+        :type account: `str`
+        :param reference: name of the container
+        :type reference: `str`
+        :param cid: container id that can be used instead of account
+            and reference
+        :type cid: `str`
+        :param snapshot_account: account in which the snapshot will be
+        :type snapshot_account: `str`
+        :param snapshot_container: name of the snapshot
+        :type snapshot_container: `str`
+        """
+        params = self._make_params(account, reference, cid=cid)
+        data = json.dumps({"account": snapshot_account,
+                           "container": snapshot_reference})
+        resp, _ = self._request('POST', '/snapshot', params=params,
+                                data=data, **kwargs)
+        return resp
+
+    def container_enable(self, account=None, reference=None, cid=None,
+                         **kwargs):
+        """
+        Change the status of a container database to enable
+
+        :param account: account in which the container is
+        :type account: `str`
+        :param reference: name of the container
+        :type reference: `str`
+        :param cid: container id that can be used instead of account
+            and reference
+        """
+        uri = self._make_uri('admin/enable')
+        params = self._make_params(account, reference, cid=cid)
+        params.update({"type": "meta2"})
+        resp, _ = self._direct_request('POST', uri, params=params, **kwargs)
+        return resp
+
+    def container_freeze(self, account=None, reference=None, cid=None,
+                         **kwargs):
+        """
+        Freeze the database of a container
+
+        :param account: account in which the container is
+        :type account: `str`
+        :param reference: name of the container
+        :type reference: name of the container
+        :param cid: container id that can be used instead of account
+            and reference
+        """
+        uri = self._make_uri('admin/freeze')
+        params = self._make_params(account, reference, cid=cid)
+        params.update({"type": "meta2"})
+        resp, _ = self._direct_request('POST', uri, params=params, **kwargs)
+        return resp
+
     def container_get_properties(self, account=None, reference=None,
                                  properties=None, cid=None, **kwargs):
         """
@@ -277,7 +341,11 @@ class ContainerClient(ProxyClient):
     def container_raw_update(self, old, new, account=None, reference=None,
                              cid=None, **kwargs):
         params = self._make_params(account, reference, cid=cid)
-        data = json.dumps({"old": [old], "new": [new]})
+        if type(old) is not list:
+            old = [old]
+        if type(new) is not list:
+            new = [new]
+        data = json.dumps({"old": old, "new": new})
         self._request(
             'POST', '/raw_update', data=data, params=params, **kwargs)
 

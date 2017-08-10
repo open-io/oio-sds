@@ -699,7 +699,7 @@ class TestMeta2Contents(BaseTestCase):
         resp = self.request('POST', self.url_content('touch'), params=params)
         self.assertEqual(resp.status, 204)
         # SetpropShouldWork
-        # If a drain is done on a snapshot we will no bet able to set a
+        # If a drain is done on a snapshot we will no be able to set a
         # propertie because the container would be frozen, but if a drain is
         # done on a content of a none frozen container it should work
         resp = self.request('POST', self.url_content('set_properties'),
