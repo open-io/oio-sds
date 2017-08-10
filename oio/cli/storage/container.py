@@ -461,3 +461,27 @@ class LocateContainer(cliff.show.ShowOne):
         for stype in ["meta0", "meta1", "meta2"]:
             info[stype] = ', '.join(info[stype])
         return zip(*sorted(info.iteritems()))
+
+
+class RefreshContainer(cliff.command.Command):
+    """ Refresh counters of an account (triggers asynchronous treatments) """
+
+    log = logging.getLogger(__name__ + '.RefreshContainer')
+
+    def get_parser(self, prog_name):
+        parser = super(RefreshContainer, self).get_parser(prog_name)
+        parser.add_argument(
+            'container',
+            metavar='<container>',
+            help='Container to refresh',
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        account = self.app.client_manager.get_account()
+        self.app.client_manager.storage.container_refresh(
+            account=account,
+            container=parsed_args.container
+        )

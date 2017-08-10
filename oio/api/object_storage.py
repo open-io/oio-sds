@@ -19,6 +19,7 @@ import logging
 import os
 import random
 import warnings
+import time
 from inspect import isgenerator
 
 from oio.common import exceptions as exc
@@ -963,6 +964,59 @@ class ObjectStorageApi(object):
             total_bytes += len(stream)
             yield stream
             current_offset += chunk_size
+
+    @handle_container_not_found
+    def container_refresh(self, account, container, attempts=3, **kwargs):
+        for i in range(attempts):
+            try:
+                self.account.container_reset(account, container, time.time())
+            except exc.Conflict:
+                if i >= attempts - 1:
+                    raise
+        try:
+            self.container.container_touch(account, container)
+        except exc.ClientException as e:
+            if e.status != 406 and e.status != 431:
+                raise
+            # CODE_USER_NOTFOUND or CODE_CONTAINER_NOTFOUND
+            metadata = dict()
+            metadata["dtime"] = time.time()
+            self.account.container_update(account, container, metadata)
+
+    @handle_account_not_found
+    def account_refresh(self, account, **kwargs):
+        self.account.account_refresh(account)
+
+        containers = self.container_list(account)
+        for container in containers:
+            try:
+                self.container_refresh(account, container[0])
+            except exc.NoSuchContainer:
+                # container remove in the meantime
+                pass
+
+        while containers:
+            marker = containers[-1][0]
+            containers = self.container_list(account, marker=marker)
+            if containers:
+                for container in containers:
+                    try:
+                        self.container_refresh(account, container[0])
+                    except exc.NoSuchContainer:
+                        # container remove in the meantime
+                        pass
+
+    def all_accounts_refresh(self, **kwargs):
+        accounts = self.account_list()
+        for account in accounts:
+            try:
+                self.account_refresh(account)
+            except exc.NoSuchAccount:  # account remove in the meantime
+                pass
+
+    @handle_account_not_found
+    def account_flush(self, account):
+        self.account.account_flush(account)
 
 
 class ObjectStorageAPI(ObjectStorageApi):

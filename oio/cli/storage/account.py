@@ -181,3 +181,57 @@ class ListAccounts(lister.Lister):
 
         column = ('Name',)
         return column, ((e,) for e in account_list)
+
+
+class RefreshAccount(command.Command):
+    """ Refresh counters of an account and all its containers """
+
+    log = logging.getLogger(__name__ + '.RefreshAccount')
+
+    def get_parser(self, prog_name):
+        parser = super(RefreshAccount, self).get_parser(prog_name)
+        parser.add_argument(
+            'account',
+            metavar='<account>',
+            help='Account to refresh'
+        )
+        parser.add_argument(
+            '--all',
+            dest='all_accounts',
+            default=False,
+            help='Refresh all accounts (<account> is ignored)',
+            action=ValueFormatStoreTrueAction
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        if parsed_args.all_accounts:
+            self.app.client_manager.storage.all_accounts_refresh()
+        else:
+            self.app.client_manager.storage.account_refresh(
+                account=parsed_args.account
+            )
+
+
+class FlushAccount(command.Command):
+    """ Flush account by emptying the list of its containers """
+
+    log = logging.getLogger(__name__ + '.FlushAccount')
+
+    def get_parser(self, prog_name):
+        parser = super(FlushAccount, self).get_parser(prog_name)
+        parser.add_argument(
+            'account',
+            metavar='<account>',
+            help='Account to flush'
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        self.app.client_manager.storage.account_flush(
+            account=parsed_args.account
+        )
