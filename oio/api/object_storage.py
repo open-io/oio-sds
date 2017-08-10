@@ -89,6 +89,7 @@ class ObjectStorageApi(object):
         from oio.account.client import AccountClient
         from oio.container.client import ContainerClient
         from oio.directory.client import DirectoryClient
+        from oio.blob.client import BlobClient
         self.directory = DirectoryClient(conf, logger=self.logger, **kwargs)
         self.container = ContainerClient(conf, logger=self.logger, **kwargs)
 
@@ -96,6 +97,7 @@ class ObjectStorageApi(object):
         acct_kwargs = kwargs.copy()
         acct_kwargs["proxy_endpoint"] = acct_kwargs.pop("endpoint", None)
         self.account = AccountClient(conf, logger=self.logger, **acct_kwargs)
+        self.blob_client = BlobClient()
 
     def _patch_timeouts(self, kwargs):
         """
@@ -255,6 +257,50 @@ class ObjectStorageApi(object):
             of user properties.
         """
         return self.container.container_show(account, container, **kwargs)
+
+    @handle_container_not_found
+    def container_snapshot(self, account, container, snapshot_account,
+                           snapshot_container, **kwargs):
+        """
+        Create a copy of the container (only the content of the database)
+
+        :param account: account in which the target is
+        :type account: `str`
+        :param container: name of the target
+        :type container: `str`
+        :param snapshot_account: account in which the snapshot will be.
+        :type snaspshot_container: `str`
+        :param snapshot_container: name of the snapshot
+        :type snapshot_container: `str`
+        """
+        try:
+            self.container.container_freeze(account, container)
+            self.container.container_snapshot(account, container,
+                                              snapshot_account,
+                                              snapshot_container)
+            self.container.container_enable(snapshot_account,
+                                            snapshot_container)
+            resp = self.object_list(snapshot_account, snapshot_container)
+            obj_gen = resp['objects']
+            for obj in obj_gen:
+                data = self.object_locate(
+                    account, container, obj["name"])
+                chunks = []
+                for d in data[1]:
+                    chunks.append(d['url'])
+                copies = self._generate_copy(chunks)
+                fullpath = self._generate_fullpath(snapshot_account,
+                                                   snapshot_container,
+                                                   obj["name"],
+                                                   obj['version'])
+                self._send_copy(chunks, copies, fullpath[0])
+                self._update_meta2(data[1], copies, snapshot_account,
+                                   snapshot_container, obj["content"])
+
+            self.container.container_freeze(snapshot_account,
+                                            snapshot_container)
+        finally:
+            self.container.container_enable(account, container)
 
     @handle_container_not_found
     def container_get_properties(self, account, container, properties=None,
@@ -825,6 +871,44 @@ class ObjectStorageApi(object):
     @handle_account_not_found
     def account_flush(self, account):
         self.account.account_flush(account)
+
+    def _random_buffer(self, dictionary, n):
+        slot = 512
+        pattern = ''.join(random.choice(dictionary) for _ in range(slot))
+        t = []
+        while len(t) * slot < n:
+            t.append(pattern)
+        return ''.join(t)[:n]
+
+    def _generate_copy(self, chunks):
+        copies = []
+        for c in chunks:
+            tmp = ''.join([c[:-60],
+                           self._random_buffer('0123456789ABCDEF', 60)])
+            copies.append(tmp)
+        return copies
+
+    def _send_copy(self, targets, copies, fullpath):
+        headers = {"x-oio-chunk-meta-full-path": fullpath}
+        for t, c in zip(targets, copies):
+            self.blob_client.chunk_link(t, c, headers=headers).status
+
+    def _update_meta2(self, targets, copies, account, container, content):
+        targets_beans = []
+        copies_beans = []
+        for t, c in zip(targets, copies):
+            targets_beans.append(self._meta2bean(t['url'], t, content))
+            copies_beans.append(self._meta2bean(c, t, content))
+        self.container.container_raw_update(targets_beans, copies_beans,
+                                            account, container)
+
+    def _meta2bean(self, url, meta, content):
+        return {"type": "chunk",
+                "id": url,
+                "hash": meta['hash'],
+                "size": int(meta["size"]),
+                "pos": meta["pos"],
+                "content": content}
 
 
 class ObjectStorageAPI(ObjectStorageApi):
