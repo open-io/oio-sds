@@ -41,3 +41,15 @@ class ContainerTest(CliTestCase):
         opts = self.get_opts(['Name'])
         output = self.openio('container list ' + opts)
         self.assertIn(self.NAME, output)
+
+    def test_container_refresh(self):
+        self.openio('container refresh ' + self.NAME)
+        opts = self.get_opts([], 'json')
+        output = self.openio('container list ' + opts)
+        containers = self.json_loads(output)
+        for container in containers:
+            if container["Name"] == self.NAME:
+                self.assertEqual(container["Count"], 0)
+                self.assertEqual(container["Bytes"], 0)
+                return
+        self.fail("No container %s" % self.NAME)

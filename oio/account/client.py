@@ -176,3 +176,37 @@ class AccountClient(HttpApi):
         _resp, body = self.account_request(account, 'POST', 'container/update',
                                            data=json.dumps(metadata))
         return body
+
+    def container_reset(self, account, container, mtime, **kwargs):
+        """
+        Reset container of an account
+
+        :param account: name of the account
+        :type account: `str`
+        :param container: name of the container to reset
+        :type container: `str`
+        :param mtime: time of the modification
+        """
+        metadata = dict()
+        metadata["name"] = container
+        metadata["mtime"] = mtime
+        self.account_request(account, 'POST', 'container/reset',
+                             data=json.dumps(metadata))
+
+    def account_refresh(self, account, **kwargs):
+        """
+        Refresh counters of an account
+
+        :param account: name of the account to refresh
+        :type account: `str`
+        """
+        self.account_request(account, 'POST', 'refresh')
+
+    def account_flush(self, account, **kwargs):
+        """
+        Flush all containers of an account
+
+        :param account: name of the account to flush
+        :type account: `str`
+        """
+        self.account_request(account, 'POST', 'flush')
