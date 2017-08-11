@@ -47,7 +47,12 @@ func_tests () {
 
     # test a content with a strange name, through the CLI and the API
     /usr/bin/fallocate -l $RANDOM /tmp/blob%
-    ${PYTHON} $(which openio) object create $RANDOM /tmp/blob%
+    CNAME=$RANDOM
+    ${PYTHON} $(which openio) object create $CNAME /tmp/blob%
+
+    # At least spawn one oio-crawler-integrity on a container that exists
+    # TODO(jfs): Move in a tests/functional/cli python test
+    ${PYTHON} $(which oio-crawler-integrity) $OIO_NS $OIO_ACCOUNT $CNAME
 
 	# Run the whole suite of functional tests (Python)
     cd $SRCDIR
