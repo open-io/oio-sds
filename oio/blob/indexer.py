@@ -29,7 +29,7 @@ class BlobIndexer(Daemon):
             conf.get('report_interval'), 3600)
         self.max_chunks_per_second = int_value(
             conf.get('chunks_per_second'), 30)
-        self.index_client = RdirClient(conf)
+        self.index_client = RdirClient(conf, logger=self.logger)
         self.namespace, self.volume_id = check_volume(self.volume)
 
     def index_pass(self):

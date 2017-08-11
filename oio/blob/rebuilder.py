@@ -55,7 +55,7 @@ class BlobRebuilderWorker(object):
         self.allow_same_rawx = true_value(
             conf.get('allow_same_rawx'))
         self.input_file = input_file
-        self.rdir_client = RdirClient(conf)
+        self.rdir_client = RdirClient(conf, logger=self.logger)
         self.content_factory = ContentFactory(conf)
         self.try_chunk_delete = try_chunk_delete
         self.beanstalkd_addr = beanstalkd_addr
