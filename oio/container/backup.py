@@ -395,13 +395,14 @@ class ContainerBackup(RedisConn, WerkzeugApp):
                                   section_name="admin-server")
         else:
             self.conf = {}
+        self.logger = get_logger(self.conf, name="ContainerBackup")
 
-        self.proxy = ObjectStorageApi(self.conf.get("namespace", NS))
+        self.proxy = ObjectStorageApi(self.conf.get("namespace", NS),
+                                      logger=self.logger)
         self.url_map = Map([
             Rule('/v1.0/container/dump', endpoint='dump'),
             Rule('/v1.0/container/restore', endpoint='restore'),
         ])
-        self.logger = get_logger(self.conf, name="ContainerBackup")
         self.REDIS_TIMEOUT = self.conf.get("redis_cache_timeout",
                                            self.REDIS_TIMEOUT)
 

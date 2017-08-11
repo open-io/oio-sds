@@ -25,14 +25,14 @@ class RdirDispatcher(object):
         self.conf = conf
         self.ns = conf['namespace']
         self.logger = get_logger(conf)
-        self.directory = DirectoryClient(conf, **kwargs)
-        self.rdir = RdirClient(conf, **kwargs)
+        self.directory = DirectoryClient(conf, logger=self.logger, **kwargs)
+        self.rdir = RdirClient(conf, logger=self.logger, **kwargs)
         self._cs = None
 
     @property
     def cs(self):
         if not self._cs:
-            self._cs = ConscienceClient(self.conf)
+            self._cs = ConscienceClient(self.conf, logger=self.logger)
         return self._cs
 
     def get_assignation(self):

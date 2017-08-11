@@ -22,8 +22,8 @@ class StorageTiererWorker(object):
         self.conf = conf
         self.logger = logger
         self.account = conf[CONF_ACCOUNT]
-        self.container_client = ContainerClient(self.conf)
-        self.account_client = AccountClient(self.conf)
+        self.container_client = ContainerClient(self.conf, logger=self.logger)
+        self.account_client = AccountClient(self.conf, logger=self.logger)
         self.content_factory = ContentFactory(self.conf)
         self.passes = 0
         self.errors = 0

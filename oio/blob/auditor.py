@@ -36,7 +36,7 @@ class BlobAuditorWorker(object):
             conf.get('chunks_per_second'), 30)
         self.max_bytes_per_second = int_value(
             conf.get('bytes_per_second'), 10000000)
-        self.container_client = ContainerClient(conf)
+        self.container_client = ContainerClient(conf, logger=self.logger)
 
     def audit_pass(self):
         self.namespace, self.address = check_volume(self.volume)

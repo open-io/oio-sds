@@ -34,7 +34,9 @@ class Content(object):
         self.storage_method = storage_method
         self.logger = get_logger(self.conf)
         self.blob_client = BlobClient()
-        self.container_client = container_client or ContainerClient(self.conf)
+        self.container_client = (container_client
+                                 or ContainerClient(self.conf,
+                                                    logger=self.logger))
         self.content_id = self.metadata["id"]
         self.stgpol = self.metadata["policy"]
         self.path = self.metadata["name"]

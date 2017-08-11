@@ -27,7 +27,7 @@ class AccountClient(HttpApi):
     """Simple client API for the account service."""
 
     def __init__(self, conf, endpoint=None, proxy_endpoint=None,
-                 refresh_delay=3600.0, **kwargs):
+                 refresh_delay=3600.0, logger=None, **kwargs):
         """
         Initialize a client for the account service.
 
@@ -40,8 +40,9 @@ class AccountClient(HttpApi):
         :type refresh_interval: `float` seconds
         """
         super(AccountClient, self).__init__(endpoint=endpoint, **kwargs)
-        self.logger = get_logger(conf)
-        self.cs = ConscienceClient(conf, endpoint=proxy_endpoint, **kwargs)
+        self.logger = logger or get_logger(conf)
+        self.cs = ConscienceClient(conf, endpoint=proxy_endpoint,
+                                   logger=self.logger, **kwargs)
         self._refresh_delay = refresh_delay if not self.endpoint else -1.0
         self._last_refresh = 0.0
 
