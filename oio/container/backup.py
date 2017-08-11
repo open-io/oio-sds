@@ -641,8 +641,8 @@ class ContainerBackup(RedisConn, WerkzeugApp):
         results = json.loads(results)
         blocks = sum(i['blocks'] for i in results['manifest'])
         return Response(headers={
-            'X-TarSize': blocks * BLOCKSIZE,
-            'X-ConsumedSize': results['end'] * BLOCKSIZE,
+            'X-Tar-Size': blocks * BLOCKSIZE,
+            'X-Consumed-Size': results['end'] * BLOCKSIZE,
         }, status=200)
 
     @redis_cnx
