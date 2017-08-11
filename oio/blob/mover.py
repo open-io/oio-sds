@@ -56,7 +56,7 @@ class BlobMoverWorker(object):
         self.max_bytes_per_second = int_value(
             conf.get('bytes_per_second'), 10000000)
         self.blob_client = BlobClient()
-        self.container_client = ContainerClient(conf)
+        self.container_client = ContainerClient(conf, logger=self.logger)
         self.content_factory = ContentFactory(conf)
 
     def mover_pass(self):

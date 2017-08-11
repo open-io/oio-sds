@@ -33,7 +33,7 @@ from oio.api.backblaze import BackblazeWriteHandler, \
     BackblazeChunkDownloadHandler
 from oio.common import constants
 from oio.common.utils import ensure_headers, ensure_request_id, float_value, \
-    name2cid, GeneratorIO
+    name2cid, GeneratorIO, get_logger
 from oio.common.http import http_header_from_ranges
 from oio.common.storage_method import STORAGE_METHODS
 from oio.common.constants import OIO_VERSION
@@ -305,7 +305,7 @@ class ObjectStorageApi(object):
     """
     TIMEOUT_KEYS = ('connection_timeout', 'read_timeout', 'write_timeout')
 
-    def __init__(self, namespace, **kwargs):
+    def __init__(self, namespace, logger=None, **kwargs):
         """
         Initialize the object storage API.
 
@@ -321,6 +321,8 @@ class ObjectStorageApi(object):
         :type write_timeout: `float` seconds
         """
         self.namespace = namespace
+        conf = {"namespace": self.namespace}
+        self.logger = logger or get_logger(conf)
         self.timeouts = {tok: float_value(tov, None)
                          for tok, tov in kwargs.items()
                          if tok in self.__class__.TIMEOUT_KEYS}
@@ -329,16 +331,13 @@ class ObjectStorageApi(object):
         from oio.container.client import ContainerClient
         from oio.directory.client import DirectoryClient
         # FIXME: share session between all the clients
-        self.directory = DirectoryClient({"namespace": self.namespace},
-                                         **kwargs)
-        self.container = ContainerClient({"namespace": self.namespace},
-                                         **kwargs)
+        self.directory = DirectoryClient(conf, logger=self.logger, **kwargs)
+        self.container = ContainerClient(conf, logger=self.logger, **kwargs)
 
         # In AccountClient, "endpoint" is the account service, not the proxy
         acct_kwargs = kwargs.copy()
         acct_kwargs["proxy_endpoint"] = acct_kwargs.pop("endpoint", None)
-        self.account = AccountClient({"namespace": self.namespace},
-                                     **acct_kwargs)
+        self.account = AccountClient(conf, logger=self.logger, **acct_kwargs)
 
     def _patch_timeouts(self, kwargs):
         """

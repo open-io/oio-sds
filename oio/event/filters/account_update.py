@@ -16,6 +16,7 @@
 
 from eventlet import Timeout
 from oio.common.exceptions import ClientException
+from oio.common.utils import get_logger
 from oio.account.client import AccountClient
 from oio.event.evob import Event, EventError
 from oio.event.consumer import EventTypes
@@ -33,8 +34,10 @@ CONTAINER_EVENTS = [
 class AccountUpdateFilter(Filter):
 
     def __init__(self, app, conf, **kwargs):
-        super(AccountUpdateFilter, self).__init__(app, conf, **kwargs)
-        self.account = AccountClient(conf)
+        self.logger = get_logger(conf)
+        super(AccountUpdateFilter, self).__init__(app, conf,
+                                                  logger=self.logger, **kwargs)
+        self.account = AccountClient(conf, logger=self.logger)
 
     def process(self, env, cb):
         event = Event(env)

@@ -35,7 +35,7 @@ class ProxyClient(HttpApi):
     def __init__(self, conf, pool_manager=None, request_prefix="",
                  no_ns_in_url=False, endpoint=None,
                  request_attempts=REQUEST_ATTEMPTS,
-                 **kwargs):
+                 logger=None, **kwargs):
         """
         :param pool_manager: an optional pool manager that will be reused
         :type pool_manager: `urllib3.PoolManager`
@@ -55,7 +55,7 @@ class ProxyClient(HttpApi):
         validate_service_conf(conf)
         self.ns = conf.get('namespace')
         self.conf = conf
-        self.logger = get_logger(conf)
+        self.logger = logger or get_logger(conf)
 
         ep_parts = list()
         if endpoint:
