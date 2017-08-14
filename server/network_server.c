@@ -1109,6 +1109,12 @@ _cb_tcp_worker(struct network_client_s *clt, struct network_server_s *srv)
 	/* The event stayed *really* long in the queue of the thread pool.
 	 * Let's close the connection, and let the client retry it's request. */
 	if (clt->events & CLT_READ) {
+#ifdef HAVE_ENBUG
+		if (oio_server_request_failure_threshold >= oio_ext_rand_int_range(1,100)) {
+			_client_clean(srv, clt);
+			return;
+		}
+#endif
 		const gint64 now = oio_ext_monotonic_time();
 		if (clt->time.evt_in < OLDEST(now, server_queue_max_delay)) {
 			GRID_INFO("STARVING fd %d peer %s delay %"G_GINT64_FORMAT"ms",
