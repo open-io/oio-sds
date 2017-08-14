@@ -183,10 +183,16 @@ class UnsatisfiableRange(ClientException):
         super(UnsatisfiableRange, self).__init__(http_status, status, message)
 
 
+class ServiceBusy(ClientException):
+    def __init__(self, http_status=503, status=None, message=None):
+        super(ServiceBusy, self).__init__(http_status, status, message)
+
+
 _http_status_map = {404: NotFound,
                     409: Conflict,
                     413: TooLarge,
-                    416: UnsatisfiableRange}
+                    416: UnsatisfiableRange,
+                    503: ServiceBusy}
 
 
 def from_status(status, reason="n/a"):
