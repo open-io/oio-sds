@@ -297,8 +297,12 @@ class TestObjectStorageAPI(BaseTestCase):
         return sort_chunks(chunks, False), data
 
     def _fetch_range(self, name, range_):
+        if not isinstance(range_[0], tuple):
+            ranges = (range_, )
+        else:
+            ranges = range_
         stream = self.api.object_fetch(
-                self.account, name, name, ranges=[range_])[1]
+                self.account, name, name, ranges=ranges)[1]
         data = ""
         for chunk in stream:
             data += chunk
@@ -356,6 +360,30 @@ class TestObjectStorageAPI(BaseTestCase):
         fdata = self._fetch_range(name, (start, end))
         self.assertEqual(len(fdata), end-start+1)
         self.assertEqual(fdata, data[start:end+1])
+
+    def test_object_fetch_several_ranges(self):
+        """
+        Download several ranges at once.
+        """
+        name = random_str(16)
+        chunks, data = self._upload_data(name)
+        start = 666
+        end = start + chunks[0][0]['size'] - 1
+        fdata = self._fetch_range(name, ((start, end), (end+1, end+2)))
+        self.assertEqual(len(fdata), end-start+3)
+        self.assertEqual(fdata, data[start:end+3])
+
+        # Notice that we download some bytes from the second metachunk
+        # before some from the first.
+        fdata = self._fetch_range(
+            name,
+            ((chunks[0][0]['size'], chunks[0][0]['size'] + 2),
+             (0, 1), (1, 2), (4, 6)))
+        self.assertEqual(len(fdata), 10)
+        self.assertEqual(
+            fdata,
+            data[chunks[0][0]['size']:chunks[0][0]['size'] + 3] +
+            data[0:2] + data[1:3] + data[4:7])
 
     def test_object_create_then_append(self):
         """Create an object then append data"""

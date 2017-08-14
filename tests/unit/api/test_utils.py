@@ -1,5 +1,5 @@
 import unittest
-from oio.api.ec import obj_range_to_meta_chunk_range
+from oio.api.object_storage import obj_range_to_meta_chunk_range
 
 
 class TestUtils(unittest.TestCase):
