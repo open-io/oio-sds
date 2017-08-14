@@ -125,10 +125,11 @@ class HttpApi(object):
         try:
             resp = self.pool_manager.request(method, url, **out_kwargs)
             body = resp.data
-            try:
-                body = jsonlib.loads(body)
-            except ValueError:
-                pass
+            if body:
+                try:
+                    body = jsonlib.loads(body)
+                except ValueError:
+                    pass
         except MaxRetryError as exc:
             if isinstance(exc.reason, NewConnectionError):
                 raise exceptions.OioNetworkException(exc), None, \
