@@ -518,7 +518,7 @@ class ListObject(ContainerCommandMixin, lister.Lister):
             kwargs['end_marker'] = parsed_args.end_marker
         if parsed_args.delimiter:
             kwargs['delimiter'] = parsed_args.delimiter
-        if parsed_args.limit:
+        if parsed_args.limit and not parsed_args.full_listing:
             kwargs['limit'] = parsed_args.limit
         if parsed_args.long_listing:
             kwargs['properties'] = True
