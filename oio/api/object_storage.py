@@ -21,19 +21,19 @@ import logging
 import os
 import random
 import warnings
+import time
 from inspect import isgenerator
 
 from oio.common import exceptions as exc
 from oio.api import io
-from oio.api.ec import ECWriteHandler, ECChunkDownloadHandler, \
-    obj_range_to_meta_chunk_range
+from oio.api.ec import ECWriteHandler, ECChunkDownloadHandler
 from oio.api.replication import ReplicatedWriteHandler
 from oio.api.backblaze_http import BackblazeUtilsException, BackblazeUtils
 from oio.api.backblaze import BackblazeWriteHandler, \
     BackblazeChunkDownloadHandler
 from oio.common import constants
 from oio.common.utils import ensure_headers, ensure_request_id, float_value, \
-    name2cid, GeneratorIO
+    name2cid, GeneratorIO, get_logger
 from oio.common.http import http_header_from_ranges
 from oio.common.storage_method import STORAGE_METHODS
 from oio.common.constants import OIO_VERSION
@@ -42,9 +42,70 @@ from urllib import quote_plus
 logger = logging.getLogger(__name__)
 
 
+def obj_range_to_meta_chunk_range(obj_start, obj_end, meta_sizes):
+    """
+    Convert a requested object range into a list of meta_chunk ranges.
+
+    :param meta_sizes: size of all object metachunks. Must be sorted!
+    :type meta_sizes: iterable, sorted in ascendant metachunk order.
+    :returns: a `dict` of tuples (meta_chunk_start, meta_chunk_end)
+        with metachunk positions as keys.
+
+        * meta_chunk_start is the first byte of the meta chunk,
+          or None if this is a suffix byte range
+
+        * meta_chunk_end is the last byte of the meta_chunk,
+          or None if this is a prefix byte range
+    """
+
+    offset = 0
+    found_start = False
+    found_end = False
+    total_size = 0
+
+    for meta_size in meta_sizes:
+        total_size += meta_size
+    # suffix byte range handling
+    if obj_start is None and obj_end is not None:
+        obj_start = total_size - min(total_size, obj_end)
+        obj_end = total_size - 1
+
+    meta_chunk_ranges = dict()
+    for pos, meta_size in enumerate(meta_sizes):
+        if meta_size <= 0:
+            continue
+        if found_start:
+            meta_chunk_start = 0
+        elif obj_start is not None and obj_start >= offset + meta_size:
+            offset += meta_size
+            continue
+        elif obj_start is not None and obj_start < offset + meta_size:
+            meta_chunk_start = obj_start - offset
+            found_start = True
+        else:
+            meta_chunk_start = 0
+        if obj_end is not None and offset + meta_size > obj_end:
+            meta_chunk_end = obj_end - offset
+            # found end
+            found_end = True
+        elif meta_size > 0:
+            meta_chunk_end = meta_size - 1
+        meta_chunk_ranges[pos] = (meta_chunk_start, meta_chunk_end)
+        if found_end:
+            break
+        offset += meta_size
+
+    return meta_chunk_ranges
+
+
 def get_meta_ranges(ranges, chunks):
+    """
+    Convert object ranges to metachunks ranges.
+
+    :returns: a list of dictionaries indexed by metachunk positions
+    """
     range_infos = []
-    meta_sizes = [c[0]['size'] for _p, c in chunks.iteritems()]
+    meta_sizes = [chunks[pos][0]['size'] for pos in sorted(chunks.keys())]
     for obj_start, obj_end in ranges:
         meta_ranges = obj_range_to_meta_chunk_range(obj_start, obj_end,
                                                     meta_sizes)
@@ -187,10 +248,11 @@ def fetch_stream(chunks, ranges, storage_method, headers=None,
     meta_range_list = get_meta_ranges(ranges, chunks)
 
     for meta_range_dict in meta_range_list:
-        for pos, meta_range in meta_range_dict.iteritems():
-            meta_start, meta_end = meta_range
+        for pos in sorted(meta_range_dict.keys()):
+            meta_start, meta_end = meta_range_dict[pos]
             if meta_start is not None and meta_end is not None:
-                headers['Range'] = http_header_from_ranges([meta_range])
+                headers['Range'] = http_header_from_ranges(
+                    (meta_range_dict[pos], ))
             reader = io.ChunkReader(
                 iter(chunks[pos]), io.READ_CHUNK_SIZE, headers=headers,
                 **kwargs)
@@ -214,8 +276,8 @@ def fetch_stream_ec(chunks, ranges, storage_method, **kwargs):
     ranges = ranges or [(None, None)]
     meta_range_list = get_meta_ranges(ranges, chunks)
     for meta_range_dict in meta_range_list:
-        for pos, meta_range in meta_range_dict.iteritems():
-            meta_start, meta_end = meta_range
+        for pos in sorted(meta_range_dict.keys()):
+            meta_start, meta_end = meta_range_dict[pos]
             handler = ECChunkDownloadHandler(
                 storage_method, chunks[pos],
                 meta_start, meta_end, **kwargs)
@@ -243,7 +305,7 @@ class ObjectStorageApi(object):
     """
     TIMEOUT_KEYS = ('connection_timeout', 'read_timeout', 'write_timeout')
 
-    def __init__(self, namespace, **kwargs):
+    def __init__(self, namespace, logger=None, **kwargs):
         """
         Initialize the object storage API.
 
@@ -259,6 +321,8 @@ class ObjectStorageApi(object):
         :type write_timeout: `float` seconds
         """
         self.namespace = namespace
+        conf = {"namespace": self.namespace}
+        self.logger = logger or get_logger(conf)
         self.timeouts = {tok: float_value(tov, None)
                          for tok, tov in kwargs.items()
                          if tok in self.__class__.TIMEOUT_KEYS}
@@ -267,16 +331,13 @@ class ObjectStorageApi(object):
         from oio.container.client import ContainerClient
         from oio.directory.client import DirectoryClient
         # FIXME: share session between all the clients
-        self.directory = DirectoryClient({"namespace": self.namespace},
-                                         **kwargs)
-        self.container = ContainerClient({"namespace": self.namespace},
-                                         **kwargs)
+        self.directory = DirectoryClient(conf, logger=self.logger, **kwargs)
+        self.container = ContainerClient(conf, logger=self.logger, **kwargs)
 
         # In AccountClient, "endpoint" is the account service, not the proxy
         acct_kwargs = kwargs.copy()
         acct_kwargs["proxy_endpoint"] = acct_kwargs.pop("endpoint", None)
-        self.account = AccountClient({"namespace": self.namespace},
-                                     **acct_kwargs)
+        self.account = AccountClient(conf, logger=self.logger, **acct_kwargs)
 
     def _patch_timeouts(self, kwargs):
         """
@@ -384,7 +445,6 @@ class ObjectStorageApi(object):
         return self.container.container_create_many(account,
                                                     containers,
                                                     properties=properties,
-                                                    autocreate=True,
                                                     **kwargs)
 
     @handle_container_not_found
@@ -905,6 +965,59 @@ class ObjectStorageApi(object):
             total_bytes += len(stream)
             yield stream
             current_offset += chunk_size
+
+    @handle_container_not_found
+    def container_refresh(self, account, container, attempts=3, **kwargs):
+        for i in range(attempts):
+            try:
+                self.account.container_reset(account, container, time.time())
+            except exc.Conflict:
+                if i >= attempts - 1:
+                    raise
+        try:
+            self.container.container_touch(account, container)
+        except exc.ClientException as e:
+            if e.status != 406 and e.status != 431:
+                raise
+            # CODE_USER_NOTFOUND or CODE_CONTAINER_NOTFOUND
+            metadata = dict()
+            metadata["dtime"] = time.time()
+            self.account.container_update(account, container, metadata)
+
+    @handle_account_not_found
+    def account_refresh(self, account, **kwargs):
+        self.account.account_refresh(account)
+
+        containers = self.container_list(account)
+        for container in containers:
+            try:
+                self.container_refresh(account, container[0])
+            except exc.NoSuchContainer:
+                # container remove in the meantime
+                pass
+
+        while containers:
+            marker = containers[-1][0]
+            containers = self.container_list(account, marker=marker)
+            if containers:
+                for container in containers:
+                    try:
+                        self.container_refresh(account, container[0])
+                    except exc.NoSuchContainer:
+                        # container remove in the meantime
+                        pass
+
+    def all_accounts_refresh(self, **kwargs):
+        accounts = self.account_list()
+        for account in accounts:
+            try:
+                self.account_refresh(account)
+            except exc.NoSuchAccount:  # account remove in the meantime
+                pass
+
+    @handle_account_not_found
+    def account_flush(self, account):
+        self.account.account_flush(account)
 
 
 class ObjectStorageAPI(ObjectStorageApi):

@@ -22,9 +22,8 @@ License along with this library.
 
 enum gridd_dispatcher_filter_result_e
 {
-	FILTER_KO=1,
+	FILTER_KO,
 	FILTER_OK,
-	FILTER_DONE,
 };
 
 /* Forward declarations */

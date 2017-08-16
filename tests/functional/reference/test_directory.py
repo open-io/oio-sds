@@ -13,7 +13,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import logging
 import simplejson as json
 from tests.utils import BaseTestCase
 
@@ -48,7 +47,6 @@ class TestDirectoryFunctional(BaseTestCase):
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
         self.assertIsInstance(body, dict)
-        logging.debug("Got services %s", repr(body))
         self.assertIn(srv0['addr'], [x['host']
                       for x in body['srv'] if x['type'] == 'echo'])
 
@@ -97,6 +95,9 @@ class TestDirectoryFunctional(BaseTestCase):
         # Renew while not linked
         resp = self.session.post(self._url_ref('renew'), params=params)
         self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertIsInstance(body, list)
+        self.assertEqual(len(body), 1)
 
         resp = self.session.get(self._url_ref('show'), params=params)
         self.assertEqual(resp.status_code, 200)
@@ -115,13 +116,16 @@ class TestDirectoryFunctional(BaseTestCase):
 
         resp = self.session.post(self._url_ref('renew'), params=params)
         self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertIsInstance(body, list)
+        self.assertEqual(len(body), 2)
 
         resp = self.session.get(self._url_ref('show'), params=params)
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
         self.assertIsInstance(body, dict)
-        self.assertEqual(len(body['srv']), 1)
-        self.assertEqual(body['srv'][0]['host'], srv1['addr'])
+        self.assertItemsEqual((srv0['addr'], srv1['addr']), [x['host']
+                              for x in body['srv'] if x['type'] == 'echo'])
 
         # Force without header while linked
         enforced = {'host': self._addr(), 'type': 'echo',

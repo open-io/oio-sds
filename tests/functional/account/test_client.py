@@ -85,3 +85,54 @@ class TestAccountClient(BaseTestCase):
                           self.account_client.account_list)
         self.account_client._get_account_addr.assert_called_once()
         self.assertIn("126.0.0.1:6667", self.account_client.endpoint)
+
+    def test_container_reset(self):
+        metadata = dict()
+        metadata["mtime"] = time.time()
+        metadata["bytes"] = 42
+        metadata["objects"] = 12
+        self.account_client.container_update(self.account_id, "container1",
+                                             metadata=metadata)
+
+        self.account_client.container_reset(self.account_id, "container1",
+                                            time.time())
+        resp = self.account_client.container_list(self.account_id,
+                                                  prefix="container1")
+        for container in resp["listing"]:
+            name, nb_objects, nb_bytes, _ = container
+            if name == 'container1':
+                self.assertEqual(nb_objects, 0)
+                self.assertEqual(nb_bytes, 0)
+                return
+        self.fail("No container container1")
+
+    def test_account_refresh(self):
+        metadata = dict()
+        metadata["mtime"] = time.time()
+        metadata["bytes"] = 42
+        metadata["objects"] = 12
+        self.account_client.container_update(self.account_id, "container1",
+                                             metadata=metadata)
+
+        self.account_client.account_refresh(self.account_id)
+
+        resp = self.account_client.account_show(self.account_id)
+        self.assertEqual(resp["bytes"], 42)
+        self.assertEqual(resp["objects"], 12)
+
+    def test_account_flush(self):
+        metadata = dict()
+        metadata["mtime"] = time.time()
+        metadata["bytes"] = 42
+        metadata["objects"] = 12
+        self.account_client.container_update(self.account_id, "container1",
+                                             metadata=metadata)
+
+        self.account_client.account_flush(self.account_id)
+
+        resp = self.account_client.account_show(self.account_id)
+        self.assertEqual(resp["bytes"], 0)
+        self.assertEqual(resp["objects"], 0)
+
+        resp = self.account_client.container_list(self.account_id)
+        self.assertEqual(len(resp["listing"]), 0)

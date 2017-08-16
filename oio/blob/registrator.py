@@ -52,7 +52,7 @@ class BlobRegistratorWorker(object):
         self.volume_ns, self.volume_id = check_volume(self.volume)
         c = dict()
         c['namespace'] = self.namespace
-        self.client = ContainerClient(c)
+        self.client = ContainerClient(c, logger=self.logger)
         self.report_interval = conf.get(
                 "report_period", default_report_interval)
 

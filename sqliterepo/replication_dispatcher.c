@@ -38,9 +38,8 @@ License along with this library.
 #include "restoration.h"
 
 #define EXTRACT_STRING(Name,Dst) do { \
-	err = metautils_message_extract_string(reply->request, Name, Dst, sizeof(Dst)); \
-	if (NULL != err) { \
-		reply->send_error(0, err); \
+	if (!metautils_message_extract_string_noerror(reply->request, Name, Dst, sizeof(Dst))) { \
+		reply->send_error(0, BADREQ("Missing field %s", Name)); \
 		return TRUE; \
 	} \
 } while (0)
@@ -1269,7 +1268,6 @@ static GError *
 _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
 		struct sqlx_name_inline_s *n, guint32 *pflags)
 {
-	GError *err;
 	gchar
 		ns[LIMIT_LENGTH_NSNAME],
 		base[LIMIT_LENGTH_BASENAME],
@@ -1278,18 +1276,10 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
 
 	flush = local = nocheck = chunked = FALSE;
 
-	err = metautils_message_extract_string(ctx->request,
-			NAME_MSGKEY_NAMESPACE, ns, sizeof(ns));
-	if (NULL != err)
-		return err;
-	err = metautils_message_extract_string(ctx->request,
-			NAME_MSGKEY_BASENAME, base, sizeof(base));
-	if (NULL != err)
-		return err;
-	err = metautils_message_extract_string(ctx->request,
-			NAME_MSGKEY_BASETYPE, type, sizeof(type));
-	if (NULL != err)
-		return err;
+	if (!metautils_message_extract_string_noerror(ctx->request, NAME_MSGKEY_NAMESPACE, ns, sizeof(ns))
+			|| !metautils_message_extract_string_noerror(ctx->request, NAME_MSGKEY_BASENAME, base, sizeof(base))
+			|| !metautils_message_extract_string_noerror(ctx->request, NAME_MSGKEY_BASETYPE, type, sizeof(type)))
+		return BADREQ("Missing base name component");
 
 	local = metautils_message_extract_flag(ctx->request,
 			NAME_MSGKEY_LOCAL, FALSE);

@@ -752,10 +752,7 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 
 	rc = _client_call_handler(&req_ctx);
 
-	if (!req_ctx.final_sent) {
-		_client_reply_fixed(&req_ctx, CODE_INTERNAL_ERROR, "BUG : no reply sent");
-		rc = FALSE;
-	}
+	EXTRA_ASSERT(req_ctx.final_sent);
 
 label_exit:
 	metautils_message_destroy(request);

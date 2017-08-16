@@ -57,61 +57,6 @@ def segment_range_to_fragment_range(segment_start, segment_end, segment_size,
     return (fragment_start, fragment_end)
 
 
-def obj_range_to_meta_chunk_range(obj_start, obj_end, meta_sizes):
-    """
-    Converts a requested object range into a list of meta_chunk ranges.
-
-    :returns: a tuple list (pos, meta_chunk_start, meta_chunk_end)
-
-        * pos is the meta chunk position
-
-        * meta_chunk_start is the first byte of the meta chunk,
-          or None if this is a suffix byte range
-
-        * meta_chunk_end is the last byte of the meta_chunk,
-          or None if this is a prefix byte range
-    """
-
-    offset = 0
-    found_start = False
-    found_end = False
-    total_size = 0
-
-    for meta_size in meta_sizes:
-        total_size += meta_size
-    # suffix byte range handling
-    if obj_start is None and obj_end is not None:
-        obj_start = total_size - min(total_size, obj_end)
-        obj_end = total_size - 1
-
-    meta_chunk_ranges = collections.OrderedDict()
-    for pos, meta_size in enumerate(meta_sizes):
-        if meta_size <= 0:
-            continue
-        if found_start:
-            meta_chunk_start = 0
-        elif obj_start is not None and obj_start >= offset + meta_size:
-            offset += meta_size
-            continue
-        elif obj_start is not None and obj_start < offset + meta_size:
-            meta_chunk_start = obj_start - offset
-            found_start = True
-        else:
-            meta_chunk_start = 0
-        if obj_end is not None and offset + meta_size > obj_end:
-            meta_chunk_end = obj_end - offset
-            # found end
-            found_end = True
-        elif meta_size > 0:
-            meta_chunk_end = meta_size - 1
-        meta_chunk_ranges[pos] = (meta_chunk_start, meta_chunk_end)
-        if found_end:
-            break
-        offset += meta_size
-
-    return meta_chunk_ranges
-
-
 def meta_chunk_range_to_segment_range(meta_start, meta_end, segment_size):
     """
     Converts a meta chunk range to a segment range.

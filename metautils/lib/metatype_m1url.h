@@ -57,4 +57,9 @@ gboolean meta1_url_has_type(const char *str, const char *srvtype);
 
 gchar ** meta1_url_filter_typed(const char * const *src, const char*srvtype);
 
+gchar * meta1_url_manifest(struct meta1_service_url_s **m1uv);
+
+/* Sort in place, first by type then by sequence number */
+void meta1_url_sort(struct meta1_service_url_s **m1uv);
+
 #endif /*OIO_SDS__metautils__lib__metatype_m1url_h*/

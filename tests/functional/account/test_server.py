@@ -89,3 +89,68 @@ class TestAccountServer(BaseTestCase):
         self.assertTrue(data['objects'] >= 0)
         self.assertTrue(data['containers'] >= 0)
         self.assertTrue(data['bytes'] >= 0)
+
+    def test_account_container_reset(self):
+        data = {'name': 'foo', 'mtime': Timestamp(time()).normal,
+                'objects': 12, 'bytes': 42}
+        data = json.dumps(data)
+        resp = self.app.post('/v1.0/account/container/update',
+                             data=data, query_string={'id': self.account_id})
+
+        data = {'name': 'foo', 'mtime': Timestamp(time()).normal}
+        data = json.dumps(data)
+        resp = self.app.post('/v1.0/account/container/reset',
+                             data=data, query_string={'id': self.account_id})
+        self.assertEqual(resp.status_code, 204)
+
+        data = {'prefix': 'foo'}
+        data = json.dumps(data)
+        resp = self.app.post('/v1.0/account/containers',
+                             data=data, query_string={'id': self.account_id})
+        resp = self.json_loads(resp.data)
+        for container in resp["listing"]:
+            name, nb_objects, nb_bytes, _ = container
+            if name == 'foo':
+                self.assertEqual(nb_objects, 0)
+                self.assertEqual(nb_bytes, 0)
+                return
+        self.fail("No container foo")
+
+    def test_account_refresh(self):
+        data = {'name': 'foo', 'mtime': Timestamp(time()).normal,
+                'objects': 12, 'bytes': 42}
+        data = json.dumps(data)
+        resp = self.app.post('/v1.0/account/container/update',
+                             data=data, query_string={'id': self.account_id})
+
+        resp = self.app.post('/v1.0/account/refresh',
+                             query_string={'id': self.account_id})
+        self.assertEqual(resp.status_code, 204)
+
+        resp = self.app.post('/v1.0/account/show',
+                             query_string={'id': self.account_id})
+        resp = self.json_loads(resp.data)
+        self.assertEqual(resp["bytes"], 42)
+        self.assertEqual(resp["objects"], 12)
+
+    def test_account_flush(self):
+        data = {'name': 'foo', 'mtime': Timestamp(time()).normal,
+                'objects': 12, 'bytes': 42}
+        data = json.dumps(data)
+        resp = self.app.post('/v1.0/account/container/update',
+                             data=data, query_string={'id': self.account_id})
+
+        resp = self.app.post('/v1.0/account/flush',
+                             query_string={'id': self.account_id})
+        self.assertEqual(resp.status_code, 204)
+
+        resp = self.app.post('/v1.0/account/show',
+                             query_string={'id': self.account_id})
+        resp = self.json_loads(resp.data)
+        self.assertEqual(resp["bytes"], 0)
+        self.assertEqual(resp["objects"], 0)
+
+        resp = self.app.post('/v1.0/account/containers',
+                             query_string={'id': self.account_id})
+        resp = self.json_loads(resp.data)
+        self.assertEqual(len(resp["listing"]), 0)

@@ -28,7 +28,8 @@ class ContentFactory(object):
     def __init__(self, conf, **kwargs):
         self.conf = conf
         self.logger = get_logger(conf)
-        self.container_client = ContainerClient(conf, **kwargs)
+        self.container_client = ContainerClient(conf, logger=self.logger,
+                                                **kwargs)
 
     def get(self, container_id, content_id, account=None,
             container_name=None):

@@ -18,7 +18,7 @@ from time import time
 
 import redis
 import redis.sentinel
-from werkzeug.exceptions import NotFound, Conflict
+from werkzeug.exceptions import NotFound, Conflict, BadRequest
 from oio.common.utils import Timestamp
 from oio.common.utils import int_value
 from oio.common.utils import true_value
@@ -46,12 +46,21 @@ class AccountBackend(RedisConn):
                end;
 
                local account_id = redis.call('HGET', KEYS[4], 'id');
-               if not account_id and ARGV[6] then
-                 redis.call('HSET', 'accounts:', KEYS[1], 1)
-                 redis.call('HMSET', KEYS[4], 'id', KEYS[1],
-                            'bytes', 0, 'objects', 0, 'ctime', ARGV[7])
-               elseif not account_id then
-                 return redis.error_reply('no_account')
+               if not account_id then
+                 if ARGV[6] == 'True' then
+                   redis.call('HSET', 'accounts:', KEYS[1], 1);
+                   redis.call('HMSET', KEYS[4], 'id', KEYS[1],
+                              'bytes', 0, 'objects', 0, 'ctime', ARGV[7]);
+                 else
+                   return redis.error_reply('no_account');
+                 end;
+               end;
+
+               if ARGV[9] == 'False' then
+                 local container_name = redis.call('HGET', KEYS[2], 'name');
+                 if not container_name then
+                   return redis.error_reply('no_container');
+                 end;
                end;
 
                local objects = redis.call('HGET', KEYS[2], 'objects');
@@ -73,6 +82,10 @@ class AccountBackend(RedisConn):
                if bytes == false then
                  bytes = 0
                end
+
+               if ARGV[9] == 'False' and is_sup(dtime, mtime) then
+                 return redis.error_reply('no_container');
+               end;
 
                local old_mtime = mtime;
                local inc_objects;
@@ -117,12 +130,53 @@ class AccountBackend(RedisConn):
                end;
                """
 
+    lua_refresh_account = """
+        local account_id = redis.call('HGET', KEYS[1], 'id');
+        if not account_id then
+            return redis.error_reply('no_account');
+        end;
+
+        local containers = redis.call('ZRANGE', KEYS[2], 0, -1);
+        local container_key = ''
+        local bytes_sum = 0;
+        local objects_sum = 0;
+        for _,container in ipairs(containers) do
+            container_key = KEYS[3] .. container;
+            bytes_sum = bytes_sum + redis.call('HGET', container_key, 'bytes')
+            objects_sum = objects_sum + redis.call('HGET', container_key,
+                                                   'objects')
+        end;
+
+        redis.call('HMSET', KEYS[1], 'bytes', bytes_sum,
+                   'objects', objects_sum)
+        """
+
+    lua_flush_account = """
+        local account_id = redis.call('HGET', KEYS[1], 'id');
+        if not account_id then
+            return redis.error_reply('no_account');
+        end;
+
+        redis.call('HMSET', KEYS[1], 'bytes', 0, 'objects', 0)
+
+        local containers = redis.call('ZRANGE', KEYS[2], 0, -1);
+        redis.call('DEL', KEYS[2]);
+
+        for _,container in ipairs(containers) do
+            redis.call('DEL', KEYS[3] .. container);
+        end;
+        """
+
     def __init__(self, conf, connection=None):
         self.conf = conf
         self.autocreate = true_value(conf.get('autocreate', 'true'))
         super(AccountBackend, self).__init__(conf, connection)
         self.script_update_container = self.register_script(
             self.lua_update_container)
+        self.script_refresh_account = self.register_script(
+            self.lua_refresh_account)
+        self.script_flush_account = self.register_script(
+            self.lua_flush_account)
 
     @staticmethod
     def ckey(account, name):
@@ -240,15 +294,23 @@ class AccountBackend(RedisConn):
         return accounts
 
     def update_container(self, account_id, name, mtime, dtime, object_count,
-                         bytes_used):
+                         bytes_used, autocreate_account=None,
+                         autocreate_container=True):
         conn = self.conn
         if not account_id or not name:
-            raise NotFound("Missing account or container")
+            raise BadRequest("Missing account or container")
+
+        if autocreate_account is None:
+            autocreate_account = self.autocreate
 
         if mtime is None:
             mtime = '0'
+        else:
+            mtime = Timestamp(float(mtime)).normal
         if dtime is None:
             dtime = '0'
+        else:
+            dtime = Timestamp(float(dtime)).normal
         if object_count is None:
             object_count = 0
         if bytes_used is None:
@@ -258,12 +320,15 @@ class AccountBackend(RedisConn):
                 ("containers:%s" % (account_id)),
                 ("account:%s" % (account_id))]
         args = [name, mtime, dtime, object_count, bytes_used,
-                self.autocreate, Timestamp(time()).normal, EXPIRE_TIME]
+                autocreate_account, Timestamp(time()).normal, EXPIRE_TIME,
+                autocreate_container]
         try:
             self.script_update_container(keys=keys, args=args, client=conn)
         except redis.exceptions.ResponseError as exc:
             if str(exc) == "no_account":
-                raise NotFound(account_id)
+                raise NotFound("Account %s not found" % account_id)
+            if str(exc) == "no_container":
+                raise NotFound("Container %s not found" % name)
             elif str(exc) == "no_update_needed":
                 raise Conflict("No update needed, "
                                "event older than last container update")
@@ -353,3 +418,35 @@ class AccountBackend(RedisConn):
         account_count = conn.hlen('accounts:')
         status = {'account_count': account_count}
         return status
+
+    def refresh_account(self, account_id):
+        if not account_id:
+            raise BadRequest("Missing account")
+
+        keys = ["account:%s" % account_id,
+                "containers:%s" % account_id,
+                "container:%s:" % account_id]
+
+        try:
+            self.script_refresh_account(keys=keys, client=self.conn)
+        except redis.exceptions.ResponseError as exc:
+            if str(exc) == "no_account":
+                raise NotFound(account_id)
+            else:
+                raise
+
+    def flush_account(self, account_id):
+        if not account_id:
+            raise BadRequest("Missing account")
+
+        keys = ["account:%s" % account_id,
+                "containers:%s" % account_id,
+                "container:%s:" % account_id]
+
+        try:
+            self.script_flush_account(keys=keys, client=self.conn)
+        except redis.exceptions.ResponseError as exc:
+            if str(exc) == "no_account":
+                raise NotFound(account_id)
+            else:
+                raise

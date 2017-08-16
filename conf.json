@@ -3,6 +3,11 @@
 		"code": "meta2_variables.c",
 		"header": "meta2_variables.h",
 		"variables": [
+			{ "type": "int64", "name": "meta2_container_max_contents",
+				"key": "meta2.container.max_contents",
+				"descr": "Maximum number of contents in each container.",
+				"def": 0, "min": 0, "max": "max" },
+
 			{ "type": "int64", "name": "meta2_max_versions",
 				"key": "meta2.max_versions",
 				"descr": "How many versions for a single alias.",
@@ -555,6 +560,11 @@
 				"descr": "Anti-DDoS counter-mesure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, A '503 Unavailabe' error is replied.",
 				"def": "2s", "min": "10ms", "max": "1h" },
 
+			{ "type": "int32", "name": "oio_server_request_failure_threshold",
+				"key": "enbug.server.request.failure.threshold",
+				"descr": "In testing situations, sets the average ratio of requests failing for a fake reason (from the peer). This helps testing the retrial mechanisms.",
+				"def": 30, "min": 0, "max": 100 },
+
 			{ "type": "uint", "name": "malloc_trim_size_ondemand",
 				"key": "server.malloc_trim_size.ondemand",
 				"descr": "Sets how many bytes bytes are released when the LEAN request is received by the current 'meta' service.",
@@ -572,7 +582,7 @@
 		"variables": [
 			{ "type": "bool", "name": "oio_proxy_srv_shuffle",
 				"key": "proxy.srv_shuffle",
-				"descr": "Should the proxy shuffle the meta2 addresses before the query, to do a better load-balancing of the requests.",
+				"descr": "Should the proxy shuffle the services addresses before the query, to do a better load-balancing of the requests.",
 				"def": true },
 
 			{ "type": "bool", "name": "oio_proxy_dir_shuffle",

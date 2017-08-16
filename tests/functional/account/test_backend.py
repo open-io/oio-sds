@@ -18,9 +18,10 @@
 from time import sleep, time
 
 import redis
+import random
 from oio.account.backend import AccountBackend
 from oio.common.utils import Timestamp
-from tests.utils import BaseTestCase
+from tests.utils import BaseTestCase, random_str
 from werkzeug.exceptions import Conflict
 from testtools.testcase import ExpectedException
 
@@ -458,3 +459,68 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(len(listing), 2)
         self.assertEqual([c[0] for c in listing],
                          ['3-0049-', '3-0049-0049'])
+
+    def test_refresh_account(self):
+        backend = AccountBackend({}, self.conn)
+        account_id = random_str(16)
+        account_key = 'account:%s' % account_id
+
+        self.assertEqual(backend.create_account(account_id), account_id)
+
+        total_bytes = 0
+        total_objects = 0
+
+        # 10 containers with bytes and objects
+        for i in range(10):
+            name = "container%d" % i
+            mtime = Timestamp(time()).normal
+            nb_bytes = random.randrange(100)
+            total_bytes += nb_bytes
+            nb_objets = random.randrange(100)
+            total_objects += nb_objets
+            backend.update_container(account_id, name, mtime, 0,
+                                     nb_objets, nb_bytes)
+
+        # change values
+        self.conn.hset(account_key, 'bytes', 1)
+        self.conn.hset(account_key, 'objects', 2)
+        self.assertEqual(self.conn.hget(account_key, 'bytes'), '1')
+        self.assertEqual(self.conn.hget(account_key, 'objects'), '2')
+
+        backend.refresh_account(account_id)
+        self.assertEqual(self.conn.hget(account_key, 'bytes'),
+                         str(total_bytes))
+        self.assertEqual(self.conn.hget(account_key, 'objects'),
+                         str(total_objects))
+
+    def test_flush_account(self):
+        backend = AccountBackend({}, self.conn)
+        account_id = random_str(16)
+        account_key = 'account:%s' % account_id
+
+        self.assertEqual(backend.create_account(account_id), account_id)
+
+        total_bytes = 0
+        total_objects = 0
+
+        # 10 containers with bytes and objects
+        for i in range(10):
+            name = "container%d" % i
+            mtime = Timestamp(time()).normal
+            nb_bytes = random.randrange(100)
+            total_bytes += nb_bytes
+            nb_objets = random.randrange(100)
+            total_objects += nb_objets
+            backend.update_container(account_id, name, mtime, 0,
+                                     nb_objets, nb_bytes)
+
+        self.assertEqual(self.conn.hget(account_key, 'bytes'),
+                         str(total_bytes))
+        self.assertEqual(self.conn.hget(account_key, 'objects'),
+                         str(total_objects))
+
+        backend.flush_account(account_id)
+        self.assertEqual(self.conn.hget(account_key, 'bytes'), '0')
+        self.assertEqual(self.conn.hget(account_key, 'objects'), '0')
+        self.assertEqual(self.conn.zcard("containers:%s" % account_id), 0)
+        self.assertEqual(self.conn.exists("container:test:*"), 0)

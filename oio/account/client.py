@@ -26,7 +26,7 @@ class AccountClient(HttpApi):
     """Simple client API for the account service."""
 
     def __init__(self, conf, endpoint=None, proxy_endpoint=None,
-                 refresh_delay=3600.0, **kwargs):
+                 refresh_delay=3600.0, logger=None, **kwargs):
         """
         Initialize a client for the account service.
 
@@ -39,8 +39,9 @@ class AccountClient(HttpApi):
         :type refresh_interval: `float` seconds
         """
         super(AccountClient, self).__init__(endpoint=endpoint, **kwargs)
-        self.logger = get_logger(conf)
-        self.cs = ConscienceClient(conf, endpoint=proxy_endpoint, **kwargs)
+        self.logger = logger or get_logger(conf)
+        self.cs = ConscienceClient(conf, endpoint=proxy_endpoint,
+                                   logger=self.logger, **kwargs)
         self._refresh_delay = refresh_delay if not self.endpoint else -1.0
         self._last_refresh = 0.0
 
@@ -176,3 +177,37 @@ class AccountClient(HttpApi):
         _resp, body = self.account_request(account, 'POST', 'container/update',
                                            data=json.dumps(metadata))
         return body
+
+    def container_reset(self, account, container, mtime, **kwargs):
+        """
+        Reset container of an account
+
+        :param account: name of the account
+        :type account: `str`
+        :param container: name of the container to reset
+        :type container: `str`
+        :param mtime: time of the modification
+        """
+        metadata = dict()
+        metadata["name"] = container
+        metadata["mtime"] = mtime
+        self.account_request(account, 'POST', 'container/reset',
+                             data=json.dumps(metadata))
+
+    def account_refresh(self, account, **kwargs):
+        """
+        Refresh counters of an account
+
+        :param account: name of the account to refresh
+        :type account: `str`
+        """
+        self.account_request(account, 'POST', 'refresh')
+
+    def account_flush(self, account, **kwargs):
+        """
+        Flush all containers of an account
+
+        :param account: name of the account to flush
+        :type account: `str`
+        """
+        self.account_request(account, 'POST', 'flush')

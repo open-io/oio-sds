@@ -37,12 +37,12 @@ while getopts "P:I:N:f:Z:Cvb" opt; do
         I) IP="${OPTARG}" ;;
         N) NS="${OPTARG}" ;;
         f) if [ -n "$OPTARG" ]; then
-			if  [ ${OPTARG::1} != "/" ]; then
-				BOOTSTRAP_CONFIG="${BOOTSTRAP_CONFIG} --conf ${PWD}/${OPTARG}"
-			else
-				BOOTSTRAP_CONFIG="${BOOTSTRAP_CONFIG} --conf ${OPTARG}"
-			fi
-		fi ;;
+            if  [ ${OPTARG::1} != "/" ]; then
+                BOOTSTRAP_CONFIG="${BOOTSTRAP_CONFIG} --conf ${PWD}/${OPTARG}"
+            else
+                BOOTSTRAP_CONFIG="${BOOTSTRAP_CONFIG} --conf ${OPTARG}"
+            fi
+        fi ;;
         Z) ZKSLOW=1 ;;
         v) ((verbose=verbose+1)) ;;
         \?) exit 1 ;;
@@ -68,7 +68,9 @@ timeout () {
 
 wait_for_srvtype () {
     echo "Waiting for the $2 $1 to get a score"
-    $PREFIX-wait-scored.sh -u -N "$2" -n "$NS" -s "$1" -t 15 >/dev/null
+    opt=
+    if [ $verbose -ge 1 ] ; then opt="-v" ; fi
+    $PREFIX-wait-scored.sh $opt -u -N "$2" -n "$NS" -s "$1" -t 15 >/dev/null
 }
 
 
@@ -132,7 +134,7 @@ if [ -n "$ZK" ] ; then
     opts=--lazy
     for srvtype in ${AVOID} ; do opts="${opts} --avoid=${srvtype}" ; done
     if [ $ZKSLOW -ne 0 ] ; then opts="${opts} --slow" ; fi
-	zk-reset.py "$NS" ;
+    zk-reset.py "$NS" ;
     zk-bootstrap.py --lazy $opts "$NS"
 fi
 
@@ -162,8 +164,8 @@ wait_for_srvtype "rdir" "$COUNT"
 
 echo -e "\n### Init the meta0/meta1 directory"
 openio \
-	--oio-ns "$NS" -v directory bootstrap --check \
-	--replicas $(${PREFIX}-test-config.py -v directory_replicas)
+    --oio-ns "$NS" -v directory bootstrap --check \
+    --replicas $(${PREFIX}-test-config.py -v directory_replicas)
 
 
 echo -e "\n### Wait for the services to have a score"

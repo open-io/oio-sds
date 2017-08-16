@@ -15,6 +15,7 @@
 
 
 import logging
+import time
 from oio.api.object_storage import ObjectStorageApi
 from oio.api.object_storage import _sort_chunks as sort_chunks
 from oio.common import exceptions as exc
@@ -299,8 +300,12 @@ class TestObjectStorageAPI(BaseTestCase):
         return sort_chunks(chunks, False), data
 
     def _fetch_range(self, name, range_):
+        if not isinstance(range_[0], tuple):
+            ranges = (range_, )
+        else:
+            ranges = range_
         stream = self.api.object_fetch(
-                self.account, name, name, ranges=[range_])[1]
+                self.account, name, name, ranges=ranges)[1]
         data = ""
         for chunk in stream:
             data += chunk
@@ -359,6 +364,30 @@ class TestObjectStorageAPI(BaseTestCase):
         self.assertEqual(len(fdata), end-start+1)
         self.assertEqual(fdata, data[start:end+1])
 
+    def test_object_fetch_several_ranges(self):
+        """
+        Download several ranges at once.
+        """
+        name = random_str(16)
+        chunks, data = self._upload_data(name)
+        start = 666
+        end = start + chunks[0][0]['size'] - 1
+        fdata = self._fetch_range(name, ((start, end), (end+1, end+2)))
+        self.assertEqual(len(fdata), end-start+3)
+        self.assertEqual(fdata, data[start:end+3])
+
+        # Notice that we download some bytes from the second metachunk
+        # before some from the first.
+        fdata = self._fetch_range(
+            name,
+            ((chunks[0][0]['size'], chunks[0][0]['size'] + 2),
+             (0, 1), (1, 2), (4, 6)))
+        self.assertEqual(len(fdata), 10)
+        self.assertEqual(
+            fdata,
+            data[chunks[0][0]['size']:chunks[0][0]['size'] + 3] +
+            data[0:2] + data[1:3] + data[4:7])
+
     def test_object_create_then_append(self):
         """Create an object then append data"""
         name = random_str(16)
@@ -391,3 +420,144 @@ class TestObjectStorageAPI(BaseTestCase):
 
         meta = self.api.object_get_properties(self.account, name, name)
         self.assertEqual(meta.get('hash', "").lower(), checksum.lower())
+
+    def test_container_refresh(self):
+        account = random_str(32)
+        # container_refresh on unknown container
+        name = random_str(32)
+        self.assertRaises(
+            exc.NoSuchContainer, self.api.container_refresh, account, name)
+
+        self.api.container_create(account, name)
+        time.sleep(0.5)  # ensure container event have been processed
+        # container_refresh on existing container
+        self.api.container_refresh(account, name)
+        time.sleep(0.5)  # ensure container event have been processed
+        res = self.api.container_list(account, prefix=name)
+        name_container, nb_objects, nb_bytes, _ = res[0]
+        self.assertEqual(name_container, name)
+        self.assertEqual(nb_objects, 0)
+        self.assertEqual(nb_bytes, 0)
+
+        self.api.object_create(account, name, data="data", obj_name=name)
+        time.sleep(0.5)  # ensure container event have been processed
+        # container_refresh on existing container with data
+        self.api.container_refresh(account, name)
+        time.sleep(0.5)  # ensure container event have been processed
+        res = self.api.container_list(account, prefix=name)
+        name_container, nb_objects, nb_bytes, _ = res[0]
+        self.assertEqual(name_container, name)
+        self.assertEqual(nb_objects, 1)
+        self.assertEqual(nb_bytes, 4)
+
+        self.api.object_delete(account, name, name)
+        time.sleep(0.5)  # ensure container event have been processed
+        self.api.container_delete(account, name)
+        time.sleep(0.5)  # ensure container event have been processed
+        # container_refresh on deleted container
+        self.assertRaises(
+            exc.NoSuchContainer, self.api.container_refresh, account, name)
+
+        self.api.account_delete(account)
+
+    def test_container_refresh_user_not_found(self):
+        name = random_str(32)
+        self.api.account.container_update(name, name, {"mtime": time.time()})
+        self.api.container_refresh(name, name)
+        containers = self.api.container_list(name)
+        self.assertEqual(len(containers), 0)
+        self.api.account_delete(name)
+
+    def test_account_refresh(self):
+        # account_refresh on unknown account
+        account = random_str(32)
+        self.assertRaises(
+            exc.NoSuchAccount, self.api.account_refresh, account)
+
+        # account_refresh on existing account
+        self.api.account_create(account)
+        self.api.account_refresh(account)
+        time.sleep(0.5)  # ensure container event have been processed
+        res = self.api.account_show(account)
+        self.assertEqual(res["bytes"], 0)
+        self.assertEqual(res["objects"], 0)
+        self.assertEqual(res["containers"], 0)
+
+        name = random_str(32)
+        self.api.object_create(account, name, data="data", obj_name=name)
+        time.sleep(0.5)  # ensure container event have been processed
+        self.api.account_refresh(account)
+        time.sleep(0.5)  # ensure container event have been processed
+        res = self.api.account_show(account)
+        self.assertEqual(res["bytes"], 4)
+        self.assertEqual(res["objects"], 1)
+        self.assertEqual(res["containers"], 1)
+
+        self.api.object_delete(account, name, name)
+        time.sleep(0.5)  # ensure container event have been processed
+        self.api.container_delete(account, name)
+        time.sleep(0.5)  # ensure container event have been processed
+        self.api.account_delete(account)
+        # account_refresh on deleted account
+        self.assertRaises(
+            exc.NoSuchAccount, self.api.account_refresh, account)
+
+    def test_all_accounts_refresh(self):
+        # clear accounts
+        accounts = self.api.account_list()
+        for account in accounts:
+            try:
+                self.api.account_flush(account)
+                self.api.account_delete(account)
+            except exc.NoSuchAccount:  # account remove in the meantime
+                pass
+
+        # all_accounts_refresh with 0 account
+        self.api.all_accounts_refresh()
+
+        # all_accounts_refresh with 2 account
+        account1 = random_str(32)
+        self.api.account_create(account1)
+        account2 = random_str(32)
+        self.api.account_create(account2)
+        self.api.all_accounts_refresh()
+        res = self.api.account_show(account1)
+        self.assertEqual(res["bytes"], 0)
+        self.assertEqual(res["objects"], 0)
+        self.assertEqual(res["containers"], 0)
+        res = self.api.account_show(account2)
+        self.assertEqual(res["bytes"], 0)
+        self.assertEqual(res["objects"], 0)
+        self.assertEqual(res["containers"], 0)
+
+        self.api.account_delete(account1)
+        self.api.account_delete(account2)
+
+    def test_account_flush(self):
+        # account_flush on unknown account
+        account = random_str(32)
+        self.assertRaises(
+            exc.NoSuchAccount, self.api.account_flush, account)
+
+        # account_flush on existing account
+        name1 = random_str(32)
+        self.api.container_create(account, name1)
+        name2 = random_str(32)
+        self.api.container_create(account, name2)
+        time.sleep(0.5)  # ensure container event have been processed
+        self.api.account_flush(account)
+        containers = self.api.container_list(account)
+        self.assertEqual(len(containers), 0)
+        res = self.api.account_show(account)
+        self.assertEqual(res["bytes"], 0)
+        self.assertEqual(res["objects"], 0)
+        self.assertEqual(res["containers"], 0)
+
+        self.api.container_delete(account, name1)
+        self.api.container_delete(account, name2)
+        time.sleep(0.5)  # ensure container event have been processed
+        self.api.account_delete(account)
+
+        # account_flush on deleted account
+        self.assertRaises(
+            exc.NoSuchAccount, self.api.account_flush, account)

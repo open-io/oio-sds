@@ -137,8 +137,8 @@ class EventWorker(Worker):
     def init(self):
         eventlet.monkey_patch(os=False)
         self.tube = self.conf.get("tube", DEFAULT_TUBE)
-        self.cs = ConscienceClient(self.conf)
-        self.rdir = RdirClient(self.conf)
+        self.cs = ConscienceClient(self.conf, logger=self.logger)
+        self.rdir = RdirClient(self.conf, logger=self.logger)
         self._acct_addr = None
         self.acct_update = 0
         self.graceful_timeout = 1

@@ -59,10 +59,11 @@ class ServiceWatcher(object):
 
         self.logger = get_logger(self.conf)
         self.pool_manager = get_pool_manager()
-        self.cs = ConscienceClient(self.conf, pool_manager=self.pool_manager)
+        self.cs = ConscienceClient(self.conf, pool_manager=self.pool_manager,
+                                   logger=self.logger)
         # FIXME: explain that
         self.client = ProxyClient(self.conf, pool_manager=self.pool_manager,
-                                  no_ns_in_url=True)
+                                  no_ns_in_url=True, logger=self.logger)
         self.last_status = False
         self.failed = False
         self.service_definition = {
