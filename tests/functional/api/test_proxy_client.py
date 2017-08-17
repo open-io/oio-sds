@@ -16,7 +16,7 @@ from tests.utils import BaseTestCase
 from mock import MagicMock as Mock
 from oio.common.client import ProxyClient
 from urllib3 import HTTPResponse
-from oio.common.exceptions import ServiceBusy
+from oio.common.exceptions import ServiceBusy, OioException
 
 
 class TestProxyClient(BaseTestCase):
@@ -31,3 +31,8 @@ class TestProxyClient(BaseTestCase):
             return_value=HTTPResponse(status=503, reason="Service busy"))
         self.assertRaises(ServiceBusy,
                           self.proxy_client._direct_request, "GET", "test")
+
+    def test_negative_requests_attempts(self):
+        self.assertRaises(OioException,
+                          self.proxy_client._direct_request, "GET", "test",
+                          request_attempts=-1)
