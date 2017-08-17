@@ -2,7 +2,7 @@ from oio.common.utils import get_logger
 from oio.common.utils import load_namespace_conf
 from oio.common.utils import validate_service_conf
 from oio.api.base import HttpApi
-from oio.common.exceptions import ServiceBusy
+from oio.common.exceptions import ServiceBusy, OioException
 from random import randrange
 from eventlet import sleep
 
@@ -63,7 +63,12 @@ class ProxyClient(HttpApi):
                                           **kwargs)
 
     def _direct_request(self, method, url, session=None, headers=None,
-                        **kwargs):
+                        request_attempts=None, **kwargs):
+        if not request_attempts:
+            request_attempts = self._request_attempts
+        if request_attempts <= 0:
+            raise OioException("Negative request attempts: %d"
+                               % request_attempts)
         if kwargs.get("autocreate"):
             if not headers:
                 headers = dict()
@@ -71,12 +76,12 @@ class ProxyClient(HttpApi):
             kwargs = kwargs.copy()
             kwargs.pop("autocreate")
 
-        for i in range(self._request_attempts):
+        for i in range(request_attempts):
             try:
                 return super(ProxyClient, self)._direct_request(
                     method, url, session=session, headers=headers, **kwargs)
             except ServiceBusy:
-                if i >= self._request_attempts - 1:
+                if i >= request_attempts - 1:
                     raise
                 # retry with exponential backoff
                 ProxyClient._exp_sleep(i + 1)
