@@ -123,6 +123,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 /* Ask the meta2 to redirect if not MASTER, even if the request is Read-Only */
 #define M2V2_FLAG_MASTER           0x00000400
 
+/* Ask the meta2 to open the database locally */
+#define M2V2_FLAG_LOCAL            0x00000800
+
 /* Request N spare chunks which should not be on provided blacklist */
 #define M2V2_SPARE_BY_BLACKLIST "SPARE_BLACKLIST"
 /* Request N spare chunks according to a storage policy */

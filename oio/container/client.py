@@ -299,6 +299,8 @@ class ContainerClient(ProxyClient):
             params['all'] = '1'
         if deleted:
             params['deleted'] = 1
+        if kwargs.get('local'):
+            params['local'] = 1
         resp, body = self._request('GET', '/list', params=params, **kwargs)
         return resp.headers, body
 
