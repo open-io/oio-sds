@@ -1791,8 +1791,9 @@ wait_for_final_status(struct election_member_s *m, const gint64 deadline)
 		m->last_atime = now;
 		transition(m, EVT_NONE, NULL);
 
-		if (m->when_unstable > 0 && m->when_unstable <
-				OLDEST(now, oio_election_delay_nowait_pending)) {
+		if (oio_election_enable_nowait_pending &&
+				m->when_unstable > 0 && m->when_unstable < OLDEST(
+					now, oio_election_delay_nowait_pending)) {
 			GRID_WARN("TIMEOUT! (election pending for too long) [%s.%s] step=%d/%s",
 					m->inline_name.base, m->inline_name.type, m->step, _step2str(m->step));
 			return FALSE;
