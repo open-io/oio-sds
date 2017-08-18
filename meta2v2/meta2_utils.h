@@ -48,6 +48,7 @@ struct list_params_s
 	guint8 flag_allversion:1;
 	guint8 flag_headers   :1;
 	guint8 flag_properties:1;
+	guint8 flag_local     :1;
 };
 
 struct dup_alias_params_s

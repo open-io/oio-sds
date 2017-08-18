@@ -75,8 +75,11 @@ static void _meta2_backend_force_prepare_data(struct meta2_backend_s *m2b,
 static enum m2v2_open_type_e
 _mode_masterslave(guint32 flags)
 {
-	return (flags & M2V2_FLAG_MASTER)
-		? M2V2_OPEN_MASTERONLY : M2V2_OPEN_MASTERSLAVE;
+	if (flags & M2V2_FLAG_MASTER)
+		return M2V2_OPEN_MASTERONLY;
+	return (flags & M2V2_FLAG_LOCAL)
+		? M2V2_OPEN_LOCAL : M2V2_OPEN_MASTERSLAVE;
+
 }
 
 static enum m2v2_open_type_e
@@ -673,7 +676,8 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(lp != NULL);
 
-	err = m2b_open(m2b, url, _mode_readonly(0), &sq3);
+	guint32 open_mode = lp->flag_local? M2V2_FLAG_LOCAL: 0;
+	err = m2b_open(m2b, url, _mode_readonly(open_mode), &sq3);
 	if (!err) {
 		err = m2db_list_aliases(sq3, lp, headers, cb, u0);
 		if (!err && out_properties)

@@ -462,6 +462,13 @@ class ListObject(ContainerCommandMixin, lister.Lister):
             help='List all objects versions (not only the last one)',
             action="store_true"
         )
+        parser.add_argument(
+            '--local',
+            dest='local',
+            default=False,
+            action="store_true",
+            help='Ask the meta2 to open a local database'
+        )
         return parser
 
     def _list_loop(self, account, container, **kwargs):
@@ -543,6 +550,8 @@ class ListObject(ContainerCommandMixin, lister.Lister):
             kwargs['properties'] = True
         if parsed_args.versions:
             kwargs['versions'] = True
+        if parsed_args.local:
+            kwargs['local'] = True
 
         account = self.app.client_manager.get_account()
         if parsed_args.auto:
