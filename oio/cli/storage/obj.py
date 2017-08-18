@@ -17,6 +17,7 @@ import os
 from logging import getLogger
 from oio.common.http import get_pool_manager
 from cliff import command, lister, show
+from eventlet import GreenPool
 
 
 class ContainerCommandMixin(object):
@@ -434,6 +435,20 @@ class ListObject(ContainerCommandMixin, lister.Lister):
             help='End marker for paging'
         )
         parser.add_argument(
+            '--concurrency',
+            metavar='<concurrency>',
+            type=int,
+            default=100,
+            help=('The number of concurrent request to the container.'
+                  '(Only used when the --auto argument is used. Default:100)')
+        )
+        parser.add_argument(
+            '--attempts',
+            dest='attempts',
+            default=0,
+            help='The number of attempts when listing autocontainers'
+        )
+        parser.add_argument(
             '--limit',
             metavar='<limit>',
             type=int,
@@ -517,19 +532,31 @@ class ListObject(ContainerCommandMixin, lister.Lister):
                 yield element
                 if limit and count >= limit:
                     return
-        # Start to list contents from the beginning of the next container
-        for container in self._container_provider(account,
-                                                  marker=container_marker):
-            if not autocontainer.verify(container):
-                self.log.debug("Container %s is not an autocontainer",
-                               container)
-                continue
-            self.log.debug("Listing autocontainer %s", container)
-            for element in self._list_loop(account, container, **kwargs):
+
+        pool = GreenPool(kwargs.get('concurrency'))
+        self.account = account
+        self.autocontainer = autocontainer
+        kwargs['pool_manager'] = get_pool_manager()
+        self.kwargs = kwargs
+        for object_list in pool.imap(
+                self._list_autocontainer_objects,
+                self._container_provider(account, marker=container_marker)):
+            for element in object_list:
                 count += 1
                 yield element
                 if limit and count >= limit:
                     return
+
+    def _list_autocontainer_objects(self, container):
+        if not self.autocontainer.verify(container):
+            self.log.debug("Container %s is not an autocontainer",
+                           container)
+            return
+        self.log.debug("Listing autocontainer %s", container)
+        object_list = []
+        for i in self._list_loop(self.account, container, **self.kwargs):
+            object_list.append(i)
+        return object_list
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
@@ -552,6 +579,10 @@ class ListObject(ContainerCommandMixin, lister.Lister):
             kwargs['versions'] = True
         if parsed_args.local:
             kwargs['local'] = True
+        if parsed_args.concurrency:
+            kwargs['concurrency'] = parsed_args.concurrency
+        if parsed_args.attempts:
+            kwargs['attempts'] = parsed_args.attempts
 
         account = self.app.client_manager.get_account()
         if parsed_args.auto:
