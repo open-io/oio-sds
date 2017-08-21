@@ -202,9 +202,11 @@ class ListAccounts(lister.Lister):
 class RefreshAccount(command.Command):
     """ Refresh counters of an account and all its containers """
 
-    log = logging.getLogger(__name__ + '.RefreshAccount')
+    log = getLogger(__name__ + '.RefreshAccount')
 
     def get_parser(self, prog_name):
+        from oio.cli.utils import ValueFormatStoreTrueAction
+
         parser = super(RefreshAccount, self).get_parser(prog_name)
         parser.add_argument(
             'account',
@@ -234,7 +236,7 @@ class RefreshAccount(command.Command):
 class FlushAccount(command.Command):
     """ Flush account by emptying the list of its containers """
 
-    log = logging.getLogger(__name__ + '.FlushAccount')
+    log = getLogger(__name__ + '.FlushAccount')
 
     def get_parser(self, prog_name):
         parser = super(FlushAccount, self).get_parser(prog_name)

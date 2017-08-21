@@ -480,10 +480,10 @@ class LocateContainer(show.ShowOne):
         return zip(*sorted(info.iteritems()))
 
 
-class RefreshContainer(cliff.command.Command):
+class RefreshContainer(command.Command):
     """ Refresh counters of an account (triggers asynchronous treatments) """
 
-    log = logging.getLogger(__name__ + '.RefreshContainer')
+    log = getLogger(__name__ + '.RefreshContainer')
 
     def get_parser(self, prog_name):
         parser = super(RefreshContainer, self).get_parser(prog_name)
