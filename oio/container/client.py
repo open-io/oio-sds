@@ -338,7 +338,7 @@ class ContainerClient(ProxyClient):
             hdrs['x-oio-content-meta-chunk-method'] = chunk_method
         resp, body = self._direct_request(
             'POST', uri, data=data, params=params, autocreate=True,
-            headers=hdrs, **kwargs)
+            headers=hdrs, request_attempts=3, **kwargs)
         return resp, body
 
     def content_delete(self, account=None, reference=None, path=None, cid=None,
