@@ -25,8 +25,7 @@ from inspect import isgenerator
 
 from oio.common import exceptions as exc
 from oio.api import io
-from oio.api.ec import ECWriteHandler, ECChunkDownloadHandler, \
-    obj_range_to_meta_chunk_range
+from oio.api.ec import ECWriteHandler, ECChunkDownloadHandler
 from oio.api.replication import ReplicatedWriteHandler
 from oio.api.backblaze_http import BackblazeUtilsException, BackblazeUtils
 from oio.api.backblaze import BackblazeWriteHandler, \
@@ -42,9 +41,70 @@ from urllib import quote_plus
 logger = logging.getLogger(__name__)
 
 
+def obj_range_to_meta_chunk_range(obj_start, obj_end, meta_sizes):
+    """
+    Convert a requested object range into a list of meta_chunk ranges.
+
+    :param meta_sizes: size of all object metachunks. Must be sorted!
+    :type meta_sizes: iterable, sorted in ascendant metachunk order.
+    :returns: a `dict` of tuples (meta_chunk_start, meta_chunk_end)
+        with metachunk positions as keys.
+
+        * meta_chunk_start is the first byte of the meta chunk,
+          or None if this is a suffix byte range
+
+        * meta_chunk_end is the last byte of the meta_chunk,
+          or None if this is a prefix byte range
+    """
+
+    offset = 0
+    found_start = False
+    found_end = False
+    total_size = 0
+
+    for meta_size in meta_sizes:
+        total_size += meta_size
+    # suffix byte range handling
+    if obj_start is None and obj_end is not None:
+        obj_start = total_size - min(total_size, obj_end)
+        obj_end = total_size - 1
+
+    meta_chunk_ranges = dict()
+    for pos, meta_size in enumerate(meta_sizes):
+        if meta_size <= 0:
+            continue
+        if found_start:
+            meta_chunk_start = 0
+        elif obj_start is not None and obj_start >= offset + meta_size:
+            offset += meta_size
+            continue
+        elif obj_start is not None and obj_start < offset + meta_size:
+            meta_chunk_start = obj_start - offset
+            found_start = True
+        else:
+            meta_chunk_start = 0
+        if obj_end is not None and offset + meta_size > obj_end:
+            meta_chunk_end = obj_end - offset
+            # found end
+            found_end = True
+        elif meta_size > 0:
+            meta_chunk_end = meta_size - 1
+        meta_chunk_ranges[pos] = (meta_chunk_start, meta_chunk_end)
+        if found_end:
+            break
+        offset += meta_size
+
+    return meta_chunk_ranges
+
+
 def get_meta_ranges(ranges, chunks):
+    """
+    Convert object ranges to metachunks ranges.
+
+    :returns: a list of dictionaries indexed by metachunk positions
+    """
     range_infos = []
-    meta_sizes = [c[0]['size'] for _p, c in chunks.iteritems()]
+    meta_sizes = [chunks[pos][0]['size'] for pos in sorted(chunks.keys())]
     for obj_start, obj_end in ranges:
         meta_ranges = obj_range_to_meta_chunk_range(obj_start, obj_end,
                                                     meta_sizes)
@@ -187,10 +247,11 @@ def fetch_stream(chunks, ranges, storage_method, headers=None,
     meta_range_list = get_meta_ranges(ranges, chunks)
 
     for meta_range_dict in meta_range_list:
-        for pos, meta_range in meta_range_dict.iteritems():
-            meta_start, meta_end = meta_range
+        for pos in sorted(meta_range_dict.keys()):
+            meta_start, meta_end = meta_range_dict[pos]
             if meta_start is not None and meta_end is not None:
-                headers['Range'] = http_header_from_ranges([meta_range])
+                headers['Range'] = http_header_from_ranges(
+                    (meta_range_dict[pos], ))
             reader = io.ChunkReader(
                 iter(chunks[pos]), io.READ_CHUNK_SIZE, headers=headers,
                 **kwargs)
@@ -214,8 +275,8 @@ def fetch_stream_ec(chunks, ranges, storage_method, **kwargs):
     ranges = ranges or [(None, None)]
     meta_range_list = get_meta_ranges(ranges, chunks)
     for meta_range_dict in meta_range_list:
-        for pos, meta_range in meta_range_dict.iteritems():
-            meta_start, meta_end = meta_range
+        for pos in sorted(meta_range_dict.keys()):
+            meta_start, meta_end = meta_range_dict[pos]
             handler = ECChunkDownloadHandler(
                 storage_method, chunks[pos],
                 meta_start, meta_end, **kwargs)

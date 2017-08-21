@@ -189,8 +189,8 @@ class Checker(object):
         results = []
         meta = dict()
         try:
-            meta, results = self.container_client.content_show(
-                acct=account, ref=container, path=obj)
+            meta, results = self.container_client.content_locate(
+                account=account, reference=container, path=obj)
         except exc.NotFound as e:
             self.object_not_found += 1
             error = True
@@ -239,8 +239,8 @@ class Checker(object):
         ct_meta = dict()
         while True:
             try:
-                resp = self.container_client.container_list(
-                    acct=account, ref=container, marker=marker)
+                _, resp = self.container_client.content_list(
+                    account=account, reference=container, marker=marker)
             except exc.NotFound as e:
                 self.container_not_found += 1
                 error = True
@@ -292,7 +292,7 @@ class Checker(object):
         results = []
         while True:
             try:
-                resp = self.account_client.containers_list(
+                resp = self.account_client.container_list(
                     account, marker=marker)
             except Exception as e:
                 self.account_exceptions += 1
