@@ -31,7 +31,7 @@ urllib3 = patcher.import_patched('urllib3.__init__')
 CONNECTION_TIMEOUT = 2.0
 READ_TIMEOUT = 30.0
 
-DEFAULT_POOLSIZE = 10
+DEFAULT_POOLSIZE = 32
 DEFAULT_RETRIES = 0
 
 
