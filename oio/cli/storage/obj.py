@@ -439,8 +439,9 @@ class ListObject(ContainerCommandMixin, lister.Lister):
             metavar='<concurrency>',
             type=int,
             default=100,
-            help=('The number of concurrent request to the container.'
-                  '(Only used when the --auto argument is used. Default:100)')
+            help=('The number of concurrent requests to the container. '
+                  '(Only used when the --auto argument is specified. '
+                  'Default: 100)')
         )
         parser.add_argument(
             '--attempts',
@@ -520,10 +521,14 @@ class ListObject(ContainerCommandMixin, lister.Lister):
                 for element in listing:
                     yield element[0]
 
-    def _autocontainer_loop(self, account, marker=None, limit=None, **kwargs):
+    def _autocontainer_loop(self, account, marker=None, limit=None,
+                            concurrency=1, **kwargs):
+        from functools import partial
         autocontainer = self.app.client_manager.get_flatns_manager()
         container_marker = autocontainer(marker) if marker else None
         count = 0
+        kwargs['pool_manager'] = get_pool_manager(
+            pool_maxsize=concurrency * 2)
         # Start to list contents at 'marker' inside the last visited container
         if container_marker:
             for element in self._list_loop(account, container_marker,
@@ -533,13 +538,12 @@ class ListObject(ContainerCommandMixin, lister.Lister):
                 if limit and count >= limit:
                     return
 
-        pool = GreenPool(kwargs.get('concurrency'))
+        pool = GreenPool(concurrency)
         self.account = account
         self.autocontainer = autocontainer
-        kwargs['pool_manager'] = get_pool_manager()
-        self.kwargs = kwargs
+
         for object_list in pool.imap(
-                self._list_autocontainer_objects,
+                partial(self._list_autocontainer_objects, **kwargs),
                 self._container_provider(account, marker=container_marker)):
             for element in object_list:
                 count += 1
@@ -547,14 +551,14 @@ class ListObject(ContainerCommandMixin, lister.Lister):
                 if limit and count >= limit:
                     return
 
-    def _list_autocontainer_objects(self, container):
+    def _list_autocontainer_objects(self, container, **kwargs):
         if not self.autocontainer.verify(container):
             self.log.debug("Container %s is not an autocontainer",
                            container)
             return
         self.log.debug("Listing autocontainer %s", container)
         object_list = []
-        for i in self._list_loop(self.account, container, **self.kwargs):
+        for i in self._list_loop(self.account, container, **kwargs):
             object_list.append(i)
         return object_list
 
