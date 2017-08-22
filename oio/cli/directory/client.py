@@ -25,7 +25,6 @@ def make_client(instance):
 
     endpoint = instance.get_endpoint('directory')
     client = DirectoryClient({"namespace": instance.namespace},
-                             session=instance.session,
                              endpoint=endpoint)
     return client
 
