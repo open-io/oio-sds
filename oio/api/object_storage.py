@@ -319,6 +319,9 @@ class ObjectStorageApi(object):
         :type read_timeout: `float` seconds
         :keyword write_timeout: timeout for rawx write requests
         :type write_timeout: `float` seconds
+        :keyword pool_manager: a pooled connection manager that will be used
+            for all HTTP based APIs (except rawx)
+        :type pool_manager: `urllib3.PoolManager`
         """
         self.namespace = namespace
         conf = {"namespace": self.namespace}
@@ -330,7 +333,6 @@ class ObjectStorageApi(object):
         from oio.account.client import AccountClient
         from oio.container.client import ContainerClient
         from oio.directory.client import DirectoryClient
-        # FIXME: share session between all the clients
         self.directory = DirectoryClient(conf, logger=self.logger, **kwargs)
         self.container = ContainerClient(conf, logger=self.logger, **kwargs)
 

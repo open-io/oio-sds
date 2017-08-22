@@ -60,7 +60,8 @@ class HttpApi(object):
         self.admin_mode = kwargs.get('admin_mode', False)
 
     def _direct_request(self, method, url, headers=None, data=None, json=None,
-                        params=None, admin_mode=False, **kwargs):
+                        params=None, admin_mode=False, pool_manager=None,
+                        **kwargs):
         """
         Make an HTTP request.
 
@@ -124,8 +125,11 @@ class HttpApi(object):
             encoded_args = urlencode(out_param)
             url += '?' + encoded_args
 
+        if not pool_manager:
+            pool_manager = self.pool_manager
+
         try:
-            resp = self.pool_manager.request(method, url, **out_kwargs)
+            resp = pool_manager.request(method, url, **out_kwargs)
             body = resp.data
             if body:
                 try:

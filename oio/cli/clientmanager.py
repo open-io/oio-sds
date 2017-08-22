@@ -41,6 +41,7 @@ class ClientCache(object):
     def __get__(self, instance, owner):
         instance.setup()
         if self._handle is None:
+            # FIXME: not thread safe
             self._handle = self.factory(instance)
         return self._handle
 
@@ -48,7 +49,6 @@ class ClientCache(object):
 class ClientManager(object):
     def __init__(self, options):
         self._options = options
-        self.session = None
         self.namespace = None
         self.setup_done = False
         self._admin_mode = False
