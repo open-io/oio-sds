@@ -174,6 +174,16 @@ test_meta2_filters () {
     sleep 0.5
 }
 
+test_cli () {
+    randomize_env
+    oio-reset.sh -N $OIO_NS $@
+
+    cd $SRCDIR
+    tox -e cli
+
+    gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
+    sleep 0.5
+}
 
 if is_running_test_suite "copyright" ; then
 	echo -e "\n### Checking the presence of Copyright mentions"
@@ -215,6 +225,12 @@ if is_running_test_suite "slave" ; then
 			-f "${SRCDIR}/etc/bootstrap-meta1-${nb}digits.yml"
 	done
 	unset SLAVE
+fi
+
+if is_running_test_suite "cli" ; then
+    echo -e "\n### CLI tests"
+    test_cli -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
+        -f "${SRCDIR}/etc/bootstrap-option-cache.yml"
 fi
 
 if is_running_test_suite "small-cache" ; then
