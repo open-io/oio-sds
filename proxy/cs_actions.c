@@ -175,7 +175,8 @@ _registration_batch (enum reg_op_e op, GSList *services)
 			v->score.timestamp = oio_ext_monotonic_seconds ();
 			REG_WRITE(
 					const struct service_info_s *si0 = lru_tree_get(srv_registered, k);
-					if (si0) v->score.value = si0->score.value;
+					if (si0)
+						v->score.value = si0->score.value;
 					lru_tree_insert (srv_registered, g_strdup(k), v);
 					);
 		}
@@ -196,13 +197,13 @@ _registration_batch (enum reg_op_e op, GSList *services)
 	lru_tree_insert(push_queue, key, si); \
 }
 	if (flag_cache_enabled) {
-		GString *gstr = g_string_sized_new (256);
 		for (GSList *l=services; l ;l=l->next) {
 			struct service_info_s *si = l->data;
-			g_string_set_size(gstr, 0);
-			service_info_encode_json (gstr, si, TRUE);
 			gchar *key = service_info_key(si);
 			PUSH_WRITE(ENQUEUE_SERVICE());
+			/* Prevent future 'services' list free from freeing element data.
+			 * It will be freed when leaving 'push_queue'. */
+			l->data = NULL;
 		}
 		return NULL;
 	} else {
@@ -226,11 +227,12 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 	GSList *services = NULL;
 	if (json_object_is_type (jsrv, json_type_array)) {
 		const gint max = json_object_array_length(jsrv);
-		for (gint i=0; i<max ;++i) {
+		for (gint i = 0; i < max; ++i) {
 			struct json_object *jitem = json_object_array_get_idx(jsrv, i);
 			struct service_info_s *si = NULL;
 			err = service_info_load_json_object (jitem, &si, TRUE);
-			if (err) break;
+			if (err)
+				break;
 			services = g_slist_prepend(services, si);
 		}
 	} else if (json_object_is_type (jsrv, json_type_object)) {
