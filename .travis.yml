@@ -14,7 +14,7 @@ install:
   - pip install --upgrade zkpython
 env:
   - TEST_SUITE=build,unit,small-cache
-  - TEST_SUITE=copyright,worm,slave
+  - TEST_SUITE=copyright,worm,slave,cli
   - TEST_SUITE=3copies
   - TEST_SUITE=repli
   - TEST_SUITE=ec
