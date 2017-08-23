@@ -395,7 +395,7 @@ service_info_key (const struct service_info_s *si)
 	const char *explicit = service_info_get_tag_value(si, "tag.id", NULL);
 	if (explicit)
 		return oio_make_service_key(si->ns_name, si->type, explicit);
-	grid_addrinfo_to_string(&si->addr, addr, sizeof(struct addr_info_s));
+	grid_addrinfo_to_string(&si->addr, addr, sizeof(addr));
 	return oio_make_service_key(si->ns_name, si->type, addr);
 }
 
