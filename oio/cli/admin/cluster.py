@@ -154,17 +154,6 @@ class ClusterUnlock(lister.Lister):
                 self._unlock_one(parsed_args.srv_type, parsed_args.srv_addr))
 
 
-def _batches_boundaries(srclen, size):
-    for start in range(0, srclen, size):
-        end = min(srclen, start + size)
-        yield start, end
-
-
-def _bounded_batches(src, size):
-    for start, end in _batches_boundaries(len(src), size):
-        yield src[start:end]
-
-
 class ClusterUnlockAll(lister.Lister):
     """Unlock all services of the cluster"""
 
@@ -187,14 +176,13 @@ class ClusterUnlockAll(lister.Lister):
             all_descr = self.app.client_manager.admin.cluster_list(type_)
             for descr in all_descr:
                 descr['type'] = type_
-            for batch in _bounded_batches(all_descr, 4096):
-                try:
-                    self.app.client_manager.admin.cluster_unlock_score(batch)
-                    for descr in batch:
-                        yield type_, descr['addr'], "unlocked"
-                except Exception as exc:
-                    for descr in batch:
-                        yield type_, descr['addr'], str(exc)
+            try:
+                self.app.client_manager.admin.cluster_unlock_score(all_descr)
+                for descr in all_descr:
+                    yield type_, descr['addr'], "unlocked"
+            except Exception as exc:
+                for descr in all_descr:
+                    yield type_, descr['addr'], str(exc)
 
     def take_action(self, parsed_args):
         columns = ('Type', 'Service', 'Result')
