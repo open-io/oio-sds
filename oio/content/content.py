@@ -24,6 +24,7 @@ from oio.common.constants import OIO_VERSION
 
 class Content(object):
 
+    # FIXME: no need for container_id since we have account and container name
     def __init__(self, conf, container_id, metadata, chunks, storage_method,
                  account, container_name, container_client=None):
         self.conf = conf
