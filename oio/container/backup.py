@@ -769,7 +769,8 @@ class ContainerBackup(RedisConn, WerkzeugApp):
                         file_or_path=LimitedStream(req.stream, inf.size),
                         **kwargs)
                     if size != inf.size:
-                        raise UnprocessableEntity()
+                        raise UnprocessableEntity(
+                            "Object created is smaller than expected")
                     r['consumed'] += size
                     if hdrs:
                         self.proxy.object_set_properties(account, container,
@@ -782,7 +783,8 @@ class ContainerBackup(RedisConn, WerkzeugApp):
                 read(BLOCKSIZE - inf.size % BLOCKSIZE)
 
         if req_size != r['consumed']:
-            raise UnprocessableEntity()
+            raise UnprocessableEntity(
+                "Invalid length of data consumed by restoration")
 
         if mode == 'full' or end_block == cur_state['last_block']:
             code = 201
