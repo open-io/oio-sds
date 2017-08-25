@@ -354,10 +354,9 @@ def make_variable(cfg):
 
 def path2macro(p):
     from os import getcwd
+    from re import sub
     p = getcwd() + '_' + p
-    p = p.replace("-", "_")
-    p = p.replace(".", "_")
-    p = p.replace("/", "_")
+    p = sub(r'\W', '_', p)
     return ("OIO_" + p + '_').upper()
 
 
