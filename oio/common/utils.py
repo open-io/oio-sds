@@ -102,10 +102,7 @@ def quote(value, safe='/'):
 
 
 def name2cid(account, ref):
-    h = hashlib.sha256()
-    for v in [account, '\0', ref]:
-        h.update(v)
-    return h.hexdigest()
+    return cid_from_name(account, ref)
 
 
 def env(*vars, **kwargs):
@@ -478,7 +475,7 @@ def cid_from_name(account, ref):
     h = hashlib.sha256()
     for v in [account, '\0', ref]:
         h.update(v)
-    return h.hexdigest()
+    return h.hexdigest().upper()
 
 
 def fix_ranges(ranges, length):

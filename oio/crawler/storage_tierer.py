@@ -77,8 +77,9 @@ class StorageTiererWorker(object):
                         account=self.account, reference=container,
                         limit=self.content_fetch_limit, marker=marker)
                 except NotFound:
-                    self.logger.warn("Container %s in account "
-                                     "but not found" % container)
+                    self.logger.warn(
+                        "Container %s appears in account but doesn't exist",
+                        container)
                     break
                 if len(listing["objects"]) == 0:
                     break
@@ -142,12 +143,12 @@ class StorageTiererWorker(object):
         except Exception:
             self.errors += 1
             self.logger.exception("ERROR while changing policy for content "
-                                  "%s/%s", (container_id, content_id))
+                                  "%s/%s", container_id, content_id)
         self.passes += 1
 
     def change_policy(self, container_id, content_id):
-        self.logger.info("Changing policy for content %s/%s"
-                         % (container_id, content_id))
+        self.logger.info("Changing policy for content %s/%s",
+                         container_id, content_id)
         self.content_factory.change_policy(
             container_id, content_id, self.new_policy)
 
@@ -162,12 +163,14 @@ class StorageTierer(Daemon):
                 "(token '%s'" % CONF_ACCOUNT)
         if not conf.get(CONF_OUTDATED_THRESHOLD):
             raise exc.ConfigurationException(
-                "No date specified for storage tiering "
+                "No threshold specified for storage tiering "
                 "(token '%s'" % CONF_OUTDATED_THRESHOLD)
         if not conf.get(CONF_NEW_POLICY):
             raise exc.ConfigurationException(
                 "No new policy specified for storage tiering "
                 "(token '%s'" % CONF_NEW_POLICY)
+        if conf.get('syslog_prefix'):
+            print "Logging to syslog, with prefix '%(syslog_prefix)s'" % conf
 
     def run(self, *args, **kwargs):
         while True:
@@ -175,7 +178,7 @@ class StorageTierer(Daemon):
                 worker = StorageTiererWorker(self.conf, self.logger)
                 worker.run()
             except Exception as e:
-                self.logger.exception('ERROR during storage tiering: %s' % e)
+                self.logger.exception('ERROR during storage tiering: %s', e)
             self._sleep()
 
     def _sleep(self):
