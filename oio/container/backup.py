@@ -648,7 +648,7 @@ class ContainerBackup(RedisConn, WerkzeugApp):
     @redis_cnx
     def _do_put(self, req, account, container):
         """Manage PUT method for restoring a container"""
-        size = int(req.headers['content-length'])
+        req_size = int(req.headers['content-length'])
         start_block, end_block = (None, None)
         append = False
         mode = "full"
@@ -694,7 +694,7 @@ class ContainerBackup(RedisConn, WerkzeugApp):
                         offset = (start_block - entry['start_block']
                                   - entry['hdr_blocks'])
                         inf.size = entry['size'] - offset * BLOCKSIZE
-                        inf.size = min(inf.size, size)
+                        inf.size = min(inf.size, req_size)
                         break
                     raise UnprocessableEntity('Header is broken')
 
@@ -714,14 +714,14 @@ class ContainerBackup(RedisConn, WerkzeugApp):
             return data
 
         hdrs = {}
-        while r['consumed'] < size:
+        while r['consumed'] < req_size:
             if not append:
                 buf = read(BLOCKSIZE)
                 if buf == NUL * BLOCKSIZE:
                     continue
                 inf = TarInfo.frombuf(buf)
                 if mode == "range":
-                    inf.size = min(size - r['consumed'], inf.size)
+                    inf.size = min(req_size - r['consumed'], inf.size)
 
             if inf.type not in (XHDTYPE, REGTYPE, AREGTYPE, DIRTYPE):
                 raise BadRequest('unsupported TAR attribute %s' % inf.type)
@@ -769,7 +769,8 @@ class ContainerBackup(RedisConn, WerkzeugApp):
                         file_or_path=LimitedStream(req.stream, inf.size),
                         **kwargs)
                     if size != inf.size:
-                        raise UnprocessableEntity()
+                        raise UnprocessableEntity(
+                            "Object created is smaller than expected")
                     r['consumed'] += size
                     if hdrs:
                         self.proxy.object_set_properties(account, container,
@@ -780,6 +781,10 @@ class ContainerBackup(RedisConn, WerkzeugApp):
 
             if inf.size % BLOCKSIZE:
                 read(BLOCKSIZE - inf.size % BLOCKSIZE)
+
+        if req_size != r['consumed']:
+            raise UnprocessableEntity(
+                "Invalid length of data consumed by restoration")
 
         if mode == 'full' or end_block == cur_state['last_block']:
             code = 201

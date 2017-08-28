@@ -393,6 +393,7 @@ class TestContainerDownload(BaseTestCase):
         self.assertNotIn('x-object-sysmeta-slo-size', props)
         self.assertNotIn('x-object-sysmeta-slo-etag', props)
 
+    @attr('simple')
     def test_simple_restore(self):
         self._create_data(metadata=gen_metadata)
         org = requests.get(self.make_uri('dump'))
@@ -401,12 +402,15 @@ class TestContainerDownload(BaseTestCase):
                            data=org.content)
         self.assertEqual(res.status_code, 201)
         ret = self.conn.object_list(account=self.account, container=cnt)
+        names = self._data.keys()
         for obj in ret['objects']:
             name = obj['name']
             self.assertIn(name, self._data)
             self.assertEqual(obj['size'], len(self._data[name]['data']))
             meta = self.conn.object_get_properties(self.account, cnt, name)
             self.assertEqual(meta['properties'], self._data[name]['meta'])
+            names.remove(name)
+        self.assertEqual(len(names), 0)
 
     @attr('restore')
     def test_multipart_restore(self):
