@@ -1,5 +1,5 @@
-[crawler-storage-tierer]
-namespace = NS
+[storage-tierer]
+namespace = OPENIO
 user = openio
 
 # Containers from this account will be processed
@@ -7,7 +7,7 @@ account = my_account
 # Contents older than this threshold (in seconds) will be processed
 outdated_threshold = 2592000
 # New storage policy to apply to outdated contents
-new_policy = RAIN
+new_policy = EC
 # Number of containers per response from account service
 container_fetch_limit = 100
 # Number of contents per response from meta2 service
