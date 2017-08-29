@@ -370,10 +370,209 @@ class ContainerTarFile(object):
             self.logger.info("data not all consumed")
 
 
-def redis_cnx(f):
+class ContainerRestore(object):
+    MODE_FULL = 1
+    MODE_RANGE = 2
+
+    def __init__(self, redis, proxy, logger):
+        self.cur_state = None
+        self._range = (None, None)
+        self.req = None
+        self.req_size = -1
+        self.append = False
+        self.mode = self.MODE_FULL
+        # current file entry being processed
+        self.inf = None
+        self.state = {}
+        self.redis = redis
+        self.proxy = proxy
+        self.logger = logger
+
+    def prepare(self, account, container):
+        assert (self.req)
+        if self.req.headers.get('range') is None:
+            return
+
+        rnge = ContainerBackup._extract_range(self.req, blocks=None)
+        self._range = [rnge[2], rnge[3]]
+        self.mode = self.MODE_RANGE
+
+        data = self.redis.get("restore:%s:%s" % (account, container))
+        if self._range[0] == 0:
+            if data:
+                raise UnprocessableEntity(
+                    "A restoration has been already started")
+            self.cur_state = {
+                'start': -1,
+                'end': -1,
+                'manifest': None}
+            return
+
+        if not data:
+            raise UnprocessableEntity("First segment is not available")
+
+        self.cur_state = json.loads(data, object_pairs_hook=OrderedDict)
+
+        if self._range[0] != self.cur_state['end']:
+            raise UnprocessableEntity(
+                "Segment was already written "
+                "or an error has occured previously")
+
+        for entry in self.cur_state['manifest']:
+            if self._range[0] > entry['end_block']:
+                continue
+            if self._range[0] == entry['start_block']:
+                self.append = False
+                break
+            if self._range[0] >= entry['start_block'] \
+                    + entry['hdr_blocks']:
+                self.append = True
+
+                self.inf = TarInfo()
+                self.inf.name = entry['name']
+                offset = (self._range[0] - entry['start_block']
+                          - entry['hdr_blocks'])
+                self.inf.size = entry['size'] - offset * BLOCKSIZE
+                self.inf.size = min(self.inf.size, self.req_size)
+                break
+            raise UnprocessableEntity('Header is broken')
+
+    def read(self, size):
+        while (len(self.state['buf']) < size and
+                not self.req.stream.is_exhausted):
+            chunk = self.req.stream.read(size - len(self.state['buf']))
+            self.state['consumed'] += len(chunk)
+            self.state['buf'] += chunk
+        data = self.state['buf'][:size]
+        self.state['buf'] = self.state['buf'][size:]
+
+        if len(data) != size:
+            raise UnprocessableEntity("No enough data")
+        return data
+
+    def extract_tar_entry(self):
+        if self.append:
+            return True
+
+        buf = self.read(BLOCKSIZE)
+        if buf == NUL * BLOCKSIZE:
+            return False
+
+        self.inf = TarInfo.frombuf(buf)
+        if self.mode == self.MODE_RANGE:
+            self.inf.size = min(self.req_size - self.state['consumed'],
+                                self.inf.size)
+        return True
+
+    def parse_xhd_type(self, hdrs):
+        """ enrich hdrs with new headers """
+        buf = self.read(self.inf.size)
+        while buf:
+            length = buf.split(' ', 1)[0]
+            if length[0] == '\x00':
+                break
+            tmp = buf[len(length) + 1:int(length) - 1]
+            key, value = tmp.split('=', 1)
+            if key.startswith(SCHILY):
+                key = key[len(SCHILY):]
+            assert key not in hdrs, (
+                "%s already found in %s (object: %s)" %
+                (key, hdrs, self.inf.name))
+            hdrs[key] = value
+            buf = buf[int(length):]
+
+    def parse_reg_type(self, hdrs, account, container):
+        if self.inf.name == CONTAINER_PROPERTIES:
+            assert not hdrs, "invalid sequence in TAR"
+            hdrs = json.loads(self.read(self.inf.size),
+                              object_pairs_hook=OrderedDict)
+            self.proxy.container_set_properties(account, container, hdrs)
+            return
+
+        if self.inf.name == CONTAINER_MANIFEST:
+            assert not hdrs, "invalid sequence in TAR"
+            manifest = json.loads(self.read(self.inf.size),
+                                  object_pairs_hook=OrderedDict)
+            if self.mode == self.MODE_RANGE:
+                self.cur_state['manifest'] = manifest
+                self.cur_state['last_block'] = max(
+                    [x['end_block'] for x in manifest]) + 1
+            return
+
+        kwargs = {}
+        if not self.append and hdrs and 'mime_type' in hdrs:
+            kwargs['mime_type'] = hdrs['mime_type']
+            del hdrs['mime_type']
+
+        _, size, _ = self.proxy.object_create(
+            account, container, obj_name=self.inf.name, append=self.append,
+            file_or_path=LimitedStream(self.req.stream, self.inf.size),
+            **kwargs)
+
+        # save properties before checking size, otherwise they'll lost
+        if hdrs:
+            self.proxy.object_set_properties(account, container,
+                                             self.inf.name,
+                                             properties=hdrs)
+        if size != self.inf.size:
+            raise UnprocessableEntity(
+                "Object created is smaller than expected")
+
+        self.state['consumed'] += size
+        self.append = False
+
+    def restore(self, request, account, container):
+        """Manage PUT method for restoring a container"""
+
+        self.req = request
+        self.req_size = int(self.req.headers['content-length'])
+        self.prepare(account, container)
+
+        self.proxy.container_create(account, container)
+        self.state = {'consumed': 0, 'buf': ''}
+
+        hdrs = {}
+        while self.state['consumed'] < self.req_size:
+            if not self.extract_tar_entry():
+                # skip NULL blocks
+                continue
+
+            if self.inf.type not in (XHDTYPE, REGTYPE, AREGTYPE, DIRTYPE):
+                raise BadRequest('unsupported TAR attribute %s' %
+                                 self.inf.type)
+
+            if self.inf.type == XHDTYPE:
+                self.parse_xhd_type(hdrs)
+
+            elif self.inf.type in (REGTYPE, AREGTYPE):
+                self.parse_reg_type(hdrs, account, container)
+                hdrs = {}
+
+            if self.inf.size % BLOCKSIZE:
+                self.read(BLOCKSIZE - self.inf.size % BLOCKSIZE)
+
+        if self.req_size != self.state['consumed']:
+            raise UnprocessableEntity(
+                "Invalid length of data consumed by restoration")
+
+        if (self.mode == self.MODE_FULL
+                or self._range[1] == self.cur_state['last_block']):
+            code = 201
+            self.redis.delete("restore:%s:%s" % (account, container))
+        else:
+            code = 206
+            self.cur_state['start'] = self._range[0]
+            self.cur_state['end'] = self._range[1]
+            self.redis.set("restore:%s:%s" % (account, container),
+                           json.dumps(self.cur_state, sort_keys=True),
+                           ex=ContainerBackup.REDIS_TIMEOUT)
+        return Response(status=code)
+
+
+def redis_cnx(fct):
     def wrapper(*args):
         try:
-            return f(*args)
+            return fct(*args)
         except ConnectionError:
             args[0].logger.error("Redis is not available")
             raise ServiceUnavailable()
@@ -648,155 +847,8 @@ class ContainerBackup(RedisConn, WerkzeugApp):
     @redis_cnx
     def _do_put(self, req, account, container):
         """Manage PUT method for restoring a container"""
-        req_size = int(req.headers['content-length'])
-        start_block, end_block = (None, None)
-        append = False
-        mode = "full"
-
-        if req.headers.get('range'):
-            _, _, start_block, end_block = self._extract_range(req,
-                                                               blocks=None)
-            mode = "range"
-
-            cur_state = self.redis.get("restore:%s:%s" % (account,
-                                                          container))
-            if start_block == 0:
-                if cur_state:
-                    raise UnprocessableEntity(
-                        "A restoration has been already started")
-                cur_state = {
-                    'start': -1,
-                    'end': -1,
-                    'manifest': None}
-            else:
-                if not cur_state:
-                    raise UnprocessableEntity("First segment "
-                                              "is not available")
-                cur_state = json.loads(cur_state,
-                                       object_pairs_hook=OrderedDict)
-
-                if start_block != cur_state['end']:
-                    raise UnprocessableEntity(
-                        "Segment was already written "
-                        "or an error has occured previously")
-
-                for entry in cur_state['manifest']:
-                    if start_block > entry['end_block']:
-                        continue
-                    if start_block == entry['start_block']:
-                        append = False
-                        break
-                    if start_block >= entry['start_block'] \
-                            + entry['hdr_blocks']:
-                        append = True
-                        inf = TarInfo()
-                        inf.name = entry['name']
-                        offset = (start_block - entry['start_block']
-                                  - entry['hdr_blocks'])
-                        inf.size = entry['size'] - offset * BLOCKSIZE
-                        inf.size = min(inf.size, req_size)
-                        break
-                    raise UnprocessableEntity('Header is broken')
-
-        self.proxy.container_create(account, container)
-        r = {'consumed': 0, 'buf': ''}
-
-        def read(size):
-            while len(r['buf']) < size and not req.stream.is_exhausted:
-                t = req.stream.read(size - len(r['buf']))
-                r['consumed'] += len(t)
-                r['buf'] += t
-            data = r['buf'][:size]
-            r['buf'] = r['buf'][size:]
-
-            if len(data) != size:
-                raise UnprocessableEntity("No enough data")
-            return data
-
-        hdrs = {}
-        while r['consumed'] < req_size:
-            if not append:
-                buf = read(BLOCKSIZE)
-                if buf == NUL * BLOCKSIZE:
-                    continue
-                inf = TarInfo.frombuf(buf)
-                if mode == "range":
-                    inf.size = min(req_size - r['consumed'], inf.size)
-
-            if inf.type not in (XHDTYPE, REGTYPE, AREGTYPE, DIRTYPE):
-                raise BadRequest('unsupported TAR attribute %s' % inf.type)
-
-            if inf.type == XHDTYPE:
-                buf = read(inf.size)
-                while buf:
-                    length = buf.split(' ', 1)[0]
-                    if length[0] == '\x00':
-                        break
-                    tmp = buf[len(length) + 1:int(length) - 1]
-                    key, value = tmp.split('=', 1)
-                    if key.startswith(SCHILY):
-                        key = key[len(SCHILY):]
-                    assert key not in hdrs, (
-                        "%s already found in %s (object: %s)" %
-                        (key, hdrs, inf.name))
-                    hdrs[key] = value
-                    buf = buf[int(length):]
-
-            elif inf.type in (REGTYPE, AREGTYPE):
-                if inf.name == CONTAINER_PROPERTIES:
-                    assert not hdrs, "invalid sequence in TAR"
-                    hdrs = json.loads(read(inf.size),
-                                      object_pairs_hook=OrderedDict)
-                    self.proxy.container_set_properties(account, container,
-                                                        hdrs)
-                elif inf.name == CONTAINER_MANIFEST:
-                    assert not hdrs, "invalid sequence in TAR"
-                    manifest = json.loads(read(inf.size),
-                                          object_pairs_hook=OrderedDict)
-                    if mode == "range":
-                        cur_state['manifest'] = manifest
-                        cur_state['last_block'] = max(
-                            [x['end_block'] for x in manifest]) + 1
-
-                else:
-                    kwargs = {}
-                    if not append and hdrs and 'mime_type' in hdrs:
-                        kwargs['mime_type'] = hdrs['mime_type']
-                        del hdrs['mime_type']
-
-                    chunk, size, _ = self.proxy.object_create(
-                        account, container, obj_name=inf.name, append=append,
-                        file_or_path=LimitedStream(req.stream, inf.size),
-                        **kwargs)
-                    if size != inf.size:
-                        raise UnprocessableEntity(
-                            "Object created is smaller than expected")
-                    r['consumed'] += size
-                    if hdrs:
-                        self.proxy.object_set_properties(account, container,
-                                                         inf.name,
-                                                         properties=hdrs)
-                    append = False
-                hdrs = {}
-
-            if inf.size % BLOCKSIZE:
-                read(BLOCKSIZE - inf.size % BLOCKSIZE)
-
-        if req_size != r['consumed']:
-            raise UnprocessableEntity(
-                "Invalid length of data consumed by restoration")
-
-        if mode == 'full' or end_block == cur_state['last_block']:
-            code = 201
-            self.redis.delete("restore:%s:%s" % (account, container))
-        else:
-            code = 206
-            cur_state['start'] = start_block
-            cur_state['end'] = end_block
-            self.redis.set("restore:%s:%s" % (account, container),
-                           json.dumps(cur_state, sort_keys=True),
-                           ex=self.REDIS_TIMEOUT)
-        return Response(status=code)
+        obj = ContainerRestore(self.redis, self.proxy, self.logger)
+        return obj.restore(req, account, container)
 
     def on_restore(self, req):
         """Entry point for restore rule"""
