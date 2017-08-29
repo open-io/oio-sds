@@ -266,6 +266,9 @@ class TestContainerDownload(BaseTestCase):
         for idx in xrange(0, int(org.headers['content-length']), 512):
             ret = requests.get(self._uri, headers={'Range': 'bytes=%d-%d' %
                                                             (idx, idx+511)})
+            self.assertEqual(ret.status_code, 206)
+            self.assertEqual(len(ret.content), 512)
+            self.assertEqual(ret.content, org.content[idx:idx+512])
             data.append(ret.content)
 
         data = "".join(data)
@@ -346,11 +349,15 @@ class TestContainerDownload(BaseTestCase):
     def test_s3_range_download(self):
         self._create_s3_slo()
         org = requests.get(self._uri)
+        self.assertEqual(org.status_code, 200)
 
         data = []
         for idx in xrange(0, int(org.headers['content-length']), 512):
             ret = requests.get(self._uri, headers={'Range': 'bytes=%d-%d' %
                                                             (idx, idx+511)})
+            self.assertEqual(ret.status_code, 206)
+            self.assertEqual(len(ret.content), 512)
+            self.assertEqual(ret.content, org.content[idx:idx+512])
             data.append(ret.content)
 
         data = "".join(data)
