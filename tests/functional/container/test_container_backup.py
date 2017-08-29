@@ -8,6 +8,8 @@ import json
 import string
 from tempfile import TemporaryFile
 import unittest
+import time
+from threading import Thread
 
 import requests
 from oio import ObjectStorageApi
@@ -452,3 +454,55 @@ class TestContainerDownload(BaseTestCase):
         hdrs = {'Range': 'bytes=%d-%d' % (size, size + len(parts[1]) - 1)}
         res = requests.put(uri, data=part, headers=hdrs)
         self.assertEqual(res.status_code, 422)
+
+    @attr('concurrency')
+    def test_multipart_concurrency(self):
+        self._create_data(metadata=gen_metadata, size=1025*1024)
+        org = requests.get(self.make_uri('dump'))
+        cnt = rand_str(20)
+        uri = self.make_uri('restore', container=cnt)
+        size = divmod(len(org.content) / 3, 512)[0] * 512
+        parts = [org.content[x:x+size] for x in xrange(0, len(org.content),
+                                                       size)]
+        start = 0
+
+        class StreamWithContentLength(Thread):
+            """Thread to send data with delays to restore API"""
+
+            def __init__(self, data, headers):
+                self._count = 0
+                self._data = data
+                self._hdrs = headers
+                super(StreamWithContentLength, self).__init__()
+
+            def __len__(self):
+                return len(self._data)
+
+            def read(self, *args):
+                if self._count < len(self._data):
+                    time.sleep(0.5)
+                    data = self._data[self._count:self._count+size/3]
+                    self._count += len(data)
+                    return data
+                return ""
+
+            def run(self):
+                self._ret = requests.put(uri, data=self, headers=self._hdrs)
+
+        for idx, part in enumerate(parts):
+            hdrs = {'Range': 'bytes=%d-%d' % (start, start + len(part) - 1)}
+            if idx == 0:
+                res = requests.put(uri, data=part, headers=hdrs)
+                self.assertIn(res.status_code, [201, 206])
+            else:
+                # launch Thread and simulate slow bandwidth
+                thr = StreamWithContentLength(part, hdrs)
+                thr.start()
+                # send data on same range
+                time.sleep(0.5)
+                res = requests.put(uri, data=part, headers=hdrs)
+                self.assertEqual(res.status_code, 422)
+
+                thr.join()
+                self.assertIn(thr._ret.status_code, [201, 206])
+            start += len(part)

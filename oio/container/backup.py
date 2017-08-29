@@ -837,18 +837,28 @@ class ContainerBackup(RedisConn, WerkzeugApp):
                                                     container))
         if not results:
             return UnprocessableEntity("No restoration in progress")
+        in_progress = self.redis.get('restore:%s:%s:lock' % (account,
+                                                             container))
         results = json.loads(results)
         blocks = sum(i['blocks'] for i in results['manifest'])
         return Response(headers={
             'X-Tar-Size': blocks * BLOCKSIZE,
             'X-Consumed-Size': results['end'] * BLOCKSIZE,
+            'X-Upload-In-Progress': in_progress
         }, status=200)
 
     @redis_cnx
     def _do_put(self, req, account, container):
         """Manage PUT method for restoring a container"""
         obj = ContainerRestore(self.redis, self.proxy, self.logger)
-        return obj.restore(req, account, container)
+        key = "restore:%s:%s:lock" % (account, container)
+        if not self.redis.set(key, 1, nx=True):
+            raise UnprocessableEntity("A restore is already in progress")
+
+        try:
+            return obj.restore(req, account, container)
+        finally:
+            self.redis.delete(key)
 
     def on_restore(self, req):
         """Entry point for restore rule"""
