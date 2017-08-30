@@ -212,9 +212,14 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(c.chunks[2].raw(), chunks[1])
         self.assertEqual(c.chunks[3].raw(), chunks[0])
 
-    def _new_content(self, stgpol, data, path="titi"):
+    def _new_content(self, stgpol, data, path="titi",
+                     mime_type=None, properties=None):
         old_content = self.content_factory.new(self.container_id, path,
                                                len(data), stgpol)
+        if properties:
+            old_content.properties = properties
+        if mime_type:
+            old_content.mime_type = mime_type
         old_content.create(BytesIO(data))
         return self.content_factory.get(self.container_id,
                                         old_content.content_id)
@@ -227,7 +232,10 @@ class TestContentFactory(BaseTestCase):
             self.stgpol_threecopies: PlainContent,
             self.stgpol_ec: ECContent
         }
-        old_content = self._new_content(old_policy, data)
+        mime_type = "application/test"
+        props = {'a': 'b'}
+        old_content = self._new_content(
+            old_policy, data, mime_type=mime_type, properties=props)
         self.assertEqual(type(old_content), obj_type[old_policy])
 
         changed_content = self.content_factory.change_policy(
@@ -245,6 +253,8 @@ class TestContentFactory(BaseTestCase):
         downloaded_data = "".join(new_content.fetch())
 
         self.assertEqual(downloaded_data, data)
+        self.assertEqual(mime_type, new_content.mime_type)
+        self.assertDictEqual(props, new_content.properties)
 
     @ec
     def test_change_content_0_byte_policy_single_to_ec(self):
@@ -329,7 +339,7 @@ class TestContentFactory(BaseTestCase):
         hosts = []
         for c in content_updated.chunks.filter(metapos=0):
             self.assertThat(hosts, Not(Contains(c.host)))
-            self.assertNotEquals(c.id, chunk_id)
+            self.assertNotEqual(c.id, chunk_id)
             hosts.append(c.host)
 
         new_chunk_meta, new_chunk_stream = self.blob_client.chunk_get(
