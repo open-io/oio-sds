@@ -32,14 +32,40 @@ class Content(object):
         self.logger = get_logger(self.conf)
         self.blob_client = BlobClient()
         self.container_client = container_client or ContainerClient(self.conf)
+
+        # FIXME: all these may be properties
         self.content_id = self.metadata["id"]
-        self.stgpol = self.metadata["policy"]
         self.path = self.metadata["name"]
         self.length = int(self.metadata["length"])
         self.version = self.metadata["version"]
         self.checksum = self.metadata["hash"]
-        self.mime_type = self.metadata["mime_type"]
         self.chunk_method = self.metadata["chunk_method"]
+
+    @property
+    def mime_type(self):
+        return self.metadata["mime_type"]
+
+    @mime_type.setter
+    def mime_type(self, value):
+        self.metadata["mime_type"] = value
+
+    @property
+    def policy(self):
+        return self.metadata["policy"]
+
+    @policy.setter
+    def policy(self, value):
+        self.metadata["policy"] = value
+
+    @property
+    def properties(self):
+        return self.metadata.get('properties')
+
+    @properties.setter
+    def properties(self, value):
+        if not isinstance(value, dict):
+            raise ValueError("'value' must be a dict")
+        self.metadata['properties'] = value
 
     def _get_spare_chunk(self, chunks_notin, chunks_broken):
         spare_data = {
@@ -49,7 +75,7 @@ class Content(object):
         try:
             spare_resp = self.container_client.content_spare(
                 cid=self.container_id, path=self.content_id,
-                data=spare_data, stgpol=self.stgpol)
+                data=spare_data, stgpol=self.policy)
         except ClientException as e:
             raise exc.SpareChunkException("No spare chunk (%s)" % e.message)
 
@@ -86,12 +112,26 @@ class Content(object):
         self.container_client.container_raw_update(
             old, new, cid=self.container_id)
 
+    def _prepare_sysmeta(self):
+        sysmeta = dict()
+        sysmeta['id'] = self.content_id
+        sysmeta['version'] = self.version
+        sysmeta['policy'] = self.policy
+        sysmeta['mime_type'] = self.mime_type
+        sysmeta['chunk_method'] = self.chunk_method
+        sysmeta['chunk_size'] = self.metadata['chunk_size']
+        sysmeta['content_path'] = self.path
+        sysmeta['container_id'] = self.container_id
+        return sysmeta
+
     def _create_object(self, **kwargs):
+        data = {'chunks': self.chunks.raw(),
+                'properties': self.properties}
         self.container_client.content_create(
             cid=self.container_id, path=self.path, content_id=self.content_id,
-            stgpol=self.stgpol, size=self.length, checksum=self.checksum,
+            stgpol=self.policy, size=self.length, checksum=self.checksum,
             version=self.version, chunk_method=self.chunk_method,
-            mime_type=self.mime_type, data=self.chunks.raw(),
+            mime_type=self.mime_type, data=data,
             **kwargs)
 
     def rebuild_chunk(self, chunk_id, allow_same_rawx=False, chunk_pos=None):
