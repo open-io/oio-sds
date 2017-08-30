@@ -228,13 +228,22 @@ class ShowContainer(show.ShowOne):
         )
 
         sys = data['system']
+        ctime = float(sys['sys.m2.ctime']) / 1000000.
+        bytes_usage = sys.get('sys.m2.usage', 0)
+        objects = sys.get('sys.m2.objects', 0)
+        if parsed_args.formatter == 'table':
+            from oio.common.utils import convert_size
+
+            ctime = int(ctime)
+            bytes_usage = convert_size(int(bytes_usage), unit="B")
+            objects = convert_size(int(objects))
         info = {'account': sys['sys.account'],
                 'base_name': sys['sys.name'],
                 'container': sys['sys.user.name'],
-                'ctime': sys['sys.m2.ctime'],
-                'bytes_usage': sys.get('sys.m2.usage', 0),
+                'ctime': ctime,
+                'bytes_usage': bytes_usage,
                 'quota': sys.get('sys.m2.quota', "Namespace default"),
-                'objects': sys.get('sys.m2.objects', 0),
+                'objects': objects,
                 'storage_policy': sys.get('sys.m2.policy.storage',
                                           "Namespace default"),
                 'max_versions': sys.get('sys.m2.policy.version',

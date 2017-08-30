@@ -16,7 +16,7 @@
 import unittest
 import logging
 from cStringIO import StringIO
-from oio.common.utils import get_logger
+from oio.common.utils import get_logger, convert_size
 
 
 class TestUtils(unittest.TestCase):
@@ -33,3 +33,13 @@ class TestUtils(unittest.TestCase):
         logger = get_logger(conf, 'test')
         logger.debug('msg3')
         self.assertEqual(sio.getvalue(), 'msg1\nmsg3\n')
+
+    def test_convert_size(self):
+        size = convert_size(0)
+        self.assertEqual(size, "0")
+        size = convert_size(42)
+        self.assertEqual(size, "42")
+        size = convert_size(1000)
+        self.assertEqual(size, "1.0K")
+        size = convert_size(0, unit="B")
+        self.assertEqual(size, "0B")
