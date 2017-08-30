@@ -14,8 +14,7 @@
 # License along with this library.
 
 
-# from urllib import quote_plus
-from oio.common.http import requests
+from oio.common.http import get_pool_manager
 from oio.common import exceptions as exc, utils
 from oio.common.constants import chunk_headers, chunk_xattr_keys_optional
 from oio.api.io import ChunkReader
@@ -41,7 +40,7 @@ def extract_headers_meta(headers):
 
 class BlobClient(object):
     def __init__(self):
-        self.session = requests.Session()
+        self.http_pool = get_pool_manager()
 
     def chunk_put(self, url, meta, data, **kwargs):
         if not hasattr(data, 'read'):
@@ -59,8 +58,8 @@ class BlobClient(object):
         writer.stream(data, None)
 
     def chunk_delete(self, url, **kwargs):
-        resp = self.session.delete(url)
-        if resp.status_code != 204:
+        resp = self.http_pool.request('DELETE', url)
+        if resp.status != 204:
             raise exc.from_response(resp)
 
     def chunk_get(self, url, **kwargs):
@@ -75,8 +74,8 @@ class BlobClient(object):
         return headers, stream
 
     def chunk_head(self, url, **kwargs):
-        resp = self.session.head(url)
-        if resp.status_code == 200:
+        resp = self.http_pool.request('HEAD', url)
+        if resp.status == 200:
             return extract_headers_meta(resp.headers)
         else:
             raise exc.from_response(resp)
