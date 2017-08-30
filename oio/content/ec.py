@@ -67,7 +67,7 @@ class ECContent(Content):
 
         # FIXME: should be 'content_policy' everywhere
         # but sadly it isn't
-        meta['policy'] = self.stgpol
+        meta['policy'] = self.policy
 
         # FIXME: should be 'content_version' everywhere
         # but sadly it isn't

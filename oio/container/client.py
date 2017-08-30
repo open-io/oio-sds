@@ -13,12 +13,15 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import warnings
+from urllib import unquote_plus
 from oio.common.client import ProxyClient
 from oio.common.utils import json, ensure_headers
 from oio.common import exceptions
-from urllib import unquote_plus
 
 CONTENT_HEADER_PREFIX = 'x-oio-content-meta-'
+SYSMETA_KEYS = ("chunk-method", "ctime", "deleted", "hash", "hash-method",
+                "id", "length", "mime-type", "name", "policy", "version")
 
 
 def extract_content_headers_meta(headers):
@@ -26,7 +29,12 @@ def extract_content_headers_meta(headers):
     for key in headers:
         if key.lower().startswith(CONTENT_HEADER_PREFIX):
             short_key = key[len(CONTENT_HEADER_PREFIX):]
-            if short_key.startswith("x-"):
+            # FIXME(FVE): this will fail when someone creates a property with
+            # same name as one of our system metadata.
+            # content_prepare() and content_show() are safe but
+            # content_locate() protocol has to send properties in the body
+            # instead of the response headers.
+            if short_key.startswith("x-") or short_key not in SYSMETA_KEYS:
                 resp_headers['properties'][short_key] = \
                     unquote_plus(headers[key])
             else:
@@ -309,7 +317,7 @@ class ContainerClient(ProxyClient):
                        size=None, checksum=None, data=None, cid=None,
                        content_id=None, stgpol=None, version=None,
                        mime_type=None, chunk_method=None, headers=None,
-                       append=False, **kwargs):
+                       append=False, force=False, **kwargs):
         """
         Create a new object. This method does not upload any data, it just
         registers object metadata in the database.
@@ -339,6 +347,11 @@ class ContainerClient(ProxyClient):
         params = self._make_params(account, reference, path, cid=cid)
         if append:
             params['append'] = '1'
+        # TODO(FVE): implement 'force' parameter
+        if not isinstance(data, dict):
+            warnings.simplefilter('once')
+            warnings.warn("'data' parameter should be a dict, not a list",
+                          DeprecationWarning, stacklevel=3)
         data = json.dumps(data)
         hdrs = {'x-oio-content-meta-length': str(size),
                 'x-oio-content-meta-hash': checksum}
@@ -430,6 +443,7 @@ class ContainerClient(ProxyClient):
                                    content=content, version=version)
         resp, chunks = self._direct_request(
                 'GET', uri, params=params, **kwargs)
+        # FIXME(FVE): see extract_content_headers_meta() code
         content_meta = extract_content_headers_meta(resp.headers)
         return content_meta, chunks
 

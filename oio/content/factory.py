@@ -73,13 +73,38 @@ class ContentFactory(object):
         return cls(self.conf, container_id, meta, chunks, storage_method,
                    account, container_name)
 
+    def copy(self, origin, policy=None):
+        if not policy:
+            policy = origin.policy
+        metadata = origin.metadata.copy()
+        new_metadata, chunks = self.container_client.content_prepare(
+            cid=origin.container_id,
+            path=metadata['name'],
+            size=metadata['length'],
+            stgpol=policy)
+
+        metadata['chunk_method'] = new_metadata['chunk_method']
+        metadata['chunk_size'] = new_metadata['chunk_size']
+        # We must use a new content_id since we change the data
+        metadata['id'] = new_metadata['id']
+        # We may want to keep the same version, but it is denied by meta2
+        metadata['version'] = int(metadata['version']) + 1
+        metadata['policy'] = new_metadata['policy']
+        # FIXME: meta2 does not allow us to set ctime
+        # and thus the object will appear as new.
+        storage_method = STORAGE_METHODS.load(metadata['chunk_method'])
+
+        cls = ECContent if storage_method.ec else PlainContent
+        return cls(self.conf, origin.container_id,
+                   metadata, chunks, storage_method,
+                   origin.account, origin.container_name)
+
     def change_policy(self, container_id, content_id, new_policy):
         old_content = self.get(container_id, content_id)
-        if old_content.stgpol == new_policy:
+        if old_content.policy == new_policy:
             return old_content
 
-        new_content = self.new(container_id, old_content.path,
-                               old_content.length, new_policy)
+        new_content = self.copy(old_content, policy=new_policy)
 
         stream = old_content.fetch()
         new_content.create(GeneratorIO(stream))
