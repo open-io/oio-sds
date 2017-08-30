@@ -40,6 +40,8 @@ from functools import wraps
 import codecs
 from oio.common.exceptions import OioException
 
+import math
+
 xattr = None
 try:
     # try python-pyxattr
@@ -589,3 +591,16 @@ def ensure_request_id(func):
             headers['X-oio-req-id'] = request_id()
         return func(*args, **kwargs)
     return ensure_request_id_wrapper
+
+
+METRIC_SYMBOLS = ("", "K", "M", "G", "T", "P", "E", "Z", "Y")
+
+
+def convert_size(size, unit=""):
+    if size == 0:
+        return "0%s" % unit
+    i = int(math.log(size, 1000))
+    if i != 0:
+        p = math.pow(1000, i)
+        size = round(size / p, 3)
+    return "%s%s%s" % (size, METRIC_SYMBOLS[i], unit)

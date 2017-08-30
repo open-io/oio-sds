@@ -14,6 +14,7 @@
 # License along with this library.
 
 import uuid
+import re
 from tests.functional.cli import CliTestCase
 
 
@@ -36,6 +37,13 @@ class ContainerTest(CliTestCase):
         opts = self.get_opts(['container'])
         output = self.openio('container show ' + self.NAME + opts)
         self.assertEqual(self.NAME + '\n', output)
+
+    def test_container_show_table(self):
+        opts = self.get_opts([], 'table')
+        output = self.openio('container show ' + self.NAME + opts)
+        regex = "|\s*%s\s*|\s*%s\s*|"
+        self.assertIsNotNone(re.match(regex % ("bytes_usage", "0B"), output))
+        self.assertIsNotNone(re.match(regex % ("objects", "0"), output))
 
     def test_container_list(self):
         opts = self.get_opts(['Name'])

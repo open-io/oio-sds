@@ -14,6 +14,7 @@
 # License along with this library.
 
 import uuid
+import re
 from tests.functional.cli import CliTestCase
 from testtools.matchers import Equals
 
@@ -49,6 +50,14 @@ class AccountTest(CliTestCase):
         self.assertThat(data['metadata']['test'], Equals('1'))
         output = self.openio('account delete ' + self.NAME)
         self.assertOutput('', output)
+
+    def test_account_show_table(self):
+        self.openio('account create ' + self.NAME)
+        opts = self.get_opts([], 'table')
+        output = self.openio('account show ' + self.NAME + opts)
+        regex = "|\s*%s\s*|\s*%s\s*|"
+        self.assertIsNotNone(re.match(regex % ("bytes", "0B"), output))
+        self.assertIsNotNone(re.match(regex % ("objects", "0"), output))
 
     def test_account_refresh(self):
         self.openio('account create ' + self.NAME)

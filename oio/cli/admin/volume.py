@@ -113,7 +113,7 @@ class IncidentAdminVolume(lister.Lister):
             default=[],
             type=int,
             action='append',
-            help='Incident date to set')
+            help='Incident date to set (seconds)')
         return parser
 
     def take_action(self, parsed_args):
