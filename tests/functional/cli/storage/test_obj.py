@@ -166,5 +166,4 @@ class ObjTest(CliTestCase):
         self.assertThat(data['hash'], Equals(checksum))
 
         output = self.openio('object delete ' + cname + ' ' + obj_name + opts)
-        print output
         self.assertEqual(True, self.json_loads(output)[0]['Deleted'])
