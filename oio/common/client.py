@@ -28,13 +28,12 @@ class ProxyClient(HttpApi):
 
         ep_parts = list()
         if endpoint:
-            self.proxy_netloc = endpoint[7:]  # skip "http://"
-            ep_parts.append(endpoint)
+            self.proxy_netloc = endpoint.lstrip("http://")
         else:
             ns_conf = load_namespace_conf(self.ns)
             self.proxy_netloc = ns_conf.get('proxy')
-            ep_parts.append("http:/")
-            ep_parts.append(self.proxy_netloc)
+        ep_parts.append("http:/")
+        ep_parts.append(self.proxy_netloc)
 
         ep_parts.append("v3.0")
         if not no_ns_in_url:
