@@ -677,6 +677,53 @@ class ObjectStorageApi(object):
         return self.container.content_delete_many(
             account, container, objs, **kwargs)
 
+    @handle_object_not_found
+    @ensure_headers
+    @ensure_request_id
+    def object_truncate(self, account, container, obj,
+                        version=None, size=None, **kwargs):
+        """
+        Truncate object at specified size. Only shrink is supported.
+        A download may occurs if size is not on chunk boundaries.
+
+        :param account: name of the account in which the object is stored
+        :param container: name of the container in which the object is stored
+        :param obj: name of the object to query
+        :param version: version of the object to query
+        :param size: new size of object
+        """
+
+        # code copied from object_fetch (should be factorized !)
+        meta, raw_chunks = self.object_locate(
+            account, container, obj, version=version, **kwargs)
+        chunk_method = meta['chunk_method']
+        storage_method = STORAGE_METHODS.load(chunk_method)
+        chunks = _sort_chunks(raw_chunks, storage_method.ec)
+
+        for pos in sorted(chunks.keys()):
+            chunk = chunks[pos][0]
+            if (size >= chunk['offset']
+                    and size <= chunk['offset'] + chunk['size']):
+                break
+        else:
+            raise exc.OioException("No chunk found at position %d" % size)
+
+        if chunk['offset'] != size:
+            props = self.object_show(account, container, obj)
+            # retrieve partial chunk
+            ret = self.object_fetch(account, container, obj,
+                                    version=version,
+                                    ranges=[(chunk['offset'], size-1)])
+            # TODO implement a proper object_update
+            pos = int(chunk['pos'].split('.')[0])
+            self.object_create(account, container, obj_name=obj,
+                               data=ret[1], meta_pos=pos,
+                               content_id=props['id'])
+
+        return self.container.content_truncate(account, container, obj,
+                                               version=version, size=size,
+                                               **kwargs)
+
     @handle_container_not_found
     def object_list(self, account, container, limit=None, marker=None,
                     delimiter=None, prefix=None, end_marker=None,
@@ -839,7 +886,7 @@ class ObjectStorageApi(object):
                     chunk["pos"] = str(mc_pos)
 
         def _metachunk_preparer():
-            mc_pos = 0
+            mc_pos = kwargs.get('meta_pos', 0)
             _fix_mc_pos(first_body, mc_pos)
             yield first_body
             while True:
@@ -863,6 +910,9 @@ class ObjectStorageApi(object):
         obj_meta['content_path'] = obj_name
         obj_meta['container_id'] = name2cid(account, container).upper()
         obj_meta['ns'] = self.namespace
+
+        # XXX content_id is necessary to update an existing object
+        kwargs['content_id'] = kwargs.get('content_id', obj_meta['id'])
 
         storage_method = STORAGE_METHODS.load(obj_meta['chunk_method'])
         if storage_method.ec:
@@ -890,7 +940,7 @@ class ObjectStorageApi(object):
         self.container.content_create(
             account, container, obj_name, size=bytes_transferred,
             checksum=content_checksum, data=data,
-            content_id=obj_meta['id'], stgpol=obj_meta['policy'],
+            stgpol=obj_meta['policy'],
             version=obj_meta['version'], mime_type=obj_meta['mime_type'],
             chunk_method=obj_meta['chunk_method'],
             **kwargs)
