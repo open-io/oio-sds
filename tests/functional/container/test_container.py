@@ -744,3 +744,8 @@ class TestMeta2Contents(BaseTestCase):
                                  params=params,
                                  data=json.dumps(['color']))
         self.assertEqual(resp.status_code, 204)
+
+        # Drain non existing content should failed
+        params = self.param_content(self.ref, 'Non_existing')
+        resp = self.session.post(self.url_content('drain'), params=params)
+        self.assertError(resp, 404, 420)
