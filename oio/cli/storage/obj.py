@@ -671,7 +671,11 @@ class UnsetObject(ObjectCommandMixin, command.Command):
 
 
 class DrainObject(ContainerCommandMixin, command.Command):
-    """ Drain the chunks """
+    """\
+Remove all the chunks of a content but keep the properties.
+We can replace the data or the properties of the content
+but no action needing the removed chunks are accepted\
+"""
 
     log = getLogger(__name__ + '.DrainObject')
 
