@@ -17,8 +17,9 @@ import os
 import tempfile
 import uuid
 from hashlib import md5
-from tests.functional.cli import CliTestCase
+from tests.functional.cli import CliTestCase, CommandFailed
 from testtools.matchers import Equals
+from tests.utils import random_str
 
 
 HEADERS = ['Name', 'Created']
@@ -167,3 +168,19 @@ class ObjTest(CliTestCase):
 
         output = self.openio('object delete ' + cname + ' ' + obj_name + opts)
         self.assertEqual(True, self.json_loads(output)[0]['Deleted'])
+
+    def test_drain(self):
+        cname = random_str(16)
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            f.write('test_exists')
+            f.flush()
+            obj = f.name
+            obj_name = random_str(16)
+            self.openio(' '.join(['object create ', cname, obj,
+                                  '--name ', obj_name]))
+            self.openio(' '.join(['object drain ', cname, ' ', obj_name]))
+
+        self.assertRaises(CommandFailed,
+                          self.openio,
+                          ' '.join(['object drain', cname,
+                                    'should not exist']))

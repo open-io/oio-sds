@@ -364,7 +364,7 @@ class ContainerClient(ProxyClient):
         params = self._make_params(account, reference, path, cid=cid,
                                    version=version)
         resp, _ = self._direct_request('POST', uri, params=params, **kwargs)
-        return resp.status_code == 204
+        return resp.status == 204
 
     def content_delete(self, account=None, reference=None, path=None, cid=None,
                        version=None, **kwargs):
