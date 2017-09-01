@@ -43,7 +43,6 @@ from oio.common.utils import get_logger, read_conf
 from oio.common.wsgi import WerkzeugApp
 from oio.common.redis_conn import RedisConn
 
-
 RANGE_RE = re.compile(r"^bytes=(\d+)-(\d+)$")
 
 # links:
@@ -405,7 +404,8 @@ class ContainerRestore(object):
             self.cur_state = {
                 'start': -1,
                 'end': -1,
-                'manifest': None}
+                'manifest': None,
+                'offset': 0}  # block offset when appending on existing object
             return
 
         if not data:
@@ -423,6 +423,7 @@ class ContainerRestore(object):
                 continue
             if self._range[0] == entry['start_block']:
                 self.append = False
+                self.cur_state['offset'] = 0
                 break
             if self._range[0] >= entry['start_block'] \
                     + entry['hdr_blocks']:
@@ -434,6 +435,8 @@ class ContainerRestore(object):
                           - entry['hdr_blocks'])
                 self.inf.size = entry['size'] - offset * BLOCKSIZE
                 self.inf.size = min(self.inf.size, self.req_size)
+                self.cur_state['offset'] = (self._range[0]
+                                            - entry['start_block'])
                 break
             raise UnprocessableEntity('Header is broken')
 
@@ -504,10 +507,28 @@ class ContainerRestore(object):
             kwargs['mime_type'] = hdrs['mime_type']
             del hdrs['mime_type']
 
-        _, size, _ = self.proxy.object_create(
-            account, container, obj_name=self.inf.name, append=self.append,
-            file_or_path=LimitedStream(self.req.stream, self.inf.size),
-            **kwargs)
+        data = LimitedStream(self.req.stream, self.inf.size)
+        try:
+            _, size, _ = self.proxy.object_create(
+                account, container, obj_name=self.inf.name, append=self.append,
+                file_or_path=data, **kwargs)
+        except Exception:
+            # no data was written if error occurs during object_create
+            # we just have to update our state_machine offset regarding
+            # current object
+            if self.mode == self.MODE_FULL:
+                raise
+            for entry in self.cur_state['manifest']:
+                if entry['name'] == self.inf.name:
+                    break
+            else:  # it should not happens
+                raise BadRequest("Invalid internal state")
+            self.cur_state['end'] = (entry['start_block']
+                                     + self.cur_state['offset'])
+            self.redis.set("restore:%s:%s" % (account, container),
+                           json.dumps(self.cur_state, sort_keys=True),
+                           ex=ContainerBackup.REDIS_TIMEOUT)
+            raise
 
         # save properties before checking size, otherwise they'll lost
         if hdrs:
@@ -519,6 +540,8 @@ class ContainerRestore(object):
                 "Object created is smaller than expected")
 
         self.state['consumed'] += size
+        if self.mode == self.MODE_RANGE:
+            self.cur_state['offset'] = 0
         self.append = False
 
     def restore(self, request, account, container):
@@ -838,7 +861,7 @@ class ContainerBackup(RedisConn, WerkzeugApp):
         if not results:
             return UnprocessableEntity("No restoration in progress")
         in_progress = self.redis.get('restore:%s:%s:lock' % (account,
-                                                             container))
+                                                             container)) or '0'
         results = json.loads(results)
         blocks = sum(i['blocks'] for i in results['manifest'])
         return Response(headers={
