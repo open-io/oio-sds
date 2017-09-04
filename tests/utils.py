@@ -20,10 +20,12 @@ import os
 import json
 import yaml
 import testtools
-import requests
 import random
 import string
 from functools import wraps
+from oio.common.http import get_pool_manager
+from urllib import urlencode
+from oio.common.utils import json as jsonlib
 
 random_chars = string.ascii_letters + string.digits
 random_chars_id = 'ABCDEF' + string.digits
@@ -128,13 +130,38 @@ class BaseTestCase(testtools.TestCase):
     def param_content(self, ref, path):
         return {'ref': ref, 'acct': self.account, 'path': path}
 
+    def request(self, method, url, data=None, params=None, headers=None,
+                json=None):
+        # Add query string
+        if params:
+            out_param = []
+            for k, v in params.items():
+                if v is not None:
+                    if isinstance(v, unicode):
+                        v = unicode(v).encode('utf-8')
+                    out_param.append((k, v))
+            encoded_args = urlencode(out_param)
+            url += '?' + encoded_args
+
+        # Convert json and add Content-Type
+        headers = headers if headers else {}
+        if json:
+            headers["Content-Type"] = "application/json"
+            data = jsonlib.dumps(json)
+
+        out_kwargs = {}
+        out_kwargs['headers'] = headers
+        out_kwargs['body'] = data
+
+        return self.http_pool.request(method, url, **out_kwargs)
+
     def setUp(self):
         super(BaseTestCase, self).setUp()
         self.conf = get_config()
         self.uri = 'http://' + self.conf['proxy']
         self.ns = self.conf['namespace']
         self.account = self.conf['account']
-        self.session = requests.session()
+        self.http_pool = get_pool_manager()
         self._flush_cs('echo')
 
     def tearDown(self):
@@ -147,46 +174,53 @@ class BaseTestCase(testtools.TestCase):
 
     def _flush_cs(self, srvtype):
         params = {'type': srvtype}
-        resp = self.session.post(self._url_cs("deregister"), params=params)
-        self.assertEqual(resp.status_code / 100, 2)
-        resp = self.session.post(self._url_cs("flush"), params=params)
-        self.assertEqual(resp.status_code / 100, 2)
+        resp = self.request('POST', self._url_cs("deregister"),
+                            params=params)
+        self.assertEqual(resp.status / 100, 2)
+        resp = self.request('POST', self._url_cs("flush"),
+                            params=params)
+        self.assertEqual(resp.status / 100, 2)
 
     def _register_srv(self, srv):
-        resp = self.session.post(self._url_cs("register"), json.dumps(srv))
-        self.assertIn(resp.status_code, (200, 204))
+        resp = self.request('POST', self._url_cs("register"),
+                            json.dumps(srv))
+        self.assertIn(resp.status, (200, 204))
 
     def _lock_srv(self, srv):
-        resp = self.session.post(self._url_cs("lock"), json.dumps(srv))
-        self.assertIn(resp.status_code, (200, 204))
+        resp = self.request('POST', self._url_cs("lock"),
+                            json.dumps(srv))
+        self.assertIn(resp.status, (200, 204))
 
     def _unlock_srv(self, srv):
-        resp = self.session.post(self._url_cs("unlock"), json.dumps(srv))
-        self.assertIn(resp.status_code, (200, 204))
+        resp = self.request('POST', self._url_cs("unlock"),
+                            json.dumps(srv))
+        self.assertIn(resp.status, (200, 204))
 
     def _flush_proxy(self):
         url = self.uri + '/v3.0/cache/flush/local'
-        resp = self.session.post(url, '')
-        self.assertEqual(resp.status_code / 100, 2)
+        resp = self.request('POST', url, '')
+        self.assertEqual(resp.status / 100, 2)
 
     def _reload_proxy(self):
         url = '{0}/v3.0/{1}/lb/reload'.format(self.uri, self.ns)
-        resp = self.session.post(url, '')
-        self.assertEqual(resp.status_code / 100, 2)
+        resp = self.request('POST', url, '')
+        self.assertEqual(resp.status / 100, 2)
 
     def _flush_meta(self):
         for srvtype in ('meta1', 'meta2'):
             for t in self.conf['services'][srvtype]:
                 url = self.uri + '/v3.0/forward/flush'
-                resp = self.session.post(url, params={'id': t['addr']})
-                self.assertEqual(resp.status_code, 204)
+                resp = self.request('POST', url,
+                                    params={'id': t['addr']})
+                self.assertEqual(resp.status, 204)
 
     def _reload_meta(self):
         for srvtype in ('meta1', 'meta2'):
             for t in self.conf['services'][srvtype]:
                 url = self.uri + '/v3.0/forward/reload'
-                resp = self.session.post(url, params={'id': t['addr']})
-                self.assertEqual(resp.status_code, 204)
+                resp = self.request('POST', url,
+                                    params={'id': t['addr']})
+                self.assertEqual(resp.status, 204)
 
     def _reload(self):
         self._flush_proxy()
@@ -215,8 +249,8 @@ class BaseTestCase(testtools.TestCase):
         self.assertEqual(body['status'], expected_code_oio)
 
     def assertError(self, resp, code_http, expected_code_oio):
-        self.assertEqual(resp.status_code, code_http)
-        self.assertIsError(resp.json(), expected_code_oio)
+        self.assertEqual(resp.status, code_http)
+        self.assertIsError(self.json_loads(resp.data), expected_code_oio)
 
     @classmethod
     def json_loads(cls, data):

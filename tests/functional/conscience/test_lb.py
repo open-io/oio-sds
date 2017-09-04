@@ -39,36 +39,34 @@ class BaseLbTest(BaseTestCase):
 class TestLbChoose(BaseLbTest):
 
     def test_choose_1(self):
-        resp = self.session.get(self._url_lb('choose'),
-                                params={'type': 'rawx'})
-        self.assertEqual(resp.status_code, 200)
-        parsed = resp.json()
+        resp = self.request('GET', self._url_lb('choose'),
+                            params={'type': 'rawx'})
+        self.assertEqual(resp.status, 200)
+        parsed = self.json_loads(resp.data)
         self.assertIsInstance(parsed, list)
         self.assertIsInstance(parsed[0], dict)
-        resp = self.session.get(self._url_lb('nothing'),
-                                params={'type': 'rawx'})
+        resp = self.request('GET', self._url_lb('nothing'),
+                            params={'type': 'rawx'})
         self.assertError(resp, 404, 404)
 
     def test_choose_2(self):
-        resp = self.session.get(self._url_lb('choose'),
-                                params={'type': 'rawx',
-                                        'size': 2})
-        self.assertEqual(resp.status_code, 200)
-        parsed = resp.json()
+        resp = self.request('GET', self._url_lb('choose'),
+                            params={'type': 'rawx', 'size': 2})
+        self.assertEqual(resp.status, 200)
+        parsed = self.json_loads(resp.data)
         self.assertIsInstance(parsed, list)
         self.assertEqual(2, len(parsed))
 
     def test_choose_too_much(self):
         if len(self.conf['services']['rawx']) >= 10000:
             self.skipTest("need less than 10000 rawx to run")
-        resp = self.session.get(self._url_lb('choose'),
-                                params={'type': 'rawx',
-                                        'size': 10000})
+        resp = self.request('GET', self._url_lb('choose'),
+                            params={'type': 'rawx', 'size': 10000})
         self.assertError(resp, 500, CODE_POLICY_NOT_SATISFIABLE)
 
     def test_choose_wrong_type(self):
-        resp = self.session.get(self._url_lb('choose'),
-                                params={'type': 'rowix'})
+        resp = self.request('GET', self._url_lb('choose'),
+                            params={'type': 'rowix'})
         self.assertError(resp, 404, CODE_SRVTYPE_NOTMANAGED)
 
     def test_choose_1_slot(self):
@@ -76,11 +74,10 @@ class TestLbChoose(BaseLbTest):
         self.fill_slots(["fast"], 3, 8000)
         self.fill_slots(["slow"], 3, 7000)
         self._reload()
-        resp = self.session.get(self._url_lb('choose'),
-                                params={'type': 'echo',
-                                        'slot': 'fast'})
-        self.assertEqual(resp.status_code, 200)
-        parsed = resp.json()
+        resp = self.request('GET', self._url_lb('choose'),
+                            params={'type': 'echo', 'slot': 'fast'})
+        self.assertEqual(resp.status, 200)
+        parsed = self.json_loads(resp.data)
         self.assertIsInstance(parsed, list)
         self.assertEqual(1, len(parsed))
         self.assertGreaterEqual(parsed[0]["addr"].split(':')[1], 8000)
@@ -90,12 +87,12 @@ class TestLbChoose(BaseLbTest):
         self.fill_slots(["fast"], 3, 8000)
         self.fill_slots(["slow"], 3, 7000)
         self._reload()
-        resp = self.session.get(self._url_lb('choose'),
-                                params={'type': 'echo',
-                                        'slot': 'fast',
-                                        'size': 4})
-        self.assertEqual(resp.status_code, 200)
-        parsed = resp.json()
+        resp = self.request('GET', self._url_lb('choose'),
+                            params={'type': 'echo',
+                                    'slot': 'fast',
+                                    'size': 4})
+        self.assertEqual(resp.status, 200)
+        parsed = self.json_loads(resp.data)
         self.assertIsInstance(parsed, list)
         self.assertEqual(4, len(parsed))
         fast_count = 0
@@ -121,13 +118,12 @@ class TestLbChoose(BaseLbTest):
         self._reload()
         self.fill_sameport(3)
         self._reload()
-        resp = self.session.get(self._url_lb('choose'),
-                                params={'type': 'echo',
-                                        'size': 3})
-        if resp.status_code != 200:
-            print resp.json()
-            self.assertEqual(resp.status_code, 200)
-        parsed = resp.json()
+        resp = self.request('GET', self._url_lb('choose'),
+                            params={'type': 'echo', 'size': 3})
+        if resp.status != 200:
+            print self.json_loads(resp.data)
+            self.assertEqual(resp.status, 200)
+        parsed = self.json_loads(resp.data)
         self.assertIsInstance(parsed, list)
         self.assertEqual(3, len(parsed))
 
@@ -135,16 +131,15 @@ class TestLbChoose(BaseLbTest):
 class TestLbPoll(BaseLbTest):
 
     def test_poll_invalid(self):
-        resp = self.session.post(self._url_lb('poll'),
-                                 params={'policy': 'invalid'})
+        resp = self.request('POST', self._url_lb('poll'),
+                            params={'policy': 'invalid'})
         self.assertError(resp, 500, CODE_POLICY_NOT_SATISFIABLE)
 
     def _test_poll_policy(self, pol_name, count, json=None):
-        resp = self.session.post(self._url_lb('poll'),
-                                 params={'policy': pol_name},
-                                 json=json)
-        parsed = resp.json()
-        self.assertEqual(resp.status_code, 200)
+        resp = self.request('POST', self._url_lb('poll'),
+                            params={'policy': pol_name}, json=json)
+        parsed = self.json_loads(resp.data)
+        self.assertEqual(resp.status, 200)
         self.assertIsInstance(parsed, list)
         self.assertEqual(count, len(parsed))
         self.assertIsInstance(parsed[0], dict)

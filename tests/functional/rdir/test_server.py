@@ -18,8 +18,8 @@ import tempfile
 import shutil
 import simplejson as json
 import subprocess
-import requests
 from os import remove
+from oio.common.http import get_pool_manager
 
 from tests.utils import BaseTestCase, random_str, random_id
 
@@ -31,13 +31,13 @@ def _key(rec):
 class TestRdirServer(BaseTestCase):
     def setUp(self):
         super(TestRdirServer, self).setUp()
+        self.http_pool = get_pool_manager(max_retries=10)
         self.num, self.db_path, self.host, self.port = self.get_service('rdir')
-        self.session = requests.Session()
         self.vol = self._volume()
 
     def tearDown(self):
         super(TestRdirServer, self).tearDown()
-        self.session.close()
+        self.http_pool.clear()
 
     def _volume(self):
         return random_id(8)
@@ -52,13 +52,13 @@ class TestRdirServer(BaseTestCase):
         return 'http://{0}:{1}{2}'.format(self.host, self.port, tail)
 
     def _get(self, url, **kwargs):
-        return self.session.get(self._rdir_url(url), **kwargs)
+        return self.request('GET', self._rdir_url(url), **kwargs)
 
     def _post(self, url, **kwargs):
-        return self.session.post(self._rdir_url(url), **kwargs)
+        return self.request('POST', self._rdir_url(url), **kwargs)
 
     def _delete(self, url, **kwargs):
-        return self.session.delete(self._rdir_url(url), **kwargs)
+        return self.request('DELETE', self._rdir_url(url), **kwargs)
 
     def test_explicit_create(self):
         rec = self._record()
@@ -67,45 +67,45 @@ class TestRdirServer(BaseTestCase):
         resp = self._post(
                 "/v1/rdir/push", params={'vol': self.vol},
                 data=json.dumps(rec))
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status, 404)
 
         # The fetch fails
         resp = self._post("/v1/rdir/fetch", params={'vol': self.vol})
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status, 404)
 
         # create volume
         resp = self._post("/v1/rdir/create", params={'vol': self.vol})
-        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.status, 201)
 
         # the fetch returns an empty array
         resp = self._post("/v1/rdir/fetch", params={'vol': self.vol})
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json(), [])
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(self.json_loads(resp.data), [])
 
         # now the push must succeed
         resp = self._post(
                 "/v1/rdir/push", params={'vol': self.vol},
                 data=json.dumps(rec))
-        self.assertEqual(resp.status_code, 204)
+        self.assertEqual(resp.status, 204)
 
         # we must fetch the same data
         resp = self._post("/v1/rdir/fetch", params={'vol': self.vol})
-        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.status, 200)
         reference = [
             [_key(rec), {'mtime': rec['mtime'], 'rtime': 0}]
         ]
-        self.assertListEqual(resp.json(), reference)
+        self.assertListEqual(self.json_loads(resp.data), reference)
 
         # deleting must succeed
         resp = self._delete(
                 "/v1/rdir/delete", params={'vol': self.vol},
                 data=json.dumps(rec))
-        self.assertEqual(resp.status_code, 204)
+        self.assertEqual(resp.status, 204)
 
         # fetching must return an empty array
         resp = self._post("/v1/rdir/fetch", params={'vol': self.vol})
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json(), [])
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(self.json_loads(resp.data), [])
 
     def test_implicit_create(self):
         rec = self._record()
@@ -114,18 +114,18 @@ class TestRdirServer(BaseTestCase):
         resp = self._post(
                 "/v1/rdir/push", params={'vol': self.vol},
                 data=json.dumps(rec))
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status, 404)
 
         # try to push on unknown volume WITH create flag
         resp = self._post(
                 "/v1/rdir/push", params={'vol': self.vol, 'create': True},
                 data=json.dumps(rec))
-        self.assertEqual(resp.status_code, 204)
+        self.assertEqual(resp.status, 204)
 
         # We must fetch the same data
         resp = self._post("/v1/rdir/fetch", params={'vol': self.vol})
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json(), [
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(self.json_loads(resp.data), [
             [_key(rec), {'mtime': rec['mtime'], 'rtime': 0}]
         ])
 
@@ -134,7 +134,7 @@ class TestRdirServer(BaseTestCase):
 
         # DB creation
         resp = self._post("/v1/rdir/create", params={'vol': self.vol})
-        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.status, 201)
 
         for k in ['container_id', 'content_id', 'chunk_id']:
             save = rec.pop(k)
@@ -142,11 +142,11 @@ class TestRdirServer(BaseTestCase):
             resp = self._post(
                     "/v1/rdir/push", params={'vol': self.vol},
                     data=json.dumps(rec))
-            self.assertEqual(resp.status_code, 400)
+            self.assertEqual(resp.status, 400)
             # check we list nothing
             resp = self._post("/v1/rdir/fetch", params={'vol': self.vol})
-            self.assertEqual(resp.status_code, 200)
-            self.assertListEqual(resp.json(), [])
+            self.assertEqual(resp.status, 200)
+            self.assertListEqual(self.json_loads(resp.data), [])
             rec[k] = save
 
     def test_lock_unlock(self):
@@ -156,41 +156,41 @@ class TestRdirServer(BaseTestCase):
         resp = self._post(
                 "/v1/rdir/admin/lock", params={'vol': self.vol},
                 data=json.dumps({}))
-        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.status, 400)
 
         # lock with who, DB not created
         resp = self._post(
                 "/v1/rdir/admin/lock", params={'vol': self.vol},
                 data=json.dumps({'who': who}))
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status, 404)
 
         # DB creation
         resp = self._post("/v1/rdir/create", params={'vol': self.vol})
-        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.status, 201)
 
         # lock without who
         resp = self._post(
                 "/v1/rdir/admin/lock", params={'vol': self.vol},
                 data=json.dumps({}))
-        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.status, 400)
 
         # lock
         resp = self._post(
                 "/v1/rdir/admin/lock", params={'vol': self.vol},
                 data=json.dumps({'who': who}))
-        self.assertEqual(resp.status_code, 204)
+        self.assertEqual(resp.status, 204)
 
         # double lock, different who
         resp = self._post(
                 "/v1/rdir/admin/lock", params={'vol': self.vol},
                 data=json.dumps({'who': random_str(64)}))
-        self.assertEqual(resp.status_code, 403)
-        body = resp.json()
+        self.assertEqual(resp.status, 403)
+        body = self.json_loads(resp.data)
         self.assertEqual(body['message'], "Already locked by %s" % who)
 
         # unlock
         resp = self._post("/v1/rdir/admin/unlock", params={'vol': self.vol})
-        self.assertEqual(resp.status_code, 204)
+        self.assertEqual(resp.status, 204)
 
     def test_rdir_clear_and_lock(self):
         rec = self._record()
@@ -200,42 +200,43 @@ class TestRdirServer(BaseTestCase):
         resp = self._post(
                 "/v1/rdir/push", params={'vol': self.vol, 'create': True},
                 data=json.dumps(rec))
-        self.assertEqual(resp.status_code, 204)
+        self.assertEqual(resp.status, 204)
 
         # lock
         resp = self._post(
                 "/v1/rdir/admin/lock", params={'vol': self.vol},
                 data=json.dumps({'who': who}))
-        self.assertEqual(resp.status_code, 204)
+        self.assertEqual(resp.status, 204)
 
         # try to clear while the lock is held
         resp = self._post("/v1/rdir/admin/clear", params={'vol': self.vol})
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status, 403)
 
         # unlock
         resp = self._post("/v1/rdir/admin/unlock", params={'vol': self.vol})
-        self.assertEqual(resp.status_code, 204)
+        self.assertEqual(resp.status, 204)
 
         # clear all entries
         resp = self._post(
                 "/v1/rdir/admin/clear", params={'vol': self.vol},
                 data=json.dumps({'all': True}))
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json(), {'removed': 1})
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(self.json_loads(resp.data), {'removed': 1})
 
     def test_vol_status(self):
         # Status on inexistant DB
         resp = self._post("/v1/rdir/status", params={'vol': self.vol})
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status, 404)
 
         # DB creation
         resp = self._post("/v1/rdir/create", params={'vol': self.vol})
-        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.status, 201)
 
         # Status on an empty DB
         resp = self._get("/v1/rdir/status", params={'vol': self.vol})
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json(), {'chunk': {'total': 0}, 'container': {}})
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(self.json_loads(resp.data),
+                         {'chunk': {'total': 0}, 'container': {}})
 
 
 class TestRdirServer2(TestRdirServer):
@@ -261,7 +262,7 @@ class TestRdirServer2(TestRdirServer):
 
     def tearDown(self):
         super(TestRdirServer2, self).tearDown()
-        self.session.close()
+        self.http_pool.clear()
         self._kill_and_watch_it_die()
         shutil.rmtree(self.db_path)
         remove(self.cfg_path)
@@ -291,14 +292,14 @@ class TestRdirServer2(TestRdirServer):
 
         # check the service has no opened DB
         resp = self._get('/status')
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json(), {'opened_db_count': 0})
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(self.json_loads(resp.data), {'opened_db_count': 0})
 
         # DB creation
         resp = self._post("/v1/rdir/create", params={'vol': self.vol})
-        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.status, 201)
 
         # The base remains open after it has been created
         resp = self._get('/status')
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json(), {'opened_db_count': 1})
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(self.json_loads(resp.data), {'opened_db_count': 1})

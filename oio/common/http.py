@@ -24,8 +24,6 @@ from eventlet.green.httplib import HTTPConnection, HTTPResponse, _UNKNOWN, \
         CONTINUE, HTTPMessage
 from oio.common.constants import chunk_headers
 
-requests = patcher.import_patched('requests.__init__')
-requests_adapters = patcher.import_patched('requests.adapters')
 urllib3 = patcher.import_patched('urllib3.__init__')
 
 CONNECTION_TIMEOUT = 2.0
