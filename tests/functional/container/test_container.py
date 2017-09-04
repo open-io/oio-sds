@@ -68,12 +68,12 @@ class TestMeta2Containers(BaseTestCase):
         super(TestMeta2Containers, self).tearDown()
         try:
             params = self.param_ref(self.ref)
-            self.session.post(self.url_container('destroy'),
-                              params=params,
-                              headers={'X-oio-action-mode': 'force'})
-            self.session.post(self._url_ref('destroy'),
-                              params=params,
-                              headers={'X-oio-action-mode': 'force'})
+            self.request('POST', self.url_container('destroy'),
+                         params=params,
+                         headers={'X-oio-action-mode': 'force'})
+            self.request('POST', self._url_ref('destroy'),
+                         params=params,
+                         headers={'X-oio-action-mode': 'force'})
         except:
             pass
 
@@ -82,19 +82,18 @@ class TestMeta2Containers(BaseTestCase):
         if autocreate:
             headers['x-oio-action-mode'] = 'autocreate'
         data = json.dumps({'properties': {}})
-        resp = self.session.post(
-            self.url_container('create'), params=params, data=data,
-            headers=headers)
-        self.assertEqual(resp.status_code, code)
+        resp = self.request('POST', self.url_container('create'),
+                            params=params, data=data, headers=headers)
+        self.assertEqual(resp.status, code)
 
     def _delete(self, params):
-        resp = self.session.post(self.url_container('destroy'),
-                                 params=params)
-        self.assertEqual(resp.status_code, 204)
-        resp = self.session.post(self._url_ref('destroy'),
-                                 params=params,
-                                 headers={'X-oio-action-mode': 'force'})
-        self.assertEqual(resp.status_code, 204)
+        resp = self.request('POST', self.url_container('destroy'),
+                            params=params)
+        self.assertEqual(resp.status, 204)
+        resp = self.request('POST', self._url_ref('destroy'),
+                            params=params,
+                            headers={'X-oio-action-mode': 'force'})
+        self.assertEqual(resp.status, 204)
 
     def check_list_output(self, body, nbobj, nbpref):
         self.assertIsInstance(body, dict)
@@ -115,12 +114,11 @@ class TestMeta2Containers(BaseTestCase):
             containers.append(container)
 
         args = {'id': self.account, 'prefix': 'container-'}
-        resp = self.session.post(('http://' +
-                                  self.conf['services']['account'][0]['addr'] +
-                                  '/v1.0/account/containers'),
-                                 params=args)
-        self.assertEqual(resp.status_code, 200)
-        data = self.json_loads(resp.content)
+        url = ''.join(['http://', self.conf['services']['account'][0]['addr'],
+                       '/v1.0/account/containers'])
+        resp = self.request('POST', url, params=args)
+        self.assertEqual(resp.status, 200)
+        data = self.json_loads(resp.data)
 
         for l in data["listing"]:
             self.assertNotIn(l[0], containers)
@@ -135,11 +133,10 @@ class TestMeta2Containers(BaseTestCase):
         data = ('{"containers":' +
                 '[{"name":"test1","properties":{},"system":{}},' +
                 '{"name":"test2","properties":{},"system":{}}]}')
-        resp = self.session.post(
-            self.url_container('create_many'), params=params, data=data,
-            headers=headers)
-        self.assertEqual(resp.status_code, 200)
-        data = json.loads(resp.content)["containers"]
+        resp = self.request('POST', self.url_container('create_many'),
+                            params=params, data=data, headers=headers)
+        self.assertEqual(resp.status, 200)
+        data = self.json_loads(resp.data)["containers"]
         self.assertEqual(data[0]["status"], 201)
         self.assertEqual(data[1]["status"], 201)
         self._delete(self.param_ref("test1"))
@@ -149,54 +146,48 @@ class TestMeta2Containers(BaseTestCase):
         data = ('{"containers":' +
                 '[{"name":"test1","properties":{},"system":{}},' +
                 '{"name":"test1","properties":{},"system":{}}]}')
-        resp = self.session.post(
-            self.url_container('create_many'), params=params, data=data,
-            headers=headers)
-        self.assertEqual(resp.status_code, 200)
-        data = json.loads(resp.content)["containers"]
+        resp = self.request('POST', self.url_container('create_many'),
+                            params=params, data=data, headers=headers)
+        self.assertEqual(resp.status, 200)
+        data = self.json_loads(resp.data)["containers"]
         self.assertEqual(data[0]["status"], 201)
         self.assertEqual(data[1]["status"], 433)
         self._delete(self.param_ref("test1"))
 
         # Empty body should be answered with an error
-        resp = self.session.post(
-            self.url_container('create_many'), params=params,
-            headers=headers)
-        self.assertEqual(resp.status_code, 400)
+        resp = self.request('POST', self.url_container('create_many'),
+                            params=params, headers=headers)
+        self.assertEqual(resp.status, 400)
 
         # Create with  missing name
         data = ('{"containers":' +
                 '[{"properties":{},"system":{}}' +
                 ']}')
-        resp = self.session.post(
-            self.url_container('create_many'), params=params, data=data,
-            headers=headers)
-        self.assertEqual(resp.status_code, 400)
+        resp = self.request('POST', self.url_container('create_many'),
+                            params=params, data=data, headers=headers)
+        self.assertEqual(resp.status, 400)
 
         # Send a non conform json (missing '{')
         data = ('{"containers":' +
                 '["name":"test","properties":{},"system":{}}' +
                 ']}')
-        resp = self.session.post(
-            self.url_container('create_many'), params=params, data=data,
-            headers=headers)
-        self.assertEqual(resp.status_code, 400)
+        resp = self.request('POST', self.url_container('create_many'),
+                            params=params, data=data, headers=headers)
+        self.assertEqual(resp.status, 400)
 
         # Don't send account
         data = ('{"containers":' +
                 '[{"name":"test1","properties":{},"system":{}}' +
                 ']}')
-        resp = self.session.post(
-            self.url_container('create_many'), data=data,
-            headers=headers)
-        self.assertEqual(resp.status_code, 400)
+        resp = self.request('POST', self.url_container('create_many'),
+                            data=data, headers=headers)
+        self.assertEqual(resp.status, 400)
 
         # Send empty array
         data = ('{"containers":[]}')
-        resp = self.session.post(
-            self.url_container('create_many'), data=data,
-            headers=headers)
-        self.assertEqual(resp.status_code, 400)
+        resp = self.request('POST', self.url_container('create_many'),
+                            data=data, headers=headers)
+        self.assertEqual(resp.status, 400)
 
     def test_list(self):
         params = self.param_ref(self.ref)
@@ -220,63 +211,63 @@ class TestMeta2Containers(BaseTestCase):
                        p+"chunk-method": "plain/nb_copy=3"}
             p = self.param_content(self.ref, name)
             body = json.dumps([chunk, ])
-            resp = self.session.post(self.url_content('create'),
-                                     params=p, headers=headers, data=body)
-            self.assertEqual(resp.status_code, 204)
+            resp = self.request('POST', self.url_content('create'),
+                                params=p, headers=headers, data=body)
+            self.assertEqual(resp.status, 204)
 
         params = self.param_ref(self.ref)
         # List everything
-        resp = self.session.get(self.url_container('list'), params=params)
-        self.assertEqual(resp.status_code, 200)
-        self.check_list_output(resp.json(), 64, 0)
+        resp = self.request('GET', self.url_container('list'), params=params)
+        self.assertEqual(resp.status, 200)
+        self.check_list_output(self.json_loads(resp.data), 64, 0)
 
         # List with a limit
         params['max'] = 3
-        resp = self.session.get(self.url_container('list'), params=params)
-        self.assertEqual(resp.status_code, 200)
-        self.check_list_output(resp.json(), 3, 0)
+        resp = self.request('GET', self.url_container('list'), params=params)
+        self.assertEqual(resp.status, 200)
+        self.check_list_output(self.json_loads(resp.data), 3, 0)
         del params['max']
 
         # List with a delimiter
         params['delimiter'] = '/'
-        resp = self.session.get(self.url_container('list'), params=params)
-        self.assertEqual(resp.status_code, 200)
-        self.check_list_output(resp.json(), 0, 8)
+        resp = self.request('GET', self.url_container('list'), params=params)
+        self.assertEqual(resp.status, 200)
+        self.check_list_output(self.json_loads(resp.data), 0, 8)
         del params['delimiter']
 
         # List with a prefix
         params['prefix'] = '1/'
-        resp = self.session.get(self.url_container('list'), params=params)
-        self.assertEqual(resp.status_code, 200)
-        self.check_list_output(resp.json(), 8, 0)
+        resp = self.request('GET', self.url_container('list'), params=params)
+        self.assertEqual(resp.status, 200)
+        self.check_list_output(self.json_loads(resp.data), 8, 0)
         del params['prefix']
 
         # List with a marker
         params['marker'] = '0/'
-        resp = self.session.get(self.url_container('list'), params=params)
-        self.assertEqual(resp.status_code, 200)
-        self.check_list_output(resp.json(), 64, 0)
+        resp = self.request('GET', self.url_container('list'), params=params)
+        self.assertEqual(resp.status, 200)
+        self.check_list_output(self.json_loads(resp.data), 64, 0)
         del params['marker']
 
         # List with an end marker
         params['marker_end'] = '1/'
-        resp = self.session.get(self.url_container('list'), params=params)
-        self.assertEqual(resp.status_code, 200)
-        self.check_list_output(resp.json(), 8, 0)
+        resp = self.request('GET', self.url_container('list'), params=params)
+        self.assertEqual(resp.status, 200)
+        self.check_list_output(self.json_loads(resp.data), 8, 0)
         del params['marker_end']
 
     def test_touch(self):
         params = self.param_ref(self.ref)
-        resp = self.session.post(self.url_container('touch'), params=params)
-        self.assertEqual(resp.status_code, 403)
+        resp = self.request('POST', self.url_container('touch'), params=params)
+        self.assertEqual(resp.status, 403)
         self._create(params, 201)
-        resp = self.session.post(self.url_container('touch'), params=params)
-        self.assertEqual(resp.status_code, 204)
+        resp = self.request('POST', self.url_container('touch'), params=params)
+        self.assertEqual(resp.status, 204)
 
     def _raw_insert(self, p, code, what):
-        resp = self.session.post(self.url_container('raw_insert'),
-                                 params=p, data=json.dumps(what))
-        self.assertEqual(resp.status_code, code)
+        resp = self.request('POST', self.url_container('raw_insert'),
+                            params=p, data=json.dumps(what))
+        self.assertEqual(resp.status, code)
 
     def test_raw(self):
         params = self.param_ref(self.ref)
@@ -326,12 +317,10 @@ class TestMeta2Contents(BaseTestCase):
         super(TestMeta2Contents, self).tearDown()
         try:
             params = self.param_ref(self.ref)
-            self.session.post(self.url_container('destroy'),
-                              params=params,
-                              headers={'X-oio-action-mode': 'force'})
-            self.session.post(self._url_ref('destroy'),
-                              params=params,
-                              headers={'X-oio-action-mode': 'force'})
+            self.request('POST', self.url_container('destroy'),
+                         params=params, headers={'X-oio-action-mode': 'force'})
+            self.request('POST', self._url_ref('destroy'),
+                         params=params, headers={'X-oio-action-mode': 'force'})
         except:
             pass
 
@@ -349,35 +338,31 @@ class TestMeta2Contents(BaseTestCase):
         headers = {'X-oio-action-mode': 'autocreate'}
         params = self.param_content(self.ref, random_content())
 
-        resp = self.session.post(self.url_content('prepare'),
-                                 params=params)
+        resp = self.request('POST', self.url_content('prepare'), params=params)
         self.assertError(resp, 400, 400)
-        resp = self.session.post(self.url_content('prepare'),
-                                 params=params,
-                                 data=json.dumps({'size': 1024}))
+        resp = self.request('POST', self.url_content('prepare'),
+                            params=params, data=json.dumps({'size': 1024}))
         self.assertError(resp, 404, 406)
-        resp = self.session.post(self.url_content('prepare'),
-
-                                 params=params,
-                                 data=json.dumps({'size': 1024}),
-                                 headers=headers)
-        self.assertEqual(resp.status_code, 200)
-        self.assertTrue(self.valid_chunks(resp.json()))
+        resp = self.request('POST', self.url_content('prepare'),
+                            params=params, data=json.dumps({'size': 1024}),
+                            headers=headers)
+        self.assertEqual(resp.status, 200)
+        self.assertTrue(self.valid_chunks(self.json_loads(resp.data)))
         # TODO test /content/prepare with additional useless parameters
         # TODO test /content/prepare with invalid sizes
 
     def test_spare(self):
         params = self.param_content(self.ref, random_content())
-        resp = self.session.post(self.url_content('spare'), params=params)
+        resp = self.request('POST', self.url_content('spare'), params=params)
         self.assertError(resp, 400, 400)
-        resp = self.session.post(self.url_content('spare'), params=params,
-                                 data=json.dumps({}))
+        resp = self.request('POST', self.url_content('spare'), params=params,
+                            data=json.dumps({}))
         self.assertError(resp, 400, 400)
-        resp = self.session.post(self.url_content('spare'), params=params,
-                                 data=json.dumps({"notin": "", "broken": ""}))
+        resp = self.request('POST', self.url_content('spare'), params=params,
+                            data=json.dumps({"notin": "", "broken": ""}))
         self.assertError(resp, 400, 400)
-        resp = self.session.post(self.url_content('spare'), params=params,
-                                 data=json.dumps({"notin": [], "broken": []}))
+        resp = self.request('POST', self.url_content('spare'), params=params,
+                            data=json.dumps({"notin": [], "broken": []}))
         self.assertError(resp, 400, 400)
 
         # TODO check SPARE requests reaching the meta2 server
@@ -385,84 +370,80 @@ class TestMeta2Contents(BaseTestCase):
     def _create_content(self, name):
         headers = {'X-oio-action-mode': 'autocreate'}
         params = self.param_content(self.ref, name)
-        resp = self.session.post(self.url_content('prepare'),
-                                 data=json.dumps({'size': '1024'}),
-                                 params=params,
-                                 headers=headers)
-        self.assertEqual(resp.status_code, 200)
-        chunks = resp.json()
+        resp = self.request('POST', self.url_content('prepare'), params=params,
+                            headers=headers, data=json.dumps({'size': '1024'}))
+        self.assertEqual(resp.status, 200)
+        chunks = self.json_loads(resp.data)
 
         headers = {'x-oio-action-mode': 'autocreate',
                    'x-oio-content-meta-length': '1024'}
-        resp = self.session.post(self.url_content('create'),
-                                 params=params,
-                                 headers=headers,
-                                 data=json.dumps(chunks))
-        self.assertEqual(resp.status_code, 204)
+        resp = self.request('POST', self.url_content('create'), params=params,
+                            headers=headers, data=json.dumps(chunks))
+        self.assertEqual(resp.status, 204)
 
     def test_delete_many(self):
         # Send no account
         params = self.param_ref(self.ref)
         params['acct'] = ""
-        resp = self.session.post(self.url_content('delete_many'),
-                                 params=params)
+        resp = self.request('POST', self.url_content('delete_many'),
+                            params=params)
         self.assertError(resp, 400, 400)
 
         # Send no container
         params = self.param_ref("")
-        resp = self.session.post(self.url_content('delete_many'),
-                                 params=params)
+        resp = self.request('POST', self.url_content('delete_many'),
+                            params=params)
         self.assertError(resp, 400, 400)
 
         # Send empty body
         params = self.param_ref(self.ref)
-        resp = self.session.post(self.url_content('delete_many'),
-                                 params=params)
+        resp = self.request('POST', self.url_content('delete_many'),
+                            params=params)
         self.assertError(resp, 400, 400)
 
         # Send empty content
         data = ('{"contents"}')
-        resp = self.session.post(self.url_content('delete_many'),
-                                 params=params, data=data)
+        resp = self.request('POST', self.url_content('delete_many'),
+                            params=params, data=data)
         self.assertError(resp, 400, 400)
 
         # Send empty array
         data = ('{"contents":[]}')
-        resp = self.session.post(self.url_content('delete_many'),
-                                 params=params, data=data)
+        resp = self.request('POST', self.url_content('delete_many'),
+                            params=params, data=data)
         self.assertError(resp, 400, 400)
 
         # Send one existent
         self._create_content('should_exist')
         data = ('{"contents":[{"name":"should_exist"}]}')
-        resp = self.session.post(self.url_content('delete_many'),
-                                 params=params, data=data)
-        json_data = resp.json()
-        self.assertEqual(resp.status_code, 200)
+        resp = self.request('POST', self.url_content('delete_many'),
+                            params=params, data=data)
+        json_data = self.json_loads(resp.data)
+        self.assertEqual(resp.status, 200)
         self.assertEqual(json_data['contents'][0]['status'], 204)
 
         # Send one nonexistent
         data = ('{"contents":[{"name":"should_not_exist"}]}')
-        resp = self.session.post(self.url_content('delete_many'),
-                                 params=params, data=data)
-        json_data = resp.json()
+        resp = self.request('POST', self.url_content('delete_many'),
+                            params=params, data=data)
+        json_data = self.json_loads(resp.data)
         self.assertEqual(json_data['contents'][0]['status'], 420)
         # Send one existent and one nonexistent
         self._create_content('should_exist')
         data = ('{"contents":[{"name":"should_exist"},'
                 + '{"name":"should_not_exist"}]}')
-        resp = self.session.post(self.url_content('delete_many'),
-                                 params=params, data=data)
-        json_data = resp.json()
-        self.assertEqual(resp.status_code, 200)
+        resp = self.request('POST', self.url_content('delete_many'),
+                            params=params, data=data)
+        json_data = self.json_loads(resp.data)
+        self.assertEqual(resp.status, 200)
         self.assertEqual(json_data['contents'][0]['status'], 204)
         self.assertEqual(json_data['contents'][1]['status'], 420)
         # Send 2 nonexistents
         data = ('{"contents":[{"name":"should_not_exist"},'
                 + '{"name":"should_also_not_exist"}]}')
-        resp = self.session.post(self.url_content('delete_many'),
-                                 params=params, data=data)
-        json_data = resp.json()
+        resp = self.request('POST', self.url_content('delete_many'),
+                            params=params, data=data)
+        json_data = self.json_loads(resp.data)
         self.assertEqual(json_data['contents'][0]['status'], 420)
         self.assertEqual(json_data['contents'][1]['status'], 420)
         # Send 2 existents
@@ -470,10 +451,10 @@ class TestMeta2Contents(BaseTestCase):
         self._create_content('should_also_exist')
         data = ('{"contents":[{"name":"should_exist"},'
                 + '{"name":"should_also_exist"}]}')
-        resp = self.session.post(self.url_content('delete_many'),
-                                 params=params, data=data)
-        json_data = resp.json()
-        self.assertEqual(resp.status_code, 200)
+        resp = self.request('POST', self.url_content('delete_many'),
+                            params=params, data=data)
+        json_data = self.json_loads(resp.data)
+        self.assertEqual(resp.status, 200)
         self.assertEqual(json_data['contents'][0]['status'], 204)
         self.assertEqual(json_data['contents'][1]['status'], 204)
 
@@ -495,10 +476,10 @@ class TestMeta2Contents(BaseTestCase):
             self._create_content(name)
             contents.append({"name": name})
         data = json.dumps({"contents": contents})
-        resp = self.session.post(self.url_content('delete_many'),
-                                 params=params, data=data)
-        json_data = resp.json()
-        self.assertEqual(resp.status_code, 200)
+        resp = self.request('POST', self.url_content('delete_many'),
+                            params=params, data=data)
+        json_data = self.json_loads(resp.data)
+        self.assertEqual(resp.status, 200)
         for r in json_data['contents']:
             self.assertEqual(r['status'], 204)
 
@@ -508,30 +489,29 @@ class TestMeta2Contents(BaseTestCase):
                                        path+'-COPY')
         headers = {'Destination': to, 'X-oio-action-mode': 'autocreate'}
 
-        resp = self.session.post(self.url_content('copy'))
+        resp = self.request('POST', self.url_content('copy'))
         self.assertError(resp, 400, 400)
 
         params = self.param_ref(self.ref)
-        resp = self.session.post(self.url_content('copy'), params=params)
+        resp = self.request('POST', self.url_content('copy'), params=params)
         self.assertError(resp, 400, 400)
 
         params = self.param_content(self.ref, path)
-        resp = self.session.post(self.url_content('copy'), params=params)
+        resp = self.request('POST', self.url_content('copy'), params=params)
         self.assertError(resp, 400, 400)
 
         # No user, no container, no content
-        resp = self.session.post(self.url_content('copy'),
-                                 headers=headers, params=params)
+        resp = self.request('POST', self.url_content('copy'),
+                            headers=headers, params=params)
         self.assertError(resp, 403, 406)
 
         # No content
         data = json.dumps({'properties': {}})
-        resp = self.session.post(self.url_container('create'),
-                                 params=params, headers=headers,
-                                 data=data)
-        self.assertEqual(resp.status_code, 201)
-        resp = self.session.post(self.url_content('copy'),
-                                 headers=headers, params=params)
+        resp = self.request('POST', self.url_container('create'),
+                            params=params, headers=headers, data=data)
+        self.assertEqual(resp.status, 201)
+        resp = self.request('POST', self.url_content('copy'),
+                            headers=headers, params=params)
         self.assertError(resp, 403, 420)
 
     def test_cycle_properties(self):
@@ -540,45 +520,43 @@ class TestMeta2Contents(BaseTestCase):
         params = self.param_content(self.ref, path)
 
         def get_ok(expected):
-            resp = self.session.post(self.url_content('get_properties'),
-                                     params=params)
-            self.assertEqual(resp.status_code, 200)
-            body = resp.json()
+            resp = self.request('POST', self.url_content('get_properties'),
+                                params=params)
+            self.assertEqual(resp.status, 200)
+            body = self.json_loads(resp.data)
             self.assertIsInstance(body, dict)
             self.assertIsInstance(body.get('properties'), dict)
             self.assertDictEqual(expected, body['properties'])
 
         def del_ok(keys):
-            resp = self.session.post(self.url_content('del_properties'),
-                                     params=params, data=json.dumps(keys))
-            self.assertEqual(resp.status_code, 204)
+            resp = self.request('POST', self.url_content('del_properties'),
+                                params=params, data=json.dumps(keys))
+            self.assertEqual(resp.status, 204)
 
         def set_ok(kv):
-            resp = self.session.post(self.url_content('set_properties'),
-                                     params=params,
-                                     data=json.dumps({'properties': kv}))
-            self.assertEqual(resp.status_code, 204)
+            resp = self.request('POST', self.url_content('set_properties'),
+                                params=params,
+                                data=json.dumps({'properties': kv}))
+            self.assertEqual(resp.status, 204)
 
         # GetProperties on no content
-        resp = self.session.post(self.url_content('get_properties'),
-                                 params=params)
+        resp = self.request('POST', self.url_content('get_properties'),
+                            params=params)
         self.assertError(resp, 404, 406)
 
         # Create the content
-        resp = self.session.post(self.url_content('prepare'),
-                                 data=json.dumps({'size': 1024}),
-                                 params=params,
-                                 headers=headers)
-        self.assertEqual(resp.status_code, 200)
-        chunks = resp.json()
+        resp = self.request('POST', self.url_content('prepare'),
+                            data=json.dumps({'size': 1024}),
+                            params=params, headers=headers)
+        self.assertEqual(resp.status, 200)
+        chunks = self.json_loads(resp.data)
 
         headers = {'X-oio-action-mode': 'autocreate',
                    'X-oio-content-meta-length': '1024'}
-        resp = self.session.post(self.url_content('create'),
-                                 params=params,
-                                 headers=headers,
-                                 data=json.dumps(chunks))
-        self.assertEqual(resp.status_code, 204)
+        resp = self.request('POST', self.url_content('create'),
+                            params=params, headers=headers,
+                            data=json.dumps(chunks))
+        self.assertEqual(resp.status, 204)
 
         p0 = {random_content(): random_content()}
         p1 = {random_content(): random_content()}
@@ -597,54 +575,52 @@ class TestMeta2Contents(BaseTestCase):
         headers = {'x-oio-action-mode': 'autocreate'}
         params = self.param_content(self.ref, path)
 
-        resp = self.session.get(self.url_content('show'), params=params)
+        resp = self.request('GET', self.url_content('show'), params=params)
         self.assertError(resp, 404, 406)
 
-        resp = self.session.post(self.url_content('touch'), params=params)
+        resp = self.request('POST', self.url_content('touch'), params=params)
         self.assertError(resp, 403, 406)
 
-        resp = self.session.post(self.url_content('prepare'),
-                                 data=json.dumps({'size': '1024'}),
-                                 params=params,
-                                 headers=headers)
-        self.assertEqual(resp.status_code, 200)
-        chunks = resp.json()
+        resp = self.request('POST', self.url_content('prepare'),
+                            data=json.dumps({'size': '1024'}),
+                            params=params, headers=headers)
+        self.assertEqual(resp.status, 200)
+        chunks = self.json_loads(resp.data)
 
         headers = {'x-oio-action-mode': 'autocreate',
                    'x-oio-content-meta-length': '1024'}
-        resp = self.session.post(self.url_content('create'),
-                                 params=params,
-                                 headers=headers,
-                                 data=json.dumps(chunks))
-        self.assertEqual(resp.status_code, 204)
+        resp = self.request('POST', self.url_content('create'),
+                            params=params, headers=headers,
+                            data=json.dumps(chunks))
+        self.assertEqual(resp.status, 204)
 
         # # FIXME check re-create depending on the container's ver'policy
-        # resp = self.session.post(self.url_content('create'),
+        # resp = self.request('POST', self.url_content('create'),
         #                         params=params,
         #                         headers=headers,
         #                         data=json.dumps(chunks))
-        # self.assertEqual(resp.status_code, 201)
+        # self.assertEqual(resp.status, 201)
 
-        resp = self.session.get(self.url_content('show'), params=params)
-        self.assertEqual(resp.status_code, 200)
+        resp = self.request('GET', self.url_content('show'), params=params)
+        self.assertEqual(resp.status, 200)
 
         to = '{0}/{1}/{2}//{3}-COPY'.format(self.ns, self.account,
                                             self.ref, path)
         headers = {'Destination': to}
-        resp = self.session.post(self.url_content('copy'),
-                                 headers=headers, params=params)
-        self.assertEqual(resp.status_code, 204)
+        resp = self.request('POST', self.url_content('copy'), headers=headers,
+                            params=params)
+        self.assertEqual(resp.status, 204)
 
-        resp = self.session.get(self.url_content('show'), params=params)
-        self.assertEqual(resp.status_code, 200)
+        resp = self.request('GET', self.url_content('show'), params=params)
+        self.assertEqual(resp.status, 200)
 
-        resp = self.session.post(self.url_content('delete'), params=params)
-        self.assertEqual(resp.status_code, 204)
+        resp = self.request('POST', self.url_content('delete'), params=params)
+        self.assertEqual(resp.status, 204)
 
-        resp = self.session.get(self.url_content('show'), params=params)
+        resp = self.request('GET', self.url_content('show'), params=params)
         self.assertError(resp, 404, 420)
 
-        resp = self.session.post(self.url_content('delete'), params=params)
+        resp = self.request('POST', self.url_content('delete'), params=params)
         self.assertError(resp, 404, 420)
 
     def test_drain_content(self):
@@ -653,99 +629,93 @@ class TestMeta2Contents(BaseTestCase):
 
         self._create_content(path)
         # Drain Content
-        resp = self.session.post(self.url_content('drain'), params=params)
-        self.assertEqual(resp.status_code, 204)
+        resp = self.request('POST', self.url_content('drain'), params=params)
+        self.assertEqual(resp.status, 204)
         # TruncateShouldFail
         trunc_param = {"size": 0}
         trunc_param.update(params)
-        resp = self.session.post(self.url_content('truncate'),
-                                 params=trunc_param)
+        resp = self.request('POST', self.url_content('truncate'),
+                            params=trunc_param)
         self.assertError(resp, 410, 427)
         # AppendShouldFail
         headers = {'X-oio-action-mode': 'autocreate'}
-        resp = self.session.post(self.url_content('prepare'),
-                                 data=json.dumps({'size': '1024'}),
-                                 params=params,
-                                 headers=headers)
-        self.assertEqual(resp.status_code, 200)
-        chunks = resp.json()
+        resp = self.request('POST', self.url_content('prepare'),
+                            data=json.dumps({'size': '1024'}),
+                            params=params, headers=headers)
+        self.assertEqual(resp.status, 200)
+        chunks = self.json_loads(resp.data)
         append_param = {"append": 1}
         append_param.update(params)
         headers = {'x-oio-action-mode': 'autocreate',
                    'x-oio-content-meta-length': '1024'}
-        resp = self.session.post(self.url_content('create'),
-                                 params=append_param,
-                                 headers=headers,
-                                 data=json.dumps(chunks))
+        resp = self.request('POST', self.url_content('create'),
+                            params=append_param, headers=headers,
+                            data=json.dumps(chunks))
         self.assertError(resp, 410, 427)
         # ShowShouldFail
         # Currently the proxy execute the same action for 'show' and 'locate'.
         # Since this give the location of the chunks it should failed for a
         # drained content.
-        resp = self.session.get(self.url_content('show'), params=params)
+        resp = self.request('GET', self.url_content('show'), params=params)
         self.assertError(resp, 410, 427)
         # LocateShouldFail
-        resp = self.session.get(self.url_content('locate'), params=params)
+        resp = self.request('GET', self.url_content('locate'), params=params)
         self.assertError(resp, 410, 427)
 
         # UpdateShouldFail
         headers = {'X-oio-action-mode': 'autocreate'}
-        resp = self.session.post(self.url_content('prepare'),
-                                 data=json.dumps({'size': '1024'}),
-                                 params=params,
-                                 headers=headers)
-        self.assertEqual(resp.status_code, 200)
-        chunks = resp.json()
+        resp = self.request('POST', self.url_content('prepare'),
+                            data=json.dumps({'size': '1024'}),
+                            params=params, headers=headers)
+        self.assertEqual(resp.status, 200)
+        chunks = self.json_loads(resp.data)
 
         headers = {'x-oio-action-mode': 'autocreate',
                    'x-oio-content-meta-length': '1024'}
-        resp = self.session.post(self.url_content('update'),
-                                 params=params,
-                                 headers=headers,
-                                 data=json.dumps(chunks))
+        resp = self.request('POST', self.url_content('update'),
+                            params=params, headers=headers,
+                            data=json.dumps(chunks))
         self.assertError(resp, 410, 427)
 
         # CopyShouldWork
         to = '{0}/{1}/{2}//{3}-COPY'.format(self.ns, self.account,
                                             self.ref, path)
         headers = {'Destination': to}
-        resp = self.session.post(self.url_content('copy'),
-                                 headers=headers, params=params)
-        self.assertEqual(resp.status_code, 204)
+        resp = self.request('POST', self.url_content('copy'),
+                            headers=headers, params=params)
+        self.assertEqual(resp.status, 204)
         # DeleteShouldWork
-        resp = self.session.post(self.url_content('delete'), params=params)
-        self.assertEqual(resp.status_code, 204)
+        resp = self.request('POST', self.url_content('delete'), params=params)
+        self.assertEqual(resp.status, 204)
         # CreateShouldWork
         self._create_content(path)
-        self.assertEqual(resp.status_code, 204)
-        resp = self.session.post(self.url_content('drain'), params=params)
-        self.assertEqual(resp.status_code, 204)
+        self.assertEqual(resp.status, 204)
+        resp = self.request('POST', self.url_content('drain'), params=params)
+        self.assertEqual(resp.status, 204)
         self._create_content(path)
-        resp = self.session.post(self.url_content('drain'), params=params)
-        self.assertEqual(resp.status_code, 204)
+        resp = self.request('POST', self.url_content('drain'), params=params)
+        self.assertEqual(resp.status, 204)
         # TouchShouldWork
-        resp = self.session.post(self.url_content('touch'), params=params)
-        self.assertEqual(resp.status_code, 204)
+        resp = self.request('POST', self.url_content('touch'), params=params)
+        self.assertEqual(resp.status, 204)
         # SetpropShouldWork
         # If a drain is done on a snapshot we will no bet able to set a
         # propertie because the container would be frozen, but if a drain is
         # done on a content of a none frozen container it should work
-        resp = self.session.post(self.url_content('set_properties'),
-                                 params=params,
-                                 data=json.dumps({'properties':
-                                                  {"color": "blue"}}))
-        self.assertEqual(resp.status_code, 204)
+        resp = self.request('POST', self.url_content('set_properties'),
+                            params=params,
+                            data=json.dumps({'properties': {"color": "blue"}}))
+        self.assertEqual(resp.status, 204)
         # getpropShouldWork
-        resp = self.session.post(self.url_content('get_properties'),
-                                 params=params)
-        self.assertEqual(resp.status_code, 200)
+        resp = self.request('POST', self.url_content('get_properties'),
+                            params=params)
+        self.assertEqual(resp.status, 200)
         # delpropShouldWork
-        resp = self.session.post(self.url_content('del_properties'),
-                                 params=params,
-                                 data=json.dumps(['color']))
-        self.assertEqual(resp.status_code, 204)
+        resp = self.request('POST', self.url_content('del_properties'),
+                            params=params, data=json.dumps(['color']))
+        self.assertEqual(resp.status, 204)
 
         # Drain non existing content should failed
         params = self.param_content(self.ref, 'Non_existing')
-        resp = self.session.post(self.url_content('drain'), params=params)
+        resp = self.request('POST', self.url_content('drain'), params=params)
         self.assertError(resp, 404, 420)
