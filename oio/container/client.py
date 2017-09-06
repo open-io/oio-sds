@@ -347,6 +347,10 @@ class ContainerClient(ProxyClient):
         params = self._make_params(account, reference, path, cid=cid)
         if append:
             params['append'] = '1'
+        if kwargs.get('meta_pos') is not None:
+            data = data['chunks']
+            params['id'] = content_id
+            uri = self._make_uri('content/update')
         # TODO(FVE): implement 'force' parameter
         if not isinstance(data, dict):
             warnings.simplefilter('once')
@@ -528,4 +532,13 @@ class ContainerClient(ProxyClient):
         data = json.dumps(data)
         _resp, body = self._direct_request(
             'POST', uri, data=data, params=params, **kwargs)
+        return body
+
+    def content_truncate(self, account=None, reference=None, path=None,
+                         cid=None, size=0, **kwargs):
+        uri = self._make_uri('content/truncate')
+        params = self._make_params(account, reference, path, cid=cid)
+        params['size'] = size
+        _resp, body = self._direct_request(
+            'POST', uri, params=params, **kwargs)
         return body

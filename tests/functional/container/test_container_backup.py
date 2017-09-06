@@ -24,6 +24,8 @@ import json
 import string
 from tempfile import TemporaryFile
 import unittest
+import time
+from threading import Thread
 
 import requests
 from oio.api.object_storage import ObjectStorageApi
@@ -199,6 +201,24 @@ class TestContainerDownload(BaseTestCase):
         self.conn.object_update(self.account, self._cnt, _name,
                                 self._data[_name]['meta'])
 
+    def _check_tar(self, data):
+        raw = BytesIO(data)
+        tar = tarfile.open(fileobj=raw, ignore_zeros=True)
+        info = self._data.keys()
+        for entry in tar.getnames():
+            if entry == CONTAINER_MANIFEST:
+                # skip special entry
+                continue
+
+            self.assertIn(entry, info)
+
+            tmp = tar.extractfile(entry)
+            self.assertEqual(self._data[entry]['data'], tmp.read())
+            info.remove(entry)
+
+        self.assertEqual(info, [])
+        return tar
+
     def _simple_download(self, name=gen_names, metadata=None):
         self._create_data(name, metadata)
 
@@ -209,7 +229,8 @@ class TestContainerDownload(BaseTestCase):
 
         with TemporaryFile() as tmpfile:
             tmpfile.write(self.raw)
-
+        return self._check_tar(ret.content)
+        """
         raw = BytesIO(ret.content)
         tar = tarfile.open(fileobj=raw, ignore_zeros=True)
         info = self._data.keys()
@@ -226,6 +247,7 @@ class TestContainerDownload(BaseTestCase):
 
         self.assertEqual(info, [])
         return tar
+        """
 
     def _check_metadata(self, tar):
         for entry in tar.getnames():
@@ -282,7 +304,9 @@ class TestContainerDownload(BaseTestCase):
         for idx in xrange(0, int(org.headers['content-length']), 512):
             ret = requests.get(self._uri, headers={'Range': 'bytes=%d-%d' %
                                                             (idx, idx+511)})
-            self.assertIn(ret.status_code, [200, 206])
+            self.assertEqual(ret.status_code, 206)
+            self.assertEqual(len(ret.content), 512)
+            self.assertEqual(ret.content, org.content[idx:idx+512])
             data.append(ret.content)
 
         data = "".join(data)
@@ -363,12 +387,15 @@ class TestContainerDownload(BaseTestCase):
     def test_s3_range_download(self):
         self._create_s3_slo()
         org = requests.get(self._uri)
+        self.assertEqual(org.status_code, 200)
 
         data = []
         for idx in xrange(0, int(org.headers['content-length']), 512):
             ret = requests.get(self._uri, headers={'Range': 'bytes=%d-%d' %
                                                             (idx, idx+511)})
-            self.assertIn(ret.status_code, [200, 206])
+            self.assertEqual(ret.status_code, 206)
+            self.assertEqual(len(ret.content), 512)
+            self.assertEqual(ret.content, org.content[idx:idx+512])
             data.append(ret.content)
 
         data = "".join(data)
@@ -463,3 +490,129 @@ class TestContainerDownload(BaseTestCase):
         hdrs = {'Range': 'bytes=%d-%d' % (size, size + len(parts[1]) - 1)}
         res = requests.put(uri, data=part, headers=hdrs)
         self.assertEqual(res.status_code, 422)
+
+    @attr('concurrency')
+    def test_multipart_concurrency(self):
+        self._create_data(metadata=gen_metadata, size=1025*1024)
+        org = requests.get(self.make_uri('dump'))
+        cnt = rand_str(20)
+        uri = self.make_uri('restore', container=cnt)
+        size = divmod(len(org.content) / 3, 512)[0] * 512
+        parts = [org.content[x:x+size] for x in xrange(0, len(org.content),
+                                                       size)]
+        start = 0
+
+        class StreamWithContentLength(Thread):
+            """Thread to send data with delays to restore API"""
+
+            def __init__(self, data, headers):
+                self._count = 0
+                self._data = data
+                self._hdrs = headers
+                super(StreamWithContentLength, self).__init__()
+
+            def __len__(self):
+                return len(self._data)
+
+            def read(self, *args):
+                if self._count < len(self._data):
+                    time.sleep(0.5)
+                    data = self._data[self._count:self._count+size/3]
+                    self._count += len(data)
+                    return data
+                return ""
+
+            def run(self):
+                self._ret = requests.put(uri, data=self, headers=self._hdrs)
+
+        for idx, part in enumerate(parts):
+            hdrs = {'Range': 'bytes=%d-%d' % (start, start + len(part) - 1)}
+            if idx == 0:
+                res = requests.put(uri, data=part, headers=hdrs)
+                self.assertIn(res.status_code, [201, 206])
+            else:
+                # launch Thread and simulate slow bandwidth
+                thr = StreamWithContentLength(part, hdrs)
+                thr.start()
+                # send data on same range
+                time.sleep(0.5)
+                res = requests.put(uri, data=part, headers=hdrs)
+                self.assertEqual(res.status_code, 422)
+
+                thr.join()
+                self.assertIn(thr._ret.status_code, [201, 206])
+            start += len(part)
+
+    @attr('disconnected')
+    def test_broken_connectivity(self):
+        self._create_data(metadata=gen_metadata, size=1025*1024)
+        org = requests.get(self.make_uri('dump'))
+        cnt = rand_str(20)
+
+        class FakeStream(object):
+            """Send data and simulate a connectivity issue"""
+
+            def __init__(self, data, size):
+                self._count = 0
+                self._data = data
+                self._size = size
+
+            def __len__(self):
+                return len(self._data)
+
+            def read(self, *args):
+                if self._count < self._size:
+                    data = self._data[self._count:self._count+size/3]
+                    self._count += len(data)
+                    return data
+                if self._count == len(self._data):
+                    return ""
+                raise Exception("break connection")
+
+        def wait_lock():
+            """When the lock is gone, return current consumed size"""
+            nb = 0
+            while True:
+                time.sleep(0.1)
+                req = requests.head(uri)
+                if (req.status_code == 200
+                        and req.headers.get('X-Upload-In-Progress',
+                                            '1') == '0'):
+                    print("Tried before lock free", nb)
+                    print("Got consumed-size", req.headers['X-Consumed-Size'])
+                    return int(req.headers['X-Consumed-Size'])
+                nb += 1
+                self.assertLess(nb, 10)
+
+        uri = self.make_uri('restore', container=cnt)
+        block = 1000 * 512
+        start = 0
+        cut = False
+        while True:
+            if start:
+                start = wait_lock()
+
+            stop = min(len(org.content), start + block)
+            hdrs = {'Range': 'bytes=%d-%d' % (start, stop-1)}
+            size = stop - start
+            if cut:
+                size = block / 2
+            cut = not cut
+
+            try:
+                ret = requests.put(uri, headers=hdrs,
+                                   data=FakeStream(org.content[start:stop],
+                                                   size))
+            except:
+                pass
+            else:
+                self.assertIn(
+                    ret.status_code, (201, 206),
+                    "Unexpected %d HTTP response: %s" % (ret.status_code,
+                                                         ret.content))
+                start += size
+                if ret.status_code == 201:
+                    break
+
+        result = requests.get(self.make_uri('dump', container=cnt))
+        self._check_tar(result.content)

@@ -561,3 +561,41 @@ class TestObjectStorageAPI(BaseTestCase):
         # account_flush on deleted account
         self.assertRaises(
             exc.NoSuchAccount, self.api.account_flush, account)
+
+    def test_object_create_then_truncate(self):
+        """Create an object then truncate data"""
+        name = random_str(16)
+        self.api.object_create(self.account, name, data="1"*128, obj_name=name)
+        self.api.object_truncate(self.account, name, name, size=64)
+        _, data = self.api.object_fetch(self.account, name, name)
+        data = "".join(data)
+        self.assertEqual(len(data), 64)
+        self.assertEqual(data, "1" * 64)
+
+    def test_object_create_append_then_truncate(self):
+        """Create an object, append data then truncate on chunk boundary"""
+        name = random_str(16)
+        self.api.object_create(self.account, name, data="1"*128, obj_name=name)
+        _, size, _ = self.api.object_create(
+            self.account, name, data="2"*128, obj_name=name, append=True)
+        self.assertEqual(size, 128)
+
+        self.api.object_truncate(self.account, name, name, size=128)
+        _, data = self.api.object_fetch(self.account, name, name)
+        data = "".join(data)
+        self.assertEqual(len(data), 128)
+        self.assertEqual(data, "1" * 128)
+
+        self.api.object_truncate(self.account, name, name, size=128)
+
+    def test_object_create_then_invalid_truncate(self):
+        """Create an object, append data then try to truncate outside object
+           range"""
+        name = random_str(16)
+        self.api.object_create(self.account, name, data="1"*128, obj_name=name)
+        self.assertRaises(
+            exc.OioException, self.api.object_truncate, self.account, name,
+            name, size=-1)
+        self.assertRaises(
+            exc.OioException, self.api.object_truncate, self.account, name,
+            name, size=129)
