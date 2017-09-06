@@ -684,7 +684,7 @@ class ObjectStorageApi(object):
                         version=None, size=None, **kwargs):
         """
         Truncate object at specified size. Only shrink is supported.
-        A download may occurs if size is not on chunk boundaries.
+        A download may occur if size is not on chunk boundaries.
 
         :param account: name of the account in which the object is stored
         :param container: name of the container in which the object is stored
@@ -709,7 +709,6 @@ class ObjectStorageApi(object):
             raise exc.OioException("No chunk found at position %d" % size)
 
         if chunk['offset'] != size:
-            props = self.object_show(account, container, obj)
             # retrieve partial chunk
             ret = self.object_fetch(account, container, obj,
                                     version=version,
@@ -718,7 +717,7 @@ class ObjectStorageApi(object):
             pos = int(chunk['pos'].split('.')[0])
             self.object_create(account, container, obj_name=obj,
                                data=ret[1], meta_pos=pos,
-                               content_id=props['id'])
+                               content_id=meta['id'])
 
         return self.container.content_truncate(account, container, obj,
                                                version=version, size=size,

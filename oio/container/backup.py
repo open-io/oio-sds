@@ -521,7 +521,7 @@ class ContainerRestore(object):
             for entry in self.cur_state['manifest']:
                 if entry['name'] == self.inf.name:
                     break
-            else:  # it should not happens
+            else:  # it should not happen
                 raise BadRequest("Invalid internal state")
             self.cur_state['end'] = (entry['start_block']
                                      + self.cur_state['offset'])
@@ -530,7 +530,7 @@ class ContainerRestore(object):
                            ex=ContainerBackup.REDIS_TIMEOUT)
             raise
 
-        # save properties before checking size, otherwise they'll lost
+        # save properties before checking size, otherwise they'll be lost
         if hdrs:
             self.proxy.object_set_properties(account, container,
                                              self.inf.name,

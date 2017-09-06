@@ -534,7 +534,7 @@ class TestContainerDownload(BaseTestCase):
         cnt = rand_str(20)
 
         class FakeStream(object):
-            """Sending data and simulate connectivity issue"""
+            """Send data and simulate a connectivity issue"""
 
             def __init__(self, data, size):
                 self._count = 0
@@ -554,7 +554,7 @@ class TestContainerDownload(BaseTestCase):
                 raise Exception("break connection")
 
         def wait_lock():
-            """When no lock is go away, return current consumed size"""
+            """When the lock is gone, return current consumed size"""
             nb = 0
             while True:
                 time.sleep(0.1)
