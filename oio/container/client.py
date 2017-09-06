@@ -510,11 +510,10 @@ class ContainerClient(ProxyClient):
         return body
 
     def content_truncate(self, account=None, reference=None, path=None,
-                         cid=None, size=None, **kwargs):
+                         cid=None, size=0, **kwargs):
         uri = self._make_uri('content/truncate')
         params = self._make_params(account, reference, path, cid=cid)
-        if size:
-            params['size'] = size
+        params['size'] = size
         _resp, body = self._direct_request(
             'POST', uri, params=params, **kwargs)
         return body
