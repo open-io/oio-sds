@@ -18,7 +18,6 @@
 
 set -e
 
-PREFIX="@EXE_PREFIX@"
 NS=OPENIO
 IP=
 PORT=
@@ -58,7 +57,7 @@ timeout () {
     num=$1 ; shift
     if [ $count -gt "$num" ] ; then
         echo "TIMEOUT! $@"
-        $PREFIX-cluster -r "$NS"
+        oio-cluster -r "$NS"
         ( ps -o pid,ppid,cmd $(pgrep -u $UID -P "$pidof_gridinit" | sed 's/^/-p /') || exit 0 )
         exit 1
     fi
@@ -68,7 +67,7 @@ timeout () {
 
 wait_for_srvtype () {
     echo "Waiting for the $2 $1 to get a score"
-    $PREFIX-wait-scored.sh -u -N "$2" -n "$NS" -s "$1" -t 15 >/dev/null
+    oio-wait-scored.sh -u -N "$2" -n "$NS" -s "$1" -t 15 >/dev/null
 }
 
 
@@ -106,7 +105,7 @@ pgrep -u "$UID" --full gridinit | while read pidof_gridinit ; do
         # Waiting for gridinit ...
         if [ "$count" -gt 20 ] ; then
             echo "Gridinit doesn't want to die gracefully. Go for euthanasy"
-            ( pkill -9 -u "$UID" $PREFIX-event-agent || exit 0 )
+            ( pkill -9 -u "$UID" oio-event-agent || exit 0 )
         fi
             timeout 30
         done
@@ -117,7 +116,7 @@ done
 mkdir -p "$OIO" && cd "$OIO" && (rm -rf sds.conf sds/{conf,data,run,logs})
 bootstrap_opt=
 if [[ -n "${PORT}" ]] ; then bootstrap_opt="${bootstrap_opt} --port ${PORT}" ; fi
-${PREFIX}-bootstrap.py $bootstrap_opt -d ${BOOTSTRAP_CONFIG} "$NS" "$IP" > /tmp/oio-bootstrap.$$
+oio-bootstrap.py $bootstrap_opt -d ${BOOTSTRAP_CONFIG} "$NS" "$IP" > /tmp/oio-bootstrap.$$
 
 
 . /tmp/oio-bootstrap.$$
@@ -127,7 +126,7 @@ rm -f /tmp/oio-bootstrap.$$
 gridinit -s OIO,gridinit -d ${SDS}/conf/gridinit.conf
 
 # Initiate Zookeeper (if necessary)
-ZK=$(${PREFIX}-cluster --local-cfg | grep "$NS/zookeeper" ; exit 0)
+ZK=$(oio-cluster --local-cfg | grep "$NS/zookeeper" ; exit 0)
 if [ -n "$ZK" ] ; then
     opts=--lazy
     for srvtype in ${AVOID} ; do opts="${opts} --avoid=${srvtype}" ; done
@@ -152,26 +151,26 @@ echo -e "\n### Start gridinit and wait for the services to register"
 gridinit_cmd -S "$GRIDINIT_SOCK" reload >/dev/null
 gridinit_cmd -S "$GRIDINIT_SOCK" start "@${NS}" >/dev/null
 
-COUNT=$(${PREFIX}-test-config.py -c -t meta2 -t rawx -t sqlx)
+COUNT=$(oio-test-config.py -c -t meta2 -t rawx -t sqlx)
 wait_for_srvtype "sqlx rawx meta2" "$COUNT"
-COUNT=$(${PREFIX}-test-config.py -c -t meta0 -t meta1)
+COUNT=$(oio-test-config.py -c -t meta0 -t meta1)
 wait_for_srvtype "meta0 meta1" "$COUNT"
-COUNT=$(${PREFIX}-test-config.py -c -t rdir)
+COUNT=$(oio-test-config.py -c -t rdir)
 wait_for_srvtype "rdir" "$COUNT"
 
 
 echo -e "\n### Init the meta0/meta1 directory"
 openio \
 	--oio-ns "$NS" -v directory bootstrap --check \
-	--replicas $(${PREFIX}-test-config.py -v directory_replicas)
+	--replicas $(oio-test-config.py -v directory_replicas)
 
 
 echo -e "\n### Wait for the services to have a score"
 openio -q --oio-ns "$NS" cluster unlockall
-$PREFIX-wait-scored.sh -n "$NS" -t 60 >/dev/null
-$PREFIX-flush-all.sh -n "$NS" >/dev/null
+oio-wait-scored.sh -n "$NS" -t 60 >/dev/null
+oio-flush-all.sh -n "$NS" >/dev/null
 
 find $SDS -type d | xargs chmod a+rx
 gridinit_cmd -S "$GRIDINIT_SOCK" status2
-$PREFIX-cluster -r "$NS"
+oio-cluster -r "$NS"
 

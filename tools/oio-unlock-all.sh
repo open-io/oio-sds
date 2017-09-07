@@ -17,16 +17,15 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 set -e
 
-PREFIX="@EXE_PREFIX@"
 LOCAL=
 NS=
 SRVTYPE=
 
 list () {
 	if [ -n "$SRVTYPE" ] ; then
-		${PREFIX}-cluster -r "$NS" | egrep -E -e "|${SRVTYPE}|"
+		oio-cluster -r "$NS" | egrep -E -e "|${SRVTYPE}|"
 	else
-		${PREFIX}-cluster -r "$NS"
+		oio-cluster -r "$NS"
 	fi
 }
 
@@ -45,6 +44,6 @@ if [ -z "$NS" ] ; then
 fi
 
 list | while read S ; do
-	${PREFIX}-cluster --unlock-score -S "$S"
+	oio-cluster --unlock-score -S "$S"
 done
 

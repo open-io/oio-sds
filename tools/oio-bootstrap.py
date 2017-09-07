@@ -96,7 +96,7 @@ group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+command=oio-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
@@ -106,7 +106,7 @@ group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+command=oio-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 """
 
 template_gridinit_proxy = """
@@ -644,7 +644,7 @@ group=${NS},localhost,event
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-event-agent ${CFGDIR}/event-agent.conf
+command=oio-event-agent ${CFGDIR}/event-agent.conf
 env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 
 [service.${NS}-conscience-agent]
@@ -652,7 +652,7 @@ group=${NS},localhost,conscience,conscience-agent
 on_die=respawn
 enabled=true
 start_at_boot=true
-command=${EXE_PREFIX}-conscience-agent ${CFGDIR}/conscience-agent.yml
+command=oio-conscience-agent ${CFGDIR}/conscience-agent.yml
 env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
@@ -662,7 +662,7 @@ group=${NS},localhost,conscience,${IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=true
-command=${EXE_PREFIX}-daemon -s OIO,${NS},cs,${SRVNUM} ${CFGDIR}/${NS}-conscience-${SRVNUM}.conf
+command=oio-daemon -s OIO,${NS},cs,${SRVNUM} ${CFGDIR}/${NS}-conscience-${SRVNUM}.conf
 """
 
 template_gridinit_meta = """
@@ -686,7 +686,7 @@ command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O DirectorySchemas=${CFGDIR}/s
 template_gridinit_indexer = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-command=${EXE_PREFIX}-blob-indexer ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+command=oio-blob-indexer ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 enabled=true
 start_at_boot=false
 on_die=respawn
@@ -939,7 +939,6 @@ sqlx_schemas = (
 )
 
 HOME = str(os.environ['HOME'])
-EXE_PREFIX = "@EXE_PREFIX@"
 OIODIR = HOME + '/.oio'
 SDSDIR = OIODIR + '/sds'
 CFGDIR = SDSDIR + '/conf'
@@ -1037,7 +1036,7 @@ def mkdir_noerror(d):
 
 
 def type2exe(t):
-    return EXE_PREFIX + '-' + str(t) + '-server'
+    return 'oio-' + str(t) + '-server'
 
 
 def generate(options):
@@ -1088,7 +1087,6 @@ def generate(options):
     ENV = dict(ZK_CNXSTRING=options.get('ZK'),
                NS=ns,
                HOME=HOME,
-               EXE_PREFIX=EXE_PREFIX,
                PATH=PATH,
                LIBDIR=LIBDIR,
                OIODIR=OIODIR,
@@ -1129,14 +1127,14 @@ def generate(options):
         env['env.G_DEBUG'] = "fatal_warnings"
         env['env.G_SLICE'] = "always-malloc"
         if options.get(PROFILE) == "valgrind":
-            orig_exe = env.get('EXE', env['EXE_PREFIX'])
+            orig_exe = env.get('EXE', None)
             new_exe = "valgrind --leak-check=full --leak-resolution=high\
  --trace-children=yes --log-file=/tmp/%q{ORIG_EXE}.%p.valgrind " + orig_exe
             env['env.ORIG_EXE'] = orig_exe
             env['EXE'] = new_exe
             env['env.G_DEBUG'] = "gc-friendly"
         elif options.get(PROFILE) == "callgrind":
-            orig_exe = env.get('EXE', env['EXE_PREFIX'])
+            orig_exe = env.get('EXE', None)
             new_exe = "valgrind --tool=callgrind --collect-jumps=yes\
  --collect-systime=yes --trace-children=yes\
  --callgrind-out-file=/tmp/callgrind.out.%q{ORIG_EXE}.%p " + orig_exe
@@ -1229,7 +1227,7 @@ def generate(options):
     # meta* + sqlx
     def generate_meta(t, n, tpl, ext_opt=""):
         env = subenv({'SRVTYPE': t, 'SRVNUM': n, 'PORT': next(ports),
-                      'EXE': ENV['EXE_PREFIX'] + '-' + t + '-server',
+                      'EXE': 'oio-' + t + '-server',
                       'EXTRA': ext_opt})
         add_service(env)
         # gridinit config
@@ -1333,7 +1331,7 @@ def generate(options):
 
     # proxy
     env = subenv({'SRVTYPE': 'proxy', 'SRVNUM': 1, 'PORT': port_proxy,
-                  'EXE': ENV['EXE_PREFIX'] + '-' + 'proxy'})
+                  'EXE': 'oio-proxy'})
     add_service(env)
     with open(gridinit(env), 'a+') as f:
         tpl = Template(template_gridinit_proxy)
