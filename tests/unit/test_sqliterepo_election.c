@@ -1083,6 +1083,7 @@ static void test_STEP_CHECKING_MASTER(void) {
 		m->count_GETVERS = 1;
 		m->pending_GETVERS = 1;
 		m->attempts_GETVERS = 2;
+		m->when_unstable = oio_ext_monotonic_time();
 		_member_assert_CHECKING_MASTER(m);
 	}
 
@@ -1135,6 +1136,7 @@ static void test_STEP_CHECKING_MASTER(void) {
 	RESET();
 	transition(m, EVT_GETVERS_OK, NULL);
 	_member_assert_SLAVE(m);
+	EXTRA_ASSERT(m->when_unstable == 0);
 	g_assert_false(member_has_getvers(m));
 	_pending(0);
 
