@@ -341,10 +341,6 @@ class ContainerClient(ProxyClient):
     def container_raw_update(self, old, new, account=None, reference=None,
                              cid=None, **kwargs):
         params = self._make_params(account, reference, cid=cid)
-        if type(old) is not list:
-            old = [old]
-        if type(new) is not list:
-            new = [new]
         data = json.dumps({"old": old, "new": new})
         self._request(
             'POST', '/raw_update', data=data, params=params, **kwargs)

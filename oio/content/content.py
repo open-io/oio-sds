@@ -124,7 +124,7 @@ class Content(object):
                'pos': current_chunk.pos,
                'content': self.content_id}
         self.container_client.container_raw_update(
-            old, new, cid=self.container_id)
+            [old], [new], cid=self.container_id)
 
     def _generate_sysmeta(self):
         sysmeta = dict()
