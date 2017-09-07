@@ -526,6 +526,7 @@ static void test_STEP_NONE (void) {
 		member_set_status(m, STEP_NONE);
 		member_reset(m);
 		member_reset_requests(m);
+		m->when_unstable = 0;
 		_member_assert_NONE(m);
 	}
 
@@ -570,6 +571,7 @@ static void test_STEP_CREATING(void) {
 		member_reset(m);
 		member_reset_requests(m);
 		m->pending_ZK_CREATE = 1;
+		m->when_unstable = oio_ext_monotonic_time();
 		_member_assert_CREATING(m);
 	}
 
@@ -629,6 +631,7 @@ static void test_STEP_WATCHING(void) {
 		member_reset_requests(m);
 		member_set_local_id(m, oio_ext_rand_int());
 		m->pending_ZK_EXISTS = 1;
+		m->when_unstable = oio_ext_monotonic_time();
 		_member_assert_WATCHING(m);
 	}
 
@@ -691,6 +694,7 @@ static void test_STEP_LISTING(void) {
 		member_reset_requests(m);
 		member_set_local_id(m, oio_ext_rand_int());
 		m->pending_ZK_LIST = 1;
+		m->when_unstable = oio_ext_monotonic_time();
 		_member_assert_LISTING(m);
 	}
 
@@ -765,6 +769,7 @@ static void test_STEP_CHECKING_SLAVES(void) {
 		member_set_local_id(m, oio_ext_rand_int());
 		member_set_master_id(m, m->local_id);
 		m->pending_GETVERS = 3;
+		m->when_unstable = oio_ext_monotonic_time();
 		_member_assert_CHECKING_SLAVES(m);
 	}
 
@@ -901,6 +906,7 @@ static void test_STEP_MASTER(void) {
 		member_reset_requests(m);
 		member_set_local_id(m, oio_ext_rand_int());
 		member_set_master_id(m, m->local_id);
+		m->when_unstable = 0;
 		_member_assert_MASTER(m);
 	}
 
@@ -955,6 +961,7 @@ static void test_STEP_ASKING(void) {
 		member_set_master_id(m, m->local_id + 1);
 		m->pending_ZK_GET = 1;
 		m->attempts_GETVERS = 0;
+		m->when_unstable = oio_ext_monotonic_time();
 		_member_assert_ASKING(m);
 	}
 
@@ -1136,7 +1143,6 @@ static void test_STEP_CHECKING_MASTER(void) {
 	RESET();
 	transition(m, EVT_GETVERS_OK, NULL);
 	_member_assert_SLAVE(m);
-	EXTRA_ASSERT(m->when_unstable == 0);
 	g_assert_false(member_has_getvers(m));
 	_pending(0);
 
@@ -1180,6 +1186,7 @@ static void test_STEP_SLAVE(void) {
 		member_set_local_id(m, oio_ext_rand_int());
 		member_set_master_id(m, m->local_id + 1);
 		member_set_master_url(m, "ID1");
+		m->when_unstable = 0;
 		_member_assert_SLAVE(m);
 	}
 
@@ -1237,6 +1244,7 @@ static void test_STEP_SYNCING(void) {
 		member_set_master_id(m, m->local_id + 1);
 		member_set_master_url(m, "ID1");
 		m->pending_PIPEFROM = 1;
+		m->when_unstable = oio_ext_monotonic_time();
 		_member_assert_SYNCING(m);
 	}
 
