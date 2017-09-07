@@ -2407,7 +2407,7 @@ member_finish_CHECKING_MASTER(struct election_member_s *member)
 		return member_action_to_CHECKING_MASTER(member);
 	}
 
-	return member_set_status(member, STEP_SLAVE);
+	return member_action_to_SLAVE(member);
 }
 
 static void
