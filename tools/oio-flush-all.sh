@@ -18,7 +18,6 @@
 
 set -e
 
-PREFIX="@EXE_PREFIX@"
 NS=
 
 list () {

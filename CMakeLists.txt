@@ -233,10 +233,7 @@ macro (option_or_system _PREFIX _LIB)
 endmacro ()
 
 macro(bin_prefix T N)
-	if (NOT DEFINED EXE_PREFIX)
-		set(EXE_PREFIX "oio")
-	endif ()
-	set_target_properties(${T} PROPERTIES OUTPUT_NAME ${EXE_PREFIX}${N})
+	set_target_properties(${T} PROPERTIES OUTPUT_NAME "oio${N}")
 endmacro ()
 
 ###-------------------------------------------------------------------------###
