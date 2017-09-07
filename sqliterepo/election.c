@@ -2203,6 +2203,10 @@ member_action_to_LISTING(struct election_member_s *member)
 		return member_leave_on_error(member, zrc);
 	}
 
+	// if comming from a stable state like SLAVE
+	if (!member->when_unstable)
+		member->when_unstable = oio_ext_monotonic_time();
+
 	member->pending_ZK_LIST = 1;
 	member_ref(member);
 	return member_set_status(member, STEP_LISTING);
@@ -2475,6 +2479,7 @@ _member_assert_NONE(struct election_member_s *member)
 	EXTRA_ASSERT(!member_has_master_id(member));
 	EXTRA_ASSERT(member->master_url == NULL);
 	EXTRA_ASSERT(!member_has_action(member));
+	EXTRA_ASSERT(member->when_unstable == 0);
 }
 
 static void
@@ -2492,6 +2497,7 @@ _member_assert_CREATING(struct election_member_s *member)
 	EXTRA_ASSERT(member->pending_ZK_LIST == 0);
 	EXTRA_ASSERT(member->pending_ZK_GET == 0);
 	EXTRA_ASSERT(member->pending_ZK_DELETE == 0);
+	EXTRA_ASSERT(member->when_unstable > 0);
 }
 
 static void
@@ -2508,6 +2514,7 @@ _member_assert_WATCHING(struct election_member_s *member)
 	EXTRA_ASSERT(member->pending_ZK_LIST == 0);
 	EXTRA_ASSERT(member->pending_ZK_GET == 0);
 	EXTRA_ASSERT(member->pending_ZK_DELETE == 0);
+	EXTRA_ASSERT(member->when_unstable > 0);
 }
 
 static void
@@ -2524,6 +2531,7 @@ _member_assert_LISTING(struct election_member_s *member)
 	EXTRA_ASSERT(member->pending_ZK_LIST != 0);
 	EXTRA_ASSERT(member->pending_ZK_GET == 0);
 	EXTRA_ASSERT(member->pending_ZK_DELETE == 0);
+	EXTRA_ASSERT(member->when_unstable > 0);
 }
 
 static void
@@ -2540,6 +2548,7 @@ _member_assert_ASKING(struct election_member_s *member)
 	EXTRA_ASSERT(member->pending_ZK_LIST == 0);
 	EXTRA_ASSERT(member->pending_ZK_GET != 0);
 	EXTRA_ASSERT(member->pending_ZK_DELETE == 0);
+	EXTRA_ASSERT(member->when_unstable > 0);
 }
 
 static void
@@ -2557,6 +2566,7 @@ _member_assert_CHECKING_MASTER(struct election_member_s *member)
 	EXTRA_ASSERT(member->pending_ZK_EXISTS == 0);
 	EXTRA_ASSERT(member->pending_ZK_GET == 0);
 	EXTRA_ASSERT(member->pending_ZK_DELETE == 0);
+	EXTRA_ASSERT(member->when_unstable > 0);
 }
 
 static void
@@ -2575,6 +2585,7 @@ _member_assert_CHECKING_SLAVES(struct election_member_s *member)
 	EXTRA_ASSERT(member->pending_ZK_EXISTS == 0);
 	EXTRA_ASSERT(member->pending_ZK_GET == 0);
 	EXTRA_ASSERT(member->pending_ZK_DELETE == 0);
+	EXTRA_ASSERT(member->when_unstable > 0);
 }
 
 static void
@@ -2591,6 +2602,7 @@ _member_assert_LEAVING(struct election_member_s *member)
 	EXTRA_ASSERT(member->pending_ZK_LIST == 0);
 	EXTRA_ASSERT(member->pending_ZK_GET == 0);
 	EXTRA_ASSERT(member->pending_ZK_DELETE != 0);
+	EXTRA_ASSERT(member->when_unstable > 0);
 }
 
 static inline void
@@ -2607,6 +2619,7 @@ _member_assert_LEAVING_FAILING(struct election_member_s *member)
 	EXTRA_ASSERT(member->pending_ZK_LIST == 0);
 	EXTRA_ASSERT(member->pending_ZK_GET == 0);
 	EXTRA_ASSERT(member->pending_ZK_DELETE != 0);
+	EXTRA_ASSERT(member->when_unstable > 0);
 }
 
 static void
@@ -2624,6 +2637,7 @@ _member_assert_SYNCING(struct election_member_s *member)
 	EXTRA_ASSERT(member->pending_ZK_LIST == 0);
 	EXTRA_ASSERT(member->pending_ZK_GET == 0);
 	EXTRA_ASSERT(member->pending_ZK_DELETE == 0);
+	EXTRA_ASSERT(member->when_unstable > 0);
 }
 
 static void
@@ -2635,6 +2649,7 @@ _member_assert_SLAVE(struct election_member_s *member)
 	EXTRA_ASSERT(member->master_id != member->local_id);
 	EXTRA_ASSERT(member->master_url != NULL);
 	EXTRA_ASSERT(!member_has_action(member));
+	EXTRA_ASSERT(member->when_unstable == 0);
 }
 
 static void
@@ -2646,6 +2661,7 @@ _member_assert_MASTER(struct election_member_s *member)
 	EXTRA_ASSERT(member->master_id == member->local_id);
 	EXTRA_ASSERT(member->master_url == NULL);
 	EXTRA_ASSERT(!member_has_action(member));
+	EXTRA_ASSERT(member->when_unstable == 0);
 }
 
 static void
