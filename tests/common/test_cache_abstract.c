@@ -1,6 +1,7 @@
 /*
 OpenIO SDS cache
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015 Vincent Vinel
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
