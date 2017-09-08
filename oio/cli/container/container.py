@@ -18,7 +18,7 @@
 from logging import getLogger
 from cliff import command, show, lister
 from time import time
-from oio.common.utils import Timestamp
+from oio.common.timestamp import Timestamp
 
 
 class SetPropertyCommandMixin(object):
@@ -532,30 +532,38 @@ class SnapshotContainer(lister.Lister):
             help='Container to snapshot'
         )
         parser.add_argument(
-            '--snapshot-account',
-            metavar='<snapshot_account>',
+            '--account-snapshot',
+            metavar='<account_snapshot>',
             help=('The account where the snapshot should be created. '
                   'By default the same of the target.')
         )
         parser.add_argument(
-            '--snapshot-container',
-            metavar='<snapshot_container>',
+            '--container-snapshot',
+            metavar='<container_snapshot>',
             help=('The name of the snapshot. '
                   'By default the "current_name-Timestamp"')
+        )
+        parser.add_argument(
+            '--batch-chunk-size',
+            metavar='<batch>',
+            default=100,
+            help=('The number of chunks updated at the same time')
         )
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
-        account = self.app.client_manager.get_account()
+        account = self.app.client_manager.account
         container = parsed_args.container
-        snapshot_account = parsed_args.snapshot_account or account
-        snapshot_container = (parsed_args.snapshot_container or
+        account_snapshot = parsed_args.account_snapshot or account
+        container_snapshot = (parsed_args.container_snapshot or
                               (container + "-" + Timestamp(time()).normal))
+        batch = parsed_args.batch_chunk_size
 
         self.app.client_manager.storage.container_snapshot(account, container,
-                                                           snapshot_account,
-                                                           snapshot_container)
-        lines = [(snapshot_account, snapshot_container, "OK")]
+                                                           account_snapshot,
+                                                           container_snapshot,
+                                                           batch=batch)
+        lines = [(account_snapshot, container_snapshot, "OK")]
         return ('Account', 'Container', 'Status'), lines

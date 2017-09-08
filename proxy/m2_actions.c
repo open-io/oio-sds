@@ -1122,6 +1122,7 @@ action_m2_container_raw_update (struct req_args_s *args, struct json_object *jar
 	GError *err = NULL;
 	GSList *beans_old = NULL, *beans_new = NULL;
 	struct json_object *jold = NULL, *jnew = NULL;
+	const gboolean frozen = OPT("frozen")?TRUE:FALSE;
 
 	if (!err && !json_object_object_get_ex (jargs, "old", &jold))
 		err = BADREQ("No 'old' set of beans");
@@ -1138,7 +1139,8 @@ action_m2_container_raw_update (struct req_args_s *args, struct json_object *jar
 
 	if (!err) {
 		PACKER_VOID(_pack) {
-			return m2v2_remote_pack_RAW_SUBST (args->url, beans_new, beans_old);
+			return m2v2_remote_pack_RAW_SUBST(args->url, beans_new, beans_old,
+					frozen);
 		}
 		err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
 	}
@@ -1191,14 +1193,14 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 	GError *err = NULL;
 	gchar **urlv = NULL;
 	gchar **urlv_snapshot = NULL;
-	char type[64] = {};
+	char type[LIMIT_LENGTH_SRVTYPE] = {};
 	_get_meta2_realtype(args, type, sizeof(type));
 	const char *target_account, *target_container;
 	char target_cid[65] = {};
 	target_account = oio_url_get(args->url, OIOURL_ACCOUNT);
 	target_container = oio_url_get(args->url, OIOURL_USER);
-	strncpy(target_cid, oio_url_get(args->url, OIOURL_HEXID),
-			sizeof(target_cid)-1);
+	g_strlcpy(target_cid, oio_url_get(args->url, OIOURL_HEXID),
+			sizeof(target_cid));
 	err = hc_resolve_reference_service(resolver, args->url, NAME_SRVTYPE_META2,
 			&urlv);
 	if (!err && (!urlv || !*urlv)) {
@@ -1228,11 +1230,7 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 
 	oio_url_set(args->url, OIOURL_ACCOUNT, account);
 	oio_url_set(args->url, OIOURL_USER, container);
-	guint8 id[32] = {};
-	gchar hexid[65] = {};
-	oio_str_hash_name(id, NULL, account, container);
-	oio_str_bin2hex(id, sizeof(id),hexid, sizeof(hexid));
-	oio_url_set(args->url, OIOURL_HEXID, hexid);
+	oio_url_set(args->url, OIOURL_HEXID, NULL);
 	err = hc_resolve_reference_service (resolver, args->url,
 			NAME_SRVTYPE_META2, &urlv_snapshot);
 	if (!err) {

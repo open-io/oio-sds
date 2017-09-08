@@ -20,7 +20,7 @@ from oio.api.object_storage import ObjectStorageApi
 from oio.common.storage_functions import _sort_chunks as sort_chunks
 from oio.common import exceptions as exc
 from tests.utils import random_str, random_data, BaseTestCase
-from oio.common.http import get_pool_manager
+from oio.common.http_urllib3 import get_pool_manager
 
 
 class TestObjectStorageAPI(BaseTestCase):

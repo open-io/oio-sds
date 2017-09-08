@@ -110,7 +110,8 @@ GError* meta2_backend_insert_beans(struct meta2_backend_s *m2b,
 /** Updates all the beans listed (old by new), as is, regardless of their type.
  * This is REALLY DANGEROUS, do not use this feature. */
 GError* meta2_backend_update_beans(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, GSList *new_chunks, GSList *old_chunks);
+		struct oio_url_s *url, GSList *new_chunks, GSList *old_chunks,
+		gboolean frozen);
 
 /** Filters out only the CONTENTS-typed beans and call
  * meta2_backend_delete_beans() */

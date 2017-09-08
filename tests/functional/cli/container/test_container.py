@@ -76,8 +76,8 @@ class ContainerTest(CliTestCase):
         # Use specified name
         snapshot_account = random_str(16)
         snapshot_container = random_str(16)
-        opts += " --snapshot-account " + snapshot_account
-        opts += " --snapshot-container " + snapshot_container
+        opts += " --account-snapshot " + snapshot_account
+        opts += " --container-snapshot " + snapshot_container
         output = self.openio('container snapshot ' + self.NAME + opts)
         output = self.json_loads(output)[0]
         self.assertEqual(output['Account'], snapshot_account)

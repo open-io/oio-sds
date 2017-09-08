@@ -20,6 +20,7 @@ import logging
 import os
 import warnings
 import time
+import random
 from inspect import isgenerator
 from urllib import quote_plus
 
@@ -259,8 +260,8 @@ class ObjectStorageApi(object):
         return self.container.container_show(account, container, **kwargs)
 
     @handle_container_not_found
-    def container_snapshot(self, account, container, snapshot_account,
-                           snapshot_container, **kwargs):
+    def container_snapshot(self, account, container, account_snapshot,
+                           container_snapshot, batch=100, **kwargs):
         """
         Create a copy of the container (only the content of the database)
 
@@ -268,20 +269,20 @@ class ObjectStorageApi(object):
         :type account: `str`
         :param container: name of the target
         :type container: `str`
-        :param snapshot_account: account in which the snapshot will be.
+        :param account_snapshot: account in which the snapshot will be.
         :type snaspshot_container: `str`
-        :param snapshot_container: name of the snapshot
-        :type snapshot_container: `str`
+        :param container_snapshot: name of the snapshot
+        :type container_snapshot: `str`
         """
         try:
             self.container.container_freeze(account, container)
             self.container.container_snapshot(account, container,
-                                              snapshot_account,
-                                              snapshot_container)
-            self.container.container_enable(snapshot_account,
-                                            snapshot_container)
-            resp = self.object_list(snapshot_account, snapshot_container)
+                                              account_snapshot,
+                                              container_snapshot)
+            resp = self.object_list(account_snapshot, container_snapshot)
             obj_gen = resp['objects']
+            target_beans = []
+            copy_beans = []
             for obj in obj_gen:
                 data = self.object_locate(
                     account, container, obj["name"])
@@ -289,16 +290,30 @@ class ObjectStorageApi(object):
                 for d in data[1]:
                     chunks.append(d['url'])
                 copies = self._generate_copy(chunks)
-                fullpath = self._generate_fullpath(snapshot_account,
-                                                   snapshot_container,
+                fullpath = self._generate_fullpath(account_snapshot,
+                                                   container_snapshot,
                                                    obj["name"],
                                                    obj['version'])
                 self._send_copy(chunks, copies, fullpath[0])
-                self._update_meta2(data[1], copies, snapshot_account,
-                                   snapshot_container, obj["content"])
-
-            self.container.container_freeze(snapshot_account,
-                                            snapshot_container)
+                t_beans, c_beans = self._prepare_update_meta2(
+                    data[1], copies, account_snapshot, container_snapshot,
+                    obj["content"])
+                target_beans.extend(t_beans)
+                copy_beans.extend(c_beans)
+                if len(target_beans) > batch:
+                    self.container.container_raw_update(target_beans,
+                                                        copy_beans,
+                                                        account_snapshot,
+                                                        container_snapshot,
+                                                        frozen=True)
+                    target_beans = []
+                    copy_beans = []
+            if target_beans:
+                self.container.container_raw_update(target_beans,
+                                                    copy_beans,
+                                                    account_snapshot,
+                                                    container_snapshot,
+                                                    frozen=True)
         finally:
             self.container.container_enable(account, container)
 
@@ -873,18 +888,16 @@ class ObjectStorageApi(object):
         self.account.account_flush(account)
 
     def _random_buffer(self, dictionary, n):
-        slot = 512
-        pattern = ''.join(random.choice(dictionary) for _ in range(slot))
-        t = []
-        while len(t) * slot < n:
-            t.append(pattern)
-        return ''.join(t)[:n]
+        return ''.join(random.choice(dictionary) for _ in range(n))
 
-    def _generate_copy(self, chunks):
+    def _generate_copy(self, chunks, random_hex=60):
+        # random_hex is the number of hexadecimals characters to generate for
+        # the copy path
         copies = []
         for c in chunks:
-            tmp = ''.join([c[:-60],
-                           self._random_buffer('0123456789ABCDEF', 60)])
+            tmp = ''.join([c[:-random_hex],
+                           self._random_buffer('0123456789ABCDEF',
+                                               random_hex)])
             copies.append(tmp)
         return copies
 
@@ -893,14 +906,14 @@ class ObjectStorageApi(object):
         for t, c in zip(targets, copies):
             self.blob_client.chunk_link(t, c, headers=headers).status
 
-    def _update_meta2(self, targets, copies, account, container, content):
+    def _prepare_update_meta2(self, targets, copies, account, container,
+                              content):
         targets_beans = []
         copies_beans = []
         for t, c in zip(targets, copies):
             targets_beans.append(self._meta2bean(t['url'], t, content))
             copies_beans.append(self._meta2bean(c, t, content))
-        self.container.container_raw_update(targets_beans, copies_beans,
-                                            account, container)
+        return targets_beans, copies_beans
 
     def _meta2bean(self, url, meta, content):
         return {"type": "chunk",

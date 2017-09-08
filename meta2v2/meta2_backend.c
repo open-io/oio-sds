@@ -1125,7 +1125,7 @@ meta2_backend_delete_beans(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_update_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		GSList *new_chunks, GSList *old_chunks)
+		GSList *new_chunks, GSList *old_chunks, gboolean frozen)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1142,8 +1142,10 @@ meta2_backend_update_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
-
-	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
+	gint flags = M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED;
+	if (frozen)
+		flags |= M2V2_OPEN_FROZEN;
+	err = m2b_open(m2b, url, flags, &sq3);
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			for (GSList *l0=old_chunks, *l1=new_chunks;

@@ -63,6 +63,7 @@ License along with this library.
 #define NAME_MSGKEY_FLAGS              "FLAGS"
 #define NAME_MSGKEY_FLUSH              "FLUSH"
 #define NAME_MSGKEY_FORCE              "FORCE"
+#define NAME_MSGKEY_FROZEN             "FROZEN"
 #define NAME_MSGKEY_FULL               "FULL"
 #define NAME_MSGKEY_KEY                "K"
 #define NAME_MSGKEY_LOCAL              "LOCAL"
