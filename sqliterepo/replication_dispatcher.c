@@ -426,13 +426,13 @@ _restore_snapshot(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = sqlx_repository_open_and_lock(repo, name,
-		SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK|SQLX_OPEN_CREATE, &sq3, NULL);
+			SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK|SQLX_OPEN_CREATE, &sq3, NULL);
 	if (!err) {
 		err = sqlx_repository_restore_from_file(sq3, path);
 		if (!err) {
 			sqlx_repository_call_change_callback(sq3);
 			sqlx_admin_set_str(sq3, SQLX_ADMIN_PEERS,
-			sqlx_repository_get_local_addr(repo));
+					sqlx_repository_get_local_addr(repo));
 			sqlx_admin_save_lazy(sq3);
 		}
 	}
