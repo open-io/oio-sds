@@ -16,8 +16,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 set -e
-
-set -e
 set -x
 export COLUMNS=512 LANG= LANGUAGE=
 
@@ -184,6 +182,8 @@ test_cli () {
     gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
     sleep 0.5
 }
+
+/sbin/sysctl net.ipv4.ip_local_port_range
 
 if is_running_test_suite "copyright" ; then
 	echo -e "\n### Checking the presence of Copyright mentions"
