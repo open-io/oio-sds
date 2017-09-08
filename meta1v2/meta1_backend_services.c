@@ -516,7 +516,7 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 	*err = oio_lb__patch_with_pool(
 			m1->lb, ct->baretype, avoid, known, _on_id, NULL);
 	if (*err) {
-		g_prefix_error(err, "found only %u services matching the criteria",
+		g_prefix_error(err, "found only %u services matching the criteria: ",
 				ids->len);
 	}
 
@@ -822,7 +822,7 @@ __relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
 					avoids, known, _on_id, NULL);
 			if (err) {
 				g_prefix_error(&err,
-						"found only %u services matching the criteria",
+						"found only %u services matching the criteria: ",
 						ids->len);
 			}
 			g_ptr_array_add(ids, NULL);
