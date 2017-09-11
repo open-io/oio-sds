@@ -53,7 +53,7 @@ class HashedContainerBuilder(ContainerBuilder):
         self.func = None
 
         # Maximum number of bits of the hexadecimal representation
-        bitlength = ((self.bits / 4) + 1) * 4
+        bitlength = (((self.bits - 1) / 4) + 1) * 4
         # Maximum value of the hexadecimal representation
         self.mask = (2 ** bitlength) - (2 ** (bitlength - self.bits))
 

@@ -14,7 +14,8 @@
 
 import unittest
 
-from oio.common.autocontainer import ContainerBuilder, RegexContainerBuilder
+from oio.common.autocontainer import (ContainerBuilder, RegexContainerBuilder,
+                                      HashedContainerBuilder)
 
 
 class ContainerBuilderTest(unittest.TestCase):
@@ -30,6 +31,66 @@ class ContainerBuilderTest(unittest.TestCase):
         self.assertFalse(builder.verify(1.0))
         self.assertFalse(builder.verify(object()))
         self.assertFalse(builder.verify(None))
+
+
+class HashedContainerBuilderTest(unittest.TestCase):
+
+    def test_8_bits_length(self):
+        builder = HashedContainerBuilder(bits=8)
+        self.assertTrue(builder.verify("F0"))
+        self.assertTrue(builder.verify("0F"))
+        self.assertFalse(builder.verify("1F0"))
+        self.assertFalse(builder.verify("FF0"))
+
+    def test_9_bits_length(self):
+        builder = HashedContainerBuilder(bits=9)
+        self.assertTrue(builder.verify("FF0"))
+        self.assertTrue(builder.verify("FF8"))
+        self.assertFalse(builder.verify("1FF0"))
+        self.assertFalse(builder.verify("1FF8"))
+        self.assertFalse(builder.verify("FF9"))
+        self.assertFalse(builder.verify("FF1"))
+        self.assertFalse(builder.verify("FF2"))
+        self.assertFalse(builder.verify("FF4"))
+        self.assertFalse(builder.verify("FFF"))
+
+    def test_10_bits_length(self):
+        builder = HashedContainerBuilder(bits=10)
+        self.assertTrue(builder.verify("FF0"))
+        self.assertTrue(builder.verify("FF8"))
+        self.assertTrue(builder.verify("FF4"))
+        self.assertFalse(builder.verify("1FF0"))
+        self.assertFalse(builder.verify("1FF8"))
+        self.assertFalse(builder.verify("1FF4"))
+        self.assertFalse(builder.verify("FF9"))
+        self.assertFalse(builder.verify("FF1"))
+        self.assertFalse(builder.verify("FF2"))
+        self.assertFalse(builder.verify("FFF"))
+
+    def test_11_bits_length(self):
+        builder = HashedContainerBuilder(bits=11)
+        self.assertTrue(builder.verify("FF0"))
+        self.assertTrue(builder.verify("FF8"))
+        self.assertTrue(builder.verify("FF4"))
+        self.assertTrue(builder.verify("FF2"))
+        self.assertFalse(builder.verify("1FF0"))
+        self.assertFalse(builder.verify("1FF8"))
+        self.assertFalse(builder.verify("1FF4"))
+        self.assertFalse(builder.verify("FFF"))
+
+    def test_12_bits_length(self):
+        builder = HashedContainerBuilder(bits=12)
+        self.assertTrue(builder.verify("FF0"))
+        self.assertTrue(builder.verify("FF8"))
+        self.assertTrue(builder.verify("FF4"))
+        self.assertTrue(builder.verify("FF2"))
+        self.assertTrue(builder.verify("FF1"))
+        self.assertTrue(builder.verify("FFF"))
+        self.assertFalse(builder.verify("1FF0"))
+        self.assertFalse(builder.verify("1FF8"))
+        self.assertFalse(builder.verify("1FF4"))
+        self.assertFalse(builder.verify("1FF2"))
+        self.assertFalse(builder.verify("1FF1"))
 
 
 class RegexContainerBuilderTest(unittest.TestCase):
