@@ -27,6 +27,31 @@ test_transform(gchar* (*T) (const gchar*), const gchar *s0, const gchar *sN)
 	g_free(s);
 }
 
+static void
+test_via_gba(void)
+{
+	const char *src = "255.255.255.255:6789";
+	GByteArray *gba = metautils_gba_from_string(src);
+	gchar *copy = g_strndup((gchar*)gba->data, gba->len);
+	g_assert_cmpstr(src, ==, copy);
+	g_free(copy);
+	g_byte_array_free(gba, TRUE);
+}
+
+static void
+test_via_message(void)
+{
+	const char *src = "255.255.255.255:6789";
+	MESSAGE msg = metautils_message_create_named("plop");
+	metautils_message_add_body_unref(msg, metautils_gba_from_string(src));
+	gchar *copy = NULL;
+	GError *err = metautils_message_extract_body_string(msg, &copy);
+	g_assert_no_error(err);
+	g_assert_cmpstr(src, ==, copy);
+	g_free(copy);
+	metautils_message_destroy(msg);
+}
+
 /* ------------------------------------------------------------------------- */
 
 static void
@@ -221,6 +246,8 @@ main(int argc, char **argv)
 	g_test_add_func("/core/str/strv", test_STRV_ok);
 	g_test_add_func("/core/str/autocontainer", test_autocontainer);
 
+	g_test_add_func("/metautils/str/gba", test_via_gba);
+	g_test_add_func("/metautils/str/message", test_via_message);
 	g_test_add_func("/metautils/str/clean", test_clean);
 	g_test_add_func("/metautils/str/upper", test_upper);
 	g_test_add_func("/metautils/str/lower", test_lower);
