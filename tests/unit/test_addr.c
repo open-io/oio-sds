@@ -46,12 +46,36 @@ test_good_connect_address(void)
 	test_on_urlv(good_urls, test);
 }
 
+#define SRV_NS "NAMESPACE"
+#define SRV_TYPE "meta2"
+
+#define TEST_IDGEN(URL) do { \
+	struct service_info_s si = {}; \
+	g_strlcpy(si.ns_name, SRV_NS, sizeof(si.ns_name)); \
+	g_strlcpy(si.type, SRV_TYPE, sizeof(si.type)); \
+	g_assert_true(grid_string_to_addrinfo(URL, &si.addr)); \
+	si.score.value = si.score.timestamp = 1; \
+	gchar *id = service_info_key(&si); \
+	g_assert_nonnull(id); \
+	g_assert_cmpstr(id, ==, SRV_NS "|" SRV_TYPE "|" URL); \
+	g_free(id); \
+} while (0)
+
+static void
+test_srvinfo_id(void)
+{
+	TEST_IDGEN("1.2.3.4:1");
+	TEST_IDGEN("127.0.0.1:6000");
+	TEST_IDGEN("254.254.254.254:60000");
+}
+
 int
 main(int argc, char **argv)
 {
 	HC_TEST_INIT(argc,argv);
 	g_test_add_func("/metautils/addr/connect/ko", test_bad_connect_address);
 	g_test_add_func("/metautils/addr/connect/ok", test_good_connect_address);
+	g_test_add_func("/metautils/srvinfo/id", test_srvinfo_id);
 	return g_test_run();
 }
 
