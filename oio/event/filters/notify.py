@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from oio.common.utils import json
+from oio.common.json import json
 from oio.event.evob import Event, EventError
 from oio.event.beanstalk import Beanstalk, BeanstalkError
 from oio.event.filters.base import Filter

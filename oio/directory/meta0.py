@@ -17,7 +17,7 @@
 """Meta0 client and meta1 balancing operations"""
 import random
 
-from oio.common.utils import json
+from oio.common.json import json
 from oio.common.client import ProxyClient
 from oio.common.exceptions import ConfigurationException
 

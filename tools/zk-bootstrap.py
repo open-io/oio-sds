@@ -23,7 +23,7 @@ import itertools
 import threading
 import zookeeper
 from time import time as now
-from oio.common.utils import load_namespace_conf
+from oio.common.configuration import load_namespace_conf
 
 PREFIX = '/hc'
 PREFIX_NS = PREFIX + '/ns'

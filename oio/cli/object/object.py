@@ -601,7 +601,7 @@ class ListObject(ContainerCommandMixin, lister.Lister):
                 obj_gen = resp['objects']
 
         if parsed_args.long_listing:
-            from oio.common.utils import Timestamp
+            from oio.common.timestamp import Timestamp
 
             def _format_props(props):
                 prop_list = ["%s=%s" % (k, v) for k, v

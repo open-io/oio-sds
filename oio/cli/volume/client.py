@@ -48,7 +48,7 @@ class VolumeClientCli(object):
         return self.volume.admin_clear(volume)
 
     def volume_show(self, volume):
-        from oio.common.utils import json
+        from oio.common.json import json
 
         info = self.volume.status(volume)
         data = {}

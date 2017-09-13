@@ -32,8 +32,10 @@ from oio.api.backblaze_http import BackblazeUtilsException, BackblazeUtils
 from oio.api.backblaze import BackblazeWriteHandler, \
     BackblazeChunkDownloadHandler
 from oio.common import constants
-from oio.common.utils import ensure_headers, ensure_request_id, float_value, \
-    name2cid, GeneratorIO, get_logger
+from oio.common.utils import cid_from_name, GeneratorIO
+from oio.common.easy_value import float_value
+from oio.common.logger import get_logger
+from oio.common.decorators import ensure_headers, ensure_request_id
 from oio.common.http import http_header_from_ranges
 from oio.common.storage_method import STORAGE_METHODS
 from oio.common.constants import OIO_VERSION
@@ -810,7 +812,7 @@ class ObjectStorageApi(object):
         chunk_method = meta['chunk_method']
         storage_method = STORAGE_METHODS.load(chunk_method)
         chunks = _sort_chunks(raw_chunks, storage_method.ec)
-        meta['container_id'] = name2cid(account, container).upper()
+        meta['container_id'] = cid_from_name(account, container).upper()
         meta['ns'] = self.namespace
         self._patch_timeouts(kwargs)
         if storage_method.ec:
@@ -930,7 +932,7 @@ class ObjectStorageApi(object):
             policy=policy, **kwargs)
         obj_meta.update(sysmeta)
         obj_meta['content_path'] = obj_name
-        obj_meta['container_id'] = name2cid(account, container).upper()
+        obj_meta['container_id'] = cid_from_name(account, container).upper()
         obj_meta['ns'] = self.namespace
         obj_meta['full_path'] = self._generate_fullpath(account, container,
                                                         obj_name,

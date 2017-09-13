@@ -14,7 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from eventlet import Timeout
-from oio.common.utils import float_value, RingBuffer
+from oio.common.utils import RingBuffer
+from oio.common.easy_value import float_value
 
 
 class BaseChecker(object):

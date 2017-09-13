@@ -19,9 +19,8 @@ from time import time
 import redis
 import redis.sentinel
 from werkzeug.exceptions import NotFound, Conflict, BadRequest
-from oio.common.utils import Timestamp
-from oio.common.utils import int_value
-from oio.common.utils import true_value
+from oio.common.timestamp import Timestamp
+from oio.common.easy_value import int_value, true_value
 from oio.common.redis_conn import RedisConn
 
 

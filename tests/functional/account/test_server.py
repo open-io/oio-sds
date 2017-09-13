@@ -20,7 +20,7 @@ from werkzeug.test import Client
 from werkzeug.wrappers import BaseResponse
 from oio.account.server import create_app
 from tests.utils import BaseTestCase
-from oio.common.utils import Timestamp
+from oio.common.timestamp import Timestamp
 
 
 class TestAccountServer(BaseTestCase):

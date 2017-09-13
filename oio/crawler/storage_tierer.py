@@ -19,7 +19,9 @@ from oio.account.client import AccountClient
 from oio.common import exceptions as exc
 from oio.common.daemon import Daemon
 from oio.common.exceptions import NotFound
-from oio.common.utils import get_logger, int_value, cid_from_name
+from oio.common.utils import cid_from_name
+from oio.common.easy_value import int_value
+from oio.common.logger import get_logger
 from oio.common.green import ratelimit
 from oio.container.client import ContainerClient
 from oio.content.factory import ContentFactory

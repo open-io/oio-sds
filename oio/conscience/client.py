@@ -15,7 +15,7 @@
 
 from oio.common.client import ProxyClient
 from oio.common.exceptions import OioException
-from oio.common.utils import json
+from oio.common.json import json
 
 
 class LbClient(ProxyClient):

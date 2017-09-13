@@ -17,7 +17,8 @@ import json
 import sys
 import time
 from oio.api.base import HttpApi
-from oio.common.utils import get_logger, quote
+from oio.common.utils import quote
+from oio.common.logger import get_logger
 from oio.common.exceptions import ClientException, OioNetworkException
 from oio.conscience.client import ConscienceClient
 

@@ -15,7 +15,7 @@
 
 import sys
 
-from oio.common.utils import json as jsonlib
+from oio.common.json import json as jsonlib
 from oio.common.http import urllib3, get_pool_manager
 from urllib3.exceptions import MaxRetryError, TimeoutError, HTTPError, \
     NewConnectionError, ProtocolError, ProxyError, ClosedPoolError

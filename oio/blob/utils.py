@@ -15,7 +15,7 @@
 
 
 from oio.common import exceptions as exc
-from oio.common.utils import read_user_xattr
+from oio.common.xattr import read_user_xattr
 from oio.common.constants import chunk_xattr_keys, chunk_xattr_keys_optional, \
     volume_xattr_keys
 

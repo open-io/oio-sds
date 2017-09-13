@@ -22,9 +22,10 @@ import signal
 import time
 import os
 import eventlet
-from oio.common.utils import read_conf, get_logger, \
-    int_value, CPU_COUNT, drop_privileges, \
-    redirect_stdio
+from oio.common.utils import CPU_COUNT, drop_privileges
+from oio.common.easy_value import int_value
+from oio.common.configuration import read_conf
+from oio.common.logger import get_logger, redirect_stdio
 
 
 class HaltServer(BaseException):

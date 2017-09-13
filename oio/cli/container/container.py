@@ -232,7 +232,7 @@ class ShowContainer(show.ShowOne):
         bytes_usage = sys.get('sys.m2.usage', 0)
         objects = sys.get('sys.m2.objects', 0)
         if parsed_args.formatter == 'table':
-            from oio.common.utils import convert_size
+            from oio.common.easy_value import convert_size
 
             ctime = int(ctime)
             bytes_usage = convert_size(int(bytes_usage), unit="B")

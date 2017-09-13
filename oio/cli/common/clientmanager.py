@@ -39,7 +39,7 @@ class ClientManager(object):
     @property
     def sds_conf(self):
         if not self._sds_conf:
-            from oio.common.utils import load_namespace_conf
+            from oio.common.configuration import load_namespace_conf
             self._sds_conf = load_namespace_conf(self.namespace) or {}
         return self._sds_conf
 

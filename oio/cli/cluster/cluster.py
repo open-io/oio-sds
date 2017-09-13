@@ -333,7 +333,7 @@ class LocalNSConf(show.ShowOne):
         return parser
 
     def take_action(self, parsed_args):
-        from oio.common.utils import load_namespace_conf
+        from oio.common.configuration import load_namespace_conf
 
         self.log.debug('take_action(%s)', parsed_args)
         namespace = self.app.client_manager.cluster.conf['namespace']
