@@ -16,10 +16,11 @@
 import unittest
 import logging
 from cStringIO import StringIO
-from oio.common.utils import get_logger, convert_size
+from oio.common.logger import get_logger
+from oio.common.easy_value import convert_size
 
 
-class TestUtils(unittest.TestCase):
+class TestLogger(unittest.TestCase):
     def test_get_logger(self):
         sio = StringIO()
         logger = logging.getLogger('test')

@@ -18,7 +18,7 @@
 
 import sys, logging, itertools
 import zookeeper
-from oio.common.utils import load_namespace_conf
+from oio.common.configuration import load_namespace_conf
 
 PREFIX='/hc'
 PREFIX_NS=PREFIX+'/ns'
@@ -154,5 +154,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-

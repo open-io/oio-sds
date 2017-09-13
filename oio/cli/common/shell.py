@@ -16,11 +16,11 @@
 """Command-line interface to the OpenIO APIs"""
 
 import sys
+import os
 import logging
 from cliff.app import App
 
 from oio import __version__ as oio_version
-from oio.common.utils import env
 from oio.cli.common.commandmanager import CommandManager
 from oio.cli.common.clientmanager import ClientManager, get_plugin_module
 
@@ -43,6 +43,7 @@ class OpenIOShell(App):
 
     def configure_logging(self):
         super(OpenIOShell, self).configure_logging()
+
         root_logger = logging.getLogger('')
 
         if self.options.verbose_level == 0:
@@ -90,21 +91,21 @@ class OpenIOShell(App):
             '--oio-ns',
             metavar='<namespace>',
             dest='ns',
-            default=env('OIO_NS'),
+            default=os.environ.get('OIO_NS', ''),
             help='Namespace name (Env: OIO_NS)',
         )
         parser.add_argument(
             '--oio-account',
             metavar='<account>',
             dest='account_name',
-            default=env('OIO_ACCOUNT'),
+            default=os.environ.get('OIO_ACCOUNT', ''),
             help='Account name (Env: OIO_ACCOUNT)'
         )
         parser.add_argument(
             '--oio-proxyd-url',
             metavar='<proxyd url>',
             dest='proxyd_url',
-            default=env('OIO_PROXYD_URL'),
+            default=os.environ.get('OIO_PROXYD_URL', ''),
             help='Proxyd URL (Env: OIO_PROXYD_URL)'
         )
         parser.add_argument(
@@ -138,6 +139,8 @@ class OpenIOShell(App):
                 self.command_manager.add_command_group(cmd_group)
                 LOG.debug('%s API: cmd group %s', api, cmd_group)
 
+        self.print_help_if_requested()
+
         options = {
             'namespace': self.options.ns,
             'account_name': self.options.account_name,
@@ -147,8 +150,6 @@ class OpenIOShell(App):
                 logging.getLogger('').getEffectiveLevel()),
             'is_cli': True,
         }
-
-        self.print_help_if_requested()
         self.client_manager = ClientManager(options)
 
     def prepare_to_run_command(self, cmd):

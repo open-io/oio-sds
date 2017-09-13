@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from oio.common.utils import get_logger
+from oio.common.logger import get_logger
 
 
 class Filter(object):

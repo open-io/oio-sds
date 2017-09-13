@@ -21,8 +21,9 @@ import os
 from re import sub
 
 import eventlet.hubs
-from oio.common.utils import read_conf, drop_privileges, \
-    redirect_stdio, get_logger
+from oio.common.utils import drop_privileges
+from oio.common.configuration import read_conf
+from oio.common.logger import redirect_stdio, get_logger
 from oio.common.green import get_hub
 
 

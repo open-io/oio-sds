@@ -16,7 +16,7 @@
 
 from oio.common import exceptions
 from oio.common.client import ProxyClient
-from oio.common.utils import json
+from oio.common.json import json
 
 
 class DirectoryClient(ProxyClient):

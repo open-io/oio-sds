@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from oio.common.utils import load_namespace_conf
+from oio.common.configuration import load_namespace_conf
 from oio.event.beanstalk import Beanstalk
 
 

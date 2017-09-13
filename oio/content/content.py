@@ -15,7 +15,7 @@
 
 from oio.common import exceptions as exc
 from oio.common.exceptions import ClientException, OrphanChunk
-from oio.common.utils import get_logger
+from oio.common.logger import get_logger
 from oio.blob.client import BlobClient
 from oio.container.client import ContainerClient
 from urllib import quote_plus

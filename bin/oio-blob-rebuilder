@@ -3,7 +3,7 @@
 import argparse
 
 from oio.blob.rebuilder import BlobRebuilderWorker
-from oio.common.utils import get_logger
+from oio.common.logger import get_logger
 
 
 def make_arg_parser():

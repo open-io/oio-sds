@@ -3,7 +3,7 @@
 import argparse
 
 from oio.blob.registrator import BlobRegistratorWorker
-from oio.common.utils import get_logger
+from oio.common.logger import get_logger
 
 
 def make_arg_parser():
@@ -90,4 +90,3 @@ if __name__ == '__main__':
             worker.pass_without_lock()
     except Exception as e:
         logger.exception('ERROR in registrator: %s' % e)
-

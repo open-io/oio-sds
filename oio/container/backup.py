@@ -38,7 +38,8 @@ from werkzeug.wsgi import wrap_file
 
 from oio.api.object_storage import ObjectStorageApi
 from oio.common import exceptions as exc
-from oio.common.utils import get_logger, read_conf
+from oio.common.configuration import read_conf
+from oio.common.logger import get_logger
 from oio.common.wsgi import WerkzeugApp
 from oio.common.redis_conn import RedisConn
 

@@ -16,7 +16,7 @@
 
 from eventlet import Timeout
 from oio.common.exceptions import ClientException
-from oio.common.utils import get_logger
+from oio.common.logger import get_logger
 from oio.account.client import AccountClient
 from oio.event.evob import Event, EventError
 from oio.event.consumer import EventTypes

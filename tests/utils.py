@@ -25,7 +25,7 @@ import string
 from functools import wraps
 from oio.common.http import get_pool_manager
 from urllib import urlencode
-from oio.common.utils import json as jsonlib
+from oio.common.json import json as jsonlib
 
 random_chars = string.ascii_letters + string.digits
 random_chars_id = 'ABCDEF' + string.digits

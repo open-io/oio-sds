@@ -2,7 +2,7 @@
 
 from oio.blob.indexer import BlobIndexer
 from oio.common.daemon import run_daemon
-from oio.common.utils import parse_options
+from oio.common.configuration import parse_options
 from optparse import OptionParser
 
 if __name__ == '__main__':

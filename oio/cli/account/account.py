@@ -40,7 +40,7 @@ class ShowAccount(show.ShowOne):
         data['account'] = data['id']
         del data['id']
         if parsed_args.formatter == 'table':
-            from oio.common.utils import convert_size
+            from oio.common.easy_value import convert_size
 
             data['ctime'] = int(float(data.get('ctime', 0)))
             data['bytes'] = convert_size(int(data.get('bytes', 0)), unit="B")

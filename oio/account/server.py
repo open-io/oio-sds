@@ -19,7 +19,8 @@ from werkzeug.routing import Map, Rule
 from werkzeug.exceptions import NotFound, BadRequest, Conflict
 
 from oio.account.backend import AccountBackend
-from oio.common.utils import json, get_logger
+from oio.common.json import json
+from oio.common.logger import get_logger
 from oio.common.wsgi import WerkzeugApp
 
 

@@ -21,8 +21,9 @@ from oio.common.exceptions import ContentNotFound
 from oio.container.client import ContainerClient
 from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
-from oio.common.utils import get_logger, int_value, paths_gen, \
-    statfs
+from oio.common.utils import paths_gen, statfs
+from oio.common.easy_value import int_value
+from oio.common.logger import get_logger
 from oio.common.green import ratelimit
 from oio.content.factory import ContentFactory
 
