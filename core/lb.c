@@ -803,7 +803,7 @@ _local__patch(struct oio_lb_pool_s *self,
 		void _display(GQuark k, gpointer data, gpointer u) {
 			guint level = GPOINTER_TO_UINT(u);
 			oio_location_t loc = (GPOINTER_TO_UINT(k) - 1);
-			GRID_DEBUG("%0*lX selected %u times",
+			GRID_DEBUG("%0*" G_GINT64_MODIFIER "X selected %u times",
 					4 * (OIO_LB_LOC_LEVELS - level),
 					loc, GPOINTER_TO_UINT(data));
 		}
