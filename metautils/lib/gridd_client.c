@@ -124,7 +124,7 @@ _has_too_many_errors (const char *url)
 
 	const gboolean rc = (oio_client_cache_errors_max <= delta);
 	if (rc) {
-		GRID_DEBUG("[%s] seems DOWN (%"G_GUINT64_FORMAT" fails in %lds)",
+		GRID_DEBUG("[%s] seems DOWN (%"G_GUINT64_FORMAT" fails in %" G_GINT64_FORMAT "s)",
 				url, delta, oio_client_cache_errors_period);
 	}
 	return rc;
