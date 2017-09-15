@@ -16,7 +16,7 @@
 
 from urlparse import urlparse
 from eventlet import Timeout, GreenPile
-from oio.common.http import http_connect
+from oio.common.http_eventlet import http_connect
 from oio.event.evob import Event
 from oio.event.consumer import EventTypes
 from oio.event.filters.base import Filter

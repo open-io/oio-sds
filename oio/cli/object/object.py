@@ -15,7 +15,7 @@
 
 import os
 from logging import getLogger
-from oio.common.http import get_pool_manager
+from oio.common.http_urllib3 import get_pool_manager
 from cliff import command, lister, show
 from eventlet import GreenPool
 

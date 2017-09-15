@@ -15,7 +15,8 @@
 
 from io import BytesIO
 from eventlet import sleep
-from oio.common.http import HeadersDict, urllib3
+from oio.common.http import HeadersDict
+from oio.common.http_urllib3 import urllib3
 from oio.api.object_storage import ObjectStorageApi
 from oio.directory.client import DirectoryClient
 

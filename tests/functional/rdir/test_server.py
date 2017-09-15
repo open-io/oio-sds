@@ -19,7 +19,7 @@ import shutil
 import simplejson as json
 import subprocess
 from os import remove
-from oio.common.http import get_pool_manager
+from oio.common.http_urllib3 import get_pool_manager
 
 from tests.utils import BaseTestCase, random_str, random_id
 

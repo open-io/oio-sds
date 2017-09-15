@@ -16,13 +16,12 @@
 import sys
 
 from oio.common.json import json as jsonlib
-from oio.common.http import urllib3, get_pool_manager
+from oio.common.http_urllib3 import urllib3, get_pool_manager
 from urllib3.exceptions import MaxRetryError, TimeoutError, HTTPError, \
     NewConnectionError, ProtocolError, ProxyError, ClosedPoolError
 from urllib import urlencode
 from oio.common import exceptions
-from oio.common.http import CONNECTION_TIMEOUT, READ_TIMEOUT
-from oio.common.constants import ADMIN_HEADER
+from oio.common.constants import ADMIN_HEADER, CONNECTION_TIMEOUT, READ_TIMEOUT
 
 _POOL_MANAGER_OPTIONS_KEYS = ["pool_connections", "pool_maxsize",
                               "max_retries"]
