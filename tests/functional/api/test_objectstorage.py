@@ -17,7 +17,7 @@
 import logging
 import time
 from oio.api.object_storage import ObjectStorageApi
-from oio.api.object_storage import _sort_chunks as sort_chunks
+from oio.common.storage_functions import _sort_chunks as sort_chunks
 from oio.common import exceptions as exc
 from tests.utils import random_str, random_data, BaseTestCase
 

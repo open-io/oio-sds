@@ -29,12 +29,43 @@ Basic object storage example:
      113,
      '8de4989188593b0419d387099c9e9872')
 
+See help("oio.api.object_storage.ObjectStorageApi")
+
 """
 
 
 import pkg_resources
+import importlib
 
-from oio.api.object_storage import ObjectStorageApi
+
+class LazyLoader(object):
+    """
+    See help("oio.api.object_storage.ObjectStorageApi")
+    """
+
+    def __init__(self, module, name=None):
+        self.mod_name = module
+        self.class_name = name
+        self.value = None
+
+    def __ensure_value(self):
+        if self.value is None:
+            mod = importlib.import_module(self.mod_name)
+            if self.class_name:
+                self.value = getattr(mod, self.class_name)
+            else:
+                self.value = mod
+
+    def __getattr__(self, name):
+        self.__ensure_value()
+        return getattr(self.value, name)
+
+    def __call__(self, *args, **kwargs):
+        self.__ensure_value()
+        return self.value(*args, **kwargs)
+
+
+ObjectStorageApi = LazyLoader("oio.api.object_storage", "ObjectStorageApi")
 
 try:
     __version__ = __canonical_version__ = pkg_resources.get_provider(

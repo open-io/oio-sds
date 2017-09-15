@@ -21,9 +21,9 @@ import unittest
 
 from oio.common import exceptions
 from oio.common.constants import container_headers, object_headers
-from oio.api.object_storage import handle_object_not_found
-from oio.api.object_storage import handle_container_not_found
-from oio.api.object_storage import _sort_chunks
+from oio.common.decorators import handle_container_not_found, \
+    handle_object_not_found
+from oio.common.storage_functions import _sort_chunks
 from tests.utils import random_str
 from tests.unit.api import FakeStorageAPI, FakeAPIResponse
 

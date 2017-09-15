@@ -16,278 +16,32 @@
 
 from __future__ import absolute_import
 from io import BytesIO
-from functools import wraps
 import logging
 import os
-import random
 import warnings
 import time
 from inspect import isgenerator
+from urllib import quote_plus
 
 from oio.common import exceptions as exc
-from oio.api import io
-from oio.api.ec import ECWriteHandler, ECChunkDownloadHandler
+from oio.api.ec import ECWriteHandler
 from oio.api.replication import ReplicatedWriteHandler
 from oio.api.backblaze_http import BackblazeUtilsException, BackblazeUtils
 from oio.api.backblaze import BackblazeWriteHandler, \
     BackblazeChunkDownloadHandler
-from oio.common import constants
 from oio.common.utils import cid_from_name, GeneratorIO
 from oio.common.easy_value import float_value
 from oio.common.logger import get_logger
 from oio.common.decorators import ensure_headers, ensure_request_id
-from oio.common.http import http_header_from_ranges
 from oio.common.storage_method import STORAGE_METHODS
 from oio.common.constants import OIO_VERSION
-from urllib import quote_plus
+from oio.common.decorators import handle_account_not_found, \
+    handle_container_not_found, handle_object_not_found
+from oio.common.storage_functions import _sort_chunks, fetch_stream, \
+    fetch_stream_ec
+
 
 logger = logging.getLogger(__name__)
-
-
-def obj_range_to_meta_chunk_range(obj_start, obj_end, meta_sizes):
-    """
-    Convert a requested object range into a list of meta_chunk ranges.
-
-    :param meta_sizes: size of all object metachunks. Must be sorted!
-    :type meta_sizes: iterable, sorted in ascendant metachunk order.
-    :returns: a `dict` of tuples (meta_chunk_start, meta_chunk_end)
-        with metachunk positions as keys.
-
-        * meta_chunk_start is the first byte of the meta chunk,
-          or None if this is a suffix byte range
-
-        * meta_chunk_end is the last byte of the meta_chunk,
-          or None if this is a prefix byte range
-    """
-
-    offset = 0
-    found_start = False
-    found_end = False
-    total_size = 0
-
-    for meta_size in meta_sizes:
-        total_size += meta_size
-    # suffix byte range handling
-    if obj_start is None and obj_end is not None:
-        obj_start = total_size - min(total_size, obj_end)
-        obj_end = total_size - 1
-
-    meta_chunk_ranges = dict()
-    for pos, meta_size in enumerate(meta_sizes):
-        if meta_size <= 0:
-            continue
-        if found_start:
-            meta_chunk_start = 0
-        elif obj_start is not None and obj_start >= offset + meta_size:
-            offset += meta_size
-            continue
-        elif obj_start is not None and obj_start < offset + meta_size:
-            meta_chunk_start = obj_start - offset
-            found_start = True
-        else:
-            meta_chunk_start = 0
-        if obj_end is not None and offset + meta_size > obj_end:
-            meta_chunk_end = obj_end - offset
-            # found end
-            found_end = True
-        elif meta_size > 0:
-            meta_chunk_end = meta_size - 1
-        meta_chunk_ranges[pos] = (meta_chunk_start, meta_chunk_end)
-        if found_end:
-            break
-        offset += meta_size
-
-    return meta_chunk_ranges
-
-
-def get_meta_ranges(ranges, chunks):
-    """
-    Convert object ranges to metachunks ranges.
-
-    :returns: a list of dictionaries indexed by metachunk positions
-    """
-    range_infos = []
-    meta_sizes = [chunks[pos][0]['size'] for pos in sorted(chunks.keys())]
-    for obj_start, obj_end in ranges:
-        meta_ranges = obj_range_to_meta_chunk_range(obj_start, obj_end,
-                                                    meta_sizes)
-        range_infos.append(meta_ranges)
-    return range_infos
-
-
-def handle_account_not_found(fnc):
-    @wraps(fnc)
-    def _wrapped(self, account, *args, **kwargs):
-        try:
-            return fnc(self, account, *args, **kwargs)
-        except exc.NotFound as e:
-            e.message = "Account '%s' does not exist." % account
-            raise exc.NoSuchAccount(e)
-    return _wrapped
-
-
-def handle_container_not_found(fnc):
-    @wraps(fnc)
-    def _wrapped(self, account, container, *args, **kwargs):
-        try:
-            return fnc(self, account, container, *args, **kwargs)
-        except exc.NotFound as e:
-            e.message = "Container '%s' does not exist." % container
-            raise exc.NoSuchContainer(e)
-
-    return _wrapped
-
-
-def handle_object_not_found(fnc):
-    @wraps(fnc)
-    def _wrapped(self, account, container, obj, *args, **kwargs):
-        try:
-            return fnc(self, account, container, obj, *args, **kwargs)
-        except exc.NotFound as e:
-            e.message = "Object '%s' does not exist." % obj
-            raise exc.NoSuchObject(e)
-
-    return _wrapped
-
-
-def wrand_choice_index(scores):
-    """Choose an element from the `scores` sequence and return its index"""
-    scores = list(scores)
-    total = sum(scores)
-    target = random.uniform(0, total)
-    upto = 0
-    index = 0
-    for score in scores:
-        if upto + score >= target:
-            return index
-        upto += score
-        index += 1
-    assert False, "Shouldn't get here"
-
-
-def _sort_chunks(raw_chunks, ec_security):
-    """
-    Sort a list a chunk objects. In addition to the sort,
-    this function adds an "offset" field to each chunk object.
-
-    :type raw_chunks: iterable of `dict`
-    :param ec_security: tells the sort algorithm that chunk positions are
-        composed (e.g. "0.4").
-    :type ec_security: `bool`
-    :returns: a `dict` with metachunk positions as keys,
-        and `list` of chunk objects as values.
-    """
-    chunks = dict()
-    for chunk in raw_chunks:
-        raw_position = chunk["pos"].split(".")
-        position = int(raw_position[0])
-        if ec_security:
-            chunk['num'] = int(raw_position[1])
-        if position in chunks:
-            chunks[position].append(chunk)
-        else:
-            chunks[position] = []
-            chunks[position].append(chunk)
-
-    # for each position, remove incoherent chunks
-    for pos, local_chunks in chunks.iteritems():
-        if len(local_chunks) < 2:
-            continue
-        byhash = dict()
-        for chunk in local_chunks:
-            h = chunk.get('hash')
-            if h not in byhash:
-                byhash[h] = list()
-            byhash[h].append(chunk)
-        if len(byhash) < 2:
-            continue
-        # sort by length
-        bylength = byhash.values()
-        bylength.sort(key=len, reverse=True)
-        chunks[pos] = bylength[0]
-
-    # Append the 'offset' attribute
-    offset = 0
-    for pos in sorted(chunks.keys()):
-        clist = chunks[pos]
-        clist.sort(key=lambda x: x.get("score", 0), reverse=True)
-        for element in clist:
-            element['offset'] = offset
-        if not ec_security and len(clist) > 1:
-            # When scores are close together (e.g. [95, 94, 94, 93, 50]),
-            # don't always start with the highest element.
-            first = wrand_choice_index(x.get("score", 0) for x in clist)
-            clist[0], clist[first] = clist[first], clist[0]
-        offset += clist[0]['size']
-
-    return chunks
-
-
-def _make_object_metadata(headers):
-    meta = {}
-    props = {}
-
-    prefix = constants.OBJECT_METADATA_PREFIX
-
-    for k, v in headers.iteritems():
-        k = k.lower()
-        if k.startswith(prefix):
-            key = k.replace(prefix, "")
-            # TODO temporary workaround
-            # This is used by properties set through swift
-            if key.startswith('x-'):
-                props[key[2:]] = v
-            else:
-                meta[key.replace('-', '_')] = v
-    meta['properties'] = props
-    return meta
-
-
-@ensure_headers
-def fetch_stream(chunks, ranges, storage_method, headers=None,
-                 **kwargs):
-    ranges = ranges or [(None, None)]
-    meta_range_list = get_meta_ranges(ranges, chunks)
-
-    for meta_range_dict in meta_range_list:
-        for pos in sorted(meta_range_dict.keys()):
-            meta_start, meta_end = meta_range_dict[pos]
-            if meta_start is not None and meta_end is not None:
-                headers['Range'] = http_header_from_ranges(
-                    (meta_range_dict[pos], ))
-            reader = io.ChunkReader(
-                iter(chunks[pos]), io.READ_CHUNK_SIZE, headers=headers,
-                **kwargs)
-            try:
-                it = reader.get_iter()
-            except exc.NotFound as err:
-                raise exc.UnrecoverableContent(
-                    "Cannot download position %d: %s" %
-                    (pos, err))
-            except Exception as err:
-                raise exc.OioException(
-                    "Error while downloading position %d: %s" %
-                    (pos, err))
-            for part in it:
-                for dat in part['iter']:
-                    yield dat
-
-
-@ensure_headers
-def fetch_stream_ec(chunks, ranges, storage_method, **kwargs):
-    ranges = ranges or [(None, None)]
-    meta_range_list = get_meta_ranges(ranges, chunks)
-    for meta_range_dict in meta_range_list:
-        for pos in sorted(meta_range_dict.keys()):
-            meta_start, meta_end = meta_range_dict[pos]
-            handler = ECChunkDownloadHandler(
-                storage_method, chunks[pos],
-                meta_start, meta_end, **kwargs)
-            stream = handler.get_stream()
-            for part_info in stream:
-                for dat in part_info['iter']:
-                    yield dat
-            stream.close()
 
 
 class ObjectStorageApi(object):
