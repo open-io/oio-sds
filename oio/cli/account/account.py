@@ -107,7 +107,7 @@ class SetAccount(command.Command):
     log = getLogger(__name__ + '.SetAccount')
 
     def get_parser(self, prog_name):
-        from oio.cli.utils import KeyValueAction
+        from oio.cli.common.utils import KeyValueAction
 
         parser = super(SetAccount, self).get_parser(prog_name)
         parser.add_argument(
@@ -170,7 +170,7 @@ class ListAccounts(lister.Lister):
     log = getLogger(__name__ + '.ListAccount')
 
     def get_parser(self, prog_name):
-        from oio.cli.utils import ValueFormatStoreTrueAction
+        from oio.cli.common.utils import ValueFormatStoreTrueAction
 
         parser = super(ListAccounts, self).get_parser(prog_name)
         parser.add_argument(
@@ -211,7 +211,7 @@ class RefreshAccount(command.Command):
     log = getLogger(__name__ + '.RefreshAccount')
 
     def get_parser(self, prog_name):
-        from oio.cli.utils import ValueFormatStoreTrueAction
+        from oio.cli.common.utils import ValueFormatStoreTrueAction
 
         parser = super(RefreshAccount, self).get_parser(prog_name)
         parser.add_argument(

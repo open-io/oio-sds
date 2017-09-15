@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -13,15 +13,16 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from oio.cli.common.clientmanager import ClientManager as NewClientManager
+from logging import getLogger
+from oio.conscience.client import ConscienceClient
+
+LOG = getLogger(__name__)
+
+API_NAME = 'cluster'
 
 
-class ClientManager(NewClientManager):
-    def __init__(self, *args, **kwargs):
-        import warnings
-        warnings.simplefilter('once')
-        warnings.warn(
-            "oio.cli.clientmanager.ClientManager is deprecated, "
-            "use oio.cli.common.clientmanager.ClientManager",
-            DeprecationWarning, stacklevel=2)
-        super(ClientManager, self).__init__(*args, **kwargs)
+def make_client(instance):
+    client = ConscienceClient(
+        instance.get_process_configuration()
+    )
+    return client

@@ -25,7 +25,7 @@ class ClusterShow(show.ShowOne):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
-        data = self.app.client_manager.admin.cluster_info()
+        data = self.app.client_manager.cluster.info()
         output = list()
         output.append(('namespace', data['ns']))
         output.append(('chunksize', data['chunksize']))
@@ -63,9 +63,9 @@ class ClusterList(lister.Lister):
         results = []
         if not parsed_args.srv_types:
             parsed_args.srv_types = \
-                    self.app.client_manager.admin.cluster_list_types()
+                    self.app.client_manager.cluster.service_types()
         for srv_type in parsed_args.srv_types:
-            data = self.app.client_manager.admin.cluster_list(
+            data = self.app.client_manager.cluster.all_services(
                 srv_type, parsed_args.stats)
             for srv in data:
                 tags = srv['tags']
@@ -112,7 +112,7 @@ class ClusterLocalList(lister.Lister):
         self.log.debug('take_action(%s)', parsed_args)
         results = []
         srv_types = parsed_args.srv_types
-        data = self.app.client_manager.admin.cluster_local_list()
+        data = self.app.client_manager.cluster.local_services()
         for srv in data:
             tags = srv['tags']
             location = tags.get('tag.loc', 'n/a')
@@ -152,7 +152,7 @@ class ClusterUnlock(lister.Lister):
     def _unlock_one(self, type_, addr):
         service_info = {'type': type_, 'addr': addr}
         try:
-            self.app.client_manager.admin.cluster_unlock_score(service_info)
+            self.app.client_manager.cluster.unlock_score(service_info)
             yield type_, addr, "unlocked"
         except Exception as exc:
             yield type_, addr, str(exc)
@@ -191,14 +191,14 @@ class ClusterUnlockAll(lister.Lister):
     def _unlock_all(self, parsed_args):
         types = parsed_args.types
         if not parsed_args.types:
-            types = self.app.client_manager.admin.cluster_list_types()
+            types = self.app.client_manager.cluster.service_types()
         for type_ in types:
-            all_descr = self.app.client_manager.admin.cluster_list(type_)
+            all_descr = self.app.client_manager.cluster.all_services(type_)
             for descr in all_descr:
                 descr['type'] = type_
             for batch in _bounded_batches(all_descr, 4096):
                 try:
-                    self.app.client_manager.admin.cluster_unlock_score(batch)
+                    self.app.client_manager.cluster.unlock_score(batch)
                     for descr in batch:
                         yield type_, descr['addr'], "unlocked"
                 except Exception as exc:
@@ -235,7 +235,7 @@ class ClusterWait(lister.Lister):
 
         types = parsed_args.types
         if not parsed_args.types:
-            types = self.app.client_manager.admin.cluster_list_types()
+            types = self.app.client_manager.cluster.service_types()
 
         delay = float(parsed_args.delay)
         deadline = now() + delay
@@ -243,7 +243,7 @@ class ClusterWait(lister.Lister):
         while True:
             all_descr = []
             for type_ in types:
-                tmp = self.app.client_manager.admin.cluster_list(type_)
+                tmp = self.app.client_manager.cluster.all_services(type_)
                 for s in tmp:
                     s['type'] = type_
                 all_descr += tmp
@@ -286,7 +286,7 @@ class ClusterLock(ClusterUnlock):
     def _lock_one(self, type_, addr, score):
         si = {'type': type_, 'addr': addr, 'score': score}
         try:
-            self.app.client_manager.admin.cluster_lock_score(si)
+            self.app.client_manager.cluster.lock_score(si)
             yield type_, addr, "locked to %d" % int(score)
         except Exception as exc:
             yield type_, addr, str(exc)
@@ -316,7 +316,7 @@ class ClusterFlush(command.Command):
     def take_action(self, parsed_args):
         for srv_type in parsed_args.srv_types:
             try:
-                self.app.client_manager.admin.cluster_flush(srv_type)
+                self.app.client_manager.cluster.flush(srv_type)
                 self.log.warn('services %s flushed' % (srv_type))
             except Exception as e:
                 raise Exception('Error while flushing service %s: %s' %
@@ -336,7 +336,7 @@ class LocalNSConf(show.ShowOne):
         from oio.common.utils import load_namespace_conf
 
         self.log.debug('take_action(%s)', parsed_args)
-        namespace = self.app.client_manager.admin.conf['namespace']
+        namespace = self.app.client_manager.cluster.conf['namespace']
         sds_conf = load_namespace_conf(namespace)
         output = list()
         for k in sds_conf:

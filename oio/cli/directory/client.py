@@ -20,14 +20,45 @@ LOG = getLogger(__name__)
 API_NAME = 'directory'
 
 
+class DirectoryClientCli(object):
+    def __init__(self, namespace, **kwargs):
+        self.conf = {'namespace': namespace}
+        self.conf.update(kwargs)
+        self._cluster = None
+        self._rdir_lb = None
+        self._meta0 = None
+
+    @property
+    def cluster(self):
+        if not self._cluster:
+            from oio.conscience.client import ConscienceClient
+            self._cluster = ConscienceClient(self.conf)
+        return self._cluster
+
+    @property
+    def rdir_lb(self):
+        if not self._rdir_lb:
+            from oio.rdir.client import RdirDispatcher
+            self._rdir_lb = RdirDispatcher(self.conf)
+        return self._rdir_lb
+
+    @property
+    def meta0(self):
+        if not self._meta0:
+            from oio.directory.meta0 import Meta0Client
+            self._meta0 = Meta0Client(self.conf)
+        return self._meta0
+
+
 def make_client(instance):
-    from oio.directory.client import DirectoryClient
+    """
+    Build a DirectoryClientCli that will be added as "directory"
+    field of `instance`.
 
-    endpoint = instance.get_endpoint('directory')
-    client = DirectoryClient({"namespace": instance.namespace},
-                             endpoint=endpoint)
+    :param instance: an instance of ClientManager
+    :returns: an instance of DirectoryClientCli
+    """
+    client = DirectoryClientCli(
+        **instance.get_process_configuration()
+    )
     return client
-
-
-def build_option_parser(parser):
-    return parser

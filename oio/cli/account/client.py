@@ -13,15 +13,18 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from oio.cli.common.clientmanager import ClientManager as NewClientManager
+from logging import getLogger
+from oio.api.object_storage import ObjectStorageApi
+
+LOG = getLogger(__name__)
+
+API_NAME = 'storage'
 
 
-class ClientManager(NewClientManager):
-    def __init__(self, *args, **kwargs):
-        import warnings
-        warnings.simplefilter('once')
-        warnings.warn(
-            "oio.cli.clientmanager.ClientManager is deprecated, "
-            "use oio.cli.common.clientmanager.ClientManager",
-            DeprecationWarning, stacklevel=2)
-        super(ClientManager, self).__init__(*args, **kwargs)
+def make_client(instance):
+    client = ObjectStorageApi(
+        endpoint=instance.get_endpoint('storage'),
+        namespace=instance.namespace,
+        admin_mode=instance.admin_mode
+    )
+    return client

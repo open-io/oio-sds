@@ -34,9 +34,9 @@ class DirectoryCmd(Command):
     def get_prefix_mapping(self, parsed_args):
         from oio.directory.meta0 import PrefixMapping
 
-        meta0_client = self.app.client_manager.admin.meta0
-        conscience_client = self.app.client_manager.admin.cluster
-        digits = self.app.client_manager.get_meta1_digits()
+        meta0_client = self.app.client_manager.directory.meta0
+        conscience_client = self.app.client_manager.directory.cluster
+        digits = self.app.client_manager.meta1_digits
         return PrefixMapping(meta0_client, conscience_client,
                              replicas=parsed_args.replicas,
                              digits=digits,
@@ -96,7 +96,7 @@ class DirectoryInit(DirectoryCmd):
 
             self.log.info("Assigning rdir services to rawx services...")
             sleep(5)  # Let meta1 fetch the list of managed bases
-            self.app.client_manager.admin.rdir_lb.assign_all_rawx()
+            self.app.client_manager.directory.rdir_lb.assign_all_rawx()
 
         if checked:
             self.log.info("Done")
