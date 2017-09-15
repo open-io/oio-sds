@@ -15,7 +15,7 @@
 
 
 from oio.api.replication import ReplicatedWriteHandler
-from oio.api.object_storage import _sort_chunks, fetch_stream
+from oio.common.storage_functions import _sort_chunks, fetch_stream
 from oio.common.storage_method import STORAGE_METHODS
 from oio.content.content import Content, Chunk
 from oio.common import exceptions as exc

@@ -15,6 +15,8 @@
 
 from functools import wraps
 from oio.common.utils import request_id
+from oio.common.exceptions import NotFound, NoSuchAccount, NoSuchObject, \
+    NoSuchContainer
 
 
 def ensure_headers(func):
@@ -33,3 +35,36 @@ def ensure_request_id(func):
             headers['X-oio-req-id'] = request_id()
         return func(*args, **kwargs)
     return ensure_request_id_wrapper
+
+
+def handle_account_not_found(fnc):
+    @wraps(fnc)
+    def _wrapped(self, account, *args, **kwargs):
+        try:
+            return fnc(self, account, *args, **kwargs)
+        except NotFound as e:
+            e.message = "Account '%s' does not exist." % account
+            raise NoSuchAccount(e)
+    return _wrapped
+
+
+def handle_container_not_found(fnc):
+    @wraps(fnc)
+    def _wrapped(self, account, container, *args, **kwargs):
+        try:
+            return fnc(self, account, container, *args, **kwargs)
+        except NotFound as e:
+            e.message = "Container '%s' does not exist." % container
+            raise NoSuchContainer(e)
+    return _wrapped
+
+
+def handle_object_not_found(fnc):
+    @wraps(fnc)
+    def _wrapped(self, account, container, obj, *args, **kwargs):
+        try:
+            return fnc(self, account, container, obj, *args, **kwargs)
+        except NotFound as e:
+            e.message = "Object '%s' does not exist." % obj
+            raise NoSuchObject(e)
+    return _wrapped
