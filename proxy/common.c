@@ -165,7 +165,7 @@ static void _sort_services (struct client_ctx_s *ctx,
 
 	/* among the available services, prefer those expected SLAVE/MASTER */
 	if (pivot > 1 && (ctx->which == CLIENT_PREFER_MASTER
-		           || ctx->which == CLIENT_PREFER_SLAVE)) {
+			|| ctx->which == CLIENT_PREFER_SLAVE)) {
 		gboolean _master (gconstpointer p) { return service_is_master (k, p); }
 		gboolean _slave (gconstpointer p) { return service_is_slave (k, p); }
 		switch (ctx->which) {
@@ -254,6 +254,7 @@ label_retry:
 			if (m1uv)
 				g_strfreev(m1uv);
 			m1uv = tmp;
+			meta1_urlv_shift_addr(m1uv);
 		} else if (!*m1uv) {
 			g_strfreev (m1uv);
 			return NEWERROR (CODE_CONTAINER_NOTFOUND, "No service located");
@@ -271,12 +272,11 @@ label_retry:
 		*errorv = g_ptr_array_new (), /* <GError*> */
 		*bodyv = g_ptr_array_new (); /* <GByteArray*> */
 
-	NAME2CONST(n,ctx->name);
+	NAME2CONST(n, ctx->name);
 	GByteArray *packed = pack(&n);
 
 	gboolean stop = FALSE;
-	for (gchar **pu=m1uv; *pu && !stop ;++pu) {
-
+	for (gchar **pu = m1uv; *pu && !stop; ++pu) {
 		const char *url = pu[0];
 		const char *next_url = pu[1];
 		struct gridd_client_s *client = NULL;
