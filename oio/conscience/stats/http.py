@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from oio.common.json import json
-from oio.common.http import http_connect
+from oio.common.http_eventlet import http_connect
 from oio.conscience.stats.base import BaseStat
 
 

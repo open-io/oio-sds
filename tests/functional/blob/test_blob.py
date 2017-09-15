@@ -22,7 +22,7 @@ import os.path
 from hashlib import md5
 from urlparse import urlparse
 from urllib import quote_plus
-from oio.common.http import http_connect
+from oio.common.http_eventlet import http_connect
 from oio.common.constants import OIO_VERSION
 
 from tests.utils import BaseTestCase

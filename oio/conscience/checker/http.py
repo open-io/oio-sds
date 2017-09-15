@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from oio.common.http import http_connect
+from oio.common.http_eventlet import http_connect
 from oio.common import exceptions as exc
 from oio.conscience.checker.base import BaseChecker
 

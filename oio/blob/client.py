@@ -14,7 +14,7 @@
 # License along with this library.
 
 
-from oio.common.http import get_pool_manager
+from oio.common.http_urllib3 import get_pool_manager
 from oio.common import exceptions as exc, utils
 from oio.common.constants import chunk_headers, chunk_xattr_keys_optional
 from oio.api.io import ChunkReader
