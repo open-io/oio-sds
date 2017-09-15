@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from logging import getLogger
+from oio.api.object_storage import ObjectStorageApi
 
 LOG = getLogger(__name__)
 
@@ -21,17 +22,9 @@ API_NAME = 'storage'
 
 
 def make_client(instance):
-    from oio.api.object_storage import ObjectStorageApi
-
-    admin_mode = instance.get_admin_mode()
-    endpoint = instance.get_endpoint('storage')
     client = ObjectStorageApi(
-        endpoint=endpoint,
+        endpoint=instance.get_endpoint('storage'),
         namespace=instance.namespace,
-        admin_mode=admin_mode
+        admin_mode=instance.admin_mode
     )
     return client
-
-
-def build_option_parser(parser):
-    return parser
