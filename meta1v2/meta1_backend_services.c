@@ -547,9 +547,10 @@ _is_service_up(struct meta1_backend_s *m1, struct meta1_service_url_s *url)
 		return FALSE;
 	}
 
-	char key[128];
-	g_snprintf(key, sizeof(key), "%s|%s|%s", m1->ns_name, ct.baretype, url->host);
+	/* TODO @todo Make the same without memory allocation from the heap */
+	gchar *key = oio_make_service_key(m1->ns_name, ct.baretype, url->host);
 	struct oio_lb_item_s *item = oio_lb__get_item_from_pool(m1->lb, ct.baretype, key);
+	g_free(key);
 
 	const gboolean is_up = item ? (item->weight > 0) : FALSE;
 	g_free(item);
