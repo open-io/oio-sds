@@ -64,7 +64,7 @@ static GTree *tree_bases = NULL;
 #define STRDUPA(Out, Src, Len) do { \
 	if (Src) { \
 		(Out) = alloca(1 + (Len)); \
-		strncpy((Out), (Src), 1 + (Len)); \
+		g_strlcpy((Out), (Src), 1 + (Len)); \
 	} else { \
 		(Out) = NULL; \
 	} \
