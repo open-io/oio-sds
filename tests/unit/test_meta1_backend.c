@@ -27,6 +27,8 @@ License along with this library.
 #include <meta1v2/meta1_prefixes.h>
 #include <sqliterepo/sqliterepo.h>
 
+#define DEADBEEF ((void*)0xDEADBEEF)
+
 #define MAXITER 32
 
 #undef GQ
@@ -182,6 +184,93 @@ test_backend_cycle(void)
 		_repo_wrapper("NS", NULL);
 }
 
+/**
+ * All the invalid parameters should be tested with assertions, at the
+ * beginning of the functions.
+ */
+static void
+test_invalid_parameters(void)
+{
+#define TEST_ABORTING_INIT(Call) do { \
+		if (g_test_subprocess ()) { \
+			struct meta1_backend_s *_m1 = NULL; \
+			struct sqlx_repository_s *repo = DEADBEEF; \
+			struct oio_lb_s *lb = DEADBEEF; \
+			do { Call; } while (0); \
+			(void) _m1, (void) repo, (void) lb; \
+			return; \
+		} \
+		g_test_trap_subprocess (NULL, 0, 0); \
+		g_test_trap_assert_failed (); \
+} while (0)
+	void _init(struct meta1_backend_s *m1 UNUSED, struct oio_url_s *url UNUSED) {
+		TEST_ABORTING_INIT(meta1_backend_init(NULL, "NS", repo, lb));
+		TEST_ABORTING_INIT(meta1_backend_init(&_m1, NULL, repo, lb));
+		TEST_ABORTING_INIT(meta1_backend_init(&_m1, "NS", NULL, lb));
+		TEST_ABORTING_INIT(meta1_backend_init(&_m1, "NS", repo, NULL));
+	}
+
+#define TEST_ABORTING_LIST(Call) do { \
+		if (g_test_subprocess ()) { \
+			gchar **out = NULL; \
+			do { Call; } while (0); \
+			(void) out; \
+			return; \
+		} \
+		g_test_trap_subprocess (NULL, 0, 0); \
+		g_test_trap_assert_failed (); \
+} while (0)
+	void _create(struct meta1_backend_s *m1, struct oio_url_s *url) {
+		gchar **props = DEADBEEF;
+		TEST_ABORTING_LIST(meta1_backend_user_create(NULL, url, props));
+		TEST_ABORTING_LIST(meta1_backend_user_create(m1, NULL, props));
+		TEST_ABORTING_LIST(meta1_backend_user_create(m1, url, NULL));
+	}
+	void _destroy(struct meta1_backend_s *m1, struct oio_url_s *url) {
+		TEST_ABORTING_LIST(meta1_backend_user_create(NULL, url, FALSE));
+		TEST_ABORTING_LIST(meta1_backend_user_create(m1, NULL, FALSE));
+	}
+	void _info(struct meta1_backend_s *m1, struct oio_url_s *url) {
+		TEST_ABORTING_LIST(meta1_backend_user_info(NULL, url, &out));
+		TEST_ABORTING_LIST(meta1_backend_user_info(m1, NULL, &out));
+		TEST_ABORTING_LIST(meta1_backend_user_info(m1, url, NULL));
+	}
+	void _list(struct meta1_backend_s *m1, struct oio_url_s *url) {
+		TEST_ABORTING_LIST(meta1_backend_services_list(NULL, url, NAME_SRVTYPE_META2, &out));
+		TEST_ABORTING_LIST(meta1_backend_services_list(m1, NULL, NAME_SRVTYPE_META2, &out));
+		TEST_ABORTING_LIST(meta1_backend_services_list(m1, url, NULL, &out));
+		TEST_ABORTING_LIST(meta1_backend_services_list(m1, url, NAME_SRVTYPE_META2, NULL));
+	}
+	void _link(struct meta1_backend_s *m1, struct oio_url_s *url) {
+		TEST_ABORTING_LIST(meta1_backend_services_link(NULL, url, NAME_SRVTYPE_META2, NULL, FALSE, &out));
+		TEST_ABORTING_LIST(meta1_backend_services_link(m1, NULL, NAME_SRVTYPE_META2, NULL, FALSE, &out));
+		TEST_ABORTING_LIST(meta1_backend_services_link(m1, url, NULL, NULL, FALSE, &out));
+		TEST_ABORTING_LIST(meta1_backend_services_link(m1, url, NAME_SRVTYPE_META2, NULL, FALSE, NULL));
+	}
+	void _renew(struct meta1_backend_s *m1, struct oio_url_s *url) {
+		TEST_ABORTING_LIST(meta1_backend_services_renew(NULL, url, NAME_SRVTYPE_META2, NULL, FALSE, &out));
+		TEST_ABORTING_LIST(meta1_backend_services_renew(m1, NULL, NAME_SRVTYPE_META2, NULL, FALSE, &out));
+		TEST_ABORTING_LIST(meta1_backend_services_renew(m1, url, NULL, NULL, FALSE, &out));
+		TEST_ABORTING_LIST(meta1_backend_services_renew(m1, url, NAME_SRVTYPE_META2, NULL, FALSE, NULL));
+	}
+	void _unlink(struct meta1_backend_s *m1, struct oio_url_s *url) {
+		gchar **in = DEADBEEF;
+		TEST_ABORTING_LIST(meta1_backend_services_unlink(NULL, url, NAME_SRVTYPE_META2, in));
+		TEST_ABORTING_LIST(meta1_backend_services_unlink(m1, NULL, NAME_SRVTYPE_META2, in));
+		TEST_ABORTING_LIST(meta1_backend_services_unlink(m1, url, NULL, in));
+		TEST_ABORTING_LIST(meta1_backend_services_unlink(m1, url, NAME_SRVTYPE_META2, NULL));
+	}
+
+	_container_wraper("NS", _init);
+	_container_wraper("NS", _create);
+	_container_wraper("NS", _destroy);
+	_container_wraper("NS", _info);
+	_container_wraper("NS", _list);
+	_container_wraper("NS", _link);
+	_container_wraper("NS", _renew);
+	_container_wraper("NS", _unlink);
+}
+
 static void
 test_user_cycle(void)
 {
@@ -248,20 +337,11 @@ test_services_cycle_nolast(void)
 		g_assert_no_error(err);
 
 		for (guint i=0; i<MAXITER ;++i) {
-			err = meta1_backend_services_list(m1, url, "", NULL);
-			g_assert_error(err, GQ(), CODE_INTERNAL_ERROR);
-			g_clear_error(&err);
-
 			g_assert_cmpuint(0, ==, _count_services(m1, url, "Mkmlkmjnhj"));
 		}
 
-		/* Subsequent LINK do noto alter the sequence returned */
+		/* Subsequent LINK do not alter the sequence returned */
 		for (guint i=0; i<MAXITER ;++i) {
-			err = meta1_backend_services_link(
-					m1, url, NAME_SRVTYPE_META2, NULL, FALSE, NULL);
-			g_assert_error(err, GQ(), CODE_INTERNAL_ERROR);
-			g_clear_error(&err);
-
 			err = meta1_backend_services_link(
 					m1, url, NAME_SRVTYPE_META2, NULL, FALSE, &out);
 			g_assert_no_error(err);
@@ -271,11 +351,6 @@ test_services_cycle_nolast(void)
 		}
 
 		/* Renew the services with no 'last' known */
-		err = meta1_backend_services_renew(
-				m1, url, NAME_SRVTYPE_META2, NULL, FALSE, NULL);
-		g_assert_error(err, GQ(), CODE_INTERNAL_ERROR);
-		g_clear_error(&err);
-
 		err = meta1_backend_services_renew(
 				m1, url, NAME_SRVTYPE_META2, NULL, FALSE, &out);
 		g_assert_no_error(err);
@@ -347,6 +422,7 @@ main(int argc, char **argv)
 	oio_time_real = _get_real;
 	container_counter = random();
 
+	g_test_add_func("/meta1/backend/invalid", test_invalid_parameters);
 	g_test_add_func("/meta1/backend/cycle", test_backend_cycle);
 	g_test_add_func("/meta1/user/cycle", test_user_cycle);
 	g_test_add_func("/meta1/services/cycle/nolast", test_services_cycle_nolast);
