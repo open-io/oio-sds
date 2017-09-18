@@ -968,8 +968,7 @@ meta1_backend_services_link (struct meta1_backend_s *m1,
 		gboolean autocreate,
 		gchar ***result)
 {
-	if (!result)
-		return SYSERR("Missing output variable");
+	EXTRA_ASSERT(result != NULL);
 
 	GError *err = __check_backend_events (m1);
 	if (err) return err;
@@ -1002,10 +1001,11 @@ meta1_backend_services_renew(struct meta1_backend_s *m1,
 		const char *last, gboolean autocreate,
 		gchar ***result)
 {
-	if (!srvtype)
-		return SYSERR("Missing service type");
-	if (!result)
-		return SYSERR("Missing output variable");
+	EXTRA_ASSERT(result != NULL);
+	EXTRA_ASSERT(srvtype != NULL);
+
+	if (!oio_str_is_set(srvtype))
+		return BADREQ("Missing service type");
 
 	GError *err = __check_backend_events (m1);
 	if (err) return err;
@@ -1039,9 +1039,7 @@ meta1_backend_services_list(struct meta1_backend_s *m1,
 {
 	EXTRA_ASSERT(m1 != NULL);
 	EXTRA_ASSERT(url != NULL);
-
-	if (!result)
-		return SYSERR("BUG No service type");
+	EXTRA_ASSERT(result != NULL);
 
 	gboolean retry = TRUE;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1125,6 +1123,8 @@ meta1_backend_services_relink(struct meta1_backend_s *m1,
 		struct oio_url_s *url, const char *kept, const char *replaced,
 		gboolean dryrun, gchar ***out)
 {
+	EXTRA_ASSERT(out != NULL);
+
 	GError *err = __check_backend_events (m1);
 	if (err) return err;
 
