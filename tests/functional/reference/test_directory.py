@@ -95,7 +95,7 @@ class TestDirectoryFunctional(BaseTestCase):
         # Renew while not linked
         resp = self.request('POST', self._url_ref('renew'), params=params)
         self.assertEqual(resp.status, 200)
-        body = resp.json()
+        body = self.json_loads(resp.data)
         self.assertIsInstance(body, list)
         self.assertEqual(len(body), 1)
 
@@ -116,7 +116,7 @@ class TestDirectoryFunctional(BaseTestCase):
 
         resp = self.request('POST', self._url_ref('renew'), params=params)
         self.assertEqual(resp.status, 200)
-        body = resp.json()
+        body = self.json_loads(resp.data)
         self.assertIsInstance(body, list)
         self.assertEqual(len(body), 2)
 
