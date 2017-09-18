@@ -57,6 +57,9 @@ gboolean meta1_url_has_type(const char *str, const char *srvtype);
 
 gchar ** meta1_url_filter_typed(const char * const *src, const char*srvtype);
 
+/* Build a string with the sorted list of service sequence numbers.
+ * This is useful to check if clients know the same services as the
+ * server. */
 gchar * meta1_url_manifest(struct meta1_service_url_s **m1uv);
 
 /* Sort in place, first by type then by sequence number */
