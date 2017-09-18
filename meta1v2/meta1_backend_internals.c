@@ -84,8 +84,7 @@ m1_to_sqlx(enum m1v2_open_type_e t)
 GError *
 __check_backend_events (struct meta1_backend_s *m1)
 {
-	if (!m1)
-		return SYSERR("backend not ready");
+	EXTRA_ASSERT(m1 != NULL);
 	if (m1->notifier && oio_events_queue__is_stalled (m1->notifier))
 		return BUSY("Too many pending events");
 	return NULL;

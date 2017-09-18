@@ -54,6 +54,8 @@ meta1_backend_init(struct meta1_backend_s **out, const char *ns,
 {
 	EXTRA_ASSERT(out != NULL);
 	EXTRA_ASSERT(repo != NULL);
+	EXTRA_ASSERT(ns != NULL);
+	EXTRA_ASSERT(lb != NULL);
 
 	if (!*ns || strlen(ns) >= LIMIT_LENGTH_NSNAME)
 		return BADREQ("Invalid namespace name");
