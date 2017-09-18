@@ -648,7 +648,7 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 			return NULL;
 		}
 	} else {
-		/* No service currently in use, so we should not see accept a request
+		/* No service currently in use, so we should not accept a request
 		 * that mentions the client knowns any service */
 		if (oio_str_is_set(last)) {
 			meta1_service_url_cleanv(used);
