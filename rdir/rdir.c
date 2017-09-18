@@ -550,7 +550,7 @@ _db_vol_fetch(const char *volid, GString *value,
 	if (leveldb_iter_valid(it) && start_after) {
 		size_t keylen = 0;
 		const char *key = leveldb_iter_key(it, &keylen);
-		if (after_len < keylen && !memcmp(key, after, after_len))
+		if (after_len <= keylen && !memcmp(key, after, after_len))
 			leveldb_iter_next(it);
 	}
 
