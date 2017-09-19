@@ -122,7 +122,6 @@ class BlobRebuilderWorker(object):
     def rebuilder_pass(self):
         start_time = report_time = time.time()
 
-        total_errors = 0
         rebuilder_time = 0
 
         chunks = self._fetch_chunks()
@@ -149,7 +148,7 @@ class BlobRebuilderWorker(object):
                     'chunks=%(nb_chunks)d %(c_rate).2f/s '
                     'bytes=%(nb_bytes)d %(b_rate).2fB/s '
                     'elapsed=%(total).2f '
-                    '(rebuilder: %(rebuilder_rate).2f%%)' % {
+                    '(rebuilder: %(success_rate).2f%%)' % {
                         'volume': self.volume,
                         'start_time': datetime.fromtimestamp(
                             int(report_time)).isoformat(),
@@ -161,12 +160,12 @@ class BlobRebuilderWorker(object):
                         'b_rate': self.bytes_processed / (now - report_time),
                         'total': (now - start_time),
                         'rebuilder_time': rebuilder_time,
-                        'rebuilder_rate':
-                            100.0 * rebuilder_time / float(now - start_time)
+                        'success_rate':
+                            100 * ((self.total_chunks_processed - self.errors)
+                                   / float(self.total_chunks_processed))
                     }
                 )
                 report_time = now
-                total_errors += self.errors
                 self.passes = 0
                 self.bytes_processed = 0
                 self.last_reported = now
@@ -177,25 +176,29 @@ class BlobRebuilderWorker(object):
             'DONE %(volume)s '
             'started=%(start_time)s '
             'ended=%(end_time)s '
+            'passes=%(passes)d '
             'elapsed=%(elapsed).02f '
             'errors=%(errors)d '
             'chunks=%(nb_chunks)d %(c_rate).2f/s '
             'bytes=%(nb_bytes)d %(b_rate).2fB/s '
             'elapsed=%(rebuilder_time).2f '
-            '(rebuilder: %(rebuilder_rate).2f%%)' % {
+            '(rebuilder: %(success_rate).2f%%)' % {
                 'volume': self.volume,
                 'start_time': datetime.fromtimestamp(
                     int(start_time)).isoformat(),
                 'end_time': datetime.fromtimestamp(
                     int(end_time)).isoformat(),
+                'passes': self.passes,
                 'elapsed': elapsed,
-                'errors': total_errors + self.errors,
+                'errors': self.errors,
                 'nb_chunks': self.total_chunks_processed,
                 'nb_bytes': self.total_bytes_processed,
                 'c_rate': self.total_chunks_processed / elapsed,
                 'b_rate': self.total_bytes_processed / elapsed,
                 'rebuilder_time': rebuilder_time,
-                'rebuilder_rate': 100.0 * rebuilder_time / float(elapsed)
+                'success_rate':
+                    100 * ((self.total_chunks_processed - self.errors) /
+                           float(self.total_chunks_processed or 1))
             }
         )
 
