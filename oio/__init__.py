@@ -28,20 +28,16 @@ Basic object storage example:
        u'size': 113}],
      113,
      '8de4989188593b0419d387099c9e9872')
-
-See help("oio.api.object_storage.ObjectStorageApi")
-
 """
 
 
 import pkg_resources
 import importlib
+import sys
 
 
 class LazyLoader(object):
-    """
-    See help("oio.api.object_storage.ObjectStorageApi")
-    """
+    """Delay module or class loading."""
 
     def __init__(self, module, name=None):
         self.mod_name = module
@@ -65,7 +61,22 @@ class LazyLoader(object):
         return self.value(*args, **kwargs)
 
 
-ObjectStorageApi = LazyLoader("oio.api.object_storage", "ObjectStorageApi")
+class OioModule(object):
+
+    oio = importlib.import_module('oio')
+    object_storage = None
+    __doc__ = oio.__doc__
+
+    @property
+    def ObjectStorageApi(self):  # pylint: disable=invalid-name
+        if not self.__class__.object_storage:
+            self.__class__.object_storage = importlib.import_module(
+                'oio.api.object_storage')
+        return self.__class__.object_storage.ObjectStorageApi
+
+    def __getattr__(self, name):
+        return getattr(self.__class__.oio, name)
+
 
 try:
     __version__ = __canonical_version__ = pkg_resources.get_provider(
@@ -76,4 +87,6 @@ except pkg_resources.DistributionNotFound:
     __version__ = _version_info.release_string()
     __canonical_version = _version_info.version_string()
 
+
+sys.modules[__name__] = OioModule()
 __all__ = ["ObjectStorageApi"]
