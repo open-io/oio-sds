@@ -115,7 +115,7 @@ _check_policy(struct meta2_backend_s *m2, const gchar *polname)
 	struct storage_policy_s *policy = NULL;
 
 	if (!*polname)
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid policy: %s", "empty");
+		return BADREQ("Invalid policy: %s", "empty");
 
 	g_mutex_lock (&m2->nsinfo_lock);
 	policy = storage_policy_init(m2->nsinfo, polname);
@@ -477,8 +477,7 @@ _check_if_container_empty (struct sqlx_sqlite3_s *sq3)
 			GRID_WARN("SQLite error: (%d) %s",
 					rc, sqlite3_errmsg(sq3->db));
 		} else {
-			err = NEWERROR(CODE_INTERNAL_ERROR, "SQLite error: (%d) %s",
-					rc, sqlite3_errmsg(sq3->db));
+			err = SYSERR("SQLite error: (%d) %s", rc, sqlite3_errmsg(sq3->db));
 		}
 	}
 	(void) sqlite3_finalize (stmt);
@@ -899,7 +898,7 @@ meta2_backend_put_alias(
 		GSList *in, GSList **out_deleted, GSList **out_added)
 {
 	if (!in)
-		return NEWERROR(CODE_BAD_REQUEST, "No bean");
+		return BADREQ("No bean");
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = m2b_open(m2b, base, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
@@ -972,8 +971,10 @@ meta2_backend_update_content(
 		struct meta2_backend_s *m2b, struct m2op_target_s *base,
 		GSList *in, GSList **out_deleted, GSList **out_added)
 {
+	EXTRA_ASSERT(out_added != NULL);
+	EXTRA_ASSERT(out_deleted != NULL);
 	if (!in)
-		return NEWERROR(CODE_BAD_REQUEST, "No bean");
+		return BADREQ("No bean");
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = m2b_open(m2b, base, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
@@ -998,7 +999,10 @@ meta2_backend_truncate_content(
 		struct meta2_backend_s *m2b, struct m2op_target_s *base,
 		gint64 truncate_size, GSList **out_deleted, GSList **out_added)
 {
-	if (truncate_size <= 0)
+	EXTRA_ASSERT(out_added != NULL);
+	EXTRA_ASSERT(out_deleted != NULL);
+
+	if (truncate_size < 0)
 		return BADREQ("Negative truncate size!");
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1027,6 +1031,8 @@ meta2_backend_force_alias(
 {
 	EXTRA_ASSERT(out_deleted != NULL);
 	EXTRA_ASSERT(out_added != NULL);
+	if (!in)
+		return BADREQ("No bean");
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = m2b_open(m2b, base, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
@@ -1056,6 +1062,9 @@ meta2_backend_insert_beans(
 		struct meta2_backend_s *m2b, struct m2op_target_s *base,
 		GSList *beans, gboolean force)
 {
+	if (!beans)
+		return BADREQ("No bean");
+
 	int error_already = 0;
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1142,12 +1151,12 @@ meta2_backend_update_beans(
 		GSList *new_chunks, GSList *old_chunks, gboolean frozen)
 {
 	if (g_slist_length(new_chunks) != g_slist_length(old_chunks))
-		return NEWERROR(CODE_BAD_REQUEST, "BeanSet length mismatch");
+		return BADREQ("BeanSet length mismatch");
 	for (GSList *l0=new_chunks, *l1=old_chunks; l0 && l1 ;l0=l0->next,l1=l1->next) {
 		if (!l0->data || !l1->data)
-			return NEWERROR(CODE_BAD_REQUEST, "BeanSet validity mismatch");
+			return BADREQ("BeanSet validity mismatch");
 		if (DESCR(l0->data) != DESCR(l1->data))
-			return NEWERROR(CODE_BAD_REQUEST, "BeanSet type mismatch");
+			return BADREQ("BeanSet type mismatch");
 	}
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1193,9 +1202,9 @@ meta2_backend_append_to_alias(
 	struct namespace_info_s *nsinfo = NULL;
 
 	if (!beans)
-		return NEWERROR(CODE_BAD_REQUEST, "No bean");
+		return BADREQ("No bean");
 	if (!(nsinfo = meta2_backend_get_nsinfo (m2b)))
-		return NEWERROR(CODE_INTERNAL_ERROR, "NS not ready");
+		return SYSERR("NS not ready");
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = m2b_open(m2b, base, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
@@ -1406,12 +1415,11 @@ GError *
 meta2_backend_check_content(struct meta2_backend_s *m2b,
 		GSList *beans, GString *message, gboolean update)
 {
-	GError *err = NULL;
 	struct namespace_info_s *nsinfo = NULL;
 	if (!(nsinfo = meta2_backend_get_nsinfo(m2b)))
-		return NEWERROR(CODE_INTERNAL_ERROR, "NS not ready");
+		return SYSERR("NS not ready");
 
-	err = m2db_check_content(beans, nsinfo, message, update);
+	GError *err = m2db_check_content(beans, nsinfo, message, update);
 	namespace_info_free(nsinfo);
 	return err;
 }
@@ -1431,7 +1439,7 @@ meta2_backend_generate_beans(
 	EXTRA_ASSERT(cb != NULL);
 
 	if (!(nsinfo = meta2_backend_get_nsinfo(m2b)))
-		return NEWERROR(CODE_INTERNAL_ERROR, "NS not ready");
+		return SYSERR("NS not ready");
 
 	/* Get the data needed for the beans preparation.
 	 * This call may return an open database. */
@@ -1496,7 +1504,7 @@ _load_storage_policy(
 	struct sqlx_sqlite3_s *sq3 = NULL;
 
 	if (!(nsinfo = meta2_backend_get_nsinfo(m2b)))
-		return NEWERROR(CODE_INTERNAL_ERROR, "NS not ready");
+		return SYSERR("NS not ready");
 
 	if (polname) {
 		if (!(*pol = storage_policy_init(nsinfo, polname)))
@@ -1531,6 +1539,8 @@ meta2_backend_get_conditionned_spare_chunks_v2(
 		const gchar *polname, GSList *notin,
 		GSList *broken, GSList **result)
 {
+	EXTRA_ASSERT(result != NULL);
+
 	struct storage_policy_s *pol = NULL;
 	GError *err = _load_storage_policy(m2b, base, polname, &pol);
 	if (!err)
@@ -1547,6 +1557,8 @@ meta2_backend_get_spare_chunks(
 		struct meta2_backend_s *m2b, struct m2op_target_s *base,
 		const char *polname, GSList **result)
 {
+	EXTRA_ASSERT(result != NULL);
+
 	// TODO: we can avoid instantiating storage policy
 	// but we need to review several function calls
 	struct storage_policy_s *pol = NULL;
@@ -1567,6 +1579,7 @@ meta2_backend_content_from_chunkid(
 		const char *chunk_id, m2_onbean_cb cb, gpointer u0)
 {
 	EXTRA_ASSERT(cb != NULL);
+
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = m2b_open(m2b, base, _mode_readonly(0), &sq3);
 	if (!err) {
@@ -1591,6 +1604,7 @@ meta2_backend_content_from_contenthash (
 		GBytes *h, m2_onbean_cb cb, gpointer u0)
 {
 	EXTRA_ASSERT(cb != NULL);
+
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = m2b_open(m2b, base, _mode_readonly(0), &sq3);
 	if (!err) {
@@ -1613,6 +1627,7 @@ meta2_backend_content_from_contentid (
 		GBytes *h, m2_onbean_cb cb, gpointer u0)
 {
 	EXTRA_ASSERT(cb != NULL);
+
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = m2b_open(m2b, base, _mode_readonly(0), &sq3);
 	if (!err) {
