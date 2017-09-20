@@ -410,13 +410,13 @@ resource_stat_chunk(dav_resource *resource, int flags)
 				APR_FINFO_NORM, resource->pool);
 	}
 
-	if (status != APR_SUCCESS)
+	if (status != APR_SUCCESS && status != APR_INCOMPLETE)
 		status = apr_stat(&(resource->info->finfo),
 				resource_get_pathname(resource),
 				APR_FINFO_NORM, resource->pool);
 
 	resource->collection = 0;
-	resource->exists = (status == APR_SUCCESS);
+	resource->exists = (status == APR_SUCCESS || status == APR_INCOMPLETE);
 
 	if (!resource->exists)
 		DAV_DEBUG_RES(resource, 0, "Resource does not exist [%s]", resource_get_pathname(resource));
