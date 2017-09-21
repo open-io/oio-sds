@@ -16,7 +16,7 @@
 from oio.api.base import HttpApi
 from oio.common.exceptions import ClientException, NotFound, VolumeException
 from oio.common.exceptions import ServiceUnavailable, ServerException
-from oio.common.utils import get_logger
+from oio.common.logger import get_logger
 from oio.conscience.client import ConscienceClient
 from oio.directory.client import DirectoryClient
 

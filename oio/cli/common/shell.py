@@ -16,17 +16,21 @@
 """Command-line interface to the OpenIO APIs"""
 
 import sys
+import os
 import logging
 from cliff.app import App
 
 from oio import __version__ as oio_version
-from oio.common.utils import env
-from oio.cli.commandmanager import CommandManager
-from oio.cli import clientmanager
+from oio.cli.common.commandmanager import CommandManager
+from oio.cli.common.clientmanager import ClientManager, get_plugin_module
+
+LOG = logging.getLogger(__name__)
+
+GROUP_LIST = ["account", "container", "object", "reference", "volume",
+              "directory", "events", "cluster", "election"]
 
 
 class OpenIOShell(App):
-    log = logging.getLogger(__name__)
 
     def __init__(self):
         super(OpenIOShell, self).__init__(
@@ -39,6 +43,7 @@ class OpenIOShell(App):
 
     def configure_logging(self):
         super(OpenIOShell, self).configure_logging()
+
         root_logger = logging.getLogger('')
 
         if self.options.verbose_level == 0:
@@ -74,7 +79,7 @@ class OpenIOShell(App):
         try:
             return super(OpenIOShell, self).run(argv)
         except Exception as e:
-            self.log.error('Exception raised: ' + str(e))
+            LOG.error('Exception raised: ' + str(e))
             return 1
 
     def build_option_parser(self, description, version):
@@ -86,21 +91,21 @@ class OpenIOShell(App):
             '--oio-ns',
             metavar='<namespace>',
             dest='ns',
-            default=env('OIO_NS'),
+            default=os.environ.get('OIO_NS', ''),
             help='Namespace name (Env: OIO_NS)',
         )
         parser.add_argument(
             '--oio-account',
             metavar='<account>',
             dest='account_name',
-            default=env('OIO_ACCOUNT'),
+            default=os.environ.get('OIO_ACCOUNT', ''),
             help='Account name (Env: OIO_ACCOUNT)'
         )
         parser.add_argument(
             '--oio-proxyd-url',
             metavar='<proxyd url>',
             dest='proxyd_url',
-            default=env('OIO_PROXYD_URL'),
+            default=os.environ.get('OIO_PROXYD_URL', ''),
             help='Proxyd URL (Env: OIO_PROXYD_URL)'
         )
         parser.add_argument(
@@ -109,18 +114,32 @@ class OpenIOShell(App):
             action='store_true',
             help="Add 'admin mode' flag to all proxy requests")
 
-        return clientmanager.build_plugin_option_parser(parser)
+        return parser
 
     def initialize_app(self, argv):
         super(OpenIOShell, self).initialize_app(argv)
 
-        for module in clientmanager.PLUGIN_MODULES:
-            api = module.API_NAME
-            cmd_group = 'openio.' + api.replace('-', '_')
+        try:
+            api = argv[0]
+            module_name = 'oio.cli.%s.client' % api
+            get_plugin_module(module_name)
+            cmd_group = 'openio.%s' % api
             self.command_manager.add_command_group(cmd_group)
-            self.log.debug('%s API: cmd group %s', api, cmd_group)
-        self.command_manager.add_command_group('openio.common')
-        self.command_manager.add_command_group('openio.ext')
+            LOG.debug('%s API: cmd group %s', api, cmd_group)
+        except ImportError:
+            for api in GROUP_LIST:
+                cmd_group = 'openio.%s' % api
+                self.command_manager.add_command_group(cmd_group)
+                LOG.debug('%s API: cmd group %s', api, cmd_group)
+        except IndexError:
+            for api in GROUP_LIST:
+                module_name = 'oio.cli.%s.client' % api
+                get_plugin_module(module_name)
+                cmd_group = 'openio.%s' % api
+                self.command_manager.add_command_group(cmd_group)
+                LOG.debug('%s API: cmd group %s', api, cmd_group)
+
+        self.print_help_if_requested()
 
         options = {
             'namespace': self.options.ns,
@@ -131,12 +150,10 @@ class OpenIOShell(App):
                 logging.getLogger('').getEffectiveLevel()),
             'is_cli': True,
         }
-
-        self.print_help_if_requested()
-        self.client_manager = clientmanager.ClientManager(options)
+        self.client_manager = ClientManager(options)
 
     def prepare_to_run_command(self, cmd):
-        self.log.debug(
+        LOG.debug(
             'command: %s -> %s.%s',
             getattr(cmd, 'cmd_name', '<none>'),
             cmd.__class__.__module__,
@@ -144,7 +161,7 @@ class OpenIOShell(App):
         )
 
     def clean_up(self, cmd, result, err):
-        self.log.debug('clean up %s: %s', cmd.__class__.__name__, err or '')
+        LOG.debug('clean up %s: %s', cmd.__class__.__name__, err or '')
 
 
 def main(argv=sys.argv[1:]):

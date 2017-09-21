@@ -28,13 +28,55 @@ Basic object storage example:
        u'size': 113}],
      113,
      '8de4989188593b0419d387099c9e9872')
-
 """
 
 
 import pkg_resources
+import importlib
+import sys
 
-from oio.api.object_storage import ObjectStorageApi
+
+class LazyLoader(object):
+    """Delay module or class loading."""
+
+    def __init__(self, module, name=None):
+        self.mod_name = module
+        self.class_name = name
+        self.value = None
+
+    def __ensure_value(self):
+        if self.value is None:
+            mod = importlib.import_module(self.mod_name)
+            if self.class_name:
+                self.value = getattr(mod, self.class_name)
+            else:
+                self.value = mod
+
+    def __getattr__(self, name):
+        self.__ensure_value()
+        return getattr(self.value, name)
+
+    def __call__(self, *args, **kwargs):
+        self.__ensure_value()
+        return self.value(*args, **kwargs)
+
+
+class OioModule(object):
+
+    oio = importlib.import_module('oio')
+    object_storage = None
+    __doc__ = oio.__doc__
+
+    @property
+    def ObjectStorageApi(self):  # pylint: disable=invalid-name
+        if not self.__class__.object_storage:
+            self.__class__.object_storage = importlib.import_module(
+                'oio.api.object_storage')
+        return self.__class__.object_storage.ObjectStorageApi
+
+    def __getattr__(self, name):
+        return getattr(self.__class__.oio, name)
+
 
 try:
     __version__ = __canonical_version__ = pkg_resources.get_provider(
@@ -45,4 +87,6 @@ except pkg_resources.DistributionNotFound:
     __version__ = _version_info.release_string()
     __canonical_version = _version_info.version_string()
 
+
+sys.modules[__name__] = OioModule()
 __all__ = ["ObjectStorageApi"]

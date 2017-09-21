@@ -26,8 +26,9 @@ from eventlet import Timeout, greenthread
 from oio.conscience.client import ConscienceClient
 from oio.rdir.client import RdirClient
 from oio.event.beanstalk import Beanstalk, ConnectionError
-from oio.common.utils import true_value, drop_privileges, \
-        json, int_value
+from oio.common.utils import drop_privileges
+from oio.common.easy_value import true_value, int_value
+from oio.common.json import json
 from oio.event.evob import is_success, is_error
 from oio.event.loader import loadhandlers
 

@@ -18,7 +18,7 @@
 import os
 import mock
 
-from oio.common.utils import xattr
+from oio.common.xattr import xattr
 from oio.blob.indexer import BlobIndexer
 from oio.blob.utils import chunk_xattr_keys
 from oio.common.exceptions import FaultyChunk

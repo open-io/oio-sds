@@ -20,7 +20,7 @@
 import sys
 import logging
 import zookeeper
-from oio.common.utils import load_namespace_conf
+from oio.common.configuration import load_namespace_conf
 
 
 def delete_children(zh, path):

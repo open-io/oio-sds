@@ -19,7 +19,8 @@ import time
 from datetime import datetime
 from socket import gethostname
 
-from oio.common.utils import get_logger, int_value, true_value
+from oio.common.easy_value import int_value, true_value
+from oio.common.logger import get_logger
 from oio.common.green import ratelimit
 from oio.common.exceptions import ContentNotFound, NotFound, OrphanChunk
 from oio.content.factory import ContentFactory

@@ -33,8 +33,7 @@ class StatsEvents(show.ShowOne):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
-        data = self.app.client_manager.admin.event_stats(
-            parsed_args.tube)
+        data = self.app.client_manager.event.stats(parsed_args.tube)
         return zip(*sorted(data.iteritems()))
 
 
@@ -61,6 +60,6 @@ class EventsExhume(show.ShowOne):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
-        count = self.app.client_manager.admin.event.exhume(parsed_args.limit,
-                                                           parsed_args.tube)
+        count = self.app.client_manager.event.exhume(parsed_args.limit,
+                                                     parsed_args.tube)
         return [("Exhumed",), (count,)]

@@ -17,7 +17,9 @@ import hashlib
 
 import os
 
-from oio.common.utils import get_logger, cid_from_name, xattr
+from oio.common.utils import cid_from_name
+from oio.common.xattr import xattr
+from oio.common.logger import get_logger
 from oio.blob.auditor import BlobAuditorWorker
 from oio.common import exceptions as exc
 from oio.container.client import ContainerClient

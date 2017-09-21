@@ -17,9 +17,10 @@
 """Meta0 client and meta1 balancing operations"""
 import random
 
-from oio.common.utils import json
+from oio.common.json import json
 from oio.common.client import ProxyClient
-from oio.common.exceptions import ConfigurationException
+from oio.common.exceptions import ConfigurationException, ServiceBusy
+from oio.directory.admin import AdminClient
 
 
 class Meta0Client(ProxyClient):
@@ -36,9 +37,9 @@ class Meta0Client(ProxyClient):
         """
         self._request('POST', "/meta0_force", data=mapping, **kwargs)
 
-    def list(self):
+    def list(self, **kwargs):
         """Get the meta0 prefix mapping"""
-        _, obody = self._request('GET', "/meta0_list")
+        _, obody = self._request('GET', "/meta0_list", **kwargs)
         return obody
 
 
@@ -55,6 +56,7 @@ class PrefixMapping(object):
         """
         self.cs = conscience_client
         self.m0 = meta0_client
+        self.admin = AdminClient(self.m0.conf)
         self.svc_by_base = dict()
         self.services = dict()
         self.logger = logger
@@ -147,7 +149,7 @@ class PrefixMapping(object):
                 for base in xrange(int(min_base, 16),
                                    int(max_base, 16) + 1)]
 
-    def _extend(self):
+    def _extend(self, bases=None):
         """
         Extend the mapping to all meta1 prefixes,
         if `self.digits` is less than 4.
@@ -155,22 +157,26 @@ class PrefixMapping(object):
         if self.digits == 4:
             return self.svc_by_base
         extended = dict()
-        for base, services in self.svc_by_base.iteritems():
+        if not bases:
+            svc_by_base = self.svc_by_base
+        else:
+            svc_by_base = {base: self.svc_by_base[base] for base in bases}
+        for base, services in svc_by_base.iteritems():
             for pfx in self.prefix_siblings(base):
                 extended[pfx] = services
         return extended
 
-    def to_json(self):
+    def to_json(self, bases=None):
         """
         Serialize the mapping to a JSON string suitable
         as input for 'meta0_force' request.
         """
         simplified = dict()
-        for pfx, services in self._extend().iteritems():
+        for pfx, services in self._extend(bases).iteritems():
             simplified[pfx] = [x['addr'] for x in services]
         return json.dumps(simplified)
 
-    def load(self, json_mapping=None):
+    def load(self, json_mapping=None, **kwargs):
         """
         Load the mapping from the cluster,
         from a JSON string or from a dictionary.
@@ -180,7 +186,7 @@ class PrefixMapping(object):
         elif isinstance(json_mapping, dict):
             raw_mapping = json_mapping
         else:
-            raw_mapping = self.m0.list()
+            raw_mapping = self.m0.list(**kwargs)
 
         # pylint: disable=no-member
         for pfx, services_addrs in raw_mapping.iteritems():
@@ -195,9 +201,27 @@ class PrefixMapping(object):
                 services.append(svc)
             self.assign_services(base, services)
 
-    def force(self, **kwargs):
-        """Upload the current mapping to the meta0 services"""
-        self.m0.force(self.to_json().strip(), **kwargs)
+    def apply(self, moved=None, **kwargs):
+        """
+        Upload the current mapping to the meta0 services, and set peers
+        accordingly in meta1 databases.
+
+        :param moved: list of bases that have moved.
+        """
+        if moved:
+            for base in moved:
+                peers = [v['addr'] for v in self.svc_by_base[base]]
+                cid = base.ljust(64, '0')
+                try:
+                    self.admin.set_peers('meta1', cid=cid, peers=peers)
+                except ServiceBusy:
+                    self.logger.warn('Failed to set peers to %s for base %s',
+                                     peers, base)
+        self.m0.force(self.to_json(moved).strip(), **kwargs)
+        if moved:
+            for base in moved:
+                cid = base.ljust(64, '0')
+                self.admin.election_leave('meta1', cid=cid)
 
     def _find_services(self, known=None, lookup=None, max_lookup=50):
         """
@@ -384,7 +408,7 @@ class PrefixMapping(object):
             if self.logger:
                 self.logger.info("No equilibration possible when " +
                                  "meta1_digits is set to 0")
-            return
+            return None
 
         loops = 0
         moved_bases = set()
@@ -437,3 +461,4 @@ class PrefixMapping(object):
                 svc_bases = self.get_managed_bases(svc)
                 self.logger.info("meta1 %s has %d bases",
                                  svc['addr'], len(svc_bases))
+        return moved_bases

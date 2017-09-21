@@ -16,7 +16,8 @@
 import warnings
 from urllib import unquote_plus
 from oio.common.client import ProxyClient
-from oio.common.utils import json, ensure_headers
+from oio.common.decorators import ensure_headers
+from oio.common.json import json
 from oio.common import exceptions
 
 CONTENT_HEADER_PREFIX = 'x-oio-content-meta-'

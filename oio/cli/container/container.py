@@ -23,7 +23,7 @@ class SetPropertyCommandMixin(object):
     """Command setting quota, storage policy or generic property"""
 
     def patch_parser(self, parser):
-        from oio.cli.utils import KeyValueAction
+        from oio.cli.common.utils import KeyValueAction
 
         parser.add_argument(
             '--property',
@@ -84,7 +84,7 @@ class CreateContainer(SetPropertyCommandMixin, lister.Lister):
             system['sys.m2.policy.version'] = str(parsed_args.max_versions)
 
         results = []
-        account = self.app.client_manager.get_account()
+        account = self.app.client_manager.account
         if len(parsed_args.containers) > 1:
             results = self.app.client_manager.storage.container_create_many(
                 account,
@@ -141,7 +141,7 @@ class SetContainer(SetPropertyCommandMixin, command.Command):
             system['sys.m2.policy.version'] = str(parsed_args.max_versions)
 
         self.app.client_manager.storage.container_set_properties(
-            self.app.client_manager.get_account(),
+            self.app.client_manager.account,
             parsed_args.container,
             properties,
             clear=parsed_args.clear,
@@ -169,7 +169,7 @@ class TouchContainer(command.Command):
 
         for container in parsed_args.containers:
             self.app.client_manager.storage.container_touch(
-                self.app.client_manager.get_account(),
+                self.app.client_manager.account,
                 container
             )
 
@@ -194,7 +194,7 @@ class DeleteContainer(command.Command):
 
         for container in parsed_args.containers:
             self.app.client_manager.storage.container_delete(
-                self.app.client_manager.get_account(),
+                self.app.client_manager.account,
                 container
             )
 
@@ -217,7 +217,7 @@ class ShowContainer(show.ShowOne):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
-        account = self.app.client_manager.get_account()
+        account = self.app.client_manager.account
 
         # The command is named 'show' but we must call
         # container_get_properties() because container_show() does
@@ -232,7 +232,7 @@ class ShowContainer(show.ShowOne):
         bytes_usage = sys.get('sys.m2.usage', 0)
         objects = sys.get('sys.m2.objects', 0)
         if parsed_args.formatter == 'table':
-            from oio.common.utils import convert_size
+            from oio.common.easy_value import convert_size
 
             ctime = int(ctime)
             bytes_usage = convert_size(int(bytes_usage), unit="B")
@@ -260,7 +260,7 @@ class ListContainer(lister.Lister):
     log = getLogger(__name__ + '.ListContainer')
 
     def get_parser(self, prog_name):
-        from oio.cli.utils import ValueFormatStoreTrueAction
+        from oio.cli.common.utils import ValueFormatStoreTrueAction
 
         parser = super(ListContainer, self).get_parser(prog_name)
         parser.add_argument(
@@ -313,7 +313,7 @@ class ListContainer(lister.Lister):
         if parsed_args.limit:
             kwargs['limit'] = parsed_args.limit
 
-        account = self.app.client_manager.get_account()
+        account = self.app.client_manager.account
 
         columns = ('Name', 'Bytes', 'Count')
 
@@ -394,12 +394,12 @@ class UnsetContainer(command.Command):
 
         if properties:
             self.app.client_manager.storage.container_del_properties(
-                self.app.client_manager.get_account(),
+                self.app.client_manager.account,
                 parsed_args.container,
                 properties)
         if system:
             self.app.client_manager.storage.container_set_properties(
-                self.app.client_manager.get_account(),
+                self.app.client_manager.account,
                 parsed_args.container,
                 system=system)
 
@@ -422,7 +422,7 @@ class SaveContainer(command.Command):
 
         self.log.debug('take_action(%s)', parsed_args)
 
-        account = self.app.client_manager.get_account()
+        account = self.app.client_manager.account
         container = parsed_args.container
         objs = self.app.client_manager.storage.object_list(
             account, container)
@@ -458,7 +458,7 @@ class LocateContainer(show.ShowOne):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
-        account = self.app.client_manager.get_account()
+        account = self.app.client_manager.account
         container = parsed_args.container
 
         data = self.app.client_manager.storage.container_get_properties(
@@ -506,7 +506,7 @@ class RefreshContainer(command.Command):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
-        account = self.app.client_manager.get_account()
+        account = self.app.client_manager.account
         self.app.client_manager.storage.container_refresh(
             account=account,
             container=parsed_args.container

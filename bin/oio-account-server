@@ -2,7 +2,7 @@
 
 import eventlet.hubs
 from optparse import OptionParser
-from oio.common.utils import parse_options, read_conf
+from oio.common.configuration import parse_options, read_conf
 from oio.common.green import get_hub
 from oio.account.server import create_app
 from oio.common.wsgi import Application, ServiceLogger

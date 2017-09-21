@@ -20,8 +20,9 @@ import logging
 from urlparse import urlparse
 from eventlet import sleep, Timeout
 from oio.common import exceptions as exc
-from oio.common.http import http_connect, parse_content_type,\
+from oio.common.http import parse_content_type,\
     parse_content_range, ranges_from_http_header, http_header_from_ranges
+from oio.common.http_eventlet import http_connect
 from oio.common.utils import GeneratorIO, group_chunk_errors
 from oio.common import green
 

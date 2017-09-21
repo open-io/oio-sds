@@ -18,7 +18,9 @@ from gunicorn.glogging import Logger
 from werkzeug.wrappers import Request
 from werkzeug.exceptions import HTTPException, InternalServerError
 
-from oio.common.utils import get_logger, read_conf, CPU_COUNT
+from oio.common.utils import CPU_COUNT
+from oio.common.configuration import read_conf
+from oio.common.logger import get_logger
 
 
 class Application(BaseApplication):

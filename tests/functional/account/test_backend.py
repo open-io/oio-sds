@@ -20,7 +20,7 @@ from time import sleep, time
 import redis
 import random
 from oio.account.backend import AccountBackend
-from oio.common.utils import Timestamp
+from oio.common.timestamp import Timestamp
 from tests.utils import BaseTestCase, random_str
 from werkzeug.exceptions import Conflict
 from testtools.testcase import ExpectedException

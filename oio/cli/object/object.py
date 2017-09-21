@@ -15,7 +15,7 @@
 
 import os
 from logging import getLogger
-from oio.common.http import get_pool_manager
+from oio.common.http_urllib3 import get_pool_manager
 from cliff import command, lister, show
 from eventlet import GreenPool
 
@@ -25,7 +25,7 @@ class ContainerCommandMixin(object):
 
     @property
     def flatns_manager(self):
-        return self.app.client_manager.get_flatns_manager()
+        return self.app.client_manager.flatns_manager
 
     def patch_parser(self, parser):
         parser.add_argument(
@@ -73,7 +73,7 @@ class CreateObject(ContainerCommandMixin, lister.Lister):
     log = getLogger(__name__ + '.CreateObject')
 
     def get_parser(self, prog_name):
-        from oio.cli.utils import KeyValueAction
+        from oio.cli.common.utils import KeyValueAction
 
         parser = super(CreateObject, self).get_parser(prog_name)
         self.patch_parser(parser)
@@ -138,7 +138,7 @@ class CreateObject(ContainerCommandMixin, lister.Lister):
                     if parsed_args.auto:
                         container = self.flatns_manager(name)
                     data = self.app.client_manager.storage.object_create(
-                        self.app.client_manager.get_account(),
+                        self.app.client_manager.account,
                         container,
                         file_or_path=f,
                         obj_name=name,
@@ -199,7 +199,7 @@ class TouchObject(ContainerCommandMixin, command.Command):
             if parsed_args.auto:
                 container = self.flatns_manager(obj)
             self.app.client_manager.storage.object_touch(
-                self.app.client_manager.get_account(),
+                self.app.client_manager.account,
                 container,
                 obj,
                 version=parsed_args.object_version)
@@ -232,7 +232,7 @@ class DeleteObject(ContainerCommandMixin, lister.Lister):
         super(DeleteObject, self).take_action(parsed_args)
         container = ''
         results = []
-        account = self.app.client_manager.get_account()
+        account = self.app.client_manager.account
 
         if len(parsed_args.objects) <= 1:
             if parsed_args.auto:
@@ -289,7 +289,7 @@ class ShowObject(ObjectCommandMixin, show.ShowOne):
         self.log.debug('take_action(%s)', parsed_args)
         super(ShowObject, self).take_action(parsed_args)
 
-        account = self.app.client_manager.get_account()
+        account = self.app.client_manager.account
         container = parsed_args.container
         obj = parsed_args.object
 
@@ -321,7 +321,7 @@ class SetObject(ObjectCommandMixin, command.Command):
     log = getLogger(__name__ + '.SetObject')
 
     def get_parser(self, prog_name):
-        from oio.cli.utils import KeyValueAction
+        from oio.cli.common.utils import KeyValueAction
 
         parser = super(SetObject, self).get_parser(prog_name)
         self.patch_parser(parser)
@@ -347,7 +347,7 @@ class SetObject(ObjectCommandMixin, command.Command):
             container = self.flatns_manager(obj)
         properties = parsed_args.property
         self.app.client_manager.storage.object_set_properties(
-            self.app.client_manager.get_account(),
+            self.app.client_manager.account,
             container,
             obj,
             properties,
@@ -391,7 +391,7 @@ class SaveObject(ObjectCommandMixin, command.Command):
             container = self.flatns_manager(obj)
 
         meta, stream = self.app.client_manager.storage.object_fetch(
-            self.app.client_manager.get_account(),
+            self.app.client_manager.account,
             container,
             obj,
             key_file=key_file
@@ -410,7 +410,7 @@ class ListObject(ContainerCommandMixin, lister.Lister):
     log = getLogger(__name__ + '.ListObject')
 
     def get_parser(self, prog_name):
-        from oio.cli.utils import ValueFormatStoreTrueAction
+        from oio.cli.common.utils import ValueFormatStoreTrueAction
 
         parser = super(ListObject, self).get_parser(prog_name)
         self.patch_parser(parser)
@@ -524,7 +524,7 @@ class ListObject(ContainerCommandMixin, lister.Lister):
     def _autocontainer_loop(self, account, marker=None, limit=None,
                             concurrency=1, **kwargs):
         from functools import partial
-        autocontainer = self.app.client_manager.get_flatns_manager()
+        autocontainer = self.flatns_manager
         container_marker = autocontainer(marker) if marker else None
         count = 0
         kwargs['pool_manager'] = get_pool_manager(
@@ -588,7 +588,7 @@ class ListObject(ContainerCommandMixin, lister.Lister):
         if parsed_args.attempts:
             kwargs['attempts'] = parsed_args.attempts
 
-        account = self.app.client_manager.get_account()
+        account = self.app.client_manager.account
         if parsed_args.auto:
             obj_gen = self._autocontainer_loop(account, **kwargs)
         else:
@@ -601,7 +601,7 @@ class ListObject(ContainerCommandMixin, lister.Lister):
                 obj_gen = resp['objects']
 
         if parsed_args.long_listing:
-            from oio.common.utils import Timestamp
+            from oio.common.timestamp import Timestamp
 
             def _format_props(props):
                 prop_list = ["%s=%s" % (k, v) for k, v
@@ -663,7 +663,7 @@ class UnsetObject(ObjectCommandMixin, command.Command):
         if parsed_args.auto:
             container = self.flatns_manager(obj)
         self.app.client_manager.storage.object_del_properties(
-            self.app.client_manager.get_account(),
+            self.app.client_manager.account,
             container,
             obj,
             properties,
@@ -693,7 +693,7 @@ but no action needing the removed chunks are accepted\
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         super(DrainObject, self).take_action(parsed_args)
-        account = self.app.client_manager.get_account()
+        account = self.app.client_manager.account
         container = parsed_args.container
 
         for obj in parsed_args.objects:
@@ -724,7 +724,7 @@ class LocateObject(ObjectCommandMixin, lister.Lister):
         self.log.debug('take_action(%s)', parsed_args)
         super(LocateObject, self).take_action(parsed_args)
 
-        account = self.app.client_manager.get_account()
+        account = self.app.client_manager.account
         container = parsed_args.container
         obj = parsed_args.object
         if parsed_args.auto:

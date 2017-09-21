@@ -16,7 +16,7 @@
 from oio.common.exceptions import OrphanChunk
 from oio.content.content import Content, Chunk
 from oio.api.ec import ECWriteHandler, ECRebuildHandler
-from oio.api.object_storage import _sort_chunks, fetch_stream_ec
+from oio.common.storage_functions import _sort_chunks, fetch_stream_ec
 from oio.common.utils import GeneratorIO
 from oio.common.constants import OIO_VERSION
 

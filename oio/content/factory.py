@@ -15,7 +15,8 @@
 
 from oio.common.exceptions import ContentNotFound
 from oio.common.exceptions import NotFound
-from oio.common.utils import get_logger, GeneratorIO
+from oio.common.utils import GeneratorIO
+from oio.common.logger import get_logger
 from oio.container.client import ContainerClient
 from oio.content.plain import PlainContent
 from oio.content.ec import ECContent

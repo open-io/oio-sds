@@ -32,7 +32,7 @@ OBJ_FIELDS = ['account', 'container', 'ctime', 'hash', 'id', 'mime-type',
               'object', 'policy', 'size', 'version']
 
 
-class ObjTest(CliTestCase):
+class ObjectTest(CliTestCase):
     """Functional tests for objects."""
 
     CONTAINER_NAME = uuid.uuid4().hex

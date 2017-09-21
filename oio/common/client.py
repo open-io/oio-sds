@@ -13,9 +13,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.common.utils import get_logger
-from oio.common.utils import load_namespace_conf
-from oio.common.utils import validate_service_conf
+from oio.common.logger import get_logger
+from oio.common.configuration import load_namespace_conf, validate_service_conf
 from oio.api.base import HttpApi
 from oio.common.exceptions import ServiceBusy, OioException
 from random import randrange

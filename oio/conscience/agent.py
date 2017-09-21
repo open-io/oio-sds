@@ -20,9 +20,10 @@ import pkg_resources
 from eventlet import GreenPool, sleep
 
 from oio.common.daemon import Daemon
-from oio.common.http import get_pool_manager
-from oio.common.utils import get_logger, float_value, validate_service_conf, \
-    int_value, parse_config, true_value
+from oio.common.http_urllib3 import get_pool_manager
+from oio.common.easy_value import float_value, int_value, true_value
+from oio.common.configuration import parse_config, validate_service_conf
+from oio.common.logger import get_logger
 from oio.common.client import ProxyClient
 from oio.conscience.client import ConscienceClient
 from oio.common.exceptions import OioException

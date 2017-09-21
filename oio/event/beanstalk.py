@@ -16,7 +16,7 @@
 
 import os
 import sys
-from oio.common.utils import yaml
+import yaml
 from eventlet.green import socket
 from eventlet.queue import Empty, LifoQueue
 from urlparse import urlparse

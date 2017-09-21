@@ -1151,7 +1151,7 @@ member_json (struct election_member_s *m, GString *gs)
 	if (m->flag_local_id)
 		OIO_JSON_append_int (gs, "id", m->local_id);
 	else
-		g_string_append_static (gs, "id:null");
+		g_string_append_static (gs, "\"id\":null");
 	g_string_append_c (gs, ',');
 	OIO_JSON_append_str (gs, "url", member_get_url(m));
 	g_string_append_c (gs, ',');
@@ -1160,7 +1160,7 @@ member_json (struct election_member_s *m, GString *gs)
 	if (m->flag_master_id)
 		OIO_JSON_append_int (gs, "id", m->master_id);
 	else
-		g_string_append (gs, "id:null");
+		g_string_append (gs, "\"id\":null");
 	g_string_append_c (gs, ',');
 	OIO_JSON_append_str (gs, "url", m->master_url);
 	g_string_append_static (gs, "},\"base\":{");

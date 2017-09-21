@@ -29,14 +29,17 @@ class DirectoryCmd(Command):
                             help='Set the number of replicas (3 by default)')
         parser.add_argument('--min-dist', type=int, default=1,
                             help="Minimum distance between replicas")
+        parser.add_argument(
+            '--meta0-timeout', metavar='<SECONDS>', type=float, default=30.0,
+            help="Timeout for meta0-related operations (30.0s by default)")
         return parser
 
     def get_prefix_mapping(self, parsed_args):
         from oio.directory.meta0 import PrefixMapping
 
-        meta0_client = self.app.client_manager.admin.meta0
-        conscience_client = self.app.client_manager.admin.cluster
-        digits = self.app.client_manager.get_meta1_digits()
+        meta0_client = self.app.client_manager.directory.meta0
+        conscience_client = self.app.client_manager.directory.cluster
+        digits = self.app.client_manager.meta1_digits
         return PrefixMapping(meta0_client, conscience_client,
                              replicas=parsed_args.replicas,
                              digits=digits,
@@ -45,7 +48,11 @@ class DirectoryCmd(Command):
 
 
 class DirectoryInit(DirectoryCmd):
-    """Initialize the directory"""
+    """
+    Initialize the service directory.
+    Distribute database prefixes among meta1 services and fill the meta0.
+    Also assign one rdir service for each rawx service.
+    """
 
     def get_parser(self, prog_name):
         parser = super(DirectoryInit, self).get_parser(prog_name)
@@ -67,7 +74,7 @@ class DirectoryInit(DirectoryCmd):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         mapping = self.get_prefix_mapping(parsed_args)
-        mapping.load()
+        mapping.load(read_timeout=parsed_args.meta0_timeout)
 
         # Bootstrap with the 'random' strategy, then rebalance with the
         # 'less_prefixes' strategy to ensure the same number of prefixes
@@ -89,14 +96,15 @@ class DirectoryInit(DirectoryCmd):
 
         if checked:
             self.log.info("Saving...")
-            mapping.force(connection_timeout=5.0, read_timeout=30.0)
+            mapping.apply(connection_timeout=5.0,
+                          read_timeout=parsed_args.meta0_timeout)
 
         if parsed_args.rdir:
             from time import sleep
 
             self.log.info("Assigning rdir services to rawx services...")
             sleep(5)  # Let meta1 fetch the list of managed bases
-            self.app.client_manager.admin.rdir_lb.assign_all_rawx()
+            self.app.client_manager.directory.rdir_lb.assign_all_rawx()
 
         if checked:
             self.log.info("Done")
@@ -107,7 +115,7 @@ class DirectoryInit(DirectoryCmd):
 
 class DirectoryList(DirectoryCmd):
     """
-    List the content of the directory as a JSON object.
+    List the content of meta0 database as a JSON object.
 
     WARNING: output is >2MB.
     """
@@ -115,23 +123,24 @@ class DirectoryList(DirectoryCmd):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         mapping = self.get_prefix_mapping(parsed_args)
-        mapping.load()
+        mapping.load(read_timeout=parsed_args.meta0_timeout)
         print mapping.to_json()
 
 
 class DirectoryRebalance(DirectoryCmd):
-    """Rebalance the container prefixes"""
+    """Rebalance the container prefixes."""
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         mapping = self.get_prefix_mapping(parsed_args)
-        mapping.load()
-        mapping.rebalance()
-        mapping.force()
+        mapping.load(read_timeout=parsed_args.meta0_timeout)
+        moved = mapping.rebalance()
+        mapping.apply(moved, read_timeout=parsed_args.meta0_timeout)
+        self.log.info("Moved %s", moved)
 
 
 class DirectoryDecommission(DirectoryCmd):
-    """Decommission a Meta1 service"""
+    """Decommission a Meta1 service."""
 
     def get_parser(self, prog_name):
         parser = super(DirectoryDecommission, self).get_parser(prog_name)
@@ -142,6 +151,7 @@ class DirectoryDecommission(DirectoryCmd):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         mapping = self.get_prefix_mapping(parsed_args)
-        mapping.load()
-        mapping.decommission(parsed_args.addr)
-        mapping.force()
+        mapping.load(read_timeout=parsed_args.meta0_timeout)
+        moved = mapping.decommission(parsed_args.addr)
+        mapping.apply(moved, read_timeout=parsed_args.meta0_timeout)
+        self.log.info("Moved %s", moved)
