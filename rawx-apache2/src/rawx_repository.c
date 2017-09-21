@@ -512,7 +512,7 @@ dav_rawx_deliver(const dav_resource *resource, ap_filter_t *output)
 		char *pending_file = apr_pstrcat(pool,
 				resource_get_pathname(resource), ".pending", NULL);
 		status = apr_stat(&info, pending_file, APR_FINFO_ATIME, pool);
-		if (status == APR_SUCCESS) {
+		if (status == APR_SUCCESS || status == APR_INCOMPLETE) {
 			e = server_create_and_stat_error(conf, pool, HTTP_FORBIDDEN,
 					0, "File in pending mode.");
 			goto end_deliver;
@@ -545,7 +545,7 @@ dav_rawx_deliver(const dav_resource *resource, ap_filter_t *output)
 					APR_FOPEN_BUFFERED|
 					APR_FOPEN_SENDFILE_ENABLED,
 					0, pool);
-			if (APR_SUCCESS != status) {
+			if (status != APR_SUCCESS) {
 				e = server_create_and_stat_error(conf, pool, HTTP_FORBIDDEN,
 						0, "File permissions deny server access.");
 				goto end_deliver;
