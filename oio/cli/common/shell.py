@@ -27,7 +27,7 @@ from oio.cli.common.clientmanager import ClientManager, get_plugin_module
 LOG = logging.getLogger(__name__)
 
 GROUP_LIST = ["account", "container", "object", "reference", "volume",
-              "directory", "events", "cluster"]
+              "directory", "events", "cluster", "election"]
 
 
 class OpenIOShell(App):

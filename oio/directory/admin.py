@@ -110,8 +110,10 @@ class AdminClient(ProxyClient):
             if body[svc_id]['status']['status'] == 200:
                 resp['master'] = svc_id
             elif body[svc_id]['status']['status'] == 303:
-                resp.get('slaves', []).append(svc_id)
-        return body
+                slaves = resp.get('slaves', [])
+                slaves.append(svc_id)
+                resp['slaves'] = slaves
+        return resp
 
     @loc_params
     def set_properties(self, params,
