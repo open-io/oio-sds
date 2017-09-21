@@ -124,7 +124,7 @@ dav_rawx_cmd_gridconfig_docroot(cmd_parms *cmd, void *config UNUSED, const char 
 	/* Check the directory exists */
 	apr_finfo_t finfo;
 	apr_status_t status = apr_stat(&(finfo), arg1, APR_FINFO_NORM, cmd->pool);
-	if (status != APR_SUCCESS) {
+	if (status != APR_SUCCESS && status != APR_INCOMPLETE) {
 		DAV_DEBUG_POOL(cmd->temp_pool, 0,
 				"Invalid docroot for GridStorage chunks: %s", arg1);
 		return apr_pstrcat(cmd->temp_pool,
