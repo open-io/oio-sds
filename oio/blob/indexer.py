@@ -24,6 +24,7 @@ from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
 from oio.common.utils import get_logger, int_value, paths_gen
 from oio.common.green import ratelimit
+from oio.common.exceptions import OioNetworkException
 
 
 class BlobIndexer(Daemon):
@@ -55,6 +56,9 @@ class BlobIndexer(Daemon):
                 self.update_index(path)
                 self.successes += 1
                 self.logger.debug('Updated %s', path)
+            except OioNetworkException as exc:
+                self.errors += 1
+                self.logger.warn('ERROR while updating %s: %s', path, exc)
             except Exception:
                 self.errors += 1
                 self.logger.exception('ERROR while updating %s', path)
