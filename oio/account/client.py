@@ -69,6 +69,12 @@ class AccountClient(HttpApi):
             if now - self._last_refresh > self._refresh_delay:
                 try:
                     self._refresh_endpoint(now)
+                except OioNetworkException as exc:
+                    if not self.endpoint:
+                        # Cannot use the previous one
+                        raise
+                    self.logger.warn(
+                            "Failed to refresh account endpoint: %s", exc)
                 except ClientException:
                     if not self.endpoint:
                         # Cannot use the previous one
