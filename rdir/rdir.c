@@ -18,6 +18,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include <errno.h>
 #include <malloc.h>
+#include <unistd.h>
 
 #include <glib.h>
 #include <json-c/json.h>
@@ -1511,6 +1512,11 @@ _task_malloc_trim(gpointer p)
 
 #define CFG(K) g_key_file_get_string(gkf, CFG_GROUP, (K), &err)
 
+#define DUAL_ERROR(FMT,...) do { \
+	g_printerr("\n*** " FMT " ***\n\n", ##__VA_ARGS__); \
+	GRID_ERROR(FMT, ##__VA_ARGS__); \
+} while (0)
+
 static gboolean
 grid_main_configure(int argc, char **argv)
 {
@@ -1567,13 +1573,6 @@ grid_main_configure(int argc, char **argv)
 	g_key_file_free(gkf);
 	gkf = NULL;
 
-	/* Load the central configuration facility, it will tell us our
-	 * NS is locally known. */
-	if (!oio_var_value_with_files(ns_name, config_system, config_paths)) {
-		GRID_ERROR("NS [%s] unknown in the configuration", ns_name);
-		return FALSE;
-	}
-
 	/* supersedes the default logging */
 	if (cfg_syslog) {
 		const gsize len0 = g_strlcpy(syslog_id, cfg_syslog, sizeof(syslog_id));
@@ -1581,6 +1580,23 @@ grid_main_configure(int argc, char **argv)
 			return _config_error("Syslog prefix",
 					NEWERROR(EINVAL, "Prefix too long (64B max)"));
 		logger_syslog_open();
+	}
+
+	/* Check the basedir exists and we have the required permissions on it */
+	if (0 != g_access(basedir, R_OK|W_OK|X_OK)) {
+		DUAL_ERROR("Basedir error [%s]: (%d) %s", basedir, errno, strerror(errno));
+		return FALSE;
+	}
+	if (!g_file_test(basedir, G_FILE_TEST_IS_DIR)) {
+		DUAL_ERROR("Basedir error [%s]: not a directory", basedir);
+		return FALSE;
+	}
+
+	/* Load the central configuration facility, it will tell us our
+	 * NS is locally known. */
+	if (!oio_var_value_with_files(ns_name, config_system, config_paths)) {
+		DUAL_ERROR("NS [%s] unknown in the configuration", ns_name);
+		return FALSE;
 	}
 
 	_patch_and_apply_configuration();
