@@ -31,6 +31,7 @@ from oio.common.utils import true_value, drop_privileges, \
         json, int_value
 from oio.event.evob import is_success, is_error
 from oio.event.loader import loadhandlers
+from oio.common.exceptions import JobBury
 
 
 SLEEP_TIME = 1
@@ -224,6 +225,9 @@ class EventWorker(Worker):
                     self.process_event(job_id, event, beanstalk)
                 except OioNetworkException as e:
                     self.logger.warn("handling event %s (bury): %s", job_id, e)
+                    beanstalk.bury(job_id)
+                except JobBury as e:
+                    self.logger.info("handling event %s (bury)", job_id)
                     beanstalk.bury(job_id)
                 except Exception:
                     self.logger.exception("handling event %s (bury)", job_id)

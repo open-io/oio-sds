@@ -804,6 +804,9 @@ use = egg:oio#noop
 
 [filter:logger]
 use = egg:oio#logger
+
+[filter:bury]
+use = egg:oio#bury
 """
 
 template_conscience_agent = """
