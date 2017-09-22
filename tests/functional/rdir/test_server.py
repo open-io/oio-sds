@@ -21,22 +21,30 @@ import subprocess
 from os import remove
 from oio.common.http import get_pool_manager
 
-from tests.utils import BaseTestCase, random_str, random_id
+from tests.utils import CommonTestCase, random_str, random_id
 
 
 def _key(rec):
     return '|'.join((rec['container_id'], rec['content_id'], rec['chunk_id']))
 
 
-class TestRdirServer(BaseTestCase):
+def _write_config(path, config):
+    with open(path, 'w') as f:
+        f.write("[rdir-server]\n")
+        f.write("bind_addr = {0}\n".format(config['host']))
+        f.write("bind_port = {0}\n".format(config['port']))
+        f.write("namespace = {0}\n".format(config['ns']))
+        f.write("db_path = {0}\n".format(config['db']))
+        f.write("syslog_prefix = OIO,OPENIO,rdir,1\n")
+
+
+class RdirTestCase(CommonTestCase):
     def setUp(self):
-        super(TestRdirServer, self).setUp()
+        super(RdirTestCase, self).setUp()
         self.http_pool = get_pool_manager(max_retries=10)
-        self.num, self.db_path, self.host, self.port = self.get_service('rdir')
-        self.vol = self._volume()
 
     def tearDown(self):
-        super(TestRdirServer, self).tearDown()
+        super(RdirTestCase, self).tearDown()
         self.http_pool.clear()
 
     def _volume(self):
@@ -59,6 +67,38 @@ class TestRdirServer(BaseTestCase):
 
     def _delete(self, url, **kwargs):
         return self.request('DELETE', self._rdir_url(url), **kwargs)
+
+    def _kill_and_watch_it_die(self):
+        self.child.terminate()
+        self.child.wait()
+
+    def _wait_for_that_fucking_slow_startup_on_travis(self):
+        for i in range(5):
+            if self._check_for_server():
+                return True
+            time.sleep(i * 0.2)
+        return False
+
+    def _check_for_server(self):
+        hexport = "%04X" % self.port
+        with open("/proc/net/tcp", "r") as f:
+            for line in f:
+                tokens = line.strip().split()
+                port = tokens[1][9:13]
+                if port == hexport:
+                    return True
+        return False
+
+
+class TestRdirServer(RdirTestCase):
+    def setUp(self):
+        super(TestRdirServer, self).setUp()
+        self.num, self.db_path, self.host, self.port = self.get_service('rdir')
+        self.port = int(self.port)
+        self.vol = self._volume()
+
+    def tearDown(self):
+        super(TestRdirServer, self).tearDown()
 
     def test_explicit_create(self):
         rec = self._record()
@@ -239,20 +279,16 @@ class TestRdirServer(BaseTestCase):
                          {'chunk': {'total': 0}, 'container': {}})
 
 
-class TestRdirServer2(TestRdirServer):
+class TestRdirServer2(RdirTestCase):
     def setUp(self):
         super(TestRdirServer2, self).setUp()
-        self.host = '127.0.0.1'
-        self.port = 5999
-        self.db_path = tempfile.mkdtemp()
+        self.vol = self._volume()
+        self.num, self.host, self.port = 17, '127.0.0.1', 5999
         self.cfg_path = tempfile.mktemp()
-        with open(self.cfg_path, 'w') as f:
-            f.write("[rdir-server]\n")
-            f.write("bind_addr = {0}\n".format(self.host))
-            f.write("bind_port = {0}\n".format(self.port))
-            f.write("namespace = {0}\n".format(self.ns))
-            f.write("db_path = {0}\n".format(self.db_path))
-            f.write("syslog_prefix = OIO,OPENIO,rdir,1\n")
+        self.db_path = tempfile.mkdtemp()
+        config = {'host': self.host, 'port': self.port,
+                  'ns': self.ns, 'db': self.db_path}
+        _write_config(self.cfg_path, config)
 
         self.child = subprocess.Popen(['oio-rdir-server', self.cfg_path],
                                       close_fds=True)
@@ -266,27 +302,6 @@ class TestRdirServer2(TestRdirServer):
         self._kill_and_watch_it_die()
         shutil.rmtree(self.db_path)
         remove(self.cfg_path)
-
-    def _kill_and_watch_it_die(self):
-        self.child.terminate()
-        self.child.wait()
-
-    def _wait_for_that_fucking_slow_startup_on_travis(self):
-        for i in range(5):
-            if self._check_for_server():
-                return True
-            time.sleep(i * 0.2)
-        return False
-
-    def _check_for_server(self):
-        hexport = "%04X" % self.port
-        with open("/proc/net/tcp", "r") as f:
-            for line in f:
-                tokens = line.strip().split()
-                port = tokens[1][9:13]
-                if port == hexport:
-                    return True
-        return False
 
     def test_status(self):
 
@@ -303,3 +318,67 @@ class TestRdirServer2(TestRdirServer):
         resp = self._get('/status')
         self.assertEqual(resp.status, 200)
         self.assertEqual(self.json_loads(resp.data), {'opened_db_count': 1})
+
+
+def _check_process_absent(proc):
+    for i in range(5):
+        if not proc.poll():
+            return True
+        time.sleep(i * 0.2)
+    proc.terminate()
+    return False
+
+
+class TestRdirServer3(RdirTestCase):
+    """Test the oio-rdir-server with invalid configuration"""
+
+    def setUp(self):
+        super(TestRdirServer3, self).setUp()
+
+    def tearDown(self):
+        super(TestRdirServer3, self).tearDown()
+
+    def test_wrong_config(self):
+        cfg = '/x/y/z/not_found/on_any/server/rdir.conf'
+        with open('/dev/null', 'w') as out:
+            fd = out.fileno()
+            proc = subprocess.Popen(
+                    ['oio-rdir-server', cfg], stderr=fd)
+            self.assertTrue(_check_process_absent(proc))
+
+    def test_basedir_not_found(self):
+        self.num, self.host, self.port = 17, '127.0.0.1', 5999
+        self.cfg_path = tempfile.mktemp()
+        config = {'host': self.host, 'port': self.port,
+                  'ns': self.ns, 'db': '/x/y/z/not_found'}
+        _write_config(self.cfg_path, config)
+        with open('/dev/null', 'w') as out:
+            fd = out.fileno()
+            proc = subprocess.Popen(
+                    ['oio-rdir-server', self.cfg_path], stderr=fd)
+        self.assertTrue(_check_process_absent(proc))
+
+    def test_basedir_not_dir(self):
+        self.num, self.host, self.port = 17, '127.0.0.1', 5999
+        self.cfg_path = tempfile.mktemp()
+        config = {'host': self.host, 'port': self.port,
+                  'ns': self.ns, 'db': '/etc/magic'}
+        _write_config(self.cfg_path, config)
+        with open('/dev/null', 'w') as out:
+            fd = out.fileno()
+            proc = subprocess.Popen(
+                    ['oio-rdir-server', self.cfg_path], stderr=fd)
+        self.assertTrue(_check_process_absent(proc))
+
+    def test_basedir_denied(self):
+        self.num, self.host, self.port = 17, '127.0.0.1', 5999
+        self.cfg_path = tempfile.mktemp()
+        config = {'host': self.host, 'port': self.port,
+                  'ns': self.ns, 'db': '/var'}
+        _write_config(self.cfg_path, config)
+        with open('/dev/null', 'w') as out:
+            fd = out.fileno()
+            proc = subprocess.Popen(
+                    ['oio-rdir-server', self.cfg_path], stderr=fd)
+        self.assertTrue(_check_process_absent(proc))
+
