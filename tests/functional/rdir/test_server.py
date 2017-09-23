@@ -381,4 +381,3 @@ class TestRdirServer3(RdirTestCase):
             proc = subprocess.Popen(
                     ['oio-rdir-server', self.cfg_path], stderr=fd)
         self.assertTrue(_check_process_absent(proc))
-
