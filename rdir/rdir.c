@@ -228,10 +228,10 @@ _map_errno_to_gerror(int code, char *msg)
 			err = NEWERROR(CODE_NOT_ALLOWED, "%s", msg);
 			break;
 		case EINVAL:
-			err = NEWERROR(CODE_BAD_REQUEST, "%s", msg);
+			err = BADREQ("%s", msg);
 			break;
 		default:
-			err = NEWERROR(CODE_INTERNAL_ERROR, "(%d) %s", code, msg);
+			err = SYSERR("(%d) %s", code, msg);
 	}
 
 	if (msg)
