@@ -1494,15 +1494,6 @@ grid_main_specific_fini(void)
 	oio_str_clean(&basedir);
 }
 
-static gboolean
-_config_error(const char *where, GError *err)
-{
-	GRID_ERROR("Configuration error: %s: (%d) %s",
-			where, err->code, err->message);
-	g_clear_error(&err);
-	return FALSE;
-}
-
 static void
 _task_malloc_trim(gpointer p)
 {
@@ -1516,6 +1507,15 @@ _task_malloc_trim(gpointer p)
 	g_printerr("\n*** " FMT " ***\n\n", ##__VA_ARGS__); \
 	GRID_ERROR(FMT, ##__VA_ARGS__); \
 } while (0)
+
+static gboolean
+_config_error(const char *where, GError *err)
+{
+	DUAL_ERROR("Configuration error: %s: (%d) %s",
+			where, err->code, err->message);
+	g_clear_error(&err);
+	return FALSE;
+}
 
 static gboolean
 grid_main_configure(int argc, char **argv)
@@ -1601,11 +1601,16 @@ grid_main_configure(int argc, char **argv)
 
 	_patch_and_apply_configuration();
 
-	/* Prepare the network side of the application */
-	server = network_server_init();
-
 	gchar *cfg_main_url = g_strconcat(cfg_ip, ":", cfg_port, NULL);
 	STRING_STACKIFY(cfg_main_url);
+
+	/* Validate the volume was never used for another rdir */
+	err = volume_service_lock(basedir, NAME_SRVTYPE_RDIR, cfg_main_url, ns_name);
+	if (err != NULL)
+		return _config_error("Volume lock error", err);
+
+	/* Prepare the network side of the application */
+	server = network_server_init();
 
 	network_server_bind_host(server, cfg_main_url, handler_action,
 			(network_transport_factory) transport_http_factory0);
