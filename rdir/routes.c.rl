@@ -23,28 +23,33 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 /** @private */
 struct rdir_router_s {
     const char *ts, *te;
-    int cs, act, ok;
+    int cs, act;
+};
+
+struct rdir_router_result_s {
+	const char *last;
+	enum rdir_route_e result;
 };
 
 %%{
 machine rdir_router_s;
 access parser.;
 
-action Final { parser.ok = 1; }
+action Final { rc.last = p; }
 
-srv_status = "/status" %{ result = OIO_ROUTE_STATUS; };
-srv_config = "/config" %{ result = OIO_ROUTE_CONFIG; };
-adm_status = "/v1/status" %{ result = OIO_RDIR_STATUS; };
-adm_show = "/v1/rdir/admin/show" %{ result = OIO_RDIR_ADMIN_SHOW; };
-adm_lock = "/v1/rdir/admin/lock" %{ result = OIO_RDIR_ADMIN_LOCK; };
-adm_unlock = "/v1/rdir/admin/unlock" %{ result = OIO_RDIR_ADMIN_UNLOCK; };
-adm_incident = "/v1/rdir/admin/incident" %{ result = OIO_RDIR_ADMIN_INCIDENT; };
-adm_clear = "/v1/rdir/admin/clear" %{ result = OIO_RDIR_ADMIN_CLEAR; };
-vol_create = "/v1/rdir/create" %{ result = OIO_RDIR_VOL_CREATE; };
-vol_push = "/v1/rdir/push" %{ result = OIO_RDIR_VOL_PUSH; };
-vol_delete = "/v1/rdir/delete" %{ result = OIO_RDIR_VOL_DELETE; };
-vol_fetch = "/v1/rdir/fetch" %{ result = OIO_RDIR_VOL_FETCH; };
-vol_status = "/v1/rdir/status" %{ result = OIO_RDIR_VOL_STATUS; };
+srv_status = "/status" %{ rc.result = OIO_ROUTE_STATUS; };
+srv_config = "/config" %{ rc.result = OIO_ROUTE_CONFIG; };
+adm_status = "/v1/status" %{ rc.result = OIO_RDIR_STATUS; };
+adm_show = "/v1/rdir/admin/show" %{ rc.result = OIO_RDIR_ADMIN_SHOW; };
+adm_lock = "/v1/rdir/admin/lock" %{ rc.result = OIO_RDIR_ADMIN_LOCK; };
+adm_unlock = "/v1/rdir/admin/unlock" %{ rc.result = OIO_RDIR_ADMIN_UNLOCK; };
+adm_incident = "/v1/rdir/admin/incident" %{ rc.result = OIO_RDIR_ADMIN_INCIDENT; };
+adm_clear = "/v1/rdir/admin/clear" %{ rc.result = OIO_RDIR_ADMIN_CLEAR; };
+vol_create = "/v1/rdir/create" %{ rc.result = OIO_RDIR_VOL_CREATE; };
+vol_push = "/v1/rdir/push" %{ rc.result = OIO_RDIR_VOL_PUSH; };
+vol_delete = "/v1/rdir/delete" %{ rc.result = OIO_RDIR_VOL_DELETE; };
+vol_fetch = "/v1/rdir/fetch" %{ rc.result = OIO_RDIR_VOL_FETCH; };
+vol_status = "/v1/rdir/status" %{ rc.result = OIO_RDIR_VOL_STATUS; };
 srv_route = srv_status | srv_config;
 adm_route = adm_status | adm_show | adm_lock | adm_unlock | adm_incident | adm_clear;
 vol_route = vol_status | vol_fetch | vol_delete | vol_push | vol_create;
@@ -56,19 +61,24 @@ route_rdir_request := |*
 
 %%write data;
 
+static struct rdir_router_result_s _parse(const char *p, const size_t len) {
+	struct rdir_router_s parser = {};
+    const char* pe = p + len;
+    const char* eof = pe;
+	struct rdir_router_result_s rc = {};
+	rc.result = OIO_RDIR_NOT_MATCHED;
+    (void) eof; /* JFS: kept to be ready in case of a FSM change */
+    %%write init;
+    %%write exec;
+	return rc;
+}
+
 enum rdir_route_e oio_rdir_parse_route(const char *p) {
     if (!p)
         return OIO_RDIR_NOT_MATCHED;
     const size_t len = strlen(p);
-    const char* pe = p + len;
-    const char* eof = pe;
-    struct rdir_router_s parser;
-	enum rdir_route_e result = OIO_RDIR_NOT_MATCHED;
-
-    (void) eof; /* JFS: kept to be ready in case of a FSM change */
-    %%write init;
-    %%write exec;
+    struct rdir_router_result_s rc = _parse(p, len);
 
     /* the FSM embed actions that return, here we are when the parsing fails */
-    return p == eof && parser.ok ? result : OIO_RDIR_NOT_MATCHED;
+    return (p+len) == rc.last ? rc.result : OIO_RDIR_NOT_MATCHED;
 }

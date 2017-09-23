@@ -2,7 +2,7 @@
 #line 1 "routes.c.rl"
 /*
 OpenIO SDS rdir
-Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2017 OpenIO SAS, original work as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -25,15 +25,20 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 /** @private */
 struct rdir_router_s {
     const char *ts, *te;
-    int cs, act, ok;
+    int cs, act;
+};
+
+struct rdir_router_result_s {
+	const char *last;
+	enum rdir_route_e result;
 };
 
 
-#line 55 "routes.c.rl"
+#line 60 "routes.c.rl"
 
 
 
-#line 37 "routes.c"
+#line 42 "routes.c"
 static const char _rdir_router_s_actions[] = {
 	0, 1, 14, 1, 15, 3, 1, 0, 
 	16, 3, 2, 0, 16, 3, 3, 0, 
@@ -225,20 +230,17 @@ static const int rdir_router_s_error = 0;
 static const int rdir_router_s_en_route_rdir_request = 75;
 
 
-#line 58 "routes.c.rl"
+#line 63 "routes.c.rl"
 
-enum rdir_route_e oio_rdir_parse_route(const char *p) {
-    if (!p)
-        return OIO_RDIR_NOT_MATCHED;
-    const size_t len = strlen(p);
+static struct rdir_router_result_s _parse(const char *p, const size_t len) {
+	struct rdir_router_s parser = {};
     const char* pe = p + len;
     const char* eof = pe;
-    struct rdir_router_s parser;
-	enum rdir_route_e result = OIO_RDIR_NOT_MATCHED;
-
+	struct rdir_router_result_s rc = {};
+	rc.result = OIO_RDIR_NOT_MATCHED;
     (void) eof; /* JFS: kept to be ready in case of a FSM change */
     
-#line 242 "routes.c"
+#line 244 "routes.c"
 	{
 	 parser.cs = rdir_router_s_start;
 	 parser.ts = 0;
@@ -246,9 +248,9 @@ enum rdir_route_e oio_rdir_parse_route(const char *p) {
 	 parser.act = 0;
 	}
 
-#line 70 "routes.c.rl"
+#line 72 "routes.c.rl"
     
-#line 252 "routes.c"
+#line 254 "routes.c"
 	{
 	int _klen;
 	unsigned int _trans;
@@ -269,7 +271,7 @@ _resume:
 #line 1 "NONE"
 	{ parser.ts = p;}
 	break;
-#line 273 "routes.c"
+#line 275 "routes.c"
 		}
 	}
 
@@ -335,66 +337,66 @@ _eof_trans:
 		switch ( *_acts++ )
 		{
 	case 0:
-#line 33 "routes.c.rl"
-	{ parser.ok = 1; }
+#line 38 "routes.c.rl"
+	{ rc.last = p; }
 	break;
 	case 1:
-#line 35 "routes.c.rl"
-	{ result = OIO_ROUTE_STATUS; }
+#line 40 "routes.c.rl"
+	{ rc.result = OIO_ROUTE_STATUS; }
 	break;
 	case 2:
-#line 36 "routes.c.rl"
-	{ result = OIO_ROUTE_CONFIG; }
+#line 41 "routes.c.rl"
+	{ rc.result = OIO_ROUTE_CONFIG; }
 	break;
 	case 3:
-#line 37 "routes.c.rl"
-	{ result = OIO_RDIR_STATUS; }
+#line 42 "routes.c.rl"
+	{ rc.result = OIO_RDIR_STATUS; }
 	break;
 	case 4:
-#line 38 "routes.c.rl"
-	{ result = OIO_RDIR_ADMIN_SHOW; }
+#line 43 "routes.c.rl"
+	{ rc.result = OIO_RDIR_ADMIN_SHOW; }
 	break;
 	case 5:
-#line 39 "routes.c.rl"
-	{ result = OIO_RDIR_ADMIN_LOCK; }
+#line 44 "routes.c.rl"
+	{ rc.result = OIO_RDIR_ADMIN_LOCK; }
 	break;
 	case 6:
-#line 40 "routes.c.rl"
-	{ result = OIO_RDIR_ADMIN_UNLOCK; }
+#line 45 "routes.c.rl"
+	{ rc.result = OIO_RDIR_ADMIN_UNLOCK; }
 	break;
 	case 7:
-#line 41 "routes.c.rl"
-	{ result = OIO_RDIR_ADMIN_INCIDENT; }
+#line 46 "routes.c.rl"
+	{ rc.result = OIO_RDIR_ADMIN_INCIDENT; }
 	break;
 	case 8:
-#line 42 "routes.c.rl"
-	{ result = OIO_RDIR_ADMIN_CLEAR; }
+#line 47 "routes.c.rl"
+	{ rc.result = OIO_RDIR_ADMIN_CLEAR; }
 	break;
 	case 9:
-#line 43 "routes.c.rl"
-	{ result = OIO_RDIR_VOL_CREATE; }
+#line 48 "routes.c.rl"
+	{ rc.result = OIO_RDIR_VOL_CREATE; }
 	break;
 	case 10:
-#line 44 "routes.c.rl"
-	{ result = OIO_RDIR_VOL_PUSH; }
+#line 49 "routes.c.rl"
+	{ rc.result = OIO_RDIR_VOL_PUSH; }
 	break;
 	case 11:
-#line 45 "routes.c.rl"
-	{ result = OIO_RDIR_VOL_DELETE; }
+#line 50 "routes.c.rl"
+	{ rc.result = OIO_RDIR_VOL_DELETE; }
 	break;
 	case 12:
-#line 46 "routes.c.rl"
-	{ result = OIO_RDIR_VOL_FETCH; }
+#line 51 "routes.c.rl"
+	{ rc.result = OIO_RDIR_VOL_FETCH; }
 	break;
 	case 13:
-#line 47 "routes.c.rl"
-	{ result = OIO_RDIR_VOL_STATUS; }
+#line 52 "routes.c.rl"
+	{ rc.result = OIO_RDIR_VOL_STATUS; }
 	break;
 	case 16:
-#line 53 "routes.c.rl"
+#line 58 "routes.c.rl"
 	{ parser.te = p;p--;}
 	break;
-#line 398 "routes.c"
+#line 400 "routes.c"
 		}
 	}
 
@@ -407,7 +409,7 @@ _again:
 #line 1 "NONE"
 	{ parser.ts = 0;}
 	break;
-#line 411 "routes.c"
+#line 413 "routes.c"
 		}
 	}
 
@@ -427,8 +429,16 @@ _again:
 	_out: {}
 	}
 
-#line 71 "routes.c.rl"
+#line 73 "routes.c.rl"
+	return rc;
+}
+
+enum rdir_route_e oio_rdir_parse_route(const char *p) {
+    if (!p)
+        return OIO_RDIR_NOT_MATCHED;
+    const size_t len = strlen(p);
+    struct rdir_router_result_s rc = _parse(p, len);
 
     /* the FSM embed actions that return, here we are when the parsing fails */
-    return p == eof && parser.ok ? result : OIO_RDIR_NOT_MATCHED;
+    return (p+len) == rc.last ? rc.result : OIO_RDIR_NOT_MATCHED;
 }
