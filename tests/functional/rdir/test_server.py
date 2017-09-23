@@ -357,6 +357,60 @@ class TestRdirServer2(RdirTestCase):
         self.assertEqual(resp.status, 200)
         self.assertEqual(self.json_loads(resp.data), {'opened_db_count': 1})
 
+    def test_bad_routes(self):
+        routes = ('/status', '/config',
+                  '/v1/status',
+                  '/v1/rdir/admin/show',
+                  '/v1/rdir/admin/lock',
+                  '/v1/rdir/admin/unlock',
+                  '/v1/rdir/admin/incident',
+                  '/v1/rdir/admin/clear',
+                  '/v1/rdir/create',
+                  '/v1/rdir/push',
+                  '/v1/rdir/delete',
+                  '/v1/rdir/fetch',
+                  '/v1/rdir/status')
+        for r in routes:
+            resp = self._get('/' + r)
+            self.assertEqual(resp.status, 404)
+            resp = self._get(r + '/')
+            self.assertEqual(resp.status, 404)
+            bulk = random_id(4)
+            resp = self._get('/' + bulk + r)
+            self.assertEqual(resp.status, 404)
+            resp = self._get(r + '/' + bulk)
+            self.assertEqual(resp.status, 404)
+            resp = self._get(r + bulk)
+            self.assertEqual(resp.status, 404)
+
+    def test_bad_methods(self):
+        actions = (('/status', self._post),
+                   ('/status', self._delete),
+                   ('/config', self._delete),
+                   ('/v1/status', self._post),
+                   ('/v1/status', self._delete),
+                   ('/v1/rdir/admin/show', self._post),
+                   ('/v1/rdir/admin/show', self._delete),
+                   ('/v1/rdir/admin/lock', self._get),
+                   ('/v1/rdir/admin/lock', self._delete),
+                   ('/v1/rdir/admin/unlock', self._get),
+                   ('/v1/rdir/admin/unlock', self._delete),
+                   ('/v1/rdir/admin/incident', self._delete),
+                   ('/v1/rdir/admin/clear', self._get),
+                   ('/v1/rdir/admin/clear', self._delete),
+                   ('/v1/rdir/create', self._get),
+                   ('/v1/rdir/create', self._delete),
+                   ('/v1/rdir/push', self._get),
+                   ('/v1/rdir/push', self._delete),
+                   ('/v1/rdir/delete', self._get),
+                   ('/v1/rdir/delete', self._post),
+                   ('/v1/rdir/fetch', self._get),
+                   ('/v1/rdir/fetch', self._delete),
+                   ('/v1/rdir/status', self._delete))
+        for route, method in actions:
+            resp = method(route)
+            self.assertEqual(resp.status, 405)
+
 
 class TestRdirServer3(RdirTestCase):
     """Test the oio-rdir-server with invalid configuration"""
