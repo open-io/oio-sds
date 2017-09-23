@@ -137,6 +137,12 @@ class TestRdirServer(RdirTestCase):
     def tearDown(self):
         super(TestRdirServer, self).tearDown()
 
+    def test_status(self):
+        resp = self._get("/status")
+        self.assertEqual(resp.status, 200)
+        resp = self._get("/config")
+        self.assertEqual(resp.status, 200)
+
     def test_explicit_create(self):
         rec = self._record()
 
@@ -146,13 +152,29 @@ class TestRdirServer(RdirTestCase):
                 data=json.dumps(rec))
         self.assertEqual(resp.status, 404)
 
+        # fetch without volume
+        resp = self._post("/v1/rdir/fetch")
+        self.assertEqual(resp.status, 400)
+
+        # fetch with non-json body
+        resp = self._post("/v1/rdir/fetch", params={'vol': self.vol},
+                          data='this is not json')
+        self.assertEqual(resp.status, 400)
+
         # The fetch fails
         resp = self._post("/v1/rdir/fetch", params={'vol': self.vol})
         self.assertEqual(resp.status, 404)
 
+        # create volume without the volume
+        resp = self._post("/v1/rdir/create")
+        self.assertEqual(resp.status, 400)
+
         # create volume
         resp = self._post("/v1/rdir/create", params={'vol': self.vol})
         self.assertEqual(resp.status, 201)
+
+        resp = self._get("/v1/status", params={'vol': self.vol})
+        self.assertEqual(resp.status, 200)
 
         # the fetch returns an empty array
         resp = self._post("/v1/rdir/fetch", params={'vol': self.vol})
@@ -172,6 +194,13 @@ class TestRdirServer(RdirTestCase):
             [_key(rec), {'mtime': rec['mtime'], 'rtime': 0}]
         ]
         self.assertListEqual(self.json_loads(resp.data), reference)
+
+        # delete without volume
+        resp = self._delete("/v1/rdir/delete")
+        self.assertEqual(resp.status, 400)
+
+        resp = self._delete("/v1/rdir/delete", params={'vol': ''})
+        self.assertEqual(resp.status, 400)
 
         # deleting must succeed
         resp = self._delete(
@@ -209,6 +238,10 @@ class TestRdirServer(RdirTestCase):
     def test_push_missing_fields(self):
         rec = self._record()
 
+        # Push without volume
+        resp = self._post("/v1/rdir/push")
+        self.assertEqual(resp.status, 400)
+
         # DB creation
         resp = self._post("/v1/rdir/create", params={'vol': self.vol})
         self.assertEqual(resp.status, 201)
@@ -245,6 +278,10 @@ class TestRdirServer(RdirTestCase):
         resp = self._post("/v1/rdir/create", params={'vol': self.vol})
         self.assertEqual(resp.status, 201)
 
+        # lock without volume
+        resp = self._post("/v1/rdir/admin/lock", data=json.dumps({}))
+        self.assertEqual(resp.status, 400)
+
         # lock without who
         resp = self._post(
                 "/v1/rdir/admin/lock", params={'vol': self.vol},
@@ -272,6 +309,11 @@ class TestRdirServer(RdirTestCase):
     def test_rdir_clear_and_lock(self):
         rec = self._record()
         who = random_id(32)
+
+        # clear without volume
+        resp = self._post("/v1/rdir/admin/clear",
+                          data=json.dumps({'all': True}))
+        self.assertEqual(resp.status, 400)
 
         # push with autocreate
         resp = self._post(
@@ -301,6 +343,10 @@ class TestRdirServer(RdirTestCase):
         self.assertEqual(self.json_loads(resp.data), {'removed': 1})
 
     def test_vol_status(self):
+        # Status without volume
+        resp = self._post("/v1/rdir/status")
+        self.assertEqual(resp.status, 400)
+
         # Status on inexistant DB
         resp = self._post("/v1/rdir/status", params={'vol': self.vol})
         self.assertEqual(resp.status, 404)
@@ -420,6 +466,12 @@ class TestRdirServer3(RdirTestCase):
 
     def tearDown(self):
         super(TestRdirServer3, self).tearDown()
+
+    def test_no_config(self):
+        with open('/dev/null', 'w') as out:
+            fd = out.fileno()
+            proc = subprocess.Popen(['oio-rdir-server'], stderr=fd)
+            self.assertTrue(_check_process_absent(proc))
 
     def test_wrong_config(self):
         cfg = '/x/y/z/not_found/on_any/server/rdir.conf'
