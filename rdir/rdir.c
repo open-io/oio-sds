@@ -79,13 +79,9 @@ _reply_bytes(struct http_reply_ctx_s *rp,
 {
 	rp->set_status(code, msg);
 	if (bytes) {
-		if (g_bytes_get_size(bytes) > 0) {
+		if (g_bytes_get_size(bytes) > 0)
 			rp->set_content_type("application/json");
-			rp->set_body_bytes(bytes);
-		} else {
-			g_bytes_unref(bytes);
-			rp->set_body_bytes(NULL);
-		}
+		rp->set_body_bytes(bytes);
 	} else {
 		rp->set_body_bytes(NULL);
 	}
@@ -105,7 +101,7 @@ static enum http_rc_e
 _reply_json_error(struct http_reply_ctx_s *rp,
 		int code, const char *msg, GString * gstr)
 {
-	if (gstr && gstr->len)
+	if (gstr)
 		rp->access_tail("e=%.*s", gstr->len, gstr->str);
 	return _reply_json(rp, code, msg, gstr);
 }
@@ -132,8 +128,6 @@ _create_status(gint code, const gchar * msg)
 static GString *
 _create_status_error(GError * e)
 {
-	if (!e)
-		return _create_status(CODE_INTERNAL_ERROR, "unknown error");
 	GString *gstr = _create_status(e->code, e->message);
 	g_error_free(e);
 	return gstr;
@@ -150,7 +144,7 @@ static enum http_rc_e
 _reply_method_error(struct http_reply_ctx_s *rp)
 {
 	return _reply_json_error(rp, HTTP_CODE_METHOD_NOT_ALLOWED,
-			"Method not allowed", NULL);
+			"Method not allowed", _create_status_error(BADREQ("Bad method")));
 }
 
 static enum http_rc_e
@@ -210,7 +204,7 @@ _reply_created(struct http_reply_ctx_s *rp)
 static enum http_rc_e
 _reply_ok(struct http_reply_ctx_s *rp, GString *body)
 {
-	if (!body || !body->len)
+	if (!body)
 		return _reply_json(rp, HTTP_CODE_NO_CONTENT, "OK", body);
 	return _reply_json(rp, HTTP_CODE_OK, "OK", body);
 }
@@ -1284,9 +1278,9 @@ _handler_decode_route(struct req_args_s *args, struct json_object *jbody,
 			return _route_srv_config(args);
 
 		case OIO_RDIR_STATUS:
-			args->rp->no_access();
 			// FALLTHROUGH
 		case OIO_RDIR_ADMIN_SHOW:
+			args->rp->no_access();
 			CHECK_METHOD("GET");
 			return _route_admin_show(args, OPT("vol"));
 
