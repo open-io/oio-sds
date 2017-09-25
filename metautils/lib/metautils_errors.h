@@ -32,12 +32,7 @@ void g_error_trace(GError ** e, const char *dom, int code,
 		int line, const char *func, const char *file,
 		const char *fmt, ...) __attribute__ ((format (printf, 7, 8)));
 
-void g_error_transmit(GError **err, GError *e);
-
-/** Returns the internal error code of <err> or 0 if <err> is NULL */
-gint gerror_get_code(GError * err);
-
 /** Returns the internal error message of <err> or NULL if <err> is NULL */
-const gchar *gerror_get_message(GError * err);
+#define gerror_get_message(err) ((err)?(err)->message:NULL)
 
 #endif /*OIO_SDS__metautils__lib__metautils_errors_h*/
