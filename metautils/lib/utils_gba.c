@@ -29,12 +29,6 @@ metautils_buffer_cmp(const guint8 * const d0, const guint l0,
 	return MACRO_COND(cmp_data, cmp_data, CMP(l0, l1));
 }
 
-gboolean
-metautils_gba_equal(const GByteArray *a, const GByteArray *b)
-{
-	return metautils_gba_cmp(a, b) == 0;
-}
-
 int
 metautils_gba_cmp(const GByteArray *a, const GByteArray *b)
 {
@@ -133,15 +127,6 @@ metautils_gba_cleanv(GByteArray **tab)
 	}
 }
 
-GByteArray*
-metautils_gba_from_cid(const container_id_t cid)
-{
-	EXTRA_ASSERT(cid != NULL);
-	return g_byte_array_append(
-			g_byte_array_sized_new(sizeof(container_id_t)),
-			cid, sizeof(container_id_t));
-}
-
 GString*
 metautils_gba_to_hexgstr(GString *gstr, GByteArray *gba)
 {
@@ -154,23 +139,5 @@ metautils_gba_to_hexgstr(GString *gstr, GByteArray *gba)
 	oio_str_bin2hex (gba->data, gba->len, gstr->str + len, gstr->len - len + 1);
 
 	return gstr;
-}
-
-void
-gba_pool_clean(GSList **pool)
-{
-	if (*pool) {
-		g_slist_free_full(*pool, metautils_gba_unref);
-		*pool = NULL;
-	}
-}
-
-GByteArray *
-gba_poolify(GSList **pool, GByteArray *gba)
-{
-	if (!gba)
-		return NULL;
-	*pool = g_slist_prepend(*pool, gba);
-	return gba;
 }
 
