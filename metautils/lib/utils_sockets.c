@@ -463,13 +463,13 @@ sock_build_for_url(const char *url, GError **err,
 	*sas_len = sizeof(*sas);
 
 	if (!grid_string_to_sockaddr (url, (struct sockaddr*) sas, sas_len)) {
-		g_error_transmit(err, NEWERROR(EINVAL, "invalid URL"));
+		GSETCODE(err, EINVAL, "invalid URL");
 		return -1;
 	}
 
 	int fd = socket_nonblock(sas->ss_family, SOCK_STREAM, 0);
 	if (0 > fd) {
-		g_error_transmit(err, NEWERROR(EINVAL, "socket error: (%d) %s", errno, strerror(errno)));
+		GSETCODE(err, EINVAL, "socket error: (%d) %s", errno, strerror(errno));
 		return -1;
 	}
 
@@ -489,7 +489,7 @@ sock_connect (const char *url, GError **err)
 
 	if (0 != metautils_syscall_connect (fd, (struct sockaddr*)&sas, sas_len)) {
 		if (errno != EINPROGRESS && errno != 0) {
-			g_error_transmit(err, NEWERROR(EINVAL, "connect error: (%d) %s", errno, strerror(errno)));
+			GSETCODE(err, EINVAL, "connect error: (%d) %s", errno, strerror(errno));
 			metautils_pclose (&fd);
 			return -1;
 		}
@@ -544,8 +544,7 @@ label_simple_connect:
 			*len = 0;
 			if (0 != metautils_syscall_connect (fd, (struct sockaddr*)&sas, sas_len)) {
 				if (errno != EINPROGRESS && errno != 0) {
-					g_error_transmit(err,
-							SYSERR("connect error: (%d) %s", errno, strerror(errno)));
+					GSETCODE(err, CODE_INTERNAL_ERROR, "connect error: (%d) %s", errno, strerror(errno));
 					metautils_pclose (&fd);
 					return -1;
 				}
@@ -560,8 +559,7 @@ label_simple_connect:
 			*err = NULL;
 			return fd;
 		} else {
-			g_error_transmit(err, NEWERROR(CODE_NETWORK_ERROR,
-						"connect error: (%d) %s", errno, strerror(errno)));
+			GSETCODE(err, CODE_NETWORK_ERROR, "connect error: (%d) %s", errno, strerror(errno));
 			metautils_pclose (&fd);
 			return -1;
 		}

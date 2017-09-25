@@ -53,21 +53,6 @@ g_error_trace(GError ** e, const char *dom, int code,
 	g_string_free(gstr, TRUE);
 }
 
-void
-g_error_transmit(GError **err, GError *e)
-{
-	if (err) {
-		if (!*err) {
-			g_propagate_error(err, e);
-		} else {
-			GSETRAW(err, e->code, e->message);
-			g_error_free(e);
-		}
-	} else {
-		g_error_free(e);
-	}
-}
-
 gint
 gerror_get_code(GError * err)
 {
