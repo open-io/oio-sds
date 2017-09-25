@@ -314,7 +314,7 @@ label_retry:
 		}
 #endif
 		/* ensure an output for that request: each array (url, body, error)
-		 * must contain the correspondinng item. */
+		 * must contain the corresponding item. */
 		if (err) {
 			GRID_DEBUG("ERROR %s -> (%d) %s", url, err->code, err->message);
 			g_ptr_array_add (errorv, g_error_copy(err));
