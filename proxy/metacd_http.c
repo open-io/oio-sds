@@ -973,7 +973,11 @@ configure_request_handlers (void)
 	 * Current state, zookeeper node, transition history... */
 	SET("/$NS/admin/debug/#POST", action_admin_debug);
 
-	/* "DB_PIPETO" */
+	/* Copy a base from one service to another. The body must be a json
+	 * object with 'to' and 'from' service ids. If 'from' is provided,
+	 * DB_PIPEFROM will be called on the destination service,
+	 * otherwise the source services will be located from the directory
+	 * and DB_PIPETO will be used. */
 	SET("/$NS/admin/copy/#POST", action_admin_copy);
 
 	/* Get, set or delete properties from the admin table

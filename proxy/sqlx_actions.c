@@ -119,28 +119,59 @@ _load_stringv (struct json_object *jargs)
 enum http_rc_e
 action_sqlx_copyto (struct req_args_s *args, struct json_object *jargs)
 {
-	if (!json_object_is_type(jargs, json_type_string))
-		return _reply_format_error (args, BADREQ("Action argument must be a string"));
+	if (!json_object_is_type(jargs, json_type_object))
+		return _reply_format_error(args,
+				BADREQ("Action argument must be an object"));
 
-	const gchar *to = json_object_get_string (jargs);
+	struct json_object *jto = NULL, *jfrom = NULL;
+	struct oio_ext_json_mapping_s mapping[] = {
+		{"to",   &jto,  json_type_string, 1},
+		{"from", &jfrom, json_type_string, 0},
+		{NULL, NULL, 0, 0},
+	};
+
+	GError *err = oio_ext_extract_json(jargs, mapping);
+	if (err)
+		return _reply_format_error(args, err);
+
+	const gchar *to = json_object_get_string(jto);
 	if (!metautils_url_valid_for_connect(to))
-		return _reply_format_error (args, BADREQ("Invalid target URL"));
+		return _reply_format_error(args, BADREQ("Invalid target URL"));
+	const gchar *from = NULL;
+	if (jfrom) {
+		from = json_object_get_string(jfrom);
+		if (!metautils_url_valid_for_connect(to))
+			return _reply_format_error(args, BADREQ("Invalid source URL"));
+	}
 
 	const char *type = TYPE();
 	if (!type)
 		return _reply_format_error(args, BADREQ("No service type"));
 	gchar dirtype[64] = "";
-	_get_sqlx_dirtype (type, dirtype, sizeof(dirtype));
+	_get_sqlx_dirtype(type, dirtype, sizeof(dirtype));
 
 	gint64 seq = 1;
-
-	CLIENT_CTX (ctx, args, dirtype, seq);
-	ctx.which = CLIENT_PREFER_MASTER;
-	GByteArray * _pack (const struct sqlx_name_s *n) {
-		return sqlx_pack_PIPETO(n, to);
+	enum http_rc_e rc;
+	CLIENT_CTX(ctx, args, dirtype, seq);
+	if (!from) {
+		/* No source, locate services from directory and use DB_PIPETO. */
+		ctx.which = CLIENT_PREFER_MASTER;
+		GByteArray * _pack(const struct sqlx_name_s *n) {
+			return sqlx_pack_PIPETO(n, to);
+		}
+		rc = _sqlx_action_noreturn_TAIL(args, &ctx, _pack);
+	} else {
+		/* Source service provided, use DB_PIPEFROM. */
+		NAME2CONST(n, ctx.name);
+		GByteArray *encoded = sqlx_pack_PIPEFROM(&n, from);
+		err = gridd_client_exec(to, proxy_timeout_common, encoded);
+		if (err) {
+			rc = _reply_common_error(args, err);
+		} else {
+			rc = _reply_success_json(args, NULL);
+		}
 	}
 
-	enum http_rc_e rc = _sqlx_action_noreturn_TAIL (args, &ctx, _pack);
 	client_clean(&ctx);
 	return rc;
 }

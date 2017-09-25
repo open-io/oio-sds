@@ -159,12 +159,27 @@ class AdminClient(ProxyClient):
                       params=params, json=data, **kwargs)
 
     @loc_params
-    def copy_base_to(self, params, svc_id, **kwargs):
+    def copy_base_from(self, params, svc_from, svc_to, **kwargs):
+        """
+        Copy a base to another service, using DB_PIPEFROM.
+
+        :param svc_from: id of the source service.
+        :param svc_to: id of the destination service.
+        """
+        data = {'to': svc_to, 'from': svc_from}
+        self._request('POST', "/copy",
+                      params=params, json=data, **kwargs)
+
+    @loc_params
+    def copy_base_to(self, params, svc_to, **kwargs):
         """
         Copy a base to another service, using DB_PIPETO.
+        Source service is looked after in service directory.
+
+        :param svc_to: id of the destination service.
         """
         self._request('POST', "/copy",
-                      params=params, json=str(svc_id), **kwargs)
+                      params=params, json={'to': svc_to}, **kwargs)
 
     def _forward_service_action(self, svc_id, action, **kwargs):
         """Execute service-specific actions."""
