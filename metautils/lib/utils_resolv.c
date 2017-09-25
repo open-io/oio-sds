@@ -122,14 +122,6 @@ grid_string_to_sockaddr(const gchar *start, struct sockaddr *s, gsize *slen)
 	STRING_STACKIFY(addr);
 	EXTRA_ASSERT(addr != NULL);
 
-	if (*addr == '/') { // UNIX socket
-		struct sockaddr_un *sun = (struct sockaddr_un*) s;
-		*slen = sizeof(*sun);
-		sun->sun_family = AF_UNIX;
-		g_strlcpy(sun->sun_path, addr, sizeof(sun->sun_path));
-		return TRUE;
-	}
-
 	// Find the ':' separator and fill the working buffers with each part
 	gchar *colon = strrchr(addr, ':');
 	if (!colon) return FALSE;
