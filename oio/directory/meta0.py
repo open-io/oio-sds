@@ -19,7 +19,8 @@ import random
 
 from oio.common.json import json
 from oio.common.client import ProxyClient
-from oio.common.exceptions import ConfigurationException, ServiceBusy
+from oio.common.exceptions import ConfigurationException, \
+        OioException, ServiceBusy
 from oio.directory.admin import AdminClient
 
 
@@ -56,7 +57,8 @@ class PrefixMapping(object):
         """
         self.cs = conscience_client
         self.m0 = meta0_client
-        self.admin = AdminClient(self.m0.conf)
+        self._admin = None
+        self.raw_svc_by_base = dict()
         self.svc_by_base = dict()
         self.services = dict()
         self.logger = logger
@@ -72,6 +74,12 @@ class PrefixMapping(object):
             raise ConfigurationException("meta_digits must be <= 4")
         self.min_dist = min_dist
         self.reset()
+
+    @property
+    def admin(self):
+        if not self._admin:
+            self._admin = AdminClient(self.m0.conf)
+        return self._admin
 
     def reset(self):
         """
@@ -122,15 +130,15 @@ class PrefixMapping(object):
     def get_score(self, svc):
         """Get the score of a service, or 0 if it is unknown"""
         if isinstance(svc, basestring):
-            svc = self.services.get(svc, {"addr": svc})
+            svc = self.services.get(svc, {'addr': svc})
         score = int(svc.get("score", 0))
         return score
 
     def get_managed_bases(self, svc):
         """Get the list of bases managed by the service"""
         if isinstance(svc, basestring):
-            svc = self.services.get(svc, {"addr": svc})
-        return svc.get("bases", set([]))
+            svc = self.services.get(svc, {'addr': svc})
+        return svc.get('bases', set())
 
     def prefix_to_base(self, pfx):
         """
@@ -153,14 +161,17 @@ class PrefixMapping(object):
         """
         Extend the mapping to all meta1 prefixes,
         if `self.digits` is less than 4.
+
+        :param bases: if set, only extend the mapping for the specified bases
         """
-        if self.digits == 4:
-            return self.svc_by_base
         extended = dict()
         if not bases:
             svc_by_base = self.svc_by_base
         else:
             svc_by_base = {base: self.svc_by_base[base] for base in bases}
+        if self.digits == 4:
+            # nothing to extend: there is one base for each prefix
+            return svc_by_base
         for base, services in svc_by_base.iteritems():
             for pfx in self.prefix_siblings(base):
                 extended[pfx] = services
@@ -176,7 +187,7 @@ class PrefixMapping(object):
             simplified[pfx] = [x['addr'] for x in services]
         return json.dumps(simplified)
 
-    def load(self, json_mapping=None, **kwargs):
+    def load(self, json_mapping=None, swap_bytes=True, **kwargs):
         """
         Load the mapping from the cluster,
         from a JSON string or from a dictionary.
@@ -195,11 +206,71 @@ class PrefixMapping(object):
             # self.prefix_to_base() takes the beginning of the prefix,
             # but here we have to take the end, because meta0 does
             # some byte swapping.
-            base = pfx[4-self.digits:]
+            if swap_bytes:
+                base = pfx[4-self.digits:]
+            else:
+                base = pfx[:self.digits]
             for svc_addr in services_addrs:
                 svc = self.services.get(svc_addr, {"addr": svc_addr})
                 services.append(svc)
             self.assign_services(base, services)
+            # Deep copy the list
+            self.raw_svc_by_base[base] = [str(x) for x in services_addrs]
+
+    # TODO(FVE): move the following method in a generic class
+    def _apply_copy_bases(self, svc_type, moved, **kwargs):
+        """Step 1 of base reassignation algorithm."""
+        moved_ok = list()
+        for base in moved:
+            peers = [v['addr'] for v in self.svc_by_base[base]]
+            old_peers = self.raw_svc_by_base[base]
+            new_peers = [v for v in peers if v not in old_peers]
+            kept_peers = [v for v in peers if v in old_peers]
+            self.logger.info("old: %s, new: %s", old_peers, new_peers)
+            cid = base.ljust(64, '0')
+            try:
+                self.admin.set_peers(svc_type, cid=cid, peers=peers)
+                all_peers_ok = True
+                for svc_to in new_peers:
+                    this_peer_ok = False
+                    for svc_from in kept_peers:
+                        self.logger.info("Copying base %s from %s to %s",
+                                         base, svc_from, svc_to)
+                        try:
+                            self.admin.copy_base_from(
+                                svc_type, cid=cid,
+                                svc_from=svc_from, svc_to=svc_to)
+                            this_peer_ok = True
+                            break
+                        except OioException:
+                            self.logger.warn(
+                                "Failed to copy base %s to %s",
+                                base, svc_to)
+                    if not this_peer_ok:
+                        all_peers_ok = False
+                if all_peers_ok:
+                    moved_ok.append(base)
+            except ServiceBusy:
+                self.logger.warn('Failed to set peers to %s for base %s',
+                                 peers, base)
+        return moved_ok
+
+    # TODO(FVE): move the following method in a generic class
+    def _apply_reset_elections(self, svc_type, moved, **kwargs):
+        """Step 3 of base reassignation algorithm."""
+        for base in moved:
+            cid = base.ljust(64, '0')
+            try:
+                self.admin.election_leave(svc_type, cid=cid)
+                election = self.admin.election_status(svc_type, cid=cid)
+                for svc, status in election['peers'].items():
+                    if status['status']['status'] not in (200, 303):
+                        self.logger.warn("Election not started for %s: %s",
+                                         svc, status)
+            except OioException as exc:
+                self.logger.warn(
+                    "Failed to get election status for base %s: %s",
+                    cid, exc)
 
     def apply(self, moved=None, **kwargs):
         """
@@ -209,19 +280,11 @@ class PrefixMapping(object):
         :param moved: list of bases that have moved.
         """
         if moved:
-            for base in moved:
-                peers = [v['addr'] for v in self.svc_by_base[base]]
-                cid = base.ljust(64, '0')
-                try:
-                    self.admin.set_peers('meta1', cid=cid, peers=peers)
-                except ServiceBusy:
-                    self.logger.warn('Failed to set peers to %s for base %s',
-                                     peers, base)
-        self.m0.force(self.to_json(moved).strip(), **kwargs)
-        if moved:
-            for base in moved:
-                cid = base.ljust(64, '0')
-                self.admin.election_leave('meta1', cid=cid)
+            moved_ok = self._apply_copy_bases('meta1', moved, **kwargs)
+        else:
+            moved_ok = list()
+        self.m0.force(self.to_json(moved_ok).strip(), **kwargs)
+        self._apply_reset_elections('meta1', moved_ok, **kwargs)
 
     def _find_services(self, known=None, lookup=None, max_lookup=50):
         """
@@ -258,7 +321,7 @@ class PrefixMapping(object):
     def find_services_less_bases(self, known=None, min_score=1, **_kwargs):
         """Find `replicas` services, including the ones of `known`"""
         if known is None:
-            known = list([])
+            known = list()
         filtered = [x for x in self.services.itervalues()
                     if self.get_score(x) >= min_score]
         # Reverse the list so we can quickly pop the service
@@ -294,9 +357,9 @@ class PrefixMapping(object):
         if fail_if_already_set and base in self.svc_by_base:
             raise ValueError("Base %s already managed" % base)
         for svc in services:
-            base_set = svc.get("bases", set(()))
+            base_set = svc.get('bases') or set()
             base_set.add(base)
-            svc["bases"] = base_set
+            svc['bases'] = base_set
         self.svc_by_base[base] = services
 
     def bootstrap(self, strategy=None):
@@ -317,25 +380,6 @@ class PrefixMapping(object):
             base = "%0*X" % (self.digits, base_int)
             services = strategy()
             self.assign_services(base, services, fail_if_already_set=True)
-
-    def check(self):
-        """
-        Check the distribution of services respect the prefixes groups
-        """
-
-        if self.digits == 4:
-            return
-
-        for p1 in self.svc_by_base.keys():
-            p0 = self.prefix_to_base(p1)
-            if p0 == p1:
-                continue
-            s0, s1 = self.svc_by_base[p0], self.svc_by_base[p1]
-            s0, s1 = sorted(s0), sorted(s1)
-            if s0 != s1:
-                raise Exception(
-                    "Group={0} Prefix={1} have different services" .
-                    format(p0, p1))
 
     def count_pfx_by_svc(self):
         """
@@ -382,7 +426,7 @@ class PrefixMapping(object):
         saved_score = svc["score"]
         svc["score"] = 0
         if not bases_to_remove:
-            bases_to_remove = list(svc["bases"])
+            bases_to_remove = list(svc.get("bases", list()))
         if not strategy:
             strategy = self.find_services_less_bases
         moved = list()

@@ -140,18 +140,21 @@ class DirectoryRebalance(DirectoryCmd):
 
 
 class DirectoryDecommission(DirectoryCmd):
-    """Decommission a Meta1 service."""
+    """Decommission a Meta1 service (or only some bases)."""
 
     def get_parser(self, prog_name):
         parser = super(DirectoryDecommission, self).get_parser(prog_name)
         parser.add_argument('addr', metavar='<ADDR>',
                             help='Address of service to decommission')
+        parser.add_argument('base', metavar='<BASE>', nargs='*',
+                            help="Name of bases to decommission")
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         mapping = self.get_prefix_mapping(parsed_args)
         mapping.load(read_timeout=parsed_args.meta0_timeout)
-        moved = mapping.decommission(parsed_args.addr)
+        moved = mapping.decommission(parsed_args.addr,
+                                     bases_to_remove=parsed_args.base)
         mapping.apply(moved, read_timeout=parsed_args.meta0_timeout)
         self.log.info("Moved %s", moved)
