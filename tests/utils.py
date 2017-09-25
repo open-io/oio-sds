@@ -88,7 +88,7 @@ def get_config(defaults=None):
     return conf
 
 
-class BaseTestCase(testtools.TestCase):
+class CommonTestCase(testtools.TestCase):
 
     def _random_user(self):
         return "user-" + random_str(16, "0123456789ABCDEF")
@@ -156,17 +156,15 @@ class BaseTestCase(testtools.TestCase):
         return self.http_pool.request(method, url, **out_kwargs)
 
     def setUp(self):
-        super(BaseTestCase, self).setUp()
+        super(CommonTestCase, self).setUp()
         self.conf = get_config()
         self.uri = 'http://' + self.conf['proxy']
         self.ns = self.conf['namespace']
         self.account = self.conf['account']
         self.http_pool = get_pool_manager()
-        self._flush_cs('echo')
 
     def tearDown(self):
-        super(BaseTestCase, self).tearDown()
-        self._flush_cs('echo')
+        super(CommonTestCase, self).tearDown()
 
     @classmethod
     def tearDownClass(cls):
@@ -259,3 +257,18 @@ class BaseTestCase(testtools.TestCase):
         except ValueError:
             logging.info("Unparseable data: %s", str(data))
             raise
+
+
+class BaseTestCase(CommonTestCase):
+
+    def setUp(self):
+        super(BaseTestCase, self).setUp()
+        self._flush_cs('echo')
+
+    def tearDown(self):
+        super(BaseTestCase, self).tearDown()
+        self._flush_cs('echo')
+
+    @classmethod
+    def tearDownClass(cls):
+        pass

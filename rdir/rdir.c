@@ -18,6 +18,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include <errno.h>
 #include <malloc.h>
+#include <unistd.h>
 
 #include <glib.h>
 #include <json-c/json.h>
@@ -78,13 +79,9 @@ _reply_bytes(struct http_reply_ctx_s *rp,
 {
 	rp->set_status(code, msg);
 	if (bytes) {
-		if (g_bytes_get_size(bytes) > 0) {
+		if (g_bytes_get_size(bytes) > 0)
 			rp->set_content_type("application/json");
-			rp->set_body_bytes(bytes);
-		} else {
-			g_bytes_unref(bytes);
-			rp->set_body_bytes(NULL);
-		}
+		rp->set_body_bytes(bytes);
 	} else {
 		rp->set_body_bytes(NULL);
 	}
@@ -104,7 +101,7 @@ static enum http_rc_e
 _reply_json_error(struct http_reply_ctx_s *rp,
 		int code, const char *msg, GString * gstr)
 {
-	if (gstr && gstr->len)
+	if (gstr)
 		rp->access_tail("e=%.*s", gstr->len, gstr->str);
 	return _reply_json(rp, code, msg, gstr);
 }
@@ -131,8 +128,6 @@ _create_status(gint code, const gchar * msg)
 static GString *
 _create_status_error(GError * e)
 {
-	if (!e)
-		return _create_status(CODE_INTERNAL_ERROR, "unknown error");
 	GString *gstr = _create_status(e->code, e->message);
 	g_error_free(e);
 	return gstr;
@@ -149,7 +144,7 @@ static enum http_rc_e
 _reply_method_error(struct http_reply_ctx_s *rp)
 {
 	return _reply_json_error(rp, HTTP_CODE_METHOD_NOT_ALLOWED,
-			"Method not allowed", NULL);
+			"Method not allowed", _create_status_error(BADREQ("Bad method")));
 }
 
 static enum http_rc_e
@@ -209,7 +204,7 @@ _reply_created(struct http_reply_ctx_s *rp)
 static enum http_rc_e
 _reply_ok(struct http_reply_ctx_s *rp, GString *body)
 {
-	if (!body || !body->len)
+	if (!body)
 		return _reply_json(rp, HTTP_CODE_NO_CONTENT, "OK", body);
 	return _reply_json(rp, HTTP_CODE_OK, "OK", body);
 }
@@ -227,10 +222,10 @@ _map_errno_to_gerror(int code, char *msg)
 			err = NEWERROR(CODE_NOT_ALLOWED, "%s", msg);
 			break;
 		case EINVAL:
-			err = NEWERROR(CODE_BAD_REQUEST, "%s", msg);
+			err = BADREQ("%s", msg);
 			break;
 		default:
-			err = NEWERROR(CODE_INTERNAL_ERROR, "(%d) %s", code, msg);
+			err = SYSERR("(%d) %s", code, msg);
 	}
 
 	if (msg)
@@ -1283,9 +1278,9 @@ _handler_decode_route(struct req_args_s *args, struct json_object *jbody,
 			return _route_srv_config(args);
 
 		case OIO_RDIR_STATUS:
-			args->rp->no_access();
 			// FALLTHROUGH
 		case OIO_RDIR_ADMIN_SHOW:
+			args->rp->no_access();
 			CHECK_METHOD("GET");
 			return _route_admin_show(args, OPT("vol"));
 
@@ -1493,15 +1488,6 @@ grid_main_specific_fini(void)
 	oio_str_clean(&basedir);
 }
 
-static gboolean
-_config_error(const char *where, GError *err)
-{
-	GRID_ERROR("Configuration error: %s: (%d) %s",
-			where, err->code, err->message);
-	g_clear_error(&err);
-	return FALSE;
-}
-
 static void
 _task_malloc_trim(gpointer p)
 {
@@ -1510,6 +1496,20 @@ _task_malloc_trim(gpointer p)
 }
 
 #define CFG(K) g_key_file_get_string(gkf, CFG_GROUP, (K), &err)
+
+#define DUAL_ERROR(FMT,...) do { \
+	g_printerr("\n*** " FMT " ***\n\n", ##__VA_ARGS__); \
+	GRID_ERROR(FMT, ##__VA_ARGS__); \
+} while (0)
+
+static gboolean
+_config_error(const char *where, GError *err)
+{
+	DUAL_ERROR("Configuration error: %s: (%d) %s",
+			where, err->code, err->message);
+	g_clear_error(&err);
+	return FALSE;
+}
 
 static gboolean
 grid_main_configure(int argc, char **argv)
@@ -1567,13 +1567,6 @@ grid_main_configure(int argc, char **argv)
 	g_key_file_free(gkf);
 	gkf = NULL;
 
-	/* Load the central configuration facility, it will tell us our
-	 * NS is locally known. */
-	if (!oio_var_value_with_files(ns_name, config_system, config_paths)) {
-		GRID_ERROR("NS [%s] unknown in the configuration", ns_name);
-		return FALSE;
-	}
-
 	/* supersedes the default logging */
 	if (cfg_syslog) {
 		const gsize len0 = g_strlcpy(syslog_id, cfg_syslog, sizeof(syslog_id));
@@ -1583,13 +1576,35 @@ grid_main_configure(int argc, char **argv)
 		logger_syslog_open();
 	}
 
-	_patch_and_apply_configuration();
+	/* Check the basedir exists and we have the required permissions on it */
+	if (0 != g_access(basedir, R_OK|W_OK|X_OK)) {
+		DUAL_ERROR("Basedir error [%s]: (%d) %s", basedir, errno, strerror(errno));
+		return FALSE;
+	}
+	if (!g_file_test(basedir, G_FILE_TEST_IS_DIR)) {
+		DUAL_ERROR("Basedir error [%s]: not a directory", basedir);
+		return FALSE;
+	}
 
-	/* Prepare the network side of the application */
-	server = network_server_init();
+	/* Load the central configuration facility, it will tell us our
+	 * NS is locally known. */
+	if (!oio_var_value_with_files(ns_name, config_system, config_paths)) {
+		DUAL_ERROR("NS [%s] unknown in the configuration", ns_name);
+		return FALSE;
+	}
+
+	_patch_and_apply_configuration();
 
 	gchar *cfg_main_url = g_strconcat(cfg_ip, ":", cfg_port, NULL);
 	STRING_STACKIFY(cfg_main_url);
+
+	/* Validate the volume was never used for another rdir */
+	err = volume_service_lock(basedir, NAME_SRVTYPE_RDIR, cfg_main_url, ns_name);
+	if (err != NULL)
+		return _config_error("Volume lock error", err);
+
+	/* Prepare the network side of the application */
+	server = network_server_init();
 
 	network_server_bind_host(server, cfg_main_url, handler_action,
 			(network_transport_factory) transport_http_factory0);
