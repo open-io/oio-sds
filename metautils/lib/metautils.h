@@ -51,7 +51,6 @@ License along with this library.
 # include <metautils/lib/metatype_srvinfo.h>
 # include <metautils/lib/metatype_m1url.h>
 # include <metautils/lib/metatype_addrinfo.h>
-# include <metautils/lib/metatype_kv.h>
 # include <metautils/lib/metatype_metadata.h>
 
 # include <metautils/lib/lrutree.h>
