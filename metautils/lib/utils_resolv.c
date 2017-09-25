@@ -175,40 +175,6 @@ grid_string_to_addrinfo(const gchar *start, struct addr_info_s *a)
 }
 
 gint
-addrinfo_to_sockaddr(const addr_info_t * ai, struct sockaddr *sa, gsize * saSize)
-{
-	struct sockaddr_in *sa4;
-	struct sockaddr_in6 *sa6;
-
-	if (!ai || !sa || !saSize || *saSize <= 6 /*family(2) + ipv4(4) */ )
-		return 0;
-	memset(sa, 0x00, *saSize);
-
-	switch (ai->type) {
-	case TADDR_V4:
-		if (*saSize < sizeof(struct sockaddr_in))
-			return 0;
-		sa4 = (struct sockaddr_in *) sa;
-		sa4->sin_family = AF_INET;
-		sa4->sin_port = ai->port;
-		sa4->sin_addr.s_addr = ai->addr.v4;
-		*saSize = sizeof(struct sockaddr_in);
-		return 1;
-	case TADDR_V6:
-		if (*saSize < sizeof(struct sockaddr_in6))
-			return 0;
-		sa6 = (struct sockaddr_in6 *) sa;
-		sa6->sin6_family = AF_INET6;
-		sa6->sin6_port = ai->port;
-		memcpy(&(sa6->sin6_addr), &(ai->addr), sizeof(struct in6_addr));
-		*saSize = sizeof(struct sockaddr_in6);
-		return 1;
-	default:
-		return 0;
-	}
-}
-
-gint
 addrinfo_from_sockaddr(addr_info_t * ai, struct sockaddr * sa, gsize saSize)
 {
 	struct sockaddr_in *sa4;
