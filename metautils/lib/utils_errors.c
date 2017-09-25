@@ -52,20 +52,3 @@ g_error_trace(GError ** e, const char *dom, int code,
 
 	g_string_free(gstr, TRUE);
 }
-
-gint
-gerror_get_code(GError * err)
-{
-	return err ? err->code : 0;
-}
-
-const gchar *
-gerror_get_message(GError * err)
-{
-	if (!err)
-		return "no error";
-	if (!err->message)
-		return "no error message";
-	return err->message;
-}
-

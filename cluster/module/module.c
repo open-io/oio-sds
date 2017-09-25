@@ -100,7 +100,7 @@ static void
 _reply_ctx_set_error(struct reply_context_s *ctx)
 {
 	reply_context_clear(ctx, FALSE);
-	reply_context_set_message(ctx, gerror_get_code(ctx->warning), gerror_get_message(ctx->warning));
+	reply_context_set_message(ctx, ctx->warning->code, gerror_get_message(ctx->warning));
 }
 
 static void
