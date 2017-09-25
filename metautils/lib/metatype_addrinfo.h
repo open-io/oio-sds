@@ -23,8 +23,6 @@ License along with this library.
 #include <glib/gtypes.h>
 
 gboolean addr_info_equal(gconstpointer a, gconstpointer b);
-gint addr_info_compare(gconstpointer a, gconstpointer b);
-guint addr_info_hash(gconstpointer k);
 
 #define addr_info_clean  g_free0
 #define addr_info_gclean g_free1
