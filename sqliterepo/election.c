@@ -227,6 +227,9 @@ struct election_member_s
 	struct sqlx_name_inline_s inline_name;
 
 	struct logged_event_s log[EVENTLOG_SIZE];
+
+	/* Peers as they are at the election start */
+	gchar **peers;
 };
 
 static void _noop (gpointer p) { (void)p; }
@@ -654,6 +657,19 @@ election_manager_count(struct election_manager_s *manager)
 	return count;
 }
 
+static struct election_member_s *
+_LOCKED_get_member (struct election_manager_s *ma, const char *k);
+
+#define member_reset_peers(m) do { \
+	g_strfreev(m->peers); \
+	m->peers = NULL; \
+} while (0)
+
+#define member_unref(m) do { \
+	EXTRA_ASSERT (m->refcount > 0); \
+	-- m->refcount; \
+} while (0)
+
 static GError *
 _election_get_peers(struct election_manager_s *manager,
 		const struct sqlx_name_s *n, gboolean nocache, gchar ***result)
@@ -665,18 +681,41 @@ _election_get_peers(struct election_manager_s *manager,
 		*result = g_malloc0(sizeof(void*));
 		return NULL;
 	} else {
+		GError *err = NULL;
 		gchar **peers = NULL;
-		GError *err = manager->config->get_peers(manager->config->ctx, n, nocache, &peers);
+		gboolean peers_from_election = FALSE;
+		gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
+		sqliterepo_hash_name(n, key, sizeof(key));
+		struct election_member_s *member = _LOCKED_get_member(manager, key);
+		if (!nocache && member && member->peers && *(member->peers)) {
+			/* Election has started, member has been created and peers
+			 * have already been loaded from database or for from
+			 * upper-level service. */
+			peers = g_strdupv(member->peers);
+			peers_from_election = TRUE;
+		} else {
+			/* Member does not exist yet
+			 * or we have been asked to bypass the peer cache. */
+			err = manager->config->get_peers(
+					manager->config->ctx, n, nocache, &peers);
+		}
 		if (!err) {
 			EXTRA_ASSERT(peers != NULL);
 			*result = peers;
-			return NULL;
+			if (member && !peers_from_election) {
+				if (member->peers)
+					member_reset_peers(member);
+				if (*peers)
+					member->peers = g_strdupv(peers);
+			}
 		} else {
 			EXTRA_ASSERT(peers == NULL);
 			*result = NULL;
 			g_prefix_error(&err, "get_peers(%s,%s): ", n->base, n->type);
-			return err;
 		}
+		if (member)
+			member_unref(member);
+		return err;
 	}
 }
 
@@ -827,22 +866,8 @@ member_get_peers(struct election_member_s *m, gboolean nocache, gchar ***peers)
 	return election_get_peers(MMANAGER(m), &n, nocache, peers);
 }
 
-static void
-member_decache_peers(struct election_member_s *m)
-{
-	gchar **peers = NULL;
-	GError *err = member_get_peers(m, TRUE, &peers);
-	oio_str_cleanv(&peers);
-	if (err) g_clear_error(&err);
-}
-
 #define member_ref(m) do { \
 	++ m->refcount; \
-} while (0)
-
-#define member_unref(m) do { \
-	EXTRA_ASSERT (m->refcount > 0); \
-	-- m->refcount; \
 } while (0)
 
 static GCond*
@@ -926,6 +951,7 @@ member_reset(struct election_member_s *m)
 	member_reset_master(m);
 	member_reset_getvers(m);
 	member_reset_pending(m);
+	member_reset_peers(m);
 	/* do not reset the `requested_*` fields, those must survive,
 	 * typically to a restart, e.g. to perform a final resync */
 }
@@ -1949,10 +1975,11 @@ _result_GETVERS (GError *enet,
 		else if (err->code == CODE_CONCURRENT)
 			transition(member, EVT_GETVERS_RACE, &reqid);
 		else {
-			GRID_DEBUG("GETVERS error : (%d) %s", err->code, err->message);
+			GRID_DEBUG("GETVERS error: (%d) %s", err->code, err->message);
 			if (err->code == CODE_CONTAINER_NOTFOUND) {
-				// We may have asked the wrong peer
-				member_decache_peers(member);
+				/* We may have asked the wrong peer,
+				 * or we don't manage the base (yet?). */
+				member_reset_peers(member);
 			}
 			transition(member, EVT_GETVERS_KO, &reqid);
 		}
@@ -2031,6 +2058,7 @@ member_action_to_NONE(struct election_member_s *member)
 	EXTRA_ASSERT(member->local_id == 0);
 	EXTRA_ASSERT(member->master_id == 0);
 	EXTRA_ASSERT(member->master_url == NULL);
+	member_reset_peers(member);
 	member->when_unstable = 0;
 	return member_set_status(member, STEP_NONE);
 }
@@ -2045,6 +2073,7 @@ member_action_to_FAILED(struct election_member_s *member)
 
 	member_reset_local(member);
 	member_reset_master(member);
+	member_reset_peers(member);
 
 	/* setting last_USE to now avoids sending USE as soon as arrived in
 	 * the set of FAILED elections. */
@@ -2087,6 +2116,7 @@ _common_action_to_LEAVE(struct election_member_s *member,
 	member->pending_ZK_DELETE = 1;
 	member_ref(member);
 	member_reset_master(member);
+	member_reset_peers(member);
 	return member_set_status(member, evt);
 }
 

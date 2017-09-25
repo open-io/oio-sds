@@ -137,7 +137,7 @@ action_sqlx_copyto (struct req_args_s *args, struct json_object *jargs)
 	CLIENT_CTX (ctx, args, dirtype, seq);
 	ctx.which = CLIENT_PREFER_MASTER;
 	GByteArray * _pack (const struct sqlx_name_s *n) {
-		return sqlx_pack_PIPEFROM(n, to);
+		return sqlx_pack_PIPETO(n, to);
 	}
 
 	enum http_rc_e rc = _sqlx_action_noreturn_TAIL (args, &ctx, _pack);

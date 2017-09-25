@@ -44,6 +44,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqliterepo/replication_dispatcher.h>
 #include <sqliterepo/gridd_client_pool.h>
 #include <sqliterepo/internals.h>
+#include <sqliterepo/hash.h>
 #include <resolver/hc_resolver.h>
 
 #include <core/oiolb.h>
@@ -346,6 +347,7 @@ _init_configless_structures(struct sqlx_service_s *ss)
 		GRID_WARN("SERVICE init error: memory allocation failure");
 		return FALSE;
 	}
+	hc_resolver_configure(ss->resolver, HC_RESOLVER_NOCACHE);
 
 	return TRUE;
 }
