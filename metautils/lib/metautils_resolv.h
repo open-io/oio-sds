@@ -35,9 +35,6 @@ gboolean grid_string_to_addrinfo(const gchar *src, struct addr_info_s *a);
 
 gboolean grid_string_to_sockaddr(const gchar *src, struct sockaddr *s, gsize *slen);
 
-gint addrinfo_to_sockaddr(const struct addr_info_s * ai, struct sockaddr *sa,
-		gsize * saSize);
-
 gint addrinfo_from_sockaddr(struct addr_info_s * ai, struct sockaddr *sa,
 		gsize saSize);
 
