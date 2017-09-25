@@ -17,7 +17,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 set -e
 set -x
-export COLUMNS=512 LANG= LANGUAGE=
 
 export G_DEBUG=fatal_warnings
 export G_SLICE=always-malloc
