@@ -69,3 +69,7 @@ add_executable(test_oio_cluster test_cluster.c)
 target_link_libraries(test_oio_cluster oiocore gridcluster)
 add_test(NAME cluster/lib COMMAND test_oio_cluster)
 
+add_executable(test_volume_lock test_volume_lock.c)
+target_link_libraries(test_volume_lock metautils)
+add_test(NAME metautils/volume_lock COMMAND test_volume_lock)
+
