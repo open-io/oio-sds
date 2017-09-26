@@ -1254,11 +1254,10 @@ election_manager_whatabout (struct election_manager_s *m,
 	} else { \
 		/* Try to defer, if error, then do immediately */ \
 		GError *_e = NULL; \
-		gboolean rc = g_thread_pool_push((M)->completions, (Ctx), &_e); \
-		if (rc) return; \
-		GRID_WARN("Completion queue error: (%d) %s", _e->code, _e->message); \
-		if (_e) g_error_free(_e); \
-		return _completion_router((Ctx), (M)); \
+		if (!g_thread_pool_push((M)->completions, (Ctx), &_e)) { \
+			GRID_WARN("ZK pool error: (%d) %s", _e->code, _e->message); \
+			g_error_free(_e); \
+		} \
 	} \
 } while (0)
 
