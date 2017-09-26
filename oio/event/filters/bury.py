@@ -15,7 +15,7 @@
 
 
 from oio.event.filters.base import Filter
-from oio.common.exceptions import JobBury
+from oio.common.exceptions import ExplicitBury
 
 
 class BuryFilter(Filter):
@@ -25,7 +25,7 @@ class BuryFilter(Filter):
         pass
 
     def process(self, env, cb):
-        raise JobBury()
+        raise ExplicitBury()
 
 
 def filter_factory(global_conf, **local_conf):
