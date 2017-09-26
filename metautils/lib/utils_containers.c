@@ -19,7 +19,7 @@ License along with this library.
 
 #include <stdlib.h>
 
-#include "metautils_containers.h"
+#include "metautils.h"
 
 void
 gslist_free_element(gpointer d, gpointer u)
@@ -253,6 +253,21 @@ metautils_gvariant_unrefv(GVariant **v)
 	for (; *v ;v++) {
 		g_variant_unref(*v);
 		*v = NULL;
+	}
+}
+
+void
+metautils_gthreadpool_push(const char *tag, GThreadPool *pool, gpointer p)
+{
+	static gint64 last_log = 0;
+	GError *err = NULL;
+	if (!g_thread_pool_push(pool, p, &err)) {
+		const gint64 now = oio_ext_monotonic_time();
+		if (last_log <= OLDEST(now, G_TIME_SPAN_MINUTE)) {
+			last_log = now;
+			GRID_WARN("%s pool error: (%d) %s", tag, err->code, err->message);
+		}
+		g_clear_error(&err);
 	}
 }
 

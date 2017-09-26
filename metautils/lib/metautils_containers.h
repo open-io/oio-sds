@@ -94,4 +94,8 @@ void metautils_gpa_reverse (GPtrArray *gpa);
  * <v> is NULL-terminated. <v> is not freed. */
 void metautils_gvariant_unrefv (GVariant **v);
 
+/* Wrapper around g_thread_pool_push() that throttle-logs the error */
+void metautils_gthreadpool_push(const char *tag,
+		GThreadPool *pool, gpointer p);
+
 #endif /*OIO_SDS__metautils__lib__metautils_containers_h*/
