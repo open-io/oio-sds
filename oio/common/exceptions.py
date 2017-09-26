@@ -82,7 +82,7 @@ class CommandError(Exception):
     pass
 
 
-class JobBury(OioException):
+class ExplicitBury(OioException):
     pass
 
 
