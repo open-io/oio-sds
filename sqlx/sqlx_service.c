@@ -1038,7 +1038,13 @@ _task_expire_bases(gpointer p)
 
 	struct sqlx_cache_s *cache = sqlx_repository_get_cache(PSRV(p)->repository);
 	if (cache != NULL) {
-		guint count = sqlx_cache_expire(cache, 100, 500 * G_TIME_SPAN_MILLISECOND);
+
+		VARIABLE_PERIOD_DECLARE();
+		if (VARIABLE_PERIOD_SKIP(sqlx_periodic_decache_period))
+			return;
+
+		guint count = sqlx_cache_expire(cache,
+				sqlx_periodic_decache_max_bases, sqlx_periodic_decache_max_delay);
 		if (count)
 			GRID_DEBUG("Expired %u bases", count);
 	}
