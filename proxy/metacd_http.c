@@ -861,12 +861,17 @@ configure_request_handlers (void)
 	SET("/config/#POST", action_set_config);
 
 	SET("/forward/config/#POST", action_forward_set_config);
+
 	SET("/forward/config/#GET", action_forward_get_config);
-
+	SET("/forward/version/#GET", action_forward_get_version);
+	SET("/forward/info/#GET", action_forward_get_info);
 	SET("/forward/stats/#GET", action_forward_stats);
-	SET("/forward/stats/#POST", action_forward_stats);
-
-	SET("/forward/$ACTION/#POST", action_forward);
+	SET("/forward/ping/#GET", action_forward_get_ping);
+	SET("/forward/kill/#POST", action_forward_kill);
+	SET("/forward/reload/#POST", action_forward_reload);
+	SET("/forward/flush/#POST", action_forward_flush);
+	SET("/forward/lean-glib/#POST", action_forward_lean_glib);
+	SET("/forward/lean-sqlx/#POST", action_forward_lean_sqlx);
 
 	SET("/cache/status/#GET", action_cache_status);
 	SET("/cache/flush/local/#POST", action_cache_flush_local);

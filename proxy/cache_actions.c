@@ -52,122 +52,6 @@ action_forward_stats (struct req_args_s *args)
 }
 
 enum http_rc_e
-action_forward (struct req_args_s *args)
-{
-	const char *id = OPT("id");
-	const char *action = TOK("ACTION");
-
-	if (!id)
-		return _reply_format_error (args, BADREQ("Missing SRVID"));
-	if (!action)
-		return _reply_format_error (args, BADREQ("Missing action"));
-
-	GError *err = NULL;
-	if (!g_ascii_strcasecmp (action, "flush")) {
-		GByteArray *encoded = message_marshall_gba_and_clean (
-				metautils_message_create_named (NAME_MSGNAME_SQLX_FLUSH));
-		err = gridd_client_exec (id, proxy_timeout_common, encoded);
-		if (err)
-			return _reply_common_error (args, err);
-		return _reply_success_json (args, NULL);
-	}
-	if (!g_ascii_strcasecmp (action, "reload")) {
-		GByteArray *encoded = message_marshall_gba_and_clean (
-				metautils_message_create_named (NAME_MSGNAME_SQLX_RELOAD));
-		err = gridd_client_exec (id, proxy_timeout_common, encoded);
-		if (err)
-			return _reply_common_error (args, err);
-		return _reply_success_json (args, NULL);
-	}
-	if (!g_ascii_strcasecmp (action, "kill")) {
-		GByteArray *encoded = message_marshall_gba_and_clean (
-				metautils_message_create_named("REQ_KILL"));
-		err = gridd_client_exec (id, proxy_timeout_common, encoded);
-		if (err)
-			return _reply_common_error (args, err);
-		return _reply_success_json (args, NULL);
-	}
-	if (!g_ascii_strcasecmp (action, "ping")) {
-		args->rp->no_access();
-		GByteArray *encoded = message_marshall_gba_and_clean (
-				metautils_message_create_named("REQ_PING"));
-		err = gridd_client_exec (id, proxy_timeout_common, encoded);
-		if (err)
-			return _reply_common_error (args, err);
-		return _reply_success_json (args, NULL);
-	}
-	if (!g_ascii_strcasecmp (action, "lean-glib")) {
-		MESSAGE req = metautils_message_create_named("REQ_LEAN");
-		metautils_message_add_field_str(req, "LIBC", "1");
-		metautils_message_add_field_str(req, "THREADS", "1");
-		GByteArray *encoded = message_marshall_gba_and_clean (req);
-		err = gridd_client_exec (id, proxy_timeout_common, encoded);
-		if (err)
-			return _reply_common_error (args, err);
-		return _reply_success_json (args, NULL);
-	}
-
-	if (!g_ascii_strcasecmp (action, "lean-sqlx")) {
-		GByteArray *encoded = message_marshall_gba_and_clean (
-				metautils_message_create_named(NAME_MSGNAME_SQLX_LEANIFY));
-		err = gridd_client_exec (id, proxy_timeout_common, encoded);
-		if (err)
-			return _reply_common_error (args, err);
-		return _reply_success_json (args, NULL);
-	}
-
-	if (!g_ascii_strcasecmp (action, "version")) {
-		args->rp->no_access();
-		GByteArray *encoded = message_marshall_gba_and_clean (
-				metautils_message_create_named("REQ_VERSION"));
-		gchar *packed = NULL;
-		err = gridd_client_exec_and_concat_string (id, proxy_timeout_common,
-				encoded, &packed);
-		if (err) {
-			g_free0 (packed);
-			return _reply_common_error (args, err);
-		}
-
-		return _reply_success_bytes (
-				args, g_bytes_new_take((guint8*)packed, strlen(packed)));
-	}
-
-	if (!g_ascii_strcasecmp (action, "handlers")) {
-		args->rp->no_access();
-		GByteArray *encoded = message_marshall_gba_and_clean (
-				metautils_message_create_named("REQ_HANDLERS"));
-		gchar *packed = NULL;
-		err = gridd_client_exec_and_concat_string (id, proxy_timeout_common,
-				encoded, &packed);
-		if (err) {
-			g_free0 (packed);
-			return _reply_common_error (args, err);
-		}
-
-		return _reply_success_bytes (
-				args, g_bytes_new_take((guint8*)packed, strlen(packed)));
-	}
-
-	if (!g_ascii_strcasecmp (action, "info")) {
-		args->rp->no_access();
-		GByteArray *encoded = message_marshall_gba_and_clean (
-				metautils_message_create_named(NAME_MSGNAME_SQLX_INFO));
-		gchar *packed = NULL;
-		err = gridd_client_exec_and_concat_string(id, proxy_timeout_common,
-				encoded, &packed);
-		if (err) {
-			g_free0 (packed);
-			return _reply_common_error (args, err);
-		}
-
-		return _reply_success_bytes (
-				args, g_bytes_new_take((guint8*)packed, strlen(packed)));
-	}
-
-	return _reply_common_error (args, BADREQ("unexpected action"));
-}
-
-enum http_rc_e
 action_cache_flush_local (struct req_args_s *args)
 {
 	oio_lb_world__flush(lb_world);
@@ -264,34 +148,6 @@ action_set_config (struct req_args_s *args)
 }
 
 enum http_rc_e
-action_forward_get_config (struct req_args_s *args)
-{
-	args->rp->no_access();
-
-	const char *id = OPT("id");
-	if (!id)
-		return _reply_format_error (args, BADREQ("Missing SRVID"));
-
-	MESSAGE req = metautils_message_create_named("REQ_GETCFG");
-	GByteArray *encoded = message_marshall_gba_and_clean (req);
-	gchar *packed = NULL;
-	GError *err = gridd_client_exec_and_concat_string (
-			id, proxy_timeout_config, encoded, &packed);
-	if (err) {
-		g_free0 (packed);
-		if (CODE_IS_NETWORK_ERROR(err->code)) {
-			if (err->code == ERRCODE_CONN_TIMEOUT || err->code == ERRCODE_READ_TIMEOUT)
-				return _reply_gateway_timeout (args, err);
-			return _reply_srv_unavailable (args, err);
-		}
-		return _reply_common_error (args, err);
-	}
-
-	return _reply_success_bytes (
-			args, g_bytes_new_take((guint8*)packed, strlen(packed)));
-}
-
-enum http_rc_e
 action_forward_set_config (struct req_args_s *args)
 {
 	args->rp->no_access();
@@ -317,3 +173,92 @@ action_forward_set_config (struct req_args_s *args)
 
 	return _reply_success_json(args, NULL);
 }
+
+static enum http_rc_e
+_forward_XXX (struct req_args_s *args, const char *reqname, gdouble timeout)
+{
+	args->rp->no_access();
+
+	const char *id = OPT("id");
+	if (!id)
+		return _reply_format_error (args, BADREQ("Missing SRVID"));
+
+	MESSAGE req = metautils_message_create_named(reqname);
+	GByteArray *encoded = message_marshall_gba_and_clean(req);
+	gchar *packed = NULL;
+	GError *err = gridd_client_exec_and_concat_string(id, timeout, encoded, &packed);
+	if (err) {
+		g_free0 (packed);
+		if (CODE_IS_NETWORK_ERROR(err->code)) {
+			if (err->code == ERRCODE_CONN_TIMEOUT || err->code == ERRCODE_READ_TIMEOUT)
+				return _reply_gateway_timeout (args, err);
+			return _reply_srv_unavailable (args, err);
+		}
+		return _reply_common_error (args, err);
+	}
+
+	return _reply_success_bytes (
+			args, g_bytes_new_take((guint8*)packed, strlen(packed)));
+}
+
+
+enum http_rc_e
+action_forward_get_config (struct req_args_s *args)
+{
+	return _forward_XXX(args, "REQ_GETCFG", proxy_timeout_config);
+}
+
+enum http_rc_e
+action_forward_get_version (struct req_args_s *args)
+{
+	return _forward_XXX(args, "REQ_VERSION", proxy_timeout_info);
+}
+
+enum http_rc_e
+action_forward_get_handlers (struct req_args_s *args)
+{
+	return _forward_XXX(args, "REQ_HANDLERS", proxy_timeout_common);
+}
+
+enum http_rc_e
+action_forward_get_ping (struct req_args_s *args)
+{
+	return _forward_XXX(args, "REQ_PING", proxy_timeout_common);
+}
+
+enum http_rc_e
+action_forward_get_info (struct req_args_s *args)
+{
+	return _forward_XXX(args, NAME_MSGNAME_SQLX_INFO, proxy_timeout_info);
+}
+
+enum http_rc_e
+action_forward_kill (struct req_args_s *args)
+{
+	return _forward_XXX(args, "REQ_KILL", proxy_timeout_common);
+}
+
+enum http_rc_e
+action_forward_flush (struct req_args_s *args)
+{
+	return _forward_XXX(args, NAME_MSGNAME_SQLX_FLUSH, proxy_timeout_common);
+}
+
+enum http_rc_e
+action_forward_reload (struct req_args_s *args)
+{
+	return _forward_XXX(args, NAME_MSGNAME_SQLX_RELOAD, proxy_timeout_common);
+}
+
+enum http_rc_e
+action_forward_lean_sqlx (struct req_args_s *args)
+{
+	return _forward_XXX(args, NAME_MSGNAME_SQLX_LEANIFY, proxy_timeout_common);
+}
+
+enum http_rc_e
+action_forward_lean_glib (struct req_args_s *args)
+{
+	return _forward_XXX(args, "REQ_LEAN", proxy_timeout_common);
+}
+
