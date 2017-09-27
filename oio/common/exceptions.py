@@ -82,6 +82,10 @@ class CommandError(Exception):
     pass
 
 
+class ExplicitBury(OioException):
+    pass
+
+
 class ECError(Exception):
     pass
 

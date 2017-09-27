@@ -182,7 +182,7 @@ network_server_stat_push4 (struct network_server_s *srv, gboolean increment,
 	m->which[0] = k1, m->which[1] = k2, m->which[2] = k3, m->which[3] = k4;
 	m->value[0] = v1, m->value[1] = v2, m->value[2] = v3, m->value[3] = v4;
 	m->increment = BOOL(increment);
-	g_thread_pool_push (srv->pool_stats, m, NULL);
+	metautils_gthreadpool_push("STAT", srv->pool_stats, m);
 }
 
 GArray*
@@ -538,7 +538,7 @@ _manage_client_event(struct network_server_s *srv,
 
 	if (clt->events & CLT_ERROR)
 		ARM_CLIENT(srv, clt, EPOLL_CTL_DEL);
-	g_thread_pool_push(srv->pool_tcp, clt, NULL);
+	metautils_gthreadpool_push("TCP", srv->pool_tcp, clt);
 }
 
 static void
@@ -754,14 +754,7 @@ _manage_udp_event(struct network_server_s *srv, struct endpoint_s *e,
 		if (unprocessed > server_udp_queue_maxlen) {
 			GRID_DEBUG("UDP dropped %s -> %s", clt->peer_name, clt->local_name);
 		} else {
-			GError *err = NULL;
-			if (!g_thread_pool_push(srv->pool_udp, clt, &err)) {
-				GRID_WARN("UDP discarded %s -> %s: (%d) %s",
-						clt->peer_name, clt->local_name,
-						err->code, err->message);
-				g_clear_error(&err);
-				_client_clean(srv, clt);
-			}
+			metautils_gthreadpool_push("UDP", srv->pool_udp, clt);
 		}
 	}
 }
