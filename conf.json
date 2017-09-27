@@ -161,6 +161,11 @@
 				"def": "5m", "min": "1s", "max": "1h",
 				"descr": "Tells how long the verbosity remains higher before being reset to the default, after a SIGUSR1 has been received." },
 
+			{ "type": "float", "name": "oio_m1_client_timeout_common",
+				"key": "meta1.outgoing.timeout.common.req",
+				"descr": "Sets the timeout to the set of (quick) RPC that query a meta1 service",
+				"def": 10.0, "min": 0.01, "max": 60.0 },
+
 			{ "type": "float", "name": "oio_m0_client_timeout_common",
 				"key": "meta0.outgoing.timeout.common.req",
 				"descr": "Sets the timeout to the set of (quick) RPC that query a meta0 service",
