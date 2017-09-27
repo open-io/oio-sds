@@ -313,10 +313,15 @@ oio_url_set(struct oio_url_s *u, enum oio_url_field_e f, const char *v)
 
 		case OIOURL_HEXID:
 			u->hexid[0] = 0;
-			if (!oio_str_ishexa(v,64) || !oio_str_hex2bin(v, u->id, 32))
-				return NULL;
-			memcpy(u->hexid, v, 64);
-			return u;
+			if (oio_str_ishexa(v, 64) && oio_str_hex2bin(v, u->id, 32)) {
+				memcpy(u->hexid, v, 64);
+				return u;
+			} else if (u->type && !strcmp(u->type, "meta1") &&
+					oio_str_ishexa(v, 4) && oio_str_hex2bin(v, u->id, 2)) {
+				memcpy(u->hexid, v, 4);
+				return u;
+			}
+			return NULL;
 
 		case OIOURL_CONTENTID:
 			if (!oio_str_ishexa1(v))

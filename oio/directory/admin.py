@@ -120,6 +120,7 @@ class AdminClient(ProxyClient):
 
     @loc_params
     def election_sync(self, params, **kwargs):
+        """Try to synchronize a dubious election."""
         _, body = self._request('POST', '/sync', params=params, **kwargs)
         return body
 
