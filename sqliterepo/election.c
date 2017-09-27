@@ -1227,11 +1227,11 @@ member_json (struct election_member_s *m, GString *gs)
 	/* then the livelog */
 	g_string_append_static(gs, ",\"log\":[");
 	guint idx = m->log_index - 1;
-	for (guint i=0; i<EVENTLOG_SIZE ;i++,idx--) {
+	for (guint i = 0; i < EVENTLOG_SIZE; i++, idx--) {
 		struct logged_event_s *plog = m->log + (idx % EVENTLOG_SIZE);
 		if (!plog->pre && !plog->post)
 			break;
-		if (i!=0)
+		if (i != 0)
 			g_string_append_c(gs, ',');
 		g_string_append_printf(gs, "\"%s:%s:%s\"", _step2str(plog->pre),
 				_evt2str(plog->event), _step2str(plog->post));
@@ -1939,8 +1939,15 @@ _result_GETVERS (GError *enet,
 	if (enet) {
 		err = g_error_copy(enet);
 	} else {
-		err = manager->config->get_version (manager->config->ctx, name, &vlocal);
+		err = manager->config->get_version(manager->config->ctx, name, &vlocal);
 		EXTRA_ASSERT ((err != NULL) ^ (vlocal != NULL));
+		if (err && err->code == CODE_CONTAINER_NOTFOUND) {
+			/* We don't have the base! If we are here, we can suppose we have
+			 * already checked that we are actually in the list of peers of
+			 * the election. We must ask for a fresh copy of the base. */
+			g_clear_error(&err);
+			err = NEWERROR(CODE_PIPEFROM, "Local database missing");
+		}
 	}
 
 	if (!err) {
@@ -1977,8 +1984,7 @@ _result_GETVERS (GError *enet,
 		else {
 			GRID_DEBUG("GETVERS error: (%d) %s", err->code, err->message);
 			if (err->code == CODE_CONTAINER_NOTFOUND) {
-				/* We may have asked the wrong peer,
-				 * or we don't manage the base (yet?). */
+				/* We may have asked the wrong peer. */
 				member_reset_peers(member);
 			}
 			transition(member, EVT_GETVERS_KO, &reqid);
