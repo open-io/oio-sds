@@ -680,6 +680,11 @@
 				"descr": "In a proxy, sets the maximum length for the URL it receives. This options protects stack allocation for that URL.",
 				"def": 2048, "min": 32, "max": 65536 },
 
+			{ "type": "float", "name": "proxy_timeout_info",
+				"key": "proxy.outgoing.timeout.info",
+				"descr": "In a proxy, sets the global timeout for 'info' requests issued",
+				"def": 5.0, "min": 0.01, "max": 60.0 },
+
 			{ "type": "float", "name": "proxy_timeout_config",
 				"key": "proxy.outgoing.timeout.config",
 				"descr": "In a proxy, sets the global timeout for 'config' requests issued",
