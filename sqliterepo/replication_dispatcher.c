@@ -2168,36 +2168,27 @@ _info_sqlite(GString *gstr)
 {
 	const char *s;
 
-	g_string_append_static(gstr, "SQLite options:\n");
+	g_string_append_static(gstr, "\"sqlite\":[");
 	for (int i=0; NULL != (s = sqlite3_compileoption_get(i)); ++i) {
-		g_string_append_c(gstr, '\t');
-		g_string_append(gstr, s);
-		g_string_append_c(gstr, '\n');
+		if (i!=0)
+			g_string_append_c(gstr, ',');
+		oio_str_gstring_append_json_quote(gstr, s);
 	}
+	g_string_append_c(gstr, ']');
 }
 
 static void
 _info_repository(struct sqlx_repository_s *r, GString *gstr)
 {
-	guint count_flags = 0;
-	void _append_flag(const char *s) {
-		if (count_flags++)
-			g_string_append_c(gstr, '|');
-		g_string_append(gstr, s);
-	}
-
-	g_string_append_static(gstr, "sqliterepo options:\n");
-	g_string_append_printf(gstr, "\thash: width=%u depth=%u\n",
-			r->hash_width, r->hash_depth);
-
-	g_string_append_static(gstr, "\tflags: ");
-	if (r->flag_autovacuum)
-		_append_flag("AUTOVACUUM");
-	if (r->flag_delete_on)
-		_append_flag("DELETE");
-	if (!count_flags)
-		g_string_append_c(gstr, '0');
-	g_string_append_c(gstr, '\n');
+	g_string_append_static(gstr, "\"sqliterepo\":{");
+	oio_str_gstring_append_json_pair_int(gstr, "width", r->hash_width);
+	g_string_append_c(gstr, ',');
+	oio_str_gstring_append_json_pair_int(gstr, "depth", r->hash_depth);
+	g_string_append_c(gstr, ',');
+	oio_str_gstring_append_json_pair_boolean(gstr, "vacuum", r->flag_autovacuum);
+	g_string_append_c(gstr, ',');
+	oio_str_gstring_append_json_pair_boolean(gstr, "delete", r->flag_delete_on);
+	g_string_append_c(gstr, '}');
 }
 
 static void
@@ -2205,13 +2196,19 @@ _info_elections(struct sqlx_repository_s *repo, GString *gstr)
 {
 	struct election_counts_s count = election_manager_count(
 			sqlx_repository_get_elections_manager(repo));
-	g_string_append_static(gstr, "Elections count:\n");
-	g_string_append_printf(gstr, "\ttotal: %u\n", count.total);
-	g_string_append_printf(gstr, "\tnone: %u\n", count.none);
-	g_string_append_printf(gstr, "\tpending: %u\n", count.pending);
-	g_string_append_printf(gstr, "\tfailed: %u\n", count.failed);
-	g_string_append_printf(gstr, "\tslave: %u\n", count.slave);
-	g_string_append_printf(gstr, "\tmaster: %u\n", count.master);
+	g_string_append_static(gstr, "\"elections\":{");
+	oio_str_gstring_append_json_pair_int(gstr, "total", count.total);
+	g_string_append_c(gstr, ',');
+	oio_str_gstring_append_json_pair_int(gstr, "none", count.none);
+	g_string_append_c(gstr, ',');
+	oio_str_gstring_append_json_pair_int(gstr, "pending", count.pending);
+	g_string_append_c(gstr, ',');
+	oio_str_gstring_append_json_pair_int(gstr, "failed", count.failed);
+	g_string_append_c(gstr, ',');
+	oio_str_gstring_append_json_pair_int(gstr, "slave", count.slave);
+	g_string_append_c(gstr, ',');
+	oio_str_gstring_append_json_pair_int(gstr, "master", count.master);
+	g_string_append_c(gstr, '}');
 }
 
 static void
@@ -2230,8 +2227,7 @@ _info_replication(struct sqlx_repository_s *repo, GString *gstr)
 		}
 	}
 
-	g_string_append_static(gstr, "Replication:\n");
-	g_string_append_printf(gstr, "\tmode: %s\n",
+	oio_str_gstring_append_json_pair(gstr, "replication",
 			_mode2str(election_manager_get_mode(
 					sqlx_repository_get_elections_manager(repo))));
 }
@@ -2241,25 +2237,34 @@ _info_cache(struct sqlx_repository_s *repo, GString *gstr)
 {
 	struct cache_counts_s count = sqlx_cache_count(
 			sqlx_repository_get_cache(repo));
-	g_string_append_static(gstr, "Cache count:\n");
-	g_string_append_printf(gstr, "\tmax: %u\n", count.max);
-	g_string_append_printf(gstr, "\thot: %u\n", count.hot);
-	g_string_append_printf(gstr, "\tcold: %u\n", count.cold);
-	g_string_append_printf(gstr, "\tused: %u\n", count.used);
+	g_string_append_static(gstr, "\"cache\":{");
+	oio_str_gstring_append_json_pair_int(gstr, "max", count.max);
+	g_string_append_c(gstr, ',');
+	oio_str_gstring_append_json_pair_int(gstr, "hot", count.hot);
+	g_string_append_c(gstr, ',');
+	oio_str_gstring_append_json_pair_int(gstr, "cold", count.cold);
+	g_string_append_c(gstr, ',');
+	oio_str_gstring_append_json_pair_int(gstr, "used", count.used);
+	g_string_append_c(gstr, '}');
 }
 
 static gboolean
 _handler_INFO(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
-	(void) ignored;
-
-	GString *gstr = g_string_sized_new(256);
+	GString *gstr = g_string_sized_new(2048);
+	g_string_append_c(gstr, '{');
 	_info_sqlite(gstr);
+	g_string_append_c(gstr, ',');
 	_info_repository(repo, gstr);
+	g_string_append_c(gstr, ',');
 	_info_replication(repo, gstr);
+	g_string_append_c(gstr, ',');
 	_info_elections(repo, gstr);
+	g_string_append_c(gstr, ',');
 	_info_cache(repo, gstr);
+	g_string_append_c(gstr, '}');
+
 	reply->add_body(metautils_gba_from_string(gstr->str));
 	g_string_free(gstr, TRUE);
 
