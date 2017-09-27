@@ -578,7 +578,22 @@
 			{ "type": "uint", "name": "malloc_trim_size_periodic",
 				"key": "server.malloc_trim_size.periodic",
 				"descr": "Sets how many bytes bytes are released when the LEAN request is received by the current 'meta' service.",
-				"def": 0, "min": 0, "max": "1<<32 - 1" }
+				"def": 0, "min": 0, "max": "1<<32 - 1" },
+
+			{ "type": "uint", "name": "sqlx_periodic_decache_period",
+				"key": "server.periodic_decache.period",
+				"descr": "In ticks / jiffies, with approx. 1 tick per second. 0 means never",
+				"def": 1, "min": 0, "max": "1Mi" },
+
+			{ "type": "uint", "name": "sqlx_periodic_decache_max_bases",
+				"key": "server.periodic_decache.max_bases",
+				"descr": "How many bases may be decached eacch time the background task performs its Dance of Death",
+				"def": 100, "min": 1, "max": "4Mi" },
+
+			{ "type": "monotonic", "name": "sqlx_periodic_decache_max_delay",
+				"key": "server.periodic_decache.max_delay",
+				"descr": "How long may the decache routine take",
+				"def": "500ms", "min": "1ms", "max": "1m" }
 		]
 	},
 	"proxy": {
