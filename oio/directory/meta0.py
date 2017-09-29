@@ -370,16 +370,16 @@ class PrefixMapping(object):
         self.reset()
         if not strategy:
             strategy = self.find_services_random
+        last_percent = 0
         for base_int in xrange(0, self.num_bases()):
-            if (self.logger and self.num_bases() > 100 and
-                    (base_int % (self.num_bases() / 10)) == 0):
-                self.logger.info("%d%%",
-                                 base_int /
-                                 (self.num_bases() / 100))
-
             base = "%0*X" % (self.digits, base_int)
             services = strategy()
             self.assign_services(base, services, fail_if_already_set=True)
+            if self.logger:
+                progress = ((base_int + 1) * 100) / self.num_bases()
+                if progress / 10 > last_percent:
+                    last_percent = progress / 10
+                    self.logger.info("%d%%", progress)
 
     def count_pfx_by_svc(self):
         """
