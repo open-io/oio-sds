@@ -25,35 +25,35 @@ export G_SLICE=always-malloc
 export PYTHON=python
 
 if [ "${PYTHON_COVERAGE:-}" == "1" ]; then
-    PYTHON="coverage run -p --omit=/home/travis/oio/lib/python2.7/*"
+	PYTHON="coverage run -p --omit=/home/travis/oio/lib/python2.7/*"
 fi
 
 SRCDIR=$PWD
 WRKDIR=$PWD
 if [ $# -eq 2 ] ; then
-    SRCDIR="$1"
-    WRKDIR="$2"
+	SRCDIR="$1"
+	WRKDIR="$2"
 fi
 
 function dump_syslog {
-    cmd=tail
-    if ! [ -r /var/log/syslog ] ; then
-        cmd="sudo tail"
-    fi
-    $cmd -n 500 /var/log/syslog
-    pip list
-    gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock status3
+	cmd=tail
+	if ! [ -r /var/log/syslog ] ; then
+		cmd="sudo tail"
+	fi
+	$cmd -n 500 /var/log/syslog
+	pip list
+	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock status3
 }
 
 #trap dump_syslog EXIT
 
 is_running_test_suite () {
-    [ -z "$TEST_SUITE" ] || [ "${TEST_SUITE/*$1*/$1}" == "$1" ]
+	[ -z "$TEST_SUITE" ] || [ "${TEST_SUITE/*$1*/$1}" == "$1" ]
 }
 
 randomize_env () {
-    export OIO_NS="NS-${RANDOM}" OIO_ACCOUNT="ACCT-$RANDOM" \
-        OIO_USER=USER-$RANDOM OIO_PATH=PATH-$RANDOM
+	export OIO_NS="NS-${RANDOM}" OIO_ACCOUNT="ACCT-$RANDOM" \
+		OIO_USER=USER-$RANDOM OIO_PATH=PATH-$RANDOM
 }
 
 test_oio_cluster () {
@@ -118,34 +118,34 @@ test_proxy_forward () {
 
 func_tests () {
 	randomize_env
-    oio-reset.sh -N $OIO_NS $@
+	oio-reset.sh -N $OIO_NS $@
 
 	test_proxy_forward
 
-    # test a content with a strange name, through the CLI and the API
-    /usr/bin/fallocate -l $RANDOM /tmp/blob%
-    CNAME=$RANDOM
-    ${PYTHON} $(which openio) object create $CNAME /tmp/blob%
+	# test a content with a strange name, through the CLI and the API
+	/usr/bin/fallocate -l $RANDOM /tmp/blob%
+	CNAME=$RANDOM
+	${PYTHON} $(which openio) object create $CNAME /tmp/blob%
 
-    # At least spawn one oio-crawler-integrity on a container that exists
-    # TODO(jfs): Move in a tests/functional/cli python test
-    ${PYTHON} $(which oio-crawler-integrity) $OIO_NS $OIO_ACCOUNT $CNAME
+	# At least spawn one oio-crawler-integrity on a container that exists
+	# TODO(jfs): Move in a tests/functional/cli python test
+	${PYTHON} $(which oio-crawler-integrity) $OIO_NS $OIO_ACCOUNT $CNAME
 
 	# Run the whole suite of functional tests (Python)
-    cd $SRCDIR
-    tox -e coverage
-    tox -e func
+	cd $SRCDIR
+	tox -e coverage
+	tox -e func
 
 	# Run the whole suite of functional tests (C)
-    cd $WRKDIR
-    make -C tests/func test
+	cd $WRKDIR
+	make -C tests/func test
 
-    # Create a file just bigger than chunk size
-    SOURCE=$(mktemp)
-    dd if=/dev/urandom of=$SOURCE bs=128K count=9
+	# Create a file just bigger than chunk size
+	SOURCE=$(mktemp)
+	dd if=/dev/urandom of=$SOURCE bs=128K count=9
 	# Run the test-suite of the C API
-    ./core/tool_roundtrip $SOURCE
-    rm -f $SOURCE
+	./core/tool_roundtrip $SOURCE
+	rm -f $SOURCE
 
 	test_oio_cluster
 	test_oio_tool
@@ -156,31 +156,31 @@ func_tests () {
 	export OIO_ECD=$(oio-test-config.py -t ecd -1)
 	./core/tool_sdk_noconf
 
-    gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
-    sleep 0.5
+	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
+	sleep 0.5
 }
 
 test_meta2_filters () {
 	randomize_env
-    oio-reset.sh -N $OIO_NS $@
+	oio-reset.sh -N $OIO_NS $@
 
-    cd $SRCDIR
-    tox -e coverage
-    ${PYTHON} $(which nosetests) tests.functional.m2_filters.test_filters
+	cd $SRCDIR
+	tox -e coverage
+	${PYTHON} $(which nosetests) tests.functional.m2_filters.test_filters
 
-    gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
-    sleep 0.5
+	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
+	sleep 0.5
 }
 
 test_cli () {
-    randomize_env
-    oio-reset.sh -N $OIO_NS $@
+	randomize_env
+	oio-reset.sh -N $OIO_NS $@
 
-    cd $SRCDIR
-    tox -e cli
+	cd $SRCDIR
+	tox -e cli
 
-    gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
-    sleep 0.5
+	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
+	sleep 0.5
 }
 
 /sbin/sysctl net.ipv4.ip_local_port_range
@@ -201,13 +201,15 @@ fi
 
 if is_running_test_suite "repli" ; then
 	echo -e "\n### Replication tests"
-    func_tests -f "${SRCDIR}/etc/bootstrap-preset-smallrepli.yml" \
-		-f "${SRCDIR}/etc/bootstrap-option-udp.yml"
+	func_tests -f "${SRCDIR}/etc/bootstrap-preset-smallrepli.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-udp.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-long-timeouts.yml" \
+		-f "${SRCDIR}/etc/bootstrap-meta1-1digits.yml"
 	fi
 
 if is_running_test_suite "worm" ; then
 	echo -e "\n### WORM tests"
-    export WORM=1
+	export WORM=1
 	for nb in 0 1 2 3 ; do
 		test_meta2_filters -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
 			-f "${SRCDIR}/etc/bootstrap-option-worm.yml" \
@@ -218,7 +220,7 @@ fi
 
 if is_running_test_suite "slave" ; then
 	echo -e "\n### SLAVE tests"
-    export SLAVE=1
+	export SLAVE=1
 	for nb in 0 1 2 3 ; do
 		test_meta2_filters -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
 			-f "${SRCDIR}/etc/bootstrap-option-slave.yml" \
@@ -228,24 +230,24 @@ if is_running_test_suite "slave" ; then
 fi
 
 if is_running_test_suite "cli" ; then
-    echo -e "\n### CLI tests"
-    test_cli -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
-        -f "${SRCDIR}/etc/bootstrap-option-cache.yml"
+	echo -e "\n### CLI tests"
+	test_cli -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-cache.yml"
 fi
 
 if is_running_test_suite "small-cache" ; then
 	echo -e "\n### Small Cache tests"
-    func_tests -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
+	func_tests -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-smallcache.yml"
 fi
 
 if is_running_test_suite "3copies" ; then
 	echo -e "\n### 3copies tests"
-    func_tests -f "${SRCDIR}/etc/bootstrap-preset-3COPIES-11RAWX.yml"
+	func_tests -f "${SRCDIR}/etc/bootstrap-preset-3COPIES-11RAWX.yml"
 fi
 
 if is_running_test_suite "ec" ; then
 	echo -e "\n### EC tests"
-    func_tests -f "${SRCDIR}/etc/bootstrap-preset-EC.yml"
+	func_tests -f "${SRCDIR}/etc/bootstrap-preset-EC.yml"
 fi
 
