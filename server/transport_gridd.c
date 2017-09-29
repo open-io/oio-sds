@@ -799,25 +799,11 @@ dispatch_LISTHANDLERS(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 dispatch_LEAN(struct gridd_reply_ctx_s *reply,
-		gpointer gdata, gpointer hdata)
+		gpointer gdata UNUSED, gpointer hdata UNUSED)
 {
-	gchar buf[128] = "Freed:";
-	(void) gdata, (void) hdata;
-
-	if (metautils_message_extract_flag (reply->request, "LIBC", FALSE)) {
-		if (malloc_trim (malloc_trim_size_ondemand))
-			g_strlcat (buf, " malloc-heap", sizeof(buf));
-	}
-
-	if (metautils_message_extract_flag (reply->request, "THREADS", FALSE)) {
-		g_thread_pool_stop_unused_threads ();
-		g_strlcat (buf, " idle-threads", sizeof(buf));
-	}
-
-	if (buf[strlen(buf)-1] != ':')
-		g_strlcat (buf, " nothing", sizeof(buf));
-
-	reply->send_reply(CODE_FINAL_OK, buf);
+	malloc_trim (malloc_trim_size_ondemand);
+	g_thread_pool_stop_unused_threads();
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
 
