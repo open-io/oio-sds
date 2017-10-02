@@ -26,7 +26,6 @@ enum hc_resolver_flags_e
 {
 	HC_RESOLVER_NOCACHE = 0x01,
 	HC_RESOLVER_NOATIME = 0x02,
-	HC_RESOLVER_NOMAX =   0x04,
 	HC_RESOLVER_DECACHEM0 = 0x08,
 };
 
