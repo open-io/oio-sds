@@ -464,7 +464,7 @@ class LocateContainer(show.ShowOne):
         data = self.app.client_manager.storage.container_get_properties(
             account, container)
 
-        data_dir = self.app.client_manager.directory.list(
+        data_dir = self.app.client_manager.storage.directory.list(
             account, container)
 
         info = {'account': data['system']['sys.account'],
