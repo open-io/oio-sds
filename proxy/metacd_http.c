@@ -877,10 +877,6 @@ configure_request_handlers (void)
 	SET("/cache/flush/local/#POST", action_cache_flush_local);
 	SET("/cache/flush/high/#POST", action_cache_flush_high);
 	SET("/cache/flush/low/#POST", action_cache_flush_low);
-	SET("/cache/ttl/low/$COUNT/#POST", action_cache_set_ttl_low);
-	SET("/cache/ttl/high/$COUNT/#POST", action_cache_set_ttl_high);
-	SET("/cache/max/low/$COUNT/#POST", action_cache_set_max_low);
-	SET("/cache/max/high/$COUNT/#POST", action_cache_set_max_high);
 
 	// New routes
 
@@ -1036,8 +1032,9 @@ grid_main_configure (int argc, char **argv)
 	srv_known = lru_tree_create((GCompareFunc)g_strcmp0, g_free, NULL, LTO_NOATIME);
 	srv_master = lru_tree_create((GCompareFunc)g_strcmp0, g_free, g_free, LTO_NOATIME);
 
-	enum hc_resolver_flags_e f =
-		flag_cache_enabled ? HC_RESOLVER_DECACHEM0 : HC_RESOLVER_NOCACHE;
+	enum hc_resolver_flags_e f = 0;
+	if (!flag_cache_enabled)
+		f |= HC_RESOLVER_NOCACHE;
 
 	resolver = hc_resolver_create ();
 	hc_resolver_configure (resolver, f);
