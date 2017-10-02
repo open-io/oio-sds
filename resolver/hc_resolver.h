@@ -56,18 +56,6 @@ void hc_resolver_notify (struct hc_resolver_s *r,
 /* Cleanup all the internal structures. */
 void hc_resolver_destroy(struct hc_resolver_s *r);
 
-/* @param d Timeout for services from meta1 */
-void hc_resolver_set_max_services(struct hc_resolver_s *r, guint d);
-
-/* @param d max cached entries from meta1 */
-void hc_resolver_set_ttl_services(struct hc_resolver_s *r, gint64 d);
-
-/* @param d max cached services from conscience and meta0 */
-void hc_resolver_set_max_csm0(struct hc_resolver_s *r, guint d);
-
-/* @param d Timeout for services from conscience and meta0 */
-void hc_resolver_set_ttl_csm0(struct hc_resolver_s *r, gint64 d);
-
 /* Applies time-based cache policies. */
 guint hc_resolver_expire(struct hc_resolver_s *r);
 
