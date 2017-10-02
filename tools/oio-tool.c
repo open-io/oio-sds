@@ -197,6 +197,7 @@ _config(const char *ns, gboolean raw, int nbfiles, char **pfiles)
 	GSList *files = NULL;
 	for (int i=0; i<nbfiles; i++)
 		files = g_slist_append(files, pfiles[i]);
+	oio_var_reset_all();
 	const gboolean known = oio_var_value_with_files(ns, TRUE, files);
 	g_slist_free(files);
 
