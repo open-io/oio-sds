@@ -24,7 +24,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 enum hc_resolver_flags_e
 {
-	HC_RESOLVER_NOCACHE = 0x01,
 	HC_RESOLVER_NOATIME = 0x02,
 	HC_RESOLVER_DECACHEM0 = 0x08,
 };
