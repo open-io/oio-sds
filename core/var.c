@@ -78,7 +78,6 @@ struct oio_var_record_s {
 	union oio_var_default_u def;
 	union oio_var_default_u min;
 	union oio_var_default_u max;
-	const char *defstr;
 };
 
 static volatile guint var_init = 0;
@@ -148,8 +147,8 @@ oio_var_register_string(gchar *p,
 	rec.ptr.str = p;
 	rec.min.u = limit;
 	rec.max.u = limit;
-	rec.defstr = def;
-	strncpy(rec.ptr.str, rec.defstr, rec.max.u);
+	strncpy(rec.ptr.str, def, rec.max.u);
+	rec.def.str = (char *) def;
 	_register_record(&rec);
 }
 

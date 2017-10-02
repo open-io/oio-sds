@@ -555,8 +555,9 @@ _LRU_expire(struct hc_resolver_s *r, struct lru_ext_s *l)
 	guint count = 0;
 	const gint64 now = oio_ext_monotonic_time();
 	g_mutex_lock(&r->lock);
-	if (l->ttl > 0 && l->cache != NULL)
+	if (l->ttl > 0) {
 		count = lru_tree_remove_older(l->cache, OLDEST(now, l->ttl));
+	}
 	g_mutex_unlock(&r->lock);
 	return count;
 }
@@ -588,8 +589,10 @@ hc_resolver_tell (struct hc_resolver_s *r, struct oio_url_s *url,
 static guint
 _LRU_purge(struct hc_resolver_s *r, struct lru_ext_s *l)
 {
+	guint count = 0;
 	g_mutex_lock(&r->lock);
-	guint count = lru_tree_remove_exceeding (l->cache, l->max);
+	if (l->max > 0)
+		count = lru_tree_remove_exceeding (l->cache, l->max);
 	g_mutex_unlock(&r->lock);
 	return count;
 }
