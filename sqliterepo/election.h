@@ -90,7 +90,7 @@ struct election_manager_vtable_s
 
 	/* who are the peers for the given base */
 	GError* (*election_get_peers) (struct election_manager_s *manager,
-			const struct sqlx_name_s *n, gboolean nocache, gchar ***peers);
+			const struct sqlx_name_s *n, guint32 flags, gchar ***peers);
 
 	/** Prepare the internal memory for the election context, but without
 	 * starting the election. Usefull to prepare. */
@@ -129,7 +129,7 @@ enum election_mode_e election_manager_get_mode (const struct election_manager_s 
 const char * election_manager_get_local (const struct election_manager_s *m);
 
 GError* election_get_peers (struct election_manager_s *manager,
-		const struct sqlx_name_s *n, gboolean nocache, gchar ***peers);
+		const struct sqlx_name_s *n, guint32 flags, gchar ***peers);
 
 #define election_init(m,n) \
 	((struct abstract_election_manager_s*)m)->vtable->election_init(m,n)

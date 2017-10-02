@@ -1731,7 +1731,7 @@ _handler_RESYNC(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	/* Force refresh of peers from meta1 */
+	/* Force refresh of peers from meta1/meta0 */
 	em = sqlx_repository_get_elections_manager(repo);
 	err = election_has_peers(em, &n0, TRUE, &has_peers);
 	g_clear_error(&err);
