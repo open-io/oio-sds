@@ -311,7 +311,7 @@
 
 			{ "type": "monotonic", "name": "oio_election_delay_nowait_pending",
 				"key": "sqliterepo.election.nowait.after",
-				"descr": "In the current sqliterepo repository, sets the amount of time spent in an election resolution that will make a worker thread won't wait at all an consider that election is stalled.",
+				"descr": "In the current sqliterepo repository, sets the amount of time spent in an election resolution that will make a worker thread won't wait at all and consider that election is stalled.",
 				"def": "15m", "min": "1ms", "max": "max" },
 
 			{ "type": "monotonic", "name": "oio_election_delay_expire_NONE",
