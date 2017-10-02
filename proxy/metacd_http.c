@@ -667,6 +667,7 @@ static void
 _patch_and_apply_configuration(void)
 {
 	_patch_configuration_fd();
+	oio_resolver_cache_enabled = BOOL(flag_cache_enabled);
 	network_server_reconfigure(server);
 }
 
@@ -1032,12 +1033,9 @@ grid_main_configure (int argc, char **argv)
 	srv_known = lru_tree_create((GCompareFunc)g_strcmp0, g_free, NULL, LTO_NOATIME);
 	srv_master = lru_tree_create((GCompareFunc)g_strcmp0, g_free, g_free, LTO_NOATIME);
 
-	enum hc_resolver_flags_e f = 0;
-	if (!flag_cache_enabled)
-		f |= HC_RESOLVER_NOCACHE;
+	oio_resolver_cache_enabled = BOOL(flag_cache_enabled);
 
 	resolver = hc_resolver_create ();
-	hc_resolver_configure (resolver, f);
 	hc_resolver_qualify (resolver, service_is_ok);
 	hc_resolver_notify (resolver, service_invalidate);
 
