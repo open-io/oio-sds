@@ -90,14 +90,10 @@ hc_resolver_create(void)
 {
 	struct hc_resolver_s *resolver = g_malloc0(sizeof(struct hc_resolver_s));
 
-	resolver->csm0.max = _cache_m0cs_default_max;
-	resolver->csm0.ttl = _cache_m0cs_default_ttl;
-	resolver->csm0.cache = lru_tree_create((GCompareFunc)hashstr_quick_cmp,
+	resolver->csm0 = lru_tree_create((GCompareFunc)hashstr_quick_cmp,
 			g_free, g_free, 0);
 
-	resolver->services.max = _cache_srv_default_max;
-	resolver->services.ttl = _cache_srv_default_ttl;
-	resolver->services.cache = lru_tree_create((GCompareFunc)hashstr_quick_cmp,
+	resolver->services = lru_tree_create((GCompareFunc)hashstr_quick_cmp,
 			g_free, g_free, 0);
 
 	g_mutex_init(&resolver->lock);
@@ -134,10 +130,10 @@ hc_resolver_destroy(struct hc_resolver_s *r)
 {
 	if (!r)
 		return;
-	if (r->csm0.cache)
-		lru_tree_destroy(r->csm0.cache);
-	if (r->services.cache)
-		lru_tree_destroy(r->services.cache);
+	if (r->csm0)
+		lru_tree_destroy(r->csm0);
+	if (r->services)
+		lru_tree_destroy(r->services);
 	g_mutex_clear(&r->lock);
 	g_free(r);
 }
@@ -234,7 +230,7 @@ _resolve_meta0(struct hc_resolver_s *r, const char *ns, gchar ***result)
 	hk = _m0_key(ns);
 
 	/* Try to hit the cache */
-	if (!(*result = hc_resolver_get_cached(r, r->csm0.cache, hk))) {
+	if (!(*result = hc_resolver_get_cached(r, r->csm0, hk))) {
 		GSList *allm0;
 
 		/* Now attempt a real resolution */
@@ -251,7 +247,7 @@ _resolve_meta0(struct hc_resolver_s *r, const char *ns, gchar ***result)
 			allm0 = NULL;
 
 			/* then fill the cache */
-			hc_resolver_store(r, r->csm0.cache, hk,
+			hc_resolver_store(r, r->csm0, hk,
 					(const char * const *) *result);
 			err = NULL;
 		}
@@ -347,7 +343,7 @@ _resolve_meta1(struct hc_resolver_s *r, struct oio_url_s *u, gchar ***result)
 	hk = _m1_key (u);
 
 	/* Try to hit the cache */
-	if (!(*result = hc_resolver_get_cached(r, r->csm0.cache, hk))) {
+	if (!(*result = hc_resolver_get_cached(r, r->csm0, hk))) {
 		/* get a meta0, then store it in the cache */
 		gchar **m0urlv = NULL;
 
@@ -358,7 +354,7 @@ _resolve_meta1(struct hc_resolver_s *r, struct oio_url_s *u, gchar ***result)
 			err = _resolve_m1_through_many_m0(r, (const char * const *)m0urlv,
 					oio_url_get_id(u), result);
 			if (!err)
-				hc_resolver_store(r, r->csm0.cache, hk,
+				hc_resolver_store(r, r->csm0, hk,
 						(const char * const *) *result);
 			g_strfreev(m0urlv);
 		}
@@ -421,7 +417,7 @@ _resolve_reference_service(struct hc_resolver_s *r, struct hashstr_s *hk,
 			oio_url_get(u, OIOURL_WHOLE), s);
 
 	/* Try to hit the cache for the service itself */
-	*result = hc_resolver_get_cached(r, r->services.cache, hk);
+	*result = hc_resolver_get_cached(r, r->services, hk);
 	if (NULL != *result) {
 		return NULL;
 	}
@@ -437,7 +433,7 @@ _resolve_reference_service(struct hc_resolver_s *r, struct hashstr_s *hk,
 	EXTRA_ASSERT((err!=NULL) ^ (*result!=NULL));
 	if (!err) {
 		/* fill the cache */
-		hc_resolver_store(r, r->services.cache, hk,
+		hc_resolver_store(r, r->services, hk,
 				(const char * const *) *result);
 	}
 
@@ -520,12 +516,12 @@ hc_decache_reference(struct hc_resolver_s *r, struct oio_url_s *url)
 
 	if (r->flags & HC_RESOLVER_DECACHEM0) {
 		hk = _m0_key (oio_url_get(url, OIOURL_NS));
-		hc_resolver_forget(r, r->csm0.cache, hk);
+		hc_resolver_forget(r, r->csm0, hk);
 		g_free(hk);
 	}
 
 	hk = _m1_key (url);
-	hc_resolver_forget(r, r->csm0.cache, hk);
+	hc_resolver_forget(r, r->csm0, hk);
 	g_free(hk);
 }
 
@@ -544,20 +540,19 @@ hc_decache_reference_service(struct hc_resolver_s *r, struct oio_url_s *url,
 		return;
 
 	hk = _srv_key (srvtype, url);
-	hc_resolver_forget(r, r->services.cache, hk);
+	hc_resolver_forget(r, r->services, hk);
 	g_free(hk);
 }
 
 static guint
-_LRU_expire(struct hc_resolver_s *r, struct lru_ext_s *l)
+_LRU_expire(struct hc_resolver_s *r, struct lru_tree_s *l, gint64 ttl)
 {
 	EXTRA_ASSERT(r != NULL);
 	guint count = 0;
-	const gint64 now = oio_ext_monotonic_time();
 	g_mutex_lock(&r->lock);
-	if (l->ttl > 0) {
-		count = lru_tree_remove_older(l->cache, OLDEST(now, l->ttl));
-	}
+	const gint64 now = oio_ext_monotonic_time();
+	if (ttl > 0)
+		count = lru_tree_remove_older(l, OLDEST(now, ttl));
 	g_mutex_unlock(&r->lock);
 	return count;
 }
@@ -566,7 +561,8 @@ guint
 hc_resolver_expire(struct hc_resolver_s *r)
 {
 	EXTRA_ASSERT(r != NULL);
-	return _LRU_expire(r, &r->csm0) + _LRU_expire(r, &r->services);
+	return _LRU_expire(r, r->csm0, _cache_m0cs_default_ttl)
+		+ _LRU_expire(r, r->services, _cache_srv_default_ttl);
 }
 
 void
@@ -582,17 +578,17 @@ hc_resolver_tell (struct hc_resolver_s *r, struct oio_url_s *url,
 		return;
 
 	struct hashstr_s *hk = _srv_key (srvtype, url);
-	hc_resolver_store (r, r->services.cache, hk, urlv);
+	hc_resolver_store (r, r->services, hk, urlv);
 	g_free (hk);
 }
 
 static guint
-_LRU_purge(struct hc_resolver_s *r, struct lru_ext_s *l)
+_LRU_purge(struct hc_resolver_s *r, struct lru_tree_s *l, guint max)
 {
 	guint count = 0;
 	g_mutex_lock(&r->lock);
-	if (l->max > 0)
-		count = lru_tree_remove_exceeding (l->cache, l->max);
+	if (max > 0)
+		count = lru_tree_remove_exceeding(l, max);
 	g_mutex_unlock(&r->lock);
 	return count;
 }
@@ -601,7 +597,8 @@ guint
 hc_resolver_purge(struct hc_resolver_s *r)
 {
 	EXTRA_ASSERT(r != NULL);
-	return _LRU_purge(r, &r->csm0) + _LRU_purge(r, &r->services);
+	return _LRU_purge(r, r->csm0, _cache_m0cs_default_max)
+		+ _LRU_purge(r, r->services, _cache_srv_default_max);
 }
 
 static void
@@ -616,7 +613,7 @@ hc_resolver_flush_csm0(struct hc_resolver_s *r)
 {
 	EXTRA_ASSERT(r != NULL);
 	g_mutex_lock(&r->lock);
-	_lru_flush(r->csm0.cache);
+	_lru_flush(r->csm0);
 	g_mutex_unlock(&r->lock);
 }
 
@@ -625,42 +622,8 @@ hc_resolver_flush_services(struct hc_resolver_s *r)
 {
 	EXTRA_ASSERT(r != NULL);
 	g_mutex_lock(&r->lock);
-	_lru_flush(r->services.cache);
+	_lru_flush(r->services);
 	g_mutex_unlock(&r->lock);
-}
-
-static void
-_LRU_set_max(struct lru_ext_s *l, guint v) { if (l) l->max = v; }
-
-static void
-_LRU_set_ttl(struct lru_ext_s *l, gint64 v) { if (l) l->ttl = v; }
-
-void
-hc_resolver_set_max_services(struct hc_resolver_s *r, guint d)
-{
-	if (r)
-		_LRU_set_max(&r->services, d);
-}
-
-void
-hc_resolver_set_ttl_services(struct hc_resolver_s *r, gint64 d)
-{
-	if (r)
-		_LRU_set_ttl(&r->services, d);
-}
-
-void
-hc_resolver_set_max_csm0(struct hc_resolver_s *r, guint d)
-{
-	if (r)
-		_LRU_set_max(&r->csm0, d);
-}
-
-void
-hc_resolver_set_ttl_csm0(struct hc_resolver_s *r, gint64 d)
-{
-	if (r)
-		_LRU_set_ttl(&r->csm0, d);
 }
 
 void
@@ -669,12 +632,12 @@ hc_resolver_info(struct hc_resolver_s *r, struct hc_resolver_stats_s *s)
 	EXTRA_ASSERT(s != NULL);
 	EXTRA_ASSERT(r != NULL);
 	g_mutex_lock(&r->lock);
-	s->csm0.max = r->csm0.max;
-	s->csm0.ttl = r->csm0.ttl / G_TIME_SPAN_SECOND;
-	s->csm0.count = lru_tree_count(r->csm0.cache);
-	s->services.max = r->services.max;
-	s->services.ttl = r->services.ttl / G_TIME_SPAN_SECOND;
-	s->services.count = lru_tree_count(r->services.cache);
+	s->csm0.max = _cache_m0cs_default_max;
+	s->csm0.ttl = _cache_m0cs_default_ttl;
+	s->csm0.count = lru_tree_count(r->csm0);
+	s->services.max = _cache_srv_default_max;
+	s->services.ttl = _cache_srv_default_ttl;
+	s->services.count = lru_tree_count(r->services);
 	g_mutex_unlock(&r->lock);
 }
 
