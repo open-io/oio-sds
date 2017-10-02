@@ -132,6 +132,7 @@ class CreateObject(ContainerCommandMixin, lister.Lister):
         properties = parsed_args.property
         results = []
         for obj in objs:
+            name = obj
             try:
                 with io.open(obj, 'rb') as f:
                     name = names.pop(0) if names else os.path.basename(f.name)
