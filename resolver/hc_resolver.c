@@ -159,7 +159,7 @@ hc_resolver_store(struct hc_resolver_s *r, struct lru_tree_s *lru,
 {
 	if (!v || !*v)
 		return;
-	if (r->flags & HC_RESOLVER_NOCACHE)
+	if (!oio_resolver_cache_enabled)
 		return;
 
 	struct cached_element_s *elt = hc_resolver_element_create(v);
@@ -506,12 +506,11 @@ void
 hc_decache_reference(struct hc_resolver_s *r, struct oio_url_s *url)
 {
 	struct hashstr_s *hk;
-
 	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(url, OIOURL_WHOLE));
 	EXTRA_ASSERT(r != NULL);
 	EXTRA_ASSERT(url != NULL);
 
-	if (r->flags & HC_RESOLVER_NOCACHE)
+	if (!oio_resolver_cache_enabled)
 		return;
 
 	if (r->flags & HC_RESOLVER_DECACHEM0) {
@@ -536,7 +535,7 @@ hc_decache_reference_service(struct hc_resolver_s *r, struct oio_url_s *url,
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(srvtype != NULL);
 
-	if (r->flags & HC_RESOLVER_NOCACHE)
+	if (!oio_resolver_cache_enabled)
 		return;
 
 	hk = _srv_key (srvtype, url);
@@ -574,7 +573,7 @@ hc_resolver_tell (struct hc_resolver_s *r, struct oio_url_s *url,
 	EXTRA_ASSERT(srvtype != NULL);
 	EXTRA_ASSERT(urlv != NULL);
 
-	if (r->flags & HC_RESOLVER_NOCACHE)
+	if (!oio_resolver_cache_enabled)
 		return;
 
 	struct hashstr_s *hk = _srv_key (srvtype, url);
@@ -635,8 +634,8 @@ hc_resolver_info(struct hc_resolver_s *r, struct hc_resolver_stats_s *s)
 	s->csm0.max = oio_resolver_m0cs_default_max;
 	s->csm0.ttl = oio_resolver_m0cs_default_ttl;
 	s->csm0.count = lru_tree_count(r->csm0);
-	s->services.max = _cache_srv_default_max;
-	s->services.ttl = _cache_srv_default_ttl;
+	s->services.max = oio_resolver_srv_default_max;
+	s->services.ttl = oio_resolver_srv_default_ttl;
 	s->services.count = lru_tree_count(r->services);
 	g_mutex_unlock(&r->lock);
 }

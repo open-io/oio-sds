@@ -42,6 +42,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <server/network_server.h>
 #include <server/server_variables.h>
 #include <resolver/hc_resolver.h>
+#include <resolver/resolver_variables.h>
 #include <meta1v2/meta1_remote.h>
 #include <meta2v2/meta2_macros.h>
 #include <meta2v2/meta2_utils.h>
