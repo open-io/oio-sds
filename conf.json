@@ -106,7 +106,7 @@
 			{ "type": "uint", "name": "_cache_m0cs_default_max",
 				"key": "resolver.cache.csm0.max.default",
 				"descr": "In any service resolver instanciated, sets the maximum number of entries related to meta0 (meta1 addresses) and conscience (meta0 address)",
-				"def": 0, "min": 0, "max": "4Mi" },
+				"def": 0, "min": 0, "max": "max" },
 
 			{ "type": "monotonic", "name": "_cache_srv_default_ttl",
 				"key": "resolver.cache.srv.ttl.default",
@@ -116,7 +116,7 @@
 			{ "type": "uint", "name": "_cache_srv_default_max",
 				"key": "resolver.cache.srv.max.default",
 				"descr": "In any service resolver instanciated, sets the maximum number of meta1 entries (data-bound services)",
-				"def": 0, "min": 0, "max": "1Mi" }
+				"def": 0, "min": 0, "max": "max" }
 		]
 	},
 	"metautils": {
