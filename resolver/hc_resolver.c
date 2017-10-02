@@ -561,8 +561,8 @@ guint
 hc_resolver_expire(struct hc_resolver_s *r)
 {
 	EXTRA_ASSERT(r != NULL);
-	return _LRU_expire(r, r->csm0, _cache_m0cs_default_ttl)
-		+ _LRU_expire(r, r->services, _cache_srv_default_ttl);
+	return _LRU_expire(r, r->csm0, oio_resolver_m0cs_default_ttl)
+		+ _LRU_expire(r, r->services, oio_resolver_srv_default_ttl);
 }
 
 void
@@ -597,8 +597,8 @@ guint
 hc_resolver_purge(struct hc_resolver_s *r)
 {
 	EXTRA_ASSERT(r != NULL);
-	return _LRU_purge(r, r->csm0, _cache_m0cs_default_max)
-		+ _LRU_purge(r, r->services, _cache_srv_default_max);
+	return _LRU_purge(r, r->csm0, oio_resolver_m0cs_default_max)
+		+ _LRU_purge(r, r->services, oio_resolver_srv_default_max);
 }
 
 static void
@@ -632,8 +632,8 @@ hc_resolver_info(struct hc_resolver_s *r, struct hc_resolver_stats_s *s)
 	EXTRA_ASSERT(s != NULL);
 	EXTRA_ASSERT(r != NULL);
 	g_mutex_lock(&r->lock);
-	s->csm0.max = _cache_m0cs_default_max;
-	s->csm0.ttl = _cache_m0cs_default_ttl;
+	s->csm0.max = oio_resolver_m0cs_default_max;
+	s->csm0.ttl = oio_resolver_m0cs_default_ttl;
 	s->csm0.count = lru_tree_count(r->csm0);
 	s->services.max = _cache_srv_default_max;
 	s->services.ttl = _cache_srv_default_ttl;
