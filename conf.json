@@ -30,7 +30,7 @@
 
 			{ "type": "epoch", "name": "meta2_reload_lb_period",
 				"key": "meta2.reload.lb.period",
-				"descr": "Sets the period of the periodical reloading of the Load-balancing state, in the current meta2 service.",
+				"descr": "Sets the period of the periodical reloading of the load-balancing state, in the current meta2 service.",
 				"def": "10s", "min": "1s", "max": "1h" },
 
 			{ "type": "epoch", "name": "meta2_reload_nsinfo_period",
@@ -85,7 +85,7 @@
 
 			{ "type": "epoch", "name": "oio_events_beanstalkd_default_ttr",
 				"key": "events.beanstalkd.ttr",
-				"descr": "Sets the TTR (time to run) allow on the treatment of the notificatio sent to the beanstalkd",
+				"descr": "Sets the TTR (time to run) allowed on the treatment of the notification sent to the beanstalkd",
 				"def": 120, "min": 0, "max": 86400 }
 		]
 	},
@@ -105,22 +105,22 @@
 
 			{ "type": "monotonic", "name": "_cache_m0cs_default_ttl",
 				"key": "resolver.cache.csm0.ttl.default",
-				"descr": "In any service resolver instanciated, sets the default TTL on the entries related meta0 (meta1 addresses) and conscience (meta0 address)",
+				"descr": "In any service resolver instantiated, sets the default TTL on the entries related to meta0 (meta1 addresses) and conscience (meta0 address)",
 				"def": 0, "min": 0, "max": "max" },
 
 			{ "type": "uint", "name": "_cache_m0cs_default_max",
 				"key": "resolver.cache.csm0.max.default",
-				"descr": "In any service resolver instanciated, sets the maximum number of entries related to meta0 (meta1 addresses) and conscience (meta0 address)",
+				"descr": "In any service resolver instantiated, sets the maximum number of entries related to meta0 (meta1 addresses) and conscience (meta0 address)",
 				"def": 0, "min": 0, "max": "4Mi" },
 
 			{ "type": "monotonic", "name": "_cache_srv_default_ttl",
 				"key": "resolver.cache.srv.ttl.default",
-				"descr": "In any service resolver instanciated, sets the default TTL on the meta1 entries (data-bound services)",
+				"descr": "In any service resolver instantiated, sets the default TTL on the meta1 entries (data-bound services)",
 				"def": 0, "min": 0, "max": "max" },
 
 			{ "type": "uint", "name": "_cache_srv_default_max",
 				"key": "resolver.cache.srv.max.default",
-				"descr": "In any service resolver instanciated, sets the maximum number of meta1 entries (data-bound services)",
+				"descr": "In any service resolver instantiated, sets the maximum number of meta1 entries (data-bound services)",
 				"def": 0, "min": 0, "max": "1Mi" }
 		]
 	},
@@ -159,7 +159,7 @@
 			{ "type": "bool", "name": "oio_ns_mode_worm",
 				"key": "ns.worm",
 				"def": false,
-				"descr": "Is the NS in a WORM (for Write Once, Read Many --but never delete)." },
+				"descr": "Is the NS in a WORM (for Write Once, Read Many -- but never delete)." },
 
 			{ "type": "monotonic", "name": "main_log_level_reset_delay",
 				"key": "common.verbosity.reset_delay",
@@ -179,12 +179,12 @@
 			{ "type": "bool", "name": "oio_socket_linger_onoff",
 				"key": "socket.linger.enabled",
 				"def": false,
-				"descr": "Set to TRUE to allow the LINGER behavior of TCP sockets, as a default. The connections then end with a normal FIN packet, and go in the TIME_WAIT state for a given delay. Setting to FALSE causes connections to be closed with a RST packet, then avoiding a lot of TCP sockets in the TIME_WAIT state." },
+				"descr": "Set to TRUE to allow the LINGER behavior of TCP sockets, as a default. The connections then end with a normal FIN packet, and go in the TIME_WAIT state for a given delay. Setting to FALSE causes connections to be closed with a RST packet, thus avoiding a lot of TCP sockets in the TIME_WAIT state." },
 
 			{ "type": "epoch", "name": "oio_socket_linger_delay",
 				"key": "socket.linger.delay",
 				"def": "1s", "min": 0, "max": 60,
-				"descr": "When socket.linger.enabled is set to TRUE, socket.linger.delat tells how the socket remains in the TIME_WAIT state after the close() has been called." },
+				"descr": "When socket.linger.enabled is set to TRUE, socket.linger.delay tells how much the socket remains in the TIME_WAIT state after the close() has been called." },
 
 			{ "type": "bool", "name": "oio_socket_quickack",
 				"key": "socket.quickack.enabled",
@@ -230,7 +230,7 @@
 			{ "type": "float", "name": "oio_client_timeout_whole",
 				"key": "gridd.timeout.whole.common",
 				"def": 30.0, "min": 0.01, "max": 120.0,
-				"descr": "Sets the global timeout of a RPC to e 'meta' service, considering all the possible redirections." },
+				"descr": "Sets the global timeout of a RPC to a 'meta' service, considering all the possible redirections." },
 
 			{ "type": "float", "name": "oio_client_timeout_connect",
 				"key": "gridd.timeout.connect.common",
@@ -275,7 +275,7 @@
 
 			{ "type": "float", "name": "oio_election_resync_timeout_cnx",
 				"key": "sqliterepo.outgoing.timeout.cnx.resync",
-				"descr": "Set the connection timeout during RPC to ask for a SLAVE database to be resync on its MASTER",
+				"descr": "Set the connection timeout during RPC to ask for a SLAVE database to be resync'ed to its MASTER",
 				"def": 1.0, "min": 0.01, "max": 30.0 },
 
 			{ "type": "float", "name": "oio_election_resync_timeout_req",
@@ -301,7 +301,7 @@
 
 			{ "type": "monotonic", "name": "oio_election_period_cond_wait",
 				"key": "sqliterepo.election.wait.quantum",
-				"descr": "In the current sqliterepo repository, while loop-waiting for a final election status to be reached, this value sets the unit amount of time of eacch unit wait on the lock. Keep this value rather small to avoid waitin for too long, but not too small to avoid dumping CPU cycles in active waiting.",
+				"descr": "In the current sqliterepo repository, while loop-waiting for a final election status to be reached, this value sets the unit amount of time each unit can wait on the lock. Keep this value rather small to avoid waiting for too long, but not too small to avoid dumping CPU cycles in active waiting.",
 				"def": "1s", "min": "1ms", "max": "1h" },
 
 			{ "type": "monotonic", "name": "oio_election_delay_wait",
@@ -331,7 +331,7 @@
 
 			{ "type": "monotonic", "name": "oio_election_delay_ping_final",
 				"key": "sqliterepo.election.delay.ping_final",
-				"descr": "In the current sqliterepo repository, sets the average amount of time after which a PING will be sent for an established election. This is an average, in facts a jitter is introduced to avoid resonance effects on large-scale platforms.",
+				"descr": "In the current sqliterepo repository, sets the average amount of time after which a PING will be sent for an established election. This is an average, in fact some jitter is introduced to avoid resonance effects on large-scale platforms.",
 				"def": "15m", "min": "1ms", "max": "1d" },
 
 			{ "type": "monotonic", "name": "oio_election_delay_expire_MASTER",
@@ -376,12 +376,12 @@
 
 			{ "type": "uint", "name": "disconnection_threshold",
 				"key": "sqliterepo.zk.rrd.threshold",
-				"descr": "Sets the maximum number of reconnections to the ZK that remains acceptable. Beyond that limit, we consider the current service has been disconnected, and that it loast all its nodes.",
+				"descr": "Sets the maximum number of reconnections to the ZK that remains acceptable. Beyond that limit, we consider that the current service has been disconnected, and that it has lost all its nodes.",
 				"def": 5, "min": 1, "max": "1 << 32 - 1" },
 
 			{ "type": "int32", "name": "oio_sync_failure_threshold_action",
 				"key": "enbug.sqliterepo.synchro.failure",
-				"descr": "Fake Error rate on synchronism RPC (a.k.a. ZK) ",
+				"descr": "Fake error rate on synchronism RPC (a.k.a. ZK) ",
 				"def": 10, "min": 0, "max": 100 },
 
 			{ "type": "bool", "name": "_cache_fail_on_heavy_load",
@@ -411,7 +411,7 @@
 
 			{ "type": "uint32", "name": "_cache_heat_threshold",
 				"key": "sqliterepo.cache.heat_threshold",
-				"descr": "Sets the heat value below which a databse is considered hot",
+				"descr": "Sets the heat value below which a database is considered hot",
 				"def": 1, "min": 1, "max": "1 << 32 - 1" },
 
 			{ "type": "monotonic", "name": "_cache_grace_delay_cool",
@@ -487,12 +487,12 @@
 
 			{ "type": "uint", "name": "server_event_batch_size",
 				"key": "server.batch.events",
-				"descr": "In the network core of a server, how many events do you manage in each call to epoll_wait(). Set to a low value to quickly react on new connections, to an higher value to rather treat established connections. The value is bound to a stack-allocated buffer, keep it rather small.",
+				"descr": "In the network core of a server, how many events do you manage in each call to epoll_wait(). Set to a low value to quickly react on new connections, or to an high value to rather treat established connections. The value is bound to a stack-allocated buffer, keep it rather small.",
 				"def": 128, "min": 1, "max": "4ki" },
 
 			{ "type": "uint", "name": "server_accept_batch_size",
 				"key": "server.batch.accept",
-				"descr": "In the network core, when the server socket wakes the call to epoll_wait(), that value sets the number of subsequent calls to accept(). Setting it to a low value allows to quickly switch to other events (established connection) and can lead to a strvation on the new connections. Setting to a high value might spend too much time in accepting and ease denials of service (with established but idle cnx).",
+				"descr": "In the network core, when the server socket wakes the call to epoll_wait(), that value sets the number of subsequent calls to accept(). Setting it to a low value allows to quickly switch to other events (established connection) and can lead to a starvation on the new connections. Setting to a high value might spend too much time in accepting and ease denials of service (with established but idle cnx).",
 				"def": 64, "min": 1, "max": "4ki" },
 
 			{ "type": "monotonic", "name": "sqliterepo_server_exit_ttl",
@@ -507,7 +507,7 @@
 
 			{ "type": "monotonic", "name": "server_threadpool_max_idle",
 				"key": "server.pool.max_idle",
-				"descr": "In the current server, sets how long a thread can remain unused before considered as idle (and thus to be stopped)",
+				"descr": "In the current server, sets how long a thread can remain unused before being considered as idle (and thus be stopped)",
 				"def": "30s", "min": 1, "max": "1h" },
 
 			{ "type": "int", "name": "server_threadpool_max_stat",
@@ -532,22 +532,22 @@
 
 			{ "type": "monotonic", "name": "server_cnx_ttl_persist",
 				"key": "server.cnx.timeout.persist",
-				"descr": "In the current server, sets the maximum amount of time a connection is allowed to live, since its creation by the accept() call, wheter it presents activity or not.",
+				"descr": "In the current server, sets the maximum amount of time a connection is allowed to live, since its creation by the accept() call, whether it presents activity or not.",
 				"def": "2h", "min": 0, "max": "1d" },
 
 			{ "type": "monotonic", "name": "server_cnx_ttl_idle",
 				"key": "server.cnx.timeout.idle",
-				"descr": "In the current server, sets the maximumu amount of time a connection may live without activity since the last activity (i.e. the last reply sent)",
+				"descr": "In the current server, sets the maximum amount of time a connection may live without activity since the last activity (i.e. the last reply sent)",
 				"def": "5m", "min": 0, "max": "1d" },
 
 			{ "type": "monotonic", "name": "server_udp_queue_ttl",
 				"key": "server.udp_queue.ttl",
-				"descr": "In the current server, sets the maximum amount of time a queued UDP frame may remain in the queue. When unqueued, if the message was queued for too long, it will be dropped. The purpose of such a mechanism is to avoid clogging the queue and the whole election/cache mechanisms with old messages, thoses message having already been resent.",
+				"descr": "In the current server, sets the maximum amount of time a queued UDP frame may remain in the queue. When unqueued, if the message was queued for too long, it will be dropped. The purpose of such a mechanism is to avoid clogging the queue and the whole election/cache mechanisms with old messages, those messages having already been resent.",
 				"def": "2s", "min": "100ms", "max": "1d" },
 
 			{ "type": "uint", "name": "server_udp_queue_maxlen",
 				"key": "server.udp_queue.max",
-				"descr": "In the current server, sets the maximumu length of the queue for UDP messages. When that number has been reached and a new message arrives, the message will be dropped.",
+				"descr": "In the current server, sets the maximum length of the queue for UDP messages. When that number has been reached and a new message arrives, the message will be dropped.",
 				"def": 8192, "min": 0, "max": "1 << 32 - 1" },
 
 			{ "type": "monotonic", "name": "server_queue_max_delay",
@@ -697,7 +697,7 @@
 
 			{ "type": "float", "name": "proxy_timeout_conscience",
 				"key": "proxy.outgoing.timeout.conscience",
-				"descr": "In a proxy, sets the global timeout for the RPC to the central cosnience service.",
+				"descr": "In a proxy, sets the global timeout for the RPC to the central conscience service.",
 				"def": 2.0, "min": 0.01, "max": 60.0 },
 
 			{ "type": "float", "name": "proxy_timeout_common",
@@ -738,7 +738,7 @@
 
 			{ "type": "monotonic", "name": "_refresh_cpu_idle",
 				"key": "core.period.refresh.cpu_idle",
-				"descr": "Sets the miniimal amount of time between two refreshed of the known CPU-idle counters for the current host. Keep this value small.",
+				"descr": "Sets the minimal amount of time between two refreshes of the known CPU-idle counters for the current host. Keep this value small.",
 				"def": "1s", "min": "100ms", "max": "1h" },
 
 			{ "type": "string", "name": "oio_core_http_user_agent",
