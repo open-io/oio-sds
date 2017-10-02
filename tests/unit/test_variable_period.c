@@ -30,7 +30,7 @@ static void test_zero(void) {
 	for (guint i=0; i<8 ;++i) {
 		g_assert_true(VARIABLE_PERIOD_SKIP(period));
 	}
-	g_assert_cmpuint(tick, ==, 8);
+	g_assert_cmpuint(tick, ==, 0);
 }
 
 /* negative means zero */
@@ -40,7 +40,7 @@ static void test_negative(void) {
 	for (guint i=0; i<8 ;++i) {
 		g_assert_true(VARIABLE_PERIOD_SKIP(period));
 	}
-	g_assert_cmpuint(tick, ==, 8);
+	g_assert_cmpuint(tick, ==, 0);
 }
 
 static void test_positive(void) {
