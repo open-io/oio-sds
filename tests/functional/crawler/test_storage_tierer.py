@@ -127,7 +127,7 @@ class TestStorageTierer(BaseTestCase):
         self.gridconf["outdated_threshold"] = 2
         worker = StorageTiererWorker(self.gridconf, Mock())
         with mock.patch('oio.crawler.storage_tierer.time.time',
-                        mock.MagicMock(return_value=now+2)):
+                        mock.MagicMock(return_value=now+1)):
             gen = worker._list_contents()
         self.assertEqual(gen.next(), (
             self.container_1_id, self.container_1_content_0.content_id))

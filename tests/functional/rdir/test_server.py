@@ -18,6 +18,7 @@ import tempfile
 import shutil
 import simplejson as json
 import subprocess
+import errno
 from os import remove
 from oio.common.http_urllib3 import get_pool_manager
 
@@ -77,7 +78,10 @@ def _check_process_absent(proc):
         if not proc.poll():
             return True
         time.sleep(i * 0.2)
-    proc.terminate()
+    try:
+        proc.terminate()
+    except OSError as exc:
+        return exc.errno == errno.ESRCH
     return False
 
 
