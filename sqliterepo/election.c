@@ -2899,6 +2899,7 @@ _member_react_ASKING(struct election_member_s *member, enum event_type_e evt,
 			}
 			if (member->requested_LEFT_MASTER) {
 				member_reset_master(member);
+				member->requested_LEFT_MASTER = 0;
 				return member_action_to_LISTING(member);
 			}
 			/* nominal flow : let's become CHECKING_MASTER */
