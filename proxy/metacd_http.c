@@ -866,6 +866,11 @@ configure_request_handlers (void)
 	SET("/forward/version/#GET", action_forward_get_version);
 	SET("/forward/info/#GET", action_forward_get_info);
 	SET("/forward/stats/#GET", action_forward_stats);
+
+	/* TODO(jfs): remove in a further release, present for the sake of backward
+	 * compliance and smooth transition */
+	SET("/forward/stats/#POST", action_forward_stats);
+
 	SET("/forward/ping/#GET", action_forward_get_ping);
 	SET("/forward/kill/#POST", action_forward_kill);
 	SET("/forward/reload/#POST", action_forward_reload);
