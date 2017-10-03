@@ -2898,6 +2898,14 @@ _member_react_ASKING(struct election_member_s *member, enum event_type_e evt,
 				return member_action_to_CREATING(member);
 			}
 			if (member->requested_LEFT_MASTER) {
+				/* Strange situation: we receive the content of the master
+				 * node and at the same time the information the master
+				 * node hass left. We are not even sure the left master was
+				 * the last master we've monitored.
+				 * For sure we are in a transient state, services are leaving
+				 * or elections are moving elsewhere.
+				 * For the sake of security, let's do an other whole loop
+				 * and restart with a clean state. */
 				member_reset_master(member);
 				member->requested_LEFT_MASTER = 0;
 				return member_action_to_LISTING(member);
