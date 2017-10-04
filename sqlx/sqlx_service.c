@@ -347,7 +347,7 @@ _init_configless_structures(struct sqlx_service_s *ss)
 		GRID_WARN("SERVICE init error: memory allocation failure");
 		return FALSE;
 	}
-	hc_resolver_configure(ss->resolver, HC_RESOLVER_NOCACHE);
+	oio_var_fix_one("resolver.cache.enabled", "false");
 
 	return TRUE;
 }
