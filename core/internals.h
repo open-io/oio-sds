@@ -83,6 +83,12 @@ extern "C" {
 	VTABLE_CHECK(self,T,F); \
 	return VTABLE_CALL_NOCHECK(self,T,F)
 
+#define VARIABLE_PERIOD_DECLARE() \
+	static volatile guint tick = 0;
+
+#define VARIABLE_PERIOD_SKIP(period) \
+	((period <= 0) || (0 != ((tick++) % MAX(1,period))))
+
 #define ADAPTIVE_PERIOD_DECLARE() \
 	static volatile gboolean already_succeeded = FALSE; \
 	static volatile guint tick_reload = 0; \

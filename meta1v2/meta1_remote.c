@@ -18,6 +18,7 @@ License along with this library.
 */
 
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/common_variables.h>
 
 #include "./internals.h"
 #include "./meta1_remote.h"
@@ -28,7 +29,7 @@ static GError *array_request(const char *to, GByteArray *req,
 	EXTRA_ASSERT(req != NULL);
 
 	GByteArray *gba = NULL;
-	GError *err = gridd_client_exec_and_concat(to, 30.0, req, out ? &gba : NULL);
+	GError *err = gridd_client_exec_and_concat(to, oio_m1_client_timeout_common, req, out ? &gba : NULL);
 
 	if (NULL != err) {
 		if (gba)

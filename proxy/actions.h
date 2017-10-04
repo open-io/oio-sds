@@ -26,10 +26,18 @@ enum http_rc_e action_cache_status (struct req_args_s *args);
 enum http_rc_e action_get_config (struct req_args_s *args);
 enum http_rc_e action_set_config (struct req_args_s *args);
 
-enum http_rc_e action_forward_get_config (struct req_args_s *args);
 enum http_rc_e action_forward_set_config (struct req_args_s *args);
 enum http_rc_e action_forward_stats (struct req_args_s *args);
-enum http_rc_e action_forward (struct req_args_s *args);
+enum http_rc_e action_forward_get_config (struct req_args_s *args);
+enum http_rc_e action_forward_get_info (struct req_args_s *args);
+enum http_rc_e action_forward_get_ping (struct req_args_s *args);
+enum http_rc_e action_forward_get_handlers (struct req_args_s *args);
+enum http_rc_e action_forward_get_version (struct req_args_s *args);
+enum http_rc_e action_forward_kill (struct req_args_s *args);
+enum http_rc_e action_forward_lean_glib (struct req_args_s *args);
+enum http_rc_e action_forward_lean_sqlx (struct req_args_s *args);
+enum http_rc_e action_forward_flush (struct req_args_s *args);
+enum http_rc_e action_forward_reload (struct req_args_s *args);
 
 enum http_rc_e action_cache_flush_local (struct req_args_s *args);
 enum http_rc_e action_cache_flush_high (struct req_args_s *args);

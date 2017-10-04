@@ -34,17 +34,16 @@ class ElectionCmd(Lister):
         parser = super(ElectionCmd, self).get_parser(prog_name)
         parser.add_argument(
             'service_type',
-            metavar='<service-type>',
-            help='Service type')
+            help="Service type")
         parser.add_argument(
             'reference',
             metavar='<reference>',
-            help='Reference')
+            help="Reference name")
         parser.add_argument(
             '--cid',
             dest='is_cid',
             default=False,
-            help=('<reference> becomes a CID'),
+            help="Interpret <reference> as a CID",
             action='store_true'
         )
         return parser

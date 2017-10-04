@@ -34,16 +34,20 @@ container_fields = ['ns', 'account', 'type', 'objects', 'bytes', 'ctime',
 
 
 class AccountBackend(RedisConn):
-    lua_update_container = """
+    lua_is_sup = """
                -- With lua float we are losing precision for this reason
                -- we keep the number as a string
                local is_sup = function(a,b)
-                 if string.len(a) < string.len(b) then
-                   return false;
+                 local int_a = string.match(a,"%d+")
+                 local int_b = string.match(b,"%d+")
+                 if string.len(int_a) > string.len(int_b) then
+                   return true;
                  end;
                  return a > b;
                end;
+               """
 
+    lua_update_container = (lua_is_sup + """
                local account_id = redis.call('HGET', KEYS[4], 'id');
                if not account_id then
                  if ARGV[6] == 'True' then
@@ -127,7 +131,7 @@ class AccountBackend(RedisConn):
                if inc_bytes ~= 0 then
                  redis.call('HINCRBY', KEYS[4], 'bytes', inc_bytes);
                end;
-               """
+               """)
 
     lua_refresh_account = """
         local account_id = redis.call('HGET', KEYS[1], 'id');

@@ -410,9 +410,9 @@ void oio_str_gstring_append_json_pair_boolean (GString *base,
 	oio_str_gstring_append_json_quote(base, k);
 	g_string_append_c (base, ':');
 	if (v) {
-		g_string_append_static(base, "True");
+		g_string_append_static(base, "true");
 	} else {
-		g_string_append_static(base, "False");
+		g_string_append_static(base, "false");
 	}
 }
 

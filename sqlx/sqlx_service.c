@@ -1045,7 +1045,13 @@ _task_expire_bases(gpointer p)
 
 	struct sqlx_cache_s *cache = sqlx_repository_get_cache(PSRV(p)->repository);
 	if (cache != NULL) {
-		guint count = sqlx_cache_expire(cache, 100, 500 * G_TIME_SPAN_MILLISECOND);
+
+		VARIABLE_PERIOD_DECLARE();
+		if (VARIABLE_PERIOD_SKIP(sqlx_periodic_decache_period))
+			return;
+
+		guint count = sqlx_cache_expire(cache,
+				sqlx_periodic_decache_max_bases, sqlx_periodic_decache_max_delay);
 		if (count)
 			GRID_DEBUG("Expired %u bases", count);
 	}
@@ -1057,9 +1063,12 @@ _task_expire_resolver(gpointer p)
 	if (!grid_main_is_running ())
 		return;
 
-	guint count = hc_resolver_expire(PSRV(p)->resolver);
-	if (count)
-		GRID_DEBUG("Expired %u entries from the resolver cache", count);
+	guint count_expire = hc_resolver_expire(PSRV(p)->resolver);
+	guint count_purge = hc_resolver_purge (PSRV(p)->resolver);
+	if (count_expire || count_purge) {
+		GRID_DEBUG ("Resolver: expired %u, purged %u",
+				count_expire, count_purge);
+	}
 }
 
 static void

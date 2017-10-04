@@ -493,6 +493,74 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(self.conn.hget(account_key, 'objects'),
                          str(total_objects))
 
+    def test_update_container_wrong_timestamp_format(self):
+        backend = AccountBackend({}, self.conn)
+        account_id = 'test'
+        self.assertEqual(backend.create_account(account_id), account_id)
+
+        # initial container
+        name = '"{<container \'&\' name>}"'
+        mtime = "12456.0000076"
+        backend.update_container(account_id, name, mtime, 0, 0, 0)
+
+        res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
+        self.assertEqual(res[0], name)
+
+        # same event
+        with ExpectedException(Conflict):
+            backend.update_container(account_id, name, mtime, 0, 0, 0)
+
+        res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
+        self.assertEqual(res[0], name)
+
+        mtime = "0000012456.00005"
+        backend.update_container(account_id, name, mtime, 0, 0, 0)
+
+        res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
+        self.assertEqual(res[0], name)
+
+        self.assertEqual(self.conn.hget('container:%s:%s' %
+                                        (account_id, name), 'mtime'), mtime)
+
+        mtime = "0000012456.00035"
+        backend.update_container(account_id, name, mtime, 0, 0, 0)
+
+        res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
+        self.assertEqual(res[0], name)
+
+        self.assertEqual(self.conn.hget('container:%s:%s' %
+                                        (account_id, name), 'mtime'), mtime)
+
+    def test_is_sup(self):
+        backend = AccountBackend({}, self.conn)
+        compare = (backend.lua_is_sup +
+                   """
+            if (is_sup(KEYS[1], KEYS[2])) then
+              return redis.status_reply('IS SUP');
+            else
+              return redis.error_reply('IS NOT SUP');
+            end;
+                   """)
+
+        compare_script = backend.register_script(compare)
+        self.assertRaises(redis.exceptions.ResponseError, compare_script,
+                          keys=["12457.00245", "12457.00245"],
+                          client=self.conn)
+        self.assertEqual(compare_script(keys=["42457.00245", "12457.00245"],
+                                        client=self.conn), "IS SUP")
+        self.assertRaises(redis.exceptions.ResponseError, compare_script,
+                          keys=["12457.00245", "12457.002450"],
+                          client=self.conn)
+        self.assertEqual(compare_script(keys=["42457.00245", "12457.002450"],
+                                        client=self.conn), "IS SUP")
+        self.assertRaises(redis.exceptions.ResponseError, compare_script,
+                          keys=["12457.00245", "12457.002456"],
+                          client=self.conn)
+        self.assertEqual(compare_script(keys=["42457.00245", "12457.002456"],
+                                        client=self.conn), "IS SUP")
+        self.assertEqual(compare_script(keys=["42457.00246", "42457.002458"],
+                                        client=self.conn), "IS SUP")
+
     def test_flush_account(self):
         backend = AccountBackend({}, self.conn)
         account_id = random_str(16)

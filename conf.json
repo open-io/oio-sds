@@ -166,6 +166,11 @@
 				"def": "5m", "min": "1s", "max": "1h",
 				"descr": "Tells how long the verbosity remains higher before being reset to the default, after a SIGUSR1 has been received." },
 
+			{ "type": "float", "name": "oio_m1_client_timeout_common",
+				"key": "meta1.outgoing.timeout.common.req",
+				"descr": "Sets the timeout to the set of (quick) RPC that query a meta1 service",
+				"def": 10.0, "min": 0.01, "max": 60.0 },
+
 			{ "type": "float", "name": "oio_m0_client_timeout_common",
 				"key": "meta0.outgoing.timeout.common.req",
 				"descr": "Sets the timeout to the set of (quick) RPC that query a meta0 service",
@@ -316,7 +321,7 @@
 
 			{ "type": "monotonic", "name": "oio_election_delay_nowait_pending",
 				"key": "sqliterepo.election.nowait.after",
-				"descr": "In the current sqliterepo repository, sets the amount of time spent in an election resolution that will make a worker thread won't wait at all an consider that election is stalled.",
+				"descr": "In the current sqliterepo repository, sets the amount of time spent in an election resolution that will make a worker thread won't wait at all and consider that election is stalled.",
 				"def": "15m", "min": "1ms", "max": "max" },
 
 			{ "type": "monotonic", "name": "oio_election_delay_expire_NONE",
@@ -578,7 +583,22 @@
 			{ "type": "uint", "name": "malloc_trim_size_periodic",
 				"key": "server.malloc_trim_size.periodic",
 				"descr": "Sets how many bytes bytes are released when the LEAN request is received by the current 'meta' service.",
-				"def": 0, "min": 0, "max": "1<<32 - 1" }
+				"def": 0, "min": 0, "max": "1<<32 - 1" },
+
+			{ "type": "uint", "name": "sqlx_periodic_decache_period",
+				"key": "server.periodic_decache.period",
+				"descr": "In ticks / jiffies, with approx. 1 tick per second. 0 means never",
+				"def": 1, "min": 0, "max": "1Mi" },
+
+			{ "type": "uint", "name": "sqlx_periodic_decache_max_bases",
+				"key": "server.periodic_decache.max_bases",
+				"descr": "How many bases may be decached eacch time the background task performs its Dance of Death",
+				"def": 100, "min": 1, "max": "4Mi" },
+
+			{ "type": "monotonic", "name": "sqlx_periodic_decache_max_delay",
+				"key": "server.periodic_decache.max_delay",
+				"descr": "How long may the decache routine take",
+				"def": "500ms", "min": "1ms", "max": "1m" }
 		]
 	},
 	"proxy": {
@@ -684,6 +704,11 @@
 				"key": "proxy.url.path.maxlen",
 				"descr": "In a proxy, sets the maximum length for the URL it receives. This options protects stack allocation for that URL.",
 				"def": 2048, "min": 32, "max": 65536 },
+
+			{ "type": "float", "name": "proxy_timeout_info",
+				"key": "proxy.outgoing.timeout.info",
+				"descr": "In a proxy, sets the global timeout for 'info' requests issued",
+				"def": 5.0, "min": 0.01, "max": 60.0 },
 
 			{ "type": "float", "name": "proxy_timeout_config",
 				"key": "proxy.outgoing.timeout.config",

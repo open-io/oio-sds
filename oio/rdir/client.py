@@ -16,6 +16,7 @@
 from oio.api.base import HttpApi
 from oio.common.exceptions import ClientException, NotFound, VolumeException
 from oio.common.exceptions import ServiceUnavailable, ServerException
+from oio.common.exceptions import OioNetworkException
 from oio.common.logger import get_logger
 from oio.conscience.client import ConscienceClient
 from oio.directory.client import DirectoryClient
@@ -205,7 +206,13 @@ class RdirClient(HttpApi):
         if create:
             params['create'] = '1'
         uri = self._make_uri(action, volume)
-        resp, body = self._direct_request(method, uri, params=params, **kwargs)
+        try:
+            resp, body = self._direct_request(method, uri, params=params,
+                                              **kwargs)
+        except OioNetworkException:
+            self._clear_cache(volume)
+            raise
+
         return resp, body
 
     def create(self, volume_id):
