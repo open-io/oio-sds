@@ -851,7 +851,7 @@ dispatch_SETCFG(struct gridd_reply_ctx_s *reply,
 			reply->send_error(0, BADREQ("Empty object argument"));
 		else {
 			json_object_object_foreach(jbody, k, jv) {
-				oio_var_value_one_with_option(k, json_object_get_string(jv));
+				oio_var_value_one(k, json_object_get_string(jv));
 			}
 			reply->send_reply(CODE_FINAL_OK, "OK");
 		}

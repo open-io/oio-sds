@@ -136,7 +136,7 @@ _set_fixed_opt(gchar **tokens)
 			return _set_config_option(opt, tokens);
 	}
 
-	if (oio_var_value_one_with_option(tokens[0], tokens[1]))
+	if (oio_var_fix_one(tokens[0], tokens[1]))
 		return NULL;
 
 	ERR("Option '%s' not supported", tokens[0]);

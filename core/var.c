@@ -78,6 +78,8 @@ struct oio_var_record_s {
 	union oio_var_default_u def;
 	union oio_var_default_u min;
 	union oio_var_default_u max;
+
+	guint8 flag_readonly;
 };
 
 static volatile guint var_init = 0;
@@ -278,8 +280,16 @@ _unit(struct oio_var_record_s *rec, const char *end)
 }
 
 static void
-_record_set_to_value(struct oio_var_record_s *rec, const char *value)
+_record_set_to_value(struct oio_var_record_s *rec, const char *value,
+		const gboolean readonly)
 {
+	/* don't touch the value if the variable is already set to readonly
+	 * and we are not forcing its value */
+	if (!readonly && rec->flag_readonly)
+		return;
+	rec->flag_readonly = (readonly != 0);
+
+	/* bound the value to the limits configured at the build-time */
 	gint64 i64, unit;
 	guint64 u64;
 	gchar *end = NULL;
@@ -367,15 +377,15 @@ oio_var_value_all_with_config(struct oio_cfg_handle_s *cfg, const char *ns)
 		struct oio_var_record_s *rec = l->data;
 		gchar *value = oio_cfg_handle_get(cfg, ns, rec->name);
 		if (value) {
-			_record_set_to_value(rec, value);
+			_record_set_to_value(rec, value, FALSE);
 			g_free(value);
 		}
 	}
 	g_mutex_unlock(&var_lock);
 }
 
-gboolean
-oio_var_value_one_with_option(const char *name, const char *value)
+static gboolean
+_value_one(const char *name, const char *value, const gboolean readonly)
 {
 	gboolean rc = FALSE;
 	if (name && value && var_init) {
@@ -385,7 +395,7 @@ oio_var_value_one_with_option(const char *name, const char *value)
 				continue;
 			struct oio_var_record_s *rec = l->data;
 			if (!strcmp(rec->name, name)) {
-				_record_set_to_value(rec, value);
+				_record_set_to_value(rec, value, readonly);
 				rc = TRUE;
 				break;
 			}
@@ -393,6 +403,20 @@ oio_var_value_one_with_option(const char *name, const char *value)
 		g_mutex_unlock(&var_lock);
 	}
 	return rc;
+}
+
+/* The only fonction that set 'readonly' and override any previous already
+ * readonly variable. Destined to be called for CLI options */
+gboolean
+oio_var_fix_one(const char *name, const char *value)
+{
+	return _value_one(name, value, TRUE);
+}
+
+gboolean
+oio_var_value_one(const char *name, const char *value)
+{
+	return _value_one(name, value, FALSE);
 }
 
 void
@@ -502,7 +526,8 @@ oio_var_reset_all(void)
 		if (!l->data)
 			continue;
 		struct oio_var_record_s *rec = l->data;
-		_record_set(rec, rec->def);
+		if (!rec->flag_readonly)
+			_record_set(rec, rec->def);
 	}
 	g_mutex_unlock(&var_lock);
 }

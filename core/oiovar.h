@@ -74,8 +74,16 @@ void oio_var_value_all_with_config(struct oio_cfg_handle_s *cfg, const char *ns)
 
 /**
  * Feed a named value and return if it matches a variable already declared.
+ * The variable is marked as readonly, and the previous value is replaced.
  */
-gboolean oio_var_value_one_with_option(const char *name, const char *value);
+gboolean oio_var_fix_one(const char *name, const char *value);
+
+/**
+ * Feed a named value and return if it matches a variable already declared.
+ * If the variable was marked readonly, this is not an error and TRUE will
+ * be returned, and the value will be left untouched.
+ */
+gboolean oio_var_value_one(const char *name, const char *value);
 
 /**
  * Feed the central configuration with all the variables found in the given
