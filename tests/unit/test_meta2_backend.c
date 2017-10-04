@@ -181,7 +181,7 @@ _init_nsinfo(const gchar *ns, gint64 maxvers)
 
 	gchar tmp[32];
 	g_snprintf(tmp, sizeof(tmp), "%" G_GINT64_FORMAT, maxvers);
-	g_assert_true(oio_var_value_one_with_option("meta2.max_versions", tmp));
+	g_assert_true(oio_var_value_one("meta2.max_versions", tmp));
 
 	g_hash_table_insert(nsinfo->storage_policy, g_strdup("classic"),
 			metautils_gba_from_string("NONE:DUPONETWO"));

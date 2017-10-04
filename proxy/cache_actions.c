@@ -107,7 +107,7 @@ _set_config (struct req_args_s *args, struct json_object *jargs)
 	if (json_object_object_length(jargs) <= 0)
 		return _reply_format_error (args, BADREQ("Empty object argument"));
 	json_object_object_foreach(jargs, k, jv) {
-		oio_var_value_one_with_option(k, json_object_get_string(jv));
+		oio_var_value_one(k, json_object_get_string(jv));
 	}
 	return _reply_success_json(args, NULL);
 }
