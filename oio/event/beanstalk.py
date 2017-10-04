@@ -401,14 +401,14 @@ class Beanstalk(object):
     EXPECTED_ERR = dict_merge(
         {'reserve': ['DEADLINE_SOON', 'TIMED_OUT'],
          'delete': ['NOT_FOUND'],
-         'release': ['BURIED', 'NOT_FOUND'],
-         'bury': ['NOT_FOUND'],
+         'release': ['BURIED', 'NOT_FOUND', 'OUT_OF_MEMORY'],
+         'bury': ['NOT_FOUND', 'OUT_OF_MEMORY'],
          'stats-tube': ['NOT_FOUND'],
          'use': [],
          'watch': [],
-         'put': ['JOB_TOO_BIG', 'BURIED', 'DRAINING'],
-         'kick': [],
-         'kick-job': ['NOT_FOUND']}
+         'put': ['JOB_TOO_BIG', 'BURIED', 'DRAINING', 'OUT_OF_MEMORY'],
+         'kick': ['OUT_OF_MEMORY'],
+         'kick-job': ['NOT_FOUND', 'OUT_OF_MEMORY']}
     )
 
     @classmethod

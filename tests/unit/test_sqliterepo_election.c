@@ -1032,47 +1032,123 @@ static void test_STEP_ASKING(void) {
 	/* Legit transitions
 	 * 2/ Pending past interruption */
 
+	/* MASTER_OK */
 	RESET();
+	m->requested_LEAVE = 1; /* left_self takes over both the others */
 	m->requested_LEFT_SELF = 1;
+	m->requested_LEFT_MASTER = 1;
+	transition(m, EVT_MASTER_OK, NULL);
+	_member_assert_LEAVING(m);
+	g_assert_false(m->requested_LEFT_MASTER);
+	g_assert_false(m->requested_LEFT_SELF);
+	g_assert_false(m->requested_LEAVE);
+	_pending(CMD_DELETE, 0);
+
+	RESET();
+	m->requested_LEFT_SELF = 1; /* left_self takes over left_master */
+	m->requested_LEFT_MASTER = 1;
 	transition(m, EVT_MASTER_OK, url);
 	_member_assert_CREATING(m);
+	g_assert_false(m->requested_LEFT_MASTER);
+	g_assert_false(m->requested_LEFT_SELF);
+	g_assert_false(m->requested_LEAVE);
 	_pending(CMD_CREATE, 0);
 
 	RESET();
 	m->requested_LEFT_SELF = 1;
+	transition(m, EVT_MASTER_OK, url);
+	_member_assert_CREATING(m);
+	g_assert_false(m->requested_LEFT_MASTER);
+	g_assert_false(m->requested_LEFT_SELF);
+	g_assert_false(m->requested_LEAVE);
+	_pending(CMD_CREATE, 0);
+
+	RESET();
+	m->requested_LEFT_MASTER = 1;
+	transition(m, EVT_MASTER_OK, url);
+	_member_assert_LISTING(m);
+	g_assert_false(m->requested_LEFT_MASTER);
+	g_assert_false(m->requested_LEFT_SELF);
+	g_assert_false(m->requested_LEAVE);
+	_pending(CMD_LIST, 0);
+
+
+	/* MASTER_BAD */
+	RESET();
+	m->requested_LEFT_SELF = 1;
 	transition(m, EVT_MASTER_BAD, NULL);
 	_member_assert_LEAVING_FAILING(m);
+	g_assert_false(m->requested_LEFT_MASTER);
+	g_assert_false(m->requested_LEFT_SELF);
+	g_assert_false(m->requested_LEAVE);
 	_pending(CMD_DELETE, 0);
 
 	RESET();
 	m->requested_LEFT_MASTER = 1;
 	transition(m, EVT_MASTER_BAD, NULL);
 	_member_assert_LEAVING_FAILING(m);
+	g_assert_false(m->requested_LEFT_MASTER);
+	g_assert_false(m->requested_LEFT_SELF);
+	g_assert_false(m->requested_LEAVE);
 	_pending(CMD_DELETE, 0);
 
 	RESET();
 	m->requested_LEAVE = 1;
 	transition(m, EVT_MASTER_BAD, NULL);
 	_member_assert_LEAVING_FAILING(m);
+	g_assert_false(m->requested_LEFT_MASTER);
+	g_assert_false(m->requested_LEFT_SELF);
+	g_assert_false(m->requested_LEAVE);
 	_pending(CMD_DELETE, 0);
 
+
+	/* MASTER_KO */
+	RESET();
+	m->requested_LEAVE = 1;
+	m->requested_LEFT_MASTER = 1;
+	m->requested_LEFT_SELF = 1;
+	transition(m, EVT_MASTER_KO, NULL);
+	_member_assert_LEAVING_FAILING(m);
+	g_assert_false(m->requested_LEFT_MASTER);
+	g_assert_false(m->requested_LEFT_SELF);
+	g_assert_false(m->requested_LEAVE);
+	_pending(CMD_DELETE, 0);
+
+	RESET();
+	m->requested_LEFT_MASTER = 1;
+	m->requested_LEFT_SELF = 1;
+	transition(m, EVT_MASTER_KO, NULL);
+	_member_assert_LEAVING_FAILING(m);
+	g_assert_false(m->requested_LEFT_MASTER);
+	g_assert_false(m->requested_LEFT_SELF);
+	g_assert_false(m->requested_LEAVE);
+	_pending(CMD_DELETE, 0);
 
 	RESET();
 	m->requested_LEFT_SELF = 1;
 	transition(m, EVT_MASTER_KO, NULL);
 	_member_assert_LEAVING_FAILING(m);
+	g_assert_false(m->requested_LEFT_MASTER);
+	g_assert_false(m->requested_LEFT_SELF);
+	g_assert_false(m->requested_LEAVE);
 	_pending(CMD_DELETE, 0);
 
 	RESET();
 	m->requested_LEFT_MASTER = 1;
 	transition(m, EVT_MASTER_KO, NULL);
 	_member_assert_LEAVING_FAILING(m);
+	g_assert_false(m->requested_LEFT_MASTER);
+	g_assert_false(m->requested_LEFT_SELF);
+	g_assert_false(m->requested_LEAVE);
 	_pending(CMD_DELETE, 0);
 
 	RESET();
 	m->requested_LEAVE = 1;
 	transition(m, EVT_MASTER_KO, NULL);
 	_member_assert_LEAVING_FAILING(m);
+	g_assert_false(m->requested_LEFT_MASTER);
+	g_assert_false(m->requested_LEFT_SELF);
+	g_assert_false(m->requested_LEAVE);
 	_pending(CMD_DELETE, 0);
 }
 
