@@ -126,10 +126,24 @@ __delete_base(struct sqlx_sqlite3_s *sq3)
 		GRID_DEBUG("DELETE done [%s][%s] (%s)", sq3->name.base,
 			sq3->name.type, sq3->path_inline);
 	else
-		GRID_WARN("DELETE failed [%s][%s] (%s) : (%d) %s",
+		GRID_WARN("DELETE failed [%s][%s] (%s): (%d) %s",
 				sq3->name.base, sq3->name.type, sq3->path_inline,
 				errno, strerror(errno));
 	sq3->deleted = 0;
+}
+
+static void
+__rename_base(struct sqlx_sqlite3_s *sq3, const gchar *dst)
+{
+	EXTRA_ASSERT(sq3->path_inline[0] != '\0');
+	EXTRA_ASSERT(dst != NULL && dst[0] != '\0');
+	if (rename(sq3->path_inline, dst) < 0) {
+		GRID_WARN("Failed to rename %s to %s: (%d) %s",
+				sq3->path_inline, dst, errno, strerror(errno));
+	} else {
+		GRID_DEBUG("[%s][%s] base renamed to %s",
+				sq3->name.base, sq3->name.type, dst);
+	}
 }
 
 static void
@@ -165,6 +179,14 @@ __close_base(struct sqlx_sqlite3_s *sq3)
 			}
 		}
 		__delete_base(sq3);
+	} else if (sq3->corrupted) {
+		gchar dst[sizeof(sq3->path_inline) + sizeof(SQLX_CORRUPTED_SUFFIX)];
+		char *suffix = stpcpy(dst, sq3->path_inline);
+		strcpy(suffix, SQLX_CORRUPTED_SUFFIX);
+		GRID_ERROR("Renaming corrupted base [%s][%s] to %s",
+				sq3->name.base, sq3->name.type, dst);
+		__rename_base(sq3, dst);
+		sq3->corrupted = 0;
 	}
 
 	if (sq3->db)
@@ -651,7 +673,7 @@ retry:
 			break;
 		case SQLITE_NOTFOUND:
 		case SQLITE_CANTOPEN:
-			GRID_DEBUG("Open soft error [%s] : (%d) %s", args->realpath,
+			GRID_DEBUG("Open soft error [%s]: (%d) %s", args->realpath,
 					rc, sqlite_strerror(rc));
 			if (attempts-- && args->create) {
 				_close_handle(&handle);
@@ -659,13 +681,13 @@ retry:
 					GRID_TRACE("Directory created, retrying open [%s]", args->realpath);
 					goto retry;
 				}
-				GRID_DEBUG("DB creation error on [%s] : (%d) %s",
+				GRID_DEBUG("DB creation error on [%s]: (%d) %s",
 						args->realpath, error->code, error->message);
 			} else {
 			// FALLTHROUGH
 		default:
 				_close_handle(&handle);
-				GRID_DEBUG("Open strong error [%s] : (%d) %s",
+				GRID_DEBUG("Open strong error [%s]: (%d) %s",
 						args->realpath, rc, sqlite_strerror(rc));
 				error = NEWERROR(CODE_CONTAINER_NOTFOUND, "sqlite3_open error:"
 						" (errno=%d %s) (rc=%d) %s", errno, strerror(errno),
@@ -691,7 +713,20 @@ retry:
 	sq3->admin = g_tree_new_full(metautils_strcmp3, NULL, g_free, g_free);
 
 	sqlx_exec(handle, "PRAGMA foreign_keys = OFF");
-	sqlx_exec(handle, "PRAGMA journal_mode = MEMORY");
+
+	/* We chose to check this call especially because it is able to detect
+	 * a wrong/corrupted database file. */
+	rc = sqlx_exec(handle, "PRAGMA journal_mode = MEMORY");
+	if (rc != SQLITE_OK) {
+		error = NEWERROR(CODE_INTERNAL_ERROR, "failed to setup base: (%d) %s",
+				rc, sqlite_strerror(rc));
+		if (rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT) {
+			sq3->corrupted = TRUE;
+			__close_base(sq3);
+		}
+		return error;
+	}
+
 	sqlx_exec(handle, "PRAGMA temp_store = MEMORY");
 	if (!_schema_has(sq3->db)) {
 		if (_page_size >= 512) {
@@ -878,7 +913,9 @@ sqlx_repository_unlock_and_close2(struct sqlx_sqlite3_s *sq3, guint32 flags)
 
 	if (sq3->repo->cache) {
 		err = sqlx_cache_unlock_and_close_base(sq3->repo->cache, sq3->bd,
-			sq3->deleted || (flags & SQLX_CLOSE_IMMEDIATELY));
+				sq3->deleted ||
+				sq3->corrupted ||
+				(flags & SQLX_CLOSE_IMMEDIATELY));
 	}
 	else {
 		__close_base(sq3);

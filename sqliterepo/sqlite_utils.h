@@ -81,6 +81,8 @@ License along with this library.
 #define SQLITE_GERROR(db,RC) NEWERROR((RC), "(%s) %s", \
 		sqlite_strerror(RC), ((db)?sqlite3_errmsg(db):"unknown error"))
 
+#define SQLX_CORRUPTED_SUFFIX ".corrupted"
+
 static inline int
 sqlx_code_good(const int rc)
 {

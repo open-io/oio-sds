@@ -366,9 +366,9 @@ sqlx_admin_save (struct sqlx_sqlite3_s *sq3)
 	if (run_to_delete && !err) {
 		sqlite3_prepare_debug(rc, sq3->db,
 				"DELETE FROM admin WHERE k = ?", -1, &stmt, NULL);
-		if (rc != SQLITE_OK && rc != SQLITE_DONE)
+		if (rc != SQLITE_OK && rc != SQLITE_DONE) {
 			err = SYSERR("DB error: (%d) %s", rc, sqlite3_errmsg(sq3->db));
-		else {
+		} else {
 			GSList *deleted = NULL;
 			gboolean _delete (gchar *k, struct _cache_entry_s *v, gpointer i UNUSED) {
 				if (!v->flag_deleted)
@@ -393,9 +393,11 @@ sqlx_admin_save (struct sqlx_sqlite3_s *sq3)
 	}
 
 	if (err) {
-		GRID_WARN("DB error: failed to save the admin table: (%d) %s",
+		GRID_WARN("Failed to save the admin table: (%d) %s",
 				err->code, err->message);
-		g_clear_error (&err);
+		if (rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT)
+			sq3->corrupted = TRUE;
+		g_clear_error(&err);
 		count = 0;
 	}
 	return count;
