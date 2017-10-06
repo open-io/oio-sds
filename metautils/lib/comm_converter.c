@@ -20,6 +20,8 @@ License along with this library.
 #include "metautils.h"
 #include "codec.h"
 
+#include <metautils/lib/common_variables.h>
+
 /* -------------------------------------------------------------------------- */
 
 typedef gboolean(*abstract_converter_f) (const void *in, void *out);
@@ -677,6 +679,7 @@ hashtable_conversion(GHashTable *ht,
 static gboolean
 namespace_info_API2ASN(const namespace_info_t * api, NamespaceInfo_t * asn)
 {
+	gchar tmp[64] = {};
 	EXTRA_ASSERT (api != NULL);
 	EXTRA_ASSERT (asn != NULL);
 
@@ -694,6 +697,46 @@ namespace_info_API2ASN(const namespace_info_t * api, NamespaceInfo_t * asn)
 							  key_value_pairs_convert_from_map))
 		return FALSE;
 
+	/* For backward compliance purposes toward older peers, let's
+	 * serialize the chunk_size we know from the central configuration,
+	 * and idem for the storage policy expected in the 'options' table.
+	 * JFS: beware to use the same macros for the allocation than those
+	 *      used by asn1c. */
+
+	if (!asn->chunkSize)
+		asn->chunkSize = ASN1C_CALLOC(1, sizeof(INTEGER_t));
+	if (!asn->options)
+		asn->options = ASN1C_CALLOC(1, sizeof(ParameterSequence_t));
+
+	asn_int64_to_INTEGER(asn->chunkSize, oio_ns_chunk_size);
+
+	GHashTable *opts = g_hash_table_new_full(g_str_hash, g_str_equal,
+			NULL, metautils_gba_unref);
+	g_hash_table_insert(opts, "storage_policy",
+			metautils_gba_from_string(oio_ns_storage_policy));
+	g_hash_table_insert(opts, "worm",
+			metautils_gba_from_string(oio_ns_mode_worm ? "on" : "off"));
+	g_hash_table_insert(opts, "service_update_policy",
+			metautils_gba_from_string(oio_ns_service_update_policy));
+
+#if 0
+	/* Would require variables defined in meta2, not acceptable here because
+	 * we are earlier in the dependency tree */
+	g_snprintf(tmp, sizeof(tmp), "%" G_GINT64_FORMAT, meta2_max_versions);
+	g_hash_table_insert(opts, "meta2_max_versions", metautils_gba_from_string(tmp));
+	g_snprintf(tmp, sizeof(tmp), "%" G_GINT64_FORMAT, meta2_container_max_size);
+	g_hash_table_insert(opts, "container_max_size", metautils_gba_from_string(tmp));
+	g_hash_table_insert(opts, "meta2_keep_deleted_delay", metautils_gba_from_string("-1"));
+#endif
+
+	g_snprintf(tmp, sizeof(tmp), "%u", oio_ns_flat_bits);
+	g_hash_table_insert(opts, "flat_bitlength", metautils_gba_from_string(tmp));
+	g_hash_table_insert(opts, "flat_hash_size", metautils_gba_from_string("0"));
+	g_hash_table_insert(opts, "flat_hash_offset", metautils_gba_from_string("0"));
+
+	hashtable_conversion(opts, asn->options, key_value_pairs_convert_from_map);
+	g_hash_table_destroy(opts);
+
 	return TRUE;
 }
 
@@ -702,6 +745,10 @@ namespace_info_cleanASN(NamespaceInfo_t * asn, gboolean only_content)
 {
 	if (!asn)
 		return;
+
+	if (asn->options)
+		asn->options->list.free = free_Parameter;
+
 	asn->storagePolicy.list.free = free_Parameter;
 	asn->dataSecurity.list.free = free_Parameter;
 	if (only_content)
