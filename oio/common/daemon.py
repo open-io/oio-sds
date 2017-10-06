@@ -34,16 +34,33 @@ class Daemon(object):
     def run(self, *args, **kwargs):
         raise NotImplementedError('run not implemented')
 
+    def stop(self):
+        pass
+
     def start(self, **kwargs):
         drop_privileges(self.conf.get('user', 'openio'))
         redirect_stdio(self.logger)
 
-        def kill_children(*args):
-            signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        def kill_children():
             os.killpg(0, signal.SIGTERM)
+            self.stop()
             sys.exit()
 
-        signal.signal(signal.SIGTERM, kill_children)
+        def _on_SIGTERM(*args):
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)
+            kill_children()
+
+        def _on_SIGQUIT(*args):
+            signal.signal(signal.SIGQUIT, signal.SIG_IGN)
+            kill_children()
+
+        def _on_SIGINT(*args):
+            signal.signal(signal.SIGINT, signal.SIG_IGN)
+            kill_children()
+
+        signal.signal(signal.SIGINT, _on_SIGINT)
+        signal.signal(signal.SIGQUIT, _on_SIGQUIT)
+        signal.signal(signal.SIGTERM, _on_SIGTERM)
 
         self.run(**kwargs)
 
