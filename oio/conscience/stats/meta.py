@@ -29,7 +29,7 @@ class MetaStat(HttpStat):
     def get_stats(self):
         try:
             resp, _body = self.agent.client._request(
-                    'POST', self.uri, params=self.params)
+                    'POST', self.uri, params=self.params, retries=False)
             return self._parse_stats_lines(resp.text)
         except Exception as exc:
             self.logger.debug("get_stats error: %s", exc)
