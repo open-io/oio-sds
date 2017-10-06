@@ -91,6 +91,7 @@ class ServiceWatcher(object):
         self.logger.info('watcher "%s" starting', self.name)
         self.running = True
         self.watch()
+        self.running = False
 
     def stop(self):
         self.logger.info('watcher "%s" stopping', self.name)
@@ -105,7 +106,7 @@ class ServiceWatcher(object):
 
     def check(self):
         status = True
-        for service_check in self.service_checks:
+        for service_check in (x for x in self.service_checks if self.running):
             if not service_check.service_status():
                 status = False
 
@@ -120,15 +121,20 @@ class ServiceWatcher(object):
         """Update service definition with all configured stats"""
         if not self.last_status:
             return
-        for stat in self.service_stats:
+        for stat in (x for x in self.service_stats if self.running):
             stats = stat.get_stats()
             self.service_definition['tags'].update(stats)
 
     def register(self):
+        # only accept a final zero/down-registration when exiting
+        if not self.running and self.last_status:
+            return
+
         # Use a boolean so we can easily convert it to a number in conscience
         self.service_definition['tags']['tag.up'] = self.last_status
         try:
-            self.cs.register(self.service['type'], self.service_definition)
+            self.cs.register(self.service['type'], self.service_definition,
+                             retries=False)
         except OioException as rqe:
             self.logger.warn("Failed to register service %s: %s",
                              self.service_definition["addr"], rqe)
@@ -184,10 +190,14 @@ class ServiceWatcher(object):
 class ConscienceAgent(Daemon):
     def __init__(self, conf):
         validate_service_conf(conf)
+        self.running = True
         self.conf = conf
         self.logger = get_logger(conf)
         self.load_services()
         self.init_watchers(self.conf['services'])
+
+    def stop(self):
+        self.running = False
 
     def run(self, *args, **kwargs):
         try:
@@ -197,7 +207,8 @@ class ConscienceAgent(Daemon):
             for watcher in self.watchers:
                 pool.spawn(watcher.start)
 
-            while True:
+            self.running = True
+            while self.running:
                 sleep(1)
                 for w in self.watchers:
                     if w.failed:
@@ -212,6 +223,7 @@ class ConscienceAgent(Daemon):
             raise e
         finally:
             self.logger.warn('conscience agent: stopping')
+            self.running = False
             self.stop_watchers()
 
     def init_watchers(self, services):
