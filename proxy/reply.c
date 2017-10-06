@@ -133,7 +133,9 @@ _reply_common_error (struct req_args_s *args, GError *err)
 			return _reply_format_error (args, err);
 		case CODE_TOOMANY_REDIRECT:
 		case CODE_UNAVAILABLE:
-		case CODE_EXCESSIVE_LOAD:
+		case CODE_GATEWAY_TIMEOUT:  // returned by server
+		case CODE_EXCESSIVE_LOAD:  // returned by sqliterepo
+		case CODE_CORRUPT_DATABASE:
 		case CODE_CONTAINER_FROZEN:
 			return _reply_retry(args, err);
 		case CODE_CONTAINER_EXISTS:
