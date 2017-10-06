@@ -163,8 +163,7 @@ __close_base(struct sqlx_sqlite3_s *sq3)
 
 	sqlx_repository_call_close_callback(sq3);
 
-	/* delete the base */
-	if (sq3->deleted) {
+	if (sq3->deleted || sq3->corrupted) {
 		if (sq3->repo->election_manager) {
 			NAME2CONST(n0, sq3->name);
 			GError *err = election_exit(sq3->repo->election_manager, &n0);
@@ -178,15 +177,18 @@ __close_base(struct sqlx_sqlite3_s *sq3)
 						sq3->name.base, sq3->name.type);
 			}
 		}
-		__delete_base(sq3);
-	} else if (sq3->corrupted) {
-		gchar dst[sizeof(sq3->path_inline) + sizeof(SQLX_CORRUPTED_SUFFIX)];
-		char *suffix = stpcpy(dst, sq3->path_inline);
-		strcpy(suffix, SQLX_CORRUPTED_SUFFIX);
-		GRID_ERROR("Renaming corrupted base [%s][%s] to %s",
-				sq3->name.base, sq3->name.type, dst);
-		__rename_base(sq3, dst);
-		sq3->corrupted = 0;
+
+		if (sq3->deleted) {
+			__delete_base(sq3);
+		} else if (sq3->corrupted) {
+			gchar dst[sizeof(sq3->path_inline) + sizeof(SQLX_CORRUPT_SUFFIX)];
+			char *suffix = stpcpy(dst, sq3->path_inline);
+			strcpy(suffix, SQLX_CORRUPT_SUFFIX);
+			GRID_ERROR("Renaming corrupted base [%s][%s] to %s",
+					sq3->name.base, sq3->name.type, dst);
+			__rename_base(sq3, dst);
+			sq3->corrupted = 0;
+		}
 	}
 
 	if (sq3->db)
@@ -718,11 +720,16 @@ retry:
 	 * a wrong/corrupted database file. */
 	rc = sqlx_exec(handle, "PRAGMA journal_mode = MEMORY");
 	if (rc != SQLITE_OK) {
-		error = NEWERROR(CODE_INTERNAL_ERROR, "failed to setup base: (%d) %s",
-				rc, sqlite_strerror(rc));
 		if (rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT) {
+			error = NEWERROR(CODE_CORRUPT_DATABASE,
+					"invalid database file: (%d) %s",
+					rc, sqlite_strerror(rc));
 			sq3->corrupted = TRUE;
 			__close_base(sq3);
+		} else {
+			error = NEWERROR(CODE_INTERNAL_ERROR,
+					"failed to setup base: (%d) %s",
+					rc, sqlite_strerror(rc));
 		}
 		return error;
 	}
