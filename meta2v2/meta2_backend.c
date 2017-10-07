@@ -49,7 +49,6 @@ enum m2v2_open_type_e
 #define M2V2_OPEN_REPLIMODE 0x00F
 
 	M2V2_OPEN_AUTOCREATE  = 0x010,
-	M2V2_OPEN_NOREFCHECK  = 0x020,
 #define M2V2_OPEN_FLAGS     0x0F0
 
 	// Set an OR'ed combination of the following flags to require
@@ -251,8 +250,6 @@ m2_to_sqlx(enum m2v2_open_type_e t)
 
 	if (t & M2V2_OPEN_AUTOCREATE)
 		result |= SQLX_OPEN_CREATE;
-	if (t & M2V2_OPEN_NOREFCHECK)
-		result |= SQLX_OPEN_NOREFCHECK;
 
 	if (t & M2V2_OPEN_ENABLED)
 		result |= SQLX_OPEN_ENABLED;
@@ -311,7 +308,7 @@ m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 		return err;
 	}
 
-	sq3->no_peers = how & (M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK);
+	sq3->no_peers = (M2V2_OPEN_LOCAL == (how & M2V2_OPEN_REPLIMODE));
 
 	// If the container is being deleted, this is sad ...
 	// This MIGHT happen if a cache is present (and this is the
@@ -535,7 +532,7 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 	}
 
 	if (params->local)
-		open_mode = M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK;
+		open_mode = M2V2_OPEN_LOCAL;
 	else
 		open_mode = M2V2_OPEN_MASTERONLY;
 
@@ -582,7 +579,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = NULL;
 
-	err = m2b_open(m2, url, M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK, &sq3);
+	err = m2b_open(m2, url, M2V2_OPEN_LOCAL, &sq3);
 	if (!err) {
 		EXTRA_ASSERT(sq3 != NULL);
 
