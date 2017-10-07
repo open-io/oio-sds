@@ -308,7 +308,11 @@ m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 		return err;
 	}
 
-	sq3->no_peers = (M2V2_OPEN_LOCAL == (how & M2V2_OPEN_REPLIMODE));
+	/* beware that LOCAL is maybe == 0 */
+	const gboolean _local = (M2V2_OPEN_LOCAL == (how & M2V2_OPEN_REPLIMODE));
+	const gboolean _create = (M2V2_OPEN_AUTOCREATE == (how & M2V2_OPEN_AUTOCREATE));
+
+	sq3->no_peers = _local;
 
 	// If the container is being deleted, this is sad ...
 	// This MIGHT happen if a cache is present (and this is the
@@ -322,12 +326,17 @@ m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 		return NEWERROR(CODE_CONTAINER_FROZEN, "destruction pending");
 	}
 
-	/* M2V2_OPEN_AUTOCREATE is only used when creating the container. If not
-	 * specified, we expect the container to also be "softly" initiated.
-	 * Non-LOCAL accesses are made by the functional requests, and by no
-	 * other, excepted by the DESTROY request. */
-	if (!(how & M2V2_OPEN_AUTOCREATE) &&
-			M2V2_OPEN_LOCAL == (how & M2V2_OPEN_REPLIMODE)) {
+	/* The kind of check we do depend of the kind of opening:
+	 * - creation : init not done
+	 * - local access : no check
+	 * - replicated access : int done */
+	if (_create) {
+		if (_is_container_initiated(sq3)) {
+			m2b_close(sq3);
+			return NEWERROR(CODE_CONTAINER_EXISTS,
+					"container already initiated");
+		}
+	} else if (!_local) {
 		if (!_is_container_initiated(sq3)) {
 			m2b_close(sq3);
 			return NEWERROR(CODE_CONTAINER_NOTFOUND,
@@ -335,7 +344,7 @@ m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 		}
 	}
 
-	// Complete URL with full VNS and container name
+	/* Complete URL with full VNS and container name */
 	void set(gchar *k, int f) {
 		if (oio_url_has(url, f))
 			return;
@@ -516,7 +525,6 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 		struct oio_url_s *url, struct m2v2_create_params_s *params)
 {
 	GError *err = NULL;
-	enum m2v2_open_type_e open_mode = 0;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 
 	GRID_DEBUG("CREATE(%s,%s,%s)%s", oio_url_get(url, OIOURL_WHOLE),
@@ -531,41 +539,36 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 			return err;
 	}
 
-	if (params->local)
-		open_mode = M2V2_OPEN_LOCAL;
-	else
-		open_mode = M2V2_OPEN_MASTERONLY;
-
-	/* The AUTOCREATE flag disables the INIT check */
-	open_mode |= M2V2_OPEN_AUTOCREATE;
+	/* Defer the `m2.init` check to the m2b_open() */
+	enum m2v2_open_type_e open_mode = M2V2_OPEN_AUTOCREATE |
+		(params->local ? M2V2_OPEN_LOCAL : M2V2_OPEN_MASTERONLY);
 
 	err = m2b_open(m2, url, open_mode, &sq3);
-	if (sq3 && !err) {
-		if (sqlx_admin_has(sq3, META2_INIT_FLAG))
-			err = NEWERROR(CODE_CONTAINER_EXISTS, "Container already initiated");
-		else {
-			err = _init_container(sq3, url, params);
-			if (err) {
-				m2b_destroy(sq3);
-				return err;
-			}
+	EXTRA_ASSERT((sq3 != NULL) ^ (err != NULL));
+	if (err)
+		return err;
 
-			/* Fire an event to notify the world this container exists */
-			const enum election_status_e s = sq3->election;
-			if (!params->local && m2->notifier && (!s || s == ELECTION_LEADER)) {
-				GString *gs = oio_event__create (META2_EVENTS_PREFIX".container.new", url);
-				g_string_append_static (gs, ",\"data\":null}");
-				oio_events_queue__send (m2->notifier, g_string_free (gs, FALSE));
-			}
-
-			/* Reload any cache maybe already associated with the container.
-			 * It happens that the cache sometimes exists because created during a
-			 * M2_PREP that occured after a GETVERS (the meta1 is filled) but before
-			 * the CREATE. */
-			meta2_backend_change_callback(sq3, m2);
-		}
-		m2b_close(sq3);
+	/* At this point the base exist and it has nt been iniated yet */
+	err = _init_container(sq3, url, params);
+	if (err) {
+		m2b_destroy(sq3);
+		return err;
 	}
+
+	/* Fire an event to notify the world this container exists */
+	const enum election_status_e s = sq3->election;
+	if (!params->local && m2->notifier && (!s || s == ELECTION_LEADER)) {
+		GString *gs = oio_event__create (META2_EVENTS_PREFIX".container.new", url);
+		g_string_append_static (gs, ",\"data\":null}");
+		oio_events_queue__send (m2->notifier, g_string_free (gs, FALSE));
+	}
+
+	/* Reload any cache maybe already associated with the container.
+	 * It happens that the cache sometimes exists because created during a
+	 * M2_PREP that occured after a GETVERS (the meta1 is filled) but before
+	 * the CREATE. */
+	meta2_backend_change_callback(sq3, m2);
+	m2b_close(sq3);
 	return err;
 }
 
