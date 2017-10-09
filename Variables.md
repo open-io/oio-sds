@@ -187,6 +187,14 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_CORE_SDS_NOSHUFFLE*
 
+### core.sds.version
+
+> The version of the sds. It's used to know the expected metadata of a chunk
+
+ * default: **4.0**
+ * type: string
+ * cmake directive: *OIO_CORE_SDS_VERSION*
+
 ### events.beanstalkd.delay
 
 > Sets the delay on each notification sent to the BEANSTALK endpoint
@@ -284,6 +292,15 @@ Used by `gcc`
  * default: **10.0**
  * type: gdouble
  * cmake directive: *OIO_META0_OUTGOING_TIMEOUT_COMMON_REQ*
+ * range: 0.01 -> 60.0
+
+### meta1.outgoing.timeout.common.req
+
+> Sets the timeout to the set of (quick) RPC that query a meta1 service
+
+ * default: **10.0**
+ * type: gdouble
+ * cmake directive: *OIO_META1_OUTGOING_TIMEOUT_COMMON_REQ*
  * range: 0.01 -> 60.0
 
 ### meta2.batch.maxlen
@@ -467,6 +484,15 @@ Used by `gcc`
  * cmake directive: *OIO_PROXY_OUTGOING_TIMEOUT_CONSCIENCE*
  * range: 0.01 -> 60.0
 
+### proxy.outgoing.timeout.info
+
+> In a proxy, sets the global timeout for 'info' requests issued
+
+ * default: **5.0**
+ * type: gdouble
+ * cmake directive: *OIO_PROXY_OUTGOING_TIMEOUT_INFO*
+ * range: 0.01 -> 60.0
+
 ### proxy.outgoing.timeout.stat
 
 > In a proxy, sets the global timeout for 'stat' requests issued (mostly forwarded for the event-agent)
@@ -630,7 +656,7 @@ Used by `gcc`
  * default: **0**
  * type: guint
  * cmake directive: *OIO_RESOLVER_CACHE_CSM0_MAX_DEFAULT*
- * range: 0 -> 4194304
+ * range: 0 -> G_MAXUINT
 
 ### resolver.cache.csm0.ttl.default
 
@@ -641,6 +667,14 @@ Used by `gcc`
  * cmake directive: *OIO_RESOLVER_CACHE_CSM0_TTL_DEFAULT*
  * range: 0 -> G_MAXINT64
 
+### resolver.cache.enabled
+
+> Allows the resolver instances to cache entries
+
+ * default: **TRUE**
+ * type: gboolean
+ * cmake directive: *OIO_RESOLVER_CACHE_ENABLED*
+
 ### resolver.cache.srv.max.default
 
 > In any service resolver instanciated, sets the maximum number of meta1 entries (data-bound services)
@@ -648,7 +682,7 @@ Used by `gcc`
  * default: **0**
  * type: guint
  * cmake directive: *OIO_RESOLVER_CACHE_SRV_MAX_DEFAULT*
- * range: 0 -> 1048576
+ * range: 0 -> G_MAXUINT
 
 ### resolver.cache.srv.ttl.default
 
@@ -738,6 +772,33 @@ Used by `gcc`
  * type: guint
  * cmake directive: *OIO_SERVER_MALLOC_TRIM_SIZE_PERIODIC*
  * range: 0 -> 2147483648
+
+### server.periodic_decache.max_bases
+
+> How many bases may be decached each time the background task performs its Dance of Death
+
+ * default: **100**
+ * type: guint
+ * cmake directive: *OIO_SERVER_PERIODIC_DECACHE_MAX_BASES*
+ * range: 1 -> 4194304
+
+### server.periodic_decache.max_delay
+
+> How long may the decache routine take
+
+ * default: **500 * G_TIME_SPAN_MILLISECOND**
+ * type: gint64
+ * cmake directive: *OIO_SERVER_PERIODIC_DECACHE_MAX_DELAY*
+ * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_MINUTE
+
+### server.periodic_decache.period
+
+> In ticks / jiffies, with approx. 1 tick per second. 0 means never
+
+ * default: **1**
+ * type: guint
+ * cmake directive: *OIO_SERVER_PERIODIC_DECACHE_PERIOD*
+ * range: 0 -> 1048576
 
 ### server.pool.max_idle
 
@@ -942,7 +1003,7 @@ Used by `gcc`
 
 ### sqliterepo.election.delay.expire_master
 
-> In the current sqliterepo repository, sets the amount of time after which a MASTER election will drop its status and return to the NONE status. This helps recycling established-but-unused elections, and save Zookeeper nodes. Keep this value between sqliterepo.election.delay.expire_slave and sqliterepo.election.delay.expire_slave + sqliterepo.election.delay.ping_final.
+> In the current sqliterepo repository, sets the amount of time after which a MASTER election will drop its status and return to the NONE status. This helps recycling established-but-unused elections, and save Zookeeper nodes. Keep this value between sqliterepo.election.delay.expire_slave and sqliterepo.election.delay.ping_final if you want the election to never expire.
 
  * default: **25 * G_TIME_SPAN_MINUTE**
  * type: gint64
@@ -969,9 +1030,9 @@ Used by `gcc`
 
 ### sqliterepo.election.delay.ping_final
 
-> In the current sqliterepo repository, sets the average amount of time after which a PING will be sent for an established election. This is an average, in facts a jitter is introduced to avoid resonance effects on large-scale platforms.
+> In the current sqliterepo repository, sets the average amount of time after which a PING will be sent for an established election. This is an average, in facts a jitter is introduced to avoid resonance effects on large-scale platforms. Should be greater than sqliterepo.election.delay.expire_slave if you want the slaves to actually expire.
 
- * default: **15 * G_TIME_SPAN_MINUTE**
+ * default: **30 * G_TIME_SPAN_MINUTE**
  * type: gint64
  * cmake directive: *OIO_SQLITEREPO_ELECTION_DELAY_PING_FINAL*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_DAY
@@ -987,12 +1048,20 @@ Used by `gcc`
 
 ### sqliterepo.election.nowait.after
 
-> In the current sqliterepo repository, sets the amount of time spent in an election resolution that will make a worker thread won't wait at all an consider that election is stalled.
+> In the current sqliterepo repository, sets the amount of time spent in an election resolution that will make a worker thread won't wait at all and consider that election is stalled.
 
- * default: **15 * G_TIME_SPAN_SECOND**
+ * default: **15 * G_TIME_SPAN_MINUTE**
  * type: gint64
  * cmake directive: *OIO_SQLITEREPO_ELECTION_NOWAIT_AFTER*
- * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
+ * range: 1 * G_TIME_SPAN_MILLISECOND -> G_MAXINT64
+
+### sqliterepo.election.nowait.enable
+
+> Check of the election is pending since too long. If it is, don't way for it.
+
+ * default: **FALSE**
+ * type: gboolean
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_NOWAIT_ENABLE*
 
 ### sqliterepo.election.task.expire_max_per_round
 
@@ -1240,6 +1309,15 @@ the cmake command line.
  * type: gint32
  * cmake directive: *OIO_ENBUG_CLIENT_FAKE_TIMEOUT_THRESHOLD*
  * range: 0 -> 0
+
+### enbug.server.request.failure.threshold
+
+> In testing situations, sets the average ratio of requests failing for a fake reason (from the peer). This helps testing the retrial mechanisms.
+
+ * default: **30**
+ * type: gint32
+ * cmake directive: *OIO_ENBUG_SERVER_REQUEST_FAILURE_THRESHOLD*
+ * range: 0 -> 100
 
 ### enbug.sqliterepo.client.failure.threshold
 
