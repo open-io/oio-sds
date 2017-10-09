@@ -264,7 +264,19 @@ m2_to_sqlx(enum m2v2_open_type_e t)
 static gboolean
 _is_container_initiated(struct sqlx_sqlite3_s *sq3)
 {
-	return sqlx_admin_has(sq3, META2_INIT_FLAG);
+	if (sqlx_admin_has(sq3, META2_INIT_FLAG))
+		return TRUE;
+
+	/* workaround for a known bug, when the container has no flag because
+	 * of some failed replication (yet to be determined) but it is used
+	 * because of a (now-fixed) inexistant checck on the flag. */
+	if (0 < m2db_get_obj_count(sq3) || 0 < m2db_get_size(sq3)) {
+		GRID_DEBUG("DB partially initiated: [%s][%.s]",
+				sq3->name.base, sq3->name.type);
+		return TRUE;
+	}
+
+	return FALSE;
 }
 
 static void
