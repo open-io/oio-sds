@@ -33,7 +33,7 @@ class ElectionTest(CliTestCase):
         self.openio('election ping meta2 ' + self.NAME)
 
     def test_election_status(self):
-        self.openio('election status meta2 ' + self.NAME)
+        self.openio('election status --timeout 45.0 meta2 ' + self.NAME)
 
     def test_election_debug(self):
         self.openio('election debug meta2 ' + self.NAME)

@@ -44,8 +44,15 @@ class ElectionCmd(Lister):
             dest='is_cid',
             default=False,
             help="Interpret <reference> as a CID",
-            action='store_true'
-        )
+            action='store_true')
+        # TODO(FVE): add the timeout option to all openio subcommands
+        # FVE: I chose 32s because the timeout between the proxy and the
+        # services is usually 30s.
+        parser.add_argument(
+            '--timeout',
+            default=32.0,
+            type=float,
+            help="Timeout toward the proxy (defaults to 32.0 seconds)")
         return parser
 
     def get_params(self, parsed_args):
@@ -71,7 +78,7 @@ class PingElection(ElectionCmd):
 
         data = self.app.client_manager.election.election_ping(
             service_type=service_type, account=account, reference=reference,
-            cid=cid)
+            cid=cid, timeout=parsed_args.timeout)
 
         columns = ('Id', 'Status', 'Message')
         data = sorted(data.iteritems())
@@ -90,7 +97,7 @@ class StatusElection(ElectionCmd):
 
         data = self.app.client_manager.election.election_status(
             service_type=service_type, account=account, reference=reference,
-            cid=cid)
+            cid=cid, timeout=parsed_args.timeout)
 
         columns = ('Id', 'Status', 'Message')
         data = sorted(data["peers"].iteritems())
@@ -109,7 +116,7 @@ class DebugElection(ElectionCmd):
 
         data = self.app.client_manager.election.election_debug(
             service_type=service_type, account=account, reference=reference,
-            cid=cid)
+            cid=cid, timeout=parsed_args.timeout)
 
         columns = ('Id', 'Status', 'Message', 'Body')
         data = sorted(data.iteritems())
