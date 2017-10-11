@@ -63,7 +63,8 @@ class AdminClient(ProxyClient):
         """
         Force all peers to leave the election.
         """
-        self._request('POST', '/leave', params=params, **kwargs)
+        _, body = self._request('POST', '/leave', params=params, **kwargs)
+        return body
 
     @loc_params
     def election_ping(self, params, **kwargs):

@@ -29,6 +29,9 @@ class ElectionTest(CliTestCase):
     def tearDownClass(cls):
         cls.openio('container delete ' + cls.NAME)
 
+    def test_election_leave(self):
+        self.openio('election leave meta2 ' + self.NAME)
+
     def test_election_ping(self):
         self.openio('election ping meta2 ' + self.NAME)
 
