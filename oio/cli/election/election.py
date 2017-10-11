@@ -135,11 +135,31 @@ class ElectionSync(ElectionCmd):
         service_type, account, reference, cid = self.get_params(parsed_args)
 
         data = self.app.client_manager.election.election_sync(
-            service_type, account=account, reference=reference, cid=cid)
+            service_type, account=account, reference=reference, cid=cid,
+            timeout=parsed_args.timeout)
 
         columns = ('Id', 'Status', 'Message', 'Body')
         data = sorted(data.iteritems())
         results = ((k, v["status"]["status"], v["status"]["message"],
                     format_json(parsed_args, v["body"])
                     ) for k, v in data)
+        return columns, results
+
+
+class ElectionLeave(ElectionCmd):
+    """Ask all peers to leave an election."""
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        service_type, account, reference, cid = self.get_params(parsed_args)
+
+        data = self.app.client_manager.election.election_leave(
+            service_type, account=account, reference=reference, cid=cid,
+            timeout=parsed_args.timeout)
+
+        columns = ('Id', 'Status', 'Message')
+        data = sorted(data.iteritems())
+        results = ((k, v["status"]["status"], v["status"]["message"])
+                   for k, v in data)
         return columns, results
