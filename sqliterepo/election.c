@@ -1675,14 +1675,18 @@ deferred_watch_COMMON(struct deferred_watcher_context_s *d,
 
 	if (d->type == ZOO_SESSION_EVENT) {
 		struct election_member_s *member = _find_member(M, d->path, d->gen);
-		member_reset(member);
-		member_set_status(member, STEP_NONE);
+		/* It happens, when a process has been paused, that d->path is empty,
+		 * and thus we cannot find any specific election member. */
+		if (member != NULL) {
+			member_reset(member);
+			member_set_status(member, STEP_NONE);
+		}
 		/* We cannot run all the election and reset everything, because we
 		 * introduced a sharding of the elections across several ZK clusters
 		 * and the problem concerns only one cluster */
 	} else if (d->type == ZOO_DELETED_EVENT) {
 		struct election_member_s *member = _find_member(M, d->path, d->gen);
-		if (NULL != member) {
+		if (member != NULL) {
 			transition(member, d->evt, NULL);
 			member_unref(member);
 			member_unlock(member);
