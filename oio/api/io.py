@@ -417,7 +417,7 @@ class ChunkReader(object):
                     buf = ''
                     break
 
-                # buffer to read_size
+                # If buf_size is defined, yield bounded data buffers
                 if self.buf_size is not None:
                     while len(buf) >= self.buf_size:
                         read_d = buf[:self.buf_size]
