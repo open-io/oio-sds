@@ -336,111 +336,116 @@ class ChunkReader(object):
         self.request_headers['Range'] = http_header_from_ranges(
             new_ranges)
 
+    @staticmethod
+    def get_next_part(parts_iter):
+        """
+        Gets next part of the body
+
+        NOTE: for the moment only return one part
+              (single range only)
+        """
+        while True:
+            try:
+                with green.ChunkReadTimeout(CHUNK_TIMEOUT):
+                    start, end, length, headers, part = next(
+                        parts_iter[0])
+                return (start, end, length, headers, part)
+            except green.ChunkReadTimeout:
+                # TODO recover
+                raise StopIteration
+
+    def iter_from_resp(self, source, parts_iter, part, chunk):
+        bytes_consumed = 0
+        count = 0
+        buf = ''
+        while True:
+            try:
+                with green.ChunkReadTimeout(self.read_timeout):
+                    data = part.read(READ_CHUNK_SIZE)
+                    count += 1
+                    buf += data
+            except green.ChunkReadTimeout as crto:
+                try:
+                    self.recover(bytes_consumed)
+                except (exc.UnsatisfiableRange, ValueError):
+                    raise
+                except exc.EmptyByteRange:
+                    # we are done already
+                    break
+                buf = ''
+                # find a new source to perform recovery
+                new_source, new_chunk = self._get_source()
+                if new_source:
+                    logger.warn(
+                        "Failed to read from %s (%s), retrying from %s",
+                        chunk, crto, new_chunk)
+                    close_source(source[0])
+                    # switch source
+                    source[0] = new_source
+                    chunk = new_chunk
+                    parts_iter[0] = make_iter_from_resp(source[0])
+                    try:
+                        _j, _j, _j, _j, part = \
+                            self.get_next_part(parts_iter)
+                    except StopIteration:
+                        # failed to recover
+                        # we did our best
+                        return
+
+                else:
+                    logger.warn("Failed to read from %s (%s)", chunk, crto)
+                    # no valid source found to recover
+                    raise
+            else:
+                # discard bytes
+                if buf and self.discard_bytes:
+                    if self.discard_bytes < len(buf):
+                        buf = buf[self.discard_bytes:]
+                        bytes_consumed += self.discard_bytes
+                        self.discard_bytes = 0
+                    else:
+                        self.discard_bytes -= len(buf)
+                        bytes_consumed += len(buf)
+                        buf = ''
+
+                # no data returned
+                # flush out buffer
+                if not data:
+                    if buf:
+                        bytes_consumed += len(buf)
+                        yield buf
+                    buf = ''
+                    break
+
+                # buffer to read_size
+                if self.buf_size is not None:
+                    while len(buf) >= self.buf_size:
+                        read_d = buf[:self.buf_size]
+                        buf = buf[self.buf_size:]
+                        yield read_d
+                        bytes_consumed += len(read_d)
+                else:
+                    yield buf
+                    bytes_consumed += len(buf)
+                    buf = ''
+
+                # avoid starvation by forcing sleep()
+                # every once in a while
+                if count % 10 == 0:
+                    sleep()
+
     def _get_iter(self, chunk, source):
         source = [source]
-
         try:
-            read_size = self.buf_size
             parts_iter = [make_iter_from_resp(source[0])]
-
-            def get_next_part():
-                """
-                Gets next part of the body
-
-                NOTE: for the moment only return one part
-                      (single range only)
-                """
-                while True:
-                    try:
-                        with green.ChunkReadTimeout(CHUNK_TIMEOUT):
-                            start, end, length, headers, part = next(
-                                parts_iter[0])
-                        return (start, end, length, headers, part)
-                    except green.ChunkReadTimeout:
-                        # TODO recover
-                        raise StopIteration
-
-            def iter_from_resp(part):
-                bytes_consumed = 0
-                count = 0
-                buf = ''
-                while True:
-                    try:
-                        with green.ChunkReadTimeout(self.read_timeout):
-                            data = part.read(READ_CHUNK_SIZE)
-                            count += 1
-                            buf += data
-                    except green.ChunkReadTimeout:
-                        try:
-                            self.recover(bytes_consumed)
-                        except (exc.UnsatisfiableRange, ValueError):
-                            raise
-                        except exc.EmptyByteRange:
-                            # we are done already
-                            break
-                        buf = ''
-                        # find a new source to perform recovery
-                        new_source, new_chunk = self._get_source()
-                        if new_source:
-                            logger.warn("Retrying from another source")
-                            close_source(source[0])
-                            # switch source
-                            source[0] = new_source
-                            parts_iter[0] = make_iter_from_resp(source[0])
-                            try:
-                                _j, _j, _j, _j, part = get_next_part()
-                            except StopIteration:
-                                # failed to recover
-                                # we did our best
-                                return
-
-                        else:
-                            # no valid source found to recover
-                            raise
-                    else:
-                        # discard bytes
-                        if buf and self.discard_bytes:
-                            if self.discard_bytes < len(buf):
-                                buf = buf[self.discard_bytes:]
-                                bytes_consumed += self.discard_bytes
-                                self.discard_bytes = 0
-                            else:
-                                self.discard_bytes -= len(buf)
-                                bytes_consumed += len(buf)
-                                buf = ''
-
-                        # no data returned
-                        # flush out buffer
-                        if not data:
-                            if buf:
-                                bytes_consumed += len(buf)
-                                yield buf
-                            buf = ''
-                            break
-
-                        # buffer to read_size
-                        if read_size is not None:
-                            while len(buf) >= read_size:
-                                read_d = buf[:read_size]
-                                buf = buf[read_size:]
-                                yield read_d
-                                bytes_consumed += len(read_d)
-                        else:
-                            yield buf
-                            bytes_consumed += len(buf)
-                            buf = ''
-
-                        # avoid starvation by forcing sleep()
-                        # every once in a while
-                        if count % 10 == 0:
-                            sleep()
-
             body_iter = None
             try:
                 while True:
-                    start, end, length, headers, part = get_next_part()
+                    start, end, length, headers, part = \
+                        self.get_next_part(parts_iter)
                     self.fill_ranges(start, end, length)
-                    body_iter = iter_from_resp(part)
+                    body_iter = self.iter_from_resp(
+                        source, parts_iter, part, chunk)
                     result = {'start': start, 'end': end, 'length': length,
                               'iter': body_iter, 'headers': headers}
                     yield result
