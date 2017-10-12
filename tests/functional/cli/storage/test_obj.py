@@ -115,7 +115,7 @@ class ObjTest(CliTestCase):
         output = self.openio('container list' + opts)
         listing = self.json_loads(output)
         self.assert_list_fields(listing, CONTAINER_LIST_HEADERS)
-        self.assertTrue(len(listing) >= 1)
+        self.assertGreaterEqual(len(listing), 1)
         # TODO verify CONTAINER_NAME in list
 
         opts = self.get_opts([], 'json')
