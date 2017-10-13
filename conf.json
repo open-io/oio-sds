@@ -103,25 +103,30 @@
 				"descr": "",
 				"def": true },
 
-			{ "type": "monotonic", "name": "_cache_m0cs_default_ttl",
+			{ "type": "bool", "name": "oio_resolver_cache_enabled",
+				"key": "resolver.cache.enabled",
+				"descr": "Allows the resolver instances to cache entries",
+				"def": true },
+
+			{ "type": "monotonic", "name": "oio_resolver_m0cs_default_ttl",
 				"key": "resolver.cache.csm0.ttl.default",
 				"descr": "In any service resolver instantiated, sets the default TTL on the entries related to meta0 (meta1 addresses) and conscience (meta0 address)",
 				"def": 0, "min": 0, "max": "max" },
 
-			{ "type": "uint", "name": "_cache_m0cs_default_max",
+			{ "type": "uint", "name": "oio_resolver_m0cs_default_max",
 				"key": "resolver.cache.csm0.max.default",
 				"descr": "In any service resolver instantiated, sets the maximum number of entries related to meta0 (meta1 addresses) and conscience (meta0 address)",
-				"def": 0, "min": 0, "max": "4Mi" },
+				"def": 0, "min": 0, "max": "max" },
 
-			{ "type": "monotonic", "name": "_cache_srv_default_ttl",
+			{ "type": "monotonic", "name": "oio_resolver_srv_default_ttl",
 				"key": "resolver.cache.srv.ttl.default",
 				"descr": "In any service resolver instantiated, sets the default TTL on the meta1 entries (data-bound services)",
 				"def": 0, "min": 0, "max": "max" },
 
-			{ "type": "uint", "name": "_cache_srv_default_max",
+			{ "type": "uint", "name": "oio_resolver_srv_default_max",
 				"key": "resolver.cache.srv.max.default",
 				"descr": "In any service resolver instantiated, sets the maximum number of meta1 entries (data-bound services)",
-				"def": 0, "min": 0, "max": "1Mi" }
+				"def": 0, "min": 0, "max": "max" }
 		]
 	},
 	"metautils": {
@@ -336,12 +341,12 @@
 
 			{ "type": "monotonic", "name": "oio_election_delay_ping_final",
 				"key": "sqliterepo.election.delay.ping_final",
-				"descr": "In the current sqliterepo repository, sets the average amount of time after which a PING will be sent for an established election. This is an average, in fact some jitter is introduced to avoid resonance effects on large-scale platforms.",
-				"def": "15m", "min": "1ms", "max": "1d" },
+				"descr": "In the current sqliterepo repository, sets the average amount of time after which a PING will be sent for an established election. This is an average, in fact some jitter is introduced to avoid resonance effects on large-scale platforms. Should be greater than sqliterepo.election.delay.expire_slave if you want the slaves to actually expire.",
+				"def": "30m", "min": "1ms", "max": "1d" },
 
 			{ "type": "monotonic", "name": "oio_election_delay_expire_MASTER",
 				"key": "sqliterepo.election.delay.expire_master",
-				"descr": "In the current sqliterepo repository, sets the amount of time after which a MASTER election will drop its status and return to the NONE status. This helps recycling established-but-unused elections, and save Zookeeper nodes. Keep this value between sqliterepo.election.delay.expire_slave and sqliterepo.election.delay.expire_slave + sqliterepo.election.delay.ping_final.",
+				"descr": "In the current sqliterepo repository, sets the amount of time after which a MASTER election will drop its status and return to the NONE status. This helps recycling established-but-unused elections, and save Zookeeper nodes. Keep this value between sqliterepo.election.delay.expire_slave and sqliterepo.election.delay.ping_final if you want the election to never expire.",
 				"def": "25m", "min": "1ms", "max": "7d" },
 
 			{ "type": "monotonic", "name": "oio_election_delay_retry_FAILED",
@@ -592,7 +597,7 @@
 
 			{ "type": "uint", "name": "sqlx_periodic_decache_max_bases",
 				"key": "server.periodic_decache.max_bases",
-				"descr": "How many bases may be decached eacch time the background task performs its Dance of Death",
+				"descr": "How many bases may be decached each time the background task performs its Dance of Death",
 				"def": 100, "min": 1, "max": "4Mi" },
 
 			{ "type": "monotonic", "name": "sqlx_periodic_decache_max_delay",

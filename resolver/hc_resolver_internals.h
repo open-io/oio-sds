@@ -31,18 +31,11 @@ struct cached_element_s
 	gchar s[]; /* Must be the last! */
 };
 
-struct lru_ext_s
-{
-	struct lru_tree_s *cache;
-	gint64 ttl;
-	guint max;
-};
-
 struct hc_resolver_s
 {
 	GMutex lock;
-	struct lru_ext_s services;
-	struct lru_ext_s csm0;
+	struct lru_tree_s *services;
+	struct lru_tree_s *csm0;
 	enum hc_resolver_flags_e flags;
 
 	/* called with the IP:PORT string */

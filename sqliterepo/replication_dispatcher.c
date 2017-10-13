@@ -1417,20 +1417,20 @@ _handler_REPLICATE(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_HAS(struct gridd_reply_ctx_s *reply,
-        struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored)
 {
-    GError *err = NULL;
-    gchar *bddname=NULL;
+	GError *err = NULL;
+	gchar *bddname=NULL;
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
-    (void) ignored;
+	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
 		return TRUE;
 	}
 
-    if (NULL != (err = sqlx_repository_has_base2(repo, &n0, &bddname))) {
+	if (NULL != (err = sqlx_repository_has_base2(repo, &n0, &bddname))) {
 		reply->send_error(0, err);
 	} else {
 		if (bddname) {
@@ -1442,7 +1442,7 @@ _handler_HAS(struct gridd_reply_ctx_s *reply,
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
-    return TRUE;
+	return TRUE;
 }
 
 static gboolean
@@ -1469,7 +1469,7 @@ _handler_STATUS(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_ISMASTER(struct gridd_reply_ctx_s *reply,
-        struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	GError *err;
 	struct sqlx_name_inline_s name;

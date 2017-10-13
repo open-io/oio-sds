@@ -61,6 +61,8 @@ License along with this library.
 
 def str2epoch(s):
     s = str(s).strip()
+    if s == "max":
+        return 'G_MAXINT64'
     if s.endswith('ms'):
         return "1"
     if s.endswith('s'):
@@ -74,10 +76,10 @@ def str2epoch(s):
     return s
 
 
-def str2size(s):
+def str2size(s, imax):
     s = str(s).strip()
     if s == "max":
-        return 'G_MAXINT64'
+        return imax
     if s.endswith('ki'):
         return int(s[:-2]) * 1024
     if s.endswith('Mi'):
@@ -284,43 +286,43 @@ class Float(Number):
 
 
 class Size(Number):
-    def __init__(self, conf, ctype):
+    def __init__(self, conf, ctype, imax):
         super(Size, self).__init__(conf)
         self.kind = 'OIO_VARKIND_size'
         self.ctype = ctype
-        self.default = str2size(self.default)
-        self.vmin = str2size(self.vmin)
-        self.vmax = str2size(self.vmax)
+        self.default = str2size(self.default, imax)
+        self.vmin = str2size(self.vmin, imax)
+        self.vmax = str2size(self.vmax, imax)
 
 
 class Int(Size):
     def __init__(self, conf):
-        super(Int, self).__init__(conf, 'gint')
+        super(Int, self).__init__(conf, 'gint', 'G_MAXINT')
 
 
 class Int32(Size):
     def __init__(self, conf):
-        super(Int32, self).__init__(conf, 'gint32')
+        super(Int32, self).__init__(conf, 'gint32', 'G_MAXINT32')
 
 
 class Int64(Size):
     def __init__(self, conf):
-        super(Int64, self).__init__(conf, 'gint64')
+        super(Int64, self).__init__(conf, 'gint64', 'G_MAXINT64')
 
 
 class Uint(Size):
     def __init__(self, conf):
-        super(Uint, self).__init__(conf, 'guint')
+        super(Uint, self).__init__(conf, 'guint', 'G_MAXUINT')
 
 
 class Uint32(Size):
     def __init__(self, conf):
-        super(Uint32, self).__init__(conf, 'guint32')
+        super(Uint32, self).__init__(conf, 'guint32', 'G_MAXUINT32')
 
 
 class Uint64(Size):
     def __init__(self, conf):
-        super(Uint64, self).__init__(conf, 'guint64')
+        super(Uint64, self).__init__(conf, 'guint64', 'G_MAXUINT64')
 
 
 _classes = {

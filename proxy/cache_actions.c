@@ -75,34 +75,6 @@ action_cache_flush_high (struct req_args_s *args)
 }
 
 enum http_rc_e
-action_cache_set_max_high (struct req_args_s *args)
-{
-	hc_resolver_set_max_csm0 (resolver, atoi (TOK ("COUNT")));
-	return _reply_success_json (args, NULL);
-}
-
-enum http_rc_e
-action_cache_set_max_low (struct req_args_s *args)
-{
-	hc_resolver_set_max_services (resolver, atoi (TOK ("COUNT")));
-	return _reply_success_json (args, NULL);
-}
-
-enum http_rc_e
-action_cache_set_ttl_high (struct req_args_s *args)
-{
-	hc_resolver_set_ttl_csm0 (resolver, atoi (TOK ("COUNT")));
-	return _reply_success_json (args, NULL);
-}
-
-enum http_rc_e
-action_cache_set_ttl_low (struct req_args_s *args)
-{
-	hc_resolver_set_ttl_services (resolver, atoi (TOK ("COUNT")));
-	return _reply_success_json (args, NULL);
-}
-
-enum http_rc_e
 action_cache_status (struct req_args_s *args)
 {
 	struct hc_resolver_stats_s s = {{0}};
@@ -135,7 +107,7 @@ _set_config (struct req_args_s *args, struct json_object *jargs)
 	if (json_object_object_length(jargs) <= 0)
 		return _reply_format_error (args, BADREQ("Empty object argument"));
 	json_object_object_foreach(jargs, k, jv) {
-		oio_var_value_one_with_option(k, json_object_get_string(jv));
+		oio_var_value_one(k, json_object_get_string(jv));
 	}
 	return _reply_success_json(args, NULL);
 }

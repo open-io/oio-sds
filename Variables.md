@@ -130,7 +130,7 @@ Used by `gcc`
 
 ### core.period.refresh.cpu_idle
 
-> Sets the miniimal amount of time between two refreshed of the known CPU-idle counters for the current host. Keep this value small.
+> Sets the minimal amount of time between two refreshes of the known CPU-idle counters for the current host. Keep this value small.
 
  * default: **1 * G_TIME_SPAN_SECOND**
  * type: gint64
@@ -187,6 +187,14 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_CORE_SDS_NOSHUFFLE*
 
+### core.sds.version
+
+> The version of the sds. It's used to know the expected metadata of a chunk
+
+ * default: **4.0**
+ * type: string
+ * cmake directive: *OIO_CORE_SDS_VERSION*
+
 ### events.beanstalkd.delay
 
 > Sets the delay on each notification sent to the BEANSTALK endpoint
@@ -207,7 +215,7 @@ Used by `gcc`
 
 ### events.beanstalkd.ttr
 
-> Sets the TTR (time to run) allow on the treatment of the notificatio sent to the beanstalkd
+> Sets the TTR (time to run) allowed on the treatment of the notification sent to the beanstalkd
 
  * default: **120**
  * type: gint64
@@ -261,7 +269,7 @@ Used by `gcc`
 
 ### gridd.timeout.whole.common
 
-> Sets the global timeout of a RPC to e 'meta' service, considering all the possible redirections.
+> Sets the global timeout of a RPC to a 'meta' service, considering all the possible redirections.
 
  * default: **30.0**
  * type: gdouble
@@ -286,6 +294,15 @@ Used by `gcc`
  * cmake directive: *OIO_META0_OUTGOING_TIMEOUT_COMMON_REQ*
  * range: 0.01 -> 60.0
 
+### meta1.outgoing.timeout.common.req
+
+> Sets the timeout to the set of (quick) RPC that query a meta1 service
+
+ * default: **10.0**
+ * type: gdouble
+ * cmake directive: *OIO_META1_OUTGOING_TIMEOUT_COMMON_REQ*
+ * range: 0.01 -> 60.0
+
 ### meta2.batch.maxlen
 
 > When listing a container, limits the number of items to that value.
@@ -294,6 +311,15 @@ Used by `gcc`
  * type: guint
  * cmake directive: *OIO_META2_BATCH_MAXLEN*
  * range: 1 -> 100000
+
+### meta2.container.max_contents
+
+> Maximum number of contents in each container.
+
+ * default: **0**
+ * type: gint64
+ * cmake directive: *OIO_META2_CONTAINER_MAX_CONTENTS*
+ * range: 0 -> G_MAXINT64
 
 ### meta2.container.max_size
 
@@ -323,7 +349,7 @@ Used by `gcc`
 
 ### meta2.reload.lb.period
 
-> Sets the period of the periodical reloading of the Load-balancing state, in the current meta2 service.
+> Sets the period of the periodical reloading of the load-balancing state, in the current meta2 service.
 
  * default: **10**
  * type: gint64
@@ -392,7 +418,7 @@ Used by `gcc`
 
 ### ns.worm
 
-> Is the NS in a WORM (for Write Once, Read Many --but never delete).
+> Is the NS in a WORM (for Write Once, Read Many -- but never delete).
 
  * default: **FALSE**
  * type: gboolean
@@ -460,11 +486,20 @@ Used by `gcc`
 
 ### proxy.outgoing.timeout.conscience
 
-> In a proxy, sets the global timeout for the RPC to the central cosnience service.
+> In a proxy, sets the global timeout for the RPC to the central conscience service.
 
  * default: **2.0**
  * type: gdouble
  * cmake directive: *OIO_PROXY_OUTGOING_TIMEOUT_CONSCIENCE*
+ * range: 0.01 -> 60.0
+
+### proxy.outgoing.timeout.info
+
+> In a proxy, sets the global timeout for 'info' requests issued
+
+ * default: **5.0**
+ * type: gdouble
+ * cmake directive: *OIO_PROXY_OUTGOING_TIMEOUT_INFO*
  * range: 0.01 -> 60.0
 
 ### proxy.outgoing.timeout.stat
@@ -555,7 +590,7 @@ Used by `gcc`
 
 ### proxy.srv_shuffle
 
-> Should the proxy shuffle the meta2 addresses before the query, to do a better load-balancing of the requests.
+> Should the proxy shuffle the services addresses before the query, to do a better load-balancing of the requests.
 
  * default: **TRUE**
  * type: gboolean
@@ -625,34 +660,42 @@ Used by `gcc`
 
 ### resolver.cache.csm0.max.default
 
-> In any service resolver instanciated, sets the maximum number of entries related to meta0 (meta1 addresses) and conscience (meta0 address)
+> In any service resolver instantiated, sets the maximum number of entries related to meta0 (meta1 addresses) and conscience (meta0 address)
 
  * default: **0**
  * type: guint
  * cmake directive: *OIO_RESOLVER_CACHE_CSM0_MAX_DEFAULT*
- * range: 0 -> 4194304
+ * range: 0 -> G_MAXUINT
 
 ### resolver.cache.csm0.ttl.default
 
-> In any service resolver instanciated, sets the default TTL on the entries related meta0 (meta1 addresses) and conscience (meta0 address)
+> In any service resolver instantiated, sets the default TTL on the entries related to meta0 (meta1 addresses) and conscience (meta0 address)
 
  * default: **0**
  * type: gint64
  * cmake directive: *OIO_RESOLVER_CACHE_CSM0_TTL_DEFAULT*
  * range: 0 -> G_MAXINT64
 
+### resolver.cache.enabled
+
+> Allows the resolver instances to cache entries
+
+ * default: **TRUE**
+ * type: gboolean
+ * cmake directive: *OIO_RESOLVER_CACHE_ENABLED*
+
 ### resolver.cache.srv.max.default
 
-> In any service resolver instanciated, sets the maximum number of meta1 entries (data-bound services)
+> In any service resolver instantiated, sets the maximum number of meta1 entries (data-bound services)
 
  * default: **0**
  * type: guint
  * cmake directive: *OIO_RESOLVER_CACHE_SRV_MAX_DEFAULT*
- * range: 0 -> 1048576
+ * range: 0 -> G_MAXUINT
 
 ### resolver.cache.srv.ttl.default
 
-> In any service resolver instanciated, sets the default TTL on the meta1 entries (data-bound services)
+> In any service resolver instantiated, sets the default TTL on the meta1 entries (data-bound services)
 
  * default: **0**
  * type: gint64
@@ -661,7 +704,7 @@ Used by `gcc`
 
 ### server.batch.accept
 
-> In the network core, when the server socket wakes the call to epoll_wait(), that value sets the number of subsequent calls to accept(). Setting it to a low value allows to quickly switch to other events (established connection) and can lead to a strvation on the new connections. Setting to a high value might spend too much time in accepting and ease denials of service (with established but idle cnx).
+> In the network core, when the server socket wakes the call to epoll_wait(), that value sets the number of subsequent calls to accept(). Setting it to a low value allows to quickly switch to other events (established connection) and can lead to a starvation on the new connections. Setting to a high value might spend too much time in accepting and ease denials of service (with established but idle cnx).
 
  * default: **64**
  * type: guint
@@ -670,7 +713,7 @@ Used by `gcc`
 
 ### server.batch.events
 
-> In the network core of a server, how many events do you manage in each call to epoll_wait(). Set to a low value to quickly react on new connections, to an higher value to rather treat established connections. The value is bound to a stack-allocated buffer, keep it rather small.
+> In the network core of a server, how many events do you manage in each call to epoll_wait(). Set to a low value to quickly react on new connections, or to an high value to rather treat established connections. The value is bound to a stack-allocated buffer, keep it rather small.
 
  * default: **128**
  * type: guint
@@ -679,7 +722,7 @@ Used by `gcc`
 
 ### server.cnx.timeout.idle
 
-> In the current server, sets the maximumu amount of time a connection may live without activity since the last activity (i.e. the last reply sent)
+> In the current server, sets the maximum amount of time a connection may live without activity since the last activity (i.e. the last reply sent)
 
  * default: **5 * G_TIME_SPAN_MINUTE**
  * type: gint64
@@ -697,7 +740,7 @@ Used by `gcc`
 
 ### server.cnx.timeout.persist
 
-> In the current server, sets the maximum amount of time a connection is allowed to live, since its creation by the accept() call, wheter it presents activity or not.
+> In the current server, sets the maximum amount of time a connection is allowed to live, since its creation by the accept() call, whether it presents activity or not.
 
  * default: **2 * G_TIME_SPAN_HOUR**
  * type: gint64
@@ -739,9 +782,36 @@ Used by `gcc`
  * cmake directive: *OIO_SERVER_MALLOC_TRIM_SIZE_PERIODIC*
  * range: 0 -> 2147483648
 
+### server.periodic_decache.max_bases
+
+> How many bases may be decached each time the background task performs its Dance of Death
+
+ * default: **100**
+ * type: guint
+ * cmake directive: *OIO_SERVER_PERIODIC_DECACHE_MAX_BASES*
+ * range: 1 -> 4194304
+
+### server.periodic_decache.max_delay
+
+> How long may the decache routine take
+
+ * default: **500 * G_TIME_SPAN_MILLISECOND**
+ * type: gint64
+ * cmake directive: *OIO_SERVER_PERIODIC_DECACHE_MAX_DELAY*
+ * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_MINUTE
+
+### server.periodic_decache.period
+
+> In ticks / jiffies, with approx. 1 tick per second. 0 means never
+
+ * default: **1**
+ * type: guint
+ * cmake directive: *OIO_SERVER_PERIODIC_DECACHE_PERIOD*
+ * range: 0 -> 1048576
+
 ### server.pool.max_idle
 
-> In the current server, sets how long a thread can remain unused before considered as idle (and thus to be stopped)
+> In the current server, sets how long a thread can remain unused before being considered as idle (and thus be stopped)
 
  * default: **30 * G_TIME_SPAN_SECOND**
  * type: gint64
@@ -804,7 +874,7 @@ Used by `gcc`
 
 ### server.udp_queue.max
 
-> In the current server, sets the maximumu length of the queue for UDP messages. When that number has been reached and a new message arrives, the message will be dropped.
+> In the current server, sets the maximum length of the queue for UDP messages. When that number has been reached and a new message arrives, the message will be dropped.
 
  * default: **8192**
  * type: guint
@@ -813,7 +883,7 @@ Used by `gcc`
 
 ### server.udp_queue.ttl
 
-> In the current server, sets the maximum amount of time a queued UDP frame may remain in the queue. When unqueued, if the message was queued for too long, it will be dropped. The purpose of such a mechanism is to avoid clogging the queue and the whole election/cache mechanisms with old messages, thoses message having already been resent.
+> In the current server, sets the maximum amount of time a queued UDP frame may remain in the queue. When unqueued, if the message was queued for too long, it will be dropped. The purpose of such a mechanism is to avoid clogging the queue and the whole election/cache mechanisms with old messages, those messages having already been resent.
 
  * default: **2 * G_TIME_SPAN_SECOND**
  * type: gint64
@@ -830,7 +900,7 @@ Used by `gcc`
 
 ### socket.linger.delay
 
-> When socket.linger.enabled is set to TRUE, socket.linger.delat tells how the socket remains in the TIME_WAIT state after the close() has been called.
+> When socket.linger.enabled is set to TRUE, socket.linger.delay tells how much the socket remains in the TIME_WAIT state after the close() has been called.
 
  * default: **1**
  * type: gint64
@@ -839,7 +909,7 @@ Used by `gcc`
 
 ### socket.linger.enabled
 
-> Set to TRUE to allow the LINGER behavior of TCP sockets, as a default. The connections then end with a normal FIN packet, and go in the TIME_WAIT state for a given delay. Setting to FALSE causes connections to be closed with a RST packet, then avoiding a lot of TCP sockets in the TIME_WAIT state.
+> Set to TRUE to allow the LINGER behavior of TCP sockets, as a default. The connections then end with a normal FIN packet, and go in the TIME_WAIT state for a given delay. Setting to FALSE causes connections to be closed with a RST packet, thus avoiding a lot of TCP sockets in the TIME_WAIT state.
 
  * default: **FALSE**
  * type: gboolean
@@ -863,7 +933,7 @@ Used by `gcc`
 
 ### sqliterepo.cache.heat_threshold
 
-> Sets the heat value below which a databse is considered hot
+> Sets the heat value below which a database is considered hot
 
  * default: **1**
  * type: guint32
@@ -942,7 +1012,7 @@ Used by `gcc`
 
 ### sqliterepo.election.delay.expire_master
 
-> In the current sqliterepo repository, sets the amount of time after which a MASTER election will drop its status and return to the NONE status. This helps recycling established-but-unused elections, and save Zookeeper nodes. Keep this value between sqliterepo.election.delay.expire_slave and sqliterepo.election.delay.expire_slave + sqliterepo.election.delay.ping_final.
+> In the current sqliterepo repository, sets the amount of time after which a MASTER election will drop its status and return to the NONE status. This helps recycling established-but-unused elections, and save Zookeeper nodes. Keep this value between sqliterepo.election.delay.expire_slave and sqliterepo.election.delay.ping_final if you want the election to never expire.
 
  * default: **25 * G_TIME_SPAN_MINUTE**
  * type: gint64
@@ -969,9 +1039,9 @@ Used by `gcc`
 
 ### sqliterepo.election.delay.ping_final
 
-> In the current sqliterepo repository, sets the average amount of time after which a PING will be sent for an established election. This is an average, in facts a jitter is introduced to avoid resonance effects on large-scale platforms.
+> In the current sqliterepo repository, sets the average amount of time after which a PING will be sent for an established election. This is an average, in fact some jitter is introduced to avoid resonance effects on large-scale platforms. Should be greater than sqliterepo.election.delay.expire_slave if you want the slaves to actually expire.
 
- * default: **15 * G_TIME_SPAN_MINUTE**
+ * default: **30 * G_TIME_SPAN_MINUTE**
  * type: gint64
  * cmake directive: *OIO_SQLITEREPO_ELECTION_DELAY_PING_FINAL*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_DAY
@@ -987,12 +1057,20 @@ Used by `gcc`
 
 ### sqliterepo.election.nowait.after
 
-> In the current sqliterepo repository, sets the amount of time spent in an election resolution that will make a worker thread won't wait at all an consider that election is stalled.
+> In the current sqliterepo repository, sets the amount of time spent in an election resolution that will make a worker thread won't wait at all and consider that election is stalled.
 
- * default: **15 * G_TIME_SPAN_SECOND**
+ * default: **15 * G_TIME_SPAN_MINUTE**
  * type: gint64
  * cmake directive: *OIO_SQLITEREPO_ELECTION_NOWAIT_AFTER*
- * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
+ * range: 1 * G_TIME_SPAN_MILLISECOND -> G_MAXINT64
+
+### sqliterepo.election.nowait.enable
+
+> Check of the election is pending since too long. If it is, don't way for it.
+
+ * default: **FALSE**
+ * type: gboolean
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_NOWAIT_ENABLE*
 
 ### sqliterepo.election.task.expire_max_per_round
 
@@ -1014,7 +1092,7 @@ Used by `gcc`
 
 ### sqliterepo.election.wait.quantum
 
-> In the current sqliterepo repository, while loop-waiting for a final election status to be reached, this value sets the unit amount of time of eacch unit wait on the lock. Keep this value rather small to avoid waitin for too long, but not too small to avoid dumping CPU cycles in active waiting.
+> In the current sqliterepo repository, while loop-waiting for a final election status to be reached, this value sets the unit amount of time each unit can wait on the lock. Keep this value rather small to avoid waiting for too long, but not too small to avoid dumping CPU cycles in active waiting.
 
  * default: **1 * G_TIME_SPAN_SECOND**
  * type: gint64
@@ -1041,7 +1119,7 @@ Used by `gcc`
 
 ### sqliterepo.outgoing.timeout.cnx.resync
 
-> Set the connection timeout during RPC to ask for a SLAVE database to be resync on its MASTER
+> Set the connection timeout during RPC to ask for a SLAVE database to be resync'ed to its MASTER
 
  * default: **1.0**
  * type: gdouble
@@ -1167,7 +1245,7 @@ Used by `gcc`
 
 ### sqliterepo.zk.rrd.threshold
 
-> Sets the maximum number of reconnections to the ZK that remains acceptable. Beyond that limit, we consider the current service has been disconnected, and that it loast all its nodes.
+> Sets the maximum number of reconnections to the ZK that remains acceptable. Beyond that limit, we consider that the current service has been disconnected, and that it has lost all its nodes.
 
  * default: **5**
  * type: guint
@@ -1241,6 +1319,15 @@ the cmake command line.
  * cmake directive: *OIO_ENBUG_CLIENT_FAKE_TIMEOUT_THRESHOLD*
  * range: 0 -> 0
 
+### enbug.server.request.failure.threshold
+
+> In testing situations, sets the average ratio of requests failing for a fake reason (from the peer). This helps testing the retrial mechanisms.
+
+ * default: **30**
+ * type: gint32
+ * cmake directive: *OIO_ENBUG_SERVER_REQUEST_FAILURE_THRESHOLD*
+ * range: 0 -> 100
+
 ### enbug.sqliterepo.client.failure.threshold
 
 > In testing situations, sets the average ratio of requests failing for a fake reason (from the peer). This helps testing the retrial mechanisms.
@@ -1261,7 +1348,7 @@ the cmake command line.
 
 ### enbug.sqliterepo.synchro.failure
 
-> Fake Error rate on synchronism RPC (a.k.a. ZK) 
+> Fake error rate on synchronism RPC (a.k.a. ZK) 
 
  * default: **10**
  * type: gint32
