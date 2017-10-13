@@ -444,34 +444,66 @@ struct oio_sds_list_item_s
 
 struct oio_sds_list_listener_s
 {
+	/** An arbitraty pointer that will be passed as-is to all the hooks
+	 * producing an output for this listing. */
 	void *ctx;
 
-	/* called for each item listed */
+	/** called for each item listed */
 	int (*on_item) (void *ctx, const struct oio_sds_list_item_s *item);
 
-	/* called for each sub-prefix detected (depends on the delimiter) */
+	/** called for each sub-prefix detected (depends on the delimiter) */
 	int (*on_prefix) (void *ctx, const char *prefix);
 
-	/* called once, with no warranty to be called before 'on_item' nor
+	/** called once, with no warranty to be called before 'on_item' nor
 	 * 'on_bound' */
 	int (*on_bound) (void *ctx, const char *next_marker);
+
+	/** How many items have been returned, eventually */
 	size_t out_count;
+
+	/** Has the list been truncated. If so, a subsequent call to list with
+	 * the appropriate marker shoudl be issued for a full list. */
 	int out_truncated;
 };
 
+/**
+ * List the object present in the container.
+ *
+ * @param sds
+ * @param param
+ * @param listener
+ * @return
+ */
 struct oio_error_s* oio_sds_list (struct oio_sds_s *sds,
 		struct oio_sds_list_param_s *param,
 		struct oio_sds_list_listener_s *listener);
 
 /* Quota -------------------------------------------------------------------- */
 
+/**
+ * Report the usage of a container.
+ */
 struct oio_sds_usage_s
 {
+	/** The number of bytes used for the storage */
 	size_t used_bytes;
+
+	/** The maximum number of  */
 	size_t quota_bytes;
+
+	/** The number of objects present in the container. */
 	int used_objects;
 };
 
+/**
+ * Report the usage of the container identified by the oio_url_s `u`.
+ *
+ * @param sds A pointer to a valid oio_sds_s.
+ * @param u A pointer to a valid oio_url_s.
+ * @param out output variable, filled with the stats upon success.
+ * @return NULL if the requests succeeds, or an oio_error_s pointer otherwise,
+ *         to be freed with oio_error_free().
+ */
 struct oio_error_s* oio_sds_get_usage (struct oio_sds_s *sds,
 		struct oio_url_s *u, struct oio_sds_usage_s *out);
 
@@ -479,9 +511,19 @@ struct oio_error_s* oio_sds_get_usage (struct oio_sds_s *sds,
 
 /* Misc. -------------------------------------------------------------------- */
 
+/**
+ * Drain the content identified by `u`, a.k.a. make it remain in the directory
+ * but not point to valid contents.
+ *
+ * @param sds a pointer to a valid sds client.
+ * @param u a pointer to a valid oio_url_s identifying the content.
+ * @return NULL in case of success, a valid error pointer otherwise
+ */
 struct oio_error_s* oio_sds_drain(struct oio_sds_s *sds, struct  oio_url_s *u);
 
-/** works with fully qualified urls (content) */
+/**
+ * Works with fully qualified urls (content)
+ */
 struct oio_error_s* oio_sds_delete (struct oio_sds_s *sds, struct oio_url_s *u);
 
 /** currently works with fully qualified urls (content) */
@@ -514,7 +556,8 @@ struct oio_error_s* oio_sds_set_container_properties(struct oio_sds_s *sds,
 struct oio_error_s* oio_sds_link (struct oio_sds_s *sds, struct oio_url_s *url,
 		const char *content_id);
 
-/** Attempts a link with oio_sds_link(), then calls oio_sds_upload_from_source()
+/**
+ * Attempts a link with oio_sds_link(), then calls oio_sds_upload_from_source()
  * in case of error, if the link failed because of a content not found.
  * The underlying call to oio_sds_link() requires the 'content_id' field of
  * 'dst' to be set to a non-NULL value. */
