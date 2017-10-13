@@ -128,7 +128,7 @@ void oio_log_to_syslog (void);
  * wants to another format, it is its responsibility. */
 void oio_log_to_stderr (void);
 
-/** As the name suggests, it turns of the log output from the OpenIO's SDK */
+/** As the name suggests, it turns off the log output from the OpenIO's SDK */
 void oio_log_nothing (void);
 
 /** Increases the verbosity of the internal logging output.
@@ -165,7 +165,7 @@ void oio_error_pfree (struct oio_error_s **pe);
 /**
  * Return an error code associated with the error structure.
  * @param e May be NULL
- * @return 0 is e is NULL, an integer elsewhere
+ * @return 0 is e is NULL, an integer otherwise
  */
 int oio_error_code (const struct oio_error_s *e);
 
@@ -256,7 +256,7 @@ struct oio_sds_dl_src_s
 {
 	struct oio_url_s *url;
 
-	/* if not set, the whole content will be read at once.
+	/** if not set, the whole content will be read at once.
 	 * To be set, it must contain a pointer to a NULL-terminated array
 	 * of pointers to ranges. */
 	struct oio_sds_dl_range_s **ranges;
@@ -265,19 +265,23 @@ struct oio_sds_dl_src_s
 struct oio_error_s* oio_sds_download (struct oio_sds_s *sds,
 		struct oio_sds_dl_src_s *src, struct oio_sds_dl_dst_s *dst);
 
-/** Downloads the whole file
- * works with fully qualified urls (content) and local paths */
+/**
+ * Downloads the whole file
+ * works with fully qualified urls (content) and local paths
+ */
 struct oio_error_s* oio_sds_download_to_file (struct oio_sds_s *sds,
 		struct oio_url_s *u, const char *local);
 
-/** Tells how is the ccontent internally split.
+/**
+ * Tells how is the content internally split.
+ *
  * Helps applications to paginate the downloads, with pages aligned on chunks
  * boundaries.
- *
  * @param cb_data not even checked, implementation-dependant
  * @param cb_info ignored if NULL
  * @param cb_metachunks ignored if NULL
- * @param cb_props ignoed if NULL */
+ * @param cb_props ignored if NULL
+ */
 struct oio_error_s* oio_sds_show_content (struct oio_sds_s *sds,
 		struct oio_url_s *u, void *cb_data,
 		oio_sds_info_reporter_f cb_info,
