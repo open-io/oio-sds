@@ -1196,7 +1196,7 @@ _reload_lb_world(struct oio_lb_world_s *lbw, struct oio_lb_s *lb)
 		GSList *srv = NULL;
 		GError *e = conscience_get_services(SRV.ns_name, srvtype, FALSE, &srv);
 		if (e) {
-			GRID_WARN("Failed to load the list of [%s] in NS=%s", SRV.ns_name, srvtype);
+			GRID_WARN("Failed to load the list of [%s] in NS=%s", srvtype, SRV.ns_name);
 			any_loading_error = TRUE;
 		}
 		g_ptr_array_add(tabsrv, srv);

@@ -639,10 +639,15 @@ retry:
 					if (!urgent && _cache_max_waiting > 0 &&
 							base->count_waiting >= _cache_max_waiting) {
 						if (_cache_fail_on_heavy_load) {
-							err = NEWERROR(CODE_EXCESSIVE_LOAD, "Load too high");
+							err = NEWERROR(CODE_EXCESSIVE_LOAD, "Load too high "
+									"(%"G_GUINT32_FORMAT"/%"G_GUINT32_FORMAT")",
+									base->count_waiting, _cache_max_waiting);
 							break;
 						} else if (_cache_alert_on_heavy_load) {
-							GRID_WARN("Load too high on [%s]", hashstr_str(hname));
+							GRID_WARN("Load too high on [%s] "
+									"(%"G_GUINT32_FORMAT"/%"G_GUINT32_FORMAT")",
+									hashstr_str(hname),
+									base->count_waiting, _cache_max_waiting);
 						}
 					}
 
