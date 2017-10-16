@@ -239,7 +239,7 @@ _patch_configuration_fd(void)
 	// internal mechanics (notifications, epoll, etc).
 	const guint total = maxfd - 32;
 
-	const guint reserved = sqliterepo_repo_max_bases_soft
+	const guint reserved = sqliterepo_repo_max_bases_hard
 		+ server_fd_max_passive + sqliterepo_fd_max_active;
 
 	// The operator already reserved to many connections, and we cannot
@@ -248,10 +248,10 @@ _patch_configuration_fd(void)
 		GRID_NOTICE("Too many descriptors have been reserved (%u), "
 				"please reconfigure the service or extend the system limit "
 				"(currently set to %u).", reserved, maxfd);
-		if (!sqliterepo_repo_max_bases_soft) {
-			sqliterepo_repo_max_bases_soft = MIN(1024, sqliterepo_repo_max_bases_hard);
+		if (!sqliterepo_repo_max_bases_hard) {
+			sqliterepo_repo_max_bases_hard = 1024;
 			GRID_WARN("maximum # of bases not set, arbitrarily set to %u",
-								sqliterepo_repo_max_bases_soft);
+								sqliterepo_repo_max_bases_hard);
 		}
 		if (!server_fd_max_passive) {
 			server_fd_max_passive = 64;
@@ -269,10 +269,9 @@ _patch_configuration_fd(void)
 		guint limits[3] = {G_MAXUINT, G_MAXUINT, G_MAXUINT};
 		do {
 			guint i=0;
-			if (sqliterepo_repo_max_bases_soft <= 0) {
-				to_be_set[i] = &sqliterepo_repo_max_bases_soft;
-				limits[i] = CLAMP(limits[i],
-						((100 * total) / 30), sqliterepo_repo_max_bases_hard);
+			if (sqliterepo_repo_max_bases_hard <= 0) {
+				to_be_set[i] = &sqliterepo_repo_max_bases_hard;
+				limits[i] = CLAMP(limits[i], ((100 * total) / 30), 131072);
 				i++;
 			}
 			if (!sqliterepo_fd_max_active) {
@@ -287,7 +286,8 @@ _patch_configuration_fd(void)
 			}
 		} while (0);
 
-		// Fan out all the available FD on each slot that dod not reach its max
+		// Fan out all the available FD on each slot that has not
+		// reached its maximum.
 		while (available > 0) {
 			gboolean any = FALSE;
 			for (guint i=0; to_be_set[i] && available > 0 ;i++) {

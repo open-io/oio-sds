@@ -441,12 +441,12 @@
 
 			{ "type": "uint", "name": "sqliterepo_repo_max_bases_hard",
 				"key": "sqliterepo.repo.hard_max",
-				"descr": "Sets how many databases can be kept simultaneously open in the current service.",
-				"def": "32ki", "min": "8", "max": "128ki" },
+				"descr": "Sets how many databases can be kept simultaneously open (in use or idle) in the current service. If defined to 0, it is set to 30% of available file descriptors.",
+				"def": "0", "min": "0", "max": "128ki" },
 
 			{ "type": "uint", "name": "sqliterepo_repo_max_bases_soft",
 				"key": "sqliterepo.repo.soft_max",
-				"descr": "Sets how many databases can be kept simultaneously open in the current service.",
+				"descr": "Sets how many databases can be in use at the same moment in the current service. If defined to 0, it is set to sqliterepo.repo.hard_max.",
 				"def": "0", "min": "0", "max": "128ki" },
 
 			{ "type": "uint", "name": "sqliterepo_getvers_max_retries",
@@ -456,8 +456,8 @@
 
 			{ "type": "uint", "name": "sqliterepo_fd_max_active",
 				"key": "sqliterepo.repo.fd_max_active",
-				"descr": "Set to 0 for an automatic detection",
-				"def": 0, "min": 0, "max": "4ki" }
+				"descr": "Maximum number of simultaneous outgoing connections. Set to 0 for an automatic detection (30% of available file descriptors).",
+				"def": 0, "min": 0, "max": "64ki" }
 		]
 	},
 	"rdir": {
@@ -477,8 +477,8 @@
 		"variables": [
 			{ "type": "uint", "name": "server_fd_max_passive",
 				"key": "server.fd_max_passive",
-				"descr": "Set to 0 for an automatic detection",
-				"def": 0, "min": 0, "max": "4ki" },
+				"descr": "Maximum number of simultaneous incoming connections. Set to 0 for an automatic detection (40% of available file descriptors).",
+				"def": 0, "min": 0, "max": "64ki" },
 
 			{ "type": "bool", "name": "oio_udp_allowed",
 				"key": "udp_allowed",
