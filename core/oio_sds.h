@@ -16,13 +16,13 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
+#ifndef OIO_SDS__sdk__oio_sds_h
+#define OIO_SDS__sdk__oio_sds_h 1
+
 /**
  * @addtogroup oio-api-c
  * @{
  */
-
-#ifndef OIO_SDS__sdk__oio_sds_h
-#define OIO_SDS__sdk__oio_sds_h 1
 
 #include <stdlib.h>
 #include <core/oiourl.h>
@@ -97,10 +97,12 @@ typedef void (*oio_sds_info_reporter_f) (void *cb_data,
 typedef void (*oio_sds_property_reporter_f) (void *cb_data,
 		const char *key, const char *value);
 
-/* How hints on the internal chunking are reported.
+/**
+ * How hints on the internal chunking are reported.
  * @param seq the sequence number
  * @param offset the offset of the metachunk in the whole content
- * @param length the size of the metachunk */
+ * @param length the size of the metachunk
+ */
 typedef void (*oio_sds_metachunk_reporter_f) (void *cb_data,
 		unsigned int seq, size_t offset, size_t length);
 
@@ -108,7 +110,7 @@ typedef void (*oio_sds_metachunk_reporter_f) (void *cb_data,
 
 /* API-global --------------------------------------------------------------- */
 
-/** OpenIO SDK internally relies on GLib-2.0 logging features,
+/* OpenIO SDK internally relies on GLib-2.0 logging features,
  * so this only sets a callback into GLib's system. The calling app
  * keeps the freedom to change this. */
 
@@ -119,23 +121,33 @@ typedef void (*oio_sds_metachunk_reporter_f) (void *cb_data,
 extern volatile int oio_sds_default_autocreate;
 
 
-/** Configures the GLib-2.0 to send the logging output to the syslog. This
- * function does not call openlog() */
+/**
+ * Configures the GLib-2.0 to send the logging output to the syslog. This
+ * function does not call openlog()
+ */
 void oio_log_to_syslog (void);
 
-/** Configures the GLib-2.0 to send the logging output to the standard error
- * output. The format follow an internal rules of OpeIO. If the walling app
- * wants to another format, it is its responsibility. */
+/**
+ * Configures the GLib-2.0 to send the logging output to the standard error
+ * output.
+ *
+ * The format follow an internal rules of OpeIO. If the walling app
+ * wants to another format, it is its responsibility.
+ */
 void oio_log_to_stderr (void);
 
-/** As the name suggests, it turns off the log output from the OpenIO's SDK */
+/**
+ * As the name suggests, it turns off the log output from the OpenIO's SDK
+ */
 void oio_log_nothing (void);
 
-/** Increases the verbosity of the internal logging output.
+/**
+ * Increases the verbosity of the internal logging output.
  * OpenIO's log levels are ERROR, WARNING, NOTICE, INFO, DEBUG, TRACE.
  * The default level is WARNING.
  * DEBUG: output the SDK behavior.
- * TRACE: also outputs the licurl behavior. */
+ * TRACE: also outputs the licurl behavior.
+ */
 void oio_log_more (void);
 
 #ifdef OIO_SDS_VERSION
@@ -145,7 +157,6 @@ void oio_log_more (void);
  * level. */
 unsigned int oio_sds_version (void);
 #endif /* defined OIO_SDS_VERSION */
-
 
 
 /* Error management --------------------------------------------------------- */
@@ -180,7 +191,13 @@ const char * oio_error_message (const struct oio_error_s *e);
 
 /* Client-related features -------------------------------------------------- */
 
-/* constructor */
+/**
+ * Prepare an OpenIO SDS client.
+ *
+ * @param out A placeholder for the 
+ * @param ns
+ * @return NULL if an error occured, or a pointer to a valid OpenIO SDS client.
+ */
 struct oio_error_s * oio_sds_init (struct oio_sds_s **out, const char *ns);
 
 /* destructor */
