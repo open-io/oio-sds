@@ -740,12 +740,12 @@ Used by `gcc`
 
 ### server.fd_max_passive
 
-> Set to 0 for an automatic detection
+> Maximum number of simultaneous incoming connections. Set to 0 for an automatic detection (40% of available file descriptors).
 
  * default: **0**
  * type: guint
  * cmake directive: *OIO_SERVER_FD_MAX_PASSIVE*
- * range: 0 -> 4096
+ * range: 0 -> 65536
 
 ### server.log_outgoing
 
@@ -1182,12 +1182,12 @@ Used by `gcc`
 
 ### sqliterepo.repo.fd_max_active
 
-> Set to 0 for an automatic detection
+> Maximum number of simultaneous outgoing connections. Set to 0 for an automatic detection (30% of available file descriptors).
 
  * default: **0**
  * type: guint
  * cmake directive: *OIO_SQLITEREPO_REPO_FD_MAX_ACTIVE*
- * range: 0 -> 4096
+ * range: 0 -> 65536
 
 ### sqliterepo.repo.getvers_max_retries
 
@@ -1200,16 +1200,16 @@ Used by `gcc`
 
 ### sqliterepo.repo.hard_max
 
-> Sets how many databases can be kept simultaneously open in the current service.
+> Sets how many databases can be kept simultaneously open (in use or idle) in the current service. If defined to 0, it is set to 30% of available file descriptors.
 
- * default: **32768**
+ * default: **0**
  * type: guint
  * cmake directive: *OIO_SQLITEREPO_REPO_HARD_MAX*
- * range: 8 -> 131072
+ * range: 0 -> 131072
 
 ### sqliterepo.repo.soft_max
 
-> Sets how many databases can be kept simultaneously open in the current service.
+> Sets how many databases can be in use at the same moment in the current service. If defined to 0, it is set to sqliterepo.repo.hard_max.
 
  * default: **0**
  * type: guint

@@ -499,7 +499,8 @@ sqlx_cache_init(void)
 	BEACON_RESET(&(cache->beacon_used));
 
 	cache->bases_used = 0;
-	cache->bases_max_hard = sqliterepo_repo_max_bases_hard;
+	// The default is only used during unit tests
+	cache->bases_max_hard = sqliterepo_repo_max_bases_hard? : 1024;
 	cache->bases_max_soft = cache->bases_max_hard;
 	cache->bases = g_malloc0(cache->bases_max_hard * sizeof(sqlx_base_t));
 
