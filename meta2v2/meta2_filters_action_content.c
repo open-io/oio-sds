@@ -218,11 +218,11 @@ meta2_filter_action_check_content(struct gridd_filter_ctx_s * ctx,
 		g_string_append(gs, message->str);
 		g_string_append(gs, "}}");
 		oio_events_queue__send (m2b->notifier, g_string_free (gs, FALSE));
-		g_string_free(message,TRUE);
 		if (e->code == CODE_CONTENT_CORRUPTED)
 			rc = FILTER_KO;
 		g_clear_error(&e);
 	}
+	g_string_free(message, TRUE);
 	return rc;
 }
 
