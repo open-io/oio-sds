@@ -376,7 +376,7 @@
 
 			{ "type": "uint", "name": "sqliterepo_election_task_PING_period",
 				"key": "sqliterepo.election.task.ping.period",
-				"descr": "In jiffies, how often a PING is maybe triggered for elections in a final state.",
+				"descr": "In jiffies, how often a PING may be triggered for elections in a final state.",
 				"def": "15", "min": 0, "max": "86400" },
 
 			{ "type": "monotonic", "name": "sqliterepo_election_task_EXIT_alert",
@@ -386,7 +386,7 @@
 
 			{ "type": "monotonic", "name": "sqliterepo_election_task_TIMER_alert",
 				"key": "sqliterepo.election.task.timer.alert",
-				"descr": "When timer are raised on elections, report a warning if the background task holds the lock longer than this value.",
+				"descr": "When timers are raised on elections, report a warning if the background task holds the lock longer than this value.",
 				"def": "200ms", "min": 0, "max": "max" },
 
 			{ "type": "monotonic", "name": "sqliterepo_election_task_PING_alert",
