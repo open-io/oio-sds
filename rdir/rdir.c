@@ -1489,10 +1489,13 @@ grid_main_specific_fini(void)
 }
 
 static void
-_task_malloc_trim(gpointer p)
+_task_malloc_trim(gpointer p UNUSED)
 {
-	(void) p;
-	malloc_trim(malloc_trim_size_periodic);
+	VARIABLE_PERIOD_DECLARE();
+	if (VARIABLE_PERIOD_SKIP(sqlx_periodic_malloctrim_period))
+		return;
+
+	malloc_trim (sqlx_periodic_malloctrim_size);
 }
 
 #define CFG(K) g_key_file_get_string(gkf, CFG_GROUP, (K), &err)
@@ -1620,7 +1623,7 @@ grid_main_configure(int argc, char **argv)
 
 	/* Ask for a periodic release of the memory slices kept by the process */
 	gtq_admin = grid_task_queue_create("admin");
-	grid_task_queue_register(gtq_admin, 300, _task_malloc_trim, NULL, NULL);
+	grid_task_queue_register(gtq_admin, 1, _task_malloc_trim, NULL, NULL);
 	return TRUE;
 }
 

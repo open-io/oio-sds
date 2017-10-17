@@ -3332,68 +3332,107 @@ transition_error(struct election_member_s *member,
 	return transition(member, evt, NULL);
 }
 
-static GSList *
+static GPtrArray *
 _DEQUE_extract (struct deque_beacon_s *beacon)
 {
-	GSList *out = NULL;
+	GPtrArray *out = g_ptr_array_sized_new(beacon->count);
 	for (struct election_member_s *m=beacon->front; m ;m=m->next)
-		out = g_slist_prepend (out, m);
-	return g_slist_reverse (out);
+		g_ptr_array_add(out, m);
+	return out;
+}
+
+static guint
+_play_exit_on_state(struct election_manager_s *M, struct deque_beacon_s *beacon)
+{
+	if (beacon->front == NULL)
+		return 0;
+
+	const gint64 now = oio_ext_monotonic_time();
+	guint count = 0;
+	GPtrArray *members = _DEQUE_extract (beacon);
+	for (guint i=0; i<members->len ;++i) {
+		struct election_member_s *m = members->pdata[i];
+
+		/* Election in NONE state ... */
+		if (!_is_over(now, m->last_status, oio_election_delay_expire_NONE))
+			continue;
+
+		/* ... for longer than acceptable */
+		if (m->refcount != 1)
+			continue;
+
+		/* ... but not referenced by anyone */
+		count ++;
+		_DEQUE_remove (m);
+		g_tree_remove (M->members_by_key, m->key);
+		member_unref (m);
+		member_destroy (m);
+	}
+	g_ptr_array_free (members, TRUE);
+	return count;
 }
 
 guint
-election_manager_play_timers (struct election_manager_s *manager, guint max)
+election_manager_play_exits (struct election_manager_s *manager)
 {
-	static const int steps[] = {
-		STEP_NONE, STEP_FAILED, STEP_MASTER, STEP_SLAVE,
-		-1 /* stops the iteration */
-	};
+	guint count = 0;
+	struct deque_beacon_s *beacon = manager->members_by_state + STEP_NONE;
+	if (beacon->front) {
+		_manager_lock(manager);
+		count += _play_exit_on_state(manager, beacon);
+		_manager_unlock(manager);
+	}
+	return count;
+}
+
+static guint
+_send_NONE_to_state(struct deque_beacon_s *beacon)
+{
+	if (!beacon->front)
+		return 0;
 
 	guint count = 0;
-	gint64 now = oio_ext_monotonic_time();
-
-	_manager_lock(manager);
-	for (const int *pi=steps; *pi >= 0 && (!max || count < max) ;++pi) {
-		struct deque_beacon_s *beacon = manager->members_by_state + *pi;
-		if (!beacon->front)
-			continue;
-		/* working on an item of the list might alterate the list, and even
-		   move the item itself to the tail. so working with a temp. list
-		   avoids loops and wrong game on pointers. */
-		GSList *l0 = _DEQUE_extract (beacon);
-		for (GSList *l=l0; l && (!max || count < max) ;l=l->next) {
-
-			struct election_member_s *m = l->data;
-			if (m->step == STEP_NONE) {
-				if (_is_over(now, m->last_status, oio_election_delay_expire_NONE)) {
-					/* Election in NONE state for longer than acceptable */
-					if (m->refcount == 1) {
-						/* In addition, not referenced by anyone */
-						count ++;
-						_DEQUE_remove (m);
-						g_tree_remove (manager->members_by_key, m->key);
-						member_unref (m);
-						member_destroy (m);
-					}
-				}
-			} else {
-				/* Just send a ping */
-				enum election_step_e pre = m->step;
-				_member_react (m, EVT_NONE, NULL);
-				enum election_step_e post = m->step;
-				if (pre == post) {
-					/* Avoid looping on that item, so let's shift it from the
-					 * head then push it to the tail of the queue. */
-					_DEQUE_remove (m);
-					_DEQUE_add (m);
-				}
-			}
-		}
-		g_slist_free (l0);
-		l0 = NULL;
+	GPtrArray *members = _DEQUE_extract (beacon);
+	for (guint i=0; i<members->len ;++i) {
+		struct election_member_s *m = members->pdata[i];
+		_member_react (m, EVT_NONE, NULL);
+		count ++;
 	}
-	_manager_unlock(manager);
+	g_ptr_array_free (members, TRUE);
+	return count;
+}
 
+guint
+election_manager_play_timers (struct election_manager_s *manager)
+{
+	static const int steps[] = { STEP_FAILED, -1 };
+
+	guint count = 0;
+	for (const int *pi=steps; *pi >= 0 ;++pi) {
+		struct deque_beacon_s *beacon = manager->members_by_state + *pi;
+		if (beacon->front) {
+			_manager_lock(manager);
+			count += _send_NONE_to_state(beacon);
+			_manager_unlock(manager);
+		}
+	}
+	return count;
+}
+
+guint
+election_manager_play_final_pings (struct election_manager_s *manager)
+{
+	static const int steps[] = { STEP_MASTER, STEP_SLAVE, -1 };
+
+	guint count = 0;
+	for (const int *pi=steps; *pi >= 0 ;++pi) {
+		struct deque_beacon_s *beacon = manager->members_by_state + *pi;
+		if (beacon->front) {
+			_manager_lock(manager);
+			count += _send_NONE_to_state(beacon);
+			_manager_unlock(manager);
+		}
+	}
 	return count;
 }
 
