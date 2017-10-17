@@ -95,7 +95,7 @@ GByteArray* sqlx_pack_STATUS(const struct sqlx_name_s *name);
 GByteArray* sqlx_pack_GETVERS(const struct sqlx_name_s *name);
 
 GByteArray* sqlx_pack_SNAPSHOT(const struct sqlx_name_s *name, const gchar *source,
-		const gchar *cid);
+		const gchar *cid, const gchar *seq_num);
 GByteArray* sqlx_pack_PIPEFROM(const struct sqlx_name_s *name, const gchar *source);
 GByteArray* sqlx_pack_PIPETO(const struct sqlx_name_s *name, const gchar *target);
 GByteArray* sqlx_pack_RESYNC(const struct sqlx_name_s *name);

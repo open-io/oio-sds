@@ -83,6 +83,7 @@ License along with this library.
 #define NAME_MSGKEY_PREFIX             "PREFIX"
 #define NAME_MSGKEY_QUERY              "Q"
 #define NAME_MSGKEY_REPLICAS           "REPLICAS"
+#define NAME_MSGKEY_SEQNUM             "SEQ_NUM"
 #define NAME_MSGKEY_SPARE              "SPARE"
 #define NAME_MSGKEY_SRC                "SRC"
 #define NAME_MSGKEY_STATUS             "S"

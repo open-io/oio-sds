@@ -499,37 +499,45 @@ _dump_chunked(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 }
 
 static GError *
-_pipe_from(const gchar *source, struct sqlx_repository_s *repo,
-		struct sqlx_name_s *name)
+_pipe_base_from(const gchar *source, struct sqlx_repository_s *repo,
+		struct sqlx_name_s *name, struct restore_ctx_s **ctx)
 {
 	GError *err;
 	gchar path[LIMIT_LENGTH_VOLUMENAME+32] = {0};
-	struct restore_ctx_s *ctx = NULL;
 
 	GRID_TRACE2("%s(%s,%p,%s,%s)", __FUNCTION__,
 			source, repo, name->base, name->type);
 
 	g_snprintf(path, sizeof(path), "%s/tmp/restore.sqlite3.XXXXXX",
 			repo->basedir);
-	err = restore_ctx_create(path, &ctx);
+	err = restore_ctx_create(path, ctx);
 	if (err != NULL)
-		goto end;
+		return err;
 
-	GError *_pipe_from_cb(GByteArray *part, gint64 remaining, gpointer arg) {
+	GError *_pipe_from_cb(GByteArray *part, gint64 remaining, gpointer arg)
+	{
 		(void) arg;
 		GError *err2 = NULL;
-		GRID_DEBUG("PIPEFROM received block of %u bytes, %"
+		GRID_DEBUG ("PIPEFROM received block of %u bytes, %"
 				G_GINT64_FORMAT" bytes remaining", part->len, remaining);
-		err2 = restore_ctx_append(ctx, part->data, part->len);
-		metautils_gba_unref(part);
+		err2 = restore_ctx_append(*ctx, part->data, part->len);
+		metautils_gba_unref (part);
 		return err2;
 	}
 
-	err = peer_dump(source, name, TRUE, _pipe_from_cb, NULL);
+	return peer_dump(source, name, TRUE, _pipe_from_cb, NULL);
+}
+
+static GError *
+_pipe_from(const gchar *source, struct sqlx_repository_s *repo,
+		struct sqlx_name_s *name)
+{
+	GError *err;
+	struct restore_ctx_s *ctx = NULL;
+	err = _pipe_base_from(source, repo, name, &ctx);
 	if (!err)
 		err = _restore2(repo, name, ctx->path);
 
-end:
 	restore_ctx_clear(&ctx);
 	return err;
 }
@@ -539,33 +547,11 @@ _snapshot_from(const gchar *source, struct sqlx_repository_s *repo,
 		struct sqlx_name_s *source_name, struct sqlx_name_s *dest_name)
 {
 	GError *err = NULL;
-	gchar path[LIMIT_LENGTH_VOLUMENAME+32] = {0};
 	struct restore_ctx_s *ctx = NULL;
-
-	GRID_TRACE2("%s(%s,%p,%s,%s)", __FUNCTION__, source, repo,
-			source_name->base, source_name->type);
-
-	g_snprintf(path, sizeof(path), "%s/tmp/restore.sqlite3.XXXXXX",
-			repo->basedir);
-	err = restore_ctx_create(path, &ctx);
-	if (err)
-		goto end;
-
-	GError *_pipe_from_cb(GByteArray *part, gint64 remaining, gpointer arg) {
-		(void) arg;
-		GError *err2 = NULL;
-		GRID_DEBUG("PIPEFROM received block of %u bytes, %" G_GINT64_FORMAT
-			" bytes remaining", part->len, remaining);
-		err2 = restore_ctx_append(ctx, part->data, part->len);
-		metautils_gba_unref(part);
-		return err2;
-	}
-
-	err = peer_dump(source, source_name, TRUE, _pipe_from_cb, NULL);
+	err = _pipe_base_from(source, repo, source_name, &ctx);
 	if (!err)
 		err = _restore_snapshot(repo, dest_name, ctx->path);
 
-end:
 	restore_ctx_clear(&ctx);
 	return err;
 }
@@ -1778,7 +1764,8 @@ _handler_SNAPSHOT(struct gridd_reply_ctx_s *reply,
 {
 	GError *err;
 	gchar source[64];
-	gchar cid[65];
+	gchar cid[STRLEN_CONTAINERID];
+	gchar seq_num[10];
 	gchar *full_base_name;
 	struct sqlx_name_inline_s name;
 	NAME2CONST(no, name);
@@ -1787,11 +1774,12 @@ _handler_SNAPSHOT(struct gridd_reply_ctx_s *reply,
 		reply->send_error(0, err);
 		return TRUE;
 	}
-	EXTRACT_STRING("SRC", source);
-	EXTRACT_STRING("CID", cid);
-	reply->subject("%s.%s|%s", name.base, name.type, source);
 
-	full_base_name = g_strconcat(cid, ".1", NULL);
+	EXTRACT_STRING(NAME_MSGKEY_SRC, source);
+	EXTRACT_STRING(NAME_MSGKEY_CONTAINERID, cid);
+	EXTRACT_STRING(NAME_MSGKEY_SEQNUM, seq_num);
+	reply->subject("%s.%s|%s", name.base, name.type, source);
+	full_base_name = g_strconcat(cid, seq_num, NULL);
 	struct sqlx_name_s src = {name.ns, full_base_name ,name.type};
 	if ((err = _snapshot_from(source, repo, &src, &no)))
 		reply->send_error(0, err);

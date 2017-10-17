@@ -1211,9 +1211,11 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 
 	struct json_object *jaccount = NULL;
 	struct json_object *jcontainer = NULL;
+	struct json_object *jseq_num = NULL;
 	struct oio_ext_json_mapping_s m[] = {
 		{"account", &jaccount, json_type_string, 1},
 		{"container", &jcontainer, json_type_string, 1},
+		{"seq_num", &jseq_num, json_type_string, 0},
 		{NULL, NULL, 0, 0}
 	};
 
@@ -1223,6 +1225,7 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 
 	const gchar *account = json_object_get_string(jaccount);
 	const gchar *container = json_object_get_string(jcontainer);
+	const gchar *seq_num = jseq_num? json_object_get_string(jseq_num): ".1";
 	if(!strcmp(account, target_account) && !strcmp(container, target_container)) {
 		err = BADREQ("the snapshot should have a different account or reference");
 		goto cleanup;
@@ -1262,7 +1265,7 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 	meta1_urlv_shift_addr(urlv);
 	CLIENT_CTX(ctx, args, type, 1);
 	GByteArray * _pack(const struct sqlx_name_s *n) {
-		return sqlx_pack_SNAPSHOT(n, urlv[0], target_cid);
+		return sqlx_pack_SNAPSHOT(n, urlv[0], target_cid, seq_num);
 	}
 
 	err = _resolve_meta2(args, CLIENT_PREFER_MASTER, _pack, NULL);
