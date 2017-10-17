@@ -167,10 +167,14 @@ struct election_counts_s election_manager_count (struct election_manager_s *m);
 guint election_manager_balance_masters(struct election_manager_s *M,
 		guint ratio, guint max, gint64 inactivity);
 
-/* Perform the 'timer' action on one item of each status.
-   This includes expiring the election, retrying, pinging peers, etc.
-   Returns the number of items activated. */
-guint election_manager_play_timers (struct election_manager_s *m, guint max);
+/* Reactivate some elections waiting for a timer to fire. */
+guint election_manager_play_timers (struct election_manager_s *m);
+
+/* Free all the elections with no status (STEP_NONE) since too long */
+guint election_manager_play_exits (struct election_manager_s *m);
+
+/* Send the pings from the final states */
+guint election_manager_play_final_pings (struct election_manager_s *m);
 
 /* Similar to the MANAGER_CHECK macro, but not stripped in Release mode,
  * and returns a boolean instead of asserting. */
