@@ -187,6 +187,14 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_CORE_SDS_NOSHUFFLE*
 
+### core.sds.version
+
+> The version of the sds. It's used to know the expected metadata of a chunk
+
+ * default: **4.0**
+ * type: string
+ * cmake directive: *OIO_CORE_SDS_VERSION*
+
 ### events.beanstalkd.delay
 
 > Sets the delay on each notification sent to the BEANSTALK endpoint
@@ -284,6 +292,15 @@ Used by `gcc`
  * default: **10.0**
  * type: gdouble
  * cmake directive: *OIO_META0_OUTGOING_TIMEOUT_COMMON_REQ*
+ * range: 0.01 -> 60.0
+
+### meta1.outgoing.timeout.common.req
+
+> Sets the timeout to the set of (quick) RPC that query a meta1 service
+
+ * default: **10.0**
+ * type: gdouble
+ * cmake directive: *OIO_META1_OUTGOING_TIMEOUT_COMMON_REQ*
  * range: 0.01 -> 60.0
 
 ### meta2.batch.maxlen
@@ -739,6 +756,33 @@ Used by `gcc`
  * cmake directive: *OIO_SERVER_MALLOC_TRIM_SIZE_PERIODIC*
  * range: 0 -> 2147483648
 
+### server.periodic_decache.max_bases
+
+> How many bases may be decached eacch time the background task performs its Dance of Death
+
+ * default: **100**
+ * type: guint
+ * cmake directive: *OIO_SERVER_PERIODIC_DECACHE_MAX_BASES*
+ * range: 1 -> 4194304
+
+### server.periodic_decache.max_delay
+
+> How long may the decache routine take
+
+ * default: **500 * G_TIME_SPAN_MILLISECOND**
+ * type: gint64
+ * cmake directive: *OIO_SERVER_PERIODIC_DECACHE_MAX_DELAY*
+ * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_MINUTE
+
+### server.periodic_decache.period
+
+> In ticks / jiffies, with approx. 1 tick per second. 0 means never
+
+ * default: **1**
+ * type: guint
+ * cmake directive: *OIO_SERVER_PERIODIC_DECACHE_PERIOD*
+ * range: 0 -> 1048576
+
 ### server.pool.max_idle
 
 > In the current server, sets how long a thread can remain unused before considered as idle (and thus to be stopped)
@@ -801,6 +845,15 @@ Used by `gcc`
  * type: gint64
  * cmake directive: *OIO_SERVER_QUEUE_WARN_DELAY*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
+
+### server.task.malloc_trim.period
+
+> In jiffies, how often the periodic task that calls malloc_trim() is fired.
+
+ * default: **3600**
+ * type: guint
+ * cmake directive: *OIO_SERVER_TASK_MALLOC_TRIM_PERIOD*
+ * range: 0 -> 86400
 
 ### server.udp_queue.max
 
@@ -989,19 +1042,72 @@ Used by `gcc`
 
 > In the current sqliterepo repository, sets the amount of time spent in an election resolution that will make a worker thread won't wait at all an consider that election is stalled.
 
- * default: **15 * G_TIME_SPAN_SECOND**
+ * default: **15 * G_TIME_SPAN_MINUTE**
  * type: gint64
  * cmake directive: *OIO_SQLITEREPO_ELECTION_NOWAIT_AFTER*
- * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
+ * range: 1 * G_TIME_SPAN_MILLISECOND -> G_MAXINT64
 
-### sqliterepo.election.task.expire_max_per_round
+### sqliterepo.election.nowait.enable
 
-> Sets how many elections can be expired during the periodical expiration task.
+> Check of the election is pending since too long. If it is, don't way for it.
 
- * default: **100**
+ * default: **FALSE**
+ * type: gboolean
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_NOWAIT_ENABLE*
+
+### sqliterepo.election.task.exit.alert
+
+> When NONE elections are expired, report a warning if the background task holds the lock longer than this value.
+
+ * default: **200 * G_TIME_SPAN_MILLISECOND**
+ * type: gint64
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_TASK_EXIT_ALERT*
+ * range: 0 -> G_MAXINT64
+
+### sqliterepo.election.task.exit.period
+
+> In jiffies, how often the removal of expired NONE elections happens
+
+ * default: **5**
  * type: guint
- * cmake directive: *OIO_SQLITEREPO_ELECTION_TASK_EXPIRE_MAX_PER_ROUND*
- * range: 1 -> 2147483648
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_TASK_EXIT_PERIOD*
+ * range: 0 -> 86400
+
+### sqliterepo.election.task.ping.alert
+
+> When pings are sent from election in a final state, report a warning if the background task holds the lock longer than this value.
+
+ * default: **200 * G_TIME_SPAN_MILLISECOND**
+ * type: gint64
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_TASK_PING_ALERT*
+ * range: 0 -> G_MAXINT64
+
+### sqliterepo.election.task.ping.period
+
+> In jiffies, how often a PING may be triggered for elections in a final state.
+
+ * default: **15**
+ * type: guint
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_TASK_PING_PERIOD*
+ * range: 0 -> 86400
+
+### sqliterepo.election.task.timer.alert
+
+> When timers are raised on elections, report a warning if the background task holds the lock longer than this value.
+
+ * default: **200 * G_TIME_SPAN_MILLISECOND**
+ * type: gint64
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_TASK_TIMER_ALERT*
+ * range: 0 -> G_MAXINT64
+
+### sqliterepo.election.task.timer.period
+
+> In jiffies, how often the elections waiting for timers are fired
+
+ * default: **1**
+ * type: guint
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_TASK_TIMER_PERIOD*
+ * range: 0 -> 86400
 
 ### sqliterepo.election.wait.delay
 
@@ -1240,6 +1346,15 @@ the cmake command line.
  * type: gint32
  * cmake directive: *OIO_ENBUG_CLIENT_FAKE_TIMEOUT_THRESHOLD*
  * range: 0 -> 0
+
+### enbug.server.request.failure.threshold
+
+> In testing situations, sets the average ratio of requests failing for a fake reason (from the peer). This helps testing the retrial mechanisms.
+
+ * default: **30**
+ * type: gint32
+ * cmake directive: *OIO_ENBUG_SERVER_REQUEST_FAILURE_THRESHOLD*
+ * range: 0 -> 100
 
 ### enbug.sqliterepo.client.failure.threshold
 
