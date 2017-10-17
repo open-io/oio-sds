@@ -516,11 +516,11 @@ class RefreshContainer(command.Command):
 
 
 class SnapshotContainer(lister.Lister):
-    """ Create a snapshot of a container.
+    """ Take a snapshot of a container.
 
-    Create a different database containing all the informations of the contents
-    in the database but with different chunks that are copy of the target
-    chunks at the time of the snapshot"""
+    Create a separate database containing all information about the contents
+    from the original database, but with copies of the chunks at the time
+    of the snapshot."""
 
     log = getLogger(__name__ + '.SnapshotContainer')
 
@@ -535,7 +535,7 @@ class SnapshotContainer(lister.Lister):
             '--account-snapshot',
             metavar='<account_snapshot>',
             help=('The account where the snapshot should be created. '
-                  'By default the same of the target.')
+                  'By default the same as the target.')
         )
         parser.add_argument(
             '--container-snapshot',

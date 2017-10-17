@@ -651,6 +651,13 @@ dav_rawx_copy_resource(const dav_resource *src, dav_resource *dst, int depth,
 		goto end_copy;
 	}
 
+	if (!src->info->chunk.oio_full_path) {
+		e = server_create_and_stat_error(srv_conf, pool,
+					HTTP_FORBIDDEN, 0,
+					apr_pstrdup(pool, "Missing fullpath"));
+		goto end_copy;
+	}
+
 	DAV_DEBUG_RES(src, 0, "Copying %s to %s", resource_get_pathname(src),
 			resource_get_pathname(dst));
 	status = apr_file_link(resource_get_pathname(src),
@@ -664,20 +671,13 @@ dav_rawx_copy_resource(const dav_resource *src, dav_resource *dst, int depth,
 		goto end_copy;
 	}
 
-	if (!src->info->chunk.oio_full_path) {
-		e = server_create_and_stat_error(srv_conf, pool,
-					HTTP_FORBIDDEN, 0,
-					apr_pstrdup(pool, "Missing fullpath"));
-				goto end_copy;
-	}
-
 	GError *local_error = NULL;
 	if (!set_rawx_info_to_file(resource_get_pathname(dst), &local_error,
 				&(src->info->chunk))) {
-			e = server_create_and_stat_error(srv_conf, pool,
-					HTTP_FORBIDDEN, 0,
-					apr_pstrdup(pool, gerror_get_message(local_error)));
-				goto end_copy;
+		e = server_create_and_stat_error(srv_conf, pool,
+				HTTP_FORBIDDEN, 0,
+				apr_pstrdup(pool, gerror_get_message(local_error)));
+		goto end_copy;
 	}
 
 	server_inc_stat(srv_conf, RAWX_STATNAME_REP_2XX, 0);

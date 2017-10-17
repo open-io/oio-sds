@@ -212,7 +212,7 @@ class ContainerClient(ProxyClient):
         """
         Create a snapshot of a the container.
 
-        This function duplicate only the database. It doesn't duplicate the
+        This function duplicates only the database. It doesn't duplicate the
         chunks of the contents.
 
         :param account: account in which the container is

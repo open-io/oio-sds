@@ -90,7 +90,6 @@ class ObjectStorageApi(object):
         from oio.account.client import AccountClient
         from oio.container.client import ContainerClient
         from oio.directory.client import DirectoryClient
-        from oio.blob.client import BlobClient
         self.directory = DirectoryClient(conf, logger=self.logger, **kwargs)
         self.container = ContainerClient(conf, logger=self.logger, **kwargs)
 
@@ -98,7 +97,6 @@ class ObjectStorageApi(object):
         acct_kwargs = kwargs.copy()
         acct_kwargs["proxy_endpoint"] = acct_kwargs.pop("endpoint", None)
         self.account = AccountClient(conf, logger=self.logger, **acct_kwargs)
-        self.blob_client = BlobClient()
 
     def _patch_timeouts(self, kwargs):
         """
@@ -903,6 +901,9 @@ class ObjectStorageApi(object):
 
     def _send_copy(self, targets, copies, fullpath):
         headers = {"x-oio-chunk-meta-full-path": fullpath}
+        if not hasattr(self, "blob_client"):
+            from oio.blob.client import BlobClient
+            self.blob_client = BlobClient()
         for t, c in zip(targets, copies):
             self.blob_client.chunk_link(t, c, headers=headers).status
 
