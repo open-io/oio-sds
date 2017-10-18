@@ -34,25 +34,27 @@ def iso8601_to_int(text):
 
 class ContainerLifecycle(object):
 
-    def __init__(self, account, container, logger=None):
+    def __init__(self, api, account, container, logger=None):
+        self.api = api
         self.account = account
         self.container = container
         self.logger = logger or get_logger(None, name=str(self.__class__))
         self._rules = dict()
+        self.src_xml = None
 
-    def load(self, api):
+    def load(self):
         """
         Load lifecycle rules from container property.
         """
-        props = api.container_get_properties(self.account, self.container)
+        props = self.api.container_get_properties(self.account, self.container)
         xml_str = props['properties'].get(LIFECYCLE_PROPERTY_KEY)
         if xml_str:
-            self.load_xml(xml_str, api)
+            self.load_xml(xml_str)
         else:
             self.logger.info("No Lifecycle configuration for %s/%s",
                              self.account, self.container)
 
-    def load_xml(self, xml_str, api=None):
+    def load_xml(self, xml_str):
         """
         Load lifecycle rules from LifecycleConfiguration XML document.
         """
@@ -62,8 +64,25 @@ class ContainerLifecycle(object):
                 "Expected 'LifecycleConfiguration' as root tag, got '%s'" %
                 tree.tag)
         for rule_elt in tree.findall('Rule'):
-            rule = LifecycleRule.from_element(rule_elt, api=api)
+            rule = LifecycleRule.from_element(rule_elt, api=self.api)
             self._rules[rule.id] = rule
+        self.src_xml = xml_str
+
+    def save(self, xml_str=None):
+        """
+        Save the lifecycle configuration in container property.
+
+        :param xml_str: the configuration to save, or None to save the
+        configuration that has been loaded previously
+        :type xml_str: `str`
+        """
+        xml_str = xml_str or self.src_xml
+        if not xml_str:
+            raise ValueError('You must call `load_xml()` or provide `xml_str`'
+                             ' parameter before saving')
+        self.api.container_set_properties(
+            self.account, self.container,
+            properties={LIFECYCLE_PROPERTY_KEY: xml_str})
 
     def apply(self, obj_meta, **kwargs):
         """

@@ -28,7 +28,8 @@ class TestContainerLifecycle(BaseTestCase):
         self.api = ObjectStorageApi(self.ns)
         self.account = "test_lifecycle"
         self.container = "lifecycle-" + random_str(4)
-        self.lifecycle = ContainerLifecycle(self.account, self.container)
+        self.lifecycle = ContainerLifecycle(
+            self.api, self.account, self.container)
 
     @staticmethod
     def _time_to_date(timestamp=None):
@@ -90,7 +91,7 @@ class TestContainerLifecycle(BaseTestCase):
         props = {LIFECYCLE_PROPERTY_KEY: source}
         self.api.container_create(self.account, self.container,
                                   properties=props)
-        self.lifecycle.load(self.api)
+        self.lifecycle.load()
         self.assertIn('rule1', self.lifecycle._rules)
         rule = self.lifecycle._rules['rule1']
         self.assertEqual('rule1', rule.id)
@@ -100,6 +101,50 @@ class TestContainerLifecycle(BaseTestCase):
         self.assertIn('Transition', rule.actions)
         self.assertIn('NoncurrentVersionExpiration', rule.actions)
         self.assertIn('NoncurrentVersionTransition', rule.actions)
+
+    def test_save_to_container_property(self):
+        source = """
+        <LifecycleConfiguration>
+            <Rule>
+                <ID>rule1</ID>
+                <Filter>
+                    <And>
+                        <Prefix>documents/</Prefix>
+                        <Tag>
+                            <Key>key1</Key>
+                            <Value>value1</Value>
+                        </Tag>
+                        <Tag>
+                            <Key>key2</Key>
+                            <Value>value2</Value>
+                        </Tag>
+                    </And>
+                </Filter>
+                <Status>Enabled</Status>
+                <Transition>
+                    <Days>1</Days>
+                    <StorageClass>THREECOPIES</StorageClass>
+                </Transition>
+                <Expiration>
+                    <Days>60</Days>
+                </Expiration>
+                <NoncurrentVersionTransition>
+                    <NoncurrentDays>1</NoncurrentDays>
+                    <StorageClass>THREECOPIES</StorageClass>
+                </NoncurrentVersionTransition>
+                <NoncurrentVersionExpiration>
+                    <NoncurrentDays>60</NoncurrentDays>
+                </NoncurrentVersionExpiration>
+            </Rule>
+        </LifecycleConfiguration>
+        """
+        self.api.container_create(self.account, self.container)
+        self.lifecycle.load_xml(source)
+        self.lifecycle.save()
+        props = self.api.container_get_properties(
+            self.account, self.container)['properties']
+        self.assertIn(LIFECYCLE_PROPERTY_KEY, props)
+        self.assertEqual(source, props[LIFECYCLE_PROPERTY_KEY])
 
     def test_immediate_expiration_by_date(self):
         obj_meta = self._upload_something()
@@ -114,7 +159,7 @@ class TestContainerLifecycle(BaseTestCase):
                 <Status>enabled</Status>
             </Rule>
         </LifecycleConfiguration>
-        """ % self._time_to_date(time.time() - 86400), api=self.api)
+        """ % self._time_to_date(time.time() - 86400))
         self.lifecycle.apply(obj_meta)
         container_descr = self.api.object_list(self.account, self.container)
         obj_names = [obj['name'] for obj in container_descr['objects']]
@@ -133,7 +178,7 @@ class TestContainerLifecycle(BaseTestCase):
                 <Status>enabled</Status>
             </Rule>
         </LifecycleConfiguration>
-        """ % self._time_to_date(time.time() + 86400), api=self.api)
+        """ % self._time_to_date(time.time() + 86400))
         self.lifecycle.apply(obj_meta)
         container_descr = self.api.object_list(self.account, self.container)
         obj_names = [obj['name'] for obj in container_descr['objects']]
@@ -153,7 +198,7 @@ class TestContainerLifecycle(BaseTestCase):
                 <Status>enabled</Status>
             </Rule>
         </LifecycleConfiguration>
-        """, api=self.api)
+        """)
         self.lifecycle.apply(obj_meta)
         container_descr = self.api.object_list(self.account, self.container)
         obj_names = [obj['name'] for obj in container_descr['objects']]
@@ -172,7 +217,7 @@ class TestContainerLifecycle(BaseTestCase):
                 <Status>enabled</Status>
             </Rule>
         </LifecycleConfiguration>
-        """, api=self.api)
+        """)
         self.lifecycle.apply(obj_meta)
         container_descr = self.api.object_list(self.account, self.container)
         obj_names = [obj['name'] for obj in container_descr['objects']]
@@ -194,7 +239,7 @@ class TestContainerLifecycle(BaseTestCase):
                 <Status>enabled</Status>
             </Rule>
         </LifecycleConfiguration>
-        """, api=self.api)
+        """)
         self.lifecycle.apply(obj_meta)
         self.lifecycle.apply(obj_meta2)
         container_descr = self.api.object_list(self.account, self.container)
@@ -221,7 +266,7 @@ class TestContainerLifecycle(BaseTestCase):
                 <Status>enabled</Status>
             </Rule>
         </LifecycleConfiguration>
-        """, api=self.api)
+        """)
         self.lifecycle.apply(obj_meta)
         self.lifecycle.apply(obj_meta2)
         container_descr = self.api.object_list(self.account, self.container)
@@ -250,7 +295,7 @@ class TestContainerLifecycle(BaseTestCase):
                 <Status>enabled</Status>
             </Rule>
         </LifecycleConfiguration>
-        """, api=self.api)
+        """)
         self.lifecycle.apply(obj_meta)
         self.lifecycle.apply(obj_meta2)
         obj_meta_after = self.api.object_show(
@@ -276,7 +321,7 @@ class TestContainerLifecycle(BaseTestCase):
                 <Status>enabled</Status>
             </Rule>
         </LifecycleConfiguration>
-        """, api=self.api)
+        """)
         self.lifecycle.apply(obj_meta)
         self.lifecycle.apply(obj_meta_v2)
         container_descr = self.api.object_list(self.account, self.container,
