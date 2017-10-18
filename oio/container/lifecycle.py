@@ -20,8 +20,9 @@ try:
 except ImportError:
     from xml.etree import cElementTree as etree
 
+from oio.common.exceptions import OioException
 from oio.common.logger import get_logger
-from oio.common.utils import cid_from_name
+from oio.common.utils import cid_from_name, depaginate
 
 
 LIFECYCLE_PROPERTY_KEY = "X-Container-Sysmeta-Swift3-Lifecycle"
@@ -45,14 +46,18 @@ class ContainerLifecycle(object):
     def load(self):
         """
         Load lifecycle rules from container property.
+
+        :returns: True if a lifecycle configuration has been loaded
         """
         props = self.api.container_get_properties(self.account, self.container)
         xml_str = props['properties'].get(LIFECYCLE_PROPERTY_KEY)
         if xml_str:
             self.load_xml(xml_str)
+            return True
         else:
             self.logger.info("No Lifecycle configuration for %s/%s",
                              self.account, self.container)
+            return False
 
     def load_xml(self, xml_str):
         """
@@ -88,17 +93,47 @@ class ContainerLifecycle(object):
         """
         Match then apply the set of rules of this lifecycle configuration
         on the specified object.
+
+        :returns: tuples of (object metadata, rule name, action, status)
+        :rtype: generator of 4-tuples
+
+        :notice: you must consume the results or the rules won't be applied.
         """
         for rule in self._rules.values():
-            rule.apply(self.account, self.container, obj_meta, **kwargs)
-        # TODO: return something useful
+            res = rule.apply(self.account, self.container, obj_meta,
+                             **kwargs)
+            if res:
+                for action in res:
+                    yield obj_meta, rule.id, action[0], action[1]
+            else:
+                yield obj_meta, rule.id, "n/a", "n/a"
 
     def execute(self, **kwargs):
         """
         Match then apply the set of rules of the lifecycle configuration
         on all objects of the container.
+
+        :returns: tuples of (object metadata, rule name, action, status)
+        :rtype: generator of 4-tuples
+        :notice: you must consume the results or the rules won't be applied.
         """
-        # TODO: implement
+        for obj_meta in depaginate(
+                self.api.object_list,
+                listing_key=lambda x: x['objects'],
+                marker_key=lambda x: x['objects'][-1]['name'],
+                account=self.account,
+                container=self.container,
+                versions=True,
+                **kwargs):
+            try:
+                results = self.apply(obj_meta, **kwargs)
+                for res in results:
+                    yield res
+            except Exception as exc:
+                self.logger.warn(
+                        "Failed to apply lifecycle rules on %s/%s/%s: %s",
+                        self.account, self.container, obj_meta['name'], exc)
+                yield obj_meta, "n/a", "n/a", exc
 
 
 class LifecycleRule(object):
@@ -152,14 +187,26 @@ class LifecycleRule(object):
     def apply(self, account, container, obj_meta, **kwargs):
         """
         Apply the set of actions of this rule.
+
+        :returns: the list of actions that have been applied
+        :rtype: `list` of `tuple` of a class and a bool or
+            a class and an exception instance
         """
+        results = list()
         if self.filter.match(obj_meta):
             for action in self.actions.values():
-                action.apply(account, container, obj_meta, **kwargs)
+                try:
+                    res = action.apply(account, container, obj_meta, **kwargs)
+                    results.append((action.__class__.__name__, res))
+                except OioException as exc:
+                    results.append((action.__class__.__name__, exc))
+        return results
 
 
 class LifecycleRuleFilter(object):
     """Filter to determine on which objects to apply a lifecycle rule."""
+
+    _rule_number = 0
 
     def __init__(self, prefix=None, tags=None):
         """
@@ -201,6 +248,10 @@ class LifecycleRuleFilter(object):
             parts.append('prefix=%s' % self.prefix)
         for kv in sorted(self.tags.items(), key=lambda x: x[0]):
             parts.append('='.join(kv))
+        if not parts:
+            id_ = self.__class__._rule_number
+            self.__class__._rule_number += 1
+            return "anonymous-rule-%s" % id_
         return ','.join(parts)
 
     def match(self, obj_meta, **kwargs):
@@ -270,9 +321,10 @@ class DelayExpiration(LifecycleAction):
 
     def apply(self, account, container, obj_meta, **kwargs):
         if self.match(obj_meta, **kwargs):
-            return self.api.object_delete(account, container, obj_meta['name'],
-                                          version=obj_meta.get('version'))
-        return False
+            res = self.api.object_delete(account, container, obj_meta['name'],
+                                         version=obj_meta.get('version'))
+            return "Deleted" if res else "Kept"
+        return "Kept"
 
 
 class Expiration(DelayExpiration):
@@ -350,11 +402,11 @@ class Transition(Expiration):
         if self.match(obj_meta, **kwargs):
             cid = cid_from_name(account, container)
             if not self.factory:
-                return False
+                return "Kept"
             # TODO: avoid loading content description a second time
             self.factory.change_policy(cid, obj_meta['id'], self.policy)
-            return True
-        return False
+            return "Policy changed to %s" % self.policy
+        return "Kept"
 
 
 class NoncurrentAction(LifecycleAction):
@@ -369,11 +421,11 @@ class NoncurrentAction(LifecycleAction):
             # TODO: use a cache to avoid requesting each time
             descr = self.api.object_show(account, container,
                                          obj_meta['name'])
-            if descr['version'] != obj_meta['version']:
+            if str(descr['version']) != str(obj_meta['version']):
                 # Object is not the latest version, we can apply the treatment
                 return super(NoncurrentAction, self).apply(
                     account, container, obj_meta, **kwargs)
-        return False
+        return "Kept"
 
 
 class NoncurrentVersionExpiration(NoncurrentAction, DelayExpiration):

@@ -14,9 +14,18 @@
 # License along with this library.
 
 import time
+
+from mock import patch
+
 from oio import ObjectStorageApi
 from oio.container.lifecycle import ContainerLifecycle, LIFECYCLE_PROPERTY_KEY
 from tests.utils import BaseTestCase, random_str
+
+
+def consume(generator):
+    """Consume a generator without doing anything with the results"""
+    for _ in generator:
+        pass
 
 
 class TestContainerLifecycle(BaseTestCase):
@@ -160,7 +169,8 @@ class TestContainerLifecycle(BaseTestCase):
             </Rule>
         </LifecycleConfiguration>
         """ % self._time_to_date(time.time() - 86400))
-        self.lifecycle.apply(obj_meta)
+        results = [x for x in self.lifecycle.apply(obj_meta)]
+        self.assertEqual(1, len(results))
         container_descr = self.api.object_list(self.account, self.container)
         obj_names = [obj['name'] for obj in container_descr['objects']]
         self.assertNotIn(obj_meta['name'], obj_names)
@@ -179,7 +189,8 @@ class TestContainerLifecycle(BaseTestCase):
             </Rule>
         </LifecycleConfiguration>
         """ % self._time_to_date(time.time() + 86400))
-        self.lifecycle.apply(obj_meta)
+        results = [x for x in self.lifecycle.apply(obj_meta)]
+        self.assertEqual(1, len(results))
         container_descr = self.api.object_list(self.account, self.container)
         obj_names = [obj['name'] for obj in container_descr['objects']]
         self.assertIn(obj_meta['name'], obj_names)
@@ -199,7 +210,8 @@ class TestContainerLifecycle(BaseTestCase):
             </Rule>
         </LifecycleConfiguration>
         """)
-        self.lifecycle.apply(obj_meta)
+        results = [x for x in self.lifecycle.apply(obj_meta)]
+        self.assertEqual(1, len(results))
         container_descr = self.api.object_list(self.account, self.container)
         obj_names = [obj['name'] for obj in container_descr['objects']]
         self.assertNotIn(obj_meta['name'], obj_names)
@@ -240,8 +252,8 @@ class TestContainerLifecycle(BaseTestCase):
             </Rule>
         </LifecycleConfiguration>
         """)
-        self.lifecycle.apply(obj_meta)
-        self.lifecycle.apply(obj_meta2)
+        consume(self.lifecycle.apply(obj_meta))
+        consume(self.lifecycle.apply(obj_meta2))
         container_descr = self.api.object_list(self.account, self.container)
         obj_names = [obj['name'] for obj in container_descr['objects']]
         self.assertIn(obj_meta['name'], obj_names)
@@ -267,8 +279,8 @@ class TestContainerLifecycle(BaseTestCase):
             </Rule>
         </LifecycleConfiguration>
         """)
-        self.lifecycle.apply(obj_meta)
-        self.lifecycle.apply(obj_meta2)
+        consume(self.lifecycle.apply(obj_meta))
+        consume(self.lifecycle.apply(obj_meta2))
         container_descr = self.api.object_list(self.account, self.container)
         obj_names = [obj['name'] for obj in container_descr['objects']]
         self.assertIn(obj_meta['name'], obj_names)
@@ -296,8 +308,8 @@ class TestContainerLifecycle(BaseTestCase):
             </Rule>
         </LifecycleConfiguration>
         """)
-        self.lifecycle.apply(obj_meta)
-        self.lifecycle.apply(obj_meta2)
+        consume(self.lifecycle.apply(obj_meta))
+        consume(self.lifecycle.apply(obj_meta2))
         obj_meta_after = self.api.object_show(
             self.account, self.container, obj_meta['name'])
         obj_meta_after2 = self.api.object_show(
@@ -322,11 +334,69 @@ class TestContainerLifecycle(BaseTestCase):
             </Rule>
         </LifecycleConfiguration>
         """)
-        self.lifecycle.apply(obj_meta)
-        self.lifecycle.apply(obj_meta_v2)
+        consume(self.lifecycle.apply(obj_meta))
+        consume(self.lifecycle.apply(obj_meta_v2))
         container_descr = self.api.object_list(self.account, self.container,
                                                versions=True)
         obj_names = [obj['name'] for obj in container_descr['objects']]
         self.assertIn(obj_meta['name'], obj_names)
         self.assertEqual(1, len(obj_names))
         self.api.object_delete(self.account, self.container, obj_meta['name'])
+
+    def test_execute_immediate_expiration(self):
+        source = """
+        <LifecycleConfiguration>
+            <Rule>
+                <ID>rule1</ID>
+                <Filter>
+                </Filter>
+                <Status>Enabled</Status>
+                <Expiration>
+                    <Days>0</Days>
+                </Expiration>
+            </Rule>
+        </LifecycleConfiguration>
+        """
+        props = {LIFECYCLE_PROPERTY_KEY: source}
+        self.api.container_create(self.account, self.container,
+                                  properties=props)
+        self._upload_something()
+        self._upload_something()
+        self._upload_something()
+        self.lifecycle.load()
+        results = [x for x in self.lifecycle.execute()]
+        self.assertEqual(3, len(results))
+        listing = self.api.object_list(self.account, self.container)
+        self.assertEqual(0, len(listing['objects']))
+
+    def test_execute_expiration_on_missing_objects(self):
+        source = """
+        <LifecycleConfiguration>
+            <Rule>
+                <ID>rule1</ID>
+                <Filter>
+                </Filter>
+                <Status>Enabled</Status>
+                <Expiration>
+                    <Days>0</Days>
+                </Expiration>
+            </Rule>
+        </LifecycleConfiguration>
+        """
+        props = {LIFECYCLE_PROPERTY_KEY: source}
+        self.api.container_create(self.account, self.container,
+                                  properties=props)
+        self.lifecycle.load()
+
+        fake_listing = {'objects': [
+            {'name': 'a', 'ctime': '12'},
+            {'name': 'b', 'ctime': '12'},
+            {'name': 'c', 'ctime': '12'},
+            {'name': 'd', 'ctime': '12'}
+        ]}
+        with patch.object(self.api, 'object_list',
+                          side_effect=[fake_listing]):
+            results = [x for x in self.lifecycle.execute()]
+        self.assertEqual(4, len(results))
+        for res in results:
+            self.assertIsInstance(res[3], Exception)
