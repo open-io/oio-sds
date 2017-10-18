@@ -234,6 +234,10 @@ class ObjectStorageApi(object):
         :keyword end_marker:
         :keyword prefix:
         :keyword delimiter:
+        :return: the list of containers of an account
+        :rtype: `list` of items (`list`) with 4 fields:
+            name, number of objects, number of bytes, and 1 if the item
+            is a prefix or 0 if the item is actually a container
         """
         resp = self.account.container_list(account, limit=limit,
                                            marker=marker,
@@ -501,6 +505,19 @@ class ObjectStorageApi(object):
     @ensure_request_id
     def object_delete(self, account, container, obj,
                       version=None, **kwargs):
+        """
+        Delete an object from a container. If versioning is enabled and no
+        version is specified, the object will be marked as deleted but not
+        actually deleted.
+
+        :param account: name of the account the object belongs to
+        :type account: `str`
+        :param container: name of the container the object belongs to
+        :type container: `str`
+        :param obj: name of the object to delete
+        :param version: version of the object to delete
+        :returns: True on success
+        """
         return self.container.content_delete(account, container, obj,
                                              version=version, **kwargs)
 
