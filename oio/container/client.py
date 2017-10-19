@@ -207,7 +207,7 @@ class ContainerClient(ProxyClient):
         return body
 
     def container_snapshot(self, account=None, reference=None,
-                           snapshot_account=None, snapshot_reference=None,
+                           dst_account=None, dst_reference=None,
                            cid=None, **kwargs):
         """
         Create a snapshot of a the container.
@@ -222,14 +222,14 @@ class ContainerClient(ProxyClient):
         :param cid: container id that can be used instead of account
             and reference
         :type cid: `str`
-        :param snapshot_account: account in which the snapshot will be
-        :type snapshot_account: `str`
-        :param snapshot_container: name of the snapshot
-        :type snapshot_container: `str`
+        :param dst_account: account in which the snapshot will be created
+        :type dst_account: `str`
+        :param dst_reference: name of the snapshot
+        :type dst_reference: `str`
         """
         params = self._make_params(account, reference, cid=cid)
-        data = json.dumps({"account": snapshot_account,
-                           "container": snapshot_reference})
+        data = json.dumps({"account": dst_account,
+                           "container": dst_reference})
         resp, _ = self._request('POST', '/snapshot', params=params,
                                 data=data, **kwargs)
         return resp
