@@ -863,6 +863,15 @@ Used by `gcc`
  * cmake directive: *OIO_SERVER_QUEUE_WARN_DELAY*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
+### server.task.malloc_trim.period
+
+> In jiffies, how often the periodic task that calls malloc_trim() is fired.
+
+ * default: **3600**
+ * type: guint
+ * cmake directive: *OIO_SERVER_TASK_MALLOC_TRIM_PERIOD*
+ * range: 0 -> 86400
+
 ### server.udp_queue.max
 
 > In the current server, sets the maximumu length of the queue for UDP messages. When that number has been reached and a new message arrives, the message will be dropped.
@@ -1063,14 +1072,59 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_SQLITEREPO_ELECTION_NOWAIT_ENABLE*
 
-### sqliterepo.election.task.expire_max_per_round
+### sqliterepo.election.task.exit.alert
 
-> Sets how many elections can be expired during the periodical expiration task.
+> When NONE elections are expired, report a warning if the background task holds the lock longer than this value.
 
- * default: **100**
+ * default: **200 * G_TIME_SPAN_MILLISECOND**
+ * type: gint64
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_TASK_EXIT_ALERT*
+ * range: 0 -> G_MAXINT64
+
+### sqliterepo.election.task.exit.period
+
+> In jiffies, how often the removal of expired NONE elections happens
+
+ * default: **5**
  * type: guint
- * cmake directive: *OIO_SQLITEREPO_ELECTION_TASK_EXPIRE_MAX_PER_ROUND*
- * range: 1 -> 2147483648
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_TASK_EXIT_PERIOD*
+ * range: 0 -> 86400
+
+### sqliterepo.election.task.ping.alert
+
+> When pings are sent from election in a final state, report a warning if the background task holds the lock longer than this value.
+
+ * default: **200 * G_TIME_SPAN_MILLISECOND**
+ * type: gint64
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_TASK_PING_ALERT*
+ * range: 0 -> G_MAXINT64
+
+### sqliterepo.election.task.ping.period
+
+> In jiffies, how often a PING may be triggered for elections in a final state.
+
+ * default: **15**
+ * type: guint
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_TASK_PING_PERIOD*
+ * range: 0 -> 86400
+
+### sqliterepo.election.task.timer.alert
+
+> When timers are raised on elections, report a warning if the background task holds the lock longer than this value.
+
+ * default: **200 * G_TIME_SPAN_MILLISECOND**
+ * type: gint64
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_TASK_TIMER_ALERT*
+ * range: 0 -> G_MAXINT64
+
+### sqliterepo.election.task.timer.period
+
+> In jiffies, how often the elections waiting for timers are fired
+
+ * default: **1**
+ * type: guint
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_TASK_TIMER_PERIOD*
+ * range: 0 -> 86400
 
 ### sqliterepo.election.wait.delay
 
