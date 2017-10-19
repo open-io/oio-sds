@@ -217,7 +217,6 @@ add_library(metautils SHARED
 		utils_l4v.c
 		utils_m1url.c
 		utils_meta0_info.c
-		utils_metadata.c
 		utils_namespace_info.c
 		utils_service_info.c
 

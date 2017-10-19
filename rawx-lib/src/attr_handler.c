@@ -326,6 +326,79 @@ get_rawx_info_from_file (const char *p, GError ** error, struct chunk_textinfo_s
 	}
 }
 
+#define METADATA_HT_CREATE() g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free)
+
+static GHashTable*
+metadata_unpack_buffer(const guint8 *data, gsize size, GError **error)
+{
+	GHashTable *ht;
+	gchar **tokens, **tok;
+
+	if (!data) {
+		GSETERROR(error, "Invalid paramater (%p)", data);
+		return NULL;
+	}
+
+	if (!size)
+		return METADATA_HT_CREATE();
+
+	tokens = buffer_split(data, size, ";", 0);
+	if (!tokens) {
+		GSETERROR(error,"split error");
+		return NULL;
+	}
+
+	ht = METADATA_HT_CREATE();
+	for (tok=tokens; *tok && **tok ;tok++) {
+		gchar **pair_tokens, *stripped;
+
+		pair_tokens = g_strsplit(*tok, "=", 2);
+		if (!pair_tokens)/*skip this empty pair*/
+			continue;
+		switch (g_strv_length(pair_tokens)) {
+		case 0U:/*strange case, let's happily ignore it*/
+			break;
+		case 1U:/*single key with no value*/
+			stripped = g_strstrip(pair_tokens[0]);
+			if (stripped && *stripped)
+				g_hash_table_insert(ht, g_strdup(stripped), g_strdup(""));
+			break;
+		case 2U:
+			stripped = g_strstrip(pair_tokens[0]);
+			if (stripped && *stripped)
+				g_hash_table_insert(ht, g_strdup(stripped), g_strdup(pair_tokens[1]));
+			break;
+		}
+		g_strfreev(pair_tokens);
+	}
+
+	g_strfreev(tokens);
+	return ht;
+}
+
+static GHashTable*
+metadata_unpack_string(const gchar *data, GError **error)
+{
+	if (!data) {
+		GSETERROR(error,"Inavalid parameter (str==NULL)");
+		return NULL;
+	}
+	return metadata_unpack_buffer((guint8*)data, strlen(data), error);
+}
+
+static void
+metadata_merge(GHashTable *base, GHashTable *complement)
+{
+	GHashTableIter iter;
+	gpointer k, v;
+
+	if (!base || !complement)
+		return;
+
+	g_hash_table_iter_init(&iter, complement);
+	while (g_hash_table_iter_next(&iter, &k, &v))
+		g_hash_table_insert(base, g_strdup(k), g_strdup(v));
+}
 gboolean
 get_compression_info_in_attr(const char *p, GError ** error, GHashTable *table)
 {
