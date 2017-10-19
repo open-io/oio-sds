@@ -66,12 +66,8 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 			*ppS = g_strdup(pE->expr.str);
 			return EXPR_EVAL_DEF;
 		case VAL_NUM_ET:
-		case UN_NUMSUP_ET:
-		case UN_NUMINF_ET:
 		case UN_NUMNOT_ET:
 		case UN_STRNUM_ET:
-		case UN_STRLEN_ET:
-		case BIN_STRCMP_ET:
 		case BIN_NUMCMP_ET:
 		case BIN_NUMEQ_ET:
 		case BIN_NUMNEQ_ET:
@@ -138,20 +134,6 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 			*pD = pE->expr.num;
 			return EXPR_EVAL_DEF;
 
-		case UN_NUMSUP_ET:
-			ret = __main_eval(pE->expr.unary, pD);
-			if (ret != EXPR_EVAL_DEF)
-				return ret;
-			*pD = ceil(*pD);
-			return EXPR_EVAL_DEF;
-
-		case UN_NUMINF_ET:
-			ret = __main_eval(pE->expr.unary, pD);
-			if (ret != EXPR_EVAL_DEF)
-				return ret;
-			*pD = floor(*pD);
-			return EXPR_EVAL_DEF;
-
 		case UN_NUMNOT_ET:
 			ret = __main_eval(pE->expr.unary, pD);
 			if (ret != EXPR_EVAL_DEF)
@@ -202,39 +184,6 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 				}
 
 				/*TODO test if there remains some characters */
-				return EXPR_EVAL_DEF;
-			}
-
-		case UN_STRLEN_ET:{
-				char *s = NULL;
-
-				ret = __get_str(pE->expr.unary, &s);
-				if (ret != EXPR_EVAL_DEF)
-					return ret;
-				*pD = strlen(s);
-				g_free(s);
-				return EXPR_EVAL_DEF;
-			}
-
-		case BIN_STRCMP_ET:{
-				char *s1 = NULL, *s2 = NULL;
-
-				if (!pE->expr.bin.p1)
-					return EXPR_EVAL_ERROR;
-				if (!pE->expr.bin.p2)
-					return EXPR_EVAL_ERROR;
-				ret = __get_str(pE->expr.bin.p1, &s1);
-				if (ret != EXPR_EVAL_DEF)
-					return ret;
-				ret = __get_str(pE->expr.bin.p2, &s2);
-				if (ret != EXPR_EVAL_DEF) {
-					g_free(s1);
-					return ret;
-				}
-				*pD = (strcmp(s1, s2) == 0);
-				g_free(s1);
-				if (s2 != s1)
-					g_free(s2);
 				return EXPR_EVAL_DEF;
 			}
 

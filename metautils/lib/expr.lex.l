@@ -17,9 +17,6 @@
 [ \t\r\n]*      {}
 
 "num"    { T; return UN_STRNUM_TK; }
-"len"    { T; return UN_STRLEN_TK; }
-"sup"    { T; return UN_NUMSUP_TK; }
-"inf"    { T; return UN_NUMINF_TK; }
 "not"    { T; return UN_NUMNOT_TK; }
 "xor"    { T; return BIN_NUMXOR_TK; }
 "and"    { T; return BIN_NUMAND_TK; }
@@ -29,7 +26,6 @@
 [-]?[1-9][0-9]* { T; yylval.n=atof(yytext) ; return VAL_NUM_TK; }
 [0]             { T; yylval.n=0 ; return VAL_NUM_TK; }
 
-[<][Ss][>] { T; return BIN_STRCMP_TK; }
 [<][Nn][>] { T; return BIN_NUMCMP_TK; }
 [!][=]     { T; return BIN_NUMEQ_TK; }
 [=][=]     { T; return BIN_NUMNEQ_TK; }

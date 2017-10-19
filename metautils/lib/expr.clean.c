@@ -35,15 +35,11 @@ expr_clean(struct expr_s *pE)
 		break;
 	case VAL_NUM_ET:
 		break;
-	case UN_NUMSUP_ET:
-	case UN_NUMINF_ET:
 	case UN_NUMNOT_ET:
 	case UN_STRNUM_ET:
-	case UN_STRLEN_ET:
 		if (pE->expr.unary)
 			expr_clean(pE->expr.unary);
 		break;
-	case BIN_STRCMP_ET:
 	case BIN_NUMCMP_ET:
 	case BIN_NUMEQ_ET:
 	case BIN_NUMNEQ_ET:

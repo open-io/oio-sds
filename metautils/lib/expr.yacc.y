@@ -24,12 +24,12 @@ static struct expr_s *pParsed = NULL;
 	char* s;
 	struct expr_s* e;
 }
-%token BIN_STRCMP_TK BIN_NUMCMP_TK BIN_NUMEQ_TK BIN_NUMNEQ_TK
+%token BIN_NUMCMP_TK BIN_NUMEQ_TK BIN_NUMNEQ_TK
 %token BIN_NUMLT_TK BIN_NUMLE_TK BIN_NUMGT_TK BIN_NUMGE_TK
 %token BIN_NUMADD_TK BIN_NUMSUB_TK BIN_NUMMUL_TK BIN_NUMDIV_TK BIN_NUMMOD_TK
 %token BIN_NUMAND_TK BIN_NUMXOR_TK BIN_NUMOR_TK BIN_ROOT_TK
-%token UN_NUMSUP_TK UN_NUMINF_TK UN_NUMNOT_TK
-%token UN_STRNUM_TK UN_STRLEN_TK 
+%token UN_NUMNOT_TK
+%token UN_STRNUM_TK
 %token PAROP_TK PARCL_TK DOT_TK COMA_TK
 %token <s> ID_TK
 %token <s> VAL_STR_TK
@@ -47,11 +47,8 @@ expr:
 	| ID_TK DOT_TK ID_TK { $$ = makeAccessor ($1, $3); }
 	| PAROP_TK expr PARCL_TK { $$ = $2; }
 
-	| UN_STRLEN_TK expr { $$ = makeUnary (UN_STRLEN_ET,$2); }
 	| UN_STRNUM_TK expr { $$ = makeUnary (UN_STRNUM_ET,$2); }
 
-	| UN_NUMSUP_TK expr { $$ = makeUnary (UN_NUMSUP_ET,$2); }
-	| UN_NUMINF_TK expr { $$ = makeUnary (UN_NUMINF_ET,$2); }
 	| UN_NUMNOT_TK expr { $$ = makeUnary (UN_NUMNOT_ET,$2); }
 
 	| expr BIN_NUMAND_TK expr { $$ = makeBinary (BIN_NUMAND_ET,$1,$3); }
@@ -59,8 +56,6 @@ expr:
 	| expr BIN_NUMOR_TK  expr { $$ = makeBinary (BIN_NUMOR_ET,$1,$3); }
 
 	| BIN_ROOT_TK PAROP_TK expr COMA_TK  expr PARCL_TK { $$ = makeBinary (BIN_ROOT_ET,$3,$5); }
-	
-	| expr BIN_STRCMP_TK expr { $$ = makeBinary (BIN_STRCMP_ET,$1,$3); }
 
 	| expr BIN_NUMCMP_TK expr { $$ = makeBinary (BIN_NUMCMP_ET,$1,$3); }
 	| expr BIN_NUMEQ_TK expr  { $$ = makeBinary (BIN_NUMEQ_ET,$1,$3); }
