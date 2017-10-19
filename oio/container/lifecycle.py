@@ -123,6 +123,7 @@ class ContainerLifecycle(object):
                 marker_key=lambda x: x['objects'][-1]['name'],
                 account=self.account,
                 container=self.container,
+                properties=True,
                 versions=True,
                 **kwargs):
             try:
@@ -261,7 +262,7 @@ class LifecycleRuleFilter(object):
         if self.prefix and not obj_meta['name'].startswith(self.prefix):
             return False
         for tagk in self.tags.keys():
-            if obj_meta['properties'].get(tagk) != self.tags[tagk]:
+            if obj_meta.get('properties', {}).get(tagk) != self.tags[tagk]:
                 return False
         return True
 
