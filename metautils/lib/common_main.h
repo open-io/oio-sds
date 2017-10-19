@@ -96,7 +96,7 @@ struct grid_main_callbacks
 /** Uses sigprocmask to block a lot of signals */
 void metautils_ignore_signals(void);
 
-void logger_udp_open (const char *target);
+gboolean logger_udp_open (const char *target);
 
 /* Activate syslog logging */
 void logger_syslog_open (void);

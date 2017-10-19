@@ -25,6 +25,10 @@ License along with this library.
 #include <errno.h>
 #include <sys/stat.h>
 
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+
 #include <metautils/lib/common_variables.h>
 
 #include "metautils.h"
@@ -128,25 +132,55 @@ logger_syslog_open (void)
 	g_log_set_default_handler(oio_log_syslog, NULL);
 }
 
-void
+#define SA(ss) ((struct sockaddr*)(ss))
+#define SIN(ss) ((struct sockaddr_in*)(ss))
+#define SIN6(ss) ((struct sockaddr_in6*)(ss))
+
+static void
+_set_default_port(struct sockaddr_storage *ss, int port)
+{
+	switch (ss->ss_family) {
+		case AF_INET:
+			if (SIN(ss)->sin_port == 0)
+				SIN(ss)->sin_port = g_htons(port);
+			return;
+		case AF_INET6:
+			if (SIN6(ss)->sin6_port == 0)
+				SIN6(ss)->sin6_port = g_htons(port);
+			return;
+	}
+}
+
+gboolean
 logger_udp_open (const char *target)
 {
-	struct sockaddr_storage ss = {0};
+	struct sockaddr_storage ss = {};
 	gsize sslen = sizeof(ss);
-	if (!grid_string_to_sockaddr(target, &ss, &sslen)) {
+	if (!grid_string_to_sockaddr(target, SA(&ss), &sslen)) {
 		GRID_WARN("Invalid IP:PORT to forward the log to: %s", target);
-	} else {
-		int fd = socket_nonblock(AF_INET, SOCK_DGRAM, 0);
-		if (fd < 0) {
-			GRID_WARN("Failed to allocate a new UDP socket");
-		} else {
-			metautils_syscall_connect(fd, (struct sockaddr*)&ss, sslen);
-			if (oio_log_udp_fd >= 0)
-				metautils_pclose(&oio_log_udp_fd);
-			oio_log_udp_fd = fd;
-			g_log_set_default_handler(_logger_syslog_udp, NULL);
-		}
+		return FALSE;
 	}
+
+	/* No port specified? Set if to the default UDP port for syslog */
+	_set_default_port(&ss, 514);
+
+	int fd = socket_nonblock(AF_INET, SOCK_DGRAM, 0);
+	if (fd < 0)
+		return FALSE;
+
+	if (0 != metautils_syscall_connect(fd, (struct sockaddr*)&ss, sslen)) {
+		const int errsav = errno;
+		metautils_pclose(&fd);
+		errno = errsav;
+		return FALSE;
+	}
+
+	if (oio_log_udp_fd >= 0)
+		metautils_pclose(&oio_log_udp_fd);
+	oio_log_udp_fd = fd;
+
+	g_log_set_default_handler(_logger_syslog_udp, NULL);
+	return TRUE;
 }
 
 static const char*
@@ -567,8 +601,12 @@ grid_main_init(int argc, char **args)
 
 	if (*syslog_id) {
 		if (*udp_target) {
-			GRID_DEBUG("Opening syslog with id [%s] to [%d]", syslog_id, udp_target);
-			logger_udp_open(udp_target);
+			GRID_DEBUG("Opening syslog with id [%s] to [%s]", syslog_id, udp_target);
+			if (!logger_udp_open(udp_target)) {
+				GRID_WARN("Failed to open an UDP logger to [%s]: (%d) %s",
+						udp_target, errno, strerror(errno));
+				return FALSE;
+			}
 		} else {
 			GRID_DEBUG("Opening syslog with id [%s] to /dev/log", syslog_id);
 			logger_syslog_open();
