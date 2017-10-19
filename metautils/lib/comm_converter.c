@@ -157,49 +157,34 @@ static GByteArray *
 abstract_sequence_marshall(const struct abstract_sequence_handler_s * h, GSList * api_sequence, GError ** err)
 {
 	gboolean error_occured = FALSE;
-	gsize probable_size;
-	asn_enc_rval_t encRet;
-	GByteArray *gba;
+	GByteArray *gba = NULL;
 
-	int func_write(const void *b, gsize bSize, void *key)
-	{
-		(void) key;
+	int func_write(const void *b, gsize bSize, void *key UNUSED) {
 		return g_byte_array_append(gba, (guint8 *) b, bSize) ? 0 : -1;
 	}
 
-	void func_free(void *d)
-	{
-		if (!d)
-			return;
-		h->clean_ASN1(d, FALSE);
+	void func_free(void *d) {
+		if (d)
+			h->clean_ASN1(d, FALSE);
 	}
 
-	void func_fill(gpointer d, gpointer u)
-	{
-		asn_anonymous_set_ *p_set;
-		void *asn1_form;
-
+	void func_fill(gpointer d, gpointer u) {
 		if (error_occured || !d)
 			return;
-		asn1_form = ASN1C_CALLOC(1, h->asn1_size);
+		void *asn1_form = ASN1C_CALLOC(1, h->asn1_size);
 		if (!h->map_API_to_ASN1(d, asn1_form)) {
 			ASN1C_FREE(asn1_form);
 			GSETERROR(err, "Element of type [%s] serialization failed!", h->type_name);
 			error_occured = TRUE;
 		} else {
-			p_set = &(((struct anonymous_sequence_s *) u)->list);
+			asn_anonymous_set_ *p_set = &(((struct anonymous_sequence_s *) u)->list);
 			asn_set_add(_A_SET_FROM_VOID(p_set), asn1_form);
 		}
 	}
 
-	probable_size = g_slist_length(api_sequence) * (h->asn1_size + 6) + 64;
+	gsize probable_size = g_slist_length(api_sequence) * (h->asn1_size + 6) + 64;
 	probable_size = MIN(probable_size, 4096);
-
 	gba = g_byte_array_sized_new(probable_size);
-	if (!gba) {
-		GSETERROR(err, "Memory allocation failure");
-		return NULL;
-	}
 
 	/*fills the ASN.1 structure */
 	struct anonymous_sequence_s asnSeq = {{0}};
@@ -211,7 +196,7 @@ abstract_sequence_marshall(const struct abstract_sequence_handler_s * h, GSList 
 	}
 
 	/*serializes the structure */
-	encRet = der_encode(h->asn1_descriptor, &asnSeq, func_write, NULL);
+	asn_enc_rval_t encRet = der_encode(h->asn1_descriptor, &asnSeq, func_write, NULL);
 	if (encRet.encoded == -1) {
 		GSETERROR(err, "Cannot encode the ASN.1 sequence (error on %s)", encRet.failed_type->name);
 		g_byte_array_free(gba, TRUE);
@@ -337,9 +322,8 @@ score_API2ASN(const score_t * api, Score_t * asn)
 static gboolean
 service_tag_ASN2API(ServiceTag_t * asn, service_tag_t * api)
 {
-	if (!api || !asn)
-		return FALSE;
-
+	EXTRA_ASSERT(api != NULL);
+	EXTRA_ASSERT(asn != NULL);
 	memset(api, 0x00, sizeof(service_tag_t));
 
 	/*name */
@@ -372,9 +356,8 @@ service_tag_ASN2API(ServiceTag_t * asn, service_tag_t * api)
 static gboolean
 service_info_ASN2API(ServiceInfo_t * asn, service_info_t * api)
 {
-	if (!api || !asn)
-		return FALSE;
-
+	EXTRA_ASSERT(api != NULL);
+	EXTRA_ASSERT(asn != NULL);
 	memset(api, 0x00, sizeof(service_info_t));
 
 	/*header */
@@ -402,16 +385,12 @@ service_info_ASN2API(ServiceInfo_t * asn, service_info_t * api)
 static gboolean
 service_tag_API2ASN(service_tag_t * api, ServiceTag_t * asn)
 {
-	gsize name_len;
-
-	if (!api || !asn) {
-		return FALSE;
-	}
-
+	EXTRA_ASSERT(api != NULL);
+	EXTRA_ASSERT(asn != NULL);
 	memset(asn, 0x00, sizeof(ServiceTag_t));
 
 	/*name */
-	name_len = strnlen(api->name, sizeof(api->name));
+	gsize name_len = strnlen(api->name, sizeof(api->name));
 	OCTET_STRING_fromBuf(&(asn->name), api->name, name_len);
 
 	/*value */
@@ -444,9 +423,8 @@ service_tag_API2ASN(service_tag_t * api, ServiceTag_t * asn)
 static gboolean
 service_info_API2ASN(service_info_t * api, ServiceInfo_t * asn)
 {
-	if (!api || !asn)
-		return FALSE;
-
+	EXTRA_ASSERT(api != NULL);
+	EXTRA_ASSERT(asn != NULL);
 	memset(asn, 0x00, sizeof(ServiceInfo_t));
 
 	/*header */
@@ -518,19 +496,14 @@ static const struct abstract_sequence_handler_s descr_ServiceInfo =
 GByteArray*
 service_info_marshall_1(service_info_t *si, GError **err)
 {
-	ServiceInfo_t asn;
-	asn_enc_rval_t encRet;
-	GByteArray *gba;
+	EXTRA_ASSERT(si != NULL);
 
-	if (!si) {
-		GSETERROR(err, "invalid parameter");
-		return NULL;
-	}
-
+	ServiceInfo_t asn = {};
 	if (!service_info_API2ASN(si, &asn))
 		GRID_ERROR("Conversion error");
 
-	gba = g_byte_array_sized_new(64);
+	asn_enc_rval_t encRet = {};
+	GByteArray *gba = g_byte_array_sized_new(64);
 	encRet = der_encode(&asn_DEF_ServiceInfo, &asn, metautils_asn1c_write_gba, gba);
 	service_info_cleanASN(&asn, TRUE);
 
@@ -664,13 +637,6 @@ key_value_pair_clean(key_value_pair_t * kv)
 }
 
 static void
-key_value_pair_gclean(gpointer p, gpointer u)
-{
-	(void) u;
-	key_value_pair_clean((key_value_pair_t *) p);
-}
-
-static void
 ht_iterator(gpointer k, gpointer v, gpointer u)
 {
 	struct kv_convert_ctx_s *ctx;
@@ -698,23 +664,16 @@ ht_iterator(gpointer k, gpointer v, gpointer u)
 static GSList *
 key_value_pairs_convert_from_map(GHashTable * ht, gboolean copy, GError ** err)
 {
-	struct kv_convert_ctx_s ctx;
+	g_assert(ht != NULL);
 
-	ctx.error_met = FALSE;
+	struct kv_convert_ctx_s ctx = {};
 	ctx.pairs = NULL;
 	ctx.err = err;
 	ctx.copy = copy;
 
-	if (!ht) {
-		GSETERROR(err, "Invalid parameter");
-		return NULL;
-	}
 	g_hash_table_foreach(ht, ht_iterator, &ctx);
 	if (ctx.error_met) {
-		if (ctx.pairs) {
-			g_slist_foreach(ctx.pairs, key_value_pair_gclean, NULL);
-			g_slist_free(ctx.pairs);
-		}
+		g_slist_free_full(ctx.pairs, (GDestroyNotify)key_value_pair_clean);
 		GSETERROR(err, "conversion error");
 		return NULL;
 	}
@@ -752,8 +711,7 @@ hashtable_conversion(GHashTable *ht,
 		}
 
 		/* free the temp list */
-		g_slist_foreach(result, key_value_pair_gclean, NULL);
-		g_slist_free(result);
+		g_slist_free_full(result, (GDestroyNotify)key_value_pair_clean);
 	}
 
 	return TRUE;
@@ -802,62 +760,39 @@ namespace_info_cleanASN(NamespaceInfo_t * asn, gboolean only_content)
 GByteArray *
 namespace_info_marshall(namespace_info_t * namespace_info, GError ** err)
 {
-	asn_enc_rval_t encRet;
-	GByteArray *result = NULL;
-	NamespaceInfo_t asn1_namespace_info = {{0}};
-
-	/*sanity checks */
-	if (!namespace_info) {
-		GSETERROR(err, "Invalid parameter");
-		goto error_params;
-	}
+	g_assert(namespace_info != NULL);
 
 	/*fills an ASN.1 structure */
+	NamespaceInfo_t asn1_namespace_info = {};
 	if (!namespace_info_API2ASN(namespace_info, &asn1_namespace_info)) {
 		GSETERROR(err, "API to ASN.1 mapping error");
-		goto error_mapping;
+		return NULL;
 	}
 
 	/*serialize the ASN.1 structure */
-	if (!(result = g_byte_array_sized_new(4096))) {
-		GSETERROR(err, "memory allocation failure");
-		goto error_alloc_gba;
-	}
+	GByteArray *result = g_byte_array_sized_new(4096);
+	asn_enc_rval_t encRet = {};
 	encRet = der_encode(&asn_DEF_NamespaceInfo, &asn1_namespace_info,
 			metautils_asn1c_write_gba, result);
 	if (encRet.encoded == -1) {
 		GSETERROR(err, "ASN.1 encoding error");
-		goto error_encode;
+		namespace_info_cleanASN(&asn1_namespace_info, TRUE);
+		g_byte_array_free(result, TRUE);
+		return NULL;
 	}
 
-	/*free the ASN.1 structure */
 	namespace_info_cleanASN(&asn1_namespace_info, TRUE);
-
 	return result;
-
-error_encode:
-	g_byte_array_free(result, TRUE);
-error_alloc_gba:
-error_mapping:
-	namespace_info_cleanASN(&asn1_namespace_info, TRUE);
-error_params:
-
-	return NULL;
 }
 
 namespace_info_t *
 namespace_info_unmarshall(const guint8 * buf, gsize buf_len, GError ** err)
 {
-	asn_dec_rval_t decRet;
-	asn_codec_ctx_t codecCtx;
-	namespace_info_t *result = NULL;
-	NamespaceInfo_t *asn1_namespace_info = NULL;
+	g_assert(buf != NULL);
 
-	/*sanity checks */
-	if (!buf) {
-		GSETCODE(err, ERRCODE_PARAM, "Invalid paremeter");
-		return NULL;
-	}
+	asn_dec_rval_t decRet = {};
+	asn_codec_ctx_t codecCtx = {};
+	NamespaceInfo_t *asn1_namespace_info = NULL;
 
 	/*deserialize the encoded form */
 	codecCtx.max_stack_size = ASN1C_MAX_STACK;
@@ -869,9 +804,7 @@ namespace_info_unmarshall(const guint8 * buf, gsize buf_len, GError ** err)
 	}
 
 	/*prepare the working structures */
-	result = g_malloc0(sizeof(namespace_info_t));
-
-	/*map the ASN.1 in a common structure */
+	namespace_info_t *result = g_malloc0(sizeof(namespace_info_t));
 	int rc = namespace_info_ASN2API(asn1_namespace_info, result);
 	namespace_info_cleanASN(asn1_namespace_info, FALSE);
 	asn1_namespace_info = NULL;
