@@ -88,6 +88,11 @@ grid_addrinfo_to_string(const struct addr_info_s *a, gchar *dst, gsize dst_size)
 static gboolean
 _port_parse (const char *start, guint16 *res)
 {
+	if (!*start) {  /* Accept "IP:", as a zeroed PORT */
+		*res = 0;
+		return TRUE;
+	}
+
 	if (!g_ascii_isdigit(*start))
 		return FALSE;
 
@@ -137,14 +142,13 @@ grid_string_to_sockaddr(const gchar *start, struct sockaddr *s, gsize *slen)
 	}
 
 	// Find the ':' separator and fill the working buffers with each part
-	gchar *colon = strrchr(addr, ':');
-	if (!colon) return FALSE;
-	*(colon++) = '\0';
-
-	// Parse the port
 	guint16 u16port = 0;
-	if (!_port_parse(colon, &u16port))
-		return 0;
+	gchar *colon = strrchr(addr, ':');
+	if (colon) {
+		*(colon++) = '\0';
+		if (!_port_parse(colon, &u16port))
+			return 0;
+	}
 
 	// And now, parse the address
 	if (addr[0] == '[') {
