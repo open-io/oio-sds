@@ -22,45 +22,31 @@ License along with this library.
 GByteArray *
 l4v_read_2to(int fd, gint ms1, gint msAll, GError ** err)
 {
-	gint rc = 0;
-	int nbRecv = 0;
-	GByteArray *gba = NULL;
 	guint8 recvBuf[4096];
-	gsize msgSize = 0;
 
 	/* the size */
-	rc = sock_to_read_size(fd, ms1, recvBuf, 4, err);
+	int rc = sock_to_read_size(fd, ms1, recvBuf, 4, err);
 	if (rc < 4) {
 		GSETERROR(err, "Failed to read %d bytes on socket", 4);
 		return NULL;
 	}
 
 	guint32 s32 = *((guint32*)recvBuf);
-	msgSize = g_ntohl(s32);
-	gba = g_byte_array_sized_new(MIN(msgSize + 4 + 4, 16384));
+	gsize msgSize = g_ntohl(s32);
 
-	if (NULL == gba) {
-		GSETERROR(err, "Cannot create a pre-allocated buffer");
-		return NULL;
-	}
-
+	GByteArray *gba = g_byte_array_sized_new(MIN(msgSize + 4 + 4, 16384));
 	gba = g_byte_array_append(gba, recvBuf, 4);
 
 	/* the remaining */
 	while (gba->len < msgSize + 4) {
-		nbRecv = sock_to_read(fd, msAll, recvBuf,
+		int nbRecv = sock_to_read(fd, msAll, recvBuf,
 				MIN(sizeof(recvBuf), msgSize + 4 - gba->len), err);
 		if (nbRecv <= 0) {
 			GSETERROR(err, "Read failed after %i bytes", gba->len);
 			g_byte_array_free(gba, TRUE);
 			return NULL;
-		}
-		else {
-			if (!g_byte_array_append(gba, recvBuf, nbRecv)) {
-				GSETERROR(err, "Memory allocation failure");
-				g_byte_array_free(gba, TRUE);
-				return NULL;
-			}
+		} else {
+			g_byte_array_append(gba, recvBuf, nbRecv);
 		}
 	}
 
