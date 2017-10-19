@@ -267,6 +267,30 @@ _get_data_security_id(const gchar *storage_policy_value)
 	return data_sec_id;
 }
 
+static gsize
+metautils_gba_data_to_string(const GByteArray *gba, gchar *dst,
+		gsize dst_size)
+{
+	gsize i, imax, idst;
+
+	if (unlikely(NULL == gba || NULL == dst || 0 == dst_size))
+		return 0;
+	if (!gba->data || !gba->len)
+		return 0;
+
+	memset(dst, 0, dst_size);
+	imax = MIN(gba->len,dst_size);
+	for (i=0,idst=0; i<imax && idst<dst_size-5 ;i++) {
+		gchar c = (gchar)(gba->data[i]);
+		if (g_ascii_isprint(c) && c != '\\')
+			dst[ idst++ ] = c;
+		else
+			idst += g_snprintf(dst+idst, dst_size-idst, "\\x%02X", c);
+	}
+
+	return idst;
+}
+
 gchar*
 namespace_data_security_value(const namespace_info_t *ns_info, const gchar *wanted_policy)
 {
