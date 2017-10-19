@@ -74,14 +74,14 @@ class ContainerTest(CliTestCase):
                           self.openio,
                           ('container snapshot Should_not_exist' + opts))
         # Use specified name
-        snapshot_account = random_str(16)
-        snapshot_container = random_str(16)
-        opts += " --account-snapshot " + snapshot_account
-        opts += " --container-snapshot " + snapshot_container
+        dst_account = random_str(16)
+        dst_container = random_str(16)
+        opts += " --dst-account " + dst_account
+        opts += " --dst-container " + dst_container
         output = self.openio('container snapshot ' + self.NAME + opts)
         output = self.json_loads(output)[0]
-        self.assertEqual(output['Account'], snapshot_account)
-        self.assertEqual(output['Container'], snapshot_container)
+        self.assertEqual(output['Account'], dst_account)
+        self.assertEqual(output['Container'], dst_container)
         self.assertEqual(output['Status'], "OK")
         # Snapshot should reply Container already exists when using already
         #   specified name

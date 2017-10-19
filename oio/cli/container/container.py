@@ -516,11 +516,13 @@ class RefreshContainer(command.Command):
 
 
 class SnapshotContainer(lister.Lister):
-    """ Take a snapshot of a container.
+    """
+    Take a snapshot of a container.
 
     Create a separate database containing all information about the contents
     from the original database, but with copies of the chunks at the time
-    of the snapshot."""
+    of the snapshot. This new database is not replicated.
+    """
 
     log = getLogger(__name__ + '.SnapshotContainer')
 
@@ -532,22 +534,23 @@ class SnapshotContainer(lister.Lister):
             help='Container to snapshot'
         )
         parser.add_argument(
-            '--account-snapshot',
-            metavar='<account_snapshot>',
+            '--dst-account',
+            metavar='<account>',
             help=('The account where the snapshot should be created. '
-                  'By default the same as the target.')
+                  'By default the same account as the snapshotted container.')
         )
         parser.add_argument(
-            '--container-snapshot',
-            metavar='<container_snapshot>',
-            help=('The name of the snapshot. '
-                  'By default the "current_name-Timestamp"')
+            '--dst-container',
+            metavar='<container>',
+            help=('The name of the container hosting the snapshot. '
+                  'By default the name of the snapshotted container '
+                  'suffixed by a timestamp.')
         )
         parser.add_argument(
-            '--batch-chunk-size',
-            metavar='<batch>',
+            '--chunk-batch-size',
+            metavar='<size>',
             default=100,
-            help=('The number of chunks updated at the same time')
+            help=('The number of chunks updated at the same time.')
         )
         return parser
 
@@ -556,14 +559,12 @@ class SnapshotContainer(lister.Lister):
 
         account = self.app.client_manager.account
         container = parsed_args.container
-        account_snapshot = parsed_args.account_snapshot or account
-        container_snapshot = (parsed_args.container_snapshot or
-                              (container + "-" + Timestamp(time()).normal))
-        batch = parsed_args.batch_chunk_size
+        dst_account = parsed_args.dst_account or account
+        dst_container = (parsed_args.dst_container or
+                         (container + "-" + Timestamp(time()).normal))
+        batch = parsed_args.chunk_batch_size
 
-        self.app.client_manager.storage.container_snapshot(account, container,
-                                                           account_snapshot,
-                                                           container_snapshot,
-                                                           batch=batch)
-        lines = [(account_snapshot, container_snapshot, "OK")]
+        self.app.client_manager.storage.container_snapshot(
+            account, container, dst_account, dst_container, batch=batch)
+        lines = [(dst_account, dst_container, "OK")]
         return ('Account', 'Container', 'Status'), lines

@@ -258,8 +258,8 @@ class ObjectStorageApi(object):
         return self.container.container_show(account, container, **kwargs)
 
     @handle_container_not_found
-    def container_snapshot(self, account, container, account_snapshot,
-                           container_snapshot, batch=100, **kwargs):
+    def container_snapshot(self, account, container, dst_account,
+                           dst_container, batch=100, **kwargs):
         """
         Create a copy of the container (only the content of the database)
 
@@ -267,51 +267,44 @@ class ObjectStorageApi(object):
         :type account: `str`
         :param container: name of the target
         :type container: `str`
-        :param account_snapshot: account in which the snapshot will be.
-        :type snaspshot_container: `str`
-        :param container_snapshot: name of the snapshot
-        :type container_snapshot: `str`
+        :param dst_account: account in which the snapshot will be.
+        :type dst_account: `str`
+        :param dst_container: name of the snapshot
+        :type dst_container: `str`
         """
         try:
             self.container.container_freeze(account, container)
-            self.container.container_snapshot(account, container,
-                                              account_snapshot,
-                                              container_snapshot)
-            resp = self.object_list(account_snapshot, container_snapshot)
+            self.container.container_snapshot(
+                account, container, dst_account, dst_container)
+            resp = self.object_list(dst_account, dst_container)
             obj_gen = resp['objects']
             target_beans = []
             copy_beans = []
             for obj in obj_gen:
                 data = self.object_locate(
                     account, container, obj["name"])
-                chunks = []
-                for d in data[1]:
-                    chunks.append(d['url'])
+                chunks = [chunk['url'] for chunk in data[1]]
                 copies = self._generate_copy(chunks)
-                fullpath = self._generate_fullpath(account_snapshot,
-                                                   container_snapshot,
-                                                   obj["name"],
-                                                   obj['version'])
+                fullpath = self._generate_fullpath(
+                    dst_account, dst_container, obj['name'], obj['version'])
                 self._send_copy(chunks, copies, fullpath[0])
                 t_beans, c_beans = self._prepare_update_meta2(
-                    data[1], copies, account_snapshot, container_snapshot,
-                    obj["content"])
+                    data[1], copies, dst_account, dst_container,
+                    obj['content'])
                 target_beans.extend(t_beans)
                 copy_beans.extend(c_beans)
                 if len(target_beans) > batch:
-                    self.container.container_raw_update(target_beans,
-                                                        copy_beans,
-                                                        account_snapshot,
-                                                        container_snapshot,
-                                                        frozen=True)
+                    self.container.container_raw_update(
+                        target_beans, copy_beans,
+                        dst_account, dst_container,
+                        frozen=True)
                     target_beans = []
                     copy_beans = []
             if target_beans:
-                self.container.container_raw_update(target_beans,
-                                                    copy_beans,
-                                                    account_snapshot,
-                                                    container_snapshot,
-                                                    frozen=True)
+                self.container.container_raw_update(
+                    target_beans, copy_beans,
+                    dst_account, dst_container,
+                    frozen=True)
         finally:
             self.container.container_enable(account, container)
 
