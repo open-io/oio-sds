@@ -374,10 +374,35 @@
 				"descr": "In the current sqliterepo repository, sets the maximum amount of time a periodical task may take, while checking for the timeouts on the outbound connections.",
 				"def": "5s", "min": "1ms", "max": "1h" },
 
-			{ "type": "uint", "name": "sqliterepo_election_expire_max_per_round",
-				"key": "sqliterepo.election.task.expire_max_per_round",
-				"descr": "Sets how many elections can be expired during the periodical expiration task.",
-				"def": 100, "min": 1, "max": "1 << 31" },
+			{ "type": "uint", "name": "sqliterepo_election_task_EXIT_period",
+				"key": "sqliterepo.election.task.exit.period",
+				"descr": "In jiffies, how often the removal of expired NONE elections happens",
+				"def": "5", "min": 0, "max": "86400" },
+
+			{ "type": "uint", "name": "sqliterepo_election_task_TIMER_period",
+				"key": "sqliterepo.election.task.timer.period",
+				"descr": "In jiffies, how often the elections waiting for timers are fired",
+				"def": "1", "min": 0, "max": "86400" },
+
+			{ "type": "uint", "name": "sqliterepo_election_task_PING_period",
+				"key": "sqliterepo.election.task.ping.period",
+				"descr": "In jiffies, how often a PING may be triggered for elections in a final state.",
+				"def": "15", "min": 0, "max": "86400" },
+
+			{ "type": "monotonic", "name": "sqliterepo_election_task_EXIT_alert",
+				"key": "sqliterepo.election.task.exit.alert",
+				"descr": "When NONE elections are expired, report a warning if the background task holds the lock longer than this value.",
+				"def": "200ms", "min": 0, "max": "max" },
+
+			{ "type": "monotonic", "name": "sqliterepo_election_task_TIMER_alert",
+				"key": "sqliterepo.election.task.timer.alert",
+				"descr": "When timers are raised on elections, report a warning if the background task holds the lock longer than this value.",
+				"def": "200ms", "min": 0, "max": "max" },
+
+			{ "type": "monotonic", "name": "sqliterepo_election_task_PING_alert",
+				"key": "sqliterepo.election.task.ping.alert",
+				"descr": "When pings are sent from election in a final state, report a warning if the background task holds the lock longer than this value.",
+				"def": "200ms", "min": 0, "max": "max" },
 
 			{ "type": "uint", "name": "disconnection_rrd_window",
 			   "key": "sqliterepo.zk.rrd.window",
@@ -446,12 +471,12 @@
 
 			{ "type": "uint", "name": "sqliterepo_repo_max_bases_hard",
 				"key": "sqliterepo.repo.hard_max",
-				"descr": "Sets how many databases can be kept simultaneously open in the current service.",
-				"def": "32ki", "min": "8", "max": "128ki" },
+				"descr": "Sets how many databases can be kept simultaneously open (in use or idle) in the current service. If defined to 0, it is set to 30% of available file descriptors.",
+				"def": "0", "min": "0", "max": "128ki" },
 
 			{ "type": "uint", "name": "sqliterepo_repo_max_bases_soft",
 				"key": "sqliterepo.repo.soft_max",
-				"descr": "Sets how many databases can be kept simultaneously open in the current service.",
+				"descr": "Sets how many databases can be in use at the same moment in the current service. If defined to 0, it is set to sqliterepo.repo.hard_max.",
 				"def": "0", "min": "0", "max": "128ki" },
 
 			{ "type": "uint", "name": "sqliterepo_getvers_max_retries",
@@ -461,8 +486,8 @@
 
 			{ "type": "uint", "name": "sqliterepo_fd_max_active",
 				"key": "sqliterepo.repo.fd_max_active",
-				"descr": "Set to 0 for an automatic detection",
-				"def": 0, "min": 0, "max": "4ki" }
+				"descr": "Maximum number of simultaneous outgoing connections. Set to 0 for an automatic detection (30% of available file descriptors).",
+				"def": 0, "min": 0, "max": "64ki" }
 		]
 	},
 	"rdir": {
@@ -482,8 +507,8 @@
 		"variables": [
 			{ "type": "uint", "name": "server_fd_max_passive",
 				"key": "server.fd_max_passive",
-				"descr": "Set to 0 for an automatic detection",
-				"def": 0, "min": 0, "max": "4ki" },
+				"descr": "Maximum number of simultaneous incoming connections. Set to 0 for an automatic detection (40% of available file descriptors).",
+				"def": 0, "min": 0, "max": "64ki" },
 
 			{ "type": "bool", "name": "oio_udp_allowed",
 				"key": "udp_allowed",
@@ -585,7 +610,12 @@
 				"descr": "Sets how many bytes bytes are released when the LEAN request is received by the current 'meta' service.",
 				"def": 0, "min": 0, "max": "1<<32 - 1" },
 
-			{ "type": "uint", "name": "malloc_trim_size_periodic",
+			{ "type": "uint", "name": "sqlx_periodic_malloctrim_period",
+				"key": "server.task.malloc_trim.period",
+				"descr": "In jiffies, how often the periodic task that calls malloc_trim() is fired.",
+				"def": 3600, "min": 0, "max": "86400" },
+
+			{ "type": "uint", "name": "sqlx_periodic_malloctrim_size",
 				"key": "server.malloc_trim_size.periodic",
 				"descr": "Sets how many bytes bytes are released when the LEAN request is received by the current 'meta' service.",
 				"def": 0, "min": 0, "max": "1<<32 - 1" },

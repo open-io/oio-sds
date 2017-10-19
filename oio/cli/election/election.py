@@ -68,8 +68,8 @@ class ElectionCmd(Lister):
         return service_type, account, reference, cid
 
 
-class PingElection(ElectionCmd):
-    """Trigger or refresh an election"""
+class ElectionPing(ElectionCmd):
+    """Trigger or refresh an election."""
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
@@ -87,8 +87,8 @@ class PingElection(ElectionCmd):
         return columns, results
 
 
-class StatusElection(ElectionCmd):
-    """Get the status of an election (trigger it if necessary)"""
+class ElectionStatus(ElectionCmd):
+    """Get the status of an election (trigger it if necessary)."""
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
@@ -106,8 +106,8 @@ class StatusElection(ElectionCmd):
         return columns, results
 
 
-class DebugElection(ElectionCmd):
-    """Get debugging information about an election"""
+class ElectionDebug(ElectionCmd):
+    """Get debugging information about an election."""
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
@@ -123,4 +123,43 @@ class DebugElection(ElectionCmd):
         results = ((k, v["status"]["status"], v["status"]["message"],
                     format_json(parsed_args, v["body"])
                     ) for k, v in data)
+        return columns, results
+
+
+class ElectionSync(ElectionCmd):
+    """Try to synchronize a dubious election."""
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        service_type, account, reference, cid = self.get_params(parsed_args)
+
+        data = self.app.client_manager.election.election_sync(
+            service_type, account=account, reference=reference, cid=cid,
+            timeout=parsed_args.timeout)
+
+        columns = ('Id', 'Status', 'Message', 'Body')
+        data = sorted(data.iteritems())
+        results = ((k, v["status"]["status"], v["status"]["message"],
+                    format_json(parsed_args, v["body"])
+                    ) for k, v in data)
+        return columns, results
+
+
+class ElectionLeave(ElectionCmd):
+    """Ask all peers to leave an election."""
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        service_type, account, reference, cid = self.get_params(parsed_args)
+
+        data = self.app.client_manager.election.election_leave(
+            service_type, account=account, reference=reference, cid=cid,
+            timeout=parsed_args.timeout)
+
+        columns = ('Id', 'Status', 'Message')
+        data = sorted(data.iteritems())
+        results = ((k, v["status"]["status"], v["status"]["message"])
+                   for k, v in data)
         return columns, results

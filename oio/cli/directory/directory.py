@@ -71,40 +71,59 @@ class DirectoryInit(DirectoryCmd):
             help="Check that all prefixes have the right number of replicas")
         return parser
 
-    def take_action(self, parsed_args):
-        self.log.debug('take_action(%s)', parsed_args)
+    def _assign_meta1(self, parsed_args):
         mapping = self.get_prefix_mapping(parsed_args)
         mapping.load(read_timeout=parsed_args.meta0_timeout)
+
+        if mapping and not parsed_args.force:
+            self.log.info("Meta1 prefix mapping already initialized")
+            if not parsed_args.check:
+                return True
+            self.log.info("Checking...")
+            return mapping.check_replicas()
 
         # Bootstrap with the 'random' strategy, then rebalance with the
         # 'less_prefixes' strategy to ensure the same number of prefixes
         # per meta1. This is faster than bootstrapping directly with the
         # 'less_prefixes' strategy.
-        if not mapping or parsed_args.force:
-            self.log.info("Computing meta1 prefix mapping...")
+        checked = False
+        for i in range(3):
+            self.log.info("Computing meta1 prefix mapping (pass %d)", i)
             mapping.bootstrap()
-        else:
-            self.log.info("Meta1 prefix mapping already initialized")
 
-        self.log.info("Equilibrating...")
-        mapping.rebalance()
+            self.log.info("Equilibrating...")
+            mapping.rebalance()
 
-        checked = not parsed_args.check
-        if not checked:
-            self.log.info("Checking...")
-            checked = mapping.check_replicas()
+            if parsed_args.check:
+                self.log.info("Checking...")
+                checked = mapping.check_replicas()
+            else:
+                checked = True
+
+            if checked:
+                break
 
         if checked:
             self.log.info("Saving...")
             mapping.apply(connection_timeout=5.0,
                           read_timeout=parsed_args.meta0_timeout)
+        else:
+            raise Exception("Failed to initialize prefix mapping")
+        return checked
+
+    def _assign_rdir(self):
+        from time import sleep
+
+        self.log.info("Assigning rdir services to rawx services...")
+        sleep(5)  # Let meta1 fetch the list of managed bases
+        self.app.client_manager.directory.rdir_lb.assign_all_rawx()
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+        checked = self._assign_meta1(parsed_args)
 
         if parsed_args.rdir:
-            from time import sleep
-
-            self.log.info("Assigning rdir services to rawx services...")
-            sleep(5)  # Let meta1 fetch the list of managed bases
-            self.app.client_manager.directory.rdir_lb.assign_all_rawx()
+            self._assign_rdir()
 
         if checked:
             self.log.info("Done")
@@ -140,18 +159,21 @@ class DirectoryRebalance(DirectoryCmd):
 
 
 class DirectoryDecommission(DirectoryCmd):
-    """Decommission a Meta1 service."""
+    """Decommission a Meta1 service (or only some bases)."""
 
     def get_parser(self, prog_name):
         parser = super(DirectoryDecommission, self).get_parser(prog_name)
         parser.add_argument('addr', metavar='<ADDR>',
                             help='Address of service to decommission')
+        parser.add_argument('base', metavar='<BASE>', nargs='*',
+                            help="Name of bases to decommission")
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         mapping = self.get_prefix_mapping(parsed_args)
         mapping.load(read_timeout=parsed_args.meta0_timeout)
-        moved = mapping.decommission(parsed_args.addr)
+        moved = mapping.decommission(parsed_args.addr,
+                                     bases_to_remove=parsed_args.base)
         mapping.apply(moved, read_timeout=parsed_args.meta0_timeout)
         self.log.info("Moved %s", moved)

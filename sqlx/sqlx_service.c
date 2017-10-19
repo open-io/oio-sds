@@ -44,6 +44,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqliterepo/replication_dispatcher.h>
 #include <sqliterepo/gridd_client_pool.h>
 #include <sqliterepo/internals.h>
+#include <sqliterepo/hash.h>
 #include <resolver/hc_resolver.h>
 
 #include <core/oiolb.h>
@@ -65,7 +66,9 @@ static void sqlx_service_specific_stop(void);
 static void _task_malloc_trim(gpointer p);
 static void _task_expire_bases(gpointer p);
 static void _task_expire_resolver(gpointer p);
-static void _task_react_elections(gpointer p);
+static void _task_react_NONE(gpointer p);
+static void _task_react_FINAL(gpointer p);
+static void _task_react_TIMERS(gpointer p);
 static void _task_reload_nsinfo(gpointer p);
 
 static gpointer _worker_queue (gpointer p);
@@ -238,7 +241,7 @@ _patch_configuration_fd(void)
 	// internal mechanics (notifications, epoll, etc).
 	const guint total = maxfd - 32;
 
-	const guint reserved = sqliterepo_repo_max_bases_soft
+	const guint reserved = sqliterepo_repo_max_bases_hard
 		+ server_fd_max_passive + sqliterepo_fd_max_active;
 
 	// The operator already reserved to many connections, and we cannot
@@ -247,10 +250,10 @@ _patch_configuration_fd(void)
 		GRID_NOTICE("Too many descriptors have been reserved (%u), "
 				"please reconfigure the service or extend the system limit "
 				"(currently set to %u).", reserved, maxfd);
-		if (!sqliterepo_repo_max_bases_soft) {
-			sqliterepo_repo_max_bases_soft = MIN(1024, sqliterepo_repo_max_bases_hard);
+		if (!sqliterepo_repo_max_bases_hard) {
+			sqliterepo_repo_max_bases_hard = 1024;
 			GRID_WARN("maximum # of bases not set, arbitrarily set to %u",
-								sqliterepo_repo_max_bases_soft);
+								sqliterepo_repo_max_bases_hard);
 		}
 		if (!server_fd_max_passive) {
 			server_fd_max_passive = 64;
@@ -268,10 +271,9 @@ _patch_configuration_fd(void)
 		guint limits[3] = {G_MAXUINT, G_MAXUINT, G_MAXUINT};
 		do {
 			guint i=0;
-			if (sqliterepo_repo_max_bases_soft <= 0) {
-				to_be_set[i] = &sqliterepo_repo_max_bases_soft;
-				limits[i] = CLAMP(limits[i],
-						((100 * total) / 30), sqliterepo_repo_max_bases_hard);
+			if (sqliterepo_repo_max_bases_hard <= 0) {
+				to_be_set[i] = &sqliterepo_repo_max_bases_hard;
+				limits[i] = CLAMP(limits[i], ((100 * total) / 30), 131072);
 				i++;
 			}
 			if (!sqliterepo_fd_max_active) {
@@ -286,7 +288,8 @@ _patch_configuration_fd(void)
 			}
 		} while (0);
 
-		// Fan out all the available FD on each slot that dod not reach its max
+		// Fan out all the available FD on each slot that has not
+		// reached its maximum.
 		while (available > 0) {
 			gboolean any = FALSE;
 			for (guint i=0; to_be_set[i] && available > 0 ;i++) {
@@ -346,6 +349,7 @@ _init_configless_structures(struct sqlx_service_s *ss)
 		GRID_WARN("SERVICE init error: memory allocation failure");
 		return FALSE;
 	}
+	oio_var_fix_one("resolver.cache.enabled", "false");
 
 	return TRUE;
 }
@@ -649,8 +653,10 @@ _configure_tasks(struct sqlx_service_s *ss)
 
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_bases, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_resolver, NULL, ss);
-	grid_task_queue_register(ss->gtq_admin, 1, _task_react_elections, NULL, ss);
-	grid_task_queue_register(ss->gtq_admin, 3600, _task_malloc_trim, NULL, ss);
+	grid_task_queue_register(ss->gtq_admin, 1, _task_react_NONE, NULL, ss);
+	grid_task_queue_register(ss->gtq_admin, 1, _task_react_FINAL, NULL, ss);
+	grid_task_queue_register(ss->gtq_admin, 1, _task_react_TIMERS, NULL, ss);
+	grid_task_queue_register(ss->gtq_admin, 1, _task_malloc_trim, NULL, ss);
 
 	return TRUE;
 }
@@ -1031,10 +1037,13 @@ _worker_clients(gpointer p)
 }
 
 static void
-_task_malloc_trim(gpointer p)
+_task_malloc_trim(gpointer p UNUSED)
 {
-	(void) p;
-	malloc_trim (malloc_trim_size_periodic);
+	VARIABLE_PERIOD_DECLARE();
+	if (VARIABLE_PERIOD_SKIP(sqlx_periodic_malloctrim_period))
+		return;
+
+	malloc_trim (sqlx_periodic_malloctrim_size);
 }
 
 static void
@@ -1071,23 +1080,40 @@ _task_expire_resolver(gpointer p)
 	}
 }
 
+#define _task_alert_message(action) \
+	"Action %s on %u elections took %"G_GINT64_FORMAT"ms", \
+	#action, count, t / G_TIME_SPAN_MILLISECOND
+
+#define _task_timed_action(action,period,delay) do { \
+	if (!grid_main_is_running () || !PSRV(p)->flag_replicable) return; \
+	VARIABLE_PERIOD_DECLARE(); \
+	if (VARIABLE_PERIOD_SKIP(sqliterepo_election_task_##period)) return; \
+	gint64 t = oio_ext_monotonic_time(); \
+	guint count = action (PSRV(p)->election_manager); \
+	t = t - oio_ext_monotonic_time(); \
+	if (t > sqliterepo_election_task_##delay) { \
+		GRID_WARN(_task_alert_message(action)); \
+	} else { \
+		GRID_DEBUG(_task_alert_message(action)); \
+	} \
+} while (0)
+
 static void
-_task_react_elections(gpointer p)
+_task_react_NONE(gpointer p)
 {
-	if (!grid_main_is_running ())
-		return;
-	if (!PSRV(p)->flag_replicable)
-		return;
+	_task_timed_action(election_manager_play_exits, EXIT_period, EXIT_alert);
+}
 
-	gint64 t = oio_ext_monotonic_time();
-	guint count = election_manager_play_timers (PSRV(p)->election_manager,
-			sqliterepo_election_expire_max_per_round);
-	t = t - oio_ext_monotonic_time();
+static void
+_task_react_TIMERS(gpointer p)
+{
+	_task_timed_action(election_manager_play_timers, TIMER_period, TIMER_alert);
+}
 
-	if (count || t > (500*G_TIME_SPAN_MILLISECOND)) {
-		GRID_DEBUG("Reacted %u elections in %"G_GINT64_FORMAT"ms",
-				count, t / G_TIME_SPAN_MILLISECOND);
-	}
+static void
+_task_react_FINAL(gpointer p)
+{
+	_task_timed_action(election_manager_play_final_pings, PING_period, PING_alert);
 }
 
 static void

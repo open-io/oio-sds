@@ -138,7 +138,7 @@ class BlobRegistratorWorker(object):
                 return
         pre = meta2bean(self.volume_id, meta)
         post = meta2bean(self.volume_id, meta)
-        self.client.container_raw_update(pre, post, cid=cid)
+        self.client.container_raw_update([pre], [post], cid=cid)
         self.logger.info("updated %s/%s in %s/%s",
                          meta['content_id'], chunkid, cid,
                          meta['content_path'])

@@ -318,13 +318,14 @@ m2v2_remote_pack_RAW_ADD(struct oio_url_s *url, GSList *beans, gboolean force)
 
 GByteArray*
 m2v2_remote_pack_RAW_SUBST(struct oio_url_s *url,
-		GSList *new_chunks, GSList *old_chunks)
+		GSList *new_chunks, GSList *old_chunks, gboolean frozen)
 {
 	GByteArray *new_chunks_gba = bean_sequence_marshall(new_chunks);
 	GByteArray *old_chunks_gba = bean_sequence_marshall(old_chunks);
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_RAW_SUBST, url, NULL);
 	metautils_message_add_field_gba(msg, NAME_MSGKEY_NEW, new_chunks_gba);
 	metautils_message_add_field_gba(msg, NAME_MSGKEY_OLD, old_chunks_gba);
+	metautils_message_add_field_struint(msg, NAME_MSGKEY_FROZEN, BOOL(frozen));
 	g_byte_array_unref (new_chunks_gba);
 	g_byte_array_unref (old_chunks_gba);
 	return message_marshall_gba_and_clean(msg);

@@ -17,6 +17,8 @@
 
 from logging import getLogger
 from cliff import command, show, lister
+from time import time
+from oio.common.timestamp import Timestamp
 
 
 class SetPropertyCommandMixin(object):
@@ -511,3 +513,57 @@ class RefreshContainer(command.Command):
             account=account,
             container=parsed_args.container
         )
+
+
+class SnapshotContainer(lister.Lister):
+    """ Take a snapshot of a container.
+
+    Create a separate database containing all information about the contents
+    from the original database, but with copies of the chunks at the time
+    of the snapshot."""
+
+    log = getLogger(__name__ + '.SnapshotContainer')
+
+    def get_parser(self, prog_name):
+        parser = super(SnapshotContainer, self).get_parser(prog_name)
+        parser.add_argument(
+            'container',
+            metavar='<container>',
+            help='Container to snapshot'
+        )
+        parser.add_argument(
+            '--account-snapshot',
+            metavar='<account_snapshot>',
+            help=('The account where the snapshot should be created. '
+                  'By default the same as the target.')
+        )
+        parser.add_argument(
+            '--container-snapshot',
+            metavar='<container_snapshot>',
+            help=('The name of the snapshot. '
+                  'By default the "current_name-Timestamp"')
+        )
+        parser.add_argument(
+            '--batch-chunk-size',
+            metavar='<batch>',
+            default=100,
+            help=('The number of chunks updated at the same time')
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        account = self.app.client_manager.account
+        container = parsed_args.container
+        account_snapshot = parsed_args.account_snapshot or account
+        container_snapshot = (parsed_args.container_snapshot or
+                              (container + "-" + Timestamp(time()).normal))
+        batch = parsed_args.batch_chunk_size
+
+        self.app.client_manager.storage.container_snapshot(account, container,
+                                                           account_snapshot,
+                                                           container_snapshot,
+                                                           batch=batch)
+        lines = [(account_snapshot, container_snapshot, "OK")]
+        return ('Account', 'Container', 'Status'), lines

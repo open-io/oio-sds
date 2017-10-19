@@ -2278,7 +2278,7 @@ GError *m2db_check_content(GSList *beans, struct namespace_info_s *nsinfo,
 		g_slist_free(sorted_content.aliases);
 	if (sorted_content.properties)
 		g_slist_free(sorted_content.properties);
-	
+
 	g_tree_foreach(sorted_content.metachunks, _foreach_free_list, NULL);
 	g_tree_destroy(sorted_content.metachunks);
 	if(pol)

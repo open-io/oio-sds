@@ -44,8 +44,11 @@ class AdminClient(ProxyClient):
     """Low level database administration client."""
 
     def __init__(self, conf, **kwargs):
-        super(AdminClient, self).__init__(conf, request_prefix="/admin",
-                                          **kwargs)
+        super(AdminClient, self).__init__(
+            conf, request_prefix="/admin", **kwargs)
+        self.forwarder = ProxyClient(
+            conf, request_prefix="/forward", pool_manager=self.pool_manager,
+            no_ns_in_url=True, **kwargs)
 
     @loc_params
     def election_debug(self, params, **kwargs):
@@ -60,7 +63,8 @@ class AdminClient(ProxyClient):
         """
         Force all peers to leave the election.
         """
-        self._request('POST', '/leave', params=params, **kwargs)
+        _, body = self._request('POST', '/leave', params=params, **kwargs)
+        return body
 
     @loc_params
     def election_ping(self, params, **kwargs):
@@ -116,6 +120,12 @@ class AdminClient(ProxyClient):
         return resp
 
     @loc_params
+    def election_sync(self, params, **kwargs):
+        """Try to synchronize a dubious election."""
+        _, body = self._request('POST', '/sync', params=params, **kwargs)
+        return body
+
+    @loc_params
     def set_properties(self, params,
                        properties=None, system=None, **kwargs):
         """
@@ -149,3 +159,35 @@ class AdminClient(ProxyClient):
         data = {'system': {'sys.peers': ','.join(peers)}}
         self._request('POST', "/set_properties",
                       params=params, json=data, **kwargs)
+
+    @loc_params
+    def copy_base_from(self, params, svc_from, svc_to, **kwargs):
+        """
+        Copy a base to another service, using DB_PIPEFROM.
+
+        :param svc_from: id of the source service.
+        :param svc_to: id of the destination service.
+        """
+        data = {'to': svc_to, 'from': svc_from}
+        self._request('POST', "/copy",
+                      params=params, json=data, **kwargs)
+
+    @loc_params
+    def copy_base_to(self, params, svc_to, **kwargs):
+        """
+        Copy a base to another service, using DB_PIPETO.
+        Source service is looked after in service directory.
+
+        :param svc_to: id of the destination service.
+        """
+        self._request('POST', "/copy",
+                      params=params, json={'to': svc_to}, **kwargs)
+
+    def _forward_service_action(self, svc_id, action, **kwargs):
+        """Execute service-specific actions."""
+        self.forwarder._request('POST', action,
+                                params={'id': svc_id}, **kwargs)
+
+    def service_flush_cache(self, svc_id, **kwargs):
+        """Flush the resolver cache of an sqlx-bases service."""
+        self._forward_service_action(svc_id, '/flush', **kwargs)

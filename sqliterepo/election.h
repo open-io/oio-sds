@@ -90,7 +90,7 @@ struct election_manager_vtable_s
 
 	/* who are the peers for the given base */
 	GError* (*election_get_peers) (struct election_manager_s *manager,
-			const struct sqlx_name_s *n, gboolean nocache, gchar ***peers);
+			const struct sqlx_name_s *n, guint32 flags, gchar ***peers);
 
 	/** Prepare the internal memory for the election context, but without
 	 * starting the election. Usefull to prepare. */
@@ -129,7 +129,7 @@ enum election_mode_e election_manager_get_mode (const struct election_manager_s 
 const char * election_manager_get_local (const struct election_manager_s *m);
 
 GError* election_get_peers (struct election_manager_s *manager,
-		const struct sqlx_name_s *n, gboolean nocache, gchar ***peers);
+		const struct sqlx_name_s *n, guint32 flags, gchar ***peers);
 
 #define election_init(m,n) \
 	((struct abstract_election_manager_s*)m)->vtable->election_init(m,n)
@@ -167,10 +167,14 @@ struct election_counts_s election_manager_count (struct election_manager_s *m);
 guint election_manager_balance_masters(struct election_manager_s *M,
 		guint ratio, guint max, gint64 inactivity);
 
-/* Perform the 'timer' action on one item of each status.
-   This includes expiring the election, retrying, pinging peers, etc.
-   Returns the number of items activated. */
-guint election_manager_play_timers (struct election_manager_s *m, guint max);
+/* Reactivate some elections waiting for a timer to fire. */
+guint election_manager_play_timers (struct election_manager_s *m);
+
+/* Free all the elections with no status (STEP_NONE) since too long */
+guint election_manager_play_exits (struct election_manager_s *m);
+
+/* Send the pings from the final states */
+guint election_manager_play_final_pings (struct election_manager_s *m);
 
 /* Similar to the MANAGER_CHECK macro, but not stripped in Release mode,
  * and returns a boolean instead of asserting. */

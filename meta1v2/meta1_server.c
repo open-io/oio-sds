@@ -32,6 +32,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqliterepo/election.h>
 #include <sqliterepo/replication_dispatcher.h>
 #include <sqlx/sqlx_service.h>
+#include <resolver/hc_resolver.h>
 
 #include "./internals.h"
 #include "./meta1_backend.h"
@@ -126,27 +127,26 @@ static GError *
 _get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
 		gboolean nocache, gchar ***result)
 {
-	if (!n || !result)
-		return SYSERR("BUG [%s:%s:%d]", __FUNCTION__, __FILE__, __LINE__);
+	(void) nocache;
+	GError *err = NULL;
 
-	if (!g_str_has_prefix(n->type, NAME_SRVTYPE_META1))
-		return BADREQ("Invalid type name");
-	if (!oio_str_ishexa(n->base,4))
-		return BADREQ("Invalid base name");
+	gint64 seq = 1;
+	gchar **peers = NULL;
+	struct oio_url_s *u = oio_url_empty();
+	oio_url_set(u, OIOURL_NS, ss->ns_name);
 
-	/* normalizes the maybe-shortened base name: 4 xdigits, padded
-	 * with zeroes if necessary. */
-	guint8 cid[2] = {0,0};
-	oio_str_hex2bin(n->base, cid, 2);
-
-	if (nocache)
-		_reload_prefixes(ss, FALSE);
-
-	*result = meta1_prefixes_get_peers(meta1_backend_get_prefixes(m1), cid);
-	if (likely(*result != NULL))
-		return NULL;
-
-	return NEWERROR(CODE_CONTAINER_NOTFOUND, "Base not managed");
+	if (!sqlx_name_extract(n, u, ss->service_config->srvtype, &seq)) {
+		err = BADREQ("Invalid type name: '%s'", n->type);
+	} else {
+		err = hc_resolve_reference_directory(ss->resolver, u, &peers);
+	}
+	if (!err) {
+		*result = meta1_url_filter_typed((const char * const *)peers, n->type);
+		if (peers)
+			g_strfreev(peers);
+	}
+	oio_url_clean(u);
+	return err;
 }
 
 static gboolean

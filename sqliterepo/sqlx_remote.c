@@ -119,6 +119,17 @@ sqlx_pack_EXITELECTION(const struct sqlx_name_s *name)
 }
 
 GByteArray*
+sqlx_pack_SNAPSHOT(const struct sqlx_name_s *name, const gchar *source,
+		const gchar *cid, const gchar *seq_num)
+{
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_SNAPSHOT, name);
+	metautils_message_add_field_str(req, NAME_MSGKEY_SRC, source);
+	metautils_message_add_field_str(req, NAME_MSGKEY_CONTAINERID, cid);
+	metautils_message_add_field_str(req, NAME_MSGKEY_SEQNUM, seq_num);
+	return message_marshall_gba_and_clean(req);
+}
+
+GByteArray*
 sqlx_pack_PIPEFROM(const struct sqlx_name_s *name, const gchar *source)
 {
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PIPEFROM, name);
@@ -301,8 +312,20 @@ sqlx_name_extract (const struct sqlx_name_s *n, struct oio_url_s *url,
 	}
 
 	if (NULL != (tokens = g_strsplit (n->base, ".", 2))) {
-		if (tokens[0])
-			oio_url_set (url, OIOURL_HEXID, tokens[0]);
+		if (tokens[0]) {
+			if (strlen(tokens[0]) >= 64) {
+				oio_url_set(url, OIOURL_HEXID, tokens[0]);
+			} else {
+				// Special case of meta1 databases
+				EXTRA_ASSERT(!strcmp(srvtype, NAME_SRVTYPE_META1));
+				gchar hexid[STRLEN_CONTAINERID];
+				gchar *cur = g_stpcpy(hexid, tokens[0]);
+				for (; cur < hexid + STRLEN_CONTAINERID - 1; cur++)
+					*cur = '0';
+				*cur = '\0';
+				oio_url_set(url, OIOURL_HEXID, hexid);
+			}
+		}
 		*pseq = tokens[1] ? g_ascii_strtoll (tokens[1], NULL, 10) : 1;
 		g_strfreev (tokens);
 	}

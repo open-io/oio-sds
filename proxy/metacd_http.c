@@ -919,6 +919,7 @@ configure_request_handlers (void)
 
 	// Meta2
 	// Container
+	SET("/$NS/container/snapshot/#POST", action_container_snapshot);
 	SET("/$NS/container/create/#POST", action_container_create);
 	SET("/$NS/container/create_many/#POST", action_container_create_many);
 	SET("/$NS/container/destroy/#POST", action_container_destroy);
@@ -954,22 +955,49 @@ configure_request_handlers (void)
 	SET("/$NS/content/truncate/#POST", action_content_truncate);
 
 	// Admin
+	/* Ask each peer to trigger or update the election ("DB_USE"). */
 	SET("/$NS/admin/ping/#POST", action_admin_ping);
+
 	SET("/$NS/admin/info/#POST", action_admin_info);
+
+	/* Ask each peer for the status of the election.
+	 * 200 -> master, 303 -> slave. */
 	SET("/$NS/admin/status/#POST", action_admin_status);
+
 	SET("/$NS/admin/drop_cache/#POST", action_admin_drop_cache);
 	SET("/$NS/admin/sync/#POST", action_admin_sync);
+
+	/* Ask each peer to exit the election ("DB_LEAVE"). */
 	SET("/$NS/admin/leave/#POST", action_admin_leave);
+
+	/* Ask each peer for debugging information abount an election.
+	 * Current state, zookeeper node, transition history... */
 	SET("/$NS/admin/debug/#POST", action_admin_debug);
+
+	/* Copy a base from one service to another. The body must be a json
+	 * object with 'to' and 'from' service ids. If 'from' is provided,
+	 * DB_PIPEFROM will be called on the destination service,
+	 * otherwise the source services will be located from the directory
+	 * and DB_PIPETO will be used. */
 	SET("/$NS/admin/copy/#POST", action_admin_copy);
+
+	/* Get, set or delete properties from the admin table
+	 * of any sqliterepo service. */
 	SET("/$NS/admin/get_properties/#POST", action_admin_prop_get);
 	SET("/$NS/admin/set_properties/#POST", action_admin_prop_set);
 	SET("/$NS/admin/del_properties/#POST", action_admin_prop_del);
+
+	/* Freeze a database (disable writes, reads are still enabled). */
 	SET("/$NS/admin/freeze/#POST", action_admin_freeze);
+	/* Enable a database that has previously been frozen. */
 	SET("/$NS/admin/enable/#POST", action_admin_enable);
+	/* Disable a database. */
 	SET("/$NS/admin/disable/#POST", action_admin_disable);
 
+	/* Fill the meta0. The first call must contain all prefixes.
+	 * Subsequent calls can contain only the prefixes to update. */
 	SET("/$NS/admin/meta0_force/#POST", action_admin_meta0_force);
+	/* Get the whole content of the meta0. */
 	SET("/$NS/admin/meta0_list/#GET", action_admin_meta0_list);
 }
 

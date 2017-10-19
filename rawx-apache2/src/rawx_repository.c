@@ -204,6 +204,10 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 
 	resource_stat_chunk(resource, flags);
 
+	if (r->method_number == M_COPY) {
+		request_load_chunk_info_from_headers(r, &(resource->info->chunk));
+	}
+
 	if (r->method_number == M_PUT || r->method_number == M_POST ||
 			r->method_number == M_MOVE ||
 			(r->method_number == M_GET && ctx.update_only)) {
@@ -618,6 +622,74 @@ end_deliver:
 }
 
 static dav_error *
+dav_rawx_copy_resource(const dav_resource *src, dav_resource *dst, int depth,
+		dav_response **response)
+{
+	(void) depth;
+	char buff[128];
+	apr_pool_t *pool;
+	pool = dst->pool;
+	apr_status_t status;
+	dav_error *e = NULL;
+	dav_rawx_server_conf * srv_conf = resource_get_server_config(src);
+
+	*response = NULL;
+
+	if (DAV_RESOURCE_TYPE_REGULAR != src->type) {
+		e = server_create_and_stat_error(srv_conf, pool, HTTP_CONFLICT,
+				0, "Cannot COPY this type of resource");
+		goto end_copy;
+	}
+	if (src->collection) {
+		e = server_create_and_stat_error(srv_conf, pool, HTTP_CONFLICT,
+				0, "No COPY on collections");
+		goto end_copy;
+	}
+	if (!apr_strnatcasecmp(src->info->hex_chunkid, dst->info->hex_chunkid)) {
+		e = server_create_and_stat_error(srv_conf, pool, HTTP_FORBIDDEN, 0,
+				"Source and destination should not have the same id");
+		goto end_copy;
+	}
+
+	if (!src->info->chunk.oio_full_path) {
+		e = server_create_and_stat_error(srv_conf, pool,
+					HTTP_FORBIDDEN, 0,
+					apr_pstrdup(pool, "Missing fullpath"));
+		goto end_copy;
+	}
+
+	DAV_DEBUG_RES(src, 0, "Copying %s to %s", resource_get_pathname(src),
+			resource_get_pathname(dst));
+	status = apr_file_link(resource_get_pathname(src),
+			resource_get_pathname(dst));
+
+	if (status != APR_SUCCESS) {
+		e = server_create_and_stat_error(srv_conf,
+				pool, HTTP_INTERNAL_SERVER_ERROR, status,
+				apr_pstrcat(pool, "Failed to COPY this chunk: ",
+					apr_strerror(status, buff, sizeof(buff)), NULL));
+		goto end_copy;
+	}
+
+	GError *local_error = NULL;
+	if (!set_rawx_info_to_file(resource_get_pathname(dst), &local_error,
+				&(src->info->chunk))) {
+		e = server_create_and_stat_error(srv_conf, pool,
+				HTTP_FORBIDDEN, 0,
+				apr_pstrdup(pool, gerror_get_message(local_error)));
+		goto end_copy;
+	}
+
+	server_inc_stat(srv_conf, RAWX_STATNAME_REP_2XX, 0);
+
+end_copy:
+	server_inc_request_stat(srv_conf, RAWX_STATNAME_REQ_OTHER,
+			request_get_duration(src->info->request));
+
+	return e;
+}
+
+static dav_error *
 dav_rawx_move_resource(dav_resource *src_res, dav_resource *dst_res,
 		dav_response **response)
 {
@@ -791,7 +863,7 @@ static const dav_hooks_repository dav_hooks_repository_rawx =
 	dav_rawx_set_headers,
 	dav_rawx_deliver,
 	NULL /* no collection creation */,
-	NULL /* no copy of resources allowed */,
+	dav_rawx_copy_resource,
 	dav_rawx_move_resource /* only for regular resources */,
 	dav_rawx_remove_resource /* only for regular resources */,
 	dav_rawx_walk /* no walk across the chunks */,

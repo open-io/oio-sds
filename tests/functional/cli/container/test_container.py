@@ -15,7 +15,8 @@
 
 import uuid
 import re
-from tests.functional.cli import CliTestCase
+from tests.functional.cli import CliTestCase, CommandFailed
+from tests.utils import random_str
 
 
 class ContainerTest(CliTestCase):
@@ -61,3 +62,29 @@ class ContainerTest(CliTestCase):
                 self.assertEqual(container["Bytes"], 0)
                 return
         self.fail("No container %s" % self.NAME)
+
+    def test_container_snapshot(self):
+        # Snapshot should reply the name of the snapshot on success
+        opts = self.get_opts([], 'json')
+        output = self.openio('container snapshot ' + self.NAME + opts)
+        output = self.json_loads(output)[0]
+        self.assertEqual(output['Status'], "OK")
+        # Snapshot should reply Missing container on non existant container
+        self.assertRaises(CommandFailed,
+                          self.openio,
+                          ('container snapshot Should_not_exist' + opts))
+        # Use specified name
+        snapshot_account = random_str(16)
+        snapshot_container = random_str(16)
+        opts += " --account-snapshot " + snapshot_account
+        opts += " --container-snapshot " + snapshot_container
+        output = self.openio('container snapshot ' + self.NAME + opts)
+        output = self.json_loads(output)[0]
+        self.assertEqual(output['Account'], snapshot_account)
+        self.assertEqual(output['Container'], snapshot_container)
+        self.assertEqual(output['Status'], "OK")
+        # Snapshot should reply Container already exists when using already
+        #   specified name
+        self.assertRaises(CommandFailed,
+                          self.openio,
+                          ('container snapshot ' + self.NAME + opts))

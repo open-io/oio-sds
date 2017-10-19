@@ -20,6 +20,8 @@ License along with this library.
 #include "metautils.h"
 #include "codec.h"
 
+#include <metautils/lib/common_variables.h>
+
 /* -------------------------------------------------------------------------- */
 
 typedef gboolean(*abstract_converter_f) (const void *in, void *out);
@@ -785,6 +787,10 @@ namespace_info_cleanASN(NamespaceInfo_t * asn, gboolean only_content)
 {
 	if (!asn)
 		return;
+
+	if (asn->options)
+		asn->options->list.free = free_Parameter;
+
 	asn->storagePolicy.list.free = free_Parameter;
 	asn->dataSecurity.list.free = free_Parameter;
 	if (only_content)

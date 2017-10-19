@@ -45,6 +45,10 @@ add_executable(test_cache_lru test_cache_lru.c)
 target_link_libraries(test_cache_lru oiocache)
 add_test(NAME cache/lru COMMAND test_cache_lru)
 
+add_executable(test_nsinfo test_nsinfo.c)
+target_link_libraries(test_nsinfo metautils ${COMMON})
+add_test(NAME metautils/nsinfo COMMAND test_nsinfo)
+
 add_executable(test_stg_policy test_stg_policy.c)
 target_link_libraries(test_stg_policy ${COMMON})
 add_test(NAME metautils/stgpol COMMAND test_stg_policy)

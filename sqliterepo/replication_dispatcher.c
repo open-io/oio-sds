@@ -420,6 +420,27 @@ _restore2(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 }
 
 static GError *
+_restore_snapshot(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
+		const gchar *path)
+{
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	GError *err = sqlx_repository_open_and_lock(repo, name,
+			SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK|SQLX_OPEN_CREATE, &sq3, NULL);
+	if (!err) {
+		err = sqlx_repository_restore_from_file(sq3, path);
+		if (!err) {
+			sqlx_repository_call_change_callback(sq3);
+			sqlx_admin_set_str(sq3, SQLX_ADMIN_PEERS,
+					sqlx_repository_get_local_addr(repo));
+			sqlx_admin_save_lazy(sq3);
+		}
+	}
+
+	sqlx_repository_unlock_and_close_noerror(sq3);
+	return err;
+} 
+
+static GError *
 _dump(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 		GByteArray **result)
 {
@@ -477,37 +498,59 @@ _dump_chunked(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 }
 
 static GError *
-_pipe_from(const gchar *source, struct sqlx_repository_s *repo,
-		struct sqlx_name_s *name)
+_pipe_base_from(const gchar *source, struct sqlx_repository_s *repo,
+		struct sqlx_name_s *name, struct restore_ctx_s **ctx)
 {
 	GError *err;
 	gchar path[LIMIT_LENGTH_VOLUMENAME+32] = {0};
-	struct restore_ctx_s *ctx = NULL;
 
 	GRID_TRACE2("%s(%s,%p,%s,%s)", __FUNCTION__,
 			source, repo, name->base, name->type);
 
 	g_snprintf(path, sizeof(path), "%s/tmp/restore.sqlite3.XXXXXX",
 			repo->basedir);
-	err = restore_ctx_create(path, &ctx);
+	err = restore_ctx_create(path, ctx);
 	if (err != NULL)
-		goto end;
+		return err;
 
-	GError *_pipe_from_cb(GByteArray *part, gint64 remaining, gpointer arg) {
+	GError *_pipe_from_cb(GByteArray *part, gint64 remaining, gpointer arg)
+	{
 		(void) arg;
 		GError *err2 = NULL;
-		GRID_DEBUG("PIPEFROM received block of %u bytes, %"
+		GRID_DEBUG ("PIPEFROM received block of %u bytes, %"
 				G_GINT64_FORMAT" bytes remaining", part->len, remaining);
-		err2 = restore_ctx_append(ctx, part->data, part->len);
-		metautils_gba_unref(part);
+		err2 = restore_ctx_append(*ctx, part->data, part->len);
+		metautils_gba_unref (part);
 		return err2;
 	}
 
-	err = peer_dump(source, name, TRUE, _pipe_from_cb, NULL);
+	return peer_dump(source, name, TRUE, _pipe_from_cb, NULL);
+}
+
+static GError *
+_pipe_from(const gchar *source, struct sqlx_repository_s *repo,
+		struct sqlx_name_s *name)
+{
+	GError *err;
+	struct restore_ctx_s *ctx = NULL;
+	err = _pipe_base_from(source, repo, name, &ctx);
 	if (!err)
 		err = _restore2(repo, name, ctx->path);
 
-end:
+	restore_ctx_clear(&ctx);
+	return err;
+}
+
+static GError *
+_snapshot_from(const gchar *source, struct sqlx_repository_s *repo,
+		struct sqlx_name_s *source_name, struct sqlx_name_s *dest_name)
+{
+	GError *err = NULL;
+	struct restore_ctx_s *ctx = NULL;
+	err = _pipe_base_from(source, repo, source_name, &ctx);
+	if (!err)
+		err = _restore_snapshot(repo, dest_name, ctx->path);
+
 	restore_ctx_clear(&ctx);
 	return err;
 }
@@ -1706,6 +1749,38 @@ _handler_PIPEFROM(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
+_handler_SNAPSHOT(struct gridd_reply_ctx_s *reply,
+		struct sqlx_repository_s *repo, gpointer ignored)
+{
+	GError *err;
+	gchar source[64];
+	gchar cid[STRLEN_CONTAINERID];
+	gchar seq_num[10];
+	gchar *full_base_name;
+	struct sqlx_name_inline_s name;
+	NAME2CONST(no, name);
+	(void) ignored;
+	if ((err = _load_sqlx_name(reply, &name, NULL))) {
+		reply->send_error(0, err);
+		return TRUE;
+	}
+
+	EXTRACT_STRING(NAME_MSGKEY_SRC, source);
+	EXTRACT_STRING(NAME_MSGKEY_CONTAINERID, cid);
+	EXTRACT_STRING(NAME_MSGKEY_SEQNUM, seq_num);
+	reply->subject("%s.%s|%s", name.base, name.type, source);
+	full_base_name = g_strconcat(cid, seq_num, NULL);
+	struct sqlx_name_s src = {name.ns, full_base_name ,name.type};
+	if ((err = _snapshot_from(source, repo, &src, &no)))
+		reply->send_error(0, err);
+	else
+		reply->send_reply(CODE_FINAL_OK, "OK");
+
+	g_free(full_base_name);
+	return TRUE;
+}
+
+static gboolean
 _handler_RESYNC(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
@@ -1721,7 +1796,7 @@ _handler_RESYNC(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	/* Force refresh of peers from meta1 */
+	/* Force refresh of peers from meta1/meta0 */
 	em = sqlx_repository_get_elections_manager(repo);
 	err = election_has_peers(em, &n0, TRUE, &has_peers);
 	g_clear_error(&err);
@@ -2409,6 +2484,7 @@ sqlx_repli_gridd_get_requests(void)
 		{NAME_MSGNAME_SQLX_EXITELECTION, (hook) _handler_EXIT,      NULL},
 		{NAME_MSGNAME_SQLX_PIPETO,       (hook) _handler_PIPETO,    NULL},
 		{NAME_MSGNAME_SQLX_PIPEFROM,     (hook) _handler_PIPEFROM,  NULL},
+		{NAME_MSGNAME_SQLX_SNAPSHOT,     (hook) _handler_SNAPSHOT,  NULL},
 		{NAME_MSGNAME_SQLX_DUMP,         (hook) _handler_DUMP,      NULL},
 		{NAME_MSGNAME_SQLX_RESTORE,      (hook) _handler_RESTORE,   NULL},
 		{NAME_MSGNAME_SQLX_REPLICATE,    (hook) _handler_REPLICATE, NULL},

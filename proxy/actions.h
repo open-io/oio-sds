@@ -70,6 +70,7 @@ enum http_rc_e action_ref_unlink (struct req_args_s *args);
 enum http_rc_e action_ref_force (struct req_args_s *args);
 enum http_rc_e action_ref_renew (struct req_args_s *args);
 
+enum http_rc_e action_container_snapshot(struct req_args_s *args);
 enum http_rc_e action_container_create_many (struct req_args_s *args);
 enum http_rc_e action_container_create (struct req_args_s *args);
 enum http_rc_e action_container_destroy (struct req_args_s *args);

@@ -1,0 +1,38 @@
+#!/usr/bin/env python
+
+# Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 3.0 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library.
+
+import sys
+import argparse
+from os import getenv
+from oio.check_service.check_rawx import CheckRawx
+from oio.check_service.check_meta2 import CheckMeta2
+
+
+def make_arg_parser():
+    descr = "Make a cycle `PUT/GET/DELETE` on each host for RAWX and META2"
+    parser = argparse.ArgumentParser(description=descr)
+    parser.add_argument('namespace', help="Namespace")
+    return parser
+
+
+if __name__ == '__main__':
+    args = make_arg_parser().parse_args()
+    namespace = args.namespace
+    check_rawx = CheckRawx(namespace)
+    check_rawx.run()
+    check_meta2= CheckMeta2(namespace)
+    check_meta2.run()

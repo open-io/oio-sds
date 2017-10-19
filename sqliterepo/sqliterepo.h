@@ -108,6 +108,7 @@ struct sqlx_sqlite3_s
 	guint8 admin_dirty : 1;
 	guint8 deleted : 1;
 	guint8 no_peers : 1; // Prevent get_peers()
+	guint8 corrupted : 1; // Will rename the file when closing database.
 
 	struct sqlx_name_inline_s name;
 	gchar path_inline[128 + LIMIT_LENGTH_NSNAME + LIMIT_LENGTH_SRVTYPE];

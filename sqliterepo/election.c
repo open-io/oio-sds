@@ -227,6 +227,9 @@ struct election_member_s
 	struct sqlx_name_inline_s inline_name;
 
 	struct logged_event_s log[EVENTLOG_SIZE];
+
+	/* Peers as they are at the election start */
+	gchar **peers;
 };
 
 static void _noop (gpointer p) { (void)p; }
@@ -317,7 +320,7 @@ enum election_mode_e _manager_get_mode (const struct election_manager_s *manager
 const char * _manager_get_local (const struct election_manager_s *manager);
 
 static GError * _election_get_peers(struct election_manager_s *manager,
-		const struct sqlx_name_s *n, gboolean nocache, gchar ***peers);
+		const struct sqlx_name_s *n, guint32 flags, gchar ***peers);
 
 static GError * _election_trigger_RESYNC(struct election_manager_s *manager,
 		const struct sqlx_name_s *n);
@@ -371,6 +374,8 @@ _cond_clean (gpointer p)
 		g_free (cond);
 	}
 }
+
+#define _ELECTION_MANAGER_LOCKED 0x02
 
 #define _manager_save_locked(M) do { \
 	/* (M)->when_lock = g_get_monotonic_time(); */ \
@@ -577,7 +582,8 @@ election_has_peers (struct election_manager_s *m, const struct sqlx_name_s *n,
 {
 	EXTRA_ASSERT(result != NULL);
 	gchar **peers = NULL;
-	GError *err = election_get_peers (m, n, nocache, &peers);
+	GError *err = election_get_peers(
+			m, n, nocache?SQLX_REPO_NOCACHE:0, &peers);
 	if (err != NULL) {
 		EXTRA_ASSERT(peers == NULL);
 		*result = FALSE;
@@ -592,7 +598,7 @@ election_has_peers (struct election_manager_s *m, const struct sqlx_name_s *n,
 
 GError *
 election_get_peers (struct election_manager_s *m, const struct sqlx_name_s *n,
-		gboolean nocache, gchar ***peers)
+		guint32 flags, gchar ***peers)
 {
 	EXTRA_ASSERT(peers != NULL);
 	if (!m) {
@@ -601,7 +607,7 @@ election_get_peers (struct election_manager_s *m, const struct sqlx_name_s *n,
 	} else {
 		*peers = NULL;
 		return ((struct abstract_election_manager_s*)m)->vtable->
-			election_get_peers(m,n,nocache,peers);
+			election_get_peers(m, n, flags, peers);
 	}
 }
 
@@ -654,9 +660,75 @@ election_manager_count(struct election_manager_s *manager)
 	return count;
 }
 
+static struct election_member_s *
+_LOCKED_get_member (struct election_manager_s *ma, const char *k);
+
+#define member_reset_peers(m) do { \
+	g_strfreev(m->peers); \
+	m->peers = NULL; \
+} while (0)
+
+#define member_unref(m) do { \
+	EXTRA_ASSERT (m->refcount > 0); \
+	-- m->refcount; \
+} while (0)
+
+static gboolean
+_LOCKED_get_cached_peers(struct election_manager_s *manager,
+		const struct sqlx_name_s *n, gchar ***result)
+{
+	gboolean success = FALSE;
+	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
+	sqliterepo_hash_name(n, key, sizeof(key));
+	struct election_member_s *member = _LOCKED_get_member(manager, key);
+	if (member) {
+		if (member->peers && *(member->peers)) {
+			*result = g_strdupv(member->peers);
+			success = TRUE;
+		}
+		member_unref(member);
+	}
+	return success;
+}
+
+static void
+_LOCKED_cache_peers(struct election_manager_s *manager,
+		const struct sqlx_name_s *n, gchar **peers)
+{
+	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
+	sqliterepo_hash_name(n, key, sizeof(key));
+	struct election_member_s *member = _LOCKED_get_member(manager, key);
+	if (member) {
+		if (member->peers)
+			member_reset_peers(member);
+		if (*peers)
+			member->peers = g_strdupv(peers);
+		member_unref(member);
+	}
+}
+
+static gboolean
+_get_cached_peers(struct election_manager_s *manager,
+		const struct sqlx_name_s *n, gchar ***result)
+{
+	_manager_lock(manager);
+	gboolean rc = _LOCKED_get_cached_peers(manager, n, result);
+	_manager_unlock(manager);
+	return rc;
+}
+
+static void
+_cache_peers(struct election_manager_s *manager,
+		const struct sqlx_name_s *n, gchar **peers)
+{
+	_manager_lock(manager);
+	_LOCKED_cache_peers(manager, n, peers);
+	_manager_unlock(manager);
+}
+
 static GError *
 _election_get_peers(struct election_manager_s *manager,
-		const struct sqlx_name_s *n, gboolean nocache, gchar ***result)
+		const struct sqlx_name_s *n, guint32 flags, gchar ***result)
 {
 	SQLXNAME_CHECK(n);
 	EXTRA_ASSERT(result != NULL);
@@ -664,20 +736,40 @@ _election_get_peers(struct election_manager_s *manager,
 	if (!manager || !manager->config || !manager->config->get_peers) {
 		*result = g_malloc0(sizeof(void*));
 		return NULL;
-	} else {
-		gchar **peers = NULL;
-		GError *err = manager->config->get_peers(manager->config->ctx, n, nocache, &peers);
-		if (!err) {
-			EXTRA_ASSERT(peers != NULL);
-			*result = peers;
-			return NULL;
-		} else {
-			EXTRA_ASSERT(peers == NULL);
-			*result = NULL;
-			g_prefix_error(&err, "get_peers(%s,%s): ", n->base, n->type);
-			return err;
-		}
 	}
+
+	GError *err = NULL;
+	gchar **peers = NULL;
+	gboolean nocache = flags & SQLX_REPO_NOCACHE;
+	gboolean peers_from_election = FALSE;
+	if (!nocache) {
+		if (flags & _ELECTION_MANAGER_LOCKED)
+			peers_from_election = _LOCKED_get_cached_peers(manager, n, &peers);
+		else
+			peers_from_election = _get_cached_peers(manager, n, &peers);
+	}
+	if (!peers_from_election) {
+		/* Member does not exist yet
+		 * or we have been asked to bypass the peer cache. */
+		err = manager->config->get_peers(
+				manager->config->ctx, n, nocache, &peers);
+	}
+	if (!err) {
+		EXTRA_ASSERT(peers != NULL);
+		if (!peers_from_election) {
+			/* Peers did not come from election, we can cache them. */
+			if (flags & _ELECTION_MANAGER_LOCKED)
+				_LOCKED_cache_peers(manager, n, peers);
+			else
+				_cache_peers(manager, n, peers);
+		}
+		*result = peers;
+	} else {
+		EXTRA_ASSERT(peers == NULL);
+		*result = NULL;
+		g_prefix_error(&err, "get_peers(%s,%s): ", n->base, n->type);
+	}
+	return err;
 }
 
 static void
@@ -821,28 +913,16 @@ member_get_url(struct election_member_s *m)
 }
 
 static GError *
-member_get_peers(struct election_member_s *m, gboolean nocache, gchar ***peers)
+member_get_peers(struct election_member_s *m, gchar ***peers)
 {
-	MEMBER_NAME(n,m);
-	return election_get_peers(MMANAGER(m), &n, nocache, peers);
-}
-
-static void
-member_decache_peers(struct election_member_s *m)
-{
-	gchar **peers = NULL;
-	GError *err = member_get_peers(m, TRUE, &peers);
-	oio_str_cleanv(&peers);
-	if (err) g_clear_error(&err);
+	MEMBER_NAME(n, m);
+	/* If we have a member, we have already locked the manager. */
+	guint32 flags = _ELECTION_MANAGER_LOCKED;
+	return election_get_peers(MMANAGER(m), &n, flags, peers);
 }
 
 #define member_ref(m) do { \
 	++ m->refcount; \
-} while (0)
-
-#define member_unref(m) do { \
-	EXTRA_ASSERT (m->refcount > 0); \
-	-- m->refcount; \
 } while (0)
 
 static GCond*
@@ -926,6 +1006,7 @@ member_reset(struct election_member_s *m)
 	member_reset_master(m);
 	member_reset_getvers(m);
 	member_reset_pending(m);
+	member_reset_peers(m);
 	/* do not reset the `requested_*` fields, those must survive,
 	 * typically to a restart, e.g. to perform a final resync */
 }
@@ -1179,7 +1260,7 @@ member_json (struct election_member_s *m, GString *gs)
 
 	/* the peers */
 	gchar **peers = NULL;
-	GError *err = member_get_peers(m, FALSE, &peers);
+	GError *err = member_get_peers(m, &peers);
 	if (err != NULL) {
 		g_string_append_static(gs, ",\"peers\":{");
 		OIO_JSON_append_int(gs, "status", err->code);
@@ -1201,11 +1282,11 @@ member_json (struct election_member_s *m, GString *gs)
 	/* then the livelog */
 	g_string_append_static(gs, ",\"log\":[");
 	guint idx = m->log_index - 1;
-	for (guint i=0; i<EVENTLOG_SIZE ;i++,idx--) {
+	for (guint i = 0; i < EVENTLOG_SIZE; i++, idx--) {
 		struct logged_event_s *plog = m->log + (idx % EVENTLOG_SIZE);
 		if (!plog->pre && !plog->post)
 			break;
-		if (i!=0)
+		if (i != 0)
 			g_string_append_c(gs, ',');
 		g_string_append_printf(gs, "\"%s:%s:%s\"", _step2str(plog->pre),
 				_evt2str(plog->event), _step2str(plog->post));
@@ -1594,14 +1675,18 @@ deferred_watch_COMMON(struct deferred_watcher_context_s *d,
 
 	if (d->type == ZOO_SESSION_EVENT) {
 		struct election_member_s *member = _find_member(M, d->path, d->gen);
-		member_reset(member);
-		member_set_status(member, STEP_NONE);
+		/* It happens, when a process has been paused, that d->path is empty,
+		 * and thus we cannot find any specific election member. */
+		if (member != NULL) {
+			member_reset(member);
+			member_set_status(member, STEP_NONE);
+		}
 		/* We cannot run all the election and reset everything, because we
 		 * introduced a sharding of the elections across several ZK clusters
 		 * and the problem concerns only one cluster */
 	} else if (d->type == ZOO_DELETED_EVENT) {
 		struct election_member_s *member = _find_member(M, d->path, d->gen);
-		if (NULL != member) {
+		if (member != NULL) {
 			transition(member, d->evt, NULL);
 			member_unref(member);
 			member_unlock(member);
@@ -1874,7 +1959,7 @@ defer_USE(struct election_member_s *member)
 	}
 
 	gchar **peers = NULL;
-	GError *err = member_get_peers(member, FALSE, &peers);
+	GError *err = member_get_peers(member, &peers);
 	if (err != NULL) {
 		GRID_WARN("[%s] Election initiated (%s) but get_peers error: (%d) %s",
 				__FUNCTION__, _step2str(member->step), err->code, err->message);
@@ -1913,8 +1998,15 @@ _result_GETVERS (GError *enet,
 	if (enet) {
 		err = g_error_copy(enet);
 	} else {
-		err = manager->config->get_version (manager->config->ctx, name, &vlocal);
+		err = manager->config->get_version(manager->config->ctx, name, &vlocal);
 		EXTRA_ASSERT ((err != NULL) ^ (vlocal != NULL));
+		if (err && err->code == CODE_CONTAINER_NOTFOUND) {
+			/* We don't have the base! If we are here, we can suppose we have
+			 * already checked that we are actually in the list of peers of
+			 * the election. We must ask for a fresh copy of the base. */
+			g_clear_error(&err);
+			err = NEWERROR(CODE_PIPEFROM, "Local database missing");
+		}
 	}
 
 	if (!err) {
@@ -1949,10 +2041,10 @@ _result_GETVERS (GError *enet,
 		else if (err->code == CODE_CONCURRENT)
 			transition(member, EVT_GETVERS_RACE, &reqid);
 		else {
-			GRID_DEBUG("GETVERS error : (%d) %s", err->code, err->message);
+			GRID_DEBUG("GETVERS error: (%d) %s", err->code, err->message);
 			if (err->code == CODE_CONTAINER_NOTFOUND) {
-				// We may have asked the wrong peer
-				member_decache_peers(member);
+				/* We may have asked the wrong peer. */
+				member_reset_peers(member);
 			}
 			transition(member, EVT_GETVERS_KO, &reqid);
 		}
@@ -2031,6 +2123,7 @@ member_action_to_NONE(struct election_member_s *member)
 	EXTRA_ASSERT(member->local_id == 0);
 	EXTRA_ASSERT(member->master_id == 0);
 	EXTRA_ASSERT(member->master_url == NULL);
+	member_reset_peers(member);
 	member->when_unstable = 0;
 	return member_set_status(member, STEP_NONE);
 }
@@ -2045,6 +2138,7 @@ member_action_to_FAILED(struct election_member_s *member)
 
 	member_reset_local(member);
 	member_reset_master(member);
+	member_reset_peers(member);
 
 	/* setting last_USE to now avoids sending USE as soon as arrived in
 	 * the set of FAILED elections. */
@@ -2087,6 +2181,7 @@ _common_action_to_LEAVE(struct election_member_s *member,
 	member->pending_ZK_DELETE = 1;
 	member_ref(member);
 	member_reset_master(member);
+	member_reset_peers(member);
 	return member_set_status(member, evt);
 }
 
@@ -2303,7 +2398,7 @@ member_action_to_CHECKING_SLAVES(struct election_member_s *m)
 		m->attempts_GETVERS = sqliterepo_getvers_max_retries;
 
 	gchar **peers = NULL;
-	GError *err = member_get_peers(m, FALSE, &peers);
+	GError *err = member_get_peers(m, &peers);
 	if (err != NULL) {
 		GRID_WARN("[%s] Election initiated (%s) but get_peers error: (%d) %s",
 				__FUNCTION__, _step2str(m->step), err->code, err->message);
@@ -3348,68 +3443,107 @@ transition_error(struct election_member_s *member,
 	return transition(member, evt, NULL);
 }
 
-static GSList *
+static GPtrArray *
 _DEQUE_extract (struct deque_beacon_s *beacon)
 {
-	GSList *out = NULL;
+	GPtrArray *out = g_ptr_array_sized_new(beacon->count);
 	for (struct election_member_s *m=beacon->front; m ;m=m->next)
-		out = g_slist_prepend (out, m);
-	return g_slist_reverse (out);
+		g_ptr_array_add(out, m);
+	return out;
+}
+
+static guint
+_play_exit_on_state(struct election_manager_s *M, struct deque_beacon_s *beacon)
+{
+	if (beacon->front == NULL)
+		return 0;
+
+	const gint64 now = oio_ext_monotonic_time();
+	guint count = 0;
+	GPtrArray *members = _DEQUE_extract (beacon);
+	for (guint i=0; i<members->len ;++i) {
+		struct election_member_s *m = members->pdata[i];
+
+		/* Election in NONE state ... */
+		if (!_is_over(now, m->last_status, oio_election_delay_expire_NONE))
+			continue;
+
+		/* ... for longer than acceptable */
+		if (m->refcount != 1)
+			continue;
+
+		/* ... but not referenced by anyone */
+		count ++;
+		_DEQUE_remove (m);
+		g_tree_remove (M->members_by_key, m->key);
+		member_unref (m);
+		member_destroy (m);
+	}
+	g_ptr_array_free (members, TRUE);
+	return count;
 }
 
 guint
-election_manager_play_timers (struct election_manager_s *manager, guint max)
+election_manager_play_exits (struct election_manager_s *manager)
 {
-	static const int steps[] = {
-		STEP_NONE, STEP_FAILED, STEP_MASTER, STEP_SLAVE,
-		-1 /* stops the iteration */
-	};
+	guint count = 0;
+	struct deque_beacon_s *beacon = manager->members_by_state + STEP_NONE;
+	if (beacon->front) {
+		_manager_lock(manager);
+		count += _play_exit_on_state(manager, beacon);
+		_manager_unlock(manager);
+	}
+	return count;
+}
+
+static guint
+_send_NONE_to_state(struct deque_beacon_s *beacon)
+{
+	if (!beacon->front)
+		return 0;
 
 	guint count = 0;
-	gint64 now = oio_ext_monotonic_time();
-
-	_manager_lock(manager);
-	for (const int *pi=steps; *pi >= 0 && (!max || count < max) ;++pi) {
-		struct deque_beacon_s *beacon = manager->members_by_state + *pi;
-		if (!beacon->front)
-			continue;
-		/* working on an item of the list might alterate the list, and even
-		   move the item itself to the tail. so working with a temp. list
-		   avoids loops and wrong game on pointers. */
-		GSList *l0 = _DEQUE_extract (beacon);
-		for (GSList *l=l0; l && (!max || count < max) ;l=l->next) {
-
-			struct election_member_s *m = l->data;
-			if (m->step == STEP_NONE) {
-				if (_is_over(now, m->last_status, oio_election_delay_expire_NONE)) {
-					/* Election in NONE state for longer than acceptable */
-					if (m->refcount == 1) {
-						/* In addition, not referenced by anyone */
-						count ++;
-						_DEQUE_remove (m);
-						g_tree_remove (manager->members_by_key, m->key);
-						member_unref (m);
-						member_destroy (m);
-					}
-				}
-			} else {
-				/* Just send a ping */
-				enum election_step_e pre = m->step;
-				_member_react (m, EVT_NONE, NULL);
-				enum election_step_e post = m->step;
-				if (pre == post) {
-					/* Avoid looping on that item, so let's shift it from the
-					 * head then push it to the tail of the queue. */
-					_DEQUE_remove (m);
-					_DEQUE_add (m);
-				}
-			}
-		}
-		g_slist_free (l0);
-		l0 = NULL;
+	GPtrArray *members = _DEQUE_extract (beacon);
+	for (guint i=0; i<members->len ;++i) {
+		struct election_member_s *m = members->pdata[i];
+		_member_react (m, EVT_NONE, NULL);
+		count ++;
 	}
-	_manager_unlock(manager);
+	g_ptr_array_free (members, TRUE);
+	return count;
+}
 
+guint
+election_manager_play_timers (struct election_manager_s *manager)
+{
+	static const int steps[] = { STEP_FAILED, -1 };
+
+	guint count = 0;
+	for (const int *pi=steps; *pi >= 0 ;++pi) {
+		struct deque_beacon_s *beacon = manager->members_by_state + *pi;
+		if (beacon->front) {
+			_manager_lock(manager);
+			count += _send_NONE_to_state(beacon);
+			_manager_unlock(manager);
+		}
+	}
+	return count;
+}
+
+guint
+election_manager_play_final_pings (struct election_manager_s *manager)
+{
+	static const int steps[] = { STEP_MASTER, STEP_SLAVE, -1 };
+
+	guint count = 0;
+	for (const int *pi=steps; *pi >= 0 ;++pi) {
+		struct deque_beacon_s *beacon = manager->members_by_state + *pi;
+		if (beacon->front) {
+			_manager_lock(manager);
+			count += _send_NONE_to_state(beacon);
+			_manager_unlock(manager);
+		}
+	}
 	return count;
 }
 

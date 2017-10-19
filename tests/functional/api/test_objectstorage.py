@@ -20,6 +20,7 @@ from oio.api.object_storage import ObjectStorageApi
 from oio.common.storage_functions import _sort_chunks as sort_chunks
 from oio.common import exceptions as exc
 from tests.utils import random_str, random_data, BaseTestCase
+from oio.common.http_urllib3 import get_pool_manager
 
 
 class TestObjectStorageAPI(BaseTestCase):
@@ -599,3 +600,68 @@ class TestObjectStorageAPI(BaseTestCase):
         self.assertRaises(
             exc.OioException, self.api.object_truncate, self.account, name,
             name, size=129)
+
+    def test_container_snapshot(self):
+        name = random_str(16)
+        self.api.container_create(self.account, name)
+        test_object = "test_object"
+        self.api.object_create(self.account, name, data="0"*128,
+                               obj_name=test_object)
+        # Snapshot cannot have same name and same account
+        self.assertRaises(exc.ClientException,
+                          self.api.container_snapshot,
+                          self.account, name, self.account, name)
+        snapshot_name = random_str(16)
+        self.assertNotEqual(snapshot_name, name)
+        # Non existing snapshot should work
+        self.api.container_snapshot(self.account, name, self.account,
+                                    snapshot_name)
+        # Already taken snapshot name should failed
+        self.assertRaises(exc.ClientException,
+                          self.api.container_snapshot,
+                          self.account, name, self.account, snapshot_name)
+        # Check Container Frozen so create should failed
+        self.assertRaises(exc.ServiceBusy,
+                          self.api.object_create,
+                          self.account, snapshot_name,
+                          data="1"*128,
+                          obj_name="should_not_be_created")
+
+        # fullpath is set on every chunk
+        chunk_list = self.api.object_locate(self.account, name, test_object)[1]
+        # check that every chunk is different from the target
+        snapshot_list = self.api.object_locate(self.account, snapshot_name,
+                                               test_object)[1]
+
+        for c, t in zip(chunk_list, snapshot_list):
+            self.assertNotEqual(c['url'], t['url'])
+        # check target can be used
+        self.api.object_create(self.account, name, data="0"*128,
+                               obj_name="should_be_created")
+        # Create and send copy of a object
+        url_list = [c['url'] for c in chunk_list]
+        copy_list = self.api._generate_copy(url_list)
+        # every chunks should have the fullpath
+        fullpath = self.api._generate_fullpath(self.account,
+                                               snapshot_name, 'copy', 12456)
+        self.api._send_copy(url_list, copy_list, fullpath[0])
+        # check that every copy exists
+        pool_manager = get_pool_manager()
+        for c in copy_list:
+            r = pool_manager.request('HEAD', c)
+            self.assertEqual(r.status, 200)
+            self.assertIn(fullpath[0],
+                          r.headers["X-oio-chunk-meta-full-path"].split(','))
+        # Snapshot on non existing container should failed
+        self.assertRaises(exc.NoSuchContainer,
+                          self.api.container_snapshot,
+                          random_str(16), random_str(16),
+                          random_str(16), random_str(16))
+        # Snapshot need to have a account
+        self.assertRaises(exc.ClientException,
+                          self.api.container_snapshot,
+                          self.account, name, None, random_str(16))
+        # Snapshot need to have a name
+        self.assertRaises(exc.ClientException,
+                          self.api.container_snapshot,
+                          self.account, name, random_str(16), None)
