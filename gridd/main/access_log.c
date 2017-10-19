@@ -29,35 +29,24 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 static void
 _log_addr(GString *gs, int fd)
 {
-	struct sockaddr_storage ss = {0};
+	struct sockaddr_storage ss = {};
 	socklen_t ss_len = sizeof(ss);
-	char buf_addr[STRLEN_ADDRINFO];
-	char buf_port[8];
+	gchar buf[STRLEN_ADDRINFO] = {};
 
-	if (0 != getsockname(fd, (struct sockaddr*)&ss, &ss_len))
+	if (0 != getsockname(fd, (struct sockaddr*)&ss, &ss_len)) {
 		g_string_append_c(gs, '?');
-	else {
-		memset(buf_port, 0, sizeof(buf_port));
-		memset(buf_addr, 0, sizeof(buf_addr));
-		format_addr((struct sockaddr*)&ss, buf_addr, sizeof(buf_addr), buf_port, sizeof(buf_port), NULL);
-
-		g_string_append(gs, buf_addr);
-		g_string_append_c(gs, ':');
-		g_string_append(gs, buf_port);
+	} else {
+		grid_sockaddr_to_string((struct sockaddr*)&ss, buf, sizeof(buf));
+		g_string_append(gs, buf);
 	}
 
 	g_string_append_c(gs, ' ');
 
-	if (0 != getpeername(fd, (struct sockaddr*)&ss, &ss_len))
+	if (0 != getpeername(fd, (struct sockaddr*)&ss, &ss_len)) {
 		g_string_append_c(gs, '?');
-	else {
-		memset(buf_port, 0, sizeof(buf_port));
-		memset(buf_addr, 0, sizeof(buf_addr));
-		format_addr((struct sockaddr*)&ss, buf_addr, sizeof(buf_addr), buf_port, sizeof(buf_port), NULL);
-
-		g_string_append(gs, buf_addr);
-		g_string_append_c(gs, ':');
-		g_string_append(gs, buf_port);
+	} else {
+		grid_sockaddr_to_string((struct sockaddr*)&ss, buf, sizeof(buf));
+		g_string_append(gs, buf);
 	}
 }
 
@@ -70,8 +59,8 @@ _log_reqid(GString *gs, MESSAGE req)
 	void *field = metautils_message_get_ID (req, &field_len);
 	if (!field || !field_len)
 		g_string_append_c(gs, '-');
-	else for (gsize i=0; i<field_len ;++i)
-		g_string_append_c (gs, ((gchar*)field)[i]);
+	else
+		g_string_append_len (gs, (gchar*)field, field_len);
 }
 
 static void
@@ -79,14 +68,11 @@ _log_reqname(GString *gs, MESSAGE req)
 {
 	gsize field_len=0;
 	void *field = metautils_message_get_NAME(req, &field_len);
-	if (!field) {
-		g_string_append_c(gs, ' ');
+	g_string_append_c(gs, ' ');
+	if (!field)
 		g_string_append_c(gs, '-');
-	}
-	else {
-		int i_len = field_len;
-		g_string_append_printf(gs, " %.*s", i_len, (char*)field);
-	}
+	else
+		g_string_append_len(gs, (char*)field, field_len);
 }
 
 void
