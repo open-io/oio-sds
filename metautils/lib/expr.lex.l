@@ -17,10 +17,6 @@
 [ \t\r\n]*      {}
 
 "num"    { T; return UN_STRNUM_TK; }
-"not"    { T; return UN_NUMNOT_TK; }
-"xor"    { T; return BIN_NUMXOR_TK; }
-"and"    { T; return BIN_NUMAND_TK; }
-"or"     { T; return BIN_NUMOR_TK; }
 "root"	 { T; return BIN_ROOT_TK; }
 
 [-]?[1-9][0-9]* { T; yylval.n=atof(yytext) ; return VAL_NUM_TK; }

@@ -27,8 +27,7 @@ static struct expr_s *pParsed = NULL;
 %token BIN_NUMCMP_TK BIN_NUMEQ_TK BIN_NUMNEQ_TK
 %token BIN_NUMLT_TK BIN_NUMLE_TK BIN_NUMGT_TK BIN_NUMGE_TK
 %token BIN_NUMADD_TK BIN_NUMSUB_TK BIN_NUMMUL_TK BIN_NUMDIV_TK BIN_NUMMOD_TK
-%token BIN_NUMAND_TK BIN_NUMXOR_TK BIN_NUMOR_TK BIN_ROOT_TK
-%token UN_NUMNOT_TK
+%token BIN_ROOT_TK
 %token UN_STRNUM_TK
 %token PAROP_TK PARCL_TK DOT_TK COMA_TK
 %token <s> ID_TK
@@ -48,12 +47,6 @@ expr:
 	| PAROP_TK expr PARCL_TK { $$ = $2; }
 
 	| UN_STRNUM_TK expr { $$ = makeUnary (UN_STRNUM_ET,$2); }
-
-	| UN_NUMNOT_TK expr { $$ = makeUnary (UN_NUMNOT_ET,$2); }
-
-	| expr BIN_NUMAND_TK expr { $$ = makeBinary (BIN_NUMAND_ET,$1,$3); }
-	| expr BIN_NUMXOR_TK expr { $$ = makeBinary (BIN_NUMXOR_ET,$1,$3); }
-	| expr BIN_NUMOR_TK  expr { $$ = makeBinary (BIN_NUMOR_ET,$1,$3); }
 
 	| BIN_ROOT_TK PAROP_TK expr COMA_TK  expr PARCL_TK { $$ = makeBinary (BIN_ROOT_ET,$3,$5); }
 

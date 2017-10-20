@@ -39,7 +39,6 @@ struct expr_s;
 enum expr_type_e
 {
 	VAL_STR_ET, VAL_NUM_ET,
-	UN_NUMNOT_ET,
 	UN_STRNUM_ET,
 	BIN_NUMCMP_ET,
 	BIN_NUMEQ_ET, BIN_NUMNEQ_ET,
@@ -48,8 +47,6 @@ enum expr_type_e
 	BIN_NUMADD_ET, BIN_NUMSUB_ET,
 	BIN_NUMMUL_ET, BIN_NUMDIV_ET,
 	BIN_NUMMOD_ET,
-	BIN_NUMAND_ET, BIN_NUMXOR_ET,
-	BIN_NUMOR_ET,
 	BIN_ROOT_ET,
 	ACC_ET,
 	/*last beacon */

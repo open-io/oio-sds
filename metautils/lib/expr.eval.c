@@ -66,7 +66,6 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 			*ppS = g_strdup(pE->expr.str);
 			return EXPR_EVAL_DEF;
 		case VAL_NUM_ET:
-		case UN_NUMNOT_ET:
 		case UN_STRNUM_ET:
 		case BIN_NUMCMP_ET:
 		case BIN_NUMEQ_ET:
@@ -80,9 +79,6 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 		case BIN_NUMMUL_ET:
 		case BIN_NUMDIV_ET:
 		case BIN_NUMMOD_ET:
-		case BIN_NUMAND_ET:
-		case BIN_NUMXOR_ET:
-		case BIN_NUMOR_ET:
 		case BIN_ROOT_ET:
 		case NB_ET:
 			return EXPR_EVAL_UNDEF;
@@ -132,13 +128,6 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 
 		case VAL_NUM_ET:
 			*pD = pE->expr.num;
-			return EXPR_EVAL_DEF;
-
-		case UN_NUMNOT_ET:
-			ret = __main_eval(pE->expr.unary, pD);
-			if (ret != EXPR_EVAL_DEF)
-				return ret;
-			*pD = ((int) *pD) ? 0 : 1;
 			return EXPR_EVAL_DEF;
 
 		case UN_STRNUM_ET:{
@@ -295,30 +284,6 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 				if (ret < 0)
 					return EXPR_EVAL_DEF;
 				*pD = (double) ((int) d1 % (int) d2);
-				return EXPR_EVAL_DEF;
-			}
-
-		case BIN_NUMAND_ET:{
-				double d1 = 0, d2 = 0;
-
-				EVAL_BINNUM(d1, d2, pE);
-				*pD = FPBOOL(d1) && FPBOOL(d2);
-				return EXPR_EVAL_DEF;
-			}
-
-		case BIN_NUMXOR_ET:{
-				double d1 = 0, d2 = 0;
-
-				EVAL_BINNUM(d1, d2, pE);
-				*pD = (int) d1 ^ (int) d2;
-				return EXPR_EVAL_DEF;
-			}
-
-		case BIN_NUMOR_ET:{
-				double d1 = 0, d2 = 0;
-
-				EVAL_BINNUM(d1, d2, pE);
-				*pD = d1 + d2;
 				return EXPR_EVAL_DEF;
 			}
 
