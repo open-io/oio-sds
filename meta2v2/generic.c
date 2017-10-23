@@ -29,12 +29,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 /* GVariant utils ---------------------------------------------------------- */
 
-static gchar random_chars[] =
-	"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	"abcdefghijklmnopqrstuvwxyz"
-	"0123456789"
-	",?;.:!*$%#+-[](){}/\\";
-
 static GString *
 _gstr_assign(GString *base, GString *gstr)
 {
@@ -45,20 +39,6 @@ _gstr_assign(GString *base, GString *gstr)
 		g_string_append_len(base, gstr->str, gstr->len);
 	}
 	return base;
-}
-
-static void
-_gstr_randomize(GString *gstr)
-{
-	g_string_set_size(gstr, oio_ext_rand_int_range(1, 17));
-	oio_str_randomize(gstr->str, gstr->len, random_chars);
-}
-
-static void
-_gba_randomize(GByteArray *gba)
-{
-	g_byte_array_set_size(gba, oio_ext_rand_int_range(1, 19));
-	oio_buf_randomize (gba->data, gba->len);
 }
 
 static GByteArray *
@@ -153,10 +133,6 @@ _bean_clause(gpointer bean, GString *gstr, gboolean pk_only)
 {
 	guint count;
 	const struct field_descriptor_s *fd;
-
-	if (!gstr)
-		gstr = g_string_sized_new(16 * DESCR(bean)->count_fields);
-
 	for (count=0,fd=DESCR(bean)->fields; fd->type ;fd++) {
 		if (pk_only && !fd->pk)
 			continue;
@@ -246,7 +222,7 @@ _stmt_apply_GV_parameter_simple(sqlite3_stmt *stmt, int pos, GVariant *p)
 			return NULL;
 		/* XXX TODO manage the G_VARIANT_UNIT associtaed to NULL'd fields */
 		default:
-			return NEWERROR(CODE_BAD_REQUEST, "Unexpected parameter at position %d ('%s')",
+			return BADREQ("Unexpected parameter at position %d ('%s')",
 					pos, (gchar*)g_variant_get_type(p));
 	}
 	(void) rc;
@@ -290,7 +266,7 @@ _stmt_apply_GV_parameters(sqlite3_stmt *stmt, GVariant **params)
 	count_params = g_strv_length((gchar**)params);
 
 	if (count_params != count_binds)
-		return NEWERROR(CODE_INTERNAL_ERROR, "Bad parameters : %u expected, %u received",
+		return SYSERR("Bad parameters : %u expected, %u received",
 				count_binds, count_params);
 
 	for (i=1; (p=*params) ;i++,params++) {
@@ -439,9 +415,7 @@ _db_get_bean(const struct bean_descriptor_s *descr,
 		while ((rc = sqlite3_step(stmt)) == SQLITE_ROW)
 			cb(u, _row_to_bean(descr, stmt));
 		if (unlikely(!(rc == SQLITE_OK || rc == SQLITE_DONE))) {
-			err = NEWERROR(CODE_INTERNAL_ERROR,
-					"Got an error from sqlite: (%d) %s",
-					rc, sqlite_strerror(rc));
+			err = SYSERR("Got an error from sqlite: (%d) %s", rc, sqlite_strerror(rc));
 		}
 	}
 
@@ -724,20 +698,6 @@ _bean_clean(gpointer bean)
 }
 
 void
-_bean_cleanv(gpointer *beanv)
-{
-	gpointer *pb;
-
-	if (!beanv)
-		return;
-	for (pb = beanv; *pb ;pb++) {
-		_bean_clean(*pb);
-		*pb = NULL;
-	}
-	g_free(beanv);
-}
-
-void
 _bean_cleanv2(GPtrArray *v)
 {
 	if (!v)
@@ -863,7 +823,7 @@ _db_del_FK_by_name(gpointer bean, const gchar *name, sqlite3 *db)
 	}
 
 	g_assert_not_reached();
-	return NEWERROR(CODE_INTERNAL_ERROR, "BUG"); /* makes the compilers happy */
+	return SYSERR("BUG"); /* makes the compilers happy */
 }
 
 GError*
@@ -890,7 +850,7 @@ _db_get_FK_by_name(gpointer bean, const gchar *name, sqlite3 *db,
 	}
 
 	g_assert_not_reached();
-	return NEWERROR(CODE_INTERNAL_ERROR, "BUG"); /* makes the compilers happy */
+	return SYSERR("BUG"); /* makes the compilers happy */
 }
 
 static GError*
@@ -953,7 +913,7 @@ _db_count_FK_by_name(gpointer bean, const gchar *name,
 	}
 
 	g_assert_not_reached();
-	return NEWERROR(CODE_INTERNAL_ERROR, "BUG"); /* makes the compilers happy */
+	return SYSERR("BUG"); /* makes the compilers happy */
 }
 
 GError*
@@ -1047,45 +1007,6 @@ _bean_debugl2 (const char *tag, GSList *beans)
 	g_string_free (gs, TRUE);
 }
 
-void
-_bean_randomize(gpointer bean, gboolean avoid_pk)
-{
-	GRand *r = oio_ext_local_prng ();
-	const struct field_descriptor_s *fd;
-
-	EXTRA_ASSERT(bean != NULL);
-	HDR(bean)->flags = BEAN_FLAG_DIRTY | (avoid_pk?0:BEAN_FLAG_TRANSIENT);
-
-	for (fd = DESCR(bean)->fields; fd->type != FT_NONE; fd++) {
-		register gpointer pf = FIELD(bean, fd->position);
-		EXTRA_ASSERT(pf != NULL);
-
-		if (fd->pk && avoid_pk)
-			continue;
-
-		switch (fd->type) {
-			case FT_BOOL:
-				*((gboolean*)pf) = g_rand_boolean(r);
-				break;
-			case FT_INT:
-				*((gint64*)pf) = g_rand_int(r);
-				break;
-			case FT_REAL:
-				*((gdouble*)pf) = g_rand_double(r);
-				break;
-			case FT_TEXT:
-				_gstr_randomize(GSTR(pf));
-				break;
-			case FT_BLOB:
-				_gba_randomize(GBA(pf));
-				break;
-			default:
-				g_assert_not_reached();
-				break;
-		}
-	}
-}
-
 const gchar *
 _bean_get_typename(gpointer bean)
 {
@@ -1133,71 +1054,6 @@ _bean_create(const struct bean_descriptor_s *descr)
 	}
 
 	return result;
-}
-
-gpointer
-_bean_create_child(gpointer bean, const gchar *fkname)
-{
-	const struct fk_descriptor_s *fk;
-	const struct bean_descriptor_s *src_descr, *dst_descr;
-
-	EXTRA_ASSERT(bean != NULL);
-	EXTRA_ASSERT(fkname != NULL);
-	src_descr = DESCR(bean);
-
-	inline gpointer _build(struct fk_field_s *f0, struct fk_field_s *f1) {
-		gpointer res = _bean_create(dst_descr);
-		for (; f0->i >= 0 && f1->i >=0 ;f0++,f1++) {
-			register gpointer pf0, pf1;
-
-			const struct field_descriptor_s *fd0 = src_descr->fields + f0->i;
-#ifdef HAVE_EXTRA_ASSERT
-			const struct field_descriptor_s *fd1 = dst_descr->fields + f1->i;
-			EXTRA_ASSERT(fd0->type == fd1->type);
-#endif
-
-			pf0 = FIELD(bean, f0->i);
-			pf1 = FIELD(res, f1->i);
-			switch (fd0->type) {
-				case FT_BOOL:
-					*((gboolean*)pf1) = *((gboolean*)pf0);
-					break;
-				case FT_INT:
-					*((gint64*)pf1) = *((gint64*)pf0);
-					break;
-				case FT_REAL:
-					*((gdouble*)pf1) = *((gdouble*)pf0);
-					break;
-				case FT_TEXT:
-					GSTR(pf1) = _gstr_assign(GSTR(pf1), GSTR(pf0));
-					break;
-				case FT_BLOB:
-					GBA(pf1) = _gba_assign(GBA(pf1), GBA(pf0));
-					break;
-				default:
-					g_assert_not_reached();
-					break;
-			}
-		}
-		return res;
-	}
-
-	for (fk=DESCR(bean)->fk; fk->src ;fk++) {
-		if (!strcmp(fk->name, fkname)) {
-			EXTRA_ASSERT(DESCR(bean) == fk->src || DESCR(bean) == fk->dst);
-			if (DESCR(bean) == fk->src) {
-				dst_descr = fk->dst;
-				return _build(fk->src_fields, fk->dst_fields);
-			}
-			if (DESCR(bean) == fk->dst) {
-				dst_descr = fk->src;
-				return _build(fk->dst_fields, fk->src_fields);
-			}
-		}
-	}
-
-	g_assert_not_reached();
-	return NULL;
 }
 
 void
