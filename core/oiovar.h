@@ -26,6 +26,16 @@ enum oio_var_kind_e {
 	OIO_VARKIND_size,
 };
 
+/**
+ * Notify the "manager of the variables" that a deprecated name exists for
+ * the given variable. A variables named `name`must exist, and no alias
+ * named `alias`must exist.
+ *
+ * @param name a non-NULL pointer to a valid string
+ * @param alias a non-NULL pointer ot a valid string
+ */
+void oio_var_register_alias(const char *name, const char *alias);
+
 void oio_var_register_string(gchar *p,
 		const char *n, const char *descr,
 		const gchar *def, gsize limit);

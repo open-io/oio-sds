@@ -20,7 +20,9 @@ License along with this library.
 
 #include <string.h>
 
+#include <core/oiolog.h>
 #include <core/oiostr.h>
+#include <core/internals.h>
 
 enum oio_var_type_e {
 	OIO_VARTYPE_gboolean,
@@ -81,22 +83,33 @@ struct oio_var_record_s {
 };
 
 static volatile guint var_init = 0;
-static GMutex var_lock = {0};
+static GMutex var_lock = {};
 static GSList *var_records = NULL;
+static GTree *var_aliases = NULL;
 
 void _oio_var_constructor (void);
 
 void __attribute__ ((constructor)) _oio_var_constructor (void) {
 	if (g_atomic_int_compare_and_exchange(&var_init, 0, 1)) {
 		g_mutex_init(&var_lock);
+		var_aliases = g_tree_new_full(oio_str_cmp3, NULL, g_free, g_free);
 	}
+}
+
+void
+oio_var_register_alias(const char *name, const char *alias)
+{
+	_oio_var_constructor();
+	g_mutex_lock(&var_lock);
+	g_assert(NULL == g_tree_lookup(var_aliases, alias));
+	g_tree_insert(var_aliases, g_strdup(alias), g_strdup(name));
+	g_mutex_unlock(&var_lock);
 }
 
 static void
 _register_record(const struct oio_var_record_s *rec)
 {
 	_oio_var_constructor();
-	g_assert(g_atomic_int_get(&var_init) == 1);
 	g_mutex_lock(&var_lock);
 	var_records = g_slist_append(var_records, g_memdup(rec, sizeof(*rec)));
 	g_mutex_unlock(&var_lock);
@@ -357,10 +370,43 @@ _record_set_to_value(struct oio_var_record_s *rec, const char *value)
 	return _record_set(rec, v);
 }
 
-void
-oio_var_value_all_with_config(struct oio_cfg_handle_s *cfg, const char *ns)
+static struct oio_var_record_s *
+_LOCKED_lookup_record(const gchar *name)
 {
-	g_mutex_lock(&var_lock);
+	for (GSList *l=var_records; l ;l=l->next) {
+		if (!l->data)
+			continue;
+		struct oio_var_record_s *rec = l->data;
+		if (!strcmp(rec->name, name)) {
+			return rec;
+		}
+	}
+
+	return NULL;
+}
+
+static void
+_LOCKED_value_all_aliases(struct oio_cfg_handle_s *cfg, const char *ns)
+{
+	gboolean _runner(gchar *alias, gchar *name, gpointer i UNUSED) {
+		gchar *value = oio_cfg_handle_get(cfg, ns, alias);
+		if (value) {
+			struct oio_var_record_s *rec = _LOCKED_lookup_record(name);
+			EXTRA_ASSERT(rec != NULL);
+			_record_set_to_value(rec, value);
+			GRID_NOTICE(
+					"DEPRECATED variable used [%s], consider [%s] instead",
+					alias, name);
+			g_free(value);
+		}
+		return FALSE;
+	}
+	g_tree_foreach(var_aliases, (GTraverseFunc)_runner, NULL);
+}
+
+static void
+_LOCKED_value_all_variables(struct oio_cfg_handle_s *cfg, const char *ns)
+{
 	for (GSList *l=var_records; l ;l=l->next) {
 		if (!l->data)
 			continue;
@@ -371,27 +417,49 @@ oio_var_value_all_with_config(struct oio_cfg_handle_s *cfg, const char *ns)
 			g_free(value);
 		}
 	}
+}
+
+void
+oio_var_value_all_with_config(struct oio_cfg_handle_s *cfg, const char *ns)
+{
+	EXTRA_ASSERT(var_init != 0);
+	EXTRA_ASSERT(cfg != NULL);
+	EXTRA_ASSERT(ns != NULL);
+
+	g_mutex_lock(&var_lock);
+	_LOCKED_value_all_aliases(cfg, ns);
+	_LOCKED_value_all_variables(cfg, ns);
 	g_mutex_unlock(&var_lock);
+}
+
+static gboolean
+_LOCKED_value_named_variable(const char *name, const char *value)
+{
+	struct oio_var_record_s *rec = _LOCKED_lookup_record(name);
+	if (!rec)
+		return FALSE;
+	_record_set_to_value(rec, value);
+	return TRUE;
 }
 
 gboolean
 oio_var_value_one_with_option(const char *name, const char *value)
 {
+	EXTRA_ASSERT(var_init != 0);
+	EXTRA_ASSERT(name != NULL);
+	EXTRA_ASSERT(value != NULL);
+
 	gboolean rc = FALSE;
-	if (name && value && var_init) {
-		g_mutex_lock(&var_lock);
-		for (GSList *l=var_records; l ;l=l->next) {
-			if (!l->data)
-				continue;
-			struct oio_var_record_s *rec = l->data;
-			if (!strcmp(rec->name, name)) {
-				_record_set_to_value(rec, value);
-				rc = TRUE;
-				break;
-			}
-		}
-		g_mutex_unlock(&var_lock);
+	g_mutex_lock(&var_lock);
+	/* First try with a real variable name, and if not foundcheck if the name
+	 * is not an alias to another. */
+	if (!(rc = _LOCKED_value_named_variable(name, value))) {
+		const gchar *name0 = g_tree_lookup(var_aliases, name);
+		if (name0 && (rc = _LOCKED_value_named_variable(name0, value)))
+			GRID_NOTICE("DEPRECATED variable used [%s], consider [%s] instead",
+					name, name0);
 	}
+	g_mutex_unlock(&var_lock);
 	return rc;
 }
 
@@ -450,6 +518,8 @@ oio_var_list_all(void (*hook) (const char *k, const char *v))
 GString*
 oio_var_list_as_json(void)
 {
+	EXTRA_ASSERT(var_init != 0);
+
 	GString *gstr = g_string_sized_new (4096);
 	void _hook (const char *k, const char *v) {
 		if (gstr->len > 1)
@@ -466,6 +536,7 @@ oio_var_list_as_json(void)
 gboolean
 oio_var_value_with_files(const char *ns, gboolean sys, GSList *files)
 {
+	EXTRA_ASSERT(var_init != 0);
 	gboolean known = FALSE;
 
 	/* Init with the system config */
@@ -497,6 +568,7 @@ oio_var_value_with_files(const char *ns, gboolean sys, GSList *files)
 void
 oio_var_reset_all(void)
 {
+	EXTRA_ASSERT(var_init != 0);
 	g_mutex_lock(&var_lock);
 	for (GSList *l=var_records; l ;l=l->next) {
 		if (!l->data)
@@ -510,6 +582,7 @@ oio_var_reset_all(void)
 gchar*
 oio_var_get_string(const char *v)
 {
+	EXTRA_ASSERT(var_init != 0);
 	g_mutex_lock(&var_lock);
 	gchar *rc = g_strdup(v);
 	g_mutex_unlock(&var_lock);
