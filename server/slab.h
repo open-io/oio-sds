@@ -68,8 +68,6 @@ gboolean data_slab_send(struct data_slab_s *ds, int fd);
 gboolean data_slab_consume(struct data_slab_s *ds, guint8 **p_data,
 		gsize *p_size);
 
-gsize data_slab_size(struct data_slab_s *ds);
-
 /* Slab-sequence features --------------------------------------------------- */
 
 void data_slab_sequence_clean_data(struct data_slab_sequence_s *dss);

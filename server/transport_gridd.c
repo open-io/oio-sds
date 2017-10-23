@@ -277,29 +277,18 @@ _req_get_hex_ID(MESSAGE req, gchar *d, gsize dsize)
 static gsize
 gba_read(GByteArray *gba, struct data_slab_s *ds, guint32 max)
 {
-	guint8 *data = NULL;
-	gsize data_size = 0;
-
 	EXTRA_ASSERT(max >= gba->len);
 	if (max <= gba->len)
 		return 0;
 
-	data_size = max - gba->len;
-	GRID_TRACE("About to consume a maximum of %"G_GSIZE_FORMAT" bytes among %"G_GSIZE_FORMAT,
-			data_size, data_slab_size(ds));
+	guint8 *data = NULL;
+	gsize data_size = max - gba->len;
 
-	if (data_slab_consume(ds, &data, &data_size)) {
-		if (data_size > 0 && data)
-			g_byte_array_append(gba, data, data_size);
-		GRID_TRACE("Consumed %"G_GSIZE_FORMAT" bytes (now gba=%u ds=%"G_GSIZE_FORMAT")",
-				data_size, gba->len, data_slab_size(ds));
-		return data_size;
-	}
-	else {
-		GRID_TRACE("consumed 0 bytes (now gba=%u ds=%"G_GSIZE_FORMAT")",
-				gba->len, data_slab_size(ds));
+	if (!data_slab_consume(ds, &data, &data_size))
 		return 0;
-	}
+	if (data_size > 0 && data)
+		g_byte_array_append(gba, data, data_size);
+	return data_size;
 }
 
 static void
