@@ -438,5 +438,5 @@ class TestContentFactory(BaseTestCase):
             for cname in answers:
                 try:
                     content.delete()
-                except:
+                except Exception:
                     pass

@@ -181,7 +181,7 @@ class Content(object):
 
         try:
             self.blob_client.chunk_delete(current_chunk.url)
-        except:
+        except Exception:
             self.logger.warn("Failed to delete chunk %s" % current_chunk.url)
 
         current_chunk.url = spare_urls[0]

@@ -426,7 +426,7 @@ class ContainerClient(ProxyClient):
                         account, reference, tail,
                         cid=cid, **kwargs)
             return results
-        except:
+        except Exception:
             raise
 
     def content_locate(self, account=None, reference=None, path=None, cid=None,

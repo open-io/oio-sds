@@ -101,9 +101,7 @@ class CreateContainer(SetPropertyCommandMixin, lister.Lister):
                     system=system)
                 results.append((container, success))
 
-        columns = ('Name', 'Created')
-        res_gen = (r for r in results)
-        return columns, res_gen
+        return ('Name', 'Created'), (r for r in results)
 
 
 class SetContainer(SetPropertyCommandMixin, command.Command):
@@ -315,8 +313,6 @@ class ListContainer(lister.Lister):
 
         account = self.app.client_manager.get_account()
 
-        columns = ('Name', 'Bytes', 'Count')
-
         if parsed_args.full_listing:
             def full_list():
                 listing = self.app.client_manager.storage.container_list(
@@ -332,13 +328,13 @@ class ListContainer(lister.Lister):
                         for element in listing:
                             yield element
 
-            l = full_list()
+            listing = full_list()
         else:
-            l = self.app.client_manager.storage.container_list(
+            listing = self.app.client_manager.storage.container_list(
                 account, **kwargs)
 
-        results = ((v[0], v[2], v[1]) for v in l)
-        return columns, results
+        columns = ('Name', 'Bytes', 'Count')
+        return columns, ((v[0], v[2], v[1]) for v in listing)
 
 
 class UnsetContainer(command.Command):

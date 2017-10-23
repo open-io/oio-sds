@@ -30,7 +30,7 @@ def delete_children(zh, path):
             p = path + '/' + n
             delete_children(zh, p)
             zookeeper.delete(zh, p)
-    except:
+    except Exception:
         pass
 
 

@@ -183,7 +183,7 @@ class Runner(object):
             sys.exit(0)
         except SystemExit:
             raise
-        except:
+        except Exception:
             self.logger.exception("Exception in worker process")
             if not worker.started:
                 sys.exit(self.WORKER_START_ERROR)
