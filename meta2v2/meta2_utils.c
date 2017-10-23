@@ -2489,6 +2489,8 @@ _purge_exceeding_aliases(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 	return err;
 }
 
+static void m2v2_dup_alias(struct dup_alias_params_s *params, gpointer bean);
+
 static GError*
 _purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay,
 		m2_onbean_cb cb, gpointer u0)
@@ -2663,8 +2665,7 @@ m2db_flush_container(sqlite3 *db)
 	return SQLITE_GERROR(db, rc);
 }
 
-/* Duplicate an alias bean */
-void
+static void
 m2v2_dup_alias(struct dup_alias_params_s *params, gpointer bean)
 {
 	GError *local_err = NULL;
@@ -2701,3 +2702,4 @@ m2v2_dup_alias(struct dup_alias_params_s *params, gpointer bean)
 		params->errors = g_slist_prepend(params->errors, local_err);
 	}
 }
+

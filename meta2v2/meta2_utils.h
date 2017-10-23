@@ -218,6 +218,4 @@ GError* m2db_flush_container(sqlite3 *db);
 GError* m2db_deduplicate_contents(struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url);
 
-void m2v2_dup_alias(struct dup_alias_params_s *params, gpointer bean);
-
 #endif /*OIO_SDS__meta2v2__meta2_utils_h*/
