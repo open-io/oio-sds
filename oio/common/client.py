@@ -57,6 +57,9 @@ class ProxyClient(HttpApi):
         self.conf = conf
         self.logger = logger or get_logger(conf)
 
+        if not endpoint:
+            endpoint = self.conf.get('proxyd_url', None)
+
         ep_parts = list()
         if endpoint:
             self.proxy_netloc = endpoint.lstrip("http://")
