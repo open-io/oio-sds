@@ -57,6 +57,7 @@ randomize_env () {
 
 test_oio_cluster () {
 	oio-cluster -h >/dev/null
+	oio-cluster -r --full "${OIO_NS}" >/dev/null
 	oio-cluster --unlock-score -S "$OIO_NS|echo|127.0.0.2:80" >/dev/null
 	oio-cluster --set-score=0 -S "$OIO_NS|echo|127.0.0.2:80" >/dev/null
 	oio-cluster --unlock-score -S "$OIO_NS|echo|127.0.0.2:80" >/dev/null

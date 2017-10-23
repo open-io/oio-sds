@@ -75,13 +75,11 @@ print_formated_namespace(namespace_info_t * ns)
 static void
 print_formated_services(const gchar * type, GSList * services)
 {
-	if(services && 0 < g_slist_length(services)) {
+	if (services) {
 
 		gboolean init = FALSE;
 		for (GSList *l = services; l; l = l->next) {
 			struct service_info_s *si = l->data;
-			if(!si)
-				continue;
 			if(!init) {
 				g_print("\n-- %s --\n", type);
 				init = TRUE;
@@ -102,12 +100,9 @@ print_raw_services(const gchar * ns, const gchar * type, GSList * services)
 	if (!services)
 		return;
 	for (GSList *l = services; l; l = l->next) {
-		struct service_info_s *si;
 		char str_score[32];
 		char str_addr[STRLEN_ADDRINFO];
-
-		if (!(si = l->data))
-			continue;
+		struct service_info_s *si = l->data;
 
 		grid_addrinfo_to_string(&(si->addr), str_addr, sizeof(str_addr));
 		g_snprintf(str_score, sizeof(str_score), "%d", si->score.value);
@@ -133,11 +128,9 @@ static GError *
 set_service_score(const char *service_desc, int score)
 {
 	gchar **tokens = g_strsplit(service_desc, "|", 4);
-	if (!tokens)
-		return NEWERROR(CODE_INTERNAL_ERROR, "split failed (OOM?)");
 	STRINGV_STACKIFY(tokens);
 	if (g_strv_length(tokens) < 3)
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid service description");
+		return BADREQ("Invalid service description");
 
 	struct service_info_s *si = g_malloc0(sizeof(struct service_info_s));
 	g_strlcpy(si->ns_name, tokens[0], sizeof(si->ns_name));
@@ -151,8 +144,6 @@ set_service_score(const char *service_desc, int score)
 	}
 
 	GError *err = conscience_push_service (tokens[0], si);
-	if (err)
-		g_prefix_error(&err, "Registration failed: ");
 	service_info_clean (si);
 	return err;
 }
