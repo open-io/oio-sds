@@ -214,7 +214,7 @@ def from_response(resp, body=None):
         try:
             message = body.get('message')
             status = body.get('status')
-        except:
+        except Exception:
             message = body
         return cls(http_status, status, message)
     else:

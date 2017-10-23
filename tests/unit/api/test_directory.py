@@ -122,13 +122,13 @@ class DirectoryTest(unittest.TestCase):
                       "args": ""}]
 
         api._direct_request = Mock(return_value=(resp, resp_body))
-        l = api.list(self.account, self.name, service_type=service_type)
+        srv = api.list(self.account, self.name, service_type=service_type)
         uri = "%s/reference/show" % self.uri_base
         params = {'acct': self.account, 'ref': self.name,
                   'type': service_type}
         api._direct_request.assert_called_once_with(
             'GET', uri, params=params)
-        self.assertEqual(l, resp_body)
+        self.assertEqual(srv, resp_body)
 
     def test_unlink(self):
         api = self.api

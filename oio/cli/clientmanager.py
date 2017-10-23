@@ -117,7 +117,7 @@ class ClientManager(object):
         bitlength, offset, size = None, 0, 0
         try:
             bitlength = int(options['flat_bitlength'])
-        except:
+        except Exception:
             raise ConfigurationException(
                     "Namespace not configured for autocontainers")
         try:
@@ -125,7 +125,7 @@ class ClientManager(object):
                 offset = int(options['flat_hash_offset'])
             if 'flat_hash_size' in options:
                 size = int(options['flat_hash_size'])
-        except:
+        except Exception:
             raise Exception("Invalid autocontainer config: offset/size")
         self._flatns_manager = HashedContainerBuilder(
             offset=offset, size=size, bits=bitlength)

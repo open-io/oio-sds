@@ -904,7 +904,7 @@ class ContainerBackup(RedisConn, WerkzeugApp):
             pass
         except Conflict:
             raise
-        except:
+        except Exception:
             raise BadRequest('Fail to verify container')
 
         if req.method == 'HEAD':

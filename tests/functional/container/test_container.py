@@ -74,7 +74,7 @@ class TestMeta2Containers(BaseTestCase):
             self.request('POST', self._url_ref('destroy'),
                          params=params,
                          headers={'X-oio-action-mode': 'force'})
-        except:
+        except Exception:
             pass
 
     def _create(self, params, code, autocreate=True):
@@ -321,7 +321,7 @@ class TestMeta2Contents(BaseTestCase):
                          params=params, headers={'X-oio-action-mode': 'force'})
             self.request('POST', self._url_ref('destroy'),
                          params=params, headers={'X-oio-action-mode': 'force'})
-        except:
+        except Exception:
             pass
 
     def valid_chunks(self, tab):

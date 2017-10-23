@@ -98,9 +98,7 @@ class CreateReference(lister.Lister):
                 account, reference=reference)
             results.append((reference, created))
 
-        columns = ('Name', 'Created')
-        l = (r for r in results)
-        return columns, l
+        return ('Name', 'Created'), (r for r in results)
 
 
 class DeleteReference(command.Command):
