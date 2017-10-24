@@ -476,7 +476,7 @@ nodev_to_int32v(const struct String_vector *sv, const char *prefix)
 {
 	GArray *array = g_array_new(0, 0, sizeof(gint32));
 
-	for (int32_t i = 0; i < sv->count; i++) {
+	for (int32_t i = 0; sv != NULL && i < sv->count; i++) {
 		const char *s = sv->data[i];
 		if (g_str_has_prefix(s, prefix)) {
 			gint32 id = 0;

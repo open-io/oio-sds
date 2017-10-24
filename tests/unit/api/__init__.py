@@ -29,11 +29,11 @@ class FakeAPI(object):
         pass
 
 
-class FakeAPIResponse(urllib3.HTTPResponse):
+class FakeApiResponse(urllib3.HTTPResponse):
     pass
 
 
-class FakeStorageAPI(ObjectStorageApi):
+class FakeStorageApi(ObjectStorageApi):
     pass
 
 

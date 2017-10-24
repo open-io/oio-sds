@@ -25,7 +25,7 @@ from oio.common.decorators import handle_container_not_found, \
     handle_object_not_found
 from oio.common.storage_functions import _sort_chunks
 from tests.utils import random_str
-from tests.unit.api import FakeStorageAPI, FakeAPIResponse
+from tests.unit.api import FakeStorageApi, FakeApiResponse
 
 
 def chunk(suffix, position):
@@ -41,7 +41,7 @@ def extend(base, inc):
 class ObjectStorageTest(unittest.TestCase):
     def setUp(self):
         self.fake_endpoint = "http://1.2.3.4:8000"
-        self.api = FakeStorageAPI("NS", endpoint=self.fake_endpoint)
+        self.api = FakeStorageApi("NS", endpoint=self.fake_endpoint)
         self.account = "test"
         self.container = "fake"
         self.headers = {"x-req-id": random_str(32)}
@@ -68,7 +68,7 @@ class ObjectStorageTest(unittest.TestCase):
             obj)
 
     def test_container_list(self):
-        resp = FakeAPIResponse()
+        resp = FakeApiResponse()
         name = random_str(32)
         marker = random_str(32)
         delimiter = random_str(32)
@@ -99,7 +99,7 @@ class ObjectStorageTest(unittest.TestCase):
         name0 = random_str(32)
         name1 = random_str(32)
         resp_body = {"objects": [{"name": name0}, {"name": name1}]}
-        resp = FakeAPIResponse()
+        resp = FakeApiResponse()
         resp.headers = {}
         api.container._direct_request = Mock(return_value=(resp, resp_body))
         listing = api.object_list(
@@ -118,7 +118,7 @@ class ObjectStorageTest(unittest.TestCase):
 
     def test_container_show(self):
         api = self.api
-        resp = FakeAPIResponse()
+        resp = FakeApiResponse()
         name = random_str(32)
         cont_size = random.randint(1, 1000)
         resp.headers = {
@@ -142,7 +142,7 @@ class ObjectStorageTest(unittest.TestCase):
 
     def test_container_create(self):
         api = self.api
-        resp = FakeAPIResponse()
+        resp = FakeApiResponse()
         resp.status = 201
         api.container._direct_request = Mock(return_value=(resp, None))
 
@@ -160,7 +160,7 @@ class ObjectStorageTest(unittest.TestCase):
 
     def test_container_create_exist(self):
         api = self.api
-        resp = FakeAPIResponse()
+        resp = FakeApiResponse()
         resp.status = 204
         api.container._direct_request = Mock(return_value=(resp, None))
 
@@ -171,7 +171,7 @@ class ObjectStorageTest(unittest.TestCase):
     def test_container_delete(self):
         api = self.api
 
-        resp = FakeAPIResponse()
+        resp = FakeApiResponse()
         resp.status_code = 204
         api.container._direct_request = Mock(return_value=(resp, None))
         api.directory.unlink = Mock(return_value=None)
@@ -202,7 +202,7 @@ class ObjectStorageTest(unittest.TestCase):
         key = random_str(32)
         value = random_str(32)
         meta = {key: value}
-        resp = FakeAPIResponse()
+        resp = FakeApiResponse()
         api.container._direct_request = Mock(return_value=(resp, None))
         api.container_set_properties(
             self.account, name, meta, headers=self.headers)
@@ -219,7 +219,7 @@ class ObjectStorageTest(unittest.TestCase):
         size = random.randint(1, 1000)
         content_hash = random_str(32)
         content_type = random_str(32)
-        resp = FakeAPIResponse()
+        resp = FakeApiResponse()
         resp.headers = {object_headers["name"]: name,
                         object_headers["size"]: str(size),
                         object_headers["hash"]: content_hash,
@@ -261,7 +261,7 @@ class ObjectStorageTest(unittest.TestCase):
         key = random_str(32)
         value = random_str(32)
         meta = {key: value}
-        resp = FakeAPIResponse()
+        resp = FakeApiResponse()
         api.container._direct_request = Mock(return_value=(resp, None))
         api.object_set_properties(
             self.account, self.container, name, meta, headers=self.headers)
@@ -280,7 +280,7 @@ class ObjectStorageTest(unittest.TestCase):
         resp_body = [
             chunk("AAAA", "0"), chunk("BBBB", "1"), chunk("CCCC", "2")
         ]
-        resp = FakeAPIResponse()
+        resp = FakeApiResponse()
         api.container._direct_request = Mock(return_value=(resp, resp_body))
 
         api.object_delete(

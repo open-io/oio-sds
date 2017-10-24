@@ -16,12 +16,12 @@
 import unittest
 
 from oio.common import exceptions
-from tests.unit.api import FakeAPIResponse
+from tests.unit.api import FakeApiResponse
 
 
 class ExceptionsTest(unittest.TestCase):
     def test_from_response(self):
-        fake_resp = FakeAPIResponse()
+        fake_resp = FakeApiResponse()
         fake_resp.status = 500
         exc = exceptions.from_response(fake_resp, None)
         self.assertTrue(isinstance(exc, exceptions.ClientException))
@@ -30,7 +30,7 @@ class ExceptionsTest(unittest.TestCase):
         self.assertTrue("HTTP 500" in str(exc))
 
     def test_from_response_with_body(self):
-        fake_resp = FakeAPIResponse()
+        fake_resp = FakeApiResponse()
         fake_resp.status = 500
         body = {"status": 300, "message": "Fake error"}
         exc = exceptions.from_response(fake_resp, body)
@@ -42,7 +42,7 @@ class ExceptionsTest(unittest.TestCase):
         self.assertTrue("STATUS 300" in str(exc))
 
     def test_from_response_http_status(self):
-        fake_resp = FakeAPIResponse()
+        fake_resp = FakeApiResponse()
         fake_resp.status = 404
         exc = exceptions.from_response(fake_resp, None)
         self.assertTrue(isinstance(exc, exceptions.NotFound))
