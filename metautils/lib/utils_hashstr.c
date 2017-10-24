@@ -25,8 +25,7 @@ License along with this library.
 hashstr_t*
 hashstr_create(const gchar *s)
 {
-	if (unlikely(NULL == s))
-		return NULL;
+	EXTRA_ASSERT(s != NULL);
 
 	struct hash_len_s hl = djb_hash_str(s);
 	hashstr_t *result = g_malloc0(HASHSTR_PREFIX + hl.l + 1);
@@ -39,8 +38,7 @@ hashstr_create(const gchar *s)
 hashstr_t*
 hashstr_create_len(const gchar *s, gsize l)
 {
-	if (unlikely(NULL == s))
-		return NULL;
+	EXTRA_ASSERT(s != NULL);
 
 	guint32 h = djb_hash_buf((guint8 *) s, l);
 	hashstr_t *result = g_malloc0(HASHSTR_PREFIX + l + 1);
@@ -54,25 +52,21 @@ hashstr_create_len(const gchar *s, gsize l)
 hashstr_t*
 hashstr_create_from_gstring(GString *gstr)
 {
+	EXTRA_ASSERT(gstr != NULL);
 	return hashstr_create_len(gstr->str, gstr->len);
 }
 
 hashstr_t *
 hashstr_printf(const gchar *fmt, ...)
 {
+	GString *gstr = g_string_sized_new(64);
+
 	va_list arg;
-	GString *gstr;
-	hashstr_t *result;
-
-	gstr = g_string_sized_new(64);
-	if (unlikely(NULL == gstr))
-		return NULL;
-
 	va_start(arg, fmt);
 	g_string_vprintf(gstr, fmt, arg);
 	va_end(arg);
 
-	result = hashstr_create_from_gstring(gstr);
+	hashstr_t *result = hashstr_create_from_gstring(gstr);
 	g_string_free(gstr, TRUE);
 	return result;
 }
@@ -80,8 +74,7 @@ hashstr_printf(const gchar *fmt, ...)
 hashstr_t*
 hashstr_dup(const hashstr_t *hs)
 {
-	if (unlikely(NULL == hs))
-		return NULL;
+	EXTRA_ASSERT(hs != NULL);
 
 	hashstr_t *result = g_malloc0(HASHSTR_PREFIX + hs->hl.l + 1);
 
@@ -132,8 +125,7 @@ hashstr_quick_cmp(const hashstr_t *hs1, const hashstr_t *hs2)
 }
 
 gint
-hashstr_quick_cmpdata(gconstpointer p1, gconstpointer p2, gpointer u)
+hashstr_quick_cmpdata(gconstpointer p1, gconstpointer p2, gpointer u UNUSED)
 {
-	(void) u;
 	return hashstr_quick_cmp(p1, p2);
 }
