@@ -16,7 +16,7 @@
 from oio.common.logger import get_logger
 from oio.common.configuration import load_namespace_conf, validate_service_conf
 from oio.api.base import HttpApi
-from oio.common.exceptions import ServiceBusy, OioException
+from oio.common.exceptions import Conflict, OioException, ServiceBusy
 from random import randrange
 from eventlet import sleep
 
@@ -49,7 +49,7 @@ class ProxyClient(HttpApi):
 
         :raise oio.common.exceptions.ServiceBusy: if all attempts fail
         """
-        assert(request_attempts > 0)
+        assert request_attempts > 0
 
         validate_service_conf(conf)
         self.ns = conf.get('namespace')
@@ -101,9 +101,18 @@ class ProxyClient(HttpApi):
                     raise
                 # retry with exponential backoff
                 ProxyClient._exp_sleep(i + 1)
+            except Conflict:
+                if i > 0 and method == 'POST':
+                    # We were retrying a POST operation, it's highly probable
+                    # that the original operation succeeded after we timed
+                    # out. So we consider this a success and don't raise
+                    # the exception.
+                    return None, None
+                raise
 
     @staticmethod
     def _exp_sleep(attempts):
-        N = pow(2, attempts)
-        k = randrange(N)
+        """Sleep an exponential amount of time derived from `attempts`."""
+        limit = pow(2, attempts)
+        k = randrange(limit)
         sleep(k * ProxyClient._slot_time)
