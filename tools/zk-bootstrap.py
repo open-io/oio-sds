@@ -172,7 +172,7 @@ def main():
             for t, _, _ in SRVTYPES:
                 try:
                     _, _ = zookeeper.get(zh, PREFIX_NS + '/' + ns + '/el/' + t)
-                except:
+                except Exception:
                     _m = True
             missing = _m
 

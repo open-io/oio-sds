@@ -33,7 +33,7 @@ class Handler(object):
         try:
             res = self.process(event)
             return res(env, cb)
-        except:
+        except Exception:
             self.logger.exception('Error: An error occured')
             res = EventError(event=event, body='An error ocurred')
             return res(env, cb)

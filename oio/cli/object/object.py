@@ -158,12 +158,12 @@ class CreateObject(ContainerCommandMixin, lister.Lister):
                 any_error = True
                 results.append((name, 0, None, 'Failed'))
 
-        l = (obj for obj in results)
+        listing = (obj for obj in results)
         columns = ('Name', 'Size', 'Hash', 'Status')
         if any_error:
-            self.produce_output(parsed_args, columns, l)
+            self.produce_output(parsed_args, columns, listing)
             raise Exception("Too many errors occured")
-        return columns, l
+        return columns, listing
 
 
 class TouchObject(ContainerCommandMixin, command.Command):

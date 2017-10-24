@@ -603,7 +603,7 @@ class TestContainerDownload(BaseTestCase):
                 ret = requests.put(uri, headers=hdrs,
                                    data=FakeStream(org.content[start:stop],
                                                    size))
-            except:
+            except Exception:
                 pass
             else:
                 self.assertIn(

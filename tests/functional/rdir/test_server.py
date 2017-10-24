@@ -99,14 +99,14 @@ class RdirTestCase(CommonTestCase):
             try:
                 p.terminate()
                 p.kill()
-            except:
+            except Exception:
                 pass
         for f in self.garbage_files:
             ignore_errors = True
             try:
                 shutil.rmtree(f, ignore_errors)
                 remove(f)
-            except:
+            except Exception:
                 pass
 
     def _volume(self):

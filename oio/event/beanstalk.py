@@ -130,7 +130,7 @@ class Reader(object):
         try:
             self.purge()
             self._buffer.close()
-        except:
+        except Exception:
             pass
 
         self._buffer = None
@@ -329,14 +329,14 @@ class Connection(object):
                 errmsg = e.args[1]
             raise ConnectionError("Error %s while writing to socket. %s." %
                                   (errno, errmsg))
-        except:
+        except Exception:
             self.disconnect()
             raise
 
     def read_response(self):
         try:
             response = self._parser.read_response()
-        except:
+        except Exception:
             self.disconnect()
             raise
         if isinstance(response, ResponseError):
@@ -346,7 +346,7 @@ class Connection(object):
     def read_body(self, size):
         try:
             response = self._parser.read(size)
-        except:
+        except Exception:
             self.disconnect()
             raise
         if isinstance(response, ResponseError):

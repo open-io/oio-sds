@@ -136,6 +136,10 @@ class Variable(object):
             self.descr = "TODO: to be documented"
         self.default = cfg.get("def")
         self.declare = bool(cfg.get("declare", True))
+        if 'aliases' in cfg:
+            self.aliases = [str(x) for x in cfg['aliases']]
+        else:
+            self.aliases = list()
 
     def raw(self):
         out = dict()
@@ -149,6 +153,11 @@ class Variable(object):
     def _gen_declaration(self, out):
         assert(False)
 
+    def _declare_aliases(self, out):
+        for alias in self.aliases:
+            out.write('\n\toio_var_register_alias(\"{key}\", \"{alias}\");'
+                      ''.format(**{'key': self.key, 'alias': alias}))
+
     def _gen_registration(self, out):
         assert(False)
 
@@ -161,16 +170,9 @@ class Variable(object):
 
 class String(Variable):
     def __init__(self, cfg):
-        self.name = cfg["name"]
-        self.limit = int(cfg["limit"])
-        self.key = cfg.get("key", name2key(self.name))
-        self.macro = cfg.get("macro", key2macro(self.key))
+        super(String, self).__init__(cfg)
         self.ctype = 'string'
-        self.descr = cfg.get("descr", "")
-        if not self.descr:
-            self.descr = "TODO: to be documented"
-        self.default = cfg.get("def")
-        self.declare = bool(cfg.get("declare", True))
+        self.limit = int(cfg["limit"])
 
     def raw(self):
         out = dict()
@@ -196,6 +198,7 @@ class String(Variable):
             "descr": self.descr,
             "def": self.macro,
             "limit": self.limit}))
+        self._declare_aliases(out)
 
     def _gen_header(self, out):
         out.write("\n#ifndef {0}\n# define {0} \"{1}\"\n#endif\n\n".format(
@@ -220,6 +223,7 @@ class Bool(Variable):
                 '\n\t\t"{3}",'
                 '\n\t\t{1});\n'.format(
             self.name, self.macro, self.key, self.descr))
+        self._declare_aliases(out)
 
 
 class Number(Variable):
@@ -247,6 +251,7 @@ class Number(Variable):
             "def": self.macro,
             "min": self.vmin,
             "max": self.vmax}))
+        self._declare_aliases(out)
 
     def raw(self):
         out = super(Number, self).raw()
@@ -349,11 +354,6 @@ _classes = {
 }
 
 
-def make_variable(cfg):
-    cls = _classes[cfg["type"]]
-    return cls(cfg)
-
-
 def path2macro(p):
     from os import getcwd
     from re import sub
@@ -426,6 +426,11 @@ the cmake command line.
 def gen_cmake(out, allvars):
     for var in allvars:
         out.write("dir2macro({0})\n".format(var.macro))
+
+
+def make_variable(cfg):
+    cls = _classes[cfg["type"]]
+    return cls(cfg)
 
 
 def get_all_vars(descr):
