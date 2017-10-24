@@ -1343,7 +1343,7 @@ Used by `gcc`
 
 ### udp_allowed
 
-> TODO: to be documented
+> Allow the sqlx client DB_USE RPC to be sent via UDP instead of the default TCP channel.
 
  * default: **FALSE**
  * type: gboolean

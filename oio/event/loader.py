@@ -210,22 +210,22 @@ class ConfigLoader(object):
         return context
 
     def find_config_section(self, obj_type, name=None):
-        l = []
+        sections = []
         for prefix in obj_type.config_prefixes:
             found = self._find_sections(
                 self.parser.sections(), prefix, name)
             if found:
-                l.extend(found)
+                sections.extend(found)
                 break
-        if not l:
+        if not sections:
             raise LookupError(
                 'No section %r found in config %r' % (name, self.filename))
-        if len(l) > 1:
+        if len(sections) > 1:
             raise LookupError(
                 'Ambiguous section %r found in config %r'
                 % (name, self.filename))
 
-        return l[0]
+        return sections[0]
 
     def _find_sections(self, sections, prefix, name):
         found = []
@@ -258,23 +258,23 @@ class EggLoader(_Loader):
     def find_egg_ep(self, obj_type, name=None):
         if name is None:
             name = 'main'
-        l = []
+        entries = []
         for protocol in obj_type.egg_protocols:
             pkg_resources.require(self.spec)
             entry = pkg_resources.get_entry_info(
                         self.spec, protocol, name)
             if entry is not None:
-                l.append((entry.load(), protocol, entry.name))
+                entries.append((entry.load(), protocol, entry.name))
                 break
-        if not l:
+        if not entries:
             raise LookupError(
                 "Entry point %r not found in egg %r"
                 % (name, self.spec))
-        if len(l) > 1:
+        if len(entries) > 1:
             raise LookupError(
                 "Ambiguous entry for %r in egg"
                 % (name, self.spec))
-        return l[0]
+        return entries[0]
 
 
 class LoaderContext(object):

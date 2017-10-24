@@ -109,7 +109,7 @@ class TestLbChoose(BaseLbTest):
         try:
             self.assertEqual(fast_count, 3)
             self.assertEqual(slow_count, 1)
-        except:
+        except Exception:
             print parsed
             raise
 

@@ -284,7 +284,7 @@ class ECStream(object):
                 pass
             except green.ChunkReadTimeout:
                 logger.error("Timeout on reading")
-            except:
+            except Exception:
                 logger.exception("Exception on reading")
             finally:
                 queue.resize(2)

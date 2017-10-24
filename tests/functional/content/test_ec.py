@@ -73,8 +73,8 @@ class TestECContent(BaseTestCase):
                                          version)]
 
     def random_chunks(self, nb):
-        l = random.sample(xrange(self.k + self.m), nb)
-        return ["0.%s" % i for i in l]
+        pos = random.sample(xrange(self.k + self.m), nb)
+        return ["0.%s" % i for i in pos]
 
     def _test_create(self, data_size):
         # generate random test data

@@ -96,9 +96,7 @@ class CreateAccount(lister.Lister):
                 account=account)
             results.append((account, result))
 
-        columns = ('Name', 'Created')
-        l = (r for r in results)
-        return columns, l
+        return ('Name', 'Created'), (r for r in results)
 
 
 class SetAccount(command.Command):
