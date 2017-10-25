@@ -65,9 +65,6 @@ MESSAGE metautils_message_create_named (const char *name);
 /** Frees all the internal structures of the pointed message. */
 void metautils_message_destroy(MESSAGE m);
 
-/** Perform the serialization of the message. */
-GByteArray* message_marshall_gba(MESSAGE m, GError **err);
-
 /** Allocates a new message and Unserializes the given buffer. */
 MESSAGE message_unmarshall(const guint8 *buf, gsize len, GError ** error);
 
