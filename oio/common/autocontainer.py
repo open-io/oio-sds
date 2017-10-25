@@ -33,6 +33,11 @@ class ContainerBuilder(object):
     def __call__(self, path):
         return str(path)
 
+    def alternatives(self, path):
+        """Generate all alternatives for the provided content path."""
+        yield self(path)
+        raise StopIteration
+
     def verify(self, name):
         """Verify that `name` is an autocontainer"""
         return isinstance(name, basestring)
@@ -152,6 +157,18 @@ class RegexContainerBuilder(object):
             if match:
                 return self.builder(''.join(match.groups()))
         raise ValueError("'%s' does not match any configured patterns" % path)
+
+    def alternatives(self, path):
+        """
+        Generate all alternatives for the provided path,
+        in case it matches several patterns.
+        """
+
+        for pattern in self.patterns:
+            match = pattern.search(path)
+            if match:
+                yield self.builder(''.join(match.groups()))
+        raise StopIteration
 
     def verify(self, name):
         return self.builder.verify(name)
