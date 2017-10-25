@@ -54,23 +54,12 @@ errno_to_errcode(int e)
 	}
 }
 
-static struct metautils_sockets_vtable_s VTABLE = {
-	NULL, NULL, NULL,
-	NULL, NULL,
-	NULL,
-	NULL, NULL, NULL, NULL, NULL, NULL, NULL
-};
+static struct metautils_sockets_vtable_s VTABLE = {};
 
 void
 metautils_set_vtable_sockets(struct metautils_sockets_vtable_s *vtable)
 {
 	memcpy(&VTABLE, vtable, sizeof(VTABLE));
-}
-
-struct metautils_sockets_vtable_s*
-metautils_get_vtable_sockets(void)
-{
-	return &VTABLE;
 }
 
 int
@@ -378,20 +367,6 @@ sock_set_nodelay(int fd, gboolean enabled)
 }
 
 gboolean
-sock_set_cork(int fd, gboolean enabled)
-{
-	if (VTABLE.set_cork)
-		return VTABLE.set_cork(fd, enabled);
-
-	int opt = BOOL(enabled);
-	if (!metautils_syscall_setsockopt(fd, IPPROTO_TCP, TCP_CORK, (void*)&opt, sizeof(opt)))
-		return TRUE;
-	GRID_DEBUG("fd=%i set(TCP_CORK,%d): (%d) %s",
-			fd, opt, errno, strerror(errno));
-	return FALSE;
-}
-
-gboolean
 sock_set_fastopen(int fd)
 {
 	int syndata_backlog = 16;
@@ -441,10 +416,8 @@ sock_set_client_default(int fd)
 int
 metautils_pclose(int *pfd)
 {
-	if (unlikely(pfd == NULL)) {
-		errno = EAGAIN;
-		return -1;
-	}
+	EXTRA_ASSERT(pfd != NULL);
+
 	if (*pfd < 0) {
 		errno = EINVAL;
 		return -1;
