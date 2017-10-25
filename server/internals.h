@@ -32,7 +32,6 @@ License along with this library.
 #endif
 
 enum {
-	NETSERVER_THROUGHPUT = 0x0001,
 	NETSERVER_LATENCY    = 0x0002,
 };
 

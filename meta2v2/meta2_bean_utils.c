@@ -32,38 +32,23 @@ struct anonymous_sequence_s
 	asn_struct_ctx_t _asn_ctx;
 };
 
-static void bean_gclean(gpointer bean, gpointer ignored)
-{
-	(void) ignored;
-	if (!bean)
-		return;
-	_bean_clean(bean);
-}
-
 GByteArray *
 bean_sequence_marshall(GSList *beans)
 {
 	gboolean error_occured = FALSE;
-	gsize probable_size;
-	asn_enc_rval_t encRet;
-	struct anonymous_sequence_s asnSeq;
 	GByteArray *gba = NULL;
 
-	int func_write(const void *b, gsize bSize, void *key)
-	{
-		(void) key;
+	int func_write(const void *b, gsize bSize, void *key UNUSED) {
 		return g_byte_array_append(gba, (guint8 *) b, bSize) ? 0 : -1;
 	}
 
-	void func_free(void *d)
-	{
+	void func_free(void *d) {
 		if (!d)
 			return;
 		bean_cleanASN(d, FALSE);
 	}
 
-	void func_fill(gpointer d, gpointer u)
-	{
+	void func_fill(gpointer d, gpointer u) {
 		asn_anonymous_set_ *p_set;
 		M2V2Bean_t *asn1;
 
@@ -82,17 +67,12 @@ bean_sequence_marshall(GSList *beans)
 
 	GRID_TRACE("Serializing a list of %d elements", g_slist_length(beans));
 
-	probable_size = g_slist_length(beans) * (sizeof(M2V2Bean_t) + 6) + 64;
+	gsize probable_size = g_slist_length(beans) * (sizeof(M2V2Bean_t) + 6) + 64;
 	probable_size = MIN(probable_size, 4096);
-
 	gba = g_byte_array_sized_new(probable_size);
-	if (!gba) {
-		GRID_ERROR("Memory allocation failure");
-		return NULL;
-	}
 
 	/*fills the ASN.1 structure */
-	memset(&asnSeq, 0x00, sizeof(asnSeq));
+	struct anonymous_sequence_s asnSeq = {};
 	g_slist_foreach(beans, &func_fill, &asnSeq);
 	if (error_occured) {
 		g_byte_array_free(gba, TRUE);
@@ -101,7 +81,7 @@ bean_sequence_marshall(GSList *beans)
 	}
 
 	/*serializes the structure */
-	encRet = der_encode(&asn_DEF_M2V2BeanSequence, &asnSeq, func_write, NULL);
+	asn_enc_rval_t encRet = der_encode(&asn_DEF_M2V2BeanSequence, &asnSeq, func_write, NULL);
 	if (encRet.encoded == -1) {
 		GRID_ERROR("Cannot encode the ASN.1 sequence (error on %s)", encRet.failed_type->name);
 		g_byte_array_free(gba, TRUE);
@@ -123,9 +103,7 @@ bean_sequence_unmarshall(const guint8 *buf, gsize len)
 {
 	GSList *l = NULL;
 	GError *err = NULL;
-	gint rc = 0;
-
-	rc = bean_sequence_decoder(&l, buf, len, &err);
+	gint rc = bean_sequence_decoder(&l, buf, len, &err);
 	if (rc <= 0) {
 		if (err)
 			GRID_ERROR("Decoder error: (%d) %s", err->code, err->message);
@@ -180,10 +158,7 @@ bean_sequence_decoder(GSList **l, const void *buf, gsize len, GError **err)
 					asn_set_empty(abstract_sequence);
 					g_free(abstract_sequence);
 
-					if (beans) {
-						g_slist_foreach(beans, bean_gclean, NULL);
-						g_slist_free(beans);
-					}
+					g_slist_free_full(beans, (GDestroyNotify)_bean_clean);
 					return -1;
 				}
 				beans = g_slist_prepend(beans, bean);

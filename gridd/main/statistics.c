@@ -29,17 +29,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "./srvstats.h"
 #define IS(gv,T) g_variant_type_equal(g_variant_get_type(gv), T)
 
-static GRWLock rw_lock;
+static GRWLock rw_lock = {};
 
 static GHashTable *ht_stats = NULL;
 
 gboolean
 srvstat_set_gvariant(const gchar *name, GVariant *gv)
 {
-	if (!name || !gv) {
-		GRID_WARN("Invalid parameter (name=%p gv=%p)", name, gv);
-		return FALSE;
-	}
+	EXTRA_ASSERT(name != NULL);
+	EXTRA_ASSERT(gv != NULL);
 
 	if (!ht_stats)
 		srvstat_init();
@@ -51,22 +49,10 @@ srvstat_set_gvariant(const gchar *name, GVariant *gv)
 	return TRUE;
 }
 
-static gboolean
-_set_gvariant(const gchar *name, GVariant *gv)
-{
-	if (!srvstat_set_gvariant(name, gv)) {
-		g_variant_unref(gv);
-		return FALSE;
-	}
-
-	return TRUE;
-}
-
-
 gboolean
 srvstat_set_u64(const gchar *name, guint64 value)
 {
-	return _set_gvariant(name, g_variant_new_uint64(value));
+	return srvstat_set_gvariant(name, g_variant_new_uint64(value));
 }
 
 static void
@@ -82,9 +68,7 @@ gvariant_free(gpointer p)
 void
 srvstat_init (void)
 {
-	memset(&rw_lock,0x00,sizeof(rw_lock));
 	g_rw_lock_init(&rw_lock);
-	
 	g_rw_lock_writer_lock (&rw_lock);
 	if (!ht_stats)
 		ht_stats = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, gvariant_free);
@@ -107,19 +91,15 @@ srvstat_fini (void)
 void
 srvstat_foreach_gvariant(const gchar *pattern, srvstat_iterator_gvariant_f cb, void *udata)
 {
+	EXTRA_ASSERT(pattern != NULL);
+	EXTRA_ASSERT(*pattern != '\0');
 	GHashTableIter iter;
 	gpointer k, v;
 
-	if (!pattern || !*pattern) {
-		GRID_WARN("invalid parameter");
-		return ;
-	}
-	
 	if (!ht_stats)
 		srvstat_init();
 
 	g_rw_lock_writer_lock (&rw_lock);
-
 	g_hash_table_iter_init(&iter, ht_stats);
 	while (g_hash_table_iter_next(&iter, &k, &v)) {
 		const gchar *name;
@@ -135,4 +115,3 @@ srvstat_foreach_gvariant(const gchar *pattern, srvstat_iterator_gvariant_f cb, v
 
 	g_rw_lock_writer_unlock (&rw_lock);
 }
-

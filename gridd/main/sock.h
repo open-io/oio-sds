@@ -44,11 +44,7 @@ typedef struct accept_pool_s
 	gint count;
 } *ACCEPT_POOL;
 
-gint format_addr (struct sockaddr *sa, gchar *h, gsize hL, gchar *p, gsize pL, GError **err);
-
-gint resolve (struct sockaddr_storage *sa, const gchar *h, const gchar *p, GError **err);
-
-gint accept_make (ACCEPT_POOL *s, GError **err);
+ACCEPT_POOL accept_make (void);
 
 gint accept_add (ACCEPT_POOL ap, const gchar *l, GError **err);
 

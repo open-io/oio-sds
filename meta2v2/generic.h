@@ -127,7 +127,6 @@ struct fk_descriptor_s
 };
 
 void _bean_clean(gpointer bean);
-void _bean_cleanv(gpointer *beanv);
 void _bean_cleanv2(GPtrArray *v);
 void _bean_cleanl2(GSList *v);
 
@@ -170,15 +169,11 @@ GError* _db_get_FK_by_name_buffered(gpointer bean, const gchar *name,
 GString* _bean_debug(GString *gstr, gpointer bean);
 void _bean_debugl2 (const char *tag, GSList *beans);
 
-void _bean_randomize(gpointer bean, gboolean avoid_pk);
-
 /** Returns a newly allocated blank bean of the goven type */
 gpointer _bean_create(const struct bean_descriptor_s *descr);
 
 const gchar * _bean_get_typename(gpointer bean);
 gchar ** _bean_get_FK_names(gpointer bean);
-
-gpointer _bean_create_child(gpointer bean, const gchar *fkname);
 
 gpointer _bean_dup(gpointer bean);
 

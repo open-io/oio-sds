@@ -25,26 +25,6 @@ License along with this library.
 #include "slab.h"
 #include "internals.h"
 
-gsize
-data_slab_size(struct data_slab_s *ds)
-{
-	switch (ds->type) {
-		case STYPE_BUFFER:
-		case STYPE_BUFFER_STATIC:
-			if (!ds->data.buffer.buff || !ds->data.buffer.alloc)
-				return 0;
-			if (ds->data.buffer.start >= ds->data.buffer.end)
-				return 0;
-			return (ds->data.buffer.end - ds->data.buffer.start);
-		case STYPE_GBYTES:
-			return g_bytes_get_size (ds->data.gbytes);
-		case STYPE_EOF:
-			return 0;
-	}
-	g_assert_not_reached();
-	return 0;
-}
-
 gboolean
 data_slab_has_data(struct data_slab_s *ds)
 {
@@ -223,11 +203,7 @@ data_slab_consume(struct data_slab_s *ds, guint8 **p_data, gsize *p_size)
 gboolean
 data_slab_sequence_send(struct data_slab_sequence_s *dss, int fd)
 {
-	if (!dss->first) {
-		g_assert_not_reached();
-		return TRUE;
-	}
-
+	EXTRA_ASSERT(dss->first != NULL);
 	return data_slab_send(dss->first, fd);
 }
 

@@ -47,30 +47,6 @@ metautils_gba_dup(const GByteArray *gba)
 	return gba_copy;
 }
 
-gsize
-metautils_gba_data_to_string(const GByteArray *gba, gchar *dst,
-		gsize dst_size)
-{
-	gsize i, imax, idst;
-
-	if (unlikely(NULL == gba || NULL == dst || 0 == dst_size))
-		return 0;
-	if (!gba->data || !gba->len)
-		return 0;
-
-	memset(dst, 0, dst_size);
-	imax = MIN(gba->len,dst_size);
-	for (i=0,idst=0; i<imax && idst<dst_size-5 ;i++) {
-		gchar c = (gchar)(gba->data[i]);
-		if (g_ascii_isprint(c) && c != '\\')
-			dst[ idst++ ] = c;
-		else
-			idst += g_snprintf(dst+idst, dst_size-idst, "\\x%02X", c);
-	}
-
-	return idst;
-}
-
 GByteArray*
 metautils_gba_from_string(const gchar *str)
 {

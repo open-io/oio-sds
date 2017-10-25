@@ -30,9 +30,6 @@ GByteArray* metautils_gba_from_string(const gchar *str);
 
 GByteArray* metautils_gba_from_hexstring(const gchar *str);
 
-gsize metautils_gba_data_to_string(const GByteArray *gba, gchar *dst,
-		gsize dst_size);
-
 /** 3-way comparison */
 int metautils_gba_cmp(const GByteArray *a, const GByteArray *b);
 

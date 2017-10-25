@@ -206,58 +206,6 @@ storage_policy_init(namespace_info_t *ni, const char *name)
 	return sp;
 }
 
-/* Copy constructors ------------------------------------------------------- */
-
-static void
-__kv_dup(gpointer k, gpointer v, gpointer out)
-{
-	GHashTable **r = (GHashTable **) out;
-	g_hash_table_insert(*r, g_strdup((gchar*)k), g_strdup((gchar*)v));
-}
-
-static GHashTable *
-__copy_params(GHashTable *params)
-{
-	GHashTable *r = _params();
-	g_hash_table_foreach(params, __kv_dup, &r);
-	return r;
-}
-
-static struct data_security_s *
-_data_security_dup(struct data_security_s *ds)
-{
-	struct data_security_s *r = NULL;
-
-	r = g_malloc0(sizeof(struct data_security_s));
-	r->type = ds->type;
-	if(NULL != ds->name)
-		r->name = g_strdup(ds->name);
-	if(NULL != ds->params)
-		r->params = __copy_params(ds->params);
-
-	return r;
-}
-
-struct storage_policy_s *
-storage_policy_dup(const struct storage_policy_s *sp)
-{
-	struct storage_policy_s *r = NULL;
-
-	if(!sp)
-		return NULL;
-
-	r = g_malloc0(sizeof(struct storage_policy_s));
-
-	if (NULL != sp->name)
-		r->name = g_strdup(sp->name);
-	if (sp->service_pool)
-		r->service_pool = g_strdup(sp->service_pool);
-	if (NULL != sp->datasec)
-		r->datasec = _data_security_dup(sp->datasec);
-
-	return r;
-}
-
 /* Various getters --------------------------------------------------------- */
 
 const char *

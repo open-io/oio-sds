@@ -109,28 +109,22 @@ gridd_request_dispatcher_clean(struct gridd_request_dispatcher_s *disp)
 	g_free(disp);
 }
 
-GError *
+void
 transport_gridd_dispatcher_add_requests(
 		struct gridd_request_dispatcher_s *dispatcher,
 		const struct gridd_request_descr_s *descr,
 		gpointer gdata)
 {
+	EXTRA_ASSERT(dispatcher != NULL);
+	EXTRA_ASSERT(descr != NULL);
+
 	const struct gridd_request_descr_s *d;
-
-	if (!dispatcher)
-		return NEWERROR(EINVAL, "Invalid dispatcher");
-	if (!descr)
-		return NEWERROR(EINVAL, "Invalid request descriptor");
-
 	for (d = descr; descr && d->name && d->handler; d++) {
 		struct hashstr_s *hname;
-		struct gridd_request_handler_s *handler;
-
 		HASHSTR_ALLOCA(hname, d->name);
-		if (NULL != g_tree_lookup(dispatcher->tree_requests, hname))
-			return NEWERROR(CODE_INTERNAL_ERROR, "Overriding another request with '%s'", hashstr_str(hname));
+		EXTRA_ASSERT(!g_tree_lookup(dispatcher->tree_requests, hname));
 
-		handler = g_malloc0(sizeof(*handler));
+		struct gridd_request_handler_s *handler = g_malloc0(sizeof(*handler));
 		handler->name = d->name;
 		handler->handler = d->handler;
 		handler->gdata = gdata;
@@ -144,8 +138,6 @@ transport_gridd_dispatcher_add_requests(
 
 		g_tree_insert(dispatcher->tree_requests, hashstr_dup(hname), handler);
 	}
-
-	return NULL;
 }
 
 struct gridd_request_dispatcher_s *
@@ -258,13 +250,11 @@ _request_get_name(MESSAGE req)
 static gchar *
 _req_get_hex_ID(MESSAGE req, gchar *d, gsize dsize)
 {
-	memset(d, 0, dsize);
-
 	gsize flen = 0;
 	guint8 *f = metautils_message_get_ID(req, &flen);
-	if (!f || !flen)
+	if (!f || !flen) {
 		*d = '-';
-	else if (oio_str_ishexa((gchar*)f, flen)) {
+	} else if (oio_str_ishexa((gchar*)f, flen)) {
 		for (gchar *p=d; flen-- > 0 && dsize-- > 0;)
 			*(p++) = *(f++);
 	} else {
@@ -277,29 +267,18 @@ _req_get_hex_ID(MESSAGE req, gchar *d, gsize dsize)
 static gsize
 gba_read(GByteArray *gba, struct data_slab_s *ds, guint32 max)
 {
-	guint8 *data = NULL;
-	gsize data_size = 0;
-
 	EXTRA_ASSERT(max >= gba->len);
 	if (max <= gba->len)
 		return 0;
 
-	data_size = max - gba->len;
-	GRID_TRACE("About to consume a maximum of %"G_GSIZE_FORMAT" bytes among %"G_GSIZE_FORMAT,
-			data_size, data_slab_size(ds));
+	guint8 *data = NULL;
+	gsize data_size = max - gba->len;
 
-	if (data_slab_consume(ds, &data, &data_size)) {
-		if (data_size > 0 && data)
-			g_byte_array_append(gba, data, data_size);
-		GRID_TRACE("Consumed %"G_GSIZE_FORMAT" bytes (now gba=%u ds=%"G_GSIZE_FORMAT")",
-				data_size, gba->len, data_slab_size(ds));
-		return data_size;
-	}
-	else {
-		GRID_TRACE("consumed 0 bytes (now gba=%u ds=%"G_GSIZE_FORMAT")",
-				gba->len, data_slab_size(ds));
+	if (!data_slab_consume(ds, &data, &data_size))
 		return 0;
-	}
+	if (data_size > 0 && data)
+		g_byte_array_append(gba, data, data_size);
+	return data_size;
 }
 
 static void
@@ -701,8 +680,8 @@ _request_get_cid (MESSAGE request)
 static gboolean
 _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 {
-	gchar hexid[65];
-	struct req_ctx_s req_ctx = {0};
+	gchar hexid[65] = {};
+	struct req_ctx_s req_ctx = {};
 	gboolean rc = FALSE;
 	GError *err = NULL;
 
@@ -968,7 +947,7 @@ grid_daemon_bind_host(struct network_server_s *server, const gchar *url,
 			gq_count_all, 0, gq_count_unexpected, 0,
 			gq_time_all, 0, gq_time_unexpected, 0);
 
-	network_server_bind_host_lowlatency(server, url, dispatcher,
+	network_server_bind_host(server, url, dispatcher,
 			(network_transport_factory)transport_gridd_factory);
 }
 

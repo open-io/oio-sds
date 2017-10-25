@@ -239,15 +239,13 @@ static gboolean
 thread_start(struct server_s *srv)
 {
 	GError *gErr = NULL;
-	GThread *th;
-
-	if (NULL != (th = g_thread_try_new("main", main_thread, srv, &gErr)))
+	GThread *th = g_thread_try_new("main", main_thread, srv, &gErr);
+	if (NULL != th)
 		return TRUE;
 
 	GRID_ERROR("Cannot start a worker thread : %s", gErr?gErr->message:"?");
 	if (gErr)
 		g_error_free(gErr);
-
 	return FALSE;
 }
 
@@ -743,11 +741,7 @@ load_servers (GKeyFile *cfgFile, GError **err)
 				goto errorLabel;
 			}
 
-			if (!accept_make (&(srv->ap), err))
-			{
-				GSETERROR(err,"Cannot init a new connection pool");
-				goto errorLabel;
-			}
+			srv->ap = accept_make();
 
 			for (url = srvList; srvList && *url && *(*url); url++) {
 				set_srv_addr(*url);

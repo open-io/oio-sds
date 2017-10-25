@@ -35,15 +35,10 @@ expr_clean(struct expr_s *pE)
 		break;
 	case VAL_NUM_ET:
 		break;
-	case UN_NUMSUP_ET:
-	case UN_NUMINF_ET:
-	case UN_NUMNOT_ET:
 	case UN_STRNUM_ET:
-	case UN_STRLEN_ET:
 		if (pE->expr.unary)
 			expr_clean(pE->expr.unary);
 		break;
-	case BIN_STRCMP_ET:
 	case BIN_NUMCMP_ET:
 	case BIN_NUMEQ_ET:
 	case BIN_NUMNEQ_ET:
@@ -55,11 +50,7 @@ expr_clean(struct expr_s *pE)
 	case BIN_NUMSUB_ET:
 	case BIN_NUMMUL_ET:
 	case BIN_NUMDIV_ET:
-	case BIN_NUMMOD_ET:
-	case BIN_NUMAND_ET:
 	case BIN_ROOT_ET:
-	case BIN_NUMXOR_ET:
-	case BIN_NUMOR_ET:
 		if (pE->expr.bin.p1)
 			expr_clean(pE->expr.bin.p1);
 		if (pE->expr.bin.p2)
@@ -70,7 +61,6 @@ expr_clean(struct expr_s *pE)
 			g_free(pE->expr.acc.base);
 		if (pE->expr.acc.field)
 			g_free(pE->expr.acc.field);
-		break;
 	case NB_ET:
 		break;
 	}

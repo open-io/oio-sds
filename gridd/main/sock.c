@@ -24,6 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <unistd.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -35,143 +36,33 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "./server_internals.h"
 #include "./srvalert.h"
 
-#define FAMILY(S) ((struct sockaddr*)(S))->sa_family
-#define ADDRLEN(A) (((struct sockaddr*)(A))->sa_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6))
-
-#include <poll.h>
-
-gint
-format_addr (struct sockaddr *sa, gchar *h, gsize hL, gchar *p, gsize pL, GError **err)
+ACCEPT_POOL
+accept_make(void)
 {
-	if (!sa) {
-		GSETERROR(err,"Invalid parameter");
-		return 0;
-	}
-
-	memset (h, 0x00, hL);
-	memset (p, 0x00, pL);
-
-	*h = '?';
-	*p = '?';
-
-	/*no reverse resolution, only numeric addresses*/
-	if (0 != getnameinfo (sa, ADDRLEN(sa), h, hL, p, pL, NI_NUMERICHOST|NI_NUMERICSERV)) {
-		GSETERROR(err, "Cannot format the address (%s)", strerror(errno));
-		return 0;
-	}
-
-	return 1;
-}
-
-gint
-resolve (struct sockaddr_storage *sa, const gchar *h, const gchar *p, GError **err)
-{
-	gint retCode;
-	struct addrinfo *ai=0, aiHint;
-
-	if (!sa) {
-		GSETERROR(err, "Invalid parameter");
-		return 0;
-	}
-
-	memset(&aiHint, 0x00, sizeof(struct addrinfo));
-	aiHint.ai_family = PF_UNSPEC;
-	aiHint.ai_socktype = SOCK_STREAM;
-	retCode = getaddrinfo (h, p, &aiHint, &ai);
-	if (retCode != 0) {
-		GSETERROR(err,"Cannot resolve [%s]:%s (%s)", (h?h:"0.0.0.0"), (p?p:"NOPORT"), gai_strerror(retCode));
-		return 0;
-	}
-	if (!ai) {
-		GSETERROR(err,"Cannot resolve [%s]:%s (%s)", (h?h:"0.0.0.0"), (p?p:"NOPORT"), "Unknown error");
-		return 0;
-	}
-
-	memcpy (sa, ai->ai_addr, ai->ai_addrlen);
-	freeaddrinfo(ai);
-	return 1;
-}
-
-gint
-accept_make(ACCEPT_POOL *s, GError **err)
-{
-	struct accept_pool_s *ap=NULL;
-
-	if (!s) {
-		GSETERROR(err,"Invalid parameter");
-		goto error_param;
-	}
-
-	ap = g_try_malloc0 (sizeof(struct accept_pool_s));
-	if (!ap) {
-		GSETERROR(err,"Memory allocation error");
-		goto error_pool;
-	}
-
+	struct accept_pool_s *ap = g_malloc0 (sizeof(struct accept_pool_s));
 	g_rec_mutex_init(&(ap->mut));
-
 	ap->count = 0;
 	ap->size = 2;
-	ap->srv = g_try_malloc0 (ap->size * sizeof(gint));
-	if (!ap->srv) {
-		GSETERROR(err,"Memory allocation failure");
-		goto error_array;
-	} else {
-		int i;
-		for (i=0; i<ap->size ;i++)
-			ap->srv[i]=-1;
-	}
-	*s = ap;
-
-	return 1;
-
-error_array:
-	g_free(ap);
-error_pool:
-error_param:
-	return 0;
+	ap->srv = g_malloc0 (ap->size * sizeof(gint));
+	for (int i=0; i<ap->size ;i++)
+		ap->srv[i]=-1;
+	return ap;
 }
 
-static const char*
-_get_family_name (int f)
+static void
+accept_add_any (ACCEPT_POOL ap, int srv)
 {
-	switch (f) {
-		case PF_LOCAL: return "PF_LOCAL";
-		case PF_INET: return "PF_INET";
-		case PF_INET6: return "PF_INET6";
-		case PF_UNSPEC: return "PF_UNSPEC";
-	}
-	return "?";
-}
-
-static gint
-accept_add_any (ACCEPT_POOL ap, int srv, GError **err)
-{
-	gint rc = 0;
-	if (!ap || srv<0)
-	{
-		GSETERROR (err, "Invalid parameter");
-		return 0;
-	}
+	EXTRA_ASSERT(ap != NULL);
+	EXTRA_ASSERT(ap->srv != NULL);
+	EXTRA_ASSERT(srv >= 0);
 
 	g_rec_mutex_lock (&(ap->mut));
-
-	/*allocates an array if it is necessary*/
-	if (!ap->srv) {
-		GSETERROR(err, "AcceptPool not initialized (should not happen)");
-		goto exitLabel;
-	}
 
 	/*make the arrays grows if it is too small*/
 	if (ap->size <= ap->count) {
 		gint *newSrv, newSize;
 		newSize = ap->size + 2;
-		newSrv = g_try_realloc (ap->srv, sizeof(gint) * newSize);
-		if (!newSrv)
-		{
-			GSETERROR(err, "Memory allocation error (%s)", strerror(errno));
-			goto exitLabel;
-		}
+		newSrv = g_realloc (ap->srv, sizeof(gint) * newSize);
 		memset (newSrv+ap->size, 0x00, sizeof(gint) * 2);
 		ap->size = newSize;
 		ap->srv = newSrv;
@@ -179,65 +70,49 @@ accept_add_any (ACCEPT_POOL ap, int srv, GError **err)
 
 	ap->srv [ap->count++] = srv;
 
-	rc = 1;
-exitLabel:
 	g_rec_mutex_unlock (&(ap->mut));
-	return rc;
 }
 
-static gint
-accept_add_inet (ACCEPT_POOL ap, const gchar *h, const gchar *p, GError **err)
+gint
+accept_add (ACCEPT_POOL ap, const gchar *url, GError **err)
 {
-	struct sockaddr_storage sa;
+	EXTRA_ASSERT(ap != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	struct sockaddr_storage sa = {};
+	gsize sa_len = sizeof(sa);
 	gint srv = -1;
 
-	if (!ap || !p)
-	{
-		GSETERROR (err, "Invalid parameter");
-		goto errorLabel;
+	if (!metautils_url_valid_for_bind(url)) {
+		GSETERROR(err,"Invalid address [%s]", url);
+		return 0;
 	}
-
-	if (!h || !(*h))
-		h = "0.0.0.0";
-
-	if (!resolve (&sa, h, p, err))
-	{
-		GSETERROR(err,"Cannot resolve [%s]:%s", h, p);
-		goto errorLabel;
+	if (!grid_string_to_sockaddr(url, (struct sockaddr*)&sa, &sa_len)) {
+		GSETERROR(err,"Cannot resolve [%s]", url);
+		return 0;
 	}
 
 	/*create the server socket*/
-	if (-1 == (srv = socket (FAMILY(&sa), SOCK_STREAM, 0)))
-	{
-		GSETERROR(err,"Cannot open a %s socket (%s)", _get_family_name(FAMILY(&sa)), strerror(errno));
+	if (-1 == (srv = socket_nonblock (sa.ss_family, SOCK_STREAM, 0))) {
+		GSETERROR(err,"socket() error: (%d) %s", errno, strerror(errno));
+		return 0;
+	}
+
+	sock_set_reuseaddr(srv, TRUE);
+
+	if (-1 == bind (srv, (struct sockaddr*)&sa, sa_len)) {
+		GSETERROR(err,"Cannot bind %d on [%s]: (%d) %s",
+				srv, url, errno, strerror(errno));
 		goto errorLabel;
 	}
 
-	if (!sock_set_reuseaddr(srv, TRUE)) {
-		GSETERROR(err,"Cannot set SO_REUSEADDR on %d [%s]:%s (%s)", srv, h, p, strerror(errno));
+	if (-1 == listen (srv,AP_BACKLOG)) {
+		GSETERROR(err,"Cannot listen on %d [%s]: (%d) %s",
+				srv, url, errno, strerror(errno));
 		goto errorLabel;
 	}
 
-	fcntl(srv, F_SETFL, O_NONBLOCK|fcntl(srv, F_GETFL));
-
-	if (-1 == bind (srv, (struct sockaddr*)(&sa), sizeof(struct sockaddr_in)))
-	{
-		GSETERROR(err,"Cannot bind %d on [%s]:%s (%s)", srv, h, p, strerror(errno));
-		goto errorLabel;
-	}
-
-	if (-1 == listen (srv,AP_BACKLOG))
-	{
-		GSETERROR(err,"Cannot listen on %d [%s]:%s (%s)", srv, h, p, strerror(errno));
-		goto errorLabel;
-	}
-
-	if (!accept_add_any(ap,srv,err))
-	{
-		GSETERROR(err,"Cannot monitor %s srv=%d", _get_family_name(FAMILY(&sa)), srv);
-		goto errorLabel;
-	}
-
+	accept_add_any(ap,srv);
 	return 1;
 errorLabel:
 	if (srv>=0)
@@ -304,49 +179,20 @@ UNSAFE_accept_do(ACCEPT_POOL ap, struct sockaddr *sa, socklen_t *saSize, GError 
 }
 
 gint
-accept_add (ACCEPT_POOL ap, const gchar *url, GError **err)
-{
-	if (!ap || !url || !(*url)) {
-		GSETERROR(err,"Invalid parameter");
-		return 0;
-	}
-
-		char *colon;
-		if (!(colon=strrchr(url,':'))) {
-			/*url supposed to be only a port*/
-			return accept_add_inet (ap, NULL, url, err);
-		}
-		else {
-			/*url supposed to be host:port*/
-			/**@todo TODO manage ipv6 addresses format*/
-			*colon = '\0';
-			return accept_add_inet (ap, url, colon+1, err);
-		}
-}
-
-gint
 accept_do (ACCEPT_POOL ap, addr_info_t *cltaddr, GError **err)
 {
-	struct sockaddr_storage sa;
-	socklen_t saSize;
-	int clt;
-
-	errno=0;
-
-	if (!ap) {
-		GSETERROR(err,"Invalid parameter");
-		return -1;
-	}
+	EXTRA_ASSERT(ap != NULL);
 
 	if (!ap->srv || ap->count<=0) {
 		GSETERROR(err, "Empty server socket pool");
 		return -1;
 	}
 
-	memset(&sa, 0, sizeof(sa));
-	saSize = sizeof(sa);
-	clt = UNSAFE_accept_do (ap, (struct sockaddr*) &sa, &saSize, err);
+	struct sockaddr_storage sa = {};
+	socklen_t saSize = sizeof(sa);
 
+	errno=0;
+	int clt = UNSAFE_accept_do (ap, (struct sockaddr*) &sa, &saSize, err);
 	if (clt < 0)
 		return -1;
 

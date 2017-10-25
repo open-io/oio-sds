@@ -96,8 +96,7 @@ struct gridd_request_descr_s
 };
 
 /* Adds support for a requests to the given gridd_dispatcher. */
-GError *
-transport_gridd_dispatcher_add_requests(
+void transport_gridd_dispatcher_add_requests(
 		struct gridd_request_dispatcher_s *dispatcher,
 		const struct gridd_request_descr_s *descr,
 		gpointer group_data);

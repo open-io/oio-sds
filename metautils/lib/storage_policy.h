@@ -53,8 +53,6 @@ struct storage_policy_s;
 struct storage_policy_s * storage_policy_init(struct namespace_info_s *ni,
 		const char *name);
 
-struct storage_policy_s * storage_policy_dup(const struct storage_policy_s *sp);
-
 /**
  * @param sp the storage policy
  * @return a string which represents the chunk method

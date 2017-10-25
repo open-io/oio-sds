@@ -35,7 +35,6 @@ struct metautils_sockets_vtable_s
 	gboolean (*set_reuseaddr) (int fd, gboolean enabled);
 	gboolean (*set_keepalive) (int fd, gboolean enabled);
 	gboolean (*set_nodelay) (int fd, gboolean enabled);
-	gboolean (*set_cork) (int fd, gboolean enabled);
 	gboolean (*set_linger) (int fd, int onoff, int linger);
 };
 
@@ -118,8 +117,6 @@ gboolean sock_set_reuseaddr(int fd, gboolean enabled);
 gboolean sock_set_keepalive(int fd, gboolean enabled);
 
 gboolean sock_set_nodelay(int fd, gboolean enabled);
-
-gboolean sock_set_cork(int fd, gboolean enabled);
 
 gboolean sock_set_fastopen(int fd);
 

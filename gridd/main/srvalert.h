@@ -24,13 +24,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 /* Alerting functions */
 
-typedef int (*srv_alert_handler) (void* user_data, const char *id, const char *criticity, const char *msg);
-
-/* overwrite the default (dummy) alert handler with a user defined function.
- * Returns the old user_data previously registered. By default, a NULL pointer
- * is stored in the user_data pointer */
-gpointer srv_set_alert_handler (srv_alert_handler h, void *user_data);
-
 /*sends the alert through the registered alert handler*/
 int srv_send_alert(const char *id, const char *criticity, const char *msg);
 

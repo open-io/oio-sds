@@ -102,16 +102,10 @@ metautils_asn1c_write_gba (const void *b, gsize bSize, void *key)
 }
 
 
-GByteArray*
-message_marshall_gba(MESSAGE m, GError **err)
+static GByteArray*
+message_marshall_gba(MESSAGE m)
 {
-	asn_enc_rval_t encRet;
-
-	/*sanity check */
-	if (!m) {
-		GSETERROR(err, "Invalid parameter");
-		return NULL;
-	}
+	EXTRA_ASSERT(m != NULL);
 
 	/*set an ID if it is not present */
 	if (!metautils_message_has_ID(m)) {
@@ -129,11 +123,10 @@ message_marshall_gba(MESSAGE m, GError **err)
 	guint32 u32 = 0;
 	GByteArray *result = g_byte_array_sized_new(256);
 	g_byte_array_append(result, (guint8*)&u32, sizeof(u32));
-	encRet = der_encode(&asn_DEF_Message, m, metautils_asn1c_write_gba, result);
+	asn_enc_rval_t encRet = der_encode(&asn_DEF_Message, m, metautils_asn1c_write_gba, result);
 
 	if (encRet.encoded < 0) {
 		g_byte_array_free(result, TRUE);
-		GSETERROR(err, "Encoding error (Message)");
 		return NULL;
 	}
 
@@ -148,7 +141,7 @@ message_marshall_gba_and_clean(MESSAGE m)
 	GByteArray *result;
 
 	EXTRA_ASSERT(m != NULL);
-	result = message_marshall_gba(m, NULL);
+	result = message_marshall_gba(m);
 	metautils_message_destroy(m);
 	return result;
 }
@@ -214,8 +207,9 @@ _os_set (OCTET_STRING_t **pos, const void *s, gsize sSize)
 static void
 message_set_param(MESSAGE m, enum message_param_e mp, const void *s, gsize sSize)
 {
-	if (!m || !s || sSize < 1)
-		return ;
+	EXTRA_ASSERT(m != NULL);
+	EXTRA_ASSERT(s != NULL);
+	EXTRA_ASSERT(sSize > 0);
 
 	switch (mp) {
 		case MP_ID:
@@ -281,15 +275,12 @@ metautils_message_get_field(MESSAGE m, const char *name, gsize *vsize)
 		return NULL;
 	}
 
-	gssize nlen = strlen(name);
+	const gssize nlen = strlen(name);
 
 	for (int i = 0; i < m->content.list.count ;i++) {
 		Parameter_t *p = m->content.list.array[i];
-		if (!p)
-			continue;
 		if (p->name.size != nlen)
 			continue;
-
 		if (!memcmp(p->name.buf, name, nlen)) {
 			*vsize = p->value.size;
 			return p->value.buf;
@@ -304,12 +295,11 @@ metautils_message_get_field_names(MESSAGE m)
 {
 	EXTRA_ASSERT(m != NULL);
 
-	int i, nb, max = m->content.list.count;
-	if (max < 0)
-		return NULL;
+	const int max = m->content.list.count;
+	EXTRA_ASSERT(max >= 0);
 
 	gchar **array = g_malloc0(sizeof(gchar *) * (max + 1));
-	for (nb=0,i=0; i<max; ) {
+	for (int nb=0,i=0; i<max; ) {
 		Parameter_t *p = m->content.list.array[i++];
 		if (p && p->name.buf)
 			array[nb++] = g_strndup((const gchar*)p->name.buf, p->name.size);

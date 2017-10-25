@@ -168,10 +168,8 @@ static int _client_get_fd(struct gridd_client_s *client);
 static int _client_interest(struct gridd_client_s *client);
 static GError* _client_error(struct gridd_client_s *client);
 static gboolean _client_start(struct gridd_client_s *client);
-static GError* _client_set_fd(struct gridd_client_s *client, int fd);
 static void _client_set_timeout(struct gridd_client_s *client, gdouble seconds);
 static void _client_set_timeout_cnx(struct gridd_client_s *client, gdouble sec);
-static void _client_set_keepalive(struct gridd_client_s *client, gboolean on);
 static void _client_react(struct gridd_client_s *client);
 static gboolean _client_expire(struct gridd_client_s *client, gint64 now);
 static void _client_fail(struct gridd_client_s *client, GError *why);
@@ -195,8 +193,6 @@ struct gridd_client_vtable_s VTABLE_CLIENT =
 	_client_interest,
 	_client_url,
 	_client_get_fd,
-	_client_set_fd,
-	_client_set_keepalive,
 	_client_set_timeout,
 	_client_set_timeout_cnx,
 	_client_expired,
@@ -596,15 +592,6 @@ _client_free(struct gridd_client_s *client)
 }
 
 static void
-_client_set_keepalive(struct gridd_client_s *client, gboolean on)
-{
-	EXTRA_ASSERT(client != NULL);
-	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
-
-	client->keepalive = BOOL(on);
-}
-
-static void
 _client_set_timeout(struct gridd_client_s *client, gdouble seconds)
 {
 	EXTRA_ASSERT(client != NULL);
@@ -621,46 +608,6 @@ _client_set_timeout_cnx(struct gridd_client_s *client, gdouble seconds)
 	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
 
 	client->delay_connect = seconds * (gdouble) G_TIME_SPAN_SECOND;
-}
-
-static GError*
-_client_set_fd(struct gridd_client_s *client, int fd)
-{
-	EXTRA_ASSERT(client != NULL);
-	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
-
-	if (fd >= 0) {
-		switch (client->step) {
-			case NONE: /* ok */
-				break;
-			case CONNECTING:
-				if (client->request != NULL)
-					return NEWERROR(CODE_INTERNAL_ERROR, "Request pending");
-				break;
-			case REQ_SENDING:
-			case REP_READING_SIZE:
-			case REP_READING_DATA:
-				return NEWERROR(CODE_INTERNAL_ERROR, "Request pending");
-			case STATUS_OK:
-			case STATUS_FAILED:
-				/* ok */
-				break;
-		}
-	}
-
-	/* reset any connection and request */
-	_client_reset_reply(client);
-	_client_reset_request(client);
-	_client_reset_target(client);
-
-	/* XXX do not call _client_reset_cnx(), or close the connexion.
-	 * It is the responsibility of the caller to manage this, because it
-	 * explicitely breaks the pending socket management. */
-	client->fd = fd;
-
-	client->step = (client->fd >= 0) ? CONNECTING : NONE;
-
-	return NULL;
 }
 
 static GError*
@@ -881,11 +828,10 @@ _factory_clean(struct gridd_client_factory_s *self)
 }
 
 static struct gridd_client_s *
-_factory_create_client (struct gridd_client_factory_s *factory)
+_factory_create_client (struct gridd_client_factory_s *factory UNUSED)
 {
 	EXTRA_ASSERT(factory != NULL);
 	EXTRA_ASSERT(factory->abstract.vtable == &VTABLE_FACTORY);
-	(void) factory;
 	return gridd_client_create_empty();
 }
 
@@ -895,8 +841,6 @@ struct gridd_client_s *
 gridd_client_create_empty(void)
 {
 	struct gridd_client_s *client = SLICE_NEW0(struct gridd_client_s);
-	if (unlikely(NULL == client))
-		return NULL;
 
 	client->abstract.vtable = &VTABLE_CLIENT;
 	client->fd = -1;
@@ -969,18 +913,6 @@ int
 gridd_client_fd (struct gridd_client_s *self)
 {
 	GRIDD_CALL(self,get_fd)(self);
-}
-
-GError *
-gridd_client_set_fd(struct gridd_client_s *self, int fd)
-{
-	GRIDD_CALL(self,set_fd)(self,fd);
-}
-
-void
-gridd_client_set_keepalive(struct gridd_client_s *self, gboolean on)
-{
-	GRIDD_CALL(self,set_keepalive)(self,on);
 }
 
 void

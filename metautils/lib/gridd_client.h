@@ -61,12 +61,6 @@ struct gridd_client_vtable_s
 	// Returns the file descriptor currently used
 	int (*get_fd) (struct gridd_client_s *c);
 
-	// Force a new descriptor
-	GError* (*set_fd) (struct gridd_client_s *c, int fd);
-
-	// Tells to keep the connection open between requests.
-	void (*set_keepalive) (struct gridd_client_s *c, gboolean on);
-
 	// Force global timeout for the operation (all the request, including
 	// the redirections)
 	void (*set_timeout) (struct gridd_client_s *c, gdouble seconds);
@@ -109,8 +103,6 @@ GError * gridd_client_error (struct gridd_client_s *self);
 int gridd_client_interest (struct gridd_client_s *self);
 const gchar * gridd_client_url (struct gridd_client_s *self);
 int gridd_client_fd (struct gridd_client_s *self);
-GError * gridd_client_set_fd(struct gridd_client_s *self, int fd);
-void gridd_client_set_keepalive(struct gridd_client_s *self, gboolean on);
 void gridd_client_set_timeout (struct gridd_client_s *self, gdouble seconds);
 void gridd_client_set_timeout_cnx (struct gridd_client_s *self, gdouble sec);
 gboolean gridd_client_expired(struct gridd_client_s *self, gint64 now);
