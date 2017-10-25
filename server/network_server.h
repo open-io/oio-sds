@@ -133,10 +133,6 @@ gchar** network_server_endpoints (struct network_server_s *srv);
 
 int network_server_first_udp (struct network_server_s *srv);
 
-void network_server_bind_host_lowlatency(struct network_server_s *srv,
-		const gchar *url, gpointer factory_udata,
-		network_transport_factory factory);
-
 void network_server_close_servers(struct network_server_s *srv);
 
 GError * network_server_open_servers(struct network_server_s *srv);

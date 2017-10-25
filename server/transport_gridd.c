@@ -947,7 +947,7 @@ grid_daemon_bind_host(struct network_server_s *server, const gchar *url,
 			gq_count_all, 0, gq_count_unexpected, 0,
 			gq_time_all, 0, gq_time_unexpected, 0);
 
-	network_server_bind_host_lowlatency(server, url, dispatcher,
+	network_server_bind_host(server, url, dispatcher,
 			(network_transport_factory)transport_gridd_factory);
 }
 
