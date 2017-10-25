@@ -156,20 +156,6 @@ add_custom_command(
 )
 
 add_custom_command(
-	OUTPUT expr.yacc.c expr.yacc.h
-	DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/expr.yacc.y
-	COMMAND ${BISON_EXECUTABLE}
-	ARGS -d -y -o expr.yacc.c ${CMAKE_CURRENT_SOURCE_DIR}/expr.yacc.y
-)
-
-add_custom_command(
-	OUTPUT expr.lex.c
-	DEPENDS expr.yacc.c expr.yacc.h
-	COMMAND ${FLEX_EXECUTABLE}
-	ARGS -s -oexpr.lex.c ${CMAKE_CURRENT_SOURCE_DIR}/expr.lex.l
-)
-
-add_custom_command(
 	OUTPUT
 		${CMAKE_CURRENT_BINARY_DIR}/common_variables.c
 		${CMAKE_CURRENT_BINARY_DIR}/common_variables.h
@@ -199,10 +185,6 @@ add_library(metautils SHARED
 		utils_syscall.c metautils_syscall.h
 		lrutree.c lrutree.h tree.h
 		storage_policy.c storage_policy.h
-		expr.clean.c
-		expr.eval.c
-		expr.lex.c expr.yacc.c expr.yacc.h
-		expr.h
 
 		utils_containers.c metautils_containers.h
 		utils_svc_policy.c metautils_svc_policy.h
