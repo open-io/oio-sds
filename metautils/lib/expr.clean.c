@@ -50,7 +50,6 @@ expr_clean(struct expr_s *pE)
 	case BIN_NUMSUB_ET:
 	case BIN_NUMMUL_ET:
 	case BIN_NUMDIV_ET:
-	case BIN_NUMMOD_ET:
 	case BIN_ROOT_ET:
 		if (pE->expr.bin.p1)
 			expr_clean(pE->expr.bin.p1);

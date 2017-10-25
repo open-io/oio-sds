@@ -33,7 +33,6 @@
 [+]        { T; return BIN_NUMADD_TK; }
 [/]        { T; return BIN_NUMDIV_TK; }
 [*]        { T; return BIN_NUMMUL_TK; }
-[%]        { T; return BIN_NUMMOD_TK; }
 [(]        { T; return PAROP_TK ; }
 [)]        { T; return PARCL_TK ; }
 [.]        { T; return DOT_TK ; }

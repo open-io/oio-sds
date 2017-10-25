@@ -78,7 +78,6 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 		case BIN_NUMSUB_ET:
 		case BIN_NUMMUL_ET:
 		case BIN_NUMDIV_ET:
-		case BIN_NUMMOD_ET:
 		case BIN_ROOT_ET:
 		case NB_ET:
 			return EXPR_EVAL_UNDEF;
@@ -270,20 +269,6 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 				if (ret == 0)
 					return EXPR_EVAL_DEF;
 				*pD = d1 / d2;
-				return EXPR_EVAL_DEF;
-			}
-
-		case BIN_NUMMOD_ET:{
-				double d1 = 0, d2 = 0;
-
-				EVAL_BINNUM(d1, d2, pE);
-				FPcmp(ret, d1, 0);
-				if (ret < 0)
-					return EXPR_EVAL_DEF;
-				FPcmp(ret, d2, 0);
-				if (ret < 0)
-					return EXPR_EVAL_DEF;
-				*pD = (double) ((int) d1 % (int) d2);
 				return EXPR_EVAL_DEF;
 			}
 

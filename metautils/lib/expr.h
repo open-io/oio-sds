@@ -46,7 +46,6 @@ enum expr_type_e
 	BIN_NUMGT_ET, BIN_NUMGE_ET,
 	BIN_NUMADD_ET, BIN_NUMSUB_ET,
 	BIN_NUMMUL_ET, BIN_NUMDIV_ET,
-	BIN_NUMMOD_ET,
 	BIN_ROOT_ET,
 	ACC_ET,
 	/*last beacon */
