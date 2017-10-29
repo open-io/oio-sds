@@ -90,13 +90,23 @@ struct gridd_client_s
 
 static GMutex lock_errors;
 static GTree *tree_errors = NULL;
+static volatile guint lazy_init = 1;
 
-void  _oio_cache_of_errors_contructor (void);
+void  _oio_cache_of_errors_constructor (void);
+void  _oio_cache_of_errors_destructor (void);
+
+void __attribute__ ((destructor))
+_oio_cache_of_errors_destructor (void)
+{
+	if (g_atomic_int_compare_and_exchange(&lazy_init, 1, 0)) {
+		g_mutex_clear(&lock_errors);
+		g_tree_unref(tree_errors);
+	}
+}
 
 void __attribute__ ((constructor))
-_oio_cache_of_errors_contructor (void)
+_oio_cache_of_errors_constructor (void)
 {
-	static volatile guint lazy_init = 1;
 	if (lazy_init) {
 		if (g_atomic_int_compare_and_exchange(&lazy_init, 1, 0)) {
 			g_mutex_init (&lock_errors);
