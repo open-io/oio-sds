@@ -14,9 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from urlparse import urlparse
-from eventlet import Timeout, GreenPile
-from oio.common.http_eventlet import http_connect
+from eventlet import GreenPile
 from oio.event.evob import Event
 from oio.event.consumer import EventTypes
 from oio.event.filters.base import Filter
@@ -25,6 +23,8 @@ from oio.api.backblaze import BackblazeDeleteHandler
 from oio.api.backblaze_http import BackblazeUtils
 from oio.common.storage_method import STORAGE_METHODS, guess_storage_method
 from oio.common.utils import request_id
+from oio.common.http_urllib3 import urllib3, get_pool_manager
+from oio.common.constants import CONNECTION_TIMEOUT
 
 CHUNK_TIMEOUT = 60
 PARALLEL_CHUNKS_DELETE = 3
@@ -41,19 +41,20 @@ class ContentReaperFilter(Filter):
                 "ec": self._handle_rawx,
                 "backblaze": self._handle_b2,
         }
+        self.pool_manager = get_pool_manager()
+        self.timeout = urllib3.Timeout(
+            connect=self.conf.get("connection_timeout", CONNECTION_TIMEOUT),
+            read=self.conf.get("read_timeout", CHUNK_TIMEOUT))
 
     def delete_chunk(self, chunk, cid, reqid):
         resp = None
-        parsed = urlparse(chunk['id'])
         headers = {'X-oio-req-id': reqid,
                    'X-oio-chunk-meta-container-id': cid}
         try:
-            with Timeout(CHUNK_TIMEOUT):
-                conn = http_connect(parsed.netloc, 'DELETE', parsed.path,
-                                    headers=headers)
-                resp = conn.getresponse()
-                resp.chunk = chunk
-        except (Exception, Timeout) as exc:
+            resp = self.pool_manager.request(
+                "DELETE", chunk['id'], headers=headers, timeout=self.timeout)
+            resp.chunk = chunk
+        except (Exception) as exc:
             self.logger.warn(
                 'error while deleting chunk %s "%s"',
                 chunk['id'], str(exc.message))
