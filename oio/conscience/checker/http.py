@@ -13,7 +13,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from oio.common.http_eventlet import http_connect
 from oio.common import exceptions as exc
 from oio.conscience.checker.base import BaseChecker
 
@@ -32,15 +31,13 @@ class HttpChecker(BaseChecker):
         self.path = self.checker_conf['uri']
         self.name = '%s|http|%s|%s|%s' % \
             (self.srv_type, self.host, self.port, self.path)
-        self.netloc = '%s:%s' % (self.host, self.port)
-        self.pool_manager = self.agent.pool_manager
+        self.url = '%s:%s/%s' % (self.host, self.port, self.path)
 
     def check(self):
         success = False
         resp = None
         try:
-            conn = http_connect(self.netloc, 'GET', self.path)
-            resp = conn.getresponse()
+            resp = self.agent.pool_manager.request("GET", self.url)
             if resp.status == 200:
                 success = True
             else:
