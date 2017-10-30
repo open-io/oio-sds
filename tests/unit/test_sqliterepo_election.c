@@ -894,6 +894,27 @@ static void test_STEP_CHECKING_SLAVES(void) {
 	_member_assert_LEAVING(m);
 	g_assert_false(member_has_getvers(m));
 	_pending(CMD_DELETE, 0);
+
+	/* Legit transitions with no interruption:
+	 * 3/ LAST getvers reply, quorum absent */
+	RESET();
+	m->count_GETVERS = 3;
+	m->pending_GETVERS = 1;
+	m->errors_GETVERS = 1;
+	m->attempts_GETVERS = 1;
+	transition(m, EVT_GETVERS_KO, NULL);
+	_member_assert_DELAYED_CHECKING_SLAVES(m);  /* 1 attempt left */
+	g_assert_false(member_has_getvers(m));
+	_pending(0);
+
+	RESET();
+	m->count_GETVERS = 3;
+	m->pending_GETVERS = 1;
+	m->errors_GETVERS = 1;
+	transition(m, EVT_GETVERS_KO, NULL);
+	_member_assert_LEAVING_FAILING(m);  /* no more attempts left */
+	g_assert_false(member_has_getvers(m));
+	_pending(CMD_DELETE, 0);
 }
 
 static void test_STEP_MASTER(void) {
@@ -1152,6 +1173,160 @@ static void test_STEP_ASKING(void) {
 	_pending(CMD_DELETE, 0);
 }
 
+static void test_STEP_DELAYED_CHECKING_MASTER(void) {
+	TEST_HEAD();
+
+	void RESET() {
+		g_array_set_size(sync->pending, 0);
+		member_set_status(m, STEP_DELAYED_CHECKING_MASTER);
+		member_reset(m);
+		member_reset_requests(m);
+		member_set_local_id(m, oio_ext_rand_int());
+		member_set_master_id(m, m->local_id + 1);
+		member_set_master_url(m, "ID1");
+		m->count_GETVERS = 0;
+		m->pending_GETVERS = 0;
+		m->attempts_GETVERS = 0;
+		m->when_unstable = oio_ext_monotonic_time();
+		_member_assert_DELAYED_CHECKING_MASTER(m);
+	}
+
+	/* Test No-Op transitions */
+	static const int ABNORMAL[] = {
+		EVT_MASTER_OK, EVT_MASTER_KO, EVT_MASTER_BAD,
+		EVT_GETVERS_OK, EVT_GETVERS_RACE, EVT_GETVERS_OLD, EVT_GETVERS_KO,
+		EVT_CREATE_OK, EVT_CREATE_KO,
+		EVT_EXISTS_OK, EVT_EXISTS_KO,
+		EVT_LEAVE_OK, EVT_LEAVE_KO,
+		EVT_LIST_OK, EVT_LIST_KO,
+		EVT_SYNC_OK, EVT_SYNC_KO,
+		-1 /* end beacon */
+	};
+	for (const int *pevt=ABNORMAL; *pevt >= 0 ;++pevt) {
+		RESET();
+		_test_nochange(*pevt, NULL);
+		_member_assert_DELAYED_CHECKING_MASTER(m);
+		_pending(0);
+		g_assert_false(member_has_request(m));
+	}
+
+	/* interruptions */
+	RESET();
+	transition(m, EVT_DISCONNECTED, NULL);
+	_member_assert_NONE(m);
+	_pending(0);
+
+	RESET();
+	transition(m, EVT_LEAVE_REQ, NULL);
+	_member_assert_LEAVING(m);
+	_pending(CMD_DELETE, 0);
+	g_assert_cmpint(m->requested_LEAVE, ==, 0);
+
+	RESET();
+	transition(m, EVT_LEFT_SELF, NULL);
+	_member_assert_CREATING(m);
+	_pending(CMD_CREATE, 0);
+	g_assert_cmpint(m->requested_LEFT_SELF, ==, 0);
+
+	RESET();
+	transition(m, EVT_LEFT_MASTER, NULL);
+	_member_assert_LISTING(m);
+	_pending(CMD_LIST, 0);
+	g_assert_cmpint(m->requested_LEFT_MASTER, ==, 0);
+
+	/* Timeout not raised (clock untouched) */
+	RESET();
+	transition(m, EVT_NONE, NULL);
+	_member_assert_DELAYED_CHECKING_MASTER(m);
+	g_assert_false(member_has_getvers(m));
+	_pending(0);
+
+	/* Timeout raised */
+	RESET();
+	CLOCK += sqliterepo_getvers_backoff + 1;
+	transition(m, EVT_NONE, NULL);
+	_member_assert_CHECKING_MASTER(m);
+	g_assert_true(member_has_getvers(m));
+	_pending(0);
+}
+
+static void test_STEP_DELAYED_CHECKING_SLAVES(void) {
+	TEST_HEAD();
+
+	void RESET() {
+		g_array_set_size(sync->pending, 0);
+		member_set_status(m, STEP_DELAYED_CHECKING_SLAVES);
+		member_reset(m);
+		member_reset_requests(m);
+		member_set_local_id(m, oio_ext_rand_int());
+		member_set_master_id(m, m->local_id);
+		member_set_master_url(m, NULL);
+		m->count_GETVERS = 0;
+		m->pending_GETVERS = 0;
+		m->attempts_GETVERS = 0;
+		m->when_unstable = oio_ext_monotonic_time();
+		_member_assert_DELAYED_CHECKING_SLAVES(m);
+	}
+
+	/* Test No-Op transitions */
+	static const int ABNORMAL[] = {
+		EVT_MASTER_OK, EVT_MASTER_KO, EVT_MASTER_BAD,
+		EVT_GETVERS_OK, EVT_GETVERS_RACE, EVT_GETVERS_OLD, EVT_GETVERS_KO,
+		EVT_CREATE_OK, EVT_CREATE_KO,
+		EVT_EXISTS_OK, EVT_EXISTS_KO,
+		EVT_LEAVE_OK, EVT_LEAVE_KO,
+		EVT_LIST_OK, EVT_LIST_KO,
+		EVT_SYNC_OK, EVT_SYNC_KO,
+		-1 /* end beacon */
+	};
+	for (const int *pevt=ABNORMAL; *pevt >= 0 ;++pevt) {
+		RESET();
+		_test_nochange(*pevt, NULL);
+		_member_assert_DELAYED_CHECKING_SLAVES(m);
+		_pending(0);
+		g_assert_false(member_has_request(m));
+	}
+
+	/* interruptions */
+	RESET();
+	transition(m, EVT_DISCONNECTED, NULL);
+	_member_assert_NONE(m);
+	_pending(0);
+
+	RESET();
+	transition(m, EVT_LEAVE_REQ, NULL);
+	_member_assert_LEAVING(m);
+	_pending(CMD_DELETE, 0);
+	g_assert_cmpint(m->requested_LEAVE, ==, 0);
+
+	RESET();
+	transition(m, EVT_LEFT_SELF, NULL);
+	_member_assert_CREATING(m);
+	_pending(CMD_CREATE, 0);
+	g_assert_cmpint(m->requested_LEFT_SELF, ==, 0);
+
+	RESET();
+	transition(m, EVT_LEFT_MASTER, NULL);
+	_member_assert_DELAYED_CHECKING_SLAVES(m);
+	_pending(0);
+	g_assert_cmpint(m->requested_LEFT_MASTER, ==, 0);
+
+	/* Timeout not raised (clock untouched) */
+	RESET();
+	transition(m, EVT_NONE, NULL);
+	_member_assert_DELAYED_CHECKING_SLAVES(m);
+	g_assert_false(member_has_getvers(m));
+	_pending(0);
+
+	/* Timeout raised */
+	RESET();
+	CLOCK += sqliterepo_getvers_backoff + 1;
+	transition(m, EVT_NONE, NULL);
+	_member_assert_CHECKING_SLAVES(m);
+	g_assert_true(member_has_getvers(m));
+	_pending(0);
+}
+
 static void test_STEP_CHECKING_MASTER(void) {
 	TEST_HEAD();
 
@@ -1225,8 +1400,8 @@ static void test_STEP_CHECKING_MASTER(void) {
 	RESET();
 	m->attempts_GETVERS = 1;
 	transition(m, EVT_GETVERS_KO, NULL);
-	_member_assert_CHECKING_MASTER(m);
-	g_assert_true(member_has_getvers(m));
+	_member_assert_DELAYED_CHECKING_MASTER(m);
+	g_assert_false(member_has_getvers(m));
 	_pending(0);
 
 	RESET();
@@ -1380,6 +1555,8 @@ main(int argc, char **argv)
 	g_test_add_func("/sqlx/election/step/MASTER", test_STEP_MASTER);
 	g_test_add_func("/sqlx/election/step/ASKING", test_STEP_ASKING);
 	g_test_add_func("/sqlx/election/step/CHECKING_MASTER", test_STEP_CHECKING_MASTER);
+	g_test_add_func("/sqlx/election/step/DELAYED_CHECKING_MASTER", test_STEP_DELAYED_CHECKING_MASTER);
+	g_test_add_func("/sqlx/election/step/DELAYED_CHECKING_SLAVES", test_STEP_DELAYED_CHECKING_SLAVES);
 	g_test_add_func("/sqlx/election/step/SLAVE", test_STEP_SLAVE);
 	g_test_add_func("/sqlx/election/step/SYNCING", test_STEP_SYNCING);
 	return g_test_run();
