@@ -1914,9 +1914,9 @@ _election_get_status(struct election_manager_s *mgr,
 	_manager_lock(mgr);
 	struct election_member_s *m = _LOCKED_init_member(mgr, n, TRUE);
 
-	if (!wait_for_final_status(m, deadline)) // TIMEOUT!
+	if (!wait_for_final_status(m, deadline)) {  /* TIMEOUT! */
 		rc = STEP_FAILED;
-	else {
+	} else {
 		rc = m->step;
 		if (rc == STEP_SLAVE) {
 			if (m->master_url)
