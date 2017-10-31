@@ -90,11 +90,20 @@ static GSList *var_records = NULL;
 static GTree *var_aliases = NULL;
 
 void _oio_var_constructor (void);
+void _oio_var_destructor (void);
 
 void __attribute__ ((constructor)) _oio_var_constructor (void) {
 	if (g_atomic_int_compare_and_exchange(&var_init, 0, 1)) {
 		g_mutex_init(&var_lock);
 		var_aliases = g_tree_new_full(oio_str_cmp3, NULL, g_free, g_free);
+	}
+}
+
+void __attribute__ ((destructor)) _oio_var_destructor (void) {
+	if (g_atomic_int_compare_and_exchange(&var_init, 1, 0)) {
+		g_mutex_clear(&var_lock);
+		g_tree_unref(var_aliases), var_aliases = NULL;
+		g_slist_free_full(var_records, g_free), var_records = NULL;
 	}
 }
 
