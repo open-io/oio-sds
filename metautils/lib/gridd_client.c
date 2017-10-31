@@ -426,7 +426,8 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 
 			if (client->reply->len < 4) {
 				/* Continue reading the size */
-				rc = metautils_syscall_read(client->fd, d, (4 - client->reply->len));
+				rc = metautils_syscall_read(client->fd, d,
+						(4 - client->reply->len));
 				if (rc < 0)
 					return (errno == EINTR || errno == EAGAIN) ? NULL :
 						NEWERROR(errno, "read error (%s)", strerror(errno));
@@ -435,7 +436,9 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 
 				if (client->reply->len < 4) {
 					if (!rc)
-						return NEWERROR(errno, "EOF!");
+						return NEWERROR(CODE_NETWORK_ERROR,
+								"EOF while reading response size from %s",
+								_client_url(client));
 					return NULL;
 				}
 			}
@@ -452,10 +455,10 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 
 			EXTRA_ASSERT (client->reply->len <= client->size + 4);
 			if (client->reply->len < client->size + 4) {
-				gsize remaiming = client->size + 4 - client->reply->len;
+				gsize remaining = client->size + 4 - client->reply->len;
 				gsize dmax = ds;
-				if (dmax > remaiming)
-					dmax = remaiming;
+				if (dmax > remaining)
+					dmax = remaining;
 				rc = metautils_syscall_read(client->fd, d, dmax);
 				if (rc < 0)
 					return (errno == EINTR || errno == EAGAIN) ? NULL :
@@ -471,9 +474,13 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 					client->step = STATUS_FAILED;
 					return err;
 				}
+			} else if (!rc) {
+				return NEWERROR(CODE_NETWORK_ERROR,
+						"EOF while reading response from %s"
+						"(got %u bytes, expected %"G_GUINT32_FORMAT")",
+						_client_url(client), client->reply->len,
+						client->size + 4);
 			}
-			else if (!rc)
-				return NEWERROR(errno, "EOF!");
 			return NULL;
 
 		default:

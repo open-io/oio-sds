@@ -146,7 +146,7 @@ class ObjectStorageApi(object):
     @handle_account_not_found
     def account_update(self, account, metadata, to_delete=None, **kwargs):
         warnings.warn("You'd better use account_set_properties()",
-                      DeprecationWarning)
+                      DeprecationWarning, stacklevel=2)
         self.account.account_update(account, metadata, to_delete, **kwargs)
 
     @handle_account_not_found
@@ -234,6 +234,10 @@ class ObjectStorageApi(object):
         :keyword end_marker:
         :keyword prefix:
         :keyword delimiter:
+        :return: the list of containers of an account
+        :rtype: `list` of items (`list`) with 4 fields:
+            name, number of objects, number of bytes, and 1 if the item
+            is a prefix or 0 if the item is actually a container
         """
         resp = self.account.container_list(account, limit=limit,
                                            marker=marker,
@@ -380,7 +384,7 @@ class ObjectStorageApi(object):
     def object_create(self, account, container, file_or_path=None, data=None,
                       etag=None, obj_name=None, mime_type=None,
                       metadata=None, policy=None, key_file=None,
-                      append=False, **kwargs):
+                      append=False, properties=None, **kwargs):
         """
         Create an object or append data to object in *container* of *account*
         with data taken from either *data* (`str` or `generator`) or
@@ -439,22 +443,30 @@ class ObjectStorageApi(object):
 
         sysmeta = {'mime_type': mime_type,
                    'etag': etag}
+        if metadata:
+            warnings.warn(
+                "You'd better use 'properties' instead of 'metadata'",
+                DeprecationWarning, stacklevel=4)
+            if not properties:
+                properties = metadata
+            else:
+                properties.update(metadata)
 
         if src is data:
             return self._object_create(
                 account, container, obj_name, BytesIO(data), sysmeta,
-                properties=metadata, policy=policy,
+                properties=properties, policy=policy,
                 key_file=key_file, append=append, **kwargs)
         elif hasattr(file_or_path, "read"):
             return self._object_create(
                 account, container, obj_name, src, sysmeta,
-                properties=metadata, policy=policy, key_file=key_file,
+                properties=properties, policy=policy, key_file=key_file,
                 append=append, **kwargs)
         else:
             with open(file_or_path, "rb") as f:
                 return self._object_create(
                     account, container, obj_name, f, sysmeta,
-                    properties=metadata, policy=policy,
+                    properties=properties, policy=policy,
                     key_file=key_file, append=append, **kwargs)
 
     @ensure_headers
@@ -493,6 +505,19 @@ class ObjectStorageApi(object):
     @ensure_request_id
     def object_delete(self, account, container, obj,
                       version=None, **kwargs):
+        """
+        Delete an object from a container. If versioning is enabled and no
+        version is specified, the object will be marked as deleted but not
+        actually deleted.
+
+        :param account: name of the account the object belongs to
+        :type account: `str`
+        :param container: name of the container the object belongs to
+        :type container: `str`
+        :param obj: name of the object to delete
+        :param version: version of the object to delete
+        :returns: True on success
+        """
         return self.container.content_delete(account, container, obj,
                                              version=version, **kwargs)
 

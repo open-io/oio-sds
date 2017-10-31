@@ -157,6 +157,9 @@ class AccountClient(HttpApi):
         :keyword end_marker:
         :keyword prefix:
         :keyword delimiter:
+        :rtype: `dict` with 'ctime' (`float`), 'bytes' (`int`),
+            'objects' (`int`), 'containers' (`int`), 'id' (`str`),
+            'metadata' (`dict`) and 'listing' (`list`).
         """
         params = {"id": account,
                   "limit": limit,

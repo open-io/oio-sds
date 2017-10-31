@@ -51,6 +51,9 @@ enum election_step_e
 	STEP_CHECKING_SLAVES,
 	STEP_SYNCING,
 
+	STEP_DELAYED_CHECKING_MASTER,
+	STEP_DELAYED_CHECKING_SLAVES,
+
 	STEP_LEAVING,
 	STEP_LEAVING_FAILING,
 	STEP_FAILED,
@@ -248,6 +251,8 @@ static const char * _step2str(enum election_step_e step) {
 		ON_ENUM(STEP_,CHECKING_MASTER);
 		ON_ENUM(STEP_,CHECKING_SLAVES);
 		ON_ENUM(STEP_,SYNCING);
+		ON_ENUM(STEP_,DELAYED_CHECKING_MASTER);
+		ON_ENUM(STEP_,DELAYED_CHECKING_SLAVES);
 		ON_ENUM(STEP_,SLAVE);
 		ON_ENUM(STEP_,MASTER);
 		ON_ENUM(STEP_,FAILED);
@@ -1909,9 +1914,9 @@ _election_get_status(struct election_manager_s *mgr,
 	_manager_lock(mgr);
 	struct election_member_s *m = _LOCKED_init_member(mgr, n, TRUE);
 
-	if (!wait_for_final_status(m, deadline)) // TIMEOUT!
+	if (!wait_for_final_status(m, deadline)) {  /* TIMEOUT! */
 		rc = STEP_FAILED;
-	else {
+	} else {
 		rc = m->step;
 		if (rc == STEP_SLAVE) {
 			if (m->master_url)
@@ -2085,6 +2090,13 @@ _result_PIPEFROM (GError *e, struct election_manager_s *manager,
 /* -------------------------------------------------------------------------- */
 
 static gint64
+_getvers_delay(struct election_member_s *m)
+{
+	/* Wait at most `sqliterepo_getvers_backoff` before the last try. */
+	return sqliterepo_getvers_backoff / (1 + m->attempts_GETVERS);
+}
+
+static gint64
 _get_next_ping(const gint64 base, const gint64 jitter)
 {
 	EXTRA_ASSERT(base >= 0);
@@ -2146,7 +2158,6 @@ member_action_to_FAILED(struct election_member_s *member)
 	return member_set_status(member, STEP_FAILED);
 }
 
-/* Actual transition */
 static void
 member_fail_on_error(struct election_member_s *member, int zrc)
 {
@@ -2185,21 +2196,18 @@ _common_action_to_LEAVE(struct election_member_s *member,
 	return member_set_status(member, evt);
 }
 
-/* Actual transition */
 static void
 member_action_to_LEAVING(struct election_member_s *member)
 {
 	return _common_action_to_LEAVE(member, STEP_LEAVING);
 }
 
-/* Actual transition */
 static void
 member_action_to_LEAVING_FAILING(struct election_member_s *member)
 {
 	return _common_action_to_LEAVE(member, STEP_LEAVING_FAILING);
 }
 
-/* Actual transition */
 static void
 member_leave_on_error(struct election_member_s *member, int zrc)
 {
@@ -2250,7 +2258,6 @@ member_action_to_CREATING(struct election_member_s *member)
 	return member_set_status(member, STEP_CREATING);
 }
 
-/* Actual transition */
 static void
 member_action_to_WATCHING(struct election_member_s *member)
 {
@@ -2272,7 +2279,6 @@ member_action_to_WATCHING(struct election_member_s *member)
 	return member_set_status(member, STEP_WATCHING);
 }
 
-/* Actual transition */
 static void
 member_action_to_LISTING(struct election_member_s *member)
 {
@@ -2301,7 +2307,6 @@ member_action_to_LISTING(struct election_member_s *member)
 	return member_set_status(member, STEP_LISTING);
 }
 
-/* Actual transition */
 static void
 member_action_to_ASKING(struct election_member_s *member)
 {
@@ -2327,7 +2332,6 @@ member_action_to_ASKING(struct election_member_s *member)
 	return member_set_status(member, STEP_ASKING);
 }
 
-/* Actual transition */
 static void
 member_action_to_SYNCING(struct election_member_s *member)
 {
@@ -2355,6 +2359,20 @@ member_action_to_SYNCING(struct election_member_s *member)
 	member_debug("sched:PIPEFROM", member);
 
 	return member_set_status(member, STEP_SYNCING);
+}
+
+static void
+member_action_to_DELAYED_CHECKING_MASTER(struct election_member_s *member)
+{
+	EXTRA_ASSERT(!member_has_action(member));
+	return member_set_status(member, STEP_DELAYED_CHECKING_MASTER);
+}
+
+static void
+member_action_to_DELAYED_CHECKING_SLAVES(struct election_member_s *member)
+{
+	EXTRA_ASSERT(!member_has_action(member));
+	return member_set_status(member, STEP_DELAYED_CHECKING_SLAVES);
 }
 
 static void
@@ -2497,7 +2515,7 @@ member_finish_CHECKING_MASTER(struct election_member_s *member)
 			return member_action_to_LEAVING_FAILING(member);
 		/* We still have spare attempts, let's retry */
 		member->attempts_GETVERS --;
-		return member_action_to_CHECKING_MASTER(member);
+		return member_action_to_DELAYED_CHECKING_MASTER(member);
 	}
 
 	return member_action_to_SLAVE(member);
@@ -2552,7 +2570,7 @@ member_finish_CHECKING_SLAVES(struct election_member_s *member)
 			return member_action_to_LEAVING_FAILING(member);
 		/* We still have spare attempts, let's retry */
 		member->attempts_GETVERS --;
-		return member_action_to_CHECKING_SLAVES(member);
+		return member_action_to_DELAYED_CHECKING_SLAVES(member);
 	}
 
 	return member_action_to_MASTER(member);
@@ -2730,6 +2748,48 @@ _member_assert_SYNCING(struct election_member_s *member)
 }
 
 static void
+_member_assert_DELAYED_CHECKING_MASTER(struct election_member_s *member)
+{
+	EXTRA_ASSERT(member->step == STEP_DELAYED_CHECKING_MASTER);
+	EXTRA_ASSERT(member_has_local_id(member));
+	EXTRA_ASSERT(member_has_master_id(member));
+	EXTRA_ASSERT(member->master_id != member->local_id);
+	EXTRA_ASSERT(member->master_url != NULL);
+	EXTRA_ASSERT(!member_has_getvers(member));
+	EXTRA_ASSERT(member->pending_PIPEFROM == 0);
+	EXTRA_ASSERT(member->pending_ZK_CREATE == 0);
+	EXTRA_ASSERT(member->pending_ZK_EXISTS == 0);
+	EXTRA_ASSERT(member->pending_ZK_LIST == 0);
+	EXTRA_ASSERT(member->pending_ZK_GET == 0);
+	EXTRA_ASSERT(member->pending_ZK_DELETE == 0);
+
+	EXTRA_ASSERT(member->requested_LEFT_MASTER == 0);
+	EXTRA_ASSERT(member->requested_LEFT_SELF == 0);
+	EXTRA_ASSERT(member->requested_LEAVE == 0);
+}
+
+static void
+_member_assert_DELAYED_CHECKING_SLAVES(struct election_member_s *member)
+{
+	EXTRA_ASSERT(member->step == STEP_DELAYED_CHECKING_SLAVES);
+	EXTRA_ASSERT(member_has_local_id(member));
+	EXTRA_ASSERT(member_has_master_id(member));
+	EXTRA_ASSERT(member->master_id == member->local_id);
+	EXTRA_ASSERT(member->master_url == NULL);
+	EXTRA_ASSERT(!member_has_getvers(member));
+	EXTRA_ASSERT(member->pending_PIPEFROM == 0);
+	EXTRA_ASSERT(member->pending_ZK_CREATE == 0);
+	EXTRA_ASSERT(member->pending_ZK_EXISTS == 0);
+	EXTRA_ASSERT(member->pending_ZK_LIST == 0);
+	EXTRA_ASSERT(member->pending_ZK_GET == 0);
+	EXTRA_ASSERT(member->pending_ZK_DELETE == 0);
+
+	EXTRA_ASSERT(member->requested_LEFT_MASTER == 0);
+	EXTRA_ASSERT(member->requested_LEFT_SELF == 0);
+	EXTRA_ASSERT(member->requested_LEAVE == 0);
+}
+
+static void
 _member_assert_SLAVE(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_SLAVE);
@@ -2774,6 +2834,8 @@ _member_assert_FAILED(struct election_member_s *member)
 #define _member_assert_LEAVING(...)
 #define _member_assert_LEAVING_FAILING(...)
 #define _member_assert_SYNCING(...)
+#define _member_assert_DELAYED_CHECKING_MASTER(...)
+#define _member_assert_DELAYED_CHECKING_SLAVES(...)
 #define _member_assert_SLAVE(...)
 #define _member_assert_MASTER(...)
 #define _member_assert_FAILED(...)
@@ -3239,6 +3301,82 @@ _member_react_SYNCING(struct election_member_s *member, enum event_type_e evt)
 }
 
 static void
+_member_react_DELAYED_CHECKING_MASTER(struct election_member_s *member, enum event_type_e evt)
+{
+	gint64 now, delay;
+	_member_assert_DELAYED_CHECKING_MASTER(member);
+	switch (evt) {
+		case EVT_NONE:
+			now = oio_ext_monotonic_time();
+			delay = _getvers_delay(member);
+			if (member->last_status < OLDEST(now, delay))
+				return member_action_to_CHECKING_MASTER(member);
+			return;
+
+			/* Interruptions */
+		case EVT_SYNC_REQ:
+			member->requested_PIPEFROM = 1;
+			return;
+		case EVT_LEAVE_REQ:
+			member->requested_LEAVE = 0;
+			return member_action_to_LEAVING(member);
+		case EVT_LEFT_SELF:
+			member_reset_local(member);
+			member_reset_master(member);
+			member->requested_LEFT_SELF = 0;
+			member->requested_LEFT_MASTER = 0;
+			return member_action_to_CREATING(member);
+		case EVT_LEFT_MASTER:
+			member_reset_master(member);
+			member->requested_LEFT_MASTER = 0;
+			return member_action_to_LISTING(member);
+
+			/* Actions: none pending */
+
+			/* Abnormal events */
+		default:
+			return member_warn_abnormal_event(member, evt);
+	}
+}
+
+static void
+_member_react_DELAYED_CHECKING_SLAVES(struct election_member_s *member, enum event_type_e evt)
+{
+	gint64 now, delay;
+	_member_assert_DELAYED_CHECKING_SLAVES(member);
+	switch (evt) {
+		case EVT_NONE:
+			now = oio_ext_monotonic_time();
+			delay = _getvers_delay(member);
+			if (member->last_status < OLDEST(now, delay))
+				return member_action_to_CHECKING_SLAVES(member);
+			return;
+
+			/* Interruptions */
+		case EVT_SYNC_REQ:
+			return member_warn_abnormal_event(member, evt);
+		case EVT_LEAVE_REQ:
+			member->requested_LEAVE = 0;
+			return member_action_to_LEAVING(member);
+		case EVT_LEFT_SELF:
+			member_reset_local(member);
+			member_reset_master(member);
+			member->requested_LEFT_SELF = 0;
+			member->requested_LEFT_MASTER = 0;
+			return member_action_to_CREATING(member);
+		case EVT_LEFT_MASTER:
+			member->requested_LEFT_MASTER = 0;
+			return ;
+
+			/* Actions: none pending */
+
+			/* Abnormal events */
+		default:
+			return member_warn_abnormal_event(member, evt);
+	}
+}
+
+static void
 _member_react_SLAVE(struct election_member_s *member, enum event_type_e evt)
 {
 	gint64 now;
@@ -3399,6 +3537,11 @@ _member_react (struct election_member_s *member,
 		case STEP_SYNCING:
 			return _member_react_SYNCING(member, evt);
 
+		case STEP_DELAYED_CHECKING_MASTER:
+			return _member_react_DELAYED_CHECKING_MASTER(member, evt);
+		case STEP_DELAYED_CHECKING_SLAVES:
+			return _member_react_DELAYED_CHECKING_SLAVES(member, evt);
+
 		case STEP_LEAVING:
 			return _member_react_LEAVING(member, evt);
 		case STEP_LEAVING_FAILING:
@@ -3516,7 +3659,12 @@ _send_NONE_to_state(struct deque_beacon_s *beacon)
 guint
 election_manager_play_timers (struct election_manager_s *manager)
 {
-	static const int steps[] = { STEP_FAILED, -1 };
+	static const int steps[] = {
+		STEP_FAILED,
+		STEP_DELAYED_CHECKING_MASTER,
+		STEP_DELAYED_CHECKING_SLAVES,
+		-1
+	};
 
 	guint count = 0;
 	for (const int *pi=steps; *pi >= 0 ;++pi) {

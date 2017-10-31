@@ -231,3 +231,45 @@ def group_chunk_errors(chunk_err_iter):
         err_list.append(chunk)
         errors[err] = err_list
     return errors
+
+
+def depaginate(func, item_key=None, listing_key=None, marker_key=None,
+               *args, **kwargs):
+    """
+    Yield items from the lists returned by the repetitive calls
+    to `func(*args, **kwargs)`. For each call (except the first),
+    the marker is taken from the last element returned by the previous
+    call (unless `marker_key` is provided).
+
+    :param item_key: an accessor to the actual item that should be yielded,
+        applied on each element of the listing
+    :param listing_key: an accessor to the actual listing, applied
+        on the result of `func(*args, **kwargs)`
+    :param marker_key: an accessor to the next marker from the previous
+        listing, applied on the result of `func(*args, **kwargs)`
+    """
+    if not item_key:
+        # pylint: disable=function-redefined, missing-docstring
+        def item_key(item):
+            return item
+    if not listing_key:
+        # pylint: disable=function-redefined, missing-docstring
+        def listing_key(listing):
+            return listing
+    if not marker_key:
+        # pylint: disable=function-redefined, missing-docstring
+        def marker_key(listing):
+            return listing[-1]
+
+    raw_listing = func(*args, **kwargs)
+    listing = listing_key(raw_listing)
+    for item in listing:
+        yield item_key(item)
+
+    while listing:
+        kwargs['marker'] = marker_key(raw_listing)
+        raw_listing = func(*args, **kwargs)
+        listing = listing_key(raw_listing)
+        if listing:
+            for item in listing:
+                yield item_key(item)

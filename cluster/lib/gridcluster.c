@@ -27,7 +27,6 @@ License along with this library.
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/common_variables.h>
-#include <cluster/module/module.h>
 #include <core/http_internals.h>
 
 #include "gridcluster.h"

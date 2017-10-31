@@ -14,7 +14,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from oio.common.json import json
-from oio.common.http_eventlet import http_connect
 from oio.conscience.stats.base import BaseStat
 
 
@@ -26,7 +25,7 @@ class HttpStat(BaseStat):
         self.path = self.stat_conf['path'].lstrip('/')
         self.host = self.stat_conf['host']
         self.port = self.stat_conf['port']
-        self.netloc = '%s:%s' % (self.host, self.port)
+        self.url = '%s:%s/%s' % (self.host, self.port, self.path)
         if self.parser == 'json':
             # use json parser (account and rdir style)
             self._parse_func = self._parse_stats_json
@@ -65,10 +64,9 @@ class HttpStat(BaseStat):
         result = {}
         resp = None
         try:
-            conn = http_connect(self.netloc, 'GET', self.path)
-            resp = conn.getresponse()
+            resp = self.agent.pool_manager.request("GET", self.url)
             if resp.status == 200:
-                result = self._parse_func(resp.read())
+                result = self._parse_func(resp.data)
             else:
                 raise Exception("status code != 200: %s" % resp.status)
         except Exception as e:

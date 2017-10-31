@@ -76,7 +76,6 @@ test_oio_tool () {
 	for url in $(oio-test-config.py -t conscience) ; do
 		oio-tool ping "$url" >/dev/null
 		if oio-tool info "$url" >/dev/null ; then exit 1 ; fi
-		if oio-tool redirect "$url" >/dev/null ; then exit 1 ; fi
 	done
 	for url in $(oio-test-config.py -t meta2 -t meta0 -t meta1) ; do
 		oio-tool ping "$url" >/dev/null

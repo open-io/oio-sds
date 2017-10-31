@@ -16,6 +16,7 @@
 import os
 from logging import getLogger
 from oio.common.http_urllib3 import get_pool_manager
+from oio.common.utils import depaginate
 from cliff import command, lister, show
 from eventlet import GreenPool
 
@@ -406,7 +407,7 @@ class SaveObject(ObjectCommandMixin, command.Command):
 
 
 class ListObject(ContainerCommandMixin, lister.Lister):
-    """List objects in container"""
+    """List objects in a container."""
 
     log = getLogger(__name__ + '.ListObject')
 
@@ -488,78 +489,52 @@ class ListObject(ContainerCommandMixin, lister.Lister):
         )
         return parser
 
-    def _list_loop(self, account, container, **kwargs):
-        resp = self.app.client_manager.storage.object_list(
-            account, container, **kwargs)
-        listing = resp['objects']
-        for element in listing:
-            yield element
-
-        while listing:
-            if not kwargs.get('delimiter'):
-                marker = listing[-1]['name']
-            else:
-                marker = listing[-1].get('name')
-            kwargs['marker'] = marker
-            listing = self.app.client_manager.storage.object_list(
-                account, container, **kwargs)['objects']
-            if listing:
-                for element in listing:
-                    yield element
-
-    # TODO: make a decorator with this loop pattern
-    def _container_provider(self, account, **kwargs):
-        listing = self.app.client_manager.storage.container_list(
-                account, **kwargs)
-        for element in listing:
-            yield element[0]
-
-        while listing:
-            kwargs['marker'] = listing[-1][0]
-            listing = self.app.client_manager.storage.container_list(
-                account, **kwargs)
-            if listing:
-                for element in listing:
-                    yield element[0]
-
     def _autocontainer_loop(self, account, marker=None, limit=None,
                             concurrency=1, **kwargs):
         from functools import partial
-        autocontainer = self.flatns_manager
-        container_marker = autocontainer(marker) if marker else None
+        container_marker = self.flatns_manager(marker) if marker else None
         count = 0
         kwargs['pool_manager'] = get_pool_manager(
             pool_maxsize=concurrency * 2)
         # Start to list contents at 'marker' inside the last visited container
         if container_marker:
-            for element in self._list_loop(account, container_marker,
-                                           marker=marker, **kwargs):
+            for element in depaginate(
+                    self.app.client_manager.storage.object_list,
+                    listing_key=lambda x: x['objects'],
+                    marker_key=lambda x: x['objects'][-1]['name'],
+                    account=account, container=container_marker,
+                    marker=marker, **kwargs):
                 count += 1
                 yield element
                 if limit and count >= limit:
                     return
 
         pool = GreenPool(concurrency)
-        self.account = account
-        self.autocontainer = autocontainer
-
         for object_list in pool.imap(
-                partial(self._list_autocontainer_objects, **kwargs),
-                self._container_provider(account, marker=container_marker)):
+                partial(self._list_autocontainer_objects,
+                        account=account, **kwargs),
+                depaginate(self.app.client_manager.storage.container_list,
+                           item_key=lambda x: x[0],
+                           account=account,
+                           marker=container_marker)):
             for element in object_list:
                 count += 1
                 yield element
                 if limit and count >= limit:
                     return
 
-    def _list_autocontainer_objects(self, container, **kwargs):
-        if not self.autocontainer.verify(container):
+    def _list_autocontainer_objects(self, container, account, **kwargs):
+        if not self.flatns_manager.verify(container):
             self.log.debug("Container %s is not an autocontainer",
                            container)
-            return
+            return list()
         self.log.debug("Listing autocontainer %s", container)
         object_list = []
-        for i in self._list_loop(self.account, container, **kwargs):
+        for i in depaginate(
+                self.app.client_manager.storage.object_list,
+                listing_key=lambda x: x['objects'],
+                marker_key=lambda x: x['objects'][-1]['name'],
+                account=account, container=container, **kwargs):
             object_list.append(i)
         return object_list
 
@@ -595,7 +570,11 @@ class ListObject(ContainerCommandMixin, lister.Lister):
         else:
             container = parsed_args.container
             if parsed_args.full_listing:
-                obj_gen = self._list_loop(account, container, **kwargs)
+                obj_gen = depaginate(
+                    self.app.client_manager.storage.object_list,
+                    listing_key=lambda x: x['objects'],
+                    marker_key=lambda x: x['objects'][-1]['name'],
+                    account=account, container=container, **kwargs)
             else:
                 resp = self.app.client_manager.storage.object_list(
                     account, container, **kwargs)

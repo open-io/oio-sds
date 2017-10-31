@@ -153,3 +153,13 @@ class RegexContainerBuilderTest(unittest.TestCase):
         self.assertEqual(builder(
             "91d44"),
             "91d44")
+
+    def test_alternatives(self):
+        builder = RegexContainerBuilder((
+            r'(\d+)/(\d+)/\d+/',
+            r'^(.+)/.*?([0-9A-Fa-f]{2})(?=[0-9A-Fa-f]{6})',
+            r'^(.*)/')
+        )
+        gen = builder.alternatives('cloud-images/img-01234567')
+        names = [x for x in gen]
+        self.assertListEqual(['cloud-images01', 'cloud-images'], names)
