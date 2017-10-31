@@ -17,15 +17,13 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <cluster/module/module.h>
-
 #include "common.h"
 #include "actions.h"
 
 GError *
 conscience_remote_get_namespace (const char *cs, namespace_info_t **out)
 {
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_CS_GET_NSINFO);
+	MESSAGE req = metautils_message_create_named("CS_CFG");
 	GByteArray *gba = NULL;
 	GError *err = gridd_client_exec_and_concat (cs, proxy_timeout_conscience,
 			message_marshall_gba_and_clean(req), &gba);
@@ -47,7 +45,7 @@ conscience_remote_get_services(const char *cs, const char *type, gboolean full,
 		GSList **out)
 {
 	EXTRA_ASSERT(type != NULL);
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_CS_GET_SRV);
+	MESSAGE req = metautils_message_create_named("CS_SRV");
 	metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, type);
 	if (full)
 		metautils_message_add_field_str(req, NAME_MSGKEY_FULL, "1");
@@ -56,7 +54,7 @@ conscience_remote_get_services(const char *cs, const char *type, gboolean full,
 }
 
 GError * conscience_remote_get_types(const char *cs, gchar ***out) {
-	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_CS_GET_SRVNAMES);
+	MESSAGE req = metautils_message_create_named ("CS_TYP");
 	gchar *json = NULL;
 	GError *err = gridd_client_exec_and_concat_string (cs, proxy_timeout_conscience,
 			message_marshall_gba_and_clean(req), &json);
@@ -74,7 +72,7 @@ GError * conscience_remote_get_types(const char *cs, gchar ***out) {
 GError *
 conscience_remote_push_services(const char *cs, GSList *ls)
 {
-	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_CS_PUSH_SRV);
+	MESSAGE req = metautils_message_create_named ("CS_PSH");
 	metautils_message_add_body_unref (req, service_info_marshall_gba (ls, NULL));
 	return gridd_client_exec (cs, proxy_timeout_conscience,
 			message_marshall_gba_and_clean(req));
@@ -83,7 +81,7 @@ conscience_remote_push_services(const char *cs, GSList *ls)
 GError*
 conscience_remote_remove_services(const char *cs, const char *type, GSList *ls)
 {
-	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_CS_RM_SRV);
+	MESSAGE req = metautils_message_create_named ("CS_DEL");
 	if (ls)
 		metautils_message_add_body_unref (req, service_info_marshall_gba (ls, NULL));
 	if (type) metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, type);
