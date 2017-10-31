@@ -474,6 +474,11 @@
 				"descr": "Sets how many databases can be in use at the same moment in the current service. If defined to 0, it is set to sqliterepo.repo.hard_max.",
 				"def": "0", "min": "0", "max": "128ki" },
 
+			{ "type": "monotonic", "name": "sqliterepo_getvers_backoff",
+				"key": "sqliterepo.repo.getvers_backoff",
+				"descr": ".",
+				"def": "2s", "min": "10ms", "max": "1m" },
+
 			{ "type": "uint", "name": "sqliterepo_getvers_max_retries",
 				"key": "sqliterepo.repo.getvers_max_retries",
 				"descr": "Sets how many versions exchanges are allowed during the journey in the election FSM.",
