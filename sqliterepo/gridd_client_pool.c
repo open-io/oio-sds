@@ -48,6 +48,9 @@ struct gridd_client_pool_s
 
 	guint active_clients_size;
 	guint active_clients_max;
+	guint active_clients_min;
+	guint active_clients_limit;
+	guint active_clients_threshold;
 	guint active_count;
 
 	/* if set to any non-zero value, new requests are not started */
@@ -61,6 +64,10 @@ static void _defer (struct gridd_client_pool_s *p, struct event_client_s *ev);
 static GError* _round (struct gridd_client_pool_s *p, time_t sec);
 
 static void _reconfigure (struct gridd_client_pool_s *p);
+
+static void _increment_active_clients_limit(struct gridd_client_pool_s *pool);
+
+static void _decrement_active_clients_limit(struct gridd_client_pool_s *pool);
 
 static struct gridd_client_pool_vtable_s VTABLE =
 {
@@ -96,6 +103,9 @@ gridd_client_pool_create(void)
 	pool->fdmon = fdmon;
 	pool->active_clients_size = maxfd;
 	pool->active_clients_max = maxfd;
+	pool->active_clients_min = sqliterepo_fd_min_active;
+	pool->active_clients_limit = sqliterepo_fd_min_active;
+	pool->active_clients_threshold = maxfd;
 	pool->active_clients = g_malloc0(pool->active_clients_size
 			* sizeof(struct event_client_s*));
 
@@ -249,6 +259,7 @@ _manage_timeouts(struct gridd_client_pool_s *pool)
 
 		if (gridd_client_expire (ec->client, now)) {
 			GRID_INFO("EXPIRED Client fd=%d [%s]", i, gridd_client_url(ec->client));
+			_decrement_active_clients_limit(pool);
 			_pool_unmonitor(pool, i);
 			event_client_free(ec);
 		}
@@ -273,7 +284,7 @@ _manage_requests(struct gridd_client_pool_s *pool)
 	EXTRA_ASSERT(pool != NULL);
 
 	gint64 start = oio_ext_monotonic_time();
-	while (pool->active_count < pool->active_clients_max) {
+	while (pool->active_count < pool->active_clients_limit) {
 		ec = g_async_queue_try_pop(pool->pending_clients);
 		if (NULL == ec)
 			break;
@@ -344,9 +355,10 @@ _manage_one_event(struct gridd_client_pool_s *pool, int fd, int evt)
 		/* TODO check here how long it took with that election */
 		gridd_client_react(ec->client);
 
-		if (gridd_client_finished(ec->client))
+		if (gridd_client_finished(ec->client)) {
+			_increment_active_clients_limit(pool);
 			event_client_free(ec);
-		else if (!event_client_monitor(pool, ec))
+		} else if (!event_client_monitor(pool, ec))
 			event_client_free(ec);
 	}
 }
@@ -372,8 +384,14 @@ _reconfigure(struct gridd_client_pool_s *pool)
 		pool->active_clients_max = pool->active_clients_size;
 	} else {
 		pool->active_clients_max =
-			CLAMP(sqliterepo_fd_max_active, 1, pool->active_clients_size);
+			MIN(sqliterepo_fd_max_active, pool->active_clients_size);
 	}
+	pool->active_clients_limit =
+			MIN(pool->active_clients_limit, pool->active_clients_max);
+	pool->active_clients_min = sqliterepo_fd_min_active;
+	pool->active_clients_threshold =
+			CLAMP(pool->active_clients_threshold, pool->active_clients_min,
+			pool->active_clients_max);
 }
 
 static GError *
@@ -423,3 +441,33 @@ _defer(struct gridd_client_pool_s *pool, struct event_client_s *ev)
 	}
 }
 
+// Use the same principle as TCP Congestion Control
+// See RFC5681 Section 3.1
+
+static void
+_increment_active_clients_limit(struct gridd_client_pool_s *pool)
+{
+	if (pool->active_clients_limit >= pool->active_clients_max)
+		return;
+	if (pool->active_clients_limit < pool->active_clients_threshold) {
+		// Slow start
+		guint new_limit = pool->active_clients_limit * 2;
+		pool->active_clients_limit = MIN(new_limit, pool->active_clients_max);
+		GRID_TRACE("Increment active clients limit: %u (slow start)",
+				pool->active_clients_limit);
+	} else {
+		// Congestion avoidance
+		pool->active_clients_limit++;
+		GRID_TRACE("Increment active clients limit: %u (congestion avoidance)",
+				pool->active_clients_limit);
+	}
+}
+
+static void
+_decrement_active_clients_limit(struct gridd_client_pool_s *pool)
+{
+	guint new_threshold = pool->active_clients_limit / 2;
+	pool->active_clients_threshold = MAX(new_threshold, pool->active_clients_min);
+	pool->active_clients_limit = pool->active_clients_min;
+	GRID_DEBUG("Decrement active clients limit: %u", pool->active_clients_limit);
+}
