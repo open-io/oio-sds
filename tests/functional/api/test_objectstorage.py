@@ -17,10 +17,10 @@
 import logging
 import time
 from oio.api.object_storage import ObjectStorageApi
+from oio.common.http_urllib3 import get_pool_manager
 from oio.common.storage_functions import _sort_chunks as sort_chunks
 from oio.common import exceptions as exc
 from tests.utils import random_str, random_data, BaseTestCase
-from oio.common.http_urllib3 import get_pool_manager
 
 
 class TestObjectStorageAPI(BaseTestCase):
@@ -104,6 +104,21 @@ class TestObjectStorageAPI(BaseTestCase):
 
         # clean
         self._clean(name, True)
+
+    def test_container_create_many(self):
+        containers = [random_str(8) for _ in range(8)]
+        props = {'a': 'a'}
+        res = self.api.container_create_many(self.account, containers,
+                                             properties=props)
+        for container in containers:
+            self.assertIn(container, [x[0] for x in res])
+        for container in res:
+            self.assertTrue(container[1])
+        props_gotten = self.api.container_get_properties(
+            self.account, containers[0])
+        self.assertDictEqual(props, props_gotten['properties'])
+        for container in containers:
+            self.api.container_delete(self.account, container)
 
     def test_container_delete(self):
         name = random_str(32)
@@ -600,6 +615,22 @@ class TestObjectStorageAPI(BaseTestCase):
         self.assertRaises(
             exc.OioException, self.api.object_truncate, self.account, name,
             name, size=129)
+
+    def test_object_delete_many(self):
+        container = random_str(8)
+        objects = ["obj%d" % i for i in range(8)]
+        for obj in objects:
+            self.api.object_create(self.account, container,
+                                   obj_name=obj, data=obj)
+        res = self.api.object_delete_many(self.account, container, objects)
+        self.assertEqual(len(objects), len(res))
+        for obj in objects:
+            self.assertIn(obj, [x[0] for x in res])
+        for obj in res:
+            self.assertTrue(obj[1])
+
+        res = self.api.object_delete_many(self.account, container, ["dahu"])
+        self.assertFalse(res[0][1])
 
     def test_container_snapshot(self):
         name = random_str(16)
