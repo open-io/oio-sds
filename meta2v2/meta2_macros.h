@@ -95,7 +95,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_M2V2_RAW_DEL         "M2_RAWDEL"
 # define NAME_MSGNAME_M2V2_RAW_ADD         "M2_RAWADD"
 # define NAME_MSGNAME_M2V2_RAW_SUBST       "M2_RAWSUBST"
-# define NAME_MSGNAME_M2V2_EXITELECTION    "M2_LEAVE"
 # define NAME_MSGNAME_M2V1_TOUCH_CONTENT   "M2_CTOUCH"
 # define NAME_MSGNAME_M2V1_TOUCH_CONTAINER "M2_BTOUCH"
 
