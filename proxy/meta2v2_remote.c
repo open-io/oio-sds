@@ -419,12 +419,6 @@ m2v2_remote_pack_PROP_GET(struct oio_url_s *url, guint32 flags)
 }
 
 GByteArray*
-m2v2_remote_pack_EXITELECTION(struct oio_url_s *url)
-{
-	return _m2v2_pack_request(NAME_MSGNAME_M2V2_EXITELECTION, url, NULL);
-}
-
-GByteArray*
 m2v2_remote_pack_TOUCHC(struct oio_url_s *url)
 {
 	return _m2v2_pack_request(NAME_MSGNAME_M2V1_TOUCH_CONTENT, url, NULL);
