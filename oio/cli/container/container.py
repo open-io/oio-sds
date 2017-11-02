@@ -487,6 +487,29 @@ class LocateContainer(show.ShowOne):
         return zip(*sorted(info.iteritems()))
 
 
+class PurgeContainer(command.Command):
+    """Purge exceeding object versions."""
+
+    log = getLogger(__name__ + '.PurgeContainer')
+
+    def get_parser(self, prog_name):
+        parser = super(PurgeContainer, self).get_parser(prog_name)
+        parser.add_argument(
+            'container',
+            metavar='<container>',
+            help='Container to purge',
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        account = self.app.client_manager.account
+        self.app.client_manager.storage.container.container_purge(
+            account, parsed_args.container
+        )
+
+
 class RefreshContainer(command.Command):
     """ Refresh counters of an account (triggers asynchronous treatments) """
 
