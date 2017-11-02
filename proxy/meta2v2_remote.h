@@ -124,7 +124,6 @@ GByteArray* m2v2_remote_pack_PROP_SET(
 /* accepts M2V2_FLAG_MASTER */
 GByteArray* m2v2_remote_pack_PROP_GET(struct oio_url_s *url, guint32 flags);
 
-GByteArray* m2v2_remote_pack_EXITELECTION(struct oio_url_s *url);
 GByteArray* m2v2_remote_pack_TOUCHB(struct oio_url_s *url, guint32 flags);
 GByteArray* m2v2_remote_pack_TOUCHC(struct oio_url_s *url);
 

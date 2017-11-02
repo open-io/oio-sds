@@ -109,6 +109,10 @@ add_executable(test_sqliterepo_repo test_sqliterepo_repo.c)
 target_link_libraries(test_sqliterepo_repo sqliterepo sqlitereporemote ${COMMON})
 add_test(NAME sqliterepo/repository COMMAND test_sqliterepo_repo)
 
+add_executable(test_gridd_client_pool test_gridd_client_pool.c)
+target_link_libraries(test_gridd_client_pool sqliterepo ${COMMON})
+add_test(NAME sqliterepo/gridd_client_pool COMMAND test_gridd_client_pool)
+
 add_executable(test_sqlx_client_mem test_sqlx_client.c)
 target_link_libraries(test_sqlx_client_mem oiosqlx oiosqlx_local ${COMMON})
 add_test(NAME sqlx/client/mem COMMAND test_sqlx_client_mem)

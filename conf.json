@@ -492,7 +492,12 @@
 			{ "type": "uint", "name": "sqliterepo_fd_max_active",
 				"key": "sqliterepo.repo.fd_max_active",
 				"descr": "Maximum number of simultaneous outgoing connections. Set to 0 for an automatic detection (30% of available file descriptors).",
-				"def": 0, "min": 0, "max": "64ki" }
+				"def": 0, "min": 0, "max": "64ki" },
+
+			{ "type": "uint", "name": "sqliterepo_fd_min_active",
+				"key": "sqliterepo.repo.fd_min_active",
+				"descr": "Minimum number of simultaneous outgoing connections.",
+				"def": 32, "min": 0, "max": "64ki" }
 		]
 	},
 	"rdir": {

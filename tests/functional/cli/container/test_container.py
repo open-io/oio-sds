@@ -88,3 +88,7 @@ class ContainerTest(CliTestCase):
         self.assertRaises(CommandFailed,
                           self.openio,
                           ('container snapshot ' + self.NAME + opts))
+
+    def test_container_purge(self):
+        output = self.openio('container purge ' + self.NAME)
+        self.assertEqual('', output)
