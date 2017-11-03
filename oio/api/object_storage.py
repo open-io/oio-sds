@@ -107,6 +107,8 @@ class ObjectStorageApi(object):
             if tok not in kwargs:
                 kwargs[tok] = tov
 
+    @ensure_headers
+    @ensure_request_id
     def account_create(self, account, **kwargs):
         """
         Create an account.
@@ -118,6 +120,8 @@ class ObjectStorageApi(object):
         return self.account.account_create(account, **kwargs)
 
     @handle_account_not_found
+    @ensure_headers
+    @ensure_request_id
     def account_delete(self, account, **kwargs):
         """
         Delete an account.
@@ -128,12 +132,16 @@ class ObjectStorageApi(object):
         self.account.account_delete(account, **kwargs)
 
     @handle_account_not_found
+    @ensure_headers
+    @ensure_request_id
     def account_show(self, account, **kwargs):
         """
         Get information about an account.
         """
         return self.account.account_show(account, **kwargs)
 
+    @ensure_headers
+    @ensure_request_id
     def account_list(self, **kwargs):
         """
         List known accounts.
@@ -150,13 +158,19 @@ class ObjectStorageApi(object):
         self.account.account_update(account, metadata, to_delete, **kwargs)
 
     @handle_account_not_found
+    @ensure_headers
+    @ensure_request_id
     def account_set_properties(self, account, properties, **kwargs):
         self.account.account_update(account, properties, None, **kwargs)
 
     @handle_account_not_found
+    @ensure_headers
+    @ensure_request_id
     def account_del_properties(self, account, properties, **kwargs):
         self.account.account_update(account, None, properties, **kwargs)
 
+    @ensure_headers
+    @ensure_request_id
     def container_create(self, account, container, properties=None,
                          **kwargs):
         """
@@ -189,6 +203,8 @@ class ObjectStorageApi(object):
         """
         self.container.container_touch(account, container, **kwargs)
 
+    @ensure_headers
+    @ensure_request_id
     def container_create_many(self, account, containers, properties=None,
                               **kwargs):
         """
@@ -207,6 +223,8 @@ class ObjectStorageApi(object):
                                                     **kwargs)
 
     @handle_container_not_found
+    @ensure_headers
+    @ensure_request_id
     def container_delete(self, account, container, **kwargs):
         """
         Delete a container.
@@ -219,6 +237,8 @@ class ObjectStorageApi(object):
         self.container.container_delete(account, container, **kwargs)
 
     @handle_account_not_found
+    @ensure_headers
+    @ensure_request_id
     def container_list(self, account, limit=None, marker=None,
                        end_marker=None, prefix=None, delimiter=None,
                        **kwargs):
@@ -248,6 +268,8 @@ class ObjectStorageApi(object):
         return resp["listing"]
 
     @handle_container_not_found
+    @ensure_headers
+    @ensure_request_id
     def container_show(self, account, container, **kwargs):
         """
         Get information about a container (user properties).
@@ -262,6 +284,8 @@ class ObjectStorageApi(object):
         return self.container.container_show(account, container, **kwargs)
 
     @handle_container_not_found
+    @ensure_headers
+    @ensure_request_id
     def container_snapshot(self, account, container, dst_account,
                            dst_container, batch=100, **kwargs):
         """
@@ -313,6 +337,8 @@ class ObjectStorageApi(object):
             self.container.container_enable(account, container)
 
     @handle_container_not_found
+    @ensure_headers
+    @ensure_request_id
     def container_get_properties(self, account, container, properties=None,
                                  **kwargs):
         """
@@ -332,6 +358,8 @@ class ObjectStorageApi(object):
                                                        **kwargs)
 
     @handle_container_not_found
+    @ensure_headers
+    @ensure_request_id
     def container_set_properties(self, account, container, properties=None,
                                  clear=False, **kwargs):
         """
@@ -352,6 +380,8 @@ class ObjectStorageApi(object):
             clear=clear, **kwargs)
 
     @handle_container_not_found
+    @ensure_headers
+    @ensure_request_id
     def container_del_properties(self, account, container, properties,
                                  **kwargs):
         """
@@ -486,6 +516,8 @@ class ObjectStorageApi(object):
         self.container.content_touch(account, container, obj,
                                      version=version, **kwargs)
 
+    @ensure_headers
+    @ensure_request_id
     def object_drain(self, account, container, obj,
                      version=None, **kwargs):
         """
@@ -574,6 +606,8 @@ class ObjectStorageApi(object):
                                                **kwargs)
 
     @handle_container_not_found
+    @ensure_headers
+    @ensure_request_id
     def object_list(self, account, container, limit=None, marker=None,
                     delimiter=None, prefix=None, end_marker=None,
                     properties=False, versions=False, deleted=False,
@@ -610,6 +644,8 @@ class ObjectStorageApi(object):
         return resp_body
 
     @handle_object_not_found
+    @ensure_headers
+    @ensure_request_id
     def object_locate(self, account, container, obj,
                       version=None, **kwargs):
         """
@@ -657,11 +693,15 @@ class ObjectStorageApi(object):
         return meta, stream
 
     @handle_object_not_found
+    @ensure_headers
+    @ensure_request_id
     def object_get_properties(self, account, container, obj, **kwargs):
         return self.container.content_get_properties(account, container, obj,
                                                      **kwargs)
 
     @handle_object_not_found
+    @ensure_headers
+    @ensure_request_id
     def object_show(self, account, container, obj, version=None, **kwargs):
         """
         Get a description of the content along with its user properties.
@@ -704,15 +744,34 @@ class ObjectStorageApi(object):
                 account, container, obj, metadata, version=version, **kwargs)
 
     @handle_object_not_found
+    @ensure_headers
+    @ensure_request_id
     def object_set_properties(self, account, container, obj, properties,
                               version=None, **kwargs):
+        """
+        Set properties on an object.
+
+        :param account: name of the account in which the object is stored
+        :param container: name of the container in which the object is stored
+        :param obj: name of the object to query
+        :param properties: dictionary of properties
+        """
         return self.container.content_set_properties(
             account, container, obj, properties={'properties': properties},
             version=version, **kwargs)
 
     @handle_object_not_found
+    @ensure_headers
+    @ensure_request_id
     def object_del_properties(self, account, container, obj, properties,
                               version=None, **kwargs):
+        """
+        Delete some properties from an object.
+
+        :param properties: list of property keys to delete
+        :type properties: `list`
+        :returns: True if the property has been deleted (or was missing)
+        """
         return self.container.content_del_properties(
             account, container, obj, properties=properties,
             version=version, **kwargs)
@@ -851,57 +910,65 @@ class ObjectStorageApi(object):
             current_offset += chunk_size
 
     @handle_container_not_found
+    @ensure_headers
+    @ensure_request_id
     def container_refresh(self, account, container, attempts=3, **kwargs):
         for i in range(attempts):
             try:
-                self.account.container_reset(account, container, time.time())
+                self.account.container_reset(account, container, time.time(),
+                                             **kwargs)
             except exc.Conflict:
                 if i >= attempts - 1:
                     raise
         try:
-            self.container.container_touch(account, container)
+            self.container.container_touch(account, container, **kwargs)
         except exc.ClientException as e:
             if e.status != 406 and e.status != 431:
                 raise
             # CODE_USER_NOTFOUND or CODE_CONTAINER_NOTFOUND
             metadata = dict()
             metadata["dtime"] = time.time()
-            self.account.container_update(account, container, metadata)
+            self.account.container_update(account, container, metadata,
+                                          **kwargs)
 
     @handle_account_not_found
+    @ensure_headers
+    @ensure_request_id
     def account_refresh(self, account, **kwargs):
-        self.account.account_refresh(account)
+        self.account.account_refresh(account, **kwargs)
 
-        containers = self.container_list(account)
+        containers = self.container_list(account, **kwargs)
         for container in containers:
             try:
-                self.container_refresh(account, container[0])
+                self.container_refresh(account, container[0], **kwargs)
             except exc.NoSuchContainer:
                 # container remove in the meantime
                 pass
 
         while containers:
             marker = containers[-1][0]
-            containers = self.container_list(account, marker=marker)
+            containers = self.container_list(account, marker=marker, **kwargs)
             if containers:
                 for container in containers:
                     try:
-                        self.container_refresh(account, container[0])
+                        self.container_refresh(account, container[0], **kwargs)
                     except exc.NoSuchContainer:
                         # container remove in the meantime
                         pass
 
     def all_accounts_refresh(self, **kwargs):
-        accounts = self.account_list()
+        accounts = self.account_list(**kwargs)
         for account in accounts:
             try:
-                self.account_refresh(account)
+                self.account_refresh(account, **kwargs)
             except exc.NoSuchAccount:  # account remove in the meantime
                 pass
 
     @handle_account_not_found
-    def account_flush(self, account):
-        self.account.account_flush(account)
+    @ensure_headers
+    @ensure_request_id
+    def account_flush(self, account, **kwargs):
+        self.account.account_flush(account, **kwargs)
 
     def _random_buffer(self, dictionary, n):
         return ''.join(random.choice(dictionary) for _ in range(n))

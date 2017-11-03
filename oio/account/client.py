@@ -185,7 +185,7 @@ class AccountClient(HttpApi):
         """
         metadata['name'] = container
         _resp, body = self.account_request(account, 'POST', 'container/update',
-                                           data=json.dumps(metadata))
+                                           data=json.dumps(metadata), **kwargs)
         return body
 
     def container_reset(self, account, container, mtime, **kwargs):
@@ -202,7 +202,7 @@ class AccountClient(HttpApi):
         metadata["name"] = container
         metadata["mtime"] = mtime
         self.account_request(account, 'POST', 'container/reset',
-                             data=json.dumps(metadata))
+                             data=json.dumps(metadata), **kwargs)
 
     def account_refresh(self, account, **kwargs):
         """
@@ -211,7 +211,7 @@ class AccountClient(HttpApi):
         :param account: name of the account to refresh
         :type account: `str`
         """
-        self.account_request(account, 'POST', 'refresh')
+        self.account_request(account, 'POST', 'refresh', **kwargs)
 
     def account_flush(self, account, **kwargs):
         """
@@ -220,4 +220,4 @@ class AccountClient(HttpApi):
         :param account: name of the account to flush
         :type account: `str`
         """
-        self.account_request(account, 'POST', 'flush')
+        self.account_request(account, 'POST', 'flush', **kwargs)

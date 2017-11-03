@@ -90,6 +90,8 @@ def get_config(defaults=None):
 
 class CommonTestCase(testtools.TestCase):
 
+    TEST_HEADERS = {'X-oio-req-id': '7E571D0000000000'}
+
     def _random_user(self):
         return "user-" + random_str(16, "0123456789ABCDEF")
 
@@ -173,35 +175,35 @@ class CommonTestCase(testtools.TestCase):
     def _flush_cs(self, srvtype):
         params = {'type': srvtype}
         resp = self.request('POST', self._url_cs("deregister"),
-                            params=params)
+                            params=params, headers=self.TEST_HEADERS)
         self.assertEqual(resp.status / 100, 2)
         resp = self.request('POST', self._url_cs("flush"),
-                            params=params)
+                            params=params, headers=self.TEST_HEADERS)
         self.assertEqual(resp.status / 100, 2)
 
     def _register_srv(self, srv):
         resp = self.request('POST', self._url_cs("register"),
-                            json.dumps(srv))
+                            json.dumps(srv), headers=self.TEST_HEADERS)
         self.assertIn(resp.status, (200, 204))
 
     def _lock_srv(self, srv):
         resp = self.request('POST', self._url_cs("lock"),
-                            json.dumps(srv))
+                            json.dumps(srv), headers=self.TEST_HEADERS)
         self.assertIn(resp.status, (200, 204))
 
     def _unlock_srv(self, srv):
         resp = self.request('POST', self._url_cs("unlock"),
-                            json.dumps(srv))
+                            json.dumps(srv), headers=self.TEST_HEADERS)
         self.assertIn(resp.status, (200, 204))
 
     def _flush_proxy(self):
         url = self.uri + '/v3.0/cache/flush/local'
-        resp = self.request('POST', url, '')
+        resp = self.request('POST', url, '', headers=self.TEST_HEADERS)
         self.assertEqual(resp.status / 100, 2)
 
     def _reload_proxy(self):
         url = '{0}/v3.0/{1}/lb/reload'.format(self.uri, self.ns)
-        resp = self.request('POST', url, '')
+        resp = self.request('POST', url, '', headers=self.TEST_HEADERS)
         self.assertEqual(resp.status / 100, 2)
 
     def _flush_meta(self):
@@ -209,7 +211,8 @@ class CommonTestCase(testtools.TestCase):
             for t in self.conf['services'][srvtype]:
                 url = self.uri + '/v3.0/forward/flush'
                 resp = self.request('POST', url,
-                                    params={'id': t['addr']})
+                                    params={'id': t['addr']},
+                                    headers=self.TEST_HEADERS)
                 self.assertEqual(resp.status, 204)
 
     def _reload_meta(self):
@@ -217,7 +220,8 @@ class CommonTestCase(testtools.TestCase):
             for t in self.conf['services'][srvtype]:
                 url = self.uri + '/v3.0/forward/reload'
                 resp = self.request('POST', url,
-                                    params={'id': t['addr']})
+                                    params={'id': t['addr']},
+                                    headers=self.TEST_HEADERS)
                 self.assertEqual(resp.status, 204)
 
     def _reload(self):
