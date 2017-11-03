@@ -487,3 +487,25 @@ gridd_client_exec_and_decode (const gchar *to, gdouble seconds,
 	return err;
 }
 
+gdouble
+oio_clamp_timeout(gdouble timeout, gint64 deadline)
+{
+	if (deadline <= 0)
+		return timeout;
+
+	const gint64 now = oio_ext_monotonic_time();
+	if (now > deadline)
+		return 0.000001;
+
+	const gint64 remaining = deadline - now;
+	const gdouble dl_to = ((gdouble)remaining) / (gdouble)G_TIME_SPAN_SECOND;
+	return MIN(timeout, dl_to);
+}
+
+gint64
+oio_clamp_deadline(gdouble timeout, gint64 deadline)
+{
+	const gint64 dl_local = oio_ext_monotonic_time() + (G_TIME_SPAN_SECOND * timeout);
+	return (deadline > 0) ? MIN(deadline, dl_local) : dl_local;
+}
+
