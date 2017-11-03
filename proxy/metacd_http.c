@@ -208,8 +208,7 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 	if (tostr && oio_str_is_number(tostr, &to)) {
 		oio_ext_set_deadline(now + to);
 	} else {
-		/* Decently acceptable default deadline, despite totally arbitrary */
-		oio_ext_set_deadline(now + G_TIME_SPAN_MINUTE);
+		oio_ext_set_deadline(now + proxy_request_max_delay);
 	}
 
 	// Then parse the request to find a handler
