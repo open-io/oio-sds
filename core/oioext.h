@@ -105,6 +105,10 @@ gint32 oio_ext_rand_int_range (gint32 low, gint32 up);
 /** Get a request-id stored in the thread-local, or NULL if not set */
 const char * oio_ext_get_reqid (void);
 
+gint64 oio_ext_get_deadline(void);
+
+void oio_ext_set_deadline(gint64 deadline);
+
 gboolean oio_ext_is_admin(void);
 
 void oio_ext_set_admin(const gboolean admin);
