@@ -375,7 +375,6 @@ static GError *
 _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize ds)
 {
 	guint32 s32;
-	ssize_t rc;
 
 	switch (client->step) {
 
@@ -393,24 +392,28 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 			_client_reset_reply(client);
 			if (!client->request)
 				return NULL;
+			else {
+				/* Continue to send the request */
+				ssize_t rc = metautils_syscall_send(client->fd,
+						client->request->data + client->sent_bytes,
+						client->request->len - client->sent_bytes,
+						MSG_NOSIGNAL);
 
-			/* Continue to send the request */
-			rc = metautils_syscall_send(client->fd,
-					client->request->data + client->sent_bytes,
-					client->request->len - client->sent_bytes,
-					MSG_NOSIGNAL);
+				if (rc < 0)
+					return (errno == EINTR || errno == EAGAIN) ? NULL :
+						NEWERROR(CODE_NETWORK_ERROR,
+								"ERROR while requesting %s: (%d) %s",
+								_client_url(client), errno, strerror(errno));
+				if (rc > 0)
+					client->sent_bytes += rc;
 
-			if (rc < 0)
-				return (errno == EINTR || errno == EAGAIN) ? NULL :
-					NEWERROR(errno, "write error (%s)", strerror(errno));
-			if (rc > 0)
-				client->sent_bytes += rc;
-
-			if (client->sent_bytes < client->request->len)
-				return NULL;
+				if (client->sent_bytes < client->request->len)
+					return NULL;
+			}
 
 			client->step = REP_READING_SIZE;
 			// FALLTHROUGH
+
 		case REP_READING_SIZE:
 
 			EXTRA_ASSERT(client->step == REP_READING_SIZE);
@@ -420,21 +423,24 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 
 			if (client->reply->len < 4) {
 				/* Continue reading the size */
-				rc = metautils_syscall_read(client->fd, d,
-						(4 - client->reply->len));
+				ssize_t rc = metautils_syscall_read(
+						client->fd, d, (4 - client->reply->len));
+				if (rc == 0)
+					return NEWERROR(CODE_NETWORK_ERROR,
+							"EOF while reading response size from %s",
+							_client_url(client));
 				if (rc < 0)
 					return (errno == EINTR || errno == EAGAIN) ? NULL :
-						NEWERROR(errno, "read error (%s)", strerror(errno));
-				if (rc > 0)
-					g_byte_array_append(client->reply, d, rc);
+						NEWERROR(CODE_NETWORK_ERROR,
+								"ERROR while reading response size from %s:"
+								" (%d) %s", _client_url(client),
+								errno, strerror(errno));
 
-				if (client->reply->len < 4) {
-					if (!rc)
-						return NEWERROR(CODE_NETWORK_ERROR,
-								"EOF while reading response size from %s",
-								_client_url(client));
+				EXTRA_ASSERT(rc > 0);
+				g_byte_array_append(client->reply, d, rc);
+
+				if (client->reply->len < 4)  /* size still incomplete */
 					return NULL;
-				}
 			}
 
 			EXTRA_ASSERT (client->reply->len >= 4);
@@ -445,37 +451,47 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 		case REP_READING_DATA:
 
 			EXTRA_ASSERT(client->step == REP_READING_DATA);
-			rc = 0;
-
 			EXTRA_ASSERT (client->reply->len <= client->size + 4);
+
+			/* If the reply is not complete, try to consume some bytes */
 			if (client->reply->len < client->size + 4) {
 				gsize remaining = client->size + 4 - client->reply->len;
 				gsize dmax = ds;
 				if (dmax > remaining)
 					dmax = remaining;
-				rc = metautils_syscall_read(client->fd, d, dmax);
+				ssize_t rc = metautils_syscall_read(client->fd, d, dmax);
+				if (rc == 0)
+					return NEWERROR(CODE_NETWORK_ERROR,
+							"EOF while reading response from %s "
+							"(got %u bytes, expected %"G_GUINT32_FORMAT")",
+							_client_url(client), client->reply->len,
+							client->size + 4);
 				if (rc < 0)
 					return (errno == EINTR || errno == EAGAIN) ? NULL :
-						NEWERROR(errno, "read error (%s)", strerror(errno));
-				if (rc > 0)
-					g_byte_array_append(client->reply, d, rc);
+						NEWERROR(CODE_NETWORK_ERROR,
+								"ERROR while reading response from %s: (%d) %s",
+								_client_url(client), errno, strerror(errno));
+
+				EXTRA_ASSERT(rc > 0);
+				g_byte_array_append(client->reply, d, rc);
 			}
 
 			EXTRA_ASSERT (client->reply->len <= client->size + 4);
-			if (client->reply->len == client->size + 4) {
+
+			if (client->reply->len < client->size + 4) {
+				/* the reply is not complete yet */
+				return NULL;
+			} else {
+				/* Ok, the reply is complete, ready to be parsed */
 				GError *err = _client_manage_reply_data(client);
 				if (err) {
 					client->step = STATUS_FAILED;
 					return err;
+				} else {
+					/* `step` has been changed by _client_manage_reply_data() */
+					return NULL;
 				}
-			} else if (!rc) {
-				return NEWERROR(CODE_NETWORK_ERROR,
-						"EOF while reading response from %s"
-						"(got %u bytes, expected %"G_GUINT32_FORMAT")",
-						_client_url(client), client->reply->len,
-						client->size + 4);
 			}
-			return NULL;
 
 		default:
 			g_assert_not_reached();
