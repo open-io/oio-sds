@@ -164,6 +164,7 @@ void ** oio_ext_array_concat (void **t0, void **t1) {
 /** @private */
 struct oio_ext_local_s {
 	GRand *prng;
+	gint64 deadline;
 	guint8 is_admin;
 	gchar reqid[LIMIT_LENGTH_REQID];
 };
@@ -239,16 +240,22 @@ void oio_ext_set_random_reqid (void) {
 	oio_ext_set_reqid(hex);
 }
 
-gboolean
-oio_ext_is_admin (void)
-{
+gint64 oio_ext_get_deadline(void) {
+	const struct oio_ext_local_s *l = _local_ensure ();
+	return l->deadline > 0 ? l->deadline : 0;
+}
+
+void oio_ext_set_deadline(gint64 deadline) {
+	struct oio_ext_local_s *l = _local_ensure ();
+	l->deadline = deadline > 0 ? deadline : 0;
+}
+
+gboolean oio_ext_is_admin (void) {
 	const struct oio_ext_local_s *l = _local_ensure ();
 	return BOOL(l->is_admin);
 }
 
-void
-oio_ext_set_admin (const gboolean admin)
-{
+void oio_ext_set_admin (const gboolean admin) {
 	struct oio_ext_local_s *l = _local_ensure ();
 	l->is_admin = BOOL(admin);
 }
@@ -264,9 +271,7 @@ oio_ext_set_admin (const gboolean admin)
 #include <execinfo.h>
 #define STACK_MAX 8
 
-GError *
-oio_error_debug (GQuark gq, int code, const char *fmt, ...)
-{
+GError * oio_error_debug (GQuark gq, int code, const char *fmt, ...) {
 	void *frames[STACK_MAX];
 	int nbframes = backtrace(frames, STACK_MAX);
 
