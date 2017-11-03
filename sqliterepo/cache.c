@@ -564,7 +564,7 @@ sqlx_cache_clean(sqlx_cache_t *cache)
 
 GError *
 sqlx_cache_open_and_lock_base(sqlx_cache_t *cache, const hashstr_t *hname,
-		gboolean urgent, gint *result)
+		gboolean urgent, gint *result, gint64 deadline)
 {
 	gint bd;
 	GError *err = NULL;
@@ -575,10 +575,12 @@ sqlx_cache_open_and_lock_base(sqlx_cache_t *cache, const hashstr_t *hname,
 	EXTRA_ASSERT(result != NULL);
 
 	const gint64 start = oio_ext_monotonic_time();
-	const gint64 deadline = start + _cache_timeout_open;
-	GRID_TRACE2("%s(%p,%s,%p) delay = %"G_GINT64_FORMAT, __FUNCTION__,
+	const gint64 local_deadline = start + _cache_timeout_open;
+	deadline = (deadline <= 0) ? local_deadline : MIN(deadline, local_deadline);
+
+	GRID_TRACE2("%s(%p,%s,%p) delay = %" G_GINT64_FORMAT "ms", __FUNCTION__,
 			(void*)cache, hname ? hashstr_str(hname) : "NULL",
-			(void*)result, deadline);
+			(void*)result, (deadline - start) / G_TIME_SPAN_MILLISECOND);
 
 	g_mutex_lock(&cache->lock);
 retry:

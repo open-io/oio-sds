@@ -1143,7 +1143,7 @@ do_query_after_open(struct gridd_reply_ctx_s *reply_ctx,
 
 		if (0 != action) {
 			NAME2CONST(n, sq3->name);
-			err = sqlx_repository_status_base(sq3->repo, &n);
+			err = sqlx_repository_status_base(sq3->repo, &n, reply_ctx->deadline);
 			if (NULL != err) {
 				if (err->code != CODE_REDIRECT)
 					g_prefix_error(&err, "Status error: ");
@@ -1212,7 +1212,7 @@ _checked_open(struct gridd_reply_ctx_s *reply_ctx, sqlx_repository_t *repo,
 }
 
 static GError *
-_check_init_flag(struct sqlx_sqlite3_s *sq3, gboolean autocreate)
+_check_init_flag(struct sqlx_sqlite3_s *sq3, gboolean autocreate, gint64 deadline)
 {
 	GError *err = NULL;
 	if (!sqlx_admin_has(sq3, SQLX_ADMIN_INITFLAG)) {
@@ -1222,7 +1222,7 @@ _check_init_flag(struct sqlx_sqlite3_s *sq3, gboolean autocreate)
 			err = NEWERROR(CODE_CONTAINER_NOTFOUND, "Base does not exist");
 		} else {
 			NAME2CONST(n, sq3->name);
-			err = sqlx_repository_status_base(sq3->repo, &n);
+			err = sqlx_repository_status_base(sq3->repo, &n, deadline);
 			if (!err) { /* We are master */
 				struct sqlx_repctx_s *repctx = NULL;
 				GRID_DEBUG("Autocreate %s, inserting %s flag",
@@ -1250,7 +1250,7 @@ do_query(struct gridd_reply_ctx_s *reply_ctx, sqlx_repository_t *repo,
 	if (err != NULL)
 		return err;
 
-	err = _check_init_flag(sq3, TRUE);
+	err = _check_init_flag(sq3, TRUE, reply_ctx->deadline);
 	if (!err)
 		err = do_query_after_open(reply_ctx, sq3, params, result);
 
@@ -1512,7 +1512,7 @@ _handler_STATUS(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	if (NULL != (err = sqlx_repository_status_base(repo, &n0)))
+	if (NULL != (err = sqlx_repository_status_base(repo, &n0, reply->deadline)))
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "MASTER");
@@ -1534,7 +1534,7 @@ _handler_ISMASTER(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	err = sqlx_repository_status_base(repo, &n0);
+	err = sqlx_repository_status_base(repo, &n0, reply->deadline);
 	if (NULL == err)
 		reply->send_reply(CODE_FINAL_OK, "MASTER");
 	else {

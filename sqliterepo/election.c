@@ -340,7 +340,7 @@ static GError * _election_exit(struct election_manager_s *manager,
 		const struct sqlx_name_s *n);
 
 static enum election_status_e _election_get_status(struct election_manager_s *m,
-		const struct sqlx_name_s *n, gchar **master_url);
+		const struct sqlx_name_s *n, gchar **master_url, gint64 deadline);
 
 static struct election_manager_vtable_s VTABLE =
 {
@@ -1901,7 +1901,8 @@ wait_for_final_status(struct election_member_s *m, const gint64 deadline)
 
 static enum election_status_e
 _election_get_status(struct election_manager_s *mgr,
-		const struct sqlx_name_s *n, gchar **master_url)
+		const struct sqlx_name_s *n, gchar **master_url,
+		gint64 deadline)
 {
 	int rc;
 	gchar *url = NULL;
@@ -1909,7 +1910,9 @@ _election_get_status(struct election_manager_s *mgr,
 	MANAGER_CHECK(mgr);
 	EXTRA_ASSERT(n != NULL);
 
-	gint64 deadline = oio_ext_monotonic_time () + oio_election_delay_wait;
+	const gint64 start = oio_ext_monotonic_time();
+	const gint64 local_deadline = start + oio_election_delay_wait;
+	deadline = (deadline <= 0) ? local_deadline : MIN(deadline, local_deadline);
 
 	_manager_lock(mgr);
 	struct election_member_s *m = _LOCKED_init_member(mgr, n, TRUE);
