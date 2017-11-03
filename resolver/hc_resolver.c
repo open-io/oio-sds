@@ -241,7 +241,7 @@ _resolve_meta0(struct hc_resolver_s *r, const char *ns, gchar ***result)
 		err = conscience_get_services (ns, NAME_SRVTYPE_META0, FALSE, &allm0);
 		if (!allm0 || err) {
 			if (!err)
-				err = NEWERROR(CODE_INTERNAL_ERROR, "No meta0 available");
+				err = BUSY("No meta0 available");
 			*result = NULL;
 		}
 		else {
@@ -333,7 +333,7 @@ _resolve_m1_through_many_m0(struct hc_resolver_s *r, const char * const *urlv,
 		g_error_free(err);
 	}
 
-	return NEWERROR(CODE_INTERNAL_ERROR, "No META0 answered");
+	return BUSY("No meta0 answered");
 }
 
 static GError *
@@ -407,7 +407,7 @@ _resolve_service_through_many_meta1(struct hc_resolver_s *r,
 		g_clear_error(&err);
 	}
 
-	return NEWERROR(CODE_INTERNAL_ERROR, "No META0 answered");
+	return BUSY("No meta1 answered");
 }
 
 static GError*
