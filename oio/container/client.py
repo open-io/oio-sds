@@ -120,6 +120,9 @@ class ContainerClient(ProxyClient):
         :type properties: `dict`
         :keyword headers: extra headers to send to the proxy
         :type headers: `dict`
+        :returns: a list of tuples with the name of the container and
+            a boolean telling if the container has been created
+        :rtype: `list` of `tuple`
         """
         results = list()
         try:
@@ -414,15 +417,15 @@ class ContainerClient(ProxyClient):
         params = self._make_params(account, reference, path, cid=cid)
         if append:
             params['append'] = '1'
-        if kwargs.get('meta_pos') is not None:
-            data = data['chunks']
-            params['id'] = content_id
-            uri = self._make_uri('content/update')
         # TODO(FVE): implement 'force' parameter
         if not isinstance(data, dict):
             warnings.simplefilter('once')
             warnings.warn("'data' parameter should be a dict, not a list",
                           DeprecationWarning, stacklevel=3)
+        if kwargs.get('meta_pos') is not None:
+            data = data['chunks']
+            params['id'] = content_id
+            uri = self._make_uri('content/update')
         data = json.dumps(data)
         hdrs = {'x-oio-content-meta-length': str(size),
                 'x-oio-content-meta-hash': checksum}
@@ -452,6 +455,11 @@ class ContainerClient(ProxyClient):
 
     def content_delete(self, account=None, reference=None, path=None, cid=None,
                        version=None, **kwargs):
+        """
+        Delete one object.
+
+        :returns: True if the object has been deleted
+        """
         uri = self._make_uri('content/delete')
         params = self._make_params(account, reference, path, cid=cid,
                                    version=version)
@@ -461,6 +469,14 @@ class ContainerClient(ProxyClient):
 
     def content_delete_many(self, account=None, reference=None, paths=None,
                             cid=None, **kwargs):
+        """
+        Delete several objects.
+
+        :param paths: an iterable of object paths (should not be a generator)
+        :returns: a list of tuples with the path of the content and
+            a boolean telling if the content has been deleted
+        :rtype: `list` of `tuple`
+        """
         uri = self._make_uri('content/delete_many')
         params = self._make_params(account, reference, cid=cid)
         unformatted_data = list()
@@ -566,6 +582,11 @@ class ContainerClient(ProxyClient):
     def content_set_properties(self, account=None, reference=None, path=None,
                                properties={}, cid=None, version=None,
                                **kwargs):
+        """
+        Set properties on an object.
+
+        :param properties: dictionary of properties
+        """
         uri = self._make_uri('content/set_properties')
         params = self._make_params(account, reference, path,
                                    cid=cid, version=version)
@@ -576,13 +597,20 @@ class ContainerClient(ProxyClient):
     def content_del_properties(self, account=None, reference=None, path=None,
                                properties=[], cid=None, version=None,
                                **kwargs):
+        """
+        Delete some properties from an object.
+
+        :param properties: list of property keys to delete
+        :type properties: `list`
+        :returns: True is the property has been deleted
+        """
         uri = self._make_uri('content/del_properties')
         params = self._make_params(account, reference, path,
                                    cid=cid, version=version)
         data = json.dumps(properties)
-        _resp, body = self._direct_request(
+        resp, _body = self._direct_request(
             'POST', uri, data=data, params=params, **kwargs)
-        return body
+        return resp.status == 204
 
     def content_touch(self, account=None, reference=None, path=None, cid=None,
                       version=None, **kwargs):

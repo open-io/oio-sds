@@ -41,7 +41,6 @@ class ContainerCommandMixin(object):
             help=("Auto-generate the container name according to the " +
                   "'flat_*' namespace parameters (<container> is ignored)."),
             action="store_true",
-            default=False
         )
 
     def take_action(self, parsed_args):

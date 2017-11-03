@@ -17,6 +17,7 @@ from oio.api.base import HttpApi
 from oio.common.exceptions import ClientException, NotFound, VolumeException
 from oio.common.exceptions import ServiceUnavailable, ServerException
 from oio.common.exceptions import OioNetworkException
+from oio.common.utils import request_id
 from oio.common.logger import get_logger
 from oio.conscience.client import ConscienceClient
 from oio.directory.client import DirectoryClient
@@ -182,14 +183,16 @@ class RdirClient(HttpApi):
     def _clear_cache(self, volume_id):
         del self._addr_cache[volume_id]
 
-    def _get_rdir_addr(self, volume_id):
+    def _get_rdir_addr(self, volume_id, req_id=None):
         # Initial lookup in the cache
         if volume_id in self._addr_cache:
             return self._addr_cache[volume_id]
         # Not cached, try a direct lookup
         try:
+            headers = {'X-oio-req-id': req_id or request_id()}
             resp = self.directory.list(RDIR_ACCT, volume_id,
-                                       service_type='rdir')
+                                       service_type='rdir',
+                                       headers=headers)
             host = _filter_rdir_host(resp)
             # Add the new service to the cache
             self._addr_cache[volume_id] = host
@@ -197,15 +200,15 @@ class RdirClient(HttpApi):
         except NotFound:
             raise VolumeException('No rdir assigned to volume %s' % volume_id)
 
-    def _make_uri(self, action, volume_id):
-        rdir_host = self._get_rdir_addr(volume_id)
+    def _make_uri(self, action, volume_id, req_id=None):
+        rdir_host = self._get_rdir_addr(volume_id, req_id)
         return 'http://%s/v1/rdir/%s' % (rdir_host, action)
 
     def _rdir_request(self, volume, method, action, create=False, **kwargs):
         params = {'vol': volume}
         if create:
             params['create'] = '1'
-        uri = self._make_uri(action, volume)
+        uri = self._make_uri(action, volume, req_id=kwargs.get('X-oio-req-id'))
         try:
             resp, body = self._direct_request(method, uri, params=params,
                                               **kwargs)
