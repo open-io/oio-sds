@@ -36,6 +36,7 @@ add_custom_command(
 		${CMAKE_SOURCE_DIR}/conf.json)
 
 add_executable(metacd_http
+	meta2v2_remote.c
     metacd_http.c
     common.c
     admin_actions.c
@@ -48,8 +49,7 @@ add_executable(metacd_http
     reply.c
     path_parser.c
     transport_http.c
-	${CMAKE_CURRENT_BINARY_DIR}/proxy_variables.c
-	meta2v2_remote.c meta2v2_remote.h)
+	${CMAKE_CURRENT_BINARY_DIR}/proxy_variables.c)
 
 bin_prefix(metacd_http -proxy)
 
