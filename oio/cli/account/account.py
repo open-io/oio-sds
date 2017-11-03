@@ -214,13 +214,13 @@ class RefreshAccount(command.Command):
         parser = super(RefreshAccount, self).get_parser(prog_name)
         parser.add_argument(
             'account',
+            nargs='?',
             metavar='<account>',
             help='Account to refresh'
         )
         parser.add_argument(
             '--all',
             dest='all_accounts',
-            default=False,
             help='Refresh all accounts (<account> is ignored)',
             action=ValueFormatStoreTrueAction
         )
@@ -231,10 +231,13 @@ class RefreshAccount(command.Command):
 
         if parsed_args.all_accounts:
             self.app.client_manager.storage.all_accounts_refresh()
-        else:
+        elif parsed_args.account is not None:
             self.app.client_manager.storage.account_refresh(
-                account=parsed_args.account
-            )
+                account=parsed_args.account)
+        else:
+            from argparse import ArgumentError
+            raise ArgumentError(parsed_args.account,
+                                "Missing value for account or --all")
 
 
 class FlushAccount(command.Command):
