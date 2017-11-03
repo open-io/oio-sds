@@ -582,6 +582,11 @@ class ContainerClient(ProxyClient):
     def content_set_properties(self, account=None, reference=None, path=None,
                                properties={}, cid=None, version=None,
                                **kwargs):
+        """
+        Set properties on an object.
+
+        :param properties: dictionary of properties
+        """
         uri = self._make_uri('content/set_properties')
         params = self._make_params(account, reference, path,
                                    cid=cid, version=version)
@@ -592,13 +597,20 @@ class ContainerClient(ProxyClient):
     def content_del_properties(self, account=None, reference=None, path=None,
                                properties=[], cid=None, version=None,
                                **kwargs):
+        """
+        Delete some properties from an object.
+
+        :param properties: list of property keys to delete
+        :type properties: `list`
+        :returns: True is the property has been deleted
+        """
         uri = self._make_uri('content/del_properties')
         params = self._make_params(account, reference, path,
                                    cid=cid, version=version)
         data = json.dumps(properties)
-        _resp, body = self._direct_request(
+        resp, _body = self._direct_request(
             'POST', uri, data=data, params=params, **kwargs)
-        return body
+        return resp.status == 204
 
     def content_touch(self, account=None, reference=None, path=None, cid=None,
                       version=None, **kwargs):

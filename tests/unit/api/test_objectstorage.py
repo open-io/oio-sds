@@ -44,7 +44,7 @@ class ObjectStorageTest(unittest.TestCase):
         self.api = FakeStorageApi("NS", endpoint=self.fake_endpoint)
         self.account = "test"
         self.container = "fake"
-        self.headers = {"x-req-id": random_str(32)}
+        self.headers = {"x-oio-req-id": random_str(32)}
         self.policy = "THREECOPIES"
         self.uri_base = self.fake_endpoint + "/v3.0/NS"
 
@@ -274,6 +274,19 @@ class ObjectStorageTest(unittest.TestCase):
         api.container._direct_request.assert_called_once_with(
             'POST', uri, data=data, params=params, headers=self.headers)
 
+    def test_object_del_properties(self):
+        resp = FakeApiResponse()
+        self.api.container._direct_request = Mock(return_value=(resp, None))
+        self.api.object_del_properties(self.account, self.container, 'a',
+                                       ['a'], version='17',
+                                       headers=self.headers)
+        uri = '%s/content/del_properties' % self.uri_base
+        params = {'acct': self.account, 'ref': self.container,
+                  'path': 'a', 'version': '17'}
+        self.api.container._direct_request.assert_called_once_with(
+            'POST', uri, data=json.dumps(['a']), params=params,
+            headers=self.headers)
+
     def test_object_delete(self):
         api = self.api
         name = random_str(32)
@@ -300,6 +313,16 @@ class ObjectStorageTest(unittest.TestCase):
         self.assertRaises(
             exceptions.NoSuchObject, api.object_delete, self.account,
             self.container, name)
+
+    def test_object_touch(self):
+        self.api.container._direct_request = Mock()
+        self.api.object_touch(self.account, self.container, 'obj',
+                              version='31', headers=self.headers)
+        uri = '%s/content/touch' % self.uri_base
+        params = {'acct': self.account, 'ref': self.container,
+                  'path': 'obj', 'version': '31'}
+        self.api.container._direct_request.assert_called_once_with(
+            'POST', uri, params=params, headers=self.headers)
 
     def test_sort_chunks(self):
         raw_chunks = [
