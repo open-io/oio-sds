@@ -65,6 +65,7 @@ struct gridd_reply_ctx_s
 	/* --------------------------------
 	 * Context belonging to the request
 	 * -------------------------------- */
+	gint64 deadline;
 
 	/* Provide access to the network layer */
 	struct network_client_s *client;
