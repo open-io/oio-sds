@@ -227,6 +227,8 @@ gridd_request_replicated (struct client_ctx_s *ctx, request_packer_f pack)
 
 	const gint64 deadline = oio_ext_get_deadline();
 
+	const gint64 req_start = oio_ext_monotonic_time();
+
 	/* Locate the services */
 label_retry:
 	if (*ctx->type == '#')
@@ -242,8 +244,7 @@ label_retry:
 			hc_decache_reference(resolver, ctx->url);
 			goto label_retry;
 		} else {
-			g_prefix_error (&err, "Directory error: ");
-			return err;
+			g_prefix_error(&err, "Directory error: ");
 		}
 	} else {
 		EXTRA_ASSERT(m1uv != NULL);
@@ -259,7 +260,7 @@ label_retry:
 			meta1_urlv_shift_addr(m1uv);
 		} else if (!*m1uv) {
 			g_strfreev (m1uv);
-			return NEWERROR (CODE_CONTAINER_NOTFOUND, "No service located");
+			err = NEWERROR(CODE_CONTAINER_NOTFOUND, "No service located");
 		} else {
 			/* We found some locations, let's keep only the URL part */
 			meta1_urlv_shift_addr (m1uv);
@@ -267,6 +268,10 @@ label_retry:
 			_sort_services (ctx, election_key, m1uv);
 		}
 	}
+	const gint64 resolve_end = oio_ext_monotonic_time();
+	ctx->resolve_duration = resolve_end - req_start;
+	if (err)
+		return err;
 
 	/* Perform the sequence of requests. */
 	GPtrArray
@@ -388,6 +393,7 @@ label_retry:
 		gridd_client_free (client);
 		client = NULL;
 	}
+	ctx->request_duration = oio_ext_monotonic_time() - resolve_end;
 
 	EXTRA_ASSERT(urlv->len == bodyv->len);
 	EXTRA_ASSERT(urlv->len == errorv->len);

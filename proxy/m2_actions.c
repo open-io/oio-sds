@@ -67,6 +67,12 @@ _resolve_meta2 (struct req_args_s *args, enum proxy_preference_e how,
 			}
 		}
 	}
+	if (g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PERFDATA)) {
+		gchar *perfdata = g_strdup_printf(
+				"resolve=%"G_GINT64_FORMAT",meta2=%"G_GINT64_FORMAT,
+				ctx.resolve_duration, ctx.request_duration);
+		args->rp->add_header(PROXYD_HEADER_PERFDATA, perfdata);
+	}
 
 	client_clean (&ctx);
 	return err;

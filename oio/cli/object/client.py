@@ -25,6 +25,8 @@ def make_client(instance):
     client = ObjectStorageApi(
         endpoint=instance.get_endpoint('storage'),
         namespace=instance.namespace,
-        admin_mode=instance.admin_mode
+        admin_mode=instance.admin_mode,
+        # FIXME(FVE): this is ugly
+        perfdata=instance.get_process_configuration().get('perfdata')
     )
     return client

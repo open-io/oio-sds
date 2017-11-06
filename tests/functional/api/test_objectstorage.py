@@ -17,6 +17,7 @@
 import logging
 import time
 from oio.api.object_storage import ObjectStorageApi
+from oio.common.constants import CHUNK_HEADERS
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.storage_functions import _sort_chunks as sort_chunks
 from oio.common import exceptions as exc
@@ -669,20 +670,20 @@ class TestObjectStorageAPI(BaseTestCase):
         # check target can be used
         self.api.object_create(self.account, name, data="0"*128,
                                obj_name="should_be_created")
-        # Create and send copy of a object
+        # Generate hard links of each chunk of the object
         url_list = [c['url'] for c in chunk_list]
-        copy_list = self.api._generate_copy(url_list)
+        copy_list = self.api._generate_copies(url_list)
         # every chunks should have the fullpath
-        fullpath = self.api._generate_fullpath(self.account,
-                                               snapshot_name, 'copy', 12456)
-        self.api._send_copy(url_list, copy_list, fullpath[0])
+        fullpath = self.api._generate_fullpath(
+            self.account, snapshot_name, 'copy', 12456)
+        self.api._link_chunks(url_list, copy_list, fullpath[0])
         # check that every copy exists
         pool_manager = get_pool_manager()
-        for c in copy_list:
-            r = pool_manager.request('HEAD', c)
-            self.assertEqual(r.status, 200)
+        for copy in copy_list:
+            resp = pool_manager.request('HEAD', copy)
+            self.assertEqual(resp.status, 200)
             self.assertIn(fullpath[0],
-                          r.headers["X-oio-chunk-meta-full-path"].split(','))
+                          resp.headers[CHUNK_HEADERS['full_path']].split(','))
         # Snapshot on non existing container should failed
         self.assertRaises(exc.NoSuchContainer,
                           self.api.container_snapshot,

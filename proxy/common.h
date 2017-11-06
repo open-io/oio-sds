@@ -216,6 +216,10 @@ struct client_ctx_s {
 	gchar **urlv;
 	GError **errorv;
 	GByteArray **bodyv;
+
+	/* performance */
+	gint64 resolve_duration;
+	gint64 request_duration;
 };
 
 void client_init (struct client_ctx_s *ctx, struct req_args_s *args,

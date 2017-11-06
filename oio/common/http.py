@@ -16,7 +16,7 @@
 import re
 
 from urllib import quote_plus
-from oio.common.constants import chunk_headers
+from oio.common.constants import CHUNK_HEADERS
 from oio.common.http_eventlet import CustomHttpConnection \
     as NewCustomHttpConnection
 
@@ -104,21 +104,21 @@ def headers_from_object_metadata(metadata):
     out = dict()
     out["transfer-encoding"] = "chunked"
     # FIXME: remove key incoherencies
-    out[chunk_headers["content_id"]] = metadata['id']
-    out[chunk_headers["content_version"]] = metadata['version']
-    out[chunk_headers["content_path"]] = metadata['content_path']
-    out[chunk_headers["content_chunkmethod"]] = metadata['chunk_method']
-    out[chunk_headers["content_policy"]] = metadata['policy']
-    out[chunk_headers["container_id"]] = metadata['container_id']
-    out[chunk_headers["oio_version"]] = metadata["oio_version"]
+    out[CHUNK_HEADERS["content_id"]] = metadata['id']
+    out[CHUNK_HEADERS["content_version"]] = metadata['version']
+    out[CHUNK_HEADERS["content_path"]] = metadata['content_path']
+    out[CHUNK_HEADERS["content_chunkmethod"]] = metadata['chunk_method']
+    out[CHUNK_HEADERS["content_policy"]] = metadata['policy']
+    out[CHUNK_HEADERS["container_id"]] = metadata['container_id']
+    out[CHUNK_HEADERS["oio_version"]] = metadata["oio_version"]
 
     for key in ['metachunk_hash', 'metachunk_size', 'chunk_hash']:
         val = metadata.get(key)
         if val is not None:
-            out[chunk_headers[key]] = metadata[key]
+            out[CHUNK_HEADERS[key]] = metadata[key]
 
     header = {k: quote_plus(str(v)) for (k, v) in out.iteritems()}
-    header[chunk_headers["full_path"]] = ','.join(metadata['full_path'])
+    header[CHUNK_HEADERS["full_path"]] = ','.join(metadata['full_path'])
     return header
 
 

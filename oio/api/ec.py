@@ -26,7 +26,7 @@ from oio.common.http import HeadersDict, parse_content_range, \
     ranges_from_http_header, headers_from_object_metadata
 from oio.common.utils import fix_ranges
 from oio.api import io
-from oio.common.constants import chunk_headers
+from oio.common.constants import CHUNK_HEADERS
 from oio.common import green
 
 
@@ -551,14 +551,14 @@ class EcChunkWriter(object):
         if reqid:
             hdrs['X-oio-req-id'] = reqid
 
-        hdrs[chunk_headers["chunk_pos"]] = chunk["pos"]
-        hdrs[chunk_headers["chunk_id"]] = chunk_path
+        hdrs[CHUNK_HEADERS["chunk_pos"]] = chunk["pos"]
+        hdrs[CHUNK_HEADERS["chunk_id"]] = chunk_path
 
         # in the trailer
         # metachunk_size & metachunk_hash
-        hdrs["Trailer"] = ', '.join((chunk_headers["metachunk_size"],
-                                     chunk_headers["metachunk_hash"],
-                                     chunk_headers["chunk_hash"]))
+        hdrs["Trailer"] = ', '.join((CHUNK_HEADERS["metachunk_size"],
+                                     CHUNK_HEADERS["metachunk_hash"],
+                                     CHUNK_HEADERS["chunk_hash"]))
         with green.ConnectionTimeout(
                 connection_timeout or io.CONNECTION_TIMEOUT):
             conn = io.http_connect(
@@ -613,11 +613,11 @@ class EcChunkWriter(object):
         """Send metachunk_size and metachunk_hash as trailers"""
         parts = [
             '0\r\n',
-            '%s: %s\r\n' % (chunk_headers['metachunk_size'],
+            '%s: %s\r\n' % (CHUNK_HEADERS['metachunk_size'],
                             metachunk_size),
-            '%s: %s\r\n' % (chunk_headers['metachunk_hash'],
+            '%s: %s\r\n' % (CHUNK_HEADERS['metachunk_hash'],
                             metachunk_hash),
-            '%s: %s\r\n' % (chunk_headers['chunk_hash'],
+            '%s: %s\r\n' % (CHUNK_HEADERS['chunk_hash'],
                             self.checksum.hexdigest()),
             '\r\n'
         ]
@@ -805,7 +805,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
         def _handle_resp(writer, resp):
             if resp:
                 if resp.status == 201:
-                    checksum = resp.getheader(chunk_headers['chunk_hash'])
+                    checksum = resp.getheader(CHUNK_HEADERS['chunk_hash'])
                     if checksum and \
                             checksum.lower() != writer.checksum.hexdigest():
                         writer.chunk['error'] = \
