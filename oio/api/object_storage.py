@@ -30,12 +30,12 @@ from oio.api.replication import ReplicatedWriteHandler
 from oio.api.backblaze_http import BackblazeUtilsException, BackblazeUtils
 from oio.api.backblaze import BackblazeWriteHandler, \
     BackblazeChunkDownloadHandler
-from oio.common.utils import cid_from_name, GeneratorIO
+from oio.common.utils import cid_from_name, GeneratorIO, monotonic_time
 from oio.common.easy_value import float_value
 from oio.common.logger import get_logger
 from oio.common.decorators import ensure_headers, ensure_request_id
 from oio.common.storage_method import STORAGE_METHODS
-from oio.common.constants import OIO_VERSION
+from oio.common.constants import OIO_VERSION, CHUNK_HEADERS
 from oio.common.decorators import handle_account_not_found, \
     handle_container_not_found, handle_object_not_found
 from oio.common.storage_functions import _sort_chunks, fetch_stream, \
@@ -97,6 +97,7 @@ class ObjectStorageApi(object):
         acct_kwargs = kwargs.copy()
         acct_kwargs["proxy_endpoint"] = acct_kwargs.pop("endpoint", None)
         self.account = AccountClient(conf, logger=self.logger, **acct_kwargs)
+        self._blob_client = None
 
     def _patch_timeouts(self, kwargs):
         """
@@ -106,6 +107,19 @@ class ObjectStorageApi(object):
         for tok, tov in self.timeouts.items():
             if tok not in kwargs:
                 kwargs[tok] = tov
+
+    @property
+    def blob_client(self):
+        """
+        :rtype: `oio.blob.client.BlobClient`
+        """
+        if self._blob_client is None:
+            from oio.blob.client import BlobClient
+            perfdata = self.container.perfdata
+            connection_pool = self.container.pool_manager
+            self._blob_client = BlobClient(
+                connection_pool=connection_pool, perfdata=perfdata)
+        return self._blob_client
 
     @ensure_headers
     @ensure_request_id
@@ -301,40 +315,39 @@ class ObjectStorageApi(object):
         :type dst_container: `str`
         """
         try:
-            self.container.container_freeze(account, container)
+            self.container.container_freeze(account, container, **kwargs)
             self.container.container_snapshot(
-                account, container, dst_account, dst_container)
-            resp = self.object_list(dst_account, dst_container)
+                account, container, dst_account, dst_container, **kwargs)
+            resp = self.object_list(dst_account, dst_container, **kwargs)
             obj_gen = resp['objects']
             target_beans = []
             copy_beans = []
             for obj in obj_gen:
                 data = self.object_locate(
-                    account, container, obj["name"])
+                    account, container, obj["name"], **kwargs)
                 chunks = [chunk['url'] for chunk in data[1]]
-                copies = self._generate_copy(chunks)
+                copies = self._generate_copies(chunks)
                 fullpath = self._generate_fullpath(
                     dst_account, dst_container, obj['name'], obj['version'])
-                self._send_copy(chunks, copies, fullpath[0])
-                t_beans, c_beans = self._prepare_update_meta2(
-                    data[1], copies, dst_account, dst_container,
-                    obj['content'])
+                self._link_chunks(chunks, copies, fullpath[0], **kwargs)
+                t_beans, c_beans = self._prepare_meta2_raw_update(
+                    data[1], copies, obj['content'])
                 target_beans.extend(t_beans)
                 copy_beans.extend(c_beans)
                 if len(target_beans) > batch:
                     self.container.container_raw_update(
                         target_beans, copy_beans,
                         dst_account, dst_container,
-                        frozen=True)
+                        frozen=True, **kwargs)
                     target_beans = []
                     copy_beans = []
             if target_beans:
                 self.container.container_raw_update(
                     target_beans, copy_beans,
                     dst_account, dst_container,
-                    frozen=True)
+                    frozen=True, **kwargs)
         finally:
-            self.container.container_enable(account, container)
+            self.container.container_enable(account, container, **kwargs)
 
     @handle_container_not_found
     @ensure_headers
@@ -493,9 +506,9 @@ class ObjectStorageApi(object):
                 properties=properties, policy=policy, key_file=key_file,
                 append=append, **kwargs)
         else:
-            with open(file_or_path, "rb") as f:
+            with open(file_or_path, "rb") as in_f:
                 return self._object_create(
-                    account, container, obj_name, f, sysmeta,
+                    account, container, obj_name, in_f, sysmeta,
                     properties=properties, policy=policy,
                     key_file=key_file, append=append, **kwargs)
 
@@ -647,7 +660,7 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def object_locate(self, account, container, obj,
-                      version=None, **kwargs):
+                      version=None, chunk_info=False, **kwargs):
         """
         Get a description of the object along with the list of its chunks.
 
@@ -655,12 +668,30 @@ class ObjectStorageApi(object):
         :param container: name of the container in which the object is stored
         :param obj: name of the object to query
         :param version: version of the object to query
+        :param chunk_info: if True, fetch additional information about chunks
+            from rawx services (slow). The second element of the returned
+            tuple becomes a generator (instead of a list).
         :returns: a tuple with object metadata `dict` as first element
             and chunk `list` as second element
         """
         obj_meta, chunks = self.container.content_locate(
             account, container, obj, version=version, **kwargs)
-        return obj_meta, chunks
+        if not chunk_info:
+            return obj_meta, chunks
+
+        # FIXME(FVE): converting to float does not sort properly
+        # the chunks of the same metachunk
+        def _fetch_ext_info(chunks_):
+            for chunk in sorted(chunks_, key=lambda x: float(x['pos'])):
+                try:
+                    ext_info = self.blob_client.chunk_head(
+                        chunk['url'], **kwargs)
+                    for key in ('chunk_size', 'chunk_hash', 'full_path'):
+                        chunk[key] = ext_info.get(key)
+                except exc.OioException:
+                    pass
+                yield chunk
+        return obj_meta, _fetch_ext_info(chunks)
 
     def object_analyze(self, *args, **kwargs):
         """
@@ -824,9 +855,8 @@ class ObjectStorageApi(object):
         obj_meta['content_path'] = obj_name
         obj_meta['container_id'] = cid_from_name(account, container).upper()
         obj_meta['ns'] = self.namespace
-        obj_meta['full_path'] = self._generate_fullpath(account, container,
-                                                        obj_name,
-                                                        obj_meta['version'])
+        obj_meta['full_path'] = self._generate_fullpath(
+            account, container, obj_name, obj_meta['version'])
         obj_meta['oio_version'] = (obj_meta.get('oio_version')
                                    or OIO_VERSION)
 
@@ -846,7 +876,14 @@ class ObjectStorageApi(object):
             handler = ReplicatedWriteHandler(
                 source, obj_meta, chunk_prep, storage_method, **kwargs)
 
+        perfdata = kwargs.get('perfdata') or self.container.perfdata
+        if perfdata is not None:
+            upload_start = monotonic_time()
         final_chunks, bytes_transferred, content_checksum = handler.stream()
+        if perfdata is not None:
+            upload_end = monotonic_time()
+            val = perfdata.get('rawx', 0.0) + upload_end - upload_start
+            perfdata['rawx'] = val
 
         etag = obj_meta.get('etag')
         if etag and etag.lower() != content_checksum.lower():
@@ -968,40 +1005,69 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def account_flush(self, account, **kwargs):
+        """
+        Flush all containers of an account
+
+        :param account: name of the account to flush
+        :type account: `str`
+        """
         self.account.account_flush(account, **kwargs)
 
-    def _random_buffer(self, dictionary, n):
-        return ''.join(random.choice(dictionary) for _ in range(n))
+    def _random_buffer(self, dictionary, num_chars):
+        """
+        :rtype: `str`
+        :returns: `num_chars` randomly taken from `dictionary`
+        """
+        return ''.join(random.choice(dictionary) for _ in range(num_chars))
 
-    def _generate_copy(self, chunks, random_hex=60):
-        # random_hex is the number of hexadecimals characters to generate for
-        # the copy path
+    def _generate_copies(self, chunks, random_hex=60):
+        """
+        Generate new chunk URLs, by replacing the last `random_hex`
+        characters of the original URLs by random hexadecimal digits.
+        """
         copies = []
-        for c in chunks:
-            tmp = ''.join([c[:-random_hex],
+        for chunk in chunks:
+            tmp = ''.join((chunk[:-random_hex],
                            self._random_buffer('0123456789ABCDEF',
-                                               random_hex)])
+                                               random_hex)))
             copies.append(tmp)
         return copies
 
-    def _send_copy(self, targets, copies, fullpath):
-        headers = {"x-oio-chunk-meta-full-path": fullpath}
-        if not hasattr(self, "blob_client"):
-            from oio.blob.client import BlobClient
-            self.blob_client = BlobClient()
-        for t, c in zip(targets, copies):
-            self.blob_client.chunk_link(t, c, headers=headers).status
+    def _link_chunks(self, targets, copies, fullpath, **kwargs):
+        """
+        Create chunk hard links.
 
-    def _prepare_update_meta2(self, targets, copies, account, container,
-                              content):
+        :param targets: original chunk URLs
+        :param copies: new chunk URLs
+        :param fullpath: full path to the object whose chunks will
+            be hard linked
+        """
+        out_kwargs = dict(kwargs)
+        headers = out_kwargs.pop('headers', dict())
+        headers.update(((CHUNK_HEADERS['full_path'], fullpath), ))
+        for target, copy in zip(targets, copies):
+            res = self.blob_client.chunk_link(target, copy,
+                                              headers=headers, **out_kwargs)
+            res.status
+
+    def _prepare_meta2_raw_update(self, targets, copies, content):
+        """
+        Generate the lists of original and replacement chunk beans
+        to be used as input for `container_raw_update`.
+        """
         targets_beans = []
         copies_beans = []
-        for t, c in zip(targets, copies):
-            targets_beans.append(self._meta2bean(t['url'], t, content))
-            copies_beans.append(self._meta2bean(c, t, content))
+        for target, copy in zip(targets, copies):
+            targets_beans.append(self._m2_chunk_bean(
+                target['url'], target, content))
+            copies_beans.append(self._m2_chunk_bean(copy, target, content))
         return targets_beans, copies_beans
 
-    def _meta2bean(self, url, meta, content):
+    @staticmethod
+    def _m2_chunk_bean(url, meta, content):
+        """
+        Prepare a dictionary to be used as a chunk "bean" (in meta2 sense).
+        """
         return {"type": "chunk",
                 "id": url,
                 "hash": meta['hash'],

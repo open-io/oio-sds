@@ -16,7 +16,7 @@
 import string
 from hashlib import md5
 from oio.check_service.common import CheckService, random_buffer
-from oio.common.constants import OIO_VERSION
+from oio.common.constants import CHUNK_HEADERS, OIO_VERSION
 
 
 class CheckRawx(CheckService):
@@ -29,20 +29,19 @@ class CheckRawx(CheckService):
 
     def _chunk_headers(self, chunk_id, data):
         return {
-            'x-oio-chunk-meta-content-id': '0123456789ABCDEF',
-            'x-oio-chunk-meta-content-version': '1456938361143740',
-            'x-oio-chunk-meta-content-path': 'test',
-            'x-oio-chunk-meta-content-chunk-method':
+            CHUNK_HEADERS['content_id']: '0123456789ABCDEF',
+            CHUNK_HEADERS['content_version']: '1456938361143740',
+            CHUNK_HEADERS['content_path']: 'test',
+            CHUNK_HEADERS['content_chunkmethod']:
                 'ec/algo=liberasurecode_rs_vand,k=6,m=3',
-            'x-oio-chunk-meta-content-storage-policy': 'TESTPOLICY',
-            'x-oio-chunk-meta-container-id': '1'*64,
-            'x-oio-chunk-meta-chunk-id': chunk_id,
-            'x-oio-chunk-meta-chunk-size': len(data),
-            'x-oio-chunk-meta-chunk-hash': md5(data).hexdigest().upper(),
-            'x-oio-chunk-meta-chunk-pos': 0,
-            'x-oio-chunk-meta-full-path': ('test/test/test' +
-                                           ',test1/test1/test1'),
-            'x-oio-chunk-meta-oio-version': OIO_VERSION
+            CHUNK_HEADERS['content_policy']: 'TESTPOLICY',
+            CHUNK_HEADERS['container_id']: '1'*64,
+            CHUNK_HEADERS['chunk_id']: chunk_id,
+            CHUNK_HEADERS['chunk_size']: len(data),
+            CHUNK_HEADERS['chunk_hash']: md5(data).hexdigest().upper(),
+            CHUNK_HEADERS['chunk_pos']: 0,
+            CHUNK_HEADERS['full_path']: 'test/test/test,test1/test1/test1',
+            CHUNK_HEADERS['oio_version']: OIO_VERSION
         }
 
     def _chunk_url(self, rawx_host, chunk_id):
@@ -88,8 +87,8 @@ class CheckRawx(CheckService):
         metachunk_size = 9 * length
         metachunk_hash = md5().hexdigest()
 
-        trailers = {'x-oio-chunk-meta-metachunk-size': metachunk_size,
-                    'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
+        trailers = {CHUNK_HEADERS['metachunk_size']: metachunk_size,
+                    CHUNK_HEADERS['metachunk_hash']: metachunk_hash}
 
         chunk_id = self._chunk_id()
         chunk_headers = self._chunk_headers(chunk_id, chunk_data)

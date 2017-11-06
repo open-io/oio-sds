@@ -15,6 +15,8 @@
 
 HEADER_PREFIX = 'x-oio-'
 ADMIN_HEADER = HEADER_PREFIX + 'admin'
+PERFDATA_HEADER = HEADER_PREFIX + 'perfdata'
+PERFDATA_HEADER_PREFIX = PERFDATA_HEADER + '-'
 
 CONTAINER_METADATA_PREFIX = "x-oio-container-meta-"
 OBJECT_METADATA_PREFIX = "x-oio-content-meta-"
@@ -61,7 +63,7 @@ object_headers = {
     "chunk_method": "%schunk-method" % OBJECT_METADATA_PREFIX
 }
 
-chunk_headers = {
+CHUNK_HEADERS = {
     "container_id": "%scontainer-id" % CHUNK_METADATA_PREFIX,
     "chunk_id": "%schunk-id" % CHUNK_METADATA_PREFIX,
     "chunk_hash": "%schunk-hash" % CHUNK_METADATA_PREFIX,
