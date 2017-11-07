@@ -42,7 +42,7 @@ static void
 test_via_message(void)
 {
 	const char *src = "255.255.255.255:6789";
-	MESSAGE msg = metautils_message_create_named("plop");
+	MESSAGE msg = metautils_message_create_named("plop", 0);
 	metautils_message_add_body_unref(msg, metautils_gba_from_string(src));
 	gchar *copy = NULL;
 	GError *err = metautils_message_extract_body_string(msg, &copy);

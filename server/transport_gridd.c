@@ -662,8 +662,7 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 	 * the meta2 backend, especially right now while we are writing this
 	 * comment in the 4.x branch. There is currently no support of a single
 	 * context with all the common open args, in 4.x, while there is one in
-	 * the 'master' branch.
-	 * TODO @todo remove this in a further release */
+	 * the 'master' branch. */
 	oio_ext_set_deadline(ctx.deadline);
 
 	gboolean rc = FALSE;

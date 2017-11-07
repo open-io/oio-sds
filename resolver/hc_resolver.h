@@ -73,12 +73,14 @@ void hc_resolver_flush_services(struct hc_resolver_s *r);
  * meta1 associated with the reference, and not the meta1 that should have been
  * returned by hc_resolve_reference_directory(). */
 GError* hc_resolve_reference_service(struct hc_resolver_s *r,
-		struct oio_url_s *url, const gchar *srvtype, gchar ***result);
+		struct oio_url_s *url, const gchar *srvtype, gchar ***result,
+		gint64 deadline);
 
 /* Fills 'result' with a NULL-terminated array of IP:port couples, those
  * responsible for the given URL. */
 GError* hc_resolve_reference_directory(struct hc_resolver_s *r,
-		struct oio_url_s *url, gchar ***result);
+		struct oio_url_s *url, gchar ***result,
+		gint64 deadline);
 
 /* Removes from the cache the services associated to the given references.
  * It doesn't touch the directory services belonging to the reference. */

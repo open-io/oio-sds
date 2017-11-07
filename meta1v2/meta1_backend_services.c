@@ -1023,7 +1023,8 @@ meta1_backend_services_poll(struct meta1_backend_s *m1,
 
 GError *
 meta1_backend_services_list(struct meta1_backend_s *m1,
-		struct oio_url_s *url, const char *srvtype, gchar ***result)
+		struct oio_url_s *url, const char *srvtype, gchar ***result,
+		gint64 deadline)
 {
 	if (!result) return SYSERR("BUG: invalid output array");
 
@@ -1042,7 +1043,7 @@ label_retry:
 			GError *err_load = meta1_prefixes_load(m1->prefixes,
 					oio_url_get(url, OIOURL_NS),
 					sqlx_repository_get_local_addr(m1->repo),
-					&updated_prefixes, &meta0_ok, m1->nb_digits);
+					&updated_prefixes, &meta0_ok, m1->nb_digits, deadline);
 			if (err_load || !meta0_ok) {
 				if (err_load) g_error_free(err_load);
 				return err;

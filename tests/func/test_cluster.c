@@ -76,7 +76,7 @@ static void
 test_cluster_list_success (void)
 {
 	GSList *out = NULL;
-	GError *err = conscience_get_services(ns, srvtype, FALSE, &out);
+	GError *err = conscience_get_services(ns, srvtype, FALSE, &out, 0);
 	g_assert_no_error(err);
 	g_slist_free_full(out, (GDestroyNotify) service_info_clean);
 }
@@ -87,17 +87,17 @@ test_cluster_list_errors (void)
 	GError *err = NULL;
 	GSList *out = NULL;
 
-	err = conscience_get_services(ns, "XxXXxXXxx", FALSE, &out);
+	err = conscience_get_services(ns, "XxXXxXXxx", FALSE, &out, 0);
 	g_assert_error(err, GQ_CORE(), CODE_SRVTYPE_NOTMANAGED);
 	g_clear_error(&err);
 	g_assert_null(out);
 
-	err = conscience_get_services("lqoaioxjlqkmxjslqkjx", srvtype, FALSE, &out);
+	err = conscience_get_services("lqoaioxjlqkmxjslqkjx", srvtype, FALSE, &out, 0);
 	g_assert_error(err, GQ_CORE(), CODE_NAMESPACE_NOTMANAGED);
 	g_clear_error(&err);
 	g_assert_null(out);
 
-	err = conscience_get_services("lqoaioxjlqkmxjslqkjx", "XxXXxXXxx", FALSE, &out);
+	err = conscience_get_services("lqoaioxjlqkmxjslqkjx", "XxXXxXXxx", FALSE, &out, 0);
 	g_assert_error(err, GQ_CORE(), CODE_NAMESPACE_NOTMANAGED);
 	g_clear_error(&err);
 	g_assert_null(out);
@@ -107,7 +107,7 @@ static void
 test_cluster_list_abort_no_ns (void)
 {
 	if (g_test_subprocess ()) {
-		conscience_get_services(NULL, srvtype, FALSE, NULL);
+		conscience_get_services(NULL, srvtype, FALSE, NULL, 0);
 	} else {
 		g_test_trap_subprocess (NULL, 0, 0);
 		g_test_trap_assert_failed ();
@@ -119,7 +119,7 @@ test_cluster_list_abort_no_type (void)
 {
 	if (g_test_subprocess ()) {
 		GSList *out = NULL;
-		conscience_get_services(ns, NULL, FALSE, &out);
+		conscience_get_services(ns, NULL, FALSE, &out, 0);
 	} else {
 		g_test_trap_subprocess (NULL, 0, 0);
 		g_test_trap_assert_failed ();
@@ -130,7 +130,7 @@ static void
 test_cluster_list_abort_no_out (void)
 {
 	if (g_test_subprocess ()) {
-		conscience_get_services(ns, srvtype, FALSE, NULL);
+		conscience_get_services(ns, srvtype, FALSE, NULL, 0);
 	} else {
 		g_test_trap_subprocess (NULL, 0, 0);
 		g_test_trap_assert_failed ();

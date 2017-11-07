@@ -28,11 +28,11 @@ License along with this library.
 
 GError*
 sqlx_remote_execute_DESTROY_many(gchar **targets, GByteArray *sid,
-		struct sqlx_name_s *name)
+		struct sqlx_name_s *name, gint64 deadline)
 {
 	(void) sid;
 	GError *err = NULL;
-	GByteArray *req = sqlx_pack_DESTROY(name, TRUE);
+	GByteArray *req = sqlx_pack_DESTROY(name, TRUE, deadline);
 
 	struct gridd_client_s **clients = gridd_client_create_many(targets, req,
 			NULL, NULL);
@@ -43,6 +43,9 @@ sqlx_remote_execute_DESTROY_many(gchar **targets, GByteArray *sid,
 		err = NEWERROR(0, "Failed to create gridd clients");
 		return err;
 	}
+
+	gridd_clients_set_timeout(clients,
+                            oio_clamp_timeout(10 * G_TIME_SPAN_SECOND, deadline));
 
 	gridd_clients_start(clients);
 	err = gridd_clients_loop(clients);

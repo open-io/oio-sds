@@ -228,7 +228,8 @@ static guint
 _count_services(struct meta1_backend_s *m1, struct oio_url_s *url, const char *srvtype)
 {
 	gchar **out = NULL;
-	GError *err = meta1_backend_services_list(m1, url, srvtype, &out);
+	GError *err = meta1_backend_services_list(m1, url, srvtype, &out,
+			oio_ext_monotonic_time() + 30 * G_TIME_SPAN_SECOND);
 	g_assert_no_error(err);
 	g_assert_nonnull(out);
 	guint count = g_strv_length(out);
@@ -248,7 +249,8 @@ test_services_cycle_nolast(void)
 		g_assert_no_error(err);
 
 		for (guint i=0; i<MAXITER ;++i) {
-			err = meta1_backend_services_list(m1, url, "", NULL);
+			err = meta1_backend_services_list(m1, url, "", NULL,
+					oio_ext_monotonic_time() + 30 * G_TIME_SPAN_SECOND);
 			g_assert_error(err, GQ(), CODE_INTERNAL_ERROR);
 			g_clear_error(&err);
 

@@ -909,7 +909,8 @@ retry:
 				gchar **urlv = NULL, realtype[64];
 				_get_meta2_realtype (args, realtype, sizeof(realtype));
 				GError *e = meta1v2_remote_link_service (
-						m1, args->url, realtype, FALSE, TRUE, &urlv);
+						m1, args->url, realtype, FALSE, TRUE, &urlv,
+						oio_ext_get_deadline());
 				if (!e && urlv && *urlv) {
 					/* Explicitely feeding the meta1 avoids a subsequent
 					   call to meta1 to locate the meta2 */
@@ -937,7 +938,8 @@ _m2_container_create_with_defaults (struct req_args_s *args)
 static void
 _re_enable (struct req_args_s *args)
 {
-	GError *e = _resolve_meta2(args, CLIENT_PREFER_MASTER, sqlx_pack_ENABLE, NULL);
+	PACKER_VOID (_pack) { return sqlx_pack_ENABLE (_u, DL()); }
+	GError *e = _resolve_meta2(args, CLIENT_PREFER_MASTER, _pack, NULL);
 	if (e) {
 		GRID_INFO("Failed to un-freeze [%s]: (%d) %s",
 				oio_url_get(args->url, OIOURL_WHOLE), e->code, e->message);
@@ -960,14 +962,15 @@ action_m2_container_destroy (struct req_args_s *args)
 
 	/* 0. Pre-loads the locations of the container. We will need this at the
 	 * destroy step. */
-	err = hc_resolve_reference_service (resolver, args->url, n.type, &urlv);
+	err = hc_resolve_reference_service (resolver, args->url, n.type, &urlv,
+			oio_ext_get_deadline());
 	if (!err && (!urlv || !*urlv))
 		err = NEWERROR(CODE_CONTAINER_NOTFOUND, "No service located");
 
 	/* 1. FREEZE the base to avoid writings during the operation */
 	if (!err) {
-		err = _resolve_meta2 (args, CLIENT_PREFER_MASTER,
-							  sqlx_pack_FREEZE, NULL);
+		PACKER_VOID(_pack) { return sqlx_pack_FREEZE(_u, DL()); }
+		err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
 		if (NULL != err && CODE_IS_NETWORK_ERROR(err->code)) {
 			/* rollback! There are chances the request made a timeout
 			 * but was actually managed by the server. */
@@ -992,7 +995,8 @@ action_m2_container_destroy (struct req_args_s *args)
 	/* 3. UNLINK the base in the directory */
 	if (!err) {
 		GError * _unlink (const char * m1) {
-			return meta1v2_remote_unlink_service (m1, args->url, n.type);
+			return meta1v2_remote_unlink_service(
+					m1, args->url, n.type, oio_ext_get_deadline());
 		}
 		err = _m1_locate_and_action (args->url, _unlink);
 		hc_decache_reference_service (resolver, args->url, n.type);
@@ -1012,7 +1016,8 @@ action_m2_container_destroy (struct req_args_s *args)
 		err = m2v2_remote_execute_DESTROY (urlv[0], args->url,
 				M2V2_DESTROY_EVENT|flag_force);
 		if (!err && urlv[1]) {
-			err = m2v2_remote_execute_DESTROY_many(urlv+1, args->url, flag_force);
+			err = m2v2_remote_execute_DESTROY_many(
+					urlv+1, args->url, flag_force);
 		}
 	}
 
@@ -1202,7 +1207,7 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 	g_strlcpy(target_cid, oio_url_get(args->url, OIOURL_HEXID),
 			sizeof(target_cid));
 	err = hc_resolve_reference_service(resolver, args->url, NAME_SRVTYPE_META2,
-			&urlv);
+			&urlv, oio_ext_get_deadline());
 	if (!err && (!urlv || !*urlv)) {
 		err = NEWERROR(CODE_CONTAINER_NOTFOUND, "No service located");
 	}
@@ -1235,7 +1240,7 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 	oio_url_set(args->url, OIOURL_USER, container);
 	oio_url_set(args->url, OIOURL_HEXID, NULL);
 	err = hc_resolve_reference_service (resolver, args->url,
-			NAME_SRVTYPE_META2, &urlv_snapshot);
+			NAME_SRVTYPE_META2, &urlv_snapshot, oio_ext_get_deadline());
 	if (!err) {
 		err = BADREQ("Container already exists");
 		goto cleanup;
@@ -1246,10 +1251,12 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 
 	GError *hook_dir (const char *m1) {
 		GError *e = meta1v2_remote_link_service (
-				m1, args->url, type, FALSE, TRUE, &urlv_snapshot);
+				m1, args->url, type, FALSE, TRUE, &urlv_snapshot,
+				oio_ext_get_deadline());
 		if (!e && urlv_snapshot && *urlv_snapshot) {
 			e = meta1v2_remote_force_reference_service(
-				m1, args->url, urlv_snapshot[0], FALSE, TRUE);
+				m1, args->url, urlv_snapshot[0], FALSE, TRUE,
+				oio_ext_get_deadline());
 		}
 		if (urlv_snapshot) {
 			g_strfreev (urlv_snapshot);
@@ -1265,7 +1272,7 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 	meta1_urlv_shift_addr(urlv);
 	CLIENT_CTX(ctx, args, type, 1);
 	GByteArray * _pack(const struct sqlx_name_s *n) {
-		return sqlx_pack_SNAPSHOT(n, urlv[0], target_cid, seq_num);
+		return sqlx_pack_SNAPSHOT(n, urlv[0], target_cid, seq_num, DL());
 	}
 
 	err = _resolve_meta2(args, CLIENT_PREFER_MASTER, _pack, NULL);
@@ -1570,7 +1577,8 @@ enum http_rc_e action_container_show (struct req_args_s *args) {
 
 	CLIENT_CTX(ctx,args,NAME_SRVTYPE_META2,1);
 
-	err = gridd_request_replicated (&ctx, sqlx_pack_PROPGET);
+	PACKER_VOID(_pack) { return sqlx_pack_PROPGET(_u, DL()); }
+	err = gridd_request_replicated (&ctx, _pack);
 	if (err) {
 		client_clean (&ctx);
 		return _reply_m2_error (args, err);

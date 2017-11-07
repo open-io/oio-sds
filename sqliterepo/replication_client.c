@@ -40,16 +40,16 @@ License along with this library.
 #include "internals.h"
 
 static GByteArray*
-_pack_RESTORE(struct sqlx_name_s *name, GByteArray *dump)
+_pack_RESTORE(struct sqlx_name_s *name, GByteArray *dump, gint64 deadline)
 {
-	GByteArray *encoded = sqlx_pack_RESTORE(name, dump->data, dump->len);
+	GByteArray *encoded = sqlx_pack_RESTORE(name, dump->data, dump->len, deadline);
 	g_byte_array_unref(dump);
 	return encoded;
 }
 
 GError *
 peer_restore(const gchar *target, struct sqlx_name_s *name,
-		GByteArray *dump)
+		GByteArray *dump, gint64 deadline)
 {
 	GError *err = NULL;
 
@@ -58,15 +58,17 @@ peer_restore(const gchar *target, struct sqlx_name_s *name,
 		return NULL;
 	}
 
-	GByteArray *encoded = _pack_RESTORE(name, dump);
+	GByteArray *encoded = _pack_RESTORE(name, dump, deadline);
 	struct gridd_client_s *client = gridd_client_create(target, encoded, NULL, NULL);
 	g_byte_array_unref(encoded);
 
 	if (!client)
 		return NEWERROR(CODE_INTERNAL_ERROR, "Failed to create client to [%s], bad address?", target);
 
-	gridd_client_set_timeout_cnx(client, oio_election_replicate_timeout_cnx);
-	gridd_client_set_timeout(client, oio_election_replicate_timeout_req);
+	gridd_client_set_timeout_cnx(client,
+			oio_clamp_timeout(oio_election_replicate_timeout_cnx, deadline));
+	gridd_client_set_timeout(client,
+			oio_clamp_timeout(oio_election_replicate_timeout_req, deadline));
 
 	gridd_client_start(client);
 	if (!(err = gridd_client_loop(client)))
@@ -77,7 +79,7 @@ peer_restore(const gchar *target, struct sqlx_name_s *name,
 
 void
 peers_restore(gchar **targets, struct sqlx_name_s *name,
-		GByteArray *dump)
+		GByteArray *dump, gint64 deadline)
 {
 	GError *err = NULL;
 
@@ -86,11 +88,14 @@ peers_restore(gchar **targets, struct sqlx_name_s *name,
 		return ;
 	}
 
-	GByteArray *encoded = _pack_RESTORE(name, dump);
+	GByteArray *encoded = _pack_RESTORE(name, dump, deadline);
 	struct gridd_client_s **clients = gridd_client_create_many(targets, encoded, NULL, NULL);
 	g_byte_array_unref(encoded);
-	gridd_clients_set_timeout_cnx(clients, oio_election_replicate_timeout_cnx);
-	gridd_clients_set_timeout(clients, oio_election_replicate_timeout_req);
+
+	gridd_clients_set_timeout_cnx(clients,
+			oio_clamp_timeout(oio_election_replicate_timeout_cnx, deadline));
+	gridd_clients_set_timeout(clients,
+			oio_clamp_timeout(oio_election_replicate_timeout_req, deadline));
 
 	gridd_clients_start(clients);
 	if (!(err = gridd_clients_loop(clients)))
@@ -106,7 +111,7 @@ peers_restore(gchar **targets, struct sqlx_name_s *name,
 
 GError *
 peer_dump(const gchar *target, struct sqlx_name_s *name, gboolean chunked,
-		peer_dump_cb callback, gpointer cb_arg)
+		peer_dump_cb callback, gpointer cb_arg, gint64 deadline)
 {
 	struct gridd_client_s *client;
 	GByteArray *encoded;
@@ -140,17 +145,19 @@ peer_dump(const gchar *target, struct sqlx_name_s *name, gboolean chunked,
 			callback, cb_arg);
 
 	if (!target)
-		return NEWERROR(CODE_INTERNAL_ERROR, "No target URL");
+		return SYSERR("No target URL");
 
-	encoded = sqlx_pack_DUMP(name, chunked);
+	encoded = sqlx_pack_DUMP(name, chunked, deadline);
 	client = gridd_client_create(target, encoded, NULL, on_reply);
 	g_byte_array_unref(encoded);
 
 	if (!client)
-		return NEWERROR(CODE_INTERNAL_ERROR, "Failed to create client to [%s], bad address?", target);
+		return SYSERR("Failed to create client to [%s], bad address?", target);
 
-	// set a long timeout to allow moving large meta2 bases
-	gridd_client_set_timeout(client, 3600.0);
+	/* set a long timeout to allow moving large meta2 bases */
+	gridd_client_set_timeout_cnx(client, oio_clamp_timeout(1.0, deadline));
+	gridd_client_set_timeout(client, oio_clamp_timeout(3600.0, deadline));
+
 	gridd_client_start(client);
 	if (!(err = gridd_client_loop(client))) {
 		err = gridd_client_error(client);

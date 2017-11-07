@@ -21,6 +21,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metautils.h>
 #include <sqliterepo/sqlx_macros.h>
 
+static gdouble timeout = 10.0;
+static gint64 deadline = 0;
+
 static void
 _dump_cid (const char *s)
 {
@@ -129,11 +132,10 @@ _sysstat (gchar **vols)
 }
 
 static int
-_redirect(gchar *dest, gchar *to)
+_redirect(const char *dest)
 {
-	gdouble timeout = g_ascii_strtod(to, NULL);
 	GByteArray *encoded = message_marshall_gba_and_clean (
-			metautils_message_create_named("REQ_REDIRECT"));
+			metautils_message_create_named("REQ_REDIRECT", deadline));
 	gint64 start = oio_ext_monotonic_time();
 	GError *err = gridd_client_exec(dest, timeout, encoded);
 	gint64 end = oio_ext_monotonic_time();
@@ -150,11 +152,10 @@ _redirect(gchar *dest, gchar *to)
 }
 
 static int
-_ping(gchar *dest, gchar *to)
+_ping(const char *dest)
 {
-	gdouble timeout = g_ascii_strtod(to, NULL);
 	GByteArray *encoded = message_marshall_gba_and_clean (
-			metautils_message_create_named("REQ_PING"));
+			metautils_message_create_named("REQ_PING", deadline));
 	gint64 start = oio_ext_monotonic_time();
 	GError *err = gridd_client_exec(dest, timeout, encoded);
 	gint64 end = oio_ext_monotonic_time();
@@ -175,9 +176,9 @@ _info(const char *dest)
 {
 	GByteArray *out = NULL;
 	GByteArray *encoded = message_marshall_gba_and_clean (
-			metautils_message_create_named(NAME_MSGNAME_SQLX_INFO));
+			metautils_message_create_named(NAME_MSGNAME_SQLX_INFO, deadline));
 	gint64 start = oio_ext_monotonic_time();
-	GError *err = gridd_client_exec_and_concat(dest, 10.0, encoded, &out);
+	GError *err = gridd_client_exec_and_concat(dest, timeout, encoded, &out);
 	gint64 end = oio_ext_monotonic_time();
 	if (err) {
 		g_print("KO (%d) %s\n", err->code, err->message);
@@ -259,6 +260,10 @@ main (int argc, char **argv)
 		_print_usage(argv[0]);
 		return 2;
 	}
+
+	timeout = 10.0;
+	deadline = oio_ext_monotonic_time() + (timeout * G_TIME_SPAN_SECOND);
+	oio_ext_set_deadline(deadline);
 	oio_ext_set_random_reqid ();
 
 	if (!strcmp("config", argv[1])) {
@@ -287,10 +292,7 @@ main (int argc, char **argv)
 	} else if (!strcmp("info", argv[1])) {
 		return _info(argv[2]);
 	} else if (!strcmp("ping", argv[1])) {
-		if (argc > 3)
-			return _ping(argv[2], argv[3]);
-		else
-			return _ping(argv[2], "10.0");
+		return _ping(argv[2]);
 	} else if (!strcmp("stat", argv[1])) {
 		_sysstat (argv+2);
 		return 0;
@@ -303,7 +305,7 @@ main (int argc, char **argv)
 			g_printerr("Usage: %s redirect IP:PORT\n", argv[0]);
 			return 1;
 		}
-		return _redirect(argv[2], "5.0");
+		return _redirect(argv[2]);
 	} else if (!strcmp("-h", argv[1]) ||
 			!strcmp("help", argv[1]) ||
 			!strcmp("--help", argv[1])) {
