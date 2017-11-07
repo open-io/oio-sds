@@ -531,13 +531,15 @@ _direct_use (struct sqlx_peering_s *self,
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(n != NULL);
 
+	const gint64 deadline = oio_ext_get_deadline();
+
 	if (p->fd_udp >= 0) {
 		struct sockaddr_storage ss;
 		gsize ss_len = sizeof(ss);
 		struct sockaddr *sa = (struct sockaddr*) &ss;
 		if (grid_string_to_sockaddr(url, sa, &ss_len)) {
 			GByteArray *req = sqlx_pack_USE(n,
-					oio_clamp_deadline(oio_election_use_timeout_req, 0));
+					oio_clamp_deadline(oio_election_use_timeout_req, deadline));
 			const ssize_t sent = sendto(p->fd_udp, req->data, req->len,
 					MSG_NOSIGNAL, sa, ss_len);
 			const ssize_t len = req->len;
@@ -554,7 +556,6 @@ _direct_use (struct sqlx_peering_s *self,
 		struct event_client_s *mc = g_malloc0 (sizeof(struct event_client_s));
 		mc->client = gridd_client_factory_create_client (p->factory);
 
-		const gint64 deadline = oio_ext_get_deadline();
 		gridd_client_set_timeout(mc->client,
 				oio_clamp_timeout(oio_election_use_timeout_req, deadline));
 		gridd_client_set_timeout_cnx(mc->client,
@@ -566,7 +567,7 @@ _direct_use (struct sqlx_peering_s *self,
 			event_client_free(mc);
 		} else {
 			GByteArray *req = sqlx_pack_USE(n,
-					oio_clamp_deadline(oio_election_use_timeout_req, 0));
+					oio_clamp_deadline(oio_election_use_timeout_req, deadline));
 			err = gridd_client_request (mc->client, req, NULL, NULL);
 			g_byte_array_unref(req);
 			if (err) {
@@ -638,7 +639,7 @@ _direct_pipefrom (struct sqlx_peering_s *self,
 		event_client_free(&mc->ec);
 	} else {
 		GByteArray *req = sqlx_pack_PIPEFROM(n, src,
-				oio_clamp_deadline(oio_election_resync_timeout_req, 0));
+				oio_clamp_deadline(oio_election_resync_timeout_req, deadline));
 		err = gridd_client_request(mc->ec.client, req, NULL, NULL);
 		g_byte_array_unref(req);
 		if (NULL != err) {
@@ -745,7 +746,7 @@ _direct_getvers (struct sqlx_peering_s *self,
 		event_client_free(&mc->ec);
 	} else {
 		GByteArray *req = sqlx_pack_GETVERS(n,
-				oio_clamp_deadline(oio_election_getvers_timeout_req, 0));
+				oio_clamp_deadline(oio_election_getvers_timeout_req, deadline));
 		err = gridd_client_request (mc->ec.client, req, mc, on_reply_GETVERS);
 		g_byte_array_unref(req);
 		if (NULL != err) {
