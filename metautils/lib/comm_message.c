@@ -55,9 +55,12 @@ __getParameter(MESSAGE m, enum message_param_e mp)
 }
 
 MESSAGE
-metautils_message_create(gint64 deadline)
+metautils_message_create_named (const char *name, gint64 deadline)
 {
+	EXTRA_ASSERT(name != NULL);
+
 	MESSAGE result = ASN1C_CALLOC(1, sizeof(Message_t));
+	metautils_message_set_NAME (result, name, strlen(name));
 
 	const char *id = oio_ext_get_reqid ();
 	if (id)
@@ -69,15 +72,6 @@ metautils_message_create(gint64 deadline)
 				(now < deadline) ? (deadline - now) : 1);
 	}
 
-	return result;
-}
-
-MESSAGE
-metautils_message_create_named (const char *name, gint64 deadline)
-{
-	MESSAGE result = metautils_message_create (deadline);
-	if (name)
-		metautils_message_set_NAME (result, name, strlen(name));
 	return result;
 }
 
