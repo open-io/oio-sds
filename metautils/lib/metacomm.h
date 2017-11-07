@@ -58,9 +58,9 @@ gboolean metautils_message_has_ID (MESSAGE m);
 gboolean metautils_message_has_BODY (MESSAGE m);
 
 /** Allocates all the internal structures of a hidden message. */
-MESSAGE metautils_message_create(void);
+MESSAGE metautils_message_create(gint64 deadline);
 
-MESSAGE metautils_message_create_named (const char *name);
+MESSAGE metautils_message_create_named (const char *name, gint64 deadline);
 
 /** Frees all the internal structures of the pointed message. */
 void metautils_message_destroy(MESSAGE m);

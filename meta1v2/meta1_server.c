@@ -50,7 +50,8 @@ _reload_prefixes(struct sqlx_service_s *ss, gboolean init)
 	GArray *updated_prefixes=NULL;
 	struct meta1_prefixes_set_s *m1ps = meta1_backend_get_prefixes(m1);
 	GError *err = meta1_prefixes_load(m1ps, ss->ns_name, ss->url->str,
-			&updated_prefixes, &meta0_ok, m1->nb_digits);
+			&updated_prefixes, &meta0_ok, m1->nb_digits,
+			oio_ext_monotonic_time() + (10 * G_TIME_SPAN_SECOND));
 	if (err) {
 		g_prefix_error(&err, "Reload error: ");
 		if (updated_prefixes)
@@ -138,7 +139,7 @@ _get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
 	if (!sqlx_name_extract(n, u, ss->service_config->srvtype, &seq)) {
 		err = BADREQ("Invalid type name: '%s'", n->type);
 	} else {
-		err = hc_resolve_reference_directory(ss->resolver, u, &peers);
+		err = hc_resolve_reference_directory(ss->resolver, u, &peers, oio_ext_get_deadline());
 	}
 	if (!err) {
 		*result = meta1_url_filter_typed((const char * const *)peers, n->type);

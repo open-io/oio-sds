@@ -289,20 +289,22 @@ context_pending_to_rowset(sqlite3 *db, struct sqlx_repctx_s *ctx)
 /* HOOKS ------------------------------------------------------------------- */
 
 static GError*
-_replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx)
+_replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 {
 	guint count_errors = 0, count_success = 0;
 
 	NAME2CONST(n, ctx->sq3->name);
 	dump_request(__FUNCTION__, peers, "SQLX_REPLICATE", &n);
 
-	GByteArray *encoded = sqlx_pack_REPLICATE(&n, &(ctx->sequence));
+	GByteArray *encoded = sqlx_pack_REPLICATE(&n, &(ctx->sequence), deadline);
 	struct gridd_client_s **clients =
 		gridd_client_create_many(peers, encoded, NULL, NULL);
 	g_byte_array_unref(encoded);
 
-	gridd_clients_set_timeout_cnx(clients, oio_election_replicate_timeout_cnx);
-	gridd_clients_set_timeout(clients, oio_election_replicate_timeout_req);
+	gridd_clients_set_timeout_cnx(clients,
+			oio_clamp_timeout(oio_election_replicate_timeout_cnx, deadline));
+	gridd_clients_set_timeout(clients,
+			oio_clamp_timeout(oio_election_replicate_timeout_req, deadline));
 
 	gridd_clients_start(clients);
 	GError *err = gridd_clients_loop(clients);
@@ -399,7 +401,7 @@ _perform_REPLICATE(struct sqlx_repctx_s *ctx)
 		return 1;
 	}
 
-	err = _replicate_on_peers(peers, ctx);
+	err = _replicate_on_peers(peers, ctx, oio_ext_get_deadline());
 	g_strfreev(peers);
 	context_flush_rowsets(ctx);
 
@@ -491,7 +493,7 @@ sqlx_synchronous_resync(struct sqlx_repctx_s *ctx, gchar **peers)
 
 	// Now send it to the SLAVES
 	NAME2CONST(n, ctx->sq3->name);
-	peers_restore(peers, &n, dump);
+	peers_restore(peers, &n, dump, oio_ext_get_deadline());
 	GRID_INFO("RESTORED on SLAVES [%s][%s]", ctx->sq3->name.base,
 			ctx->sq3->name.type);
 }

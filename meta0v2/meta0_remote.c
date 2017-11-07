@@ -24,19 +24,23 @@ License along with this library.
 #include "internals.h"
 
 static GError *
-_m0_remote_no_return (const char *m0, GByteArray *req)
+_m0_remote_no_return (const char *m0, GByteArray *req, gint64 deadline)
 {
 	EXTRA_ASSERT (m0 != NULL);
-	return gridd_client_exec (m0, oio_m0_client_timeout_common, req);
+	return gridd_client_exec (m0,
+			oio_clamp_timeout(oio_m0_client_timeout_common, deadline),
+			req);
 }
 
 static GError *
-_m0_remote_m0info (const char *m0, GByteArray *req, GSList **out)
+_m0_remote_m0info (const char *m0, GByteArray *req, GSList **out, gint64 deadline)
 {
 	EXTRA_ASSERT (m0 != NULL);
 	EXTRA_ASSERT (out != NULL);
 	GSList *result = NULL;
-	GError *e = gridd_client_exec_and_decode (m0, oio_m0_client_timeout_common,
+
+	GError *e = gridd_client_exec_and_decode(m0,
+			oio_clamp_timeout(oio_m0_client_timeout_common, deadline),
 			req, &result, meta0_info_unmarshall);
 	if (!e) {
 		*out = result;
@@ -50,45 +54,45 @@ _m0_remote_m0info (const char *m0, GByteArray *req, GSList **out)
 /* ------------------------------------------------------------------------- */
 
 GError *
-meta0_remote_get_meta1_all(const char *m0, GSList **out)
+meta0_remote_get_meta1_all(const char *m0, GSList **out, gint64 deadline)
 {
-	MESSAGE request = metautils_message_create_named (NAME_MSGNAME_M0_GETALL);
-	return _m0_remote_m0info (m0, message_marshall_gba_and_clean (request), out);
+	MESSAGE request = metautils_message_create_named (NAME_MSGNAME_M0_GETALL, deadline);
+	return _m0_remote_m0info (m0, message_marshall_gba_and_clean (request), out, deadline);
 }
 
 GError*
 meta0_remote_get_meta1_one(const char *m0, const guint8 *prefix,
-		GSList **out)
+		GSList **out, gint64 deadline)
 {
-	MESSAGE request = metautils_message_create_named (NAME_MSGNAME_M0_GETONE);
+	MESSAGE request = metautils_message_create_named (NAME_MSGNAME_M0_GETONE, deadline);
 	metautils_message_add_field (request, NAME_MSGKEY_PREFIX, prefix, 2);
-	return _m0_remote_m0info (m0, message_marshall_gba_and_clean (request), out);
+	return _m0_remote_m0info (m0, message_marshall_gba_and_clean (request), out, deadline);
 }
 
 GError*
-meta0_remote_cache_refresh(const char *m0)
+meta0_remote_cache_refresh(const char *m0, gint64 deadline)
 {
-	MESSAGE request = metautils_message_create_named (NAME_MSGNAME_M0_RELOAD);
-	return _m0_remote_no_return (m0, message_marshall_gba_and_clean (request));
+	MESSAGE request = metautils_message_create_named (NAME_MSGNAME_M0_RELOAD, deadline);
+	return _m0_remote_no_return (m0, message_marshall_gba_and_clean (request), deadline);
 }
 
 GError *
-meta0_remote_cache_reset (const char *m0, gboolean local)
+meta0_remote_cache_reset (const char *m0, gboolean local, gint64 deadline)
 {
-	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_M0_RESET);
+	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_M0_RESET, deadline);
 	if (local)
 		metautils_message_add_field_struint(req, NAME_MSGKEY_LOCAL, 1);
-	return _m0_remote_no_return (m0, message_marshall_gba_and_clean (req));
+	return _m0_remote_no_return (m0, message_marshall_gba_and_clean (req), deadline);
 }
 
 GError*
-meta0_remote_force(const char *m0, const guint8 *mapping, gsize mapping_len)
+meta0_remote_force(const char *m0, const guint8 *mapping, gsize mapping_len, gint64 deadline)
 {
 	if (!mapping || !mapping_len || !*mapping)
 		return NEWERROR(CODE_BAD_REQUEST, "Empty JSON mapping");
 
-	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_FORCE);
+	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_FORCE, deadline);
 	metautils_message_set_BODY(request, mapping, mapping_len);
-	return _m0_remote_no_return(m0, message_marshall_gba_and_clean(request));
+	return _m0_remote_no_return(m0, message_marshall_gba_and_clean(request), deadline);
 }
 

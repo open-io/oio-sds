@@ -96,7 +96,7 @@ static GError * _m1_action (struct oio_url_s *url, gchar ** m1v,
 GError * _m1_locate_and_action (struct oio_url_s *url,
 		GError * (*hook) (const char * m1addr)) {
 	gchar **m1v = NULL;
-	GError *err = hc_resolve_reference_directory (resolver, url, &m1v);
+	GError *err = hc_resolve_reference_directory (resolver, url, &m1v, oio_ext_get_deadline());
 	if (NULL != err) {
 		g_prefix_error (&err, "No META1: ");
 		return err;
@@ -158,8 +158,9 @@ action_dir_srv_link (struct req_args_s *args, struct json_object *jargs)
 
 	gchar **urlv = NULL;
 	GError *hook (const char * m1) {
-		return meta1v2_remote_link_service (m1, args->url, type, dryrun,
-				autocreate, &urlv);
+		return meta1v2_remote_link_service (
+				m1, args->url, type, dryrun, autocreate, &urlv,
+				oio_ext_get_deadline());
 	}
 
 	GError *err = _m1_locate_and_action (args->url, hook);
@@ -192,7 +193,9 @@ action_dir_srv_force (struct req_args_s *args, struct json_object *jargs)
 
 	GError *hook (const char * m1) {
 		gchar *packed = meta1_pack_url (m1u);
-		GError *e = meta1v2_remote_force_reference_service (m1, args->url, packed, autocreate, force);
+		GError *e = meta1v2_remote_force_reference_service (
+				m1, args->url, packed, autocreate, force,
+				oio_ext_get_deadline());
 		g_free (packed);
 		return e;
 	}
@@ -233,7 +236,8 @@ action_dir_srv_renew (struct req_args_s *args, struct json_object *jargs)
 	gchar **urlv = NULL;
 	GError *hook (const char * m1) {
 		return meta1v2_remote_renew_reference_service (
-				m1, args->url, type, dryrun, autocreate, &urlv);
+				m1, args->url, type, dryrun, autocreate, &urlv,
+				oio_ext_get_deadline());
 	}
 
 	GError *err = _m1_locate_and_action (args->url, hook);
@@ -318,7 +322,8 @@ action_dir_srv_relink (struct req_args_s *args, struct json_object *jargs)
 			if (newset)
 				g_strfreev (newset);
 			return meta1v2_remote_relink_service (
-					m1, args->url, kept, repl, dryrun, &newset);
+					m1, args->url, kept, repl, dryrun, &newset,
+					oio_ext_get_deadline());
 		}
 		kept = meta1_pack_url (m1u_kept);
 		repl = m1u_repl ? meta1_pack_url (m1u_repl) : NULL;
@@ -353,8 +358,9 @@ action_dir_prop_get (struct req_args_s *args, struct json_object *jargs)
 		GError *hook(const char *m1) {
 			if (pairs) g_strfreev(pairs);
 			pairs = NULL;
-			return meta1v2_remote_reference_get_property(m1, args->url,
-														 keys, &pairs);
+			return meta1v2_remote_reference_get_property(
+					m1, args->url, keys, &pairs,
+					oio_ext_get_deadline());
 		}
 		err = _m1_locate_and_action(args->url, hook);
 		g_strfreev(keys);
@@ -382,7 +388,9 @@ action_dir_prop_set (struct req_args_s *args, struct json_object *jargs)
 		return _reply_format_error(args, err);
 
 	GError *hook (const char * m1) {
-		return meta1v2_remote_reference_set_property (m1, args->url, pairs, flush);
+		return meta1v2_remote_reference_set_property (
+				m1, args->url, pairs, flush,
+				oio_ext_get_deadline());
 	}
 	err = _m1_locate_and_action (args->url, hook);
 	g_strfreev(pairs);
@@ -398,7 +406,9 @@ action_dir_prop_del (struct req_args_s *args, struct json_object *jargs)
 	GError *err = decode_json_string_array (&keys, jargs);
 
 	GError *hook (const char *m1) {
-		return meta1v2_remote_reference_del_property (m1, args->url, keys);
+		return meta1v2_remote_reference_del_property (
+				m1, args->url, keys,
+				oio_ext_get_deadline());
 	}
 
 	if (!err) {
@@ -414,7 +424,9 @@ action_dir_prop_del (struct req_args_s *args, struct json_object *jargs)
 static enum http_rc_e
 action_dir_ref_create_with_properties (struct req_args_s *args, gchar **props) {
 	GError *hook (const char * m1) {
-		return meta1v2_remote_create_reference (m1, args->url, props);
+		return meta1v2_remote_create_reference (
+				m1, args->url, props,
+				oio_ext_get_deadline());
 	}
 	GError *err = _m1_locate_and_action (args->url, hook);
 	if (!err)
@@ -459,18 +471,19 @@ enum http_rc_e action_ref_show (struct req_args_s *args) {
 	GError *err = NULL;
 	gchar **urlv = NULL;
 	if (type) {
-		err = hc_resolve_reference_service (resolver, args->url, type, &urlv);
+		err = hc_resolve_reference_service (
+				resolver, args->url, type, &urlv, oio_ext_get_deadline());
 	} else {
 		GError *hook (const char * m1) {
-			return meta1v2_remote_list_reference_services (m1, args->url,
-														   type, &urlv);
+			return meta1v2_remote_list_reference_services (
+					m1, args->url, type, &urlv, oio_ext_get_deadline());
 		}
 		err = _m1_locate_and_action (args->url, hook);
 	}
 
 	if (!err) {
 		gchar **dirv = NULL;
-		err = hc_resolve_reference_directory (resolver, args->url, &dirv);
+		err = hc_resolve_reference_directory (resolver, args->url, &dirv, oio_ext_get_deadline());
 		GString *out = g_string_sized_new (512);
 		g_string_append_c (out, '{');
 		g_string_append_static (out, "\"dir\":");
@@ -490,7 +503,9 @@ enum http_rc_e action_ref_destroy (struct req_args_s *args) {
 	gboolean force = _request_get_flag (args, "force");
 
 	GError *hook (const char * m1) {
-		return meta1v2_remote_delete_reference (m1, args->url, force);
+		return meta1v2_remote_delete_reference (
+				m1, args->url, force,
+				oio_ext_get_deadline());
 	}
 	GError *err = _m1_locate_and_action (args->url, hook);
 	if (!err || CODE_IS_NETWORK_ERROR(err->code)) {
@@ -523,7 +538,9 @@ enum http_rc_e action_ref_unlink (struct req_args_s *args) {
 		return _reply_format_error (args, BADREQ("No service type provided"));
 
 	GError *hook (const char * m1) {
-		return meta1v2_remote_unlink_service (m1, args->url, type);
+		return meta1v2_remote_unlink_service (
+				m1, args->url, type,
+				oio_ext_get_deadline());
 	}
 
 	GError *err = _m1_locate_and_action (args->url, hook);

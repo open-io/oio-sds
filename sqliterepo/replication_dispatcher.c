@@ -525,7 +525,7 @@ _pipe_base_from(const gchar *source, struct sqlx_repository_s *repo,
 		return err2;
 	}
 
-	return peer_dump(source, name, TRUE, _pipe_from_cb, NULL);
+	return peer_dump(source, name, TRUE, _pipe_from_cb, NULL, oio_ext_get_deadline());
 }
 
 static GError *
@@ -1284,7 +1284,7 @@ do_destroy(struct gridd_reply_ctx_s *reply, struct sqlx_repository_s *repo,
 			goto end_label;
 		} else {
 			EXTRA_ASSERT(peers != NULL);
-			err = sqlx_remote_execute_DESTROY_many(peers, NULL, name);
+			err = sqlx_remote_execute_DESTROY_many(peers, NULL, name, oio_ext_get_deadline());
 			g_strfreev(peers);
 		}
 	}
@@ -1644,7 +1644,7 @@ _handler_PIPETO(struct gridd_reply_ctx_s *reply,
 	reply->send_reply(CODE_TEMPORARY, "Dump done");
 
 	/* forward the dump to the target */
-	if (NULL != (err = peer_restore(target, &n0, dump)))
+	if (NULL != (err = peer_restore(target, &n0, dump, oio_ext_get_deadline())))
 		reply->send_error(CODE_INTERNAL_ERROR, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");

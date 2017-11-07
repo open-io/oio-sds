@@ -210,7 +210,6 @@ struct client_ctx_s {
 	const char *type;
 	gint64 seq;
 	enum proxy_preference_e which;
-	gdouble timeout;
 
 	/* output */
 	guint count;
@@ -307,9 +306,7 @@ GError* conscience_remote_remove_services(const char *cs, const char *type,
 		GSList *ls);
 
 static inline gint64 DL(void) {
-	const gint64 dl_req = oio_ext_get_deadline();
-	const gint64 dl_local = oio_ext_monotonic_time() + (G_TIME_SPAN_SECOND * proxy_timeout_common);
-	return (dl_req > 0) ? MIN(dl_req, dl_local) : dl_local;
+	return oio_clamp_deadline(proxy_timeout_common, oio_ext_get_deadline());
 }
 
 /* -------------------------------------------------------------------------- */

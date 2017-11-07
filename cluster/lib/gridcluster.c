@@ -81,7 +81,7 @@ conscience_get_types (const char *ns, GSList **out)
 
 GError *
 conscience_get_services (const char *ns, const char *type, gboolean full,
-		GSList **out)
+		GSList **out, gint64 deadline UNUSED)
 {
 	g_assert (ns != NULL);
 	g_assert (type != NULL);

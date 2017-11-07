@@ -30,11 +30,14 @@ action_forward_stats (struct req_args_s *args)
 		return _reply_format_error (args, BADREQ("Missing SRVID"));
 
 	args->rp->no_access();
-	MESSAGE req = metautils_message_create_named("REQ_STATS");
+
+	MESSAGE req = metautils_message_create_named("REQ_STATS",
+			oio_clamp_deadline(proxy_timeout_stat, oio_ext_get_deadline()));
 	GByteArray *encoded = message_marshall_gba_and_clean (req);
 	gchar *packed = NULL;
-	GError *err = gridd_client_exec_and_concat_string (
-			id, proxy_timeout_stat, encoded, &packed);
+	GError *err = gridd_client_exec_and_concat_string(id,
+			oio_clamp_timeout(proxy_timeout_stat, oio_ext_get_deadline()),
+			encoded, &packed);
 	if (err) {
 		g_free0 (packed);
 		if (CODE_IS_NETWORK_ERROR(err->code)) {
@@ -130,10 +133,13 @@ action_forward_set_config (struct req_args_s *args)
 	if (!args->rq->body)
 		return _reply_format_error (args, BADREQ("Missing body"));
 
-	MESSAGE req = metautils_message_create_named("REQ_SETCFG");
+	MESSAGE req = metautils_message_create_named("REQ_SETCFG",
+			oio_clamp_deadline(proxy_timeout_config, oio_ext_get_deadline()));
 	metautils_message_set_BODY(req, args->rq->body->data, args->rq->body->len);
 	GByteArray *encoded = message_marshall_gba_and_clean (req);
-	GError *err = gridd_client_exec(id, proxy_timeout_config, encoded);
+	GError *err = gridd_client_exec(id,
+			oio_clamp_timeout(proxy_timeout_config, oio_ext_get_deadline()),
+			encoded);
 	if (err) {
 		if (CODE_IS_NETWORK_ERROR(err->code)) {
 			if (err->code == ERRCODE_CONN_TIMEOUT || err->code == ERRCODE_READ_TIMEOUT)
@@ -155,10 +161,13 @@ _forward_XXX (struct req_args_s *args, const char *reqname, gdouble timeout)
 	if (!id)
 		return _reply_format_error (args, BADREQ("Missing SRVID"));
 
-	MESSAGE req = metautils_message_create_named(reqname);
+	MESSAGE req = metautils_message_create_named(reqname,
+			oio_clamp_deadline(timeout, oio_ext_get_deadline()));
 	GByteArray *encoded = message_marshall_gba_and_clean(req);
 	gchar *packed = NULL;
-	GError *err = gridd_client_exec_and_concat_string(id, timeout, encoded, &packed);
+	GError *err = gridd_client_exec_and_concat_string(id,
+			oio_clamp_timeout(timeout, oio_ext_get_deadline()),
+			encoded, &packed);
 	if (err) {
 		g_free0 (packed);
 		if (CODE_IS_NETWORK_ERROR(err->code)) {

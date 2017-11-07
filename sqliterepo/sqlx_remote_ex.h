@@ -23,15 +23,8 @@ License along with this library.
 #include <metautils/lib/metautils.h>
 #include <sqliterepo/sqlx_remote.h>
 
-/**
- * Locally destroy an SQLX database on several services.
- *
- * @param targets An array of services managing the database.
- * @param sid Unused
- * @param name The name of the database
- * @param local
- */
+/* Locally destroy an SQLX database on several services. */
 GError* sqlx_remote_execute_DESTROY_many(gchar **targets, GByteArray *sid,
-		struct sqlx_name_s *name);
+		struct sqlx_name_s *name, gint64 deadline);
 
 #endif /*OIO_SDS__sqliterepo__sqlx_remote_ex_h*/

@@ -44,12 +44,14 @@ gboolean m2v2_list_result_extract (gpointer ctx, MESSAGE reply);
 
 struct m2v2_create_params_s;
 
+/* deadline known from thread-local */
 GError* m2v2_remote_execute_DESTROY(
 		const char *target,
 		struct oio_url_s *url,
 		guint32 flags);
 
-/* Locally destroy a container on several services. */
+/* deadline known from thread-local
+ * Locally destroy a container on several services. */
 GError* m2v2_remote_execute_DESTROY_many(
 		gchar **targets,
 		struct oio_url_s *url,

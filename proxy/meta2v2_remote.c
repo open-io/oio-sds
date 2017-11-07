@@ -37,40 +37,26 @@ _m2v2_build_request(const char *name, struct oio_url_s *url, GByteArray *body,
 	EXTRA_ASSERT(name != NULL);
 	EXTRA_ASSERT(url != NULL);
 
-	MESSAGE msg = metautils_message_create_named(name);
+	MESSAGE msg = metautils_message_create_named(name, deadline);
 	metautils_message_add_url (msg, url);
-
-	if (deadline > 0) {
-		const gint64 now = oio_ext_monotonic_time();
-		metautils_message_add_field_strint64(msg, NAME_MSGKEY_TIMEOUT,
-				(now < deadline) ? (deadline - now) : G_TIME_SPAN_SECOND);
-	}
-
 	if (body)
 		metautils_message_add_body_unref (msg, body);
 	return msg;
 }
 
-static MESSAGE
-_m2v2_build_request_with_flags(const char *name, struct oio_url_s *url,
-		GByteArray *body, gint64 deadline, guint32 flags)
-{
-	MESSAGE out = _m2v2_build_request(name, url, body, deadline);
-	flags = g_htonl(flags);
-	metautils_message_add_field(out, NAME_MSGKEY_FLAGS, &flags, sizeof(flags));
-	return out;
-}
-
 static GByteArray *
 _m2v2_pack_request_with_flags(const char *name, struct oio_url_s *url,
-		GByteArray *body, gint64 deadline, guint32 flags)
+		GByteArray *body, guint32 flags, gint64 deadline)
 {
-	MESSAGE msg = _m2v2_build_request_with_flags(name, url, body, deadline, flags);
+	MESSAGE msg = _m2v2_build_request(name, url, body, deadline);
+	flags = g_htonl(flags);
+	metautils_message_add_field(msg, NAME_MSGKEY_FLAGS, &flags, sizeof(flags));
 	return message_marshall_gba_and_clean(msg);
 }
 
 static GByteArray *
-_m2v2_pack_request(const char *name, struct oio_url_s *url, GByteArray *body, gint64 deadline)
+_m2v2_pack_request(const char *name, struct oio_url_s *url, GByteArray *body,
+		gint64 deadline)
 {
 	MESSAGE msg = _m2v2_build_request(name, url, body, deadline);
 	return message_marshall_gba_and_clean(msg);
@@ -454,10 +440,12 @@ m2v2_remote_pack_LINK(struct oio_url_s *url, gint64 dl)
 /* ------------------------------------------------------------------------- */
 
 GError*
-m2v2_remote_execute_DESTROY(const char *target, struct oio_url_s *url, guint32 flags)
+m2v2_remote_execute_DESTROY(const char *target, struct oio_url_s *url,
+		guint32 flags)
 {
-	return gridd_client_exec(target, proxy_timeout_common,
-			m2v2_remote_pack_DESTROY(url, flags, DL()));
+	return gridd_client_exec(target,
+			oio_clamp_timeout(proxy_timeout_common, oio_ext_get_deadline()),
+			m2v2_remote_pack_DESTROY(url, flags, oio_ext_get_deadline()));
 }
 
 GError*
@@ -467,7 +455,7 @@ m2v2_remote_execute_DESTROY_many(gchar **targets, struct oio_url_s *url, guint32
 		return NEWERROR(CODE_INTERNAL_ERROR, "invalid target array (NULL)");
 
 	// TODO: factorize with sqlx_remote_execute_DESTROY_many
-	GByteArray *req = m2v2_remote_pack_DESTROY(url, flags, DL());
+	GByteArray *req = m2v2_remote_pack_DESTROY(url, flags, oio_ext_get_deadline());
 	struct gridd_client_s **clients = gridd_client_create_many(targets, req, NULL, NULL);
 	metautils_gba_unref(req);
 	req = NULL;

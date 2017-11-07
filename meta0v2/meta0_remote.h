@@ -22,10 +22,10 @@ License along with this library.
 
 #include <glib.h>
 
-GError * meta0_remote_get_meta1_all(const char *m0, GSList **out);
-GError * meta0_remote_get_meta1_one(const char *m0, const guint8 *prefix, GSList **out);
-GError * meta0_remote_cache_refresh(const char *m0);
-GError * meta0_remote_cache_reset(const char *m0, gboolean local);
-GError * meta0_remote_force(const char *m0, const guint8 *mapping, gsize mapping_len);
+GError * meta0_remote_get_meta1_all(const char *m0, GSList **out, gint64 deadline);
+GError * meta0_remote_get_meta1_one(const char *m0, const guint8 *prefix, GSList **out, gint64 deadline);
+GError * meta0_remote_cache_refresh(const char *m0, gint64 deadline);
+GError * meta0_remote_cache_reset(const char *m0, gboolean local, gint64 deadline);
+GError * meta0_remote_force(const char *m0, const guint8 *mapping, gsize mapping_len, gint64 deadline);
 
 #endif /*OIO_SDS__meta0v2__meta0_remote_h*/
