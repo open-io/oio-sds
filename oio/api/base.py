@@ -21,7 +21,8 @@ from urllib3.exceptions import MaxRetryError, TimeoutError, HTTPError, \
     NewConnectionError, ProtocolError, ProxyError, ClosedPoolError
 from urllib import urlencode
 from oio.common import exceptions
-from oio.common.constants import ADMIN_HEADER, CONNECTION_TIMEOUT, READ_TIMEOUT
+from oio.common.constants import ADMIN_HEADER, TIMEOUT_HEADER, \
+    CONNECTION_TIMEOUT, READ_TIMEOUT
 
 _POOL_MANAGER_OPTIONS_KEYS = ["pool_connections", "pool_maxsize",
                               "max_retries"]
@@ -104,6 +105,13 @@ class HttpApi(object):
             out_kwargs['timeout'] = urllib3.Timeout(
                 connect=kwargs.get('connection_timeout', CONNECTION_TIMEOUT),
                 read=kwargs.get('read_timeout', READ_TIMEOUT))
+        if TIMEOUT_HEADER not in out_headers:
+            to = out_kwargs['timeout']
+            if isinstance(to, urllib3.Timeout):
+                to = to.read_timeout
+            else:
+                to = float(to)
+            out_headers[TIMEOUT_HEADER] = int(to * 1000000.0)
 
         # Convert json and add Content-Type
         if json:
