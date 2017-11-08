@@ -39,9 +39,9 @@ def ensure_request_id(func):
 
 def handle_account_not_found(fnc):
     @wraps(fnc)
-    def _wrapped(self, account, *args, **kwargs):
+    def _wrapped(self, account=None, *args, **kwargs):
         try:
-            return fnc(self, account, *args, **kwargs)
+            return fnc(self, account=account, *args, **kwargs)
         except NotFound as e:
             e.message = "Account '%s' does not exist." % account
             raise NoSuchAccount(e)

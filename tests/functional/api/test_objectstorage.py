@@ -519,7 +519,7 @@ class TestObjectStorageAPI(BaseTestCase):
         self.assertRaises(
             exc.NoSuchAccount, self.api.account_refresh, account)
 
-    def test_all_accounts_refresh(self):
+    def test_account_refresh_all(self):
         # clear accounts
         accounts = self.api.account_list()
         for account in accounts:
@@ -529,15 +529,15 @@ class TestObjectStorageAPI(BaseTestCase):
             except exc.NoSuchAccount:  # account remove in the meantime
                 pass
 
-        # all_accounts_refresh with 0 account
-        self.api.all_accounts_refresh()
+        # With 0 account
+        self.api.account_refresh()
 
-        # all_accounts_refresh with 2 account
+        # With 2 accounts
         account1 = random_str(32)
         self.api.account_create(account1)
         account2 = random_str(32)
         self.api.account_create(account2)
-        self.api.all_accounts_refresh()
+        self.api.account_refresh()
         res = self.api.account_show(account1)
         self.assertEqual(res["bytes"], 0)
         self.assertEqual(res["objects"], 0)
