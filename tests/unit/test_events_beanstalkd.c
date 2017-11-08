@@ -180,20 +180,21 @@ static void check_return (GError *err) {
 	gboolean expected[] = {
 		TRUE,
 		TRUE,
-		TRUE,
-		FALSE,
 
 		TRUE,
 		TRUE,
 		FALSE,
 
 		TRUE,
+		TRUE,
+		FALSE,
+
 		TRUE,
 	};
 	if (expected[i++])
 		g_assert_no_error(err);
 	else
-		g_assert_error(err, GQ(), CODE_BAD_REQUEST);
+		g_assert_nonnull(err);
 }
 
 static void
@@ -201,6 +202,7 @@ test_nominal (void)
 {
 	gchar *requests[] = {
 		"use [A-Za-z0-9]+\\R",
+		"stats\\R",
 		"put [[:digit:]]+ [[:digit:]]+ [[:digit:]]+ [[:digit:]]+\\R", "1\\R",
 		"put [[:digit:]]+ [[:digit:]]+ [[:digit:]]+ [[:digit:]]+\\R", "2\\R",
 		"put [[:digit:]]+ [[:digit:]]+ [[:digit:]]+ [[:digit:]]+\\R", "3\\R",
@@ -215,16 +217,17 @@ test_nominal (void)
 	};
 	gchar *replies[] = {
 		"USING oio\r\n",
+		"OK 0\r\n",
+
 		"", "INSERTED 1\r\n",
 		"", "INSERTED 2\r\n",
-		"", "INVERTED 3\r\n",
-		/* bad reply -> connection closed and restablished */
+		"", "OUT_OF_MEMORY 3\r\n",
+		/* bad reply -> retry */
 		"USING oio\r\n",
 		"", "INSERTED 3\r\n",
 		"", "ARGL 4\r\n",
-		/* bad reply -> connection closed and restablished */
+		/* bad reply -> no retry */
 		"USING oio\r\n",
-		"", "INSERTED 4\r\n",
 		NULL
 	};
 
