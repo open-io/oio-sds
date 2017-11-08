@@ -318,7 +318,7 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s *)self;
 	gchar *saved = NULL;
 	int fd = -1;
-	guint attempts_connect = 0, attempts_check = 0;
+	guint attempts_connect = 0, attempts_check = 0, attempts_put = 0;
 	gint64 last_flush = 0, last_check = 0;
 
 	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_BEANSTALKD);
@@ -384,16 +384,23 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 
 		/* forward the event as a beanstalkd job */
 		if (*msg) {
-			GError *err = _put_job (fd, msg, strlen(msg));
+			const size_t msglen = strlen(msg);
+			GError *err = _put_job (fd, msg, msglen);
 			if (intercept_errors)
 				(*intercept_errors) (err);
-			if (err) {
-				if (CODE_IS_RETRY(err->code)) {
+			if (!err) {
+				attempts_put = 0;
+			} else {
+				if (CODE_IS_RETRY(err->code) || CODE_IS_NETWORK_ERROR(err->code)) {
 					saved = msg;
 					msg = NULL;
+					EXPO_BACKOFF(250 * G_TIME_SPAN_MILLISECOND, attempts_put, 4);
 				} else {
 					GRID_WARN("Unrecoverable error with beanstalkd at [%s]: (%d) %s",
 							q->endpoint, err->code, err->message);
+					GRID_NOTICE("dropped %d %.*s",
+							(int)msglen, (int)MIN(msglen,2048), msg);
+					attempts_put = 0;
 				}
 				g_clear_error (&err);
 				sock_set_linger(fd, 1, 1);
