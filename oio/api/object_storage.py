@@ -461,6 +461,10 @@ class ObjectStorageApi(object):
         object will be created if unset)
         :type append: `bool`
 
+        :keyword perfdata: optional `dict` that will be filled with metrics
+            of time spend to resolve the meta2 address, to do the meta2
+            requests, and to upload chunks to rawx services.
+
         :returns: `list` of chunks, size and hash of the what has been uploaded
         """
         if (data, file_or_path) == (None, None):
@@ -711,6 +715,15 @@ class ObjectStorageApi(object):
                       DeprecationWarning)
         return self.object_locate(*args, **kwargs)
 
+    @staticmethod
+    def _ttfb_wrapper(stream, req_start, perfdata):
+        """Keep track of time-to-first-byte and time-to-last-byte"""
+        for dat in stream:
+            if 'ttfb' not in perfdata:
+                perfdata['ttfb'] = monotonic_time() - req_start
+            yield dat
+        perfdata['ttlb'] = monotonic_time() - req_start
+
     @ensure_headers
     @ensure_request_id
     def object_fetch(self, account, container, obj, version=None, ranges=None,
@@ -727,10 +740,18 @@ class ObjectStorageApi(object):
         :type ranges: `list` of `tuples`
         :param key_file: path to the file containing credentials
 
+        :keyword perfdata: optional `dict` that will be filled with metrics
+            of time spend to resolve the meta2 address, to do the meta2
+            request, and the time-to-first-byte, as seen by this API.
+
         :returns: a dictionary of object metadata and
             a stream of object data
         :rtype: tuple
         """
+        perfdata = kwargs.get('perfdata', self.container.perfdata)
+        if perfdata is not None:
+            req_start = monotonic_time()
+
         meta, raw_chunks = self.object_locate(
             account, container, obj, version=version, **kwargs)
         chunk_method = meta['chunk_method']
@@ -747,6 +768,9 @@ class ObjectStorageApi(object):
                                                   **kwargs)
         else:
             stream = fetch_stream(chunks, ranges, storage_method, **kwargs)
+
+        if perfdata is not None:
+            return meta, self._ttfb_wrapper(stream, req_start, perfdata)
         return meta, stream
 
     @handle_object_not_found
@@ -910,7 +934,7 @@ class ObjectStorageApi(object):
             handler = ReplicatedWriteHandler(
                 source, obj_meta, chunk_prep, storage_method, **kwargs)
 
-        perfdata = kwargs.get('perfdata') or self.container.perfdata
+        perfdata = kwargs.get('perfdata', self.container.perfdata)
         if perfdata is not None:
             upload_start = monotonic_time()
         final_chunks, bytes_transferred, content_checksum = handler.stream()
