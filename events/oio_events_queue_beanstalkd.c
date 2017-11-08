@@ -46,6 +46,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 	g_usleep((1 << MIN(TRY, MAX_TRIES)) * DELAY); \
 	TRY++
 
+#define NETERR(FMT,...) NEWERROR(CODE_NETWORK_ERROR, FMT, ##__VA_ARGS__)
+
 static void _q_destroy (struct oio_events_queue_s *self);
 static void _q_send (struct oio_events_queue_s *self, gchar *msg);
 static void _q_send_overwritable(struct oio_events_queue_s *self, gchar *key, gchar *msg);
@@ -166,25 +168,19 @@ static GError *
 _send_and_read_reply (int fd, struct iovec *iov, unsigned int iovcount)
 {
 	if (!_send(fd, iov, iovcount))
-		return NEWERROR(CODE_NETWORK_ERROR,
-				"send error: (%d) %s",
-				errno, strerror(errno));
+		return NETERR("send error: (%d) %s", errno, strerror(errno));
 
 	GError *err = NULL;
 	guint8 buf[256];
 	int r = sock_to_read (fd, 1000, buf, sizeof(buf)-1, &err);
 	if (r < 0)
-		return NEWERROR(CODE_NETWORK_ERROR,
-				"read error: (%d) %s", err->code, err->message);
+		return NETERR("read error from beanstalkd: (%d) %s", err->code, err->message);
 	if (r == 0)
-		return NEWERROR(CODE_NETWORK_ERROR,
-				"read error: closed by peer: (%d) %s",
-				errno, strerror(errno));
-
-	buf[r+1] = 0;
+		return NETERR("EOF from beanstalkd");
+	buf[r] = 0;
 
 	if (!_is_success((gchar*) buf))
-		return NEWERROR(CODE_BAD_REQUEST, "reply error: unexpected");
+		return BADREQ("reply error: unexpected");
 	return NULL;
 }
 
@@ -218,14 +214,69 @@ _use_tube (int fd, const char *name)
 
 	gchar buf[256];
 	gsize len = g_snprintf(buf, sizeof(buf), "use %s\r\n", name);
-
 	if (len >= sizeof(buf))
-		return NEWERROR(CODE_INTERNAL_ERROR, "BUG: tube name too long");
+		return SYSERR("BUG: tube name too long");
 
 	struct iovec iov[1];
 	iov[0].iov_base = buf;
 	iov[0].iov_len = len;
 	return _send_and_read_reply (fd, iov, 1);
+}
+
+static GError *
+_check_server(int fd)
+{
+	guint8 buf[2048];
+
+	/* send the request */
+	const gsize len = g_snprintf((gchar*)buf, sizeof(buf), "stats\r\n");
+	if (len >= sizeof(buf))
+		return SYSERR("BUG: tube name too long");
+
+	struct iovec iov[1] = {};
+	iov[0].iov_base = buf;
+	iov[0].iov_len = len;
+	if (!_send(fd, iov, 1))
+		return NETERR("send error: (%d) %s", errno, strerror(errno));
+
+	/* consume the reply */
+	GError *err = NULL;
+	const int r = sock_to_read (fd, 1000, buf, sizeof(buf)-1, &err);
+	if (r < 0)
+		return NETERR("read error: (%d) %s", err->code, err->message);
+	if (r == 0)
+		return NETERR("EOF");
+	buf[r] = 0;
+
+	/* parse the reply */
+	if (!g_str_has_prefix((gchar*)buf, "OK")) {
+		return BADREQ("request error");
+	}
+
+	gint64 total = 0;
+	gchar **lines = g_strsplit((gchar*)buf, "\n", -1);
+	if (lines) {
+		for (gchar **pline = lines; *pline ;++pline) {
+			gchar *line = *pline;
+			gint64 count = 0;
+			if (!g_str_has_prefix(line, "current-jobs-"))
+				continue;
+			if (!(line = strchr(line, ':')))
+				continue;
+			if (!oio_str_is_number(g_strchug(line+1), &count))
+				continue;
+			total += count;
+		}
+		g_strfreev(lines);
+	}
+
+	const gint64 max_jobs = oio_events_beanstalkd_check_level_deny;
+	if (max_jobs > 0 && total > max_jobs)
+		return BUSY("FULL");
+	const gint64 alert = oio_events_beanstalkd_check_level_alert;
+	if (alert > 0 && total > alert)
+		GRID_WARN("Beanstalkd too loaded");
+	return NULL;
 }
 
 static GError *
@@ -264,17 +315,62 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s *)self;
 	gchar *saved = NULL;
 	int fd = -1;
-	int try_count = 0;
-	gint64 last_flush = 0;
+	guint attempts_connect = 0, attempts_check = 0;
+	gint64 last_flush = 0, last_check = 0;
 
 	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_BEANSTALKD);
 	EXTRA_ASSERT (running != NULL);
 
 	while ((*running)(0 < g_async_queue_length(q->queue))) {
-		gint64 now = oio_ext_monotonic_time();
+
+		const gint64 now = oio_ext_monotonic_time();
+
+		/* Maybe reconnect to the beanstalkd */
+		if (fd < 0) {
+			GError *err = NULL;
+			fd = sock_connect(q->endpoint, &err);
+			if (!err)
+				err = _poll_out (fd);
+			if (!err) {
+				err = _use_tube (fd, q->tube);
+				if (intercept_errors)
+					(*intercept_errors) (err);
+			}
+			if (err) {
+				metautils_pclose(&fd);
+				GRID_WARN("BEANSTALKD: reconnection failed to %s: (%d) %s",
+						q->endpoint, err->code, err->message);
+				g_clear_error (&err);
+
+				EXPO_BACKOFF(250 * G_TIME_SPAN_MILLISECOND, attempts_connect, 4);
+				continue;
+			} else {
+				GRID_INFO("BEANSTALKD: connected to %s", q->endpoint);
+				attempts_connect = 0;
+			}
+		}
+
+		/* Maybe do a periodic check of the beanstalkd tube */
+		if (oio_events_beanstalkd_check_period > 0 &&
+				last_check < OLDEST(now, oio_events_beanstalkd_check_period)) {
+			GError *err = _check_server(fd);
+			if (intercept_errors)
+				(*intercept_errors) (err);
+			if (err) {
+				GRID_WARN("Beanstalkd error [%s]: (%d) %s", q->endpoint, err->code, err->message);
+				g_clear_error(&err);
+				EXPO_BACKOFF(250 * G_TIME_SPAN_MILLISECOND, attempts_check, 4);
+				continue;
+			} else {
+				last_check = now;
+				attempts_check = 0;
+			}
+		}
+
+		/* Build the deadline for the timed wait */
 		if (now - last_flush > q->buffer.delay / 10) {
-			_flush_buffered(self, q);
 			last_flush = now;
+			_flush_buffered(self, q);
 		}
 
 		/* find an event, prefering the last that failed */
@@ -285,36 +381,8 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 
 		/* forward the event */
 		if (*msg) {
-			GError *err = NULL;
-
-			/* lazy-reconnection, with backoff sleeping to avoid crazy-looping */
-			if (fd < 0) {
-				fd = sock_connect(q->endpoint, &err);
-				if (!err)
-					err = _poll_out (fd);
-				if (!err) {
-					err = _use_tube (fd, q->tube);
-					if (intercept_errors)
-						(*intercept_errors) (err);
-				}
-				if (err) {
-					metautils_pclose(&fd);
-					GRID_WARN("BEANSTALKD: reconnection failed to %s: (%d) %s",
-							q->endpoint, err->code, err->message);
-					g_clear_error (&err);
-					saved = msg;
-					msg = NULL;
-
-					EXPO_BACKOFF(250 * G_TIME_SPAN_MILLISECOND, try_count, 4);
-					continue;
-				} else {
-					GRID_INFO("BEANSTALKD: connected to %s", q->endpoint);
-					try_count = 0;
-				}
-			}
-
 			/* prepare the header, and the buffers to be sent */
-			err = _put (fd, msg, strlen(msg));
+			GError *err = _put (fd, msg, strlen(msg));
 			if (intercept_errors)
 				(*intercept_errors) (err);
 			if (err) {
