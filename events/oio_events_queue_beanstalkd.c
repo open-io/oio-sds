@@ -135,7 +135,7 @@ retry:
 		if (errno == EINTR)
 			goto retry;
 		if (errno == EAGAIN || errno == EWOULDBLOCK) {
-			struct pollfd pfd = {0};
+			struct pollfd pfd = {};
 			pfd.fd = fd;
 			pfd.events = POLLOUT;
 			metautils_syscall_poll (&pfd, 1, 1000);
@@ -194,7 +194,7 @@ _put_job (int fd, gchar *msg, size_t msglen)
 			(guint) oio_events_beanstalkd_default_delay,
 			(guint) oio_events_beanstalkd_default_ttr,
 			msglen);
-	struct iovec iov[3] = {0};
+	struct iovec iov[3] = {};
 	iov[0].iov_base = buf;
 	iov[0].iov_len = len;
 	iov[1].iov_base = msg;
@@ -227,7 +227,7 @@ _use_tube (int fd, const char *name)
 	gsize len = g_snprintf(buf, sizeof(buf), "use %s\r\n", name);
 	if (len >= sizeof(buf))
 		return SYSERR("BUG: tube name too long");
-	struct iovec iov[1] = {0};
+	struct iovec iov[1] = {};
 	iov[0].iov_base = buf;
 	iov[0].iov_len = len;
 	GError *err = _send_and_read_reply(fd, iov, 1, buf, sizeof(buf));
@@ -286,7 +286,7 @@ static GError *
 _poll_out (int fd)
 {
 	int rc = 0;
-	struct pollfd pfd = {0};
+	struct pollfd pfd = {};
 	do {
 		pfd.fd = fd;
 		pfd.events = POLLOUT;
