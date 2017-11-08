@@ -39,9 +39,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "oio_events_queue_beanstalkd.h"
 #include "oio_events_queue_buffer.h"
 
-#define INSERTED_PREFIX "INSERTED"
-#define USING_PREFIX "USING"
-
 #define EXPO_BACKOFF(DELAY,TRY,MAX_TRIES) \
 	g_usleep((1 << MIN(TRY, MAX_TRIES)) * DELAY); \
 	TRY++
@@ -118,6 +115,16 @@ _q_set_buffering(struct oio_events_queue_s *self, gint64 v)
 	}
 }
 
+static GError *
+_match_common_error(gchar *buf)
+{
+	if (g_str_has_prefix(buf, "JOB_TOO_BIG"))
+		return SYSERR("Job too big");
+	if (g_str_has_prefix(buf, "OUT_OF_MEMORY"))
+		return BUSY("Beanstald is OOM");
+	return BADREQ("Invalid beanstalkd request/reply: %s", buf);
+}
+
 static int
 _send (int fd, struct iovec *iov, unsigned int iovcount)
 {
@@ -134,8 +141,6 @@ retry:
 			metautils_syscall_poll (&pfd, 1, 1000);
 			goto retry;
 		}
-		GRID_WARN("BEANSTALKD failed to put: [errno=%d] %s",
-				errno, strerror(errno));
 		return 0;
 	}
 
@@ -153,108 +158,106 @@ retry:
 	if (iovcount > 0)
 		goto retry;
 
-	GRID_TRACE("BEANSTALKD put sent!");
 	return 1;
 }
 
-static gboolean
-_is_success(gchar *buf)
-{
-	return g_str_has_prefix(buf, INSERTED_PREFIX)
-		|| g_str_has_prefix(buf, USING_PREFIX);
-}
-
 static GError *
-_send_and_read_reply (int fd, struct iovec *iov, unsigned int iovcount)
+_send_and_read_reply (int fd, struct iovec *iov, unsigned int iovcount,
+		gchar *dst, gsize dst_len)
 {
 	if (!_send(fd, iov, iovcount))
-		return NETERR("send error: (%d) %s", errno, strerror(errno));
+		return NETERR("Send error: (%d) %s", errno, strerror(errno));
 
 	GError *err = NULL;
-	guint8 buf[256];
-	int r = sock_to_read (fd, 1000, buf, sizeof(buf)-1, &err);
-	if (r < 0)
-		return NETERR("read error from beanstalkd: (%d) %s", err->code, err->message);
-	if (r == 0)
-		return NETERR("EOF from beanstalkd");
-	buf[r] = 0;
+	int r = sock_to_read (fd, 1000, dst, dst_len - 1, &err);
+	if (r < 0) {
+		g_prefix_error(&err, "Read error: ");
+		return err;
+	}
 
-	if (!_is_success((gchar*) buf))
-		return BADREQ("reply error: unexpected");
+	if (r == 0)
+		return NETERR("EOF");
+
+	dst[r] = 0;
 	return NULL;
 }
 
 static GError *
-_put (int fd, gchar *msg, size_t msglen)
+_put_job (int fd, gchar *msg, size_t msglen)
 {
 	gchar buf[256];
-	struct iovec iov[3];
 
+	/* send the request */
 	gsize len = g_snprintf (buf, sizeof(buf),
 			"put %u %u %u %"G_GSIZE_FORMAT"\r\n",
 			oio_events_beanstalkd_default_prio,
 			(guint) oio_events_beanstalkd_default_delay,
 			(guint) oio_events_beanstalkd_default_ttr,
 			msglen);
+	struct iovec iov[3] = {0};
 	iov[0].iov_base = buf;
 	iov[0].iov_len = len;
 	iov[1].iov_base = msg;
 	iov[1].iov_len = msglen;
 	iov[2].iov_base = "\r\n";
 	iov[2].iov_len = 2;
+	GError *err = _send_and_read_reply(fd, iov, 3, buf, sizeof(buf));
+	if (err) return err;
 
-	return _send_and_read_reply (fd, iov, 3);
+	/* No need to retry, the event has been saved ... or explicitely
+	 * dropped. */
+	const char * const replies_ok[] = { "INSERTED", "BURIED", "DRAINING", NULL };
+	for (const char * const *pmsg = replies_ok; *pmsg ;++pmsg) {
+		if (g_str_has_prefix(buf, *pmsg))
+			return NULL;
+	}
+
+	return _match_common_error(buf);
 }
 
 static GError *
 _use_tube (int fd, const char *name)
 {
+	gchar buf[256];
+
 	if (!oio_str_is_set(name))
 		return NULL;
 
-	gchar buf[256];
+	/* senf the request */
 	gsize len = g_snprintf(buf, sizeof(buf), "use %s\r\n", name);
 	if (len >= sizeof(buf))
 		return SYSERR("BUG: tube name too long");
-
-	struct iovec iov[1];
+	struct iovec iov[1] = {0};
 	iov[0].iov_base = buf;
 	iov[0].iov_len = len;
-	return _send_and_read_reply (fd, iov, 1);
+	GError *err = _send_and_read_reply(fd, iov, 1, buf, sizeof(buf));
+	if (err) return err;
+
+	/* parse the reply */
+	if (g_str_has_prefix(buf, "USING"))
+		return NULL;
+	return _match_common_error(buf);
 }
 
 static GError *
 _check_server(int fd)
 {
-	guint8 buf[2048];
+	gchar buf[2048];
 
 	/* send the request */
-	const gsize len = g_snprintf((gchar*)buf, sizeof(buf), "stats\r\n");
-	if (len >= sizeof(buf))
-		return SYSERR("BUG: tube name too long");
-
+	strcpy(buf, "stats\r\n");
 	struct iovec iov[1] = {};
 	iov[0].iov_base = buf;
-	iov[0].iov_len = len;
-	if (!_send(fd, iov, 1))
-		return NETERR("send error: (%d) %s", errno, strerror(errno));
-
-	/* consume the reply */
-	GError *err = NULL;
-	const int r = sock_to_read (fd, 1000, buf, sizeof(buf)-1, &err);
-	if (r < 0)
-		return NETERR("read error: (%d) %s", err->code, err->message);
-	if (r == 0)
-		return NETERR("EOF");
-	buf[r] = 0;
+	iov[0].iov_len = strlen(buf);
+	GError *err = _send_and_read_reply(fd, iov, 1, buf, sizeof(buf));
+	if (err) return err;
 
 	/* parse the reply */
-	if (!g_str_has_prefix((gchar*)buf, "OK")) {
-		return BADREQ("request error");
-	}
+	if (!g_str_has_prefix(buf, "OK"))
+		return _match_common_error(buf);
 
 	gint64 total = 0;
-	gchar **lines = g_strsplit((gchar*)buf, "\n", -1);
+	gchar **lines = g_strsplit(buf, "\n", -1);
 	if (lines) {
 		for (gchar **pline = lines; *pline ;++pline) {
 			gchar *line = *pline;
@@ -379,18 +382,22 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 		if (!msg) msg = g_async_queue_timeout_pop (q->queue, G_TIME_SPAN_SECOND);
 		if (!msg) continue;
 
-		/* forward the event */
+		/* forward the event as a beanstalkd job */
 		if (*msg) {
-			/* prepare the header, and the buffers to be sent */
-			GError *err = _put (fd, msg, strlen(msg));
+			GError *err = _put_job (fd, msg, strlen(msg));
 			if (intercept_errors)
 				(*intercept_errors) (err);
 			if (err) {
+				if (CODE_IS_RETRY(err->code)) {
+					saved = msg;
+					msg = NULL;
+				} else {
+					GRID_WARN("Unrecoverable error with beanstalkd at [%s]: (%d) %s",
+							q->endpoint, err->code, err->message);
+				}
 				g_clear_error (&err);
 				sock_set_linger(fd, 1, 1);
 				metautils_pclose (&fd);
-				saved = msg;
-				msg = NULL;
 			}
 		}
 
