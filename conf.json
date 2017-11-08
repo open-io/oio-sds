@@ -68,6 +68,21 @@
 				"descr": "Sets the maximum number of ACK managed by the ZMQ notification client",
 				"def": "32", "min": 1, "max": "1<<31 - 1" },
 
+			{ "type": "monotonic", "name": "oio_events_beanstalkd_check_period",
+				"key": "events.beanstalkd.check_period",
+				"descr": "Set the interval between each check of the beanstalkd availability. Set to 0 to never check.",
+				"def": "1m", "min": "0", "max": "1d" },
+
+			{ "type": "int64", "name": "oio_events_beanstalkd_check_level_deny",
+				"key": "events.beanstalkd.check_level_deny",
+				"descr": "Set the maximum number of items in beanstalkd before considering it full",
+				"def": "500ki", "min": "0", "max": "max" },
+
+			{ "type": "int64", "name": "oio_events_beanstalkd_check_level_alert",
+				"key": "events.beanstalkd.check_level_alert",
+				"descr": "Set a threshold for the number of items in the beanstalkd, so that the service will alert past that value. Set to 0 for no alert sent.",
+				"def": "0", "min": "0", "max": "max" },
+
 			{ "type": "uint", "name": "oio_events_beanstalkd_default_prio",
 				"key": "events.beanstalkd.prio",
 				"descr": "Sets the priority of each notification sent to the BEANSTALK endpoint",
