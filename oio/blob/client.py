@@ -56,6 +56,8 @@ def update_rawx_perfdata(func):
 
 
 class BlobClient(object):
+    """A low-level client to rawx services."""
+
     def __init__(self, connection_pool=None, perfdata=None, **kwargs):
         self.http_pool = connection_pool or get_pool_manager()
         self.perfdata = perfdata

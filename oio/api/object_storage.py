@@ -111,6 +111,8 @@ class ObjectStorageApi(object):
     @property
     def blob_client(self):
         """
+        A low-level client to rawx services.
+
         :rtype: `oio.blob.client.BlobClient`
         """
         if self._blob_client is None:
@@ -199,9 +201,8 @@ class ObjectStorageApi(object):
         :returns: True if the container has been created,
                   False if it already exists
         """
-        return self.container.container_create(account, container,
-                                               properties=properties,
-                                               **kwargs)
+        return self.container.container_create(
+            account, container, properties=properties, **kwargs)
 
     @handle_container_not_found
     @ensure_headers
@@ -231,10 +232,8 @@ class ObjectStorageApi(object):
         :param properties: properties to set on the containers
         :type properties: `dict`
         """
-        return self.container.container_create_many(account,
-                                                    containers,
-                                                    properties=properties,
-                                                    **kwargs)
+        return self.container.container_create_many(
+            account, containers, properties=properties, **kwargs)
 
     @handle_container_not_found
     @ensure_headers
@@ -412,6 +411,9 @@ class ObjectStorageApi(object):
 
     def container_update(self, account, container, metadata, clear=False,
                          **kwargs):
+        """
+        :deprecated: use `container_set_properties`
+        """
         warnings.warn("You'd better use container_set_properties()",
                       DeprecationWarning)
         if not metadata:
@@ -569,6 +571,14 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def object_delete_many(self, account, container, objs, **kwargs):
+        """
+        Delete several objects.
+
+        :param objs: an iterable of object names (should not be a generator)
+        :returns: a list of tuples with the name of the object and
+            a boolean telling if the object has been successfully deleted
+        :rtype: `list` of `tuple`
+        """
         return self.container.content_delete_many(
             account, container, objs, **kwargs)
 
@@ -705,6 +715,22 @@ class ObjectStorageApi(object):
     @ensure_request_id
     def object_fetch(self, account, container, obj, version=None, ranges=None,
                      key_file=None, **kwargs):
+        """
+        Download an object.
+
+        :param account: name of the account in which the object is stored
+        :param container: name of the container in which the object is stored
+        :param obj: name of the object to fetch
+        :param version: version of the object to fetch
+        :type version: `str`
+        :param ranges: a list of object ranges to download
+        :type ranges: `list` of `tuples`
+        :param key_file: path to the file containing credentials
+
+        :returns: a dictionary of object metadata and
+            a stream of object data
+        :rtype: tuple
+        """
         meta, raw_chunks = self.object_locate(
             account, container, obj, version=version, **kwargs)
         chunk_method = meta['chunk_method']
@@ -727,16 +753,8 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def object_get_properties(self, account, container, obj, **kwargs):
-        return self.container.content_get_properties(account, container, obj,
-                                                     **kwargs)
-
-    @handle_object_not_found
-    @ensure_headers
-    @ensure_request_id
-    def object_show(self, account, container, obj, version=None, **kwargs):
         """
-        Get a description of the content along with its user properties.
-
+        Get the description of an object along with its user properties.
 
         :param account: name of the account in which the object is stored
         :param container: name of the container in which the object is stored
@@ -759,12 +777,28 @@ class ObjectStorageApi(object):
              'mime_type': 'application/octet-stream',
              'name': 'Makefile'}
         """
-        return self.container.content_show(account, container, obj,
-                                           version=version,
-                                           **kwargs)
+        return self.container.content_get_properties(
+            account, container, obj, **kwargs)
+
+    @handle_object_not_found
+    @ensure_headers
+    @ensure_request_id
+    def object_show(self, account, container, obj, version=None, **kwargs):
+        """
+        Get the description of an object along with
+        the dictionary of user-set properties.
+
+        :deprecated: prefer using `object_get_properties`,
+            for consistency with `container_get_properties`.
+        """
+        return self.container.content_show(
+            account, container, obj, version=version, **kwargs)
 
     def object_update(self, account, container, obj, metadata,
                       version=None, clear=False, **kwargs):
+        """
+        :deprecated: use `object_set_properties`
+        """
         warnings.warn("You'd better use object_set_properties()",
                       DeprecationWarning, stacklevel=2)
         if clear:
@@ -971,7 +1005,23 @@ class ObjectStorageApi(object):
     @handle_account_not_found
     @ensure_headers
     @ensure_request_id
-    def account_refresh(self, account, **kwargs):
+    def account_refresh(self, account=None, **kwargs):
+        """
+        Refresh counters of an account.
+
+        :param account: name of the account to refresh,
+            or None to refresh all accounts (slow)
+        :type account: `str`
+        """
+        if account is None:
+            accounts = self.account_list(**kwargs)
+            for account in accounts:
+                try:
+                    self.account_refresh(account, **kwargs)
+                except exc.NoSuchAccount:  # account remove in the meantime
+                    pass
+            return
+
         self.account.account_refresh(account, **kwargs)
 
         containers = self.container_list(account, **kwargs)
@@ -994,12 +1044,12 @@ class ObjectStorageApi(object):
                         pass
 
     def all_accounts_refresh(self, **kwargs):
-        accounts = self.account_list(**kwargs)
-        for account in accounts:
-            try:
-                self.account_refresh(account, **kwargs)
-            except exc.NoSuchAccount:  # account remove in the meantime
-                pass
+        """
+        :deprecated: call `account_refresh(None)` instead
+        """
+        warnings.warn("You'd better use account_refresh(None)",
+                      DeprecationWarning, stacklevel=2)
+        return self.account_refresh(None, **kwargs)
 
     @handle_account_not_found
     @ensure_headers

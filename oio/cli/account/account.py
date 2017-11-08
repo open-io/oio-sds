@@ -230,7 +230,7 @@ class RefreshAccount(command.Command):
         self.log.debug('take_action(%s)', parsed_args)
 
         if parsed_args.all_accounts:
-            self.app.client_manager.storage.all_accounts_refresh()
+            self.app.client_manager.storage.account_refresh()
         elif parsed_args.account is not None:
             self.app.client_manager.storage.account_refresh(
                 account=parsed_args.account)
