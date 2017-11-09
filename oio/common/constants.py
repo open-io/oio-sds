@@ -28,6 +28,20 @@ READ_TIMEOUT = 30.0
 
 OIO_VERSION = '4.0'
 
+OIO_DB_ENABLED = 0
+OIO_DB_FROZEN = 2 ** 32 - 1
+OIO_DB_DISABLED = 2 ** 32 - 2
+
+OIO_DB_STATUS_NAME = {
+    OIO_DB_ENABLED: "Enabled",
+    OIO_DB_FROZEN: "Frozen",
+    OIO_DB_DISABLED: "Disabled",
+    str(OIO_DB_ENABLED): "Enabled",
+    str(OIO_DB_FROZEN): "Frozen",
+    str(OIO_DB_DISABLED): "Disabled",
+}
+
+# TODO(FVE): rename constants to upper case
 container_headers = {
     "size": "%ssys-m2-usage" % CONTAINER_METADATA_PREFIX,
     "ns": "%ssys-ns" % CONTAINER_METADATA_PREFIX
