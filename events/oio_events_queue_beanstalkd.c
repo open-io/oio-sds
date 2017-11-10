@@ -274,11 +274,16 @@ _check_server(int fd)
 	}
 
 	const gint64 max_jobs = oio_events_beanstalkd_check_level_deny;
-	if (max_jobs > 0 && total > max_jobs)
-		return BUSY("FULL");
+	if (max_jobs > 0 && total > max_jobs) {
+		return BUSY("FULL (current=%" G_GINT64_FORMAT
+				" > limit=%" G_GINT64_FORMAT ")", total, max_jobs);
+	}
+
 	const gint64 alert = oio_events_beanstalkd_check_level_alert;
-	if (alert > 0 && total > alert)
-		GRID_WARN("Beanstalkd too loaded");
+	if (alert > 0 && total > alert) {
+		GRID_WARN("Beanstalkd load alert (current=%" G_GINT64_FORMAT
+				" > limit=%" G_GINT64_FORMAT ")", total, alert);
+	}
 	return NULL;
 }
 
