@@ -36,9 +36,9 @@ class Meta0Client(ProxyClient):
         """
         self._request('POST', "/meta0_force", data=mapping, **kwargs)
 
-    def list(self):
+    def list(self, **kwargs):
         """Get the meta0 prefix mapping"""
-        _, obody = self._request('GET', "/meta0_list")
+        _, obody = self._request('GET', "/meta0_list", **kwargs)
         return obody
 
 
@@ -170,7 +170,7 @@ class PrefixMapping(object):
             simplified[pfx] = [x['addr'] for x in services]
         return json.dumps(simplified)
 
-    def load(self, json_mapping=None):
+    def load(self, json_mapping=None, **kwargs):
         """
         Load the mapping from the cluster,
         from a JSON string or from a dictionary.
@@ -180,7 +180,7 @@ class PrefixMapping(object):
         elif isinstance(json_mapping, dict):
             raw_mapping = json_mapping
         else:
-            raw_mapping = self.m0.list()
+            raw_mapping = self.m0.list(**kwargs)
 
         # pylint: disable=no-member
         for pfx, services_addrs in raw_mapping.iteritems():
