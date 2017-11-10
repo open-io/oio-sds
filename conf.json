@@ -71,7 +71,7 @@
 			{ "type": "monotonic", "name": "oio_events_beanstalkd_check_period",
 				"key": "events.beanstalkd.check_period",
 				"descr": "Set the interval between each check of the beanstalkd availability. Set to 0 to never check.",
-				"def": "1m", "min": "0", "max": "1d" },
+				"def": "0", "min": "0", "max": "1d" },
 
 			{ "type": "int64", "name": "oio_events_beanstalkd_check_level_deny",
 				"key": "events.beanstalkd.check_level_deny",
