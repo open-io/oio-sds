@@ -92,7 +92,7 @@ _task_reload_prefixes(gpointer p)
 {
 	static volatile guint tick_reload = 0;
 
-	if (already_succeeded && 0 != (tick_reload++ % 32))
+	if (already_succeeded && 0 != (tick_reload++ % 61))
 		return;
 
 	GError *err = _reload_prefixes(PSRV(p), FALSE);
