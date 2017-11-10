@@ -51,7 +51,7 @@ _reload_prefixes(struct sqlx_service_s *ss, gboolean init)
 	struct meta1_prefixes_set_s *m1ps = meta1_backend_get_prefixes(m1);
 	GError *err = meta1_prefixes_load(m1ps, ss->ns_name, ss->url->str,
 			&updated_prefixes, &meta0_ok, m1->nb_digits,
-			oio_ext_monotonic_time() + (10 * G_TIME_SPAN_SECOND));
+			oio_ext_monotonic_time() + G_TIME_SPAN_MINUTE);
 	if (err) {
 		g_prefix_error(&err, "Reload error: ");
 		if (updated_prefixes)
