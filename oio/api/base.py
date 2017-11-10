@@ -46,6 +46,11 @@ class HttpApi(object):
         :type endpoint: `str`
         :keyword admin_mode: allow talking to a slave/worm namespace
         :type admin_mode: `bool`
+
+        :keyword perfdata: optional dictionary that will be filled with
+            metrics of time spent to resolve the meta2 address and
+            to do the meta2 request.
+        :type perfdata: `dict`
         """
         super(HttpApi, self).__init__()
         self.endpoint = endpoint
@@ -149,7 +154,7 @@ class HttpApi(object):
                     body = jsonlib.loads(body)
                 except ValueError:
                     pass
-            if PERFDATA_HEADER in resp.headers and perfdata is not None:
+            if perfdata is not None and PERFDATA_HEADER in resp.headers:
                 for header_val in resp.headers[PERFDATA_HEADER].split(','):
                     kv = header_val.split('=', 1)
                     pdat = perfdata.get(kv[0], 0.0) + float(kv[1]) / 1000000.0

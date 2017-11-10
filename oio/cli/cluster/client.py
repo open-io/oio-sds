@@ -23,6 +23,6 @@ API_NAME = 'cluster'
 
 def make_client(instance):
     client = ConscienceClient(
-        instance.get_process_configuration()
+        instance.cli_conf()
     )
     return client
