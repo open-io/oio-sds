@@ -126,7 +126,8 @@ class ClientManager(object):
         # TODO: for the moment always return the proxyd URL
         return endpoint
 
-    def get_process_configuration(self):
+    def cli_conf(self):
+        """Get a copy of the CLI configuration options."""
         return dict(self._options)
 
 

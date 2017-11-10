@@ -78,8 +78,7 @@ class OpenIOShell(App):
     def run(self, argv):
         try:
             res = super(OpenIOShell, self).run(argv)
-            pcfg = self.client_manager.get_process_configuration()
-            pdata = pcfg.get('perfdata')
+            pdata = self.client_manager.cli_conf().get('perfdata')
             if pdata:
                 LOG.warn("Performance data: %s", pdata)
             return res

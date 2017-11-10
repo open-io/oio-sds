@@ -26,7 +26,6 @@ def make_client(instance):
         endpoint=instance.get_endpoint('storage'),
         namespace=instance.namespace,
         admin_mode=instance.admin_mode,
-        # FIXME(FVE): this is ugly
-        perfdata=instance.get_process_configuration().get('perfdata')
+        perfdata=instance.cli_conf().get('perfdata')
     )
     return client

@@ -462,7 +462,7 @@ class ObjectStorageApi(object):
         :type append: `bool`
 
         :keyword perfdata: optional `dict` that will be filled with metrics
-            of time spend to resolve the meta2 address, to do the meta2
+            of time spent to resolve the meta2 address, to do the meta2
             requests, and to upload chunks to rawx services.
 
         :returns: `list` of chunks, size and hash of the what has been uploaded
@@ -741,7 +741,7 @@ class ObjectStorageApi(object):
         :param key_file: path to the file containing credentials
 
         :keyword perfdata: optional `dict` that will be filled with metrics
-            of time spend to resolve the meta2 address, to do the meta2
+            of time spent to resolve the meta2 address, to do the meta2
             request, and the time-to-first-byte, as seen by this API.
 
         :returns: a dictionary of object metadata and
@@ -815,6 +815,9 @@ class ObjectStorageApi(object):
         :deprecated: prefer using `object_get_properties`,
             for consistency with `container_get_properties`.
         """
+        # stacklevel=5 because we are using 3 decorators
+        warnings.warn("You'd better use object_get_properties()",
+                      DeprecationWarning, stacklevel=5)
         return self.container.content_show(
             account, container, obj, version=version, **kwargs)
 
