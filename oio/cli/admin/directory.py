@@ -89,7 +89,7 @@ class DirectoryInit(DirectoryCmd):
 
         if checked:
             self.log.info("Saving...")
-            mapping.force(connection_timeout=5.0, read_timeout=30.0)
+            mapping.force(connection_timeout=10.0, read_timeout=60.0)
 
         if parsed_args.rdir:
             from time import sleep
