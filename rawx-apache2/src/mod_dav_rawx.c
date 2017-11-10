@@ -377,7 +377,10 @@ rawx_hook_post_config(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp UNU
 				continue;
 			}
 
-			apr_snprintf(url, sizeof(url), "%s:%d", host, a->host_port);
+			if (strchr(host, ':')) // IPv6
+				apr_snprintf(url, sizeof(url), "[%s]:%d", host, a->host_port);
+			else // IPv4
+				apr_snprintf(url, sizeof(url), "%s:%d", host, a->host_port);
 			DAV_DEBUG_POOL(plog, 0, "xattr-lock : testing addr [%s]", url);
 
 			/* FIXME the rawx_id is ok if there is only one ip:port in configuration */

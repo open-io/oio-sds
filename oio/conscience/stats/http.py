@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from oio.common.json import json
+from oio.common.http import get_addr
 from oio.conscience.stats.base import BaseStat
 
 
@@ -25,7 +26,7 @@ class HttpStat(BaseStat):
         self.path = self.stat_conf['path'].lstrip('/')
         self.host = self.stat_conf['host']
         self.port = self.stat_conf['port']
-        self.url = '%s:%s/%s' % (self.host, self.port, self.path)
+        self.url = '%s/%s' % (get_addr(self.host, self.port), self.path)
         if self.parser == 'json':
             # use json parser (account and rdir style)
             self._parse_func = self._parse_stats_json

@@ -1099,6 +1099,10 @@ _init_hub (void)
 	hub_zpub = zmq_socket (hub_zctx, ZMQ_PUB);
 	g_assert (hub_zpub != NULL);
 
+	int opt = 1;
+	zmq_setsockopt (hub_zsub, ZMQ_IPV6, &opt, sizeof(int));
+	zmq_setsockopt (hub_zpub, ZMQ_IPV6, &opt, sizeof(int));
+
 	setint (hub_zpub, ZMQ_RCVBUF, 16*1024*1024);
 	zmq_setsockopt (hub_zsub, ZMQ_SUBSCRIBE, "P", 1); /* push / lock / unlock */
 	zmq_setsockopt (hub_zsub, ZMQ_SUBSCRIBE, "R", 1); /* removal */

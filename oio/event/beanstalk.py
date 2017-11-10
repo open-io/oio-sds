@@ -230,8 +230,9 @@ class Connection(object):
 
     def _connect(self):
         err = None
-        for res in socket.getaddrinfo(self.host, self.port, 0,
-                                      socket.SOCK_STREAM):
+        for res in socket.getaddrinfo(self.host, self.port,
+                                      socktype=socket.SOCK_STREAM,
+                                      flags=socket.AI_NUMERICHOST):
             family, socktype, proto, canonname, socket_address = res
             sock = None
             try:

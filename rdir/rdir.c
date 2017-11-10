@@ -1598,7 +1598,11 @@ grid_main_configure(int argc, char **argv)
 
 	_patch_and_apply_configuration();
 
-	gchar *cfg_main_url = g_strconcat(cfg_ip, ":", cfg_port, NULL);
+	gchar *cfg_main_url;
+	if (strchr(cfg_ip, ':')) // IPv6
+		cfg_main_url = g_strconcat("[", cfg_ip, "]:", cfg_port, NULL);
+	else // IPv4
+		cfg_main_url = g_strconcat(cfg_ip, ":", cfg_port, NULL);
 	STRING_STACKIFY(cfg_main_url);
 
 	/* Validate the volume was never used for another rdir */
