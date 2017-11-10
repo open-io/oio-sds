@@ -124,7 +124,7 @@ class DirectoryList(DirectoryCmd):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         mapping = self.get_prefix_mapping(parsed_args)
-        mapping.load()
+        mapping.load(connection_timeout=10.0, read_timeout=60.0)
         print mapping.to_json()
 
 
@@ -134,9 +134,9 @@ class DirectoryRebalance(DirectoryCmd):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         mapping = self.get_prefix_mapping(parsed_args)
-        mapping.load()
+        mapping.load(connection_timeout=10.0, read_timeout=60.0)
         mapping.rebalance()
-        mapping.force()
+        mapping.force(connection_timeout=10.0, read_timeout=60.0)
 
 
 class DirectoryDecommission(DirectoryCmd):
@@ -151,6 +151,6 @@ class DirectoryDecommission(DirectoryCmd):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         mapping = self.get_prefix_mapping(parsed_args)
-        mapping.load()
+        mapping.load(connection_timeout=10.0, read_timeout=60.0)
         mapping.decommission(parsed_args.addr)
-        mapping.force()
+        mapping.force(connection_timeout=10.0, read_timeout=60.0)
