@@ -25,6 +25,7 @@ from oio.common.easy_value import float_value, int_value, true_value
 from oio.common.configuration import parse_config, validate_service_conf
 from oio.common.logger import get_logger
 from oio.common.client import ProxyClient
+from oio.common.http import get_addr
 from oio.conscience.client import ConscienceClient
 from oio.common.exceptions import OioException
 
@@ -70,7 +71,7 @@ class ServiceWatcher(object):
         self.service_definition = {
             'ns': self.conf['namespace'],
             'type': self.service['type'],
-            'addr': '%s:%s' % (self.service['host'], self.service['port']),
+            'addr': get_addr(self.service['host'], self.service['port']),
             'score': 0,
             'tags': {}}
         if self.service.get('location', None):

@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from oio.common import exceptions as exc
+from oio.common.http import get_addr
 from oio.conscience.checker.base import BaseChecker
 
 
@@ -31,7 +32,7 @@ class HttpChecker(BaseChecker):
         self.path = self.checker_conf['uri']
         self.name = '%s|http|%s|%s|%s' % \
             (self.srv_type, self.host, self.port, self.path)
-        self.url = '%s:%s/%s' % (self.host, self.port, self.path)
+        self.url = '%s/%s' % (get_addr(self.host, self.port), self.path)
 
     def check(self):
         success = False

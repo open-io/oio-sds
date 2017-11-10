@@ -83,7 +83,7 @@ aof-rewrite-incremental-fsync yes
 
 template_gridinit_redis = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+group=${NS},localhost,${SRVTYPE},${NORMALIZED_IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
@@ -92,7 +92,7 @@ command=redis-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 
 template_gridinit_account = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+group=${NS},localhost,${SRVTYPE},${NORMALIZED_IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
@@ -102,7 +102,7 @@ env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 
 template_gridinit_rdir = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+group=${NS},localhost,${SRVTYPE},${NORMALIZED_IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
@@ -111,12 +111,12 @@ command=oio-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 
 template_gridinit_proxy = """
 [service.${NS}-proxy]
-group=${NS},localhost,proxy,${IP}:${PORT}
+group=${NS},localhost,proxy,${NORMALIZED_IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
-#command=${EXE} -s OIO,${NS},proxy -O Bind=${RUNDIR}/${NS}-proxy.sock ${IP}:${PORT} ${NS}
-command=${EXE} -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
+#command=${EXE} -s OIO,${NS},proxy -O Bind=${RUNDIR}/${NS}-proxy.sock ${NORMALIZED_IP}:${PORT} ${NS}
+command=${EXE} -s OIO,${NS},proxy ${NORMALIZED_IP}:${PORT} ${NS}
 """
 
 template_blob_indexer_service = """
@@ -154,10 +154,10 @@ LoadModule dav_rawx_module @APACHE2_MODULES_DIRS@/mod_dav_rawx.so
   LoadModule log_config_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_log_config.so
 </IfModule>
 
-Listen ${IP}:${PORT}
+Listen ${NORMALIZED_IP}:${PORT}
 PidFile ${RUNDIR}/${NS}-${SRVTYPE}-${SRVNUM}.pid
 ServerRoot ${TMPDIR}
-ServerName ${IP}
+ServerName ${NS}-${SRVTYPE}-${SRVNUM}
 ServerSignature Off
 ServerTokens Prod
 DocumentRoot ${RUNDIR}
@@ -244,7 +244,7 @@ Require all granted
 Options -SymLinksIfOwnerMatch -FollowSymLinks -Includes -Indexes
 </Directory>
 
-<VirtualHost ${IP}:${PORT}>
+<VirtualHost ${NORMALIZED_IP}:${PORT}>
 # DO NOT REMOVE (even if empty) !
 </VirtualHost>
 """
@@ -265,7 +265,7 @@ LoadModule wsgi_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_wsgi.so
   LoadModule log_config_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_log_config.so
 </IfModule>
 
-Listen ${IP}:${PORT}
+Listen ${NORMALIZED_IP}:${PORT}
 PidFile ${RUNDIR}/${NS}-${SRVTYPE}-${SRVNUM}.pid
 ServerRoot ${TMPDIR}
 ServerName localhost
@@ -294,7 +294,7 @@ WSGISocketPrefix ${RUNDIR}/
 WSGIChunkedRequest On
 LimitRequestFields 200
 
-<VirtualHost ${IP}:${PORT}>
+<VirtualHost ${NORMALIZED_IP}:${PORT}>
 # Leave Empty
 </VirtualHost>
 """
@@ -324,10 +324,10 @@ atexit.register(save_coverage)
 """
 
 template_meta_watch = """
-host: ${IP}
+host: "${IP}"
 port: ${PORT}
 type: ${SRVTYPE}
-location: ${LOC}
+location: "${LOC}"
 slots:
     - ${SRVTYPE}
 checks:
@@ -340,7 +340,7 @@ stats:
 """
 
 template_account_watch = """
-host: ${IP}
+host: "${IP}"
 port: ${PORT}
 type: account
 checks:
@@ -353,10 +353,10 @@ stats:
 """
 
 template_rawx_watch = """
-host: ${IP}
+host: "${IP}"
 port: ${PORT}
 type: rawx
-location: ${LOC}
+location: "${LOC}"
 checks:
     - {type: http, uri: /info}
 slots:
@@ -369,10 +369,10 @@ stats:
 """
 
 template_rdir_watch = """
-host: ${IP}
+host: "${IP}"
 port: ${PORT}
 type: rdir
-location: ${LOC}
+location: "${LOC}"
 checks:
     - {type: tcp}
 slots:
@@ -384,7 +384,7 @@ stats:
 """
 
 template_redis_watch = """
-host: ${IP}
+host: "${IP}"
 port: ${PORT}
 type: redis
 location: localhost.db${SRVNUM}
@@ -412,7 +412,7 @@ min_workers=2
 min_spare_workers=2
 max_spare_workers=10
 max_workers=10
-listen=${IP}:${PORT}
+listen=${NORMALIZED_IP}:${PORT}
 plugins=conscience,stats,ping,fallback
 
 [Service]
@@ -435,7 +435,7 @@ path=${LIBDIR}/grid/msg_conscience.so
 param_namespace=${NS}
 
 # Multi-conscience
-param_hub.me=tcp://${IP}:${PORT_HUB}
+param_hub.me=tcp://${NORMALIZED_IP}:${PORT_HUB}
 param_hub.group=${CS_ALL_HUB}
 
 # Storage policies definitions
@@ -658,7 +658,7 @@ env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 
 template_gridinit_conscience = """
 [service.${NS}-conscience-${SRVNUM}]
-group=${NS},localhost,conscience,${IP}:${PORT}
+group=${NS},localhost,conscience,${NORMALIZED_IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=true
@@ -667,25 +667,25 @@ command=oio-daemon -s OIO,${NS},cs,${SRVNUM} ${CFGDIR}/${NS}-conscience-${SRVNUM
 
 template_gridinit_meta = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+group=${NS},localhost,${SRVTYPE},${NORMALIZED_IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${IP}:${PORT} ${EXTRA} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
+command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${NORMALIZED_IP}:${PORT} ${EXTRA} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
 """
 
 template_gridinit_sqlx = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+group=${NS},localhost,${SRVTYPE},${NORMALIZED_IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O DirectorySchemas=${CFGDIR}/sqlx/schemas -O Endpoint=${IP}:${PORT} ${EXTRA} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
+command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O DirectorySchemas=${CFGDIR}/sqlx/schemas -O Endpoint=${NORMALIZED_IP}:${PORT} ${EXTRA} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
 """
 
 template_gridinit_indexer = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+group=${NS},localhost,${SRVTYPE},${NORMALIZED_IP}:${PORT}
 command=oio-blob-indexer ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 enabled=true
 start_at_boot=false
@@ -694,7 +694,7 @@ on_die=respawn
 
 template_gridinit_httpd = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+group=${NS},localhost,${SRVTYPE},${NORMALIZED_IP}:${PORT}
 command=${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.httpd.conf
 enabled=true
 start_at_boot=false
@@ -716,15 +716,15 @@ ${NOZK}zookeeper.meta2=${ZK_CNXSTRING}
 ${NOZK}zookeeper.sqlx= ${ZK_CNXSTRING}
 
 #proxy-local=${RUNDIR}/${NS}-proxy.sock
-proxy=${IP}:${PORT_PROXYD}
-ecd=${IP}:${PORT_ECD}
-event-agent=beanstalk://127.0.0.1:11300
+proxy=${NORMALIZED_IP}:${PORT_PROXYD}
+ecd=${NORMALIZED_IP}:${PORT_ECD}
+event-agent=beanstalk://${NORMALIZED_IP}:11300
 #event-agent=ipc://${RUNDIR}/event-agent.sock
 conscience=${CS_ALL_PUB}
 
 meta1_digits=${M1_DIGITS}
 
-admin=${IP}:${PORT_ADMIN}
+admin=${NORMALIZED_IP}:${PORT_ADMIN}
 
 """
 
@@ -787,7 +787,7 @@ key_file = ${KEY_FILE}
 [filter:content_rebuild]
 use = egg:oio#notify
 tube = rebuild
-queue_url = beanstalk://127.0.0.1:11300
+queue_url = beanstalk://${NORMALIZED_IP}:11300
 
 [filter:account_update]
 use = egg:oio#account_update
@@ -798,7 +798,7 @@ use = egg:oio#volume_index
 [filter:replication]
 use = egg:oio#notify
 tube = oio-repli
-queue_url = beanstalk://127.0.0.1:11300
+queue_url = beanstalk://${NORMALIZED_IP}:11300
 
 [filter:noop]
 use = egg:oio#noop
@@ -1178,10 +1178,15 @@ def generate(options):
             if t in options and isinstance(options[t], dict):
                 _h = ensure(options[t].get(SVC_HOSTS), hosts)
             env['IP'] = _h[(num-1) % len(_h)]
+        if 'NORMALIZED_IP' not in env:
+            if ':' in env['IP']:  # IPv6
+                env['NORMALIZED_IP'] = '['+env['IP']+']'
+            else:  # IPv4
+                env['NORMALIZED_IP'] = env['IP']
         if 'LOC' not in env:
             env['LOC'] = "srv%s.vol%d" % (env['IP'].rsplit('.', 1)[-1], num)
         if 'PORT' in env:
-            out['addr'] = '%s:%s' % (env['IP'], env['PORT'])
+            out['addr'] = '%s:%s' % (env['NORMALIZED_IP'], env['PORT'])
         if 'VOLUME' in env:
             out['path'] = env['VOLUME']
         final_services[t].append(out)
@@ -1211,9 +1216,12 @@ def generate(options):
             cs.append((num + 1, h, next(ports), next(ports)))
         ENV.update({
             'CS_ALL_PUB': ','.join(
-                [str(host)+':'+str(port) for _, host, port, _ in cs]),
+                [('['+str(host)+']' if ':' in str(host) else str(host))
+                 +':'+str(port) for _, host, port, _ in cs]),
             'CS_ALL_HUB': ','.join(
-                ['tcp://'+str(host)+':'+str(hub) for _, host, _, hub in cs]),
+                ['tcp://'+
+                 ('['+str(host)+']' if ':' in str(host) else str(host))
+                 +':'+str(hub) for _, host, _, hub in cs]),
         })
 
         for num, host, port, hub in cs:
@@ -1445,7 +1453,10 @@ def generate(options):
         f.write(tpl.safe_substitute(ENV))
     # system config
     with open('{OIODIR}/sds.conf'.format(**ENV), 'w+') as f:
-        env = merge_env({'IP':hosts[0]})
+        if ":" in hosts[0]:  # IPv6
+            env = merge_env({'NORMALIZED_IP':'['+hosts[0]+']'})
+        else:  # IPv4
+            env = merge_env({'NORMALIZED_IP':hosts[0]})
         tpl = Template(template_local_header)
         f.write(tpl.safe_substitute(env))
         tpl = Template(template_local_ns)

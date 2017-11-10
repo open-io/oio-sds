@@ -24,11 +24,14 @@ class TcpChecker(BaseChecker):
             if k not in self.checker_conf:
                 raise exc.ConfigurationException(
                     'Missing field "%s" in configuration' % k)
-        self.addr = (self.checker_conf['host'], self.checker_conf['port'])
+        addrinfo = socket.getaddrinfo(
+            self.checker_conf['host'], self.checker_conf['port'],
+            socktype=socket.SOCK_STREAM, flags=socket.AI_NUMERICHOST)[0]
+        self.family, _, _, _, self.addr = addrinfo
 
     def check(self):
         result = False
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s = socket.socket(self.family, socket.SOCK_STREAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             s.connect(self.addr)

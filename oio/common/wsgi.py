@@ -21,6 +21,7 @@ from werkzeug.exceptions import HTTPException, InternalServerError
 from oio.common.utils import CPU_COUNT
 from oio.common.configuration import read_conf
 from oio.common.logger import get_logger
+from oio.common.http import get_addr
 
 
 class Application(BaseApplication):
@@ -34,8 +35,8 @@ class Application(BaseApplication):
         super(Application, self).__init__()
 
     def load_config(self):
-        bind = '%s:%s' % (self.conf.get('bind_addr', '127.0.0.1'),
-                          self.conf.get('bind_port', '8000'))
+        bind = get_addr(self.conf.get('bind_addr', '127.0.0.1'),
+                        self.conf.get('bind_port', '8000'))
         self.cfg.set('bind', bind)
         self.cfg.set('backlog', self.conf.get('backlog', 2048))
         self.cfg.set('workers', self.conf.get('workers', 1))

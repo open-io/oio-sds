@@ -122,6 +122,16 @@ def headers_from_object_metadata(metadata):
     return header
 
 
+def get_addr(host, port):
+    """
+    Generate the address for host (IPv4 or IPv6) and port
+    """
+    if ':' in host:  # IPv6
+        return '[%s]:%s' % (host, port)
+    else:  # IPv4
+        return '%s:%s' % (host, port)
+
+
 class HeadersDict(dict):
     def __init__(self, headers, **kwargs):
         if headers:
