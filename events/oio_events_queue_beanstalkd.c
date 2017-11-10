@@ -339,15 +339,19 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 			fd = sock_connect(q->endpoint, &err);
 			if (!err)
 				err = _poll_out (fd);
-			if (!err) {
+			if (err) {
+				g_prefix_error(&err, "Connection error: ");
+			} else {
 				err = _use_tube (fd, q->tube);
 				if (intercept_errors)
 					(*intercept_errors) (err);
+				if (err)
+					g_prefix_error(&err, "USE command error: ");
 			}
 			if (err) {
 				metautils_pclose(&fd);
-				GRID_WARN("BEANSTALKD: reconnection failed to %s: (%d) %s",
-						q->endpoint, err->code, err->message);
+				GRID_WARN("BEANSTALK error to %s: (%d) %s", q->endpoint,
+						err->code, err->message);
 				g_clear_error (&err);
 
 				EXPO_BACKOFF(250 * G_TIME_SPAN_MILLISECOND, attempts_connect, 4);
