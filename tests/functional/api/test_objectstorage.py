@@ -599,3 +599,9 @@ class TestObjectStorageAPI(BaseTestCase):
         self.assertRaises(
             exc.OioException, self.api.object_truncate, self.account, name,
             name, size=129)
+
+    def test_object_create_long_name(self):
+        """Create an objet whose name has the maximum length allowed"""
+        cname = random_str(16)
+        path = random_str(1023)
+        self.api.object_create(self.account, cname, data="1"*128, obj_name=path)
