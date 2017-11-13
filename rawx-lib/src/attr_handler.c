@@ -31,8 +31,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "rawx.h"
 
-static volatile ssize_t longest_xattr = 1024;
-static volatile ssize_t longest_xattr_list = 2048;
+static volatile ssize_t longest_xattr = 2048;
+static volatile ssize_t longest_xattr_list = 16384;
 
 static gchar *
 _getxattr_from_fd(int fd, const char *attrname)
@@ -71,24 +71,33 @@ retry:
 }
 
 static gboolean
-_set_xattr_list(int fd, gchar* name, gchar* keys)
+_set_xattr_list(int fd, gchar* strkeys)
 {
+	if (!strkeys)
+		return FALSE;
+
+	gchar **keys = g_strsplit(strkeys, ",", -1);
 	if (!keys)
 		return FALSE;
-	gchar **fields = g_strsplit(keys, ",", -1);
-	if (!fields)
-		return FALSE;
-	for(gchar **f = fields; *f; ++f) {
-		gchar *escaped_name = g_strconcat(name, ":", *f, NULL);
-		if (fsetxattr(fd, escaped_name, "", 0, 0) == -1) {
-			g_free(escaped_name);
-			g_strfreev(fields);
-			return FALSE;
-		}
-		g_free(escaped_name);
+
+	gboolean rc = FALSE;
+	GChecksum *checksum = g_checksum_new(G_CHECKSUM_SHA256);
+	for (gchar **key = keys; *key; ++key) {
+		g_checksum_reset(checksum);
+		g_checksum_update(checksum, (guint8*)*key, strlen(*key));
+		gchar *hexup = g_ascii_strup(g_checksum_get_string(checksum), -1);
+		gchar *xname = g_strconcat(ATTR_DOMAIN_OIO, ":", hexup, NULL);
+		const int xrc = fsetxattr(fd, xname, *key, strlen(*key), 0);
+		g_free(xname);
+		g_free(hexup);
+		if (xrc == -1)
+			goto error_label;
 	}
-	g_strfreev(fields);
-	return TRUE;
+	rc = TRUE;
+error_label:
+	g_checksum_free(checksum);
+	g_strfreev(keys);
+	return rc;
 }
 
 gboolean
@@ -132,8 +141,7 @@ set_rawx_info_to_fd (int fd, GError **error, struct chunk_textinfo_s *cti)
 
 	SET(ATTR_NAME_OIO_VERSION, cti->oio_version);
 
-	if (cti->oio_full_path && !_set_xattr_list(fd, ATTR_DOMAIN_OIO,
-			cti->oio_full_path))
+	if (cti->oio_full_path && !_set_xattr_list(fd, cti->oio_full_path))
 		goto error_set_attr;
 
 	return TRUE;
@@ -195,38 +203,42 @@ _get (int fd, const char *k, gchar **pv)
 
 #define GET(K,R) _get(fd, ATTR_DOMAIN "." K, &(R))
 
-
-/**
- * Fullpaths are in the form 'oio:account/container/path/version'
- * So we have to check the prefix:'oio:'.
- * Sometimes we need to only have the fullpath of a specific path
- * So we have to check /path
- */
-static GString*
-_get_fullpaths_from_listxattr(gchar * xattrlist, ssize_t size, gchar *path)
+static GString *
+_append_path(GString *gs, const char *path)
 {
-	GString* user_list = g_string_new("");
-	gchar* elem = NULL;
-	gchar* enclosed_path = g_strconcat("/", path, "/", NULL);
+	if (gs->len > 0)
+		gs = g_string_append_c(gs, ',');
+	return g_string_append(gs, path);
+}
+
+static GString*
+_get_fullpaths_from_listxattr(int fd, gchar * xattrlist, ssize_t size)
+{
+	GString* user_list = g_string_sized_new(8192);
+
 	for (gint i = 0; i < size; i+= strlen(&xattrlist[i]) + 1) {
-		elem = strstr(&xattrlist[i], ATTR_DOMAIN_OIO);
-		if (elem) {
-			if (path)
-				elem = g_strrstr(&xattrlist[i], enclosed_path );
-			if(!path || elem) {
-				if (user_list->len)
-					user_list = g_string_append_c(user_list, ',');
-				user_list = g_string_append(user_list,
-						&xattrlist[i + strlen(ATTR_DOMAIN_OIO) + 1]);
+		const char *k = &xattrlist[i];
+		if (g_str_has_prefix(k, ATTR_DOMAIN_OIO ":")) {
+			if (strchr(k, '/')) {
+				/* old-style with a path in the key */
+				k += sizeof(ATTR_DOMAIN_OIO ":") - 1;
+				user_list = _append_path(user_list, k);
+			} else {
+				/* new-style SHA256 identifiers */
+				gchar *path = NULL;
+				if (_get(fd, k, &path)) {
+					user_list = _append_path(user_list, path);
+					g_free(path);
+				}
 			}
-			elem = NULL;
 		}
 	}
+
 	return user_list;
 }
 
 static gboolean
-_get_fullpaths_from_fd(int fd, gchar **list_path, gchar *path)
+_get_fullpaths_from_fd(int fd, gchar **list_path)
 {
 	ssize_t s = longest_xattr_list;
 	gchar *buf = g_malloc0(s);
@@ -236,7 +248,8 @@ retry:
 	if (rc < 0) {
 		if (errno == ERANGE) {
 			s = s*2;
-			longest_xattr_list = 1 + MAX(longest_xattr_list, s);
+			if (s > longest_xattr_list)
+				longest_xattr_list = s;
 			buf = g_realloc(buf, s);
 			memset(buf, 0, s);
 			goto retry;
@@ -245,7 +258,7 @@ retry:
 			return FALSE;
 		}
 	}
-	GString *full_path = _get_fullpaths_from_listxattr(buf, rc, path);
+	GString *full_path = _get_fullpaths_from_listxattr(fd, buf, rc);
 	*list_path = full_path->str;
 	g_free(buf);
 	g_string_free(full_path, FALSE);
@@ -281,8 +294,7 @@ get_rawx_info_from_fd (int fd, GError **error, struct chunk_textinfo_s *cti)
 		}
 	}
 
-	_get_fullpaths_from_fd(fd, &(cti->oio_full_path),
-			cti->content_path);
+	_get_fullpaths_from_fd(fd, &(cti->oio_full_path));
 
 	GET(ATTR_NAME_CONTENT_ID,      cti->content_id);
 	GET(ATTR_NAME_CONTENT_PATH,    cti->content_path);
