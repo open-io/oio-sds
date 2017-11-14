@@ -411,12 +411,12 @@ _expire_base(sqlx_cache_t *cache, sqlx_base_t *b)
 }
 
 static gint
-_expire_specific_base(sqlx_cache_t *cache, sqlx_base_t *b, gint64 now,
-		gint64 grace_delay)
+_expire_specific_base(sqlx_cache_t *cache, sqlx_base_t *b,
+		const gint64 now, const gint64 grace_delay)
 {
-	if (now) {
-		now = (now > grace_delay) ? (now - grace_delay) : 0;
-		if (b->last_update > now)
+	/* TODO(jfs): this is way to complicated. ASAP change the logic */
+	if (now > 0) {
+	   if (grace_delay <= 0 || b->last_update > OLDEST(now, grace_delay))
 			return 0;
 	}
 
