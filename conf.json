@@ -446,13 +446,13 @@
 
 			{ "type": "monotonic", "name": "_cache_grace_delay_cool",
 				"key": "sqliterepo.cache.ttl.cool",
-				"descr": "Sets the period after the return to the IDLE/COLD state, during which the recycling is forbidden",
-				"def": "0", "min": "0", "max": "1h" },
+				"descr": "Sets the period after the return to the IDLE/COLD state, during which the recycling is forbidden. 0 means the base won't be decached.",
+				"def": "1ms", "min": "0", "max": "1d" },
 
 			{ "type": "monotonic", "name": "_cache_grace_delay_hot",
 				"key": "sqliterepo.cache.ttl.hot",
-				"descr": "Sets the period after the return to the IDLE/HOT state, during which the recycling is forbidden",
-				"def": "0", "min": "0", "max": "1h" },
+				"descr": "Sets the period after the return to the IDLE/HOT state, during which the recycling is forbidden. 0 means the base won't be decached.",
+				"def": "1ms", "min": "0", "max": "1d" },
 
 			{ "type": "uint", "name": "sqliterepo_release_size",
 				"key": "sqliterepo.release_size",
