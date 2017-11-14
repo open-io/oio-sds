@@ -604,4 +604,5 @@ class TestObjectStorageAPI(BaseTestCase):
         """Create an objet whose name has the maximum length allowed"""
         cname = random_str(16)
         path = random_str(1023)
-        self.api.object_create(self.account, cname, data="1"*128, obj_name=path)
+        self.api.object_create(self.account, cname,
+                               data="1"*128, obj_name=path)
