@@ -16,20 +16,22 @@
 # License along with this library.
 
 from hashlib import md5
+from collections import OrderedDict
 import random
 import tarfile
 from io import BytesIO
 import itertools
 import json
 import string
-from tempfile import TemporaryFile
 import unittest
+from tarfile import TarFile, TarInfo
 import time
 from threading import Thread
 
 import requests
 from oio.api.object_storage import ObjectStorageApi
-from oio.container.backup import CONTAINER_PROPERTIES, CONTAINER_MANIFEST
+from oio.container.backup import CONTAINER_PROPERTIES, CONTAINER_MANIFEST, \
+                                 BLOCKSIZE
 from tests.utils import BaseTestCase
 from nose.plugins.attrib import attr
 
@@ -146,13 +148,27 @@ class TestContainerDownload(BaseTestCase):
         self.conn.container_delete(self.account, self._cnt)
         super(TestContainerDownload, self).tearDown()
 
-    def _create_data(self, name=gen_names, metadata=None, size=513):
+    def _create_data(self, name=gen_names, metadata=None, size=513,
+                     append=False):
         for idx, _name in itertools.islice(name(), 5):
-            data = gen_data(size * idx)
             mime = random.choice(MIMETYPE)
-            entry = {'data': data, 'meta': None, 'mime': mime}
-            self.conn.object_create(self.account, self._cnt, obj_name=_name,
-                                    data=data, mime_type=mime)
+            if append and size > 0:
+                data = gen_data(size / 2 * idx)
+                entry = {'data': data, 'meta': None, 'mime': mime}
+                self.conn.object_create(self.account, self._cnt,
+                                        obj_name=_name, data=data,
+                                        mime_type=mime)
+                data = gen_data(size / 2 * idx)
+                self.conn.object_create(self.account, self._cnt,
+                                        obj_name=_name, data=data,
+                                        mime_type=mime, append=True)
+                entry['data'] += data
+            else:
+                data = gen_data(size * idx)
+                entry = {'data': data, 'meta': None, 'mime': mime}
+                self.conn.object_create(self.account, self._cnt,
+                                        obj_name=_name, data=data,
+                                        mime_type=mime)
             if metadata:
                 entry['meta'] = {}
                 for _ in xrange(10):
@@ -219,35 +235,34 @@ class TestContainerDownload(BaseTestCase):
         self.assertEqual(info, [])
         return tar
 
-    def _simple_download(self, name=gen_names, metadata=None):
-        self._create_data(name, metadata)
+    def _check_container(self, cnt):
+        ret = self.conn.object_list(account=self.account, container=cnt)
+        names = self._data.keys()
+        for obj in ret['objects']:
+            name = obj['name']
+            self.assertIn(name, self._data)
+            self.assertEqual(obj['size'], len(self._data[name]['data']))
+            _, data = self.conn.object_fetch(self.account, cnt, name)
+            raw = "".join(data)
+
+            self.assertEqual(md5(raw).hexdigest(),
+                             md5(self._data[name]['data']).hexdigest())
+            meta = self.conn.object_get_properties(self.account, cnt, name)
+            self.assertEqual(meta['properties'], self._data[name]['meta'])
+            names.remove(name)
+        self.assertEqual(len(names), 0)
+
+    def _simple_download(self, name=gen_names, metadata=None, size=513,
+                         append=False):
+        self._create_data(name=name, metadata=metadata, size=size,
+                          append=append)
 
         ret = requests.get(self._uri)
         self.assertGreater(len(ret.content), 0)
         self.assertEqual(ret.status_code, 200)
         self.raw = ret.content
 
-        with TemporaryFile() as tmpfile:
-            tmpfile.write(self.raw)
         return self._check_tar(ret.content)
-        """
-        raw = BytesIO(ret.content)
-        tar = tarfile.open(fileobj=raw, ignore_zeros=True)
-        info = self._data.keys()
-        for entry in tar.getnames():
-            if entry == CONTAINER_MANIFEST:
-                # skip special entry
-                continue
-
-            self.assertIn(entry, info)
-
-            tmp = tar.extractfile(entry)
-            self.assertEqual(self._data[entry]['data'], tmp.read())
-            info.remove(entry)
-
-        self.assertEqual(info, [])
-        return tar
-        """
 
     def _check_metadata(self, tar):
         for entry in tar.getnames():
@@ -425,19 +440,11 @@ class TestContainerDownload(BaseTestCase):
         self._create_data(metadata=gen_metadata)
         org = requests.get(self.make_uri('dump'))
         cnt = rand_str(20)
+
         res = requests.put(self.make_uri('restore', container=cnt),
                            data=org.content)
         self.assertEqual(res.status_code, 201)
-        ret = self.conn.object_list(account=self.account, container=cnt)
-        names = self._data.keys()
-        for obj in ret['objects']:
-            name = obj['name']
-            self.assertIn(name, self._data)
-            self.assertEqual(obj['size'], len(self._data[name]['data']))
-            meta = self.conn.object_get_properties(self.account, cnt, name)
-            self.assertEqual(meta['properties'], self._data[name]['meta'])
-            names.remove(name)
-        self.assertEqual(len(names), 0)
+        self._check_container(cnt)
 
     @attr('restore')
     def test_multipart_restore(self):
@@ -454,6 +461,8 @@ class TestContainerDownload(BaseTestCase):
             res = requests.put(uri, data=part, headers=hdrs)
             start += len(part)
             self.assertIn(res.status_code, [201, 206])
+
+        self._check_container(cnt)
 
     @attr('restore')
     def test_multipart_invalid_restore(self):
@@ -484,12 +493,12 @@ class TestContainerDownload(BaseTestCase):
                 res = requests.head(uri)
                 self.assertEqual(int(res.headers['X-Consumed-Size']), start)
 
-        cnt = rand_str(20)
-        uri = self.make_uri('restore', container=cnt)
-
+        uri = self.make_uri('restore', container=rand_str(20))
         hdrs = {'Range': 'bytes=%d-%d' % (size, size + len(parts[1]) - 1)}
         res = requests.put(uri, data=part, headers=hdrs)
         self.assertEqual(res.status_code, 422)
+
+        self._check_container(cnt)
 
     @attr('concurrency')
     def test_multipart_concurrency(self):
@@ -542,6 +551,8 @@ class TestContainerDownload(BaseTestCase):
                 thr.join()
                 self.assertIn(thr._ret.status_code, [201, 206])
             start += len(part)
+
+        self._check_container(cnt)
 
     @attr('disconnected')
     def test_broken_connectivity(self):
@@ -616,3 +627,76 @@ class TestContainerDownload(BaseTestCase):
 
         result = requests.get(self.make_uri('dump', container=cnt))
         self._check_tar(result.content)
+
+    @attr('rawtar')
+    def test_rawtar(self):
+        """Create a normal tar archive and restore it"""
+        raw = BytesIO()
+        tarfile = TarFile(mode='w', fileobj=raw)
+
+        testdata = rand_str(20) * 5000
+
+        inf = TarInfo("simpletar")
+        fileraw = BytesIO()
+        fileraw.write(testdata)
+        inf.size = len(testdata)
+        fileraw.seek(0)
+
+        tarfile.addfile(inf, fileobj=fileraw)
+        tarfile.close()
+
+        raw.seek(0)
+        data = raw.read()
+
+        cnt = rand_str(20)
+        ret = requests.put(self.make_uri("restore", container=cnt),
+                           data=data)
+
+        self.assertEqual(ret.status_code, 201)
+        meta, stream = self.conn.object_fetch(self.account, cnt, "simpletar")
+        self.assertEqual(md5("".join(stream)).hexdigest(),
+                         md5(testdata).hexdigest())
+
+    @attr('invalid')
+    def test_checksums(self):
+        """Check restore operation with invalid tar"""
+        tar = self._simple_download(append=True)
+
+        manifest = json.load(tar.extractfile(CONTAINER_MANIFEST),
+                             object_pairs_hook=OrderedDict)
+        # => add random bytes inside each file (either header and data)
+        for entry in manifest:
+            if entry['name'] == CONTAINER_MANIFEST:
+                # CONTAINER_MANIFEST does not have checksum at this time
+                continue
+            inv = self.raw
+
+            # Test with tar entry
+            # checksum tar doesn't work very well with SCHILY attributes
+            # so only apply changes on regular block entry
+            idx = entry['start_block'] * BLOCKSIZE \
+                + random.randint(0, BLOCKSIZE)
+            # + random.randint(0, entry['hdr_blocks'] * BLOCKSIZE)
+            while self.raw[idx] == inv[idx]:
+                inv = inv[:idx] + chr(random.randint(0, 255)) + inv[idx+1:]
+
+            cnt = rand_str(20)
+            res = requests.put(self.make_uri('restore', container=cnt),
+                               data=inv)
+            self.assertEqual(res.status_code, 400)
+
+            # skip emty file
+            if entry['size'] == 0:
+                continue
+
+            # Test with data blocks
+            inv = self.raw
+            idx = (entry['start_block'] + entry['hdr_blocks']) * BLOCKSIZE \
+                + random.randint(0, entry['size'] - 1)
+            while self.raw[idx] == inv[idx]:
+                inv = inv[:idx] + chr(random.randint(0, 255)) + inv[idx+1:]
+            cnt = rand_str(20)
+            res = requests.put(self.make_uri('restore', container=cnt),
+                               data=inv)
+
+            self.assertEqual(res.status_code, 400)
