@@ -687,9 +687,13 @@ class ContainerRestore(object):
 
         hdrs = {}
         while self.state['consumed'] < self.req_size:
-            if not self.extract_tar_entry():
-                # skip NULL blocks
-                continue
+            try:
+                if not self.extract_tar_entry():
+                    # skip NULL blocks
+                    continue
+            except InvalidHeaderError as ex:
+                self.logger.error("Tar entry have invalid checksum")
+                raise BadRequest(str(ex))
 
             if self.inf.type not in (XHDTYPE, REGTYPE, AREGTYPE, DIRTYPE):
                 raise BadRequest('unsupported TAR attribute %s' %
