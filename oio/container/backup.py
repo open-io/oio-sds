@@ -36,11 +36,12 @@ from werkzeug.exceptions import BadRequest, RequestedRangeNotSatisfiable, \
 
 from werkzeug.wsgi import wrap_file
 
-from oio.api.object_storage import ObjectStorageApi
+from oio.api.object_storage import ObjectStorageApi, _sort_chunks
 from oio.common import exceptions as exc
 from oio.common.utils import get_logger, read_conf
 from oio.common.wsgi import WerkzeugApp
 from oio.common.redis_conn import RedisConn
+from oio.common.storage_method import STORAGE_METHODS
 
 RANGE_RE = re.compile(r"^bytes=(\d+)-(\d+)$")
 
@@ -68,6 +69,8 @@ class OioTarEntry(object):
         self.ref = container
         self.name = name
         self._filesize = 0
+        # contains MD5 of single object or list of chunks
+        self._checksums = None
         self.compute(conn, data)
 
     def compute(self, conn, data=None):
@@ -100,8 +103,27 @@ class OioTarEntry(object):
             tarinfo.size = int(properties.get(SLO_SIZE))
             _, slo = conn.object_fetch(self.acct, self.ref, self.name)
             self._slo = json.loads("".join(slo), object_pairs_hook=OrderedDict)
+            self._checksums = {}
+            # format MD5 to share same format as multi chunks object
+            offset = 0
+            for idx, ck in enumerate(self._slo):
+                self._checksums[idx] = {
+                    'hash': ck['hash'].upper(),
+                    'size': ck['bytes'],
+                    'offset': offset
+                }
+                offset += ck['bytes']
         else:
             tarinfo.size = int(entry['length'])
+            meta, chunks = conn.object_locate(self.acct, self.ref, self.name)
+            storage_method = STORAGE_METHODS.load(meta['chunk_method'])
+            chunks = _sort_chunks(chunks, storage_method.ec)
+            for idx in chunks:
+                chunks[idx] = chunks[idx][0]
+                del chunks[idx]['url']
+                del chunks[idx]['score']
+                del chunks[idx]['pos']
+            self._checksums = chunks
         self._filesize = tarinfo.size
 
         # XATTR
@@ -137,6 +159,10 @@ class OioTarEntry(object):
     @property
     def buf(self):
         return self._buf
+
+    @property
+    def checksums(self):
+        return self._checksums
 
 
 class LimitedStream(object):
@@ -697,7 +723,8 @@ class ContainerBackup(RedisConn, WerkzeugApp):
                 'hdr_blocks': tar.header_blocks,
                 'blocks': tar.header_blocks + tar.data_blocks,
                 'start_block': start_block,
-                'slo': tar.slo
+                'slo': tar.slo,
+                'checksums': tar.checksums,
             }
             start_block += entry['blocks']
             entry['end_block'] = start_block - 1
