@@ -25,8 +25,12 @@ from collections import OrderedDict
 import math
 import re
 import os
+import pickle
 from tarfile import TarInfo, REGTYPE, NUL, PAX_FORMAT, BLOCKSIZE, XHDTYPE, \
-                    DIRTYPE, AREGTYPE
+                    DIRTYPE, AREGTYPE, InvalidHeaderError
+
+from md5py import MD5
+
 
 from redis import ConnectionError
 from werkzeug.wrappers import Response
@@ -168,20 +172,92 @@ class OioTarEntry(object):
 class LimitedStream(object):
     """Wrap a stream to read no more than size bytes from input stream"""
 
-    def __init__(self, fd, size):
+    def __init__(self, fd, size, entry=None, offset=0):
         self.fd = fd
         self.max_size = size
         self.pos = 0
+        self.entry = entry
+        self.chk = None
+        if entry:
+            self.chk = entry.get('checksums')
+
+        self.offset = offset
+        self.md5 = None
+        self.current_chunk = None
+        self.find_chunk()
+
+    def find_chunk(self):
+        if not self.chk:
+            self.current_chunk = None
+            return
+
+        for idx, item in self.chk.items():
+            val = item
+            if (self.offset >= val['offset']
+                    and self.offset < val['offset'] + val['size']):
+                self.current_chunk = val
+
+                if val['offset'] == self.offset:
+                    self.md5 = MD5()
+                else:
+                    self.md5 = pickle.loads(val['md5'])
+                self.current_chunk_idx = idx
+                return
+        if self.offset < self.entry['size']:
+            raise Exception("No chunk found for current offset")
 
     def read(self, block=-1):
         if self.pos >= self.max_size:
+            # save current MD5 object in current_check
+            if self.current_chunk:
+                self.current_chunk['md5'] = pickle.dumps(self.md5)
+                self.md5 = None
+                self.current_chunk = None
             return ""
+
         if block < 0:
             block = 1024 * 1024 * 10
         block = min(block, self.max_size - self.pos)
         data = self.fd.read(block)
+
         self.pos += len(data)
-        return data
+        if not self.current_chunk:
+            return data
+
+        if (self.offset + len(data) <
+                self.current_chunk['offset'] + self.current_chunk['size']):
+            self.offset += len(data)
+            if self.md5:
+                self.md5.update(data)
+
+            return data
+
+        to_ret = data
+        while (self.offset + len(data) >=
+                self.current_chunk['offset'] + self.current_chunk['size']):
+
+            # update md5 with proper size
+            used = (self.current_chunk['offset'] + self.current_chunk['size']
+                    - self.offset)
+
+            self.md5.update(data[0:used])
+            if self.md5.hexdigest().upper() != self.current_chunk['hash']:
+                raise IOError("Chunk has invalid checksum, aborting")
+            self.current_chunk['verified'] = True
+
+            # align offset on boundary
+            self.offset += used
+            self.find_chunk()
+            data = data[used:]
+
+            if len(data) == 0:
+                break
+
+        self.offset += len(data)
+        if self.md5:
+            self.md5.update(data)
+
+        return to_ret
 
 
 class ContainerTarFile(object):
@@ -399,8 +475,8 @@ class ContainerRestore(object):
     MODE_RANGE = 2
 
     def __init__(self, redis, proxy, logger):
-        self.cur_state = None
-        self._range = (None, None)
+        self.cur_state = {'offset_block': 0, 'offset': 0}
+        self._range = (0, 0)
         self.req = None
         self.req_size = -1
         self.append = False
@@ -430,7 +506,11 @@ class ContainerRestore(object):
                 'start': -1,
                 'end': -1,
                 'manifest': None,
-                'offset': 0}  # block offset when appending on existing object
+                'entry': None,  # current entry in process
+                # block offset when appending on existing object
+                'offset_block': 0,
+                # block offset in data (w/o headers) when appending
+                'offset': 0}
             return
 
         if not data:
@@ -448,20 +528,23 @@ class ContainerRestore(object):
                 continue
             if self._range[0] == entry['start_block']:
                 self.append = False
+                self.cur_state['offset_block'] = 0
                 self.cur_state['offset'] = 0
                 break
             if self._range[0] >= entry['start_block'] \
                     + entry['hdr_blocks']:
                 self.append = True
 
+                self.cur_state['entry'] = entry
                 self.inf = TarInfo()
                 self.inf.name = entry['name']
                 offset = (self._range[0] - entry['start_block']
                           - entry['hdr_blocks'])
+                self.cur_state['offset'] = offset * BLOCKSIZE
                 self.inf.size = entry['size'] - offset * BLOCKSIZE
                 self.inf.size = min(self.inf.size, self.req_size)
-                self.cur_state['offset'] = (self._range[0]
-                                            - entry['start_block'])
+                self.cur_state['offset_block'] = (self._range[0]
+                                                  - entry['start_block'])
                 break
             raise UnprocessableEntity('Header is broken')
 
@@ -487,9 +570,15 @@ class ContainerRestore(object):
             return False
 
         self.inf = TarInfo.frombuf(buf)
+
         if self.mode == self.MODE_RANGE:
             self.inf.size = min(self.req_size - self.state['consumed'],
                                 self.inf.size)
+
+        if 'manifest' in self.cur_state and self.cur_state['manifest']:
+            for entry in self.cur_state['manifest']:
+                if entry['name'] == self.inf.name:
+                    self.cur_state['entry'] = entry
         return True
 
     def parse_xhd_type(self, hdrs):
@@ -521,8 +610,8 @@ class ContainerRestore(object):
             assert not hdrs, "invalid sequence in TAR"
             manifest = json.loads(self.read(self.inf.size),
                                   object_pairs_hook=OrderedDict)
+            self.cur_state['manifest'] = manifest
             if self.mode == self.MODE_RANGE:
-                self.cur_state['manifest'] = manifest
                 self.cur_state['last_block'] = max(
                     [x['end_block'] for x in manifest]) + 1
             return
@@ -532,24 +621,38 @@ class ContainerRestore(object):
             kwargs['mime_type'] = hdrs['mime_type']
             del hdrs['mime_type']
 
-        data = LimitedStream(self.req.stream, self.inf.size)
+        data = LimitedStream(self.req.stream, self.inf.size,
+                             entry=self.cur_state.get('entry'),
+                             offset=self.cur_state.get('offset'))
         try:
             _, size, _ = self.proxy.object_create(
                 account, container, obj_name=self.inf.name, append=self.append,
                 file_or_path=data, **kwargs)
-        except Exception:
+        except (Exception, exc.SourceReadError) as ex:
             # no data was written if error occurs during object_create
             # we just have to update our state_machine offset regarding
             # current object
-            if self.mode == self.MODE_FULL:
+            if self.cur_state.get('manifest') is None:
                 raise
+
+            entry = None
             for entry in self.cur_state['manifest']:
                 if entry['name'] == self.inf.name:
                     break
             else:  # it should not happen
                 raise BadRequest("Invalid internal state")
+
+            # since an error has occured, we have to reset
+            # current offset to start of current chunk
+            # and remove stored checksum if set
+
+            if isinstance(ex, exc.SourceReadError):
+                self.logger.error("Invalid checksum detected for %s",
+                                  self.inf.name)
+                raise BadRequest("Checksum error %s" % self.inf.name)
+
             self.cur_state['end'] = (entry['start_block']
-                                     + self.cur_state['offset'])
+                                     + self.cur_state['offset_block'])
             self.redis.set("restore:%s:%s" % (account, container),
                            json.dumps(self.cur_state, sort_keys=True),
                            ex=ContainerBackup.REDIS_TIMEOUT)
@@ -560,12 +663,15 @@ class ContainerRestore(object):
             self.proxy.object_set_properties(account, container,
                                              self.inf.name,
                                              properties=hdrs)
+
         if size != self.inf.size:
             raise UnprocessableEntity(
                 "Object created is smaller than expected")
 
         self.state['consumed'] += size
+
         if self.mode == self.MODE_RANGE:
+            self.cur_state['offset_block'] = 0
             self.cur_state['offset'] = 0
         self.append = False
 
