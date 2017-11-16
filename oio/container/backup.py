@@ -712,6 +712,24 @@ class ContainerRestore(object):
         if (self.mode == self.MODE_FULL
                 or self._range[1] == self.cur_state['last_block']):
             code = 201
+
+            manifest = self.cur_state.get('manifest')
+            if manifest:
+                for entry in self.cur_state.get('manifest'):
+                    verified = 0
+                    nb = 0
+                    # check that each chunk of each object has been checked
+                    for idx in entry.get('checksums', []):
+                        if (entry['checksums'][idx].get('verified')
+                                or entry['checksums'][idx].get('size') == 0):
+                            verified += 1
+                        nb += 1
+                    if verified != nb:
+                        self.logger.warn("%s not verified !",
+                                         entry.get('name'))
+            else:
+                self.logger.info("no manifest, checksums not available")
+
             self.redis.delete("restore:%s:%s" % (account, container))
         else:
             code = 206
