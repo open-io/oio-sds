@@ -136,6 +136,7 @@ class LinkHandler(_WriteHandler):
                 chunks = handler.link()
             except Exception as ex:
                 if isinstance(ex, exc.UnfinishedUploadException):
+                    # pylint: disable=no-member
                     content_chunks = content_chunks + \
                             ex.chunks_already_uploaded
                     ex = ex.exception
