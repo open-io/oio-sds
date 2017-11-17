@@ -14,6 +14,7 @@
 # License along with this library.
 
 import unittest
+from six import itervalues, iteritems
 
 from mock import MagicMock as Mock
 
@@ -148,7 +149,7 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         mapping = self.make_mapping()
         mapping.bootstrap()
         n_pfx_by_svc = mapping.count_pfx_by_svc()
-        for count in n_pfx_by_svc.itervalues():
+        for count in itervalues(n_pfx_by_svc):
             self.assertIn(count, range(mapping.num_bases() - 5000,
                                        mapping.num_bases() + 5000))
 
@@ -161,7 +162,7 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         n_pfx_by_svc = mapping.count_pfx_by_svc()
         ideal = mapping.num_bases() * replicas / n
         arange = range(int(ideal * 0.8), int(ideal * 1.2))
-        for count in n_pfx_by_svc.itervalues():
+        for count in itervalues(n_pfx_by_svc):
             self.assertIn(count, arange)
 
     def _test_bootstrap_rebalanced(self, n_svc, replicas,
@@ -176,7 +177,7 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         n_pfx_by_svc = mapping.count_pfx_by_svc()
         ideal = mapping.num_bases() * replicas / n_svc
         arange = range(int(ideal * 0.92), int(ideal * 1.08))
-        for count in n_pfx_by_svc.itervalues():
+        for count in itervalues(n_pfx_by_svc):
             self.assertIn(count, arange)
 
     def test_bootstrap_4_services_rebalanced(self):
@@ -215,7 +216,7 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         ideal = mapping.num_bases() * replicas / n
         arange = range(int(ideal * 0.95), int(ideal * 1.05))
 
-        svc = mapping.services.values()[0]
+        svc = list(mapping.services.values())[0]
         svc["score"] = 0
         self.logger.info("Decommissioning %s", svc["addr"])
         mapping.decommission(svc)
@@ -223,7 +224,7 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         ideal = mapping.num_bases() * replicas / (n-1)
         arange = range(int(ideal * 0.95), int(ideal * 1.05))
         n_pfx_by_svc = mapping.count_pfx_by_svc()
-        for svc1, count in n_pfx_by_svc.iteritems():
+        for svc1, count in iteritems(n_pfx_by_svc):
             if svc1 == svc["addr"]:
                 self.assertEqual(0, count)
             else:
@@ -238,7 +239,7 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         mapping.rebalance()
         self.assertTrue(mapping.check_replicas())
 
-        svc = mapping.services.values()[0]
+        svc = list(mapping.services.values())[0]
         for base in [b for b in svc['bases']]:
             old_peers = [x['addr'] for x in mapping.services_by_base[base]]
             self.logger.info("Decommissioning base %s from %s",
@@ -270,7 +271,7 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         mapping._admin.election_status = Mock(return_value={'peers': {}})
         mapping.load_json(mapping_str)
 
-        svc = mapping.services.values()[0]
+        svc = list(mapping.services.values())[0]
         self.logger.info("Decommissioning everything from %s", svc['addr'])
         self.logger.info("Bases: %s", svc['bases'])
         moved = [b for b in svc['bases']]

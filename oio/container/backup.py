@@ -16,6 +16,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from __future__ import print_function
+from six import string_types
+from six.moves import range
 try:
     import simplejson as json
 except ImportError:
@@ -137,7 +139,7 @@ class OioTarEntry(object):
         # XATTR
         # do we have to store basic properties like policy, ... ?
         for key, val in properties.items():
-            assert isinstance(val, basestring), \
+            assert isinstance(val, string_types), \
                 "Invalid type for %s:%s:%s" % (self.acct, self.name, key)
             if self.slo and key in SLO_HEADERS:
                 continue
@@ -300,7 +302,7 @@ class ContainerTarFile(object):
         if range_[0] < entry['hdr_blocks']:
             tar = OioTarEntry(self.storage, self.acct, self.container, name)
 
-            for bl in xrange(entry['hdr_blocks']):
+            for bl in range(entry['hdr_blocks']):
                 if bl >= range_[0] and bl <= range_[1]:
                     mem += tar.buf[bl * BLOCKSIZE:bl * BLOCKSIZE + BLOCKSIZE]
             range_ = (entry['hdr_blocks'], range_[1])
@@ -387,7 +389,7 @@ class ContainerTarFile(object):
             tar = OioTarEntry(self.storage, self.acct, self.container,
                               name, data=struct)
 
-            for bl in xrange(entry['hdr_blocks']):
+            for bl in range(entry['hdr_blocks']):
                 if bl >= range_[0] and bl <= range_[1]:
                     mem += tar.buf[bl * BLOCKSIZE:bl * BLOCKSIZE + BLOCKSIZE]
             range_ = (entry['hdr_blocks'], range_[1])
