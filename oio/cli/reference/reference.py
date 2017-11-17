@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from six import iteritems
 from logging import getLogger
 from cliff import command, lister, show
 
@@ -68,9 +69,9 @@ class ShowReference(show.ShowOne):
             parsed_args.reference)
         info = {'account': account,
                 'name': reference}
-        for k, v in data['properties'].iteritems():
+        for k, v in iteritems(data['properties']):
             info['meta.' + k] = v
-        return zip(*sorted(info.iteritems()))
+        return list(zip(*sorted(info.items())))
 
 
 class CreateReference(lister.Lister):
@@ -376,4 +377,4 @@ class LocateReference(show.ShowOne):
         for srv_type in ['meta0', 'meta1']:
             info[srv_type] = ', '.join(h for h in info[srv_type])
 
-        return zip(*sorted(info.iteritems()))
+        return list(zip(*sorted(info.items())))

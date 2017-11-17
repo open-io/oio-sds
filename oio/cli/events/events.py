@@ -34,7 +34,7 @@ class StatsEvents(show.ShowOne):
         self.log.debug('take_action(%s)', parsed_args)
 
         data = self.app.client_manager.event.stats(parsed_args.tube)
-        return zip(*sorted(data.iteritems()))
+        return list(zip(*sorted(data.items())))
 
 
 class EventsExhume(show.ShowOne):

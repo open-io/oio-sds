@@ -100,7 +100,7 @@ class AccountClient(HttpApi):
                     self._refresh_endpoint()
                 except Exception as exc:
                     self.logger.warn("%s", exc)
-            raise exc_info[0], exc_info[1], exc_info[2]
+            raise exc_info[0](exc_info[1]).with_traceback(exc_info[2])
         return resp, body
 
     def account_create(self, account, **kwargs):

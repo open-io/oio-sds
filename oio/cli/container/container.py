@@ -15,6 +15,7 @@
 
 """Container-related commands"""
 
+from six import iteritems
 from logging import getLogger
 from cliff import command, show, lister
 from time import time
@@ -252,9 +253,9 @@ class ShowContainer(show.ShowOne):
                                     "Namespace default"),
             'status': OIO_DB_STATUS_NAME.get(sys.get('sys.status'), "Unknown"),
         }
-        for k, v in data['properties'].iteritems():
+        for k, v in iteritems(data['properties']):
             info['meta.' + k] = v
-        return zip(*sorted(info.iteritems()))
+        return list(zip(*sorted(info.items())))
 
 
 class ListContainer(lister.Lister):
@@ -491,7 +492,7 @@ class LocateContainer(show.ShowOne):
 
         for stype in ["meta0", "meta1", "meta2"]:
             info[stype] = ', '.join(info[stype])
-        return zip(*sorted(info.iteritems()))
+        return list(zip(*sorted(info.items())))
 
 
 class PurgeContainer(command.Command):

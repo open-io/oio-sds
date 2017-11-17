@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from six import iteritems
 from oio.api.base import HttpApi
 from oio.common.exceptions import ClientException, NotFound, VolumeException
 from oio.common.exceptions import ServiceUnavailable, ServerException
@@ -229,7 +230,7 @@ class RdirClient(HttpApi):
                 'content_id': content_id,
                 'chunk_id': chunk_id}
 
-        for key, value in data.iteritems():
+        for key, value in iteritems(data):
             body[key] = value
 
         self._rdir_request(volume_id, 'POST', 'push', create=True,

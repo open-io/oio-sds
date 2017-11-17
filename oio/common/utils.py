@@ -22,7 +22,12 @@ from random import getrandbits
 from io import RawIOBase
 from itertools import islice
 from codecs import getdecoder, getencoder
-from urllib import quote as _quote
+from six.moves import range
+try:
+    from urllib.parse import quote as _quote
+except ImportError:
+    from urllib import quote as _quote
+from six import text_type
 from oio.common.exceptions import OioException
 
 
@@ -38,10 +43,22 @@ utf8_encoder = getencoder('utf-8')
 
 
 def quote(value, safe='/'):
-    if isinstance(value, unicode):
+    if isinstance(value, text_type):
         (value, _len) = utf8_encoder(value, 'replace')
     (valid_utf8_str, _len) = utf8_decoder(value, 'replace')
     return _quote(valid_utf8_str.encode('utf-8'), safe)
+
+
+def encode(input, codec='utf-8'):
+    """Recursively encode a list of dictionnaries"""
+    if isinstance(input, dict):
+        return {key: encode(value, codec) for key, value in input.items()}
+    elif isinstance(input, list):
+        return [encode(element, codec) for element in input]
+    elif isinstance(input, text_type):
+        return input.encode(codec)
+    else:
+        return input
 
 
 def set_fd_non_blocking(fd):
@@ -127,14 +144,14 @@ class RingBuffer(list):
         raise self.InvalidOperation('Delete impossible in RingBuffer')
 
     def __iter__(self):
-        for i in xrange(0, self._count):
+        for i in range(0, self._count):
             yield self[i]
 
 
 def cid_from_name(account, ref):
     h = sha256()
     for v in [account, '\0', ref]:
-        h.update(v)
+        h.update(v.encode())
     return h.hexdigest().upper()
 
 

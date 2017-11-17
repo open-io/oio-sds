@@ -14,7 +14,11 @@
 # License along with this library.
 
 import warnings
-from urllib import unquote_plus
+
+try:
+    from urllib.parse import unquote_plus
+except ImportError:
+    from urllib import unquote_plus
 from oio.common.client import ProxyClient
 from oio.common.decorators import ensure_headers
 from oio.common.json import json

@@ -11,3 +11,4 @@ requests<2.13.0
 simplejson>=2.0.9
 urllib3>=1.13.1
 werkzeug>=0.9.1
+six==1.11.0

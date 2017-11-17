@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from six import iteritems
 from logging import getLogger
 from cliff.lister import Lister
 
@@ -81,7 +82,7 @@ class ElectionPing(ElectionCmd):
             cid=cid, timeout=parsed_args.timeout)
 
         columns = ('Id', 'Status', 'Message')
-        data = sorted(data.iteritems())
+        data = sorted(iteritems(data))
         results = ((k, v["status"]["status"], v["status"]["message"]
                     ) for k, v in data)
         return columns, results
@@ -100,7 +101,7 @@ class ElectionStatus(ElectionCmd):
             cid=cid, timeout=parsed_args.timeout)
 
         columns = ('Id', 'Status', 'Message')
-        data = sorted(data["peers"].iteritems())
+        data = sorted(iteritems(data["peers"]))
         results = ((k, v["status"]["status"], v["status"]["message"]
                     ) for k, v in data)
         return columns, results
@@ -119,7 +120,7 @@ class ElectionDebug(ElectionCmd):
             cid=cid, timeout=parsed_args.timeout)
 
         columns = ('Id', 'Status', 'Message', 'Body')
-        data = sorted(data.iteritems())
+        data = sorted(iteritems(data))
         results = ((k, v["status"]["status"], v["status"]["message"],
                     format_json(parsed_args, v["body"])
                     ) for k, v in data)
@@ -139,7 +140,7 @@ class ElectionSync(ElectionCmd):
             timeout=parsed_args.timeout)
 
         columns = ('Id', 'Status', 'Message', 'Body')
-        data = sorted(data.iteritems())
+        data = sorted(iteritems(data))
         results = ((k, v["status"]["status"], v["status"]["message"],
                     format_json(parsed_args, v["body"])
                     ) for k, v in data)
@@ -159,7 +160,7 @@ class ElectionLeave(ElectionCmd):
             timeout=parsed_args.timeout)
 
         columns = ('Id', 'Status', 'Message')
-        data = sorted(data.iteritems())
+        data = sorted(iteritems(data))
         results = ((k, v["status"]["status"], v["status"]["message"])
                    for k, v in data)
         return columns, results

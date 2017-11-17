@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+from six import iteritems
 from oio.common import exceptions as exc
 from oio.common.xattr import read_user_xattr
 from oio.common.constants import chunk_xattr_keys, chunk_xattr_keys_optional, \
@@ -35,7 +36,7 @@ def check_volume(volume_path):
 def read_chunk_metadata(fd):
     raw_meta = read_user_xattr(fd)
     meta = {}
-    for k, v in chunk_xattr_keys.iteritems():
+    for k, v in iteritems(chunk_xattr_keys):
         if v not in raw_meta:
             if k not in chunk_xattr_keys_optional:
                 raise exc.MissingAttribute(v)

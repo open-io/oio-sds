@@ -17,7 +17,10 @@ import collections
 import math
 import hashlib
 import logging
-from urlparse import urlparse
+try:
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
 from eventlet import Queue, Timeout, GreenPile
 from greenlet import GreenletExit
 from oio.common import exceptions

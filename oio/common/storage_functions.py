@@ -15,6 +15,7 @@
 
 
 import random
+from six import iteritems
 
 from oio.api.io import ChunkReader, READ_CHUNK_SIZE
 from oio.api.ec import ECChunkDownloadHandler
@@ -135,7 +136,7 @@ def _sort_chunks(raw_chunks, ec_security):
             chunks[position].append(chunk)
 
     # for each position, remove incoherent chunks
-    for pos, local_chunks in chunks.iteritems():
+    for pos, local_chunks in iteritems(chunks):
         if len(local_chunks) < 2:
             continue
         byhash = dict()
