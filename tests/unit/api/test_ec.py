@@ -65,7 +65,7 @@ class TestEC(unittest.TestCase):
     def meta_chunk_copy(self):
         return deepcopy(self._meta_chunk)
 
-    def checksum(self, d=''):
+    def checksum(self, d=b''):
         return md5(d)
 
     def test_write_simple(self):
@@ -415,14 +415,14 @@ class TestEC(unittest.TestCase):
         }
 
         responses = [
-            FakeResponse(200, '', headers),
-            FakeResponse(200, '', headers),
-            FakeResponse(200, '', headers),
-            FakeResponse(200, '', headers),
-            FakeResponse(200, '', headers),
-            FakeResponse(200, '', headers),
-            FakeResponse(200, '', headers),
-            FakeResponse(200, '', headers),
+            FakeResponse(200, b'', headers),
+            FakeResponse(200, b'', headers),
+            FakeResponse(200, b'', headers),
+            FakeResponse(200, b'', headers),
+            FakeResponse(200, b'', headers),
+            FakeResponse(200, b'', headers),
+            FakeResponse(200, b'', headers),
+            FakeResponse(200, b'', headers),
         ]
 
         def get_response(req):
@@ -547,12 +547,12 @@ class TestEC(unittest.TestCase):
         headers = {}
         # add 2 failures
         responses = [
-            FakeResponse(404, '', headers),
+            FakeResponse(404, b'', headers),
             FakeResponse(200, ec_chunks[1], headers),
             FakeResponse(200, ec_chunks[2], headers),
             FakeResponse(200, ec_chunks[3], headers),
             FakeResponse(200, ec_chunks[4], headers),
-            FakeResponse(404, '', headers),
+            FakeResponse(404, b'', headers),
             FakeResponse(200, ec_chunks[6], headers),
             FakeResponse(200, ec_chunks[7], headers),
         ]
@@ -722,7 +722,7 @@ class TestEC(unittest.TestCase):
                 base_responses.append(FakeResponse(200, ec_chunk, headers))
             responses = base_responses
             error_idx = random.randint(0, len(responses) - 1)
-            responses[error_idx] = FakeResponse(error, '', {})
+            responses[error_idx] = FakeResponse(error, b'', {})
 
             def get_response(req):
                 return responses.pop(0) if responses else FakeResponse(404)
@@ -762,7 +762,7 @@ class TestEC(unittest.TestCase):
                 base_responses.append(FakeResponse(200, ec_chunk, headers))
             responses = base_responses
             error_idx = random.randint(0, len(responses) - 1)
-            responses[error_idx] = FakeResponse(error, '', {})
+            responses[error_idx] = FakeResponse(error, b'', {})
 
             def get_response(req):
                 return responses.pop(0) if responses else FakeResponse(404)
@@ -791,7 +791,7 @@ class TestEC(unittest.TestCase):
 
         # add errors on other chunks
         errors = [Timeout(), 404, Exception('failure')]
-        responses = [FakeResponse(random.choice(errors), '', {}) for i in
+        responses = [FakeResponse(random.choice(errors), b'', {}) for i in
                      range(nb - 1)]
 
         def get_response(req):

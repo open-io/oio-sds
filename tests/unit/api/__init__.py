@@ -42,7 +42,7 @@ class FakeDirectoryClient(DirectoryClient):
 
 
 class FakeResponse(object):
-    def __init__(self, status, body='', headers=None, slow=0):
+    def __init__(self, status, body=b'', headers=None, slow=0):
         self.status = status
         self.body = body
         self.headers = HeadersDict(headers)
@@ -73,19 +73,19 @@ class FakeResponse(object):
 
 
 def decode_chunked_body(raw_body):
-    body = ''
+    body = b''
     remaining = raw_body
     trailers = {}
     reading_trailers = False
     while remaining:
         if reading_trailers:
-            header, remaining = remaining.split('\r\n', 1)
+            header, remaining = remaining.split(b'\r\n', 1)
             if header:
-                header_key, header_value = header.split(': ', 1)
+                header_key, header_value = header.split(b': ', 1)
                 trailers[header_key] = header_value
         else:
             # get the hexa_length
-            hexa_length, remaining = remaining.split('\r\n', 1)
+            hexa_length, remaining = remaining.split(b'\r\n', 1)
             length = int(hexa_length, 16)
             if length == 0:
                 # reached the end
@@ -99,4 +99,4 @@ def decode_chunked_body(raw_body):
 
 
 def empty_stream():
-    return BytesIO("")
+    return BytesIO(b'')

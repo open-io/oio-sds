@@ -256,11 +256,11 @@ class TestChunksHelper(unittest.TestCase):
 
     def test_iterator(self):
         chunk_iter = iter(self.dup_chunks)
-        self.assertEqual(chunk_iter.next().raw(), self.dup_c1_1)
-        self.assertEqual(chunk_iter.next().raw(), self.dup_c1_2)
-        self.assertEqual(chunk_iter.next().raw(), self.dup_c2_1)
-        self.assertEqual(chunk_iter.next().raw(), self.dup_c2_2)
-        self.assertRaises(StopIteration, chunk_iter.next)
+        self.assertEqual(next(chunk_iter).raw(), self.dup_c1_1)
+        self.assertEqual(next(chunk_iter).raw(), self.dup_c1_2)
+        self.assertEqual(next(chunk_iter).raw(), self.dup_c2_1)
+        self.assertEqual(next(chunk_iter).raw(), self.dup_c2_2)
+        self.assertRaises(StopIteration, lambda: next(chunk_iter))
 
     def test_getitem(self):
         self.assertEqual(self.dup_chunks[0].raw(), self.dup_c1_1)
