@@ -60,7 +60,7 @@ class TestReplication(unittest.TestCase):
     def meta_chunk(self):
         return self._meta_chunk
 
-    def checksum(self, d=''):
+    def checksum(self, d=b''):
         return hashlib.md5(d)
 
     def test_write_simple(self):
@@ -229,7 +229,7 @@ class TestReplication(unittest.TestCase):
 
     def test_write_transfer(self):
         checksum = self.checksum()
-        test_data = ('1234' * 1024)[:-10]
+        test_data = (b'1234' * 1024)[:-10]
         size = len(test_data)
         meta_chunk = self.meta_chunk()
         nb = len(meta_chunk)
@@ -253,7 +253,7 @@ class TestReplication(unittest.TestCase):
         bodies = []
 
         for conn_id, info in put_reqs.items():
-            body, trailers = decode_chunked_body(''.join(info['parts']))
+            body, trailers = decode_chunked_body(b''.join(info['parts']))
             # TODO check trailers?
             bodies.append(body)
 
@@ -300,7 +300,7 @@ class TestReplication(unittest.TestCase):
             algo_new.assert_not_called()
 
     def test_read(self):
-        test_data = ('1234' * 1024)[:-10]
+        test_data = (b'1234' * 1024)[:-10]
         data_checksum = self.checksum(test_data).hexdigest()
         meta_chunk = self.meta_chunk()
 
@@ -314,7 +314,7 @@ class TestReplication(unittest.TestCase):
             return responses.pop(0) if responses else FakeResponse(404)
 
         headers = {}
-        data = ''
+        data = b''
         parts = []
         with set_http_requests(get_response) as conn_record:
             reader = io.ChunkReader(iter(meta_chunk), None, headers)
@@ -330,7 +330,7 @@ class TestReplication(unittest.TestCase):
         self.assertEqual(len(conn_record), 1)
 
     def test_read_zero_byte(self):
-        test_data = ''
+        test_data = b''
         data_checksum = self.checksum(test_data).hexdigest()
         meta_chunk = self.meta_chunk()
 
@@ -344,7 +344,7 @@ class TestReplication(unittest.TestCase):
             return responses.pop(0) if responses else FakeResponse(404)
 
         headers = {}
-        data = ''
+        data = b''
         parts = []
         with set_http_requests(get_response) as conn_record:
             reader = io.ChunkReader(iter(meta_chunk), None, headers)
@@ -360,7 +360,7 @@ class TestReplication(unittest.TestCase):
         self.assertEqual(len(conn_record), 1)
 
     def test_read_range(self):
-        test_data = ('1024' * 1024)[:-10]
+        test_data = (b'1024' * 1024)[:-10]
         meta_chunk = self.meta_chunk()
 
         meta_start = 1
@@ -384,7 +384,7 @@ class TestReplication(unittest.TestCase):
             return responses.pop(0) if responses else FakeResponse(404)
 
         headers = {'Range': 'bytes=%s-%s' % (meta_start, meta_end)}
-        data = ''
+        data = b''
         parts = []
         with set_http_requests(get_response) as conn_record:
             reader = io.ChunkReader(iter(meta_chunk), None, headers)
@@ -420,12 +420,12 @@ class TestReplication(unittest.TestCase):
             self.assertEqual(len(conn_record), self.storage_method.nb_copy)
 
     def test_read_404_resume(self):
-        test_data = ('1234' * 1024)[:-10]
+        test_data = (b'1234' * 1024)[:-10]
         data_checksum = self.checksum(test_data).hexdigest()
         meta_chunk = self.meta_chunk()
 
         responses = [
-            FakeResponse(404, ''),
+            FakeResponse(404, b''),
             FakeResponse(200, test_data),
             FakeResponse(200, test_data),
         ]
@@ -434,7 +434,7 @@ class TestReplication(unittest.TestCase):
             return responses.pop(0) if responses else FakeResponse(404)
 
         headers = {}
-        data = ''
+        data = b''
         parts = []
         with set_http_requests(get_response) as conn_record:
             reader = io.ChunkReader(iter(meta_chunk), None, headers)
@@ -453,7 +453,7 @@ class TestReplication(unittest.TestCase):
         # TODO verify ranges
 
     def test_read_timeout(self):
-        test_data = ('1234' * 1024*1024)[:-10]
+        test_data = (b'1234' * 1024 * 1024)[:-10]
         data_checksum = self.checksum(test_data).hexdigest()
         meta_chunk = self.meta_chunk()
 
@@ -468,7 +468,7 @@ class TestReplication(unittest.TestCase):
             return responses.pop(0) if responses else FakeResponse(404)
 
         headers = {}
-        data = ''
+        data = b''
         parts = []
         with set_http_requests(get_response) as conn_record:
             reader = io.ChunkReader(iter(meta_chunk), None, headers,
@@ -490,7 +490,7 @@ class TestReplication(unittest.TestCase):
         # TODO verify ranges
 
     def test_read_timeout_resume(self):
-        test_data = ('1234' * 1024*1024)[:-10]
+        test_data = (b'1234' * 1024 * 1024)[:-10]
         data_checksum = self.checksum(test_data).hexdigest()
         meta_chunk = self.meta_chunk()
 
@@ -505,7 +505,7 @@ class TestReplication(unittest.TestCase):
             return responses.pop(0) if responses else FakeResponse(404)
 
         headers = {}
-        data = ''
+        data = b''
         parts = []
         with set_http_requests(get_response) as conn_record:
             reader = io.ChunkReader(iter(meta_chunk), None, headers,
