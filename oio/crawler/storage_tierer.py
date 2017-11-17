@@ -172,7 +172,7 @@ class StorageTierer(Daemon):
                 "No new policy specified for storage tiering "
                 "(token '%s'" % CONF_NEW_POLICY)
         if conf.get('syslog_prefix'):
-            print "Logging to syslog, with prefix '%(syslog_prefix)s'" % conf
+            print("Logging to syslog, with prefix '%(syslog_prefix)s'" % conf)
 
     def run(self, *args, **kwargs):
         while True:

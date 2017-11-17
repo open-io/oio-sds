@@ -16,6 +16,7 @@
 
 from time import time
 
+from six import text_type
 import redis
 import redis.sentinel
 from werkzeug.exceptions import NotFound, Conflict, BadRequest
@@ -184,7 +185,7 @@ class AccountBackend(RedisConn):
     @staticmethod
     def ckey(account, name):
         """Build the key of a container description"""
-        return 'container:%s:%s' % (account, unicode(name))
+        return 'container:%s:%s' % (account, text_type(name))
 
     def create_account(self, account_id):
         conn = self.conn

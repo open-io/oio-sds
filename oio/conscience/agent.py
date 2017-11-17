@@ -16,6 +16,7 @@
 import re
 import os
 
+from six import iteritems
 import pkg_resources
 from eventlet import GreenPool, sleep
 
@@ -229,7 +230,7 @@ class ConscienceAgent(Daemon):
 
     def init_watchers(self, services):
         watchers = []
-        for _name, conf in services.iteritems():
+        for _name, conf in iteritems(services):
             try:
                 watchers.append(ServiceWatcher(self.conf, conf))
             except Exception:

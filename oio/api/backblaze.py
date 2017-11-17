@@ -16,7 +16,10 @@
 import logging
 import hashlib
 from tempfile import TemporaryFile
-from urlparse import urlparse
+try:
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
 from oio.api import io
 from oio.common.exceptions import SourceReadError, OioException
 from oio.api.backblaze_http import Backblaze, BackblazeException

@@ -13,14 +13,19 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from six import text_type, iteritems
+
 from oio.common.json import json as jsonlib
 from oio.common.http_urllib3 import urllib3, get_pool_manager
 from urllib3.exceptions import MaxRetryError, TimeoutError, HTTPError, \
     NewConnectionError, ProtocolError, ProxyError, ClosedPoolError
-from urllib import urlencode
 from oio.common import exceptions
 from oio.common.constants import ADMIN_HEADER, \
     TIMEOUT_HEADER, PERFDATA_HEADER, CONNECTION_TIMEOUT, READ_TIMEOUT
+try:
+    from urllib.parse import urlencode
+except ImportError:
+    from urllib import urlencode
 
 _POOL_MANAGER_OPTIONS_KEYS = ["pool_connections", "pool_maxsize",
                               "max_retries"]
@@ -55,7 +60,7 @@ class HttpApi(object):
 
         if not pool_manager:
             pool_manager_conf = {k: int(v)
-                                 for k, v in kwargs.iteritems()
+                                 for k, v in iteritems(kwargs)
                                  if k in _POOL_MANAGER_OPTIONS_KEYS}
             pool_manager = get_pool_manager(**pool_manager_conf)
         self.pool_manager = pool_manager
@@ -93,12 +98,12 @@ class HttpApi(object):
         code >= 400
         """
         # Filter arguments that are not recognized by Requests
-        out_kwargs = {k: v for k, v in kwargs.items()
+        out_kwargs = {k: v for k, v in iteritems(kwargs)
                       if k in URLLIB3_REQUESTS_KWARGS}
 
         # Ensure headers are all strings
         if headers:
-            out_headers = {k: str(v) for k, v in headers.items()}
+            out_headers = {k: text_type(v) for k, v in headers.items()}
         else:
             out_headers = dict()
         if self.admin_mode or admin_mode:
@@ -135,8 +140,8 @@ class HttpApi(object):
             out_param = []
             for k, v in params.items():
                 if v is not None:
-                    if isinstance(v, unicode):
-                        v = unicode(v).encode('utf-8')
+                    if isinstance(v, text_type):
+                        v = text_type(v).encode('utf-8')
                     out_param.append((k, v))
             encoded_args = urlencode(out_param)
             url += '?' + encoded_args

@@ -17,10 +17,15 @@ import logging
 import hashlib
 from eventlet import Timeout, GreenPile
 from eventlet.queue import Queue
-from urlparse import urlparse
+try:
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
+from six import text_type
 from oio.common import exceptions as exc
 from oio.common.exceptions import SourceReadError
 from oio.common.http import headers_from_object_metadata
+from oio.common.utils import encode
 from oio.api import io
 from oio.common.constants import CHUNK_HEADERS
 from oio.common import green
@@ -100,7 +105,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                         if len(data) == 0:
                             for conn in current_conns:
                                 if not conn.failed:
-                                    conn.queue.put('0\r\n\r\n')
+                                    conn.queue.put(b'0\r\n\r\n')
                             break
                     self.checksum.update(data)
                     meta_checksum.update(data)
@@ -108,7 +113,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                     # copy current_conns to be able to remove a failed conn
                     for conn in current_conns[:]:
                         if not conn.failed:
-                            conn.queue.put('%x\r\n%s\r\n' % (len(data), data))
+                            conn.queue.put(b'%x\r\n%s\r\n' % (len(data), data))
                         else:
                             current_conns.remove(conn)
                             failed_chunks.append(conn.chunk)
@@ -168,6 +173,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
             hdrs[CHUNK_HEADERS["chunk_pos"]] = chunk["pos"]
             hdrs[CHUNK_HEADERS["chunk_id"]] = chunk_path
             hdrs.update(self.headers)
+            hdrs = encode(hdrs)
 
             with green.ConnectionTimeout(self.connection_timeout):
                 conn = io.http_connect(
@@ -186,6 +192,8 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         """
         while True:
             data = conn.queue.get()
+            if isinstance(data, text_type):
+                data = data.encode('utf-8')
             if not conn.failed:
                 try:
                     with green.ChunkWriteTimeout(self.write_timeout):

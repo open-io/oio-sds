@@ -67,8 +67,8 @@ class StorageMethods(object):
             storage_method, params = parse_chunk_method(chunk_method)
             cls = self.index[storage_method]
         except Exception as exc:
-            raise exceptions.InvalidStorageMethod(str(exc)), \
-                None, sys.exc_info()[2]
+            raise exceptions.InvalidStorageMethod(str(exc)).with_traceback(
+                sys.exc_info()[2])
         params.update(kwargs)
         self.cache[chunk_method] = cls.build(params)
         self.cache[chunk_method].type = storage_method

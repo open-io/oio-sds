@@ -21,7 +21,7 @@ from __future__ import print_function
 import os
 import csv
 import sys
-import cStringIO
+from io import StringIO
 import argparse
 
 from eventlet.event import Event
@@ -428,7 +428,7 @@ def main():
     if not os.isatty(sys.stdin.fileno()):
         source = sys.stdin
     else:
-        source = cStringIO.StringIO(' '.join(args.target))
+        source = StringIO(' '.join(args.target))
     args = csv.reader(source, delimiter=' ')
     for entry in args:
         checker.check(Target(*entry))

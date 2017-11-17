@@ -17,7 +17,7 @@
 import os
 import re
 import pkg_resources
-from ConfigParser import ConfigParser
+from six.moves import configparser
 
 
 DEFAULT_HANDLER = 'egg:oio#default'
@@ -123,9 +123,9 @@ class _Loader(object):
     pass
 
 
-class CustomConfigParser(ConfigParser):
+class CustomConfigParser(configparser.ConfigParser):
     def __init__(self, filename, *args, **kwargs):
-        ConfigParser.__init__(self, *args, **kwargs)
+        configparser.ConfigParser.__init__(self, *args, **kwargs)
         self.filename = filename
 
 

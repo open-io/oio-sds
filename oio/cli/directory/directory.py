@@ -151,7 +151,7 @@ class DirectoryList(DirectoryCmd):
         self.log.debug('take_action(%s)', parsed_args)
         mapping = self.get_prefix_mapping(parsed_args)
         mapping.load(read_timeout=parsed_args.meta0_timeout)
-        print mapping.to_json()
+        print(mapping.to_json())
 
 
 class DirectoryRebalance(DirectoryCmd):
