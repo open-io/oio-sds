@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from six.moves import range
 from hashlib import md5
 
 from werkzeug.exceptions import BadRequest
@@ -86,7 +87,7 @@ def load_sysmeta(request):
 def load_meta_chunk(request, nb_chunks, pos=None):
     h = request.headers
     meta_chunk = []
-    for i in xrange(nb_chunks):
+    for i in range(nb_chunks):
         chunk_url = h['%schunk-%s' % (SYS_PREFIX, i)]
         chunk_pos = '%s.%d' % (pos, i) if pos else str(i)
         chunk = {

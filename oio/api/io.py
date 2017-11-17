@@ -17,7 +17,6 @@ from __future__ import absolute_import
 from io import BufferedReader, RawIOBase, IOBase
 import itertools
 import logging
-from six import text_type
 try:
     from urllib.parse import urlparse
 except ImportError:

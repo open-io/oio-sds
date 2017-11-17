@@ -428,7 +428,7 @@ def main():
     if not os.isatty(sys.stdin.fileno()):
         source = sys.stdin
     else:
-        source = StringIO(' '.join(args.target))
+        source = StringIO(u' '.join(args.target))
     args = csv.reader(source, delimiter=' ')
     for entry in args:
         checker.check(Target(*entry))
