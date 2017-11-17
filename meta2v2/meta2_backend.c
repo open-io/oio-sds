@@ -269,8 +269,9 @@ _is_container_initiated(struct sqlx_sqlite3_s *sq3)
 
 	/* workaround for a known bug, when the container has no flag because
 	 * of some failed replication (yet to be determined) but it is used
-	 * because of a (now-fixed) inexistant checck on the flag. */
-	if (0 < m2db_get_obj_count(sq3) || 0 < m2db_get_size(sq3)) {
+	 * because of a (now-fixed) inexistant check on the flag. */
+	if (sqlx_admin_has(sq3, M2V2_ADMIN_OBJ_COUNT)
+			|| sqlx_admin_has(sq3, M2V2_ADMIN_SIZE)) {
 		GRID_DEBUG("DB partially initiated: [%s][%.s]",
 				sq3->name.base, sq3->name.type);
 		return TRUE;
