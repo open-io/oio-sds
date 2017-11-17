@@ -98,12 +98,15 @@ class IOTest(unittest.TestCase):
 
         chunk = {}
         source = FakeSource(
-            ['1234', 'abcd', '123', '4a', 'bcd1234abcd1234a', 'b'])
+            [b'1234', b'abcd', b'123', b'4a', b'bcd1234abcd1234a', b'b'])
 
         it = reader._create_iter(chunk, source)
 
         data = list(it)
-        self.assertEqual(data, ['1234abcd', '1234abcd', '1234abcd', '1234ab'])
+        self.assertEqual(
+            data,
+            [b'1234abcd', b'1234abcd', b'1234abcd', b'1234ab']
+        )
 
     def test_reader_buf_resume(self):
         chunk = {}
@@ -111,12 +114,12 @@ class IOTest(unittest.TestCase):
         reader = ChunkReader(None, 8, {})
 
         # provide source0 with failure
-        source0 = FakeSource(['1234', 'abcd', '123', None])
+        source0 = FakeSource([b'1234', b'abcd', b'123', None])
 
         it = reader._create_iter(chunk, source0)
         # provide source1 for recovery
-        source1 = FakeSource(['5678efgh'])
+        source1 = FakeSource([b'5678efgh'])
         with patch.object(reader, '_get_source', lambda: (source1, chunk)):
             data = list(it)
 
-        self.assertEqual(data, ['1234abcd', '5678efgh'])
+        self.assertEqual(data, [b'1234abcd', b'5678efgh'])
