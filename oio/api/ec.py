@@ -20,8 +20,11 @@ from oio.common.green import ChunkReadTimeout, ChunkWriteTimeout, \
 import collections
 import math
 import hashlib
-from urlparse import urlparse
 from socket import error as SocketError
+try:
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
 from greenlet import GreenletExit
 
 from oio.api import io

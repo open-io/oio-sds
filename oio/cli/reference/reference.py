@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from logging import getLogger
+from six import iteritems
 
 from oio.cli import Command, Lister, ShowOne
 
@@ -70,9 +71,9 @@ class ShowReference(ShowOne):
         info = {'account': account,
                 'name': reference,
                 'cid': data.get('cid', None)}
-        for k, v in data['properties'].iteritems():
+        for k, v in iteritems(data['properties']):
             info['meta.' + k] = v
-        return zip(*sorted(info.iteritems()))
+        return list(zip(*sorted(info.items())))
 
 
 class CreateReference(Lister):
@@ -396,13 +397,13 @@ class LocateReference(ShowOne):
                 'cid': data.get('cid'),
                 'meta0': [],
                 'meta1': []}
-        for d in data['dir']:
-            if d['type'] == 'meta0':
-                info['meta0'].append(d['host'])
-            elif d['type'] == 'meta1':
-                info['meta1'].append(d['host'])
+        for svc in data['dir']:
+            if svc['type'] == 'meta0':
+                info['meta0'].append(svc['host'])
+            elif svc['type'] == 'meta1':
+                info['meta1'].append(svc['host'])
 
         for srv_type in ['meta0', 'meta1']:
             info[srv_type] = ', '.join(h for h in info[srv_type])
 
-        return zip(*sorted(info.iteritems()))
+        return list(zip(*sorted(info.items())))

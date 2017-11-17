@@ -13,8 +13,9 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
 import random
+
+from six import iteritems
 
 from oio.api.base import HttpApi
 from oio.common.constants import HEADER_PREFIX, REQID_HEADER
@@ -393,7 +394,7 @@ class RdirClient(HttpApi):
                 'content_id': content_id,
                 'chunk_id': chunk_id}
 
-        for key, value in data.iteritems():
+        for key, value in iteritems(data):
             body[key] = value
 
         self._rdir_request(volume_id, 'POST', 'push', create=True,

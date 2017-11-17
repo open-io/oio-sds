@@ -13,9 +13,9 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
 from oio.common.green import GreenPool
 
+from six import iteritems
 import os
 from logging import getLogger
 
@@ -25,6 +25,9 @@ from oio.common.utils import depaginate
 from oio.common.json import json as jsonlib
 from oio.common import exceptions
 
+
+# flatns_manager field is not seen as callable.
+# pylint: disable=not-callable
 
 class ContainerCommandMixin(object):
     """Command taking a container name as parameter"""
@@ -364,9 +367,9 @@ class ShowObject(ObjectCommandMixin, ShowOne):
                 'mtime': 'mtime', 'policy': 'policy'}
         for key0, key1 in conv.items():
             info[key0] = data.get(key1, 'n/a')
-        for k, v in data['properties'].iteritems():
+        for k, v in iteritems(data['properties']):
             info['meta.' + k] = v
-        return zip(*sorted(info.iteritems()))
+        return list(zip(*sorted(info.items())))
 
 
 class SetObject(ObjectCommandMixin, Command):
@@ -680,7 +683,7 @@ class ListObject(ContainerCommandMixin, Lister):
 
             def _format_props(props):
                 prop_list = ["%s=%s" % (k, v) for k, v
-                             in props.iteritems()]
+                             in props.items()]
                 if parsed_args.formatter == 'table':
                     prop_string = "\n".join(prop_list)
                 elif parsed_args.formatter in ('value', 'csv'):

@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+from six import iteritems
 from oio.common import exceptions as exc
 from oio.common.xattr import read_user_xattr
 from oio.common.constants import chunk_xattr_keys, chunk_xattr_keys_optional, \
@@ -100,7 +101,7 @@ def read_chunk_metadata(fd, chunk_id, check_chunk_id=True):
         # that could be deduced from this one.
         missing.append(exc.MissingAttribute(
             CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunk_id))
-    for k, v in chunk_xattr_keys.iteritems():
+    for k, v in iteritems(chunk_xattr_keys):
         if v not in raw_meta:
             if k not in chunk_xattr_keys_optional:
                 missing.append(exc.MissingAttribute(v))

@@ -14,17 +14,22 @@
 # License along with this library.
 
 
+import hashlib
 from oio.common.green import sleep, LightQueue, Timeout, GreenPile
 
-import hashlib
 from socket import error as SocketError
-from urlparse import urlparse
+
+try:
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
+from six import text_type
 
 from oio.api import io
 from oio.common.exceptions import OioTimeout, SourceReadError, \
     SourceReadTimeout
 from oio.common.http import headers_from_object_metadata
-from oio.common.utils import monotonic_time
+from oio.common.utils import encode, monotonic_time
 from oio.common.constants import CHUNK_HEADERS
 from oio.common import green
 from oio.common.logger import get_logger
@@ -109,7 +114,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                         if len(data) == 0:
                             for conn in current_conns:
                                 if not conn.failed:
-                                    conn.queue.put('')
+                                    conn.queue.put(b'')
                             break
                     self.checksum.update(data)
                     if meta_checksum:
@@ -182,6 +187,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
             hdrs[CHUNK_HEADERS["chunk_pos"]] = chunk["pos"]
             hdrs[CHUNK_HEADERS["chunk_id"]] = chunk_path
             hdrs.update(self.headers)
+            hdrs = encode(hdrs)
 
             with green.ConnectionTimeout(self.connection_timeout):
                 if self.perfdata is not None:
@@ -215,6 +221,8 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         conn.upload_start = None
         while True:
             data = conn.queue.get()
+            if isinstance(data, text_type):
+                data = data.encode('utf-8')
             if not conn.failed:
                 try:
                     with green.ChunkWriteTimeout(self.write_timeout):

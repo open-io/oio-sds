@@ -15,20 +15,22 @@
 
 
 from __future__ import absolute_import
-from oio.common.green import sleep, Timeout
 
 from io import BufferedReader, RawIOBase, IOBase
 import itertools
-from urlparse import urlparse
 from socket import error as SocketError
-from oio.common import exceptions as exc
+from six import text_type
+try:
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
+from oio.common import exceptions as exc, green
 from oio.common.constants import REQID_HEADER
 from oio.common.http import parse_content_type,\
     parse_content_range, ranges_from_http_header, http_header_from_ranges
 from oio.common.http_eventlet import http_connect
 from oio.common.utils import GeneratorIO, group_chunk_errors, \
     deadline_to_timeout, monotonic_time, set_deadline_from_read_timeout
-from oio.common import green
 from oio.common.storage_method import STORAGE_METHODS
 from oio.common.logger import get_logger
 
@@ -350,15 +352,15 @@ class ChunkReader(object):
             with green.OioTimeout(self.read_timeout):
                 source = conn.getresponse()
                 source.conn = conn
-        except (SocketError, Timeout) as err:
+        except (SocketError, green.Timeout) as err:
             self.logger.error('Connection failed to %s (reqid=%s): %s',
                               chunk, self.reqid, err)
-            self._resp_by_chunk[chunk["url"]] = (0, str(err))
+            self._resp_by_chunk[chunk["url"]] = (0, text_type(err))
             return False
         except Exception as err:
             self.logger.exception('Connection failed to %s (reqid=%s)',
                                   chunk, self.reqid)
-            self._resp_by_chunk[chunk["url"]] = (0, str(err))
+            self._resp_by_chunk[chunk["url"]] = (0, text_type(err))
             return False
 
         if source.status in (200, 206):
@@ -370,7 +372,7 @@ class ChunkReader(object):
             self.logger.warn("Invalid response from %s (reqid=%s): %d %s",
                              chunk, self.reqid, source.status, source.reason)
             self._resp_by_chunk[chunk["url"]] = (source.status,
-                                                 str(source.reason))
+                                                 text_type(source.reason))
             close_source(source, self.logger)
         return False
 
@@ -464,7 +466,7 @@ class ChunkReader(object):
     def iter_from_resp(self, source, parts_iter, part, chunk):
         bytes_consumed = 0
         count = 0
-        buf = ''
+        buf = b''
         if self.perfdata is not None:
             perfdata_rawx = self.perfdata.setdefault('rawx', dict())
             url_chunk = chunk['url']
@@ -489,7 +491,7 @@ class ChunkReader(object):
                 except exc.EmptyByteRange:
                     # we are done already
                     break
-                buf = ''
+                buf = b''
                 # find a new source to perform recovery
                 new_source, new_chunk = self._get_source()
                 if new_source:
@@ -525,7 +527,7 @@ class ChunkReader(object):
                     else:
                         self.discard_bytes -= len(buf)
                         bytes_consumed += len(buf)
-                        buf = ''
+                        buf = b''
 
                 # no data returned
                 # flush out buffer
@@ -533,7 +535,7 @@ class ChunkReader(object):
                     if buf:
                         bytes_consumed += len(buf)
                         yield buf
-                    buf = ''
+                    buf = b''
                     break
 
                 # If buf_size is defined, yield bounded data buffers
@@ -546,12 +548,12 @@ class ChunkReader(object):
                 else:
                     yield buf
                     bytes_consumed += len(buf)
-                    buf = ''
+                    buf = b''
 
                 # avoid starvation by forcing sleep()
                 # every once in a while
                 if count % 10 == 0:
-                    sleep()
+                    green.sleep()
 
     def _get_iter(self, chunk, source):
         source = [source]
@@ -781,7 +783,7 @@ class MetachunkPreparer(object):
                 chunk['num'] = int(raw_pos[1])
                 chunk['pos'] = '%d.%d' % (mc_pos, chunk['num'])
             else:
-                chunk['pos'] = str(mc_pos)
+                chunk['pos'] = text_type(mc_pos)
 
     def __call__(self):
         mc_pos = self.extra_kwargs.get('meta_pos', 0)

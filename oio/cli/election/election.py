@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from six import iteritems
 from logging import getLogger
 
 from oio.cli import Lister
@@ -89,7 +90,7 @@ class ElectionPing(ElectionCmd):
             service_id=parsed_args.service_id)
 
         columns = ('Id', 'Status', 'Message')
-        data = sorted(data.iteritems())
+        data = sorted(iteritems(data))
         results = ((k, v["status"]["status"], v["status"]["message"]
                     ) for k, v in data)
         return columns, results
@@ -109,7 +110,7 @@ class ElectionStatus(ElectionCmd):
             service_id=parsed_args.service_id)
 
         columns = ('Id', 'Status', 'Message')
-        data = sorted(data["peers"].iteritems())
+        data = sorted(iteritems(data["peers"]))
         results = ((k, v["status"]["status"], v["status"]["message"]
                     ) for k, v in data)
         return columns, results
@@ -135,7 +136,7 @@ class ElectionDebug(ElectionCmd):
             service_id=parsed_args.service_id)
 
         columns = ('Id', 'Status', 'Message', 'Body')
-        data = sorted(data.iteritems())
+        data = sorted(iteritems(data))
         import time
 
         def format_item(x, v):
@@ -172,7 +173,7 @@ class ElectionSync(ElectionCmd):
             timeout=parsed_args.timeout)
 
         columns = ('Id', 'Status', 'Message', 'Body')
-        data = sorted(data.iteritems())
+        data = sorted(iteritems(data))
         results = ((k, v["status"]["status"], v["status"]["message"],
                     format_json(parsed_args, v["body"])
                     ) for k, v in data)
@@ -192,7 +193,7 @@ class ElectionLeave(ElectionCmd):
             timeout=parsed_args.timeout, service_id=parsed_args.service_id)
 
         columns = ('Id', 'Status', 'Message')
-        data = sorted(data.iteritems())
+        data = sorted(iteritems(data))
         results = ((k, v["status"]["status"], v["status"]["message"])
                    for k, v in data)
         return columns, results
