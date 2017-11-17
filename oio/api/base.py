@@ -13,10 +13,11 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from urllib import urlencode
+from six import text_type, iteritems
 
 from oio.common.easy_value import true_value
 from oio.common.json import json as jsonlib
+
 from oio.common.http_urllib3 import urllib3, get_pool_manager, \
     oio_exception_from_httperror
 from oio.common import exceptions
@@ -24,6 +25,17 @@ from oio.common.utils import deadline_to_timeout, monotonic_time
 from oio.common.constants import ADMIN_HEADER, \
     TIMEOUT_HEADER, PERFDATA_HEADER, FORCEMASTER_HEADER, \
     CONNECTION_TIMEOUT, READ_TIMEOUT, REQID_HEADER, STRLEN_REQID
+try:
+    from urllib.parse import urlencode
+except ImportError:
+    from urllib import urlencode
+
+_POOL_MANAGER_OPTIONS_KEYS = ["pool_connections", "pool_maxsize",
+                              "max_retries"]
+
+URLLIB3_REQUESTS_KWARGS = ('fields', 'headers', 'body', 'retries', 'redirect',
+                           'assert_same_host', 'timeout', 'pool_timeout',
+                           'release_conn', 'chunked')
 
 
 class HttpApi(object):
@@ -52,7 +64,10 @@ class HttpApi(object):
         self.endpoint = endpoint
 
         if not pool_manager:
-            pool_manager = get_pool_manager(**kwargs)
+            pool_manager_conf = {k: int(v)
+                                 for k, v in iteritems(kwargs)
+                                 if k in _POOL_MANAGER_OPTIONS_KEYS}
+            pool_manager = get_pool_manager(**pool_manager_conf)
         self.pool_manager = pool_manager
 
         self.admin_mode = true_value(kwargs.get('admin_mode', False))
@@ -101,11 +116,13 @@ class HttpApi(object):
         :raise oio.common.exceptions.ClientException: in case of HTTP status
         code >= 400
         """
-        out_kwargs = dict(kwargs)
+        # Filter arguments that are not recognized by Requests
+        out_kwargs = {k: v for k, v in iteritems(kwargs)
+                      if k in URLLIB3_REQUESTS_KWARGS}
 
         # Ensure headers are all strings
         if headers:
-            out_headers = {k: str(v) for k, v in headers.items()}
+            out_headers = {k: text_type(v) for k, v in headers.items()}
         else:
             out_headers = dict()
         if self.admin_mode or admin_mode:
@@ -169,8 +186,8 @@ class HttpApi(object):
             out_param = []
             for k, v in params.items():
                 if v is not None:
-                    if isinstance(v, unicode):
-                        v = unicode(v).encode('utf-8')
+                    if isinstance(v, text_type):
+                        v = text_type(v).encode('utf-8')
                     out_param.append((k, v))
             encoded_args = urlencode(out_param)
             url += '?' + encoded_args

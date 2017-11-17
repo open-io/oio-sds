@@ -14,7 +14,11 @@
 # License along with this library.
 
 import re
-from urllib import quote
+try:
+    from urllib.parse import quote
+except ImportError:
+    from urllib import quote
+
 from oio.common.constants import CHUNK_HEADERS, OIO_VERSION
 from oio.common.http_eventlet import CustomHttpConnection \
     as NewCustomHttpConnection
@@ -112,13 +116,23 @@ def headers_from_object_metadata(metadata):
     headers[CHUNK_HEADERS["oio_version"]] = metadata.get('oio_version',
                                                          OIO_VERSION)
 
-    for key in ['metachunk_hash', 'metachunk_size', 'chunk_hash']:
+    for key in ('metachunk_hash', 'metachunk_size', 'chunk_hash'):
         val = metadata.get(key)
         if val is not None:
             headers[CHUNK_HEADERS[key]] = str(metadata[key])
 
     headers[CHUNK_HEADERS['full_path']] = metadata['full_path']
     return headers
+
+
+def get_addr(host, port):
+    """
+    Generate the address for host (IPv4 or IPv6) and port
+    """
+    if ':' in host:  # IPv6
+        return '[%s]:%s' % (host, port)
+    else:  # IPv4
+        return '%s:%s' % (host, port)
 
 
 class HeadersDict(dict):

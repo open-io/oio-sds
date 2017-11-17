@@ -13,7 +13,12 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from urllib import quote
+from six import text_type
+
+try:
+    from urllib.parse import quote
+except ImportError:
+    from urllib import quote
 
 from oio.common.green import socket, HTTPConnection, HTTPResponse, _UNKNOWN
 from oio.common.logger import get_logger
@@ -23,15 +28,18 @@ logger = get_logger({}, __name__)
 
 class CustomHTTPResponse(HTTPResponse):
     def __init__(self, sock, debuglevel=0, strict=0,
-                 method=None):
+                 method=None, url=None):
         self.sock = sock
-        self._actual_socket = sock.fd._sock
+        try:
+            self._actual_socket = sock.fd._sock
+        except AttributeError:
+            self._actual_socket = sock.fd
         self.fp = sock.makefile('rb')
         self.debuglevel = debuglevel
         self.strict = strict
         self._method = method
 
-        self.msg = None
+        self.headers = self.msg = None
 
         self.version = _UNKNOWN
         self.status = _UNKNOWN
@@ -99,23 +107,23 @@ class CustomHttpConnection(HTTPConnection):
 
 
 def http_connect(host, method, path, headers=None, query_string=None):
-    if isinstance(path, unicode):
+    if isinstance(path, text_type):
         try:
             path = path.encode('utf-8')
         except UnicodeError as e:
-            logger.exception('ERROR encoding to UTF-8: %s', str(e))
-    path = quote('/' + path)
+            logger.exception('ERROR encoding to UTF-8: %s', text_type(e))
+    path = quote(b'/' + path)
     conn = CustomHttpConnection(host)
     if query_string:
-        path += '?' + query_string
+        path += b'?' + query_string
     conn.path = path
     conn.putrequest(method, path)
     if headers:
         for header, value in headers.items():
             if isinstance(value, list):
                 for k in value:
-                    conn.putheader(header, str(k))
+                    conn.putheader(header, k)
             else:
-                conn.putheader(header, str(value))
+                conn.putheader(header, value)
     conn.endheaders()
     return conn

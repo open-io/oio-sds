@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from logging import getLogger
+from six import iteritems
 
 from oio.cli import Lister, ShowOne
 from oio.cli.rdir.rdir import _format_assignments
@@ -45,9 +46,9 @@ class ShowAdminVolume(ShowOne):
         output.append(('volume', parsed_args.volume))
         data = self.app.client_manager.volume.volume_admin_show(
             volume=parsed_args.volume)
-        for k, v in sorted(data.iteritems()):
+        for k, v in sorted(iteritems(data)):
             output.append((k, v))
-        return zip(*output)
+        return list(zip(*output))
 
 
 class ClearAdminVolume(Lister):
@@ -129,7 +130,7 @@ class ShowVolume(ShowOne):
         data = self.app.client_manager.volume.volume_show(
             volume=parsed_args.volume, read_timeout=60.0
         )
-        return zip(*sorted(data.iteritems()))
+        return list(zip(*sorted(data.items())))
 
 
 class IncidentAdminVolume(Lister):
@@ -317,7 +318,7 @@ class DisplayVolumeAssignation(Lister):
                 if rdir_id not in rdir_by_id:
                     rdir['managed_rawx'] = list()
                     rdir_by_id[rdir_id] = rdir
-            for addr, rdir in rdir_by_id.iteritems():
+            for addr, rdir in iteritems(rdir_by_id):
                 results.append((addr,
                                 len(rdir['managed_rawx']),
                                 ' '.join(rdir['managed_rawx'])))

@@ -15,6 +15,7 @@
 
 """Container-related commands"""
 
+from six import iteritems
 from logging import getLogger
 from time import time
 
@@ -371,9 +372,9 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
                                    None)
         if delete_exceeding is not None:
             info['delete_exceeding_versions'] = delete_exceeding != '0'
-        for k, v in data['properties'].iteritems():
+        for k, v in iteritems(data['properties']):
             info['meta.' + k] = v
-        return zip(*sorted(info.iteritems()))
+        return list(zip(*sorted(info.items())))
 
 
 class ListContainer(Lister):
@@ -616,7 +617,7 @@ class LocateContainer(ContainerCommandMixin, ShowOne):
 
         for stype in ["meta0", "meta1", "meta2", 'meta2.sys.peers']:
             info[stype] = ', '.join(info[stype])
-        return zip(*sorted(info.iteritems()))
+        return list(zip(*sorted(info.items())))
 
 
 class PurgeContainer(ContainerCommandMixin, Command):

@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
 
 from oio.common.green import Queue, GreenPile, sleep
 
@@ -75,7 +76,6 @@ class DirectoryCmd(Command):
         Upload the specified mapping to the meta0 service,
         retry in case or error.
         """
-        from time import sleep
         self.log.info("Saving...")
         for i in range(max_attempts):
             try:
@@ -185,7 +185,7 @@ class DirectoryList(DirectoryCmd):
         mapping = self.get_prefix_mapping(parsed_args)
         mapping.load_meta0(connection_timeout=M0_CONN_TIMEOUT,
                            read_timeout=parsed_args.meta0_timeout)
-        print mapping.to_json()
+        print(mapping.to_json())
 
 
 class DirectoryRebalance(DirectoryCmd):

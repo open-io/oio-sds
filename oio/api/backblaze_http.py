@@ -15,8 +15,10 @@
 
 import base64
 import hashlib
-import ConfigParser
 import json as js
+
+from six import string_types
+from six.moves import configparser
 
 from requests import exceptions, Session, Request
 
@@ -34,7 +36,7 @@ def _recover_true_path(metadata, chunk_path):
 
 def _get_sha1(data):
     generate = hashlib.sha1()
-    if not isinstance(data, basestring):
+    if not isinstance(data, string_types):
         for chunk in iter(lambda: data.read(io.WRITE_CHUNK_SIZE), b''):
             generate.update(chunk)
             data.seek(0, 0)
@@ -67,7 +69,7 @@ class BackblazeUtils(object):
             authorization = BackblazeUtils.b2_authorization_list.get(key, None)
             if authorization:
                 return authorization
-        config = ConfigParser.ConfigParser()
+        config = configparser.ConfigParser()
         app_key = None
         with open(application_key_path) as app_key_f:
             try:

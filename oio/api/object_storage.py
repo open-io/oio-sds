@@ -15,13 +15,20 @@
 
 
 from __future__ import absolute_import
+from six import string_types
+
 from io import BytesIO
 from functools import partial
 import os
 import warnings
 import time
 import random
-from urllib import unquote
+
+try:
+    from urllib.parse import unquote
+except ImportError:
+    from urllib import unquote
+
 from oio.common import exceptions as exc
 from oio.api.ec import ECWriteHandler
 from oio.api.io import MetachunkPreparer, LinkHandler
@@ -708,7 +715,7 @@ class ObjectStorageApi(object):
         src = data if data is not None else file_or_path
         if src is file_or_path:
             # We are asked to read from a file path or a file-like object
-            if isinstance(file_or_path, basestring):
+            if isinstance(file_or_path, string_types):
                 if not os.path.exists(file_or_path):
                     raise exc.FileNotFound("File '%s' not found." %
                                            file_or_path)

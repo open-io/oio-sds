@@ -46,7 +46,7 @@ class ShowAccount(ShowOne):
             data['ctime'] = int(float(data.get('ctime', 0)))
             data['bytes'] = convert_size(int(data.get('bytes', 0)), unit="B")
             data['objects'] = convert_size(int(data.get('objects', 0)))
-        return zip(*sorted(data.iteritems()))
+        return list(zip(*sorted(data.items())))
 
 
 class DeleteAccount(Command):

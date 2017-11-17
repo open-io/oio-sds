@@ -67,6 +67,11 @@ def ensure_better_chunk_qualities(current_chunks, candidates, threshold=1):
     return balance
 
 
+def cmp(x, y):
+    """cmp function as a workaround for python3"""
+    return (x > y) - (x < y)
+
+
 class Content(object):
 
     # FIXME: no need for container_id since we have account and container name

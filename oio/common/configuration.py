@@ -20,7 +20,7 @@ from os import path
 from yaml import load
 from optparse import OptionParser
 from glob import glob
-from ConfigParser import SafeConfigParser
+from six.moves.configparser import SafeConfigParser
 
 
 def parse_options(parser=None):
