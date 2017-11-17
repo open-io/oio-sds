@@ -24,7 +24,6 @@ import string
 
 from subprocess import check_call
 from functools import wraps
-from urllib import urlencode
 
 import yaml
 import testtools
@@ -32,6 +31,10 @@ import testtools
 from oio.common.configuration import load_namespace_conf, set_namespace_options
 from oio.common.constants import REQID_HEADER
 from oio.common.http_urllib3 import get_pool_manager
+try:
+    from urllib.parse import urlencode
+except ImportError:
+    from urllib import urlencode
 from oio.common.json import json as jsonlib
 from oio.common.green import time
 from oio.event.beanstalk import Beanstalk, ResponseError
