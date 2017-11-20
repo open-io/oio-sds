@@ -1427,8 +1427,12 @@ _handler_REPLICATE(struct gridd_reply_ctx_s *reply,
 	}
 
 	err = sqlx_repository_open_and_lock(repo, &n0,
-			SQLX_OPEN_LOCAL|SQLX_OPEN_CREATE|SQLX_OPEN_URGENT, &sq3, NULL);
+			SQLX_OPEN_LOCAL|SQLX_OPEN_URGENT, &sq3, NULL);
 	if (NULL != err) {
+		if (err->code == CODE_CONTAINER_NOTFOUND) {
+			reply->send_error(CODE_PIPEFROM, err);
+			return TRUE;
+		}
 		reply->send_error(0, err);
 		return TRUE;
 	}
