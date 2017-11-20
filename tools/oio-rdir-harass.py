@@ -16,6 +16,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
+
 import sys
 import time
 import random
@@ -44,7 +46,7 @@ class Harasser(object):
     def harass_put(self, loops=None):
         if loops is None:
             loops = random.randint(1000, 2000)
-        print "Pushing %d fake chunks" % loops
+        print("Pushing %d fake chunks" % loops)
         loop = loops
         count_start_container = random.randrange(2**20)
         count_start_content = random.randrange(2**20)
@@ -67,13 +69,13 @@ class Harasser(object):
         end = time.time()
         self.pushed_count += loops
         self.pushed_time += end-start
-        print "%d pushed in %.3fs, %d req/s" \
-            % (loops, end-start, loops/(end-start))
+        print("%d pushed in %.3fs, %d req/s" \
+            % (loops, end-start, loops/(end-start)))
 
     def harass_del(self, min_loops=0):
         min_loops = min(min_loops, len(self.sent))
         loops = random.randint(min_loops, len(self.sent))
-        print "Removing %d fake chunks" % loops
+        print("Removing %d fake chunks" % loops)
         loop = loops
         start = time.time()
         while loop > 0:
@@ -83,8 +85,8 @@ class Harasser(object):
         end = time.time()
         self.removed_count += loops
         self.removed_time += end-start
-        print "%d removed in %.3fs, %d req/s" \
-            % (loops, end-start, loops/(end-start))
+        print("%d removed in %.3fs, %d req/s" \
+            % (loops, end-start, loops/(end-start)))
 
     def __call__(self):
         try:
@@ -92,17 +94,17 @@ class Harasser(object):
                 self.harass_put()
                 self.harass_del()
         except KeyboardInterrupt:
-            print "Cleaning..."
+            print("Cleaning...")
             self.harass_del(len(self.sent))
-            print "Stats:"
-            print "Pushed %d in %.3fs, %d req/s" % (self.pushed_count,
+            print("Stats:")
+            print("Pushed %d in %.3fs, %d req/s" % (self.pushed_count,
                                                     self.pushed_time,
                                                     self.pushed_count /
-                                                    self.pushed_time)
-            print "Removed %d in %.3fs, %d req/s" % (self.removed_count,
+                                                    self.pushed_time))
+            print("Removed %d in %.3fs, %d req/s" % (self.removed_count,
                                                      self.removed_time,
                                                      self.removed_count /
-                                                     self.removed_time)
+                                                     self.removed_time))
 
 
 if __name__ == '__main__':
@@ -113,6 +115,6 @@ if __name__ == '__main__':
     elif len(sys.argv) > 1:
         HARASS = Harasser(sys.argv[1])
     else:
-        print "usage: %s NS [NB_CONTAINERS [NB_CONTENTS]]" % sys.argv[0]
+        print("usage: %s NS [NB_CONTAINERS [NB_CONTENTS]]" % sys.argv[0])
         sys.exit(1)
     HARASS()

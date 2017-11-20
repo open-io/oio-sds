@@ -13,9 +13,12 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from __future__ import print_function
+
 import random
 import time
 from mock import MagicMock as Mock, ANY, call
+
 from oio.directory.client import DirectoryClient
 from oio.common.utils import cid_from_name
 from oio.common import exceptions as exc
@@ -421,7 +424,7 @@ class TestDirectoryAPI(BaseTestCase):
             total += 1
             by_rdir[rawx['rdir']['addr']] = count + 1
         avg = total / float(len(by_rdir))
-        print "Ideal number of bases per rdir: ", avg
-        print "Current repartition: ", by_rdir
+        print("Ideal number of bases per rdir: ", avg)
+        print("Current repartition: ", by_rdir)
         for count in by_rdir.itervalues():
             self.assertLessEqual(count, avg + 1)

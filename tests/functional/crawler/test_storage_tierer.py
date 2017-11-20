@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from __future__ import print_function
+
 import time
 
 from mock import MagicMock as Mock
@@ -81,7 +83,7 @@ class TestStorageTierer(BaseTestCase):
         worker = StorageTiererWorker(self.gridconf, Mock())
         actual = [x[0] for x in self.api.container_list(self.test_account)]
         if len(actual) < 3:
-            print "Slow event propagation!"
+            print("Slow event propagation!")
             # account events have not yet propagated
             time.sleep(3.0)
             actual = [x[0] for x in self.api.container_list(

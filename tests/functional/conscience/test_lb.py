@@ -15,6 +15,8 @@
 
 """Test the load balancer through the proxy"""
 
+from __future__ import print_function
+
 from tests.utils import BaseTestCase
 from tests.utils import CODE_SRVTYPE_NOTMANAGED, CODE_POLICY_NOT_SATISFIABLE
 
@@ -102,7 +104,7 @@ class TestLbChoose(BaseLbTest):
                 fast_count += 1
             else:
                 slow_count += 1
-        print "fast: %d, slow: %d" % (fast_count, slow_count)
+        print("fast: %d, slow: %d" % (fast_count, slow_count))
         # One of the 4 services should not be 'fast' since there is only 3
         # in the 'fast' slot, and we don't want duplicates, and
         # there is a default fallback on any other service of the same type
@@ -110,7 +112,7 @@ class TestLbChoose(BaseLbTest):
             self.assertEqual(fast_count, 3)
             self.assertEqual(slow_count, 1)
         except Exception:
-            print parsed
+            print(parsed)
             raise
 
     def test_choose_3_sameport(self):
@@ -121,7 +123,7 @@ class TestLbChoose(BaseLbTest):
         resp = self.request('GET', self._url_lb('choose'),
                             params={'type': 'echo', 'size': 3})
         if resp.status != 200:
-            print self.json_loads(resp.data)
+            print(self.json_loads(resp.data))
             self.assertEqual(resp.status, 200)
         parsed = self.json_loads(resp.data)
         self.assertIsInstance(parsed, list)
