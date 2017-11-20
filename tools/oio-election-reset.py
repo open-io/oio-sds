@@ -16,6 +16,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
+
 import sys, logging, itertools
 import zookeeper
 from oio.common.configuration import load_namespace_conf
@@ -73,7 +75,7 @@ def list_problematic_nodes (zh, path, options):
             for n in children:
                 n = path + '/' + n
                 data, meta = tuple(zookeeper.get(zh, n))
-                print repr(data), repr(meta)
+                print(repr(data), repr(meta))
                 if data in group:
                     yield group[data]
                 group[data] = n;

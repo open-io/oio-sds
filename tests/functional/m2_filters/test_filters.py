@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from __future__ import print_function
 
 import os
 import time
@@ -63,7 +64,7 @@ class TestFilters(BaseTestCase):
         try:
             self._new_content(data, path)
         except ClientException as exc:
-            print str(exc)
+            print(str(exc))
             self.assertTrue(str(exc).find('NS slave!') != -1)
         content = self._new_content(data, path)
         content.delete(admin_mode=True)

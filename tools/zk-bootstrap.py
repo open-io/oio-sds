@@ -17,6 +17,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
+
 import sys
 import logging
 import itertools
@@ -59,9 +61,9 @@ def batch_create(zh, batch):
         def completion(*args, **kwargs):
             rc, zrc, ignored = args
             if rc != 0:
-                print "zookeeper.acreate() error"
+                print("zookeeper.acreate() error")
             elif zrc != 0 and zrc != zookeeper.NODEEXISTS:
-                print 'create/set('+path+') : FAILED'
+                print('create/set('+path+') : FAILED')
             sem.release()
         zookeeper.acreate(zh, path, data, acl_openbar, 0, completion)
     for path, data in batch:
@@ -80,9 +82,9 @@ def create_tree(zh, nodes, options):
         pre = now()
         o, k = batch_create(zh, batch)
         post = now()
-        print " > batch({0},{1}) in {2}s".format(o, k, post-pre)
+        print(" > batch({0},{1}) in {2}s".format(o, k, post-pre))
         ok, ko = ok+o, ko+k
-    print "Created nodes : ok", ok, "ko", ko
+    print("Created nodes : ok", ok, "ko", ko)
 
 
 def hash_tokens(w):

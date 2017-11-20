@@ -16,6 +16,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
+
 import os
 import yaml
 from optparse import OptionParser as OptionParser
@@ -46,9 +48,9 @@ options, args = parser.parse_args()
 with open(options.PATH, 'r') as f:
     conf = yaml.load(f)
     if options.FETCH_NS:
-        print conf['namespace']
+        print(conf['namespace'])
     elif options.VALUE:
-        print conf[options.VALUE]
+        print(conf[options.VALUE])
     elif options.FETCH_SRVTYPES:
         out = []
         for t in options.FETCH_SRVTYPES:
@@ -58,9 +60,9 @@ with open(options.PATH, 'r') as f:
                 out.append(item['addr'])
         if options.FIRST:
             if len(out) > 0:
-                print out[0]
+                print(out[0])
         elif options.COUNT:
-            print len(out)
+            print(len(out))
         else:
             for i in out:
-                print i
+                print(i)

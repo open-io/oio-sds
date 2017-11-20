@@ -16,6 +16,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
+
 import sys, logging, itertools
 import zookeeper
 from oio.common.configuration import load_namespace_conf
@@ -56,7 +58,7 @@ def list_nodes (zh, path, options):
     try:
         children = list(zookeeper.get_children(zh, path))
         if len(children) >= options.CHILDREN:
-                print "CHILDREN", len(children), path
+                print("CHILDREN", len(children), path)
         for child in children:
             n = path + '/' + child
             _, meta = tuple(zookeeper.get(zh, n))
@@ -109,7 +111,7 @@ def main():
         for group in namespace_tree(ns, srvtype):
             for child, meta in list_nodes(zh, group, options):
                 if meta['dataLength'] > options.SIZE:
-                    print "NODE", meta['dataLength'], child
+                    print("NODE", meta['dataLength'], child)
 
     zookeeper.close(zh)
 
