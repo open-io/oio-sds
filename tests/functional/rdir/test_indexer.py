@@ -155,9 +155,13 @@ class TestIndexerCrawler(BaseTestCase):
 
         # create fake chunks
         chunk_path1, _, _, _ = self._create_chunk(
-            self.rawx_conf['path']+".pending")
+            self.rawx_conf['path'] + ".pending")
         chunk_path2, _, _, _ = self._create_chunk(
             self.rawx_conf['path'][:-1] + 'G')
+        chunk_path3, _, _, _ = self._create_chunk(
+            self.rawx_conf['path'] + '0')
+        chunk_path4, _, _, _ = self._create_chunk(
+            self.rawx_conf['path'][:-1])
 
         # try to index the chunks
         indexer.index_pass()
@@ -167,3 +171,5 @@ class TestIndexerCrawler(BaseTestCase):
 
         os.remove(chunk_path1)
         os.remove(chunk_path2)
+        os.remove(chunk_path3)
+        os.remove(chunk_path4)
