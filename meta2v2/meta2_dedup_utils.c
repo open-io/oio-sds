@@ -184,7 +184,7 @@ substitute_content_header(sqlite3 *db, struct bean_CONTENTS_HEADERS_s *new_ch,
 		GError *err2 = NULL;
 		struct bean_ALIASES_s *new_alias = _bean_dup(alias);
 		ALIASES_set_content(new_alias, CONTENTS_HEADERS_get_id(ch));
-		err2 = ALIASES_save(db, new_alias);
+		err2 = _db_save_bean(db, new_alias);
 		if (err2 != NULL) {
 			GString *orig_ch_str = metautils_gba_to_hexgstr(NULL,
 					ALIASES_get_content(alias));

@@ -405,7 +405,7 @@ m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *u,
 
 	GPtrArray *tmp = g_ptr_array_new();
 	if (!err)
-		err = ALIASES_load_buffered(sq3->db, sql, params, tmp);
+		err = ALIASES_load(sq3->db, sql, params, _bean_buffer_cb, tmp);
 	metautils_gvariant_unrefv(params);
 
 	if (!err) {
@@ -2693,7 +2693,7 @@ m2v2_dup_alias(struct dup_alias_params_s *params, gpointer bean)
 			if (params->set_deleted) {
 				ALIASES_set_deleted(new_alias, TRUE);
 			}
-			local_err = ALIASES_save(params->sq3->db, new_alias);
+			local_err = _db_save_bean(params->sq3->db, new_alias);
 		}
 		_bean_clean(new_alias);
 	}
