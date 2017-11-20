@@ -53,15 +53,18 @@ _prepare_statement(Table_t *t)
 	GString *gstr = g_string_sized_new(256);
 	g_string_append_static(gstr, "REPLACE INTO ");
 	g_string_append_len(gstr, (char*)t->name.buf, t->name.size);
-	g_string_append_static(gstr, " (ROWID");
+	g_string_append_static(gstr, " (");
 	for (int i=0; i < t->header.list.count; i++) {
 		RowName_t *r = t->header.list.array[i];
-		g_string_append_c(gstr, ',');
+		if (i > 0)
+			g_string_append_c(gstr, ',');
 		g_string_append_len(gstr, (char*)r->name.buf, r->name.size);
 	}
-	g_string_append_static(gstr, ") VALUES (?");
+	g_string_append_static(gstr, ") VALUES (");
 	for (int i=0; i < t->header.list.count; i++) {
-		g_string_append_static(gstr, ",?");
+		if (i > 0)
+			g_string_append_c(gstr, ',');
+		g_string_append_static(gstr, "?");
 	}
 	g_string_append_c(gstr, ')');
 
@@ -86,13 +89,8 @@ replicate_table_updates(struct sqlx_sqlite3_s *sq3, Table_t *table)
 	for (i=0; i<table->rows.list.count; i++) {
 		Row_t *row = table->rows.list.array[i];
 		if (row->fields && row->fields->list.count > 0) {
-			gint64 rowid;
-
-			asn_INTEGER_to_int64(&(row->rowid), &rowid);
 			sqlite3_reset(stmt);
 			sqlite3_clear_bindings(stmt);
-
-			sqlite3_bind_int64(stmt, 1, rowid);
 
 			/* Now apply all the field values */
 			for (j=0; j<row->fields->list.count ;j++) {
@@ -102,7 +100,7 @@ replicate_table_updates(struct sqlx_sqlite3_s *sq3, Table_t *table)
 
 				field = row->fields->list.array[j];
 				asn_INTEGER2long(&(field->pos), &lpos);
-				pos = lpos + 2;
+				pos = lpos + 1;
 				switch (field->value.present) {
 					case RowFieldValue_PR_NOTHING:
 					case RowFieldValue_PR_n:
