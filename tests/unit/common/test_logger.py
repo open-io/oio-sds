@@ -15,7 +15,7 @@
 
 import unittest
 import logging
-from cStringIO import StringIO
+from six import StringIO
 from oio.common.logger import get_logger
 from oio.common.easy_value import convert_size
 

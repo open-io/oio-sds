@@ -1,4 +1,4 @@
-# Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,6 +15,7 @@
 
 import math
 import string
+from six import string_types
 
 
 def int_value(value, default):
@@ -43,7 +44,7 @@ FALSE_VALUES = set(('false', '0', 'no', 'off', 'f', 'n'))
 
 def true_value(value):
     return value is True or \
-        (isinstance(value, basestring) and value.lower() in TRUE_VALUES)
+        (isinstance(value, string_types) and value.lower() in TRUE_VALUES)
 
 
 def boolean_value(value):
