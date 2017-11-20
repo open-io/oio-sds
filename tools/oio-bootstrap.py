@@ -17,6 +17,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
+
 import errno
 import grp
 import yaml
@@ -1503,10 +1505,10 @@ def generate(options):
 
 
 def dump_config(conf):
-    print 'PROXY=%s' % conf['proxy']
-    print 'REPLI_CONTAINER=%s' % conf[M2_REPLICAS]
-    print 'REPLI_DIRECTORY=%s' % conf[M1_REPLICAS]
-    print 'M1_DIGITS=%s' % conf[M1_DIGITS]
+    print('PROXY=%s' % conf['proxy'])
+    print('REPLI_CONTAINER=%s' % conf[M2_REPLICAS])
+    print('REPLI_DIRECTORY=%s' % conf[M1_REPLICAS])
+    print('M1_DIGITS=%s' % conf[M1_DIGITS])
 
 
 def merge_config(base, inc):

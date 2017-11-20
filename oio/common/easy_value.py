@@ -14,6 +14,7 @@
 # License along with this library.
 
 import math
+from six import string_types
 
 
 def int_value(value, default):
@@ -41,7 +42,7 @@ TRUE_VALUES = set(('true', '1', 'yes', 'on', 't', 'y'))
 
 def true_value(value):
     return value is True or \
-        (isinstance(value, basestring) and value.lower() in TRUE_VALUES)
+        (isinstance(value, string_types) and value.lower() in TRUE_VALUES)
 
 
 METRIC_SYMBOLS = ("", "K", "M", "G", "T", "P", "E", "Z", "Y")
