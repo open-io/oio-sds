@@ -188,6 +188,7 @@ class LimitedStream(object):
         self.md5 = None
         self.current_chunk = None
         self._find_chunk_for_current_offset()
+        self.invalid_checksum = False
 
     def _find_chunk_for_current_offset(self):
         if not self.chk:
@@ -245,6 +246,7 @@ class LimitedStream(object):
 
             self.md5.update(data[0:used])
             if self.md5.hexdigest().upper() != self.current_chunk['hash']:
+                self.invalid_checksum = True
                 raise IOError("Chunk has invalid checksum, aborting")
             self.current_chunk['verified'] = True
 
@@ -629,7 +631,7 @@ class ContainerRestore(object):
             _, size, _ = self.proxy.object_create(
                 account, container, obj_name=self.inf.name, append=self.append,
                 file_or_path=data, **kwargs)
-        except (Exception, exc.SourceReadError) as ex:
+        except Exception:
             # No data is written if an error occurs during object_create.
             # We just have to update our state_machine offset regarding
             # the current object.
@@ -647,7 +649,7 @@ class ContainerRestore(object):
             # current offset to the start of the current chunk
             # and remove the stored checksum if set.
 
-            if isinstance(ex, exc.SourceReadError):
+            if data.invalid_checksum:
                 self.logger.error("Invalid checksum detected for %s",
                                   self.inf.name)
                 raise BadRequest("Checksum error for %s" % self.inf.name)
