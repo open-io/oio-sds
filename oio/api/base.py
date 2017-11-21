@@ -221,6 +221,7 @@ class HttpApi(object):
             oio_exception_from_httperror(exc,
                                          reqid=out_headers.get(REQID_HEADER),
                                          url=url)
+
         if resp.status >= 400:
             raise exceptions.from_response(resp, body)
         return resp, body
