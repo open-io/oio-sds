@@ -785,7 +785,7 @@ class ObjectStorageApi(object):
         :param obj: name of the object to query
         :returns: a `dict` describing the object
 
-        .. python::
+        .. py:data:: example
 
             {'hash': '6BF60C17CC15EEA108024903B481738F',
              'ctime': '1481031763',
