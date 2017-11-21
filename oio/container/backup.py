@@ -175,8 +175,8 @@ class LimitedStream(object):
     Also verify checksums.
     """
 
-    def __init__(self, fd, size, entry=None, offset=0):
-        self.fd = fd
+    def __init__(self, stream, size, entry=None, offset=0):
+        self.stream = stream
         self.max_size = size
         self.pos = 0
         self.entry = entry
@@ -210,59 +210,56 @@ class LimitedStream(object):
         if self.offset < self.entry['size']:
             raise Exception("No chunk found for current offset")
 
-    def read(self, block=-1):
-        if self.pos >= self.max_size:
-            # save current MD5 object in current_check
-            if self.current_chunk:
-                self.current_chunk['md5'] = pickle.dumps(self.md5)
-                self.md5 = None
-                self.current_chunk = None
-            return ""
+    def _current_chunk_end(self):
+        return self.current_chunk['offset'] + self.current_chunk['size']
 
-        if block < 0:
-            block = 1024 * 1024 * 10
-        block = min(block, self.max_size - self.pos)
-        data = self.fd.read(block)
+    def _read_eof(self):
+        """Reset the current chunk and return an empty data block."""
+        # save MD5 internal status in current_chunk
+        if self.current_chunk:
+            self.current_chunk['md5'] = pickle.dumps(self.md5)
+            self.md5 = None
+            self.current_chunk = None
+        return ""
 
-        self.pos += len(data)
-        if not self.current_chunk:
-            return data
-
-        if (self.offset + len(data) <
-                self.current_chunk['offset'] + self.current_chunk['size']):
-            self.offset += len(data)
-            if self.md5:
-                self.md5.update(data)
-
-            return data
-
-        to_ret = data
-        while (self.offset + len(data) >=
-                self.current_chunk['offset'] + self.current_chunk['size']):
-
-            # update md5 with proper size
-            used = (self.current_chunk['offset'] + self.current_chunk['size']
-                    - self.offset)
-
-            self.md5.update(data[0:used])
+    def _update_checksum(self, data):
+        """Update and verify the checksum of the current chunk."""
+        while self.offset + len(data) >= self._current_chunk_end():
+            # We read past the current chunk end. We must only do a partial
+            # update of the checksum in order to verify it.
+            remaining = (self._current_chunk_end() - self.offset)
+            self.md5.update(data[0:remaining])
             if self.md5.hexdigest().upper() != self.current_chunk['hash']:
                 self.invalid_checksum = True
                 raise IOError("Chunk has invalid checksum, aborting")
             self.current_chunk['verified'] = True
 
-            # align offset on boundary
-            self.offset += used
+            # align offset on chunk boundary
+            self.offset += remaining
             self._find_chunk_for_current_offset()
-            data = data[used:]
+            data = data[remaining:]
 
             if len(data) == 0:
                 break
 
         self.offset += len(data)
-        if self.md5:
-            self.md5.update(data)
+        self.md5.update(data)
 
-        return to_ret
+    def read(self, size=-1):
+        if self.pos >= self.max_size:
+            return self._read_eof()
+
+        if size < 0:
+            size = 1024 * 1024 * 10
+        size = min(size, self.max_size - self.pos)
+
+        data = self.stream.read(size)
+
+        self.pos += len(data)
+        if self.current_chunk:
+            self._update_checksum(data)
+
+        return data
 
 
 class ContainerTarFile(object):
