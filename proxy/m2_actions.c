@@ -1972,6 +1972,13 @@ static enum http_rc_e _m2_content_update(struct req_args_s *args,
 
 /* CONTENT resources ------------------------------------------------------- */
 
+/*
+CONTAINER{{
+POST /v3.0/{NS}/content/create
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+}}CONTAINER
+*/
 enum http_rc_e action_content_put (struct req_args_s *args) {
 	return rest_action(args, action_m2_content_create);
 }
