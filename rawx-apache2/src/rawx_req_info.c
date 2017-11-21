@@ -77,6 +77,31 @@ struct dav_resource_private {
 #define STR_KV(Field,Name) apr_psprintf(pool, Name" %u\n", \
 		apr_atomic_read32(&stats->body.Field))
 
+/*
+RAWX{{
+GET /info
+~~~~~~~~~~~
+
+Returns some static information about the targeted RAWX service.
+No particular header is expected, neither in the request nor in the reply.
+
+.. code-block:: http
+
+   GET /info HTTP/1.1
+   Host: 127.0.0.1
+   Content-Length: 0
+
+
+.. code-block:: http
+
+   HTTP/1.1 200 OK
+   Content-Length: 60
+
+   namespace OPENIO
+   path /home/jfs/.oio/sds/data/OPENIO-rawx-4
+
+}}RAWX
+*/
 static const char *
 __gen_info(const dav_resource *resource, apr_pool_t *pool)
 {
@@ -84,6 +109,53 @@ __gen_info(const dav_resource *resource, apr_pool_t *pool)
 	return apr_pstrcat(pool, "namespace ", conf->ns_name, "\npath ", conf->docroot, "\n", NULL);
 }
 
+/*
+RAWX{{
+GET /stat
+~~~~~~~~~~~
+
+Returns some volatile counters and gauges about what's happening in the targeted RAWX service.
+
+Sample exchange:
+
+.. code-block:: http
+
+   GET /stat HTTP/1.1
+   Host: 127.0.0.1
+   Content-Length: 0
+
+
+.. code-block:: http
+
+   HTTP/1.1 200 OK
+   Content-Length: 625
+
+   counter req.time 436106
+   counter req.time.put 0
+   counter req.time.get 0
+   counter req.time.del 0
+   counter req.time.stat 3612
+   counter req.time.info 3613
+   counter req.time.raw 0
+   counter req.time.other 0
+   counter req.hits 7225
+   counter req.hits.put 0
+   counter req.hits.get 0
+   counter req.hits.del 0
+   counter req.hits.stat 3612
+   counter req.hits.info 3613
+   counter req.hits.raw 0
+   counter req.hits.other 0
+   counter rep.hits.2xx 7225
+   counter rep.hits.4xx 2
+   counter rep.hits.5xx 0
+   counter rep.hits.other 0
+   counter rep.hits.403 0
+   counter rep.hits.404 0
+   counter rep.bread 0
+   counter rep.bwritten 0
+}}RAWX
+*/
 static const char *
 __gen_stats(const dav_resource *resource, apr_pool_t *pool)
 {
