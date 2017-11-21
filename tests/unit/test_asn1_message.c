@@ -24,12 +24,7 @@ test_create_destroy(void)
 {
 	for (guint i=0; i<512 ;i++) {
 		MESSAGE msg;
-		msg= metautils_message_create();
-		metautils_message_destroy(msg);
-	}
-	for (guint i=0; i<512 ;i++) {
-		MESSAGE msg;
-		msg= metautils_message_create_named("jlkjsdqljqslkxcjqlkcxkjq");
+		msg= metautils_message_create_named("jlkjsdqljqslkxcjqlkcxkjq", 1);
 		metautils_message_destroy(msg);
 	}
 }
@@ -39,7 +34,7 @@ test_set_get(void)
 {
 	gchar tmp[1024];
 
-	MESSAGE msg = metautils_message_create_named("mklmkmlk");
+	MESSAGE msg = metautils_message_create_named("mklmkmlk", 0);
 	metautils_message_add_field_struint(msg, "xxx", 1);
 
 	gboolean rc = metautils_message_extract_string_noerror(msg, "xxx", tmp, sizeof(tmp));

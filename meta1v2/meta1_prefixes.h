@@ -28,7 +28,7 @@ struct meta1_prefixes_set_s* meta1_prefixes_init(void);
 GError* meta1_prefixes_load(struct meta1_prefixes_set_s *m1ps,
 		const char *ns_name, const char *local_url,
 		GArray **updated_prefixes, gboolean *meta0_ok,
-		guint digits);
+		guint digits, gint64 deadline);
 
 void meta1_prefixes_clean(struct meta1_prefixes_set_s *m1ps);
 

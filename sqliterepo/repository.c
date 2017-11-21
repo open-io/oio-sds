@@ -556,6 +556,7 @@ struct open_args_s
 	const char *schema;
 	hashstr_t *realname;
 	gchar *realpath;
+	gint64 deadline;
 
 	gboolean create : 1;
 	gboolean no_refcheck : 1;
@@ -673,6 +674,9 @@ retry:
 		flags |= SQLITE_OPEN_CREATE;
 	handle = NULL;
 
+	if (args->deadline && oio_ext_monotonic_time() > args->deadline)
+		return BUSY("Deadline reached [%s]", args->realpath);
+
 	switch (rc = sqlite3_open_v2(args->realpath, &handle, flags, NULL)) {
 		case SQLITE_OK:
 		case SQLITE_DONE:
@@ -778,7 +782,7 @@ __open_maybe_cached(struct open_args_s *args, struct sqlx_sqlite3_s **result)
 	gint bd = -1;
 
 	e0 = sqlx_cache_open_and_lock_base(args->repo->cache, args->realname,
-		   args->urgent, &bd);
+		   args->urgent, &bd, args->deadline);
 	if (e0 != NULL) {
 		g_prefix_error(&e0, "cache error: ");
 		return e0;
@@ -839,7 +843,8 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 	} else {
 		gchar *url = NULL;
 
-		status = election_get_status(args->repo->election_manager, &args->name, &url);
+		status = election_get_status(args->repo->election_manager,
+				&args->name, &url, args->deadline);
 		GRID_TRACE("Status got=%d expected=%d master=%s", status, expected, url);
 
 		switch (status) {
@@ -1001,6 +1006,16 @@ sqlx_repository_open_and_lock(sqlx_repository_t *repo,
 		const struct sqlx_name_s *n, enum sqlx_open_type_e how,
 		struct sqlx_sqlite3_s **result, gchar **lead)
 {
+	return sqlx_repository_timed_open_and_lock(
+			repo, n, how, result, lead, oio_ext_get_deadline());
+}
+
+GError*
+sqlx_repository_timed_open_and_lock(sqlx_repository_t *repo,
+		const struct sqlx_name_s *n, enum sqlx_open_type_e how,
+		struct sqlx_sqlite3_s **result, gchar **lead,
+		gint64 deadline)
+{
 	GError *err = NULL;
 	struct open_args_s args = {0};
 
@@ -1019,6 +1034,7 @@ sqlx_repository_open_and_lock(sqlx_repository_t *repo,
 	args.no_refcheck = BOOL(how & SQLX_OPEN_NOREFCHECK);
 	args.create = BOOL(how & SQLX_OPEN_CREATE);
 	args.urgent = BOOL(how & SQLX_OPEN_URGENT);
+	args.deadline = deadline;
 
 	switch (how & SQLX_OPEN_REPLIMODE) {
 		case SQLX_OPEN_LOCAL:
@@ -1109,7 +1125,8 @@ sqlx_repository_has_base2(sqlx_repository_t *repo, const struct sqlx_name_s *n,
 /* ------------------------------------------------------------------------- */
 
 GError*
-sqlx_repository_status_base(sqlx_repository_t *repo, const struct sqlx_name_s *n)
+sqlx_repository_status_base(sqlx_repository_t *repo,
+		const struct sqlx_name_s *n, gint64 deadline)
 {
 	REPO_CHECK(repo);
 	SQLXNAME_CHECK(n);
@@ -1144,7 +1161,7 @@ sqlx_repository_status_base(sqlx_repository_t *repo, const struct sqlx_name_s *n
 	gchar *url = NULL;
 	enum election_status_e status;
 
-	status = election_get_status(repo->election_manager, n, &url);
+	status = election_get_status(repo->election_manager, n, &url, deadline);
 	switch (status) {
 		case ELECTION_LOST:
 			err = NEWERROR(CODE_REDIRECT, "%s", url);

@@ -91,6 +91,7 @@ License along with this library.
 #define NAME_MSGKEY_STATUS             "S"
 #define NAME_MSGKEY_SIZE               "SZ"
 #define NAME_MSGKEY_STGPOLICY          "SP"
+#define NAME_MSGKEY_TIMEOUT            "TO"
 #define NAME_MSGKEY_TRUNCATED          "TRUNC"
 #define NAME_MSGKEY_TYPENAME           "T"
 #define NAME_MSGKEY_UPDATE             "UPDATE"

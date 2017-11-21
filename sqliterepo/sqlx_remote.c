@@ -34,9 +34,9 @@ License along with this library.
 struct asn_TYPE_descriptor_s;
 
 static MESSAGE
-make_request(const gchar *rn, const struct sqlx_name_s *name)
+make_request(const gchar *rn, const struct sqlx_name_s *name, gint64 deadline)
 {
-	MESSAGE req = metautils_message_create_named(rn);
+	MESSAGE req = metautils_message_create_named(rn, deadline);
 	metautils_message_add_field_str(req, NAME_MSGKEY_BASENAME, name->base);
 	metautils_message_add_field_str(req, NAME_MSGKEY_BASETYPE, name->type);
 	metautils_message_add_field_str(req, NAME_MSGKEY_NAMESPACE, name->ns);
@@ -70,59 +70,59 @@ sqlx_encode_TableSequence(struct TableSequence *tabseq, GError **err)
 /* ------------------------------------------------------------------------- */
 
 GByteArray*
-sqlx_pack_USE(const struct sqlx_name_s *name)
+sqlx_pack_USE(const struct sqlx_name_s *name, gint64 deadline)
 {
-	MESSAGE req = make_request(NAME_MSGNAME_SQLX_USE, name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_USE, name, deadline);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
-sqlx_pack_DESCR(const struct sqlx_name_s *name)
+sqlx_pack_DESCR(const struct sqlx_name_s *name, gint64 deadline)
 {
-	MESSAGE req = make_request(NAME_MSGNAME_SQLX_DESCR, name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_DESCR, name, deadline);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
-sqlx_pack_INFO(void)
+sqlx_pack_INFO(gint64 deadline)
 {
-	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_SQLX_INFO);
+	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_SQLX_INFO, deadline);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
-sqlx_pack_LEANIFY(void)
+sqlx_pack_LEANIFY(gint64 deadline)
 {
-	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_SQLX_LEANIFY);
+	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_SQLX_LEANIFY, deadline);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
-sqlx_pack_RESYNC(const struct sqlx_name_s *name)
+sqlx_pack_RESYNC(const struct sqlx_name_s *name, gint64 deadline)
 {
-	MESSAGE req = make_request(NAME_MSGNAME_SQLX_RESYNC, name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_RESYNC, name, deadline);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
-sqlx_pack_STATUS(const struct sqlx_name_s *name)
+sqlx_pack_STATUS(const struct sqlx_name_s *name, gint64 deadline)
 {
-	MESSAGE req = make_request(NAME_MSGNAME_SQLX_STATUS, name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_STATUS, name, deadline);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
-sqlx_pack_EXITELECTION(const struct sqlx_name_s *name)
+sqlx_pack_EXITELECTION(const struct sqlx_name_s *name, gint64 deadline)
 {
-	MESSAGE req = make_request(NAME_MSGNAME_SQLX_EXITELECTION, name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_EXITELECTION, name, deadline);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
 sqlx_pack_SNAPSHOT(const struct sqlx_name_s *name, const gchar *source,
-		const gchar *cid, const gchar *seq_num)
+		const gchar *cid, const gchar *seq_num, gint64 deadline)
 {
-	MESSAGE req = make_request(NAME_MSGNAME_SQLX_SNAPSHOT, name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_SNAPSHOT, name, deadline);
 	metautils_message_add_field_str(req, NAME_MSGKEY_SRC, source);
 	metautils_message_add_field_str(req, NAME_MSGKEY_CONTAINERID, cid);
 	metautils_message_add_field_str(req, NAME_MSGKEY_SEQNUM, seq_num);
@@ -130,65 +130,65 @@ sqlx_pack_SNAPSHOT(const struct sqlx_name_s *name, const gchar *source,
 }
 
 GByteArray*
-sqlx_pack_PIPEFROM(const struct sqlx_name_s *name, const gchar *source)
+sqlx_pack_PIPEFROM(const struct sqlx_name_s *name, const gchar *source, gint64 deadline)
 {
-	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PIPEFROM, name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PIPEFROM, name, deadline);
 	metautils_message_add_field_str(req, NAME_MSGKEY_SRC, source);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
-sqlx_pack_PIPETO(const struct sqlx_name_s *name, const gchar *target)
+sqlx_pack_PIPETO(const struct sqlx_name_s *name, const gchar *target, gint64 deadline)
 {
-	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PIPETO, name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PIPETO, name, deadline);
 	metautils_message_add_field_str(req, NAME_MSGKEY_DST, target);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
-sqlx_pack_DUMP(const struct sqlx_name_s *name, gboolean chunked)
+sqlx_pack_DUMP(const struct sqlx_name_s *name, gboolean chunked, gint64 deadline)
 {
-	MESSAGE req = make_request(NAME_MSGNAME_SQLX_DUMP, name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_DUMP, name, deadline);
 	metautils_message_add_field(req, NAME_MSGKEY_CHUNKED, &chunked, 1);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
-sqlx_pack_RESTORE(const struct sqlx_name_s *name, const guint8 *raw, gsize rawsize)
+sqlx_pack_RESTORE(const struct sqlx_name_s *name, const guint8 *raw, gsize rawsize, gint64 deadline)
 {
-	MESSAGE req = make_request(NAME_MSGNAME_SQLX_RESTORE, name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_RESTORE, name, deadline);
 	metautils_message_set_BODY(req, raw, rawsize);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
-sqlx_pack_REPLICATE(const struct sqlx_name_s *name, struct TableSequence *tabseq)
+sqlx_pack_REPLICATE(const struct sqlx_name_s *name, struct TableSequence *tabseq, gint64 deadline)
 {
 	EXTRA_ASSERT(name != NULL);
 	EXTRA_ASSERT(tabseq != NULL);
 
-	MESSAGE req = make_request(NAME_MSGNAME_SQLX_REPLICATE, name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_REPLICATE, name, deadline);
 	metautils_message_add_body_unref(req, sqlx_encode_TableSequence(tabseq, NULL));
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
-sqlx_pack_GETVERS(const struct sqlx_name_s *name)
+sqlx_pack_GETVERS(const struct sqlx_name_s *name, gint64 deadline)
 {
 	EXTRA_ASSERT(name != NULL);
-	MESSAGE req = make_request(NAME_MSGNAME_SQLX_GETVERS, name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_GETVERS, name, deadline);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
 sqlx_pack_QUERY(const struct sqlx_name_s *name, const gchar *query,
-		struct TableSequence *params, gboolean autocreate)
+		struct TableSequence *params, gboolean autocreate, gint64 deadline)
 {
 	EXTRA_ASSERT(name != NULL);
 	EXTRA_ASSERT(query != NULL);
 
 	guint8 ac = (guint8) autocreate;
-	MESSAGE req = make_request(NAME_MSGNAME_SQLX_QUERY, name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_QUERY, name, deadline);
 	metautils_message_add_field(req, NAME_MSGKEY_AUTOCREATE, &ac, 1);
 	metautils_message_add_field_str(req, NAME_MSGKEY_QUERY, query);
 	if (params)
@@ -198,58 +198,57 @@ sqlx_pack_QUERY(const struct sqlx_name_s *name, const gchar *query,
 }
 
 GByteArray *
-sqlx_pack_DESTROY(const struct sqlx_name_s *name, gboolean local)
+sqlx_pack_DESTROY(const struct sqlx_name_s *name, gboolean local, gint64 deadline)
 {
 	gint8 local2 = BOOL(local);
-	MESSAGE req = make_request(NAME_MSGNAME_SQLX_DESTROY, name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_DESTROY, name, deadline);
 	if (local)
 		metautils_message_add_field(req, NAME_MSGKEY_LOCAL, &local2, 1);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray *
-sqlx_pack_ENABLE(const struct sqlx_name_s *name)
+sqlx_pack_ENABLE(const struct sqlx_name_s *name, gint64 deadline)
 {
-	return message_marshall_gba_and_clean(make_request(NAME_MSGNAME_SQLX_ENABLE, name));
+	return message_marshall_gba_and_clean(make_request(NAME_MSGNAME_SQLX_ENABLE, name, deadline));
 }
 
 GByteArray *
-sqlx_pack_DISABLE(const struct sqlx_name_s *name)
+sqlx_pack_DISABLE(const struct sqlx_name_s *name, gint64 deadline)
 {
-	return message_marshall_gba_and_clean(make_request(NAME_MSGNAME_SQLX_DISABLE, name));
+	return message_marshall_gba_and_clean(make_request(NAME_MSGNAME_SQLX_DISABLE, name, deadline));
 }
 
 GByteArray *
-sqlx_pack_FREEZE(const struct sqlx_name_s *name)
+sqlx_pack_FREEZE(const struct sqlx_name_s *name, gint64 deadline)
 {
-	return message_marshall_gba_and_clean(make_request(NAME_MSGNAME_SQLX_FREEZE, name));
+	return message_marshall_gba_and_clean(make_request(NAME_MSGNAME_SQLX_FREEZE, name, deadline));
 }
 
 GByteArray *
-sqlx_pack_DISABLE_DISABLED(const struct sqlx_name_s *name)
+sqlx_pack_DISABLE_DISABLED(const struct sqlx_name_s *name, gint64 deadline)
 {
-	return message_marshall_gba_and_clean(make_request(NAME_MSGNAME_SQLX_DISABLE_DISABLED, name));
+	return message_marshall_gba_and_clean(make_request(NAME_MSGNAME_SQLX_DISABLE_DISABLED, name, deadline));
 }
 
 GByteArray *
-sqlx_pack_PROPGET(const struct sqlx_name_s *name)
+sqlx_pack_PROPGET(const struct sqlx_name_s *name, gint64 deadline)
 {
-	return message_marshall_gba_and_clean(make_request(
-				NAME_MSGNAME_SQLX_PROPGET, name));
+	return message_marshall_gba_and_clean(make_request(NAME_MSGNAME_SQLX_PROPGET, name, deadline));
 }
 
 GByteArray *
-sqlx_pack_PROPDEL(const struct sqlx_name_s *name, const gchar * const *keys)
+sqlx_pack_PROPDEL(const struct sqlx_name_s *name, const gchar * const *keys, gint64 deadline)
 {
-	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PROPDEL, name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PROPDEL, name, deadline);
 	metautils_message_add_body_unref(req, STRV_encode_gba((gchar**)keys));
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray *
-sqlx_pack_PROPSET_tab(const struct sqlx_name_s *name, gboolean flush, gchar **kv)
+sqlx_pack_PROPSET_tab(const struct sqlx_name_s *name, gboolean flush, gchar **kv, gint64 deadline)
 {
-	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PROPSET, name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PROPSET, name, deadline);
 	if (flush)
 		metautils_message_add_field_strint (req, NAME_MSGKEY_FLUSH, 1);
 	metautils_message_add_body_unref (req, KV_encode_gba((gchar**)kv));

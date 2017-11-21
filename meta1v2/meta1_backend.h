@@ -117,7 +117,8 @@ GError* meta1_backend_user_info(struct meta1_backend_s *m1,
 
 
 GError* meta1_backend_services_list(struct meta1_backend_s *m1,
-		struct oio_url_s *url, const gchar *srvtype, gchar ***result);
+		struct oio_url_s *url, const gchar *srvtype, gchar ***result,
+		gint64 deadline);
 
 GError* meta1_backend_services_link (struct meta1_backend_s *m1,
 		struct oio_url_s *url, const gchar *srvtype, const char *last,

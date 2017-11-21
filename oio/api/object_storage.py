@@ -30,12 +30,12 @@ from oio.api.replication import ReplicatedWriteHandler
 from oio.api.backblaze_http import BackblazeUtilsException, BackblazeUtils
 from oio.api.backblaze import BackblazeWriteHandler, \
     BackblazeChunkDownloadHandler
-from oio.common.utils import cid_from_name, GeneratorIO
+from oio.common.utils import cid_from_name, GeneratorIO, monotonic_time
 from oio.common.easy_value import float_value
 from oio.common.logger import get_logger
 from oio.common.decorators import ensure_headers, ensure_request_id
 from oio.common.storage_method import STORAGE_METHODS
-from oio.common.constants import OIO_VERSION
+from oio.common.constants import OIO_VERSION, CHUNK_HEADERS
 from oio.common.decorators import handle_account_not_found, \
     handle_container_not_found, handle_object_not_found
 from oio.common.storage_functions import _sort_chunks, fetch_stream, \
@@ -97,6 +97,7 @@ class ObjectStorageApi(object):
         acct_kwargs = kwargs.copy()
         acct_kwargs["proxy_endpoint"] = acct_kwargs.pop("endpoint", None)
         self.account = AccountClient(conf, logger=self.logger, **acct_kwargs)
+        self._blob_client = None
 
     def _patch_timeouts(self, kwargs):
         """
@@ -106,6 +107,21 @@ class ObjectStorageApi(object):
         for tok, tov in self.timeouts.items():
             if tok not in kwargs:
                 kwargs[tok] = tov
+
+    @property
+    def blob_client(self):
+        """
+        A low-level client to rawx services.
+
+        :rtype: `oio.blob.client.BlobClient`
+        """
+        if self._blob_client is None:
+            from oio.blob.client import BlobClient
+            perfdata = self.container.perfdata
+            connection_pool = self.container.pool_manager
+            self._blob_client = BlobClient(
+                connection_pool=connection_pool, perfdata=perfdata)
+        return self._blob_client
 
     @ensure_headers
     @ensure_request_id
@@ -185,9 +201,8 @@ class ObjectStorageApi(object):
         :returns: True if the container has been created,
                   False if it already exists
         """
-        return self.container.container_create(account, container,
-                                               properties=properties,
-                                               **kwargs)
+        return self.container.container_create(
+            account, container, properties=properties, **kwargs)
 
     @handle_container_not_found
     @ensure_headers
@@ -217,10 +232,8 @@ class ObjectStorageApi(object):
         :param properties: properties to set on the containers
         :type properties: `dict`
         """
-        return self.container.container_create_many(account,
-                                                    containers,
-                                                    properties=properties,
-                                                    **kwargs)
+        return self.container.container_create_many(
+            account, containers, properties=properties, **kwargs)
 
     @handle_container_not_found
     @ensure_headers
@@ -301,40 +314,39 @@ class ObjectStorageApi(object):
         :type dst_container: `str`
         """
         try:
-            self.container.container_freeze(account, container)
+            self.container.container_freeze(account, container, **kwargs)
             self.container.container_snapshot(
-                account, container, dst_account, dst_container)
-            resp = self.object_list(dst_account, dst_container)
+                account, container, dst_account, dst_container, **kwargs)
+            resp = self.object_list(dst_account, dst_container, **kwargs)
             obj_gen = resp['objects']
             target_beans = []
             copy_beans = []
             for obj in obj_gen:
                 data = self.object_locate(
-                    account, container, obj["name"])
+                    account, container, obj["name"], **kwargs)
                 chunks = [chunk['url'] for chunk in data[1]]
-                copies = self._generate_copy(chunks)
+                copies = self._generate_copies(chunks)
                 fullpath = self._generate_fullpath(
                     dst_account, dst_container, obj['name'], obj['version'])
-                self._send_copy(chunks, copies, fullpath[0])
-                t_beans, c_beans = self._prepare_update_meta2(
-                    data[1], copies, dst_account, dst_container,
-                    obj['content'])
+                self._link_chunks(chunks, copies, fullpath[0], **kwargs)
+                t_beans, c_beans = self._prepare_meta2_raw_update(
+                    data[1], copies, obj['content'])
                 target_beans.extend(t_beans)
                 copy_beans.extend(c_beans)
                 if len(target_beans) > batch:
                     self.container.container_raw_update(
                         target_beans, copy_beans,
                         dst_account, dst_container,
-                        frozen=True)
+                        frozen=True, **kwargs)
                     target_beans = []
                     copy_beans = []
             if target_beans:
                 self.container.container_raw_update(
                     target_beans, copy_beans,
                     dst_account, dst_container,
-                    frozen=True)
+                    frozen=True, **kwargs)
         finally:
-            self.container.container_enable(account, container)
+            self.container.container_enable(account, container, **kwargs)
 
     @handle_container_not_found
     @ensure_headers
@@ -399,6 +411,9 @@ class ObjectStorageApi(object):
 
     def container_update(self, account, container, metadata, clear=False,
                          **kwargs):
+        """
+        :deprecated: use `container_set_properties`
+        """
         warnings.warn("You'd better use container_set_properties()",
                       DeprecationWarning)
         if not metadata:
@@ -445,6 +460,10 @@ class ObjectStorageApi(object):
         :param append: if set, data will be append to existing object (or
         object will be created if unset)
         :type append: `bool`
+
+        :keyword perfdata: optional `dict` that will be filled with metrics
+            of time spent to resolve the meta2 address, to do the meta2
+            requests, and to upload chunks to rawx services.
 
         :returns: `list` of chunks, size and hash of the what has been uploaded
         """
@@ -493,9 +512,9 @@ class ObjectStorageApi(object):
                 properties=properties, policy=policy, key_file=key_file,
                 append=append, **kwargs)
         else:
-            with open(file_or_path, "rb") as f:
+            with open(file_or_path, "rb") as in_f:
                 return self._object_create(
-                    account, container, obj_name, f, sysmeta,
+                    account, container, obj_name, in_f, sysmeta,
                     properties=properties, policy=policy,
                     key_file=key_file, append=append, **kwargs)
 
@@ -556,6 +575,14 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def object_delete_many(self, account, container, objs, **kwargs):
+        """
+        Delete several objects.
+
+        :param objs: an iterable of object names (should not be a generator)
+        :returns: a list of tuples with the name of the object and
+            a boolean telling if the object has been successfully deleted
+        :rtype: `list` of `tuple`
+        """
         return self.container.content_delete_many(
             account, container, objs, **kwargs)
 
@@ -647,7 +674,7 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def object_locate(self, account, container, obj,
-                      version=None, **kwargs):
+                      version=None, chunk_info=False, **kwargs):
         """
         Get a description of the object along with the list of its chunks.
 
@@ -655,12 +682,30 @@ class ObjectStorageApi(object):
         :param container: name of the container in which the object is stored
         :param obj: name of the object to query
         :param version: version of the object to query
+        :param chunk_info: if True, fetch additional information about chunks
+            from rawx services (slow). The second element of the returned
+            tuple becomes a generator (instead of a list).
         :returns: a tuple with object metadata `dict` as first element
             and chunk `list` as second element
         """
         obj_meta, chunks = self.container.content_locate(
             account, container, obj, version=version, **kwargs)
-        return obj_meta, chunks
+        if not chunk_info:
+            return obj_meta, chunks
+
+        # FIXME(FVE): converting to float does not sort properly
+        # the chunks of the same metachunk
+        def _fetch_ext_info(chunks_):
+            for chunk in sorted(chunks_, key=lambda x: float(x['pos'])):
+                try:
+                    ext_info = self.blob_client.chunk_head(
+                        chunk['url'], **kwargs)
+                    for key in ('chunk_size', 'chunk_hash', 'full_path'):
+                        chunk[key] = ext_info.get(key)
+                except exc.OioException:
+                    pass
+                yield chunk
+        return obj_meta, _fetch_ext_info(chunks)
 
     def object_analyze(self, *args, **kwargs):
         """
@@ -670,10 +715,43 @@ class ObjectStorageApi(object):
                       DeprecationWarning)
         return self.object_locate(*args, **kwargs)
 
+    @staticmethod
+    def _ttfb_wrapper(stream, req_start, perfdata):
+        """Keep track of time-to-first-byte and time-to-last-byte"""
+        for dat in stream:
+            if 'ttfb' not in perfdata:
+                perfdata['ttfb'] = monotonic_time() - req_start
+            yield dat
+        perfdata['ttlb'] = monotonic_time() - req_start
+
     @ensure_headers
     @ensure_request_id
     def object_fetch(self, account, container, obj, version=None, ranges=None,
                      key_file=None, **kwargs):
+        """
+        Download an object.
+
+        :param account: name of the account in which the object is stored
+        :param container: name of the container in which the object is stored
+        :param obj: name of the object to fetch
+        :param version: version of the object to fetch
+        :type version: `str`
+        :param ranges: a list of object ranges to download
+        :type ranges: `list` of `tuples`
+        :param key_file: path to the file containing credentials
+
+        :keyword perfdata: optional `dict` that will be filled with metrics
+            of time spent to resolve the meta2 address, to do the meta2
+            request, and the time-to-first-byte, as seen by this API.
+
+        :returns: a dictionary of object metadata and
+            a stream of object data
+        :rtype: tuple
+        """
+        perfdata = kwargs.get('perfdata', self.container.perfdata)
+        if perfdata is not None:
+            req_start = monotonic_time()
+
         meta, raw_chunks = self.object_locate(
             account, container, obj, version=version, **kwargs)
         chunk_method = meta['chunk_method']
@@ -690,22 +768,17 @@ class ObjectStorageApi(object):
                                                   **kwargs)
         else:
             stream = fetch_stream(chunks, ranges, storage_method, **kwargs)
+
+        if perfdata is not None:
+            return meta, self._ttfb_wrapper(stream, req_start, perfdata)
         return meta, stream
 
     @handle_object_not_found
     @ensure_headers
     @ensure_request_id
     def object_get_properties(self, account, container, obj, **kwargs):
-        return self.container.content_get_properties(account, container, obj,
-                                                     **kwargs)
-
-    @handle_object_not_found
-    @ensure_headers
-    @ensure_request_id
-    def object_show(self, account, container, obj, version=None, **kwargs):
         """
-        Get a description of the content along with its user properties.
-
+        Get the description of an object along with its user properties.
 
         :param account: name of the account in which the object is stored
         :param container: name of the container in which the object is stored
@@ -728,12 +801,31 @@ class ObjectStorageApi(object):
              'mime_type': 'application/octet-stream',
              'name': 'Makefile'}
         """
-        return self.container.content_show(account, container, obj,
-                                           version=version,
-                                           **kwargs)
+        return self.container.content_get_properties(
+            account, container, obj, **kwargs)
+
+    @handle_object_not_found
+    @ensure_headers
+    @ensure_request_id
+    def object_show(self, account, container, obj, version=None, **kwargs):
+        """
+        Get the description of an object along with
+        the dictionary of user-set properties.
+
+        :deprecated: prefer using `object_get_properties`,
+            for consistency with `container_get_properties`.
+        """
+        # stacklevel=5 because we are using 3 decorators
+        warnings.warn("You'd better use object_get_properties()",
+                      DeprecationWarning, stacklevel=5)
+        return self.container.content_show(
+            account, container, obj, version=version, **kwargs)
 
     def object_update(self, account, container, obj, metadata,
                       version=None, clear=False, **kwargs):
+        """
+        :deprecated: use `object_set_properties`
+        """
         warnings.warn("You'd better use object_set_properties()",
                       DeprecationWarning, stacklevel=2)
         if clear:
@@ -824,9 +916,8 @@ class ObjectStorageApi(object):
         obj_meta['content_path'] = obj_name
         obj_meta['container_id'] = cid_from_name(account, container).upper()
         obj_meta['ns'] = self.namespace
-        obj_meta['full_path'] = self._generate_fullpath(account, container,
-                                                        obj_name,
-                                                        obj_meta['version'])
+        obj_meta['full_path'] = self._generate_fullpath(
+            account, container, obj_name, obj_meta['version'])
         obj_meta['oio_version'] = (obj_meta.get('oio_version')
                                    or OIO_VERSION)
 
@@ -846,7 +937,14 @@ class ObjectStorageApi(object):
             handler = ReplicatedWriteHandler(
                 source, obj_meta, chunk_prep, storage_method, **kwargs)
 
+        perfdata = kwargs.get('perfdata', self.container.perfdata)
+        if perfdata is not None:
+            upload_start = monotonic_time()
         final_chunks, bytes_transferred, content_checksum = handler.stream()
+        if perfdata is not None:
+            upload_end = monotonic_time()
+            val = perfdata.get('rawx', 0.0) + upload_end - upload_start
+            perfdata['rawx'] = val
 
         etag = obj_meta.get('etag')
         if etag and etag.lower() != content_checksum.lower():
@@ -934,7 +1032,23 @@ class ObjectStorageApi(object):
     @handle_account_not_found
     @ensure_headers
     @ensure_request_id
-    def account_refresh(self, account, **kwargs):
+    def account_refresh(self, account=None, **kwargs):
+        """
+        Refresh counters of an account.
+
+        :param account: name of the account to refresh,
+            or None to refresh all accounts (slow)
+        :type account: `str`
+        """
+        if account is None:
+            accounts = self.account_list(**kwargs)
+            for account in accounts:
+                try:
+                    self.account_refresh(account, **kwargs)
+                except exc.NoSuchAccount:  # account remove in the meantime
+                    pass
+            return
+
         self.account.account_refresh(account, **kwargs)
 
         containers = self.container_list(account, **kwargs)
@@ -957,51 +1071,80 @@ class ObjectStorageApi(object):
                         pass
 
     def all_accounts_refresh(self, **kwargs):
-        accounts = self.account_list(**kwargs)
-        for account in accounts:
-            try:
-                self.account_refresh(account, **kwargs)
-            except exc.NoSuchAccount:  # account remove in the meantime
-                pass
+        """
+        :deprecated: call `account_refresh(None)` instead
+        """
+        warnings.warn("You'd better use account_refresh(None)",
+                      DeprecationWarning, stacklevel=2)
+        return self.account_refresh(None, **kwargs)
 
     @handle_account_not_found
     @ensure_headers
     @ensure_request_id
     def account_flush(self, account, **kwargs):
+        """
+        Flush all containers of an account
+
+        :param account: name of the account to flush
+        :type account: `str`
+        """
         self.account.account_flush(account, **kwargs)
 
-    def _random_buffer(self, dictionary, n):
-        return ''.join(random.choice(dictionary) for _ in range(n))
+    def _random_buffer(self, dictionary, num_chars):
+        """
+        :rtype: `str`
+        :returns: `num_chars` randomly taken from `dictionary`
+        """
+        return ''.join(random.choice(dictionary) for _ in range(num_chars))
 
-    def _generate_copy(self, chunks, random_hex=60):
-        # random_hex is the number of hexadecimals characters to generate for
-        # the copy path
+    def _generate_copies(self, chunks, random_hex=60):
+        """
+        Generate new chunk URLs, by replacing the last `random_hex`
+        characters of the original URLs by random hexadecimal digits.
+        """
         copies = []
-        for c in chunks:
-            tmp = ''.join([c[:-random_hex],
+        for chunk in chunks:
+            tmp = ''.join((chunk[:-random_hex],
                            self._random_buffer('0123456789ABCDEF',
-                                               random_hex)])
+                                               random_hex)))
             copies.append(tmp)
         return copies
 
-    def _send_copy(self, targets, copies, fullpath):
-        headers = {"x-oio-chunk-meta-full-path": fullpath}
-        if not hasattr(self, "blob_client"):
-            from oio.blob.client import BlobClient
-            self.blob_client = BlobClient()
-        for t, c in zip(targets, copies):
-            self.blob_client.chunk_link(t, c, headers=headers).status
+    def _link_chunks(self, targets, copies, fullpath, **kwargs):
+        """
+        Create chunk hard links.
 
-    def _prepare_update_meta2(self, targets, copies, account, container,
-                              content):
+        :param targets: original chunk URLs
+        :param copies: new chunk URLs
+        :param fullpath: full path to the object whose chunks will
+            be hard linked
+        """
+        out_kwargs = dict(kwargs)
+        headers = out_kwargs.pop('headers', dict())
+        headers.update(((CHUNK_HEADERS['full_path'], fullpath), ))
+        for target, copy in zip(targets, copies):
+            res = self.blob_client.chunk_link(target, copy,
+                                              headers=headers, **out_kwargs)
+            res.status
+
+    def _prepare_meta2_raw_update(self, targets, copies, content):
+        """
+        Generate the lists of original and replacement chunk beans
+        to be used as input for `container_raw_update`.
+        """
         targets_beans = []
         copies_beans = []
-        for t, c in zip(targets, copies):
-            targets_beans.append(self._meta2bean(t['url'], t, content))
-            copies_beans.append(self._meta2bean(c, t, content))
+        for target, copy in zip(targets, copies):
+            targets_beans.append(self._m2_chunk_bean(
+                target['url'], target, content))
+            copies_beans.append(self._m2_chunk_bean(copy, target, content))
         return targets_beans, copies_beans
 
-    def _meta2bean(self, url, meta, content):
+    @staticmethod
+    def _m2_chunk_bean(url, meta, content):
+        """
+        Prepare a dictionary to be used as a chunk "bean" (in meta2 sense).
+        """
         return {"type": "chunk",
                 "id": url,
                 "hash": meta['hash'],

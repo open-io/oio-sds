@@ -189,15 +189,27 @@ _metacd_load_url (struct req_args_s *args)
 static enum http_rc_e
 handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 {
-	// Get a request id for the current request
-	const gchar *reqid = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_REQID);
+	const gint64 now = oio_ext_monotonic_time();
+
+	/* Get a request id for the current request */
+	const char *reqid = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_REQID);
 	if (reqid)
 		oio_ext_set_reqid(reqid);
 	else
 		oio_ext_set_random_reqid();
 
-	const gchar *admin = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_ADMIN);
+	/* Load the optionnal 'admin' flag */
+	const char *admin = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_ADMIN);
 	oio_ext_set_admin(oio_str_parse_bool(admin, FALSE));
+
+	/* Load the optional deadline of the current request */
+	const char *tostr = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_TIMEOUT);
+	gint64 to = 0;
+	if (tostr && oio_str_is_number(tostr, &to)) {
+		oio_ext_set_deadline(now + to);
+	} else {
+		oio_ext_set_deadline(now + proxy_request_max_delay);
+	}
 
 	// Then parse the request to find a handler
 	struct oio_url_s *url = NULL;
@@ -244,7 +256,7 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 		}
 	}
 
-	gint64 spent = oio_ext_monotonic_time () - rq->client->time.evt_in;
+	const gint64 spent = now - rq->client->time.evt_in;
 
 	network_server_stat_push4 (rq->client->server, TRUE,
 			gq_count, 1, gq_count_all, 1,

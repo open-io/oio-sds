@@ -252,7 +252,8 @@ meta1_dispatch_v2_SRV_LIST(struct gridd_reply_ctx_s *reply,
 	reply->subject("%s|%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), srvtype);
 
 	gchar **result = NULL;
-	GError *err = meta1_backend_services_list(m1, url, srvtype, &result);
+	GError *err = meta1_backend_services_list(
+			m1, url, srvtype, &result, oio_ext_get_deadline());
 	if (NULL != err) {
 		_strfreev(&result);
 		reply->send_error(0, err);

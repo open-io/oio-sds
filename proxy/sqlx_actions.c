@@ -157,14 +157,16 @@ action_sqlx_copyto (struct req_args_s *args, struct json_object *jargs)
 		/* No source, locate services from directory and use DB_PIPETO. */
 		ctx.which = CLIENT_PREFER_MASTER;
 		GByteArray * _pack(const struct sqlx_name_s *n) {
-			return sqlx_pack_PIPETO(n, to);
+			return sqlx_pack_PIPETO(n, to, DL());
 		}
 		rc = _sqlx_action_noreturn_TAIL(args, &ctx, _pack);
 	} else {
 		/* Source service provided, use DB_PIPEFROM. */
 		NAME2CONST(n, ctx.name);
-		GByteArray *encoded = sqlx_pack_PIPEFROM(&n, from);
-		err = gridd_client_exec(to, proxy_timeout_common, encoded);
+		GByteArray *encoded = sqlx_pack_PIPEFROM(&n, from, DL());
+		err = gridd_client_exec(to,
+				oio_clamp_timeout(proxy_timeout_common, oio_ext_get_deadline()),
+				encoded);
 		if (err) {
 			rc = _reply_common_error(args, err);
 		} else {
@@ -188,7 +190,7 @@ action_sqlx_propset (struct req_args_s *args, struct json_object *jargs)
 	if (!err) {
 		gboolean flush = _request_get_flag(args, "flush");
 		GByteArray * _pack (const struct sqlx_name_s *n) {
-			return sqlx_pack_PROPSET_tab(n, flush, kv);
+			return sqlx_pack_PROPSET_tab(n, flush, kv, DL());
 		}
 		rc = _sqlx_action_noreturn(args, CLIENT_PREFER_MASTER, _pack);
 	} else {
@@ -215,7 +217,8 @@ action_sqlx_propget (struct req_args_s *args, struct json_object *jargs)
 	gint64 seq = 1;
 	CLIENT_CTX(ctx, args, dirtype, seq);
 
-	err = gridd_request_replicated (&ctx, sqlx_pack_PROPGET);
+	PACKER_VOID(_pack) { return sqlx_pack_PROPGET(_u, DL()); }
+	err = gridd_request_replicated (&ctx, _pack);
 
 	if (err) {
 		client_clean (&ctx);
@@ -273,7 +276,7 @@ action_sqlx_propdel (struct req_args_s *args, struct json_object *jargs)
 		oio_str_reuse(p, g_strconcat("user.", *p, NULL));
 
 	GByteArray * _pack(const struct sqlx_name_s *n) {
-		return sqlx_pack_PROPDEL (n, (const gchar * const * )namev);
+		return sqlx_pack_PROPDEL (n, (const gchar * const * )namev, DL());
 	}
 	enum http_rc_e rc = _sqlx_action_noreturn (args, CLIENT_PREFER_MASTER, _pack);
 	g_strfreev (namev);
@@ -283,45 +286,50 @@ action_sqlx_propdel (struct req_args_s *args, struct json_object *jargs)
 enum http_rc_e
 action_admin_ping (struct req_args_s *args)
 {
-	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, sqlx_pack_USE);
+	PACKER_VOID(_pack) { return sqlx_pack_USE (_u, DL()); }
+	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
 }
 
 enum http_rc_e
 action_admin_status (struct req_args_s *args)
 {
-	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, sqlx_pack_STATUS);
+	PACKER_VOID(_pack) { return sqlx_pack_STATUS (_u, DL()); }
+	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
 }
 
 enum http_rc_e
 action_admin_info (struct req_args_s *args)
 {
-	PACKER_VOID(_pack) { return sqlx_pack_INFO (); }
+	PACKER_VOID(_pack) { return sqlx_pack_INFO (DL()); }
 	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
 }
 
 enum http_rc_e
 action_admin_drop_cache (struct req_args_s *args)
 {
-	PACKER_VOID(_pack) { return sqlx_pack_LEANIFY (); }
+	PACKER_VOID(_pack) { return sqlx_pack_LEANIFY (DL()); }
 	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
 }
 
 enum http_rc_e
 action_admin_sync (struct req_args_s *args)
 {
-	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, sqlx_pack_RESYNC);
+	PACKER_VOID(_pack) { return sqlx_pack_RESYNC (_u, DL()); }
+	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
 }
 
 enum http_rc_e
 action_admin_leave (struct req_args_s *args)
 {
-	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, sqlx_pack_EXITELECTION);
+	PACKER_VOID(_pack) { return sqlx_pack_EXITELECTION (_u, DL()); }
+	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
 }
 
 enum http_rc_e
 action_admin_debug (struct req_args_s *args)
 {
-	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, sqlx_pack_DESCR);
+	PACKER_VOID(_pack) { return sqlx_pack_DESCR (_u, DL()); }
+	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
 }
 
 enum http_rc_e
@@ -351,17 +359,20 @@ action_admin_prop_del (struct req_args_s *args)
 enum http_rc_e
 action_admin_freeze (struct req_args_s *args)
 {
-	return _sqlx_action_noreturn(args, CLIENT_PREFER_MASTER, sqlx_pack_FREEZE);
+	PACKER_VOID(_pack) { return sqlx_pack_FREEZE(_u, DL()); }
+	return _sqlx_action_noreturn(args, CLIENT_PREFER_MASTER, _pack);
 }
 
 enum http_rc_e
 action_admin_enable (struct req_args_s *args)
 {
-	return _sqlx_action_noreturn(args, CLIENT_PREFER_MASTER, sqlx_pack_ENABLE);
+	PACKER_VOID(_pack) { return sqlx_pack_ENABLE(_u, DL()); }
+	return _sqlx_action_noreturn(args, CLIENT_PREFER_MASTER, _pack);
 }
 
 enum http_rc_e
 action_admin_disable (struct req_args_s *args)
 {
-	return _sqlx_action_noreturn(args, CLIENT_PREFER_MASTER, sqlx_pack_DISABLE);
+	PACKER_VOID(_pack) { return sqlx_pack_DISABLE(_u, DL()); }
+	return _sqlx_action_noreturn(args, CLIENT_PREFER_MASTER, _pack);
 }

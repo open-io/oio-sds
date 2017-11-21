@@ -195,6 +195,33 @@ Used by `gcc`
  * type: string
  * cmake directive: *OIO_CORE_SDS_VERSION*
 
+### events.beanstalkd.check_level_alert
+
+> Set a threshold for the number of items in the beanstalkd, so that the service will alert past that value. Set to 0 for no alert sent.
+
+ * default: **0**
+ * type: gint64
+ * cmake directive: *OIO_EVENTS_BEANSTALKD_CHECK_LEVEL_ALERT*
+ * range: 0 -> G_MAXINT64
+
+### events.beanstalkd.check_level_deny
+
+> Set the maximum number of items in beanstalkd before considering it full
+
+ * default: **512000**
+ * type: gint64
+ * cmake directive: *OIO_EVENTS_BEANSTALKD_CHECK_LEVEL_DENY*
+ * range: 0 -> G_MAXINT64
+
+### events.beanstalkd.check_period
+
+> Set the interval between each check of the beanstalkd availability. Set to 0 to never check.
+
+ * default: **1 * G_TIME_SPAN_MINUTE**
+ * type: gint64
+ * cmake directive: *OIO_EVENTS_BEANSTALKD_CHECK_PERIOD*
+ * range: 0 -> 1 * G_TIME_SPAN_DAY
+
 ### events.beanstalkd.delay
 
 > Sets the delay on each notification sent to the BEANSTALK endpoint
@@ -588,6 +615,15 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_PROXY_QUIRK_LOCAL_SCORES*
 
+### proxy.request.max_delay
+
+> How long a request might take to execute, when no specific deadline has been received. Used to compute a deadline transmitted to backend services.
+
+ * default: **1 * G_TIME_SPAN_MINUTE**
+ * type: gint64
+ * cmake directive: *OIO_PROXY_REQUEST_MAX_DELAY*
+ * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
+
 ### proxy.srv_shuffle
 
 > Should the proxy shuffle the services addresses before the query, to do a better load-balancing of the requests.
@@ -870,6 +906,15 @@ Used by `gcc`
  * default: **100 * G_TIME_SPAN_MILLISECOND**
  * type: gint64
  * cmake directive: *OIO_SERVER_QUEUE_WARN_DELAY*
+ * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
+
+### server.request.max_delay_start
+
+> How long a request might take to start executing on the server side. This value is used to compute a deadline for several waitings (DB cache, manager of elections, etc). Common to all sqliterepo-based services, it might be overriden.
+
+ * default: **30 * G_TIME_SPAN_SECOND**
+ * type: gint64
+ * cmake directive: *OIO_SERVER_REQUEST_MAX_DELAY_START*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### server.task.malloc_trim.period
@@ -1251,6 +1296,24 @@ Used by `gcc`
  * type: guint
  * cmake directive: *OIO_SQLITEREPO_REPO_FD_MAX_ACTIVE*
  * range: 0 -> 65536
+
+### sqliterepo.repo.fd_min_active
+
+> Minimum number of simultaneous outgoing connections.
+
+ * default: **32**
+ * type: guint
+ * cmake directive: *OIO_SQLITEREPO_REPO_FD_MIN_ACTIVE*
+ * range: 0 -> 65536
+
+### sqliterepo.repo.getvers_backoff
+
+> .
+
+ * default: **2 * G_TIME_SPAN_SECOND**
+ * type: gint64
+ * cmake directive: *OIO_SQLITEREPO_REPO_GETVERS_BACKOFF*
+ * range: 10 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_MINUTE
 
 ### sqliterepo.repo.getvers_max_retries
 

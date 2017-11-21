@@ -502,7 +502,8 @@ label_retry:
 			hc_decache_reference_service(ss->resolver, u, n->type);
 
 		gchar **peers = NULL;
-		err = hc_resolve_reference_service(ss->resolver, u, n->type, &peers);
+		err = hc_resolve_reference_service(ss->resolver, u, n->type, &peers,
+				oio_ext_get_deadline());
 		if (err == NULL) {
 			EXTRA_ASSERT(peers != NULL);
 			*result = peers;
@@ -1227,7 +1228,7 @@ _reload_lb_world(struct oio_lb_world_s *lbw, struct oio_lb_s *lb)
 	for (char **pst=srvtypes; *pst ;++pst) {
 		const char * srvtype = *pst;
 		GSList *srv = NULL;
-		GError *e = conscience_get_services(SRV.ns_name, srvtype, FALSE, &srv);
+		GError *e = conscience_get_services(SRV.ns_name, srvtype, FALSE, &srv, 0);
 		if (e) {
 			GRID_WARN("Failed to load the list of [%s] in NS=%s", srvtype, SRV.ns_name);
 			any_loading_error = TRUE;

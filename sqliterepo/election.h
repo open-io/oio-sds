@@ -107,8 +107,11 @@ struct election_manager_vtable_s
 
 	/** Triggers the global election mechanism then wait for a final status
 	 * have been locally hit.  */
-	enum election_status_e (*election_get_status) (struct election_manager_s *manager,
-			const struct sqlx_name_s *n, gchar **master_url);
+	enum election_status_e (*election_get_status) (
+			struct election_manager_s *manager,
+			const struct sqlx_name_s *n,
+			gchar **master_url,
+			gint64 deadline);
 
 	GError* (*election_trigger_RESYNC) (struct election_manager_s *m,
 			const struct sqlx_name_s *n);
@@ -140,8 +143,9 @@ GError* election_get_peers (struct election_manager_s *manager,
 #define election_exit(m,n) \
 	((struct abstract_election_manager_s*)m)->vtable->election_exit(m,n)
 
-#define election_get_status(m,n,pmaster) \
-	((struct abstract_election_manager_s*)m)->vtable->election_get_status(m,n,pmaster)
+#define election_get_status(m,n,pmaster,deadline) \
+	((struct abstract_election_manager_s*)m)->vtable->election_get_status(\
+		m,n,pmaster,deadline)
 
 #define election_manager_trigger_RESYNC(m,n) \
 	((struct abstract_election_manager_s*)m)->vtable->election_trigger_RESYNC(m,n)

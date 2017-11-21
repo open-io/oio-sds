@@ -352,7 +352,7 @@ main(int argc, char **argv)
 			/* Generate the list */
 			gboolean full = has_flag_full && has_raw;
 			error = conscience_get_services (namespace, str_type, full,
-					&list_services);
+					&list_services, 0);
 
 			/* Dump the list */
 			if (error && !list_services) {

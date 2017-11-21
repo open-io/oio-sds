@@ -29,7 +29,7 @@ void metautils_srvinfo_ensure_tags (struct service_info_s *si);
 
 GError* conscience_get_namespace (const char *ns, struct namespace_info_s **out);
 GError* conscience_get_services (const char *ns, const char *type,
-		gboolean full, GSList **out);
+		gboolean full, GSList **out, gint64 deadline);
 GError* conscience_get_types (const char *ns, GSList **out);
 GError* conscience_push_service (const char *ns, struct service_info_s *si);
 GError* conscience_remove_services (const char *ns, const char *type);

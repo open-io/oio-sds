@@ -46,7 +46,7 @@ meta1_client_list(void)
 	gchar **result;
 	guint len =0;
 
-	err = meta1v2_remote_get_prefixes(url, &result);
+	err = meta1v2_remote_get_prefixes(url, &result, oio_ext_get_deadline());
 
 	if (err != NULL) {
 		GRID_WARN("META1 request error (%d) : %s", err->code, err->message);

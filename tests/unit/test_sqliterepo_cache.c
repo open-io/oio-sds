@@ -48,12 +48,12 @@ _round_lock(sqlx_cache_t *cache)
 	HASHSTR_ALLOCA(hn1, name1);
 
 	gint id0;
-	GError *err = sqlx_cache_open_and_lock_base(cache, hn0, FALSE, &id0);
+	GError *err = sqlx_cache_open_and_lock_base(cache, hn0, FALSE, &id0, 0);
 	g_assert_no_error (err);
 
 	for (int i=0; i<5 ;i++) {
 		gint id = oio_ext_rand_int();
-		err = sqlx_cache_open_and_lock_base(cache, hn0, FALSE, &id);
+		err = sqlx_cache_open_and_lock_base(cache, hn0, FALSE, &id, 0);
 		g_assert_no_error (err);
 		g_assert_cmpint(id0, ==, id);
 	}
@@ -67,7 +67,7 @@ _round_lock(sqlx_cache_t *cache)
 
 	for (int i=0; i<5 ;i++) {
 		gint id = oio_ext_rand_int ();
-		err = sqlx_cache_open_and_lock_base(cache, hn1, FALSE, &id);
+		err = sqlx_cache_open_and_lock_base(cache, hn1, FALSE, &id, 0);
 		g_assert_no_error (err);
 		err = sqlx_cache_unlock_and_close_base(cache, id, FALSE);
 		g_assert_no_error (err);
@@ -120,7 +120,7 @@ _test_cache_limit (sqlx_cache_t *cache, guint max)
 		g_snprintf(name, sizeof(name), "base-%u", i);
 		hashstr_t *hname = hashstr_create(name);
 		GError *err = sqlx_cache_open_and_lock_base (
-				cache, hname, FALSE, ids+i);
+				cache, hname, FALSE, ids+i, 0);
 		g_assert_no_error(err);
 		g_assert_cmpint(ids[i], >=, 0);
 		g_free(hname);
@@ -130,7 +130,7 @@ _test_cache_limit (sqlx_cache_t *cache, guint max)
 	do {
 		gint id0 = -1;
 		hashstr_t *hn = hashstr_create("X");
-		GError *err = sqlx_cache_open_and_lock_base (cache, hn, FALSE, &id0);
+		GError *err = sqlx_cache_open_and_lock_base (cache, hn, FALSE, &id0, 0);
 		g_assert_error (err, GQ(), CODE_UNAVAILABLE);
 		g_clear_error (&err);
 		g_free(hn);

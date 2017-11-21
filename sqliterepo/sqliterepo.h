@@ -201,6 +201,11 @@ void sqlx_repository_call_change_callback(struct sqlx_sqlite3_s *sq3);
 
 /* Bases operations -------------------------------------------------------- */
 
+GError* sqlx_repository_timed_open_and_lock(sqlx_repository_t *repo,
+		const struct sqlx_name_s *n, enum sqlx_open_type_e how,
+		struct sqlx_sqlite3_s **sq3, gchar **lead,
+		gint64 deadline);
+
 GError* sqlx_repository_open_and_lock(sqlx_repository_t *repo,
 		const struct sqlx_name_s *n, enum sqlx_open_type_e how,
 		struct sqlx_sqlite3_s **sq3, gchar **lead);
@@ -258,7 +263,7 @@ GError* sqlx_repository_use_base(sqlx_repository_t *repo,
  * @return NULL if master, an error with code CODE_REDIRECT if slave, an error with
  *         another code if the election failed. */
 GError* sqlx_repository_status_base(sqlx_repository_t *repo,
-		const struct sqlx_name_s *n);
+		const struct sqlx_name_s *n, gint64 deadline);
 
 /** Collect into a buffer the binary dump of the base (i.e. the content
  *  of a valid sqlite3 file, with only the meaningful pages). */

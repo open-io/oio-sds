@@ -15,6 +15,8 @@
 
 HEADER_PREFIX = 'x-oio-'
 ADMIN_HEADER = HEADER_PREFIX + 'admin'
+PERFDATA_HEADER = HEADER_PREFIX + 'perfdata'
+PERFDATA_HEADER_PREFIX = PERFDATA_HEADER + '-'
 
 CONTAINER_METADATA_PREFIX = "x-oio-container-meta-"
 OBJECT_METADATA_PREFIX = "x-oio-content-meta-"
@@ -22,12 +24,29 @@ CHUNK_METADATA_PREFIX = "x-oio-chunk-meta-"
 
 CONTAINER_USER_METADATA_PREFIX = CONTAINER_METADATA_PREFIX + 'user-'
 
+TIMEOUT_HEADER = HEADER_PREFIX + 'timeout'
+
 CONNECTION_TIMEOUT = 2.0
 READ_TIMEOUT = 30.0
 
+STRLEN_CHUNKID = 64
 
 OIO_VERSION = '4.0'
 
+OIO_DB_ENABLED = 0
+OIO_DB_FROZEN = 2 ** 32 - 1
+OIO_DB_DISABLED = 2 ** 32 - 2
+
+OIO_DB_STATUS_NAME = {
+    OIO_DB_ENABLED: "Enabled",
+    OIO_DB_FROZEN: "Frozen",
+    OIO_DB_DISABLED: "Disabled",
+    str(OIO_DB_ENABLED): "Enabled",
+    str(OIO_DB_FROZEN): "Frozen",
+    str(OIO_DB_DISABLED): "Disabled",
+}
+
+# TODO(FVE): rename constants to upper case
 container_headers = {
     "size": "%ssys-m2-usage" % CONTAINER_METADATA_PREFIX,
     "ns": "%ssys-ns" % CONTAINER_METADATA_PREFIX
@@ -45,7 +64,7 @@ object_headers = {
     "chunk_method": "%schunk-method" % OBJECT_METADATA_PREFIX
 }
 
-chunk_headers = {
+CHUNK_HEADERS = {
     "container_id": "%scontainer-id" % CHUNK_METADATA_PREFIX,
     "chunk_id": "%schunk-id" % CHUNK_METADATA_PREFIX,
     "chunk_hash": "%schunk-hash" % CHUNK_METADATA_PREFIX,

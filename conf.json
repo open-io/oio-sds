@@ -73,6 +73,26 @@
 				"descr": "Sets the maximum number of ACK managed by the ZMQ notification client",
 				"def": "32", "min": 1, "max": "1<<31 - 1" },
 
+			{ "type": "monotonic", "name": "oio_events_beanstalkd_timeout",
+				"key": "events.beanstalkd.timeout",
+				"descr": "Set the interval between each check of the beanstalkd availability. Set to 0 to never check.",
+				"def": "4s", "min": "100ms", "max": "90s" },
+
+			{ "type": "monotonic", "name": "oio_events_beanstalkd_check_period",
+				"key": "events.beanstalkd.check_period",
+				"descr": "Set the interval between each check of the beanstalkd availability. Set to 0 to never check.",
+				"def": "0", "min": "0", "max": "1d" },
+
+			{ "type": "int64", "name": "oio_events_beanstalkd_check_level_deny",
+				"key": "events.beanstalkd.check_level_deny",
+				"descr": "Set the maximum number of items in beanstalkd before considering it full",
+				"def": "500ki", "min": "0", "max": "max" },
+
+			{ "type": "int64", "name": "oio_events_beanstalkd_check_level_alert",
+				"key": "events.beanstalkd.check_level_alert",
+				"descr": "Set a threshold for the number of items in the beanstalkd, so that the service will alert past that value. Set to 0 for no alert sent.",
+				"def": "0", "min": "0", "max": "max" },
+
 			{ "type": "uint", "name": "oio_events_beanstalkd_default_prio",
 				"key": "events.beanstalkd.prio",
 				"descr": "Sets the priority of each notification sent to the BEANSTALK endpoint",
@@ -451,13 +471,13 @@
 
 			{ "type": "monotonic", "name": "_cache_grace_delay_cool",
 				"key": "sqliterepo.cache.ttl.cool",
-				"descr": "Sets the period after the return to the IDLE/COLD state, during which the recycling is forbidden",
-				"def": "0", "min": "0", "max": "1h" },
+				"descr": "Sets the period after the return to the IDLE/COLD state, during which the recycling is forbidden. 0 means the base won't be decached.",
+				"def": "1ms", "min": "0", "max": "1d" },
 
 			{ "type": "monotonic", "name": "_cache_grace_delay_hot",
 				"key": "sqliterepo.cache.ttl.hot",
-				"descr": "Sets the period after the return to the IDLE/HOT state, during which the recycling is forbidden",
-				"def": "0", "min": "0", "max": "1h" },
+				"descr": "Sets the period after the return to the IDLE/HOT state, during which the recycling is forbidden. 0 means the base won't be decached.",
+				"def": "1ms", "min": "0", "max": "1d" },
 
 			{ "type": "uint", "name": "sqliterepo_release_size",
 				"key": "sqliterepo.release_size",
@@ -643,13 +663,23 @@
 			{ "type": "monotonic", "name": "sqlx_periodic_decache_max_delay",
 				"key": "server.periodic_decache.max_delay",
 				"descr": "How long may the decache routine take",
-				"def": "500ms", "min": "1ms", "max": "1m" }
+				"def": "500ms", "min": "1ms", "max": "1m" },
+
+			{ "type": "monotonic", "name": "sqlx_request_max_delay_start",
+				"key": "server.request.max_delay_start",
+				"descr": "How long a request might take to start executing on the server side. This value is used to compute a deadline for several waitings (DB cache, manager of elections, etc). Common to all sqliterepo-based services, it might be overriden.",
+				"def": "30s", "min": "1ms", "max": "1h" }
 		]
 	},
 	"proxy": {
 		"code": "proxy_variables.c",
 		"header": "proxy_variables.h",
 		"variables": [
+			{ "type": "monotonic", "name": "proxy_request_max_delay",
+				"key": "proxy.request.max_delay",
+				"descr": "How long a request might take to execute, when no specific deadline has been received. Used to compute a deadline transmitted to backend services, when no timeout is present in the request.",
+				"def": "1m", "min": "1ms", "max": "1h" },
+
 			{ "type": "bool", "name": "oio_proxy_srv_shuffle",
 				"key": "proxy.srv_shuffle",
 				"descr": "Should the proxy shuffle the services addresses before the query, to do a better load-balancing of the requests.",

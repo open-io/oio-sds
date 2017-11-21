@@ -20,6 +20,7 @@ License along with this library.
 #ifndef OIO_SDS__metautils__lib__metacomm_h
 # define OIO_SDS__metautils__lib__metacomm_h 1
 
+#include <core/oiourl.h>
 #include <metautils/lib/metatypes.h>
 
 #define DECLARE_MARSHALLER_GBA(Name) \
@@ -30,8 +31,6 @@ gint Name (GSList **l, const void *buf, gsize len, GError **err)
 
 typedef struct Message Message_t;
 typedef Message_t* MESSAGE;
-
-struct oio_url_s;
 
 /** Builds a simple reply for the given request. This function automates the
  * copy of the required fields from the request, and sets the appropriated
@@ -57,10 +56,7 @@ void metautils_message_set_BODY (MESSAGE m, const void *b, gsize l);
 gboolean metautils_message_has_ID (MESSAGE m);
 gboolean metautils_message_has_BODY (MESSAGE m);
 
-/** Allocates all the internal structures of a hidden message. */
-MESSAGE metautils_message_create(void);
-
-MESSAGE metautils_message_create_named (const char *name);
+MESSAGE metautils_message_create_named (const char *name, gint64 deadline);
 
 /** Frees all the internal structures of the pointed message. */
 void metautils_message_destroy(MESSAGE m);

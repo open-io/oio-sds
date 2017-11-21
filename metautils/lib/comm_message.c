@@ -55,21 +55,23 @@ __getParameter(MESSAGE m, enum message_param_e mp)
 }
 
 MESSAGE
-metautils_message_create(void)
+metautils_message_create_named (const char *name, gint64 deadline)
 {
-	const char *id = oio_ext_get_reqid ();
+	EXTRA_ASSERT(name != NULL);
+
 	MESSAGE result = ASN1C_CALLOC(1, sizeof(Message_t));
+	metautils_message_set_NAME (result, name, strlen(name));
+
+	const char *id = oio_ext_get_reqid ();
 	if (id)
 		metautils_message_set_ID (result, id, strlen(id));
-	return result;
-}
 
-MESSAGE
-metautils_message_create_named (const char *name)
-{
-	MESSAGE result = metautils_message_create ();
-	if (name)
-		metautils_message_set_NAME (result, name, strlen(name));
+	if (deadline > 0) {
+		const gint64 now = oio_ext_monotonic_time();
+		metautils_message_add_field_strint64(result, NAME_MSGKEY_TIMEOUT,
+				(now < deadline) ? (deadline - now) : 1);
+	}
+
 	return result;
 }
 

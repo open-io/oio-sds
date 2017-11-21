@@ -48,7 +48,8 @@ void sqlx_cache_debug(sqlx_cache_t *cache);
 /** Similar to sqlx_cache_open_base2() and sqlx_cache_lock_base()
  * but in the same critical section. */
 GError * sqlx_cache_open_and_lock_base(sqlx_cache_t *cache,
-		const struct hashstr_s *key, gboolean urgent, gint *result);
+		const struct hashstr_s *key, gboolean urgent, gint *result,
+		gint64 deadline);
 
 /** The invert of sqlx_cache_open_and_lock_base() */
 GError * sqlx_cache_unlock_and_close_base(sqlx_cache_t *cache, gint bd,

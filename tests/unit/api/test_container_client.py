@@ -27,14 +27,15 @@ class ContainerClientTest(unittest.TestCase):
         self.account = "test_container_client"
         self.container = "fake_container"
 
-    def test_content_create_busy(self):
+    def test_content_create_busy_retry(self):
         # Several attempts, service still busy
         with patch('oio.api.base.HttpApi._direct_request',
                    Mock(side_effect=ServiceBusy(""))):
             self.assertRaises(
                 ServiceBusy,
                 self.api.container.content_create,
-                self.account, self.container, "test", size=1, data={})
+                self.account, self.container, "test", size=1, data={},
+                request_attempts=3)
 
         # Conflict error at first attempt
         with patch('oio.api.base.HttpApi._direct_request',
@@ -42,11 +43,31 @@ class ContainerClientTest(unittest.TestCase):
             self.assertRaises(
                 Conflict,
                 self.api.container.content_create,
-                self.account, self.container, "test", size=1, data={})
+                self.account, self.container, "test", size=1, data={},
+                request_attempts=3)
 
         # Service busy followed by Conflict: operation probably
         # finished in background after the proxy timed out
         with patch('oio.api.base.HttpApi._direct_request',
                    Mock(side_effect=[ServiceBusy(), Conflict("")])):
             self.api.container.content_create(
+                self.account, self.container, "test", size=1, data={},
+                request_attempts=3)
+
+    def test_content_create_busy_noretry(self):
+        # Conflict error + no retry configured -> no retry issued
+        with patch('oio.api.base.HttpApi._direct_request',
+                   Mock(side_effect=[Conflict(""), ServiceBusy("")])):
+            self.assertRaises(
+                Conflict,
+                self.api.container.content_create,
+                self.account, self.container, "test", size=1, data={})
+
+        # Service busy + no retry configured -> no retry must be done
+        # and the Conflict side effect is not used.
+        with patch('oio.api.base.HttpApi._direct_request',
+                   Mock(side_effect=[ServiceBusy(), Conflict("")])):
+            self.assertRaises(
+                ServiceBusy,
+                self.api.container.content_create,
                 self.account, self.container, "test", size=1, data={})

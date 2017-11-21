@@ -144,3 +144,32 @@ class TestIndexerCrawler(BaseTestCase):
 
         self.assertRaises(FaultyChunk, indexer.update_index, chunk_path)
         os.remove(chunk_path)
+
+    def test_index_chunk_with_wrong_paths(self):
+        indexer = BlobIndexer(self.conf)
+
+        # try to index the chunks
+        indexer.index_pass()
+        successes = indexer.successes
+        errors = indexer.errors
+
+        # create fake chunks
+        chunk_path1, _, _, _ = self._create_chunk(
+            self.rawx_conf['path'] + ".pending")
+        chunk_path2, _, _, _ = self._create_chunk(
+            self.rawx_conf['path'][:-1] + 'G')
+        chunk_path3, _, _, _ = self._create_chunk(
+            self.rawx_conf['path'] + '0')
+        chunk_path4, _, _, _ = self._create_chunk(
+            self.rawx_conf['path'][:-1])
+
+        # try to index the chunks
+        indexer.index_pass()
+
+        self.assertEqual(indexer.successes, successes)
+        self.assertEqual(indexer.errors, errors)
+
+        os.remove(chunk_path1)
+        os.remove(chunk_path2)
+        os.remove(chunk_path3)
+        os.remove(chunk_path4)

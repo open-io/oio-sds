@@ -14,9 +14,11 @@
 # License along with this library.
 
 
+from functools import wraps
+
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common import exceptions as exc, utils
-from oio.common.constants import chunk_headers, chunk_xattr_keys_optional
+from oio.common.constants import CHUNK_HEADERS, chunk_xattr_keys_optional
 from oio.api.io import ChunkReader
 from oio.api.replication import ReplicatedMetachunkWriter, FakeChecksum
 from oio.common.storage_method import STORAGE_METHODS
@@ -26,22 +28,41 @@ READ_BUFFER_SIZE = 65535
 
 def extract_headers_meta(headers):
     meta = {}
-    for k in chunk_headers.iterkeys():
+    for k in CHUNK_HEADERS.iterkeys():
         try:
-            meta[k] = headers[chunk_headers[k]]
-        except KeyError as e:
+            meta[k] = headers[CHUNK_HEADERS[k]]
+        except KeyError as err:
             if k not in chunk_xattr_keys_optional:
-                raise e
-    if meta['full_path']:
+                raise err
+    if 'full_path' in meta:
         meta['full_path'] = meta['full_path'].split(',')
 
     return meta
 
 
-class BlobClient(object):
-    def __init__(self):
-        self.http_pool = get_pool_manager()
+def update_rawx_perfdata(func):
+    @wraps(func)
+    def _update_rawx_perfdata(self, *args, **kwargs):
+        perfdata = kwargs.get('perfdata') or self.perfdata
+        if perfdata is not None:
+            req_start = utils.monotonic_time()
+        res = func(self, *args, **kwargs)
+        if perfdata is not None:
+            req_end = utils.monotonic_time()
+            val = perfdata.get('rawx', 0.0) + req_end - req_start
+            perfdata['rawx'] = val
+        return res
+    return _update_rawx_perfdata
 
+
+class BlobClient(object):
+    """A low-level client to rawx services."""
+
+    def __init__(self, connection_pool=None, perfdata=None, **kwargs):
+        self.http_pool = connection_pool or get_pool_manager()
+        self.perfdata = perfdata
+
+    @update_rawx_perfdata
     def chunk_put(self, url, meta, data, **kwargs):
         if not hasattr(data, 'read'):
             data = utils.GeneratorIO(data)
@@ -57,11 +78,13 @@ class BlobClient(object):
             storage_method, quorum=1)
         writer.stream(data, None)
 
+    @update_rawx_perfdata
     def chunk_delete(self, url, **kwargs):
         resp = self.http_pool.request('DELETE', url)
         if resp.status != 204:
             raise exc.from_response(resp)
 
+    @update_rawx_perfdata
     def chunk_get(self, url, **kwargs):
         req_id = kwargs.get('req_id')
         if not req_id:
@@ -73,6 +96,7 @@ class BlobClient(object):
         headers = extract_headers_meta(reader.headers)
         return headers, stream
 
+    @update_rawx_perfdata
     def chunk_head(self, url, **kwargs):
         resp = self.http_pool.request('HEAD', url)
         if resp.status == 200:
@@ -80,6 +104,7 @@ class BlobClient(object):
         else:
             raise exc.from_response(resp)
 
+    @update_rawx_perfdata
     def chunk_copy(self, from_url, to_url, **kwargs):
         stream = None
         req_id = kwargs.get('req_id')
@@ -100,6 +125,7 @@ class BlobClient(object):
             if stream:
                 stream.close()
 
+    @update_rawx_perfdata
     def chunk_link(self, target, link, **kwargs):
         headers = kwargs.get('headers')
         headers["Destination"] = link[:-64] + "/" + link[-64:]

@@ -24,7 +24,7 @@ from oio.common.storage_method import STORAGE_METHODS
 from oio.api.ec import EcMetachunkWriter, ECChunkDownloadHandler, \
     ECRebuildHandler
 from oio.common import exceptions as exc
-from oio.common.constants import chunk_headers
+from oio.common.constants import CHUNK_HEADERS
 from tests.unit.api import empty_stream, decode_chunked_body, \
     FakeResponse, CHUNK_SIZE, EMPTY_CHECKSUM
 from tests.unit import set_http_connect, set_http_requests
@@ -263,8 +263,8 @@ class TestEC(unittest.TestCase):
         for conn_id, info in put_reqs.items():
             body, trailers = decode_chunked_body(''.join(info['parts']))
             fragments.append(body)
-            metachunk_size = int(trailers[chunk_headers['metachunk_size']])
-            metachunk_hash = trailers[chunk_headers['metachunk_hash']]
+            metachunk_size = int(trailers[CHUNK_HEADERS['metachunk_size']])
+            metachunk_hash = trailers[CHUNK_HEADERS['metachunk_hash']]
             self.assertEqual(metachunk_size, size)
 
             self.assertEqual(metachunk_hash, test_data_checksum)

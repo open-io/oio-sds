@@ -73,8 +73,16 @@ extern "C" {
 # define PROXYD_HEADER_ADMIN PROXYD_HEADER_PREFIX "admin"
 # endif
 
+# ifndef PROXYD_HEADER_TIMEOUT
+# define PROXYD_HEADER_TIMEOUT PROXYD_HEADER_PREFIX "timeout"
+# endif
+
 # ifndef PROXYD_HEADER_NOEMPTY
 #  define PROXYD_HEADER_NOEMPTY PROXYD_HEADER_PREFIX "no-empty-list"
+# endif
+
+# ifndef PROXYD_HEADER_PERFDATA
+#  define PROXYD_HEADER_PERFDATA PROXYD_HEADER_PREFIX "perfdata"
 # endif
 
 /* in oio_ext_monotonic_time() precision */

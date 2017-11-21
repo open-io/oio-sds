@@ -102,7 +102,8 @@ _cache_load_from_m0(struct meta1_prefixes_set_s *m1ps,
 		const struct addr_info_s *m0_addr,
 		GArray **updated_prefixes,
 		gboolean *meta0_ok,
-		guint digits)
+		guint digits,
+		gint64 deadline)
 {
 	EXTRA_ASSERT(m1ps != NULL);
 	GRID_TRACE2("%s(%p,%p,%p)", __FUNCTION__, m1ps, local_addr, m0_addr);
@@ -115,7 +116,7 @@ _cache_load_from_m0(struct meta1_prefixes_set_s *m1ps,
 
 	grid_addrinfo_to_string (m0_addr, m0, sizeof(m0));
 
-	err = meta0_remote_get_meta1_all(m0, &m0info_list);
+	err = meta0_remote_get_meta1_all(m0, &m0info_list, deadline);
 	if (err) {
 		g_prefix_error(&err, "Remote error: ");
 		goto label_exit;
@@ -173,7 +174,7 @@ label_exit:
 static GError*
 _cache_load_from_ns(struct meta1_prefixes_set_s *m1ps, const char *ns_name,
 		const char *local_url, GArray **updated_prefixes, gboolean *meta0_ok,
-		guint digits)
+		guint digits, gint64 deadline)
 {
 	struct addr_info_s local_ai = {{0}};
 	gboolean done = FALSE;
@@ -190,7 +191,7 @@ _cache_load_from_ns(struct meta1_prefixes_set_s *m1ps, const char *ns_name,
 	/* Get the META0 address */
 	GError *err = NULL;
 	GSList *m0_list = NULL;
-	err = conscience_get_services (ns_name, NAME_SRVTYPE_META0, FALSE, &m0_list);
+	err = conscience_get_services (ns_name, NAME_SRVTYPE_META0, FALSE, &m0_list, deadline);
 	if (err != NULL) {
 		g_prefix_error(&err, "META0 locate error : ");
 		return err;
@@ -204,7 +205,7 @@ _cache_load_from_ns(struct meta1_prefixes_set_s *m1ps, const char *ns_name,
 	for (GSList *m0 = m0_list ; m0 && !err && !done ; m0 = m0->next) {
 		const struct service_info_s *si = m0->data;
 		err = _cache_load_from_m0(m1ps, &local_ai, &(si->addr),
-				updated_prefixes, meta0_ok, digits);
+				updated_prefixes, meta0_ok, digits, deadline);
 		if (!err) {
 			done = TRUE;
 		} else {
@@ -251,7 +252,8 @@ meta1_prefixes_clean(struct meta1_prefixes_set_s *m1ps)
 GError*
 meta1_prefixes_load(struct meta1_prefixes_set_s *m1ps,
 		const char *ns_name, const char *local_url,
-		GArray **updated_prefixes, gboolean *meta0_ok, guint digits)
+		GArray **updated_prefixes, gboolean *meta0_ok, guint digits,
+		gint64 deadline)
 {
 	GError *err = NULL;
 
@@ -260,7 +262,7 @@ meta1_prefixes_load(struct meta1_prefixes_set_s *m1ps,
 	EXTRA_ASSERT(local_url != NULL);
 
 	err = _cache_load_from_ns(m1ps, ns_name, local_url, updated_prefixes,
-			meta0_ok, digits);
+			meta0_ok, digits, deadline);
 	if (NULL != err)
 		g_prefix_error(&err, "NS loading error : ");
 	else

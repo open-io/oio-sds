@@ -20,6 +20,11 @@ License along with this library.
 #ifndef OIO_SDS__core__oiourl_h
 # define OIO_SDS__core__oiourl_h 1
 
+/**
+ * @addtogroup oio-api-c
+ * @{
+ */
+
 #include <glib.h>
 #include <sys/types.h>
 
@@ -143,4 +148,6 @@ gboolean oio_url_check(const struct oio_url_s *u, const char *n, const gchar **e
 #ifdef __cplusplus
 }
 #endif
+
+/** @} */
 #endif /*OIO_SDS__core__oiourl_h*/

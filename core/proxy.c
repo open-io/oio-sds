@@ -309,7 +309,7 @@ _header_callback(char *b, size_t s, size_t n, void *u)
 	/* Then only the OpenIO-related headers are considered if the caller app.
 	 * has an interest in them. */
 	if (ctx->out && ctx->out->headers
-			&& _has_prefix_len (&b, &remaining, "x-oio-")) {
+			&& _has_prefix_len (&b, &remaining, PROXYD_HEADER_PREFIX)) {
 		gchar tmp[remaining+1];
 		memcpy (tmp, b, remaining);
 		tmp[remaining] = '\0';

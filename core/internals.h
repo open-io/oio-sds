@@ -55,6 +55,7 @@ extern "C" {
 #define CODE_IS_RETRY(C) ( \
 		   ((C) == CODE_EXCESSIVE_LOAD) \
 		|| ((C) == CODE_UNAVAILABLE) \
+		|| ((C) == CODE_GATEWAY_TIMEOUT) \
 		|| ((C) == CODE_TOOMANY_REDIRECT))
 
 #define CODE_IS_NOTFOUND(C) ( \
@@ -262,6 +263,7 @@ GError * oio_error_debug (GQuark gq, int code, const char *fmt, ...);
 #define BADREQ(FMT,...) NEWERROR(CODE_BAD_REQUEST, FMT, ##__VA_ARGS__)
 #define BADNS()         NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Unexpected NS")
 #define BUSY(FMT,...)   NEWERROR(CODE_UNAVAILABLE, FMT, ##__VA_ARGS__)
+#define TIMEOUT(FMT,...) NEWERROR(CODE_GATEWAY_TIMEOUT, FMT, ##__VA_ARGS__)
 #define BADSRVTYPE()    NEWERROR(CODE_SRVTYPE_NOTMANAGED, "Unexpected service type")
 #define SYSERR(FMT,...) NEWERROR(CODE_INTERNAL_ERROR, FMT, ##__VA_ARGS__)
 

@@ -22,7 +22,7 @@ from oio.common import exceptions as exc
 from oio.common.exceptions import SourceReadError
 from oio.common.http import headers_from_object_metadata
 from oio.api import io
-from oio.common.constants import chunk_headers
+from oio.common.constants import CHUNK_HEADERS
 from oio.common import green
 
 logger = logging.getLogger(__name__)
@@ -165,8 +165,8 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         try:
             chunk_path = parsed.path.split('/')[-1]
             hdrs = headers_from_object_metadata(self.sysmeta)
-            hdrs[chunk_headers["chunk_pos"]] = chunk["pos"]
-            hdrs[chunk_headers["chunk_id"]] = chunk_path
+            hdrs[CHUNK_HEADERS["chunk_pos"]] = chunk["pos"]
+            hdrs[CHUNK_HEADERS["chunk_id"]] = chunk_path
             hdrs.update(self.headers)
 
             with green.ConnectionTimeout(self.connection_timeout):
@@ -230,7 +230,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                 logger.error("Wrong status code from %s (%s)",
                              conn.chunk, resp.status)
             else:
-                rawx_checksum = resp.getheader(chunk_headers['chunk_hash'])
+                rawx_checksum = resp.getheader(CHUNK_HEADERS['chunk_hash'])
                 if rawx_checksum and rawx_checksum.lower() != checksum:
                     conn.failed = True
                     conn.chunk['error'] = \

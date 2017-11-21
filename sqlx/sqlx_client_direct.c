@@ -192,7 +192,7 @@ _sds_client_create_db (struct oio_sqlx_client_s *self)
 }
 
 static GByteArray *
-_pack_request (struct sqlx_name_inline_s *n0, struct oio_sqlx_batch_s *batch)
+_pack_request (struct sqlx_name_inline_s *n0, struct oio_sqlx_batch_s *batch, gint64 deadline)
 {
 	GByteArray *req = NULL;
 	struct TableSequence in_table_sequence = {{0}};
@@ -230,7 +230,7 @@ _pack_request (struct sqlx_name_inline_s *n0, struct oio_sqlx_batch_s *batch)
 	}
 
 	NAME2CONST(n, *n0);
-	req = sqlx_pack_QUERY(&n, "QUERY", &in_table_sequence, TRUE/*autocreate*/);
+	req = sqlx_pack_QUERY(&n, "QUERY", &in_table_sequence, TRUE/*autocreate*/, deadline);
 
 	asn_DEF_TableSequence.free_struct(&asn_DEF_TableSequence,
 			&in_table_sequence, TRUE);
@@ -394,8 +394,8 @@ _sds_client_batch (struct oio_sqlx_client_s *self,
 	struct sqlx_name_inline_s name;
 	sqlx_inline_name_fill (&name, c->url, NAME_SRVTYPE_SQLX, atoi(allsrv[0]));
 
-	GByteArray *req = _pack_request (&name, batch);
-	GRID_DEBUG("Encoded query: %u bytes", req ? req->len : 0);
+	const gdouble timeout = oio_sqlx_timeout_req;
+	const gint64 deadline = oio_ext_monotonic_time() + (timeout * G_TIME_SPAN_SECOND);
 
 	/* Query each service until a reply is acceptable */
 	gboolean done = FALSE;
@@ -408,10 +408,13 @@ _sds_client_batch (struct oio_sqlx_client_s *self,
 
 		/* send the request and concat all the replies */
 		GByteArray *out = NULL;
-		GRID_DEBUG("SQLX trying with %s", p);
+		GByteArray *req = _pack_request (&name, batch, deadline);
+		GRID_DEBUG("Encoded query: %u bytes", req ? req->len : 0);
+
 		/* TODO(jfs): here are memory copies. big result sets can cause OOM.
 		 * Manage to avoid big resultsets. */
-		err = gridd_client_exec_and_concat (p, oio_sqlx_timeout_req, req, &out);
+		err = gridd_client_exec_and_concat(
+				p, oio_clamp_timeout(timeout, deadline), req, &out);
 		if (err) {
 			if (err->code == CODE_NETWORK_ERROR) {
 				g_clear_error (&err);

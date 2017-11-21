@@ -48,7 +48,7 @@ meta0_utils_getMeta0addr(gchar *ns, GSList **m0_lst, GSList *exclude)
 {
 	addr_info_t *a = NULL;
 	if (*m0_lst == NULL) {
-		GError *err = conscience_get_services(ns, NAME_SRVTYPE_META0, FALSE, m0_lst);
+		GError *err = conscience_get_services(ns, NAME_SRVTYPE_META0, FALSE, m0_lst, oio_ext_get_deadline());
 		if (err) {
 			GRID_WARN("Failed to get Meta0 addresses for namespace %s: (%d) %s",
 					ns, err->code, err->message);
@@ -119,7 +119,7 @@ meta0_init_reload(void)
 	while (m0addr) {
 		gchar url[STRLEN_ADDRINFO];
 		grid_addrinfo_to_string(m0addr, url , sizeof(url));
-		err = meta0_remote_cache_refresh(url);
+		err = meta0_remote_cache_refresh(url, oio_ext_get_deadline());
 		if (err != NULL) {
 			GRID_WARN("META0 [%s] refresh error (%d) : %s", url, err->code, err->message);
 			g_clear_error(&err);
@@ -148,7 +148,7 @@ meta0_init_reset(void)
 	while (m0addr) {
 		gchar url[STRLEN_ADDRINFO];
 		grid_addrinfo_to_string(m0addr, url , sizeof(url));
-		err = meta0_remote_cache_reset(url, FALSE);
+		err = meta0_remote_cache_reset(url, FALSE, oio_ext_get_deadline());
 		if (err != NULL) {
 			GRID_WARN("META0 [%s] reset error (%d) : %s", url, err->code, err->message);
 			g_clear_error(&err);
@@ -178,7 +178,7 @@ meta0_init_list(void)
 		gchar url[STRLEN_ADDRINFO];
 		grid_addrinfo_to_string(m0addr, url , sizeof(url));
 		GSList *list = NULL;
-		err = meta0_remote_get_meta1_all(url, &list);
+		err = meta0_remote_get_meta1_all(url, &list, oio_ext_get_deadline());
 		if (err != NULL) {
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
 				if (GRID_DEBUG_ENABLED()) {
@@ -218,7 +218,7 @@ meta0_init_get(void)
 		gchar url[STRLEN_ADDRINFO];
 		grid_addrinfo_to_string(m0addr, url , sizeof(url));
 		GSList *list = NULL;
-		err = meta0_remote_get_meta1_one(url, prefix, &list);
+		err = meta0_remote_get_meta1_one(url, prefix, &list, oio_ext_get_deadline());
 		if (err != NULL) {
 			GRID_WARN("META0 request error (%d) : %s", err->code, err->message);
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
@@ -299,6 +299,8 @@ meta0_configure(int argc, char **argv)
 
 	if (!grid_string_to_addrinfo(argv[0], &addr))
 		g_strlcpy(namespace, argv[0], sizeof(namespace));
+
+	oio_ext_set_deadline(oio_ext_monotonic_time() + G_TIME_SPAN_MINUTE);
 
 	command = argv[1];
 	if (!g_ascii_strcasecmp(command, "get")) {

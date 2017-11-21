@@ -93,4 +93,8 @@ GError * gridd_clients_step(struct gridd_client_s **clients);
 // Wraps gridd_clients_step() and gridd_clients_finished()
 GError * gridd_clients_loop(struct gridd_client_s **clients);
 
+gdouble oio_clamp_timeout(gdouble timeout, gint64 deadline);
+
+gint64 oio_clamp_deadline(gdouble timeout, gint64 deadline);
+
 #endif /*OIO_SDS__metautils__lib__gridd_client_ext_h*/

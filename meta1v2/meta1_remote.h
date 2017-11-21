@@ -29,48 +29,48 @@ struct oio_url_s;
  *					 i-th key and [(i*2)+1] is the i-th value
  * @return
  */
-GError * meta1v2_remote_create_reference (const char *m1, struct oio_url_s *url,
-		gchar **properties);
+GError * meta1v2_remote_create_reference(const char *m1, struct oio_url_s *url,
+		gchar **properties, gint64 deadline);
 
 GError * meta1v2_remote_delete_reference(const char *m1, struct oio_url_s *url,
-		gboolean force);
+		gboolean force, gint64 deadline);
 
 GError * meta1v2_remote_list_reference_services(const char *m1,
-		struct oio_url_s *url, const char *srvtype, gchar ***out);
+		struct oio_url_s *url, const char *srvtype, gchar ***out, gint64 deadline);
 
 GError * meta1v2_remote_link_service(const char *m1, struct oio_url_s *url,
-		const char *srvtype, gboolean ac, gchar ***out);
+		const char *srvtype, gboolean ac, gchar ***out, gint64 deadline);
 
 GError * meta1v2_remote_unlink_service(const char *m1, struct oio_url_s *url,
-		const char *srvtype);
+		const char *srvtype, gint64 deadline);
 
 GError * meta1v2_remote_unlink_one_service(const char *m1, struct oio_url_s *url,
-		const char *srvtype, gint64 seqid);
+		const char *srvtype, gint64 seqid, gint64 deadline);
 
 GError * meta1v2_remote_renew_reference_service(const char *m1, struct oio_url_s *url,
-		const char *srvtype, const char *last, gboolean ac, gchar ***out);
+		const char *srvtype, const char *last, gboolean ac, gchar ***out, gint64 deadline);
 
 GError * meta1v2_remote_force_reference_service(const char *m1, struct oio_url_s *url,
-		const char *m1url, gboolean ac, gboolean force);
+		const char *m1url, gboolean ac, gboolean force, gint64 deadline);
 
 
 GError * meta1v2_remote_reference_get_property(const char *m1, struct oio_url_s *url,
-		gchar **keys, gchar ***result);
+		gchar **keys, gchar ***result, gint64 deadline);
 
 GError * meta1v2_remote_reference_set_property(const char *m1, struct oio_url_s *url,
-		gchar **pairs, gboolean flush);
+		gchar **pairs, gboolean flush, gint64 deadline);
 
 GError * meta1v2_remote_reference_del_property(const char *m1, struct oio_url_s *url,
-		gchar **keys);
+		gchar **keys, gint64 deadline);
 
 GError * meta1v2_remote_relink_service(const char *m1, struct oio_url_s *url,
 		const char *kept, const char *replaced,
-		gboolean dryrun, gchar ***out);
+		gboolean dryrun, gchar ***out, gint64 deadline);
 
 
 GError * meta1v2_remote_list_services_by_prefix(const char *to, struct oio_url_s *url,
-		gchar ***out);
+		gchar ***out, gint64 deadline);
 
-GError * meta1v2_remote_get_prefixes(const char *m1, gchar ***result);
+GError * meta1v2_remote_get_prefixes(const char *m1, gchar ***result, gint64 deadline);
 
 #endif /*OIO_SDS__meta1v2__meta1_remote_h*/

@@ -219,7 +219,8 @@ _srvlist_to_urlv(GSList *l)
 }
 
 static GError*
-_resolve_meta0(struct hc_resolver_s *r, const char *ns, gchar ***result)
+_resolve_meta0(struct hc_resolver_s *r, const char *ns, gchar ***result,
+		gint64 deadline)
 {
 	GRID_TRACE2("%s(%s)", __FUNCTION__, ns);
 	GError *err = NULL;
@@ -230,13 +231,12 @@ _resolve_meta0(struct hc_resolver_s *r, const char *ns, gchar ***result)
 		GSList *allm0;
 
 		/* Now attempt a real resolution */
-		err = conscience_get_services(ns, NAME_SRVTYPE_META0, FALSE, &allm0);
+		err = conscience_get_services(ns, NAME_SRVTYPE_META0, FALSE, &allm0, deadline);
 		if (!allm0 || err) {
 			if (!err)
 				err = BUSY("No meta0 available");
 			*result = NULL;
-		}
-		else {
+		} else {
 			*result = _srvlist_to_urlv(allm0);
 			g_slist_foreach(allm0, service_info_gclean, NULL);
 			g_slist_free(allm0);
@@ -271,7 +271,8 @@ _m0list_to_urlv(GSList *l)
 }
 
 static GError *
-_resolve_m1_through_one_m0(const char *m0, const guint8 *prefix, gchar ***result)
+_resolve_m1_through_one_m0(const char *m0, const guint8 *prefix,
+		gchar ***result, gint64 deadline)
 {
 	GRID_TRACE2("%s(%s,%02X%02X)", __FUNCTION__, m0, prefix[0], prefix[1]);
 	GError *err = NULL;
@@ -280,7 +281,7 @@ _resolve_m1_through_one_m0(const char *m0, const guint8 *prefix, gchar ***result
 
 	do {
 		GSList *lmap = NULL;
-		err = meta0_remote_get_meta1_one(url, prefix, &lmap);
+		err = meta0_remote_get_meta1_one(url, prefix, &lmap, deadline);
 		if (err)
 			return err;
 		*result = _m0list_to_urlv(lmap);
@@ -293,7 +294,7 @@ _resolve_m1_through_one_m0(const char *m0, const guint8 *prefix, gchar ***result
 
 static GError *
 _resolve_m1_through_many_m0(struct hc_resolver_s *r, const char * const *urlv,
-		const guint8 *prefix, gchar ***result)
+		const guint8 *prefix, gchar ***result, gint64 deadline)
 {
 	GRID_TRACE2("%s(%02X%02X)", __FUNCTION__, prefix[0], prefix[1]);
 
@@ -311,7 +312,7 @@ _resolve_m1_through_many_m0(struct hc_resolver_s *r, const char * const *urlv,
 	}
 
 	for (const char * const *purl=urlv; *purl ;++purl) {
-		GError *err = _resolve_m1_through_one_m0(*purl, prefix, result);
+		GError *err = _resolve_m1_through_one_m0(*purl, prefix, result, deadline);
 		EXTRA_ASSERT((err!=NULL) ^ (*result!=NULL));
 		if (!err)
 			return NULL;
@@ -326,7 +327,7 @@ _resolve_m1_through_many_m0(struct hc_resolver_s *r, const char * const *urlv,
 }
 
 static GError *
-_resolve_meta1(struct hc_resolver_s *r, struct oio_url_s *u, gchar ***result)
+_resolve_meta1(struct hc_resolver_s *r, struct oio_url_s *u, gchar ***result, gint64 deadline)
 {
 	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(u, OIOURL_WHOLE));
 	GError *err = NULL;
@@ -337,12 +338,12 @@ _resolve_meta1(struct hc_resolver_s *r, struct oio_url_s *u, gchar ***result)
 		/* get a meta0, then store it in the cache */
 		gchar **m0urlv = NULL;
 
-		err = _resolve_meta0(r, oio_url_get(u, OIOURL_NS), &m0urlv);
+		err = _resolve_meta0(r, oio_url_get(u, OIOURL_NS), &m0urlv, deadline);
 		if (err != NULL)
 			g_prefix_error(&err, "M0 resolution error: ");
 		else {
 			err = _resolve_m1_through_many_m0(r, (const char * const *)m0urlv,
-					oio_url_get_id(u), result);
+					oio_url_get_id(u), result, deadline);
 			if (!err)
 				hc_resolver_store(r, r->csm0, hk,
 						(const char * const *) *result);
@@ -359,7 +360,7 @@ _resolve_meta1(struct hc_resolver_s *r, struct oio_url_s *u, gchar ***result)
 static GError *
 _resolve_service_through_many_meta1(struct hc_resolver_s *r,
 		const char * const *urlv, struct oio_url_s *u, const char *s,
-		gchar ***result)
+		gchar ***result, gint64 deadline)
 {
 	GRID_TRACE2("%s(%s,%s)", __FUNCTION__, oio_url_get(u, OIOURL_WHOLE), s);
 
@@ -381,7 +382,7 @@ _resolve_service_through_many_meta1(struct hc_resolver_s *r,
 	for (const char * const *purl=urlv; *purl ;++purl) {
 
 		gchar *m1 = meta1_strurl_get_address(*purl);
-		GError *err = meta1v2_remote_list_reference_services(m1, u, s, result);
+		GError *err = meta1v2_remote_list_reference_services(m1, u, s, result, deadline);
 		if (err && CODE_IS_NETWORK_ERROR(err->code) && r->service_notifier)
 			r->service_notifier(m1);
 		g_free0(m1);
@@ -398,7 +399,7 @@ _resolve_service_through_many_meta1(struct hc_resolver_s *r,
 
 static GError*
 _resolve_reference_service(struct hc_resolver_s *r, struct hashstr_s *hk,
-		struct oio_url_s *u, const char *s, gchar ***result)
+		struct oio_url_s *u, const char *s, gchar ***result, gint64 deadline)
 {
 	GRID_TRACE2("%s(%s,%s,%s)", __FUNCTION__, hashstr_str(hk),
 			oio_url_get(u, OIOURL_WHOLE), s);
@@ -411,13 +412,13 @@ _resolve_reference_service(struct hc_resolver_s *r, struct hashstr_s *hk,
 
 	/* now attempt a real resolution */
 	gchar **m1urlv = NULL;
-	GError *err = _resolve_meta1(r, u, &m1urlv);
+	GError *err = _resolve_meta1(r, u, &m1urlv, deadline);
 	EXTRA_ASSERT((err!=NULL) ^ (m1urlv!=NULL));
 	if (NULL != err)
 		return err;
 
 	err = _resolve_service_through_many_meta1(r, (const char * const *)m1urlv,
-			u, s, result);
+			u, s, result, deadline);
 	EXTRA_ASSERT((err!=NULL) ^ (*result!=NULL));
 	if (!err) {
 		/* fill the cache */
@@ -433,7 +434,7 @@ _resolve_reference_service(struct hc_resolver_s *r, struct hashstr_s *hk,
 
 GError*
 hc_resolve_reference_directory(struct hc_resolver_s *r, struct oio_url_s *url,
-		gchar ***result)
+		gchar ***result, gint64 deadline)
 {
 	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(url, OIOURL_WHOLE));
 	EXTRA_ASSERT(r != NULL);
@@ -445,8 +446,8 @@ hc_resolve_reference_directory(struct hc_resolver_s *r, struct oio_url_s *url,
 	GError *err = NULL;
 	gchar **m1v = NULL, **m0v = NULL;
 
-	if (!(err = _resolve_meta0(r, oio_url_get(url, OIOURL_NS), &m0v)))
-		err = _resolve_meta1(r, url, &m1v);
+	if (!(err = _resolve_meta0(r, oio_url_get(url, OIOURL_NS), &m0v, deadline)))
+		err = _resolve_meta1(r, url, &m1v, deadline);
 
 	if (err) {
 		if (m0v) g_strfreev(m0v);
@@ -466,7 +467,7 @@ hc_resolve_reference_directory(struct hc_resolver_s *r, struct oio_url_s *url,
 
 GError*
 hc_resolve_reference_service(struct hc_resolver_s *r, struct oio_url_s *url,
-		const char *srvtype, gchar ***result)
+		const char *srvtype, gchar ***result, gint64 deadline)
 {
 	GRID_TRACE2("%s(%s,%s)", __FUNCTION__, oio_url_get(url, OIOURL_WHOLE), srvtype);
 	EXTRA_ASSERT(r != NULL);
@@ -479,7 +480,7 @@ hc_resolve_reference_service(struct hc_resolver_s *r, struct oio_url_s *url,
 		return BADREQ("Incomplete URL [%s]", oio_url_get(url, OIOURL_WHOLE));
 
 	struct hashstr_s *hk = _srv_key(srvtype, url);
-	GError *err = _resolve_reference_service(r, hk, url, srvtype, result);
+	GError *err = _resolve_reference_service(r, hk, url, srvtype, result, deadline);
 	g_free(hk);
 
 	if (*result && oio_resolver_srv_shuffle)

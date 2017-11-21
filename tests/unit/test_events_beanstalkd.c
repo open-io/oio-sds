@@ -175,29 +175,68 @@ retry:
 	network_server_clean (srv);
 }
 
-static void check_return (GError *err) {
-	static volatile guint i = 0;
-	gboolean expected[] = {
-		TRUE,
-		TRUE,
-		TRUE,
-		FALSE,
+static void
+test_with_check (void)
+{
+	gchar *requests[] = {
+		"use [A-Za-z0-9]+\\R",
+		"stats\\R",
+		"put [[:digit:]]+ [[:digit:]]+ [[:digit:]]+ [[:digit:]]+\\R", "1\\R",
+		"put [[:digit:]]+ [[:digit:]]+ [[:digit:]]+ [[:digit:]]+\\R", "2\\R",
+		"put [[:digit:]]+ [[:digit:]]+ [[:digit:]]+ [[:digit:]]+\\R", "3\\R",
 
-		TRUE,
-		TRUE,
-		FALSE,
+		"use [A-Za-z0-9]+\\R",
+		"put [[:digit:]]+ [[:digit:]]+ [[:digit:]]+ [[:digit:]]+\\R", "3\\R",
+		"put [[:digit:]]+ [[:digit:]]+ [[:digit:]]+ [[:digit:]]+\\R", "4\\R",
 
-		TRUE,
-		TRUE,
+		"use [A-Za-z0-9]+\\R",
+		"put [[:digit:]]+ [[:digit:]]+ [[:digit:]]+ [[:digit:]]+\\R", "4\\R",
+		NULL
 	};
-	if (expected[i++])
-		g_assert_no_error(err);
-	else
-		g_assert_error(err, GQ(), CODE_BAD_REQUEST);
+	gchar *replies[] = {
+		"USING oio\r\n",
+		"OK 0\r\n",
+
+		"", "INSERTED 1\r\n",
+		"", "INSERTED 2\r\n",
+		"", "OUT_OF_MEMORY 3\r\n",
+		/* bad reply -> retry */
+		"USING oio\r\n",
+		"", "INSERTED 3\r\n",
+		"", "ARGL 4\r\n",
+		/* bad reply -> no retry */
+		"USING oio\r\n",
+		NULL
+	};
+
+	void check_return (GError *err) {
+		static volatile guint i = 0;
+		gboolean expected[] = {
+			TRUE, TRUE,
+			TRUE, TRUE, FALSE,
+			TRUE, TRUE, FALSE,
+			TRUE,
+		};
+		if (expected[i++])
+			g_assert_no_error(err);
+		else
+			g_assert_nonnull(err);
+	}
+
+	void t(struct oio_events_queue_s *q) {
+		intercept_errors = check_return;
+		oio_events_queue__send(q, g_strdup("1"));
+		oio_events_queue__send(q, g_strdup("2"));
+		oio_events_queue__send(q, g_strdup("3"));
+		oio_events_queue__send(q, g_strdup("4"));
+	}
+
+	oio_events_beanstalkd_check_period = G_TIME_SPAN_SECOND; /* != 0 */
+	_wrap_with_beanstalkd(requests, replies, t);
 }
 
 static void
-test_nominal (void)
+test_without_check (void)
 {
 	gchar *requests[] = {
 		"use [A-Za-z0-9]+\\R",
@@ -215,19 +254,32 @@ test_nominal (void)
 	};
 	gchar *replies[] = {
 		"USING oio\r\n",
+
 		"", "INSERTED 1\r\n",
 		"", "INSERTED 2\r\n",
-		"", "INVERTED 3\r\n",
-		/* bad reply -> connection closed and restablished */
+		"", "OUT_OF_MEMORY 3\r\n",
+		/* bad reply -> retry */
 		"USING oio\r\n",
 		"", "INSERTED 3\r\n",
 		"", "ARGL 4\r\n",
-		/* bad reply -> connection closed and restablished */
+		/* bad reply -> no retry */
 		"USING oio\r\n",
-		"", "INSERTED 4\r\n",
 		NULL
 	};
 
+	void check_return (GError *err) {
+		static volatile guint i = 0;
+		gboolean expected[] = {
+			TRUE,
+			TRUE, TRUE, FALSE,
+			TRUE, TRUE, FALSE,
+			TRUE,
+		};
+		if (expected[i++])
+			g_assert_no_error(err);
+		else
+			g_assert_nonnull(err);
+	}
 	void t(struct oio_events_queue_s *q) {
 		intercept_errors = check_return;
 		oio_events_queue__send(q, g_strdup("1"));
@@ -235,6 +287,8 @@ test_nominal (void)
 		oio_events_queue__send(q, g_strdup("3"));
 		oio_events_queue__send(q, g_strdup("4"));
 	}
+
+	oio_events_beanstalkd_check_period = 0;
 	_wrap_with_beanstalkd(requests, replies, t);
 }
 
@@ -242,7 +296,8 @@ int
 main(int argc, char **argv)
 {
 	HC_TEST_INIT(argc, argv);
-	g_test_add_func("/event/beanstalkd/nominal", test_nominal);
+	g_test_add_func("/event/beanstalkd/with_check", test_with_check);
+	g_test_add_func("/event/beanstalkd/without_check", test_without_check);
 	server_fd_max_passive = metautils_syscall_count_maxfd();
 	return g_test_run();
 }

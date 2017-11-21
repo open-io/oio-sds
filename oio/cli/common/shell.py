@@ -77,7 +77,11 @@ class OpenIOShell(App):
 
     def run(self, argv):
         try:
-            return super(OpenIOShell, self).run(argv)
+            res = super(OpenIOShell, self).run(argv)
+            pdata = self.client_manager.cli_conf().get('perfdata')
+            if pdata:
+                LOG.warn("Performance data: %s", pdata)
+            return res
         except Exception as e:
             LOG.error('Exception raised: ' + str(e))
             return 1
@@ -113,6 +117,10 @@ class OpenIOShell(App):
             dest='admin_mode',
             action='store_true',
             help="Add 'admin mode' flag to all proxy requests")
+        parser.add_argument(
+            "--dump-perfdata",
+            action='store_true',
+            help="Force the API to dump performance data")
 
         return parser
 
@@ -150,6 +158,8 @@ class OpenIOShell(App):
                 logging.getLogger('').getEffectiveLevel()),
             'is_cli': True,
         }
+        if self.options.dump_perfdata:
+            options['perfdata'] = dict()
         self.client_manager = ClientManager(options)
 
     def prepare_to_run_command(self, cmd):

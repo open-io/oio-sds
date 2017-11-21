@@ -236,10 +236,10 @@ test_invalid_parameters(void)
 		TEST_ABORTING_LIST(meta1_backend_user_info(m1, url, NULL));
 	}
 	void _list(struct meta1_backend_s *m1, struct oio_url_s *url) {
-		TEST_ABORTING_LIST(meta1_backend_services_list(NULL, url, NAME_SRVTYPE_META2, &out));
-		TEST_ABORTING_LIST(meta1_backend_services_list(m1, NULL, NAME_SRVTYPE_META2, &out));
-		TEST_ABORTING_LIST(meta1_backend_services_list(m1, url, NULL, &out));
-		TEST_ABORTING_LIST(meta1_backend_services_list(m1, url, NAME_SRVTYPE_META2, NULL));
+		TEST_ABORTING_LIST(meta1_backend_services_list(NULL, url, NAME_SRVTYPE_META2, &out, oio_ext_monotonic_time() + G_TIME_SPAN_SECOND));
+		TEST_ABORTING_LIST(meta1_backend_services_list(m1, NULL, NAME_SRVTYPE_META2, &out, oio_ext_monotonic_time() + G_TIME_SPAN_SECOND));
+		TEST_ABORTING_LIST(meta1_backend_services_list(m1, url, NULL, &out, oio_ext_monotonic_time() + G_TIME_SPAN_SECOND));
+		TEST_ABORTING_LIST(meta1_backend_services_list(m1, url, NAME_SRVTYPE_META2, NULL, oio_ext_monotonic_time() + G_TIME_SPAN_SECOND));
 	}
 	void _link(struct meta1_backend_s *m1, struct oio_url_s *url) {
 		TEST_ABORTING_LIST(meta1_backend_services_link(NULL, url, NAME_SRVTYPE_META2, NULL, FALSE, &out));
@@ -317,7 +317,8 @@ static guint
 _count_services(struct meta1_backend_s *m1, struct oio_url_s *url, const char *srvtype)
 {
 	gchar **out = NULL;
-	GError *err = meta1_backend_services_list(m1, url, srvtype, &out);
+	GError *err = meta1_backend_services_list(m1, url, srvtype, &out,
+			oio_ext_monotonic_time() + 30 * G_TIME_SPAN_SECOND);
 	g_assert_no_error(err);
 	g_assert_nonnull(out);
 	guint count = g_strv_length(out);

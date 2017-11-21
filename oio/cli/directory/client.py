@@ -59,6 +59,6 @@ def make_client(instance):
     :returns: an instance of DirectoryClientCli
     """
     client = DirectoryClientCli(
-        **instance.get_process_configuration()
+        **instance.cli_conf()
     )
     return client

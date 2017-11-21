@@ -273,3 +273,29 @@ def depaginate(func, item_key=None, listing_key=None, marker_key=None,
         if listing:
             for item in listing:
                 yield item_key(item)
+
+
+__MONOTONIC_TIME = None
+
+
+def monotonic_time():
+    """Get the monotonic time as float seconds"""
+    global __MONOTONIC_TIME
+    if __MONOTONIC_TIME is None:
+        from ctypes import CDLL, c_int64
+        try:
+            liboiocore = CDLL('liboiocore.so.0')
+            oio_ext_monotonic_time = liboiocore.oio_ext_monotonic_time
+            oio_ext_monotonic_time.restype = c_int64
+
+            def _monotonic_time():
+                return oio_ext_monotonic_time() / 1000000.0
+
+            __MONOTONIC_TIME = _monotonic_time
+        except OSError as exc:
+            from sys import stderr
+            from time import time
+            print >>stderr, "Failed to load oio_ext_monotonic_time(): %s" % exc
+            __MONOTONIC_TIME = time
+
+    return __MONOTONIC_TIME()

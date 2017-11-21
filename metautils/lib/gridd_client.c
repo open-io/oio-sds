@@ -71,6 +71,10 @@ struct gridd_client_s
 	gint64 delay_single; /* max delay for a single request, without redirection */
 	gint64 delay_overall; /* max delay with all possible redirections */
 
+	gint64 deadline_connect; /* max delay for a connection to be established */
+	gint64 deadline_single; /* max delay for a single request, without redirection */
+	gint64 deadline_overall; /* max delay with all possible redirections */
+
 	guint32 size;
 
 	guint nb_redirects;
@@ -719,27 +723,13 @@ _client_expired(struct gridd_client_s *client, gint64 now)
 		case NONE:
 			return FALSE;
 		case CONNECTING:
-			if (client->delay_connect > 0) {
-				if ((now - client->tv_connect) > client->delay_connect)
-					return TRUE;
-			}
-			if (client->delay_overall > 0) {
-				if ((now - client->tv_start) > client->delay_overall)
-					return TRUE;
-			}
-			return FALSE;
+			return (now > client->deadline_connect) ||
+				(now > client->deadline_overall);
 		case REQ_SENDING:
 		case REP_READING_SIZE:
 		case REP_READING_DATA:
-			if (client->delay_single > 0) {
-				if ((now - client->tv_connect) > client->delay_single)
-					return TRUE;
-			}
-			if (client->delay_overall > 0) {
-				if ((now - client->tv_start) > client->delay_overall)
-					return TRUE;
-			}
-			return FALSE;
+			return (now > client->deadline_single) ||
+				(now > client->deadline_overall);
 		case STATUS_OK:
 		case STATUS_FAILED:
 			return FALSE;
@@ -817,7 +807,14 @@ _client_start(struct gridd_client_s *client)
 	EXTRA_ASSERT(client != NULL);
 	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
 
-	client->tv_start = client->tv_connect = oio_ext_monotonic_time ();
+	const gint64 now = oio_ext_monotonic_time ();
+	client->tv_start = client->tv_connect = now;
+
+	/* Compute now the deadline of each step, then ppatch it with the
+	 * threadlocal deadline */
+	client->deadline_connect = now + client->delay_connect;
+	client->deadline_single = now + client->delay_single;
+	client->deadline_overall = now + client->delay_overall;
 
 	if (client->step != NONE)
 		return FALSE;

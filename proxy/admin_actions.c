@@ -63,7 +63,7 @@ _action_admin_meta0_common(struct req_args_s *args,
 	GError *err = NULL;
 	GSList *m0_lst = NULL;
 
-	err = conscience_get_services(NS(), NAME_SRVTYPE_META0, FALSE, &m0_lst);
+	err = conscience_get_services(NS(), NAME_SRVTYPE_META0, FALSE, &m0_lst, oio_ext_get_deadline());
 	if (!err) {
 		for (GSList *l = m0_lst; l; l = l->next) {
 			g_clear_error(&err);
@@ -100,9 +100,10 @@ action_admin_meta0_list(struct req_args_s *args) {
 static GError*
 _wrap_meta0_remote_force(const char *m0_url, GByteArray *udata)
 {
-	GError *err = meta0_remote_force(m0_url, udata->data, udata->len);
+	const gint64 deadline = oio_ext_get_deadline();
+	GError *err = meta0_remote_force(m0_url, udata->data, udata->len, deadline);
 	if (!err)
-		err = meta0_remote_cache_refresh(m0_url);
+		err = meta0_remote_cache_refresh(m0_url, deadline);
 	return err;
 }
 

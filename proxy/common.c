@@ -225,12 +225,16 @@ gridd_request_replicated (struct client_ctx_s *ctx, request_packer_f pack)
 	gchar *election_key = g_strconcat (ctx->name.base, "/", ctx->name.type, NULL);
 	STRING_STACKIFY(election_key);
 
+	const gint64 deadline = oio_ext_get_deadline();
+
+	const gint64 req_start = oio_ext_monotonic_time();
+
 	/* Locate the services */
 label_retry:
 	if (*ctx->type == '#')
-		err = hc_resolve_reference_directory (resolver, ctx->url, &m1uv);
+		err = hc_resolve_reference_directory (resolver, ctx->url, &m1uv, deadline);
 	else
-		err = hc_resolve_reference_service (resolver, ctx->url, ctx->type, &m1uv);
+		err = hc_resolve_reference_service (resolver, ctx->url, ctx->type, &m1uv, deadline);
 
 	if (err) {
 		EXTRA_ASSERT(m1uv == NULL);
@@ -240,8 +244,7 @@ label_retry:
 			hc_decache_reference(resolver, ctx->url);
 			goto label_retry;
 		} else {
-			g_prefix_error (&err, "Directory error: ");
-			return err;
+			g_prefix_error(&err, "Directory error: ");
 		}
 	} else {
 		EXTRA_ASSERT(m1uv != NULL);
@@ -257,7 +260,7 @@ label_retry:
 			meta1_urlv_shift_addr(m1uv);
 		} else if (!*m1uv) {
 			g_strfreev (m1uv);
-			return NEWERROR (CODE_CONTAINER_NOTFOUND, "No service located");
+			err = NEWERROR(CODE_CONTAINER_NOTFOUND, "No service located");
 		} else {
 			/* We found some locations, let's keep only the URL part */
 			meta1_urlv_shift_addr (m1uv);
@@ -265,6 +268,10 @@ label_retry:
 			_sort_services (ctx, election_key, m1uv);
 		}
 	}
+	const gint64 resolve_end = oio_ext_monotonic_time();
+	ctx->resolve_duration = resolve_end - req_start;
+	if (err)
+		return err;
 
 	/* Perform the sequence of requests. */
 	GPtrArray
@@ -307,7 +314,8 @@ label_retry:
 			if (ctx->which == CLIENT_RUN_ALL)
 				gridd_client_no_redirect (client);
 			gridd_client_start (client);
-			gridd_client_set_timeout (client, ctx->timeout);
+			gridd_client_set_timeout (client,
+					oio_clamp_timeout(proxy_timeout_common, deadline));
 			if (!(err = gridd_client_loop (client)))
 				err = gridd_client_error (client);
 #ifdef HAVE_ENBUG
@@ -385,6 +393,7 @@ label_retry:
 		gridd_client_free (client);
 		client = NULL;
 	}
+	ctx->request_duration = oio_ext_monotonic_time() - resolve_end;
 
 	EXTRA_ASSERT(urlv->len == bodyv->len);
 	EXTRA_ASSERT(urlv->len == errorv->len);
@@ -493,7 +502,6 @@ void client_init (struct client_ctx_s *ctx, struct req_args_s *args,
 	ctx->seq = seq;
 	sqlx_inline_name_fill_type_asis (&ctx->name, args->url,
 			*srvtype == '#' ? srvtype+1 : srvtype, ctx->seq);
-	ctx->timeout = proxy_timeout_common;
 	ctx->which = CLIENT_PREFER_NONE;
 }
 

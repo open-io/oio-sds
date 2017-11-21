@@ -210,13 +210,16 @@ struct client_ctx_s {
 	const char *type;
 	gint64 seq;
 	enum proxy_preference_e which;
-	gdouble timeout;
 
 	/* output */
 	guint count;
 	gchar **urlv;
 	GError **errorv;
 	GByteArray **bodyv;
+
+	/* performance */
+	gint64 resolve_duration;
+	gint64 request_duration;
 };
 
 void client_init (struct client_ctx_s *ctx, struct req_args_s *args,
@@ -305,6 +308,10 @@ GError * conscience_remote_get_types(const char *cs, gchar ***out);
 GError * conscience_remote_push_services(const char *cs, GSList *ls);
 GError* conscience_remote_remove_services(const char *cs, const char *type,
 		GSList *ls);
+
+static inline gint64 DL(void) {
+	return oio_clamp_deadline(proxy_timeout_common, oio_ext_get_deadline());
+}
 
 /* -------------------------------------------------------------------------- */
 
