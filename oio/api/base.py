@@ -178,6 +178,7 @@ class HttpApi(object):
             _reraise(exceptions.OioTimeout, exc)
         except HTTPError as exc:
             _reraise(exceptions.OioException, exc)
+
         if resp.status >= 400:
             raise exceptions.from_response(resp, body)
         return resp, body

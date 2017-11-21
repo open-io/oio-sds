@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from six import reraise
 import sys
 from oio.common import exceptions
 
@@ -67,8 +68,8 @@ class StorageMethods(object):
             storage_method, params = parse_chunk_method(chunk_method)
             cls = self.index[storage_method]
         except Exception as exc:
-            raise exceptions.InvalidStorageMethod(str(exc)).with_traceback(
-                sys.exc_info()[2])
+            reraise(exceptions.InvalidStorageMethod, str(exc),
+                    sys.exc_info()[2])
         params.update(kwargs)
         self.cache[chunk_method] = cls.build(params)
         self.cache[chunk_method].type = storage_method
