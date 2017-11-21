@@ -45,23 +45,35 @@ License along with this library.
 	} \
 } while (0)
 
+#define ADMIN "admin"
+
 /* ------------------------------------------------------------------------- */
 
 static gchar *
-_prepare_statement(Table_t *t)
+_prepare_statement(Table_t *t, gboolean is_admin)
 {
 	GString *gstr = g_string_sized_new(256);
 	g_string_append_static(gstr, "REPLACE INTO ");
 	g_string_append_len(gstr, (char*)t->name.buf, t->name.size);
-	g_string_append_static(gstr, " (ROWID");
+	g_string_append_static(gstr, " (");
+	if (!is_admin)
+		g_string_append_static(gstr, "ROWID,");
+
 	for (int i=0; i < t->header.list.count; i++) {
 		RowName_t *r = t->header.list.array[i];
-		g_string_append_c(gstr, ',');
+		if (i > 0)
+			g_string_append_c(gstr, ',');
 		g_string_append_len(gstr, (char*)r->name.buf, r->name.size);
 	}
-	g_string_append_static(gstr, ") VALUES (?");
+
+	g_string_append_static(gstr, ") VALUES (");
+	if (!is_admin)
+		g_string_append_static(gstr, " ?,");
+
 	for (int i=0; i < t->header.list.count; i++) {
-		g_string_append_static(gstr, ",?");
+		if (i > 0)
+			g_string_append_c(gstr, ',');
+		g_string_append_static(gstr, "?");
 	}
 	g_string_append_c(gstr, ')');
 
@@ -75,8 +87,8 @@ replicate_table_updates(struct sqlx_sqlite3_s *sq3, Table_t *table)
 	gint i, j, rc;
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
-
-	sql = _prepare_statement(table);
+	gboolean is_admin = !(g_strcmp0((char*)table->name.buf, ADMIN));
+	sql = _prepare_statement(table, is_admin);
 	sqlite3_prepare_debug(rc, sq3->db, sql, -1, &stmt, NULL);
 	g_free(sql);
 
@@ -92,8 +104,8 @@ replicate_table_updates(struct sqlx_sqlite3_s *sq3, Table_t *table)
 			sqlite3_reset(stmt);
 			sqlite3_clear_bindings(stmt);
 
-			sqlite3_bind_int64(stmt, 1, rowid);
-
+			if (!is_admin)
+				sqlite3_bind_int64(stmt, 1, rowid);
 			/* Now apply all the field values */
 			for (j=0; j<row->fields->list.count ;j++) {
 				int pos = 0;
@@ -102,7 +114,7 @@ replicate_table_updates(struct sqlx_sqlite3_s *sq3, Table_t *table)
 
 				field = row->fields->list.array[j];
 				asn_INTEGER2long(&(field->pos), &lpos);
-				pos = lpos + 2;
+				pos = lpos + (is_admin? 1 : 2);
 				switch (field->value.present) {
 					case RowFieldValue_PR_NOTHING:
 					case RowFieldValue_PR_n:

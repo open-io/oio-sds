@@ -17,6 +17,7 @@
 import time
 from datetime import datetime
 from random import random
+from string import hexdigits
 
 from oio.blob.utils import check_volume, read_chunk_metadata
 from oio.rdir.client import RdirClient
@@ -27,6 +28,7 @@ from oio.common.easy_value import int_value
 from oio.common.logger import get_logger
 from oio.common.green import ratelimit
 from oio.common.exceptions import OioNetworkException
+from oio.common.constants import STRLEN_CHUNKID
 
 
 class BlobIndexer(Daemon):
@@ -54,6 +56,12 @@ class BlobIndexer(Daemon):
     def index_pass(self):
 
         def safe_update_index(path):
+            chunk_id = path.rsplit('/', 1)[-1]
+            if len(chunk_id) != STRLEN_CHUNKID:
+                return
+            for c in chunk_id:
+                if c not in hexdigits:
+                    return
             try:
                 self.update_index(path)
                 self.successes += 1

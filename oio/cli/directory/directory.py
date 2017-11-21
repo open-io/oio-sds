@@ -15,6 +15,7 @@
 
 from logging import getLogger
 from cliff.command import Command
+from oio.common.exceptions import ServiceUnavailable
 
 
 class DirectoryCmd(Command):
@@ -115,13 +116,20 @@ class DirectoryInit(DirectoryCmd):
         from time import sleep
 
         self.log.info("Assigning rdir services to rawx services...")
-        sleep(5)  # Let meta1 fetch the list of managed bases
-        self.app.client_manager.directory.rdir_lb.assign_all_rawx()
+        max_attempts = 3
+        for i in range(max_attempts):
+            sleep(5 + i)
+            try:
+                self.app.client_manager.directory.rdir_lb.assign_all_rawx()
+            except ServiceUnavailable as e:
+                if i < (max_attempts - 1):
+                    self.log.info("Retrying because of %s", e)
+                    continue
+                raise
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         checked = self._assign_meta1(parsed_args)
-
         if parsed_args.rdir:
             self._assign_rdir()
 

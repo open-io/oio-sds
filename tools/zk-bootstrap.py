@@ -75,7 +75,7 @@ def batch_create(zh, batch):
 def create_tree(zh, nodes, options):
     N, ok, ko = 2048, 0, 0
     if options.SLOW is not None and options.SLOW:
-        N = 256
+        N = 8
     for batch in batch_split(nodes, N):
         pre = now()
         o, k = batch_create(zh, batch)
