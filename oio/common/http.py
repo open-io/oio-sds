@@ -18,7 +18,7 @@ try:
     from urllib.parse import quote_plus
 except ImportError:
     from urllib import quote_plus
-from six import iteritems
+from six import iteritems, text_type
 
 from oio.common.constants import CHUNK_HEADERS, OIO_VERSION
 from oio.common.http_eventlet import CustomHttpConnection \
@@ -122,7 +122,15 @@ def headers_from_object_metadata(metadata):
         if val is not None:
             out[CHUNK_HEADERS[key]] = metadata[key]
 
-    header = {k: quote_plus(v.encode('utf-8')) for (k, v) in iteritems(out)}
+    header = {}
+    for k, v in iteritems(out):
+        if isinstance(v, text_type):
+            header[k] = quote_plus(v.encode('utf-8'))
+        elif isinstance(v, int):
+            header[k] = quote_plus('%d' % v)
+        else:
+            header[k] = quote_plus(v)
+
     header[CHUNK_HEADERS["full_path"]] = ','.join(metadata['full_path'])
     return header
 
