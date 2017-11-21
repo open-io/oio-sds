@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,6 +18,7 @@ try:
     from urllib.parse import quote
 except ImportError:
     from urllib import quote
+from six import text_type
 
 from oio.common.constants import CHUNK_HEADERS, OIO_VERSION
 from oio.common.http_eventlet import CustomHttpConnection \
@@ -34,11 +35,11 @@ def parse_content_type(raw_content_type):
     param_list = []
     if raw_content_type:
         if ';' in raw_content_type:
-            content_type, params = raw_content_type.split(';', 1)
+            _content_type, params = raw_content_type.split(';', 1)
             params = ';' + params
-            for p in _EXT_PATTERN.findall(params):
-                k = p[0].strip()
-                v = p[1].strip()
+            for match in _EXT_PATTERN.findall(params):
+                k = match[0].strip()
+                v = match[1].strip()
                 param_list.append((k, v))
     return raw_content_type, param_list
 
@@ -54,7 +55,7 @@ def parse_content_range(raw_content_range):
 
 
 def http_header_from_ranges(ranges):
-    s = 'bytes='
+    header = 'bytes='
     for i, (start, end) in enumerate(ranges):
         if end:
             if end < 0:
@@ -66,22 +67,22 @@ def http_header_from_ranges(ranges):
                 raise ValueError("Invalid range (%s, %s)" % (start, end))
 
         if start is not None:
-            s += str(start)
-        s += '-'
+            header += text_type(start)
+        header += '-'
 
         if end is not None:
-            s += str(end)
+            header += text_type(end)
         if i < len(ranges) - 1:
-            s += ','
-    return s
+            header += ','
+    return header
 
 
 def ranges_from_http_header(val):
     if not val.startswith('bytes='):
         raise ValueError('Invalid Range value: %s' % val)
     ranges = []
-    for r in val[6:].split(','):
-        start, end = r.split('-', 1)
+    for rng in val[6:].split(','):
+        start, end = rng.split('-', 1)
         if start:
             start = int(start)
         else:
@@ -108,7 +109,7 @@ def headers_from_object_metadata(metadata):
     headers["transfer-encoding"] = "chunked"
     # FIXME: remove key incoherencies
     headers[CHUNK_HEADERS["content_id"]] = metadata['id']
-    headers[CHUNK_HEADERS["content_version"]] = str(metadata['version'])
+    headers[CHUNK_HEADERS["content_version"]] = text_type(metadata['version'])
     headers[CHUNK_HEADERS["content_path"]] = quote(metadata['content_path'])
     headers[CHUNK_HEADERS["content_chunkmethod"]] = metadata['chunk_method']
     headers[CHUNK_HEADERS["content_policy"]] = metadata['policy']
@@ -119,7 +120,7 @@ def headers_from_object_metadata(metadata):
     for key in ('metachunk_hash', 'metachunk_size', 'chunk_hash'):
         val = metadata.get(key)
         if val is not None:
-            headers[CHUNK_HEADERS[key]] = str(metadata[key])
+            headers[CHUNK_HEADERS[key]] = text_type(metadata[key])
 
     headers[CHUNK_HEADERS['full_path']] = metadata['full_path']
     return headers
