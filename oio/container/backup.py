@@ -170,7 +170,10 @@ class OioTarEntry(object):
 
 
 class LimitedStream(object):
-    """Wrap a stream to read no more than size bytes from input stream"""
+    """
+    Wrap a stream to read no more than size bytes from input stream.
+    Also verify checksums.
+    """
 
     def __init__(self, fd, size, entry=None, offset=0):
         self.fd = fd
@@ -184,9 +187,9 @@ class LimitedStream(object):
         self.offset = offset
         self.md5 = None
         self.current_chunk = None
-        self.find_chunk()
+        self._find_chunk_for_current_offset()
 
-    def find_chunk(self):
+    def _find_chunk_for_current_offset(self):
         if not self.chk:
             self.current_chunk = None
             return
@@ -247,7 +250,7 @@ class LimitedStream(object):
 
             # align offset on boundary
             self.offset += used
-            self.find_chunk()
+            self._find_chunk_for_current_offset()
             data = data[used:]
 
             if len(data) == 0:
@@ -598,24 +601,22 @@ class ContainerRestore(object):
             hdrs[key] = value
             buf = buf[int(length):]
 
-    def parse_reg_type(self, hdrs, account, container):
-        if self.inf.name == CONTAINER_PROPERTIES:
-            assert not hdrs, "invalid sequence in TAR"
-            hdrs = json.loads(self.read(self.inf.size),
+    def _restore_container_properties(self, hdrs, account, container):
+        assert not hdrs, "invalid sequence in TAR"
+        hdrs = json.loads(self.read(self.inf.size),
+                          object_pairs_hook=OrderedDict)
+        self.proxy.container_set_properties(account, container, hdrs)
+
+    def _load_manifest(self, hdrs, account, container):
+        assert not hdrs, "invalid sequence in TAR"
+        manifest = json.loads(self.read(self.inf.size),
                               object_pairs_hook=OrderedDict)
-            self.proxy.container_set_properties(account, container, hdrs)
-            return
+        self.cur_state['manifest'] = manifest
+        if self.mode == self.MODE_RANGE:
+            self.cur_state['last_block'] = max(
+                [x['end_block'] for x in manifest]) + 1
 
-        if self.inf.name == CONTAINER_MANIFEST:
-            assert not hdrs, "invalid sequence in TAR"
-            manifest = json.loads(self.read(self.inf.size),
-                                  object_pairs_hook=OrderedDict)
-            self.cur_state['manifest'] = manifest
-            if self.mode == self.MODE_RANGE:
-                self.cur_state['last_block'] = max(
-                    [x['end_block'] for x in manifest]) + 1
-            return
-
+    def _restore_object(self, hdrs, account, container):
         kwargs = {}
         if not self.append and hdrs and 'mime_type' in hdrs:
             kwargs['mime_type'] = hdrs['mime_type']
@@ -629,9 +630,9 @@ class ContainerRestore(object):
                 account, container, obj_name=self.inf.name, append=self.append,
                 file_or_path=data, **kwargs)
         except (Exception, exc.SourceReadError) as ex:
-            # no data was written if error occurs during object_create
-            # we just have to update our state_machine offset regarding
-            # current object
+            # No data is written if an error occurs during object_create.
+            # We just have to update our state_machine offset regarding
+            # the current object.
             if self.cur_state.get('manifest') is None:
                 raise
 
@@ -642,14 +643,14 @@ class ContainerRestore(object):
             else:  # it should not happen
                 raise BadRequest("Invalid internal state")
 
-            # since an error has occured, we have to reset
-            # current offset to start of current chunk
-            # and remove stored checksum if set
+            # Since an error has occured, we have to reset the
+            # current offset to the start of the current chunk
+            # and remove the stored checksum if set.
 
             if isinstance(ex, exc.SourceReadError):
                 self.logger.error("Invalid checksum detected for %s",
                                   self.inf.name)
-                raise BadRequest("Checksum error %s" % self.inf.name)
+                raise BadRequest("Checksum error for %s" % self.inf.name)
 
             self.cur_state['end'] = (entry['start_block']
                                      + self.cur_state['offset_block'])
@@ -674,6 +675,14 @@ class ContainerRestore(object):
             self.cur_state['offset_block'] = 0
             self.cur_state['offset'] = 0
         self.append = False
+
+    def parse_reg_type(self, hdrs, account, container):
+        if self.inf.name == CONTAINER_PROPERTIES:
+            return self._restore_container_properties(hdrs, account, container)
+        elif self.inf.name == CONTAINER_MANIFEST:
+            return self._load_manifest(hdrs, account, container)
+        else:
+            return self._restore_object(hdrs, account, container)
 
     def restore(self, request, account, container):
         """Manage PUT method for restoring a container"""
