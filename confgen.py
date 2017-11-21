@@ -393,13 +393,17 @@ def end_registration(out):
 def gen_rst_single_var(out, var):
     params = var.raw()
     params['line'] = '-' * len(params['key'])
+    if params['macro']:
+        params['macro'] = '*' + str(params['macro']) + '*'
+    if params['default']:
+        params['default'] = '**' + str(params['default']) + '**'
     out.write("\n{key}\n{line}\n".format(**params))
     out.write("""
 {descr}
 
-- default: **{default}**
+- default: {default}
 - type: {ctype}
-- cmake directive: *{macro}*
+- cmake directive: {macro}
 """.format(**params))
     if isinstance(var, Number):
         out.write("- range: {vmin} -> {vmax}\n".format(**params))
