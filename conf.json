@@ -68,6 +68,11 @@
 				"descr": "Sets the maximum number of ACK managed by the ZMQ notification client",
 				"def": "32", "min": 1, "max": "1<<31 - 1" },
 
+			{ "type": "monotonic", "name": "oio_events_beanstalkd_timeout",
+				"key": "events.beanstalkd.timeout",
+				"descr": "Set the interval between each check of the beanstalkd availability. Set to 0 to never check.",
+				"def": "4s", "min": "100ms", "max": "90s" },
+
 			{ "type": "monotonic", "name": "oio_events_beanstalkd_check_period",
 				"key": "events.beanstalkd.check_period",
 				"descr": "Set the interval between each check of the beanstalkd availability. Set to 0 to never check.",

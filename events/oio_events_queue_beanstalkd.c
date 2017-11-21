@@ -128,6 +128,9 @@ _match_common_error(gchar *buf)
 static int
 _send (int fd, struct iovec *iov, unsigned int iovcount)
 {
+	const int timeout =
+		oio_events_beanstalkd_timeout / G_TIME_SPAN_MILLISECOND;
+
 	int w;
 retry:
 	w = writev (fd, iov, iovcount);
@@ -138,7 +141,7 @@ retry:
 			struct pollfd pfd = {};
 			pfd.fd = fd;
 			pfd.events = POLLOUT;
-			metautils_syscall_poll (&pfd, 1, 1000);
+			metautils_syscall_poll (&pfd, 1, timeout);
 			goto retry;
 		}
 		return 0;
@@ -165,11 +168,14 @@ static GError *
 _send_and_read_reply (int fd, struct iovec *iov, unsigned int iovcount,
 		gchar *dst, gsize dst_len)
 {
+	const int timeout =
+		oio_events_beanstalkd_timeout / G_TIME_SPAN_MILLISECOND;
+
 	if (!_send(fd, iov, iovcount))
 		return NETERR("Send error: (%d) %s", errno, strerror(errno));
 
 	GError *err = NULL;
-	int r = sock_to_read (fd, 1000, dst, dst_len - 1, &err);
+	int r = sock_to_read (fd, timeout, dst, dst_len - 1, &err);
 	if (r < 0) {
 		g_prefix_error(&err, "Read error: ");
 		return err;
@@ -290,13 +296,16 @@ _check_server(int fd)
 static GError *
 _poll_out (int fd)
 {
+	const int timeout =
+		oio_events_beanstalkd_timeout / G_TIME_SPAN_MILLISECOND;
+
 	int rc = 0;
 	struct pollfd pfd = {};
 	do {
 		pfd.fd = fd;
 		pfd.events = POLLOUT;
 		pfd.revents = 0;
-	} while (!(rc = metautils_syscall_poll(&pfd, 1, 1000)));
+	} while (!(rc = metautils_syscall_poll(&pfd, 1, timeout)));
 	if (pfd.revents != POLLOUT)
 		return socket_get_error(fd);
 	return NULL;
