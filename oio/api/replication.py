@@ -113,7 +113,10 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                     # copy current_conns to be able to remove a failed conn
                     for conn in current_conns[:]:
                         if not conn.failed:
-                            conn.queue.put(b'%x\r\n%s\r\n' % (len(data), data))
+                            data_put = ('%x\r\n' % len(data)).encode()
+                            data_put += data + b'\r\n'
+                            conn.queue.put(data_put)
+                            # conn.queue.put(b'%x\r\n%s\r\n' % (len(data), data))
                         else:
                             current_conns.remove(conn)
                             failed_chunks.append(conn.chunk)

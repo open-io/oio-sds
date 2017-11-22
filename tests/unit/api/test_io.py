@@ -33,7 +33,7 @@ class FakeSource(object):
             else:
                 return d
         else:
-            return ''
+            return b''
 
     def getheader(self, k):
         if k.lower() == 'content-length':
