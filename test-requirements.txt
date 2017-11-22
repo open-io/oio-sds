@@ -1,4 +1,3 @@
-beanstalkc
 codecov
 coverage
 fixtures>=1.4.0

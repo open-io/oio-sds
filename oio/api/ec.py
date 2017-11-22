@@ -21,6 +21,7 @@ import collections
 import math
 import hashlib
 from socket import error as SocketError
+from six import text_type
 try:
     from urllib.parse import urlparse
 except ImportError:
@@ -53,13 +54,13 @@ def segment_range_to_fragment_range(segment_start, segment_end, segment_size,
         * fragment_end is the last byte of the last fragment,
           or None if this is a prefix byte range
     """
-    fragment_start = ((segment_start / segment_size * fragment_size)
+    fragment_start = ((segment_start // segment_size * fragment_size)
                       if segment_start is not None else None)
 
     fragment_end = (None if segment_end is None else
-                    ((segment_end + 1) / segment_size * fragment_size)
+                    ((segment_end + 1) // segment_size * fragment_size)
                     if segment_start is None else
-                    ((segment_end + 1) / segment_size * fragment_size) - 1)
+                    ((segment_end + 1) // segment_size * fragment_size) - 1)
 
     return (fragment_start, fragment_end)
 
@@ -350,8 +351,8 @@ class ECStream(object):
     def _convert_range(self, req_start, req_end, length):
         try:
             ranges = ranges_from_http_header("bytes=%s-%s" % (
-                req_start if req_start is not None else '',
-                req_end if req_end is not None else ''))
+                req_start if req_start is not None else b'',
+                req_end if req_end is not None else b''))
         except ValueError:
             return (None, None)
 
@@ -516,7 +517,7 @@ def ec_encode(storage_method, n):
                     total_len -= len(part)
                 # let's encode!
                 encode_result.append(
-                    storage_method.driver.encode(''.join(parts)))
+                    storage_method.driver.encode(b''.join(parts)))
 
             # transform the result
             #
@@ -531,7 +532,7 @@ def ec_encode(storage_method, n):
             # [(fragment_2_0 + fragment_2_1 + ...), # write to chunk 2
             #  ...]
 
-            result = [''.join(p) for p in zip(*encode_result)]
+            result = [b''.join(p) for p in zip(*encode_result)]
             data = yield result
         else:
             # not enough data to encode
@@ -540,11 +541,11 @@ def ec_encode(storage_method, n):
     # empty input data
     # which means end of stream
     # encode what is left in the buf
-    whats_left = ''.join(buf)
+    whats_left = b''.join(buf)
     if whats_left:
         last_fragments = storage_method.driver.encode(whats_left)
     else:
-        last_fragments = [''] * n
+        last_fragments = [b''] * n
     yield last_fragments
 
 
@@ -596,7 +597,7 @@ class EcChunkWriter(object):
                     CHUNK_HEADERS["metachunk_hash"])
         if kwargs.get('chunk_checksum_algo'):
             trailers = trailers + (CHUNK_HEADERS["chunk_hash"], )
-        hdrs["Trailer"] = ', '.join(trailers)
+        hdrs["Trailer"] = b', '.join(trailers)
         with ConnectionTimeout(
                 connection_timeout or io.CONNECTION_TIMEOUT):
             perfdata = kwargs.get('perfdata', None)
@@ -632,14 +633,14 @@ class EcChunkWriter(object):
                     if self.perfdata is not None \
                             and self.conn.upload_start is None:
                         self.conn.upload_start = monotonic_time()
-                    self.conn.send("%x\r\n" % len(data))
+                    self.conn.send(b"%x\r\n" % len(data))
                     self.conn.send(data)
-                    self.conn.send("\r\n")
+                    self.conn.send(b"\r\n")
                     self.bytes_transferred += len(data)
                 eventlet_yield()
             except (Exception, ChunkWriteTimeout) as exc:
                 self.failed = True
-                msg = str(exc)
+                msg = text_type(exc)
                 self.logger.warn("Failed to write to %s (%s, reqid=%s)",
                                  self.chunk, msg, self.reqid)
                 self.chunk['error'] = 'write: %s' % msg
@@ -696,7 +697,7 @@ class EcChunkWriter(object):
             parts.append('%s: %s\r\n' % (CHUNK_HEADERS['chunk_hash'],
                                          self.checksum.hexdigest()))
         parts.append('\r\n')
-        to_send = "".join(parts)
+        to_send = b"".join(parts)
         try:
             with ChunkWriteTimeout(self.write_timeout):
                 self.conn.send(to_send)
@@ -704,7 +705,7 @@ class EcChunkWriter(object):
                 self.conn.set_cork(False)
         except (Exception, ChunkWriteTimeout) as exc:
             self.failed = True
-            msg = str(exc)
+            msg = text_type(exc)
             self.logger.warn("Failed to finish %s (%s, reqid=%s)",
                              self.chunk, msg, self.reqid)
             self.chunk['error'] = 'finish: %s' % msg
@@ -834,7 +835,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                         try:
                             data = source.read(read_size)
                         except (ValueError, IOError) as exc:
-                            raise SourceReadError(str(exc))
+                            raise SourceReadError(text_type(exc))
                     return data
 
                 # the main write loop
@@ -928,7 +929,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 logger=self.logger)
             return writer, chunk
         except (Exception, Timeout) as exc:
-            msg = str(exc)
+            msg = text_type(exc)
             self.logger.warn("Failed to connect to %s (%s, reqid=%s): %s",
                              chunk, msg, self.reqid, exc)
             chunk['error'] = 'connect: %s' % msg
@@ -991,7 +992,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
             resp = writer.getresponse()
         except (Exception, Timeout) as exc:
             resp = None
-            msg = str(exc)
+            msg = text_type(exc)
             self.logger.warn("Failed to read response for %s (reqid=%s): %s",
                              writer.chunk, self.reqid, msg)
             writer.chunk['error'] = 'resp: %s' % msg
@@ -1126,7 +1127,7 @@ class ECRebuildHandler(object):
 
     def _make_rebuild_iter(self, resps):
         def _get_frag(resp):
-            buf = ''
+            buf = b''
             remaining = self.storage_method.ec_fragment_size
             while remaining:
                 data = resp.read(remaining)
