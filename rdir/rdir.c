@@ -1221,6 +1221,30 @@ _route_admin_set_incident(struct req_args_s *args, struct json_object *jbody,
 	return _reply_ok(args->rp, NULL);
 }
 
+
+// RDIR{{
+// GET /status
+// ~~~~~~~~~~~
+// Return a brief summary of the usage on the target service.
+//
+// .. code-block:: http
+//
+//    GET /status HTTP/1.1
+//    Host: 127.0.0.1:6022
+//    User-Agent: curl/7.55.1
+//    Accept: */*
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 21
+//
+//    {"opened_db_count":6}
+//
+// }}RDIR
 static enum http_rc_e
 _route_srv_status(struct req_args_s *args)
 {
@@ -1236,6 +1260,29 @@ _route_srv_status(struct req_args_s *args)
 	return _reply_ok(args->rp, gstr);
 }
 
+// RDIR{{
+// GET /config
+// ~~~~~~~~~~~~~~~~~~~~
+//
+// Return the live configuration of the target RDIR service.
+//
+// .. code-block:: http
+//
+//    GET /config HTTP/1.1
+//    Host: 127.0.0.1:6022
+//    User-Agent: curl/7.55.1
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 2015
+//
+//    {"core.http.user_agent":"", ...}
+//
+// }}RDIR
 static enum http_rc_e
 _route_srv_config(struct req_args_s *args)
 {
