@@ -604,3 +604,14 @@ def convert_size(size, unit=""):
         p = math.pow(1000, i)
         size = round(size / p, 3)
     return "%s%s%s" % (size, METRIC_SYMBOLS[i], unit)
+
+
+def oio_reraise(exc_type, exc_value, extra_message=None):
+    """
+    Raise an exception of type `exc_type` with arguments of `exc_value`
+    plus maybe `extra_message` at the beginning.
+    """
+    args = exc_value.args
+    if extra_message:
+        args = (extra_message, ) + args
+    raise exc_type(args), None, sys.exc_info()[2]
