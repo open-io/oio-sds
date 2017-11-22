@@ -157,10 +157,14 @@ send_chunk_event(const char *type, const dav_resource *resource)
 	GError *err = rawx_event_send(type, json);
 	const gint64 post = oio_ext_monotonic_time ();
 	if (!err) {
-		if (post - pre > 5 * G_TIME_SPAN_SECOND) {
+		gint64 limit = 5 * G_TIME_SPAN_SECOND;
+		if (post - pre > limit) {
 			DAV_ERROR_REQ(resource->info->request, 0,
-					"Event LONG %s t=%"G_GINT64_FORMAT"ms", type,
-					(post-pre)/G_TIME_SPAN_MILLISECOND);
+					"Sending event %s took %"G_GINT64_FORMAT
+					"ms (warning limit is %"G_GINT64_FORMAT"ms)",
+					type,
+					(post-pre) / G_TIME_SPAN_MILLISECOND,
+					limit / G_TIME_SPAN_MILLISECOND);
 		} else {
 			DAV_DEBUG_REQ(resource->info->request, 0, "Event OK %s", type);
 		}
