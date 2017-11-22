@@ -69,8 +69,8 @@ class Harasser(object):
         end = time.time()
         self.pushed_count += loops
         self.pushed_time += end-start
-        print("%d pushed in %.3fs, %d req/s" \
-            % (loops, end-start, loops/(end-start)))
+        print("%d pushed in %.3fs, %d req/s"
+              % (loops, end-start, loops/(end-start)))
 
     def harass_del(self, min_loops=0):
         min_loops = min(min_loops, len(self.sent))
@@ -85,8 +85,8 @@ class Harasser(object):
         end = time.time()
         self.removed_count += loops
         self.removed_time += end-start
-        print("%d removed in %.3fs, %d req/s" \
-            % (loops, end-start, loops/(end-start)))
+        print("%d removed in %.3fs, %d req/s"
+              % (loops, end-start, loops/(end-start)))
 
     def __call__(self):
         try:
