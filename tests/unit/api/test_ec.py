@@ -109,7 +109,7 @@ class TestEC(unittest.TestCase):
 
         for i in range(quorum_size):
             self.assertEqual(chunks[i].get('error'), None)
-        for i in xrange(quorum_size, nb):
+        for i in range(quorum_size, nb):
             self.assertEqual(chunks[i].get('error'), 'resp: HTTP 500')
 
         self.assertEqual(bytes_transferred, 0)
@@ -237,7 +237,7 @@ class TestEC(unittest.TestCase):
     def test_write_transfer(self):
         checksum = self.checksum()
         segment_size = self.storage_method.ec_segment_size
-        test_data = ('1234' * segment_size)[:-10]
+        test_data = (b'1234' * segment_size)[:-10]
         size = len(test_data)
         test_data_checksum = self.checksum(test_data).hexdigest()
         nb = self.storage_method.ec_nb_data + self.storage_method.ec_nb_parity
@@ -247,7 +247,7 @@ class TestEC(unittest.TestCase):
         put_reqs = defaultdict(lambda: {'parts': []})
 
         def cb_body(conn_id, part):
-            put_reqs[conn_id]['parts'].append(part)
+            put_reqs[conn_id]['parts'].append(part.encode('utf-8'))
 
         # TODO test headers
 
@@ -261,7 +261,8 @@ class TestEC(unittest.TestCase):
         fragments = []
 
         for conn_id, info in put_reqs.items():
-            body, trailers = decode_chunked_body(''.join(info['parts']))
+            body, trailers = decode_chunked_body(
+                b''.join(info['parts']))
             fragments.append(body)
             metachunk_size = int(trailers[CHUNK_HEADERS['metachunk_size']])
             metachunk_hash = trailers[CHUNK_HEADERS['metachunk_hash']]
@@ -281,7 +282,7 @@ class TestEC(unittest.TestCase):
 
         fragments = zip(*frags)
 
-        final_data = ''
+        final_data = b''
         for frag in fragments:
             self.assertEqual(len(frag), nb)
             frag = list(frag)
@@ -305,13 +306,13 @@ class TestEC(unittest.TestCase):
                 break
             fragments_data.append(fragments)
 
-        ec_chunks = [''.join(frag) for frag in zip(*fragments_data)]
+        ec_chunks = [b''.join(frag) for frag in zip(*fragments_data)]
         return ec_chunks
 
     def test_read(self):
         segment_size = self.storage_method.ec_segment_size
 
-        data = ('1234' * segment_size)[:-10]
+        data = (b'1234' * segment_size)[:-10]
 
         d = [data[x:x + segment_size]
              for x in range(0, len(data), segment_size)]
@@ -324,7 +325,7 @@ class TestEC(unittest.TestCase):
                 break
             fragmented_data.append(fragments)
 
-        result = ''
+        result = b''
         for fragment_data in fragmented_data:
             result += self.storage_method.driver.decode(
                 fragment_data)
@@ -334,7 +335,7 @@ class TestEC(unittest.TestCase):
         chunk_fragments = list(zip(*fragmented_data))
         nb = self.storage_method.ec_nb_data + self.storage_method.ec_nb_parity
         self.assertEqual(len(chunk_fragments), nb)
-        chunks_resps = [(200, ''.join(chunk_fragments[i]))
+        chunks_resps = [(200, b''.join(chunk_fragments[i]))
                         for i in range(self.storage_method.ec_nb_data)]
         resps, body_iter = zip(*chunks_resps)
 
@@ -348,7 +349,7 @@ class TestEC(unittest.TestCase):
                                              meta_chunk, meta_start,
                                              meta_end, headers)
             stream = handler.get_stream()
-            body = ''
+            body = b''
             for part in stream:
                 for body_chunk in part['iter']:
                     body += body_chunk
@@ -357,7 +358,7 @@ class TestEC(unittest.TestCase):
 
     def test_read_advanced(self):
         segment_size = self.storage_method.ec_segment_size
-        test_data = ('1234' * segment_size)[:-657]
+        test_data = (b'1234' * segment_size)[:-657]
 
         ec_chunks = self._make_ec_chunks(test_data)
 
@@ -402,7 +403,7 @@ class TestEC(unittest.TestCase):
     def _make_ec_meta_resp(self, test_data=None):
         segment_size = self.storage_method.ec_segment_size
         test_data = test_data or \
-            ('1234' * segment_size)[:-random.randint(0, 1000)]
+            (b'1234' * segment_size)[:-random.randint(0, 1000)]
         ec_chunks = self._make_ec_chunks(test_data)
 
         return test_data, ec_chunks
@@ -487,7 +488,7 @@ class TestEC(unittest.TestCase):
 
         meta_chunk = self.meta_chunk()
         meta_chunk[0]['size'] = len(test_data)
-        data = ''
+        data = b''
         parts = []
         with set_http_requests(get_response) as conn_record:
             handler = ECChunkDownloadHandler(
@@ -541,7 +542,7 @@ class TestEC(unittest.TestCase):
 
     def test_read_404_resume(self):
         segment_size = self.storage_method.ec_segment_size
-        test_data = ('1234' * segment_size)[:-333]
+        test_data = (b'1234' * segment_size)[:-333]
         ec_chunks = self._make_ec_chunks(test_data)
 
         headers = {}
@@ -568,7 +569,7 @@ class TestEC(unittest.TestCase):
             handler = ECChunkDownloadHandler(
                 self.storage_method, meta_chunk, meta_start, meta_end, headers)
             stream = handler.get_stream()
-            body = ''
+            body = b''
             for part in stream:
                 for body_chunk in part['iter']:
                     body += body_chunk
@@ -583,7 +584,7 @@ class TestEC(unittest.TestCase):
 
     def test_read_timeout(self):
         segment_size = self.storage_method.ec_segment_size
-        test_data = ('1234' * segment_size)[:-333]
+        test_data = (b'1234' * segment_size)[:-333]
         ec_chunks = self._make_ec_chunks(test_data)
 
         headers = {}
@@ -611,7 +612,7 @@ class TestEC(unittest.TestCase):
                 self.storage_method, meta_chunk, meta_start, meta_end, headers,
                 read_timeout=0.05)
             stream = handler.get_stream()
-            body = ''
+            body = b''
             for part in stream:
                 for body_chunk in part['iter']:
                     body += body_chunk
@@ -625,7 +626,7 @@ class TestEC(unittest.TestCase):
 
     def test_read_timeout_resume(self):
         segment_size = self.storage_method.ec_segment_size
-        test_data = ('1234' * segment_size)[:-333]
+        test_data = (b'1234' * segment_size)[:-333]
         ec_chunks = self._make_ec_chunks(test_data)
 
         headers = {}
@@ -652,7 +653,7 @@ class TestEC(unittest.TestCase):
                 self.storage_method, meta_chunk, meta_start, meta_end, headers,
                 read_timeout=0.01)
             stream = handler.get_stream()
-            body = ''
+            body = b''
             for part in stream:
                 for body_chunk in part['iter']:
                     body += body_chunk
@@ -664,7 +665,7 @@ class TestEC(unittest.TestCase):
         # TODO verify ranges
 
     def test_rebuild(self):
-        test_data = ('1234' * self.storage_method.ec_segment_size)[:-777]
+        test_data = (b'1234' * self.storage_method.ec_segment_size)[:-777]
 
         ec_chunks = self._make_ec_chunks(test_data)
 
@@ -695,14 +696,14 @@ class TestEC(unittest.TestCase):
             handler = ECRebuildHandler(
                 meta_chunk, missing, self.storage_method)
             stream = handler.rebuild()
-            result = ''.join(stream)
+            result = b''.join(stream)
             self.assertEqual(len(result), len(missing_chunk_body))
             self.assertEqual(self.checksum(result).hexdigest(),
                              self.checksum(missing_chunk_body).hexdigest())
             self.assertEqual(len(conn_record), nb - 1)
 
     def test_rebuild_errors(self):
-        test_data = ('1234' * self.storage_method.ec_segment_size)[:-777]
+        test_data = (b'1234' * self.storage_method.ec_segment_size)[:-777]
 
         ec_chunks = self._make_ec_chunks(test_data)
 
@@ -735,14 +736,14 @@ class TestEC(unittest.TestCase):
                 handler = ECRebuildHandler(
                     meta_chunk, missing, self.storage_method)
                 stream = handler.rebuild()
-                result = ''.join(stream)
+                result = b''.join(stream)
                 self.assertEqual(len(result), len(missing_chunk_body))
                 self.assertEqual(self.checksum(result).hexdigest(),
                                  self.checksum(missing_chunk_body).hexdigest())
                 self.assertEqual(len(conn_record), nb - 1)
 
     def test_rebuild_parity_errors(self):
-        test_data = ('1234' * self.storage_method.ec_segment_size)[:-777]
+        test_data = (b'1234' * self.storage_method.ec_segment_size)[:-777]
 
         ec_chunks = self._make_ec_chunks(test_data)
 
@@ -775,7 +776,7 @@ class TestEC(unittest.TestCase):
                 handler = ECRebuildHandler(
                     meta_chunk, missing, self.storage_method)
                 stream = handler.rebuild()
-                result = ''.join(stream)
+                result = b''.join(stream)
                 self.assertEqual(len(result), len(missing_chunk_body))
                 self.assertEqual(self.checksum(result).hexdigest(),
                                  self.checksum(missing_chunk_body).hexdigest())

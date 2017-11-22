@@ -224,7 +224,7 @@ class ChunkReader(object):
                 if start == end + 1:
                     # no more bytes to serve in the requested byte range
                     raise exc.EmptyByteRange()
-                if start > end:
+                if start is not None and start > end:
                     # invalid range
                     raise exc.UnsatisfiableRange()
                 if end and start:

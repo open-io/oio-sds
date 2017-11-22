@@ -49,13 +49,13 @@ def segment_range_to_fragment_range(segment_start, segment_end, segment_size,
         * fragment_end is the last byte of the last fragment,
           or None if this is a prefix byte range
     """
-    fragment_start = ((segment_start / segment_size * fragment_size)
+    fragment_start = ((segment_start // segment_size * fragment_size)
                       if segment_start is not None else None)
 
     fragment_end = (None if segment_end is None else
-                    ((segment_end + 1) / segment_size * fragment_size)
+                    ((segment_end + 1) // segment_size * fragment_size)
                     if segment_start is None else
-                    ((segment_end + 1) / segment_size * fragment_size) - 1)
+                    ((segment_end + 1) // segment_size * fragment_size) - 1)
 
     return (fragment_start, fragment_end)
 
@@ -329,8 +329,8 @@ class ECStream(object):
     def _convert_range(self, req_start, req_end, length):
         try:
             ranges = ranges_from_http_header("bytes=%s-%s" % (
-                req_start if req_start is not None else '',
-                req_end if req_end is not None else ''))
+                req_start if req_start is not None else b'',
+                req_end if req_end is not None else b''))
         except ValueError:
             return (None, None)
 
@@ -485,7 +485,7 @@ def ec_encode(storage_method, n):
                     parts.append(part)
                     amount -= len(part)
                     total_len -= len(part)
-                data_to_encode.append(''.join(parts))
+                data_to_encode.append(b''.join(parts))
 
             # let's encode!
             encode_result = []
@@ -505,7 +505,7 @@ def ec_encode(storage_method, n):
             # [(fragment_2_0 + fragment_2_1 + ...), # write to chunk 2
             #  ...]
 
-            result = [''.join(p) for p in zip(*encode_result)]
+            result = [b''.join(p) for p in zip(*encode_result)]
             data = yield result
         else:
             # not enough data to encode
@@ -514,11 +514,11 @@ def ec_encode(storage_method, n):
     # empty input data
     # which means end of stream
     # encode what is left in the buf
-    whats_left = ''.join(buf)
+    whats_left = b''.join(buf)
     if whats_left:
         last_fragments = storage_method.driver.encode(whats_left)
     else:
-        last_fragments = [''] * n
+        last_fragments = [b''] * n
     yield last_fragments
 
 
@@ -582,7 +582,10 @@ class EcChunkWriter(object):
             # to write data to RAWX
             if not self.failed:
                 # format the chunk
-                to_send = "%x\r\n%s\r\n" % (len(data), data)
+                to_send = (u'%x\r\n' % len(data)).encode('utf-8')
+                to_send += data + b'\r\n'
+                                                        
+                to_send = b"%x\r\n%s\r\n" % (len(data), data)
                 try:
                     with green.ChunkWriteTimeout(self.write_timeout):
                         self.conn.send(to_send)
@@ -731,7 +734,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                     send(data)
 
                 # flush out buffered data
-                send('')
+                send(b'')
 
                 # wait for all data to be processed
                 for writer in writers:
@@ -969,7 +972,7 @@ class ECRebuildHandler(object):
 
     def _make_rebuild_iter(self, resps):
         def _get_frag(resp):
-            buf = ''
+            buf = b''
             remaining = self.storage_method.ec_fragment_size
             while remaining:
                 data = resp.read(remaining)

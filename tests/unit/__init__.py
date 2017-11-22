@@ -86,7 +86,7 @@ class FakeStatus(object):
 
 def fake_http_connect(*status_iter, **kwargs):
     class FakeConn(object):
-        def __init__(self, status, body='', headers=None, cb_body=None,
+        def __init__(self, status, body=b'', headers=None, cb_body=None,
                      conn_id=None):
             if not isinstance(status, FakeStatus):
                 status = FakeStatus(status)
@@ -137,7 +137,7 @@ def fake_http_connect(*status_iter, **kwargs):
     def connect(*args, **ckwargs):
         headers = next(headers_iter)
         if body_iter is None:
-            body = raw_body or ''
+            body = raw_body or b''
         else:
             body = next(body_iter)
         if kwargs.get("slow_connect", False):
