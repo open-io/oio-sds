@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+
 from collections import OrderedDict
 from hashlib import md5
 from io import BytesIO
@@ -27,6 +28,8 @@ from tarfile import TarFile, TarInfo
 import time
 from threading import Thread
 import unittest
+
+from six.moves import xrange
 
 import requests
 from oio.api.object_storage import ObjectStorageApi
@@ -170,7 +173,7 @@ class TestContainerDownload(BaseTestCase):
                                         obj_name=_name, data=data,
                                         mime_type=mime)
             if metadata:
-                entry['meta'] = {}
+                entry['meta'] = dict()
                 for _ in xrange(10):
                     key, val = metadata()
                     entry['meta'][key] = val

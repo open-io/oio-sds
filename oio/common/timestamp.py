@@ -19,6 +19,9 @@ from datetime import datetime
 TIMESTAMP_FORMAT = "%016.05f"
 
 
+def cmp(x, y): return (x > y) - (x < y)
+
+
 class Timestamp(object):
     def __init__(self, timestamp):
         self.timestamp = float(timestamp)

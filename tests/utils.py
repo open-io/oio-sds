@@ -25,6 +25,8 @@ import string
 from subprocess import check_call
 from functools import wraps
 
+from six import text_type
+
 import yaml
 import testtools
 
@@ -40,8 +42,8 @@ from oio.common.green import time
 from oio.event.beanstalk import Beanstalk, ResponseError
 from oio.event.evob import Event
 
-random_chars = string.ascii_letters + string.digits
-random_chars_id = 'ABCDEF' + string.digits
+RANDOM_CHARS = string.ascii_letters + string.digits
+RANDOM_CHARS_ID = 'ABCDEF' + string.digits
 
 CODE_NAMESPACE_NOTMANAGED = 418
 CODE_SRVTYPE_NOTMANAGED = 453
@@ -58,7 +60,7 @@ def ec(fnc):
     return _wrapped
 
 
-def random_str(size, chars=random_chars):
+def random_str(size, chars=RANDOM_CHARS):
     return ''.join(random.choice(chars) for _ in range(size))
 
 
@@ -80,7 +82,7 @@ strange_paths = [
 
 
 def random_id(size):
-    return random_str(size, chars=random_chars_id)
+    return random_str(size, chars=RANDOM_CHARS_ID)
 
 
 def random_data(size):
@@ -180,8 +182,8 @@ class CommonTestCase(testtools.TestCase):
             out_param = []
             for k, v in params.items():
                 if v is not None:
-                    if isinstance(v, unicode):
-                        v = unicode(v).encode('utf-8')
+                    if isinstance(v, text_type):
+                        v = text_type(v).encode('utf-8')
                     out_param.append((k, v))
             encoded_args = urlencode(out_param)
             url += '?' + encoded_args

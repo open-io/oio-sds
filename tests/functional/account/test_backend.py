@@ -15,6 +15,9 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from six import text_type
+from six.moves import xrange
+
 from time import sleep, time
 
 import redis
@@ -246,7 +249,7 @@ class TestAccountBackend(BaseTestCase):
         self.backend.update_container(account_id, name, mtime, 0, 0, 0, 0, 0)
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
-        self.assertEqual(unicode(res[0], 'utf8'), name)
+        self.assertEqual(text_type(res[0], 'utf8'), name)
 
         # ensure it appears in listing
         listing = self.backend.list_containers(
