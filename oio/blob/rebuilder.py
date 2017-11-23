@@ -213,7 +213,7 @@ class BlobRebuilderWorker(object):
             self.chunk_rebuild(container_id, content_id, chunk_id)
         except Exception as e:
             self.errors += 1
-            self.logger.error('ERROR while rebuilding chunk %s|%s|%s): %s',
+            self.logger.error('ERROR while rebuilding chunk %s|%s|%s: %s',
                               container_id, content_id, chunk_id, e)
 
         self.passes += 1

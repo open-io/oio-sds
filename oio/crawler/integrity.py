@@ -104,7 +104,10 @@ class Checker(object):
         self.error_writer.writerow(error)
 
     def write_rebuilder_input(self, target, obj_meta, ct_meta):
-        cid = ct_meta['properties']['sys.name'].split('.', 1)[0]
+        try:
+            cid = ct_meta['system']['sys.name'].split('.', 1)[0]
+        except KeyError:
+            cid = ct_meta['properties']['sys.name'].split('.', 1)[0]
         self.rebuild_writer.writerow((cid, obj_meta['id'], target.chunk))
 
     def _check_chunk_xattr(self, target, obj_meta, xattr_meta):

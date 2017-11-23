@@ -22,7 +22,7 @@ from urllib import quote, quote_plus
 from eventlet import patcher
 from eventlet.green.httplib import HTTPConnection, HTTPResponse, _UNKNOWN, \
         CONTINUE, HTTPMessage
-from oio.common.constants import chunk_headers
+from oio.common.constants import chunk_headers, OIO_VERSION
 
 urllib3 = patcher.import_patched('urllib3.__init__')
 
@@ -217,7 +217,8 @@ def headers_from_object_metadata(metadata):
     out[chunk_headers["content_chunkmethod"]] = metadata['chunk_method']
     out[chunk_headers["content_policy"]] = metadata['policy']
     out[chunk_headers["container_id"]] = metadata['container_id']
-    out[chunk_headers["oio_version"]] = metadata["oio_version"]
+    out[chunk_headers["oio_version"]] = metadata.get('oio_version',
+                                                     OIO_VERSION)
 
     for key in ['metachunk_hash', 'metachunk_size', 'chunk_hash']:
         val = metadata.get(key)
