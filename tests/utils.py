@@ -14,6 +14,8 @@
 # License along with this library.
 
 from __future__ import print_function
+from six import text_type
+
 import logging
 import sys
 import os
@@ -142,8 +144,8 @@ class CommonTestCase(testtools.TestCase):
             out_param = []
             for k, v in params.items():
                 if v is not None:
-                    if isinstance(v, unicode):
-                        v = unicode(v).encode('utf-8')
+                    if isinstance(v, text_type):
+                        v = text_type(v).encode('utf-8')
                     out_param.append((k, v))
             encoded_args = urlencode(out_param)
             url += '?' + encoded_args

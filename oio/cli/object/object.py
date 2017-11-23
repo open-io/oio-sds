@@ -22,6 +22,9 @@ from cliff import command, lister, show
 from eventlet import GreenPool
 
 
+def cmp(x, y): return(x > y) - (x < y)
+
+
 class ContainerCommandMixin(object):
     """Command taking a container name as parameter"""
 
