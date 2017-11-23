@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -28,6 +28,7 @@ from oio.common import exceptions
 
 # flatns_manager field is not seen as callable.
 # pylint: disable=not-callable
+
 
 class ContainerCommandMixin(object):
     """Command taking a container name as parameter"""
