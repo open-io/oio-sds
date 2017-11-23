@@ -87,6 +87,13 @@ replicate_table_updates(struct sqlx_sqlite3_s *sq3, Table_t *table)
 	gint i, j, rc;
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
+
+	/* if there is no table header, we won't be able to generate a valid
+	 * UPDATE/REPLACE statement. The current table at best only carries
+	 * DELETE commands (with only a ROWID) */
+	if (table->header.list.count <= 0)
+		return NULL;
+
 	gboolean is_admin = !(g_strcmp0((char*)table->name.buf, ADMIN));
 	sql = _prepare_statement(table, is_admin);
 	sqlite3_prepare_debug(rc, sq3->db, sql, -1, &stmt, NULL);
