@@ -69,6 +69,9 @@ void oio_str_replace(gchar **dst, const char *src);
 /** Returns FALSE if 's' is not 'slen' long and contains a non-hexa character. */
 gboolean oio_str_ishexa(const char *s, gsize slen);
 
+/** Returns TRUE if 's' contains only printable ascii characters. */
+gboolean oio_str_is_printable(const char *s, gsize slen);
+
 /** Returns is 's' is an even number of hexadecimal characters */
 gboolean oio_str_ishexa1(const char *s);
 
@@ -127,7 +130,7 @@ void oio_str_gstring_append_json_quote (GString *base, const char *s);
 void oio_str_gstring_append_json_blob(GString *base, const char *s, int len);
 
 /* appends "<k>":"<v>" where k and v are added with
-   oio_str_gstring_append_json_string() */
+ * oio_str_gstring_append_json_string() */
 void oio_str_gstring_append_json_pair (GString *base,
 		const char *k, const char *v);
 
