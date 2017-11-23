@@ -21,6 +21,9 @@ from oio.directory.client import DirectoryClient
 from oio.common.configuration import load_namespace_conf
 
 
+def cmp(x, y): return(x > y) - (x < y)
+
+
 class CheckMeta2(CheckService):
 
     account_name = "_meta2_probe"
