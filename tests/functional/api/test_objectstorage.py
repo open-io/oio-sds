@@ -69,7 +69,8 @@ class TestObjectStorageAPI(BaseTestCase):
 
         self._create(name)
         # container_show on existing container
-        res = self.api.container_show(self.account, name)
+        res = self.api.container_show(self.account, name,
+                                      headers={'X-oio-req-id': 'Salut!'})
         self.assertIsNot(res['properties'], None)
 
         self._delete(name)

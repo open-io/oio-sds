@@ -15,7 +15,8 @@
 
 from gunicorn.app.base import BaseApplication
 from gunicorn.glogging import Logger
-from werkzeug.wrappers import Request
+from werkzeug.wrappers import Request, Response
+from werkzeug.utils import escape
 from werkzeug.exceptions import HTTPException, InternalServerError
 
 from oio.common.utils import CPU_COUNT
@@ -106,13 +107,16 @@ class WerkzeugApp(object):
         adapter = self.url_map.bind_to_environ(req.environ)
         try:
             endpoint, _ = adapter.match()
-            return getattr(self, 'on_' + endpoint)(req)
+            resp = getattr(self, 'on_' + endpoint)(req)
         except HTTPException as exc:
-            return exc
+            resp = exc
         except Exception as exc:
             if self.logger:
                 self.logger.exception('ERROR Unhandled exception in request')
-            return InternalServerError('Unmanaged error: %s' % exc)
+            resp = InternalServerError('Unmanaged error: %s' % exc)
+        if isinstance(resp, HTTPException) and not resp.response:
+            resp.response = Response(escape(resp.description), resp.code)
+        return resp
 
     def wsgi_app(self, environ, start_response):
         req = Request(environ)

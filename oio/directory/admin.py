@@ -82,7 +82,7 @@ class AdminClient(ProxyClient):
         :returns: a `dict` with 'master' (`str`), 'slaves' (`list`),
             'peers' (`dict`) and 'type' (`str`)
 
-        .. python::
+        .. py:data:: example
 
             {
                 'peers': {

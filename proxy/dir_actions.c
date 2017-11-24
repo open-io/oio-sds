@@ -454,6 +454,13 @@ action_dir_ref_create (struct req_args_s *args, struct json_object *jargs) {
 
 /* -------------------------------------------------------------------------- */
 
+/*
+DIR{{
+POST /v3.0/{NS}/reference/create
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+}}DIR
+ */
 enum http_rc_e action_ref_create (struct req_args_s *args) {
 	return rest_action(args, action_dir_ref_create);
 }

@@ -53,6 +53,32 @@ class Account(WerkzeugApp):
             raise BadRequest('Missing Account ID')
         return account_id
 
+    # ACCT{{
+    # GET /status
+    # ~~~~~~~~~~~
+    # Return a summary of the target ACCOUNT service. The body of the reply
+    # will present a count of the objects in the databse, formatted as a JSON
+    # object.
+    #
+    # .. code-block:: http
+    #
+    #    GET /status HTTP/1.1
+    #    Host: 127.0.0.1:6021
+    #    User-Agent: curl/7.55.1
+    #    Accept: */*
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 200 OK
+    #    Server: gunicorn/19.7.1
+    #    Date: Wed, 22 Nov 2017 09:45:03 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/json; charset=utf-8
+    #    Content-Length: 20
+    #
+    #    {"account_count": 0}
+    #
+    # }}ACCT
     def on_status(self, req):
         status = self.backend.status()
         return Response(json.dumps(status), mimetype='text/json')

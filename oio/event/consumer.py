@@ -168,7 +168,8 @@ class EventWorker(Worker):
             env['job_id'] = job_id
             return env
         except Exception as exc:
-            self.logger.warn('decoding job "%s"', str(exc.message))
+            self.logger.warn('Failed to decode job %s: "%s"',
+                             job_id, str(exc.message))
             return None
 
     def run(self):
@@ -221,17 +222,20 @@ class EventWorker(Worker):
                         conn_error = True
                     eventlet.sleep(BEANSTALK_RECONNECTION)
                     continue
+                event = self.safe_decode_job(job_id, data)
                 try:
-                    event = self.safe_decode_job(job_id, data)
                     self.process_event(job_id, event, beanstalk)
-                except OioNetworkException as e:
-                    self.logger.warn("handling event %s (bury): %s", job_id, e)
+                except OioNetworkException as exc:
+                    self.logger.warn("Burying event %s (%s): %s",
+                                     job_id, event.get('event'), exc)
                     beanstalk.bury(job_id)
-                except ExplicitBury as e:
-                    self.logger.info("handling event %s (bury)", job_id)
+                except ExplicitBury:
+                    self.logger.info("Burying event %s (%s)",
+                                     job_id, event.get('event'))
                     beanstalk.bury(job_id)
                 except Exception:
-                    self.logger.exception("handling event %s (bury)", job_id)
+                    self.logger.exception("Burying event %s: %s",
+                                          job_id, event)
                     beanstalk.bury(job_id)
         except StopServe:
             pass

@@ -86,6 +86,13 @@ replicate_table_updates(struct sqlx_sqlite3_s *sq3, Table_t *table)
 	gint i, j, rc;
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
+
+	/* if there is no table header, we won't be able to generate a valid
+	 * UPDATE/REPLACE statement. The current table at best only carries
+	 * DELETE commands (with only a ROWID) */
+	if (table->header.list.count <= 0)
+		return NULL;
+
 	gboolean is_admin = !(g_strcmp0((char*)table->name.buf, ADMIN));
 	sql = _prepare_statement(table, is_admin);
 	sqlite3_prepare_debug(rc, sq3->db, sql, -1, &stmt, NULL);
@@ -339,6 +346,7 @@ label_rollback:
 		/* keep the current version for later */
 		sqlx_admin_reload(sq3);
 		postvers = version_extract_from_admin(sq3);
+		version_debug("POST:", postvers);
 
 		gint64 worst = 0;
 		err = version_validate_diff(postvers, expected_version, &worst);
@@ -1452,8 +1460,12 @@ _handler_REPLICATE(struct gridd_reply_ctx_s *reply,
 	}
 
 	err = sqlx_repository_open_and_lock(repo, &n0,
-			SQLX_OPEN_LOCAL|SQLX_OPEN_CREATE|SQLX_OPEN_URGENT, &sq3, NULL);
+			SQLX_OPEN_LOCAL|SQLX_OPEN_URGENT, &sq3, NULL);
 	if (NULL != err) {
+		if (err->code == CODE_CONTAINER_NOTFOUND) {
+			reply->send_error(CODE_PIPEFROM, err);
+			return TRUE;
+		}
 		reply->send_error(0, err);
 		return TRUE;
 	}
@@ -1891,10 +1903,11 @@ _handler_PROPDEL(struct gridd_reply_ctx_s *reply,
 			}
 		}
 
-		if (repctx)
+		if (repctx) {
 			err = sqlx_transaction_end(repctx, err);
-		else
+		} else {
 			sqlx_admin_save_lazy_tnx (sq3);
+		}
 
 		sqlx_repository_unlock_and_close_noerror(sq3);
 		if (err)
@@ -2019,10 +2032,11 @@ _handler_PROPSET(struct gridd_reply_ctx_s *reply,
 			}
 		}
 
-		if (!(flags&FLAG_LOCAL))
+		if (repctx) {
 			err = sqlx_transaction_end(repctx, err);
-		else
+		} else {
 			sqlx_admin_save_lazy_tnx (sq3);
+		}
 	}
 	sqlx_repository_unlock_and_close_noerror(sq3);
 
@@ -2069,10 +2083,11 @@ _handler_ENABLE(struct gridd_reply_ctx_s *reply,
 		else
 			err = NEWERROR(CODE_CONTAINER_ENABLED, "Already enabled");
 
-		if (!(flags&FLAG_LOCAL))
+		if (repctx) {
 			err = sqlx_transaction_end(repctx, err);
-		else
+		} else {
 			sqlx_admin_save_lazy_tnx (sq3);
+		}
 	}
 
 	if (NULL != err)
@@ -2121,10 +2136,11 @@ _handler_FREEZE(struct gridd_reply_ctx_s *reply,
 		else
 			err = NEWERROR(CODE_CONTAINER_DISABLED, "Container disabled");
 
-		if (!(flags&FLAG_LOCAL))
+		if (repctx) {
 			err = sqlx_transaction_end(repctx, err);
-		else
+		} else {
 			sqlx_admin_save_lazy_tnx (sq3);
+		}
 	}
 
 	if (NULL != err)
@@ -2173,10 +2189,11 @@ _handler_DISABLE(struct gridd_reply_ctx_s *reply,
 		else
 			err = NEWERROR(CODE_CONTAINER_DISABLED, "Container disabled");
 
-		if (!(flags&FLAG_LOCAL))
+		if (repctx) {
 			err = sqlx_transaction_end(repctx, err);
-		else
+		} else {
 			sqlx_admin_save_lazy_tnx (sq3);
+		}
 	}
 
 	if (NULL != err)
@@ -2223,10 +2240,11 @@ _handler_DISABLE2(struct gridd_reply_ctx_s *reply,
 		else
 			sqlx_admin_set_status(sq3, ADMIN_STATUS_DISABLED);
 
-		if (!(flags&FLAG_LOCAL))
+		if (repctx) {
 			err = sqlx_transaction_end(repctx, err);
-		else
+		} else {
 			sqlx_admin_save_lazy_tnx (sq3);
+		}
 	}
 
 	if (NULL != err)

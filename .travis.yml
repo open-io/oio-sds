@@ -26,11 +26,11 @@ script:
   - export PYTHON_COVERAGE=1 CMAKE_OPTS="${CMAKE_OPTS} -DENABLE_CODECOVERAGE=on"
   - cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Debug" . && make all install
   - python setup.py install
-  - bash ./tools/oio-check-version.sh
   - export G_DEBUG_LEVEL=D PATH="$PATH:/tmp/oio/bin" LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/tmp/oio/lib"
   - make coverage_init
   - pwd && env && ./tools/oio-travis-tests.sh
   - make coverage
+  - bash ./tools/oio-check-version.sh
 after_success:
   - bash <(curl -s https://codecov.io/bash) -f cmake_coverage.output
   - codecov

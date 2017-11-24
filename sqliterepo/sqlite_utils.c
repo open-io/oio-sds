@@ -49,8 +49,10 @@ _make_cache_entry(const gchar *buf, gsize len)
 	struct _cache_entry_s *e = g_malloc0(
 			sizeof(struct _cache_entry_s) + _buffer_length(len));
 	e->len = len;
-	if (len > 0)
+	if (buf && len > 0)
 		memcpy(e->buffer, buf, len);
+	if (!buf)
+		e->flag_deleted = 1;
 	return e;
 }
 
@@ -118,9 +120,9 @@ void
 sqlx_admin_del(struct sqlx_sqlite3_s *sq3, const gchar *k)
 {
 	struct _cache_entry_s *v = g_tree_lookup(sq3->admin, k);
-	if (v) {
+	if (v && !v->flag_deleted) {
 		v->flag_deleted = 1;
-		v->flag_changed = 0;
+		v->flag_changed = 1;
 		sq3->admin_dirty = TRUE;
 	}
 }
@@ -129,9 +131,11 @@ void
 sqlx_admin_del_all_user(struct sqlx_sqlite3_s *sq3)
 {
 	gboolean runner(gchar *k, struct _cache_entry_s *v, gpointer i UNUSED) {
+		if (v->flag_deleted)
+			return FALSE;
 		if (g_str_has_prefix(k, SQLX_ADMIN_PREFIX_USER)) {
 			v->flag_deleted = 1;
-			v->flag_changed = 0;
+			v->flag_changed = 1;
 		}
 		return FALSE;
 	}
@@ -345,7 +349,6 @@ sqlx_admin_save (struct sqlx_sqlite3_s *sq3)
 	guint count = 0;
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
-	gboolean run_to_delete = FALSE;
 
 	EXTRA_ASSERT(sq3 != NULL);
 
@@ -355,16 +358,17 @@ sqlx_admin_save (struct sqlx_sqlite3_s *sq3)
 		err = SYSERR("DB error: (%d) %s", rc, sqlite3_errmsg(sq3->db));
 	else {
 		gboolean _save (gchar *k, struct _cache_entry_s *v, gpointer i UNUSED) {
-
-			run_to_delete |= BOOL(v->flag_deleted);
-			if (v->flag_deleted || !v->flag_changed)
+			if (!v->flag_changed)
 				return FALSE;
 
 			sqlite3_reset (stmt);
 			sqlite3_clear_bindings (stmt);
 			sqlite3_bind_text (stmt, 1, k, -1, NULL);
-			if (!v->len) {
+
+			if (v->flag_deleted) {
 				sqlite3_bind_null (stmt, 2);
+			} else if (!v->len) {
+				sqlite3_bind_text (stmt, 2, "", 0, NULL);
 			} else {
 				sqlite3_bind_blob (stmt, 2, (guint8*)v->buffer, v->len, NULL);
 			}
@@ -376,35 +380,6 @@ sqlx_admin_save (struct sqlx_sqlite3_s *sq3)
 		}
 		g_tree_foreach (sq3->admin, (GTraverseFunc)_save, NULL);
 		(void) sqlite3_finalize(stmt);
-	}
-
-	if (run_to_delete && !err) {
-		sqlite3_prepare_debug(rc, sq3->db,
-				"DELETE FROM admin WHERE k = ?", -1, &stmt, NULL);
-		if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-			err = SYSERR("DB error: (%d) %s", rc, sqlite3_errmsg(sq3->db));
-		} else {
-			GSList *deleted = NULL;
-			gboolean _delete (gchar *k, struct _cache_entry_s *v, gpointer i UNUSED) {
-				if (!v->flag_deleted)
-					return FALSE;
-				sqlite3_reset (stmt);
-				sqlite3_clear_bindings (stmt);
-				sqlite3_bind_text (stmt, 1, k, -1, NULL);
-				sqlite3_step_debug_until_end (rc, stmt);
-				if (rc != SQLITE_OK && rc != SQLITE_DONE)
-					err = SYSERR("DB error: (%d) %s", rc, sqlite3_errmsg(sq3->db));
-				else
-					deleted = g_slist_prepend(deleted, k);
-				count ++;
-				return err != NULL;
-			}
-			g_tree_foreach (sq3->admin, (GTraverseFunc)_delete, NULL);
-			(void) sqlite3_finalize(stmt);
-			for (GSList *l = deleted; !err && l; l = l->next)
-				g_tree_remove(sq3->admin, l->data);
-			g_slist_free(deleted);  // values were freed by g_tree_remove
-		}
 	}
 
 	if (err) {
@@ -451,10 +426,14 @@ sqlx_admin_load(struct sqlx_sqlite3_s *sq3)
 		EXTRA_ASSERT(stmt != NULL);
 		while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 			const gchar *k = (const gchar*)sqlite3_column_text(stmt, 0);
-			g_tree_replace(sq3->admin, g_strdup(k),
-					_make_cache_entry(
+			struct _cache_entry_s *v = NULL;
+			if (sqlite3_column_type(stmt, 1) == SQLITE_NULL)
+				v = _make_cache_entry(NULL, 0);
+			else
+				v = _make_cache_entry(
 						sqlite3_column_blob(stmt, 1),
-						sqlite3_column_bytes(stmt, 1)));
+						sqlite3_column_bytes(stmt, 1));
+			g_tree_replace(sq3->admin, g_strdup(k), v);
 		}
 		sqlite3_finalize(stmt);
 	}

@@ -128,6 +128,15 @@ gboolean oio_str_ishexa1(const char *s) {
 	return len > 0 && (len%2) == 0;
 }
 
+gboolean oio_str_is_printable(const char *s, gsize slen) {
+	gsize len = 0;
+	for (; len < slen && *s; ++s, ++len) {
+		if (!g_ascii_isprint(*s))
+			return FALSE;
+	}
+	return TRUE;
+}
+
 gboolean oio_str_hex2bin(const char *s0, guint8 *d, gsize dlen) {
 	const guint8 *s = (const guint8*) s0;
 	if (!s || !d)

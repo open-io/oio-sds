@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from sys import exc_info
+
 
 class OioException(Exception):
     pass
@@ -223,3 +225,14 @@ def from_response(resp, body=None):
         return cls(http_status, status, message)
     else:
         return cls(http_status, resp.reason)
+
+
+def reraise(exc_type, exc_value, extra_message=None):
+    """
+    Raise an exception of type `exc_type` with arguments of `exc_value`
+    plus maybe `extra_message` at the beginning.
+    """
+    args = exc_value.args
+    if extra_message:
+        args = (extra_message, ) + args
+    raise exc_type(args), None, exc_info()[2]

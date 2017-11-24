@@ -43,21 +43,21 @@ struct oio_error_s;
  */
 enum oio_sds_config_e
 {
-	/** expects an <int> as a number of seconds */
+	/** expects an integer as a number of seconds */
 	OIOSDS_CFG_TIMEOUT_PROXY = 1,
 
-	/** expects an <int> as a number of seconds */
+	/** expects an integer as a number of seconds */
 	OIOSDS_CFG_TIMEOUT_RAWX,
 
-	/** expects an <int> used for its boolean value */
+	/** expects an integer used for its boolean value */
 	OIOSDS_CFG_FLAG_SYNCATDOWNLOAD,
 
-	/** expects an <int> used for its boolean value */
+	/** expects an integer used for its boolean value */
 	OIOSDS_CFG_FLAG_ADMIN,
 
 	/** Disable the shuffling of chunks before reading,
 	 * and instead sort them by score.
-	 * Expects an <int> used for its boolean value. */
+	 * Expects an integer used for its boolean value. */
 	OIOSDS_CFG_FLAG_NO_SHUFFLE,
 };
 

@@ -443,6 +443,33 @@ _rest_conscience_register (struct req_args_s *args, struct json_object *jargs)
 	return _registration (args, REGOP_PUSH, jargs);
 }
 
+/*
+CS{{
+POST /v3.0/{NS}/conscience/register
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Register one service:
+
+.. code-block:: json
+
+   {
+     "addr": "127.0.0.1:6000",
+     "tags": { "stat.cpu": 100, "stat.idle": 100, "stat.io": 100 }
+   }
+
+Register several services at once:
+
+.. code-block:: json
+
+   [
+     { "addr": "127.0.0.1:6000",
+       "tags": { "stat.cpu": 100, "stat.idle": 100, "stat.io": 100 } },
+     { "addr": "127.0.0.1:6000",
+       "tags": { "stat.cpu": 100, "stat.idle": 100, "stat.io": 100 } }
+   ]
+
+}}CS
+ */
 enum http_rc_e
 action_conscience_register (struct req_args_s *args)
 {
