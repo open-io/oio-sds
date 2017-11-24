@@ -326,7 +326,6 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 					// whatever the remote problem on *that* peer, the it
 					// is MASTER because the election succeeded, and we won't
 					// restart a whole election
-					++ count_success;
 					g_ptr_array_add(ctx->resync_todo, g_strdup(
 							gridd_client_url(*pc)));
 				} else {
@@ -670,16 +669,14 @@ sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err)
 			// Restore the in-RAM cache
 			sqlx_admin_reload(ctx->sq3);
 		}
-		else {
-			if (ctx->errors->len > 0) {
-				GRID_WARN("COMMIT errors on [%s.%s]:%s", ctx->sq3->name.base,
-						ctx->sq3->name.type, ctx->errors->str);
-			}
-			if (ctx->resync_todo && ctx->resync_todo->len) {
-				// Detected the need of an explicit RESYNC on some SLAVES.
-				g_ptr_array_add(ctx->resync_todo, NULL);
-				sqlx_synchronous_resync(ctx, (gchar**)ctx->resync_todo->pdata);
-			}
+		if (ctx->errors->len > 0) {
+			GRID_WARN("COMMIT errors on [%s.%s]:%s", ctx->sq3->name.base,
+					ctx->sq3->name.type, ctx->errors->str);
+		}
+		if (ctx->resync_todo && ctx->resync_todo->len) {
+			// Detected the need of an explicit RESYNC on some SLAVES.
+			g_ptr_array_add(ctx->resync_todo, NULL);
+			sqlx_synchronous_resync(ctx, (gchar**)ctx->resync_todo->pdata);
 		}
 	}
 

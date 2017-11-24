@@ -181,7 +181,7 @@ class RdirClient(HttpApi):
         self._addr_cache = dict()
 
     def _clear_cache(self, volume_id):
-        del self._addr_cache[volume_id]
+        self._addr_cache.pop(volume_id, None)
 
     def _get_rdir_addr(self, volume_id, req_id=None):
         # Initial lookup in the cache

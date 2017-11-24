@@ -256,17 +256,16 @@ _request_get_name(MESSAGE req)
 }
 
 static gchar *
-_req_get_hex_ID(MESSAGE req, gchar *d, gsize dsize)
+_req_get_ID(MESSAGE req, gchar *d, gsize dsize)
 {
 	memset(d, 0, dsize);
 
 	gsize flen = 0;
 	guint8 *f = metautils_message_get_ID(req, &flen);
-	if (!f || !flen)
+	if (!f || !flen) {
 		*d = '-';
-	else if (oio_str_ishexa((gchar*)f, flen)) {
-		for (gchar *p=d; flen-- > 0 && dsize-- > 0;)
-			*(p++) = *(f++);
+	} else if (oio_str_is_printable((gchar*)f, flen)) {
+		g_strlcpy(d, (gchar*)f, MIN(dsize, flen + 1));
 	} else {
 		oio_str_bin2hex(f, MIN(flen,dsize/2), d, dsize);
 	}
@@ -756,7 +755,7 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 	req_ctx.request = request;
 	req_ctx.reqname = _request_get_name(request);
 	req_ctx.uid = _request_get_cid(request);
-	req_ctx.reqid = _req_get_hex_ID(request, hexid, sizeof(hexid));
+	req_ctx.reqid = _req_get_ID(request, hexid, sizeof(hexid));
 	oio_ext_set_reqid(req_ctx.reqid);
 	rc = TRUE;
 

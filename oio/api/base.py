@@ -13,8 +13,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import sys
-
 from oio.common.json import json as jsonlib
 from oio.common.http_urllib3 import urllib3, get_pool_manager
 from urllib3.exceptions import MaxRetryError, TimeoutError, HTTPError, \
@@ -146,6 +144,10 @@ class HttpApi(object):
         if not pool_manager:
             pool_manager = self.pool_manager
 
+        def _reraise(exc_type, exc_value):
+            reqid = out_headers.get('X-oio-req-id')
+            exceptions.reraise(exc_type, exc_value, "reqid=%s" % reqid)
+
         try:
             resp = pool_manager.request(method, url, **out_kwargs)
             body = resp.data
@@ -161,17 +163,16 @@ class HttpApi(object):
                     perfdata[kv[0]] = pdat
         except MaxRetryError as exc:
             if isinstance(exc.reason, NewConnectionError):
-                raise exceptions.OioNetworkException(exc), None, \
-                        sys.exc_info()[2]
+                _reraise(exceptions.OioNetworkException, exc)
             if isinstance(exc.reason, TimeoutError):
-                raise exceptions.OioTimeout(exc), None, sys.exc_info()[2]
-            raise exceptions.OioNetworkException(exc), None, sys.exc_info()[2]
+                _reraise(exceptions.OioTimeout, exc)
+            _reraise(exceptions.OioNetworkException, exc)
         except (ProtocolError, ProxyError, ClosedPoolError) as exc:
-            raise exceptions.OioNetworkException(exc), None, sys.exc_info()[2]
+            _reraise(exceptions.OioNetworkException, exc)
         except TimeoutError as exc:
-            raise exceptions.OioTimeout(exc), None, sys.exc_info()[2]
+            _reraise(exceptions.OioTimeout, exc)
         except HTTPError as exc:
-            raise exceptions.OioException(exc), None, sys.exc_info()[2]
+            _reraise(exceptions.OioException, exc)
         if resp.status >= 400:
             raise exceptions.from_response(resp, body)
         return resp, body

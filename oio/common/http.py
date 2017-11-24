@@ -14,16 +14,15 @@
 # License along with this library.
 
 import re
-
 from urllib import quote_plus
-from oio.common.constants import CHUNK_HEADERS
+from oio.common.constants import CHUNK_HEADERS, OIO_VERSION
 from oio.common.http_eventlet import CustomHttpConnection \
     as NewCustomHttpConnection
 
 
-_token = r'[^()<>@,;:\"/\[\]?={}\x00-\x20\x7f]+'
-_ext_pattern = re.compile(
-    r'(?:\s*;\s*(' + _token + r')\s*(?:=\s*(' + _token +
+_TOKEN = r'[^()<>@,;:\"/\[\]?={}\x00-\x20\x7f]+'
+_EXT_PATTERN = re.compile(
+    r'(?:\s*;\s*(' + _TOKEN + r')\s*(?:=\s*(' + _TOKEN +
     r'|"(?:[^"\\]|\\.)*"))?)')
 
 
@@ -33,7 +32,7 @@ def parse_content_type(raw_content_type):
         if ';' in raw_content_type:
             content_type, params = raw_content_type.split(';', 1)
             params = ';' + params
-            for p in _ext_pattern.findall(params):
+            for p in _EXT_PATTERN.findall(params):
                 k = p[0].strip()
                 v = p[1].strip()
                 param_list.append((k, v))
@@ -110,7 +109,8 @@ def headers_from_object_metadata(metadata):
     out[CHUNK_HEADERS["content_chunkmethod"]] = metadata['chunk_method']
     out[CHUNK_HEADERS["content_policy"]] = metadata['policy']
     out[CHUNK_HEADERS["container_id"]] = metadata['container_id']
-    out[CHUNK_HEADERS["oio_version"]] = metadata["oio_version"]
+    out[CHUNK_HEADERS["oio_version"]] = metadata.get('oio_version',
+                                                     OIO_VERSION)
 
     for key in ['metachunk_hash', 'metachunk_size', 'chunk_hash']:
         val = metadata.get(key)

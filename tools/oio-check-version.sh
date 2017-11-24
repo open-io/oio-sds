@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # This will work in the main repository, but not in forks
-LATEST_TAG=$(git fetch --tags && git describe --tags)
+LATEST_TAG=$(git fetch --tags && git describe --tags --first-parent)
 if [ -z "$LATEST_TAG" ]
 then
   echo "No tag, cannot check"
