@@ -28,9 +28,11 @@ from eventlet.event import Event
 from eventlet.greenpool import GreenPool
 
 from oio.common import exceptions as exc
+from oio.common.storage_method import STORAGE_METHODS
 from oio.account.client import AccountClient
 from oio.container.client import ContainerClient
 from oio.blob.client import BlobClient
+from oio.api.object_storage import _sort_chunks
 
 
 class Target(object):
@@ -110,6 +112,17 @@ class Checker(object):
             cid = ct_meta['properties']['sys.name'].split('.', 1)[0]
         self.rebuild_writer.writerow((cid, obj_meta['id'], target.chunk))
 
+    def write_chunk_error(self, target, obj_meta, chunk=None):
+        if chunk is not None:
+            target = target.copy()
+            target.chunk = chunk
+        if self.error_file:
+            self.write_error(target)
+        if self.rebuild_file:
+            self.write_rebuilder_input(
+                target, obj_meta,
+                self.list_cache[(target.account, target.container)][1])
+
     def _check_chunk_xattr(self, target, obj_meta, xattr_meta):
         error = False
         # Composed position -> erasure coding
@@ -159,13 +172,33 @@ class Checker(object):
                 error = self._check_chunk_xattr(target, db_meta, xattr_meta)
 
         if error:
-            if self.error_file:
-                self.write_error(target)
-            if self.rebuild_file:
-                self.write_rebuilder_input(
-                    target, obj_meta,
-                    self.list_cache[(target.account, target.container)][1])
+            self.write_chunk_error(target, obj_meta)
+
         self.chunks_checked += 1
+
+    def check_obj_policy(self, target, obj_meta, chunks):
+        """
+        Check that the list of chunks of an object matches
+        the object's storage policy.
+        """
+        stg_met = STORAGE_METHODS.load(obj_meta['chunk_method'])
+        chunks_by_pos = _sort_chunks(chunks, stg_met.ec)
+        if stg_met.ec:
+            required = stg_met.ec_nb_data + stg_met.ec_nb_parity
+        else:
+            required = stg_met.nb_copy
+        for pos, clist in chunks_by_pos.iteritems():
+            if len(clist) < required:
+                print('  Missing %d chunks at position %s of %s' % (
+                    required - len(clist), pos, target))
+                if stg_met.ec:
+                    subs = {x['num'] for x in clist}
+                    for sub in range(required):
+                        if sub not in subs:
+                            self.write_chunk_error(target, obj_meta,
+                                                   '%d.%d' % (pos, sub))
+                else:
+                    self.write_chunk_error(target, obj_meta, str(pos))
 
     def check_obj(self, target, recurse=False):
         account = target.account
@@ -206,6 +239,8 @@ class Checker(object):
         chunk_listing = dict()
         for chunk in results:
             chunk_listing[chunk['url']] = chunk
+
+        self.check_obj_policy(target.copy(), meta, results)
 
         self.objects_checked += 1
         self.list_cache[(account, container, obj)] = (chunk_listing, meta)
