@@ -22,15 +22,15 @@ from oio.common import exceptions as exc
 from tests.utils import random_str, random_data, BaseTestCase
 
 
-class TestObjectStorageAPI(BaseTestCase):
+class ObjectStorageApiTestBase(BaseTestCase):
 
     def setUp(self):
-        super(TestObjectStorageAPI, self).setUp()
+        super(ObjectStorageApiTestBase, self).setUp()
         self.api = ObjectStorageApi(self.ns, endpoint=self.uri)
         self.created = list()
 
     def tearDown(self):
-        super(TestObjectStorageAPI, self).tearDown()
+        super(ObjectStorageApiTestBase, self).tearDown()
         for ct, name in self.created:
             try:
                 self.api.object_delete(self.account, ct, name)
@@ -58,6 +58,16 @@ class TestObjectStorageAPI(BaseTestCase):
     def _set_properties(self, name, properties=None):
         return self.api.container_set_properties(
             self.account, name, properties=properties)
+
+    def _upload_empty(self, container, *objs, **kwargs):
+        """Upload empty objects to `container`"""
+        for obj in objs:
+            self.api.object_create(self.account, container,
+                                   obj_name=obj, data="", **kwargs)
+            self.created.append((container, obj))
+
+
+class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_container_show(self):
         # container_show on unknown container
@@ -607,3 +617,109 @@ class TestObjectStorageAPI(BaseTestCase):
         path = random_str(1023)
         self.api.object_create(self.account, cname,
                                data="1"*128, obj_name=path)
+
+
+class TestObjectList(ObjectStorageApiTestBase):
+
+    def setUp(self):
+        super(TestObjectList, self).setUp()
+        self.cname = random_str(16)
+
+    def tearDown(self):
+        super(TestObjectList, self).tearDown()
+
+    def _upload_empty(self, *objs, **kwargs):
+        super(TestObjectList, self)._upload_empty(self.cname, *objs, **kwargs)
+
+    def test_object_list(self):
+        objects = ['a', 'b', 'c']
+        self._upload_empty(*objects)
+        res = self.api.object_list(self.account, self.cname)
+        self.assertIn('objects', res)
+        self.assertIn('prefixes', res)
+        self.assertIn('truncated', res)
+        self.assertListEqual(objects, [x['name'] for x in res['objects']])
+        self.assertFalse(res['prefixes'])
+        self.assertFalse(res['truncated'])
+
+    def test_object_list_limit(self):
+        objects = ['a', 'b', 'c']
+        self._upload_empty(*objects)
+        res = self.api.object_list(self.account, self.cname, limit=2)
+        self.assertIn('objects', res)
+        self.assertIn('prefixes', res)
+        self.assertIn('truncated', res)
+        self.assertIn('next_marker', res)
+        self.assertListEqual(objects[:2], [x['name'] for x in res['objects']])
+        self.assertFalse(res['prefixes'])
+        self.assertTrue(res['truncated'])
+
+        res = self.api.object_list(self.account, self.cname, limit=2,
+                                   marker=res['next_marker'])
+        self.assertIn('objects', res)
+        self.assertIn('prefixes', res)
+        self.assertIn('truncated', res)
+        self.assertListEqual(objects[2:], [x['name'] for x in res['objects']])
+        self.assertFalse(res['prefixes'])
+        self.assertFalse(res['truncated'])
+
+    def test_object_list_marker(self):
+        objects = ['a', 'b', 'c']
+        self._upload_empty(*objects)
+        res = self.api.object_list(self.account, self.cname, marker='a')
+        self.assertIn('objects', res)
+        self.assertIn('prefixes', res)
+        self.assertIn('truncated', res)
+        self.assertListEqual(objects[1:], [x['name'] for x in res['objects']])
+        self.assertFalse(res['prefixes'])
+        self.assertFalse(res['truncated'])
+
+    def test_object_list_delimiter(self):
+        objects = ['1/a', '1/b', '2/c']
+        self._upload_empty(*objects)
+        res = self.api.object_list(self.account, self.cname, delimiter='/')
+        self.assertIn('objects', res)
+        self.assertIn('prefixes', res)
+        self.assertIn('truncated', res)
+        self.assertFalse(res['objects'])
+        self.assertListEqual(['1/', '2/'], res['prefixes'])
+        self.assertFalse(res['truncated'])
+
+        self._upload_empty('a')
+        res = self.api.object_list(self.account, self.cname, delimiter='/')
+        self.assertIn('objects', res)
+        self.assertIn('prefixes', res)
+        self.assertIn('truncated', res)
+        self.assertListEqual(['a'], [x['name'] for x in res['objects']])
+        self.assertListEqual(['1/', '2/'], res['prefixes'])
+        self.assertFalse(res['truncated'])
+
+    def test_object_list_delimiter_limit_marker(self):
+        objects = ['1/a', '1/b', '1/c', '2/d', '2/e']
+        self._upload_empty(*objects)
+        res = self.api.object_list(self.account, self.cname,
+                                   delimiter='/', limit=1)
+        self.assertIn('objects', res)
+        self.assertIn('prefixes', res)
+        self.assertIn('truncated', res)
+        self.assertFalse(res['objects'])
+        self.assertListEqual(['1/'], res['prefixes'])
+        self.assertTrue(res['truncated'])
+
+        res = self.api.object_list(self.account, self.cname,
+                                   delimiter='/', limit=1,
+                                   marker=res['next_marker'])
+        self.assertIn('objects', res)
+        self.assertIn('prefixes', res)
+        self.assertIn('truncated', res)
+        self.assertFalse(res['objects'])
+        self.assertListEqual(['2/'], res['prefixes'])
+
+        res = self.api.object_list(self.account, self.cname,
+                                   delimiter='/', limit=1,
+                                   marker='1/')
+        self.assertIn('objects', res)
+        self.assertIn('prefixes', res)
+        self.assertIn('truncated', res)
+        self.assertFalse(res['objects'])
+        self.assertListEqual(['2/'], res['prefixes'])
