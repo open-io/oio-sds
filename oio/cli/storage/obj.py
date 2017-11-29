@@ -496,13 +496,10 @@ class ListObject(ContainerCommandMixin, lister.Lister):
             yield element
 
         while listing:
-            if not kwargs.get('delimiter'):
-                marker = listing[-1]['name']
-            else:
-                marker = listing[-1].get('name')
-            kwargs['marker'] = marker
-            listing = self.app.client_manager.storage.object_list(
-                account, container, **kwargs)['objects']
+            kwargs['marker'] = resp.get('next_marker')
+            resp = self.app.client_manager.storage.object_list(
+                account, container, **kwargs)
+            listing = resp['objects']
             if listing:
                 for element in listing:
                     yield element
