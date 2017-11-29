@@ -834,17 +834,18 @@ struct filter_ctx_s
 	GTree *prefixes;
 	guint count; // aliases in <beans>
 	const char *prefix;
+	const char *marker;
 	char delimiter;
 };
 
 static void
-_filter (struct filter_ctx_s *ctx, GSList *l)
+_filter_list_result(struct filter_ctx_s *ctx, GSList *l)
 {
 	void forget (GSList *p) { if (p->data) _bean_clean (p->data); g_slist_free1 (p); }
 	void prepend (GSList *p) { p->next = ctx->beans; ctx->beans = p; }
 
 	gsize prefix_len = ctx->prefix ? strlen(ctx->prefix) : 0;
-	for (GSList *tmp; l ;l=tmp) {
+	for (GSList *tmp; l; l = tmp) {
 		tmp = l->next;
 		l->next = NULL;
 
@@ -864,9 +865,15 @@ _filter (struct filter_ctx_s *ctx, GSList *l)
 
 		const char *name = ALIASES_get_alias(l->data)->str;
 		if (ctx->delimiter) {
-			const char *p = strchr(name+prefix_len, ctx->delimiter);
+			const char *p = strchr(name + prefix_len, ctx->delimiter);
 			if (p) {
-				g_tree_insert(ctx->prefixes, g_strndup(name, (p-name)+1), GINT_TO_POINTER(1));
+				// We must not respond a prefix equal to the marker.
+				if (!ctx->marker ||
+						strncmp(name, ctx->marker, (p - name) + 1)) {
+					g_tree_insert(ctx->prefixes,
+							g_strndup(name, (p - name) + 1),
+							GINT_TO_POINTER(1));
+				}
 				forget (l);
 			} else {
 				ctx->count ++;
@@ -1329,7 +1336,7 @@ static GError * _list_loop (struct req_args_s *args,
 
 		/* Action */
 		err = _resolve_meta2_for_list (args, _pack, &out);
-		if (NULL != err) {
+		if (err) {
 			m2v2_list_result_clean (&out);
 			break;
 		}
@@ -1337,7 +1344,7 @@ static GError * _list_loop (struct req_args_s *args,
 		/* Manage the properties */
 		gchar **keys = gtree_string_keys (out.props);
 		if (keys) {
-			for (gchar **pk=keys; *pk ;++pk) {
+			for (gchar **pk = keys; *pk; ++pk) {
 				gchar *v = g_tree_lookup (out.props, *pk);
 				g_tree_steal (out.props, *pk);
 				g_tree_replace (out0->props, *pk, v);
@@ -1354,14 +1361,16 @@ static GError * _list_loop (struct req_args_s *args,
 			ctx.prefixes = tree_prefixes;
 			ctx.count = count;
 			ctx.prefix = in0->prefix;
+			ctx.marker = in0->marker_start;
 			ctx.delimiter = delimiter;
-			_filter (&ctx, out.beans);
+			_filter_list_result(&ctx, out.beans);
 			out.beans = NULL;
 			count = ctx.count;
 			out0->beans = ctx.beans;
 		}
 
-		if (in0->maxkeys > 0 && in0->maxkeys <= (count + g_tree_nnodes(tree_prefixes))) {
+		if (in0->maxkeys > 0 &&
+				(count + g_tree_nnodes(tree_prefixes)) >= in0->maxkeys) {
 			/* enough elements received */
 			out0->truncated = out.truncated;
 			stop = TRUE;

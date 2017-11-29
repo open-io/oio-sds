@@ -33,11 +33,11 @@ from oio.api.backblaze import BackblazeWriteHandler, \
     BackblazeChunkDownloadHandler
 from oio.common import constants
 from oio.common.utils import ensure_headers, ensure_request_id, float_value, \
-    name2cid, GeneratorIO, get_logger
+    name2cid, GeneratorIO, get_logger, true_value
 from oio.common.http import http_header_from_ranges
 from oio.common.storage_method import STORAGE_METHODS
 from oio.common.constants import OIO_VERSION
-from urllib import quote_plus
+from urllib import quote_plus, unquote_plus
 
 logger = logging.getLogger(__name__)
 
@@ -753,12 +753,15 @@ class ObjectStorageApi(object):
         :param deleted: if True, list also the deleted objects
 
         :returns: a dict which contains
-           * 'objects': the list of objects
+           * 'objects': the `list` of object descriptions
            * 'prefixes': common prefixes (only if delimiter and prefix are set)
-           * 'properties': a dict of container properties
-           * 'system': a dict of system metadata
+           * 'properties': a `dict` of container properties
+           * 'system': a `dict` of system metadata
+           * 'truncated': a `bool` telling if the listing was truncated
+           * 'next_marker': a `str` to be used as `marker` to get the next
+            page of results (in case the listing was truncated)
         """
-        _, resp_body = self.container.content_list(
+        hdrs, resp_body = self.container.content_list(
             account, container, limit=limit, marker=marker,
             end_marker=end_marker, prefix=prefix, delimiter=delimiter,
             properties=properties, versions=versions, deleted=deleted,
@@ -774,6 +777,11 @@ class ObjectStorageApi(object):
                 obj['version'] = version
                 del obj['ver']
 
+        resp_body['truncated'] = true_value(
+            hdrs.get(constants.HEADER_PREFIX + 'list-truncated'))
+        marker_header = constants.HEADER_PREFIX + 'list-marker'
+        if marker_header in hdrs:
+            resp_body['next_marker'] = unquote_plus(hdrs.get(marker_header))
         return resp_body
 
     @handle_object_not_found
