@@ -67,7 +67,7 @@ class PlainContent(Content):
             current_chunk = Chunk(chunk)
 
         broken_list = list()
-        if not allow_same_rawx:
+        if not allow_same_rawx and chunk_id is not None:
             broken_list.append(current_chunk)
         spare_urls = self._get_spare_chunk(
             duplicate_chunks, broken_list)

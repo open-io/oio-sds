@@ -39,15 +39,14 @@ class ECContent(Content):
             current_chunk.checksum = chunks[0].checksum
 
         broken_list = list()
-        if not allow_same_rawx:
+        if not allow_same_rawx and chunk_id is not None:
             broken_list.append(current_chunk)
         spare_url = self._get_spare_chunk(chunks.all(), broken_list)
 
         handler = ECRebuildHandler(
             chunks.raw(), current_chunk.subpos, self.storage_method)
 
-        new_chunk = {'pos': current_chunk.pos, 'url': spare_url[0]}
-        new_chunk = Chunk(new_chunk)
+        new_chunk = Chunk({'pos': current_chunk.pos, 'url': spare_url[0]})
         stream = handler.rebuild()
 
         meta = {}

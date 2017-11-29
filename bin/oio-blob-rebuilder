@@ -18,15 +18,18 @@ def make_arg_parser():
     log_parser.add_argument('--log-address',
                             help="Log address")
 
-    descr = "Rebuild chunks that were on the specified volume. " \
-            "If no input file is provided, the list of chunks " \
-            "is obtained by requesting the associated rdir service. " \
-            "In that case, it is necessary to declare an incident " \
-            "(with 'openio volume admin incident') before " \
-            "running this tool."
+    descr = """
+Rebuild chunks that were on the specified volume, or chunks listed in
+the input file. If no input file is provided, the list of chunks is
+obtained by requesting the associated rdir service. In that case,
+it is necessary to declare an incident (with 'openio volume admin incident')
+before running this tool. This tool can also keep listening to a beanstalkd
+tube for broken chunks events.
+"""
     parser = argparse.ArgumentParser(description=descr, parents=[log_parser])
     parser.add_argument('namespace', help="Namespace")
-    parser.add_argument('--volume', help="Id of the volume to rebuild (IP:PORT)")
+    parser.add_argument('--volume',
+                        help="Id of the volume to rebuild (IP:PORT)")
     parser.add_argument('--dry-run', action='store_true',
                         help="Display actions but do nothing")
     parser.add_argument('--rdir-fetch-limit', type=int,
@@ -49,7 +52,7 @@ def make_arg_parser():
                         help=dft_help)
     ifile_help = "Read chunks from this file instead of rdir. " \
                  "Each line should be formatted like " \
-                 "'container_id|content_id|short_chunk_id'."
+                 "'container_id|content_id|short_chunk_id_or_position'."
     parser.add_argument('--input-file', nargs='?',
                         help=ifile_help)
     parser.add_argument('--beanstalkd',
