@@ -247,7 +247,7 @@ class TestEC(unittest.TestCase):
         put_reqs = defaultdict(lambda: {'parts': []})
 
         def cb_body(conn_id, part):
-            put_reqs[conn_id]['parts'].append(part.encode('utf-8'))
+            put_reqs[conn_id]['parts'].append(part)
 
         # TODO test headers
 
