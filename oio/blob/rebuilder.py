@@ -126,12 +126,12 @@ class BlobRebuilderWorker(object):
         rebuilder_time = 0
 
         chunks = self._fetch_chunks()
-        for container_id, content_id, chunk_id, _ in chunks:
+        for cid, content_id, chunk_id_or_pos, _ in chunks:
             loop_time = time.time()
             if self.dry_run:
-                self.dryrun_chunk_rebuild(container_id, content_id, chunk_id)
+                self.dryrun_chunk_rebuild(cid, content_id, chunk_id_or_pos)
             else:
-                self.safe_chunk_rebuild(container_id, content_id, chunk_id)
+                self.safe_chunk_rebuild(cid, content_id, chunk_id_or_pos)
 
             self.chunks_run_time = ratelimit(
                 self.chunks_run_time,
@@ -203,25 +203,25 @@ class BlobRebuilderWorker(object):
             }
         )
 
-    def dryrun_chunk_rebuild(self, container_id, content_id, chunk_id):
+    def dryrun_chunk_rebuild(self, container_id, content_id, chunk_id_or_pos):
         self.logger.info("[dryrun] Rebuilding "
                          "container %s, content %s, chunk %s",
-                         container_id, content_id, chunk_id)
+                         container_id, content_id, chunk_id_or_pos)
         self.passes += 1
 
-    def safe_chunk_rebuild(self, container_id, content_id, chunk_id):
+    def safe_chunk_rebuild(self, container_id, content_id, chunk_id_or_pos):
         try:
-            self.chunk_rebuild(container_id, content_id, chunk_id)
+            self.chunk_rebuild(container_id, content_id, chunk_id_or_pos)
         except Exception as e:
             self.errors += 1
             self.logger.error('ERROR while rebuilding chunk %s|%s|%s: %s',
-                              container_id, content_id, chunk_id, e)
+                              container_id, content_id, chunk_id_or_pos, e)
 
         self.passes += 1
 
-    def chunk_rebuild(self, container_id, content_id, chunk_id):
+    def chunk_rebuild(self, container_id, content_id, chunk_id_or_pos):
         self.logger.info('Rebuilding (container %s, content %s, chunk %s)',
-                         container_id, content_id, chunk_id)
+                         container_id, content_id, chunk_id_or_pos)
         try:
             content = self.content_factory.get(container_id, content_id)
         except ContentNotFound:
@@ -229,14 +229,16 @@ class BlobRebuilderWorker(object):
 
         chunk_size = 0
         chunk_pos = None
-        if len(chunk_id) < 32:
-            chunk_pos = chunk_id
+        if len(chunk_id_or_pos) < 32:
+            chunk_pos = chunk_id_or_pos
             chunk_id = None
             metapos = int(chunk_pos.split('.', 1)[0])
             chunk_size = content.chunks.filter(metapos=metapos).all()[0].size
         else:
-            if '/' in chunk_id:
-                chunk_id = chunk_id.rsplit('/', 1)[-1]
+            if '/' in chunk_id_or_pos:
+                chunk_id = chunk_id_or_pos.rsplit('/', 1)[-1]
+            else:
+                chunk_id = chunk_id_or_pos
 
             chunk = content.chunks.filter(id=chunk_id).one()
             if chunk is None:
@@ -257,7 +259,7 @@ class BlobRebuilderWorker(object):
                 self.logger.debug("Chunk %s: %s", chunk.url, exc)
 
         # This call does not raise exception if chunk is not referenced
-        if chunk_pos is None:
+        if chunk_id is not None:
             self.rdir_client.chunk_delete(chunk.host, container_id,
                                           content_id, chunk_id)
 

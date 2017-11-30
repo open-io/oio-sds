@@ -609,7 +609,7 @@ retry:
 
 		if (now > deadline) {
 			err = NEWERROR (CODE_UNAVAILABLE,
-					"DB busy (after %"G_GINT64_FORMAT" ms)",
+					"DB busy (deadline reached after %"G_GINT64_FORMAT" ms)",
 					(now - start) / G_TIME_SPAN_MILLISECOND);
 		} else switch (base->status) {
 
