@@ -447,26 +447,30 @@ class TestObjectStorageAPI(BaseTestCase):
             exc.NoSuchContainer, self.api.container_refresh, account, name)
 
         self.api.container_create(account, name)
+        ref_time = time.time()
         time.sleep(0.5)  # ensure container event have been processed
         # container_refresh on existing container
         self.api.container_refresh(account, name)
         time.sleep(0.5)  # ensure container event have been processed
         res = self.api.container_list(account, prefix=name)
-        name_container, nb_objects, nb_bytes, _ = res[0]
-        self.assertEqual(name_container, name)
-        self.assertEqual(nb_objects, 0)
-        self.assertEqual(nb_bytes, 0)
+        name_container, nb_objects, nb_bytes, _, mtime = res[0]
+        self.assertEqual(name, name_container)
+        self.assertEqual(0, nb_objects)
+        self.assertEqual(0, nb_bytes)
+        self.assertGreater(mtime, ref_time)
 
+        ref_time = mtime
         self.api.object_create(account, name, data="data", obj_name=name)
         time.sleep(0.5)  # ensure container event have been processed
         # container_refresh on existing container with data
         self.api.container_refresh(account, name)
         time.sleep(0.5)  # ensure container event have been processed
         res = self.api.container_list(account, prefix=name)
-        name_container, nb_objects, nb_bytes, _ = res[0]
-        self.assertEqual(name_container, name)
-        self.assertEqual(nb_objects, 1)
-        self.assertEqual(nb_bytes, 4)
+        name_container, nb_objects, nb_bytes, _, mtime = res[0]
+        self.assertEqual(name, name_container)
+        self.assertEqual(1, nb_objects)
+        self.assertEqual(4, nb_bytes)
+        self.assertGreater(mtime, ref_time)
 
         self.api.object_delete(account, name, name)
         time.sleep(0.5)  # ensure container event have been processed
@@ -483,7 +487,7 @@ class TestObjectStorageAPI(BaseTestCase):
         self.api.account.container_update(name, name, {"mtime": time.time()})
         self.api.container_refresh(name, name)
         containers = self.api.container_list(name)
-        self.assertEqual(len(containers), 0)
+        self.assertEqual(0, len(containers))
         self.api.account_delete(name)
 
     def test_account_refresh(self):

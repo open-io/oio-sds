@@ -93,26 +93,26 @@ class TestAccountServer(BaseTestCase):
     def test_account_container_reset(self):
         data = {'name': 'foo', 'mtime': Timestamp(time()).normal,
                 'objects': 12, 'bytes': 42}
-        data = json.dumps(data)
+        dataj = json.dumps(data)
         resp = self.app.post('/v1.0/account/container/update',
-                             data=data, query_string={'id': self.account_id})
+                             data=dataj, query_string={'id': self.account_id})
 
         data = {'name': 'foo', 'mtime': Timestamp(time()).normal}
-        data = json.dumps(data)
+        dataj = json.dumps(data)
         resp = self.app.post('/v1.0/account/container/reset',
-                             data=data, query_string={'id': self.account_id})
+                             data=dataj, query_string={'id': self.account_id})
         self.assertEqual(resp.status_code, 204)
 
-        data = {'prefix': 'foo'}
-        data = json.dumps(data)
+        dataj = json.dumps({'prefix': 'foo'})
         resp = self.app.post('/v1.0/account/containers',
-                             data=data, query_string={'id': self.account_id})
+                             data=dataj, query_string={'id': self.account_id})
         resp = self.json_loads(resp.data)
         for container in resp["listing"]:
-            name, nb_objects, nb_bytes, _ = container
+            name, nb_objects, nb_bytes, _, mtime = container
             if name == 'foo':
-                self.assertEqual(nb_objects, 0)
-                self.assertEqual(nb_bytes, 0)
+                self.assertEqual(0, nb_objects)
+                self.assertEqual(0, nb_bytes)
+                self.assertEqual(float(data['mtime']), mtime)
                 return
         self.fail("No container foo")
 

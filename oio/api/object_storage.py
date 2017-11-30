@@ -268,9 +268,10 @@ class ObjectStorageApi(object):
         :keyword prefix:
         :keyword delimiter:
         :return: the list of containers of an account
-        :rtype: `list` of items (`list`) with 4 fields:
-            name, number of objects, number of bytes, and 1 if the item
-            is a prefix or 0 if the item is actually a container
+        :rtype: `list` of items (`list`) with 5 fields:
+            name, number of objects, number of bytes, 1 if the item
+            is a prefix or 0 if the item is actually a container,
+            and modification time.
         """
         resp = self.account.container_list(account, limit=limit,
                                            marker=marker,

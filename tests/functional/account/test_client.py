@@ -49,31 +49,28 @@ class TestAccountClient(BaseTestCase):
 
     def test_container_list(self):
         resp = self.account_client.container_list(self.account_id)
-        self.assertEquals(resp["containers"], 2)
-        self.assertEqual(resp["listing"], [
-            ["container1", 0, 0, 0],
-            ["container2", 0, 0, 0]
-        ])
+        self.assertEqual(2, resp["containers"])
+        self.assertEqual([["container1", 0, 0, 0],
+                          ["container2", 0, 0, 0]],
+                         [x[:4] for x in resp["listing"]])
 
         resp = self.account_client.container_list(self.account_id, limit=1)
-        self.assertEquals(resp["containers"], 2)
-        self.assertEqual(resp["listing"], [
-            ["container1", 0, 0, 0]
-        ])
+        self.assertEqual(2, resp["containers"])
+        self.assertEqual([["container1", 0, 0, 0]],
+                         [x[:4] for x in resp["listing"]])
 
         resp = self.account_client.container_list(self.account_id,
                                                   marker="container1",
                                                   limit=1)
-        self.assertEquals(resp["containers"], 2)
-        self.assertEqual(resp["listing"], [
-            ["container2", 0, 0, 0]
-        ])
+        self.assertEquals(2, resp["containers"])
+        self.assertEqual([["container2", 0, 0, 0]],
+                         [x[:4] for x in resp["listing"]])
 
         resp = self.account_client.container_list(self.account_id,
                                                   marker="container2",
                                                   limit=1)
-        self.assertEquals(resp["containers"], 2)
-        self.assertEqual(resp["listing"], [])
+        self.assertEqual(2, resp["containers"])
+        self.assertEqual([], resp["listing"])
 
     # TODO: move this test somewhere under tests/unit/
     def test_account_service_refresh(self):
@@ -99,10 +96,11 @@ class TestAccountClient(BaseTestCase):
         resp = self.account_client.container_list(self.account_id,
                                                   prefix="container1")
         for container in resp["listing"]:
-            name, nb_objects, nb_bytes, _ = container
+            name, nb_objects, nb_bytes, _, mtime = container
             if name == 'container1':
                 self.assertEqual(nb_objects, 0)
                 self.assertEqual(nb_bytes, 0)
+                self.assertGreater(mtime, metadata["mtime"])
                 return
         self.fail("No container container1")
 
