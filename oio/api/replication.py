@@ -116,7 +116,6 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                             data_put = ('%x\r\n' % len(data)).encode()
                             data_put += data + b'\r\n'
                             conn.queue.put(data_put)
-                            # conn.queue.put(b'%x\r\n%s\r\n' % (len(data), data))
                         else:
                             current_conns.remove(conn)
                             failed_chunks.append(conn.chunk)

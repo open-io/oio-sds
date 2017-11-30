@@ -582,9 +582,6 @@ class EcChunkWriter(object):
             # to write data to RAWX
             if not self.failed:
                 # format the chunk
-                to_send = (u'%x\r\n' % len(data)).encode('utf-8')
-                to_send += data + b'\r\n'
-                                                        
                 to_send = b"%x\r\n%s\r\n" % (len(data), data)
                 try:
                     with green.ChunkWriteTimeout(self.write_timeout):
