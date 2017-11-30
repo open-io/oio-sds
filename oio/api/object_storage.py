@@ -22,7 +22,7 @@ import warnings
 import time
 import random
 from inspect import isgenerator
-from urllib import quote_plus
+from urllib import quote_plus, unquote_plus
 
 from oio.common import exceptions as exc
 from oio.api.ec import ECWriteHandler
@@ -31,16 +31,15 @@ from oio.api.backblaze_http import BackblazeUtilsException, BackblazeUtils
 from oio.api.backblaze import BackblazeWriteHandler, \
     BackblazeChunkDownloadHandler
 from oio.common.utils import cid_from_name, GeneratorIO, monotonic_time
-from oio.common.easy_value import float_value
+from oio.common.easy_value import float_value, true_value
 from oio.common.logger import get_logger
 from oio.common.decorators import ensure_headers, ensure_request_id
 from oio.common.storage_method import STORAGE_METHODS
-from oio.common.constants import OIO_VERSION, CHUNK_HEADERS
+from oio.common.constants import OIO_VERSION, CHUNK_HEADERS, HEADER_PREFIX
 from oio.common.decorators import handle_account_not_found, \
     handle_container_not_found, handle_object_not_found
 from oio.common.storage_functions import _sort_chunks, fetch_stream, \
     fetch_stream_ec
-
 
 logger = logging.getLogger(__name__)
 
@@ -647,12 +646,15 @@ class ObjectStorageApi(object):
         :param deleted: if True, list also the deleted objects
 
         :returns: a dict which contains
-           * 'objects': the list of objects
+           * 'objects': the `list` of object descriptions
            * 'prefixes': common prefixes (only if delimiter and prefix are set)
-           * 'properties': a dict of container properties
-           * 'system': a dict of system metadata
+           * 'properties': a `dict` of container properties
+           * 'system': a `dict` of system metadata
+           * 'truncated': a `bool` telling if the listing was truncated
+           * 'next_marker': a `str` to be used as `marker` to get the next
+            page of results (in case the listing was truncated)
         """
-        _, resp_body = self.container.content_list(
+        hdrs, resp_body = self.container.content_list(
             account, container, limit=limit, marker=marker,
             end_marker=end_marker, prefix=prefix, delimiter=delimiter,
             properties=properties, versions=versions, deleted=deleted,
@@ -668,6 +670,11 @@ class ObjectStorageApi(object):
                 obj['version'] = version
                 del obj['ver']
 
+        resp_body['truncated'] = true_value(
+            hdrs.get(HEADER_PREFIX + 'list-truncated'))
+        marker_header = HEADER_PREFIX + 'list-marker'
+        if marker_header in hdrs:
+            resp_body['next_marker'] = unquote_plus(hdrs.get(marker_header))
         return resp_body
 
     @handle_object_not_found
