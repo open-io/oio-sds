@@ -69,6 +69,7 @@ static void _task_react_NONE(gpointer p);
 static void _task_react_FINAL(gpointer p);
 static void _task_react_TIMERS(gpointer p);
 static void _task_reload_nsinfo(gpointer p);
+static void _task_reload_peers(gpointer p);
 
 static gpointer _worker_queue (gpointer p);
 static gpointer _worker_clients (gpointer p);
@@ -641,6 +642,7 @@ static gboolean
 _configure_tasks(struct sqlx_service_s *ss)
 {
 	grid_task_queue_register(ss->gtq_reload, 5, _task_reload_nsinfo, NULL, ss);
+	grid_task_queue_register(ss->gtq_reload, 5, _task_reload_peers, NULL, ss);
 
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_bases, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_resolver, NULL, ss);
@@ -1126,6 +1128,71 @@ _task_reload_nsinfo(gpointer p)
 		PSRV(p)->nsinfo = ni;
 		namespace_info_free(old);
 	}
+}
+
+static gboolean
+_srv_is_up(struct service_info_s *si)
+{
+	EXTRA_ASSERT(si != NULL);
+
+	if (!si->tags)
+		return TRUE;
+
+	struct service_tag_s *tag =
+		service_info_get_tag(si->tags, NAME_TAGNAME_RAWX_UP);
+	if (!tag)
+		return TRUE;
+
+	gboolean up = TRUE;
+	service_tag_get_value_boolean(tag, &up, NULL);
+	return up;
+}
+
+static gchar *
+_srv_url (struct service_info_s *si)
+{
+	EXTRA_ASSERT(si != NULL);
+	gchar tmp[STRLEN_ADDRINFO];
+	grid_addrinfo_to_string(&si->addr, tmp, sizeof(tmp));
+	return g_strdup(tmp);
+}
+
+static gchar **
+_filter_down_hosts(GSList *l)
+{
+	GPtrArray *tmp = g_ptr_array_new();
+	for (; l ;l=l->next) {
+		if (_srv_is_up(l->data))
+			g_ptr_array_add(tmp, _srv_url(l->data));
+	}
+	return (gchar**) g_ptr_array_free(tmp, FALSE);
+}
+
+static void
+_task_reload_peers(gpointer p)
+{
+	if (!grid_main_is_running ())
+		return;
+
+	const char * nsname = PSRV(p)->ns_name;
+	const char * srvtype = PSRV(p)->service_config->srvtype;
+	GSList *allsrv = NULL;
+	GError *err = conscience_get_services(nsname, srvtype, FALSE, &allsrv);
+	if (err) {
+		GRID_WARN("Failed to reload the list of [%s/%s]: (%d) %s",
+				nsname, srvtype, err->code, err->message);
+		g_clear_error(&err);
+	} else {
+		gchar **down = _filter_down_hosts(allsrv);
+		gridd_client_learn_peers_down((const char * const *)down);
+		if (down && *down) {
+			const gsize len = g_strv_length(down);
+			GRID_NOTICE("Reloaded %" G_GSIZE_FORMAT " faulty %s", len, srvtype);
+		}
+		g_strfreev(down);
+	}
+
+	g_slist_free_full(allsrv, (GDestroyNotify)service_info_clean);
 }
 
 static void
