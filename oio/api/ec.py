@@ -624,8 +624,8 @@ class EcChunkWriter(object):
                             self.checksum.hexdigest()),
             '\r\n'
         ]
-        to_send = "".join(parts)
-        self.conn.send(to_send)
+        to_send = ''.join(parts)
+        self.conn.send(to_send.encode('utf-8'))
 
     def getresponse(self):
         """Read the HTTP response from the connection"""

@@ -14,6 +14,7 @@
 # License along with this library.
 
 from sys import exc_info
+from six import reraise as six_reraise
 
 
 class OioException(Exception):
@@ -235,4 +236,4 @@ def reraise(exc_type, exc_value, extra_message=None):
     args = exc_value.args
     if extra_message:
         args = (extra_message, ) + args
-    raise exc_type(args), None, exc_info()[2]
+    six_reraise(exc_type, args, exc_info()[2])
