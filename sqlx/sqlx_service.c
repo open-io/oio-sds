@@ -1171,6 +1171,8 @@ _filter_down_hosts(GSList *l)
 static void
 _task_reload_peers(gpointer p)
 {
+	VARIABLE_PERIOD_DECLARE();
+
 	if (!grid_main_is_running ())
 		return;
 
@@ -1187,7 +1189,12 @@ _task_reload_peers(gpointer p)
 		gridd_client_learn_peers_down((const char * const *)down);
 		if (down && *down) {
 			const gsize len = g_strv_length(down);
-			GRID_NOTICE("Reloaded %" G_GSIZE_FORMAT " faulty %s", len, srvtype);
+			if (VARIABLE_PERIOD_SKIP(180)) {
+				GRID_DEBUG("Loaded %" G_GSIZE_FORMAT " down %s", len, srvtype);
+			} else {
+				/* once per 15 minutes */
+				GRID_NOTICE("Loaded %" G_GSIZE_FORMAT " down %s", len, srvtype);
+			}
 		}
 		g_strfreev(down);
 	}
