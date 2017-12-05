@@ -1131,21 +1131,21 @@ _task_reload_nsinfo(gpointer p)
 }
 
 static gboolean
-_srv_is_up(struct service_info_s *si)
+_srv_is_down(struct service_info_s *si)
 {
 	EXTRA_ASSERT(si != NULL);
 
 	if (!si->tags)
-		return TRUE;
+		return FALSE;
 
 	struct service_tag_s *tag =
 		service_info_get_tag(si->tags, NAME_TAGNAME_RAWX_UP);
 	if (!tag)
-		return TRUE;
+		return FALSE;
 
 	gboolean up = TRUE;
 	service_tag_get_value_boolean(tag, &up, NULL);
-	return up;
+	return !up;
 }
 
 static gchar *
@@ -1162,7 +1162,7 @@ _filter_down_hosts(GSList *l)
 {
 	GPtrArray *tmp = g_ptr_array_new();
 	for (; l ;l=l->next) {
-		if (_srv_is_up(l->data))
+		if (_srv_is_down(l->data))
 			g_ptr_array_add(tmp, _srv_url(l->data));
 	}
 	return (gchar**) g_ptr_array_free(tmp, FALSE);
