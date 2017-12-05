@@ -456,7 +456,7 @@ metautils_pclose(int *pfd)
 	return rc;
 }
 
-static int
+int
 sock_build_for_url(const char *url, GError **err,
 		struct sockaddr_storage *sas, size_t *sas_len)
 {
