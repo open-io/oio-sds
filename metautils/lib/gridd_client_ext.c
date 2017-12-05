@@ -325,12 +325,15 @@ gridd_client_run (struct gridd_client_s *self)
 {
 	if (!self)
 		return NEWERROR(CODE_INTERNAL_ERROR, "creation error");
-	if (!gridd_client_start(self))
-		return NEWERROR(CODE_INTERNAL_ERROR, "starting error");
 	GError *err;
-	if (NULL != (err = gridd_client_loop (self)))
+	if (!gridd_client_start(self)) {
+		if ((err = gridd_client_error(self)))
+			return err;
+		return NEWERROR(CODE_INTERNAL_ERROR, "starting error");
+	}
+	if ((err = gridd_client_loop(self)))
 		return err;
-	if (NULL != (err = gridd_client_error (self)))
+	if ((err = gridd_client_error(self)))
 		return err;
 	return NULL;
 }
