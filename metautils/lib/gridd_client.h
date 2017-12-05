@@ -154,4 +154,8 @@ struct abstract_client_factory_s
 // gridd_client_create_empty().
 struct gridd_client_factory_s * gridd_client_factory_create(void);
 
+/* If that list of peers odwn is not periodically refreshed, it ends up with
+ * a set of blocked peers */
+void gridd_client_learn_peers_down(const char * const * peers);
+
 #endif /*OIO_SDS__metautils__lib__gridd_client_h*/

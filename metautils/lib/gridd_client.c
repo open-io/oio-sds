@@ -80,7 +80,6 @@ struct gridd_client_s
 	enum client_step_e step : 4;
 	guint8 keepalive : 1;
 	guint8 forbid_redirect : 1;
-	guint8 avoid_on_error : 1;
 
 	gchar orig_url[URL_MAXLEN];
 	gchar url[URL_MAXLEN];
@@ -89,7 +88,10 @@ struct gridd_client_s
 /* Cache of network errors ------------------------------------------------- */
 
 static GMutex lock_errors;
-static GTree *tree_errors = NULL;
+static GTree *tree_errors = NULL;  /* <gchar*> -> <rrd*> */
+
+static GRWLock lock_down;
+static GTree *tree_down = NULL;  /* <gchar*> -> <constant> */
 
 void  _oio_cache_of_errors_contructor (void);
 
@@ -102,16 +104,25 @@ _oio_cache_of_errors_contructor (void)
 			g_mutex_init (&lock_errors);
 			tree_errors = g_tree_new_full(metautils_strcmp3, NULL,
 					g_free, (GDestroyNotify) grid_single_rrd_destroy);
+			g_rw_lock_init(&lock_down);
+			tree_down = g_tree_new_full(metautils_strcmp3, NULL, g_free, NULL);
 		}
 	}
 }
 
 static gboolean
+_is_peer_down (const char *url)
+{
+	g_rw_lock_reader_lock(&lock_down);
+	gpointer p = g_tree_lookup(tree_down, url);
+	g_rw_lock_reader_unlock(&lock_down);
+
+	return p != NULL;
+}
+
+static gboolean
 _has_too_many_errors (const char *url)
 {
-	if (!url || !*url)
-		return FALSE;
-
 	guint64 delta = 0;
 	g_mutex_lock(&lock_errors);
 
@@ -604,7 +615,7 @@ _client_free(struct gridd_client_s *client)
 	EXTRA_ASSERT(client != NULL);
 	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
 
-	if (client->avoid_on_error)
+	if (oio_client_cache_errors)
 		_count_network_error(client->url, client->error);
 
 	_client_reset_reply(client);
@@ -870,11 +881,23 @@ _client_start(struct gridd_client_s *client)
 		return FALSE;
 	}
 
-	if (oio_client_cache_errors && client->avoid_on_error) {
-		if (_has_too_many_errors(client->url)) {
-			_client_replace_error(client, NEWERROR(CODE_AVOIDED,
-						"Request avoided, service probably down"));
-			return FALSE;
+	if (oio_client_cache_errors && _has_too_many_errors(client->url)) {
+		_client_replace_error(client, NEWERROR(CODE_AVOIDED,
+					"Request avoided, service probably down"));
+		return FALSE;
+	}
+
+	if (oio_client_down_avoid || oio_client_down_shorten) {
+		const gboolean down = _is_peer_down(client->url);
+		if (down) {
+			if (oio_client_down_avoid) {
+				_client_replace_error(client, NEWERROR(CODE_AVOIDED,
+							"Request avoided, service marked down"));
+				return FALSE;
+			}
+			if (oio_client_down_shorten) {
+				client->delay_connect = 25 * G_TIME_SPAN_MILLISECOND;
+			}
 		}
 	}
 
@@ -914,6 +937,24 @@ _factory_create_client (struct gridd_client_factory_s *factory)
 
 /* ------------------------------------------------------------------------- */
 
+void
+gridd_client_learn_peers_down(const char * const * peers)
+{
+	GTree *new_down = NULL, *old_down = NULL;
+
+	new_down = g_tree_new_full(metautils_strcmp3, NULL, g_free, NULL);
+	for (const char * const * ppeer = peers; peers && **ppeer ;++ppeer)
+		g_tree_replace(new_down, g_strdup(*ppeer), (void*)0xDEADBEAF);
+
+	g_rw_lock_writer_lock(&lock_down);
+	old_down = tree_down;
+	tree_down = new_down;
+	new_down = NULL;
+	g_rw_lock_writer_unlock(&lock_down);
+
+	g_tree_destroy(old_down);
+}
+
 struct gridd_client_s *
 gridd_client_create_empty(void)
 {
@@ -928,7 +969,6 @@ gridd_client_create_empty(void)
 	client->delay_single = oio_client_timeout_single * (gdouble)G_TIME_SPAN_SECOND;
 	client->delay_connect = oio_client_timeout_connect * (gdouble)G_TIME_SPAN_SECOND;
 	client->tv_start = client->tv_connect = oio_ext_monotonic_time ();
-	client->avoid_on_error = BOOL(oio_client_cache_errors);
 
 	return client;
 }
