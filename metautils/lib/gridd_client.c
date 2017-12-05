@@ -943,7 +943,7 @@ gridd_client_learn_peers_down(const char * const * peers)
 	GTree *new_down = NULL, *old_down = NULL;
 
 	new_down = g_tree_new_full(metautils_strcmp3, NULL, g_free, NULL);
-	for (const char * const * ppeer = peers; peers && **ppeer ;++ppeer)
+	for (const char * const * ppeer = peers; peers && *ppeer ;++ppeer)
 		g_tree_replace(new_down, g_strdup(*ppeer), (void*)0xDEADBEAF);
 
 	g_rw_lock_writer_lock(&lock_down);
