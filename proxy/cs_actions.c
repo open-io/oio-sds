@@ -22,73 +22,109 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "common.h"
 #include "actions.h"
 
-GError *
-conscience_remote_get_namespace (const char *cs, namespace_info_t **out)
+static GError *
+_loop_on_allcs_while_neterror(gchar **allcs, GError* (action)(const char *cs))
 {
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_CS_GET_NSINFO);
-	GByteArray *gba = NULL;
-	GError *err = gridd_client_exec_and_concat (cs, proxy_timeout_conscience,
-			message_marshall_gba_and_clean(req), &gba);
-	if (err) {
-		EXTRA_ASSERT (gba == NULL);
+	EXTRA_ASSERT(allcs != NULL);
+
+	for (gchar **pcs=allcs; *pcs ;++pcs) {
+		GError *err = action(*pcs);
+		if (!err)
+			return NULL;
+		if (CODE_IS_NETWORK_ERROR(err->code)) {
+			GRID_DEBUG("Error toward [%s]: (%d) %s", *pcs, err->code, err->message);
+			g_clear_error(&err);
+			continue;
+		}
 		g_prefix_error(&err, "request: ");
 		return err;
 	}
 
-	*out = namespace_info_unmarshall(gba->data, gba->len, &err);
-	g_byte_array_unref (gba);
-	if (*out) return NULL;
-	GSETERROR(&err, "Decoding error");
-	return err;
+	return BUSY("No conscience replied");
 }
 
 GError *
-conscience_remote_get_services(const char *cs, const char *type, gboolean full,
+conscience_remote_get_namespace (gchar **allcs, namespace_info_t **out)
+{
+	GError * action (const char *cs) {
+		GByteArray *gba = NULL;
+		MESSAGE req = metautils_message_create_named(NAME_MSGNAME_CS_GET_NSINFO);
+		GError *err = gridd_client_exec_and_concat (cs, proxy_timeout_conscience,
+				message_marshall_gba_and_clean(req), &gba);
+		EXTRA_ASSERT ((gba != NULL) ^ (err != NULL));
+		if (err)
+			return err;
+		*out = namespace_info_unmarshall(gba->data, gba->len, &err);
+		g_byte_array_unref (gba);
+		if (*out) return NULL;
+		g_prefix_error(&err, "Decoding error: ");
+		return err;
+	}
+	return _loop_on_allcs_while_neterror(allcs, action);
+}
+
+GError *
+conscience_remote_get_services(gchar **allcs, const char *type, gboolean full,
 		GSList **out)
 {
 	EXTRA_ASSERT(type != NULL);
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_CS_GET_SRV);
-	metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, type);
-	if (full)
-		metautils_message_add_field_str(req, NAME_MSGKEY_FULL, "1");
-	return gridd_client_exec_and_decode (cs, proxy_timeout_conscience,
-			message_marshall_gba_and_clean(req), out, service_info_unmarshall);
-}
-
-GError * conscience_remote_get_types(const char *cs, gchar ***out) {
-	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_CS_GET_SRVNAMES);
-	gchar *json = NULL;
-	GError *err = gridd_client_exec_and_concat_string (cs, proxy_timeout_conscience,
-			message_marshall_gba_and_clean(req), &json);
-	EXTRA_ASSERT((err != NULL) ^ (json != NULL));
-	if (!err) {
-		err = STRV_decode_buffer((guint8*)json, strlen(json), out);
-		if (out) {
-			EXTRA_ASSERT((err != NULL) ^ (*out != NULL));
-		}
-		g_free(json);
+	GError * action (const char *cs) {
+		MESSAGE req = metautils_message_create_named(NAME_MSGNAME_CS_GET_SRV);
+		metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, type);
+		if (full)
+			metautils_message_add_field_str(req, NAME_MSGKEY_FULL, "1");
+		return gridd_client_exec_and_decode (cs, proxy_timeout_conscience,
+				message_marshall_gba_and_clean(req), out, service_info_unmarshall);
 	}
-	return err;
+	return _loop_on_allcs_while_neterror(allcs, action);
 }
 
 GError *
-conscience_remote_push_services(const char *cs, GSList *ls)
+conscience_remote_get_types(gchar **allcs, gchar ***out)
 {
-	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_CS_PUSH_SRV);
-	metautils_message_add_body_unref (req, service_info_marshall_gba (ls, NULL));
-	return gridd_client_exec (cs, proxy_timeout_conscience,
-			message_marshall_gba_and_clean(req));
+	GError * action(const char *cs) {
+		MESSAGE req = metautils_message_create_named (NAME_MSGNAME_CS_GET_SRVNAMES);
+		gchar *json = NULL;
+		GError *err = gridd_client_exec_and_concat_string (cs, proxy_timeout_conscience,
+				message_marshall_gba_and_clean(req), &json);
+		EXTRA_ASSERT((err != NULL) ^ (json != NULL));
+		if (!err) {
+			err = STRV_decode_buffer((guint8*)json, strlen(json), out);
+			if (out) {
+				EXTRA_ASSERT((err != NULL) ^ (*out != NULL));
+			}
+			g_free(json);
+		}
+		return err;
+	}
+	return _loop_on_allcs_while_neterror(allcs, action);
+}
+
+GError *
+conscience_remote_push_services(gchar **allcs, GSList *ls)
+{
+	GError * action(const char *cs) {
+		MESSAGE req = metautils_message_create_named (NAME_MSGNAME_CS_PUSH_SRV);
+		metautils_message_add_body_unref (req, service_info_marshall_gba (ls, NULL));
+		return gridd_client_exec (cs, proxy_timeout_conscience,
+				message_marshall_gba_and_clean(req));
+	}
+	return _loop_on_allcs_while_neterror(allcs, action);
 }
 
 GError*
-conscience_remote_remove_services(const char *cs, const char *type, GSList *ls)
+conscience_remote_remove_services(gchar **allcs, const char *type, GSList *ls)
 {
-	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_CS_RM_SRV);
-	if (ls)
-		metautils_message_add_body_unref (req, service_info_marshall_gba (ls, NULL));
-	if (type) metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, type);
-	return gridd_client_exec (cs, proxy_timeout_conscience,
-			message_marshall_gba_and_clean(req));
+	GError * action(const char *cs) {
+		MESSAGE req = metautils_message_create_named (NAME_MSGNAME_CS_RM_SRV);
+		if (ls)
+			metautils_message_add_body_unref (req, service_info_marshall_gba (ls, NULL));
+		if (type)
+			metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, type);
+		return gridd_client_exec (cs, proxy_timeout_conscience,
+				message_marshall_gba_and_clean(req));
+	}
+	return _loop_on_allcs_while_neterror(allcs, action);
 }
 
 /* -------------------------------------------------------------------------- */
