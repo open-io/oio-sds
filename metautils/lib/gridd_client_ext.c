@@ -442,24 +442,6 @@ gridd_client_exec_and_concat (const gchar *to, gdouble seconds, GByteArray *req,
 }
 
 GError *
-gridd_client_exec_and_concat_string (const gchar *to, gdouble seconds, GByteArray *req,
-		gchar **out)
-{
-	GByteArray *tmp = NULL;
-	GError *err = gridd_client_exec_and_concat (to, seconds, req, out ? &tmp : NULL);
-
-	if (err) {
-		if (tmp) g_byte_array_unref (tmp);
-		return err;
-	}
-	if (out) {
-		g_byte_array_append (tmp, (guint8*)"", 1);
-		*out = (gchar*) g_byte_array_free (tmp, FALSE);
-	}
-	return NULL;
-}
-
-GError *
 gridd_client_exec_and_decode (const gchar *to, gdouble seconds,
 		GByteArray *req, GSList **out, body_decoder_f decode)
 {

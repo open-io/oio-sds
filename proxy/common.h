@@ -322,4 +322,10 @@ extern gint32 oio_proxy_request_failure_threshold_last;
 extern gint32 oio_proxy_request_failure_threshold_middle;
 #endif
 
+/* ------------------------------------------------------------------------- */
+
+/* wraps gridd_client_exec_and_concat() */
+GError * gridd_client_exec_and_concat_string (const char *to, gdouble timeout,
+		GByteArray *req, gchar **out);
+
 #endif /*OIO_SDS__proxy__common_h*/
