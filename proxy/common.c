@@ -23,13 +23,14 @@ gint32 oio_proxy_request_failure_threshold_first = 100;
 gint32 oio_proxy_request_failure_threshold_middle = 50;
 gint32 oio_proxy_request_failure_threshold_last = 0;
 
-gchar *
-proxy_get_csurl (void)
+gchar **
+proxy_get_cs_urlv (void)
 {
 	g_rw_lock_reader_lock (&csurl_rwlock);
-	const gint32 i = oio_ext_rand_int_range(0, csurl_count % G_MAXINT32);
-	gchar *cs = g_strdup(csurl[i]);
+	gchar **cs = g_strdupv(csurl);
 	g_rw_lock_reader_unlock (&csurl_rwlock);
+
+	oio_ext_array_shuffle((void**)cs, g_strv_length(cs));
 	return cs;
 }
 

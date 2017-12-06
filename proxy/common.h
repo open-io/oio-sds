@@ -98,9 +98,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define MASTER_READ(Action)  GUARDED_READ(master_rwlock,Action)
 #define MASTER_WRITE(Action) GUARDED_WRITE(master_rwlock,Action)
 
-#define CSURL(C) gchar *C = NULL; do { \
-	C = proxy_get_csurl(); \
-	STRING_STACKIFY(C); \
+#define CSURL(C) gchar **C = NULL; do { \
+	C = proxy_get_cs_urlv(); \
+	STRINGV_STACKIFY(C); \
 } while (0)
 
 #define COMA(gs,first) do { \
@@ -136,7 +136,7 @@ gboolean validate_srvtype (const char * n);
 extern GRWLock csurl_rwlock;
 extern gchar **csurl;
 extern gsize csurl_count;
-gchar * proxy_get_csurl (void);
+gchar ** proxy_get_cs_urlv (void);
 
 /* Periodically loads lists of services from the conscience, and keep this
  * in cache. */
@@ -297,12 +297,12 @@ enum http_rc_e _reply_common_error (struct req_args_s *args, GError *err);
 
 /* -------------------------------------------------------------------------- */
 
-GError * conscience_remote_get_namespace (const char *cs, namespace_info_t **out);
-GError * conscience_remote_get_services(const char *cs, const char *type,
+GError * conscience_remote_get_namespace (gchar **cs, namespace_info_t **out);
+GError * conscience_remote_get_services(gchar **cs, const char *type,
 		gboolean full, GSList **out);
-GError * conscience_remote_get_types(const char *cs, gchar ***out);
-GError * conscience_remote_push_services(const char *cs, GSList *ls);
-GError* conscience_remote_remove_services(const char *cs, const char *type,
+GError * conscience_remote_get_types(gchar **cs, gchar ***out);
+GError * conscience_remote_push_services(gchar **cs, GSList *ls);
+GError* conscience_remote_remove_services(gchar **cs, const char *type,
 		GSList *ls);
 
 /* -------------------------------------------------------------------------- */
