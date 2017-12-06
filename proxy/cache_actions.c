@@ -66,7 +66,7 @@ action_forward (struct req_args_s *args)
 	if (!g_ascii_strcasecmp (action, "flush")) {
 		GByteArray *encoded = message_marshall_gba_and_clean (
 				metautils_message_create_named (NAME_MSGNAME_SQLX_FLUSH));
-		err = gridd_client_exec (id, proxy_timeout_common, encoded);
+		err = CLIENT_EXEC (id, proxy_timeout_common, encoded);
 		if (err)
 			return _reply_common_error (args, err);
 		return _reply_success_json (args, NULL);
@@ -74,7 +74,7 @@ action_forward (struct req_args_s *args)
 	if (!g_ascii_strcasecmp (action, "reload")) {
 		GByteArray *encoded = message_marshall_gba_and_clean (
 				metautils_message_create_named (NAME_MSGNAME_SQLX_RELOAD));
-		err = gridd_client_exec (id, proxy_timeout_common, encoded);
+		err = CLIENT_EXEC (id, proxy_timeout_common, encoded);
 		if (err)
 			return _reply_common_error (args, err);
 		return _reply_success_json (args, NULL);
@@ -82,7 +82,7 @@ action_forward (struct req_args_s *args)
 	if (!g_ascii_strcasecmp (action, "kill")) {
 		GByteArray *encoded = message_marshall_gba_and_clean (
 				metautils_message_create_named("REQ_KILL"));
-		err = gridd_client_exec (id, proxy_timeout_common, encoded);
+		err = CLIENT_EXEC (id, proxy_timeout_common, encoded);
 		if (err)
 			return _reply_common_error (args, err);
 		return _reply_success_json (args, NULL);
@@ -91,7 +91,7 @@ action_forward (struct req_args_s *args)
 		args->rp->no_access();
 		GByteArray *encoded = message_marshall_gba_and_clean (
 				metautils_message_create_named("REQ_PING"));
-		err = gridd_client_exec (id, proxy_timeout_common, encoded);
+		err = CLIENT_EXEC (id, proxy_timeout_common, encoded);
 		if (err)
 			return _reply_common_error (args, err);
 		return _reply_success_json (args, NULL);
@@ -101,7 +101,7 @@ action_forward (struct req_args_s *args)
 		metautils_message_add_field_str(req, "LIBC", "1");
 		metautils_message_add_field_str(req, "THREADS", "1");
 		GByteArray *encoded = message_marshall_gba_and_clean (req);
-		err = gridd_client_exec (id, proxy_timeout_common, encoded);
+		err = CLIENT_EXEC (id, proxy_timeout_common, encoded);
 		if (err)
 			return _reply_common_error (args, err);
 		return _reply_success_json (args, NULL);
@@ -110,7 +110,7 @@ action_forward (struct req_args_s *args)
 	if (!g_ascii_strcasecmp (action, "lean-sqlx")) {
 		GByteArray *encoded = message_marshall_gba_and_clean (
 				metautils_message_create_named(NAME_MSGNAME_SQLX_LEANIFY));
-		err = gridd_client_exec (id, proxy_timeout_common, encoded);
+		err = CLIENT_EXEC (id, proxy_timeout_common, encoded);
 		if (err)
 			return _reply_common_error (args, err);
 		return _reply_success_json (args, NULL);
@@ -305,7 +305,7 @@ action_forward_set_config (struct req_args_s *args)
 	MESSAGE req = metautils_message_create_named("REQ_SETCFG");
 	metautils_message_set_BODY(req, args->rq->body->data, args->rq->body->len);
 	GByteArray *encoded = message_marshall_gba_and_clean (req);
-	GError *err = gridd_client_exec(id, proxy_timeout_config, encoded);
+	GError *err = CLIENT_EXEC(id, proxy_timeout_config, encoded);
 	if (err) {
 		if (CODE_IS_NETWORK_ERROR(err->code)) {
 			if (err->code == ERRCODE_CONN_TIMEOUT || err->code == ERRCODE_READ_TIMEOUT)

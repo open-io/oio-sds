@@ -324,7 +324,12 @@ extern gint32 oio_proxy_request_failure_threshold_middle;
 
 /* ------------------------------------------------------------------------- */
 
-/* wraps gridd_client_exec_and_concat() */
+/* Execute the request without avoidance, and discard the output */
+#define CLIENT_EXEC(Url,Timeout,Req) \
+	gridd_client_exec_and_concat_string(Url,Timeout,Req,NULL)
+
+/* wraps gridd_client_exec_and_concat() but disable the avoidance of peers
+ * seen faulty or down. */
 GError * gridd_client_exec_and_concat_string (const char *to, gdouble timeout,
 		GByteArray *req, gchar **out);
 
