@@ -575,7 +575,7 @@ gridd_client_exec_and_concat_string (const gchar *to, gdouble seconds,
 		GByteArray *req, gchar **out)
 {
 	EXTRA_ASSERT(to != NULL);
-	EXTRA_ASSERT(out != NULL);
+	EXTRA_ASSERT(out == NULL || *out == NULL);
 
 	GError *err = NULL;
 	GByteArray *tmp = g_byte_array_sized_new(512);
@@ -590,16 +590,16 @@ gridd_client_exec_and_concat_string (const gchar *to, gdouble seconds,
 	} else {
 		if (seconds > 0.0)
 			gridd_client_set_timeout (client, seconds);
+		gridd_client_set_avoidance(client, FALSE);
 		err = gridd_client_run (client);
 		gridd_client_free (client);
 	}
 
-	if (!err) {
+	if (!err && out) {
 		g_byte_array_append (tmp, (guint8*)"", 1);
 		*out = (gchar*) g_byte_array_free (tmp, FALSE);
 		tmp = NULL;
 	}
-
 	if (tmp)
 		g_byte_array_free (tmp, TRUE);
 
