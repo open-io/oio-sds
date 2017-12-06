@@ -559,3 +559,22 @@ GError * KV_read_usersys_properties (struct json_object *j, gchar ***out) {
 	*out = kv;
 	return NULL;
 }
+
+GError *
+gridd_client_exec_and_concat_string (const gchar *to, gdouble seconds,
+		GByteArray *req, gchar **out)
+{
+	GByteArray *tmp = NULL;
+	GError *err = gridd_client_exec_and_concat (to, seconds, req, out ? &tmp : NULL);
+
+	if (err) {
+		if (tmp) g_byte_array_unref (tmp);
+		return err;
+	}
+	if (out) {
+		g_byte_array_append (tmp, (guint8*)"", 1);
+		*out = (gchar*) g_byte_array_free (tmp, FALSE);
+	}
+	return NULL;
+}
+

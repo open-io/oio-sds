@@ -58,10 +58,6 @@ GError * gridd_client_exec_and_decode (const char *to, gdouble timeout,
 GError * gridd_client_exec_and_concat (const char *to, gdouble timeout,
 		GByteArray *req, GByteArray **out);
 
-/* wraps gridd_client_exec_and_concat() */
-GError * gridd_client_exec_and_concat_string (const char *to, gdouble timeout, GByteArray *req,
-		gchar **out);
-
 /* Implementation specifics / array of structures -------------------------- */
 
 // @return NULL if one of the subsequent client creation fails
