@@ -873,11 +873,13 @@ _client_start(struct gridd_client_s *client)
 
 	client->tv_start = client->tv_connect = oio_ext_monotonic_time ();
 
-	if (client->step != NONE)
+	if (client->step != NONE) {
+		_client_replace_error(client, SYSERR("bug: invalid client state"));
 		return FALSE;
+	}
 
 	if (!client->url[0]) {
-		_client_replace_error(client, NEWERROR(EINVAL, "No target"));
+		_client_replace_error(client, SYSERR("bug: no client target"));
 		return FALSE;
 	}
 

@@ -324,12 +324,13 @@ GError *
 gridd_client_run (struct gridd_client_s *self)
 {
 	if (!self)
-		return NEWERROR(CODE_INTERNAL_ERROR, "creation error");
+		return SYSERR("creation error");
 	GError *err;
 	if (!gridd_client_start(self)) {
 		if ((err = gridd_client_error(self)))
 			return err;
-		return NEWERROR(CODE_INTERNAL_ERROR, "starting error");
+		/* TODO good place for a g_assert_not_reached(); */
+		return SYSERR("client startup: unknown error");
 	}
 	if ((err = gridd_client_loop(self)))
 		return err;
