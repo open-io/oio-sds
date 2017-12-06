@@ -80,6 +80,7 @@ struct gridd_client_s
 	enum client_step_e step : 4;
 	guint8 keepalive : 1;
 	guint8 forbid_redirect : 1;
+	guint8 avoidance_onoff : 1;
 
 	gchar orig_url[URL_MAXLEN];
 	gchar url[URL_MAXLEN];
@@ -182,7 +183,6 @@ static gboolean _client_start(struct gridd_client_s *client);
 static GError* _client_set_fd(struct gridd_client_s *client, int fd);
 static void _client_set_timeout(struct gridd_client_s *client, gdouble seconds);
 static void _client_set_timeout_cnx(struct gridd_client_s *client, gdouble sec);
-static void _client_set_keepalive(struct gridd_client_s *client, gboolean on);
 static void _client_react(struct gridd_client_s *client);
 static gboolean _client_expire(struct gridd_client_s *client, gint64 now);
 static void _client_fail(struct gridd_client_s *client, GError *why);
@@ -207,7 +207,6 @@ struct gridd_client_vtable_s VTABLE_CLIENT =
 	_client_url,
 	_client_get_fd,
 	_client_set_fd,
-	_client_set_keepalive,
 	_client_set_timeout,
 	_client_set_timeout_cnx,
 	_client_expired,
@@ -630,15 +629,6 @@ _client_free(struct gridd_client_s *client)
 }
 
 static void
-_client_set_keepalive(struct gridd_client_s *client, gboolean on)
-{
-	EXTRA_ASSERT(client != NULL);
-	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
-
-	client->keepalive = BOOL(on);
-}
-
-static void
 _client_set_timeout(struct gridd_client_s *client, gdouble seconds)
 {
 	EXTRA_ASSERT(client != NULL);
@@ -883,22 +873,24 @@ _client_start(struct gridd_client_s *client)
 		return FALSE;
 	}
 
-	if (oio_client_cache_errors && _has_too_many_errors(client->url)) {
-		_client_replace_error(client, NEWERROR(CODE_AVOIDED,
-					"Request avoided, service probably down"));
-		return FALSE;
-	}
+	if (client->avoidance_onoff) {
+		if (oio_client_cache_errors && _has_too_many_errors(client->url)) {
+			_client_replace_error(client, NEWERROR(CODE_AVOIDED,
+						"Request avoided, service probably down"));
+			return FALSE;
+		}
 
-	if (oio_client_down_avoid || oio_client_down_shorten) {
-		const gboolean down = _is_peer_down(client->url);
-		if (down) {
-			if (oio_client_down_avoid) {
-				_client_replace_error(client, NEWERROR(CODE_AVOIDED,
-							"Request avoided, service marked down"));
-				return FALSE;
-			}
-			if (oio_client_down_shorten) {
-				client->delay_connect = 25 * G_TIME_SPAN_MILLISECOND;
+		if (oio_client_down_avoid || oio_client_down_shorten) {
+			const gboolean down = _is_peer_down(client->url);
+			if (down) {
+				if (oio_client_down_avoid) {
+					_client_replace_error(client, NEWERROR(CODE_AVOIDED,
+								"Request avoided, service marked down"));
+					return FALSE;
+				}
+				if (oio_client_down_shorten) {
+					client->delay_connect = 25 * G_TIME_SPAN_MILLISECOND;
+				}
 			}
 		}
 	}
@@ -972,6 +964,10 @@ gridd_client_create_empty(void)
 	client->delay_connect = oio_client_timeout_connect * (gdouble)G_TIME_SPAN_SECOND;
 	client->tv_start = client->tv_connect = oio_ext_monotonic_time ();
 
+	client->keepalive = 0;
+	client->forbid_redirect = 0;
+	client->avoidance_onoff = 1;
+
 	return client;
 }
 
@@ -981,6 +977,22 @@ gridd_client_no_redirect (struct gridd_client_s *c)
 	if (!c) return;
 	EXTRA_ASSERT(c->abstract.vtable == &VTABLE_CLIENT);
 	c->forbid_redirect = 1;
+}
+
+void
+gridd_client_set_keepalive(struct gridd_client_s *c, gboolean onoff)
+{
+	if (!c) return;
+	EXTRA_ASSERT(c->abstract.vtable == &VTABLE_CLIENT);
+	c->keepalive = BOOL(onoff);
+}
+
+void
+gridd_client_set_avoidance (struct gridd_client_s *c, gboolean onoff)
+{
+	if (!c) return;
+	EXTRA_ASSERT(c->abstract.vtable == &VTABLE_CLIENT);
+	c->avoidance_onoff = BOOL(onoff);
 }
 
 struct gridd_client_factory_s *
@@ -1040,12 +1052,6 @@ GError *
 gridd_client_set_fd(struct gridd_client_s *self, int fd)
 {
 	GRIDD_CALL(self,set_fd)(self,fd);
-}
-
-void
-gridd_client_set_keepalive(struct gridd_client_s *self, gboolean on)
-{
-	GRIDD_CALL(self,set_keepalive)(self,on);
 }
 
 void
