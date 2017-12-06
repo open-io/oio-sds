@@ -38,7 +38,7 @@ License along with this library.
 #define STRINGV_STACKIFY(V) do { \
 	if (!(V)) break; \
 	BUFFER_STACKIFY((V), (1+g_strv_length(V))*sizeof(void*)); \
-	for (gchar **p=(V); *p ;++p) { STRING_STACKIFY(*p); } \
+	for (gchar **__p=(V); *__p ;++__p) { STRING_STACKIFY(*__p); } \
 } while (0)
 
 #define metautils_str_upper oio_str_upper
