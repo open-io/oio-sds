@@ -560,21 +560,49 @@ GError * KV_read_usersys_properties (struct json_object *j, gchar ***out) {
 	return NULL;
 }
 
+static gboolean
+_cb_exec_and_concat (GByteArray *tmp, MESSAGE reply)
+{
+	gsize bsize = 0;
+	void *b = metautils_message_get_BODY(reply, &bsize);
+	if (b && bsize)
+		g_byte_array_append(tmp, b, bsize);
+	return TRUE;
+}
+
 GError *
 gridd_client_exec_and_concat_string (const gchar *to, gdouble seconds,
 		GByteArray *req, gchar **out)
 {
-	GByteArray *tmp = NULL;
-	GError *err = gridd_client_exec_and_concat (to, seconds, req, out ? &tmp : NULL);
+	EXTRA_ASSERT(to != NULL);
+	EXTRA_ASSERT(out != NULL);
 
-	if (err) {
-		if (tmp) g_byte_array_unref (tmp);
-		return err;
+	GError *err = NULL;
+	GByteArray *tmp = g_byte_array_sized_new(512);
+
+	struct gridd_client_s *client = gridd_client_create(
+			to, req, tmp, (client_on_reply)_cb_exec_and_concat);
+	g_byte_array_unref (req);
+	req = NULL;
+
+	if (!client) {
+		return SYSERR("client creation");
+	} else {
+		if (seconds > 0.0)
+			gridd_client_set_timeout (client, seconds);
+		err = gridd_client_run (client);
+		gridd_client_free (client);
 	}
-	if (out) {
+
+	if (!err) {
 		g_byte_array_append (tmp, (guint8*)"", 1);
 		*out = (gchar*) g_byte_array_free (tmp, FALSE);
+		tmp = NULL;
 	}
-	return NULL;
+
+	if (tmp)
+		g_byte_array_free (tmp, TRUE);
+
+	return err;
 }
 
