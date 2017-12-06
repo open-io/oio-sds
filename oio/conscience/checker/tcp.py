@@ -26,14 +26,19 @@ class TcpChecker(BaseChecker):
                     'Missing field "%s" in configuration' % k)
         self.addr = (self.checker_conf['host'], self.checker_conf['port'])
 
+    def _communicate(self, sock):
+        """Do something with the already connected socket."""
+        pass
+
     def check(self):
         result = False
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            s.connect(self.addr)
+            sock.connect(self.addr)
+            self._communicate(sock)
             result = True
         finally:
-            if s:
-                s.close()
+            if sock:
+                sock.close()
             return result
