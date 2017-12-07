@@ -451,8 +451,9 @@ class ListObject(ContainerCommandMixin, lister.Lister):
         parser.add_argument(
             '--attempts',
             dest='attempts',
+            type=int,
             default=0,
-            help='The number of attempts when listing autocontainers'
+            help='Number of attempts for listing requests'
         )
         parser.add_argument(
             '--limit',
@@ -565,7 +566,7 @@ class ListObject(ContainerCommandMixin, lister.Lister):
         if parsed_args.concurrency:
             kwargs['concurrency'] = parsed_args.concurrency
         if parsed_args.attempts:
-            kwargs['attempts'] = parsed_args.attempts
+            kwargs['request_attempts'] = parsed_args.attempts
 
         account = self.app.client_manager.account
         if parsed_args.auto:

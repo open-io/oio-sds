@@ -21,7 +21,7 @@ import redis
 import redis.sentinel
 from werkzeug.exceptions import NotFound, Conflict, BadRequest
 from oio.common.timestamp import Timestamp
-from oio.common.easy_value import int_value, true_value
+from oio.common.easy_value import int_value, true_value, float_value
 from oio.common.redis_conn import RedisConn
 
 
@@ -367,15 +367,15 @@ class AccountBackend(RedisConn):
                              for cid in container_ids]
 
             if prefix is None:
-                containers = [[c_id, 0, 0, 0] for c_id in container_ids]
+                containers = [[c_id, 0, 0, 0, 0] for c_id in container_ids]
                 return containers
             if not delimiter:
                 if not prefix:
-                    containers = [[c_id, 0, 0, 0] for c_id in container_ids]
+                    containers = [[c_id, 0, 0, 0, 0] for c_id in container_ids]
                     return containers
                 else:
-                    containers = [[c_id, 0, 0, 0] for c_id in container_ids if
-                                  c_id.startswith(prefix)]
+                    containers = [[c_id, 0, 0, 0, 0] for c_id in container_ids
+                                  if c_id.startswith(prefix)]
                     return containers
 
             count = 0
@@ -390,9 +390,9 @@ class AccountBackend(RedisConn):
                     marker = container_id[:end] + chr(ord(delimiter) + 1)
                     dir_name = container_id[:end + 1]
                     if dir_name != orig_marker:
-                        results.append([dir_name, 0, 0, 1])
+                        results.append([dir_name, 0, 0, 1, 0])
                     break
-                results.append([container_id, 0, 0, 0])
+                results.append([container_id, 0, 0, 0, 0])
             if not count:
                 break
         return results
@@ -405,7 +405,7 @@ class AccountBackend(RedisConn):
         pipeline = self.conn.pipeline(True)
         for container in raw_list:
             pipeline.hmget(AccountBackend.ckey(account_id, container[0]),
-                           'objects', 'bytes')
+                           'objects', 'bytes', 'mtime')
         res = pipeline.execute()
 
         i = 0
@@ -413,6 +413,7 @@ class AccountBackend(RedisConn):
             if not container[3]:
                 container[1] = int_value(res[i][0], 0)
                 container[2] = int_value(res[i][1], 0)
+                container[4] = float_value(res[i][2], 0.0)
                 i += 1
 
         return raw_list

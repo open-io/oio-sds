@@ -1496,12 +1496,13 @@ GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 
 	/* Manage the potential conflict with the latest alias in place. */
 	if (version > 0) {
+		const gint64 latest_version = latest? ALIASES_get_version(latest) : 0;
 		/* version explicitely specified */
-		if (latest && version == ALIASES_get_version(latest)) {
-			/* TODO decide if it is better to alter the version to insert though */
+		if (version == latest_version) {
 			err = NEWERROR(CODE_CONTENT_EXISTS, "Alias already saved");
-		} else {
-			/* TODO check the PUT doesn't override an alias in place that is not the latest */
+		} else if (version < latest_version) {
+			err = NEWERROR(CODE_CONTENT_PRECONDITION,
+					"New object version is older than latest version");
 		}
 	} else {
 		/* version unset, let's deduce it from the alias in place */

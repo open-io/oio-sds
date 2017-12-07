@@ -748,11 +748,11 @@ class EcMetachunkWriter(io.MetachunkWriter):
 
                 return bytes_transferred
 
-        except green.SourceReadTimeout:
-            logger.warn('Source read timeout')
+        except green.SourceReadTimeout as exc:
+            logger.warn('Source read timeout: %s', exc)
             raise
-        except SourceReadError:
-            logger.warn('Source read error')
+        except SourceReadError as exc:
+            logger.warn('Source read error: %s', exc)
             raise
         except Timeout as to:
             logger.exception('Timeout writing data')

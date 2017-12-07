@@ -131,6 +131,9 @@ void sock_set_client_default(int fd);
  * @return the result of close() or -1 in case of error. */
 int metautils_pclose(int *pfd);
 
+int sock_build_for_url(const char *url, GError **err,
+		struct sockaddr_storage *sas, size_t *sas_len);
+
 /* Opens a non-blocking TCP socket then connect it to 'url' before returning
  * it. 'err' is optional. */
 int sock_connect (const char *url, GError **err);

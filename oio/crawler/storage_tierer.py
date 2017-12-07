@@ -67,7 +67,8 @@ class StorageTiererWorker(object):
                 limit=self.container_fetch_limit)
             if len(resp["listing"]) == 0:
                 break
-            for container, _, _, _ in resp["listing"]:
+            for res in resp["listing"]:
+                container = res[0]
                 yield container
 
     def _list_contents(self):

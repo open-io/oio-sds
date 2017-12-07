@@ -161,6 +161,9 @@ class AccountClient(HttpApi):
         :rtype: `dict` with 'ctime' (`float`), 'bytes' (`int`),
             'objects' (`int`), 'containers' (`int`), 'id' (`str`),
             'metadata' (`dict`) and 'listing' (`list`).
+            'listing' contains lists of container metadata (name,
+            number of objects, number of bytes, whether it is a prefix,
+            and modification time).
         """
         params = {"id": account,
                   "limit": limit,

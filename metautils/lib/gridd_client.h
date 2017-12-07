@@ -120,6 +120,12 @@ struct gridd_client_s * gridd_client_create_empty(void);
 /* Only works with clients of the default type */
 void gridd_client_no_redirect (struct gridd_client_s *c);
 
+/* Only works with clients of the default type */
+void gridd_client_set_avoidance (struct gridd_client_s *c, gboolean on);
+
+/* Only works with clients of the default type */
+void gridd_client_set_keepalive(struct gridd_client_s *self, gboolean on);
+
 /* ------------------------------------------------------------------------- */
 
 struct gridd_client_factory_vtable_s
@@ -145,5 +151,9 @@ struct abstract_client_factory_s
 // provide clients with the same VTABLE than those created with
 // gridd_client_create_empty().
 struct gridd_client_factory_s * gridd_client_factory_create(void);
+
+/* If that list of peers odwn is not periodically refreshed, it ends up with
+ * a set of blocked peers */
+void gridd_client_learn_peers_down(const char * const * peers);
 
 #endif /*OIO_SDS__metautils__lib__gridd_client_h*/

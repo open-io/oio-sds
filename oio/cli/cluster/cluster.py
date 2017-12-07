@@ -16,6 +16,7 @@
 from six import iteritems
 from logging import getLogger
 from cliff import lister, show, command
+from oio.common.exceptions import OioException
 
 
 class ClusterShow(show.ShowOne):
@@ -59,15 +60,18 @@ class ClusterList(lister.Lister):
             help='Display service statistics')
         return parser
 
-    def take_action(self, parsed_args):
-        self.log.debug('take_action(%s)', parsed_args)
-        results = []
+    def _list_services(self, parsed_args):
         if not parsed_args.srv_types:
             parsed_args.srv_types = \
                     self.app.client_manager.cluster.service_types()
         for srv_type in parsed_args.srv_types:
-            data = self.app.client_manager.cluster.all_services(
-                srv_type, parsed_args.stats)
+            try:
+                data = self.app.client_manager.cluster.all_services(
+                    srv_type, parsed_args.stats)
+            except OioException:
+                self.log.exception("Failed to list services of type %s",
+                                   srv_type)
+                continue
             for srv in data:
                 tags = srv['tags']
                 location = tags.get('tag.loc', 'n/a')
@@ -84,15 +88,17 @@ class ClusterList(lister.Lister):
                 else:
                     values = (srv_type, addr, volume, location,
                               slots, up, score)
-                results.append(values)
+                yield values
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
         if parsed_args.stats:
             columns = ('Type', 'Id', 'Volume', 'Location', 'Slots', 'Up',
                        'Score', 'Stats')
         else:
             columns = ('Type', 'Id', 'Volume', 'Location', 'Slots', 'Up',
                        'Score')
-        result_gen = (r for r in results)
-        return columns, result_gen
+        return columns, self._list_services(parsed_args)
 
 
 class ClusterLocalList(lister.Lister):
@@ -194,7 +200,12 @@ class ClusterUnlockAll(lister.Lister):
         if not parsed_args.types:
             types = self.app.client_manager.cluster.service_types()
         for type_ in types:
-            all_descr = self.app.client_manager.cluster.all_services(type_)
+            try:
+                all_descr = self.app.client_manager.cluster.all_services(type_)
+            except OioException:
+                self.log.exception("Failed to list services of type %s",
+                                   type_)
+                continue
             for descr in all_descr:
                 descr['type'] = type_
             for batch in _bounded_batches(all_descr, 4096):

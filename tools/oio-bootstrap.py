@@ -335,7 +335,7 @@ location: "${LOC}"
 slots:
     - ${SRVTYPE}
 checks:
-    - {type: tcp}
+    - {type: asn1}
 
 stats:
     - {type: volume, path: ${VOLUME}}
