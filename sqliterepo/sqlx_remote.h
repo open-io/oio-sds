@@ -93,6 +93,7 @@ GByteArray* sqlx_pack_EXITELECTION(const struct sqlx_name_s *name, gint64 deadli
 GByteArray* sqlx_pack_USE(const struct sqlx_name_s *name, const gboolean master,
 		gint64 deadline);
 GByteArray* sqlx_pack_HAS(const struct sqlx_name_s *name, gint64 deadline);
+GByteArray* sqlx_pack_BALM(guint replicas, guint max, gint64 deadline);
 GByteArray* sqlx_pack_DESCR(const struct sqlx_name_s *name, gint64 deadline);
 GByteArray* sqlx_pack_STATUS(const struct sqlx_name_s *name, gint64 deadline);
 GByteArray* sqlx_pack_GETVERS(const struct sqlx_name_s *name, gint64 deadline);

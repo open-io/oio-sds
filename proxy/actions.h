@@ -37,6 +37,7 @@ enum http_rc_e action_forward_get_version (struct req_args_s *args);
 enum http_rc_e action_forward_kill (struct req_args_s *args);
 enum http_rc_e action_forward_lean_glib (struct req_args_s *args);
 enum http_rc_e action_forward_lean_sqlx (struct req_args_s *args);
+enum http_rc_e action_forward_balance_masters(struct req_args_s *args);
 enum http_rc_e action_forward_flush (struct req_args_s *args);
 enum http_rc_e action_forward_reload (struct req_args_s *args);
 

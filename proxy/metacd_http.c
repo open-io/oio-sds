@@ -955,6 +955,7 @@ configure_request_handlers (void)
 	SET("/forward/lean-glib/#POST", action_forward_lean_glib);
 	/* Ask sqlite3 to release memory. */
 	SET("/forward/lean-sqlx/#POST", action_forward_lean_sqlx);
+	SET("/forward/balance-masters/#POST", action_forward_balance_masters);
 
 	/* Get a status of the high (conscience and meta0) and low (meta1)
 	 * cache, including the current number of entries. */

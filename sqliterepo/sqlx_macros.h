@@ -31,7 +31,6 @@ License along with this library.
 #define NAME_MSGNAME_SQLX_STATUS             "DB_STATUS"
 #define NAME_MSGNAME_SQLX_DESCR              "DB_DESCR"
 #define NAME_MSGNAME_SQLX_ISMASTER           "DB_ISMASTER"
-#define NAME_MSGNAME_SQLX_ELECTION           "DB_ELECTION"
 #define NAME_MSGNAME_SQLX_EXITELECTION       "DB_LEAVE"
 
 #define NAME_MSGNAME_SQLX_USE                "DB_USE"
@@ -49,6 +48,7 @@ License along with this library.
 /* repository-wide */
 #define NAME_MSGNAME_SQLX_INFO               "DB_INFO"
 #define NAME_MSGNAME_SQLX_LEANIFY            "DB_LEAN"
+#define NAME_MSGNAME_SQLX_BALM               "DB_BALM"
 
 /* server-wide */
 #define NAME_MSGNAME_SQLX_FLUSH              "DB_FLUSH"
