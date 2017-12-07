@@ -3991,7 +3991,7 @@ election_manager_balance_masters(struct election_manager_s *M,
 	const guint bias = 64;
 	const guint nb_master = M->members_by_state[STEP_MASTER].count;
 	const guint nb_slave = M->members_by_state[STEP_SLAVE].count;
-	const guint ideal = nb_slave / ratio;
+	const guint ideal = nb_slave / (ratio? : 2);
 
 	if (nb_master > 0 && nb_master > ideal + bias) {
 		max = MIN(max, nb_master);
@@ -4004,6 +4004,7 @@ election_manager_balance_masters(struct election_manager_s *M,
 			current->requested_USE = 1;
 			transition(current, EVT_LEAVE_REQ, NULL);
 			current = next;
+			count++;
 		}
 	}
 	_manager_unlock(M);

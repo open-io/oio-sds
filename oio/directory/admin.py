@@ -183,11 +183,29 @@ class AdminClient(ProxyClient):
         self._request('POST', "/copy",
                       params=params, json={'to': svc_to}, **kwargs)
 
-    def _forward_service_action(self, svc_id, action, **kwargs):
+    def _forward_service_action(self, svc_id, action, params=None, **kwargs):
         """Execute service-specific actions."""
+        req_params = {'id': svc_id}
+        if req_params:
+            req_params.update(params)
         self.forwarder._request('POST', action,
-                                params={'id': svc_id}, **kwargs)
+                                params=req_params, **kwargs)
 
     def service_flush_cache(self, svc_id, **kwargs):
         """Flush the resolver cache of an sqlx-bases service."""
         self._forward_service_action(svc_id, '/flush', **kwargs)
+
+    def service_balance_elections(self, svc_id, max_ops=0, replicas=0,
+                                  **kwargs):
+        """
+        Balance elections to get an acceptable slave/master ratio.
+
+        :param svc_to: id of the service that should balance its elections.
+        :param replicas: typical number of "replicas", used to compute the
+            acceptable master/slave ratio. 3 replicas lead to 1 master for
+            2 slaves.
+        :param max_ops: maximum number of balancing operations.
+        """
+        params = {'replicas': int(replicas), 'max': int(max_ops)}
+        self._forward_service_action(svc_id, '/balance-masters',
+                                     params=params, **kwargs)

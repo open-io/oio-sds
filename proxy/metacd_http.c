@@ -913,6 +913,7 @@ configure_request_handlers (void)
 	SET("/forward/flush/#POST", action_forward_flush);
 	SET("/forward/lean-glib/#POST", action_forward_lean_glib);
 	SET("/forward/lean-sqlx/#POST", action_forward_lean_sqlx);
+	SET("/forward/balance-masters/#POST", action_forward_balance_masters);
 
 	SET("/cache/status/#GET", action_cache_status);
 	SET("/cache/show/#GET", action_cache_show);
