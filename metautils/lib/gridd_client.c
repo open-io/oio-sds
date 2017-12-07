@@ -84,7 +84,7 @@ struct gridd_client_s
 	enum client_step_e step : 4;
 	guint8 keepalive : 1;
 	guint8 forbid_redirect : 1;
-	guint8 avoid_on_error : 1;
+	guint8 avoidance_onoff : 1;
 
 	gchar orig_url[URL_MAXLEN];
 	gchar url[URL_MAXLEN];
@@ -93,7 +93,10 @@ struct gridd_client_s
 /* Cache of network errors ------------------------------------------------- */
 
 static GMutex lock_errors;
-static GTree *tree_errors = NULL;
+static GTree *tree_errors = NULL;  /* <gchar*> -> <rrd*> */
+
+static GRWLock lock_down;
+static GTree *tree_down = NULL;  /* <gchar*> -> <constant> */
 
 void  _oio_cache_of_errors_contructor (void);
 
@@ -106,16 +109,25 @@ _oio_cache_of_errors_contructor (void)
 			g_mutex_init (&lock_errors);
 			tree_errors = g_tree_new_full(metautils_strcmp3, NULL,
 					g_free, (GDestroyNotify) grid_single_rrd_destroy);
+			g_rw_lock_init(&lock_down);
+			tree_down = g_tree_new_full(metautils_strcmp3, NULL, g_free, NULL);
 		}
 	}
 }
 
 static gboolean
+_is_peer_down (const char *url)
+{
+	g_rw_lock_reader_lock(&lock_down);
+	gpointer p = g_tree_lookup(tree_down, url);
+	g_rw_lock_reader_unlock(&lock_down);
+
+	return p != NULL;
+}
+
+static gboolean
 _has_too_many_errors (const char *url)
 {
-	if (!url || !*url)
-		return FALSE;
-
 	guint64 delta = 0;
 	g_mutex_lock(&lock_errors);
 
@@ -175,7 +187,6 @@ static gboolean _client_start(struct gridd_client_s *client);
 static GError* _client_set_fd(struct gridd_client_s *client, int fd);
 static void _client_set_timeout(struct gridd_client_s *client, gdouble seconds);
 static void _client_set_timeout_cnx(struct gridd_client_s *client, gdouble sec);
-static void _client_set_keepalive(struct gridd_client_s *client, gboolean on);
 static void _client_react(struct gridd_client_s *client);
 static gboolean _client_expire(struct gridd_client_s *client, gint64 now);
 static void _client_fail(struct gridd_client_s *client, GError *why);
@@ -200,7 +211,6 @@ struct gridd_client_vtable_s VTABLE_CLIENT =
 	_client_url,
 	_client_get_fd,
 	_client_set_fd,
-	_client_set_keepalive,
 	_client_set_timeout,
 	_client_set_timeout_cnx,
 	_client_expired,
@@ -608,7 +618,7 @@ _client_free(struct gridd_client_s *client)
 	EXTRA_ASSERT(client != NULL);
 	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
 
-	if (client->avoid_on_error)
+	if (oio_client_cache_errors)
 		_count_network_error(client->url, client->error);
 
 	_client_reset_reply(client);
@@ -620,15 +630,6 @@ _client_free(struct gridd_client_s *client)
 		g_byte_array_free(client->reply, TRUE);
 	client->fd = -1;
 	SLICE_FREE (struct gridd_client_s, client);
-}
-
-static void
-_client_set_keepalive(struct gridd_client_s *client, gboolean on)
-{
-	EXTRA_ASSERT(client != NULL);
-	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
-
-	client->keepalive = BOOL(on);
 }
 
 static void
@@ -859,19 +860,35 @@ _client_start(struct gridd_client_s *client)
 	client->deadline_single = now + client->delay_single;
 	client->deadline_overall = now + client->delay_overall;
 
-	if (client->step != NONE)
-		return FALSE;
-
-	if (!client->url[0]) {
-		_client_replace_error(client, NEWERROR(EINVAL, "No target"));
+	if (client->step != NONE) {
+		_client_replace_error(client, SYSERR("bug: invalid client state"));
 		return FALSE;
 	}
 
-	if (oio_client_cache_errors && client->avoid_on_error) {
-		if (_has_too_many_errors(client->url)) {
+	if (!client->url[0]) {
+		_client_replace_error(client, SYSERR("bug: no client target"));
+		return FALSE;
+	}
+
+	if (client->avoidance_onoff) {
+		if (oio_client_cache_errors && _has_too_many_errors(client->url)) {
 			_client_replace_error(client, NEWERROR(CODE_AVOIDED,
 						"Request avoided, service probably down"));
 			return FALSE;
+		}
+
+		if (oio_client_down_avoid || oio_client_down_shorten) {
+			const gboolean down = _is_peer_down(client->url);
+			if (down) {
+				if (oio_client_down_avoid) {
+					_client_replace_error(client, NEWERROR(CODE_AVOIDED,
+								"Request avoided, service marked down"));
+					return FALSE;
+				}
+				if (oio_client_down_shorten) {
+					client->delay_connect = 25 * G_TIME_SPAN_MILLISECOND;
+				}
+			}
 		}
 	}
 
@@ -911,6 +928,24 @@ _factory_create_client (struct gridd_client_factory_s *factory)
 
 /* ------------------------------------------------------------------------- */
 
+void
+gridd_client_learn_peers_down(const char * const * peers)
+{
+	GTree *new_down = NULL, *old_down = NULL;
+
+	new_down = g_tree_new_full(metautils_strcmp3, NULL, g_free, NULL);
+	for (const char * const * ppeer = peers; peers && *ppeer ;++ppeer)
+		g_tree_replace(new_down, g_strdup(*ppeer), (void*)0xDEADBEAF);
+
+	g_rw_lock_writer_lock(&lock_down);
+	old_down = tree_down;
+	tree_down = new_down;
+	new_down = NULL;
+	g_rw_lock_writer_unlock(&lock_down);
+
+	g_tree_destroy(old_down);
+}
+
 struct gridd_client_s *
 gridd_client_create_empty(void)
 {
@@ -925,7 +960,10 @@ gridd_client_create_empty(void)
 	client->delay_single = oio_client_timeout_single * (gdouble)G_TIME_SPAN_SECOND;
 	client->delay_connect = oio_client_timeout_connect * (gdouble)G_TIME_SPAN_SECOND;
 	client->tv_start = client->tv_connect = oio_ext_monotonic_time ();
-	client->avoid_on_error = BOOL(oio_client_cache_errors);
+
+	client->keepalive = 0;
+	client->forbid_redirect = 0;
+	client->avoidance_onoff = 1;
 
 	return client;
 }
@@ -936,6 +974,22 @@ gridd_client_no_redirect (struct gridd_client_s *c)
 	if (!c) return;
 	EXTRA_ASSERT(c->abstract.vtable == &VTABLE_CLIENT);
 	c->forbid_redirect = 1;
+}
+
+void
+gridd_client_set_keepalive(struct gridd_client_s *c, gboolean onoff)
+{
+	if (!c) return;
+	EXTRA_ASSERT(c->abstract.vtable == &VTABLE_CLIENT);
+	c->keepalive = BOOL(onoff);
+}
+
+void
+gridd_client_set_avoidance (struct gridd_client_s *c, gboolean onoff)
+{
+	if (!c) return;
+	EXTRA_ASSERT(c->abstract.vtable == &VTABLE_CLIENT);
+	c->avoidance_onoff = BOOL(onoff);
 }
 
 struct gridd_client_factory_s *
@@ -995,12 +1049,6 @@ GError *
 gridd_client_set_fd(struct gridd_client_s *self, int fd)
 {
 	GRIDD_CALL(self,set_fd)(self,fd);
-}
-
-void
-gridd_client_set_keepalive(struct gridd_client_s *self, gboolean on)
-{
-	GRIDD_CALL(self,set_keepalive)(self,on);
 }
 
 void

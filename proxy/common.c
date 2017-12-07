@@ -23,13 +23,14 @@ gint32 oio_proxy_request_failure_threshold_first = 100;
 gint32 oio_proxy_request_failure_threshold_middle = 50;
 gint32 oio_proxy_request_failure_threshold_last = 0;
 
-gchar *
-proxy_get_csurl (void)
+gchar **
+proxy_get_cs_urlv (void)
 {
 	g_rw_lock_reader_lock (&csurl_rwlock);
-	const gint32 i = oio_ext_rand_int_range(0, csurl_count % G_MAXINT32);
-	gchar *cs = g_strdup(csurl[i]);
+	gchar **cs = g_strdupv(csurl);
 	g_rw_lock_reader_unlock (&csurl_rwlock);
+
+	oio_ext_array_shuffle((void**)cs, g_strv_length(cs));
 	return cs;
 }
 
@@ -567,3 +568,50 @@ GError * KV_read_usersys_properties (struct json_object *j, gchar ***out) {
 	*out = kv;
 	return NULL;
 }
+
+static gboolean
+_cb_exec_and_concat (GByteArray *tmp, MESSAGE reply)
+{
+	gsize bsize = 0;
+	void *b = metautils_message_get_BODY(reply, &bsize);
+	if (b && bsize)
+		g_byte_array_append(tmp, b, bsize);
+	return TRUE;
+}
+
+GError *
+gridd_client_exec_and_concat_string (const gchar *to, gdouble seconds,
+		GByteArray *req, gchar **out)
+{
+	EXTRA_ASSERT(to != NULL);
+	EXTRA_ASSERT(out == NULL || *out == NULL);
+
+	GError *err = NULL;
+	GByteArray *tmp = g_byte_array_sized_new(512);
+
+	struct gridd_client_s *client = gridd_client_create(
+			to, req, tmp, (client_on_reply)_cb_exec_and_concat);
+	g_byte_array_unref (req);
+	req = NULL;
+
+	if (!client) {
+		return SYSERR("client creation");
+	} else {
+		if (seconds > 0.0)
+			gridd_client_set_timeout (client, seconds);
+		gridd_client_set_avoidance(client, FALSE);
+		err = gridd_client_run (client);
+		gridd_client_free (client);
+	}
+
+	if (!err && out) {
+		g_byte_array_append (tmp, (guint8*)"", 1);
+		*out = (gchar*) g_byte_array_free (tmp, FALSE);
+		tmp = NULL;
+	}
+	if (tmp)
+		g_byte_array_free (tmp, TRUE);
+
+	return err;
+}
+

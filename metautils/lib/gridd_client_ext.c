@@ -324,13 +324,17 @@ GError *
 gridd_client_run (struct gridd_client_s *self)
 {
 	if (!self)
-		return NEWERROR(CODE_INTERNAL_ERROR, "creation error");
-	if (!gridd_client_start(self))
-		return NEWERROR(CODE_INTERNAL_ERROR, "starting error");
+		return SYSERR("creation error");
 	GError *err;
-	if (NULL != (err = gridd_client_loop (self)))
+	if (!gridd_client_start(self)) {
+		if ((err = gridd_client_error(self)))
+			return err;
+		/* TODO good place for a g_assert_not_reached(); */
+		return SYSERR("client startup: unknown error");
+	}
+	if ((err = gridd_client_loop(self)))
 		return err;
-	if (NULL != (err = gridd_client_error (self)))
+	if ((err = gridd_client_error(self)))
 		return err;
 	return NULL;
 }
@@ -436,24 +440,6 @@ gridd_client_exec_and_concat (const gchar *to, gdouble seconds, GByteArray *req,
 	if (tmp)
 		metautils_gba_unref (tmp);
 	return err;
-}
-
-GError *
-gridd_client_exec_and_concat_string (const gchar *to, gdouble seconds, GByteArray *req,
-		gchar **out)
-{
-	GByteArray *tmp = NULL;
-	GError *err = gridd_client_exec_and_concat (to, seconds, req, out ? &tmp : NULL);
-
-	if (err) {
-		if (tmp) g_byte_array_unref (tmp);
-		return err;
-	}
-	if (out) {
-		g_byte_array_append (tmp, (guint8*)"", 1);
-		*out = (gchar*) g_byte_array_free (tmp, FALSE);
-	}
-	return NULL;
 }
 
 GError *

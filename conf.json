@@ -231,6 +231,16 @@
 				"def": "10",
 				"descr": "Set the probability of fake timeout failures, in any client RPC to a 'meta' service" },
 
+			{ "type": "bool", "name": "oio_client_down_avoid",
+				"key": "client.down_cache.avoid",
+				"def": false,
+				"descr": "Should an error be raised when the peer is marked down, instead of trying to contact the peer." },
+
+			{ "type": "bool", "name": "oio_client_down_shorten",
+				"key": "client.down_cache.shorten",
+				"def": false,
+				"descr": "Should the connection timeout be dramatically shortened when talking to a peer that has been reported down. Set to false by default, this is evaluated after the avoidance of those peers." },
+
 			{ "type": "bool", "name": "oio_client_cache_errors",
 				"key": "client.errors_cache.enabled",
 				"def": false,

@@ -584,8 +584,10 @@ _task_reload_nsinfo (gpointer p UNUSED)
 	struct namespace_info_s *ni = NULL;
 	GError *err = conscience_remote_get_namespace (cs, &ni);
 	if (err) {
+		gchar *tmp = g_strjoinv("/", cs);
+		STRING_STACKIFY(tmp);
 		GRID_WARN ("NSINFO reload error [%s] from [%s]: (%d) %s",
-			ns_name, cs, err->code, err->message);
+			ns_name, tmp, err->code, err->message);
 		g_clear_error (&err);
 	} else {
 		ADAPTIVE_PERIOD_ONSUCCESS(nsinfo_refresh_delay);
@@ -611,8 +613,10 @@ _task_reload_srvtypes (gpointer p UNUSED)
 	EXTRA_ASSERT((err != NULL) ^ (types != NULL));
 
 	if (err != NULL) {
+		gchar *tmp = g_strjoinv("/", cs);
+		STRING_STACKIFY(tmp);
 		GRID_WARN ("SRVTYPES reload error [%s] from [%s] : (%d) %s",
-			ns_name, cs, err->code, err->message);
+			ns_name, tmp, err->code, err->message);
 		g_clear_error (&err);
 		return;
 	} else {

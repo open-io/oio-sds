@@ -851,6 +851,44 @@ test_content_put_get_delete(void)
 }
 
 static void
+test_content_put_lower_version(void)
+{
+	void test(struct meta2_backend_s *m2, struct oio_url_s *u, gint64 maxver) {
+		(void) maxver;
+		GSList *beans = NULL;
+		GError *err;
+
+		CLOCK_START = CLOCK = oio_ext_rand_int();
+
+		/* generate the beans for an alias of 3 chunks */
+		beans = _create_alias(m2, u, NULL);
+
+		/* first PUT */
+		err = meta2_backend_put_alias(m2, u, beans, NULL, NULL);
+		g_assert_no_error(err);
+		CHECK_ALIAS_VERSION(m2, u, _get_real());
+		check_list_count(m2, u, 1);
+		_bean_cleanl2(beans);
+
+		/* second PUT, with lower version */
+		CLOCK--;
+		beans = _create_alias(m2, u, NULL);
+		CLOCK++;
+		err = meta2_backend_put_alias(m2, u, beans, NULL, NULL);
+		g_assert_error(err, GQ(), CODE_CONTENT_PRECONDITION);
+		_bean_cleanl2(beans);
+		g_clear_error(&err);
+
+		CHECK_ALIAS_VERSION(m2, u, CLOCK_START);
+	}
+	_container_wraper("NS", -1, test);
+	/* Would fail for another reason */
+	// _container_wraper (ns, 0, cf);
+	_container_wraper("NS", 1, test);
+	_container_wraper("NS", 2, test);
+}
+
+static void
 test_content_append_empty(void)
 {
 	void test(struct meta2_backend_s *m2, struct oio_url_s *u, gint64 maxver) {
@@ -1194,6 +1232,8 @@ main(int argc, char **argv)
 			test_content_delete_not_found);
 	g_test_add_func("/meta2v2/backend/content/put_get_delete",
 			test_content_put_get_delete);
+	g_test_add_func("/meta2v2/backend/content/put_lower_version",
+			test_content_put_lower_version);
 	g_test_add_func("/meta2v2/backend/content/put_prop_get",
 			test_content_put_prop_get);
 	g_test_add_func("/meta2v2/backend/content/append_empty",

@@ -140,6 +140,7 @@ _reply_common_error (struct req_args_s *args, GError *err)
 			return _reply_retry(args, err);
 		case CODE_CONTAINER_EXISTS:
 		case CODE_CONTENT_EXISTS:
+		case CODE_CONTENT_PRECONDITION:
 			return _reply_conflict_error(args, err);
 	}
 
