@@ -106,6 +106,8 @@ GError * oio_proxy_call_reference_show (CURL *h, struct oio_url_s *u,
 
 GError * oio_proxy_call_reference_create (CURL *h, struct oio_url_s *u);
 
+GError * oio_proxy_call_reference_delete (CURL *h, struct oio_url_s *u);
+
 GError * oio_proxy_call_reference_link (CURL *h, struct oio_url_s *u,
 		const char *srvtype, gboolean autocreate, GString *out);
 
