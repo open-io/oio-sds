@@ -48,7 +48,7 @@ gridd_client_create_idle(const gchar *target)
 
 struct gridd_client_s *
 gridd_client_create(const gchar *target, GByteArray *req, gpointer ctx,
-                client_on_reply cb)
+		client_on_reply cb)
 {
 	EXTRA_ASSERT(req != NULL);
 
@@ -80,7 +80,7 @@ gridd_client_loop(struct gridd_client_s *client)
 
 struct gridd_client_s **
 gridd_client_create_many(gchar **targets, GByteArray *req, gpointer ctx,
-                client_on_reply cb)
+		client_on_reply cb)
 {
 	EXTRA_ASSERT(targets != NULL);
 	EXTRA_ASSERT(req != NULL);
