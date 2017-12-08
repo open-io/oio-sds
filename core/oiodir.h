@@ -40,6 +40,10 @@ struct oio_directory_vtable_s
 			const struct oio_url_s *url);
 
 	/* the OIOURL_TYPE in <url> will be ignored */
+	GError * (*delete) (struct oio_directory_s *self,
+			const struct oio_url_s *url);
+
+	/* the OIOURL_TYPE in <url> will be ignored */
 	GError * (*list) (struct oio_directory_s *self,
 			const struct oio_url_s *url, const char *srvtype,
 			gchar ***out_dir, gchar ***out_srv);
@@ -75,6 +79,9 @@ struct oio_directory_abstract_s
 void oio_directory__destroy (struct oio_directory_s *d);
 
 GError * oio_directory__create (struct oio_directory_s *d,
+		const struct oio_url_s *url);
+
+GError * oio_directory__delete (struct oio_directory_s *d,
 		const struct oio_url_s *url);
 
 GError * oio_directory__list (struct oio_directory_s *d,
