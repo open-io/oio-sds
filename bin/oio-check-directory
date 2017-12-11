@@ -1,0 +1,213 @@
+#!/usr/bin/env python
+
+# oio-check-directory.py
+# Copyright (C) 2018 OpenIO SAS, as part of OpenIO SDS
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+import logging
+import argparse
+from oio.common.utils import load_namespace_conf
+from oio.conscience.client import ConscienceClient
+
+
+def filter_services(srv, srvtype):
+    for t, i, p, s in srv:
+        if t == srvtype:
+            yield t, i, p, s
+
+
+def load_live_services(ns):
+    client = ConscienceClient({"namespace": ns})
+    for srvtype in client.service_types():
+        for srv in client.all_services(srvtype):
+            ip, port = srv['addr'].split(':')
+            yield str(srvtype), str(ip), int(port), int(srv['score'])
+
+
+def load_catalog_from_file(path):
+    with open(path, "r") as fin:
+        for line in fin:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            try:
+                t, i, p = line.split()
+                yield str(t), str(i), int(p), 0
+            except Exception as ex:
+                logging.exception("Failed to loadthe NS services: %s", ex)
+
+
+def main():
+    descr = "Check an OpenIO namespace has been fully deployed. Mostly " + \
+            "the directory of services will be checked."
+    parser = argparse.ArgumentParser(description=descr)
+    parser.add_argument(
+            "ns", metavar='<NAMESPACE>',
+            help="set the namespace")
+    parser.add_argument(
+            "actions", metavar='<ACTION>', nargs='+',
+            choices=('meta0', 'meta1', 'rdir', 'dir'),
+            help="A value among 'meta0', 'meta1', 'dir', 'rdir'")
+    parser.add_argument(
+            '-v', '--verbose',
+            action="store_true", dest="flag_verbose", default=False,
+            help='Triggers debugging traces')
+    parser.add_argument(
+            '--catalog',
+            action="store", dest="catalog", default=None, type=str,
+            help='Catalog of services')
+    args = parser.parse_args()
+
+    # Logging configuration
+    if args.flag_verbose:
+        logging.basicConfig(
+            format='%(asctime)s %(message)s',
+            datefmt='%m/%d/%Y %I:%M:%S',
+            level=logging.DEBUG)
+    else:
+        logging.basicConfig(
+            format='%(asctime)s %(message)s',
+            datefmt='%m/%d/%Y %I:%M:%S',
+            level=logging.INFO)
+
+    # Load the live services
+    live = load_live_services(args.ns)
+    live = tuple(live)
+    logging.info("Catalog: Loaded %d services", len(live))
+    for t, i, p, s in live:
+        logging.debug("live> %s %s %d score=%d", t, i, p, s)
+
+    # Load a catalog of expected services
+    catalog = list()
+    if args.catalog:
+        catalog = load_catalog_from_file(args.catalog)
+    else:
+        for t, i, p, s in live:
+            catalog.append((t, i, p, s))
+    catalog = tuple(catalog)
+    logging.info("Catalog: Loaded %d services", len(catalog))
+    for t, i, p, s in catalog:
+        logging.debug("catalog> %s %s %d", t, i, p)
+
+    # Prepare the ZK connection string
+    cnxstr = load_namespace_conf(args.ns)['zookeeper']
+
+    # Check the state of the META0 services
+    if 'meta0' in args.actions:
+        import zookeeper
+        from oio.zk.admin import get_meta0_paths, get_connected_handles
+        logging.debug("Checking the META0 services")
+
+        # TODO: tcp touch to the meta0 services
+
+        # check they are registered in the ZK
+        for zh in get_connected_handles(cnxstr):
+            for p in get_meta0_paths(zh, args.ns):
+                try:
+                    registered = set()
+                    for n in zookeeper.get_children(zh.get(), p):
+                        v, m = zookeeper.get(zh.get(), p + '/' + n)
+                        registered.add(v)
+                    known = set()
+                    for t, i, p, s in filter_services(catalog, 'meta0'):
+                        known.add('%s:%d' % (i, p))
+                    logging.info("meta0 known=%d zk_registered=%d",
+                                 len(known), len(registered))
+                    assert registered == known
+                except Exception as ex:
+                    logging.exception(
+                            "Failed to list the M0 from the ZK: %s", ex)
+                finally:
+                    zh.close()
+
+    # Check the state of the META1 services
+    if 'meta1' in args.actions:
+        logging.debug("Checking the META1 services")
+
+        # All the services must have been declared
+        c0 = list(filter_services(catalog, 'meta1'))
+        l0 = list(filter_services(live, 'meta1'))
+        assert len(c0) == len(l0)
+        logging.info("All the META1 are alive")
+
+        # They also need a positive score
+        for _, _, _, m1_score in l0:
+            assert m1_score > 0
+        logging.info("All the META1 have a positive score")
+
+    # Check the directory has been bootstraped
+    if 'dir' in args.actions:
+        import subprocess
+        from oio.directory.meta0 import Meta0Client
+        from oio.common.utils import json
+
+        logging.debug("Checking the directory bootstrap")
+
+        # Get an official dump from the proxy, check its size
+        m0 = Meta0Client({"namespace": args.ns})
+        prefixes = m0.list()
+        assert len(prefixes) == 65536
+        logging.info("The proxy serves a full META0 dump")
+
+        # contact each M0 to perform a check: any "get" command will
+        # fail if the meta0 is not complete. Unfortunately we just have
+        # oio-meta0-client to target a specific service.
+        for t, i, p, s in filter_services(catalog, 'meta0'):
+            url = '%s:%d' % (i, p)
+            subprocess.check_call(['oio-meta0-client', url, 'get', '0000'])
+        logging.info("All the META0 are complete")
+
+        # contact each meta0 to check that all the dumps are identical
+        dump0 = None
+        for t, i, p, s in filter_services(catalog, 'meta0'):
+            url = '%s:%d' % (i, p)
+            dump = subprocess.check_output(['oio-meta0-client', url, 'list'])
+            if dump0 is None:
+                dump0 = dump
+            else:
+                assert dump0 == dump
+        logging.info("All the META0 are the same")
+
+        # Check all the meta1 are concerned
+        reverse_dump = set()
+        for _, v in json.loads(dump0).iteritems():
+            for url in v:
+                reverse_dump.add(url)
+        m1 = list(filter_services(catalog, 'meta1'))
+        assert len(m1) == len(reverse_dump)
+        logging.info("All the META1 have been assigned")
+
+    # Check the RDIR status
+    if 'rdir' in args.actions:
+        from oio.rdir.client import RdirDispatcher
+
+        logging.debug("Checking the RDIR services")
+
+        # Load the assigned rdir services
+        client = RdirDispatcher({"namespace": args.ns})
+        all_rawx, all_rdir = client.get_assignation()
+        assert not any(r['rdir'] is None for r in all_rawx)
+        logging.info("All the RAWX have a RDIR assigned")
+
+        # Compare with the number of expected services
+        l0 = list(filter_services(live, 'rdir'))
+        c0 = list(filter_services(catalog, 'rdir'))
+        assert len(l0) == len(c0)
+        assert len(l0) == len(all_rdir)
+        logging.info("All the RDIR are alive")
+
+
+if __name__ == '__main__':
+    main()
