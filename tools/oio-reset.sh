@@ -137,11 +137,11 @@ gridinit -s OIO,gridinit -d ${SDS}/conf/gridinit.conf
 # Initiate Zookeeper (if necessary)
 ZK=$(oio-cluster --local-cfg | grep "$NS/zookeeper" ; exit 0)
 if [ -n "$ZK" ] ; then
-    opts=--lazy
+    opts="-v --lazy"
     for srvtype in ${AVOID} ; do opts="${opts} --avoid=${srvtype}" ; done
     if [ $ZKSLOW -ne 0 ] ; then opts="${opts} --slow" ; fi
     zk-reset.py "$NS" ;
-    zk-bootstrap.py --lazy $opts "$NS"
+    zk-bootstrap.py $opts "$NS"
 fi
 
 
