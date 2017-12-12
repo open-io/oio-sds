@@ -496,7 +496,7 @@ class ListObject(ContainerCommandMixin, lister.Lister):
         for element in listing:
             yield element
 
-        while listing:
+        while resp['truncated']:
             kwargs['marker'] = resp.get('next_marker')
             resp = self.app.client_manager.storage.object_list(
                 account, container, **kwargs)
