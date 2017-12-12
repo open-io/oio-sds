@@ -16,6 +16,7 @@
 
 import logging
 import time
+from mock import MagicMock as Mock
 from oio.api.object_storage import ObjectStorageApi
 from oio.api.object_storage import _sort_chunks as sort_chunks
 from oio.common import exceptions as exc
@@ -431,6 +432,27 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         meta = self.api.object_get_properties(self.account, name, name)
         self.assertEqual(meta.get('hash', "").lower(), checksum.lower())
+
+    def test_object_create_conflict_delete_chunks(self):
+        name = random_str(16)
+        # Simulate a conflict error
+        self.api.container.content_create = \
+            Mock(side_effect=exc.Conflict(409))
+        self.api._blob_client = Mock(wraps=self.api.blob_client)
+        # Ensure the error is passed to the upper level
+        self.assertRaises(
+            exc.Conflict, self.api.object_create, self.account,
+            name, obj_name=name, data=name)
+        # Ensure that the chunk deletion has been called with proper args
+        create_kwargs = self.api.container.content_create.call_args[1]
+        chunks = create_kwargs['data']['chunks']
+        self.api.blob_client.chunk_delete_many.assert_called_once()
+        self.assertEqual(
+            chunks, self.api.blob_client.chunk_delete_many.call_args[0][0])
+        # Ensure the chunks have actually been deleted
+        for chunk in chunks:
+            self.assertRaises(
+                exc.NotFound, self.api.blob_client.chunk_head, chunk['url'])
 
     def test_container_refresh(self):
         account = random_str(32)

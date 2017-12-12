@@ -14,6 +14,9 @@
 # License along with this library.
 
 
+from eventlet import GreenPile
+from urllib3 import Timeout
+from urllib3.exceptions import HTTPError
 from oio.common.http import get_pool_manager
 from oio.common import exceptions as exc, utils
 from oio.common.constants import chunk_headers, chunk_xattr_keys_optional
@@ -21,7 +24,9 @@ from oio.api.io import ChunkReader
 from oio.api.replication import ReplicatedMetachunkWriter, FakeChecksum
 from oio.common.storage_method import STORAGE_METHODS
 
+CHUNK_TIMEOUT = 60
 READ_BUFFER_SIZE = 65535
+PARALLEL_CHUNKS_DELETE = 3
 
 
 def extract_headers_meta(headers):
@@ -39,8 +44,8 @@ def extract_headers_meta(headers):
 
 
 class BlobClient(object):
-    def __init__(self):
-        self.http_pool = get_pool_manager()
+    def __init__(self, connection_pool=None):
+        self.http_pool = connection_pool or get_pool_manager()
 
     def chunk_put(self, url, meta, data, **kwargs):
         if not hasattr(data, 'read'):
@@ -58,9 +63,42 @@ class BlobClient(object):
         writer.stream(data, None)
 
     def chunk_delete(self, url, **kwargs):
-        resp = self.http_pool.request('DELETE', url)
+        resp = self.http_pool.request('DELETE', url, **kwargs)
         if resp.status != 204:
             raise exc.from_response(resp)
+        return resp
+
+    @utils.ensure_headers
+    @utils.ensure_request_id
+    def chunk_delete_many(self, chunks, cid=None, **kwargs):
+        """
+        :rtype: `list` of either `urllib3.response.HTTPResponse`
+            or `urllib3.exceptions.HTTPError`, with an extra "chunk"
+            attribute.
+        """
+        headers = kwargs['headers'].copy()
+        if cid is not None:
+            # This is only to get a nice access log
+            headers['X-oio-chunk-meta-container-id'] = cid
+        timeout = kwargs.get('timeout')
+        if not timeout:
+            timeout = Timeout(CHUNK_TIMEOUT)
+
+        def __delete_chunk(chunk_):
+            try:
+                resp = self.http_pool.request(
+                    "DELETE", chunk_['url'], headers=headers, timeout=timeout)
+                resp.chunk = chunk_
+                return resp
+            except HTTPError as ex:
+                ex.chunk = chunk_
+                return ex
+
+        pile = GreenPile(PARALLEL_CHUNKS_DELETE)
+        for chunk in chunks:
+            pile.spawn(__delete_chunk, chunk)
+        resps = [resp for resp in pile if resp]
+        return resps
 
     def chunk_get(self, url, **kwargs):
         req_id = kwargs.get('req_id')

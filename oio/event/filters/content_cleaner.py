@@ -14,9 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from urlparse import urlparse
-from eventlet import Timeout, GreenPile
-from oio.common.http import http_connect
+from oio.blob.client import BlobClient
 from oio.event.evob import Event
 from oio.event.consumer import EventTypes
 from oio.event.filters.base import Filter
@@ -41,48 +39,31 @@ class ContentReaperFilter(Filter):
                 "ec": self._handle_rawx,
                 "backblaze": self._handle_b2,
         }
+        self.blob_client = BlobClient()
 
-    def delete_chunk(self, chunk, cid, reqid):
-        resp = None
-        parsed = urlparse(chunk['id'])
-        headers = {'X-oio-req-id': reqid,
-                   'X-oio-chunk-meta-container-id': cid}
-        try:
-            with Timeout(CHUNK_TIMEOUT):
-                conn = http_connect(parsed.netloc, 'DELETE', parsed.path,
-                                    headers=headers)
-                resp = conn.getresponse()
-                resp.chunk = chunk
-        except (Exception, Timeout) as exc:
-            self.logger.warn(
-                'error while deleting chunk %s "%s"',
-                chunk['id'], str(exc.message))
-        return resp
-
-    def _handle_rawx(self, url, chunks, headers, storage_method, reqid):
-        pile = GreenPile(PARALLEL_CHUNKS_DELETE)
+    def _handle_rawx(self, url, chunks, content_headers,
+                     storage_method, reqid):
         cid = url.get('id')
-        for chunk in chunks:
-            pile.spawn(self.delete_chunk, chunk, cid, reqid)
-        resps = [resp for resp in pile if resp]
+        headers = {'X-oio-req-id': reqid}
+        resps = self.blob_client.chunk_delete_many(
+            chunks, cid=cid, headers=headers)
         for resp in resps:
-            if resp.status != 204:
+            if isinstance(resp, Exception):
+                self.logger.warn(
+                    'failed to delete chunk %s (%s)',
+                    resp.chunk['url'], resp)
+            elif resp.status not in (204, 404):
                 self.logger.warn(
                     'failed to delete chunk %s (HTTP %s)',
-                    resp.chunk['id'], resp.status)
+                    resp.chunk['url'], resp.status)
 
     def _handle_b2(self, url, chunks, headers, storage_method, reqid):
         meta = {'container_id': url['id']}
-        chunk_list = []
-        for chunk in chunks:
-            chunk['url'] = chunk['id']
-            chunk_list.append(chunk)
         key_file = self.conf.get('key_file')
         b2_creds = BackblazeUtils.get_credentials(
             storage_method, key_file)
         try:
-            BackblazeDeleteHandler(meta, chunk_list,
-                                   b2_creds).delete()
+            BackblazeDeleteHandler(meta, chunks, b2_creds).delete()
         except OioException as exc:
             self.logger.warn('delete failed: %s' % str(exc))
 
@@ -103,6 +84,8 @@ class ContentReaperFilter(Filter):
 
             for item in event.data:
                 if item.get('type') == 'chunks':
+                    # The event contains "id" whereas the API uses "url".
+                    item['url'] = item['id']
                     chunks.append(item)
                 if item.get("type") == 'contents_headers':
                     content_headers.append(item)
