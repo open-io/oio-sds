@@ -340,6 +340,7 @@ class ObjectStorageApi(object):
         acct_kwargs = kwargs.copy()
         acct_kwargs["proxy_endpoint"] = acct_kwargs.pop("endpoint", None)
         self.account = AccountClient(conf, logger=self.logger, **acct_kwargs)
+        self._blob_client = None
 
     def _patch_timeouts(self, kwargs):
         """
@@ -349,6 +350,19 @@ class ObjectStorageApi(object):
         for tok, tov in self.timeouts.items():
             if tok not in kwargs:
                 kwargs[tok] = tov
+
+    @property
+    def blob_client(self):
+        """
+        A low-level client to rawx services.
+        :rtype: `oio.blob.client.BlobClient`
+        """
+        if self._blob_client is None:
+            from oio.blob.client import BlobClient
+            connection_pool = self.container.pool_manager
+            self._blob_client = BlobClient(
+                connection_pool=connection_pool)
+        return self._blob_client
 
     def account_create(self, account, **kwargs):
         """
@@ -971,14 +985,28 @@ class ObjectStorageApi(object):
         obj_meta['etag'] = content_checksum
 
         data = {'chunks': final_chunks, 'properties': properties or {}}
-        # FIXME: we may just pass **obj_meta
-        self.container.content_create(
-            account, container, obj_name, size=bytes_transferred,
-            checksum=content_checksum, data=data,
-            stgpol=obj_meta['policy'],
-            version=obj_meta['version'], mime_type=obj_meta['mime_type'],
-            chunk_method=obj_meta['chunk_method'],
-            **kwargs)
+        try:
+            # FIXME: we may just pass **obj_meta
+            self.container.content_create(
+                account, container, obj_name, size=bytes_transferred,
+                checksum=content_checksum, data=data,
+                stgpol=obj_meta['policy'],
+                version=obj_meta['version'], mime_type=obj_meta['mime_type'],
+                chunk_method=obj_meta['chunk_method'],
+                **kwargs)
+        except exc.Conflict as ex:
+            self.logger.warn(
+                'Failed to commit to meta2 (%s), deleting chunks', ex)
+            del_resps = self.blob_client.chunk_delete_many(
+                final_chunks, cid=obj_meta['container_id'], **kwargs)
+            for resp in del_resps:
+                if isinstance(resp, Exception):
+                    self.logger.warn('failed to delete chunk %s (%s)',
+                                     resp.chunk['url'], resp)
+                elif resp.status not in (204, 404):
+                    self.logger.warn('failed to delete chunk %s (HTTP %s)',
+                                     resp.chunk['url'], resp.status)
+            raise
         return final_chunks, bytes_transferred, content_checksum
 
     def _b2_credentials(self, storage_method, key_file):
