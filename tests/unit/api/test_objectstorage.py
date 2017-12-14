@@ -454,3 +454,23 @@ class ObjectStorageTest(unittest.TestCase):
             self.account, self.container, 'dummy', ANY, ANY,
             append=ANY, headers=ANY, key_file=ANY, policy=ANY, properties=ANY,
             **kwargs)
+
+    def test_container_flush_not_found_1(self):
+        self.api.object_list = Mock(
+            side_effect=exceptions.NotFound("No container"))
+        self.assertRaises(
+            exceptions.NoSuchContainer, self.api.container_flush,
+            self.account, self.container)
+
+    def test_container_flush_not_found_2(self):
+        self.api.object_list = Mock(
+            return_value={"objects": [{"name": "test"}]})
+        self.api.object_delete_many = Mock(
+            side_effect=exceptions.NotFound("No container"))
+        self.assertRaises(
+            exceptions.NoSuchContainer, self.api.container_flush,
+            self.account, self.container)
+
+    def test_container_flush_empty(self):
+        self.api.object_list = Mock(return_value={"objects": []})
+        self.api.container_flush(self.account, self.container)
