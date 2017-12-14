@@ -29,10 +29,10 @@ License along with this library.
 #include <curl/curlver.h>
 
 #include <core/client_variables.h>
-#include <core/oiostr.h>
 #include <metautils/lib/metautils.h>
 
 #include "http_put.h"
+#include "http_del.h"
 #include "http_internals.h"
 #include "internals.h"
 
@@ -1680,9 +1680,28 @@ oio_sds_upload_step (struct oio_sds_ul_s *ul)
 }
 
 static void
-_chunks_remove (CURL *h UNUSED, GSList *chunks UNUSED)
+_chunks_remove (GSList *failed, GSList *done)
 {
-	/* TODO JFS */
+	if (!failed && !done)
+		return;
+
+	/* Merge both lists */
+	GPtrArray *tmp = g_ptr_array_new();
+	for (GSList *l=failed; l ;l=l->next)
+		g_ptr_array_add(tmp, ((struct chunk_s*)(l->data))->url);
+	for (GSList *l=done; l ;l=l->next)
+		g_ptr_array_add(tmp, ((struct chunk_s*)(l->data))->url);
+	g_ptr_array_add(tmp, NULL);
+
+	GError *err = http_poly_delete((gchar**)(tmp->pdata));
+
+	g_ptr_array_free(tmp, TRUE);
+
+	if (err) {
+		GRID_WARN("Error rolling back some chunks: (%d) %s",
+				err->code, err->message);
+		g_clear_error(&err);
+	}
 }
 
 struct oio_error_s *
@@ -1719,26 +1738,33 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 	};
 
 	GRID_TRACE("%s (%p) Saving %s", __FUNCTION__, ul, request_body->str);
-	GError *err;
+	GError *err = NULL;
 	CURL_DO(ul->sds, H, err = oio_proxy_call_content_create (H, ul->dst->url, &in, reply_body));
-	if (ul->chunks_failed)
-		CURL_DO(ul->sds, H, _chunks_remove (H, ul->chunks_failed));
 
 	g_string_free (request_body, TRUE);
 	g_string_free (reply_body, TRUE);
-	if (err)
-		return (struct oio_error_s*) err;
-	return NULL;
+	return (struct oio_error_s*) err;
 }
 
 struct oio_error_s *
 oio_sds_upload_abort (struct oio_sds_ul_s *ul)
 {
-	GRID_TRACE("%s (%p)", __FUNCTION__, ul);
 	EXTRA_ASSERT (ul != NULL);
-	if (ul->chunks_failed)
-		CURL_DO(ul->sds, H, _chunks_remove (H, ul->chunks_failed));
-	return (struct oio_error_s *) NYI();
+	_chunks_remove(ul->chunks_failed, ul->chunks_done);
+	return NULL;
+}
+
+static void
+_upload_abort_no_error(struct oio_sds_ul_s *ul)
+{
+	EXTRA_ASSERT (ul != NULL);
+	GRID_WARN("Aborting...");
+	struct oio_error_s *e = oio_sds_upload_abort (ul);
+	if (e) {
+		GRID_WARN("Upload abort failed: (%d) %s",
+				oio_error_code (e), oio_error_message (e));
+		oio_error_free (e);
+	}
 }
 
 static void
@@ -1828,15 +1854,17 @@ _upload_sequential (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 
 	oio_pfree0(&b, NULL);
 
-	if (!err)
+	if (!err) {
 		err = oio_sds_upload_commit (ul);
-	else {
-		struct oio_error_s *e = oio_sds_upload_abort (ul);
-		if (e) {
-			GRID_WARN("Upload abort failed: (%d) %s",
-					oio_error_code (e), oio_error_message (e));
-			oio_error_free (e);
+		if (oio_error_code(err) == CODE_CONTENT_EXISTS ||
+				oio_error_code(err) == CODE_CONTENT_PRECONDITION) {
+			_upload_abort_no_error(ul);
+		} else {
+			GRID_WARN("Conditons unsafe to abort the upload: (%d) %s",
+					oio_error_code(err), oio_error_message(err));
 		}
+	} else {
+		_upload_abort_no_error(ul);
 	}
 
 	oio_sds_upload_clean (ul);

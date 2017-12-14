@@ -127,6 +127,7 @@ int main(int argc, char **argv) {
 	HC_TEST_INIT(argc,argv);
 	g_assert (OIO_SDS_VERSION == oio_sds_version());
 	oio_log_flags |= LOG_FLAG_PRETTYTIME;
+	oio_log_verbose_default();
 
 	if (argc < 2) {
 		g_printerr("Missing argument\n");
