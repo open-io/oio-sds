@@ -15,6 +15,7 @@
 
 import uuid
 import re
+import tempfile
 from tests.functional.cli import CliTestCase, CommandFailed
 from tests.utils import random_str
 
@@ -92,3 +93,17 @@ class ContainerTest(CliTestCase):
     def test_container_purge(self):
         output = self.openio('container purge ' + self.NAME)
         self.assertEqual('', output)
+
+    def test_container_flush(self):
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            f.write('test_exists')
+            f.flush()
+            obj = f.name
+            for i in range(10):
+                obj_name = random_str(16)
+                self.openio('object create ' + self.NAME
+                            + ' ' + obj + ' --name ' + obj_name)
+        output = self.openio('container flush ' + self.NAME)
+        self.assertEqual('', output)
+        output = self.openio('object list ' + self.NAME)
+        self.assertEqual('\n', output)

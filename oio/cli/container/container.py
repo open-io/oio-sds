@@ -215,6 +215,27 @@ class DeleteContainer(command.Command):
             )
 
 
+class FlushContainer(command.Command):
+    """Flush an object container."""
+
+    log = getLogger(__name__ + '.FlushContainer')
+
+    def get_parser(self, prog_name):
+        parser = super(FlushContainer, self).get_parser(prog_name)
+        parser.add_argument(
+            'container',
+            metavar='<container>',
+            help='Container to flush'
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        self.app.client_manager.storage.container_flush(
+            self.app.client_manager.account, parsed_args.container)
+
+
 class ShowContainer(show.ShowOne):
     """Display information about an object container."""
 

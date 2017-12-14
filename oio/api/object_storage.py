@@ -278,6 +278,29 @@ class ObjectStorageApi(object):
         """
         self.container.container_delete(account, container, **kwargs)
 
+    @handle_container_not_found
+    @ensure_headers
+    @ensure_request_id
+    def container_flush(self, account, container, **kwargs):
+        """
+        Flush a container
+
+        :param account: account from which to delete the container
+        :type account: `str`
+        :param container: name of the container
+        :type container: `str`
+        """
+        def _get_names(objects):
+            for object in objects:
+                yield object["name"]
+
+        while (True):
+            rep = self.object_list(account, container, **kwargs)
+            if not rep["objects"]:
+                break
+            self.object_delete_many(account, container,
+                                    _get_names(rep["objects"]), **kwargs)
+
     @handle_account_not_found
     @ensure_headers
     @ensure_request_id
