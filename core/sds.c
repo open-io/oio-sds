@@ -1856,12 +1856,14 @@ _upload_sequential (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 
 	if (!err) {
 		err = oio_sds_upload_commit (ul);
-		if (oio_error_code(err) == CODE_CONTENT_EXISTS ||
-				oio_error_code(err) == CODE_CONTENT_PRECONDITION) {
-			_upload_abort_no_error(ul);
-		} else {
-			GRID_WARN("Conditons unsafe to abort the upload: (%d) %s",
-					oio_error_code(err), oio_error_message(err));
+		if (err) {
+			if (oio_error_code(err) == CODE_CONTENT_EXISTS ||
+					oio_error_code(err) == CODE_CONTENT_PRECONDITION) {
+				_upload_abort_no_error(ul);
+			} else {
+				GRID_WARN("Conditons unsafe to abort the upload: (%d) %s",
+						oio_error_code(err), oio_error_message(err));
+			}
 		}
 	} else {
 		_upload_abort_no_error(ul);
