@@ -70,6 +70,8 @@ static void _task_react_FINAL(gpointer p);
 static void _task_react_TIMERS(gpointer p);
 static void _task_reload_nsinfo(gpointer p);
 static void _task_reload_peers(gpointer p);
+static void _task_update_stats(gpointer p);
+static GQuark gq_events_health = 0;
 
 static gpointer _worker_queue (gpointer p);
 static gpointer _worker_clients (gpointer p);
@@ -650,6 +652,7 @@ _configure_tasks(struct sqlx_service_s *ss)
 	grid_task_queue_register(ss->gtq_admin, 1, _task_react_FINAL, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_react_TIMERS, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_malloc_trim, NULL, ss);
+	grid_task_queue_register(ss->gtq_admin, 5, _task_update_stats, NULL, ss);
 
 	return TRUE;
 }
@@ -815,6 +818,8 @@ sqlx_service_set_defaults(void)
 
 	if (SRV.service_config->set_defaults)
 		SRV.service_config->set_defaults(&SRV);
+
+	gq_events_health = g_quark_from_static_string("gauge event.health");
 }
 
 static void
@@ -1128,6 +1133,17 @@ _task_reload_nsinfo(gpointer p)
 		PSRV(p)->nsinfo = ni;
 		namespace_info_free(old);
 	}
+}
+
+static void
+_task_update_stats(gpointer p)
+{
+	if (!grid_main_is_running() || !PSRV(p)->events_queue)
+		return;
+
+	gint64 health = oio_events_queue__get_health(PSRV(p)->events_queue);
+	network_server_stat_push2(PSRV(p)->server, FALSE,
+			gq_events_health, health, 0, 0);
 }
 
 static gboolean
