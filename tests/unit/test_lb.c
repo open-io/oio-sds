@@ -274,12 +274,68 @@ _world_from_loc_strings(const char **locations)
 	return world;
 }
 
-static void
-_test_repartition_by_loc_level(const char **locations, int targets)
+static struct oio_lb_world_s *
+_world_from_file(const char *src_file)
 {
-	int shots = 10000;
+	GRID_DEBUG("Loading LB world from %s", src_file);
+
+	struct oio_lb_world_s *world = oio_lb_local__create_world();
+	oio_lb_world__create_slot(world, "*");
+
+	GError *err = NULL;
+	gchar *file_contents = NULL;
+	if (!g_file_get_contents(src_file, &file_contents, NULL, &err)) {
+		GRID_ERROR("Failed to read file %s: (%d) %s",
+				src_file, err->code, err->message);
+		g_assert_not_reached();
+	}
+
+	gchar **lines = g_strsplit(file_contents, "\n", -1);
+	for (gchar **line = lines; lines && *line; line++) {
+		*line = g_strstrip(*line);
+		if (*line[0] == '#') {
+			GRID_DEBUG("Ignoring line [%s]", *line);
+			continue;
+		}
+		char **id_loc = g_strsplit(*line, " ", 4);
+		guint elements = g_strv_length(id_loc);
+		if (elements > 0) {
+			int item_sz = sizeof(struct oio_lb_item_s) + strlen(id_loc[0]) + 1;
+			struct oio_lb_item_s *srv = g_malloc0(item_sz);
+			strcpy(srv->id, id_loc[0]);
+
+			if (elements > 1) {
+				srv->location = location_from_dotted_string(id_loc[1]);
+			} else {
+				addr_info_t ai = {{0}};
+				grid_string_to_addrinfo(id_loc[0], &ai);
+				srv->location = location_from_addr_info(&ai);
+			}
+
+			if (elements > 2)
+				srv->weight = atoi(id_loc[2]);
+			else
+				srv->weight = 80;
+			GRID_TRACE("Built service id=%s,location=%lu,weight=%d",
+					srv->id, srv->location, srv->weight);
+			oio_lb_world__feed_slot(world, "*", srv);
+		} else {
+			GRID_DEBUG("Ignoring line [%s]", *line);
+		}
+		g_strfreev(id_loc);
+	}
+
+	g_strfreev(lines);
+	g_free(file_contents);
+
+	return world;
+}
+
+static void
+_test_repartition_by_loc_level(struct oio_lb_world_s *world,
+		int targets, int shots)
+{
 	int unbalanced = 0;
-	struct oio_lb_world_s *world = _world_from_loc_strings(locations);
 
 	/* create a pool and poll it */
 	GRID_DEBUG("Creating a pool with %d targets", targets);
@@ -292,8 +348,9 @@ _test_repartition_by_loc_level(const char **locations, int targets)
 	oio_lb_world__debug(world);
 
 	int services = oio_lb_world__count_items(world);
-	int counts[services];
-	memset(counts, 0, services * sizeof(int));
+	// int counts[services];
+	// memset(counts, 0, services * sizeof(int));
+	GHashTable *counts = g_hash_table_new(g_str_hash, g_str_equal);
 	for (int i = 0; i < shots; i++) {
 		GData *count_by_level_by_host[4];
 		for (int j = 1; j < 4; j++) {
@@ -313,7 +370,8 @@ _test_repartition_by_loc_level(const char **locations, int targets)
 				g_datalist_id_set_data(datalist,
 						host_key, GUINT_TO_POINTER(host_count));
 			}
-			counts[atoi(id+3)]++;
+			gint icount = 1 + GPOINTER_TO_INT(g_hash_table_lookup(counts, id));
+			g_hash_table_replace(counts, (gpointer)id, GINT_TO_POINTER(icount));
 		}
 		GError *err = oio_lb_pool__poll(pool, NULL, _on_item, NULL);
 		g_assert_no_error(err);
@@ -336,7 +394,8 @@ _test_repartition_by_loc_level(const char **locations, int targets)
 		}
 		for (int j = 1; j < 4; j++) {
 			if (max[j] - min[j] > 1) {
-				GRID_DEBUG("Unbalanced situation at level %d at iteration %d: min=%u, max=%u",
+				GRID_DEBUG("Unbalanced situation at level %d at iteration %d: "
+						"min=%u, max=%u",
 						j, i, min[j], max[j]);
 				unbalanced++;
 				break;
@@ -353,25 +412,47 @@ _test_repartition_by_loc_level(const char **locations, int targets)
 	int ideal_count = targets * shots / services;
 	int min_count = ideal_count * 80 / 100;
 	int max_count = ideal_count * 120 / 100;
-	for (int i = 0; i < services; i++) {
+
+	void _on_item_check(const char *id, gpointer pcount, gpointer d UNUSED) {
+		gint count = GPOINTER_TO_INT(pcount);
 		double deviation_percent =
-				counts[i]*100.0f/(float)ideal_count - 100.0f;
-		if (counts[i] < min_count || counts[i] > max_count) {
-			GRID_WARN("service %04d chosen %d times "
+				count*100.0f/(float)ideal_count - 100.0f;
+		if (count < min_count || count > max_count) {
+			GRID_WARN("service %s chosen %d times "
 					"(min/ideal/max/diff: %d/%d/%d/%+2.2f%%)",
-					i, counts[i], min_count, ideal_count, max_count,
+					id, count, min_count, ideal_count, max_count,
 					deviation_percent);
 		} else {
-			GRID_DEBUG("service %04d chosen %d times "
+			GRID_DEBUG("service %s chosen %d times "
 					"(min/ideal/max/diff: %d/%d/%d/%+2.2f%%)",
-					i, counts[i], min_count, ideal_count, max_count,
+					id, count, min_count, ideal_count, max_count,
 					deviation_percent);
 		}
 	}
+	g_hash_table_foreach(counts, (GHFunc)_on_item_check, NULL);
+
+	g_hash_table_destroy(counts);
+}
+
+static void
+_test_repartition_by_level__locations(const char **locations, int targets)
+{
+	struct oio_lb_world_s *world = _world_from_loc_strings(locations);
+	_test_repartition_by_loc_level(world, targets, 10000);
+	oio_lb_world__destroy(world);
+}
+
+static void
+_test_repartition_by_level__file(const char *service_file, int targets)
+{
+	struct oio_lb_world_s *world = _world_from_file(service_file);
+	_test_repartition_by_loc_level(world, targets, 50000);
+	oio_lb_world__destroy(world);
 }
 
 struct level_repartition_test_s {
 	const char **locations;
+	const char *file;
 	int targets;
 };
 
@@ -379,7 +460,10 @@ static void
 test_uniform_level_repartition(gconstpointer raw_test_data)
 {
 	const struct level_repartition_test_s *test_data = raw_test_data;
-	return _test_repartition_by_loc_level(
+	if (test_data->file)
+		return _test_repartition_by_level__file(
+				test_data->file, test_data->targets);
+	return _test_repartition_by_level__locations(
 			test_data->locations, test_data->targets);
 }
 
@@ -605,6 +689,44 @@ _add_level_repartition_test(const char **locations, const char *config, int targ
 	test_data->targets = targets;
 	g_test_add_data_func_full(name, test_data,
 			test_uniform_level_repartition, g_free);
+}
+
+static void
+_add_level_repartition_test_file(const char *service_file, int targets)
+{
+	char name[128] = {0};
+	snprintf(name, sizeof(name),
+			"/core/lb/level_repartition/%s/%dtargets",
+			service_file, targets);
+	struct level_repartition_test_s *test_data = \
+			g_malloc0(sizeof(struct level_repartition_test_s));
+	test_data->file = service_file;
+	test_data->targets = targets;
+	g_test_add_data_func_full(name, test_data,
+			test_uniform_level_repartition, g_free);
+}
+
+static void
+_add_tests_from_files(const char *dir_path)
+{
+	GError *err = NULL;
+	GDir *dir = g_dir_open(dir_path, 0, &err);
+	if (err) {
+		GRID_ERROR("Failed to open dir %s", dir_path);
+		return;
+	}
+
+	const gchar *entry = NULL;
+	while ((entry = g_dir_read_name(dir))) {
+		if (g_str_has_prefix(entry, "lb-")) {
+			gchar *full_path = g_build_filename(dir_path, entry, NULL);
+			// FIXME: get target count from file name
+			_add_level_repartition_test_file(full_path, 15);
+		} else {
+			GRID_DEBUG("Ignoring %s", entry);
+		}
+	}
+	g_dir_close(dir);
 }
 
 int
@@ -1113,6 +1235,8 @@ main(int argc, char **argv)
 	_add_level_repartition_test(lrt7, "8x3+1x1", 15); // 12+3
 	_add_level_repartition_test(lrt7, "8x3+1x1", 16); // 12+4
 	_add_level_repartition_test(lrt7, "8x3+1x1", 18); // 14+4
+
+	_add_tests_from_files("tests/datasets");
 
 	return g_test_run();
 };
