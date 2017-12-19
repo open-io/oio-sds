@@ -388,12 +388,14 @@ class TestContainerLifecycle(BaseTestCase):
                                   properties=props)
         self.lifecycle.load()
 
-        fake_listing = {'objects': [
-            {'name': 'a', 'ctime': '12'},
-            {'name': 'b', 'ctime': '12'},
-            {'name': 'c', 'ctime': '12'},
-            {'name': 'd', 'ctime': '12'}
-        ]}
+        fake_listing = {
+            'objects': [
+                {'name': 'a', 'ctime': '12'},
+                {'name': 'b', 'ctime': '12'},
+                {'name': 'c', 'ctime': '12'},
+                {'name': 'd', 'ctime': '12'}],
+            'truncated': False
+        }
         with patch.object(self.api, 'object_list',
                           side_effect=[fake_listing]):
             results = [x for x in self.lifecycle.execute()]
