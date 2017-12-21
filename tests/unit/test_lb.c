@@ -53,6 +53,7 @@ test_local_poll (void)
 		g_free (srv);
 	}
 
+	oio_lb_world__purge_old_generations(world);
 	oio_lb_world__debug (world);
 
 	/* create a pool and poll it */
@@ -95,6 +96,7 @@ test_local_poll_same_low_bits(void)
 		g_free(srv);
 	}
 
+	oio_lb_world__purge_old_generations(world);
 	oio_lb_world__debug(world);
 
 	/* create a pool and poll it */
@@ -167,6 +169,7 @@ _test_uniform_repartition(int services, int slots, int targets)
 		actual_svc_per_slot[i/svc_per_slot]++;
 		g_free(srv);
 	}
+	oio_lb_world__purge_old_generations(world);
 
 	/* create a pool and poll it */
 	GRID_DEBUG("Creating a pool with %d targets", targets);
@@ -270,6 +273,7 @@ _world_from_loc_strings(const char **locations)
 		struct oio_lb_item_s *srv = _srv3(i, *loc);
 		oio_lb_world__feed_slot(world, "*", srv);
 	}
+	oio_lb_world__purge_old_generations(world);
 
 	return world;
 }
@@ -324,6 +328,7 @@ _world_from_file(const char *src_file)
 		}
 		g_strfreev(id_loc);
 	}
+	oio_lb_world__purge_old_generations(world);
 
 	g_strfreev(lines);
 	g_free(file_contents);
@@ -485,6 +490,7 @@ test_local_feed_twice(void)
 	oio_lb_world__feed_slot(world, "0", srv1);
 	oio_lb_world__feed_slot(world, "0", srv0);
 	oio_lb_world__feed_slot(world, "0", srv0);
+	oio_lb_world__purge_old_generations(world);
 
 	g_assert_cmpuint(2, ==, oio_lb_world__count_slot_items(world, "0"));
 	g_free(srv0);
@@ -523,6 +529,7 @@ test_local_feed (void)
 		}
 		g_free (srv);
 	}
+	oio_lb_world__purge_old_generations(world);
 	g_assert_cmpuint (oio_lb_world__count_slots (world), ==, 5);
 	g_assert_cmpuint (oio_lb_world__count_items (world), ==, 8);
 
