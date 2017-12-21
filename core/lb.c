@@ -117,6 +117,9 @@ struct _slot_item_s
  * criteria. */
 struct oio_lb_slot_s
 {
+	/* A pointer to the world owning this slot. */
+	struct oio_lb_world_s *world;
+
 	/* the sum of all the individual weights. */
 	oio_weight_acc_t sum_weight;
 
@@ -441,6 +444,7 @@ _slot_destroy (struct oio_lb_slot_s *slot)
 		g_datalist_clear(&(slot->items_by_loc[level]));
 	}
 	oio_str_clean (&slot->name);
+	slot->world = NULL;
 	g_free (slot);
 }
 
@@ -589,8 +593,8 @@ static gboolean
 _local_slot__poll(struct oio_lb_slot_s *slot, const guint16 bit_shift,
 		gboolean reversed, struct polling_ctx_s *ctx)
 {
-	if (_slot_needs_rehash (slot))
-		_slot_rehash (slot);
+	if (unlikely(_slot_needs_rehash(slot)))
+		GRID_WARN("BUG: LB reload not followed by rehash");
 
 	GRID_TRACE2(
 			"%s slot=%s sum=%"G_GUINT32_FORMAT
@@ -700,8 +704,8 @@ _local_target__is_satisfied(struct oio_lb_pool_LOCAL_s *lb,
 			GRID_DEBUG ("Slot [%s] not ready", name);
 			continue;
 		}
-		if (_slot_needs_rehash(slot)) {
-			_slot_rehash(slot);
+		if (unlikely(_slot_needs_rehash(slot))) {
+			GRID_WARN("BUG: LB reload not followed by rehash");
 		}
 		oio_location_t *known = ctx->next_polled;
 		do {
@@ -1060,6 +1064,7 @@ _world_create_slot (struct oio_lb_world_s *self, const char *name)
 	g_rw_lock_reader_unlock(&self->lock);
 	if (!slot) {
 		slot = g_malloc0(sizeof(*slot));
+		slot->world = self;
 		slot->name = g_strdup(name);
 		slot->items = g_array_new(FALSE, TRUE, sizeof(struct _slot_item_s));
 		for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
@@ -1255,7 +1260,7 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 	}
 
 	if (slot->flag_rehash_on_update && _slot_needs_rehash (slot))
-		_slot_rehash (slot);
+		_slot_rehash(slot);
 
 	/* This is an optimization to speedup the locations comparisons.
 	 * It needs __builtin_clzll which is a GCC builtin. */
@@ -1345,6 +1350,9 @@ _world_purge_slot_items(struct oio_lb_world_s *self, guint32 age)
 			slot->flag_dirty_weights = 1;
 			slot->flag_dirty_order = 1;
 		}
+
+		if (_slot_needs_rehash(slot))
+			_slot_rehash(slot);
 
 		return FALSE;
 	}
