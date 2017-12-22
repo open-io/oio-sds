@@ -19,6 +19,7 @@ from urllib3.exceptions import MaxRetryError, TimeoutError, HTTPError, \
     NewConnectionError, ProtocolError, ProxyError, ClosedPoolError
 from urllib import urlencode
 from oio.common import exceptions
+from oio.common.utils import deadline_to_timeout
 from oio.common.constants import ADMIN_HEADER, \
     TIMEOUT_HEADER, PERFDATA_HEADER, CONNECTION_TIMEOUT, READ_TIMEOUT
 
@@ -75,6 +76,9 @@ class HttpApi(object):
         :type url: `str`
         :keyword admin_mode: allow operations on slave or worm namespaces
         :type admin_mode: `bool`
+        :keyword deadline: deadline for the request, in monotonic time.
+            Supersedes `read_timeout`.
+        :type deadline: `float` seconds
         :keyword timeout: optional timeout for the request (in seconds).
             May be a `urllib3.Timeout(connect=connection_timeout,
             read=read_timeout)`.
@@ -103,6 +107,17 @@ class HttpApi(object):
             out_headers = dict()
         if self.admin_mode or admin_mode:
             out_headers[ADMIN_HEADER] = '1'
+
+        # Look for a request deadline, deduce the timeout from it.
+        if kwargs.get('deadline', None) is not None:
+            to = deadline_to_timeout(kwargs['deadline'], True)
+            to = min(to, kwargs.get('read_timeout', to))
+            out_kwargs['timeout'] = urllib3.Timeout(
+                connect=kwargs.get('connection_timeout', CONNECTION_TIMEOUT),
+                read=to)
+            # Shorten the deadline by 1% to compensate for the time spent
+            # connecting and reading response.
+            out_headers[TIMEOUT_HEADER] = int(to * 990000.0)
 
         # Ensure there is a timeout
         if 'timeout' not in out_kwargs:
@@ -187,6 +202,9 @@ class HttpApi(object):
         :type url: `str`
         :param endpoint: endpoint to use in place of `self.endpoint`
         :type endpoint: `str`
+        :keyword deadline: deadline for the request, in monotonic time.
+            Supersedes `read_timeout`.
+        :type deadline: `float` seconds
         :keyword timeout: optional timeout for the request (in seconds).
             May be a `urllib3.Timeout(connect=connection_timeout,
             read=read_timeout)`.

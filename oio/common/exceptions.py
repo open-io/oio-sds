@@ -157,6 +157,19 @@ class OioTimeout(OioNetworkException):
     pass
 
 
+class DeadlineReached(OioException):
+    """
+    Special exception to be raised when a deadline is reached.
+    This differs from the `OioTimeout` in that we are sure
+    the operation won't succeed silently in the background.
+    """
+
+    def __str__(self):
+        if not self.args:
+            return 'Deadline reached'
+        return super(DeadlineReached, self).__str__()
+
+
 class VolumeException(OioException):
     pass
 
@@ -175,15 +188,18 @@ class ClientException(OioException):
 
 
 class NotFound(ClientException):
-    pass
+    def __init__(self, http_status=404, status=None, message=None):
+        super(NotFound, self).__init__(http_status, status, message)
 
 
 class Conflict(ClientException):
-    pass
+    def __init__(self, http_status=409, status=None, message=None):
+        super(Conflict, self).__init__(http_status, status, message)
 
 
 class TooLarge(ClientException):
-    pass
+    def __init__(self, http_status=413, status=None, message=None):
+        super(TooLarge, self).__init__(http_status, status, message)
 
 
 class UnsatisfiableRange(ClientException):

@@ -14,7 +14,9 @@
 # License along with this library.
 
 import unittest
+from oio.common.exceptions import DeadlineReached
 from oio.common.storage_functions import obj_range_to_meta_chunk_range
+from oio.common.utils import deadline_to_timeout, monotonic_time
 
 
 class TestUtils(unittest.TestCase):
@@ -126,3 +128,13 @@ class TestUtils(unittest.TestCase):
             result = obj_range_to_meta_chunk_range(
                 c['start'], c['end'], c['sizes'])
             self.assertEqual(result, c['expected'])
+
+    def test_deadline_to_timeout(self):
+        self.assertRaises(DeadlineReached,
+                          deadline_to_timeout, monotonic_time() - 0.001, True)
+        self.assertRaises(DeadlineReached,
+                          deadline_to_timeout, monotonic_time(), True)
+        deadline = monotonic_time() + 1.0
+        to = deadline_to_timeout(deadline, True)
+        self.assertLessEqual(to, 1.0)
+        self.assertGreater(to, 0.9)

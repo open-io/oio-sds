@@ -68,10 +68,11 @@ class ObjectStorageApi(object):
         :param namespace: name of the namespace to interract with
         :type namespace: `str`
 
-        :keyword connection_timeout: connection timeout towards rawx services
+        :keyword connection_timeout: connection timeout towards proxy and
+            rawx services
         :type connection_timeout: `float` seconds
         :keyword read_timeout: timeout for rawx responses and data reads from
-            the caller (when uploading)
+            the caller (when uploading), and metadata requests
         :type read_timeout: `float` seconds
         :keyword write_timeout: timeout for rawx write requests
         :type write_timeout: `float` seconds
@@ -458,12 +459,16 @@ class ObjectStorageApi(object):
         :type policy: `str`
         :keyword key_file:
         :param append: if set, data will be append to existing object (or
-        object will be created if unset)
+            object will be created if unset)
         :type append: `bool`
 
         :keyword perfdata: optional `dict` that will be filled with metrics
             of time spent to resolve the meta2 address, to do the meta2
             requests, and to upload chunks to rawx services.
+        :keyword deadline: deadline for the request, in monotonic time
+            (`oio.common.utils.monotonic_time`). This supersedes `timeout`
+            or `read_timeout` keyword arguments.
+        :type deadline: `float` seconds
 
         :returns: `list` of chunks, size and hash of the what has been uploaded
         """
@@ -970,7 +975,7 @@ class ObjectStorageApi(object):
                 version=obj_meta['version'], mime_type=obj_meta['mime_type'],
                 chunk_method=obj_meta['chunk_method'],
                 **kwargs)
-        except exc.Conflict as ex:
+        except (exc.Conflict, exc.DeadlineReached) as ex:
             self.logger.warn(
                 'Failed to commit to meta2 (%s), deleting chunks', ex)
             del_resps = self.blob_client.chunk_delete_many(
