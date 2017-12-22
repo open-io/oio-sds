@@ -23,7 +23,7 @@ from io import RawIOBase
 from itertools import islice
 from codecs import getdecoder, getencoder
 from urllib import quote as _quote
-from oio.common.exceptions import OioException
+from oio.common.exceptions import OioException, DeadlineReached
 
 
 try:
@@ -306,3 +306,11 @@ def monotonic_time():
             __MONOTONIC_TIME = time
 
     return __MONOTONIC_TIME()
+
+
+def deadline_to_timeout(deadline, check=False):
+    """Convert a deadline (`float` seconds) to a timeout (`float` seconds)"""
+    dl_to = deadline - monotonic_time()
+    if check and dl_to <= 0.0:
+        raise DeadlineReached()
+    return dl_to

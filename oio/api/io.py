@@ -23,7 +23,8 @@ from oio.common import exceptions as exc
 from oio.common.http import parse_content_type,\
     parse_content_range, ranges_from_http_header, http_header_from_ranges
 from oio.common.http_eventlet import http_connect
-from oio.common.utils import GeneratorIO, group_chunk_errors
+from oio.common.utils import GeneratorIO, group_chunk_errors, \
+    deadline_to_timeout
 from oio.common import green
 
 logger = logging.getLogger(__name__)
@@ -76,7 +77,7 @@ class WriteHandler(object):
     def __init__(self, source, sysmeta, chunk_preparer,
                  storage_method, headers=None,
                  connection_timeout=None, write_timeout=None,
-                 read_timeout=None, **_kwargs):
+                 read_timeout=None, deadline=None, **_kwargs):
         """
         :param connection_timeout: timeout to establish the connection
         :param write_timeout: timeout to send a buffer of data
@@ -97,8 +98,23 @@ class WriteHandler(object):
         self.storage_method = storage_method
         self.headers = headers or dict()
         self.connection_timeout = connection_timeout or CONNECTION_TIMEOUT
-        self.write_timeout = write_timeout or CHUNK_TIMEOUT
-        self.read_timeout = read_timeout or CLIENT_TIMEOUT
+        self.deadline = deadline
+        self._read_timeout = read_timeout or CLIENT_TIMEOUT
+        self._write_timeout = write_timeout or CHUNK_TIMEOUT
+
+    @property
+    def read_timeout(self):
+        if self.deadline is None:
+            return self._read_timeout
+        dl_to = deadline_to_timeout(self.deadline, True)
+        return min(dl_to, self._read_timeout)
+
+    @property
+    def write_timeout(self):
+        if self.deadline is None:
+            return self._write_timeout
+        dl_to = deadline_to_timeout(self.deadline, True)
+        return min(dl_to, self._write_timeout)
 
     def stream(self):
         """
