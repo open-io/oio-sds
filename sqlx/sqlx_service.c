@@ -1175,6 +1175,7 @@ _filter_down_hosts(GSList *l)
 		if (_srv_is_down(l->data))
 			g_ptr_array_add(tmp, _srv_url(l->data));
 	}
+	g_ptr_array_add(tmp, NULL);
 	return (gchar**) g_ptr_array_free(tmp, FALSE);
 }
 

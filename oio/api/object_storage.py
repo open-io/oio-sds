@@ -967,14 +967,28 @@ class ObjectStorageApi(object):
         obj_meta['etag'] = content_checksum
 
         data = {'chunks': final_chunks, 'properties': properties or {}}
-        # FIXME: we may just pass **obj_meta
-        self.container.content_create(
-            account, container, obj_name, size=bytes_transferred,
-            checksum=content_checksum, data=data,
-            stgpol=obj_meta['policy'],
-            version=obj_meta['version'], mime_type=obj_meta['mime_type'],
-            chunk_method=obj_meta['chunk_method'],
-            **kwargs)
+        try:
+            # FIXME: we may just pass **obj_meta
+            self.container.content_create(
+                account, container, obj_name, size=bytes_transferred,
+                checksum=content_checksum, data=data,
+                stgpol=obj_meta['policy'],
+                version=obj_meta['version'], mime_type=obj_meta['mime_type'],
+                chunk_method=obj_meta['chunk_method'],
+                **kwargs)
+        except exc.Conflict as ex:
+            self.logger.warn(
+                'Failed to commit to meta2 (%s), deleting chunks', ex)
+            del_resps = self.blob_client.chunk_delete_many(
+                final_chunks, cid=obj_meta['container_id'], **kwargs)
+            for resp in del_resps:
+                if isinstance(resp, Exception):
+                    self.logger.warn('failed to delete chunk %s (%s)',
+                                     resp.chunk['url'], resp)
+                elif resp.status not in (204, 404):
+                    self.logger.warn('failed to delete chunk %s (HTTP %s)',
+                                     resp.chunk['url'], resp.status)
+            raise
         return final_chunks, bytes_transferred, content_checksum
 
     def _b2_credentials(self, storage_method, key_file):

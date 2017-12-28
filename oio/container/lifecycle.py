@@ -120,7 +120,8 @@ class ContainerLifecycle(object):
         for obj_meta in depaginate(
                 self.api.object_list,
                 listing_key=lambda x: x['objects'],
-                marker_key=lambda x: x['objects'][-1]['name'],
+                marker_key=lambda x: x.get('next_marker'),
+                truncated_key=lambda x: x['truncated'],
                 account=self.account,
                 container=self.container,
                 properties=True,

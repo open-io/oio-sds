@@ -801,6 +801,17 @@ oio_proxy_call_reference_create (CURL *h, struct oio_url_s *u)
 }
 
 GError *
+oio_proxy_call_reference_delete (CURL *h, struct oio_url_s *u)
+{
+	GString *http_url = _curl_reference_url (u, "destroy");
+	if (!http_url) return BADNS();
+
+	GError *err = _proxy_call (h, "POST", http_url->str, NULL, NULL);
+	g_string_free(http_url, TRUE);
+	return err;
+}
+
+GError *
 oio_proxy_call_reference_link (CURL *h, struct oio_url_s *u,
 		const char *srvtype, gboolean autocreate, GString *out)
 {

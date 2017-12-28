@@ -71,14 +71,26 @@ service_tag_get_value_boolean(struct service_tag_s *tag, gboolean *b, GError **e
 		return FALSE;
 	}
 
-	if (tag->type != STVT_BOOL) {
-		GSETERROR(error, "Tag is not of type BOOL");
-		return FALSE;
+	switch (tag->type) {
+		case STVT_I64:
+			*b = BOOL(tag->value.i);
+			return TRUE;
+		case STVT_REAL:
+			*b = (tag->value.r != 0.0);
+			return TRUE;
+		case STVT_BOOL:
+			*b = BOOL(tag->value.b);
+			return TRUE;
+		case STVT_STR:
+			*b = oio_str_parse_bool(tag->value.s, *b);
+			return TRUE;
+		case STVT_BUF:
+			*b = oio_str_parse_bool(tag->value.buf, *b);
+			return TRUE;
+		default:
+			GSETERROR(error, "Unmanaged tag type [%d]", tag->type);
+			return FALSE;
 	}
-
-	memcpy(b, &(tag->value.b), sizeof(gboolean));
-
-	return TRUE;
 }
 
 void

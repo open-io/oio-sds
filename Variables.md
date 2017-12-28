@@ -85,6 +85,22 @@ Used by `gcc`
 
 ### Variables for production purposes
 
+### client.down_cache.avoid
+
+> Should an error be raised when the peer is marked down, instead of trying to contact the peer.
+
+ * default: **FALSE**
+ * type: gboolean
+ * cmake directive: *OIO_CLIENT_DOWN_CACHE_AVOID*
+
+### client.down_cache.shorten
+
+> Should the connection timeout be dramatically shortened when talking to a peer that has been reported down. Set to false by default, this is evaluated after the avoidance of those peers.
+
+ * default: **FALSE**
+ * type: gboolean
+ * cmake directive: *OIO_CLIENT_DOWN_CACHE_SHORTEN*
+
 ### client.errors_cache.enabled
 
 > Should the client feed a cache with the network errors it encounters, and should those errors be used to prevent RPC to be performed toward 'too-faulty' peers.
@@ -217,7 +233,7 @@ Used by `gcc`
 
 > Set the interval between each check of the beanstalkd availability. Set to 0 to never check.
 
- * default: **1 * G_TIME_SPAN_MINUTE**
+ * default: **0**
  * type: gint64
  * cmake directive: *OIO_EVENTS_BEANSTALKD_CHECK_PERIOD*
  * range: 0 -> 1 * G_TIME_SPAN_DAY
@@ -239,6 +255,15 @@ Used by `gcc`
  * type: guint
  * cmake directive: *OIO_EVENTS_BEANSTALKD_PRIO*
  * range: 0 -> 2147483648
+
+### events.beanstalkd.timeout
+
+> Set the interval between each check of the beanstalkd availability. Set to 0 to never check.
+
+ * default: **4 * G_TIME_SPAN_SECOND**
+ * type: gint64
+ * cmake directive: *OIO_EVENTS_BEANSTALKD_TIMEOUT*
+ * range: 100 * G_TIME_SPAN_MILLISECOND -> 90 * G_TIME_SPAN_SECOND
 
 ### events.beanstalkd.ttr
 

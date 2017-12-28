@@ -43,6 +43,13 @@ oio_directory__create (struct oio_directory_s *self,
 }
 
 GError *
+oio_directory__delete (struct oio_directory_s *self,
+		const struct oio_url_s *url)
+{
+	DIR_CALL(self,delete)(self, url);
+}
+
+GError *
 oio_directory__list (struct oio_directory_s *self,
 		const struct oio_url_s *url, const char *srvtype,
 		gchar ***out_dir, gchar ***out_srv)
@@ -99,6 +106,9 @@ static void _dir_proxy_destroy (struct oio_directory_s *self);
 static GError * _dir_proxy_create (struct oio_directory_s *self,
 			const struct oio_url_s *url);
 
+static GError * _dir_proxy_delete (struct oio_directory_s *self,
+			const struct oio_url_s *url);
+
 static GError * _dir_proxy_list (struct oio_directory_s *self,
 			const struct oio_url_s *url, const char *srvtype,
 			gchar ***out_dir, gchar ***out_srv);
@@ -124,6 +134,7 @@ static struct oio_directory_vtable_s vtable_PROXY =
 {
 	_dir_proxy_destroy,
 	_dir_proxy_create,
+	_dir_proxy_delete,
 	_dir_proxy_list,
 	_dir_proxy_link,
 	_dir_proxy_get_prop,
@@ -198,6 +209,20 @@ _dir_proxy_create (struct oio_directory_s *self, const struct oio_url_s *url)
 	struct oio_url_s *u = oio_url_dup (url);
 	CURL *h = _curl_get_handle_proxy ();
 	GError *err = oio_proxy_call_reference_create (h, u);
+	curl_easy_cleanup (h);
+	oio_url_pclean (&u);
+
+	return err;
+}
+
+static GError *
+_dir_proxy_delete (struct oio_directory_s *self, const struct oio_url_s *url)
+{
+	_DIR_FUNC_INIT
+
+	struct oio_url_s *u = oio_url_dup (url);
+	CURL *h = _curl_get_handle_proxy ();
+	GError *err = oio_proxy_call_reference_delete (h, u);
 	curl_easy_cleanup (h);
 	oio_url_pclean (&u);
 

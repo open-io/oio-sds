@@ -16,10 +16,10 @@
 from six import iteritems
 import os
 from logging import getLogger
+from eventlet import GreenPool
+from cliff import command, lister, show
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.utils import depaginate
-from cliff import command, lister, show
-from eventlet import GreenPool
 
 
 def cmp(x, y): return(x > y) - (x < y)
@@ -505,7 +505,8 @@ class ListObject(ContainerCommandMixin, lister.Lister):
             for element in depaginate(
                     self.app.client_manager.storage.object_list,
                     listing_key=lambda x: x['objects'],
-                    marker_key=lambda x: x['objects'][-1]['name'],
+                    marker_key=lambda x: x.get('next_marker'),
+                    truncated_key=lambda x: x['truncated'],
                     account=account, container=container_marker,
                     marker=marker, **kwargs):
                 count += 1
@@ -537,7 +538,8 @@ class ListObject(ContainerCommandMixin, lister.Lister):
         for i in depaginate(
                 self.app.client_manager.storage.object_list,
                 listing_key=lambda x: x['objects'],
-                marker_key=lambda x: x['objects'][-1]['name'],
+                marker_key=lambda x: x.get('next_marker'),
+                truncated_key=lambda x: x['truncated'],
                 account=account, container=container, **kwargs):
             object_list.append(i)
         return object_list
@@ -577,7 +579,8 @@ class ListObject(ContainerCommandMixin, lister.Lister):
                 obj_gen = depaginate(
                     self.app.client_manager.storage.object_list,
                     listing_key=lambda x: x['objects'],
-                    marker_key=lambda x: x['objects'][-1]['name'],
+                    marker_key=lambda x: x.get('next_marker'),
+                    truncated_key=lambda x: x['truncated'],
                     account=account, container=container, **kwargs)
             else:
                 resp = self.app.client_manager.storage.object_list(

@@ -291,7 +291,7 @@ context_pending_to_rowset(sqlite3 *db, struct sqlx_repctx_s *ctx)
 static GError*
 _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 {
-	guint count_errors = 0, count_success = 0;
+	guint count_success = 0;
 
 	NAME2CONST(n, ctx->sq3->name);
 	dump_request(__FUNCTION__, peers, "SQLX_REPLICATE", &n);
@@ -328,11 +328,9 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 					// restart a whole election
 					g_ptr_array_add(ctx->resync_todo, g_strdup(
 							gridd_client_url(*pc)));
-				} else {
-					++ count_errors;
-					g_string_append_printf (ctx->errors, " [%s/%d/%s]",
-							gridd_client_url(*pc), e->code, e->message);
 				}
+				g_string_append_printf(ctx->errors, " [%s/%d/%s]",
+						gridd_client_url(*pc), e->code, e->message);
 				g_clear_error(&e);
 			}
 		}

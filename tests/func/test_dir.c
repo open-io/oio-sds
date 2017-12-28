@@ -109,6 +109,26 @@ _test_reference_cycle_round (void)
 	g_strfreev (dirtab);
 	g_strfreev (srvtab);
 
+	/* delete with link */
+	err = oio_directory__delete (dir, url);
+	g_assert_error (err, GQ(), CODE_NOT_ALLOWED);
+	g_clear_error (&err);
+
+	/* unlink */
+	err = oio_directory__unlink (dir, url, NAME_SRVTYPE_META2);
+	g_assert_no_error (err);
+
+	/* delete with no link */
+	err = oio_directory__delete (dir, url);
+	g_assert_no_error (err);
+
+	/* link with no reference */
+	srvtab = NULL;
+	err = oio_directory__link (dir, url, NAME_SRVTYPE_META2, FALSE, &srvtab);
+	g_assert_error (err, GQ(), CODE_USER_NOTFOUND);
+	g_assert_null (srvtab);
+	g_clear_error (&err);
+
 	oio_url_pclean (&url);
 	oio_directory__destroy (dir);
 }
