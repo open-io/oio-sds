@@ -111,6 +111,7 @@ class Worker(object):
 
 
 class EventTypes(object):
+    ACCOUNT_SERVICES = 'account.services'
     CHUNK_NEW = 'storage.chunk.new'
     CHUNK_DELETED = 'storage.chunk.deleted'
     CONTAINER_NEW = 'storage.container.new'
