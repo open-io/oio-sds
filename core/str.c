@@ -707,6 +707,19 @@ gchar ** KV_extract_not_prefixed (gchar **kv, const char *prefix) {
 	return (gchar**) g_ptr_array_free(tmp, FALSE);
 }
 
+gchar *
+KV_get_value(gchar **kv, char *key)
+{
+	if (!kv)
+		return NULL;
+
+	for (gchar **p=kv; *p && *(p+1); p+=2) {
+		if (g_strcmp0(key, *p) == 0)
+			return *(p+1);
+	}
+	return NULL;
+}
+
 void oio_str_cleanv(gchar ***p) {
 	if (unlikely(p == NULL))
 		return;
