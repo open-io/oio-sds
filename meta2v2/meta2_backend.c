@@ -512,12 +512,6 @@ _init_container(struct sqlx_sqlite3_s *sq3,
 	if (!params->local && (err = _transaction_begin(sq3, url, &repctx)))
 		return err;
 
-	if (!err && params->storage_policy)
-		err = m2db_set_storage_policy(sq3, params->storage_policy, 0);
-	if (!err && params->version_policy) {
-		gint64 max = g_ascii_strtoll(params->version_policy, NULL, 10);
-		m2db_set_max_versions(sq3, max);
-	}
 	if (!err) {
 		m2db_set_ctime (sq3, oio_ext_real_time());
 		m2db_set_size(sq3, 0);
@@ -527,6 +521,12 @@ _init_container(struct sqlx_sqlite3_s *sq3,
 	if (!err && params->properties) {
 		for (gchar **p=params->properties; *p && *(p+1) ;p+=2)
 			sqlx_admin_set_str (sq3, *p, *(p+1));
+	}
+	if (!err && params->storage_policy)
+		err = m2db_set_storage_policy(sq3, params->storage_policy, TRUE);
+	if (!err && params->version_policy) {
+		gint64 max = g_ascii_strtoll(params->version_policy, NULL, 10);
+		m2db_set_max_versions(sq3, max);
 	}
 	if (!params->local)
 		err = sqlx_transaction_end(repctx, err);

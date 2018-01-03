@@ -237,6 +237,8 @@ gchar ** KV_extract_prefixed (gchar **kv, const char *prefix);
 /* @see KV_extract_prefixed(), with the keys left untouched */
 gchar ** KV_extract_not_prefixed (gchar **kv, const char *prefix);
 
+gchar * KV_get_value(gchar **kv, char *key);
+
 
 #ifdef __cplusplus
 }

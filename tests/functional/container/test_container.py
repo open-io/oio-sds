@@ -306,6 +306,20 @@ class TestMeta2Containers(BaseTestCase):
         self._create(params, 201)
         self._raw_insert(params, 204, chunks)
 
+    def test_create_with_unknown_storage_policy(self):
+        params = self.param_ref(self.ref)
+        headers = {}
+        headers['x-oio-action-mode'] = 'autocreate'
+        headers['Content-Type'] = 'application/json'
+
+        data = ('{"properties":{},' +
+                '"system":{"sys.m2.policy.storage": "unknown"}}')
+        resp = self.request('POST', self.url_container('create'),
+                            params=params, data=data, headers=headers)
+        self.assertEqual(resp.status, 500)
+        data = self.json_loads(resp.data)
+        self.assertEqual(data["status"], 480)
+
 
 class TestMeta2Contents(BaseTestCase):
     def setUp(self):
