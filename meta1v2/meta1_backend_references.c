@@ -142,6 +142,9 @@ meta1_backend_user_create(struct meta1_backend_s *m1,
 			}
 		}
 		err = sqlx_transaction_end(repctx, err);
+
+		if (!err)
+			meta1_backend_notify_services(m1, url);
 	}
 
 	sqlx_repository_unlock_and_close_noerror(sq3);
@@ -198,4 +201,3 @@ meta1_backend_user_info(struct meta1_backend_s *m1,
 	sqlx_repository_unlock_and_close_noerror(sq3);
 	return err;
 }
-
