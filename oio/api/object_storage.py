@@ -26,6 +26,7 @@ from urllib import quote_plus, unquote_plus
 
 from oio.common import exceptions as exc
 from oio.api.ec import ECWriteHandler
+from oio.api.io import MetachunkPreparer
 from oio.api.replication import ReplicatedWriteHandler
 from oio.api.backblaze_http import BackblazeUtilsException, BackblazeUtils
 from oio.api.backblaze import BackblazeWriteHandler, \
@@ -881,50 +882,32 @@ class ObjectStorageApi(object):
             account, container, obj, properties=properties,
             version=version, **kwargs)
 
-    def _content_preparer(self, account, container, obj_name,
-                          policy=None, **kwargs):
-        # TODO: optimize by asking more than one metachunk at a time
-        obj_meta, first_body = self.container.content_prepare(
-            account, container, obj_name, size=1, stgpol=policy,
-            autocreate=True, **kwargs)
-        storage_method = STORAGE_METHODS.load(obj_meta['chunk_method'])
-
-        def _fix_mc_pos(chunks, mc_pos):
-            for chunk in chunks:
-                raw_pos = chunk["pos"].split(".")
-                if storage_method.ec:
-                    chunk['num'] = int(raw_pos[1])
-                    chunk["pos"] = "%d.%d" % (mc_pos, chunk['num'])
-                else:
-                    chunk["pos"] = str(mc_pos)
-
-        def _metachunk_preparer():
-            mc_pos = kwargs.get('meta_pos', 0)
-            _fix_mc_pos(first_body, mc_pos)
-            yield first_body
-            while True:
-                mc_pos += 1
-                _, next_body = self.container.content_prepare(
-                        account, container, obj_name, 1, stgpol=policy,
-                        autocreate=True, **kwargs)
-                _fix_mc_pos(next_body, mc_pos)
-                yield next_body
-
-        return obj_meta, _metachunk_preparer
-
     def _generate_fullpath(self, account, container_name, path, version):
         return ['{0}/{1}/{2}/{3}'.format(quote_plus(account),
                                          quote_plus(container_name),
                                          quote_plus(path),
                                          version)]
 
-    def _object_create(self, account, container, obj_name, source,
-                       sysmeta, properties=None, policy=None,
-                       key_file=None, **kwargs):
-        self._patch_timeouts(kwargs)
-        obj_meta, chunk_prep = self._content_preparer(
-            account, container, obj_name,
+    def _object_upload(self, ul_handler, **kwargs):
+        """Upload data to rawx, measure time it takes."""
+        perfdata = kwargs.get('perfdata', self.container.perfdata)
+        if perfdata is not None:
+            upload_start = monotonic_time()
+        ul_chunks, ul_bytes, obj_checksum = ul_handler.stream()
+        if perfdata is not None:
+            upload_end = monotonic_time()
+            val = perfdata.get('rawx', 0.0) + upload_end - upload_start
+            perfdata['rawx'] = val
+        return ul_chunks, ul_bytes, obj_checksum
+
+    def _object_prepare(self, account, container, obj_name, source,
+                        sysmeta, policy=None,
+                        key_file=None, **kwargs):
+        """Call content/prepare, initialize chunk uploaders."""
+        chunk_prep = MetachunkPreparer(
+            self.container, account, container, obj_name,
             policy=policy, **kwargs)
+        obj_meta = chunk_prep.obj_meta
         obj_meta.update(sysmeta)
         obj_meta['content_path'] = obj_name
         obj_meta['container_id'] = cid_from_name(account, container).upper()
@@ -950,27 +933,42 @@ class ObjectStorageApi(object):
             handler = ReplicatedWriteHandler(
                 source, obj_meta, chunk_prep, storage_method, **kwargs)
 
-        perfdata = kwargs.get('perfdata', self.container.perfdata)
-        if perfdata is not None:
-            upload_start = monotonic_time()
-        final_chunks, bytes_transferred, content_checksum = handler.stream()
-        if perfdata is not None:
-            upload_end = monotonic_time()
-            val = perfdata.get('rawx', 0.0) + upload_end - upload_start
-            perfdata['rawx'] = val
+        return obj_meta, handler, chunk_prep
+
+    def _object_create(self, account, container, obj_name, source,
+                       sysmeta, properties=None, policy=None,
+                       key_file=None, **kwargs):
+        self._patch_timeouts(kwargs)
+
+        obj_meta, ul_handler, chunk_prep = self._object_prepare(
+            account, container, obj_name, source, sysmeta,
+            policy=policy, key_file=key_file,
+            **kwargs)
+
+        try:
+            ul_chunks, ul_bytes, obj_checksum = self._object_upload(
+                ul_handler, **kwargs)
+        except exc.OioException as ex:
+            self.logger.warn(
+                'Failed to upload all data (%s), deleting chunks', ex)
+            self._delete_orphan_chunks(
+                chunk_prep.all_chunks_so_far(),
+                obj_meta['container_id'],
+                **kwargs)
+            raise
 
         etag = obj_meta.get('etag')
-        if etag and etag.lower() != content_checksum.lower():
+        if etag and etag.lower() != obj_checksum.lower():
             raise exc.EtagMismatch(
-                "given etag %s != computed %s" % (etag, content_checksum))
-        obj_meta['etag'] = content_checksum
+                "given etag %s != computed %s" % (etag, obj_checksum))
+        obj_meta['etag'] = obj_checksum
 
-        data = {'chunks': final_chunks, 'properties': properties or {}}
+        data = {'chunks': ul_chunks, 'properties': properties or {}}
         try:
             # FIXME: we may just pass **obj_meta
             self.container.content_create(
-                account, container, obj_name, size=bytes_transferred,
-                checksum=content_checksum, data=data,
+                account, container, obj_name, size=ul_bytes,
+                checksum=obj_checksum, data=data,
                 stgpol=obj_meta['policy'],
                 version=obj_meta['version'], mime_type=obj_meta['mime_type'],
                 chunk_method=obj_meta['chunk_method'],
@@ -978,17 +976,22 @@ class ObjectStorageApi(object):
         except (exc.Conflict, exc.DeadlineReached) as ex:
             self.logger.warn(
                 'Failed to commit to meta2 (%s), deleting chunks', ex)
-            del_resps = self.blob_client.chunk_delete_many(
-                final_chunks, cid=obj_meta['container_id'], **kwargs)
-            for resp in del_resps:
-                if isinstance(resp, Exception):
-                    self.logger.warn('failed to delete chunk %s (%s)',
-                                     resp.chunk['url'], resp)
-                elif resp.status not in (204, 404):
-                    self.logger.warn('failed to delete chunk %s (HTTP %s)',
-                                     resp.chunk['url'], resp.status)
+            self._delete_orphan_chunks(ul_chunks, obj_meta['container_id'],
+                                       **kwargs)
             raise
-        return final_chunks, bytes_transferred, content_checksum
+        return ul_chunks, ul_bytes, obj_checksum
+
+    def _delete_orphan_chunks(self, chunks, cid, **kwargs):
+        """Delete chunks that have been orphaned by an unfinished upload."""
+        # FIXME(FVE): won't work with BackBlaze
+        del_resps = self.blob_client.chunk_delete_many(chunks, cid, **kwargs)
+        for resp in del_resps:
+            if isinstance(resp, Exception):
+                self.logger.warn('failed to delete chunk %s (%s)',
+                                 resp.chunk['url'], resp)
+            elif resp.status not in (204, 404):
+                self.logger.warn('failed to delete chunk %s (HTTP %s)',
+                                 resp.chunk['url'], resp.status)
 
     def _b2_credentials(self, storage_method, key_file):
         key_file = key_file or '/etc/oio/sds/b2-appkey.conf'

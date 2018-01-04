@@ -472,7 +472,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             self.assertRaises(
                 exc.NotFound, self.api.blob_client.chunk_head, chunk['url'])
 
-    def test_object_create_deadline_delete_chunks(self):
+    def test_object_create_commit_deadline_delete_chunks(self):
         name = random_str(16)
         # Simulate a deadline during commit
         self.api.container.content_create = \
@@ -493,6 +493,36 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         for chunk in chunks:
             self.assertRaises(
                 exc.NotFound, self.api.blob_client.chunk_head, chunk['url'])
+
+    def test_object_create_prepare_deadline_delete_chunks(self):
+        name = random_str(16)
+
+        class _Preparer(object):
+            def __init__(self, func):
+                self.func = func
+                self.call_count = 0
+
+            def __call__(self, *args, **kwargs):
+                if self.call_count > 1:
+                    raise exc.DeadlineReached()
+                res = self.func(*args, **kwargs)
+                # Hack the size of chunks, will become chunk_size
+                for chunk in res[1]:
+                    chunk['size'] = 4
+                res[0]['chunk_size'] = 4
+                self.call_count += 1
+                return res
+
+        # Simulate a deadline during prepare
+        self.api.container.content_prepare = \
+            Mock(side_effect=_Preparer(self.api.container.content_prepare))
+        self.api._blob_client = Mock(wraps=self.api.blob_client)
+        # Ensure the error is passed to the upper level
+        self.assertRaises(
+            exc.DeadlineReached, self.api.object_create, self.account,
+            name, obj_name=name, data=name+name)
+        # Ensure that the chunk deletion has been called with proper args
+        self.api.blob_client.chunk_delete_many.assert_called_once()
 
     def test_container_refresh(self):
         account = random_str(32)
