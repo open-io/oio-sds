@@ -26,6 +26,7 @@ from oio.common.http_eventlet import http_connect
 from oio.common.utils import GeneratorIO, group_chunk_errors, \
     deadline_to_timeout
 from oio.common import green
+from oio.common.storage_method import STORAGE_METHODS
 
 logger = logging.getLogger(__name__)
 
@@ -536,6 +537,54 @@ class MetachunkWriter(object):
             raise exc.OioException(
                 "RAWX write failure, quorum not reached (%d/%d): %s" %
                 (len(successes), self.quorum, errors))
+
+
+class MetachunkPreparer(object):
+    """Get metadata for a new object and continuously yield new metachunks."""
+
+    def __init__(self, container_client, account, container, obj_name,
+                 policy=None, **kwargs):
+        self.account = account
+        self.container = container
+        self.obj_name = obj_name
+        self.policy = policy
+        self.container_client = container_client
+        self.extra_kwargs = kwargs
+
+        # TODO: optimize by asking more than one metachunk at a time
+        self.obj_meta, self.first_body = self.container_client.content_prepare(
+            account, container, obj_name, size=1, stgpol=policy,
+            autocreate=True, **kwargs)
+        self.stg_method = STORAGE_METHODS.load(self.obj_meta['chunk_method'])
+
+        self._all_chunks = list()
+
+    def _fix_mc_pos(self, chunks, mc_pos):
+        for chunk in chunks:
+            raw_pos = chunk['pos'].split('.')
+            if self.stg_method.ec:
+                chunk['num'] = int(raw_pos[1])
+                chunk['pos'] = '%d.%d' % (mc_pos, chunk['num'])
+            else:
+                chunk['pos'] = str(mc_pos)
+
+    def __call__(self):
+        mc_pos = self.extra_kwargs.get('meta_pos', 0)
+        self._fix_mc_pos(self.first_body, mc_pos)
+        self._all_chunks.extend(self.first_body)
+        yield self.first_body
+        while True:
+            mc_pos += 1
+            _, next_body = self.container_client.content_prepare(
+                    self.account, self.container, self.obj_name, 1,
+                    stgpol=self.policy, autocreate=True, **self.extra_kwargs)
+            self._fix_mc_pos(next_body, mc_pos)
+            self._all_chunks.extend(next_body)
+            yield next_body
+
+    def all_chunks_so_far(self):
+        """Get the list of all chunks yielded so far."""
+        return self._all_chunks
 
 
 def make_iter_from_resp(resp):
