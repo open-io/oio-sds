@@ -2,7 +2,7 @@ cliff>=2.0.0,<2.1.0
 eventlet!=0.18.3,!=0.20.1,<0.21.0,>=0.18.2
 gunicorn>=19.4.5
 lxml
-plyvel>=0.9
+plyvel>=0.9,<1.0.0
 PyECLib>=1.2.0
 pyxattr>=0.4
 PyYAML>=3.10
