@@ -17,6 +17,7 @@
 import logging
 import time
 from mock import MagicMock as Mock
+from functools import partial
 from oio.api.object_storage import ObjectStorageApi
 from oio.common.constants import CHUNK_HEADERS
 from oio.common.http_urllib3 import get_pool_manager
@@ -470,6 +471,58 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         for chunk in chunks:
             self.assertRaises(
                 exc.NotFound, self.api.blob_client.chunk_head, chunk['url'])
+
+    def test_object_create_commit_deadline_delete_chunks(self):
+        name = random_str(16)
+        # Simulate a deadline during commit
+        self.api.container.content_create = \
+            Mock(wraps=partial(self.api.container.content_create,
+                               deadline=0.0))
+        self.api._blob_client = Mock(wraps=self.api.blob_client)
+        # Ensure the error is passed to the upper level
+        self.assertRaises(
+            exc.DeadlineReached, self.api.object_create, self.account,
+            name, obj_name=name, data=name)
+        # Ensure that the chunk deletion has been called with proper args
+        create_kwargs = self.api.container.content_create.call_args[1]
+        chunks = create_kwargs['data']['chunks']
+        self.api.blob_client.chunk_delete_many.assert_called_once()
+        self.assertEqual(
+            chunks, self.api.blob_client.chunk_delete_many.call_args[0][0])
+        # Ensure the chunks have actually been deleted
+        for chunk in chunks:
+            self.assertRaises(
+                exc.NotFound, self.api.blob_client.chunk_head, chunk['url'])
+
+    def test_object_create_prepare_deadline_delete_chunks(self):
+        name = random_str(16)
+
+        class _Preparer(object):
+            def __init__(self, func):
+                self.func = func
+                self.call_count = 0
+
+            def __call__(self, *args, **kwargs):
+                if self.call_count > 1:
+                    raise exc.DeadlineReached()
+                res = self.func(*args, **kwargs)
+                # Hack the size of chunks, will become chunk_size
+                for chunk in res[1]:
+                    chunk['size'] = 4
+                res[0]['chunk_size'] = 4
+                self.call_count += 1
+                return res
+
+        # Simulate a deadline during prepare
+        self.api.container.content_prepare = \
+            Mock(side_effect=_Preparer(self.api.container.content_prepare))
+        self.api._blob_client = Mock(wraps=self.api.blob_client)
+        # Ensure the error is passed to the upper level
+        self.assertRaises(
+            exc.DeadlineReached, self.api.object_create, self.account,
+            name, obj_name=name, data=name+name)
+        # Ensure that the chunk deletion has been called with proper args
+        self.api.blob_client.chunk_delete_many.assert_called_once()
 
     def test_container_refresh(self):
         account = random_str(32)

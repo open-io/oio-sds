@@ -15,10 +15,12 @@
 
 from __future__ import print_function
 
+import time
 from oio.directory.client import DirectoryClient
 from oio.common import exceptions as exc
 from oio.conscience.client import ConscienceClient
 from oio.rdir.client import RdirDispatcher
+from oio.account.client import AccountClient
 from tests.utils import random_str, BaseTestCase
 
 
@@ -90,6 +92,21 @@ class TestDirectoryAPI(BaseTestCase):
 
         # clean
         self._clean(name, True)
+
+    def test_create_without_account(self):
+        account = random_str(32)
+        name = random_str(32)
+        account_client = AccountClient(self.conf)
+
+        self.assertRaises(exc.NotFound, account_client.account_show, account)
+        self.api.create(account, name)
+        time.sleep(0.5)  # ensure account event have been processed
+        self.assertEqual(account_client.account_show(account)['id'],
+                         account)
+
+        # clean
+        self.api.delete(account, name)
+        account_client.account_delete(account)
 
     def test_delete(self):
         name = random_str(32)

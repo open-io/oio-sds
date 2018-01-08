@@ -223,6 +223,7 @@ _init_lb(int nb_services)
 		g_snprintf(item->id, LIMIT_LENGTH_SRVID, "127.0.0.1:%d", 6000+i);
 		oio_lb_world__feed_slot(lb_world, "*", item);
 	}
+	oio_lb_world__purge_old_generations(lb_world);
 	oio_lb_world__debug(lb_world);
 
 	struct oio_lb_pool_s *pool = oio_lb_world__create_pool(lb_world,

@@ -553,8 +553,8 @@ class ContainerClient(ProxyClient):
         data = json.dumps(data)
         resp, body = self._direct_request(
             'POST', uri, data=data, params=params, **kwargs)
-        resp_headers = extract_content_headers_meta(resp.headers)
-        return resp_headers, body
+        obj_meta = extract_content_headers_meta(resp.headers)
+        return obj_meta, body
 
     def content_show(self, account=None, reference=None, path=None,
                      properties=None, cid=None, content=None, version=None,

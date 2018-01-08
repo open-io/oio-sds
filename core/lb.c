@@ -117,6 +117,9 @@ struct _slot_item_s
  * criteria. */
 struct oio_lb_slot_s
 {
+	/* A pointer to the world owning this slot. */
+	struct oio_lb_world_s *world;
+
 	/* the sum of all the individual weights. */
 	oio_weight_acc_t sum_weight;
 
@@ -379,14 +382,22 @@ _item_is_too_popular(struct polling_ctx_s *ctx, const oio_location_t item,
 {
 	for (int level = 1; level <= 3; level++) {
 		GQuark key = key_from_loc_level(item, level);
-		// How many different locations there is under this level
+		// How many different items there is under this level
 		guint32 n_leafs = GPOINTER_TO_UINT(
 				g_datalist_id_get_data(&(slot->items_by_loc[level]), key));
+		if (unlikely(n_leafs == 0)) {
+			GRID_WARN("BUG: LB reload not followed by rehash");
+			n_leafs = 1;
+		}
 		// How often the location has been chosen
 		guint32 popularity = GPOINTER_TO_UINT(
 				g_datalist_id_get_data(ctx->counters + level, key));
 		// Maximum number of elements with this location that we can take
 		guint32 max = 1 + (ctx->n_targets - 1) / (slot->items->len / n_leafs);
+
+		// This gives better results on well balanced platforms,
+		// but is not resilient to service failures.
+		//guint32 max = 1 + (ctx->n_targets - 1) / slot->locs_by_level[level];
 
 		GRID_TRACE("At level %d, %08X has popularity: %u, leafs: %u, max: %u",
 				level, key, popularity, n_leafs, max);
@@ -433,6 +444,7 @@ _slot_destroy (struct oio_lb_slot_s *slot)
 		g_datalist_clear(&(slot->items_by_loc[level]));
 	}
 	oio_str_clean (&slot->name);
+	slot->world = NULL;
 	g_free (slot);
 }
 
@@ -457,6 +469,7 @@ _level_datalist_incr_loc(GData **counters, oio_location_t loc)
 	for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
 		GData **counter = counters + level;
 		GQuark key = key_from_loc_level(loc, level);
+		// Will be 0 (NULL) if key does not exist
 		guint32 count = GPOINTER_TO_UINT(
 				g_datalist_id_get_data(counter, key));
 		count++;
@@ -580,8 +593,8 @@ static gboolean
 _local_slot__poll(struct oio_lb_slot_s *slot, const guint16 bit_shift,
 		gboolean reversed, struct polling_ctx_s *ctx)
 {
-	if (_slot_needs_rehash (slot))
-		_slot_rehash (slot);
+	if (unlikely(_slot_needs_rehash(slot)))
+		GRID_WARN("BUG: LB reload not followed by rehash");
 
 	GRID_TRACE2(
 			"%s slot=%s sum=%"G_GUINT32_FORMAT
@@ -691,8 +704,8 @@ _local_target__is_satisfied(struct oio_lb_pool_LOCAL_s *lb,
 			GRID_DEBUG ("Slot [%s] not ready", name);
 			continue;
 		}
-		if (_slot_needs_rehash(slot)) {
-			_slot_rehash(slot);
+		if (unlikely(_slot_needs_rehash(slot))) {
+			GRID_WARN("BUG: LB reload not followed by rehash");
 		}
 		oio_location_t *known = ctx->next_polled;
 		do {
@@ -1051,6 +1064,7 @@ _world_create_slot (struct oio_lb_world_s *self, const char *name)
 	g_rw_lock_reader_unlock(&self->lock);
 	if (!slot) {
 		slot = g_malloc0(sizeof(*slot));
+		slot->world = self;
 		slot->name = g_strdup(name);
 		slot->items = g_array_new(FALSE, TRUE, sizeof(struct _slot_item_s));
 		for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
@@ -1246,7 +1260,7 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 	}
 
 	if (slot->flag_rehash_on_update && _slot_needs_rehash (slot))
-		_slot_rehash (slot);
+		_slot_rehash(slot);
 
 	/* This is an optimization to speedup the locations comparisons.
 	 * It needs __builtin_clzll which is a GCC builtin. */
@@ -1336,6 +1350,9 @@ _world_purge_slot_items(struct oio_lb_world_s *self, guint32 age)
 			slot->flag_dirty_weights = 1;
 			slot->flag_dirty_order = 1;
 		}
+
+		if (_slot_needs_rehash(slot))
+			_slot_rehash(slot);
 
 		return FALSE;
 	}

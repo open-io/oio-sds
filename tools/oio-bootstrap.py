@@ -782,7 +782,7 @@ pipeline = volume_index
 pipeline = volume_index
 
 [handler:account.services]
-pipeline = noop
+pipeline = account_update
 
 [filter:content_cleaner]
 use = egg:oio#content_cleaner

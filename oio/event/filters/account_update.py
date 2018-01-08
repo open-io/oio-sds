@@ -14,8 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from eventlet import Timeout
-from oio.common.exceptions import ClientException
+from oio.common.exceptions import ClientException, OioTimeout
 from oio.common.logger import get_logger
 from oio.account.client import AccountClient
 from oio.event.evob import Event, EventError
@@ -56,10 +55,10 @@ class AccountUpdateFilter(Filter):
             elif event.event_type == EventTypes.CONTAINER_NEW:
                 body['mtime'] = mtime
             try:
-                with Timeout(ACCOUNT_TIMEOUT):
-                    self.account.container_update(
-                        url.get('account'), url.get('user'), body)
-            except Timeout as exc:
+                self.account.container_update(
+                    url.get('account'), url.get('user'), body,
+                    read_timeout=ACCOUNT_TIMEOUT)
+            except OioTimeout as exc:
                 msg = 'account update failure: %s' % str(exc)
                 resp = EventError(event=Event(env), body=msg)
                 return resp(env, cb)
@@ -74,6 +73,10 @@ class AccountUpdateFilter(Filter):
                     msg = 'account update failure: %s' % str(exc)
                     resp = EventError(event=Event(env), body=msg)
                     return resp(env, cb)
+        elif event.event_type == EventTypes.ACCOUNT_SERVICES:
+            url = event.env.get('url')
+            self.account.account_create(
+                url.get('account'), read_timeout=ACCOUNT_TIMEOUT)
         return self.app(env, cb)
 
 
