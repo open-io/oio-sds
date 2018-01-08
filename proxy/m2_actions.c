@@ -1314,8 +1314,9 @@ _m2_container_create (struct req_args_s *args, struct json_object *jbody)
 	if (err)
 		return _reply_m2_error(args, err);
 
-	err = _m2_container_create_with_properties(
-			args, properties, OPT("stgpol"), OPT("verpol"));
+	err = _m2_container_create_with_properties(args, properties,
+			KV_get_value(properties, M2V2_ADMIN_STORAGE_POLICY),
+			KV_get_value(properties, M2V2_ADMIN_VERSIONING_POLICY));
 	g_strfreev (properties);
 
 	if (err && CODE_IS_NOTFOUND(err->code))
@@ -1404,7 +1405,8 @@ _m2_container_create_many(struct req_args_s *args, struct json_object *jbody)
 
 		oio_url_set(args->url, OIOURL_USER, name);
 		err = _m2_container_create_with_properties(args, properties,
-				OPT("stgpol"), OPT("verpol"));
+				KV_get_value(properties, M2V2_ADMIN_STORAGE_POLICY),
+				KV_get_value(properties, M2V2_ADMIN_VERSIONING_POLICY));
 		g_strfreev(properties);
 		_bulk_item_result(gresponse, i, name, err, HTTP_CODE_CREATED);
 		if (err) g_clear_error(&err);

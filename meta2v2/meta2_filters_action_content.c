@@ -49,13 +49,19 @@ enum content_action_e
 
 static void
 _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		GSList *beans, const char *name)
+		GSList *beans, const char *name, gboolean send_chunks)
 {
-	void forward (GSList *list_of_beans) {
+	guint n_events = 1;
+	guint cur_event = 0;
+	void forward(GSList *list_of_beans) {
 		gchar tmp[256];
 		g_snprintf (tmp, sizeof(tmp), "%s.%s", META2_EVENTS_PREFIX, name);
 
-		GString *gs = oio_event__create (tmp, url);
+		GString *gs = oio_event__create(tmp, url);
+		g_string_append_c(gs, ',');
+		oio_str_gstring_append_json_pair_int(gs, "part", cur_event++);
+		g_string_append_c(gs, ',');
+		oio_str_gstring_append_json_pair_int(gs, "parts", n_events);
 		g_string_append_static (gs, ",\"data\":[");
 		meta2_json_dump_all_xbeans (gs, list_of_beans);
 		g_string_append_static (gs, "]}");
@@ -65,13 +71,22 @@ _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	if (!m2b->notifier)
 		return;
 
-	if (g_slist_length (beans) < 16)
-		forward (beans);
-	else {
+	guint beans_len = g_slist_length(beans);
+	if (!send_chunks) {
+		GSList *non_chunks = NULL;
+		for (GSList *l = beans; l; l = l->next) {
+			if (DESCR(l->data) != &descr_struct_CHUNKS)
+				non_chunks = g_slist_prepend(non_chunks, l->data);
+		}
+		forward(non_chunks);
+		g_slist_free(non_chunks);
+	} else if (beans_len < 16) {
+		forward(beans);
+	} else {
 		/* first, notify everything but the chunks */
 		GSList *non_chunks = NULL;
 		struct bean_CONTENTS_HEADERS_s *header = NULL;
-		for (GSList *l=beans; l ;l=l->next) {
+		for (GSList *l = beans; l; l = l->next) {
 			if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
 				if (header)
 					GRID_WARN("Several content headers in same event!");
@@ -82,6 +97,7 @@ _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 				non_chunks = g_slist_prepend (non_chunks, l->data);
 			}
 		}
+		n_events += 1 + (beans_len - g_slist_length(non_chunks)) / 16;
 		if (non_chunks) {
 			forward (non_chunks);
 			g_slist_free (non_chunks);
@@ -93,7 +109,7 @@ _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		/* then notify each chunks by batches of 16 items */
 		GSList *batch = NULL;
 		guint count = 0;
-		for (GSList *l=beans; l ;l=l->next) {
+		for (GSList *l = beans; l; l = l->next) {
 			if (&descr_struct_CHUNKS != DESCR(l->data))
 				continue;
 			batch = g_slist_prepend (batch, l->data);
@@ -151,9 +167,9 @@ _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 		meta2_filter_ctx_set_error(ctx, e);
 		rc = FILTER_KO;
 	} else {
-		_m2b_notify_beans(m2b, url, added, "content.new");
+		_m2b_notify_beans(m2b, url, added, "content.new", FALSE);
 		if (deleted)
-			_m2b_notify_beans(m2b, url, deleted, "content.deleted");
+			_m2b_notify_beans(m2b, url, deleted, "content.deleted", TRUE);
 		_on_bean_ctx_send_list(obc);
 		rc = FILTER_OK;
 	}
@@ -264,7 +280,7 @@ meta2_filter_action_append_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	_m2b_notify_beans(m2b, url, obc->l, "content.append");
+	_m2b_notify_beans(m2b, url, obc->l, "content.append", FALSE);
 	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
@@ -330,7 +346,7 @@ meta2_filter_action_drain_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	_m2b_notify_beans(m2b, url, obc->l, "content.drained");
+	_m2b_notify_beans(m2b, url, obc->l, "content.drained", TRUE);
 	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
@@ -355,7 +371,7 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	_m2b_notify_beans(m2b, url, obc->l, "content.deleted");
+	_m2b_notify_beans(m2b, url, obc->l, "content.deleted", TRUE);
 	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
@@ -384,9 +400,9 @@ meta2_filter_action_truncate_content(struct gridd_filter_ctx_s *ctx,
 	}
 
 	if (deleted)
-		_m2b_notify_beans(m2b, url, deleted, "content.deleted");
+		_m2b_notify_beans(m2b, url, deleted, "content.deleted", TRUE);
 	if (added)
-		_m2b_notify_beans(m2b, url, added, "content.new");
+		_m2b_notify_beans(m2b, url, added, "content.new", FALSE);
 
 	_bean_cleanl2(added);
 	_bean_cleanl2(deleted);
@@ -573,7 +589,7 @@ meta2_filter_action_touch_content(struct gridd_filter_ctx_s *ctx,
 			m2b, url, M2V2_FLAG_ALLPROPS|M2V2_FLAG_HEADERS,
 			_bean_list_cb, &beans);
     if (!err) {
-		_m2b_notify_beans(m2b, url, beans, "content.new");
+		_m2b_notify_beans(m2b, url, beans, "content.new", FALSE);
 		_bean_cleanl2(beans);
 		return FILTER_OK;
 	}

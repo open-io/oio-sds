@@ -27,6 +27,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <glib.h>
 #include <zmq.h>
+#include <math.h>
 
 #include <core/oio_core.h>
 #include <events/events_variables.h>
@@ -49,6 +50,8 @@ static void _q_destroy (struct oio_events_queue_s *self);
 static void _q_send (struct oio_events_queue_s *self, gchar *msg);
 static void _q_send_overwritable(struct oio_events_queue_s *self, gchar *key, gchar *msg);
 static gboolean _q_is_stalled (struct oio_events_queue_s *self);
+static gint64 _q_get_health(struct oio_events_queue_s *self);
+
 static void _q_set_buffering (struct oio_events_queue_s *self, gint64 v);
 static GError * _q_run (struct oio_events_queue_s *self,
 		gboolean (*running) (gboolean pending));
@@ -59,6 +62,7 @@ static struct oio_events_queue_vtable_s vtable_BEANSTALKD =
 	.send = _q_send,
 	.send_overwritable = _q_send_overwritable,
 	.is_stalled = _q_is_stalled,
+	.get_health = _q_get_health,
 	.set_buffering = _q_set_buffering,
 	.run = _q_run
 };
@@ -75,6 +79,7 @@ struct _queue_BEANSTALKD_s
 	GAsyncQueue *queue;
 	gchar *endpoint;
 	gchar *tube;
+	gint64 pending_events;
 
 	struct oio_events_queue_buffer_s buffer;
 };
@@ -246,7 +251,7 @@ _use_tube (int fd, const char *name)
 }
 
 static GError *
-_check_server(int fd)
+_check_server(struct _queue_BEANSTALKD_s *q, int fd)
 {
 	gchar buf[2048];
 
@@ -278,6 +283,8 @@ _check_server(int fd)
 		}
 		g_strfreev(lines);
 	}
+
+	q->pending_events = total;
 
 	const gint64 max_jobs = oio_events_beanstalkd_check_level_deny;
 	if (max_jobs > 0 && total > max_jobs) {
@@ -374,7 +381,7 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 		/* Maybe do a periodic check of the beanstalkd tube */
 		if (oio_events_beanstalkd_check_period > 0 &&
 				last_check < OLDEST(now, oio_events_beanstalkd_check_period)) {
-			GError *err = _check_server(fd);
+			GError *err = _check_server(q, fd);
 			if (intercept_errors)
 				(*intercept_errors) (err);
 			if (err) {
@@ -477,4 +484,14 @@ _q_is_stalled (struct oio_events_queue_s *self)
 	if (l <= 0)
 		return FALSE;
 	return ((guint)l) >= oio_events_common_max_pending;
+}
+
+static gint64
+_q_get_health(struct oio_events_queue_s *self)
+{
+	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s*) self;
+	EXTRA_ASSERT(q != NULL && q->vtable == &vtable_BEANSTALKD);
+
+	gint64 res = (gint64) (100.0 / (1.0 + log(1.0 + q->pending_events * 0.1)));
+	return MIN(SCORE_MAX, res);
 }

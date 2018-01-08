@@ -35,6 +35,9 @@ void oio_events_queue__send_overwritable(struct oio_events_queue_s *self,
  * the queue won't deny events. */
 gboolean oio_events_queue__is_stalled (struct oio_events_queue_s *self);
 
+/* Get a health metric for the events queue, from 0 (bad) to 100 (good). */
+gint64 oio_events_queue__get_health(struct oio_events_queue_s *self);
+
 GError * oio_events_queue__run (struct oio_events_queue_s *self,
 		gboolean (*running) (gboolean pending));
 

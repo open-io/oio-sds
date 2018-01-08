@@ -64,6 +64,15 @@ oio_events_queue__is_stalled (struct oio_events_queue_s *self)
 	EVTQ_CALL(self,is_stalled)(self);
 }
 
+gint64
+oio_events_queue__get_health(struct oio_events_queue_s *self)
+{
+	if (VTABLE_HAS(self,struct oio_events_queue_abstract_s*,get_health)) {
+		EVTQ_CALL(self,get_health)(self);
+	}
+	return 100;
+}
+
 GError *
 oio_events_queue__run (struct oio_events_queue_s *self,
 		gboolean (*running) (gboolean pending))
