@@ -25,7 +25,7 @@ import pwd
 from string import Template
 import re
 import argparse
-
+import uuid
 
 template_redis = """
 daemonize no
@@ -855,6 +855,7 @@ log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
 syslog_prefix = OIO,${NS},rdir,${SRVNUM}
+uuid = ${UUID}
 """
 
 template_admin = """
@@ -1411,7 +1412,9 @@ def generate(options):
             f.write(tpl.safe_substitute(env))
         with open(config(env), 'w+') as f:
             tpl = Template(template_rdir)
+            env['UUID'] = uuid.uuid4()
             f.write(tpl.safe_substitute(env))
+        del env['UUID']
         with open(watch(env), 'w+') as f:
             tpl = Template(template_rdir_watch)
             f.write(tpl.safe_substitute(env))
