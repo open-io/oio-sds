@@ -62,9 +62,10 @@ class Target(object):
 
 class Checker(object):
     def __init__(self, namespace, concurrency=50,
-                 error_file=None, rebuild_file=None):
+                 error_file=None, rebuild_file=None, full=True):
         self.pool = GreenPool(concurrency)
         self.error_file = error_file
+        self.full = bool(full)
         if self.error_file:
             f = open(self.error_file, 'a')
             self.error_writer = csv.writer(f, delimiter=' ')
@@ -158,7 +159,7 @@ class Checker(object):
             db_meta = obj_listing[chunk]
 
         try:
-            xattr_meta = self.blob_client.chunk_head(chunk)
+            xattr_meta = self.blob_client.chunk_head(chunk, xattr=self.full)
         except exc.NotFound as e:
             self.chunk_not_found += 1
             error = True
@@ -168,7 +169,7 @@ class Checker(object):
             error = True
             print('  Exception chunk "%s": %s' % (target, str(e)))
         else:
-            if db_meta:
+            if db_meta and self.full:
                 error = self._check_chunk_xattr(target, db_meta, xattr_meta)
 
         if error:
@@ -418,13 +419,17 @@ def main():
     parser.add_argument('--output-for-blob-rebuilder',
                         help="Write chunk errors in a file with a format " +
                         "suitable as oio-blob-rebuilder input")
+    parser.add_argument('-p', '--presence',
+                        action='store_true', default=False,
+                        help="Presence check, the xattr check is skipped")
     parser.add_argument('-v', '--verbose',
                         action='store_true', help='verbose output')
 
     args = parser.parse_args()
 
     checker = Checker(args.namespace, error_file=args.output,
-                      rebuild_file=args.output_for_blob_rebuilder)
+                      rebuild_file=args.output_for_blob_rebuilder,
+                      full=not args.presence)
     if not os.isatty(sys.stdin.fileno()):
         source = sys.stdin
     else:
