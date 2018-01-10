@@ -195,12 +195,17 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 	}
 
 	/* Check the chunk's existence */
-	int flags = (r->method_number == M_GET ||
-			r->method_number == M_OPTIONS ||
-			r->method_number == M_DELETE)?
-				 RESOURCE_STAT_CHUNK_READ_ATTRS : 0;
-	if (r->method_number == M_PUT || r->method_number == M_POST)
+	int flags = 0;
+
+	if (r->method_number == M_GET) {
+		const char *value = apr_table_get(r->headers_in, "X-oio-xattr");
+		if (oio_str_parse_bool(value, TRUE))
+			flags |= RESOURCE_STAT_CHUNK_READ_ATTRS;
+	} else if (r->method_number == M_OPTIONS) {
+		flags |= RESOURCE_STAT_CHUNK_READ_ATTRS;
+	} else if (r->method_number == M_PUT || r->method_number == M_POST) {
 		flags |= RESOURCE_STAT_CHUNK_PENDING;
+	}
 
 	resource_stat_chunk(resource, flags);
 
