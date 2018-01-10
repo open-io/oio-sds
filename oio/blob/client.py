@@ -19,7 +19,8 @@ from urllib3 import Timeout
 from urllib3.exceptions import HTTPError
 from oio.common.http import get_pool_manager
 from oio.common import exceptions as exc, utils
-from oio.common.constants import chunk_headers, chunk_xattr_keys_optional
+from oio.common.constants import chunk_headers, chunk_xattr_keys_optional, \
+        HEADER_PREFIX
 from oio.api.io import ChunkReader
 from oio.api.replication import ReplicatedMetachunkWriter, FakeChecksum
 from oio.common.storage_method import STORAGE_METHODS
@@ -112,7 +113,9 @@ class BlobClient(object):
         return headers, stream
 
     def chunk_head(self, url, **kwargs):
-        resp = self.http_pool.request('HEAD', url)
+        xattr = bool(kwargs.get('xattr', True))
+        resp = self.http_pool.request(
+                'HEAD', url, headers={HEADER_PREFIX + 'xattr': xattr})
         if resp.status == 200:
             return extract_headers_meta(resp.headers)
         else:
