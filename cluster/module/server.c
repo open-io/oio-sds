@@ -82,6 +82,10 @@ static GSList *config_paths = NULL;
 #  define LIMIT_LENGTH_SRVDESCR (LIMIT_LENGTH_SRVTYPE + 1 + STRLEN_ADDRINFO)
 # endif
 
+# ifndef LIMIT_LENGTH_UUID
+#  define LIMIT_LENGTH_UUID (36 + 1)
+# endif
+
 struct conscience_srv_s {
 	addr_info_t addr;
 
@@ -98,6 +102,7 @@ struct conscience_srv_s {
 	struct conscience_srv_s *prev;
 
 	gchar description[LIMIT_LENGTH_SRVDESCR];
+	gchar uuid[LIMIT_LENGTH_UUID];
 };
 
 struct conscience_srvtype_s
@@ -512,6 +517,22 @@ conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_
 			p_srv = conscience_srvtype_register_srv(srvtype, &si->addr);
 			g_assert_nonnull (p_srv);
 			really_first = tag_first && tag_first->type == STVT_BOOL && tag_first->value.b;
+
+			/* retrieve UUID if present */
+			if (si->tags) {
+				const guint max = si->tags->len;
+				for (guint i = 0; i < max; i++) {
+					struct service_tag_s *tag = g_ptr_array_index(si->tags, i);
+					if (tag == tag_first) continue;
+
+					if (g_strcmp0(tag->name, "tag.uuid")) {
+						continue;
+					}
+
+					service_tag_to_string(tag, p_srv->uuid, LIMIT_LENGTH_UUID);
+					GRID_TRACE("associate %s to %s", p_srv->description, p_srv->uuid);
+				}
+			}
 		}
 	}
 
