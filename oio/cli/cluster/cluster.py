@@ -76,27 +76,28 @@ class ClusterList(lister.Lister):
                 location = tags.get('tag.loc', 'n/a')
                 slots = tags.get('tag.slots', 'n/a')
                 volume = tags.get('tag.vol', 'n/a')
+                uuid = tags.get('tag.uuid', 'n/a')
                 addr = srv['addr']
                 up = tags.get('tag.up', 'n/a')
                 score = srv['score']
                 if parsed_args.stats:
                     stats = ["%s=%s" % (k, v) for k, v in tags.items()
                              if k.startswith('stat.')]
-                    values = (srv_type, addr, volume, location,
+                    values = (srv_type, addr, uuid, volume, location,
                               slots, up, score, " ".join(stats))
                 else:
-                    values = (srv_type, addr, volume, location,
+                    values = (srv_type, addr, uuid, volume, location,
                               slots, up, score)
                 yield values
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         if parsed_args.stats:
-            columns = ('Type', 'Id', 'Volume', 'Location', 'Slots', 'Up',
-                       'Score', 'Stats')
+            columns = ('Type', 'Addr', 'Id', 'Volume', 'Location', 'Slots',
+                       'Up', 'Score', 'Stats')
         else:
-            columns = ('Type', 'Id', 'Volume', 'Location', 'Slots', 'Up',
-                       'Score')
+            columns = ('Type', 'Addr', 'Id', 'Volume', 'Location', 'Slots',
+                       'Up', 'Score')
         return columns, self._list_services(parsed_args)
 
 
