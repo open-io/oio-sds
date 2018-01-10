@@ -24,6 +24,7 @@ class RawxStat(HttpStat):
     rawx_stat_keys = [
             ("counter", "req.hits", "stat.total_reqpersec"),
             ("counter", "req.time", "stat.total_avreqtime"),
+            ("config",  "uuid",     "tag.uuid"),
     ]
 
     def configure(self):

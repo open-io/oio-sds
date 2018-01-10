@@ -24,6 +24,7 @@ import os
 import pwd
 from string import Template
 import re
+import uuid
 import argparse
 
 
@@ -212,6 +213,7 @@ DavDepthInfinity Off
 grid_docroot           ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
 grid_namespace         ${NS}
 grid_dir_run           ${RUNDIR}
+grid_uuid              ${UUID}
 
 # How many hexdigits must be used to name the indirection directories
 grid_hash_width        3
@@ -1294,7 +1296,9 @@ def generate(options):
                 f.write(tpl.safe_substitute(env))
             # service
             tpl = Template(template_rawx_service)
+            env['UUID'] = uuid.uuid4()
             to_write = tpl.safe_substitute(env)
+            del env['UUID']
             if options.get(OPENSUSE, None):
                 to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
             with open(httpd_config(env), 'w+') as f:

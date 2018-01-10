@@ -101,6 +101,16 @@ dav_rawx_merge_server_config(apr_pool_t *p, void *base UNUSED, void *overrides)
 }
 
 static const char *
+dav_rawx_cmd_gridconfig_uuid(cmd_parms *cmd, void *config UNUSED, const char *arg1)
+{
+	dav_rawx_server_conf *conf =
+		ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
+
+	g_strlcpy(conf->uuid, arg1, sizeof(conf->uuid));
+	return NULL;
+}
+
+static const char *
 dav_rawx_cmd_gridconfig_hash_width(cmd_parms *cmd, void *config UNUSED, const char *arg1)
 {
 	dav_rawx_server_conf *conf =
@@ -384,7 +394,7 @@ rawx_hook_post_config(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp UNU
 			g_strlcpy(conf->rawx_id, url, sizeof(conf->rawx_id));
 
 			gerr = volume_service_lock (conf->docroot, NAME_SRVTYPE_RAWX,
-					url, conf->ns_name);
+					conf->uuid ? conf->uuid : url, conf->ns_name);
 			if (!gerr)
 				volume_validated = 1;
 			else {
@@ -434,6 +444,7 @@ label_error:
 
 static const command_rec dav_rawx_cmds[] =
 {
+    AP_INIT_TAKE1("grid_uuid",        dav_rawx_cmd_gridconfig_uuid,        NULL, RSRC_CONF, "UUID of service"),
     AP_INIT_TAKE1("grid_hash_width",  dav_rawx_cmd_gridconfig_hash_width,  NULL, RSRC_CONF, "hash width on a chunk's name"),
     AP_INIT_TAKE1("grid_hash_depth",  dav_rawx_cmd_gridconfig_hash_depth,  NULL, RSRC_CONF, "hash depth on a chunk's name"),
     AP_INIT_TAKE1("grid_docroot",     dav_rawx_cmd_gridconfig_docroot,     NULL, RSRC_CONF, "chunks docroot"),
