@@ -108,6 +108,7 @@ typedef struct dav_rawx_server_conf_s dav_rawx_server_conf;
 
 struct dav_rawx_server_conf_s {
 	char rawx_id[64]; /* enough for @ipv6:port */
+	char uuid[37]; /* 36 + 1 */
 	apr_pool_t *pool;
 	char docroot[1024];
 	char ns_name[LIMIT_LENGTH_NSNAME];
