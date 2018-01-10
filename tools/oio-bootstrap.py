@@ -833,6 +833,7 @@ log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
+uuid = ${UUID}
 
 # Let this option empty to connect directly to redis_host
 #sentinel_hosts = 127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381
@@ -1395,7 +1396,9 @@ def generate(options):
         f.write(tpl.safe_substitute(env))
     with open(config(env), 'w+') as f:
         tpl = Template(template_account)
+        env['UUID'] = uuid.uuid4()
         f.write(tpl.safe_substitute(env))
+        del env['UUID']
     with open(watch(env), 'w+') as f:
         tpl = Template(template_account_watch)
         f.write(tpl.safe_substitute(env))

@@ -81,6 +81,7 @@ class Account(WerkzeugApp):
     # }}ACCT
     def on_status(self, req):
         status = self.backend.status()
+        status['uuid'] = self.conf.get('uuid')
         return Response(json.dumps(status), mimetype='text/json')
 
     def on_account_create(self, req):
