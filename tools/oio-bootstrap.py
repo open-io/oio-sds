@@ -329,6 +329,7 @@ host: ${IP}
 port: ${PORT}
 type: ${SRVTYPE}
 location: ${LOC}
+uuid: ${UUID}
 slots:
     - ${SRVTYPE}
 checks:
@@ -389,6 +390,7 @@ host: ${IP}
 port: ${PORT}
 type: redis
 location: localhost.db${SRVNUM}
+uuid: ${UUID}
 checks:
     - {type: tcp}
 slots:
@@ -1245,7 +1247,9 @@ def generate(options):
         # watcher
         tpl = Template(template_meta_watch)
         with open(watch(env), 'w+') as f:
+            env['UUID'] = uuid.uuid4()
             f.write(tpl.safe_substitute(env))
+            del env['UUID']
 
     # meta0
     nb_meta0 = max(getint(options['meta0'].get(SVC_NB), defaults['NB_M0']),
@@ -1335,7 +1339,9 @@ def generate(options):
             f.write(tpl.safe_substitute(env))
         with open(watch(env), 'w+') as f:
             tpl = Template(template_redis_watch)
+            env['UUID'] = uuid.uuid4()
             f.write(tpl.safe_substitute(env))
+            del env['UUID']
 
     # proxy
     env = subenv({'SRVTYPE': 'proxy', 'SRVNUM': 1, 'PORT': port_proxy,
