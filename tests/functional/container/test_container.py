@@ -320,6 +320,52 @@ class TestMeta2Containers(BaseTestCase):
         data = self.json_loads(resp.data)
         self.assertEqual(data["status"], 480)
 
+    def test_cycle_properties(self):
+        params = self.param_ref(self.ref)
+
+        def get_ok(expected, expected_version):
+            resp = self.request('POST', self.url_container('get_properties'),
+                                params=params)
+            self.assertEqual(resp.status, 200)
+            body = self.json_loads(resp.data)
+            self.assertIsInstance(body, dict)
+            self.assertIsInstance(body.get('properties'), dict)
+            self.assertDictEqual(expected, body['properties'])
+            self.assertEqual(expected_version,
+                             body['system']['sys.m2.version'])
+
+        def del_ok(keys):
+            resp = self.request('POST', self.url_container('del_properties'),
+                                params=params, data=json.dumps(keys))
+            self.assertEqual(resp.status, 200)
+
+        def set_ok(kv):
+            resp = self.request('POST', self.url_container('set_properties'),
+                                params=params,
+                                data=json.dumps({'properties': kv}))
+            self.assertEqual(resp.status, 200)
+
+        # GetProperties on no container
+        resp = self.request('POST', self.url_container('get_properties'),
+                            params=params)
+        self.assertError(resp, 404, 406)
+
+        # Create the container
+        self._create(params, 201)
+
+        p0 = {random_content(): random_content()}
+        p1 = {random_content(): random_content()}
+
+        get_ok({}, '0')
+        set_ok(p0)
+        get_ok(p0, '1')
+        set_ok(p1)
+        get_ok(merge(p0, p1), '2')
+        del_ok(p0.keys())
+        get_ok(p1, '3')
+        del_ok(p0.keys())
+        get_ok(p1, '4')
+
 
 class TestMeta2Contents(BaseTestCase):
     def setUp(self):
