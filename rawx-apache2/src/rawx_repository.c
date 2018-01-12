@@ -429,19 +429,23 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 		resource->info->file_extension,
 		NULL);
 
-	/* init compression context structure if we are in get method */
-	if (r->method_number == M_GET && !ctx.update_only) {
-		resource_init_decompression(resource, conf);
-	}
-
 	/* Check the chunk's existence */
-	int flags = (r->method_number == M_GET ||
-			r->method_number == M_OPTIONS ||
-			r->method_number == M_DELETE)?
-				 RESOURCE_STAT_CHUNK_READ_ATTRS : 0;
-	if (r->method_number == M_PUT || r->method_number == M_POST)
-		flags |= RESOURCE_STAT_CHUNK_PENDING;
-
+	int flags = 0;
+	switch (r->method_number) {
+		case M_GET:
+			if (oio_str_parse_bool(apr_table_get(r->headers_in, "X-oio-xattr"), TRUE))
+				flags |= RESOURCE_STAT_CHUNK_READ_ATTRS;
+			break;
+		case M_OPTIONS:
+		case M_DELETE:
+		case M_MOVE:
+			flags |= RESOURCE_STAT_CHUNK_READ_ATTRS;
+			break;
+		case M_PUT:
+		case M_POST:
+			flags |= RESOURCE_STAT_CHUNK_PENDING;
+			break;
+	}
 	resource_stat_chunk(resource, flags);
 
 	if (r->method_number == M_COPY) {

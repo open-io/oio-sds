@@ -21,7 +21,8 @@ from urllib3 import Timeout
 from urllib3.exceptions import HTTPError
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common import exceptions as exc, utils
-from oio.common.constants import CHUNK_HEADERS, chunk_xattr_keys_optional
+from oio.common.constants import CHUNK_HEADERS, chunk_xattr_keys_optional, \
+        HEADER_PREFIX
 from oio.common.decorators import ensure_headers, ensure_request_id
 from oio.api.io import ChunkReader
 from oio.api.replication import ReplicatedMetachunkWriter, FakeChecksum
@@ -137,7 +138,9 @@ class BlobClient(object):
 
     @update_rawx_perfdata
     def chunk_head(self, url, **kwargs):
-        resp = self.http_pool.request('HEAD', url)
+        xattr = bool(kwargs.get('xattr', True))
+        resp = self.http_pool.request(
+                'HEAD', url, headers={HEADER_PREFIX + 'xattr': xattr})
         if resp.status == 200:
             return extract_headers_meta(resp.headers)
         else:
