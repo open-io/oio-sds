@@ -20,15 +20,15 @@ import logging
 import random
 import simplejson as json
 import struct
-from tests.utils import BaseTestCase
+from tests.utils import BaseTestCase, random_str
 
 
 def random_content():
-    return 'content-{0}'.format(random.randint(0, 65536))
+    return 'content-' + random_str(32)
 
 
 def random_container():
-    return 'container-{0}'.format(random.randint(0, 65536))
+    return 'container-' + random_str(64)
 
 
 def merge(s0, s1):
@@ -62,7 +62,7 @@ class TestMeta2Containers(BaseTestCase):
 
     def setUp(self):
         super(TestMeta2Containers, self).setUp()
-        self.ref = 'Ça ne marchera jamais !'
+        self.ref = random_container()
 
     def tearDown(self):
         super(TestMeta2Containers, self).tearDown()
@@ -370,7 +370,7 @@ class TestMeta2Containers(BaseTestCase):
 class TestMeta2Contents(BaseTestCase):
     def setUp(self):
         super(TestMeta2Contents, self).setUp()
-        self.ref = 'plop-0'
+        self.ref = random_container()
         self._reload()
 
     def tearDown(self):
