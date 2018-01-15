@@ -919,6 +919,7 @@ configure_request_handlers (void)
 	SET("/$NS/conscience/flush/#POST", action_conscience_flush);
 	SET("/$NS/conscience/lock/#POST", action_conscience_lock);
 	SET("/$NS/conscience/unlock/#POST", action_conscience_unlock);
+    SET("/$NS/conscience/resolve/#GET", action_conscience_resolve_uuid);
 
 	// Directory
 	SET("/$NS/reference/create/#POST", action_ref_create);

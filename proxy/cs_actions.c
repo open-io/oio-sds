@@ -479,6 +479,46 @@ action_conscience_list (struct req_args_s *args)
 }
 
 enum http_rc_e
+action_conscience_resolve_uuid (struct req_args_s *args)
+{
+	args->rp->no_access();
+
+	const char *type = TYPE();
+	if (!type)
+		return _reply_format_error (args, BADREQ("Missing type"));
+
+	const char *uuid = UUID();
+	if (!uuid)
+		return _reply_format_error (args, BADREQ("Missing uuid"));
+
+#ifdef HAVE_ENBUG
+	if (10 >= oio_ext_rand_int_range(1,100))
+		return _reply_retry(args, NEWERROR(CODE_UNAVAILABLE, "FAKE"));
+#endif
+
+	GError *err;
+	if (NULL != (err = _cs_check_tokens(args)))
+		return _reply_notfound_error(args, err);
+
+	CSURL(cs);
+	gchar *addr = NULL;
+	err = conscience_resolve_uuid(cs, type, uuid, &addr);
+	if (NULL != err) {
+		g_prefix_error (&err, "Conscience error: ");
+		return _reply_common_error (args, err);
+	}
+
+	GString *gstr = g_string_sized_new (256);
+	g_string_append_c (gstr, '{');
+	g_string_append_printf(gstr," \"addr\": \"%s\"", addr);
+	g_string_append_c (gstr, '}');
+
+	g_free(addr);
+
+	return _reply_success_json (args, gstr);
+}
+
+enum http_rc_e
 action_conscience_flush (struct req_args_s *args)
 {
 	GError *err;

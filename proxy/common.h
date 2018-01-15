@@ -68,6 +68,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define PATH()    OPT("path")
 #define SEQ()     OPT("seq")
 #define VERSION() OPT("version")
+#define UUID()    OPT("uuid")
 
 #define GUARDED_READ(Lock,Action) do { \
 	g_rw_lock_reader_lock(&Lock); \
