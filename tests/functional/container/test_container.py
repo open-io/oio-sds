@@ -124,7 +124,7 @@ class TestMeta2Containers(BaseTestCase):
             self.assertNotIn(l[0], containers)
 
     def test_create_many(self):
-        params = self.param_ref(self.ref)
+        params = {'acct': self.account}
         headers = {}
         headers['x-oio-action-mode'] = 'autocreate'
         headers['Content-Type'] = 'application/json'
@@ -323,7 +323,7 @@ class TestMeta2Containers(BaseTestCase):
     def test_cycle_properties(self):
         params = self.param_ref(self.ref)
 
-        def get_ok(expected, expected_version):
+        def check_properties(expected):
             resp = self.request('POST', self.url_container('get_properties'),
                                 params=params)
             self.assertEqual(resp.status, 200)
@@ -331,15 +331,13 @@ class TestMeta2Containers(BaseTestCase):
             self.assertIsInstance(body, dict)
             self.assertIsInstance(body.get('properties'), dict)
             self.assertDictEqual(expected, body['properties'])
-            self.assertEqual(expected_version,
-                             body['system']['sys.m2.version'])
 
-        def del_ok(keys):
+        def del_properties(keys):
             resp = self.request('POST', self.url_container('del_properties'),
                                 params=params, data=json.dumps(keys))
             self.assertEqual(resp.status, 200)
 
-        def set_ok(kv):
+        def set_properties(kv):
             resp = self.request('POST', self.url_container('set_properties'),
                                 params=params,
                                 data=json.dumps({'properties': kv}))
@@ -356,15 +354,15 @@ class TestMeta2Containers(BaseTestCase):
         p0 = {random_content(): random_content()}
         p1 = {random_content(): random_content()}
 
-        get_ok({}, '0')
-        set_ok(p0)
-        get_ok(p0, '1')
-        set_ok(p1)
-        get_ok(merge(p0, p1), '2')
-        del_ok(p0.keys())
-        get_ok(p1, '3')
-        del_ok(p0.keys())
-        get_ok(p1, '4')
+        check_properties({})
+        set_properties(p0)
+        check_properties(p0)
+        set_properties(p1)
+        check_properties(merge(p0, p1))
+        del_properties(p0.keys())
+        check_properties(p1)
+        del_properties(p0.keys())
+        check_properties(p1)
 
 
 class TestMeta2Contents(BaseTestCase):
