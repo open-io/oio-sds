@@ -43,8 +43,6 @@ GTree* version_extract_from_admin_tree(GTree *t);
 
 gchar* version_dump(GTree *t);
 
-void version_debug(const gchar *tag, GTree *sq3);
-
 /**
  * Computes what would be the version if the 'changes' were applied to a
  * base with the 'current' version.

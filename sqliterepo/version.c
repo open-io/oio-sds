@@ -90,18 +90,6 @@ version_dump(GTree *t)
 	return g_string_free(gstr, FALSE);
 }
 
-void
-version_debug(const gchar *tag, GTree *versions)
-{
-	if (!GRID_TRACE_ENABLED())
-		return;
-
-	(void) tag;
-	gchar *s = version_dump(versions);
-	GRID_TRACE("%s %s (%s)", tag, s, __FUNCTION__);
-	g_free(s);
-}
-
 #include <TableVersion.h>
 #include <BaseVersion.h>
 #include <asn_codecs.h>
@@ -194,12 +182,9 @@ version_extract_effective_diff(TableSequence_t *seq)
 
 	for (i=0; i<seq->list.count ;i++) {
 		Table_t *table = seq->list.array[i];
-		if (table->name.size != sizeof("main.admin")-1 ||
-				memcmp(table->name.buf, "main.admin", table->name.size-1)) {
-			struct object_version_s *o = version_getslen(1, t,
-					table->name.buf, table->name.size);
-			o->version = 1;
-		}
+		struct object_version_s *o = version_getslen(1, t,
+				table->name.buf, table->name.size);
+		o->version = 1;
 	}
 
 	return t;
