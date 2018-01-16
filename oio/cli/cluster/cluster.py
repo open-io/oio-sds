@@ -223,7 +223,7 @@ class ClusterUnlockAll(lister.Lister):
 
 
 class ClusterWait(lister.Lister):
-    """Wait for the services to get a score"""
+    """Wait for services to get a positive score"""
 
     log = getLogger(__name__ + '.ClusterWait')
 
