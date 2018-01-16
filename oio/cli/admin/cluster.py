@@ -259,7 +259,7 @@ class ClusterWait(lister.Lister):
                     s['type'] = type_
                 all_descr += tmp
             ko = len([s['score'] for s in tmp if s['score'] <= 0])
-            if ko <= 0:
+            if ko == 0:
                 for descr in all_descr:
                     yield descr['type'], descr['addr'], descr['score']
                 return
