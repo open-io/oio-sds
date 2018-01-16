@@ -17,7 +17,6 @@
 
 import binascii
 import logging
-import random
 import simplejson as json
 import struct
 from tests.utils import BaseTestCase, random_str
