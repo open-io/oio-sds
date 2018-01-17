@@ -19,7 +19,7 @@ import binascii
 import logging
 import simplejson as json
 import struct
-from tests.utils import BaseTestCase, random_id
+from tests.utils import BaseTestCase, random_id, random_str
 
 
 def random_content():
