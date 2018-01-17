@@ -258,12 +258,12 @@ label_retry:
 		} else if (!*m1uv) {
 			g_strfreev (m1uv);
 			return NEWERROR (CODE_CONTAINER_NOTFOUND, "No service located");
-		} else {
-			/* We found some locations, let's keep only the URL part */
-			meta1_urlv_shift_addr (m1uv);
-			/* let's prefer the services requested (master, slave, etc) */
-			_sort_services (ctx, election_key, m1uv);
 		}
+
+		/* We found some locations, let's keep only the URL part */
+		meta1_urlv_shift_addr (m1uv);
+		/* let's prefer the services requested (master, slave, etc) */
+		_sort_services (ctx, election_key, m1uv);
 	}
 
 	/* Perform the sequence of requests. */
