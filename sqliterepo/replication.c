@@ -227,21 +227,31 @@ load_table_row(sqlite3 *db, const hashstr_t *name, gint64 rowid, Row_t *row,
 static void
 context_pending_inc_versions(struct sqlx_repctx_s *ctx)
 {
-	gboolean _on_table(hashstr_t *k, GTree *rows, gpointer u0) {
-		(void) u0;
+	/* while we iterate on the tables about to be changed, we keep an eye
+	 * on the 'admin' table. We need to increment its version number only
+	 * once. Because that table will always receive a change (the version
+	 * themselves alter the table) but the legit operations on the DB maybe
+	 * already touched that table and cause an increment. */
+	volatile gboolean admin_changed = FALSE;
+	gboolean _on_table(hashstr_t *k, GTree *rows, gpointer u0 UNUSED) {
 		if (g_tree_nnodes(rows) > 0) {
-			if (0 != strcmp(hashstr_str(k), "main.admin")) {
-				gsize max = sizeof("version:")+hashstr_len(k);
-				gchar buf[max];
-				g_snprintf(buf, max, "version:%s", hashstr_str(k));
-				sqlx_admin_inc_version(ctx->sq3, buf, 1);
-			}
+			if (0 == strcmp("main.admin", hashstr_str(k)))
+				admin_changed = TRUE;
+			gchar buf[256];
+			g_snprintf(buf, sizeof(buf), "version:%s", hashstr_str(k));
+			sqlx_admin_inc_version(ctx->sq3, buf, 1);
 		}
 		return FALSE;
 	}
 
-	if (ctx->pending)
-		g_tree_foreach(ctx->pending, (GTraverseFunc)_on_table, NULL);
+	EXTRA_ASSERT(NULL != ctx->pending);
+
+	g_tree_foreach(ctx->pending, (GTraverseFunc)_on_table, NULL);
+
+	/* ... so, if the admin table didn't receive an increment yet, we do it
+	 * now */
+	if (!admin_changed)
+		sqlx_admin_inc_version(ctx->sq3, "version:main.admin", 1);
 }
 
 static void
@@ -626,6 +636,11 @@ sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err)
 		/* Ensure that newly created tables have versions now referenced
 		 * in the admin table. */
 		sqlx_admin_ensure_versions (ctx->sq3);
+
+		/* Ensure any operation happening during the request handler on the
+		 * admin table, will be stored in the replication context and will
+		 * trigger an increment in the version numbers. */
+		sqlx_admin_save_lazy (ctx->sq3);
 
 		/* Special management for the big changes (it is big when we could
 		 * not capture each row change, so that we need to trigger a whole

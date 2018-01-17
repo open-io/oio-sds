@@ -198,6 +198,7 @@ sqlx_admin_inc_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 delt
 
 	v->flag_changed = 1;
 	v->flag_deleted = 0;
+	sq3->admin_dirty = TRUE;
 }
 
 static void

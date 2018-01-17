@@ -138,10 +138,12 @@ class BlobClient(object):
 
     @update_rawx_perfdata
     def chunk_head(self, url, **kwargs):
-        xattr = bool(kwargs.get('xattr', True))
+        _xattr = bool(kwargs.get('xattr', True))
         resp = self.http_pool.request(
-                'HEAD', url, headers={HEADER_PREFIX + 'xattr': xattr})
+                'HEAD', url, headers={HEADER_PREFIX + 'xattr': _xattr})
         if resp.status == 200:
+            if not _xattr:
+                return dict()
             return extract_headers_meta(resp.headers)
         else:
             raise exc.from_response(resp)
