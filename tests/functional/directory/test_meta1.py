@@ -20,8 +20,14 @@ class TestProxyFailure(BaseTestCase):
     def setUp(self):
         super(TestProxyFailure, self).setUp()
 
-    def test_admin_debug_on_meta1(self):
+    def _test_admin_debug_on_srvtype(self, srvtype):
         params = {'ref': random_str(64),
                   'acct': random_str(64),
-                  'type': 'meta1'}
+                  'type': srvtype}
         self.request('POST', self._url('admin/debug'), params=params)
+
+    def test_admin_debug_on_meta1(self):
+        self._test_admin_debug_on_srvtype('meta1')
+
+    def test_admin_debug_on_meta0(self):
+        self._test_admin_debug_on_srvtype('meta0')
