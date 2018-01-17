@@ -17,18 +17,17 @@
 
 import binascii
 import logging
-import random
 import simplejson as json
 import struct
 from tests.utils import BaseTestCase, random_id
 
 
 def random_content():
-    return 'content-{0}'.format(random.randint(0, 65536))
+    return 'content-' + random_str(32)
 
 
 def random_container():
-    return 'container-{0}'.format(random.randint(0, 65536))
+    return 'container-' + random_str(64)
 
 
 def merge(s0, s1):
@@ -63,7 +62,7 @@ class TestMeta2Containers(BaseTestCase):
     def setUp(self):
         super(TestMeta2Containers, self).setUp()
         self.account = random_id(16)
-        self.ref = random_id(16) + '-' + 'Ça ne marchera jamais !'
+        self.ref = random_container()
 
     def tearDown(self):
         super(TestMeta2Containers, self).tearDown()
@@ -125,7 +124,7 @@ class TestMeta2Containers(BaseTestCase):
             self.assertNotIn(l[0], containers)
 
     def test_create_many(self):
-        params = self.param_ref(self.ref)
+        params = {'acct': self.account}
         headers = {}
         headers['x-oio-action-mode'] = 'autocreate'
         headers['Content-Type'] = 'application/json'
@@ -321,11 +320,55 @@ class TestMeta2Containers(BaseTestCase):
         data = self.json_loads(resp.data)
         self.assertEqual(data["status"], 480)
 
+    def test_cycle_properties(self):
+        params = self.param_ref(self.ref)
+
+        def check_properties(expected):
+            resp = self.request('POST', self.url_container('get_properties'),
+                                params=params)
+            self.assertEqual(resp.status, 200)
+            body = self.json_loads(resp.data)
+            self.assertIsInstance(body, dict)
+            self.assertIsInstance(body.get('properties'), dict)
+            self.assertDictEqual(expected, body['properties'])
+
+        def del_properties(keys):
+            resp = self.request('POST', self.url_container('del_properties'),
+                                params=params, data=json.dumps(keys))
+            self.assertEqual(resp.status, 200)
+
+        def set_properties(kv):
+            resp = self.request('POST', self.url_container('set_properties'),
+                                params=params,
+                                data=json.dumps({'properties': kv}))
+            self.assertEqual(resp.status, 200)
+
+        # GetProperties on no container
+        resp = self.request('POST', self.url_container('get_properties'),
+                            params=params)
+        self.assertError(resp, 404, 406)
+
+        # Create the container
+        self._create(params, 201)
+
+        p0 = {random_content(): random_content()}
+        p1 = {random_content(): random_content()}
+
+        check_properties({})
+        set_properties(p0)
+        check_properties(p0)
+        set_properties(p1)
+        check_properties(merge(p0, p1))
+        del_properties(p0.keys())
+        check_properties(p1)
+        del_properties(p0.keys())
+        check_properties(p1)
+
 
 class TestMeta2Contents(BaseTestCase):
     def setUp(self):
         super(TestMeta2Contents, self).setUp()
-        self.ref = random_id(16)
+        self.ref = random_container()
         self._reload()
 
     def tearDown(self):

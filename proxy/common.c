@@ -261,13 +261,13 @@ label_retry:
 			meta1_urlv_shift_addr(m1uv);
 		} else if (!*m1uv) {
 			g_strfreev (m1uv);
-			err = NEWERROR(CODE_CONTAINER_NOTFOUND, "No service located");
-		} else {
-			/* We found some locations, let's keep only the URL part */
-			meta1_urlv_shift_addr (m1uv);
-			/* let's prefer the services requested (master, slave, etc) */
-			_sort_services (ctx, election_key, m1uv);
+			return NEWERROR (CODE_CONTAINER_NOTFOUND, "No service located");
 		}
+
+		/* We found some locations, let's keep only the URL part */
+		meta1_urlv_shift_addr (m1uv);
+		/* let's prefer the services requested (master, slave, etc) */
+		_sort_services (ctx, election_key, m1uv);
 	}
 	const gint64 resolve_end = oio_ext_monotonic_time();
 	ctx->resolve_duration = resolve_end - req_start;

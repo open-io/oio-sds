@@ -48,6 +48,17 @@ License along with this library.
 
 /* ------------------------------------------------------------------------- */
 
+static void
+version_debug(GTree *current, GTree *expected, GTree *post)
+{
+	if (!GRID_TRACE_ENABLED())
+		return;
+	gchar *s0 = version_dump(current); STRING_STACKIFY(s0);
+	gchar *s1 = version_dump(expected); STRING_STACKIFY(s1);
+	gchar *s2 = version_dump(post); STRING_STACKIFY(s2);
+	GRID_TRACE("CURRENT:%s EXPECTED:%s POST:%s", s0, s1, s2);
+}
+
 static gchar *
 _prepare_statement(Table_t *t, gboolean is_admin)
 {
@@ -321,9 +332,7 @@ replicate_body_manage(struct sqlx_sqlite3_s *sq3, TableSequence_t *seq)
 	GTree *oldvers, *expected_version, *postvers;
 
 	oldvers = version_extract_from_admin(sq3);
-	version_debug("CURRENT:", oldvers);
 	expected_version = version_extract_expected(oldvers, seq);
-	version_debug("EXPECTED:", expected_version);
 	postvers = NULL;
 
 	sqlx_exec(sq3->db, "BEGIN");
@@ -346,7 +355,7 @@ label_rollback:
 		/* keep the current version for later */
 		sqlx_admin_reload(sq3);
 		postvers = version_extract_from_admin(sq3);
-		version_debug("POST:", postvers);
+		version_debug(oldvers, expected_version, postvers);
 
 		gint64 worst = 0;
 		err = version_validate_diff(postvers, expected_version, &worst);

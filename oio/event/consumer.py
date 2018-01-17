@@ -22,7 +22,7 @@ import sys
 import greenlet
 import eventlet
 from eventlet import Timeout, greenthread
-from oio.common.exceptions import OioNetworkException
+from oio.common.exceptions import OioNetworkException, ClientException
 
 from oio.conscience.client import ConscienceClient
 from oio.rdir.client import RdirClient
@@ -226,7 +226,7 @@ class EventWorker(Worker):
                 event = self.safe_decode_job(job_id, data)
                 try:
                     self.process_event(job_id, event, beanstalk)
-                except OioNetworkException as exc:
+                except (ClientException, OioNetworkException) as exc:
                     self.logger.warn("Burying event %s (%s): %s",
                                      job_id, event.get('event'), exc)
                     beanstalk.bury(job_id)
