@@ -96,8 +96,10 @@ grid_task_queue_fire(struct grid_task_queue_s *gtq)
 	for (i=0,max=gtq->tasks->len; i<max ;i++) {
 		struct grid_task_s *task = &g_array_index(gtq->tasks, struct grid_task_s, i);
 		if (task->next == current) {
-			if (task->run)
+			if (task->run) {
+				oio_ext_set_deadline(oio_ext_monotonic_time() + G_TIME_SPAN_MINUTE);
 				task->run(task->u);
+			}
 			task->next = current + task->period;
 		}
 	}
