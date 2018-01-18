@@ -205,7 +205,7 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 	/* Load the optional deadline of the current request */
 	const char *tostr = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_TIMEOUT);
 	gint64 to = 0;
-	if (tostr && oio_str_is_number(tostr, &to)) {
+	if (tostr && oio_str_is_number(tostr, &to) && to > 0) {
 		oio_ext_set_deadline(now + to);
 	} else {
 		oio_ext_set_deadline(now + proxy_request_max_delay);
