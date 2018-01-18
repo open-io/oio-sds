@@ -605,12 +605,12 @@ retry:
 
 		GCond *wait_cond = urgent? &base->cond_prio : &base->cond;
 
-		gint64 now = oio_ext_monotonic_time ();
+		const gint64 now = oio_ext_monotonic_time ();
 
 		if (now > deadline) {
 			err = NEWERROR (CODE_UNAVAILABLE,
-					"DB busy (deadline reached after %"G_GINT64_FORMAT" ms)",
-					(now - start) / G_TIME_SPAN_MILLISECOND);
+					"DB busy (deadline reached after %"G_GINT64_FORMAT" us)",
+					now - start);
 		} else switch (base->status) {
 
 			case SQLX_BASE_FREE:
