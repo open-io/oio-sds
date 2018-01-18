@@ -301,13 +301,25 @@ enum http_rc_e _reply_common_error (struct req_args_s *args, GError *err);
 
 /* -------------------------------------------------------------------------- */
 
-GError * conscience_remote_get_namespace (gchar **cs, namespace_info_t **out);
-GError * conscience_remote_get_services(gchar **cs, const char *type,
-		gboolean full, GSList **out);
-GError * conscience_remote_get_types(gchar **cs, gchar ***out);
-GError * conscience_remote_push_services(gchar **cs, GSList *ls);
-GError* conscience_remote_remove_services(gchar **cs, const char *type,
-		GSList *ls);
+GError * conscience_remote_get_namespace(gchar **cs,
+		namespace_info_t **out,
+		gint64 deadline);
+
+GError * conscience_remote_get_services(gchar **cs,
+		const char *type, gboolean full, GSList **out,
+		gint64 deadline);
+
+GError * conscience_remote_get_types(gchar **cs,
+		gchar ***out,
+		gint64 deadline);
+
+GError * conscience_remote_push_services(gchar **cs,
+		GSList *ls,
+		gint64 deadline);
+
+GError* conscience_remote_remove_services(gchar **cs,
+		const char *type, GSList *ls,
+		gint64 deadline);
 
 static inline gint64 DL(void) {
 	return oio_clamp_deadline(proxy_timeout_common, oio_ext_get_deadline());
