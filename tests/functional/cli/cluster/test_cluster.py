@@ -1,4 +1,4 @@
-# Copyright (C) 2016-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2016-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,9 +13,13 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import time
 import json
+import unittest
 from tests.functional.cli import CliTestCase
 
+# Default to skip long-runnning tests, for travis's sake
+_SKIP_LONG_TESTS = True
 
 CLUSTER_FIELDS = ['namespace', 'storage_policy', 'chunksize']
 CLUSTER_LIST_HEADERS = ['Type', 'Id', 'Volume', 'Location', 'Slots', 'Up',
@@ -69,3 +73,61 @@ class ClusterTest(CliTestCase):
         output = self.openio('cluster lock rdir 127.0.0.1:666' + opts)
         data = json.loads(output)
         self.assertEqual(data[0]['Result'], 'locked to 0')
+
+    @unittest.skipIf(_SKIP_LONG_TESTS,
+                     "This test is too long to run on travis, so disable it")
+    def test_cluster_wait(self):
+        opts = self.get_opts([], 'json')
+
+        # Get one rawx service's ID
+        output = self.openio('cluster list rawx' + opts)
+        data = json.loads(output)
+        nodeid = data[0]['Id']
+
+        # Wait for score to be non-zero
+
+        # Lock that rawx
+        output = self.openio('cluster lock rawx ' + nodeid + opts)
+        data = json.loads(output)
+        self.assertEqual(data[0]['Result'], 'locked to 0')
+        time.sleep(4)
+        # Ensure it is zero-scored
+        output = self.openio('cluster list rawx' + opts)
+        data = json.loads(output)
+        zeroed = [node['Score'] == 0 for node in data if node['Id'] == nodeid]
+        # We should have only one service left in this list: the rawx we locked
+        self.assertEqual(len(zeroed), 1)
+        # And its score should be zero
+        self.assertTrue(zeroed[0])
+        # Unlock all services
+        output = self.openio('cluster unlockall' + opts)
+        data = json.loads(output)
+        self.assertTrue(all([node['Result'] == 'unlocked' for node in data]))
+        # Wait for services to be non-zero-scored
+        output = self.openio('cluster wait rawx' + opts)
+        data = json.loads(output)
+        self.assertTrue(all([node['Score'] > 0 for node in data]))
+
+        # Wait for score to reach 20
+
+        # Lock that rawx
+        output = self.openio('cluster lock rawx ' + nodeid + opts)
+        data = json.loads(output)
+        self.assertEqual(data[0]['Result'], 'locked to 0')
+        time.sleep(4)
+        # Ensure it is zero-scored
+        output = self.openio('cluster list rawx' + opts)
+        data = json.loads(output)
+        zeroed = [node['Score'] == 0 for node in data if node['Id'] == nodeid]
+        # We should have only one service left in this list: the rawx we locked
+        self.assertEqual(len(zeroed), 1)
+        # And its score should be zero
+        self.assertTrue(zeroed[0])
+        # Unlock all services
+        output = self.openio('cluster unlockall' + opts)
+        data = json.loads(output)
+        self.assertTrue(all([node['Result'] == 'unlocked' for node in data]))
+        # Wait for services to be non-zero-scored
+        output = self.openio('cluster wait rawx -d 99 -s 20' + opts)
+        data = json.loads(output)
+        self.assertTrue(all([node['Score'] > 20 for node in data]))

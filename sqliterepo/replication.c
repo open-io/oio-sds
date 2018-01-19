@@ -48,7 +48,8 @@ struct sqlx_repctx_s
 	GString *errors;
 
 	// Count the explicit changes, those matched
-	gint32 changes;
+	int changes;
+	guint8 local_changes : 1;
 
 	// if set, there is no replication configured, even if a replicated
 	// transaction context had been initiated.
@@ -475,7 +476,9 @@ hook_update(struct sqlx_repctx_s *ctx, int op, char const *bn, char const *tn,
 		g_free(n);
 	} while (0);
 
-	ctx->changes ++;
+	++ ctx->changes;
+	ctx->local_changes = 1;
+
 	GTree *subtree = context_get_pending_table(ctx->pending, key);
 	guint u = (op == SQLITE_DELETE);
 	g_tree_replace(subtree, g_memdup(&rowid, sizeof(rowid)),
@@ -554,6 +557,7 @@ sqlx_transaction_prepare(struct sqlx_sqlite3_s *sq3,
 	repctx->hollow = !has;
 	repctx->sq3 = sq3;
 	repctx->changes = sqlite3_total_changes(sq3->db);
+	repctx->local_changes = 0;
 
 	if (has) {
 		repctx->resync_todo = g_ptr_array_sized_new(4);
@@ -631,8 +635,7 @@ sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err)
 					sqlite_strerror(rc), sqlite3_errmsg(ctx->sq3->db));
 		}
 		sqlx_admin_reload(ctx->sq3);
-	}
-	else {
+	} else {
 		/* Ensure that newly created tables have versions now referenced
 		 * in the admin table. */
 		sqlx_admin_ensure_versions (ctx->sq3);
@@ -658,7 +661,7 @@ sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err)
 		if (!ctx->hollow) {
 			if (ctx->huge) {
 				sqlx_admin_inc_all_versions(ctx->sq3, 2);
-			} else if (ctx->changes) {
+			} else if (ctx->local_changes) {
 				context_pending_inc_versions(ctx);
 			}
 		}
