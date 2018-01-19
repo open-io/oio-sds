@@ -254,8 +254,8 @@ class ClusterWait(lister.Lister):
         if not parsed_args.types:
             types = self.app.client_manager.admin.cluster_list_types()
 
-        min_score = int(parsed_args.score)
-        delay = float(parsed_args.delay)
+        min_score = parsed_args.score
+        delay = parsed_args.delay
         deadline = now() + delay
         exc_msg = ("Timeout ({0}s) while waiting for the services to get a "
                    "score > {1}, still {2} are not")
