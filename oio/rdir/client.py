@@ -95,18 +95,19 @@ class RdirDispatcher(object):
                  for x in all_rdir}
 
         for rawx in all_rawx:
+            rawx_id = rawx['tags'].get('tag.uuid', rawx['addr'])
             try:
                 # Verify that there is no rdir linked
-                resp = self.directory.list(RDIR_ACCT, rawx['addr'],
+                resp = self.directory.list(RDIR_ACCT, rawx_id,
                                            service_type='rdir')
                 rdir_host = _filter_rdir_host(resp)
                 try:
                     rawx['rdir'] = by_id[_make_id(self.ns, 'rdir', rdir_host)]
                 except KeyError:
                     self.logger.warn("rdir %s linked to rawx %s seems down",
-                                     rdir_host, rawx['addr'])
+                                     rdir_host, rawx_id)
             except (NotFound, ClientException):
-                rdir = self._smart_link_rdir(rawx['addr'], all_rdir,
+                rdir = self._smart_link_rdir(rawx_id, all_rdir,
                                              max_per_rdir)
                 n_bases = by_id[rdir]['tags'].get("stat.opened_db_count", 0)
                 by_id[rdir]['tags']["stat.opened_db_count"] = n_bases + 1
@@ -196,7 +197,7 @@ class RdirClient(HttpApi):
             self._addr_cache[volume_id] = host
             return host
         except NotFound:
-            raise VolumeException('No rdir assigned to volume %s' % volume_id)
+            raise VolumeException('No rdir assigned to volume %s' % (volume_id))
 
     def _make_uri(self, action, volume_id, req_id=None):
         rdir_host = self._get_rdir_addr(volume_id, req_id)
