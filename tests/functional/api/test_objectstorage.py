@@ -470,7 +470,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # Ensure the chunks have actually been deleted
         for chunk in chunks:
             self.assertRaises(
-                exc.NotFound, self.api.blob_client.chunk_head, chunk['url'])
+                exc.NotFound, self.api.blob_client.chunk_head, chunk.get('real_url', chunk['url']))
 
     def test_object_create_commit_deadline_delete_chunks(self):
         name = random_str(16)
@@ -492,7 +492,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # Ensure the chunks have actually been deleted
         for chunk in chunks:
             self.assertRaises(
-                exc.NotFound, self.api.blob_client.chunk_head, chunk['url'])
+                exc.NotFound, self.api.blob_client.chunk_head, chunk.get('real_url', chunk['url']))
 
     def test_object_create_prepare_deadline_delete_chunks(self):
         name = random_str(16)
