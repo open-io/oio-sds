@@ -34,6 +34,9 @@ typedef guint32 generation_t;
 #define OIO_LB_LOC_LEVELS 4
 #define OIO_LB_BITS_PER_LOC_LEVEL (sizeof(oio_location_t)*8/OIO_LB_LOC_LEVELS)
 
+/* This special target matches any service, any location. */
+#define OIO_LB_JOKER_SVC_TARGET "__any_slot"
+
 typedef guint16 oio_refcount_t;
 
 struct oio_lb_pool_vtable_s
@@ -694,6 +697,12 @@ _local_target__is_satisfied(struct oio_lb_pool_LOCAL_s *lb,
 {
 	if (!*(ctx->next_polled))
 		return FALSE;
+
+	/* Whatever the service is, the client provided it only for its location.
+	 * We don't check if it really exists, and consider this special target
+	 * as satisfied by default. */
+	if (!g_strcmp0(target, OIO_LB_JOKER_SVC_TARGET))
+		return TRUE;
 
 	/* Iterate over the slots of the target to find if one of the
 	** already known locations is inside, and thus satisfies the target. */

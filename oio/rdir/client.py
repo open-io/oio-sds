@@ -24,6 +24,9 @@ from oio.directory.client import DirectoryClient
 
 RDIR_ACCT = '_RDIR'
 
+# Special target that will match any service from the "known" service list
+JOKER_SVC_TARGET = '__any_slot'
+
 
 def _make_id(ns, type_, addr):
     return "%s|%s|%s" % (ns, type_, addr)
@@ -102,12 +105,6 @@ class RdirDispatcher(object):
                     self.logger.warn("rdir %s linked to rawx %s seems down",
                                      rdir_host, rawx['addr'])
             except (NotFound, ClientException):
-                if rawx['score'] <= 0:
-                    self.logger.warn("rawx %s has score %s, and thus cannot be"
-                                     " affected a rdir (load balancer "
-                                     "limitation)",
-                                     rawx['addr'], rawx['score'])
-                    continue
                 rdir = self._smart_link_rdir(rawx['addr'], all_rdir,
                                              max_per_rdir)
                 n_bases = by_id[rdir]['tags'].get("stat.opened_db_count", 0)
@@ -160,7 +157,8 @@ class RdirDispatcher(object):
         except ClientException as exc:
             if exc.status != 400:
                 raise
-            self.cs.lb.create_pool('__rawx_rdir', ((1, 'rawx'), (1, 'rdir')))
+            self.cs.lb.create_pool(
+                '__rawx_rdir', ((1, JOKER_SVC_TARGET), (1, 'rdir')))
             svcs = self.cs.poll('__rawx_rdir', avoid=avoid, known=known)
         for svc in svcs:
             # FIXME: we should include the service type in a dedicated field
