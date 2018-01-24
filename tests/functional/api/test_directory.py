@@ -17,7 +17,7 @@ import time
 from oio.directory.client import DirectoryClient
 from oio.common import exceptions as exc
 from oio.conscience.client import ConscienceClient
-from oio.rdir.client import RdirDispatcher
+from oio.rdir.client import RdirDispatcher, RdirClient
 from oio.account.client import AccountClient
 from tests.utils import random_str, BaseTestCase
 
@@ -272,7 +272,7 @@ class TestDirectoryAPI(BaseTestCase):
         # get on deleted reference
         self.assertRaises(exc.NotFound, self.api.list, self.account, name)
 
-    def test_rdir_linking(self):
+    def test_rdir_linking_old(self):
         """
         Tests that rdir services linked to rawx services
         are not on the same locations
@@ -297,6 +297,29 @@ class TestDirectoryAPI(BaseTestCase):
         for rawx in rawx_list:
             self.api.unlink('_RDIR_TEST', rawx['addr'], 'rdir')
             self.api.delete('_RDIR_TEST', rawx['addr'])
+
+    def test_link_rdir_to_zero_scored_rawx(self):
+        self._reload()
+        client = RdirClient({'namespace': self.ns})
+        disp = RdirDispatcher({'namespace': self.ns})
+
+        # Register a service, with score locked to zero
+        new_rawx = self._srv('rawx', {'tag.loc': 'whatever'})
+        new_rawx['score'] = 0
+        self._register_srv(new_rawx)
+        self._reload_proxy()
+
+        all_rawx = disp.assign_all_rawx()
+        all_rawx_keys = [x['addr'] for x in all_rawx]
+        self.assertIn(new_rawx['addr'], all_rawx_keys)
+        rdir_addr = client._get_rdir_addr(new_rawx['addr'])
+        self.assertIsNotNone(rdir_addr)
+        try:
+            self.api.unlink('_RDIR', new_rawx['addr'], 'rdir')
+            self.api.delete('_RDIR', new_rawx['addr'])
+            self._flush_cs('rawx')
+        except Exception:
+            pass
 
     def test_rdir_repartition(self):
         client = RdirDispatcher({'namespace': self.ns})
