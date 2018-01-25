@@ -516,6 +516,7 @@ _init_container(struct sqlx_sqlite3_s *sq3,
 		m2db_set_ctime (sq3, oio_ext_real_time());
 		m2db_set_size(sq3, 0);
 		m2db_set_obj_count(sq3, 0);
+		sqlx_admin_set_status(sq3, ADMIN_STATUS_ENABLED);
 		sqlx_admin_init_i64(sq3, META2_INIT_FLAG, 1);
 	}
 	if (!err && params->properties) {
