@@ -104,7 +104,7 @@ class TestIndexerCrawler(BaseTestCase):
             indexer.update_index(chunk_path)
 
         # check rdir
-        check_value = self._rdir_get(self.rawx_conf['addr'], container_id,
+        check_value = self._rdir_get(self.rawx_conf['uuid'], container_id,
                                      content_id, chunk_id)
 
         self.assertIsNotNone(check_value)
@@ -117,7 +117,7 @@ class TestIndexerCrawler(BaseTestCase):
             indexer.update_index(chunk_path)
 
         # check rdir
-        check_value = self._rdir_get(self.rawx_conf['addr'], container_id,
+        check_value = self._rdir_get(self.rawx_conf['uuid'], container_id,
                                      content_id, chunk_id)
 
         self.assertIsNotNone(check_value)

@@ -770,7 +770,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # check that every copy exists
         pool_manager = get_pool_manager()
         for copy in copy_list:
-            resp = pool_manager.request('HEAD', copy)
+            resp = pool_manager.request('HEAD', self.api._blob_client.resolve_url(copy))
             self.assertEqual(resp.status, 200)
             self.assertIn(fullpath[0],
                           resp.headers[CHUNK_HEADERS['full_path']].split(','))

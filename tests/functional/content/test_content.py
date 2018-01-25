@@ -62,7 +62,7 @@ class TestContentFactory(BaseTestCase):
         self.gridconf = {"namespace": self.namespace}
         self.content_factory = ContentFactory(self.gridconf)
         self.container_name = "TestContentFactory%f" % time.time()
-        self.blob_client = BlobClient()
+        self.blob_client = BlobClient(conf=self.conf)
         self.container_client = ContainerClient(self.gridconf)
         self.container_client.container_create(account=self.account,
                                                reference=self.container_name)
