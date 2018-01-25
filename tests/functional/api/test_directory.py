@@ -277,7 +277,8 @@ class TestDirectoryAPI(BaseTestCase):
         Tests that rdir services linked to rawx services
         are not on the same locations
         """
-        self._reload()
+        self.skipTest('Deprecated way of linking rdir services')
+        self._reload_proxy()
         cs = ConscienceClient({'namespace': self.ns})
         rawx_list = cs.all_services('rawx')
         rdir_dict = {x['addr']: x for x in cs.all_services('rdir')}
@@ -299,7 +300,6 @@ class TestDirectoryAPI(BaseTestCase):
             self.api.delete('_RDIR_TEST', rawx['addr'])
 
     def test_link_rdir_to_zero_scored_rawx(self):
-        self._reload()
         client = RdirClient({'namespace': self.ns})
         disp = RdirDispatcher({'namespace': self.ns})
 
@@ -317,13 +317,15 @@ class TestDirectoryAPI(BaseTestCase):
         try:
             self.api.unlink('_RDIR', new_rawx['addr'], 'rdir')
             self.api.delete('_RDIR', new_rawx['addr'])
-            self._flush_cs('rawx')
+            # self._flush_cs('rawx')
         except Exception:
             pass
 
     def test_rdir_repartition(self):
         client = RdirDispatcher({'namespace': self.ns})
+        self._reload_proxy()
         all_rawx = client.assign_all_rawx()
+        self.assertGreater(len(all_rawx), 0)
         by_rdir = dict()
         total = 0
         for rawx in all_rawx:
