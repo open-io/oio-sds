@@ -1186,6 +1186,8 @@ def generate(options):
             out['addr'] = '%s:%s' % (env['IP'], env['PORT'])
         if 'VOLUME' in env:
             out['path'] = env['VOLUME']
+        if 'UUID' in env:
+            out['uuid'] = env['UUID']
         final_services[t].append(out)
 
     # gridinit header
@@ -1287,6 +1289,7 @@ def generate(options):
                           'SRVNUM': i + 1,
                           'PORT': next(ports),
                           'COMPRESSION': compression,
+                          'UUID': str(uuid.uuid4()),
                           'EXTRASLOT': ('rawx-even' if i % 2 else 'rawx-odd')
                           })
             add_service(env)
@@ -1296,9 +1299,7 @@ def generate(options):
                 f.write(tpl.safe_substitute(env))
             # service
             tpl = Template(template_rawx_service)
-            env['UUID'] = uuid.uuid4()
             to_write = tpl.safe_substitute(env)
-            del env['UUID']
             if options.get(OPENSUSE, None):
                 to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
             with open(httpd_config(env), 'w+') as f:
