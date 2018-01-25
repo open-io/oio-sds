@@ -42,14 +42,14 @@ _loop_on_allcs_while_neterror(gchar **allcs, GError* (action)(const char *cs))
 }
 
 GError *
-conscience_remote_get_namespace (gchar **allcs, namespace_info_t **out)
+conscience_remote_get_namespace (gchar **allcs, namespace_info_t **out, gint64 deadline)
 {
 	GError * action (const char *cs) {
 		GByteArray *gba = NULL;
 		MESSAGE req = metautils_message_create_named("CS_CFG",
-				oio_clamp_timeout(proxy_timeout_conscience, oio_ext_get_deadline()));
+				oio_clamp_deadline(proxy_timeout_conscience, deadline));
 		GError *err = gridd_client_exec_and_concat(cs,
-				oio_clamp_timeout(proxy_timeout_conscience, oio_ext_get_deadline()),
+				oio_clamp_timeout(proxy_timeout_conscience, deadline),
 				message_marshall_gba_and_clean(req), &gba);
 		EXTRA_ASSERT ((gba != NULL) ^ (err != NULL));
 		if (err)
@@ -65,31 +65,31 @@ conscience_remote_get_namespace (gchar **allcs, namespace_info_t **out)
 
 GError *
 conscience_remote_get_services(gchar **allcs, const char *type, gboolean full,
-		GSList **out)
+		GSList **out, gint64 deadline)
 {
 	EXTRA_ASSERT(type != NULL);
 	GError * action (const char *cs) {
 		MESSAGE req = metautils_message_create_named("CS_SRV",
-				oio_clamp_deadline(proxy_timeout_conscience, oio_ext_get_deadline()));
+				oio_clamp_deadline(proxy_timeout_conscience, deadline));
 		metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, type);
 		if (full)
 			metautils_message_add_field_str(req, NAME_MSGKEY_FULL, "1");
 		return gridd_client_exec_and_decode(cs,
-				oio_clamp_deadline(proxy_timeout_conscience, oio_ext_get_deadline()),
+				oio_clamp_timeout(proxy_timeout_conscience, deadline),
 				message_marshall_gba_and_clean(req), out, service_info_unmarshall);
 	}
 	return _loop_on_allcs_while_neterror(allcs, action);
 }
 
 GError *
-conscience_remote_get_types(gchar **allcs, gchar ***out)
+conscience_remote_get_types(gchar **allcs, gchar ***out, gint64 deadline)
 {
 	GError * action(const char *cs) {
 		MESSAGE req = metautils_message_create_named("CS_TYP",
-				oio_clamp_timeout(proxy_timeout_conscience, oio_ext_get_deadline()));
+				oio_clamp_deadline(proxy_timeout_conscience, deadline));
 		gchar *json = NULL;
 		GError *err = gridd_client_exec_and_concat_string(cs,
-				oio_clamp_timeout(proxy_timeout_conscience, oio_ext_get_deadline()),
+				oio_clamp_timeout(proxy_timeout_conscience, deadline),
 				message_marshall_gba_and_clean(req), &json);
 		EXTRA_ASSERT((err != NULL) ^ (json != NULL));
 		if (!err) {
@@ -105,31 +105,31 @@ conscience_remote_get_types(gchar **allcs, gchar ***out)
 }
 
 GError *
-conscience_remote_push_services(gchar **allcs, GSList *ls)
+conscience_remote_push_services(gchar **allcs, GSList *ls, gint64 deadline)
 {
 	GError * action(const char *cs) {
 		MESSAGE req = metautils_message_create_named("CS_PSH",
-				oio_clamp_timeout(proxy_timeout_conscience, oio_ext_get_deadline()));
+				oio_clamp_deadline(proxy_timeout_conscience, deadline));
 		metautils_message_add_body_unref(req, service_info_marshall_gba(ls, NULL));
 		return gridd_client_exec(cs,
-				oio_clamp_timeout(proxy_timeout_conscience, oio_ext_get_deadline()),
+				oio_clamp_timeout(proxy_timeout_conscience, deadline),
 				message_marshall_gba_and_clean(req));
 	}
 	return _loop_on_allcs_while_neterror(allcs, action);
 }
 
 GError*
-conscience_remote_remove_services(gchar **allcs, const char *type, GSList *ls)
+conscience_remote_remove_services(gchar **allcs, const char *type, GSList *ls, gint64 deadline)
 {
 	GError * action(const char *cs) {
 		MESSAGE req = metautils_message_create_named("CS_DEL",
-			oio_clamp_deadline(proxy_timeout_conscience, oio_ext_get_deadline()));
+			oio_clamp_deadline(proxy_timeout_conscience, deadline));
 		if (ls)
 			metautils_message_add_body_unref(req, service_info_marshall_gba(ls, NULL));
 		if (type)
 			metautils_message_add_field_str(req, NAME_MSGKEY_TYPENAME, type);
 		return gridd_client_exec(cs,
-				oio_clamp_deadline(proxy_timeout_conscience, oio_ext_get_deadline()),
+				oio_clamp_timeout(proxy_timeout_conscience, deadline),
 				message_marshall_gba_and_clean(req));
 	}
 	return _loop_on_allcs_while_neterror(allcs, action);
@@ -252,7 +252,7 @@ _registration_batch (enum reg_op_e op, GSList *services)
 		return NULL;
 	} else {
 		CSURL(cs);
-		return conscience_remote_push_services (cs, services);
+		return conscience_remote_push_services (cs, services, oio_ext_get_deadline());
 	}
 }
 
@@ -418,7 +418,7 @@ action_conscience_list (struct req_args_s *args)
 
 	CSURL(cs);
 	GSList *sl = NULL;
-	err = conscience_remote_get_services (cs, type, full, &sl);
+	err = conscience_remote_get_services (cs, type, full, &sl, oio_ext_get_deadline());
 	if (NULL != err) {
 		g_slist_free_full (sl, (GDestroyNotify) service_info_clean);
 		g_prefix_error (&err, "Conscience error: ");
@@ -446,7 +446,7 @@ action_conscience_flush (struct req_args_s *args)
 		return _reply_format_error (args, BADREQ("Missing type"));
 
 	CSURL(cs);
-	err = conscience_remote_remove_services (cs, srvtype, NULL);
+	err = conscience_remote_remove_services (cs, srvtype, NULL, oio_ext_get_deadline());
 
 	if (err) {
 		g_prefix_error (&err, "Conscience error: ");

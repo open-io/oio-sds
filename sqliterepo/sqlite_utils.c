@@ -82,6 +82,14 @@ sqlx_exec(sqlite3 *handle, const gchar *sql)
 	return grc;
 }
 
+#ifdef HAVE_EXTRA_DEBUG
+#define _dump_entry(tag,k,v) \
+	GRID_TRACE2("%s: %s <- {del:%d, changed:%d, %s}", tag, \
+			k, v->flag_deleted, v->flag_changed, v->buffer)
+#else
+#define _dump_entry(tag,k,v)
+#endif
+
 gboolean
 sqlx_admin_set_str(struct sqlx_sqlite3_s *sq3, const gchar *k, const gchar *v)
 {
@@ -105,6 +113,7 @@ sqlx_admin_set_str(struct sqlx_sqlite3_s *sq3, const gchar *k, const gchar *v)
 
 	prev->flag_changed = 1;
 	sq3->admin_dirty = 1;
+	_dump_entry("change", k, prev);
 	return TRUE;
 }
 
@@ -123,7 +132,8 @@ sqlx_admin_del(struct sqlx_sqlite3_s *sq3, const gchar *k)
 	if (v && !v->flag_deleted) {
 		v->flag_deleted = 1;
 		v->flag_changed = 1;
-		sq3->admin_dirty = TRUE;
+		sq3->admin_dirty = 1;
+		_dump_entry("change", k, v);
 	}
 }
 
@@ -136,6 +146,7 @@ sqlx_admin_del_all_user(struct sqlx_sqlite3_s *sq3)
 		if (g_str_has_prefix(k, SQLX_ADMIN_PREFIX_USER)) {
 			v->flag_deleted = 1;
 			v->flag_changed = 1;
+			_dump_entry("change", k, v);
 		}
 		return FALSE;
 	}
@@ -213,7 +224,8 @@ sqlx_admin_inc_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 delt
 
 	v->flag_changed = 1;
 	v->flag_deleted = 0;
-	sq3->admin_dirty = TRUE;
+	sq3->admin_dirty = 1;
+	_dump_entry("change", k, v);
 }
 
 static void
@@ -246,7 +258,8 @@ sqlx_admin_inc_version(struct sqlx_sqlite3_s *sq3, const gchar *k, const int del
 	struct _cache_entry_s *prev = g_tree_lookup(sq3->admin, k);
 	if (prev) {
 		_cache_entry_increment_version(prev, delta);
-		sq3->admin_dirty = TRUE;
+		sq3->admin_dirty = 1;
+		_dump_entry("change", k, prev);
 	}
 }
 
@@ -359,6 +372,7 @@ sqlx_admin_save (struct sqlx_sqlite3_s *sq3)
 		err = SYSERR("DB error: (%d) %s", rc, sqlite3_errmsg(sq3->db));
 	else {
 		gboolean _save (gchar *k, struct _cache_entry_s *v, gpointer i UNUSED) {
+			_dump_entry("save", k, v);
 			if (!v->flag_changed)
 				return FALSE;
 

@@ -897,6 +897,10 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 			gchar *myid = g_strdup(
 					election_manager_get_local((*result)->manager));
 			peers = oio_strv_append(peers, myid);
+			int compare(const void *p0, const void *p1) {
+				return g_strcmp0(*(gchar**)p0, *(gchar**)p1);
+			}
+			qsort(peers, g_strv_length(peers), sizeof(gchar*), compare);
 			if (sqlx_admin_ensure_peers((*result), peers)) {
 				sqlx_admin_save_lazy(*result);
 				GRID_DEBUG("Replications peers saved in %s",

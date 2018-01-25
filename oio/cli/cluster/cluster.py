@@ -223,7 +223,7 @@ class ClusterUnlockAll(lister.Lister):
 
 
 class ClusterWait(lister.Lister):
-    """Wait for the services to get a score"""
+    """Wait for services to get a score above specified value"""
 
     log = getLogger(__name__ + '.ClusterWait')
 
@@ -240,6 +240,12 @@ class ClusterWait(lister.Lister):
             type=float,
             default=15.0,
             help='How long to wait for a score')
+        parser.add_argument(
+            '-s', '--score',
+            metavar='<score>',
+            type=int,
+            default=0,
+            help='Minimum score value required for the chosen services')
         return parser
 
     def _wait(self, parsed_args):
@@ -249,8 +255,11 @@ class ClusterWait(lister.Lister):
         if not parsed_args.types:
             types = self.app.client_manager.cluster.service_types()
 
-        delay = float(parsed_args.delay)
+        min_score = parsed_args.score
+        delay = parsed_args.delay
         deadline = now() + delay
+        exc_msg = ("Timeout ({0}s) while waiting for the services to get a "
+                   "score > {1}, still {2} are not")
 
         while True:
             all_descr = []
@@ -259,18 +268,15 @@ class ClusterWait(lister.Lister):
                 for s in tmp:
                     s['type'] = type_
                 all_descr += tmp
-            ko = len([s['score'] for s in tmp if s['score'] <= 0])
-            if ko <= 0:
+            ko = len([s['score'] for s in tmp if s['score'] <= min_score])
+            if ko == 0:
                 for descr in all_descr:
                     yield descr['type'], descr['addr'], descr['score']
                 return
             else:
                 self.log.debug("Still %d services down", ko)
                 if now() > deadline:
-                    raise Exception(
-                            "Timeout ({0}s) while waiting ".format(delay) +
-                            "for the services to get a score, still " +
-                            "{0} are zeroed".format(ko))
+                    raise Exception(exc_msg.format(delay, min_score, ko))
                 else:
                     sleep(1.0)
 
