@@ -210,7 +210,7 @@ GError* m2db_get_storage_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *ur
  * @return
  */
 GError* m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		gint64 retention_delay);
+		gint64 retention_delay, m2_onbean_cb cb, gpointer u0);
 
 /** Delete all aliases of the container, without doing any check.  */
 GError* m2db_flush_container(sqlite3 *db);
