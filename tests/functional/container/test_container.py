@@ -404,6 +404,58 @@ class TestMeta2Containers(BaseTestCase):
         del_properties(p0.keys())
         check_properties(p1)
 
+    def _create_content(self, name):
+        headers = {'X-oio-action-mode': 'autocreate'}
+        params = self.param_content(self.ref, name)
+        resp = self.request('POST', self.url_content('prepare'), params=params,
+                            headers=headers, data=json.dumps({'size': '1024'}))
+        self.assertEqual(200, resp.status)
+        chunks = self.json_loads(resp.data)
+
+        headers = {'x-oio-action-mode': 'autocreate',
+                   'x-oio-content-meta-length': '1024'}
+        resp = self.request('POST', self.url_content('create'), params=params,
+                            headers=headers, data=json.dumps(chunks))
+        self.assertEqual(204, resp.status)
+
+    def test_purge(self):
+        params = self.param_ref(self.ref)
+
+        # no container
+        resp = self.request('POST', self.url_container('purge'),
+                            params=params)
+        self.assertEqual(404, resp.status)
+
+        def purge_and_check(expected_object):
+            resp = self.request('POST', self.url_container('purge'),
+                                params=params)
+            self.assertEqual(204, resp.status)
+            resp = self.request('POST', self.url_container('get_properties'),
+                                params=params)
+            data = self.json_loads(resp.data)
+            self.assertEqual(str(expected_object),
+                             data['system']['sys.m2.objects'])
+            resp = self.request('GET', self.url_container('list'),
+                                params=merge(params, {'all': 1}))
+            data = self.json_loads(resp.data)
+            self.assertEqual(expected_object, len(data['objects']))
+
+        # empty container
+        self._create(params, 201)
+        props = {"system": {"sys.m2.policy.version": "3"}}
+        resp = self.request('POST', self.url_container('set_properties'),
+                            params=params, data=json.dumps(props))
+        purge_and_check(0)
+
+        # one content
+        self._create_content("content")
+        purge_and_check(1)
+
+        # many contents
+        for i in range(100):
+            self._create_content("content")
+        purge_and_check(3)
+
 
 class TestMeta2Contents(BaseTestCase):
     def setUp(self):

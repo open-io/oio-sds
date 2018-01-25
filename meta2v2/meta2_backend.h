@@ -78,7 +78,7 @@ GError* meta2_backend_flush_container(struct meta2_backend_s *m2,
 		struct oio_url_s *url);
 
 GError* meta2_backend_purge_container(struct meta2_backend_s *m2,
-		struct oio_url_s *url);
+		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0);
 
 /* Find and unreference duplicate content headers. */
 GError* meta2_backend_dedup_contents(struct meta2_backend_s *m2b,
