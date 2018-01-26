@@ -20,6 +20,8 @@ import logging
 import simplejson as json
 import struct
 from tests.utils import BaseTestCase, random_str
+from oio.common.constants import OIO_DB_STATUS_NAME, OIO_DB_ENABLED, \
+                                 OIO_DB_FROZEN, OIO_DB_DISABLED
 
 
 def random_content():
@@ -318,6 +320,45 @@ class TestMeta2Containers(BaseTestCase):
         self.assertEqual(resp.status, 500)
         data = self.json_loads(resp.data)
         self.assertEqual(data["status"], 480)
+
+    def _test_create_with_status(self, status=None):
+        def _status(_data):
+            return _data['system']['sys.status']
+
+        params = self.param_ref(self.ref)
+        headers = {}
+        headers['x-oio-action-mode'] = 'autocreate'
+        headers['Content-Type'] = 'application/json'
+        if status:
+            data = ('{"properties":{},' +
+                    '"system":{"sys.status": "%d"}}' % status)
+        else:
+            data = None
+            status = OIO_DB_ENABLED
+
+        resp = self.request('POST', self.url_container('create'),
+                            params=params,
+                            data=data,
+                            headers=headers)
+        self.assertEqual(resp.status, 201)
+
+        resp = self.request('POST', self.url_container('get_properties'),
+                            params=params)
+        data = self.json_loads(resp.data)
+        self.assertEqual(OIO_DB_STATUS_NAME.get(_status(data), "Unknown"),
+                         OIO_DB_STATUS_NAME[status])
+
+    def test_create_without_status(self):
+        self._test_create_with_status(None)
+
+    def test_create_with_enabled_status(self):
+        self._test_create_with_status(OIO_DB_ENABLED)
+
+    def test_create_with_frozen_status(self):
+        self._test_create_with_status(OIO_DB_FROZEN)
+
+    def test_create_with_disabled_status(self):
+        self._test_create_with_status(OIO_DB_DISABLED)
 
     def test_cycle_properties(self):
         params = self.param_ref(self.ref)
