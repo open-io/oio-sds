@@ -19,6 +19,8 @@ env:
   - TEST_SUITE=repli
   - TEST_SUITE=ec
 script:
+  - sudo bash -c "echo '/tmp/core.%p.%E' > /proc/sys/kernel/core_pattern"
+  - ulimit -c unlimited -S
   - set -e
   - mkdir /tmp/oio && source $HOME/oio/bin/activate
   - export CMAKE_OPTS='-DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib -DZK_LIBDIR=/usr/lib -DZK_INCDIR=/usr/include/zookeeper -DAPACHE2_LIBDIR=/usr/lib/apache2 -DAPACHE2_INCDIR=/usr/include/apache2 -DAPACHE2_MODDIR=/tmp/oio/lib/apache2/module'
