@@ -33,7 +33,7 @@ class Content(object):
         self.chunks = ChunksHelper(chunks)
         self.storage_method = storage_method
         self.logger = get_logger(self.conf)
-        self.blob_client = BlobClient()
+        self.blob_client = BlobClient(conf)
         self.container_client = (container_client
                                  or ContainerClient(self.conf,
                                                     logger=self.logger))

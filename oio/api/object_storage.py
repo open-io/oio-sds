@@ -121,6 +121,7 @@ class ObjectStorageApi(object):
             perfdata = self.container.perfdata
             connection_pool = self.container.pool_manager
             self._blob_client = BlobClient(
+                conf={"namespace": self.namespace},
                 connection_pool=connection_pool, perfdata=perfdata)
         return self._blob_client
 
@@ -988,10 +989,10 @@ class ObjectStorageApi(object):
         for resp in del_resps:
             if isinstance(resp, Exception):
                 self.logger.warn('failed to delete chunk %s (%s)',
-                                 resp.chunk['url'], resp)
+                                 resp.chunk.get('real_url', resp.chunk['url']), resp)
             elif resp.status not in (204, 404):
                 self.logger.warn('failed to delete chunk %s (HTTP %s)',
-                                 resp.chunk['url'], resp.status)
+                                 resp.chunk.get('real_url', resp.chunk['url']), resp.status)
 
     def _b2_credentials(self, storage_method, key_file):
         key_file = key_file or '/etc/oio/sds/b2-appkey.conf'

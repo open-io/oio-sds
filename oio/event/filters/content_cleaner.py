@@ -35,23 +35,24 @@ class ContentReaperFilter(Filter):
                 "ec": self._handle_rawx,
                 "backblaze": self._handle_b2,
         }
-        self.blob_client = BlobClient()
+        self.blob_client = BlobClient(self.conf)
 
     def _handle_rawx(self, url, chunks, content_headers,
                      storage_method, reqid):
         cid = url.get('id')
         headers = {'X-oio-req-id': reqid}
+
         resps = self.blob_client.chunk_delete_many(
             chunks, cid=cid, headers=headers)
         for resp in resps:
             if isinstance(resp, Exception):
                 self.logger.warn(
                     'failed to delete chunk %s (%s)',
-                    resp.chunk['url'], resp)
+                    resp.chunk.get('real_url', resp.chunk['url']), resp)
             elif resp.status not in (204, 404):
                 self.logger.warn(
                     'failed to delete chunk %s (HTTP %s)',
-                    resp.chunk['url'], resp.status)
+                    resp.chunk.get('real_url', resp.chunk['url']), resp.status)
 
     def _handle_b2(self, url, chunks, headers, storage_method, reqid):
         meta = {'container_id': url['id']}
