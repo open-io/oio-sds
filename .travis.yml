@@ -10,8 +10,7 @@ install:
   - sudo apt-get install -y --force-yes gdb
   - virtualenv $HOME/oio && source $HOME/oio/bin/activate
   - pip install --upgrade pip setuptools virtualenv tox
-  - pip install --upgrade -r all-requirements.txt
-  - pip install --upgrade -r test-requirements.txt
+  - pip install --upgrade -r all-requirements.txt -r test-requirements.txt
   - pip install --upgrade zkpython
 env:
   - TEST_SUITE=build,unit,small-cache
