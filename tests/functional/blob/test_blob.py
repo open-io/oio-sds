@@ -72,7 +72,7 @@ class TestBlobFunctional(BaseTestCase):
         super(TestBlobFunctional, self).setUp()
         self.namespace = self.conf['namespace']
         self.test_dir = self.conf['sds_path']
-        rawx_num, rawx_path, rawx_addr, rawx_uuid = self.get_service_url('rawx')
+        rawx_num, rawx_path, rawx_addr, _ = self.get_service_url('rawx')
         self.rawx = 'http://' + rawx_addr
         self.rawx_path = rawx_path + '/'
 

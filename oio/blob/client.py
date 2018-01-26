@@ -183,4 +183,5 @@ class BlobClient(object):
     def chunk_link(self, target, link, **kwargs):
         headers = kwargs.get('headers')
         headers["Destination"] = link[:-64] + "/" + link[-64:]
-        return self.http_pool.request('COPY', self.resolve_url(target), headers=headers)
+        return self.http_pool.request('COPY', self.resolve_url(target),
+                                      headers=headers)

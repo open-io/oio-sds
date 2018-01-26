@@ -470,7 +470,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # Ensure the chunks have actually been deleted
         for chunk in chunks:
             self.assertRaises(
-                exc.NotFound, self.api.blob_client.chunk_head, chunk.get('real_url', chunk['url']))
+                exc.NotFound, self.api.blob_client.chunk_head,
+                chunk.get('real_url', chunk['url']))
 
     def test_object_create_commit_deadline_delete_chunks(self):
         name = random_str(16)
@@ -492,7 +493,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # Ensure the chunks have actually been deleted
         for chunk in chunks:
             self.assertRaises(
-                exc.NotFound, self.api.blob_client.chunk_head, chunk.get('real_url', chunk['url']))
+                exc.NotFound, self.api.blob_client.chunk_head,
+                chunk.get('real_url', chunk['url']))
 
     def test_object_create_prepare_deadline_delete_chunks(self):
         name = random_str(16)
@@ -770,7 +772,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # check that every copy exists
         pool_manager = get_pool_manager()
         for copy in copy_list:
-            resp = pool_manager.request('HEAD', self.api._blob_client.resolve_url(copy))
+            resp = pool_manager.request(
+                'HEAD', self.api._blob_client.resolve_url(copy))
             self.assertEqual(resp.status, 200)
             self.assertIn(fullpath[0],
                           resp.headers[CHUNK_HEADERS['full_path']].split(','))

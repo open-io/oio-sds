@@ -197,7 +197,7 @@ class RdirClient(HttpApi):
             self._addr_cache[volume_id] = host
             return host
         except NotFound:
-            raise VolumeException('No rdir assigned to volume %s' % (volume_id))
+            raise VolumeException('No rdir assigned to volume %s' % volume_id)
 
     def _make_uri(self, action, volume_id, req_id=None):
         rdir_host = self._get_rdir_addr(volume_id, req_id)

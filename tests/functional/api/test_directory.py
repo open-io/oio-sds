@@ -292,7 +292,7 @@ class TestDirectoryAPI(BaseTestCase):
         # Do the checks
         for rawx in rawx_list:
             linked_rdir = self.api.list('_RDIR_TEST', _id(rawx),
-                service_type='rdir')['srv']
+                                        service_type='rdir')['srv']
             rdir = rdir_dict[linked_rdir[0]['host']]
             rawx_loc = rawx['tags'].get('tag.loc')
             rdir_loc = rdir['tags'].get('tag.loc')

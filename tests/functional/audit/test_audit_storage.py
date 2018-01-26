@@ -53,7 +53,8 @@ class TestBlobAuditorFunctional(BaseTestCase):
 
         self.test_dir = self.conf['sds_path']
 
-        rawx_num, rawx_path, rawx_addr, rawx_uuid = self.get_service_url('rawx')
+        rawx_num, rawx_path, rawx_addr, rawx_uuid = \
+            self.get_service_url('rawx')
         self.rawx = 'http://' + rawx_uuid
 
         self.h = hashlib.new('md5')
