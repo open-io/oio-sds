@@ -78,7 +78,7 @@ class Checker(object):
         conf = {'namespace': namespace}
         self.account_client = AccountClient(conf)
         self.container_client = ContainerClient(conf)
-        self.blob_client = BlobClient()
+        self.blob_client = BlobClient(conf=conf)
 
         self.accounts_checked = 0
         self.containers_checked = 0
