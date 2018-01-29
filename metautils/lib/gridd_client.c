@@ -1005,6 +1005,7 @@ gridd_client_factory_create(void)
 void
 gridd_client_free (struct gridd_client_s *self)
 {
+	if (!self) return;
 	GRIDD_CALL(self,clean)(self);
 }
 

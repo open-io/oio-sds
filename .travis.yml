@@ -7,10 +7,10 @@ install:
   - sudo apt-get update -qq
   - sudo apt-get install -y --force-yes openio-gridinit openio-asn1c
   - sudo apt-get install -y --force-yes flex bison curl lcov libglib2.0-dev libzookeeper-mt-dev libzmq3-dev libcurl4-gnutls-dev libapreq2-dev libsqlite3-dev libattr1-dev apache2 apache2-dev libapache2-mod-wsgi liblzo2-dev libjson-c-dev libleveldb1 libleveldb-dev libattr1-dev python-all-dev python-virtualenv liberasurecode-dev zookeeper zookeeper-bin zookeeperd beanstalkd
+  - sudo apt-get install -y --force-yes gdb
   - virtualenv $HOME/oio && source $HOME/oio/bin/activate
   - pip install --upgrade pip setuptools virtualenv tox
-  - pip install --upgrade -r all-requirements.txt
-  - pip install --upgrade -r test-requirements.txt
+  - pip install --upgrade -r all-requirements.txt -r test-requirements.txt
   - pip install --upgrade zkpython
 env:
   - TEST_SUITE=build,unit,small-cache
@@ -19,6 +19,8 @@ env:
   - TEST_SUITE=repli
   - TEST_SUITE=ec
 script:
+  - sudo bash -c "echo '/tmp/core.%p.%E' > /proc/sys/kernel/core_pattern"
+  - ulimit -c unlimited -S
   - set -e
   - mkdir /tmp/oio && source $HOME/oio/bin/activate
   - export CMAKE_OPTS='-DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib -DZK_LIBDIR=/usr/lib -DZK_INCDIR=/usr/include/zookeeper -DAPACHE2_LIBDIR=/usr/lib/apache2 -DAPACHE2_INCDIR=/usr/include/apache2 -DAPACHE2_MODDIR=/tmp/oio/lib/apache2/module'
