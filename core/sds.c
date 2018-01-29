@@ -2050,9 +2050,10 @@ _notify_list_result (struct oio_sds_list_listener_s *listener,
 		return err;
 	}
 
-	GRID_TRACE2 ("Found %u items, %u prefixes",
-			json_object_array_length(jobjects),
-			json_object_array_length(jprefixes));
+	/* Type changed to size_t in json-c 0.13 */
+	GRID_TRACE2("Found %zu items, %zu prefixes",
+			(size_t)json_object_array_length(jobjects),
+			(size_t)json_object_array_length(jprefixes));
 
 	const int count_objects = json_object_array_length(jobjects);
 	if (count_objects >= 0)
