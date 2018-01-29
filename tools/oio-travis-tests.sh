@@ -47,7 +47,12 @@ function dump_syslog {
     gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock status3
 }
 
+function dump_coredump {
+    oio-gdb.py
+}
+
 #trap dump_syslog EXIT
+trap dump_coredump EXIT
 
 is_running_test_suite () {
     [ -z "$TEST_SUITE" ] || [ "${TEST_SUITE/*$1*/$1}" == "$1" ]

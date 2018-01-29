@@ -68,6 +68,7 @@ install(PROGRAMS
             oio-election-smudge.py
             oio-election-stat.py
             oio-election-dump.py
+            oio-gdb.py
             ${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-unlock-all.sh
             ${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-flush-all.sh
             ${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-wait-scored.sh
@@ -75,4 +76,3 @@ install(PROGRAMS
             ${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-test-config.py
             ${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-reset.sh
         DESTINATION bin)
-
