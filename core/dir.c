@@ -46,7 +46,7 @@ GError *
 oio_directory__delete (struct oio_directory_s *self,
 		const struct oio_url_s *url)
 {
-	DIR_CALL(self,delete)(self, url);
+	DIR_CALL(self,delete_)(self, url);
 }
 
 GError *

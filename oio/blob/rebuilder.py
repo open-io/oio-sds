@@ -62,22 +62,30 @@ class BlobRebuilderWorker(object):
         self.try_chunk_delete = try_chunk_delete
         self.beanstalkd_addr = beanstalkd_addr
         self.beanstalkd_tube = conf.get('beanstalkd_tube', 'rebuild')
+        self.beanstalk = None
 
     def _fetch_chunks_from_event(self, job_id, data):
         env = json.loads(data)
         for chunk_pos in env['data']['missing_chunks']:
-            yield [env['url']['id'], env['url']['content'], chunk_pos, None]
+            yield [env['url']['id'],
+                   env['url']['content'],
+                   str(chunk_pos),
+                   None]
+
+    def _connect_to_beanstalk(self):
+        self.beanstalk = Beanstalk.from_url(self.beanstalkd_addr)
+        self.beanstalk.use(self.beanstalkd_tube)
+        self.beanstalk.watch(self.beanstalkd_tube)
 
     def _handle_beanstalk_event(self, conn_error):
         try:
             job_id, data = self.beanstalk.reserve()
             if conn_error:
                 self.logger.warn("beanstalk reconnected")
-                conn_error = False
         except ConnectionError:
             if not conn_error:
                 self.logger.warn("beanstalk connection error")
-                conn_error = True
+            raise
         try:
             for chunk in self._fetch_chunks_from_event(job_id, data):
                 yield chunk
@@ -87,13 +95,16 @@ class BlobRebuilderWorker(object):
             self.beanstalk.bury(job_id)
 
     def _fetch_chunks_from_beanstalk(self):
-        self.beanstalk = Beanstalk.from_url(self.beanstalkd_addr)
-        self.beanstalk.use(self.beanstalkd_tube)
-        self.beanstalk.watch(self.beanstalkd_tube)
         conn_error = False
         while 1:
-            for chunk in self._handle_beanstalk_event(conn_error):
-                yield chunk
+            try:
+                self._connect_to_beanstalk()
+                for chunk in self._handle_beanstalk_event(conn_error):
+                    conn_error = False
+                    yield chunk
+            except ConnectionError:
+                conn_error = True
+                time.sleep(1.0)
 
     def _fetch_chunks_from_file(self):
         with open(self.input_file, 'r') as ifile:

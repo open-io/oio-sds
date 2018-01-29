@@ -280,6 +280,66 @@ _is_container_initiated(struct sqlx_sqlite3_s *sq3)
 	return FALSE;
 }
 
+/* TODO(jfs): merge the container's state with the m2_prepare_data and keep
+ *            it cached? */
+static gchar *
+_container_state (struct sqlx_sqlite3_s *sq3)
+{
+	void sep (GString *gs) {
+		if (gs->len > 1 && !strchr(",[{", gs->str[gs->len-1]))
+			g_string_append_c (gs, ',');
+	}
+	void append_int64 (GString *gs, const char *k, gint64 v) {
+		sep (gs);
+		g_string_append_printf (gs, "\"%s\":%"G_GINT64_FORMAT, k, v);
+	}
+	void append_const (GString *gs, const char *k, const char *v) {
+		sep (gs);
+		oio_str_gstring_append_json_pair(gs, k, v);
+	}
+
+	struct oio_url_s *u = sqlx_admin_get_url (sq3);
+
+	/* Patch the SUBTYPE: the URL must represent an object as managed by meta2
+	 * services (and also by end-user APIs). Unlike for sqlx services, the user
+	 * doesn't know anything about the meta2, and never mentions it in URL.
+	 * This is why we strip this from the service type. */
+	if (!strcmp(sq3->name.type, NAME_SRVTYPE_META2))
+		oio_url_set (u, OIOURL_TYPE, "");
+	else if (g_str_has_prefix (sq3->name.type, NAME_SRVTYPE_META2 "."))
+		oio_url_set (u, OIOURL_TYPE, sq3->name.type + sizeof(NAME_SRVTYPE_META2));
+
+	GString *gs = oio_event__create (META2_EVENTS_PREFIX ".container.state", u);
+	g_string_append_static (gs, ",\"data\":{");
+	append_const (gs, "policy", sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY));
+	append_int64 (gs, "ctime", m2db_get_ctime(sq3));
+	append_int64 (gs, "bytes-count", m2db_get_size(sq3));
+	append_int64 (gs, "object-count", m2db_get_obj_count(sq3));
+	g_string_append_static (gs, "}}");
+
+	oio_url_clean (u);
+	return g_string_free(gs, FALSE);
+}
+
+static void
+m2b_add_modified_container(struct meta2_backend_s *m2b,
+		struct sqlx_sqlite3_s *sq3)
+{
+	EXTRA_ASSERT(m2b != NULL);
+	if (m2b->notifier)
+		oio_events_queue__send_overwritable(m2b->notifier,
+				sqlx_admin_get_str(sq3, SQLX_ADMIN_BASENAME),
+				_container_state(sq3));
+
+	gboolean has_peers = FALSE;
+	NAME2CONST(n, sq3->name);
+	GError *err = election_has_peers(sq3->manager, &n, FALSE, &has_peers);
+	if (!err && !has_peers) {
+		meta2_backend_change_callback(sq3, m2b);
+	}
+	g_clear_error(&err);
+}
+
 static void
 m2b_close(struct sqlx_sqlite3_s *sq3)
 {
@@ -516,6 +576,7 @@ _init_container(struct sqlx_sqlite3_s *sq3,
 		m2db_set_ctime (sq3, oio_ext_real_time());
 		m2db_set_size(sq3, 0);
 		m2db_set_obj_count(sq3, 0);
+		sqlx_admin_set_status(sq3, ADMIN_STATUS_ENABLED);
 		sqlx_admin_init_i64(sq3, META2_INIT_FLAG, 1);
 	}
 	if (!err && params->properties) {
@@ -646,7 +707,8 @@ meta2_backend_flush_container(struct meta2_backend_s *m2, struct oio_url_s *url)
 		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 			if (!(err = m2db_flush_container(sq3->db)))
-				err = m2db_purge(sq3, _maxvers(sq3), _retention_delay(sq3));
+				err = m2db_purge(sq3, _maxvers(sq3), _retention_delay(sq3),
+						NULL, NULL);
 			err = sqlx_transaction_end(repctx, err);
 		}
 		m2b_close(sq3);
@@ -656,7 +718,8 @@ meta2_backend_flush_container(struct meta2_backend_s *m2, struct oio_url_s *url)
 }
 
 GError *
-meta2_backend_purge_container(struct meta2_backend_s *m2, struct oio_url_s *url)
+meta2_backend_purge_container(struct meta2_backend_s *m2, struct oio_url_s *url,
+	m2_onbean_cb cb, gpointer u0)
 {
 	GError *err;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -666,9 +729,11 @@ meta2_backend_purge_container(struct meta2_backend_s *m2, struct oio_url_s *url)
 	if (!err) {
 		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
-			err = m2db_purge(sq3, _maxvers(sq3), _retention_delay(sq3));
+			err = m2db_purge(sq3, _maxvers(sq3), _retention_delay(sq3), cb, u0);
 			err = sqlx_transaction_end(repctx, err);
 		}
+		if (!err)
+			m2b_add_modified_container(m2, sq3);
 		m2b_close(sq3);
 	}
 
@@ -719,66 +784,6 @@ meta2_backend_get_alias(struct meta2_backend_s *m2b,
 	}
 
 	return err;
-}
-
-/* TODO(jfs): merge the container's state with the m2_prepare_data and keep
- *            it cached? */
-static gchar *
-_container_state (struct sqlx_sqlite3_s *sq3)
-{
-	void sep (GString *gs) {
-		if (gs->len > 1 && !strchr(",[{", gs->str[gs->len-1]))
-			g_string_append_c (gs, ',');
-	}
-	void append_int64 (GString *gs, const char *k, gint64 v) {
-		sep (gs);
-		g_string_append_printf (gs, "\"%s\":%"G_GINT64_FORMAT, k, v);
-	}
-	void append_const (GString *gs, const char *k, const char *v) {
-		sep (gs);
-		oio_str_gstring_append_json_pair(gs, k, v);
-	}
-
-	struct oio_url_s *u = sqlx_admin_get_url (sq3);
-
-	/* Patch the SUBTYPE: the URL must represent an object as managed by meta2
-	 * services (and also by end-user APIs). Unlike for sqlx services, the user
-	 * doesn't know anything about the meta2, and never mentions it in URL.
-	 * This is why we strip this from the service type. */
-	if (!strcmp(sq3->name.type, NAME_SRVTYPE_META2))
-		oio_url_set (u, OIOURL_TYPE, "");
-	else if (g_str_has_prefix (sq3->name.type, NAME_SRVTYPE_META2 "."))
-		oio_url_set (u, OIOURL_TYPE, sq3->name.type + sizeof(NAME_SRVTYPE_META2));
-
-	GString *gs = oio_event__create (META2_EVENTS_PREFIX ".container.state", u);
-	g_string_append_static (gs, ",\"data\":{");
-	append_const (gs, "policy", sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY));
-	append_int64 (gs, "ctime", m2db_get_ctime(sq3));
-	append_int64 (gs, "bytes-count", m2db_get_size(sq3));
-	append_int64 (gs, "object-count", m2db_get_obj_count(sq3));
-	g_string_append_static (gs, "}}");
-
-	oio_url_clean (u);
-	return g_string_free(gs, FALSE);
-}
-
-static void
-m2b_add_modified_container(struct meta2_backend_s *m2b,
-		struct sqlx_sqlite3_s *sq3)
-{
-	EXTRA_ASSERT(m2b != NULL);
-	if (m2b->notifier)
-		oio_events_queue__send_overwritable(m2b->notifier,
-				sqlx_admin_get_str(sq3, SQLX_ADMIN_BASENAME),
-				_container_state (sq3));
-
-	gboolean has_peers = FALSE;
-	NAME2CONST(n, sq3->name);
-	GError *err = election_has_peers(sq3->manager, &n, FALSE, &has_peers);
-	if (!err && !has_peers) {
-		meta2_backend_change_callback(sq3, m2b);
-	}
-	g_clear_error(&err);
 }
 
 /* TODO(jfs): maybe is there a way to keep this in a cache */

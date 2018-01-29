@@ -39,8 +39,9 @@ struct oio_directory_vtable_s
 	GError * (*create) (struct oio_directory_s *self,
 			const struct oio_url_s *url);
 
-	/* the OIOURL_TYPE in <url> will be ignored */
-	GError * (*delete) (struct oio_directory_s *self,
+	/* The OIOURL_TYPE in <url> will be ignored.
+	 * The trailing underscore is there to avoid conflict with C++ keyword. */
+	GError * (*delete_) (struct oio_directory_s *self,
 			const struct oio_url_s *url);
 
 	/* the OIOURL_TYPE in <url> will be ignored */

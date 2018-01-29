@@ -36,16 +36,17 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/oio-sds.pc
 install(TARGETS oio-tool DESTINATION bin)
 
 install(PROGRAMS
-			zk-bootstrap.py
-			zk-reset.py
-			oio-election-reset.py
-			oio-election-smudge.py
-			oio-election-stat.py
-			oio-election-dump.py
+            zk-bootstrap.py
+            zk-reset.py
+            oio-election-reset.py
+            oio-election-smudge.py
+            oio-election-stat.py
+            oio-election-dump.py
+            oio-gdb.py
 			oio-unlock-all.sh
 			oio-flush-all.sh
 			oio-wait-scored.sh
 			${CMAKE_CURRENT_BINARY_DIR}/oio-bootstrap.py
 			oio-test-config.py
 			oio-reset.sh
-		DESTINATION bin)
+        DESTINATION bin)

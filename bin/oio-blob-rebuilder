@@ -55,10 +55,13 @@ tube for broken chunks events.
                  "'container_id|content_id|short_chunk_id_or_position'."
     parser.add_argument('--input-file', nargs='?',
                         help=ifile_help)
+    beanstalk_help = "Listen to broken chunks events from a beanstalkd tube " \
+                     "instead of querying rdir."
     parser.add_argument('--beanstalkd',
-                        help='address of the service beanstalkd')
+                        metavar='IP:PORT',
+                        help=beanstalk_help)
     parser.add_argument('--beanstalkd-tube',
-                        help='the tube to use for the beanstalkd service')
+                        help='The beanstalk tube to use (default: "rebuild")')
 
     return parser
 
@@ -103,5 +106,7 @@ if __name__ == '__main__':
             worker.rebuilder_pass_with_lock()
         else:
             worker.rebuilder_pass()
+    except KeyboardInterrupt:
+        logger.info('Exiting')
     except Exception as e:
         logger.exception('ERROR in rebuilder: %s' % e)

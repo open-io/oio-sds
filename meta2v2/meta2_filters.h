@@ -28,6 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 struct gridd_filter_ctx_s;
 struct gridd_reply_ctx_s;
+struct meta2_backend_s;
 
 struct on_bean_ctx_s
 {
@@ -43,6 +44,9 @@ struct on_bean_ctx_s *_on_bean_ctx_init(struct gridd_filter_ctx_s *ctx,
 void _on_bean_ctx_send_list(struct on_bean_ctx_s *obc);
 
 void _on_bean_ctx_clean(struct on_bean_ctx_s *obc);
+
+void _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
+		GSList *beans, const char *name, gboolean send_chunks);
 
 /* -------------------------------------------------------------------------- */
 

@@ -47,7 +47,7 @@ enum content_action_e
 	DELETE,
 };
 
-static void
+void
 _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		GSList *beans, const char *name, gboolean send_chunks)
 {

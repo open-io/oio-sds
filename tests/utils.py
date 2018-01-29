@@ -19,7 +19,6 @@ from six import text_type
 import logging
 import sys
 import os
-import json
 import yaml
 import testtools
 import random
@@ -137,8 +136,11 @@ class CommonTestCase(testtools.TestCase):
     def param_content(self, ref, path):
         return {'ref': ref, 'acct': self.account, 'path': path}
 
-    def request(self, method, url, data=None, params=None, headers=None,
-                json=None):
+    @staticmethod
+    def static_request(method, url, data=None, params=None, headers=None,
+                       json=None, http_pool=None):
+        if not http_pool:
+            http_pool = get_pool_manager()
         # Add query string
         if params:
             out_param = []
@@ -160,7 +162,20 @@ class CommonTestCase(testtools.TestCase):
         out_kwargs['headers'] = headers
         out_kwargs['body'] = data
 
-        return self.http_pool.request(method, url, **out_kwargs)
+        return http_pool.request(method, url, **out_kwargs)
+
+    def request(self, method, url,
+                data=None, params=None, headers=None, json=None):
+        return self.static_request(method, url, data=data, params=params,
+                                   headers=headers, json=json,
+                                   http_pool=self.http_pool)
+
+    @classmethod
+    def setUpClass(cls):
+        cls._cls_conf = get_config()
+        cls._cls_account = cls._cls_conf['account']
+        cls._cls_ns = cls._cls_conf['namespace']
+        cls._cls_uri = 'http://' + cls._cls_conf['proxy']
 
     def setUp(self):
         super(CommonTestCase, self).setUp()
@@ -188,23 +203,28 @@ class CommonTestCase(testtools.TestCase):
 
     def _register_srv(self, srv):
         resp = self.request('POST', self._url_cs("register"),
-                            json.dumps(srv), headers=self.TEST_HEADERS)
+                            jsonlib.dumps(srv), headers=self.TEST_HEADERS)
         self.assertIn(resp.status, (200, 204))
 
     def _lock_srv(self, srv):
         resp = self.request('POST', self._url_cs("lock"),
-                            json.dumps(srv), headers=self.TEST_HEADERS)
+                            jsonlib.dumps(srv), headers=self.TEST_HEADERS)
         self.assertIn(resp.status, (200, 204))
 
     def _unlock_srv(self, srv):
         resp = self.request('POST', self._url_cs("unlock"),
-                            json.dumps(srv), headers=self.TEST_HEADERS)
+                            jsonlib.dumps(srv), headers=self.TEST_HEADERS)
         self.assertIn(resp.status, (200, 204))
 
     def _flush_proxy(self):
         url = self.uri + '/v3.0/cache/flush/local'
         resp = self.request('POST', url, '', headers=self.TEST_HEADERS)
         self.assertEqual(resp.status / 100, 2)
+
+    @classmethod
+    def _cls_reload_proxy(cls):
+        url = '{0}/v3.0/{1}/lb/reload'.format(cls._cls_uri, cls._cls_ns)
+        cls.static_request('POST', url, '')
 
     def _reload_proxy(self):
         url = '{0}/v3.0/{1}/lb/reload'.format(self.uri, self.ns)
@@ -219,6 +239,13 @@ class CommonTestCase(testtools.TestCase):
                                     params={'id': t['addr']},
                                     headers=self.TEST_HEADERS)
                 self.assertEqual(resp.status, 204)
+
+    @classmethod
+    def _cls_reload_meta(cls):
+        for srvtype in ('meta1', 'meta2'):
+            for t in cls._cls_conf['services'][srvtype]:
+                url = cls._cls_uri + '/v3.0/forward/reload'
+                cls.static_request('POST', url, params={'id': t['addr']})
 
     def _reload_meta(self):
         for srvtype in ('meta1', 'meta2'):
@@ -262,7 +289,7 @@ class CommonTestCase(testtools.TestCase):
     @classmethod
     def json_loads(cls, data):
         try:
-            return json.loads(data)
+            return jsonlib.loads(data)
         except ValueError:
             logging.info("Unparseable data: %s", str(data))
             raise
