@@ -246,6 +246,7 @@ label_retry:
 		}
 	} else {
 		EXTRA_ASSERT(m1uv != NULL);
+
 		if (*ctx->type == '#') {
 			/* when looking for a directory service, the resolver always replies
 			 * all the services involved. Let's keep only the services with the
@@ -280,40 +281,55 @@ label_retry:
 
 		const char *url = pu[0];
 		const char *next_url = pu[1];
-		struct gridd_client_s *client = NULL;
 		GByteArray *body = NULL;
 
-		/* TODO ensure the service match the expected TYPE and SEQ */
-		if (!ctx->decoder) {
-			client = gridd_client_create (url, packed, &body, _on_reply);
+		struct gridd_client_s *client = gridd_client_create_empty();
+		if (!client) {
+			err = SYSERR("Memory allocation error");
 		} else {
-			client = gridd_client_create (url, packed, ctx->decoder_data, ctx->decoder);
+			err = gridd_client_connect_url(client, url);
+			if (err) {
+				GRID_WARN("Invalid peer [%s]", url);
+				err->code = ERRCODE_CONN_NOROUTE;
+			}
 		}
 
-#ifdef HAVE_ENBUG
-		gint32 threshold = 0;
-		if (url == m1uv[0] && !next_url)
-			threshold = oio_proxy_request_failure_threshold_alone;
-		else if (url == m1uv[0])
-			threshold = oio_proxy_request_failure_threshold_first;
-		else if (next_url == NULL)
-			threshold = oio_proxy_request_failure_threshold_last;
-		else
-			threshold = oio_proxy_request_failure_threshold_middle;
-		if (threshold >= oio_ext_rand_int_range(1, 100)) {
-			err = NEWERROR(CODE_AVOIDED, "FAKE ERROR");
-		} else {
-#endif /* HAVE_ENBUG */
-			/* Send a unitary request */
-			if (ctx->which == CLIENT_RUN_ALL)
-				gridd_client_no_redirect (client);
-			gridd_client_start (client);
-			gridd_client_set_timeout (client, ctx->timeout);
-			if (!(err = gridd_client_loop (client)))
-				err = gridd_client_error (client);
-#ifdef HAVE_ENBUG
+		if (!err) {
+			/* TODO ensure the service match the expected TYPE and SEQ */
+			if (!ctx->decoder) {
+				err = gridd_client_request(client, packed, &body, _on_reply);
+			} else {
+				err = gridd_client_request(client, packed, ctx->decoder_data, ctx->decoder);
+			}
 		}
+
+		if (!err) {
+#ifdef HAVE_ENBUG
+			gint32 threshold = 0;
+			if (url == m1uv[0] && !next_url)
+				threshold = oio_proxy_request_failure_threshold_alone;
+			else if (url == m1uv[0])
+				threshold = oio_proxy_request_failure_threshold_first;
+			else if (next_url == NULL)
+				threshold = oio_proxy_request_failure_threshold_last;
+			else
+				threshold = oio_proxy_request_failure_threshold_middle;
+			if (threshold >= oio_ext_rand_int_range(1, 100)) {
+				err = NEWERROR(CODE_AVOIDED, "FAKE ERROR");
+			} else {
+#endif /* HAVE_ENBUG */
+				/* Send a unitary request */
+				if (ctx->which == CLIENT_RUN_ALL)
+					gridd_client_no_redirect (client);
+				gridd_client_start (client);
+				gridd_client_set_timeout (client, ctx->timeout);
+				if (!(err = gridd_client_loop (client)))
+					err = gridd_client_error (client);
+#ifdef HAVE_ENBUG
+			}
 #endif
+		}
+
 		/* ensure an output for that request: each array (url, body, error)
 		 * must contain the correspondinng item. */
 		if (err) {
@@ -334,7 +350,7 @@ label_retry:
 		/* Check for a possible redirection */
 		if (flag_prefer_master_for_read || flag_prefer_slave_for_read
 				|| flag_prefer_master_for_write) {
-			const char *actual = gridd_client_url(client);
+			const char *actual = client ? gridd_client_url(client) : NULL;
 			if (actual && 0 != strcmp(actual, url)) {
 				gchar *k = g_strdup(election_key);
 				gchar *v = g_strdup(actual);
@@ -383,8 +399,10 @@ label_retry:
 				stop = TRUE;
 		}
 
-		gridd_client_free (client);
-		client = NULL;
+		if (client) {
+			gridd_client_free (client);
+			client = NULL;
+		}
 	}
 
 	EXTRA_ASSERT(urlv->len == bodyv->len);
