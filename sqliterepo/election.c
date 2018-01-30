@@ -1963,6 +1963,7 @@ _result_GETVERS (GError *enet,
 			}
 			transition(member, EVT_GETVERS_KO, &reqid);
 		}
+		member_unref(member);
 		member_unlock(member);
 	}
 
