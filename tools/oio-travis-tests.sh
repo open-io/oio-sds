@@ -109,17 +109,17 @@ test_proxy_forward () {
 		"http://$proxy/v3.0/config" >/dev/null
 
 	for url in $(oio-test-config.py -t meta2 -t meta0 -t meta1) ; do
-		curl -X GET "http://$proxy/v3.0/forward/config&id=$url" >/dev/null
+		curl -X GET "http://$proxy/v3.0/forward/config?id=$url" >/dev/null
 		curl -X POST -d '{"socket.nodelay.enabled":"on"}' \
-			"http://$proxy/v3.0/forward/config&id=$url" >/dev/null
-		curl -X POST "http://$proxy/v3.0/forward/flush&id=$url" >/dev/null
-		curl -X POST "http://$proxy/v3.0/forward/reload&id=$url" >/dev/null
-		curl -X POST "http://$proxy/v3.0/forward/ping&id=$url" >/dev/null
-		curl -X POST "http://$proxy/v3.0/forward/lean-glib&id=$url" >/dev/null
-		curl -X POST "http://$proxy/v3.0/forward/lean-sqlx&id=$url" >/dev/null
-		curl -X POST "http://$proxy/v3.0/forward/version&id=$url" >/dev/null
-		curl -X POST "http://$proxy/v3.0/forward/handlers&id=$url" >/dev/null
-		curl -X POST "http://$proxy/v3.0/forward/info&id=$url" >/dev/null
+			"http://$proxy/v3.0/forward/config?id=$url" >/dev/null
+		curl -X POST "http://$proxy/v3.0/forward/flush?id=$url" >/dev/null
+		curl -X POST "http://$proxy/v3.0/forward/reload?id=$url" >/dev/null
+		curl -X POST "http://$proxy/v3.0/forward/ping?id=$url" >/dev/null
+		curl -X POST "http://$proxy/v3.0/forward/lean-glib?id=$url" >/dev/null
+		curl -X POST "http://$proxy/v3.0/forward/lean-sqlx?id=$url" >/dev/null
+		curl -X POST "http://$proxy/v3.0/forward/version?id=$url" >/dev/null
+		curl -X POST "http://$proxy/v3.0/forward/handlers?id=$url" >/dev/null
+		curl -X POST "http://$proxy/v3.0/forward/info?id=$url" >/dev/null
 	done
 }
 
