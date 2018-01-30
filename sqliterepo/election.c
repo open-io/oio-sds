@@ -3403,7 +3403,7 @@ _send_NONE_to_state(struct deque_beacon_s *beacon)
 	GPtrArray *members = _DEQUE_extract (beacon);
 	for (guint i=0; i<members->len ;++i) {
 		struct election_member_s *m = members->pdata[i];
-		_member_react (m, EVT_NONE, NULL);
+		transition (m, EVT_NONE, NULL);
 		count ++;
 	}
 	g_ptr_array_free (members, TRUE);
