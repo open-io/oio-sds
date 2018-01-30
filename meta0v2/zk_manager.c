@@ -102,7 +102,8 @@ zk_main_watch(zhandle_t *zh, int type, int state, const char *path,
 		if (!manager->zh) {
 			GRID_ERROR("ZooKeeper init failure: (%d) %s",
 					errno, strerror(errno));
-			abort();
+			grid_main_set_status (2);
+			grid_main_stop();
 		}
 	}
 	else if (state == ZOO_AUTH_FAILED_STATE) {
