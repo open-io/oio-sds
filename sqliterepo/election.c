@@ -146,6 +146,7 @@ struct logged_event_s
 	enum event_type_e event   :8;
 	enum election_step_e pre  :4;
 	enum election_step_e post :4;
+	gint64 time              :48;  // cheeseparing economies
 } __attribute__ ((packed));
 
 /* @private */
@@ -963,6 +964,7 @@ member_log_event(struct election_member_s *member, enum election_step_e pre,
 	plog->event = evt;
 	plog->pre = pre;
 	plog->post = member->step;
+	plog->time = (oio_ext_real_time() / G_TIME_SPAN_MILLISECOND) % (1L << 48);
 }
 
 #ifdef HAVE_EXTRA_DEBUG
@@ -1170,11 +1172,11 @@ member_json (struct election_member_s *m, GString *gs)
 	g_string_append_c (gs, ',');
 	OIO_JSON_append_str (gs, "zk", m->key);
 	g_string_append_static (gs, "},\"#\":{");
-	OIO_JSON_append_int (gs, "R", m->refcount);
+	OIO_JSON_append_int (gs, "refcount", m->refcount);
 	g_string_append_c (gs, ',');
-	OIO_JSON_append_int (gs, "P", m->pending_PIPEFROM);
+	OIO_JSON_append_int (gs, "pipefrom", m->pending_PIPEFROM);
 	g_string_append_c (gs, ',');
-	OIO_JSON_append_int (gs, "V", m->pending_GETVERS);
+	OIO_JSON_append_int (gs, "getvers", m->pending_GETVERS);
 	g_string_append_c (gs, '}');
 
 	/* the peers */
@@ -1207,7 +1209,8 @@ member_json (struct election_member_s *m, GString *gs)
 			break;
 		if (i!=0)
 			g_string_append_c(gs, ',');
-		g_string_append_printf(gs, "\"%s:%s:%s\"", _step2str(plog->pre),
+		g_string_append_printf(gs, "\"%"G_GINT64_FORMAT":%s:%s:%s\"",
+				(gint64)plog->time, _step2str(plog->pre),
 				_evt2str(plog->event), _step2str(plog->post));
 	}
 	g_string_append_static (gs, "]}");
