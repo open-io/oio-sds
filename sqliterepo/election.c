@@ -309,6 +309,14 @@ static gboolean _zoo_disconnected(int zrc) {
 
 /* ------------------------------------------------------------------------- */
 
+#define member_log_change(member,evt,action) do { \
+	const enum election_step_e pre = member->step; \
+	action; \
+	const enum election_step_e post = member->step; \
+	if (evt != EVT_NONE || pre != post) \
+		member_log_event(member, pre, evt); \
+} while (0)
+
 static void member_destroy(struct election_member_s *member);
 
 static void _manager_clean(struct election_manager_s *manager);
@@ -1601,7 +1609,8 @@ deferred_watch_COMMON(struct deferred_watcher_context_s *d,
 		 * and thus we cannot find any specific election member. */
 		if (member != NULL) {
 			member_reset(member);
-			member_set_status(member, STEP_NONE);
+			member_log_change(member, EVT_DISCONNECTED,
+					member_set_status(member, STEP_NONE));
 		}
 		/* We cannot run all the election and reset everything, because we
 		 * introduced a sharding of the elections across several ZK clusters
@@ -3316,12 +3325,7 @@ static void
 transition(struct election_member_s *member, enum event_type_e evt,
 		void *evt_arg)
 {
-	enum election_step_e pre = member->step;
-	_member_react(member, evt, evt_arg);
-	enum election_step_e post = member->step;
-
-	if (evt != EVT_NONE || pre != post)
-		member_log_event(member, pre, evt);
+	member_log_change(member, evt, _member_react(member, evt, evt_arg));
 
 	/* re-kickoff elections marked as to be restarted, but only if without
 	 * activity and if the manager if not being exited. */
