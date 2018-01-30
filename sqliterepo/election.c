@@ -33,7 +33,7 @@ License along with this library.
 #include "gridd_client_pool.h"
 #include "internals.h"
 
-#define EVENTLOG_SIZE 16
+#define EVENTLOG_SIZE 32
 #define STATUS_FINAL(e) ((e) >= STEP_SLAVE)
 
 #define MEMBER_NAME(n, m) NAME2CONST(n, m->inline_name)
