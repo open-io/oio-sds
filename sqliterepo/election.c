@@ -1359,10 +1359,9 @@ deferred_completion_WATCHING(struct exec_later_WATCHING_context_s *d)
 
 	member_lock(d->member);
 	member_log_completion("WATCH", d->zrc, d->member);
-	if (d->zrc == ZNONODE) {
-		transition(d->member, EVT_LEFT_SELF, NULL);
-		transition(d->member, EVT_EXISTS_KO, NULL);
-	} else if (d->zrc != ZOK) {
+	if (d->zrc != ZOK) {
+		if (d->zrc == ZNONODE)
+			transition(d->member, EVT_LEFT_SELF, NULL);
 		transition_error(d->member, EVT_EXISTS_KO, d->zrc);
 	} else {
 		transition(d->member, EVT_EXISTS_OK, NULL);
