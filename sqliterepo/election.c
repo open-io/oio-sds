@@ -1333,9 +1333,9 @@ completion_CREATING(int zrc, const char *path, const void *d)
 	ctx->magic = DAT_CREATING;
 	ctx->member = (struct election_member_s *) d;
 	ctx->local_id = -1;
-	ctx->zrc = ZNONODE;
-	if (path && _extract_id(path, &ctx->local_id))
-		ctx->zrc = zrc;
+	ctx->zrc = zrc;
+	if (path)
+		_extract_id(path, &ctx->local_id);
 
 	struct election_manager_s *M = ctx->member->manager;
 	_thlocal_set_manager(M);
