@@ -1398,9 +1398,9 @@ deferred_completion_ASKING(struct exec_later_ASKING_context_s *d)
 
 	member_lock(d->member);
 	member_log_completion("ASK", d->zrc, d->member);
-	if (d->zrc != ZOK)
+	if (d->zrc != ZOK) {
 		transition_error(d->member, EVT_MASTER_KO, d->zrc);
-	else {
+	} else {
 		if (!d->master[0] || !metautils_url_valid_for_connect(d->master)) {
 			transition(d->member, EVT_MASTER_BAD, NULL);
 		} else {
