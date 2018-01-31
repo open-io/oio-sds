@@ -544,7 +544,7 @@ class EcChunkWriter(object):
     @classmethod
     def connect(cls, chunk, sysmeta, reqid=None,
                 connection_timeout=None, write_timeout=None, **_kwargs):
-        raw_url = chunk["url"]
+        raw_url = chunk.get("real_url", chunk["url"])
         parsed = urlparse(raw_url)
         chunk_path = parsed.path.split('/')[-1]
         hdrs = headers_from_object_metadata(sysmeta)
@@ -925,7 +925,7 @@ class ECRebuildHandler(object):
 
     def _get_response(self, chunk, headers):
         resp = None
-        parsed = urlparse(chunk['url'])
+        parsed = urlparse(chunk.get('real_url', chunk['url']))
         try:
             with green.ConnectionTimeout(self.connection_timeout):
                 conn = io.http_connect(
