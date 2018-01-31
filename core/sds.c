@@ -1180,6 +1180,7 @@ oio_sds_upload_init (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst)
 	ul->checksum_chunk = NULL;
 	ul->buffer_tail = g_queue_new ();
 	ul->metachunk_ready = g_queue_new ();
+	ul->chunk_size = dst->chunk_size;
 
 	if (dst->content_id) {
 		EXTRA_ASSERT(oio_str_ishexa1 (dst->content_id));
