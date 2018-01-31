@@ -65,7 +65,7 @@ test_local_poll (void)
 	/* now poll some pools */
 	for (int i = 0; i < 4096; i++) {
 		guint count = 0;
-		void _on_item (oio_location_t location, const char *id) {
+		void _on_item (oio_location_t location, const char *id, const char *addr UNUSED) {
 			(void) location, (void) id;
 			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT, id, location);
 			++ count;
@@ -109,7 +109,7 @@ test_local_poll_same_low_bits(void)
 	/* now poll some pools */
 	for (int i = 0; i < 4096; i++) {
 		guint count = 0;
-		void _on_item (oio_location_t location, const char *id) {
+		void _on_item (oio_location_t location, const char *id, const char *addr UNUSED) {
 			(void) location, (void) id;
 			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT, id, location);
 			++ count;
@@ -187,7 +187,7 @@ _test_uniform_repartition(int services, int slots, int targets)
 	/* now poll some pools */
 	for (int i = 0; i < shots; i++) {
 		guint count = 0;
-		void _on_item(oio_location_t location, const char *id) {
+		void _on_item(oio_location_t location, const char *id, const char *addr UNUSED) {
 			(void) location, (void) id;
 			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT, id, location);
 			++count;
@@ -362,7 +362,7 @@ _test_repartition_by_loc_level(struct oio_lb_world_s *world,
 			g_datalist_init(&count_by_level_by_host[j]);
 		}
 		guint count = 0;
-		void _on_item(oio_location_t location, const char *id) {
+		void _on_item(oio_location_t location, const char *id, const char *addr UNUSED) {
 			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT, id, location);
 			++count;
 			// Count how many times an "area" is selected, for each area level.

@@ -83,7 +83,7 @@ _lb(struct req_args_s *args, const char *srvtype)
 	g_string_free(targets, TRUE);
 
 	GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
-	void _on_id(oio_location_t loc, const char *id) {
+	void _on_id(oio_location_t loc, const char *id, const char *addr UNUSED) {
 		(void)loc;
 		g_ptr_array_add(ids, g_strdup(id));
 	}
@@ -214,7 +214,7 @@ _poll(struct req_args_s *args, struct json_object *body)
 	}
 
 	GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
-	void _on_id(oio_location_t loc, const char *id) {
+	void _on_id(oio_location_t loc, const char *id, const char *addr UNUSED) {
 		(void)loc;
 		g_ptr_array_add(ids, g_strdup(id));
 	}

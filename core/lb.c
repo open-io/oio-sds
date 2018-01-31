@@ -102,6 +102,7 @@ struct _lb_item_s
 	oio_location_t location;
 	oio_refcount_t refcount;
 	oio_weight_t weight;
+	gchar addr[STRLEN_ADDRINFO];
 	gchar id[];
 };
 
@@ -203,7 +204,7 @@ struct oio_lb_pool_LOCAL_s
 
 struct polling_ctx_s
 {
-	void (*on_id) (oio_location_t location, const char *id);
+	void (*on_id) (oio_location_t location, const char *id, const char *addr);
 	const oio_location_t * avoids;
 	const oio_location_t * polled;
 	oio_location_t *next_polled;
@@ -250,12 +251,13 @@ static struct oio_lb_pool_vtable_s vtable_LOCAL =
 };
 
 static struct _lb_item_s *
-_item_make (oio_location_t location, const char *id)
+_item_make (oio_location_t location, const char *id, const char *addr)
 {
 	int len = strlen (id);
 	struct _lb_item_s *out = g_malloc0 (sizeof(struct _lb_item_s) + len + 1);
 	out->location = location;
 	strcpy (out->id, id);
+	strcpy (out->addr, addr);
 	return out;
 }
 
@@ -579,7 +581,7 @@ _accept_item(struct oio_lb_slot_s *slot, const guint16 bit_shift,
 	}
 	GRID_TRACE("Accepting item %s (0x%"OIO_LOC_FORMAT") from slot %s",
 			item->id, loc, slot->name);
-	ctx->on_id((oio_location_t)loc, item->id);
+	ctx->on_id((oio_location_t)loc, item->id, item->addr);
 	*(ctx->next_polled) = loc;
 
 	_level_datalist_incr_loc(ctx->counters, loc);
@@ -685,7 +687,7 @@ _local_target__poll(struct oio_lb_pool_LOCAL_s *lb,
 static GError*
 _local__poll (struct oio_lb_pool_s *self,
 		const oio_location_t * avoids,
-		void (*on_id) (oio_location_t, const char *),
+		void (*on_id) (oio_location_t, const char *, const char *),
 		gboolean *flawed)
 {
 	return _local__patch(self, avoids, NULL, on_id, flawed);
@@ -745,7 +747,7 @@ _dist_to_bit_shift(guint16 dist, gboolean nearby_mode)
 static GError*
 _local__patch(struct oio_lb_pool_s *self,
 		const oio_location_t *avoids, const oio_location_t *known,
-		void (*on_id) (oio_location_t location, const char *id),
+		void (*on_id) (oio_location_t location, const char *id, const char *addr),
 		gboolean *flawed)
 {
 	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
@@ -1132,6 +1134,7 @@ oio_lb_world__get_item(struct oio_lb_world_s *self, const char *id)
 		item->location = item0->location;
 		item->weight = item0->weight;
 		strcpy(item->id, id);
+		strcpy(item->addr, item0->addr);
 	}
 	g_rw_lock_reader_unlock(&self->lock);
 	return item;
@@ -1213,7 +1216,7 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 	if (!item0) {
 
 		/* Item unknown in the world, so we add it */
-		item0 = _item_make (item->location, item->id);
+		item0 = _item_make (item->location, item->id, item->addr);
 		item0->weight = item->weight;
 		g_tree_replace (self->items, g_strdup(item0->id), item0);
 
