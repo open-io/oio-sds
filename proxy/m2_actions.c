@@ -483,6 +483,30 @@ _reply_simplified_beans (struct req_args_s *args, GError *err,
 			struct bean_CHUNKS_s *chunk = l0->data;
 			gint32 score = _score_from_chunk_id(CHUNKS_get_id(chunk)->str);
 			g_string_append_printf (gstr, "{\"url\":\"%s\"", CHUNKS_get_id (chunk)->str);
+
+			/* XXX remove this stupid lookup, we should use a flag received from meta2 or generate id and url inside meta2 ? */
+			/* TODO(mb) it should be factorized with _score_from_chunk_id */
+			{
+				gchar *key = NULL, *type = NULL, *netloc = NULL;
+				char *_id = strdup(CHUNKS_get_id(chunk)->str);
+
+				// FIXME: probably broken with B2 URLs
+				oio_parse_chunk_url(_id, &type, &netloc, NULL);
+				key = oio_make_service_key(ns_name, type, netloc);
+				struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
+
+				/* generate real_url, only if item was found */
+				if (item) {
+					g_string_append_printf (gstr, ",\"real_url\":\"http://%s/%s\"",
+											item->addr,_id + strlen("http://") + strlen(netloc) + 1);
+					g_free(item);
+				}
+
+				g_free(key);
+				g_free(netloc);
+				g_free(type);
+				g_free(_id);
+			}
 			g_string_append_printf (gstr, ",\"pos\":\"%s\"", CHUNKS_get_position (chunk)->str);
 			g_string_append_printf (gstr, ",\"size\":%"G_GINT64_FORMAT, CHUNKS_get_size (chunk));
 			g_string_append_static (gstr, ",\"hash\":\"");
