@@ -23,6 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 struct req_args_s;
 
 enum http_rc_e action_cache_status (struct req_args_s *args);
+enum http_rc_e action_cache_show (struct req_args_s *args);
 enum http_rc_e action_get_config (struct req_args_s *args);
 enum http_rc_e action_set_config (struct req_args_s *args);
 

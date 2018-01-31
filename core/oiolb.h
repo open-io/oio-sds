@@ -92,6 +92,10 @@ void oio_lb_world__destroy (struct oio_lb_world_s *self);
 /* Flush all items of all slots */
 void oio_lb_world__flush(struct oio_lb_world_s *self);
 
+/* Retrieve all items of all slots */
+void oio_lb_world__parse (struct oio_lb_world_s *self, void *user,
+		void (*on_item)(const char *id, const char *addr, void *user));
+
 /* Use this carefully, it GRID_DEBUG() all the items in the given world */
 void oio_lb_world__debug (struct oio_lb_world_s *self);
 

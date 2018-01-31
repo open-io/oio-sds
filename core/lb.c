@@ -1298,6 +1298,20 @@ oio_lb_world__feed_slot (struct oio_lb_world_s *self, const char *name,
 	g_rw_lock_writer_unlock(&self->lock);
 }
 
+void
+oio_lb_world__parse (struct oio_lb_world_s *self, void *user,
+		void (*on_item)(const char *id, const char *addr, void *user))
+{
+	gboolean _on_id(gpointer _key UNUSED, gpointer _item, gpointer data) {
+		struct _lb_item_s *item = _item;
+		(*on_item)(item->id, item->addr, data);
+		return FALSE;
+	}
+	g_rw_lock_writer_lock(&self->lock);
+	g_tree_foreach (self->items, (GTraverseFunc) _on_id, user);
+	g_rw_lock_writer_unlock(&self->lock);
+}
+
 static void
 _slot_debug (struct oio_lb_slot_s *slot)
 {

@@ -505,6 +505,7 @@ _reply_simplified_beans (struct req_args_s *args, GError *err,
 
 			// Serialize the chunk
 			struct bean_CHUNKS_s *chunk = l0->data;
+
 			const char *chunk_id = CHUNKS_get_id(chunk)->str;
 			gint32 score = _score_from_chunk_id(chunk_id);
 			g_string_append_printf (gstr, "{\"url\":\"%s\"", chunk_id);

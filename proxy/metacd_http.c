@@ -896,6 +896,7 @@ configure_request_handlers (void)
 	SET("/forward/lean-sqlx/#POST", action_forward_lean_sqlx);
 
 	SET("/cache/status/#GET", action_cache_status);
+	SET("/cache/show/#GET", action_cache_show);
 	SET("/cache/flush/local/#POST", action_cache_flush_local);
 	SET("/cache/flush/high/#POST", action_cache_flush_high);
 	SET("/cache/flush/low/#POST", action_cache_flush_low);

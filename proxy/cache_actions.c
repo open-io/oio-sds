@@ -96,6 +96,27 @@ action_cache_status (struct req_args_s *args)
 }
 
 enum http_rc_e
+action_cache_show (struct req_args_s *args)
+{
+	GString *gstr = g_string_sized_new (256);
+
+	void _on_item(const char *id, const char *addr, void *user UNUSED) {
+		if (gstr->len > 1) {
+			g_string_append_c (gstr, ',');
+		}
+		g_string_append_c (gstr, '{');
+		g_string_append_printf(gstr, " \"addr\": \"%s\",", addr);
+		g_string_append_printf(gstr, " \"id\": \"%s\"", id);
+		g_string_append_c (gstr, '}');
+	}
+
+	g_string_append_c (gstr, '[');
+	oio_lb_world__parse(lb_world, NULL, _on_item);
+	g_string_append_c (gstr, ']');
+	return _reply_success_json (args, gstr);
+}
+
+enum http_rc_e
 action_get_config (struct req_args_s *args)
 {
 	args->rp->no_access();
