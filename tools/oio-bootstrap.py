@@ -25,7 +25,7 @@ import pwd
 from string import Template
 import re
 import argparse
-
+import uuid
 
 template_redis = """
 daemonize no
@@ -212,6 +212,7 @@ DavDepthInfinity Off
 grid_docroot           ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
 grid_namespace         ${NS}
 grid_dir_run           ${RUNDIR}
+grid_uuid              ${UUID}
 
 # How many hexdigits must be used to name the indirection directories
 grid_hash_width        3
@@ -328,6 +329,7 @@ host: ${IP}
 port: ${PORT}
 type: ${SRVTYPE}
 location: ${LOC}
+uuid: ${UUID}
 slots:
     - ${SRVTYPE}
 checks:
@@ -388,6 +390,7 @@ host: ${IP}
 port: ${PORT}
 type: redis
 location: localhost.db${SRVNUM}
+uuid: ${UUID}
 checks:
     - {type: tcp}
 slots:
@@ -833,6 +836,7 @@ log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
+uuid = ${UUID}
 
 # Let this option empty to connect directly to redis_host
 #sentinel_hosts = 127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381
@@ -855,6 +859,7 @@ log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
 syslog_prefix = OIO,${NS},rdir,${SRVNUM}
+uuid = ${UUID}
 """
 
 template_admin = """
@@ -1242,7 +1247,9 @@ def generate(options):
         # watcher
         tpl = Template(template_meta_watch)
         with open(watch(env), 'w+') as f:
+            env['UUID'] = uuid.uuid4()
             f.write(tpl.safe_substitute(env))
+            del env['UUID']
 
     # meta0
     nb_meta0 = max(getint(options['meta0'].get(SVC_NB), defaults['NB_M0']),
@@ -1294,7 +1301,9 @@ def generate(options):
                 f.write(tpl.safe_substitute(env))
             # service
             tpl = Template(template_rawx_service)
+            env['UUID'] = uuid.uuid4()
             to_write = tpl.safe_substitute(env)
+            del env['UUID']
             if options.get(OPENSUSE, None):
                 to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
             with open(httpd_config(env), 'w+') as f:
@@ -1330,7 +1339,9 @@ def generate(options):
             f.write(tpl.safe_substitute(env))
         with open(watch(env), 'w+') as f:
             tpl = Template(template_redis_watch)
+            env['UUID'] = uuid.uuid4()
             f.write(tpl.safe_substitute(env))
+            del env['UUID']
 
     # proxy
     env = subenv({'SRVTYPE': 'proxy', 'SRVNUM': 1, 'PORT': port_proxy,
@@ -1394,7 +1405,9 @@ def generate(options):
         f.write(tpl.safe_substitute(env))
     with open(config(env), 'w+') as f:
         tpl = Template(template_account)
+        env['UUID'] = uuid.uuid4()
         f.write(tpl.safe_substitute(env))
+        del env['UUID']
     with open(watch(env), 'w+') as f:
         tpl = Template(template_account_watch)
         f.write(tpl.safe_substitute(env))
@@ -1411,7 +1424,9 @@ def generate(options):
             f.write(tpl.safe_substitute(env))
         with open(config(env), 'w+') as f:
             tpl = Template(template_rdir)
+            env['UUID'] = uuid.uuid4()
             f.write(tpl.safe_substitute(env))
+        del env['UUID']
         with open(watch(env), 'w+') as f:
             tpl = Template(template_rdir_watch)
             f.write(tpl.safe_substitute(env))
