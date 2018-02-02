@@ -126,10 +126,12 @@ GError* meta2_backend_refresh_container_size(struct meta2_backend_s *m2b,
 
 GError* meta2_backend_put_alias(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *in,
-		GSList **out_deleted, GSList **out_added);
+		m2_onbean_cb cb_deleted, gpointer u0_deleted,
+		m2_onbean_cb cb_added, gpointer u0_added);
 
 GError* meta2_backend_copy_alias(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, const char *src);
+		struct oio_url_s *url, const char *src,
+		m2_onbean_cb cb_deleted, gpointer u0_deleted);
 
 GError* meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *beans,
@@ -142,7 +144,8 @@ GError* meta2_backend_check_content(struct meta2_backend_s *m2b,
  *  at the same position. */
 GError *meta2_backend_update_content(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *in,
-		GSList **out_deleted, GSList **out_added);
+		m2_onbean_cb cb_deleted, gpointer u0_deleted,
+		m2_onbean_cb cb_added, gpointer u0_added);
 
 /** Truncate a content at the metachunk whose offset is immediately
  * superior to truncate_size */
@@ -154,7 +157,8 @@ GError * meta2_backend_truncate_content(struct meta2_backend_s *m2b,
  * the existing CONTENT.  */
 GError* meta2_backend_force_alias(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *in,
-		GSList **out_deleted, GSList **out_added);
+		m2_onbean_cb cb_deleted, gpointer u0_deleted,
+		m2_onbean_cb cb_added, gpointer u0_added);
 
 /* TODO manage properties */
 GError* meta2_backend_link_content (struct meta2_backend_s *m2b,

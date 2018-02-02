@@ -20,6 +20,7 @@ from cliff import command, show, lister
 from time import time
 from oio.common.timestamp import Timestamp
 from oio.common.constants import OIO_DB_STATUS_NAME
+from oio.common.easy_value import boolean_value
 
 
 class SetPropertyCommandMixin(object):
@@ -56,6 +57,14 @@ class SetPropertyCommandMixin(object):
  n>1 is maximum n versions.
 """
         )
+        parser.add_argument(
+            '--delete-exceeding-versions',
+            metavar='<bool>',
+            type=boolean_value,
+            help="""Delete exceeding versions when adding a new object
+ (only if versioning is enabled).
+"""
+        )
 
 
 class CreateContainer(SetPropertyCommandMixin, lister.Lister):
@@ -85,6 +94,9 @@ class CreateContainer(SetPropertyCommandMixin, lister.Lister):
             system['sys.m2.policy.storage'] = parsed_args.storage_policy
         if parsed_args.max_versions is not None:
             system['sys.m2.policy.version'] = str(parsed_args.max_versions)
+        if parsed_args.delete_exceeding_versions is not None:
+            system['sys.m2.policy.version.delete_exceeding'] = \
+                str(int(parsed_args.delete_exceeding_versions))
 
         results = []
         account = self.app.client_manager.account
@@ -140,6 +152,9 @@ class SetContainer(SetPropertyCommandMixin, command.Command):
             system['sys.m2.policy.storage'] = parsed_args.storage_policy
         if parsed_args.max_versions is not None:
             system['sys.m2.policy.version'] = str(parsed_args.max_versions)
+        if parsed_args.delete_exceeding_versions is not None:
+            system['sys.m2.policy.version.delete_exceeding'] = \
+                str(int(parsed_args.delete_exceeding_versions))
 
         self.app.client_manager.storage.container_set_properties(
             self.app.client_manager.account,
@@ -252,6 +267,10 @@ class ShowContainer(show.ShowOne):
                                     "Namespace default"),
             'status': OIO_DB_STATUS_NAME.get(sys.get('sys.status'), "Unknown"),
         }
+        delete_exceeding = sys.get('sys.m2.policy.version.delete_exceeding',
+                                   None)
+        if delete_exceeding is not None:
+            info['delete_exceeding_versions'] = delete_exceeding != '0'
         for k, v in data['properties'].iteritems():
             info['meta.' + k] = v
         return zip(*sorted(info.iteritems()))
@@ -379,6 +398,12 @@ class UnsetContainer(command.Command):
             help='Reset the quota of the container '
                  'to the namespace default'
         )
+        parser.add_argument(
+            '--delete-exceeding-versions',
+            action='store_true',
+            help='Reset the deletion of the exceeding versions '
+                 'to the default value'
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -392,6 +417,8 @@ class UnsetContainer(command.Command):
             system['sys.m2.policy.version'] = ''
         if parsed_args.quota:
             system['sys.m2.quota'] = ''
+        if parsed_args.delete_exceeding_versions:
+            system['sys.m2.policy.version.delete_exceeding'] = ''
 
         if properties:
             self.app.client_manager.storage.container_del_properties(

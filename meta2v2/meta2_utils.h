@@ -96,6 +96,10 @@ void m2db_set_ctime(struct sqlx_sqlite3_s *sq3, gint64 now);
 /** Get the delay before actually deleting a content marked as deleted.  */
 gint64 m2db_get_keep_deleted_delay(struct sqlx_sqlite3_s *sq3, gint64 def);
 
+/** Get the flag to delete exceeding versions. */
+gint64 m2db_get_flag_delete_exceeding_versions(struct sqlx_sqlite3_s *sq3,
+		gint64 def);
+
 /** Set the delay before actually deleting a content marked as deleted. */
 void m2db_set_keep_deleted_delay(struct sqlx_sqlite3_s *sq3, gint64 delay);
 
@@ -161,7 +165,8 @@ GError* m2db_check_content(GSList *beans, struct namespace_info_s *nsinfo,
 		GString* message, gboolean update);
 
 GError* m2db_update_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
-		GSList *beans, GSList **out_deleted, GSList **out_added);
+		GSList *beans, m2_onbean_cb cb_deleted, gpointer u0_deleted,
+		m2_onbean_cb cb_added, gpointer u0_added);
 
 GError* m2db_truncate_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		gint64 truncate_size, GSList **out_deleted, GSList **out_added);
@@ -175,13 +180,16 @@ struct m2db_put_args_s
 	gint64 ns_max_versions;
 };
 
-GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *in,
-		GSList **out_deleted, GSList **out_added);
+GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
+		m2_onbean_cb cb_deleted, gpointer u0_deleted,
+		m2_onbean_cb cb_added, gpointer u0_added);
 
 GError* m2db_force_alias(struct m2db_put_args_s *args, GSList *in,
-		GSList **out_deleted, GSList **out_added);
+		m2_onbean_cb cb_deleted, gpointer u0_deleted,
+		m2_onbean_cb cb_added, gpointer u0_added);
 
-GError* m2db_copy_alias(struct m2db_put_args_s *args, const char *source);
+GError* m2db_copy_alias(struct m2db_put_args_s *args, const char *source,
+		m2_onbean_cb cb_deleted, gpointer u0_deleted);
 
 GError* m2db_append_to_alias(struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url, GSList *beans,

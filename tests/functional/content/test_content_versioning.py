@@ -43,6 +43,10 @@ class TestContentVersioning(BaseTestCase):
         self.assertNotEqual(objects[0]['version'], objects[1]['version'])
 
     def test_purge(self):
+        system = {'sys.m2.policy.version.delete_exceeding': '0'}
+        self.api.container_set_properties(self.account, self.container,
+                                          system=system)
+
         self.api.object_create(self.account, self.container,
                                obj_name="versioned", data="content0")
         self.api.object_create(self.account, self.container,
@@ -55,7 +59,7 @@ class TestContentVersioning(BaseTestCase):
                                        versions=True)
         objects = listing['objects']
         self.assertEqual(4, len(objects))
-        oldest_version = min(objects, lambda x: x['version'])
+        oldest_version = min(objects, key=lambda x: x['version'])
 
         self.api.container.container_purge(self.account, self.container)
         listing = self.api.object_list(self.account, self.container,
@@ -63,3 +67,58 @@ class TestContentVersioning(BaseTestCase):
         objects = listing['objects']
         self.assertEqual(3, len(objects))
         self.assertNotIn(oldest_version, [x['version'] for x in objects])
+
+    def test_delete_old_version(self):
+        def check_num_objects_and_get_oldest_version(expected):
+            listing = self.api.object_list(self.account, self.container,
+                                           versions=True)
+            objects = listing['objects']
+            self.assertEqual(expected, len(objects))
+            return min(objects, key=lambda x: x['version'])
+
+        self.api.object_create(self.account, self.container,
+                               obj_name="versioned", data="content0")
+        self.api.object_create(self.account, self.container,
+                               obj_name="versioned", data="content1")
+        self.api.object_create(self.account, self.container,
+                               obj_name="versioned", data="content2")
+        oldest_version = check_num_objects_and_get_oldest_version(3)
+
+        self.api.object_create(self.account, self.container,
+                               obj_name="versioned", data="content3")
+        new_oldest_version = check_num_objects_and_get_oldest_version(3)
+        self.assertLess(oldest_version['version'],
+                        new_oldest_version['version'])
+
+    def test_change_flag_delete_exceeding_versions(self):
+        def check_num_objects(expected):
+            listing = self.api.object_list(self.account, self.container,
+                                           versions=True)
+            objects = listing['objects']
+            self.assertEqual(expected, len(objects))
+
+        system = {'sys.m2.policy.version.delete_exceeding': '0'}
+        self.api.container_set_properties(self.account, self.container,
+                                          system=system)
+        for i in range(5):
+            self.api.object_create(self.account, self.container,
+                                   obj_name="versioned", data="content"+str(i))
+        check_num_objects(5)
+
+        system['sys.m2.policy.version.delete_exceeding'] = '1'
+        self.api.container_set_properties(self.account, self.container,
+                                          system=system)
+        self.api.object_create(self.account, self.container,
+                               obj_name="versioned", data="content5")
+        check_num_objects(3)
+        for i in range(6, 10):
+            self.api.object_create(self.account, self.container,
+                                   obj_name="versioned", data="content"+str(i))
+        check_num_objects(3)
+
+        system['sys.m2.policy.version.delete_exceeding'] = '0'
+        self.api.container_set_properties(self.account, self.container,
+                                          system=system)
+        self.api.object_create(self.account, self.container,
+                               obj_name="versioned", data="content11")
+        check_num_objects(4)
