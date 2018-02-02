@@ -394,7 +394,7 @@ rawx_hook_post_config(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp UNU
 			g_strlcpy(conf->rawx_id, url, sizeof(conf->rawx_id));
 
 			gerr = volume_service_lock (conf->docroot, NAME_SRVTYPE_RAWX,
-					conf->uuid ? conf->uuid : url, conf->ns_name);
+					conf->uuid[0] ? conf->uuid : url, conf->ns_name);
 			if (!gerr)
 				volume_validated = 1;
 			else {
