@@ -33,7 +33,7 @@ License along with this library.
 #include "gridd_client_pool.h"
 #include "internals.h"
 
-#define EVENTLOG_SIZE 16
+#define EVENTLOG_SIZE 32
 #define STATUS_FINAL(e) ((e) >= STEP_SLAVE)
 
 #define MEMBER_NAME(n, m) NAME2CONST(n, m->inline_name)
@@ -149,6 +149,7 @@ struct logged_event_s
 	enum event_type_e event   :8;
 	enum election_step_e pre  :4;
 	enum election_step_e post :4;
+	gint64 time              :48;  // cheeseparing economies
 } __attribute__ ((packed));
 
 /* @private */
@@ -315,6 +316,14 @@ static gboolean _zoo_disconnected(int zrc) {
 }
 
 /* ------------------------------------------------------------------------- */
+
+#define member_log_change(member,evt,action) do { \
+	const enum election_step_e pre = member->step; \
+	action; \
+	const enum election_step_e post = member->step; \
+	if (evt != EVT_NONE || pre != post) \
+		member_log_event(member, pre, evt); \
+} while (0)
 
 static void member_destroy(struct election_member_s *member);
 
@@ -1049,6 +1058,7 @@ member_log_event(struct election_member_s *member, enum election_step_e pre,
 	plog->event = evt;
 	plog->pre = pre;
 	plog->post = member->step;
+	plog->time = (oio_ext_real_time() / G_TIME_SPAN_MILLISECOND) % (1L << 48);
 }
 
 #ifdef HAVE_EXTRA_DEBUG
@@ -1256,11 +1266,11 @@ member_json (struct election_member_s *m, GString *gs)
 	g_string_append_c (gs, ',');
 	OIO_JSON_append_str (gs, "zk", m->key);
 	g_string_append_static (gs, "},\"#\":{");
-	OIO_JSON_append_int (gs, "R", m->refcount);
+	OIO_JSON_append_int (gs, "refcount", m->refcount);
 	g_string_append_c (gs, ',');
-	OIO_JSON_append_int (gs, "P", m->pending_PIPEFROM);
+	OIO_JSON_append_int (gs, "pipefrom", m->pending_PIPEFROM);
 	g_string_append_c (gs, ',');
-	OIO_JSON_append_int (gs, "V", m->pending_GETVERS);
+	OIO_JSON_append_int (gs, "getvers", m->pending_GETVERS);
 	g_string_append_c (gs, '}');
 
 	/* the peers */
@@ -1293,7 +1303,8 @@ member_json (struct election_member_s *m, GString *gs)
 			break;
 		if (i != 0)
 			g_string_append_c(gs, ',');
-		g_string_append_printf(gs, "\"%s:%s:%s\"", _step2str(plog->pre),
+		g_string_append_printf(gs, "\"%"G_GINT64_FORMAT":%s:%s:%s\"",
+				(gint64)plog->time, _step2str(plog->pre),
 				_evt2str(plog->event), _step2str(plog->post));
 	}
 	g_string_append_static (gs, "]}");
@@ -1408,9 +1419,9 @@ completion_CREATING(int zrc, const char *path, const void *d)
 	ctx->magic = DAT_CREATING;
 	ctx->member = (struct election_member_s *) d;
 	ctx->local_id = -1;
-	ctx->zrc = ZNONODE;
-	if (path && _extract_id(path, &ctx->local_id))
-		ctx->zrc = zrc;
+	ctx->zrc = zrc;
+	if (path)
+		_extract_id(path, &ctx->local_id);
 
 	struct election_manager_s *M = ctx->member->manager;
 	_thlocal_set_manager(M);
@@ -1434,10 +1445,9 @@ deferred_completion_WATCHING(struct exec_later_WATCHING_context_s *d)
 
 	member_lock(d->member);
 	member_log_completion("WATCH", d->zrc, d->member);
-	if (d->zrc == ZNONODE) {
-		transition(d->member, EVT_LEFT_SELF, NULL);
-		transition(d->member, EVT_EXISTS_KO, NULL);
-	} else if (d->zrc != ZOK) {
+	if (d->zrc != ZOK) {
+		if (d->zrc == ZNONODE)
+			transition(d->member, EVT_LEFT_SELF, NULL);
 		transition_error(d->member, EVT_EXISTS_KO, d->zrc);
 	} else {
 		transition(d->member, EVT_EXISTS_OK, NULL);
@@ -1481,9 +1491,9 @@ deferred_completion_ASKING(struct exec_later_ASKING_context_s *d)
 
 	member_lock(d->member);
 	member_log_completion("ASK", d->zrc, d->member);
-	if (d->zrc != ZOK)
+	if (d->zrc != ZOK) {
 		transition_error(d->member, EVT_MASTER_KO, d->zrc);
-	else {
+	} else {
 		if (!d->master[0] || !metautils_url_valid_for_connect(d->master)) {
 			transition(d->member, EVT_MASTER_BAD, NULL);
 		} else {
@@ -1684,7 +1694,8 @@ deferred_watch_COMMON(struct deferred_watcher_context_s *d,
 		 * and thus we cannot find any specific election member. */
 		if (member != NULL) {
 			member_reset(member);
-			member_set_status(member, STEP_NONE);
+			member_log_change(member, EVT_DISCONNECTED,
+					member_set_status(member, STEP_NONE));
 		}
 		/* We cannot run all the election and reset everything, because we
 		 * introduced a sharding of the elections across several ZK clusters
@@ -2056,6 +2067,7 @@ _result_GETVERS (GError *enet,
 			}
 			transition(member, EVT_GETVERS_KO, &reqid);
 		}
+		member_unref(member);
 		member_unlock(member);
 	}
 
@@ -3565,12 +3577,7 @@ static void
 transition(struct election_member_s *member, enum event_type_e evt,
 		void *evt_arg)
 {
-	enum election_step_e pre = member->step;
-	_member_react(member, evt, evt_arg);
-	enum election_step_e post = member->step;
-
-	if (evt != EVT_NONE || pre != post)
-		member_log_event(member, pre, evt);
+	member_log_change(member, evt, _member_react(member, evt, evt_arg));
 
 	/* re-kickoff elections marked as to be restarted, but only if without
 	 * activity and if the manager if not being exited. */
@@ -3652,7 +3659,7 @@ _send_NONE_to_state(struct deque_beacon_s *beacon)
 	GPtrArray *members = _DEQUE_extract (beacon);
 	for (guint i=0; i<members->len ;++i) {
 		struct election_member_s *m = members->pdata[i];
-		_member_react (m, EVT_NONE, NULL);
+		transition (m, EVT_NONE, NULL);
 		count ++;
 	}
 	g_ptr_array_free (members, TRUE);

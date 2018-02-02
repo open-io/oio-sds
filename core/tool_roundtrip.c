@@ -572,7 +572,7 @@ _roundtrip_put_from_file (const char * const * properties)
 static void
 check_chunksize (const char * const * properties)
 {
-	const gsize chunk_size = 5*1024*1024;
+	int64_t chunk_size = 5*1024*1024;
 	struct oio_error_s *err = NULL;
 
 	struct oio_url_s *url_random = oio_url_dup(url);
@@ -594,17 +594,6 @@ check_chunksize (const char * const * properties)
 		NOERROR(err);
 	}
 
-	struct oio_sds_ul_dst_s ul_dst = OIO_SDS_UPLOAD_DST_INIT;
-	ul_dst.url = url;
-	ul_dst.autocreate = 1;
-	ul_dst.append = 0;
-	ul_dst.out_size = 0;
-	ul_dst.properties = properties;
-	ul_dst.chunk_size = chunk_size;
-	err = oio_sds_upload_from_buffer(client, &ul_dst, buffer, size);
-	NOERROR(err);
-
-	/* get details on the content */
 	gsize max_size[2] = {0};
 	void _on_metachunk(void *i UNUSED, guint seq, gsize offt, gsize len) {
 		GRID_DEBUG("metachunk: %u, %"G_GSIZE_FORMAT" %"G_GSIZE_FORMAT,
@@ -612,6 +601,43 @@ check_chunksize (const char * const * properties)
 		g_assert_cmpuint(seq, <, 2);
 		max_size[seq] = len;
 	}
+
+	/**************************************************
+	 * Configure the chunk size in the client.        */
+	g_assert_cmpint(oio_sds_configure(client, OIOSDS_CFG_FLAG_CHUNKSIZE,
+			&chunk_size, sizeof(chunk_size)), ==, 0);
+
+	struct oio_sds_ul_dst_s ul_dst = OIO_SDS_UPLOAD_DST_INIT;
+	ul_dst.url = url;
+	ul_dst.autocreate = 1;
+	ul_dst.append = 0;
+	ul_dst.out_size = 0;
+	ul_dst.properties = properties;
+	err = oio_sds_upload_from_buffer(client, &ul_dst, buffer, size);
+	NOERROR(err);
+
+	/* get details on the content */
+	err = oio_sds_show_content(client, url, NULL, NULL, _on_metachunk, NULL);
+	NOERROR(err);
+	g_assert_cmpuint(max_size[0], ==, chunk_size);
+	g_assert_cmpuint(max_size[1], ==, size - chunk_size);
+
+	/* delete the content */
+	err = oio_sds_delete(client, url);
+	NOERROR(err);
+	/* Unset the chunk size */
+	int64_t default_chunk_size = 0;
+	g_assert_cmpint(oio_sds_configure(client, OIOSDS_CFG_FLAG_CHUNKSIZE,
+			&default_chunk_size, sizeof(default_chunk_size)), ==, 0);
+
+	/**************************************************
+	 * Configure the chunk size only for this upload. */
+	ul_dst.chunk_size = chunk_size;
+	err = oio_sds_upload_from_buffer(client, &ul_dst, buffer, size);
+	NOERROR(err);
+
+	/* get details on the content */
+	memset(max_size, 0, 2 * sizeof(gsize));
 	err = oio_sds_show_content(client, url, NULL, NULL, _on_metachunk, NULL);
 	NOERROR(err);
 	g_assert_cmpuint(max_size[0], ==, chunk_size);
