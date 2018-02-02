@@ -567,6 +567,92 @@ _roundtrip_put_from_file (const char * const * properties)
 	oio_error_pfree (&err);
 }
 
+/* Upload a content larger than the chunk size
+ * then check the chunks' size */
+static void
+check_chunksize (const char * const * properties)
+{
+	int64_t chunk_size = 5*1024*1024;
+	struct oio_error_s *err = NULL;
+
+	struct oio_url_s *url_random = oio_url_dup(url);
+	gchar path[32];
+	oio_str_randomize(path, oio_ext_rand_int_range(7,32), random_chars);
+	oio_url_set(url_random, OIOURL_PATH, path);
+
+	/* generate a buffer to work in. First we fill it of random bytes */
+	gsize size = 7*1024*1024;
+	guint8 *buffer = g_malloc(size);
+	g_assert_nonnull(buffer);
+	oio_buf_randomize(buffer, size);
+	gchar *pre_hash =
+		g_compute_checksum_for_data(G_CHECKSUM_MD5, buffer, size);
+	g_assert_nonnull(pre_hash);
+	oio_str_upper(pre_hash);
+	if (GRID_TRACE2_ENABLED()) {
+		g_file_set_contents("/tmp/pre", (gchar *) buffer, size, (GError **) &err);
+		NOERROR(err);
+	}
+
+	gsize max_size[2] = {0};
+	void _on_metachunk(void *i UNUSED, guint seq, gsize offt, gsize len) {
+		GRID_DEBUG("metachunk: %u, %"G_GSIZE_FORMAT" %"G_GSIZE_FORMAT,
+				seq, offt, len);
+		g_assert_cmpuint(seq, <, 2);
+		max_size[seq] = len;
+	}
+
+	/**************************************************
+	 * Configure the chunk size in the client.        */
+	g_assert_cmpint(oio_sds_configure(client, OIOSDS_CFG_FLAG_CHUNKSIZE,
+			&chunk_size, sizeof(chunk_size)), ==, 0);
+
+	struct oio_sds_ul_dst_s ul_dst = OIO_SDS_UPLOAD_DST_INIT;
+	ul_dst.url = url;
+	ul_dst.autocreate = 1;
+	ul_dst.append = 0;
+	ul_dst.out_size = 0;
+	ul_dst.properties = properties;
+	err = oio_sds_upload_from_buffer(client, &ul_dst, buffer, size);
+	NOERROR(err);
+
+	/* get details on the content */
+	err = oio_sds_show_content(client, url, NULL, NULL, _on_metachunk, NULL);
+	NOERROR(err);
+	g_assert_cmpuint(max_size[0], ==, chunk_size);
+	g_assert_cmpuint(max_size[1], ==, size - chunk_size);
+
+	/* delete the content */
+	err = oio_sds_delete(client, url);
+	NOERROR(err);
+	/* Unset the chunk size */
+	int64_t default_chunk_size = 0;
+	g_assert_cmpint(oio_sds_configure(client, OIOSDS_CFG_FLAG_CHUNKSIZE,
+			&default_chunk_size, sizeof(default_chunk_size)), ==, 0);
+
+	/**************************************************
+	 * Configure the chunk size only for this upload. */
+	ul_dst.chunk_size = chunk_size;
+	err = oio_sds_upload_from_buffer(client, &ul_dst, buffer, size);
+	NOERROR(err);
+
+	/* get details on the content */
+	memset(max_size, 0, 2 * sizeof(gsize));
+	err = oio_sds_show_content(client, url, NULL, NULL, _on_metachunk, NULL);
+	NOERROR(err);
+	g_assert_cmpuint(max_size[0], ==, chunk_size);
+	g_assert_cmpuint(max_size[1], ==, size - chunk_size);
+
+	/* delete the content */
+	err = oio_sds_delete(client, url);
+	NOERROR(err);
+
+	oio_error_pfree(&err);
+	oio_pfree0 (&buffer, NULL);
+	oio_url_pclean(&url_random);
+	oio_str_clean(&pre_hash);
+}
+
 /* Perform subsequent appends then check the content is OK */
 static void
 _roundtrip_append (const char * const * properties)
@@ -745,10 +831,10 @@ main(int argc, char **argv)
 	ADD_TEST ("put/file/asis", OIO_HDRCASE_LOW,    _roundtrip_put_from_file);
 	ADD_TEST ("put/file/asis", OIO_HDRCASE_1CAP,   _roundtrip_put_from_file);
 	ADD_TEST ("put/file/asis", OIO_HDRCASE_RANDOM, _roundtrip_put_from_file);
+	ADD_TEST ("put/buffer/chunksize", OIO_HDRCASE_RANDOM, check_chunksize);
 
 	int rc = g_test_run();
 	oio_sds_pfree (&client);
 	oio_url_pclean (&url);
 	return rc;
 }
-

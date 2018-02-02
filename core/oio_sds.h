@@ -29,7 +29,7 @@ License along with this library.
 
 /** Version started to be defined in June, 2016. Version prior to 20160600
  * have no ABI incompatibilities. */
-#define OIO_SDS_VERSION 20170301
+#define OIO_SDS_VERSION 20180131
 
 #ifdef __cplusplus
 extern "C" {
@@ -59,6 +59,11 @@ enum oio_sds_config_e
 	 * and instead sort them by score.
 	 * Expects an integer used for its boolean value. */
 	OIOSDS_CFG_FLAG_NO_SHUFFLE,
+
+	/** Defines the chunk size in bytes.
+	 *  Expects an <int64_t>.
+	 *  If 0, uses the default size. */
+	OIOSDS_CFG_FLAG_CHUNKSIZE,
 };
 
 /**
@@ -343,9 +348,13 @@ struct oio_sds_ul_dst_s
 	/* Offset of the first byte of the metachunk, relative to the
 	 * beginning of the content, used to check write alignment. */
 	size_t offset;
+
+	/* Size of the chunks we will send, in bytes.
+	 * If set to 0, the default will be used. */
+	size_t chunk_size;
 };
 
-#define OIO_SDS_UPLOAD_DST_INIT {NULL, 0, 0, 0, 0, NULL, NULL, 0, 0}
+#define OIO_SDS_UPLOAD_DST_INIT {NULL, 0, 0, 0, 0, NULL, NULL, 0, 0, 0}
 
 /** "Female" upload API
  * The sequence is managed by the caller: an upload context has to be

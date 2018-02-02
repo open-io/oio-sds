@@ -54,6 +54,7 @@ struct oio_sds_s
 
 	GMutex curl_lock;
 	CURL *curl_handle;
+	gint64 chunk_size;
 };
 
 struct oio_error_s;
@@ -418,6 +419,7 @@ oio_sds_init (struct oio_sds_s **out, const char *ns)
 	(*out)->no_shuffle = oio_sds_no_shuffle;
 	(*out)->admin = FALSE;
 	g_mutex_init(&((*out)->curl_lock));
+	(*out)->chunk_size = 0;
 
 	return NULL;
 }
@@ -475,6 +477,11 @@ oio_sds_configure (struct oio_sds_s *sds, enum oio_sds_config_e what,
 			if (vlen != sizeof(int))
 				return EINVAL;
 			sds->no_shuffle = BOOL(*(int*)pv);
+			return 0;
+		case OIOSDS_CFG_FLAG_CHUNKSIZE:
+			if (vlen != sizeof(int64_t))
+				return EINVAL;
+			sds->chunk_size = *(int64_t *)pv;
 			return 0;
 		default:
 			return EBADSLT;
@@ -1180,6 +1187,10 @@ oio_sds_upload_init (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst)
 	ul->checksum_chunk = NULL;
 	ul->buffer_tail = g_queue_new ();
 	ul->metachunk_ready = g_queue_new ();
+	if (dst->chunk_size > 0)
+		ul->chunk_size = dst->chunk_size;
+	else
+		ul->chunk_size = sds->chunk_size;
 
 	if (dst->content_id) {
 		EXTRA_ASSERT(oio_str_ishexa1 (dst->content_id));
