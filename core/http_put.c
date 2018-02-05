@@ -87,8 +87,8 @@ struct http_put_s
 
 	CURLM *mhandle;
 
-	long timeout_cnx;
-	long timeout_op;
+	long timeout_cnx;  // milliseconds
+	long timeout_op;  // milliseconds
 
 	/* how many bytes are announced to the server
 	 *   <0 : streaming with transfer-encoding=chunked
@@ -159,8 +159,8 @@ http_put_create(gint64 content_length, gint64 soft_length)
 	p->dests = NULL;
 	p->mhandle = curl_multi_init();
 	p->buffer_tail = g_queue_new();
-	p->timeout_cnx = 60;
-	p->timeout_op = 60;
+	p->timeout_cnx = oio_client_rawx_timeout_cnx * 1000L;  // seconds to ms
+	p->timeout_op = oio_client_rawx_timeout_req * 1000L;  // seconds to ms
 	p->content_length = content_length;
 	p->remaining_length = p->soft_length = soft_length;
 	p->state = HTTP_WHOLE_BEGIN;
@@ -454,8 +454,8 @@ _start_upload(struct http_put_s *p)
 		dest->handle = _curl_get_handle_blob();
 		EXTRA_ASSERT(dest->handle != NULL);
 
-		curl_easy_setopt(dest->handle, CURLOPT_CONNECTTIMEOUT, p->timeout_cnx);
-		curl_easy_setopt(dest->handle, CURLOPT_TIMEOUT, p->timeout_op);
+		curl_easy_setopt(dest->handle, CURLOPT_CONNECTTIMEOUT_MS, p->timeout_cnx);
+		curl_easy_setopt(dest->handle, CURLOPT_TIMEOUT_MS, p->timeout_op);
 
 		curl_easy_setopt(dest->handle, CURLOPT_PRIVATE, dest);
 		curl_easy_setopt(dest->handle, CURLOPT_URL, dest->url);
@@ -716,7 +716,7 @@ _curl_set_sockopt_blob (void *u, curl_socket_t fd, curlsocktype event)
 }
 
 /* Overrides the default setsockopt() for proxy connections.
-   SO_LINGER is now set. */
+ * SO_LINGER is now set. */
 static int
 _curl_set_sockopt_proxy (void *u, curl_socket_t fd, curlsocktype event)
 {
