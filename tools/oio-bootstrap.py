@@ -213,7 +213,7 @@ DavDepthInfinity Off
 grid_docroot           ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
 grid_namespace         ${NS}
 grid_dir_run           ${RUNDIR}
-grid_uuid              ${UUID}
+${WANT_UUID}grid_uuid              ${UUID}
 
 # How many hexdigits must be used to name the indirection directories
 grid_hash_width        3
@@ -1087,6 +1087,7 @@ def generate(options):
     backblaze_account_id = options.get('backblaze', {}).get(ACCOUNT_ID)
     backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
     backblaze_app_key = options.get('backblaze', {}).get(APPLICATION_KEY)
+    want_uuid = '' if options.get('with_uuid') else '#'
 
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(ZK_CNXSTRING=options.get('ZK'),
@@ -1124,7 +1125,8 @@ def generate(options):
                BACKBLAZE_APPLICATION_KEY=backblaze_app_key,
                KEY_FILE=key_file,
                HTTPD_BINARY=HTTPD_BINARY,
-               META_HEADER=META_HEADER)
+               META_HEADER=META_HEADER,
+               WANT_UUID=want_uuid)
 
     def merge_env(add):
         env = dict(ENV)
@@ -1150,6 +1152,9 @@ def generate(options):
 
     def subenv(add):
         env = merge_env(add)
+        # remove UUID from env for test.yml
+        if 'UUID' in env and env['WANT_UUID'] == '#':
+            del env['UUID']
         env['VOLUME'] = '{DATADIR}/{NS}-{SRVTYPE}-{SRVNUM}'.format(**env)
         return env
 
@@ -1533,6 +1538,9 @@ def main():
     parser.add_argument("-p", "--port",
                         type=int, default=6000,
                         help="Specify the first port of the range")
+    parser.add_argument("-u", "--with-uuid",
+                        action='store_true', default=False,
+                        help="generate UUID for services supporting them")
     parser.add_argument("namespace",
                         action='store', type=str, default=None,
                         help="Namespace name")
@@ -1562,6 +1570,7 @@ def main():
                     opts = merge_config(opts, data)
 
     opts['port'] = int(options.port)
+    opts['with_uuid'] = options.with_uuid
 
     # Remove empty strings, then apply the default if no value remains
     options.ip = [str(x) for x in options.ip if x]
