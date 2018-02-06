@@ -1088,6 +1088,7 @@ def generate(options):
     backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
     backblaze_app_key = options.get('backblaze', {}).get(APPLICATION_KEY)
     want_uuid = '' if options.get('with_uuid') else '#'
+    random_uuid = 1 if options.get('random_uuid') else 0
 
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(ZK_CNXSTRING=options.get('ZK'),
@@ -1152,6 +1153,13 @@ def generate(options):
 
     def subenv(add):
         env = merge_env(add)
+        if options['random_uuid'] == 1:
+            env['WANT_UUID'] = ''
+            options['random_uuid'] = 2
+        elif options['random_uuid'] == 2:
+            env['WANT_UUID'] = '#'
+            options['random_uuid'] = 1
+
         # remove UUID from env for test.yml
         if 'UUID' in env and env['WANT_UUID'] == '#':
             del env['UUID']
@@ -1541,6 +1549,9 @@ def main():
     parser.add_argument("-u", "--with-uuid",
                         action='store_true', default=False,
                         help="generate UUID for services supporting them")
+    parser.add_argument("--random-uuid",
+                        action='store_true', default=False,
+                        help="generate services with UUID randomly (implies --with--uuid)")
     parser.add_argument("namespace",
                         action='store', type=str, default=None,
                         help="Namespace name")
@@ -1570,7 +1581,8 @@ def main():
                     opts = merge_config(opts, data)
 
     opts['port'] = int(options.port)
-    opts['with_uuid'] = options.with_uuid
+    opts['with_uuid'] = options.with_uuid or options.random_uuid
+    opts['random_uuid'] = options.random_uuid
 
     # Remove empty strings, then apply the default if no value remains
     options.ip = [str(x) for x in options.ip if x]
