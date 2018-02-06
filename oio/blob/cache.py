@@ -52,6 +52,9 @@ class ServiceCache(object):
         """
         :rtype: return resolved url of a rawx using Service-ID
         """
+        # FIXME(mb) some tests doesn't put scheme, should fix tests
+        if not url.startswith('http://'):
+            url = "http://" + url
         res = urlparse(url)
         if res.port == 80 or res.port is None:
             uuid_or_host = urlparse(url).hostname

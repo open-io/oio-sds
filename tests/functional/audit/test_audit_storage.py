@@ -55,7 +55,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
 
         rawx_num, rawx_path, rawx_addr, rawx_uuid = \
             self.get_service_url('rawx')
-        self.rawx = 'http://' + rawx_uuid
+        self.rawx = 'http://' + rawx_uuid if rawx_uuid else rawx_addr
 
         self.h = hashlib.new('md5')
 
