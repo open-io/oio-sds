@@ -452,6 +452,30 @@ _score_from_chunk_id (const char *id)
 	return res;
 }
 
+static gchar*
+_real_url_from_chunk_id (const char *id)
+{
+	gchar *out = NULL;
+	gchar *key = NULL, *type = NULL, *netloc = NULL;
+
+	oio_parse_chunk_url(id, &type, &netloc, NULL);
+	key = oio_make_service_key(ns_name, type, netloc);
+	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
+
+	/* generate real_url, only if item was found */
+	if (item) {
+		out = g_strdup_printf("http://%s/%s",
+			item->addr, id + strlen("http://") + strlen(netloc) + 1);
+		g_free(item);
+	} else {
+		GRID_WARN("no rawx matching '%s'", key);
+	}
+	g_free(key);
+	g_free(netloc);
+	g_free(type);
+	return out;
+}
+
 static enum http_rc_e
 _reply_simplified_beans (struct req_args_s *args, GError *err,
 		GSList *beans, gboolean body)
@@ -481,32 +505,18 @@ _reply_simplified_beans (struct req_args_s *args, GError *err,
 
 			// Serialize the chunk
 			struct bean_CHUNKS_s *chunk = l0->data;
-			gint32 score = _score_from_chunk_id(CHUNKS_get_id(chunk)->str);
-			g_string_append_printf (gstr, "{\"url\":\"%s\"", CHUNKS_get_id (chunk)->str);
+			const char *chunk_id = CHUNKS_get_id(chunk)->str;
+			gint32 score = _score_from_chunk_id(chunk_id);
+			g_string_append_printf (gstr, "{\"url\":\"%s\"", chunk_id);
 
-			/* XXX remove this stupid lookup, we should use a flag received from meta2 or generate id and url inside meta2 ? */
-			/* TODO(mb) it should be factorized with _score_from_chunk_id */
-			{
-				gchar *key = NULL, *type = NULL, *netloc = NULL;
-				char *_id = strdup(CHUNKS_get_id(chunk)->str);
+			/* XXX we should use a flag received from meta2 or generate id and url inside meta2 ? */
+			gchar *real_url = _real_url_from_chunk_id(chunk_id);
 
-				// FIXME: probably broken with B2 URLs
-				oio_parse_chunk_url(_id, &type, &netloc, NULL);
-				key = oio_make_service_key(ns_name, type, netloc);
-				struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
-
-				/* generate real_url, only if item was found */
-				if (item) {
-					g_string_append_printf (gstr, ",\"real_url\":\"http://%s/%s\"",
-											item->addr,_id + strlen("http://") + strlen(netloc) + 1);
-					g_free(item);
-				}
-
-				g_free(key);
-				g_free(netloc);
-				g_free(type);
-				g_free(_id);
+			if (real_url) {
+				g_string_append_printf (gstr, ",\"real_url\":\"%s\"", real_url);
+				g_free(real_url);
 			}
+
 			g_string_append_printf (gstr, ",\"pos\":\"%s\"", CHUNKS_get_position (chunk)->str);
 			g_string_append_printf (gstr, ",\"size\":%"G_GINT64_FORMAT, CHUNKS_get_size (chunk));
 			g_string_append_static (gstr, ",\"hash\":\"");
