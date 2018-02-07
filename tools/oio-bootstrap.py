@@ -1504,6 +1504,8 @@ def generate(options):
         elif k in defaults:
             final_conf[k] = defaults[k]
     final_conf['config'] = options['config']
+    final_conf['with_uuid'] = options['with_uuid']
+    final_conf['random_uuid'] = True if options['random_uuid'] else False
     with open('{CFGDIR}/test.yml'.format(**ENV), 'w+') as f:
         f.write(yaml.dump(final_conf))
     return final_conf
