@@ -42,7 +42,7 @@ class TestContentVersioning(BaseTestCase):
         self.assertEqual(2, len(objects))
         self.assertNotEqual(objects[0]['version'], objects[1]['version'])
 
-    def test_purge(self):
+    def test_container_purge(self):
         system = {'sys.m2.policy.version.delete_exceeding': '0'}
         self.api.container_set_properties(self.account, self.container,
                                           system=system)
@@ -67,6 +67,46 @@ class TestContentVersioning(BaseTestCase):
         objects = listing['objects']
         self.assertEqual(3, len(objects))
         self.assertNotIn(oldest_version, [x['version'] for x in objects])
+
+    def test_content_purge(self):
+        system = {'sys.m2.policy.version.delete_exceeding': '0'}
+        self.api.container_set_properties(self.account, self.container,
+                                          system=system)
+
+        # many contents
+        for i in range(0, 4):
+            self.api.object_create(self.account, self.container,
+                                   obj_name="versioned", data="content"+str(i))
+        listing = self.api.object_list(self.account, self.container,
+                                       versions=True)
+        objects = listing['objects']
+        self.assertEqual(4, len(objects))
+        oldest_version = min(objects, key=lambda x: x['version'])
+
+        self.api.container.content_purge(self.account, self.container,
+                                         "versioned")
+        listing = self.api.object_list(self.account, self.container,
+                                       versions=True)
+        objects = listing['objects']
+        self.assertEqual(3, len(objects))
+        self.assertNotIn(oldest_version, [x['version'] for x in objects])
+
+        # other contents
+        for i in range(0, 4):
+            self.api.object_create(self.account, self.container,
+                                   obj_name="versioned2",
+                                   data="content"+str(i))
+        listing = self.api.object_list(self.account, self.container,
+                                       versions=True)
+        objects = listing['objects']
+        self.assertEqual(7, len(objects))
+
+        self.api.container.content_purge(self.account, self.container,
+                                         "versioned")
+        listing = self.api.object_list(self.account, self.container,
+                                       versions=True)
+        objects = listing['objects']
+        self.assertEqual(7, len(objects))
 
     def test_delete_old_version(self):
         def check_num_objects_and_get_oldest_version(expected):

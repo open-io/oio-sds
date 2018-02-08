@@ -83,7 +83,11 @@ GByteArray* m2v2_remote_pack_FLUSH(
 		struct oio_url_s *url,
 		gint64 deadline);
 
-GByteArray* m2v2_remote_pack_PURGE(
+GByteArray* m2v2_remote_pack_PURGEC(
+		struct oio_url_s *url,
+		gint64 deadline);
+
+GByteArray* m2v2_remote_pack_PURGEB(
 		struct oio_url_s *url,
 		gint64 deadline);
 

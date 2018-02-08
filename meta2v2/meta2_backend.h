@@ -160,6 +160,9 @@ GError* meta2_backend_force_alias(struct meta2_backend_s *m2b,
 		m2_onbean_cb cb_deleted, gpointer u0_deleted,
 		m2_onbean_cb cb_added, gpointer u0_added);
 
+GError * meta2_backend_purge_alias(struct meta2_backend_s *m2,
+		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0);
+
 /* TODO manage properties */
 GError* meta2_backend_link_content (struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GBytes *content_id);

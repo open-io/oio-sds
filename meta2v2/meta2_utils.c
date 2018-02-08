@@ -2592,30 +2592,49 @@ _purge_exceeding_aliases(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 
 static GError*
 _purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay,
-		m2_onbean_cb cb, gpointer u0)
+		const gchar *alias, m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;
 	gchar *sql, *sql2;
 	GSList *old_deleted = NULL;
-	GVariant *params[] = {NULL, NULL};
+	GVariant *params[] = {NULL, NULL, NULL};
 	gint64 now = oio_ext_real_time () / G_TIME_SPAN_SECOND;
 	gint64 time_limit = 0;
 	struct dup_alias_params_s dup_params;
 
 	// All aliases which have one version deleted (the last) older than time_limit
-	sql = (" alias IN "
-			"(SELECT alias FROM "
-			"  (SELECT alias,ctime,deleted FROM aliases GROUP BY alias) "
-			" WHERE deleted AND ctime < ?) ");
+	if (alias) {
+		sql = (" alias IN "
+				"(SELECT alias FROM "
+				"  (SELECT alias,ctime,deleted FROM aliases WHERE alias = ? "
+				"   GROUP BY alias) "
+				" WHERE deleted AND ctime < ?) ");
+	} else {
+		sql = (" alias IN "
+				"(SELECT alias FROM "
+				"  (SELECT alias,ctime,deleted FROM aliases GROUP BY alias) "
+				" WHERE deleted AND ctime < ?) ");
+	}
 
 	// Last snapshoted aliases part of deleted contents.
 	// (take some paracetamol)
-	sql2 = (" rowid IN (SELECT a1.rowid FROM aliases AS a1"
-			" INNER JOIN "
-			"(SELECT alias,max(deleted) as mdel FROM aliases GROUP BY alias) AS a2 "
-			"ON a1.alias = a2.alias "
-			"WHERE mdel "
-			"GROUP BY a1.alias HAVING max(version)) ");
+	if (alias) {
+		sql2 = (" rowid IN (SELECT a1.rowid FROM aliases AS a1 "
+				"INNER JOIN "
+				"  (SELECT alias,max(deleted) as mdel FROM aliases "
+				"   WHERE alias = ? GROUP BY alias) AS a2 "
+				"ON a1.alias = a2.alias "
+				"WHERE mdel "
+				"GROUP BY a1.alias HAVING max(version)) ");
+	} else {
+		sql2 = (" rowid IN (SELECT a1.rowid FROM aliases AS a1 "
+				"INNER JOIN "
+				"  (SELECT alias,max(deleted) as mdel FROM aliases "
+				"   GROUP BY alias) AS a2 "
+				"ON a1.alias = a2.alias "
+				"WHERE mdel "
+				"GROUP BY a1.alias HAVING max(version)) ");
+	}
 
 	if (now < 0) {
 		err = g_error_new(GQ(), CODE_INTERNAL_ERROR,
@@ -2634,20 +2653,22 @@ _purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay,
 		(void) u;
 		old_deleted = g_slist_prepend(old_deleted, bean);
 	}
+	if (alias)
+		params[0] = g_variant_new_string(alias);
 	ALIASES_load(sq3->db, sql2, params, _load_old_deleted, NULL);
 
 	// Delete the alias bean and send it to callback
-	void _delete_cb(gpointer udata, struct bean_ALIASES_s *alias)
+	void _delete_cb(gpointer udata, struct bean_ALIASES_s *alias_to_delete)
 	{
-		GError *local_err = _db_delete_bean(sq3->db, alias);
+		GError *local_err = _db_delete_bean(sq3->db, alias_to_delete);
 		if (!local_err) {
-			cb(udata, alias); // alias is cleaned by callback
+			cb(udata, alias_to_delete); // alias is cleaned by callback
 		} else {
 			GRID_WARN("Failed to drop %s (v%"G_GINT64_FORMAT"): %s",
-					ALIASES_get_alias(alias)->str,
-					ALIASES_get_version(alias),
+					ALIASES_get_alias(alias_to_delete)->str,
+					ALIASES_get_version(alias_to_delete),
 					local_err->message);
-			_bean_clean(alias);
+			_bean_clean(alias_to_delete);
 			g_clear_error(&local_err);
 		}
 	}
@@ -2655,7 +2676,10 @@ _purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay,
 	// Do the purge.
 	GRID_DEBUG("Purging deleted aliases older than %"G_GINT64_FORMAT" seconds (timestamp < %"G_GINT64_FORMAT")",
 			delay, time_limit);
-	params[0] = g_variant_new_int64(time_limit);
+	if (alias)
+		params[1] = g_variant_new_int64(time_limit);
+	else
+		params[0] = g_variant_new_int64(time_limit);
 	err = ALIASES_load(sq3->db, sql, params, (m2_onbean_cb)_delete_cb, u0);
 	metautils_gvariant_unrefv(params);
 
@@ -2694,12 +2718,13 @@ _purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay,
 
 GError*
 m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		gint64 retention_delay, m2_onbean_cb cb, gpointer u0)
+		gint64 retention_delay, const gchar *alias,
+		m2_onbean_cb cb, gpointer u0)
 {
 	GError *err;
 
 	GPtrArray *aliases = g_ptr_array_new();
-	if ((err = _purge_exceeding_aliases(sq3, max_versions, NULL,
+	if ((err = _purge_exceeding_aliases(sq3, max_versions, alias,
 			_bean_buffer_cb, aliases))) {
 		GRID_WARN("Failed to purge ALIASES: (code=%d) %s",
 				err->code, err->message);
@@ -2708,7 +2733,7 @@ m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 	}
 
 	if (retention_delay >= 0) {
-		if ((err = _purge_deleted_aliases(sq3, retention_delay,
+		if ((err = _purge_deleted_aliases(sq3, retention_delay, alias,
 				_bean_buffer_cb, aliases))) {
 			GRID_WARN("Failed to purge deleted ALIASES: (code=%d) %s",
 					err->code, err->message);

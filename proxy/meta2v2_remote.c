@@ -169,9 +169,15 @@ m2v2_remote_pack_FLUSH(struct oio_url_s *url, gint64 dl)
 }
 
 GByteArray*
-m2v2_remote_pack_PURGE(struct oio_url_s *url, gint64 dl)
+m2v2_remote_pack_PURGEC(struct oio_url_s *url, gint64 dl)
 {
-	return _m2v2_pack_request(NAME_MSGNAME_M2V2_PURGE, url, NULL, dl);
+	return _m2v2_pack_request(NAME_MSGNAME_M2V2_PURGE_CONTENT, url, NULL, dl);
+}
+
+GByteArray*
+m2v2_remote_pack_PURGEB(struct oio_url_s *url, gint64 dl)
+{
+	return _m2v2_pack_request(NAME_MSGNAME_M2V2_PURGE_CONTAINER, url, NULL, dl);
 }
 
 GByteArray*
@@ -479,4 +485,3 @@ m2v2_remote_execute_DESTROY_many(gchar **targets, struct oio_url_s *url, guint32
 	gridd_clients_free(clients);
 	return err;
 }
-
