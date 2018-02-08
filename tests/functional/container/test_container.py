@@ -442,7 +442,9 @@ class TestMeta2Containers(BaseTestCase):
 
         # empty container
         self._create(params, 201)
-        props = {"system": {"sys.m2.policy.version": "3"}}
+        props = {"system":
+                 {"sys.m2.policy.version": "3",
+                  "sys.m2.policy.version.delete_exceeding": "0"}}
         resp = self.request('POST', self.url_container('set_properties'),
                             params=params, data=json.dumps(props))
         purge_and_check(0)
@@ -452,9 +454,10 @@ class TestMeta2Containers(BaseTestCase):
         purge_and_check(1)
 
         # many contents
-        for i in range(100):
+        for i in range(50):
             self._create_content("content")
-        purge_and_check(3)
+            self._create_content("content2")
+        purge_and_check(6)
 
 
 class TestMeta2Contents(BaseTestCase):
@@ -869,3 +872,49 @@ class TestMeta2Contents(BaseTestCase):
         params = self.param_content(self.ref, 'Non_existing')
         resp = self.request('POST', self.url_content('drain'), params=params)
         self.assertError(resp, 404, 420)
+
+    def test_purge(self):
+        path = random_content()
+        params = self.param_content(self.ref, path)
+
+        # no container
+        resp = self.request('POST', self.url_content('purge'),
+                            params=params)
+        self.assertEqual(404, resp.status)
+
+        def purge_and_check(expected_object):
+            resp = self.request('POST', self.url_content('purge'),
+                                params=params)
+            self.assertEqual(204, resp.status)
+            resp = self.request('POST', self.url_container('get_properties'),
+                                params=params)
+            data = self.json_loads(resp.data)
+            self.assertEqual(str(expected_object),
+                             data['system']['sys.m2.objects'])
+            resp = self.request('GET', self.url_container('list'),
+                                params=merge(params, {'all': 1}))
+            data = self.json_loads(resp.data)
+            self.assertEqual(expected_object, len(data['objects']))
+
+        # one content
+        self._create_content(path)
+        props = {"system":
+                 {"sys.m2.policy.version": "3",
+                  "sys.m2.policy.version.delete_exceeding": "0"}}
+        resp = self.request('POST', self.url_container('set_properties'),
+                            params=params, data=json.dumps(props))
+        purge_and_check(1)
+
+        # many contents
+        for i in range(100):
+            self._create_content(path)
+        purge_and_check(3)
+
+        # other contents
+        for i in range(5):
+            self._create_content("content")
+        purge_and_check(8)
+
+        # object desn't exist
+        params = self.param_content(self.ref, "wrong")
+        purge_and_check(8)

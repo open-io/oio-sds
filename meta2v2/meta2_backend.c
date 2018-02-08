@@ -708,7 +708,7 @@ meta2_backend_flush_container(struct meta2_backend_s *m2, struct oio_url_s *url)
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 			if (!(err = m2db_flush_container(sq3->db)))
 				err = m2db_purge(sq3, _maxvers(sq3), _retention_delay(sq3),
-						NULL, NULL);
+						NULL, NULL, NULL);
 			err = sqlx_transaction_end(repctx, err);
 		}
 		m2b_close(sq3);
@@ -729,7 +729,8 @@ meta2_backend_purge_container(struct meta2_backend_s *m2, struct oio_url_s *url,
 	if (!err) {
 		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
-			err = m2db_purge(sq3, _maxvers(sq3), _retention_delay(sq3), cb, u0);
+			err = m2db_purge(sq3, _maxvers(sq3), _retention_delay(sq3), NULL,
+					cb, u0);
 			err = sqlx_transaction_end(repctx, err);
 		}
 		if (!err)
@@ -1034,6 +1035,37 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		if (!err)
 			m2b_add_modified_container(m2b, sq3);
 
+		m2b_close(sq3);
+	}
+
+	return err;
+}
+
+GError *
+meta2_backend_purge_alias(struct meta2_backend_s *m2, struct oio_url_s *url,
+	m2_onbean_cb cb, gpointer u0)
+{
+	GError *err;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	struct sqlx_repctx_s *repctx = NULL;
+
+	EXTRA_ASSERT(m2 != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	if (!oio_url_has(url, OIOURL_PATH))
+		return BADREQ("Missing path");
+
+	err = m2b_open(m2, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
+	if (!err) {
+		EXTRA_ASSERT(sq3 != NULL);
+		if (!(err = _transaction_begin(sq3, url, &repctx))) {
+			if (!(err = m2db_purge(sq3, _maxvers(sq3), _retention_delay(sq3),
+					oio_url_get(url, OIOURL_PATH), cb, u0)))
+				m2db_increment_version(sq3);
+			err = sqlx_transaction_end(repctx, err);
+		}
+		if (!err)
+			m2b_add_modified_container(m2, sq3);
 		m2b_close(sq3);
 	}
 
@@ -1711,4 +1743,3 @@ meta2_backend_content_from_contentid (struct meta2_backend_s *m2b,
 
 	return err;
 }
-

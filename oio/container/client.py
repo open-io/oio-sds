@@ -637,3 +637,9 @@ class ContainerClient(ProxyClient):
         _resp, body = self._direct_request(
             'POST', uri, params=params, **kwargs)
         return body
+
+    def content_purge(self, account=None, reference=None, path=None, cid=None,
+                      **kwargs):
+        uri = self._make_uri('content/purge')
+        params = self._make_params(account, reference, path, cid=cid)
+        self._direct_request('POST', uri, params=params, **kwargs)

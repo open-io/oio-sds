@@ -730,3 +730,22 @@ class LocateObject(ObjectCommandMixin, lister.Lister):
                       for c in data[1])
 
         return columns, chunks
+
+
+class PurgeObject(ObjectCommandMixin, command.Command):
+    """Purge exceeding object versions."""
+
+    log = getLogger(__name__ + '.PurgeObject')
+
+    def get_parser(self, prog_name):
+        parser = super(PurgeObject, self).get_parser(prog_name)
+        self.patch_parser(parser)
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        account = self.app.client_manager.account
+        self.app.client_manager.storage.container.content_purge(
+            account, parsed_args.container, parsed_args.object
+        )
