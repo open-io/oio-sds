@@ -244,6 +244,7 @@ _reconnect(struct sqlx_sync_s *ss)
 
 	/* Forget the previous ID and reconnect */
 	memset (&ss->zk_id, 0, sizeof(ss->zk_id));
+
 	GRID_NOTICE("Zookeeper: starting connection to [%s]", ss->zk_url);
 	ss->zh = zookeeper_init(ss->zk_url, zk_main_watch,
 			sqliterepo_zk_timeout / G_TIME_SPAN_MILLISECOND, &ss->zk_id, ss, 0);
@@ -256,13 +257,15 @@ _reconnect(struct sqlx_sync_s *ss)
 }
 
 static void
-zk_main_watch(zhandle_t *zh UNUSED, int type, int state, const char *path UNUSED,
+zk_main_watch(zhandle_t *zh, int type, int state, const char *path UNUSED,
 		void *watcherCtx)
 {
-	metautils_ignore_signals();
+	EXTRA_ASSERT (watcherCtx != NULL);
+	EXTRA_ASSERT (zh != NULL);
 
-	struct sqlx_sync_s *ss = watcherCtx;
-	EXTRA_ASSERT (ss != NULL);
+	/* The current call happens in the bg thread of the ZK handle. Let's
+	 * ensure it ignores the signals we rely on. */
+	metautils_ignore_signals();
 
 	if (type != ZOO_SESSION_EVENT) {
 		GRID_TRACE("Zookeeper: non-session event type=%d state=%d path=%s",
@@ -270,7 +273,9 @@ zk_main_watch(zhandle_t *zh UNUSED, int type, int state, const char *path UNUSED
 		return;
 	}
 
-	gint64 now = oio_ext_monotonic_seconds();
+	const gint64 now = oio_ext_monotonic_seconds();
+	struct sqlx_sync_s *ss = watcherCtx;
+
 	if (state == ZOO_EXPIRED_SESSION_STATE || state == ZOO_AUTH_FAILED_STATE) {
 		GRID_WARN("Zookeeper: %s/%s to %s",
 				zoo_zevt2str(type), zoo_state2str(state),
@@ -290,7 +295,9 @@ zk_main_watch(zhandle_t *zh UNUSED, int type, int state, const char *path UNUSED
 	} else if (state == ZOO_ASSOCIATING_STATE) {
 		GRID_DEBUG("Zookeeper: associating to [%s]", ss->zk_url);
 	} else if (state == ZOO_CONNECTED_STATE) {
-		memcpy(&(ss->zk_id), zoo_client_id(ss->zh), sizeof(clientid_t));
+		const clientid_t *p_cid = zh ? zoo_client_id(zh) : NULL;
+		if (p_cid)
+			memcpy(&ss->zk_id, p_cid, sizeof(clientid_t));
 		GRID_INFO("Zookeeper: connected to [%s] id=%"G_GINT64_FORMAT,
 				ss->zk_url, ss->zk_id.client_id);
 		grid_single_rrd_add(ss->conn_attempts, now, 1);
@@ -306,6 +313,7 @@ _open(struct sqlx_sync_s *ss)
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
+
 	if (NULL != ss->zh)
 		return NEWERROR(CODE_INTERNAL_ERROR, "BUG: ZK connection already initiated");
 	ss->zh = zookeeper_init(ss->zk_url, zk_main_watch,
