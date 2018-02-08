@@ -203,6 +203,24 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_CORE_SDS_NOSHUFFLE*
 
+### core.sds.timeout.cnx.rawx
+
+> Sets the connection timeout for requests issued to rawx services.
+
+ * default: **5.0**
+ * type: gdouble
+ * cmake directive: *OIO_CORE_SDS_TIMEOUT_CNX_RAWX*
+ * range: 0.001 -> 300.0
+
+### core.sds.timeout.req.rawx
+
+> Sets the global timeout when uploading a chunk to a rawx service.
+
+ * default: **60.0**
+ * type: gdouble
+ * cmake directive: *OIO_CORE_SDS_TIMEOUT_REQ_RAWX*
+ * range: 0.001 -> 600.0
+
 ### core.sds.version
 
 > The version of the sds. It's used to know the expected metadata of a chunk

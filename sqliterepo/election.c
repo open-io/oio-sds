@@ -2699,7 +2699,6 @@ _member_assert_CHECKING_SLAVES(struct election_member_s *member)
 	EXTRA_ASSERT(member_has_master_id(member));
 	EXTRA_ASSERT(member->master_id == member->local_id);
 	EXTRA_ASSERT(member->master_url == NULL);
-	EXTRA_ASSERT(member->requested_LEFT_MASTER == 0);
 	EXTRA_ASSERT(member_has_getvers(member));
 	EXTRA_ASSERT(member->pending_PIPEFROM == 0);
 	EXTRA_ASSERT(member->pending_ZK_CREATE == 0);

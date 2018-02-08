@@ -852,6 +852,15 @@
 				"descr": "Sets the timeout for the requests issued to the SQLX services.",
 				"def": 30.0, "min": 0.01, "max": 60.0 },
 
+			{ "type": "float", "name": "oio_client_rawx_timeout_cnx",
+				"key": "core.sds.timeout.cnx.rawx",
+				"descr": "Sets the connection timeout for requests issued to rawx services.",
+				"def": 5.0, "min": 0.001, "max": 300.0 },
+			{ "type": "float", "name": "oio_client_rawx_timeout_req",
+				"key": "core.sds.timeout.req.rawx",
+				"descr": "Sets the global timeout when uploading a chunk to a rawx service.",
+				"def": 60.0, "min": 0.001, "max": 600.0 },
+
 			{ "type": "monotonic", "name": "_refresh_cpu_idle",
 				"key": "core.period.refresh.cpu_idle",
 				"descr": "Sets the miniimal amount of time between two refreshed of the known CPU-idle counters for the current host. Keep this value small.",
