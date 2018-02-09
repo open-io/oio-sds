@@ -80,3 +80,20 @@ Used by `gcc`
 | ----- | ------- | ----------- |
 |OIO_USE_OLD_FMEMOPEN|_undefined_|Use the old implementation of glibc's `fmemopen`. Starting from glibc 2.22 the new implementation lacks the binary mode which made things work.|
 
+## Start-up configuration
+
+### RAWX
+
+| Name | Type | Default | Description |
+| ---- | ---- | ------- | ----------- |
+| grid_docroot | string | *MANDATORY* | Chunks root directory |
+| grid_namespace | string | *MANDATORY* | Namespace name |
+| grid_dir_run | string | *MANDATORY* | Run directory |
+| grid_hash_width | number | 3 | How many hexdigits must be used to name the indirection directories |
+| grid_hash_depth | number | 1 | How many levels of directories are used to store chunks |
+| grid_fsync | boolean | disabled | At the end of an upload, perform a fsync() on the chunk file itself |
+| grid_fsync_dir | boolean | enabled | At the end of an upload, perform a fsync() on the directory holding the chunk |
+| grid_fallocate | boolean | enabled | Preallocate space for the chunk file |
+| grid_acl | boolean | *IGNORED* | Enable ACL |
+| grid_checksum | string (enabled,disabled,smart) | enabled | Enable checksuming the body of PUT |
+
