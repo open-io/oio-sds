@@ -195,6 +195,12 @@ if is_running_test_suite "copyright" ; then
 	${SRCDIR}/tools/oio-check-copyright.sh ${SRCDIR}
 fi
 
+if is_running_test_suite "variables" ; then
+	echo -e "\n### Checking Variables.md"
+	cd $SRCDIR
+	tox -e variables
+fi
+
 if is_running_test_suite "unit" ; then
 	echo -e "\n### UNIT tests"
 	cd $SRCDIR
