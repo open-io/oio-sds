@@ -1182,6 +1182,33 @@ class ObjectStorageApi(object):
                 "pos": meta["pos"],
                 "content": content}
 
+    def object_head(self, account, container, obj, trust_level=0, **kwargs):
+        """
+        Check for the presence of an object in a container.
+
+        :param trust_level: 0: do not check chunks;
+                            1: check if there are enough chunks to read the
+                            object;
+                            2: check if all chunks are present.
+        :type trust_level: `int`
+        """
+        try:
+            if trust_level == 0:
+                self.object_get_properties(account, container, obj, **kwargs)
+            elif trust_level == 1:
+                raise NotImplementedError()
+            elif trust_level == 2:
+                _, chunks = self.object_locate(account, container, obj,
+                                               **kwargs)
+                for chunk in chunks:
+                    self.blob_client.chunk_head(chunk['url'])
+            else:
+                raise exc.ValueError(
+                    '`trust_level` must be between 0 and 2')
+        except (exc.NotFound, exc.NoSuchObject):
+            return False
+        return True
+
 
 class ObjectStorageAPI(ObjectStorageApi):
     """
