@@ -31,6 +31,7 @@ READ_TIMEOUT = 30.0
 
 DEFAULT_POOLSIZE = 32
 DEFAULT_RETRIES = 0
+DEFAULT_BACKOFF = 0
 
 
 class CustomHTTPResponse(HTTPResponse):
@@ -258,7 +259,8 @@ class HeadersDict(dict):
 
 def get_pool_manager(pool_connections=DEFAULT_POOLSIZE,
                      pool_maxsize=DEFAULT_POOLSIZE,
-                     max_retries=DEFAULT_RETRIES):
+                     max_retries=DEFAULT_RETRIES,
+                     backoff_factor=DEFAULT_BACKOFF):
     """
     Get `urllib3.PoolManager` to manage pools of connections
 
@@ -268,11 +270,15 @@ def get_pool_manager(pool_connections=DEFAULT_POOLSIZE,
     :type pool_maxsize: `int`
     :param max_retries: number of retries per request
     :type max_retries: `int`
+    :param backoff_factor: backoff factor to apply between attemps after
+        second try
+    :type backoff_factor: `float`
     """
     if max_retries == DEFAULT_RETRIES:
         max_retries = urllib3.Retry(0, read=False)
     else:
-        max_retries = urllib3.Retry.from_int(max_retries)
+        max_retries = urllib3.Retry(total=max_retries,
+                                    backoff_factor=backoff_factor)
     return urllib3.PoolManager(num_pools=pool_connections,
                                maxsize=pool_maxsize, retries=max_retries,
                                block=False)
