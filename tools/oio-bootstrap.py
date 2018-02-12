@@ -1526,6 +1526,8 @@ def main():
     parser.add_argument("-p", "--port",
                         type=int, default=6000,
                         help="Specify the first port of the range")
+    parser.add_argument("--profile", choices=['default', 'valgrind', 'callgrind'],
+                        help="Launch SDS with specific tool")
     parser.add_argument("namespace",
                         action='store', type=str, default=None,
                         help="Namespace name")
@@ -1563,6 +1565,7 @@ def main():
 
     opts['ZK'] = os.environ.get('ZK', defaults['ZK'])
     opts['ns'] = options.namespace
+    opts[PROFILE] = options.profile
     final_conf = generate(opts)
     if options.dump_config:
         dump_config(final_conf)
