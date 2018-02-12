@@ -23,7 +23,7 @@ from oio.common.http import CONNECTION_TIMEOUT, READ_TIMEOUT
 from oio.common.constants import ADMIN_HEADER
 
 _POOL_MANAGER_OPTIONS_KEYS = ["pool_connections", "pool_maxsize",
-                              "max_retries"]
+                              "max_retries", "backoff_factor"]
 
 URLLIB3_REQUESTS_KWARGS = ('fields', 'headers', 'body', 'retries', 'redirect',
                            'assert_same_host', 'timeout', 'pool_timeout',
