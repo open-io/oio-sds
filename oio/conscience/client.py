@@ -170,12 +170,12 @@ class ConscienceClient(ProxyClient):
         resp, body = self._request('POST', '/flush',
                                    params={'type': srv_type})
 
-    def resolve(self, srv_type, uuid):
+    def resolve(self, srv_type, service_id):
         resp, body = self._request('GET', '/resolve',
                                    params={'type': srv_type,
-                                           'uuid': uuid})
+                                           'service_id': service_id})
         if resp.status == 200:
             return body
         else:
-            raise OioException("failed to resolve uuid %s: %s" %
-                               (uuid, resp.text))
+            raise OioException("failed to resolve servie id %s: %s" %
+                               (service_id, resp.text))

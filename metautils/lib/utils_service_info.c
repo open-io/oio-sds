@@ -404,7 +404,7 @@ gchar *
 service_info_key (const struct service_info_s *si)
 {
 	gchar addr[STRLEN_ADDRINFO];
-	const char *explicit = service_info_get_tag_value(si, "tag.uuid", NULL);
+	const char *explicit = service_info_get_tag_value(si, "tag.service_id", NULL);
 	if (explicit)
 		return oio_make_service_key(si->ns_name, si->type, explicit);
 	grid_addrinfo_to_string(&si->addr, addr, sizeof(addr));

@@ -136,10 +136,10 @@ conscience_remote_remove_services(gchar **allcs, const char *type, GSList *ls, g
 }
 
 GError *
-conscience_resolve_uuid(gchar **cs UNUSED, const char *type, const char *uuid, gchar **out) {
+conscience_resolve_service_id(gchar **cs UNUSED, const char *type, const char *service_id, gchar **out) {
 	*out = NULL;
 
-	gchar *key = oio_make_service_key(ns_name, type, uuid);
+	gchar *key = oio_make_service_key(ns_name, type, service_id);
 	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
 	g_free(key);
 	if (item) {
@@ -147,7 +147,7 @@ conscience_resolve_uuid(gchar **cs UNUSED, const char *type, const char *uuid, g
 		return NULL;
 	}
 
-	return NEWERROR(CODE_UNAVAILABLE, "Service UUID [%s] not found", uuid);
+	return NEWERROR(CODE_UNAVAILABLE, "Service ID [%s] not found", service_id);
 #if 0
 	GError *err = NULL;
 	GSList *sl = NULL;
@@ -159,14 +159,14 @@ conscience_resolve_uuid(gchar **cs UNUSED, const char *type, const char *uuid, g
 		return err;
 	}
 
-	/* FIXME: we should build a HASH table from UUID to ADDR to find them quickly */
+	/* FIXME: we should build a HASH table from Service ID to ADDR to find them quickly */
 	for (GSList *l = sl; l; l = l->next) {
 		const struct service_info_s *si = l->data;
 
 		if (si->tags && si->tags->len) {
 			for(guint i = 0; i < si->tags->len; ++i) {
 				struct service_tag_s *tag = si->tags->pdata[i];
-				if (g_strcmp0(tag->name, "tag.uuid") == 0 && g_strcmp0(tag->value.s, uuid) == 0) {
+				if (g_strcmp0(tag->name, "tag.service_id") == 0 && g_strcmp0(tag->value.s, service_id) == 0) {
 					gchar straddr[STRLEN_ADDRINFO];
 					grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
 					*out = g_strdup(straddr);
@@ -179,8 +179,7 @@ conscience_resolve_uuid(gchar **cs UNUSED, const char *type, const char *uuid, g
 	}
 
 	g_slist_free_full (sl, (GDestroyNotify) service_info_clean);
-	err = NEWERROR(CODE_UNAVAILABLE, "Service UUID [%s] not found", uuid);
-	return err;
+	return NEWERROR(CODE_UNAVAILABLE, "Service ID [%s] not found", service_id);
 #endif
 }
 
@@ -479,7 +478,7 @@ action_conscience_list (struct req_args_s *args)
 }
 
 enum http_rc_e
-action_conscience_resolve_uuid (struct req_args_s *args)
+action_conscience_resolve_service_id (struct req_args_s *args)
 {
 	args->rp->no_access();
 
@@ -487,9 +486,9 @@ action_conscience_resolve_uuid (struct req_args_s *args)
 	if (!type)
 		return _reply_format_error (args, BADREQ("Missing type"));
 
-	const char *uuid = UUID();
-	if (!uuid)
-		return _reply_format_error (args, BADREQ("Missing uuid"));
+	const char *service_id = SERVICE_ID();
+	if (!service_id)
+		return _reply_format_error (args, BADREQ("Missing service id"));
 
 #ifdef HAVE_ENBUG
 	if (10 >= oio_ext_rand_int_range(1,100))
@@ -502,7 +501,7 @@ action_conscience_resolve_uuid (struct req_args_s *args)
 
 	CSURL(cs);
 	gchar *addr = NULL;
-	err = conscience_resolve_uuid(cs, type, uuid, &addr);
+	err = conscience_resolve_service_id(cs, type, service_id, &addr);
 	if (NULL != err) {
 		g_prefix_error (&err, "Conscience error: ");
 		return _reply_common_error (args, err);

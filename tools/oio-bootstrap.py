@@ -213,7 +213,7 @@ DavDepthInfinity Off
 grid_docroot           ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
 grid_namespace         ${NS}
 grid_dir_run           ${RUNDIR}
-${WANT_UUID}grid_uuid              ${UUID}
+${WANT_SERVICE_ID}grid_service_id        ${SERVICE_ID}
 
 # How many hexdigits must be used to name the indirection directories
 grid_hash_width        3
@@ -1087,8 +1087,8 @@ def generate(options):
     backblaze_account_id = options.get('backblaze', {}).get(ACCOUNT_ID)
     backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
     backblaze_app_key = options.get('backblaze', {}).get(APPLICATION_KEY)
-    want_uuid = '' if options.get('with_uuid') else '#'
-    random_uuid = 1 if options.get('random_uuid') else 0
+    want_service_id = '' if options.get('with_service_id') else '#'
+    random_service_id = 1 if options.get('random_service_id') else 0
 
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(ZK_CNXSTRING=options.get('ZK'),
@@ -1127,7 +1127,7 @@ def generate(options):
                KEY_FILE=key_file,
                HTTPD_BINARY=HTTPD_BINARY,
                META_HEADER=META_HEADER,
-               WANT_UUID=want_uuid)
+               WANT_SERVICE_ID=want_service_id)
 
     def merge_env(add):
         env = dict(ENV)
@@ -1153,16 +1153,16 @@ def generate(options):
 
     def subenv(add):
         env = merge_env(add)
-        if options['random_uuid'] == 1:
-            env['WANT_UUID'] = ''
-            options['random_uuid'] = 2
-        elif options['random_uuid'] == 2:
-            env['WANT_UUID'] = '#'
-            options['random_uuid'] = 1
+        if options['random_service_id'] == 1:
+            env['WANT_SERVICE_ID'] = ''
+            options['random_service_id'] = 2
+        elif options['random_service_id'] == 2:
+            env['WANT_SERVICE_ID'] = '#'
+            options['random_service_id'] = 1
 
-        # remove UUID from env for test.yml
-        if 'UUID' in env and env['WANT_UUID'] == '#':
-            del env['UUID']
+        # remove Service Id from env for test.yml
+        if 'SERVICE_ID' in env and env['WANT_SERVICE_ID'] == '#':
+            del env['SERVICE_ID']
         env['VOLUME'] = '{DATADIR}/{NS}-{SRVTYPE}-{SRVNUM}'.format(**env)
         return env
 
@@ -1199,8 +1199,8 @@ def generate(options):
             out['addr'] = '%s:%s' % (env['IP'], env['PORT'])
         if 'VOLUME' in env:
             out['path'] = env['VOLUME']
-        if 'UUID' in env:
-            out['uuid'] = env['UUID']
+        if 'SERVICE_ID' in env:
+            out['service_id'] = env['SERVICE_ID']
         final_services[t].append(out)
 
     # gridinit header
@@ -1302,7 +1302,7 @@ def generate(options):
                           'SRVNUM': i + 1,
                           'PORT': next(ports),
                           'COMPRESSION': compression,
-                          'UUID': str(uuid.uuid4()),
+                          'SERVICE_ID': str(uuid.uuid4()),
                           'EXTRASLOT': ('rawx-even' if i % 2 else 'rawx-odd')
                           })
             add_service(env)
@@ -1504,8 +1504,8 @@ def generate(options):
         elif k in defaults:
             final_conf[k] = defaults[k]
     final_conf['config'] = options['config']
-    final_conf['with_uuid'] = options['with_uuid']
-    final_conf['random_uuid'] = True if options['random_uuid'] else False
+    final_conf['with_service_id'] = options['with_service_id']
+    final_conf['random_service_id'] = True if options['random_service_id'] else False
     with open('{CFGDIR}/test.yml'.format(**ENV), 'w+') as f:
         f.write(yaml.dump(final_conf))
     return final_conf
@@ -1548,12 +1548,12 @@ def main():
     parser.add_argument("-p", "--port",
                         type=int, default=6000,
                         help="Specify the first port of the range")
-    parser.add_argument("-u", "--with-uuid",
+    parser.add_argument("-u", "--with-service-id",
                         action='store_true', default=False,
-                        help="generate UUID for services supporting them")
-    parser.add_argument("--random-uuid",
+                        help="generate Service Id for services supporting them")
+    parser.add_argument("--random-service-id",
                         action='store_true', default=False,
-                        help="generate services with UUID randomly (implies --with--uuid)")
+                        help="generate services with Service Id randomly (implies --with--service-id)")
     parser.add_argument("namespace",
                         action='store', type=str, default=None,
                         help="Namespace name")
@@ -1583,8 +1583,8 @@ def main():
                     opts = merge_config(opts, data)
 
     opts['port'] = int(options.port)
-    opts['with_uuid'] = options.with_uuid or options.random_uuid
-    opts['random_uuid'] = options.random_uuid
+    opts['with_service_id'] = options.with_service_id or options.random_service_id
+    opts['random_service_id'] = options.random_service_id
 
     # Remove empty strings, then apply the default if no value remains
     options.ip = [str(x) for x in options.ip if x]

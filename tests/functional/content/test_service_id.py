@@ -38,12 +38,12 @@ class TestServiceId(BaseTestCase):
     def setUp(self):
         super(TestServiceId, self).setUp()
 
-        if not self.conf['with_uuid']:
+        if not self.conf['with_service_id']:
             self.skipTest("Service ID not enabled")
 
         # support mix deployement
         self.rawx = {}
-        while 'uuid' not in self.rawx:
+        while 'service_id' not in self.rawx:
             self.rawx = random.choice(self.conf['services']['rawx'])
 
         self.conn = ObjectStorageApi(self.ns)
@@ -133,13 +133,13 @@ class TestServiceId(BaseTestCase):
         while True:
             ret = self._create_data()[1]
             for item in ret:
-                if self.rawx['uuid'] in item['url']:
+                if self.rawx['service_id'] in item['url']:
                     return
 
     def _wait_data(self):
         ret = self.conn.object_locate(self.account, self._cnt, "plop")[1]
         for item in ret:
-            if self.rawx['uuid'] in item['url']:
+            if self.rawx['service_id'] in item['url']:
                 try:
                     self.http.request('GET', item.get('real_url'))
                     return True

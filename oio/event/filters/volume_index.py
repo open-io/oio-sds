@@ -59,7 +59,7 @@ class VolumeIndexFilter(Filter):
         event = Event(env)
         if event.event_type in CHUNK_EVENTS:
             data = event.data
-            volume_id = data.get('volume_uuid', data.get('volume_id'))
+            volume_id = data.get('volume_service_id', data.get('volume_id'))
             container_id = data.get('container_id')
             content_id = data.get('content_id')
             chunk_id = data.get('chunk_id')

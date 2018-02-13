@@ -36,7 +36,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 static gchar *ns_name = NULL;
 static gchar *basedir = NULL;
-static gchar *uuid = NULL;
+static gchar *service_id = NULL;
 static gboolean config_system = TRUE;
 static GSList *config_paths = NULL;
 static GSList *config_urlv = NULL;
@@ -1256,9 +1256,9 @@ _route_srv_status(struct req_args_s *args)
 	GString *gstr = g_string_sized_new(128);
 	g_string_append_c(gstr, '{');
 	oio_str_gstring_append_json_pair_int(gstr, "opened_db_count", count);
-	if (uuid) {
+	if (service_id) {
 		g_string_append_c(gstr, ',');
-		oio_str_gstring_append_json_pair(gstr, "uuid", uuid);
+		oio_str_gstring_append_json_pair(gstr, "service_id", service_id);
 	}
 	g_string_append_c(gstr, '}');
 
@@ -1538,7 +1538,7 @@ grid_main_specific_fini(void)
 	g_cond_clear(&cond_bases);
 	g_mutex_clear(&lock_bases);
 	oio_str_clean(&basedir);
-	oio_str_clean(&uuid);
+	oio_str_clean(&service_id);
 }
 
 static void
@@ -1603,7 +1603,7 @@ grid_main_configure(int argc, char **argv)
 		return _config_error("DB path", err);
 	}
 
-	uuid = CFG("uuid");
+	service_id = CFG("service_id");
 
 	gchar *cfg_ip = CFG("bind_addr");
 	STRING_STACKIFY(cfg_ip);

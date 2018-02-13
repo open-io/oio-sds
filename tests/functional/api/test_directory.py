@@ -278,7 +278,7 @@ class TestDirectoryAPI(BaseTestCase):
         are not on the same locations
         """
         def _id(r):
-            return r['tags'].get('tag.uuid', r['addr'])
+            return r['tags'].get('tag.service_id', r['addr'])
 
         self.skipTest('Deprecated way of linking rdir services')
         self._reload_proxy()

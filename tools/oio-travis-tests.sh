@@ -134,10 +134,10 @@ wait_proxy_cache() {
 func_tests () {
 	randomize_env
     args=
-    if is_running_test_suite "uuid"; then
+    if is_running_test_suite "with-service-id"; then
         args="${args} -U"
     fi
-    if is_running_test_suite "random-uuid"; then
+    if is_running_test_suite "with-random-service-id"; then
         args="${args} -R"
     fi
 	oio-reset.sh ${args} -N $OIO_NS $@

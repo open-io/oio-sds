@@ -95,7 +95,7 @@ class RdirDispatcher(object):
                  for x in all_rdir}
 
         for rawx in all_rawx:
-            rawx_id = rawx['tags'].get('tag.uuid', rawx['addr'])
+            rawx_id = rawx['tags'].get('tag.service_id', rawx['addr'])
             try:
                 # Verify that there is no rdir linked
                 resp = self.directory.list(RDIR_ACCT, rawx_id,

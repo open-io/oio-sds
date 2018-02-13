@@ -82,8 +82,8 @@ static GSList *config_paths = NULL;
 #  define LIMIT_LENGTH_SRVDESCR (LIMIT_LENGTH_SRVTYPE + 1 + STRLEN_ADDRINFO)
 # endif
 
-# ifndef LIMIT_LENGTH_UUID
-#  define LIMIT_LENGTH_UUID (36 + 1)
+# ifndef LIMIT_LENGTH_SERVICE_ID
+#  define LIMIT_LENGTH_SERVICE_ID (36 + 1)
 # endif
 
 struct conscience_srv_s {
@@ -102,7 +102,7 @@ struct conscience_srv_s {
 	struct conscience_srv_s *prev;
 
 	gchar description[LIMIT_LENGTH_SRVDESCR];
-	gchar uuid[LIMIT_LENGTH_UUID];
+	gchar service_id[LIMIT_LENGTH_SERVICE_ID];
 };
 
 struct conscience_srvtype_s
@@ -518,19 +518,19 @@ conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_
 			g_assert_nonnull (p_srv);
 			really_first = tag_first && tag_first->type == STVT_BOOL && tag_first->value.b;
 
-			/* retrieve UUID if present */
+			/* retrieve Service ID if present */
 			if (si->tags) {
 				const guint max = si->tags->len;
 				for (guint i = 0; i < max; i++) {
 					struct service_tag_s *tag = g_ptr_array_index(si->tags, i);
 					if (tag == tag_first) continue;
 
-					if (g_strcmp0(tag->name, "tag.uuid")) {
+					if (g_strcmp0(tag->name, "tag.service_id")) {
 						continue;
 					}
 
-					service_tag_to_string(tag, p_srv->uuid, LIMIT_LENGTH_UUID);
-					GRID_TRACE("associate %s to %s", p_srv->description, p_srv->uuid);
+					service_tag_to_string(tag, p_srv->service_id, LIMIT_LENGTH_SERVICE_ID);
+					GRID_TRACE("associate %s to %s", p_srv->description, p_srv->service_id);
 				}
 			}
 		}

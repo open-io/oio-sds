@@ -128,7 +128,7 @@ send_chunk_event(const char *type, const dav_resource *resource)
 
 	oio_str_gstring_append_json_pair(json, "volume_id", conf->rawx_id);
 
-	_PAIR_AND_COMMA("volume_uuid", conf->uuid);
+	_PAIR_AND_COMMA("volume_service_id", conf->service_id);
 
 	_PAIR_AND_COMMA("container_id", resource->info->chunk.container_id);
 

@@ -22,8 +22,8 @@ from tests.functional.cli import CliTestCase
 _SKIP_LONG_TESTS = True
 
 CLUSTER_FIELDS = ['namespace', 'storage_policy', 'chunksize']
-CLUSTER_LIST_HEADERS = ['Type', 'Id', 'Volume', 'Location', 'Slots', 'Up',
-                        'Score']
+CLUSTER_LIST_HEADERS = ['Type', 'Addr', 'ServiceId', 'Volume', 'Location',
+                        'Slots', 'Up', 'Score']
 
 
 class ClusterTest(CliTestCase):
@@ -82,7 +82,7 @@ class ClusterTest(CliTestCase):
         # Get one rawx service's ID
         output = self.openio('cluster list rawx' + opts)
         data = json.loads(output)
-        nodeid = data[0]['Id']
+        nodeid = data[0]['Addr']
 
         # Wait for score to be non-zero
 
@@ -94,7 +94,8 @@ class ClusterTest(CliTestCase):
         # Ensure it is zero-scored
         output = self.openio('cluster list rawx' + opts)
         data = json.loads(output)
-        zeroed = [node['Score'] == 0 for node in data if node['Id'] == nodeid]
+        zeroed = [node['Score'] == 0 for node in data
+                  if node['Addr'] == nodeid]
         # We should have only one service left in this list: the rawx we locked
         self.assertEqual(len(zeroed), 1)
         # And its score should be zero
@@ -118,7 +119,8 @@ class ClusterTest(CliTestCase):
         # Ensure it is zero-scored
         output = self.openio('cluster list rawx' + opts)
         data = json.loads(output)
-        zeroed = [node['Score'] == 0 for node in data if node['Id'] == nodeid]
+        zeroed = [node['Score'] == 0 for node in data
+                  if node['Addr'] == nodeid]
         # We should have only one service left in this list: the rawx we locked
         self.assertEqual(len(zeroed), 1)
         # And its score should be zero

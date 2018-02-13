@@ -76,28 +76,28 @@ class ClusterList(lister.Lister):
                 location = tags.get('tag.loc', 'n/a')
                 slots = tags.get('tag.slots', 'n/a')
                 volume = tags.get('tag.vol', 'n/a')
-                uuid = tags.get('tag.uuid', 'n/a')
+                service_id = tags.get('tag.service_id', 'n/a')
                 addr = srv['addr']
                 up = tags.get('tag.up', 'n/a')
                 score = srv['score']
                 if parsed_args.stats:
                     stats = ["%s=%s" % (k, v) for k, v in tags.items()
                              if k.startswith('stat.')]
-                    values = (srv_type, addr, uuid, volume, location,
+                    values = (srv_type, addr, service_id, volume, location,
                               slots, up, score, " ".join(stats))
                 else:
-                    values = (srv_type, addr, uuid, volume, location,
+                    values = (srv_type, addr, service_id, volume, location,
                               slots, up, score)
                 yield values
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         if parsed_args.stats:
-            columns = ('Type', 'Addr', 'Id', 'Volume', 'Location', 'Slots',
-                       'Up', 'Score', 'Stats')
+            columns = ('Type', 'Addr', 'ServiceId', 'Volume', 'Location',
+                       'Slots', 'Up', 'Score', 'Stats')
         else:
-            columns = ('Type', 'Addr', 'Id', 'Volume', 'Location', 'Slots',
-                       'Up', 'Score')
+            columns = ('Type', 'Addr', 'ServiceId', 'Volume', 'Location',
+                       'Slots', 'Up', 'Score')
         return columns, self._list_services(parsed_args)
 
 
@@ -125,14 +125,15 @@ class ClusterLocalList(lister.Lister):
             location = tags.get('tag.loc', 'n/a')
             slots = tags.get('tag.slots', 'n/a')
             volume = tags.get('tag.vol', 'n/a')
+            service_id = tags.get('tag.service_id', 'n/a')
             addr = srv['addr']
             up = tags.get('tag.up', 'n/a')
             score = srv['score']
             srv_type = srv['type']
             if not srv_types or srv_type in srv_types:
-                results.append((srv_type, addr, volume, location,
+                results.append((srv_type, addr, service_id, volume, location,
                                 slots, up, score))
-        columns = ('Type', 'Id', 'Volume', 'Location',
+        columns = ('Type', 'Addr', 'ServiceId', 'Volume', 'Location',
                    'Slots', 'Up', 'Score')
         result_gen = (r for r in results)
         return columns, result_gen

@@ -106,8 +106,8 @@ static const char *
 __gen_info(const dav_resource *resource, apr_pool_t *pool)
 {
 	dav_rawx_server_conf *conf = resource->info->conf;
-	if (conf->uuid[0]) {
-		return apr_pstrcat(pool, "namespace ", conf->ns_name, "\npath ", conf->docroot, "\nuuid ", conf->uuid, "\n", NULL);
+	if (conf->service_id[0]) {
+		return apr_pstrcat(pool, "namespace ", conf->ns_name, "\npath ", conf->docroot, "\nservice_id ", conf->service_id, "\n", NULL);
 	} else {
 		return apr_pstrcat(pool, "namespace ", conf->ns_name, "\npath ", conf->docroot, "\n", NULL);
 	}
@@ -196,8 +196,8 @@ __gen_stats(const dav_resource *resource, apr_pool_t *pool)
 			STR_KV(rep_bwritten,  "counter rep.bwritten"),
 
 			apr_psprintf(pool, "config volume %s", c->docroot),
-			c->uuid[0] ? apr_psprintf(pool, "\nconfig uuid %s", c->uuid)
-                       : NULL,
+			c->service_id[0] ? apr_psprintf(pool, "\nconfig service_id %s", c->service_id)
+				: NULL,
 			NULL);
 }
 
