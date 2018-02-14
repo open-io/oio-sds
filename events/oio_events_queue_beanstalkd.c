@@ -26,7 +26,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/socket.h>
 
 #include <glib.h>
-#include <zmq.h>
 #include <math.h>
 
 #include <core/oio_core.h>
