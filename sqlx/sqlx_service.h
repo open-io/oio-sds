@@ -84,6 +84,8 @@ struct sqlx_service_s
 	GString *announce;
 	gchar *zk_url;
 
+	GString *service_id;
+
 	/* Should the service load an additional list of configuration files to
 	 * supersede the values in place in the central configuration facility */
 	GSList *config_paths;

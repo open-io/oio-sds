@@ -40,7 +40,7 @@ gridd_client_create_idle(const gchar *target)
 	if (likely(NULL == err))
 		return client;
 
-	GRID_WARN("Client creation failed: (%d) %s", err->code, err->message);
+	GRID_WARN("Client creation failed: (%d) %s for %s", err->code, err->message, target);
 	g_clear_error(&err);
 	gridd_client_free(client);
 	return NULL;

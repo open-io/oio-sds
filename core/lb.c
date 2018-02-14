@@ -94,6 +94,101 @@ oio_lb_pool__get_item(struct oio_lb_pool_s *self,
 	CFG_CALL(self, get_item)(self, id);
 }
 
+
+/* -------------------------------------------------------------------------- */
+
+/* Mapping <service_id, addr> */
+
+static GRWLock lock_service_id_addr;
+
+static GTree *tree_service_id_addr = NULL;  /* <gchar*> -> <gchar*> */
+
+
+static void __attribute__ ((constructor))
+_oio_cache_service_id_contructor (void)
+{
+	static volatile guint lazy_init = 1;
+	if (lazy_init) {
+		if (g_atomic_int_compare_and_exchange(&lazy_init, 1, 0)) {
+			g_rw_lock_init(&lock_service_id_addr);
+			tree_service_id_addr = g_tree_new_full(oio_str_cmp3, NULL, g_free, g_free);
+		}
+	}
+}
+
+static const gchar *_oio_cache_get_service_id(const gchar* service_id)
+{
+	/* FIXME(mb) we should use meta1_url_shift_addr but it add dependency on metautils */
+
+	const gchar *s = strchr(service_id, '|');
+	if (s) s = strchr(s+1, '|');
+	if (s) s++;
+
+	return s;
+}
+
+static void _oio_cache_add_service_id_addr(const gchar* service_id, const gchar* addr)
+{
+	g_rw_lock_writer_lock(&lock_service_id_addr);
+
+	const gchar *id = _oio_cache_get_service_id(service_id);
+	if (id) {
+		g_tree_replace(tree_service_id_addr, g_strdup(id), g_strdup(addr));
+	}
+	g_rw_lock_writer_unlock(&lock_service_id_addr);
+}
+
+/* FIXME(mb) should be called when removing items from LB will be implemented */
+__attribute__ ((unused))
+static void _oio_cache_remove_service_id(const gchar* service_id)
+{
+	g_rw_lock_writer_lock(&lock_service_id_addr);
+
+	const gchar *id = _oio_cache_get_service_id(service_id);
+	if (id) {
+		g_tree_remove(tree_service_id_addr, id);
+	}
+
+	g_rw_lock_writer_unlock(&lock_service_id_addr);
+}
+
+static void _oio_cache_service_id_flush (void)
+{
+	g_rw_lock_writer_lock(&lock_service_id_addr);
+
+	g_tree_destroy(tree_service_id_addr);
+	tree_service_id_addr = g_tree_new_full(oio_str_cmp3, NULL, g_free, g_free);
+
+	g_rw_lock_writer_unlock(&lock_service_id_addr);
+}
+
+static void __attribute__ ((destructor))
+_oio_cache_service_id_destroy (void)
+{
+	g_rw_lock_writer_lock(&lock_service_id_addr);
+
+	EXTRA_ASSERT(tree_service_id_addr != NULL);
+
+	g_tree_destroy(tree_service_id_addr);
+	tree_service_id_addr = NULL;
+	g_rw_lock_writer_unlock(&lock_service_id_addr);
+
+	g_rw_lock_clear(&lock_service_id_addr);
+}
+
+gchar* oio_lb_resolve_service_id (const gchar* service_id)
+{
+	EXTRA_ASSERT(service_id != NULL);
+
+	gchar *res = NULL;
+	g_rw_lock_reader_lock(&lock_service_id_addr);
+	if (tree_service_id_addr && (res = g_tree_lookup(tree_service_id_addr, service_id))) {
+		res = g_strdup(res);
+	}
+	g_rw_lock_reader_unlock(&lock_service_id_addr);
+	return res;
+}
+
 /* -------------------------------------------------------------------------- */
 
 /* A service item, as known by the world. */
@@ -1028,6 +1123,7 @@ oio_lb_world__flush(struct oio_lb_world_s *self)
 		self->items = g_tree_new_full (oio_str_cmp3, NULL,
 				g_free, g_free);
 	}
+	_oio_cache_service_id_flush();
 
 	g_rw_lock_writer_unlock(&self->lock);
 }
@@ -1049,6 +1145,8 @@ oio_lb_world__destroy (struct oio_lb_world_s *self)
 	g_rw_lock_writer_unlock(&self->lock);
 	g_rw_lock_clear(&self->lock);
 	g_free (self);
+
+	_oio_cache_service_id_flush();
 }
 
 struct oio_lb_pool_s *
@@ -1219,6 +1317,7 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 		item0 = _item_make (item->location, item->id, item->addr);
 		item0->weight = item->weight;
 		g_tree_replace (self->items, g_strdup(item0->id), item0);
+		_oio_cache_add_service_id_addr(item0->id, item0->addr);
 
 	} else {
 

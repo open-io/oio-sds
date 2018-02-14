@@ -126,6 +126,9 @@ static struct grid_main_option_s common_options[] =
 	{"DeleteEnabled", OT_BOOL, {.b = &SRV.flag_delete_on},
 		"If not set, prevents deleting database files from disk"},
 
+	{"ServiceId", OT_STRING, {.str = &SRV.service_id},
+		"Set Service Id of the service"},
+
 	{NULL, 0, {.any=0}, NULL}
 };
 
@@ -135,7 +138,8 @@ static const gchar *
 _get_url(gpointer ctx)
 {
 	EXTRA_ASSERT(ctx != NULL);
-	return PSRV(ctx)->announce->str;
+	struct sqlx_service_s *ptr = ctx;
+	return ptr->service_id ?  ptr->service_id->str : ptr->announce->str;
 }
 
 static GError*
@@ -459,10 +463,13 @@ filter_services(struct sqlx_service_s *ss, gchar **s, const gchar *type)
 			host = *s;
 		}
 		if (srvtype_matched) {
-			if (!g_ascii_strcasecmp(host, ss->url->str))
+			const char *hid = (ss->service_id && ss->service_id->str) ? ss->service_id->str
+				: ss->url->str;
+			if (!g_ascii_strcasecmp(host, hid)) {
 				matched = TRUE;
-			else
+			} else {
 				g_ptr_array_add(tmp, g_strdup(host));
+			}
 		}
 		meta1_service_url_clean(u);
 	}
@@ -719,7 +726,7 @@ sqlx_service_action(void)
 
 	if (!SRV.flag_nolock) {
 		err = volume_service_lock (SRV.volume, SRV.service_config->srvtype,
-				SRV.announce->str, SRV.ns_name);
+				_get_url(&SRV), SRV.ns_name);
 		if (err)
 			return _action_report_error(err, "Volume lock failed");
 	}
@@ -818,6 +825,7 @@ sqlx_service_set_defaults(void)
 
 	SRV.sync_mode_solo = 1;
 	SRV.sync_mode_repli = 0;
+	SRV.service_id = NULL;
 
 	if (SRV.service_config->set_defaults)
 		SRV.service_config->set_defaults(&SRV);

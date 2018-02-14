@@ -330,6 +330,7 @@ host: ${IP}
 port: ${PORT}
 type: ${SRVTYPE}
 location: ${LOC}
+${WANT_SERVICE_ID}service_id: ${SERVICE_ID}
 slots:
     - ${SRVTYPE}
 checks:
@@ -673,7 +674,7 @@ group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${IP}:${PORT} ${EXTRA} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
+command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${IP}:${PORT} ${OPTARGS} ${EXTRA} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
 """
 
 template_gridinit_sqlx = """
@@ -1245,10 +1246,16 @@ def generate(options):
                 f.write(tpl.safe_substitute(env))
 
     # meta* + sqlx
-    def generate_meta(t, n, tpl, ext_opt=""):
+    def generate_meta(t, n, tpl, ext_opt="", service_id=False):
         env = subenv({'SRVTYPE': t, 'SRVNUM': n, 'PORT': next(ports),
                       'EXE': 'oio-' + t + '-server',
                       'EXTRA': ext_opt})
+        if service_id:
+            env['SERVICE_ID'] = str(uuid.uuid4())
+            env['OPTARGS'] = "-O ServiceId=%s" % env['SERVICE_ID']
+        else:
+            env['WANT_SERVICE_ID'] = '#'
+            env['OPTARGS'] = ''
         add_service(env)
         # gridinit config
         tpl = Template(tpl)
@@ -1283,7 +1290,8 @@ def generate(options):
     if nb_meta2:
         for i in range(nb_meta2):
             generate_meta('meta2', i + 1, template_gridinit_meta,
-                          options['meta2'].get(SVC_PARAMS, ""))
+                          options['meta2'].get(SVC_PARAMS, ""),
+                          service_id=options['with_service_id'])
 
     # sqlx
     nb_sqlx = getint(options['sqlx'].get(SVC_NB), sqlx_replicas)
