@@ -178,12 +178,13 @@ class EventWorker(Worker):
 
         server_gt = greenthread.getcurrent()
 
-        for i in range(concurrency):
-            beanstalk = Beanstalk.from_url(queue_url)
-            gt = eventlet.spawn(self.handle, beanstalk)
-            gt.link(_eventlet_stop, server_gt, beanstalk)
-            coros.append(gt)
-            beanstalk, gt = None, None
+        for url in queue_url.split(';'):
+            for i in range(concurrency):
+                beanstalk = Beanstalk.from_url(url)
+                gt = eventlet.spawn(self.handle, beanstalk)
+                gt.link(_eventlet_stop, server_gt, beanstalk)
+                coros.append(gt)
+                beanstalk, gt = None, None
 
         while self.alive:
             self.notify()
