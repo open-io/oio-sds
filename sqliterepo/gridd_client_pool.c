@@ -384,8 +384,17 @@ _round(struct gridd_client_pool_s *pool, time_t sec)
 	EXTRA_ASSERT(pool->fdmon >= 0);
 	g_assert(sqliterepo_fd_max_active > 0);
 
+	/* Avoid a possible starvation, when all the events have been
+	 * consumed but some events remain in the queue and slots are
+	 * available to manage them. */
+	long delay = sec * 1000L;
+	if (g_async_queue_length(pool->pending_clients) > 0
+			&& pool->active_count < pool->active_clients_max) {
+		delay = 0L;
+	}
+
 	struct epoll_event ev[MAX_ROUND];
-	int rc = epoll_wait(pool->fdmon, ev, MAX_ROUND, sec * 1000L);
+	int rc = epoll_wait(pool->fdmon, ev, MAX_ROUND, delay);
 
 	if (rc < 0 && errno != EINTR)
 		return NEWERROR(errno, "epoll_wait error: %s", strerror(errno));
