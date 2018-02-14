@@ -699,6 +699,9 @@ _direct_use (struct sqlx_peering_s *self,
 			} else {
 				_use_by_udp_no_free(&req, p);
 			}
+		} else {
+			GRID_WARN("USE(%s,%s.%s) failed to parse url",
+					url, n->base, n->type);
 		}
 		return FALSE;
 	} else {
@@ -710,7 +713,7 @@ _direct_use (struct sqlx_peering_s *self,
 
 		GError *err = gridd_client_connect_url (mc->client, url);
 		if (err) {
-			GRID_DEBUG("USE error: (%d) %s", err->code, err->message);
+			GRID_WARN("USE error: (%d) %s", err->code, err->message);
 			event_client_free(mc);
 			g_error_free(err);
 			return FALSE;
@@ -720,7 +723,7 @@ _direct_use (struct sqlx_peering_s *self,
 			err = gridd_client_request (mc->client, req, NULL, NULL);
 			g_byte_array_unref(req);
 			if (err) {
-				GRID_DEBUG("USE error: (%d) %s", err->code, err->message);
+				GRID_WARN("USE error: (%d) %s", err->code, err->message);
 				event_client_free(mc);
 				g_error_free(err);
 				return FALSE;

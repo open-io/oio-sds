@@ -22,6 +22,7 @@ from ConfigParser import SafeConfigParser
 import yaml
 
 from oio.api.object_storage import ObjectStorageApi
+from oio.common.exceptions import ServiceBusy
 from tests.utils import BaseTestCase, random_str
 
 
@@ -137,7 +138,11 @@ class TestServiceId(BaseTestCase):
                     return
 
     def _wait_data(self):
-        ret = self.conn.object_locate(self.account, self._cnt, "plop")[1]
+        try:
+            # cache may be empty for meta2 as well, catch exceptions here
+            ret = self.conn.object_locate(self.account, self._cnt, "plop")[1]
+        except ServiceBusy:
+            return False
         for item in ret:
             if self.rawx['service_id'] in item['url']:
                 try:
