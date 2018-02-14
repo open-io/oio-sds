@@ -82,6 +82,7 @@ struct replication_config_s
 	 *
 	 * @param ctx the pointer registered in the configuration
 	 * @param n the logical name of the base (not the physical path)
+	 * @param nocache
 	 * @param result a placeholder for the array of peers.
 	 * @return NULL if 'result' is set, and not-NULL if 'result' is not set
 	 */
