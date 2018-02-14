@@ -76,6 +76,12 @@ guint32 key_from_loc_level(oio_location_t location, int level);
 
 /* -------------------------------------------------------------------------- */
 
+/* Resolve service_id to addr
+ * The result must be freed if found or NULL. */
+gchar* oio_lb_resolve_service_id(const gchar* service_id);
+
+/* -------------------------------------------------------------------------- */
+
 /* A world is something you feed with services and that will arrange them for
  * you in slots. Services are tuples like <location,score,id>.
  * A slot is a partition of the world that is identified by a name. It holds

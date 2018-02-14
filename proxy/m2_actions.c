@@ -26,6 +26,26 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "common.h"
 #include "actions.h"
 
+
+static char*
+_resolve_service_id(const char *service_id)
+{
+	gchar *out;
+	gchar *key = oio_make_service_key(ns_name, "meta2", service_id);
+	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
+
+	if (item) {
+		GRID_WARN("*found %s to %s", service_id, item->addr);
+		out = g_strdup(item->addr);
+
+		g_free(item);
+	} else {
+		out = g_strdup(service_id);
+	}
+
+	return out;
+}
+
 static void
 _get_meta2_realtype (struct req_args_s *args, gchar *d, gsize dlen)
 {
@@ -1067,6 +1087,7 @@ action_m2_container_destroy (struct req_args_s *args)
 		const guint32 flag_force = (force) ? M2V2_DESTROY_FORCE : 0;
 
 		meta1_urlv_shift_addr(urlv);
+        // char *url = _resolve_service_id(urlv[0]);
 		err = m2v2_remote_execute_DESTROY(urlv[0], args->url,
 				M2V2_DESTROY_EVENT|flag_force);
 		if (err != NULL) {
@@ -1099,6 +1120,8 @@ action_m2_container_destroy (struct req_args_s *args)
 			err = m2v2_remote_execute_DESTROY_many(urlv+1, args->url,
 					flag_force);
 		}
+
+		// free(url);
 	}
 
 clean_and_exit:
@@ -1357,11 +1380,13 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 
 	meta1_urlv_shift_addr(urlv);
 	CLIENT_CTX(ctx, args, type, 1);
+	char *url = _resolve_service_id(urlv[0]);
 	GByteArray * _pack(const struct sqlx_name_s *n) {
-		return sqlx_pack_SNAPSHOT(n, urlv[0], target_cid, seq_num, DL());
+		return sqlx_pack_SNAPSHOT(n, url, target_cid, seq_num, DL());
 	}
 
 	err = _resolve_meta2(args, CLIENT_PREFER_MASTER, _pack, NULL);
+	free(url);
 	if(err)
 		goto cleanup;
 

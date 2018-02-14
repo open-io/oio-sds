@@ -78,8 +78,8 @@ _post_config(struct sqlx_service_s *ss)
 		return FALSE;
 	}
 
-	/* Tell the meta2 is interested only by RAWX services */
-	g_strlcpy(ss->srvtypes, NAME_SRVTYPE_RAWX, sizeof(ss->srvtypes));
+	/* Tell the meta2 is interested only by RAWX services and META2 (for service_id) */
+	g_snprintf(ss->srvtypes, sizeof(ss->srvtypes), "%s,%s", NAME_SRVTYPE_RAWX, NAME_SRVTYPE_META2);
 
 	/* prepare a meta2 backend */
 	err = meta2_backend_init(&m2, ss->repository, ss->ns_name, ss->lb, ss->resolver);

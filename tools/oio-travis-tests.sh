@@ -124,14 +124,23 @@ test_proxy_forward () {
 }
 
 wait_proxy_cache() {
-	cnt=$(oio-test-config.py -t rawx | wc -l)
-	while true; do
-		rawx=$(curl -s http://$proxy/v3.0/cache/show | python -m json.tool | grep -c rawx | cat)
-		if [ $cnt -eq $rawx ]; then
-			break
-		fi
-		sleep 0.1
-	done
+    cnt=$(oio-test-config.py -t rawx | wc -l)
+    while true; do
+        rawx=$(curl -s http://$proxy/v3.0/cache/show | python -m json.tool | grep -c rawx | cat)
+        if [ $cnt -eq $rawx ]; then
+            break
+        fi
+        sleep 0.1
+    done
+
+    cnt=$(oio-test-config.py -t meta2 | wc -l)
+    while true; do
+        meta2=$(curl -s http://$proxy/v3.0/cache/show | python -m json.tool | grep -c meta2 | cat)
+        if [ $cnt -eq $meta2 ]; then
+            break
+        fi
+        sleep 0.1
+    done
 }
 
 func_tests () {
