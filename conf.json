@@ -243,12 +243,12 @@
 
 			{ "type": "uint64", "name": "oio_client_cache_errors_max",
 				"key": "client.errors_cache.max",
-				"def": "15", "min": 1, "max": "4Gi",
+				"def": "60", "min": 1, "max": "4Gi",
 				"descr": "Sets the number of faults (on the period given by client.errors_cache.period) beyond which a peer is considered as too faulty to try a new RPC." },
 
 			{ "type": "epoch", "name": "oio_client_cache_errors_period",
 				"key": "client.errors_cache.period",
-				"def": "15s", "min": "1s", "max": "1h",
+				"def": "60s", "min": "1s", "max": "1h",
 				"descr": "Sets the size of the time window used to count the number of network errors." },
 
 
