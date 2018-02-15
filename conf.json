@@ -507,7 +507,7 @@
 			{ "type": "uint", "name": "sqliterepo_fd_max_active",
 				"key": "sqliterepo.repo.fd_max_active",
 				"descr": "Set to 0 for an automatic detection",
-				"def": 0, "min": 0, "max": "4ki" }
+				"def": 512, "min": 0, "max": "4ki" }
 		]
 	},
 	"rdir": {
