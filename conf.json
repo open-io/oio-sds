@@ -61,7 +61,7 @@
 			{ "type": "uint32", "name": "oio_events_common_max_pending",
 				"key": "events.common.pending.max",
 				"descr": "Sets the maximum number of pending events, not received yet by the endpoint",
-				"def": "1000", "min": 1, "max": "1Mi" },
+				"def": "10000", "min": 1, "max": "1Mi" },
 
 			{ "type": "uint", "name": "oio_events_zmq_max_recv",
 				"key": "events.zmq.max_recv",
