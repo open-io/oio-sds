@@ -362,7 +362,7 @@
 			{ "type": "monotonic", "name": "oio_election_delay_ping_final",
 				"key": "sqliterepo.election.delay.ping_final",
 				"descr": "In the current sqliterepo repository, sets the average amount of time after which a PING will be sent for an established election. This is an average, in facts a jitter is introduced to avoid resonance effects on large-scale platforms.",
-				"def": "15m", "min": "1ms", "max": "1d" },
+				"def": "30m", "min": "1ms", "max": "1d" },
 
 			{ "type": "monotonic", "name": "oio_election_delay_expire_MASTER",
 				"key": "sqliterepo.election.delay.expire_master",
