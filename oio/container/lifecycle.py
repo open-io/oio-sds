@@ -445,11 +445,54 @@ class NoncurrentVersionTransition(NoncurrentAction, Transition):
     DAYS_XML_TAG = 'NoncurrentDays'
 
 
+class ExceedingVersionExpiration(LifecycleAction):
+    """
+    Delete exceeding versions if versioning is enabled.
+    """
+
+    def __init__(self, api=None):
+        super(ExceedingVersionExpiration, self).__init__(api)
+        self.versioning = None
+        self.last_object_name = None
+
+    @classmethod
+    def from_element(cls, unused, **kwargs):
+        return cls(**kwargs)
+
+    def match(self, account, container, **kwargs):
+        if self.versioning is None:
+            data = self.api.container_get_properties(account, container)
+            sys = data['system']
+            version = sys.get('sys.m2.policy.version', None)
+            if version is None:
+                from oio.common.client import ProxyClient
+                proxy_client = ProxyClient({"namespace": self.api.namespace},
+                                           no_ns_in_url=True)
+                _, data = proxy_client._request('GET', "config")
+                version = data['meta2.max_versions']
+            version = int(version)
+            self.versioning = version > 1 or version < 0
+        return self.versioning
+
+    def apply(self, account, container, obj_meta, **kwargs):
+        if self.match(account, container, **kwargs):
+            object_name = obj_meta['name']
+            if object_name != self.last_object_name:
+                self.api.container.content_purge(account, container,
+                                                 object_name)
+                self.last_object_name = object_name
+            if not self.api.object_head(account, container, object_name,
+                                        version=obj_meta['version']):
+                return "Deleted"
+        return "Kept"
+
+
 ACTION_MAP = {a.__name__: a for a in
               (Expiration,
                Transition,
                NoncurrentVersionExpiration,
-               NoncurrentVersionTransition)}
+               NoncurrentVersionTransition,
+               ExceedingVersionExpiration)}
 
 
 def action_from_element(element, api=None, **kwargs):
