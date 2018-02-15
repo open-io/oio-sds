@@ -228,7 +228,7 @@
 
 			{ "type": "bool", "name": "oio_client_down_avoid",
 				"key": "client.down_cache.avoid",
-				"def": false,
+				"def": true,
 				"descr": "Should an error be raised when the peer is marked down, instead of trying to contact the peer." },
 
 			{ "type": "bool", "name": "oio_client_down_shorten",
