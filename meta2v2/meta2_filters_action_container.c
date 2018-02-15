@@ -127,7 +127,6 @@ meta2_filter_action_delete_container(struct gridd_filter_ctx_s *ctx,
 {
 	guint32 flags = 0;
 	getflag (flags,reply->request, FORCE);
-	getflag (flags,reply->request, FLUSH);
 	getflag (flags,reply->request, EVENT);
 
 	GError *err = meta2_backend_destroy_container(
@@ -176,9 +175,19 @@ int
 meta2_filter_action_flush_container(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply UNUSED)
 {
-	GError *err = meta2_backend_flush_container(
-			meta2_filter_ctx_get_backend(ctx),
-			meta2_filter_ctx_get_url(ctx));
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+	GSList *beans_list_list = NULL;
+
+	GError *err = meta2_backend_flush_container(meta2_filter_ctx_get_backend(ctx),
+			meta2_filter_ctx_get_url(ctx), _bean_list_cb, &beans_list_list);
+
+	for (GSList *l=beans_list_list; l; l=l->next) {
+		_m2b_notify_beans(m2b, url, l->data, "content.deleted", TRUE);
+		_bean_cleanl2(l->data);
+	}
+	g_slist_free(beans_list_list);
+
 	if (!err)
 		return FILTER_OK;
 	GRID_DEBUG("Container flush failed (%d): %s", err->code, err->message);

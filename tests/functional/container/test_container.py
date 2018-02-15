@@ -458,6 +458,41 @@ class TestMeta2Containers(BaseTestCase):
             self._create_content("content2")
         purge_and_check(6)
 
+    def test_flush(self):
+        params = self.param_ref(self.ref)
+
+        # no container
+        resp = self.request('POST', self.url_container('flush'),
+                            params=params)
+        self.assertEqual(404, resp.status)
+
+        def flush_and_check():
+            resp = self.request('POST', self.url_container('flush'),
+                                params=params)
+            self.assertEqual(204, resp.status)
+            resp = self.request('POST', self.url_container('get_properties'),
+                                params=params)
+            data = self.json_loads(resp.data)
+            self.assertEqual(data['system']['sys.m2.objects'], '0')
+            self.assertEqual(data['system']['sys.m2.usage'], '0')
+            resp = self.request('GET', self.url_container('list'),
+                                params=params)
+            data = self.json_loads(resp.data)
+            self.assertEqual(len(data['objects']), 0)
+
+        # empty container
+        self._create(params, 201)
+        flush_and_check()
+
+        # one content
+        self._create_content("content")
+        flush_and_check()
+
+        # many contents
+        for i in range(100):
+            self._create_content("content"+str(i))
+        flush_and_check()
+
 
 class TestMeta2Contents(BaseTestCase):
     def setUp(self):

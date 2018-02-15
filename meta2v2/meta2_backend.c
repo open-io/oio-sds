@@ -71,6 +71,9 @@ struct m2_prepare_data
 static void _meta2_backend_force_prepare_data(struct meta2_backend_s *m2b,
 		const gchar *key, struct sqlx_sqlite3_s *sq3);
 
+static void m2b_add_modified_container(struct meta2_backend_s *m2b,
+		struct sqlx_sqlite3_s *sq3);
+
 static enum m2v2_open_type_e
 _mode_masterslave(guint32 flags)
 {
@@ -652,7 +655,6 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 {
 	gboolean event = BOOL(flags & M2V2_DESTROY_EVENT);
 	gboolean force = BOOL(flags & M2V2_DESTROY_FORCE);
-	gboolean flush = BOOL(flags & M2V2_DESTROY_FLUSH);
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = NULL;
 
@@ -660,17 +662,8 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 	if (!err) {
 		EXTRA_ASSERT(sq3 != NULL);
 
-		if (flush && !force)
+		if (!force)
 			err = _check_if_container_empty (sq3);
-
-		if (!err && flush) {
-			err = m2db_flush_container(sq3->db);
-			if (NULL != err && force) {
-				GRID_WARN ("Destroy error: flush error: (%d) %s",
-						err->code, err->message);
-				g_clear_error (&err);
-			}
-		}
 
 		/* TODO(jfs): manage base's subtype */
 		hc_decache_reference_service(m2->resolver, url, NAME_SRVTYPE_META2);
@@ -709,7 +702,8 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 }
 
 GError *
-meta2_backend_flush_container(struct meta2_backend_s *m2, struct oio_url_s *url)
+meta2_backend_flush_container(struct meta2_backend_s *m2, struct oio_url_s *url,
+		m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -720,10 +714,22 @@ meta2_backend_flush_container(struct meta2_backend_s *m2, struct oio_url_s *url)
 	if (!err) {
 		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
-			if (!(err = m2db_flush_container(sq3->db)))
-				err = m2db_purge(sq3, _maxvers(sq3), _retention_delay(sq3),
-						NULL, NULL, NULL);
+			err = m2db_flush_container(sq3, cb, u0);
 			err = sqlx_transaction_end(repctx, err);
+		}
+		if (!err)
+			m2b_add_modified_container(m2, sq3);
+		if (!err) {
+			int rc = sqlx_exec(sq3->db, "VACUUM");
+			if (rc != SQLITE_OK)
+				err = SQLITE_GERROR(sq3->db, rc);
+		}
+		if (!err) {
+			if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
+				if (!err)
+					sqlx_transaction_notify_huge_changes(repctx);
+				err = sqlx_transaction_end(repctx, err);
+			}
 		}
 		m2b_close(sq3);
 	}

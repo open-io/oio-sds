@@ -2738,9 +2738,31 @@ m2db_deduplicate_contents(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 }
 
 GError*
-m2db_flush_container(sqlite3 *db)
+m2db_flush_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0)
 {
-	int rc = sqlx_exec(db, "DELETE FROM aliases");
-	if (SQLITE_OK == rc) return NULL;
-	return SQLITE_GERROR(db, rc);
+	GError *err = NULL;
+
+	GPtrArray *aliases = g_ptr_array_new();
+	GVariant *params[3] = {NULL};
+	err = ALIASES_load(sq3->db, "", params, _bean_buffer_cb, aliases);
+	metautils_gvariant_unrefv(params);
+
+	if (!err)
+		err = _real_delete_aliases(sq3, aliases, cb, u0);
+	_bean_cleanv2(aliases);
+
+	if (!err) {
+		int rc = sqlx_exec(sq3->db,
+				"DELETE FROM aliases;"
+				"DELETE FROM contents;"
+				"DELETE FROM chunks;"
+				"DELETE FROM properties");
+		if (rc != SQLITE_OK)
+			return SQLITE_GERROR(sq3->db, rc);
+		// reset container size and object count
+		m2db_set_size(sq3, 0);
+		m2db_set_obj_count(sq3, 0);
+	}
+
+	return err;
 }
