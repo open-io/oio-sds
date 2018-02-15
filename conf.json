@@ -532,7 +532,7 @@
 
 			{ "type": "bool", "name": "oio_udp_allowed",
 				"key": "udp_allowed",
-				"def": false,
+				"def": true,
 				"descr": "Allow the sqlx client DB_USE RPC to be sent via UDP instead of the default TCP channel."},
 
 			{ "type": "epoch", "name": "oio_sqlx_lb_refresh_period",
