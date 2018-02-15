@@ -276,27 +276,27 @@
 			{ "type": "float", "name": "oio_election_use_timeout_cnx",
 				"key": "sqliterepo.outgoing.timeout.cnx.use",
 				"descr": "Sets the connection timeout when ping'ing a peer database. Keep it small. Only used when UDP is disabled.",
-				"def": 0.25, "min": 0.01, "max": 30.0 },
+				"def": 1.0, "min": 0.01, "max": 30.0 },
 
 			{ "type": "float", "name": "oio_election_use_timeout_req",
 				"key": "sqliterepo.outgoing.timeout.req.use",
 				"descr": "Sets the global timeout when ping'ing a peer database. Keep it small.",
-				"def": 1.0, "min": 0.01, "max": 30.0 },
+				"def": 10.0, "min": 0.01, "max": 30.0 },
 
 			{ "type": "float", "name": "oio_election_getvers_timeout_cnx",
 				"key": "sqliterepo.outgoing.timeout.cnx.getvers",
 				"descr": "Sets the connection timeout when exchanging versions between databases replicas.",
-				"def": 0.5, "min": 0.01, "max": 30.0 },
+				"def": 5.0, "min": 0.01, "max": 30.0 },
 
 			{ "type": "float", "name": "oio_election_getvers_timeout_req",
 				"key": "sqliterepo.outgoing.timeout.req.getvers",
 				"descr": "Sets the global timeout when performing a version exchange RPC. Keep it rather small, to let election quickly fail on network troubles. Only used when UDP is disabled.",
-				"def": 2.0, "min": 0.01, "max": 30.0 },
+				"def": 10.0, "min": 0.01, "max": 30.0 },
 
 			{ "type": "float", "name": "oio_election_replicate_timeout_cnx",
 				"key": "sqliterepo.outgoing.timeout.cnx.replicate",
 				"descr": "Sets the connection timeout sending a replication request.",
-				"def": 1.0, "min": 0.01, "max": 30.0 },
+				"def": 5.0, "min": 0.01, "max": 30.0 },
 
 			{ "type": "float", "name": "oio_election_replicate_timeout_req",
 				"key": "sqliterepo.outgoing.timeout.req.replicate",
@@ -306,7 +306,7 @@
 			{ "type": "float", "name": "oio_election_resync_timeout_cnx",
 				"key": "sqliterepo.outgoing.timeout.cnx.resync",
 				"descr": "Set the connection timeout during RPC to ask for a SLAVE database to be resync on its MASTER",
-				"def": 1.0, "min": 0.01, "max": 30.0 },
+				"def": 5.0, "min": 0.01, "max": 30.0 },
 
 			{ "type": "float", "name": "oio_election_resync_timeout_req",
 				"key": "sqliterepo.outgoing.timeout.req.resync",
