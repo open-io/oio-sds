@@ -148,8 +148,6 @@ m2v2_remote_pack_DESTROY(struct oio_url_s *url, guint32 flags, gint64 dl)
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_DESTROY, url, NULL, dl);
 	if (flags & M2V2_DESTROY_FORCE)
 		metautils_message_add_field_str(msg, NAME_MSGKEY_FORCE, "1");
-	if (flags & M2V2_DESTROY_FLUSH)
-		metautils_message_add_field_str(msg, NAME_MSGKEY_FLUSH, "1");
 	if (flags & M2V2_DESTROY_EVENT)
 		metautils_message_add_field_str(msg, NAME_MSGKEY_EVENT, "1");
 

@@ -415,6 +415,46 @@ test_container_create_destroy(void)
 }
 
 static void
+test_container_flush(void)
+{
+	void test(struct meta2_backend_s *m2, struct oio_url_s *u, gint64 maxver) {
+		(void) maxver;
+		GPtrArray *tmp;
+		GSList *beans = NULL;
+		GError *err;
+
+		CLOCK_START = CLOCK = oio_ext_rand_int();
+
+		/* generate the beans for an alias of 3 chunks */
+		beans = _create_alias(m2, u, NULL);
+
+		/* PUT */
+		err = meta2_backend_put_alias(m2, u, beans, NULL, NULL, NULL, NULL);
+		g_assert_no_error(err);
+		CHECK_ALIAS_VERSION(m2,u,_get_real());
+		check_list_count(m2,u,1);
+
+		/* flush the container */
+		err = meta2_backend_flush_container(m2, u, NULL, NULL);
+		g_assert_no_error(err);
+		check_list_count(m2, u, 0);
+
+		/* check we get nothing when looking for a valid version */
+		tmp = g_ptr_array_new();
+		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_NODELETED, _bean_buffer_cb, tmp);
+		g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
+		g_clear_error(&err);
+		GRID_DEBUG("TEST Found %u beans (NODELETED)", tmp->len);
+		g_assert_cmpint(tmp->len, ==, 0);
+		_bean_cleanv2(tmp);
+
+		_bean_cleanl2(beans);
+	}
+
+	_container_wraper_allversions("NS", test);
+}
+
+static void
 test_content_delete_not_found(void)
 {
 	void test(struct meta2_backend_s *m2, struct oio_url_s *u, gint64 maxver) {
@@ -1229,6 +1269,8 @@ main(int argc, char **argv)
 			test_backend_create_destroy);
 	g_test_add_func("/meta2v2/backend/container/create_destroy",
 			test_container_create_destroy);
+	g_test_add_func("/meta2v2/backend/container/flush",
+			test_container_flush);
 	g_test_add_func("/meta2v2/backend/content/put_nobeans",
 			test_content_put_no_beans);
 	g_test_add_func("/meta2v2/backend/content/delete_notfound",
