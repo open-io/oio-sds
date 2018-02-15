@@ -769,22 +769,22 @@
 			{ "type": "float", "name": "proxy_timeout_config",
 				"key": "proxy.outgoing.timeout.config",
 				"descr": "In a proxy, sets the global timeout for 'config' requests issued",
-				"def": 5.0, "min": 0.01, "max": 60.0 },
+				"def": 10.0, "min": 0.1, "max": 60.0 },
 
 			{ "type": "float", "name": "proxy_timeout_stat",
 				"key": "proxy.outgoing.timeout.stat",
 				"descr": "In a proxy, sets the global timeout for 'stat' requests issued (mostly forwarded for the event-agent)",
-				"def": 5.0, "min": 0.01, "max": 60.0 },
+				"def": 10.0, "min": 0.1, "max": 60.0 },
 
 			{ "type": "float", "name": "proxy_timeout_conscience",
 				"key": "proxy.outgoing.timeout.conscience",
 				"descr": "In a proxy, sets the global timeout for the RPC to the central cosnience service.",
-				"def": 2.0, "min": 0.01, "max": 60.0 },
+				"def": 10.0, "min": 0.1, "max": 60.0 },
 
 			{ "type": "float", "name": "proxy_timeout_common",
 				"key": "proxy.outgoing.timeout.common",
 				"descr": "In a proxy, sets the global timeout for all the other RPC issued (not conscience, not stats-related)",
-				"def": 30.0, "min": 0.01, "max": 60.0 }
+				"def": 30.0, "min": 0.1, "max": 60.0 }
 		]
 	},
 	"client": {
