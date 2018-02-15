@@ -528,7 +528,7 @@
 			{ "type": "uint", "name": "server_fd_max_passive",
 				"key": "server.fd_max_passive",
 				"descr": "Set to 0 for an automatic detection",
-				"def": 0, "min": 0, "max": "4ki" },
+				"def": 0, "min": 0, "max": "16ki" },
 
 			{ "type": "bool", "name": "oio_udp_allowed",
 				"key": "udp_allowed",
