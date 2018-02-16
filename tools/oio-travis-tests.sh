@@ -260,3 +260,10 @@ if is_running_test_suite "ec" ; then
     func_tests -f "${SRCDIR}/etc/bootstrap-preset-EC.yml"
 fi
 
+if is_running_test_suite "multi-beanstalk" ; then
+	echo -e "\n### Tests with multiple beanstalkd"
+    func_tests \
+		-f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-3beanstalkd.yml"
+fi
+
