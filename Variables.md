@@ -106,7 +106,7 @@ Used by `gcc`
 
 > Should an error be raised when the peer is marked down, instead of trying to contact the peer.
 
- * default: **FALSE**
+ * default: **TRUE**
  * type: gboolean
  * cmake directive: *OIO_CLIENT_DOWN_CACHE_AVOID*
 
@@ -130,7 +130,7 @@ Used by `gcc`
 
 > Sets the number of faults (on the period given by client.errors_cache.period) beyond which a peer is considered as too faulty to try a new RPC.
 
- * default: **15**
+ * default: **60**
  * type: guint64
  * cmake directive: *OIO_CLIENT_ERRORS_CACHE_MAX*
  * range: 1 -> 4294967296
@@ -139,7 +139,7 @@ Used by `gcc`
 
 > Sets the size of the time window used to count the number of network errors.
 
- * default: **15**
+ * default: **60**
  * type: gint64
  * cmake directive: *OIO_CLIENT_ERRORS_CACHE_PERIOD*
  * range: 1 -> 3600
@@ -322,7 +322,7 @@ Used by `gcc`
 
 > Sets the maximum number of pending events, not received yet by the endpoint
 
- * default: **1000**
+ * default: **10000**
  * type: guint32
  * cmake directive: *OIO_EVENTS_COMMON_PENDING_MAX*
  * range: 1 -> 1048576
@@ -340,10 +340,10 @@ Used by `gcc`
 
 > Sets the connection timeout, involved in any RPC to a 'meta' service.
 
- * default: **2.0**
+ * default: **4.0**
  * type: gdouble
  * cmake directive: *OIO_GRIDD_TIMEOUT_CONNECT_COMMON*
- * range: 0.01 -> 120.0
+ * range: 0.1 -> 30.0
 
 ### gridd.timeout.single.common
 
@@ -361,13 +361,13 @@ Used by `gcc`
  * default: **30.0**
  * type: gdouble
  * cmake directive: *OIO_GRIDD_TIMEOUT_WHOLE_COMMON*
- * range: 0.01 -> 120.0
+ * range: 0.1 -> 120.0
 
 ### meta.queue.max_delay
 
 > Anti-DDoS counter-mesure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, A '503 Unavailabe' error is replied.
 
- * default: **2 * G_TIME_SPAN_SECOND**
+ * default: **40 * G_TIME_SPAN_SECOND**
  * type: gint64
  * cmake directive: *OIO_META_QUEUE_MAX_DELAY*
  * range: 10 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
@@ -551,34 +551,34 @@ Used by `gcc`
  * default: **30.0**
  * type: gdouble
  * cmake directive: *OIO_PROXY_OUTGOING_TIMEOUT_COMMON*
- * range: 0.01 -> 60.0
+ * range: 0.1 -> 60.0
 
 ### proxy.outgoing.timeout.config
 
 > In a proxy, sets the global timeout for 'config' requests issued
 
- * default: **5.0**
+ * default: **10.0**
  * type: gdouble
  * cmake directive: *OIO_PROXY_OUTGOING_TIMEOUT_CONFIG*
- * range: 0.01 -> 60.0
+ * range: 0.1 -> 60.0
 
 ### proxy.outgoing.timeout.conscience
 
 > In a proxy, sets the global timeout for the RPC to the central cosnience service.
 
- * default: **2.0**
+ * default: **10.0**
  * type: gdouble
  * cmake directive: *OIO_PROXY_OUTGOING_TIMEOUT_CONSCIENCE*
- * range: 0.01 -> 60.0
+ * range: 0.1 -> 60.0
 
 ### proxy.outgoing.timeout.stat
 
 > In a proxy, sets the global timeout for 'stat' requests issued (mostly forwarded for the event-agent)
 
- * default: **5.0**
+ * default: **10.0**
  * type: gdouble
  * cmake directive: *OIO_PROXY_OUTGOING_TIMEOUT_STAT*
- * range: 0.01 -> 60.0
+ * range: 0.1 -> 60.0
 
 ### proxy.period.cs.downstream
 
@@ -731,10 +731,10 @@ Used by `gcc`
 
 > In any service resolver instanciated, sets the maximum number of entries related to meta0 (meta1 addresses) and conscience (meta0 address)
 
- * default: **0**
+ * default: **4194304**
  * type: guint
  * cmake directive: *OIO_RESOLVER_CACHE_CSM0_MAX_DEFAULT*
- * range: 0 -> 4194304
+ * range: 0 -> 8388608
 
 ### resolver.cache.csm0.ttl.default
 
@@ -749,10 +749,10 @@ Used by `gcc`
 
 > In any service resolver instanciated, sets the maximum number of meta1 entries (data-bound services)
 
- * default: **0**
+ * default: **4194304**
  * type: guint
  * cmake directive: *OIO_RESOLVER_CACHE_SRV_MAX_DEFAULT*
- * range: 0 -> 1048576
+ * range: 0 -> 33554432
 
 ### resolver.cache.srv.ttl.default
 
@@ -815,7 +815,7 @@ Used by `gcc`
  * default: **0**
  * type: guint
  * cmake directive: *OIO_SERVER_FD_MAX_PASSIVE*
- * range: 0 -> 4096
+ * range: 0 -> 16384
 
 ### server.log_outgoing
 
@@ -919,7 +919,7 @@ Used by `gcc`
 
 > Anti-DDoS counter-mesure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, the connection is immediately closed. Keep this value rather high because the connection closing doesn't involve a reply that will help the client to retry with an exponential back-off.
 
- * default: **5 * G_TIME_SPAN_SECOND**
+ * default: **60 * G_TIME_SPAN_SECOND**
  * type: gint64
  * cmake directive: *OIO_SERVER_QUEUE_MAX_DELAY*
  * range: 10 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
@@ -928,10 +928,10 @@ Used by `gcc`
 
 > In the current server, set the time threshold after which a warning is sent when a file descriptor stays longer than that in the queue of the Thread Pool.
 
- * default: **100 * G_TIME_SPAN_MILLISECOND**
+ * default: **4 * G_TIME_SPAN_SECOND**
  * type: gint64
  * cmake directive: *OIO_SERVER_QUEUE_WARN_DELAY*
- * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
+ * range: 10 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### server.task.malloc_trim.period
 
@@ -946,7 +946,7 @@ Used by `gcc`
 
 > In the current server, sets the maximumu length of the queue for UDP messages. When that number has been reached and a new message arrives, the message will be dropped.
 
- * default: **8192**
+ * default: **512**
  * type: guint
  * cmake directive: *OIO_SERVER_UDP_QUEUE_MAX*
  * range: 0 -> 2147483648
@@ -955,7 +955,7 @@ Used by `gcc`
 
 > In the current server, sets the maximum amount of time a queued UDP frame may remain in the queue. When unqueued, if the message was queued for too long, it will be dropped. The purpose of such a mechanism is to avoid clogging the queue and the whole election/cache mechanisms with old messages, thoses message having already been resent.
 
- * default: **2 * G_TIME_SPAN_SECOND**
+ * default: **1 * G_TIME_SPAN_SECOND**
  * type: gint64
  * cmake directive: *OIO_SERVER_UDP_QUEUE_TTL*
  * range: 100 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_DAY
@@ -1084,7 +1084,7 @@ Used by `gcc`
 
 > In the current sqliterepo repository, sets the amount of time after which a MASTER election will drop its status and return to the NONE status. This helps recycling established-but-unused elections, and save Zookeeper nodes. Keep this value between sqliterepo.election.delay.expire_slave and sqliterepo.election.delay.expire_slave + sqliterepo.election.delay.ping_final.
 
- * default: **25 * G_TIME_SPAN_MINUTE**
+ * default: **240 * G_TIME_SPAN_MINUTE**
  * type: gint64
  * cmake directive: *OIO_SQLITEREPO_ELECTION_DELAY_EXPIRE_MASTER*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 7 * G_TIME_SPAN_DAY
@@ -1093,7 +1093,7 @@ Used by `gcc`
 
 > In the current sqliterepo repository, sets the amount of time an election without status will be forgotten 
 
- * default: **5 * G_TIME_SPAN_MINUTE**
+ * default: **30 * G_TIME_SPAN_MINUTE**
  * type: gint64
  * cmake directive: *OIO_SQLITEREPO_ELECTION_DELAY_EXPIRE_NONE*
  * range: 1 * G_TIME_SPAN_SECOND -> 1 * G_TIME_SPAN_DAY
@@ -1102,7 +1102,7 @@ Used by `gcc`
 
 > In the current sqliterepo repository, sets the amount of time after which a SLAVE election will drop its status and return to the NONE status. This helps recycling established-but-unused elections, and save Zookeeper nodes.
 
- * default: **15 * G_TIME_SPAN_MINUTE**
+ * default: **210 * G_TIME_SPAN_MINUTE**
  * type: gint64
  * cmake directive: *OIO_SQLITEREPO_ELECTION_DELAY_EXPIRE_SLAVE*
  * range: 1 * G_TIME_SPAN_SECOND -> 7 * G_TIME_SPAN_DAY
@@ -1111,7 +1111,7 @@ Used by `gcc`
 
 > In the current sqliterepo repository, sets the average amount of time after which a PING will be sent for an established election. This is an average, in facts a jitter is introduced to avoid resonance effects on large-scale platforms.
 
- * default: **15 * G_TIME_SPAN_MINUTE**
+ * default: **30 * G_TIME_SPAN_MINUTE**
  * type: gint64
  * cmake directive: *OIO_SQLITEREPO_ELECTION_DELAY_PING_FINAL*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_DAY
@@ -1200,25 +1200,25 @@ Used by `gcc`
 
 > In the current sqliterepo repository, sets the maximum amount of time a worker thread is allowed to wait for an election to get its final status.
 
- * default: **5 * G_TIME_SPAN_SECOND**
+ * default: **20 * G_TIME_SPAN_SECOND**
  * type: gint64
  * cmake directive: *OIO_SQLITEREPO_ELECTION_WAIT_DELAY*
- * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
+ * range: 100 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### sqliterepo.election.wait.quantum
 
 > In the current sqliterepo repository, while loop-waiting for a final election status to be reached, this value sets the unit amount of time of eacch unit wait on the lock. Keep this value rather small to avoid waitin for too long, but not too small to avoid dumping CPU cycles in active waiting.
 
- * default: **1 * G_TIME_SPAN_SECOND**
+ * default: **4 * G_TIME_SPAN_SECOND**
  * type: gint64
  * cmake directive: *OIO_SQLITEREPO_ELECTION_WAIT_QUANTUM*
- * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
+ * range: 100 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### sqliterepo.outgoing.timeout.cnx.getvers
 
 > Sets the connection timeout when exchanging versions between databases replicas.
 
- * default: **0.5**
+ * default: **5.0**
  * type: gdouble
  * cmake directive: *OIO_SQLITEREPO_OUTGOING_TIMEOUT_CNX_GETVERS*
  * range: 0.01 -> 30.0
@@ -1227,7 +1227,7 @@ Used by `gcc`
 
 > Sets the connection timeout sending a replication request.
 
- * default: **1.0**
+ * default: **5.0**
  * type: gdouble
  * cmake directive: *OIO_SQLITEREPO_OUTGOING_TIMEOUT_CNX_REPLICATE*
  * range: 0.01 -> 30.0
@@ -1236,7 +1236,7 @@ Used by `gcc`
 
 > Set the connection timeout during RPC to ask for a SLAVE database to be resync on its MASTER
 
- * default: **1.0**
+ * default: **5.0**
  * type: gdouble
  * cmake directive: *OIO_SQLITEREPO_OUTGOING_TIMEOUT_CNX_RESYNC*
  * range: 0.01 -> 30.0
@@ -1245,7 +1245,7 @@ Used by `gcc`
 
 > Sets the connection timeout when ping'ing a peer database. Keep it small. Only used when UDP is disabled.
 
- * default: **0.25**
+ * default: **1.0**
  * type: gdouble
  * cmake directive: *OIO_SQLITEREPO_OUTGOING_TIMEOUT_CNX_USE*
  * range: 0.01 -> 30.0
@@ -1254,7 +1254,7 @@ Used by `gcc`
 
 > Sets the global timeout when performing a version exchange RPC. Keep it rather small, to let election quickly fail on network troubles. Only used when UDP is disabled.
 
- * default: **2.0**
+ * default: **10.0**
  * type: gdouble
  * cmake directive: *OIO_SQLITEREPO_OUTGOING_TIMEOUT_REQ_GETVERS*
  * range: 0.01 -> 30.0
@@ -1281,7 +1281,7 @@ Used by `gcc`
 
 > Sets the global timeout when ping'ing a peer database. Keep it small.
 
- * default: **1.0**
+ * default: **10.0**
  * type: gdouble
  * cmake directive: *OIO_SQLITEREPO_OUTGOING_TIMEOUT_REQ_USE*
  * range: 0.01 -> 30.0
@@ -1308,7 +1308,7 @@ Used by `gcc`
 
 > Set to 0 for an automatic detection
 
- * default: **0**
+ * default: **512**
  * type: guint
  * cmake directive: *OIO_SQLITEREPO_REPO_FD_MAX_ACTIVE*
  * range: 0 -> 4096
@@ -1415,7 +1415,7 @@ Used by `gcc`
 
 > Allow the sqlx client DB_USE RPC to be sent via UDP instead of the default TCP channel.
 
- * default: **FALSE**
+ * default: **TRUE**
  * type: gboolean
  * cmake directive: *OIO_UDP_ALLOWED*
 
