@@ -18,6 +18,7 @@ env:
   - TEST_SUITE=3copies
   - TEST_SUITE=repli
   - TEST_SUITE=ec
+  - TEST_SUITE=multi-beanstalk
 script:
   - sudo bash -c "echo '/tmp/core.%p.%E' > /proc/sys/kernel/core_pattern"
   - ulimit -c unlimited -S
