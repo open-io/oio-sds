@@ -93,7 +93,7 @@ _has_prefix (const char *cfg, const char *prefix)
 static GError *
 _parse_and_create_multi(const char *cfg, struct oio_events_queue_s **out)
 {
-	gchar **tokens = g_strsplit(cfg, ";", -1);
+	gchar **tokens = g_strsplit(cfg, OIO_CSV_SEP2, -1);
 	if (!tokens)
 		return SYSERR("internal error");
 
@@ -135,7 +135,7 @@ oio_events_queue_factory__create (const char *cfg, struct oio_events_queue_s **o
 	EXTRA_ASSERT (out != NULL);
 	*out = NULL;
 
-	if (NULL != strchr(cfg, ';')) {
+	if (NULL != strchr(cfg, OIO_CSV_SEP2_C)) {
 		// Sharding over several endpoints
 		return _parse_and_create_multi(cfg, out);
 	} else {
