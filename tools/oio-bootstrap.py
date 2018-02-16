@@ -83,7 +83,7 @@ aof-rewrite-incremental-fsync yes
 template_gridinit_redis = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=false
 command=redis-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
@@ -92,7 +92,7 @@ command=redis-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 template_gridinit_account = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=false
 command=${EXE_PREFIX}-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
@@ -102,7 +102,7 @@ env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 template_gridinit_rdir = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=false
 command=${EXE_PREFIX}-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
@@ -111,7 +111,7 @@ command=${EXE_PREFIX}-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.con
 template_gridinit_proxy = """
 [service.${NS}-proxy]
 group=${NS},localhost,proxy,${IP}:${PORT}
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=false
 #command=${EXE} -s OIO,${NS},proxy -O Bind=${RUNDIR}/${NS}-proxy.sock ${IP}:${PORT} ${NS}
@@ -640,7 +640,7 @@ template_gridinit_ns = """
 
 [service.${NS}-event-agent]
 group=${NS},localhost,event
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=false
 command=${EXE_PREFIX}-event-agent ${CFGDIR}/event-agent.conf
@@ -648,7 +648,7 @@ env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 
 [service.${NS}-conscience-agent]
 group=${NS},localhost,conscience,conscience-agent
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=true
 command=${EXE_PREFIX}-conscience-agent ${CFGDIR}/conscience-agent.yml
@@ -658,7 +658,7 @@ env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 template_gridinit_conscience = """
 [service.${NS}-conscience-${SRVNUM}]
 group=${NS},localhost,conscience,${IP}:${PORT}
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=true
 command=${EXE_PREFIX}-daemon -s OIO,${NS},cs,${SRVNUM} ${CFGDIR}/${NS}-conscience-${SRVNUM}.conf
@@ -667,7 +667,7 @@ command=${EXE_PREFIX}-daemon -s OIO,${NS},cs,${SRVNUM} ${CFGDIR}/${NS}-conscienc
 template_gridinit_meta = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=false
 command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${IP}:${PORT} ${EXTRA} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
@@ -676,7 +676,7 @@ command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${IP}:${PORT} ${EXT
 template_gridinit_sqlx = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=false
 command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O DirectorySchemas=${CFGDIR}/sqlx/schemas -O Endpoint=${IP}:${PORT} ${EXTRA} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
@@ -688,7 +688,7 @@ group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 command=${EXE_PREFIX}-blob-indexer ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 enabled=true
 start_at_boot=false
-on_die=respawn
+on_die=cry
 """
 
 template_gridinit_httpd = """
@@ -697,7 +697,7 @@ group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 command=${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.httpd.conf
 enabled=true
 start_at_boot=false
-on_die=respawn
+on_die=cry
 """
 
 template_local_header = """
