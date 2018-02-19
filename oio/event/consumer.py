@@ -173,7 +173,7 @@ class EventWorker(Worker):
 
     def run(self):
         coros = []
-        queue_url = self.conf.get('queue_url', '127.0.0.1:11300')
+        queue_url = self.conf.get('queue_url', 'beanstalk://127.0.0.1:11300')
         concurrency = int_value(self.conf.get('concurrency'), 10)
 
         server_gt = greenthread.getcurrent()
