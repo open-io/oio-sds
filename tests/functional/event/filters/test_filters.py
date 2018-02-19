@@ -50,7 +50,7 @@ class TestContentRebuildFilter(BaseTestCase):
         self.conf['tube'] = 'rebuild'
         self.conf['queue_url'] = 'beanstalk://127.0.0.1:11300'
         self.notify_filter = NotifyFilter(app=_App, conf=self.conf)
-        queue_url = self.conf.get('queue_url', 'tcp://127.0.0.1:11300')
+        queue_url = self.conf.get('queue_url', 'beanstalk://127.0.0.1:11300')
         self.tube = self.conf.get('tube', 'rebuild')
         self.beanstalk = Beanstalk.from_url(queue_url)
         self.beanstalk.use(self.tube)
