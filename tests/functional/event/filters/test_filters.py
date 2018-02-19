@@ -17,6 +17,7 @@
 
 import time
 import subprocess
+from random import choice
 from oio.api.object_storage import ObjectStorageApi
 from oio.container.client import ContainerClient
 from oio.event.filters.notify import NotifyFilter
@@ -48,11 +49,12 @@ class TestContentRebuildFilter(BaseTestCase):
         self.object_storage_api = ObjectStorageApi(namespace=self.namespace)
         self.stgpol = "SINGLE"
         self.conf['tube'] = 'rebuild'
-        self.conf['queue_url'] = 'beanstalk://127.0.0.1:11300'
+        queue_addr = choice(self.conf['services']['beanstalkd'])['addr']
+        self.queue_url = 'beanstalk://' + queue_addr
+        self.conf['queue_url'] = self.queue_url
         self.notify_filter = NotifyFilter(app=_App, conf=self.conf)
-        queue_url = self.conf.get('queue_url', 'beanstalk://127.0.0.1:11300')
         self.tube = self.conf.get('tube', 'rebuild')
-        self.beanstalk = Beanstalk.from_url(queue_url)
+        self.beanstalk = Beanstalk.from_url(self.queue_url)
         self.beanstalk.use(self.tube)
 
     def _create_event(self, content_name, present_chunks, missing_chunks,
@@ -86,7 +88,7 @@ class TestContentRebuildFilter(BaseTestCase):
     def _rebuild(self, event, job_id=0):
         self.blob_rebuilder = subprocess.Popen(
                     ['oio-blob-rebuilder', self.namespace,
-                     '--beanstalkd=127.0.0.1:11300'])
+                     '--beanstalkd=' + self.queue_url])
         time.sleep(3)
         self.blob_rebuilder.kill()
 
