@@ -419,7 +419,9 @@ class Beanstalk(object):
             raise ConnectionError('Empty URL')
         if not url.startswith('beanstalk://'):
             import warnings
-            warnings.warn('Invalid URL scheme, expecting beanstalk', DeprecationWarning)
+            warnings.warn(
+                    'Invalid URL scheme, expecting beanstalk',
+                    DeprecationWarning)
         connection = Connection.from_url(url, **kwargs)
         return cls(connection=connection)
 
