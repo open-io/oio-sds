@@ -620,7 +620,7 @@ static void test_STEP_PEERING (void) {
 	_pending(0);
 
 	RESET();
-	transition(m, EVT_GETPEERS_DONE, g_strdupv(PEERS));
+	transition(m, EVT_GETPEERS_DONE, PEERS);
 	_member_assert_CREATING(m);
 	_pending(CMD_CREATE, 0);
 
@@ -1265,6 +1265,7 @@ static void test_STEP_DELAYED_CHECKING_MASTER(void) {
 		m->pending_GETVERS = 0;
 		m->attempts_GETVERS = 0;
 		m->when_unstable = oio_ext_monotonic_time();
+		m->peers = g_strdupv(PEERS);
 		_member_assert_DELAYED_CHECKING_MASTER(m);
 	}
 
@@ -1318,13 +1319,108 @@ static void test_STEP_DELAYED_CHECKING_MASTER(void) {
 	g_assert_false(member_has_getvers(m));
 	_pending(0);
 
-	/* Timeout raised */
+	/* Timeout raised without reload */
 	RESET();
+	m->requested_peers_decache = 0;
 	CLOCK += sqliterepo_getvers_backoff + 1;
 	transition(m, EVT_NONE, NULL);
 	_member_assert_CHECKING_MASTER(m);
 	g_assert_true(member_has_getvers(m));
 	_pending(0);
+
+	/* Timeout raised with reload */
+	RESET();
+	m->requested_peers_decache = 1;
+	CLOCK += sqliterepo_getvers_backoff + 1;
+	transition(m, EVT_NONE, NULL);
+	_member_assert_REFRESH_CHECKING_MASTER(m);
+	_pending(0);
+
+	TEST_TAIL();
+}
+
+static void test_STEP_REFRESH_CHECKING_MASTER(void) {
+	TEST_HEAD();
+
+	void RESET() {
+		g_array_set_size(sync->pending, 0);
+		member_set_status(m, STEP_REFRESH_CHECKING_MASTER);
+		member_reset(m);
+		member_reset_requests(m);
+		member_set_local_id(m, oio_ext_rand_int());
+		member_set_master_id(m, oio_ext_rand_int());
+		member_set_master_url(m, "ID1");
+		m->count_GETVERS = 0;
+		m->pending_GETVERS = 0;
+		m->attempts_GETVERS = 0;
+		m->when_unstable = oio_ext_monotonic_time();
+		m->peers = g_strdupv(PEERS);
+		_member_assert_REFRESH_CHECKING_MASTER(m);
+	}
+
+	/* Test No-Op transitions */
+	static const int ABNORMAL[] = {
+		EVT_NONE,
+		EVT_GETVERS_OK, EVT_GETVERS_RACE, EVT_GETVERS_OLD, EVT_GETVERS_KO,
+		EVT_MASTER_OK, EVT_MASTER_KO, EVT_MASTER_BAD,
+		EVT_CREATE_OK, EVT_CREATE_KO,
+		EVT_EXISTS_OK, EVT_EXISTS_KO,
+		EVT_LIST_OK, EVT_LIST_KO,
+		EVT_LEAVE_OK, EVT_LEAVE_KO,
+		EVT_SYNC_OK, EVT_SYNC_KO,
+		-1 /* end beacon */
+	};
+	for (const int *pevt=ABNORMAL; *pevt >= 0 ;++pevt) {
+		RESET();
+		_test_nochange(*pevt, NULL);
+		_member_assert_REFRESH_CHECKING_MASTER(m);
+		_pending(0);
+		g_assert_false(member_has_request(m));
+	}
+
+	/* Test interruptions */
+	RESET();
+	transition(m, EVT_DISCONNECTED, NULL);
+	_member_assert_NONE(m);
+	_pending(0);
+
+	RESET();
+	transition(m, EVT_SYNC_REQ, NULL);
+	_member_assert_REFRESH_CHECKING_MASTER(m);
+	_pending(0);
+	g_assert_cmpint(m->requested_PIPEFROM, ==, 1);
+
+	RESET();
+	transition(m, EVT_LEAVE_REQ, NULL);
+	_member_assert_REFRESH_CHECKING_MASTER(m);
+	_pending(0);
+	g_assert_cmpint(m->requested_LEAVE, ==, 1);
+
+	RESET();
+	transition(m, EVT_LEFT_SELF, NULL);
+	_member_assert_REFRESH_CHECKING_MASTER(m);
+	_pending(0);
+	g_assert_cmpint(m->requested_LEFT_SELF, ==, 1);
+
+	RESET();
+	transition(m, EVT_LEFT_MASTER, NULL);
+	_member_assert_REFRESH_CHECKING_MASTER(m);
+	_pending(0);
+	g_assert_cmpint(m->requested_LEFT_MASTER, ==, 1);
+
+	/* Legit transitions */
+	RESET();
+	transition(m, EVT_GETPEERS_DONE, NULL);
+	_member_assert_LEAVING_FAILING(m);
+	_pending(CMD_DELETE, 0);
+
+	RESET();
+	transition(m, EVT_GETPEERS_DONE, PEERS);
+	_member_assert_CHECKING_MASTER(m);
+	g_assert_true(member_has_getvers(m));
+	_pending(0);
+
+	TEST_TAIL();
 }
 
 static void test_STEP_DELAYED_CHECKING_SLAVES(void) {
@@ -1342,6 +1438,7 @@ static void test_STEP_DELAYED_CHECKING_SLAVES(void) {
 		m->pending_GETVERS = 0;
 		m->attempts_GETVERS = 0;
 		m->when_unstable = oio_ext_monotonic_time();
+		m->peers = g_strdupv(PEERS);
 		_member_assert_DELAYED_CHECKING_SLAVES(m);
 	}
 
@@ -1388,6 +1485,12 @@ static void test_STEP_DELAYED_CHECKING_SLAVES(void) {
 	_pending(0);
 	g_assert_cmpint(m->requested_LEFT_MASTER, ==, 0);
 
+	RESET();
+	transition(m, EVT_SYNC_REQ, NULL);
+	_member_assert_DELAYED_CHECKING_SLAVES(m);
+	_pending(0);
+	g_assert_cmpint(m->requested_PIPEFROM, ==, 0);
+
 	/* Timeout not raised (clock untouched) */
 	RESET();
 	transition(m, EVT_NONE, NULL);
@@ -1395,13 +1498,97 @@ static void test_STEP_DELAYED_CHECKING_SLAVES(void) {
 	g_assert_false(member_has_getvers(m));
 	_pending(0);
 
-	/* Timeout raised */
+	/* Timeout raised without reload and no pending interruption */
 	RESET();
+	m->requested_peers_decache = 0;
 	CLOCK += sqliterepo_getvers_backoff + 1;
 	transition(m, EVT_NONE, NULL);
 	_member_assert_CHECKING_SLAVES(m);
 	g_assert_true(member_has_getvers(m));
 	_pending(0);
+
+	/* Timeout raised with reload but no pending signal */
+	RESET();
+	m->requested_peers_decache = 1;
+	CLOCK += sqliterepo_getvers_backoff + 1;
+	transition(m, EVT_NONE, NULL);
+	_member_assert_REFRESH_CHECKING_SLAVES(m);
+	_pending(0);
+
+	TEST_TAIL();
+}
+
+static void test_STEP_REFRESH_CHECKING_SLAVES(void) {
+	TEST_HEAD();
+
+	void RESET() {
+		g_array_set_size(sync->pending, 0);
+		member_set_status(m, STEP_REFRESH_CHECKING_SLAVES);
+		member_reset(m);
+		member_reset_requests(m);
+		member_set_local_id(m, oio_ext_rand_int());
+		member_set_master_id(m, m->local_id);
+		member_set_master_url(m, NULL);
+		m->count_GETVERS = 0;
+		m->pending_GETVERS = 0;
+		m->attempts_GETVERS = 0;
+		m->when_unstable = oio_ext_monotonic_time();
+		m->peers = g_strdupv(PEERS);
+		_member_assert_REFRESH_CHECKING_SLAVES(m);
+	}
+
+	/* Test No-Op transitions */
+	static const int ABNORMAL[] = {
+		EVT_NONE,
+		EVT_GETVERS_OK, EVT_GETVERS_RACE, EVT_GETVERS_OLD, EVT_GETVERS_KO,
+		EVT_MASTER_OK, EVT_MASTER_KO, EVT_MASTER_BAD,
+		EVT_CREATE_OK, EVT_CREATE_KO,
+		EVT_EXISTS_OK, EVT_EXISTS_KO,
+		EVT_LIST_OK, EVT_LIST_KO,
+		EVT_LEAVE_OK, EVT_LEAVE_KO,
+		EVT_SYNC_OK, EVT_SYNC_KO,
+		EVT_SYNC_REQ, EVT_LEFT_MASTER,
+		-1 /* end beacon */
+	};
+	for (const int *pevt=ABNORMAL; *pevt >= 0 ;++pevt) {
+		RESET();
+		_test_nochange(*pevt, NULL);
+		_member_assert_REFRESH_CHECKING_SLAVES(m);
+		_pending(0);
+		g_assert_false(member_has_request(m));
+	}
+
+	/* Test interruptions */
+	RESET();
+	transition(m, EVT_DISCONNECTED, NULL);
+	_member_assert_NONE(m);
+	_pending(0);
+
+	RESET();
+	transition(m, EVT_LEAVE_REQ, NULL);
+	_member_assert_REFRESH_CHECKING_SLAVES(m);
+	_pending(0);
+	g_assert_cmpint(m->requested_LEAVE, ==, 1);
+
+	RESET();
+	transition(m, EVT_LEFT_SELF, NULL);
+	_member_assert_REFRESH_CHECKING_SLAVES(m);
+	_pending(0);
+	g_assert_cmpint(m->requested_LEFT_SELF, ==, 1);
+
+	/* Legit transitions */
+	RESET();
+	transition(m, EVT_GETPEERS_DONE, NULL);
+	_member_assert_LEAVING_FAILING(m);
+	_pending(CMD_DELETE, 0);
+
+	RESET();
+	transition(m, EVT_GETPEERS_DONE, PEERS);
+	_member_assert_CHECKING_SLAVES(m);
+	g_assert_true(member_has_getvers(m));
+	_pending(0);
+
+	TEST_TAIL();
 }
 
 static void test_STEP_CHECKING_MASTER(void) {
@@ -1645,5 +1832,7 @@ main(int argc, char **argv)
 	g_test_add_func("/sqlx/election/step/DELAYED_CHECKING_SLAVES", test_STEP_DELAYED_CHECKING_SLAVES);
 	g_test_add_func("/sqlx/election/step/SLAVE", test_STEP_SLAVE);
 	g_test_add_func("/sqlx/election/step/SYNCING", test_STEP_SYNCING);
+	g_test_add_func("/sqlx/election/step/REFRESH_CHECKING_SLAVES", test_STEP_REFRESH_CHECKING_SLAVES);
+	g_test_add_func("/sqlx/election/step/REFRESH_CHECKING_MASTER", test_STEP_REFRESH_CHECKING_MASTER);
 	return g_test_run();
 }
