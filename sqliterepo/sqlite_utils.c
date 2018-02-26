@@ -326,19 +326,19 @@ gchar**
 sqlx_admin_get_keyvalues (struct sqlx_sqlite3_s *sq3)
 {
 	gboolean runner(gchar *k, struct _cache_entry_s *v, GPtrArray *tmp) {
-		g_ptr_array_add (tmp, g_strdup(k));
 		if (v->flag_deleted)
 			return FALSE;
+		g_ptr_array_add(tmp, g_strdup(k));
 		if (!v->buffer)
-			g_ptr_array_add (tmp, g_strdup(""));
+			g_ptr_array_add(tmp, g_strdup(""));
 		else
-			g_ptr_array_add (tmp, g_strndup((gchar*)v->buffer, v->len));
+			g_ptr_array_add(tmp, g_strndup((gchar*)v->buffer, v->len));
 		return FALSE;
 	}
 
-	GPtrArray *tmp = g_ptr_array_new ();
-	g_tree_foreach (sq3->admin, (GTraverseFunc) runner, tmp);
-	return (gchar**) metautils_gpa_to_array (tmp, TRUE);
+	GPtrArray *tmp = g_ptr_array_new();
+	g_tree_foreach(sq3->admin, (GTraverseFunc) runner, tmp);
+	return (gchar**) metautils_gpa_to_array(tmp, TRUE);
 }
 
 static guint
