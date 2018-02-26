@@ -165,9 +165,11 @@ wait_for_srvtype "rdir" "$COUNT"
 
 echo -e "\n### Init the meta0/meta1 directory"
 openio \
-	--oio-ns "$NS" -v directory bootstrap --check \
+	--oio-ns "$NS" -v directory bootstrap --check --no-rdir \
 	--replicas $(${PREFIX}-test-config.py -v directory_replicas)
 
+echo -e "\n### Assign rdir services"
+openio --oio-ns "$NS" -v volume admin bootstrap
 
 echo -e "\n### Wait for the services to have a score"
 openio -q --oio-ns "$NS" cluster unlockall

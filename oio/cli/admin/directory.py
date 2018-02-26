@@ -46,16 +46,21 @@ class DirectoryCmd(Command):
 
 
 class DirectoryInit(DirectoryCmd):
-    """Initialize the directory"""
+    """
+    Initialize the directory.
+
+    First assign reference prefixes to meta1 services.
+    Then assign an rdir service to each rawx service
+    (unless --no-rdir option is specified).
+    """
 
     def get_parser(self, prog_name):
         parser = super(DirectoryInit, self).get_parser(prog_name)
-        parser.add_argument('--no-rdir',
-                            dest='rdir',
-                            action='store_false',
-                            default=True,
-                            help='Do not assign rdir services to rawx services'
-                            )
+        parser.add_argument(
+            '--no-rdir', dest='rdir', action='store_false', default=True,
+            help=('Do not assign rdir services to rawx services. '
+                  'Will be enabled by default in the next version.')
+        )
         parser.add_argument('--force',
                             action='store_true',
                             help="Do the bootstrap even if already done")
@@ -69,26 +74,26 @@ class DirectoryInit(DirectoryCmd):
         self.log.debug('take_action(%s)', parsed_args)
         mapping = self.get_prefix_mapping(parsed_args)
         mapping.load()
+        already_done = bool(mapping)
 
         # Bootstrap with the 'random' strategy, then rebalance with the
         # 'less_prefixes' strategy to ensure the same number of prefixes
         # per meta1. This is faster than bootstrapping directly with the
         # 'less_prefixes' strategy.
-        if not mapping or parsed_args.force:
+        if not already_done or parsed_args.force:
             self.log.info("Computing meta1 prefix mapping...")
             mapping.bootstrap()
+            self.log.info("Equilibrating...")
+            mapping.rebalance()
         else:
-            self.log.info("Meta1 prefix mapping already initialized")
-
-        self.log.info("Equilibrating...")
-        mapping.rebalance()
+            self.log.warn("Meta1 prefix mapping already initialized")
 
         checked = not parsed_args.check
         if not checked:
             self.log.info("Checking...")
             checked = mapping.check_replicas()
 
-        if checked:
+        if checked and not already_done:
             self.log.info("Saving...")
             mapping.force(connection_timeout=10.0, read_timeout=60.0)
 
@@ -101,9 +106,9 @@ class DirectoryInit(DirectoryCmd):
                 sleep(5 + i)
                 try:
                     self.app.client_manager.admin.rdir_lb.assign_all_rawx()
-                except ServiceUnavailable as e:
+                except ServiceUnavailable as exc:
                     if i < (max_attempts - 1):
-                        self.log.info("Retrying because of %s", e)
+                        self.log.info("Retrying because of %s", exc)
                         continue
                     raise
 
@@ -129,7 +134,7 @@ class DirectoryList(DirectoryCmd):
 
 
 class DirectoryRebalance(DirectoryCmd):
-    """Rebalance the container prefixes"""
+    """Rebalance the container prefixes."""
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
@@ -140,7 +145,7 @@ class DirectoryRebalance(DirectoryCmd):
 
 
 class DirectoryDecommission(DirectoryCmd):
-    """Decommission a Meta1 service"""
+    """Decommission a Meta1 service."""
 
     def get_parser(self, prog_name):
         parser = super(DirectoryDecommission, self).get_parser(prog_name)
