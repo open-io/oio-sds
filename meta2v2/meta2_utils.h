@@ -51,16 +51,6 @@ struct list_params_s
 	guint8 flag_local     :1;
 };
 
-struct dup_alias_params_s
-{
-	struct sqlx_sqlite3_s *sq3;
-	gint64 c_version;
-	gint64 src_c_version;
-	gboolean overwrite_latest;
-	gboolean set_deleted;
-	GSList *errors;
-};
-
 gchar* m2v2_build_chunk_url (const char *srv, const char *id);
 
 
@@ -226,7 +216,5 @@ GError* m2db_flush_container(sqlite3 *db);
 
 GError* m2db_deduplicate_contents(struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url);
-
-void m2v2_dup_alias(struct dup_alias_params_s *params, gpointer bean);
 
 #endif /*OIO_SDS__meta2v2__meta2_utils_h*/

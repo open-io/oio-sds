@@ -2595,12 +2595,10 @@ _purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay,
 		const gchar *alias, m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;
-	gchar *sql, *sql2;
-	GSList *old_deleted = NULL;
+	gchar *sql;
 	GVariant *params[] = {NULL, NULL, NULL};
 	gint64 now = oio_ext_real_time () / G_TIME_SPAN_SECOND;
 	gint64 time_limit = 0;
-	struct dup_alias_params_s dup_params;
 
 	// All aliases which have one version deleted (the last) older than time_limit
 	if (alias) {
@@ -2616,26 +2614,6 @@ _purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay,
 				" WHERE deleted AND ctime < ?) ");
 	}
 
-	// Last snapshoted aliases part of deleted contents.
-	// (take some paracetamol)
-	if (alias) {
-		sql2 = (" rowid IN (SELECT a1.rowid FROM aliases AS a1 "
-				"INNER JOIN "
-				"  (SELECT alias,max(deleted) as mdel FROM aliases "
-				"   WHERE alias = ? GROUP BY alias) AS a2 "
-				"ON a1.alias = a2.alias "
-				"WHERE mdel "
-				"GROUP BY a1.alias HAVING max(version)) ");
-	} else {
-		sql2 = (" rowid IN (SELECT a1.rowid FROM aliases AS a1 "
-				"INNER JOIN "
-				"  (SELECT alias,max(deleted) as mdel FROM aliases "
-				"   GROUP BY alias) AS a2 "
-				"ON a1.alias = a2.alias "
-				"WHERE mdel "
-				"GROUP BY a1.alias HAVING max(version)) ");
-	}
-
 	if (now < 0) {
 		err = g_error_new(GQ(), CODE_INTERNAL_ERROR,
 				"Cannot get current time: %s", g_strerror(errno));
@@ -2645,17 +2623,6 @@ _purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay,
 	if (delay >= 0 && delay < now) {
 		time_limit = now - delay;
 	}
-
-	// We need to copy/delete snapshoted aliases that used to appear deleted
-	// thanks to a more recent alias which will be erased soon.
-	// Build the list.
-	void _load_old_deleted(gpointer u, gpointer bean) {
-		(void) u;
-		old_deleted = g_slist_prepend(old_deleted, bean);
-	}
-	if (alias)
-		params[0] = g_variant_new_string(alias);
-	ALIASES_load(sq3->db, sql2, params, _load_old_deleted, NULL);
 
 	// Delete the alias bean and send it to callback
 	void _delete_cb(gpointer udata, struct bean_ALIASES_s *alias_to_delete)
@@ -2676,42 +2643,14 @@ _purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay,
 	// Do the purge.
 	GRID_DEBUG("Purging deleted aliases older than %"G_GINT64_FORMAT" seconds (timestamp < %"G_GINT64_FORMAT")",
 			delay, time_limit);
-	if (alias)
+	if (alias) {
+		params[0] = g_variant_new_string(alias);
 		params[1] = g_variant_new_int64(time_limit);
-	else
+	} else {
 		params[0] = g_variant_new_int64(time_limit);
+	}
 	err = ALIASES_load(sq3->db, sql, params, (m2_onbean_cb)_delete_cb, u0);
 	metautils_gvariant_unrefv(params);
-
-	// Re-delete what needs to.
-	memset(&dup_params, 0, sizeof(struct dup_alias_params_s));
-	dup_params.sq3 = sq3;
-	dup_params.set_deleted = TRUE;
-	dup_params.c_version = m2db_get_version(sq3);
-	for (GSList *l = old_deleted; l != NULL; l = l->next) {
-		if (!ALIASES_get_deleted(l->data)) {
-			if (GRID_TRACE_ENABLED()) {
-				GRID_TRACE("Copy/delete %s version %"G_GINT64_FORMAT,
-					ALIASES_get_alias(l->data)->str,
-					ALIASES_get_version(l->data));
-			}
-			m2v2_dup_alias(&dup_params, l->data); // also cleans l->data
-		} else {
-			_bean_clean(l->data);
-		}
-	}
-	g_slist_free(old_deleted);
-	if (dup_params.errors != NULL) {
-		if (err == NULL) {
-			err = NEWERROR(0,
-				"Got at least one error while purging aliases, see meta2 logs");
-		}
-		for (GSList *l = dup_params.errors; l; l = l->next) {
-			GRID_WARN("Alias purge error: %s", ((GError*)l->data)->message);
-			g_clear_error((GError**)&l->data);
-		}
-		g_slist_free(dup_params.errors);
-	}
 
 	return err;
 }
@@ -2778,43 +2717,4 @@ m2db_flush_container(sqlite3 *db)
 	int rc = sqlx_exec(db, "DELETE FROM aliases");
 	if (SQLITE_OK == rc) return NULL;
 	return SQLITE_GERROR(db, rc);
-}
-
-/* Duplicate an alias bean */
-void
-m2v2_dup_alias(struct dup_alias_params_s *params, gpointer bean)
-{
-	GError *local_err = NULL;
-	if (DESCR(bean) == &descr_struct_ALIASES) {
-		struct bean_ALIASES_s *new_alias = _bean_dup(bean);
-		gint64 latest_version = ALIASES_get_version(bean);
-		/* If source container version specified, we may not be duplicating
-		 * latest version of each alias, so we must find it. */
-		if (params->src_c_version >= 1) {
-			struct oio_url_s *url = oio_url_empty();
-			oio_url_set(url, OIOURL_PATH, ALIASES_get_alias(new_alias)->str);
-			local_err = m2db_get_alias_version(params->sq3, url, &latest_version);
-			if (local_err != NULL) {
-				GRID_WARN("Failed to get latest alias version for '%s'",
-						ALIASES_get_alias(new_alias)->str);
-				g_clear_error(&local_err);
-				_bean_clean(new_alias);
-				new_alias = NULL;
-			}
-			oio_url_clean(url);
-		}
-		if (local_err == NULL) {
-			ALIASES_set_version(new_alias,
-					(!params->overwrite_latest) + latest_version);
-			if (params->set_deleted) {
-				ALIASES_set_deleted(new_alias, TRUE);
-			}
-			local_err = _db_save_bean(params->sq3->db, new_alias);
-		}
-		_bean_clean(new_alias);
-	}
-	_bean_clean(bean); // TODO: add parameter to disable cleaning
-	if (local_err != NULL) {
-		params->errors = g_slist_prepend(params->errors, local_err);
-	}
 }
