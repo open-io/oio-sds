@@ -368,7 +368,10 @@ action_dir_prop_get (struct req_args_s *args, struct json_object *jargs)
 	}
 	if (!err) {
 		GString *gs = g_string_sized_new(256);
-		g_string_append_static(gs, "{\"properties\":");
+		g_string_append_static(gs, "{");
+		OIO_JSON_append_str(gs, "cid", oio_url_get(args->url, OIOURL_HEXID));
+		g_string_append_c(gs, ',');
+		g_string_append_static(gs, "\"properties\":");
 		KV_encode_gstr2(gs, pairs);
 		g_string_append_c(gs, '}');
 		g_strfreev(pairs);

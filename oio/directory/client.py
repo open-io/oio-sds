@@ -161,11 +161,14 @@ class DirectoryClient(ProxyClient):
         _resp, _body = self._request('POST', '/renew', params=params, **kwargs)
 
     def force(self, account=None, reference=None, service_type=None,
-              services=None, cid=None, autocreate=False, **kwargs):
+              services=None, cid=None, autocreate=False, replace=False,
+              **kwargs):
         """
         Associate the specified services to the reference.
         """
         params = self._make_params(account, reference, service_type, cid=cid)
+        if replace:
+            params["replace"] = "yes"
         data = json.dumps(services)
         _resp, _body = self._request('POST', '/force',
                                      data=data, params=params,
