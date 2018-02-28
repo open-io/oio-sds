@@ -69,7 +69,7 @@ class ContainerLifecycle(object):
                 "Expected 'LifecycleConfiguration' as root tag, got '%s'" %
                 tree.tag)
         for rule_elt in tree.findall('Rule'):
-            rule = LifecycleRule.from_element(rule_elt, api=self.api)
+            rule = LifecycleRule.from_element(rule_elt, lifecycle=self)
             self._rules[rule.id] = rule
         self.src_xml = xml_str
 
@@ -100,8 +100,7 @@ class ContainerLifecycle(object):
         :notice: you must consume the results or the rules won't be applied.
         """
         for rule in self._rules.values():
-            res = rule.apply(self.account, self.container, obj_meta,
-                             **kwargs)
+            res = rule.apply(obj_meta, **kwargs)
             if res:
                 for action in res:
                     yield obj_meta, rule.id, action[0], action[1]
@@ -150,7 +149,7 @@ class LifecycleRule(object):
         self.actions = actions or dict()
 
     @classmethod
-    def from_element(cls, rule_elt, api=None):
+    def from_element(cls, rule_elt, lifecycle=None):
         """
         Load the rule from an XML element.
 
@@ -165,7 +164,7 @@ class LifecycleRule(object):
         status_elt = rule_elt.find('Status')
         if status_elt is None:
             raise ValueError("Missing 'Status' element")
-        actions = {name: action_from_element(element, api=api)
+        actions = {name: action_from_element(element, lifecycle=lifecycle)
                    for name, element in {k: rule_elt.find(k)
                                          for k in ACTION_MAP.keys()}.items()
                    if element is not None}
@@ -186,7 +185,7 @@ class LifecycleRule(object):
                 return True
         return False
 
-    def apply(self, account, container, obj_meta, **kwargs):
+    def apply(self, obj_meta, **kwargs):
         """
         Apply the set of actions of this rule.
 
@@ -198,7 +197,7 @@ class LifecycleRule(object):
         if self.filter.match(obj_meta):
             for action in self.actions.values():
                 try:
-                    res = action.apply(account, container, obj_meta, **kwargs)
+                    res = action.apply(obj_meta, **kwargs)
                     results.append((action.__class__.__name__, res))
                 except OioException as exc:
                     results.append((action.__class__.__name__, exc))
@@ -271,8 +270,8 @@ class LifecycleRuleFilter(object):
 class LifecycleAction(object):
     """Interface for Lifecycle actions"""
 
-    def __init__(self, api=None, **_kwargs):
-        self.api = api
+    def __init__(self, lifecycle=None, **_kwargs):
+        self.lifecycle = lifecycle
 
     def match(self, obj_meta, now=None, **kwargs):
         """
@@ -281,7 +280,7 @@ class LifecycleAction(object):
         """
         raise NotImplementedError
 
-    def apply(self, account, container, obj_meta, **kwargs):
+    def apply(self, obj_meta, **kwargs):
         """
         Match then apply the treatment on the object.
         """
@@ -296,8 +295,8 @@ class DelayExpiration(LifecycleAction):
 
     DAYS_XML_TAG = 'Days'
 
-    def __init__(self, days=None, api=None):
-        super(DelayExpiration, self).__init__(api)
+    def __init__(self, days=None, **kwargs):
+        super(DelayExpiration, self).__init__(**kwargs)
         self.days = days
 
     @classmethod
@@ -321,10 +320,11 @@ class DelayExpiration(LifecycleAction):
         now = now or time.time()
         return float(obj_meta['ctime']) + self.days * 86400 < now
 
-    def apply(self, account, container, obj_meta, **kwargs):
+    def apply(self, obj_meta, **kwargs):
         if self.match(obj_meta, **kwargs):
-            res = self.api.object_delete(account, container, obj_meta['name'],
-                                         version=obj_meta.get('version'))
+            res = self.lifecycle.api.object_delete(
+                self.lifecycle.account, self.lifecycle.container,
+                obj_meta['name'], version=obj_meta.get('version'))
             return "Deleted" if res else "Kept"
         return "Kept"
 
@@ -334,11 +334,11 @@ class Expiration(DelayExpiration):
 
     DATE_XML_TAG = 'Date'
 
-    def __init__(self, days=None, date=None, api=None):
+    def __init__(self, days=None, date=None, **kwargs):
         if days is not None and date is not None:
             raise ValueError(
                 "'days' and 'date' cannot be provided at the same time")
-        super(Expiration, self).__init__(days, api)
+        super(Expiration, self).__init__(days, **kwargs)
         if date is not None:
             self.date = (int(date) - (int(date) % 86400))
         else:
@@ -378,15 +378,15 @@ class Expiration(DelayExpiration):
 class Transition(Expiration):
     """Change object storage policy after a specified delay or date."""
 
-    def __init__(self, policy=None, days=None, date=None, api=None):
-        super(Transition, self).__init__(days=days, date=date, api=api)
+    def __init__(self, policy=None, days=None, date=None, **kwargs):
+        super(Transition, self).__init__(days=days, date=date, **kwargs)
         if policy is None:
             raise ValueError("'policy' must be specified")
         self.policy = policy
-        if self.api:
+        if self.lifecycle and self.lifecycle.api:
             from oio.content.factory import ContentFactory
-            self.factory = ContentFactory(api.container.conf,
-                                          api.container)
+            self.factory = ContentFactory(self.lifecycle.api.container.conf,
+                                          self.lifecycle.api.container)
         else:
             self.factory = None
 
@@ -400,9 +400,10 @@ class Transition(Expiration):
                                      policy=stgcls_elt.text,
                                      **kwargs)
 
-    def apply(self, account, container, obj_meta, **kwargs):
+    def apply(self, obj_meta, **kwargs):
         if self.match(obj_meta, **kwargs):
-            cid = cid_from_name(account, container)
+            cid = cid_from_name(self.lifecycle.account,
+                                self.lifecycle.container)
             if not self.factory:
                 return "Kept"
             # TODO: avoid loading content description a second time
@@ -417,16 +418,16 @@ class NoncurrentAction(LifecycleAction):
     except the latest.
     """
 
-    def apply(self, account, container, obj_meta, **kwargs):
+    def apply(self, obj_meta, **kwargs):
         if self.match(obj_meta, **kwargs):
             # Load the description of the latest object version
             # TODO: use a cache to avoid requesting each time
-            descr = self.api.object_show(account, container,
-                                         obj_meta['name'])
+            descr = self.lifecycle.api.object_show(self.lifecycle.account,
+                                                   self.lifecycle.container,
+                                                   obj_meta['name'])
             if str(descr['version']) != str(obj_meta['version']):
                 # Object is not the latest version, we can apply the treatment
-                return super(NoncurrentAction, self).apply(
-                    account, container, obj_meta, **kwargs)
+                return super(NoncurrentAction, self).apply(obj_meta, **kwargs)
         return "Kept"
 
 
@@ -450,8 +451,8 @@ class ExceedingVersionExpiration(LifecycleAction):
     Delete exceeding versions if versioning is enabled.
     """
 
-    def __init__(self, api=None):
-        super(ExceedingVersionExpiration, self).__init__(api)
+    def __init__(self, **kwargs):
+        super(ExceedingVersionExpiration, self).__init__(**kwargs)
         self.versioning = None
         self.last_object_name = None
 
@@ -459,30 +460,35 @@ class ExceedingVersionExpiration(LifecycleAction):
     def from_element(cls, unused, **kwargs):
         return cls(**kwargs)
 
-    def match(self, account, container, **kwargs):
+    def match(self, obj_meta, now=None, **kwargs):
         if self.versioning is None:
-            data = self.api.container_get_properties(account, container)
+            data = self.lifecycle.api.container_get_properties(
+                self.lifecycle.account, self.lifecycle.container)
             sys = data['system']
             version = sys.get('sys.m2.policy.version', None)
             if version is None:
                 from oio.common.client import ProxyClient
-                proxy_client = ProxyClient({"namespace": self.api.namespace},
-                                           no_ns_in_url=True)
+                proxy_client = ProxyClient(
+                    {"namespace": self.lifecycle.api.namespace},
+                    no_ns_in_url=True)
                 _, data = proxy_client._request('GET', "config")
                 version = data['meta2.max_versions']
             version = int(version)
             self.versioning = version > 1 or version < 0
         return self.versioning
 
-    def apply(self, account, container, obj_meta, **kwargs):
-        if self.match(account, container, **kwargs):
+    def apply(self, obj_meta, **kwargs):
+        if self.match(obj_meta, **kwargs):
             object_name = obj_meta['name']
             if object_name != self.last_object_name:
-                self.api.container.content_purge(account, container,
-                                                 object_name)
+                self.lifecycle.api.container.content_purge(
+                    self.lifecycle.account, self.lifecycle.container,
+                    object_name)
                 self.last_object_name = object_name
-            if not self.api.object_head(account, container, object_name,
-                                        version=obj_meta['version']):
+            if not self.lifecycle.api.object_head(self.lifecycle.account,
+                                                  self.lifecycle.container,
+                                                  object_name,
+                                                  version=obj_meta['version']):
                 return "Deleted"
         return "Kept"
 
@@ -495,11 +501,11 @@ ACTION_MAP = {a.__name__: a for a in
                ExceedingVersionExpiration)}
 
 
-def action_from_element(element, api=None, **kwargs):
+def action_from_element(element, **kwargs):
     """
     Create a new `LifecycleAction` subclass instance from an XML description.
 
     :param element: the XML description of the action
     :type element: `Element`
     """
-    return ACTION_MAP[element.tag].from_element(element, api=api, **kwargs)
+    return ACTION_MAP[element.tag].from_element(element, **kwargs)
