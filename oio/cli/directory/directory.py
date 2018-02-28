@@ -40,16 +40,17 @@ class DirectoryCmd(Command):
         return parser
 
     def get_prefix_mapping(self, parsed_args):
-        from oio.directory.meta0 import PrefixMapping
+        from oio.directory.meta0 import Meta0PrefixMapping
 
         meta0_client = self.app.client_manager.directory.meta0
         conscience_client = self.app.client_manager.directory.cluster
         digits = self.app.client_manager.meta1_digits
-        return PrefixMapping(meta0_client, conscience_client,
-                             replicas=parsed_args.replicas,
-                             digits=digits,
-                             min_dist=parsed_args.min_dist,
-                             logger=self.log)
+        return Meta0PrefixMapping(meta0_client,
+                                  conscience_client=conscience_client,
+                                  replicas=parsed_args.replicas,
+                                  digits=digits,
+                                  min_dist=parsed_args.min_dist,
+                                  logger=self.log)
 
 
 class DirectoryInit(DirectoryCmd):

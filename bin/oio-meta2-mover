@@ -1,0 +1,44 @@
+#!/usr/bin/env python
+
+# Copyright (C) 2018 OpenIO SAS, as part of OpenIO SDS
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 3.0 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library.
+
+import argparse
+
+from oio.directory.meta1 import Meta1RefMapping
+
+def make_arg_parser():
+    descr = "Move a base from source service to destination service"
+    parser = argparse.ArgumentParser(description=descr)
+    parser.add_argument('namespace',
+                        metavar='<namespace>',
+                        help="Namespace")
+    parser.add_argument('src_service',
+                        metavar='<src-service>',
+                        help="ID of the source service (IP:PORT)")
+    parser.add_argument('dest_service',
+                        metavar='<dest-service>',
+                        help="ID of the destination service (IP:PORT)")
+    parser.add_argument('base',
+                        metavar='<base>',
+                        help="ID of the base (cid)")
+    return parser
+
+
+if __name__ == '__main__':
+    args = make_arg_parser().parse_args()
+    mapping = Meta1RefMapping(args.namespace)
+    mapping.move(args.src_service, args.dest_service, args.base, 'meta2')
+    print(mapping.apply())

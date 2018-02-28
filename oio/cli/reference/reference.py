@@ -67,7 +67,8 @@ class ShowReference(show.ShowOne):
             account,
             parsed_args.reference)
         info = {'account': account,
-                'name': reference}
+                'name': reference,
+                'cid': data.get('cid', None)}
         for k, v in data['properties'].iteritems():
             info['meta.' + k] = v
         return zip(*sorted(info.iteritems()))
@@ -271,6 +272,13 @@ class ForceReference(command.Command):
             default="",
             help='Service args'
         )
+        parser.add_argument(
+            '--replace',
+            dest='replace',
+            default=False,
+            help='Replace',
+            action='store_true'
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -286,7 +294,8 @@ class ForceReference(command.Command):
             self.app.client_manager.account,
             reference,
             parsed_args.type,
-            service
+            service,
+            replace=parsed_args.replace
         )
 
 

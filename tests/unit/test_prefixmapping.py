@@ -18,7 +18,7 @@ import unittest
 
 from mock import MagicMock as Mock
 
-from oio.directory.meta0 import PrefixMapping
+from oio.directory.meta0 import Meta0PrefixMapping
 
 
 class FakeConscienceClient(object):
@@ -37,18 +37,19 @@ class FakeConscienceClient(object):
             self._all_services.append(svc)
 
 
-class TestPrefixMapping(unittest.TestCase):
+class TestMeta0PrefixMapping(unittest.TestCase):
 
     def setUp(self):
-        super(TestPrefixMapping, self).setUp()
+        super(TestMeta0PrefixMapping, self).setUp()
         self.cs_client = FakeConscienceClient()
         self.m0_client = Mock(conf={'namespace': 'OPENIO'})
         self.logger = logging.getLogger('test')
 
     def make_mapping(self, replicas=3, digits=None):
-        mapping = PrefixMapping(self.m0_client, self.cs_client,
-                                replicas=replicas, digits=digits,
-                                logger=self.logger)
+        mapping = Meta0PrefixMapping(self.m0_client,
+                                     conscience_client=self.cs_client,
+                                     replicas=replicas, digits=digits,
+                                     logger=self.logger)
         return mapping
 
     def test_bootstrap_3_services(self):
@@ -148,11 +149,11 @@ class TestPrefixMapping(unittest.TestCase):
 
         svc = mapping.services.values()[0]
         for base in [b for b in svc['bases']]:
-            old_peers = [x['addr'] for x in mapping.svc_by_base[base]]
+            old_peers = [x['addr'] for x in mapping.services_by_base[base]]
             self.logger.info("Decommissioning base %s from %s",
                              base, svc['addr'])
             mapping.decommission(svc, [base])
-            new_peers = [x['addr'] for x in mapping.svc_by_base[base]]
+            new_peers = [x['addr'] for x in mapping.services_by_base[base]]
             preserved = [x for x in new_peers if x in old_peers]
             self.logger.info("Old peers: %s", old_peers)
             self.logger.info("New peers: %s", new_peers)
@@ -183,13 +184,13 @@ class TestPrefixMapping(unittest.TestCase):
         self.logger.info("Bases: %s", svc['bases'])
         moved = [b for b in svc['bases']]
         for base in moved:
-            old_peers = [x['addr'] for x in mapping.svc_by_base[base]]
+            old_peers = [x['addr'] for x in mapping.services_by_base[base]]
             self.logger.info("Decommissioning base %s from %s",
                              base, svc['addr'])
             self.assertIn(svc['addr'], old_peers)
             mapping.decommission(svc, [base])
-            old_peers2 = mapping.raw_svc_by_base[base]
-            new_peers = [x['addr'] for x in mapping.svc_by_base[base]]
+            old_peers2 = mapping.raw_services_by_base[base]
+            new_peers = [x['addr'] for x in mapping.services_by_base[base]]
             preserved = [x for x in new_peers if x in old_peers]
             self.logger.info("Old peers: %s (real)", old_peers)
             self.logger.info("Old peers: %s (computed)", old_peers2)
