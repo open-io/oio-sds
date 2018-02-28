@@ -35,61 +35,23 @@ WATCH_CONF = exp("~/.oio/sds/conf/watch/%s-%s.yml")
 HTTPD_CONF = exp("~/.oio/sds/conf/%s-%s.httpd.conf")
 
 
-class TestServiceId(BaseTestCase):
+class BaseTestServiceId(BaseTestCase):
     def setUp(self):
-        super(TestServiceId, self).setUp()
+        super(BaseTestServiceId, self).setUp()
 
         if not self.conf['with_service_id']:
             self.skipTest("Service ID not enabled")
 
-        # support mix deployement
-        self.rawx = {}
-        while 'service_id' not in self.rawx:
-            self.rawx = random.choice(self.conf['services']['rawx'])
-
-        self.conn = ObjectStorageApi(self.ns)
-        self.name = "rawx-%d" % int(self.rawx['num'])
-
         self._cnt = random_str(10)
-        self._port = int(self.rawx['addr'].split(':')[1])
-        self._newport = self._port + 10000 + random.randint(0, 200)
-
-        self.org_rawx = self.rawx.copy()
         self.http = urllib3.PoolManager()
 
     def tearDown(self):
-        super(TestServiceId, self).tearDown()
-        # TODO: restore rawx addr
+        super(BaseTestServiceId, self).tearDown()
 
     def _service(self, name, action):
         name = "%s-%s" % (self.conf['namespace'], name)
         check_call(['gridinit_cmd', '-S',
                     exp('~/.oio/sds/run/gridinit.sock'), action, name])
-
-    def _update_gridinit(self, port):
-
-        grid = SafeConfigParser()
-        grid.read(exp(GRID_CONF))
-
-        section = "Service.%s-%s" % (self.ns, self.name)
-        val = grid.get(section, "Group").split(",")
-
-        val[3] = val[3].split(':')[0] + ':' + str(port)
-        grid.set(section, "Group", ",".join(val))
-
-        with open(exp(GRID_CONF), "w") as fp:
-            grid.write(fp)
-
-    def _update_event_watch(self, port):
-        conf = None
-        path = WATCH_CONF % (self.ns, self.name)
-        with open(path, "r") as fp:
-            conf = yaml.load(fp)
-
-        conf['port'] = port
-
-        with open(path, "w") as fp:
-            yaml.dump(conf, stream=fp)
 
     def _update_apache(self, port):
         path = HTTPD_CONF % (self.ns, self.name)
@@ -115,11 +77,45 @@ class TestServiceId(BaseTestCase):
         ret = self.conn.object_locate(self.account, self._cnt, "plop")
         return ret
 
-    def _change_rawx_addr(self, port):
-        self._service(self.name, "stop")
+    def _generate_data(self):
+        # generate content with a chunk located on rawx
+        while True:
+            ret = self._create_data()[1]
+            for item in ret:
+                if self.rawx['service_id'] in item['url']:
+                    return
 
-        self._update_gridinit(port)
-        self._update_event_watch(port)
+    def _check_data(self):
+        try:
+            # cache may be empty for meta2 as well, catch exceptions here
+            self.conn.object_locate(self.account, self._cnt, "plop")[1]
+            return True
+        except ServiceBusy:
+            return False
+
+    def _wait_data(self, timeout=10):
+        """wait that chunk become available."""
+        while not self._check_data():
+            time.sleep(1)
+            timeout -= 1
+        self.assertTrue(timeout)
+
+    def _update_event_watch(self, name, port):
+        conf = None
+        path = WATCH_CONF % (self.ns, name)
+        with open(path, "r") as fp:
+            conf = yaml.load(fp)
+
+        conf['port'] = port
+
+        with open(path, "w") as fp:
+            yaml.dump(conf, stream=fp)
+
+    def _change_rawx_addr(self, name, port):
+        self._service(name, "stop")
+
+        self._update_gridinit_rawx(port)
+        self._update_event_watch(name, port)
         self._update_apache(port)
 
         self._service(self.name, "reload")
@@ -129,20 +125,37 @@ class TestServiceId(BaseTestCase):
         check_call(["openio", "cluster", "unlockall"])
         self._cache_flush()
 
-    def _generate_data(self):
-        # generate content with a chunk located on rawx
-        while True:
-            ret = self._create_data()[1]
-            for item in ret:
-                if self.rawx['service_id'] in item['url']:
-                    return
 
-    def _wait_data(self):
+class TestRawxServiceId(BaseTestServiceId):
+    def setUp(self):
+        super(TestRawxServiceId, self).setUp()
+
+        if not self.conf['with_service_id']:
+            self.skipTest("Service ID not enabled")
+
+        # support mix deployement
+        self.rawx = {}
+        while 'service_id' not in self.rawx:
+            self.rawx = random.choice(self.conf['services']['rawx'])
+
+        self.conn = ObjectStorageApi(self.ns)
+        self.name = "rawx-%d" % int(self.rawx['num'])
+
+        self._port = int(self.rawx['addr'].split(':')[1])
+        self._newport = self._port + 10000 + random.randint(0, 200)
+
+        self.org_rawx = self.rawx.copy()
+
+    def tearDown(self):
+        super(TestRawxServiceId, self).tearDown()
+
+    def _check_data(self):
         try:
             # cache may be empty for meta2 as well, catch exceptions here
             ret = self.conn.object_locate(self.account, self._cnt, "plop")[1]
         except ServiceBusy:
             return False
+
         for item in ret:
             if self.rawx['service_id'] in item['url']:
                 try:
@@ -152,22 +165,94 @@ class TestServiceId(BaseTestCase):
                     print("%s: %s", item.get('real_url'), str(exc))
         return False
 
-    def test_service_id_new_addr(self):
+    def _update_gridinit_rawx(self, port):
+        grid = SafeConfigParser()
+        grid.read(exp(GRID_CONF))
+
+        section = "Service.%s-%s" % (self.ns, self.name)
+        val = grid.get(section, "Group").split(",")
+
+        val[3] = val[3].split(':')[0] + ':' + str(port)
+        grid.set(section, "Group", ",".join(val))
+
+        with open(exp(GRID_CONF), "w") as fp:
+            grid.write(fp)
+
+    def test_rawx_service_id_new_addr(self):
         self._generate_data()
-        self._change_rawx_addr(self._newport)
+        self._change_rawx_addr(self.name, self._newport)
 
-        # wait that chunk become available
-        timeout = 10
-        while not self._wait_data():
-            time.sleep(1)
-            timeout -= 1
-            self.assertTrue(timeout)
-
+        self._wait_data()
         # reset addr of rawx
-        self._change_rawx_addr(self._port)
+        self._change_rawx_addr(self.name, self._port)
 
-        timeout = 10
-        while not self._wait_data():
-            time.sleep(1)
-            timeout -= 1
-            self.assertTrue(timeout)
+        self._wait_data()
+
+
+class TestMeta2ServiceId(BaseTestServiceId):
+    def setUp(self):
+        super(TestMeta2ServiceId, self).setUp()
+
+        if not self.conf['with_service_id']:
+            self.skipTest("Service ID not enabled")
+
+        # support mix deployement
+        self.conn = ObjectStorageApi(self.ns)
+        self.meta2 = list(self.conf['services']['meta2'])
+        for entry in self.meta2:
+            port = int(entry['addr'].split(':')[1])
+            entry['old_port'] = port
+            if 'service_id' in entry:
+                entry['new_port'] = port + 1000
+            else:
+                entry['new_port'] = port
+
+    def tearDown(self):
+        super(TestMeta2ServiceId, self).tearDown()
+
+    def _update_gridinit_meta(self, name, port):
+        grid = SafeConfigParser()
+        grid.read(exp(GRID_CONF))
+
+        section = "service.%s-%s" % (self.ns, name)
+        val = grid.get(section, "Group").split(",")
+
+        org_addr = val[3]
+
+        val[3] = val[3].split(':')[0] + ':' + str(port)
+        grid.set(section, "Group", ",".join(val))
+
+        cmd = grid.get(section, 'command')
+        if cmd and org_addr in cmd:
+            cmd = cmd.replace(org_addr, val[3])
+            grid.set(section, 'command', cmd)
+
+        with open(exp(GRID_CONF), "w") as fp:
+            grid.write(fp)
+
+    def _change_meta2_addr(self, field):
+        for entry in self.meta2:
+            name = "meta2-%s" % entry['num']
+            port = entry[field]
+
+            self._service(name, 'stop')
+            self._update_gridinit_meta(name, port)
+            self._update_event_watch(name, port)
+
+            self._service(name, 'reload')
+            self._service(name, 'start')
+
+        self._service("conscience-agent", "restart")
+        check_call(["openio", "cluster", "flush", "meta2"])
+        check_call(["openio", "cluster", "unlockall"])
+        self._cache_flush()
+
+    def test_meta2_service_id_new_addr(self):
+        self._create_data()
+        self._change_meta2_addr('new_port')
+
+        self._wait_data(timeout=10)
+
+        # reset configuration
+        self._change_meta2_addr('old_port')
+        self._wait_data(timeout=10)
