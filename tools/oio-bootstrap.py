@@ -1251,6 +1251,7 @@ def generate(options):
                       'EXE': 'oio-' + t + '-server',
                       'EXTRA': ext_opt})
         if service_id:
+            env['WANT_SERVICE_ID'] = ''
             env['SERVICE_ID'] = str(uuid.uuid4())
             env['OPTARGS'] = "-O ServiceId=%s" % env['SERVICE_ID']
         else:
