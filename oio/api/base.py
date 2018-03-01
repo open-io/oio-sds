@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.common.utils import json as jsonlib, oio_reraise
+from oio.common.utils import json as jsonlib, oio_reraise, true_value
 from oio.common.http import urllib3, get_pool_manager
 from urllib3.exceptions import MaxRetryError, TimeoutError, HTTPError, \
     NewConnectionError, ProtocolError, ProxyError, ClosedPoolError
@@ -55,7 +55,7 @@ class HttpApi(object):
             pool_manager = get_pool_manager(**pool_manager_conf)
         self.pool_manager = pool_manager
 
-        self.admin_mode = kwargs.get('admin_mode', False)
+        self.admin_mode = true_value(kwargs.get('admin_mode', False))
 
     def _direct_request(self, method, url, headers=None, data=None, json=None,
                         params=None, admin_mode=False, pool_manager=None,
