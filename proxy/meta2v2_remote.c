@@ -169,15 +169,23 @@ m2v2_remote_pack_FLUSH(struct oio_url_s *url, gint64 dl)
 }
 
 GByteArray*
-m2v2_remote_pack_PURGEC(struct oio_url_s *url, gint64 dl)
+m2v2_remote_pack_PURGEC(struct oio_url_s *url,
+		const char *maxvers_str, gint64 dl)
 {
-	return _m2v2_pack_request(NAME_MSGNAME_M2V2_PURGE_CONTENT, url, NULL, dl);
+	MESSAGE msg = _m2v2_build_request(
+			NAME_MSGNAME_M2V2_PURGE_CONTENT, url, NULL, dl);
+	metautils_message_add_field_str(msg, NAME_MSGKEY_MAXVERS, maxvers_str);
+	return message_marshall_gba_and_clean(msg);
 }
 
 GByteArray*
-m2v2_remote_pack_PURGEB(struct oio_url_s *url, gint64 dl)
+m2v2_remote_pack_PURGEB(struct oio_url_s *url,
+		const char *maxvers_str, gint64 dl)
 {
-	return _m2v2_pack_request(NAME_MSGNAME_M2V2_PURGE_CONTAINER, url, NULL, dl);
+	MESSAGE msg = _m2v2_build_request(
+			NAME_MSGNAME_M2V2_PURGE_CONTAINER, url, NULL, dl);
+	metautils_message_add_field_str(msg, NAME_MSGKEY_MAXVERS, maxvers_str);
+	return message_marshall_gba_and_clean(msg);
 }
 
 GByteArray*

@@ -1047,11 +1047,17 @@ clean_and_exit:
 static enum http_rc_e
 action_m2_container_purge (struct req_args_s *args, struct json_object *j UNUSED)
 {
-	PACKER_VOID(_pack) { return m2v2_remote_pack_PURGEB(args->url, DL()); }
-	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL);
-	if (NULL != err)
-		return _reply_common_error(args, err);
-	return _reply_success_json(args, NULL);
+	GError *err = NULL;
+	const char *maxvers_str = OPT("maxvers");
+	if (maxvers_str && !oio_str_is_number(maxvers_str, NULL)) {
+		err = BADREQ("Invalid maxvers parameter: %s", maxvers_str);
+	} else {
+		PACKER_VOID(_pack) {
+			return m2v2_remote_pack_PURGEB(args->url, maxvers_str, DL());
+		}
+		err = _resolve_meta2(args, _prefer_master(), _pack, NULL);
+	}
+	return _reply_m2_error(args, err);
 }
 
 static enum http_rc_e
@@ -1983,11 +1989,17 @@ static enum http_rc_e _m2_content_update(struct req_args_s *args,
 static enum http_rc_e
 action_m2_content_purge (struct req_args_s *args, struct json_object *j UNUSED)
 {
-	PACKER_VOID(_pack) { return m2v2_remote_pack_PURGEC(args->url, DL()); }
-	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL);
-	if (NULL != err)
-		return _reply_common_error(args, err);
-	return _reply_success_json(args, NULL);
+	GError *err = NULL;
+	const char *maxvers_str = OPT("maxvers");
+	if (maxvers_str && !oio_str_is_number(maxvers_str, NULL)) {
+		err = BADREQ("Invalid maxvers parameter: %s", maxvers_str);
+	} else {
+		PACKER_VOID(_pack) {
+			return m2v2_remote_pack_PURGEC(args->url, maxvers_str, DL());
+		}
+		err = _resolve_meta2(args, _prefer_master(), _pack, NULL);
+	}
+	return _reply_m2_error(args, err);
 }
 
 

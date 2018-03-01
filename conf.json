@@ -41,7 +41,7 @@
 			{ "type": "bool", "name": "meta2_flag_delete_exceeding_versions",
 				"key": "meta2.delete_exceeding_versions",
 				"descr": "When adding alias with versioning, deletes exceeding versions.",
-				"def": true }
+				"def": false }
 		]
 	},
 	"rawx": {

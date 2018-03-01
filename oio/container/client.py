@@ -330,8 +330,10 @@ class ContainerClient(ProxyClient):
         self._request('POST', '/dedup', params=params, **kwargs)
 
     def container_purge(self, account=None, reference=None, cid=None,
-                        **kwargs):
+                        maxvers=None, **kwargs):
         params = self._make_params(account, reference, cid=cid)
+        if maxvers is not None:
+            params["maxvers"] = maxvers
         self._request('POST', '/purge', params=params, **kwargs)
 
     def container_raw_insert(self, bean, account=None, reference=None,
@@ -639,7 +641,9 @@ class ContainerClient(ProxyClient):
         return body
 
     def content_purge(self, account=None, reference=None, path=None, cid=None,
-                      **kwargs):
+                      maxvers=None, **kwargs):
         uri = self._make_uri('content/purge')
         params = self._make_params(account, reference, path, cid=cid)
+        if maxvers is not None:
+            params["maxvers"] = maxvers
         self._direct_request('POST', uri, params=params, **kwargs)
