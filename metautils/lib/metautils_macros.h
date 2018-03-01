@@ -70,6 +70,7 @@ License along with this library.
 #define NAME_MSGKEY_MARKER             "MRK"
 #define NAME_MSGKEY_MARKER_END         "MRK_END"
 #define NAME_MSGKEY_MAX_KEYS           "MAX_KEYS"
+#define NAME_MSGKEY_MAXVERS            "MAXVERS"
 #define NAME_MSGKEY_MESSAGE            "MSG"
 #define NAME_MSGKEY_METAURL            "METAURL"
 #define NAME_MSGKEY_NAMESPACE          "NS"

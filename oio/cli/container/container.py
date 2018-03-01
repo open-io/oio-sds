@@ -533,6 +533,17 @@ class PurgeContainer(command.Command):
             metavar='<container>',
             help='Container to purge',
         )
+        parser.add_argument(
+            '--max-versions',
+            metavar='<n>',
+            type=int,
+            help="""The number of versions to keep
+ (override the container configuration).
+ n<0 is unlimited number of versions (purge only deleted aliases).
+ n=0 is 1 version.
+ n>0 is n versions.
+"""
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -540,7 +551,7 @@ class PurgeContainer(command.Command):
 
         account = self.app.client_manager.account
         self.app.client_manager.storage.container.container_purge(
-            account, parsed_args.container
+            account, parsed_args.container, maxvers=parsed_args.max_versions
         )
 
 

@@ -443,8 +443,7 @@ class TestMeta2Containers(BaseTestCase):
         # empty container
         self._create(params, 201)
         props = {"system":
-                 {"sys.m2.policy.version": "3",
-                  "sys.m2.policy.version.delete_exceeding": "0"}}
+                 {"sys.m2.policy.version": "3"}}
         resp = self.request('POST', self.url_container('set_properties'),
                             params=params, data=json.dumps(props))
         purge_and_check(0)
@@ -899,8 +898,7 @@ class TestMeta2Contents(BaseTestCase):
         # one content
         self._create_content(path)
         props = {"system":
-                 {"sys.m2.policy.version": "3",
-                  "sys.m2.policy.version.delete_exceeding": "0"}}
+                 {"sys.m2.policy.version": "3"}}
         resp = self.request('POST', self.url_container('set_properties'),
                             params=params, data=json.dumps(props))
         purge_and_check(1)

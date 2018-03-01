@@ -740,6 +740,17 @@ class PurgeObject(ObjectCommandMixin, command.Command):
     def get_parser(self, prog_name):
         parser = super(PurgeObject, self).get_parser(prog_name)
         self.patch_parser(parser)
+        parser.add_argument(
+            '--max-versions', '--versioning',
+            metavar='<n>',
+            type=int,
+            help="""The number of versions to keep
+ (override the container configuration).
+ n<0 is unlimited number of versions.
+ n=0 is 1 version.
+ n>0 is n versions.
+"""
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -747,5 +758,6 @@ class PurgeObject(ObjectCommandMixin, command.Command):
 
         account = self.app.client_manager.account
         self.app.client_manager.storage.container.content_purge(
-            account, parsed_args.container, parsed_args.object
+            account, parsed_args.container, parsed_args.object,
+            maxvers=parsed_args.max_versions
         )

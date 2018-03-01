@@ -719,7 +719,7 @@ meta2_backend_flush_container(struct meta2_backend_s *m2, struct oio_url_s *url)
 
 GError *
 meta2_backend_purge_container(struct meta2_backend_s *m2, struct oio_url_s *url,
-	m2_onbean_cb cb, gpointer u0)
+	gint64 *pmaxvers, m2_onbean_cb cb, gpointer u0)
 {
 	GError *err;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -729,7 +729,12 @@ meta2_backend_purge_container(struct meta2_backend_s *m2, struct oio_url_s *url,
 	if (!err) {
 		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
-			err = m2db_purge(sq3, _maxvers(sq3), _retention_delay(sq3), NULL,
+			gint64 maxvers;
+			if (pmaxvers)
+				maxvers = *pmaxvers;
+			else
+				maxvers = _maxvers(sq3);
+			err = m2db_purge(sq3, maxvers, _retention_delay(sq3), NULL,
 					cb, u0);
 			err = sqlx_transaction_end(repctx, err);
 		}
@@ -1043,7 +1048,7 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 
 GError *
 meta2_backend_purge_alias(struct meta2_backend_s *m2, struct oio_url_s *url,
-	m2_onbean_cb cb, gpointer u0)
+	gint64 *pmaxvers, m2_onbean_cb cb, gpointer u0)
 {
 	GError *err;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1059,7 +1064,12 @@ meta2_backend_purge_alias(struct meta2_backend_s *m2, struct oio_url_s *url,
 	if (!err) {
 		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (!(err = m2db_purge(sq3, _maxvers(sq3), _retention_delay(sq3),
+			gint64 maxvers;
+			if (pmaxvers)
+				maxvers = *pmaxvers;
+			else
+				maxvers = _maxvers(sq3);
+			if (!(err = m2db_purge(sq3, maxvers, _retention_delay(sq3),
 					oio_url_get(url, OIOURL_PATH), cb, u0)))
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);

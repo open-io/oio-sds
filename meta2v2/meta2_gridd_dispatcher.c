@@ -142,6 +142,7 @@ static gridd_filter M2V2_HAS_FILTERS[] =
 static gridd_filter M2V2_PURGE_CONTENT_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
+	meta2_filter_extract_header_string_maxvers,
 	meta2_filter_extract_admin,
 	meta2_filter_fill_subject,
 	meta2_filter_check_url_cid,
@@ -156,6 +157,7 @@ static gridd_filter M2V2_PURGE_CONTENT_FILTERS[] =
 static gridd_filter M2V2_PURGE_CONTAINER_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
+	meta2_filter_extract_header_string_maxvers,
 	meta2_filter_extract_admin,
 	meta2_filter_fill_subject,
 	meta2_filter_check_url_cid,
