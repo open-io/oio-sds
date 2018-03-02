@@ -74,7 +74,7 @@ action_status(struct req_args_s *args)
 	if (0 == strcasecmp("HEAD", args->rq->cmd))
 		return _reply_success_json(args, NULL);
 	if (0 != strcasecmp("GET", args->rq->cmd))
-		return _reply_method_error(args);
+		return _reply_method_error(args, NULL, "GET, HEAD");
 
 	GString *gstr = g_string_sized_new (128);
 
