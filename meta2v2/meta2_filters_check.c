@@ -134,7 +134,8 @@ meta2_filter_check_ns_not_wormed(struct gridd_filter_ctx_s *ctx,
 	if (oio_ns_mode_worm) {
 		if (GRID_DEBUG_ENABLED())
 			GRID_DEBUG("NS wormed!");
-		meta2_filter_ctx_set_error(ctx, SYSERR("NS wormed!"));
+		meta2_filter_ctx_set_error(
+				ctx, NEWERROR(CODE_METHOD_NOTALLOWED, "NS wormed!"));
 		return FILTER_KO;
 	}
 	TRACE_FILTER();
