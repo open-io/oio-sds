@@ -1516,6 +1516,10 @@ GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 
 	/* Check the operation respects the rules of versioning for the container */
 	if (latest) {
+		if (args->worm_mode) {
+			err = NEWERROR(CODE_CONTENT_EXISTS, "NS wormed! Cannot overwrite.");
+		}
+
 		if (VERSIONS_DISABLED(max_versions)) {
 			if (ALIASES_get_deleted(latest) || ALIASES_get_version(latest) > 0) {
 				GRID_DEBUG("Versioning DISABLED but clues of SUSPENDED");

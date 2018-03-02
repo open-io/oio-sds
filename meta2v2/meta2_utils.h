@@ -173,6 +173,8 @@ struct m2db_put_args_s
 	struct sqlx_sqlite3_s *sq3;
 	struct oio_url_s *url;
 	gint64 ns_max_versions;
+	// Should be true when in WORM mode and no admin flag
+	gboolean worm_mode;
 };
 
 GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *in,

@@ -889,6 +889,7 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		args.sq3 = sq3;
 		args.url = url;
 		args.ns_max_versions = meta2_max_versions;
+		args.worm_mode = oio_ns_mode_worm && !oio_ext_is_admin();
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_put_alias(&args, in, out_deleted, out_added)))
@@ -922,6 +923,7 @@ meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		args.sq3 = sq3;
 		args.url = url;
 		args.ns_max_versions = meta2_max_versions;
+		args.worm_mode = oio_ns_mode_worm && !oio_ext_is_admin();
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_copy_alias(&args, src)))
@@ -946,6 +948,9 @@ meta2_backend_update_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	EXTRA_ASSERT(url != NULL);
 	if (!in)
 		return NEWERROR(CODE_BAD_REQUEST, "No bean");
+	else if (oio_ns_mode_worm && !oio_ext_is_admin())
+		return NEWERROR(CODE_METHOD_NOTALLOWED,
+				"NS wormed! Cannot modify object.");
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
@@ -1014,6 +1019,7 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		args.sq3 = sq3;
 		args.url = url;
 		args.ns_max_versions = meta2_max_versions;
+		args.worm_mode = oio_ns_mode_worm && !oio_ext_is_admin();
 
 		if (!(err = _transaction_begin(sq3,url, &repctx))) {
 			if (!(err = m2db_force_alias(&args, in, out_deleted, out_added)))
@@ -1475,13 +1481,14 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 	 * This call may return an open database. */
 	m2b_get_prepare_data(m2b, url, &pdata, &sq3);
 
-	if (m2b->flag_precheck_on_generate &&
-			VERSIONS_DISABLED(pdata.max_versions)) {
+	if ((m2b->flag_precheck_on_generate &&
+			VERSIONS_DISABLED(pdata.max_versions)) ||
+			(oio_ns_mode_worm && !oio_ext_is_admin())) {
 		err = m2b_open_if_needed(m2b, url,
 				_mode_masterslave(0)|M2V2_OPEN_ENABLED, &sq3);
 		if (!err) {
-			/* If the versioning is not supported, we check the content
-			 * is not present */
+			/* If the versioning is not supported, or the namespace is
+			 * is WORM mode, we check the content is not present */
 			err = _check_alias_doesnt_exist(sq3, url);
 			if (append) {
 				if (err) {

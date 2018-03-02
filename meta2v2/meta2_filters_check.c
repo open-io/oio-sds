@@ -125,8 +125,7 @@ meta2_filter_check_ns_not_wormed(struct gridd_filter_ctx_s *ctx,
 {
 	(void) reply;
 
-	const char *admin = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_ADMIN_COMMAND);
-	if (oio_str_parse_bool(admin, FALSE)) {
+	if (oio_ext_is_admin()) {
 		if (GRID_DEBUG_ENABLED())
 			GRID_DEBUG("admin mode is on");
 		return FILTER_OK;
