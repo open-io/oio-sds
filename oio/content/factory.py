@@ -56,9 +56,10 @@ class ContentFactory(object):
                    container_client=self.container_client)
 
     def new(self, container_id, path, size, policy, account=None,
-            container_name=None):
+            container_name=None, **kwargs):
         meta, chunks = self.container_client.content_prepare(
-            cid=container_id, path=path, size=size, stgpol=policy)
+            cid=container_id, path=path, size=size, stgpol=policy,
+            **kwargs)
 
         chunk_method = meta['chunk_method']
         storage_method = STORAGE_METHODS.load(chunk_method)
