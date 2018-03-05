@@ -1282,12 +1282,17 @@ GError* m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 	else
 		err = m2db_latest_alias(args->sq3, args->url, &latest);
 
-	if (NULL != err) {
+	if (err) {
 		if (err->code != CODE_CONTENT_NOTFOUND) {
 			g_prefix_error(&err, "Version error: ");
 			return err;
 		}
 		g_clear_error(&err);
+	}
+
+	if (latest && args->worm_mode) {
+		err = NEWERROR(CODE_CONTENT_EXISTS, "NS wormed! Cannot overwrite.");
+		goto cleanup;
 	}
 
 	_patch_beans_defaults(beans);
@@ -1331,6 +1336,7 @@ GError* m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 		m2db_set_obj_count(args->sq3, obj_count);
 	}
 
+cleanup:
 	if (latest)
 		_bean_clean(latest);
 
