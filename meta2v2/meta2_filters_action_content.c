@@ -616,7 +616,7 @@ meta2_filter_action_purge_content(struct gridd_filter_ctx_s *ctx,
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	gint64 *pmaxvers = NULL;
-	GSList *beans_list = NULL;
+	GSList *beans_list_list = NULL;
 
 	const char *maxvers_str = meta2_filter_ctx_get_param(ctx,
 			NAME_MSGKEY_MAXVERS);
@@ -625,14 +625,15 @@ meta2_filter_action_purge_content(struct gridd_filter_ctx_s *ctx,
 		pmaxvers = &maxvers;
 	}
 
+	// Here we are abusing _bean_list_cb with a list of lists of beans
 	GError *err = meta2_backend_purge_alias(m2b, url, pmaxvers,
-			_bean_list_cb, &beans_list);
+			_bean_list_cb, &beans_list_list);
 
-	for (GSList *l=beans_list; l; l=l->next) {
+	for (GSList *l = beans_list_list; l; l = l->next) {
 		_m2b_notify_beans(m2b, url, l->data, "content.deleted", TRUE);
 		_bean_cleanl2(l->data);
 	}
-	g_slist_free(beans_list);
+	g_slist_free(beans_list_list);
 
 	if (!err)
 		return FILTER_OK;
