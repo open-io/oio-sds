@@ -177,8 +177,17 @@ _metacd_load_url (struct req_args_s *args)
 			oio_url_set (url, OIOURL_VERSION, s);
 	}
 
-	if (NULL != (s = CID()))
-		oio_url_set (url, OIOURL_HEXID, s);
+	if ((s = CID())) {
+		/* Tolerate the base name (with a dot and sequence number)
+		 * passed as a container ID. */
+		if (strlen(s) >= STRLEN_CONTAINERID && s[STRLEN_CONTAINERID-1] == '.') {
+			char cid[STRLEN_CONTAINERID];
+			g_strlcpy(cid, s, sizeof(cid));
+			oio_url_set(url, OIOURL_HEXID, cid);
+		} else {
+			oio_url_set(url, OIOURL_HEXID, s);
+		}
+	}
 
 	if (NULL != (s = CONTENT()))
 		oio_url_set (url, OIOURL_CONTENTID, s);
