@@ -49,15 +49,13 @@ class TestContainerLifecycle(unittest.TestCase):
         days_elt = etree.XML("<Expiration><Days>365</Days></Expiration>")
         days_exp = Expiration.from_element(days_elt)
         self.assertIsNotNone(days_exp)
-        self.assertEqual(days_exp.days, 365)
-        self.assertIsNone(days_exp.date)
+        self.assertEqual(days_exp.filter.days, 365)
 
         date_elt = etree.XML(
             "<Expiration><Date>2006-08-14T02:34:56</Date></Expiration>")
         date_exp = Expiration.from_element(date_elt)
         self.assertIsNotNone(date_exp)
-        self.assertEqual(date_exp.date, 1155513600)
-        self.assertIsNone(date_exp.days)
+        self.assertEqual(date_exp.filter.date, 1155513600)
 
         broken_elt = etree.XML(
             "<Expiration></Expiration>")
@@ -75,7 +73,8 @@ class TestContainerLifecycle(unittest.TestCase):
                           Expiration.from_element, days_elt)
 
     def test_NoncurrentVersionExpiration_from_element_missing_days(self):
-        days_elt = etree.XML("<Expiration><Days>365</Days></Expiration>")
+        days_elt = etree.XML(
+            "<NoncurrentVersionExpiration></NoncurrentVersionExpiration>")
         self.assertRaises(ValueError,
                           NoncurrentVersionExpiration.from_element, days_elt)
 
@@ -105,8 +104,7 @@ class TestContainerLifecycle(unittest.TestCase):
             """)
         trans = Transition.from_element(trans_elt)
         self.assertIsNotNone(trans)
-        self.assertEqual(trans.days, 365)
-        self.assertIsNone(trans.date)
+        self.assertEqual(trans.filter.days, 365)
 
         trans_elt = etree.XML(
             """
@@ -117,8 +115,7 @@ class TestContainerLifecycle(unittest.TestCase):
             """)
         trans = Transition.from_element(trans_elt)
         self.assertIsNotNone(trans)
-        self.assertEqual(trans.date, 1155513600)
-        self.assertIsNone(trans.days)
+        self.assertEqual(trans.filter.date, 1155513600)
 
     def test_LifecycleRuleFilter_from_element_broken_tag(self):
         filter_elt = etree.XML(
@@ -444,8 +441,7 @@ class TestContainerLifecycle(unittest.TestCase):
         days_elt = etree.XML("<Expiration><Days>1</Days></Expiration>")
         days_exp = Expiration.from_element(days_elt)
         self.assertIsNotNone(days_exp)
-        self.assertEqual(days_exp.days, 1)
-        self.assertIsNone(days_exp.date)
+        self.assertEqual(days_exp.filter.days, 1)
 
         obj_meta = self.obj_meta.copy()
         self.assertTrue(days_exp.match(obj_meta))
@@ -458,8 +454,7 @@ class TestContainerLifecycle(unittest.TestCase):
             "<Expiration><Date>2006-08-14T02:34:56</Date></Expiration>")
         date_exp = Expiration.from_element(date_elt)
         self.assertIsNotNone(date_exp)
-        self.assertEqual(date_exp.date, 1155513600)
-        self.assertIsNone(date_exp.days)
+        self.assertEqual(date_exp.filter.date, 1155513600)
 
         self.assertTrue(date_exp.match(self.obj_meta))
 

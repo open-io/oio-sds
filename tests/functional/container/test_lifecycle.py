@@ -411,8 +411,9 @@ class TestContainerLifecycle(BaseTestCase):
                 <Filter>
                 </Filter>
                 <Status>Enabled</Status>
-                <ExceedingVersionExpiration>
-                </ExceedingVersionExpiration>
+                <NoncurrentVersionExpiration>
+                    <NoncurrentCount>2</NoncurrentCount>
+                </NoncurrentVersionExpiration>
             </Rule>
         </LifecycleConfiguration>
         """
@@ -438,13 +439,14 @@ class TestContainerLifecycle(BaseTestCase):
                 <Filter>
                 </Filter>
                 <Status>Enabled</Status>
-                <ExceedingVersionExpiration>
-                </ExceedingVersionExpiration>
+                <NoncurrentVersionExpiration>
+                    <NoncurrentCount>2</NoncurrentCount>
+                </NoncurrentVersionExpiration>
             </Rule>
         </LifecycleConfiguration>
         """
         props = {LIFECYCLE_PROPERTY_KEY: source}
-        system = {"sys.m2.policy.version": "3",
+        system = {"sys.m2.policy.version": "4",
                   "sys.m2.policy.version.delete_exceeding": "0"}
         self.api.container_create(self.account, self.container,
                                   properties=props, system=system)
