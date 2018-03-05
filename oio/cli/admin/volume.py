@@ -18,7 +18,9 @@ from cliff import lister, show
 
 
 class ShowAdminVolume(show.ShowOne):
-    """Show admin volume"""
+    """
+    Show information about a volume, especially the last incident date.
+    """
 
     log = getLogger(__name__ + '.ShowAdminVolume')
 

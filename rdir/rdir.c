@@ -793,7 +793,8 @@ _db_admin_show(const char *volid, GString *value)
 			g_string_append_c(value, ',');
 		first = FALSE;
 		g_string_append_c(value, '"');
-		oio_str_gstring_append_json_blob(value, key, keylen);
+		oio_str_gstring_append_json_blob(value,
+				key+sizeof(ADMIN_PREFIX)-1, keylen-sizeof(ADMIN_PREFIX)+1);
 		g_string_append_len(value, "\":\"", 3);
 		oio_str_gstring_append_json_blob(value, val, vallen);
 		g_string_append_c(value, '"');
