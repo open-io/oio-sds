@@ -202,8 +202,9 @@ GError* m2db_get_storage_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *ur
  * @param retention_delay Delay in seconds before actually purging
  *     a deleted alias (use -1 to keep all deleted aliases)
  * @param flags: M2V2_DRYRUN_MODE, ...
- * @param cb: callback for chunks that have been removed from
- *     the database, and that should be removed from disk
+ * @param cb: callback for lists of beans (one list per alias)
+ *     that have been removed from the database,
+ *     and that should be notified
  * @param u0: argument for the callback
  * @return
  */
