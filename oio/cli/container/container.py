@@ -538,7 +538,7 @@ class PurgeContainer(command.Command):
             metavar='<n>',
             type=int,
             help="""The number of versions to keep
- (override the container configuration).
+ (overrides the container configuration).
  n<0 is unlimited number of versions (purge only deleted aliases).
  n=0 is 1 version.
  n>0 is n versions.
