@@ -741,12 +741,12 @@ class PurgeObject(ObjectCommandMixin, command.Command):
         parser = super(PurgeObject, self).get_parser(prog_name)
         self.patch_parser(parser)
         parser.add_argument(
-            '--max-versions', '--versioning',
+            '--max-versions',
             metavar='<n>',
             type=int,
             help="""The number of versions to keep
- (override the container configuration).
- n<0 is unlimited number of versions.
+ (overrides the container configuration).
+ n<0 is unlimited number of versions (purge only deleted aliases).
  n=0 is 1 version.
  n>0 is n versions.
 """
