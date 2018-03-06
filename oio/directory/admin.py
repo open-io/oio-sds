@@ -59,10 +59,12 @@ class AdminClient(ProxyClient):
         return body
 
     @loc_params
-    def election_leave(self, params, **kwargs):
+    def election_leave(self, params, service_id=None, **kwargs):
         """
         Force all peers to leave the election.
         """
+        if service_id:
+            params['service_id'] = service_id
         _, body = self._request('POST', '/leave', params=params, **kwargs)
         return body
 

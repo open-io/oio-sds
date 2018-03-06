@@ -49,8 +49,6 @@ class Meta1RefMapping(MetaMapping):
             cid, seq = self.get_cid_and_seq(base)
 
             try:
-                # Ask old peers to exit the election
-                self.admin.election_leave(service_type, cid=cid)
                 self.reference.force(
                     service_type=service_type, cid=cid,  replace=True,
                     services=dict(host=','.join(peers), type=service_type,

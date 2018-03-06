@@ -34,7 +34,7 @@ static enum http_rc_e
 _sqlx_action_noreturn_TAIL (struct req_args_s *args, struct client_ctx_s *ctx,
 		request_packer_f pack)
 {
-	GError *err = gridd_request_replicated (ctx, pack);
+	GError *err = gridd_request_replicated (args, ctx, pack);
 
 	if (err) {
 		client_clean (ctx);
@@ -45,7 +45,8 @@ _sqlx_action_noreturn_TAIL (struct req_args_s *args, struct client_ctx_s *ctx,
 	g_string_append_c(out, '{');
 
 	/* Pack the output */
-	if (ctx->which == CLIENT_RUN_ALL && ctx->count) {
+	if ((ctx->which == CLIENT_RUN_ALL || ctx->which == CLIENT_SPECIFIED)
+			&& ctx->count) {
 		gboolean first = TRUE;
 		for (guint i=0; i<ctx->count ;++i) {
 			COMA(out,first);
@@ -225,7 +226,7 @@ action_sqlx_propget (struct req_args_s *args, struct json_object *jargs)
 	CLIENT_CTX(ctx, args, dirtype, seq);
 
 	PACKER_VOID(_pack) { return sqlx_pack_PROPGET(_u, DL()); }
-	err = gridd_request_replicated (&ctx, _pack);
+	err = gridd_request_replicated (args, &ctx, _pack);
 
 	if (err) {
 		client_clean (&ctx);
@@ -329,7 +330,11 @@ enum http_rc_e
 action_admin_leave (struct req_args_s *args)
 {
 	PACKER_VOID(_pack) { return sqlx_pack_EXITELECTION (_u, DL()); }
-	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
+	const char *service_id = OPT("service_id");
+	if (service_id)
+		return _sqlx_action_noreturn (args, CLIENT_SPECIFIED, _pack);
+	else
+		return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
 }
 
 enum http_rc_e
