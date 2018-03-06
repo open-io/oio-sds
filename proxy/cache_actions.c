@@ -111,7 +111,7 @@ action_cache_show (struct req_args_s *args)
 	}
 
 	g_string_append_c (gstr, '[');
-	oio_lb_world__parse(lb_world, NULL, _on_item);
+	oio_lb_world__foreach(lb_world, NULL, _on_item);
 	g_string_append_c (gstr, ']');
 	return _reply_success_json (args, gstr);
 }
