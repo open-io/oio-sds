@@ -118,7 +118,8 @@ enum proxy_preference_e {
 	CLIENT_PREFER_NONE = 0,
 	CLIENT_RUN_ALL,
 	CLIENT_PREFER_SLAVE,
-	CLIENT_PREFER_MASTER
+	CLIENT_PREFER_MASTER,
+	CLIENT_SPECIFIED
 };
 
 extern gchar *ns_name;
@@ -257,7 +258,8 @@ typedef GByteArray * (request_packer_f) (const struct sqlx_name_s *);
 
 #define PACKER_VOID(N) GByteArray * N (const struct sqlx_name_s *_u UNUSED)
 
-GError * gridd_request_replicated (struct client_ctx_s *, request_packer_f);
+GError * gridd_request_replicated (struct req_args_s *args,
+		struct client_ctx_s *, request_packer_f);
 
 GError * KV_read_properties (struct json_object *j, gchar ***out,
 		const char *section, gboolean fail_if_empty);

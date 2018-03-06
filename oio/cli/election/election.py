@@ -149,6 +149,14 @@ class ElectionSync(ElectionCmd):
 class ElectionLeave(ElectionCmd):
     """Ask all peers to leave an election."""
 
+    def get_parser(self, prog_name):
+        parser = super(ElectionLeave, self).get_parser(prog_name)
+        parser.add_argument(
+            '--service-id',
+            metavar='<service-id>',
+            help="Leave the election only for this service ID")
+        return parser
+
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
@@ -156,7 +164,7 @@ class ElectionLeave(ElectionCmd):
 
         data = self.app.client_manager.election.election_leave(
             service_type, account=account, reference=reference, cid=cid,
-            timeout=parsed_args.timeout)
+            timeout=parsed_args.timeout, service_id=parsed_args.service_id)
 
         columns = ('Id', 'Status', 'Message')
         data = sorted(data.iteritems())

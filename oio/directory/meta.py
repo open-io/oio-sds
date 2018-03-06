@@ -126,8 +126,19 @@ class MetaMapping(object):
     def _apply_reset_elections(self, moved_ok, **kwargs):
         """Step 3 of base reassignation algorithm."""
         for base in moved_ok:
+            peers = self._get_peers_by_base(base)
+            old_peers = self._get_old_peers_by_base(base)
+            no_longer_used = [v for v in old_peers if v not in peers]
             service_type = self._get_service_type_by_base(base)
             cid, _ = self.get_cid_and_seq(base)
+            for service_id in no_longer_used:
+                try:
+                    self.admin.election_leave(service_type, cid=cid,
+                                              service_id=service_id)
+                except OioException as exc:
+                    self.logger.warn(
+                        "Failed to leave the election for base %s (%s): %s",
+                        cid, service_id, exc)
             try:
                 self.admin.election_leave(service_type, cid=cid)
                 election = self.admin.election_status(service_type, cid=cid)

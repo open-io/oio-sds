@@ -83,20 +83,11 @@ class Meta0PrefixMapping(MetaMapping):
         return 'meta1'
 
     def _apply_link_services(self, moved_ok, **kwargs):
-        for base in moved_ok:
-            service_type = self._get_service_type_by_base(base)
-            cid, _ = self.get_cid_and_seq(base)
-            try:
-                # Ask old peers to exit the election
-                self.admin.election_leave(service_type, cid=cid)
-            except OioException as exc:
-                self.logger.warn(
-                    "Failed to leave the election for base %s: %s", cid, exc)
         try:
             self.m0.force(self.to_json(moved_ok).strip(), **kwargs)
         except OioException as exc:
             self.logger.warn(
-                    "Failed to link services for base %s: %s", cid, exc)
+                    "Failed to link services for meta0: %s", exc)
 
     def __nonzero__(self):
         return bool(self.services_by_base)

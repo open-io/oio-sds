@@ -230,7 +230,8 @@ static gboolean _on_reply (gpointer p, MESSAGE reply) {
 }
 
 GError *
-gridd_request_replicated (struct client_ctx_s *ctx, request_packer_f pack)
+gridd_request_replicated (struct req_args_s *args, struct client_ctx_s *ctx,
+		request_packer_f pack)
 {
 	gboolean retry = TRUE;
 	GError *err = NULL;
@@ -246,7 +247,11 @@ gridd_request_replicated (struct client_ctx_s *ctx, request_packer_f pack)
 
 	/* Locate the services */
 label_retry:
-	if (*ctx->type == '#')
+	if (ctx->which == CLIENT_SPECIFIED) {
+		const char *service_id = OPT("service_id");
+		m1uv = g_malloc0(2 * sizeof(char *));
+		m1uv[0] = g_strdup(service_id);
+	} else if (*ctx->type == '#')
 		err = hc_resolve_reference_directory (resolver, ctx->url, &m1uv, deadline);
 	else
 		err = hc_resolve_reference_service (resolver, ctx->url, ctx->type, &m1uv, deadline);
@@ -264,7 +269,7 @@ label_retry:
 	} else {
 		EXTRA_ASSERT(m1uv != NULL);
 
-		if (*ctx->type == '#') {
+		if (*ctx->type == '#' && ctx->which != CLIENT_SPECIFIED) {
 			/* when looking for a directory service, the resolver always replies
 			 * all the services involved. Let's keep only the services with the
 			 * targeted type */
@@ -340,7 +345,8 @@ label_retry:
 			} else {
 #endif /* HAVE_ENBUG */
 				/* Send a unitary request */
-				if (ctx->which == CLIENT_RUN_ALL)
+				if (ctx->which == CLIENT_RUN_ALL
+						|| ctx->which == CLIENT_SPECIFIED)
 					gridd_client_no_redirect (client);
 				gridd_client_start (client);
 				gridd_client_set_timeout (client,
@@ -397,7 +403,8 @@ label_retry:
 				/* But if we expected at least one service to respond,
 				 * and we still encounter that error with the last URL of the
 				 * array (!pu[1]), then this is an overall error that we should return. */
-				if (ctx->which != CLIENT_RUN_ALL && !next_url) {
+				if ((ctx->which != CLIENT_RUN_ALL
+						&& ctx->which != CLIENT_SPECIFIED) && !next_url) {
 					err = BUSY("No service replied");
 					stop = TRUE;
 				}
@@ -409,7 +416,8 @@ label_retry:
 				 * will also be overloaded. */
 				service_invalidate(url);
 				stop = TRUE;
-			} else if (ctx->which == CLIENT_RUN_ALL) {
+			} else if (ctx->which == CLIENT_RUN_ALL
+					|| ctx->which == CLIENT_SPECIFIED) {
 				/* All the services must be reached, let's just remind the
 				 * error (already done) and continue to the next service */
 				g_clear_error (&err);
@@ -417,7 +425,7 @@ label_retry:
 				stop = TRUE;
 			}
 		} else {
-			if (ctx->which != CLIENT_RUN_ALL)
+			if (ctx->which != CLIENT_RUN_ALL && ctx->which != CLIENT_SPECIFIED)
 				stop = TRUE;
 		}
 
@@ -646,4 +654,3 @@ gridd_client_exec_and_concat_string (const gchar *to, gdouble seconds,
 
 	return err;
 }
-
