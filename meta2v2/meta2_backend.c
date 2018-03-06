@@ -1481,9 +1481,12 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 	 * This call may return an open database. */
 	m2b_get_prepare_data(m2b, url, &pdata, &sq3);
 
-	if ((m2b->flag_precheck_on_generate &&
-			VERSIONS_DISABLED(pdata.max_versions)) ||
-			(oio_ns_mode_worm && !oio_ext_is_admin())) {
+	gboolean must_check_alias = m2b->flag_precheck_on_generate && (
+			 VERSIONS_DISABLED(pdata.max_versions) ||
+			(VERSIONS_SUSPENDED(pdata.max_versions) &&
+			 oio_ns_mode_worm &&
+			 !oio_ext_is_admin()));
+	if (must_check_alias) {
 		err = m2b_open_if_needed(m2b, url,
 				_mode_masterslave(0)|M2V2_OPEN_ENABLED, &sq3);
 		if (!err) {
