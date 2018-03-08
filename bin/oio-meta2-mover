@@ -20,20 +20,28 @@ import argparse
 from oio.directory.meta1 import Meta1RefMapping
 
 def make_arg_parser():
-    descr = "Move a base from source service to destination service"
+    descr = """
+    Move a base from source service to destination service.
+    If the destination service isn't set,
+    a destination service is automatically selected.
+    """
     parser = argparse.ArgumentParser(description=descr)
     parser.add_argument('namespace',
                         metavar='<namespace>',
                         help="Namespace")
-    parser.add_argument('src_service',
-                        metavar='<src-service>',
-                        help="ID of the source service (IP:PORT)")
-    parser.add_argument('dest_service',
-                        metavar='<dest-service>',
-                        help="ID of the destination service (IP:PORT)")
     parser.add_argument('base',
                         metavar='<base>',
-                        help="ID of the base (cid)")
+                        help="""ID of the base (cid[.seq]).
+ If the sequence is not set, apply to all sequences.
+"""
+    )
+    parser.add_argument('src_service',
+                        metavar='<src-service>',
+                        help="Host of the source service (IP:PORT)")
+    parser.add_argument('dest_service',
+                        metavar='<dest-service>',
+                        nargs='?',
+                        help="Host of the destination service (IP:PORT)")
     return parser
 
 
