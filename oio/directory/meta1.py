@@ -64,6 +64,22 @@ class Meta1RefMapping(MetaMapping):
             self._reference = DirectoryClient(self.conf)
         return self._reference
 
+    def _service_id(self, service, service_type):
+        return self.conf['namespace'] + "|" + service_type + "|" + service
+
+    def _conscience_poll(self, service_type, known, avoid, **kwargs):
+        try:
+            services_found = self.conscience.poll(
+                service_type,
+                known=[self._service_id(svc, service_type) for svc in known],
+                avoid=[self._service_id(svc, service_type) for svc in avoid])
+            return [svc['addr'] for svc in services_found]
+        except OioException as exc:
+            self.logger.warn(
+                "Failed to poll services (type=%s, known=%s, avoid=%s): %s",
+                service_type, known, avoid, exc)
+            return list()
+
     def move(self, src_service, dest_service, base_name, service_type,
              **kwargs):
         """
@@ -76,7 +92,7 @@ class Meta1RefMapping(MetaMapping):
         cid, seq = self.get_cid_and_seq(base_name)
 
         data = self.reference.list(cid=cid)
-        if dest_service not in \
+        if dest_service is not None and dest_service not in \
                 self.services_by_service_type[service_type].keys():
             raise ValueError(
                 "destination service must be a %s service" % service_type)
@@ -99,14 +115,25 @@ class Meta1RefMapping(MetaMapping):
         moved = set()
         for base, raw_services in bases.iteritems():
             old_peers = raw_services.keys()
-            if src_service in old_peers and dest_service not in old_peers:
-                service = raw_services.pop(src_service)
-                raw_services[dest_service] = service
-                moved.add(base)
-                self.raw_services_by_base[base] = old_peers
-                self.services_by_base[base] = raw_services
-                self.service_type_by_base[base] = service_type
-                self.args_by_base[base] = service['args']
+            if src_service not in old_peers:
+                continue
+            src_info = raw_services.pop(src_service)
+            if dest_service is None:
+                known = raw_services.keys()
+                services_found = self._conscience_poll(
+                    service_type, known, [src_service], **kwargs)
+                if not services_found:
+                    self.logger.warn(
+                        "No destination service found %s (seq=%d)", cid, seq)
+                dest_service = services_found[0]
+            elif dest_service in old_peers:
+                continue
+            raw_services[dest_service] = src_info
+            moved.add(base)
+            self.raw_services_by_base[base] = old_peers
+            self.services_by_base[base] = raw_services
+            self.service_type_by_base[base] = service_type
+            self.args_by_base[base] = src_info['args']
 
         if not moved:
             raise ValueError(
