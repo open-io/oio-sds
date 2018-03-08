@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -51,21 +51,23 @@ class DirectoryCmd(Command):
 class DirectoryInit(DirectoryCmd):
     """
     Initialize the service directory.
+
     Distribute database prefixes among meta1 services and fill the meta0.
-    Also assign one rdir service for each rawx service.
+    Then assign an rdir service to each rawx service
+    (unless --no-rdir option is specified).
     """
 
     def get_parser(self, prog_name):
         parser = super(DirectoryInit, self).get_parser(prog_name)
-        parser.add_argument('--no-rdir',
-                            dest='rdir',
-                            action='store_false',
-                            default=True,
-                            help='Do not assign rdir services to rawx services'
-                            )
-        parser.add_argument('--force',
-                            action='store_true',
-                            help="Do the bootstrap even if already done")
+        parser.add_argument(
+            '--no-rdir', dest='rdir', action='store_false', default=True,
+            help=('Do not assign rdir services to rawx services. '
+                  'Will be enabled by default in the next version.')
+        )
+        parser.add_argument(
+            '--force',
+            action='store_true',
+            help="Do the bootstrap even if already done")
         parser.add_argument(
             '--check',
             action='store_true',

@@ -26,6 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "oio_events_queue.h"
 #include "oio_events_queue_internals.h"
+#include "oio_events_queue_fanout.h"
 #include "oio_events_queue_zmq.h"
 #include "oio_events_queue_beanstalkd.h"
 
@@ -34,6 +35,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 void
 oio_events_queue__destroy (struct oio_events_queue_s *self)
 {
+	if (!self) return;
 	EVTQ_CALL(self,destroy)(self);
 }
 
@@ -88,6 +90,44 @@ _has_prefix (const char *cfg, const char *prefix)
 	return NULL;
 }
 
+static GError *
+_parse_and_create_multi(const char *cfg, struct oio_events_queue_s **out)
+{
+	gchar **tokens = g_strsplit(cfg, OIO_CSV_SEP2, -1);
+	if (!tokens)
+		return SYSERR("internal error");
+
+	GError *err = NULL;
+	GPtrArray *sub_queuev = g_ptr_array_new();
+
+	for (gchar **token = tokens; *token && !err ;++token) {
+		struct oio_events_queue_s *sub = NULL;
+		if (!(err = oio_events_queue_factory__create(*token, &sub)))
+			g_ptr_array_add(sub_queuev, sub);
+	}
+
+	if (!err) {
+		if (sub_queuev->len <= 0) {
+			err = BADREQ("empty connection string");
+		} else {
+			err = oio_events_queue_factory__create_fanout(
+					(struct oio_events_queue_s **)sub_queuev->pdata,
+					sub_queuev->len, out);
+		}
+	}
+
+	if (err) {
+		g_ptr_array_set_free_func(sub_queuev,
+				(GDestroyNotify)oio_events_queue__destroy);
+		g_ptr_array_free(sub_queuev, TRUE);
+	} else {
+		g_ptr_array_free(sub_queuev, FALSE);
+	}
+
+	g_strfreev(tokens);
+	return err;
+}
+
 GError *
 oio_events_queue_factory__create (const char *cfg, struct oio_events_queue_s **out)
 {
@@ -95,17 +135,22 @@ oio_events_queue_factory__create (const char *cfg, struct oio_events_queue_s **o
 	EXTRA_ASSERT (out != NULL);
 	*out = NULL;
 
-	const char *tmp;
+	if (NULL != strchr(cfg, OIO_CSV_SEP2_C)) {
+		// Sharding over several endpoints
+		return _parse_and_create_multi(cfg, out);
+	} else {
+		const char *tmp;
 
-	if (NULL != (tmp = _has_prefix (cfg, "beanstalk://")))
-		return oio_events_queue_factory__create_beanstalkd (tmp, out);
+		if (NULL != (tmp = _has_prefix (cfg, "beanstalk://")))
+			return oio_events_queue_factory__create_beanstalkd (tmp, out);
 
-	if (NULL != (tmp = _has_prefix (cfg, "ipc://"))
-			|| NULL != (tmp = _has_prefix (cfg, "tcp://"))
-			|| NULL != (tmp = _has_prefix (cfg, "inproc://")))
-		return oio_events_queue_factory__create_zmq (cfg, out);
+		if (NULL != (tmp = _has_prefix (cfg, "ipc://"))
+				|| NULL != (tmp = _has_prefix (cfg, "tcp://"))
+				|| NULL != (tmp = _has_prefix (cfg, "inproc://")))
+			return oio_events_queue_factory__create_zmq (cfg, out);
 
-	return BADREQ("implementation not recognized");
+		return BADREQ("implementation not recognized");
+	}
 }
 
 GError *

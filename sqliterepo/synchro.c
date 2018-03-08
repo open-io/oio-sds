@@ -571,6 +571,7 @@ _direct_use (struct sqlx_peering_s *self,
 		if (err) {
 			GRID_DEBUG("USE error: (%d) %s", err->code, err->message);
 			event_client_free(mc);
+			g_error_free(err);
 		} else {
 			GByteArray *req = sqlx_pack_USE(n, deadline);
 			err = gridd_client_request (mc->client, req, NULL, NULL);
@@ -578,6 +579,7 @@ _direct_use (struct sqlx_peering_s *self,
 			if (err) {
 				GRID_DEBUG("USE error: (%d) %s", err->code, err->message);
 				event_client_free(mc);
+				g_error_free(err);
 			} else {
 				gridd_client_pool_defer(p->pool, mc);
 				OUTGOING("DB_USE tcp %s %s.%s", url, n->base, n->type);

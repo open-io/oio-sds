@@ -22,7 +22,7 @@ from oio.event.filters.base import Filter
 
 class NotifyFilter(Filter):
     def init(self):
-        queue_url = self.conf.get('queue_url', 'tcp://127.0.0.1:11300')
+        queue_url = self.conf.get('queue_url', 'beanstalk://127.0.0.1:11300')
         self.beanstalk = Beanstalk.from_url(queue_url)
         self.tube = self.conf.get('tube', 'notif')
         self.beanstalk.use(self.tube)

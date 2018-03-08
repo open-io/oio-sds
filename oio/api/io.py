@@ -214,6 +214,13 @@ class ChunkReader(object):
         self.read_timeout = read_timeout or CHUNK_TIMEOUT
         self._resp_by_chunk = dict()
 
+    @property
+    def reqid(self):
+        """:returns: the request ID or None"""
+        if not self.request_headers:
+            return None
+        return self.request_headers.get('X-oio-req-id')
+
     def recover(self, nb_bytes):
         """
         Recover the request.
@@ -272,7 +279,8 @@ class ChunkReader(object):
                 source = conn.getresponse()
                 source.conn = conn
         except (Exception, Timeout) as error:
-            logger.exception('Connection failed to %s', chunk)
+            logger.exception('Connection failed to %s (reqid=%s)',
+                             chunk, self.reqid)
             self._resp_by_chunk[chunk["url"]] = (0, str(error))
             return False
 
@@ -282,8 +290,8 @@ class ChunkReader(object):
             self.sources.append((source, chunk))
             return True
         else:
-            logger.warn("Invalid response from %s: %d %s",
-                        chunk, source.status, source.reason)
+            logger.warn("Invalid response from %s (reqid=%s): %d %s",
+                        chunk, self.reqid, source.status, source.reason)
             self._resp_by_chunk[chunk["url"]] = (source.status,
                                                  str(source.reason))
         return False
@@ -316,8 +324,11 @@ class ChunkReader(object):
                                      self._resp_by_chunk)
 
     def stream(self):
-        # Calling that right now will make `headers` field available
-        # before the caller starts reading the stream
+        """
+        Get a generator over chunk data.
+        After calling this method, the `headers` field will be available
+        (even if no data is read from the generator).
+        """
         parts_iter = self.get_iter()
 
         def _iter():
@@ -395,8 +406,9 @@ class ChunkReader(object):
                 new_source, new_chunk = self._get_source()
                 if new_source:
                     logger.warn(
-                        "Failed to read from %s (%s), retrying from %s",
-                        chunk, crto, new_chunk)
+                        "Failed to read from %s (%s), "
+                        "retrying from %s (reqid=%s)",
+                        chunk, crto, new_chunk, self.reqid)
                     close_source(source[0])
                     # switch source
                     source[0] = new_source
@@ -411,7 +423,8 @@ class ChunkReader(object):
                         return
 
                 else:
-                    logger.warn("Failed to read from %s (%s)", chunk, crto)
+                    logger.warn("Failed to read from %s (%s, reqid=%s)",
+                                chunk, crto, self.reqid)
                     # no valid source found to recover
                     raise
             else:
@@ -474,7 +487,8 @@ class ChunkReader(object):
                     body_iter.close()
 
         except green.ChunkReadTimeout:
-            logger.exception("Failure during chunk read")
+            logger.exception("Failure during chunk read (reqid=%s)",
+                             self.reqid)
             raise
         except GeneratorExit:
             pass

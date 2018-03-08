@@ -1058,7 +1058,7 @@ member_log_event(struct election_member_s *member, enum election_step_e pre,
 	plog->event = evt;
 	plog->pre = pre;
 	plog->post = member->step;
-	plog->time = (oio_ext_real_time() / G_TIME_SPAN_MILLISECOND) % (1L << 48);
+	plog->time = (oio_ext_real_time() / G_TIME_SPAN_MILLISECOND) % (1LL << 48);
 }
 
 #ifdef HAVE_EXTRA_DEBUG

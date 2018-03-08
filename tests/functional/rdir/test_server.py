@@ -88,7 +88,7 @@ def _check_process_absent(proc):
 class RdirTestCase(CommonTestCase):
     def setUp(self):
         super(RdirTestCase, self).setUp()
-        self.http_pool = get_pool_manager(max_retries=10)
+        self.http_pool = get_pool_manager(max_retries=10, backoff_factor=0.05)
         self.garbage_files = list()
         self.garbage_procs = list()
 

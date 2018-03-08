@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,6 +15,7 @@
 
 from oio.common.json import json as jsonlib
 from oio.common.http_urllib3 import urllib3, get_pool_manager
+from oio.common.easy_value import true_value
 from urllib3.exceptions import MaxRetryError, TimeoutError, HTTPError, \
     NewConnectionError, ProtocolError, ProxyError, ClosedPoolError
 from urllib import urlencode
@@ -24,7 +25,7 @@ from oio.common.constants import ADMIN_HEADER, \
     TIMEOUT_HEADER, PERFDATA_HEADER, CONNECTION_TIMEOUT, READ_TIMEOUT
 
 _POOL_MANAGER_OPTIONS_KEYS = ["pool_connections", "pool_maxsize",
-                              "max_retries"]
+                              "max_retries", "backoff_factor"]
 
 URLLIB3_REQUESTS_KWARGS = ('fields', 'headers', 'body', 'retries', 'redirect',
                            'assert_same_host', 'timeout', 'pool_timeout',
@@ -61,7 +62,7 @@ class HttpApi(object):
             pool_manager = get_pool_manager(**pool_manager_conf)
         self.pool_manager = pool_manager
 
-        self.admin_mode = kwargs.get('admin_mode', False)
+        self.admin_mode = true_value(kwargs.get('admin_mode', False))
         self.perfdata = kwargs.get('perfdata')
 
     def _direct_request(self, method, url, headers=None, data=None, json=None,

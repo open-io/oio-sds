@@ -1,4 +1,4 @@
-# Copyright (C) 2017 OpenIO SAS
+# Copyright (C) 2017-2018 OpenIO SAS
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,7 +15,7 @@
 import unittest
 
 from oio.common.autocontainer import (ContainerBuilder, RegexContainerBuilder,
-                                      HashedContainerBuilder)
+                                      HashedContainerBuilder, NoMatchFound)
 
 
 class ContainerBuilderTest(unittest.TestCase):
@@ -104,7 +104,7 @@ class RegexContainerBuilderTest(unittest.TestCase):
         builder = RegexContainerBuilder(r'(\d+)')
         self.assertEqual(builder("abc/123/def"), "123")
         self.assertEqual(builder("abc123def"), "123")
-        self.assertRaises(ValueError, builder, "abcdef")
+        self.assertRaises(NoMatchFound, builder, "abcdef")
 
     def test_concatenated_digits(self):
         builder = RegexContainerBuilder(r'(\d+)/(\d+)/(\d+)')
@@ -115,7 +115,7 @@ class RegexContainerBuilderTest(unittest.TestCase):
             "previews/images/59/38/69/normal/idirlgfdh.jpg?1502312379"),
             "593869")
         self.assertRaises(
-            ValueError, builder,
+            NoMatchFound, builder,
             "previews/images/normal/idirlgfdh.jpg?1502312379")
 
     def test_several_regex(self):
@@ -128,7 +128,7 @@ class RegexContainerBuilderTest(unittest.TestCase):
             "previews/images/591/384/697/normal/idirlgfdh.jpg?1502312379"),
             "591384697")
         self.assertRaises(
-            ValueError, builder,
+            NoMatchFound, builder,
             "previews/images/591/384/697/medium/idirlgfdh.jpg?1502312379")
 
     def test_prefix_container(self):

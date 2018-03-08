@@ -176,7 +176,7 @@ class TouchContainer(command.Command):
             'containers',
             metavar='<container>',
             nargs='+',
-            help='Container(s) to delete'
+            help='Container(s) to touch'
         )
         return parser
 
