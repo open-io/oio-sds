@@ -476,10 +476,13 @@ meta0_backend_get_one(struct meta0_backend_s *m0, const guint8 *prefix,
 		return err;
 	}
 
-	g_rw_lock_reader_lock(&(m0->rwlock));
-	EXTRA_ASSERT(m0->array_by_prefix != NULL);
-	*u = meta0_utils_array_get_urlv(m0->array_by_prefix, prefix);
-	g_rw_lock_reader_unlock(&(m0->rwlock));
+	if (!m0->array_by_prefix) {
+		*u = NULL;
+	} else {
+		g_rw_lock_reader_lock(&(m0->rwlock));
+		*u = meta0_utils_array_get_urlv(m0->array_by_prefix, prefix);
+		g_rw_lock_reader_unlock(&(m0->rwlock));
+	}
 
 	return *u ? NULL : NEWERROR(EINVAL, "META0 partially missing");
 }
