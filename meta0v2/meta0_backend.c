@@ -447,9 +447,12 @@ meta0_backend_get_all(struct meta0_backend_s *m0, GPtrArray **result)
 		g_prefix_error(&err, "Reload error: ");
 		return err;
 	}
+	if (!m0->array_by_prefix) {
+		g_prefix_error(&err, "Prefixes not ready");
+		return err;
+	}
 
 	g_rw_lock_reader_lock(&(m0->rwlock));
-	EXTRA_ASSERT(m0->array_by_prefix != NULL);
 	*result = meta0_utils_array_dup(m0->array_by_prefix);
 	g_rw_lock_reader_unlock(&(m0->rwlock));
 
