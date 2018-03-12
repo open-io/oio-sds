@@ -98,7 +98,7 @@ class PrefixMapping(object):
         loc = svc.get("tags", {}).get("tag.loc", default)
         if not loc or loc == "addr":
             loc = svc["addr"].rsplit(":", 1)[0]
-        return loc
+        return str(loc)
 
     @staticmethod
     def dist_between(loc1, loc2):
