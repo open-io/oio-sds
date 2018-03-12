@@ -314,6 +314,8 @@ meta1_prefixes_get_peers(struct meta1_prefixes_set_s *m1ps,
 		const guint8 *bytes)
 {
 	EXTRA_ASSERT(m1ps != NULL);
+	if (!m1ps->by_prefix)
+		return NULL;
 	g_mutex_lock(&m1ps->lock);
 	gchar **a = meta0_utils_array_get_urlv(m1ps->by_prefix, bytes);
 	g_mutex_unlock(&m1ps->lock);
