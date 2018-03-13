@@ -77,7 +77,7 @@ def _does_startup_fail(path, config):
 
 def _check_process_absent(proc):
     for i in range(5):
-        if not proc.poll():
+        if proc.poll() is not None:
             return True
         time.sleep(i * 0.2)
     try:
