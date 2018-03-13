@@ -54,9 +54,9 @@ class RdirDispatcher(object):
             self._cs = ConscienceClient(self.conf, logger=self.logger)
         return self._cs
 
-    def get_assignation(self):
-        all_rawx = self.cs.all_services('rawx')
-        all_rdir = self.cs.all_services('rdir', True)
+    def get_assignation(self, **kwargs):
+        all_rawx = self.cs.all_services('rawx', **kwargs)
+        all_rdir = self.cs.all_services('rdir', True, **kwargs)
         by_id = {_make_id(self.ns, 'rdir', x['addr']): x
                  for x in all_rdir}
 
@@ -64,7 +64,8 @@ class RdirDispatcher(object):
             try:
                 # Verify that there is no rdir linked
                 resp = self.directory.list(RDIR_ACCT, rawx['addr'],
-                                           service_type='rdir')
+                                           service_type='rdir',
+                                           **kwargs)
                 rdir_host = _filter_rdir_host(resp)
                 try:
                     rawx['rdir'] = by_id[_make_id(self.ns, 'rdir', rdir_host)]
