@@ -95,7 +95,7 @@ class DirectoryInit(DirectoryCmd):
 
         if checked and not already_done:
             self.log.info("Saving...")
-            mapping.force(connection_timeout=10.0, read_timeout=60.0)
+            mapping.force(connection_timeout=30.0, read_timeout=90.0)
 
         if parsed_args.rdir:
             from time import sleep
@@ -105,7 +105,8 @@ class DirectoryInit(DirectoryCmd):
             for i in range(max_attempts):
                 sleep(5 + i)
                 try:
-                    self.app.client_manager.admin.rdir_lb.assign_all_rawx()
+                    self.app.client_manager.admin.rdir_lb.assign_all_rawx(
+                            connection_timeout=30.0, read_timeout=90.0)
                 except ServiceUnavailable as exc:
                     if i < (max_attempts - 1):
                         self.log.info("Retrying because of %s", exc)
@@ -129,7 +130,7 @@ class DirectoryList(DirectoryCmd):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         mapping = self.get_prefix_mapping(parsed_args)
-        mapping.load(connection_timeout=10.0, read_timeout=60.0)
+        mapping.load(connection_timeout=30.0, read_timeout=90.0)
         print mapping.to_json()
 
 
