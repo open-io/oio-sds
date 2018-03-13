@@ -60,7 +60,10 @@ def _wait_for_slow_startup(port):
 
 
 def _kill_and_watch_it_die(proc):
-    proc.terminate()
+    try:
+        proc.terminate()
+    except:
+        pass
     proc.wait()
 
 
@@ -77,7 +80,10 @@ def _check_process_absent(proc):
         if not proc.poll():
             return True
         time.sleep(i * 0.2)
-    proc.terminate()
+    try:
+        proc.terminate()
+    except:
+        pass
     return False
 
 
