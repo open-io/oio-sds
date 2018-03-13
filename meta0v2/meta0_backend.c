@@ -448,8 +448,7 @@ meta0_backend_get_all(struct meta0_backend_s *m0, GPtrArray **result)
 		return err;
 	}
 	if (!m0->array_by_prefix) {
-		g_prefix_error(&err, "Prefixes not ready");
-		return err;
+		return NEWERROR(EINVAL, "Prefixes not ready");
 	}
 
 	g_rw_lock_reader_lock(&(m0->rwlock));
