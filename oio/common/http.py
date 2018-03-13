@@ -26,8 +26,8 @@ from oio.common.constants import chunk_headers, OIO_VERSION
 
 urllib3 = patcher.import_patched('urllib3.__init__')
 
-CONNECTION_TIMEOUT = 2.0
-READ_TIMEOUT = 30.0
+CONNECTION_TIMEOUT = 10.0
+READ_TIMEOUT = 60.0
 
 DEFAULT_POOLSIZE = 32
 DEFAULT_RETRIES = 0
