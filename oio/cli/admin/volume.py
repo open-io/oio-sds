@@ -219,13 +219,15 @@ class BootstrapVolume(lister.Lister):
 
         try:
             all_rawx = self.app.client_manager.admin.rdir_lb.assign_all_rawx(
-                    parsed_args.max_per_rdir)
+                    parsed_args.max_per_rdir,
+                    connection_timeout=30.0, read_timeout=90.0)
         except ClientException as exc:
             if exc.status != 481:
                 raise
             self.log.warn("Failed to assign all rawx: %s", exc)
             all_rawx, _ = \
-                self.app.client_manager.admin.rdir_lb.get_assignation()
+                self.app.client_manager.admin.rdir_lb.get_assignation(
+                        connection_timeout=30.0, read_timeout=90.0)
 
         results = list()
         for rawx in all_rawx:
@@ -256,7 +258,8 @@ class DisplayVolumeAssignation(lister.Lister):
         self.log.debug('take_action(%s)', parsed_args)
 
         all_rawx, all_rdir = \
-            self.app.client_manager.admin.rdir_lb.get_assignation()
+            self.app.client_manager.admin.rdir_lb.get_assignation(
+                    connection_timeout=30.0, read_timeout=90.0)
 
         results = list()
         if not parsed_args.aggregated:
