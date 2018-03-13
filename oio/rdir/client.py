@@ -77,7 +77,7 @@ class RdirDispatcher(object):
                 self.logger.info("No rdir linked to %s", rawx['addr'])
         return all_rawx, all_rdir
 
-    def assign_all_rawx(self, max_per_rdir=None):
+    def assign_all_rawx(self, max_per_rdir=None, **kwargs):
         """
         Find a rdir service for all rawx that don't have one already.
 
@@ -85,8 +85,8 @@ class RdirDispatcher(object):
                              can be linked to
         :type max_per_rdir: `int`
         """
-        all_rawx = self.cs.all_services('rawx')
-        all_rdir = self.cs.all_services('rdir', True)
+        all_rawx = self.cs.all_services('rawx', **kwargs)
+        all_rdir = self.cs.all_services('rdir', True, **kwargs)
         if len(all_rdir) <= 0:
             raise ServiceUnavailable("No rdir service found in %s" % self.ns)
 
@@ -97,7 +97,7 @@ class RdirDispatcher(object):
             try:
                 # Verify that there is no rdir linked
                 resp = self.directory.list(RDIR_ACCT, rawx['addr'],
-                                           service_type='rdir')
+                                           service_type='rdir', **kwargs)
                 rdir_host = _filter_rdir_host(resp)
                 try:
                     rawx['rdir'] = by_id[_make_id(self.ns, 'rdir', rdir_host)]
@@ -106,13 +106,14 @@ class RdirDispatcher(object):
                                      rdir_host, rawx['addr'])
             except (NotFound, ClientException):
                 rdir = self._smart_link_rdir(rawx['addr'], all_rdir,
-                                             max_per_rdir)
+                                             max_per_rdir, **kwargs)
                 n_bases = by_id[rdir]['tags'].get("stat.opened_db_count", 0)
                 by_id[rdir]['tags']["stat.opened_db_count"] = n_bases + 1
                 rawx['rdir'] = by_id[rdir]
         return all_rawx
 
-    def _smart_link_rdir(self, volume_id, all_rdir, max_per_rdir=None):
+    def _smart_link_rdir(self, volume_id, all_rdir, max_per_rdir=None,
+                         **kwargs):
         """
         Force the load balancer to avoid services that already host more
         bases than the average (or more than `max_per_rdir`)
@@ -133,33 +134,36 @@ class RdirDispatcher(object):
                   x['tags']['stat.opened_db_count'] > upper_limit]
         known = [_make_id(self.ns, "rawx", volume_id)]
         try:
-            polled = self._poll_rdir(avoid=avoids, known=known)
+            polled = self._poll_rdir(avoid=avoids, known=known, **kwargs)
         except ClientException as exc:
             if exc.status != 481 or max_per_rdir:
                 raise
             # Retry without `avoids`, hoping the next iteration will rebalance
-            polled = self._poll_rdir(known=known)
+            polled = self._poll_rdir(known=known, **kwargs)
         forced = {'host': polled['addr'], 'type': 'rdir',
                   'seq': 1, 'args': "", 'id': polled['id']}
         self.directory.force(RDIR_ACCT, volume_id, 'rdir',
-                             forced, autocreate=True)
+                             forced, autocreate=True, **kwargs)
         try:
-            self.rdir.create(volume_id)
+            self.rdir.create(volume_id, **kwargs)
         except Exception as exc:
             self.logger.warn("Failed to create database for %s on %s: %s",
                              volume_id, polled['addr'], exc)
         return polled['id']
 
-    def _poll_rdir(self, avoid=None, known=None):
+    def _poll_rdir(self, avoid=None, known=None, **kwargs):
         """Call the special rdir service pool (created if missing)"""
         try:
-            svcs = self.cs.poll('__rawx_rdir', avoid=avoid, known=known)
+            svcs = self.cs.poll('__rawx_rdir', avoid=avoid, known=known,
+                                **kwargs)
         except ClientException as exc:
             if exc.status != 400:
                 raise
             self.cs.lb.create_pool(
-                '__rawx_rdir', ((1, JOKER_SVC_TARGET), (1, 'rdir')))
-            svcs = self.cs.poll('__rawx_rdir', avoid=avoid, known=known)
+                '__rawx_rdir', ((1, JOKER_SVC_TARGET), (1, 'rdir')),
+                **kwargs)
+            svcs = self.cs.poll('__rawx_rdir', avoid=avoid, known=known,
+                                **kwargs)
         for svc in svcs:
             # FIXME: we should include the service type in a dedicated field
             if 'rdir' in svc['id']:
