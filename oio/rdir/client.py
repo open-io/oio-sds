@@ -141,10 +141,33 @@ class RdirDispatcher(object):
                 raise
             # Retry without `avoids`, hoping the next iteration will rebalance
             polled = self._poll_rdir(known=known, **kwargs)
+
+        # Associate the rdir to the rawx
         forced = {'host': polled['addr'], 'type': 'rdir',
                   'seq': 1, 'args': "", 'id': polled['id']}
-        self.directory.force(RDIR_ACCT, volume_id, 'rdir',
-                             forced, autocreate=True, **kwargs)
+        max_attempts = 7
+        for i in range(max_attempts):
+            try:
+                self.directory.force(RDIR_ACCT, volume_id, 'rdir',
+                                     forced, autocreate=True, **kwargs)
+            except ClientException as ex:
+                # Already done
+                done = (455, )
+                if ex.status in done:
+                    break
+                # Manage several unretriable errors
+                retry = (406, 450, 503, 504)
+                if ex.status >= 400 and ex.status not in retry:
+                    raise
+                # Monotonic backoff (retriable and net erorrs)
+                if i < max_attempts - 1:
+                    from time import sleep
+                    sleep(i * 1.0)
+                    continue
+                # Too many attempts
+                raise
+
+        # Do the creation in the rdir itself
         try:
             self.rdir.create(volume_id, **kwargs)
         except Exception as exc:
