@@ -218,9 +218,9 @@ class RdirClient(HttpApi):
 
         return resp, body
 
-    def create(self, volume_id):
+    def create(self, volume_id, **kwargs):
         """Create the database for `volume_id` on the appropriate rdir"""
-        self._rdir_request(volume_id, 'POST', 'create')
+        self._rdir_request(volume_id, 'POST', 'create', **kwargs)
 
     def chunk_push(self, volume_id, container_id, content_id, chunk_id,
                    **data):
