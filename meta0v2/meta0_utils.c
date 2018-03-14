@@ -88,7 +88,6 @@ meta0_utils_array_finalize(GPtrArray *array)
 }
 
 GPtrArray* meta0_utils_list_to_array(GSList *list) {
-	EXTRA_ASSERT(list != NULL);
 	GPtrArray *result = meta0_utils_array_create();
 
 	for (GSList *l = list; l; l = l->next) {

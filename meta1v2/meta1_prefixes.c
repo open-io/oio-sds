@@ -49,6 +49,28 @@ struct meta1_prefixes_set_s
 
 #define BITPOS(X) (1<<((X)%8))
 
+static gboolean
+_cache_full(const guint8 *cache)
+{
+	const guint32 *b = (guint32*) cache;
+	for (int i=0; i<2048 ;i++) {
+		if (b[i] != 0xFFFFFFFF)
+			return FALSE;
+	}
+	return TRUE;
+}
+
+static gboolean
+_cache_empty(const guint8 *cache)
+{
+	const guint32 *b = (guint32*) cache;
+	for (int i=0; i<2048 ;i++) {
+		if (b[i] != 0)
+			return FALSE;
+	}
+	return TRUE;
+}
+
 static void
 _cache_manage(guint8 *cache, const guint8 *prefix)
 {
@@ -77,6 +99,22 @@ meta1_prefixes_manage_all(struct meta1_prefixes_set_s *m1ps)
 
 
 /* NS operations ------------------------------------------------------------ */
+
+static guint8*
+_cache_from_all_m0l(const GSList *l)
+{
+	guint8 *result = g_malloc0(8192);
+
+	for (; l ;l=l->next) {
+		const struct meta0_info_s *m0i = l->data;
+		if (unlikely(!m0i)) continue;
+		const guint8 *max = m0i->prefixes + m0i->prefixes_size;
+		for (guint8 *p = m0i->prefixes; p<max ;p+=2)
+			_cache_manage(result, p);
+	}
+
+	return result;
+}
 
 static guint8*
 _cache_from_m0l(const GSList *l, const struct addr_info_s *ai)
@@ -110,7 +148,7 @@ _cache_load_from_m0(struct meta1_prefixes_set_s *m1ps,
 
 	GPtrArray *by_prefix = NULL;
 	GSList *m0info_list = NULL;
-	guint8 *cache = NULL;
+	guint8 *local_cache = NULL, *all_cache = NULL;
 	GError *err = NULL;
 	gchar m0[STRLEN_ADDRINFO];
 
@@ -121,20 +159,20 @@ _cache_load_from_m0(struct meta1_prefixes_set_s *m1ps,
 		g_prefix_error(&err, "Remote error: ");
 		goto label_exit;
 	}
-	if (!m0info_list) {
-		GRID_DEBUG("META0 has no prefix configured!");
-		goto label_exit;
-	}
 
-	*meta0_ok = TRUE;
+	all_cache = _cache_from_all_m0l(m0info_list);
+	local_cache = _cache_from_m0l(m0info_list, local_addr);
 
-	cache = _cache_from_m0l(m0info_list, local_addr);
-	if (!cache) {
+	if (!local_cache || !all_cache) {
 		err = SYSERR("Cache allocation error");
 		goto label_exit;
 	}
+	if (!_cache_empty(all_cache) && !_cache_full(all_cache)) {
+		err = NEWERROR(CODE_UNAVAILABLE, "Partial META0 %s", m0);
+		goto label_exit;
+	}
 
-	err = meta1_prefixes_check_coalescence_all(cache, digits);
+	err = meta1_prefixes_check_coalescence_all(local_cache, digits);
 	if (NULL != err) {
 		g_prefix_error(&err, "Meta0 consistency check: ");
 		goto label_exit;
@@ -143,30 +181,42 @@ _cache_load_from_m0(struct meta1_prefixes_set_s *m1ps,
 	by_prefix = meta0_utils_list_to_array(m0info_list);
 
 	g_mutex_lock(&m1ps->lock);
-	GRID_DEBUG("Got %u prefixes from M0, %u in place",
-			by_prefix->len, m1ps->by_prefix ? m1ps->by_prefix->len : 0);
+	if (!_cache_empty(m1ps->cache) && _cache_empty(all_cache)) {
+		/* It is not normal to receive a cache that is completely empty
+		 * (not only our portion) to upgrade a cache that is not empty.
+		 * This is the sign we hit an outdated meta0 */
+		err = NEWERROR(CODE_UNAVAILABLE, "Avoiding zeroed meta0 at %s", m0);
+	} else {
+		GRID_DEBUG("Got %u prefixes from M0, %u in place",
+				by_prefix->len, m1ps->by_prefix ? m1ps->by_prefix->len : 0);
 
-	if (m1ps->by_prefix) {
-		*updated_prefixes = g_array_new(FALSE, FALSE, sizeof(guint16));
-		for (guint i = 0; i < CID_PREFIX_COUNT; i++) {
-			const guint16 prefix = i;
-			const guint8 *bin = (guint8*)&prefix;
-			const gboolean before = _cache_is_managed(m1ps->cache, bin);
-			const gboolean after = _cache_is_managed(cache, bin);
-			if (BOOL(before) != BOOL(after))
-				g_array_append_vals(*updated_prefixes, bin, 1);
+		if (m1ps->by_prefix) {
+			*updated_prefixes = g_array_new(FALSE, FALSE, sizeof(guint16));
+			for (guint i = 0; i < CID_PREFIX_COUNT; i++) {
+				const guint16 prefix = i;
+				const guint8 *bin = (guint8*)&prefix;
+				const gboolean before = _cache_is_managed(m1ps->cache, bin);
+				const gboolean after = _cache_is_managed(local_cache, bin);
+				if (BOOL(before) != BOOL(after))
+					g_array_append_vals(*updated_prefixes, bin, 1);
+			}
 		}
-	}
 
-	SWAP_PTR(m1ps->by_prefix, by_prefix);
-	SWAP_PTR(m1ps->cache, cache);
+		SWAP_PTR(m1ps->by_prefix, by_prefix);
+		SWAP_PTR(m1ps->cache, local_cache);
+	}
 	g_mutex_unlock(&m1ps->lock);
+
+	if (!err)
+		*meta0_ok = TRUE;
 
 label_exit:
 	if (by_prefix)
 		meta0_utils_array_clean(by_prefix);
-	if (cache)
-		g_free(cache);
+	if (all_cache)
+		g_free(all_cache);
+	if (local_cache)
+		g_free(local_cache);
 	g_slist_free_full(m0info_list, (GDestroyNotify)meta0_info_clean);
 	return err;
 }
@@ -210,7 +260,7 @@ _cache_load_from_ns(struct meta1_prefixes_set_s *m1ps, const char *ns_name,
 			done = TRUE;
 		} else {
 			GRID_WARN("M0 cache loading error : (%d) %s", err->code, err->message);
-			if (CODE_IS_NETWORK_ERROR(err->code))
+			if (CODE_IS_NETWORK_ERROR(err->code) || CODE_IS_RETRY(err->code))
 				g_clear_error(&err);
 		}
 	}
