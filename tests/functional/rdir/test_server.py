@@ -62,7 +62,7 @@ def _wait_for_slow_startup(port):
 def _kill_and_watch_it_die(proc):
     try:
         proc.terminate()
-    except:
+    except Exception:
         pass
     proc.wait()
 
@@ -82,7 +82,7 @@ def _check_process_absent(proc):
         time.sleep(i * 0.2)
     try:
         proc.terminate()
-    except:
+    except Exception:
         pass
     return False
 
