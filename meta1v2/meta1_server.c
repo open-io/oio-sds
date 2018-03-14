@@ -57,6 +57,7 @@ _reload_prefixes(struct sqlx_service_s *ss, gboolean init)
 			g_array_free(updated_prefixes, TRUE);
 		return err;
 	}
+
 	if (meta0_ok)
 		already_succeeded = TRUE;
 
@@ -181,6 +182,7 @@ _post_config(struct sqlx_service_s *ss)
 		 * for this reason. */
 		if (!(err = _reload_prefixes(ss, TRUE))) {
 			done = TRUE;
+			GRID_DEBUG("Prefix reloaded");
 		} else {
 			GRID_WARN("PREFIXES reload failure : (%d) %s", err->code, err->message);
 			g_clear_error(&err);
