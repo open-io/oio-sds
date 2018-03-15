@@ -101,6 +101,11 @@ class BlobClient(object):
         resps = [resp for resp in pile if resp]
         return resps
 
+    def chunk_link(self, target, link, **kwargs):
+        headers = kwargs.get('headers')
+        headers["Destination"] = link[:-64] + "/" + link[-64:]
+        return self.http_pool.request('COPY', target, headers=headers)
+
     def chunk_get(self, url, **kwargs):
         req_id = kwargs.get('req_id')
         if not req_id:
