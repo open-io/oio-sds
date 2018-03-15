@@ -15,7 +15,7 @@
 
 from logging import getLogger
 from cliff.command import Command
-from oio.common.exceptions import ServiceUnavailable
+from oio.common.exceptions import ServiceUnavailable, ClientException
 
 
 class DirectoryCmd(Command):
@@ -95,7 +95,22 @@ class DirectoryInit(DirectoryCmd):
 
         if checked and not already_done:
             self.log.info("Saving...")
-            mapping.force(connection_timeout=30.0, read_timeout=90.0)
+            max_attempts = 7
+            for i in range(max_attempts):
+                try:
+                    mapping.force(connection_timeout=30.0, read_timeout=90.0)
+                except ClientException as ex:
+                    # Manage several unretriable errors
+                    retry = (503, 504)
+                    if ex.status >= 400 and ex.status not in retry:
+                        raise
+                    # Monotonic backoff (retriable and net errors)
+                    if i < max_attempts - 1:
+                        from time import sleep
+                        sleep(i * 1.0)
+                        continue
+                    # Too many attempts
+                    raise
 
         if parsed_args.rdir:
             from time import sleep
