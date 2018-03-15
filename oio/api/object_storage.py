@@ -823,6 +823,65 @@ class ObjectStorageApi(object):
                       DeprecationWarning)
         return self.object_locate(*args, **kwargs)
 
+    def _generate_fullchunk_copies(self, chunks, random_hex=60):
+        # random_hex is the number of hexadecimals characters to generate for
+        # the copy path
+        copies = []
+        for c in chunks:
+            tmp = c.copy()
+            rnd = (''.join(random.choice('0123456789ABCDEF')
+                           for _ in range(random_hex)))
+            tmp['url'] = ''.join([tmp['url'][:-random_hex], rnd])
+            copies.append(tmp)
+        return copies
+
+    def object_fastcopy(self, target_account, target_container, target_obj,
+                        link_account, link_container, link_obj,
+                        version=None,  **kwargs):
+        meta, chunks = self.object_locate(
+            target_account, target_container, target_obj, version=version,
+            **kwargs)
+
+        chunks_copies = self._generate_fullchunk_copies(chunks)
+        chunks_copies_url = []
+        chunks_url = []
+        for c in chunks:
+            chunks_url.append(c['url'])
+        for c in chunks_copies:
+            chunks_copies_url.append(c['url'])
+        fullpath = self._generate_fullpath(link_account, link_container,
+                                           link_obj, version)
+        data = {'chunks': chunks_copies,
+                'properties': meta["properties"] or {}}
+        try:
+            self._send_copy(chunks_url, chunks_copies_url, fullpath[0])
+            self.container.content_create(link_account, link_container,
+                                          link_obj,
+                                          size=meta["length"], data=data,
+                                          checksum=meta['hash'],
+                                          stgpol=meta["policy"],
+                                          mime_type=meta['mime_type'],
+                                          chunk_method=meta['chunk_method'],
+                                          **kwargs)
+        except Exception:
+            del_resps = self.blob_client.chunk_delete_many(chunks_copies,
+                                                           **kwargs)
+            for resp in del_resps:
+                if isinstance(resp, Exception):
+                    self.logger.warn('failed to delete chunk %s (%s)',
+                                     resp.chunk['url'], resp)
+                elif resp.status not in (204, 404):
+                    self.logger.warn('failed to delete chunk %s (HTTP %s)',
+                                     resp.chunk['url'], resp.status)
+            raise
+
+    def _send_copy(self, targets, copies, fullpath):
+        headers = {"x-oio-chunk-meta-full-path": fullpath}
+        for t, c in zip(targets, copies):
+            resp = self.blob_client.chunk_link(t, c, headers=headers).status
+            if resp != 201:
+                raise exc.ChunkException(resp.status)
+
     @ensure_headers
     @ensure_request_id
     def object_fetch(self, account, container, obj, version=None, ranges=None,

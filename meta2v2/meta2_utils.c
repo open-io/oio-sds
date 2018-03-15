@@ -1512,7 +1512,7 @@ GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 		}
 	} else {
 		/* version unset, let's deduce it from the alias in place */
-		version = oio_ext_real_seconds();
+		version = oio_ext_real_time();
 		if (latest && ALIASES_get_version(latest) == version)
 			version ++;
 	}
