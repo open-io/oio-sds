@@ -41,6 +41,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 static struct meta1_backend_s *m1 = NULL;
 static volatile gboolean already_succeeded = FALSE;
+static volatile gboolean decache_requested = FALSE;
 
 static GError*
 _reload_prefixes(struct sqlx_service_s *ss, gboolean init)
@@ -90,6 +91,12 @@ _task_reload_prefixes(gpointer p)
 {
 	static volatile guint tick_reload = 0;
 
+	if (decache_requested) {
+		decache_requested = FALSE;
+		already_succeeded = FALSE;
+		tick_reload = 0;
+	}
+
 	if (already_succeeded && 0 != (tick_reload++ % 32))
 		return;
 
@@ -123,7 +130,7 @@ _task_reload_policies(gpointer p)
 }
 
 static GError *
-_get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
+_get_peers(struct sqlx_service_s *ss UNUSED, const struct sqlx_name_s *n,
 		gboolean nocache, gchar ***result)
 {
 	if (!n || !result)
@@ -140,7 +147,7 @@ _get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
 	oio_str_hex2bin(n->base, cid, 2);
 
 	if (nocache)
-		_reload_prefixes(ss, FALSE);
+		decache_requested = TRUE;
 
 	*result = meta1_prefixes_get_peers(meta1_backend_get_prefixes(m1), cid);
 	if (likely(*result != NULL))
