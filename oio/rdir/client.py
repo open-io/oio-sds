@@ -153,7 +153,10 @@ class RdirDispatcher(object):
             except ClientException as ex:
                 # Already done
                 done = (455, )
-                if ex.status in done:
+                if ex.status in done \
+                        or ex.message.startswith('META1 error: '
+                                                 '(SQLITE_CONSTRAINT) '
+                                                 'UNIQUE constraint failed'):
                     break
                 # Manage several unretriable errors
                 retry = (406, 450, 503, 504)
