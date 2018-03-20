@@ -1535,4 +1535,3 @@ sqlx_repository_get_version2(sqlx_repository_t *repo, const struct sqlx_name_s *
 	*result = version;
 	return NULL;
 }
-
