@@ -847,7 +847,7 @@ Used by `gcc`
 
 > How many bases may be decached eacch time the background task performs its Dance of Death
 
- * default: **100**
+ * default: **1**
  * type: guint
  * cmake directive: *OIO_SERVER_PERIODIC_DECACHE_MAX_BASES*
  * range: 1 -> 4194304
@@ -865,7 +865,7 @@ Used by `gcc`
 
 > In ticks / jiffies, with approx. 1 tick per second. 0 means never
 
- * default: **1**
+ * default: **0**
  * type: guint
  * cmake directive: *OIO_SERVER_PERIODIC_DECACHE_PERIOD*
  * range: 0 -> 1048576
