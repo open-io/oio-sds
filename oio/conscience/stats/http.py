@@ -71,8 +71,6 @@ class HttpStat(BaseStat):
                 result = self._parse_func(resp.read())
             else:
                 raise Exception("status code != 200: %s" % resp.status)
-        except Exception as e:
-            self.logger.debug("get_stats error: %s", e)
         finally:
             if resp:
                 try:
