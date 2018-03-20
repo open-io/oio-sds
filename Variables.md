@@ -810,7 +810,7 @@ Used by `gcc`
 
 ### server.fd_max_passive
 
-> Set to 0 for an automatic detection
+> Maximum number of incoming connections. Set to 0 for an automatic detection (50% of available file descriptors).
 
  * default: **0**
  * type: guint
@@ -1306,7 +1306,7 @@ Used by `gcc`
 
 ### sqliterepo.repo.fd_max_active
 
-> Set to 0 for an automatic detection
+> Maximum number of outgoing connections. Set to 0 for an automatic detection (2% of available file descriptors).
 
  * default: **512**
  * type: guint

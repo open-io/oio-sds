@@ -506,7 +506,7 @@
 
 			{ "type": "uint", "name": "sqliterepo_fd_max_active",
 				"key": "sqliterepo.repo.fd_max_active",
-				"descr": "Set to 0 for an automatic detection",
+				"descr": "Maximum number of outgoing connections. Set to 0 for an automatic detection (2% of available file descriptors).",
 				"def": 512, "min": 0, "max": "4ki" }
 		]
 	},
@@ -527,7 +527,7 @@
 		"variables": [
 			{ "type": "uint", "name": "server_fd_max_passive",
 				"key": "server.fd_max_passive",
-				"descr": "Set to 0 for an automatic detection",
+				"descr": "Maximum number of incoming connections. Set to 0 for an automatic detection (50% of available file descriptors).",
 				"def": 0, "min": 0, "max": "16ki" },
 
 			{ "type": "bool", "name": "oio_udp_allowed",

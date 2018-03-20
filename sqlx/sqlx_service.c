@@ -236,7 +236,9 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 static void
 _patch_configuration_fd(void)
 {
+	/* By design, this function never returns less than 1024. */
 	const guint maxfd = metautils_syscall_count_maxfd();
+	EXTRA_ASSERT(maxfd >= 1024);
 
 	// We keep some FDs for unexpected cases (sqlite sometimes uses
 	// temporary files, even when we ask for memory journals) and for
@@ -249,55 +251,56 @@ _patch_configuration_fd(void)
 	// The operator already reserved to many connections, and we cannot
 	// promise these numbers. we hope he/she is aware of his/her job.
 	if (reserved >= total) {
-		GRID_NOTICE("Too many descriptors have been reserved (%u), "
+		GRID_WARN("Too many descriptors have been reserved (%u), "
 				"please reconfigure the service or extend the system limit "
 				"(currently set to %u).", reserved, maxfd);
 		if (!sqliterepo_repo_max_bases_soft) {
 			sqliterepo_repo_max_bases_soft = MIN(1024, sqliterepo_repo_max_bases_hard);
 			GRID_WARN("maximum # of bases not set, arbitrarily set to %u",
-								sqliterepo_repo_max_bases_soft);
+					sqliterepo_repo_max_bases_soft);
 		}
 		if (!server_fd_max_passive) {
 			server_fd_max_passive = 64;
 			GRID_WARN("maximum # of incoming cnx not set, arbitrarily set to %u",
-								server_fd_max_passive);
+					server_fd_max_passive);
 		}
 		if (!sqliterepo_fd_max_active) {
 			sqliterepo_fd_max_active = 64;
 			GRID_WARN("maximum # of outgoing cnx not set, arbitrarily set to %u",
-								sqliterepo_fd_max_active);
+					sqliterepo_fd_max_active);
 		}
 	} else {
 		guint available = total - reserved;
 		guint *to_be_set[4] = {NULL, NULL, NULL, NULL};
 		guint limits[3] = {G_MAXUINT, G_MAXUINT, G_MAXUINT};
 		do {
-			guint i=0;
+			guint i = 0;
+			/* When automatically set, keep it low to avoid DoS. */
+			if (!sqliterepo_fd_max_active) {
+				to_be_set[i] = &sqliterepo_fd_max_active;
+				limits[i] = (2 * total) / 100;
+				i++;
+			}
 			if (sqliterepo_repo_max_bases_soft <= 0) {
 				to_be_set[i] = &sqliterepo_repo_max_bases_soft;
 				limits[i] = CLAMP(limits[i],
-						((100 * total) / 30), sqliterepo_repo_max_bases_hard);
-				i++;
-			}
-			if (!sqliterepo_fd_max_active) {
-				to_be_set[i] = &sqliterepo_fd_max_active;
-				limits[i] = (100 * total) / 30;
+						((48 * total) / 100), sqliterepo_repo_max_bases_hard);
 				i++;
 			}
 			if (!server_fd_max_passive) {
 				to_be_set[i] = &server_fd_max_passive;
-				limits[i] = (100 * total) / 40;
+				limits[i] = (50 * total) / 100;
 				i++;
 			}
 		} while (0);
 
-		// Fan out all the available FD on each slot that dod not reach its max
+		// Fan out all the available FD on each slot that did not reach its max
 		while (available > 0) {
 			gboolean any = FALSE;
-			for (guint i=0; to_be_set[i] && available > 0 ;i++) {
+			for (guint i = 0; to_be_set[i] && available > 0; i++) {
 				if (*to_be_set[i] < limits[i]) {
 					(*to_be_set[i]) ++;
-					available --;
+					available--;
 					any = TRUE;
 				}
 			}
