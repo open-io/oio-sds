@@ -62,6 +62,7 @@ static void sqlx_service_specific_fini(void);
 static void sqlx_service_specific_stop(void);
 
 // Periodic tasks & thread's workers
+static void _task_probe_repository(gpointer p);
 static void _task_malloc_trim(gpointer p);
 static void _task_expire_bases(gpointer p);
 static void _task_expire_resolver(gpointer p);
@@ -645,6 +646,7 @@ _configure_tasks(struct sqlx_service_s *ss)
 {
 	grid_task_queue_register(ss->gtq_reload, 5, _task_reload_nsinfo, NULL, ss);
 	grid_task_queue_register(ss->gtq_reload, 5, _task_reload_peers, NULL, ss);
+	grid_task_queue_register(ss->gtq_reload, 5, _task_probe_repository, NULL, ss);
 
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_bases, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_resolver, NULL, ss);
@@ -1032,6 +1034,54 @@ _worker_clients(gpointer p)
 		}
 	}
 	return p;
+}
+
+#define HEXA "0123456789ABCDEF"
+
+static void
+_task_probe_repository(gpointer p)
+{
+	struct sqlx_service_s *ss = PSRV(p);
+	int rc, errsav;
+	GError *err = NULL;
+	gchar path[PATH_MAX], subdir[16], filename[16];
+
+	oio_str_randomize(subdir, sizeof(subdir), HEXA);
+	oio_str_randomize(filename, sizeof(filename), HEXA);
+
+	g_strlcpy(path, ss->volume, sizeof(path));
+	g_strlcat(path, "/probe-", sizeof(path));
+	g_strlcat(path, subdir, sizeof(path));
+	GRID_DEBUG("Probing directory %s", path);
+	rc = g_mkdir(path, 0755);
+	errsav = errno;
+	(void) g_rmdir(path);
+	if (rc != 0) {
+		GRID_WARN("I/O error on %s: (%d) %s", path, errsav, strerror(errsav));
+		goto label_io_error;
+	}
+
+	g_strlcpy(path, ss->volume, sizeof(path));
+	g_strlcat(path, "/probe-", sizeof(path));
+	g_strlcat(path, filename, sizeof(path));
+	GRID_DEBUG("Probing file %s", path);
+	rc = g_file_set_contents(path, "", 0, &err);
+	errsav = errno;
+	(void) g_unlink(path);
+	if (!rc) {
+		GRID_WARN("I/O error on %s: (%d) %s", path, err->code, err->message);
+		g_clear_error(&err);
+		goto label_io_error;
+	}
+	if (err)
+		g_clear_error(&err);
+
+	grid_daemon_notify_io_status(ss->dispatcher, TRUE);
+	return;
+
+label_io_error:
+	grid_daemon_notify_io_status(ss->dispatcher, FALSE);
+	(void) rc;
 }
 
 static void

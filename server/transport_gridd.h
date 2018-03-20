@@ -132,4 +132,9 @@ const struct gridd_request_descr_s* gridd_get_common_requests(void);
 void grid_daemon_bind_host(struct network_server_s *server, const gchar *url,
 		struct gridd_request_dispatcher_s *dispatcher);
 
+void grid_daemon_notify_io_status(
+		struct gridd_request_dispatcher_s *disp, gboolean ok);
+
+gboolean grid_daemon_is_io_ok(struct gridd_request_dispatcher_s *disp);
+
 #endif /*OIO_SDS__server__transport_gridd_h*/
