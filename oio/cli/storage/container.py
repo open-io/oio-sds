@@ -485,6 +485,39 @@ class LocateContainer(show.ShowOne):
         return zip(*sorted(info.iteritems()))
 
 
+class PurgeContainer(command.Command):
+    """Purge exceeding object versions."""
+
+    log = getLogger(__name__ + '.PurgeContainer')
+
+    def get_parser(self, prog_name):
+        parser = super(PurgeContainer, self).get_parser(prog_name)
+        parser.add_argument(
+            'container',
+            metavar='<container>',
+            help='Container to purge',
+        )
+        parser.add_argument(
+            '--max-versions',
+            metavar='<n>',
+            type=int,
+            help="""The number of versions to keep
+ (overrides the container configuration).
+ n=0 is 1 version.
+ n>0 is n versions.
+"""
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        account = self.app.client_manager.get_account()
+        self.app.client_manager.storage.container_purge(
+            account, parsed_args.container, maxvers=parsed_args.max_versions
+        )
+
+
 class RefreshContainer(command.Command):
     """ Refresh counters of an account (triggers asynchronous treatments) """
 
