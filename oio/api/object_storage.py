@@ -341,6 +341,7 @@ class ObjectStorageApi(object):
         acct_kwargs["proxy_endpoint"] = acct_kwargs.pop("endpoint", None)
         self.account = AccountClient(conf, logger=self.logger, **acct_kwargs)
         self._blob_client = None
+        self._proxy_client = None
 
     def _patch_timeouts(self, kwargs):
         """
@@ -363,6 +364,17 @@ class ObjectStorageApi(object):
             self._blob_client = BlobClient(
                 connection_pool=connection_pool)
         return self._blob_client
+
+    @property
+    def proxy_client(self):
+        if self._proxy_client is None:
+            from oio.common.client import ProxyClient
+            conf = self.container.conf
+            pool_manager = self.container.pool_manager
+            self._proxy_client = ProxyClient(
+                conf, pool_manager=pool_manager, no_ns_in_url=True,
+                logger=self.logger)
+        return self._proxy_client
 
     def account_create(self, account, **kwargs):
         """
@@ -568,6 +580,54 @@ class ObjectStorageApi(object):
         """
         return self.container.container_del_properties(
             account, container, properties, **kwargs)
+
+    def _delete_exceeding_versions(self, account, container, obj,
+                                   versions, maxvers, **kwargs):
+        if not versions:
+            return
+        exceeding_versions = versions[maxvers:]
+        for version in exceeding_versions:
+            self.object_delete(account, container, obj, version=version,
+                               **kwargs)
+
+    @handle_container_not_found
+    def container_purge(self, account, container, maxvers=None, **kwargs):
+        if maxvers is None:
+            props = self.container_get_properties(account, container, **kwargs)
+            maxvers = props['system'].get('sys.m2.policy.version', None)
+            if maxvers is None:
+                _, data = self.proxy_client._request('GET', "config")
+                maxvers = data['meta2.max_versions']
+        maxvers = int(maxvers)
+        if maxvers < 0:
+            return
+        elif maxvers == 0:
+            maxvers = 1
+
+        truncated = True
+        marker = None
+        last_object_name = None
+        versions = None
+        while truncated:
+            resp = self.object_list(account, container, versions=True,
+                                    marker=marker, **kwargs)
+            # FIXME `next_marker` is an object name.
+            # `object_list` can send twice the same version
+            # if there weren't all versions for the last object.
+            last_object_name = None
+            truncated = resp['truncated']
+            marker = resp.get('next_marker', None)
+            for obj in resp['objects']:
+                if obj['name'] != last_object_name:
+                    self._delete_exceeding_versions(
+                        account, container, last_object_name, versions,
+                        maxvers, **kwargs)
+                    last_object_name = obj['name']
+                    versions = list()
+                if not obj['deleted']:
+                    versions.append(obj['version'])
+        self._delete_exceeding_versions(
+            account, container, last_object_name, versions, maxvers, **kwargs)
 
     def container_update(self, account, container, metadata, clear=False,
                          **kwargs):
