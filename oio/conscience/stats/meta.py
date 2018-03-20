@@ -27,15 +27,11 @@ class MetaStat(HttpStat):
         self.params = {'id': service_id}
 
     def get_stats(self):
-        try:
-            resp, _body = self.agent.client._request(
-                    'POST', self.uri, params=self.params, retries=False)
-            stats = self._parse_stats_lines(resp.data)
-            for key in stats.keys():
-                if key.startswith('gauge'):
-                    stat_key = 'stat.' + key.split(None, 1)[1]
-                    stats[stat_key] = stats[key]
-            return stats
-        except Exception as exc:
-            self.logger.info("get_stats error: %s", exc)
-            return {}
+        resp, _body = self.agent.client._request(
+                'POST', self.uri, params=self.params, retries=False)
+        stats = self._parse_stats_lines(resp.data)
+        for key in stats.keys():
+            if key.startswith('gauge'):
+                stat_key = 'stat.' + key.split(None, 1)[1]
+                stats[stat_key] = stats[key]
+        return stats
