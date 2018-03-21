@@ -89,6 +89,11 @@ def get_config(defaults=None):
 
 class CommonTestCase(testtools.TestCase):
 
+    def is_running_on_public_ci(self):
+        from os import getenv
+        clues = (getenv("TRAVIS"), getenv("CIRCLECI"))
+        return any(clue is not None for clue in clues)
+
     def _random_user(self):
         return "user-" + random_str(16, "0123456789ABCDEF")
 
