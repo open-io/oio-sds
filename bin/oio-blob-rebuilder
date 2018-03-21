@@ -2,7 +2,7 @@
 
 import argparse
 
-from oio.blob.rebuilder import BlobRebuilderWorker
+from oio.blob.rebuilder import BlobRebuilder
 from oio.common.utils import get_logger
 
 
@@ -37,10 +37,10 @@ tube for broken chunks events.
                              "each rdir response (100)")
     parser.add_argument('--report-interval', type=int,
                         help="Report interval in seconds (3600)")
-    parser.add_argument('--bytes-per-second', type=int,
-                        help="Max bytes per second (10000000)")
+    parser.add_argument('--workers', type=int,
+                        help="Number of workers (1)")
     parser.add_argument('--chunks-per-second', type=int,
-                        help="Max chunks per second (30)")
+                        help="Max chunks per second per coroutine (30)")
     parser.add_argument('-q', '--quiet', action='store_true',
                         help="Don't print log on console")
     parser.add_argument('--allow-same-rawx', action='store_true',
@@ -83,8 +83,8 @@ if __name__ == '__main__':
         conf['rdir_fetch_limit'] = args.rdir_fetch_limit
     if args.report_interval is not None:
         conf['report_interval'] = args.report_interval
-    if args.bytes_per_second is not None:
-        conf['bytes_per_second'] = args.bytes_per_second
+    if args.workers is not None:
+        conf['workers'] = args.workers
     if args.chunks_per_second is not None:
         conf['chunks_per_second'] = args.chunks_per_second
     conf['namespace'] = args.namespace
@@ -98,14 +98,14 @@ if __name__ == '__main__':
     logger = get_logger(conf, None, not args.quiet)
 
     try:
-        worker = BlobRebuilderWorker(
+        blob_rebuilder = BlobRebuilder(
             conf, logger, args.volume, input_file=args.input_file,
             try_chunk_delete=args.delete_faulty_chunks,
             beanstalkd_addr=args.beanstalkd)
         if args.volume:
-            worker.rebuilder_pass_with_lock()
+            blob_rebuilder.rebuilder_pass_with_lock()
         else:
-            worker.rebuilder_pass()
+            blob_rebuilder.rebuilder_pass()
     except KeyboardInterrupt:
         logger.info('Exiting')
     except Exception as e:
