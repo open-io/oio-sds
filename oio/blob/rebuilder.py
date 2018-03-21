@@ -20,48 +20,29 @@ from datetime import datetime
 from socket import gethostname
 
 from oio.common.utils import get_logger, int_value, true_value
-from oio.common.green import ratelimit
+from oio.common.green import ratelimit, eventlet, ContextPool
 from oio.common.exceptions import ContentNotFound, NotFound, OrphanChunk
 from oio.content.factory import ContentFactory
 from oio.event.beanstalk import Beanstalk, ConnectionError
 from oio.rdir.client import RdirClient
 
 
-class BlobRebuilderWorker(object):
+class BlobRebuilder(object):
+
     def __init__(self, conf, logger, volume,
                  input_file=None, try_chunk_delete=False,
                  beanstalkd_addr=None):
         self.conf = conf
         self.logger = logger or get_logger(conf)
         self.volume = volume
-        self.run_time = 0
-        self.passes = 0
-        self.errors = 0
-        self.last_reported = 0
-        self.chunks_run_time = 0
-        self.bytes_running_time = 0
-        self.bytes_processed = 0
-        self.total_bytes_processed = 0
-        self.total_chunks_processed = 0
-        self.dry_run = true_value(
-            conf.get('dry_run', False))
-        self.report_interval = int_value(
-            conf.get('report_interval'), 3600)
-        self.max_chunks_per_second = int_value(
-            conf.get('chunks_per_second'), 30)
-        self.max_bytes_per_second = int_value(
-            conf.get('bytes_per_second'), 10000000)
-        self.rdir_fetch_limit = int_value(
-            conf.get('rdir_fetch_limit'), 100)
-        self.allow_same_rawx = true_value(
-            conf.get('allow_same_rawx'))
-        self.input_file = input_file
         self.rdir_client = RdirClient(conf, logger=self.logger)
-        self.content_factory = ContentFactory(conf)
+        self.input_file = input_file
         self.try_chunk_delete = try_chunk_delete
         self.beanstalkd_addr = beanstalkd_addr
         self.beanstalkd_tube = conf.get('beanstalkd_tube', 'rebuild')
         self.beanstalk = None
+        self.nworkers = int_value(conf.get('workers'), 1)
+        self.rdir_fetch_limit = int_value(conf.get('rdir_fetch_limit'), 100)
 
     def _fetch_chunks_from_event(self, job_id, data):
         env = json.loads(data)
@@ -131,56 +112,39 @@ class BlobRebuilderWorker(object):
             self.rdir_client.admin_unlock(self.volume)
 
     def rebuilder_pass(self):
-        start_time = report_time = time.time()
+        start_time = time.time()
 
+        workers = list()
+        with ContextPool(self.nworkers) as pool:
+            chunks_queue = eventlet.Queue(self.nworkers*2)
+
+            # spawn coroutines to rebuild the chunks
+            for i in range(self.nworkers):
+                worker = BlobRebuilderWorker(
+                    self.conf, self.logger, self.volume, self.try_chunk_delete)
+                workers.append(worker)
+                pool.spawn(worker.rebuilder_pass, i, chunks_queue)
+
+            # fill the queue
+            chunks = self._fetch_chunks()
+            for chunk in chunks:
+                chunks_queue.put(chunk)
+
+            # block until all chunks are rebuilt
+            chunks_queue.join()
+
+        passes = 0
+        errors = 0
+        total_chunks_processed = 0
+        total_bytes_processed = 0
         rebuilder_time = 0
+        for worker in workers:
+            passes += worker.passes
+            errors += worker.errors
+            total_chunks_processed += worker.total_chunks_processed
+            total_bytes_processed += worker.total_bytes_processed
+            rebuilder_time += worker.rebuilder_time
 
-        chunks = self._fetch_chunks()
-        for cid, content_id, chunk_id_or_pos, _ in chunks:
-            loop_time = time.time()
-            if self.dry_run:
-                self.dryrun_chunk_rebuild(cid, content_id, chunk_id_or_pos)
-            else:
-                self.safe_chunk_rebuild(cid, content_id, chunk_id_or_pos)
-
-            self.chunks_run_time = ratelimit(
-                self.chunks_run_time,
-                self.max_chunks_per_second
-            )
-            self.total_chunks_processed += 1
-            now = time.time()
-
-            if now - self.last_reported >= self.report_interval:
-                self.logger.info(
-                    'RUN  %(volume)s '
-                    'started=%(start_time)s '
-                    'passes=%(passes)d '
-                    'errors=%(errors)d '
-                    'chunks=%(nb_chunks)d %(c_rate).2f/s '
-                    'bytes=%(nb_bytes)d %(b_rate).2fB/s '
-                    'elapsed=%(total).2f '
-                    '(rebuilder: %(success_rate).2f%%)' % {
-                        'volume': self.volume,
-                        'start_time': datetime.fromtimestamp(
-                            int(report_time)).isoformat(),
-                        'passes': self.passes,
-                        'errors': self.errors,
-                        'nb_chunks': self.total_chunks_processed,
-                        'nb_bytes': self.total_bytes_processed,
-                        'c_rate': self.passes / (now - report_time),
-                        'b_rate': self.bytes_processed / (now - report_time),
-                        'total': (now - start_time),
-                        'rebuilder_time': rebuilder_time,
-                        'success_rate':
-                            100 * ((self.total_chunks_processed - self.errors)
-                                   / float(self.total_chunks_processed))
-                    }
-                )
-                report_time = now
-                self.passes = 0
-                self.bytes_processed = 0
-                self.last_reported = now
-            rebuilder_time += (now - loop_time)
         end_time = time.time()
         elapsed = (end_time - start_time) or 0.000001
         self.logger.info(
@@ -199,19 +163,100 @@ class BlobRebuilderWorker(object):
                     int(start_time)).isoformat(),
                 'end_time': datetime.fromtimestamp(
                     int(end_time)).isoformat(),
-                'passes': self.passes,
+                'passes': passes,
                 'elapsed': elapsed,
-                'errors': self.errors,
-                'nb_chunks': self.total_chunks_processed,
-                'nb_bytes': self.total_bytes_processed,
-                'c_rate': self.total_chunks_processed / elapsed,
-                'b_rate': self.total_bytes_processed / elapsed,
+                'errors': errors,
+                'nb_chunks': total_chunks_processed,
+                'nb_bytes': total_bytes_processed,
+                'c_rate': total_chunks_processed / elapsed,
+                'b_rate': total_bytes_processed / elapsed,
                 'rebuilder_time': rebuilder_time,
                 'success_rate':
-                    100 * ((self.total_chunks_processed - self.errors) /
-                           float(self.total_chunks_processed or 1))
+                    100 * ((total_chunks_processed - errors) /
+                           float(total_chunks_processed or 1))
             }
         )
+
+
+class BlobRebuilderWorker(object):
+    def __init__(self, conf, logger, volume, try_chunk_delete=False):
+        self.conf = conf
+        self.logger = logger or get_logger(conf)
+        self.volume = volume
+        self.passes = 0
+        self.errors = 0
+        self.last_reported = 0
+        self.chunks_run_time = 0
+        self.bytes_processed = 0
+        self.total_bytes_processed = 0
+        self.total_chunks_processed = 0
+        self.rebuilder_time = 0
+        self.dry_run = true_value(
+            conf.get('dry_run', False))
+        self.report_interval = int_value(
+            conf.get('report_interval'), 3600)
+        self.max_chunks_per_second = int_value(
+            conf.get('chunks_per_second'), 30)
+        self.allow_same_rawx = true_value(
+            conf.get('allow_same_rawx'))
+        self.rdir_client = RdirClient(conf, logger=self.logger)
+        self.content_factory = ContentFactory(conf)
+        self.try_chunk_delete = try_chunk_delete
+
+    def rebuilder_pass(self, num, chunks_queue):
+        start_time = report_time = time.time()
+
+        while True:
+            cid, content_id, chunk_id_or_pos, _ = chunks_queue.get()
+
+            loop_time = time.time()
+            if self.dry_run:
+                self.dryrun_chunk_rebuild(cid, content_id, chunk_id_or_pos)
+            else:
+                self.safe_chunk_rebuild(cid, content_id, chunk_id_or_pos)
+
+            self.chunks_run_time = ratelimit(
+                self.chunks_run_time,
+                self.max_chunks_per_second
+            )
+            self.total_chunks_processed += 1
+            now = time.time()
+
+            if now - self.last_reported >= self.report_interval:
+                self.logger.info(
+                    'RUN  %(volume)s '
+                    'num=%(num)d '
+                    'started=%(start_time)s '
+                    'passes=%(passes)d '
+                    'errors=%(errors)d '
+                    'chunks=%(nb_chunks)d %(c_rate).2f/s '
+                    'bytes=%(nb_bytes)d %(b_rate).2fB/s '
+                    'elapsed=%(total).2f '
+                    '(rebuilder: %(success_rate).2f%%)' % {
+                        'volume': self.volume,
+                        'num': num,
+                        'start_time': datetime.fromtimestamp(
+                            int(report_time)).isoformat(),
+                        'passes': self.passes,
+                        'errors': self.errors,
+                        'nb_chunks': self.total_chunks_processed,
+                        'nb_bytes': self.total_bytes_processed,
+                        'c_rate': self.passes / (now - report_time),
+                        'b_rate': self.bytes_processed / (now - report_time),
+                        'total': (now - start_time),
+                        'rebuilder_time': self.rebuilder_time,
+                        'success_rate':
+                            100 * ((self.total_chunks_processed - self.errors)
+                                   / float(self.total_chunks_processed))
+                    }
+                )
+                report_time = now
+                self.passes = 0
+                self.bytes_processed = 0
+                self.last_reported = now
+            self.rebuilder_time += (now - loop_time)
+
+            chunks_queue.task_done()
 
     def dryrun_chunk_rebuild(self, container_id, content_id, chunk_id_or_pos):
         self.logger.info("[dryrun] Rebuilding "
