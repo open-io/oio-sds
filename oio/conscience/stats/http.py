@@ -71,10 +71,10 @@ class HttpStat(BaseStat):
                 result = self._parse_func(resp.read())
             else:
                 raise Exception("status code != 200: %s" % resp.status)
+            return result
         finally:
             if resp:
                 try:
                     resp.force_close()
                 except Exception:
                     pass
-            return result
