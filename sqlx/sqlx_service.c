@@ -1052,6 +1052,7 @@ _task_probe_repository(gpointer p)
 	oio_str_randomize(subdir, sizeof(subdir), HEXA);
 	oio_str_randomize(filename, sizeof(filename), HEXA);
 
+	/* Try a directory creation */
 	g_strlcpy(path, ss->volume, sizeof(path));
 	g_strlcat(path, "/probe-", sizeof(path));
 	g_strlcat(path, subdir, sizeof(path));
@@ -1061,30 +1062,25 @@ _task_probe_repository(gpointer p)
 	(void) g_rmdir(path);
 	if (rc != 0) {
 		GRID_WARN("I/O error on %s: (%d) %s", path, errsav, strerror(errsav));
-		goto label_io_error;
+		grid_daemon_notify_io_status(ss->dispatcher, FALSE);
+		return;
 	}
 
+	/* Try a file creation */
 	g_strlcpy(path, ss->volume, sizeof(path));
 	g_strlcat(path, "/probe-", sizeof(path));
 	g_strlcat(path, filename, sizeof(path));
 	GRID_DEBUG("Probing file %s", path);
 	rc = g_file_set_contents(path, "", 0, &err);
-	errsav = errno;
 	(void) g_unlink(path);
 	if (!rc) {
 		GRID_WARN("I/O error on %s: (%d) %s", path, err->code, err->message);
 		g_clear_error(&err);
-		goto label_io_error;
+		grid_daemon_notify_io_status(ss->dispatcher, FALSE);
+		return;
 	}
-	if (err)
-		g_clear_error(&err);
 
 	grid_daemon_notify_io_status(ss->dispatcher, TRUE);
-	return;
-
-label_io_error:
-	grid_daemon_notify_io_status(ss->dispatcher, FALSE);
-	(void) rc;
 }
 
 static void
