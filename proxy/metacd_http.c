@@ -153,11 +153,10 @@ _metacd_match (const gchar *method, const gchar *path)
 	return result;
 }
 
-static struct oio_url_s *
-_metacd_load_url (struct req_args_s *args)
+static gboolean
+_metacd_load_url (struct req_args_s *args, struct oio_url_s *url)
 {
 	const gchar *s;
-	struct oio_url_s *url = oio_url_empty();
 
 	if (NULL != (s = NS()))
 		oio_url_set (url, OIOURL_NS, s);
@@ -187,12 +186,15 @@ _metacd_load_url (struct req_args_s *args)
 		} else {
 			oio_url_set(url, OIOURL_HEXID, s);
 		}
+
+		if (NULL == oio_url_get(url, OIOURL_HEXID))
+			return FALSE;
 	}
 
 	if (NULL != (s = CONTENT()))
 		oio_url_set (url, OIOURL_CONTENTID, s);
 
-	return url;
+	return TRUE;
 }
 
 static enum http_rc_e
@@ -236,24 +238,28 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 		args.matchings = matchings;
 		args.rq = rq;
 		args.rp = rp;
+		args.url = url = oio_url_empty();
 
-		args.url = url = _metacd_load_url (&args);
-		rp->subject(oio_url_get(url, OIOURL_HEXID));
-		gq_count = (*matchings)->last->gq_count;
-		gq_time = (*matchings)->last->gq_time;
-
-		GRID_TRACE("%s %s URL %s", __FUNCTION__,
-				ruri.path, oio_url_get(args.url, OIOURL_WHOLE));
-
-		if (!oio_url_check(url, ns_name, &err)) {
-			rc = _reply_format_error(&args, BADREQ("Invalid parameter %s", err));
+		if (!_metacd_load_url (&args, url)) {
+			rc = _reply_format_error(&args, BADREQ("Invalid oio url"));
 		} else {
-			req_handler_f handler = (*matchings)->last->u;
-			rc = (*handler) (&args);
+			rp->subject(oio_url_get(url, OIOURL_HEXID));
+			gq_count = (*matchings)->last->gq_count;
+			gq_time = (*matchings)->last->gq_time;
+
+			GRID_TRACE("%s %s URL %s", __FUNCTION__,
+					ruri.path, oio_url_get(args.url, OIOURL_WHOLE));
+
+			if (!oio_url_check(url, ns_name, &err)) {
+				rc = _reply_format_error(&args, BADREQ("Invalid parameter %s", err));
+			} else {
+				req_handler_f handler = (*matchings)->last->u;
+				rc = (*handler) (&args);
+			}
 		}
 	}
 
-	gint64 spent = oio_ext_monotonic_time () - rq->client->time.evt_in;
+	const gint64 spent = oio_ext_monotonic_time () - rq->client->time.evt_in;
 
 	network_server_stat_push4 (rq->client->server, TRUE,
 			gq_count, 1, gq_count_all, 1,
