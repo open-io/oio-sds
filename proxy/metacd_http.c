@@ -178,15 +178,19 @@ _metacd_load_url (struct req_args_s *args, struct oio_url_s *url)
 
 	if ((s = CID())) {
 		/* Tolerate the base name (with a dot and sequence number)
-		 * passed as a container ID. */
-		if (strlen(s) >= STRLEN_CONTAINERID && s[STRLEN_CONTAINERID-1] == '.') {
-			char cid[STRLEN_CONTAINERID];
+		 * passed as a container ID. Also tolerate an hexadecimal prefx. */
+		char cid[STRLEN_CONTAINERID] =
+			"0000000000000000000000000000000000000000000000000000000000000000";
+		const size_t len = strlen(s);
+		if (len >= STRLEN_CONTAINERID && s[STRLEN_CONTAINERID-1] == '.') {
 			g_strlcpy(cid, s, sizeof(cid));
+			oio_url_set(url, OIOURL_HEXID, cid);
+		} else if (0 < len && len <= 4) {
+			memcpy(cid, s, len);
 			oio_url_set(url, OIOURL_HEXID, cid);
 		} else {
 			oio_url_set(url, OIOURL_HEXID, s);
 		}
-
 		if (NULL == oio_url_get(url, OIOURL_HEXID))
 			return FALSE;
 	}
