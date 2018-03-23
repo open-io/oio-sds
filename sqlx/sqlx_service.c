@@ -795,7 +795,7 @@ sqlx_service_specific_stop(void)
 static gboolean
 sqlx_service_configure(int argc, char **argv)
 {
-	return _init_configless_structures(&SRV)
+	const gboolean rc = _init_configless_structures(&SRV)
 		&& _configure_with_arguments(&SRV, argc, argv)
 		/* NS now known! */
 		&& _patch_and_apply_configuration()
@@ -808,6 +808,8 @@ sqlx_service_configure(int argc, char **argv)
 		&& _configure_events_queue(&SRV)
 		&& (!SRV.service_config->post_config
 				|| SRV.service_config->post_config(&SRV));
+	_patch_and_apply_configuration();
+	return rc;
 }
 
 static void
