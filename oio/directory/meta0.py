@@ -437,3 +437,32 @@ class PrefixMapping(object):
                 svc_bases = self.get_managed_bases(svc)
                 self.logger.info("meta1 %s has %d bases",
                                  svc['addr'], len(svc_bases))
+
+
+def count_prefixes(digits):
+    """Returns the number of real prefixes in meta0/meta1.
+    Raises an exception if the prefix number is not acceptable."""
+    count = {0: 1, 1: 16, 2: 256, 3: 4096, 4: 65536}
+    if digits in count:
+        return count[digits]
+    raise Exception("Invalid prefix")
+
+
+def generate_short_prefixes(digits):
+    from itertools import product
+    hexa = "0123456789ABCDEF"
+    if digits == 0:
+        return ('',)
+    elif digits == 1:
+        return (c for c in hexa)
+    elif digits == 2:
+        return (''.join((a, b)) for a, b in product(hexa, repeat=2))
+    elif digits == 3:
+        return (''.join((a, b, c)) for a, b, c in product(hexa, repeat=3))
+    elif digits == 4:
+        return (''.join((a, b, c, d)) for a, b, c, d in product(hexa, repeat=4))
+
+
+def generate_prefixes(digits):
+    for p in generate_short_prefixes(digits):
+        yield p.ljust(4, '0')

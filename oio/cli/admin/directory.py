@@ -16,6 +16,10 @@
 from logging import getLogger
 from cliff.command import Command
 from oio.common.exceptions import ServiceUnavailable, ClientException
+from oio.common.utils import load_namespace_conf
+from oio.common import green
+from oio.directory.meta0 import generate_prefixes, count_prefixes
+from eventlet import Queue, Timeout, GreenPile
 
 
 class DirectoryCmd(Command):
@@ -71,6 +75,8 @@ class DirectoryInit(DirectoryCmd):
         return parser
 
     def take_action(self, parsed_args):
+        from time import sleep
+
         self.log.debug('take_action(%s)', parsed_args)
         mapping = self.get_prefix_mapping(parsed_args)
         mapping.load()
@@ -106,15 +112,12 @@ class DirectoryInit(DirectoryCmd):
                         raise
                     # Monotonic backoff (retriable and net errors)
                     if i < max_attempts - 1:
-                        from time import sleep
                         sleep(i * 1.0)
                         continue
                     # Too many attempts
                     raise
 
         if parsed_args.rdir:
-            from time import sleep
-
             self.log.info("Assigning rdir services to rawx services...")
             max_attempts = 3
             for i in range(max_attempts):
@@ -175,3 +178,94 @@ class DirectoryDecommission(DirectoryCmd):
         mapping.load(connection_timeout=10.0, read_timeout=60.0)
         mapping.decommission(parsed_args.addr)
         mapping.force(connection_timeout=10.0, read_timeout=60.0)
+
+
+class DirectoryWarmup(DirectoryCmd):
+    """Ping each prefix of a Meta0 hash to prepare each Meta1 base"""
+
+    def get_parser(self, prog_name):
+        parser = super(DirectoryCmd, self).get_parser(prog_name)
+        parser.add_argument('--workers', type=int, default=1,
+                            help="How many concurrent bases to warm up")
+        parser.add_argument('--proxy', type=str, default=None,
+                            help="Specific proxy IP:PORT")
+        return parser
+
+    def _ping_prefix(self, prefix):
+        pass
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+        digits = self.app.client_manager.get_meta1_digits()
+        workers_count = parsed_args.workers
+
+        conf = {'namespace': self.app.client_manager.namespace}
+        if parsed_args.proxy:
+            conf.update({'proxyd_url': parsed_args.proxy})
+        else:
+            ns_conf = load_namespace_conf(conf['namespace'])
+            proxy = ns_conf.get('proxy')
+            conf.update({'proxyd_url': proxy})
+
+        workers = list()
+        with green.ContextPool(workers_count) as pool:
+            pile = GreenPile(pool)
+            prefix_queue = Queue(16)
+
+            # Prepare some workers
+            for i in range(workers_count):
+                w = WarmupWorker(conf, self.log)
+                workers.append(w)
+                pile.spawn(w.run, prefix_queue)
+
+            # Feed the queue
+            trace_increment = 0.01
+            trace_next = trace_increment
+            sent, total = 0, float(count_prefixes(digits))
+            for prefix in generate_prefixes(digits):
+                sent += 1
+                prefix_queue.put(prefix)
+                # Display the progression
+                ratio = float(sent) / total
+                if ratio >= trace_next:
+                    self.log.info("... %d%%", int(ratio * 100.0))
+                    trace_next += trace_increment
+
+            self.log.debug("Send the termination marker")
+            for i in range(workers_count):
+                prefix_queue.put(None)
+
+            # Block until the queue is empty
+            pool.waitall()
+
+        self.log.info("All the workers are done")
+
+
+class WarmupWorker(object):
+    def __init__(self, conf, log):
+        import urllib3
+        self.log = log
+        self.pool = urllib3.PoolManager()
+        self.url_prefix = 'http://%s/v3.0/%s/admin/status?type=meta1&cid=' % (
+                conf['proxyd_url'], conf['namespace'])
+
+    def run(self, prefix_queue):
+        while True:
+            prefix = prefix_queue.get()
+            if not prefix:
+                return
+            self.ping(prefix)
+
+    def ping(self, prefix):
+        url = self.url_prefix + prefix.ljust(64, '0')
+        max_attempts = 5
+        for i in range(max_attempts):
+            rep = self.pool.request('POST', url)
+            if rep.status == 200:
+                return
+            self.log.warn("%d %s", rep.status, prefix)
+            if rep.status == 503:
+                from eventlet import sleep
+                sleep(i * 0.5)
+            else:
+                break
