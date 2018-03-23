@@ -2,7 +2,7 @@
 
 import argparse
 
-from oio.blob.rebuilder import BlobRebuilder
+from oio.rebuilder.blob_rebuilder import BlobRebuilder
 from oio.common.utils import get_logger
 
 
@@ -40,7 +40,7 @@ tube for broken chunks events.
     parser.add_argument('--workers', type=int,
                         help="Number of workers (1)")
     parser.add_argument('--chunks-per-second', type=int,
-                        help="Max chunks per second per coroutine (30)")
+                        help="Max chunks per second per worker (30)")
     parser.add_argument('-q', '--quiet', action='store_true',
                         help="Don't print log on console")
     parser.add_argument('--allow-same-rawx', action='store_true',
@@ -86,7 +86,7 @@ if __name__ == '__main__':
     if args.workers is not None:
         conf['workers'] = args.workers
     if args.chunks_per_second is not None:
-        conf['chunks_per_second'] = args.chunks_per_second
+        conf['items_per_second'] = args.chunks_per_second
     conf['namespace'] = args.namespace
     conf['allow_same_rawx'] = args.allow_same_rawx
     if args.log_syslog_prefix is not None:
