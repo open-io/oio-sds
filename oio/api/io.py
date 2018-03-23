@@ -508,6 +508,8 @@ class MetachunkWriter(object):
     def __init__(self, storage_method=None, quorum=None, **_kwargs):
         self.storage_method = storage_method
         self._quorum = quorum
+        if storage_method is None and quorum is None:
+            raise ValueError('Missing storage_method or quorum')
 
     @property
     def quorum(self):
@@ -524,15 +526,26 @@ class MetachunkWriter(object):
         :type successes: `list` or `tuple`
         :param failures: a list of chunk objects whose upload failed
         :type failures: `list` or `tuple`
+        :raises `exc.SourceReadError`: if there is a timeout while reading
+            data from the client (SourceReadTimeout)
+        :raises `exc.OioTimeout`: if there is a timeout among the errors
         :raises `exc.OioException`: if quorum has not been reached
+            for any other reason
         """
         if len(successes) < self.quorum:
             errors = group_chunk_errors(
                 ((chunk["url"], chunk.get("error", "success"))
                  for chunk in successes + failures))
-            raise exc.OioException(
+            new_exc = exc.OioException(
                 "RAWX write failure, quorum not reached (%d/%d): %s" %
                 (len(successes), self.quorum, errors))
+            for err in [x.get('error') for x in failures]:
+                if isinstance(err,
+                              (exc.SourceReadError, green.SourceReadTimeout)):
+                    raise exc.SourceReadError(new_exc)
+                elif isinstance(err, (exc.OioTimeout, green.OioTimeout)):
+                    raise exc.OioTimeout(new_exc)
+            raise new_exc
 
 
 def make_iter_from_resp(resp):
