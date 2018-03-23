@@ -500,7 +500,7 @@ sqlx_cache_init(void)
 
 	cache->bases_used = 0;
 	cache->bases_max_hard = sqliterepo_repo_max_bases_hard;
-	cache->bases_max_soft = cache->bases_max_hard;
+	cache->bases_max_soft = CLAMP(sqliterepo_repo_max_bases_soft, 1, cache->bases_max_hard);
 	cache->bases = g_malloc0(cache->bases_max_hard * sizeof(sqlx_base_t));
 
 	for (guint i=0; i<cache->bases_max_hard ;i++) {
