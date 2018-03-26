@@ -172,7 +172,7 @@ class BlobRebuilderWorker(RebuilderWorker):
         self.content_factory = ContentFactory(conf)
         self.try_chunk_delete = try_chunk_delete
 
-    def _rebuilder_pass(self, chunk, **kwargs):
+    def _rebuild_one(self, chunk, **kwargs):
         cid, content_id, chunk_id_or_pos, _ = chunk
         if self.dry_run:
             self.dryrun_chunk_rebuild(cid, content_id, chunk_id_or_pos)

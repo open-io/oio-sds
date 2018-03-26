@@ -23,6 +23,9 @@ from oio.rebuilder.rebuilder import Rebuilder, RebuilderWorker
 
 
 class MetaRebuilder(Rebuilder):
+    """
+    Abstract class for directory rebuilders.
+    """
 
     def __init__(self, conf, logger, **kwargs):
         super(MetaRebuilder, self).__init__(conf, logger, **kwargs)
@@ -49,14 +52,14 @@ class MetaRebuilder(Rebuilder):
 
 class MetaRebuilderWorker(RebuilderWorker):
 
-    def __init__(self, conf, logger, type, max_attempts=5, **kwargs):
+    def __init__(self, conf, logger, type_, max_attempts=5, **kwargs):
         super(MetaRebuilderWorker, self).__init__(conf, logger, **kwargs)
-        self.type = type
+        self.type = type_
         self.max_attempts = max_attempts
         self.proxy_client = ProxyClient(
             self.conf, request_prefix='/admin', logger=self.logger)
 
-    def _rebuilder_pass(self, cid, **kwargs):
+    def _rebuild_one(self, cid, **kwargs):
         attempts = 0
         while True:
             attempts += 1
@@ -64,6 +67,7 @@ class MetaRebuilderWorker(RebuilderWorker):
                 params = {'cid': cid, 'type': self.type}
                 properties = {'properties': {'sys.last_rebuild':
                                              str(int(time.time()))}}
+                # Setting a property will trigger a database replication
                 self.proxy_client._request('POST', '/set_properties',
                                            params=params, json=properties)
                 self.passes += 1
