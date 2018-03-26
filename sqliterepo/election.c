@@ -1927,9 +1927,15 @@ _result_GETVERS (GError *enet,
 
 	if (enet) {
 		err = g_error_copy(enet);
+		GRID_DEBUG("GETVERS error [%s.%s]: (%d) %s",
+				name->base, name->type, err->code, err->message);
 	} else {
 		err = manager->config->get_version (manager->config->ctx, name, &vlocal);
 		EXTRA_ASSERT ((err != NULL) ^ (vlocal != NULL));
+		if (err) {
+			GRID_WARN("GETVERS error [%s.%s]: (%d) %s",
+					name->base, name->type, err->code, err->message);
+		}
 	}
 
 	if (!err) {
@@ -1964,7 +1970,6 @@ _result_GETVERS (GError *enet,
 		else if (err->code == CODE_CONCURRENT)
 			transition(member, EVT_GETVERS_RACE, &reqid);
 		else {
-			GRID_DEBUG("GETVERS error : (%d) %s", err->code, err->message);
 			if (err->code == CODE_CONTAINER_NOTFOUND) {
 				// We may have asked the wrong peer
 				member_decache_peers(member);
