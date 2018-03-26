@@ -791,7 +791,6 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 				args->is_replicated ? "true" : "false");
 	} else {
 		gchar *url = NULL;
-
 		status = election_get_status(args->repo->election_manager, &args->name, &url);
 		GRID_TRACE("Status got=%d expected=%d master=%s", status, expected, url);
 
@@ -1096,6 +1095,18 @@ sqlx_repository_status_base(sqlx_repository_t *repo, const struct sqlx_name_s *n
 		return NULL;
 	}
 
+	do { /* ensure the DB locally exists */
+		struct sqlx_sqlite3_s *sq3 = NULL;
+		err = sqlx_repository_open_and_lock(repo, n,
+				SQLX_OPEN_CREATE|SQLX_OPEN_LOCAL|SQLX_OPEN_URGENT,
+				&sq3, NULL);
+		if (err) {
+			g_prefix_error(&err, "DB creation failure: ");
+			return err;
+		}
+		sqlx_repository_unlock_and_close_noerror(sq3);
+	} while (0);
+
 	gchar *url = NULL;
 	enum election_status_e status;
 
@@ -1184,7 +1195,26 @@ sqlx_repository_use_base(sqlx_repository_t *repo, const struct sqlx_name_s *n)
 		return NULL;
 	}
 
-	return election_start(repo->election_manager, n);
+	/* The initiation of the election will perform the check that the
+	 * election is locally managed. */
+	if (!(err = election_init(repo->election_manager, n))) {
+
+		/* ensure the DB locally exists */
+		struct sqlx_sqlite3_s *sq3 = NULL;
+		err = sqlx_repository_open_and_lock(repo, n,
+				SQLX_OPEN_CREATE|SQLX_OPEN_LOCAL|SQLX_OPEN_URGENT,
+				&sq3, NULL);
+		if (err) {
+			g_prefix_error(&err, "DB creation failure: ");
+		} else {
+			sqlx_repository_unlock_and_close_noerror(sq3);
+		}
+
+		if (!err)
+			err = election_start(repo->election_manager, n);
+	}
+
+	return err;
 }
 
 /* ------------------------------------------------------------------------- */

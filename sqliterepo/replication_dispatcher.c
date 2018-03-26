@@ -1364,8 +1364,7 @@ _handler_GETVERS(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	/* TODO JFS : trigger an election, useful to reduce the number of
-	   messages during an election. */
+	/* Kickoff the election, we are already involved in it... */
 	if (NULL != (err = sqlx_repository_use_base(repo, &n0))) {
 		g_prefix_error(&err, "Use: ");
 		reply->send_error(0, err);
@@ -1381,10 +1380,11 @@ _handler_GETVERS(struct gridd_reply_ctx_s *reply,
 	}
 
 	err = sqlx_repository_get_version(sq3, &version);
+	sqlx_repository_unlock_and_close_noerror(sq3);
+
 	if (NULL != err) {
 		reply->send_error(0, err);
-	}
-	else {
+	} else {
 		GByteArray *encoded = version_encode(version);
 		if (!encoded) {
 			err = NEWERROR(CODE_INTERNAL_ERROR, "Encoding error (version)");
@@ -1396,7 +1396,6 @@ _handler_GETVERS(struct gridd_reply_ctx_s *reply,
 		}
 	}
 
-	sqlx_repository_unlock_and_close_noerror(sq3);
 	if (version)
 		g_tree_destroy(version);
 	return TRUE;
