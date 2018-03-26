@@ -34,7 +34,8 @@ def make_arg_parser():
     log_parser.add_argument('--log-address',
                             help="Log address")
 
-    descr = "Rebuild references of meta2."
+    descr = "Rebuild meta2 databases by setting 'last_rebuild' " \
+        "property in admin table, thus triggering a replication."
     parser = argparse.ArgumentParser(description=descr, parents=[log_parser])
     parser.add_argument('namespace', help="Namespace")
     parser.add_argument('--report-interval', type=int,
@@ -47,6 +48,7 @@ def make_arg_parser():
                         help="Don't print log on console")
 
     return parser
+
 
 if __name__ == '__main__':
     args = make_arg_parser().parse_args()

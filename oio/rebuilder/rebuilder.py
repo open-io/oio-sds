@@ -21,6 +21,15 @@ from oio.common.green import ratelimit, eventlet, ContextPool
 
 
 class Rebuilder(object):
+    """
+    Base class for rebuilders.
+    Subclass and implement
+      `_create_worker()`
+      `_fill_queue()`
+      `_init_info()`
+      `_compute_info()`
+      `_get_report()`.
+    """
 
     def __init__(self, conf, logger, **kwargs):
         self.conf = conf
@@ -69,6 +78,10 @@ class Rebuilder(object):
         raise NotImplementedError()
 
     def _fill_queue(self, queue, **kwargs):
+        """
+        Fill `queue` with items that will be passed to
+        `RebuilderWorker#_rebuild_one()`.
+        """
         raise NotImplementedError()
 
     def _init_info(self, **kwargs):
@@ -83,6 +96,10 @@ class Rebuilder(object):
 
 
 class RebuilderWorker(object):
+    """
+    Base class for rebuilder workers.
+    Subclass and implement `_rebuild_one()` and `_get_report()`.
+    """
 
     def __init__(self, conf, logger, **kwargs):
         self.conf = conf
@@ -105,7 +122,7 @@ class RebuilderWorker(object):
             item = queue.get()
             loop_time = time.time()
 
-            self._rebuilder_pass(item, **kwargs)
+            self._rebuild_one(item, **kwargs)
 
             self.items_run_time = ratelimit(self.items_run_time,
                                             self.max_items_per_second)
@@ -122,7 +139,11 @@ class RebuilderWorker(object):
             self.rebuilder_time += (now - loop_time)
             queue.task_done()
 
-    def _rebuilder_pass(self, item, **kwargs):
+    def _rebuild_one(self, item, **kwargs):
+        """
+        Rebuild one item from the queue previously filled
+        by `Rebuilder#_fill_queue()`.
+        """
         raise NotImplementedError()
 
     def _get_report(self, num, start_time, report_time, now, **kwargs):
