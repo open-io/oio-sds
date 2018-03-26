@@ -442,10 +442,9 @@ class PrefixMapping(object):
 def count_prefixes(digits):
     """Returns the number of real prefixes in meta0/meta1.
     Raises an exception if the prefix number is not acceptable."""
-    count = {0: 1, 1: 16, 2: 256, 3: 4096, 4: 65536}
-    if digits in count:
-        return count[digits]
-    raise Exception("Invalid prefix")
+    if digits <= 4:
+        return 16**digits
+    raise Exception('Invalid number of digits')
 
 
 def generate_short_prefixes(digits):
@@ -453,14 +452,8 @@ def generate_short_prefixes(digits):
     hexa = "0123456789ABCDEF"
     if digits == 0:
         return ('',)
-    elif digits == 1:
-        return (c for c in hexa)
-    elif digits == 2:
-        return (''.join((a, b)) for a, b in product(hexa, repeat=2))
-    elif digits == 3:
-        return (''.join((a, b, c)) for a, b, c in product(hexa, repeat=3))
-    elif digits == 4:
-        return (''.join((a, b, c, d)) for a, b, c, d in product(hexa, repeat=4))
+    elif digits <= 4:
+        return (''.join(pfx) for pfx in product(hexa, repeat=digits))
 
 
 def generate_prefixes(digits):
