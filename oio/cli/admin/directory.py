@@ -19,7 +19,7 @@ from oio.common.exceptions import ServiceUnavailable, ClientException
 from oio.common.utils import load_namespace_conf
 from oio.common import green
 from oio.directory.meta0 import generate_prefixes, count_prefixes
-from eventlet import Queue, Timeout, GreenPile
+from eventlet import Queue, GreenPile
 
 
 class DirectoryCmd(Command):
@@ -232,11 +232,7 @@ class DirectoryWarmup(DirectoryCmd):
                     trace_next += trace_increment
 
             self.log.debug("Send the termination marker")
-            for i in range(workers_count):
-                prefix_queue.put(None)
-
-            # Block until the queue is empty
-            pool.waitall()
+            prefix_queue.join()
 
         self.log.info("All the workers are done")
 
@@ -252,9 +248,8 @@ class WarmupWorker(object):
     def run(self, prefix_queue):
         while True:
             prefix = prefix_queue.get()
-            if not prefix:
-                return
             self.ping(prefix)
+            prefix_queue.task_done()
 
     def ping(self, prefix):
         url = self.url_prefix + prefix.ljust(64, '0')
