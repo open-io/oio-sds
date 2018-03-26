@@ -444,7 +444,7 @@ def count_prefixes(digits):
     Raises an exception if the prefix number is not acceptable."""
     if digits <= 4:
         return 16**digits
-    raise Exception('Invalid number of digits')
+    raise ValueError('Invalid number of digits')
 
 
 def generate_short_prefixes(digits):
