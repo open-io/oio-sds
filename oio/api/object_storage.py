@@ -22,7 +22,6 @@ import os
 import random
 import warnings
 import time
-from inspect import isgenerator
 
 from oio.common import exceptions as exc
 from oio.api import io
@@ -684,6 +683,7 @@ class ObjectStorageApi(object):
             raise exc.MissingData()
         src = data if data is not None else file_or_path
         if src is file_or_path:
+            # We are asked to read from a file path or a file-like object
             if isinstance(file_or_path, basestring):
                 if not os.path.exists(file_or_path):
                     raise exc.FileNotFound("File '%s' not found." %
@@ -695,9 +695,13 @@ class ObjectStorageApi(object):
                 except AttributeError:
                     file_name = None
             obj_name = obj_name or file_name
-        elif isgenerator(src):
-            file_or_path = GeneratorIO(src)
-            src = file_or_path
+        else:
+            # We are asked to read from a buffer or an iterator
+            try:
+                src = BytesIO(src)
+            except TypeError:
+                src = GeneratorIO(src)
+
         if not obj_name:
             raise exc.MissingName(
                 "No name for the object has been specified"
@@ -706,20 +710,20 @@ class ObjectStorageApi(object):
         sysmeta = {'mime_type': mime_type,
                    'etag': etag}
 
-        if src is data:
+        if isinstance(src, BytesIO):
             return self._object_create(
-                account, container, obj_name, BytesIO(data), sysmeta,
+                account, container, obj_name, src, sysmeta,
                 properties=metadata, policy=policy,
                 key_file=key_file, append=append, **kwargs)
-        elif hasattr(file_or_path, "read"):
+        elif hasattr(src, 'read'):
             return self._object_create(
                 account, container, obj_name, src, sysmeta,
                 properties=metadata, policy=policy, key_file=key_file,
                 append=append, **kwargs)
         else:
-            with open(file_or_path, "rb") as f:
+            with open(src, 'rb') as srcf:
                 return self._object_create(
-                    account, container, obj_name, f, sysmeta,
+                    account, container, obj_name, srcf, sysmeta,
                     properties=metadata, policy=policy,
                     key_file=key_file, append=append, **kwargs)
 

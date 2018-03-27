@@ -17,6 +17,8 @@ import json
 from mock import MagicMock as Mock
 import random
 import unittest
+from os.path import basename
+from tempfile import NamedTemporaryFile
 
 
 from oio.common import exceptions
@@ -253,6 +255,71 @@ class ObjectStorageTest(unittest.TestCase):
         self.assertRaises(
             exceptions.FileNotFound, api.object_create, self.account,
             self.container, name)
+
+    def test_object_create_from_file(self):
+        self.api._object_create = Mock(return_value=None)
+        src = NamedTemporaryFile()
+        self.api.object_create(
+            self.account, self.container, file_or_path=src)
+        self.api._object_create.assert_called_once()
+        call_args = self.api._object_create.call_args
+        self.assertIs(call_args[0][0], self.account)
+        self.assertIs(call_args[0][1], self.container)
+        self.assertEqual(call_args[0][2], basename(src.name))
+        self.assertIs(call_args[0][3], src)
+
+    def test_object_create_from_file_path(self):
+        self.api._object_create = Mock(return_value=None)
+        src = NamedTemporaryFile()
+        self.api.object_create(
+            self.account, self.container, file_or_path=src.name)
+        self.api._object_create.assert_called_once()
+        call_args = self.api._object_create.call_args
+        self.assertIs(call_args[0][0], self.account)
+        self.assertIs(call_args[0][1], self.container)
+        self.assertEqual(call_args[0][2], basename(src.name))
+        self.assertIsInstance(call_args[0][3], file)
+        self.assertEqual(call_args[0][3].name, src.name)
+
+    def test_object_create_from_iterable(self):
+        class DataGen(object):
+            def __init__(self):
+                self.data = "abcd"
+                self.pos = 0
+
+            def __iter__(self):
+                return self
+
+            def next(self):
+                if self.pos >= len(self.data):
+                    raise StopIteration()
+                self.pos += 1
+                return self.data[self.pos - 1]
+
+        self.api._object_create = Mock(return_value=None)
+        name = random_str(32)
+        self.api.object_create(
+            self.account, self.container, data=DataGen(), obj_name=name)
+        self.api._object_create.assert_called_once()
+        call_args = self.api._object_create.call_args
+        from oio.common.utils import GeneratorIO
+        self.assertIs(call_args[0][0], self.account)
+        self.assertIs(call_args[0][1], self.container)
+        self.assertIs(call_args[0][2], name)
+        self.assertIsInstance(call_args[0][3], GeneratorIO)
+
+    def test_object_create_from_string(self):
+        self.api._object_create = Mock(return_value=None)
+        name = random_str(32)
+        self.api.object_create(
+            self.account, self.container, data=name, obj_name=name)
+        self.api._object_create.assert_called_once()
+        call_args = self.api._object_create.call_args
+        from io import BytesIO
+        self.assertIs(call_args[0][0], self.account)
+        self.assertIs(call_args[0][1], self.container)
+        self.assertIs(call_args[0][2], name)
+        self.assertIsInstance(call_args[0][3], BytesIO)
 
     def test_object_set_properties(self):
         api = self.api
