@@ -23,6 +23,21 @@ from oio.common.utils import json, get_logger
 from oio.common.wsgi import WerkzeugApp
 
 
+def access_log(func):
+    from functools import wraps
+
+    @wraps(func)
+    def _access_log_wrapper(self, *args, **kwargs):
+        from time import time
+        pre = time()
+        rc = func(self, *args, **kwargs)
+        post = time()
+        self.logger.info("%s %0.6f", func.__name__, post - pre)
+        return rc
+
+    return _access_log_wrapper
+
+
 class Account(WerkzeugApp):
     def __init__(self, conf, backend, logger=None):
         self.conf = conf
@@ -64,6 +79,7 @@ class Account(WerkzeugApp):
         else:
             return Response(status=202)
 
+    @access_log
     def on_account_list(self, req):
         accounts = self.backend.list_account()
         if accounts is None:
@@ -91,6 +107,7 @@ class Account(WerkzeugApp):
             return Response(status=204)
         return NotFound('Account not found')
 
+    @access_log
     def on_account_show(self, req):
         account_id = self._get_account_id(req)
         raw = self.backend.info_account(account_id)
@@ -98,6 +115,7 @@ class Account(WerkzeugApp):
             return Response(json.dumps(raw), mimetype='text/json')
         return NotFound('Account not found')
 
+    @access_log
     def on_account_containers(self, req):
         account_id = self._get_account_id(req)
 
