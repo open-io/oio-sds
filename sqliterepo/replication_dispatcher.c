@@ -1830,8 +1830,7 @@ _handler_PROPDEL(struct gridd_reply_ctx_s *reply,
 	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
 		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERONLY;
 	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
-	if (NULL != err) {
-		g_prefix_error(&err, "Open/lock: ");
+	if (err) {
 		reply->send_error(0, err);
 	} else {
 		struct sqlx_repctx_s *repctx = NULL;
@@ -1885,7 +1884,7 @@ _handler_PROPGET(struct gridd_reply_ctx_s *reply,
 	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
 		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE;
 	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
-	if (NULL != err) {
+	if (err) {
 		g_prefix_error(&err, "Open/lock: ");
 		reply->send_error(0, err);
 	} else {
@@ -1954,8 +1953,7 @@ _handler_PROPSET(struct gridd_reply_ctx_s *reply,
 	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
 			? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERONLY;
 	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
-	if (NULL != err) {
-		g_prefix_error(&err, "Open/lock: ");
+	if (err) {
 		goto label_exit;
 	}
 
@@ -2011,8 +2009,7 @@ _handler_ENABLE(struct gridd_reply_ctx_s *reply,
 	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
 		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERONLY;
 	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
-	if (NULL != err) {
-		g_prefix_error(&err, "Open/lock: ");
+	if (err) {
 		reply->send_error(0, err);
 		return TRUE;
 	}
@@ -2061,8 +2058,7 @@ _handler_FREEZE(struct gridd_reply_ctx_s *reply,
 	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
 		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERONLY;
 	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
-	if (NULL != err) {
-		g_prefix_error(&err, "Open/lock: ");
+	if (err) {
 		reply->send_error(0, err);
 		return TRUE;
 	}
@@ -2114,8 +2110,7 @@ _handler_DISABLE(struct gridd_reply_ctx_s *reply,
 	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
 		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERONLY;
 	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
-	if (NULL != err) {
-		g_prefix_error(&err, "Open/lock: ");
+	if (err) {
 		reply->send_error(0, err);
 		return TRUE;
 	}
@@ -2167,8 +2162,7 @@ _handler_DISABLE2(struct gridd_reply_ctx_s *reply,
 	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
 		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERONLY;
 	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
-	if (NULL != err) {
-		g_prefix_error(&err, "Open/lock: ");
+	if (err) {
 		reply->send_error(0, err);
 		return TRUE;
 	}
