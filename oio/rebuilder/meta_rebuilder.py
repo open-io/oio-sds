@@ -63,8 +63,8 @@ class MetaRebuilderWorker(RebuilderWorker):
         attempts = 0
         while True:
             attempts += 1
+            params = {'cid': cid, 'type': self.type}
             try:
-                params = {'cid': cid, 'type': self.type}
                 properties = {'properties': {'sys.last_rebuild':
                                              str(int(time.time()))}}
                 # Setting a property will trigger a database replication
@@ -75,6 +75,11 @@ class MetaRebuilderWorker(RebuilderWorker):
             except Exception as err:
                 if attempts < self.max_attempts:
                     if isinstance(err, NotFound):
+                        try:
+                            self.proxy_client._request('POST', '/leave',
+                                                       params=params)
+                        except Exception:
+                            pass
                         continue
                     if isinstance(err, ServiceBusy):
                         time.sleep(attempts * 0.5)
