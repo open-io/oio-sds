@@ -1068,48 +1068,16 @@ sqlx_repository_status_base(sqlx_repository_t *repo, const struct sqlx_name_s *n
 	REPO_CHECK(repo);
 	SQLXNAME_CHECK(n);
 
-	GError *err = NULL;
-	gboolean has_peers = FALSE;
-
 	GRID_TRACE2("%s(%p,t=%s,n=%s)", __FUNCTION__, repo, n->type, n->base);
 
-	if (!repo->running)
-		return NEWERROR(CODE_UNAVAILABLE, "Repository being shut down");
-
-	if (NULL != (err = _schema_get(repo, n->type, NULL)))
+	/* Kick the election off */
+	GError *err = sqlx_repository_use_base(repo, n);
+	if (err)
 		return err;
 
-	if (!election_manager_configured(repo->election_manager)) {
-		GRID_TRACE("Replication disabled by configuration, MASTER de facto");
-		return NULL;
-	}
-
-	err = election_has_peers(repo->election_manager, n, FALSE, &has_peers);
-	if (err != NULL) {
-		g_prefix_error(&err, "Peers resolution error: ");
-		return err;
-	}
-
-	if (!has_peers) {
-		GRID_TRACE("Unable to find peers for [%s][%s]", n->base, n->type);
-		return NULL;
-	}
-
-	do { /* ensure the DB locally exists */
-		struct sqlx_sqlite3_s *sq3 = NULL;
-		err = sqlx_repository_open_and_lock(repo, n,
-				SQLX_OPEN_CREATE|SQLX_OPEN_LOCAL|SQLX_OPEN_URGENT,
-				&sq3, NULL);
-		if (err) {
-			g_prefix_error(&err, "DB creation failure: ");
-			return err;
-		}
-		sqlx_repository_unlock_and_close_noerror(sq3);
-	} while (0);
-
+	/* Wait for a final status */
 	gchar *url = NULL;
 	enum election_status_e status;
-
 	status = election_get_status(repo->election_manager, n, &url);
 	switch (status) {
 		case ELECTION_LOST:
@@ -1175,6 +1143,27 @@ sqlx_repository_exit_election(sqlx_repository_t *repo, const struct sqlx_name_s 
 	return err;
 }
 
+static GError *
+_base_lazy_recover(sqlx_repository_t *repo, const struct sqlx_name_s *n)
+{
+	if (sqlx_repository_has_base2(repo, n, NULL))
+		return NULL;
+
+	/* Ensure the election is not MASTER to avoid the DB to be
+	 * recreated empty while MASTER */
+	election_exit(repo->election_manager, n);
+
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	GError *err = sqlx_repository_open_and_lock(repo, n,
+			SQLX_OPEN_CREATE|SQLX_OPEN_LOCAL|SQLX_OPEN_URGENT,
+			&sq3, NULL);
+	if (err)
+		return err;
+
+	sqlx_repository_unlock_and_close_noerror(sq3);
+	return NULL;
+}
+
 GError*
 sqlx_repository_use_base(sqlx_repository_t *repo, const struct sqlx_name_s *n)
 {
@@ -1198,19 +1187,7 @@ sqlx_repository_use_base(sqlx_repository_t *repo, const struct sqlx_name_s *n)
 	/* The initiation of the election will perform the check that the
 	 * election is locally managed. */
 	if (!(err = election_init(repo->election_manager, n))) {
-
-		/* ensure the DB locally exists */
-		struct sqlx_sqlite3_s *sq3 = NULL;
-		err = sqlx_repository_open_and_lock(repo, n,
-				SQLX_OPEN_CREATE|SQLX_OPEN_LOCAL|SQLX_OPEN_URGENT,
-				&sq3, NULL);
-		if (err) {
-			g_prefix_error(&err, "DB creation failure: ");
-		} else {
-			sqlx_repository_unlock_and_close_noerror(sq3);
-		}
-
-		if (!err)
+		if (!(err = _base_lazy_recover(repo, n)))
 			err = election_start(repo->election_manager, n);
 	}
 
