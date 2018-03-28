@@ -224,7 +224,8 @@ class EventWorker(Worker):
                     continue
                 event = self.safe_decode_job(job_id, data)
                 try:
-                    self.process_event(job_id, event, beanstalk)
+                    if event:
+                        self.process_event(job_id, event, beanstalk)
                 except (ClientException, OioNetworkException) as exc:
                     self.logger.warn("Burying event %s (%s): %s",
                                      job_id, event.get('event'), exc)
