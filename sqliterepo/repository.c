@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -1071,7 +1071,7 @@ sqlx_repository_status_base(sqlx_repository_t *repo, const struct sqlx_name_s *n
 	GRID_TRACE2("%s(%p,t=%s,n=%s)", __FUNCTION__, repo, n->type, n->base);
 
 	/* Kick the election off */
-	GError *err = sqlx_repository_use_base(repo, n);
+	GError *err = sqlx_repository_use_base(repo, n, TRUE);
 	if (err)
 		return err;
 
@@ -1116,7 +1116,7 @@ sqlx_repository_prepare_election(sqlx_repository_t *repo, const struct sqlx_name
 		return NULL;
 	}
 
-	return election_init(repo->election_manager, n);
+	return election_init(repo->election_manager, n, NULL);
 }
 
 GError*
@@ -1144,18 +1144,25 @@ sqlx_repository_exit_election(sqlx_repository_t *repo, const struct sqlx_name_s 
 }
 
 static GError *
-_base_lazy_recover(sqlx_repository_t *repo, const struct sqlx_name_s *n)
+_base_lazy_recover(sqlx_repository_t *repo, const struct sqlx_name_s *n,
+		enum election_step_e status)
 {
+	if (!sqliterepo_election_lazy_recover)
+		return NULL;
+
 	GError *err = NULL;
 	if (!(err = sqlx_repository_has_base2(repo, n, NULL)))
 		return NULL;
 
-	/* Ensure the election is not MASTER to avoid the DB to be
-	 * recreated empty while MASTER */
-	election_exit(repo->election_manager, n);
+	g_clear_error(&err);
+
+	if (status == STEP_MASTER || status == STEP_CHECKING_SLAVES) {
+		/* Ensure the election is not MASTER to avoid the DB to be
+		 * recreated empty while MASTER */
+		election_exit(repo->election_manager, n);
+	}
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	g_clear_error(&err);
 	err = sqlx_repository_open_and_lock(repo, n,
 			SQLX_OPEN_CREATE|SQLX_OPEN_LOCAL|SQLX_OPEN_URGENT,
 			&sq3, NULL);
@@ -1167,7 +1174,8 @@ _base_lazy_recover(sqlx_repository_t *repo, const struct sqlx_name_s *n)
 }
 
 GError*
-sqlx_repository_use_base(sqlx_repository_t *repo, const struct sqlx_name_s *n)
+sqlx_repository_use_base(sqlx_repository_t *repo, const struct sqlx_name_s *n,
+		gboolean allow_autocreate)
 {
 	REPO_CHECK(repo);
 	SQLXNAME_CHECK(n);
@@ -1188,8 +1196,15 @@ sqlx_repository_use_base(sqlx_repository_t *repo, const struct sqlx_name_s *n)
 
 	/* The initiation of the election will perform the check that the
 	 * election is locally managed. */
-	if (!(err = election_init(repo->election_manager, n))) {
-		if (!(err = _base_lazy_recover(repo, n)))
+	enum election_step_e status = STEP_NONE;
+	if (!(err = election_init(repo->election_manager, n, &status))) {
+
+		/* Interleave a DB creation (out of the lock) if explicitely
+		 * allowed by both the request type AND the application */
+		if (allow_autocreate)
+			err = _base_lazy_recover(repo, n, status);
+
+		if (!err)
 			err = election_start(repo->election_manager, n);
 	}
 

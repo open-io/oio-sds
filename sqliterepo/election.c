@@ -40,27 +40,6 @@ License along with this library.
 
 typedef guint req_id_t;
 
-enum election_step_e
-{
-	STEP_NONE = 0,
-	STEP_CREATING,
-	STEP_WATCHING,
-	STEP_LISTING,
-	STEP_ASKING,
-	STEP_CHECKING_MASTER,
-	STEP_CHECKING_SLAVES,
-	STEP_SYNCING,
-
-	STEP_LEAVING,
-	STEP_LEAVING_FAILING,
-	STEP_FAILED,
-
-	/* final */
-	STEP_SLAVE,
-	STEP_MASTER,
-#define STEP_MAX (STEP_MASTER+1)
-};
-
 enum event_type_e
 {
 	/* ping, a.k.a poke, etc */
@@ -332,7 +311,7 @@ static GError * _election_trigger_RESYNC(struct election_manager_s *manager,
 		const struct sqlx_name_s *n);
 
 static GError * _election_init(struct election_manager_s *manager,
-		const struct sqlx_name_s *n);
+		const struct sqlx_name_s *n, enum election_step_e *out_status);
 
 static GError * _election_start(struct election_manager_s *manager,
 		const struct sqlx_name_s *n);
@@ -1714,7 +1693,7 @@ enum election_op_e {
 
 static GError *
 _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
-		enum election_op_e op)
+		enum election_op_e op, enum election_step_e *out_status)
 {
 	MANAGER_CHECK(m);
 	SQLXNAME_CHECK(n);
@@ -1734,25 +1713,28 @@ _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
 
 	_manager_lock(m);
 	struct election_member_s *member = _LOCKED_init_member(m, n, op != ELOP_EXIT);
-	switch (op) {
-		case ELOP_NONE:
-			member->last_atime = oio_ext_monotonic_time ();
-			break;
-		case ELOP_START:
-			member->last_atime = oio_ext_monotonic_time ();
-			transition(member, EVT_NONE, NULL);
-			break;
-		case ELOP_RESYNC:
-			member->last_atime = oio_ext_monotonic_time ();
-			transition(member, EVT_SYNC_REQ, NULL);
-			break;
-		case ELOP_EXIT:
-			if (member)
-				transition(member, EVT_LEAVE_REQ, NULL);
-			break;
-	}
-	if (member)
+	if (member) {
+		switch (op) {
+			case ELOP_NONE:
+				member->last_atime = oio_ext_monotonic_time ();
+				break;
+			case ELOP_START:
+				member->last_atime = oio_ext_monotonic_time ();
+				transition(member, EVT_NONE, NULL);
+				break;
+			case ELOP_RESYNC:
+				member->last_atime = oio_ext_monotonic_time ();
+				transition(member, EVT_SYNC_REQ, NULL);
+				break;
+			case ELOP_EXIT:
+				if (member)
+					transition(member, EVT_LEAVE_REQ, NULL);
+				break;
+		}
+		if (out_status)
+			*out_status = member->step;
 		member_unref(member);
+	}
 	_manager_unlock(m);
 
 	return NULL;
@@ -1762,25 +1744,26 @@ static GError *
 _election_trigger_RESYNC(struct election_manager_s *manager,
 		const struct sqlx_name_s *n)
 {
-	return _election_make(manager, n, ELOP_RESYNC);
+	return _election_make(manager, n, ELOP_RESYNC, NULL);
 }
 
 static GError *
-_election_init(struct election_manager_s *manager, const struct sqlx_name_s *n)
+_election_init(struct election_manager_s *manager, const struct sqlx_name_s *n,
+		enum election_step_e *out_status)
 {
-	return _election_make(manager, n, ELOP_NONE);
+	return _election_make(manager, n, ELOP_NONE, out_status);
 }
 
 static GError *
 _election_start(struct election_manager_s *manager, const struct sqlx_name_s *n)
 {
-	return _election_make(manager, n, ELOP_START);
+	return _election_make(manager, n, ELOP_START, NULL);
 }
 
 static GError *
 _election_exit(struct election_manager_s *manager, const struct sqlx_name_s *n)
 {
-	return _election_make(manager, n, ELOP_EXIT);
+	return _election_make(manager, n, ELOP_EXIT, NULL);
 }
 
 static gboolean

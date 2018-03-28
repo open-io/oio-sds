@@ -49,6 +49,27 @@ enum election_mode_e
 	ELECTION_MODE_GROUP
 };
 
+enum election_step_e
+{
+	STEP_NONE = 0,
+	STEP_CREATING,
+	STEP_WATCHING,
+	STEP_LISTING,
+	STEP_ASKING,
+	STEP_CHECKING_MASTER,
+	STEP_CHECKING_SLAVES,
+	STEP_SYNCING,
+
+	STEP_LEAVING,
+	STEP_LEAVING_FAILING,
+	STEP_FAILED,
+
+	/* final */
+	STEP_SLAVE,
+	STEP_MASTER,
+#define STEP_MAX (STEP_MASTER+1)
+};
+
 struct replication_config_s
 {
 	/** Tells the unique ID of the local service. */
@@ -95,7 +116,7 @@ struct election_manager_vtable_s
 	/** Prepare the internal memory for the election context, but without
 	 * starting the election. Usefull to prepare. */
 	GError* (*election_init) (struct election_manager_s *manager,
-			const struct sqlx_name_s *n);
+			const struct sqlx_name_s *n, enum election_step_e *out_status);
 
 	/** Triggers the global election mechanism then returns without
 	 * waiting for a final status. */
@@ -131,8 +152,8 @@ const char * election_manager_get_local (const struct election_manager_s *m);
 GError* election_get_peers (struct election_manager_s *manager,
 		const struct sqlx_name_s *n, gboolean nocache, gchar ***peers);
 
-#define election_init(m,n) \
-	((struct abstract_election_manager_s*)m)->vtable->election_init(m,n)
+#define election_init(m,n,out) \
+	((struct abstract_election_manager_s*)m)->vtable->election_init(m,n,out)
 
 #define election_start(m,n) \
 	((struct abstract_election_manager_s*)m)->vtable->election_start(m,n)
