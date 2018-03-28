@@ -1146,7 +1146,8 @@ sqlx_repository_exit_election(sqlx_repository_t *repo, const struct sqlx_name_s 
 static GError *
 _base_lazy_recover(sqlx_repository_t *repo, const struct sqlx_name_s *n)
 {
-	if (sqlx_repository_has_base2(repo, n, NULL))
+	GError *err = NULL;
+	if (!(err = sqlx_repository_has_base2(repo, n, NULL)))
 		return NULL;
 
 	/* Ensure the election is not MASTER to avoid the DB to be
@@ -1154,7 +1155,8 @@ _base_lazy_recover(sqlx_repository_t *repo, const struct sqlx_name_s *n)
 	election_exit(repo->election_manager, n);
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	GError *err = sqlx_repository_open_and_lock(repo, n,
+	g_clear_error(&err);
+	err = sqlx_repository_open_and_lock(repo, n,
 			SQLX_OPEN_CREATE|SQLX_OPEN_LOCAL|SQLX_OPEN_URGENT,
 			&sq3, NULL);
 	if (err)
