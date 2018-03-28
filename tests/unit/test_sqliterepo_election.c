@@ -468,7 +468,7 @@ test_election_init(void)
 		g_snprintf(n0.base, sizeof(n0.base),
 				"base-%"G_GUINT32_FORMAT, oio_ext_rand_int());
 		NAME2CONST(n, n0);
-		err = election_init(m, &n, NULL);
+		err = election_init(m, &n, NULL, NULL);
 		g_assert_no_error(err);
 		err = election_exit(m, &n);
 		g_assert_no_error(err);
@@ -514,7 +514,7 @@ test_create_ok(void)
 	sqliterepo_hash_name(&name, _k, sizeof(_k)); \
 	struct election_member_s *m = manager_get_member (manager, _k); \
 	g_assert_null(m); \
-	g_assert_no_error (_election_init (manager, &name, NULL)); \
+	g_assert_no_error (_election_init (manager, &name, NULL, NULL)); \
 	m = manager_get_member (manager, _k); \
 	g_assert_nonnull(m); \
 

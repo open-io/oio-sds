@@ -311,7 +311,8 @@ static GError * _election_trigger_RESYNC(struct election_manager_s *manager,
 		const struct sqlx_name_s *n);
 
 static GError * _election_init(struct election_manager_s *manager,
-		const struct sqlx_name_s *n, enum election_step_e *out_status);
+		const struct sqlx_name_s *n, enum election_step_e *out_status,
+		gboolean *replicated);
 
 static GError * _election_start(struct election_manager_s *manager,
 		const struct sqlx_name_s *n);
@@ -1693,10 +1694,16 @@ enum election_op_e {
 
 static GError *
 _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
-		enum election_op_e op, enum election_step_e *out_status)
+		enum election_op_e op,
+		enum election_step_e *out_status, gboolean *replicated)
 {
 	MANAGER_CHECK(m);
 	SQLXNAME_CHECK(n);
+
+	if (out_status)
+		*out_status = STEP_NONE;
+	if (replicated)
+		*replicated = FALSE;
 
 	if (op != ELOP_EXIT) {
 		gboolean peers_present = FALSE;
@@ -1708,29 +1715,32 @@ _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
 		if (!peers_present) {
 			GRID_DEBUG("No peer for [%s][%s]", n->base, n->type);
 			return NULL;
+		} else {
+			if (replicated)
+				*replicated = TRUE;
 		}
 	}
 
 	_manager_lock(m);
 	struct election_member_s *member = _LOCKED_init_member(m, n, op != ELOP_EXIT);
+	switch (op) {
+		case ELOP_NONE:
+			member->last_atime = oio_ext_monotonic_time ();
+			break;
+		case ELOP_START:
+			member->last_atime = oio_ext_monotonic_time ();
+			transition(member, EVT_NONE, NULL);
+			break;
+		case ELOP_RESYNC:
+			member->last_atime = oio_ext_monotonic_time ();
+			transition(member, EVT_SYNC_REQ, NULL);
+			break;
+		case ELOP_EXIT:
+			if (member)
+				transition(member, EVT_LEAVE_REQ, NULL);
+			break;
+	}
 	if (member) {
-		switch (op) {
-			case ELOP_NONE:
-				member->last_atime = oio_ext_monotonic_time ();
-				break;
-			case ELOP_START:
-				member->last_atime = oio_ext_monotonic_time ();
-				transition(member, EVT_NONE, NULL);
-				break;
-			case ELOP_RESYNC:
-				member->last_atime = oio_ext_monotonic_time ();
-				transition(member, EVT_SYNC_REQ, NULL);
-				break;
-			case ELOP_EXIT:
-				if (member)
-					transition(member, EVT_LEAVE_REQ, NULL);
-				break;
-		}
 		if (out_status)
 			*out_status = member->step;
 		member_unref(member);
@@ -1744,26 +1754,26 @@ static GError *
 _election_trigger_RESYNC(struct election_manager_s *manager,
 		const struct sqlx_name_s *n)
 {
-	return _election_make(manager, n, ELOP_RESYNC, NULL);
+	return _election_make(manager, n, ELOP_RESYNC, NULL, NULL);
 }
 
 static GError *
 _election_init(struct election_manager_s *manager, const struct sqlx_name_s *n,
-		enum election_step_e *out_status)
+		enum election_step_e *out_status, gboolean *replicated)
 {
-	return _election_make(manager, n, ELOP_NONE, out_status);
+	return _election_make(manager, n, ELOP_NONE, out_status, replicated);
 }
 
 static GError *
 _election_start(struct election_manager_s *manager, const struct sqlx_name_s *n)
 {
-	return _election_make(manager, n, ELOP_START, NULL);
+	return _election_make(manager, n, ELOP_START, NULL, NULL);
 }
 
 static GError *
 _election_exit(struct election_manager_s *manager, const struct sqlx_name_s *n)
 {
-	return _election_make(manager, n, ELOP_EXIT, NULL);
+	return _election_make(manager, n, ELOP_EXIT, NULL, NULL);
 }
 
 static gboolean
@@ -3464,3 +3474,13 @@ election_manager_balance_masters(struct election_manager_s *M,
 
 	return count;
 }
+
+gboolean
+election_manager_configured(const struct election_manager_s *m)
+{
+	return m != NULL
+		&& m->sync_tab != NULL
+		&& m->peering != NULL
+		&& (ELECTION_MODE_NONE != election_manager_get_mode (m));
+}
+
