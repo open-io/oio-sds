@@ -116,7 +116,9 @@ struct election_manager_vtable_s
 	/** Prepare the internal memory for the election context, but without
 	 * starting the election. Usefull to prepare. */
 	GError* (*election_init) (struct election_manager_s *manager,
-			const struct sqlx_name_s *n, enum election_step_e *out_status);
+			const struct sqlx_name_s *n,
+			enum election_step_e *out_status,
+			gboolean *replicated);
 
 	/** Triggers the global election mechanism then returns without
 	 * waiting for a final status. */
@@ -152,8 +154,8 @@ const char * election_manager_get_local (const struct election_manager_s *m);
 GError* election_get_peers (struct election_manager_s *manager,
 		const struct sqlx_name_s *n, gboolean nocache, gchar ***peers);
 
-#define election_init(m,n,out) \
-	((struct abstract_election_manager_s*)m)->vtable->election_init(m,n,out)
+#define election_init(m,n,out,replicated) \
+	((struct abstract_election_manager_s*)m)->vtable->election_init(m,n,out,replicated)
 
 #define election_start(m,n) \
 	((struct abstract_election_manager_s*)m)->vtable->election_start(m,n)
@@ -212,6 +214,8 @@ void election_manager_add_sync(struct election_manager_s *manager,
 
 void election_manager_set_peering (struct election_manager_s *m,
 		struct sqlx_peering_s *peering);
+
+gboolean election_manager_configured(const struct election_manager_s *m);
 
 struct election_member_s;
 

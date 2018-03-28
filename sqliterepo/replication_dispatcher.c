@@ -1365,7 +1365,7 @@ _handler_GETVERS(struct gridd_reply_ctx_s *reply,
 	}
 
 	/* Kickoff the election, we are already involved in it... */
-	if (NULL != (err = sqlx_repository_use_base(repo, &n0, TRUE))) {
+	if (NULL != (err = sqlx_repository_use_base(repo, &n0, TRUE, NULL))) {
 		g_prefix_error(&err, "Use: ");
 		reply->send_error(0, err);
 		return TRUE;
@@ -1428,7 +1428,7 @@ _handler_REPLICATE(struct gridd_reply_ctx_s *reply,
 	/* Starts an election without being an initiator ... because I receive
 	 * this request from a master, so an election is already running
 	 * somewhere else. */
-	err = sqlx_repository_use_base(repo, &n0, FALSE);
+	err = sqlx_repository_use_base(repo, &n0, FALSE, NULL);
 	if (NULL != err) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -1576,7 +1576,7 @@ _handler_USE(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	if (NULL != (err = sqlx_repository_use_base(repo, &n0, TRUE)))
+	if (NULL != (err = sqlx_repository_use_base(repo, &n0, TRUE, NULL)))
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");
@@ -1769,7 +1769,7 @@ _handler_RESYNC(struct gridd_reply_ctx_s *reply,
 	g_clear_error(&err);
 
 	/* Open and lock the base */
-	err = sqlx_repository_use_base(repo, &n0, FALSE);
+	err = sqlx_repository_use_base(repo, &n0, FALSE, NULL);
 	if (NULL != err) {
 		reply->send_error(0, err);
 		return TRUE;

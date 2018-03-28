@@ -46,12 +46,6 @@ License along with this library.
 			g_string_append_c((S), G_DIR_SEPARATOR); \
 } while (0)
 
-static gboolean
-election_manager_configured(const struct election_manager_s *em)
-{
-	return em && (ELECTION_MODE_NONE != election_manager_get_mode (em));
-}
-
 static void
 _close_handle(sqlite3 **pdb)
 {
@@ -1071,9 +1065,12 @@ sqlx_repository_status_base(sqlx_repository_t *repo, const struct sqlx_name_s *n
 	GRID_TRACE2("%s(%p,t=%s,n=%s)", __FUNCTION__, repo, n->type, n->base);
 
 	/* Kick the election off */
-	GError *err = sqlx_repository_use_base(repo, n, TRUE);
+	gboolean replicated = FALSE;
+	GError *err = sqlx_repository_use_base(repo, n, TRUE, &replicated);
 	if (err)
 		return err;
+	if (!replicated)
+		return NULL;
 
 	/* Wait for a final status */
 	gchar *url = NULL;
@@ -1116,7 +1113,7 @@ sqlx_repository_prepare_election(sqlx_repository_t *repo, const struct sqlx_name
 		return NULL;
 	}
 
-	return election_init(repo->election_manager, n, NULL);
+	return election_init(repo->election_manager, n, NULL, NULL);
 }
 
 GError*
@@ -1175,7 +1172,7 @@ _base_lazy_recover(sqlx_repository_t *repo, const struct sqlx_name_s *n,
 
 GError*
 sqlx_repository_use_base(sqlx_repository_t *repo, const struct sqlx_name_s *n,
-		gboolean allow_autocreate)
+		gboolean allow_autocreate, gboolean *replicated)
 {
 	REPO_CHECK(repo);
 	SQLXNAME_CHECK(n);
@@ -1197,7 +1194,7 @@ sqlx_repository_use_base(sqlx_repository_t *repo, const struct sqlx_name_s *n,
 	/* The initiation of the election will perform the check that the
 	 * election is locally managed. */
 	enum election_step_e status = STEP_NONE;
-	if (!(err = election_init(repo->election_manager, n, &status))) {
+	if (!(err = election_init(repo->election_manager, n, &status, replicated))) {
 
 		/* Interleave a DB creation (out of the lock) if explicitely
 		 * allowed by both the request type AND the application */
