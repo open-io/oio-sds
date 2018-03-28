@@ -1125,6 +1125,14 @@ Used by `gcc`
  * cmake directive: *OIO_SQLITEREPO_ELECTION_DELAY_RETRY_FAILED*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 7 * G_TIME_SPAN_DAY
 
+### sqliterepo.election.lazy_recover
+
+> Should the election mecanism try to recreate missing DB?
+
+ * default: **FALSE**
+ * type: gboolean
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_LAZY_RECOVER*
+
 ### sqliterepo.election.nowait.after
 
 > In the current sqliterepo repository, sets the amount of time spent in an election resolution that will make a worker thread won't wait at all an consider that election is stalled.
