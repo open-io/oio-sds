@@ -17,6 +17,7 @@
 from werkzeug.wrappers import Response
 from werkzeug.routing import Map, Rule
 from werkzeug.exceptions import NotFound, BadRequest, Conflict
+from functools import wraps
 
 from oio.account.backend import AccountBackend
 from oio.common.utils import json, get_logger
@@ -24,7 +25,6 @@ from oio.common.wsgi import WerkzeugApp
 
 
 def access_log(func):
-    from functools import wraps
 
     @wraps(func)
     def _access_log_wrapper(self, *args, **kwargs):
