@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -282,8 +282,8 @@ class ECStream(object):
             except GreenletExit:
                 # ignore
                 pass
-            except green.ChunkReadTimeout:
-                logger.error("Timeout on reading")
+            except green.ChunkReadTimeout as err:
+                logger.error('%s', err)
             except Exception:
                 logger.exception("Exception on reading")
             finally:
@@ -746,8 +746,8 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 return bytes_transferred
 
         except green.SourceReadTimeout as exc:
-            logger.warn('Source read timeout: %s', exc)
-            raise
+            logger.warn('%s', exc)
+            raise exceptions.SourceReadTimeout(exc)
         except SourceReadError as exc:
             logger.warn('Source read error: %s', exc)
             raise
@@ -782,10 +782,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
         except (Exception, Timeout) as exc:
             msg = str(exc)
             logger.error("Failed to connect to %s (%s)", chunk, msg)
-            if isinstance(exc, Timeout):
-                chunk['error'] = 'connect: Timeout %s' % msg
-            else:
-                chunk['error'] = 'connect: %s' % msg
+            chunk['error'] = 'connect: %s' % msg
             return None, chunk
 
     def _get_results(self, writers):
@@ -839,7 +836,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
             if isinstance(exc, Timeout):
                 logger.warn("Timeout (%s) while writing %s",
                             msg, writer.chunk)
-                writer.chunk['error'] = 'resp: Timeout %s' % msg
+                writer.chunk['error'] = 'resp: %s' % msg
             else:
                 logger.warn("Failed to read response for %s (%s)",
                             writer.chunk, msg)

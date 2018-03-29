@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -526,8 +526,10 @@ class MetachunkWriter(object):
         :type successes: `list` or `tuple`
         :param failures: a list of chunk objects whose upload failed
         :type failures: `list` or `tuple`
-        :raises `exc.SourceReadError`: if there is a timeout while reading
-            data from the client (SourceReadTimeout)
+        :raises `exc.SourceReadError`: if there is an error while reading
+            data from the client
+        :raises `exc.SourceReadTimeout`: if there is a timeout while reading
+            data from the client
         :raises `exc.OioTimeout`: if there is a timeout among the errors
         :raises `exc.OioException`: if quorum has not been reached
             for any other reason
@@ -540,9 +542,11 @@ class MetachunkWriter(object):
                 "RAWX write failure, quorum not reached (%d/%d): %s" %
                 (len(successes), self.quorum, errors))
             for err in [x.get('error') for x in failures]:
-                if isinstance(err,
-                              (exc.SourceReadError, green.SourceReadTimeout)):
+                if isinstance(err, exc.SourceReadError):
                     raise exc.SourceReadError(new_exc)
+                elif isinstance(err, green.SourceReadTimeout):
+                    # Never raise 'green' timeouts out of our API
+                    raise exc.SourceReadTimeout(new_exc)
                 elif isinstance(err, (exc.OioTimeout, green.OioTimeout)):
                     raise exc.OioTimeout(new_exc)
             raise new_exc

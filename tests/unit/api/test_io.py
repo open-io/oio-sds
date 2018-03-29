@@ -186,7 +186,7 @@ class MetachunkWriterTest(unittest.TestCase):
         successes = [self._dummy_chunk(), self._dummy_chunk()]
         failures = [self._dummy_chunk(Exception('Failed')),
                     self._dummy_chunk(green.SourceReadTimeout(10))]
-        self.assertRaises(exceptions.SourceReadError,
+        self.assertRaises(exceptions.SourceReadTimeout,
                           self.mcw.quorum_or_fail, successes, failures)
         self._check_message(successes, failures)
 
