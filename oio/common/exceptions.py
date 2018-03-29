@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -148,6 +148,14 @@ class OioNetworkException(OioException):
 
 
 class OioTimeout(OioNetworkException):
+    pass
+
+
+class SourceReadTimeout(OioTimeout):
+    """
+    Specialization of OioTimeout for the case when a timeout occurs
+    while reading data from a client application.
+    """
     pass
 
 

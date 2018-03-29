@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -23,7 +23,7 @@ from eventlet import Timeout
 from oio.common.storage_method import STORAGE_METHODS
 from oio.api.ec import EcMetachunkWriter, ECChunkDownloadHandler, \
     ECRebuildHandler
-from oio.common import exceptions as exc
+from oio.common import exceptions as exc, green
 from oio.common.constants import chunk_headers
 from tests.unit.api import empty_stream, decode_chunked_body, \
     FakeResponse, CHUNK_SIZE, EMPTY_CHECKSUM
@@ -131,7 +131,8 @@ class TestEC(unittest.TestCase):
 
     def test_write_connect_errors(self):
         test_cases = [
-                {'error': Timeout(1.0), 'msg': 'connect: Timeout 1.0 second'},
+                {'error': green.ConnectionTimeout(1.0),
+                 'msg': 'connect: Connection timeout 1.0 second'},
                 {'error': Exception('failure'), 'msg': 'connect: failure'},
         ]
         for test in test_cases:
@@ -161,7 +162,8 @@ class TestEC(unittest.TestCase):
 
     def test_write_response_error(self):
         test_cases = [
-                {'error': Timeout(1.0), 'msg': 'resp: Timeout 1.0 second'},
+                {'error': green.ChunkWriteTimeout(1.0),
+                 'msg': 'resp: Chunk write timeout 1.0 second'},
                 {'error': Exception('failure'), 'msg': 'resp: failure'},
         ]
         for test in test_cases:

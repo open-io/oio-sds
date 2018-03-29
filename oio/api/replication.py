@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -120,14 +120,14 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                     if conn.queue.unfinished_tasks:
                         conn.queue.join()
 
-        except green.SourceReadTimeout:
-            logger.warn('Source read timeout')
-            raise
+        except green.SourceReadTimeout as err:
+            logger.warn('Source read timeout (%s)', err)
+            raise exc.SourceReadTimeout(err)
         except SourceReadError:
             logger.warn('Source read error')
             raise
         except Timeout as to:
-            logger.exception('Timeout writing data')
+            logger.exception('Timeout writing data (%s)', to)
             raise exc.OioTimeout(to)
         except Exception:
             logger.exception('Exception writing data')
