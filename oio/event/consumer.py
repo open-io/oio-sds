@@ -224,9 +224,8 @@ class EventWorker(Worker):
                     continue
                 event = self.safe_decode_job(job_id, data)
                 if not event:
-                    self.logger.warn("Burying event %s (%s): %s",
-                                     job_id, event.get('event'),
-                                     "malformed")
+                    self.logger.warn("Burying event %s: %s",
+                                     job_id, "malformed")
                     beanstalk.bury(job_id)
                 else:
                     try:
