@@ -223,17 +223,22 @@ class EventWorker(Worker):
                     eventlet.sleep(BEANSTALK_RECONNECTION)
                     continue
                 event = self.safe_decode_job(job_id, data)
-                try:
-                    if event:
-                        self.process_event(job_id, event, beanstalk)
-                except (ClientException, OioNetworkException) as exc:
+                if not event:
                     self.logger.warn("Burying event %s (%s): %s",
-                                     job_id, event.get('event'), exc)
+                                     job_id, event.get('event'),
+                                     "malformed")
                     beanstalk.bury(job_id)
-                except Exception:
-                    self.logger.exception("Burying event %s: %s",
-                                          job_id, event)
-                    beanstalk.bury(job_id)
+                else:
+                    try:
+                        self.process_event(job_id, event, beanstalk)
+                    except (ClientException, OioNetworkException) as exc:
+                        self.logger.warn("Burying event %s (%s): %s",
+                                         job_id, event.get('event'), exc)
+                        beanstalk.bury(job_id)
+                    except Exception:
+                        self.logger.exception("Burying event %s: %s",
+                                              job_id, event)
+                        beanstalk.bury(job_id)
         except StopServe:
             pass
 
