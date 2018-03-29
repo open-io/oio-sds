@@ -945,6 +945,8 @@ static void
 _re_enable (struct req_args_s *args)
 {
 	GError *e = _resolve_meta2(args, CLIENT_PREFER_MASTER, sqlx_pack_ENABLE, NULL);
+	if (e && e->code == CODE_CONTAINER_ENABLED)
+		g_clear_error(&e);
 	if (e) {
 		GRID_INFO("Failed to un-freeze [%s]: (%d) %s",
 				oio_url_get(args->url, OIOURL_WHOLE), e->code, e->message);
@@ -975,7 +977,9 @@ action_m2_container_destroy (struct req_args_s *args)
 	if (!err) {
 		err = _resolve_meta2 (args, CLIENT_PREFER_MASTER,
 							  sqlx_pack_FREEZE, NULL);
-		if (NULL != err && CODE_IS_NETWORK_ERROR(err->code)) {
+		if (err != NULL && err->code == CODE_CONTAINER_FROZEN)
+			g_clear_error(&err);
+		if (err != NULL && CODE_IS_NETWORK_ERROR(err->code)) {
 			/* rollback! There are chances the request made a timeout
 			 * but was actually managed by the server. */
 			_re_enable (args);
@@ -989,7 +993,7 @@ action_m2_container_destroy (struct req_args_s *args)
 		guint32 flags = flag_force_master ? M2V2_FLAG_MASTER : 0;
 		PACKER_VOID(_pack) { return m2v2_remote_pack_ISEMPTY (args->url, flags); }
 		err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
-		if (NULL != err) {
+		if (err != NULL) {
 			/* rollback! */
 			_re_enable (args);
 			goto clean_and_exit;
@@ -1003,7 +1007,7 @@ action_m2_container_destroy (struct req_args_s *args)
 		}
 		err = _m1_locate_and_action (args->url, _unlink);
 		hc_decache_reference_service (resolver, args->url, n.type);
-		if (NULL != err) {
+		if (err != NULL) {
 			/* Rolling back will be hard if there is any chance the UNLINK has
 			 * been managed by the server, despite a time-out that occured. */
 			_re_enable (args);
@@ -1026,7 +1030,7 @@ action_m2_container_destroy (struct req_args_s *args)
 clean_and_exit:
 	if (urlv)
 		g_strfreev (urlv);
-	if (NULL != err)
+	if (err != NULL)
 		return _reply_m2_error(args, err);
 	return _reply_nocontent (args);
 }
