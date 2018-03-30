@@ -45,6 +45,7 @@ class Application(BaseApplication):
         self.cfg.set('syslog_prefix', self.conf.get('syslog_prefix', ''))
         self.cfg.set('syslog_addr', self.conf.get('log_address', '/dev/log'))
         self.cfg.set('accesslog', None)
+        self.cfg.set('keepalive', 30)
         self.cfg.set('access_log_format', self.conf.get('access_log_format',
                                                         self.access_log_fmt))
         if self.logger_class:
