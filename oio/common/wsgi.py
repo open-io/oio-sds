@@ -37,8 +37,7 @@ class Application(BaseApplication):
                           self.conf.get('bind_port', '8000'))
         self.cfg.set('bind', bind)
         self.cfg.set('backlog', self.conf.get('backlog', 2048))
-        self.cfg.set('workers', self.conf.get('workers', 1))
-        self.cfg.set('threads', self.conf.get('threads', CPU_COUNT))
+        self.cfg.set('workers', self.conf.get('workers', CPU_COUNT))
         self.cfg.set('worker_class', self.conf.get('worker_class', 'eventlet'))
         self.cfg.set('worker_connections', self.conf.get(
             'worker_connections', 1000))
