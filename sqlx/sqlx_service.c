@@ -251,7 +251,7 @@ _patch_configuration_fd(void)
 
 	// The operator already reserved to many connections, and we cannot
 	// promise these numbers. we hope he/she is aware of his/her job.
-	if (reserved >= total) {
+	if (reserved > total) {
 		GRID_WARN("Too many descriptors have been reserved (%u), "
 				"please reconfigure the service or extend the system limit "
 				"(currently set to %u).", reserved, maxfd);
