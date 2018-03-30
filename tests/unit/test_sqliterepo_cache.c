@@ -58,10 +58,10 @@ _round_lock(sqlx_cache_t *cache)
 		g_assert_cmpint(id0, ==, id);
 	}
 	for (int i=0; i<6 ;i++) {
-		err = sqlx_cache_unlock_and_close_base(cache, id0, FALSE);
+		err = sqlx_cache_unlock_and_close_base(cache, id0, 0);
 		g_assert_no_error (err);
 	}
-	err = sqlx_cache_unlock_and_close_base(cache, id0, FALSE);
+	err = sqlx_cache_unlock_and_close_base(cache, id0, 0);
 	g_assert_error (err, GQ(), CODE_INTERNAL_ERROR);
 	g_clear_error (&err);
 
@@ -69,7 +69,7 @@ _round_lock(sqlx_cache_t *cache)
 		gint id = oio_ext_rand_int ();
 		err = sqlx_cache_open_and_lock_base(cache, hn1, FALSE, &id);
 		g_assert_no_error (err);
-		err = sqlx_cache_unlock_and_close_base(cache, id, FALSE);
+		err = sqlx_cache_unlock_and_close_base(cache, id, 0);
 		g_assert_no_error (err);
 	}
 }
@@ -138,7 +138,7 @@ _test_cache_limit (sqlx_cache_t *cache, guint max)
 
 	// 3 a bit of cleanup
 	for (guint i=0; i<max ;++i) {
-		GError *err = sqlx_cache_unlock_and_close_base(cache, ids[i], FALSE);
+		GError *err = sqlx_cache_unlock_and_close_base(cache, ids[i], 0);
 		g_assert_no_error(err);
 	}
 }

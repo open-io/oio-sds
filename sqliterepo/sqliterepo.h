@@ -74,7 +74,10 @@ enum sqlx_open_type_e
 enum sqlx_close_flag_e
 {
 	/** Close the base immediately, don't keep it in the cache */
-	SQLX_CLOSE_IMMEDIATELY = 0x01,
+	SQLX_CLOSE_IMMEDIATELY  = 0x01,
+	/** Close the base immediately,
+	 *  and prevent other threads from reopening it. */
+	SQLX_CLOSE_FOR_DELETION = 0x02,
 };
 
 enum sqlx_repo_flag_e

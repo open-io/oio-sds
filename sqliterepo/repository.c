@@ -138,7 +138,7 @@ __close_base(struct sqlx_sqlite3_s *sq3)
 			sq3->name.type);
 
 	/* send a vacuum */
-	if (sq3->repo && sq3->repo->flag_autovacuum)
+	if (sq3->repo && sq3->repo->flag_autovacuum && !sq3->deleted)
 		sqlx_exec(sq3->db, "VACUUM");
 
 	sqlx_repository_call_close_callback(sq3);
@@ -745,9 +745,9 @@ __open_maybe_cached(struct open_args_s *args, struct sqlx_sqlite3_s **result)
 		return NULL;
 	}
 
-	GError *e1 = sqlx_cache_unlock_and_close_base(args->repo->cache, bd, FALSE);
+	GError *e1 = sqlx_cache_unlock_and_close_base(args->repo->cache, bd, 0);
 	if (e1) {
-		GRID_WARN("BASE unlock/close error on bd=%d : (%d) %s",
+		GRID_WARN("BASE unlock/close error on bd=%d: (%d) %s",
 				bd, e1->code, e1->message);
 		g_clear_error(&e1);
 	}
@@ -874,8 +874,10 @@ sqlx_repository_unlock_and_close2(struct sqlx_sqlite3_s *sq3, guint32 flags)
 		sq3->deleted = FALSE;
 
 	if (sq3->repo->cache) {
-		err = sqlx_cache_unlock_and_close_base(sq3->repo->cache, sq3->bd,
-			sq3->deleted || (flags & SQLX_CLOSE_IMMEDIATELY));
+		if (sq3->deleted)
+			flags |= SQLX_CLOSE_FOR_DELETION;
+		err = sqlx_cache_unlock_and_close_base(
+				sq3->repo->cache, sq3->bd, flags);
 	}
 	else {
 		__close_base(sq3);

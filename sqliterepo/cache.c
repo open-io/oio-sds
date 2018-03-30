@@ -49,6 +49,7 @@ enum sqlx_base_status_e
 						 * to be kept open, and owner tells if the lock
 						 * os currently owned by a thread. */
 	SQLX_BASE_CLOSING, // base being closed, wait for notification and retry on it
+	SQLX_BASE_CLOSING_FOR_DELETION, // base about to be deleted
 };
 
 struct sqlx_base_s
@@ -125,6 +126,8 @@ sqlx_status_to_str(enum sqlx_base_status_e status)
 			return "USED";
 		case SQLX_BASE_CLOSING:
 			return "CLOSING";
+		case SQLX_BASE_CLOSING_FOR_DELETION:
+			return "CLOSING_FOR_DELETION";
 		default:
 			return "?";
 	}
@@ -264,6 +267,7 @@ sqlx_base_remove_from_list(sqlx_cache_t *cache, sqlx_base_t *base)
 			SQLX_REMOVE(cache, base, &(cache->beacon_used));
 			return;
 		case SQLX_BASE_CLOSING:
+		case SQLX_BASE_CLOSING_FOR_DELETION:
 			EXTRA_ASSERT(base->link.prev < 0);
 			EXTRA_ASSERT(base->link.next < 0);
 			return;
@@ -293,6 +297,7 @@ sqlx_base_add_to_list(sqlx_cache_t *cache, sqlx_base_t *base,
 			SQLX_UNSHIFT(cache, base, &(cache->beacon_used), SQLX_BASE_USED);
 			return;
 		case SQLX_BASE_CLOSING:
+		case SQLX_BASE_CLOSING_FOR_DELETION:
 			base->status = status;
 			return;
 	}
@@ -377,7 +382,7 @@ _signal_base(sqlx_base_t *base)
  * - The cache-wide lock is still owned
  */
 static void
-_expire_base(sqlx_cache_t *cache, sqlx_base_t *b)
+_expire_base(sqlx_cache_t *cache, sqlx_base_t *b, gboolean deleted)
 {
 	gpointer handle = b->handle;
 
@@ -386,7 +391,8 @@ _expire_base(sqlx_cache_t *cache, sqlx_base_t *b)
 	EXTRA_ASSERT(b->count_open == 0);
 	EXTRA_ASSERT(b->status == SQLX_BASE_USED);
 
-	sqlx_base_move_to_list(cache, b, SQLX_BASE_CLOSING);
+	sqlx_base_move_to_list(cache, b,
+			deleted? SQLX_BASE_CLOSING_FOR_DELETION : SQLX_BASE_CLOSING);
 
 	/* the base is for the given thread, it is time to REALLY close it.
 	 * But this can take a lot of time. So we can release the pool,
@@ -433,7 +439,7 @@ _expire_specific_base(sqlx_cache_t *cache, sqlx_base_t *b, gint64 now,
 	b->owner = g_thread_self();
 	sqlx_base_move_to_list(cache, b, SQLX_BASE_USED);
 
-	_expire_base(cache, b);
+	_expire_base(cache, b, FALSE);
 
 	/* If someone is waiting on the base while it is being closed
 	 * (this arrives when someone tries to read it again after
@@ -542,6 +548,7 @@ sqlx_cache_clean(sqlx_cache_t *cache)
 					sqlx_base_debug(__FUNCTION__, base);
 					break;
 				case SQLX_BASE_CLOSING:
+				case SQLX_BASE_CLOSING_FOR_DELETION:
 					GRID_ERROR("Base being closed while the cache is being cleaned");
 					break;
 			}
@@ -673,6 +680,12 @@ retry:
 				g_cond_wait_until(wait_cond, &cache->lock,
 						g_get_monotonic_time() + _cache_period_cond_wait);
 				goto retry;
+
+			case SQLX_BASE_CLOSING_FOR_DELETION:
+				err = NEWERROR(CODE_CONTAINER_NOTFOUND,
+						"Base [%s] about to be deleted",
+						hashstr_str(hname));
+				break;
 		}
 	}
 
@@ -689,11 +702,11 @@ retry:
 }
 
 GError *
-sqlx_cache_unlock_and_close_base(sqlx_cache_t *cache, gint bd, gboolean force)
+sqlx_cache_unlock_and_close_base(sqlx_cache_t *cache, gint bd, guint32 flags)
 {
 	GError *err = NULL;
 
-	GRID_TRACE2("%s(%p,%d,%d)", __FUNCTION__, (void*)cache, bd, force);
+	GRID_TRACE2("%s(%p,%d,%d)", __FUNCTION__, (void*)cache, bd, flags);
 
 	EXTRA_ASSERT(cache != NULL);
 	if (base_id_out(cache, bd))
@@ -721,8 +734,8 @@ sqlx_cache_unlock_and_close_base(sqlx_cache_t *cache, gint bd, gboolean force)
 			EXTRA_ASSERT(base->count_open > 0);
 			/* held by the current thread */
 			if (!(-- base->count_open)) {  /* to be closed */
-				if (force) {
-					_expire_base(cache, base);
+				if (flags & (SQLX_CLOSE_IMMEDIATELY|SQLX_CLOSE_FOR_DELETION)) {
+					_expire_base(cache, base, flags & SQLX_CLOSE_FOR_DELETION);
 				} else {
 					sqlx_base_debug("CLOSING", base);
 					base->owner = NULL;
@@ -735,6 +748,7 @@ sqlx_cache_unlock_and_close_base(sqlx_cache_t *cache, gint bd, gboolean force)
 			break;
 
 		case SQLX_BASE_CLOSING:
+		case SQLX_BASE_CLOSING_FOR_DELETION:
 			EXTRA_ASSERT(base->owner != NULL);
 			EXTRA_ASSERT(base->owner != g_thread_self());
 			err = NEWERROR(CODE_INTERNAL_ERROR, "base being closed");
