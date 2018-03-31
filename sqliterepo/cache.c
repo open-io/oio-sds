@@ -682,7 +682,7 @@ retry:
 				goto retry;
 
 			case SQLX_BASE_CLOSING_FOR_DELETION:
-				err = NEWERROR(CODE_CONTAINER_NOTFOUND,
+				err = NEWERROR(CODE_UNAVAILABLE,
 						"Base [%s] about to be deleted",
 						hashstr_str(hname));
 				break;
