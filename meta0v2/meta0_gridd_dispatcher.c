@@ -140,7 +140,6 @@ meta0_dispatch_v1_GETONE(struct gridd_reply_ctx_s *reply,
 		gchar **urlv = NULL;
 		err = meta0_backend_get_one(m0disp->m0, prefix, &urlv);
 		if (NULL != err) {
-			g_prefix_error(&err, "Backend error: ");
 			reply->send_error(0, err);
 		} else {
 			reply->add_body(_encode_meta0_tree(urlv_to_tree(prefix, urlv)));
@@ -166,7 +165,6 @@ meta0_dispatch_v1_RELOAD(struct gridd_reply_ctx_s *reply,
 	GError *err;
 
 	if (NULL != (err = meta0_backend_reload(m0disp->m0))) {
-		g_prefix_error(&err, "Backend error: ");
 		reply->send_error(0, err);
 		return TRUE;
 	}
@@ -185,7 +183,6 @@ meta0_dispatch_v1_RESET(struct gridd_reply_ctx_s *reply,
 
 	GError *err = meta0_backend_reset(m0disp->m0, flag_local);
 	if (NULL != err) {
-		g_prefix_error(&err, "Backend error: ");
 		reply->send_error(0, err);
 		return TRUE;
 	}
