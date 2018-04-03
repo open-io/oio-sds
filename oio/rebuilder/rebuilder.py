@@ -31,9 +31,10 @@ class Rebuilder(object):
       `_get_report()`.
     """
 
-    def __init__(self, conf, logger, **kwargs):
+    def __init__(self, conf, logger, input_file=None, **kwargs):
         self.conf = conf
         self.logger = logger or get_logger(conf)
+        self.input_file = input_file
         self.nworkers = int_value(conf.get('workers'), 1)
 
     def rebuilder_pass(self, **kwargs):

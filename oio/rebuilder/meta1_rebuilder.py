@@ -33,6 +33,9 @@ class Meta1Rebuilder(MetaRebuilder):
         return Meta1RebuilderWorker(self.conf, self.logger, **kwargs)
 
     def _fill_queue(self, queue, **kwargs):
+        if self._fill_queue_from_file(queue, **kwargs):
+            return
+
         prefixes = set()
 
         rawx_services = self.conscience.all_services('rawx')

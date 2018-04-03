@@ -15,6 +15,7 @@
 
 
 import time
+import sys
 
 from oio import ObjectStorageApi
 from oio.common.exceptions import NotFound, ServiceBusy
@@ -30,6 +31,16 @@ class MetaRebuilder(Rebuilder):
     def __init__(self, conf, logger, **kwargs):
         super(MetaRebuilder, self).__init__(conf, logger, **kwargs)
         self.api = ObjectStorageApi(self.conf['namespace'], logger=self.logger)
+
+    def _fill_queue_from_file(self, queue, **kwargs):
+        if self.input_file is None:
+            return False
+        with open(self.input_file, 'r') as ifile:
+            for line in ifile:
+                stripped = line.strip()
+                if stripped and not stripped.startswith('#'):
+                    queue.put(stripped)
+        return True
 
     def _full_container_list(self, account, **kwargs):
         listing = self.api.container_list(account, **kwargs)
@@ -86,4 +97,5 @@ class MetaRebuilderWorker(RebuilderWorker):
                         continue
                 self.logger.error('ERROR while rebuilding %s: %s', cid, err)
                 self.errors += 1
+                sys.stdout.write(cid+'\n')
                 break
