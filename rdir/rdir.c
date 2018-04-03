@@ -347,6 +347,7 @@ _db_open(const char *volid, gboolean autocreate, leveldb_t **pdb)
 	}
 
 	leveldb_options_t *options = leveldb_options_create();
+	leveldb_options_set_max_open_files(options, rdir_fd_per_base);
 	leveldb_options_set_create_if_missing(options, BOOL(autocreate));
 	db = leveldb_open(options, dbname, &errmsg);
 	leveldb_options_destroy(options);
@@ -1383,21 +1384,41 @@ _main_error(GError * err)
 static void
 _patch_and_apply_configuration(void)
 {
-	if (server_fd_max_passive <= 0) {
-		const guint maxfd = metautils_syscall_count_maxfd();
-		guint reserved = rdir_fd_reserve;
+	const guint maxfd = metautils_syscall_count_maxfd();
 
-		if (reserved > maxfd) {
-			GRID_WARN("Too many FD reserved for the backend, check `ulimit -n`"
-					" and `rdir.fd_reserve`. Reserving only %u instead of %u",
-					maxfd / 2, reserved);
-			reserved = maxfd / 2;
+	if (server_fd_max_passive > 0 && rdir_fd_reserve <= 0) {
+		rdir_fd_reserve = maxfd - server_fd_max_passive;
+	} else if (server_fd_max_passive <=0 && rdir_fd_reserve > 0) {
+		server_fd_max_passive = maxfd - rdir_fd_reserve;
+	} else if (server_fd_max_passive <=0 && rdir_fd_reserve <= 0) {
+		/* Enforce arbitrary but acceptable default value */
+		const guint maxfd_net = maxfd / 2;
+		if (server_fd_max_passive > maxfd_net || server_fd_max_passive <= 0) {
+			server_fd_max_passive = maxfd_net;
 		}
+		const guint maxfd_db = maxfd - maxfd_net;
+		if (rdir_fd_reserve > maxfd_db || rdir_fd_reserve <= 0) {
+			rdir_fd_reserve = maxfd_db;
+		}
+	}
 
-		/* Even on small platforms, rdir is called by a lot of concurrent
-		 * clients. The event-agent currently use a lot of worker processes
-		 * that all manage several coroutines and a pool of connections. */
-		server_fd_max_passive = maxfd - reserved;
+	if (rdir_fd_per_base <= 0) {
+		/* rdir are supposed to be deployed alongside the rawx, with a 1:1
+		 * ratio as the most common deployment case, and a 8:1 rdir/rawx ratio
+		 * in some cases. So assuming a rdir manages 16 bases in most cases
+		 * seems decent. */
+		rdir_fd_per_base = rdir_fd_reserve / 16;
+	}
+	if (rdir_fd_per_base <= 8) {
+		rdir_fd_per_base = 8;
+	}
+
+	if (rdir_fd_reserve + server_fd_max_passive > maxfd) {
+		GRID_WARN("Too many FD configured sys[%u] db[%u] passive[%u] %%base[%u]",
+				maxfd, rdir_fd_reserve, server_fd_max_passive, rdir_fd_per_base);
+	} else {
+		GRID_INFO("FD configured sys[%u] db[%u] passive[%u] %%base[%u]",
+				maxfd, rdir_fd_reserve, server_fd_max_passive, rdir_fd_per_base);
 	}
 
 	network_server_reconfigure(server);

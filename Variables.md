@@ -722,14 +722,23 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_RAWX_EVENTS_ALLOWED*
 
+### rdir.fd_per_base
+
+> Configure the maximum number of file descriptors allowed to each leveldb database. Set to 0 to autodetermine the value (cf. rdir.fd_reserve). The real value will be clamped at least to 8. Will only be applied on bases opened after the configuration change.
+
+ * default: **0**
+ * type: guint
+ * cmake directive: *OIO_RDIR_FD_PER_BASE*
+ * range: 0 -> 16384
+
 ### rdir.fd_reserve
 
-> Only effective when `server.fd_max_passive` is set to 0 (autodetection). When deducing the maximum number of incoming connections, the rdir reserves that amount of file descritors to reach the database shards, and allocates what remains to the network.
+> Configure the total number of file descriptors the leveldb backend may use. Set to 0 to autodetermine the value. Will only be applied on bases opened after the configuration change.
 
- * default: **128**
+ * default: **0**
  * type: guint
  * cmake directive: *OIO_RDIR_FD_RESERVE*
- * range: 64 -> 1024
+ * range: 0 -> 32768
 
 ### resolver.cache.csm0.max.default
 
