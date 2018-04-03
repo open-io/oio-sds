@@ -477,11 +477,17 @@ meta0_backend_get_one(struct meta0_backend_s *m0, const guint8 *prefix,
 
 	if (!m0->array_by_prefix) {
 		*u = NULL;
+		return NEWERROR(CODE_UNAVAILABLE,
+				"The current META0 service is not ready yet, "
+				"it has not been initiated.");
 	} else {
 		g_rw_lock_reader_lock(&(m0->rwlock));
 		*u = meta0_utils_array_get_urlv(m0->array_by_prefix, prefix);
 		g_rw_lock_reader_unlock(&(m0->rwlock));
+		if (*u != NULL)
+			return NULL;
+		return NEWERROR(CODE_UNAVAILABLE,
+				"The current META0 service is not ready yet, "
+				"it has been partially initiated.");
 	}
-
-	return *u ? NULL : NEWERROR(EINVAL, "META0 partially missing");
 }
