@@ -158,7 +158,8 @@ static void _sort_services (struct client_ctx_s *ctx,
 		const char *k, gchar **m1uv) {
 	_debug_services ("PRE sort: ", m1uv);
 
-	gsize pivot = g_strv_length (m1uv);
+	gsize len = g_strv_length (m1uv);
+	gsize pivot = len;
 
 	/* prefer services recently available */
 	if (pivot > 1)
@@ -181,9 +182,22 @@ static void _sort_services (struct client_ctx_s *ctx,
 		}
 	}
 
-	/* If multiple available & preferred services, shuffle them */
-	if (pivot > 1 && oio_proxy_srv_shuffle)
-		oio_ext_array_shuffle ((void**)m1uv, pivot);
+	if (oio_proxy_srv_shuffle) {
+		switch (pivot) {
+			case 1:
+				break;
+			case 0:
+				/* If no available & preferred service, shuffle them */
+				if (len > 1)
+					pivot = len;
+				else
+					break;
+				// FALLTHROUGH
+			default:
+				/* If multiple available & preferred services, shuffle them */
+				oio_ext_array_shuffle((void**)m1uv, pivot);
+		}
+	}
 
 	_debug_services ("POST sort: ", m1uv);
 }
