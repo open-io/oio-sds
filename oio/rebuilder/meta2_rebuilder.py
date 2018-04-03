@@ -29,6 +29,9 @@ class Meta2Rebuilder(MetaRebuilder):
         return Meta2RebuilderWorker(self.conf, self.logger, **kwargs)
 
     def _fill_queue(self, queue, **kwargs):
+        if self._fill_queue_from_file(queue, **kwargs):
+            return
+
         accounts = self.api.account_list()
         for account in accounts:
             containers = self._full_container_list(account)

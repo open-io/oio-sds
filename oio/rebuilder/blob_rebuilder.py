@@ -32,13 +32,11 @@ DEFAULT_REBUILDER_TUBE = 'oio-rebuild'
 
 class BlobRebuilder(Rebuilder):
 
-    def __init__(self, conf, logger, volume,
-                 input_file=None, try_chunk_delete=False,
+    def __init__(self, conf, logger, volume, try_chunk_delete=False,
                  beanstalkd_addr=None, **kwargs):
         super(BlobRebuilder, self).__init__(conf, logger, **kwargs)
         self.volume = volume
         self.rdir_client = RdirClient(conf, logger=self.logger)
-        self.input_file = input_file
         self.try_chunk_delete = try_chunk_delete
         self.beanstalkd_addr = beanstalkd_addr
         self.beanstalkd_tube = conf.get('beanstalkd_tube',

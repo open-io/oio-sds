@@ -35,7 +35,8 @@ def make_arg_parser():
                             help="Log address")
 
     descr = "Rebuild meta1 databases by setting 'last_rebuild' " \
-        "property in admin table, thus triggering a replication."
+            "property in admin table, thus triggering a replication." \
+            "And print the failed container IDs."
     parser = argparse.ArgumentParser(description=descr, parents=[log_parser])
     parser.add_argument('namespace', help="Namespace")
     parser.add_argument('--report-interval', type=int,
@@ -46,6 +47,10 @@ def make_arg_parser():
                         help="Max prefixes per second per workers (30)")
     parser.add_argument('-q', '--quiet', action='store_true',
                         help="Don't print log on console")
+    ifile_help = "Read container IDs from this file instead of redis. " \
+                 "Each line should be formatted like 'container_id'."
+    parser.add_argument('--input-file', nargs='?',
+                        help=ifile_help)
 
     return parser
 
@@ -77,7 +82,8 @@ if __name__ == '__main__':
     logger = get_logger(conf, None, not args.quiet)
 
     try:
-        meta1_rebuilder = Meta1Rebuilder(conf, logger)
+        meta1_rebuilder = Meta1Rebuilder(conf, logger,
+                                         input_file=args.input_file)
         meta1_rebuilder.rebuilder_pass()
     except KeyboardInterrupt:
         logger.info('Exiting')
