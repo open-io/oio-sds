@@ -141,7 +141,7 @@ meta0_dispatch_v1_GETONE(struct gridd_reply_ctx_s *reply,
 		err = meta0_backend_get_one(m0disp->m0, prefix, &urlv);
 		if (NULL != err) {
 			g_prefix_error(&err, "Backend error: ");
-			reply->send_error(CODE_INTERNAL_ERROR, err);
+			reply->send_error(0, err);
 		} else {
 			reply->add_body(_encode_meta0_tree(urlv_to_tree(prefix, urlv)));
 			reply->send_reply(CODE_FINAL_OK, "OK");
