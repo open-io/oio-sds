@@ -105,7 +105,8 @@ class OioTarEntry(object):
         # x-static-large-object
         if properties.get(SLO, False):
             tarinfo.size = int(properties.get(SLO_SIZE))
-            _, slo = conn.object_fetch(self.acct, self.ref, self.name)
+            _, slo = conn.object_fetch(self.acct, self.ref, self.name,
+                                       properties=False)
             self._slo = json.loads("".join(slo), object_pairs_hook=OrderedDict)
             self._checksums = {}
             # format MD5 to share same format as multi chunks object
@@ -119,7 +120,8 @@ class OioTarEntry(object):
                 offset += ck['bytes']
         else:
             tarinfo.size = int(entry['length'])
-            meta, chunks = conn.object_locate(self.acct, self.ref, self.name)
+            meta, chunks = conn.object_locate(self.acct, self.ref, self.name,
+                                              properties=False)
             storage_method = STORAGE_METHODS.load(meta['chunk_method'])
             chunks = _sort_chunks(chunks, storage_method.ec)
             for idx in chunks:
@@ -332,7 +334,8 @@ class ContainerTarFile(object):
 
                 cnt, path = part['name'].strip('/').split('/', 1)
                 _, data = self.storage.object_fetch(
-                    self.acct, cnt, path, ranges=[(slo_start, slo_end)])
+                    self.acct, cnt, path, ranges=[(slo_start, slo_end)],
+                    properties=False)
                 mem += "".join(data)
 
                 start = max(0, start - part['bytes'])
@@ -341,7 +344,8 @@ class ContainerTarFile(object):
                     break
         else:
             _, data = self.storage.object_fetch(
-                self.acct, self.container, name, ranges=[(start, end)])
+                self.acct, self.container, name, ranges=[(start, end)],
+                properties=False)
             mem += "".join(data)
 
         if last:

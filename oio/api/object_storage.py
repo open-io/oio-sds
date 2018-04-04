@@ -790,7 +790,8 @@ class ObjectStorageApi(object):
 
         # code copied from object_fetch (should be factorized !)
         meta, raw_chunks = self.object_locate(
-            account, container, obj, version=version, **kwargs)
+            account, container, obj, version=version,
+            properties=False, **kwargs)
         chunk_method = meta['chunk_method']
         storage_method = STORAGE_METHODS.load(chunk_method)
         chunks = _sort_chunks(raw_chunks, storage_method.ec)
@@ -864,7 +865,7 @@ class ObjectStorageApi(object):
 
     @handle_object_not_found
     def object_locate(self, account, container, obj,
-                      version=None, **kwargs):
+                      version=None, properties=True, **kwargs):
         """
         Get a description of the object along with the list of its chunks.
 
@@ -872,11 +873,16 @@ class ObjectStorageApi(object):
         :param container: name of the container in which the object is stored
         :param obj: name of the object to query
         :param version: version of the object to query
+        :param properties: should the request return object properties
+            along with content description
+        :type properties: `bool`
+
         :returns: a tuple with object metadata `dict` as first element
             and chunk `list` as second element
         """
         obj_meta, chunks = self.container.content_locate(
-            account, container, obj, version=version, **kwargs)
+            account, container, obj, version=version,
+            properties=properties, **kwargs)
         return obj_meta, chunks
 
     def object_analyze(self, *args, **kwargs):
@@ -950,6 +956,26 @@ class ObjectStorageApi(object):
     @ensure_request_id
     def object_fetch(self, account, container, obj, version=None, ranges=None,
                      key_file=None, **kwargs):
+        """
+        Download an object.
+
+        :param account: name of the account in which the object is stored
+        :param container: name of the container in which the object is stored
+        :param obj: name of the object to fetch
+        :param version: version of the object to fetch
+        :type version: `str`
+        :param ranges: a list of object ranges to download
+        :type ranges: `list` of `tuple`
+        :param key_file: path to the file containing credentials
+
+        :keyword properties: should the request return object properties
+            along with content description (True by default)
+        :type properties: `bool`
+
+        :returns: a dictionary of object metadata and
+            a stream of object data
+        :rtype: tuple
+        """
         meta, raw_chunks = self.object_locate(
             account, container, obj, version=version, **kwargs)
         chunk_method = meta['chunk_method']
