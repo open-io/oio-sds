@@ -278,11 +278,12 @@ class Checker(object):
         results = []
         ct_meta = dict()
         prefix = target.obj
+        limit = 1 if target.obj else None
         while True:
             try:
                 _, resp = self.container_client.content_list(
                     account=account, reference=container, prefix=prefix,
-                    marker=marker)
+                    marker=marker, limit=limit)
             except exc.NotFound as e:
                 self.container_not_found += 1
                 error = True
@@ -333,10 +334,11 @@ class Checker(object):
         marker = None
         results = []
         prefix = target.container
+        limit = 1 if target.obj else None
         while True:
             try:
                 resp = self.account_client.container_list(
-                    account, prefix=prefix, marker=marker)
+                    account, prefix=prefix, marker=marker, limit=limit)
             except Exception as e:
                 self.account_exceptions += 1
                 error = True
