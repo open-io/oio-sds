@@ -27,6 +27,9 @@ from oio.rdir.client import RdirClient
 from oio.rebuilder.rebuilder import Rebuilder, RebuilderWorker
 
 
+DEFAULT_REBUILDER_TUBE = 'oio-rebuild'
+
+
 class BlobRebuilder(Rebuilder):
 
     def __init__(self, conf, logger, volume,
@@ -38,7 +41,8 @@ class BlobRebuilder(Rebuilder):
         self.input_file = input_file
         self.try_chunk_delete = try_chunk_delete
         self.beanstalkd_addr = beanstalkd_addr
-        self.beanstalkd_tube = conf.get('beanstalkd_tube', 'rebuild')
+        self.beanstalkd_tube = conf.get('beanstalkd_tube',
+                                        DEFAULT_REBUILDER_TUBE)
         self.beanstalk = None
         self.rdir_fetch_limit = int_value(conf.get('rdir_fetch_limit'), 100)
 
@@ -51,7 +55,9 @@ class BlobRebuilder(Rebuilder):
                    None]
 
     def _connect_to_beanstalk(self):
+        self.logger.debug('Connecting to %s', self.beanstalkd_addr)
         self.beanstalk = Beanstalk.from_url(self.beanstalkd_addr)
+        self.logger.debug('Using tube %s', self.beanstalkd_tube)
         self.beanstalk.use(self.beanstalkd_tube)
         self.beanstalk.watch(self.beanstalkd_tube)
 
@@ -80,7 +86,10 @@ class BlobRebuilder(Rebuilder):
                 for chunk in self._handle_beanstalk_event(conn_error):
                     conn_error = False
                     yield chunk
-            except ConnectionError:
+            except ConnectionError as exc:
+                self.logger.warn('Disconnected: %s', exc)
+                if 'Invalid URL' in str(exc):
+                    raise
                 conn_error = True
                 time.sleep(1.0)
 
