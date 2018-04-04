@@ -87,6 +87,13 @@ _sqlx_action_noreturn (struct req_args_s *args, enum proxy_preference_e how,
 	gint64 seq = 1;
 
 	CLIENT_CTX (ctx, args, dirtype, seq);
+
+	if (*dirtype == '#' && !strcmp(dirtype+1, NAME_SRVTYPE_META1)) {
+		const guint nb_digits = MIN(oio_ns_meta1_digits, 4);
+		for (guint i=nb_digits; i<4 ;i++)
+			ctx.name.base[i] = '0';
+	}
+
 	ctx.which = how;
 	enum http_rc_e rc = _sqlx_action_noreturn_TAIL (args, &ctx, pack);
 	client_clean(&ctx);
