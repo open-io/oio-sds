@@ -416,7 +416,7 @@ def main():
     t_help = "Element whose integrity should be checked. " \
         "Can be ACCOUNT, ACCOUNT CONTAINER, ACCOUNT CONTAINER CONTENT " \
         "or ACCOUNT CONTAINER CONTENT CHUNK."
-    parser.add_argument('target', metavar='T', nargs='*',
+    parser.add_argument('target', metavar='T', nargs='+',
                         help=t_help)
     parser.add_argument('-o', '--output', help='output file')
     parser.add_argument('--output-for-blob-rebuilder',
