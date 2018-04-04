@@ -29,8 +29,7 @@ struct oio_events_queue_buffer_s
 	gint64 delay;
 };
 
-void oio_events_queue_buffer_init(struct oio_events_queue_buffer_s *buf,
-		gint64 delay);
+void oio_events_queue_buffer_init(struct oio_events_queue_buffer_s *buf);
 void oio_events_queue_buffer_clean(struct oio_events_queue_buffer_s *buf);
 void oio_events_queue_buffer_set_delay(struct oio_events_queue_buffer_s *buf,
 		gint64 new_delay);

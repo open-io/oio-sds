@@ -308,7 +308,7 @@ Used by `gcc`
 
 > Sets the buffering delay of the events emitted by the application
 
- * default: **5 * G_TIME_SPAN_SECOND**
+ * default: **1 * G_TIME_SPAN_SECOND**
  * type: gint64
  * cmake directive: *OIO_EVENTS_COMMON_PENDING_DELAY*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR

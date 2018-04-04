@@ -133,7 +133,7 @@ oio_events_queue_factory__create_zmq (const char *zurl,
 	self->url = g_strdup (zurl);
 	self->max_recv_per_round = 32;
 	self->procid = getpid();
-	oio_events_queue_buffer_init(&(self->buffer), 1 * G_TIME_SPAN_SECOND);
+	oio_events_queue_buffer_init(&(self->buffer));
 	*out = (struct oio_events_queue_s *) self;
 	return NULL;
 }
