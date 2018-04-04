@@ -799,7 +799,7 @@ key_file = ${KEY_FILE}
 
 [filter:content_rebuild]
 use = egg:oio#notify
-tube = rebuild
+tube = oio-rebuild
 queue_url = ${QUEUE_URL}
 
 [filter:account_update]
