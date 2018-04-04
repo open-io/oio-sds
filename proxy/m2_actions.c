@@ -500,7 +500,9 @@ _reply_simplified_beans (struct req_args_s *args, GError *err,
 			gchar *k = g_strdup_printf (PROXYD_HEADER_PREFIX "content-meta-%s",
 					PROPERTIES_get_key(prop)->str);
 			GByteArray *v = PROPERTIES_get_value (prop);
-			args->rp->add_header(k, g_strndup ((gchar*)v->data, v->len));
+			g_byte_array_append(v, (guint8*)"", 1);  // Ensure nul-terminated
+			args->rp->add_header(k,
+					g_uri_escape_string((gchar*)v->data, NULL, FALSE));
 			g_free (k);
 		}
 	}
@@ -1905,6 +1907,10 @@ enum http_rc_e action_content_prepare (struct req_args_s *args) {
 enum http_rc_e action_content_show (struct req_args_s *args) {
 	GSList *beans = NULL;
 	guint32 flags = flag_force_master ? M2V2_FLAG_MASTER : 0;
+	/* Historical behaviour is to return properties as headers, but
+	 * if there are too many, the client will fail decoding the request. */
+	if (!oio_str_parse_bool(OPT("properties"), TRUE))
+		flags |= M2V2_FLAG_NOPROPS;
 	PACKER_VOID(_pack) { return m2v2_remote_pack_GET (args->url, flags); }
 	GError *err = _resolve_meta2 (args, _prefer_slave(), _pack, &beans);
 	return _reply_simplified_beans (args, err, beans, TRUE);
