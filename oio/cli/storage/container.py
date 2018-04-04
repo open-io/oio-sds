@@ -426,7 +426,7 @@ class SaveContainer(command.Command):
         for obj in objs['objects']:
             obj_name = obj['name']
             _, stream = self.app.client_manager.storage.object_fetch(
-                account, container, obj_name)
+                account, container, obj_name, properties=False)
 
             if not os.path.exists(os.path.dirname(obj_name)):
                 if len(os.path.dirname(obj_name)) > 0:

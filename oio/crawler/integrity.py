@@ -227,7 +227,8 @@ class Checker(object):
         meta = dict()
         try:
             meta, results = self.container_client.content_locate(
-                account=account, reference=container, path=obj)
+                account=account, reference=container, path=obj,
+                properties=False)
         except exc.NotFound as e:
             self.object_not_found += 1
             error = True

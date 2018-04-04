@@ -391,11 +391,12 @@ class SaveObject(ObjectCommandMixin, command.Command):
         if parsed_args.auto:
             container = self.flatns_manager(obj)
 
-        meta, stream = self.app.client_manager.storage.object_fetch(
+        _meta, stream = self.app.client_manager.storage.object_fetch(
             self.app.client_manager.get_account(),
             container,
             obj,
-            key_file=key_file
+            key_file=key_file,
+            properties=False,
         )
         if not os.path.exists(os.path.dirname(filename)):
             if len(os.path.dirname(filename)) > 0:
@@ -729,11 +730,12 @@ class LocateObject(ObjectCommandMixin, lister.Lister):
         if parsed_args.auto:
             container = self.flatns_manager(obj)
 
-        data = self.app.client_manager.storage.object_analyze(
+        data = self.app.client_manager.storage.object_locate(
             account,
             container,
             obj,
-            version=parsed_args.object_version)
+            version=parsed_args.object_version,
+            properties=False)
 
         def sort_chunk_pos(c1, c2):
             c1_tokens = c1[0].split('.')
