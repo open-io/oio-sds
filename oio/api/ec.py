@@ -895,10 +895,12 @@ class ECWriteHandler(io.WriteHandler):
             for chunk in chunks:
                 chunk['hash'] = checksum
                 chunk['size'] = bytes_transferred
+                # add the chunks whose upload succeeded
+                # to the content chunk list
+                if not chunk.get('error'):
+                    content_chunks.append(chunk)
 
             total_bytes_transferred += bytes_transferred
-            # add the chunks to the content chunk list
-            content_chunks += chunks
             if bytes_transferred < max_size:
                 break
             if len(self.source.peek()) == 0:
