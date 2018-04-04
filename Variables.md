@@ -69,11 +69,6 @@ Used by `gcc`
 
 | Macro | Default | Description |
 | ----- | ------- | ----------- |
-| OIO_META1_DIGITS_KEY | "meta1_digits" | Variable name in the /etc/oio/sds.conf to configure the number of digits that name a meta1 base. |
-| OIO_META1_DIGITS_DEFAULT | 4 | Default number of digits to name a meta1 database |
-
-| Macro | Default | Description |
-| ----- | ------- | ----------- |
 | RAWX_HEADER_PREFIX | "X-oio-chunk-meta-" | Prefix applied to proxyd's URL, second version (with accounts) |
 
 | Macro | Default | Description |
@@ -477,6 +472,15 @@ Used by `gcc`
  * default: **TRUE**
  * type: gboolean
  * cmake directive: *OIO_NS_MASTER*
+
+### ns.meta1_digits
+
+> Default number of digits to agregate meta1 databases.
+
+ * default: **4**
+ * type: guint
+ * cmake directive: *OIO_NS_META1_DIGITS*
+ * range: 0 -> 4
 
 ### ns.service_update_policy
 

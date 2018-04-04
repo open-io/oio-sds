@@ -144,6 +144,12 @@
 		"code": "common_variables.c",
 		"header": "common_variables.h",
 		"variables": [
+			{ "type": "uint", "name": "oio_ns_meta1_digits",
+				"key": "ns.meta1_digits",
+				"descr": "Default number of digits to agregate meta1 databases.",
+				"def": 4, "min": 0, "max": 4,
+				"aliases": ["meta1_digits"]},
+
 			{ "type": "uint", "name": "oio_ns_flat_bits",
 				"key": "ns.flat_bits",
 				"descr": "Default number of bits with flat-NS computation.",
