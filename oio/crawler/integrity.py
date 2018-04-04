@@ -416,10 +416,11 @@ class Checker(object):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('namespace', help='Namespace name')
+    parser.add_argument('account', help="Account")
     t_help = "Element whose integrity should be checked. " \
-        "Can be ACCOUNT, ACCOUNT CONTAINER, ACCOUNT CONTAINER CONTENT " \
-        "or ACCOUNT CONTAINER CONTENT CHUNK."
-    parser.add_argument('target', metavar='T', nargs='+',
+        "Can be empty, CONTAINER, CONTAINER CONTENT " \
+        "or CONTAINER CONTENT CHUNK."
+    parser.add_argument('target', metavar='T', nargs='*',
                         help=t_help)
     parser.add_argument('-o', '--output', help='output file')
     parser.add_argument('--output-for-blob-rebuilder',
@@ -443,7 +444,7 @@ def main():
     if not os.isatty(sys.stdin.fileno()):
         source = sys.stdin
     else:
-        source = cStringIO.StringIO(' '.join(args.target))
+        source = cStringIO.StringIO(' '.join([args.account] + args.target))
     args = csv.reader(source, delimiter=' ')
     for entry in args:
         checker.check(Target(*entry))
