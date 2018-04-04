@@ -75,6 +75,13 @@ oio_events_queue__get_health(struct oio_events_queue_s *self)
 	return 100;
 }
 
+void
+oio_events_queue__set_buffering (struct oio_events_queue_s *self,
+		gint64 delay)
+{
+	EVTQ_CALL(self,set_buffering)(self,delay);
+}
+
 GError *
 oio_events_queue__run (struct oio_events_queue_s *self,
 		gboolean (*running) (gboolean pending))

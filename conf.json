@@ -55,7 +55,7 @@
 		"variables": [
 			{ "type": "monotonic", "name": "oio_events_common_buffer_delay",
 				"key": "events.common.pending.delay",
-				"def": "5s", "min": "1ms", "max": "1h",
+				"def": "1s", "min": "1ms", "max": "1h",
 				"descr": "Sets the buffering delay of the events emitted by the application" },
 
 			{ "type": "uint32", "name": "oio_events_common_max_pending",

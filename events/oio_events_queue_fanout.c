@@ -96,7 +96,13 @@ oio_events_queue_factory__create_fanout (
 	self->queue = g_async_queue_new ();
 	self->output_tab = subv;
 	self->output_nb = sublen;
-	oio_events_queue_buffer_init(&(self->buffer), 1 * G_TIME_SPAN_SECOND);
+	oio_events_queue_buffer_init(&(self->buffer));
+
+	/* Turn the buffering off, it is already done in the fanout layer */
+	for (guint i = 0; i < sublen; i++) {
+		struct oio_events_queue_s *sub = subv[i];
+		oio_events_queue__set_buffering(sub, 0);
+	}
 
 	*out = (struct oio_events_queue_s*) self;
 	return NULL;
