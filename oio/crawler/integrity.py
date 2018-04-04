@@ -332,10 +332,11 @@ class Checker(object):
         error = False
         marker = None
         results = []
+        prefix = target.container
         while True:
             try:
                 resp = self.account_client.container_list(
-                    account, marker=marker)
+                    account, prefix=prefix, marker=marker)
             except Exception as e:
                 self.account_exceptions += 1
                 error = True
