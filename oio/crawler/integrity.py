@@ -277,10 +277,12 @@ class Checker(object):
         marker = None
         results = []
         ct_meta = dict()
+        prefix = target.obj
         while True:
             try:
                 _, resp = self.container_client.content_list(
-                    account=account, reference=container, marker=marker)
+                    account=account, reference=container, prefix=prefix,
+                    marker=marker)
             except exc.NotFound as e:
                 self.container_not_found += 1
                 error = True
