@@ -424,10 +424,14 @@ def main():
                         help="Presence check, the xattr check is skipped")
     parser.add_argument('-v', '--verbose',
                         action='store_true', help='verbose output')
+    parser.add_argument('--concurrency', '--workers', type=int,
+                        default=50,
+                        help='Number of concurrent checks (default: 50)')
 
     args = parser.parse_args()
 
     checker = Checker(args.namespace, error_file=args.output,
+                      concurrency=args.concurrency,
                       rebuild_file=args.output_for_blob_rebuilder,
                       full=not args.presence)
     if not os.isatty(sys.stdin.fileno()):
