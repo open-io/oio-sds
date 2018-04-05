@@ -17,7 +17,7 @@
 from eventlet import GreenPile
 from urllib3 import Timeout
 from urllib3.exceptions import HTTPError
-from oio.common.http import get_pool_manager
+from oio.common.http import get_pool_manager, oio_exception_from_httperror
 from oio.common import exceptions as exc, utils
 from oio.common.constants import chunk_headers, chunk_xattr_keys_optional, \
         HEADER_PREFIX
@@ -117,10 +117,17 @@ class BlobClient(object):
         headers = extract_headers_meta(reader.headers)
         return headers, stream
 
+    @utils.ensure_headers
+    @utils.ensure_request_id
     def chunk_head(self, url, **kwargs):
         _xattr = bool(kwargs.get('xattr', True))
-        resp = self.http_pool.request(
-                'HEAD', url, headers={HEADER_PREFIX + 'xattr': _xattr})
+        headers = kwargs['headers'].copy()
+        headers[HEADER_PREFIX + 'xattr'] = _xattr
+        try:
+            resp = self.http_pool.request(
+                'HEAD', url, headers=headers)
+        except HTTPError as ex:
+            oio_exception_from_httperror(ex, headers['X-oio-req-id'])
         if resp.status == 200:
             if not _xattr:
                 return dict()

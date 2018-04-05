@@ -212,6 +212,7 @@ class UnsatisfiableRange(ClientException):
         super(UnsatisfiableRange, self).__init__(http_status, status, message)
 
 
+# FIXME(FVE): ServiceBusy is not a client exception
 class ServiceBusy(ClientException):
     def __init__(self, http_status=503, status=None, message=None):
         super(ServiceBusy, self).__init__(http_status, status, message)

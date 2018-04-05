@@ -618,4 +618,4 @@ def oio_reraise(exc_type, exc_value, extra_message=None):
     args = exc_value.args
     if extra_message:
         args = (extra_message, ) + args
-    raise exc_type(args), None, sys.exc_info()[2]
+    raise exc_type(*args), None, sys.exc_info()[2]
