@@ -15,7 +15,9 @@
 
 import os
 from logging import getLogger
+from oio.common.exceptions import OioException
 from oio.common.http import get_pool_manager
+from oio.common.utils import request_id
 from cliff import command, lister, show
 from eventlet import GreenPool
 
@@ -730,12 +732,15 @@ class LocateObject(ObjectCommandMixin, lister.Lister):
         if parsed_args.auto:
             container = self.flatns_manager(obj)
 
+        reqid = request_id()
+        headers = {'X-oio-req-id': reqid}
         data = self.app.client_manager.storage.object_locate(
             account,
             container,
             obj,
             version=parsed_args.object_version,
-            properties=False)
+            properties=False,
+            headers=headers)
 
         def sort_chunk_pos(c1, c2):
             c1_tokens = c1[0].split('.')
@@ -747,23 +752,21 @@ class LocateObject(ObjectCommandMixin, lister.Lister):
             return cmp(c1[0], c2[0])
 
         def get_chunks_info(chunks):
-            pool_manager = get_pool_manager()
-            chunk_hash = ""
-            chunk_size = ""
-            for c in chunks:
-                resp = pool_manager.request('HEAD', c['url'])
-                if resp.status != 200:
-                    chunk_size = "%d %s" % (resp.status, resp.reason)
-                    chunk_hash = "%d %s" % (resp.status, resp.reason)
-                else:
-                    chunk_size = resp.headers.get(
-                        'X-oio-chunk-meta-chunk-size',
-                        'Missing chunk size header')
-                    chunk_hash = resp.headers.get(
-                        'X-oio-chunk-meta-chunk-hash',
-                        'Missing chunk hash header')
-                yield (c['pos'], c['url'], c['size'], c['hash'], chunk_size,
-                       chunk_hash)
+            from oio.blob.client import BlobClient
+            blob = BlobClient()
+            chunk_hash = ''
+            chunk_size = ''
+            for chunk in chunks:
+                try:
+                    chunk_meta = blob.chunk_head(chunk['url'], headers=headers)
+                    chunk_hash = chunk_meta.get('chunk_hash', 'n/a')
+                    chunk_size = chunk_meta.get('chunk_size', 'n/a')
+                except OioException as exc:
+                    chunk_hash = 'n/a'
+                    chunk_size = str(exc)
+
+                yield (chunk['pos'], chunk['url'], chunk['size'],
+                       chunk['hash'], chunk_size, chunk_hash)
         columns = ()
         chunks = []
         if parsed_args.chunk_info:
