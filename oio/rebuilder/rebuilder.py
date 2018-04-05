@@ -136,6 +136,7 @@ class RebuilderWorker(object):
                                      **kwargs))
                 report_time = now
                 self.last_reported = now
+                self.passes = 0
 
             self.rebuilder_time += (now - loop_time)
             queue.task_done()
