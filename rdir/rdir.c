@@ -1386,20 +1386,13 @@ _patch_and_apply_configuration(void)
 {
 	const guint maxfd = metautils_syscall_count_maxfd();
 
+	/* Enforce arbitrary but acceptable default value */
 	if (server_fd_max_passive > 0 && rdir_fd_reserve <= 0) {
 		rdir_fd_reserve = maxfd - server_fd_max_passive;
-	} else if (server_fd_max_passive <=0 && rdir_fd_reserve > 0) {
+	} else if (server_fd_max_passive <= 0 && rdir_fd_reserve > 0) {
 		server_fd_max_passive = maxfd - rdir_fd_reserve;
-	} else if (server_fd_max_passive <=0 && rdir_fd_reserve <= 0) {
-		/* Enforce arbitrary but acceptable default value */
-		const guint maxfd_net = maxfd / 2;
-		if (server_fd_max_passive > maxfd_net || server_fd_max_passive <= 0) {
-			server_fd_max_passive = maxfd_net;
-		}
-		const guint maxfd_db = maxfd - maxfd_net;
-		if (rdir_fd_reserve > maxfd_db || rdir_fd_reserve <= 0) {
-			rdir_fd_reserve = maxfd_db;
-		}
+	} else if (server_fd_max_passive <= 0 && rdir_fd_reserve <= 0) {
+		server_fd_max_passive = rdir_fd_reserve = maxfd / 2;
 	}
 
 	if (rdir_fd_per_base <= 0) {
