@@ -105,6 +105,7 @@ class DirectoryInit(DirectoryCmd):
             for i in range(max_attempts):
                 try:
                     mapping.force(connection_timeout=30.0, read_timeout=90.0)
+                    break
                 except ClientException as ex:
                     # Manage several unretriable errors
                     retry = (503, 504)
