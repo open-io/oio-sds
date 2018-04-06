@@ -150,6 +150,7 @@ class RdirDispatcher(object):
             try:
                 self.directory.force(RDIR_ACCT, volume_id, 'rdir',
                                      forced, autocreate=True, **kwargs)
+                break
             except ClientException as ex:
                 # Already done
                 done = (455, )
