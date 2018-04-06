@@ -112,7 +112,7 @@ class ObjectStorageTest(unittest.TestCase):
         params = {'acct': self.account, 'ref': self.container,
                   'marker': marker, 'max': limit,
                   'delimiter': delimiter, 'prefix': prefix,
-                  'marker_end': end_marker,
+                  'end_marker': end_marker,
                   'properties': False}
         api.container._direct_request.assert_called_once_with(
             'GET', uri, params=params, headers=self.headers)

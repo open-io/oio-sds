@@ -298,7 +298,7 @@ class ContainerClient(ProxyClient):
             and a `dict` with "object" and "prefixes" as second element
         """
         params = self._make_params(account, reference, cid=cid)
-        p_up = {'max': limit, 'marker': marker, 'marker_end': end_marker,
+        p_up = {'max': limit, 'marker': marker, 'end_marker': end_marker,
                 'prefix': prefix, 'delimiter': delimiter,
                 'properties': properties}
         params.update(p_up)
