@@ -178,7 +178,7 @@ class BlobRebuilderWorker(RebuilderWorker):
         self.allow_same_rawx = true_value(
             conf.get('allow_same_rawx'))
         self.rdir_client = RdirClient(conf, logger=self.logger)
-        self.content_factory = ContentFactory(conf)
+        self.content_factory = ContentFactory(conf, logger=self.logger)
         self.try_chunk_delete = try_chunk_delete
 
     def _rebuild_one(self, chunk, **kwargs):

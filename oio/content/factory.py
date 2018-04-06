@@ -25,9 +25,9 @@ from oio.common.storage_method import STORAGE_METHODS
 class ContentFactory(object):
     DEFAULT_DATASEC = "plain", {"nb_copy": "1", "distance": "0"}
 
-    def __init__(self, conf, **kwargs):
+    def __init__(self, conf, logger=None, **kwargs):
         self.conf = conf
-        self.logger = get_logger(conf)
+        self.logger = logger or get_logger(conf)
         self.container_client = ContainerClient(conf, logger=self.logger,
                                                 **kwargs)
 
@@ -53,7 +53,7 @@ class ContentFactory(object):
         return cls(self.conf, container_id, meta, chunks, storage_method,
                    account,
                    container_name,
-                   container_client=self.container_client)
+                   container_client=self.container_client, logger=self.logger)
 
     def new(self, container_id, path, size, policy, account=None,
             container_name=None, **kwargs):
