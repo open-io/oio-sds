@@ -1436,7 +1436,9 @@ enum http_rc_e action_container_list (struct req_args_s *args) {
 	list_in.flag_nodeleted = 1;
 	list_in.prefix = OPT("prefix");
 	list_in.marker_start = OPT("marker");
-	list_in.marker_end = OPT("marker_end");
+	list_in.marker_end = OPT("end_marker");
+	if (!list_in.marker_end)
+		list_in.marker_end = OPT("marker_end");  // backward compatibility
 	if (OPT("deleted"))
 		list_in.flag_nodeleted = 0;
 	if (OPT("all"))
