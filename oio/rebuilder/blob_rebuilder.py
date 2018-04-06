@@ -132,32 +132,34 @@ class BlobRebuilder(Rebuilder):
         total_bytes_processed += worker.total_bytes_processed
         return total_bytes_processed
 
-    def _get_report(self, start_time, passes, errors, total_chunks_processed,
-                    rebuilder_time, end_time, elapsed, total_bytes_processed,
-                    **kwargs):
+    def _get_report(self, start_time, end_time, passes, errors,
+                    waiting_time, rebuilder_time, elapsed,
+                    total_chunks_processed, total_bytes_processed, **kwargs):
         return ('DONE %(volume)s '
                 'started=%(start_time)s '
                 'ended=%(end_time)s '
+                'elapsed=%(elapsed).2f '
                 'passes=%(passes)d '
-                'elapsed=%(elapsed).02f '
                 'errors=%(errors)d '
                 'chunks=%(nb_chunks)d %(c_rate).2f/s '
                 'bytes=%(nb_bytes)d %(b_rate).2fB/s '
-                'elapsed=%(rebuilder_time).2f '
+                'waiting_time=%(waiting_time).2f '
+                'rebuilder_time=%(rebuilder_time).2f '
                 '(rebuilder: %(success_rate).2f%%)' % {
                     'volume': self.volume,
                     'start_time': datetime.fromtimestamp(
                         int(start_time)).isoformat(),
                     'end_time': datetime.fromtimestamp(
                         int(end_time)).isoformat(),
-                    'passes': passes,
                     'elapsed': elapsed,
+                    'passes': passes,
                     'errors': errors,
                     'nb_chunks': total_chunks_processed,
                     'nb_bytes': total_bytes_processed,
                     'c_rate': total_chunks_processed / elapsed,
                     'b_rate': total_bytes_processed / elapsed,
                     'rebuilder_time': rebuilder_time,
+                    'waiting_time': waiting_time,
                     'success_rate':
                         100 * ((total_chunks_processed - errors) /
                                float(total_chunks_processed or 1))
@@ -186,7 +188,8 @@ class BlobRebuilderWorker(RebuilderWorker):
         else:
             self.safe_chunk_rebuild(cid, content_id, chunk_id_or_pos)
 
-    def _get_report(self, num, start_time, report_time, now, **kwargs):
+    def _get_report(self, num, start_time, end_time, total_time, report_time,
+                    **kwargs):
         return ('RUN  %(volume)s '
                 'worker=%(num)d '
                 'started=%(start_time)s '
@@ -194,7 +197,9 @@ class BlobRebuilderWorker(RebuilderWorker):
                 'errors=%(errors)d '
                 'chunks=%(nb_chunks)d %(c_rate).2f/s '
                 'bytes=%(nb_bytes)d %(b_rate).2fB/s '
-                'elapsed=%(total).2f '
+                'waiting_time=%(waiting_time).2f '
+                'rebuilder_time=%(rebuilder_time).2f '
+                'total_time=%(total_time).2f '
                 '(rebuilder: %(success_rate).2f%%)' % {
                     'volume': self.volume,
                     'num': num,
@@ -204,10 +209,11 @@ class BlobRebuilderWorker(RebuilderWorker):
                     'errors': self.errors,
                     'nb_chunks': self.total_items_processed,
                     'nb_bytes': self.total_bytes_processed,
-                    'c_rate': self.passes / (now - report_time),
-                    'b_rate': self.bytes_processed / (now - report_time),
-                    'total': (now - start_time),
+                    'c_rate': self.passes / (end_time - report_time),
+                    'b_rate': self.bytes_processed / (end_time - report_time),
+                    'waiting_time': self.waiting_time,
                     'rebuilder_time': self.rebuilder_time,
+                    'total_time': (end_time - start_time),
                     'success_rate':
                         100 * ((self.total_items_processed - self.errors)
                                / float(self.total_items_processed))
