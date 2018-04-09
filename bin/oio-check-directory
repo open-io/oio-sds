@@ -18,7 +18,7 @@
 
 import logging
 import argparse
-from oio.common.utils import load_namespace_conf
+from oio.common.configuration import load_namespace_conf
 from oio.conscience.client import ConscienceClient
 
 
@@ -151,7 +151,7 @@ def main():
     if 'dir' in args.actions:
         import subprocess
         from oio.directory.meta0 import Meta0Client
-        from oio.common.utils import json
+        from oio.common.json import json
 
         logging.debug("Checking the directory bootstrap")
 

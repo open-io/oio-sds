@@ -21,8 +21,8 @@ import json
 import logging
 from os import getenv
 
-from oio.common.http import get_pool_manager
-from oio.common.utils import load_namespace_conf
+from oio.common.http_urllib3 import get_pool_manager
+from oio.common.configuration import load_namespace_conf
 
 http = get_pool_manager()
 
