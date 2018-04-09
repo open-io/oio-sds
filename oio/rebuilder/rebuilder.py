@@ -42,7 +42,7 @@ class Rebuilder(object):
 
         workers = list()
         with ContextPool(self.nworkers) as pool:
-            queue = eventlet.Queue(self.nworkers*2)
+            queue = eventlet.Queue(self.nworkers*10)
 
             # spawn workers to rebuild
             for i in range(self.nworkers):
