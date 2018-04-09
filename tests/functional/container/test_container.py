@@ -251,11 +251,11 @@ class TestMeta2Containers(BaseTestCase):
         del params['marker']
 
         # List with an end marker
-        params['marker_end'] = '1/'
+        params['end_marker'] = '1/'
         resp = self.request('GET', self.url_container('list'), params=params)
         self.assertEqual(resp.status, 200)
         self.check_list_output(self.json_loads(resp.data), 8, 0)
-        del params['marker_end']
+        del params['end_marker']
 
     def test_touch(self):
         params = self.param_ref(self.ref)
