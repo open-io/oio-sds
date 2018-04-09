@@ -240,9 +240,9 @@ class DirectoryWarmup(DirectoryCmd):
 
 class WarmupWorker(object):
     def __init__(self, conf, log):
-        import urllib3
+        from oio.common.http import get_pool_manager
         self.log = log
-        self.pool = urllib3.PoolManager()
+        self.pool = get_pool_manager()
         self.url_prefix = 'http://%s/v3.0/%s/admin/status?type=meta1&cid=' % (
                 conf['proxyd_url'], conf['namespace'])
 

@@ -22,8 +22,6 @@ from urllib import quote, quote_plus
 from eventlet import patcher
 from eventlet.green.httplib import HTTPConnection, HTTPResponse, _UNKNOWN, \
         CONTINUE, HTTPMessage
-from urllib3.exceptions import MaxRetryError, TimeoutError, \
-    NewConnectionError, ProtocolError, ProxyError, ClosedPoolError
 
 from oio.common.constants import chunk_headers, OIO_VERSION
 from oio.common.utils import oio_reraise
@@ -296,15 +294,17 @@ def oio_exception_from_httperror(exc, reqid=None):
     and re-raise it.
     """
     extra = ("reqid=%s" % reqid) if reqid else None
-    if isinstance(exc, MaxRetryError):
-        if isinstance(exc.reason, NewConnectionError):
+    if isinstance(exc, urllib3.exceptions.MaxRetryError):
+        if isinstance(exc.reason, urllib3.exceptions.NewConnectionError):
             oio_reraise(exceptions.OioNetworkException, exc.reason, extra)
-        if isinstance(exc.reason, TimeoutError):
+        if isinstance(exc.reason, urllib3.exceptions.TimeoutError):
             oio_reraise(exceptions.OioTimeout, exc.reason, extra)
         oio_reraise(exceptions.OioNetworkException, exc, extra)
-    elif isinstance(exc, (ProtocolError, ProxyError, ClosedPoolError)):
+    elif isinstance(exc, (urllib3.exceptions.ProtocolError,
+                          urllib3.exceptions.ProxyError,
+                          urllib3.exceptions.ClosedPoolError)):
         oio_reraise(exceptions.OioNetworkException, exc, extra)
-    elif isinstance(exc, TimeoutError):
+    elif isinstance(exc, urllib3.exceptions.TimeoutError):
         oio_reraise(exceptions.OioTimeout, exc, extra)
     else:
         oio_reraise(exceptions.OioException, exc, extra)
