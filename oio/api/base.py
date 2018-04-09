@@ -14,7 +14,6 @@
 # License along with this library.
 
 from urllib import urlencode
-from urllib3.exceptions import HTTPError
 
 from oio.common.utils import json as jsonlib, oio_reraise, true_value
 from oio.common.http import urllib3, get_pool_manager, \
@@ -139,7 +138,7 @@ class HttpApi(object):
                     body = jsonlib.loads(body)
                 except ValueError:
                     pass
-        except HTTPError as exc:
+        except urllib3.exceptions.HTTPError as exc:
             oio_exception_from_httperror(exc, out_headers.get('X-oio-req-id'))
         if resp.status >= 400:
             raise exceptions.from_response(resp, body)
