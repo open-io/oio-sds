@@ -22,13 +22,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
 void
-oio_events_queue_buffer_init(struct oio_events_queue_buffer_s *buf,
-		gint64 delay)
+oio_events_queue_buffer_init(struct oio_events_queue_buffer_s *buf)
 {
 	g_mutex_init(&(buf->msg_by_key_lock));
 	buf->msg_by_key = lru_tree_create((GCompareFunc)g_strcmp0, g_free, g_free,
 			LTO_NOATIME|LTO_NOUTIME);
-	buf->delay = delay;
+	buf->delay = oio_events_common_buffer_delay;
 }
 
 void

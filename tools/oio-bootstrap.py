@@ -799,8 +799,8 @@ key_file = ${KEY_FILE}
 
 [filter:content_rebuild]
 use = egg:oio#notify
-tube = rebuild
-queue_url = beanstalk://127.0.0.1:11300
+tube = oio-rebuild
+queue_url = ${QUEUE_URL}
 
 [filter:account_update]
 use = egg:oio#account_update
@@ -811,7 +811,7 @@ use = egg:oio#volume_index
 [filter:replication]
 use = egg:oio#notify
 tube = oio-repli
-queue_url = beanstalk://127.0.0.1:11300
+queue_url = ${QUEUE_URL}
 
 [filter:noop]
 use = egg:oio#noop

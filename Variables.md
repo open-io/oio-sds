@@ -69,11 +69,6 @@ Used by `gcc`
 
 | Macro | Default | Description |
 | ----- | ------- | ----------- |
-| OIO_META1_DIGITS_KEY | "meta1_digits" | Variable name in the /etc/oio/sds.conf to configure the number of digits that name a meta1 base. |
-| OIO_META1_DIGITS_DEFAULT | 4 | Default number of digits to name a meta1 database |
-
-| Macro | Default | Description |
-| ----- | ------- | ----------- |
 | RAWX_HEADER_PREFIX | "X-oio-chunk-meta-" | Prefix applied to proxyd's URL, second version (with accounts) |
 
 | Macro | Default | Description |
@@ -313,7 +308,7 @@ Used by `gcc`
 
 > Sets the buffering delay of the events emitted by the application
 
- * default: **5 * G_TIME_SPAN_SECOND**
+ * default: **1 * G_TIME_SPAN_SECOND**
  * type: gint64
  * cmake directive: *OIO_EVENTS_COMMON_PENDING_DELAY*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
@@ -485,6 +480,15 @@ Used by `gcc`
  * default: **TRUE**
  * type: gboolean
  * cmake directive: *OIO_NS_MASTER*
+
+### ns.meta1_digits
+
+> Default number of digits to agregate meta1 databases.
+
+ * default: **4**
+ * type: guint
+ * cmake directive: *OIO_NS_META1_DIGITS*
+ * range: 0 -> 4
 
 ### ns.service_update_policy
 
@@ -744,14 +748,23 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_RAWX_EVENTS_ALLOWED*
 
+### rdir.fd_per_base
+
+> Configure the maximum number of file descriptors allowed to each leveldb database. Set to 0 to autodetermine the value (cf. rdir.fd_reserve). The real value will be clamped at least to 8. Will only be applied on bases opened after the configuration change.
+
+ * default: **0**
+ * type: guint
+ * cmake directive: *OIO_RDIR_FD_PER_BASE*
+ * range: 0 -> 16384
+
 ### rdir.fd_reserve
 
-> Only effective when `server.fd_max_passive` is set to 0 (autodetection). When deducing the maximum number of incoming connections, the rdir reserves that amount of file descritors to reach the database shards, and allocates what remains to the network.
+> Configure the total number of file descriptors the leveldb backend may use. Set to 0 to autodetermine the value. Will only be applied on bases opened after the configuration change.
 
- * default: **128**
+ * default: **0**
  * type: guint
  * cmake directive: *OIO_RDIR_FD_RESERVE*
- * range: 64 -> 1024
+ * range: 0 -> 32768
 
 ### resolver.cache.csm0.max.default
 
@@ -881,7 +894,7 @@ Used by `gcc`
 
 > How many bases may be decached each time the background task performs its Dance of Death
 
- * default: **100**
+ * default: **1**
  * type: guint
  * cmake directive: *OIO_SERVER_PERIODIC_DECACHE_MAX_BASES*
  * range: 1 -> 4194304
@@ -899,7 +912,7 @@ Used by `gcc`
 
 > In ticks / jiffies, with approx. 1 tick per second. 0 means never
 
- * default: **1**
+ * default: **0**
  * type: guint
  * cmake directive: *OIO_SERVER_PERIODIC_DECACHE_PERIOD*
  * range: 0 -> 1048576
@@ -1168,6 +1181,14 @@ Used by `gcc`
  * cmake directive: *OIO_SQLITEREPO_ELECTION_DELAY_RETRY_FAILED*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 7 * G_TIME_SPAN_DAY
 
+### sqliterepo.election.lazy_recover
+
+> Should the election mecanism try to recreate missing DB?
+
+ * default: **FALSE**
+ * type: gboolean
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_LAZY_RECOVER*
+
 ### sqliterepo.election.nowait.after
 
 > In the current sqliterepo repository, sets the amount of time spent in an election resolution that will make a worker thread won't wait at all and consider that election is stalled.
@@ -1349,7 +1370,7 @@ Used by `gcc`
 
 ### sqliterepo.repo.fd_max_active
 
-> Maximum number of simultaneous outgoing connections. Set to 0 for an automatic detection (30% of available file descriptors).
+> Maximum number of simultaneous outgoing connections. Set to 0 for an automatic detection (2% of available file descriptors).
 
  * default: **512**
  * type: guint

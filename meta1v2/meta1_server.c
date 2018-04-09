@@ -42,6 +42,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 static struct meta1_backend_s *m1 = NULL;
 static volatile gboolean already_succeeded = FALSE;
+static volatile gboolean decache_requested = FALSE;
 
 static GError*
 _reload_prefixes(struct sqlx_service_s *ss, gboolean init)
@@ -58,6 +59,7 @@ _reload_prefixes(struct sqlx_service_s *ss, gboolean init)
 			g_array_free(updated_prefixes, TRUE);
 		return err;
 	}
+
 	if (meta0_ok)
 		already_succeeded = TRUE;
 
@@ -92,6 +94,12 @@ _task_reload_prefixes(gpointer p)
 {
 	static volatile guint tick_reload = 0;
 
+	if (decache_requested) {
+		decache_requested = FALSE;
+		already_succeeded = FALSE;
+		tick_reload = 0;
+	}
+
 	if (already_succeeded && 0 != (tick_reload++ % 61))
 		return;
 
@@ -125,11 +133,25 @@ _task_reload_policies(gpointer p)
 }
 
 static GError *
-_get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
+_get_peers(struct sqlx_service_s *ss UNUSED, const struct sqlx_name_s *n,
 		gboolean nocache, gchar ***result)
 {
-	(void) nocache;
 	GError *err = NULL;
+	if (!n || !result)
+		return SYSERR("BUG [%s:%s:%d]", __FUNCTION__, __FILE__, __LINE__);
+
+	if (!g_str_has_prefix(n->type, NAME_SRVTYPE_META1))
+		return BADREQ("Invalid type name");
+	if (!oio_str_ishexa(n->base,4))
+		return BADREQ("Invalid base name");
+
+	/* normalizes the maybe-shortened base name: 4 xdigits, padded
+	 * with zeroes if necessary. */
+	guint8 cid[2] = {0,0};
+	oio_str_hex2bin(n->base, cid, 2);
+
+	if (nocache)
+		decache_requested = TRUE;
 
 	gint64 seq = 1;
 	gchar **peers = NULL;
@@ -175,6 +197,7 @@ _post_config(struct sqlx_service_s *ss)
 		 * for this reason. */
 		if (!(err = _reload_prefixes(ss, TRUE))) {
 			done = TRUE;
+			GRID_DEBUG("Prefix reloaded");
 		} else {
 			GRID_WARN("PREFIXES reload failure : (%d) %s", err->code, err->message);
 			g_clear_error(&err);

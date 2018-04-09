@@ -61,6 +61,11 @@ struct gridd_request_handler_s
 struct gridd_request_dispatcher_s
 {
 	GTree *tree_requests;
+
+	/* By default to 0, set to a monotonic time value when an I/O
+	 * error occurs, periodically checked for recent acctivity */
+	gint64 last_io_error;
+	gint64 last_io_success;
 };
 
 struct req_ctx_s
@@ -94,6 +99,8 @@ static gboolean _client_manage_l4v(struct network_client_s *clt, GByteArray *gba
  * the server but allow it to reply "config volume /path/to/docroot" in its
  * stats. */
 const char *oio_server_volume = NULL;
+
+static int _local_variable = 0;
 
 /* -------------------------------------------------------------------------- */
 
@@ -682,8 +689,14 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 			_notify_request(req_ctx, gq_count_unexpected, gq_time_unexpected);
 		} else {
 			EXTRA_ASSERT(hdl->handler != NULL);
-			rc = hdl->handler(&ctx, hdl->gdata, hdl->hdata);
-			_notify_request(req_ctx, hdl->stat_name_req, hdl->stat_name_time);
+			if (hdl->hdata != &_local_variable
+					&& !grid_daemon_is_io_ok(req_ctx->disp)) {
+				rc = _client_reply_fixed(req_ctx, CODE_UNAVAILABLE, "IO errors reported");
+				_notify_request(req_ctx, gq_count_ioerror, gq_time_ioerror);
+			} else {
+				rc = hdl->handler(&ctx, hdl->gdata, hdl->hdata);
+				_notify_request(req_ctx, hdl->stat_name_req, hdl->stat_name_time);
+			}
 		}
 	}
 
@@ -804,10 +817,8 @@ _stats_runner(gpointer k, gpointer v, gpointer u)
 
 static gboolean
 dispatch_LISTHANDLERS(struct gridd_reply_ctx_s *reply,
-		gpointer gdata, gpointer hdata)
+		gpointer gdata UNUSED, gpointer hdata UNUSED)
 {
-	(void) gdata, (void) hdata;
-
 	GByteArray *body = g_byte_array_sized_new(256);
 	g_tree_foreach(reply->client->transport.client_context->dispatcher->tree_requests,
 			_stats_runner, body);
@@ -829,9 +840,8 @@ dispatch_LEAN(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 dispatch_PING(struct gridd_reply_ctx_s *reply,
-		gpointer gdata, gpointer hdata)
+		gpointer gdata UNUSED, gpointer hdata UNUSED)
 {
-	(void) gdata, (void) hdata;
 	reply->no_access();
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
@@ -839,9 +849,8 @@ dispatch_PING(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 dispatch_KILL(struct gridd_reply_ctx_s *reply,
-		gpointer gdata, gpointer hdata)
+		gpointer gdata UNUSED, gpointer hdata UNUSED)
 {
-	(void) gdata, (void) hdata;
 	if (reply->client->server->abort_allowed) {
 		abort();
 		reply->send_reply(CODE_FINAL_OK, "OK");
@@ -853,10 +862,8 @@ dispatch_KILL(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 dispatch_SETCFG(struct gridd_reply_ctx_s *reply,
-		gpointer gdata, gpointer hdata)
+		gpointer gdata UNUSED, gpointer hdata UNUSED)
 {
-	(void) gdata, (void) hdata;
-
 	gsize length = 0;
 	void *body = metautils_message_get_BODY(reply->request, &length);
 
@@ -884,10 +891,8 @@ dispatch_SETCFG(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 dispatch_GETCFG(struct gridd_reply_ctx_s *reply,
-		gpointer gdata, gpointer hdata)
+		gpointer gdata UNUSED, gpointer hdata UNUSED)
 {
-	(void) gdata, (void) hdata;
-
 	GString *gstr = oio_var_list_as_json();
 	reply->add_body(g_bytes_unref_to_array(g_string_free_to_bytes(gstr)));
 	reply->send_reply(CODE_FINAL_OK, "OK");
@@ -896,9 +901,8 @@ dispatch_GETCFG(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 dispatch_REDIRECT(struct gridd_reply_ctx_s *reply,
-		gpointer gdata, gpointer hdata)
+		gpointer gdata UNUSED, gpointer hdata UNUSED)
 {
-	(void) gdata, (void) hdata;
 	gchar **endpoints = network_server_endpoints(reply->client->server);
 	reply->send_error(0, NEWERROR(CODE_REDIRECT, "%s", endpoints[0]));
 	g_strfreev(endpoints);
@@ -909,10 +913,8 @@ dispatch_REDIRECT(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 dispatch_STATS(struct gridd_reply_ctx_s *reply,
-		gpointer gdata, gpointer hdata)
+		gpointer gdata UNUSED, gpointer hdata UNUSED)
 {
-	(void) gdata, (void) hdata;
-
 	GArray *array = network_server_stat_getall(reply->client->server);
 	// Rough estimate, will be automatically resized if needed
 	GByteArray *body = g_byte_array_sized_new(array->len * 32);
@@ -941,9 +943,8 @@ dispatch_STATS(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 dispatch_VERSION(struct gridd_reply_ctx_s *reply,
-		gpointer gdata, gpointer hdata)
+		gpointer gdata UNUSED, gpointer hdata UNUSED)
 {
-	(void) gdata, (void) hdata;
 	reply->no_access();
 	reply->add_body(metautils_gba_from_string(OIOSDS_PROJECT_VERSION));
 	reply->send_reply(CODE_FINAL_OK, "OK");
@@ -953,16 +954,18 @@ dispatch_VERSION(struct gridd_reply_ctx_s *reply,
 const struct gridd_request_descr_s*
 gridd_get_common_requests(void)
 {
+	/* The marker is used to detect local low-level handlers */
 	static struct gridd_request_descr_s descriptions[] = {
-		{"REQ_LEAN",      dispatch_LEAN,          NULL},
+		/* ping mustwill fail because of I/O errors */
 		{"REQ_PING",      dispatch_PING,          NULL},
 		{"REQ_STATS",     dispatch_STATS,         NULL},
-		{"REQ_VERSION",   dispatch_VERSION,       NULL},
-		{"REQ_HANDLERS",  dispatch_LISTHANDLERS,  NULL},
-		{"REQ_KILL",      dispatch_KILL,          NULL},
-		{"REQ_GETCFG",    dispatch_GETCFG,        NULL},
-		{"REQ_SETCFG",    dispatch_SETCFG,        NULL},
-		{"REQ_REDIRECT",  dispatch_REDIRECT,      NULL},
+		{"REQ_VERSION",   dispatch_VERSION,       &_local_variable},
+		{"REQ_HANDLERS",  dispatch_LISTHANDLERS,  &_local_variable},
+		{"REQ_GETCFG",    dispatch_GETCFG,        &_local_variable},
+		{"REQ_SETCFG",    dispatch_SETCFG,        &_local_variable},
+		{"REQ_REDIRECT",  dispatch_REDIRECT,      &_local_variable},
+		{"REQ_LEAN",      dispatch_LEAN,          &_local_variable},
+		{"REQ_KILL",      dispatch_KILL,          &_local_variable},
 		{NULL, NULL, NULL}
 	};
 
@@ -995,3 +998,32 @@ grid_daemon_bind_host(struct network_server_s *server, const gchar *url,
 			(network_transport_factory)transport_gridd_factory);
 }
 
+void
+grid_daemon_notify_io_status(
+		struct gridd_request_dispatcher_s *disp, gboolean ok)
+{
+	EXTRA_ASSERT(disp != NULL);
+	if (ok) {
+		disp->last_io_success = oio_ext_monotonic_time();
+	} else {
+		disp->last_io_error = oio_ext_monotonic_time();
+	}
+}
+
+gboolean
+grid_daemon_is_io_ok(struct gridd_request_dispatcher_s *disp)
+{
+	EXTRA_ASSERT(disp != NULL);
+
+	/* Never touched -> OK */
+	if (!disp->last_io_error && !disp->last_io_success)
+		return TRUE;
+
+	/* The most recent activity is an error -> KO */
+	if (disp->last_io_error > disp->last_io_success)
+		return FALSE;
+
+	/* check the probe thread was not stalled */
+	const gint64 now = oio_ext_monotonic_time();
+	return disp->last_io_success > OLDEST(now, G_TIME_SPAN_MINUTE);
+}

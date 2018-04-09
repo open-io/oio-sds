@@ -60,7 +60,7 @@
 		"variables": [
 			{ "type": "monotonic", "name": "oio_events_common_buffer_delay",
 				"key": "events.common.pending.delay",
-				"def": "5s", "min": "1ms", "max": "1h",
+				"def": "1s", "min": "1ms", "max": "1h",
 				"descr": "Sets the buffering delay of the events emitted by the application" },
 
 			{ "type": "uint32", "name": "oio_events_common_max_pending",
@@ -154,6 +154,12 @@
 		"code": "common_variables.c",
 		"header": "common_variables.h",
 		"variables": [
+			{ "type": "uint", "name": "oio_ns_meta1_digits",
+				"key": "ns.meta1_digits",
+				"descr": "Default number of digits to agregate meta1 databases.",
+				"def": 4, "min": 0, "max": 4,
+				"aliases": ["meta1_digits"]},
+
 			{ "type": "uint", "name": "oio_ns_flat_bits",
 				"key": "ns.flat_bits",
 				"descr": "Default number of bits with flat-NS computation.",
@@ -339,6 +345,11 @@
 				"descr": "Should the synchronism mechanism shuffle the set of URL in the ZK connection string? Set to yes as an attempt to a better balancing of the connections to the nodes of the ZK cluster.",
 				"def": true},
 
+			{ "type": "bool", "name": "sqliterepo_election_lazy_recover",
+				"key": "sqliterepo.election.lazy_recover",
+				"descr": "Should the election mecanism try to recreate missing DB?",
+				"def": false},
+
 			{ "type": "monotonic", "name": "oio_election_period_cond_wait",
 				"key": "sqliterepo.election.wait.quantum",
 				"descr": "In the current sqliterepo repository, while loop-waiting for a final election status to be reached, this value sets the unit amount of time of eacch unit wait on the lock. Keep this value rather small to avoid waitin for too long, but not too small to avoid dumping CPU cycles in active waiting.",
@@ -521,7 +532,7 @@
 
 			{ "type": "uint", "name": "sqliterepo_fd_max_active",
 				"key": "sqliterepo.repo.fd_max_active",
-				"descr": "Maximum number of simultaneous outgoing connections. Set to 0 for an automatic detection (30% of available file descriptors).",
+				"descr": "Maximum number of simultaneous outgoing connections. Set to 0 for an automatic detection (2% of available file descriptors).",
 				"def": 512, "min": 0, "max": "64ki" },
 
 			{ "type": "uint", "name": "sqliterepo_fd_min_active",
@@ -534,10 +545,15 @@
 		"code": "rdir_variables.c",
 		"header": "rdir_variables.h",
 		"variables": [
+			{ "type": "uint", "name": "rdir_fd_per_base",
+				"key": "rdir.fd_per_base",
+				"descr": "Configure the maximum number of file descriptors allowed to each leveldb database. Set to 0 to autodetermine the value (cf. rdir.fd_reserve). The real value will be clamped at least to 8. Will only be applied on bases opened after the configuration change.",
+				"def": 0, "min": 0, "max": "16ki" },
+
 			{ "type": "uint", "name": "rdir_fd_reserve",
 				"key": "rdir.fd_reserve",
-				"descr": "Only effective when `server.fd_max_passive` is set to 0 (autodetection). When deducing the maximum number of incoming connections, the rdir reserves that amount of file descritors to reach the database shards, and allocates what remains to the network.",
-				"def": 128, "min": 64, "max": "1024" }
+				"descr": "Configure the total number of file descriptors the leveldb backend may use. Set to 0 to autodetermine the value. Will only be applied on bases opened after the configuration change.",
+				"def": 0, "min": 0, "max": "32ki" }
 		]
 	},
 	"server": {
@@ -663,12 +679,12 @@
 			{ "type": "uint", "name": "sqlx_periodic_decache_period",
 				"key": "server.periodic_decache.period",
 				"descr": "In ticks / jiffies, with approx. 1 tick per second. 0 means never",
-				"def": 1, "min": 0, "max": "1Mi" },
+				"def": 0, "min": 0, "max": "1Mi" },
 
 			{ "type": "uint", "name": "sqlx_periodic_decache_max_bases",
 				"key": "server.periodic_decache.max_bases",
 				"descr": "How many bases may be decached each time the background task performs its Dance of Death",
-				"def": 100, "min": 1, "max": "4Mi" },
+				"def": 1, "min": 1, "max": "4Mi" },
 
 			{ "type": "monotonic", "name": "sqlx_periodic_decache_max_delay",
 				"key": "server.periodic_decache.max_delay",

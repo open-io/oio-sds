@@ -54,7 +54,7 @@ class TestContentVersioning(BaseTestCase):
         oldest_version = min(objects, key=lambda x: x['version'])
 
         # use the maxvers of the container configuration
-        self.api.container.container_purge(self.account, self.container)
+        self.api.container_purge(self.account, self.container)
         listing = self.api.object_list(self.account, self.container,
                                        versions=True)
         objects = listing['objects']
@@ -63,8 +63,7 @@ class TestContentVersioning(BaseTestCase):
         oldest_version = min(objects, key=lambda x: x['version'])
 
         # use the maxvers of the request
-        self.api.container.container_purge(self.account, self.container,
-                                           maxvers=1)
+        self.api.container_purge(self.account, self.container, maxvers=1)
         listing = self.api.object_list(self.account, self.container,
                                        versions=True)
         objects = listing['objects']

@@ -25,14 +25,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # include <sqlx/sqlx_service.h>
 # include <events/oio_events_queue.h>
 
-#ifndef OIO_META1_DIGITS_KEY
-#define OIO_META1_DIGITS_KEY "meta1_digits"
-#endif
-
-#ifndef OIO_META1_DIGITS_DEFAULT
-#define OIO_META1_DIGITS_DEFAULT 4
-#endif
-
 #define M1_SQLITE_GERROR(db,RC) NEWERROR((RC), "(%s) %s", \
 		sqlite_strerror(RC), (db)?sqlite3_errmsg(db):"unkown error")
 

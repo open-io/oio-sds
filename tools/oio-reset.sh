@@ -164,10 +164,13 @@ wait_for_srvtype "rdir" "$COUNT"
 
 echo -e "\n### Init the meta0/meta1 directory"
 openio \
-	--oio-ns "$NS" -v directory bootstrap --check --no-rdir \
+	--oio-ns "$NS" -v directory bootstrap --check \
 	--replicas $(oio-test-config.py -v directory_replicas)
 
 echo -e "\n### Assign rdir services"
+# Force meta1 services to reload meta0 cache
+gridinit_cmd -S "$GRIDINIT_SOCK" restart "@meta1" >/dev/null
+sleep 1
 openio --oio-ns "$NS" -v volume admin bootstrap
 
 echo -e "\n### Wait for the services to have a score"

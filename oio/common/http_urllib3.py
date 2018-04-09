@@ -14,6 +14,10 @@
 # License along with this library.
 
 from eventlet import patcher
+from urllib3.exceptions import MaxRetryError, TimeoutError, \
+    NewConnectionError, ProtocolError, ProxyError, ClosedPoolError
+from oio.common.exceptions import reraise, \
+    OioException, OioNetworkException, OioTimeout
 
 
 urllib3 = patcher.import_patched('urllib3.__init__')
@@ -50,3 +54,23 @@ def get_pool_manager(pool_connections=DEFAULT_POOLSIZE,
     return urllib3.PoolManager(num_pools=pool_connections,
                                maxsize=pool_maxsize, retries=max_retries,
                                block=False)
+
+
+def oio_exception_from_httperror(exc, reqid=None):
+    """
+    Convert an HTTPError from urllib3 to an OioException,
+    and re-raise it.
+    """
+    extra = ("reqid=%s" % reqid) if reqid else None
+    if isinstance(exc, MaxRetryError):
+        if isinstance(exc.reason, NewConnectionError):
+            reraise(OioNetworkException, exc.reason, extra)
+        if isinstance(exc.reason, TimeoutError):
+            reraise(OioTimeout, exc.reason, extra)
+        reraise(OioNetworkException, exc, extra)
+    elif isinstance(exc, (ProtocolError, ProxyError, ClosedPoolError)):
+        reraise(OioNetworkException, exc, extra)
+    elif isinstance(exc, TimeoutError):
+        reraise(OioTimeout, exc, extra)
+    else:
+        reraise(OioException, exc, extra)

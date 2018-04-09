@@ -62,10 +62,17 @@ class Target(object):
 
 class Checker(object):
     def __init__(self, namespace, concurrency=50,
-                 error_file=None, rebuild_file=None, full=True):
+                 error_file=None, rebuild_file=None, full=True,
+                 limit_listings=0):
         self.pool = GreenPool(concurrency)
         self.error_file = error_file
         self.full = bool(full)
+        # Optimisation for when we are only checking one object
+        # or one container.
+        # 0 -> do not limit
+        # 1 -> limit account listings (list of containers)
+        # 2 -> limit container listings (list of objects)
+        self.limit_listings = limit_listings
         if self.error_file:
             f = open(self.error_file, 'a')
             self.error_writer = csv.writer(f, delimiter=' ')
@@ -227,7 +234,8 @@ class Checker(object):
         meta = dict()
         try:
             meta, results = self.container_client.content_locate(
-                account=account, reference=container, path=obj)
+                account=account, reference=container, path=obj,
+                properties=False)
         except exc.NotFound as e:
             self.object_not_found += 1
             error = True
@@ -276,10 +284,17 @@ class Checker(object):
         marker = None
         results = []
         ct_meta = dict()
+        extra_args = dict()
+        if self.limit_listings > 1 and target.obj:
+            # When we are explicitly checking one object, start the listing
+            # where this object is supposed to be, and list only one object.
+            extra_args['prefix'] = target.obj
+            extra_args['limit'] = 1
         while True:
             try:
                 _, resp = self.container_client.content_list(
-                    account=account, reference=container, marker=marker)
+                    account=account, reference=container, marker=marker,
+                    **extra_args)
             except exc.NotFound as e:
                 self.container_not_found += 1
                 error = True
@@ -294,6 +309,8 @@ class Checker(object):
             if resp['objects']:
                 marker = resp['objects'][-1]['name']
                 results.extend(resp['objects'])
+                if self.limit_listings > 1:
+                    break
             else:
                 ct_meta = resp
                 ct_meta.pop('objects')
@@ -303,8 +320,10 @@ class Checker(object):
         for obj in results:
             container_listing[obj['name']] = obj
 
-        self.containers_checked += 1
-        self.list_cache[(account, container)] = container_listing, ct_meta
+        if self.limit_listings <= 1:
+            # We just listed the whole container, keep the result in a cache
+            self.containers_checked += 1
+            self.list_cache[(account, container)] = container_listing, ct_meta
         self.running[(account, container)].send(True)
         del self.running[(account, container)]
 
@@ -329,10 +348,17 @@ class Checker(object):
         error = False
         marker = None
         results = []
+        extra_args = dict()
+        if self.limit_listings > 0 and target.container:
+            # When we are explicitly checking one container, start the listing
+            # where this container is supposed to be, and list only one
+            # container.
+            extra_args['prefix'] = target.container
+            extra_args['limit'] = 1
         while True:
             try:
                 resp = self.account_client.container_list(
-                    account, marker=marker)
+                    account, marker=marker, **extra_args)
             except Exception as e:
                 self.account_exceptions += 1
                 error = True
@@ -340,18 +366,22 @@ class Checker(object):
                 break
             if resp['listing']:
                 marker = resp['listing'][-1][0]
+                results.extend(resp['listing'])
+                if self.limit_listings > 0:
+                    break
             else:
                 break
-            results.extend(resp['listing'])
 
         containers = dict()
         for e in results:
             containers[e[0]] = (e[1], e[2])
 
-        self.list_cache[account] = containers
+        if self.limit_listings <= 0:
+            # We just listed the whole account, keep the result in a cache
+            self.accounts_checked += 1
+            self.list_cache[account] = containers
         self.running[account].send(True)
         del self.running[account]
-        self.accounts_checked += 1
 
         if recurse:
             for container in containers:
@@ -410,9 +440,14 @@ class Checker(object):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('namespace', help='Namespace name')
+    parser.add_argument(
+        'account', nargs='?', help="Account (optional if reading from stdin)")
     t_help = "Element whose integrity should be checked. " \
-        "Can be ACCOUNT, ACCOUNT CONTAINER, ACCOUNT CONTAINER CONTENT " \
-        "or ACCOUNT CONTAINER CONTENT CHUNK."
+        "Can be empty (check the whole account), " \
+        "CONTAINER (check all objects of the container), " \
+        "CONTAINER CONTENT (check all chunks of the object) " \
+        "or CONTAINER CONTENT CHUNK (check only one chunk). \n" \
+        "When reading from stdin, expect one element per line."
     parser.add_argument('target', metavar='T', nargs='*',
                         help=t_help)
     parser.add_argument('-o', '--output', help='output file')
@@ -424,16 +459,25 @@ def main():
                         help="Presence check, the xattr check is skipped")
     parser.add_argument('-v', '--verbose',
                         action='store_true', help='verbose output')
+    parser.add_argument('--concurrency', '--workers', type=int,
+                        default=50,
+                        help='Number of concurrent checks (default: 50)')
 
     args = parser.parse_args()
 
-    checker = Checker(args.namespace, error_file=args.output,
-                      rebuild_file=args.output_for_blob_rebuilder,
-                      full=not args.presence)
     if not os.isatty(sys.stdin.fileno()):
         source = sys.stdin
+        limit_listings = 0  # do full listings, cache the results
     else:
-        source = cStringIO.StringIO(' '.join(args.target))
+        if not args.account:
+            raise ValueError('missing account argument')
+        source = cStringIO.StringIO(' '.join([args.account] + args.target))
+        limit_listings = len(args.target)
+    checker = Checker(args.namespace, error_file=args.output,
+                      concurrency=args.concurrency,
+                      rebuild_file=args.output_for_blob_rebuilder,
+                      full=not args.presence,
+                      limit_listings=limit_listings)
     args = csv.reader(source, delimiter=' ')
     for entry in args:
         checker.check(Target(*entry))

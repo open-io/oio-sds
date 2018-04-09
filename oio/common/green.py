@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -28,24 +28,29 @@ logging._lock = logging.threading.RLock()
 
 
 class OioTimeout(Timeout):
+    """Wrapper over eventlet.Timeout with better __str__."""
+
+    msg_prefix = ''
+
     def __str__(self):
-        return "Timeout %s" % super(OioTimeout, self).__str__()
+        return "%stimeout %s" % (self.__class__.msg_prefix,
+                                 super(OioTimeout, self).__str__())
 
 
 class ConnectionTimeout(OioTimeout):
-    pass
+    msg_prefix = 'Connection '
 
 
 class SourceReadTimeout(OioTimeout):
-    pass
+    msg_prefix = 'Source read '
 
 
 class ChunkWriteTimeout(OioTimeout):
-    pass
+    msg_prefix = 'Chunk write '
 
 
 class ChunkReadTimeout(OioTimeout):
-    pass
+    msg_prefix = 'Chunk read '
 
 
 def get_hub():

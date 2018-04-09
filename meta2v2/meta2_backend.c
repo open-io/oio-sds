@@ -1390,16 +1390,25 @@ _check_alias_doesnt_exist(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 	return err;
 }
 
-/* Create, save in cache, and possibly return m2_prepare_data */
+/* Create, save in cache, and possibly return m2_prepare_data.
+ * If container is disabled or frozen, decache m2_prepare_data
+ * and return nothing. */
 static void
 _meta2_backend_force_prepare_data_unlocked(struct meta2_backend_s *m2b,
 		const gchar *key, struct m2_prepare_data *pdata_out,
 		struct sqlx_sqlite3_s *sq3)
 {
-	GRID_DEBUG("Forcing M2_PREPARE data for %s", key);
 
 	struct m2_prepare_data *pdata = g_hash_table_lookup(
 			m2b->prepare_data_cache, key);
+
+	gint64 status = sqlx_admin_get_status(sq3);
+	if (status != ADMIN_STATUS_ENABLED) {
+		GRID_DEBUG("Decaching M2_PREP data for %s", key);
+		g_hash_table_remove(m2b->prepare_data_cache, key);
+		return;
+	}
+	GRID_DEBUG("Forcing M2_PREP data for %s", key);
 	if (!pdata) {
 		pdata = g_malloc0(sizeof(struct m2_prepare_data));
 		g_hash_table_insert(m2b->prepare_data_cache, g_strdup(key), pdata);
@@ -1417,8 +1426,9 @@ _meta2_backend_force_prepare_data_unlocked(struct meta2_backend_s *m2b,
 }
 
 /**
- * Update the data structure allowing to answer PREPARE requests
- * without taking the lock on the database file.
+ * Update the data structure allowing to answer M2_PREP requests
+ * without taking the lock on the database file. If the container
+ * is frozen or disabled, decache this data.
  */
 static void
 _meta2_backend_force_prepare_data(struct meta2_backend_s *m2b,
@@ -1478,10 +1488,12 @@ m2b_get_prepare_data(struct meta2_backend_s *m2b,
 	g_rw_lock_reader_unlock(&(m2b->prepare_data_lock));
 
 	if (!pdata) {
-		// Prepare data is not available. Open the base, take the writer lock
-		// and check again, in case another thread did the job while we were
-		// waiting for the base or the writer lock.
-		err = m2b_open(m2b, url, _mode_readonly(0), sq3);
+		/* Prepare data is not available. Open the base, take the writer lock
+		 * and check again, in case another thread did the job while we were
+		 * waiting for the base or the writer lock.
+		 * The base must not be frozen or disabled
+		 * (we must refuse "prepare" operation in such cases). */
+		err = m2b_open(m2b, url, _mode_masterslave(0)|M2V2_OPEN_ENABLED, sq3);
 		if (!err) {
 			g_rw_lock_writer_lock(&(m2b->prepare_data_lock));
 			pdata = g_hash_table_lookup(m2b->prepare_data_cache, key);

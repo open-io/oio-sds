@@ -13,12 +13,13 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.common.json import json as jsonlib
-from oio.common.http_urllib3 import urllib3, get_pool_manager
-from oio.common.easy_value import true_value
-from urllib3.exceptions import MaxRetryError, TimeoutError, HTTPError, \
-    NewConnectionError, ProtocolError, ProxyError, ClosedPoolError
 from urllib import urlencode
+from urllib3.exceptions import HTTPError
+
+from oio.common.easy_value import true_value
+from oio.common.json import json as jsonlib
+from oio.common.http_urllib3 import urllib3, get_pool_manager, \
+    oio_exception_from_httperror
 from oio.common import exceptions
 from oio.common.utils import deadline_to_timeout
 from oio.common.constants import ADMIN_HEADER, \
@@ -177,18 +178,8 @@ class HttpApi(object):
                     kv = header_val.split('=', 1)
                     pdat = perfdata.get(kv[0], 0.0) + float(kv[1]) / 1000000.0
                     perfdata[kv[0]] = pdat
-        except MaxRetryError as exc:
-            if isinstance(exc.reason, NewConnectionError):
-                _reraise(exceptions.OioNetworkException, exc)
-            if isinstance(exc.reason, TimeoutError):
-                _reraise(exceptions.OioTimeout, exc)
-            _reraise(exceptions.OioNetworkException, exc)
-        except (ProtocolError, ProxyError, ClosedPoolError) as exc:
-            _reraise(exceptions.OioNetworkException, exc)
-        except TimeoutError as exc:
-            _reraise(exceptions.OioTimeout, exc)
         except HTTPError as exc:
-            _reraise(exceptions.OioException, exc)
+            oio_exception_from_httperror(exc, out_headers.get('X-oio-req-id'))
         if resp.status >= 400:
             raise exceptions.from_response(resp, body)
         return resp, body

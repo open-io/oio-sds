@@ -19,7 +19,8 @@ from functools import wraps
 from eventlet import GreenPile
 from urllib3 import Timeout
 from urllib3.exceptions import HTTPError
-from oio.common.http_urllib3 import get_pool_manager
+from oio.common.http_urllib3 import get_pool_manager, \
+    oio_exception_from_httperror
 from oio.common import exceptions as exc, utils
 from oio.common.constants import CHUNK_HEADERS, chunk_xattr_keys_optional, \
         HEADER_PREFIX
@@ -137,10 +138,17 @@ class BlobClient(object):
         return headers, stream
 
     @update_rawx_perfdata
+    @ensure_headers
+    @ensure_request_id
     def chunk_head(self, url, **kwargs):
         _xattr = bool(kwargs.get('xattr', True))
-        resp = self.http_pool.request(
-                'HEAD', url, headers={HEADER_PREFIX + 'xattr': _xattr})
+        headers = kwargs['headers'].copy()
+        headers[HEADER_PREFIX + 'xattr'] = _xattr
+        try:
+            resp = self.http_pool.request(
+                'HEAD', url, headers=headers)
+        except HTTPError as ex:
+            oio_exception_from_httperror(ex, headers['X-oio-req-id'])
         if resp.status == 200:
             if not _xattr:
                 return dict()
@@ -149,13 +157,12 @@ class BlobClient(object):
             raise exc.from_response(resp)
 
     @update_rawx_perfdata
+    @ensure_headers
+    @ensure_request_id
     def chunk_copy(self, from_url, to_url, **kwargs):
         stream = None
-        req_id = kwargs.get('req_id')
-        if not req_id:
-            req_id = utils.request_id()
         try:
-            meta, stream = self.chunk_get(from_url, req_id=req_id)
+            meta, stream = self.chunk_get(from_url, **kwargs)
             meta['chunk_id'] = to_url.split('/')[-1]
             # FIXME: the original keys are the good ones.
             # ReplicatedMetachunkWriter should be modified to accept them.
@@ -163,14 +170,16 @@ class BlobClient(object):
             meta['version'] = meta['content_version']
             meta['chunk_method'] = meta['content_chunkmethod']
             meta['policy'] = meta['content_policy']
-            copy_meta = self.chunk_put(to_url, meta, stream, req_id=req_id)
+            copy_meta = self.chunk_put(to_url, meta, stream, **kwargs)
             return copy_meta
         finally:
             if stream:
                 stream.close()
 
     @update_rawx_perfdata
+    @ensure_headers
+    @ensure_request_id
     def chunk_link(self, target, link, **kwargs):
         headers = kwargs.get('headers')
-        headers["Destination"] = link[:-64] + "/" + link[-64:]
+        headers['Destination'] = link[:-64] + "/" + link[-64:]
         return self.http_pool.request('COPY', target, headers=headers)

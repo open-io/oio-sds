@@ -2169,9 +2169,11 @@ _prepare_message(struct _check_content_s *content, GString *message)
 static gboolean
 _check_metachunk_number(GSList *beans, struct _check_content_s *ec)
 {
-
 	gint last_pos = 0;
 	gint i = 0;
+
+	if (ec->present_chunks->len > 0)
+		g_string_append_c(ec->present_chunks, ',');
 	meta2_json_chunks_only(ec->present_chunks, beans, FALSE);
 
 	for (GSList *l = beans; l; l = l->next) {
@@ -2193,6 +2195,8 @@ _check_metachunk_number(GSList *beans, struct _check_content_s *ec)
 
 		gint64 p = g_ascii_strtoll(subpos, NULL, 10);
 		for (; last_pos < p - 1; last_pos++) {
+			if (ec->missing_pos->len)
+				g_string_append(ec->missing_pos, ",");
 			oio_str_gstring_append_json_string(ec->missing_pos,
 					CHUNKS_get_position(bean)->str);
 		}
@@ -2223,7 +2227,11 @@ _foreach_check_plain_content(gpointer key, gpointer value, gpointer data)
 
 	content->last_pos = GPOINTER_TO_INT(key);
 	guint nb_chunks = 0;
+
+	if (content->present_chunks->len > 0)
+		g_string_append_c(content->present_chunks, ',');
 	meta2_json_chunks_only (content->present_chunks, value, FALSE);
+
 	for (GSList *l = value; l; l = l->next) {
 		content->size += CHUNKS_get_size(l->data);
 		nb_chunks++;

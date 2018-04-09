@@ -20,15 +20,6 @@ from oio.common import exceptions
 EC_SEGMENT_SIZE = 1048576
 
 
-ec_type_to_pyeclib_type = {
-    'isa_l_rs_vand': 'isa_l_rs_vand',
-    'jerasure_rs_vand': 'jerasure_rs_vand',
-    'jerasure_rs_cauchy': 'jerasure_rs_cauchy',
-    'shss': 'shss',
-    'liberasurecode_rs_vand': 'liberasurecode_rs_vand'
-}
-
-
 def parse_chunk_method(chunk_method):
     param_list = dict()
     if '/' in chunk_method:
@@ -140,9 +131,14 @@ class ECStorageMethod(StorageMethod):
         self._ec_segment_size = ec_segment_size
         self._ec_type = ec_type
 
-        from pyeclib.ec_iface import ECDriver
-        self.driver = ECDriver(k=ec_nb_data, m=ec_nb_parity,
-                               ec_type=ec_type_to_pyeclib_type[ec_type])
+        from pyeclib.ec_iface import ECDriver, ECDriverError
+        try:
+            self.driver = ECDriver(k=ec_nb_data, m=ec_nb_parity,
+                                   ec_type=ec_type)
+        except ECDriverError as exc:
+            msg = "'%s' (%s: %s) Check erasure code packages." % (
+                ec_type, exc.__class__.__name__, exc)
+            raise exceptions.InvalidStorageMethod(msg), None, sys.exc_info()[2]
         self._ec_quorum_size = \
             self._ec_nb_data + self.driver.min_parity_fragments_needed()
 

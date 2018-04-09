@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -34,11 +34,11 @@ WRITE_CHUNK_SIZE = 65536
 READ_CHUNK_SIZE = 65536
 
 # RAWX connection timeout
-CONNECTION_TIMEOUT = 2.0
+CONNECTION_TIMEOUT = 10.0
 # chunk operations timeout
-CHUNK_TIMEOUT = 5.0
+CHUNK_TIMEOUT = 60.0
 # client read timeout
-CLIENT_TIMEOUT = 5.0
+CLIENT_TIMEOUT = 60.0
 
 PUT_QUEUE_DEPTH = 10
 
@@ -526,6 +526,8 @@ class MetachunkWriter(object):
     def __init__(self, storage_method=None, quorum=None, **_kwargs):
         self.storage_method = storage_method
         self._quorum = quorum
+        if storage_method is None and quorum is None:
+            raise ValueError('Missing storage_method or quorum')
 
     @property
     def quorum(self):
@@ -542,15 +544,30 @@ class MetachunkWriter(object):
         :type successes: `list` or `tuple`
         :param failures: a list of chunk objects whose upload failed
         :type failures: `list` or `tuple`
+        :raises `exc.SourceReadError`: if there is an error while reading
+            data from the client
+        :raises `exc.SourceReadTimeout`: if there is a timeout while reading
+            data from the client
+        :raises `exc.OioTimeout`: if there is a timeout among the errors
         :raises `exc.OioException`: if quorum has not been reached
+            for any other reason
         """
         if len(successes) < self.quorum:
             errors = group_chunk_errors(
                 ((chunk["url"], chunk.get("error", "success"))
                  for chunk in successes + failures))
-            raise exc.OioException(
+            new_exc = exc.OioException(
                 "RAWX write failure, quorum not reached (%d/%d): %s" %
                 (len(successes), self.quorum, errors))
+            for err in [x.get('error') for x in failures]:
+                if isinstance(err, exc.SourceReadError):
+                    raise exc.SourceReadError(new_exc)
+                elif isinstance(err, green.SourceReadTimeout):
+                    # Never raise 'green' timeouts out of our API
+                    raise exc.SourceReadTimeout(new_exc)
+                elif isinstance(err, (exc.OioTimeout, green.OioTimeout)):
+                    raise exc.OioTimeout(new_exc)
+            raise new_exc
 
 
 class MetachunkPreparer(object):

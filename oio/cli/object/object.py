@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -15,8 +15,8 @@
 
 import os
 from logging import getLogger
-from eventlet import GreenPool
 from cliff import command, lister, show
+from eventlet import GreenPool
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.utils import depaginate
 
@@ -391,11 +391,12 @@ class SaveObject(ObjectCommandMixin, command.Command):
         if parsed_args.auto:
             container = self.flatns_manager(obj)
 
-        meta, stream = self.app.client_manager.storage.object_fetch(
+        _meta, stream = self.app.client_manager.storage.object_fetch(
             self.app.client_manager.account,
             container,
             obj,
-            key_file=key_file
+            key_file=key_file,
+            properties=False,
         )
         if not os.path.exists(os.path.dirname(filename)):
             if len(os.path.dirname(filename)) > 0:
@@ -722,7 +723,7 @@ class LocateObject(ObjectCommandMixin, lister.Lister):
             columns = ('Pos', 'Id', 'Metachunk size', 'Metachunk hash',
                        'Chunk size', 'Chunk hash')
             chunks = ((c['pos'], c['url'], c['size'], c['hash'],
-                       c['chunk_size'], c['chunk_hash'])
+                       c.get('chunk_size', 'n/a'), c.get('chunk_hash', 'n/a'))
                       for c in data[1])
         else:
             columns = ('Pos', 'Id', 'Metachunk size', 'Metachunk hash')
