@@ -19,7 +19,7 @@
 import argparse
 
 from oio.rebuilder.meta1_rebuilder import Meta1Rebuilder
-from oio.common.utils import get_logger
+from oio.common.logger import get_logger
 
 
 def make_arg_parser():
