@@ -259,7 +259,7 @@ class BlobRebuilderWorker(RebuilderWorker):
             chunk = content.chunks.filter(id=chunk_id).one()
             if chunk is None:
                 raise OrphanChunk(("Chunk not found in content:"
-                                  "possible orphan chunk"))
+                                   'possible orphan chunk'))
             elif self.volume and chunk.host != self.volume:
                 raise ValueError("Chunk does not belong to this volume")
             chunk_size = chunk.size

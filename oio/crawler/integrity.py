@@ -63,7 +63,7 @@ class Target(object):
 class Checker(object):
     def __init__(self, namespace, concurrency=50,
                  error_file=None, rebuild_file=None, full=True,
-                 limit_listings=0):
+                 limit_listings=0, request_attempts=1):
         self.pool = GreenPool(concurrency)
         self.error_file = error_file
         self.full = bool(full)
@@ -83,8 +83,13 @@ class Checker(object):
             self.rebuild_writer = csv.writer(fd, delimiter='|')
 
         conf = {'namespace': namespace}
-        self.account_client = AccountClient(conf)
-        self.container_client = ContainerClient(conf)
+        self.account_client = AccountClient(
+            conf,
+            max_retries=request_attempts - 1)
+        self.container_client = ContainerClient(
+            conf,
+            max_retries=request_attempts - 1,
+            request_attempts=request_attempts)
         self.blob_client = BlobClient()
 
         self.accounts_checked = 0
@@ -249,10 +254,12 @@ class Checker(object):
         for chunk in results:
             chunk_listing[chunk['url']] = chunk
 
-        self.check_obj_policy(target.copy(), meta, results)
+        # Skip the check if we could not locate the object
+        if meta:
+            self.check_obj_policy(target.copy(), meta, results)
+            self.list_cache[(account, container, obj)] = (chunk_listing, meta)
 
         self.objects_checked += 1
-        self.list_cache[(account, container, obj)] = (chunk_listing, meta)
         self.running[(account, container, obj)].send(True)
         del self.running[(account, container, obj)]
 
@@ -446,24 +453,34 @@ def main():
         "Can be empty (check the whole account), " \
         "CONTAINER (check all objects of the container), " \
         "CONTAINER CONTENT (check all chunks of the object) " \
-        "or CONTAINER CONTENT CHUNK (check only one chunk). \n" \
-        "When reading from stdin, expect one element per line."
+        "or CONTAINER CONTENT CHUNK (check only one chunk). " \
+        "When reading from stdin, expect one element per line " \
+        "(starting with account)."
     parser.add_argument('target', metavar='T', nargs='*',
                         help=t_help)
-    parser.add_argument('-o', '--output', help='output file')
+    parser.add_argument('-o', '--output',
+                        help=('Output file. Will contain elements in error. '
+                              'Can later be passed to stdin to re-check only '
+                              'these elements.'))
     parser.add_argument('--output-for-blob-rebuilder',
                         help="Write chunk errors in a file with a format " +
-                        "suitable as oio-blob-rebuilder input")
+                        "suitable as oio-blob-rebuilder input.")
     parser.add_argument('-p', '--presence',
                         action='store_true', default=False,
-                        help="Presence check, the xattr check is skipped")
+                        help="Presence check, the xattr check is skipped.")
     parser.add_argument('-v', '--verbose',
                         action='store_true', help='verbose output')
     parser.add_argument('--concurrency', '--workers', type=int,
                         default=50,
-                        help='Number of concurrent checks (default: 50)')
+                        help='Number of concurrent checks (default: 50).')
+    parser.add_argument('--attempts', type=int, default=1,
+                        help=('Number of attempts for '
+                              'listing requests (default: 1).'))
 
     args = parser.parse_args()
+
+    if args.attempts < 1:
+        raise ValueError('attempts must be at least 1')
 
     if not os.isatty(sys.stdin.fileno()):
         source = sys.stdin
@@ -473,11 +490,15 @@ def main():
             raise ValueError('missing account argument')
         source = cStringIO.StringIO(' '.join([args.account] + args.target))
         limit_listings = len(args.target)
-    checker = Checker(args.namespace, error_file=args.output,
-                      concurrency=args.concurrency,
-                      rebuild_file=args.output_for_blob_rebuilder,
-                      full=not args.presence,
-                      limit_listings=limit_listings)
+    checker = Checker(
+        args.namespace,
+        error_file=args.output,
+        concurrency=args.concurrency,
+        rebuild_file=args.output_for_blob_rebuilder,
+        full=not args.presence,
+        limit_listings=limit_listings,
+        request_attempts=args.attempts,
+    )
     args = csv.reader(source, delimiter=' ')
     for entry in args:
         checker.check(Target(*entry))

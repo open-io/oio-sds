@@ -28,11 +28,17 @@ class ECContent(Content):
         if current_chunk is None and chunk_pos is None:
             raise OrphanChunk("Chunk not found in content")
         elif current_chunk is None:
-            chunk = {"pos": chunk_pos, "url": ""}
-            current_chunk = Chunk(chunk)
+            current_chunk = self.chunks.filter(pos=chunk_pos).one()
+            if current_chunk is None:
+                chunk = {'pos': chunk_pos, 'url': ''}
+                current_chunk = Chunk(chunk)
+            else:
+                chunk_id = current_chunk.id
+                self.logger.debug('Chunk at pos %s has id %s',
+                                  chunk_pos, chunk_id)
 
         chunks = self.chunks.filter(metapos=current_chunk.metapos)\
-            .exclude(id=chunk_id)
+            .exclude(id=chunk_id, pos=chunk_pos)
 
         if chunk_id is None:
             current_chunk.size = chunks[0].size
@@ -81,6 +87,8 @@ class ECContent(Content):
             self._add_raw_chunk(current_chunk, spare_url[0])
         else:
             self._update_spare_chunk(current_chunk, spare_url[0])
+        self.logger.info('Chunk %s repaired in %s',
+                         chunk_id or chunk_pos, spare_url[0])
 
     def fetch(self):
         chunks = _sort_chunks(self.chunks.raw(), self.storage_method.ec)

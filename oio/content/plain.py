@@ -76,14 +76,14 @@ class PlainContent(Content):
         for src in duplicate_chunks:
             try:
                 self.blob_client.chunk_copy(src.url, spare_urls[0])
-                self.logger.debug("copy chunk from %s to %s",
+                self.logger.debug('Chunk copied from %s to %s, registering it',
                                   src.url, spare_urls[0])
                 uploaded = True
                 break
-            except Exception as e:
+            except Exception as err:
                 self.logger.warn(
                     "Failed to copy chunk from %s to %s: %s", src.url,
-                    spare_urls[0], str(e.message))
+                    spare_urls[0], str(err.message))
         if not uploaded:
             raise UnrecoverableContent("No copy available of missing chunk")
 
@@ -91,3 +91,5 @@ class PlainContent(Content):
             self._add_raw_chunk(current_chunk, spare_urls[0])
         else:
             self._update_spare_chunk(current_chunk, spare_urls[0])
+        self.logger.info('Chunk %s repaired in %s',
+                         chunk_id or chunk_pos, spare_urls[0])
