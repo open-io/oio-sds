@@ -506,7 +506,9 @@ _reply_simplified_beans (struct req_args_s *args, GError *err,
 			gchar *k = g_strdup_printf (PROXYD_HEADER_PREFIX "content-meta-%s",
 					PROPERTIES_get_key(prop)->str);
 			GByteArray *v = PROPERTIES_get_value (prop);
-			args->rp->add_header(k, g_strndup ((gchar*)v->data, v->len));
+			g_byte_array_append(v, (guint8*)"", 1);  // Ensure nul-terminated
+			args->rp->add_header(k,
+					g_uri_escape_string((gchar*)v->data, NULL, FALSE));
 			g_free (k);
 		}
 	}
@@ -953,6 +955,8 @@ _re_enable (struct req_args_s *args)
 {
 	PACKER_VOID (_pack) { return sqlx_pack_ENABLE (_u, DL()); }
 	GError *e = _resolve_meta2(args, CLIENT_PREFER_MASTER, _pack, NULL);
+	if (e && e->code == CODE_CONTAINER_ENABLED)
+		g_clear_error(&e);
 	if (e) {
 		GRID_INFO("Failed to un-freeze [%s]: (%d) %s",
 				oio_url_get(args->url, OIOURL_WHOLE), e->code, e->message);
@@ -984,7 +988,9 @@ action_m2_container_destroy (struct req_args_s *args)
 	if (!err) {
 		PACKER_VOID(_pack) { return sqlx_pack_FREEZE(_u, DL()); }
 		err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
-		if (NULL != err && CODE_IS_NETWORK_ERROR(err->code)) {
+		if (err != NULL && err->code == CODE_CONTAINER_FROZEN) {
+			g_clear_error(&err);
+		} else if (err != NULL && CODE_IS_NETWORK_ERROR(err->code)) {
 			/* rollback! There are chances the request made a timeout
 			 * but was actually managed by the server. */
 			_re_enable (args);
@@ -998,7 +1004,7 @@ action_m2_container_destroy (struct req_args_s *args)
 		guint32 flags = flag_force_master ? M2V2_FLAG_MASTER : 0;
 		PACKER_VOID(_pack) { return m2v2_remote_pack_ISEMPTY (args->url, flags, DL()); }
 		err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
-		if (NULL != err) {
+		if (err != NULL) {
 			/* rollback! */
 			_re_enable (args);
 			goto clean_and_exit;
@@ -1013,7 +1019,7 @@ action_m2_container_destroy (struct req_args_s *args)
 		}
 		err = _m1_locate_and_action (args->url, _unlink);
 		hc_decache_reference_service (resolver, args->url, n.type);
-		if (NULL != err) {
+		if (err != NULL) {
 			/* Rolling back will be hard if there is any chance the UNLINK has
 			 * been managed by the server, despite a time-out that occured. */
 			_re_enable (args);
@@ -1037,7 +1043,7 @@ action_m2_container_destroy (struct req_args_s *args)
 clean_and_exit:
 	if (urlv)
 		g_strfreev (urlv);
-	if (NULL != err)
+	if (err != NULL)
 		return _reply_m2_error(args, err);
 	return _reply_nocontent (args);
 }
@@ -1047,11 +1053,17 @@ clean_and_exit:
 static enum http_rc_e
 action_m2_container_purge (struct req_args_s *args, struct json_object *j UNUSED)
 {
-	PACKER_VOID(_pack) { return m2v2_remote_pack_PURGE (args->url, DL()); }
-	GError *err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
-	if (NULL != err)
-		return _reply_common_error (args, err);
-	return _reply_success_json (args, NULL);
+	GError *err = NULL;
+	const char *maxvers_str = OPT("maxvers");
+	if (maxvers_str && !oio_str_is_number(maxvers_str, NULL)) {
+		err = BADREQ("Invalid maxvers parameter: %s", maxvers_str);
+	} else {
+		PACKER_VOID(_pack) {
+			return m2v2_remote_pack_PURGEB(args->url, maxvers_str, DL());
+		}
+		err = _resolve_meta2(args, _prefer_master(), _pack, NULL);
+	}
+	return _reply_m2_error(args, err);
 }
 
 static enum http_rc_e
@@ -1543,7 +1555,9 @@ enum http_rc_e action_container_list (struct req_args_s *args) {
 	list_in.flag_nodeleted = 1;
 	list_in.prefix = OPT("prefix");
 	list_in.marker_start = OPT("marker");
-	list_in.marker_end = OPT("marker_end");
+	list_in.marker_end = OPT("end_marker");
+	if (!list_in.marker_end)
+		list_in.marker_end = OPT("marker_end");  // backward compatibility
 	if (OPT("deleted"))
 		list_in.flag_nodeleted = 0;
 	if (OPT("all"))
@@ -1980,6 +1994,22 @@ static enum http_rc_e _m2_content_update(struct req_args_s *args,
 	return _reply_m2_error (args, err);
 }
 
+static enum http_rc_e
+action_m2_content_purge (struct req_args_s *args, struct json_object *j UNUSED)
+{
+	GError *err = NULL;
+	const char *maxvers_str = OPT("maxvers");
+	if (maxvers_str && !oio_str_is_number(maxvers_str, NULL)) {
+		err = BADREQ("Invalid maxvers parameter: %s", maxvers_str);
+	} else {
+		PACKER_VOID(_pack) {
+			return m2v2_remote_pack_PURGEC(args->url, maxvers_str, DL());
+		}
+		err = _resolve_meta2(args, _prefer_master(), _pack, NULL);
+	}
+	return _reply_m2_error(args, err);
+}
+
 
 /* CONTENT resources ------------------------------------------------------- */
 
@@ -2022,6 +2052,10 @@ enum http_rc_e action_content_prepare (struct req_args_s *args) {
 enum http_rc_e action_content_show (struct req_args_s *args) {
 	GSList *beans = NULL;
 	guint32 flags = flag_force_master ? M2V2_FLAG_MASTER : 0;
+	/* Historical behaviour is to return properties as headers, but
+	 * if there are too many, the client will fail decoding the request. */
+	if (!oio_str_parse_bool(OPT("properties"), TRUE))
+		flags |= M2V2_FLAG_NOPROPS;
 	PACKER_VOID(_pack) { return m2v2_remote_pack_GET (args->url, flags, DL()); }
 	GError *err = _resolve_meta2 (args, _prefer_slave(), _pack, &beans);
 	return _reply_simplified_beans (args, err, beans, TRUE);
@@ -2154,4 +2188,8 @@ enum http_rc_e action_content_copy (struct req_args_s *args) {
 	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);
+}
+
+enum http_rc_e action_content_purge (struct req_args_s *args) {
+	return rest_action (args, action_m2_content_purge);
 }

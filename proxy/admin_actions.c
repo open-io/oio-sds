@@ -82,12 +82,19 @@ _action_admin_meta0_common(struct req_args_s *args,
 	return err;
 }
 
+static GError*
+_wrap_meta0_remote_get_meta1_all(const char *m0_url, GSList **out)
+{
+	const gint64 deadline = oio_ext_get_deadline();
+	return meta0_remote_get_meta1_all(m0_url, out, deadline);
+}
+
 enum http_rc_e
 action_admin_meta0_list(struct req_args_s *args) {
 	GSList *m1_lst = NULL;
 	GString *json = NULL;
 	GError *err = _action_admin_meta0_common(args,
-			(meta0_func)meta0_remote_get_meta1_all, &m1_lst);
+			(meta0_func)_wrap_meta0_remote_get_meta1_all, &m1_lst);
 
 	if (!err) {
 		json = _m0_mapping_from_m1_list(m1_lst);

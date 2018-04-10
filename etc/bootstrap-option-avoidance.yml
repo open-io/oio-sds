@@ -1,0 +1,5 @@
+config:
+  client.errors_cache.enabled: true
+  client.down_cache.avoid: true
+  client.down_cache.shorten: true
+

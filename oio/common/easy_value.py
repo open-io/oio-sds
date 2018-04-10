@@ -38,11 +38,25 @@ def float_value(value, default):
 
 
 TRUE_VALUES = set(('true', '1', 'yes', 'on', 't', 'y'))
+FALSE_VALUES = set(('false', '0', 'no', 'off', 'f', 'n'))
 
 
 def true_value(value):
     return value is True or \
         (isinstance(value, string_types) and value.lower() in TRUE_VALUES)
+
+
+def boolean_value(value):
+    try:
+        value = str(value).lower()
+        if value in TRUE_VALUES:
+            return True
+        elif value in FALSE_VALUES:
+            return False
+        else:
+            raise ValueError('Boolean value expected')
+    except (TypeError, ValueError):
+        raise
 
 
 METRIC_SYMBOLS = ("", "K", "M", "G", "T", "P", "E", "Z", "Y")

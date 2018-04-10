@@ -21,6 +21,7 @@ from cliff import command, show, lister
 from time import time
 from oio.common.timestamp import Timestamp
 from oio.common.constants import OIO_DB_STATUS_NAME
+from oio.common.easy_value import boolean_value
 
 
 class SetPropertyCommandMixin(object):
@@ -57,6 +58,14 @@ class SetPropertyCommandMixin(object):
  n>1 is maximum n versions.
 """
         )
+        parser.add_argument(
+            '--delete-exceeding-versions',
+            metavar='<bool>',
+            type=boolean_value,
+            help="""Delete exceeding versions when adding a new object
+ (only if versioning is enabled).
+"""
+        )
 
 
 class CreateContainer(SetPropertyCommandMixin, lister.Lister):
@@ -86,6 +95,9 @@ class CreateContainer(SetPropertyCommandMixin, lister.Lister):
             system['sys.m2.policy.storage'] = parsed_args.storage_policy
         if parsed_args.max_versions is not None:
             system['sys.m2.policy.version'] = str(parsed_args.max_versions)
+        if parsed_args.delete_exceeding_versions is not None:
+            system['sys.m2.policy.version.delete_exceeding'] = \
+                str(int(parsed_args.delete_exceeding_versions))
 
         results = []
         account = self.app.client_manager.account
@@ -141,6 +153,9 @@ class SetContainer(SetPropertyCommandMixin, command.Command):
             system['sys.m2.policy.storage'] = parsed_args.storage_policy
         if parsed_args.max_versions is not None:
             system['sys.m2.policy.version'] = str(parsed_args.max_versions)
+        if parsed_args.delete_exceeding_versions is not None:
+            system['sys.m2.policy.version.delete_exceeding'] = \
+                str(int(parsed_args.delete_exceeding_versions))
 
         self.app.client_manager.storage.container_set_properties(
             self.app.client_manager.account,
@@ -162,7 +177,7 @@ class TouchContainer(command.Command):
             'containers',
             metavar='<container>',
             nargs='+',
-            help='Container(s) to delete'
+            help='Container(s) to touch'
         )
         return parser
 
@@ -253,6 +268,10 @@ class ShowContainer(show.ShowOne):
                                     "Namespace default"),
             'status': OIO_DB_STATUS_NAME.get(sys.get('sys.status'), "Unknown"),
         }
+        delete_exceeding = sys.get('sys.m2.policy.version.delete_exceeding',
+                                   None)
+        if delete_exceeding is not None:
+            info['delete_exceeding_versions'] = delete_exceeding != '0'
         for k, v in iteritems(data['properties']):
             info['meta.' + k] = v
         return list(zip(*sorted(info.items())))
@@ -380,6 +399,12 @@ class UnsetContainer(command.Command):
             help='Reset the quota of the container '
                  'to the namespace default'
         )
+        parser.add_argument(
+            '--delete-exceeding-versions',
+            action='store_true',
+            help='Reset the deletion of the exceeding versions '
+                 'to the default value'
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -393,6 +418,8 @@ class UnsetContainer(command.Command):
             system['sys.m2.policy.version'] = ''
         if parsed_args.quota:
             system['sys.m2.quota'] = ''
+        if parsed_args.delete_exceeding_versions:
+            system['sys.m2.policy.version.delete_exceeding'] = ''
 
         if properties:
             self.app.client_manager.storage.container_del_properties(
@@ -432,7 +459,7 @@ class SaveContainer(command.Command):
         for obj in objs['objects']:
             obj_name = obj['name']
             _, stream = self.app.client_manager.storage.object_fetch(
-                account, container, obj_name)
+                account, container, obj_name, properties=False)
 
             if not os.path.exists(os.path.dirname(obj_name)):
                 if len(os.path.dirname(obj_name)) > 0:
@@ -507,14 +534,25 @@ class PurgeContainer(command.Command):
             metavar='<container>',
             help='Container to purge',
         )
+        parser.add_argument(
+            '--max-versions',
+            metavar='<n>',
+            type=int,
+            help="""The number of versions to keep
+ (overrides the container configuration).
+ n<0 is unlimited number of versions (purge only deleted aliases).
+ n=0 is 1 version.
+ n>0 is n versions.
+"""
+        )
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
         account = self.app.client_manager.account
-        self.app.client_manager.storage.container.container_purge(
-            account, parsed_args.container
+        self.app.client_manager.storage.container_purge(
+            account, parsed_args.container, maxvers=parsed_args.max_versions
         )
 
 

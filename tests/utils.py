@@ -96,6 +96,11 @@ class CommonTestCase(testtools.TestCase):
 
     TEST_HEADERS = {'X-oio-req-id': '7E571D0000000000'}
 
+    def is_running_on_public_ci(self):
+        from os import getenv
+        clues = (getenv("TRAVIS"), getenv("CIRCLECI"))
+        return any(clue is not None for clue in clues)
+
     def _random_user(self):
         return "user-" + random_str(16, "0123456789ABCDEF")
 

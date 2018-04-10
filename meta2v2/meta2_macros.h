@@ -60,6 +60,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define M2V2_ADMIN_KEEP_DELETED_DELAY M2V2_ADMIN_PREFIX_SYS "keep_deleted_delay"
 # endif
 
+# ifndef M2V2_ADMIN_DELETE_EXCEEDING_VERSIONS
+# define M2V2_ADMIN_DELETE_EXCEEDING_VERSIONS M2V2_ADMIN_VERSIONING_POLICY ".delete_exceeding"
+# endif
+
 # ifndef META2_INIT_FLAG
 # define META2_INIT_FLAG M2V2_ADMIN_PREFIX_SYS "init"
 # endif
@@ -74,7 +78,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_M2V2_DESTROY         "M2_DESTROY"
 # define NAME_MSGNAME_M2V2_HAS             "M2_HAS"
 # define NAME_MSGNAME_M2V2_FLUSH           "M2_FLUSH"
-# define NAME_MSGNAME_M2V2_PURGE           "M2_PURGE"
+# define NAME_MSGNAME_M2V2_PURGE_CONTENT   "M2_CPURGE"
+# define NAME_MSGNAME_M2V2_PURGE_CONTAINER "M2_BPURGE"
 # define NAME_MSGNAME_M2V2_DEDUP           "M2_DEDUP"
 # define NAME_MSGNAME_M2V2_PUT             "M2_PUT"
 # define NAME_MSGNAME_M2V2_BEANS           "M2_PREP"

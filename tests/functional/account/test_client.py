@@ -72,6 +72,31 @@ class TestAccountClient(BaseTestCase):
         self.assertEqual(2, resp["containers"])
         self.assertEqual([], resp["listing"])
 
+    def test_container_list_with_delimiter(self):
+        self.container_client.container_create(account=self.account_id,
+                                               reference="cnt%2Bdir1")
+        self.container_client.container_create(account=self.account_id,
+                                               reference="cnt%2Bdir2")
+        self.container_client.container_create(account=self.account_id,
+                                               reference="zzz")
+        metadata = dict()
+        metadata["mtime"] = time.time()
+        metadata["bytes"] = 42
+        metadata["objects"] = 12
+        self.account_client.container_update(self.account_id, "zzz",
+                                             metadata=metadata)
+
+        time.sleep(.5)  # ensure container event have been processed
+        resp = self.account_client.container_list(self.account_id,
+                                                  delimiter='%')
+        self.assertEqual(5, resp["containers"])
+        self.assertEqual(
+            [["cnt%", 0, 0, 1],
+             ["container1", 0, 0, 0],
+             ["container2", 0, 0, 0],
+             ["zzz", 12, 42, 0]],
+            [x[:4] for x in resp["listing"]])
+
     # TODO: move this test somewhere under tests/unit/
     def test_account_service_refresh(self):
         self.account_client.endpoint = "126.0.0.1:6666"

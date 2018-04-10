@@ -56,9 +56,9 @@ class RdirDispatcher(object):
             self._cs = ConscienceClient(self.conf, logger=self.logger)
         return self._cs
 
-    def get_assignation(self):
-        all_rawx = self.cs.all_services('rawx')
-        all_rdir = self.cs.all_services('rdir', True)
+    def get_assignation(self, **kwargs):
+        all_rawx = self.cs.all_services('rawx', **kwargs)
+        all_rdir = self.cs.all_services('rdir', True, **kwargs)
         by_id = {_make_id(self.ns, 'rdir', x['addr']): x
                  for x in all_rdir}
 
@@ -66,7 +66,8 @@ class RdirDispatcher(object):
             try:
                 # Verify that there is no rdir linked
                 resp = self.directory.list(RDIR_ACCT, rawx['addr'],
-                                           service_type='rdir')
+                                           service_type='rdir',
+                                           **kwargs)
                 rdir_host = _filter_rdir_host(resp)
                 try:
                     rawx['rdir'] = by_id[_make_id(self.ns, 'rdir', rdir_host)]
@@ -79,7 +80,7 @@ class RdirDispatcher(object):
                 self.logger.info("No rdir linked to %s", rawx['addr'])
         return all_rawx, all_rdir
 
-    def assign_all_rawx(self, max_per_rdir=None):
+    def assign_all_rawx(self, max_per_rdir=None, **kwargs):
         """
         Find a rdir service for all rawx that don't have one already.
 
@@ -87,8 +88,8 @@ class RdirDispatcher(object):
                              can be linked to
         :type max_per_rdir: `int`
         """
-        all_rawx = self.cs.all_services('rawx')
-        all_rdir = self.cs.all_services('rdir', True)
+        all_rawx = self.cs.all_services('rawx', **kwargs)
+        all_rdir = self.cs.all_services('rdir', True, **kwargs)
         if len(all_rdir) <= 0:
             raise ServiceUnavailable("No rdir service found in %s" % self.ns)
 
@@ -99,7 +100,7 @@ class RdirDispatcher(object):
             try:
                 # Verify that there is no rdir linked
                 resp = self.directory.list(RDIR_ACCT, rawx['addr'],
-                                           service_type='rdir')
+                                           service_type='rdir', **kwargs)
                 rdir_host = _filter_rdir_host(resp)
                 try:
                     rawx['rdir'] = by_id[_make_id(self.ns, 'rdir', rdir_host)]
@@ -108,13 +109,14 @@ class RdirDispatcher(object):
                                      rdir_host, rawx['addr'])
             except (NotFound, ClientException):
                 rdir = self._smart_link_rdir(rawx['addr'], all_rdir,
-                                             max_per_rdir)
+                                             max_per_rdir, **kwargs)
                 n_bases = by_id[rdir]['tags'].get("stat.opened_db_count", 0)
                 by_id[rdir]['tags']["stat.opened_db_count"] = n_bases + 1
                 rawx['rdir'] = by_id[rdir]
         return all_rawx
 
-    def _smart_link_rdir(self, volume_id, all_rdir, max_per_rdir=None):
+    def _smart_link_rdir(self, volume_id, all_rdir, max_per_rdir=None,
+                         **kwargs):
         """
         Force the load balancer to avoid services that already host more
         bases than the average (or more than `max_per_rdir`)
@@ -135,33 +137,71 @@ class RdirDispatcher(object):
                   x['tags']['stat.opened_db_count'] > upper_limit]
         known = [_make_id(self.ns, "rawx", volume_id)]
         try:
-            polled = self._poll_rdir(avoid=avoids, known=known)
+            polled = self._poll_rdir(avoid=avoids, known=known, **kwargs)
         except ClientException as exc:
             if exc.status != 481 or max_per_rdir:
                 raise
             # Retry without `avoids`, hoping the next iteration will rebalance
-            polled = self._poll_rdir(known=known)
+            polled = self._poll_rdir(known=known, **kwargs)
+
+        # Associate the rdir to the rawx
         forced = {'host': polled['addr'], 'type': 'rdir',
                   'seq': 1, 'args': "", 'id': polled['id']}
-        self.directory.force(RDIR_ACCT, volume_id, 'rdir',
-                             forced, autocreate=True)
+        max_attempts = 7
+        for i in range(max_attempts):
+            try:
+                self.directory.force(RDIR_ACCT, volume_id, 'rdir',
+                                     forced, autocreate=True, **kwargs)
+            except ClientException as ex:
+                # Already done
+                done = (455, )
+                if ex.status in done:
+                    break
+                if ex.message.startswith(
+                        'META1 error: (SQLITE_CONSTRAINT) '
+                        'UNIQUE constraint failed'):
+                    self.logger.info(
+                            "Ignored exception (already0): %s", ex)
+                    break
+                if ex.message.startswith(
+                        'META1 error: (SQLITE_CONSTRAINT) '
+                        'columns cid, srvtype, seq are not unique'):
+                    self.logger.info(
+                            "Ignored exception (already1): %s", ex)
+                    break
+                # Manage several unretriable errors
+                retry = (406, 450, 503, 504)
+                if ex.status >= 400 and ex.status not in retry:
+                    raise
+                # Monotonic backoff (retriable and net erorrs)
+                if i < max_attempts - 1:
+                    from time import sleep
+                    sleep(i * 1.0)
+                    continue
+                # Too many attempts
+                raise
+
+        # Do the creation in the rdir itself
         try:
-            self.rdir.create(volume_id)
+            self.rdir.create(volume_id, **kwargs)
         except Exception as exc:
             self.logger.warn("Failed to create database for %s on %s: %s",
                              volume_id, polled['addr'], exc)
         return polled['id']
 
-    def _poll_rdir(self, avoid=None, known=None):
+    def _poll_rdir(self, avoid=None, known=None, **kwargs):
         """Call the special rdir service pool (created if missing)"""
         try:
-            svcs = self.cs.poll('__rawx_rdir', avoid=avoid, known=known)
+            svcs = self.cs.poll('__rawx_rdir', avoid=avoid, known=known,
+                                **kwargs)
         except ClientException as exc:
             if exc.status != 400:
                 raise
             self.cs.lb.create_pool(
-                '__rawx_rdir', ((1, JOKER_SVC_TARGET), (1, 'rdir')))
-            svcs = self.cs.poll('__rawx_rdir', avoid=avoid, known=known)
+                '__rawx_rdir', ((1, JOKER_SVC_TARGET), (1, 'rdir')),
+                **kwargs)
+            svcs = self.cs.poll('__rawx_rdir', avoid=avoid, known=known,
+                                **kwargs)
         for svc in svcs:
             # FIXME: we should include the service type in a dedicated field
             if 'rdir' in svc['id']:
@@ -217,9 +257,9 @@ class RdirClient(HttpApi):
 
         return resp, body
 
-    def create(self, volume_id):
+    def create(self, volume_id, **kwargs):
         """Create the database for `volume_id` on the appropriate rdir"""
-        self._rdir_request(volume_id, 'POST', 'create')
+        self._rdir_request(volume_id, 'POST', 'create', **kwargs)
 
     def chunk_push(self, volume_id, container_id, content_id, chunk_id,
                    **data):

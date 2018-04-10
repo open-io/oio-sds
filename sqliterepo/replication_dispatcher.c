@@ -1397,9 +1397,8 @@ _handler_GETVERS(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	/* TODO JFS : trigger an election, useful to reduce the number of
-	   messages during an election. */
-	if (NULL != (err = sqlx_repository_use_base(repo, &n0))) {
+	/* Kickoff the election, we are already involved in it... */
+	if (NULL != (err = sqlx_repository_use_base(repo, &n0, TRUE, NULL))) {
 		g_prefix_error(&err, "Use: ");
 		reply->send_error(0, err);
 		return TRUE;
@@ -1414,10 +1413,11 @@ _handler_GETVERS(struct gridd_reply_ctx_s *reply,
 	}
 
 	err = sqlx_repository_get_version(sq3, &version);
+	sqlx_repository_unlock_and_close_noerror(sq3);
+
 	if (NULL != err) {
 		reply->send_error(0, err);
-	}
-	else {
+	} else {
 		GByteArray *encoded = version_encode(version);
 		if (!encoded) {
 			err = NEWERROR(CODE_INTERNAL_ERROR, "Encoding error (version)");
@@ -1429,7 +1429,6 @@ _handler_GETVERS(struct gridd_reply_ctx_s *reply,
 		}
 	}
 
-	sqlx_repository_unlock_and_close_noerror(sq3);
 	if (version)
 		g_tree_destroy(version);
 	return TRUE;
@@ -1462,7 +1461,7 @@ _handler_REPLICATE(struct gridd_reply_ctx_s *reply,
 	/* Starts an election without being an initiator ... because I receive
 	 * this request from a master, so an election is already running
 	 * somewhere else. */
-	err = sqlx_repository_use_base(repo, &n0);
+	err = sqlx_repository_use_base(repo, &n0, FALSE, NULL);
 	if (NULL != err) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -1610,7 +1609,7 @@ _handler_USE(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	if (NULL != (err = sqlx_repository_use_base(repo, &n0)))
+	if (NULL != (err = sqlx_repository_use_base(repo, &n0, TRUE, NULL)))
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");
@@ -1835,7 +1834,7 @@ _handler_RESYNC(struct gridd_reply_ctx_s *reply,
 	g_clear_error(&err);
 
 	/* Open and lock the base */
-	err = sqlx_repository_use_base(repo, &n0);
+	err = sqlx_repository_use_base(repo, &n0, FALSE, NULL);
 	if (NULL != err) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -1894,10 +1893,9 @@ _handler_PROPDEL(struct gridd_reply_ctx_s *reply,
 	}
 
 	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
-		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE;
+		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERONLY;
 	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
-	if (NULL != err) {
-		g_prefix_error(&err, "Open/lock: ");
+	if (err) {
 		reply->send_error(0, err);
 	} else {
 		struct sqlx_repctx_s *repctx = NULL;
@@ -1951,7 +1949,7 @@ _handler_PROPGET(struct gridd_reply_ctx_s *reply,
 	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
 		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE;
 	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
-	if (NULL != err) {
+	if (err) {
 		g_prefix_error(&err, "Open/lock: ");
 		reply->send_error(0, err);
 	} else {
@@ -2018,10 +2016,9 @@ _handler_PROPSET(struct gridd_reply_ctx_s *reply,
 
 	/* Open */
 	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
-			? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE;
+			? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERONLY;
 	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
-	if (NULL != err) {
-		g_prefix_error(&err, "Open/lock: ");
+	if (err) {
 		goto label_exit;
 	}
 
@@ -2075,10 +2072,9 @@ _handler_ENABLE(struct gridd_reply_ctx_s *reply,
 	}
 
 	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
-		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE;
+		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERONLY;
 	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
-	if (NULL != err) {
-		g_prefix_error(&err, "Open/lock: ");
+	if (err) {
 		reply->send_error(0, err);
 		return TRUE;
 	}
@@ -2125,10 +2121,9 @@ _handler_FREEZE(struct gridd_reply_ctx_s *reply,
 	}
 
 	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
-		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE;
+		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERONLY;
 	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
-	if (NULL != err) {
-		g_prefix_error(&err, "Open/lock: ");
+	if (err) {
 		reply->send_error(0, err);
 		return TRUE;
 	}
@@ -2178,10 +2173,9 @@ _handler_DISABLE(struct gridd_reply_ctx_s *reply,
 	}
 
 	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
-		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE;
+		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERONLY;
 	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
-	if (NULL != err) {
-		g_prefix_error(&err, "Open/lock: ");
+	if (err) {
 		reply->send_error(0, err);
 		return TRUE;
 	}
@@ -2231,10 +2225,9 @@ _handler_DISABLE2(struct gridd_reply_ctx_s *reply,
 	}
 
 	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
-		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE;
+		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERONLY;
 	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
-	if (NULL != err) {
-		g_prefix_error(&err, "Open/lock: ");
+	if (err) {
 		reply->send_error(0, err);
 		return TRUE;
 	}

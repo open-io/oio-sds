@@ -18,6 +18,7 @@ import logging
 import time
 from mock import MagicMock as Mock
 from functools import partial
+from urllib3 import HTTPResponse
 from oio.api.object_storage import ObjectStorageApi
 from oio.common.constants import CHUNK_HEADERS
 from oio.common.http_urllib3 import get_pool_manager
@@ -669,6 +670,58 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertRaises(
             exc.NoSuchAccount, self.api.account_flush, account)
 
+    def test_object_simple_fast_copy_different_container(self):
+        target_container = random_str(16)
+        link_container = random_str(16)
+        target_obj = random_str(16)
+        link_obj = random_str(16)
+        self.api.object_create(self.account, target_container, data="1"*128,
+                               obj_name=target_obj)
+        self.api.object_fastcopy(self.account, target_container, target_obj,
+                                 self.account, link_container, link_obj)
+        _, data = self.api.object_fetch(self.account, link_container, link_obj)
+        data = "".join(data)
+        self.assertEqual(len(data), 128)
+        self.assertEqual(data, "1" * 128)
+
+    def test_object_simple_fast_copy_same_container(self):
+        container = random_str(16)
+        target_obj = random_str(16)
+        link_obj = random_str(16)
+        self.api.object_create(self.account, container, data="1"*128,
+                               obj_name=target_obj)
+        self.api.object_fastcopy(self.account, container, target_obj,
+                                 self.account, container, link_obj)
+        _, data = self.api.object_fetch(self.account, container, link_obj)
+        data = "".join(data)
+        self.assertEqual(len(data), 128)
+        self.assertEqual(data, "1" * 128)
+
+    def test_object_simple_fast_copy_same_name_same_container(self):
+        """ Considered as a rename"""
+        container = random_str(16)
+        obj = random_str(16)
+        self.api.object_create(self.account, container, data="1"*128,
+                               obj_name=obj)
+        self.api.object_fastcopy(self.account, container, obj,
+                                 self.account, container, obj)
+
+    def test_object_simple_fast_copy_with_already_existing_name(self):
+        target_container = random_str(16)
+        link_container = random_str(16)
+        target_obj = random_str(16)
+        link_obj = random_str(16)
+        self.api.object_create(self.account, target_container, data="1"*128,
+                               obj_name=target_obj)
+        self.api.object_create(self.account, target_container, data="1"*128,
+                               obj_name=link_obj)
+        self.api.object_fastcopy(self.account, target_container, target_obj,
+                                 self.account, link_container, link_obj)
+        _, data = self.api.object_fetch(self.account, link_container, link_obj)
+        data = "".join(data)
+        self.assertEqual(len(data), 128)
+        self.assertEqual(data, "1" * 128)
+
     def test_object_create_then_truncate(self):
         """Create an object then truncate data"""
         name = random_str(16)
@@ -794,6 +847,36 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         path = random_str(1023)
         self.api.object_create(self.account, cname,
                                data="1"*128, obj_name=path)
+
+    def test_object_head_trust_level_0(self):
+        cname = random_str(16)
+        path = random_str(1023)
+
+        # object doesn't exist
+        self.assertFalse(self.api.object_head(self.account, cname, path))
+
+        # object exists
+        self._upload_empty(cname, path)
+        self.assertTrue(self.api.object_head(self.account, cname, path))
+
+    def test_object_head_trust_level_2(self):
+        cname = random_str(16)
+        path = random_str(1023)
+
+        # object doesn't exist
+        self.assertFalse(self.api.object_head(self.account, cname, path,
+                                              trust_level=2))
+
+        # object exists
+        self._upload_empty(cname, path)
+        self.assertTrue(self.api.object_head(self.account, cname, path,
+                                             trust_level=2))
+
+        # chunk missing
+        self.api.blob_client.http_pool.request = \
+            Mock(return_value=HTTPResponse(status=404, reason="Not Found"))
+        self.assertFalse(self.api.object_head(self.account, cname, path,
+                                              trust_level=2))
 
 
 class TestObjectList(ObjectStorageApiTestBase):

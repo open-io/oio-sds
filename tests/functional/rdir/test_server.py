@@ -61,7 +61,10 @@ def _wait_for_slow_startup(port):
 
 
 def _kill_and_watch_it_die(proc):
-    proc.terminate()
+    try:
+        proc.terminate()
+    except Exception:
+        pass
     proc.wait()
 
 
@@ -75,20 +78,22 @@ def _does_startup_fail(path, config):
 
 def _check_process_absent(proc):
     for i in range(5):
-        if not proc.poll():
+        if proc.poll() is not None:
             return True
         time.sleep(i * 0.2)
     try:
         proc.terminate()
     except OSError as exc:
         return exc.errno == errno.ESRCH
+    except Exception:
+        pass
     return False
 
 
 class RdirTestCase(CommonTestCase):
     def setUp(self):
         super(RdirTestCase, self).setUp()
-        self.http_pool = get_pool_manager(max_retries=10)
+        self.http_pool = get_pool_manager(max_retries=10, backoff_factor=0.05)
         self.garbage_files = list()
         self.garbage_procs = list()
 

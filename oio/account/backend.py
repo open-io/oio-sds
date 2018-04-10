@@ -343,6 +343,11 @@ class AccountBackend(RedisConn):
 
     def _raw_listing(self, account_id, limit, marker, end_marker, delimiter,
                      prefix):
+        """Fetch tuple list of containers matching options.
+           Tuple is [(container|prefix),
+                     0 *reserved for objects*,
+                     0 *reserved for size*,
+                     0 for container, 1 for prefix]"""
         conn = self.conn
         if delimiter and not prefix:
             prefix = ''
@@ -403,7 +408,8 @@ class AccountBackend(RedisConn):
                                      end_marker=end_marker, prefix=prefix,
                                      delimiter=delimiter)
         pipeline = self.conn.pipeline(True)
-        for container in raw_list:
+        # skip prefix
+        for container in [entry for entry in raw_list if not entry[3]]:
             pipeline.hmget(AccountBackend.ckey(account_id, container[0]),
                            'objects', 'bytes', 'mtime')
         res = pipeline.execute()

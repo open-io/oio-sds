@@ -103,6 +103,8 @@ struct network_client_s
 
 extern GQuark gq_count_all;
 extern GQuark gq_time_all;
+extern GQuark gq_count_ioerror;
+extern GQuark gq_time_ioerror;
 extern GQuark gq_count_unexpected;
 extern GQuark gq_time_unexpected;
 extern GQuark gq_count_overloaded;

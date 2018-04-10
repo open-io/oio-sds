@@ -175,17 +175,18 @@ class EventWorker(Worker):
 
     def run(self):
         coros = []
-        queue_url = self.conf.get('queue_url', '127.0.0.1:11300')
+        queue_url = self.conf.get('queue_url', 'beanstalk://127.0.0.1:11300')
         concurrency = int_value(self.conf.get('concurrency'), 10)
 
         server_gt = greenthread.getcurrent()
 
-        for i in range(concurrency):
-            beanstalk = Beanstalk.from_url(queue_url)
-            gt = eventlet.spawn(self.handle, beanstalk)
-            gt.link(_eventlet_stop, server_gt, beanstalk)
-            coros.append(gt)
-            beanstalk, gt = None, None
+        for url in queue_url.split(';'):
+            for i in range(concurrency):
+                beanstalk = Beanstalk.from_url(url)
+                gt = eventlet.spawn(self.handle, beanstalk)
+                gt.link(_eventlet_stop, server_gt, beanstalk)
+                coros.append(gt)
+                beanstalk, gt = None, None
 
         while self.alive:
             self.notify()
@@ -224,20 +225,25 @@ class EventWorker(Worker):
                     eventlet.sleep(BEANSTALK_RECONNECTION)
                     continue
                 event = self.safe_decode_job(job_id, data)
-                try:
-                    self.process_event(job_id, event, beanstalk)
-                except (ClientException, OioNetworkException) as exc:
-                    self.logger.warn("Burying event %s (%s): %s",
-                                     job_id, event.get('event'), exc)
+                if not event:
+                    self.logger.warn("Burying event %s: %s",
+                                     job_id, "malformed")
                     beanstalk.bury(job_id)
-                except ExplicitBury:
-                    self.logger.info("Burying event %s (%s)",
-                                     job_id, event.get('event'))
-                    beanstalk.bury(job_id)
-                except Exception:
-                    self.logger.exception("Burying event %s: %s",
-                                          job_id, event)
-                    beanstalk.bury(job_id)
+                else:
+                    try:
+                        self.process_event(job_id, event, beanstalk)
+                    except (ClientException, OioNetworkException) as exc:
+                        self.logger.warn("Burying event %s (%s): %s",
+                                         job_id, event.get('event'), exc)
+                        beanstalk.bury(job_id)
+                    except ExplicitBury:
+                        self.logger.info("Burying event %s (%s)",
+                                         job_id, event.get('event'))
+                        beanstalk.bury(job_id)
+                    except Exception:
+                        self.logger.exception("Burying event %s: %s",
+                                              job_id, event)
+                        beanstalk.bury(job_id)
         except StopServe:
             pass
 

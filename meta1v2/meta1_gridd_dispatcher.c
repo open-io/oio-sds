@@ -411,7 +411,7 @@ typedef gboolean (*action) (struct gridd_reply_ctx_s *, struct meta1_backend_s *
 
 
 static gboolean meta1_dispatch_all(struct gridd_reply_ctx_s *reply,
-                                   struct meta1_backend_s *m1, gpointer callback)
+		struct meta1_backend_s *m1, gpointer callback)
 {
 	struct oio_url_s *url = metautils_message_extract_url(reply->request);
 
@@ -422,11 +422,11 @@ static gboolean meta1_dispatch_all(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-    action ptr = callback;
-    gboolean ret = (*ptr)(reply, m1, url);
-    oio_url_pclean(&url);
+	action ptr = callback;
+	gboolean ret = (*ptr)(reply, m1, url);
+	oio_url_pclean(&url);
 
-    return ret;
+	return ret;
 }
 
 const struct gridd_request_descr_s *

@@ -21,7 +21,7 @@ import os
 import time
 from io import BytesIO
 
-from oio.common.exceptions import ClientException
+from oio.common.exceptions import ClientException, Conflict
 from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
 from oio.content.factory import ContentFactory
@@ -49,10 +49,11 @@ class TestFilters(BaseTestCase):
                                           self.container_name).upper()
         self.stgpol = "SINGLE"
 
-    def _new_content(self, data, path):
+    def _new_content(self, data, path, admin_mode=True):
         old_content = self.content_factory.new(self.container_id, path,
-                                               len(data), self.stgpol)
-        old_content.create(BytesIO(data), admin_mode=True)
+                                               len(data), self.stgpol,
+                                               admin_mode=admin_mode)
+        old_content.create(BytesIO(data), admin_mode=admin_mode)
         return self.content_factory.get(self.container_id,
                                         old_content.content_id)
 
@@ -75,10 +76,24 @@ class TestFilters(BaseTestCase):
         data = random_data(10)
         path = 'test_worm'
         content = self._new_content(data, path)
+
+        # Overwrite without admin mode
+        data2 = random_data(11)
+        try:
+            content = self._new_content(data2, path, admin_mode=False)
+        except ClientException as exc:
+            self.assertIsInstance(exc, Conflict)
+
+        # Overwrite with admin mode
+        content = self._new_content(data2, path)
+
+        # Delete without admin mode
         try:
             content.delete()
         except ClientException as exc:
-            self.assertTrue(str(exc).find('NS wormed!') != -1)
+            self.assertTrue(str(exc).lower().find('worm') != -1)
         downloaded_data = ''.join(content.fetch())
-        self.assertEqual(downloaded_data, data)
+        self.assertEqual(downloaded_data, data2)
+
+        # Delete with admin mode
         content.delete(admin_mode=True)

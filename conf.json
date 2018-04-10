@@ -41,7 +41,12 @@
 			{ "type": "bool", "name": "meta2_flag_precheck_on_generate",
 				"key": "meta2.generate.precheck",
 				"descr": "Should the meta2 check the container state (quota, etc) before generating chunks.",
-				"def": true }
+				"def": true },
+
+			{ "type": "bool", "name": "meta2_flag_delete_exceeding_versions",
+				"key": "meta2.delete_exceeding_versions",
+				"descr": "When adding alias with versioning, deletes exceeding versions.",
+				"def": false }
 		]
 	},
 	"rawx": {
@@ -60,13 +65,13 @@
 		"variables": [
 			{ "type": "monotonic", "name": "oio_events_common_buffer_delay",
 				"key": "events.common.pending.delay",
-				"def": "5s", "min": "1ms", "max": "1h",
+				"def": "1s", "min": "1ms", "max": "1h",
 				"descr": "Sets the buffering delay of the events emitted by the application" },
 
 			{ "type": "uint32", "name": "oio_events_common_max_pending",
 				"key": "events.common.pending.max",
 				"descr": "Sets the maximum number of pending events, not received yet by the endpoint",
-				"def": "1000", "min": 1, "max": "1Mi" },
+				"def": "10000", "min": 1, "max": "1Mi" },
 
 			{ "type": "uint", "name": "oio_events_zmq_max_recv",
 				"key": "events.zmq.max_recv",
@@ -136,7 +141,7 @@
 			{ "type": "uint", "name": "oio_resolver_m0cs_default_max",
 				"key": "resolver.cache.csm0.max.default",
 				"descr": "In any service resolver instantiated, sets the maximum number of entries related to meta0 (meta1 addresses) and conscience (meta0 address)",
-				"def": 0, "min": 0, "max": "max" },
+				"def": "4Mi", "min": 0, "max": "max" },
 
 			{ "type": "monotonic", "name": "oio_resolver_srv_default_ttl",
 				"key": "resolver.cache.srv.ttl.default",
@@ -146,7 +151,7 @@
 			{ "type": "uint", "name": "oio_resolver_srv_default_max",
 				"key": "resolver.cache.srv.max.default",
 				"descr": "In any service resolver instantiated, sets the maximum number of meta1 entries (data-bound services)",
-				"def": 0, "min": 0, "max": "max" }
+				"def": "4Mi", "min": 0, "max": "max" }
 		]
 	},
 	"metautils": {
@@ -154,6 +159,12 @@
 		"code": "common_variables.c",
 		"header": "common_variables.h",
 		"variables": [
+			{ "type": "uint", "name": "oio_ns_meta1_digits",
+				"key": "ns.meta1_digits",
+				"descr": "Default number of digits to agregate meta1 databases.",
+				"def": 4, "min": 0, "max": 4,
+				"aliases": ["meta1_digits"]},
+
 			{ "type": "uint", "name": "oio_ns_flat_bits",
 				"key": "ns.flat_bits",
 				"descr": "Default number of bits with flat-NS computation.",
@@ -238,7 +249,7 @@
 
 			{ "type": "bool", "name": "oio_client_down_avoid",
 				"key": "client.down_cache.avoid",
-				"def": false,
+				"def": true,
 				"descr": "Should an error be raised when the peer is marked down, instead of trying to contact the peer." },
 
 			{ "type": "bool", "name": "oio_client_down_shorten",
@@ -253,12 +264,12 @@
 
 			{ "type": "uint64", "name": "oio_client_cache_errors_max",
 				"key": "client.errors_cache.max",
-				"def": "15", "min": 1, "max": "4Gi",
+				"def": "60", "min": 1, "max": "4Gi",
 				"descr": "Sets the number of faults (on the period given by client.errors_cache.period) beyond which a peer is considered as too faulty to try a new RPC." },
 
 			{ "type": "epoch", "name": "oio_client_cache_errors_period",
 				"key": "client.errors_cache.period",
-				"def": "15s", "min": "1s", "max": "1h",
+				"def": "60s", "min": "1s", "max": "1h",
 				"descr": "Sets the size of the time window used to count the number of network errors." },
 
 
@@ -269,12 +280,12 @@
 
 			{ "type": "float", "name": "oio_client_timeout_whole",
 				"key": "gridd.timeout.whole.common",
-				"def": 30.0, "min": 0.01, "max": 120.0,
+				"def": 30.0, "min": 0.1, "max": 120.0,
 				"descr": "Sets the global timeout of a RPC to a 'meta' service, considering all the possible redirections." },
 
 			{ "type": "float", "name": "oio_client_timeout_connect",
 				"key": "gridd.timeout.connect.common",
-				"def": 2.0, "min": 0.01, "max": 120.0,
+				"def": 4.0, "min": 0.1, "max": 30.0,
 				"descr": "Sets the connection timeout, involved in any RPC to a 'meta' service." }
 		]
 	},
@@ -286,27 +297,27 @@
 			{ "type": "float", "name": "oio_election_use_timeout_cnx",
 				"key": "sqliterepo.outgoing.timeout.cnx.use",
 				"descr": "Sets the connection timeout when ping'ing a peer database. Keep it small. Only used when UDP is disabled.",
-				"def": 0.25, "min": 0.01, "max": 30.0 },
+				"def": 1.0, "min": 0.01, "max": 30.0 },
 
 			{ "type": "float", "name": "oio_election_use_timeout_req",
 				"key": "sqliterepo.outgoing.timeout.req.use",
 				"descr": "Sets the global timeout when ping'ing a peer database. Keep it small.",
-				"def": 1.0, "min": 0.01, "max": 30.0 },
+				"def": 10.0, "min": 0.01, "max": 30.0 },
 
 			{ "type": "float", "name": "oio_election_getvers_timeout_cnx",
 				"key": "sqliterepo.outgoing.timeout.cnx.getvers",
 				"descr": "Sets the connection timeout when exchanging versions between databases replicas.",
-				"def": 0.5, "min": 0.01, "max": 30.0 },
+				"def": 5.0, "min": 0.01, "max": 30.0 },
 
 			{ "type": "float", "name": "oio_election_getvers_timeout_req",
 				"key": "sqliterepo.outgoing.timeout.req.getvers",
 				"descr": "Sets the global timeout when performing a version exchange RPC. Keep it rather small, to let election quickly fail on network troubles. Only used when UDP is disabled.",
-				"def": 2.0, "min": 0.01, "max": 30.0 },
+				"def": 10.0, "min": 0.01, "max": 30.0 },
 
 			{ "type": "float", "name": "oio_election_replicate_timeout_cnx",
 				"key": "sqliterepo.outgoing.timeout.cnx.replicate",
 				"descr": "Sets the connection timeout sending a replication request.",
-				"def": 1.0, "min": 0.01, "max": 30.0 },
+				"def": 5.0, "min": 0.01, "max": 30.0 },
 
 			{ "type": "float", "name": "oio_election_replicate_timeout_req",
 				"key": "sqliterepo.outgoing.timeout.req.replicate",
@@ -315,8 +326,8 @@
 
 			{ "type": "float", "name": "oio_election_resync_timeout_cnx",
 				"key": "sqliterepo.outgoing.timeout.cnx.resync",
-				"descr": "Set the connection timeout during RPC to ask for a SLAVE database to be resync'ed to its MASTER",
-				"def": 1.0, "min": 0.01, "max": 30.0 },
+				"descr": "Set the connection timeout during RPC to ask for a SLAVE database to be resync on its MASTER",
+				"def": 5.0, "min": 0.01, "max": 30.0 },
 
 			{ "type": "float", "name": "oio_election_resync_timeout_req",
 				"key": "sqliterepo.outgoing.timeout.req.resync",
@@ -339,15 +350,20 @@
 				"descr": "Should the synchronism mechanism shuffle the set of URL in the ZK connection string? Set to yes as an attempt to a better balancing of the connections to the nodes of the ZK cluster.",
 				"def": true},
 
+			{ "type": "bool", "name": "sqliterepo_election_lazy_recover",
+				"key": "sqliterepo.election.lazy_recover",
+				"descr": "Should the election mecanism try to recreate missing DB?",
+				"def": false},
+
 			{ "type": "monotonic", "name": "oio_election_period_cond_wait",
 				"key": "sqliterepo.election.wait.quantum",
 				"descr": "In the current sqliterepo repository, while loop-waiting for a final election status to be reached, this value sets the unit amount of time each unit can wait on the lock. Keep this value rather small to avoid waiting for too long, but not too small to avoid dumping CPU cycles in active waiting.",
-				"def": "1s", "min": "1ms", "max": "1h" },
+				"def": "4s", "min": "100ms", "max": "1h" },
 
 			{ "type": "monotonic", "name": "oio_election_delay_wait",
 				"key": "sqliterepo.election.wait.delay",
 				"descr": "In the current sqliterepo repository, sets the maximum amount of time a worker thread is allowed to wait for an election to get its final status.",
-				"def": "5s", "min": "1ms", "max": "1h" },
+				"def": "20s", "min": "100ms", "max": "1h" },
 
 			{ "type": "bool", "name": "oio_election_enable_nowait_pending",
 				"key": "sqliterepo.election.nowait.enable",
@@ -362,12 +378,12 @@
 			{ "type": "monotonic", "name": "oio_election_delay_expire_NONE",
 				"key": "sqliterepo.election.delay.expire_none",
 				"descr": "In the current sqliterepo repository, sets the amount of time an election without status will be forgotten ",
-				"def": "5m", "min": "1s", "max": "1d" },
+				"def": "30m", "min": "1s", "max": "1d" },
 
 			{ "type": "monotonic", "name": "oio_election_delay_expire_SLAVE",
 				"key": "sqliterepo.election.delay.expire_slave",
 				"descr": "In the current sqliterepo repository, sets the amount of time after which a SLAVE election will drop its status and return to the NONE status. This helps recycling established-but-unused elections, and save Zookeeper nodes.",
-				"def": "15m", "min": "1s", "max": "7d" },
+				"def": "210m", "min": "1s", "max": "7d" },
 
 			{ "type": "monotonic", "name": "oio_election_delay_ping_final",
 				"key": "sqliterepo.election.delay.ping_final",
@@ -377,7 +393,7 @@
 			{ "type": "monotonic", "name": "oio_election_delay_expire_MASTER",
 				"key": "sqliterepo.election.delay.expire_master",
 				"descr": "In the current sqliterepo repository, sets the amount of time after which a MASTER election will drop its status and return to the NONE status. This helps recycling established-but-unused elections, and save Zookeeper nodes. Keep this value between sqliterepo.election.delay.expire_slave and sqliterepo.election.delay.ping_final if you want the election to never expire.",
-				"def": "25m", "min": "1ms", "max": "7d" },
+				"def": "240m", "min": "1ms", "max": "7d" },
 
 			{ "type": "monotonic", "name": "oio_election_delay_retry_FAILED",
 				"key": "sqliterepo.election.delay.retry_failed",
@@ -521,8 +537,8 @@
 
 			{ "type": "uint", "name": "sqliterepo_fd_max_active",
 				"key": "sqliterepo.repo.fd_max_active",
-				"descr": "Maximum number of simultaneous outgoing connections. Set to 0 for an automatic detection (30% of available file descriptors).",
-				"def": 0, "min": 0, "max": "64ki" },
+				"descr": "Maximum number of simultaneous outgoing connections. Set to 0 for an automatic detection (2% of available file descriptors).",
+				"def": 512, "min": 0, "max": "64ki" },
 
 			{ "type": "uint", "name": "sqliterepo_fd_min_active",
 				"key": "sqliterepo.repo.fd_min_active",
@@ -534,10 +550,15 @@
 		"code": "rdir_variables.c",
 		"header": "rdir_variables.h",
 		"variables": [
+			{ "type": "uint", "name": "rdir_fd_per_base",
+				"key": "rdir.fd_per_base",
+				"descr": "Configure the maximum number of file descriptors allowed to each leveldb database. Set to 0 to autodetermine the value (cf. rdir.fd_reserve). The real value will be clamped at least to 8. Will only be applied on bases opened after the configuration change.",
+				"def": 0, "min": 0, "max": "16ki" },
+
 			{ "type": "uint", "name": "rdir_fd_reserve",
 				"key": "rdir.fd_reserve",
-				"descr": "Only effective when `server.fd_max_passive` is set to 0 (autodetection). When deducing the maximum number of incoming connections, the rdir reserves that amount of file descritors to reach the database shards, and allocates what remains to the network.",
-				"def": 128, "min": 64, "max": "1024" }
+				"descr": "Configure the total number of file descriptors the leveldb backend may use. Set to 0 to autodetermine the value. Will only be applied on bases opened after the configuration change.",
+				"def": 0, "min": 0, "max": "32ki" }
 		]
 	},
 	"server": {
@@ -552,7 +573,7 @@
 
 			{ "type": "bool", "name": "oio_udp_allowed",
 				"key": "udp_allowed",
-				"def": false,
+				"def": true,
 				"descr": "Allow the sqlx client DB_USE RPC to be sent via UDP instead of the default TCP channel."},
 
 			{ "type": "epoch", "name": "oio_sqlx_lb_refresh_period",
@@ -618,27 +639,27 @@
 			{ "type": "monotonic", "name": "server_udp_queue_ttl",
 				"key": "server.udp_queue.ttl",
 				"descr": "In the current server, sets the maximum amount of time a queued UDP frame may remain in the queue. When unqueued, if the message was queued for too long, it will be dropped. The purpose of such a mechanism is to avoid clogging the queue and the whole election/cache mechanisms with old messages, those messages having already been resent.",
-				"def": "2s", "min": "100ms", "max": "1d" },
+				"def": "1s", "min": "100ms", "max": "1d" },
 
 			{ "type": "uint", "name": "server_udp_queue_maxlen",
 				"key": "server.udp_queue.max",
 				"descr": "In the current server, sets the maximum length of the queue for UDP messages. When that number has been reached and a new message arrives, the message will be dropped.",
-				"def": 8192, "min": 0, "max": "1 << 32 - 1" },
+				"def": 512, "min": 0, "max": "1 << 32 - 1" },
 
 			{ "type": "monotonic", "name": "server_queue_max_delay",
 				"key": "server.queue.max_delay",
 				"descr": "Anti-DDoS counter-mesure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, the connection is immediately closed. Keep this value rather high because the connection closing doesn't involve a reply that will help the client to retry with an exponential back-off.",
-				"def": "5s", "min": "10ms", "max": "1h" },
+				"def": "60s", "min": "10ms", "max": "1h" },
 
 			{ "type": "monotonic", "name": "server_queue_warn_delay",
 				"key": "server.queue.warn_delay",
 				"descr": "In the current server, set the time threshold after which a warning is sent when a file descriptor stays longer than that in the queue of the Thread Pool.",
-				"def": "100ms", "min": "1ms", "max": "1h" },
+				"def": "4s", "min": "10ms", "max": "1h" },
 
 			{ "type": "monotonic", "name": "meta_queue_max_delay",
 				"key": "meta.queue.max_delay",
 				"descr": "Anti-DDoS counter-mesure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, A '503 Unavailabe' error is replied.",
-				"def": "2s", "min": "10ms", "max": "1h" },
+				"def": "40s", "min": "10ms", "max": "1h" },
 
 			{ "type": "int32", "name": "oio_server_request_failure_threshold",
 				"key": "enbug.server.request.failure.threshold",
@@ -663,12 +684,12 @@
 			{ "type": "uint", "name": "sqlx_periodic_decache_period",
 				"key": "server.periodic_decache.period",
 				"descr": "In ticks / jiffies, with approx. 1 tick per second. 0 means never",
-				"def": 1, "min": 0, "max": "1Mi" },
+				"def": 0, "min": 0, "max": "1Mi" },
 
 			{ "type": "uint", "name": "sqlx_periodic_decache_max_bases",
 				"key": "server.periodic_decache.max_bases",
 				"descr": "How many bases may be decached each time the background task performs its Dance of Death",
-				"def": 100, "min": 1, "max": "4Mi" },
+				"def": 1, "min": 1, "max": "4Mi" },
 
 			{ "type": "monotonic", "name": "sqlx_periodic_decache_max_delay",
 				"key": "server.periodic_decache.max_delay",
@@ -804,22 +825,22 @@
 			{ "type": "float", "name": "proxy_timeout_config",
 				"key": "proxy.outgoing.timeout.config",
 				"descr": "In a proxy, sets the global timeout for 'config' requests issued",
-				"def": 5.0, "min": 0.01, "max": 60.0 },
+				"def": 10.0, "min": 0.1, "max": 60.0 },
 
 			{ "type": "float", "name": "proxy_timeout_stat",
 				"key": "proxy.outgoing.timeout.stat",
 				"descr": "In a proxy, sets the global timeout for 'stat' requests issued (mostly forwarded for the event-agent)",
-				"def": 5.0, "min": 0.01, "max": 60.0 },
+				"def": 10.0, "min": 0.1, "max": 60.0 },
 
 			{ "type": "float", "name": "proxy_timeout_conscience",
 				"key": "proxy.outgoing.timeout.conscience",
 				"descr": "In a proxy, sets the global timeout for the RPC to the central conscience service.",
-				"def": 2.0, "min": 0.01, "max": 60.0 },
+				"def": 10.0, "min": 0.1, "max": 60.0 },
 
 			{ "type": "float", "name": "proxy_timeout_common",
 				"key": "proxy.outgoing.timeout.common",
 				"descr": "In a proxy, sets the global timeout for all the other RPC issued (not conscience, not stats-related)",
-				"def": 30.0, "min": 0.01, "max": 60.0 }
+				"def": 30.0, "min": 0.1, "max": 60.0 }
 		]
 	},
 	"client": {
@@ -851,6 +872,15 @@
 				"key": "sqlx.outgoing.timeout.req",
 				"descr": "Sets the timeout for the requests issued to the SQLX services.",
 				"def": 30.0, "min": 0.01, "max": 60.0 },
+
+			{ "type": "float", "name": "oio_client_rawx_timeout_cnx",
+				"key": "core.sds.timeout.cnx.rawx",
+				"descr": "Sets the connection timeout for requests issued to rawx services.",
+				"def": 5.0, "min": 0.001, "max": 300.0 },
+			{ "type": "float", "name": "oio_client_rawx_timeout_req",
+				"key": "core.sds.timeout.req.rawx",
+				"descr": "Sets the global timeout when uploading a chunk to a rawx service.",
+				"def": 60.0, "min": 0.001, "max": 600.0 },
 
 			{ "type": "monotonic", "name": "_refresh_cpu_idle",
 				"key": "core.period.refresh.cpu_idle",

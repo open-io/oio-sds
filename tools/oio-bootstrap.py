@@ -88,16 +88,26 @@ aof-rewrite-incremental-fsync yes
 template_gridinit_redis = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${NORMALIZED_IP}:${PORT}
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=false
 command=redis-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 """
 
-template_gridinit_account = """
+template_gridinit_beanstalkd = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${NORMALIZED_IP}:${PORT}
 on_die=respawn
+enabled=true
+start_at_boot=true
+command=beanstalkd -l ${IP} -p ${PORT} -b ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM} -f 1000 -s 10240000
+env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
+"""
+
+template_gridinit_account = """
+[service.${NS}-${SRVTYPE}-${SRVNUM}]
+group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+on_die=cry
 enabled=true
 start_at_boot=false
 command=oio-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
@@ -107,7 +117,7 @@ env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 template_gridinit_rdir = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${NORMALIZED_IP}:${PORT}
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=false
 command=oio-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
@@ -116,7 +126,7 @@ command=oio-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 template_gridinit_proxy = """
 [service.${NS}-proxy]
 group=${NS},localhost,proxy,${NORMALIZED_IP}:${PORT}
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=false
 #command=${EXE} -s OIO,${NS},proxy -O Bind=${RUNDIR}/${NS}-proxy.sock ${NORMALIZED_IP}:${PORT} ${NS}
@@ -642,18 +652,9 @@ limit.core_size=-1
 """
 
 template_gridinit_ns = """
-
-[service.${NS}-event-agent]
-group=${NS},localhost,event
-on_die=respawn
-enabled=true
-start_at_boot=false
-command=oio-event-agent ${CFGDIR}/event-agent.conf
-env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
-
 [service.${NS}-conscience-agent]
 group=${NS},localhost,conscience,conscience-agent
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=true
 command=oio-conscience-agent ${CFGDIR}/conscience-agent.yml
@@ -663,7 +664,7 @@ env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 template_gridinit_conscience = """
 [service.${NS}-conscience-${SRVNUM}]
 group=${NS},localhost,conscience,${NORMALIZED_IP}:${PORT}
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=true
 command=oio-daemon -s OIO,${NS},cs,${SRVNUM} ${CFGDIR}/${NS}-conscience-${SRVNUM}.conf
@@ -672,7 +673,7 @@ command=oio-daemon -s OIO,${NS},cs,${SRVNUM} ${CFGDIR}/${NS}-conscience-${SRVNUM
 template_gridinit_meta = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${NORMALIZED_IP}:${PORT}
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=false
 command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${NORMALIZED_IP}:${PORT} ${EXTRA} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
@@ -681,7 +682,7 @@ command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${NORMALIZED_IP}:${
 template_gridinit_sqlx = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${NORMALIZED_IP}:${PORT}
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=false
 command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O DirectorySchemas=${CFGDIR}/sqlx/schemas -O Endpoint=${NORMALIZED_IP}:${PORT} ${EXTRA} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
@@ -693,7 +694,7 @@ group=${NS},localhost,${SRVTYPE},${NORMALIZED_IP}:${PORT}
 command=oio-blob-indexer ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 enabled=true
 start_at_boot=false
-on_die=respawn
+on_die=cry
 """
 
 template_gridinit_httpd = """
@@ -702,7 +703,7 @@ group=${NS},localhost,${SRVTYPE},${NORMALIZED_IP}:${PORT}
 command=${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.httpd.conf
 enabled=true
 start_at_boot=false
-on_die=respawn
+on_die=cry
 """
 
 template_local_header = """
@@ -725,10 +726,24 @@ ecd=${NORMALIZED_IP}:${PORT_ECD}
 event-agent=beanstalk://${NORMALIZED_IP}:11300
 #event-agent=ipc://${RUNDIR}/event-agent.sock
 conscience=${CS_ALL_PUB}
+ecd=${IP}:${PORT_ECD}
+${NOBS}event-agent=${BEANSTALKD_CNXSTRING}
 
 meta1_digits=${M1_DIGITS}
 
 admin=${NORMALIZED_IP}:${PORT_ADMIN}
+
+"""
+
+template_gridinit_event_agent = """
+
+[service.${NS}-${SRVTYPE}-${SRVNUM}]
+group=${NS},localhost,event
+on_die=respawn
+enabled=true
+start_at_boot=false
+command=oio-event-agent ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 
 """
 
@@ -739,11 +754,12 @@ namespace = ${NS}
 user = ${USER}
 workers = 2
 concurrency = 5
-handlers_conf = ${CFGDIR}/event-handlers.conf
+handlers_conf = ${CFGDIR}/event-handlers-${SRVNUM}.conf
 log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
-syslog_prefix = OIO,${NS},event-agent
+syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
+queue_url=${QUEUE_URL}
 """
 
 template_event_agent_handlers = """
@@ -790,8 +806,8 @@ key_file = ${KEY_FILE}
 
 [filter:content_rebuild]
 use = egg:oio#notify
-tube = rebuild
-queue_url = beanstalk://${NORMALIZED_IP}:11300
+tube = oio-rebuild
+queue_url = ${QUEUE_URL}
 
 [filter:account_update]
 use = egg:oio#account_update
@@ -802,7 +818,7 @@ use = egg:oio#volume_index
 [filter:replication]
 use = egg:oio#notify
 tube = oio-repli
-queue_url = beanstalk://${NORMALIZED_IP}:11300
+queue_url = ${QUEUE_URL}
 
 [filter:noop]
 use = egg:oio#noop
@@ -1227,7 +1243,7 @@ def generate(options):
                  ('['+str(host)+']' if ':' in str(host) else str(host))
                  +':'+str(hub) for _, host, _, hub in cs]),
         })
-
+        # generate the conscience files
         for num, host, port, hub in cs:
             env = subenv({'SRVTYPE': 'conscience', 'SRVNUM': num,
                           'PORT': port, 'PORT_HUB': hub})
@@ -1238,6 +1254,35 @@ def generate(options):
             with open(config(env), 'w+') as f:
                 tpl = Template(template_conscience_service)
                 f.write(tpl.safe_substitute(env))
+
+    # beanstalkd
+    all_beanstalkd = list()
+    nb_beanstalkd = getint(options['beanstalkd'].get(SVC_NB), 1)
+    if nb_beanstalkd:
+        # prepare a list of all the beanstalkd
+        for num in range(nb_beanstalkd):
+            h = hosts[num % len(hosts)]
+            all_beanstalkd.append((num + 1, h, next(ports)))
+        # generate the files
+        for num, host, port in all_beanstalkd:
+            env = subenv({'SRVTYPE': 'beanstalkd', 'SRVNUM': num,
+                          'IP': host, 'PORT': port,
+                          'EXE': 'beanstalkd'})
+            add_service(env)
+            # gridinit config
+            tpl = Template(template_gridinit_beanstalkd)
+            with open(gridinit(env), 'a+') as f:
+                f.write(tpl.safe_substitute(env))
+                for key in (k for k in env.iterkeys() if k.startswith("env.")):
+                    f.write("%s=%s\n" % (key, env[key]))
+
+        beanstalkd_cnxstring = ';'.join(
+                "beanstalk://" + str(h) + ":" + str(p)
+                for _, h, p in all_beanstalkd)
+        ENV.update({'BEANSTALKD_CNXSTRING': beanstalkd_cnxstring,
+                    'NOBS':''})
+    else:
+        ENV.update({'BEANSTALKD_CNXSTRING': '***disabled***', 'NOBS':'#'})
 
     # meta* + sqlx
     def generate_meta(t, n, tpl, ext_opt=""):
@@ -1428,15 +1473,21 @@ def generate(options):
             tpl = Template(template_rdir_watch)
             f.write(tpl.safe_substitute(env))
 
-    # Event agent configuration
-    env = subenv({'SRVTYPE': 'event-agent', 'SRVNUM': 1})
-    add_service(env)
-    with open(CFGDIR + '/' + 'event-agent.conf', 'w+') as f:
-        tpl = Template(template_event_agent)
-        f.write(tpl.safe_substitute(env))
-    with open(CFGDIR + '/' + 'event-handlers.conf', 'w+') as f:
-        tpl = Template(template_event_agent_handlers)
-        f.write(tpl.safe_substitute(env))
+    # Event agent configuration -> one per beanstalkd
+    for num, host, port in all_beanstalkd:
+        bnurl = 'beanstalk://{0}:{1}'.format(host, port)
+        env = subenv({'SRVTYPE': 'event-agent', 'SRVNUM': num,
+                      'QUEUE_URL': bnurl})
+        add_service(env)
+        with open(gridinit(env), 'a+') as f:
+            tpl = Template(template_gridinit_event_agent)
+            f.write(tpl.safe_substitute(env))
+        with open(config(env), 'w+') as f:
+            tpl = Template(template_event_agent)
+            f.write(tpl.safe_substitute(env))
+        with open(CFGDIR + '/' + 'event-handlers-'+str(num)+'.conf', 'w+') as f:
+            tpl = Template(template_event_agent_handlers)
+            f.write(tpl.safe_substitute(env))
 
     # Conscience agent configuration
     env = subenv({'SRVTYPE': 'conscience-agent', 'SRVNUM': 1})
@@ -1543,6 +1594,8 @@ def main():
     parser.add_argument("-p", "--port",
                         type=int, default=6000,
                         help="Specify the first port of the range")
+    parser.add_argument("--profile", choices=['default', 'valgrind', 'callgrind'],
+                        help="Launch SDS with specific tool")
     parser.add_argument("namespace",
                         action='store', type=str, default=None,
                         help="Namespace name")
@@ -1562,6 +1615,7 @@ def main():
     opts['sqlx'] = {SVC_NB: None, SVC_HOSTS: None}
     opts['rawx'] = {SVC_NB: None, SVC_HOSTS: None}
     opts['rdir'] = {SVC_NB: None, SVC_HOSTS: None}
+    opts['beanstalkd'] = {SVC_NB: None, SVC_HOSTS: None}
 
     options = parser.parse_args()
     if options.config:
@@ -1580,6 +1634,7 @@ def main():
 
     opts['ZK'] = os.environ.get('ZK', defaults['ZK'])
     opts['ns'] = options.namespace
+    opts[PROFILE] = options.profile
     final_conf = generate(opts)
     if options.dump_config:
         dump_config(final_conf)

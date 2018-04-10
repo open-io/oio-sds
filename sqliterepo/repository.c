@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -45,12 +45,6 @@ License along with this library.
 	if ((S)->str[(S)->len-1]!=G_DIR_SEPARATOR) \
 			g_string_append_c((S), G_DIR_SEPARATOR); \
 } while (0)
-
-static gboolean
-election_manager_configured(const struct election_manager_s *em)
-{
-	return em && (ELECTION_MODE_NONE != election_manager_get_mode (em));
-}
 
 static void
 _close_handle(sqlite3 **pdb)
@@ -158,7 +152,7 @@ __close_base(struct sqlx_sqlite3_s *sq3)
 			sq3->name.type);
 
 	/* send a vacuum */
-	if (sq3->repo && sq3->repo->flag_autovacuum)
+	if (sq3->repo && sq3->repo->flag_autovacuum && !sq3->deleted)
 		sqlx_exec(sq3->db, "VACUUM");
 
 	sqlx_repository_call_close_callback(sq3);
@@ -802,9 +796,9 @@ __open_maybe_cached(struct open_args_s *args, struct sqlx_sqlite3_s **result)
 		return NULL;
 	}
 
-	GError *e1 = sqlx_cache_unlock_and_close_base(args->repo->cache, bd, FALSE);
+	GError *e1 = sqlx_cache_unlock_and_close_base(args->repo->cache, bd, 0);
 	if (e1) {
-		GRID_WARN("BASE unlock/close error on bd=%d : (%d) %s",
+		GRID_WARN("BASE unlock/close error on bd=%d: (%d) %s",
 				bd, e1->code, e1->message);
 		g_clear_error(&e1);
 	}
@@ -933,10 +927,13 @@ sqlx_repository_unlock_and_close2(struct sqlx_sqlite3_s *sq3, guint32 flags)
 		sq3->deleted = FALSE;
 
 	if (sq3->repo->cache) {
-		err = sqlx_cache_unlock_and_close_base(sq3->repo->cache, sq3->bd,
-				sq3->deleted ||
-				sq3->corrupted ||
-				(flags & SQLX_CLOSE_IMMEDIATELY));
+		if (sq3->deleted)
+			flags |= SQLX_CLOSE_FOR_DELETION;
+		else if (sq3->corrupted)
+			flags |= SQLX_CLOSE_IMMEDIATELY;
+
+		err = sqlx_cache_unlock_and_close_base(
+				sq3->repo->cache, sq3->bd, flags);
 	}
 	else {
 		__close_base(sq3);
@@ -1135,33 +1132,17 @@ sqlx_repository_status_base(sqlx_repository_t *repo,
 	REPO_CHECK(repo);
 	SQLXNAME_CHECK(n);
 
-	GError *err = NULL;
-	gboolean has_peers = FALSE;
-
 	GRID_TRACE2("%s(%p,t=%s,n=%s)", __FUNCTION__, repo, n->type, n->base);
 
-	if (!repo->running)
-		return NEWERROR(CODE_UNAVAILABLE, "Repository being shut down");
-
-	if (NULL != (err = _schema_get(repo, n->type, NULL)))
+	/* Kick the election off */
+	gboolean replicated = FALSE;
+	GError *err = sqlx_repository_use_base(repo, n, TRUE, &replicated);
+	if (err)
 		return err;
-
-	if (!election_manager_configured(repo->election_manager)) {
-		GRID_TRACE("Replication disabled by configuration, MASTER de facto");
+	if (!replicated)
 		return NULL;
-	}
 
-	err = election_has_peers(repo->election_manager, n, FALSE, &has_peers);
-	if (err != NULL) {
-		g_prefix_error(&err, "Peers resolution error: ");
-		return err;
-	}
-
-	if (!has_peers) {
-		GRID_TRACE("Unable to find peers for [%s][%s]", n->base, n->type);
-		return NULL;
-	}
-
+	/* Wait for a final status */
 	gchar *url = NULL;
 	enum election_status_e status;
 
@@ -1203,7 +1184,7 @@ sqlx_repository_prepare_election(sqlx_repository_t *repo, const struct sqlx_name
 		return NULL;
 	}
 
-	return election_init(repo->election_manager, n);
+	return election_init(repo->election_manager, n, NULL, NULL);
 }
 
 GError*
@@ -1230,8 +1211,39 @@ sqlx_repository_exit_election(sqlx_repository_t *repo, const struct sqlx_name_s 
 	return err;
 }
 
+static GError *
+_base_lazy_recover(sqlx_repository_t *repo, const struct sqlx_name_s *n,
+		enum election_step_e status)
+{
+	if (!sqliterepo_election_lazy_recover)
+		return NULL;
+
+	GError *err = NULL;
+	if (!(err = sqlx_repository_has_base2(repo, n, NULL)))
+		return NULL;
+
+	g_clear_error(&err);
+
+	if (status == STEP_MASTER || status == STEP_CHECKING_SLAVES) {
+		/* Ensure the election is not MASTER to avoid the DB to be
+		 * recreated empty while MASTER */
+		election_exit(repo->election_manager, n);
+	}
+
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	err = sqlx_repository_open_and_lock(repo, n,
+			SQLX_OPEN_CREATE|SQLX_OPEN_LOCAL|SQLX_OPEN_URGENT,
+			&sq3, NULL);
+	if (err)
+		return err;
+
+	sqlx_repository_unlock_and_close_noerror(sq3);
+	return NULL;
+}
+
 GError*
-sqlx_repository_use_base(sqlx_repository_t *repo, const struct sqlx_name_s *n)
+sqlx_repository_use_base(sqlx_repository_t *repo, const struct sqlx_name_s *n,
+		gboolean allow_autocreate, gboolean *replicated)
 {
 	REPO_CHECK(repo);
 	SQLXNAME_CHECK(n);
@@ -1250,7 +1262,21 @@ sqlx_repository_use_base(sqlx_repository_t *repo, const struct sqlx_name_s *n)
 		return NULL;
 	}
 
-	return election_start(repo->election_manager, n);
+	/* The initiation of the election will perform the check that the
+	 * election is locally managed. */
+	enum election_step_e status = STEP_NONE;
+	if (!(err = election_init(repo->election_manager, n, &status, replicated))) {
+
+		/* Interleave a DB creation (out of the lock) if explicitely
+		 * allowed by both the request type AND the application */
+		if (allow_autocreate)
+			err = _base_lazy_recover(repo, n, status);
+
+		if (!err)
+			err = election_start(repo->election_manager, n);
+	}
+
+	return err;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -1601,4 +1627,3 @@ sqlx_repository_get_version2(sqlx_repository_t *repo, const struct sqlx_name_s *
 	*result = version;
 	return NULL;
 }
-

@@ -73,6 +73,7 @@ M2V2_DECLARE_FILTER(meta2_filter_extract_header_flags32);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_append);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_string_size);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_overwrite);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_string_maxvers);
 M2V2_DECLARE_FILTER(meta2_filter_extract_list_params);
 M2V2_DECLARE_FILTER(meta2_filter_extract_admin);
 
@@ -105,6 +106,7 @@ M2V2_DECLARE_FILTER(meta2_filter_action_get_content_properties);
 M2V2_DECLARE_FILTER(meta2_filter_action_del_content_properties);
 M2V2_DECLARE_FILTER(meta2_filter_action_generate_beans);
 M2V2_DECLARE_FILTER(meta2_filter_action_touch_content);
+M2V2_DECLARE_FILTER(meta2_filter_action_purge_content);
 
 #define META2TOUCH_FLAGS_UPDATECSIZE     0x00000001
 #define META2TOUCH_FLAGS_RECALCCSIZE     0x00000002

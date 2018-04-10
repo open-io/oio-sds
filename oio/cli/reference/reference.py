@@ -19,7 +19,7 @@ from cliff import command, lister, show
 
 
 class ListReference(lister.Lister):
-    """List services linked to a reference"""
+    """List services linked to a reference."""
 
     log = getLogger(__name__ + '.ListReference')
 
@@ -46,7 +46,7 @@ class ListReference(lister.Lister):
 
 
 class ShowReference(show.ShowOne):
-    """Show reference properties"""
+    """Show reference properties."""
 
     log = getLogger(__name__ + '.ShowReference')
 
@@ -75,7 +75,9 @@ class ShowReference(show.ShowOne):
 
 
 class CreateReference(lister.Lister):
-    """Create reference"""
+    """
+    Create one or several references.
+    """
 
     log = getLogger(__name__ + '.CreateReference')
 
@@ -103,7 +105,11 @@ class CreateReference(lister.Lister):
 
 
 class DeleteReference(command.Command):
-    """Delete reference"""
+    """
+    Delete one or several references.
+
+    A reference must be empty before being deleted.
+    """
 
     log = getLogger(__name__ + '.DeleteReference')
 
@@ -128,7 +134,7 @@ class DeleteReference(command.Command):
 
 
 class LinkReference(command.Command):
-    """Link services to reference"""
+    """Link services to a reference."""
 
     log = getLogger(__name__ + '.LinkReference')
 
@@ -142,7 +148,7 @@ class LinkReference(command.Command):
         parser.add_argument(
             'srv_type',
             metavar='<srv_type>',
-            help='Link services of <srv_type> to reference'
+            help='Link services of type <srv_type> to the reference'
         )
         return parser
 
@@ -160,7 +166,7 @@ class LinkReference(command.Command):
 
 
 class UnlinkReference(command.Command):
-    """Unlink services from reference"""
+    """Unlink services from a reference."""
 
     log = getLogger(__name__ + '.UnlinkReference')
 
@@ -174,7 +180,7 @@ class UnlinkReference(command.Command):
         parser.add_argument(
             'srv_type',
             metavar='<srv_type>',
-            help='Unlink services of <srv_type> from reference'
+            help='Unlink services of <srv_type> from the reference'
         )
         return parser
 
@@ -192,7 +198,12 @@ class UnlinkReference(command.Command):
 
 
 class PollReference(command.Command):
-    """Poll services for reference"""
+    """
+    Poll (renew) services for a reference.
+
+    Assign a new set of services to the reference,
+    increment the sequence number.
+    """
 
     log = getLogger(__name__ + '.PollReference')
 
@@ -206,7 +217,7 @@ class PollReference(command.Command):
         parser.add_argument(
             'srv_type',
             metavar='<srv_type>',
-            help='Poll services of <srv_type>'
+            help='Poll services of type <srv_type>'
         )
         return parser
 
@@ -222,7 +233,12 @@ class PollReference(command.Command):
 
 
 class ForceReference(command.Command):
-    """Force link a service to reference"""
+    """
+    Force link a service to reference.
+
+    In order to keep the same sequence number,
+    you must first unlink the service.
+    """
 
     log = getLogger(__name__ + '.ForceReference')
 
@@ -236,7 +252,7 @@ class ForceReference(command.Command):
         parser.add_argument(
             'host',
             metavar='<host>',
-            help='Service host'
+            help="Service hosts (separated by ',')"
         )
         parser.add_argument(
             'type',
@@ -276,7 +292,7 @@ class ForceReference(command.Command):
 
 
 class SetReference(command.Command):
-    """Set reference properties"""
+    """Set reference properties."""
 
     log = getLogger(__name__ + '.SetReference')
 
@@ -313,7 +329,7 @@ class SetReference(command.Command):
 
 
 class UnsetReference(command.Command):
-    """Unset reference properties"""
+    """Unset reference properties."""
 
     log = getLogger(__name__ + '.UnsetReference')
 
@@ -343,7 +359,7 @@ class UnsetReference(command.Command):
 
 
 class LocateReference(show.ShowOne):
-    """Locate the services in charge of a reference"""
+    """Locate the services in charge of a reference."""
 
     log = getLogger(__name__ + '.LocateReference')
 

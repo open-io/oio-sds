@@ -447,9 +447,11 @@ meta0_backend_get_all(struct meta0_backend_s *m0, GPtrArray **result)
 		g_prefix_error(&err, "Reload error: ");
 		return err;
 	}
+	if (!m0->array_by_prefix) {
+		return NEWERROR(EINVAL, "Prefixes not ready");
+	}
 
 	g_rw_lock_reader_lock(&(m0->rwlock));
-	EXTRA_ASSERT(m0->array_by_prefix != NULL);
 	*result = meta0_utils_array_dup(m0->array_by_prefix);
 	g_rw_lock_reader_unlock(&(m0->rwlock));
 
@@ -473,10 +475,19 @@ meta0_backend_get_one(struct meta0_backend_s *m0, const guint8 *prefix,
 		return err;
 	}
 
-	g_rw_lock_reader_lock(&(m0->rwlock));
-	EXTRA_ASSERT(m0->array_by_prefix != NULL);
-	*u = meta0_utils_array_get_urlv(m0->array_by_prefix, prefix);
-	g_rw_lock_reader_unlock(&(m0->rwlock));
-
-	return *u ? NULL : NEWERROR(EINVAL, "META0 partially missing");
+	if (!m0->array_by_prefix) {
+		*u = NULL;
+		return NEWERROR(CODE_UNAVAILABLE,
+				"The current META0 service is not ready yet, "
+				"it has not been initiated.");
+	} else {
+		g_rw_lock_reader_lock(&(m0->rwlock));
+		*u = meta0_utils_array_get_urlv(m0->array_by_prefix, prefix);
+		g_rw_lock_reader_unlock(&(m0->rwlock));
+		if (*u != NULL)
+			return NULL;
+		return NEWERROR(CODE_UNAVAILABLE,
+				"The current META0 service is not ready yet, "
+				"it has been partially initiated.");
+	}
 }

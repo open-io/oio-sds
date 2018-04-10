@@ -708,7 +708,7 @@ meta2_backend_flush_container(struct meta2_backend_s *m2, struct oio_url_s *url)
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 			if (!(err = m2db_flush_container(sq3->db)))
 				err = m2db_purge(sq3, _maxvers(sq3), _retention_delay(sq3),
-						NULL, NULL);
+						NULL, NULL, NULL);
 			err = sqlx_transaction_end(repctx, err);
 		}
 		m2b_close(sq3);
@@ -719,7 +719,7 @@ meta2_backend_flush_container(struct meta2_backend_s *m2, struct oio_url_s *url)
 
 GError *
 meta2_backend_purge_container(struct meta2_backend_s *m2, struct oio_url_s *url,
-	m2_onbean_cb cb, gpointer u0)
+	gint64 *pmaxvers, m2_onbean_cb cb, gpointer u0)
 {
 	GError *err;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -729,7 +729,13 @@ meta2_backend_purge_container(struct meta2_backend_s *m2, struct oio_url_s *url,
 	if (!err) {
 		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
-			err = m2db_purge(sq3, _maxvers(sq3), _retention_delay(sq3), cb, u0);
+			gint64 maxvers;
+			if (pmaxvers)
+				maxvers = *pmaxvers;
+			else
+				maxvers = _maxvers(sq3);
+			err = m2db_purge(sq3, maxvers, _retention_delay(sq3), NULL,
+					cb, u0);
 			err = sqlx_transaction_end(repctx, err);
 		}
 		if (!err)
@@ -875,7 +881,8 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		GSList *in, GSList **out_deleted, GSList **out_added)
+		GSList *in, m2_onbean_cb cb_deleted, gpointer u0_deleted,
+		m2_onbean_cb cb_added, gpointer u0_added)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -894,9 +901,11 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		args.sq3 = sq3;
 		args.url = url;
 		args.ns_max_versions = meta2_max_versions;
+		args.worm_mode = oio_ns_mode_worm && !oio_ext_is_admin();
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (!(err = m2db_put_alias(&args, in, out_deleted, out_added)))
+			if (!(err = m2db_put_alias(&args, in, cb_deleted, u0_deleted,
+					cb_added, u0_added)))
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 			if (!err)
@@ -910,7 +919,7 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 
 GError*
 meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		const char *src)
+		const char *src, m2_onbean_cb cb_deleted, gpointer u0_deleted)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -927,9 +936,11 @@ meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		args.sq3 = sq3;
 		args.url = url;
 		args.ns_max_versions = meta2_max_versions;
+		args.worm_mode = oio_ns_mode_worm && !oio_ext_is_admin();
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (!(err = m2db_copy_alias(&args, src)))
+			if (!(err = m2db_copy_alias(&args, src,
+					cb_deleted, u0_deleted)))
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 		}
@@ -941,7 +952,8 @@ meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 
 GError *
 meta2_backend_update_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		GSList *in, GSList **out_deleted, GSList **out_added)
+		GSList *in, m2_onbean_cb cb_deleted, gpointer u0_deleted,
+		m2_onbean_cb cb_added, gpointer u0_added)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -951,12 +963,15 @@ meta2_backend_update_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	EXTRA_ASSERT(url != NULL);
 	if (!in)
 		return NEWERROR(CODE_BAD_REQUEST, "No bean");
+	else if (oio_ns_mode_worm && !oio_ext_is_admin())
+		return NEWERROR(CODE_METHOD_NOTALLOWED,
+				"NS wormed! Cannot modify object.");
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_update_content(sq3, url, in,
-						out_deleted, out_added)))
+					cb_deleted, u0_deleted, cb_added, u0_added)))
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 			if (!err)
@@ -1000,7 +1015,8 @@ meta2_backend_truncate_content(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		GSList *in, GSList **out_deleted, GSList **out_added)
+		GSList *in, m2_onbean_cb cb_deleted, gpointer u0_deleted,
+		m2_onbean_cb cb_added, gpointer u0_added)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1008,8 +1024,8 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
-	EXTRA_ASSERT(out_deleted != NULL);
-	EXTRA_ASSERT(out_added != NULL);
+	EXTRA_ASSERT(cb_deleted != NULL);
+	EXTRA_ASSERT(cb_added != NULL);
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
@@ -1019,15 +1035,53 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		args.sq3 = sq3;
 		args.url = url;
 		args.ns_max_versions = meta2_max_versions;
+		args.worm_mode = oio_ns_mode_worm && !oio_ext_is_admin();
 
 		if (!(err = _transaction_begin(sq3,url, &repctx))) {
-			if (!(err = m2db_force_alias(&args, in, out_deleted, out_added)))
+			if (!(err = m2db_force_alias(&args, in, cb_deleted, u0_deleted,
+					cb_added, u0_added)))
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 		}
 		if (!err)
 			m2b_add_modified_container(m2b, sq3);
 
+		m2b_close(sq3);
+	}
+
+	return err;
+}
+
+GError *
+meta2_backend_purge_alias(struct meta2_backend_s *m2, struct oio_url_s *url,
+	gint64 *pmaxvers, m2_onbean_cb cb, gpointer u0)
+{
+	GError *err;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	struct sqlx_repctx_s *repctx = NULL;
+
+	EXTRA_ASSERT(m2 != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	if (!oio_url_has(url, OIOURL_PATH))
+		return BADREQ("Missing path");
+
+	err = m2b_open(m2, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
+	if (!err) {
+		EXTRA_ASSERT(sq3 != NULL);
+		if (!(err = _transaction_begin(sq3, url, &repctx))) {
+			gint64 maxvers;
+			if (pmaxvers)
+				maxvers = *pmaxvers;
+			else
+				maxvers = _maxvers(sq3);
+			if (!(err = m2db_purge(sq3, maxvers, _retention_delay(sq3),
+					oio_url_get(url, OIOURL_PATH), cb, u0)))
+				m2db_increment_version(sq3);
+			err = sqlx_transaction_end(repctx, err);
+		}
+		if (!err)
+			m2b_add_modified_container(m2, sq3);
 		m2b_close(sq3);
 	}
 
@@ -1336,16 +1390,25 @@ _check_alias_doesnt_exist(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 	return err;
 }
 
-/* Create, save in cache, and possibly return m2_prepare_data */
+/* Create, save in cache, and possibly return m2_prepare_data.
+ * If container is disabled or frozen, decache m2_prepare_data
+ * and return nothing. */
 static void
 _meta2_backend_force_prepare_data_unlocked(struct meta2_backend_s *m2b,
 		const gchar *key, struct m2_prepare_data *pdata_out,
 		struct sqlx_sqlite3_s *sq3)
 {
-	GRID_DEBUG("Forcing M2_PREPARE data for %s", key);
 
 	struct m2_prepare_data *pdata = g_hash_table_lookup(
 			m2b->prepare_data_cache, key);
+
+	gint64 status = sqlx_admin_get_status(sq3);
+	if (status != ADMIN_STATUS_ENABLED) {
+		GRID_DEBUG("Decaching M2_PREP data for %s", key);
+		g_hash_table_remove(m2b->prepare_data_cache, key);
+		return;
+	}
+	GRID_DEBUG("Forcing M2_PREP data for %s", key);
 	if (!pdata) {
 		pdata = g_malloc0(sizeof(struct m2_prepare_data));
 		g_hash_table_insert(m2b->prepare_data_cache, g_strdup(key), pdata);
@@ -1363,8 +1426,9 @@ _meta2_backend_force_prepare_data_unlocked(struct meta2_backend_s *m2b,
 }
 
 /**
- * Update the data structure allowing to answer PREPARE requests
- * without taking the lock on the database file.
+ * Update the data structure allowing to answer M2_PREP requests
+ * without taking the lock on the database file. If the container
+ * is frozen or disabled, decache this data.
  */
 static void
 _meta2_backend_force_prepare_data(struct meta2_backend_s *m2b,
@@ -1424,10 +1488,12 @@ m2b_get_prepare_data(struct meta2_backend_s *m2b,
 	g_rw_lock_reader_unlock(&(m2b->prepare_data_lock));
 
 	if (!pdata) {
-		// Prepare data is not available. Open the base, take the writer lock
-		// and check again, in case another thread did the job while we were
-		// waiting for the base or the writer lock.
-		err = m2b_open(m2b, url, _mode_readonly(0), sq3);
+		/* Prepare data is not available. Open the base, take the writer lock
+		 * and check again, in case another thread did the job while we were
+		 * waiting for the base or the writer lock.
+		 * The base must not be frozen or disabled
+		 * (we must refuse "prepare" operation in such cases). */
+		err = m2b_open(m2b, url, _mode_masterslave(0)|M2V2_OPEN_ENABLED, sq3);
 		if (!err) {
 			g_rw_lock_writer_lock(&(m2b->prepare_data_lock));
 			pdata = g_hash_table_lookup(m2b->prepare_data_cache, key);
@@ -1482,13 +1548,17 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 	 * This call may return an open database. */
 	m2b_get_prepare_data(m2b, url, &pdata, &sq3);
 
-	if (m2b->flag_precheck_on_generate &&
-			VERSIONS_DISABLED(pdata.max_versions)) {
+	gboolean must_check_alias = m2b->flag_precheck_on_generate && (
+			 VERSIONS_DISABLED(pdata.max_versions) ||
+			(VERSIONS_SUSPENDED(pdata.max_versions) &&
+			 oio_ns_mode_worm &&
+			 !oio_ext_is_admin()));
+	if (must_check_alias) {
 		err = m2b_open_if_needed(m2b, url,
 				_mode_masterslave(0)|M2V2_OPEN_ENABLED, &sq3);
 		if (!err) {
-			/* If the versioning is not supported, we check the content
-			 * is not present */
+			/* If the versioning is not supported, or the namespace is
+			 * is WORM mode, we check the content is not present */
 			err = _check_alias_doesnt_exist(sq3, url);
 			if (append) {
 				if (err) {
@@ -1705,4 +1775,3 @@ meta2_backend_content_from_contentid (struct meta2_backend_s *m2b,
 
 	return err;
 }
-

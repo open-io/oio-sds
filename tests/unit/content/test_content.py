@@ -268,9 +268,61 @@ class TestChunksHelper(unittest.TestCase):
 
 
 class TestGeneratorIO(unittest.TestCase):
-    def test_read_1_by_1_byte(self):
+    def test_read_1_by_1_byte_from_list(self):
+        data = ["a", "b", "c", "d"]
+        gen = GeneratorIO(data)
+        self.assertEqual(gen.read(1), "a")
+        self.assertEqual(gen.read(1), "b")
+        self.assertEqual(gen.read(1), "c")
+        self.assertEqual(gen.read(1), "d")
+        self.assertEqual(gen.read(1), "")
+
+    def test_read_1_by_1_from_tuple(self):
+        data = ("a", "bc", "d")
+        gen = GeneratorIO(data)
+        self.assertEqual(gen.read(1), "a")
+        self.assertEqual(gen.read(1), "b")
+        self.assertEqual(gen.read(1), "c")
+        self.assertEqual(gen.read(1), "d")
+        self.assertEqual(gen.read(1), "")
+
+    def test_read_1_by_1_from_generator(self):
+        def gen_data():
+            yield 'a'
+            yield 'bc'
+            yield 'd'
+        gen = GeneratorIO(gen_data())
+        self.assertEqual(gen.read(1), "a")
+        self.assertEqual(gen.read(1), "b")
+        self.assertEqual(gen.read(1), "c")
+        self.assertEqual(gen.read(1), "d")
+        self.assertEqual(gen.read(1), "")
+
+    def test_read_1_by_1_from_iterable_class(self):
+        class DataGen(object):
+            def __init__(self):
+                self.data = "abcd"
+                self.pos = 0
+
+            def __iter__(self):
+                return self
+
+            def next(self):
+                if self.pos >= len(self.data):
+                    raise StopIteration()
+                self.pos += 1
+                return self.data[self.pos - 1]
+
+        gen = GeneratorIO(DataGen())
+        self.assertEqual(gen.read(1), "a")
+        self.assertEqual(gen.read(1), "b")
+        self.assertEqual(gen.read(1), "c")
+        self.assertEqual(gen.read(1), "d")
+        self.assertEqual(gen.read(1), "")
+
+    def test_read_1_by_1_byte_variable_input(self):
         data = ["a", "bc", "d"]
-        gen = GeneratorIO(iter(data))
+        gen = GeneratorIO(data)
         self.assertEqual(gen.read(1), "a")
         self.assertEqual(gen.read(1), "b")
         self.assertEqual(gen.read(1), "c")
@@ -279,15 +331,15 @@ class TestGeneratorIO(unittest.TestCase):
 
     def test_read_more_than_data_size(self):
         data = ["a", "bc", "d"]
-        gen = GeneratorIO(iter(data))
+        gen = GeneratorIO(data)
         self.assertEqual(gen.read(10), "abcd")
         self.assertEqual(gen.read(10), "")
 
     def test_read_empty_data(self):
         data = []
-        gen = GeneratorIO(iter(data))
+        gen = GeneratorIO(data)
         self.assertEqual(gen.read(10), "")
 
         data = ["", "", ""]
-        gen = GeneratorIO(iter(data))
+        gen = GeneratorIO(data)
         self.assertEqual(gen.read(10), "")

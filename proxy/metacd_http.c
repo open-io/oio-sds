@@ -74,7 +74,7 @@ action_status(struct req_args_s *args)
 	if (0 == strcasecmp("HEAD", args->rq->cmd))
 		return _reply_success_json(args, NULL);
 	if (0 != strcasecmp("GET", args->rq->cmd))
-		return _reply_method_error(args);
+		return _reply_method_error(args, NULL, "GET, HEAD");
 
 	GString *gstr = g_string_sized_new (128);
 
@@ -153,11 +153,10 @@ _metacd_match (const gchar *method, const gchar *path)
 	return result;
 }
 
-static struct oio_url_s *
-_metacd_load_url (struct req_args_s *args)
+static gboolean
+_metacd_load_url (struct req_args_s *args, struct oio_url_s *url)
 {
 	const gchar *s;
-	struct oio_url_s *url = oio_url_empty();
 
 	if (NULL != (s = NS()))
 		oio_url_set (url, OIOURL_NS, s);
@@ -177,13 +176,29 @@ _metacd_load_url (struct req_args_s *args)
 			oio_url_set (url, OIOURL_VERSION, s);
 	}
 
-	if (NULL != (s = CID()))
-		oio_url_set (url, OIOURL_HEXID, s);
+	if ((s = CID())) {
+		/* Tolerate the base name (with a dot and sequence number)
+		 * passed as a container ID. Also tolerate an hexadecimal prefx. */
+		char cid[STRLEN_CONTAINERID] =
+			"0000000000000000000000000000000000000000000000000000000000000000";
+		const size_t len = strlen(s);
+		if (len >= STRLEN_CONTAINERID && s[STRLEN_CONTAINERID-1] == '.') {
+			g_strlcpy(cid, s, sizeof(cid));
+			oio_url_set(url, OIOURL_HEXID, cid);
+		} else if (0 < len && len <= 4) {
+			memcpy(cid, s, len);
+			oio_url_set(url, OIOURL_HEXID, cid);
+		} else {
+			oio_url_set(url, OIOURL_HEXID, s);
+		}
+		if (!oio_url_get(url, OIOURL_HEXID))
+			return FALSE;
+	}
 
 	if (NULL != (s = CONTENT()))
 		oio_url_set (url, OIOURL_CONTENTID, s);
 
-	return url;
+	return TRUE;
 }
 
 static enum http_rc_e
@@ -239,24 +254,28 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 		args.matchings = matchings;
 		args.rq = rq;
 		args.rp = rp;
+		args.url = url = oio_url_empty();
 
-		args.url = url = _metacd_load_url (&args);
-		rp->subject(oio_url_get(url, OIOURL_HEXID));
-		gq_count = (*matchings)->last->gq_count;
-		gq_time = (*matchings)->last->gq_time;
-
-		GRID_TRACE("%s %s URL %s", __FUNCTION__,
-				ruri.path, oio_url_get(args.url, OIOURL_WHOLE));
-
-		if (!oio_url_check(url, ns_name, &err)) {
-			rc = _reply_format_error(&args, BADREQ("Invalid parameter %s", err));
+		if (!_metacd_load_url (&args, url)) {
+			rc = _reply_format_error(&args, BADREQ("Invalid oio url"));
 		} else {
-			req_handler_f handler = (*matchings)->last->u;
-			rc = (*handler) (&args);
+			rp->subject(oio_url_get(url, OIOURL_HEXID));
+			gq_count = (*matchings)->last->gq_count;
+			gq_time = (*matchings)->last->gq_time;
+
+			GRID_TRACE("%s %s URL %s", __FUNCTION__,
+					ruri.path, oio_url_get(args.url, OIOURL_WHOLE));
+
+			if (!oio_url_check(url, ns_name, &err)) {
+				rc = _reply_format_error(&args, BADREQ("Invalid parameter %s", err));
+			} else {
+				req_handler_f handler = (*matchings)->last->u;
+				rc = (*handler) (&args);
+			}
 		}
 	}
 
-	const gint64 spent = now - rq->client->time.evt_in;
+	const gint64 spent = oio_ext_monotonic_time () - rq->client->time.evt_in;
 
 	network_server_stat_push4 (rq->client->server, TRUE,
 			gq_count, 1, gq_count_all, 1,
@@ -969,6 +988,7 @@ configure_request_handlers (void)
 	SET("/$NS/content/copy/#POST", action_content_copy);
 	SET("/$NS/content/update/#POST", action_content_update);
 	SET("/$NS/content/truncate/#POST", action_content_truncate);
+	SET("/$NS/content/purge/#POST", action_content_purge);
 
 	// Admin
 	/* Ask each peer to trigger or update the election ("DB_USE"). */

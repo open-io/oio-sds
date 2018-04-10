@@ -17,6 +17,9 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// For strcasestr
+#include <string.h>
+
 #include "common.h"
 
 void
@@ -142,6 +145,10 @@ _reply_common_error (struct req_args_s *args, GError *err)
 		case CODE_CONTENT_EXISTS:
 		case CODE_CONTENT_PRECONDITION:
 			return _reply_conflict_error(args, err);
+		case CODE_NOT_ALLOWED:
+			return _reply_forbidden_error(args, err);
+		case CODE_METHOD_NOTALLOWED:
+			return _reply_method_error(args, err, NULL);
 	}
 
 	return _reply_system_error (args, err);
@@ -176,10 +183,17 @@ _reply_forbidden_error (struct req_args_s *args, GError * err)
 }
 
 enum http_rc_e
-_reply_method_error (struct req_args_s *args)
+_reply_method_error (struct req_args_s *args, GError *err, char *allowed)
 {
-	return _reply_json_error (args, HTTP_CODE_METHOD_NOT_ALLOWED,
-			"Method not allowed", NULL);
+	if (!allowed && err && strcasestr(err->message, "worm")) {
+		// Namespace in WORM mode, do not allow DELETE
+		allowed = "GET, HEAD, PUT";
+	}
+	// RFC 7231 requires the Allow header, but say it can be empty
+	EXTRA_ASSERT(allowed != NULL);
+	args->rp->add_header("Allow", g_strdup(allowed));
+	return _reply_json_error(args, HTTP_CODE_METHOD_NOT_ALLOWED,
+			"Method not allowed", _create_status_error(err));
 }
 
 enum http_rc_e

@@ -141,7 +141,7 @@ class RingBuffer(list):
         return super(RingBuffer, self).__setitem__(self.__index(key), value)
 
     def __delitem__(self, key):
-        raise self.InvalidOperation('Delete impossible in RingBuffer')
+        raise TypeError('Delete impossible in RingBuffer')
 
     def __iter__(self):
         for i in range(0, self._count):
@@ -242,6 +242,10 @@ class GeneratorIO(RawIOBase):
 
 
 def group_chunk_errors(chunk_err_iter):
+    """
+    Group errors in a dictionary of lists.
+    The keys are errors, the values are lists of chunk IDs.
+    """
     errors = dict()
     for chunk, err in chunk_err_iter:
         err_list = errors.get(err) or list()

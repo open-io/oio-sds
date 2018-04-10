@@ -47,6 +47,8 @@ License along with this library.
 
 GQuark gq_count_all = 0;
 GQuark gq_time_all = 0;
+GQuark gq_count_ioerror = 0;
+GQuark gq_time_ioerror = 0;
 GQuark gq_count_unexpected = 0;
 GQuark gq_time_unexpected = 0;
 GQuark gq_count_overloaded = 0;
@@ -136,6 +138,8 @@ _cnx_notify_close(struct network_server_s *srv)
 static void __attribute__ ((constructor))
 _constructor (void)
 {
+	gq_count_ioerror = g_quark_from_static_string (OIO_STAT_PREFIX_REQ ".IOERROR");
+	gq_time_ioerror = g_quark_from_static_string (OIO_STAT_PREFIX_TIME ".IOERROR");
 	gq_count_overloaded = g_quark_from_static_string (OIO_STAT_PREFIX_REQ ".OVERLOADED");
 	gq_time_overloaded = g_quark_from_static_string (OIO_STAT_PREFIX_TIME ".OVERLOADED");
 

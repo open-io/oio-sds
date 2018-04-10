@@ -71,7 +71,10 @@ enum sqlx_open_type_e
 enum sqlx_close_flag_e
 {
 	/** Close the base immediately, don't keep it in the cache */
-	SQLX_CLOSE_IMMEDIATELY = 0x01,
+	SQLX_CLOSE_IMMEDIATELY  = 0x01,
+	/** Close the base immediately,
+	 *  and prevent other threads from reopening it. */
+	SQLX_CLOSE_FOR_DELETION = 0x02,
 };
 
 enum sqlx_repo_flag_e
@@ -256,7 +259,9 @@ GError* sqlx_repository_exit_election(sqlx_repository_t *repo,
 
 /** Triggers the global election mechanism on a base given its name */
 GError* sqlx_repository_use_base(sqlx_repository_t *repo,
-		const struct sqlx_name_s *n);
+		const struct sqlx_name_s *n,
+		gboolean allow_autocreate,
+		gboolean *replicated);
 
 /** Triggers the global election mechanism on a base given its name and
  * returns when a final status (or a timeout) has been reached.

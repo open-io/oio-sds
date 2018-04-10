@@ -27,6 +27,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <core/oiocfg.h>
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/common_variables.h>
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/election.h>
 
@@ -60,19 +61,9 @@ meta1_backend_init(struct meta1_backend_s **out, const char *ns,
 	if (!*ns || strlen(ns) >= LIMIT_LENGTH_NSNAME)
 		return BADREQ("Invalid namespace name");
 
-	guint digits = OIO_META1_DIGITS_DEFAULT;
-	gchar *str_digits = oio_cfg_get_value(ns, OIO_META1_DIGITS_KEY);
-	if (str_digits) {
-		STRING_STACKIFY(str_digits);
-		gint64 i64 = 0;
-		if (!oio_str_is_number(str_digits, &i64))
-			return ERRPTF("Misconfigured '%s' in system configuration: %s",
-					OIO_META1_DIGITS_KEY, "not a valid integer");
-		if (i64 < 0 || i64 > 4)
-			return ERRPTF("Misconfigured '%s' in system configuration: %s",
-					OIO_META1_DIGITS_KEY, "value out of range [0,4]");
-		digits = i64;
-	}
+	if (oio_ns_meta1_digits > 4)
+		return ERRPTF("Misconfigured number of meta1 digits: "
+				"out of range [0,4]");
 
 	struct meta1_backend_s *m1 = g_malloc0(sizeof(*m1));
 	g_strlcpy (m1->ns_name, ns, sizeof(m1->ns_name));
@@ -81,7 +72,7 @@ meta1_backend_init(struct meta1_backend_s **out, const char *ns,
 	m1->repo = repo;
 	m1->prefixes = meta1_prefixes_init();
 	m1->svcupdate = service_update_policies_create();
-	m1->nb_digits = digits;
+	m1->nb_digits = oio_ns_meta1_digits;
 
 	*out = m1;
 	return NULL;

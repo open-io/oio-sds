@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,10 +15,12 @@
 
 from six import text_type, iteritems
 
+from urllib3.exceptions import HTTPError
+
+from oio.common.easy_value import true_value
 from oio.common.json import json as jsonlib
-from oio.common.http_urllib3 import urllib3, get_pool_manager
-from urllib3.exceptions import MaxRetryError, TimeoutError, HTTPError, \
-    NewConnectionError, ProtocolError, ProxyError, ClosedPoolError
+from oio.common.http_urllib3 import urllib3, get_pool_manager, \
+    oio_exception_from_httperror
 from oio.common import exceptions
 from oio.common.utils import deadline_to_timeout
 from oio.common.constants import ADMIN_HEADER, \
@@ -29,7 +31,7 @@ except ImportError:
     from urllib import urlencode
 
 _POOL_MANAGER_OPTIONS_KEYS = ["pool_connections", "pool_maxsize",
-                              "max_retries"]
+                              "max_retries", "backoff_factor"]
 
 URLLIB3_REQUESTS_KWARGS = ('fields', 'headers', 'body', 'retries', 'redirect',
                            'assert_same_host', 'timeout', 'pool_timeout',
@@ -66,7 +68,7 @@ class HttpApi(object):
             pool_manager = get_pool_manager(**pool_manager_conf)
         self.pool_manager = pool_manager
 
-        self.admin_mode = kwargs.get('admin_mode', False)
+        self.admin_mode = true_value(kwargs.get('admin_mode', False))
         self.perfdata = kwargs.get('perfdata')
 
     def _direct_request(self, method, url, headers=None, data=None, json=None,
@@ -181,19 +183,8 @@ class HttpApi(object):
                     kv = header_val.split('=', 1)
                     pdat = perfdata.get(kv[0], 0.0) + float(kv[1]) / 1000000.0
                     perfdata[kv[0]] = pdat
-        except MaxRetryError as exc:
-            if isinstance(exc.reason, NewConnectionError):
-                _reraise(exceptions.OioNetworkException, exc)
-            if isinstance(exc.reason, TimeoutError):
-                _reraise(exceptions.OioTimeout, exc)
-            _reraise(exceptions.OioNetworkException, exc)
-        except (ProtocolError, ProxyError, ClosedPoolError) as exc:
-            _reraise(exceptions.OioNetworkException, exc)
-        except TimeoutError as exc:
-            _reraise(exceptions.OioTimeout, exc)
         except HTTPError as exc:
-            _reraise(exceptions.OioException, exc)
-
+            oio_exception_from_httperror(exc, out_headers.get('X-oio-req-id'))
         if resp.status >= 400:
             raise exceptions.from_response(resp, body)
         return resp, body

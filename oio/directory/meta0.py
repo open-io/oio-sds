@@ -110,7 +110,7 @@ class PrefixMapping(object):
         loc = svc.get("tags", {}).get("tag.loc", default)
         if not loc or loc == "addr":
             loc = svc["addr"].rsplit(":", 1)[0]
-        return loc
+        return str(loc)
 
     @staticmethod
     def dist_between(loc1, loc2):
@@ -509,3 +509,25 @@ class PrefixMapping(object):
                 self.logger.info("meta1 %s has %d bases",
                                  svc['addr'], len(svc_bases))
         return moved_bases
+
+
+def count_prefixes(digits):
+    """Returns the number of real prefixes in meta0/meta1.
+    Raises an exception if the prefix number is not acceptable."""
+    if digits <= 4:
+        return 16**digits
+    raise ValueError('Invalid number of digits')
+
+
+def generate_short_prefixes(digits):
+    from itertools import product
+    hexa = "0123456789ABCDEF"
+    if digits == 0:
+        return ('',)
+    elif digits <= 4:
+        return (''.join(pfx) for pfx in product(hexa, repeat=digits))
+
+
+def generate_prefixes(digits):
+    for p in generate_short_prefixes(digits):
+        yield p.ljust(4, '0')

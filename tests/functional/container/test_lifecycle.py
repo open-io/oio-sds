@@ -402,3 +402,61 @@ class TestContainerLifecycle(BaseTestCase):
         self.assertEqual(4, len(results))
         for res in results:
             self.assertIsInstance(res[3], Exception)
+
+    def test_execute_exceeding_version_expiration_without_versioning(self):
+        source = """
+        <LifecycleConfiguration>
+            <Rule>
+                <ID>rule1</ID>
+                <Filter>
+                </Filter>
+                <Status>Enabled</Status>
+                <NoncurrentVersionExpiration>
+                    <NoncurrentCount>2</NoncurrentCount>
+                </NoncurrentVersionExpiration>
+            </Rule>
+        </LifecycleConfiguration>
+        """
+        props = {LIFECYCLE_PROPERTY_KEY: source}
+        self.api.container_create(self.account, self.container,
+                                  properties=props)
+        for i in range(0, 5):
+            self._upload_something()
+        self.lifecycle.load()
+        results = [x for x in self.lifecycle.execute()]
+        self.assertEqual(5, len(results))
+        for res in results:
+            self.assertEqual(res[3], 'Kept')
+        listing = self.api.object_list(self.account, self.container,
+                                       versions=True)
+        self.assertEqual(5, len(listing['objects']))
+
+    def test_execute_exceeding_version_expiration_with_versioning(self):
+        source = """
+        <LifecycleConfiguration>
+            <Rule>
+                <ID>rule1</ID>
+                <Filter>
+                </Filter>
+                <Status>Enabled</Status>
+                <NoncurrentVersionExpiration>
+                    <NoncurrentCount>2</NoncurrentCount>
+                </NoncurrentVersionExpiration>
+            </Rule>
+        </LifecycleConfiguration>
+        """
+        props = {LIFECYCLE_PROPERTY_KEY: source}
+        system = {"sys.m2.policy.version": "4",
+                  "sys.m2.policy.version.delete_exceeding": "0"}
+        self.api.container_create(self.account, self.container,
+                                  properties=props, system=system)
+        for i in range(0, 5):
+            self._upload_something(path="versioned1")
+        for i in range(0, 5):
+            self._upload_something(path="versioned2")
+        self.lifecycle.load()
+        results = [x for x in self.lifecycle.execute()]
+        self.assertEqual(10, len(results))
+        listing = self.api.object_list(self.account, self.container,
+                                       versions=True)
+        self.assertEqual(6, len(listing['objects']))

@@ -154,12 +154,15 @@ _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 			" (update)":"");
 
 	if (NULL != meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_OVERWRITE)) {
-		e = meta2_backend_force_alias(m2b, url, beans, &deleted, &added);
+		e = meta2_backend_force_alias(m2b, url, beans, _bean_list_cb, &deleted,
+				_bean_list_cb, &added);
 	} else if (meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_UPDATE)) {
 		reply->subject("(update)");
-		e = meta2_backend_update_content(m2b, url, beans, &deleted, &added);
+		e = meta2_backend_update_content(m2b, url, beans,
+				_bean_list_cb, &deleted, _bean_list_cb, &added);
 	} else {
-		e = meta2_backend_put_alias(m2b, url, beans, &deleted, &added);
+		e = meta2_backend_put_alias(m2b, url, beans, _bean_list_cb, &deleted,
+				_bean_list_cb, &added);
 	}
 
 	if (NULL != e) {
@@ -168,14 +171,15 @@ _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 		rc = FILTER_KO;
 	} else {
 		_m2b_notify_beans(m2b, url, added, "content.new", FALSE);
-		if (deleted)
-			_m2b_notify_beans(m2b, url, deleted, "content.deleted", TRUE);
+		for (GSList *l=deleted; l; l=l->next) {
+			_m2b_notify_beans(m2b, url, l->data, "content.deleted", TRUE);
+		}
 		_on_bean_ctx_send_list(obc);
 		rc = FILTER_OK;
 	}
 
-	_bean_cleanl2 (added);
-	_bean_cleanl2 (deleted);
+	_bean_cleanl2(added);
+	g_slist_free_full(deleted, (GDestroyNotify)_bean_cleanl2);
 	_on_bean_ctx_clean(obc);
 	return rc;
 }
@@ -187,15 +191,20 @@ _copy_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	GError *e = NULL;
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	GSList *deleted = NULL;
 
 	GRID_DEBUG("Copying %s from %s", oio_url_get(url, OIOURL_WHOLE), source);
 
-	e = meta2_backend_copy_alias(m2b, url, source);
+	e = meta2_backend_copy_alias(m2b, url, source, _bean_list_cb, &deleted);
 	if (NULL != e) {
 		GRID_DEBUG("Fail to copy alias (%s) to (%s)", source, oio_url_get(url, OIOURL_WHOLE));
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
 	} else {
+		for (GSList *l=deleted; l; l=l->next) {
+			_m2b_notify_beans(m2b, url, l->data, "content.deleted", TRUE);
+		}
+
 		// For notification purposes, we need to load all the beans
 		struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 		e = meta2_backend_get_alias(m2b, url, M2V2_FLAG_NOPROPS,
@@ -205,6 +214,7 @@ _copy_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		_on_bean_ctx_clean(obc);
 	}
 
+	g_slist_free_full(deleted, (GDestroyNotify)_bean_cleanl2);
 	return FILTER_OK;
 }
 
@@ -234,9 +244,13 @@ meta2_filter_action_check_content(struct gridd_filter_ctx_s * ctx,
 		g_string_append(gs, message->str);
 		g_string_append(gs, "}}");
 		oio_events_queue__send (m2b->notifier, g_string_free (gs, FALSE));
-		if (e->code == CODE_CONTENT_CORRUPTED)
+		if (e->code == CODE_CONTENT_CORRUPTED) {
+			meta2_filter_ctx_set_error(ctx, e);
+			e = NULL;
 			rc = FILTER_KO;
-		g_clear_error(&e);
+		} else {
+			g_clear_error(&e);
+		}
 	}
 	g_string_free(message, TRUE);
 	return rc;
@@ -597,4 +611,37 @@ meta2_filter_action_touch_content(struct gridd_filter_ctx_s *ctx,
 	_bean_cleanl2(beans);
     meta2_filter_ctx_set_error(ctx, err);
     return FILTER_KO;
+}
+
+int
+meta2_filter_action_purge_content(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply UNUSED)
+{
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+	gint64 *pmaxvers = NULL;
+	GSList *beans_list_list = NULL;
+
+	const char *maxvers_str = meta2_filter_ctx_get_param(ctx,
+			NAME_MSGKEY_MAXVERS);
+	gint64 maxvers;
+	if (oio_str_is_number(maxvers_str, &maxvers)) {
+		pmaxvers = &maxvers;
+	}
+
+	// Here we are abusing _bean_list_cb with a list of lists of beans
+	GError *err = meta2_backend_purge_alias(m2b, url, pmaxvers,
+			_bean_list_cb, &beans_list_list);
+
+	for (GSList *l = beans_list_list; l; l = l->next) {
+		_m2b_notify_beans(m2b, url, l->data, "content.deleted", TRUE);
+		_bean_cleanl2(l->data);
+	}
+	g_slist_free(beans_list_list);
+
+	if (!err)
+		return FILTER_OK;
+	GRID_DEBUG("Object purge failed (%d): %s", err->code, err->message);
+	meta2_filter_ctx_set_error(ctx, err);
+	return FILTER_KO;
 }

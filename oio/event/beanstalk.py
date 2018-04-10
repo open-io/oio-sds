@@ -182,21 +182,23 @@ class Connection(object):
     @classmethod
     def from_url(cls, url, **kwargs):
         url = urlparse(url)
+        if not url.netloc:
+            raise ConnectionError('Invalid URL')
         url_options = {}
         url_options.update({
             'host': url.hostname,
-            'port': int(url.port or 11300)})
+            'port': int(url.port)})
         kwargs.update(url_options)
         return cls(**kwargs)
 
-    def __init__(self, host='localhost', port=11300, use_tubes=None,
+    def __init__(self, host=None, port=None, use_tubes=None,
                  watch_tubes=None, socket_timeout=None,
                  socket_connect_timeout=None, socket_keepalive=False,
                  socket_keepalive_options=None, encoding='utf-8',
                  socket_read_size=65536):
         self.pid = os.getpid()
         self.host = host
-        self.port = port
+        self.port = int(port)
         self.encoding = encoding
         self.socket_timeout = socket_timeout
         self.socket_connect_timeout = socket_connect_timeout
@@ -418,10 +420,17 @@ class Beanstalk(object):
 
     @classmethod
     def from_url(cls, url, **kwargs):
+        if url is None or not url:
+            raise ConnectionError('Empty URL')
+        if not url.startswith('beanstalk://'):
+            import warnings
+            warnings.warn(
+                    'Invalid URL scheme, expecting beanstalk',
+                    DeprecationWarning)
         connection = Connection.from_url(url, **kwargs)
         return cls(connection=connection)
 
-    def __init__(self, host='localhost', port=11300, socket_timeout=None,
+    def __init__(self, host=None, port=None, socket_timeout=None,
                  socket_connect_timeout=None, socket_keepalive=None,
                  retry_on_timeout=False, socket_keepalive_options=None,
                  max_connections=None, connection=None):
@@ -429,7 +438,7 @@ class Beanstalk(object):
             self.socket_timeout = socket_timeout
             kwargs = {
                 'host': host,
-                'port': port,
+                'port': int(port),
                 'socket_connect_timeout': socket_connect_timeout,
                 'socket_keepalive': socket_keepalive,
                 'socket_keepalive_options': socket_keepalive_options,

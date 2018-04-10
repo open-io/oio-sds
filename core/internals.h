@@ -136,8 +136,8 @@ enum {
 	CODE_NOT_ALLOWED = 403,
 	CODE_NOT_FOUND = 404,
 
-	/*  */
-	CODE_SERVICE_NOTFOUND = 405,
+	/* Used when in WORM mode and trying to delete */
+	CODE_METHOD_NOTALLOWED = 405,
 
 	/*  */
 	CODE_USER_NOTFOUND = 406,
