@@ -16,7 +16,7 @@
 from urllib import urlencode
 from urllib3.exceptions import HTTPError
 
-from oio.common.utils import json as jsonlib, oio_reraise, true_value
+from oio.common.utils import json as jsonlib, true_value
 from oio.common.http import urllib3, get_pool_manager, \
     oio_exception_from_httperror
 from oio.common import exceptions
@@ -87,7 +87,7 @@ class HttpApi(object):
         :raise oio.common.exceptions.ClientException: in case of HTTP status
         code >= 400
         """
-        # Filter arguments that are not recognized by Requests
+        # Filter arguments that are not recognized by urllib3
         out_kwargs = {k: v for k, v in kwargs.items()
                       if k in URLLIB3_REQUESTS_KWARGS}
 
@@ -126,10 +126,6 @@ class HttpApi(object):
 
         if not pool_manager:
             pool_manager = self.pool_manager
-
-        def _reraise(exc_type, exc_value):
-            reqid = out_headers.get('X-oio-req-id')
-            oio_reraise(exc_type, exc_value, "reqid=%s" % reqid)
 
         try:
             resp = pool_manager.request(method, url, **out_kwargs)
