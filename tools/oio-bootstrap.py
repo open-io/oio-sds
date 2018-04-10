@@ -723,10 +723,8 @@ ${NOZK}zookeeper.sqlx= ${ZK_CNXSTRING}
 #proxy-local=${RUNDIR}/${NS}-proxy.sock
 proxy=${NORMALIZED_IP}:${PORT_PROXYD}
 ecd=${NORMALIZED_IP}:${PORT_ECD}
-event-agent=beanstalk://${NORMALIZED_IP}:11300
 #event-agent=ipc://${RUNDIR}/event-agent.sock
 conscience=${CS_ALL_PUB}
-ecd=${IP}:${PORT_ECD}
 ${NOBS}event-agent=${BEANSTALKD_CNXSTRING}
 
 meta1_digits=${M1_DIGITS}
