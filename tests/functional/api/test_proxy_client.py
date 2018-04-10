@@ -15,7 +15,7 @@
 from tests.utils import BaseTestCase
 from mock import MagicMock as Mock
 from oio.common.client import ProxyClient
-from urllib3 import HTTPResponse
+from oio.common.http import urllib3
 from oio.common.exceptions import ServiceBusy, OioException
 
 
@@ -28,7 +28,8 @@ class TestProxyClient(BaseTestCase):
 
     def test_error_503(self):
         self.proxy_client.pool_manager.request = Mock(
-            return_value=HTTPResponse(status=503, reason="Service busy"))
+            return_value=urllib3.HTTPResponse(status=503,
+                                              reason="Service busy"))
         self.assertRaises(ServiceBusy,
                           self.proxy_client._direct_request, "GET", "test")
 

@@ -113,6 +113,7 @@ class DirectoryInit(DirectoryCmd):
                 try:
                     mapping.apply(connection_timeout=30.0,
                                   read_timeout=parsed_args.meta0_timeout)
+                    break
                 except ClientException as ex:
                     # Manage several unretriable errors
                     retry = (503, 504)
@@ -248,9 +249,9 @@ class DirectoryWarmup(DirectoryCmd):
 
 class WarmupWorker(object):
     def __init__(self, conf, log):
-        import urllib3
+        from oio.common.http import get_pool_manager
         self.log = log
-        self.pool = urllib3.PoolManager()
+        self.pool = get_pool_manager()
         self.url_prefix = 'http://%s/v3.0/%s/admin/status?type=meta1&cid=' % (
                 conf['proxyd_url'], conf['namespace'])
 

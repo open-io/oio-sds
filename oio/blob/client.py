@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,10 +17,8 @@
 from functools import wraps
 
 from eventlet import GreenPile
-from urllib3 import Timeout
-from urllib3.exceptions import HTTPError
 from oio.common.http_urllib3 import get_pool_manager, \
-    oio_exception_from_httperror
+    oio_exception_from_httperror, urllib3
 from oio.common import exceptions as exc, utils
 from oio.common.constants import CHUNK_HEADERS, chunk_xattr_keys_optional, \
         HEADER_PREFIX
@@ -107,7 +105,7 @@ class BlobClient(object):
             headers['X-oio-chunk-meta-container-id'] = cid
         timeout = kwargs.get('timeout')
         if not timeout:
-            timeout = Timeout(CHUNK_TIMEOUT)
+            timeout = urllib3.Timeout(CHUNK_TIMEOUT)
 
         def __delete_chunk(chunk_):
             try:
@@ -115,7 +113,7 @@ class BlobClient(object):
                     "DELETE", chunk_['url'], headers=headers, timeout=timeout)
                 resp.chunk = chunk_
                 return resp
-            except HTTPError as ex:
+            except urllib3.exceptions.HTTPError as ex:
                 ex.chunk = chunk_
                 return ex
 
@@ -147,7 +145,7 @@ class BlobClient(object):
         try:
             resp = self.http_pool.request(
                 'HEAD', url, headers=headers)
-        except HTTPError as ex:
+        except urllib3.exceptions.HTTPError as ex:
             oio_exception_from_httperror(ex, headers['X-oio-req-id'])
         if resp.status == 200:
             if not _xattr:

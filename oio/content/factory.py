@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,6 +18,7 @@ from oio.common.exceptions import NotFound
 from oio.common.utils import GeneratorIO
 from oio.common.logger import get_logger
 from oio.container.client import ContainerClient
+from oio.blob.client import BlobClient
 from oio.content.plain import PlainContent
 from oio.content.ec import ECContent
 from oio.common.storage_method import STORAGE_METHODS
@@ -26,11 +27,12 @@ from oio.common.storage_method import STORAGE_METHODS
 class ContentFactory(object):
     DEFAULT_DATASEC = "plain", {"nb_copy": "1", "distance": "0"}
 
-    def __init__(self, conf, container_client=None, **kwargs):
+    def __init__(self, conf, container_client=None, logger=None, **kwargs):
         self.conf = conf
-        self.logger = get_logger(conf)
+        self.logger = logger or get_logger(conf)
         self.container_client = container_client or \
             ContainerClient(conf, logger=self.logger, **kwargs)
+        self.blob_client = BlobClient(**kwargs)
 
     def get(self, container_id, content_id, account=None,
             container_name=None):
@@ -52,9 +54,10 @@ class ContentFactory(object):
                 container_name = container_info['sys.user.name']
         cls = ECContent if storage_method.ec else PlainContent
         return cls(self.conf, container_id, meta, chunks, storage_method,
-                   account,
-                   container_name,
-                   container_client=self.container_client)
+                   account, container_name,
+                   container_client=self.container_client,
+                   blob_client=self.blob_client,
+                   logger=self.logger)
 
     def new(self, container_id, path, size, policy, account=None,
             container_name=None, **kwargs):

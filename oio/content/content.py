@@ -26,14 +26,15 @@ class Content(object):
 
     # FIXME: no need for container_id since we have account and container name
     def __init__(self, conf, container_id, metadata, chunks, storage_method,
-                 account, container_name, container_client=None):
+                 account, container_name, blob_client=None,
+                 container_client=None, logger=None):
         self.conf = conf
         self.container_id = container_id
         self.metadata = metadata
         self.chunks = ChunksHelper(chunks)
         self.storage_method = storage_method
-        self.logger = get_logger(self.conf)
-        self.blob_client = BlobClient()
+        self.logger = logger or get_logger(self.conf)
+        self.blob_client = (blob_client or BlobClient())
         self.container_client = (container_client
                                  or ContainerClient(self.conf,
                                                     logger=self.logger))

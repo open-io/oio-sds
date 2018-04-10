@@ -21,6 +21,7 @@ from oio.common.utils import request_id
 from oio.common.logger import get_logger
 from oio.conscience.client import ConscienceClient
 from oio.directory.client import DirectoryClient
+from time import sleep
 
 
 RDIR_ACCT = '_RDIR'
@@ -151,6 +152,7 @@ class RdirDispatcher(object):
             try:
                 self.directory.force(RDIR_ACCT, volume_id, 'rdir',
                                      forced, autocreate=True, **kwargs)
+                break
             except ClientException as ex:
                 # Already done
                 done = (455, )
@@ -282,7 +284,7 @@ class RdirClient(HttpApi):
         self._rdir_request(volume_id, 'DELETE', 'delete', json=body)
 
     def chunk_fetch(self, volume, limit=100, rebuild=False,
-                    container_id=None):
+                    container_id=None, max_attempts=3):
         """
         Fetch the list of chunks belonging to the specified volume.
 
@@ -303,8 +305,18 @@ class RdirClient(HttpApi):
             req_body['container_id'] = container_id
 
         while True:
-            resp, resp_body = self._rdir_request(volume, 'POST', 'fetch',
-                                                 json=req_body)
+            for i in range(max_attempts):
+                try:
+                    resp, resp_body = self._rdir_request(
+                        volume, 'POST', 'fetch', json=req_body)
+                    break
+                except OioNetworkException:
+                    # Monotonic backoff
+                    if i < max_attempts - 1:
+                        sleep(i * 1.0)
+                        continue
+                    # Too many attempts
+                    raise
             if len(resp_body) == 0:
                 break
             for (key, value) in resp_body:
