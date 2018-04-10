@@ -17,6 +17,7 @@ from oio.common.exceptions import ContentNotFound
 from oio.common.exceptions import NotFound
 from oio.common.utils import get_logger, GeneratorIO
 from oio.container.client import ContainerClient
+from oio.blob.client import BlobClient
 from oio.content.plain import PlainContent
 from oio.content.ec import ECContent
 from oio.common.storage_method import STORAGE_METHODS
@@ -30,6 +31,7 @@ class ContentFactory(object):
         self.logger = logger or get_logger(conf)
         self.container_client = ContainerClient(conf, logger=self.logger,
                                                 **kwargs)
+        self.blob_client = BlobClient(**kwargs)
 
     def get(self, container_id, content_id, account=None,
             container_name=None):
@@ -51,9 +53,10 @@ class ContentFactory(object):
                 container_name = container_info['sys.user.name']
         cls = ECContent if storage_method.ec else PlainContent
         return cls(self.conf, container_id, meta, chunks, storage_method,
-                   account,
-                   container_name,
-                   container_client=self.container_client, logger=self.logger)
+                   account, container_name,
+                   container_client=self.container_client,
+                   blob_client=self.blob_client,
+                   logger=self.logger)
 
     def new(self, container_id, path, size, policy, account=None,
             container_name=None, **kwargs):
