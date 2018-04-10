@@ -815,8 +815,8 @@ class EcMetachunkWriter(io.MetachunkWriter):
                     else:
                         success_chunks.append(writer.chunk)
                 else:
-                    logger.error("Wrong status code from %s (%s)",
-                                 writer.chunk, resp.status)
+                    logger.error("Wrong status code from %s (%s) %s",
+                                 writer.chunk, resp.status, resp.reason)
                     writer.chunk['error'] = 'resp: HTTP %s' % resp.status
                     failed_chunks.append(writer.chunk)
             else:
@@ -936,7 +936,8 @@ class ECRebuildHandler(object):
             with Timeout(self.read_timeout):
                 resp = conn.getresponse()
             if resp.status != 200:
-                logger.warning('Invalid GET response from %s', chunk)
+                logger.warning('Invalid GET response from %s: %s %s',
+                               chunk, resp.status, resp.reason)
                 resp = None
         except (Exception, Timeout):
             logger.exception('ERROR fetching %s', chunk)

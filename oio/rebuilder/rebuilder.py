@@ -43,7 +43,7 @@ class Rebuilder(object):
 
         workers = list()
         with ContextPool(self.nworkers) as pool:
-            queue = eventlet.Queue(self.nworkers*2)
+            queue = eventlet.Queue(self.nworkers*10)
 
             # spawn workers to rebuild
             for i in range(self.nworkers):
@@ -60,12 +60,14 @@ class Rebuilder(object):
         passes = 0
         errors = 0
         total_items_processed = 0
+        waiting_time = 0
         rebuilder_time = 0
         info = self._init_info(**kwargs)
         for worker in workers:
             passes += worker.passes
             errors += worker.errors
             total_items_processed += worker.total_items_processed
+            waiting_time += worker.waiting_time
             rebuilder_time += worker.rebuilder_time
             info = self._compute_info(worker, info, **kwargs)
 
@@ -73,8 +75,9 @@ class Rebuilder(object):
         elapsed = (end_time - start_time) or 0.000001
         self.logger.info(
             self._get_report(
-                start_time, passes, errors, total_items_processed,
-                rebuilder_time, end_time, elapsed, info, **kwargs))
+                start_time, end_time, passes, errors,
+                waiting_time, rebuilder_time, elapsed,
+                total_items_processed, info, **kwargs))
 
     def _create_worker(self, **kwargs):
         raise NotImplementedError()
@@ -92,8 +95,9 @@ class Rebuilder(object):
     def _compute_info(self, worker, info, **kwargs):
         raise NotImplementedError()
 
-    def _get_report(self, start_time, passes, errors, total_items_processed,
-                    rebuilder_time, end_time, elapsed, info, **kwargs):
+    def _get_report(self, start_time, end_time, passes, errors,
+                    waiting_time, rebuilder_time, total_time,
+                    total_items_processed, info, **kwargs):
         raise NotImplementedError()
 
 
@@ -111,6 +115,7 @@ class RebuilderWorker(object):
         self.last_reported = 0
         self.items_run_time = 0
         self.total_items_processed = 0
+        self.waiting_time = 0
         self.rebuilder_time = 0
         self.report_interval = int_value(
             conf.get('report_interval'), 3600)
@@ -122,25 +127,26 @@ class RebuilderWorker(object):
 
         while True:
             item = queue.get()
-            loop_time = time.time()
-
+            begin_time = time.time()
             self._rebuild_one(item, **kwargs)
+            end_time = time.time()
+
+            self.rebuilder_time += (end_time - begin_time)
+            total_time = end_time - start_time
+            self.waiting_time = total_time - self.rebuilder_time
+            self.total_items_processed += 1
+            queue.task_done()
+
+            if end_time - self.last_reported >= self.report_interval:
+                self.logger.info(
+                    self._get_report(num, start_time, end_time, total_time,
+                                     report_time, **kwargs))
+                report_time = end_time
+                self.last_reported = end_time
+                self.passes = 0
 
             self.items_run_time = ratelimit(self.items_run_time,
                                             self.max_items_per_second)
-            self.total_items_processed += 1
-
-            now = time.time()
-            if now - self.last_reported >= self.report_interval:
-                self.logger.info(
-                    self._get_report(num, start_time, report_time, now,
-                                     **kwargs))
-                report_time = now
-                self.last_reported = now
-                self.passes = 0
-
-            self.rebuilder_time += (now - loop_time)
-            queue.task_done()
 
     def _rebuild_one(self, item, **kwargs):
         """

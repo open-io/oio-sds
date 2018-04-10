@@ -99,6 +99,7 @@ def fake_http_connect(*status_iter, **kwargs):
 
         def getresponse(self):
             self.status = self._status.get_response_status()
+            self.reason = self.status
             return self
 
         def getheaders(self):
