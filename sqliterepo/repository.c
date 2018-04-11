@@ -1146,9 +1146,6 @@ static GError *
 _base_lazy_recover(sqlx_repository_t *repo, const struct sqlx_name_s *n,
 		enum election_step_e status)
 {
-	if (!sqliterepo_election_lazy_recover)
-		return NULL;
-
 	GError *err = NULL;
 	if (!(err = sqlx_repository_has_base2(repo, n, NULL)))
 		return NULL;
@@ -1200,8 +1197,9 @@ sqlx_repository_use_base(sqlx_repository_t *repo, const struct sqlx_name_s *n,
 
 		/* Interleave a DB creation (out of the lock) if explicitely
 		 * allowed by both the request type AND the application */
-		if (allow_autocreate)
+		if (allow_autocreate && sqliterepo_election_lazy_recover) {
 			err = _base_lazy_recover(repo, n, status);
+		}
 
 		if (!err)
 			err = election_start(repo->election_manager, n);
