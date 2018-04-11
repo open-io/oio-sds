@@ -1334,6 +1334,15 @@ Used by `gcc`
  * cmake directive: *OIO_SQLITEREPO_REPO_FD_MAX_ACTIVE*
  * range: 0 -> 4096
 
+### sqliterepo.repo.getvers_attempts
+
+> Sets how many versions exchanges are allowed during the journey in the election FSM.
+
+ * default: **5**
+ * type: guint
+ * cmake directive: *OIO_SQLITEREPO_REPO_GETVERS_ATTEMPTS*
+ * range: 1 -> 64
+
 ### sqliterepo.repo.getvers_delay
 
 > .
@@ -1342,15 +1351,6 @@ Used by `gcc`
  * type: gint64
  * cmake directive: *OIO_SQLITEREPO_REPO_GETVERS_DELAY*
  * range: 10 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_MINUTE
-
-### sqliterepo.repo.getvers_max_retries
-
-> Sets how many versions exchanges are allowed during the journey in the election FSM.
-
- * default: **2**
- * type: guint
- * cmake directive: *OIO_SQLITEREPO_REPO_GETVERS_MAX_RETRIES*
- * range: 1 -> 64
 
 ### sqliterepo.repo.hard_max
 

@@ -2379,8 +2379,8 @@ member_action_to_CHECKING_MASTER(struct election_member_s *m)
 	EXTRA_ASSERT(!member_has_action(m));
 	EXTRA_ASSERT(!member_has_getvers(m));
 
-	if (m->step != STEP_CHECKING_MASTER)
-		m->attempts_GETVERS = sqliterepo_getvers_max_retries;
+	if (m->step == STEP_ASKING)
+		m->attempts_GETVERS = sqliterepo_getvers_attempts;
 
 	if (m->pending_GETVERS > 0)
 		member_warn("lost:GETVERS", m);
@@ -2412,7 +2412,7 @@ member_action_to_CHECKING_SLAVES(struct election_member_s *m)
 	EXTRA_ASSERT(m->peers != NULL);
 
 	if (m->step != STEP_CHECKING_SLAVES)
-		m->attempts_GETVERS = sqliterepo_getvers_max_retries;
+		m->attempts_GETVERS = sqliterepo_getvers_attempts;
 
 	if (m->pending_GETVERS > 0)
 		member_warn("lost:GETVERS", m);
@@ -3379,10 +3379,15 @@ _member_react_DELAYED_CHECKING_MASTER(struct election_member_s *member, enum eve
 			now = oio_ext_monotonic_time();
 			delay = sqliterepo_getvers_delay;
 			if (member->last_status < OLDEST(now, delay)) {
-				if (BOOL(member->requested_peers_decache)) {
-					return member_action_to_REFRESH_CHECKING_MASTER(member);
+				if (member->attempts_GETVERS <= 0) {
+					return member_action_to_LEAVING_FAILING(member);
 				} else {
-					return member_action_to_CHECKING_MASTER(member);
+					member->attempts_GETVERS --;
+					if (BOOL(member->requested_peers_decache)) {
+						return member_action_to_REFRESH_CHECKING_MASTER(member);
+					} else {
+						return member_action_to_CHECKING_MASTER(member);
+					}
 				}
 			}
 			return;
@@ -3474,10 +3479,15 @@ _member_react_DELAYED_CHECKING_SLAVES(struct election_member_s *member, enum eve
 			now = oio_ext_monotonic_time();
 			delay = sqliterepo_getvers_delay;
 			if (member->last_status < OLDEST(now, delay)) {
-				if (BOOL(member->requested_peers_decache)) {
-					return member_action_to_REFRESH_CHECKING_SLAVES(member);
+				if (member->attempts_GETVERS <= 0) {
+					return member_action_to_LEAVING_FAILING(member);
 				} else {
-					return member_action_to_CHECKING_SLAVES(member);
+					member->attempts_GETVERS --;
+					if (BOOL(member->requested_peers_decache)) {
+						return member_action_to_REFRESH_CHECKING_SLAVES(member);
+					} else {
+						return member_action_to_CHECKING_SLAVES(member);
+					}
 				}
 			}
 			return;
