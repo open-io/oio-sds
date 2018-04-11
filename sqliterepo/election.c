@@ -1402,6 +1402,12 @@ deferred_completion_ASKING(struct exec_later_ASKING_context_s *d)
 	} else {
 		if (!d->master[0] || !metautils_url_valid_for_connect(d->master)) {
 			transition(d->member, EVT_MASTER_BAD, NULL);
+		} else if (!d->member->peers || !oio_strv_has((const char * const *)d->member->peers, d->master)) {
+			/* The master is an unknown peer. A reload of the peers is necessary */
+			GRID_WARN("unknown master [%s] for [%s.%s]", d->master,
+					d->member->inline_name.base, d->member->inline_name.type);
+			d->member->requested_peers_decache = 1;
+			transition(d->member, EVT_MASTER_BAD, NULL);
 		} else {
 			const char *myurl = member_get_url(d->member);
 			if (strcmp(d->master, myurl) == 0) {
