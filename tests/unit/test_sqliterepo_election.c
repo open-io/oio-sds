@@ -1322,7 +1322,7 @@ static void test_STEP_DELAYED_CHECKING_MASTER(void) {
 	/* Timeout raised without reload */
 	RESET();
 	m->requested_peers_decache = 0;
-	CLOCK += sqliterepo_getvers_backoff + 1;
+	CLOCK += sqliterepo_getvers_delay + 1;
 	transition(m, EVT_NONE, NULL);
 	_member_assert_CHECKING_MASTER(m);
 	g_assert_true(member_has_getvers(m));
@@ -1331,7 +1331,7 @@ static void test_STEP_DELAYED_CHECKING_MASTER(void) {
 	/* Timeout raised with reload */
 	RESET();
 	m->requested_peers_decache = 1;
-	CLOCK += sqliterepo_getvers_backoff + 1;
+	CLOCK += sqliterepo_getvers_delay + 1;
 	transition(m, EVT_NONE, NULL);
 	_member_assert_REFRESH_CHECKING_MASTER(m);
 	_pending(0);
@@ -1501,7 +1501,7 @@ static void test_STEP_DELAYED_CHECKING_SLAVES(void) {
 	/* Timeout raised without reload and no pending interruption */
 	RESET();
 	m->requested_peers_decache = 0;
-	CLOCK += sqliterepo_getvers_backoff + 1;
+	CLOCK += sqliterepo_getvers_delay + 1;
 	transition(m, EVT_NONE, NULL);
 	_member_assert_CHECKING_SLAVES(m);
 	g_assert_true(member_has_getvers(m));
@@ -1510,7 +1510,7 @@ static void test_STEP_DELAYED_CHECKING_SLAVES(void) {
 	/* Timeout raised with reload but no pending signal */
 	RESET();
 	m->requested_peers_decache = 1;
-	CLOCK += sqliterepo_getvers_backoff + 1;
+	CLOCK += sqliterepo_getvers_delay + 1;
 	transition(m, EVT_NONE, NULL);
 	_member_assert_REFRESH_CHECKING_SLAVES(m);
 	_pending(0);

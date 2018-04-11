@@ -1334,13 +1334,13 @@ Used by `gcc`
  * cmake directive: *OIO_SQLITEREPO_REPO_FD_MAX_ACTIVE*
  * range: 0 -> 4096
 
-### sqliterepo.repo.getvers_backoff
+### sqliterepo.repo.getvers_delay
 
 > .
 
- * default: **2 * G_TIME_SPAN_SECOND**
+ * default: **100 * G_TIME_SPAN_MILLISECOND**
  * type: gint64
- * cmake directive: *OIO_SQLITEREPO_REPO_GETVERS_BACKOFF*
+ * cmake directive: *OIO_SQLITEREPO_REPO_GETVERS_DELAY*
  * range: 10 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_MINUTE
 
 ### sqliterepo.repo.getvers_max_retries
