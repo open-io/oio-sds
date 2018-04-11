@@ -516,10 +516,11 @@
 				"def": "100ms", "min": "10ms", "max": "1m",
 				"aliases": ["sqliterepo.repo.getvers_backoff"]},
 
-			{ "type": "uint", "name": "sqliterepo_getvers_max_retries",
-				"key": "sqliterepo.repo.getvers_max_retries",
+			{ "type": "uint", "name": "sqliterepo_getvers_attempts",
+				"key": "sqliterepo.repo.getvers_attempts",
 				"descr": "Sets how many versions exchanges are allowed during the journey in the election FSM.",
-				"def": 2, "min": 1, "max": "64" },
+				"def": 5, "min": 1, "max": "64",
+				"aliases": ["sqliterepo.repo.getvers_max_retries"]},
 
 			{ "type": "uint", "name": "sqliterepo_fd_max_active",
 				"key": "sqliterepo.repo.fd_max_active",
