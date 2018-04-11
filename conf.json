@@ -510,10 +510,11 @@
 				"descr": "Sets how many databases can be kept simultaneously open in the current service.",
 				"def": "0", "min": "0", "max": "128ki" },
 
-			{ "type": "monotonic", "name": "sqliterepo_getvers_backoff",
-				"key": "sqliterepo.repo.getvers_backoff",
+			{ "type": "monotonic", "name": "sqliterepo_getvers_delay",
+				"key": "sqliterepo.repo.getvers_delay",
 				"descr": ".",
-				"def": "2s", "min": "10ms", "max": "1m" },
+				"def": "100ms", "min": "10ms", "max": "1m",
+				"aliases": ["sqliterepo.repo.getvers_backoff"]},
 
 			{ "type": "uint", "name": "sqliterepo_getvers_max_retries",
 				"key": "sqliterepo.repo.getvers_max_retries",

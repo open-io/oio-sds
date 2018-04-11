@@ -2035,13 +2035,6 @@ _result_PIPEFROM (GError *e, struct election_manager_s *manager,
 /* -------------------------------------------------------------------------- */
 
 static gint64
-_getvers_delay(struct election_member_s *m)
-{
-	/* Wait at most `sqliterepo_getvers_backoff` before the last try. */
-	return sqliterepo_getvers_backoff / (1 + m->attempts_GETVERS);
-}
-
-static gint64
 _get_next_ping(const gint64 base, const gint64 jitter)
 {
 	EXTRA_ASSERT(base >= 0);
@@ -3378,7 +3371,7 @@ _member_react_DELAYED_CHECKING_MASTER(struct election_member_s *member, enum eve
 	switch (evt) {
 		case EVT_NONE:
 			now = oio_ext_monotonic_time();
-			delay = _getvers_delay(member);
+			delay = sqliterepo_getvers_delay;
 			if (member->last_status < OLDEST(now, delay)) {
 				if (BOOL(member->requested_peers_decache)) {
 					return member_action_to_REFRESH_CHECKING_MASTER(member);
@@ -3473,7 +3466,7 @@ _member_react_DELAYED_CHECKING_SLAVES(struct election_member_s *member, enum eve
 	switch (evt) {
 		case EVT_NONE:
 			now = oio_ext_monotonic_time();
-			delay = _getvers_delay(member);
+			delay = sqliterepo_getvers_delay;
 			if (member->last_status < OLDEST(now, delay)) {
 				if (BOOL(member->requested_peers_decache)) {
 					return member_action_to_REFRESH_CHECKING_SLAVES(member);
