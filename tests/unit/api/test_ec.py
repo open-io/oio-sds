@@ -17,16 +17,17 @@ import unittest
 import random
 from io import BytesIO
 from collections import defaultdict
-from hashlib import md5
+import hashlib
 from copy import deepcopy
 from eventlet import Timeout
+from mock import patch
 from oio.common.storage_method import STORAGE_METHODS
 from oio.api.ec import EcMetachunkWriter, ECChunkDownloadHandler, \
     ECRebuildHandler
 from oio.common import exceptions as exc, green
 from oio.common.constants import chunk_headers
 from tests.unit.api import empty_stream, decode_chunked_body, \
-    FakeResponse, CHUNK_SIZE, EMPTY_CHECKSUM
+    FakeResponse, CHUNK_SIZE, EMPTY_MD5, EMPTY_SHA256
 from tests.unit import set_http_connect, set_http_requests
 from oio.common.constants import OIO_VERSION
 
@@ -66,7 +67,7 @@ class TestEC(unittest.TestCase):
         return deepcopy(self._meta_chunk)
 
     def checksum(self, d=''):
-        return md5(d)
+        return hashlib.md5(d)
 
     def test_write_simple(self):
         checksum = self.checksum()
@@ -80,7 +81,7 @@ class TestEC(unittest.TestCase):
             bytes_transferred, checksum, chunks = handler.stream(source, size)
         self.assertEqual(len(chunks), nb)
         self.assertEqual(bytes_transferred, 0)
-        self.assertEqual(checksum, EMPTY_CHECKSUM)
+        self.assertEqual(checksum, EMPTY_MD5)
 
     def test_write_exception(self):
         checksum = self.checksum()
@@ -113,7 +114,7 @@ class TestEC(unittest.TestCase):
             self.assertEqual(chunks[i].get('error'), 'resp: HTTP 500')
 
         self.assertEqual(bytes_transferred, 0)
-        self.assertEqual(checksum, EMPTY_CHECKSUM)
+        self.assertEqual(checksum, EMPTY_MD5)
 
     def test_write_quorum_error(self):
         checksum = self.checksum()
@@ -158,7 +159,7 @@ class TestEC(unittest.TestCase):
             self.assertEqual(chunks[nb - 1].get('error'), test['msg'])
 
             self.assertEqual(bytes_transferred, 0)
-            self.assertEqual(checksum, EMPTY_CHECKSUM)
+            self.assertEqual(checksum, EMPTY_MD5)
 
     def test_write_response_error(self):
         test_cases = [
@@ -187,7 +188,7 @@ class TestEC(unittest.TestCase):
             self.assertEqual(chunks[nb - 1].get('error'), test['msg'])
 
             self.assertEqual(bytes_transferred, 0)
-            self.assertEqual(checksum, EMPTY_CHECKSUM)
+            self.assertEqual(checksum, EMPTY_MD5)
 
     def test_write_error_source(self):
         class TestReader(object):
@@ -292,6 +293,54 @@ class TestEC(unittest.TestCase):
         self.assertEqual(len(test_data), len(final_data))
         self.assertEqual(
             test_data_checksum, self.checksum(final_data).hexdigest())
+
+    def _test_write_checksum_algo(self, expected_checksum, **kwargs):
+        global_checksum = self.checksum()
+        source = empty_stream()
+        size = CHUNK_SIZE * self.storage_method.ec_nb_data
+        nb = self.storage_method.ec_nb_data + self.storage_method.ec_nb_parity
+        resps = [201] * nb
+        with set_http_connect(*resps):
+            handler = EcMetachunkWriter(
+                self.sysmeta, self.meta_chunk(),
+                global_checksum, self.storage_method,
+                **kwargs)
+            bytes_transferred, checksum, chunks = handler.stream(source, size)
+        self.assertEqual(nb, len(chunks))
+        self.assertEqual(0, bytes_transferred)
+        self.assertEqual(expected_checksum, checksum)
+
+    def test_write_default_checksum_algo(self):
+        with patch('hashlib.new', wraps=hashlib.new) as algo_new:
+            self._test_write_checksum_algo(EMPTY_MD5)
+            algo_new.assert_called_with('md5')
+            # Should be called once for the metachunk
+            # and once for each chunk.
+            self.assertEqual(
+                (self.storage_method.ec_nb_data +
+                 self.storage_method.ec_nb_parity +
+                 1),
+                len(algo_new.call_args_list))
+
+    def test_write_custom_checksum_algo(self):
+        with patch('hashlib.new', wraps=hashlib.new) as algo_new:
+            self._test_write_checksum_algo(
+                EMPTY_SHA256, chunk_checksum_algo='sha256')
+            algo_new.assert_called_with('sha256')
+            # Should be called once for the metachunk
+            # and once for each chunk.
+            self.assertEqual(
+                (self.storage_method.ec_nb_data +
+                 self.storage_method.ec_nb_parity +
+                 1),
+                len(algo_new.call_args_list))
+
+    def test_write_no_checksum_algo(self):
+        with patch('hashlib.new', wraps=hashlib.new) as algo_new:
+            self._test_write_checksum_algo(
+                EMPTY_MD5, chunk_checksum_algo=None)
+            # Should be called only once for the metachunk
+            algo_new.assert_called_once_with('md5')
 
     def _make_ec_chunks(self, data):
         segment_size = self.storage_method.ec_segment_size

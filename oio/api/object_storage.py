@@ -16,8 +16,7 @@
 
 from __future__ import absolute_import
 from io import BytesIO
-from functools import wraps
-import logging
+from functools import wraps, partial
 import os
 import random
 import warnings
@@ -37,8 +36,6 @@ from oio.common.http import http_header_from_ranges
 from oio.common.storage_method import STORAGE_METHODS
 from oio.common.constants import OIO_VERSION
 from urllib import quote_plus, unquote_plus
-
-logger = logging.getLogger(__name__)
 
 
 def obj_range_to_meta_chunk_range(obj_start, obj_end, meta_sizes):
@@ -145,6 +142,20 @@ def handle_object_not_found(fnc):
             raise exc.NoSuchObject(e)
 
     return _wrapped
+
+
+# TODO(FVE): decorate more methods
+def patch_kwargs(fnc):
+    """
+    Patch keyword arguments with the ones passed to the class' constructor.
+    """
+    @wraps(fnc)
+    def _patch_kwargs(self, *args, **kwargs):
+        for argk, argv in self._global_kwargs.items():
+            if argk not in kwargs:
+                kwargs[argk] = argv
+        return fnc(self, *args, **kwargs)
+    return _patch_kwargs
 
 
 def wrand_choice_index(scores):
@@ -303,6 +314,7 @@ class ObjectStorageApi(object):
         - `write_timeout`: `float`
     """
     TIMEOUT_KEYS = ('connection_timeout', 'read_timeout', 'write_timeout')
+    EXTRA_KEYWORDS = ('chunk_checksum_algo')
 
     def __init__(self, namespace, logger=None, **kwargs):
         """
@@ -321,13 +333,18 @@ class ObjectStorageApi(object):
         :keyword pool_manager: a pooled connection manager that will be used
             for all HTTP based APIs (except rawx)
         :type pool_manager: `urllib3.PoolManager`
+        :keyword chunk_checksum_algo: algorithm to use for chunk checksums.
+            Only 'md5' and `None` are supported at the moment.
         """
         self.namespace = namespace
         conf = {"namespace": self.namespace}
         self.logger = logger or get_logger(conf)
-        self.timeouts = {tok: float_value(tov, None)
-                         for tok, tov in kwargs.items()
-                         if tok in self.__class__.TIMEOUT_KEYS}
+        self._global_kwargs = {tok: float_value(tov, None)
+                               for tok, tov in kwargs.items()
+                               if tok in self.__class__.TIMEOUT_KEYS}
+        for key in self.__class__.EXTRA_KEYWORDS:
+            if key in kwargs:
+                self._global_kwargs[key] = kwargs[key]
 
         from oio.account.client import AccountClient
         from oio.container.client import ContainerClient
@@ -341,15 +358,6 @@ class ObjectStorageApi(object):
         self.account = AccountClient(conf, logger=self.logger, **acct_kwargs)
         self._blob_client = None
         self._proxy_client = None
-
-    def _patch_timeouts(self, kwargs):
-        """
-        Insert timeout settings from this class's constructor into `kwargs`,
-        if they are not already there.
-        """
-        for tok, tov in self.timeouts.items():
-            if tok not in kwargs:
-                kwargs[tok] = tov
 
     @property
     def blob_client(self):
@@ -640,6 +648,7 @@ class ObjectStorageApi(object):
                 account, container, metadata, clear, **kwargs)
 
     @handle_container_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def object_create(self, account, container, file_or_path=None, data=None,
@@ -952,6 +961,7 @@ class ObjectStorageApi(object):
             if resp != 201:
                 raise exc.ChunkException(resp.status)
 
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def object_fetch(self, account, container, obj, version=None, ranges=None,
@@ -983,7 +993,6 @@ class ObjectStorageApi(object):
         chunks = _sort_chunks(raw_chunks, storage_method.ec)
         meta['container_id'] = name2cid(account, container).upper()
         meta['ns'] = self.namespace
-        self._patch_timeouts(kwargs)
         if storage_method.ec:
             stream = fetch_stream_ec(chunks, ranges, storage_method, **kwargs)
         elif storage_method.backblaze:
@@ -1095,7 +1104,6 @@ class ObjectStorageApi(object):
     def _object_create(self, account, container, obj_name, source,
                        sysmeta, properties=None, policy=None,
                        key_file=None, **kwargs):
-        self._patch_timeouts(kwargs)
         obj_meta, chunk_prep = self._content_preparer(
             account, container, obj_name,
             policy=policy, **kwargs)
@@ -1114,15 +1122,14 @@ class ObjectStorageApi(object):
 
         storage_method = STORAGE_METHODS.load(obj_meta['chunk_method'])
         if storage_method.ec:
-            handler = ECWriteHandler(
-                source, obj_meta, chunk_prep, storage_method, **kwargs)
+            write_handler_cls = ECWriteHandler
         elif storage_method.backblaze:
             backblaze_info = self._b2_credentials(storage_method, key_file)
-            handler = BackblazeWriteHandler(
-                source, obj_meta, chunk_prep, storage_method,
-                backblaze_info, **kwargs)
+            write_handler_cls = partial(BackblazeWriteHandler,
+                                        backblaze_info=backblaze_info)
         else:
-            handler = ReplicatedWriteHandler(
+            write_handler_cls = ReplicatedWriteHandler
+        handler = write_handler_cls(
                 source, obj_meta, chunk_prep, storage_method, **kwargs)
 
         final_chunks, bytes_transferred, content_checksum = handler.stream()
