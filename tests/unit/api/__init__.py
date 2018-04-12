@@ -20,7 +20,9 @@ from oio.api.object_storage import ObjectStorageApi
 from oio.directory.client import DirectoryClient
 
 CHUNK_SIZE = 1048576
-EMPTY_CHECKSUM = 'd41d8cd98f00b204e9800998ecf8427e'
+EMPTY_MD5 = 'd41d8cd98f00b204e9800998ecf8427e'
+EMPTY_SHA256 = \
+    'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
 
 
 class FakeAPI(object):

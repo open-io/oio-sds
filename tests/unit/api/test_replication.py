@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,14 +16,16 @@
 import unittest
 from collections import defaultdict
 from io import BytesIO
-from hashlib import md5
+import hashlib
 from eventlet import Timeout
+from mock import patch
+
 from oio.common import exceptions as exc
 from oio.common import green
 from oio.api.replication import ReplicatedMetachunkWriter
 from oio.common.storage_method import STORAGE_METHODS
-from tests.unit.api import CHUNK_SIZE, EMPTY_CHECKSUM, empty_stream, \
-    decode_chunked_body, FakeResponse
+from tests.unit.api import CHUNK_SIZE, EMPTY_MD5, EMPTY_SHA256, \
+    empty_stream, decode_chunked_body, FakeResponse
 from oio.api import io
 from tests.unit import set_http_connect, set_http_requests
 from oio.common.constants import OIO_VERSION
@@ -57,7 +59,7 @@ class TestReplication(unittest.TestCase):
         return self._meta_chunk
 
     def checksum(self, d=''):
-        return md5(d)
+        return hashlib.md5(d)
 
     def test_write_simple(self):
         checksum = self.checksum()
@@ -72,7 +74,7 @@ class TestReplication(unittest.TestCase):
                 source, size)
             self.assertEqual(len(chunks), len(meta_chunk))
             self.assertEqual(bytes_transferred, 0)
-            self.assertEqual(checksum, EMPTY_CHECKSUM)
+            self.assertEqual(checksum, EMPTY_MD5)
 
     def test_write_exception(self):
         checksum = self.checksum()
@@ -109,7 +111,7 @@ class TestReplication(unittest.TestCase):
             #     self.assertEqual(chunks[i].get('error'), 'HTTP 500')
 
             self.assertEqual(bytes_transferred, 0)
-            self.assertEqual(checksum, EMPTY_CHECKSUM)
+            self.assertEqual(checksum, EMPTY_MD5)
 
     def test_write_quorum_error(self):
         checksum = self.checksum()
@@ -147,7 +149,7 @@ class TestReplication(unittest.TestCase):
         #     chunks[len(meta_chunk) - 1].get('error'), '1.0 second')
 
         self.assertEqual(bytes_transferred, 0)
-        self.assertEqual(checksum, EMPTY_CHECKSUM)
+        self.assertEqual(checksum, EMPTY_MD5)
 
     def test_write_partial_exception(self):
         checksum = self.checksum()
@@ -169,7 +171,7 @@ class TestReplication(unittest.TestCase):
         # self.assertEqual(chunks[len(meta_chunk) - 1].get('error'), 'failure')
 
         self.assertEqual(bytes_transferred, 0)
-        self.assertEqual(checksum, EMPTY_CHECKSUM)
+        self.assertEqual(checksum, EMPTY_MD5)
 
     def test_write_error_source(self):
         class TestReader(object):
@@ -257,6 +259,43 @@ class TestReplication(unittest.TestCase):
         for body in bodies:
             self.assertEqual(len(test_data), len(body))
             self.assertEqual(self.checksum(body).hexdigest(), final_checksum)
+
+    def _test_write_checksum_algo(self, expected_checksum, **kwargs):
+        global_checksum = self.checksum()
+        source = empty_stream()
+        meta_chunk = self.meta_chunk()
+        size = CHUNK_SIZE
+        resps = [201] * len(meta_chunk)
+        with set_http_connect(*resps, headers=kwargs.get('headers')):
+                handler = ReplicatedMetachunkWriter(
+                    self.sysmeta, self.meta_chunk(), global_checksum,
+                    self.storage_method, **kwargs)
+                bytes_transferred, checksum, chunks = \
+                    handler.stream(source, size)
+        self.assertEqual(len(meta_chunk), len(chunks))
+        self.assertEqual(0, bytes_transferred)
+        self.assertEqual(expected_checksum, checksum)
+
+    def test_write_default_checksum_algo(self):
+        with patch('hashlib.new', wraps=hashlib.new) as algo_new:
+            self._test_write_checksum_algo(EMPTY_MD5)
+            # Called only once for the metachunk
+            algo_new.assert_called_once_with('md5')
+
+    def test_write_custom_checksum_algo(self):
+        with patch('hashlib.new', wraps=hashlib.new) as algo_new:
+            self._test_write_checksum_algo(
+                EMPTY_SHA256, chunk_checksum_algo='sha256')
+            # Called only once for the metachunk
+            algo_new.assert_called_once_with('sha256')
+
+    def test_write_no_checksum_algo(self):
+        from oio.common.constants import CHUNK_HEADERS
+        headers = {CHUNK_HEADERS['chunk_hash']: EMPTY_MD5}
+        with patch('hashlib.new', wraps=hashlib.new) as algo_new:
+            self._test_write_checksum_algo(
+                EMPTY_MD5, chunk_checksum_algo=None, headers=headers)
+            algo_new.assert_not_called()
 
     def test_read(self):
         test_data = ('1234' * 1024)[:-10]

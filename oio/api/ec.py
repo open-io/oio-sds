@@ -523,12 +523,16 @@ class EcChunkWriter(object):
     """
     Writes an EC chunk
     """
-    def __init__(self, chunk, conn, write_timeout=None, **_kwargs):
+    def __init__(self, chunk, conn, write_timeout=None,
+                 chunk_checksum_algo='md5', **_kwargs):
         self._chunk = chunk
         self._conn = conn
         self.failed = False
         self.bytes_transferred = 0
-        self.checksum = hashlib.md5()
+        if chunk_checksum_algo:
+            self.checksum = hashlib.new(chunk_checksum_algo)
+        else:
+            self.checksum = None
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         # we use eventlet Queue to pass data to the send coroutine
         self.queue = Queue(io.PUT_QUEUE_DEPTH)
@@ -543,7 +547,7 @@ class EcChunkWriter(object):
 
     @classmethod
     def connect(cls, chunk, sysmeta, reqid=None,
-                connection_timeout=None, write_timeout=None, **_kwargs):
+                connection_timeout=None, write_timeout=None, **kwargs):
         raw_url = chunk["url"]
         parsed = urlparse(raw_url)
         chunk_path = parsed.path.split('/')[-1]
@@ -564,7 +568,7 @@ class EcChunkWriter(object):
             conn = io.http_connect(
                 parsed.netloc, 'PUT', parsed.path, hdrs)
             conn.chunk = chunk
-        return cls(chunk, conn, write_timeout=write_timeout)
+        return cls(chunk, conn, write_timeout=write_timeout, **kwargs)
 
     def start(self, pool):
         """Spawn the send coroutine"""
@@ -616,11 +620,12 @@ class EcChunkWriter(object):
             '%s: %s\r\n' % (chunk_headers['metachunk_size'],
                             metachunk_size),
             '%s: %s\r\n' % (chunk_headers['metachunk_hash'],
-                            metachunk_hash),
-            '%s: %s\r\n' % (chunk_headers['chunk_hash'],
-                            self.checksum.hexdigest()),
-            '\r\n'
+                            metachunk_hash)
         ]
+        if self.checksum:
+            parts.append('%s: %s\r\n' % (chunk_headers['chunk_hash'],
+                                         self.checksum.hexdigest()))
+        parts.append('\r\n')
         to_send = "".join(parts)
         self.conn.send(to_send)
 
@@ -636,12 +641,15 @@ class EcChunkWriter(object):
 class EcMetachunkWriter(io.MetachunkWriter):
     def __init__(self, sysmeta, meta_chunk, global_checksum, storage_method,
                  reqid=None, connection_timeout=None, write_timeout=None,
-                 read_timeout=None):
-        super(EcMetachunkWriter, self).__init__(storage_method=storage_method)
+                 read_timeout=None, **kwargs):
+        super(EcMetachunkWriter, self).__init__(
+            storage_method=storage_method, **kwargs)
         self.sysmeta = sysmeta
         self.meta_chunk = meta_chunk
         self.global_checksum = global_checksum
-        self.checksum = hashlib.md5()
+        # Unlike plain replication, we cannot use the checksum returned
+        # by rawx services, whe have to compute the checksum client-side.
+        self.checksum = hashlib.new(self.chunk_checksum_algo or 'md5')
         self.reqid = reqid
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
@@ -691,7 +699,8 @@ class EcMetachunkWriter(io.MetachunkWriter):
             for writer in current_writers:
                 fragment = fragments[chunk_index[writer]]
                 if not writer.failed:
-                    writer.checksum.update(fragment)
+                    if writer.checksum:
+                        writer.checksum.update(fragment)
                     writer.send(fragment)
                 else:
                     current_writers.remove(writer)
@@ -777,7 +786,8 @@ class EcMetachunkWriter(io.MetachunkWriter):
             writer = EcChunkWriter.connect(
                 chunk, self.sysmeta, self.reqid,
                 connection_timeout=self.connection_timeout,
-                write_timeout=self.write_timeout)
+                write_timeout=self.write_timeout,
+                chunk_checksum_algo=self.chunk_checksum_algo)
             return writer, chunk
         except (Exception, Timeout) as exc:
             msg = str(exc)
@@ -803,7 +813,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
             if resp:
                 if resp.status == 201:
                     checksum = resp.getheader(chunk_headers['chunk_hash'])
-                    if checksum and \
+                    if checksum and writer.checksum and \
                             checksum.lower() != writer.checksum.hexdigest():
                         writer.chunk['error'] = \
                             "checksum mismatch: %s (local), %s (rawx)" % \
@@ -886,7 +896,8 @@ class ECWriteHandler(io.WriteHandler):
                 reqid=self.headers.get('X-oio-req-id'),
                 connection_timeout=self.connection_timeout,
                 write_timeout=self.write_timeout,
-                read_timeout=self.read_timeout)
+                read_timeout=self.read_timeout,
+                chunk_checksum_algo=self.chunk_checksum_algo)
             bytes_transferred, checksum, chunks = handler.stream(self.source,
                                                                  max_size)
 
