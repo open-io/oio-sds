@@ -1065,9 +1065,6 @@ class ObjectStorageApi(object):
         obj_meta['oio_version'] = (obj_meta.get('oio_version')
                                    or OIO_VERSION)
 
-        # XXX content_id is necessary to update an existing object
-        kwargs['content_id'] = kwargs.get('content_id', obj_meta['id'])
-
         storage_method = STORAGE_METHODS.load(obj_meta['chunk_method'])
         if storage_method.ec:
             write_handler_cls = ECWriteHandler
@@ -1089,6 +1086,9 @@ class ObjectStorageApi(object):
             account, container, obj_name, source, sysmeta,
             policy=policy, key_file=key_file,
             **kwargs)
+
+        # XXX content_id is necessary to update an existing object
+        kwargs['content_id'] = obj_meta['id']
 
         try:
             ul_chunks, ul_bytes, obj_checksum = self._object_upload(

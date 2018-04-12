@@ -24,7 +24,7 @@ from oio.common.exceptions import ClientException, Conflict
 from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
 from oio.content.factory import ContentFactory
-from tests.utils import BaseTestCase
+from tests.utils import BaseTestCase, random_id
 
 
 def random_data(data_size):
@@ -41,14 +41,21 @@ class TestFilters(BaseTestCase):
         self.gridconf = {'namespace': self.namespace}
         self.content_factory = ContentFactory(self.gridconf)
         self.container_name = 'TestFilter%f' % time.time()
-        self.container_client = ContainerClient(self.gridconf, admin_mode=True)
+        self.container_client = ContainerClient(self.gridconf)
         self.container_client.container_create(
-            account=self.account, reference=self.container_name)
+            account=self.account, reference=self.container_name,
+            admin_mode=True)
         self.container_id = cid_from_name(self.account,
                                           self.container_name).upper()
         self.stgpol = "SINGLE"
 
-    def _new_content(self, data, path, admin_mode=True):
+    def _prepare_content(self, path, content_id, admin_mode):
+        self.container_client.content_prepare(
+            account=self.account, reference=self.container_name, path=path,
+            content_id=content_id, size=1, stgpol=self.stgpol, autocreate=True,
+            admin_mode=admin_mode)
+
+    def _new_content(self, data, path, admin_mode):
         old_content = self.content_factory.new(self.container_id, path,
                                                len(data), self.stgpol,
                                                admin_mode=admin_mode)
@@ -62,11 +69,12 @@ class TestFilters(BaseTestCase):
         data = random_data(10)
         path = 'test_slave'
         try:
-            self._new_content(data, path)
+            self._new_content(data, path, False)
         except ClientException as exc:
-            print str(exc)
-            self.assertTrue(str(exc).find('NS slave!') != -1)
-        content = self._new_content(data, path)
+            self.assertIn('NS slave!', str(exc))
+        else:
+            self.fail("New content: no exception")
+        content = self._new_content(data, path, True)
         content.delete(admin_mode=True)
 
     def test_worm_and_admin(self):
@@ -74,23 +82,37 @@ class TestFilters(BaseTestCase):
             self.skipTest("must be in worm mode")
         data = random_data(10)
         path = 'test_worm'
-        content = self._new_content(data, path)
+        content = self._new_content(data, path, True)
+
+        # Prepare without admin mode
+        self.assertRaises(Conflict, self._prepare_content, path, None, False)
+        self.assertRaises(Conflict, self._prepare_content, path,
+                          content.content_id, False)
+        self.assertRaises(Conflict, self._prepare_content, 'test_worm_prepare',
+                          content.content_id, False)
+        self.assertRaises(Conflict, self._prepare_content, path, random_id(32),
+                          False)
 
         # Overwrite without admin mode
         data2 = random_data(11)
-        try:
-            content = self._new_content(data2, path, admin_mode=False)
-        except ClientException as exc:
-            self.assertIsInstance(exc, Conflict)
+        self.assertRaises(Conflict, self._new_content, data2, path, False)
+
+        # Prepare with admin mode
+        self._prepare_content(path, None, True)
+        self._prepare_content(path, content.content_id, True)
+        self._prepare_content('test_worm_prepare', content.content_id, True)
+        self._prepare_content(path, random_id(32), True)
 
         # Overwrite with admin mode
-        content = self._new_content(data2, path)
+        content = self._new_content(data2, path, True)
 
         # Delete without admin mode
         try:
             content.delete()
         except ClientException as exc:
-            self.assertTrue(str(exc).lower().find('worm') != -1)
+            self.assertIn('worm', str(exc))
+        else:
+            self.fail("Delete without admin mode: no exception")
         downloaded_data = ''.join(content.fetch())
         self.assertEqual(downloaded_data, data2)
 

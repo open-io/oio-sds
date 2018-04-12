@@ -1386,7 +1386,28 @@ _check_alias_doesnt_exist(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 	}
 	else if (!no_bean)
 		err = NEWERROR(CODE_CONTENT_EXISTS, "Alias already present");
+	return err;
+}
 
+static GError*
+_check_alias_doesnt_exist2(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
+{
+	GError *err = NULL;
+	if (oio_url_has(url, OIOURL_PATH) && oio_url_has(url, OIOURL_CONTENTID)) {
+		struct oio_url_s *u = oio_url_dup(url);
+		oio_url_unset(u, OIOURL_CONTENTID);
+		err = _check_alias_doesnt_exist(sq3, u);
+		if (err) {
+			oio_url_clean(u);
+			return err;
+		}
+		oio_url_unset(u, OIOURL_PATH);
+		oio_url_set(u, OIOURL_CONTENTID, oio_url_get(url, OIOURL_CONTENTID));
+		err = _check_alias_doesnt_exist(sq3, u);
+		oio_url_clean(u);
+	} else {
+		err = _check_alias_doesnt_exist(sq3, url);
+	}
 	return err;
 }
 
@@ -1559,7 +1580,7 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 		if (!err) {
 			/* If the versioning is not supported, or the namespace is
 			 * is WORM mode, we check the content is not present */
-			err = _check_alias_doesnt_exist(sq3, url);
+			err = _check_alias_doesnt_exist2(sq3, url);
 			if (append) {
 				if (err) {
 					g_clear_error(&err);
