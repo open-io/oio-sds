@@ -622,13 +622,15 @@ sqlx_admin_reload(struct sqlx_sqlite3_s *sq3)
 }
 
 static GError*
-__open_not_cached(struct open_args_s *args, struct sqlx_sqlite3_s **result)
+__open_mkdir(struct open_args_s *args, sqlite3 **db)
 {
 	GError *error = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
 	sqlite3 *handle = NULL;
 	guint attempts = 2;
 	gint rc, flags = 0;
+
+	EXTRA_ASSERT(db != NULL);
+	*db = NULL;
 
 retry:
 	flags |= SQLITE_OPEN_NOMUTEX;
@@ -668,13 +670,24 @@ retry:
 			return error;
 	}
 
+	*db = handle;
+	return NULL;
+}
+
+static GError*
+__open_not_cached(struct open_args_s *args, struct sqlx_sqlite3_s **result)
+{
+	sqlite3 *handle = NULL;
+	GError *error = __open_mkdir(args, &handle);
+	if (error) return error;
+
 	sqlite3_commit_hook(handle, NULL, NULL);
 	sqlite3_rollback_hook(handle, NULL, NULL);
 	sqlite3_update_hook(handle, NULL, NULL);
 
 	sqlite3_busy_timeout(handle, 30000);
 
-	sq3 = SLICE_NEW0(struct sqlx_sqlite3_s);
+	struct sqlx_sqlite3_s *sq3 = SLICE_NEW0(struct sqlx_sqlite3_s);
 	sq3->db = handle;
 	sq3->bd = -1;
 	sq3->repo = args->repo;
@@ -763,19 +776,33 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 	GError *err = NULL;
 	enum election_status_e status = 0;
 
-	gboolean election_configured = election_manager_configured(
-			args->repo->election_manager);
+	const gboolean election_configured =
+		election_manager_configured(args->repo->election_manager);
 
 	if (election_configured && !args->no_refcheck) {
-		gboolean has_peers = FALSE;
-		err = election_has_peers(args->repo->election_manager, &args->name,
-				FALSE, &has_peers);
-		if (err != NULL) {
-			g_prefix_error(&err, "Peers resolution error: ");
+
+		gboolean replicated = FALSE;
+		enum election_step_e step = STEP_NONE;
+		err = election_init(args->repo->election_manager, &args->name, &step, &replicated);
+		if (err)
 			return err;
+
+		if (args->create && sqliterepo_election_lazy_recover) {
+			err = sqlx_repository_has_base2(args->repo, &args->name, NULL);
+			if (err) {
+				if (err->code == CODE_CONTAINER_NOTFOUND) {
+					g_clear_error(&err);
+					sqlite3 *db = NULL;
+					err = __open_mkdir(args, &db);
+					_close_handle(&db);
+				}
+			}
 		}
-		if (has_peers)
-			args->is_replicated = TRUE;
+
+		if (!err && args->is_replicated)
+			err = election_start(args->repo->election_manager, &args->name);
+
+		args->is_replicated = BOOL(replicated);
 	}
 
 	/* Now manage the replication status */
