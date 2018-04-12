@@ -2104,13 +2104,20 @@ m2_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
 	if (chunk_size <= 0)
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid chunk size");
 
-	RANDOM_UID(uid, uid_size);
+	RANDOM_UID(_uid, uid_size);
+	guint8 *uid = (guint8 *) &_uid;
+	const gchar *content_id = oio_url_get(url, OIOURL_CONTENTID);
+	if (content_id) {
+		gsize len = strlen(content_id);
+		uid_size = len/2;
+		oio_str_hex2bin(content_id, uid, uid_size);
+	}
 	struct gen_ctx_s ctx;
 	memset(&ctx, 0, sizeof(ctx));
 
 	ctx.url = url;
 	ctx.pol = pol;
-	ctx.uid = (guint8*) &uid;
+	ctx.uid = uid;
 	ctx.uid_size = uid_size;
 	ctx.size = size;
 	ctx.chunk_size = chunk_size;

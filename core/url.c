@@ -334,6 +334,61 @@ oio_url_set(struct oio_url_s *u, enum oio_url_field_e f, const char *v)
 	return NULL;
 }
 
+void
+oio_url_unset(struct oio_url_s *u, enum oio_url_field_e f)
+{
+	if (!u)
+		return;
+
+	switch (f) {
+		case OIOURL_NS:
+			oio_str_clean(&u->ns);
+			u->hexid[0] = 0;
+			return;
+
+		case OIOURL_ACCOUNT:
+			oio_str_clean(&u->account);
+			u->hexid[0] = 0;
+			return;
+
+		case OIOURL_USER:
+			oio_str_clean(&u->user);
+			u->hexid[0] = 0;
+			return;
+
+		case OIOURL_TYPE:
+			oio_str_clean(&u->type);
+			u->hexid[0] = 0;
+			return;
+
+		case OIOURL_PATH:
+			oio_str_clean(&u->path);
+			return;
+
+		case OIOURL_VERSION:
+			oio_str_clean(&u->version);
+			return;
+
+		case OIOURL_WHOLE:
+			oio_str_clean(&u->whole);
+			return;
+
+		case OIOURL_FULLPATH:
+			oio_str_clean(&u->fullpath);
+			return;
+
+		case OIOURL_HEXID:
+			u->hexid[0] = 0;
+			return;
+
+		case OIOURL_CONTENTID:
+			oio_str_clean(&u->content);
+			return;
+	}
+
+	g_assert_not_reached();
+}
+
 int
 oio_url_has(const struct oio_url_s *u, enum oio_url_field_e f)
 {

@@ -554,14 +554,16 @@ class ContainerClient(ProxyClient):
         return content_meta, chunks
 
     def content_prepare(self, account=None, reference=None, path=None,
-                        size=None, cid=None, stgpol=None, **kwargs):
+                        size=None, cid=None, stgpol=None, content_id=None,
+                        **kwargs):
         """
         Prepare an upload: get URLs of chunks on available rawx.
 
         :keyword autocreate: create container if it doesn't exist
         """
         uri = self._make_uri('content/prepare')
-        params = self._make_params(account, reference, path, cid=cid)
+        params = self._make_params(account, reference, path, cid=cid,
+                                   content=content_id)
         data = {'size': size}
         if stgpol:
             data['policy'] = stgpol

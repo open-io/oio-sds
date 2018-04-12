@@ -105,6 +105,8 @@ void oio_url_pclean(struct oio_url_s **pu);
 struct oio_url_s* oio_url_set(struct oio_url_s *u,
 		enum oio_url_field_e f, const char *v);
 
+void oio_url_unset(struct oio_url_s *u, enum oio_url_field_e f);
+
 /**
  * Gets a part of a URL.
  *

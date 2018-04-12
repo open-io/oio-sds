@@ -24,7 +24,7 @@ from oio.common.constants import CHUNK_HEADERS
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.storage_functions import _sort_chunks as sort_chunks
 from oio.common import exceptions as exc
-from tests.utils import random_str, random_data, BaseTestCase
+from tests.utils import random_str, random_data, random_id, BaseTestCase
 
 
 class ObjectStorageApiTestBase(BaseTestCase):
@@ -766,6 +766,21 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertRaises(
             exc.OioException, self.api.object_truncate, self.account, name,
             name, size=129)
+
+    def test_object_create_content_id(self):
+        def _check_content_id(content_id=None):
+            name = random_str(32)
+            chunks, _, _ = self.api.object_create(
+                self.account, name, data="data", obj_name=name,
+                content_id=content_id)
+            obj_meta = self.api.object_show(self.account, name, name)
+            if content_id is not None:
+                self.assertEqual(content_id, obj_meta['id'])
+            headers, _ = self.api.blob_client.chunk_get(chunks[0]['url'])
+            self.assertEqual(obj_meta['id'], headers['content_id'])
+
+        _check_content_id()
+        _check_content_id(content_id=random_id(32))
 
     def test_object_delete_many(self):
         container = random_str(8)
