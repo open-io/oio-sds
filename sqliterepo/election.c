@@ -2257,9 +2257,9 @@ member_action_to_LISTING(struct election_member_s *member)
 {
 	EXTRA_ASSERT(!member_has_action(member));
 	EXTRA_ASSERT(member_has_local_id(member));
-	EXTRA_ASSERT(!member_has_master_id(member));
-	EXTRA_ASSERT(member->master_id == 0);
-	EXTRA_ASSERT(member->master_url == NULL);
+
+	member->requested_LEFT_MASTER = 0;
+	member_reset_master(member);
 
 	gchar path[PATH_MAXLEN];
 	int zrc = sqlx_sync_awget_siblings(member->sync,
@@ -2477,10 +2477,8 @@ member_finish_CHECKING_MASTER(struct election_member_s *member)
 
 	if (member->requested_LEAVE)
 		return member_action_to_LEAVING(member);
-	if (master_change) {
-		member_reset_master(member);
+	if (master_change)
 		return member_action_to_LISTING(member);
-	}
 
 	if (concurrent)
 		return member_action_to_SYNCING(member);
@@ -3143,14 +3141,12 @@ _member_react_ASKING(struct election_member_s *member, enum event_type_e evt,
 			if (member->requested_LEFT_MASTER) {
 				/* Strange situation: we receive the content of the master
 				 * node and at the same time the information the master
-				 * node hass left. We are not even sure the left master was
+				 * node has left. We are not even sure the left master was
 				 * the last master we've monitored.
 				 * For sure we are in a transient state, services are leaving
 				 * or elections are moving elsewhere.
 				 * For the sake of security, let's do an other whole loop
 				 * and restart with a clean state. */
-				member_reset_master(member);
-				member->requested_LEFT_MASTER = 0;
 				return member_action_to_LISTING(member);
 			}
 			/* nominal flow : let's become CHECKING_MASTER */
@@ -3358,10 +3354,8 @@ _member_react_SYNCING(struct election_member_s *member, enum event_type_e evt)
 				return member_action_to_LEAVING(member);
 			if (member->requested_LEFT_SELF)
 				return member_action_START(member);
-			if (member->requested_LEFT_MASTER) {
-				member_reset_master(member);
+			if (member->requested_LEFT_MASTER)
 				return member_action_to_LISTING(member);
-			}
 			return member_action_to_SLAVE(member);
 
 			/* Abnormal events */
@@ -3407,8 +3401,6 @@ _member_react_DELAYED_CHECKING_MASTER(struct election_member_s *member, enum eve
 			member->requested_LEFT_MASTER = 0;
 			return member_action_to_CREATING(member);
 		case EVT_LEFT_MASTER:
-			member_reset_master(member);
-			member->requested_LEFT_MASTER = 0;
 			return member_action_to_LISTING(member);
 
 			/* Actions: none pending */
@@ -3456,10 +3448,8 @@ _member_react_REFRESH_CHECKING_MASTER(struct election_member_s *member,
 				member->requested_LEAVE = 0;
 				return member_action_START(member);
 			}
-			if (member->requested_LEFT_MASTER) {
-				member->requested_LEFT_MASTER = 0;
+			if (member->requested_LEFT_MASTER)
 				return member_action_to_LISTING(member);
-			}
 			if (!member->peers)
 				return member_action_to_LEAVING_FAILING(member);
 			return member_action_to_CHECKING_MASTER(member);
@@ -3596,7 +3586,6 @@ _member_react_SLAVE(struct election_member_s *member, enum event_type_e evt)
 			member_reset_master(member);
 			return member_action_START(member);
 		case EVT_LEFT_MASTER:
-			member_reset_master(member);
 			return member_action_to_LISTING(member);
 		case EVT_SYNC_REQ:
 			return member_action_to_SYNCING(member);
