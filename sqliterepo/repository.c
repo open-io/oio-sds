@@ -770,6 +770,27 @@ __open_maybe_cached(struct open_args_s *args, struct sqlx_sqlite3_s **result)
 }
 
 static GError*
+_db_raw_creation(struct open_args_s *args)
+{
+	gint bd = -1;
+	GError *err = sqlx_cache_open_and_lock_base(args->repo->cache, args->realname, TRUE, &bd);
+	if (err) {
+		g_prefix_error(&err, "DB autocreation failed: ");
+		return err;
+	}
+
+	sqlite3 *db = NULL;
+	err = __open_mkdir(args, &db);
+	_close_handle(&db);
+	err = sqlx_cache_unlock_and_close_base(args->repo->cache, bd, 0);
+	if (err) {
+		GRID_WARN("sqlx cache error: (%d) %s", err->code, err->message);
+		g_clear_error(&err);
+	}
+	return NULL;
+}
+
+static GError*
 _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 		struct sqlx_sqlite3_s **result, gchar **pmaster)
 {
@@ -792,9 +813,7 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 			if (err) {
 				if (err->code == CODE_CONTAINER_NOTFOUND) {
 					g_clear_error(&err);
-					sqlite3 *db = NULL;
-					err = __open_mkdir(args, &db);
-					_close_handle(&db);
+					err = _db_raw_creation(args);
 				}
 			}
 		}
