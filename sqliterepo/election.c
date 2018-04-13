@@ -119,8 +119,6 @@ struct election_manager_s
 	gint64 when_lock;
 
 	gboolean exiting;
-
-	gboolean synchronous_completions;
 };
 
 /* @private */
@@ -543,8 +541,6 @@ election_manager_create(struct replication_config_s *config,
 
 	manager->tasks_getpeers =
 		g_thread_pool_new((GFunc)_worker_getpeers, manager, 8, FALSE, NULL);
-
-	manager->synchronous_completions = FALSE;
 
 	*result = manager;
 	return NULL;
@@ -1252,11 +1248,7 @@ election_manager_whatabout (struct election_manager_s *m,
  * -------------------------------------------------------------------------- */
 
 #define completion_do_or_defer(M,Ctx) do { \
-	if ((M)->synchronous_completions) { \
-		return _completion_router((Ctx), (M)); \
-	} else { \
-		metautils_gthreadpool_push("ZK", (M)->completions, (Ctx)); \
-	} \
+	metautils_gthreadpool_push("ZK", (M)->completions, (Ctx)); \
 } while (0)
 
 static void
