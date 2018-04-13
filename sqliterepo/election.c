@@ -1709,6 +1709,7 @@ _worker_getpeers(struct election_member_s *m, struct election_manager_s *M)
 
 	if (peers)
 		g_strfreev(peers);
+	g_clear_error(&err);
 }
 
 /* ------------------------------------------------------------------------- */
