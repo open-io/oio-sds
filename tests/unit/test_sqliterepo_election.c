@@ -1428,7 +1428,7 @@ static void test_STEP_REFRESH_CHECKING_MASTER(void) {
 	_pending(0);
 	g_assert_cmpint(m->requested_LEFT_MASTER, ==, 1);
 
-	/* Legit transitions */
+	/* Legit transitions, no pending signal */
 	RESET();
 	transition(m, EVT_GETPEERS_DONE, NULL);
 	_member_assert_LEAVING_FAILING(m);
@@ -1438,6 +1438,35 @@ static void test_STEP_REFRESH_CHECKING_MASTER(void) {
 	transition(m, EVT_GETPEERS_DONE, PEERS);
 	_member_assert_CHECKING_MASTER(m);
 	g_assert_true(member_has_getvers(m));
+	_pending(0);
+
+	/* Legit transitions, pending signal */
+	RESET();
+	m->requested_LEFT_MASTER = 1;
+	transition(m, EVT_GETPEERS_DONE, PEERS);
+	_member_assert_LISTING(m);
+	g_assert_cmpint(m->requested_LEFT_MASTER, ==, 0);
+	_pending(CMD_LIST, 0);
+
+	RESET();
+	m->requested_LEAVE = 1;
+	transition(m, EVT_GETPEERS_DONE, PEERS);
+	_member_assert_LEAVING(m);
+	g_assert_cmpint(m->requested_LEAVE, ==, 0);
+	_pending(CMD_DELETE, 0);
+
+	RESET();
+	m->requested_LEFT_SELF = 1;
+	transition(m, EVT_GETPEERS_DONE, PEERS);
+	_member_assert_PEERING(m);
+	g_assert_cmpint(m->requested_LEFT_SELF, ==, 0);
+	_pending(0);
+
+	RESET();
+	m->requested_PIPEFROM = 1;
+	transition(m, EVT_GETPEERS_DONE, PEERS);
+	_member_assert_CHECKING_MASTER(m);
+	g_assert_cmpint(m->requested_PIPEFROM, ==, 1);
 	_pending(0);
 
 	TEST_TAIL();
@@ -1616,7 +1645,7 @@ static void test_STEP_REFRESH_CHECKING_SLAVES(void) {
 	_pending(0);
 	g_assert_cmpint(m->requested_LEFT_SELF, ==, 1);
 
-	/* Legit transitions */
+	/* Legit transitions, no pending signal */
 	RESET();
 	transition(m, EVT_GETPEERS_DONE, NULL);
 	_member_assert_LEAVING_FAILING(m);
@@ -1626,6 +1655,35 @@ static void test_STEP_REFRESH_CHECKING_SLAVES(void) {
 	transition(m, EVT_GETPEERS_DONE, PEERS);
 	_member_assert_CHECKING_SLAVES(m);
 	g_assert_true(member_has_getvers(m));
+	_pending(0);
+
+	/* Legit transitions, pending signals */
+	RESET();
+	m->requested_LEFT_SELF = 1;
+	transition(m, EVT_GETPEERS_DONE, PEERS);
+	_member_assert_PEERING(m);
+	g_assert_cmpint(m->requested_LEFT_SELF, ==, 0);
+	_pending(0);
+
+	RESET();
+	m->requested_LEAVE = 1;
+	transition(m, EVT_GETPEERS_DONE, PEERS);
+	_member_assert_LEAVING(m);
+	g_assert_cmpint(m->requested_LEAVE, ==, 0);
+	_pending(CMD_DELETE, 0);
+
+	RESET();
+	m->requested_LEFT_MASTER = 1;
+	transition(m, EVT_GETPEERS_DONE, PEERS);
+	_member_assert_CHECKING_SLAVES(m);
+	g_assert_cmpint(m->requested_LEFT_MASTER, ==, 1);
+	_pending(0);
+
+	RESET();
+	m->requested_PIPEFROM = 1;
+	transition(m, EVT_GETPEERS_DONE, PEERS);
+	_member_assert_CHECKING_SLAVES(m);
+	g_assert_cmpint(m->requested_PIPEFROM, ==, 1);
 	_pending(0);
 
 	TEST_TAIL();
