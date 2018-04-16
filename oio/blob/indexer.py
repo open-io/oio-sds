@@ -41,6 +41,7 @@ class BlobIndexer(Daemon):
         self.errors = 0
         self.successes = 0
         self.last_reported = 0
+        self.total_since_last_reported = 0
         self.chunks_run_time = 0
         self.interval = int_value(
             conf.get('interval'), 300)
@@ -70,6 +71,7 @@ class BlobIndexer(Daemon):
             except Exception:
                 self.errors += 1
                 self.logger.exception('ERROR while updating %s', path)
+            self.total_since_last_reported += 1
 
         def report(tag):
             total = self.errors + self.successes
@@ -87,11 +89,13 @@ class BlobIndexer(Daemon):
                     'pass': self.passes,
                     'errors': self.errors,
                     'nb_chunks': total,
-                    'c_rate': total / (now - self.last_reported),
+                    'c_rate': self.total_since_last_reported /
+                    (now - self.last_reported),
                     'elapsed': elapsed
                 }
             )
             self.last_reported = now
+            self.total_since_last_reported = 0
 
         start_time = time.time()
         self.last_reported = start_time
