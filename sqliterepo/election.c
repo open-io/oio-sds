@@ -1039,13 +1039,12 @@ _manager_get_condition (struct election_manager_s *m, const char *k)
 
 static struct election_member_s *
 _LOCKED_init_member(struct election_manager_s *manager,
-		const struct sqlx_name_s *n, gboolean autocreate)
+		const struct sqlx_name_s *n, const char *key,
+		gboolean autocreate)
 {
 	MANAGER_CHECK(manager);
 	NAME_CHECK(n);
 
-	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
-	sqliterepo_hash_name(n, key, sizeof(key));
 	struct election_member_s *member = _LOCKED_get_member (manager, key);
 	if (!member && autocreate) {
 		member = g_malloc0 (sizeof(*member));
@@ -1761,8 +1760,11 @@ _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
 		}
 	}
 
+	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
+	sqliterepo_hash_name(n, key, sizeof(key));
+
 	_manager_lock(m);
-	struct election_member_s *member = _LOCKED_init_member(m, n, op != ELOP_EXIT);
+	struct election_member_s *member = _LOCKED_init_member(m, n, key, op != ELOP_EXIT);
 	switch (op) {
 		case ELOP_NONE:
 			member->last_atime = oio_ext_monotonic_time ();
@@ -1867,10 +1869,12 @@ _election_get_status(struct election_manager_s *mgr,
 	MANAGER_CHECK(mgr);
 	EXTRA_ASSERT(n != NULL);
 
-	gint64 deadline = oio_ext_monotonic_time () + oio_election_delay_wait;
+	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
+	sqliterepo_hash_name(n, key, sizeof(key));
+	const gint64 deadline = oio_ext_monotonic_time () + oio_election_delay_wait;
 
 	_manager_lock(mgr);
-	struct election_member_s *m = _LOCKED_init_member(mgr, n, TRUE);
+	struct election_member_s *m = _LOCKED_init_member(mgr, n, key, TRUE);
 
 	if (!wait_for_final_status(m, deadline)) // TIMEOUT!
 		rc = STEP_FAILED;
