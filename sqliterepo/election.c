@@ -3744,8 +3744,10 @@ transition(struct election_member_s *member, enum event_type_e evt,
 	/* re-kickoff elections marked as to be restarted, but only if without
 	 * activity and if the manager if not being exited. */
 	if (member->step == STEP_NONE && BOOL(member->requested_USE)
-			&& !member->manager->exiting)
-		return transition(member, EVT_NONE, NULL);
+			&& !member->manager->exiting) {
+		member_log_change(member, EVT_NONE,
+				_member_react(member, EVT_NONE, NULL));
+	}
 }
 
 static void
