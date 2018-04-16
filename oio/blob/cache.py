@@ -15,7 +15,7 @@
 
 
 from time import time
-from urlparse import urlparse
+from urlparse import urlparse, urlunparse
 
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.logger import get_logger
@@ -46,17 +46,15 @@ class ServiceCache(object):
 
     def resolve(self, url):
         """
-        :rtype: return resolved url of a rawx using Service-ID
+        :returns: resolved URL of a rawx using a service ID
         """
-        # FIXME(mb) some tests doesn't put scheme, should fix tests
+        # FIXME(mb): some tests don't put scheme, should fix tests
         if not url.startswith('http://'):
             url = "http://" + url
-        res = urlparse(url)
-        if res.port == 80 or res.port is None:
-            service_id_or_host = urlparse(url).hostname
+        parsed = urlparse(url)
+        if parsed.port == 80 or parsed.port is None:
+            service_id_or_host = parsed.hostname
             host = self._get_addr(service_id_or_host)
-            if host != service_id_or_host:
-                url = res.scheme + "://" + host + res.path
-                if res.query:
-                    url += '?' + res.query
+            url = urlunparse((parsed.scheme, host, parsed.path,
+                              parsed.params, parsed.query, parsed.fragment))
         return url
