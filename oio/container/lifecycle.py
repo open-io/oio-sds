@@ -69,7 +69,7 @@ class ContainerLifecycle(object):
                 "Expected 'LifecycleConfiguration' as root tag, got '%s'" %
                 tree.tag)
         for rule_elt in tree.findall('Rule'):
-            rule = LifecycleRule.from_element(rule_elt, api=self.api)
+            rule = LifecycleRule.from_element(rule_elt, lifecycle=self)
             self._rules[rule.id] = rule
         self.src_xml = xml_str
 
@@ -100,8 +100,7 @@ class ContainerLifecycle(object):
         :notice: you must consume the results or the rules won't be applied.
         """
         for rule in self._rules.values():
-            res = rule.apply(self.account, self.container, obj_meta,
-                             **kwargs)
+            res = rule.apply(obj_meta, **kwargs)
             if res:
                 for action in res:
                     yield obj_meta, rule.id, action[0], action[1]
@@ -150,7 +149,7 @@ class LifecycleRule(object):
         self.actions = actions or dict()
 
     @classmethod
-    def from_element(cls, rule_elt, api=None):
+    def from_element(cls, rule_elt, lifecycle=None):
         """
         Load the rule from an XML element.
 
@@ -165,7 +164,7 @@ class LifecycleRule(object):
         status_elt = rule_elt.find('Status')
         if status_elt is None:
             raise ValueError("Missing 'Status' element")
-        actions = {name: action_from_element(element, api=api)
+        actions = {name: action_from_element(element, lifecycle=lifecycle)
                    for name, element in {k: rule_elt.find(k)
                                          for k in ACTION_MAP.keys()}.items()
                    if element is not None}
@@ -179,14 +178,9 @@ class LifecycleRule(object):
         """
         Check if the specified object passes the filter of this rule.
         """
-        if not self.filter.match(obj_meta):
-            return False
-        for action in self.actions.values():
-            if action.match(obj_meta, **kwargs):
-                return True
-        return False
+        return self.filter.match(obj_meta)
 
-    def apply(self, account, container, obj_meta, **kwargs):
+    def apply(self, obj_meta, **kwargs):
         """
         Apply the set of actions of this rule.
 
@@ -195,10 +189,10 @@ class LifecycleRule(object):
             a class and an exception instance
         """
         results = list()
-        if self.filter.match(obj_meta):
+        if self.match(obj_meta):
             for action in self.actions.values():
                 try:
-                    res = action.apply(account, container, obj_meta, **kwargs)
+                    res = action.apply(obj_meta, **kwargs)
                     results.append((action.__class__.__name__, res))
                 except OioException as exc:
                     results.append((action.__class__.__name__, exc))
@@ -268,20 +262,83 @@ class LifecycleRuleFilter(object):
         return True
 
 
-class LifecycleAction(object):
-    """Interface for Lifecycle actions"""
+class LifecycleActionFilter(object):
+    """
+    Specify conditions when the specific rule action takes effect.
+    """
 
-    def __init__(self, api=None, **_kwargs):
-        self.api = api
+    def __init__(self, lifecycle=None, **kwargs):
+        self.lifecycle = lifecycle
 
     def match(self, obj_meta, now=None, **kwargs):
         """
-        Check if an object matches the age and version conditions
-        for expiration.
+        Check if an object matches the conditions.
         """
         raise NotImplementedError
 
-    def apply(self, account, container, obj_meta, **kwargs):
+
+class DaysActionFilter(LifecycleActionFilter):
+    """
+    Specify the number of days after object creation
+    when the specific rule action takes effect.
+    """
+
+    XML_TAG = 'Days'
+
+    def __init__(self, days_elt, **kwargs):
+        super(DaysActionFilter, self).__init__(**kwargs)
+        self.days = int(days_elt.text)
+
+    def match(self, obj_meta, now=None, **kwargs):
+        now = now or time.time()
+        return float(obj_meta['ctime']) + self.days * 86400 < now
+
+
+class DateActionFilter(LifecycleActionFilter):
+    """
+    Specify the date when the specific rule action takes effect.
+    """
+
+    XML_TAG = 'Date'
+
+    def __init__(self, date_elt, **kwargs):
+        super(DateActionFilter, self).__init__(**kwargs)
+        date = iso8601_to_int(date_elt.text)
+        self.date = (date - (date % 86400))
+
+    def match(self, obj_meta, now=None, **kwargs):
+        now = now or time.time()
+        return now > self.date
+
+
+class CountActionFilter(LifecycleActionFilter):
+
+    XML_TAG = 'Count'
+
+    def __init__(self, count_elt, **kwargs):
+        super(CountActionFilter, self).__init__(**kwargs)
+        count = int(count_elt.text)
+        if count < 0:
+            raise ValueError(
+                "The count must be greater than or equal to zero.")
+        self.count = count
+
+
+class LifecycleAction(LifecycleActionFilter):
+    """
+    Interface for Lifecycle actions.
+    """
+
+    def __init__(self, filter, **kwargs):
+        super(LifecycleAction, self).__init__(**kwargs)
+        self.filter = filter
+
+    def match(self, obj_meta, now=None, **kwargs):
+        if self.filter is None:
+            return True
+        return self.filter.match(obj_meta, now=now, **kwargs)
+
+    def apply(self, obj_meta, **kwargs):
         """
         Match then apply the treatment on the object.
         """
@@ -291,59 +348,19 @@ class LifecycleAction(object):
 # TODO: implement AbortIncompleteMultipartUpload
 
 
-class DelayExpiration(LifecycleAction):
-    """Delete objects after a delay after their creation time."""
+class Expiration(LifecycleAction):
+    """
+    Delete objects.
+    """
 
-    DAYS_XML_TAG = 'Days'
-
-    def __init__(self, days=None, api=None):
-        super(DelayExpiration, self).__init__(api)
-        self.days = days
-
-    @classmethod
-    def from_element(cls, expiration_elt, **kwargs):
-        """
-        Load the expiration from an XML element
-
-        :type expiration_elt: `lxml.etree.Element`
-        """
-        days_elt = expiration_elt.find(cls.DAYS_XML_TAG)
-        if days_elt is None:
-            raise ValueError("Missing '%s' element in '%s'" %
-                             (cls.DAYS_XML_TAG, expiration_elt.tag))
-        days = int(days_elt.text)
-        return cls(days=days, **kwargs)
-
-    def match(self, obj_meta, now=None, **kwargs):
-        """
-        Check if an object matches the age condition for expiration.
-        """
-        now = now or time.time()
-        return float(obj_meta['ctime']) + self.days * 86400 < now
-
-    def apply(self, account, container, obj_meta, **kwargs):
+    def apply(self, obj_meta, **kwargs):
         if self.match(obj_meta, **kwargs):
-            res = self.api.object_delete(account, container, obj_meta['name'],
-                                         version=obj_meta.get('version'))
+            res = self.lifecycle.api.object_delete(
+                self.lifecycle.account, self.lifecycle.container,
+                obj_meta['name'], version=obj_meta.get('version'))
             return "Deleted" if res else "Kept"
         return "Kept"
 
-
-class Expiration(DelayExpiration):
-    """Delete objects older than a specified date or delay."""
-
-    DATE_XML_TAG = 'Date'
-
-    def __init__(self, days=None, date=None, api=None):
-        if days is not None and date is not None:
-            raise ValueError(
-                "'days' and 'date' cannot be provided at the same time")
-        super(Expiration, self).__init__(days, api)
-        if date is not None:
-            self.date = (int(date) - (int(date) % 86400))
-        else:
-            self.date = None
-
     @classmethod
     def from_element(cls, expiration_elt, **kwargs):
         """
@@ -351,58 +368,66 @@ class Expiration(DelayExpiration):
 
         :type expiration_elt: `lxml.etree.Element`
         """
-        days_elt = expiration_elt.find(cls.DAYS_XML_TAG)
-        date_elt = expiration_elt.find(cls.DATE_XML_TAG)
-        if days_elt is None and date_elt is None:
+        days_elt = expiration_elt.find(DaysExpiration.XML_TAG)
+        date_elt = expiration_elt.find(DateExpiration.XML_TAG)
+        if not ((days_elt is None) ^ (date_elt is None)):
             raise ValueError(
                 "Missing '%s' or '%s' element in '%s'" %
-                (cls.DAYS_XML_TAG, cls.DATE_XML_TAG, expiration_elt.tag))
-        days = int(days_elt.text) if days_elt is not None else None
-        date = (iso8601_to_int(date_elt.text)
-                if date_elt is not None
-                else None)
-        # TODO: ExpiredObjectDeleteMarker
-        return cls(days=days, date=date, **kwargs)
+                (DaysExpiration.XML_TAG, DateExpiration.XML_TAG,
+                 expiration_elt.tag))
 
-    def match(self, obj_meta, now=None, **kwargs):
-        """
-        Check if an object matches the age condition for expiration.
-        """
-        now = now or time.time()
-        if self.date is not None:
-            return now > self.date
+        if days_elt is not None:
+            return DaysExpiration(days_elt, **kwargs)
 
-        return super(Expiration, self).match(obj_meta, now=now, **kwargs)
+        if date_elt is not None:
+            return DateExpiration(date_elt, **kwargs)
 
 
-class Transition(Expiration):
-    """Change object storage policy after a specified delay or date."""
+class DaysExpiration(Expiration):
+    """
+    Delete objects older than a specified delay.
+    """
 
-    def __init__(self, policy=None, days=None, date=None, api=None):
-        super(Transition, self).__init__(days=days, date=date, api=api)
-        if policy is None:
-            raise ValueError("'policy' must be specified")
-        self.policy = policy
-        if self.api:
+    XML_TAG = DaysActionFilter.XML_TAG
+
+    def __init__(self, days_elt, **kwargs):
+        filter = DaysActionFilter(days_elt, **kwargs)
+        super(DaysExpiration, self).__init__(filter, **kwargs)
+
+
+class DateExpiration(Expiration):
+    """
+    Delete objects from the specified date.
+    """
+
+    XML_TAG = DateActionFilter.XML_TAG
+
+    def __init__(self, date_elt, **kwargs):
+        filter = DateActionFilter(date_elt, **kwargs)
+        super(DateExpiration, self).__init__(filter, **kwargs)
+
+
+class Transition(LifecycleAction):
+    """
+    Change object storage policy.
+    """
+
+    XML_POLICY = 'StorageClass'
+
+    def __init__(self, filter, policy_elt, **kwargs):
+        super(Transition, self).__init__(filter, **kwargs)
+        self.policy = policy_elt.text
+        if self.lifecycle and self.lifecycle.api:
             from oio.content.factory import ContentFactory
-            self.factory = ContentFactory(api.container.conf,
-                                          api.container)
+            self.factory = ContentFactory(self.lifecycle.api.container.conf,
+                                          self.lifecycle.api.container)
         else:
             self.factory = None
 
-    @classmethod
-    def from_element(cls, transition_elt, **kwargs):
-        stgcls_elt = transition_elt.find('StorageClass')
-        if stgcls_elt is None:
-            raise ValueError("Missing 'StorageClass' element in 'Transition'")
-        sup_from_elt = getattr(super(Transition, cls), 'from_element')
-        return sup_from_elt.__func__(cls, transition_elt,
-                                     policy=stgcls_elt.text,
-                                     **kwargs)
-
-    def apply(self, account, container, obj_meta, **kwargs):
+    def apply(self, obj_meta, **kwargs):
         if self.match(obj_meta, **kwargs):
-            cid = cid_from_name(account, container)
+            cid = cid_from_name(self.lifecycle.account,
+                                self.lifecycle.container)
             if not self.factory:
                 return "Kept"
             # TODO: avoid loading content description a second time
@@ -410,39 +435,213 @@ class Transition(Expiration):
             return "Policy changed to %s" % self.policy
         return "Kept"
 
+    @classmethod
+    def from_element(cls, transition_elt, **kwargs):
+        policy_elt = transition_elt.find(cls.XML_POLICY)
+        if policy_elt is None:
+            raise ValueError("Missing '%s' element in '%s'" %
+                             (cls.XML_POLICY, transition_elt.tag))
 
-class NoncurrentAction(LifecycleAction):
+        days_elt = transition_elt.find(DaysTransition.XML_TAG)
+        date_elt = transition_elt.find(DateTransition.XML_TAG)
+        if not ((days_elt is None) ^ (date_elt is None)):
+            raise ValueError(
+                "Missing '%s' or '%s' element in '%s'" %
+                (DaysTransition.XML_TAG, DateTransition.XML_TAG,
+                 transition_elt.tag))
+
+        if days_elt is not None:
+            return DaysTransition(days_elt, policy_elt, **kwargs)
+
+        if date_elt is not None:
+            return DateTransition(date_elt, policy_elt, **kwargs)
+
+
+class DaysTransition(Transition):
     """
-    An action to be executed on all versions of an object,
-    except the latest.
+    Change object storage policy after a specified delay.
     """
 
-    def apply(self, account, container, obj_meta, **kwargs):
-        if self.match(obj_meta, **kwargs):
+    XML_TAG = DaysActionFilter.XML_TAG
+
+    def __init__(self, days_elt, policy_elt, **kwargs):
+        filter = DaysActionFilter(days_elt, **kwargs)
+        super(DaysTransition, self).__init__(filter, policy_elt, **kwargs)
+
+
+class DateTransition(Transition):
+    """
+    Change object storage policy from the specified date.
+    """
+
+    XML_TAG = DateActionFilter.XML_TAG
+
+    def __init__(self, date_elt, policy_elt, **kwargs):
+        filter = DateActionFilter(date_elt, **kwargs)
+        super(DateTransition, self).__init__(filter, policy_elt, **kwargs)
+
+
+class NoncurrentVersionActionFilter(LifecycleActionFilter):
+    """
+    Apply the action on all versions of an obejct, except the latest.
+    """
+
+    def __init__(self, **kwargs):
+        super(NoncurrentVersionActionFilter, self).__init__(**kwargs)
+        self.versioning = None
+
+    def _match(self, obj_meta, now=None, **kwargs):
+        """
+        Check if versioning is enabled.
+        """
+        if self.versioning is None:
+            data = self.lifecycle.api.container_get_properties(
+                self.lifecycle.account, self.lifecycle.container)
+            sys = data['system']
+            version = sys.get('sys.m2.policy.version', None)
+            if version is None:
+                from oio.common.client import ProxyClient
+                proxy_client = ProxyClient(
+                    {"namespace": self.lifecycle.api.namespace},
+                    no_ns_in_url=True)
+                _, data = proxy_client._request('GET', "config")
+                version = data['meta2.max_versions']
+            version = int(version)
+            self.versioning = version > 1 or version < 0
+        return self.versioning
+
+    def match(self, obj_meta, now=None, **kwargs):
+        if self._match(obj_meta, now=now, **kwargs):
             # Load the description of the latest object version
             # TODO: use a cache to avoid requesting each time
-            descr = self.api.object_show(account, container,
-                                         obj_meta['name'])
-            if str(descr['version']) != str(obj_meta['version']):
-                # Object is not the latest version, we can apply the treatment
-                return super(NoncurrentAction, self).apply(
-                    account, container, obj_meta, **kwargs)
+            descr = self.lifecycle.api.object_show(self.lifecycle.account,
+                                                   self.lifecycle.container,
+                                                   obj_meta['name'])
+            return str(descr['version']) != str(obj_meta['version'])
+        return False
+
+
+class NoncurrentVersionExpiration(Expiration):
+    """
+    Delete objects old versions.
+    """
+
+    def __init__(self, filter, **kwargs):
+        super(NoncurrentVersionExpiration, self).__init__(filter, **kwargs)
+        self.noncurrent_version = NoncurrentVersionActionFilter(**kwargs)
+
+    def match(self, obj_meta, now=None, **kwargs):
+        if self.noncurrent_version.match(obj_meta, now=now, **kwargs):
+            return super(NoncurrentVersionExpiration, self).match(
+                obj_meta, now=now, **kwargs)
+        return False
+
+    @classmethod
+    def from_element(cls, expiration_elt, **kwargs):
+        days_elt = expiration_elt.find(NoncurrentDaysExpiration.XML_TAG)
+        count_elt = expiration_elt.find(
+            NoncurrentCountExpiration.XML_TAG)
+        if not ((days_elt is None) ^ (count_elt is None)):
+            raise ValueError(
+                "Missing '%s' or '%s' element in '%s'" %
+                (NoncurrentDaysExpiration.XML_TAG,
+                 NoncurrentCountExpiration.XML_TAG,
+                 expiration_elt.tag))
+
+        if days_elt is not None:
+            return NoncurrentDaysExpiration(days_elt, **kwargs)
+
+        if count_elt is not None:
+            return NoncurrentCountExpiration(count_elt, **kwargs)
+
+
+class NoncurrentDaysExpiration(NoncurrentVersionExpiration):
+    """
+    Delete objects old versions after a specified delay.
+    """
+
+    XML_TAG = 'NoncurrentDays'
+
+    def __init__(self, days_elt, **kwargs):
+        filter = DaysActionFilter(days_elt, **kwargs)
+        super(NoncurrentDaysExpiration, self).__init__(filter, **kwargs)
+
+
+class NoncurrentCountExpiration(NoncurrentVersionExpiration):
+    """
+    Delete exceeding versions, and keep a maximum number of versions.
+    """
+
+    XML_TAG = 'NoncurrentCount'
+
+    def __init__(self, count_elt, **kwargs):
+        filter = CountActionFilter(count_elt, **kwargs)
+        super(NoncurrentCountExpiration, self).__init__(filter, **kwargs)
+        self.last_object_name = None
+
+    def match(self, obj_meta, now=None, **kwargs):
+        return self.noncurrent_version._match(obj_meta, now=now, **kwargs)
+
+    def apply(self, obj_meta, **kwargs):
+        if self.match(obj_meta, **kwargs):
+            object_name = obj_meta['name']
+            if object_name != self.last_object_name:
+                self.lifecycle.api.container.content_purge(
+                    self.lifecycle.account, self.lifecycle.container,
+                    object_name, maxvers=self.filter.count+1)
+                self.last_object_name = object_name
+            if not self.lifecycle.api.object_head(self.lifecycle.account,
+                                                  self.lifecycle.container,
+                                                  object_name,
+                                                  version=obj_meta['version']):
+                return "Deleted"
         return "Kept"
 
 
-class NoncurrentVersionExpiration(NoncurrentAction, DelayExpiration):
-    """Delete objects old versions after a defined number of days."""
+class NoncurrentVersionTransition(Transition):
+    """
+    Change object storage policy for old versions of the object only.
+    """
 
-    DAYS_XML_TAG = 'NoncurrentDays'
+    def __init__(self, filter, policy_elt, **kwargs):
+        super(NoncurrentVersionTransition, self).__init__(
+            filter, policy_elt, **kwargs)
+        self.noncurrent = NoncurrentVersionActionFilter(**kwargs)
+
+    def match(self, obj_meta, now=None, **kwargs):
+        if self.noncurrent.match(obj_meta, now=now, **kwargs):
+            return super(NoncurrentVersionTransition, self).match(
+                obj_meta, now=now, **kwargs)
+        return False
+
+    @classmethod
+    def from_element(cls, transition_elt, **kwargs):
+        policy_elt = transition_elt.find(cls.XML_POLICY)
+        if policy_elt is None:
+            raise ValueError("Missing '%s' element in '%s'" %
+                             (cls.XML_POLICY, transition_elt.tag))
+
+        days_elt = transition_elt.find(NoncurrentDaysTransition.XML_TAG)
+        if days_elt is None:
+            raise ValueError(
+                "Missing '%s' element in '%s'" %
+                (NoncurrentDaysTransition.XML_TAG, transition_elt.tag))
+
+        return NoncurrentDaysTransition(days_elt, policy_elt, **kwargs)
 
 
-class NoncurrentVersionTransition(NoncurrentAction, Transition):
+class NoncurrentDaysTransition(NoncurrentVersionTransition):
     """
     Change object storage policy after a specified delay,
     for old versions of the object only.
     """
 
-    DAYS_XML_TAG = 'NoncurrentDays'
+    XML_TAG = 'NoncurrentDays'
+
+    def __init__(self, days_elt, policy_elt, **kwargs):
+        filter = DaysActionFilter(days_elt, **kwargs)
+        super(NoncurrentDaysTransition, self).__init__(
+            filter, policy_elt, **kwargs)
 
 
 ACTION_MAP = {a.__name__: a for a in
@@ -452,11 +651,11 @@ ACTION_MAP = {a.__name__: a for a in
                NoncurrentVersionTransition)}
 
 
-def action_from_element(element, api=None, **kwargs):
+def action_from_element(element, **kwargs):
     """
     Create a new `LifecycleAction` subclass instance from an XML description.
 
     :param element: the XML description of the action
     :type element: `Element`
     """
-    return ACTION_MAP[element.tag].from_element(element, api=api, **kwargs)
+    return ACTION_MAP[element.tag].from_element(element, **kwargs)

@@ -63,6 +63,7 @@ static void sqlx_service_specific_fini(void);
 static void sqlx_service_specific_stop(void);
 
 // Periodic tasks & thread's workers
+static void _task_probe_repository(gpointer p);
 static void _task_malloc_trim(gpointer p);
 static void _task_expire_bases(gpointer p);
 static void _task_expire_resolver(gpointer p);
@@ -237,7 +238,9 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 static void
 _patch_configuration_fd(void)
 {
+	/* By design, this function never returns less than 1024. */
 	const guint maxfd = metautils_syscall_count_maxfd();
+	EXTRA_ASSERT(maxfd >= 1024);
 
 	// We keep some FDs for unexpected cases (sqlite sometimes uses
 	// temporary files, even when we ask for memory journals) and for
@@ -249,44 +252,45 @@ _patch_configuration_fd(void)
 
 	// The operator already reserved to many connections, and we cannot
 	// promise these numbers. we hope he/she is aware of his/her job.
-	if (reserved >= total) {
-		GRID_NOTICE("Too many descriptors have been reserved (%u), "
+	if (reserved > total) {
+		GRID_WARN("Too many descriptors have been reserved (%u), "
 				"please reconfigure the service or extend the system limit "
 				"(currently set to %u).", reserved, maxfd);
 		if (!sqliterepo_repo_max_bases_hard) {
 			sqliterepo_repo_max_bases_hard = 1024;
 			GRID_WARN("maximum # of bases not set, arbitrarily set to %u",
-								sqliterepo_repo_max_bases_hard);
+					sqliterepo_repo_max_bases_hard);
 		}
 		if (!server_fd_max_passive) {
 			server_fd_max_passive = 64;
 			GRID_WARN("maximum # of incoming cnx not set, arbitrarily set to %u",
-								server_fd_max_passive);
+					server_fd_max_passive);
 		}
 		if (!sqliterepo_fd_max_active) {
 			sqliterepo_fd_max_active = 64;
 			GRID_WARN("maximum # of outgoing cnx not set, arbitrarily set to %u",
-								sqliterepo_fd_max_active);
+					sqliterepo_fd_max_active);
 		}
 	} else {
 		guint available = total - reserved;
 		guint *to_be_set[4] = {NULL, NULL, NULL, NULL};
 		guint limits[3] = {G_MAXUINT, G_MAXUINT, G_MAXUINT};
 		do {
-			guint i=0;
-			if (sqliterepo_repo_max_bases_hard <= 0) {
-				to_be_set[i] = &sqliterepo_repo_max_bases_hard;
-				limits[i] = CLAMP(limits[i], ((100 * total) / 30), 131072);
-				i++;
-			}
+			guint i = 0;
+			/* When automatically set, keep it low to avoid DoS. */
 			if (!sqliterepo_fd_max_active) {
 				to_be_set[i] = &sqliterepo_fd_max_active;
-				limits[i] = (100 * total) / 30;
+				limits[i] = (2 * total) / 100;
+				i++;
+			}
+			if (sqliterepo_repo_max_bases_hard <= 0) {
+				to_be_set[i] = &sqliterepo_repo_max_bases_hard;
+				limits[i] = (48 * total) / 100;
 				i++;
 			}
 			if (!server_fd_max_passive) {
 				to_be_set[i] = &server_fd_max_passive;
-				limits[i] = (100 * total) / 40;
+				limits[i] = (50 * total) / 100;
 				i++;
 			}
 		} while (0);
@@ -295,10 +299,10 @@ _patch_configuration_fd(void)
 		// reached its maximum.
 		while (available > 0) {
 			gboolean any = FALSE;
-			for (guint i=0; to_be_set[i] && available > 0 ;i++) {
+			for (guint i = 0; to_be_set[i] && available > 0; i++) {
 				if (*to_be_set[i] < limits[i]) {
 					(*to_be_set[i]) ++;
-					available --;
+					available--;
 					any = TRUE;
 				}
 			}
@@ -648,6 +652,7 @@ _configure_tasks(struct sqlx_service_s *ss)
 {
 	grid_task_queue_register(ss->gtq_reload, 5, _task_reload_nsinfo, NULL, ss);
 	grid_task_queue_register(ss->gtq_reload, 5, _task_reload_peers, NULL, ss);
+	grid_task_queue_register(ss->gtq_reload, 5, _task_probe_repository, NULL, ss);
 
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_bases, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_resolver, NULL, ss);
@@ -793,7 +798,7 @@ sqlx_service_specific_stop(void)
 static gboolean
 sqlx_service_configure(int argc, char **argv)
 {
-	return _init_configless_structures(&SRV)
+	const gboolean rc = _init_configless_structures(&SRV)
 		&& _configure_with_arguments(&SRV, argc, argv)
 		/* NS now known! */
 		&& _patch_and_apply_configuration()
@@ -806,6 +811,8 @@ sqlx_service_configure(int argc, char **argv)
 		&& _configure_events_queue(&SRV)
 		&& (!SRV.service_config->post_config
 				|| SRV.service_config->post_config(&SRV));
+	_patch_and_apply_configuration();
+	return rc;
 }
 
 static void
@@ -1035,6 +1042,50 @@ _worker_clients(gpointer p)
 		}
 	}
 	return p;
+}
+
+#define HEXA "0123456789ABCDEF"
+
+static void
+_task_probe_repository(gpointer p)
+{
+	struct sqlx_service_s *ss = PSRV(p);
+	int rc, errsav;
+	GError *err = NULL;
+	gchar path[PATH_MAX], subdir[16], filename[16];
+
+	oio_str_randomize(subdir, sizeof(subdir), HEXA);
+	oio_str_randomize(filename, sizeof(filename), HEXA);
+
+	/* Try a directory creation */
+	g_strlcpy(path, ss->volume, sizeof(path));
+	g_strlcat(path, "/probe-", sizeof(path));
+	g_strlcat(path, subdir, sizeof(path));
+	GRID_DEBUG("Probing directory %s", path);
+	rc = g_mkdir(path, 0755);
+	errsav = errno;
+	(void) g_rmdir(path);
+	if (rc != 0) {
+		GRID_WARN("I/O error on %s: (%d) %s", path, errsav, strerror(errsav));
+		grid_daemon_notify_io_status(ss->dispatcher, FALSE);
+		return;
+	}
+
+	/* Try a file creation */
+	g_strlcpy(path, ss->volume, sizeof(path));
+	g_strlcat(path, "/probe-", sizeof(path));
+	g_strlcat(path, filename, sizeof(path));
+	GRID_DEBUG("Probing file %s", path);
+	rc = g_file_set_contents(path, "", 0, &err);
+	(void) g_unlink(path);
+	if (!rc) {
+		GRID_WARN("I/O error on %s: (%d) %s", path, err->code, err->message);
+		g_clear_error(&err);
+		grid_daemon_notify_io_status(ss->dispatcher, FALSE);
+		return;
+	}
+
+	grid_daemon_notify_io_status(ss->dispatcher, TRUE);
 }
 
 static void

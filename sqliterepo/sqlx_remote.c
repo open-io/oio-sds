@@ -267,12 +267,15 @@ sqlx_inline_name_fill_type_asis  (struct sqlx_name_inline_s *n,
 	g_strlcpy(n->type, srvtype, sizeof(n->type));
 
 	if (!strcmp(srvtype, NAME_SRVTYPE_META0)) {
-		g_strlcpy(n->base, oio_url_get (url, OIOURL_NS), sizeof(n->base));
+		const gchar *ns = oio_url_get (url, OIOURL_NS);
+		g_strlcpy(n->base, ns ?: "", sizeof(n->base));
 	} else if (!strcmp(srvtype, NAME_SRVTYPE_META1)) {
-		g_strlcpy(n->base, oio_url_get(url, OIOURL_HEXID), 4+1);
+		const gchar *cid = oio_url_get(url, OIOURL_HEXID);
+		g_strlcpy(n->base, cid ?: "", 4+1);
 	} else {
+		const gchar *cid = oio_url_get(url, OIOURL_HEXID);
 		g_snprintf (n->base, sizeof(n->base), "%s.%"G_GINT64_FORMAT,
-				oio_url_get (url, OIOURL_HEXID), seq);
+				cid ?: "", seq);
 	}
 }
 

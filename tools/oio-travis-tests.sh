@@ -214,6 +214,12 @@ if is_running_test_suite "copyright" ; then
 	${SRCDIR}/tools/oio-check-copyright.sh ${SRCDIR}
 fi
 
+if is_running_test_suite "variables" ; then
+	echo -e "\n### Checking Variables.md"
+	cd $SRCDIR
+	tox -e variables
+fi
+
 if is_running_test_suite "unit" ; then
 	echo -e "\n### UNIT tests"
 	cd $SRCDIR
@@ -273,5 +279,12 @@ fi
 if is_running_test_suite "ec" ; then
 	echo -e "\n### EC tests"
 	func_tests -f "${SRCDIR}/etc/bootstrap-preset-EC.yml"
+fi
+
+if is_running_test_suite "multi-beanstalk" ; then
+	echo -e "\n### Tests with multiple beanstalkd"
+    func_tests \
+		-f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-3beanstalkd.yml"
 fi
 

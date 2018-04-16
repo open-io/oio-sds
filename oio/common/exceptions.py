@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -157,6 +157,14 @@ class OioTimeout(OioNetworkException):
     pass
 
 
+class SourceReadTimeout(OioTimeout):
+    """
+    Specialization of OioTimeout for the case when a timeout occurs
+    while reading data from a client application.
+    """
+    pass
+
+
 class DeadlineReached(OioException):
     """
     Special exception to be raised when a deadline is reached.
@@ -187,9 +195,28 @@ class ClientException(OioException):
         return s
 
 
+class Forbidden(ClientException):
+    """
+    Operation is forbidden.
+    """
+    def __init__(self, http_status=403, status=None, message=None):
+        super(Forbidden, self).__init__(http_status, status, message)
+
+
 class NotFound(ClientException):
     def __init__(self, http_status=404, status=None, message=None):
         super(NotFound, self).__init__(http_status, status, message)
+
+
+class MethodNotAllowed(ClientException):
+    """
+    Request method is not allowed.
+    May be raised when the namespace is in WORM mode and user tries to delete.
+    """
+    def __init__(self, http_status=405, status=None, message=None):
+        super(MethodNotAllowed, self).__init__(http_status, status, message)
+
+    # TODO(FVE): parse 'Allow' header
 
 
 class Conflict(ClientException):
@@ -207,16 +234,21 @@ class UnsatisfiableRange(ClientException):
         super(UnsatisfiableRange, self).__init__(http_status, status, message)
 
 
+# FIXME(FVE): ServiceBusy is not a client exception
 class ServiceBusy(ClientException):
     def __init__(self, http_status=503, status=None, message=None):
         super(ServiceBusy, self).__init__(http_status, status, message)
 
 
-_http_status_map = {404: NotFound,
-                    409: Conflict,
-                    413: TooLarge,
-                    416: UnsatisfiableRange,
-                    503: ServiceBusy}
+_http_status_map = {
+    403: Forbidden,
+    404: NotFound,
+    405: MethodNotAllowed,
+    409: Conflict,
+    413: TooLarge,
+    416: UnsatisfiableRange,
+    503: ServiceBusy,
+}
 
 
 def from_status(status, reason="n/a"):
@@ -251,4 +283,4 @@ def reraise(exc_type, exc_value, extra_message=None):
     args = exc_value.args
     if extra_message:
         args = (extra_message, ) + args
-    raise exc_type(args), None, exc_info()[2]
+    raise exc_type(*args), None, exc_info()[2]

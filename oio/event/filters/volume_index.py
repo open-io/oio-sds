@@ -17,7 +17,7 @@
 from oio.event.evob import Event, EventError
 from oio.event.consumer import EventTypes
 from oio.event.filters.base import Filter
-from oio.common.exceptions import OioNetworkException, OioException
+from oio.common.exceptions import OioException
 
 
 CHUNK_EVENTS = [EventTypes.CHUNK_DELETED, EventTypes.CHUNK_NEW]
@@ -30,30 +30,20 @@ class VolumeIndexFilter(Filter):
 
     def _chunk_delete(self,
                       volume_id, container_id, content_id, chunk_id):
-        for i in range(self.__class__._attempts_delete):
-            try:
-                return self.app.rdir.chunk_delete(
-                        volume_id, container_id, content_id, chunk_id)
-            except OioNetworkException:
-                # TODO(jfs): detect the case of a connection timeout
-                if i >= self.__class__._attempts_delete - 1:
-                    raise
-                # retry immediately, the error occurs because of a poor
-                # management of polled connection that is closed on the
-                # other side.
+        try:
+            return self.app.rdir.chunk_delete(
+                    volume_id, container_id, content_id, chunk_id)
+        except Exception as ex:
+            self.logger.warn("chunk delete failed: %s", ex)
 
     def _chunk_push(self,
                     volume_id, container_id, content_id, chunk_id,
                     args):
-        for i in range(self.__class__._attempts_push):
-            try:
-                return self.app.rdir.chunk_push(
-                        volume_id, container_id, content_id, chunk_id, **args)
-            except OioNetworkException:
-                # TODO(jfs): detect the case of a connection timeout
-                if i >= self.__class__._attempts_push - 1:
-                    raise
-                # idem
+        try:
+            return self.app.rdir.chunk_push(
+                    volume_id, container_id, content_id, chunk_id, **args)
+        except Exception as ex:
+            self.logger.warn("chunk push failed: %s", ex)
 
     def process(self, env, cb):
         event = Event(env)

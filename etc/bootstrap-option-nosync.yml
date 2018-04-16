@@ -1,0 +1,3 @@
+config:
+  sqlx.sync.solo: 0
+  sqlx.sync.repli: 0

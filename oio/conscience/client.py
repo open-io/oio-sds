@@ -66,7 +66,7 @@ class LbClient(ProxyClient):
         else:
             raise OioException("Failed to poll %s: %s" % (pool, resp.text))
 
-    def create_pool(self, pool, targets, options=None):
+    def create_pool(self, pool, targets, options=None, **kwargs):
         """
         Create a service pool on the local proxy.
 
@@ -81,7 +81,8 @@ class LbClient(ProxyClient):
         ibody = {'targets': stargets, 'options': options}
         _, _ = self._request('POST', "/create_pool",
                              params={'name': pool},
-                             data=json.dumps(ibody))
+                             data=json.dumps(ibody),
+                             **kwargs)
 
 
 class ConscienceClient(ProxyClient):
@@ -120,11 +121,11 @@ class ConscienceClient(ProxyClient):
         """
         return self.lb.poll(pool, **kwargs)
 
-    def all_services(self, type_, full=False):
+    def all_services(self, type_, full=False, **kwargs):
         params = {'type': type_}
         if full:
             params['full'] = '1'
-        resp, body = self._request('GET', '/list', params=params)
+        resp, body = self._request('GET', '/list', params=params, **kwargs)
         if resp.status == 200:
             return body
         else:

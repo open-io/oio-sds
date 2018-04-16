@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -34,11 +34,11 @@ WRITE_CHUNK_SIZE = 65536
 READ_CHUNK_SIZE = 65536
 
 # RAWX connection timeout
-CONNECTION_TIMEOUT = 2.0
+CONNECTION_TIMEOUT = 10.0
 # chunk operations timeout
-CHUNK_TIMEOUT = 5.0
+CHUNK_TIMEOUT = 60.0
 # client read timeout
-CLIENT_TIMEOUT = 5.0
+CLIENT_TIMEOUT = 60.0
 
 PUT_QUEUE_DEPTH = 10
 
@@ -214,6 +214,13 @@ class ChunkReader(object):
         self.read_timeout = read_timeout or CHUNK_TIMEOUT
         self._resp_by_chunk = dict()
 
+    @property
+    def reqid(self):
+        """:returns: the request ID or None"""
+        if not self.request_headers:
+            return None
+        return self.request_headers.get('X-oio-req-id')
+
     def recover(self, nb_bytes):
         """
         Recover the request.
@@ -272,7 +279,8 @@ class ChunkReader(object):
                 source = conn.getresponse()
                 source.conn = conn
         except (Exception, Timeout) as error:
-            logger.exception('Connection failed to %s', chunk)
+            logger.exception('Connection failed to %s (reqid=%s)',
+                             chunk, self.reqid)
             self._resp_by_chunk[chunk["url"]] = (0, str(error))
             return False
 
@@ -282,8 +290,8 @@ class ChunkReader(object):
             self.sources.append((source, chunk))
             return True
         else:
-            logger.warn("Invalid response from %s: %d %s",
-                        chunk, source.status, source.reason)
+            logger.warn("Invalid response from %s (reqid=%s): %d %s",
+                        chunk, self.reqid, source.status, source.reason)
             self._resp_by_chunk[chunk["url"]] = (source.status,
                                                  str(source.reason))
         return False
@@ -316,8 +324,11 @@ class ChunkReader(object):
                                      self._resp_by_chunk)
 
     def stream(self):
-        # Calling that right now will make `headers` field available
-        # before the caller starts reading the stream
+        """
+        Get a generator over chunk data.
+        After calling this method, the `headers` field will be available
+        (even if no data is read from the generator).
+        """
         parts_iter = self.get_iter()
 
         def _iter():
@@ -395,8 +406,9 @@ class ChunkReader(object):
                 new_source, new_chunk = self._get_source()
                 if new_source:
                     logger.warn(
-                        "Failed to read from %s (%s), retrying from %s",
-                        chunk, crto, new_chunk)
+                        "Failed to read from %s (%s), "
+                        "retrying from %s (reqid=%s)",
+                        chunk, crto, new_chunk, self.reqid)
                     close_source(source[0])
                     # switch source
                     source[0] = new_source
@@ -411,7 +423,8 @@ class ChunkReader(object):
                         return
 
                 else:
-                    logger.warn("Failed to read from %s (%s)", chunk, crto)
+                    logger.warn("Failed to read from %s (%s, reqid=%s)",
+                                chunk, crto, self.reqid)
                     # no valid source found to recover
                     raise
             else:
@@ -474,7 +487,8 @@ class ChunkReader(object):
                     body_iter.close()
 
         except green.ChunkReadTimeout:
-            logger.exception("Failure during chunk read")
+            logger.exception("Failure during chunk read (reqid=%s)",
+                             self.reqid)
             raise
         except GeneratorExit:
             pass
@@ -512,6 +526,8 @@ class MetachunkWriter(object):
     def __init__(self, storage_method=None, quorum=None, **_kwargs):
         self.storage_method = storage_method
         self._quorum = quorum
+        if storage_method is None and quorum is None:
+            raise ValueError('Missing storage_method or quorum')
 
     @property
     def quorum(self):
@@ -528,15 +544,30 @@ class MetachunkWriter(object):
         :type successes: `list` or `tuple`
         :param failures: a list of chunk objects whose upload failed
         :type failures: `list` or `tuple`
+        :raises `exc.SourceReadError`: if there is an error while reading
+            data from the client
+        :raises `exc.SourceReadTimeout`: if there is a timeout while reading
+            data from the client
+        :raises `exc.OioTimeout`: if there is a timeout among the errors
         :raises `exc.OioException`: if quorum has not been reached
+            for any other reason
         """
         if len(successes) < self.quorum:
             errors = group_chunk_errors(
                 ((chunk["url"], chunk.get("error", "success"))
                  for chunk in successes + failures))
-            raise exc.OioException(
+            new_exc = exc.OioException(
                 "RAWX write failure, quorum not reached (%d/%d): %s" %
                 (len(successes), self.quorum, errors))
+            for err in [x.get('error') for x in failures]:
+                if isinstance(err, exc.SourceReadError):
+                    raise exc.SourceReadError(new_exc)
+                elif isinstance(err, green.SourceReadTimeout):
+                    # Never raise 'green' timeouts out of our API
+                    raise exc.SourceReadTimeout(new_exc)
+                elif isinstance(err, (exc.OioTimeout, green.OioTimeout)):
+                    raise exc.OioTimeout(new_exc)
+            raise new_exc
 
 
 class MetachunkPreparer(object):

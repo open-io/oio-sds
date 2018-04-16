@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -18,7 +18,9 @@ from cliff import lister, show
 
 
 class ShowAdminVolume(show.ShowOne):
-    """Show admin volume"""
+    """
+    Show information about a volume, especially the last incident date.
+    """
 
     log = getLogger(__name__ + '.ShowAdminVolume')
 
@@ -217,13 +219,15 @@ class BootstrapVolume(lister.Lister):
 
         try:
             all_rawx = self.app.client_manager.volume.rdir_lb.assign_all_rawx(
-                    parsed_args.max_per_rdir)
+                    parsed_args.max_per_rdir,
+                    connection_timeout=30.0, read_timeout=90.0)
         except ClientException as exc:
             if exc.status != 481:
                 raise
             self.log.warn("Failed to assign all rawx: %s", exc)
             all_rawx, _ = \
-                self.app.client_manager.volume.rdir_lb.get_assignation()
+                self.app.client_manager.volume.rdir_lb.get_assignation(
+                        connection_timeout=30.0, read_timeout=90.0)
 
         results = list()
         for rawx in all_rawx:
@@ -254,7 +258,8 @@ class DisplayVolumeAssignation(lister.Lister):
         self.log.debug('take_action(%s)', parsed_args)
 
         all_rawx, all_rdir = \
-            self.app.client_manager.volume.rdir_lb.get_assignation()
+            self.app.client_manager.volume.rdir_lb.get_assignation(
+                    connection_timeout=30.0, read_timeout=90.0)
 
         results = list()
         if not parsed_args.aggregated:

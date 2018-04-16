@@ -8,16 +8,18 @@ install:
   - sudo apt-get install -y --force-yes openio-gridinit openio-asn1c
   - sudo apt-get install -y --force-yes flex bison curl lcov libglib2.0-dev libzookeeper-mt-dev libzmq3-dev libcurl4-gnutls-dev libapreq2-dev libsqlite3-dev libattr1-dev apache2 apache2-dev libapache2-mod-wsgi liblzo2-dev libjson-c-dev libleveldb1 libleveldb-dev libattr1-dev python-all-dev python-virtualenv liberasurecode-dev zookeeper zookeeper-bin zookeeperd beanstalkd
   - sudo apt-get install -y --force-yes gdb
+  - sudo service beanstalkd stop
   - virtualenv $HOME/oio && source $HOME/oio/bin/activate
   - pip install --upgrade pip setuptools virtualenv tox
   - pip install --upgrade -r all-requirements.txt -r test-requirements.txt
   - pip install --upgrade zkpython
 env:
   - TEST_SUITE=build,unit,small-cache
-  - TEST_SUITE=copyright,worm,slave,cli
+  - TEST_SUITE=copyright,worm,slave,cli,variables
   - TEST_SUITE=3copies,with-service-id
   - TEST_SUITE=repli
   - TEST_SUITE=ec,with-random-service-id
+  - TEST_SUITE=multi-beanstalk
 script:
   - sudo bash -c "echo '/tmp/core.%p.%E' > /proc/sys/kernel/core_pattern"
   - ulimit -c unlimited -S
@@ -31,7 +33,7 @@ script:
   - bash ./tools/oio-check-version.sh
   - export G_DEBUG_LEVEL=D PATH="$PATH:/tmp/oio/bin" LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/tmp/oio/lib"
   - make coverage_init
-  - pwd && env && ./tools/oio-travis-tests.sh
+  - ./tools/oio-travis-tests.sh
   - make coverage
 after_success:
   - bash <(curl -s https://codecov.io/bash) -f cmake_coverage.output

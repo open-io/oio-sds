@@ -126,6 +126,14 @@ class AutocontainerBuilder(ContainerBuilder):
             return False
 
 
+class NoMatchFound(ValueError):
+    """
+    Exception raised when none of the configured patterns match
+    the input object name.
+    """
+    pass
+
+
 class RegexContainerBuilder(object):
     """
     Build a container name from a regular expression applied on a user
@@ -156,7 +164,8 @@ class RegexContainerBuilder(object):
             match = pattern.search(path)
             if match:
                 return self.builder(''.join(match.groups()))
-        raise ValueError("'%s' does not match any configured patterns" % path)
+        raise NoMatchFound(
+            "'%s' does not match any configured patterns" % path)
 
     def alternatives(self, path):
         """

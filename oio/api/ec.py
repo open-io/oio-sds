@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -282,8 +282,8 @@ class ECStream(object):
             except GreenletExit:
                 # ignore
                 pass
-            except green.ChunkReadTimeout:
-                logger.error("Timeout on reading")
+            except green.ChunkReadTimeout as err:
+                logger.error('%s', err)
             except Exception:
                 logger.exception("Exception on reading")
             finally:
@@ -746,8 +746,8 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 return bytes_transferred
 
         except green.SourceReadTimeout as exc:
-            logger.warn('Source read timeout: %s', exc)
-            raise
+            logger.warn('%s', exc)
+            raise exceptions.SourceReadTimeout(exc)
         except SourceReadError as exc:
             logger.warn('Source read error: %s', exc)
             raise
@@ -782,10 +782,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
         except (Exception, Timeout) as exc:
             msg = str(exc)
             logger.error("Failed to connect to %s (%s)", chunk, msg)
-            if isinstance(exc, Timeout):
-                chunk['error'] = 'connect: Timeout %s' % msg
-            else:
-                chunk['error'] = 'connect: %s' % msg
+            chunk['error'] = 'connect: %s' % msg
             return None, chunk
 
     def _get_results(self, writers):
@@ -815,8 +812,8 @@ class EcMetachunkWriter(io.MetachunkWriter):
                     else:
                         success_chunks.append(writer.chunk)
                 else:
-                    logger.error("Wrong status code from %s (%s)",
-                                 writer.chunk, resp.status)
+                    logger.error("Wrong status code from %s (%s) %s",
+                                 writer.chunk, resp.status, resp.reason)
                     writer.chunk['error'] = 'resp: HTTP %s' % resp.status
                     failed_chunks.append(writer.chunk)
             else:
@@ -839,7 +836,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
             if isinstance(exc, Timeout):
                 logger.warn("Timeout (%s) while writing %s",
                             msg, writer.chunk)
-                writer.chunk['error'] = 'resp: Timeout %s' % msg
+                writer.chunk['error'] = 'resp: %s' % msg
             else:
                 logger.warn("Failed to read response for %s (%s)",
                             writer.chunk, msg)
@@ -898,10 +895,12 @@ class ECWriteHandler(io.WriteHandler):
             for chunk in chunks:
                 chunk['hash'] = checksum
                 chunk['size'] = bytes_transferred
+                # add the chunks whose upload succeeded
+                # to the content chunk list
+                if not chunk.get('error'):
+                    content_chunks.append(chunk)
 
             total_bytes_transferred += bytes_transferred
-            # add the chunks to the content chunk list
-            content_chunks += chunks
             if bytes_transferred < max_size:
                 break
             if len(self.source.peek()) == 0:
@@ -934,7 +933,8 @@ class ECRebuildHandler(object):
             with Timeout(self.read_timeout):
                 resp = conn.getresponse()
             if resp.status != 200:
-                logger.warning('Invalid GET response from %s', chunk)
+                logger.warning('Invalid GET response from %s: %s %s',
+                               chunk, resp.status, resp.reason)
                 resp = None
         except (Exception, Timeout):
             logger.exception('ERROR fetching %s', chunk)

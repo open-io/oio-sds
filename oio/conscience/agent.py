@@ -66,6 +66,7 @@ class ServiceWatcher(object):
         self.client = ProxyClient(self.conf, pool_manager=self.pool_manager,
                                   no_ns_in_url=True, logger=self.logger)
         self.last_status = False
+        self.status = False
         self.failed = False
         self.service_definition = {
             'ns': self.conf['namespace'],
@@ -101,6 +102,7 @@ class ServiceWatcher(object):
         if self.deregister_on_exit:
             self.logger.info('watcher "%s" deregister service', self.name)
             try:
+                self.status = False
                 self.last_status = False
                 self.register()
             except Exception as e:
@@ -108,33 +110,41 @@ class ServiceWatcher(object):
         self.running = False
 
     def check(self):
-        status = True
+        """Perform the registered checks on the service until any of
+        them fails of the end of the list is reached."""
+        self.status = True
         for service_check in (x for x in self.service_checks if self.running):
             if not service_check.service_status():
-                status = False
-
-        if status != self.last_status:
-            if status:
-                self.logger.info('service "%s" is now up', self.name)
-            else:
-                self.logger.warn('service "%s" is now down', self.name)
-            self.last_status = status
+                self.status = False
+                return
 
     def get_stats(self):
         """Update service definition with all configured stats"""
-        if not self.last_status:
+        if not self.status:
             return
-        for stat in (x for x in self.service_stats if self.running):
-            stats = stat.get_stats()
-            self.service_definition['tags'].update(stats)
+        try:
+            for stat in (x for x in self.service_stats if self.running):
+                stats = stat.get_stats()
+                self.service_definition['tags'].update(stats)
+        except Exception as ex:
+            self.logger.debug("get_stats error: %s", ex)
+            self.status = False
 
     def register(self):
         # only accept a final zero/down-registration when exiting
-        if not self.running and self.last_status:
+        if not self.running and self.status:
             return
 
+        # Alert when the status changes
+        if self.status != self.last_status:
+            if self.status:
+                self.logger.info('service "%s" is now up', self.name)
+            else:
+                self.logger.warn('service "%s" is now down', self.name)
+            self.last_status = self.status
+
         # Use a boolean so we can easily convert it to a number in conscience
-        self.service_definition['tags']['tag.up'] = self.last_status
+        self.service_definition['tags']['tag.up'] = self.status
         try:
             self.cs.register(self.service['type'], self.service_definition,
                              retries=False)

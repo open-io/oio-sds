@@ -106,25 +106,31 @@ gsize oio_ext_array_partition (gpointer *array, gsize len,
 	/* qualify each item, so that we call the predicate only once */
 	guchar *good = g_malloc0 (len);
 
-	for (gsize i=0; i<len ;i++)
+	guchar any = 0;
+	for (gsize i=0; i<len; i++) {
 		good[i] = 0 != ((*predicate) (array[i]));
+		any |= good[i];
+	}
 
 	/* partition the items, the predicate==TRUE first */
-	for (gsize i=0; i<len ;i++) {
-		if (good[i])
-			continue;
-		/* swap the items */
-		gchar *tmp = array[len-1];
-		array[len-1] = array[i];
-		array[i] = tmp;
-		/* swap the qualities */
-		gboolean b = good[len-1];
-		good[len-1] = good[i];
-		good[i] = b;
+	if (any) {
+		for (gsize i=0; i<len; i++) {
+			if (good[i])
+				continue;
+			/* swap the items */
+			gchar *tmp = array[len-1];
+			array[len-1] = array[i];
+			array[i] = tmp;
+			/* swap the qualities */
+			gboolean b = good[len-1];
+			good[len-1] = good[i];
+			good[i] = b;
 
-		-- len;
-		-- i;
-	}
+			-- len;
+			-- i;
+		}
+	} else
+		len = 0;
 
 	g_free (good);
 	return len;

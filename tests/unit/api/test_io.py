@@ -15,9 +15,12 @@
 
 import unittest
 from mock import patch
-from oio.api.io import ChunkReader, discard_bytes
-from oio.common import exceptions as exc
+from oio.api.io import ChunkReader, discard_bytes, MetachunkWriter
+from oio.common import exceptions
 from oio.common import green
+from oio.common.storage_method import STORAGE_METHODS
+
+from tests.utils import random_id
 
 
 class FakeSource(object):
@@ -55,9 +58,9 @@ class IOTest(unittest.TestCase):
         reader.recover(10)
         self.assertEqual(reader.request_headers['Range'], 'bytes=31-40')
         # ask byte range too large
-        self.assertRaises(exc.UnsatisfiableRange, reader.recover, 100)
+        self.assertRaises(exceptions.UnsatisfiableRange, reader.recover, 100)
         # ask empty byte range
-        self.assertRaises(exc.EmptyByteRange, reader.recover, 10)
+        self.assertRaises(exceptions.EmptyByteRange, reader.recover, 10)
 
         # prefix byte range
         reader = ChunkReader(None, None, {'Range': 'bytes=11-'})
@@ -72,7 +75,7 @@ class IOTest(unittest.TestCase):
         # single byte range
         reader = ChunkReader(None, None, {'Range': 'bytes=0-0'})
         # ask empty byte range
-        self.assertRaises(exc.EmptyByteRange, reader.recover, 1)
+        self.assertRaises(exceptions.EmptyByteRange, reader.recover, 1)
 
     def test_discard_bytes(self):
         # read from 0
@@ -120,3 +123,77 @@ class IOTest(unittest.TestCase):
             data = list(it)
 
         self.assertEqual(data, ['1234abcd', '5678efgh'])
+
+
+class MetachunkWriterTest(unittest.TestCase):
+    """Test oio.api.io.MetachunkWriter class."""
+
+    def setUp(self):
+        self.mcw = MetachunkWriter(quorum=3)
+
+    def _dummy_chunk(self, error=None):
+        chunk = {'url': 'http://127.0.0.1:7000/' + random_id(64)}
+        if error:
+            chunk['error'] = error
+        return chunk
+
+    def _check_message(self, successes, failures):
+        try:
+            self.mcw.quorum_or_fail(successes, failures)
+        except exceptions.OioException as exc:
+            msg = str(exc)
+            self.assertIn('quorum not reached', msg)
+            self.assertIn('%d/%d' % (len(successes), self.mcw.quorum), msg)
+            for chunk in successes:
+                self.assertIn(chunk['url'], msg)
+            for chunk in failures:
+                self.assertIn(chunk['url'], msg)
+
+    def test_metachunkwriter_init(self):
+        self.assertRaises(ValueError, MetachunkWriter)
+        mcw = MetachunkWriter(quorum=3)
+        self.assertEqual(3, mcw.quorum)
+        mcw = MetachunkWriter(STORAGE_METHODS.load('plain'))
+        self.assertEqual(1, mcw.quorum)
+
+    def test_metachunkwriter_quorum_success(self):
+        self.mcw.quorum_or_fail([{}, {}, {}], [])
+        self.mcw.quorum_or_fail([{}, {}, {}, {}], [])
+        failures = [self._dummy_chunk(Exception('Failed')),
+                    self._dummy_chunk(exceptions.OioTimeout('Failed')),
+                    self._dummy_chunk(green.SourceReadTimeout(10)),
+                    self._dummy_chunk(exceptions.SourceReadError('Failed'))]
+        self.mcw.quorum_or_fail([{}, {}, {}], failures)
+
+    def test_metachunkwriter_quorum_fail_generic(self):
+        successes = [self._dummy_chunk(), self._dummy_chunk()]
+        failures = [self._dummy_chunk(Exception('Failed'))]
+        self.assertRaises(exceptions.OioException,
+                          self.mcw.quorum_or_fail, successes, failures)
+        self.assertRaises(exceptions.OioException,
+                          self.mcw.quorum_or_fail, successes, [])
+        self._check_message(successes, failures)
+
+    def test_metachunkwriter_quorum_fail_timeout(self):
+        successes = [self._dummy_chunk(), self._dummy_chunk()]
+        failures = [self._dummy_chunk(Exception('Failed')),
+                    self._dummy_chunk(exceptions.OioTimeout('Failed'))]
+        self.assertRaises(exceptions.OioTimeout,
+                          self.mcw.quorum_or_fail, successes, failures)
+        self._check_message(successes, failures)
+
+    def test_metachunkwriter_quorum_fail_sourcereadtimeout(self):
+        successes = [self._dummy_chunk(), self._dummy_chunk()]
+        failures = [self._dummy_chunk(Exception('Failed')),
+                    self._dummy_chunk(green.SourceReadTimeout(10))]
+        self.assertRaises(exceptions.SourceReadTimeout,
+                          self.mcw.quorum_or_fail, successes, failures)
+        self._check_message(successes, failures)
+
+    def test_metachunkwriter_quorum_fail_sourcereaderror(self):
+        successes = [self._dummy_chunk(), self._dummy_chunk()]
+        failures = [self._dummy_chunk(Exception('Failed')),
+                    self._dummy_chunk(exceptions.SourceReadError('Failed'))]
+        self.assertRaises(exceptions.SourceReadError,
+                          self.mcw.quorum_or_fail, successes, failures)
+        self._check_message(successes, failures)

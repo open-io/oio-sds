@@ -155,6 +155,7 @@ class DirectoryClient(ProxyClient):
               **kwargs):
         """
         Re-poll and re-associate a set of services to the reference.
+        Will increment the sequence number.
         """
         params = self._make_params(account, reference, service_type, cid=cid)
         _resp, _body = self._request('POST', '/renew', params=params, **kwargs)

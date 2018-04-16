@@ -26,7 +26,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/socket.h>
 
 #include <glib.h>
-#include <zmq.h>
 #include <math.h>
 
 #include <core/oio_core.h>
@@ -103,7 +102,7 @@ oio_events_queue_factory__create_beanstalkd (const char *endpoint,
 	self->tube = g_strdup(OIO_EVT_BEANSTALKD_DEFAULT_TUBE);
 	self->endpoint = g_strdup (endpoint);
 
-	oio_events_queue_buffer_init(&(self->buffer), 1 * G_TIME_SPAN_SECOND);
+	oio_events_queue_buffer_init(&(self->buffer));
 
 	*out = (struct oio_events_queue_s*) self;
 	return NULL;

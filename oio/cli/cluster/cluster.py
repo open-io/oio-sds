@@ -263,16 +263,16 @@ class ClusterWait(lister.Lister):
                    "score > {1}, still {2} are not")
 
         while True:
-            all_descr = []
+            descr = []
             for type_ in types:
                 tmp = self.app.client_manager.cluster.all_services(type_)
                 for s in tmp:
                     s['type'] = type_
-                all_descr += tmp
-            ko = len([s['score'] for s in tmp if s['score'] <= min_score])
+                descr += tmp
+            ko = len([s['score'] for s in descr if s['score'] <= min_score])
             if ko == 0:
-                for descr in all_descr:
-                    yield descr['type'], descr['addr'], descr['score']
+                for d in descr:
+                    yield d['type'], d['addr'], d['score']
                 return
             else:
                 self.log.debug("Still %d services down", ko)

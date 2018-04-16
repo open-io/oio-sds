@@ -27,12 +27,13 @@ GRIDINIT_SOCK=${SDS}/run/gridinit.sock
 BOOTSTRAP_CONFIG=
 SERVICE_ID=
 RANDOM_SERVICE_ID=
+PROFILE=
 
 ZKSLOW=0
 verbose=0
 OPENSUSE=`grep -i opensuse /etc/*release || echo -n ''`
 
-while getopts "P:I:N:f:Z:CURvb" opt; do
+while getopts "P:I:N:f:Z:p:CURv" opt; do
     case $opt in
         P) PORT="${OPTARG}" ;;
         I) IP="${OPTARG}" ;;
@@ -47,6 +48,7 @@ while getopts "P:I:N:f:Z:CURvb" opt; do
 			fi
 		fi ;;
         Z) ZKSLOW=1 ;;
+        p) PROFILE="${OPTARG}" ;;
         v) ((verbose=verbose+1)) ;;
         \?) exit 1 ;;
     esac
@@ -122,6 +124,7 @@ bootstrap_opt=
 if [[ -n "${PORT}" ]] ; then bootstrap_opt="${bootstrap_opt} --port ${PORT}" ; fi
 if [[ -n "${SERVICE_ID}" ]] ; then bootstrap_opt="${bootstrap_opt} --with-service-id" ; fi
 if [[ -n "${RANDOM_SERVICE_ID}" ]] ; then bootstrap_opt="${bootstrap_opt} --random-service-id" ; fi
+if [[ -n "${PROFILE}" ]] ; then bootstrap_opt="${bootstrap_opt} --profile ${PROFILE}" ; fi
 oio-bootstrap.py $bootstrap_opt -d ${BOOTSTRAP_CONFIG} "$NS" "$IP" > /tmp/oio-bootstrap.$$
 
 
@@ -170,6 +173,11 @@ openio \
 	--oio-ns "$NS" -v directory bootstrap --check \
 	--replicas $(oio-test-config.py -v directory_replicas)
 
+echo -e "\n### Assign rdir services"
+# Force meta1 services to reload meta0 cache
+gridinit_cmd -S "$GRIDINIT_SOCK" restart "@meta1" >/dev/null
+sleep 1
+openio --oio-ns "$NS" -v volume admin bootstrap
 
 echo -e "\n### Wait for the services to have a score"
 openio -q --oio-ns "$NS" cluster unlockall

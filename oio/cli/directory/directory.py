@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -15,7 +15,11 @@
 
 from logging import getLogger
 from cliff.command import Command
-from oio.common.exceptions import ServiceUnavailable
+from eventlet import Queue, GreenPile
+from oio.common.configuration import load_namespace_conf
+from oio.common.exceptions import ClientException
+from oio.common import green
+from oio.directory.meta0 import generate_prefixes, count_prefixes
 
 
 class DirectoryCmd(Command):
@@ -31,8 +35,8 @@ class DirectoryCmd(Command):
         parser.add_argument('--min-dist', type=int, default=1,
                             help="Minimum distance between replicas")
         parser.add_argument(
-            '--meta0-timeout', metavar='<SECONDS>', type=float, default=30.0,
-            help="Timeout for meta0-related operations (30.0s by default)")
+            '--meta0-timeout', metavar='<SECONDS>', type=float, default=60.0,
+            help="Timeout for meta0-related operations (60.0s by default)")
         return parser
 
     def get_prefix_mapping(self, parsed_args):
@@ -51,21 +55,18 @@ class DirectoryCmd(Command):
 class DirectoryInit(DirectoryCmd):
     """
     Initialize the service directory.
+
     Distribute database prefixes among meta1 services and fill the meta0.
-    Also assign one rdir service for each rawx service.
     """
 
     def get_parser(self, prog_name):
         parser = super(DirectoryInit, self).get_parser(prog_name)
-        parser.add_argument('--no-rdir',
-                            dest='rdir',
-                            action='store_false',
-                            default=True,
-                            help='Do not assign rdir services to rawx services'
-                            )
-        parser.add_argument('--force',
-                            action='store_true',
-                            help="Do the bootstrap even if already done")
+        parser.add_argument(
+            '--no-rdir', action='store_true', help='Deprecated')
+        parser.add_argument(
+            '--force',
+            action='store_true',
+            help="Do the bootstrap even if already done")
         parser.add_argument(
             '--check',
             action='store_true',
@@ -105,33 +106,34 @@ class DirectoryInit(DirectoryCmd):
                 break
 
         if checked:
+            from time import sleep
             self.log.info("Saving...")
-            mapping.apply(connection_timeout=5.0,
-                          read_timeout=parsed_args.meta0_timeout)
+            max_attempts = 7
+            for i in range(max_attempts):
+                try:
+                    mapping.apply(connection_timeout=30.0,
+                                  read_timeout=parsed_args.meta0_timeout)
+                    break
+                except ClientException as ex:
+                    # Manage several unretriable errors
+                    retry = (503, 504)
+                    if ex.status >= 400 and ex.status not in retry:
+                        raise
+                    # Monotonic backoff (retriable and net errors)
+                    if i < max_attempts - 1:
+                        sleep(i * 1.0)
+                        continue
+                    # Too many attempts
+                    raise
         else:
             raise Exception("Failed to initialize prefix mapping")
         return checked
 
-    def _assign_rdir(self):
-        from time import sleep
-
-        self.log.info("Assigning rdir services to rawx services...")
-        max_attempts = 3
-        for i in range(max_attempts):
-            sleep(5 + i)
-            try:
-                self.app.client_manager.directory.rdir_lb.assign_all_rawx()
-            except ServiceUnavailable as e:
-                if i < (max_attempts - 1):
-                    self.log.info("Retrying because of %s", e)
-                    continue
-                raise
-
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
+        if parsed_args.no_rdir:
+            self.log.warn('--no-rdir option is deprecated')
         checked = self._assign_meta1(parsed_args)
-        if parsed_args.rdir:
-            self._assign_rdir()
 
         if checked:
             self.log.info("Done")
@@ -150,7 +152,8 @@ class DirectoryList(DirectoryCmd):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         mapping = self.get_prefix_mapping(parsed_args)
-        mapping.load(read_timeout=parsed_args.meta0_timeout)
+        mapping.load(connection_timeout=30.0,
+                     read_timeout=parsed_args.meta0_timeout)
         print mapping.to_json()
 
 
@@ -185,3 +188,89 @@ class DirectoryDecommission(DirectoryCmd):
                                      bases_to_remove=parsed_args.base)
         mapping.apply(moved, read_timeout=parsed_args.meta0_timeout)
         self.log.info("Moved %s", moved)
+
+
+class DirectoryWarmup(DirectoryCmd):
+    """Ping each prefix of a Meta0 hash to prepare each Meta1 base"""
+
+    def get_parser(self, prog_name):
+        parser = super(DirectoryWarmup, self).get_parser(prog_name)
+        parser.add_argument('--workers', type=int, default=1,
+                            help="How many concurrent bases to warm up")
+        parser.add_argument('--proxy', type=str, default=None,
+                            help="Specific proxy IP:PORT")
+        return parser
+
+    def _ping_prefix(self, prefix):
+        pass
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+        digits = self.app.client_manager.get_meta1_digits()
+        workers_count = parsed_args.workers
+
+        conf = {'namespace': self.app.client_manager.namespace}
+        if parsed_args.proxy:
+            conf.update({'proxyd_url': parsed_args.proxy})
+        else:
+            ns_conf = load_namespace_conf(conf['namespace'])
+            proxy = ns_conf.get('proxy')
+            conf.update({'proxyd_url': proxy})
+
+        workers = list()
+        with green.ContextPool(workers_count) as pool:
+            pile = GreenPile(pool)
+            prefix_queue = Queue(16)
+
+            # Prepare some workers
+            for i in range(workers_count):
+                w = WarmupWorker(conf, self.log)
+                workers.append(w)
+                pile.spawn(w.run, prefix_queue)
+
+            # Feed the queue
+            trace_increment = 0.01
+            trace_next = trace_increment
+            sent, total = 0, float(count_prefixes(digits))
+            for prefix in generate_prefixes(digits):
+                sent += 1
+                prefix_queue.put(prefix)
+                # Display the progression
+                ratio = float(sent) / total
+                if ratio >= trace_next:
+                    self.log.info("... %d%%", int(ratio * 100.0))
+                    trace_next += trace_increment
+
+            self.log.debug("Send the termination marker")
+            prefix_queue.join()
+
+        self.log.info("All the workers are done")
+
+
+class WarmupWorker(object):
+    def __init__(self, conf, log):
+        from oio.common.http import get_pool_manager
+        self.log = log
+        self.pool = get_pool_manager()
+        self.url_prefix = 'http://%s/v3.0/%s/admin/status?type=meta1&cid=' % (
+                conf['proxyd_url'], conf['namespace'])
+
+    def run(self, prefix_queue):
+        while True:
+            prefix = prefix_queue.get()
+            self.ping(prefix)
+            prefix_queue.task_done()
+
+    def ping(self, prefix):
+        url = self.url_prefix + prefix.ljust(64, '0')
+        max_attempts = 5
+        for i in range(max_attempts):
+            rep = self.pool.request('POST', url)
+            if rep.status == 200:
+                return
+            self.log.warn("%d %s", rep.status, prefix)
+            if rep.status == 503:
+                from eventlet import sleep
+                sleep(i * 0.5)
+            else:
+                break

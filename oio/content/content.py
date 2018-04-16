@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -26,14 +26,15 @@ class Content(object):
 
     # FIXME: no need for container_id since we have account and container name
     def __init__(self, conf, container_id, metadata, chunks, storage_method,
-                 account, container_name, container_client=None):
+                 account, container_name, blob_client=None,
+                 container_client=None, logger=None):
         self.conf = conf
         self.container_id = container_id
         self.metadata = metadata
         self.chunks = ChunksHelper(chunks)
         self.storage_method = storage_method
-        self.logger = get_logger(self.conf)
-        self.blob_client = BlobClient(conf)
+        self.logger = logger or get_logger(self.conf)
+        self.blob_client = (blob_client or BlobClient(conf))
         self.container_client = (container_client
                                  or ContainerClient(self.conf,
                                                     logger=self.logger))

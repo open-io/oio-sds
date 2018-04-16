@@ -51,16 +51,6 @@ struct list_params_s
 	guint8 flag_local     :1;
 };
 
-struct dup_alias_params_s
-{
-	struct sqlx_sqlite3_s *sq3;
-	gint64 c_version;
-	gint64 src_c_version;
-	gboolean overwrite_latest;
-	gboolean set_deleted;
-	GSList *errors;
-};
-
 gchar* m2v2_build_chunk_url (const char *srv, const char *id);
 
 
@@ -178,6 +168,8 @@ struct m2db_put_args_s
 	struct sqlx_sqlite3_s *sq3;
 	struct oio_url_s *url;
 	gint64 ns_max_versions;
+	// Should be true when in WORM mode and no admin flag
+	gboolean worm_mode;
 };
 
 GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
@@ -212,20 +204,20 @@ GError* m2db_get_storage_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *ur
  * @param retention_delay Delay in seconds before actually purging
  *     a deleted alias (use -1 to keep all deleted aliases)
  * @param flags: M2V2_DRYRUN_MODE, ...
- * @param cb: callback for chunks that have been removed from
- *     the database, and that should be removed from disk
+ * @param cb: callback for lists of beans (one list per alias)
+ *     that have been removed from the database,
+ *     and that should be notified
  * @param u0: argument for the callback
  * @return
  */
 GError* m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		gint64 retention_delay, m2_onbean_cb cb, gpointer u0);
+		gint64 retention_delay, const gchar *alias,
+		m2_onbean_cb cb, gpointer u0);
 
 /** Delete all aliases of the container, without doing any check.  */
 GError* m2db_flush_container(sqlite3 *db);
 
 GError* m2db_deduplicate_contents(struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url);
-
-void m2v2_dup_alias(struct dup_alias_params_s *params, gpointer bean);
 
 #endif /*OIO_SDS__meta2v2__meta2_utils_h*/

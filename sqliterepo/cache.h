@@ -53,7 +53,7 @@ GError * sqlx_cache_open_and_lock_base(sqlx_cache_t *cache,
 
 /** The invert of sqlx_cache_open_and_lock_base() */
 GError * sqlx_cache_unlock_and_close_base(sqlx_cache_t *cache, gint bd,
-		gboolean force);
+		guint32 flags);
 
 guint sqlx_cache_expire_all(sqlx_cache_t *cache);
 

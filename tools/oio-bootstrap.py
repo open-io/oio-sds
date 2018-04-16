@@ -85,16 +85,26 @@ aof-rewrite-incremental-fsync yes
 template_gridinit_redis = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=false
 command=redis-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 """
 
-template_gridinit_account = """
+template_gridinit_beanstalkd = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 on_die=respawn
+enabled=true
+start_at_boot=true
+command=beanstalkd -l ${IP} -p ${PORT} -b ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM} -f 1000 -s 10240000
+env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
+"""
+
+template_gridinit_account = """
+[service.${NS}-${SRVTYPE}-${SRVNUM}]
+group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+on_die=cry
 enabled=true
 start_at_boot=false
 command=oio-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
@@ -104,7 +114,7 @@ env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 template_gridinit_rdir = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=false
 command=oio-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
@@ -113,7 +123,7 @@ command=oio-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 template_gridinit_proxy = """
 [service.${NS}-proxy]
 group=${NS},localhost,proxy,${IP}:${PORT}
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=false
 #command=${EXE} -s OIO,${NS},proxy -O Bind=${RUNDIR}/${NS}-proxy.sock ${IP}:${PORT} ${NS}
@@ -640,18 +650,9 @@ limit.core_size=-1
 """
 
 template_gridinit_ns = """
-
-[service.${NS}-event-agent]
-group=${NS},localhost,event
-on_die=respawn
-enabled=true
-start_at_boot=false
-command=oio-event-agent ${CFGDIR}/event-agent.conf
-env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
-
 [service.${NS}-conscience-agent]
 group=${NS},localhost,conscience,conscience-agent
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=true
 command=oio-conscience-agent ${CFGDIR}/conscience-agent.yml
@@ -661,7 +662,7 @@ env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 template_gridinit_conscience = """
 [service.${NS}-conscience-${SRVNUM}]
 group=${NS},localhost,conscience,${IP}:${PORT}
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=true
 command=oio-daemon -s OIO,${NS},cs,${SRVNUM} ${CFGDIR}/${NS}-conscience-${SRVNUM}.conf
@@ -670,7 +671,7 @@ command=oio-daemon -s OIO,${NS},cs,${SRVNUM} ${CFGDIR}/${NS}-conscience-${SRVNUM
 template_gridinit_meta = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=false
 command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${IP}:${PORT} ${EXTRA} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
@@ -679,7 +680,7 @@ command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${IP}:${PORT} ${EXT
 template_gridinit_sqlx = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-on_die=respawn
+on_die=cry
 enabled=true
 start_at_boot=false
 command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O DirectorySchemas=${CFGDIR}/sqlx/schemas -O Endpoint=${IP}:${PORT} ${EXTRA} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
@@ -691,7 +692,7 @@ group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 command=oio-blob-indexer ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 enabled=true
 start_at_boot=false
-on_die=respawn
+on_die=cry
 """
 
 template_gridinit_httpd = """
@@ -700,7 +701,7 @@ group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 command=${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.httpd.conf
 enabled=true
 start_at_boot=false
-on_die=respawn
+on_die=cry
 """
 
 template_local_header = """
@@ -719,14 +720,25 @@ ${NOZK}zookeeper.sqlx= ${ZK_CNXSTRING}
 
 #proxy-local=${RUNDIR}/${NS}-proxy.sock
 proxy=${IP}:${PORT_PROXYD}
-ecd=${IP}:${PORT_ECD}
-event-agent=beanstalk://127.0.0.1:11300
-#event-agent=ipc://${RUNDIR}/event-agent.sock
 conscience=${CS_ALL_PUB}
+ecd=${IP}:${PORT_ECD}
+${NOBS}event-agent=${BEANSTALKD_CNXSTRING}
 
 meta1_digits=${M1_DIGITS}
 
 admin=${IP}:${PORT_ADMIN}
+
+"""
+
+template_gridinit_event_agent = """
+
+[service.${NS}-${SRVTYPE}-${SRVNUM}]
+group=${NS},localhost,event
+on_die=respawn
+enabled=true
+start_at_boot=false
+command=oio-event-agent ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 
 """
 
@@ -737,11 +749,12 @@ namespace = ${NS}
 user = ${USER}
 workers = 2
 concurrency = 5
-handlers_conf = ${CFGDIR}/event-handlers.conf
+handlers_conf = ${CFGDIR}/event-handlers-${SRVNUM}.conf
 log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
-syslog_prefix = OIO,${NS},event-agent
+syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
+queue_url=${QUEUE_URL}
 """
 
 template_event_agent_handlers = """
@@ -788,8 +801,8 @@ key_file = ${KEY_FILE}
 
 [filter:content_rebuild]
 use = egg:oio#notify
-tube = rebuild
-queue_url = beanstalk://127.0.0.1:11300
+tube = oio-rebuild
+queue_url = ${QUEUE_URL}
 
 [filter:account_update]
 use = egg:oio#account_update
@@ -800,7 +813,7 @@ use = egg:oio#volume_index
 [filter:replication]
 use = egg:oio#notify
 tube = oio-repli
-queue_url = beanstalk://127.0.0.1:11300
+queue_url = ${QUEUE_URL}
 
 [filter:noop]
 use = egg:oio#noop
@@ -979,9 +992,9 @@ ACCOUNT_ID = 'account_id'
 BUCKET_NAME = 'bucket_name'
 COMPRESSION = 'compression'
 APPLICATION_KEY = 'application_key'
-KEY_FILE='key_file'
-META_HEADER='x-oio-chunk-meta'
-COVERAGE=os.getenv('PYTHON_COVERAGE')
+KEY_FILE = 'key_file'
+META_HEADER = 'x-oio-chunk-meta'
+COVERAGE = os.getenv('PYTHON_COVERAGE')
 
 defaults = {
     'NS': 'OPENIO',
@@ -1017,8 +1030,10 @@ if not os.path.exists('/usr/sbin/httpd'):
 def config(env):
     return '{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.conf'.format(**env)
 
+
 def httpd_config(env):
     return '{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.httpd.conf'.format(**env)
+
 
 def watch(env):
     return '{WATCHDIR}/{NS}-{SRVTYPE}-{SRVNUM}.yml'.format(**env)
@@ -1061,7 +1076,7 @@ def generate(options):
     final_conf = {}
     final_services = {}
 
-    ports = (x for x in xrange(options['port'],60000))
+    ports = (x for x in xrange(options['port'], 60000))
     port_proxy = next(ports)
     port_ecd = next(ports)
     port_admin = next(ports)
@@ -1088,7 +1103,6 @@ def generate(options):
     backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
     backblaze_app_key = options.get('backblaze', {}).get(APPLICATION_KEY)
     want_service_id = '' if options.get('with_service_id') else '#'
-    random_service_id = 1 if options.get('random_service_id') else 0
 
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(ZK_CNXSTRING=options.get('ZK'),
@@ -1232,7 +1246,7 @@ def generate(options):
             'CS_ALL_HUB': ','.join(
                 ['tcp://'+str(host)+':'+str(hub) for _, host, _, hub in cs]),
         })
-
+        # generate the conscience files
         for num, host, port, hub in cs:
             env = subenv({'SRVTYPE': 'conscience', 'SRVNUM': num,
                           'PORT': port, 'PORT_HUB': hub})
@@ -1243,6 +1257,35 @@ def generate(options):
             with open(config(env), 'w+') as f:
                 tpl = Template(template_conscience_service)
                 f.write(tpl.safe_substitute(env))
+
+    # beanstalkd
+    all_beanstalkd = list()
+    nb_beanstalkd = getint(options['beanstalkd'].get(SVC_NB), 1)
+    if nb_beanstalkd:
+        # prepare a list of all the beanstalkd
+        for num in range(nb_beanstalkd):
+            h = hosts[num % len(hosts)]
+            all_beanstalkd.append((num + 1, h, next(ports)))
+        # generate the files
+        for num, host, port in all_beanstalkd:
+            env = subenv({'SRVTYPE': 'beanstalkd', 'SRVNUM': num,
+                          'IP': host, 'PORT': port,
+                          'EXE': 'beanstalkd'})
+            add_service(env)
+            # gridinit config
+            tpl = Template(template_gridinit_beanstalkd)
+            with open(gridinit(env), 'a+') as f:
+                f.write(tpl.safe_substitute(env))
+                for key in (k for k in env.iterkeys() if k.startswith("env.")):
+                    f.write("%s=%s\n" % (key, env[key]))
+
+        beanstalkd_cnxstring = ';'.join(
+                "beanstalk://" + str(h) + ":" + str(p)
+                for _, h, p in all_beanstalkd)
+        ENV.update({'BEANSTALKD_CNXSTRING': beanstalkd_cnxstring,
+                    'NOBS': ''})
+    else:
+        ENV.update({'BEANSTALKD_CNXSTRING': '***disabled***', 'NOBS': '#'})
 
     # meta* + sqlx
     def generate_meta(t, n, tpl, ext_opt=""):
@@ -1395,7 +1438,7 @@ def generate(options):
     # service desc
     tpl = Template(template_wsgi_service_descr)
     to_write = tpl.safe_substitute(env, SRVTYPE='container',
-                                        KEY_FILE=config(env))
+                                   KEY_FILE=config(env))
     with open(wsgi(env), 'w+') as f:
         f.write(to_write)
     # service configuration
@@ -1434,15 +1477,21 @@ def generate(options):
             tpl = Template(template_rdir_watch)
             f.write(tpl.safe_substitute(env))
 
-    # Event agent configuration
-    env = subenv({'SRVTYPE': 'event-agent', 'SRVNUM': 1})
-    add_service(env)
-    with open(CFGDIR + '/' + 'event-agent.conf', 'w+') as f:
-        tpl = Template(template_event_agent)
-        f.write(tpl.safe_substitute(env))
-    with open(CFGDIR + '/' + 'event-handlers.conf', 'w+') as f:
-        tpl = Template(template_event_agent_handlers)
-        f.write(tpl.safe_substitute(env))
+    # Event agent configuration -> one per beanstalkd
+    for num, host, port in all_beanstalkd:
+        bnurl = 'beanstalk://{0}:{1}'.format(host, port)
+        env = subenv({'SRVTYPE': 'event-agent', 'SRVNUM': num,
+                      'QUEUE_URL': bnurl})
+        add_service(env)
+        with open(gridinit(env), 'a+') as f:
+            tpl = Template(template_gridinit_event_agent)
+            f.write(tpl.safe_substitute(env))
+        with open(config(env), 'w+') as f:
+            tpl = Template(template_event_agent)
+            f.write(tpl.safe_substitute(env))
+        with open(CFGDIR + '/event-handlers-'+str(num)+'.conf', 'w+') as f:
+            tpl = Template(template_event_agent_handlers)
+            f.write(tpl.safe_substitute(env))
 
     # Conscience agent configuration
     env = subenv({'SRVTYPE': 'conscience-agent', 'SRVNUM': 1})
@@ -1463,7 +1512,7 @@ def generate(options):
         f.write(tpl.safe_substitute(ENV))
     # system config
     with open('{OIODIR}/sds.conf'.format(**ENV), 'w+') as f:
-        env = merge_env({'IP':hosts[0]})
+        env = merge_env({'IP': hosts[0]})
         tpl = Template(template_local_header)
         f.write(tpl.safe_substitute(env))
         tpl = Template(template_local_ns)
@@ -1471,7 +1520,7 @@ def generate(options):
         # Now dump the configuration
         for k, v in options['config'].iteritems():
             strv = str(v)
-            if isinstance(v,bool):
+            if isinstance(v, bool):
                 strv = strv.lower()
             f.write('{0}={1}\n'.format(k, strv))
 
@@ -1505,7 +1554,7 @@ def generate(options):
             final_conf[k] = defaults[k]
     final_conf['config'] = options['config']
     final_conf['with_service_id'] = options['with_service_id']
-    final_conf['random_service_id'] = True if options['random_service_id'] else False
+    final_conf['random_service_id'] = bool(options['random_service_id'])
     with open('{CFGDIR}/test.yml'.format(**ENV), 'w+') as f:
         f.write(yaml.dump(final_conf))
     return final_conf
@@ -1535,9 +1584,10 @@ def merge_config(base, inc):
 def main():
     if COVERAGE:
         global template_wsgi_service_descr
-        template_wsgi_service_descr = "".join([template_wsgi_service_coverage_start,
-                                               template_wsgi_service_descr,
-                                               template_wsgi_service_coverage_stop])
+        template_wsgi_service_descr = "".join(
+            [template_wsgi_service_coverage_start,
+             template_wsgi_service_descr,
+             template_wsgi_service_coverage_stop])
     parser = argparse.ArgumentParser(description='OpenIO bootstrap tool')
     parser.add_argument("-c", "--conf",
                         action="append", dest='config',
@@ -1548,12 +1598,16 @@ def main():
     parser.add_argument("-p", "--port",
                         type=int, default=6000,
                         help="Specify the first port of the range")
-    parser.add_argument("-u", "--with-service-id",
-                        action='store_true', default=False,
-                        help="generate Service Id for services supporting them")
+    parser.add_argument(
+        "-u", "--with-service-id", action='store_true', default=False,
+        help="generate service IDs for services supporting them")
     parser.add_argument("--random-service-id",
                         action='store_true', default=False,
-                        help="generate services with Service Id randomly (implies --with--service-id)")
+                        help=("generate services service IDs randomly "
+                              "(implies --with--service-id)"))
+    parser.add_argument(
+        "--profile", choices=['default', 'valgrind', 'callgrind'],
+        help="Launch SDS with specific tool")
     parser.add_argument("namespace",
                         action='store', type=str, default=None,
                         help="Namespace name")
@@ -1573,6 +1627,7 @@ def main():
     opts['sqlx'] = {SVC_NB: None, SVC_HOSTS: None}
     opts['rawx'] = {SVC_NB: None, SVC_HOSTS: None}
     opts['rdir'] = {SVC_NB: None, SVC_HOSTS: None}
+    opts['beanstalkd'] = {SVC_NB: None, SVC_HOSTS: None}
 
     options = parser.parse_args()
     if options.config:
@@ -1583,7 +1638,8 @@ def main():
                     opts = merge_config(opts, data)
 
     opts['port'] = int(options.port)
-    opts['with_service_id'] = options.with_service_id or options.random_service_id
+    opts['with_service_id'] = \
+        options.with_service_id or options.random_service_id
     opts['random_service_id'] = options.random_service_id
 
     # Remove empty strings, then apply the default if no value remains
@@ -1593,6 +1649,7 @@ def main():
 
     opts['ZK'] = os.environ.get('ZK', defaults['ZK'])
     opts['ns'] = options.namespace
+    opts[PROFILE] = options.profile
     final_conf = generate(opts)
     if options.dump_config:
         dump_config(final_conf)

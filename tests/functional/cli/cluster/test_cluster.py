@@ -15,11 +15,7 @@
 
 import time
 import json
-import unittest
 from tests.functional.cli import CliTestCase
-
-# Default to skip long-runnning tests, for travis's sake
-_SKIP_LONG_TESTS = True
 
 CLUSTER_FIELDS = ['namespace', 'storage_policy', 'chunksize']
 CLUSTER_LIST_HEADERS = ['Type', 'Addr', 'ServiceId', 'Volume', 'Location',
@@ -74,9 +70,10 @@ class ClusterTest(CliTestCase):
         data = json.loads(output)
         self.assertEqual(data[0]['Result'], 'locked to 0')
 
-    @unittest.skipIf(_SKIP_LONG_TESTS,
-                     "This test is too long to run on travis, so disable it")
     def test_cluster_wait(self):
+        if self.is_running_on_public_ci():
+            self.skipTest("Too long to run on public CI")
+
         opts = self.get_opts([], 'json')
 
         # Get one rawx service's ID

@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -21,7 +21,6 @@ import os
 import warnings
 import time
 import random
-from inspect import isgenerator
 from urllib import quote_plus, unquote_plus
 
 from oio.common import exceptions as exc
@@ -99,6 +98,7 @@ class ObjectStorageApi(object):
         acct_kwargs["proxy_endpoint"] = acct_kwargs.pop("endpoint", None)
         self.account = AccountClient(conf, logger=self.logger, **acct_kwargs)
         self._blob_client = None
+        self._proxy_client = None
 
     def _patch_timeouts(self, kwargs):
         """
@@ -124,6 +124,20 @@ class ObjectStorageApi(object):
                 conf={"namespace": self.namespace},
                 connection_pool=connection_pool, perfdata=perfdata)
         return self._blob_client
+
+    # FIXME(FVE): this method should not exist
+    # This high-level API should use lower-level APIs,
+    # not do request directly to the proxy.
+    @property
+    def proxy_client(self):
+        if self._proxy_client is None:
+            from oio.common.client import ProxyClient
+            conf = self.container.conf
+            pool_manager = self.container.pool_manager
+            self._proxy_client = ProxyClient(
+                conf, pool_manager=pool_manager, no_ns_in_url=True,
+                logger=self.logger)
+        return self._proxy_client
 
     @ensure_headers
     @ensure_request_id
@@ -412,6 +426,54 @@ class ObjectStorageApi(object):
         return self.container.container_del_properties(
             account, container, properties, **kwargs)
 
+    def _delete_exceeding_versions(self, account, container, obj,
+                                   versions, maxvers, **kwargs):
+        if not versions:
+            return
+        exceeding_versions = versions[maxvers:]
+        for version in exceeding_versions:
+            self.object_delete(account, container, obj, version=version,
+                               **kwargs)
+
+    @handle_container_not_found
+    def container_purge(self, account, container, maxvers=None, **kwargs):
+        if maxvers is None:
+            props = self.container_get_properties(account, container, **kwargs)
+            maxvers = props['system'].get('sys.m2.policy.version', None)
+            if maxvers is None:
+                _, data = self.proxy_client._request('GET', "config")
+                maxvers = data['meta2.max_versions']
+        maxvers = int(maxvers)
+        if maxvers < 0:
+            return
+        elif maxvers == 0:
+            maxvers = 1
+
+        truncated = True
+        marker = None
+        last_object_name = None
+        versions = None
+        while truncated:
+            resp = self.object_list(account, container, versions=True,
+                                    marker=marker, **kwargs)
+            # FIXME `next_marker` is an object name.
+            # `object_list` can send twice the same version
+            # if there weren't all versions for the last object.
+            last_object_name = None
+            truncated = resp['truncated']
+            marker = resp.get('next_marker', None)
+            for obj in resp['objects']:
+                if obj['name'] != last_object_name:
+                    self._delete_exceeding_versions(
+                        account, container, last_object_name, versions,
+                        maxvers, **kwargs)
+                    last_object_name = obj['name']
+                    versions = list()
+                if not obj['deleted']:
+                    versions.append(obj['version'])
+        self._delete_exceeding_versions(
+            account, container, last_object_name, versions, maxvers, **kwargs)
+
     def container_update(self, account, container, metadata, clear=False,
                          **kwargs):
         """
@@ -478,6 +540,7 @@ class ObjectStorageApi(object):
             raise exc.MissingData()
         src = data if data is not None else file_or_path
         if src is file_or_path:
+            # We are asked to read from a file path or a file-like object
             if isinstance(file_or_path, basestring):
                 if not os.path.exists(file_or_path):
                     raise exc.FileNotFound("File '%s' not found." %
@@ -489,9 +552,13 @@ class ObjectStorageApi(object):
                 except AttributeError:
                     file_name = None
             obj_name = obj_name or file_name
-        elif isgenerator(src):
-            file_or_path = GeneratorIO(src)
-            src = file_or_path
+        else:
+            # We are asked to read from a buffer or an iterator
+            try:
+                src = BytesIO(src)
+            except TypeError:
+                src = GeneratorIO(src)
+
         if not obj_name:
             raise exc.MissingName(
                 "No name for the object has been specified"
@@ -508,20 +575,20 @@ class ObjectStorageApi(object):
             else:
                 properties.update(metadata)
 
-        if src is data:
+        if isinstance(src, BytesIO):
             return self._object_create(
-                account, container, obj_name, BytesIO(data), sysmeta,
+                account, container, obj_name, src, sysmeta,
                 properties=properties, policy=policy,
                 key_file=key_file, append=append, **kwargs)
-        elif hasattr(file_or_path, "read"):
+        elif hasattr(src, 'read'):
             return self._object_create(
                 account, container, obj_name, src, sysmeta,
                 properties=properties, policy=policy, key_file=key_file,
                 append=append, **kwargs)
         else:
-            with open(file_or_path, "rb") as in_f:
+            with open(src, 'rb') as srcf:
                 return self._object_create(
-                    account, container, obj_name, in_f, sysmeta,
+                    account, container, obj_name, srcf, sysmeta,
                     properties=properties, policy=policy,
                     key_file=key_file, append=append, **kwargs)
 
@@ -611,7 +678,8 @@ class ObjectStorageApi(object):
 
         # code copied from object_fetch (should be factorized !)
         meta, raw_chunks = self.object_locate(
-            account, container, obj, version=version, **kwargs)
+            account, container, obj, version=version,
+            properties=False, **kwargs)
         chunk_method = meta['chunk_method']
         storage_method = STORAGE_METHODS.load(chunk_method)
         chunks = _sort_chunks(raw_chunks, storage_method.ec)
@@ -689,7 +757,8 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def object_locate(self, account, container, obj,
-                      version=None, chunk_info=False, **kwargs):
+                      version=None, chunk_info=False, properties=True,
+                      **kwargs):
         """
         Get a description of the object along with the list of its chunks.
 
@@ -700,13 +769,16 @@ class ObjectStorageApi(object):
         :param chunk_info: if True, fetch additional information about chunks
             from rawx services (slow). The second element of the returned
             tuple becomes a generator (instead of a list).
+        :param properties: should the request return object properties
+            along with content description
+        :type properties: `bool`
+
         :returns: a tuple with object metadata `dict` as first element
             and chunk `list` as second element
         """
         obj_meta, chunks = self.container.content_locate(
-            account, container, obj, version=version, **kwargs)
-        if not chunk_info:
-            return obj_meta, chunks
+            account, container, obj, properties=properties,
+            version=version, **kwargs)
 
         # FIXME(FVE): converting to float does not sort properly
         # the chunks of the same metachunk
@@ -717,9 +789,11 @@ class ObjectStorageApi(object):
                         chunk['url'], **kwargs)
                     for key in ('chunk_size', 'chunk_hash', 'full_path'):
                         chunk[key] = ext_info.get(key)
-                except exc.OioException:
-                    pass
+                except exc.OioException as err:
+                    chunk['error'] = str(err)
                 yield chunk
+        if not chunk_info:
+            return obj_meta, chunks
         return obj_meta, _fetch_ext_info(chunks)
 
     def object_analyze(self, *args, **kwargs):
@@ -729,6 +803,66 @@ class ObjectStorageApi(object):
         warnings.warn("You'd better use object_locate()",
                       DeprecationWarning)
         return self.object_locate(*args, **kwargs)
+
+    def _generate_fullchunk_copies(self, chunks, random_hex=60):
+        # random_hex is the number of hexadecimals characters to generate for
+        # the copy path
+        copies = []
+        for c in chunks:
+            tmp = c.copy()
+            rnd = (''.join(random.choice('0123456789ABCDEF')
+                           for _ in range(random_hex)))
+            tmp['url'] = ''.join([tmp['url'][:-random_hex], rnd])
+            copies.append(tmp)
+        return copies
+
+    # FIXME(FVE): should be named 'object_link'
+    # TODO(FVE): must be optimised to detect that the target account
+    # and container are the same as source account and source container,
+    # and then use the optimised version (just create an alias in meta2).
+    @ensure_headers
+    @ensure_request_id
+    def object_fastcopy(self, target_account, target_container, target_obj,
+                        link_account, link_container, link_obj,
+                        version=None, **kwargs):
+        """
+        Make a shallow copy of an object.
+        Works across accounts and across containers.
+        """
+        meta, chunks = self.object_locate(
+            target_account, target_container, target_obj, version=version,
+            **kwargs)
+
+        chunks_copies = self._generate_fullchunk_copies(chunks)
+        chunks_copies_url = []
+        chunks_url = []
+        for chunk in chunks:
+            chunks_url.append(chunk['url'])
+        for chunk in chunks_copies:
+            chunks_copies_url.append(chunk['url'])
+        fullpath = self._generate_fullpath(link_account, link_container,
+                                           link_obj, version)
+        data = {'chunks': chunks_copies,
+                'properties': meta['properties'] or {}}
+        try:
+            self._link_chunks(
+                chunks_url, chunks_copies_url, fullpath[0], **kwargs)
+            self.container.content_create(
+                link_account, link_container, link_obj,
+                size=meta['length'], data=data, checksum=meta['hash'],
+                stgpol=meta['policy'], mime_type=meta['mime_type'],
+                chunk_method=meta['chunk_method'], **kwargs)
+        except Exception:
+            del_resps = self.blob_client.chunk_delete_many(chunks_copies,
+                                                           **kwargs)
+            for resp in del_resps:
+                if isinstance(resp, Exception):
+                    self.logger.warn('failed to delete chunk %s (%s)',
+                                     resp.chunk['url'], resp)
+                elif resp.status not in (204, 404):
+                    self.logger.warn('failed to delete chunk %s (HTTP %s)',
+                                     resp.chunk['url'], resp.status)
+            raise
 
     @staticmethod
     def _ttfb_wrapper(stream, req_start, perfdata):
@@ -752,9 +886,12 @@ class ObjectStorageApi(object):
         :param version: version of the object to fetch
         :type version: `str`
         :param ranges: a list of object ranges to download
-        :type ranges: `list` of `tuples`
+        :type ranges: `list` of `tuple`
         :param key_file: path to the file containing credentials
 
+        :keyword properties: should the request return object properties
+            along with content description (True by default)
+        :type properties: `bool`
         :keyword perfdata: optional `dict` that will be filled with metrics
             of time spent to resolve the meta2 address, to do the meta2
             request, and the time-to-first-byte, as seen by this API.
@@ -1158,7 +1295,8 @@ class ObjectStorageApi(object):
         for target, copy in zip(targets, copies):
             res = self.blob_client.chunk_link(target, copy,
                                               headers=headers, **out_kwargs)
-            res.status
+            if res.status != 201:
+                raise exc.ChunkException(res.status)
 
     def _prepare_meta2_raw_update(self, targets, copies, content):
         """
@@ -1184,6 +1322,33 @@ class ObjectStorageApi(object):
                 "size": int(meta["size"]),
                 "pos": meta["pos"],
                 "content": content}
+
+    def object_head(self, account, container, obj, trust_level=0, **kwargs):
+        """
+        Check for the presence of an object in a container.
+
+        :param trust_level: 0: do not check chunks;
+                            1: check if there are enough chunks to read the
+                            object;
+                            2: check if all chunks are present.
+        :type trust_level: `int`
+        """
+        try:
+            if trust_level == 0:
+                self.object_get_properties(account, container, obj, **kwargs)
+            elif trust_level == 1:
+                raise NotImplementedError()
+            elif trust_level == 2:
+                _, chunks = self.object_locate(account, container, obj,
+                                               **kwargs)
+                for chunk in chunks:
+                    self.blob_client.chunk_head(chunk['url'])
+            else:
+                raise exc.ValueError(
+                    '`trust_level` must be between 0 and 2')
+        except (exc.NotFound, exc.NoSuchObject):
+            return False
+        return True
 
 
 class ObjectStorageAPI(ObjectStorageApi):

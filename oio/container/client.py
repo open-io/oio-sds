@@ -330,8 +330,10 @@ class ContainerClient(ProxyClient):
         self._request('POST', '/dedup', params=params, **kwargs)
 
     def container_purge(self, account=None, reference=None, cid=None,
-                        **kwargs):
+                        maxvers=None, **kwargs):
         params = self._make_params(account, reference, cid=cid)
+        if maxvers is not None:
+            params["maxvers"] = maxvers
         self._request('POST', '/purge', params=params, **kwargs)
 
     def container_raw_insert(self, bean, account=None, reference=None,
@@ -513,7 +515,7 @@ class ContainerClient(ProxyClient):
             raise
 
     def content_locate(self, account=None, reference=None, path=None, cid=None,
-                       content=None, version=None, **kwargs):
+                       content=None, version=None, properties=True, **kwargs):
         """
         Get a description of the content along with the list of its chunks.
 
@@ -522,16 +524,33 @@ class ContainerClient(ProxyClient):
         :type cid: hexadecimal `str`
         :param content: content id that can be used in place of `path`
         :type content: hexadecimal `str`
+        :param properties: should the request return object properties
+            along with content description
+        :type properties: `bool`
         :returns: a tuple with content metadata `dict` as first element
             and chunk `list` as second element
         """
         uri = self._make_uri('content/locate')
         params = self._make_params(account, reference, path, cid=cid,
                                    content=content, version=version)
-        resp, chunks = self._direct_request(
+        params['properties'] = properties
+        try:
+            resp, chunks = self._direct_request(
                 'GET', uri, params=params, **kwargs)
-        # FIXME(FVE): see extract_content_headers_meta() code
-        content_meta = extract_content_headers_meta(resp.headers)
+            content_meta = extract_content_headers_meta(resp.headers)
+        except exceptions.OioNetworkException as exc:
+            # TODO(FVE): this special behavior can be removed when
+            # the 'content/locate' protocol is changed to include
+            # object properties in the response body instead of headers.
+            if properties and 'got more than 100 headers' in str(exc):
+                params['properties'] = False
+                _resp, chunks = self._direct_request(
+                    'GET', uri, params=params, **kwargs)
+                content_meta = self.content_get_properties(
+                    account, reference, path, cid=cid, content=content,
+                    version=version, **kwargs)
+            else:
+                raise
         return content_meta, chunks
 
     def content_prepare(self, account=None, reference=None, path=None,
@@ -637,3 +656,11 @@ class ContainerClient(ProxyClient):
         _resp, body = self._direct_request(
             'POST', uri, params=params, **kwargs)
         return body
+
+    def content_purge(self, account=None, reference=None, path=None, cid=None,
+                      maxvers=None, **kwargs):
+        uri = self._make_uri('content/purge')
+        params = self._make_params(account, reference, path, cid=cid)
+        if maxvers is not None:
+            params["maxvers"] = maxvers
+        self._direct_request('POST', uri, params=params, **kwargs)

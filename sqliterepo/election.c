@@ -40,30 +40,6 @@ License along with this library.
 
 typedef guint req_id_t;
 
-enum election_step_e
-{
-	STEP_NONE = 0,
-	STEP_CREATING,
-	STEP_WATCHING,
-	STEP_LISTING,
-	STEP_ASKING,
-	STEP_CHECKING_MASTER,
-	STEP_CHECKING_SLAVES,
-	STEP_SYNCING,
-
-	STEP_DELAYED_CHECKING_MASTER,
-	STEP_DELAYED_CHECKING_SLAVES,
-
-	STEP_LEAVING,
-	STEP_LEAVING_FAILING,
-	STEP_FAILED,
-
-	/* final */
-	STEP_SLAVE,
-	STEP_MASTER,
-#define STEP_MAX (STEP_MASTER+1)
-};
-
 enum event_type_e
 {
 	/* ping, a.k.a poke, etc */
@@ -340,7 +316,8 @@ static GError * _election_trigger_RESYNC(struct election_manager_s *manager,
 		const struct sqlx_name_s *n);
 
 static GError * _election_init(struct election_manager_s *manager,
-		const struct sqlx_name_s *n);
+		const struct sqlx_name_s *n, enum election_step_e *out_status,
+		gboolean *replicated);
 
 static GError * _election_start(struct election_manager_s *manager,
 		const struct sqlx_name_s *n);
@@ -1058,7 +1035,7 @@ member_log_event(struct election_member_s *member, enum election_step_e pre,
 	plog->event = evt;
 	plog->pre = pre;
 	plog->post = member->step;
-	plog->time = (oio_ext_real_time() / G_TIME_SPAN_MILLISECOND) % (1L << 48);
+	plog->time = (oio_ext_real_time() / G_TIME_SPAN_MILLISECOND) % (1LL << 48);
 }
 
 #ifdef HAVE_EXTRA_DEBUG
@@ -1800,10 +1777,16 @@ enum election_op_e {
 
 static GError *
 _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
-		enum election_op_e op)
+		enum election_op_e op,
+		enum election_step_e *out_status, gboolean *replicated)
 {
 	MANAGER_CHECK(m);
 	SQLXNAME_CHECK(n);
+
+	if (out_status)
+		*out_status = STEP_NONE;
+	if (replicated)
+		*replicated = FALSE;
 
 	if (op != ELOP_EXIT) {
 		gboolean peers_present = FALSE;
@@ -1815,6 +1798,9 @@ _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
 		if (!peers_present) {
 			GRID_DEBUG("No peer for [%s][%s]", n->base, n->type);
 			return NULL;
+		} else {
+			if (replicated)
+				*replicated = TRUE;
 		}
 	}
 
@@ -1837,8 +1823,11 @@ _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
 				transition(member, EVT_LEAVE_REQ, NULL);
 			break;
 	}
-	if (member)
+	if (member) {
+		if (out_status)
+			*out_status = member->step;
 		member_unref(member);
+	}
 	_manager_unlock(m);
 
 	return NULL;
@@ -1848,25 +1837,26 @@ static GError *
 _election_trigger_RESYNC(struct election_manager_s *manager,
 		const struct sqlx_name_s *n)
 {
-	return _election_make(manager, n, ELOP_RESYNC);
+	return _election_make(manager, n, ELOP_RESYNC, NULL, NULL);
 }
 
 static GError *
-_election_init(struct election_manager_s *manager, const struct sqlx_name_s *n)
+_election_init(struct election_manager_s *manager, const struct sqlx_name_s *n,
+		enum election_step_e *out_status, gboolean *replicated)
 {
-	return _election_make(manager, n, ELOP_NONE);
+	return _election_make(manager, n, ELOP_NONE, out_status, replicated);
 }
 
 static GError *
 _election_start(struct election_manager_s *manager, const struct sqlx_name_s *n)
 {
-	return _election_make(manager, n, ELOP_START);
+	return _election_make(manager, n, ELOP_START, NULL, NULL);
 }
 
 static GError *
 _election_exit(struct election_manager_s *manager, const struct sqlx_name_s *n)
 {
-	return _election_make(manager, n, ELOP_EXIT);
+	return _election_make(manager, n, ELOP_EXIT, NULL, NULL);
 }
 
 static gboolean
@@ -2016,6 +2006,8 @@ _result_GETVERS (GError *enet,
 
 	if (enet) {
 		err = g_error_copy(enet);
+		GRID_DEBUG("GETVERS error [%s.%s]: (%d) %s",
+				name->base, name->type, err->code, err->message);
 	} else {
 		err = manager->config->get_version(manager->config->ctx, name, &vlocal);
 		EXTRA_ASSERT ((err != NULL) ^ (vlocal != NULL));
@@ -2025,6 +2017,9 @@ _result_GETVERS (GError *enet,
 			 * the election. We must ask for a fresh copy of the base. */
 			g_clear_error(&err);
 			err = NEWERROR(CODE_PIPEFROM, "Local database missing");
+		} else if (err) {
+			GRID_WARN("GETVERS error [%s.%s]: (%d) %s",
+					name->base, name->type, err->code, err->message);
 		}
 	}
 
@@ -3734,3 +3729,13 @@ election_manager_balance_masters(struct election_manager_s *M,
 
 	return count;
 }
+
+gboolean
+election_manager_configured(const struct election_manager_s *m)
+{
+	return m != NULL
+		&& m->sync_tab != NULL
+		&& m->peering != NULL
+		&& (ELECTION_MODE_NONE != election_manager_get_mode (m));
+}
+
