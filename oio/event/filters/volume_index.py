@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -49,7 +49,7 @@ class VolumeIndexFilter(Filter):
         event = Event(env)
         if event.event_type in CHUNK_EVENTS:
             data = event.data
-            volume_id = data.get('volume_service_id', data.get('volume_id'))
+            volume_id = data.get('volume_service_id') or data.get('volume_id')
             container_id = data.get('container_id')
             content_id = data.get('content_id')
             chunk_id = data.get('chunk_id')
