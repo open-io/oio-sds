@@ -1386,23 +1386,23 @@ Used by `gcc`
  * cmake directive: *OIO_SQLITEREPO_REPO_FD_MIN_ACTIVE*
  * range: 0 -> 65536
 
-### sqliterepo.repo.getvers_backoff
-
-> .
-
- * default: **2 * G_TIME_SPAN_SECOND**
- * type: gint64
- * cmake directive: *OIO_SQLITEREPO_REPO_GETVERS_BACKOFF*
- * range: 10 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_MINUTE
-
-### sqliterepo.repo.getvers_max_retries
+### sqliterepo.repo.getvers_attempts
 
 > Sets how many versions exchanges are allowed during the journey in the election FSM.
 
- * default: **2**
+ * default: **5**
  * type: guint
- * cmake directive: *OIO_SQLITEREPO_REPO_GETVERS_MAX_RETRIES*
+ * cmake directive: *OIO_SQLITEREPO_REPO_GETVERS_ATTEMPTS*
  * range: 1 -> 64
+
+### sqliterepo.repo.getvers_delay
+
+> .
+
+ * default: **100 * G_TIME_SPAN_MILLISECOND**
+ * type: gint64
+ * cmake directive: *OIO_SQLITEREPO_REPO_GETVERS_DELAY*
+ * range: 10 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_MINUTE
 
 ### sqliterepo.repo.hard_max
 

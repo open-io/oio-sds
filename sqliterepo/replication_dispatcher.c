@@ -651,36 +651,26 @@ enum query_action_e
 };
 
 static gboolean
-__is_in_array(register const gchar **p, register const gchar *needle)
-{
-	while (*p) {
-		if (!g_ascii_strcasecmp(needle, *(p++)))
-			return TRUE;
-	}
-	return FALSE;
-}
-
-static gboolean
 _pragma_is_allowed(const gchar *pragma)
 {
-	const gchar *allowed_pragmas[] = {
+	static const gchar * const allowed_pragmas[] = {
 		"table_info", "index_info", "index_list",
 		"page_count", "quick_check", "collation_list",
 		"database_list", "freelist_count",
 		NULL
 	};
-	return pragma ? __is_in_array(allowed_pragmas, pragma) : TRUE;
+	return pragma ? oio_strv_has(allowed_pragmas, pragma) : TRUE;
 }
 
 static gboolean
 _function_is_allowed(const gchar *func)
 {
-	const gchar *forbidden_funcs[] = {
+	static const gchar * const forbidden_funcs[] = {
 		"load_extension", "sqlite_compileoption_get",
 		"sqlite_compileoption_get", "sqlite_source_id",
 		NULL
 	};
-	return func ? !__is_in_array(forbidden_funcs, func) : TRUE;
+	return func ? ! oio_strv_has(forbidden_funcs, func) : TRUE;
 }
 
 enum query_rights_e

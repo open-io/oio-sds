@@ -311,14 +311,18 @@ GError * oio_error_debug (GQuark gq, int code, const char *fmt, ...) {
 #endif
 
 gint64 oio_ext_real_time (void) {
+#ifdef HAVE_EXTRA_DEBUG
 	if (oio_time_real)
 		return (*oio_time_real)();
+#endif
 	return g_get_real_time();
 }
 
 gint64 oio_ext_monotonic_time (void) {
+#ifdef HAVE_EXTRA_DEBUG
 	if (oio_time_monotonic)
 		return (*oio_time_monotonic)();
+#endif
 	return g_get_monotonic_time();
 }
 

@@ -42,17 +42,19 @@ extern "C" {
 #define g_string_append_static(out,Static) \
 	g_string_append_len(out, Static, sizeof(Static)-1) \
 
+#define oio_ptrv_length(v) oio_constptrv_length((const void * const *)(v))
+
+void oio_str_reuse(gchar **dst, gchar *src);
+
 /* Count the items in the array */
 size_t oio_strv_length (const char * const *v);
 
 /* Count the size of the concatenation of all the strings in <v> */
 size_t oio_strv_length_total (const char * const *v);
 
+gboolean oio_strv_has (const gchar * const * v, const gchar * needle);
+
 size_t oio_constptrv_length (const void * const *v);
-
-#define oio_ptrv_length(v) oio_constptrv_length((const void * const *)(v))
-
-void oio_str_reuse(gchar **dst, gchar *src);
 
 /* Reallocs <dst> and appends it <s>. <s> is reused and is not duplicated */
 gchar ** oio_strv_append(gchar **dst, gchar *s);
