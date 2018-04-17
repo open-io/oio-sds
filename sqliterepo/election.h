@@ -52,6 +52,9 @@ enum election_mode_e
 enum election_step_e
 {
 	STEP_NONE = 0,
+
+	STEP_PEERING,
+
 	STEP_CREATING,
 	STEP_WATCHING,
 	STEP_LISTING,
@@ -61,7 +64,10 @@ enum election_step_e
 	STEP_SYNCING,
 
 	STEP_DELAYED_CHECKING_MASTER,
+	STEP_REFRESH_CHECKING_MASTER,
+
 	STEP_DELAYED_CHECKING_SLAVES,
+	STEP_REFRESH_CHECKING_SLAVES,
 
 	STEP_LEAVING,
 	STEP_LEAVING_FAILING,
@@ -85,6 +91,7 @@ struct replication_config_s
 	 *
 	 * @param ctx the pointer registered in the configuration
 	 * @param n the logical name of the base (not the physical path)
+	 * @param nocache
 	 * @param result a placeholder for the array of peers.
 	 * @return NULL if 'result' is set, and not-NULL if 'result' is not set
 	 */

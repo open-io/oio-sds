@@ -15,7 +15,7 @@
 from tests.utils import BaseTestCase
 from mock import MagicMock as Mock
 from oio.common.client import ProxyClient
-from oio.common.http import urllib3
+from oio.common.http_urllib3 import urllib3
 from oio.common.exceptions import ServiceBusy, OioException
 
 

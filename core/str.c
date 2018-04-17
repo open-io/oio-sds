@@ -729,3 +729,13 @@ void oio_str_cleanv(gchar ***p) {
 	}
 }
 
+gboolean
+oio_strv_has(register const gchar * const * p, register const gchar *needle)
+{
+	if (!p) return FALSE;
+	while (*p) {
+		if (!g_ascii_strcasecmp(needle, *(p++)))
+			return TRUE;
+	}
+	return FALSE;
+}

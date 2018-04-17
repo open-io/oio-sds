@@ -53,6 +53,8 @@ enum event_type_e
 	EVT_LEFT_MASTER,
 
 	/* actions results */
+	EVT_GETPEERS_DONE,
+
 	EVT_GETVERS_OK,
 	EVT_GETVERS_KO,
 	EVT_GETVERS_OLD,
@@ -104,6 +106,8 @@ struct election_manager_s
 
 	GThreadPool *completions;
 
+	GThreadPool *tasks_getpeers;
+
 	/* GTree<gchar*,struct election_member_s*> */
 	GTree *members_by_key;
 
@@ -115,16 +119,14 @@ struct election_manager_s
 	gint64 when_lock;
 
 	gboolean exiting;
-
-	gboolean synchronous_completions;
 };
 
 /* @private */
 struct logged_event_s
 {
-	enum event_type_e event   :8;
-	enum election_step_e pre  :4;
-	enum election_step_e post :4;
+	enum event_type_e event   :6;
+	enum election_step_e pre  :5;
+	enum election_step_e post :5;
 	gint64 time              :48;  // cheeseparing economies
 } __attribute__ ((packed));
 
@@ -185,6 +187,11 @@ struct election_member_s
 
 	enum election_step_e step : 8;
 
+	/* Peers as they are at the election start */
+	gchar **peers;
+
+	unsigned char requested_peers_decache : 1;
+
 	/* flags managing unconventional transsitions */
 	unsigned char requested_USE : 1;
 	unsigned char requested_PIPEFROM : 1;
@@ -207,38 +214,38 @@ struct election_member_s
 	struct sqlx_name_inline_s inline_name;
 
 	struct logged_event_s log[EVENTLOG_SIZE];
-
-	/* Peers as they are at the election start */
-	gchar **peers;
 };
 
 static void _noop (gpointer p) { (void)p; }
 
 static GPrivate th_local_key_manager = G_PRIVATE_INIT(_noop);
 
-static const char * _step2str(enum election_step_e step) {
+static const char * _step2str(const enum election_step_e step) {
 	switch (step) {
 		ON_ENUM(STEP_,NONE);
+		ON_ENUM(STEP_,PEERING);
 		ON_ENUM(STEP_,CREATING);
 		ON_ENUM(STEP_,WATCHING);
 		ON_ENUM(STEP_,LISTING);
-		ON_ENUM(STEP_,LEAVING);
-		ON_ENUM(STEP_,LEAVING_FAILING);
 		ON_ENUM(STEP_,ASKING);
 		ON_ENUM(STEP_,CHECKING_MASTER);
 		ON_ENUM(STEP_,CHECKING_SLAVES);
-		ON_ENUM(STEP_,SYNCING);
 		ON_ENUM(STEP_,DELAYED_CHECKING_MASTER);
+		ON_ENUM(STEP_,REFRESH_CHECKING_MASTER);
 		ON_ENUM(STEP_,DELAYED_CHECKING_SLAVES);
+		ON_ENUM(STEP_,REFRESH_CHECKING_SLAVES);
+		ON_ENUM(STEP_,SYNCING);
+		ON_ENUM(STEP_,LEAVING);
+		ON_ENUM(STEP_,LEAVING_FAILING);
+		ON_ENUM(STEP_,FAILED);
 		ON_ENUM(STEP_,SLAVE);
 		ON_ENUM(STEP_,MASTER);
-		ON_ENUM(STEP_,FAILED);
 	}
 
 	return "STEP?";
 }
 
-static const char * _evt2str(enum event_type_e evt) {
+static const char * _evt2str(const enum event_type_e evt) {
 	switch (evt) {
 		ON_ENUM(EVT_,NONE);
 
@@ -247,6 +254,8 @@ static const char * _evt2str(enum event_type_e evt) {
 		ON_ENUM(EVT_,SYNC_REQ);
 		ON_ENUM(EVT_,LEFT_SELF);
 		ON_ENUM(EVT_,LEFT_MASTER);
+
+		ON_ENUM(EVT_,GETPEERS_DONE);
 
 		ON_ENUM(EVT_,GETVERS_OK);
 		ON_ENUM(EVT_,GETVERS_KO);
@@ -385,6 +394,7 @@ _cond_clean (gpointer p)
 } while (0)
 
 static void _completion_router(gpointer p, struct election_manager_s *M);
+static void _worker_getpeers(struct election_member_s *m, struct election_manager_s *M);
 
 /* -------------------------------------------------------------------------- */
 
@@ -531,7 +541,8 @@ election_manager_create(struct replication_config_s *config,
 	manager->completions =
 		g_thread_pool_new((GFunc)_completion_router, manager, 2, FALSE, NULL);
 
-	manager->synchronous_completions = FALSE;
+	manager->tasks_getpeers =
+		g_thread_pool_new((GFunc)_worker_getpeers, manager, 8, FALSE, NULL);
 
 	*result = manager;
 	return NULL;
@@ -629,6 +640,10 @@ _NOLOCK_count (struct election_manager_s *manager)
 	count.pending += manager->members_by_state[STEP_ASKING].count;
 	count.pending += manager->members_by_state[STEP_CHECKING_MASTER].count;
 	count.pending += manager->members_by_state[STEP_CHECKING_SLAVES].count;
+	count.pending += manager->members_by_state[STEP_DELAYED_CHECKING_MASTER].count;
+	count.pending += manager->members_by_state[STEP_DELAYED_CHECKING_SLAVES].count;
+	count.pending += manager->members_by_state[STEP_REFRESH_CHECKING_MASTER].count;
+	count.pending += manager->members_by_state[STEP_REFRESH_CHECKING_SLAVES].count;
 	count.pending += manager->members_by_state[STEP_SYNCING].count;
 	count.pending += manager->members_by_state[STEP_LEAVING].count;
 	count.pending += manager->members_by_state[STEP_LEAVING_FAILING].count;
@@ -655,8 +670,10 @@ static struct election_member_s *
 _LOCKED_get_member (struct election_manager_s *ma, const char *k);
 
 #define member_reset_peers(m) do { \
-	g_strfreev(m->peers); \
-	m->peers = NULL; \
+	if (m->peers) { \
+		g_strfreev(m->peers); \
+		m->peers = NULL; \
+	} \
 } while (0)
 
 #define member_unref(m) do { \
@@ -780,6 +797,11 @@ _manager_clean(struct election_manager_s *manager)
 		manager->completions = NULL;
 	}
 
+	if (manager->tasks_getpeers) {
+		g_thread_pool_free(manager->tasks_getpeers, FALSE, TRUE);
+		manager->tasks_getpeers = NULL;
+	}
+
 	if (manager->members_by_key) {
 		g_tree_destroy (manager->members_by_key);
 		manager->members_by_key = NULL;
@@ -901,15 +923,6 @@ static const char*
 member_get_url(struct election_member_s *m)
 {
 	return election_manager_get_local(MMANAGER(m));
-}
-
-static GError *
-member_get_peers(struct election_member_s *m, gchar ***peers)
-{
-	MEMBER_NAME(n, m);
-	/* If we have a member, we have already locked the manager. */
-	guint32 flags = _ELECTION_MANAGER_LOCKED;
-	return election_get_peers(MMANAGER(m), &n, flags, peers);
 }
 
 #define member_ref(m) do { \
@@ -1078,6 +1091,7 @@ member_destroy(struct election_member_s *member)
 
 	member->cond = NULL;
 	oio_str_clean (&member->master_url);
+	member_reset_peers(member);
 
 	g_free(member);
 }
@@ -1105,13 +1119,12 @@ _manager_get_condition (struct election_manager_s *m, const char *k)
 
 static struct election_member_s *
 _LOCKED_init_member(struct election_manager_s *manager,
-		const struct sqlx_name_s *n, gboolean autocreate)
+		const struct sqlx_name_s *n, const char *key,
+		gboolean autocreate)
 {
 	MANAGER_CHECK(manager);
 	NAME_CHECK(n);
 
-	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
-	sqliterepo_hash_name(n, key, sizeof(key));
 	struct election_member_s *member = _LOCKED_get_member (manager, key);
 	if (!member && autocreate) {
 		member = g_malloc0 (sizeof(*member));
@@ -1251,21 +1264,12 @@ member_json (struct election_member_s *m, GString *gs)
 	g_string_append_c (gs, '}');
 
 	/* the peers */
-	gchar **peers = NULL;
-	GError *err = member_get_peers(m, &peers);
-	if (err != NULL) {
-		g_string_append_static(gs, ",\"peers\":{");
-		OIO_JSON_append_int(gs, "status", err->code);
-		g_string_append_c (gs, ',');
-		OIO_JSON_append_str (gs, "message", err->message);
-		g_string_append_c (gs, '}');
-	} else if (peers) {
+	if (m->peers) {
 		g_string_append_static(gs, ",\"peers\":[");
-		for (gchar **p = peers; *p ;p++) {
-			if (p!=peers) g_string_append_c(gs, ',');
+		for (gchar **p = m->peers; *p ;p++) {
+			if (p!=m->peers) g_string_append_c(gs, ',');
 			oio_str_gstring_append_json_quote(gs, *p);
 		}
-		g_strfreev(peers);
 		g_string_append_c (gs, ']');
 	} else {
 		g_string_append_static(gs, ",\"peers\":null");
@@ -1323,11 +1327,7 @@ election_manager_whatabout (struct election_manager_s *m,
  * -------------------------------------------------------------------------- */
 
 #define completion_do_or_defer(M,Ctx) do { \
-	if ((M)->synchronous_completions) { \
-		return _completion_router((Ctx), (M)); \
-	} else { \
-		metautils_gthreadpool_push("ZK", (M)->completions, (Ctx)); \
-	} \
+	metautils_gthreadpool_push("ZK", (M)->completions, (Ctx)); \
 } while (0)
 
 static void
@@ -1472,6 +1472,12 @@ deferred_completion_ASKING(struct exec_later_ASKING_context_s *d)
 		transition_error(d->member, EVT_MASTER_KO, d->zrc);
 	} else {
 		if (!d->master[0] || !metautils_url_valid_for_connect(d->master)) {
+			transition(d->member, EVT_MASTER_BAD, NULL);
+		} else if (!d->member->peers || !oio_strv_has((const char * const *)d->member->peers, d->master)) {
+			/* The master is an unknown peer. A reload of the peers is necessary */
+			GRID_WARN("unknown master [%s] for [%s.%s]", d->master,
+					d->member->inline_name.base, d->member->inline_name.type);
+			d->member->requested_peers_decache = 1;
 			transition(d->member, EVT_MASTER_BAD, NULL);
 		} else {
 			const char *myurl = member_get_url(d->member);
@@ -1748,6 +1754,35 @@ _completion_router(gpointer p, struct election_manager_s *M)
 	g_assert_not_reached();
 }
 
+static void
+_worker_getpeers(struct election_member_s *m, struct election_manager_s *M)
+{
+	gchar **peers = NULL;
+	struct sqlx_name_inline_s inline_name = {};
+
+	member_lock(m);
+	memcpy(&inline_name, &m->inline_name, sizeof(struct sqlx_name_inline_s));
+	const gboolean decache = BOOL(m->requested_peers_decache);
+	m->requested_peers_decache = 0;
+	member_unlock(m);
+
+	NAME2CONST(n, inline_name);
+	GError *err = election_get_peers(M, &n, decache, &peers);
+
+	member_lock(m);
+	if (err || !peers || !*peers) {
+		transition(m, EVT_GETPEERS_DONE, NULL);
+	} else {
+		transition(m, EVT_GETPEERS_DONE, peers);
+	}
+	member_unref(m);
+	member_unlock(m);
+
+	if (peers)
+		g_strfreev(peers);
+	g_clear_error(&err);
+}
+
 /* ------------------------------------------------------------------------- */
 
 static void
@@ -1789,6 +1824,7 @@ _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
 		*replicated = FALSE;
 
 	if (op != ELOP_EXIT) {
+		/* Out of the critical section */
 		gboolean peers_present = FALSE;
 		GError *err = election_has_peers(m, n, FALSE, &peers_present);
 		if (err != NULL) {
@@ -1804,8 +1840,11 @@ _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
 		}
 	}
 
+	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
+	sqliterepo_hash_name(n, key, sizeof(key));
+
 	_manager_lock(m);
-	struct election_member_s *member = _LOCKED_init_member(m, n, op != ELOP_EXIT);
+	struct election_member_s *member = _LOCKED_init_member(m, n, key, op != ELOP_EXIT);
 	switch (op) {
 		case ELOP_NONE:
 			member->last_atime = oio_ext_monotonic_time ();
@@ -1911,12 +1950,15 @@ _election_get_status(struct election_manager_s *mgr,
 	MANAGER_CHECK(mgr);
 	EXTRA_ASSERT(n != NULL);
 
+	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
+	sqliterepo_hash_name(n, key, sizeof(key));
+
 	const gint64 start = oio_ext_monotonic_time();
 	const gint64 local_deadline = start + oio_election_delay_wait;
 	deadline = (deadline <= 0) ? local_deadline : MIN(deadline, local_deadline);
 
 	_manager_lock(mgr);
-	struct election_member_s *m = _LOCKED_init_member(mgr, n, TRUE);
+	struct election_member_s *m = _LOCKED_init_member(mgr, n, key, TRUE);
 
 	if (!wait_for_final_status(m, deadline)) {  /* TIMEOUT! */
 		rc = STEP_FAILED;
@@ -1967,29 +2009,16 @@ defer_USE(struct election_member_s *member)
 		return TRUE;
 	}
 
-	gchar **peers = NULL;
-	GError *err = member_get_peers(member, &peers);
-	if (err != NULL) {
-		GRID_WARN("[%s] Election initiated (%s) but get_peers error: (%d) %s",
-				__FUNCTION__, _step2str(member->step), err->code, err->message);
-		EXTRA_ASSERT(peers == NULL);
-		g_clear_error(&err);
-		return FALSE;
-	} else {
-		EXTRA_ASSERT(peers != NULL);
-		if (!oio_str_is_set(*peers)) {
-			member_trace("avoid:USE", member);
-		} else {
-			member->last_USE = oio_ext_monotonic_time();
-			for (gchar **p = peers; peers && *p; p++) {
-				MEMBER_NAME(n,member);
-				sqlx_peering__use (member->manager->peering, *p, &n);
-				member_trace("sched:USE", member);
-			}
+	if (member->peers) {
+		member->last_USE = oio_ext_monotonic_time();
+		for (gchar **p = member->peers; *p; p++) {
+			MEMBER_NAME(n,member);
+			sqlx_peering__use (member->manager->peering, *p, &n);
+			member_trace("sched:USE", member);
 		}
-		oio_str_cleanv(&peers);
-		return TRUE;
 	}
+
+	return TRUE;
 }
 
 static void
@@ -2057,8 +2086,8 @@ _result_GETVERS (GError *enet,
 		else {
 			GRID_DEBUG("GETVERS error: (%d) %s", err->code, err->message);
 			if (err->code == CODE_CONTAINER_NOTFOUND) {
-				/* We may have asked the wrong peer. */
-				member_reset_peers(member);
+				// We may have asked the wrong peer
+				member->requested_peers_decache = 1;
 			}
 			transition(member, EVT_GETVERS_KO, &reqid);
 		}
@@ -2098,13 +2127,6 @@ _result_PIPEFROM (GError *e, struct election_manager_s *manager,
 }
 
 /* -------------------------------------------------------------------------- */
-
-static gint64
-_getvers_delay(struct election_member_s *m)
-{
-	/* Wait at most `sqliterepo_getvers_backoff` before the last try. */
-	return sqliterepo_getvers_backoff / (1 + m->attempts_GETVERS);
-}
 
 static gint64
 _get_next_ping(const gint64 base, const gint64 jitter)
@@ -2148,6 +2170,27 @@ member_action_to_NONE(struct election_member_s *member)
 	member_reset_peers(member);
 	member->when_unstable = 0;
 	return member_set_status(member, STEP_NONE);
+}
+
+static void
+member_action_to_PEERING(struct election_member_s *member)
+{
+	EXTRA_ASSERT(!member_has_action(member));
+	EXTRA_ASSERT(!member_has_local_id(member));
+	EXTRA_ASSERT(!member_has_master_id(member));
+	EXTRA_ASSERT(member->local_id == 0);
+	EXTRA_ASSERT(member->master_id == 0);
+	EXTRA_ASSERT(member->master_url == NULL);
+
+	/* The only origin of the transition is NONE */
+	member->when_unstable = oio_ext_monotonic_time();
+
+	member_ref(member);
+#ifndef FAKE_GETPEERS
+	struct election_manager_s *M = MMANAGER(member);
+	metautils_gthreadpool_push("getpeers", M->tasks_getpeers, member);
+#endif
+	return member_set_status(member, STEP_PEERING);
 }
 
 /* Gathers a check on the set of actions currently pending and the change of
@@ -2236,12 +2279,13 @@ member_action_to_CREATING(struct election_member_s *member)
 	EXTRA_ASSERT(member->local_id == 0);
 	EXTRA_ASSERT(member->master_id == 0);
 	EXTRA_ASSERT(member->master_url == NULL);
+	EXTRA_ASSERT(member->peers != NULL);
 
 	member->requested_USE = 0;
 
-	/* The only origin of the transition is NONE, then we leave a
-	 * stable state, let's note it. */
-	member->when_unstable = oio_ext_monotonic_time();
+	/* We come from either NONE or PEERING */
+	if (member->when_unstable <= 0)
+		member->when_unstable = oio_ext_monotonic_time();
 
 	if (member->manager->exiting)
 		return member_action_to_NONE(member);
@@ -2269,6 +2313,15 @@ member_action_to_CREATING(struct election_member_s *member)
 }
 
 static void
+member_action_START(struct election_member_s *member)
+{
+	/* TODO(jfs): implement the obsolescence (time-based decay of cached
+	 * items) of the peer, lazy reloading to maybe win some precious ms. */
+	return member_action_to_PEERING(member);
+}
+
+/* Actual transition */
+static void
 member_action_to_WATCHING(struct election_member_s *member)
 {
 	EXTRA_ASSERT(!member_has_action(member));
@@ -2294,9 +2347,9 @@ member_action_to_LISTING(struct election_member_s *member)
 {
 	EXTRA_ASSERT(!member_has_action(member));
 	EXTRA_ASSERT(member_has_local_id(member));
-	EXTRA_ASSERT(!member_has_master_id(member));
-	EXTRA_ASSERT(member->master_id == 0);
-	EXTRA_ASSERT(member->master_url == NULL);
+
+	member->requested_LEFT_MASTER = 0;
+	member_reset_master(member);
 
 	gchar path[PATH_MAXLEN];
 	int zrc = sqlx_sync_awget_siblings(member->sync,
@@ -2372,10 +2425,40 @@ member_action_to_SYNCING(struct election_member_s *member)
 }
 
 static void
+member_action_to_REFRESH_CHECKING_MASTER(struct election_member_s *member)
+{
+	EXTRA_ASSERT(!member_has_action(member));
+	EXTRA_ASSERT(member_has_local_id(member));
+	EXTRA_ASSERT(member_has_master_id(member));
+
+	member_ref(member);
+#ifndef FAKE_GETPEERS
+	struct election_manager_s *M = MMANAGER(member);
+	metautils_gthreadpool_push("getpeers", M->tasks_getpeers, member);
+#endif
+	return member_set_status(member, STEP_REFRESH_CHECKING_MASTER);
+}
+
+static void
 member_action_to_DELAYED_CHECKING_MASTER(struct election_member_s *member)
 {
 	EXTRA_ASSERT(!member_has_action(member));
 	return member_set_status(member, STEP_DELAYED_CHECKING_MASTER);
+}
+
+static void
+member_action_to_REFRESH_CHECKING_SLAVES(struct election_member_s *member)
+{
+	EXTRA_ASSERT(!member_has_action(member));
+	EXTRA_ASSERT(member_has_local_id(member));
+	EXTRA_ASSERT(member_has_master_id(member));
+
+	member_ref(member);
+#ifndef FAKE_GETPEERS
+	struct election_manager_s *M = MMANAGER(member);
+	metautils_gthreadpool_push("getpeers", M->tasks_getpeers, member);
+#endif
+	return member_set_status(member, STEP_REFRESH_CHECKING_SLAVES);
 }
 
 static void
@@ -2391,8 +2474,8 @@ member_action_to_CHECKING_MASTER(struct election_member_s *m)
 	EXTRA_ASSERT(!member_has_action(m));
 	EXTRA_ASSERT(!member_has_getvers(m));
 
-	if (m->step != STEP_CHECKING_MASTER)
-		m->attempts_GETVERS = sqliterepo_getvers_max_retries;
+	if (m->step == STEP_ASKING)
+		m->attempts_GETVERS = sqliterepo_getvers_attempts;
 
 	if (m->pending_GETVERS > 0)
 		member_warn("lost:GETVERS", m);
@@ -2421,28 +2504,15 @@ member_action_to_CHECKING_SLAVES(struct election_member_s *m)
 	EXTRA_ASSERT(member_has_master_id(m));
 	EXTRA_ASSERT(m->master_id == m->local_id);
 	EXTRA_ASSERT(m->master_url == NULL);
+	EXTRA_ASSERT(m->peers != NULL);
 
 	if (m->step != STEP_CHECKING_SLAVES)
-		m->attempts_GETVERS = sqliterepo_getvers_max_retries;
-
-	gchar **peers = NULL;
-	GError *err = member_get_peers(m, &peers);
-	if (err != NULL) {
-		GRID_WARN("[%s] Election initiated (%s) but get_peers error: (%d) %s",
-				__FUNCTION__, _step2str(m->step), err->code, err->message);
-		EXTRA_ASSERT(peers == NULL);
-		g_clear_error(&err);
-		/* Damned, no peers were found. Let's exit and fail. Maybe after a
-		 * short sleep we will be able to re-locate the peers. */
-		return member_action_to_LEAVING_FAILING(m);
-	}
-
-	EXTRA_ASSERT(peers != NULL);
+		m->attempts_GETVERS = sqliterepo_getvers_attempts;
 
 	if (m->pending_GETVERS > 0)
 		member_warn("lost:GETVERS", m);
 
-	const guint pending = peers ? g_strv_length(peers) : 0;
+	const guint pending = g_strv_length(m->peers);
 	m->count_GETVERS = pending;
 	m->pending_GETVERS = pending;
 	m->concurrent_GETVERS = 0;
@@ -2450,13 +2520,11 @@ member_action_to_CHECKING_SLAVES(struct election_member_s *m)
 	m->errors_GETVERS = 0;
 
 	MEMBER_NAME(n, m);
-	for (gchar **p=peers; peers && *p; p++) {
+	for (gchar **p=m->peers; *p; p++) {
 		sqlx_peering__getvers (m->manager->peering, *p,
 				&n, m->manager, 0, _result_GETVERS);
 		member_trace("sched:GETVERS", m);
 	}
-
-	g_strfreev(peers);
 
 	return member_set_status(m, STEP_CHECKING_SLAVES);
 }
@@ -2503,10 +2571,8 @@ member_finish_CHECKING_MASTER(struct election_member_s *member)
 
 	if (member->requested_LEAVE)
 		return member_action_to_LEAVING(member);
-	if (master_change) {
-		member_reset_master(member);
+	if (master_change)
 		return member_action_to_LISTING(member);
-	}
 
 	if (concurrent)
 		return member_action_to_SYNCING(member);
@@ -2516,7 +2582,7 @@ member_finish_CHECKING_MASTER(struct election_member_s *member)
 	if (node_left) {
 		member_reset_local(member);
 		member_reset_master(member);
-		return member_action_to_CREATING(member);
+		return member_action_START(member);
 	}
 
 	if (errors) {
@@ -2562,7 +2628,7 @@ member_finish_CHECKING_SLAVES(struct election_member_s *member)
 	if (node_left) {
 		member_reset_local(member);
 		member_reset_master(member);
-		return member_action_to_CREATING(member);
+		return member_action_START(member);
 	}
 
 	/* two error cases immediately tell the current base could not be an
@@ -2600,9 +2666,26 @@ _member_assert_NONE(struct election_member_s *member)
 }
 
 static void
+_member_assert_PEERING(struct election_member_s *member)
+{
+	EXTRA_ASSERT(member->step == STEP_PEERING);
+	EXTRA_ASSERT(!member_has_local_id(member));
+	EXTRA_ASSERT(!member_has_master_id(member));
+	EXTRA_ASSERT(member->master_url == NULL);
+	EXTRA_ASSERT(!member_has_getvers(member));
+	EXTRA_ASSERT(member->pending_PIPEFROM == 0);
+	EXTRA_ASSERT(member->pending_ZK_CREATE == 0);
+	EXTRA_ASSERT(member->pending_ZK_EXISTS == 0);
+	EXTRA_ASSERT(member->pending_ZK_LIST == 0);
+	EXTRA_ASSERT(member->pending_ZK_GET == 0);
+	EXTRA_ASSERT(member->pending_ZK_DELETE == 0);
+}
+
+static void
 _member_assert_CREATING(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_CREATING);
+	EXTRA_ASSERT(member->peers != NULL);
 	EXTRA_ASSERT(!member_has_local_id(member));
 	EXTRA_ASSERT(!member_has_master_id(member));
 	EXTRA_ASSERT(member->master_url == NULL);
@@ -2621,6 +2704,7 @@ static void
 _member_assert_WATCHING(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_WATCHING);
+	EXTRA_ASSERT(member->peers != NULL);
 	EXTRA_ASSERT(member_has_local_id(member));
 	EXTRA_ASSERT(!member_has_master_id(member));
 	EXTRA_ASSERT(member->master_url == NULL);
@@ -2638,6 +2722,7 @@ static void
 _member_assert_LISTING(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_LISTING);
+	EXTRA_ASSERT(member->peers != NULL);
 	EXTRA_ASSERT(member_has_local_id(member));
 	EXTRA_ASSERT(!member_has_master_id(member));
 	EXTRA_ASSERT(member->master_url == NULL);
@@ -2655,6 +2740,7 @@ static void
 _member_assert_ASKING(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_ASKING);
+	EXTRA_ASSERT(member->peers != NULL);
 	EXTRA_ASSERT(member_has_local_id(member));
 	EXTRA_ASSERT(member_has_master_id(member));
 	EXTRA_ASSERT(member->master_url == NULL);
@@ -2672,6 +2758,7 @@ static void
 _member_assert_CHECKING_MASTER(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_CHECKING_MASTER);
+	EXTRA_ASSERT(member->peers != NULL);
 	EXTRA_ASSERT(member_has_local_id(member));
 	EXTRA_ASSERT(member_has_master_id(member));
 	EXTRA_ASSERT(member->master_id != member->local_id);
@@ -2690,6 +2777,7 @@ static void
 _member_assert_CHECKING_SLAVES(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_CHECKING_SLAVES);
+	EXTRA_ASSERT(member->peers != NULL);
 	EXTRA_ASSERT(member_has_local_id(member));
 	EXTRA_ASSERT(member_has_master_id(member));
 	EXTRA_ASSERT(member->master_id == member->local_id);
@@ -2742,6 +2830,7 @@ static void
 _member_assert_SYNCING(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_SYNCING);
+	EXTRA_ASSERT(member->peers != NULL);
 	EXTRA_ASSERT(member_has_local_id(member));
 	EXTRA_ASSERT(member_has_master_id(member));
 	EXTRA_ASSERT(member->master_id != member->local_id);
@@ -2799,9 +2888,47 @@ _member_assert_DELAYED_CHECKING_SLAVES(struct election_member_s *member)
 }
 
 static void
+_member_assert_REFRESH_CHECKING_MASTER(struct election_member_s *member)
+{
+	EXTRA_ASSERT(member->step == STEP_REFRESH_CHECKING_MASTER);
+	EXTRA_ASSERT(member_has_local_id(member));
+	EXTRA_ASSERT(member_has_master_id(member));
+	EXTRA_ASSERT(member->master_id != member->local_id);
+	EXTRA_ASSERT(member->master_url != NULL);
+	EXTRA_ASSERT(!member_has_getvers(member));
+	EXTRA_ASSERT(member->pending_PIPEFROM == 0);
+	EXTRA_ASSERT(member->pending_ZK_CREATE == 0);
+	EXTRA_ASSERT(member->pending_ZK_EXISTS == 0);
+	EXTRA_ASSERT(member->pending_ZK_LIST == 0);
+	EXTRA_ASSERT(member->pending_ZK_GET == 0);
+	EXTRA_ASSERT(member->pending_ZK_DELETE == 0);
+	/* a request is pending, signal flags are allowed */
+}
+
+
+static void
+_member_assert_REFRESH_CHECKING_SLAVES(struct election_member_s *member)
+{
+	EXTRA_ASSERT(member->step == STEP_REFRESH_CHECKING_SLAVES);
+	EXTRA_ASSERT(member_has_local_id(member));
+	EXTRA_ASSERT(member_has_master_id(member));
+	EXTRA_ASSERT(member->master_id == member->local_id);
+	EXTRA_ASSERT(member->master_url == NULL);
+	EXTRA_ASSERT(!member_has_getvers(member));
+	EXTRA_ASSERT(member->pending_PIPEFROM == 0);
+	EXTRA_ASSERT(member->pending_ZK_CREATE == 0);
+	EXTRA_ASSERT(member->pending_ZK_EXISTS == 0);
+	EXTRA_ASSERT(member->pending_ZK_LIST == 0);
+	EXTRA_ASSERT(member->pending_ZK_GET == 0);
+	EXTRA_ASSERT(member->pending_ZK_DELETE == 0);
+	/* a request is pending, signal flags are allowed */
+}
+
+static void
 _member_assert_SLAVE(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_SLAVE);
+	EXTRA_ASSERT(member->peers != NULL);
 	EXTRA_ASSERT(member_has_local_id(member));
 	EXTRA_ASSERT(member_has_master_id(member));
 	EXTRA_ASSERT(member->master_id != member->local_id);
@@ -2814,6 +2941,7 @@ static void
 _member_assert_MASTER(struct election_member_s *member)
 {
 	EXTRA_ASSERT(member->step == STEP_MASTER);
+	EXTRA_ASSERT(member->peers != NULL);
 	EXTRA_ASSERT(member_has_local_id(member));
 	EXTRA_ASSERT(member_has_master_id(member));
 	EXTRA_ASSERT(member->master_id == member->local_id);
@@ -2834,6 +2962,7 @@ _member_assert_FAILED(struct election_member_s *member)
 
 #else
 #define _member_assert_NONE(...)
+#define _member_assert_PEERING(...)
 #define _member_assert_CREATING(...)
 #define _member_assert_WATCHING(...)
 #define _member_assert_LISTING(...)
@@ -2844,7 +2973,9 @@ _member_assert_FAILED(struct election_member_s *member)
 #define _member_assert_LEAVING_FAILING(...)
 #define _member_assert_SYNCING(...)
 #define _member_assert_DELAYED_CHECKING_MASTER(...)
+#define _member_assert_REFRESH_CHECKING_MASTER(...)
 #define _member_assert_DELAYED_CHECKING_SLAVES(...)
+#define _member_assert_REFRESH_CHECKING_SLAVES(...)
 #define _member_assert_SLAVE(...)
 #define _member_assert_MASTER(...)
 #define _member_assert_FAILED(...)
@@ -2861,7 +2992,7 @@ _member_react_NONE(struct election_member_s *member, enum event_type_e evt)
 				return;
 			/* Right now, we start an election cycle. We consider this point
 			 * as the real start of the "unstable" phasis of the election. */
-			return member_action_to_CREATING(member);
+			return member_action_START(member);
 
 			/* Interruptions */
 		case EVT_LEAVE_REQ:
@@ -2879,6 +3010,41 @@ _member_react_NONE(struct election_member_s *member, enum event_type_e evt)
 			return;
 		case EVT_LEFT_MASTER:
 			return;
+
+			/* Abnormal events */
+		default:
+			return member_warn_abnormal_event(member, evt);
+	}
+}
+
+static void
+_member_react_PEERING(struct election_member_s *member,
+		enum event_type_e evt, gchar **peers)
+{
+	_member_assert_PEERING (member);
+	switch (evt) {
+		case EVT_NONE:
+			return;
+
+			/* Interruptions */
+		case EVT_LEAVE_REQ:
+			/* we didn't join yet ... why marking it to leave? */
+			return;
+		case EVT_SYNC_REQ:
+			member->requested_PIPEFROM = 1;
+			return;
+		case EVT_LEFT_SELF:
+			return;
+		case EVT_LEFT_MASTER:
+			return member_warn_abnormal_event(member, evt);
+
+			/* Actions */
+		case EVT_GETPEERS_DONE:
+			member_reset_peers(member);
+			member->peers = g_strdupv(peers);
+			if (!member->peers)
+				return member_action_to_FAILED(member);
+			return member_action_to_CREATING(member);
 
 			/* Abnormal events */
 		default:
@@ -2963,7 +3129,7 @@ _member_react_WATCHING(struct election_member_s *member, enum event_type_e evt)
 				member_reset_local(member);
 				member->requested_LEFT_SELF = 0;
 				member->requested_LEFT_MASTER = 0;
-				return member_action_to_CREATING(member);
+				return member_action_START(member);
 			}
 			/* nominal flow */
 			return member_action_to_LISTING(member);
@@ -3010,7 +3176,7 @@ _member_react_LISTING(struct election_member_s *member, enum event_type_e evt,
 				member_reset_local(member);
 				member->requested_LEFT_SELF = 0;
 				member->requested_LEFT_MASTER = 0;
-				return member_action_to_CREATING(member);
+				return member_action_START(member);
 			}
 			/* nominal flow */
 			if (member->local_id == *p_masterid) {
@@ -3077,19 +3243,17 @@ _member_react_ASKING(struct election_member_s *member, enum event_type_e evt,
 				member_reset_master(member);
 				member->requested_LEFT_SELF = 0;
 				member->requested_LEFT_MASTER = 0;
-				return member_action_to_CREATING(member);
+				return member_action_START(member);
 			}
 			if (member->requested_LEFT_MASTER) {
 				/* Strange situation: we receive the content of the master
 				 * node and at the same time the information the master
-				 * node hass left. We are not even sure the left master was
+				 * node has left. We are not even sure the left master was
 				 * the last master we've monitored.
 				 * For sure we are in a transient state, services are leaving
 				 * or elections are moving elsewhere.
 				 * For the sake of security, let's do an other whole loop
 				 * and restart with a clean state. */
-				member_reset_master(member);
-				member->requested_LEFT_MASTER = 0;
 				return member_action_to_LISTING(member);
 			}
 			/* nominal flow : let's become CHECKING_MASTER */
@@ -3296,12 +3460,150 @@ _member_react_SYNCING(struct election_member_s *member, enum event_type_e evt)
 			if (member->requested_LEAVE)
 				return member_action_to_LEAVING(member);
 			if (member->requested_LEFT_SELF)
-				return member_action_to_CREATING(member);
-			if (member->requested_LEFT_MASTER) {
-				member_reset_master(member);
+				return member_action_START(member);
+			if (member->requested_LEFT_MASTER)
 				return member_action_to_LISTING(member);
-			}
 			return member_action_to_SLAVE(member);
+
+			/* Abnormal events */
+		default:
+			return member_warn_abnormal_event(member, evt);
+	}
+}
+
+static void
+_member_react_REFRESH_CHECKING_MASTER(struct election_member_s *member,
+		enum event_type_e evt, gchar **peers)
+{
+	_member_assert_REFRESH_CHECKING_MASTER(member);
+	switch (evt) {
+		case EVT_NONE:
+			return;
+
+			/* Interruptions */
+		case EVT_SYNC_REQ:
+			member->requested_PIPEFROM = 1;
+			return;
+		case EVT_LEAVE_REQ:
+			member->requested_LEAVE = 1;
+			return;
+		case EVT_LEFT_SELF:
+			member->requested_LEFT_SELF = 1;
+			return;
+		case EVT_LEFT_MASTER:
+			member->requested_LEFT_MASTER = 1;
+			return;
+
+			/* Actions: none pending */
+		case EVT_GETPEERS_DONE:
+			member_reset_peers(member);
+			member->peers = g_strdupv(peers);
+			if (member->requested_LEAVE)
+				return member_action_to_LEAVING(member);
+			if (member->requested_LEFT_SELF) {
+				member_reset_local(member);
+				member_reset_master(member);
+				member->requested_LEFT_SELF = 0;
+				member->requested_LEFT_MASTER = 0;
+				member->requested_LEAVE = 0;
+				return member_action_START(member);
+			}
+			if (member->requested_LEFT_MASTER)
+				return member_action_to_LISTING(member);
+			if (!member->peers)
+				return member_action_to_LEAVING_FAILING(member);
+			return member_action_to_CHECKING_MASTER(member);
+
+			/* Abnormal events */
+		default:
+			return member_warn_abnormal_event(member, evt);
+	}
+}
+
+static void
+_member_react_DELAYED_CHECKING_SLAVES(struct election_member_s *member, enum event_type_e evt)
+{
+	gint64 now, delay;
+	_member_assert_DELAYED_CHECKING_SLAVES(member);
+	switch (evt) {
+		case EVT_NONE:
+			now = oio_ext_monotonic_time();
+			delay = sqliterepo_getvers_delay;
+			if (member->last_status < OLDEST(now, delay)) {
+				if (member->attempts_GETVERS <= 0) {
+					return member_action_to_LEAVING_FAILING(member);
+				} else {
+					member->attempts_GETVERS --;
+					if (BOOL(member->requested_peers_decache)) {
+						return member_action_to_REFRESH_CHECKING_SLAVES(member);
+					} else {
+						return member_action_to_CHECKING_SLAVES(member);
+					}
+				}
+			}
+			return;
+
+			/* Interruptions */
+		case EVT_SYNC_REQ:
+			return member_warn_abnormal_event(member, evt);
+		case EVT_LEAVE_REQ:
+			member->requested_LEAVE = 0;
+			return member_action_to_LEAVING(member);
+		case EVT_LEFT_SELF:
+			member_reset_local(member);
+			member_reset_master(member);
+			member->requested_LEFT_SELF = 0;
+			member->requested_LEFT_MASTER = 0;
+			return member_action_to_CREATING(member);
+		case EVT_LEFT_MASTER:
+			return member_warn_abnormal_event(member, evt);
+
+			/* Actions: none pending */
+
+			/* Abnormal events */
+		default:
+			return member_warn_abnormal_event(member, evt);
+	}
+}
+
+static void
+_member_react_REFRESH_CHECKING_SLAVES(struct election_member_s *member,
+		enum event_type_e evt, gchar **peers)
+{
+	_member_assert_REFRESH_CHECKING_SLAVES(member);
+	switch (evt) {
+		case EVT_NONE:
+			return;
+
+			/* Interruptions */
+		case EVT_SYNC_REQ:
+			return;
+		case EVT_LEAVE_REQ:
+			member->requested_LEAVE = 1;
+			return;
+		case EVT_LEFT_SELF:
+			member->requested_LEFT_SELF = 1;
+			return;
+		case EVT_LEFT_MASTER:
+			return member_warn_abnormal_event(member, evt);
+
+			/* Actions: none pending */
+		case EVT_GETPEERS_DONE:
+			member_reset_peers(member);
+			member->peers = g_strdupv(peers);
+			if (member->requested_LEAVE)
+				return member_action_to_LEAVING(member);
+			if (member->requested_LEFT_SELF) {
+				member_reset_local(member);
+				member_reset_master(member);
+				member->requested_LEAVE = 0;
+				member->requested_LEFT_SELF = 0;
+				member->requested_LEFT_MASTER = 0;
+				return member_action_START(member);
+			}
+			if (!member->peers)
+				return member_action_to_LEAVING_FAILING(member);
+			return member_action_to_CHECKING_SLAVES(member);
 
 			/* Abnormal events */
 		default:
@@ -3317,9 +3619,19 @@ _member_react_DELAYED_CHECKING_MASTER(struct election_member_s *member, enum eve
 	switch (evt) {
 		case EVT_NONE:
 			now = oio_ext_monotonic_time();
-			delay = _getvers_delay(member);
-			if (member->last_status < OLDEST(now, delay))
-				return member_action_to_CHECKING_MASTER(member);
+			delay = sqliterepo_getvers_delay;
+			if (member->last_status < OLDEST(now, delay)) {
+				if (member->attempts_GETVERS <= 0) {
+					return member_action_to_LEAVING_FAILING(member);
+				} else {
+					member->attempts_GETVERS --;
+					if (BOOL(member->requested_peers_decache)) {
+						return member_action_to_REFRESH_CHECKING_MASTER(member);
+					} else {
+						return member_action_to_CHECKING_MASTER(member);
+					}
+				}
+			}
 			return;
 
 			/* Interruptions */
@@ -3336,46 +3648,7 @@ _member_react_DELAYED_CHECKING_MASTER(struct election_member_s *member, enum eve
 			member->requested_LEFT_MASTER = 0;
 			return member_action_to_CREATING(member);
 		case EVT_LEFT_MASTER:
-			member_reset_master(member);
-			member->requested_LEFT_MASTER = 0;
 			return member_action_to_LISTING(member);
-
-			/* Actions: none pending */
-
-			/* Abnormal events */
-		default:
-			return member_warn_abnormal_event(member, evt);
-	}
-}
-
-static void
-_member_react_DELAYED_CHECKING_SLAVES(struct election_member_s *member, enum event_type_e evt)
-{
-	gint64 now, delay;
-	_member_assert_DELAYED_CHECKING_SLAVES(member);
-	switch (evt) {
-		case EVT_NONE:
-			now = oio_ext_monotonic_time();
-			delay = _getvers_delay(member);
-			if (member->last_status < OLDEST(now, delay))
-				return member_action_to_CHECKING_SLAVES(member);
-			return;
-
-			/* Interruptions */
-		case EVT_SYNC_REQ:
-			return member_warn_abnormal_event(member, evt);
-		case EVT_LEAVE_REQ:
-			member->requested_LEAVE = 0;
-			return member_action_to_LEAVING(member);
-		case EVT_LEFT_SELF:
-			member_reset_local(member);
-			member_reset_master(member);
-			member->requested_LEFT_SELF = 0;
-			member->requested_LEFT_MASTER = 0;
-			return member_action_to_CREATING(member);
-		case EVT_LEFT_MASTER:
-			member->requested_LEFT_MASTER = 0;
-			return ;
 
 			/* Actions: none pending */
 
@@ -3418,9 +3691,8 @@ _member_react_SLAVE(struct election_member_s *member, enum event_type_e evt)
 			member_warn("LEFT (self)", member);
 			member_reset_local(member);
 			member_reset_master(member);
-			return member_action_to_CREATING(member);
+			return member_action_START(member);
 		case EVT_LEFT_MASTER:
-			member_reset_master(member);
 			return member_action_to_LISTING(member);
 		case EVT_SYNC_REQ:
 			return member_action_to_SYNCING(member);
@@ -3463,7 +3735,7 @@ _member_react_MASTER(struct election_member_s *member, enum event_type_e evt)
 			member_warn("LEFT (self)", member);
 			member_reset_local(member);
 			member_reset_master(member);
-			return member_action_to_CREATING(member);
+			return member_action_START(member);
 
 			/* Actions: none should be pending! */
 
@@ -3485,7 +3757,7 @@ _member_react_FAILED(struct election_member_s *member, enum event_type_e evt)
 			now = oio_ext_monotonic_time();
 			if (_is_over(now, member->last_status, oio_election_delay_retry_FAILED)) {
 				if (member->requested_USE)
-					return member_action_to_CREATING(member);
+					return member_action_START(member);
 				return member_action_to_NONE(member);
 			}
 			return;
@@ -3531,6 +3803,8 @@ _member_react (struct election_member_s *member,
 	switch (member->step) {
 		case STEP_NONE:
 			return _member_react_NONE(member, evt);
+		case STEP_PEERING:
+			return _member_react_PEERING(member, evt, evt_arg);
 		case STEP_CREATING:
 			return _member_react_CREATING(member, evt, evt_arg);
 		case STEP_WATCHING:
@@ -3548,8 +3822,13 @@ _member_react (struct election_member_s *member,
 
 		case STEP_DELAYED_CHECKING_MASTER:
 			return _member_react_DELAYED_CHECKING_MASTER(member, evt);
+		case STEP_REFRESH_CHECKING_MASTER:
+			return _member_react_REFRESH_CHECKING_MASTER(member, evt, evt_arg);
+
 		case STEP_DELAYED_CHECKING_SLAVES:
 			return _member_react_DELAYED_CHECKING_SLAVES(member, evt);
+		case STEP_REFRESH_CHECKING_SLAVES:
+			return _member_react_REFRESH_CHECKING_SLAVES(member, evt, evt_arg);
 
 		case STEP_LEAVING:
 			return _member_react_LEAVING(member, evt);
@@ -3576,8 +3855,10 @@ transition(struct election_member_s *member, enum event_type_e evt,
 	/* re-kickoff elections marked as to be restarted, but only if without
 	 * activity and if the manager if not being exited. */
 	if (member->step == STEP_NONE && BOOL(member->requested_USE)
-			&& !member->manager->exiting)
-		return transition(member, EVT_NONE, NULL);
+			&& !member->manager->exiting) {
+		member_log_change(member, EVT_NONE,
+				_member_react(member, EVT_NONE, NULL));
+	}
 }
 
 static void

@@ -18,7 +18,7 @@ from __future__ import absolute_import
 from six import string_types
 
 from io import BytesIO
-import logging
+from functools import wraps, partial
 import os
 import warnings
 import time
@@ -47,7 +47,19 @@ from oio.common.decorators import handle_account_not_found, \
 from oio.common.storage_functions import _sort_chunks, fetch_stream, \
     fetch_stream_ec
 
-logger = logging.getLogger(__name__)
+
+# TODO(FVE): decorate more methods
+def patch_kwargs(fnc):
+    """
+    Patch keyword arguments with the ones passed to the class' constructor.
+    """
+    @wraps(fnc)
+    def _patch_kwargs(self, *args, **kwargs):
+        for argk, argv in self._global_kwargs.items():
+            if argk not in kwargs:
+                kwargs[argk] = argv
+        return fnc(self, *args, **kwargs)
+    return _patch_kwargs
 
 
 class ObjectStorageApi(object):
@@ -66,6 +78,7 @@ class ObjectStorageApi(object):
         - `write_timeout`: `float`
     """
     TIMEOUT_KEYS = ('connection_timeout', 'read_timeout', 'write_timeout')
+    EXTRA_KEYWORDS = ('chunk_checksum_algo')
 
     def __init__(self, namespace, logger=None, **kwargs):
         """
@@ -85,13 +98,18 @@ class ObjectStorageApi(object):
         :keyword pool_manager: a pooled connection manager that will be used
             for all HTTP based APIs (except rawx)
         :type pool_manager: `urllib3.PoolManager`
+        :keyword chunk_checksum_algo: algorithm to use for chunk checksums.
+            Only 'md5' and `None` are supported at the moment.
         """
         self.namespace = namespace
         conf = {"namespace": self.namespace}
         self.logger = logger or get_logger(conf)
-        self.timeouts = {tok: float_value(tov, None)
-                         for tok, tov in kwargs.items()
-                         if tok in self.__class__.TIMEOUT_KEYS}
+        self._global_kwargs = {tok: float_value(tov, None)
+                               for tok, tov in kwargs.items()
+                               if tok in self.__class__.TIMEOUT_KEYS}
+        for key in self.__class__.EXTRA_KEYWORDS:
+            if key in kwargs:
+                self._global_kwargs[key] = kwargs[key]
 
         from oio.account.client import AccountClient
         from oio.container.client import ContainerClient
@@ -105,15 +123,6 @@ class ObjectStorageApi(object):
         self.account = AccountClient(conf, logger=self.logger, **acct_kwargs)
         self._blob_client = None
         self._proxy_client = None
-
-    def _patch_timeouts(self, kwargs):
-        """
-        Insert timeout settings from this class's constructor into `kwargs`,
-        if they are not already there.
-        """
-        for tok, tov in self.timeouts.items():
-            if tok not in kwargs:
-                kwargs[tok] = tov
 
     @property
     def blob_client(self):
@@ -494,6 +503,7 @@ class ObjectStorageApi(object):
                 account, container, metadata, clear, **kwargs)
 
     @handle_container_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def object_create(self, account, container, file_or_path=None, data=None,
@@ -878,6 +888,7 @@ class ObjectStorageApi(object):
             yield dat
         perfdata['ttlb'] = monotonic_time() - req_start
 
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def object_fetch(self, account, container, obj, version=None, ranges=None,
@@ -916,7 +927,6 @@ class ObjectStorageApi(object):
         chunks = _sort_chunks(raw_chunks, storage_method.ec)
         meta['container_id'] = cid_from_name(account, container).upper()
         meta['ns'] = self.namespace
-        self._patch_timeouts(kwargs)
         if storage_method.ec:
             stream = fetch_stream_ec(chunks, ranges, storage_method, **kwargs)
         elif storage_method.backblaze:
@@ -1065,15 +1075,14 @@ class ObjectStorageApi(object):
 
         storage_method = STORAGE_METHODS.load(obj_meta['chunk_method'])
         if storage_method.ec:
-            handler = ECWriteHandler(
-                source, obj_meta, chunk_prep, storage_method, **kwargs)
+            write_handler_cls = ECWriteHandler
         elif storage_method.backblaze:
             backblaze_info = self._b2_credentials(storage_method, key_file)
-            handler = BackblazeWriteHandler(
-                source, obj_meta, chunk_prep, storage_method,
-                backblaze_info, **kwargs)
+            write_handler_cls = partial(BackblazeWriteHandler,
+                                        backblaze_info=backblaze_info)
         else:
-            handler = ReplicatedWriteHandler(
+            write_handler_cls = ReplicatedWriteHandler
+        handler = write_handler_cls(
                 source, obj_meta, chunk_prep, storage_method, **kwargs)
 
         return obj_meta, handler, chunk_prep
@@ -1081,8 +1090,6 @@ class ObjectStorageApi(object):
     def _object_create(self, account, container, obj_name, source,
                        sysmeta, properties=None, policy=None,
                        key_file=None, **kwargs):
-        self._patch_timeouts(kwargs)
-
         obj_meta, ul_handler, chunk_prep = self._object_prepare(
             account, container, obj_name, source, sysmeta,
             policy=policy, key_file=key_file,
@@ -1347,7 +1354,7 @@ class ObjectStorageApi(object):
                 for chunk in chunks:
                     self.blob_client.chunk_head(chunk['url'])
             else:
-                raise exc.ValueError(
+                raise ValueError(
                     '`trust_level` must be between 0 and 2')
         except (exc.NotFound, exc.NoSuchObject):
             return False
