@@ -614,6 +614,20 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 		/* TODO(jfs): manage base's subtype */
 		hc_decache_reference_service(m2->resolver, url, NAME_SRVTYPE_META2);
 
+#ifdef HAVE_ENBUG
+		if (event && !err) {
+			gint32 random = oio_ext_rand_int_range(0,3);
+			switch (random) {
+				case 0:
+					err = NEWERROR(CODE_BAD_REQUEST, "Fake error (meta2)");
+					break;
+				case 1:
+					sleep(100);
+					break;
+			}
+		}
+#endif
+
 		if (!err) {
 			GString *gs = NULL;
 			if (event && m2->notifier) {

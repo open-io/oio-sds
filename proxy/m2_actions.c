@@ -1022,10 +1022,36 @@ action_m2_container_destroy (struct req_args_s *args)
 		const guint32 flag_force = (force) ? M2V2_DESTROY_FORCE : 0;
 
 		meta1_urlv_shift_addr(urlv);
-		err = m2v2_remote_execute_DESTROY (urlv[0], args->url,
+		err = m2v2_remote_execute_DESTROY(urlv[0], args->url,
 				M2V2_DESTROY_EVENT|flag_force);
-		if (!err && urlv[1]) {
-			err = m2v2_remote_execute_DESTROY_many(urlv+1, args->url, flag_force);
+		if (err != NULL) {
+			/* rollback! */
+			struct meta1_service_url_s m1u;
+			m1u.seq = 1;
+			g_strlcpy(m1u.srvtype, n.type, LIMIT_LENGTH_SRVTYPE);
+			gchar *hosts = g_strjoinv(OIO_CSV_SEP, urlv);
+			g_strlcpy(m1u.host, hosts, 256);
+			g_free(hosts);
+			m1u.args[0] = 0;
+			GError * _link (const char * m1) {
+				gchar *packed = meta1_pack_url(&m1u);
+				GError *e = meta1v2_remote_force_reference_service(
+						m1, args->url, packed, FALSE, FALSE);
+				g_free(packed);
+				return e;
+			}
+			GError *_err = _m1_locate_and_action(args->url, _link);
+			if (_err) {
+				GRID_ERROR("Failed to re-link the meta2 services for %s: "
+						"(%d) %s", oio_url_get(args->url, OIOURL_HEXID),
+						_err->code, _err->message);
+				g_error_free(_err);
+			}
+			_re_enable(args);
+			goto clean_and_exit;
+		} else if (urlv[1]) {
+			err = m2v2_remote_execute_DESTROY_many(urlv+1, args->url,
+					flag_force);
 		}
 	}
 
