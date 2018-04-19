@@ -1063,7 +1063,7 @@ _LOCKED_init_member(struct election_manager_s *manager,
 
 		member->manager = manager;
 		member->last_status = oio_ext_monotonic_time ();
-		strncpy(member->key, key, sizeof(member->key));
+		g_strlcpy(member->key, key, sizeof(member->key));
 		g_strlcpy(member->inline_name.base, n->base, sizeof(member->inline_name.base));
 		g_strlcpy(member->inline_name.type, n->type, sizeof(member->inline_name.type));
 		g_strlcpy(member->inline_name.ns, n->ns, sizeof(member->inline_name.ns));
