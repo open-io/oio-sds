@@ -139,7 +139,7 @@ dav_rawx_cmd_gridconfig_docroot(cmd_parms *cmd, void *config UNUSED, const char 
 
 	dav_rawx_server_conf *conf =
 		ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
-	strncpy(conf->docroot, arg1, sizeof(conf->docroot));
+	g_strlcpy(conf->docroot, arg1, sizeof(conf->docroot));
 	return NULL;
 }
 
@@ -148,7 +148,7 @@ dav_rawx_cmd_gridconfig_namespace(cmd_parms *cmd, void *config UNUSED, const cha
 {
 	dav_rawx_server_conf *conf =
 		ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
-	strncpy(conf->ns_name, arg1, sizeof(conf->ns_name));
+	g_strlcpy(conf->ns_name, arg1, sizeof(conf->ns_name));
 	return NULL;
 }
 
