@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -16,8 +16,8 @@
 from oio.api.base import HttpApi
 from oio.common.exceptions import ClientException, NotFound, VolumeException
 from oio.common.exceptions import ServiceUnavailable, ServerException
-from oio.common.exceptions import OioNetworkException
-from oio.common.utils import get_logger
+from oio.common.exceptions import OioNetworkException, OioException
+from oio.common.utils import get_logger, group_chunk_errors, oio_reraise
 from oio.conscience.client import ConscienceClient
 from oio.directory.client import DirectoryClient
 from time import sleep
@@ -63,7 +63,6 @@ class RdirDispatcher(object):
 
         for rawx in all_rawx:
             try:
-                # Verify that there is no rdir linked
                 resp = self.directory.list(RDIR_ACCT, rawx['addr'],
                                            service_type='rdir',
                                            **kwargs)
@@ -77,6 +76,9 @@ class RdirDispatcher(object):
                     by_id[_make_id(self.ns, 'rdir', rdir_host)] = rawx['rdir']
             except NotFound:
                 self.logger.info("No rdir linked to %s", rawx['addr'])
+            except OioException as exc:
+                self.logger.warn('Failed to get rdir linked to %s: %s',
+                                 rawx['addr'], exc)
         return all_rawx, all_rdir
 
     def assign_all_rawx(self, max_per_rdir=None, **kwargs):
@@ -95,6 +97,7 @@ class RdirDispatcher(object):
         by_id = {_make_id(self.ns, 'rdir', x['addr']): x
                  for x in all_rdir}
 
+        errors = list()
         for rawx in all_rawx:
             try:
                 # Verify that there is no rdir linked
@@ -106,22 +109,43 @@ class RdirDispatcher(object):
                 except KeyError:
                     self.logger.warn("rdir %s linked to rawx %s seems down",
                                      rdir_host, rawx['addr'])
-            except (NotFound, ClientException):
-                rdir = self._smart_link_rdir(rawx['addr'], all_rdir,
-                                             max_per_rdir, **kwargs)
+            except NotFound:
+                try:
+                    rdir = self._smart_link_rdir(rawx['addr'], all_rdir,
+                                                 max_per_rdir=max_per_rdir,
+                                                 **kwargs)
+                except OioException as exc:
+                    self.logger.warn("Failed to link an rdir to rawx %s: %s",
+                                     rawx['addr'], exc)
+                    errors.append((rawx['addr'], exc))
+                    continue
                 n_bases = by_id[rdir]['tags'].get("stat.opened_db_count", 0)
                 by_id[rdir]['tags']["stat.opened_db_count"] = n_bases + 1
                 rawx['rdir'] = by_id[rdir]
+            except OioException as exc:
+                self.logger.warn("Failed to check rdir linked to rawx %s "
+                                 "(thus won't try to make the link): %s",
+                                 rawx['addr'], exc)
+                errors.append((rawx['addr'], exc))
+        if errors:
+            # group_chunk_errors is flexible enough to accept service addresses
+            errors = group_chunk_errors(errors)
+            if len(errors) == 1:
+                err, addrs = errors.popitem()
+                oio_reraise(type(err), err, str(addrs))
+            else:
+                raise OioException('Several errors encountered: %s' %
+                                   errors)
         return all_rawx
 
     def _smart_link_rdir(self, volume_id, all_rdir, max_per_rdir=None,
-                         **kwargs):
+                         max_attempts=7, **kwargs):
         """
         Force the load balancer to avoid services that already host more
         bases than the average (or more than `max_per_rdir`)
         while selecting rdir services.
         """
-        opened_db = [x['tags']['stat.opened_db_count'] for x in all_rdir
+        opened_db = [x['tags'].get('stat.opened_db_count', 0) for x in all_rdir
                      if x['score'] > 0]
         if len(opened_db) <= 0:
             raise ServiceUnavailable(
@@ -133,7 +157,7 @@ class RdirDispatcher(object):
         avoids = [_make_id(self.ns, "rdir", x['addr'])
                   for x in all_rdir
                   if x['score'] > 0 and
-                  x['tags']['stat.opened_db_count'] > upper_limit]
+                  x['tags'].get('stat.opened_db_count', 0) > upper_limit]
         known = [_make_id(self.ns, "rawx", volume_id)]
         try:
             polled = self._poll_rdir(avoid=avoids, known=known, **kwargs)
@@ -146,7 +170,6 @@ class RdirDispatcher(object):
         # Associate the rdir to the rawx
         forced = {'host': polled['addr'], 'type': 'rdir',
                   'seq': 1, 'args': "", 'id': polled['id']}
-        max_attempts = 7
         for i in range(max_attempts):
             try:
                 self.directory.force(RDIR_ACCT, volume_id, 'rdir',
@@ -175,7 +198,6 @@ class RdirDispatcher(object):
                     raise
                 # Monotonic backoff (retriable and net erorrs)
                 if i < max_attempts - 1:
-                    from time import sleep
                     sleep(i * 1.0)
                     continue
                 # Too many attempts

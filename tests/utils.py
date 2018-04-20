@@ -188,13 +188,10 @@ class CommonTestCase(testtools.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        pass
+        super(CommonTestCase, cls).tearDownClass()
 
     def _flush_cs(self, srvtype):
         params = {'type': srvtype}
-        resp = self.request('POST', self._url_cs("deregister"),
-                            params=params)
-        self.assertEqual(resp.status / 100, 2)
         resp = self.request('POST', self._url_cs("flush"),
                             params=params)
         self.assertEqual(resp.status / 100, 2)
@@ -303,4 +300,4 @@ class BaseTestCase(CommonTestCase):
 
     @classmethod
     def tearDownClass(cls):
-        pass
+        super(BaseTestCase, cls).tearDownClass()
