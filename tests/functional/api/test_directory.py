@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,16 +13,19 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import random
 import time
+from mock import MagicMock as Mock, ANY, call
 from oio.directory.client import DirectoryClient
 from oio.common import exceptions as exc
 from oio.conscience.client import ConscienceClient
-from oio.rdir.client import RdirDispatcher, RdirClient
+from oio.rdir.client import RdirDispatcher, RdirClient, RDIR_ACCT, _make_id
 from oio.account.client import AccountClient
 from tests.utils import random_str, BaseTestCase
 
 
 class TestDirectoryAPI(BaseTestCase):
+
     def setUp(self):
         super(TestDirectoryAPI, self).setUp()
         self.api = DirectoryClient({'namespace': self.ns}, endpoint=self.uri)
@@ -279,7 +282,7 @@ class TestDirectoryAPI(BaseTestCase):
         """
         self.skipTest('Deprecated way of linking rdir services')
         self._reload_proxy()
-        cs = ConscienceClient({'namespace': self.ns})
+        cs = ConscienceClient({'namespace': self.ns}, endpoint=self.uri)
         rawx_list = cs.all_services('rawx')
         rdir_dict = {x['addr']: x for x in cs.all_services('rdir')}
         # Link the services
@@ -315,13 +318,86 @@ class TestDirectoryAPI(BaseTestCase):
         rdir_addr = client._get_rdir_addr(new_rawx['addr'])
         self.assertIsNotNone(rdir_addr)
         try:
-            self.api.unlink('_RDIR', new_rawx['addr'], 'rdir')
-            self.api.delete('_RDIR', new_rawx['addr'])
+            self.api.unlink(RDIR_ACCT, new_rawx['addr'], 'rdir')
+            self.api.delete(RDIR_ACCT, new_rawx['addr'])
             # self._flush_cs('rawx')
         except Exception:
             pass
 
+    def _generate_services(self, types, score=50):
+        all_srvs = dict()
+        for type_, count in types.items():
+            srvs = [self._srv(type_, {'tag.loc': 'whatever%d' % i})
+                    for i in range(count)]
+            for srv in srvs:
+                srv['score'] = score
+                srv['id'] = _make_id(self.ns, type_, srv['addr'])
+            all_srvs[type_] = srvs
+        return all_srvs
+
+    def _test_link_rdir_fail_to_force(self, side_effects, expected_exc):
+        disp = RdirDispatcher({'namespace': self.ns})
+
+        # Mock rdir and rawx services so we do not pollute following tests
+        all_srvs = self._generate_services({'rdir': 3, 'rawx': 3})
+
+        def _all_services(type_, *args, **kwargs):
+            """Return all mocked services of specified type"""
+            return all_srvs[type_]
+
+        def _poll(*args, **kwargs):
+            """Pick one mocked random service"""
+            return [random.choice(all_srvs['rdir'])]
+
+        disp.cs.all_services = Mock(side_effect=_all_services)
+        disp.cs.poll = Mock(side_effect=_poll)
+
+        # Mock the check method to avoid calling the proxy
+        disp.directory.list = Mock(side_effect=exc.NotFound)
+
+        # Mock the assignation methods so we can check the calls
+        disp._smart_link_rdir = \
+            Mock(wraps=disp._smart_link_rdir)
+        disp.directory.force = \
+            Mock(wraps=disp.directory.force,
+                 side_effect=side_effects)
+
+        # Expect an exception since some assignations will fail
+        self.assertRaises(expected_exc,
+                          disp.assign_all_rawx,
+                          max_attempts=1)
+
+        # But ensure all calls have been made
+        link_calls = [call(rawx['addr'], ANY, max_per_rdir=ANY, max_attempts=1)
+                      for rawx in all_srvs['rawx']]
+        disp._smart_link_rdir.assert_has_calls(link_calls)
+        force_calls = \
+            [call(RDIR_ACCT, rawx['addr'], 'rdir', ANY, autocreate=True)
+             for rawx in all_srvs['rawx']]
+        disp.directory.force.assert_has_calls(force_calls)
+
+    def test_link_rdir_fail_to_force_one(self):
+        """
+        Verify that the failure of one 'force' operation does
+        not break the whole operation.
+        """
+        self._test_link_rdir_fail_to_force(
+            [exc.ServiceBusy('Failed :('), None, None],
+            exc.ServiceBusy)
+
+    def test_link_rdir_fail_to_force_several(self):
+        """
+        Verify that the failure of two 'force' operations does
+        not break the whole operation.
+        """
+        self._test_link_rdir_fail_to_force(
+            [exc.ServiceBusy('Failed :('),
+             exc.OioTimeout('Timeout :('),
+             None],
+            exc.OioException)
+
     def test_rdir_repartition(self):
+        # FIXME(FVE): this test will fail if run after self._flush_cs('rawx')
         client = RdirDispatcher({'namespace': self.ns})
         self._reload_proxy()
         all_rawx = client.assign_all_rawx()
