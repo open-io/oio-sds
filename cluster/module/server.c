@@ -76,6 +76,12 @@ static gboolean flag_serialize_srvinfo_tags = TRUE;
 static gboolean config_system = TRUE;
 static GSList *config_paths = NULL;
 
+static GString *persistence_path = NULL;
+static time_t persistence_period = 30;
+
+static const guint8 header[] = { 0x30, 0x80 };
+static const guint8 footer[] = { 0x00, 0x00 };
+
 /* ------------------------------------------------------------------------- */
 
 # ifndef LIMIT_LENGTH_SRVDESCR
@@ -926,8 +932,6 @@ static gboolean
 _cs_dispatch_SRV(struct gridd_reply_ctx_s *reply,
 	 gpointer g UNUSED, gpointer h UNUSED)
 {
-	static const guint8 header[] = { 0x30, 0x80 };
-	static const guint8 footer[] = { 0x00, 0x00 };
 	gchar strtype[LIMIT_LENGTH_SRVTYPE] = {};
 
 	if (!metautils_message_extract_string_noerror(
@@ -1180,6 +1184,98 @@ _task_expire (gpointer p UNUSED)
 	}
 
 	g_free(typev);
+}
+
+
+/* Persistence of services status -------------------------------------------*/
+
+static gboolean
+serialize_info(struct conscience_srv_s *srv, gpointer buffer)
+{
+	GByteArray *all_encoded = (GByteArray *) buffer;
+	GByteArray *srv_encoded = _conscience_srv_serialize_full(srv);
+	g_byte_array_append(all_encoded, srv_encoded->data, srv_encoded->len);
+	g_byte_array_free(srv_encoded, TRUE);
+	return TRUE;
+}
+
+static gboolean
+write_status(gchar *path)
+{
+	gchar **services_names = conscience_get_srvtype_names();
+	GError *err = NULL;
+	guint nb_services = 0;
+	gboolean ret = FALSE;
+
+	GByteArray *all_encoded = g_byte_array_sized_new(8192);
+	g_byte_array_append(all_encoded, header, 2);
+
+	for (gchar **name = services_names; *name; name++){
+		err = conscience_run_srvtypes(*name, serialize_info, all_encoded);
+
+		if (err) {
+			GRID_ERROR("Failed to get service info: (%d) %s",
+				err->code, err->message);
+			goto end;
+		} else {
+			nb_services++;
+		}
+	}
+
+	g_byte_array_append(all_encoded, footer, 2);
+	g_file_set_contents(path, (char *)all_encoded->data, all_encoded->len, &err);
+
+	if(err){
+		GRID_ERROR("Failed to write service status on file [%s]: (%d) %s",
+			path, err->code, err->message);
+		goto end;
+	} else {
+		ret = TRUE;
+	}
+end:
+	if(err != NULL)
+		g_error_free(err);
+	g_byte_array_free(all_encoded, TRUE);
+	g_free(services_names);
+        return ret;
+}
+
+
+static gboolean
+restart_srv_from_file(gchar *path)
+{
+	gchar *all_encoded = NULL;
+	GError *err = NULL;
+	gsize length;
+
+	if(!g_file_test(path, G_FILE_TEST_EXISTS))
+		return FALSE;
+
+	gboolean ret = g_file_get_contents(path, &all_encoded, &length, &err);
+
+	if(!ret){
+		GRID_ERROR("Failed to read services status from file [%s] (%d) %s",
+			path, err->code, err->message);
+	} else {
+		GSList *si_l = NULL;
+
+		service_info_unmarshall(&si_l, all_encoded, length, &err);
+
+		if(err){
+			GRID_ERROR("Failed to unmarshall service info: (%d) %s",
+				err->code, err->message);
+		} else {
+			for(GSList *si = si_l; si; si = si->next){
+				struct service_info_s *si_data = si->data;
+				push_service(si_data);
+			}
+		}
+	}
+
+	if(err != NULL)
+		g_error_free(err);
+	g_free(all_encoded);
+	return ret;
 }
 
 /* Main -------------------------------------------------------------------- */
@@ -1631,6 +1727,13 @@ _cs_configure(int argc, char **argv)
 	transport_gridd_dispatcher_add_requests (dispatcher, descr, NULL);
 	network_server_bind_host(server, service_url, dispatcher, transport_gridd_factory);
 	grid_task_queue_register (gtq_admin, 1, _task_expire, NULL, NULL);
+
+	if(persistence_path){
+		restart_srv_from_file(persistence_path->str);
+		grid_task_queue_register(gtq_admin, persistence_period,
+				(GDestroyNotify)write_status,
+				NULL, persistence_path->str);
+	}
 	return TRUE;
 }
 
@@ -1704,6 +1807,12 @@ _cs_get_options(void)
 
 		{"Config", OT_LIST, {.lst = &config_paths},
 			"Load the given file and overload the central variables"},
+
+		{"PersistencePath", OT_STRING, {.str = &persistence_path},
+		 	"Path used to register services status"},
+
+		{"PersistencePeriod", OT_TIME, {.t = &persistence_period},
+			"Period during which services are updated, in seconds"},
 
 		{NULL, 0, {.i = 0}, NULL}
 	};
