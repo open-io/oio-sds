@@ -80,6 +80,8 @@ CHUNK_HEADERS = {
     "full_path": "%sfull-path" % CHUNK_METADATA_PREFIX,
     "oio_version": "%soio-version" % CHUNK_METADATA_PREFIX,
 }
+# TODO(FVE): remove from versions >= 4.2.0
+chunk_headers = CHUNK_HEADERS
 
 chunk_xattr_keys = {
     'chunk_hash': 'grid.chunk.hash',

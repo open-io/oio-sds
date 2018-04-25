@@ -78,11 +78,15 @@ class WriteHandler(object):
     def __init__(self, source, sysmeta, chunk_preparer,
                  storage_method, headers=None,
                  connection_timeout=None, write_timeout=None,
-                 read_timeout=None, deadline=None, **_kwargs):
+                 read_timeout=None, deadline=None, chunk_checksum_algo='md5',
+                 **_kwargs):
         """
         :param connection_timeout: timeout to establish the connection
         :param write_timeout: timeout to send a buffer of data
         :param read_timeout: timeout to read a buffer of data from source
+        :param chunk_checksum_algo: algorithm to use to compute chunk
+            checksums locally. Can be `None` to disable local checksum
+            computation and let the rawx compute it (will be md5).
         """
         if isinstance(source, IOBase):
             self.source = BufferedReader(source)
@@ -102,6 +106,7 @@ class WriteHandler(object):
         self.deadline = deadline
         self._read_timeout = read_timeout or CLIENT_TIMEOUT
         self._write_timeout = write_timeout or CHUNK_TIMEOUT
+        self.chunk_checksum_algo = chunk_checksum_algo
 
     @property
     def read_timeout(self):
@@ -523,11 +528,13 @@ class ChunkReader(object):
 class MetachunkWriter(object):
     """Base class for metachunk writers"""
 
-    def __init__(self, storage_method=None, quorum=None, **_kwargs):
+    def __init__(self, storage_method=None, quorum=None,
+                 chunk_checksum_algo='md5', **_kwargs):
         self.storage_method = storage_method
         self._quorum = quorum
         if storage_method is None and quorum is None:
             raise ValueError('Missing storage_method or quorum')
+        self.chunk_checksum_algo = chunk_checksum_algo
 
     @property
     def quorum(self):

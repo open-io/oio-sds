@@ -1142,7 +1142,7 @@ _task_expire_resolver(gpointer p)
 	if (VARIABLE_PERIOD_SKIP(sqliterepo_election_task_##period)) return; \
 	gint64 t = oio_ext_monotonic_time(); \
 	guint count = action (PSRV(p)->election_manager); \
-	t = t - oio_ext_monotonic_time(); \
+	t = oio_ext_monotonic_time() - t; \
 	if (t > sqliterepo_election_task_##delay) { \
 		GRID_WARN(_task_alert_message(action)); \
 	} else { \

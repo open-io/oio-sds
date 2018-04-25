@@ -45,9 +45,9 @@ class FakeChecksum(object):
 class ReplicatedMetachunkWriter(io.MetachunkWriter):
     def __init__(self, sysmeta, meta_chunk, checksum, storage_method,
                  quorum=None, connection_timeout=None, write_timeout=None,
-                 read_timeout=None, headers=None):
+                 read_timeout=None, headers=None, **kwargs):
         super(ReplicatedMetachunkWriter, self).__init__(
-            storage_method=storage_method, quorum=quorum)
+            storage_method=storage_method, quorum=quorum, **kwargs)
         self.sysmeta = sysmeta
         self.meta_chunk = meta_chunk
         self.checksum = checksum
@@ -59,7 +59,10 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
     def stream(self, source, size=None):
         bytes_transferred = 0
         meta_chunk = self.meta_chunk
-        meta_checksum = hashlib.md5()
+        if self.chunk_checksum_algo:
+            meta_checksum = hashlib.new(self.chunk_checksum_algo)
+        else:
+            meta_checksum = None
         pile = GreenPile(len(meta_chunk))
         failed_chunks = []
         current_conns = []
@@ -103,7 +106,8 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                                     conn.queue.put('0\r\n\r\n')
                             break
                     self.checksum.update(data)
-                    meta_checksum.update(data)
+                    if meta_checksum:
+                        meta_checksum.update(data)
                     bytes_transferred += len(data)
                     # copy current_conns to be able to remove a failed conn
                     for conn in current_conns[:]:
@@ -141,18 +145,18 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                 continue
             pile.spawn(self._get_response, conn)
 
-        meta_checksum_hex = meta_checksum.hexdigest()
         for (conn, resp) in pile:
             if resp:
-                self._handle_resp(conn, resp, meta_checksum_hex,
-                                  success_chunks, failed_chunks)
+                self._handle_resp(
+                    conn, resp,
+                    meta_checksum.hexdigest() if meta_checksum else None,
+                    success_chunks, failed_chunks)
         self.quorum_or_fail(success_chunks, failed_chunks)
 
         for chunk in success_chunks:
             chunk["size"] = bytes_transferred
-            chunk["hash"] = meta_checksum_hex
 
-        return bytes_transferred, meta_checksum_hex, success_chunks
+        return bytes_transferred, success_chunks[0]['hash'], success_chunks
 
     def _connect_put(self, chunk):
         """
@@ -231,7 +235,8 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                              conn.chunk, resp.status)
             else:
                 rawx_checksum = resp.getheader(CHUNK_HEADERS['chunk_hash'])
-                if rawx_checksum and rawx_checksum.lower() != checksum:
+                if rawx_checksum and checksum and \
+                        rawx_checksum.lower() != checksum:
                     conn.failed = True
                     conn.chunk['error'] = \
                         "checksum mismatch: %s (local), %s (rawx)" % \
@@ -240,6 +245,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                     logger.error("%s: %s",
                                  conn.chunk['url'], conn.chunk['error'])
                 else:
+                    conn.chunk['hash'] = checksum or rawx_checksum
                     successes.append(conn.chunk)
         conn.close()
 
@@ -262,9 +268,9 @@ class ReplicatedWriteHandler(io.WriteHandler):
                 connection_timeout=self.connection_timeout,
                 write_timeout=self.write_timeout,
                 read_timeout=self.read_timeout,
-                headers=self.headers)
-            bytes_transferred, _checksum, chunks = handler.stream(self.source,
-                                                                  size)
+                headers=self.headers,
+                chunk_checksum_algo=self.chunk_checksum_algo)
+            bytes_transferred, _h, chunks = handler.stream(self.source, size)
             content_chunks += chunks
 
             total_bytes_transferred += bytes_transferred
