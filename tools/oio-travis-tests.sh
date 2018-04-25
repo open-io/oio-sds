@@ -125,7 +125,7 @@ test_proxy_forward () {
 
 func_tests () {
 	randomize_env
-    oio-reset.sh -N $OIO_NS $@
+    oio-reset.sh -v -N $OIO_NS $@
 
 	test_proxy_forward
 
@@ -169,7 +169,7 @@ func_tests () {
 
 test_meta2_filters () {
 	randomize_env
-    oio-reset.sh -N $OIO_NS $@
+    oio-reset.sh -v -N $OIO_NS $@
 
     cd $SRCDIR
     tox -e coverage
@@ -181,7 +181,7 @@ test_meta2_filters () {
 
 test_cli () {
     randomize_env
-    oio-reset.sh -N $OIO_NS $@
+    oio-reset.sh -v -N $OIO_NS $@
 
     cd $SRCDIR
     tox -e cli
