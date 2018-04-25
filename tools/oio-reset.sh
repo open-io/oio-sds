@@ -27,13 +27,15 @@ SDS=$OIO/sds
 GRIDINIT_SOCK=${SDS}/run/gridinit.sock
 BOOTSTRAP_CONFIG=
 PROFILE=
+DATADIR=
 
 ZKSLOW=0
 verbose=0
 OPENSUSE=`grep -i opensuse /etc/*release || echo -n ''`
 
-while getopts "P:I:N:f:Z:p:Cvb" opt; do
+while getopts "D:P:I:N:f:Z:p:Cvb" opt; do
     case $opt in
+        D) DATADIR="${OPTARG}" ;;
         P) PORT="${OPTARG}" ;;
         I) IP="${OPTARG}" ;;
         N) NS="${OPTARG}" ;;
@@ -116,6 +118,7 @@ done
 mkdir -p "$OIO" && cd "$OIO" && (rm -rf sds.conf sds/{conf,data,run,logs})
 bootstrap_opt=
 if [[ -n "${PORT}" ]] ; then bootstrap_opt="${bootstrap_opt} --port ${PORT}" ; fi
+if [[ -n "${DATADIR}" ]] ; then bootstrap_opt="${bootstrap_opt} --data ${DATADIR}" ; fi
 if [[ -n "${PROFILE}" ]] ; then bootstrap_opt="${bootstrap_opt} --profile ${PROFILE}" ; fi
 ${PREFIX}-bootstrap.py $bootstrap_opt -d ${BOOTSTRAP_CONFIG} "$NS" "$IP" > /tmp/oio-bootstrap.$$
 
