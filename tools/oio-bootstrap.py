@@ -232,7 +232,7 @@ grid_hash_depth        1
 grid_fsync             disabled
 
 # At the end of an upload, perform a fsync() on the directory holding the chunk
-grid_fsync_dir         enabled
+grid_fsync_dir         disabled
 
 # Preallocate space for the chunk file (enabled by default)
 #grid_fallocate enabled
