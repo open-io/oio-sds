@@ -68,14 +68,10 @@ timeout () {
     ((count=count+1))
 }
 
-wait_for_srvtype () {
-    echo "Waiting for the $2 $1 to get a score"
-    $PREFIX-wait-scored.sh -u -N "$2" -n "$NS" -s "$1" -t 15 >/dev/null
-}
-
 
 #-------------------------------------------------------------------------------
 
+cmd_openio="openio --oio-ns $NS"
 G_DEBUG_LEVEL=WARN
 if [ $verbose != 0 ] ; then
     G_DEBUG_LEVEL=TRACE
@@ -85,6 +81,7 @@ if [ $verbose != 0 ] ; then
         "-N \"${NS}\"" \
         "-Z \"${ZKSLOW}\"" \
         "${BOOTSTRAP_CONFIG}"
+	cmd_openio="$cmd_openio -v --debug"
 fi
 export G_DEBUG_LEVEL
 
@@ -155,28 +152,24 @@ echo -e "\n### Start gridinit and wait for the services to register"
 gridinit_cmd -S "$GRIDINIT_SOCK" reload >/dev/null
 gridinit_cmd -S "$GRIDINIT_SOCK" start "@${NS}" >/dev/null
 
-COUNT=$(${PREFIX}-test-config.py -c -t meta2 -t rawx -t sqlx)
-wait_for_srvtype "sqlx rawx meta2" "$COUNT"
-COUNT=$(${PREFIX}-test-config.py -c -t meta0 -t meta1)
-wait_for_srvtype "meta0 meta1" "$COUNT"
-COUNT=$(${PREFIX}-test-config.py -c -t rdir)
-wait_for_srvtype "rdir" "$COUNT"
+COUNT=$(${PREFIX}-test-config.py -c -t meta2 -t rawx -t sqlx -t meta0 -t meta1 -t rdir)
+$cmd_openio cluster wait -d 30 -u -n "$COUNT" sqlx rawx meta2 meta0 meta1 rdir
 
 
 echo -e "\n### Init the meta0/meta1 directory"
-openio \
-	--oio-ns "$NS" -v directory bootstrap --check --no-rdir \
+$cmd_openio directory bootstrap --check --no-rdir \
 	--replicas $(${PREFIX}-test-config.py -v directory_replicas)
 
 echo -e "\n### Assign rdir services"
-openio --oio-ns "$NS" -v volume admin bootstrap
+$cmd_openio volume admin bootstrap
 
 echo -e "\n### Wait for the services to have a score"
-openio -q --oio-ns "$NS" cluster unlockall
-$PREFIX-wait-scored.sh -n "$NS" -t 60 >/dev/null
+$cmd_openio cluster unlockall
 $PREFIX-flush-all.sh -n "$NS" >/dev/null
 
+echo -e "\n### Congrats, it's a NS"
 find $SDS -type d | xargs chmod a+rx
 gridinit_cmd -S "$GRIDINIT_SOCK" status2
 $PREFIX-cluster -r "$NS"
 
+echo -e "\nexport OIO_NS=$NS OIO_ACCT=ACCT-$RANDOM"
