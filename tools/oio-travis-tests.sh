@@ -16,8 +16,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 set -e
-
-set -e
 set -x
 export COLUMNS=512 LANG= LANGUAGE=
 
@@ -43,15 +41,16 @@ function dump_syslog {
         cmd="sudo tail"
     fi
     $cmd -n 500 /var/log/syslog
-    pip list
-    gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock status3
 }
 
-function dump_coredump {
+function trap_exit {
+	set +e
+    #pip list
+    gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock status3
+	#dump_syslog
     oio-gdb.py
 }
 
-#trap dump_syslog EXIT
 trap dump_coredump EXIT
 
 is_running_test_suite () {
