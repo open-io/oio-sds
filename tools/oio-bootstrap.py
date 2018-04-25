@@ -959,7 +959,6 @@ CFGDIR = SDSDIR + '/conf'
 RUNDIR = SDSDIR + '/run'
 LOGDIR = SDSDIR + '/logs'
 SPOOLDIR = SDSDIR + '/spool'
-DATADIR = SDSDIR + '/data'
 WATCHDIR = SDSDIR + '/conf/watch'
 TMPDIR = '/tmp'
 CODEDIR = '@CMAKE_INSTALL_PREFIX@'
@@ -1096,6 +1095,8 @@ def generate(options):
     backblaze_account_id = options.get('backblaze', {}).get(ACCOUNT_ID)
     backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
     backblaze_app_key = options.get('backblaze', {}).get(APPLICATION_KEY)
+
+    DATADIR = options.get('DATADIR', SDSDIR + '/data')
 
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(ZK_CNXSTRING=options.get('ZK'),
@@ -1575,6 +1576,9 @@ def main():
     parser.add_argument("-p", "--port",
                         type=int, default=6000,
                         help="Specify the first port of the range")
+    parser.add_argument("-D", "--data",
+                        action="store", type=str, default=None,
+                        help="Specify a DATA directory")
     parser.add_argument("--profile", choices=['default', 'valgrind', 'callgrind'],
                         help="Launch SDS with specific tool")
     parser.add_argument("namespace",
@@ -1599,6 +1603,10 @@ def main():
     opts['beanstalkd'] = {SVC_NB: None, SVC_HOSTS: None}
 
     options = parser.parse_args()
+
+    if options.data:
+        opts['DATADIR'] = options.data
+
     if options.config:
         for path in options.config:
             with open(path, 'r') as f:
