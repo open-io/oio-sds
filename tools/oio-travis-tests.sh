@@ -17,16 +17,16 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 set -e
 set -x
-export COLUMNS=512 LANG= LANGUAGE=
 
 export G_DEBUG=fatal_warnings
 export G_SLICE=always-malloc
 
 export PYTHON=python
-
 if [ "${PYTHON_COVERAGE:-}" == "1" ]; then
     PYTHON="coverage run -p --omit=/home/travis/oio/lib/python2.7/*"
 fi
+
+OIO_RESET="oio-reset.sh -v"
 
 SRCDIR=$PWD
 WRKDIR=$PWD
@@ -51,7 +51,7 @@ function trap_exit {
     oio-gdb.py
 }
 
-trap dump_coredump EXIT
+trap trap_exit EXIT
 
 is_running_test_suite () {
     [ -z "$TEST_SUITE" ] || [ "${TEST_SUITE/*$1*/$1}" == "$1" ]
@@ -124,7 +124,7 @@ test_proxy_forward () {
 
 func_tests () {
 	randomize_env
-    oio-reset.sh -v -N $OIO_NS $@
+    $OIO_RESET -N $OIO_NS $@
 
 	test_proxy_forward
 
@@ -168,7 +168,7 @@ func_tests () {
 
 test_meta2_filters () {
 	randomize_env
-    oio-reset.sh -v -N $OIO_NS $@
+    $OIO_RESET -N $OIO_NS $@
 
     cd $SRCDIR
     tox -e coverage
@@ -180,7 +180,7 @@ test_meta2_filters () {
 
 test_cli () {
     randomize_env
-    oio-reset.sh -v -N $OIO_NS $@
+    $OIO_RESET -N $OIO_NS $@
 
     cd $SRCDIR
     tox -e cli
