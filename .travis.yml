@@ -29,6 +29,7 @@ script:
   - if [ "build" == "${TEST_SUITE/*build*/build}" ] ; then cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Release" . && make all && make clean ; fi
   - export PYTHON_COVERAGE=1 CMAKE_OPTS="${CMAKE_OPTS} -DENABLE_CODECOVERAGE=on"
   - cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Debug" . && make all install
+  - git fetch --tags
   - python setup.py develop
   - bash ./tools/oio-check-version.sh
   - export G_DEBUG_LEVEL=D PATH="$PATH:/tmp/oio/bin" LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/tmp/oio/lib"
