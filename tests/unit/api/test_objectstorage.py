@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,19 +13,20 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+# pylint: disable=protected-access
+
 import json
-from mock import MagicMock as Mock
 import random
 import unittest
 from os.path import basename
 from tempfile import NamedTemporaryFile
+from mock import MagicMock as Mock, ANY
 
 
 from oio.common import exceptions
 from oio.common.constants import container_headers, object_headers
-from oio.api.object_storage import handle_object_not_found
-from oio.api.object_storage import handle_container_not_found
-from oio.api.object_storage import _sort_chunks
+from oio.api.object_storage import handle_object_not_found, \
+    handle_container_not_found, _sort_chunks, ObjectStorageApi
 from tests.utils import random_str
 from tests.unit.api import FakeStorageApi, FakeApiResponse
 
@@ -405,3 +406,26 @@ class ObjectStorageTest(unittest.TestCase):
         self.assertRaises(
             exceptions.Conflict, self.api.container_refresh, self.account,
             self.container)
+
+    def test_object_create_patch_kwargs(self):
+        """
+        Check that the patch_kwargs decorator does its job on object_create.
+        """
+        kwargs = {x: 'test' for x in ObjectStorageApi.EXTRA_KEYWORDS}
+        # Pass kwargs to class constructor
+        api = ObjectStorageApi('NS', endpoint=self.fake_endpoint,
+                               dummy_keyword='dummy_value',
+                               **kwargs)
+        self.assertNotIn('dummy_keyword', api._global_kwargs)
+        for k, v in kwargs.items():
+            self.assertIn(k, api._global_kwargs)
+            self.assertEqual(v, api._global_kwargs[k])
+
+        # Verify that kwargs are forwarded to method call
+        api._object_create = Mock()
+        api.object_create(self.account, self.container,
+                          data='data', obj_name='dummy')
+        api._object_create.assert_called_with(
+            self.account, self.container, 'dummy', ANY, ANY,
+            append=ANY, headers=ANY, key_file=ANY, policy=ANY, properties=ANY,
+            **kwargs)

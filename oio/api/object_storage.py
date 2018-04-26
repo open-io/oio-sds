@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -314,7 +314,7 @@ class ObjectStorageApi(object):
         - `write_timeout`: `float`
     """
     TIMEOUT_KEYS = ('connection_timeout', 'read_timeout', 'write_timeout')
-    EXTRA_KEYWORDS = ('chunk_checksum_algo')
+    EXTRA_KEYWORDS = ('chunk_checksum_algo', )
 
     def __init__(self, namespace, logger=None, **kwargs):
         """
