@@ -67,7 +67,6 @@ static void _task_malloc_trim(gpointer p);
 static void _task_expire_bases(gpointer p);
 static void _task_expire_resolver(gpointer p);
 static void _task_react_NONE(gpointer p);
-static void _task_react_FINAL(gpointer p);
 static void _task_react_TIMERS(gpointer p);
 static void _task_reload_nsinfo(gpointer p);
 static void _task_reload_peers(gpointer p);
@@ -654,7 +653,6 @@ _configure_tasks(struct sqlx_service_s *ss)
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_bases, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_resolver, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_react_NONE, NULL, ss);
-	grid_task_queue_register(ss->gtq_admin, 1, _task_react_FINAL, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_react_TIMERS, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_malloc_trim, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 5, _task_update_stats, NULL, ss);
@@ -1138,7 +1136,7 @@ _task_expire_resolver(gpointer p)
 	VARIABLE_PERIOD_DECLARE(); \
 	if (VARIABLE_PERIOD_SKIP(sqliterepo_election_task_##period)) return; \
 	gint64 t = oio_ext_monotonic_time(); \
-	guint count = action (PSRV(p)->election_manager); \
+	guint count = election_manager_play_##action (PSRV(p)->election_manager); \
 	t = oio_ext_monotonic_time() - t; \
 	if (t > sqliterepo_election_task_##delay) { \
 		GRID_WARN(_task_alert_message(action)); \
@@ -1150,22 +1148,17 @@ _task_expire_resolver(gpointer p)
 static void
 _task_react_NONE(gpointer p)
 {
-	_task_timed_action(election_manager_play_exits, EXIT_period, EXIT_alert);
+	_task_timed_action(exits, EXIT_period, EXIT_alert);
 }
 
 static void
 _task_react_TIMERS(gpointer p)
 {
-	_task_timed_action(election_manager_play_timers_FAILED, TIMER_period, TIMER_alert);
-	_task_timed_action(election_manager_play_timers_DELAYED_MASTER, TIMER_period, TIMER_alert);
-	_task_timed_action(election_manager_play_timers_DELAYED_SLAVE, TIMER_period, TIMER_alert);
-}
-
-static void
-_task_react_FINAL(gpointer p)
-{
-	_task_timed_action(election_manager_play_ping_MASTER, PING_period, PING_alert);
-	_task_timed_action(election_manager_play_ping_SLAVE, PING_period, PING_alert);
+	_task_timed_action(timers_FAILED, TIMER_period, TIMER_alert);
+	_task_timed_action(timers_DELAYED_MASTER, TIMER_period, TIMER_alert);
+	_task_timed_action(timers_DELAYED_SLAVE, TIMER_period, TIMER_alert);
+	_task_timed_action(timers_MASTER, TIMER_period, TIMER_alert);
+	_task_timed_action(timers_SLAVE, TIMER_period, TIMER_alert);
 }
 
 static void
