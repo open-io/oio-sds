@@ -80,6 +80,9 @@ class ServiceWatcher(object):
         if self.service.get('slots', None):
             self.service_definition['tags']['tag.slots'] = \
                     ','.join(self.service['slots'])
+        if self.service.get('service_id', None):
+            self.service_definition['tags']['tag.service_id'] = \
+                self.service['service_id']
         self.service_checks = list()
         self.service_stats = list()
         self.init_checkers(service)

@@ -404,7 +404,7 @@ gchar *
 service_info_key (const struct service_info_s *si)
 {
 	gchar addr[STRLEN_ADDRINFO];
-	const char *explicit = service_info_get_tag_value(si, "tag.id", NULL);
+	const char *explicit = service_info_get_tag_value(si, "tag.service_id", NULL);
 	if (explicit)
 		return oio_make_service_key(si->ns_name, si->type, explicit);
 	grid_addrinfo_to_string(&si->addr, addr, sizeof(addr));
@@ -432,6 +432,8 @@ service_info_to_lb_item(const struct service_info_s *si,
 	gchar *key = service_info_key(si);
 	g_strlcpy(item->id, key, LIMIT_LENGTH_SRVID);
 	g_free(key);
+
+	grid_addrinfo_to_string(&(si->addr), item->addr, sizeof(item->addr));
 }
 
 //------------------------------------------------------------------------------

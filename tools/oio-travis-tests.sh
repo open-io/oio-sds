@@ -120,11 +120,31 @@ test_proxy_forward () {
 	done
 }
 
+wait_proxy_cache() {
+    cnt=$(oio-test-config.py -t rawx | wc -l)
+    while true; do
+        rawx=$(curl -s http://$proxy/v3.0/cache/show | python -m json.tool | grep -c rawx | cat)
+        if [ $cnt -eq $rawx ]; then
+            break
+        fi
+        sleep 0.1
+    done
+}
+
 func_tests () {
 	randomize_env
-	oio-reset.sh -N $OIO_NS $@
+    args=
+    if is_running_test_suite "with-service-id"; then
+        args="${args} -U"
+    fi
+    if is_running_test_suite "with-random-service-id"; then
+        args="${args} -R"
+    fi
+	oio-reset.sh ${args} -N $OIO_NS $@
 
 	test_proxy_forward
+
+	wait_proxy_cache
 
 	# test a content with a strange name, through the CLI and the API
 	/usr/bin/fallocate -l $RANDOM /tmp/blob%

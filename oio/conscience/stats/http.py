@@ -58,7 +58,11 @@ class HttpStat(BaseStat):
     def _parse_stats_json(body):
         """Prefix each entry with 'stat.'"""
         body = json.loads(body)
-        return {'stat.' + k: body[k] for k in body.keys()}
+        uuid = body.pop('uuid', None)
+        res = {'stat.' + k: body[k] for k in body.keys()}
+        if uuid:
+            res['tag.uuid'] = uuid
+        return res
 
     def get_stats(self):
         result = {}

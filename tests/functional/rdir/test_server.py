@@ -19,6 +19,7 @@ import shutil
 import simplejson as json
 import subprocess
 import errno
+import uuid
 from os import remove
 from oio.common.http_urllib3 import get_pool_manager
 
@@ -30,7 +31,8 @@ def _key(rec):
 
 
 map_cfg = {'host': 'bind_addr', 'port': 'bind_port',
-           'ns': 'namespace', 'db': 'db_path'}
+           'ns': 'namespace', 'db': 'db_path',
+           'service_id': 'service_id'}
 
 
 def _write_config(path, config):
@@ -378,10 +380,12 @@ class TestRdirServer2(RdirTestCase):
         self.num, self.host, self.port = 17, '127.0.0.1', 5999
         self.cfg_path = tempfile.mktemp()
         self.db_path = tempfile.mkdtemp()
+        self.service_id = str(uuid.uuid4())
         self.garbage_files.extend((self.cfg_path, self.db_path))
 
         config = {'host': self.host, 'port': self.port,
-                  'ns': self.ns, 'db': self.db_path}
+                  'ns': self.ns, 'db': self.db_path,
+                  'service_id': self.service_id}
         _write_config(self.cfg_path, config)
 
         child = subprocess.Popen(['oio-rdir-server', self.cfg_path],
@@ -401,7 +405,8 @@ class TestRdirServer2(RdirTestCase):
         # check the service has no opened DB
         resp = self._get('/status')
         self.assertEqual(resp.status, 200)
-        self.assertEqual(self.json_loads(resp.data), {'opened_db_count': 0})
+        self.assertEqual(self.json_loads(resp.data),
+                         {'opened_db_count': 0, 'service_id': self.service_id})
 
         # DB creation
         resp = self._post("/v1/rdir/create", params={'vol': vol})
@@ -410,7 +415,8 @@ class TestRdirServer2(RdirTestCase):
         # The base remains open after it has been created
         resp = self._get('/status')
         self.assertEqual(resp.status, 200)
-        self.assertEqual(self.json_loads(resp.data), {'opened_db_count': 1})
+        self.assertEqual(self.json_loads(resp.data),
+                         {'opened_db_count': 1, 'service_id': self.service_id})
 
     def test_bad_routes(self):
         routes = ('/status', '/config',

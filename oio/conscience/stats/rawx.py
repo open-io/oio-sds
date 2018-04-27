@@ -22,8 +22,9 @@ class RawxStat(HttpStat):
     """Specialization of HttpStat for rawx services"""
 
     rawx_stat_keys = [
-            ("counter", "req.hits", "stat.total_reqpersec"),
-            ("counter", "req.time", "stat.total_avreqtime"),
+            ("counter", "req.hits",   "stat.total_reqpersec"),
+            ("counter", "req.time",   "stat.total_avreqtime"),
+            ("config",  "service_id", "tag.service_id"),
     ]
 
     def configure(self):

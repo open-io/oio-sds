@@ -915,6 +915,7 @@ configure_request_handlers (void)
 	SET("/forward/lean-sqlx/#POST", action_forward_lean_sqlx);
 
 	SET("/cache/status/#GET", action_cache_status);
+	SET("/cache/show/#GET", action_cache_show);
 	SET("/cache/flush/local/#POST", action_cache_flush_local);
 	SET("/cache/flush/high/#POST", action_cache_flush_high);
 	SET("/cache/flush/low/#POST", action_cache_flush_low);
@@ -938,6 +939,7 @@ configure_request_handlers (void)
 	SET("/$NS/conscience/flush/#POST", action_conscience_flush);
 	SET("/$NS/conscience/lock/#POST", action_conscience_lock);
 	SET("/$NS/conscience/unlock/#POST", action_conscience_unlock);
+	SET("/$NS/conscience/resolve/#GET", action_conscience_resolve_service_id);
 
 	// Directory
 	SET("/$NS/reference/create/#POST", action_ref_create);

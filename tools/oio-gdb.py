@@ -61,13 +61,13 @@ class Core(object):
         if not os.path.isfile(path):
             raise Exception("File not found")
 
-        exc = "thread apply all bt"
-        cmd = ['gdb', '-ex', exc, '--batch', path,
-               '-c', os.path.join(self.dir, item)]
-        ret = Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        out, err = ret.communicate()
-        print(out)
-        print("")
+        for exc in ["thread apply all bt", "bt full"]:
+            cmd = ['gdb', '-ex', exc, '--batch', path,
+                   '-c', os.path.join(self.dir, item)]
+            ret = Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+            out, err = ret.communicate()
+            print(out)
+            print("")
 
 
 if __name__ == "__main__":

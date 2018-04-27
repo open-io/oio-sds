@@ -135,6 +135,54 @@ conscience_remote_remove_services(gchar **allcs, const char *type, GSList *ls, g
 	return _loop_on_allcs_while_neterror(allcs, action);
 }
 
+GError *
+conscience_resolve_service_id(gchar **cs UNUSED, const char *type, const char *service_id, gchar **out) {
+	*out = NULL;
+
+	gchar *key = oio_make_service_key(ns_name, type, service_id);
+	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
+	g_free(key);
+	if (item) {
+		*out = g_strdup(item->addr);
+		return NULL;
+	}
+
+	return NEWERROR(CODE_UNAVAILABLE, "Service ID [%s] not found", service_id);
+#if 0
+	GError *err = NULL;
+	GSList *sl = NULL;
+
+	/* FIXME: implement only direct request at this time */
+	err = conscience_remote_get_services (cs, type, FALSE, &sl, oio_ext_get_deadline());
+	if (err) {
+		g_slist_free_full (sl, (GDestroyNotify) service_info_clean);
+		return err;
+	}
+
+	/* FIXME: we should build a HASH table from Service ID to ADDR to find them quickly */
+	for (GSList *l = sl; l; l = l->next) {
+		const struct service_info_s *si = l->data;
+
+		if (si->tags && si->tags->len) {
+			for(guint i = 0; i < si->tags->len; ++i) {
+				struct service_tag_s *tag = si->tags->pdata[i];
+				if (g_strcmp0(tag->name, "tag.service_id") == 0 && g_strcmp0(tag->value.s, service_id) == 0) {
+					gchar straddr[STRLEN_ADDRINFO];
+					grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
+					*out = g_strdup(straddr);
+
+					g_slist_free_full (sl, (GDestroyNotify) service_info_clean);
+					return NULL;
+				}
+			}
+		}
+	}
+
+	g_slist_free_full (sl, (GDestroyNotify) service_info_clean);
+	return NEWERROR(CODE_UNAVAILABLE, "Service ID [%s] not found", service_id);
+#endif
+}
+
 /* -------------------------------------------------------------------------- */
 
 static GError *
@@ -427,6 +475,46 @@ action_conscience_list (struct req_args_s *args)
 
 	args->rp->access_tail ("%s=%u", type, g_slist_length(sl));
 	return _reply_success_json (args, _cs_pack_and_free_srvinfo_list (sl));
+}
+
+enum http_rc_e
+action_conscience_resolve_service_id (struct req_args_s *args)
+{
+	args->rp->no_access();
+
+	const char *type = TYPE();
+	if (!type)
+		return _reply_format_error (args, BADREQ("Missing type"));
+
+	const char *service_id = SERVICE_ID();
+	if (!service_id)
+		return _reply_format_error (args, BADREQ("Missing service id"));
+
+#ifdef HAVE_ENBUG
+	if (10 >= oio_ext_rand_int_range(1,100))
+		return _reply_retry(args, NEWERROR(CODE_UNAVAILABLE, "FAKE"));
+#endif
+
+	GError *err;
+	if (NULL != (err = _cs_check_tokens(args)))
+		return _reply_notfound_error(args, err);
+
+	CSURL(cs);
+	gchar *addr = NULL;
+	err = conscience_resolve_service_id(cs, type, service_id, &addr);
+	if (NULL != err) {
+		g_prefix_error (&err, "Conscience error: ");
+		return _reply_common_error (args, err);
+	}
+
+	GString *gstr = g_string_sized_new (256);
+	g_string_append_c (gstr, '{');
+	g_string_append_printf(gstr," \"addr\": \"%s\"", addr);
+	g_string_append_c (gstr, '}');
+
+	g_free(addr);
+
+	return _reply_success_json (args, gstr);
 }
 
 enum http_rc_e

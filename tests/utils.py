@@ -102,10 +102,10 @@ class CommonTestCase(testtools.TestCase):
     def get_service_url(self, srvtype, i=0):
         allsrv = self.conf['services'][srvtype]
         srv = allsrv[i]
-        return srv['num'], srv['path'], srv['addr']
+        return srv['num'], srv['path'], srv['addr'], srv.get('uuid')
 
     def get_service(self, srvtype, i=0):
-        num, path, addr = self.get_service_url(srvtype, i=i)
+        num, path, addr, _ = self.get_service_url(srvtype, i=i)
         ip, port = addr.split(':')
         return num, path, ip, port
 

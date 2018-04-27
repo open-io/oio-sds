@@ -28,12 +28,15 @@ typedef guint8 oio_weight_t;
  * an oio_weight_acc_t. We internally need this to enweight pools */
 typedef guint32 oio_weight_acc_t;
 
-typedef void (*oio_lb_on_id_f) (oio_location_t, const char *);
+typedef void (*oio_lb_on_id_f) (oio_location_t, const char *, const char*);
+
+#define STRLEN_ADDRINFO    sizeof("[XXXX:XXXX:XXXX:XXXX:XXXX:XXXX]:SSSSS")
 
 struct oio_lb_item_s
 {
 	oio_location_t location;
 	oio_weight_t weight;
+	gchar addr[STRLEN_ADDRINFO];
 	gchar id[];
 };
 
@@ -88,6 +91,10 @@ void oio_lb_world__destroy (struct oio_lb_world_s *self);
 
 /* Flush all items of all slots */
 void oio_lb_world__flush(struct oio_lb_world_s *self);
+
+/* Call a function on all items of all slots. */
+void oio_lb_world__foreach(struct oio_lb_world_s *self, void *udata,
+		void (*on_item)(const char *id, const char *addr, void *udata));
 
 /* Use this carefully, it GRID_DEBUG() all the items in the given world */
 void oio_lb_world__debug (struct oio_lb_world_s *self);

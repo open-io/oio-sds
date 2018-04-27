@@ -53,15 +53,16 @@ class TestBlobAuditorFunctional(BaseTestCase):
 
         self.test_dir = self.conf['sds_path']
 
-        rawx_num, rawx_path, rawx_addr = self.get_service_url('rawx')
-        self.rawx = 'http://' + rawx_addr
+        rawx_num, rawx_path, rawx_addr, rawx_uuid = \
+            self.get_service_url('rawx')
+        self.rawx = 'http://' + rawx_uuid if rawx_uuid else rawx_addr
 
         self.h = hashlib.new('md5')
 
         conf = {"namespace": self.namespace}
         self.auditor = BlobAuditorWorker(conf, get_logger(None), None)
         self.container_c = ContainerClient(conf)
-        self.blob_c = BlobClient()
+        self.blob_c = BlobClient(conf=conf)
 
         self.ref = random_str(8)
 

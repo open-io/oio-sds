@@ -2060,7 +2060,7 @@ _m2_generate_chunks(struct gen_ctx_s *ctx,
 	gint64 esize = MAX(ctx->size, 1);
 	for (gint64 s = 0; s < esize && !err; s += mcs, ++pos) {
 		GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
-		void _on_id(oio_location_t loc, const char *id)
+		void _on_id(oio_location_t loc, const char *id, const char *addr UNUSED)
 		{
 			(void)loc;
 			char *shifted = g_strdup(id);

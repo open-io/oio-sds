@@ -94,7 +94,7 @@ get_spare_chunks(struct oio_lb_s *lb, const char *pool,
 {
 	GError *err = NULL;
 	GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
-	void _on_id(oio_location_t loc, const char *id)
+	void _on_id(oio_location_t loc, const char *id, const char *addr UNUSED)
 	{
 		(void)loc;
 		char *shifted = g_strdup(id);
@@ -160,7 +160,7 @@ get_conditioned_spare_chunks(struct oio_lb_s *lb, const char *pool,
 			ns_name, already);
 	g_rw_lock_reader_unlock(&lb->lock);
 
-	void _on_id(oio_location_t loc, const char *id)
+	void _on_id(oio_location_t loc, const char *id, const char *addr UNUSED)
 	{
 		(void)loc;
 		char *shifted = g_strdup(id);

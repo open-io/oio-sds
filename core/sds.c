@@ -219,13 +219,14 @@ _chunks_load (GSList **out, struct json_object *jtab)
 
 	for (int i = json_object_array_length(jtab); i > 0 && !err; i--) {
 		struct json_object *jurl = NULL, *jpos = NULL, *jsize = NULL,
-				*jhash = NULL, *jscore = NULL;
+				*jhash = NULL, *jscore = NULL, *jreal_url = NULL;
 		struct oio_ext_json_mapping_s m[] = {
-			{"url",   &jurl,   json_type_string, 1},
-			{"pos",   &jpos,   json_type_string, 1},
-			{"size",  &jsize,  json_type_int,    1},
-			{"hash",  &jhash,  json_type_string, 1},
-			{"score", &jscore, json_type_int,    0},
+			{"url",      &jurl,      json_type_string, 1},
+			{"pos",      &jpos,      json_type_string, 1},
+			{"size",     &jsize,     json_type_int,    1},
+			{"hash",     &jhash,     json_type_string, 1},
+			{"score",    &jscore,    json_type_int,    0},
+			{"real_url", &jreal_url, json_type_string, 0},
 			{NULL,NULL,0,0}
 		};
 		err = oio_ext_extract_json (json_object_array_get_idx (jtab, i-1), m);
@@ -236,7 +237,7 @@ _chunks_load (GSList **out, struct json_object *jtab)
 			err = SYSERR("JSON: invalid chunk hash: not hexa of %"G_GSIZE_FORMAT,
 					2*sizeof(chunk_hash_t));
 		else {
-			struct chunk_s *c = _load_one_chunk(jurl, jsize, jpos, jscore);
+			struct chunk_s *c = _load_one_chunk(jreal_url ? jreal_url : jurl, jsize, jpos, jscore);
 			g_strlcpy (c->hexhash, h, sizeof(c->hexhash));
 			oio_str_upper(c->hexhash);
 			chunks = g_slist_prepend (chunks, c);

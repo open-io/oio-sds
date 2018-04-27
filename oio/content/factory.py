@@ -32,7 +32,7 @@ class ContentFactory(object):
         self.logger = logger or get_logger(conf)
         self.container_client = container_client or \
             ContainerClient(conf, logger=self.logger, **kwargs)
-        self.blob_client = BlobClient(**kwargs)
+        self.blob_client = BlobClient(conf, **kwargs)
 
     def get(self, container_id, content_id, account=None,
             container_name=None):

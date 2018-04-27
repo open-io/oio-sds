@@ -25,17 +25,21 @@ OIO=$HOME/.oio
 SDS=$OIO/sds
 GRIDINIT_SOCK=${SDS}/run/gridinit.sock
 BOOTSTRAP_CONFIG=
+SERVICE_ID=
+RANDOM_SERVICE_ID=
 PROFILE=
 
 ZKSLOW=0
 verbose=0
 OPENSUSE=`grep -i opensuse /etc/*release || echo -n ''`
 
-while getopts "P:I:N:f:Z:p:Cvb" opt; do
+while getopts "P:I:N:f:Z:p:CURv" opt; do
     case $opt in
         P) PORT="${OPTARG}" ;;
         I) IP="${OPTARG}" ;;
         N) NS="${OPTARG}" ;;
+        U) SERVICE_ID=1 ;;
+        R) RANDOM_SERVICE_ID=1 ;;
         f) if [ -n "$OPTARG" ]; then
 			if  [ ${OPTARG::1} != "/" ]; then
 				BOOTSTRAP_CONFIG="${BOOTSTRAP_CONFIG} --conf ${PWD}/${OPTARG}"
@@ -118,6 +122,8 @@ done
 mkdir -p "$OIO" && cd "$OIO" && (rm -rf sds.conf sds/{conf,data,run,logs})
 bootstrap_opt=
 if [[ -n "${PORT}" ]] ; then bootstrap_opt="${bootstrap_opt} --port ${PORT}" ; fi
+if [[ -n "${SERVICE_ID}" ]] ; then bootstrap_opt="${bootstrap_opt} --with-service-id" ; fi
+if [[ -n "${RANDOM_SERVICE_ID}" ]] ; then bootstrap_opt="${bootstrap_opt} --random-service-id" ; fi
 if [[ -n "${PROFILE}" ]] ; then bootstrap_opt="${bootstrap_opt} --profile ${PROFILE}" ; fi
 oio-bootstrap.py $bootstrap_opt -d ${BOOTSTRAP_CONFIG} "$NS" "$IP" > /tmp/oio-bootstrap.$$
 

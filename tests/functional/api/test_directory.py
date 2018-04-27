@@ -277,27 +277,30 @@ class TestDirectoryAPI(BaseTestCase):
         Tests that rdir services linked to rawx services
         are not on the same locations
         """
+        def _id(r):
+            return r['tags'].get('tag.service_id', r['addr'])
+
         self.skipTest('Deprecated way of linking rdir services')
         self._reload_proxy()
+
         cs = ConscienceClient({'namespace': self.ns})
         rawx_list = cs.all_services('rawx')
         rdir_dict = {x['addr']: x for x in cs.all_services('rdir')}
         # Link the services
         for rawx in rawx_list:
-            self.api.link('_RDIR_TEST', rawx['addr'], 'rdir',
-                          autocreate=True)
+            self.api.link('_RDIR_TEST', _id(rawx), 'rdir', autocreate=True)
         # Do the checks
         for rawx in rawx_list:
-            linked_rdir = self.api.list(
-                '_RDIR_TEST', rawx['addr'], service_type='rdir')['srv']
+            linked_rdir = self.api.list('_RDIR_TEST', _id(rawx),
+                                        service_type='rdir')['srv']
             rdir = rdir_dict[linked_rdir[0]['host']]
             rawx_loc = rawx['tags'].get('tag.loc')
             rdir_loc = rdir['tags'].get('tag.loc')
             self.assertNotEqual(rawx_loc, rdir_loc)
         # Unlink the services
         for rawx in rawx_list:
-            self.api.unlink('_RDIR_TEST', rawx['addr'], 'rdir')
-            self.api.delete('_RDIR_TEST', rawx['addr'])
+            self.api.unlink('_RDIR_TEST', _id(rawx), 'rdir')
+            self.api.delete('_RDIR_TEST', _id(rawx))
 
     def test_link_rdir_to_zero_scored_rawx(self):
         client = RdirClient({'namespace': self.ns})

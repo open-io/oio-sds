@@ -276,7 +276,7 @@ class ChunkReader(object):
         """
         try:
             with green.ConnectionTimeout(self.connection_timeout):
-                raw_url = chunk["url"]
+                raw_url = chunk.get("real_url", chunk["url"])
                 parsed = urlparse(raw_url)
                 conn = http_connect(parsed.netloc, 'GET', parsed.path,
                                     self.request_headers)

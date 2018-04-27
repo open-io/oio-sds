@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -64,8 +64,8 @@ class RdirDispatcher(object):
 
         for rawx in all_rawx:
             try:
-                # Verify that there is no rdir linked
-                resp = self.directory.list(RDIR_ACCT, rawx['addr'],
+                ref = rawx.get('tags', {}).get('tag.service_id')
+                resp = self.directory.list(RDIR_ACCT, ref or rawx['addr'],
                                            service_type='rdir',
                                            **kwargs)
                 rdir_host = _filter_rdir_host(resp)
@@ -97,18 +97,19 @@ class RdirDispatcher(object):
                  for x in all_rdir}
 
         for rawx in all_rawx:
+            rawx_id = rawx['tags'].get('tag.service_id', rawx['addr'])
             try:
                 # Verify that there is no rdir linked
-                resp = self.directory.list(RDIR_ACCT, rawx['addr'],
+                resp = self.directory.list(RDIR_ACCT, rawx_id,
                                            service_type='rdir', **kwargs)
                 rdir_host = _filter_rdir_host(resp)
                 try:
                     rawx['rdir'] = by_id[_make_id(self.ns, 'rdir', rdir_host)]
                 except KeyError:
                     self.logger.warn("rdir %s linked to rawx %s seems down",
-                                     rdir_host, rawx['addr'])
+                                     rdir_host, rawx_id)
             except (NotFound, ClientException):
-                rdir = self._smart_link_rdir(rawx['addr'], all_rdir,
+                rdir = self._smart_link_rdir(rawx_id, all_rdir,
                                              max_per_rdir, **kwargs)
                 n_bases = by_id[rdir]['tags'].get("stat.opened_db_count", 0)
                 by_id[rdir]['tags']["stat.opened_db_count"] = n_bases + 1
@@ -176,7 +177,6 @@ class RdirDispatcher(object):
                     raise
                 # Monotonic backoff (retriable and net erorrs)
                 if i < max_attempts - 1:
-                    from time import sleep
                     sleep(i * 1.0)
                     continue
                 # Too many attempts

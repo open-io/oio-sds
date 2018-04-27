@@ -68,6 +68,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define PATH()    OPT("path")
 #define SEQ()     OPT("seq")
 #define VERSION() OPT("version")
+#define SERVICE_ID() OPT("service_id")
 
 #define GUARDED_READ(Lock,Action) do { \
 	g_rw_lock_reader_lock(&Lock); \
@@ -320,6 +321,9 @@ GError * conscience_remote_push_services(gchar **cs,
 GError* conscience_remote_remove_services(gchar **cs,
 		const char *type, GSList *ls,
 		gint64 deadline);
+
+/* retrieve addr of a Service Id service, use cache only */
+GError * conscience_resolve_service_id(gchar **cs, const char *type, const char *service_id, gchar **out);
 
 static inline gint64 DL(void) {
 	return oio_clamp_deadline(proxy_timeout_common, oio_ext_get_deadline());

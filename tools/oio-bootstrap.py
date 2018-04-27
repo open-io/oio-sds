@@ -24,6 +24,7 @@ import os
 import pwd
 from string import Template
 import re
+import uuid
 import argparse
 
 
@@ -222,6 +223,7 @@ DavDepthInfinity Off
 grid_docroot           ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
 grid_namespace         ${NS}
 grid_dir_run           ${RUNDIR}
+${WANT_SERVICE_ID}grid_service_id        ${SERVICE_ID}
 
 # How many hexdigits must be used to name the indirection directories
 grid_hash_width        3
@@ -990,9 +992,9 @@ ACCOUNT_ID = 'account_id'
 BUCKET_NAME = 'bucket_name'
 COMPRESSION = 'compression'
 APPLICATION_KEY = 'application_key'
-KEY_FILE='key_file'
-META_HEADER='x-oio-chunk-meta'
-COVERAGE=os.getenv('PYTHON_COVERAGE')
+KEY_FILE = 'key_file'
+META_HEADER = 'x-oio-chunk-meta'
+COVERAGE = os.getenv('PYTHON_COVERAGE')
 
 defaults = {
     'NS': 'OPENIO',
@@ -1028,8 +1030,10 @@ if not os.path.exists('/usr/sbin/httpd'):
 def config(env):
     return '{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.conf'.format(**env)
 
+
 def httpd_config(env):
     return '{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.httpd.conf'.format(**env)
+
 
 def watch(env):
     return '{WATCHDIR}/{NS}-{SRVTYPE}-{SRVNUM}.yml'.format(**env)
@@ -1072,7 +1076,7 @@ def generate(options):
     final_conf = {}
     final_services = {}
 
-    ports = (x for x in xrange(options['port'],60000))
+    ports = (x for x in xrange(options['port'], 60000))
     port_proxy = next(ports)
     port_ecd = next(ports)
     port_admin = next(ports)
@@ -1098,6 +1102,7 @@ def generate(options):
     backblaze_account_id = options.get('backblaze', {}).get(ACCOUNT_ID)
     backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
     backblaze_app_key = options.get('backblaze', {}).get(APPLICATION_KEY)
+    want_service_id = '' if options.get('with_service_id') else '#'
 
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(ZK_CNXSTRING=options.get('ZK'),
@@ -1135,7 +1140,8 @@ def generate(options):
                BACKBLAZE_APPLICATION_KEY=backblaze_app_key,
                KEY_FILE=key_file,
                HTTPD_BINARY=HTTPD_BINARY,
-               META_HEADER=META_HEADER)
+               META_HEADER=META_HEADER,
+               WANT_SERVICE_ID=want_service_id)
 
     def merge_env(add):
         env = dict(ENV)
@@ -1161,6 +1167,16 @@ def generate(options):
 
     def subenv(add):
         env = merge_env(add)
+        if options['random_service_id'] == 1:
+            env['WANT_SERVICE_ID'] = ''
+            options['random_service_id'] = 2
+        elif options['random_service_id'] == 2:
+            env['WANT_SERVICE_ID'] = '#'
+            options['random_service_id'] = 1
+
+        # remove Service Id from env for test.yml
+        if 'SERVICE_ID' in env and env['WANT_SERVICE_ID'] == '#':
+            del env['SERVICE_ID']
         env['VOLUME'] = '{DATADIR}/{NS}-{SRVTYPE}-{SRVNUM}'.format(**env)
         return env
 
@@ -1197,6 +1213,8 @@ def generate(options):
             out['addr'] = '%s:%s' % (env['IP'], env['PORT'])
         if 'VOLUME' in env:
             out['path'] = env['VOLUME']
+        if 'SERVICE_ID' in env:
+            out['service_id'] = env['SERVICE_ID']
         final_services[t].append(out)
 
     # gridinit header
@@ -1265,9 +1283,9 @@ def generate(options):
                 "beanstalk://" + str(h) + ":" + str(p)
                 for _, h, p in all_beanstalkd)
         ENV.update({'BEANSTALKD_CNXSTRING': beanstalkd_cnxstring,
-                    'NOBS':''})
+                    'NOBS': ''})
     else:
-        ENV.update({'BEANSTALKD_CNXSTRING': '***disabled***', 'NOBS':'#'})
+        ENV.update({'BEANSTALKD_CNXSTRING': '***disabled***', 'NOBS': '#'})
 
     # meta* + sqlx
     def generate_meta(t, n, tpl, ext_opt=""):
@@ -1327,6 +1345,7 @@ def generate(options):
                           'SRVNUM': i + 1,
                           'PORT': next(ports),
                           'COMPRESSION': compression,
+                          'SERVICE_ID': str(uuid.uuid4()),
                           'EXTRASLOT': ('rawx-even' if i % 2 else 'rawx-odd')
                           })
             add_service(env)
@@ -1419,7 +1438,7 @@ def generate(options):
     # service desc
     tpl = Template(template_wsgi_service_descr)
     to_write = tpl.safe_substitute(env, SRVTYPE='container',
-                                        KEY_FILE=config(env))
+                                   KEY_FILE=config(env))
     with open(wsgi(env), 'w+') as f:
         f.write(to_write)
     # service configuration
@@ -1470,7 +1489,7 @@ def generate(options):
         with open(config(env), 'w+') as f:
             tpl = Template(template_event_agent)
             f.write(tpl.safe_substitute(env))
-        with open(CFGDIR + '/' + 'event-handlers-'+str(num)+'.conf', 'w+') as f:
+        with open(CFGDIR + '/event-handlers-'+str(num)+'.conf', 'w+') as f:
             tpl = Template(template_event_agent_handlers)
             f.write(tpl.safe_substitute(env))
 
@@ -1493,7 +1512,7 @@ def generate(options):
         f.write(tpl.safe_substitute(ENV))
     # system config
     with open('{OIODIR}/sds.conf'.format(**ENV), 'w+') as f:
-        env = merge_env({'IP':hosts[0]})
+        env = merge_env({'IP': hosts[0]})
         tpl = Template(template_local_header)
         f.write(tpl.safe_substitute(env))
         tpl = Template(template_local_ns)
@@ -1501,7 +1520,7 @@ def generate(options):
         # Now dump the configuration
         for k, v in options['config'].iteritems():
             strv = str(v)
-            if isinstance(v,bool):
+            if isinstance(v, bool):
                 strv = strv.lower()
             f.write('{0}={1}\n'.format(k, strv))
 
@@ -1534,6 +1553,8 @@ def generate(options):
         elif k in defaults:
             final_conf[k] = defaults[k]
     final_conf['config'] = options['config']
+    final_conf['with_service_id'] = options['with_service_id']
+    final_conf['random_service_id'] = bool(options['random_service_id'])
     with open('{CFGDIR}/test.yml'.format(**ENV), 'w+') as f:
         f.write(yaml.dump(final_conf))
     return final_conf
@@ -1563,9 +1584,10 @@ def merge_config(base, inc):
 def main():
     if COVERAGE:
         global template_wsgi_service_descr
-        template_wsgi_service_descr = "".join([template_wsgi_service_coverage_start,
-                                               template_wsgi_service_descr,
-                                               template_wsgi_service_coverage_stop])
+        template_wsgi_service_descr = "".join(
+            [template_wsgi_service_coverage_start,
+             template_wsgi_service_descr,
+             template_wsgi_service_coverage_stop])
     parser = argparse.ArgumentParser(description='OpenIO bootstrap tool')
     parser.add_argument("-c", "--conf",
                         action="append", dest='config',
@@ -1576,8 +1598,16 @@ def main():
     parser.add_argument("-p", "--port",
                         type=int, default=6000,
                         help="Specify the first port of the range")
-    parser.add_argument("--profile", choices=['default', 'valgrind', 'callgrind'],
-                        help="Launch SDS with specific tool")
+    parser.add_argument(
+        "-u", "--with-service-id", action='store_true', default=False,
+        help="generate service IDs for services supporting them")
+    parser.add_argument("--random-service-id",
+                        action='store_true', default=False,
+                        help=("generate services service IDs randomly "
+                              "(implies --with--service-id)"))
+    parser.add_argument(
+        "--profile", choices=['default', 'valgrind', 'callgrind'],
+        help="Launch SDS with specific tool")
     parser.add_argument("namespace",
                         action='store', type=str, default=None,
                         help="Namespace name")
@@ -1608,6 +1638,9 @@ def main():
                     opts = merge_config(opts, data)
 
     opts['port'] = int(options.port)
+    opts['with_service_id'] = \
+        options.with_service_id or options.random_service_id
+    opts['random_service_id'] = options.random_service_id
 
     # Remove empty strings, then apply the default if no value remains
     options.ip = [str(x) for x in options.ip if x]

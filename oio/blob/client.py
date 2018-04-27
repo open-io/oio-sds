@@ -26,6 +26,7 @@ from oio.common.decorators import ensure_headers, ensure_request_id
 from oio.api.io import ChunkReader
 from oio.api.replication import ReplicatedMetachunkWriter, FakeChecksum
 from oio.common.storage_method import STORAGE_METHODS
+from oio.blob.cache import ServiceCache
 
 CHUNK_TIMEOUT = 60
 READ_BUFFER_SIZE = 65535
@@ -64,15 +65,20 @@ def update_rawx_perfdata(func):
 class BlobClient(object):
     """A low-level client to rawx services."""
 
-    def __init__(self, connection_pool=None, perfdata=None, **kwargs):
+    def __init__(self, conf=None, connection_pool=None, perfdata=None,
+                 **kwargs):
         self.http_pool = connection_pool or get_pool_manager()
         self.perfdata = perfdata
+        self.cache = ServiceCache(conf, self.http_pool)
+
+    def resolve_url(self, url):
+        return self.cache.resolve(url)
 
     @update_rawx_perfdata
     def chunk_put(self, url, meta, data, **kwargs):
         if not hasattr(data, 'read'):
             data = utils.GeneratorIO(data)
-        chunk = {'url': url, 'pos': meta['chunk_pos']}
+        chunk = {'url': self.resolve_url(url), 'pos': meta['chunk_pos']}
         # FIXME: ugly
         chunk_method = meta.get('chunk_method',
                                 meta.get('content_chunkmethod'))
@@ -86,7 +92,8 @@ class BlobClient(object):
 
     @update_rawx_perfdata
     def chunk_delete(self, url, **kwargs):
-        resp = self.http_pool.request('DELETE', url, **kwargs)
+        resp = self.http_pool.request('DELETE', self.resolve_url(url),
+                                      **kwargs)
         if resp.status != 204:
             raise exc.from_response(resp)
         return resp
@@ -110,7 +117,8 @@ class BlobClient(object):
         def __delete_chunk(chunk_):
             try:
                 resp = self.http_pool.request(
-                    "DELETE", chunk_['url'], headers=headers, timeout=timeout)
+                    "DELETE", self.resolve_url(chunk_['url']),
+                    headers=headers, timeout=timeout)
                 resp.chunk = chunk_
                 return resp
             except urllib3.exceptions.HTTPError as ex:
@@ -128,6 +136,7 @@ class BlobClient(object):
         req_id = kwargs.get('req_id')
         if not req_id:
             req_id = utils.request_id()
+        url = self.resolve_url(url)
         reader = ChunkReader([{'url': url}], READ_BUFFER_SIZE,
                              {'X-oio-req-id': req_id})
         # This must be done now if we want to access headers
@@ -140,6 +149,7 @@ class BlobClient(object):
     @ensure_request_id
     def chunk_head(self, url, **kwargs):
         _xattr = bool(kwargs.get('xattr', True))
+        url = self.resolve_url(url)
         headers = kwargs['headers'].copy()
         headers[HEADER_PREFIX + 'xattr'] = _xattr
         try:
@@ -179,5 +189,6 @@ class BlobClient(object):
     @ensure_request_id
     def chunk_link(self, target, link, **kwargs):
         headers = kwargs.get('headers')
-        headers['Destination'] = link[:-64] + "/" + link[-64:]
-        return self.http_pool.request('COPY', target, headers=headers)
+        headers['Destination'] = link[:-64] + '/' + link[-64:]
+        return self.http_pool.request(
+            'COPY', self.resolve_url(target), headers=headers)

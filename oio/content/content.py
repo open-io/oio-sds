@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -34,7 +34,7 @@ class Content(object):
         self.chunks = ChunksHelper(chunks)
         self.storage_method = storage_method
         self.logger = logger or get_logger(self.conf)
-        self.blob_client = (blob_client or BlobClient())
+        self.blob_client = (blob_client or BlobClient(conf))
         self.container_client = (container_client
                                  or ContainerClient(self.conf,
                                                     logger=self.logger))

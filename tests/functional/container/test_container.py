@@ -482,7 +482,7 @@ class TestMeta2Contents(BaseTestCase):
             self.assertIsInstance(chunk, dict)
             self.assertListEqual(sorted(chunk.keys()),
                                  sorted(['url', 'pos', 'hash',
-                                        'size', 'score']))
+                                        'size', 'score', 'real_url']))
             self.assertIsInstance(chunk['size'], int)
         return True
 

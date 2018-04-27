@@ -26,7 +26,7 @@ static struct oio_lb_item_s *
 _srv (int i)
 {
 	oio_location_t loc = i+1; // discard 0
-	size_t len = 8 + sizeof (struct oio_lb_item_s);
+	size_t len = LIMIT_LENGTH_SRVID + sizeof (struct oio_lb_item_s);
 	struct oio_lb_item_s *srv = g_malloc0 (len);
 	srv->location = ((loc & ~0xFF) << 16) | (loc & 0xFF);
 	srv->weight = 90 + i;
@@ -65,7 +65,7 @@ test_local_poll (void)
 	/* now poll some pools */
 	for (int i = 0; i < 4096; i++) {
 		guint count = 0;
-		void _on_item (oio_location_t location, const char *id) {
+		void _on_item (oio_location_t location, const char *id, const char *addr UNUSED) {
 			(void) location, (void) id;
 			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT, id, location);
 			++ count;
@@ -109,7 +109,7 @@ test_local_poll_same_low_bits(void)
 	/* now poll some pools */
 	for (int i = 0; i < 4096; i++) {
 		guint count = 0;
-		void _on_item (oio_location_t location, const char *id) {
+		void _on_item (oio_location_t location, const char *id, const char *addr UNUSED) {
 			(void) location, (void) id;
 			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT, id, location);
 			++ count;
@@ -128,7 +128,7 @@ test_local_poll_same_low_bits(void)
 static struct oio_lb_item_s *
 _srv2(int i, int svc_per_slot)
 {
-	size_t len = 8 + sizeof (struct oio_lb_item_s);
+	size_t len = LIMIT_LENGTH_SRVID + sizeof (struct oio_lb_item_s);
 	struct oio_lb_item_s *srv = g_malloc0 (len);
 	oio_location_t loc = i;
 	srv->location = loc % svc_per_slot + loc / svc_per_slot * 65536 + 1;
@@ -187,7 +187,7 @@ _test_uniform_repartition(int services, int slots, int targets)
 	/* now poll some pools */
 	for (int i = 0; i < shots; i++) {
 		guint count = 0;
-		void _on_item(oio_location_t location, const char *id) {
+		void _on_item(oio_location_t location, const char *id, const char *addr UNUSED) {
 			(void) location, (void) id;
 			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT, id, location);
 			++count;
@@ -252,7 +252,7 @@ test_uniform_repartition(gconstpointer raw_test_data)
 static struct oio_lb_item_s *
 _srv3(int i, const char *loc)
 {
-	size_t len = 8 + sizeof(struct oio_lb_item_s);
+	size_t len = LIMIT_LENGTH_SRVID + sizeof(struct oio_lb_item_s);
 	struct oio_lb_item_s *srv = g_malloc0(len);
 	srv->location = location_from_dotted_string(loc);
 	srv->weight = 80;
@@ -362,7 +362,7 @@ _test_repartition_by_loc_level(struct oio_lb_world_s *world,
 			g_datalist_init(&count_by_level_by_host[j]);
 		}
 		guint count = 0;
-		void _on_item(oio_location_t location, const char *id) {
+		void _on_item(oio_location_t location, const char *id, const char *addr UNUSED) {
 			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT, id, location);
 			++count;
 			// Count how many times an "area" is selected, for each area level.
@@ -477,8 +477,8 @@ static void
 test_local_feed_twice(void)
 {
 	struct oio_lb_world_s *world = oio_lb_local__create_world();
-	struct oio_lb_item_s *srv0 = g_malloc0(8 + sizeof (struct oio_lb_item_s));
-	struct oio_lb_item_s *srv1 = g_malloc0(8 + sizeof (struct oio_lb_item_s));
+	struct oio_lb_item_s *srv0 = g_malloc0(LIMIT_LENGTH_SRVID + sizeof (struct oio_lb_item_s));
+	struct oio_lb_item_s *srv1 = g_malloc0(LIMIT_LENGTH_SRVID + sizeof (struct oio_lb_item_s));
 	srv0->location = 42 + 65536;
 	srv0->weight = 42;
 	g_sprintf(srv0->id, "ID-%d", 42);
@@ -515,7 +515,7 @@ test_local_feed (void)
 	g_assert_cmpuint (oio_lb_world__count_slots (world), ==, 5);
 
 	for (int j = 0; j < 8; ++j) {
-		struct oio_lb_item_s *srv = g_malloc0 (8 + sizeof (struct oio_lb_item_s));
+		struct oio_lb_item_s *srv = g_malloc0 (LIMIT_LENGTH_SRVID + sizeof (struct oio_lb_item_s));
 		for (int i = 0; i < 8; ++i) {
 			srv->location = 65430 - i;
 			srv->weight = 90 + i;

@@ -90,7 +90,7 @@ class Checker(object):
             conf,
             max_retries=request_attempts - 1,
             request_attempts=request_attempts)
-        self.blob_client = BlobClient()
+        self.blob_client = BlobClient(conf=conf)
 
         self.accounts_checked = 0
         self.containers_checked = 0

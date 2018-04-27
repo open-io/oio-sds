@@ -23,6 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 struct req_args_s;
 
 enum http_rc_e action_cache_status (struct req_args_s *args);
+enum http_rc_e action_cache_show (struct req_args_s *args);
 enum http_rc_e action_get_config (struct req_args_s *args);
 enum http_rc_e action_set_config (struct req_args_s *args);
 
@@ -57,6 +58,7 @@ enum http_rc_e action_conscience_deregister (struct req_args_s *args);
 enum http_rc_e action_conscience_flush (struct req_args_s *args);
 enum http_rc_e action_conscience_lock (struct req_args_s *args);
 enum http_rc_e action_conscience_unlock (struct req_args_s *args);
+enum http_rc_e action_conscience_resolve_service_id (struct req_args_s *args);
 
 enum http_rc_e action_ref_create (struct req_args_s *args);
 enum http_rc_e action_ref_destroy (struct req_args_s *args);
