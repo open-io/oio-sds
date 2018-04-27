@@ -146,11 +146,6 @@ struct election_member_s
 	 * client threads to decide wether to wait (or not) for a final state. */
 	gint64 when_unstable;
 
-	/* Used to know when the mechanism is allowed to send a gratuitous ping
-	 * to the peers. Set to a value when entering a state allowed to generate
-	 * such a ping (i.e. a final state) or when a ping is sent. */
-	gint64 when_next_ping;
-
 	/* last time the status was changed */
 	gint64 last_status;
 
@@ -1730,6 +1725,21 @@ enum election_op_e {
 	ELOP_NONE, ELOP_START, ELOP_RESYNC, ELOP_EXIT
 };
 
+static void
+_election_atime(struct election_member_s *m)
+{
+	m->last_atime = oio_ext_monotonic_time ();
+	switch (m->step) {
+		case STEP_MASTER:
+		case STEP_SLAVE:
+			_DEQUE_remove(m);
+			_DEQUE_add(m);
+			return;
+		default:
+			return;
+	}
+}
+
 static GError *
 _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
 		enum election_op_e op,
@@ -1767,14 +1777,14 @@ _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
 	struct election_member_s *member = _LOCKED_init_member(m, n, key, op != ELOP_EXIT);
 	switch (op) {
 		case ELOP_NONE:
-			member->last_atime = oio_ext_monotonic_time ();
+			_election_atime(member);
 			break;
 		case ELOP_START:
-			member->last_atime = oio_ext_monotonic_time ();
+			_election_atime(member);
 			transition(member, EVT_NONE, NULL);
 			break;
 		case ELOP_RESYNC:
-			member->last_atime = oio_ext_monotonic_time ();
+			_election_atime(member);
 			transition(member, EVT_SYNC_REQ, NULL);
 			break;
 		case ELOP_EXIT:
@@ -2036,36 +2046,6 @@ _result_PIPEFROM (GError *e, struct election_manager_s *manager,
 }
 
 /* -------------------------------------------------------------------------- */
-
-static gint64
-_get_next_ping(const gint64 base, const gint64 jitter)
-{
-	EXTRA_ASSERT(base >= 0);
-	EXTRA_ASSERT(jitter >= 0);
-
-	/* Avoid an overflow on the int32, the delay might represent several days
-	 * in microseconds */
-	gint64 max = G_MAXINT32 - 1;
-	if (base + jitter < max)
-		max = base + jitter;
-	gint64 min = (base > jitter) ? base - jitter : 0;
-
-	/* Introduce a +1 bias to avoid the check of base != 0 */
-	return oio_ext_monotonic_time() + oio_ext_rand_int_range(
-			(gint32)(min + 1), (gint32)(max + 1));
-}
-
-#define _member_rearm_ping_MASTER(m) do { \
-	m->when_next_ping = _get_next_ping( \
-			oio_election_delay_ping_final, \
-			oio_election_delay_ping_final / 3); \
-} while (0)
-
-#define _member_rearm_ping_SLAVE(m) do { \
-	m->when_next_ping = _get_next_ping( \
-			oio_election_delay_ping_final, \
-			oio_election_delay_ping_final / 3); \
-} while (0)
 
 static void
 member_action_to_NONE(struct election_member_s *member)
@@ -2434,7 +2414,6 @@ member_action_to_CHECKING_SLAVES(struct election_member_s *m)
 static void
 member_action_to_MASTER(struct election_member_s *member)
 {
-	_member_rearm_ping_MASTER(member);
 	member->when_unstable = 0;
 	return member_set_status(member, STEP_MASTER);
 }
@@ -2442,7 +2421,6 @@ member_action_to_MASTER(struct election_member_s *member)
 static void
 member_action_to_SLAVE(struct election_member_s *member)
 {
-	_member_rearm_ping_SLAVE(member);
 	member->when_unstable = 0;
 	return member_set_status(member, STEP_SLAVE);
 }
@@ -3567,10 +3545,6 @@ _member_react_SLAVE(struct election_member_s *member, enum event_type_e evt)
 			if (_is_over(now, member->last_atime, oio_election_delay_expire_SLAVE)) {
 				return member_action_to_LEAVING(member);
 			}
-			if (now > member->when_next_ping) {
-				_member_rearm_ping_SLAVE(member);
-				return (void) defer_USE(member);
-			}
 			return;
 
 			/* Interruptions */
@@ -3606,10 +3580,6 @@ _member_react_MASTER(struct election_member_s *member, enum event_type_e evt)
 			now = oio_ext_monotonic_time();
 			if (_is_over(now, member->last_atime, oio_election_delay_expire_MASTER)) {
 				return member_action_to_LEAVING(member);
-			}
-			if (now > member->when_next_ping) {
-				_member_rearm_ping_MASTER(member);
-				return (void) defer_USE(member);
 			}
 			return;
 
@@ -3668,6 +3638,8 @@ _member_react_FAILED(struct election_member_s *member, enum event_type_e evt)
 			return member_warn_abnormal_event(member, evt);
 	}
 }
+
+static gint64
 
 static void
 _member_react (struct election_member_s *member,
@@ -3860,13 +3832,13 @@ election_manager_play_timers_DELAYED_SLAVE (struct election_manager_s *M)
 }
 
 guint
-election_manager_play_ping_MASTER (struct election_manager_s *M)
+election_manager_play_timers_MASTER (struct election_manager_s *M)
 {
 	return _send_NONE_to_step2(M, STEP_MASTER);
 }
 
 guint
-election_manager_play_ping_SLAVE (struct election_manager_s *M)
+election_manager_play_timers_SLAVE (struct election_manager_s *M)
 {
 	return _send_NONE_to_step2(M, STEP_SLAVE);
 }
