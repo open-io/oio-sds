@@ -203,6 +203,10 @@ class BootstrapVolume(lister.Lister):
 
     log = getLogger(__name__ + '.BootstrapVolume')
 
+    def __init__(self, *args, **kwargs):
+        super(BootstrapVolume, self).__init__(*args, **kwargs)
+        self.error = None
+
     def get_parser(self, prog_name):
         parser = super(BootstrapVolume, self).get_parser(prog_name)
         parser.add_argument(
@@ -213,7 +217,7 @@ class BootstrapVolume(lister.Lister):
         return parser
 
     def take_action(self, parsed_args):
-        from oio.common.exceptions import ClientException
+        from oio.common.exceptions import OioException
 
         self.log.debug('take_action(%s)', parsed_args)
 
@@ -221,10 +225,9 @@ class BootstrapVolume(lister.Lister):
             all_rawx = self.app.client_manager.volume.rdir_lb.assign_all_rawx(
                     parsed_args.max_per_rdir,
                     connection_timeout=30.0, read_timeout=90.0)
-        except ClientException as exc:
-            if exc.status != 481:
-                raise
+        except OioException as exc:
             self.log.warn("Failed to assign all rawx: %s", exc)
+            self.error = exc
             all_rawx, _ = \
                 self.app.client_manager.volume.rdir_lb.get_assignation(
                         connection_timeout=30.0, read_timeout=90.0)
@@ -238,6 +241,7 @@ class BootstrapVolume(lister.Lister):
                             rawx['tags'].get('tag.loc')))
         results.sort()
         columns = ('Rdir', 'Rawx', 'Rdir location', 'Rawx location')
+        # FIXME(FVE): return 1 if self.error
         return columns, results
 
 

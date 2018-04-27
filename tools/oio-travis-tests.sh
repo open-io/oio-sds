@@ -17,16 +17,16 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 set -e
 set -x
-export COLUMNS=512 LANG= LANGUAGE=
 
 export G_DEBUG=fatal_warnings
 export G_SLICE=always-malloc
 
 export PYTHON=python
-
 if [ "${PYTHON_COVERAGE:-}" == "1" ]; then
 	PYTHON="coverage run -p --omit=/home/travis/oio/lib/python2.7/*"
 fi
+
+OIO_RESET="oio-reset.sh -v"
 
 SRCDIR=$PWD
 WRKDIR=$PWD
@@ -45,12 +45,15 @@ function dump_syslog {
 	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock status3
 }
 
-function dump_coredump {
-    oio-gdb.py
+function trap_exit {
+	set +e
+	#pip list
+	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock status3
+	#dump_syslog
+	oio-gdb.py
 }
 
-#trap dump_syslog EXIT
-trap dump_coredump EXIT
+trap trap_exit EXIT
 
 is_running_test_suite () {
 	[ -z "$TEST_SUITE" ] || [ "${TEST_SUITE/*$1*/$1}" == "$1" ]
@@ -121,26 +124,26 @@ test_proxy_forward () {
 }
 
 wait_proxy_cache() {
-    cnt=$(oio-test-config.py -t rawx | wc -l)
-    while true; do
-        rawx=$(curl -s http://$proxy/v3.0/cache/show | python -m json.tool | grep -c rawx | cat)
-        if [ $cnt -eq $rawx ]; then
-            break
-        fi
-        sleep 0.1
-    done
+	cnt=$(oio-test-config.py -t rawx | wc -l)
+	while true; do
+		rawx=$(curl -s http://$proxy/v3.0/cache/show | python -m json.tool | grep -c rawx | cat)
+		if [ $cnt -eq $rawx ]; then
+			break
+		fi
+		sleep 0.1
+	done
 }
 
 func_tests () {
 	randomize_env
-    args=
-    if is_running_test_suite "with-service-id"; then
-        args="${args} -U"
-    fi
-    if is_running_test_suite "with-random-service-id"; then
-        args="${args} -R"
-    fi
-	oio-reset.sh ${args} -N $OIO_NS $@
+	args=
+	if is_running_test_suite "with-service-id"; then
+		args="${args} -U"
+	fi
+	if is_running_test_suite "with-random-service-id"; then
+		args="${args} -R"
+	fi
+	$OIO_RESET ${args} -N $OIO_NS $@
 
 	test_proxy_forward
 
@@ -186,7 +189,7 @@ func_tests () {
 
 test_meta2_filters () {
 	randomize_env
-	oio-reset.sh -N $OIO_NS $@
+	$OIO_RESET -N $OIO_NS $@
 
 	cd $SRCDIR
 	tox -e coverage
@@ -198,7 +201,7 @@ test_meta2_filters () {
 
 test_cli () {
 	randomize_env
-	oio-reset.sh -N $OIO_NS $@
+	$OIO_RESET -N $OIO_NS $@
 
 	cd $SRCDIR
 	tox -e cli
@@ -283,7 +286,7 @@ fi
 
 if is_running_test_suite "multi-beanstalk" ; then
 	echo -e "\n### Tests with multiple beanstalkd"
-    func_tests \
+	func_tests \
 		-f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-3beanstalkd.yml"
 fi

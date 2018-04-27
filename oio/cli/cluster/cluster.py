@@ -236,6 +236,12 @@ class ClusterWait(lister.Lister):
             nargs='*',
             help='Service Type(s) to wait for (or all if unset)')
         parser.add_argument(
+            '-n', '--count',
+            metavar='<count>',
+            type=int,
+            default=0,
+            help='How many services are expected')
+        parser.add_argument(
             '-d', '--delay',
             metavar='<delay>',
             type=float,
@@ -247,6 +253,11 @@ class ClusterWait(lister.Lister):
             type=int,
             default=0,
             help='Minimum score value required for the chosen services')
+        parser.add_argument(
+            '-u', '--unlock',
+            action='store_true',
+            default=False,
+            help='Should the service be unlocked.')
         return parser
 
     def _wait(self, parsed_args):
@@ -262,6 +273,15 @@ class ClusterWait(lister.Lister):
         exc_msg = ("Timeout ({0}s) while waiting for the services to get a "
                    "score > {1}, still {2} are not")
 
+        def maybe_unlock(allsrv):
+            if not parsed_args.unlock:
+                return
+            self.app.client_manager.cluster.unlock_score(allsrv)
+
+        def check_deadline():
+            if now() > deadline:
+                raise Exception(exc_msg.format(delay, min_score, ko))
+
         while True:
             descr = []
             for type_ in types:
@@ -271,15 +291,25 @@ class ClusterWait(lister.Lister):
                 descr += tmp
             ko = len([s['score'] for s in descr if s['score'] <= min_score])
             if ko == 0:
+                # If a minimum has been specified, let's check we have enough
+                # services
+                if parsed_args.count:
+                    ok = len([s for s in descr if s['score'] > min_score])
+                    if ok < parsed_args.count:
+                        self.log.debug("Only %d services up", ok)
+                        check_deadline()
+                        maybe_unlock(descr)
+                        sleep(1.0)
+                        continue
+                # No service down, and enough services, we are done.
                 for d in descr:
                     yield d['type'], d['addr'], d['score']
                 return
             else:
                 self.log.debug("Still %d services down", ko)
-                if now() > deadline:
-                    raise Exception(exc_msg.format(delay, min_score, ko))
-                else:
-                    sleep(1.0)
+                check_deadline()
+                maybe_unlock(descr)
+                sleep(1.0)
 
     def take_action(self, parsed_args):
         columns = ('Type', 'Service', 'Score')

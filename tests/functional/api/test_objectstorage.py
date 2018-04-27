@@ -1,4 +1,4 @@
-# Copyright (C) 2016-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2016-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -28,6 +28,11 @@ from tests.utils import random_str, random_data, BaseTestCase
 
 
 class ObjectStorageApiTestBase(BaseTestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super(ObjectStorageApiTestBase, cls).setUpClass()
+        cls._cls_reload_meta()
 
     def setUp(self):
         super(ObjectStorageApiTestBase, self).setUp()

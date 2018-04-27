@@ -28,25 +28,27 @@ BOOTSTRAP_CONFIG=
 SERVICE_ID=
 RANDOM_SERVICE_ID=
 PROFILE=
+DATADIR=
 
 ZKSLOW=0
 verbose=0
 OPENSUSE=`grep -i opensuse /etc/*release || echo -n ''`
 
-while getopts "P:I:N:f:Z:p:CURv" opt; do
+while getopts "D:P:I:N:f:Z:p:CRUv" opt; do
     case $opt in
+        D) DATADIR="${OPTARG}" ;;
         P) PORT="${OPTARG}" ;;
         I) IP="${OPTARG}" ;;
         N) NS="${OPTARG}" ;;
         U) SERVICE_ID=1 ;;
         R) RANDOM_SERVICE_ID=1 ;;
         f) if [ -n "$OPTARG" ]; then
-			if  [ ${OPTARG::1} != "/" ]; then
-				BOOTSTRAP_CONFIG="${BOOTSTRAP_CONFIG} --conf ${PWD}/${OPTARG}"
-			else
-				BOOTSTRAP_CONFIG="${BOOTSTRAP_CONFIG} --conf ${OPTARG}"
-			fi
-		fi ;;
+            if  [ ${OPTARG::1} != "/" ]; then
+                BOOTSTRAP_CONFIG="${BOOTSTRAP_CONFIG} --conf ${PWD}/${OPTARG}"
+            else
+                BOOTSTRAP_CONFIG="${BOOTSTRAP_CONFIG} --conf ${OPTARG}"
+            fi
+        fi ;;
         Z) ZKSLOW=1 ;;
         p) PROFILE="${OPTARG}" ;;
         v) ((verbose=verbose+1)) ;;
@@ -62,7 +64,7 @@ M2_REPLICAS="m2-replicas"
 timeout () {
     num=$1 ; shift
     if [ $count -gt "$num" ] ; then
-        echo "TIMEOUT! $@"
+        echo "TIMEOUT! $*"
         oio-cluster -r "$NS"
         ( ps -o pid,ppid,cmd $(pgrep -u $UID -P "$pidof_gridinit" | sed 's/^/-p /') || exit 0 )
         exit 1
@@ -71,14 +73,10 @@ timeout () {
     ((count=count+1))
 }
 
-wait_for_srvtype () {
-    echo "Waiting for the $2 $1 to get a score"
-    oio-wait-scored.sh -u -N "$2" -n "$NS" -s "$1" -t 15 >/dev/null
-}
-
 
 #-------------------------------------------------------------------------------
 
+cmd_openio="openio --oio-ns $NS"
 G_DEBUG_LEVEL=WARN
 if [ $verbose != 0 ] ; then
     G_DEBUG_LEVEL=TRACE
@@ -88,6 +86,7 @@ if [ $verbose != 0 ] ; then
         "-N \"${NS}\"" \
         "-Z \"${ZKSLOW}\"" \
         "${BOOTSTRAP_CONFIG}"
+    cmd_openio="$cmd_openio -v --debug"
 fi
 export G_DEBUG_LEVEL
 
@@ -124,6 +123,7 @@ bootstrap_opt=
 if [[ -n "${PORT}" ]] ; then bootstrap_opt="${bootstrap_opt} --port ${PORT}" ; fi
 if [[ -n "${SERVICE_ID}" ]] ; then bootstrap_opt="${bootstrap_opt} --with-service-id" ; fi
 if [[ -n "${RANDOM_SERVICE_ID}" ]] ; then bootstrap_opt="${bootstrap_opt} --random-service-id" ; fi
+if [[ -n "${DATADIR}" ]] ; then bootstrap_opt="${bootstrap_opt} --data ${DATADIR}" ; fi
 if [[ -n "${PROFILE}" ]] ; then bootstrap_opt="${bootstrap_opt} --profile ${PROFILE}" ; fi
 oio-bootstrap.py $bootstrap_opt -d ${BOOTSTRAP_CONFIG} "$NS" "$IP" > /tmp/oio-bootstrap.$$
 
@@ -140,7 +140,7 @@ if [ -n "$ZK" ] ; then
     opts=--lazy
     for srvtype in ${AVOID} ; do opts="${opts} --avoid=${srvtype}" ; done
     if [ $ZKSLOW -ne 0 ] ; then opts="${opts} --slow" ; fi
-	zk-reset.py "$NS" ;
+    zk-reset.py "$NS" ;
     zk-bootstrap.py --lazy $opts "$NS"
 fi
 
@@ -160,31 +160,27 @@ echo -e "\n### Start gridinit and wait for the services to register"
 gridinit_cmd -S "$GRIDINIT_SOCK" reload >/dev/null
 gridinit_cmd -S "$GRIDINIT_SOCK" start "@${NS}" >/dev/null
 
-COUNT=$(oio-test-config.py -c -t meta2 -t rawx -t sqlx)
-wait_for_srvtype "sqlx rawx meta2" "$COUNT"
-COUNT=$(oio-test-config.py -c -t meta0 -t meta1)
-wait_for_srvtype "meta0 meta1" "$COUNT"
-COUNT=$(oio-test-config.py -c -t rdir)
-wait_for_srvtype "rdir" "$COUNT"
+COUNT=$(oio-test-config.py -c -t meta2 -t rawx -t sqlx -t meta0 -t meta1 -t rdir)
+$cmd_openio cluster wait -d 30 -u -n "$COUNT" sqlx rawx meta2 meta0 meta1 rdir
 
 
 echo -e "\n### Init the meta0/meta1 directory"
-openio \
-	--oio-ns "$NS" -v directory bootstrap --check \
-	--replicas $(oio-test-config.py -v directory_replicas)
+$cmd_openio directory bootstrap --check \
+    --replicas $(oio-test-config.py -v directory_replicas)
 
 echo -e "\n### Assign rdir services"
 # Force meta1 services to reload meta0 cache
 gridinit_cmd -S "$GRIDINIT_SOCK" restart "@meta1" >/dev/null
 sleep 1
-openio --oio-ns "$NS" -v volume admin bootstrap
+$cmd_openio volume admin bootstrap
 
 echo -e "\n### Wait for the services to have a score"
-openio -q --oio-ns "$NS" cluster unlockall
-oio-wait-scored.sh -n "$NS" -t 60 >/dev/null
+$cmd_openio cluster unlockall
 oio-flush-all.sh -n "$NS" >/dev/null
 
+echo -e "\n### Congrats, it's a NS"
 find $SDS -type d | xargs chmod a+rx
 gridinit_cmd -S "$GRIDINIT_SOCK" status2
 oio-cluster -r "$NS"
 
+echo -e "\nexport OIO_NS=$NS OIO_ACCT=ACCT-$RANDOM"

@@ -17,64 +17,23 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 set -e
 
-LOCAL=
+VERBOSE=
 NS=
 SRVTYPE=
-MAXWAIT=0
-MINSRV=1
+MAXWAIT=
+MINSRV=
 UNLOCK=
 
-list () {
-	if [ -n "$SRVTYPE" ] ; then
-		openio cluster list --oio-ns "$NS" -f value -c Score $SRVTYPE
-	else
-		openio cluster list --oio-ns "$NS" -f value -c Score
-	fi
-}
-
-maybe_unlock () {
-	if [ -n "$UNLOCK" ] ; then
-		openio --oio-ns "$NS" cluster unlockall $SRVTYPE
-	fi
-}
-
-while getopts "N:s:t:n:lu" opt ; do
+while getopts "N:s:t:n:uv" opt ; do
 	case $opt in
-		t) MAXWAIT="${OPTARG}" ;;
-		s) SRVTYPE="${OPTARG}" ;;
-		n) NS="${OPTARG}" ;;
-		l) LOCAL=1 ;;
-		u) UNLOCK=1 ;;
-		N) MINSRV="${OPTARG}" ;;
+		t) MAXWAIT="-d ${OPTARG}" ;;
+		s) SRVTYPE="${SRVTYPE} ${OPTARG}" ;;
+		n) NS="--oio-ns ${OPTARG}" ;;
+		u) UNLOCK="-u" ;;
+		v) VERBOSE="-v --debug" ;;
+		N) MINSRV="-n ${OPTARG}" ;;
 		\?) exit 1 ;;
 	esac
 done
 
-if [ -z "$NS" ] ; then
-	echo "No namespace configured"
-	exit 1
-fi
-
-count=0
-while true ; do
-	count_scored=$(list | grep -c -v '^0$' || exit 0)
-	count_down=$(list | grep -c '^0$' || exit 0)
-	if [ "$count_scored" -ge "$MINSRV" ] && [ "$count_down" -eq 0 ] ; then
-		exit 0
-	else
-		if [ "$MAXWAIT" -gt 0 ] ; then
-			if [ $count -ge "$MAXWAIT" ] ; then
-				echo "Timeout!"
-				exit 2
-			else
-				maybe_unlock
-				sleep 1
-				((count=count+1))
-			fi
-		else
-			maybe_unlock
-			sleep 1
-		fi
-	fi
-done
-
+exec openio $VERBOSE $NS cluster wait $MINSRV $UNLOCK $MAXWAIT $SRVTYPE

@@ -363,11 +363,14 @@ _acreate (struct sqlx_sync_s *ss, const char *path, const char *v,
 	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
 		return ZOPERATIONTIMEOUT;
 #endif
+#ifdef HAVE_EXTRA_DEBUG
+	const gint64 pre = oio_ext_monotonic_time();
+#endif
 	gchar p[PATH_MAXLEN];
 	int rc = zoo_acreate(ss->zh, _realpath(ss, path, p, sizeof(p)),
 			v, vlen, &ZOO_OPEN_ACL_UNSAFE,
 			flags, completion, data);
-	EXTRA_OUTGOING("ZK_CREATE %s %d", p, rc);
+	EXTRA_OUTGOING("ZK_CREATE %s %d %" G_GINT64_FORMAT, p, rc, oio_ext_monotonic_time() - pre);
 	return rc;
 }
 
@@ -381,10 +384,13 @@ _adelete (struct sqlx_sync_s *ss, const char *path, int version,
 	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
 		return ZOPERATIONTIMEOUT;
 #endif
+#ifdef HAVE_EXTRA_DEBUG
+	const gint64 pre = oio_ext_monotonic_time();
+#endif
 	gchar p[PATH_MAXLEN];
 	int rc = zoo_adelete(ss->zh, _realpath(ss, path, p, sizeof(p)),
 			version, completion, data);
-	EXTRA_OUTGOING("ZK_DEL %s %d", p, rc);
+	EXTRA_OUTGOING("ZK_DEL %s %d %" G_GINT64_FORMAT, p, rc, oio_ext_monotonic_time() - pre);
 	return rc;
 }
 
@@ -399,9 +405,13 @@ _awexists (struct sqlx_sync_s *ss, const char *path,
 	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
 		return ZOPERATIONTIMEOUT;
 #endif
+#ifdef HAVE_EXTRA_DEBUG
+	const gint64 pre = oio_ext_monotonic_time();
+#endif
 	gchar p[PATH_MAXLEN];
 	int rc = zoo_awexists(ss->zh, _realpath(ss, path, p, sizeof(p)),
 			watcher, watcherCtx, completion, data);
+	EXTRA_OUTGOING("ZK_EXISTS %s %d %" G_GINT64_FORMAT, p, rc, oio_ext_monotonic_time() - pre);
 	return rc;
 }
 
@@ -416,10 +426,13 @@ _awget (struct sqlx_sync_s *ss, const char *path,
 	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
 		return ZOPERATIONTIMEOUT;
 #endif
+#ifdef HAVE_EXTRA_DEBUG
+	const gint64 pre = oio_ext_monotonic_time();
+#endif
 	gchar p[PATH_MAXLEN];
 	int rc = zoo_awget(ss->zh, _realpath(ss, path, p, sizeof(p)),
 			watcher, watcherCtx, completion, data);
-	EXTRA_OUTGOING("ZK_GET %s %d", p, rc);
+	EXTRA_OUTGOING("ZK_GET %s %d %" G_GINT64_FORMAT, p, rc, oio_ext_monotonic_time() - pre);
 	return rc;
 }
 
@@ -434,10 +447,13 @@ _awget_children (struct sqlx_sync_s *ss, const char *path,
 	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
 		return ZOPERATIONTIMEOUT;
 #endif
+#ifdef HAVE_EXTRA_DEBUG
+	const gint64 pre = oio_ext_monotonic_time();
+#endif
 	gchar p[PATH_MAXLEN];
 	int rc = zoo_awget_children(ss->zh, _realpath(ss, path, p, sizeof(p)),
 			watcher, watcherCtx, completion, data);
-	EXTRA_OUTGOING("ZK_CHILDREN %s %d", p, rc);
+	EXTRA_OUTGOING("ZK_CHILDREN %s %d %" G_GINT64_FORMAT, p, rc, oio_ext_monotonic_time() - pre);
 	return rc;
 }
 
@@ -452,10 +468,13 @@ _awget_siblings (struct sqlx_sync_s *ss, const char *path,
 	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
 		return ZOPERATIONTIMEOUT;
 #endif
+#ifdef HAVE_EXTRA_DEBUG
+	const gint64 pre = oio_ext_monotonic_time();
+#endif
 	gchar p[PATH_MAXLEN];
 	int rc = zoo_awget_children(ss->zh, _realdirname(ss, path, p, sizeof(p)),
 			watcher, watcherCtx, completion, data);
-	EXTRA_OUTGOING("ZK_CHILDREN %s %d", p, rc);
+	EXTRA_OUTGOING("ZK_CHILDREN %s %d %" G_GINT64_FORMAT, p, rc, oio_ext_monotonic_time() - pre);
 	return rc;
 }
 

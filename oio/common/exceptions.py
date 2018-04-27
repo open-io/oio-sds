@@ -204,6 +204,7 @@ class Forbidden(ClientException):
 
 
 class NotFound(ClientException):
+    """Resource was not found."""
     def __init__(self, http_status=404, status=None, message=None):
         super(NotFound, self).__init__(http_status, status, message)
 

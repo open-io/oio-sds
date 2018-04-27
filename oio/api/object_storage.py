@@ -72,7 +72,7 @@ class ObjectStorageApi(object):
         - `write_timeout`: `float`
     """
     TIMEOUT_KEYS = ('connection_timeout', 'read_timeout', 'write_timeout')
-    EXTRA_KEYWORDS = ('chunk_checksum_algo')
+    EXTRA_KEYWORDS = ('chunk_checksum_algo', )
 
     def __init__(self, namespace, logger=None, **kwargs):
         """

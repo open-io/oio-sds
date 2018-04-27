@@ -235,7 +235,7 @@ grid_hash_depth        1
 grid_fsync             disabled
 
 # At the end of an upload, perform a fsync() on the directory holding the chunk
-grid_fsync_dir         enabled
+grid_fsync_dir         disabled
 
 # Preallocate space for the chunk file (enabled by default)
 #grid_fallocate enabled
@@ -963,7 +963,6 @@ CFGDIR = SDSDIR + '/conf'
 RUNDIR = SDSDIR + '/run'
 LOGDIR = SDSDIR + '/logs'
 SPOOLDIR = SDSDIR + '/spool'
-DATADIR = SDSDIR + '/data'
 WATCHDIR = SDSDIR + '/conf/watch'
 TMPDIR = '/tmp'
 CODEDIR = '@CMAKE_INSTALL_PREFIX@'
@@ -1103,6 +1102,8 @@ def generate(options):
     backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
     backblaze_app_key = options.get('backblaze', {}).get(APPLICATION_KEY)
     want_service_id = '' if options.get('with_service_id') else '#'
+
+    DATADIR = options.get('DATADIR', SDSDIR + '/data')
 
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(ZK_CNXSTRING=options.get('ZK'),
@@ -1608,6 +1609,9 @@ def main():
     parser.add_argument(
         "--profile", choices=['default', 'valgrind', 'callgrind'],
         help="Launch SDS with specific tool")
+    parser.add_argument("-D", "--data",
+                        action="store", type=str, default=None,
+                        help="Specify a DATA directory")
     parser.add_argument("namespace",
                         action='store', type=str, default=None,
                         help="Namespace name")
@@ -1630,6 +1634,10 @@ def main():
     opts['beanstalkd'] = {SVC_NB: None, SVC_HOSTS: None}
 
     options = parser.parse_args()
+
+    if options.data:
+        opts['DATADIR'] = options.data
+
     if options.config:
         for path in options.config:
             with open(path, 'r') as f:
