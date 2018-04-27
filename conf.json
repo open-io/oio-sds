@@ -423,17 +423,17 @@
 			{ "type": "monotonic", "name": "sqliterepo_election_task_EXIT_alert",
 				"key": "sqliterepo.election.task.exit.alert",
 				"descr": "When NONE elections are expired, report a warning if the background task holds the lock longer than this value.",
-				"def": "200ms", "min": 0, "max": "max" },
+				"def": "100ms", "min": 0, "max": "max" },
 
 			{ "type": "monotonic", "name": "sqliterepo_election_task_TIMER_alert",
 				"key": "sqliterepo.election.task.timer.alert",
 				"descr": "When timers are raised on elections, report a warning if the background task holds the lock longer than this value.",
-				"def": "200ms", "min": 0, "max": "max" },
+				"def": "100ms", "min": 0, "max": "max" },
 
 			{ "type": "monotonic", "name": "sqliterepo_election_task_PING_alert",
 				"key": "sqliterepo.election.task.ping.alert",
 				"descr": "When pings are sent from election in a final state, report a warning if the background task holds the lock longer than this value.",
-				"def": "200ms", "min": 0, "max": "max" },
+				"def": "1ms", "min": 0, "max": "max" },
 
 			{ "type": "uint", "name": "disconnection_rrd_window",
 			   "key": "sqliterepo.zk.rrd.window",
