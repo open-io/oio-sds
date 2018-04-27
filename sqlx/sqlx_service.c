@@ -1156,13 +1156,16 @@ _task_react_NONE(gpointer p)
 static void
 _task_react_TIMERS(gpointer p)
 {
-	_task_timed_action(election_manager_play_timers, TIMER_period, TIMER_alert);
+	_task_timed_action(election_manager_play_timers_FAILED, TIMER_period, TIMER_alert);
+	_task_timed_action(election_manager_play_timers_DELAYED_MASTER, TIMER_period, TIMER_alert);
+	_task_timed_action(election_manager_play_timers_DELAYED_SLAVE, TIMER_period, TIMER_alert);
 }
 
 static void
 _task_react_FINAL(gpointer p)
 {
-	_task_timed_action(election_manager_play_final_pings, PING_period, PING_alert);
+	_task_timed_action(election_manager_play_ping_MASTER, PING_period, PING_alert);
+	_task_timed_action(election_manager_play_ping_SLAVE, PING_period, PING_alert);
 }
 
 static void

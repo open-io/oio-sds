@@ -3814,11 +3814,8 @@ election_manager_play_exits (struct election_manager_s *manager)
 }
 
 static guint
-_send_NONE_to_state(struct deque_beacon_s *beacon)
+_send_NONE_to_step(struct deque_beacon_s *beacon)
 {
-	if (!beacon->front)
-		return 0;
-
 	guint count = 0;
 	GPtrArray *members = _DEQUE_extract (beacon);
 	for (guint i=0; i<members->len ;++i) {
@@ -3830,43 +3827,48 @@ _send_NONE_to_state(struct deque_beacon_s *beacon)
 	return count;
 }
 
-guint
-election_manager_play_timers (struct election_manager_s *manager)
+static guint
+_send_NONE_to_step2 (struct election_manager_s *M, enum election_step_e step)
 {
-	static const int steps[] = {
-		STEP_FAILED,
-		STEP_DELAYED_CHECKING_MASTER,
-		STEP_DELAYED_CHECKING_SLAVES,
-		-1
-	};
-
 	guint count = 0;
-	for (const int *pi=steps; *pi >= 0 ;++pi) {
-		struct deque_beacon_s *beacon = manager->members_by_state + *pi;
-		if (beacon->front) {
-			_manager_lock(manager);
-			count += _send_NONE_to_state(beacon);
-			_manager_unlock(manager);
-		}
+	struct deque_beacon_s *beacon = M->members_by_state + step;
+	if (beacon->front) {
+		_manager_lock(M);
+		if (beacon->front)
+			count += _send_NONE_to_step(beacon);
+		_manager_unlock(M);
 	}
 	return count;
 }
 
 guint
-election_manager_play_final_pings (struct election_manager_s *manager)
+election_manager_play_timers_FAILED (struct election_manager_s *M)
 {
-	static const int steps[] = { STEP_MASTER, STEP_SLAVE, -1 };
+	return _send_NONE_to_step2(M, STEP_FAILED);
+}
 
-	guint count = 0;
-	for (const int *pi=steps; *pi >= 0 ;++pi) {
-		struct deque_beacon_s *beacon = manager->members_by_state + *pi;
-		if (beacon->front) {
-			_manager_lock(manager);
-			count += _send_NONE_to_state(beacon);
-			_manager_unlock(manager);
-		}
-	}
-	return count;
+guint
+election_manager_play_timers_DELAYED_MASTER (struct election_manager_s *M)
+{
+	return _send_NONE_to_step2(M, STEP_DELAYED_CHECKING_MASTER);
+}
+
+guint
+election_manager_play_timers_DELAYED_SLAVE (struct election_manager_s *M)
+{
+	return _send_NONE_to_step2(M, STEP_DELAYED_CHECKING_SLAVES);
+}
+
+guint
+election_manager_play_ping_MASTER (struct election_manager_s *M)
+{
+	return _send_NONE_to_step2(M, STEP_MASTER);
+}
+
+guint
+election_manager_play_ping_SLAVE (struct election_manager_s *M)
+{
+	return _send_NONE_to_step2(M, STEP_SLAVE);
 }
 
 guint
