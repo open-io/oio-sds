@@ -231,7 +231,11 @@ def headers_from_object_metadata(metadata):
             out[chunk_headers[key]] = metadata[key]
 
     header = {k: quote_plus(str(v)) for (k, v) in out.iteritems()}
-    header[chunk_headers["full_path"]] = ','.join(metadata['full_path'])
+    full_path = metadata['full_path']
+    if isinstance(full_path, basestring):
+        header[chunk_headers['full_path']] = full_path
+    else:
+        header[chunk_headers['full_path']] = ','.join(full_path)
     return header
 
 
