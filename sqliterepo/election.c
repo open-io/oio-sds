@@ -3640,6 +3640,23 @@ _member_react_FAILED(struct election_member_s *member, enum event_type_e evt)
 }
 
 static gint64
+_member_next_timeout(struct election_member_s *m)
+{
+	switch (m->step) {
+		case STEP_DELAYED_CHECKING_MASTER:
+			return m->last_status + sqliterepo_getvers_delay;
+		case STEP_DELAYED_CHECKING_SLAVES:
+			return m->last_status + sqliterepo_getvers_delay;
+		case STEP_FAILED:
+			return m->last_status + oio_election_delay_retry_FAILED;
+		case STEP_SLAVE:
+			return m->last_atime + oio_election_delay_expire_SLAVE;
+		case STEP_MASTER:
+			return m->last_atime + oio_election_delay_expire_MASTER;
+		default:
+			return 0;
+	}
+}
 
 static void
 _member_react (struct election_member_s *member,
@@ -3786,31 +3803,44 @@ election_manager_play_exits (struct election_manager_s *manager)
 }
 
 static guint
-_send_NONE_to_step(struct deque_beacon_s *beacon)
+_send_NONE_to_step(struct election_manager_s *M, struct deque_beacon_s *beacon)
 {
+	gboolean stop = FALSE;
 	guint count = 0;
-	GPtrArray *members = _DEQUE_extract (beacon);
-	for (guint i=0; i<members->len ;++i) {
-		struct election_member_s *m = members->pdata[i];
-		transition (m, EVT_NONE, NULL);
-		count ++;
-	}
-	g_ptr_array_free (members, TRUE);
-	return count;
-}
 
-static guint
-_send_NONE_to_step2 (struct election_manager_s *M, enum election_step_e step)
-{
-	guint count = 0;
-	struct deque_beacon_s *beacon = M->members_by_state + step;
-	if (beacon->front) {
+	while (grid_main_is_running() && beacon->front && !stop) {
 		_manager_lock(M);
-		if (beacon->front)
-			count += _send_NONE_to_step(beacon);
+		struct election_member_s *m = beacon->front;
+		if (!m) {
+			/* The queue emptied before the lock */
+			stop = TRUE;
+		} else {
+			const gint64 deadline = _member_next_timeout(m);
+			if (!deadline) {
+				/* The FSM is not waiting for a timer
+				 * !!! This is abnormal, we should not call the current timer
+				 * function on such a queue. !!! */
+				stop = TRUE;
+			} else {
+				const gint64 now = oio_ext_monotonic_time();
+				if (now < deadline) {
+					/* The timer didn't fired. */
+					stop = TRUE;
+				} else {
+					transition (m, EVT_NONE, NULL);
+					count ++;
+				}
+			}
+		}
 		_manager_unlock(M);
 	}
 	return count;
+}
+
+static inline guint
+_send_NONE_to_step2 (struct election_manager_s *M, enum election_step_e step)
+{
+	return _send_NONE_to_step(M, M->members_by_state + step);
 }
 
 guint
