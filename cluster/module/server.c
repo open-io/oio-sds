@@ -1225,7 +1225,7 @@ write_status(gchar *path)
 	g_byte_array_append(all_encoded, footer, 2);
 	g_file_set_contents(path, (char *)all_encoded->data, all_encoded->len, &err);
 
-	if(err){
+	if (err){
 		GRID_ERROR("Failed to write service status on file [%s]: (%d) %s",
 			path, err->code, err->message);
 		goto end;
@@ -1233,11 +1233,11 @@ write_status(gchar *path)
 		ret = TRUE;
 	}
 end:
-	if(err != NULL)
+	if (err != NULL)
 		g_error_free(err);
 	g_byte_array_free(all_encoded, TRUE);
 	g_free(services_names);
-        return ret;
+	return ret;
 }
 
 
@@ -1248,12 +1248,12 @@ restart_srv_from_file(gchar *path)
 	GError *err = NULL;
 	gsize length;
 
-	if(!g_file_test(path, G_FILE_TEST_EXISTS))
+	if (!g_file_test(path, G_FILE_TEST_EXISTS))
 		return FALSE;
 
 	gboolean ret = g_file_get_contents(path, &all_encoded, &length, &err);
 
-	if(!ret){
+	if (!ret){
 		GRID_ERROR("Failed to read services status from file [%s] (%d) %s",
 			path, err->code, err->message);
 	} else {
@@ -1261,18 +1261,18 @@ restart_srv_from_file(gchar *path)
 
 		service_info_unmarshall(&si_l, all_encoded, length, &err);
 
-		if(err){
+		if (err){
 			GRID_ERROR("Failed to unmarshall service info: (%d) %s",
 				err->code, err->message);
 		} else {
-			for(GSList *si = si_l; si; si = si->next){
+			for (GSList *si = si_l; si; si = si->next){
 				struct service_info_s *si_data = si->data;
 				push_service(si_data);
 			}
 		}
 	}
 
-	if(err != NULL)
+	if (err != NULL)
 		g_error_free(err);
 	g_free(all_encoded);
 	return ret;
@@ -1728,7 +1728,7 @@ _cs_configure(int argc, char **argv)
 	network_server_bind_host(server, service_url, dispatcher, transport_gridd_factory);
 	grid_task_queue_register (gtq_admin, 1, _task_expire, NULL, NULL);
 
-	if(persistence_path){
+	if (persistence_path){
 		restart_srv_from_file(persistence_path->str);
 		grid_task_queue_register(gtq_admin, persistence_period,
 				(GDestroyNotify)write_status,
@@ -1809,7 +1809,7 @@ _cs_get_options(void)
 			"Load the given file and overload the central variables"},
 
 		{"PersistencePath", OT_STRING, {.str = &persistence_path},
-		 	"Path used to register services status"},
+			"Path used to register services status"},
 
 		{"PersistencePeriod", OT_TIME, {.t = &persistence_period},
 			"Period during which services are updated, in seconds"},
