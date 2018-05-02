@@ -42,3 +42,17 @@ class TestAdmin(BaseTestCase):
             service_id=service_id)
         self.assertEquals(1, len(election))
         self.assertEquals(200, election[service_id]["status"]["status"])
+
+    def test_election_leave_serveral_service_ids(self):
+        status = self.admin.election_status(
+            "meta2", account=self.account, reference=self.container)
+        peers = status["peers"]
+        if len(peers) < 2:
+            self.skipTest('Can only run in a replicated environment')
+        service_ids = peers.keys()[:2]
+        election = self.admin.election_leave(
+            "meta2", account=self.account, reference=self.container,
+            service_id=','.join(service_ids))
+        self.assertEquals(2, len(election))
+        self.assertEquals(200, election[service_ids[0]]["status"]["status"])
+        self.assertEquals(200, election[service_ids[1]]["status"]["status"])
