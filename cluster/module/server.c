@@ -1218,13 +1218,12 @@ serialize_info(struct conscience_srv_s *srv, gpointer buffer)
 	return TRUE;
 }
 
-static gboolean
+static void
 write_status(gchar *path)
 {
 	gchar **services_names = conscience_get_srvtype_names();
 	GError *err = NULL;
 	guint nb_services = 0;
-	gboolean ret = FALSE;
 
 	GByteArray *all_encoded = g_byte_array_sized_new(8192);
 	g_byte_array_append(all_encoded, header, 2);
@@ -1247,16 +1246,12 @@ write_status(gchar *path)
 	if (err){
 		GRID_ERROR("Failed to write service status on file [%s]: (%d) %s",
 			path, err->code, err->message);
-		goto end;
-	} else {
-		ret = TRUE;
 	}
 end:
 	if (err != NULL)
 		g_error_free(err);
 	g_byte_array_free(all_encoded, TRUE);
 	g_free(services_names);
-	return ret;
 }
 
 
