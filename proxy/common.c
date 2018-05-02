@@ -249,12 +249,15 @@ gridd_request_replicated (struct req_args_s *args, struct client_ctx_s *ctx,
 label_retry:
 	if (ctx->which == CLIENT_SPECIFIED) {
 		const char *service_id = OPT("service_id");
-		m1uv = g_malloc0(2 * sizeof(char *));
-		m1uv[0] = g_strdup(service_id);
-	} else if (*ctx->type == '#')
-		err = hc_resolve_reference_directory (resolver, ctx->url, &m1uv, deadline);
-	else
-		err = hc_resolve_reference_service (resolver, ctx->url, ctx->type, &m1uv, deadline);
+		EXTRA_ASSERT(service_id != NULL);
+		m1uv = g_strsplit(service_id, OIO_CSV_SEP, -1);
+	} else if (*ctx->type == '#') {
+		err = hc_resolve_reference_directory(
+				resolver, ctx->url, &m1uv, deadline);
+	} else {
+		err = hc_resolve_reference_service(
+				resolver, ctx->url, ctx->type, &m1uv, deadline);
+	}
 
 	if (err) {
 		EXTRA_ASSERT(m1uv == NULL);
