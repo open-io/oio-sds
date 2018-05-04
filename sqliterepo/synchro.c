@@ -450,6 +450,111 @@ _awget_siblings (struct sqlx_sync_s *ss, const char *path,
 
 /* -------------------------------------------------------------------------- */
 
+#define SYNC_CALL(self,F) VTABLE_CALL(self,struct abstract_sqlx_sync_s*,F)
+
+void
+sqlx_sync_clear(struct sqlx_sync_s *self)
+{
+#ifdef HAVE_EXTRA_DEBUG
+	SYNC_CALL(self,clear)(self);
+#else
+	return _clear(self);
+#endif
+}
+
+GError *
+sqlx_sync_open(struct sqlx_sync_s *self)
+{
+#ifdef HAVE_EXTRA_DEBUG
+	SYNC_CALL(self,open)(self);
+#else
+	return _open(self);
+#endif
+}
+
+void
+sqlx_sync_close(struct sqlx_sync_s *self)
+{
+#ifdef HAVE_EXTRA_DEBUG
+	SYNC_CALL(self,close)(self);
+#else
+	return _close(self);
+#endif
+}
+
+int
+sqlx_sync_acreate (struct sqlx_sync_s *ss, const char *path,
+		const char *v, int vlen, int flags,
+		string_completion_t completion, const void *d)
+{
+#ifdef HAVE_EXTRA_DEBUG
+	SYNC_CALL(ss,acreate)(ss, path, v, vlen, flags, completion, d);
+#else
+	return _acreate(ss, path, v, vlen, flags, completion, d);
+#endif
+}
+
+int
+sqlx_sync_adelete (struct sqlx_sync_s *ss, const char *path, int version,
+		void_completion_t completion, const void *d)
+{
+#ifdef HAVE_EXTRA_DEBUG
+	SYNC_CALL(ss,adelete)(ss, path, version, completion, d);
+#else
+	return _adelete(ss, path, version, completion, d);
+#endif
+}
+
+int
+sqlx_sync_awexists(struct sqlx_sync_s *ss, const char *path,
+		watcher_fn watch, void* watchCtx,
+		stat_completion_t completion, const void *d)
+{
+#ifdef HAVE_EXTRA_DEBUG
+	SYNC_CALL(ss,awexists)(ss, path, watch, watchCtx, completion, d);
+#else
+	return _awexists(ss, path, watch, watchCtx, completion, d);
+#endif
+}
+
+int
+sqlx_sync_awget (struct sqlx_sync_s *ss, const char *path,
+		watcher_fn watch, void* watchCtx,
+		data_completion_t completion, const void *d)
+{
+#ifdef HAVE_EXTRA_DEBUG
+	SYNC_CALL(ss,awget)(ss, path, watch, watchCtx, completion, d);
+#else
+	return _awget(ss, path, watch, watchCtx, completion, d);
+#endif
+}
+
+int
+sqlx_sync_awget_children (struct sqlx_sync_s *ss, const char *path,
+		watcher_fn watch, void* watchCtx,
+		strings_completion_t completion, const void *d)
+{
+#ifdef HAVE_EXTRA_DEBUG
+	SYNC_CALL(ss,awget_children)(ss, path, watch, watchCtx, completion, d);
+#else
+	return _awget_children(ss, path, watch, watchCtx, completion, d);
+#endif
+}
+
+int
+sqlx_sync_awget_siblings (struct sqlx_sync_s *ss, const char *path,
+		watcher_fn watch, void* watchCtx,
+		strings_completion_t completion, const void *d)
+{
+#ifdef HAVE_EXTRA_DEBUG
+	SYNC_CALL(ss,awget_siblings)(ss, path, watch, watchCtx, completion, d);
+#else
+	return _awget_siblings(ss, path, watch, watchCtx, completion, d);
+#endif
+}
+
+/* -------------------------------------------------------------------------- */
+
 static void _direct_destroy (struct sqlx_peering_s *self);
 
 static void _direct_use (struct sqlx_peering_s *self,
@@ -750,14 +855,22 @@ _direct_getvers (struct sqlx_peering_s *self,
 void
 sqlx_peering__destroy (struct sqlx_peering_s *self)
 {
+#ifdef HAVE_EXTRA_DEBUG
 	PEER_CALL(self,destroy)(self);
+#else
+	return _direct_destroy(self);
+#endif
 }
 
 void
 sqlx_peering__use (struct sqlx_peering_s *self, const char *url,
 		const struct sqlx_name_s *n)
 {
+#ifdef HAVE_EXTRA_DEBUG
 	PEER_CALL(self,use)(self,url,n);
+#else
+	return _direct_use(self, url, n);
+#endif
 }
 
 void
@@ -765,7 +878,11 @@ sqlx_peering__getvers (struct sqlx_peering_s *self, const char *url,
 		const struct sqlx_name_s *n, struct election_manager_s *manager,
 		guint reqid, sqlx_peering_getvers_end_f result)
 {
+#ifdef HAVE_EXTRA_DEBUG
 	PEER_CALL(self,getvers)(self,url,n, manager,reqid,result);
+#else
+	return _direct_getvers(self, url, n, manager, reqid, result);
+#endif
 }
 
 void
@@ -774,5 +891,9 @@ sqlx_peering__pipefrom (struct sqlx_peering_s *self, const char *url,
 			struct election_manager_s *manager, guint reqid,
 			sqlx_peering_pipefrom_end_f result)
 {
+#ifdef HAVE_EXTRA_DEBUG
 	PEER_CALL(self,pipefrom)(self,url,n,src, manager,reqid,result);
+#else
+	return _direct_pipefrom(self, url, n, src, manager, reqid, result);
+#endif
 }

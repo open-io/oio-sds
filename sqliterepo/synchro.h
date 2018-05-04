@@ -67,32 +67,33 @@ struct abstract_sqlx_sync_s
 	struct sqlx_sync_vtable_s *vtable;
 };
 
-#define sqlx_sync_clear(ss) \
-	((struct abstract_sqlx_sync_s*)(ss))->vtable->clear(ss)
+void sqlx_sync_clear(struct sqlx_sync_s *ss);
 
-#define sqlx_sync_open(ss) \
-	((struct abstract_sqlx_sync_s*)(ss))->vtable->open(ss)
+GError * sqlx_sync_open(struct sqlx_sync_s *ss);
 
-#define sqlx_sync_close(ss) \
-	((struct abstract_sqlx_sync_s*)(ss))->vtable->close(ss)
+void sqlx_sync_close(struct sqlx_sync_s *ss);
 
-#define sqlx_sync_acreate(ss, path, v, vlen, flags, completion, data) \
-	((struct abstract_sqlx_sync_s*)(ss))->vtable->acreate(ss, path, v, vlen, flags, completion, data)
+int sqlx_sync_acreate (struct sqlx_sync_s *ss, const char *path, const char *v,
+		int vlen, int flags, string_completion_t completion, const void *data);
 
-#define sqlx_sync_adelete(ss, path, ver, completion, data) \
-	((struct abstract_sqlx_sync_s*)(ss))->vtable->adelete(ss, path, ver, completion, data)
+int sqlx_sync_adelete (struct sqlx_sync_s *ss, const char *path, int version,
+		void_completion_t completion, const void *data);
 
-#define sqlx_sync_awexists(ss, path, watch, watchctx, completion, data) \
-	((struct abstract_sqlx_sync_s*)(ss))->vtable->awexists(ss, path, watch, watchctx, completion, data)
+int sqlx_sync_awexists(struct sqlx_sync_s *ss, const char *path,
+		watcher_fn watcher, void* watcherCtx,
+		stat_completion_t completion, const void *data);
 
-#define sqlx_sync_awget(ss, path, watch, watchctx, completion, data) \
-	((struct abstract_sqlx_sync_s*)(ss))->vtable->awget(ss, path, watch, watchctx, completion, data)
+int sqlx_sync_awget (struct sqlx_sync_s *ss, const char *path,
+		watcher_fn watcher, void* watcherCtx,
+		data_completion_t completion, const void *data);
 
-#define sqlx_sync_awget_children(ss, path, watch, watchctx, completion, d) \
-	((struct abstract_sqlx_sync_s*)(ss))->vtable->awget_children(ss, path, watch, watchctx, completion, d)
+int sqlx_sync_awget_children (struct sqlx_sync_s *ss, const char *path,
+		watcher_fn watcher, void* watcherCtx,
+		strings_completion_t completion, const void *data);
 
-#define sqlx_sync_awget_siblings(ss, path, watch, watchctx, completion, d) \
-	((struct abstract_sqlx_sync_s*)(ss))->vtable->awget_siblings(ss, path, watch, watchctx, completion, d)
+int sqlx_sync_awget_siblings (struct sqlx_sync_s *ss, const char *path,
+		watcher_fn watcher, void* watcherCtx,
+		strings_completion_t completion, const void *data);
 
 /** Initiates a sqlx synchronizer based on ZooKeeper.
  * @param url the Zookeeper connection string */
