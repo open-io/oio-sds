@@ -1146,6 +1146,15 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_SQLITEREPO_ELECTION_LAZY_RECOVER*
 
+### sqliterepo.election.lock_alert_delay
+
+> .
+
+ * default: **50**
+ * type: gint64
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_LOCK_ALERT_DELAY*
+ * range: 1 -> 60 * G_TIME_SPAN_SECOND
+
 ### sqliterepo.election.nowait.after
 
 > In the current sqliterepo repository, sets the amount of time spent in an election resolution that will make a worker thread won't wait at all an consider that election is stalled.
