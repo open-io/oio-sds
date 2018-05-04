@@ -3904,7 +3904,7 @@ _send_NONE_to_step(struct election_manager_s *M, struct deque_beacon_s *beacon)
 			} else {
 				const gint64 now = oio_ext_monotonic_time();
 				if (now < deadline) {
-					/* The timer didn't fired. */
+					/* The timer didn't fire */
 					stop = TRUE;
 				} else {
 					transition (m, EVT_NONE, NULL);
