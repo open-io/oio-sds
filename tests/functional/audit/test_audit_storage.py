@@ -128,7 +128,8 @@ class TestBlobAuditorFunctional(BaseTestCase):
     def init_content(self):
         self.container_c.content_create(
             self.account, self.ref, self.content.path, self.chunk.size,
-            self.hash_rand, data={'chunks': [self.chunk_proxy]})
+            self.hash_rand, data={'chunks': [self.chunk_proxy]},
+            content_id=random_id(32))
 
     def test_chunk_audit(self):
         self.init_content()
