@@ -38,6 +38,12 @@ License along with this library.
 
 #define MEMBER_NAME(n, m) NAME2CONST(n, m->inline_name)
 
+#ifdef HAVE_EXTRA_DEBUG
+#define TRACE_EXECUTION(M) _manager_record_activity((M), __FUNCTION__, __LINE__)
+#else
+#define TRACE_EXECUTION(...)
+#endif
+
 typedef guint req_id_t;
 
 enum event_type_e
@@ -89,6 +95,14 @@ struct deque_beacon_s
 };
 
 /* @private */
+struct activity_trace_element_s
+{
+	gint64 when;
+	const char *func;
+	int line;
+};
+
+/* @private */
 struct election_manager_s
 {
 	struct election_manager_vtable_s *vtable;
@@ -115,8 +129,8 @@ struct election_manager_s
 
 	struct deque_beacon_s members_by_state[STEP_MAX];
 
-	/* When has the lock been acquired */
-	gint64 when_lock;
+	/* Trace of actions while the lock was held */
+	GArray *activity_trace;
 
 	gboolean exiting;
 };
@@ -370,9 +384,48 @@ _cond_clean (gpointer p)
 	}
 }
 
+static inline void
+_manager_record_activity(struct election_manager_s *M, const char *fn, int ln)
+{
+	struct activity_trace_element_s item = {};
+	item.when = oio_ext_monotonic_time();
+	item.func = fn;
+	item.line = ln;
+	g_array_append_vals(M->activity_trace, &item, 1);
+}
+
+#ifdef HAVE_EXTRA_DEBUG
+
 #define _manager_save_locked(M) do { \
-	/* (M)->when_lock = g_get_monotonic_time(); */ \
+	g_array_set_size(M->activity_trace, 0); \
+	TRACE_EXECUTION(M); \
 } while (0)
+
+static void
+_manage_dump_activity(struct election_manager_s *M)
+{
+	const GArray *ga = M->activity_trace;
+	EXTRA_ASSERT(ga->len > 0);
+	gint64 _in = g_array_index(ga, struct activity_trace_element_s, 0).when;
+	const gint64 _out = g_array_index(ga, struct activity_trace_element_s, ga->len - 1).when;
+	if (_out - _in > oio_election_lock_alert_delay) {
+		GString *tmp = g_string_sized_new(512);
+		g_string_printf(tmp, "total=%" G_GINT64_FORMAT, _out - _in);
+		for (guint i=0; i< ga->len ;i++) {
+			const struct activity_trace_element_s * const item =
+				&g_array_index(ga, struct activity_trace_element_s, i);
+			g_string_append_printf(tmp, " (%" G_GINT64_FORMAT "/%s:%d)",
+					item->when - _in, item->func, item->line);
+			_in = item->when;
+		}
+		GRID_NOTICE("LOCK %.*s", (int) tmp->len, tmp->str);
+		g_string_free(tmp, TRUE);
+	}
+}
+#else
+#define _manager_save_locked(...)
+#define _manage_dump_activity(...)
+#endif
 
 #define _manager_lock(M) do { \
 	g_mutex_lock(&(M)->lock); \
@@ -380,10 +433,9 @@ _cond_clean (gpointer p)
 } while (0)
 
 #define _manager_unlock(M) do { \
-	/* JFS: One might check here we did not spent to much time in the current \
-	 * critical section */ \
-	(M)->when_lock = 0; \
-	g_mutex_unlock(&(M)->lock); \
+	TRACE_EXECUTION(M); \
+	_manage_dump_activity(M); \
+	g_mutex_unlock(&M->lock); \
 } while (0)
 
 static void _completion_router(gpointer p, struct election_manager_s *M);
@@ -468,7 +520,7 @@ gint32_sort(gconstpointer p1, gconstpointer p2)
 static GArray *
 nodev_to_int32v(const struct String_vector *sv, const char *prefix)
 {
-	GArray *array = g_array_new(0, 0, sizeof(gint32));
+	GArray *array = g_array_sized_new(0, 0, sizeof(gint32), sv->count);
 
 	for (int32_t i = 0; sv != NULL && i < sv->count; i++) {
 		const char *s = sv->data[i];
@@ -536,6 +588,9 @@ election_manager_create(struct replication_config_s *config,
 
 	manager->tasks_getpeers =
 		g_thread_pool_new((GFunc)_worker_getpeers, manager, 8, FALSE, NULL);
+
+	manager->activity_trace =
+		g_array_sized_new(FALSE, FALSE, sizeof(struct activity_trace_element_s), 32);
 
 	*result = manager;
 	return NULL;
@@ -695,6 +750,11 @@ _manager_clean(struct election_manager_s *manager)
 			"%d slaves, %d pending, %d failed, %d exited",
 			count.total, count.master, count.slave, count.pending,
 			count.failed, count.none);
+
+	if (manager->activity_trace) {
+		g_array_free(manager->activity_trace, TRUE);
+		manager->activity_trace = NULL;
+	}
 
 	if (manager->completions) {
 		g_thread_pool_free(manager->completions, FALSE, TRUE);
@@ -1012,11 +1072,12 @@ member_destroy(struct election_member_s *member)
 }
 
 static struct election_member_s *
-_LOCKED_get_member (struct election_manager_s *ma, const char *k)
+_LOCKED_get_member (struct election_manager_s *M, const char *k)
 {
-	struct election_member_s *m = g_tree_lookup (ma->members_by_key, k);
+	struct election_member_s *m = g_tree_lookup (M->members_by_key, k);
 	if (m)
 		member_ref (m);
+	TRACE_EXECUTION(M);
 	return m;
 }
 
@@ -1068,6 +1129,8 @@ _LOCKED_init_member(struct election_manager_s *manager,
 		_DEQUE_add (member);
 		g_tree_replace(manager->members_by_key, member->key, member);
 	}
+
+	TRACE_EXECUTION(manager);
 	return member;
 }
 
@@ -1290,6 +1353,7 @@ deferred_completion_CREATING(struct exec_later_CREATING_context_s *d)
 	member_lock(d->member);
 	member_log_completion("CREATE", d->zrc, d->member);
 	_thlocal_set_manager (d->member->manager);
+	TRACE_EXECUTION(d->member->manager);
 
 	if (d->zrc != ZOK) {
 		transition_error(d->member, EVT_CREATE_KO, d->zrc);
@@ -1691,6 +1755,7 @@ _worker_getpeers(struct election_member_s *m, struct election_manager_s *M)
 		transition(m, EVT_GETPEERS_DONE, peers);
 	}
 	member_unref(m);
+	TRACE_EXECUTION(m->manager);
 	member_unlock(m);
 
 	if (peers)
@@ -1859,7 +1924,8 @@ wait_for_final_status(struct election_member_s *m, const gint64 deadline)
 				m->when_unstable / G_TIME_SPAN_SECOND, now / G_TIME_SPAN_SECOND);
 
 		/* perform the real WAIT on the real clock. */
-		m->manager->when_lock = 0;
+		TRACE_EXECUTION(m->manager);
+		_manage_dump_activity(m->manager);
 		g_cond_wait_until(member_get_cond(m), member_get_lock(m),
 				g_get_monotonic_time() + oio_election_period_cond_wait);
 		_manager_save_locked(m->manager);
@@ -1940,6 +2006,7 @@ defer_USE(struct election_member_s *member)
 		for (gchar **p = member->peers; *p; p++) {
 			MEMBER_NAME(n,member);
 			sqlx_peering__use (member->manager->peering, *p, &n);
+			TRACE_EXECUTION(member->manager);
 			member_trace("sched:USE", member);
 		}
 	}
@@ -2186,6 +2253,7 @@ member_action_to_CREATING(struct election_member_s *member)
 			myurl, strlen(myurl),
 			ZOO_EPHEMERAL|ZOO_SEQUENCE,
 			completion_CREATING, member);
+	TRACE_EXECUTION(member->manager);
 
 	if (unlikely(zrc != ZOK)) {
 		member_warn_failed_action(member, zrc, "CREATE");
@@ -2217,6 +2285,7 @@ member_action_to_WATCHING(struct election_member_s *member)
 			member_fullpath(member, path, sizeof(path)),
 			watch_SELF, GUINT_TO_POINTER(member->generation_id),
 			completion_WATCHING, member);
+	TRACE_EXECUTION(member->manager);
 
 	if (unlikely(zrc != ZOK)) {
 		member_warn_failed_action(member, zrc, "WATCH");
@@ -2241,6 +2310,7 @@ member_action_to_LISTING(struct election_member_s *member)
 	int zrc = sqlx_sync_awget_siblings(member->sync,
 			member_fullpath(member, path, sizeof(path)),
 			NULL, NULL, completion_LISTING, member);
+	TRACE_EXECUTION(member->manager);
 
 	if (unlikely(zrc != ZOK)) {
 		member_warn_failed_action(member, zrc, "LIST");
@@ -2266,6 +2336,7 @@ member_action_to_ASKING(struct election_member_s *member)
 			member_masterpath(member, path, sizeof(path)),
 			watch_MASTER, GUINT_TO_POINTER(member->generation_id),
 			completion_ASKING, member);
+	TRACE_EXECUTION(member->manager);
 
 	if (unlikely(zrc != ZOK)) {
 		member_warn_failed_action(member, zrc, "ASK");
@@ -2300,7 +2371,7 @@ member_action_to_SYNCING(struct election_member_s *member)
 	MEMBER_NAME(n, member);
 	sqlx_peering__pipefrom (member->manager->peering, target,
 			&n, source, member->manager, 0, _result_PIPEFROM);
-
+	TRACE_EXECUTION(member->manager);
 	member_debug("sched:PIPEFROM", member);
 
 	return member_set_status(member, STEP_SYNCING);
@@ -2371,7 +2442,7 @@ member_action_to_CHECKING_MASTER(struct election_member_s *m)
 	MEMBER_NAME(n, m);
 	sqlx_peering__getvers (m->manager->peering, m->master_url,
 			&n, m->manager, 0, _result_GETVERS);
-
+	TRACE_EXECUTION(m->manager);
 	member_trace("sched:GETVERS", m);
 
 	return member_set_status(m, STEP_CHECKING_MASTER);
@@ -2405,6 +2476,7 @@ member_action_to_CHECKING_SLAVES(struct election_member_s *m)
 	for (gchar **p=m->peers; *p; p++) {
 		sqlx_peering__getvers (m->manager->peering, *p,
 				&n, m->manager, 0, _result_GETVERS);
+		TRACE_EXECUTION(m->manager);
 		member_trace("sched:GETVERS", m);
 	}
 
@@ -2909,9 +2981,13 @@ _member_react_PEERING(struct election_member_s *member,
 		case EVT_GETPEERS_DONE:
 			member_reset_peers(member);
 			member->peers = g_strdupv(peers);
+			TRACE_EXECUTION(member->manager);
 			if (!member->peers)
-				return member_action_to_FAILED(member);
-			return member_action_to_CREATING(member);
+				member_action_to_FAILED(member);
+			else
+				member_action_to_CREATING(member);
+			TRACE_EXECUTION(member->manager);
+			return;
 
 			/* Abnormal events */
 		default:
@@ -3728,14 +3804,18 @@ static void
 transition(struct election_member_s *member, enum event_type_e evt,
 		void *evt_arg)
 {
-	member_log_change(member, evt, _member_react(member, evt, evt_arg));
+	member_log_change(member, evt,
+			_member_react(member, evt, evt_arg);
+			TRACE_EXECUTION(member->manager));
 
 	/* re-kickoff elections marked as to be restarted, but only if without
 	 * activity and if the manager if not being exited. */
-	if (member->step == STEP_NONE && BOOL(member->requested_USE)
+	if (member->step == STEP_NONE
+			&& BOOL(member->requested_USE)
 			&& !member->manager->exiting) {
 		member_log_change(member, EVT_NONE,
-				_member_react(member, EVT_NONE, NULL));
+			_member_react(member, EVT_NONE, NULL);
+			TRACE_EXECUTION(member->manager));
 	}
 }
 

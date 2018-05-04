@@ -340,6 +340,11 @@
 				"descr": "Should the election mecanism try to recreate missing DB?",
 				"def": false},
 
+			{ "type": "monotonic", "name": "oio_election_lock_alert_delay",
+				"key": "sqliterepo.election.lock_alert_delay",
+				"descr": ".",
+				"def": "50", "min": "1", "max": "60s" },
+
 			{ "type": "monotonic", "name": "oio_election_period_cond_wait",
 				"key": "sqliterepo.election.wait.quantum",
 				"descr": "In the current sqliterepo repository, while loop-waiting for a final election status to be reached, this value sets the unit amount of time of eacch unit wait on the lock. Keep this value rather small to avoid waitin for too long, but not too small to avoid dumping CPU cycles in active waiting.",
