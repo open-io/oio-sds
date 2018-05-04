@@ -20,7 +20,7 @@ import binascii
 import logging
 import simplejson as json
 import struct
-from tests.utils import BaseTestCase, random_str
+from tests.utils import BaseTestCase, random_str, random_id
 from oio.common import exceptions as exc
 from oio.common.constants import OIO_DB_STATUS_NAME, OIO_DB_ENABLED, \
                                  OIO_DB_FROZEN, OIO_DB_DISABLED
@@ -417,7 +417,8 @@ class TestMeta2Containers(BaseTestCase):
         chunks = self.json_loads(resp.data)
 
         headers = {'x-oio-action-mode': 'autocreate',
-                   'x-oio-content-meta-length': '1024'}
+                   'x-oio-content-meta-length': '1024',
+                   'x-oio-content-meta-id': random_id(32)}
         resp = self.request('POST', self.url_content('create'), params=params,
                             headers=headers, data=json.dumps(chunks))
         self.assertEqual(204, resp.status)
@@ -568,6 +569,20 @@ class TestMeta2Contents(BaseTestCase):
         # TODO test /content/prepare with additional useless parameters
         # TODO test /content/prepare with invalid sizes
 
+    def test_create_without_content_id(self):
+        headers = {'X-oio-action-mode': 'autocreate'}
+        params = self.param_content(self.ref, random_content())
+        resp = self.request('POST', self.url_content('prepare'), params=params,
+                            headers=headers, data=json.dumps({'size': '1024'}))
+        self.assertEqual(resp.status, 200)
+        chunks = self.json_loads(resp.data)
+
+        headers = {'x-oio-action-mode': 'autocreate',
+                   'x-oio-content-meta-length': '1024'}
+        resp = self.request('POST', self.url_content('create'), params=params,
+                            headers=headers, data=json.dumps(chunks))
+        self.assertEqual(resp.status, 400)
+
     def test_spare(self):
         params = self.param_content(self.ref, random_content())
         resp = self.request('POST', self.url_content('spare'), params=params)
@@ -593,7 +608,8 @@ class TestMeta2Contents(BaseTestCase):
         chunks = self.json_loads(resp.data)
 
         headers = {'x-oio-action-mode': 'autocreate',
-                   'x-oio-content-meta-length': '1024'}
+                   'x-oio-content-meta-length': '1024',
+                   'x-oio-content-meta-id': random_id(32)}
         resp = self.request('POST', self.url_content('create'), params=params,
                             headers=headers, data=json.dumps(chunks))
         self.assertEqual(resp.status, 204)
@@ -733,7 +749,6 @@ class TestMeta2Contents(BaseTestCase):
 
     def test_cycle_properties(self):
         path = random_content()
-        headers = {'X-oio-action-mode': 'autocreate'}
         params = self.param_content(self.ref, path)
 
         def get_ok(expected):
@@ -762,18 +777,7 @@ class TestMeta2Contents(BaseTestCase):
         self.assertError(resp, 404, 406)
 
         # Create the content
-        resp = self.request('POST', self.url_content('prepare'),
-                            data=json.dumps({'size': 1024}),
-                            params=params, headers=headers)
-        self.assertEqual(resp.status, 200)
-        chunks = self.json_loads(resp.data)
-
-        headers = {'X-oio-action-mode': 'autocreate',
-                   'X-oio-content-meta-length': '1024'}
-        resp = self.request('POST', self.url_content('create'),
-                            params=params, headers=headers,
-                            data=json.dumps(chunks))
-        self.assertEqual(resp.status, 204)
+        self._create_content(path)
 
         p0 = {random_content(): random_content()}
         p1 = {random_content(): random_content()}
@@ -805,7 +809,8 @@ class TestMeta2Contents(BaseTestCase):
         chunks = self.json_loads(resp.data)
 
         headers = {'x-oio-action-mode': 'autocreate',
-                   'x-oio-content-meta-length': '1024'}
+                   'x-oio-content-meta-length': '1024',
+                   'x-oio-content-meta-id': random_id(32)}
         resp = self.request('POST', self.url_content('create'),
                             params=params, headers=headers,
                             data=json.dumps(chunks))
@@ -864,7 +869,8 @@ class TestMeta2Contents(BaseTestCase):
         append_param = {"append": 1}
         append_param.update(params)
         headers = {'x-oio-action-mode': 'autocreate',
-                   'x-oio-content-meta-length': '1024'}
+                   'x-oio-content-meta-length': '1024',
+                   'x-oio-content-meta-id': random_id(32)}
         resp = self.request('POST', self.url_content('create'),
                             params=append_param, headers=headers,
                             data=json.dumps(chunks))

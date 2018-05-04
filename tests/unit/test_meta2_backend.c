@@ -149,6 +149,16 @@ _create_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 }
 
 static void
+_set_content_id(struct oio_url_s *url) {
+	guint32 binid[4];
+	for (gsize i = 0; i < 4; i++)
+		binid[i] = oio_ext_rand_int();
+	gchar content_id[33];
+	oio_str_bin2hex(binid, sizeof(binid), content_id, sizeof(content_id));
+	oio_url_set(url, OIOURL_CONTENTID, content_id);
+}
+
+static void
 check_list_count(struct meta2_backend_s *m2, struct oio_url_s *url,
 		guint expected)
 {
@@ -345,6 +355,7 @@ _container_wraper(const char *ns, gint64 maxvers, container_test_f cf)
 				ns, ++container_counter, oio_ext_monotonic_time());
 		url = oio_url_init(strurl);
 		g_free(strurl);
+		_set_content_id(url);
 
 		err = meta2_backend_create_container(m2, url, &params);
 		g_assert_no_error(err);
@@ -918,6 +929,7 @@ test_content_put_lower_version(void)
 		CLOCK--;
 		beans = _create_alias(m2, u, NULL);
 		CLOCK++;
+		_set_content_id(u);
 		err = meta2_backend_put_alias(m2, u, beans, NULL, NULL, NULL, NULL);
 		g_assert_error(err, GQ(), CODE_CONTENT_PRECONDITION);
 		_bean_cleanl2(beans);
@@ -986,6 +998,7 @@ test_content_append(void)
 		/* append new chunks */
 		struct oio_url_s *u1 = oio_url_dup(u);
 		oio_url_set (u1, OIOURL_PATH, "_");
+		_set_content_id(u1);
 		newbeans = _create_alias(m2, u1, NULL);
 		oio_url_pclean (&u1);
 
@@ -1083,6 +1096,7 @@ test_content_append_not_found(void)
 		/* re-APPEND */
 		struct oio_url_s *u1 = oio_url_dup(u);
 		oio_url_set (u1, OIOURL_PATH, "_");
+		_set_content_id(u1);
 		newbeans = _create_alias(m2, u1, NULL);
 		CLOCK ++;
 		err = meta2_backend_append_to_alias(m2, u, newbeans, NULL, NULL);
@@ -1232,13 +1246,14 @@ test_content_dedup (void)
 		/* Generate other contents with same hashes */
 		for (guint counter = 1; counter <= num_duplicates; counter++) {
 			/* Suffix the base url */
-			struct oio_url_s *url2 = oio_url_dup (url);
-			const char *p0 = oio_url_get (url, OIOURL_PATH);
+			struct oio_url_s *url2 = oio_url_dup(url);
+			const char *p0 = oio_url_get(url, OIOURL_PATH);
 			if (p0) {
 				gchar *p = g_strdup_printf("%s-%u", p0, counter);
-				oio_url_set (url2, OIOURL_PATH, p);
-				g_free (p);
+				oio_url_set(url2, OIOURL_PATH, p);
+				g_free(p);
 			}
+			_set_content_id(url2);
 			GSList *beans2 = _create_alias(m2, url2, NULL);
 			change_chunk_hash(beans2, counter);
 			err = meta2_backend_put_alias(m2, url2, beans2, NULL, NULL,

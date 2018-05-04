@@ -1548,29 +1548,22 @@ GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 	/* Needed later several times, we extract now the content-id if specified */
 	gint64 version = _fetch_alias_version(beans);
 	const char *content_hexid = oio_url_get (args->url, OIOURL_CONTENTID);
-	gsize content_idlen = 0;
-	guint8 *content_id = NULL;
-	if (content_hexid) {
-		content_idlen = strlen(content_hexid) / 2;
-		content_id = g_alloca(1 + strlen(content_hexid));
-		if (!oio_str_hex2bin(content_hexid, content_id, content_idlen))
-			return BADREQ("Invalid content ID (not hexa)");
+	if (!content_hexid) {
+		return BADREQ("Invalid URL (missing CONTENTID)");
 	}
+
+	gsize content_idlen = strlen(content_hexid) / 2;
+	guint8 *content_id = g_alloca(1 + strlen(content_hexid));
+	if (!oio_str_hex2bin(content_hexid, content_id, content_idlen))
+		return BADREQ("Invalid content ID (not hexa)");
 
 	/* The content-id has been specified, we MUST check it will be UNIQUE */
-	if (content_id) {
-		err = m2db_check_content_absent(args->sq3, content_id, content_idlen);
-		if (NULL != err)
-			return err;
-	}
+	err = m2db_check_content_absent(args->sq3, content_id, content_idlen);
+	if (NULL != err)
+		return err;
 
 	/* Ensure the beans are all linked to the content (with their content-id) */
-	if (content_id) {
-		_patch_beans_with_contentid(beans, content_id, content_idlen);
-	} else {
-		RANDOM_UID(uid, uid_size);
-		_patch_beans_with_contentid(beans, (guint8*)&uid, uid_size);
-	}
+	_patch_beans_with_contentid(beans, content_id, content_idlen);
 
 	/* needed for later: the latest content in place. Fetch it once for all */
 	if (NULL != (err = m2db_latest_alias(args->sq3, args->url, &latest))) {
