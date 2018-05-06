@@ -643,7 +643,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         link_obj = random_str(16)
         self.api.object_create(self.account, target_container, data="1"*128,
                                obj_name=target_obj)
-        self.api.object_create(self.account, target_container, data="1"*128,
+        self.api.object_create(self.account, target_container, data="0"*128,
                                obj_name=link_obj)
         self.api.object_fastcopy(self.account, target_container, target_obj,
                                  self.account, link_container, link_obj)
