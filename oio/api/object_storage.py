@@ -324,7 +324,7 @@ class ObjectStorageApi(object):
         - `write_timeout`: `float`
     """
     TIMEOUT_KEYS = ('connection_timeout', 'read_timeout', 'write_timeout')
-    EXTRA_KEYWORDS = ('chunk_checksum_algo', )
+    EXTRA_KEYWORDS = ('chunk_checksum_algo', 'autocreate')
 
     def __init__(self, namespace, logger=None, **kwargs):
         """
@@ -345,6 +345,9 @@ class ObjectStorageApi(object):
         :type pool_manager: `urllib3.PoolManager`
         :keyword chunk_checksum_algo: algorithm to use for chunk checksums.
             Only 'md5' and `None` are supported at the moment.
+        :keyword autocreate: if set, container will be created automatically.
+            Default value is True.
+        :type autocreate: `bool`
         """
         self.namespace = namespace
         conf = {"namespace": self.namespace}
@@ -355,6 +358,8 @@ class ObjectStorageApi(object):
         for key in self.__class__.EXTRA_KEYWORDS:
             if key in kwargs:
                 self._global_kwargs[key] = kwargs[key]
+        if 'autocreate' not in self._global_kwargs:
+            self._global_kwargs['autocreate'] = True
 
         from oio.account.client import AccountClient
         from oio.container.client import ContainerClient
@@ -695,6 +700,9 @@ class ObjectStorageApi(object):
         :param append: if set, data will be append to existing object (or
         object will be created if unset)
         :type append: `bool`
+        :param autocreate: if set to false, autocreation of container will be
+        disabled
+        :type autocreate: `bool`
 
         :returns: `list` of chunks, size and hash of the what has been uploaded
         """
@@ -924,6 +932,7 @@ class ObjectStorageApi(object):
             copies.append(tmp)
         return copies
 
+    @patch_kwargs
     def object_fastcopy(self, target_account, target_container, target_obj,
                         link_account, link_container, link_obj,
                         version=None,  **kwargs):
@@ -1079,7 +1088,7 @@ class ObjectStorageApi(object):
         # TODO: optimize by asking more than one metachunk at a time
         obj_meta, first_body = self.container.content_prepare(
             account, container, obj_name, size=1, stgpol=policy,
-            autocreate=True, **kwargs)
+            **kwargs)
         storage_method = STORAGE_METHODS.load(obj_meta['chunk_method'])
 
         def _fix_mc_pos(chunks, mc_pos):
@@ -1099,7 +1108,7 @@ class ObjectStorageApi(object):
                 mc_pos += 1
                 _, next_body = self.container.content_prepare(
                         account, container, obj_name, 1, stgpol=policy,
-                        autocreate=True, **kwargs)
+                        **kwargs)
                 _fix_mc_pos(next_body, mc_pos)
                 yield next_body
 
