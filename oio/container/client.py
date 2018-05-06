@@ -371,8 +371,7 @@ class ContainerClient(ProxyClient):
         if chunk_method is not None:
             hdrs['x-oio-content-meta-chunk-method'] = chunk_method
         resp, body = self._direct_request(
-            'POST', uri, data=data, params=params, autocreate=True,
-            headers=hdrs, **kwargs)
+            'POST', uri, data=data, params=params, headers=hdrs, **kwargs)
         return resp, body
 
     def content_drain(self, account=None, reference=None, path=None, cid=None,
