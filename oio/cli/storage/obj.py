@@ -79,6 +79,14 @@ class CreateObject(ContainerCommandMixin, lister.Lister):
 
         parser = super(CreateObject, self).get_parser(prog_name)
         self.patch_parser(parser)
+        # TODO(mb): manage --opt and --no-opt
+        parser.add_argument(
+            '--no-autocreate',
+            help=("Forbid autocreation of container if nonexistent"),
+            action="store_false",
+            dest="autocreate",
+            default=True
+        )
         parser.add_argument(
             'objects',
             metavar='<filename>',
@@ -126,6 +134,7 @@ class CreateObject(ContainerCommandMixin, lister.Lister):
         objs = parsed_args.objects
         names = parsed_args.name
         key_file = parsed_args.key_file
+        autocreate = parsed_args.autocreate
         if key_file and key_file[0] != '/':
             key_file = os.getcwd() + '/' + key_file
 
@@ -148,7 +157,8 @@ class CreateObject(ContainerCommandMixin, lister.Lister):
                         policy=policy,
                         metadata=properties,
                         key_file=key_file,
-                        mime_type=parsed_args.mime_type)
+                        mime_type=parsed_args.mime_type,
+                        autocreate=autocreate)
 
                     results.append((name, data[1], data[2].upper(), 'Ok'))
             except KeyboardInterrupt:
