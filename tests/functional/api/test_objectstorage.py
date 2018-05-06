@@ -614,6 +614,19 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertEqual(len(data), 128)
         self.assertEqual(data, "1" * 128)
 
+    def test_object_simple_fast_copy_different_container_no_autocreate(self):
+        target_container = random_str(16)
+        link_container = random_str(16)
+        target_obj = random_str(16)
+        link_obj = random_str(16)
+        self.api.object_create(self.account, target_container, data="1"*128,
+                               obj_name=target_obj)
+        self.assertRaises(
+            exc.NotFound,
+            self.api.object_fastcopy, self.account, target_container,
+            target_obj, self.account, link_container, link_obj,
+            autocreate=False)
+
     def test_object_simple_fast_copy_same_container(self):
         container = random_str(16)
         target_obj = random_str(16)
@@ -802,3 +815,15 @@ class TestObjectList(ObjectStorageApiTestBase):
         self.assertIn('truncated', res)
         self.assertFalse(res['objects'])
         self.assertListEqual(['2/'], res['prefixes'])
+
+    def test_object_create_without_autocreate_and_missing_container(self):
+        name = random_str(32)
+        self.assertRaises(
+            exc.NoSuchContainer, self.api.object_create, self.account, name,
+            data="data", obj_name=name, autocreate=False)
+
+    def test_object_create_without_autocreate_and_existing_container(self):
+        name = random_str(32)
+        self._create(name)
+        self.api.object_create(self.account, name, data="data", obj_name=name,
+                               autocreate=False)
