@@ -47,39 +47,17 @@ struct event_client_s
 	/* hidden abstract fields */
 };
 
-struct gridd_client_pool_vtable_s
-{
-	void (*destroy) (struct gridd_client_pool_s *p);
-
-	void (*defer) (struct gridd_client_pool_s *p, struct event_client_s *ev);
-
-	/** Destined to be called continuously, it shouldn't block more than 'sec'
-	 * seconds between each run of the polling loop. */
-	GError* (*round) (struct gridd_client_pool_s *p, time_t sec);
-
-	void (*reconfigure) (struct gridd_client_pool_s *p);
-};
-
-struct abstract_client_pool_s
-{
-	struct gridd_client_pool_vtable_s *vtable;
-};
-
-#define gridd_client_pool_destroy(p) \
-	((struct abstract_client_pool_s*)p)->vtable->destroy(p)
-
-#define gridd_client_pool_defer(p,ev) \
-	((struct abstract_client_pool_s*)p)->vtable->defer(p,ev)
-
-#define gridd_client_pool_round(p,sec) \
-	((struct abstract_client_pool_s*)p)->vtable->round(p,sec)
-
-#define gridd_client_pool_reconfigure(p) \
-	((struct abstract_client_pool_s*)p)->vtable->reconfigure(p)
-
-/* Public API -------------------------------------------------------------- */
-
 struct gridd_client_pool_s * gridd_client_pool_create(void);
+
+void gridd_client_pool_destroy(struct gridd_client_pool_s *p);
+
+void gridd_client_pool_notify(struct gridd_client_pool_s *p);
+
+void gridd_client_pool_defer(struct gridd_client_pool_s *p, struct event_client_s *ev);
+
+GError * gridd_client_pool_round(struct gridd_client_pool_s *p, time_t sec);
+
+void gridd_client_pool_reconfigure(struct gridd_client_pool_s *p);
 
 /* Should not be used on an event that has already been defered. Because this
  * will be called by the gridd_client_pool. */
