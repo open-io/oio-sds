@@ -2007,7 +2007,6 @@ defer_USE(struct election_member_s *member)
 			MEMBER_NAME(n,member);
 			sqlx_peering__use (member->manager->peering, *p, &n);
 			TRACE_EXECUTION(member->manager);
-			member_trace("sched:USE", member);
 		}
 	}
 
@@ -2372,7 +2371,6 @@ member_action_to_SYNCING(struct election_member_s *member)
 	sqlx_peering__pipefrom (member->manager->peering, target,
 			&n, source, member->manager, 0, _result_PIPEFROM);
 	TRACE_EXECUTION(member->manager);
-	member_debug("sched:PIPEFROM", member);
 
 	return member_set_status(member, STEP_SYNCING);
 }
@@ -2443,7 +2441,6 @@ member_action_to_CHECKING_MASTER(struct election_member_s *m)
 	sqlx_peering__getvers (m->manager->peering, m->master_url,
 			&n, m->manager, 0, _result_GETVERS);
 	TRACE_EXECUTION(m->manager);
-	member_trace("sched:GETVERS", m);
 
 	return member_set_status(m, STEP_CHECKING_MASTER);
 }
@@ -2477,7 +2474,6 @@ member_action_to_CHECKING_SLAVES(struct election_member_s *m)
 		sqlx_peering__getvers (m->manager->peering, *p,
 				&n, m->manager, 0, _result_GETVERS);
 		TRACE_EXECUTION(m->manager);
-		member_trace("sched:GETVERS", m);
 	}
 
 	return member_set_status(m, STEP_CHECKING_SLAVES);
