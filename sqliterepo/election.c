@@ -127,22 +127,22 @@ struct election_manager_s
 
 	GMutex lock;
 
-	struct deque_beacon_s members_by_state[STEP_MAX];
-
 	/* Trace of actions while the lock was held */
 	GArray *activity_trace;
 
 	gboolean exiting;
+
+	struct deque_beacon_s members_by_state[STEP_MAX];
 };
 
 /* @private */
 struct logged_event_s
 {
-	enum event_type_e event   :6;
-	enum election_step_e pre  :5;
-	enum election_step_e post :5;
-	gint64 time              :48;  // cheeseparing economies
-} __attribute__ ((packed));
+	gint64 time;
+	enum event_type_e event   :8;
+	enum election_step_e pre  :8;
+	enum election_step_e post :8;
+};
 
 /* @private */
 struct election_member_s
