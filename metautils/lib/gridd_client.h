@@ -37,65 +37,6 @@ enum client_interest_e
 /* Return TRUE to notify the reply management failed. */
 typedef gboolean (*client_on_reply)(gpointer ctx, MESSAGE reply);
 
-struct gridd_client_vtable_s
-{
-	// Destructor
-	void (*clean) (struct gridd_client_s *c);
-
-	// Connectors
-	GError* (*connect_url) (struct gridd_client_s *c, const gchar *target);
-
-	// Sets the next request to be sent, and what to do with the reply.
-	GError* (*request) (struct gridd_client_s *c, GByteArray *req,
-			gpointer ctx, client_on_reply cb);
-
-	// Returns a copy of the last error that occured.
-	GError* (*error) (struct gridd_client_s *c);
-
-	// Tells which among client_interest_e is to be monitored
-	int (*interest) (struct gridd_client_s *c);
-
-	// Returns the last URL we connected to
-	const gchar* (*get_url) (struct gridd_client_s *c);
-
-	// Returns the file descriptor currently used
-	int (*get_fd) (struct gridd_client_s *c);
-
-	// Force a new descriptor
-	GError* (*set_fd) (struct gridd_client_s *c, int fd);
-
-	// Force global timeout for the operation (all the request, including
-	// the redirections)
-	void (*set_timeout) (struct gridd_client_s *c, gdouble seconds);
-
-	// Force the connection timeout for each unit request
-	void (*set_timeout_cnx) (struct gridd_client_s *c, gdouble seconds);
-
-	// Returns if the client's last change is older than 'now'
-	gboolean (*expired) (struct gridd_client_s *c, gint64 now);
-
-	// Returns FALSE if the client is still expecting events.
-	gboolean (*finished) (struct gridd_client_s *c);
-
-	// Initiate the request.
-	gboolean (*start) (struct gridd_client_s *c);
-
-	// Manage the events raised
-	void (*react) (struct gridd_client_s *c);
-
-	// If expired() is true, sets the internal error and mark the client
-	// as failed.
-	gboolean (*expire) (struct gridd_client_s *c, gint64 now);
-
-	// Gives the ownership of `why` to the gridd_client_s `self`
-	void (*fail) (struct gridd_client_s *c, GError *why);
-};
-
-struct abstract_client_s
-{
-	struct gridd_client_vtable_s *vtable;
-};
-
 // wrappers to the call to the vtable.
 
 void gridd_client_free (struct gridd_client_s *self);
