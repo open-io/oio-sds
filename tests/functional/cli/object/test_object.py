@@ -45,6 +45,18 @@ class ObjectTest(CliTestCase):
             self._test_obj(f.name, test_content, self.CONTAINER_NAME)
         self._test_many_obj()
 
+    def test_obj_without_autocreate(self):
+        with tempfile.NamedTemporaryFile() as f:
+            test_content = 'test content'
+            f.write(test_content)
+            f.flush()
+
+            self.assertRaises(
+                CommandFailed,
+                self.openio,
+                'object create --no-autocreate ' +
+                uuid.uuid4().hex + ' ' + f.name)
+
     def _test_many_obj(self):
         cname = self.CONTAINER_NAME
         opts = self.get_opts([], 'json')

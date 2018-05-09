@@ -1883,8 +1883,6 @@ static enum http_rc_e action_m2_content_touch (struct req_args_s *args,
 
 	PACKER_VOID(_pack) { return m2v2_remote_pack_TOUCHC (args->url, DL()); }
 	GError *err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
-	if (err && CODE_IS_NOTFOUND(err->code))
-		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);
 }
 
@@ -1912,8 +1910,6 @@ static enum http_rc_e action_m2_content_link (struct req_args_s *args,
 
 	PACKER_VOID(_pack) { return m2v2_remote_pack_LINK (args->url, DL()); }
 	err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
-	if (err && CODE_IS_NOTFOUND(err->code))
-		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);
 }
 
@@ -1947,8 +1943,6 @@ static enum http_rc_e action_m2_content_propset (struct req_args_s *args,
 	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_SET (args->url, flags, beans, DL()); }
 	GError *err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
 	_bean_cleanl2 (beans);
-	if (err && CODE_IS_NOTFOUND(err->code))
-		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);
 }
 
@@ -1966,8 +1960,6 @@ static enum http_rc_e action_m2_content_propdel (struct req_args_s *args,
 	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_DEL (args->url, namev, DL()); }
 	err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
 	g_strfreev(namev);
-	if (err && CODE_IS_NOTFOUND(err->code))
-		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);
 }
 
@@ -2246,8 +2238,6 @@ enum http_rc_e action_content_copy (struct req_args_s *args) {
 	}
 	GError *err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
 	oio_url_pclean(&target_url);
-	if (err && CODE_IS_NOTFOUND(err->code))
-		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);
 }
 

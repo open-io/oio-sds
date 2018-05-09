@@ -60,11 +60,21 @@ def handle_container_not_found(fnc):
 
 
 def handle_object_not_found(fnc):
+    """
+    Catch `oio.common.exceptions.NotFound` exceptions and raise either
+    `oio.common.exceptions.NoSuchContainer` or
+    `oio.common.exceptions.NoSuchObject` respectively if the container
+    is missing or the object is missing.
+    """
     @wraps(fnc)
     def _wrapped(self, account, container, obj, *args, **kwargs):
         try:
             return fnc(self, account, container, obj, *args, **kwargs)
-        except NotFound as e:
-            e.message = "Object '%s' does not exist." % obj
-            raise NoSuchObject(e)
+        except NotFound as err:
+            if err.status == 406:
+                err.message = "Container '%s' does not exist." % container
+                raise NoSuchContainer(err)
+            else:
+                err.message = "Object '%s' does not exist." % obj
+                raise NoSuchObject(err)
     return _wrapped

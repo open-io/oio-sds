@@ -592,7 +592,7 @@ class MetachunkPreparer(object):
         # TODO: optimize by asking more than one metachunk at a time
         self.obj_meta, self.first_body = self.container_client.content_prepare(
             account, container, obj_name, size=1, stgpol=policy,
-            autocreate=True, **kwargs)
+            **kwargs)
         self.stg_method = STORAGE_METHODS.load(self.obj_meta['chunk_method'])
 
         self._all_chunks = list()
@@ -615,7 +615,7 @@ class MetachunkPreparer(object):
             mc_pos += 1
             _, next_body = self.container_client.content_prepare(
                     self.account, self.container, self.obj_name, 1,
-                    stgpol=self.policy, autocreate=True, **self.extra_kwargs)
+                    stgpol=self.policy, **self.extra_kwargs)
             self._fix_mc_pos(next_body, mc_pos)
             self._all_chunks.extend(next_body)
             yield next_body

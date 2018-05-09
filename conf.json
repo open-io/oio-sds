@@ -350,6 +350,11 @@
 				"descr": "Should the election mecanism try to recreate missing DB?",
 				"def": false},
 
+			{ "type": "monotonic", "name": "oio_election_lock_alert_delay",
+				"key": "sqliterepo.election.lock_alert_delay",
+				"descr": ".",
+				"def": "50", "min": "1", "max": "60s" },
+
 			{ "type": "monotonic", "name": "oio_election_period_cond_wait",
 				"key": "sqliterepo.election.wait.quantum",
 				"descr": "In the current sqliterepo repository, while loop-waiting for a final election status to be reached, this value sets the unit amount of time of eacch unit wait on the lock. Keep this value rather small to avoid waitin for too long, but not too small to avoid dumping CPU cycles in active waiting.",
@@ -425,25 +430,15 @@
 				"descr": "In jiffies, how often the elections waiting for timers are fired",
 				"def": "1", "min": 0, "max": "86400" },
 
-			{ "type": "uint", "name": "sqliterepo_election_task_PING_period",
-				"key": "sqliterepo.election.task.ping.period",
-				"descr": "In jiffies, how often a PING may be triggered for elections in a final state.",
-				"def": "15", "min": 0, "max": "86400" },
-
 			{ "type": "monotonic", "name": "sqliterepo_election_task_EXIT_alert",
 				"key": "sqliterepo.election.task.exit.alert",
 				"descr": "When NONE elections are expired, report a warning if the background task holds the lock longer than this value.",
-				"def": "200ms", "min": 0, "max": "max" },
+				"def": "100ms", "min": 0, "max": "max" },
 
 			{ "type": "monotonic", "name": "sqliterepo_election_task_TIMER_alert",
 				"key": "sqliterepo.election.task.timer.alert",
 				"descr": "When timers are raised on elections, report a warning if the background task holds the lock longer than this value.",
-				"def": "200ms", "min": 0, "max": "max" },
-
-			{ "type": "monotonic", "name": "sqliterepo_election_task_PING_alert",
-				"key": "sqliterepo.election.task.ping.alert",
-				"descr": "When pings are sent from election in a final state, report a warning if the background task holds the lock longer than this value.",
-				"def": "200ms", "min": 0, "max": "max" },
+				"def": "100ms", "min": 0, "max": "max" },
 
 			{ "type": "uint", "name": "disconnection_rrd_window",
 			   "key": "sqliterepo.zk.rrd.window",

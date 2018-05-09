@@ -72,7 +72,7 @@ class ObjectStorageApi(object):
         - `write_timeout`: `float`
     """
     TIMEOUT_KEYS = ('connection_timeout', 'read_timeout', 'write_timeout')
-    EXTRA_KEYWORDS = ('chunk_checksum_algo', )
+    EXTRA_KEYWORDS = ('chunk_checksum_algo', 'autocreate')
 
     def __init__(self, namespace, logger=None, **kwargs):
         """
@@ -94,6 +94,9 @@ class ObjectStorageApi(object):
         :type pool_manager: `urllib3.PoolManager`
         :keyword chunk_checksum_algo: algorithm to use for chunk checksums.
             Only 'md5' and `None` are supported at the moment.
+        :keyword autocreate: if set, container will be created automatically.
+            Default value is True.
+        :type autocreate: `bool`
         """
         self.namespace = namespace
         conf = {"namespace": self.namespace}
@@ -101,6 +104,7 @@ class ObjectStorageApi(object):
         self._global_kwargs = {tok: float_value(tov, None)
                                for tok, tov in kwargs.items()
                                if tok in self.__class__.TIMEOUT_KEYS}
+        self._global_kwargs['autocreate'] = True
         for key in self.__class__.EXTRA_KEYWORDS:
             if key in kwargs:
                 self._global_kwargs[key] = kwargs[key]
@@ -535,6 +539,9 @@ class ObjectStorageApi(object):
         :param append: if set, data will be append to existing object (or
             object will be created if unset)
         :type append: `bool`
+        :keyword autocreate: if set to false, autocreation of container will be
+        disabled
+        :type autocreate: `bool`
 
         :keyword perfdata: optional `dict` that will be filled with metrics
             of time spent to resolve the meta2 address, to do the meta2
@@ -830,6 +837,7 @@ class ObjectStorageApi(object):
     # TODO(FVE): must be optimised to detect that the target account
     # and container are the same as source account and source container,
     # and then use the optimised version (just create an alias in meta2).
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def object_fastcopy(self, target_account, target_container, target_obj,
@@ -1353,7 +1361,7 @@ class ObjectStorageApi(object):
             else:
                 raise ValueError(
                     '`trust_level` must be between 0 and 2')
-        except (exc.NotFound, exc.NoSuchObject):
+        except (exc.NotFound, exc.NoSuchObject, exc.NoSuchContainer):
             return False
         return True
 

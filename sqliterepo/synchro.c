@@ -34,12 +34,6 @@ License along with this library.
 #include "sqlx_remote.h"
 #include "gridd_client_pool.h"
 
-#ifdef HAVE_EXTRA_DEBUG
-#define EXTRA_OUTGOING(FMT,...) OUTGOING(FMT,##__VA_ARGS__)
-#else
-#define EXTRA_OUTGOING(...)
-#endif
-
 static const char * zoo_state2str(int state) {
 #define ON_STATE(N) do { if (state == ZOO_##N##_STATE) return #N; } while (0)
 	ON_STATE(EXPIRED_SESSION);
@@ -363,14 +357,10 @@ _acreate (struct sqlx_sync_s *ss, const char *path, const char *v,
 	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
 		return ZOPERATIONTIMEOUT;
 #endif
-#ifdef HAVE_EXTRA_DEBUG
-	const gint64 pre = oio_ext_monotonic_time();
-#endif
 	gchar p[PATH_MAXLEN];
 	int rc = zoo_acreate(ss->zh, _realpath(ss, path, p, sizeof(p)),
 			v, vlen, &ZOO_OPEN_ACL_UNSAFE,
 			flags, completion, data);
-	EXTRA_OUTGOING("ZK_CREATE %s %d %" G_GINT64_FORMAT, p, rc, oio_ext_monotonic_time() - pre);
 	return rc;
 }
 
@@ -384,13 +374,9 @@ _adelete (struct sqlx_sync_s *ss, const char *path, int version,
 	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
 		return ZOPERATIONTIMEOUT;
 #endif
-#ifdef HAVE_EXTRA_DEBUG
-	const gint64 pre = oio_ext_monotonic_time();
-#endif
 	gchar p[PATH_MAXLEN];
 	int rc = zoo_adelete(ss->zh, _realpath(ss, path, p, sizeof(p)),
 			version, completion, data);
-	EXTRA_OUTGOING("ZK_DEL %s %d %" G_GINT64_FORMAT, p, rc, oio_ext_monotonic_time() - pre);
 	return rc;
 }
 
@@ -405,13 +391,9 @@ _awexists (struct sqlx_sync_s *ss, const char *path,
 	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
 		return ZOPERATIONTIMEOUT;
 #endif
-#ifdef HAVE_EXTRA_DEBUG
-	const gint64 pre = oio_ext_monotonic_time();
-#endif
 	gchar p[PATH_MAXLEN];
 	int rc = zoo_awexists(ss->zh, _realpath(ss, path, p, sizeof(p)),
 			watcher, watcherCtx, completion, data);
-	EXTRA_OUTGOING("ZK_EXISTS %s %d %" G_GINT64_FORMAT, p, rc, oio_ext_monotonic_time() - pre);
 	return rc;
 }
 
@@ -426,13 +408,9 @@ _awget (struct sqlx_sync_s *ss, const char *path,
 	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
 		return ZOPERATIONTIMEOUT;
 #endif
-#ifdef HAVE_EXTRA_DEBUG
-	const gint64 pre = oio_ext_monotonic_time();
-#endif
 	gchar p[PATH_MAXLEN];
 	int rc = zoo_awget(ss->zh, _realpath(ss, path, p, sizeof(p)),
 			watcher, watcherCtx, completion, data);
-	EXTRA_OUTGOING("ZK_GET %s %d %" G_GINT64_FORMAT, p, rc, oio_ext_monotonic_time() - pre);
 	return rc;
 }
 
@@ -447,13 +425,9 @@ _awget_children (struct sqlx_sync_s *ss, const char *path,
 	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
 		return ZOPERATIONTIMEOUT;
 #endif
-#ifdef HAVE_EXTRA_DEBUG
-	const gint64 pre = oio_ext_monotonic_time();
-#endif
 	gchar p[PATH_MAXLEN];
 	int rc = zoo_awget_children(ss->zh, _realpath(ss, path, p, sizeof(p)),
 			watcher, watcherCtx, completion, data);
-	EXTRA_OUTGOING("ZK_CHILDREN %s %d %" G_GINT64_FORMAT, p, rc, oio_ext_monotonic_time() - pre);
 	return rc;
 }
 
@@ -468,13 +442,9 @@ _awget_siblings (struct sqlx_sync_s *ss, const char *path,
 	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
 		return ZOPERATIONTIMEOUT;
 #endif
-#ifdef HAVE_EXTRA_DEBUG
-	const gint64 pre = oio_ext_monotonic_time();
-#endif
 	gchar p[PATH_MAXLEN];
 	int rc = zoo_awget_children(ss->zh, _realdirname(ss, path, p, sizeof(p)),
 			watcher, watcherCtx, completion, data);
-	EXTRA_OUTGOING("ZK_CHILDREN %s %d %" G_GINT64_FORMAT, p, rc, oio_ext_monotonic_time() - pre);
 	return rc;
 }
 
@@ -580,8 +550,6 @@ _direct_use (struct sqlx_peering_s *self,
 				int errsav = errno;
 				GRID_DEBUG("USE(%s,%s.%s) failed: (%d) %s",
 						url, n->base, n->type, errsav, strerror(errsav));
-			} else {
-				EXTRA_OUTGOING("DB_USE udp %s %s.%s", url, n->base, n->type);
 			}
 		}
 	} else {
@@ -606,7 +574,6 @@ _direct_use (struct sqlx_peering_s *self,
 				g_error_free(err);
 			} else {
 				gridd_client_pool_defer(p->pool, mc);
-				EXTRA_OUTGOING("DB_USE tcp %s %s.%s", url, n->base, n->type);
 			}
 		}
 	}
@@ -678,7 +645,6 @@ _direct_pipefrom (struct sqlx_peering_s *self,
 			event_client_free(&mc->ec);
 		} else {
 			gridd_client_pool_defer(p->pool, &mc->ec);
-			EXTRA_OUTGOING("DB_PIPEFROM tcp %s %s.%s", url, n->base, n->type);
 		}
 	}
 }
@@ -783,7 +749,6 @@ _direct_getvers (struct sqlx_peering_s *self,
 			event_client_free(&mc->ec);
 		} else {
 			gridd_client_pool_defer(p->pool, &mc->ec);
-			EXTRA_OUTGOING("DB_GETVERS tcp %s %s.%s", url, n->base, n->type);
 		}
 	}
 }

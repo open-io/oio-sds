@@ -655,7 +655,7 @@ class TestMeta2Contents(BaseTestCase):
         # No user, no container, no content
         resp = self.request('POST', self.url_content('copy'),
                             headers=headers, params=params)
-        self.assertError(resp, 403, 406)
+        self.assertError(resp, 404, 406)
 
         # No content
         data = json.dumps({'properties': {}})
@@ -664,7 +664,7 @@ class TestMeta2Contents(BaseTestCase):
         self.assertEqual(resp.status, 201)
         resp = self.request('POST', self.url_content('copy'),
                             headers=headers, params=params)
-        self.assertError(resp, 403, 420)
+        self.assertError(resp, 404, 420)
 
     def test_cycle_properties(self):
         path = random_content()
@@ -731,7 +731,7 @@ class TestMeta2Contents(BaseTestCase):
         self.assertError(resp, 404, 406)
 
         resp = self.request('POST', self.url_content('touch'), params=params)
-        self.assertError(resp, 403, 406)
+        self.assertError(resp, 404, 406)
 
         resp = self.request('POST', self.url_content('prepare'),
                             data=json.dumps({'size': '1024'}),

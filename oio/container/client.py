@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -101,8 +101,7 @@ class ContainerClient(ProxyClient):
         data = json.dumps({'properties': properties or {},
                            'system': system or {}})
         resp, body = self._request('POST', '/create', params=params,
-                                   data=data, autocreate=True,
-                                   **kwargs)
+                                   data=data, **kwargs)
         if resp.status not in (204, 201):
             raise exceptions.from_response(resp, body)
         return resp.status == 201
@@ -134,8 +133,7 @@ class ContainerClient(ProxyClient):
                                          'system': kwargs.get('system', {})})
             data = json.dumps({"containers": unformatted_data})
             resp, body = self._request('POST', '/create_many', params=params,
-                                       data=data, autocreate=True,
-                                       **kwargs)
+                                       data=data, **kwargs)
             if resp.status not in (204, 200):
                 raise exceptions.from_response(resp, body)
             for container in body["containers"]:
@@ -443,8 +441,7 @@ class ContainerClient(ProxyClient):
         if chunk_method is not None:
             hdrs['x-oio-content-meta-chunk-method'] = chunk_method
         resp, body = self._direct_request(
-            'POST', uri, data=data, params=params, autocreate=True,
-            headers=hdrs, **kwargs)
+            'POST', uri, data=data, params=params, headers=hdrs, **kwargs)
         return resp, body
 
     def content_drain(self, account=None, reference=None, path=None, cid=None,
