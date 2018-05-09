@@ -387,6 +387,8 @@ _cond_clean (gpointer p)
 static inline void
 _manager_record_activity(struct election_manager_s *M, const char *fn, int ln)
 {
+	if (M->exiting) return;
+
 	struct activity_trace_element_s item = {};
 	item.when = oio_ext_monotonic_time();
 	item.func = fn;
@@ -404,6 +406,8 @@ _manager_record_activity(struct election_manager_s *M, const char *fn, int ln)
 static void
 _manage_dump_activity(struct election_manager_s *M)
 {
+	if (M->exiting) return;
+
 	const GArray *ga = M->activity_trace;
 	EXTRA_ASSERT(ga->len > 0);
 	gint64 _in = g_array_index(ga, struct activity_trace_element_s, 0).when;
